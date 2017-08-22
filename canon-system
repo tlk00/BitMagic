@@ -1,0 +1,56 @@
+#!/bin/sh
+
+if [ x$1 != x ]; then
+	TARGET=$1
+else
+	TARGET=`./config.guess`
+fi
+
+case "${TARGET}" in
+    alpha*-dec-osf4.0*)
+	echo alpha-osf4
+	exit 0;;
+    alpha*-dec-osf5.1)
+	echo alpha-osf51
+	exit 0;;
+    sparc-sun-solaris2.*)
+	echo sparc-solaris2
+        exit 0;;
+    i[34567]86-*-solaris2.*)
+        echo intel-solaris2
+        exit 0;;
+    powerpc-ibm-aix4.3.*)
+        echo rs6000
+        exit 0;;
+    mips-sgi-irix6.5)
+        echo mips-irix6.5
+	exit 0;;
+
+   i[34567]86-sco-sysv5*)
+	echo intel-unixware7
+	exit 0;;
+
+   i[34567]86-*-linux-gnu*)
+	echo intel-linux-gnu
+	exit 0;;
+
+   i386-apple-darwin*)
+	echo intel-macosx-gnu
+	exit 0;;
+
+   i[34567]86-*-cygwin*)
+	echo cygwin
+	exit 0;;
+   i[34567]86-*-cygwin*)
+	echo cygwin
+	exit 0;;
+   x86_64-*-cygwin*)
+	echo cygwin
+	exit 0;;
+    x86_64-*-linux-gnu*)
+	echo amd64-linux-gnu
+	exit 0;;
+    *)
+	echo Sorry! This platform \(${TARGET}\) is unsupported. 1>&2
+	exit 1;;
+esac;

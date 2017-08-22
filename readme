@@ -1,0 +1,124 @@
+How to build BitMagic library:
+
+BM is small software package and you probably can just take the
+sources and put it into your project directly. All library sources are in src
+directory.
+
+However if you want to use our makefiles you need to follow the next simple
+instructions:
+
+
+Unix:
+-----
+
+- Apply environment variables by runing bmenv.sh :
+$ . bmenv.sh
+
+- use GNU make (gmake) to build installation.
+
+$gmake rebuild
+
+or (DEBUG version)
+ 
+$gmake DEBUG=YES rebuild
+
+The default compiler on Unix and CygWin is g++.
+If you want to change the default you can do that in makefile.in
+(should be pretty easy to do)
+
+
+Windows:
+--------
+
+If you use cygwin installation please follow general Unix recommendations.
+If you use MSVC please use supplied bm.dsw and corresponding project files.
+
+
+Fine tuning and optimizations:
+------------------------------
+
+All BM fine tuning parameters are controlled by the preprocessor defines.
+
+
+=================================================================================
+
+BM library includes some code optimized for 64-bit systems. To turn this
+optimization on you need to #define BM64OPT in you makefile or in bm.h file.
+
+To turn on SSE2 optimization #define BMSSE2OPT 
+To turn on SSE4.2 optimization #define BMSSE42OPT
+You will need compiler supporting Intel SSE intrinsics. 
+(Tested with MSVC and GCC)
+
+BM64OPT and BMSSE42OPT can be used together.
+BM library does NOT support multiple code paths and runtime CPU identification.
+
+=================================================================================
+
+BM library supports "restrict" keyword, some compilers 
+(for example Intel C++ for Itanium) generate better
+code (out of order load-stores) when restrict keyword is helping. This option is 
+turned OFF by default since most of the C++ compilers does not support it. 
+To turn it ON please #define BM_HASRESTRICT in your project. Some compilers
+use "__restrict" keyword for this purpose. You can correct if by
+defineing BMRESTRICT macro to correct keyword. 
+
+=================================================================================
+
+Bitcounting optimization can be turned ON by defining BMCOUNTOPT.
+Please note this optimization is not completely thread safe. 
+bvector<> template keeps mutable variable inside it and update it 
+when it count() function is called. So it creates a certain chance that this
+function will be called from multiple threads and crash on updating this 
+variable. 
+
+=================================================================================
+
+If you want to use BM library in STL-free project you need to define
+BM_NO_STL variable. It will disable inclusion of certain headers and also 
+will make bvector iterators incompatible with STL algorithms 
+(which you said you are not using anyway).
+
+=================================================================================
+
+Different compilers use different conventions about return by value
+optimizations.
+
+For instance operator or for bitvector can be implemented in two
+different ways:
+
+--------- With explicit temp variable
+
+template<class A, class MS> 
+inline bvector<A, MS> operator| (const bvector<A, MS>& v1,
+                                 const bvector<A>& v2)
+{
+    bvector<A, MS> ret(v1);
+    ret.bit_or(v2);
+    return ret;
+}
+
+--------- Temp variable is hidden 
+
+template<class A, class MS> 
+inline bvector<A, MS> operator| (const bvector<A, MS>& v1,
+                                 const bvector<A>& v2)
+{
+    return bvector<A, MS>(v1).bit_or(v2);
+}
+
+----------
+
+Some compilers can successfully optimize one or both of this cases.
+BM implementation uses hidden temp variable unless you define 
+BM_USE_EXPLICIT_TEMP
+
+=================================================================================
+
+
+
+
+Thank you for using BitMagic library!
+	Anatoliy Kuznetsov (anatoliy_kuznetsov at yahoo.com)
+
+

@@ -1,0 +1,288 @@
+# ============================================================================
+#
+# BitMagic Library makefile
+# (c) 2002,2003 Anatoliy Kuznetsov.
+#
+# ============================================================================
+# Permission is hereby granted, free of charge, to any person 
+# obtaining a copy of this software and associated documentation 
+# files (the "Software"), to deal in the Software without restriction, 
+# including without limitation the rights to use, copy, modify, merge, 
+# publish, distribute, sublicense, and/or sell copies of the Software, 
+# and to permit persons to whom the Software is furnished to do so, 
+# subject to the following conditions:
+#
+# The above copyright notice and this permission notice shall be included 
+# in all copies or substantial portions of the Software.
+#
+# THE SOFTWARE IS PROVIDED "AS IS", WITHOUT WARRANTY OF ANY KIND, 
+# EXPRESS OR IMPLIED, INCLUDING BUT NOT LIMITED TO THE WARRANTIES 
+# OF MERCHANTABILITY, FITNESS FOR A PARTICULAR PURPOSE AND NONINFRINGEMENT. 
+# IN NO EVENT SHALL THE AUTHORS OR COPYRIGHT HOLDERS BE LIABLE FOR ANY CLAIM, 
+# DAMAGES OR OTHER LIABILITY, WHETHER IN AN ACTION OF CONTRACT, TORT OR OTHERWISE, 
+# ARISING FROM, OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR 
+# OTHER DEALINGS IN THE SOFTWARE.
+# ============================================================================
+
+
+
+# To use native compiler please comment the next line. 
+# If you choose Intel C++ please use "ICC" here 
+#COMPILER=ICC
+COMPILER = GNU_CC
+
+SHELL=/bin/sh
+DEPTOOL = gcc -MM
+RM = rm -f
+
+
+ifeq ($(origin PROJECT_NAME), undefined)
+	PROJECT_NAME=bm
+endif
+
+ifndef PROJECT_DIR
+     PROJECT_DIR=$(HOME)/$(PROJECT_NAME)
+endif
+
+
+DEBUGDIR=Debug/
+RELDIR=Release/
+
+ifeq ($(DEBUG), YES)
+	BUILDDIR=$(DEBUGDIR)
+else
+	BUILDDIR=$(RELDIR)
+endif
+
+
+
+# -------------------------------------- target platform definition
+
+ifndef OSNAME
+    TARGETNAME = $(shell $(PROJECT_DIR)/config.guess)
+    OSNAME = $(shell $(PROJECT_DIR)/canon-system $(TARGETNAME))
+endif
+
+PLATFORM-MK = $(PROJECT_DIR)/platforms/$(OSNAME).mk
+include $(PLATFORM-MK)
+
+ifndef LDD
+  LDD=ldd
+endif
+
+# -------------------------------------------------------
+
+# -------------- File access mode -----------------
+ifeq ($(FACCMODE), )
+	FACCMODE=750
+endif
+
+# -------------------------------------------------------
+
+DESTDIR = $(PROJECT_DIR)
+
+# -------------------------------------------------
+
+ifdef DESTINATIONDIR
+
+ifeq ($(DEBUG), YES)
+    OUTDIR:=$(PROJECT_DIR)/$(DESTINATIONDIR)/$(DEBUGDIR)
+    BASICLIBDIR:=$(addprefix -L$(PROJECT_DIR)/, $(addsuffix /$(DEBUGDIR), $(ADDLIBDIR))) $(addprefix -L$(PROJECT_DIR)/, $(addsuffix /$(DEBUGDIR), $(BASICLIBS)))
+
+	ifeq ($(COMPILER) ,GNU_CC)
+		DBGFLAGS:=-ggdb -D_DEBUG
+	else
+		DBGFLAGS:=-g -D_DEBUG
+	endif
+else
+    OUTDIR:=$(PROJECT_DIR)/$(DESTINATIONDIR)/$(RELDIR)
+    BASICLIBDIR:=$(addprefix -L$(PROJECT_DIR)/, $(addsuffix /$(RELDIR), $(ADDLIBDIR))) $(addprefix -L$(PROJECT_DIR)/, $(addsuffix /$(RELDIR), $(BASICLIBS)))
+
+    DBGFLAGS:=$(OPT_FLAGS)
+endif
+
+else
+
+ifeq ($(DEBUG), YES)
+    OUTDIR:=$(PROJECT_DIR)/$(DEBUGDIR)
+	ifeq ($(COMPILER) ,GNU_CC)
+		DBGFLAGS:=-ggdb -D_DEBUG -DDBG_NEW
+	else
+		DBGFLAGS:=-g -D_DEBUG
+	endif
+else
+    OUTDIR:=$(PROJECT_DIR)/$(RELDIR)
+    DBGFLAGS:=$(OPT_FLAGS)
+endif
+
+endif
+
+BASICINCDIR:=$(addprefix -I$(PROJECT_DIR)/, $(ADDLIBDIR)) $(addprefix -I$(PROJECT_DIR)/, $(BASICINCS))
+#BASICINCDIR:=$(addprefix -I$(PROJECT_DIR)/, $(ADDLIBDIR)) $(addprefix -I$(PROJECT_DIR)/, $(BASICLIBS))
+#BASICLIBS:=$(addprefix -l, $(ADDLIBS)) $(addprefix -l, $(BASICLIBS))
+BASICLIBS:=-L$(PROJECT_DIR)/src/$(BUILDDIR) 
+
+# --------------------------------------------------
+ifeq ($(DEBUG), YES)
+   DEPFILE=depend.dDebug
+else
+   DEPFILE=depend.dRelease
+endif
+
+SOURCES = $(CXXSOURCES) $(CSOURCES)
+
+# file extention replacement
+
+CXXOBJECTS1:=$(CXXSOURCES:.cpp=.o)
+CXXOBJECTS:=$(CXXOBJECTS1:.cc=.o)
+COBJECTS:=$(CSOURCES:.c=.o)
+
+# adding directory prefix
+
+CXXOBJECTS:=$(addprefix $(OUTDIR), $(CXXOBJECTS))
+COBJECTS:=$(addprefix $(OUTDIR), $(COBJECTS))
+
+
+
+.PHONY : clean init check-platform rebuild
+.SILENT : clean init dep
+
+
+$(OUTDIR)%.o: %.cpp
+	@echo \< $*.cpp \>
+	$(CXX) -c $(CXXFLAGS) $*.cpp -o $@ $(DBGFLAGS)
+
+$(OUTDIR)%.o : %.c
+	$(CC) -c $(CFLAGS) $< -o $@ $(DBGFLAGS)
+
+LDFLAGS = $(COMMON_LDFLAGS)
+
+
+
+CXXFLAGS = $(COMMON_CXXFLAGS) $(DB_INCL) $(EXTERNINCDIR) $(BASICINCDIR) $(CXX_INCUDE_FLAGS)
+CFLAGS = $(COMMON_CFLAGS)
+
+ifdef DEPCOMMAND
+    DEPCOMMAND:=$(DEPCOMMAND)$(DB_INCL) $(PLATFORM_CXXFLAGS) $(EXTERNINCDIR) $(BASICINCDIR) $(CXX_INCUDE_FLAGS) $(EXTERNINCDIR) $(SOURCES) 
+else
+    DEPCOMMAND:=$(DEPTOOL) $(DB_INCL) $(EXTERNINCDIR) $(BASICINCDIR) $(CXX_INCUDE_FLAGS) $(EXTERNINCDIR) $(SOURCES) > depend.d~
+endif
+CATCOMMAND=cat depend.d~ | awk '{if ( index($$0,".o:" ) !=0 ) print "$(OUTDIR)"$$0; else print $$0}' > $(DEPFILE)
+
+
+ifeq ($(DESTTYPE), LIB)
+    DESTDEP=$(CXXOBJECTS) $(COBJECTS)
+    DESTINATION:=$(OUTDIR)lib$(DESTINATION).a
+    DESTCOMMAND=$(AR) $(ARFLAGS) $(DESTINATION) $(CXXOBJECTS) $(COBJECTS)
+    CXX_TEMPL_MERGE = @if [ x$(CXX_REPOSITORY) != x ]; then \
+	if [ -d $(CXX_REPOSITORY) ]; then \
+		$(AR) r $(DESTINATION) $(CXX_REPOSITORY)/*; \
+	fi; \
+    fi
+else
+  ifeq ($(DESTTYPE), )
+    DESTDEP=$(CXXOBJECTS) $(COBJECTS) $(BASICOBJS)
+    ifdef CXX_REPOSITORY
+      TEMPL_LIST=$(wildcard $(CXX_REPOSITORY)/*)
+    endif
+    DESTCOMMAND=$(LD) -o $(DESTINATION) $(LDFLAGS) $(CXXOBJECTS) $(COBJECTS) $(TEMPL_LIST) $(BASICOBJS) \
+     $(BASICLIBDIR) $(BASICLIBS) $(EXTERNLIBS) \
+     $(SYS_LIBS) 
+  else
+    DEPCOMMAND=
+    CATCOMMAND=
+    ifeq ($(DESTTYPE), COPYONLY)
+      DESTDEP=
+      DESTCOMMAND=echo File(s) $(DESTINATION) do(es) not require to be build
+    else
+#      ifeq ($(DESTTYPE), SCRIPT)
+      DESTCOMMAND=
+      MERGE_SCR=merge_scr.sh
+      DESTDEP:=$(DESTDEP) $(addsuffix .src, $(DESTINATION))
+#      endif
+    endif
+  endif
+endif
+
+#LD_LIBRARY_PATH:=$(LD_LIBRARY_PATH)
+
+ifndef INSTALL_LIST
+    INSTALL_LIST=$(DESTINATION)
+endif
+
+all: init banner $(DESTINATION) $(OUTDIR)
+
+check-platform:	$(PLATFORM-MK)
+	@echo Platform : $(PLATFORM-MK)
+
+banner:
+	@echo ======= Building : $(PROJECTNAME) $(OSNAME) $(COMPILER)
+
+
+debug:
+	$(MAKE) DEBUG=YES
+release:
+	$(MAKE) COMMON_DFLAGS="$(OPT_FLAGS)" LINKER_DFLAGS= all
+
+
+$(DESTINATION): $(DESTDEP)
+	@echo ======== Linking : $(PROJECTNAME) $(OSNAME) $(COMPILER) $(DESTTYPE) $(DESTCOMMAND)
+	@echo ======== $(DESTINATION)
+	@if [  x$(MERGE_SCR) != x ] ; then \
+          for fnm in $(DESTINATION); do \
+            $(MERGE_SCR) $$fnm.src >$$fnm; done \
+        fi
+	$(DESTCOMMAND)
+	$(CXX_TEMPL_MERGE)
+
+
+rebuild:
+	$(MAKE) --no-print-directory clean
+	$(MAKE) --no-print-directory dep
+	$(MAKE) --no-print-directory all
+
+relink:
+	$(RM) $(DESTINATION)
+	$(MAKE) all
+
+clean:
+	@echo ====== Clean Up directories
+	$(RM) core *.a *.o *~ depend.d* $(DESTINATION) $(DESTINATION).exe
+	$(RM) $(DEBUGDIR)*.o $(DEBUGDIR)*.a core *.stackdump
+	$(RM) $(RELDIR)*.o $(RELDIR)*.a 
+	$(RM) -Rf $(DEBUGDIR)/$(CXX_CACHE)
+	$(RM) -Rf $(RELDIR)/$(CXX_CACHE)
+	$(RM) -Rf $(CXX_CACHE)
+	$(RM) -Rf *__Win32_Debug *__Win32_Release *.bak  *.plg
+	$(RM) -Rf warn.log cvsenv.sh
+
+
+relprep: clean
+	@echo ====== Release preparation
+	$(RM) -r CVS *.plg *.opt opt.txt $(PROJECT_DIR)/*.opt *.ncb *.opt *.dsp *vcproj.*
+	dos2unix $(SOURCES) $(wildcard *.h*) $(wildcard *.hpp)
+	dos2unix $(SOURCES) $(wildcard *.sh) $(wildcard *.cpp) $(wildcard ?akefile*) $(wildcard *.txt)
+	chmod -x $(SOURCES) $(wildcard *.h*) $(wildcard *.cpp) $(wildcard ?akefile*) $(wildcard *.txt) $(wildcard *.vcproj)
+	chmod a+rw $(SOURCES) $(wildcard *.h*) $(wildcard *.cpp) $(wildcard ?akefile*) $(wildcard *.txt) $(wildcard *.vcproj)
+	chmod a-x $(SOURCES) $(wildcard *.h*) $(wildcard *.cpp) $(wildcard ?akefile*) $(wildcard *.txt) $(wildcard *.vcproj)
+
+init:
+	[ x$(DESTTYPE) = xCOPYONLY ] && exit 0;\
+	if [ ! -d $(DEBUGDIR) ]; then \
+	    mkdir $(DEBUGDIR) 2>/dev/null; \
+	fi;\
+	if [ ! -d $(RELDIR) ]; then \
+	    mkdir $(RELDIR) 2>/dev/null; \
+	fi;\
+	exit 0;\
+
+
+dep:
+	@echo ====== Dependencies regeneration
+	$(RM) depend.d*
+	echo $(DEPCOMMAND)
+	$(DEPCOMMAND)
+	$(CATCOMMAND)
+	$(RM) depend.d~
+
+-include $(DEPFILE)
