@@ -32,6 +32,10 @@ For more information please visit:  http://bmagic.sourceforge.net
 namespace bm
 {
 
+/*!
+    \brief layout class for serialization buffers
+ 
+*/
 template<class SV>
 struct sparse_vector_serial_layout
 {
