@@ -535,14 +535,16 @@ template<typename T> unsigned gap_test(const T* buf, unsigned pos)
         if (buf[9] >= pos) return sv;
         BM_ASSERT(0);
     }
-    else
-	while ( start != end )
+	else
 	{
-		unsigned curr = (start + end) >> 1;
-		if ( buf[curr] < pos )
-			start = curr + 1;
-		else
-			end = curr;
+		while (start != end)
+		{
+			unsigned curr = (start + end) >> 1;
+			if (buf[curr] < pos)
+				start = curr + 1;
+			else
+				end = curr;
+		}
 	}
 	return ((*buf) & 1) ^ ((--start) & 1); 
 }
