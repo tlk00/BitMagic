@@ -62,9 +62,9 @@ struct bv_statistics
     /// Number of GAP blocks.
     unsigned gap_blocks;  
     /// Estimated maximum of memory required for serialization.
-    unsigned max_serialize_mem;
+    size_t  max_serialize_mem;
     /// Memory used by bitvector including temp and service blocks
-    unsigned  memory_used;
+    size_t  memory_used;
     /// Array of all GAP block lengths in the bvector.
     gap_word_t   gap_length[bm::set_total_blocks];
     /// GAP lengths used by bvector

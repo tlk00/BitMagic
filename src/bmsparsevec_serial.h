@@ -33,31 +33,66 @@ namespace bm
 {
 
 /*!
-    \brief layout class for serialization buffers
+    \brief layout class for serialization buffer structure
+    
+    Class keeps a memory block sized for the target vector
  
 */
 template<class SV>
 struct sparse_vector_serial_layout
 {
     sparse_vector_serial_layout()
-    : buffer(0), serialized_size(0)
+    : buffer_(0), capacity_(0), serialized_size_(0)
     {
     }
     
     ~sparse_vector_serial_layout()
     {
-        delete [] buffer;
+        if (buffer_)
+            free(buffer_);
     }
+    
+    /// return current serialized size
+    size_t  size() const { return serialized_size_; }
+    
+    /// return serialization buffer capacity
+    size_t  capacity() const { return capacity_; }
+    
 private:
     sparse_vector_serial_layout(const sparse_vector_serial_layout&);
     void operator=(const sparse_vector_serial_layout&);
 public:
-    unsigned char* buffer;                       ///< serialization buffer
-    unsigned       serialized_size;              ///< serialized size
+    unsigned char* buffer_;                       ///< serialization buffer
+    size_t         capacity_;                      ///< buffer capacity
+    size_t         serialized_size_;               ///< serialized size
     
-    unsigned char* plain_ptrs[SV::value_type*8]; ///< pointers on serialized bit-palins
-    unsigned plane_size[[SV::value_type*8];      ///< serialized plain size
+    unsigned char* plain_ptrs_[SV::value_type*8]; ///< pointers on serialized bit-palins
+    unsigned plane_size_[SV::value_type*8];       ///< serialized plain size
 };
+
+// -------------------------------------------------------------------------
+
+template<class SV>
+class sparse_vec_serializer
+{
+public:
+    sparse_vec_serializer();
+    
+    
+private:
+    sparse_vec_serializer(const sparse_vec_serializer&);
+    sparse_vec_serializer& operator=(const sparse_vec_serializer&);
+
+};
+
+// -------------------------------------------------------------------------
+
+template<class SV>
+sparse_vec_serializer<SV>::sparse_vec_serializer()
+{
+}
+
+// -------------------------------------------------------------------------
 
 
 template<class SV>
@@ -65,9 +100,10 @@ void sparse_vector_serialize(
                 const SV&                        sv,
                 sparse_vector_serial_layout<SV>& sv_layout,
                 unsigned                         bv_serialization_flags = 0)
-             
 {
 }
+
+// -------------------------------------------------------------------------
 
     
 } // namespace bm
