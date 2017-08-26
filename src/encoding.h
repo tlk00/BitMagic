@@ -53,6 +53,7 @@ public:
     void put_16(const bm::short_t* s, unsigned count);
     void put_32(bm::word_t  w);
     void put_32(const bm::word_t* w, unsigned count);
+    void put_64(bm::id64_t w);
     void put_prefixed_array_32(unsigned char c, 
                                const bm::word_t* w, unsigned count);
     void put_prefixed_array_16(unsigned char c, 
@@ -100,6 +101,7 @@ public:
     decoder(const unsigned char* buf);
     bm::short_t get_16();
     bm::word_t get_32();
+    bm::id64_t get_64();
     void get_32(bm::word_t* w, unsigned count);
     void get_16(bm::short_t* s, unsigned count);
 };
@@ -642,6 +644,29 @@ BMFORCEINLINE void encoder::put_32(bm::word_t w)
 }
 
 /*!
+   \fn void encoder::put_64(bm::id64_t w)
+   \brief Puts 64 bits word into encoding buffer.
+   \param w - word to encode.
+*/
+inline void encoder::put_64(bm::id64_t w)
+{
+#if (BM_UNALIGNED_ACCESS_OK == 1)
+	*((bm::id64_t*) buf_) = w;
+	buf_ += sizeof(w);
+#else
+    *buf_++ = (unsigned char) w;
+    *buf_++ = (unsigned char) (w >> 8);
+    *buf_++ = (unsigned char) (w >> 16);
+    *buf_++ = (unsigned char) (w >> 24);
+    *buf_++ = (unsigned char) (w >> 32);
+    *buf_++ = (unsigned char) (w >> 40);
+    *buf_++ = (unsigned char) (w >> 48);
+    *buf_++ = (unsigned char) (w >> 56);
+#endif
+}
+
+
+/*!
     \brief Encodes array of 32-bit words
 */
 inline 
@@ -692,7 +717,7 @@ inline decoder::decoder(const unsigned char* buf)
 
 /*!
    \fn bm::short_t decoder::get_16()
-   \brief Reads 16bit word from the decoding buffer.
+   \brief Reads 16-bit word from the decoding buffer.
 */
 BMFORCEINLINE bm::short_t decoder::get_16() 
 {
@@ -707,7 +732,7 @@ BMFORCEINLINE bm::short_t decoder::get_16()
 
 /*!
    \fn bm::word_t decoder::get_32()
-   \brief Reads 32 bit word from the decoding buffer.
+   \brief Reads 32-bit word from the decoding buffer.
 */
 BMFORCEINLINE bm::word_t decoder::get_32() 
 {
@@ -716,6 +741,28 @@ BMFORCEINLINE bm::word_t decoder::get_32()
 #else
 	bm::word_t a = buf_[0]+ ((unsigned)buf_[1] << 8) +
                    ((unsigned)buf_[2] << 16) + ((unsigned)buf_[3] << 24);
+#endif
+    buf_+=sizeof(a);
+    return a;
+}
+
+/*!
+   \fn bm::word_t decoder::get_64()
+   \brief Reads 64-bit word from the decoding buffer.
+*/
+inline bm::id64_t decoder::get_64()
+{
+#if (BM_UNALIGNED_ACCESS_OK == 1)
+	bm::word_t a = *((bm::id64_t*)buf_);
+#else
+	bm::word_t a = buf_[0]+
+                   ((bm::id64_t)buf_[1] << 8)  +
+                   ((bm::id64_t)buf_[2] << 16) +
+                   ((bm::id64_t)buf_[3] << 24) +
+                   ((bm::id64_t)buf_[4] << 32) +
+                   ((bm::id64_t)buf_[5] << 40) +
+                   ((bm::id64_t)buf_[6] << 48) +
+                   ((bm::id64_t)buf_[7] << 56);
 #endif
     buf_+=sizeof(a);
     return a;
