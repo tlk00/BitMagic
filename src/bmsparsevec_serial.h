@@ -35,12 +35,14 @@ namespace bm
 /*!
     \brief layout class for serialization buffer structure
     
-    Class keeps a memory block sized for the target vector
+    Class keeps a memory block sized for the target sparse vector BLOB
  
 */
 template<class SV>
 struct sparse_vector_serial_layout
 {
+    typedef typename SV::value_type value_type;
+
     sparse_vector_serial_layout()
     : buffer_(0), capacity_(0), serialized_size_(0)
     {
@@ -49,36 +51,131 @@ struct sparse_vector_serial_layout
     ~sparse_vector_serial_layout()
     {
         if (buffer_)
-            free(buffer_);
+            ::free(buffer_);
+    }
+    
+    /*!
+        \brief resize capacity
+        \param capacity - new capacity
+        \return new buffer or 0 if failed
+    */
+    unsigned char* reserve(size_t capacity)
+    {
+        if (capacity == 0)
+        {
+            freemem();
+            return 0;
+        }
+        if (capacity <= capacity_)  // buffer reduction - avoid
+        {
+            serialized_size_ = 0;
+            return buffer_;
+        }
+        // buffer growth
+        freemem();
+        buffer_ = (unsigned char*) ::malloc(capacity);
+        if (buffer_)
+        {
+            capacity_ = capacity;
+        }
+        return buffer_;
     }
     
     /// return current serialized size
     size_t  size() const { return serialized_size_; }
     
+    /// Set new serialized size
+    void resize(size_t ssize) { serialized_size_ = ssize; }
+    
     /// return serialization buffer capacity
     size_t  capacity() const { return capacity_; }
+    
+    /// free memory
+    void freemem()
+    {
+        if (buffer_)
+        {
+            ::free(buffer_);
+            buffer_ = 0; capacity_ = serialized_size_ = 0;
+        }
+    }
+    
+    /// Set plain output pointer and size
+    void set_plain(unsigned i, unsigned char* ptr, unsigned buf_size)
+    {
+        plain_ptrs_[i] = ptr;
+        plane_size_[i] = buf_size;
+    }
+    
+    /// Get plain pointer
+    const unsigned char* get_plain(unsigned i) const
+    {
+        return plain_ptrs_[i];
+    }
+    
     
 private:
     sparse_vector_serial_layout(const sparse_vector_serial_layout&);
     void operator=(const sparse_vector_serial_layout&);
-public:
+protected:
     unsigned char* buffer_;                       ///< serialization buffer
     size_t         capacity_;                      ///< buffer capacity
     size_t         serialized_size_;               ///< serialized size
-    
-    unsigned char* plain_ptrs_[SV::value_type*8]; ///< pointers on serialized bit-palins
-    unsigned plane_size_[SV::value_type*8];       ///< serialized plain size
+
+    unsigned char* plain_ptrs_[sizeof(value_type)*8]; ///< pointers on serialized bit-palins
+    unsigned plane_size_[sizeof(value_type)*8];       ///< serialized plain size
 };
 
-// -------------------------------------------------------------------------
+
+/*!
+    \brief Serializer utility class class for sparse vector
+ 
+*/
+/*!
+ Serialization format:
+ <pre>
+
+ | HEADER | BITVECTRORS |
+
+ Header structure:
+   BYTE+BYTE: Magic-signature 'BM'
+   BYTE : Byte order ( 0 - Big Endian, 1 - Little Endian)
+   BYTE : Number of Bit-vector plains (total)
+   INT64: Offset of plain 0 from the header start (value 0 means plain is empty)
+   INT64: Offset of plain 1 from
+   ...
+   INT32
+
+ </pre>
+*/
 
 template<class SV>
 class sparse_vec_serializer
 {
 public:
+    typedef SV             sparse_vector_type;
+    
+public:
     sparse_vec_serializer();
     
+    /*!
+    \brief Serialize sparse vector into a buffer layout structure
     
+    \param sv         - sparse vector to serialize
+    \param sv_layout  - buffer structure to keep the result
+    \param bv_serialization_flags - bit-vector serialization flags
+    as defined in bm::serialization_flags    
+    
+    \return "0" - success, "-1" memory allocation error
+    
+    @sa serialization_flags
+    */
+    int serialize(const SV&                        sv,
+                  sparse_vector_serial_layout<SV>& sv_layout,
+                  unsigned                         bv_serialization_flags = 0);
+protected:
+
+    //void encode_header(bm::encoder& enc, )
 private:
     sparse_vec_serializer(const sparse_vec_serializer&);
     sparse_vec_serializer& operator=(const sparse_vec_serializer&);
@@ -96,11 +193,68 @@ sparse_vec_serializer<SV>::sparse_vec_serializer()
 
 
 template<class SV>
-void sparse_vector_serialize(
+int sparse_vec_serializer<SV>::serialize(
                 const SV&                        sv,
                 sparse_vector_serial_layout<SV>& sv_layout,
-                unsigned                         bv_serialization_flags = 0)
+                unsigned                         bv_serialization_flags)
 {
+    typename SV::statistics sv_stat;
+    sv.calc_stat(&sv_stat);
+    
+    unsigned char* buf = sv_layout.reserve(sv_stat.max_serialize_mem);
+    if (!buf) // memory allocation error
+    {
+        return -1;
+    }
+    bm::encoder enc(buf, sv_layout.capacity());
+    unsigned plains = sv.plain_size();
+
+    
+    // calculate header size in bytes
+    unsigned h_size = 1 + 1 + 1 + 1 + (8 * plains);
+
+    // ptr where bit-vectors start
+    unsigned char* buf_ptr = buf + h_size;
+
+    unsigned i;
+    for (i = 0; i < plains; ++i)
+    {
+        const typename SV::bvector_type_ptr bv = sv.plain(i);
+        if (!bv)  // empty plain
+        {
+            sv_layout.set_plain(i, 0, 0);
+            continue;
+        }
+        unsigned buf_size =
+            bm::serialize(*bv, buf_ptr, 0, bv_serialization_flags);
+        sv_layout.set_plain(i, buf_ptr, buf_size);
+        buf_ptr += buf_size;
+        
+    } // for i
+    
+    sv_layout.resize(buf_ptr - buf);
+    
+    
+    // save header
+    ByteOrder bo = globals<true>::byte_order();
+    
+    enc.put_8('B');
+    enc.put_8('M');
+    enc.put_8((unsigned char)bo);
+    enc.put_8((unsigned char)plains);
+    for (i = 0; i < plains; ++i)
+    {
+        const unsigned char* p = sv_layout.get_plain(i);
+        if (!p)
+        {
+            enc.put_64(0);
+            continue;
+        }
+        size_t offset = p - buf;
+        enc.put_64(offset);
+    }
+
+    return 0;
 }
 
 // -------------------------------------------------------------------------

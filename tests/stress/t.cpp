@@ -46,6 +46,7 @@ OTHER DEALINGS IN THE SOFTWARE.
 #include <bmvmin.h>
 #include <bmsparsevec.h>
 #include <bmsparsevec_algo.h>
+#include <bmsparsevec_serial.h>
 
 using namespace bm;
 using namespace std;
@@ -7951,6 +7952,11 @@ bool CompareSparseVector(const SV& sv, const Vect& vect)
             return false;
         }
     }
+    
+    // serialization comparison
+    sparse_vector_serial_layout<SV> sv_lay;
+    sparse_vec_serializer<SV> sv_serial;
+    sv_serial.serialize(sv, sv_lay);
     
     return true;
 }

@@ -181,7 +181,7 @@ public:
     /*!
         \brief get total number of bit-plains in the vector
     */
-    unsigned plain_size() const { return unsigned(sizeof(Val)*8); }
+    static unsigned plain_size() { return unsigned(sizeof(Val)*8); }
     
     /*!
         \brief get access to bit-plain as is (can return NULL)

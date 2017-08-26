@@ -1054,7 +1054,7 @@ enum serialization_flags {
    If you want to save memory across multiple bvectors
    allocate temporary block using allocate_tempblock and pass it to 
    serialize.
-   (Of course serialize does not deallocate temp_block.)
+   (Serialize does not deallocate temp_block.)
 
    \param serialization_flags
    Flags controlling serilization (bit-mask) 
@@ -1066,7 +1066,7 @@ enum serialization_flags {
    \sa calc_stat, serialization_flags
 
 */
-/*
+/*!
  Serialization format:
  <pre>
 
