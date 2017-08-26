@@ -4916,7 +4916,6 @@ bool improve_gap_levels(const T* length,
 
     unsigned min_overhead = gap_overhead(length, length_end, glevel_len);
     bool is_improved = false;
-    gap_word_t prev_value = glevel_len[bm::gap_levels-1];
 
     // main problem solving loop
     //
@@ -4948,7 +4947,6 @@ bool improve_gap_levels(const T* length,
         }
         if (i == 0) 
             break;
-        prev_value = glevel_len[i];
     }
     // 
     // Remove duplicates
