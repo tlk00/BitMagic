@@ -113,6 +113,8 @@ struct sparse_vector_serial_layout
         return plain_ptrs_[i];
     }
     
+    /// Return serializatio buffer pointer
+    const unsigned char* buf() const { return buffer_; }
     
 private:
     sparse_vector_serial_layout(const sparse_vector_serial_layout&);
@@ -130,8 +132,6 @@ protected:
 /*!
     \brief Serializer utility class class for sparse vector
  
-*/
-/*!
  Serialization format:
  <pre>
 
@@ -141,6 +141,7 @@ protected:
    BYTE+BYTE: Magic-signature 'BM'
    BYTE : Byte order ( 0 - Big Endian, 1 - Little Endian)
    BYTE : Number of Bit-vector plains (total)
+   INT64: Vector size
    INT64: Offset of plain 0 from the header start (value 0 means plain is empty)
    INT64: Offset of plain 1 from
    ...
@@ -153,7 +154,8 @@ template<class SV>
 class sparse_vec_serializer
 {
 public:
-    typedef SV             sparse_vector_type;
+    typedef SV                          sparse_vector_type;
+    typedef typename SV::bvector_type   bvector_type;
     
 public:
     sparse_vec_serializer();
@@ -173,14 +175,17 @@ public:
     int serialize(const SV&                        sv,
                   sparse_vector_serial_layout<SV>& sv_layout,
                   unsigned                         bv_serialization_flags = 0);
-protected:
-
-    //void encode_header(bm::encoder& enc, )
+    
+    int deserialize(SV& sv,
+                    const unsigned char* buf,
+                    bm::word_t* temp_block=0);
+    
 private:
     sparse_vec_serializer(const sparse_vec_serializer&);
     sparse_vec_serializer& operator=(const sparse_vec_serializer&);
 
 };
+
 
 // -------------------------------------------------------------------------
 
@@ -207,11 +212,11 @@ int sparse_vec_serializer<SV>::serialize(
         return -1;
     }
     bm::encoder enc(buf, sv_layout.capacity());
-    unsigned plains = sv.plain_size();
+    unsigned plains = sv.plains();
 
     
     // calculate header size in bytes
-    unsigned h_size = 1 + 1 + 1 + 1 + (8 * plains);
+    unsigned h_size = 1 + 1 + 1 + 1 + 8 + (8 * plains) ;
 
     // ptr where bit-vectors start
     unsigned char* buf_ptr = buf + h_size;
@@ -242,6 +247,8 @@ int sparse_vec_serializer<SV>::serialize(
     enc.put_8('M');
     enc.put_8((unsigned char)bo);
     enc.put_8((unsigned char)plains);
+    enc.put_64(sv.size());
+    
     for (i = 0; i < plains; ++i)
     {
         const unsigned char* p = sv_layout.get_plain(i);
@@ -258,6 +265,66 @@ int sparse_vec_serializer<SV>::serialize(
 }
 
 // -------------------------------------------------------------------------
+
+template<class SV>
+int sparse_vec_serializer<SV>::deserialize(SV& sv,
+                                            const unsigned char* buf,
+                                            bm::word_t* temp_block)
+{
+    ByteOrder bo_current = globals<true>::byte_order();
+
+    bm::decoder dec(buf);
+    unsigned char h1 = dec.get_8();
+    unsigned char h2 = dec.get_8();
+
+    BM_ASSERT(h1 == 'B' && h2 == 'M');
+    if (h1 != 'B' && h2 != 'M')  // no magic header? issue...
+    {
+        return -1;
+    }
+    
+    unsigned char bv_bo = dec.get_8();
+    unsigned plains = dec.get_8();
+    
+    if (!plains || plains > sv.plains())
+    {
+        return -2; // incorrect number of plains for the target svector
+    }
+    
+    sv.clear();
+    bm::id64_t sv_size = dec.get_64();
+    if (sv_size == 0)
+    {
+        return 0;  // empty vector
+    }
+    sv.resize((unsigned)sv_size);
+    
+    unsigned i = 0;
+    for (i = 0; i < plains; ++i)
+    {
+        size_t offset = (size_t) dec.get_64();
+        if (offset == 0) // null vector
+        {
+            continue;
+        }
+        const unsigned char* bv_buf_ptr = buf + offset;
+        bvector_type*  bv = sv.get_plain(i);
+        BM_ASSERT(bv);
+        
+        bm::deserialize(*bv, bv_buf_ptr, temp_block);
+        if (!temp_block)
+        {
+            typename bvector_type::blocks_manager_type& bv_bm =
+                                                bv->get_blocks_manager();
+            temp_block = bv_bm.check_allocate_tempblock();
+        }
+    } // for i
+    return 0;
+    
+}
+
+// -------------------------------------------------------------------------
+
 
     
 } // namespace bm

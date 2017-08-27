@@ -478,7 +478,7 @@ void print_svector_stat(const SV& svect)
     
     std::cout << "Plains:" << std::endl;
     
-    for (unsigned i = 0; i < svect.plain_size(); ++i)
+    for (unsigned i = 0; i < svect.plains(); ++i)
     {
         const typename SV::bvector_type* bv_plain = svect.plain(i);
         std::cout << i << ":";

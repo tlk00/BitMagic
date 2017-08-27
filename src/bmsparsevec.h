@@ -181,7 +181,7 @@ public:
     /*!
         \brief get total number of bit-plains in the vector
     */
-    static unsigned plain_size() { return unsigned(sizeof(Val)*8); }
+    static unsigned plains() { return unsigned(sizeof(Val)*8); }
     
     /*!
         \brief get access to bit-plain as is (can return NULL)
@@ -519,6 +519,8 @@ void sparse_vector<Val, BV>::calc_stat(
             
         }
     } // for j
+    // header accounting
+    st->max_serialize_mem += 1 + 1 + 1 + 1 + 8 + (8 * sizeof(Val) * 8);
 
 }
 

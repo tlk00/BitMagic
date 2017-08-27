@@ -41,7 +41,7 @@ namespace bm
 template<class SV>
 void dynamic_range_clip_high(SV& svect, unsigned high_bit)
 {
-    unsigned sv_plains = svect.plain_size();
+    unsigned sv_plains = svect.plains();
     
     BM_ASSERT(sv_plains > high_bit && high_bit > 0);
     
@@ -80,9 +80,9 @@ template<class SV>
 void dynamic_range_clip_low(SV& svect, unsigned low_bit)
 {
     if (low_bit == 0) return; // nothing to do
-    BM_ASSERT(svect.plain_size() > low_bit);
+    BM_ASSERT(svect.plains() > low_bit);
     
-    unsigned sv_plains = svect.plain_size();
+    unsigned sv_plains = svect.plains();
     typename SV::bvector_type bv_acc1;
     unsigned i;
     

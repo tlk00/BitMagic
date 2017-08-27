@@ -7955,8 +7955,28 @@ bool CompareSparseVector(const SV& sv, const Vect& vect)
     
     // serialization comparison
     sparse_vector_serial_layout<SV> sv_lay;
-    sparse_vec_serializer<SV> sv_serial;
-    sv_serial.serialize(sv, sv_lay);
+    sparse_vec_serializer<SV> sv_ser;
+    int res = sv_ser.serialize(sv, sv_lay);
+    if (res != 0)
+    {
+        cerr << "Serialization error" << endl;
+        exit(1);
+    }
+    SV sv2;
+    const unsigned char* buf = sv_lay.buf();
+    res = sv_ser.deserialize(sv2, buf);
+    if (res != 0)
+    {
+        cerr << "De-Serialization error" << endl;
+        exit(1);
+    }
+    if (!sv.equal(sv2) )
+    {
+        cerr << "Serialization comparison of two svectors failed" << endl;
+        exit(1);
+    }
+    
+    
     
     return true;
 }
@@ -7964,6 +7984,36 @@ bool CompareSparseVector(const SV& sv, const Vect& vect)
 void TestSparseVector()
 {
     cout << "---------------------------- Bit-plain sparse vector test" << endl;
+    
+    // test empty vector serialization
+    {{
+    
+    typedef bm::sparse_vector<unsigned, bm::bvector<> > svector;
+
+    bm::sparse_vector<unsigned, bm::bvector<> > sv1;
+    bm::sparse_vector<unsigned, bm::bvector<> > sv2;
+    bm::sparse_vec_serializer<bm::sparse_vector<unsigned, bm::bvector<> > > sv_ser;
+    bm::sparse_vector_serial_layout<svector> sv_layout;
+    int res = sv_ser.serialize(sv1, sv_layout);
+    if (res != 0)
+    {
+        cerr << "Serialization error" << endl;
+        exit(1);
+    }
+    const unsigned char* buf = sv_layout.buf();
+    res = sv_ser.deserialize(sv2, buf);
+    if (res != 0)
+    {
+        cerr << "De-Serialization error" << endl;
+        exit(1);
+    }
+    if (!sv1.equal(sv2) )
+    {
+        cerr << "Serialization comparison of empty vectors failed" << endl;
+        exit(1);
+    }
+    
+    }}
     
     {{
     bm::sparse_vector<unsigned, bm::bvector<> > sv;
@@ -9093,7 +9143,7 @@ int main(void)
     exit(1);
 */                                                                                                        
 
-
+/*
      ExportTest();
      ResizeTest();
 
@@ -9158,7 +9208,7 @@ int main(void)
      StressTest(100, 1); // SUB
      StressTest(100, 2); // XOR
      StressTest(100, 3); // AND
-
+*/
      TestSparseVector();
      TestSparseVector_Stress(3);
 //return 0;
