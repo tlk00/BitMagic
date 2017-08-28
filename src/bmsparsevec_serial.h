@@ -211,12 +211,12 @@ int sparse_vec_serializer<SV>::serialize(
     {
         return -1;
     }
-    bm::encoder enc(buf, sv_layout.capacity());
+    bm::encoder enc(buf, (unsigned)sv_layout.capacity());
     unsigned plains = sv.plains();
 
     
     // calculate header size in bytes
-    unsigned h_size = 1 + 1 + 1 + 1 + 8 + (8 * plains) ;
+    unsigned h_size = 1 + 1 + 1 + 1 + 8 + (8 * plains) + 4;
 
     // ptr where bit-vectors start
     unsigned char* buf_ptr = buf + h_size;

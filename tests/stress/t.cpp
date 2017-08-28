@@ -247,7 +247,7 @@ static unsigned nf_;
             std::cerr << "Failed allocation!" << endl;
             exit(1);
         }
-        *p = n;
+        *p = (bm::word_t)n;
         return ++p;
     }
 
@@ -3621,9 +3621,9 @@ void StressTest(int repetitions, int set_operation = -1)
         struct bvect::statistics st2;
         bvect_full1->calc_stat(&st2);
 
-        unsigned Ratio = (st2.memory_used * 100)/st1.memory_used;
+        unsigned Ratio = unsigned((st2.memory_used * 100)/st1.memory_used);
         RatioSum+=Ratio;
-        DeltaSum+=st1.memory_used - st2.memory_used;
+        DeltaSum+=unsigned(st1.memory_used - st2.memory_used);
 
         cout << "Optimization statistics: " << endl  
              << "   MemUsedBefore=" << st1.memory_used
@@ -3659,9 +3659,9 @@ void StressTest(int repetitions, int set_operation = -1)
 
         delete bvect_full1;
 
-        unsigned SRatio = (slen*100)/st2.memory_used;
+        unsigned SRatio = unsigned((slen*100)/st2.memory_used);
         SRatioSum+=SRatio;
-        SDeltaSum+=st2.memory_used - slen;
+        SDeltaSum+=unsigned(st2.memory_used) - slen;
 
 
         cout << "Serialized mem_max = " << st2.max_serialize_mem 
@@ -8034,7 +8034,7 @@ void TestSparseVector()
     std::vector<unsigned> vect;
     for (unsigned i = 0; i < 128000; ++i)
     {
-        vect.push_back(i);
+        vect.push_back(9);
     }
     
     bm::sparse_vector<unsigned, bm::bvector<> > sv;
@@ -8663,7 +8663,7 @@ void LoadBVDump(const char* filename, const char* filename_out=0, bool validate=
             if (st1.max_serialize_mem > buffer_size)
             {
                 delete [] buffer;
-                buffer_size = st1.max_serialize_mem;
+                buffer_size = (unsigned)st1.max_serialize_mem;
                 buffer = new unsigned char[buffer_size];
             }
 
@@ -9143,7 +9143,7 @@ int main(void)
     exit(1);
 */                                                                                                        
 
-/*
+
      ExportTest();
      ResizeTest();
 
@@ -9208,7 +9208,7 @@ int main(void)
      StressTest(100, 1); // SUB
      StressTest(100, 2); // XOR
      StressTest(100, 3); // AND
-*/
+
      TestSparseVector();
      TestSparseVector_Stress(3);
 //return 0;

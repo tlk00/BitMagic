@@ -1891,10 +1891,8 @@ void bvector<Alloc>::optimize(bm::word_t* temp_block,
                                                 stat);
     if (stat)
     {
-        stat->bit_blocks = stat->gap_blocks 
-                         = stat->max_serialize_mem 
-                         = stat->memory_used 
-                         = 0;
+		stat->bit_blocks = stat->gap_blocks = 0;
+        stat->max_serialize_mem = stat->memory_used = 0;
         ::memcpy(stat->gap_levels, 
                 blockman_.glen(), sizeof(gap_word_t) * bm::gap_levels);
         stat->max_serialize_mem = (unsigned)sizeof(id_t) * 4;
@@ -1905,7 +1903,7 @@ void bvector<Alloc>::optimize(bm::word_t* temp_block,
 
     if (stat)
     {
-        unsigned safe_inc = stat->max_serialize_mem / 10; // 10% increment
+        size_t safe_inc = stat->max_serialize_mem / 10; // 10% increment
         if (!safe_inc) safe_inc = 256;
         stat->max_serialize_mem += safe_inc;
         stat->memory_used += (unsigned)(sizeof(*this) - sizeof(blockman_));
@@ -2087,9 +2085,8 @@ void bvector<Alloc>::calc_stat(struct bvector<Alloc>::statistics* st) const
 {
     BM_ASSERT(st);
     
-    st->bit_blocks = st->gap_blocks 
-                   = st->max_serialize_mem 
-                   = st->memory_used = 0;
+	st->bit_blocks = st->gap_blocks = 0;
+    st->max_serialize_mem = st->memory_used = 0;
 
     ::memcpy(st->gap_levels, 
              blockman_.glen(), sizeof(gap_word_t) * bm::gap_levels);
@@ -2155,7 +2152,7 @@ void bvector<Alloc>::calc_stat(struct bvector<Alloc>::statistics* st) const
         }
     }  
 
-    unsigned safe_inc = st->max_serialize_mem / 10; // 10% increment
+    size_t safe_inc = st->max_serialize_mem / 10; // 10% increment
     if (!safe_inc) safe_inc = 256;
     st->max_serialize_mem += safe_inc;
 

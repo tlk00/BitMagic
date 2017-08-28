@@ -753,7 +753,7 @@ BMFORCEINLINE bm::word_t decoder::get_32()
 inline bm::id64_t decoder::get_64()
 {
 #if (BM_UNALIGNED_ACCESS_OK == 1)
-	bm::word_t a = *((bm::id64_t*)buf_);
+	bm::id64_t a = *((bm::id64_t*)buf_);
 #else
 	bm::word_t a = buf_[0]+
                    ((bm::id64_t)buf_[1] << 8)  +

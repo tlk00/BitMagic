@@ -502,7 +502,8 @@ void sparse_vector<Val, BV>::calc_stat(
 {
     BM_ASSERT(st);
     
-    st->bit_blocks = st->gap_blocks = st->max_serialize_mem = st->memory_used = 0;
+	st->bit_blocks = st->gap_blocks = 0; 
+	st->max_serialize_mem = st->memory_used = 0;
  
     for (unsigned j = 0; j < sizeof(Val)*8; ++j)
     {
