@@ -1,5 +1,5 @@
 /*
-Copyright (c) 2002-2009 Anatoliy Kuznetsov.
+Copyright (c) 2002-20117 Anatoliy Kuznetsov.
 
 Permission is hereby granted, free of charge, to any person 
 obtaining a copy of this software and associated documentation 
@@ -24,7 +24,7 @@ OTHER DEALINGS IN THE SOFTWARE.
 
 //#define BM_SET_MMX_GUARD
 //#define BMSSE2OPT
-//#define BMSSE42OPT
+#define BMSSE42OPT
 #define BM64OPT
 //#define BMCOUNTOPT
 
@@ -7981,6 +7981,59 @@ bool CompareSparseVector(const SV& sv, const Vect& vect)
     return true;
 }
 
+template<class SV>
+bool TestEqualSparseVectors(const SV& sv1, const SV& sv2)
+{
+    bool b = sv1.equal(sv2);
+    if (!b)
+    {
+        return b;
+    }
+    // comparison through serialization
+    //
+    {{
+        sparse_vector_serial_layout<SV> sv_lay;
+        sparse_vec_serializer<SV> sv_ser;
+        int res = sv_ser.serialize(sv1, sv_lay);
+        if (res != 0)
+        {
+            cerr << "Serialization error in TestEqualSparseVectors()" << endl;
+            exit(1);
+        }
+        
+        
+        // copy buffer to check if serialization size is actually correct
+        const unsigned char* buf = sv_lay.buf();
+        size_t buf_size = sv_lay.size();
+        
+        vector<unsigned char> tmp_buf(buf_size);
+        ::memcpy(&tmp_buf[0], buf, buf_size);
+        
+        SV sv3;
+        res = sv_ser.deserialize(sv3, &tmp_buf[0]);
+        if (res != 0)
+        {
+            cerr << "De-Serialization error in TestEqualSparseVectors()" << endl;
+            exit(1);
+        }
+        
+        
+        
+        if (!sv1.equal(sv3) )
+        {
+            cerr << "Serialization comparison of two svectors failed (1)" << endl;
+            exit(1);
+        }
+        if (!sv2.equal(sv3) )
+        {
+            cerr << "Serialization comparison of two svectors failed (2)" << endl;
+            exit(1);
+        }
+        
+    
+    }}
+}
+
 void TestSparseVector()
 {
     cout << "---------------------------- Bit-plain sparse vector test" << endl;
@@ -8567,19 +8620,20 @@ void TestSparseVector_Stress(unsigned count)
                     }
                 } // for i
                 
-                bool b1 = sv1.equal(sv3);
+                bool b1 = TestEqualSparseVectors(sv1, sv3);
                 if (!b1)
                 {
                     cerr << "Equal 1 comparison failed" << endl;
                     exit(1);
                 }
-                bool b2 = sv1.equal(sv4);
+                bool b2 = TestEqualSparseVectors(sv1, sv4);
                 if (!b2)
                 {
                     cerr << "Equal 2 comparison failed" << endl;
                     exit(1);
                 }
-                bool b3 = sv3.equal(sv4);
+                
+                bool b3 = TestEqualSparseVectors(sv3, sv4);
                 if (!b3)
                 {
                     cerr << "Equal 3 comparison failed" << endl;
@@ -9208,7 +9262,7 @@ int main(void)
      StressTest(100, 1); // SUB
      StressTest(100, 2); // XOR
      StressTest(100, 3); // AND
-
+ 
      TestSparseVector();
      TestSparseVector_Stress(3);
 //return 0;
