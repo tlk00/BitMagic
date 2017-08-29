@@ -1,7 +1,7 @@
 # ============================================================================
 #
 # BitMagic Library makefile
-# (c) 2002-2009 Anatoliy Kuznetsov.
+# (c) 2002 Anatoliy Kuznetsov.
 #
 # ============================================================================
 # Permission is hereby granted, free of charge, to any person 
@@ -24,40 +24,19 @@
 # OTHER DEALINGS IN THE SOFTWARE.
 # ============================================================================
 
-TARGETS_BLD =  \
-              samples/bvsample01 \
-              samples/bvsample02 \
-              tests/stress tests/perf 
-        
-SHELL=/bin/sh
-MAKE := ${MAKE} --no-print-directory
+PROJECTNAME=BitMagic Library Sample
 
-ifeq (${MAKECMDGOALS},)
-	MAKECMDGOALS=all
-endif
+CXXSOURCES=$(wildcard *.cpp)
 
-.DIRS_BLD: 
-	@for dir in $(TARGETS_BLD); \
-	do \
-        echo $$dir; \
-		${MAKE} -C $$dir $(MAKECMDGOALS) ; \
-		if [ "$$?" != "0" ]; then exit 127; fi; \
-	done; \
-    
+BASICINCS=src
 
-rebuild all clean: .DIRS_BLD
+CSOURCES= 
 
-relprep: .DIRS_BLD
-	$(RM) -r CVS *.plg *.ncb *.opt
-	$(RM) -rf samples/CVS tests/CVS platforms/CVS src/CVS
-	$(RM) -rf html
-	$(RM) -rf src/bm__* src/*vcproj.*
-	$(RM) -rf *.suo
-	$(RM) -rf debug release cvsenv.sh
-	cd platforms; dos2unix *.mk; cd -
-	dos2unix readme *.txt
-	cd src; dos2unix *.h
-	chmod -x src/*
-	chmod -x Makefile makefile.in Doxyfile license.txt *.sln readme
+DESTINATION = sample2
 
-install : .DIRS_INST
+DESTTYPE = 
+DESTINATIONDIR=samples/bvsample02
+
+include ../../makefile.in
+
+
