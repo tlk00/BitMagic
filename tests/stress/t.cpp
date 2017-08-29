@@ -8032,6 +8032,7 @@ bool TestEqualSparseVectors(const SV& sv1, const SV& sv2)
         
     
     }}
+    return b;
 }
 
 void TestSparseVector()
