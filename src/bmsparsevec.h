@@ -594,7 +594,6 @@ void sparse_vector<Val, BV>::optimize(
             }
             
             typename bvector_type::statistics stbv;
-            
             bv->optimize(temp_block, opt_mode, &stbv);
             
             
@@ -606,12 +605,6 @@ void sparse_vector<Val, BV>::optimize(
                 st->memory_used += stbv.memory_used;
             }
 
-            if (!temp_block)
-            {
-                typename bvector_type::blocks_manager_type& bv_bm =
-                                                    bv->get_blocks_manager();
-                temp_block = bv_bm.check_allocate_tempblock();
-            }
         }
     } // for j
 
