@@ -29,8 +29,8 @@ OTHER DEALINGS IN THE SOFTWARE.
 // No intermix FP with integer SSE in this program
 //#define BM_SET_MMX_GUARD
 //#define BMSSE2OPT
-//#define BMSSE42OPT
-//#define BM64OPT
+#define BMSSE42OPT
+#define BM64OPT
 
 #ifdef _MSC_VER
 #pragma warning( push )
@@ -41,6 +41,10 @@ OTHER DEALINGS IN THE SOFTWARE.
 #include "bm.h"
 #include "bmalgo.h"
 #include "bmserial.h"
+#include "bmsparsevec.h"
+#include "bmsparsevec_algo.h"
+#include "bmsparsevec_serial.h"
+
 //#include "bmdbg.h"
 
 #include <math.h>
@@ -95,6 +99,7 @@ private:
 };
 
 typedef bm::bvector<> bvect;
+
 
 
 void SimpleFillSets(test_bitset& bset, 
@@ -1201,12 +1206,67 @@ void ptest()
 }
 
 
+typedef bm::sparse_vector<unsigned, bvect> svect;
+
+// create a benchmark vector with a few dufferent distribution patterns
+//
+
+void FillSparseIntervals(svect& sv)
+{
+    sv.resize(250000000);
+    
+    unsigned i;
+    for (i = 256000; i < 256000 * 2; ++i)
+    {
+        sv.set(i, 0xFFE);
+    }
+    for (i = 256000 * 3; i < 256000 * 5; ++i)
+    {
+        sv.set(i, i);
+    }
+    
+    for (i = 180000000; i < 190000000; ++i)
+    {
+        sv.set(i, rand() % 128000);
+    }
+    
+    for (i = 200000000; i < 210000000; ++i)
+    {
+        sv.set(i, rand() % 128000);
+    }
+}
+
+
+void SparseVectorAccessTest()
+{
+    svect   sv1;
+    FillSparseIntervals(sv1);
+    sv1.optimize();
+
+    {
+    TimeTaker tt("Random element access test", REPEATS/10 );
+    unsigned long long count = 0;
+    for (unsigned i = 0; i < REPEATS/10; ++i)
+    {
+        for (unsigned j = 256000; j < 190000000/2; ++j)
+        {
+            unsigned v = sv1[j];
+            count += v;
+        }
+    }
+    
+    }
+    
+    
+}
+
+
 int main(void)
 {
 //    ptest();
 
     TimeTaker tt("TOTAL", 1);
-
+/*
     MemCpyTest();
 
     BitCountTest();
@@ -1233,7 +1293,10 @@ int main(void)
     TI_MetricTest();
 
     SerializationTest();
-        
+*/
+    
+    SparseVectorAccessTest();
+    
     return 0;
 }
 

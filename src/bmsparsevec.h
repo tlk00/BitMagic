@@ -90,6 +90,18 @@ public:
         \param offset - target index in the sparse vector
     */
     void import(const value_type* arr, size_type size, size_type offset = 0);
+
+    /*!
+        \brief Export list of integers into a C style array
+     
+        \param arr  - dest array
+        \param size - dest size
+        \param offset - target index in the sparse vector to export from
+     
+        \return number of exported elements
+    */
+    size_type extract(value_type* arr, size_type size, size_type offset = 0);
+
     
     
     /*! \brief return size of the vector
@@ -265,10 +277,7 @@ sparse_vector<Val, BV>::~sparse_vector()
     free_vectors();
 }
 
-
-
 //---------------------------------------------------------------------
-
 
 template<class Val, class BV>
 void sparse_vector<Val, BV>::import(const value_type* arr,
@@ -300,6 +309,21 @@ void sparse_vector<Val, BV>::import(const value_type* arr,
     } // for i
     if (i > size_)
         size_ = i;
+}
+
+//---------------------------------------------------------------------
+
+template<class Val, class BV>
+typename sparse_vector<Val, BV>::size_type
+sparse_vector<Val, BV>::extract(value_type* arr,
+                               size_type   size,
+                               size_type   offset)
+{
+    if (size == 0)
+        return 0;
+    ::memset(arr, 0, sizeof(value_type)*size);
+    
+    return 0;
 }
 
 //---------------------------------------------------------------------
@@ -375,17 +399,17 @@ sparse_vector<Val, BV>::get(bm::id_t i) const
     BM_ASSERT(i < size_);
     
     value_type v = 0;
+    const bvector_type* bv;
     for (unsigned j = 0; j < sizeof(Val)*8; ++j)
     {
-        const bvector_type* bv = this->plains_[j];
-        if (bv)
-        {
-            unsigned b = bv->test(i);
-            v |= (b << j);
-        }
+        if ((bv = this->plains_[j]))   v |= ((bv->test(i))<<j);
+        if ((bv = this->plains_[++j])) v |= ((bv->test(i))<<j);
+        if ((bv = this->plains_[++j])) v |= ((bv->test(i))<<j);
+        if ((bv = this->plains_[++j])) v |= ((bv->test(i))<<j);
     }
     return v;
 }
+
 
 //---------------------------------------------------------------------
 
