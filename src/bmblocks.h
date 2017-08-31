@@ -1457,6 +1457,16 @@ public:
         return temp_block_ ? temp_block_ 
                             : (temp_block_ = alloc_.alloc_bit_block());
     }
+    
+    /*! deallocate temp block */
+    void free_temp_block()
+    {
+        if (temp_block_)
+        {
+            alloc_.free_bit_block(temp_block_);
+            temp_block_ = 0;
+        }
+    }
 
     /*! Assigns new GAP lengths vector */
     void set_glen(const gap_word_t* glevel_len)

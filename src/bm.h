@@ -1879,10 +1879,18 @@ void bvector<Alloc>::optimize(bm::word_t* temp_block,
                               optmode     opt_mode,
                               statistics* stat)
 {
+    bool  temp_block_allocated;
     word_t*** blk_root = blockman_.blocks_root();
 
     if (!temp_block)
+    {
         temp_block = blockman_.check_allocate_tempblock();
+        temp_block_allocated = true;
+    }
+    else
+    {
+        temp_block_allocated = false;
+    }
 
     typename 
         blocks_manager_type::block_opt_func  opt_func(blockman_, 
@@ -1908,6 +1916,14 @@ void bvector<Alloc>::optimize(bm::word_t* temp_block,
         stat->max_serialize_mem += safe_inc;
         stat->memory_used += (unsigned)(sizeof(*this) - sizeof(blockman_));
         stat->memory_used += blockman_.mem_used();
+    }
+    
+    // the expectation is that we don't need to keep temp block if we
+    // optimizing memory usage
+    //
+    if (temp_block_allocated)
+    {
+        blockman_.free_temp_block();
     }
 }
 
