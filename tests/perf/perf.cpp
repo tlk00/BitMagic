@@ -37,6 +37,7 @@ OTHER DEALINGS IN THE SOFTWARE.
 #pragma warning( disable : 4996)
 #endif
 
+#include <vector>
 
 #include "bm.h"
 #include "bmalgo.h"
@@ -1239,24 +1240,36 @@ void FillSparseIntervals(svect& sv)
 
 void SparseVectorAccessTest()
 {
+    std::vector<unsigned> target;
     svect   sv1;
+
     FillSparseIntervals(sv1);
     sv1.optimize();
+    target.resize(250000000);
 
+    unsigned long long cnt = 0;
     {
     TimeTaker tt("Random element access test", REPEATS/10 );
-    unsigned long long count = 0;
     for (unsigned i = 0; i < REPEATS/10; ++i)
     {
         for (unsigned j = 256000; j < 190000000/2; ++j)
         {
             unsigned v = sv1[j];
-            count += v;
+            cnt += v;
         }
     }
-    
+    }
+    {
+    TimeTaker tt("Extraction access test", REPEATS/10 );
+    for (unsigned i = 0; i < REPEATS/10; ++i)
+    {
+        unsigned target_size = 190000000/2 - 256000;
+        sv1.extract(&target[0], 256000, target_size);
+    }
     }
     
+    char buf[256];
+    sprintf(buf, "%i", (int)cnt); // to fool some smart compilers like ICC
     
 }
 

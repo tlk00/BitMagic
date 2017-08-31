@@ -316,13 +316,37 @@ void sparse_vector<Val, BV>::import(const value_type* arr,
 template<class Val, class BV>
 typename sparse_vector<Val, BV>::size_type
 sparse_vector<Val, BV>::extract(value_type* arr,
-                               size_type   size,
-                               size_type   offset)
+                                size_type   size,
+                                size_type   offset)
 {
     if (size == 0)
         return 0;
     ::memset(arr, 0, sizeof(value_type)*size);
     
+    size_type start = offset;
+    size_type end = start + size;
+    if (end > size_)
+        end = size_;
+    
+    for (size_type i = 0; i < sizeof(Val)*8; ++i)
+    {
+        const bvector_type* bv = plains_[i];
+        if (bv)
+        {
+            value_type mask = (1 << i);
+            bvector_type bv_mask;
+            
+            bv_mask.set_range(offset, end - 1);
+            bv_mask.bit_and(*bv);
+            
+            typename BV::enumerator en = bv_mask.first();
+            for (;en.valid();++en)
+            {
+                size_type idx = *en;
+                arr[idx] |= mask;
+            }
+        }
+    } // for i
     return 0;
 }
 
