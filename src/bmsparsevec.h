@@ -84,7 +84,7 @@ public:
     value_type operator[](size_type idx) const { return this->get(idx); }
     
     /*!
-        \brief Import list of integers from a C style array
+        \brief Import list of elements from a C-style array
         \param arr  - source array
         \param size - source size
         \param offset - target index in the sparse vector
@@ -92,7 +92,14 @@ public:
     void import(const value_type* arr, size_type size, size_type offset = 0);
 
     /*!
-        \brief Export list of integers into a C style array
+        \brief Bulk export list of elements to a C-style array
+        
+        For efficiency, this is left as a low level function, 
+        it does not do any bounds checking on the target array, it will 
+        override memory and crash if you are not careful with allocation
+        
+        This method uses cache-miss optimized algorithm which is by far faster 
+        than random element access functions.
      
         \param arr  - dest array
         \param size - dest size
@@ -342,7 +349,9 @@ sparse_vector<Val, BV>::extract(value_type* arr,
             typename BV::enumerator en = bv_mask.first();
             for (;en.valid();++en)
             {
-                size_type idx = *en;
+                size_type idx = *en - offset;
+                if (idx >=  size)
+                    break;
                 arr[idx] |= mask;
             }
         }
