@@ -32,6 +32,12 @@ For more information please visit:  http://bmagic.sourceforge.net
 namespace bm
 {
 
+/** \defgroup svserial
+    Sparse vector serialization
+    \ingroup svector
+ */
+
+
 /*!
     \brief layout class for serialization buffer structure
     
@@ -39,6 +45,8 @@ namespace bm
     This class also provides acess to bit-plane memory, so it becomes possible
     to use parallel storage methods to save bit-plains into
     different storage shards.
+    
+    \ingroup svserial
  
 */
 template<class SV>
@@ -124,8 +132,8 @@ private:
     void operator=(const sparse_vector_serial_layout&);
 protected:
     unsigned char* buffer_;                       ///< serialization buffer
-    size_t         capacity_;                      ///< buffer capacity
-    size_t         serialized_size_;               ///< serialized size
+    size_t         capacity_;                     ///< buffer capacity
+    size_t         serialized_size_;              ///< serialized size
 
     unsigned char* plain_ptrs_[sizeof(value_type)*8]; ///< pointers on serialized bit-palins
     unsigned plane_size_[sizeof(value_type)*8];       ///< serialized plain size
@@ -160,6 +168,8 @@ protected:
     as defined in bm::serialization_flags    
     
     \return "0" - success, "-1" memory allocation error
+    
+    \ingroup svserial
     
     @sa serialization_flags
 */
@@ -232,7 +242,13 @@ int sparse_vector_serialize(
 
 // -------------------------------------------------------------------------
 
-
+/*!
+    \brief Deserialize svector<>
+    \param sv target sparse vector 
+    \param buf source memory buffer
+    \param temp_block temporary block buffer to avoid re-allocations
+    \ingroup svector
+*/
 template<class SV>
 int sparse_vector_deserialize(SV& sv,
                               const unsigned char* buf,

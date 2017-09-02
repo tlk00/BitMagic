@@ -29,6 +29,12 @@ For more information please visit:  http://bmagic.sourceforge.net
 #include "bmdef.h"
 #include "bmsparsevec.h"
 
+/** \defgroup svalgo
+    Sparse vector algorithms
+    \ingroup svector
+ */
+
+
 namespace bm
 {
 
@@ -37,6 +43,10 @@ namespace bm
     
     \param  svect - sparse vector to do clipping
     \param  high_bit - max bit (inclusive) allowed for this signal vector
+    
+    
+    \ingroup svalgo
+    \sa dynamic_range_clip_low
 */
 template<class SV>
 void dynamic_range_clip_high(SV& svect, unsigned high_bit)
@@ -75,6 +85,9 @@ void dynamic_range_clip_high(SV& svect, unsigned high_bit)
     
     \param  svect - sparse vector to do clipping
     \param  low_bit - low bit (inclusive) allowed for this signal vector
+    
+    \ingroup svalgo
+    \sa dynamic_range_clip_high 
 */
 template<class SV>
 void dynamic_range_clip_low(SV& svect, unsigned low_bit)

@@ -37,14 +37,17 @@ For more information please visit:  http://bmagic.sourceforge.net
 namespace bm
 {
 
-/*! \defgroup setalgo Set algorithms 
- *  Set algorithms 
- *  \ingroup bmagic
+/*! 
+   @defgroup setalgo 
+ 
+   Set algebra algorithms
+   @ingroup bvector
  */
 
-/*! \defgroup distance Distance metrics 
- *  Algorithms to compute binary distance metrics
- *  \ingroup setalgo
+/*! 
+    @defgroup distance
+    Distance metrics and algorithms to compute binary distances
+    @ingroup setalgo
  */
 
 

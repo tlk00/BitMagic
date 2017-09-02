@@ -39,6 +39,16 @@ For more information please visit:   http://bmagic.sourceforge.net
 namespace bm
 {
 
+/** \defgroup svector
+    Sparse vector for integer types using bit transposition transform
+    \ingroup bmagic
+ */
+
+
+/*!
+   \brief sparse vector with runtime compression using bit transposition method
+   \ingroup svector
+*/
 template<class Val, class BV>
 class sparse_vector
 {
@@ -56,11 +66,25 @@ public:
     {};
 
 public:
+    /*!
+        \brief Sparse vector constructor
+        \param ap - allocation strategy for underlying bit-vectors
+        Default allocation policy uses BM_BIT setting (fastest access)
+        \param bv_max_size - maximum possible size of underlying bit-vectors
+        Please note, this is NOT size of svector itself, it is dynamic upper limit
+        which should be used very carefully if we surely know the ultimate size
+        
+        \sa bm::bvector<>::allocation_policy
+        \sa bm::startegy
+    */
     sparse_vector(allocation_policy_type ap = allocation_policy_type(),
-                  size_type bv_size = bm::id_max,
+                  size_type bv_max_size = bm::id_max,
                   const allocator_type&   alloc  = allocator_type());
+    
+    /*! copy-ctor */
     sparse_vector(const sparse_vector<Val, BV>& sv);
     
+    /*! Assignmment operator */
     sparse_vector& operator = (const sparse_vector<Val, BV>& sv)
     {
         clear();
@@ -249,9 +273,9 @@ private:
 template<class Val, class BV>
 sparse_vector<Val, BV>::sparse_vector(
         allocation_policy_type  ap,
-        size_type               bv_size,
+        size_type               bv_max_size,
         const allocator_type&   alloc)
-: bv_size_(bv_size),
+: bv_size_(bv_max_size),
   alloc_(alloc),
   ap_(ap),
   size_(0)

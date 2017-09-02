@@ -31,9 +31,16 @@ For more information please visit:  http://bmagic.sourceforge.net
 namespace bm
 {
 
+/*! 
+    \defgroup gammacode Elias Gamma Code
+    Elias Gamma Encoder
+    \ingroup bvserial
+ 
+ */
 
 /**
     Elias Gamma decoder
+    \ingroup gammacode
 */
 template<typename T, typename TBitIO>
 class gamma_decoder

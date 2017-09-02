@@ -104,17 +104,19 @@ namespace bm
 
 
 
-//typedef bm::miniset<bm::block_allocator, bm::set_total_blocks> mem_save_set;
 
 
-/** @defgroup bmagic BitMagic C++ Library
- *  For more information please visit:  http://bmagic.sourceforge.net
+/** @defgroup bmagic 
+    BitMagic C++ Library
+    For more information please visit:  http://bmagic.sourceforge.net 
+    https://github.com/tlk00/BitMagic
  *  
  */
 
 
-/** @defgroup bvector The Main bvector<> Group
- *  This is the main group. It includes bvector template: front end of the bm library.
+/** @defgroup bvector 
+    The Main bvector<> Group
+    This is the main group. It includes bvector template: front end of the bm library.
  *  @ingroup bmagic 
  */
 
@@ -122,7 +124,8 @@ namespace bm
 
 
 /*!
-   @brief bitvector with runtime compression of bits.
+   @brief bitvector 
+   Bit-vector container with runtime compression of bits
    @ingroup bvector
 */
 

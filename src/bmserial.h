@@ -27,10 +27,11 @@ For more information please visit:  http://bmagic.sourceforge.net
 */
 
 
-/*! \defgroup bvserial bvector serialization  
- *  bvector serialization
- *  \ingroup bmagic 
- *
+/*! 
+    \defgroup bvserial bvector<> serialization
+    Serialization for bvector<> container
+    \ingroup bvector
+ 
  */
 
 #ifndef BM__H__INCLUDED__

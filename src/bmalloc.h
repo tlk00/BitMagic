@@ -33,11 +33,13 @@ namespace bm
 {
 
 
-/*! @defgroup alloc Memory Allocation
- *  Memory allocation related units
- *  @ingroup bmagic
- *
- *  @{
+/*! 
+    @defgroup alloc
+    Memory allocation for bvector
+    
+    @ingroup bvector
+ 
+    @{
  */
 
 /*! 

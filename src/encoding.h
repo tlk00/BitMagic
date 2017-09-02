@@ -41,6 +41,8 @@ namespace bm
    
    Class for encoding data into memory. 
    Properly handles aligment issues with integer data types.
+   
+   \ingroup gammacode
 */
 class encoder
 {
@@ -71,6 +73,7 @@ private:
 // ----------------------------------------------------------------
 /**
     Base class for all decoding functionality
+    \ingroup gammacode
 */
 class decoder_base
 {
@@ -94,6 +97,7 @@ protected:
 /**
    Class for decoding data from memory buffer.
    Properly handles aligment issues with integer data types.
+   \ingroup gammacode
 */
 class decoder : public decoder_base
 {
@@ -112,6 +116,7 @@ public:
    Properly handles aligment issues with integer data types.
    Converts data to big endian architecture 
    (presumed it was encoded as little endian)
+   \ingroup gammacode
 */
 typedef decoder decoder_big_endian;
 
@@ -122,6 +127,7 @@ typedef decoder decoder_big_endian;
    Properly handles aligment issues with integer data types.
    Converts data to little endian architecture 
    (presumed it was encoded as big endian)
+   \ingroup gammacode
 */
 class decoder_little_endian : public decoder_base
 {
@@ -137,6 +143,7 @@ public:
 /** 
     Byte based writer for un-aligned bit streaming 
 
+    @ingroup gammacode
     @sa encoder
 */
 template<class TEncoder>
@@ -329,6 +336,7 @@ private:
 /** 
     Byte based reader for un-aligned bit streaming 
 
+    @ingroup gammacode
     @sa encoder
 */
 template<class TDecoder>
@@ -437,6 +445,7 @@ private:
 
 /**
     Functor for Elias Gamma encoding
+    @ingroup gammacode
 */
 template<typename T, typename TBitIO>
 class gamma_encoder
@@ -463,6 +472,7 @@ private:
 
 /**
     Elias Gamma decoder
+    @ingroup gammacode
 */
 template<typename T, typename TBitIO>
 class gamma_decoder

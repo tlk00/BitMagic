@@ -92,17 +92,18 @@ struct bv_statistics
 };
 
 
-/*! @defgroup gapfunc GAP functions
- *  GAP functions implement different opereations on GAP compressed blocks
- *  and serve as a minimal building blocks.
- *  @ingroup bmagic
- *
+/*! 
+    @defgroup gapfunc GAP functions
+    GAP functions implement different opereations on GAP compressed blocks (internals)
+    and serve as a minimal building blocks.
+    @ingroup bvector
  */
 
-/*! @defgroup bitfunc BIT functions
- *  Bit functions implement different opereations on bit blocks
- *  and serve as a minimal building blocks.
- *  @ingroup bmagic
+/*! 
+   @defgroup bitfunc BIT functions
+   Bit functions implement different opereations on bit blocks (internals)
+   and serve as a minimal building blocks.
+   @ingroup bvector
  */
 
 

@@ -58,16 +58,16 @@ INPUT                  = ./src/bm.h ./src/bmfunc.h  \
                          ./src/bmalgo.h ./src/bmalgo_impl.h ./src/bmgamma.h \
                          ./src/bmdef.h ./src/bmtrans.h ./src/bmutil.h \
                          ./src/bmundef.h ./src/bmserial.h ./src/bmalloc.h ./src/bmrandom.h \                        
-./samples/sample1/sample1.cpp \
-./samples/sample2/sample2.cpp \
-./samples/sample3/sample3.cpp \
-./samples/sample4/sample4.cpp \
-./samples/sample5/sample5.cpp \
-./samples/sample6/sample6.cpp \
-./samples/sample7/sample7.cpp \
-./samples/sample8/sample8.cpp \
-./samples/sample9/sample9.cpp \
-./samples/sample10/sample10.cpp
+                         ./src/bmsparsevec.h ./src/bmsparsevec_algo.h ./src/bmsparsevec_serial.h \
+./samples/bvsample01/sample1.cpp \
+./samples/bvsample02/sample2.cpp \
+./samples/bvsample03/sample3.cpp \
+./samples/bvsample04/sample4.cpp \
+./samples/bvsample05/sample5.cpp \
+./samples/bvsample06/sample6.cpp \
+./samples/bvsample08/sample8.cpp \
+./samples/bvsample09/sample9.cpp \
+./samples/bvsample10/sample10.cpp
  
 
 FILE_PATTERNS          = *.cpp \
