@@ -42,7 +42,9 @@ For more information please visit:  http://bmagic.sourceforge.net
 
 #if defined(__x86_64) || defined(_M_AMD64) || defined(_WIN64) || \
     defined(__LP64__) || defined(_LP64) || ( __WORDSIZE == 64 )
+#ifndef BM64OPT
 # define BM64OPT
+#endif
 #endif
 
 

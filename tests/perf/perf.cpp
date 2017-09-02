@@ -32,6 +32,7 @@ OTHER DEALINGS IN THE SOFTWARE.
 //#define BMSSE42OPT
 //#define BM64OPT
 
+
 #ifdef _MSC_VER
 #pragma warning( push )
 #pragma warning( disable : 4996)
