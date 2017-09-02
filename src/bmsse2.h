@@ -188,10 +188,10 @@ bm::id_t sse2_bit_count_op(const __m128i* BMRESTRICT block,
 
 
 #define VECT_XOR_ARR_2_MASK(dst, src, src_end, mask)\
-    sse2_xor_arr_2_mask((__m128i*)(dst), (__m128i*)(src), (__m128i*)(src_end), mask)
+    sse2_xor_arr_2_mask((__m128i*)(dst), (__m128i*)(src), (__m128i*)(src_end), (bm::word_t)mask)
 
 #define VECT_ANDNOT_ARR_2_MASK(dst, src, src_end, mask)\
-    sse2_andnot_arr_2_mask((__m128i*)(dst), (__m128i*)(src), (__m128i*)(src_end), mask)
+    sse2_andnot_arr_2_mask((__m128i*)(dst), (__m128i*)(src), (__m128i*)(src_end), (bm::word_t)mask)
 
 #define VECT_BITCOUNT(first, last) \
     sse2_bit_count((__m128i*) (first), (__m128i*) (last)) 
@@ -209,7 +209,7 @@ bm::id_t sse2_bit_count_op(const __m128i* BMRESTRICT block,
     sse2_bit_count_op((__m128i*) (first), (__m128i*) (last), (__m128i*) (mask), sse2_sub) 
 
 #define VECT_INVERT_ARR(first, last) \
-    sse2_invert_arr(first, last);
+    sse2_invert_arr((bm::word_t*)first, (bm::word_t*)last);
 
 #define VECT_AND_ARR(dst, src, src_end) \
     sse2_and_arr((__m128i*) dst, (__m128i*) (src), (__m128i*) (src_end))
