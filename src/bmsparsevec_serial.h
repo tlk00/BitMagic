@@ -35,7 +35,10 @@ namespace bm
 /*!
     \brief layout class for serialization buffer structure
     
-    Class keeps a memory block sized for the target sparse vector BLOB
+    Class keeps a memory block sized for the target sparse vector BLOB.
+    This class also provides acess to bit-plane memory, so it becomes possible
+    to use parallel storage methods to save bit-plains into
+    different storage shards.
  
 */
 template<class SV>
@@ -128,9 +131,11 @@ protected:
     unsigned plane_size_[sizeof(value_type)*8];       ///< serialized plain size
 };
 
+// -------------------------------------------------------------------------
+
 
 /*!
-    \brief Serializer utility class class for sparse vector
+    \brief Serialize sparse vector into a buffer(s) structure
  
  Serialization format:
  <pre>
@@ -145,24 +150,10 @@ protected:
    INT64: Offset of plain 0 from the header start (value 0 means plain is empty)
    INT64: Offset of plain 1 from
    ...
-   INT32
+   INT32: reserved
 
  </pre>
-*/
-
-template<class SV>
-class sparse_vec_serializer
-{
-public:
-    typedef SV                          sparse_vector_type;
-    typedef typename SV::bvector_type   bvector_type;
-    
-public:
-    sparse_vec_serializer();
-    
-    /*!
-    \brief Serialize sparse vector into a buffer layout structure
-    
+ 
     \param sv         - sparse vector to serialize
     \param sv_layout  - buffer structure to keep the result
     \param bv_serialization_flags - bit-vector serialization flags
@@ -171,37 +162,12 @@ public:
     \return "0" - success, "-1" memory allocation error
     
     @sa serialization_flags
-    */
-    int serialize(const SV&                        sv,
-                  sparse_vector_serial_layout<SV>& sv_layout,
-                  unsigned                         bv_serialization_flags = 0);
-    
-    int deserialize(SV& sv,
-                    const unsigned char* buf,
-                    bm::word_t* temp_block=0);
-    
-private:
-    sparse_vec_serializer(const sparse_vec_serializer&);
-    sparse_vec_serializer& operator=(const sparse_vec_serializer&);
-
-};
-
-
-// -------------------------------------------------------------------------
-
+*/
 template<class SV>
-sparse_vec_serializer<SV>::sparse_vec_serializer()
-{
-}
-
-// -------------------------------------------------------------------------
-
-
-template<class SV>
-int sparse_vec_serializer<SV>::serialize(
+int sparse_vector_serialize(
                 const SV&                        sv,
                 sparse_vector_serial_layout<SV>& sv_layout,
-                unsigned                         bv_serialization_flags)
+                unsigned                         bv_serialization_flags = 0)
 {
     typename SV::statistics sv_stat;
     sv.calc_stat(&sv_stat);
@@ -266,12 +232,16 @@ int sparse_vec_serializer<SV>::serialize(
 
 // -------------------------------------------------------------------------
 
+
 template<class SV>
-int sparse_vec_serializer<SV>::deserialize(SV& sv,
-                                            const unsigned char* buf,
-                                            bm::word_t* temp_block)
+int sparse_vector_deserialize(SV& sv,
+                              const unsigned char* buf,
+                              bm::word_t* temp_block=0)
 {
-    ByteOrder bo_current = globals<true>::byte_order();
+    typedef typename SV::bvector_type   bvector_type;
+
+    // TODO: implement correct processing of byte-order corect deserialization
+//    ByteOrder bo_current = globals<true>::byte_order();
 
     bm::decoder dec(buf);
     unsigned char h1 = dec.get_8();
@@ -283,7 +253,8 @@ int sparse_vec_serializer<SV>::deserialize(SV& sv,
         return -1;
     }
     
-    unsigned char bv_bo = dec.get_8();
+    //unsigned char bv_bo =
+        dec.get_8();
     unsigned plains = dec.get_8();
     
     if (!plains || plains > sv.plains())
@@ -320,7 +291,6 @@ int sparse_vec_serializer<SV>::deserialize(SV& sv,
         }
     } // for i
     return 0;
-    
 }
 
 // -------------------------------------------------------------------------

@@ -29,8 +29,8 @@ OTHER DEALINGS IN THE SOFTWARE.
 // No intermix FP with integer SSE in this program
 //#define BM_SET_MMX_GUARD
 //#define BMSSE2OPT
-#define BMSSE42OPT
-#define BM64OPT
+//#define BMSSE42OPT
+//#define BM64OPT
 
 #ifdef _MSC_VER
 #pragma warning( push )

@@ -1,2 +1,10 @@
 *.dRelease
 *.o
+
+tests/\.DS_Store
+
+\.DS_Store
+
+tests/perf/perf
+
+tests/stress/test

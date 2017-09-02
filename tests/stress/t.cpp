@@ -7952,8 +7952,7 @@ bool CompareSparseVector(const SV& sv, const Vect& vect)
     
     // serialization comparison
     sparse_vector_serial_layout<SV> sv_lay;
-    sparse_vec_serializer<SV> sv_ser;
-    int res = sv_ser.serialize(sv, sv_lay);
+    int res = bm::sparse_vector_serialize<SV>(sv, sv_lay);
     if (res != 0)
     {
         cerr << "Serialization error" << endl;
@@ -7961,7 +7960,7 @@ bool CompareSparseVector(const SV& sv, const Vect& vect)
     }
     SV sv2;
     const unsigned char* buf = sv_lay.buf();
-    res = sv_ser.deserialize(sv2, buf);
+    res = bm::sparse_vector_deserialize(sv2, buf);
     if (res != 0)
     {
         cerr << "De-Serialization error" << endl;
@@ -7990,8 +7989,7 @@ bool TestEqualSparseVectors(const SV& sv1, const SV& sv2)
     //
     {{
         sparse_vector_serial_layout<SV> sv_lay;
-        sparse_vec_serializer<SV> sv_ser;
-        int res = sv_ser.serialize(sv1, sv_lay);
+        int res = sparse_vector_serialize(sv1, sv_lay);
         if (res != 0)
         {
             cerr << "Serialization error in TestEqualSparseVectors()" << endl;
@@ -8007,7 +8005,7 @@ bool TestEqualSparseVectors(const SV& sv1, const SV& sv2)
         ::memcpy(&tmp_buf[0], buf, buf_size);
         
         SV sv3;
-        res = sv_ser.deserialize(sv3, &tmp_buf[0]);
+        res = bm::sparse_vector_deserialize(sv3, &tmp_buf[0]);
         if (res != 0)
         {
             cerr << "De-Serialization error in TestEqualSparseVectors()" << endl;
@@ -8043,16 +8041,15 @@ void TestSparseVector()
 
     bm::sparse_vector<unsigned, bm::bvector<> > sv1;
     bm::sparse_vector<unsigned, bm::bvector<> > sv2;
-    bm::sparse_vec_serializer<bm::sparse_vector<unsigned, bm::bvector<> > > sv_ser;
     bm::sparse_vector_serial_layout<svector> sv_layout;
-    int res = sv_ser.serialize(sv1, sv_layout);
+    int res = bm::sparse_vector_serialize(sv1, sv_layout);
     if (res != 0)
     {
         cerr << "Serialization error" << endl;
         exit(1);
     }
     const unsigned char* buf = sv_layout.buf();
-    res = sv_ser.deserialize(sv2, buf);
+    res = bm::sparse_vector_deserialize(sv2, buf);
     if (res != 0)
     {
         cerr << "De-Serialization error" << endl;
