@@ -248,9 +248,9 @@ bm::id_t sse2_bit_block_calc_count_change(const __m128i* BMRESTRICT block,
    __m128i m2 = _mm_set_epi32 (mu2, mu2, mu2, mu2);
    __m128i m3 = _mm_set_epi32 (mu3, mu3, mu3, mu3);
    __m128i m4 = _mm_set_epi32 (mu4, mu4, mu4, mu4);
-   __m128i mcnt, ccnt;
+   __m128i mcnt;//, ccnt;
    mcnt = _mm_xor_si128(m1, m1); // bit_cnt = 0
-   ccnt = _mm_xor_si128(m1, m1); // change_cnt = 0
+   //ccnt = _mm_xor_si128(m1, m1); // change_cnt = 0
 
    __m128i tmp1, tmp2;
 
