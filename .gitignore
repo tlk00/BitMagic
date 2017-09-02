@@ -8,3 +8,25 @@ tests/\.DS_Store
 tests/perf/perf
 
 tests/stress/test
+
+tests/perf/perf_debug
+
+tests/perf/perf_release
+
+tests/perf/out\.txt
+
+tests/perf/perf_release_64
+
+tests/perf/perf_release_sse2
+
+tests/perf/perf_release_sse42
+
+tests/stress/stress_debug
+
+tests/stress/stress_release
+
+tests/stress/stress_release_64
+
+tests/stress/stress_release_sse2
+
+tests/stress/stress_release_sse42
