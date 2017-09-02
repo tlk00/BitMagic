@@ -33,3 +33,6 @@ echo 64-bit
 
 
 ./stress_release_64 || exit 1
+
+echo
+echo "BitMagic Stress Test DONE"
