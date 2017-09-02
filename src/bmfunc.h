@@ -416,7 +416,7 @@ template<bool T> struct _copyright
 };
 
 template<bool T> const char _copyright<T>::_p[] = 
-    "BitMagic C++ Library. v.3.7.2 (c) 2002-2017 Anatoliy Kuznetsov.";
+    "BitMagic C++ Library. v.3.8.0 (c) 2002-2017 Anatoliy Kuznetsov.";
 
 
 /*! 
