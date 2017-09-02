@@ -80,7 +80,11 @@ public:
     
     ~sparse_vector();
     
-    
+    /*!
+        \brief get specified element without bounds checking
+        \param idx - element index
+        \return value of the element
+    */
     value_type operator[](size_type idx) const { return this->get(idx); }
     
     /*!
@@ -604,7 +608,6 @@ void sparse_vector<Val, BV>::optimize(
             
             typename bvector_type::statistics stbv;
             bv->optimize(temp_block, opt_mode, &stbv);
-            
             
             if (st)
             {

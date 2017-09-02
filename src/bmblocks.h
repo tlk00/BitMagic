@@ -981,7 +981,7 @@ public:
 
         initial_block_type and actual_block_type : 0 - bitset, 1 - gap
     */
-    bm::word_t* check_allocate_block(unsigned nb, 
+    bm::word_t* check_allocate_block(unsigned nb,
                                      unsigned content_flag,
                                      int      initial_block_type,
                                      int*     actual_block_type,

@@ -340,8 +340,8 @@ void BitCountSparseTest()
     c1 = *p;
     value = c1 = 0;
     
-
-    bv->optimize();
+    BM_DECLARE_TEMP_BLOCK(tb)
+    bv->optimize(tb);
 
     {
     TimeTaker tt("BitCount: GAP Sparse bitset", REPEATS*1000);
@@ -561,7 +561,8 @@ void EnumeratorTestGAP()
 
     {
 
-    bv->optimize();
+    BM_DECLARE_TEMP_BLOCK(tb)
+    bv->optimize(tb);
     }
 
     if (!platform_test) 
@@ -590,7 +591,8 @@ void SerializationTest()
 	bv_sparse[70000] = true;
 	bv_sparse[200000] = true;
 
-	bv_sparse.optimize();
+    BM_DECLARE_TEMP_BLOCK(tb)
+	bv_sparse.optimize(tb);
 
 	unsigned cnt = bv_sparse.count();
     bvect::statistics st;
@@ -793,7 +795,8 @@ void XorCountTest()
     {
         cout << "One optimized vector" << endl;
     }
-    bv2->optimize();
+    BM_DECLARE_TEMP_BLOCK(tb)
+    bv2->optimize(tb);
 
     if (!platform_test)
     {
@@ -829,7 +832,7 @@ void XorCountTest()
     {
         cout << "Both vectors optimized" << endl;
     }
-    bv1->optimize();
+    bv1->optimize(tb);
     //bv1->stat();
     if (!platform_test)
     {
@@ -953,7 +956,8 @@ void TI_MetricTest()
     {
         cout << "One optimized vector" << endl;
     }
-    bv2->optimize();
+    BM_DECLARE_TEMP_BLOCK(tb)
+    bv2->optimize(tb);
     bv1->count(); // trying to fool the CPU cache
 
     
@@ -1004,7 +1008,7 @@ void TI_MetricTest()
     {
         cout << "Both vectors optimized" << endl;
     }
-    bv1->optimize();
+    bv1->optimize(tb);
 
     {
     TimeTaker tt("Tversky index bvector test", REPEATS);
@@ -1050,24 +1054,6 @@ void TI_MetricTest()
     delete bset1;
     delete bset2;    
 }
-
-#ifdef BMSSE2OPT
-# if(_MSC_VER)
-#  define BM_ALIGN16 __declspec(align(16))
-#  define BM_ALIGN16ATTR
-
-# else // GCC
-
-#  define BM_ALIGN16
-#  define BM_ALIGN16ATTR __attribute__((aligned(16)))
-# endif
-
-#else
-
-#  define BM_ALIGN16
-#  define BM_ALIGN16ATTR
-
-#endif 
 
 void BitBlockTransposeTest()
 {
@@ -1244,12 +1230,13 @@ void SparseVectorAccessTest()
     svect   sv1;
 
     FillSparseIntervals(sv1);
-    sv1.optimize();
+    BM_DECLARE_TEMP_BLOCK(tb)
+    sv1.optimize(tb);
     target.resize(250000000);
 
     unsigned long long cnt = 0;
     {
-    TimeTaker tt("Random element access test", REPEATS/10 );
+    TimeTaker tt("sparse_vector random element access test", REPEATS/10 );
     for (unsigned i = 0; i < REPEATS/10; ++i)
     {
         for (unsigned j = 256000; j < 190000000/2; ++j)
@@ -1260,7 +1247,7 @@ void SparseVectorAccessTest()
     }
     }
     {
-    TimeTaker tt("Extraction access test", REPEATS/10 );
+    TimeTaker tt("sparse_vector extraction access test", REPEATS/10 );
     for (unsigned i = 0; i < REPEATS/10; ++i)
     {
         unsigned target_size = 190000000/2 - 256000;
@@ -1279,7 +1266,7 @@ int main(void)
 //    ptest();
 
     TimeTaker tt("TOTAL", 1);
-/*
+
     MemCpyTest();
 
     BitCountTest();
@@ -1306,7 +1293,6 @@ int main(void)
     TI_MetricTest();
 
     SerializationTest();
-*/
     
     SparseVectorAccessTest();
     

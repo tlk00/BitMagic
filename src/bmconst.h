@@ -86,25 +86,21 @@ const unsigned bits_in_block = bm::set_block_size * (unsigned)(sizeof(bm::word_t
 const unsigned bits_in_array = bm::bits_in_block * bm::set_array_size;
 
 
-#ifdef BM64OPT
+#if defined(BM64OPT) || defined(BM64_SSE4)
 
 typedef id64_t  wordop_t;
 const id64_t    all_bits_mask = 0xffffffffffffffff;
-
-# define DECLARE_TEMP_BLOCK(x)  bm::id64_t x[bm::set_block_size / 2]; 
 const unsigned set_block_size_op  = bm::set_block_size / 2;
-
 
 #else
 
 typedef word_t wordop_t;
 const word_t all_bits_mask = 0xffffffff;
-
-# define DECLARE_TEMP_BLOCK(x)  unsigned x[bm::set_block_size]; 
 const unsigned set_block_size_op  = bm::set_block_size;
 
 #endif
 
+# define BM_DECLARE_TEMP_BLOCK(x)  unsigned BM_ALIGN16 x[bm::set_block_size] BM_ALIGN16ATTR;
 
 
 /*!

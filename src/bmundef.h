@@ -51,8 +51,6 @@
 #undef VECT_SET_BLOCK
 
 #undef BM_UNALIGNED_ACCESS_OK
-#undef BM_ALIGN16
-#undef BM_ALIGN16ATTR
 #undef BM_x86
 
 

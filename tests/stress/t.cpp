@@ -24,7 +24,7 @@ OTHER DEALINGS IN THE SOFTWARE.
 
 //#define BM_SET_MMX_GUARD
 //#define BMSSE2OPT
-#define BMSSE42OPT
+//#define BMSSE42OPT
 #define BM64OPT
 //#define BMCOUNTOPT
 
@@ -755,7 +755,8 @@ void FillSetsRandomMethod(bvect_mini* bvect_min,
     if (optimize && (method <= 1))
     {
         cout << "Vector optimization..." << flush;
-        bvect_full->optimize();
+        BM_DECLARE_TEMP_BLOCK(tb)
+        bvect_full->optimize(tb);
         cout << "OK" << endl;
     }
 }
@@ -784,8 +785,9 @@ unsigned SerializationOperation(bvect*             bv_target,
     st1_op = new bvect::statistics;
     st2_op = new bvect::statistics;
 
-    bv1.optimize(0, bvect::opt_compress, st1_op);
-    bv2.optimize(0, bvect::opt_compress, st2_op);
+    BM_DECLARE_TEMP_BLOCK(tb)
+    bv1.optimize(tb, bvect::opt_compress, st1_op);
+    bv2.optimize(tb, bvect::opt_compress, st2_op);
 
 
    struct bvect::statistics st1, st2;
@@ -1331,7 +1333,8 @@ void ClearAllTest()
     {
         bvect_full.set_bit(i);
     }
-    bvect_full.optimize();
+    BM_DECLARE_TEMP_BLOCK(tb)
+    bvect_full.optimize(tb);
     bvect_full.clear();
 
     print_stat(bvect_full);
@@ -1929,7 +1932,8 @@ void AndOperationsTest()
     CheckVectors(bvect_min1, bv_target_s, BITVECT_SIZE);
     CheckCountRange(bvect_full1, 0, BITVECT_SIZE);
 
-    bvect_full1.optimize();
+    BM_DECLARE_TEMP_BLOCK(tb)
+    bvect_full1.optimize(tb);
     CheckVectors(bvect_min1, bvect_full1, BITVECT_SIZE);
     CheckCountRange(bvect_full1, 0, BITVECT_SIZE);
     CheckCountRange(bvect_full1, BITVECT_SIZE/2, BITVECT_SIZE);
@@ -2140,7 +2144,8 @@ void OrOperationsTest()
 
     CheckVectors(bvect_min1, bvect_full1, BITVECT_SIZE);
 
-    bvect_full1.optimize();
+    BM_DECLARE_TEMP_BLOCK(tb)
+    bvect_full1.optimize(tb);
 
     CheckVectors(bvect_min1, bvect_full1, BITVECT_SIZE);
     CheckVectors(bvect_min1, bv_target_s, BITVECT_SIZE);
@@ -2387,7 +2392,8 @@ void SubOperationsTest()
 
     CheckVectors(bvect_min1, bvect_full1, BITVECT_SIZE);
 
-    bvect_full1.optimize();
+    BM_DECLARE_TEMP_BLOCK(tb)
+    bvect_full1.optimize(tb);
     CheckVectors(bvect_min1, bvect_full1, BITVECT_SIZE);
     CheckVectors(bvect_min1, bv_target_s, BITVECT_SIZE);
     CheckCountRange(bvect_full1, 0, BITVECT_SIZE);
@@ -2479,7 +2485,8 @@ void XorOperationsTest()
             bvect_min2.set_bit(i);
         }
 
-        bvect2.optimize();
+        BM_DECLARE_TEMP_BLOCK(tb)
+        bvect2.optimize(tb);
 
         bm::id_t predicted_count = bm::count_xor(bvect1, bvect2);
         bm::id_t predicted_any = bm::any_xor(bvect1, bvect2);
@@ -2527,7 +2534,8 @@ void XorOperationsTest()
             bvect_min1.set_bit(i);
         }
 
-        bvect1.optimize();
+        BM_DECLARE_TEMP_BLOCK(tb)
+        bvect1.optimize(tb);
         
         bm::id_t predicted_count = bm::count_xor(bvect1, bvect2);
         bm::id_t predicted_any = bm::any_xor(bvect1, bvect2);
@@ -2576,7 +2584,8 @@ void XorOperationsTest()
             bvect_min2.set_bit(i);
         }
 
-        bvect1.optimize();
+        BM_DECLARE_TEMP_BLOCK(tb)
+        bvect1.optimize(tb);
         
         bm::id_t predicted_count = bm::count_xor(bvect1, bvect2);
         bm::id_t predicted_any = bm::any_xor(bvect1, bvect2);
@@ -2709,7 +2718,8 @@ void XorOperationsTest()
 
     CheckVectors(bvect_min1, bvect_full1, BITVECT_SIZE);
 
-    bvect_full1.optimize();
+    BM_DECLARE_TEMP_BLOCK(tb)
+    bvect_full1.optimize(tb);
     CheckVectors(bvect_min1, bvect_full1, BITVECT_SIZE);
     CheckVectors(bvect_min1, bv_target_s, BITVECT_SIZE);
     CheckCountRange(bvect_full1, 0, BITVECT_SIZE);
@@ -2925,7 +2935,8 @@ void ComparisonTest()
 
     printf("Comparison 3.\n");
 
-    bvect_full1.optimize();
+    BM_DECLARE_TEMP_BLOCK(tb)
+    bvect_full1.optimize(tb);
 
     res1 = bvect_min1.compare(bvect_min2);
     res2 = bvect_full1.compare(bvect_full2);
@@ -3001,6 +3012,7 @@ void DesrializationTest2()
 {
    bvect  bvtotal;
    unsigned size = BITVECT_SIZE - 10;
+   BM_DECLARE_TEMP_BLOCK(tb)
 
 
    bvect  bv1;
@@ -3011,7 +3023,7 @@ void DesrializationTest2()
       bv1.set_bit(i);
    }
 
-   bv1.optimize();
+   bv1.optimize(tb);
    print_stat(bv1);
 
    struct bvect::statistics st1;
@@ -3031,7 +3043,7 @@ void DesrializationTest2()
                                                 0,
                                                 set_OR);
 
-   bvtotal.optimize();
+   bvtotal.optimize(tb);
    int res = bvtotal.compare(bv_target_s);
    if (res != 0)
    {
@@ -3144,8 +3156,9 @@ void DesrializationTest2()
 //       cout << "After deserialization" << endl;
 //       bvtotal.stat();
 
-       bvtotal.optimize();
-       bv_target_s.optimize();
+       BM_DECLARE_TEMP_BLOCK(tb)
+       bvtotal.optimize(tb);
+       bv_target_s.optimize(tb);
 
 //       cout << "After optimization" << endl;
 //       bvtotal.stat();
@@ -6272,22 +6285,6 @@ void OptimGAPTest()
 
 }
 
-#if defined(BMSSE2OPT) || defined(BMSSE42OPT)
-
-#if(_MSC_VER)
-#  define BM_ALIGN16 __declspec(align(16))
-#  define BM_ALIGN16ATTR
-#else // GCC
-#  define BM_ALIGN16
-#  define BM_ALIGN16ATTR __attribute__((aligned (16)))
-#endif
-
-#else // NO SSE
-
-#  define BM_ALIGN16ATTR
-#  define BM_ALIGN16
-
-#endif 
 
 
 void BitCountChangeTest()
@@ -8088,7 +8085,7 @@ void TestSparseVector()
     std::vector<unsigned> vect;
     for (unsigned i = 0; i < 128000; ++i)
     {
-        vect.push_back(9);
+        vect.push_back(i);
     }
     
     bm::sparse_vector<unsigned, bm::bvector<> > sv;
@@ -8156,9 +8153,6 @@ void TestSparseVector()
         cerr << "Bit Plain assignment test failed" << endl;
         exit(1);
     }
-
-    
-    
     }}
     
     cout << "Linear assignment test" << endl;
@@ -8180,6 +8174,48 @@ void TestSparseVector()
         exit(1);
     }
     }}
+    
+    cout << "Extract test" << endl;
+    
+    {{
+    bm::sparse_vector<unsigned, bm::bvector<> > sv;
+    for (unsigned i = 0; i < 16; ++i)
+    {
+        sv.set(i, 8);
+    }
+    for (unsigned i =32; i < 48; ++i)
+    {
+        sv.set(i, 255);
+    }
+        
+    std::vector<unsigned> v1(16);
+    sv.extract(&v1[0], 16, 0);
+    for (unsigned i = 0; i < 16; ++i)
+    {
+        if (v1[i] != 8)
+        {
+            cerr << "Extract 1 failed at:" << i << endl;
+            exit(1);
+        }
+    } // for
+    
+    std::vector<unsigned> v2(10);
+    sv.extract(&v2[0], 10, 32);
+    for (unsigned i = 0; i < 10; ++i)
+    {
+        if (v2[i] != 255)
+        {
+            cerr << "Extract 2 failed at:" << i << "=" << v2[i] << "sv=" << sv[i+32] << endl;
+            exit(1);
+        }
+    } // for
+    
+    
+
+    }}
+    
+    
+    
 
 
     {{

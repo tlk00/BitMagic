@@ -33,14 +33,22 @@ For more information please visit:  http://bmagic.sourceforge.net
 # include <iterator>
 #endif
 
+#include <limits.h>
+
 #ifdef _MSC_VER
 #pragma warning( push )
 #pragma warning( disable : 4311 4312 4127)
 #endif
 
+#if defined(__x86_64) || defined(_M_AMD64) || defined(_WIN64) || \
+    defined(__LP64__) || defined(_LP64) || ( __WORDSIZE == 64 )
+# define BM64OPT
+#endif
+
 
 #ifdef BMSSE42OPT
-# ifdef BM64OPT
+# if defined(BM64OPT) || defined(__x86_64) || defined(_M_AMD64) || defined(_WIN64) || \
+    defined(__LP64__) || defined(_LP64)
 #   undef BM64OPT
 #   define BM64_SSE4
 # endif
@@ -1402,7 +1410,7 @@ public:
        
        @sa optmode, optimize_gap_size
     */
-    void optimize(bm::word_t* temp_block = 0, 
+    void optimize(bm::word_t* temp_block = 0,
                   optmode opt_mode       = opt_compress,
                   statistics* stat       = 0);
 
@@ -1875,7 +1883,7 @@ bool bvector<Alloc>::get_bit(bm::id_t n) const
 // -----------------------------------------------------------------------
 
 template<typename Alloc> 
-void bvector<Alloc>::optimize(bm::word_t* temp_block, 
+void bvector<Alloc>::optimize(bm::word_t* temp_block,
                               optmode     opt_mode,
                               statistics* stat)
 {
@@ -2252,7 +2260,7 @@ bool bvector<Alloc>::set_bit_conditional_impl(bm::id_t n,
     unsigned nblock = unsigned(n >>  bm::set_block_shift); 
 
     int block_type;
-    bm::word_t* blk = 
+    bm::word_t* blk =
         blockman_.check_allocate_block(nblock, 
                                        val,
                                        get_new_blocks_strat(), 
@@ -2332,7 +2340,7 @@ bool bvector<Alloc>::and_bit_no_check(bm::id_t n, bool val)
     unsigned nblock = unsigned(n >>  bm::set_block_shift); 
 
     int block_type;
-    bm::word_t* blk = 
+    bm::word_t* blk =
         blockman_.check_allocate_block(nblock, 
                                        val,
                                        get_new_blocks_strat(), 

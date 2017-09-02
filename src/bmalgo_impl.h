@@ -1166,7 +1166,7 @@ void combine_or(BV& bv, It  first, It last)
         label1:
         
         int block_type;
-        bm::word_t* blk = 
+        bm::word_t* blk =
             bman.check_allocate_block(nblock, 
                                       true, 
                                       bv.get_new_blocks_strat(), 
@@ -1245,7 +1245,7 @@ void combine_xor(BV& bv, It  first, It last)
         label1:
         
         int block_type;
-        bm::word_t* blk = 
+        bm::word_t* blk =
             bman.check_allocate_block(nblock, 
                                       true, 
                                       bv.get_new_blocks_strat(), 
@@ -1329,7 +1329,7 @@ void combine_sub(BV& bv, It  first, It last)
         label1:
         
         int block_type;
-        bm::word_t* blk = 
+        bm::word_t* blk =
             bman.check_allocate_block(nblock, 
                                       false, 
                                       bv.get_new_blocks_strat(), 
@@ -1493,7 +1493,7 @@ void export_array(BV& bv, It first, It last)
             size_t word_cnt = array_size / 4;
             for (unsigned i = 0; i < bm::set_total_blocks; ++i)
             {
-                bm::word_t* blk = 
+                bm::word_t* blk =
                     bman.check_allocate_block(i, 
                                               false, 
                                               BM_BIT, 
@@ -1547,7 +1547,7 @@ void export_array(BV& bv, It first, It last)
             size_t word_cnt = array_size / 2;
             for (unsigned i = 0; i < bm::set_total_blocks; ++i)
             {
-                bm::word_t* blk = 
+                bm::word_t* blk =
                     bman.check_allocate_block(i, 
                                               false, 
                                               BM_BIT, 
@@ -1595,7 +1595,7 @@ void export_array(BV& bv, It first, It last)
             size_t word_cnt = array_size;
             for (unsigned i = 0; i < bm::set_total_blocks; ++i)
             {
-                bm::word_t* blk = 
+                bm::word_t* blk =
                     bman.check_allocate_block(i, 
                                               false, 
                                               BM_BIT, 
