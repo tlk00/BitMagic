@@ -358,10 +358,10 @@ void xor_swap(W& x, W& y)
 //---------------------------------------------------------------------
 
 /*! 
-   \brief Lexicographical comparison of two words as bit strings.
+   \brief Lexicographical comparison of two words as bit strings (reference)
    Auxiliary implementation for testing and reference purposes.
-   \param buf1 - First word.
-   \param buf2 - Second word.
+   \param w1 - First word.
+   \param w2 - Second word.
    \return  <0 - less, =0 - equal,  >0 - greater.
 
    @ingroup bitfunc 
@@ -379,21 +379,21 @@ template<typename T> int wordcmp0(T w1, T w2)
 }
 
 
-/*! 
-   \brief Lexicographical comparison of two words as bit strings.
-   Auxiliary implementation for testing and reference purposes.
-   \param buf1 - First word.
-   \param buf2 - Second word.
-   \return  <0 - less, =0 - equal,  >0 - greater.
-
-   @ingroup bitfunc 
-*/
 /*
 template<typename T> int wordcmp(T w1, T w2)
 {
     T diff = w1 ^ w2;
     return diff ? ((w1 & diff & (diff ^ (diff - 1)))? 1 : -1) : 0; 
 }
+*/
+/*! 
+   \brief Lexicographical comparison of two words as bit strings.
+   Auxiliary implementation for testing and reference purposes.
+   \param a - First word.
+   \param b - Second word.
+   \return  <0 - less, =0 - equal,  >0 - greater.
+
+   @ingroup bitfunc 
 */
 
 template<typename T> int wordcmp(T a, T b)
@@ -785,6 +785,7 @@ unsigned gap_bit_count_range(const T* buf, T left, T right)
     D-Gap Functor is called for each element but last one.
     
    \param gap_buf - GAP buffer 
+   \param func - functor object
     
 */
 template<class T, class Func> 
@@ -847,6 +848,7 @@ T* gap_2_dgap(const T* gap_buf, T* dgap_buf, bool copy_head=true)
    GAP representation is GAP[N] = DGAP[N] + DGAP[N-1]    
    
    \param dgap_buf - Delta-GAP buffer
+   \param gap_header - GAP header word
    \param gap_buf  - GAP buffer
 
    \internal
@@ -1826,11 +1828,12 @@ void gap_and_to_bitset(unsigned* dest, const T*  buf)
 
 
 /*!
-   \brief Compute bitcount of bit block AND masked by GAP block.
-   \param dest - bitblock buffer pointer.
-   \param buf  - GAP buffer pointer.
+   \brief Compute bitcount of bit block AND masked by GAP block
+   \param block - bitblock buffer pointer
+   \param buf  - GAP buffer pointer
+   \return bitcount - cardinality of the AND product
 
-   @ingroup gapfunc bitfunc
+   @ingroup gapfunc
 */
 template<typename T> 
 bm::id_t gap_bitset_and_count(const unsigned* block, const T*  buf)
@@ -1858,10 +1861,11 @@ bm::id_t gap_bitset_and_count(const unsigned* block, const T*  buf)
 
 /*!
    \brief Bitcount test of bit block AND masked by GAP block.
-   \param dest - bitblock buffer pointer.
-   \param buf  - GAP buffer pointer.
+   \param block - bitblock buffer pointer
+   \param buf  - GAP buffer pointer
+   \return non-zero value if AND produces any result
 
-   @ingroup gapfunc bitfunc
+   @ingroup gapfunc
 */
 template<typename T> 
 bm::id_t gap_bitset_and_any(const unsigned* block, const T*  buf)
@@ -1897,10 +1901,11 @@ bm::id_t gap_bitset_and_any(const unsigned* block, const T*  buf)
 
 /*!
    \brief Compute bitcount of bit block SUB masked by GAP block.
-   \param dest - bitblock buffer pointer.
+   \param block - bitblock buffer pointer.
    \param buf  - GAP buffer pointer.
+   \return bit-count result of AND NOT operation
 
-   @ingroup gapfunc bitfunc
+   @ingroup gapfunc
 */
 template<typename T> 
 bm::id_t gap_bitset_sub_count(const unsigned* block, const T*  buf)
@@ -1929,11 +1934,12 @@ bm::id_t gap_bitset_sub_count(const unsigned* block, const T*  buf)
 
 
 /*!
-   \brief Compute bitcount test of bit block SUB masked by GAP block.
-   \param dest - bitblock buffer pointer.
-   \param buf  - GAP buffer pointer.
+   \brief Compute bitcount test of bit block SUB masked by GAP block
+   \param block - bitblock buffer pointer
+   \param buf  - GAP buffer pointer
+   \return non-zero value if AND NOT produces any 1 bits
 
-   @ingroup gapfunc bitfunc
+   @ingroup gapfunc
 */
 template<typename T> 
 bm::id_t gap_bitset_sub_any(const unsigned* block, const T*  buf)
@@ -1967,11 +1973,12 @@ bm::id_t gap_bitset_sub_any(const unsigned* block, const T*  buf)
 
 
 /*!
-   \brief Compute bitcount of bit block XOR masked by GAP block.
-   \param dest - bitblock buffer pointer.
-   \param buf  - GAP buffer pointer.
+   \brief Compute bitcount of bit block XOR masked by GAP block
+   \param block - bitblock buffer pointer
+   \param buf  - GAP buffer pointer
+   \return bit count value of XOR operation
 
-   @ingroup gapfunc bitfunc
+   @ingroup gapfunc
 */
 template<typename T> 
 bm::id_t gap_bitset_xor_count(const unsigned* block, const T*  buf)
@@ -2006,10 +2013,11 @@ bm::id_t gap_bitset_xor_count(const unsigned* block, const T*  buf)
 
 /*!
    \brief Compute bitcount test of bit block XOR masked by GAP block.
-   \param dest - bitblock buffer pointer.
-   \param buf  - GAP buffer pointer.
+   \param block - bitblock buffer pointer
+   \param buf  - GAP buffer pointer
+   \return non-zero value if XOR returns anything
 
-   @ingroup gapfunc bitfunc
+   @ingroup gapfunc
 */
 template<typename T> 
 bm::id_t gap_bitset_xor_any(const unsigned* block, const T*  buf)
@@ -2049,10 +2057,11 @@ bm::id_t gap_bitset_xor_any(const unsigned* block, const T*  buf)
 
 /*!
    \brief Compute bitcount of bit block OR masked by GAP block.
-   \param dest - bitblock buffer pointer.
+   \param block - bitblock buffer pointer.
    \param buf  - GAP buffer pointer.
+   \return bit count of OR
 
-   @ingroup gapfunc bitfunc
+   @ingroup gapfunc
 */
 template<typename T> 
 bm::id_t gap_bitset_or_count(const unsigned* block, const T*  buf)
@@ -2095,11 +2104,12 @@ bm::id_t gap_bitset_or_count(const unsigned* block, const T*  buf)
 }
 
 /*!
-   \brief Compute bitcount test of bit block OR masked by GAP block.
-   \param dest - bitblock buffer pointer.
-   \param buf  - GAP buffer pointer.
+   \brief Compute bitcount test of bit block OR masked by GAP block
+   \param block - bitblock buffer pointer
+   \param buf  - GAP buffer pointer
+   \return non zero value if union (OR) returns anything
 
-   @ingroup gapfunc bitfunc
+   @ingroup gapfunc
 */
 template<typename T> 
 bm::id_t gap_bitset_or_any(const unsigned* block, const T*  buf)
@@ -2182,7 +2192,7 @@ void gap_convert_to_bitset(unsigned* dest, const T*  buf)
    \brief GAP block to bitblock conversion.
    \param dest - bitblock buffer pointer.
    \param buf  - GAP buffer pointer.
-   \param dest_size - length of the destination buffer.
+   \param dest_len - length/size of the destination buffer.
 
    @ingroup gapfunc
 */
@@ -2258,6 +2268,7 @@ template<typename T> unsigned gap_control_sum(const T* buf)
    \brief Sets all bits to 0 or 1 (GAP)
    \param buf - GAP buffer pointer.
    \param set_max - max possible bitset length
+   \param value - value to set
 
    @ingroup gapfunc
 */
@@ -2397,8 +2408,9 @@ template<typename T> T gap_length(const T* buf)
 
 
 /*!
-   \brief Returs GAP block capacity.
-   \param buf - GAP buffer pointer.
+   \brief Returs GAP block capacity
+   \param buf - GAP buffer pointer
+   \param glevel_len - pointer on GAP header word
    \returns GAP block capacity.
 
    @ingroup gapfunc
@@ -2870,6 +2882,8 @@ void bit_count_change32(const bm::word_t* block,
     Also calulates number of bits ON.
     
     @param bit_count - OUT total number of bits ON
+    @param block - bit-block start pointer
+    @param block_end - bit-block end pointer
     
     @return number of 1-0, 0-1 transitions
         
@@ -4334,8 +4348,9 @@ bm::word_t* bit_operation_xor(bm::word_t* BMRESTRICT dst,
 /*!
    \brief Performs bitblock XOR operation and calculates bitcount of the result. 
 
-   \param src1 - first bit block.
-   \param src2 - second bit block.
+   \param src1 - bit block start ptr
+   \param src1_end - bit block end ptr
+   \param src2 - second bit block
 
    \returns bitcount value 
 
@@ -4359,8 +4374,9 @@ bm::id_t bit_operation_xor_count(const bm::word_t* BMRESTRICT src1,
 /*!
    \brief Performs bitblock XOR operation test. 
 
-   \param src1 - first bit block.
-   \param src2 - second bit block.
+   \param src1 - bit block start ptr
+   \param src1_end - bit block end ptr
+   \param src2 - second bit block ptr
 
    \returns non zero value if there are bits
 
@@ -4387,7 +4403,7 @@ bm::id_t bit_operation_xor_any(const bm::word_t* BMRESTRICT src1,
 /**
     \brief Inspects block for full zero words 
 
-    \param data - bit block pointer
+    \param blk - bit block pointer
     \param data_size - data size
 
     \return size of all non-zero words

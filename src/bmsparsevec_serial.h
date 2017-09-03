@@ -32,7 +32,7 @@ For more information please visit:  http://bmagic.sourceforge.net
 namespace bm
 {
 
-/** \defgroup svserial
+/** \defgroup svserial Sparse vector serialization
     Sparse vector serialization
     \ingroup svector
  */

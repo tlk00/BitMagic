@@ -679,6 +679,7 @@ void gap_2_bitblock(const GT* BMRESTRICT gap_buf,
     @param tmatrix - transposed matrix
     @param pc_vector - row content vector
     @param rstat - output row vector
+    @param effective_cols - effective columns
 
     @internal
 */

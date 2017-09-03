@@ -497,7 +497,9 @@ protected:
 
 /**
     Class deserializer, can perform logical operation on bit-vector and
-    serialized bit-vector.
+    serialized bit-vector. This utility class potentially provides faster
+    and/or more memory efficient operation than more conventional deserialization
+    into memory bvector and then logical operation
 
     \ingroup bvserial 
 */
@@ -507,6 +509,17 @@ class operation_deserializer
 public:
     typedef BV bvector_type;
 public:
+    /**
+    \brief Deserialize bvector using buffer as set operation argument
+    
+    \param bv - target bvector
+    \param buf - serialized buffer as a logical argument
+    \param temp_block - temporary block to avoid re-allocations
+    \param op - set algebra operation (default: OR)
+    \param exit_on_one - quick exit if set operation found some result
+    
+    \return bitcount
+    */
     static
     unsigned deserialize(bvector_type&        bv, 
                          const unsigned char* buf, 
@@ -515,7 +528,13 @@ public:
                          bool                 exit_on_one = false ///<! exit early if any one are found
                          );
 private:
-    /// experimental
+    /** experimental 3-way deserializator TARGET = MASK (OR/AND/XOR) BUF
+    \param bv_target - target bvector
+    \param bv_mask - mask bvector (MASK)
+    \param buf - buffer argument
+    \param temp_block - operational temporary block to avoid re-allocations
+    \param op - logical operation
+    */
     static
     void deserialize(bvector_type&        bv_target,
                      const bvector_type&  bv_mask,
@@ -1046,7 +1065,8 @@ enum serialization_flags {
    Function serializes content of the bitvector into memory.
    Serialization adaptively uses compression(variation of GAP encoding) 
    when it is benefitial. 
-
+   
+   \param bv - source bvecor
    \param buf - pointer on target memory area. No range checking in the
    function. It is responsibility of programmer to allocate sufficient 
    amount of memory using information from calc_stat function.
@@ -1131,6 +1151,7 @@ unsigned serialize(BV& bv,
 /*!
     @brief Bitvector deserialization from memory.
 
+    @param bv - target bvector
     @param buf - pointer on memory which keeps serialized bvector
     @param temp_block - pointer on temporary block, 
             if NULL bvector allocates own.

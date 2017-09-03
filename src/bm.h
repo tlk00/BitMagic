@@ -106,7 +106,7 @@ namespace bm
 
 
 
-/** @defgroup bmagic 
+/** @defgroup bmagic BitMagic Library
     BitMagic C++ Library
     For more information please visit:  http://bmagic.sourceforge.net 
     https://github.com/tlk00/BitMagic
@@ -114,9 +114,9 @@ namespace bm
  */
 
 
-/** @defgroup bvector 
+/** @defgroup bvector bvector<>
     The Main bvector<> Group
-    This is the main group. It includes bvector template: front end of the bm library.
+    bvector<> template: front end of the BitMagic library.
  *  @ingroup bmagic 
  */
 
@@ -881,6 +881,7 @@ public:
           - bvector size (number of bits addressable by bvector), bm::id_max means 
           "no limits" (recommended). 
           bit vector allocates this space dynamically on demand.
+        \param alloc - alllocator for this instance
 
         \sa bm::gap_len_table bm::gap_len_table_min set_new_blocks_strat
     */

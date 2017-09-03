@@ -41,7 +41,7 @@ For more information please visit:  http://bmagic.sourceforge.net
 namespace bm
 {
 
-/** @defgroup SSE4
+/** @defgroup SSE4 SSE4.2 funcions
     Processor specific optimizations for SSE4.2 instructions (internals)
  *  @ingroup bvector
  */

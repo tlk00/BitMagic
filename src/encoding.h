@@ -524,7 +524,7 @@ inline encoder::encoder(unsigned char* buf, unsigned size)
     size_ = size;
 }
 /*!
-    \grief Encode 8-bit prefix + an array
+    \brief Encode 8-bit prefix + an array
 */
 inline void encoder::put_prefixed_array_32(unsigned char c, 
                                            const bm::word_t* w, 
@@ -535,7 +535,7 @@ inline void encoder::put_prefixed_array_32(unsigned char c,
 }
 
 /*!
-    \grief Encode 8-bit prefix + an array 
+    \brief Encode 8-bit prefix + an array 
 */
 inline void encoder::put_prefixed_array_16(unsigned char c, 
                                            const bm::short_t* s, 

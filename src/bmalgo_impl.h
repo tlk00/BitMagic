@@ -38,14 +38,15 @@ namespace bm
 {
 
 /*! 
-   @defgroup setalgo 
+   @defgroup setalgo Bitset algorithms
  
    Set algebra algorithms
    @ingroup bvector
  */
 
 /*! 
-    @defgroup distance
+    @defgroup distance Binary-distance metrics
+ 
     Distance metrics and algorithms to compute binary distances
     @ingroup setalgo
  */

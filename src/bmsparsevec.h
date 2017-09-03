@@ -39,7 +39,7 @@ For more information please visit:   http://bmagic.sourceforge.net
 namespace bm
 {
 
-/** \defgroup svector
+/** \defgroup svector Sparse vector
     Sparse vector for integer types using bit transposition transform
     \ingroup bmagic
  */
@@ -73,7 +73,9 @@ public:
         \param bv_max_size - maximum possible size of underlying bit-vectors
         Please note, this is NOT size of svector itself, it is dynamic upper limit
         which should be used very carefully if we surely know the ultimate size
+        \param alloc - allocator for bit-vectors
         
+        \sa bvector<>
         \sa bm::bvector<>::allocation_policy
         \sa bm::startegy
     */
@@ -156,14 +158,14 @@ public:
     
     /*!
         \brief access specified element with bounds checking
-        \param i - element index
+        \param idx - element index
         \return value of the element
     */
-    value_type at(size_type i) const;
+    value_type at(size_type idx) const;
     
     /*!
         \brief get specified element without bounds checking
-        \param i - element index
+        \param idx - element index
         \return value of the element
     */
     value_type get(bm::id_t idx) const;
@@ -443,11 +445,11 @@ typename sparse_vector<Val, BV>::bvector_type_ptr
 
 template<class Val, class BV>
 typename sparse_vector<Val, BV>::value_type
-sparse_vector<Val, BV>::at(typename sparse_vector<Val, BV>::size_type i) const
+sparse_vector<Val, BV>::at(typename sparse_vector<Val, BV>::size_type idx) const
 {
-    if (i >= size_)
+    if (idx >= size_)
         throw std::range_error("sparse vector range error");
-    return this->get(i);
+    return this->get(idx);
 }
 
 //---------------------------------------------------------------------

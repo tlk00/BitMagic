@@ -31,7 +31,7 @@ For more information please visit:  http://bmagic.sourceforge.net
 namespace bm
 {
 
-/** @defgroup SSE2 
+/** @defgroup SSE2 SSE2 functions
     Processor specific optimizations for SSE2 instructions (internals)
     @ingroup bvector
  */

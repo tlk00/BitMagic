@@ -34,7 +34,7 @@ namespace bm
 
 
 /*! 
-    @defgroup alloc
+    @defgroup alloc Allocator
     Memory allocation for bvector
     
     @ingroup bvector
@@ -188,9 +188,10 @@ public:
     /*! @brief Allocates GAP block using bit block allocator (BA).
 
         GAP blocks in BM library belong to levels. Each level has a 
-        correspondent length described in bm::gap_len_table<>.
+        correspondent length described in bm::gap_len_table<>
         
         @param level GAP block level.
+        @param glevel_len table of level lengths
     */
     bm::gap_word_t* alloc_gap_block(unsigned level, 
                                     const gap_word_t* glevel_len)

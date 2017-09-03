@@ -29,7 +29,7 @@ For more information please visit:  http://bmagic.sourceforge.net
 #include "bmdef.h"
 #include "bmsparsevec.h"
 
-/** \defgroup svalgo
+/** \defgroup svalgo Sparse vector algorithms
     Sparse vector algorithms
     \ingroup svector
  */
