@@ -25,7 +25,6 @@ OTHER DEALINGS IN THE SOFTWARE.
 //#define BM_SET_MMX_GUARD
 //#define BMSSE2OPT
 //#define BMSSE42OPT
-#define BM64OPT
 //#define BMCOUNTOPT
 
 #include <stdio.h>
