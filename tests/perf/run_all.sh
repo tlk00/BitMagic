@@ -33,3 +33,5 @@ echo 64-bit
 
 
 ./perf_release_64 || exit 1
+echo
+echo "BitMagic Perf Test DONE"
