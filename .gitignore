@@ -32,3 +32,5 @@ tests/stress/stress_release_sse2
 tests/stress/stress_release_sse42
 
 *.log
+
+doc/
