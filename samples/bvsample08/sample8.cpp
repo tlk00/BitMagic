@@ -23,8 +23,7 @@ OTHER DEALINGS IN THE SOFTWARE.
 
 /** \example sample8.cpp
 
-    Example demonstrates some STL compatability set operations using
-    set iterators.
+  Example for STL interoperability and set operations with iterators.
  
   \sa bm::bvector<>::enumerator 
   \sa bm::bvector<>::insert_iterator

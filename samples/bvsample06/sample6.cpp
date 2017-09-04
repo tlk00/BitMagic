@@ -40,6 +40,10 @@ using namespace std;
 // It also reservs the front word of the allocated block and saves
 // number of elements allocated. On deallocation it makes sure
 // it deallocates the same size as allocated
+//
+// Please note, that this sample allocator is NOT compatible with SIMD
+// optimizations, requiring special address alignment
+//
 
 class dbg_block_allocator
 {

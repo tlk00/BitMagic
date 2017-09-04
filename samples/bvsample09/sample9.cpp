@@ -23,7 +23,8 @@ OTHER DEALINGS IN THE SOFTWARE.
 
 /** \example sample9.cpp
 
-    Example demonstrates binary distance metrics.
+  Example demonstrates binary distance metrics. BM library can compute 
+  various distances without materializing a product set.
  
   \sa bm::count_and 
   \sa bm::count_xor
