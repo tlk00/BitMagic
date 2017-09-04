@@ -815,8 +815,8 @@ unsigned SerializationOperation(bvect*             bv_target,
    unsigned char* smem1 = new unsigned char[st1.max_serialize_mem];
    unsigned char* smem2 = new unsigned char[st2.max_serialize_mem];
 
-   unsigned slen1 = bm::serialize(bv1, smem1);
-   unsigned slen2 = bm::serialize(bv2, smem2);
+   unsigned slen1 = bm::serialize(bv1, smem1, tb);
+   unsigned slen2 = bm::serialize(bv2, smem2, tb);
 
    if (slen1 > st1.max_serialize_mem || slen2 > st2.max_serialize_mem)
    {
@@ -3030,8 +3030,8 @@ void DesrializationTest2()
 
 
    unsigned char* sermem = new unsigned char[st1.max_serialize_mem];
-
-   unsigned slen2 = bm::serialize(bv1, sermem);
+   
+   unsigned slen2 = bm::serialize(bv1, sermem, tb);
    assert(slen2);
    slen2 = 0;
 
@@ -3126,7 +3126,7 @@ void DesrializationTest2()
 
        unsigned char* sermem = new unsigned char[st.max_serialize_mem];
 
-       unsigned slen = bm::serialize(*bvect_full1, sermem);
+       unsigned slen = bm::serialize(*bvect_full1, sermem, tb);
 
        unsigned char* smem = new unsigned char[slen];
        ::memcpy(smem, sermem, slen);
@@ -4821,9 +4821,11 @@ void MutationOperationsTest()
     bvect_full1.calc_stat(&st);
 
     // serialization
+    
+    BM_DECLARE_TEMP_BLOCK(tb)
 
     unsigned char* sermem = new unsigned char[st.max_serialize_mem];
-    unsigned slen = bm::serialize(bvect_full1, sermem);
+    unsigned slen = bm::serialize(bvect_full1, sermem, tb);
     cout << "BVECTOR SERMEM=" << slen << endl;
 
 
@@ -4892,9 +4894,11 @@ void MutationOperationsTest()
 
 
     // serialization
+    
+    BM_DECLARE_TEMP_BLOCK(tb)
 
     unsigned char* sermem = new unsigned char[st.max_serialize_mem];
-    unsigned slen = bm::serialize(bvect_full1, sermem);
+    unsigned slen = bm::serialize(bvect_full1, sermem, tb);
     cout << "BVECTOR SERMEM=" << slen << endl;
 
 
@@ -4954,8 +4958,10 @@ void SerializationTest()
 
     bvect::statistics st;
     bvect_full1->calc_stat(&st);
+    BM_DECLARE_TEMP_BLOCK(tb)
+
     unsigned char* sermem = new unsigned char[st.max_serialize_mem];
-    unsigned slen = bm::serialize(*bvect_full1, sermem);
+    unsigned slen = bm::serialize(*bvect_full1, sermem, tb);
     cout << "Serialized mem_max = " << st.max_serialize_mem 
          << " size= " << slen 
          << " Ratio=" << (slen*100)/st.max_serialize_mem << "%"
@@ -7950,8 +7956,9 @@ bool CompareSparseVector(const SV& sv, const Vect& vect)
     }
     
     // serialization comparison
+    BM_DECLARE_TEMP_BLOCK(tb)
     sparse_vector_serial_layout<SV> sv_lay;
-    int res = bm::sparse_vector_serialize<SV>(sv, sv_lay);
+    int res = bm::sparse_vector_serialize<SV>(sv, sv_lay, tb);
     if (res != 0)
     {
         cerr << "Serialization error" << endl;
@@ -7959,7 +7966,7 @@ bool CompareSparseVector(const SV& sv, const Vect& vect)
     }
     SV sv2;
     const unsigned char* buf = sv_lay.buf();
-    res = bm::sparse_vector_deserialize(sv2, buf);
+    res = bm::sparse_vector_deserialize(sv2, buf, tb);
     if (res != 0)
     {
         cerr << "De-Serialization error" << endl;

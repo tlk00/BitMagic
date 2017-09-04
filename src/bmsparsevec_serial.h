@@ -164,6 +164,8 @@ protected:
  
     \param sv         - sparse vector to serialize
     \param sv_layout  - buffer structure to keep the result
+    \param temp_block - temporary buffer 
+                        (allocate with BM_DECLARE_TEMP_BLOCK(x) for speed)
     \param bv_serialization_flags - bit-vector serialization flags
     as defined in bm::serialization_flags    
     
@@ -177,6 +179,7 @@ template<class SV>
 int sparse_vector_serialize(
                 const SV&                        sv,
                 sparse_vector_serial_layout<SV>& sv_layout,
+                bm::word_t*                      temp_block = 0,
                 unsigned                         bv_serialization_flags = 0)
 {
     typename SV::statistics sv_stat;
@@ -207,7 +210,7 @@ int sparse_vector_serialize(
             continue;
         }
         unsigned buf_size =
-            bm::serialize(*bv, buf_ptr, 0, bv_serialization_flags);
+            bm::serialize(*bv, buf_ptr, temp_block, bv_serialization_flags);
         sv_layout.set_plain(i, buf_ptr, buf_size);
         buf_ptr += buf_size;
         
@@ -244,9 +247,9 @@ int sparse_vector_serialize(
 
 /*!
     \brief Deserialize svector<>
-    \param sv target sparse vector 
-    \param buf source memory buffer
-    \param temp_block temporary block buffer to avoid re-allocations
+    \param sv         - target sparse vector
+    \param buf        - source memory buffer
+    \param temp_block - temporary block buffer to avoid re-allocations
     \ingroup svector
 */
 template<class SV>

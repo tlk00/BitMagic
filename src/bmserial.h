@@ -138,8 +138,11 @@ enum serialization_header_mask {
 /**
     Bit-vector serialization class.
     
-    Class designed to convert sparse bit-vector into a block of memory
+    Class designed to convert sparse bit-vectors into a single block of memory
     ready for file or database storage or network transfer.
+    
+    Reuse of this class for multiple serializations may offer some performance
+    advantage.
     
     @ingroup bvserial 
 */
@@ -150,7 +153,16 @@ public:
     typedef typename BV::allocator_type      allocator_type;
     typedef typename BV::blocks_manager_type blocks_manager_type;
 public:
-    serializer(const allocator_type&   alloc  = allocator_type());
+    /**
+        Construct serializer
+        
+        \param alloc - memory allocator
+        \param temp_block - temporary block for various operations
+               (if NULL it will be allocated and managed by serializer class)
+    */
+    serializer(const allocator_type&   alloc  = allocator_type(),
+              bm::word_t*  temp_block = 0);
+              
     ~serializer();
 
     /**
@@ -242,6 +254,7 @@ private:
     bool           byte_order_serial_;
     bm::word_t*    temp_block_;
     unsigned       compression_level_;
+    bool           own_temp_block_;
 };
 
 /**
@@ -561,14 +574,24 @@ private:
 //---------------------------------------------------------------------
 
 template<class BV>
-serializer<BV>::serializer(const allocator_type&   alloc)
+serializer<BV>::serializer(const allocator_type&   alloc,
+                           bm::word_t*             temp_block)
 : alloc_(alloc),
   gap_serial_(false),
   byte_order_serial_(true),
-  temp_block_(0),
   compression_level_(3)
 {
-    temp_block_ = alloc_.alloc_bit_block();
+    if (temp_block == 0)
+    {
+        temp_block_ = alloc_.alloc_bit_block();
+        own_temp_block_ = true;
+    }
+    else
+    {
+        temp_block_ = temp_block;
+        own_temp_block_ = false;
+    }
+        
 }
 
 template<class BV>
@@ -586,7 +609,8 @@ unsigned serializer<BV>::get_compression_level() const
 template<class BV>
 serializer<BV>::~serializer()
 {
-    alloc_.free_bit_block(temp_block_);
+    if (own_temp_block_)
+        alloc_.free_bit_block(temp_block_);
 }
 
 
@@ -1104,10 +1128,10 @@ enum serialization_flags {
 template<class BV>
 unsigned serialize(const BV& bv, 
                    unsigned char* buf, 
-                   bm::word_t*    /*temp_block*/,
+                   bm::word_t*    temp_block = 0,
                    unsigned       serialization_flags = 0)
 {
-    bm::serializer<BV> bv_serial;
+    bm::serializer<BV> bv_serial(bv.get_allocator(), temp_block);
     if (serialization_flags & BM_NO_BYTE_ORDER) 
         bv_serial.byte_order_serialization(false);
         
@@ -1124,26 +1148,24 @@ unsigned serialize(const BV& bv,
 /*!
    @brief Saves bitvector into memory.
    Allocates temporary memory block for bvector.
-   \ingroup bvserial 
-*/
+ 
+   \param bv - source bvecor
+   \param buf - pointer on target memory area. No range checking in the
+   function. It is responsibility of programmer to allocate sufficient 
+   amount of memory using information from calc_stat function.
 
+   \param serialization_flags
+   Flags controlling serilization (bit-mask) 
+   (use OR-ed serialization flags)
+ 
+   \ingroup bvserial
+*/
 template<class BV>
 unsigned serialize(BV& bv, 
                    unsigned char* buf, 
                    unsigned  serialization_flags=0)
 {
-    bm::serializer<BV> bv_serial;
-    if (serialization_flags & BM_NO_BYTE_ORDER) 
-        bv_serial.byte_order_serialization(false);
-        
-    if (serialization_flags & BM_NO_GAP_LENGTH) 
-        bv_serial.gap_length_serialization(false);
-    else
-        bv_serial.gap_length_serialization(true);
-
-    bv_serial.set_compression_level(4);
-    
-    return bv_serial.serialize(bv, buf, 0);
+    return bm::serialize(bv, buf, 0, serialization_flags);
 }
 
 

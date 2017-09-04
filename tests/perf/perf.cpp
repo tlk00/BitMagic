@@ -26,11 +26,8 @@ OTHER DEALINGS IN THE SOFTWARE.
 #include <time.h>
 #include <stdio.h>
 
-// No intermix FP with integer SSE in this program
-//#define BM_SET_MMX_GUARD
 //#define BMSSE2OPT
 //#define BMSSE42OPT
-//#define BM64OPT
 
 
 #ifdef _MSC_VER
@@ -581,6 +578,9 @@ void EnumeratorTestGAP()
 void SerializationTest()
 {
 	bvect bv_sparse;
+    // stack declaration of temp block instead of re-allocation makes things faster
+    BM_DECLARE_TEMP_BLOCK(tb)
+
 
 	// prepare a test bitset with a small number of bits set somewhere
 	// far from the beginning
@@ -592,7 +592,6 @@ void SerializationTest()
 	bv_sparse[70000] = true;
 	bv_sparse[200000] = true;
 
-    BM_DECLARE_TEMP_BLOCK(tb)
 	bv_sparse.optimize(tb);
 
 	unsigned cnt = bv_sparse.count();
@@ -606,7 +605,7 @@ void SerializationTest()
 	TimeTaker tt("Small bvector serialization", REPEATS*70000);
 	for (unsigned i = 0; i < REPEATS*70000; ++i)
 	{
-		len += bm::serialize(bv_sparse, buf, bm::BM_NO_BYTE_ORDER|bm::BM_NO_GAP_LENGTH);
+		len += bm::serialize(bv_sparse, buf, tb, bm::BM_NO_BYTE_ORDER|bm::BM_NO_GAP_LENGTH);
 		id_size += cnt * (unsigned)sizeof(unsigned);
 	}
 	}
@@ -627,7 +626,7 @@ void SerializationTest()
 	TimeTaker tt("Large bvector serialization", REPEATS*4);
 	for (unsigned i = 0; i < REPEATS*4; ++i)
 	{
-		len += bm::serialize(*bv, buf, bm::BM_NO_BYTE_ORDER|bm::BM_NO_GAP_LENGTH);
+		len += bm::serialize(*bv, buf, tb, bm::BM_NO_BYTE_ORDER|bm::BM_NO_GAP_LENGTH);
 		id_size += cnt * (unsigned)sizeof(unsigned);
 	}
 	}
