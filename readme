@@ -31,7 +31,6 @@ Windows:
 --------
 
 If you use cygwin installation please follow general Unix recommendations.
-If you use MSVC please use supplied bm.dsw and corresponding project files.
 
 
 Fine tuning and optimizations:
@@ -42,16 +41,20 @@ All BM fine tuning parameters are controlled by the preprocessor defines.
 
 =================================================================================
 
-BM library includes some code optimized for 64-bit systems. To turn this
-optimization on you need to #define BM64OPT in you makefile or in bm.h file.
+BM library includes some code optimized for 64-bit systems. This optimization 
+gets applied automatically.
+
+BM library contains hand tuned code for SIMD extensions SSE2 and SSE4.2
 
 To turn on SSE2 optimization #define BMSSE2OPT 
-To turn on SSE4.2 optimization #define BMSSE42OPT
-You will need compiler supporting Intel SSE intrinsics. 
-(Tested with MSVC and GCC)
+To turn on SSE4.2 optimization #define BMSSE42OPT. SSE42 optimization automatically
+assumes SSE2 as a subset of SSE4.2. (you don’t need to use both BMSSE2OPT and 
+BMSSE42OPT).You will need compiler supporting Intel SSE intrinsics.
+MSVC and GCC both has it.
 
-BM64OPT and BMSSE42OPT can be used together.
 BM library does NOT support multiple code paths and runtime CPU identification.
+You have to build specifically for your target system or use default portable
+build.
 
 =================================================================================
 
@@ -60,8 +63,8 @@ BM library supports "restrict" keyword, some compilers
 code (out of order load-stores) when restrict keyword is helping. This option is 
 turned OFF by default since most of the C++ compilers does not support it. 
 To turn it ON please #define BM_HASRESTRICT in your project. Some compilers
-use "__restrict" keyword for this purpose. You can correct if by
-defineing BMRESTRICT macro to correct keyword. 
+use "__restrict" keyword for this purpose. To correct it define BMRESTRICT macro 
+to correct keyword. 
 
 =================================================================================
 
