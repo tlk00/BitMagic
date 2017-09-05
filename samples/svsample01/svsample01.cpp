@@ -1,5 +1,5 @@
 /*
-Copyright(c) 2002-2005 Anatoliy Kuznetsov(anatoliy_kuznetsov at yahoo.com)
+Copyright(c) 2017 Anatoliy Kuznetsov(anatoliy_kuznetsov at yahoo.com)
 
 Permission is hereby granted, free of charge, to any person 
 obtaining a copy of this software and associated documentation 
@@ -26,8 +26,11 @@ OTHER DEALINGS IN THE SOFTWARE.
  
   For more information please visit:  http://bmagic.sourceforge.net
 
-  \sa bm::sparse_vector<>
-  
+  \sa bm::sparse_vector<>::import
+  \sa bm::sparse_vector<>::at
+  \sa bm::sparse_vector<>::optimize
+  \sa bm::sparse_vector<>::size
+ 
  */
 
 #include <iostream>

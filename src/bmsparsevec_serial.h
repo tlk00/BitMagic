@@ -26,8 +26,9 @@ For more information please visit:  http://bmagic.sourceforge.net
 
 */
 
-#include "bmdef.h"
 #include "bmsparsevec.h"
+#include "bmserial.h"
+#include "bmdef.h"
 
 namespace bm
 {
