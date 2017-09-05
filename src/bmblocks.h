@@ -47,7 +47,7 @@ namespace bm
    @internal
 */
 
-template<class Alloc/*, class MS*/> 
+template<class Alloc>
 class blocks_manager
 {
 public:
@@ -1304,23 +1304,6 @@ public:
             count = (IS_FULL_BLOCK(block)) ? bm::bits_in_block
                 : bit_block_calc_count(block, block + bm::set_block_size);
         }
-/*
-        if (IS_FULL_BLOCK(block))
-            count = bm::bits_in_block;
-        else
-        {
-            if (BM_IS_GAP(block))
-            {
-                count = gap_bit_count(BMGAP_PTR(block));
-            }
-            else // bitset
-            {
-                count = 
-                    bit_block_calc_count(block, 
-                                         block + bm::set_block_size);
-            }
-        }
-*/
         return count;
     }
 
