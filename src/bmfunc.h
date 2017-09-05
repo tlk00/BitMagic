@@ -4997,7 +4997,7 @@ bool improve_gap_levels(const T* length,
 /**
     Bit-block get adapter, takes bitblock and represents it as a 
     get_32() accessor function
-    /internal
+    \internal
 */
 class bitblock_get_adapter
 {
@@ -5013,7 +5013,7 @@ private:
 
 /**
     Bit-block store adapter, takes bitblock and saves results into it
-    /internal
+    \internal
 */
 class bitblock_store_adapter
 {
