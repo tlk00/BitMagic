@@ -11,3 +11,6 @@ BitMagic Library samples
 ./bvsample10 - extraction of a random subset for Monte Carlo simulations
 
 
+./svsample01 - basic example of sparse_vector<> container
+
+

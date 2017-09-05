@@ -31,9 +31,8 @@ For more information please visit:   http://bmagic.sourceforge.net
 #include <memory.h>
 #include <stdexcept>
 
-#include "bmdef.h"
 #include "bm.h"
-#include "bmfunc.h"
+#include "bmdef.h"
 
 
 namespace bm
