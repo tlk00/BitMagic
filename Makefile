@@ -35,6 +35,7 @@ TARGETS_BLD =  \
               samples/bvsample09 \
               samples/bvsample10 \
               samples/svsample01 \
+              samples/svsample02 \
               tests/stress tests/perf 
         
 SHELL=/bin/sh
@@ -56,7 +57,7 @@ endif
 rebuild all clean: .DIRS_BLD
 
 relprep: .DIRS_BLD
-	$(RM) -r CVS *.plg *.ncb *.opt
+	$(RM) -r CVS *.plg *.ncb *.opt *.log
 	$(RM) -rf samples/CVS tests/CVS platforms/CVS src/CVS
 	$(RM) -rf html
 	$(RM) -rf src/bm__* src/*vcproj.*
