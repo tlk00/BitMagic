@@ -12,5 +12,7 @@ BitMagic Library samples
 
 
 ./svsample01 - basic example of sparse_vector<> container
+./svsample02 - sparse_vector<> serialization example
+./svsample03 - sparse_vector<> import, join, extract methods
 
 
