@@ -129,7 +129,7 @@ void dynamic_range_clip_low(SV& svect, unsigned low_bit)
     // slightly lower value (due to clipping) low signal gets amplified
     // (lower contrast algorithm)
     
-    bv_acc1.bit_sub(bv_acc2);
+    bv_acc1.bit_xor(bv_acc2);
     bv_low_plain->bit_or(bv_acc1);
 }
 
