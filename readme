@@ -31,6 +31,8 @@ Windows:
 --------
 
 If you use cygwin installation please follow general Unix recommendations.
+MSVC - solution and projects are not currently available (work in progress)
+XCODE - project files are not currently available
 
 
 Fine tuning and optimizations:
