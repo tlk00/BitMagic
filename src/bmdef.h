@@ -6,6 +6,26 @@
 
 #include <climits>
 
+// Incorporate appropriate tuneups when the NCBI C++ Toolkit's core
+// headers have been included.
+//
+#ifdef NCBI_ASSERT
+#  define BM_ASSERT _ASSERT
+
+#  ifdef HAVE_RESTRICT_CXX
+#    define BM_HASRESTRICT
+#    define BMRESTRICT NCBI_RESTRICT
+#  endif
+
+#  if defined(NCBI_FORCEINLINE)  &&  \
+    ( !defined(NCBI_COMPILER_GCC)  ||  NCBI_COMPILER_VERSION >= 400  || \
+      defined(__OPTIMIZE__))
+#    define BM_HASFORCEINLINE
+#    define BMFORCEINLINE NCBI_FORCEINLINE
+#  endif
+#endif
+
+
 // macro to define/undefine unaligned memory access (x86, PowerPC)
 //
 #if defined(__i386) || defined(__x86_64) || defined(__ppc__) || \
