@@ -3,7 +3,7 @@
 #---------------------------------------------------------------------------
 # General configuration options
 #---------------------------------------------------------------------------
-PROJECT_NAME           = BitMagic
+PROJECT_NAME           = BitMagic C++ Library
 PROJECT_NUMBER         = 
 OUTPUT_DIRECTORY       = doc
 OUTPUT_LANGUAGE        = English
@@ -46,7 +46,7 @@ INTERNAL_DOC           = YES
 #---------------------------------------------------------------------------
 QUIET                  = NO
 WARNINGS               = YES
-WARN_IF_UNDOCUMENTED   = NO
+WARN_IF_UNDOCUMENTED   = YES
 WARN_FORMAT            = 
 WARN_LOGFILE           = warn.log
 #---------------------------------------------------------------------------
