@@ -406,7 +406,7 @@ public:
     };
 
     /*!
-        @brief Constant input iterator designed to enumerate "ON" bits
+        @brief Constant iterator designed to enumerate "ON" bits
         @ingroup bvector
     */
     class enumerator : public iterator_base
@@ -751,7 +751,7 @@ public:
     };
     
     /*!
-        @brief Constant input iterator designed to enumerate "ON" bits
+        @brief Constant iterator designed to enumerate "ON" bits
         counted_enumerator keeps bitcount, ie number of ON bits starting
         from the position 0 in the bit string up to the currently enumerated bit
         
