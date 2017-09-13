@@ -2538,13 +2538,13 @@ bm::id_t bvector<Alloc>::check_or_next_extract(bm::id_t prev)
                     {
                         BMCOUNT_DEC
 
-                        unsigned nbit = 
+                        unsigned nbit1 = 
                             unsigned(prev & bm::set_block_mask); 
                         unsigned nword = 
-                            unsigned(nbit >> bm::set_word_shift);
-                        nbit &= bm::set_word_mask;
+                            unsigned(nbit1 >> bm::set_word_shift);
+                        nbit1 &= bm::set_word_mask;
                         bm::word_t* word = block + nword;
-                        bm::word_t  mask = ((bm::word_t)1) << nbit;
+                        bm::word_t  mask = ((bm::word_t)1) << nbit1;
                         *word &= ~mask;
 
                         return prev;
