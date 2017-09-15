@@ -518,10 +518,10 @@ private:
     \param buf - memory buffer pointer.
     \param size - size of the buffer
 */
-inline encoder::encoder(unsigned char* buf, unsigned size)
+inline encoder::encoder(unsigned char* buf, unsigned a_size)
 : buf_(buf), start_(buf)
 {
-    size_ = size;
+    size_ = a_size;
 }
 /*!
     \brief Encode 8-bit prefix + an array
