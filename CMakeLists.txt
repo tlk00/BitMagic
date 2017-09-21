@@ -29,3 +29,19 @@ set(CMAKE_CXX_FLAGS "${CMAKE_CXX_FLAGS} ${flags}")
 
 add_executable(bmtest ${PROJECT_SOURCE_DIR}/tests/stress/t.cpp)
 add_executable(bmperf ${PROJECT_SOURCE_DIR}/tests/perf/perf.cpp)
+
+add_executable(bvsample01 ${PROJECT_SOURCE_DIR}/samples/bvsample01/sample1.cpp)
+add_executable(bvsample02 ${PROJECT_SOURCE_DIR}/samples/bvsample02/sample2.cpp)
+add_executable(bvsample03 ${PROJECT_SOURCE_DIR}/samples/bvsample03/sample3.cpp)
+add_executable(bvsample04 ${PROJECT_SOURCE_DIR}/samples/bvsample04/sample4.cpp)
+add_executable(bvsample05 ${PROJECT_SOURCE_DIR}/samples/bvsample05/sample5.cpp)
+add_executable(bvsample06 ${PROJECT_SOURCE_DIR}/samples/bvsample06/sample6.cpp)
+add_executable(bvsample08 ${PROJECT_SOURCE_DIR}/samples/bvsample08/sample8.cpp)
+add_executable(bvsample09 ${PROJECT_SOURCE_DIR}/samples/bvsample09/sample9.cpp)
+add_executable(bvsample10 ${PROJECT_SOURCE_DIR}/samples/bvsample10/sample10.cpp)
+
+add_executable(svsample01 ${PROJECT_SOURCE_DIR}/samples/svsample01/svsample01.cpp)
+add_executable(svsample02 ${PROJECT_SOURCE_DIR}/samples/svsample02/svsample02.cpp)
+add_executable(svsample03 ${PROJECT_SOURCE_DIR}/samples/svsample03/svsample03.cpp)
+
+
