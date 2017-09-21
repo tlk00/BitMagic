@@ -20,7 +20,7 @@ elseif ("${CMAKE_CXX_COMPILER_ID}" STREQUAL "Intel")
     set(flags, "-tpp7 -march=core2 -restrict -DBM_HASRESTRICT -fno-fnalias -Wall")
     set(optflags, "-g0 -O3 -opt_report_fileopt.txt -opt_report_levelmax")
 elseif ("${CMAKE_CXX_COMPILER_ID}" STREQUAL "MSVC")
-    set(flags "/W4 /WX /EHsc")
+    set(flags "/W4 /EHsc")
     set(optflags "-O2")
 endif()
 
