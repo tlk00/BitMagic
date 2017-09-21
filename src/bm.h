@@ -827,7 +827,7 @@ public:
         
         allocation_policy(bm::strategy s=BM_BIT,
                           const gap_word_t* glevels = bm::gap_len_table<true>::_len)
-        : strat(BM_BIT), glevel_len(glevels)
+        : strat(s), glevel_len(glevels)
         {}
     };
 
