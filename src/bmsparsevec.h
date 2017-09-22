@@ -146,6 +146,12 @@ public:
     size_type size() const;
     
     
+    /*! \brief return true if vector is empty
+        \return true if empty
+    */
+    bool empty() const;
+    
+    
     /*! \brief resize vector
         \param sz - new size
     */
@@ -396,6 +402,15 @@ sparse_vector<Val, BV>::size() const
 {
     return size_;
 }
+
+//---------------------------------------------------------------------
+
+template<class Val, class BV>
+bool sparse_vector<Val, BV>::empty() const
+{
+    return (size_ == 0);
+}
+
 
 //---------------------------------------------------------------------
 

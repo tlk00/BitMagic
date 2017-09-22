@@ -32,34 +32,37 @@ For more information please visit:  http://bmagic.sourceforge.net
 #include <stdlib.h>
 #include <cassert>
 #include <memory.h>
+#include <time.h>
+
 #include <iostream>
 #include <strstream>
 #include <fstream>
 #include <iomanip>
-#include <time.h>
+#include <vector>
 
 #include "bmdef.h"
 
 
-using namespace std;
 
 #ifdef _MSC_VER
 #pragma warning( push )
 #pragma warning( disable : 4311 4312 4127)
 #endif
 
+namespace bm
+{
 
 inline
 void PrintGap(const bm::gap_word_t* gap_buf)
 {
     unsigned len = (*gap_buf >> 3);
-    cout << "[" << *gap_buf << " len=" << len << "] ";
+    std::cout << "[" << *gap_buf << " len=" << len << "] ";
     for (unsigned i = 0; i < len; ++i)
     {
         ++gap_buf;
-        cout << *gap_buf << "; ";
+        std::cout << *gap_buf << "; ";
     } 
-    cout << endl;
+    std::cout << std::endl;
 }
 
 inline
@@ -67,13 +70,13 @@ void PrintDGap(const bm::gap_word_t* gap_buf, unsigned gap_len=0)
 {
 
     unsigned len = gap_len ? gap_len : (*gap_buf >> 3);
-    cout << "[" " len=" << len << "] ";
+    std::cout << "[" " len=" << len << "] ";
     unsigned i = gap_len ? 0 : 1;
     for (; i < len; ++i)
     {
-        cout << gap_buf[i] << "; ";
+        std::cout << gap_buf[i] << "; ";
     } 
-    cout << endl;
+    std::cout << std::endl;
 }
 
 inline unsigned int iLog2(unsigned int value)
@@ -93,16 +96,16 @@ unsigned PrintGammaCode(unsigned value)
         //cout << "log2=" << l << endl;
         for (unsigned i = 0; i < l; ++i)
         {
-            cout << 0;
+            std::cout << 0;
             ++bits;
         }
-        cout << 1; ++bits;
+        std::cout << 1; ++bits;
         for (unsigned i = 0; i < l; ++i)
         {
             if (value & 1 << i) 
-                cout << 1;
+                std::cout << 1;
             else
-                cout << 0;
+                std::cout << 0;
             ++bits;
         }
     }
@@ -114,41 +117,76 @@ void PrintDGapGamma(const bm::gap_word_t* gap_buf, unsigned gap_len=0)
 {
     unsigned total = 0;
     unsigned len = gap_len ? gap_len : (*gap_buf >> 3);
-    cout << "[" " len=" << len << "] ";
+    std::cout << "[" " len=" << len << "] ";
     unsigned i = gap_len ? 0 : 1;
     for (; i < len; ++i)
     {
         unsigned v = gap_buf[i];
 
         unsigned bits = PrintGammaCode(v+1);
-        cout << "; ";
+        std::cout << "; ";
         total += bits;
     } 
-    cout << "  gamma_bits=" << total << " src_bits =" << len * 16;
-    cout << endl;
+    std::cout << "  gamma_bits=" << total << " src_bits =" << len * 16;
+    std::cout << std::endl;
 
+}
+
+/// Read dump file into an STL container (vector of some basic type)
+///
+/// @return 0 - if reading went well
+///
+template<class VT>
+int read_dump_file(const std::string& fname, VT& data)
+{
+    typedef typename VT::value_type  value_type;
+
+    std::streampos fsize;
+    std::ifstream fin(fname.c_str(), std::ios::in | std::ios::binary);
+    if (!fin.good())
+    {
+        return -1;
+    }
+    fin.seekg(0, std::ios::end);
+    fsize = fin.tellg();
+    
+    data.resize(fsize/sizeof(value_type));
+    if (fsize == 0)
+    {
+        return 0; // empty input
+    }
+    fin.seekg(0, std::ios::beg);
+    
+    fin.read((char*) &data[0], fsize);
+    if (!fin.good())
+    {
+        data.resize(0);
+        return -2;
+    }
+    return 0;
+    
 }
 
 template<class TBV>
 void LoadBVector(const char* fname, TBV& bvector, unsigned* file_size=0)
 {
-    ifstream bv_file (fname, ios::in | ios::binary);
+    std::ifstream bv_file (fname, std::ios::in | std::ios::binary);
     if (!bv_file.good())
     {
-        cout << "Cannot open file: " << fname << endl;
+        std::cout << "Cannot open file: " << fname << std::endl;
         exit(1);
     }
-    bv_file.seekg(0, ios_base::end);
+    bv_file.seekg(0, std::ios_base::end);
     unsigned length = (unsigned)bv_file.tellg();
     if (length == 0)
     {
-        cout << "Empty file:" << fname << endl;
+        std::cout << "Empty file:" << fname << std::endl;
         exit(1);
     }
     if (file_size)
         *file_size = length;
         
-    bv_file.seekg(0, ios::beg);
+    bv_file.seekg(0, std::ios::beg);
     
     char* buffer = new char[length];
 
@@ -162,17 +200,17 @@ void LoadBVector(const char* fname, TBV& bvector, unsigned* file_size=0)
 template<class TBV>
 void SaveBVector(const char* fname, const TBV& bvector)
 {
-    ofstream bfile (fname, ios::out | ios::binary);
+    std::ofstream bfile (fname, std::ios::out | std::ios::binary);
     if (!bfile.good())
     {
-        cout << "Cannot open file: " << fname << endl;
+        std::cout << "Cannot open file: " << fname << std::endl;
         exit(1);
     }
     typename TBV::statistics st1;
     bvector.calc_stat(&st1);
 
     unsigned char* blob = new unsigned char[st1.max_serialize_mem];
-   unsigned blob_size = bm::serialize(bvector, blob);
+    unsigned blob_size = bm::serialize(bvector, blob);
 
 
     bfile.write((char*)blob, blob_size);
@@ -189,10 +227,10 @@ void SaveBlob(const char* name_prefix, unsigned num, const char* ext,
     fname_str << name_prefix << "-" << num << ext;
     
     char* fname = fname_str.str();
-    ofstream bfile (fname, ios::out | ios::binary);
+    std::ofstream bfile (fname, std::ios::out | std::ios::binary);
     if (!bfile.good())
     {
-        cout << "Cannot open file: " << fname << endl;
+        std::cout << "Cannot open file: " << fname << std::endl;
         exit(1);
     }
     bfile.write((char*)blob, blob_size);
@@ -205,8 +243,8 @@ void PrintBinary(V val)
 {
     for (unsigned i = 0; i < sizeof(V)*8; i++)
     {
-        cout << (unsigned)((val >> i) & 1);
-        if (i == 15 && (sizeof(V)*8 > 16)) cout << "-";
+        std::cout << (unsigned)((val >> i) & 1);
+        if (i == 15 && (sizeof(V)*8 > 16)) std::cout << "-";
     }
 //    cout << " :" << val;
 }
@@ -223,12 +261,12 @@ void PrintDistanceMatrix(
     for (unsigned i = 0; i < bm::set_block_plain_cnt; ++i)
     {
         const unsigned* row = distance[i];
-        cout << i << ": ";
+        std::cout << i << ": ";
         for (unsigned j = i; j < bm::set_block_plain_cnt; ++j)
         {
-            cout << setw(4) << setfill('0') << row[j] << " ";
+            std::cout << std::setw(4) << std::setfill('0') << row[j] << " ";
         }
-        cout << endl;
+        std::cout << std::endl;
     }
 }
 
@@ -239,20 +277,20 @@ void PrintTMatrix(const TM& tmatrix, unsigned cols=0, bool binary = false)
     for (unsigned i = 0; i < tmatrix.rows(); ++i)
     {
         const typename TM::value_type* row = tmatrix.row(i);
-        cout << i << ": ";
-        if (i < 10) cout << " ";
+        std::cout << i << ": ";
+        if (i < 10) std::cout << " ";
         for (unsigned j = 0; j < columns; ++j)
         {
             if (!binary)
             {
-                cout << setw(4) << setfill('0') << row[j] << " ";
+                std::cout << std::setw(4) << std::setfill('0') << row[j] << " ";
             }
             else
             {
                 PrintBinary(row[j]);
             }
         }
-        cout << endl;
+        std::cout << std::endl;
     }
 }
 
@@ -297,18 +335,18 @@ void print_blocks_count(const BV& bv)
 
     for (unsigned i = 0; i <= last_block; ++i)
     {
-        cout << i << ":";
+        std::cout << i << ":";
 
         unsigned j = 0;
         for (; i <= last_block; ++i)
         {
-            cout << setw(5) << setfill('0') << bc_arr[i] << " ";
+            std::cout << std::setw(5) << std::setfill('0') << bc_arr[i] << " ";
             sum += bc_arr[i];
             if (++j == 10) break;
         }
-        cout << " | " << sum << endl;
+        std::cout << " | " << sum << std::endl;
     }
-    cout << "Total=" << sum << endl;
+    std::cout << "Total=" << sum << std::endl;
 
     delete [] bc_arr;
 }
@@ -485,6 +523,19 @@ void print_svector_stat(const SV& svect)
             if (bv_plain == 0)
             {
                 std::cout << "NULL";
+                bool any_else = false;
+                for (unsigned j = i+1; j < svect.plains(); ++j) // look ahead
+                {
+                    if (svect.plain(i))
+                    {
+                        any_else = true;
+                        break;
+                    }
+                }
+                if (!any_else)
+                {
+                    break;
+                }
             }
             else
             {
@@ -495,6 +546,45 @@ void print_svector_stat(const SV& svect)
     } // for i
 }
 
+// save sparse_vector dump to disk
+//
+template<class SV>
+int file_save_svector(const SV& sv, const std::string& fname, size_t* sv_blob_size=0)
+{
+    BM_ASSERT(!fname.empty());
+    
+    bm::sparse_vector_serial_layout<SV> sv_lay;
+    
+    BM_DECLARE_TEMP_BLOCK(tb)
+    auto res = bm::sparse_vector_serialize(sv, sv_lay, tb);
+    if (res != 0)
+    {
+        return res;
+    }
+
+    std::ofstream fout(fname.c_str(), std::ios::binary);
+    if (!fout.good())
+    {
+        return -1;
+    }
+    const char* buf = (char*)sv_lay.buf();
+    fout.write(buf, sv_lay.size());
+    if (!fout.good())
+    {
+        return -1;
+    }
+    
+    fout.close();
+    
+    if (sv_blob_size)
+    {
+        *sv_blob_size = sv_lay.size();
+    }
+    return 0;
+}
+
+
+} // namespace
 
 #include "bmundef.h"
 

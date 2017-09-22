@@ -35,7 +35,7 @@ typedef unsigned __int64 id64_t;
 
 #else
 
-typedef unsigned long long id64_t;
+typedef unsigned long long int id64_t;
 
 #endif
 
