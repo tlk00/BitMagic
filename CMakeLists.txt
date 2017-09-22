@@ -11,6 +11,7 @@ set(LIBRARY_OUTPUT_PATH ${CMAKE_BINARY_DIR})
 
 include_directories("${PROJECT_SOURCE_DIR}/src")
 
+set (CMAKE_CXX_STANDARD 11)
 
 if ("${CMAKE_CXX_COMPILER_ID}" STREQUAL "GNU" OR
     "${CMAKE_CXX_COMPILER_ID}" STREQUAL "Clang")
@@ -26,6 +27,8 @@ endif()
 
 set(CMAKE_C_FLAGS   "${CMAKE_C_FLAGS} ${flags}")
 set(CMAKE_CXX_FLAGS "${CMAKE_CXX_FLAGS} ${flags}")
+
+add_executable(bmsvutil ${PROJECT_SOURCE_DIR}/utils/svutil/svutil.cpp)
 
 add_executable(bmtest ${PROJECT_SOURCE_DIR}/tests/stress/t.cpp)
 add_executable(bmperf ${PROJECT_SOURCE_DIR}/tests/perf/perf.cpp)
