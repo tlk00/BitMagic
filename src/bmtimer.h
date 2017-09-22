@@ -64,6 +64,7 @@ public:
                 unsigned repeats = 1,
                 duration_map_type* dmap = 0)
     : name_(name),
+      repeats_(repeats),
       dmap_(dmap),
       is_stopped_(false)
     {
