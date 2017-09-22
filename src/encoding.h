@@ -207,9 +207,9 @@ public:
             flush_accum();        
     }
 
-    void put_zero_bits(register unsigned count)
+    void put_zero_bits(unsigned count)
     {
-        register unsigned used = used_bits_;
+        unsigned used = used_bits_;
         unsigned free_bits = (sizeof(accum_) * 8) - used;
         if (count >= free_bits)
         {

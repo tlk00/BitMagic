@@ -1064,7 +1064,7 @@ public:
 			block = FULL_BLOCK_FAKE_ADDR;
 
         // top block index
-        register unsigned nblk_blk = nb >> bm::set_array_shift;
+        BMREGISTER unsigned nblk_blk = nb >> bm::set_array_shift;
 
         // auto-resize the top block array
         if (nblk_blk >= top_block_size_)
@@ -1141,7 +1141,7 @@ public:
         }
 
         // top block index
-        register unsigned nblk_blk = nb >> bm::set_array_shift;
+        BMREGISTER unsigned nblk_blk = nb >> bm::set_array_shift;
 
         // auto-resize the top block array
         if (nblk_blk >= top_block_size_)

@@ -60,6 +60,15 @@ build.
 
 =================================================================================
 
+BM library uses ‘register’ keyword, but it is disabled now because in C++11 
+it is obsolete. 
+Use 
+#define BMREGISTER register
+to turn it on.
+
+
+=================================================================================
+
 BM library supports "restrict" keyword, some compilers 
 (for example Intel C++ for Itanium) generate better
 code (out of order load-stores) when restrict keyword is helping. This option is 

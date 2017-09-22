@@ -329,12 +329,12 @@ public:
     /// Counts number of bits ON 
     unsigned bit_count() const
     {
-        register unsigned count = 0;
+        unsigned count = 0;
         const unsigned* end = m_buf + (m_size / 32)+1;    
 
         for (unsigned* start = m_buf; start < end; ++start)
         {
-            register unsigned value = *start;
+            unsigned value = *start;
             for (count += (value!=0); value &= value - 1; ++count);
         }
         return count;
@@ -386,7 +386,7 @@ public:
 
         for (unsigned i = 0; i < (m_size/8)+1; ++i)
         {
-            register unsigned char w = ptr[i];
+            unsigned char w = ptr[i];
 
 
             if (w != 0)
@@ -407,7 +407,7 @@ public:
     /// Returns index of next bit, which is ON
     unsigned get_next(unsigned idx) const
     {
-        register unsigned i;
+        unsigned i;
 
         for (i = idx+1; i < m_size; ++i)
         {

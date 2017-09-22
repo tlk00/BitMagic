@@ -679,7 +679,7 @@ public:
 
             do
             {
-                register bm::word_t w = *(bdescr->bit_.ptr);
+                BMREGISTER bm::word_t w = *(bdescr->bit_.ptr);
 
                 if (w)  
                 {
@@ -716,7 +716,7 @@ public:
 
             for (;true;)
             {
-                register unsigned val = *(bdescr->gap_.ptr);
+                BMREGISTER unsigned val = *(bdescr->gap_.ptr);
 
                 if (bitval)
                 {

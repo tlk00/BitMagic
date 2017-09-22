@@ -41,6 +41,12 @@
 #define BM_x86
 #endif
 
+// disable 'register' keyword, which is obsolete in C++11
+//
+#ifndef BMREGISTER
+# define BMREGISTER
+#endif
+
 
 // Enable MSVC 8.0 (2005) specific optimization options
 //
