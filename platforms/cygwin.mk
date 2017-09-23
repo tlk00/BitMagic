@@ -12,7 +12,7 @@ PLATFORM_CFLAGS = -D_REENTRANT $(OS_VER)
 COMMON_LDFLAGS = $(LINKER_DFLAGS) -export-dynamic -L/usr/local/lib
 COMMON_CLDFLAGS = $(COMMON_LDFLAGS)
 EXTERN_LIBS = $(EXTERN_LIBS_BASE)/lib
-CXX = g++ -msse4 -march=core2 -Wall
+CXX = g++ -msse4 -march=core2 -Wall -std=c++11
 CC = gcc  -Wall
 LD = g++
 CC_PIC_FLAGS = -fPIC
