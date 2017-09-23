@@ -151,7 +151,8 @@ int read_dump_file(const std::string& fname, VT& data)
     fsize = fin.tellg();
     
     data.resize(fsize/sizeof(value_type));
-    if (fsize == 0)
+
+    if (!fsize)
     {
         return 0; // empty input
     }

@@ -343,7 +343,7 @@ int main(int argc, char *argv[])
                 bm::chrono_taker tt("sparse vector in/raw comparison", 1, &timing_map);
                 for (size_t i = 0; i < sv_u32_in.size(); ++i)
                 {
-                    unsigned v1 = sv_u32_in[i];
+                    unsigned v1 = sv_u32_in[(unsigned)i];
                     unsigned v2 = vect_u32_in[i];
                     if (v1 != v2)
                     {

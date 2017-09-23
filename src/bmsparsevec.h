@@ -479,10 +479,10 @@ sparse_vector<Val, BV>::get(bm::id_t i) const
     const bvector_type* bv;
     for (unsigned j = 0; j < sizeof(Val)*8; ++j)
     {
-        if ((bv = this->plains_[j]))   v |= ((bv->test(i))<<j);
-        if ((bv = this->plains_[++j])) v |= ((bv->test(i))<<j);
-        if ((bv = this->plains_[++j])) v |= ((bv->test(i))<<j);
-        if ((bv = this->plains_[++j])) v |= ((bv->test(i))<<j);
+        if ((bv = this->plains_[j])!=0)   v |= ((bv->test(i))<<j);
+        if ((bv = this->plains_[++j])!=0) v |= ((bv->test(i))<<j);
+        if ((bv = this->plains_[++j])!=0) v |= ((bv->test(i))<<j);
+        if ((bv = this->plains_[++j])!=0) v |= ((bv->test(i))<<j);
     }
     return v;
 }

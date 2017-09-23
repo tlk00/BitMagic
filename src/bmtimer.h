@@ -29,6 +29,7 @@ For more information please visit:  http://bmagic.sourceforge.net
 // BitMagic timing functions (internal header)
 
 #include <iostream>
+#include <string>
 #include <map>
 #include <chrono>
 
