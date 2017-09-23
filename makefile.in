@@ -32,7 +32,7 @@
 COMPILER = GNU_CC
 
 SHELL=/bin/sh
-DEPTOOL = gcc -MM
+DEPTOOL = gcc -MM 
 RM = rm -f
 
 
@@ -165,7 +165,7 @@ CFLAGS = $(COMMON_CFLAGS)
 ifdef DEPCOMMAND
     DEPCOMMAND:=$(DEPCOMMAND)$(DB_INCL) $(PLATFORM_CXXFLAGS) $(EXTERNINCDIR) $(BASICINCDIR) $(CXX_INCUDE_FLAGS) $(EXTERNINCDIR) $(SOURCES) 
 else
-    DEPCOMMAND:=$(DEPTOOL) $(DB_INCL) $(EXTERNINCDIR) $(BASICINCDIR) $(CXX_INCUDE_FLAGS) $(EXTERNINCDIR) $(SOURCES) > depend.d~
+    DEPCOMMAND:=$(DEPTOOL) $(PLATFORM_CXXFLAGS) $(DB_INCL) $(EXTERNINCDIR) $(BASICINCDIR) $(CXX_INCUDE_FLAGS) $(EXTERNINCDIR) $(SOURCES) > depend.d~
 endif
 CATCOMMAND=cat depend.d~ | awk '{if ( index($$0,".o:" ) !=0 ) print "$(OUTDIR)"$$0; else print $$0}' > $(DEPFILE)
 
@@ -278,7 +278,7 @@ init:
 
 
 dep:
-	@echo ====== Dependencies regeneration
+	@echo ====== Dependencies regeneration 
 	$(RM) depend.d*
 	echo $(DEPCOMMAND)
 	$(DEPCOMMAND)

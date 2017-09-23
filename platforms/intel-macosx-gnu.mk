@@ -5,7 +5,7 @@ ifeq ($(COMPILER),GNU_CC)
     #-g
 
     OS_VER = -D__$(shell uname -s)_$(shell uname -r | sed -e 's/\./_/g' -e 's/-.*//')
-    PLATFORM_CXXFLAGS = -D_REENTRANT $(OS_VER) -D_GNU_SOURCE
+    PLATFORM_CXXFLAGS = -D_REENTRANT $(OS_VER) -D_GNU_SOURCE -std=c++11
     PLATFORM_CFLAGS = -D_REENTRANT $(OS_VER)
     COMMON_LDFLAGS = $(LINKER_DFLAGS) 
     COMMON_CLDFLAGS = $(COMMON_LDFLAGS)
