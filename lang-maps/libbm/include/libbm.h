@@ -12,13 +12,36 @@
 extern "C" {
 #endif /* __cplusplus */
 
-
+/* Initialize libbm runtime before use*/
 int BM_init(void*);
 
-int BM_construct(BM_BVHANDLE* h);
-int BM_destruct(BM_BVHANDLE h);
-int BM_set_bit(BM_BVHANDLE h, unsigned int i);
-int BM_get_bit(BM_BVHANDLE h, unsigned int i, unsigned int* ret);
+/* -------------------------------------------- */
+/* bvector functions                            */
+/* -------------------------------------------- */
+
+/* construction and setters                     */
+
+/* construct bvector handle 
+   bv_max - maximum number of allowed bits (if 0 - allows maximum)
+*/
+int BM_bvector_construct(BM_BVHANDLE* h, unsigned int bv_max);
+
+/* destroy bvector handle */
+int BM_bvector_free(BM_BVHANDLE h);
+
+/* set bit 
+   i - index of a bit to set
+*/
+int BM_bvector_set_bit(BM_BVHANDLE h, unsigned int i);
+
+
+
+/* -------------------------------------------- */
+/* read-only getters                            */
+
+
+/* get bit value */
+int BM_bvector_get_bit(BM_BVHANDLE h, unsigned int i, unsigned int* ret);
 
 
 
