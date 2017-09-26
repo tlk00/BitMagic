@@ -257,6 +257,7 @@ static unsigned nf_;
         if(*p != n)
         {
             printf("Block memory deallocation error!\n");
+			assert(0);
             exit(1);
         }
         ::free(p);
@@ -300,6 +301,7 @@ static unsigned nf_;
         if(*s != n)
         {
             printf("Ptr memory deallocation error!\n");
+			assert(0);
             exit(1);
         }
         ::free(s);
@@ -9237,7 +9239,7 @@ int main(void)
     exit(1);
 */                                                                                                        
 
-
+/*
      ExportTest();
      ResizeTest();
 
@@ -9273,7 +9275,7 @@ int main(void)
      SimpleRandomFillTest();
      
      RangeRandomFillTest();
-
+*/
      AndOperationsTest();   
           
      OrOperationsTest();

@@ -2996,7 +2996,10 @@ bvector<Alloc>::combine_operation_with_block(unsigned          nb,
         if (ret != dst) // block mutation
         {
             blockman_.set_block(nb, ret);
-            blockman_.get_allocator().free_bit_block(dst);
+			if (IS_VALID_ADDR(dst))
+			{
+				blockman_.get_allocator().free_bit_block(dst);
+			}
         }
 }
 
@@ -3073,7 +3076,8 @@ void bvector<Alloc>::set_range_no_check(bm::id_t left,
             }
             else
             {
-                blockman_.get_allocator().free_bit_block(block);
+				if (IS_VALID_ADDR(block))
+					blockman_.get_allocator().free_bit_block(block);
             }
             
         } // for
@@ -3096,7 +3100,8 @@ void bvector<Alloc>::set_range_no_check(bm::id_t left,
             }
             else
             {
-                blockman_.get_allocator().free_bit_block(block);
+				if (IS_VALID_ADDR(block))
+					blockman_.get_allocator().free_bit_block(block);
             }
 
         } // for

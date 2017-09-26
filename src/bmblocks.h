@@ -578,7 +578,8 @@ public:
             }
             else
             {
-                bman.get_allocator().free_bit_block(block);
+				if (IS_VALID_ADDR(block))
+					bman.get_allocator().free_bit_block(block);
             }
         }
     };
@@ -691,7 +692,8 @@ public:
 
     ~blocks_manager()
     {
-        alloc_.free_bit_block(temp_block_);
+		if (temp_block_)
+			alloc_.free_bit_block(temp_block_);
         deinit_tree();
     }
 
@@ -870,7 +872,8 @@ public:
         }
         else
         {
-            alloc_.free_bit_block(block);
+			if (IS_VALID_ADDR(block))
+				alloc_.free_bit_block(block);
         }
     }
 
@@ -1259,7 +1262,8 @@ public:
         else
         {
             // deallocates only valid pointers
-            get_allocator().free_bit_block(block);
+			if (IS_VALID_ADDR(block))
+				get_allocator().free_bit_block(block);
         }
         set_block(nb, 0);
         return 0;
@@ -1280,8 +1284,8 @@ public:
         }
         else
         {
-            // deallocates only valid pointers
-            get_allocator().free_bit_block(block);
+            if (IS_VALID_ADDR(block))
+				get_allocator().free_bit_block(block);
         }
         return 0;
     }
@@ -1681,11 +1685,13 @@ public:
     {}
     ~bit_block_guard()
     {
-        bman_.get_allocator().free_bit_block(block_, 3);
+		if (IS_VALID_ADDR(block_))
+			bman_.get_allocator().free_bit_block(block_, 3);
     }
     void attach(bm::word_t* blk)
     {
-        bman_.get_allocator().free_bit_block(block_);
+		if (IS_VALID_ADDR(block_))
+			bman_.get_allocator().free_bit_block(block_);
         block_ = blk;
     }
     bm::word_t* allocate()
