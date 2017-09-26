@@ -29,6 +29,9 @@ For more information please visit:  http://bmagic.sourceforge.net
 #include <stdlib.h>
 #include "try_throw_catch.h"
 
+#include "bmfunc.h"
+
+
 namespace libbm
 {
 
@@ -128,7 +131,7 @@ public:
                                     const bm::gap_word_t* glevel_len)
     {
         unsigned len = 
-            (unsigned)(glevel_len[level] / (sizeof(bm::word_t) / sizeof(gap_word_t)));
+            (unsigned)(glevel_len[level] / (sizeof(bm::word_t) / sizeof(bm::gap_word_t)));
 
         return (bm::gap_word_t*)block_alloc_.allocate(len, 0);
     }
