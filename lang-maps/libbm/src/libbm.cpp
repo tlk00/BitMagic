@@ -11,6 +11,7 @@ static jmp_buf ex_buf__;
 
 #include <new>
 
+typedef libbm::standard_allocator              TBM_Alloc;
 typedef bm::bvector<libbm::standard_allocator> TBM_bvector;
 
 
@@ -30,8 +31,15 @@ int BM_bvector_construct(BM_BVHANDLE* h, unsigned int bv_max)
 			*h = 0;
 			return BM_ERR_BADALLOC;
 		}
+        if (bv_max == 0)
+        {
+            bv_max = bm::id_max;
+        }
 		// placement new just to call the constructor
-		TBM_bvector* bv = new(mem) TBM_bvector(bm::BM_GAP, bm::gap_len_table<true>::_len, bv_max);
+		TBM_bvector* bv = new(mem) TBM_bvector(bm::BM_GAP,
+                                               bm::gap_len_table<true>::_len,
+                                               bv_max,
+                                               TBM_Alloc());
 		*h = bv;
 	}
 	CATCH (BM_ERR_BADALLOC)

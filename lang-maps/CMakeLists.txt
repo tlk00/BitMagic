@@ -30,3 +30,8 @@ set(CMAKE_CXX_FLAGS "${CMAKE_CXX_FLAGS} ${flags}")
 
 add_library(libbm-static STATIC "libbm/src/libbm.cpp")
 
+add_executable(libbmtest ${PROJECT_SOURCE_DIR}/test/libbmtest.c)
+target_link_libraries(libbmtest libbm-static)
+
+
+
