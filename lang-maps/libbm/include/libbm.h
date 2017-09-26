@@ -5,6 +5,7 @@
 
 #define BM_OK (0)
 #define BM_ERR_BADALLOC (1)
+#define BM_ERR_BADARG (2)
 
 #define BM_BVHANDLE void*
 
