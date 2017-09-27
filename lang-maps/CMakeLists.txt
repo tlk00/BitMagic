@@ -14,7 +14,7 @@ include_directories("${PROJECT_SOURCE_DIR}/../src" "${PROJECT_SOURCE_DIR}/libbm/
 
 if ("${CMAKE_CXX_COMPILER_ID}" STREQUAL "GNU" OR
     "${CMAKE_CXX_COMPILER_ID}" STREQUAL "Clang")
-    set(flags "-Wall -Wextra -march=core2 -msse4.2 -fPIC")
+    set(flags "-Wall -Wextra -march=core2 -msse4.2 -fPIC -fno-rtti -fno-exceptions ")
     set(optflags, -g0 -O3)
 elseif ("${CMAKE_CXX_COMPILER_ID}" STREQUAL "Intel")
     set(flags, "-tpp7 -march=core2 -restrict -DBM_HASRESTRICT -fno-fnalias -Wall -fPIC")
