@@ -584,6 +584,28 @@ int file_save_svector(const SV& sv, const std::string& fname, size_t* sv_blob_si
     return 0;
 }
 
+// comapre-check if sparse vector is excatly coresponds to vector 
+//
+// returns 0 - if equal
+//         1 - no size match
+//         2 - element match fails
+template<class SV, class V>
+int svector_check(const SV& sv, const V& vect)
+{
+	if (sv.size() != vect.size())
+	{
+		return 1;
+	}
+	for (size_t i = 0; i < vect.size(); ++i)
+	{
+		unsigned v1 = sv[(unsigned)i];
+		unsigned v2 = vect[i];
+		if (v1 != v2)
+			return 2;
+	} // for i
+	return 0;
+}
+
 
 } // namespace
 
