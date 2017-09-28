@@ -370,25 +370,31 @@ sparse_vector<Val, BV>::extract(value_type* arr,
     if (end > size_)
         end = size_;
     
-    for (size_type i = 0; i < sizeof(Val)*8; ++i)
+	bool masked_scan = !(offset == 0 && size == this->size());
+
+	bvector_type bv_mask;
+	for (size_type i = 0; i < sizeof(Val)*8; ++i)
     {
         const bvector_type* bv = plains_[i];
+		const bvector_type* bve = bv;
         if (bv)
         {
-            value_type mask = (1 << i);
-            bvector_type bv_mask;
+            value_type mask = (1 << i);            
+			if (masked_scan)
+			{
+				bv_mask.set_range(offset, end - 1);
+				bv_mask.bit_and(*bv);
+				bve = &bv_mask;
+			}
             
-            bv_mask.set_range(offset, end - 1);
-            bv_mask.bit_and(*bv);
-            
-            typename BV::enumerator en = bv_mask.first();
-            for (;en.valid();++en)
+            for (typename BV::enumerator en(bve, 0); en.valid(); ++en)
             {
                 size_type idx = *en - offset;
                 if (idx >=  size)
                     break;
                 arr[idx] |= mask;
-            }
+            } // for
+			bv_mask.clear();
         }
     } // for i
     return 0;
