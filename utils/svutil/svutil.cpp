@@ -374,6 +374,8 @@ int main(int argc, char *argv[])
                 std::cerr << "ERROR: input sparse vector is different from output." << std::endl;
             }
         }
+
+
         // input sparse compare to input raw
         if (!sv_u32_in.empty() && !vect_u32_in.empty())
         {
@@ -384,19 +386,25 @@ int main(int argc, char *argv[])
             else
             {
                 bm::chrono_taker tt("sparse vector in/raw comparison", 1, &timing_map);
-                for (size_t i = 0; i < sv_u32_in.size(); ++i)
-                {
-                    unsigned v1 = sv_u32_in[(unsigned)i];
-                    unsigned v2 = vect_u32_in[i];
-                    if (v1 != v2)
-                    {
-                        std::cerr << "ERROR: srase to raw element comparison failed at:"
-                                  << i;
-                        break;
-                    }
-                } // for i
+				int res = bm::svector_check(sv_u32_in, vect_u32_in);
+				if (res != 0)
+				{
+					std::cerr << "ERROR: input sparse vector is different from input raw array." << std::endl;
+				}
             }
         }
+
+		// input sparse compare to output raw
+		if (!sv_u32_in.empty() && !vect_u32_out.empty())
+		{
+			bm::chrono_taker tt("sparse vector in/raw comparison", 1, &timing_map);
+			int res = bm::svector_check(sv_u32_in, vect_u32_out);
+			if (res != 0)
+			{
+				std::cerr << "ERROR: input sparse vector is different from input raw array." << std::endl;
+			}
+		}
+
     }
     
     if (is_timing)  // print all collected timings
