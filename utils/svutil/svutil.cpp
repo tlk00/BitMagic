@@ -55,7 +55,8 @@ void show_help()
       << "-svin  sv-input-file        -- sv dump file to load"         << std::endl
       << "-u32in u32-input-file       -- raw 32-bit unsigned int file" << std::endl
       << "-svout sv-output-file       -- sv output file to produce"    << std::endl
-      << "-diag (-d)                  -- print statistics/diagnostics info" << std::endl
+	  << "-u32out u32-output-file     -- raw 32-bit output file to produce" << std::endl
+	  << "-diag (-d)                  -- print statistics/diagnostics info" << std::endl
       << "-timing (-t)                -- evaluate timing/duration of operations" << std::endl
       ;
 }
@@ -68,6 +69,7 @@ void show_help()
 std::string  sv_in_file;
 std::string  u32_in_file;
 std::string  sv_out_file;
+std::string  u32_out_file;
 bool         is_diag = false;
 bool         is_timing = false;
 
@@ -111,8 +113,7 @@ int parse_args(int argc, char *argv[])
             continue;
         }
         
-        
-        if (arg == "-svout" || arg == "-svout")
+        if (arg == "-svout" || arg == "--svout")
         {
             if (i + 1 < argc)
             {
@@ -125,6 +126,22 @@ int parse_args(int argc, char *argv[])
             }
             continue;
         }
+
+		if (arg == "-u32out" || arg == "--u32out")
+		{
+			if (i + 1 < argc)
+			{
+				u32_out_file = argv[++i];
+			}
+			else
+			{
+				std::cerr << "Error: -u32out requires file name" << std::endl;
+				return 1;
+			}
+			continue;
+		}
+
+
         if (arg == "-diag" || arg == "--diag" || arg == "-d" || arg == "--d")
             is_diag = true;
         if (arg == "-timing" || arg == "--timing" || arg == "-t" || arg == "--t")
@@ -138,14 +155,13 @@ int parse_args(int argc, char *argv[])
 
 // Globals
 //
-
 typedef bm::sparse_vector<unsigned, bm::bvector<> > sparse_vector_u32;
 
 sparse_vector_u32      sv_u32_in;
 sparse_vector_u32      sv_u32_out;
 bool                   sv_u32_in_flag = false;
 std::vector<unsigned>  vect_u32_in;
-
+std::vector<unsigned>  vect_u32_out;
 
 bm::chrono_taker::duration_map_type  timing_map;
 
@@ -306,8 +322,6 @@ int main(int argc, char *argv[])
             }
             if (is_diag)
                 std::cout << "Output sparse vector BLOB size: " << sv_blob_size << std::endl;
-            
-            
         }
         
         if (sv_u32_in_flag) // input data is ready as a sparse vector
@@ -315,7 +329,36 @@ int main(int argc, char *argv[])
             
         }
         
-    }
+    } // if sv_out_file
+
+	if (!u32_out_file.empty()) // request to de-compressed bmsv file
+	{
+		if (!sv_u32_in.empty())
+		{
+			vect_u32_out.resize(sv_u32_in.size());
+			{
+				bm::chrono_taker tt("sparse vector extract", 1, &timing_map);
+				sv_u32_in.extract(&vect_u32_out[0], sv_u32_in.size());
+				tt.stop(is_timing);
+			}
+			{
+				bm::chrono_taker tt("u32 vector write", 1, &timing_map);
+				std::ofstream fout(u32_out_file.c_str(), std::ios::binary);
+				if (!fout.good())
+				{
+					std::cerr << "Cannot open file " << u32_out_file << std::endl;
+					return 1;
+				}
+				const char* buf = (const char*)&vect_u32_out[0];
+				fout.write(buf, vect_u32_out.size() * sizeof(unsigned));
+				if (!fout.good())
+				{
+					return 2;
+				}
+				fout.close();
+			}
+		}
+	} // if u32_out_file
     
     if (is_diag)
     {
