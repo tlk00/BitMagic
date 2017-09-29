@@ -386,8 +386,7 @@ sparse_vector<Val, BV>::extract(value_type* arr,
                 for (typename BV::enumerator en(&bv_mask, 0); en.valid(); ++en)
                 {
                     size_type idx = *en - offset;
-                    if (idx >=  size)
-                        break;
+                    BM_ASSERT(idx < size);
                     arr[idx] |= mask;
                 } // for
                 bv_mask.clear();
@@ -405,8 +404,7 @@ sparse_vector<Val, BV>::extract(value_type* arr,
                 for (typename BV::enumerator en(bv, 0); en.valid(); ++en)
                 {
                     size_type idx = *en;
-                    if (idx >=  size)
-                        break;
+                    BM_ASSERT(idx < size);
                     arr[idx] |= mask;
                 } // for
             }
