@@ -326,6 +326,7 @@ void sparse_vector<Val, BV>::import(const value_type* arr,
                                     size_type         size,
                                     size_type         offset)
 {
+    unsigned b_list[sizeof(Val)*8];
     if (size == 0)
         throw std::range_error("sparse vector range error");
     
@@ -335,18 +336,13 @@ void sparse_vector<Val, BV>::import(const value_type* arr,
     size_type i;
     for (i = 0; i < size; ++i)
     {
-        value_type v = arr[i];
-        if (!v)
-            continue;
-        
-        unsigned b_list[sizeof(Val)*8];
-        unsigned bcnt = bm::bit_list_4(v, b_list);
-
+        unsigned bcnt = bm::bitscan_popcnt(arr[i], b_list);
+        const unsigned bit_idx = i + offset;
         for (unsigned j = 0; j < bcnt; ++j)
         {
             unsigned p = b_list[j];
             bvector_type* bv = get_plain(p);
-            bv->set_bit(i + offset);
+            bv->set_bit(bit_idx);
         } // for j
     } // for i
     if (i > size_)
