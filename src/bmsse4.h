@@ -246,9 +246,9 @@ bm::id_t sse4_bit_block_calc_count_change(const __m128i* BMRESTRICT block,
                                                unsigned* BMRESTRICT bit_count)
 {
 //   __m128i mask1 = _mm_set_epi32(0x1, 0x1, 0x1, 0x1);
-   register int count = (unsigned)(block_end - block)*4; 
+   BMREGISTER int count = (unsigned)(block_end - block)*4;
 
-   register bm::word_t  w0, w_prev;
+   BMREGISTER bm::word_t  w0, w_prev;
    const int w_shift = sizeof(w0) * 8 - 1;
    bool first_word = true;
    *bit_count = 0;
