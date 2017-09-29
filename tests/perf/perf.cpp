@@ -27,7 +27,7 @@ OTHER DEALINGS IN THE SOFTWARE.
 #include <stdio.h>
 
 //#define BMSSE2OPT
-//#define BMSSE42OPT
+#define BMSSE42OPT
 
 
 #ifdef _MSC_VER
@@ -303,7 +303,20 @@ void BitForEachTest()
 		}
 	}
 	}
-	
+
+	{
+		unsigned bit_list[32];
+		TimeTaker tt("BitScan on bitcount algorithm", REPEATS * 10);
+
+		for (unsigned i = 0; i < REPEATS * 10; ++i)
+		{
+			for (unsigned j = 0; j < 65536; ++j)
+			{
+				bm::bitscan_popcnt(i*test_arr[j], bit_list);
+			}
+		}
+	}
+
 	delete [] test_arr;
 }
 

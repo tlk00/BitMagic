@@ -175,7 +175,7 @@ const unsigned block_set_table<T>::_right[32] = {
 BMFORCEINLINE
 bm::id_t word_bitcount(bm::id_t w)
 {
-#ifdef BMSSE4OPT
+#ifdef BMSSE42OPT
     return _mm_popcnt_u32(w);
 #else
     return
@@ -4718,6 +4718,28 @@ template<typename T,typename B> unsigned bit_list_4(T w, B* bits)
 	copy_to_array_functor<B> func(bits);
 	bit_for_each_4(w, func);
 	return (unsigned)(func.ptr() - bits);
+}
+
+/*!
+\brief Unpacks word into list of ON bit indexes using popcnt method
+\param w - value
+\param bits - pointer on the result array
+\return number of bits in the list
+
+@ingroup bitfunc
+*/
+
+template<typename T, typename B>
+unsigned bitscan_popcnt(T w, B* bits)
+{
+	unsigned pos = 0;
+	while (w)
+	{
+		T t = w & -w;
+		bits[pos++] = bm::word_bitcount(t - 1);
+		w &= w - 1;
+	}
+	return pos;
 }
 
 /*!

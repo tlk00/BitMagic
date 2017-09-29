@@ -552,15 +552,28 @@ public:
                 this->position_ += 31 - bdescr->bit_.bits[--idx];
 
                 const bm::word_t* pend = this->block_ + bm::set_block_size;
-
                 while (++(bdescr->bit_.ptr) < pend)
                 {
-                    bm::word_t w = *(bdescr->bit_.ptr);
+                    bm::word_t w = *(bdescr->bit_.ptr);					
+					bdescr->bit_.cnt = bm::bitscan_popcnt(w, bdescr->bit_.bits);
+					if (bdescr->bit_.cnt)
+					{
+						bdescr->bit_.idx = 0;
+						bdescr->bit_.pos = this->position_;
+						this->position_ += bdescr->bit_.bits[0];
+						return *this;
+					}
+					else
+					{
+						this->position_ += 32;
+					}
+					/*
                     if (w)
                     {
                         bdescr->bit_.idx = 0;
                         bdescr->bit_.pos = this->position_;
-                        bdescr->bit_.cnt = bm::bit_list_4(w, bdescr->bit_.bits); 
+                        //bdescr->bit_.cnt = bm::bit_list_4(w, bdescr->bit_.bits); 
+						bdescr->bit_.cnt = bm::bitscan_popcnt(w, bdescr->bit_.bits);
                         this->position_ += bdescr->bit_.bits[0];
                         return *this;
                     }
@@ -568,6 +581,7 @@ public:
                     {
                         this->position_ += 32;
                     }
+					*/
                 }
     
                 }
@@ -679,14 +693,26 @@ public:
 
             do
             {
-                BMREGISTER bm::word_t w = *(bdescr->bit_.ptr);
-
+                bm::word_t w = *(bdescr->bit_.ptr);
+				bdescr->bit_.cnt = bm::bitscan_popcnt(w, bdescr->bit_.bits);
+				if (bdescr->bit_.cnt)
+				{
+					bdescr->bit_.idx = 0;
+					bdescr->bit_.pos = this->position_;
+					this->position_ += bdescr->bit_.bits[0];
+					return true;
+				}
+				else
+				{
+					this->position_ += 32;
+				}
+				/*
                 if (w)  
                 {
                     bdescr->bit_.idx = 0;
                     bdescr->bit_.pos = this->position_;
                     bdescr->bit_.cnt = 
-                              bm::bit_list_4(w, bdescr->bit_.bits);
+                              bm::bitscan_popcnt(w, bdescr->bit_.bits);
                     this->position_ += bdescr->bit_.bits[0];
 
                     return true;
@@ -695,6 +721,7 @@ public:
                 {
                     this->position_ += 32;
                 }
+				*/
 
             } 
             while (++(bdescr->bit_.ptr) < ptr_end);
