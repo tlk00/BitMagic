@@ -133,10 +133,15 @@ public:
         \param arr  - dest array
         \param size - dest size
         \param offset - target index in the sparse vector to export from
+        \param zero_mem - set to false if target array is pre-initialized 
+                          with 0s to avoid performance penalty
      
         \return number of exported elements
     */
-    size_type extract(value_type* arr, size_type size, size_type offset = 0);
+    size_type extract(value_type* arr,
+                      size_type size,
+                      size_type offset = 0,
+                      bool      zero_mem = true);
 
     
     
@@ -355,11 +360,13 @@ template<class Val, class BV>
 typename sparse_vector<Val, BV>::size_type
 sparse_vector<Val, BV>::extract(value_type* arr,
                                 size_type   size,
-                                size_type   offset)
+                                size_type   offset,
+                                bool        zero_mem)
 {
     if (size == 0)
         return 0;
-    ::memset(arr, 0, sizeof(value_type)*size);
+    if (zero_mem)
+        ::memset(arr, 0, sizeof(value_type)*size);
     
     size_type start = offset;
     size_type end = start + size;
