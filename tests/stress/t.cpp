@@ -7642,19 +7642,22 @@ void BitForEachTest()
 
 	unsigned bit_list1[32];
 	unsigned bit_list2[32];
+	unsigned bit_list3[32];
+
 
 	for (unsigned i = 0; i < 65536*50; ++i)
 	{
 		unsigned bits1 = bm::bit_list(i, bit_list1);
 		unsigned bits2 = bm::bit_list_4(i, bit_list2);
-		if (bits1 != bits2)
+		unsigned bits3 = bitscan_popcnt(i, bit_list3);
+		if (bits1 != bits2 || bits1 != bits3)
 		{
 			cout << "Bit for each test failed bit_cnt criteria!" << endl;
 			exit(1);
 		}
 		for (unsigned j = 0; j < bits1; ++j)
 		{
-			if (bit_list1[j] != bit_list2[j])
+			if (bit_list1[j] != bit_list2[j] || bit_list1[j] != bit_list3[j])
 			{
 				cout << "Bit for each check failed for " << j << endl;
 				exit(1);
@@ -9239,7 +9242,7 @@ int main(void)
     exit(1);
 */                                                                                                        
 
-/*
+
      ExportTest();
      ResizeTest();
 
@@ -9275,7 +9278,7 @@ int main(void)
      SimpleRandomFillTest();
      
      RangeRandomFillTest();
-*/
+
      AndOperationsTest();   
           
      OrOperationsTest();
