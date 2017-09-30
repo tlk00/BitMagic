@@ -567,21 +567,6 @@ public:
 					{
 						this->position_ += 32;
 					}
-					/*
-                    if (w)
-                    {
-                        bdescr->bit_.idx = 0;
-                        bdescr->bit_.pos = this->position_;
-                        //bdescr->bit_.cnt = bm::bit_list_4(w, bdescr->bit_.bits); 
-						bdescr->bit_.cnt = bm::bitscan_popcnt(w, bdescr->bit_.bits);
-                        this->position_ += bdescr->bit_.bits[0];
-                        return *this;
-                    }
-                    else
-                    {
-                        this->position_ += 32;
-                    }
-					*/
                 }
     
                 }
@@ -706,23 +691,6 @@ public:
 				{
 					this->position_ += 32;
 				}
-				/*
-                if (w)  
-                {
-                    bdescr->bit_.idx = 0;
-                    bdescr->bit_.pos = this->position_;
-                    bdescr->bit_.cnt = 
-                              bm::bitscan_popcnt(w, bdescr->bit_.bits);
-                    this->position_ += bdescr->bit_.bits[0];
-
-                    return true;
-                }
-                else
-                {
-                    this->position_ += 32;
-                }
-				*/
-
             } 
             while (++(bdescr->bit_.ptr) < ptr_end);
 
