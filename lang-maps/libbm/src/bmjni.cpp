@@ -47,7 +47,7 @@ JNIEXPORT void JNICALL Java_org_tlk00_bitmagic_BVector0_dispose0
  */
 JNIEXPORT void JNICALL Java_org_tlk00_bitmagic_BVector0_set0
   (JNIEnv *, jobject, jlong ptr, jlong bit) {
-  BM_bvector_set_bit((BM_BVHANDLE)ptr, (unsigned int)bit);
+  //BM_bvector_set_bit((BM_BVHANDLE)ptr, (unsigned int)bit);
 }
 
 /*
@@ -58,8 +58,8 @@ JNIEXPORT void JNICALL Java_org_tlk00_bitmagic_BVector0_set0
 JNIEXPORT jboolean JNICALL Java_org_tlk00_bitmagic_BVector0_get0
   (JNIEnv *, jobject, jlong ptr, jlong bit) {
   unsigned int ret;
-  BM_bvector_get_bit((BM_BVHANDLE)ptr, (unsigned int)bit, &ret);
-  return (jboolean)ret;
+  //BM_bvector_get_bit((BM_BVHANDLE)ptr, (unsigned int)bit, &ret);
+  return false; //(jboolean)ret;
 }
   
 } // extern
