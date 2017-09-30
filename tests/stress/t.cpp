@@ -9239,7 +9239,7 @@ int main(void)
     exit(1);
 */                                                                                                        
 
-/*
+
      ExportTest();
      ResizeTest();
 
@@ -9275,7 +9275,7 @@ int main(void)
      SimpleRandomFillTest();
      
      RangeRandomFillTest();
-*/
+
      AndOperationsTest();   
           
      OrOperationsTest();
