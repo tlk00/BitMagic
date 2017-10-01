@@ -32,8 +32,11 @@ int BM_bvector_free(BM_BVHANDLE h);
 
 /* set bit 
    i - index of a bit to set
+   val - value (0 | 1)
 */
-int BM_bvector_set_bit(BM_BVHANDLE h, unsigned int i);
+int BM_bvector_set_bit(BM_BVHANDLE h, unsigned int i, unsigned int val);
+
+
 
 
 
@@ -42,7 +45,13 @@ int BM_bvector_set_bit(BM_BVHANDLE h, unsigned int i);
 
 
 /* get bit value */
-int BM_bvector_get_bit(BM_BVHANDLE h, unsigned int i, unsigned int* ret);
+int BM_bvector_get_bit(BM_BVHANDLE h, unsigned int i, unsigned int* pval);
+
+
+/* bitcount
+   count - return number of ON bits in the vector
+*/
+int BM_bvector_count(BM_BVHANDLE h, unsigned int* pcount);
 
 
 

@@ -63,3 +63,57 @@ int BM_bvector_free(BM_BVHANDLE h)
 
 	return BM_OK;
 }
+
+int BM_bvector_set_bit(BM_BVHANDLE h, unsigned int i, unsigned int val)
+{
+	if (!h)
+		return BM_ERR_BADARG;
+	TRY
+	{
+        TBM_bvector* bv = (TBM_bvector*)h;
+        bv->set(i, val);
+	}
+	CATCH (BM_ERR_BADALLOC)
+	{
+		return BM_ERR_BADALLOC;
+	}
+	ETRY;
+	return BM_OK;
+}
+
+int BM_bvector_get_bit(BM_BVHANDLE h, unsigned int i, unsigned int* pval)
+{
+	if (!h || !pval)
+		return BM_ERR_BADARG;
+	TRY
+	{
+        const TBM_bvector* bv = (TBM_bvector*)h;
+        *pval = bv->test(i);
+	}
+	CATCH (BM_ERR_BADALLOC)
+	{
+		return BM_ERR_BADALLOC;
+	}
+	ETRY;
+	return BM_OK;
+}
+
+
+int BM_bvector_count(BM_BVHANDLE h, unsigned int* pcount)
+{
+	if (!h || !pcount)
+		return BM_ERR_BADARG;
+	TRY
+	{
+        const TBM_bvector* bv = (TBM_bvector*)h;
+        *pcount = bv->count();
+	}
+	CATCH (BM_ERR_BADALLOC)
+	{
+		return BM_ERR_BADALLOC;
+	}
+	ETRY;
+	return BM_OK;
+}
+
+
