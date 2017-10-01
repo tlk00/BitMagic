@@ -9,7 +9,7 @@ set(CMAKE_BINARY_DIR ${CMAKE_SOURCE_DIR}/build/bin)
 set(EXECUTABLE_OUTPUT_PATH ${CMAKE_BINARY_DIR})
 set(LIBRARY_OUTPUT_PATH ${CMAKE_BINARY_DIR})
 
-include_directories("${PROJECT_SOURCE_DIR}/../src" "${PROJECT_SOURCE_DIR}/libbm/include")
+include_directories("${PROJECT_SOURCE_DIR}/../src" "${PROJECT_SOURCE_DIR}/libbm/include" "/System/Library/Frameworks/JavaVM.framework/Versions/Current/Headers")
 
 
 if ("${CMAKE_CXX_COMPILER_ID}" STREQUAL "GNU" OR
@@ -29,6 +29,7 @@ set(CMAKE_CXX_FLAGS "${CMAKE_CXX_FLAGS} ${flags}")
 
 
 add_library(libbm-static STATIC "libbm/src/libbm.cpp")
+add_library(bmjni SHARED "libbm/src/libbm.cpp" "libbm/src/bmjni.cpp")
 
 add_executable(libbmtest ${PROJECT_SOURCE_DIR}/test/libbmtest.c)
 target_link_libraries(libbmtest libbm-static)
