@@ -871,8 +871,10 @@ public:
                        into plain bitsets only when enthropy grows.
         \param glevel_len 
            - pointer on C-style array keeping GAP block sizes. 
-            (Put bm::gap_len_table_min<true>::_len for GAP memory saving mode)
-        \param bv_size 
+            bm::gap_len_table<true>::_len - default value set
+            (use bm::gap_len_table_min<true>::_len for very sparse vectors)
+            (use bm::gap_len_table_nl<true>::_len non-linear GAP growth)
+        \param bv_size
           - bvector size (number of bits addressable by bvector), bm::id_max means 
           "no limits" (recommended). 
           bit vector allocates this space dynamically on demand.

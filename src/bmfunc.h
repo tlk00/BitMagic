@@ -107,64 +107,7 @@ struct bv_statistics
  */
 
 
-/*! @brief Default GAP lengths table.
-    @ingroup gapfunc
-*/
-template<bool T> struct gap_len_table
-{
-    static const gap_word_t _len[bm::gap_levels];
-};
 
-template<bool T>
-const gap_word_t gap_len_table<T>::_len[bm::gap_levels] = 
-                { 128, 256, 512, bm::gap_max_buff_len }; 
-
-
-/*! @brief Alternative GAP lengths table. 
-    Good for for memory saver mode and very sparse bitsets.
-
-    @ingroup gapfunc
-*/
-template<bool T> struct gap_len_table_min
-{
-    static const gap_word_t _len[bm::gap_levels];
-};
-
-template<bool T>
-const gap_word_t gap_len_table_min<T>::_len[bm::gap_levels] = 
-                                { 32, 96, 128, 512 }; 
-
-
-
-//---------------------------------------------------------------------
-
-/** Structure keeps all-left/right ON bits masks. 
-    @ingroup bitfunc 
-*/
-template<bool T> struct block_set_table
-{
-    static const unsigned _left[32];
-    static const unsigned _right[32];
-};
-
-template<bool T>
-const unsigned block_set_table<T>::_left[32] = {
-    0x1, 0x3, 0x7, 0xf, 0x1f, 0x3f, 0x7f, 0xff, 0x1ff, 0x3ff, 0x7ff,
-    0xfff, 0x1fff, 0x3fff, 0x7fff, 0xffff, 0x1ffff, 0x3ffff, 0x7ffff,
-    0xfffff, 0x1fffff, 0x3fffff, 0x7fffff, 0xffffff, 0x1ffffff, 0x3ffffff,
-    0x7ffffff, 0xfffffff, 0x1fffffff, 0x3fffffff, 0x7fffffff, 0xffffffff
-};
-
-template<bool T>
-const unsigned block_set_table<T>::_right[32] = {
-    0xffffffff, 0xfffffffe, 0xfffffffc, 0xfffffff8, 0xfffffff0,
-    0xffffffe0, 0xffffffc0, 0xffffff80, 0xffffff00, 0xfffffe00,
-    0xfffffc00, 0xfffff800, 0xfffff000, 0xffffe000, 0xffffc000,
-    0xffff8000, 0xffff0000, 0xfffe0000, 0xfffc0000, 0xfff80000,
-    0xfff00000, 0xffe00000, 0xffc00000, 0xff800000, 0xff000000,
-    0xfe000000, 0xfc000000, 0xf8000000, 0xf0000000, 0xe0000000,
-    0xc0000000, 0x80000000
-};
 
 
 
