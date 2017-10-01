@@ -36,7 +36,7 @@ int BM_bvector_construct(BM_BVHANDLE* h, unsigned int bv_max)
             bv_max = bm::id_max;
         }
 		// placement new just to call the constructor
-		TBM_bvector* bv = new(mem) TBM_bvector(bm::BM_GAP,
+		TBM_bvector* bv = new(mem) TBM_bvector(bm::BM_BIT,
                                                bm::gap_len_table<true>::_len,
                                                bv_max,
                                                TBM_Alloc());
