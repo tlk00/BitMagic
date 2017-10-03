@@ -293,9 +293,9 @@ void BitForEachTest()
 	
     {
 	unsigned bit_list[32];
-    TimeTaker tt("BitList4 algorithm(sub-octet+switch)", REPEATS*10);
+    TimeTaker tt("BitList4 algorithm(sub-octet+switch)", REPEATS*20);
 
-	for (unsigned i = 0; i < REPEATS*10; ++i)
+	for (unsigned i = 0; i < REPEATS*100; ++i)
     {    
 		for (unsigned j = 0; j < 65536; ++j)
 		{
@@ -306,9 +306,9 @@ void BitForEachTest()
 
 	{
 		unsigned bit_list[32];
-		TimeTaker tt("BitScan on bitcount algorithm", REPEATS * 10);
+		TimeTaker tt("BitScan on bitcount algorithm", REPEATS * 20);
 
-		for (unsigned i = 0; i < REPEATS * 10; ++i)
+		for (unsigned i = 0; i < REPEATS * 100; ++i)
 		{
 			for (unsigned j = 0; j < 65536; ++j)
 			{
@@ -479,8 +479,8 @@ void EnumeratorTest()
     unsigned i;
 
     {
-    TimeTaker tt("bvector<>::enumerator", REPEATS/10);
-    for (i = 0; i < REPEATS/10; ++i)
+    TimeTaker tt("bvector<>::enumerator", REPEATS);
+    for (i = 0; i < REPEATS; ++i)
     {    
         bvect::enumerator en = bv.first();
 
@@ -496,8 +496,8 @@ void EnumeratorTest()
 
     unsigned cnt = 0;
     {
-        TimeTaker tt("bvector<>::get_next()", REPEATS/10);
-        for (i = 0; i < REPEATS/10; ++i)
+        TimeTaker tt("bvector<>::get_next()", REPEATS);
+        for (i = 0; i < REPEATS; ++i)
         {
             if (bv.any())
             {

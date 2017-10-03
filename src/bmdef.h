@@ -86,9 +86,7 @@
 #define FULL_BLOCK_REAL_ADDR bm::all_set<true>::_block._p
 #define FULL_BLOCK_FAKE_ADDR bm::all_set<true>::_block._p_fullp
 #define BLOCK_ADDR_SAN(addr) (addr == FULL_BLOCK_FAKE_ADDR) ? FULL_BLOCK_REAL_ADDR : addr
-//#define IS_VALID_ADDR(addr) bool(addr && (addr != FULL_BLOCK_ADDR)
 #define IS_VALID_ADDR(addr) bm::all_set<true>::is_valid_block_addr(addr)
-//#define IS_FULL_BLOCK(addr) bool(addr == FULL_BLOCK_ADDR)
 #define IS_FULL_BLOCK(addr) bm::all_set<true>::is_full_block(addr)
 #define IS_EMPTY_BLOCK(addr) bool(addr == 0)
 

@@ -5763,8 +5763,9 @@ void EnumeratorTest()
     bvect1.set_bit(100);
 
     bvect::enumerator en = bvect1.first();
-
-    if (*en != 100)
+    unsigned n = bvect1.get_next(0);
+    
+    if (*en != 100 || n != 100)
     {
         cout << "Enumerator error !" << endl;
         exit(1);
@@ -5774,8 +5775,9 @@ void EnumeratorTest()
 
     bvect1.set_bit(2000000000);
     en.go_first();
+    n = bvect1.get_next(0);
 
-    if (*en != 2000000000)
+    if (*en != 2000000000 || n != *en)
     {
         cout << "Enumerator error !" << endl;
         exit(1);
@@ -5853,12 +5855,11 @@ void EnumeratorTest()
         {
             bvect1.set_bit(i);
         }
-/*
         for(i = 65536*10; i < 65536*20; i+=3)
         {
             bvect1.set_bit(i);
         }
-*/
+
 
         bvect::enumerator en = bvect1.first();
 

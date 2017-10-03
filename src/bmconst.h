@@ -222,6 +222,7 @@ const unsigned block_set_table<T>::_right[32] = {
 //---------------------------------------------------------------------
 
 
+
 /*! @brief Default GAP lengths table.
     @ingroup gapfunc
 */
@@ -261,6 +262,7 @@ template<bool T> struct gap_len_table_nl
 template<bool T>
 const gap_word_t gap_len_table_nl<T>::_len[bm::gap_levels] =
                 { 32, 128, 512, bm::gap_max_buff_len };
+
 
 
 } // namespace

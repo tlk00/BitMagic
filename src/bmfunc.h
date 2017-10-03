@@ -185,9 +185,36 @@ unsigned bitcount64_4way(bm::id64_t x, bm::id64_t y,
     x = x + (x >> 32);
     return x & 0x000001FF;
 }
-
-
 #endif
+
+
+/*!
+    Returns number of trailing zeros
+    @ingroup bitfunc 
+*/
+BMFORCEINLINE
+bm::id_t word_trailing_zeros(bm::id_t w)
+{
+#ifdef BMSSE42OPT
+    #ifdef _MSC_VER
+        return __lzcnt(w);
+    #endif
+    #ifdef __GNUC__
+        return __builtin_ctzl(w);
+    #endif
+#else
+    // implementation from
+    // https://gist.github.com/andrewrk/1883543
+    static const int mod37_pos[] =
+    {
+        -1, 0, 1, 26, 2, 23, 27, 0, 3, 16, 24, 30, 28, 11, 0, 13, 4,
+        7, 17, 0, 25, 22, 31, 15, 29, 10, 12, 6, 0, 21, 14, 9, 5,
+        20, 8, 19, 18
+    };
+    return mod37_pos[(-w & w) % 37];
+#endif
+}
+
 
 
 
@@ -4429,20 +4456,16 @@ int bit_find_in_block(const bm::word_t* data,
         if (nword >= bm::set_block_size) break;
 
         BMREGISTER bm::word_t val = data[nword] >> (p & bm::set_word_mask);
-
-        // TODO: consider BSF and de bruijn sequences here:
-        // http://www.0xe3.com/text/ntz/ComputingTrailingZerosHOWTO.html#debruijn
-
         if (val)
         {
-            while((val & 1) == 0)
+            unsigned trail_z = bm::word_trailing_zeros(val);
+            if (trail_z)
             {
-                val >>= 1;
-                ++nbit;
-                ++p;
+                val >>= trail_z;
+                p += trail_z;
+                BM_ASSERT(val & 1);
             }
             ++found;
-
             break;
         }
         else
