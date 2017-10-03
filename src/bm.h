@@ -1319,7 +1319,7 @@ public:
         return invert();
     }
 
-    /*! \brief Exchanges content of bv and this bitvector.
+    /*! \brief Exchanges content of bv and this bvector.
     */
     void swap(bvector<Alloc>& bvect)
     {

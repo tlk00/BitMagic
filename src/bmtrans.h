@@ -31,6 +31,8 @@ For more information please visit:  http://bmagic.sourceforge.net
 #pragma warning( disable : 4311 4312 4127)
 #endif
 
+#include "bmdef.h"
+
 namespace bm
 {
 
@@ -898,6 +900,7 @@ public:
 
 
 } // namespace bm
+
 
 #ifdef _MSC_VER
 #pragma warning( pop )

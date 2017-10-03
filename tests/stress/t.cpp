@@ -8239,6 +8239,18 @@ bool TestEqualSparseVectors(const SV& sv1, const SV& sv2)
     {
         return b;
     }
+
+    {
+        SV svv1(sv1);
+        SV svv2(sv2);
+        svv1.swap(svv2);
+        b = svv1.equal(svv2);
+        if (!b)
+        {
+            return b;
+        }
+    }
+
     // comparison through serialization
     //
     {{
@@ -9551,7 +9563,7 @@ int main(void)
      StressTest(100, 1); // SUB
      StressTest(100, 2); // XOR
      StressTest(100, 3); // AND
- 
+
      TestSparseVector();
      TestSparseVector_Stress(2);
 

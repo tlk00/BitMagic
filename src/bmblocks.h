@@ -714,14 +714,14 @@ public:
         top_blocks_ = bm.top_blocks_;
         bm.top_blocks_ = btmp;
 
-        xor_swap(this->max_bits_, bm.max_bits_);
-		xor_swap(this->top_block_size_, bm.top_block_size_);
-        xor_swap(this->effective_top_block_size_, bm.effective_top_block_size_);
+        bm::xor_swap(this->max_bits_, bm.max_bits_);
+		bm::xor_swap(this->top_block_size_, bm.top_block_size_);
+        bm::xor_swap(this->effective_top_block_size_, bm.effective_top_block_size_);
 
         BM_ASSERT(sizeof(glevel_len_) / sizeof(glevel_len_[0]) == bm::gap_levels); // paranoiya check
         for (unsigned i = 0; i < bm::gap_levels; ++i)
         {
-		    xor_swap(glevel_len_[i], bm.glevel_len_[i]);
+		    bm::xor_swap(glevel_len_[i], bm.glevel_len_[i]);
         }
     }
     

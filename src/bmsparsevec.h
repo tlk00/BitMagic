@@ -31,10 +31,11 @@ For more information please visit:   http://bmagic.sourceforge.net
 #include <memory.h>
 #include <stdexcept>
 
+#include "bmdef.h"
+
 #include "bm.h"
 #include "bmtrans.h"
 #include "bmalgo_impl.h"
-#include "bmdef.h"
 
 
 namespace bm
@@ -88,7 +89,7 @@ public:
     sparse_vector(const sparse_vector<Val, BV>& sv);
     
     /*! Assignmment operator */
-    sparse_vector& operator = (const sparse_vector<Val, BV>& sv)
+    sparse_vector<Val,BV>& operator = (const sparse_vector<Val, BV>& sv)
     {
         clear();
         resize(sv.size());
@@ -106,6 +107,10 @@ public:
     
     
     ~sparse_vector();
+    
+    /*! \brief content exchange
+    */
+    void swap(sparse_vector<Val, BV>& sv);
     
     /*!
         \brief get specified element without bounds checking
@@ -314,17 +319,44 @@ sparse_vector<Val, BV>::sparse_vector(const sparse_vector<Val, BV>& sv)
         else
             plains_[i] = 0;
     } // for i
-    
 }
 
 //---------------------------------------------------------------------
-
 
 template<class Val, class BV>
 sparse_vector<Val, BV>::~sparse_vector()
 {
     free_vectors();
 }
+
+//---------------------------------------------------------------------
+
+template<class Val, class BV>
+void sparse_vector<Val, BV>::swap(sparse_vector<Val, BV>& sv)
+{
+    if (this != &sv)
+    {
+        bm::xor_swap(bv_size_, sv.bv_size_);
+        
+        allocator_type alloc_tmp = alloc_;
+        alloc_ = sv.alloc_;
+        sv.alloc_ = alloc_tmp;
+        
+        allocation_policy_type ap_tmp = ap_;
+        ap_ = sv.ap_;
+        sv.ap_ = ap_tmp;
+        
+        for (size_type i = 0; i < sizeof(Val)*8; ++i)
+        {
+            bvector_type* bv_tmp = plains_[i];
+            plains_[i] = sv.plains_[i];
+            sv.plains_[i] = bv_tmp;
+        } // for i
+        
+        bm::xor_swap(size_, sv.size_);        
+    }
+}
+
 
 //---------------------------------------------------------------------
 
@@ -337,7 +369,7 @@ void sparse_vector<Val, BV>::import(const value_type* arr,
     unsigned row_len[sizeof(Val)*8] = {0, };
     
     const unsigned transpose_window = 256;
-    bm::tmatrix<bm::id_t, sizeof(Val)*8, transpose_window> tm;
+    bm::tmatrix<bm::id_t, sizeof(Val)*8, transpose_window> tm; // matrix accumulator
     
     if (size == 0)
         throw std::range_error("sparse vector range error");
