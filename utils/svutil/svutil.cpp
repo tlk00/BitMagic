@@ -404,6 +404,17 @@ int main(int argc, char *argv[])
 				std::cerr << "ERROR: input sparse vector is different from input raw array." << std::endl;
 			}
 		}
+        
+        if (!vect_u32_in.empty() && !sv_u32_out.empty())
+        {
+			bm::chrono_taker tt("raw in to sparse vector out comparison", 1, &timing_map);
+			int res = bm::svector_check(sv_u32_out, vect_u32_in);
+			if (res != 0)
+			{
+				std::cerr << "ERROR: input raw array is different from output sparse vector." << std::endl;
+			}
+            
+        }
 
     }
     

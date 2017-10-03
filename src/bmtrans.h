@@ -63,8 +63,16 @@ struct tmatrix
     static unsigned rows() { return ROWS; }
     static unsigned cols() { return COLS; }
 
-    const T* row(unsigned row_idx) const { return value[row_idx]; }
-          T* row(unsigned row_idx)       { return value[row_idx]; }
+    const T* row(unsigned row_idx) const
+    {
+        BM_ASSERT(row_idx < ROWS);
+        return value[row_idx];
+    }
+    T* row(unsigned row_idx)
+    {
+        BM_ASSERT(row_idx < ROWS);
+        return value[row_idx];
+    }
 };
 
 

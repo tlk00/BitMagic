@@ -32,6 +32,8 @@ For more information please visit:   http://bmagic.sourceforge.net
 #include <stdexcept>
 
 #include "bm.h"
+#include "bmtrans.h"
+#include "bmalgo_impl.h"
 #include "bmdef.h"
 
 
@@ -332,27 +334,65 @@ void sparse_vector<Val, BV>::import(const value_type* arr,
                                     size_type         offset)
 {
     unsigned b_list[sizeof(Val)*8];
+    unsigned row_len[sizeof(Val)*8] = {0, };
+    
+    const unsigned transpose_window = 256;
+    bm::tmatrix<bm::id_t, sizeof(Val)*8, transpose_window> tm;
+    
     if (size == 0)
         throw std::range_error("sparse vector range error");
     
-    // cleap all plains in the range to provide corrrect import of 0 values
+    // clear all plains in the range to provide corrrect import of 0 values
     this->clear_range(offset, offset + size - 1);
+    
+    // transposition algorithm uses bitscen to find index bits and store it
+    // in temporary matrix (list for each bit plain), matrix here works
+    // when array gets to big - the list gets loaded into bit-vector using
+    // bulk load algorithm, which is faster than single bit access
+    //
     
     size_type i;
     for (i = 0; i < size; ++i)
     {
         unsigned bcnt = bm::bitscan_popcnt(arr[i], b_list);
         const unsigned bit_idx = i + offset;
+        
         for (unsigned j = 0; j < bcnt; ++j)
         {
             unsigned p = b_list[j];
-            bvector_type* bv = get_plain(p);
-            bv->set_bit(bit_idx);
+            unsigned rl = row_len[p];
+            tm.row(p)[rl] = bit_idx;
+            row_len[p] = ++rl;
+            
+            if (rl == transpose_window)
+            {
+                bvector_type* bv = get_plain(p);
+                const bm::id_t* r = tm.row(p);
+                bm::combine_or(*bv, r, r + rl);
+                row_len[p] = 0;
+                tm.row(p)[0] = 0;
+            }
         } // for j
     } // for i
+    
+    // process incomplete transposition lines
+    //
+    for (unsigned k = 0; k < tm.rows(); ++k)
+    {
+        unsigned rl = row_len[k];
+        if (rl)
+        {
+            bvector_type* bv = get_plain(k);
+            const bm::id_t* r = tm.row(k);
+            bm::combine_or(*bv, r, r + rl);
+        }
+    } // for k
+    
+    
     if (i > size_)
         size_ = i;
 }
+
 
 //---------------------------------------------------------------------
 
