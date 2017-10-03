@@ -714,7 +714,7 @@ void distance_operation(const BV& bv1,
     bool is_all_and = true; // flag is distance operation is just COUNT_AND
     distance_stage(dmit, dmit_end, &is_all_and);
 
-    bm::word_t*** blk_root = bman1.get_rootblock();
+    bm::word_t*** blk_root = bman1.top_blocks_root();
     unsigned block_idx = 0;
     unsigned i, j;
     
@@ -730,7 +730,7 @@ void distance_operation(const BV& bv1,
 
     for (i = 0; i < effective_top_block_size; ++i)
     {
-        bm::word_t** blk_blk = blk_root[i];
+        bm::word_t** blk_blk = blk_root ? blk_root[i] : 0;
 
         if (blk_blk == 0) // not allocated
         {
@@ -798,9 +798,12 @@ unsigned distance_and_operation(const BV& bv1,
 {
     const typename BV::blocks_manager_type& bman1 = bv1.get_blocks_manager();
     const typename BV::blocks_manager_type& bman2 = bv2.get_blocks_manager();
+    
+    if (!bman1.is_init() || !bman2.is_init())
+        return 0;
 
-    bm::word_t*** blk_root = bman1.get_rootblock();
-    bm::word_t*** blk_root_arg = bman2.get_rootblock();
+    bm::word_t*** blk_root     = bman1.top_blocks_root();
+    bm::word_t*** blk_root_arg = bman2.top_blocks_root();
     unsigned count = 0;
 
     BM_SET_MMX_GUARD
@@ -873,7 +876,7 @@ void distance_operation_any(const BV& bv1,
     bool is_all_and = true; // flag is distance operation is just COUNT_AND
     distance_stage(dmit, dmit_end, &is_all_and);
   
-    bm::word_t*** blk_root = bman1.get_rootblock();
+    bm::word_t*** blk_root = bman1.top_blocks_root();
     unsigned block_idx = 0;
     unsigned i, j;
     
@@ -891,7 +894,7 @@ void distance_operation_any(const BV& bv1,
 
     for (i = 0; i < effective_top_block_size; ++i)
     {
-        bm::word_t** blk_blk = blk_root[i];
+        bm::word_t** blk_blk = blk_root ? blk_root[i] : 0;
 
         if (blk_blk == 0) // not allocated
         {
@@ -915,10 +918,10 @@ void distance_operation_any(const BV& bv1,
             for (j = 0; j < bm::set_array_size; ++j,++block_idx)
             {                
                 arg_blk = bman2.get_block(i, j);
-                arg_gap = BM_IS_GAP(arg_blk);
-
                 if (!arg_blk) 
                     continue;
+                arg_gap = BM_IS_GAP(arg_blk);
+                
                 combine_any_operation_with_block(blk, blk_gap,
                                                  arg_blk, arg_gap,
                                                  dmit, dmit_end);
@@ -1152,6 +1155,9 @@ template<class BV, class It>
 void combine_or(BV& bv, It  first, It last)
 {
     typename BV::blocks_manager_type& bman = bv.get_blocks_manager();
+    if (!bman.is_init())
+        bman.init_tree();
+    
     unsigned max_id = 0;
 
     while (first < last)
@@ -1231,6 +1237,9 @@ template<class BV, class It>
 void combine_xor(BV& bv, It  first, It last)
 {
     typename BV::blocks_manager_type& bman = bv.get_blocks_manager();
+    if (!bman.is_init())
+        bman.init_tree();
+    
     unsigned max_id = 0;
 
     while (first < last)
@@ -1315,6 +1324,9 @@ template<class BV, class It>
 void combine_sub(BV& bv, It  first, It last)
 {
     typename BV::blocks_manager_type& bman = bv.get_blocks_manager();
+    if (!bman.is_init())
+        bman.init_tree();
+    
     unsigned max_id = 0;
 
     while (first < last)
@@ -1440,6 +1452,7 @@ void combine_and(BV& bv, It  first, It last)
     intervals of 1s and 0s.
     <pre>
     For example: 
+      empty vector   - 1 interval
       00001111100000 - gives us 3 intervals
       10001111100000 - 4 intervals
       00000000000000 - 1 interval
@@ -1452,8 +1465,11 @@ template<class BV>
 bm::id_t count_intervals(const BV& bv)
 {
     const typename BV::blocks_manager_type& bman = bv.get_blocks_manager();
+    
+    if (!bman.is_init())
+        return 1;
 
-    bm::word_t*** blk_root = bman.get_rootblock();
+    bm::word_t*** blk_root = bman.top_blocks_root();
     typename BV::blocks_manager_type::block_count_change_func func(bman);
     for_each_block(blk_root, bman.top_block_size(), func);
 
@@ -1478,6 +1494,9 @@ template<class BV, class It>
 void export_array(BV& bv, It first, It last)
 {
     typename BV::blocks_manager_type& bman = bv.get_blocks_manager();
+    if (!bman.is_init())
+        bman.init_tree();
+    
     unsigned inp_word_size = sizeof(*first);
     size_t array_size = last - first;
     size_t bit_cnt = array_size * inp_word_size * 8;

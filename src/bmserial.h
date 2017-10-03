@@ -579,7 +579,7 @@ serializer<BV>::serializer(const allocator_type&   alloc,
 : alloc_(alloc),
   gap_serial_(false),
   byte_order_serial_(true),
-  compression_level_(3)
+  compression_level_(4)
 {
     if (temp_block == 0)
     {
@@ -1467,6 +1467,10 @@ unsigned deserializer<BV, DEC>::deserialize(bvector_type&        bv,
                                             bm::word_t*          temp_block)
 {
     blocks_manager_type& bman = bv.get_blocks_manager();
+    if (!bman.is_init())
+    {
+        bman.init_tree();
+    }
 
     bm::wordop_t* tmp_buf = 
         temp_block ? (bm::wordop_t*) temp_block 
@@ -2906,6 +2910,10 @@ void operation_deserializer<BV>::deserialize(
     }
 
     blocks_manager_type& bman = bv_target.get_blocks_manager();
+    if (!bman.is_init())
+    {
+        bman.init_tree();
+    }
     bit_block_guard<blocks_manager_type> bg(bman);
     if (temp_block == 0)
     {
@@ -2997,7 +3005,7 @@ iterator_deserializer<BV, SerialIterator>::finalize_target_vector(
         {
             unsigned i, j;
             bman.get_block_coord(bv_block_idx, &i, &j);
-            bm::word_t*** blk_root = bman.get_rootblock();
+            bm::word_t*** blk_root = bman.top_blocks_root();
             unsigned effective_top_size = 
                 bman.effective_top_block_size();
             for (;i < effective_top_size; ++i) 
@@ -3025,7 +3033,7 @@ iterator_deserializer<BV, SerialIterator>::finalize_target_vector(
         {
             unsigned i, j;
             bman.get_block_coord(bv_block_idx, &i, &j);
-            bm::word_t*** blk_root = bman.get_rootblock();
+            bm::word_t*** blk_root = bman.top_blocks_root();
             unsigned effective_top_size = 
                 bman.effective_top_block_size();
             for (;i < effective_top_size; ++i) 
@@ -3159,6 +3167,11 @@ void iterator_deserializer<BV, SerialIterator>::deserialize(
 
     const blocks_manager_type& bman_mask = bv_mask.get_blocks_manager();
           blocks_manager_type& bman_target = bv_target.get_blocks_manager();
+    
+    if (!bman_target.is_init())
+    {
+        bman_target.init_tree();
+    }
 
     unsigned bv_size = sit.bv_size();
     if (bv_mask.size() > bv_size) 
@@ -3373,6 +3386,10 @@ iterator_deserializer<BV, SerialIterator>::deserialize(
     gap_temp_block[0] = 0;
 
     blocks_manager_type& bman = bv.get_blocks_manager();
+    if (!bman.is_init())
+    {
+        bman.init_tree();
+    }
 
     bv.forget_count();
     if (sit.bv_size() && (sit.bv_size() > bv.size())) 

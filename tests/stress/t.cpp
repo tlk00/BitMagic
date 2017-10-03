@@ -26,6 +26,7 @@ OTHER DEALINGS IN THE SOFTWARE.
 //#define BMSSE2OPT
 //#define BMSSE42OPT
 //#define BMCOUNTOPT
+//#define BM_USE_EXPLICIT_TEMP
 
 #include <stdio.h>
 #include <stdlib.h>
@@ -1392,6 +1393,244 @@ void WordCmpTest()
     }
 
     cout << "Ok." << endl;
+}
+
+void EmptyBVTest()
+{
+    cout << "---------------------------- Empty bvector test" << endl;
+
+    {
+        bvect bv1;
+        bvect bv2;
+        
+        bvect bv3(bv1 & bv2);
+        bvect bv4 = (bv1 & bv2);
+        
+        bvect bv5(bvect);
+        std::vector< bvect > v;
+        v.push_back(bvect());
+    }
+
+    {
+        bvect  bv1;
+        bm::id_t cnt = bv1.count_range(0, 10);
+        if (cnt)
+        {
+            cerr << "Failed count_range()" << endl;
+            exit(1);
+        }
+        bool b = bv1.test(0);
+        if (b)
+        {
+            cerr << "Failed test" << endl;
+            exit(1);
+        }
+        
+        b = bv1.any();
+        if (b)
+        {
+            cerr << "Failed any" << endl;
+            exit(1);
+        }
+        
+        bv1.set_bit(0);
+        if (!bv1.any())
+        {
+            cerr << "Failed set_bit" << endl;
+            exit(1);
+        }
+    }
+    {
+        bvect  bv1;
+        bool b = bv1.set_bit_and(0, false);
+        if (bv1.any() || b)
+        {
+            cerr << "Failed set_bit" << endl;
+            exit(1);
+        }
+    }
+    {
+        bvect  bv1;
+        bv1.set_range(0, 1, false);
+        if (bv1.any())
+        {
+            cerr << "Failed set_range" << endl;
+            exit(1);
+        }
+        bv1.set_range(0, 1, true);
+        if (bv1.count()!=2)
+        {
+            cerr << "Failed set_range(0,1)" << endl;
+            exit(1);
+        }
+    }
+    {
+        bvect  bv1;
+        bv1.clear_bit(0);
+        if (bv1.any())
+        {
+            cerr << "Failed clear_bit" << endl;
+            exit(1);
+        }
+    }
+    {
+        bvect  bv1;
+        bv1.clear();
+        if (bv1.any())
+        {
+            cerr << "Failed clear()" << endl;
+            exit(1);
+        }
+    }
+    {
+        bvect  bv1;
+        bv1.invert();
+        if (!bv1.any())
+        {
+            cerr << "Failed invert()" << endl;
+            exit(1);
+        }
+    }
+    {
+        bvect  bv1;
+        bvect  bv2;
+        bv1.swap(bv2);
+        if (bv1.any() || bv2.any())
+        {
+            cerr << "Failed swap()" << endl;
+            exit(1);
+        }
+    }
+    {
+        bvect  bv1;
+        if (bv1.get_first() != 0)
+        {
+            cerr << "Failed get_first()" << endl;
+            exit(1);
+        }
+    }
+    {
+        bvect  bv1;
+        if (bv1.extract_next(0) != 0)
+        {
+            cerr << "Failed extract_next()" << endl;
+            exit(1);
+        }
+    }
+    {
+        bvect  bv1;
+        bvect::statistics st;
+        bv1.calc_stat(&st);
+        if (st.memory_used == 0)
+        {
+            cerr << "Failed calc_stat()" << endl;
+            exit(1);
+        }
+    }
+    {
+        bvect  bv1;
+        bvect  bv2;
+        bvect  bv3;
+        bv1.bit_or(bv2);
+        if (bv1.any())
+        {
+            cerr << "Failed bit_or()" << endl;
+            exit(1);
+        }
+        bv2.set_bit(100000000);
+        bv1.bit_or(bv2);
+        if (!bv1.any())
+        {
+            cerr << "Failed bit_or()" << endl;
+            exit(1);
+        }
+        bv1.bit_or(bv3);
+        if (bv1.count()!=1)
+        {
+            cerr << "Failed bit_or()" << endl;
+            exit(1);
+        }
+    }
+    
+    {
+        bvect  bv1;
+        bvect  bv2;
+        bv1.bit_and(bv2);
+        if (bv1.any())
+        {
+            cerr << "Failed bit_and()" << endl;
+            exit(1);
+        }
+        bv2.set_bit(100000000);
+        bv1.bit_and(bv2);
+        if (bv1.any())
+        {
+            cerr << "Failed bit_and()" << endl;
+            exit(1);
+        }
+        bv2.bit_and(bv1);
+        if (bv2.count()!=0)
+        {
+            cerr << "Failed bit_and()" << endl;
+            exit(1);
+        }
+    }
+    
+    {
+        bvect  bv1;
+        bvect::statistics st1;
+        bv1.optimize(0, bvect::opt_compress, &st1);
+        if (st1.memory_used == 0)
+        {
+            cerr << "Failed calc_stat()" << endl;
+            exit(1);
+        }
+        bv1.optimize_gap_size();
+    }
+    
+    {
+        bvect  bv1;
+        bvect  bv2;
+        
+        int r = bv1.compare(bv2);
+        if (r != 0)
+        {
+            cerr << "Failed compare()" << endl;
+            exit(1);
+            
+        }
+        bv2.set_bit(1000);
+        r = bv1.compare(bv2);
+        if (r == 0)
+        {
+            cerr << "Failed compare()" << endl;
+            exit(1);
+            
+        }
+        r = bv2.compare(bv1);
+        if (r == 0)
+        {
+            cerr << "Failed compare()" << endl;
+            exit(1);
+        }
+    }
+    
+    {
+        bvect  bv1;
+        bvect::enumerator en1 = bv1.first();
+        if (en1.valid())
+        {
+            cerr << "failed first enumerator" << endl;
+            exit(1);
+        }
+    }
+    
+    
+    
+    
+    cout << "---------------------------- Empty bvector test OK" << endl;
+    
+    
 }
 
 void BasicFunctionalityTest()
@@ -5793,6 +6032,9 @@ void SyntaxTest()
     if (bv1 < bv2)
     {
     }
+    
+    bv3 = bv1 & bv2;
+    bv3 = bv1 ^ bv2;
 
     bvect::reference ref = bv1[10];
     bool bn = !ref;
@@ -9262,6 +9504,7 @@ int main(void)
   
      GammaEncoderTest();
 
+     EmptyBVTest();
 
      EnumeratorTest();
 
@@ -9309,8 +9552,7 @@ int main(void)
      StressTest(100, 3); // AND
  
      TestSparseVector();
-     TestSparseVector_Stress(3);
-//return 0;
+     TestSparseVector_Stress(2);
 
      StressTest(300);
 
