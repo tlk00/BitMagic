@@ -195,13 +195,9 @@ unsigned bitcount64_4way(bm::id64_t x, bm::id64_t y,
 BMFORCEINLINE
 bm::id_t word_trailing_zeros(bm::id_t w)
 {
-#ifdef BMSSE42OPT
-    #ifdef _MSC_VER
-        return __lzcnt(w);
-    #endif
-    #ifdef __GNUC__
+	// TODO: find a better variant for MSVC 
+#if defined(BMSSE42OPT) && defined(__GNUC__)
         return __builtin_ctzl(w);
-    #endif
 #else
     // implementation from
     // https://gist.github.com/andrewrk/1883543
