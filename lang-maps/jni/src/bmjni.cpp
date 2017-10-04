@@ -1,11 +1,28 @@
 #include "org_tlk00_bitmagic_BVector0.h"
 #include "libbm.h"
 
-extern "C" {
-
+#define exec(x) \
+  switch(x) { \
+  case BM_ERR_BADALLOC: \
+  { \
+    jclass ex = env->FindClass("java/lang/RuntimeException"); \
+    env->ThrowNew(ex,"Bad alloc in native call: " #x); \
+    break; \
+  } \
+  case BM_ERR_BADARG: \
+  { \
+    jclass ex = env->FindClass("java/lang/IllegalArgumentException"); \
+    env->ThrowNew(ex,"One or more arguments are invalid in: " #x); \
+    break; \
+  } \
+  default: \
+    break; \
+  }
+  
+    
 JNIEXPORT void JNICALL Java_org_tlk00_bitmagic_BVector0_init0
-  (JNIEnv *, jobject, jlong ptr) {
-  BM_init((void*)ptr);
+  (JNIEnv *env, jobject, jlong ptr) {
+  exec(BM_init((void*)ptr));
 }
 
 /*
@@ -14,9 +31,9 @@ JNIEXPORT void JNICALL Java_org_tlk00_bitmagic_BVector0_init0
  * Signature: (IJ)J
  */
 JNIEXPORT jlong JNICALL Java_org_tlk00_bitmagic_BVector0_create0
-  (JNIEnv *, jobject, jint, jlong size) {
+  (JNIEnv *env, jobject, jint, jlong size) {
   BM_BVHANDLE ptr;
-  BM_bvector_construct(&ptr, size);
+  exec(BM_bvector_construct(&ptr, size));
   return (jlong)ptr;
 }
 
@@ -26,7 +43,7 @@ JNIEXPORT jlong JNICALL Java_org_tlk00_bitmagic_BVector0_create0
  * Signature: (J)J
  */
 JNIEXPORT jlong JNICALL Java_org_tlk00_bitmagic_BVector0_clone0
-  (JNIEnv *, jobject, jlong ptr) {
+  (JNIEnv *env, jobject, jlong ptr) {
   return ptr;
 }
 
@@ -36,18 +53,18 @@ JNIEXPORT jlong JNICALL Java_org_tlk00_bitmagic_BVector0_clone0
  * Signature: (J)V
  */
 JNIEXPORT void JNICALL Java_org_tlk00_bitmagic_BVector0_dispose0
-  (JNIEnv *, jobject, jlong ptr) {
-  BM_bvector_free((BM_BVHANDLE)ptr);
+  (JNIEnv *env, jobject, jlong ptr) {
+  exec(BM_bvector_free((BM_BVHANDLE)ptr));
 }
 
 /*
  * Class:     org_tlk00_bitmagic_BVector0
  * Method:    set0
- * Signature: (JJ)V
+ * Signature: (JJZ)V
  */
 JNIEXPORT void JNICALL Java_org_tlk00_bitmagic_BVector0_set0
-  (JNIEnv *, jobject, jlong ptr, jlong bit) {
-  //BM_bvector_set_bit((BM_BVHANDLE)ptr, (unsigned int)bit);
+  (JNIEnv *env, jobject, jlong ptr, jlong idx, jboolean bit) {
+  exec(BM_bvector_set_bit((BM_BVHANDLE)ptr, (unsigned int)idx, bit ? 1 : 0));
 }
 
 /*
@@ -56,10 +73,8 @@ JNIEXPORT void JNICALL Java_org_tlk00_bitmagic_BVector0_set0
  * Signature: (JJ)Z
  */
 JNIEXPORT jboolean JNICALL Java_org_tlk00_bitmagic_BVector0_get0
-  (JNIEnv *, jobject, jlong ptr, jlong bit) {
+  (JNIEnv *env, jobject, jlong ptr, jlong idx) {
   unsigned int ret;
-  //BM_bvector_get_bit((BM_BVHANDLE)ptr, (unsigned int)bit, &ret);
-  return false; //(jboolean)ret;
+  exec(BM_bvector_get_bit((BM_BVHANDLE)ptr, (unsigned int)idx, &ret));
+  return (jboolean)ret;
 }
-  
-} // extern

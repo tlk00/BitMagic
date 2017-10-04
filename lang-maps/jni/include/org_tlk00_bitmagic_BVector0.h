@@ -42,10 +42,10 @@ JNIEXPORT void JNICALL Java_org_tlk00_bitmagic_BVector0_dispose0
 /*
  * Class:     org_tlk00_bitmagic_BVector0
  * Method:    set0
- * Signature: (JJ)V
+ * Signature: (JJZ)V
  */
 JNIEXPORT void JNICALL Java_org_tlk00_bitmagic_BVector0_set0
-  (JNIEnv *, jobject, jlong, jlong);
+  (JNIEnv *, jobject, jlong, jlong, jboolean);
 
 /*
  * Class:     org_tlk00_bitmagic_BVector0
