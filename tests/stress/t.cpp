@@ -6004,6 +6004,28 @@ __int64 CalcBitCount64(__int64 b)
 
 */
 
+// function to return bvector by value to test move semantics
+//
+
+bvect bvect_test_return()
+{
+    bvect bv1;
+    bvect bv2;
+
+    bv1[100] = true;
+    bv1[1000] = true;
+    bv2[100] = true;
+    bv2[10001] = true;
+
+    if (rand()%2)
+    {
+        return bv1;
+    }
+    return (bv1 & bv2);
+}
+
+
+
 
 void SyntaxTest()
 {
@@ -6046,6 +6068,14 @@ void SyntaxTest()
     ref.flip();
 
     bvect bvn = ~bv1;
+    
+    // this should trigger move
+    bvect bv4 = bvect_test_return();
+    bvect bv41 = bvect_test_return() | bv2;
+    bvect bv5(bvect_test_return());
+    
+    cout << bv4.count() << " " << bv41.count() << " " << bv5.count() << endl;
+    
 
     cout << "----------------------------- Syntax test ok." << endl;
 }
