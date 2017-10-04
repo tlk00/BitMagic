@@ -680,13 +680,14 @@ public:
         }
     }
     
-    blocks_manager(blocks_manager&& blockman)
+#ifndef BMNOCXX11
+    blocks_manager(blocks_manager&& blockman) BMNOEXEPT
         : max_bits_(blockman.max_bits_),
           top_blocks_(0),
           top_block_size_(blockman.top_block_size_),
           effective_top_block_size_(blockman.effective_top_block_size_),
-            temp_block_(0),
-            alloc_(blockman.alloc_)
+          temp_block_(0),
+          alloc_(blockman.alloc_)
     {
         if (this != &blockman)
         {
@@ -694,9 +695,9 @@ public:
             move_from(blockman);
         }
     }
-    
+#endif
 
-    ~blocks_manager()
+    ~blocks_manager() BMNOEXEPT
     {
 		if (temp_block_)
 			alloc_.free_bit_block(temp_block_);
@@ -706,7 +707,7 @@ public:
     /*! \brief Swaps content 
         \param bm  another blocks manager
     */
-    void swap(blocks_manager& bm)
+    void swap(blocks_manager& bm) BMNOEXEPT
     {
         BM_ASSERT(this != &bm);
 
@@ -727,7 +728,7 @@ public:
     
     /*! \brief implementation of moving semantics
     */
-    void move_from(blocks_manager& bm)
+    void move_from(blocks_manager& bm) BMNOEXEPT
     {
         deinit_tree();
         swap(bm);
@@ -1680,7 +1681,7 @@ private:
 
     void operator =(const blocks_manager&);
 
-    void deinit_tree()
+    void deinit_tree() BMNOEXEPT
     {
         if (top_blocks_ == 0) return;
         unsigned top_size = this->effective_top_block_size();

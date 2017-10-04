@@ -41,6 +41,17 @@
 #define BM_x86
 #endif
 
+// cxx11 features
+//
+#ifdef BMNOCXX11
+# define BMNOEXEPT
+#else
+# ifndef BMNOEXEPT
+#  define BMNOEXEPT noexcept
+# endif
+#endif
+
+
 // disable 'register' keyword, which is obsolete in C++11
 //
 #ifndef BMREGISTER

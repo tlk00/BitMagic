@@ -88,11 +88,25 @@ public:
     /*! copy-ctor */
     sparse_vector(const sparse_vector<Val, BV>& sv);
 
-    /*! move-ctor */
-    sparse_vector(sparse_vector<Val, BV>&& sv);
 
-    
-    /*! Assignmment operator */
+#ifndef BMNOCXX11
+    /*! move-ctor */
+    sparse_vector(sparse_vector<Val, BV>&& sv) BMNOEXEPT;
+
+
+    /*! move assignmment operator */
+    sparse_vector<Val,BV>& operator = (sparse_vector<Val, BV>&& sv) BMNOEXEPT
+    {
+        if (this != &sv)
+        {
+            clear();
+            swap(sv);
+        }
+        return *this;
+    }
+#endif
+
+    /*! copy assignmment operator */
     sparse_vector<Val,BV>& operator = (const sparse_vector<Val, BV>& sv)
     {
         if (this != &sv)
@@ -111,25 +125,13 @@ public:
         }
         return *this;
     }
-
-    /*! move assignmment operator */
-    sparse_vector<Val,BV>& operator = (sparse_vector<Val, BV>&& sv)
-    {
-        if (this != &sv)
-        {
-            clear();
-            swap(sv);
-        }
-        return *this;
-    }
-
     
     
-    ~sparse_vector();
+    ~sparse_vector() BMNOEXEPT;
     
     /*! \brief content exchange
     */
-    void swap(sparse_vector<Val, BV>& sv);
+    void swap(sparse_vector<Val, BV>& sv) BMNOEXEPT;
     
     /*!
         \brief get specified element without bounds checking
@@ -190,7 +192,7 @@ public:
     
     /*! \brief resize to zero, free memory
     */
-    void clear();
+    void clear() BMNOEXEPT;
     
     /*!
         \brief access specified element with bounds checking
@@ -289,7 +291,7 @@ private:
 
     /*! \brief free all internal vectors
     */
-    void free_vectors();
+    void free_vectors() BMNOEXEPT;
 
     /*! \brief set value without checking boundaries
     */
@@ -344,9 +346,10 @@ sparse_vector<Val, BV>::sparse_vector(const sparse_vector<Val, BV>& sv)
 }
 
 //---------------------------------------------------------------------
+#ifndef BMNOCXX11
 
 template<class Val, class BV>
-sparse_vector<Val, BV>::sparse_vector(sparse_vector<Val, BV>&& sv)
+sparse_vector<Val, BV>::sparse_vector(sparse_vector<Val, BV>&& sv) BMNOEXEPT
 {
     if (this != &sv)
     {
@@ -364,13 +367,14 @@ sparse_vector<Val, BV>::sparse_vector(sparse_vector<Val, BV>&& sv)
     }
 }
 
+#endif
 
 
 
 //---------------------------------------------------------------------
 
 template<class Val, class BV>
-sparse_vector<Val, BV>::~sparse_vector()
+sparse_vector<Val, BV>::~sparse_vector() BMNOEXEPT
 {
     free_vectors();
 }
@@ -378,7 +382,7 @@ sparse_vector<Val, BV>::~sparse_vector()
 //---------------------------------------------------------------------
 
 template<class Val, class BV>
-void sparse_vector<Val, BV>::swap(sparse_vector<Val, BV>& sv)
+void sparse_vector<Val, BV>::swap(sparse_vector<Val, BV>& sv) BMNOEXEPT
 {
     if (this != &sv)
     {
@@ -682,7 +686,7 @@ void sparse_vector<Val, BV>::set_value(size_type idx, value_type v)
 //---------------------------------------------------------------------
 
 template<class Val, class BV>
-void sparse_vector<Val, BV>::clear()
+void sparse_vector<Val, BV>::clear() BMNOEXEPT
 {
     free_vectors();
     size_ = 0;
@@ -693,7 +697,7 @@ void sparse_vector<Val, BV>::clear()
 
 
 template<class Val, class BV>
-void sparse_vector<Val, BV>::free_vectors()
+void sparse_vector<Val, BV>::free_vectors() BMNOEXEPT
 {
     for (size_type i = 0; i < sizeof(Val)*8; ++i)
         delete plains_[i];

@@ -40,6 +40,12 @@ Fine tuning and optimizations:
 
 All BM fine tuning parameters are controlled by the preprocessor defines.
 
+=================================================================================
+
+BM library supports CXX-11. Move semantics, noexept, etc.
+use
+#define BMNOCXX11
+to explicitly disable use of CXX11 features for your build
 
 =================================================================================
 
@@ -78,6 +84,7 @@ use "__restrict" keyword for this purpose. To correct it define BMRESTRICT macro
 to correct keyword. 
 
 =================================================================================
+
 
 Bitcounting optimization can be turned ON by defining BMCOUNTOPT.
 Please note this optimization is not completely thread safe. 

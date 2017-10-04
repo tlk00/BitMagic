@@ -917,27 +917,12 @@ public:
            new_blocks_strat_(bvect.new_blocks_strat_),
            size_(bvect.size_)
     {}
+    
+    ~bvector() BMNOEXEPT
+    {}
 
 #endif
 
-    /*!
-        \brief Move constructor
-    */
-    bvector(bvector<Alloc>&& bvect)
-    {
-        if (this != &bvect)
-        {
-            blockman_.move_from(bvect.blockman_);
-            size_ = bvect.size_;
-            new_blocks_strat_ = bvect.new_blocks_strat_;
-            
-    #ifdef BMCOUNTOPT
-            BMCOUNT_VALID(false)
-            bvect.count_is_valid_ = false;
-    #endif
-        }
-    }
-    
     /*! 
         \brief Copy assignment operator
     */
@@ -951,11 +936,30 @@ public:
         }
         return *this;
     }
+
+#ifndef BMNOCXX11
+    /*!
+        \brief Move constructor
+    */
+    bvector(bvector<Alloc>&& bvect) BMNOEXEPT
+    {
+        if (this != &bvect)
+        {
+            blockman_.move_from(bvect.blockman_);
+            size_ = bvect.size_;
+            new_blocks_strat_ = bvect.new_blocks_strat_;
+            
+    #ifdef BMCOUNTOPT
+            BMCOUNT_VALID(false)
+            bvect.count_is_valid_ = false;
+    #endif
+        }
+    }
     
     /*! 
         \brief Move assignment operator
     */
-    bvector& operator=(bvector<Alloc>&& bvect)
+    bvector& operator=(bvector<Alloc>&& bvect) BMNOEXEPT
     {
         if (this != &bvect)
         {
@@ -970,6 +974,7 @@ public:
         }
         return *this;
     }
+#endif
 
     reference operator[](bm::id_t n)
     {
@@ -1321,7 +1326,7 @@ public:
 
     /*! \brief Exchanges content of bv and this bvector.
     */
-    void swap(bvector<Alloc>& bvect)
+    void swap(bvector<Alloc>& bvect) BMNOEXEPT
     {
         if (this != &bvect)
         {
