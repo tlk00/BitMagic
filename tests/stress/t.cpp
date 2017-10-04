@@ -8299,11 +8299,12 @@ bool TestEqualSparseVectors(const SV& sv1, const SV& sv2)
 void TestSparseVector()
 {
     cout << "---------------------------- Bit-plain sparse vector test" << endl;
+
+    typedef bm::sparse_vector<unsigned, bm::bvector<> > svector;
     
     // test empty vector serialization
     {{
     
-    typedef bm::sparse_vector<unsigned, bm::bvector<> > svector;
 
     bm::sparse_vector<unsigned, bm::bvector<> > sv1;
     bm::sparse_vector<unsigned, bm::bvector<> > sv2;
@@ -8327,6 +8328,14 @@ void TestSparseVector()
         exit(1);
     }
     
+    }}
+    
+    // test move construction
+    {{
+        vector<svector> v;
+        v.push_back(svector());
+        v.push_back(svector());
+        v[0] = svector();
     }}
     
     {{

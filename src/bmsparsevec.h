@@ -87,23 +87,42 @@ public:
     
     /*! copy-ctor */
     sparse_vector(const sparse_vector<Val, BV>& sv);
+
+    /*! move-ctor */
+    sparse_vector(sparse_vector<Val, BV>&& sv);
+
     
     /*! Assignmment operator */
     sparse_vector<Val,BV>& operator = (const sparse_vector<Val, BV>& sv)
     {
-        clear();
-        resize(sv.size());
-        bv_size_ = sv.bv_size_;
-        alloc_ = sv.alloc_;
-    
-        for (size_type i = 0; i < sizeof(Val)*8; ++i)
+        if (this != &sv)
         {
-            const bvector_type* bv = sv.plains_[i];
-            if (bv)
-                plains_[i] = new bvector_type(*bv);
-        } // for i
+            clear();
+            resize(sv.size());
+            bv_size_ = sv.bv_size_;
+            alloc_ = sv.alloc_;
+        
+            for (size_type i = 0; i < sizeof(Val)*8; ++i)
+            {
+                const bvector_type* bv = sv.plains_[i];
+                if (bv)
+                    plains_[i] = new bvector_type(*bv);
+            } // for i
+        }
         return *this;
     }
+
+    /*! move assignmment operator */
+    sparse_vector<Val,BV>& operator = (sparse_vector<Val, BV>&& sv)
+    {
+        if (this != &sv)
+        {
+            clear();
+            swap(sv);
+        }
+        return *this;
+    }
+
     
     
     ~sparse_vector();
@@ -311,15 +330,42 @@ sparse_vector<Val, BV>::sparse_vector(const sparse_vector<Val, BV>& sv)
   ap_(sv.ap_),
   size_(sv.size_)
 {
-    for (size_type i = 0; i < sizeof(Val)*8; ++i)
+    if (this != &sv)
     {
-        const bvector_type* bv = sv.plains_[i];
-        if (bv)
-            plains_[i] = new bvector_type(*bv);
-        else
-            plains_[i] = 0;
-    } // for i
+        for (size_type i = 0; i < sizeof(Val)*8; ++i)
+        {
+            const bvector_type* bv = sv.plains_[i];
+            if (bv)
+                plains_[i] = new bvector_type(*bv);
+            else
+                plains_[i] = 0;
+        } // for i
+    }
 }
+
+//---------------------------------------------------------------------
+
+template<class Val, class BV>
+sparse_vector<Val, BV>::sparse_vector(sparse_vector<Val, BV>&& sv)
+{
+    if (this != &sv)
+    {
+        bv_size_ = 0;
+        alloc_ = sv.alloc_;
+        ap_ = sv.ap_;
+        size_ = sv.size_;
+        
+        for (size_type i = 0; i < sizeof(Val)*8; ++i)
+        {
+            plains_[i] = sv.plains_[i];
+            sv.plains_[i] = 0;
+        }
+        sv.size_ = 0;
+    }
+}
+
+
+
 
 //---------------------------------------------------------------------
 
