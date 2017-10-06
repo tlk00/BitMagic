@@ -1,8 +1,10 @@
+
 #include "libbm.h"
 #include "try_throw_catch.h"
 static jmp_buf ex_buf__;
 
 #define BM_NO_STL
+#define BM_NO_CXX11
 #define BMALLOC__H__INCLUDED__
 
 #include "bmconst.h"

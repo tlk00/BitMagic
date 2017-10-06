@@ -13,8 +13,22 @@
 extern "C" {
 #endif /* __cplusplus */
 
+/* -------------------------------------------- */
+/* General purpose functions                    */
+/* -------------------------------------------- */
+
 /* Initialize libbm runtime before use*/
 int BM_init(void*);
+
+/**
+    return copyright info string and version information.
+*/
+const char* BM_version(unsigned* major, unsigned* minor, unsigned* patch);
+
+/**
+    return error message by code
+*/
+const char* BM_error_msg(int errcode);
 
 /* -------------------------------------------- */
 /* bvector functions                            */

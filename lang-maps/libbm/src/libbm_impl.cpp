@@ -5,6 +5,33 @@ int BM_init(void*)
 	return BM_OK;
 }
 
+const char* BM_version(unsigned* major, unsigned* minor, unsigned* patch)
+{
+    if (major)
+        *major = bm::_copyright<true>::_v[0];
+    if (minor)
+        *minor = bm::_copyright<true>::_v[1];
+    if (patch)
+        *patch = bm::_copyright<true>::_v[2];
+    
+    return bm::_copyright<true>::_p;
+}
+
+const char* BM_error_msg(int errcode)
+{
+    switch (errcode)
+    {
+    case BM_OK:
+        return "BM-00: All correct.";
+    case BM_ERR_BADALLOC:
+        return "BM-01: Allocation error.";
+    case BM_ERR_BADARG:
+        return "BM-02: Invalid or missing function argument.";
+    }
+    return 0;
+}
+
+
 
 int BM_bvector_construct(BM_BVHANDLE* h, unsigned int bv_max)
 {
