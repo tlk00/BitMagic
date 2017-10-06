@@ -680,7 +680,7 @@ public:
         }
     }
     
-#ifndef BMNOCXX11
+#ifndef BM_NO_CXX11
     blocks_manager(blocks_manager&& blockman) BMNOEXEPT
         : max_bits_(blockman.max_bits_),
           top_blocks_(0),

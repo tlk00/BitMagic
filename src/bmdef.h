@@ -43,7 +43,7 @@
 
 // cxx11 features
 //
-#ifdef BMNOCXX11
+#ifdef BM_NO_CXX11
 # define BMNOEXEPT
 #else
 # ifndef BMNOEXEPT

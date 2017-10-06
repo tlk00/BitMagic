@@ -89,7 +89,7 @@ public:
     sparse_vector(const sparse_vector<Val, BV>& sv);
 
 
-#ifndef BMNOCXX11
+#ifndef BM_NO_CXX11
     /*! move-ctor */
     sparse_vector(sparse_vector<Val, BV>&& sv) BMNOEXEPT;
 
@@ -346,7 +346,7 @@ sparse_vector<Val, BV>::sparse_vector(const sparse_vector<Val, BV>& sv)
 }
 
 //---------------------------------------------------------------------
-#ifndef BMNOCXX11
+#ifndef BM_NO_CXX11
 
 template<class Val, class BV>
 sparse_vector<Val, BV>::sparse_vector(sparse_vector<Val, BV>&& sv) BMNOEXEPT

@@ -937,7 +937,7 @@ public:
         return *this;
     }
 
-#ifndef BMNOCXX11
+#ifndef BM_NO_CXX11
     /*!
         \brief Move constructor
     */

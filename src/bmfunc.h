@@ -373,17 +373,6 @@ template<typename T> int wordcmp(T a, T b)
 // x & (x ^ (x-1))
 
 
-/**
-    Internal structure. Copyright information.
-*/
-template<bool T> struct _copyright
-{
-    static const char _p[];
-};
-
-template<bool T> const char _copyright<T>::_p[] = 
-    "BitMagic C++ Library. v.3.8.0 (c) 2002-2017 Anatoliy Kuznetsov.";
-
 
 /*! 
    \brief Byte orders recognized by the library.

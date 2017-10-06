@@ -44,7 +44,7 @@ All BM fine tuning parameters are controlled by the preprocessor defines.
 
 BM library supports CXX-11. Move semantics, noexept, etc.
 use
-#define BMNOCXX11
+#define BM_NO_CXX11
 to explicitly disable use of CXX11 features for your build
 
 =================================================================================
