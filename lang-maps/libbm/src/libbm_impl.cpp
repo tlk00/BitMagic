@@ -87,18 +87,36 @@ int BM_bvector_free(BM_BVHANDLE h)
 
 // -----------------------------------------------------------------
 
+int BM_bvector_swap(BM_BVHANDLE h1, BM_BVHANDLE h2)
+{
+	if (!h1 || !h2)
+		return BM_ERR_BADARG;
+	TRY
+	{
+        TBM_bvector* bv1 = (TBM_bvector*)h1;
+        TBM_bvector* bv2 = (TBM_bvector*)h2;
+        bv1->swap(*bv2);
+	}
+	CATCH (BM_ERR_BADALLOC)
+	{
+		return BM_ERR_BADALLOC;
+	}
+	ETRY;
+	return BM_OK;
+
+}
+
+// -----------------------------------------------------------------
+
 
 int BM_bvector_get_size(BM_BVHANDLE h, unsigned int* psize)
 {
-	if (!h)
+	if (!h || !psize)
 		return BM_ERR_BADARG;
 	TRY
 	{
         const TBM_bvector* bv = (TBM_bvector*)h;
-        if (psize)
-        {
-            *psize = bv->size();
-        }
+        *psize = bv->size();
 	}
 	CATCH (BM_ERR_BADALLOC)
 	{
@@ -169,6 +187,27 @@ int BM_bvector_set_bit(BM_BVHANDLE h, unsigned int i, int val)
 	ETRY;
 	return BM_OK;
 }
+
+// -----------------------------------------------------------------
+
+int BM_bvector_flip_bit(BM_BVHANDLE h, unsigned int i)
+{
+	if (!h)
+		return BM_ERR_BADARG;
+	TRY
+	{
+        TBM_bvector* bv = (TBM_bvector*)h;
+        bv->flip(i);
+	}
+	CATCH (BM_ERR_BADALLOC)
+	{
+		return BM_ERR_BADALLOC;
+	}
+	ETRY;
+	return BM_OK;
+}
+
+
 
 // -----------------------------------------------------------------
 
@@ -258,6 +297,44 @@ int BM_bvector_clear(BM_BVHANDLE h, int free_mem)
 	{
         TBM_bvector* bv = (TBM_bvector*)h;
         bv->clear(free_mem);
+	}
+	CATCH (BM_ERR_BADALLOC)
+	{
+		return BM_ERR_BADALLOC;
+	}
+	ETRY;
+	return BM_OK;
+}
+
+// -----------------------------------------------------------------
+
+int BM_bvector_invert(BM_BVHANDLE h)
+{
+	if (!h)
+		return BM_ERR_BADARG;
+	TRY
+	{
+        TBM_bvector* bv = (TBM_bvector*)h;
+        bv->invert();
+	}
+	CATCH (BM_ERR_BADALLOC)
+	{
+		return BM_ERR_BADALLOC;
+	}
+	ETRY;
+	return BM_OK;
+}
+
+// -----------------------------------------------------------------
+
+int BM_bvector_any(BM_BVHANDLE h, int* pval)
+{
+	if (!h || !pval)
+		return BM_ERR_BADARG;
+	TRY
+	{
+        const TBM_bvector* bv = (TBM_bvector*)h;
+        *pval = bv->any();
 	}
 	CATCH (BM_ERR_BADALLOC)
 	{

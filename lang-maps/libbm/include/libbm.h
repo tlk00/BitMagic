@@ -48,9 +48,9 @@ const char* BM_version(int* major, int* minor, int* patch);
 */
 const char* BM_error_msg(int errcode);
 
-/* -------------------------------------------- */
-/* bvector construction and sizing methods      */
-/* -------------------------------------------- */
+/* ------------------------------------------------- */
+/* bvector construction, swap and sizing methods     */
+/* ------------------------------------------------- */
 
 /* construction and setters                     */
 
@@ -79,6 +79,9 @@ int BM_bvector_get_size(BM_BVHANDLE h, unsigned int* psize);
 */
 int BM_bvector_set_size(BM_BVHANDLE h, unsigned int new_size);
 
+/* swap two bit-vectors
+*/
+int BM_bvector_swap(BM_BVHANDLE h1, BM_BVHANDLE h2);
 
 
 /* -------------------------------------------- */
@@ -104,10 +107,17 @@ int BM_bvector_set_bit_conditional(BM_BVHANDLE  h,
                                    int          val,
                                    int          condition,
                                    int*         pchanged);
+    
+/* flip bit
+   i - index of a bit to flip
+*/
+int BM_bvector_flip_bit(BM_BVHANDLE h, unsigned int i);
+    
 
 /* set all bits to 1
 */
 int BM_bvector_set(BM_BVHANDLE h);
+
 
 
 /* Sets all bits in the specified closed interval [left,right]
@@ -122,6 +132,11 @@ int BM_bvector_set_range(BM_BVHANDLE h,
                          unsigned int left,
                          unsigned int right,
                          int          value);
+    
+/* invert all bits in the bit vector
+*/
+int BM_bvector_invert(BM_BVHANDLE h);
+    
 
 
 /* set all bits to 0 and (optionally) free unused memory
@@ -153,6 +168,11 @@ int BM_bvector_count_range(BM_BVHANDLE   h,
                            unsigned int  left,
                            unsigned int  right,
                            unsigned int* pcount);
+
+/* check if there are any bits set 
+   pval - return non-zero value if any bits are ON
+*/
+int BM_bvector_any(BM_BVHANDLE h, int* pval);
 
 
 #ifdef __cplusplus

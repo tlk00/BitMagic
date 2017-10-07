@@ -110,6 +110,78 @@ int ResizeTest()
     return res;
 }
 
+static
+int ConstructionCopyMoveTest()
+{
+    int res = 0;
+    BM_BVHANDLE bmh1 = 0;
+    BM_BVHANDLE bmh2 = 0;
+    BM_BVHANDLE bmh3 = 0;
+    unsigned int count1, count2, count3;
+    
+    res = BM_bvector_construct(&bmh1, 0);
+    BMERR_CHECK(res, "BM_bvector_construct()");
+    res = BM_bvector_construct(&bmh2, 0);
+    BMERR_CHECK_GOTO(res, "BM_bvector_construct()", free_mem);
+    res = BM_bvector_construct(&bmh3, 0);
+    BMERR_CHECK_GOTO(res, "BM_bvector_construct()", free_mem);
+    
+    
+    
+    res = BM_bvector_set_bit(bmh1, 10, BM_TRUE);
+    BMERR_CHECK_GOTO(res, "BM_bvector_set_bit()", free_mem);
+
+    res = BM_bvector_set_bit(bmh2, 100, BM_TRUE);
+    BMERR_CHECK_GOTO(res, "BM_bvector_set_bit()", free_mem);
+    res = BM_bvector_set_bit(bmh2, 101, BM_TRUE);
+    BMERR_CHECK_GOTO(res, "BM_bvector_set_bit()", free_mem);
+    
+    
+    res = BM_bvector_swap(bmh1, bmh2);
+    BMERR_CHECK_GOTO(res, "BM_bvector_swap()", free_mem);
+    
+    res = BM_bvector_count(bmh1, &count1);
+    BMERR_CHECK_GOTO(res, "BM_bvector_count()", free_mem);
+    if (count1 != 2)
+    {
+        printf("1. incorrrect count %i \n", count1);
+        return 1;
+    }
+    res = BM_bvector_count(bmh2, &count2);
+    BMERR_CHECK_GOTO(res, "BM_bvector_count()", free_mem);
+    if (count2 != 1)
+    {
+        printf("2. incorrrect count %i \n", count2);
+        return 1;
+    }
+    
+    res = BM_bvector_swap(bmh1, bmh3);
+    BMERR_CHECK_GOTO(res, "BM_bvector_swap()", free_mem);
+
+    res = BM_bvector_count(bmh3, &count3);
+    BMERR_CHECK_GOTO(res, "BM_bvector_count()", free_mem);
+    if (count3 != 2)
+    {
+        printf("3. incorrrect count %i \n", count3);
+        return 1;
+    }
+    res = BM_bvector_count(bmh1, &count1);
+    BMERR_CHECK_GOTO(res, "BM_bvector_count()", free_mem);
+    if (count1 != 0)
+    {
+        printf("4. incorrrect count %i \n", count1);
+        return 1;
+    }
+    
+
+    free_mem:
+        res = BM_bvector_free(bmh1);
+        res = BM_bvector_free(bmh2);
+        res = BM_bvector_free(bmh3);
+
+    return res;
+}
+
 
 static
 int SetGetTest()
@@ -122,8 +194,25 @@ int SetGetTest()
     res = BM_bvector_construct(&bmh, 200);
     BMERR_CHECK(res, "BM_bvector_construct()");
     
+    res = BM_bvector_any(bmh, &val);
+    BMERR_CHECK_GOTO(res, "BM_bvector_any()", free_mem);
+    if (val)
+    {
+        printf("bvector any() incorrect value \n");
+        return 1;
+    }
+    
     res = BM_bvector_set_bit(bmh, 10, BM_TRUE);
     BMERR_CHECK_GOTO(res, "BM_bvector_set_bit()", free_mem);
+    
+    res = BM_bvector_any(bmh, &val);
+    BMERR_CHECK_GOTO(res, "BM_bvector_any()", free_mem);
+    if (val==0)
+    {
+        printf("bvector any() incorrect value \n");
+        return 1;
+    }
+    
     
     res = BM_bvector_get_bit(bmh, 10, &val);
     BMERR_CHECK_GOTO(res, "BM_bvector_get_bit()", free_mem);
@@ -140,6 +229,20 @@ int SetGetTest()
         printf("bvector get_bit incorrect value \n");
         return 1;
     }
+    
+    res = BM_bvector_flip_bit(bmh, 0);
+    BMERR_CHECK_GOTO(res, "BM_bvector_flip_bit()", free_mem);
+
+    res = BM_bvector_get_bit(bmh, 0, &val);
+    BMERR_CHECK_GOTO(res, "BM_bvector_get_bit()", free_mem);
+    if (val == 0)
+    {
+        printf("bvector get_bit incorrect value \n");
+        return 1;
+    }
+    res = BM_bvector_flip_bit(bmh, 0);
+    BMERR_CHECK_GOTO(res, "BM_bvector_flip_bit()", free_mem);
+    
     
     res = BM_bvector_count(bmh, &count);
     BMERR_CHECK_GOTO(res, "BM_bvector_count()", free_mem);
@@ -268,6 +371,28 @@ int RangeTest()
         printf("incorrrect count %i \n", count);
         return res;
     }
+
+    res = BM_bvector_invert(bmh);
+    BMERR_CHECK_GOTO(res, "BM_bvector_invert()", free_mem);
+    
+    res = BM_bvector_count(bmh, &count);
+    BMERR_CHECK_GOTO(res, "BM_bvector_count()", free_mem);
+    if (count == 0)
+    {
+        printf("incorrrect count %i \n", count);
+        return res;
+    }
+    res = BM_bvector_invert(bmh);
+    BMERR_CHECK_GOTO(res, "BM_bvector_invert()", free_mem);
+    
+    res = BM_bvector_count(bmh, &count);
+    BMERR_CHECK_GOTO(res, "BM_bvector_count()", free_mem);
+    if (count != 0)
+    {
+        printf("incorrrect count %i \n", count);
+        return res;
+    }
+    
     
 
     free_mem:
@@ -315,6 +440,16 @@ int main(void)
         return res;
     }
     printf("\n---------------------------------- SetGetTest OK\n");
+    
+    res = ConstructionCopyMoveTest();
+    if (res != 0)
+    {
+        printf("\nConstructionCopyMoveTest failed!\n");
+        return res;
+    }
+    
+    printf("\n---------------------------------- ConstructionCopyMoveTest OK\n");
+    
     
     res = RangeTest();
     if (res != 0)
