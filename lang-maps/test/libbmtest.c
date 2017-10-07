@@ -222,6 +222,61 @@ int SetGetTest()
     return res;
 }
 
+int RangeTest()
+{
+    int res = 0;
+    BM_BVHANDLE bmh = 0;
+    unsigned count;
+    
+    res = BM_bvector_construct(&bmh, 200);
+    BMERR_CHECK(res, "BM_bvector_construct()");
+    
+    res = BM_bvector_set_range(bmh, 10, 20, BM_TRUE);
+    BMERR_CHECK_GOTO(res, "BM_bvector_set_range()", free_mem);
+
+    res = BM_bvector_count(bmh, &count);
+    BMERR_CHECK_GOTO(res, "BM_bvector_count()", free_mem);
+    if (count != 11)
+    {
+        printf("incorrrect count %i \n", count);
+        return res;
+    }
+    
+    res = BM_bvector_count_range(bmh, 10, 20, &count);
+    BMERR_CHECK_GOTO(res, "BM_bvector_count_range()", free_mem);
+    if (count != 11)
+    {
+        printf("incorrrect count_range %i \n", count);
+        return res;
+    }
+    
+    res = BM_bvector_count_range(bmh, 0, 9, &count);
+    BMERR_CHECK_GOTO(res, "BM_bvector_count_range()", free_mem);
+    if (count != 0)
+    {
+        printf("incorrrect count_range %i \n", count);
+        return res;
+    }
+
+    res = BM_bvector_set_range(bmh, 10, 20, BM_FALSE);
+    BMERR_CHECK_GOTO(res, "BM_bvector_set_range()", free_mem);
+
+    res = BM_bvector_count(bmh, &count);
+    BMERR_CHECK_GOTO(res, "BM_bvector_count()", free_mem);
+    if (count != 0)
+    {
+        printf("incorrrect count %i \n", count);
+        return res;
+    }
+    
+
+    free_mem:
+        res = BM_bvector_free(bmh);
+        BMERR_CHECK(res, "bvector free failed");
+
+    return res;
+}
+
 
 int main(void)
 {
@@ -261,6 +316,13 @@ int main(void)
     }
     printf("\n---------------------------------- SetGetTest OK\n");
     
+    res = RangeTest();
+    if (res != 0)
+    {
+        printf("\nRangeTest failed!\n");
+        return res;
+    }
+    printf("\n---------------------------------- RangeTest OK\n");
     
     
     printf("\nlibbm unit test OK\n");
