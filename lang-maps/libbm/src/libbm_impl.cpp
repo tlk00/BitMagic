@@ -221,6 +221,33 @@ int BM_bvector_set(BM_BVHANDLE h)
 	ETRY;
 	return BM_OK;
 }
+
+// -----------------------------------------------------------------
+
+int BM_bvector_set_range(BM_BVHANDLE h,
+                         unsigned int left,
+                         unsigned int right,
+                         int          value)
+{
+	if (!h)
+		return BM_ERR_BADARG;
+    if (left > right)
+		return BM_ERR_BADARG;
+    
+	TRY
+	{
+        TBM_bvector* bv = (TBM_bvector*)h;
+        bv->set_range(left, right, value);
+	}
+	CATCH (BM_ERR_BADALLOC)
+	{
+		return BM_ERR_BADALLOC;
+	}
+	ETRY;
+	return BM_OK;
+}
+
+
 // -----------------------------------------------------------------
 
 int BM_bvector_clear(BM_BVHANDLE h, int free_mem)
@@ -281,4 +308,31 @@ int BM_bvector_count(BM_BVHANDLE h, unsigned int* pcount)
 }
 
 // -----------------------------------------------------------------
+
+
+int BM_bvector_count_range(BM_BVHANDLE h,
+                           unsigned int  left,
+                           unsigned int  right,
+                           unsigned int* pcount)
+{
+	if (!h || !pcount)
+		return BM_ERR_BADARG;
+    if (left > right)
+		return BM_ERR_BADARG;
+    
+	TRY
+	{
+        const TBM_bvector* bv = (TBM_bvector*)h;
+        *pcount = bv->count_range(left, right);
+	}
+	CATCH (BM_ERR_BADALLOC)
+	{
+		return BM_ERR_BADALLOC;
+	}
+	ETRY;
+	return BM_OK;
+}
+
+// -----------------------------------------------------------------
+
 

@@ -144,6 +144,15 @@ int BM_bvector_get_bit(BM_BVHANDLE h, unsigned int i, int* pval);
 */
 int BM_bvector_count(BM_BVHANDLE h, unsigned int* pcount);
 
+/* range bitcount
+   left  - interval start
+   right - interval end (closed interval)
+   pcount - return number of ON bits in the vector
+*/
+int BM_bvector_count_range(BM_BVHANDLE   h,
+                           unsigned int  left,
+                           unsigned int  right,
+                           unsigned int* pcount);
 
 
 #ifdef __cplusplus
