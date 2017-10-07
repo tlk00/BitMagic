@@ -3,7 +3,17 @@
 
 
 
+int check_report_error(int res, const char* msg)
+{
+    if (res != BM_OK)
+    {
+        printf("Error: %s. err_code=%i \'%s\'\n", msg, res, BM_error_msg(res));
+    }
+    return res;
+}
 
+#define BMERR_CHECK(x, y) if (check_report_error(x, y) != 0) return x;
+#define BMERR_CHECK_GOTO(x, y, z) if (check_report_error(x, y) != 0) goto z;
 
 static
 int InitTest()
@@ -11,22 +21,16 @@ int InitTest()
     int res = 0;
     const char* c;
     int major, minor, patch;
-    
     const char* msg;
     
+    
+    
     res = BM_init(0);
-    if (res != BM_OK)
-    {
-        printf("BitMagic initialization failed \n");
-        return 1;
-    }
+    BMERR_CHECK(res, "BM_init()");
+    
     
     c = BM_version(&major, &minor, &patch);
-    if (!c)
-    {
-        printf("BM_version() failed \n");
-        return 1;
-    }
+    BMERR_CHECK(res, "BM_version()");
     
     msg = BM_error_msg(BM_ERR_BADARG);
     if (!msg)
@@ -49,20 +53,13 @@ int ConstructionTest()
     int res = 0;
     BM_BVHANDLE bmh = 0;
     
-    res = BM_bvector_construct(&bmh, 200);
-    if (res != BM_OK)
-    {
-        printf("bvector construction error \n");
-        return res;
-    }
-    
+    res = BM_bvector_construct(&bmh, 0);
+    BMERR_CHECK(res, "BM_bvector_construct()");
+
     res = BM_bvector_free(bmh);
-    if (res != BM_OK)
-    {
-        printf("bvector free error \n");
-        return res;
-    }
-    return 0;
+    BMERR_CHECK(res, "BM_bvector_free()");
+
+    return res;
 }
 
 static
@@ -75,51 +72,33 @@ int ResizeTest()
     unsigned int size;
     
     res = BM_bvector_construct(&bmh, size1);
-    if (res != BM_OK)
-    {
-        printf("bvector construction error \n");
-        return res;
-    }
+    BMERR_CHECK(res, "BM_bvector_construct()");
+    
     
     res = BM_bvector_get_size(bmh, &size);
-    if (res != BM_OK)
-    {
-        printf("bvector get size error %s\n", BM_error_msg(res));
-        return res;
-    }
+    BMERR_CHECK_GOTO(res, "BM_bvector_get_size()", free_mem);
     if (size != size1)
     {
-        printf("bvector get size failed %i\n", size);
+        printf("get size test failed %i\n", size);
+        return 1;
     }
     
     res = BM_bvector_set_size(bmh, size2);
-    if (res != BM_OK)
-    {
-        printf("bvector set size error %s\n", BM_error_msg(res));
-        return res;
-    }
+    BMERR_CHECK_GOTO(res, "BM_bvector_get_size", free_mem);
     
     res = BM_bvector_get_size(bmh, &size);
-    if (res != BM_OK)
-    {
-        printf("bvector get size error %s\n", BM_error_msg(res));
-        return res;
-    }
+    BMERR_CHECK_GOTO(res, "BM_bvector_get_size()", free_mem);
     if (size != size2)
     {
         printf("bvector get size failed %i\n", size);
+        return 1;
     }
     
     
-    
-    
-    res = BM_bvector_free(bmh);
-    if (res != BM_OK)
-    {
-        printf("bvector free error \n");
-        return res;
-    }
-    return 0;
+    free_mem:
+        res = BM_bvector_free(bmh);
+        BMERR_CHECK(res, "BM_bvector_free()");
+    return res;
 }
 
 
@@ -132,25 +111,13 @@ int SetGetTest()
     unsigned int count;
     
     res = BM_bvector_construct(&bmh, 200);
-    if (res != BM_OK)
-    {
-        printf("bvector construction error \n");
-        return res;
-    }
+    BMERR_CHECK(res, "BM_bvector_construct()");
     
     res = BM_bvector_set_bit(bmh, 10, BM_TRUE);
-    if (res != BM_OK)
-    {
-        printf("bvector set_bit error \n");
-        return res;
-    }
+    BMERR_CHECK_GOTO(res, "BM_bvector_set_bit()", free_mem);
     
     res = BM_bvector_get_bit(bmh, 10, &val);
-    if (res != BM_OK)
-    {
-        printf("bvector get_bit error \n");
-        return res;
-    }
+    BMERR_CHECK_GOTO(res, "BM_bvector_get_bit()", free_mem);
     if (!val)
     {
         printf("bvector get_bit incorrect value \n");
@@ -158,11 +125,7 @@ int SetGetTest()
     }
 
     res = BM_bvector_get_bit(bmh, 0, &val);
-    if (res != BM_OK)
-    {
-        printf("bvector get_bit error \n");
-        return res;
-    }
+    BMERR_CHECK_GOTO(res, "BM_bvector_get_bit()", free_mem);
     if (val)
     {
         printf("bvector get_bit incorrect value \n");
@@ -170,11 +133,7 @@ int SetGetTest()
     }
     
     res = BM_bvector_count(bmh, &count);
-    if (res != BM_OK)
-    {
-        printf("bvector count error \n");
-        return res;
-    }
+    BMERR_CHECK_GOTO(res, "BM_bvector_count()", free_mem);
     if (count != 1)
     {
         printf("incorrrect count %i \n", count);
@@ -182,28 +141,17 @@ int SetGetTest()
     }
     
     res = BM_bvector_set_bit(bmh, 10, BM_FALSE);
-    if (res != BM_OK)
-    {
-        printf("bvector set_bit error \n");
-        return res;
-    }
+    BMERR_CHECK_GOTO(res, "BM_bvector_set_bit()", free_mem);
+    
     res = BM_bvector_get_bit(bmh, 0, &val);
-    if (res != BM_OK)
-    {
-        printf("bvector get_bit error \n");
-        return res;
-    }
+    BMERR_CHECK_GOTO(res, "BM_bvector_get_bit()", free_mem);    
     if (val != BM_FALSE)
     {
         printf("bvector get_bit incorrect value %i\n", val);
         return 1;
     }
     res = BM_bvector_count(bmh, &count);
-    if (res != BM_OK)
-    {
-        printf("bvector count error \n");
-        return res;
-    }
+    BMERR_CHECK_GOTO(res, "BM_bvector_count()", free_mem);
     if (count != 0)
     {
         printf("incorrrect count %i \n", count);
@@ -213,34 +161,21 @@ int SetGetTest()
     {
         int change;
         res = BM_bvector_set_bit_conditional(bmh, 0, BM_TRUE, BM_FALSE, &change);
-        if (res != BM_OK)
-        {
-            printf("bvector set_bit error \n");
-            return res;
-        }
-        
+        BMERR_CHECK_GOTO(res, "BM_bvector_set_bit_conditional()", free_mem);
         if (!change)
         {
             printf("bvector set_bit_conditional error \n");
             return 10;
         }
         res = BM_bvector_count(bmh, &count);
-        if (res != BM_OK)
-        {
-            printf("bvector count error \n");
-            return res;
-        }
+        BMERR_CHECK_GOTO(res, "BM_bvector_count()", free_mem);
         if (count != 1)
         {
             printf("incorrrect count %i \n", count);
             return res;
         }
         res = BM_bvector_set_bit_conditional(bmh, 0, BM_TRUE, BM_FALSE, &change);
-        if (res != BM_OK)
-        {
-            printf("bvector set_bit error \n");
-            return res;
-        }
+        BMERR_CHECK_GOTO(res, "BM_bvector_set_bit_conditional()", free_mem);
         if (change)
         {
             printf("bvector set_bit_conditional error \n");
@@ -249,34 +184,20 @@ int SetGetTest()
     }
     
     res = BM_bvector_set(bmh);
-    if (res != BM_OK)
-    {
-        printf("bvector set error \n");
-        return res;
-    }
+    BMERR_CHECK_GOTO(res, "BM_bvector_set()", free_mem);
+
     res = BM_bvector_count(bmh, &count);
-    if (res != BM_OK)
-    {
-        printf("bvector count error \n");
-        return res;
-    }
+    BMERR_CHECK_GOTO(res, "BM_bvector_count()", free_mem);
     if (count == 0)
     {
         printf("incorrrect count %i \n", count);
         return res;
     }
     res = BM_bvector_clear(bmh, BM_TRUE);
-    if (res != BM_OK)
-    {
-        printf("bvector clear error \n");
-        return res;
-    }
+    BMERR_CHECK_GOTO(res, "BM_bvector_clear()", free_mem);
+
     res = BM_bvector_count(bmh, &count);
-    if (res != BM_OK)
-    {
-        printf("bvector count error \n");
-        return res;
-    }
+    BMERR_CHECK_GOTO(res, "BM_bvector_count()", free_mem);
     if (count != 0)
     {
         printf("incorrrect count %i \n", count);
@@ -285,16 +206,11 @@ int SetGetTest()
     
     
     
-    
-    
-    res = BM_bvector_free(bmh);
-    if (res != BM_OK)
-    {
-        printf("bvector free error \n");
-        return res;
-    }
-    return 0;
+    free_mem:
+        res = BM_bvector_free(bmh);
+        BMERR_CHECK(res, "bvector free failed");
 
+    return res;
 }
 
 
