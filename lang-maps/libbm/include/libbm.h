@@ -60,6 +60,12 @@ const char* BM_error_msg(int errcode);
 */
 int BM_bvector_construct(BM_BVHANDLE* h, unsigned int bv_max);
 
+/* construct bvector handle as a copy
+   hfrom - another handle to copy from
+*/
+int BM_bvector_construct_copy(BM_BVHANDLE* h, BM_BVHANDLE hfrom);
+
+
 /* destroy bvector handle */
 int BM_bvector_free(BM_BVHANDLE h);
 

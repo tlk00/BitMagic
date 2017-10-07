@@ -43,6 +43,8 @@ const char* BM_error_msg(int errcode)
 
 int BM_bvector_construct(BM_BVHANDLE* h, unsigned int bv_max)
 {
+    if (h == 0)
+        return BM_ERR_BADARG;
 	TRY
 	{
 		void* mem = ::malloc(sizeof(TBM_bvector));
@@ -71,6 +73,38 @@ int BM_bvector_construct(BM_BVHANDLE* h, unsigned int bv_max)
 
 	return BM_OK;
 }
+
+// -----------------------------------------------------------------
+
+int BM_bvector_construct_copy(BM_BVHANDLE* h, BM_BVHANDLE hfrom)
+{
+    if (h == 0 || !hfrom)
+        return BM_ERR_BADARG;
+	TRY
+	{
+		void* mem = ::malloc(sizeof(TBM_bvector));
+		if (mem == 0)
+		{
+			*h = 0;
+			return BM_ERR_BADALLOC;
+		}
+        
+        const TBM_bvector* bv_from = (TBM_bvector*)hfrom;
+        
+		// placement new just to call the copy constructor
+		TBM_bvector* bv = new(mem) TBM_bvector(*bv_from);
+		*h = bv;
+	}
+	CATCH (BM_ERR_BADALLOC)
+	{
+		*h = 0;
+		return BM_ERR_BADALLOC;
+	}
+	ETRY;
+
+	return BM_OK;
+}
+
 
 // -----------------------------------------------------------------
 
