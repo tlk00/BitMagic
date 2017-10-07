@@ -41,6 +41,22 @@ JNIEXPORT void JNICALL Java_io_bitmagic_BVector0_dispose0
 
 /*
  * Class:     io_bitmagic_BVector0
+ * Method:    version0
+ * Signature: ()Ljava/lang/String;
+ */
+JNIEXPORT jstring JNICALL Java_io_bitmagic_BVector0_version0
+  (JNIEnv *, jobject);
+
+/*
+ * Class:     io_bitmagic_BVector0
+ * Method:    copyright0
+ * Signature: ()Ljava/lang/String;
+ */
+JNIEXPORT jstring JNICALL Java_io_bitmagic_BVector0_copyright0
+  (JNIEnv *, jobject);
+
+/*
+ * Class:     io_bitmagic_BVector0
  * Method:    set0
  * Signature: (JJZ)V
  */

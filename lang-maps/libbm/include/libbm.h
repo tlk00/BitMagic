@@ -8,6 +8,13 @@
 #define BM_ERR_BADARG (2)
 #define BM_ERR_RANGE (3)
 
+/*
+    error codes and messages
+*/
+#define BM_OK_MSG           "BM-00: All correct"
+#define BM_ERR_BADALLOC_MSG "BM-01: Allocation error"
+#define BM_ERR_BADARG_MSG   "BM-02: Invalid or missing function argument"
+
 
 /* bit-vector handle */
 #define BM_BVHANDLE void*
