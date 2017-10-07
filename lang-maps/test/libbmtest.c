@@ -66,6 +66,64 @@ int ConstructionTest()
 }
 
 static
+int ResizeTest()
+{
+    int res = 0;
+    BM_BVHANDLE bmh = 0;
+    unsigned int size1 = 100000;
+    unsigned int size2 = 100000;
+    unsigned int size;
+    
+    res = BM_bvector_construct(&bmh, size1);
+    if (res != BM_OK)
+    {
+        printf("bvector construction error \n");
+        return res;
+    }
+    
+    res = BM_bvector_get_size(bmh, &size);
+    if (res != BM_OK)
+    {
+        printf("bvector get size error %s\n", BM_error_msg(res));
+        return res;
+    }
+    if (size != size1)
+    {
+        printf("bvector get size failed %i\n", size);
+    }
+    
+    res = BM_bvector_set_size(bmh, size2);
+    if (res != BM_OK)
+    {
+        printf("bvector set size error %s\n", BM_error_msg(res));
+        return res;
+    }
+    
+    res = BM_bvector_get_size(bmh, &size);
+    if (res != BM_OK)
+    {
+        printf("bvector get size error %s\n", BM_error_msg(res));
+        return res;
+    }
+    if (size != size2)
+    {
+        printf("bvector get size failed %i\n", size);
+    }
+    
+    
+    
+    
+    res = BM_bvector_free(bmh);
+    if (res != BM_OK)
+    {
+        printf("bvector free error \n");
+        return res;
+    }
+    return 0;
+}
+
+
+static
 int SetGetTest()
 {
     int res = 0;
@@ -259,7 +317,16 @@ int main(void)
         printf("\nConstructionTest failed!\n");
         return res;
     }
+    
     printf("\n---------------------------------- ConstructionTest OK\n");
+    
+    res = ResizeTest();
+    if (res != 0)
+    {
+        printf("\nResizeTest failed!\n");
+        return res;
+    }
+    printf("\n---------------------------------- ResizeTest OK\n");
     
     res = SetGetTest();
     if (res != 0)

@@ -75,9 +75,9 @@ int BM_bvector_get_capacity(BM_BVHANDLE h, unsigned int* pcap);
 
 
 /* resize bit vector
-   psize - return size the bit vector
+   new_size - new requested size 
 */
-int BM_bvector_resize(BM_BVHANDLE h, unsigned int new_size);
+int BM_bvector_set_size(BM_BVHANDLE h, unsigned int new_size);
 
 
 

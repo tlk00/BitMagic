@@ -133,7 +133,7 @@ int BM_bvector_get_capacity(BM_BVHANDLE h, unsigned int* pcap)
 // -----------------------------------------------------------------
 
 
-int BM_bvector_resize(BM_BVHANDLE h, unsigned int new_size)
+int BM_bvector_set_size(BM_BVHANDLE h, unsigned int new_size)
 {
 	if (!h)
 		return BM_ERR_BADARG;
