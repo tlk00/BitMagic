@@ -1,11 +1,14 @@
 
+// -----------------------------------------------------------------
 
 int BM_init(void*)
 {
 	return BM_OK;
 }
 
-const char* BM_version(unsigned* major, unsigned* minor, unsigned* patch)
+// -----------------------------------------------------------------
+
+const char* BM_version(int* major, int* minor, int* patch)
 {
     if (major)
         *major = bm::_copyright<true>::_v[0];
@@ -17,6 +20,8 @@ const char* BM_version(unsigned* major, unsigned* minor, unsigned* patch)
     return bm::_copyright<true>::_p;
 }
 
+// -----------------------------------------------------------------
+
 const char* BM_error_msg(int errcode)
 {
     switch (errcode)
@@ -27,10 +32,13 @@ const char* BM_error_msg(int errcode)
         return "BM-01: Allocation error.";
     case BM_ERR_BADARG:
         return "BM-02: Invalid or missing function argument.";
+    case BM_ERR_RANGE:
+        return "BM-03: Incorrect range or index.";
     }
-    return 0;
+    return "BM-XX: Unknown error.";
 }
 
+// -----------------------------------------------------------------
 
 
 int BM_bvector_construct(BM_BVHANDLE* h, unsigned int bv_max)
@@ -64,6 +72,7 @@ int BM_bvector_construct(BM_BVHANDLE* h, unsigned int bv_max)
 	return BM_OK;
 }
 
+// -----------------------------------------------------------------
 
 int BM_bvector_free(BM_BVHANDLE h)
 {
@@ -76,7 +85,9 @@ int BM_bvector_free(BM_BVHANDLE h)
 	return BM_OK;
 }
 
-int BM_bvector_set_bit(BM_BVHANDLE h, unsigned int i, unsigned int val)
+// -----------------------------------------------------------------
+
+int BM_bvector_set_bit(BM_BVHANDLE h, unsigned int i, int val)
 {
 	if (!h)
 		return BM_ERR_BADARG;
@@ -93,7 +104,81 @@ int BM_bvector_set_bit(BM_BVHANDLE h, unsigned int i, unsigned int val)
 	return BM_OK;
 }
 
-int BM_bvector_get_bit(BM_BVHANDLE h, unsigned int i, unsigned int* pval)
+// -----------------------------------------------------------------
+
+int BM_bvector_set_bit_conditional(BM_BVHANDLE  h,
+                                   unsigned int i,
+                                   int          val,
+                                   int          condition,
+                                   int*         pchanged)
+{
+    unsigned int sz;
+	if (!h)
+		return BM_ERR_BADARG;
+    
+	TRY
+	{
+        TBM_bvector* bv = (TBM_bvector*)h;
+        sz = bv->size();
+        if (i >= sz)
+            return BM_ERR_RANGE;
+        
+        bool b_changed = bv->set_bit_conditional(i, val, condition);
+        if (pchanged)
+        {
+            *pchanged = b_changed;
+        }
+	}
+	CATCH (BM_ERR_BADALLOC)
+	{
+		return BM_ERR_BADALLOC;
+	}
+	ETRY;
+	return BM_OK;
+}
+
+// -----------------------------------------------------------------
+
+int BM_bvector_set(BM_BVHANDLE h)
+{
+	if (!h)
+		return BM_ERR_BADARG;
+	TRY
+	{
+        TBM_bvector* bv = (TBM_bvector*)h;
+        bv->set();
+	}
+	CATCH (BM_ERR_BADALLOC)
+	{
+		return BM_ERR_BADALLOC;
+	}
+	ETRY;
+	return BM_OK;
+}
+// -----------------------------------------------------------------
+
+int BM_bvector_clear(BM_BVHANDLE h, int free_mem)
+{
+	if (!h)
+		return BM_ERR_BADARG;
+	TRY
+	{
+        TBM_bvector* bv = (TBM_bvector*)h;
+        bv->clear(free_mem);
+	}
+	CATCH (BM_ERR_BADALLOC)
+	{
+		return BM_ERR_BADALLOC;
+	}
+	ETRY;
+	return BM_OK;
+}
+
+
+
+// -----------------------------------------------------------------
+
+int BM_bvector_get_bit(BM_BVHANDLE h, unsigned int i,  int* pval)
 {
 	if (!h || !pval)
 		return BM_ERR_BADARG;
@@ -110,6 +195,7 @@ int BM_bvector_get_bit(BM_BVHANDLE h, unsigned int i, unsigned int* pval)
 	return BM_OK;
 }
 
+// -----------------------------------------------------------------
 
 int BM_bvector_count(BM_BVHANDLE h, unsigned int* pcount)
 {
@@ -128,4 +214,5 @@ int BM_bvector_count(BM_BVHANDLE h, unsigned int* pcount)
 	return BM_OK;
 }
 
+// -----------------------------------------------------------------
 

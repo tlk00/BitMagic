@@ -6,8 +6,16 @@
 #define BM_OK (0)
 #define BM_ERR_BADALLOC (1)
 #define BM_ERR_BADARG (2)
+#define BM_ERR_RANGE (3)
 
+
+/* bit-vector handle */
 #define BM_BVHANDLE void*
+
+/* arguments codes and values */
+#define BM_TRUE 1
+#define BM_FALSE 0
+
 
 #ifdef __cplusplus
 extern "C" {
@@ -23,7 +31,7 @@ int BM_init(void*);
 /**
     return copyright info string and version information.
 */
-const char* BM_version(unsigned* major, unsigned* minor, unsigned* patch);
+const char* BM_version(int* major, int* minor, int* patch);
 
 /**
     return error message by code
@@ -31,7 +39,7 @@ const char* BM_version(unsigned* major, unsigned* minor, unsigned* patch);
 const char* BM_error_msg(int errcode);
 
 /* -------------------------------------------- */
-/* bvector functions                            */
+/* bvector functions to set bits                */
 /* -------------------------------------------- */
 
 /* construction and setters                     */
@@ -48,18 +56,53 @@ int BM_bvector_free(BM_BVHANDLE h);
    i - index of a bit to set
    val - value (0 | 1)
 */
-int BM_bvector_set_bit(BM_BVHANDLE h, unsigned int i, unsigned int val);
+int BM_bvector_set_bit(BM_BVHANDLE h, unsigned int i, int val);
 
 
+/* set bit only if current value equals the condition
+   i - index of a bit to set
+   val - value (0 | 1)
+   condition - expected current value of bit i
+   pchanged - optional return value, if bit was actually changed
+*/
+int BM_bvector_set_bit_conditional(BM_BVHANDLE  h,
+                                   unsigned int i,
+                                   int          val,
+                                   int          condition,
+                                   int*         pchanged);
 
+/* set all bits to 1
+*/
+int BM_bvector_set(BM_BVHANDLE h);
+
+
+/* Sets all bits in the specified closed interval [left,right]
+   This method DOES NOT resize vector.
+
+   left  - interval start
+   right - interval end (closed interval)
+   value - value to set interval in
+ 
+*/
+int BM_bvector_set_range(BM_BVHANDLE h,
+                         unsigned int left,
+                         unsigned int right,
+                         int          value);
+
+
+/* set all bits to 0 and (optionally) free unused memory
+    free_mem - flag to release unused memory
+*/
+int BM_bvector_clear(BM_BVHANDLE h, int free_mem);
 
 
 /* -------------------------------------------- */
-/* read-only getters                            */
+/* bvector functions to read bits               */
+/* -------------------------------------------- */
 
 
 /* get bit value */
-int BM_bvector_get_bit(BM_BVHANDLE h, unsigned int i, unsigned int* pval);
+int BM_bvector_get_bit(BM_BVHANDLE h, unsigned int i, int* pval);
 
 
 /* bitcount
