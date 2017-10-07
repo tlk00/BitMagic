@@ -7,6 +7,13 @@
 #define BM_ERR_BADALLOC (1)
 #define BM_ERR_BADARG (2)
 
+/*
+    error codes and messages
+*/
+#define BM_OK_MSG           "BM-00: All correct"
+#define BM_ERR_BADALLOC_MSG "BM-01: Allocation error"
+#define BM_ERR_BADARG_MSG   "BM-02: Invalid or missing function argument"
+
 #define BM_BVHANDLE void*
 
 #ifdef __cplusplus

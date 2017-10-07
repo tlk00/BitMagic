@@ -28,7 +28,7 @@ set(CMAKE_C_FLAGS   "${CMAKE_C_FLAGS} ${flags}")
 set(CMAKE_CXX_FLAGS "${CMAKE_CXX_FLAGS} ${flags}")
 
 
-add_library(bmjni SHARED "src/libbmjni.cpp" "src/bmjni.cpp")
+add_library(bmjni SHARED "src/libbmjni.cpp" "src/bmjni.c")
 
 
 
