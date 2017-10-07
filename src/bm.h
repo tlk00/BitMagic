@@ -1079,7 +1079,7 @@ public:
     }
 
     /*!
-       \brief Sets bit n only if current value is equal to the condition
+       \brief Sets bit n only if current value equals the condition
        \param n - index of the bit to be set. 
        \param val - new bit value
        \param condition - expected current value
@@ -1106,8 +1106,6 @@ public:
         set_bit(n, val);
         return *this;
     }
-
-
 
     /*!
        \brief Sets every bit in this bitset to 1.
