@@ -27,15 +27,15 @@ const char* BM_error_msg(int errcode)
     switch (errcode)
     {
     case BM_OK:
-        return "BM-00: All correct.";
+        return BM_OK_MSG;
     case BM_ERR_BADALLOC:
-        return "BM-01: Allocation error.";
+        return BM_ERR_BADALLOC_MSG;
     case BM_ERR_BADARG:
-        return "BM-02: Invalid or missing function argument.";
+        return BM_ERR_BADARG_MSG;
     case BM_ERR_RANGE:
-        return "BM-03: Incorrect range or index.";
+        return BM_ERR_RANGE_MSG;
     }
-    return "BM-XX: Unknown error.";
+    return BM_UNK_MSG;
 }
 
 // -----------------------------------------------------------------
@@ -84,6 +84,72 @@ int BM_bvector_free(BM_BVHANDLE h)
 
 	return BM_OK;
 }
+
+// -----------------------------------------------------------------
+
+
+int BM_bvector_get_size(BM_BVHANDLE h, unsigned int* psize)
+{
+	if (!h)
+		return BM_ERR_BADARG;
+	TRY
+	{
+        const TBM_bvector* bv = (TBM_bvector*)h;
+        if (psize)
+        {
+            *psize = bv->size();
+        }
+	}
+	CATCH (BM_ERR_BADALLOC)
+	{
+		return BM_ERR_BADALLOC;
+	}
+	ETRY;
+	return BM_OK;
+}
+
+// -----------------------------------------------------------------
+
+int BM_bvector_get_capacity(BM_BVHANDLE h, unsigned int* pcap)
+{
+	if (!h)
+		return BM_ERR_BADARG;
+	TRY
+	{
+        const TBM_bvector* bv = (TBM_bvector*)h;
+        if (pcap)
+        {
+            *pcap = bv->capacity();
+        }
+	}
+	CATCH (BM_ERR_BADALLOC)
+	{
+		return BM_ERR_BADALLOC;
+	}
+	ETRY;
+	return BM_OK;
+}
+
+// -----------------------------------------------------------------
+
+
+int BM_bvector_resize(BM_BVHANDLE h, unsigned int new_size)
+{
+	if (!h)
+		return BM_ERR_BADARG;
+	TRY
+	{
+        TBM_bvector* bv = (TBM_bvector*)h;
+        bv->resize(new_size);
+	}
+	CATCH (BM_ERR_BADALLOC)
+	{
+		return BM_ERR_BADALLOC;
+	}
+	ETRY;
+	return BM_OK;
+}
+
 
 // -----------------------------------------------------------------
 

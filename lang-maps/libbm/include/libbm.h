@@ -14,6 +14,9 @@
 #define BM_OK_MSG           "BM-00: All correct"
 #define BM_ERR_BADALLOC_MSG "BM-01: Allocation error"
 #define BM_ERR_BADARG_MSG   "BM-02: Invalid or missing function argument"
+#define BM_ERR_RANGE_MSG    "BM-03: Incorrect range or index"
+
+#define BM_UNK_MSG          "BM-XX: Unknown error"
 
 
 /* bit-vector handle */
@@ -46,18 +49,42 @@ const char* BM_version(int* major, int* minor, int* patch);
 const char* BM_error_msg(int errcode);
 
 /* -------------------------------------------- */
-/* bvector functions to set bits                */
+/* bvector construction and sizing methods      */
 /* -------------------------------------------- */
 
 /* construction and setters                     */
 
 /* construct bvector handle 
    bv_max - maximum number of allowed bits (if 0 - allows maximum)
+   (it is recommened to set size to maximum always and do not use size params)
 */
 int BM_bvector_construct(BM_BVHANDLE* h, unsigned int bv_max);
 
 /* destroy bvector handle */
 int BM_bvector_free(BM_BVHANDLE h);
+
+/* get bit vector size
+   psize - return size the bit vector
+*/
+int BM_bvector_get_size(BM_BVHANDLE h, unsigned int* psize);
+
+/* get bit vector capacity
+   pcap - return caapacity the bit vector
+*/
+int BM_bvector_get_capacity(BM_BVHANDLE h, unsigned int* pcap);
+
+
+/* resize bit vector
+   psize - return size the bit vector
+*/
+int BM_bvector_resize(BM_BVHANDLE h, unsigned int new_size);
+
+
+
+/* -------------------------------------------- */
+/* bvector functions to set bits                */
+/* -------------------------------------------- */
+
 
 /* set bit 
    i - index of a bit to set
@@ -113,7 +140,7 @@ int BM_bvector_get_bit(BM_BVHANDLE h, unsigned int i, int* pval);
 
 
 /* bitcount
-   count - return number of ON bits in the vector
+   pcount - return number of ON bits in the vector
 */
 int BM_bvector_count(BM_BVHANDLE h, unsigned int* pcount);
 
