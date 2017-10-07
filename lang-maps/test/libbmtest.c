@@ -71,6 +71,7 @@ int ResizeTest()
     unsigned int size2 = 100000;
     unsigned int size;
     
+    
     res = BM_bvector_construct(&bmh, size1);
     BMERR_CHECK(res, "BM_bvector_construct()");
     
@@ -82,6 +83,14 @@ int ResizeTest()
         printf("get size test failed %i\n", size);
         return 1;
     }
+    /*
+    {
+    unsigned int capacity;
+    res = BM_bvector_get_capacity(bmh, &capacity);
+    BMERR_CHECK_GOTO(res, "BM_bvector_get_capacity()", free_mem);
+    printf("cap=%i", capacity);
+    }
+    */
     
     res = BM_bvector_set_size(bmh, size2);
     BMERR_CHECK_GOTO(res, "BM_bvector_get_size", free_mem);
@@ -144,7 +153,7 @@ int SetGetTest()
     BMERR_CHECK_GOTO(res, "BM_bvector_set_bit()", free_mem);
     
     res = BM_bvector_get_bit(bmh, 0, &val);
-    BMERR_CHECK_GOTO(res, "BM_bvector_get_bit()", free_mem);    
+    BMERR_CHECK_GOTO(res, "BM_bvector_get_bit()", free_mem);
     if (val != BM_FALSE)
     {
         printf("bvector get_bit incorrect value %i\n", val);
