@@ -253,6 +253,37 @@ int BM_bvector_calc_stat(BM_BVHANDLE h,
 */
 int BM_bvector_combine_operation(BM_BVHANDLE hdst, BM_BVHANDLE hsrc, int opcode);
     
+int BM_bvector_combine_AND(BM_BVHANDLE hdst, BM_BVHANDLE hsrc);
+int BM_bvector_combine_OR(BM_BVHANDLE hdst, BM_BVHANDLE hsrc);
+int BM_bvector_combine_SUB(BM_BVHANDLE hdst, BM_BVHANDLE hsrc);
+int BM_bvector_combine_XOR(BM_BVHANDLE hdst, BM_BVHANDLE hsrc);
+
+
+/* -------------------------------------------- */
+/* bvector serialization                        */
+/* -------------------------------------------- */
+
+/*  serialize bit vector
+    buf - buffer pointer 
+      (should be allocated using BM_bvector_statistics.max_serialize_mem)
+    buf_size - size of the buffer in bytes
+    pblob_size - size of the serialized BLOB
+*/
+int BM_bvector_serialize(BM_BVHANDLE h,
+                         char*       buf,
+                         size_t      buf_size,
+                         size_t*     pblob_size);
+    
+/*  deserialize bit vector
+    buf - buffer pointer 
+      (should be allocated using BM_bvector_statistics.max_serialize_mem)
+    buf_size - size of the buffer in bytes
+*/
+int BM_bvector_deserialize(BM_BVHANDLE   h,
+                           const char*   buf,
+                           size_t        buf_size);
+    
+
 
 
 #ifdef __cplusplus

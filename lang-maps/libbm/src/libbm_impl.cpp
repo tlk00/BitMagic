@@ -1,4 +1,6 @@
 
+#include "bmserial.h"
+
 // -----------------------------------------------------------------
 
 int BM_init(void*)
@@ -642,4 +644,80 @@ int BM_bvector_combine_operation(BM_BVHANDLE hdst, BM_BVHANDLE hsrc, int opcode)
 	ETRY;
 	return BM_OK;
 }
+
+
+int BM_bvector_combine_AND(BM_BVHANDLE hdst, BM_BVHANDLE hsrc)
+{
+    return BM_bvector_combine_operation(hdst, hsrc, 0);
+}
+
+int BM_bvector_combine_OR(BM_BVHANDLE hdst, BM_BVHANDLE hsrc)
+{
+    return BM_bvector_combine_operation(hdst, hsrc, 1);
+}
+
+int BM_bvector_combine_SUB(BM_BVHANDLE hdst, BM_BVHANDLE hsrc)
+{
+    return BM_bvector_combine_operation(hdst, hsrc, 2);
+}
+
+int BM_bvector_combine_XOR(BM_BVHANDLE hdst, BM_BVHANDLE hsrc)
+{
+    return BM_bvector_combine_operation(hdst, hsrc, 3);
+}
+
+// -----------------------------------------------------------------
+
+
+int BM_bvector_serialize(BM_BVHANDLE h,
+                         char*       buf,
+                         size_t      buf_size,
+                         size_t*     pblob_size)
+{
+	if (!h || !pblob_size)
+		return BM_ERR_BADARG;
+    
+	TRY
+	{
+        BM_DECLARE_TEMP_BLOCK(tb)
+    
+        const TBM_bvector* bv = (TBM_bvector*)h;
+        
+        bm::serializer<TBM_bvector> bvs(TBM_bvector::allocator_type(), tb);
+        bvs.set_compression_level(4);
+        
+        *pblob_size = bvs.serialize(*bv, (unsigned char*)buf, buf_size);
+	}
+	CATCH (BM_ERR_BADALLOC)
+	{
+		return BM_ERR_BADALLOC;
+	}
+	ETRY;
+	return BM_OK;
+}
+
+
+// -----------------------------------------------------------------
+
+
+int BM_bvector_deserialize(BM_BVHANDLE   h,
+                           const char*   buf,
+                           size_t        /*buf_size*/)
+{
+	if (!h)
+		return BM_ERR_BADARG;
+    
+	TRY
+	{
+        TBM_bvector* bv = (TBM_bvector*)h;
+        bm::deserialize(*bv, (const unsigned char*)buf);
+	}
+	CATCH (BM_ERR_BADALLOC)
+	{
+		return BM_ERR_BADALLOC;
+	}
+	ETRY;
+	return BM_OK;
+}
+
 
