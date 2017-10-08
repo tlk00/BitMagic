@@ -93,7 +93,7 @@ unsigned char* serialize_bvector(bm::serializer<bm::bvector<> >& bvs,
     unsigned char*  buf = new unsigned char[st.max_serialize_mem];
 
     // Serialization to memory.
-    unsigned len = bvs.serialize(bv, buf, 0);
+    unsigned len = bvs.serialize(bv, buf, st.max_serialize_mem);
 
 
     cout << "Serialized size:" << len << endl << endl;
