@@ -1340,8 +1340,11 @@ public:
 
     /*!
        \fn bm::id_t bvector::get_first() const
-       \brief Gets number of first bit which is ON.
-       \return Index of the first 1 bit.
+       \brief find first 1 bit in vector. 
+       Function may return 0 and this requires an extra check if bit 0 is 
+       actually set or bit-vector is empty
+     
+       \return Index of the first 1 bit, may return 0
        \sa get_next, extract_next
     */
     bm::id_t get_first() const { return check_or_next(0); }
