@@ -1,6 +1,8 @@
 #ifndef LIBBM_INCLUDED_H__
 #define LIBBM_INCLUDED_H__
 
+#include <stddef.h>
+
 /* Error codes */
 
 #define BM_OK (0)
@@ -30,6 +32,17 @@
 #ifdef __cplusplus
 extern "C" {
 #endif /* __cplusplus */
+
+/*  bit vector statistics used for serialization and memory management
+*/
+struct BM_bvector_statistics
+{
+    size_t bit_blocks;
+    size_t gap_blocks;
+    size_t max_serialize_mem;
+    size_t memory_used;
+};
+
 
 /* -------------------------------------------- */
 /* General purpose functions                    */
@@ -91,7 +104,7 @@ int BM_bvector_swap(BM_BVHANDLE h1, BM_BVHANDLE h2);
 
 
 /* -------------------------------------------- */
-/* bvector functions to set bits                */
+/* bvector functions to set and clear bits      */
 /* -------------------------------------------- */
 
 
@@ -150,6 +163,14 @@ int BM_bvector_invert(BM_BVHANDLE h);
 */
 int BM_bvector_clear(BM_BVHANDLE h, int free_mem);
 
+/* find 1 bit index in the vector and set it to 0
+
+   i - index of bit to search from
+   pnext - return index of the next 1 bit. 0 - means no more 1 bits.
+*/
+int BM_bvector_extract_next(BM_BVHANDLE h, unsigned int i, unsigned int* pnext);
+
+
 
 /* -------------------------------------------- */
 /* bvector functions to read bits               */
@@ -179,6 +200,59 @@ int BM_bvector_count_range(BM_BVHANDLE   h,
    pval - return non-zero value if any bits are ON
 */
 int BM_bvector_any(BM_BVHANDLE h, int* pval);
+
+/* find first 1 bit index in the vector
+
+   pi - return index of first bit 
+   found - return 0 if first bit not found (empty vector)
+*/
+int BM_bvector_get_first(BM_BVHANDLE h, unsigned int* pi, int* pfound);
+
+/* find 1 bit index in the vector
+
+   i - index of bit to search from
+   pnext - return index of the next 1 bit. 0 - means no more 1 bits.
+*/
+int BM_bvector_get_next(BM_BVHANDLE h, unsigned int i, unsigned int* pnext);
+
+
+
+/* -------------------------------------------- */
+/* bvector operations                           */
+/* -------------------------------------------- */
+
+/* Lexicographical comparison of two bit vectors
+   pres - returns -1 if h1 less than h2, 1 - greater, 0 - equal.
+*/
+int BM_bvector_compare(BM_BVHANDLE h1, BM_BVHANDLE h2, int* pres);
+
+
+
+/* Perform bit vector memory optimization
+   opt_mode - optimization level:
+    (0 - default, 1 - free empty blocks, 2 - free empty and full blocks, 3 - GAP compress)
+   pstat - optional post optimization statistics
+*/
+int BM_bvector_optimize(BM_BVHANDLE h,
+                        int opt_mode,
+                        struct BM_bvector_statistics* pstat);
+    
+/* Perform calculate bit vector statistics
+   pstat - bit vector statistics
+*/
+int BM_bvector_calc_stat(BM_BVHANDLE h,
+                         struct BM_bvector_statistics* pstat);
+
+/* perform logical operation on two bit vectors
+   hdst = hdst {OR/AND/XOR/SUB} hsrc
+   opcode - operation code 
+       AND - 0
+       OR  - 1
+       SUB - 2
+       XOR - 3
+*/
+int BM_bvector_combine_operation(BM_BVHANDLE hdst, BM_BVHANDLE hsrc, int opcode);
+    
 
 
 #ifdef __cplusplus

@@ -176,17 +176,28 @@ int ConstructionCopyMoveTest()
     {
         BM_BVHANDLE bmh4 = 0;
         unsigned count4;
+        int cmp;
         
         res = BM_bvector_construct_copy(&bmh4, bmh3);
         BMERR_CHECK_GOTO(res, "BM_bvector_construct_copy()", free_mem);
         res = BM_bvector_count(bmh4, &count4);
-        BMERR_CHECK_GOTO(res, "BM_bvector_count()", free_mem);
+        BMERR_CHECK_GOTO(res, "BM_bvector_count()", free_mem1);
         if (count4 != 2)
         {
             printf("5. incorrrect count %i \n", count4);
             res = BM_bvector_free(bmh4);
-            res = 1; goto free_mem;
+            res = 1; goto free_mem1;
         }
+        
+        res = BM_bvector_compare(bmh4, bmh3, &cmp);
+        BMERR_CHECK_GOTO(res, "BM_bvector_compare()", free_mem1);
+        if (cmp != 0)
+        {
+            printf("5. incorrrect compare result %i \n", cmp);
+            res = 1; goto free_mem1;
+        }
+        
+    free_mem1:
         res = BM_bvector_free(bmh4);
     }
     
@@ -407,6 +418,82 @@ int RangeTest()
     if (count != 0)
     {
         printf("incorrrect count %i \n", count);
+        res = 1; goto free_mem;
+    }
+    
+    
+
+    free_mem:
+        res = BM_bvector_free(bmh);
+        BMERR_CHECK(res, "bvector free failed");
+
+    return res;
+}
+
+
+int GetNextTest()
+{
+    int res = 0;
+    BM_BVHANDLE bmh = 0;
+    unsigned int idx;
+    int found;
+
+    res = BM_bvector_construct(&bmh, 0);
+    BMERR_CHECK(res, "BM_bvector_construct()");
+        
+                
+    res = BM_bvector_get_first(bmh, &idx, &found);
+    BMERR_CHECK_GOTO(res, "BM_bvector_get_first()", free_mem);
+    if (found || idx != 0)
+    {
+        printf("1. incorrrect get first found on an empty vector \n");
+        res = 1; goto free_mem;
+    }
+    
+    res = BM_bvector_set_bit(bmh, 0, BM_TRUE);
+    BMERR_CHECK_GOTO(res, "BM_bvector_set_bit()", free_mem);
+    
+    res = BM_bvector_get_first(bmh, &idx, &found);
+    BMERR_CHECK_GOTO(res, "BM_bvector_get_first()", free_mem);
+    if (!found || idx != 0)
+    {
+        printf("2. incorrrect get first %i\n", idx);
+        res = 1; goto free_mem;
+    }
+    
+    res = BM_bvector_get_next(bmh, idx, &idx);
+    BMERR_CHECK_GOTO(res, "BM_bvector_get_next()", free_mem);
+    if (idx != 0)
+    {
+        printf("4. incorrrect get next \n");
+        res = 1; goto free_mem;
+    }
+
+    
+    res = BM_bvector_set_range(bmh, 100000, 100002, BM_TRUE);
+    BMERR_CHECK_GOTO(res, "BM_bvector_set_range()", free_mem);
+
+    res = BM_bvector_get_next(bmh, idx, &idx);
+    BMERR_CHECK_GOTO(res, "BM_bvector_get_next()", free_mem);
+    if (idx != 100000)
+    {
+        printf("4. incorrrect get next \n");
+        res = 1; goto free_mem;
+    }
+    
+    res = BM_bvector_extract_next(bmh, 0, &idx);
+    BMERR_CHECK_GOTO(res, "BM_bvector_extract_next()", free_mem);
+    if (idx != 100000)
+    {
+        printf("5. incorrrect extract next \n");
+        res = 1; goto free_mem;
+    }
+    
+    res = BM_bvector_get_next(bmh, idx, &idx);
+    BMERR_CHECK_GOTO(res, "BM_bvector_get_next()", free_mem);
+    if (idx != 100001)
+    {
+        printf("6. incorrrect get next \n");
         res = 1; goto free_mem;
     }
     

@@ -446,4 +446,200 @@ int BM_bvector_count_range(BM_BVHANDLE h,
 
 // -----------------------------------------------------------------
 
+int BM_bvector_get_first(BM_BVHANDLE h, unsigned int* pi, int* pfound)
+{
+	if (!h || !pi || !pfound)
+		return BM_ERR_BADARG;
+    
+	TRY
+	{
+        const TBM_bvector* bv = (TBM_bvector*)h;
+        *pi = bv->get_first();
+        if (*pi == 0)
+        {
+            if (!(bv->test(0)))
+            {
+                *pfound = 0;
+                return BM_OK;
+            }
+        }
+        *pfound = 1;
+	}
+	CATCH (BM_ERR_BADALLOC)
+	{
+		return BM_ERR_BADALLOC;
+	}
+	ETRY;
+	return BM_OK;
+}
+
+// -----------------------------------------------------------------
+
+
+int BM_bvector_get_next(BM_BVHANDLE h, unsigned int i, unsigned int* pnext)
+{
+	if (!h || !pnext)
+		return BM_ERR_BADARG;
+    
+	TRY
+	{
+        const TBM_bvector* bv = (TBM_bvector*)h;
+        *pnext = bv->get_next(i);
+	}
+	CATCH (BM_ERR_BADALLOC)
+	{
+		return BM_ERR_BADALLOC;
+	}
+	ETRY;
+	return BM_OK;
+}
+
+// -----------------------------------------------------------------
+
+int BM_bvector_extract_next(BM_BVHANDLE h, unsigned int i, unsigned int* pnext)
+{
+	if (!h || !pnext)
+		return BM_ERR_BADARG;
+    
+	TRY
+	{
+        TBM_bvector* bv = (TBM_bvector*)h;
+        *pnext = bv->extract_next(i);
+	}
+	CATCH (BM_ERR_BADALLOC)
+	{
+		return BM_ERR_BADALLOC;
+	}
+	ETRY;
+	return BM_OK;
+}
+
+// -----------------------------------------------------------------
+
+
+int BM_bvector_compare(BM_BVHANDLE h1, BM_BVHANDLE h2, int* pres)
+{
+	if (!h1 || !h2 || !pres)
+		return BM_ERR_BADARG;
+    
+	TRY
+	{
+        const TBM_bvector* bv1 = (TBM_bvector*)h1;
+        const TBM_bvector* bv2 = (TBM_bvector*)h2;
+        
+        *pres = bv1->compare(*bv2);
+	}
+	CATCH (BM_ERR_BADALLOC)
+	{
+		return BM_ERR_BADALLOC;
+	}
+	ETRY;
+	return BM_OK;
+    
+}
+
+// -----------------------------------------------------------------
+
+
+int BM_bvector_optimize(BM_BVHANDLE            h,
+                        int                    opt_mode,
+                        struct BM_bvector_statistics* pstat)
+{
+	if (!h)
+		return BM_ERR_BADARG;
+    TBM_bvector::optmode omode = TBM_bvector::opt_compress;
+    TBM_bvector::statistics stat;
+    
+    switch (opt_mode)
+    {
+    case 1: omode = TBM_bvector::opt_free_0; break;
+    case 2: omode = TBM_bvector::opt_free_01; break;
+    }
+    
+	TRY
+	{
+        BM_DECLARE_TEMP_BLOCK(tb)
+    
+        TBM_bvector* bv = (TBM_bvector*)h;
+        bv->optimize(tb, omode, &stat);
+        
+        if (pstat)
+        {
+            pstat->bit_blocks = stat.bit_blocks;
+            pstat->gap_blocks = stat.gap_blocks;
+            pstat->max_serialize_mem = stat.max_serialize_mem;
+            pstat->memory_used = stat.memory_used;
+        }
+        
+	}
+	CATCH (BM_ERR_BADALLOC)
+	{
+		return BM_ERR_BADALLOC;
+	}
+	ETRY;
+	return BM_OK;
+    
+}
+
+// -----------------------------------------------------------------
+
+
+int BM_bvector_calc_stat(BM_BVHANDLE h,
+                         struct BM_bvector_statistics* pstat)
+{
+	if (!h || !pstat)
+		return BM_ERR_BADARG;
+    TBM_bvector::statistics stat;
+    
+	TRY
+	{
+        const TBM_bvector* bv = (TBM_bvector*)h;
+        bv->calc_stat(&stat);
+        
+        pstat->bit_blocks = stat.bit_blocks;
+        pstat->gap_blocks = stat.gap_blocks;
+        pstat->max_serialize_mem = stat.max_serialize_mem;
+        pstat->memory_used = stat.memory_used;
+	}
+	CATCH (BM_ERR_BADALLOC)
+	{
+		return BM_ERR_BADALLOC;
+	}
+	ETRY;
+	return BM_OK;
+}
+
+// -----------------------------------------------------------------
+
+
+int BM_bvector_combine_operation(BM_BVHANDLE hdst, BM_BVHANDLE hsrc, int opcode)
+{
+	if (!hdst || !hsrc)
+		return BM_ERR_BADARG;
+
+    bm::operation opc;
+    switch (opcode)
+    {
+    case 0: opc = bm::BM_AND; break;
+    case 1: opc = bm::BM_OR;  break;
+    case 2: opc = bm::BM_SUB; break;
+    case 3: opc = bm::BM_XOR; break;
+    default:
+        return BM_ERR_BADARG;
+    }
+    
+	TRY
+	{
+        TBM_bvector* bv1 = (TBM_bvector*)hdst;
+        const TBM_bvector* bv2 = (TBM_bvector*)hsrc;
+        
+        bv1->combine_operation(*bv2, opc);
+	}
+	CATCH (BM_ERR_BADALLOC)
+	{
+		return BM_ERR_BADALLOC;
+	}
+	ETRY;
+	return BM_OK;
+}
 
