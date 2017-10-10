@@ -110,6 +110,7 @@ struct distance_metric_descriptor
 };
 
 
+
 /*!
     \brief Internal function computes different distance metrics.
     \internal 

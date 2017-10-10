@@ -496,11 +496,106 @@ void print_stat(const BV& bv, unsigned blocks = 0)
 
 }
 
+template<class BV>
+unsigned compute_serialization_size(const BV& bv)
+{
+    BM_DECLARE_TEMP_BLOCK(tb)
+    unsigned char*  buf = 0;
+    unsigned blob_size = 0;
+    try
+    {
+        bm::serializer<BV> bvs(typename BV::allocator_type(), tb);
+        bvs.set_compression_level(4);
+        
+        typename BV::statistics st;
+        bv.calc_stat(&st);
+        
+        buf = new unsigned char[st.max_serialize_mem];
+        blob_size = bvs.serialize(bv, (unsigned char*)buf, st.max_serialize_mem);
+    }
+    catch (...)
+    {
+        delete [] buf;
+        throw;
+    }
+    
+    delete [] buf;
+    return blob_size;
+}
 
 
 template<class SV>
 void print_svector_stat(const SV& svect)
 {
+    /// Functor to compute jaccard similarity
+    /// \internal
+    struct Jaccard_Func
+    {
+        unsigned operator () (distance_metric_descriptor* dmit,
+                            distance_metric_descriptor* dmit_end)
+        {
+            BM_ASSERT(dmit_end - dmit == 2);
+            double d;
+            BM_ASSERT(dmit->metric == COUNT_AND);
+            unsigned cnt_and = dmit->result;
+            ++dmit;
+            BM_ASSERT(dmit->metric == COUNT_OR);
+            unsigned cnt_or = dmit->result;
+            if (cnt_and == 0 || cnt_or == 0)
+            {
+                d = 0.0;
+            }
+            else
+            {
+                d = double(cnt_and) / double(cnt_or);
+            }
+            unsigned res = d * 100;
+            if (res > 100) res = 100;
+            return res;
+        }
+    };
+
+    typedef typename SV::bvector_type bvector_type;
+    typedef  bm::similarity_descriptor<bvector_type, 2, unsigned, unsigned, Jaccard_Func> similarity_descriptor_type;
+    typedef bm::similarity_batch<similarity_descriptor_type> similarity_batch_type;
+    
+    similarity_batch_type sbatch;
+    
+    bm::build_jaccard_similarity_batch(sbatch, svect);
+    
+    sbatch.calculate();
+    sbatch.sort();
+    
+    typename similarity_batch_type::vector_type& sim_vec = sbatch.descr_vect_;
+    for (size_t k = 0; k < sim_vec.size(); ++k)
+    {
+        unsigned sim = sim_vec[k].similarity();
+        if (sim > 10)
+        {
+            const typename SV::bvector_type* bv1 = sim_vec[k].get_first();
+            const typename SV::bvector_type* bv2 = sim_vec[k].get_second();
+
+            unsigned bv_size2 = compute_serialization_size(*bv2);
+            
+            typename SV::bvector_type bvx(*bv2);
+            bvx ^= *bv1;
+            
+            unsigned bv_size_x = compute_serialization_size(bvx);
+            int diff = bv_size2 - bv_size_x;
+            
+            std:: cout << "["  << sim_vec[k].get_first_idx()
+                       << ", " << sim_vec[k].get_second_idx()
+                       << "] = "  << sim
+                       << " size(" << sim_vec[k].get_second_idx() << ")="
+                       << bv_size2
+                       << " size(x)=" << bv_size_x
+                       << " diff=" << diff
+                       << std:: endl;
+        }
+    } // for k
+    
+    
+
     typename SV::statistics st;
     svect.calc_stat(&st);
     

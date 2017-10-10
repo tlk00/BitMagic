@@ -42,6 +42,7 @@ OTHER DEALINGS IN THE SOFTWARE.
 #include "bmsparsevec.h"
 #include "bmsparsevec_algo.h"
 #include "bmsparsevec_serial.h"
+#include "bmalgo_similarity.h"
 
 
 #include "bmdbg.h"
