@@ -11,9 +11,14 @@ set(LIBRARY_OUTPUT_PATH ${CMAKE_BINARY_DIR})
 
 include_directories("${PROJECT_SOURCE_DIR}/../src" "${PROJECT_SOURCE_DIR}/libbm/include")
 
+MESSAGE( STATUS "CMAKE_CXX_COMPILER_ID:         " ${CMAKE_CXX_COMPILER_ID} )
 
 if ("${CMAKE_CXX_COMPILER_ID}" STREQUAL "GNU" OR
     "${CMAKE_CXX_COMPILER_ID}" STREQUAL "Clang")
+    set(LINKER_FLAGS "-nodefaultlibs -lc")
+    set(LD_FLAGS ${LINKER_FLAGS})
+    set(LDFLAGS ${LINKER_FLAGS})
+    set(CMAKE_SHARED_LINKER_FLAGS  ${LINKER_FLAGS})
     set(flags "-Wall -Wextra -march=core2 -msse4.2 -fPIC -fno-rtti -fno-exceptions ")
     set(optflags, -g0 -O3)
 elseif ("${CMAKE_CXX_COMPILER_ID}" STREQUAL "Intel")
@@ -25,13 +30,19 @@ elseif ("${CMAKE_CXX_COMPILER_ID}" STREQUAL "MSVC")
 endif()
 
 set(CMAKE_C_FLAGS   "${CMAKE_C_FLAGS} ${flags}")
-set(CMAKE_CXX_FLAGS "${CMAKE_CXX_FLAGS} ${flags}")
-
+set(CMAKE_CXX_FLAGS "${CMAKE_CXX_FLAGS} ${flags} ")
+#set(CMAKE_EXE_LINKER_FLAGS "${CMAKE_EXE_LINKER_FLAGS} ${ldflags}")
+#set(CMAKE_EXE_LINKER_FLAGS "${CMAKE_EXE_LINKER_FLAGS} ${ldflags}")
 
 add_library(libbm-static STATIC "libbm/src/libbm.cpp")
 
 add_executable(libbmtest ${PROJECT_SOURCE_DIR}/test/libbmtest.c)
-target_link_libraries(libbmtest libbm-static)
 
+#set_property(TARGET target PROPERTY CMAKE_SHARED_LINKER_FLAGS “${CMAKE_SHARED_LINKER} -nodefaultlibs -lc”)
+#set_property(TARGET libbmtest PROPERTY CMAKE_SHARED_LINKER_FLAGS “${CMAKE_SHARED_LINKER} -nodefaultlibs -lc”)
+set_property(TARGET libbmtest PROPERTY CMAKE_EXE_LINKER_FLAGS “${CMAKE_EXE_LINKER_FLAGS} ${LINKER_FLAGS}”)
+target_link_libraries(libbmtest libbm-static ${LINKER_FLAGS})
+
+MESSAGE( STATUS "LINKER_FLAGS:         " ${LINKER_FLAGS} )
 
 
