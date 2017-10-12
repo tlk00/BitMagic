@@ -251,180 +251,186 @@ int main(int argc, char *argv[])
         show_help();
         return 1;
     }
-
     
-    auto ret = parse_args(argc, argv);
-    if (ret != 0)
-        return ret;
-  
-    
-    if (!sv_in_file.empty())
+    try
     {
-        auto res = load_sv(sv_in_file, sv_u32_in);
-        if (res != 0)
+        auto ret = parse_args(argc, argv);
+        if (ret != 0)
+            return ret;
+      
+        
+        if (!sv_in_file.empty())
         {
-            return res;
-        }
-        sv_u32_in_flag = true;
-    }
-    
-    if (!u32_in_file.empty())
-    {
-        auto res = load_u32(u32_in_file, vect_u32_in);
-        if (res != 0)
-        {
-            return res;
-        }
-    }
-    
-    if (is_diag)  // diagnostics required
-    {
-        if (sv_u32_in_flag)  // input sparse vector loaded
-        {
-            std::cout << "Input sparse vector statistics:" << std::endl;
-            bm::print_svector_stat(sv_u32_in);
-            std::cout << std::endl;
+            auto res = load_sv(sv_in_file, sv_u32_in);
+            if (res != 0)
+            {
+                return res;
+            }
+            sv_u32_in_flag = true;
         }
         
-        if (!vect_u32_in.empty())
+        if (!u32_in_file.empty())
         {
-            std::cout << "Input u32 raw vector size = "
-                      << vect_u32_in.size() << " elements."
-                      << std::endl;
-        }
-    }
-    
-    
-    if (!sv_out_file.empty()) // request to make new SV compressed file
-    {
-        if (!vect_u32_in.empty())
-        {
-            auto res = convert_u32(vect_u32_in, sv_u32_out);
+            auto res = load_u32(u32_in_file, vect_u32_in);
             if (res != 0)
-                return res;
-           
-            if (is_diag)  // diagnostics requested
             {
-                std::cout << "Output sparse vector statistics:" << std::endl;
-                bm::print_svector_stat(sv_u32_out);
+                return res;
+            }
+        }
+        
+        if (is_diag)  // diagnostics required
+        {
+            if (sv_u32_in_flag)  // input sparse vector loaded
+            {
+                std::cout << "Input sparse vector statistics:" << std::endl;
+                bm::print_svector_stat(sv_u32_in);
                 std::cout << std::endl;
             }
             
-            size_t sv_blob_size = 0;
-            
-            bm::chrono_taker tt("sparse vector BLOB save", 1, &timing_map);
-            res = bm::file_save_svector(sv_u32_out, sv_out_file, &sv_blob_size);
-            tt.stop(is_timing);
-            
-            if (res != 0)
+            if (!vect_u32_in.empty())
             {
-                std::cerr << "Failed to save sparse vector file: " << sv_out_file << std::endl;
-                return res;
-            }
-            if (is_diag)
-                std::cout << "Output sparse vector BLOB size: " << sv_blob_size << std::endl;
-        }
-        
-        if (sv_u32_in_flag) // input data is ready as a sparse vector
-        {
-            
-        }
-        
-    } // if sv_out_file
-
-	if (!u32_out_file.empty()) // request to de-compressed bmsv file
-	{
-		if (!sv_u32_in.empty())
-		{
-			vect_u32_out.resize(sv_u32_in.size());
-			{
-				bm::chrono_taker tt("sparse vector extract", 1, &timing_map);
-				sv_u32_in.extract(&vect_u32_out[0], sv_u32_in.size(), 0, false);
-				tt.stop(is_timing);
-			}
-			{
-				bm::chrono_taker tt("u32 vector write", 1, &timing_map);
-				std::ofstream fout(u32_out_file.c_str(), std::ios::binary);
-				if (!fout.good())
-				{
-					std::cerr << "Cannot open file " << u32_out_file << std::endl;
-					return 1;
-				}
-				const char* buf = (const char*)&vect_u32_out[0];
-				fout.write(buf, vect_u32_out.size() * sizeof(unsigned));
-				if (!fout.good())
-				{
-					return 2;
-				}
-				fout.close();
-			}
-		}
-	} // if u32_out_file
-    
-    if (is_diag)
-    {
-        // diagnostics comparisons
-        
-        // in/out sparse vectors
-        if (!sv_u32_in.empty() && !sv_u32_out.empty())
-        {
-            bm::chrono_taker tt("sparse vectors in/out comparison", 1, &timing_map);
-            bool eq = sv_u32_in.equal(sv_u32_out);
-            if (!eq)
-            {
-                std::cerr << "ERROR: input sparse vector is different from output." << std::endl;
+                std::cout << "Input u32 raw vector size = "
+                          << vect_u32_in.size() << " elements."
+                          << std::endl;
             }
         }
-
-
-        // input sparse compare to input raw
-        if (!sv_u32_in.empty() && !vect_u32_in.empty())
+        
+        
+        if (!sv_out_file.empty()) // request to make new SV compressed file
         {
-            if (sv_u32_in.size() != vect_u32_in.size())
+            if (!vect_u32_in.empty())
             {
-                std::cerr << "ERROR: input sparse vector size is different from input raw array." << std::endl;
+                auto res = convert_u32(vect_u32_in, sv_u32_out);
+                if (res != 0)
+                    return res;
+               
+                if (is_diag)  // diagnostics requested
+                {
+                    std::cout << "Output sparse vector statistics:" << std::endl;
+                    bm::print_svector_stat(sv_u32_out);
+                    std::cout << std::endl;
+                }
+                
+                size_t sv_blob_size = 0;
+                
+                bm::chrono_taker tt("sparse vector BLOB save", 1, &timing_map);
+                res = bm::file_save_svector(sv_u32_out, sv_out_file, &sv_blob_size);
+                tt.stop(is_timing);
+                
+                if (res != 0)
+                {
+                    std::cerr << "Failed to save sparse vector file: " << sv_out_file << std::endl;
+                    return res;
+                }
+                if (is_diag)
+                    std::cout << "Output sparse vector BLOB size: " << sv_blob_size << std::endl;
             }
-            else
+            
+            if (sv_u32_in_flag) // input data is ready as a sparse vector
+            {
+                
+            }
+            
+        } // if sv_out_file
+
+        if (!u32_out_file.empty()) // request to de-compressed bmsv file
+        {
+            if (!sv_u32_in.empty())
+            {
+                vect_u32_out.resize(sv_u32_in.size());
+                {
+                    bm::chrono_taker tt("sparse vector extract", 1, &timing_map);
+                    sv_u32_in.extract(&vect_u32_out[0], sv_u32_in.size(), 0, false);
+                    tt.stop(is_timing);
+                }
+                {
+                    bm::chrono_taker tt("u32 vector write", 1, &timing_map);
+                    std::ofstream fout(u32_out_file.c_str(), std::ios::binary);
+                    if (!fout.good())
+                    {
+                        std::cerr << "Cannot open file " << u32_out_file << std::endl;
+                        return 1;
+                    }
+                    const char* buf = (const char*)&vect_u32_out[0];
+                    fout.write(buf, vect_u32_out.size() * sizeof(unsigned));
+                    if (!fout.good())
+                    {
+                        return 2;
+                    }
+                    fout.close();
+                }
+            }
+        } // if u32_out_file
+        
+        if (is_diag)
+        {
+            // diagnostics comparisons
+            
+            // in/out sparse vectors
+            if (!sv_u32_in.empty() && !sv_u32_out.empty())
+            {
+                bm::chrono_taker tt("sparse vectors in/out comparison", 1, &timing_map);
+                bool eq = sv_u32_in.equal(sv_u32_out);
+                if (!eq)
+                {
+                    std::cerr << "ERROR: input sparse vector is different from output." << std::endl;
+                }
+            }
+
+
+            // input sparse compare to input raw
+            if (!sv_u32_in.empty() && !vect_u32_in.empty())
+            {
+                if (sv_u32_in.size() != vect_u32_in.size())
+                {
+                    std::cerr << "ERROR: input sparse vector size is different from input raw array." << std::endl;
+                }
+                else
+                {
+                    bm::chrono_taker tt("sparse vector in/raw comparison", 1, &timing_map);
+                    int res = bm::svector_check(sv_u32_in, vect_u32_in);
+                    if (res != 0)
+                    {
+                        std::cerr << "ERROR: input sparse vector is different from input raw array." << std::endl;
+                    }
+                }
+            }
+
+            // input sparse compare to output raw
+            if (!sv_u32_in.empty() && !vect_u32_out.empty())
             {
                 bm::chrono_taker tt("sparse vector in/raw comparison", 1, &timing_map);
-				int res = bm::svector_check(sv_u32_in, vect_u32_in);
-				if (res != 0)
-				{
-					std::cerr << "ERROR: input sparse vector is different from input raw array." << std::endl;
-				}
+                int res = bm::svector_check(sv_u32_in, vect_u32_out);
+                if (res != 0)
+                {
+                    std::cerr << "ERROR: input sparse vector is different from input raw array." << std::endl;
+                }
+            }
+            
+            if (!vect_u32_in.empty() && !sv_u32_out.empty())
+            {
+                bm::chrono_taker tt("raw in to sparse vector out comparison", 1, &timing_map);
+                int res = bm::svector_check(sv_u32_out, vect_u32_in);
+                if (res != 0)
+                {
+                    std::cerr << "ERROR: input raw array is different from output sparse vector." << std::endl;
+                }
+                
             }
         }
-
-		// input sparse compare to output raw
-		if (!sv_u32_in.empty() && !vect_u32_out.empty())
-		{
-			bm::chrono_taker tt("sparse vector in/raw comparison", 1, &timing_map);
-			int res = bm::svector_check(sv_u32_in, vect_u32_out);
-			if (res != 0)
-			{
-				std::cerr << "ERROR: input sparse vector is different from input raw array." << std::endl;
-			}
-		}
         
-        if (!vect_u32_in.empty() && !sv_u32_out.empty())
+        if (is_timing)  // print all collected timings
         {
-			bm::chrono_taker tt("raw in to sparse vector out comparison", 1, &timing_map);
-			int res = bm::svector_check(sv_u32_out, vect_u32_in);
-			if (res != 0)
-			{
-				std::cerr << "ERROR: input raw array is different from output sparse vector." << std::endl;
-			}
-            
+            std::cout << std::endl << "Timings (ms):" << std::endl;
+            bm::chrono_taker::print_duration_map(timing_map);
         }
-
     }
-    
-    if (is_timing)  // print all collected timings
+    catch (std::exception& ex)
     {
-        std::cout << std::endl << "Timings (ms):" << std::endl;
-        bm::chrono_taker::print_duration_map(timing_map);
+        std::cerr << "Error:" << ex.what() << std::endl;
+        return 1;
     }
-    
+
     return 0;
 }
 
