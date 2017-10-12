@@ -118,20 +118,26 @@ typedef bm::mem_alloc<dbg_block_allocator, dbg_ptr_allocator> dbg_alloc;
 
 typedef bm::bvector<dbg_alloc> bvect;
 
-
-
 int main(void)
 {
+    try
     {
-        bvect bv;
+        {
+            bvect bv;
 
-        bv[10] = true;
-        bv[100000] = true;
-        bv[10000000] = false;
+            bv[10] = true;
+            bv[100000] = true;
+            bv[10000000] = false;
+        }
+
+        cout << "Number of BLOCK allocations = " <<  dbg_block_allocator::na_ << endl;
+        cout << "Number of PTR allocations = " <<  dbg_ptr_allocator::na_ << endl;
     }
-
-    cout << "Number of BLOCK allocations = " <<  dbg_block_allocator::na_ << endl;
-    cout << "Number of PTR allocations = " <<  dbg_ptr_allocator::na_ << endl;
+    catch(std::exception& ex)
+    {
+        std::cerr << ex.what() << std::endl;
+        return 1;
+    }
 
     assert(dbg_block_allocator::balance() == 0);
     assert(dbg_ptr_allocator::balance() == 0);

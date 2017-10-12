@@ -45,29 +45,37 @@ void Print(unsigned n)
 
 int main(void)
 {
-    bm::bvector<>   bv;    
-
-    bv[10] = true;
-    bv[100] = true;
-    bv[10000] = true;
-
-    bm::bvector<>::enumerator en = bv.first();
-    bm::bvector<>::enumerator en_end = bv.end();
-
-    while (en < en_end)
+    try
     {
-        cout << *en << endl;
-        ++en;  // Fastest way to increment enumerator
+        bm::bvector<>   bv;
+
+        bv[10] = true;
+        bv[100] = true;
+        bv[10000] = true;
+
+        bm::bvector<>::enumerator en = bv.first();
+        bm::bvector<>::enumerator en_end = bv.end();
+
+        while (en < en_end)
+        {
+            cout << *en << endl;
+            ++en;  // Fastest way to increment enumerator
+        }
+
+        en = bv.first();
+
+        // This is not the fastest way to do the job, because for_each
+        // often will try to calculate difference between iterators,
+        // which is expensive for enumerators.
+        // But it can be useful for some STL loyal applications.
+
+        std::for_each(en, en_end, Print);
     }
-
-    en = bv.first();
-
-    // This is not the fastest way to do the job, because for_each 
-    // often will try to calculate difference between iterators,
-    // which is expensive for enumerators.
-    // But it can be useful for some STL loyal applications. 
-
-    std::for_each(en, en_end, Print);
+    catch(std::exception& ex)
+    {
+        std::cerr << ex.what() << std::endl;
+        return 1;
+    }
 
     return 0;
 }

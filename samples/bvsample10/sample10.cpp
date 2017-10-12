@@ -49,34 +49,41 @@ template<class T> void PrintContainer(T first, T last)
 
 int main(void)
 {
-    bm::bvector<>   bv;    
-
-    // -----------------------------------------------
-    // set some bits
-    //
-    unsigned i;
-    for (i = 0; i < 30000; i+=10)
+    try
     {
-        bv.set(i);
-    }
+        bm::bvector<>   bv;
+        // -----------------------------------------------
+        // set some bits
+        //
+        unsigned i;
+        for (i = 0; i < 30000; i+=10)
+        {
+            bv.set(i);
+        }
 
-    for (i = 300000; i < 400000; i+=100)
+        for (i = 300000; i < 400000; i+=100)
+        {
+            bv.set(i);
+        }
+
+        bm::bvector<>   bvsubset1;
+        bm::bvector<>   bvsubset2;
+
+        // random sampler instance can be shared between calls
+        //
+        bm::random_subset<bm::bvector<> > rand_sampler;
+        rand_sampler.sample(bvsubset1, bv, 20);
+        rand_sampler.sample(bvsubset2, bv, 20);
+     
+        PrintContainer(bvsubset1.first(), bvsubset1.end());
+        cout << endl;
+        PrintContainer(bvsubset2.first(), bvsubset2.end());
+    }
+    catch(std::exception& ex)
     {
-        bv.set(i);
+        std::cerr << ex.what() << std::endl;
+        return 1;
     }
-
-    bm::bvector<>   bvsubset1;
-    bm::bvector<>   bvsubset2;
-
-    // random sampler instance can be shared between calls
-    //
-    bm::random_subset<bm::bvector<> > rand_sampler;
-    rand_sampler.sample(bvsubset1, bv, 20);
-    rand_sampler.sample(bvsubset2, bv, 20);
- 
-    PrintContainer(bvsubset1.first(), bvsubset1.end());
-    cout << endl;
-    PrintContainer(bvsubset2.first(), bvsubset2.end());
 
     return 0;
 }

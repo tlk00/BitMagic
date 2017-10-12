@@ -42,58 +42,67 @@ using namespace std;
 
 int main(void)
 {
-    bm::bvector<>   bv;    // Bitvector variable declaration.
-
-    cout << bv.count() << endl;
-
-    // Set some bits.
-
-    bv.set(10);
-    bv.set(100);
-    bv.set(1000000);
-
-    // New bitvector's count.
-
-    cout << bv.count() << endl;
-
-
-    // Print the bitvector.
-
-    unsigned value = bv.get_first();
-    do
+    try
     {
-        cout << value;
-        value = bv.get_next(value);
-        if (value)
+        bm::bvector<>   bv;    // Bitvector variable declaration.
+
+        cout << bv.count() << endl;
+
+        // Set some bits.
+
+        bv.set(10);
+        bv.set(100);
+        bv.set(1000000);
+
+        // New bitvector's count.
+
+        cout << bv.count() << endl;
+
+
+        // Print the bitvector.
+
+        unsigned value = bv.get_first();
+        do
         {
-            cout << ",";
-        }
-        else
+            cout << value;
+            value = bv.get_next(value);
+            if (value)
+            {
+                cout << ",";
+            }
+            else
+            {
+                break;
+            }
+        } while(1);
+
+        cout << endl;
+
+        bv.clear();   // Clean up.
+
+        cout << bv.count() << endl;
+
+        // We also can use operators to set-clear bits;
+
+        bv[10] = true;
+        bv[100] = true;
+        bv[10000] = true;
+
+        cout << bv.count() << endl;
+
+        if (bv[10])
         {
-            break;
+            bv[10] = false;
         }
-    } while(1);
 
-    cout << endl;
-
-    bv.clear();   // Clean up.
-
-    cout << bv.count() << endl;
-
-    // We also can use operators to set-clear bits;
-
-    bv[10] = true;
-    bv[100] = true;
-    bv[10000] = true;
-
-    cout << bv.count() << endl;
-
-    if (bv[10])
-    {
-        bv[10] = false;
+        cout << bv.count() << endl;
     }
-
-    cout << bv.count() << endl;
+    catch(std::exception& ex)
+    {
+        std::cerr << ex.what() << std::endl;
+        return 1;
+    }
+    
 
     return 0;
 }

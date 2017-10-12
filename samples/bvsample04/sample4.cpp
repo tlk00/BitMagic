@@ -78,10 +78,10 @@ unsigned char* serialize_bvector(bm::serializer<bm::bvector<> >& bvs,
                                  bm::bvector<>& bv)
 {
     // It is reccomended to optimize vector before serialization.
-    bv.optimize();  
-
+    BM_DECLARE_TEMP_BLOCK(tb)
     bm::bvector<>::statistics st;
-    bv.calc_stat(&st);
+
+    bv.optimize(tb, bm::bvector<>::opt_compress, &st);
 
     cout << "Bits count:" << bv.count() << endl;
     cout << "Bit blocks:" << st.bit_blocks << endl;
@@ -104,53 +104,66 @@ unsigned char* serialize_bvector(bm::serializer<bm::bvector<> >& bvs,
 
 int main(void)
 {
-    bm::bvector<>   bv1;    
-    bm::bvector<>   bv2;
+    unsigned char* buf1 = 0;
+    unsigned char* buf2 = 0;
 
-    bv2.set_new_blocks_strat(bm::BM_GAP);  //  set DGAP compression mode ON
+    try
+    {
+        bm::bvector<>   bv1;
+        bm::bvector<>   bv2;
 
-    fill_bvector(&bv1);
-    fill_bvector(&bv2);
+        bv2.set_new_blocks_strat(bm::BM_GAP);  //  set DGAP compression mode ON
 
-    // Prepare a serializer class 
-    //  for best performance it is best to create serilizer once and reuse it
-    //  (saves a lot of memory allocations)
-    //
-    bm::serializer<bm::bvector<> > bvs;
+        fill_bvector(&bv1);
+        fill_bvector(&bv2);
 
-    // next settings provide lowest serilized size 
-    bvs.byte_order_serialization(false);
-    bvs.gap_length_serialization(false);
-    bvs.set_compression_level(4);
+        // Prepare a serializer class
+        //  for best performance it is best to create serilizer once and reuse it
+        //  (saves a lot of memory allocations)
+        //
+        bm::serializer<bm::bvector<> > bvs;
+
+        // next settings provide lowest serilized size
+        bvs.byte_order_serialization(false);
+        bvs.gap_length_serialization(false);
+        bvs.set_compression_level(4);
 
 
-    unsigned char* buf1 = serialize_bvector(bvs, bv1);
-    unsigned char* buf2 = serialize_bvector(bvs, bv2);
+        buf1 = serialize_bvector(bvs, bv1);
+        buf2 = serialize_bvector(bvs, bv2);
 
-    // Serialized bvectors (buf1 and buf2) now ready to be
-    // saved to a database, file or send over a network.
+        // Serialized bvectors (buf1 and buf2) now ready to be
+        // saved to a database, file or send over a network.
 
-    // ...
+        // ...
 
-    // Deserialization.
+        // Deserialization.
 
-    bm::bvector<>  bv3;
+        bm::bvector<>  bv3;
 
-    // As a result of desrialization bv3 will contain all bits from
-    // bv1 and bv3:
-    //   bv3 = bv1 OR bv2
+        // As a result of desrialization bv3 will contain all bits from
+        // bv1 and bv3:
+        //   bv3 = bv1 OR bv2
 
-    bm::deserialize(bv3, buf1);
-    bm::deserialize(bv3, buf2);
+        bm::deserialize(bv3, buf1);
+        bm::deserialize(bv3, buf2);
 
-    print_statistics(bv3);
+        print_statistics(bv3);
 
-    // After a complex operation we can try to optimize bv3.
+        // After a complex operation we can try to optimize bv3.
 
-    bv3.optimize();
+        bv3.optimize();
 
-    print_statistics(bv3);
-
+        print_statistics(bv3);
+    }
+    catch(std::exception& ex)
+    {
+        std::cerr << ex.what() << std::endl;
+        delete [] buf1;
+        delete [] buf2;
+        return 1;
+    }
+    
     delete [] buf1;
     delete [] buf2;
 

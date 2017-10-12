@@ -74,24 +74,30 @@ void print_statistics(const bm::bvector<>& bv)
 
 int main(void)
 {
-    bm::bvector<>   bv1;    
-    bm::bvector<>   bv2;
+    try
+    {
+        bm::bvector<>   bv1;
+        bm::bvector<>   bv2;
 
-    bv2.set_new_blocks_strat(bm::BM_GAP);  //  set DGAP compression mode ON
+        bv2.set_new_blocks_strat(bm::BM_GAP);  //  set DGAP compression mode ON
 
-    fill_bvector(&bv1, &bv2);  // Fill both bvectors with the same values
+        fill_bvector(&bv1, &bv2);  // Fill both bvectors with the same values
 
-    // For a given distrubution statistics should demonstrate
-    // lower memory consumption for the vector with compression
+        // For a given distrubution statistics should demonstrate
+        // lower memory consumption for the vector with compression
 
-    print_statistics(bv1);    
-    print_statistics(bv2);
+        print_statistics(bv1);
+        print_statistics(bv2);
 
-    // Now run optimization procedure for bv1 and see statistics.
+        // Now run optimization procedure for bv1 and see statistics.
+        bv1.optimize();
 
-    bv1.optimize();
-
-    print_statistics(bv1);    
+        print_statistics(bv1);
+    }
+    catch(std::exception& ex)
+    {
+        std::cerr << ex.what() << std::endl;
+    }
 
     return 0;
 }
