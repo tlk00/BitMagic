@@ -40,9 +40,10 @@ add_executable(libbmtest ${PROJECT_SOURCE_DIR}/test/libbmtest.c)
 
 #set_property(TARGET target PROPERTY CMAKE_SHARED_LINKER_FLAGS “${CMAKE_SHARED_LINKER} -nodefaultlibs -lc”)
 #set_property(TARGET libbmtest PROPERTY CMAKE_SHARED_LINKER_FLAGS “${CMAKE_SHARED_LINKER} -nodefaultlibs -lc”)
-set_property(TARGET libbmtest PROPERTY CMAKE_EXE_LINKER_FLAGS “${CMAKE_EXE_LINKER_FLAGS} ${LINKER_FLAGS}”)
+#set_property(TARGET libbmtest PROPERTY CMAKE_EXE_LINKER_FLAGS “${CMAKE_EXE_LINKER_FLAGS} ${LINKER_FLAGS}”)
 target_link_libraries(libbmtest libbm-static ${LINKER_FLAGS})
 
-MESSAGE( STATUS "LINKER_FLAGS:         " ${LINKER_FLAGS} )
+MESSAGE( STATUS "LINKER_FLAGS:              " ${LINKER_FLAGS} )
+MESSAGE( STATUS "CMAKE_EXE_LINKER_FLAGS:    " ${CMAKE_EXE_LINKER_FLAGS} )
 
 
