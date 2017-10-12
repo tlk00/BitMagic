@@ -50,9 +50,6 @@ namespace bm
 /*!
     @brief Template class implements memory saving set functionality
     
-    Template can be used as template parameter for bvector if we 
-    want to tune bvector for minimal memory consumption.
-
     @sa bvmini
 */
 template <class A, size_t N> class miniset
@@ -212,10 +209,7 @@ private:
 
 /*!
     @brief Mini bitvector used in bvector template to keep block type flags
-    
-    Template is used as a default template parameter MS for bvector  
-    Offers maximum performance comparing to miniset.
-
+ 
     @sa miniset
 */
 template<size_t N> class bvmini
