@@ -23,6 +23,18 @@
 #    define BM_HASFORCEINLINE
 #    define BMFORCEINLINE NCBI_FORCEINLINE
 #  endif
+
+#  ifdef NCBI_SSE
+#    if NCBI_SSE >= 20
+#      define BMSSE2OPT 1
+#    endif
+#    if NCBI_SSE >= 40
+#      define BMSSE2OPT 1
+#    endif
+#    if NCBI_SSE >= 42
+#      define BMSSE42OPT 1
+#    endif
+#  endif
 #endif
 
 
