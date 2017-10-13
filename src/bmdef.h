@@ -29,7 +29,7 @@
 #      define BMSSE2OPT 1
 #    endif
 #    if NCBI_SSE >= 40
-#      define BMSSE4OPT 1
+#      define BMSSE2OPT 1
 #    endif
 #    if NCBI_SSE >= 42
 #      define BMSSE42OPT 1
