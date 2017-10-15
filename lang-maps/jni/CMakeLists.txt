@@ -2,6 +2,7 @@ cmake_minimum_required(VERSION 2.8)
 
 project(bmjni)
 
+FIND_PACKAGE(JNI REQUIRED)
 
 set( CMAKE_VERBOSE_MAKEFILE on )
 
@@ -9,7 +10,7 @@ set(CMAKE_BINARY_DIR ${CMAKE_SOURCE_DIR}/build/bin)
 set(EXECUTABLE_OUTPUT_PATH ${CMAKE_BINARY_DIR})
 set(LIBRARY_OUTPUT_PATH ${CMAKE_BINARY_DIR})
 
-include_directories("${PROJECT_SOURCE_DIR}/../../src" "${PROJECT_SOURCE_DIR}/include" "${PROJECT_SOURCE_DIR}/../libbm/include" "${PROJECT_SOURCE_DIR}/../libbm/src" "/System/Library/Frameworks/JavaVM.framework/Versions/Current/Headers")
+include_directories("${JNI_INCLUDE_DIRS}" "${PROJECT_SOURCE_DIR}/../../src" "${PROJECT_SOURCE_DIR}/include" "${PROJECT_SOURCE_DIR}/../libbm/include" "${PROJECT_SOURCE_DIR}/../libbm/src" "/System/Library/Frameworks/JavaVM.framework/Versions/Current/Headers")
 
 
 if ("${CMAKE_CXX_COMPILER_ID}" STREQUAL "GNU" OR
@@ -29,6 +30,9 @@ set(CMAKE_CXX_FLAGS "${CMAKE_CXX_FLAGS} ${flags}")
 
 
 add_library(bmjni SHARED "src/libbmjni.cpp" "src/bmjni.c")
+
+target_link_libraries(bmjni ${JNI_LIBRARIES})
+
 
 
 
