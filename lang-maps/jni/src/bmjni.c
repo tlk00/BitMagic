@@ -66,9 +66,9 @@ JNIEXPORT void JNICALL Java_io_bitmagic_BVector0_dispose0
  */
 JNIEXPORT jstring JNICALL Java_io_bitmagic_BVector0_version0
 (JNIEnv *env, jobject obj) {
-  unsigned major;
-  unsigned minor;
-  unsigned patch;
+  int major;
+  int minor;
+  int patch;
   BM_version(&major, &minor, &patch);
   
   char version[64];
@@ -103,7 +103,7 @@ JNIEXPORT void JNICALL Java_io_bitmagic_BVector0_set0
  */
 JNIEXPORT jboolean JNICALL Java_io_bitmagic_BVector0_get0
   (JNIEnv *env, jobject obj, jlong ptr, jlong idx) {
-  unsigned int ret;
+  int ret;
   exec(BM_bvector_get_bit((BM_BVHANDLE)ptr, (unsigned int)idx, &ret));
   return (jboolean)ret;
 }
