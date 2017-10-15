@@ -91,6 +91,18 @@ struct bv_statistics
     }
 };
 
+/**
+	\brief ad-hoc conditional expressions 
+	\internal
+*/
+template <bool b> struct conditional
+{
+	static bool test() { return true; }
+};
+template <> struct conditional<false>
+{
+	static bool test() { return false; }
+};
 
 /*! 
     @defgroup gapfunc GAP functions
@@ -285,7 +297,7 @@ template<bool T> struct all_set
         all_set_block()
         {
             ::memset(_p, 0xFF, sizeof(_p));
-			if (sizeof(void*) == 8)
+			if (bm::conditional<sizeof(void*) == 8>::test())
 			{
 				const unsigned long long magic_mask = 0xFFFFfffeFFFFfffe;
 				::memcpy(&_p_fullp, &magic_mask, sizeof(magic_mask));

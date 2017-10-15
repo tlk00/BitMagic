@@ -686,7 +686,7 @@ int BM_bvector_serialize(BM_BVHANDLE h,
         bm::serializer<TBM_bvector> bvs(TBM_bvector::allocator_type(), tb);
         bvs.set_compression_level(4);
         
-        *pblob_size = bvs.serialize(*bv, (unsigned char*)buf, buf_size);
+        *pblob_size = bvs.serialize(*bv, (unsigned char*)buf, (unsigned)buf_size);
 	}
 	CATCH (BM_ERR_BADALLOC)
 	{
