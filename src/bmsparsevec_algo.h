@@ -111,7 +111,7 @@ void dynamic_range_clip_low(SV& svect, unsigned low_bit)
     typename SV::bvector_type bv_acc2;
     typename SV::bvector_type* bv_low_plain = svect.get_plain(low_bit);
     
-    for (unsigned i = low_bit-1; true; --i)
+    for (i = low_bit-1; true; --i)
     {
         typename SV::bvector_type* bv_plain = svect.plain(i);
         if (bv_plain)

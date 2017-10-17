@@ -25,6 +25,7 @@ OTHER DEALINGS IN THE SOFTWARE.
 #include <iostream>
 #include <time.h>
 #include <stdio.h>
+#include <sstream>
 
 //#define BMSSE2OPT
 #define BMSSE42OPT
@@ -244,7 +245,7 @@ void BitCountTest()
     }
 
     volatile unsigned* p = &value;
-    unsigned c1 = *p;
+    unsigned c1;
     c1 = value = 0;
 
     if (!platform_test)
@@ -258,6 +259,8 @@ void BitCountTest()
 
     c1 = *p;
     c1 = value = 0;
+	stringstream s;
+	s << value << c1; // to fool the optimization
 
     delete bset;
     delete bv;
@@ -541,10 +544,13 @@ void EnumeratorTestGAP()
 
         while (en < bend)
         {
-            v = *en;
+            v += *en;
             ++en;
         }
     }
+
+	stringstream s;
+	s << v << endl; // attempt to fool optimization
 
     }
 
@@ -1070,7 +1076,7 @@ void TI_MetricTest()
 
 void BitBlockTransposeTest()
 {
-    bm::word_t BM_ALIGN16 block1[bm::set_block_size] BM_ALIGN16ATTR = {0,};
+	bm::word_t BM_ALIGN16 block1[bm::set_block_size] BM_ALIGN16ATTR = { 0, };
     //bm::word_t BM_ALIGN16 block2[bm::set_block_size] = {0xFF,};
     unsigned   BM_ALIGN16 tmatrix1[32][bm::set_block_plain_size] BM_ALIGN16ATTR;
 

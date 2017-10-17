@@ -47,6 +47,7 @@ OTHER DEALINGS IN THE SOFTWARE.
 #include <bmsparsevec.h>
 #include <bmsparsevec_algo.h>
 #include <bmsparsevec_serial.h>
+#include <bmalgo_similarity.h>
 
 using namespace bm;
 using namespace std;
@@ -1071,7 +1072,7 @@ void print_mv(const bvect_mini &bvect_min, unsigned size)
     printf("\n");
 }
 
-void print_gap(const gap_vector& gap_vect, unsigned size)
+void print_gap(const gap_vector& gap_vect, unsigned /*size*/)
 {
     const gap_word_t *buf = gap_vect.get_buf();
     unsigned len = gap_length(buf);

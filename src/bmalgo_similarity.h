@@ -26,6 +26,10 @@ For more information please visit:  http://bmagic.sourceforge.net
 
 */
 
+#include <algorithm>
+#include <functional>
+#include <vector>
+
 #include "bm.h"
 #include "bmfunc.h"
 #include "bmdef.h"

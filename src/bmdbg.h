@@ -511,7 +511,7 @@ unsigned compute_serialization_size(const BV& bv)
         bv.calc_stat(&st);
         
         buf = new unsigned char[st.max_serialize_mem];
-        blob_size = bvs.serialize(bv, (unsigned char*)buf, st.max_serialize_mem);
+        blob_size = (unsigned)bvs.serialize(bv, (unsigned char*)buf, st.max_serialize_mem);
     }
     catch (...)
     {
@@ -532,7 +532,7 @@ void print_svector_stat(const SV& svect)
     struct Jaccard_Func
     {
         unsigned operator () (distance_metric_descriptor* dmit,
-                            distance_metric_descriptor* dmit_end)
+                              distance_metric_descriptor* dmit_end)
         {
             BM_ASSERT(dmit_end - dmit == 2);
             double d;
@@ -549,7 +549,7 @@ void print_svector_stat(const SV& svect)
             {
                 d = double(cnt_and) / double(cnt_or);
             }
-            unsigned res = d * 100;
+            unsigned res = unsigned(d * 100);
             if (res > 100) res = 100;
             return res;
         }
