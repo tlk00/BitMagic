@@ -8282,6 +8282,30 @@ bool TestEqualSparseVectors(const SV& sv1, const SV& sv2)
         }
     }
 
+    // comparison using elements assignment via reference
+    {
+    SV sv3;
+    sv3.resize(sv1.size());
+    for (unsigned i = 0; i < sv1.size(); ++i)
+    {
+        sv3[i] = sv1[i];
+        unsigned v1 = sv1[i];
+        unsigned v2 = sv3[i];
+        if (v1 != v2)
+        {
+            cerr << "1. sparse_vector reference assignment validation failed" << endl;
+            return false;
+        }
+    }
+    b = sv1.equal(sv3);
+    if (!b)
+    {
+        cerr << "2. sparse_vector reference assignment validation failed" << endl;
+        return b;
+    }
+
+    }
+
     // comparison through serialization
     //
     {{
