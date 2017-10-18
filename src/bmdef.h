@@ -106,6 +106,15 @@
 #endif
 
 
+#if defined(__x86_64) || defined(_M_AMD64) || defined(_WIN64) || \
+    defined(__LP64__) || defined(_LP64) || ( __WORDSIZE == 64 )
+#ifndef BM64OPT
+# define BM64OPT
+#endif
+#endif
+
+
+
 #define FULL_BLOCK_REAL_ADDR bm::all_set<true>::_block._p
 #define FULL_BLOCK_FAKE_ADDR bm::all_set<true>::_block._p_fullp
 #define BLOCK_ADDR_SAN(addr) (addr == FULL_BLOCK_FAKE_ADDR) ? FULL_BLOCK_REAL_ADDR : addr
@@ -163,8 +172,18 @@
 
 
 // --------------------------------
-// SSE optmization
+// SSE optmization macros
 //
+
+#ifdef BMSSE42OPT
+# if defined(BM64OPT) || defined(__x86_64) || defined(_M_AMD64) || defined(_WIN64) || \
+    defined(__LP64__) || defined(_LP64)
+#   undef BM64OPT
+#   define BM64_SSE4
+# endif
+# undef BMSSE2OPT
+#endif
+
 
 #if !(defined(BMSSE2OPT) || defined(BMSSE42OPT)) 
 

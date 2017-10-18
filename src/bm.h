@@ -40,23 +40,6 @@ For more information please visit:  http://bmagic.sourceforge.net
 #pragma warning( disable : 4311 4312 4127)
 #endif
 
-#if defined(__x86_64) || defined(_M_AMD64) || defined(_WIN64) || \
-    defined(__LP64__) || defined(_LP64) || ( __WORDSIZE == 64 )
-#ifndef BM64OPT
-# define BM64OPT
-#endif
-#endif
-
-
-#ifdef BMSSE42OPT
-# if defined(BM64OPT) || defined(__x86_64) || defined(_M_AMD64) || defined(_WIN64) || \
-    defined(__LP64__) || defined(_LP64)
-#   undef BM64OPT
-#   define BM64_SSE4
-# endif
-# undef BMSSE2OPT
-#endif
-
 
 #include "bmconst.h"
 #include "bmdef.h"
