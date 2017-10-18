@@ -67,6 +67,44 @@ public:
     struct statistics : public bv_statistics
     {};
 
+    /**
+         Reference class to access elements via common [] operator
+    */
+    class reference
+    {
+    public:
+        reference(sparse_vector<Val, BV>& sv, size_type idx) BMNOEXEPT
+        : sv_(sv), idx_(idx)
+        {}
+        
+        operator value_type() const
+        {
+            return sv_.get(idx_);
+        }
+        
+        reference& operator=(const reference& ref)
+        {
+            sv_.set(idx_, (value_type)ref);
+            return *this;
+        }
+        
+        reference& operator=(value_type val)
+        {
+            sv_.set(idx_, val);
+            return *this;
+        }
+        
+        bool operator==(const reference& ref) const
+        {
+            return bool(*this) == bool(ref);
+        }
+        
+    private:
+        sparse_vector<Val, BV>& sv_;
+        size_type               idx_;
+    };
+    
+
 public:
     /*!
         \brief Sparse vector constructor
@@ -128,6 +166,13 @@ public:
     
     
     ~sparse_vector() BMNOEXEPT;
+    
+    reference operator[](size_type idx)
+    {
+        BM_ASSERT(idx < size_);
+        return reference(*this, idx);
+    }
+
     
     /*! \brief content exchange
     */
