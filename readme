@@ -11,6 +11,7 @@ instructions:
 Unix:
 -----
 
+1. Traditional (in-place build)
 - Apply environment variables by runing bmenv.sh :
 $ . bmenv.sh
 
@@ -26,13 +27,21 @@ The default compiler on Unix and CygWin is g++.
 If you want to change the default you can do that in makefile.in
 (should be pretty easy to do)
 
+2. CMake based build
+Project now comes with a set of makefiles for cmake, you can just build it or generate project files for any cmake-supported
+environment.
+
 
 Windows:
 --------
 
 If you use cygwin installation please follow general Unix recommendations.
-MSVC - solution and projects are not currently available (work in progress)
-XCODE - project files are not currently available
+MSVC - solution and projects are available via CMAKE generation
+
+MacOS
+---------
+
+XCODE - project files are available via CMAKE generation
 
 
 Fine tuning and optimizations:
@@ -91,7 +100,10 @@ Please note this optimization is not completely thread safe.
 bvector<> template keeps mutable variable inside it and update it 
 when it count() function is called. So it creates a certain chance that this
 function will be called from multiple threads and crash on updating this 
-variable. 
+variable.
+
+If BMCOUNTOPT is not defined (default) BM library should be considered thread
+safe - all const functions and methods are honored. 
 
 =================================================================================
 
@@ -100,46 +112,16 @@ BM_NO_STL variable. It will disable inclusion of certain headers and also
 will make bvector iterators incompatible with STL algorithms 
 (which you said you are not using anyway).
 
-=================================================================================
-
-Different compilers use different conventions about return by value
-optimizations.
-
-For instance operator or for bitvector can be implemented in two
-different ways:
-
---------- With explicit temp variable
-
-template<class A, class MS> 
-inline bvector<A, MS> operator| (const bvector<A, MS>& v1,
-                                 const bvector<A>& v2)
-{
-    bvector<A, MS> ret(v1);
-    ret.bit_or(v2);
-    return ret;
-}
-
---------- Temp variable is hidden 
-
-template<class A, class MS> 
-inline bvector<A, MS> operator| (const bvector<A, MS>& v1,
-                                 const bvector<A>& v2)
-{
-    return bvector<A, MS>(v1).bit_or(v2);
-}
-
-----------
-
-Some compilers can successfully optimize one or both of this cases.
-BM implementation uses hidden temp variable unless you define 
-BM_USE_EXPLICIT_TEMP
+This rule only applies to the core bvector methods. Auxiliary algorithms may use 
+STL.
 
 =================================================================================
-
 
 
 
 Thank you for using BitMagic library!
-	Anatoliy Kuznetsov (anatoliy_kuznetsov at yahoo.com)
+	e-mail: info@bitmagic.io
+	WEB site: http://bitmagic.io
+
 
 
