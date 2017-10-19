@@ -583,8 +583,8 @@ public:
             }
             else
             {
-				if (IS_VALID_ADDR(block))
-					bman.get_allocator().free_bit_block(block);
+                if (IS_VALID_ADDR(block))
+                    bman.get_allocator().free_bit_block(block);
             }
         }
     };
@@ -693,18 +693,15 @@ public:
           temp_block_(0),
           alloc_(blockman.alloc_)
     {
-        if (this != &blockman)
-        {
-            ::memcpy(glevel_len_, blockman.glevel_len_, sizeof(glevel_len_));
-            move_from(blockman);
-        }
+        ::memcpy(glevel_len_, blockman.glevel_len_, sizeof(glevel_len_));
+        move_from(blockman);
     }
 #endif
 
     ~blocks_manager() BMNOEXEPT
     {
-		if (temp_block_)
-			alloc_.free_bit_block(temp_block_);
+        if (temp_block_)
+            alloc_.free_bit_block(temp_block_);
         deinit_tree();
     }
     
@@ -720,13 +717,13 @@ public:
         bm.top_blocks_ = btmp;
 
         bm::xor_swap(this->max_bits_, bm.max_bits_);
-		bm::xor_swap(this->top_block_size_, bm.top_block_size_);
+        bm::xor_swap(this->top_block_size_, bm.top_block_size_);
         bm::xor_swap(this->effective_top_block_size_, bm.effective_top_block_size_);
 
         BM_ASSERT(sizeof(glevel_len_) / sizeof(glevel_len_[0]) == bm::gap_levels); // paranoiya check
         for (unsigned i = 0; i < bm::gap_levels; ++i)
         {
-		    bm::xor_swap(glevel_len_[i], bm.glevel_len_[i]);
+            bm::xor_swap(glevel_len_[i], bm.glevel_len_[i]);
         }
     }
     
@@ -737,6 +734,11 @@ public:
         deinit_tree();
         swap(bm);
         alloc_ = bm.alloc_;
+        if (temp_block_ == 0)  // this does not have temp_block, borrow it from the donor
+        {
+            temp_block_ = bm.temp_block_;
+            bm.temp_block_ = 0;
+        }
     }
     
 
@@ -789,10 +791,10 @@ public:
             return 0;
         }
         bm::word_t** blk_blk = top_blocks_[block_idx];
-		bm::word_t* ret = blk_blk ? blk_blk[nb & bm::set_array_mask] : 0;
-		if (ret == FULL_BLOCK_FAKE_ADDR)
-			ret = FULL_BLOCK_REAL_ADDR;
-		return ret;
+        bm::word_t* ret = blk_blk ? blk_blk[nb & bm::set_array_mask] : 0;
+        if (ret == FULL_BLOCK_FAKE_ADDR)
+            ret = FULL_BLOCK_REAL_ADDR;
+        return ret;
     }
 
     /**
@@ -815,11 +817,11 @@ public:
         }
         *no_more_blocks = 0;
         bm::word_t** blk_blk = top_blocks_[block_idx];
-		bm::word_t* ret = blk_blk ? blk_blk[nb & bm::set_array_mask] : 0;
-		if (ret == FULL_BLOCK_FAKE_ADDR)
-			ret = FULL_BLOCK_REAL_ADDR;
-		return ret;
-	}
+        bm::word_t* ret = blk_blk ? blk_blk[nb & bm::set_array_mask] : 0;
+        if (ret == FULL_BLOCK_FAKE_ADDR)
+            ret = FULL_BLOCK_REAL_ADDR;
+        return ret;
+    }
 
     /** 
     Recalculate absolute block address into coordinates
@@ -879,10 +881,10 @@ public:
         if (!top_blocks_ || i >= top_block_size_) return 0;
         const bm::word_t* const* blk_blk = top_blocks_[i];
         const bm::word_t* ret = (blk_blk == 0) ? 0 : blk_blk[j];
-		if (ret == FULL_BLOCK_FAKE_ADDR)
-			ret = FULL_BLOCK_REAL_ADDR;
-		return ret;
-	}
+        if (ret == FULL_BLOCK_FAKE_ADDR)
+            ret = FULL_BLOCK_REAL_ADDR;
+        return ret;
+    }
 
     /**
         \brief Function returns top-level block in 2-level blocks array
@@ -921,8 +923,8 @@ public:
         }
         else
         {
-			if (IS_VALID_ADDR(block))
-				alloc_.free_bit_block(block);
+            if (IS_VALID_ADDR(block))
+                alloc_.free_bit_block(block);
         }
     }
 
@@ -989,11 +991,11 @@ public:
     bm::word_t* copy_block(unsigned idx, const blocks_manager& bm_src)
     {
         const bm::word_t* block = bm_src.get_block(idx);
-		if (block == 0)
-		{
-			zero_block(idx);
-			return 0;
-		}
+        if (block == 0)
+        {
+            zero_block(idx);
+            return 0;
+        }
         bm::word_t* new_blk = 0;
         bool is_gap = BM_IS_GAP(block);
 
@@ -1116,10 +1118,10 @@ public:
         if (!is_init())
             init_tree();
 
-		// never use real full block adress, it may be instantiated in another DLL 
-		// (unsafe static instantiation on windows)
-		if (block == FULL_BLOCK_REAL_ADDR)
-			block = FULL_BLOCK_FAKE_ADDR;
+        // never use real full block adress, it may be instantiated in another DLL 
+        // (unsafe static instantiation on windows)
+        if (block == FULL_BLOCK_REAL_ADDR)
+            block = FULL_BLOCK_FAKE_ADDR;
 
         // top block index
         BMREGISTER unsigned nblk_blk = nb >> bm::set_array_shift;
@@ -1190,10 +1192,10 @@ public:
         if (!is_init())
             init_tree();
 
-		// never use real full block adress, it may be instantiated in another DLL 
-		// (unsafe static instantiation on windows)
-		if (block == FULL_BLOCK_REAL_ADDR)
-			block = FULL_BLOCK_FAKE_ADDR;
+        // never use real full block adress, it may be instantiated in another DLL 
+        // (unsafe static instantiation on windows)
+        if (block == FULL_BLOCK_REAL_ADDR)
+            block = FULL_BLOCK_FAKE_ADDR;
 
         if (block)
         {
@@ -1240,10 +1242,10 @@ public:
         if (!is_init())
             init_tree();
         
-		// never use real full block adress, it may be instantiated in another DLL 
-		// (unsafe static instantiation on windows)
-		if (block == FULL_BLOCK_REAL_ADDR)
-			block = FULL_BLOCK_FAKE_ADDR;
+        // never use real full block adress, it may be instantiated in another DLL 
+        // (unsafe static instantiation on windows)
+        if (block == FULL_BLOCK_REAL_ADDR)
+            block = FULL_BLOCK_FAKE_ADDR;
 
         top_blocks_[nb >> bm::set_array_shift][nb & bm::set_array_mask] = block;
     }
@@ -1322,8 +1324,8 @@ public:
         else
         {
             // deallocates only valid pointers
-			if (IS_VALID_ADDR(block))
-				get_allocator().free_bit_block(block);
+            if (IS_VALID_ADDR(block))
+                get_allocator().free_bit_block(block);
         }
         set_block(nb, 0);
         return 0;
@@ -1347,7 +1349,7 @@ public:
         else
         {
             if (IS_VALID_ADDR(block))
-				get_allocator().free_bit_block(block);
+                get_allocator().free_bit_block(block);
         }
         return 0;
     }
@@ -1741,13 +1743,13 @@ public:
     {}
     ~bit_block_guard()
     {
-		if (IS_VALID_ADDR(block_))
-			bman_.get_allocator().free_bit_block(block_, 3);
+        if (IS_VALID_ADDR(block_))
+            bman_.get_allocator().free_bit_block(block_, 3);
     }
     void attach(bm::word_t* blk)
     {
-		if (IS_VALID_ADDR(block_))
-			bman_.get_allocator().free_bit_block(block_);
+        if (IS_VALID_ADDR(block_))
+            bman_.get_allocator().free_bit_block(block_);
         block_ = blk;
     }
     bm::word_t* allocate()

@@ -41,7 +41,7 @@
 // macro to define/undefine unaligned memory access (x86, PowerPC)
 //
 #if defined(__i386) || defined(__x86_64) || defined(__ppc__) || \
-	defined(__ppc64__) || defined(_M_IX86) || defined(_M_AMD64) || \
+    defined(__ppc64__) || defined(_M_IX86) || defined(_M_AMD64) || \
     defined(_M_IX86) || defined(_M_AMD64) || defined(_M_X64) || \
     (defined(_M_MPPC) && !defined(BM_FORBID_UNALIGNED_ACCESS))
 #define BM_UNALIGNED_ACCESS_OK 1
@@ -219,7 +219,7 @@
 #endif
 
 /*! 
-	Define calculates number of 1 bits in 32-bit word.
+    Define calculates number of 1 bits in 32-bit word.
     @ingroup bitfunc 
 */
 #ifndef BM_INCWORD_BITCOUNT

@@ -32,7 +32,7 @@ For more information please visit:  http://bitmagic.io
 //#define BM_SET_MMX_GUARD
 //#define BMSSE2OPT
 //#define BMSSE42OPT
-//#define BMCOUNTOPT
+#define BMCOUNTOPT
 //#define BM_USE_EXPLICIT_TEMP
 
 #include <stdio.h>
@@ -266,7 +266,7 @@ static unsigned nf_;
         if(*p != n)
         {
             printf("Block memory deallocation error!\n");
-			assert(0);
+            assert(0);
             exit(1);
         }
         ::free(p);
@@ -310,7 +310,7 @@ static unsigned nf_;
         if(*s != n)
         {
             printf("Ptr memory deallocation error!\n");
-			assert(0);
+            assert(0);
             exit(1);
         }
         ::free(s);
@@ -651,14 +651,14 @@ void FillSetClearIntervals(bvect_mini* bvect_min,
 }
 
 void FillSetsRandomOne(bvect_mini* bvect_min, 
-					   bvect* bvect_full,
-					   unsigned min, 
+                       bvect* bvect_full,
+                       unsigned min, 
                        unsigned max)
 {
-	unsigned range = max - min;
-	unsigned bit_idx = rand() % range;
-	bvect_min->set_bit(bit_idx);
-	bvect_full->set_bit(bit_idx);
+    unsigned range = max - min;
+    unsigned bit_idx = rand() % range;
+    bvect_min->set_bit(bit_idx);
+    bvect_full->set_bit(bit_idx);
     cout << "Bit_idx=" << bit_idx << endl;
 }
 
@@ -750,10 +750,10 @@ void FillSetsRandomMethod(bvect_mini* bvect_min,
         factor = rand()%3;
         FillSetsRandom(bvect_min, bvect_full, min, max, factor?factor:1);
         break;
-	case 4:
-		cout << "Random set one bit" << endl;
-		FillSetsRandomOne(bvect_min, bvect_full, min, max);
-		break;
+    case 4:
+        cout << "Random set one bit" << endl;
+        FillSetsRandomOne(bvect_min, bvect_full, min, max);
+        break;
     default:
         cout << "Random filling: method - Set Intervals - factor(random)" << endl;
         factor = rand()%10;
@@ -3394,9 +3394,9 @@ void DesrializationTest2()
         res = bvtotal.compare(bv_target_s);
         if (res != 0)
         {
-			unsigned bit_idx = bv_target_s.get_first();
-			cout << bit_idx << " " << bv_target_s.get_next(bit_idx) << endl;;
-			print_stat(bv_target_s);
+            unsigned bit_idx = bv_target_s.get_first();
+            cout << bit_idx << " " << bv_target_s.get_next(bit_idx) << endl;;
+            print_stat(bv_target_s);
             cout << "Operation deserialization error 2" << endl;
             exit(1);
         }
@@ -6733,19 +6733,19 @@ void BitCountChangeTest()
     
     CheckIntervals(bv1, 65536*2);
 
-	cout << "---------------------------- array GAP test " << endl;
+    cout << "---------------------------- array GAP test " << endl;
 
-	{
-		bm::gap_word_t arr[] = { 0 };
+    {
+        bm::gap_word_t arr[] = { 0 };
 
-		unsigned gap_count;
+        unsigned gap_count;
 
-		gap_count = bit_array_compute_gaps(arr, sizeof(arr)/sizeof(arr[0]));
-		if (gap_count != 1)
-		{
-			cout << "Array gap test failed. 1. " << endl;
-			exit(1);
-		}
+        gap_count = bit_array_compute_gaps(arr, sizeof(arr)/sizeof(arr[0]));
+        if (gap_count != 1)
+        {
+            cout << "Array gap test failed. 1. " << endl;
+            exit(1);
+        }
 
         bm::gap_word_t gap[20] = {0};
         bm::gap_word_t gap_cntrl[20] = {0};
@@ -6760,69 +6760,30 @@ void BitCountChangeTest()
         unsigned gap_len = gap_set_array(&gap[0], arr, sizeof(arr)/sizeof(arr[0]));
         unsigned gap_len1 = gap_length(gap);
 
-		if (gap_len != gap_l_cntrl || gap_len1 != gap_l_cntrl)
-		{
-			cout << "Array gap test failed. 1. " << endl;
-			exit(1);
-		}
+        if (gap_len != gap_l_cntrl || gap_len1 != gap_l_cntrl)
+        {
+            cout << "Array gap test failed. 1. " << endl;
+            exit(1);
+        }
         int cmpres = gapcmp(gap, gap_cntrl);
         if (cmpres != 0)
         {
-			cout << "Array gap cmp test failed. 1. " << endl;
-			exit(1);
+            cout << "Array gap cmp test failed. 1. " << endl;
+            exit(1);
         }
-	}
+    }
 
-	{
-		bm::gap_word_t arr[] = { 65535 };
+    {
+        bm::gap_word_t arr[] = { 65535 };
 
-		unsigned gap_count;
+        unsigned gap_count;
 
-		gap_count = bit_array_compute_gaps(arr, sizeof(arr)/sizeof(arr[0]));
-		if (gap_count != 2)
-		{
-			cout << "Array gap test failed. 1.1 " << endl;
-			exit(1);
-		}
-
-        bm::gap_word_t gap[20] = {0};
-        bm::gap_word_t gap_cntrl[20] = {0};
-
-        gap_set_all(gap_cntrl, bm::gap_max_bits, 0);
-        for (unsigned i = 0; i < sizeof(arr)/sizeof(arr[0]); ++i)
+        gap_count = bit_array_compute_gaps(arr, sizeof(arr)/sizeof(arr[0]));
+        if (gap_count != 2)
         {
-            unsigned is_set;
-            gap_set_value(1, gap_cntrl, arr[i], &is_set);
+            cout << "Array gap test failed. 1.1 " << endl;
+            exit(1);
         }
-        unsigned gap_l_cntrl = gap_length(gap_cntrl);
-
-        unsigned gap_len = gap_set_array(&gap[0], arr, sizeof(arr)/sizeof(arr[0]));
-        unsigned gap_len1 = gap_length(gap);
-
-		if (gap_len != gap_l_cntrl || gap_len1 != gap_l_cntrl)
-		{
-			cout << "Array gap test failed. 1.1 " << endl;
-			exit(1);
-		}
-        int cmpres = gapcmp(gap, gap_cntrl);
-        if (cmpres != 0)
-        {
-			cout << "Array gap cmp test failed. 1. " << endl;
-			exit(1);
-        }
-	}
-
-	{
-		bm::gap_word_t arr[] = { 0, 65535 };
-
-		unsigned gap_count;
-
-		gap_count = bit_array_compute_gaps(arr, sizeof(arr)/sizeof(arr[0]));
-		if (gap_count != 3)
-		{
-			cout << "Array gap test failed. 1.2 " << endl;
-			exit(1);
-		}
 
         bm::gap_word_t gap[20] = {0};
         bm::gap_word_t gap_cntrl[20] = {0};
@@ -6838,30 +6799,30 @@ void BitCountChangeTest()
         unsigned gap_len = gap_set_array(&gap[0], arr, sizeof(arr)/sizeof(arr[0]));
         unsigned gap_len1 = gap_length(gap);
 
-		if (gap_len != gap_l_cntrl || gap_len1 != gap_l_cntrl)
-		{
-			cout << "Array gap test failed. 1.2 " << endl;
-			exit(1);
-		}
+        if (gap_len != gap_l_cntrl || gap_len1 != gap_l_cntrl)
+        {
+            cout << "Array gap test failed. 1.1 " << endl;
+            exit(1);
+        }
         int cmpres = gapcmp(gap, gap_cntrl);
         if (cmpres != 0)
         {
-			cout << "Array gap cmp test failed. 1.2 " << endl;
-			exit(1);
+            cout << "Array gap cmp test failed. 1. " << endl;
+            exit(1);
         }
-	}
+    }
 
-	{
-		bm::gap_word_t arr[] = { 0, 1, 2, 65534, 65535 };
+    {
+        bm::gap_word_t arr[] = { 0, 65535 };
 
-		unsigned gap_count;
+        unsigned gap_count;
 
-		gap_count = bit_array_compute_gaps(arr, sizeof(arr)/sizeof(arr[0]));
-		if (gap_count != 3)
-		{
-			cout << "Array gap test failed. 1.3 " << endl;
-			exit(1);
-		}
+        gap_count = bit_array_compute_gaps(arr, sizeof(arr)/sizeof(arr[0]));
+        if (gap_count != 3)
+        {
+            cout << "Array gap test failed. 1.2 " << endl;
+            exit(1);
+        }
 
         bm::gap_word_t gap[20] = {0};
         bm::gap_word_t gap_cntrl[20] = {0};
@@ -6877,29 +6838,31 @@ void BitCountChangeTest()
         unsigned gap_len = gap_set_array(&gap[0], arr, sizeof(arr)/sizeof(arr[0]));
         unsigned gap_len1 = gap_length(gap);
 
-		if (gap_len != gap_l_cntrl || gap_len1 != gap_l_cntrl)
-		{
-			cout << "Array gap test failed. 1.3 " << endl;
-			exit(1);
-		}
+        if (gap_len != gap_l_cntrl || gap_len1 != gap_l_cntrl)
+        {
+            cout << "Array gap test failed. 1.2 " << endl;
+            exit(1);
+        }
         int cmpres = gapcmp(gap, gap_cntrl);
         if (cmpres != 0)
         {
-			cout << "Array gap cmp test failed. 1.3 " << endl;
-			exit(1);
+            cout << "Array gap cmp test failed. 1.2 " << endl;
+            exit(1);
         }
-	}
+    }
 
-	{
-		bm::gap_word_t arr[] = { 0, 1, 2 };
-		unsigned gap_count;
+    {
+        bm::gap_word_t arr[] = { 0, 1, 2, 65534, 65535 };
 
-		gap_count = bit_array_compute_gaps(arr, sizeof(arr)/sizeof(arr[0]));
-		if (gap_count != 1)
-		{
-			cout << "Array gap test failed. 2. " << endl;
-			exit(1);
-		}
+        unsigned gap_count;
+
+        gap_count = bit_array_compute_gaps(arr, sizeof(arr)/sizeof(arr[0]));
+        if (gap_count != 3)
+        {
+            cout << "Array gap test failed. 1.3 " << endl;
+            exit(1);
+        }
+
         bm::gap_word_t gap[20] = {0};
         bm::gap_word_t gap_cntrl[20] = {0};
 
@@ -6914,30 +6877,29 @@ void BitCountChangeTest()
         unsigned gap_len = gap_set_array(&gap[0], arr, sizeof(arr)/sizeof(arr[0]));
         unsigned gap_len1 = gap_length(gap);
 
-		if (gap_len != gap_l_cntrl || gap_len1 != gap_l_cntrl)
-		{
-			cout << "Array gap test failed. 2 " << endl;
-			exit(1);
-		}
+        if (gap_len != gap_l_cntrl || gap_len1 != gap_l_cntrl)
+        {
+            cout << "Array gap test failed. 1.3 " << endl;
+            exit(1);
+        }
         int cmpres = gapcmp(gap, gap_cntrl);
         if (cmpres != 0)
         {
-			cout << "Array gap cmp test failed. 2 " << endl;
-			exit(1);
+            cout << "Array gap cmp test failed. 1.3 " << endl;
+            exit(1);
         }
+    }
 
-	}
+    {
+        bm::gap_word_t arr[] = { 0, 1, 2 };
+        unsigned gap_count;
 
-	{
-		bm::gap_word_t arr[] = { 1, 2 };
-		unsigned gap_count;
-
-		gap_count = bit_array_compute_gaps(arr, sizeof(arr)/sizeof(arr[0]));
-		if (gap_count != 2)
-		{
-			cout << "Array gap test failed. 3. " << endl;
-			exit(1);
-		}
+        gap_count = bit_array_compute_gaps(arr, sizeof(arr)/sizeof(arr[0]));
+        if (gap_count != 1)
+        {
+            cout << "Array gap test failed. 2. " << endl;
+            exit(1);
+        }
         bm::gap_word_t gap[20] = {0};
         bm::gap_word_t gap_cntrl[20] = {0};
 
@@ -6952,29 +6914,30 @@ void BitCountChangeTest()
         unsigned gap_len = gap_set_array(&gap[0], arr, sizeof(arr)/sizeof(arr[0]));
         unsigned gap_len1 = gap_length(gap);
 
-		if (gap_len != gap_l_cntrl || gap_len1 != gap_l_cntrl)
-		{
-			cout << "Array gap test failed. 3 " << endl;
-			exit(1);
-		}
+        if (gap_len != gap_l_cntrl || gap_len1 != gap_l_cntrl)
+        {
+            cout << "Array gap test failed. 2 " << endl;
+            exit(1);
+        }
         int cmpres = gapcmp(gap, gap_cntrl);
         if (cmpres != 0)
         {
-			cout << "Array gap cmp test failed. 3 " << endl;
-			exit(1);
+            cout << "Array gap cmp test failed. 2 " << endl;
+            exit(1);
         }
-	}
 
-	{
-		bm::gap_word_t arr[] = { 1, 2, 10 };
-		unsigned gap_count;
+    }
 
-		gap_count = bit_array_compute_gaps(arr, sizeof(arr)/sizeof(arr[0]));
-		if (gap_count != 4)
-		{
-			cout << "Array gap test failed. 4. " << endl;
-			exit(1);
-		}
+    {
+        bm::gap_word_t arr[] = { 1, 2 };
+        unsigned gap_count;
+
+        gap_count = bit_array_compute_gaps(arr, sizeof(arr)/sizeof(arr[0]));
+        if (gap_count != 2)
+        {
+            cout << "Array gap test failed. 3. " << endl;
+            exit(1);
+        }
         bm::gap_word_t gap[20] = {0};
         bm::gap_word_t gap_cntrl[20] = {0};
 
@@ -6989,29 +6952,29 @@ void BitCountChangeTest()
         unsigned gap_len = gap_set_array(&gap[0], arr, sizeof(arr)/sizeof(arr[0]));
         unsigned gap_len1 = gap_length(gap);
 
-		if (gap_len != gap_l_cntrl || gap_len1 != gap_l_cntrl)
-		{
-			cout << "Array gap test failed. 4 " << endl;
-			exit(1);
-		}
+        if (gap_len != gap_l_cntrl || gap_len1 != gap_l_cntrl)
+        {
+            cout << "Array gap test failed. 3 " << endl;
+            exit(1);
+        }
         int cmpres = gapcmp(gap, gap_cntrl);
         if (cmpres != 0)
         {
-			cout << "Array gap cmp test failed. 4 " << endl;
-			exit(1);
+            cout << "Array gap cmp test failed. 3 " << endl;
+            exit(1);
         }
-	}
+    }
 
-	{
-		bm::gap_word_t arr[] = { 1, 2, 10, 11 };
-		unsigned gap_count;
+    {
+        bm::gap_word_t arr[] = { 1, 2, 10 };
+        unsigned gap_count;
 
-		gap_count = bit_array_compute_gaps(arr, sizeof(arr)/sizeof(arr[0]));
-		if (gap_count != 4)
-		{
-			cout << "Array gap test failed. 5. " << endl;
-			exit(1);
-		}
+        gap_count = bit_array_compute_gaps(arr, sizeof(arr)/sizeof(arr[0]));
+        if (gap_count != 4)
+        {
+            cout << "Array gap test failed. 4. " << endl;
+            exit(1);
+        }
         bm::gap_word_t gap[20] = {0};
         bm::gap_word_t gap_cntrl[20] = {0};
 
@@ -7026,30 +6989,29 @@ void BitCountChangeTest()
         unsigned gap_len = gap_set_array(&gap[0], arr, sizeof(arr)/sizeof(arr[0]));
         unsigned gap_len1 = gap_length(gap);
 
-		if (gap_len != gap_l_cntrl || gap_len1 != gap_l_cntrl)
-		{
-			cout << "Array gap test failed. 5 " << endl;
-			exit(1);
-		}
+        if (gap_len != gap_l_cntrl || gap_len1 != gap_l_cntrl)
+        {
+            cout << "Array gap test failed. 4 " << endl;
+            exit(1);
+        }
         int cmpres = gapcmp(gap, gap_cntrl);
         if (cmpres != 0)
         {
-			cout << "Array gap cmp test failed. 5 " << endl;
-			exit(1);
+            cout << "Array gap cmp test failed. 4 " << endl;
+            exit(1);
         }
+    }
 
-	}
+    {
+        bm::gap_word_t arr[] = { 1, 2, 10, 11 };
+        unsigned gap_count;
 
-	{
-		bm::gap_word_t arr[] = { 1, 2, 10, 11, 256 };
-		unsigned gap_count;
-
-		gap_count = bit_array_compute_gaps(arr, sizeof(arr)/sizeof(arr[0]));
-		if (gap_count != 6)
-		{
-			cout << "Array gap test failed. 6. " << endl;
-			exit(1);
-		}
+        gap_count = bit_array_compute_gaps(arr, sizeof(arr)/sizeof(arr[0]));
+        if (gap_count != 4)
+        {
+            cout << "Array gap test failed. 5. " << endl;
+            exit(1);
+        }
         bm::gap_word_t gap[20] = {0};
         bm::gap_word_t gap_cntrl[20] = {0};
 
@@ -7064,19 +7026,57 @@ void BitCountChangeTest()
         unsigned gap_len = gap_set_array(&gap[0], arr, sizeof(arr)/sizeof(arr[0]));
         unsigned gap_len1 = gap_length(gap);
 
-		if (gap_len != gap_l_cntrl || gap_len1 != gap_l_cntrl)
-		{
-			cout << "Array gap test failed. 6 " << endl;
-			exit(1);
-		}
+        if (gap_len != gap_l_cntrl || gap_len1 != gap_l_cntrl)
+        {
+            cout << "Array gap test failed. 5 " << endl;
+            exit(1);
+        }
         int cmpres = gapcmp(gap, gap_cntrl);
         if (cmpres != 0)
         {
-			cout << "Array gap cmp test failed. 6 " << endl;
-			exit(1);
+            cout << "Array gap cmp test failed. 5 " << endl;
+            exit(1);
         }
 
-	}
+    }
+
+    {
+        bm::gap_word_t arr[] = { 1, 2, 10, 11, 256 };
+        unsigned gap_count;
+
+        gap_count = bit_array_compute_gaps(arr, sizeof(arr)/sizeof(arr[0]));
+        if (gap_count != 6)
+        {
+            cout << "Array gap test failed. 6. " << endl;
+            exit(1);
+        }
+        bm::gap_word_t gap[20] = {0};
+        bm::gap_word_t gap_cntrl[20] = {0};
+
+        gap_set_all(gap_cntrl, bm::gap_max_bits, 0);
+        for (unsigned i = 0; i < sizeof(arr)/sizeof(arr[0]); ++i)
+        {
+            unsigned is_set;
+            gap_set_value(1, gap_cntrl, arr[i], &is_set);
+        }
+        unsigned gap_l_cntrl = gap_length(gap_cntrl);
+
+        unsigned gap_len = gap_set_array(&gap[0], arr, sizeof(arr)/sizeof(arr[0]));
+        unsigned gap_len1 = gap_length(gap);
+
+        if (gap_len != gap_l_cntrl || gap_len1 != gap_l_cntrl)
+        {
+            cout << "Array gap test failed. 6 " << endl;
+            exit(1);
+        }
+        int cmpres = gapcmp(gap, gap_cntrl);
+        if (cmpres != 0)
+        {
+            cout << "Array gap cmp test failed. 6 " << endl;
+            exit(1);
+        }
+
+    }
 
 
     cout << "---------------------------- BitCountChangeTest Ok." << endl;
@@ -7921,31 +7921,31 @@ void BitForEachTest()
 {
     cout << "---------------------------- BitForEachTest..." << endl;
 
-	unsigned bit_list1[32];
-	unsigned bit_list2[32];
-	unsigned bit_list3[32];
+    unsigned bit_list1[32];
+    unsigned bit_list2[32];
+    unsigned bit_list3[32];
 
 
-	for (unsigned i = 0; i < 65536*50; ++i)
-	{
-		unsigned bits1 = bm::bit_list(i, bit_list1);
-		unsigned bits2 = bm::bit_list_4(i, bit_list2);
-		unsigned bits3 = bitscan_popcnt(i, bit_list3);
-		if (bits1 != bits2 || bits1 != bits3)
-		{
-			cout << "Bit for each test failed bit_cnt criteria!" << endl;
-			exit(1);
-		}
-		for (unsigned j = 0; j < bits1; ++j)
-		{
-			if (bit_list1[j] != bit_list2[j] || bit_list1[j] != bit_list3[j])
-			{
-				cout << "Bit for each check failed for " << j << endl;
-				exit(1);
-			}
-		}
+    for (unsigned i = 0; i < 65536*50; ++i)
+    {
+        unsigned bits1 = bm::bit_list(i, bit_list1);
+        unsigned bits2 = bm::bit_list_4(i, bit_list2);
+        unsigned bits3 = bitscan_popcnt(i, bit_list3);
+        if (bits1 != bits2 || bits1 != bits3)
+        {
+            cout << "Bit for each test failed bit_cnt criteria!" << endl;
+            exit(1);
+        }
+        for (unsigned j = 0; j < bits1; ++j)
+        {
+            if (bit_list1[j] != bit_list2[j] || bit_list1[j] != bit_list3[j])
+            {
+                cout << "Bit for each check failed for " << j << endl;
+                exit(1);
+            }
+        }
 
-	} // for
+    } // for
 
     cout << "---------------------------- BitForEachTest Ok." << endl;
 }
@@ -9146,23 +9146,23 @@ void LoadBVDump(const char* filename, const char* filename_out=0, bool validate=
 
 void GroupByTest(const char* filename, const char* query_filename)
 {
-	bvect bv_query;
+    bvect bv_query;
 
     unsigned count = 0;
-	unsigned group_by_count = 0;
+    unsigned group_by_count = 0;
 
     clock_t start = clock();
 
-	// load the query vector
-	{
-		ifstream bv_file (query_filename, ios::in | ios::binary);
-		if (!bv_file.good())
-		{
-			cout << "Cannot open file: " << query_filename << endl;
-			exit(1);
-		}
-	    unsigned buffer_size = 400*1024*1024;
-		unsigned char* buffer = new unsigned char[buffer_size];
+    // load the query vector
+    {
+        ifstream bv_file (query_filename, ios::in | ios::binary);
+        if (!bv_file.good())
+        {
+            cout << "Cannot open file: " << query_filename << endl;
+            exit(1);
+        }
+        unsigned buffer_size = 400*1024*1024;
+        unsigned char* buffer = new unsigned char[buffer_size];
 
         unsigned bv_size=0;
         bv_file.read((char*)&bv_size, sizeof(bv_size));
@@ -9174,9 +9174,9 @@ void GroupByTest(const char* filename, const char* query_filename)
         bv_file.read((char*)buffer, bv_size);
         bm::deserialize(bv_query, (unsigned char*)buffer);
         
-		delete [] buffer;
+        delete [] buffer;
 
-	}
+    }
 
 
     ifstream bv_file (filename, ios::in | ios::binary);
@@ -9209,7 +9209,7 @@ void GroupByTest(const char* filename, const char* query_filename)
         }
         bv_file.read((char*)buffer, bv_size);
         bvect bv;
-		if (1)
+        if (1)
         {
             bv.clear(true);
             bm::deserialize(bv, (unsigned char*)buffer);
@@ -9221,47 +9221,47 @@ void GroupByTest(const char* filename, const char* query_filename)
             }
 
 /*            
-			bv &= bv_query;
-			if (bv.any())
-			{
-				++group_by_count;
-			}
+            bv &= bv_query;
+            if (bv.any())
+            {
+                ++group_by_count;
+            }
 */            
 
         }
-	
-	
+    
+    
 #if 0
 //print_stat(bv_query);
 //exit(1);
-		{
-		bvect bv(BM_GAP);
+        {
+        bvect bv(BM_GAP);
         operation_deserializer<bvect>::deserialize(bv,
                                                    bv_query,
                                                    (unsigned char*)buffer,
                                                    0,
-												   bm::set_AND);
-		// control			
-		if (0)
+                                                   bm::set_AND);
+        // control			
+        if (0)
         {
             bvect bv_control(BM_GAP);
             bm::deserialize(bv_control, (unsigned char*)buffer);
-			bv_control &= bv_query;
-			if (bv_control != bv)
-			{
-				cerr << "Group by control failure" << endl;
-				cerr << bv_control.count() << endl;
-				cerr << bv.count() << endl;
-				exit(1);
-			}
+            bv_control &= bv_query;
+            if (bv_control != bv)
+            {
+                cerr << "Group by control failure" << endl;
+                cerr << bv_control.count() << endl;
+                cerr << bv.count() << endl;
+                exit(1);
+            }
         }				
 
 
-		if (bv.any())
-		{
-			++group_by_count;
-		}
-		}
+        if (bv.any())
+        {
+            ++group_by_count;
+        }
+        }
 #endif
 
         if (count % 1000 == 0)
@@ -9497,9 +9497,9 @@ int main(void)
 
     if (0)
     {
-	    GroupByTest("C:/dev/group-by-sets/sets/geo_organization.bvdump",
-		            "C:/dev/group-by-sets/single/pubmed.dat");
-	    exit(1);
+        GroupByTest("C:/dev/group-by-sets/sets/geo_organization.bvdump",
+                    "C:/dev/group-by-sets/single/pubmed.dat");
+        exit(1);
     }
 
 
@@ -9540,29 +9540,29 @@ int main(void)
     
     }}
     
-	
+    
 /*
     LoadBVDump("C:/dev/group-by-sets/sets/geo_organization.bvdump", 
                "C:/dev/group-by-sets/sets/geo_organization.bvdump2", 
-			   false); // not validate!
+               false); // not validate!
     exit(1);
 */
 
 /*
     LoadBVDump("C:/dev/group-by-sets/sets/geo_organization.dat", 
-		       "C:/dev/group-by-sets/sets/geo_organization.bvdump", 
-			   true); //  validate!
+               "C:/dev/group-by-sets/sets/geo_organization.bvdump", 
+               true); //  validate!
 
     LoadBVDump("C:/dev/group-by-sets/sets/exec_time_msec_bit.dat", 
-		       "C:/dev/group-by-sets/sets/exec_time_msec_bit.bvdump", 
-			   true);
+               "C:/dev/group-by-sets/sets/exec_time_msec_bit.bvdump", 
+               true);
 
     LoadBVDump("C:/dev/group-by-sets/sets/geo_country.dat", 
-		       "C:/dev/group-by-sets/sets/geo_country.bvdump", 
-			   true);
+               "C:/dev/group-by-sets/sets/geo_country.bvdump", 
+               true);
     LoadBVDump("C:/dev/group-by-sets/sets/log_displayeduids.dat", 
-		       "C:/dev/group-by-sets/sets/log_displayeduids.bvdump", 
-			   true);
+               "C:/dev/group-by-sets/sets/log_displayeduids.bvdump", 
+               true);
 
     //LoadVectors("c:/dev/bv_perf", 3, 27);
     exit(1);
@@ -9582,7 +9582,7 @@ int main(void)
    
      Log2Test();
 
-	 BitForEachTest();
+     BitForEachTest();
 
 //     BitEncoderTest();
   

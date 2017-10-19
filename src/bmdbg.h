@@ -691,18 +691,18 @@ int file_save_svector(const SV& sv, const std::string& fname, size_t* sv_blob_si
 template<class SV, class V>
 int svector_check(const SV& sv, const V& vect)
 {
-	if (sv.size() != vect.size())
-	{
-		return 1;
-	}
-	for (size_t i = 0; i < vect.size(); ++i)
-	{
-		unsigned v1 = sv[(unsigned)i];
-		unsigned v2 = vect[i];
-		if (v1 != v2)
-			return 2;
-	} // for i
-	return 0;
+    if (sv.size() != vect.size())
+    {
+        return 1;
+    }
+    for (size_t i = 0; i < vect.size(); ++i)
+    {
+        unsigned v1 = sv[(unsigned)i];
+        unsigned v2 = vect[i];
+        if (v1 != v2)
+            return 2;
+    } // for i
+    return 0;
 }
 
 

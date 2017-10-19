@@ -1511,9 +1511,9 @@ void export_array(BV& bv, It first, It last)
     unsigned b1, b2, b3, b4;
 
     if (bit_cnt >= bv.size())
-		bv.resize((bm::id_t)bit_cnt + 1);
+        bv.resize((bm::id_t)bit_cnt + 1);
     else 
-		bv.set_range((bm::id_t)bit_cnt, bv.size() - 1, false);
+        bv.set_range((bm::id_t)bit_cnt, bv.size() - 1, false);
     
     switch (inp_word_size)
     {

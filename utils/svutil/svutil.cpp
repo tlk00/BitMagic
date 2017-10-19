@@ -63,8 +63,8 @@ void show_help()
       << "-svin  sv-input-file        -- sv dump file to load"         << std::endl
       << "-u32in u32-input-file       -- raw 32-bit unsigned int file" << std::endl
       << "-svout sv-output-file       -- sv output file to produce"    << std::endl
-	  << "-u32out u32-output-file     -- raw 32-bit output file to produce" << std::endl
-	  << "-diag (-d)                  -- print statistics/diagnostics info" << std::endl
+      << "-u32out u32-output-file     -- raw 32-bit output file to produce" << std::endl
+      << "-diag (-d)                  -- print statistics/diagnostics info" << std::endl
       << "-timing (-t)                -- evaluate timing/duration of operations" << std::endl
       ;
 }
@@ -135,19 +135,19 @@ int parse_args(int argc, char *argv[])
             continue;
         }
 
-		if (arg == "-u32out" || arg == "--u32out")
-		{
-			if (i + 1 < argc)
-			{
-				u32_out_file = argv[++i];
-			}
-			else
-			{
-				std::cerr << "Error: -u32out requires file name" << std::endl;
-				return 1;
-			}
-			continue;
-		}
+        if (arg == "-u32out" || arg == "--u32out")
+        {
+            if (i + 1 < argc)
+            {
+                u32_out_file = argv[++i];
+            }
+            else
+            {
+                std::cerr << "Error: -u32out requires file name" << std::endl;
+                return 1;
+            }
+            continue;
+        }
 
 
         if (arg == "-diag" || arg == "--diag" || arg == "-d" || arg == "--d")

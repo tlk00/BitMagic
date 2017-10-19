@@ -185,9 +185,9 @@ public:
     */
     void free_bit_block(bm::word_t* block, unsigned alloc_factor = 1)
     {
-		BM_ASSERT(IS_VALID_ADDR(block));
-		block_alloc_.deallocate(block, bm::set_block_size * alloc_factor);    
-	}
+        BM_ASSERT(IS_VALID_ADDR(block));
+        block_alloc_.deallocate(block, bm::set_block_size * alloc_factor);    
+    }
 
     /*! @brief Allocates GAP block using bit block allocator (BA).
 

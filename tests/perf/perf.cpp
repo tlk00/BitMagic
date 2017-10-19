@@ -266,8 +266,8 @@ void BitCountTest()
 
     c1 = *p;
     c1 = value = 0;
-	stringstream s;
-	s << value << c1; // to fool the optimization
+    stringstream s;
+    s << value << c1; // to fool the optimization
 
     delete bset;
     delete bv;
@@ -281,53 +281,53 @@ void BitForEachTest()
     // setup the test data
     //
     unsigned* test_arr = new unsigned[65536];
-	for (unsigned j = 0; j < 65536; ++j)
-	{
+    for (unsigned j = 0; j < 65536; ++j)
+    {
         test_arr[j] = j;		
-	}
+    }
 
     if (!platform_test)
     {
-	unsigned bit_list[32];
+    unsigned bit_list[32];
     TimeTaker tt("BitList algorithm. Conventional (AND based check)", REPEATS*10);
     
 
-	for (unsigned i = 0; i < REPEATS*10; ++i)
+    for (unsigned i = 0; i < REPEATS*10; ++i)
     {    
-		for (unsigned j = 0; j < 65536; ++j)
-		{
-			bm::bit_list(i*test_arr[j], bit_list);
-		}
-	}
-	}
-	
+        for (unsigned j = 0; j < 65536; ++j)
+        {
+            bm::bit_list(i*test_arr[j], bit_list);
+        }
+    }
+    }
+    
     {
-	unsigned bit_list[32];
+    unsigned bit_list[32];
     TimeTaker tt("BitList4 algorithm(sub-octet+switch)", REPEATS*20);
 
-	for (unsigned i = 0; i < REPEATS*100; ++i)
+    for (unsigned i = 0; i < REPEATS*100; ++i)
     {    
-		for (unsigned j = 0; j < 65536; ++j)
-		{
-			bm::bit_list_4(i*test_arr[j], bit_list);
-		}
-	}
-	}
+        for (unsigned j = 0; j < 65536; ++j)
+        {
+            bm::bit_list_4(i*test_arr[j], bit_list);
+        }
+    }
+    }
 
-	{
-		unsigned bit_list[32];
-		TimeTaker tt("BitScan on bitcount algorithm", REPEATS * 20);
+    {
+        unsigned bit_list[32];
+        TimeTaker tt("BitScan on bitcount algorithm", REPEATS * 20);
 
-		for (unsigned i = 0; i < REPEATS * 100; ++i)
-		{
-			for (unsigned j = 0; j < 65536; ++j)
-			{
-				bm::bitscan_popcnt(i*test_arr[j], bit_list);
-			}
-		}
-	}
+        for (unsigned i = 0; i < REPEATS * 100; ++i)
+        {
+            for (unsigned j = 0; j < 65536; ++j)
+            {
+                bm::bitscan_popcnt(i*test_arr[j], bit_list);
+            }
+        }
+    }
 
-	delete [] test_arr;
+    delete [] test_arr;
 }
 
 
@@ -556,8 +556,8 @@ void EnumeratorTestGAP()
         }
     }
 
-	stringstream s;
-	s << v << endl; // attempt to fool optimization
+    stringstream s;
+    s << v << endl; // attempt to fool optimization
 
     }
 
@@ -603,24 +603,24 @@ void EnumeratorTestGAP()
 
 void SerializationTest()
 {
-	bvect bv_sparse;
+    bvect bv_sparse;
     // stack declaration of temp block instead of re-allocation makes things faster
     BM_DECLARE_TEMP_BLOCK(tb)
 
 
-	// prepare a test bitset with a small number of bits set somewhere
-	// far from the beginning
-	for (unsigned i = 0; i < 5; ++i)
-	{
-		bv_sparse[BSIZE/2 + i * 3] = true;		
-	}
-	bv_sparse[100] = true;
-	bv_sparse[70000] = true;
-	bv_sparse[200000] = true;
+    // prepare a test bitset with a small number of bits set somewhere
+    // far from the beginning
+    for (unsigned i = 0; i < 5; ++i)
+    {
+        bv_sparse[BSIZE/2 + i * 3] = true;		
+    }
+    bv_sparse[100] = true;
+    bv_sparse[70000] = true;
+    bv_sparse[200000] = true;
 
-	bv_sparse.optimize(tb);
+    bv_sparse.optimize(tb);
 
-	unsigned cnt = bv_sparse.count();
+    unsigned cnt = bv_sparse.count();
     bvect::statistics st;
     bv_sparse.calc_stat(&st);
     unsigned char*  buf = new unsigned char[st.max_serialize_mem];
@@ -628,37 +628,37 @@ void SerializationTest()
     unsigned len, id_size;
     len = id_size = 0;
     {
-	TimeTaker tt("Small bvector serialization", REPEATS*70000);
-	for (unsigned i = 0; i < REPEATS*70000; ++i)
-	{
-		len += bm::serialize(bv_sparse, buf, tb, bm::BM_NO_BYTE_ORDER|bm::BM_NO_GAP_LENGTH);
-		id_size += cnt * (unsigned)sizeof(unsigned);
-	}
-	}
-	
-	delete [] buf; buf = 0;
-		
+    TimeTaker tt("Small bvector serialization", REPEATS*70000);
+    for (unsigned i = 0; i < REPEATS*70000; ++i)
+    {
+        len += bm::serialize(bv_sparse, buf, tb, bm::BM_NO_BYTE_ORDER|bm::BM_NO_GAP_LENGTH);
+        id_size += cnt * (unsigned)sizeof(unsigned);
+    }
+    }
+    
+    delete [] buf; buf = 0;
+        
     bvect*  bv = new bvect();
     test_bitset*  bset = new test_bitset();
     unsigned value = 0;
 
     SimpleFillSets(*bset, *bv, 0, BSIZE, 4);
     
-	cnt = bv->count();
+    cnt = bv->count();
     bv->calc_stat(&st);
     buf = new unsigned char[st.max_serialize_mem];
     
     {
-	TimeTaker tt("Large bvector serialization", REPEATS*4);
-	for (unsigned i = 0; i < REPEATS*4; ++i)
-	{
-		len += bm::serialize(*bv, buf, tb, bm::BM_NO_BYTE_ORDER|bm::BM_NO_GAP_LENGTH);
-		id_size += cnt * (unsigned)sizeof(unsigned);
-	}
-	}
+    TimeTaker tt("Large bvector serialization", REPEATS*4);
+    for (unsigned i = 0; i < REPEATS*4; ++i)
+    {
+        len += bm::serialize(*bv, buf, tb, bm::BM_NO_BYTE_ORDER|bm::BM_NO_GAP_LENGTH);
+        id_size += cnt * (unsigned)sizeof(unsigned);
+    }
+    }
     
-	char cbuf[256];
-	sprintf(cbuf, "%i %i %i", id_size, len, value);
+    char cbuf[256];
+    sprintf(cbuf, "%i %i %i", id_size, len, value);
     
     
     delete bv;
@@ -1083,7 +1083,7 @@ void TI_MetricTest()
 
 void BitBlockTransposeTest()
 {
-	bm::word_t BM_ALIGN16 block1[bm::set_block_size] BM_ALIGN16ATTR = { 0, };
+    bm::word_t BM_ALIGN16 block1[bm::set_block_size] BM_ALIGN16ATTR = { 0, };
     //bm::word_t BM_ALIGN16 block2[bm::set_block_size] = {0xFF,};
     unsigned   BM_ALIGN16 tmatrix1[32][bm::set_block_plain_size] BM_ALIGN16ATTR;
 

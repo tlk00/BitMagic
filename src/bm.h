@@ -492,8 +492,8 @@ public:
                         this->position_ += bits_in_block;
                         continue;
                     }
-					if (this->block_ == FULL_BLOCK_FAKE_ADDR)
-						this->block_ = FULL_BLOCK_REAL_ADDR;
+                    if (this->block_ == FULL_BLOCK_FAKE_ADDR)
+                        this->block_ = FULL_BLOCK_REAL_ADDR;
 
                     if (BM_IS_GAP(this->block_))
                     {
@@ -548,18 +548,18 @@ public:
                 while (++(bdescr->bit_.ptr) < pend)
                 {
                     bm::word_t w = *(bdescr->bit_.ptr);					
-					bdescr->bit_.cnt = bm::bitscan_popcnt(w, bdescr->bit_.bits);
-					if (bdescr->bit_.cnt)
-					{
-						bdescr->bit_.idx = 0;
-						bdescr->bit_.pos = this->position_;
-						this->position_ += bdescr->bit_.bits[0];
-						return *this;
-					}
-					else
-					{
-						this->position_ += 32;
-					}
+                    bdescr->bit_.cnt = bm::bitscan_popcnt(w, bdescr->bit_.bits);
+                    if (bdescr->bit_.cnt)
+                    {
+                        bdescr->bit_.idx = 0;
+                        bdescr->bit_.pos = this->position_;
+                        this->position_ += bdescr->bit_.bits[0];
+                        return *this;
+                    }
+                    else
+                    {
+                        this->position_ += 32;
+                    }
                 }
     
                 }
@@ -625,8 +625,8 @@ public:
                         this->position_ += bm::bits_in_block;
                         continue;
                     }
-					if (this->block_ == FULL_BLOCK_FAKE_ADDR)
-						this->block_ = FULL_BLOCK_REAL_ADDR;
+                    if (this->block_ == FULL_BLOCK_FAKE_ADDR)
+                        this->block_ = FULL_BLOCK_REAL_ADDR;
 
                     if (BM_IS_GAP(this->block_))
                     {
@@ -672,18 +672,18 @@ public:
             do
             {
                 bm::word_t w = *(bdescr->bit_.ptr);
-				bdescr->bit_.cnt = bm::bitscan_popcnt(w, bdescr->bit_.bits);
-				if (bdescr->bit_.cnt)
-				{
-					bdescr->bit_.idx = 0;
-					bdescr->bit_.pos = this->position_;
-					this->position_ += bdescr->bit_.bits[0];
-					return true;
-				}
-				else
-				{
-					this->position_ += 32;
-				}
+                bdescr->bit_.cnt = bm::bitscan_popcnt(w, bdescr->bit_.bits);
+                if (bdescr->bit_.cnt)
+                {
+                    bdescr->bit_.idx = 0;
+                    bdescr->bit_.pos = this->position_;
+                    this->position_ += bdescr->bit_.bits[0];
+                    return true;
+                }
+                else
+                {
+                    this->position_ += 32;
+                }
             } 
             while (++(bdescr->bit_.ptr) < ptr_end);
 
@@ -930,17 +930,14 @@ public:
     */
     bvector(bvector<Alloc>&& bvect) BMNOEXEPT
     {
-        if (this != &bvect)
-        {
-            blockman_.move_from(bvect.blockman_);
-            size_ = bvect.size_;
-            new_blocks_strat_ = bvect.new_blocks_strat_;
+        blockman_.move_from(bvect.blockman_);
+        size_ = bvect.size_;
+        new_blocks_strat_ = bvect.new_blocks_strat_;
             
-    #ifdef BMCOUNTOPT
-            BMCOUNT_VALID(false)
-            bvect.count_is_valid_ = false;
-    #endif
-        }
+#ifdef BMCOUNTOPT
+        count_ = bvect.count_;
+        count_is_valid_ = bvect.count_is_valid_;
+#endif
     }
     
     /*! 
@@ -955,8 +952,8 @@ public:
             new_blocks_strat_ = bvect.new_blocks_strat_;
             
     #ifdef BMCOUNTOPT
-            BMCOUNT_VALID(false)
-            bvect.count_is_valid_ = false;
+            count_ = bvect.count_;
+            count_is_valid_ = bvect.count_is_valid_;
     #endif
         }
         return *this;
@@ -1318,8 +1315,8 @@ public:
             blockman_.swap(bvect.blockman_);
             bm::xor_swap(size_,bvect.size_);
     #ifdef BMCOUNTOPT
-            BMCOUNT_VALID(false)
-            bvect.recalc_count();
+            bm::xor_swap(count_, bvect.count_);
+            bm::xor_swap(count_is_valid_, bvect.count_is_valid_);
     #endif
         }
     }
@@ -1932,8 +1929,8 @@ bool bvector<Alloc>::get_bit(bm::id_t n) const
     unsigned nblock = unsigned(n >>  bm::set_block_shift); 
 
     const bm::word_t* block = blockman_.get_block(nblock);
-	if (IS_FULL_BLOCK(block))
-		return true;
+    if (IS_FULL_BLOCK(block))
+        return true;
 
     if (block)
     {
@@ -1982,7 +1979,7 @@ void bvector<Alloc>::optimize(bm::word_t* temp_block,
                                                 stat);
     if (stat)
     {
-		stat->bit_blocks = stat->gap_blocks = 0;
+        stat->bit_blocks = stat->gap_blocks = 0;
         stat->max_serialize_mem = stat->memory_used = 0;
         ::memcpy(stat->gap_levels, 
                 blockman_.glen(), sizeof(gap_word_t) * bm::gap_levels);
@@ -2074,11 +2071,11 @@ int bvector<Alloc>::compare(const bvector<Alloc>& bv) const
         {
             const bm::word_t* arg_blk = arg_blk_blk ? arg_blk_blk[j] : 0;
             const bm::word_t* blk = blk_blk ? blk_blk[j] : 0;
-			if (arg_blk == FULL_BLOCK_FAKE_ADDR)
-				arg_blk = FULL_BLOCK_REAL_ADDR;
-			if (blk == FULL_BLOCK_FAKE_ADDR)
-				blk = FULL_BLOCK_REAL_ADDR;
-			if (blk == arg_blk) continue;
+            if (arg_blk == FULL_BLOCK_FAKE_ADDR)
+                arg_blk = FULL_BLOCK_REAL_ADDR;
+            if (blk == FULL_BLOCK_FAKE_ADDR)
+                blk = FULL_BLOCK_REAL_ADDR;
+            if (blk == arg_blk) continue;
 
             // If one block is zero we check if the other one has at least 
             // one bit ON
@@ -2186,7 +2183,7 @@ void bvector<Alloc>::calc_stat(struct bvector<Alloc>::statistics* st) const
 {
     BM_ASSERT(st);
     
-	st->bit_blocks = st->gap_blocks = 0;
+    st->bit_blocks = st->gap_blocks = 0;
     st->max_serialize_mem = st->memory_used = 0;
 
     ::memcpy(st->gap_levels, 
@@ -3087,10 +3084,10 @@ bvector<Alloc>::combine_operation_with_block(unsigned          nb,
         if (ret != dst) // block mutation
         {
             blockman_.set_block(nb, ret);
-			if (IS_VALID_ADDR(dst))
-			{
-				blockman_.get_allocator().free_bit_block(dst);
-			}
+            if (IS_VALID_ADDR(dst))
+            {
+                blockman_.get_allocator().free_bit_block(dst);
+            }
         }
 }
 
@@ -3167,8 +3164,8 @@ void bvector<Alloc>::set_range_no_check(bm::id_t left,
             }
             else
             {
-				if (IS_VALID_ADDR(block))
-					blockman_.get_allocator().free_bit_block(block);
+                if (IS_VALID_ADDR(block))
+                    blockman_.get_allocator().free_bit_block(block);
             }
             
         } // for
@@ -3191,8 +3188,8 @@ void bvector<Alloc>::set_range_no_check(bm::id_t left,
             }
             else
             {
-				if (IS_VALID_ADDR(block))
-					blockman_.get_allocator().free_bit_block(block);
+                if (IS_VALID_ADDR(block))
+                    blockman_.get_allocator().free_bit_block(block);
             }
 
         } // for
