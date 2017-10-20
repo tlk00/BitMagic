@@ -51,7 +51,7 @@ class encoder
 public:
     typedef unsigned char* position_type;
 public:
-    encoder(unsigned char* buf, unsigned size);
+    encoder(unsigned char* buf, size_t size);
     void put_8(unsigned char c);
     void put_16(bm::short_t  s);
     void put_16(const bm::short_t* s, unsigned count);
@@ -69,7 +69,7 @@ public:
 private:
     unsigned char*  buf_;
     unsigned char*  start_;
-    unsigned int    size_;
+    size_t          size_;
 };
 
 // ----------------------------------------------------------------
@@ -520,7 +520,7 @@ private:
     \param buf - memory buffer pointer.
     \param size - size of the buffer
 */
-inline encoder::encoder(unsigned char* buf, unsigned a_size)
+inline encoder::encoder(unsigned char* buf, size_t a_size)
 : buf_(buf), start_(buf)
 {
     size_ = a_size;

@@ -196,7 +196,7 @@ public:
        @sa calc_stat     
     */
     unsigned serialize(const BV& bv, 
-                       unsigned char* buf, unsigned buf_size);
+                       unsigned char* buf, size_t buf_size);
 
     
     /**
@@ -860,7 +860,7 @@ void serializer<BV>::encode_bit_interval(const bm::word_t* blk,
 
 template<class BV>
 unsigned serializer<BV>::serialize(const BV& bv, 
-                                   unsigned char* buf, unsigned buf_size)
+                                   unsigned char* buf, size_t buf_size)
 {
     BM_ASSERT(temp_block_);
     

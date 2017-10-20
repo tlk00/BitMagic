@@ -336,8 +336,8 @@ void BitCountSparseTest()
     {
     bvect*  bv = new bvect();
     test_bitset*  bset = new test_bitset();
-    unsigned value = 0, c1;
-    volatile unsigned* p = &value;
+    size_t value = 0, c1;
+    volatile size_t* p = &value;
 
     SimpleFillSets(*bset, *bv, 0, BSIZE, 2500);
 

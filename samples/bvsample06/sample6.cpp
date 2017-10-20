@@ -63,11 +63,11 @@ static unsigned nf_;
         assert(n);
         bm::word_t* p =
             (bm::word_t*) ::malloc((n+1) * sizeof(bm::word_t));
-        *p = n;
+        *p = (unsigned)n;
         return ++p;
     }
 
-    static void deallocate(bm::word_t* p, size_t n)
+    static void deallocate(bm::word_t* p, size_t /* n */)
     {
         ++nf_;
         --p;
@@ -100,7 +100,7 @@ static unsigned nf_;
         return (void*)++s;
     }
 
-    static void deallocate(void* p, size_t n)
+    static void deallocate(void* p, size_t /* n */)
     {
         ++nf_;
         size_t* s = (size_t*) p;
