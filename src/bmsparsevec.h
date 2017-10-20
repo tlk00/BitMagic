@@ -398,20 +398,17 @@ sparse_vector<Val, BV>::sparse_vector(const sparse_vector<Val, BV>& sv)
 template<class Val, class BV>
 sparse_vector<Val, BV>::sparse_vector(sparse_vector<Val, BV>&& sv) BMNOEXEPT
 {
-    if (this != &sv)
-    {
-        bv_size_ = 0;
-        alloc_ = sv.alloc_;
-        ap_ = sv.ap_;
-        size_ = sv.size_;
+    bv_size_ = 0;
+    alloc_ = sv.alloc_;
+    ap_ = sv.ap_;
+    size_ = sv.size_;
         
-        for (size_type i = 0; i < sizeof(Val)*8; ++i)
-        {
-            plains_[i] = sv.plains_[i];
-            sv.plains_[i] = 0;
-        }
-        sv.size_ = 0;
+    for (size_type i = 0; i < sizeof(Val)*8; ++i)
+    {
+        plains_[i] = sv.plains_[i];
+        sv.plains_[i] = 0;
     }
+    sv.size_ = 0;
 }
 
 #endif
