@@ -630,6 +630,49 @@ int OperationsTest()
     return res;
 }
 
+int EnumeratorTest()
+{
+    int res = 0;
+    BM_BVHANDLE bmh1 = 0;
+    BM_BVEHANDLE bmeh1 = 0;
+    int valid;
+    
+    unsigned int i;
+
+    res = BM_bvector_construct(&bmh1, 0);
+    BMERR_CHECK(res, "BM_bvector_construct()");
+
+    res = BM_bvector_enumerator_construct(bmh1, &bmeh1);
+    BMERR_CHECK_GOTO(res, "BM_bvector_enumerator_construct()", free_mem);
+    res = BM_bvector_enumerator_is_valid(bmeh1, &valid);
+    BMERR_CHECK_GOTO(res, "BM_bvector_enumerator_is_valid()", free_mem);
+    if (valid)
+    {
+        printf("1. incorrrect enumerator valid %i \n", valid);
+        res = 1; goto free_mem;
+    }
+    res = BM_bvector_enumerator_free(bmeh1);
+
+
+    for (i = 1; i < 4; ++i)
+    {
+        res = BM_bvector_set_bit(bmh1, i, BM_TRUE);
+        BMERR_CHECK_GOTO(res, "BM_bvector_set_bit()", free_mem);
+    } // for
+
+    res = BM_bvector_enumerator_construct(bmh1, &bmeh1);
+    BMERR_CHECK_GOTO(res, "BM_bvector_enumerator_construct()", free_mem);
+
+    
+
+    free_mem:
+        res = BM_bvector_enumerator_free(bmeh1);
+        res = BM_bvector_free(bmh1);
+
+    return res;
+}
+
+
 int SerializationTest()
 {
     int res = 0;
@@ -783,6 +826,15 @@ int main(void)
         return res;
     }
     printf("\n---------------------------------- OperationsTest OK\n");
+
+    res = EnumeratorTest();
+    if (res != 0)
+    {
+        printf("\nEnumeratorTest failed!\n");
+        return res;
+    }
+    printf("\n---------------------------------- EnumeratorTest OK\n");
+
 
     res = SerializationTest();
     if (res != 0)

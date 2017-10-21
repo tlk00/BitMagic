@@ -1,5 +1,8 @@
-
 #include "bmserial.h"
+
+
+typedef bm::bvector<libbm::standard_allocator>::enumerator TBM_bvector_enumerator;
+
 
 // -----------------------------------------------------------------
 
@@ -699,7 +702,6 @@ int BM_bvector_serialize(BM_BVHANDLE h,
 
 // -----------------------------------------------------------------
 
-
 int BM_bvector_deserialize(BM_BVHANDLE   h,
                            const char*   buf,
                            size_t        /*buf_size*/)
@@ -720,4 +722,70 @@ int BM_bvector_deserialize(BM_BVHANDLE   h,
 	return BM_OK;
 }
 
+// -----------------------------------------------------------------
+
+int BM_bvector_enumerator_construct(BM_BVHANDLE h, BM_BVEHANDLE* peh)
+{
+    if (h == 0 || peh == 0)
+        return BM_ERR_BADARG;
+
+    TRY
+    {
+        TBM_bvector* bv = (TBM_bvector*)h;
+
+        void* mem = ::malloc(sizeof(TBM_bvector_enumerator));
+        if (mem == 0)
+        {
+            *peh = 0;
+            return BM_ERR_BADALLOC;
+        }
+        // placement new just to call the constructor
+        TBM_bvector_enumerator* bvenum = new(mem) TBM_bvector_enumerator(bv, 0);
+        *peh = bvenum;
+        
+    }
+    CATCH (BM_ERR_BADALLOC)
+    {
+        *peh = 0;
+        return BM_ERR_BADALLOC;
+    }
+    ETRY;
+
+    return BM_OK;
+}
+
+// -----------------------------------------------------------------
+
+int BM_bvector_enumerator_free(BM_BVEHANDLE eh)
+{
+    if (!eh)
+        return BM_ERR_BADARG;
+    TBM_bvector_enumerator* bvenum = (TBM_bvector_enumerator*)eh;
+    bvenum->~TBM_bvector_enumerator();
+    ::free(eh);
+
+    return BM_OK;
+}
+
+// -----------------------------------------------------------------
+
+int BM_bvector_enumerator_is_valid(BM_BVEHANDLE eh, int* valid)
+{
+    if (!eh || !valid)
+        return BM_ERR_BADARG;
+    
+    TRY
+    {
+        TBM_bvector_enumerator* bvenum = (TBM_bvector_enumerator*)eh;
+        *valid = bvenum->valid();
+    }
+    CATCH (BM_ERR_BADALLOC)
+    {
+        return BM_ERR_BADALLOC;
+    }
+    ETRY;
+    return BM_OK;
+}
+
+// -----------------------------------------------------------------
 
