@@ -1,4 +1,43 @@
+/*
+     BitMagic Library C - unit test.
+*/
+
+
+/*
+Copyright(c) 2002-2017 Anatoliy Kuznetsov(anatoliy_kuznetsov at yahoo.com)
+
+Permission is hereby granted, free of charge, to any person
+obtaining a copy of this software and associated documentation
+files (the "Software"), to deal in the Software without restriction,
+including without limitation the rights to use, copy, modify, merge,
+publish, distribute, sublicense, and/or sell copies of the Software,
+and to permit persons to whom the Software is furnished to do so,
+subject to the following conditions:
+
+The above copyright notice and this permission notice shall be included
+in all copies or substantial portions of the Software.
+
+THE SOFTWARE IS PROVIDED "AS IS", WITHOUT WARRANTY OF ANY KIND,
+EXPRESS OR IMPLIED, INCLUDING BUT NOT LIMITED TO THE WARRANTIES
+OF MERCHANTABILITY, FITNESS FOR A PARTICULAR PURPOSE AND NONINFRINGEMENT.
+IN NO EVENT SHALL THE AUTHORS OR COPYRIGHT HOLDERS BE LIABLE FOR ANY CLAIM,
+DAMAGES OR OTHER LIABILITY, WHETHER IN AN ACTION OF CONTRACT, TORT OR OTHERWISE,
+ARISING FROM, OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR
+OTHER DEALINGS IN THE SOFTWARE.
+
+You have to explicitly mention BitMagic project in any derivative product,
+its WEB Site, published materials, articles or any other work derived from this
+project or based on our code or know-how.
+
+For more information please visit:  http://bitmagic.io
+
+*/
+
+
 #include <stdio.h>
+#include <stdlib.h>
+#include <string.h>
+
 #include "libbm.h"
 
 
@@ -506,6 +545,170 @@ int GetNextTest()
     return res;
 }
 
+int PrintVector(BM_BVHANDLE bmh, unsigned int size)
+{
+    unsigned int count;
+    int res = 0;
+    int val;
+    
+    res = BM_bvector_count(bmh, &count);
+    BMERR_CHECK_GOTO(res, "BM_bvector_count()", ret);
+    
+    printf("%u : ", count);
+
+    for (unsigned int i = 0; i < size; ++i)
+    {
+        res = BM_bvector_get_bit(bmh, i, &val);
+        BMERR_CHECK_GOTO(res, "BM_bvector_get_bit()", ret);
+        printf("%u", val);
+
+    } // for
+ret:
+    printf("\n");
+    return res;
+}
+
+int OperationsTest()
+{
+    int res = 0;
+    BM_BVHANDLE bmh1 = 0;
+    BM_BVHANDLE bmh2 = 0;
+    unsigned int i;
+    unsigned int count1, count2;
+
+    res = BM_bvector_construct(&bmh1, 0);
+    BMERR_CHECK(res, "BM_bvector_construct()");
+    res = BM_bvector_construct(&bmh2, 0);
+    BMERR_CHECK_GOTO(res, "BM_bvector_construct()", free_mem);
+
+
+    for (i = 1; i < 4; ++i)
+    {
+        res = BM_bvector_set_bit(bmh1, i, BM_TRUE);
+        BMERR_CHECK_GOTO(res, "BM_bvector_set_bit()", free_mem);
+    } // for
+
+    for (i = 0; i < 3; ++i)
+    {
+        res = BM_bvector_set_bit(bmh2, i, BM_TRUE);
+        BMERR_CHECK_GOTO(res, "BM_bvector_set_bit()", free_mem);
+    } // for
+
+    PrintVector(bmh1, 10);
+    PrintVector(bmh2, 10);
+    printf("AND\n");
+
+    res = BM_bvector_combine_AND(bmh1, bmh2);
+    BMERR_CHECK_GOTO(res, "BM_bvector_combine_AND()", free_mem);
+
+    
+    res = BM_bvector_count(bmh1, &count1);
+    BMERR_CHECK_GOTO(res, "BM_bvector_count()", free_mem);
+    if (count1 != 2)
+    {
+        printf("1. incorrrect count %i \n", count1);
+        res = 1; goto free_mem;
+    }
+    res = BM_bvector_count(bmh2, &count2);
+    BMERR_CHECK_GOTO(res, "BM_bvector_count()", free_mem);
+    if (count2 != 3)
+    {
+        printf("2. incorrrect count %i \n", count2);
+        res = 1; goto free_mem;
+    }
+
+    PrintVector(bmh1, 10);
+
+
+
+    free_mem:
+        res = BM_bvector_free(bmh1);
+        BMERR_CHECK(res, "bvector free failed");
+        res = BM_bvector_free(bmh2);
+        BMERR_CHECK(res, "bvector free failed");
+
+    return res;
+}
+
+int SerializationTest()
+{
+    int res = 0;
+    BM_BVHANDLE bmh1 = 0;
+    BM_BVHANDLE bmh2 = 0;
+    BM_BVHANDLE bmh3 = 0;
+    char* sbuf1 = 0;
+    char* sbuf2 = 0;
+    unsigned int i;
+    struct BM_bvector_statistics bv_stat;
+    size_t blob_size;
+
+    res = BM_bvector_construct(&bmh1, 0);
+    BMERR_CHECK(res, "BM_bvector_construct()");
+    res = BM_bvector_construct(&bmh2, 0);
+    BMERR_CHECK_GOTO(res, "BM_bvector_construct()", free_mem);
+    res = BM_bvector_construct(&bmh3, 0);
+    BMERR_CHECK_GOTO(res, "BM_bvector_construct()", free_mem);
+
+
+    for (i = 1; i < 4; ++i)
+    {
+        res = BM_bvector_set_bit(bmh1, i, BM_TRUE);
+        BMERR_CHECK_GOTO(res, "BM_bvector_set_bit()", free_mem);
+        res = BM_bvector_set_bit(bmh2, i, BM_TRUE);
+        BMERR_CHECK_GOTO(res, "BM_bvector_set_bit()", free_mem);
+    } // for
+    
+    res = BM_bvector_optimize(bmh1, 3, &bv_stat);
+    BMERR_CHECK_GOTO(res, "BM_bvector_calc_stat()", free_mem);
+
+    sbuf1 = (char*) malloc(bv_stat.max_serialize_mem);
+    if (sbuf1 == 0)
+    {
+        printf("Failed to allocate serialization buffer.\n");
+        res = 1; goto free_mem;
+    }
+    
+    res = BM_bvector_serialize(bmh1, sbuf1, bv_stat.max_serialize_mem, &blob_size);
+    BMERR_CHECK_GOTO(res, "BM_bvector_serialize()", free_mem);
+    
+    if (blob_size == 0 || blob_size > bv_stat.max_serialize_mem)
+    {
+        printf("Failed to serialize correctly.\n");
+        res = 1; goto free_mem;
+    }
+    
+    sbuf2 = (char*) malloc(blob_size);
+    if (sbuf1 == 0)
+    {
+        printf("Failed to allocate buffer.\n");
+        res = 1; goto free_mem;
+    }
+    
+    memcpy(sbuf2, sbuf1, blob_size); // imitation of I/O
+    
+    res = BM_bvector_deserialize(bmh3, sbuf2, blob_size);
+    BMERR_CHECK_GOTO(res, "BM_bvector_deserialize()", free_mem);
+
+    
+    PrintVector(bmh1, 10);
+    PrintVector(bmh2, 10);
+    PrintVector(bmh3, 10);
+
+
+
+    free_mem:
+        if(sbuf1) free(sbuf1);
+        if(sbuf2) free(sbuf2);
+
+        res = BM_bvector_free(bmh1);
+        res = BM_bvector_free(bmh2);
+        res = BM_bvector_free(bmh3);
+
+    return res;
+}
+
+
+
 
 int main(void)
 {
@@ -562,7 +765,34 @@ int main(void)
         return res;
     }
     printf("\n---------------------------------- RangeTest OK\n");
-    
+
+
+    res = GetNextTest();
+    if (res != 0)
+    {
+        printf("\nGetNextTest failed!\n");
+        return res;
+    }
+    printf("\n---------------------------------- GetNextTest OK\n");
+
+
+    res = OperationsTest();
+    if (res != 0)
+    {
+        printf("\nOperationsTest failed!\n");
+        return res;
+    }
+    printf("\n---------------------------------- OperationsTest OK\n");
+
+    res = SerializationTest();
+    if (res != 0)
+    {
+        printf("\nSerializationTest failed!\n");
+        return res;
+    }
+    printf("\n---------------------------------- SerializationTest OK\n");
+
+
     
     printf("\nlibbm unit test OK\n");
     
