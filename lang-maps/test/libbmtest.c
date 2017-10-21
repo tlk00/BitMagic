@@ -611,7 +611,7 @@ int CompareVectors(BM_BVHANDLE bmh1, BM_BVHANDLE bmh2, int* is_equal)
         res = BM_bvector_enumerator_next(bmeh1, &valid1, &pos1);
         BMERR_CHECK_GOTO(res, "BM_bvector_enumerator_next()", free_mem);
         res = BM_bvector_enumerator_next(bmeh2, &valid2, &pos2);
-        BMERR_CHECK_GOTO(res, "BM_bvector_enumerator_next()", free_mem);        
+        BMERR_CHECK_GOTO(res, "BM_bvector_enumerator_next()", free_mem);
     }
     
     if (valid1 == valid2)
