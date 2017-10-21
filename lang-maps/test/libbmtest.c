@@ -545,6 +545,7 @@ int GetNextTest()
     return res;
 }
 
+static
 int PrintVector(BM_BVHANDLE bmh, unsigned int size)
 {
     unsigned int count;
@@ -567,6 +568,65 @@ ret:
     printf("\n");
     return res;
 }
+
+static
+int CompareVectors(BM_BVHANDLE bmh1, BM_BVHANDLE bmh2, int* is_equal)
+{
+    int res = 0;
+    BM_BVEHANDLE bmeh1 = 0;
+    BM_BVEHANDLE bmeh2 = 0;
+    int valid1, valid2;
+    unsigned pos1, pos2;
+
+    res = BM_bvector_enumerator_construct(bmh1, &bmeh1);
+    BMERR_CHECK_GOTO(res, "BM_bvector_enumerator_construct()", free_mem);
+    res = BM_bvector_enumerator_construct(bmh2, &bmeh2);
+    BMERR_CHECK_GOTO(res, "BM_bvector_enumerator_construct()", free_mem);
+
+    res = BM_bvector_enumerator_is_valid(bmeh1, &valid1);
+    BMERR_CHECK_GOTO(res, "BM_bvector_enumerator_is_valid()", free_mem);
+    res = BM_bvector_enumerator_is_valid(bmeh2, &valid2);
+    BMERR_CHECK_GOTO(res, "BM_bvector_enumerator_is_valid()", free_mem);
+    
+    if (!valid1)
+    {
+        if (!valid2)
+            *is_equal = 1;
+        else
+            *is_equal = 0;
+        return 0;
+    }
+    res = BM_bvector_enumerator_get_value(bmeh1, &pos1);
+    BMERR_CHECK_GOTO(res, "BM_bvector_enumerator_get_value()", free_mem);
+    res = BM_bvector_enumerator_get_value(bmeh2, &pos2);
+    BMERR_CHECK_GOTO(res, "BM_bvector_enumerator_get_value()", free_mem);
+    
+    while(valid1 && valid2)
+    {
+        if (pos1 != pos2)
+        {
+            *is_equal = 0;
+            goto free_mem;
+        }
+        res = BM_bvector_enumerator_next(bmeh1, &valid1, &pos1);
+        BMERR_CHECK_GOTO(res, "BM_bvector_enumerator_next()", free_mem);
+        res = BM_bvector_enumerator_next(bmeh2, &valid2, &pos2);
+        BMERR_CHECK_GOTO(res, "BM_bvector_enumerator_next()", free_mem);        
+    }
+    
+    if (valid1 == valid2)
+    {
+        *is_equal = 1;
+    }
+
+    
+free_mem:
+    res = BM_bvector_enumerator_free(bmeh1);
+    res = BM_bvector_enumerator_free(bmeh2);
+
+    return res;
+}
+
 
 int OperationsTest()
 {
@@ -636,6 +696,7 @@ int EnumeratorTest()
     BM_BVHANDLE bmh1 = 0;
     BM_BVEHANDLE bmeh1 = 0;
     int valid;
+    unsigned int pos;
     
     unsigned int i;
 
@@ -662,6 +723,35 @@ int EnumeratorTest()
 
     res = BM_bvector_enumerator_construct(bmh1, &bmeh1);
     BMERR_CHECK_GOTO(res, "BM_bvector_enumerator_construct()", free_mem);
+    
+    res = BM_bvector_enumerator_is_valid(bmeh1, &valid);
+    BMERR_CHECK_GOTO(res, "BM_bvector_enumerator_is_valid()", free_mem);
+    if (!valid)
+    {
+        printf("2. incorrrect enumerator valid %i \n", valid);
+        res = 1; goto free_mem;
+    }
+    
+    res = BM_bvector_enumerator_get_value(bmeh1, &pos);
+    BMERR_CHECK_GOTO(res, "BM_bvector_enumerator_get_value()", free_mem);
+    if (pos != 1)
+    {
+        printf("3. incorrrect enumerator traversal position %u \n", pos);
+        res = 1; goto free_mem;
+    }
+    
+    res = BM_bvector_enumerator_next(bmeh1, &valid, &pos);
+    BMERR_CHECK_GOTO(res, "BM_bvector_enumerator_next()", free_mem);
+    if (!valid)
+    {
+        printf("3. incorrrect enumerator valid %i \n", valid);
+        res = 1; goto free_mem;
+    }
+    if (pos != 2)
+    {
+        printf("4. incorrrect enumerator traversal position %u \n", pos);
+        res = 1; goto free_mem;
+    }
 
     
 
@@ -684,6 +774,7 @@ int SerializationTest()
     unsigned int i;
     struct BM_bvector_statistics bv_stat;
     size_t blob_size;
+    int is_equal;
 
     res = BM_bvector_construct(&bmh1, 0);
     BMERR_CHECK(res, "BM_bvector_construct()");
@@ -731,12 +822,37 @@ int SerializationTest()
     
     res = BM_bvector_deserialize(bmh3, sbuf2, blob_size);
     BMERR_CHECK_GOTO(res, "BM_bvector_deserialize()", free_mem);
-
     
-    PrintVector(bmh1, 10);
-    PrintVector(bmh2, 10);
-    PrintVector(bmh3, 10);
+    res = CompareVectors(bmh1, bmh2, &is_equal);
+    BMERR_CHECK_GOTO(res, "CompareVectors()", free_mem);
+    if (is_equal)
+    {
+        res = CompareVectors(bmh1, bmh3, &is_equal);
+        BMERR_CHECK_GOTO(res, "CompareVectors()", free_mem);
 
+        if (!is_equal)
+        {
+            printf("1.vectors comparison failed!\n");
+            
+            PrintVector(bmh1, 10);
+            PrintVector(bmh2, 10);
+            PrintVector(bmh3, 10);
+            
+            res = 1;
+            goto free_mem;
+        }
+    }
+    else
+    {
+        printf("2.vectors comparison failed!\n");
+
+        PrintVector(bmh1, 10);
+        PrintVector(bmh2, 10);
+        PrintVector(bmh3, 10);
+        
+        res = 1;
+        goto free_mem;
+    }
 
 
     free_mem:

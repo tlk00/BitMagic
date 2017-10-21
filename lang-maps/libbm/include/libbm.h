@@ -304,9 +304,23 @@ int BM_bvector_enumerator_construct(BM_BVHANDLE h, BM_BVEHANDLE* peh);
 /* destroy bvector enumerator handle */
 int BM_bvector_enumerator_free(BM_BVEHANDLE eh);
 
-/* Check if enumerator is valid or reached the end of traversal */
-int BM_bvector_enumerator_is_valid(BM_BVEHANDLE eh, int* valid);
+/* Check if enumerator is valid or reached the end of traversal
+   pvalid - returns 0 if enumerator is no longer valid
+   (empty vector or end of traversal)
+*/
+int BM_bvector_enumerator_is_valid(BM_BVEHANDLE eh, int* pvalid);
 
+/* Return current enumerator value (traversal position)
+   pvalue - returns bit traversal position
+*/
+int BM_bvector_enumerator_get_value(BM_BVEHANDLE eh, unsigned int* pvalue);
+
+/* Advance enumerator to next traversal position.
+   pvalid - (optional) returns 0 if traversal ended
+   pvalue - (optional) current value
+*/
+int BM_bvector_enumerator_next(BM_BVEHANDLE eh,
+                               int* pvalid, unsigned int* pvalue);
 
 
 /* -------------------------------------------- */

@@ -789,3 +789,51 @@ int BM_bvector_enumerator_is_valid(BM_BVEHANDLE eh, int* valid)
 
 // -----------------------------------------------------------------
 
+int BM_bvector_enumerator_get_value(BM_BVEHANDLE eh, unsigned int* pvalue)
+{
+    if (!eh || !pvalue)
+        return BM_ERR_BADARG;
+    
+    TRY
+    {
+        TBM_bvector_enumerator* bvenum = (TBM_bvector_enumerator*)eh;
+        *pvalue = bvenum->value();
+    }
+    CATCH (BM_ERR_BADALLOC)
+    {
+        return BM_ERR_BADALLOC;
+    }
+    ETRY;
+    return BM_OK;
+}
+
+// -----------------------------------------------------------------
+
+int BM_bvector_enumerator_next(BM_BVEHANDLE eh,
+                               int* pvalid, unsigned int* pvalue)
+{
+    if (!eh)
+        return BM_ERR_BADARG;
+    
+    TRY
+    {
+        TBM_bvector_enumerator* bvenum = (TBM_bvector_enumerator*)eh;
+        bvenum->go_up();
+        if (pvalid)
+        {
+            *pvalid = bvenum->valid();
+        }
+        if (pvalue)
+        {
+            *pvalue = bvenum->value();
+        }
+    }
+    CATCH (BM_ERR_BADALLOC)
+    {
+        return BM_ERR_BADALLOC;
+    }
+    ETRY;
+    return BM_OK;
+}
+
+// -----------------------------------------------------------------
