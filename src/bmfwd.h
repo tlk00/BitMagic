@@ -43,10 +43,10 @@ template<class BA = block_allocator, class PA = ptr_allocator> class mem_alloc;
 template <class A, size_t N> class miniset;
 template<size_t N> class bvmini;
 
-typedef bm::bvmini<bm::set_total_blocks> standard_miniset;
 typedef mem_alloc<block_allocator, ptr_allocator> standard_allocator;
 
 template<class A = bm::standard_allocator> class bvector;
+
 
 
 } // namespace
