@@ -18,6 +18,12 @@
     (*env)->ThrowNew(env, ex, BM_ERR_BADARG_MSG " in: " #x); \
     break; \
   } \
+  case BM_ERR_RANGE: \
+  { \
+    jclass ex = (*env)->FindClass(env, "java/lang/IndexOutOfBoundsException"); \
+    (*env)->ThrowNew(env, ex, BM_ERR_RANGE_MSG " in: " #x); \
+    break; \
+  } \
   default: \
     break; \
   }
@@ -44,9 +50,11 @@ JNIEXPORT jlong JNICALL Java_io_bitmagic_BVector0_create0
  * Method:    clone0
  * Signature: (J)J
  */
-JNIEXPORT jlong JNICALL Java_io_bitmagic_BVector0_clone0
+JNIEXPORT jlong JNICALL Java_io_bitmagic_BVector0_copy0
   (JNIEnv *env, jobject obj, jlong ptr) {
-  return ptr;
+  BM_BVHANDLE cptr;
+  exec(BM_bvector_construct_copy(&cptr, (BM_BVHANDLE)ptr));
+  return (jlong)cptr;
 }
 
 /*
@@ -106,4 +114,26 @@ JNIEXPORT jboolean JNICALL Java_io_bitmagic_BVector0_get0
   int ret;
   exec(BM_bvector_get_bit((BM_BVHANDLE)ptr, (unsigned int)idx, &ret));
   return (jboolean)ret;
+}
+
+/*
+* Class:     io_bitmagic_BVector0
+* Method:    getSize0
+* Signature: (J)J
+*/
+JNIEXPORT jlong JNICALL Java_io_bitmagic_BVector0_getSize0
+(JNIEnv *env, jclass obj, jlong ptr) {
+  unsigned int size;
+  exec(BM_bvector_get_size((BM_BVHANDLE)ptr, &size));
+  return (jlong)size;
+}
+
+/*
+* Class:     io_bitmagic_BVector0
+* Method:    setSize0
+* Signature: (JJ)V
+*/
+JNIEXPORT void JNICALL Java_io_bitmagic_BVector0_setSize0
+(JNIEnv *env, jclass obj, jlong ptr, jlong size) {
+  exec(BM_bvector_set_size((BM_BVHANDLE)ptr, size));
 }

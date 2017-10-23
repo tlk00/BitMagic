@@ -13,7 +13,7 @@ extern "C" {
  * Signature: (J)V
  */
 JNIEXPORT void JNICALL Java_io_bitmagic_BVector0_init0
-  (JNIEnv *, jobject, jlong);
+  (JNIEnv *, jclass, jlong);
 
 /*
  * Class:     io_bitmagic_BVector0
@@ -21,15 +21,15 @@ JNIEXPORT void JNICALL Java_io_bitmagic_BVector0_init0
  * Signature: (IJ)J
  */
 JNIEXPORT jlong JNICALL Java_io_bitmagic_BVector0_create0
-  (JNIEnv *, jobject, jint, jlong);
+  (JNIEnv *, jclass, jint, jlong);
 
 /*
  * Class:     io_bitmagic_BVector0
- * Method:    clone0
+ * Method:    copy0
  * Signature: (J)J
  */
-JNIEXPORT jlong JNICALL Java_io_bitmagic_BVector0_clone0
-  (JNIEnv *, jobject, jlong);
+JNIEXPORT jlong JNICALL Java_io_bitmagic_BVector0_copy0
+  (JNIEnv *, jclass, jlong);
 
 /*
  * Class:     io_bitmagic_BVector0
@@ -37,7 +37,7 @@ JNIEXPORT jlong JNICALL Java_io_bitmagic_BVector0_clone0
  * Signature: (J)V
  */
 JNIEXPORT void JNICALL Java_io_bitmagic_BVector0_dispose0
-  (JNIEnv *, jobject, jlong);
+  (JNIEnv *, jclass, jlong);
 
 /*
  * Class:     io_bitmagic_BVector0
@@ -45,7 +45,7 @@ JNIEXPORT void JNICALL Java_io_bitmagic_BVector0_dispose0
  * Signature: ()Ljava/lang/String;
  */
 JNIEXPORT jstring JNICALL Java_io_bitmagic_BVector0_version0
-  (JNIEnv *, jobject);
+  (JNIEnv *, jclass);
 
 /*
  * Class:     io_bitmagic_BVector0
@@ -53,7 +53,7 @@ JNIEXPORT jstring JNICALL Java_io_bitmagic_BVector0_version0
  * Signature: ()Ljava/lang/String;
  */
 JNIEXPORT jstring JNICALL Java_io_bitmagic_BVector0_copyright0
-  (JNIEnv *, jobject);
+  (JNIEnv *, jclass);
 
 /*
  * Class:     io_bitmagic_BVector0
@@ -61,7 +61,7 @@ JNIEXPORT jstring JNICALL Java_io_bitmagic_BVector0_copyright0
  * Signature: (JJZ)V
  */
 JNIEXPORT void JNICALL Java_io_bitmagic_BVector0_set0
-  (JNIEnv *, jobject, jlong, jlong, jboolean);
+  (JNIEnv *, jclass, jlong, jlong, jboolean);
 
 /*
  * Class:     io_bitmagic_BVector0
@@ -69,7 +69,23 @@ JNIEXPORT void JNICALL Java_io_bitmagic_BVector0_set0
  * Signature: (JJ)Z
  */
 JNIEXPORT jboolean JNICALL Java_io_bitmagic_BVector0_get0
-  (JNIEnv *, jobject, jlong, jlong);
+  (JNIEnv *, jclass, jlong, jlong);
+
+/*
+ * Class:     io_bitmagic_BVector0
+ * Method:    getSize0
+ * Signature: (J)J
+ */
+JNIEXPORT jlong JNICALL Java_io_bitmagic_BVector0_getSize0
+  (JNIEnv *, jclass, jlong);
+
+/*
+ * Class:     io_bitmagic_BVector0
+ * Method:    setSize0
+ * Signature: (JJ)V
+ */
+JNIEXPORT void JNICALL Java_io_bitmagic_BVector0_setSize0
+  (JNIEnv *, jclass, jlong, jlong);
 
 #ifdef __cplusplus
 }
