@@ -71,7 +71,6 @@ static unsigned nf_;
     {
         ++nf_;
         --p;
-        assert(*p == n);
         ::free(p);
     }
 
@@ -105,7 +104,6 @@ static unsigned nf_;
         ++nf_;
         size_t* s = (size_t*) p;
         --s;
-        assert(*s == n);
         ::free(s);
     }
 
