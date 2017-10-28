@@ -140,8 +140,8 @@ template<bool T> struct _copyright
 };
 
 template<bool T> const char _copyright<T>::_p[] = 
-    "BitMagic C++ Library. v.3.8.0 (c) 2002-2017 Anatoliy Kuznetsov.";
-template<bool T> const unsigned _copyright<T>::_v[3] = {3, 8, 0};
+    "BitMagic C++ Library. v.3.9.0 (c) 2002-2017 Anatoliy Kuznetsov.";
+template<bool T> const unsigned _copyright<T>::_v[3] = {3, 9, 0};
 
 
 template<bool T> struct DeBruijn_bit_position

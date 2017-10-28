@@ -1323,13 +1323,23 @@ public:
 
 
     /*!
+       \fn bool bvector::find(bm::id_t from, bm::id_t& pos) const
+       \brief Finds index of 1 bit starting from position
+       \param from - position to start search from
+       \param pos - index of the found 1 bit
+       \return true if search returned result
+       \sa get_first, get_next, extract_next
+    */
+    bool find(bm::id_t from, bm::id_t& pos) const;
+
+    /*!
        \fn bm::id_t bvector::get_first() const
        \brief find first 1 bit in vector. 
        Function may return 0 and this requires an extra check if bit 0 is 
        actually set or bit-vector is empty
      
        \return Index of the first 1 bit, may return 0
-       \sa get_next, extract_next
+       \sa get_next, find, extract_next
     */
     bm::id_t get_first() const { return check_or_next(0); }
 
@@ -1338,7 +1348,7 @@ public:
        \brief Finds the number of the next bit ON.
        \param prev - Index of the previously found bit. 
        \return Index of the next bit which is ON or 0 if not found.
-       \sa get_first, extract_next
+       \sa get_first, find, extract_next
     */
     bm::id_t get_next(bm::id_t prev) const
     {
@@ -2485,6 +2495,25 @@ bool bvector<Alloc>::and_bit_no_check(bm::id_t n, bool val)
         }
     }
     return false;
+}
+
+//---------------------------------------------------------------------
+
+template<class Alloc>
+bool bvector<Alloc>::find(bm::id_t from, bm::id_t& pos) const
+{
+    bool found;
+    if (from == 0)
+    {
+        found = test(from);
+        if (found)
+        {
+            pos = from;
+            return found;
+        }
+    }
+    pos = check_or_next(from);
+    return (pos != 0);
 }
 
 

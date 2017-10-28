@@ -32,7 +32,7 @@ For more information please visit:  http://bitmagic.io
 //#define BM_SET_MMX_GUARD
 //#define BMSSE2OPT
 //#define BMSSE42OPT
-#define BMCOUNTOPT
+///#define BMCOUNTOPT
 //#define BM_USE_EXPLICIT_TEMP
 
 #include <stdio.h>
@@ -5554,6 +5554,117 @@ cout << "Deserialization ok" << endl;
 void GetNextTest()
 {
    cout << "-------------------------------------------- GetNextTest" << endl;
+   
+   cout << "testing bvector<>::find() in bit-mode" << endl;
+
+   {
+       bvect  bv;
+       bool found;
+       bm::id_t pos;
+       found = bv.find(0, pos);
+       
+       if (found)
+       {
+           cout << "1. find() failed" << endl;
+           exit(1);
+       }
+       bv[0] = true;
+       found = bv.find(0, pos);
+       if (!found || pos != 0)
+       {
+           cout << "2. find() failed" << endl;
+           exit(1);
+       }
+       found = bv.find(1, pos);
+       if (found)
+       {
+           cout << "3. find() failed" << endl;
+           exit(1);
+       }
+       bv[100000] = true;
+       bv[100001] = true;
+       found = bv.find(1, pos);
+       if (!found || pos != 100000)
+       {
+           cout << "4. find() failed " << pos << " " << found << endl;
+           exit(1);
+       }
+       found = bv.find(100000, pos);
+       if (!found || pos != 100000)
+       {
+           cout << "5. find() failed " << pos << " " << found << endl;
+           exit(1);
+       }
+       found = bv.find(100001, pos);
+       if (!found || pos != 100001)
+       {
+           cout << "6. find() failed " << pos << " " << found << endl;
+           exit(1);
+       }
+       found = bv.find(100002, pos);
+       if (found)
+       {
+           cout << "7. find() failed "<< endl;
+           exit(1);
+       }
+
+   }
+
+   cout << "testing bvector<>::find() in GAP-mode" << endl;
+
+   {
+       bvect  bv(BM_GAP);
+       bool found;
+       bm::id_t pos;
+       found = bv.find(0, pos);
+       
+       if (found)
+       {
+           cout << "1. find() failed" << endl;
+           exit(1);
+       }
+       bv[0] = true;
+       found = bv.find(0, pos);
+       if (!found || pos != 0)
+       {
+           cout << "2. find() failed" << endl;
+           exit(1);
+       }
+       found = bv.find(1, pos);
+       if (found)
+       {
+           cout << "3. find() failed" << endl;
+           exit(1);
+       }
+       bv[100000] = true;
+       bv[100001] = true;
+       found = bv.find(1, pos);
+       if (!found || pos != 100000)
+       {
+           cout << "4. find() failed " << pos << " " << found << endl;
+           exit(1);
+       }
+       found = bv.find(100000, pos);
+       if (!found || pos != 100000)
+       {
+           cout << "5. find() failed " << pos << " " << found << endl;
+           exit(1);
+       }
+       found = bv.find(100001, pos);
+       if (!found || pos != 100001)
+       {
+           cout << "6. find() failed " << pos << " " << found << endl;
+           exit(1);
+       }
+       found = bv.find(100002, pos);
+       if (found)
+       {
+           cout << "7. find() failed "<< endl;
+           exit(1);
+       }
+
+   }
+
 
    int i;
    for(i = 0; i < 2; ++i)

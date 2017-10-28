@@ -1,0 +1,13 @@
+BitMagic Language mappings libraries.
+
+This section provides BitMagic for languages other than C++.
+
+libbm - C language library
+jni   - Java native interface mappings
+
+This experimental work in progress. (use at your own risk).
+
+
+The build system is based on cmake. 
+Currently we managed to build lib without C++ runtime dependency, which makes language bindings feasible.
+
