@@ -451,6 +451,28 @@ int BM_bvector_count_range(BM_BVHANDLE h,
 
 // -----------------------------------------------------------------
 
+int BM_bvector_find(BM_BVHANDLE h,
+                    unsigned int from, unsigned int* ppos, int* pfound)
+{
+    if (!h || !ppos || !pfound)
+        return BM_ERR_BADARG;
+    
+    TRY
+    {
+        const TBM_bvector* bv = (TBM_bvector*)h;
+        *pfound = bv->find(from, *ppos);
+    }
+    CATCH (BM_ERR_BADALLOC)
+    {
+        return BM_ERR_BADALLOC;
+    }
+    ETRY;
+    return BM_OK;
+}
+
+
+// -----------------------------------------------------------------
+
 int BM_bvector_get_first(BM_BVHANDLE h, unsigned int* pi, int* pfound)
 {
 	if (!h || !pi || !pfound)

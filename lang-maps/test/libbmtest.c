@@ -489,6 +489,14 @@ int GetNextTest()
         res = 1; goto free_mem;
     }
     
+    res = BM_bvector_find(bmh, 0, &idx, &found);
+    BMERR_CHECK_GOTO(res, "BM_bvector_find()", free_mem);
+    if (found)
+    {
+        printf("1.1 incorrrect find found on an empty vector \n");
+        res = 1; goto free_mem;
+    }
+    
     res = BM_bvector_set_bit(bmh, 0, BM_TRUE);
     BMERR_CHECK_GOTO(res, "BM_bvector_set_bit()", free_mem);
     
@@ -499,7 +507,14 @@ int GetNextTest()
         printf("2. incorrrect get first %i\n", idx);
         res = 1; goto free_mem;
     }
-    
+    res = BM_bvector_find(bmh, 0, &idx, &found);
+    BMERR_CHECK_GOTO(res, "BM_bvector_find()", free_mem);
+    if (!found || idx != 0)
+    {
+        printf("2.1 incorrrect find found in 0 position \n");
+        res = 1; goto free_mem;
+    }
+
     res = BM_bvector_get_next(bmh, idx, &idx);
     BMERR_CHECK_GOTO(res, "BM_bvector_get_next()", free_mem);
     if (idx != 0)

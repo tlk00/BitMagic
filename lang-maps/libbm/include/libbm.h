@@ -234,6 +234,14 @@ int BM_bvector_count_range(BM_BVHANDLE   h,
 */
 int BM_bvector_any(BM_BVHANDLE h, int* pval);
 
+/* Finds index of 1 bit starting from position
+   from - initial search position
+   ppos - found position of 1 bit (>= from)
+   pfound - 0 if nothing found
+*/
+int BM_bvector_find(BM_BVHANDLE h,
+                    unsigned int from, unsigned int* ppos, int* pfound);
+
 /* find first 1 bit index in the vector
 
    pi - return index of first bit 
