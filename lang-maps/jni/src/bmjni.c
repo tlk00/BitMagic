@@ -255,7 +255,13 @@ JNIEXPORT jboolean JNICALL Java_io_bitmagic_BVector0_nonEmpty0
  */
 JNIEXPORT jlong JNICALL Java_io_bitmagic_BVector0_indexOf0
 (JNIEnv *env, jclass obj, jlong ptr, jlong start) {
-  return -1; // Pending https://github.com/tlk00/BitMagic/issues/12
+  int found;
+  unsigned int pos;
+  exec(BM_bvector_find((BM_BVHANDLE)ptr, (unsigned int)start, &pos, &found));
+  if (found)
+    return (jlong)pos;
+  else
+    return (jlong)-1;
 }
 
 /*
