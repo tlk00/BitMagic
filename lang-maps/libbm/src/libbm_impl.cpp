@@ -975,3 +975,164 @@ int BM_bvector_enumerator_next(BM_BVEHANDLE eh,
 }
 
 // -----------------------------------------------------------------
+
+int BM_bvector_count_AND(BM_BVHANDLE h1, BM_BVHANDLE h2, unsigned int* pcount)
+{
+    if (!h1 || !h2 || !pcount)
+        return BM_ERR_BADARG;
+    TRY
+    {
+        const TBM_bvector* bv1 = (TBM_bvector*)h1;
+        const TBM_bvector* bv2 = (TBM_bvector*)h2;
+        *pcount = bm::count_and(*bv1, *bv2);
+    }
+    CATCH (BM_ERR_BADALLOC)
+    {
+        return BM_ERR_BADALLOC;
+    }
+    ETRY;
+    return BM_OK;
+}
+
+// -----------------------------------------------------------------
+
+int BM_bvector_any_AND(BM_BVHANDLE h1, BM_BVHANDLE h2, unsigned int* pany)
+{
+    if (!h1 || !h2 || !pany)
+        return BM_ERR_BADARG;
+    TRY
+    {
+        const TBM_bvector* bv1 = (TBM_bvector*)h1;
+        const TBM_bvector* bv2 = (TBM_bvector*)h2;
+        *pany = bm::any_and(*bv1, *bv2);
+    }
+    CATCH (BM_ERR_BADALLOC)
+    {
+        return BM_ERR_BADALLOC;
+    }
+    ETRY;
+    return BM_OK;
+}
+
+// -----------------------------------------------------------------
+
+int BM_bvector_count_XOR(BM_BVHANDLE h1, BM_BVHANDLE h2, unsigned int* pcount)
+{
+    if (!h1 || !h2 || !pcount)
+        return BM_ERR_BADARG;
+    TRY
+    {
+        const TBM_bvector* bv1 = (TBM_bvector*)h1;
+        const TBM_bvector* bv2 = (TBM_bvector*)h2;
+        *pcount = bm::count_xor(*bv1, *bv2);
+    }
+    CATCH (BM_ERR_BADALLOC)
+    {
+        return BM_ERR_BADALLOC;
+    }
+    ETRY;
+    return BM_OK;
+}
+
+// -----------------------------------------------------------------
+
+int BM_bvector_any_XOR(BM_BVHANDLE h1, BM_BVHANDLE h2, unsigned int* pany)
+{
+    if (!h1 || !h2 || !pany)
+        return BM_ERR_BADARG;
+    TRY
+    {
+        const TBM_bvector* bv1 = (TBM_bvector*)h1;
+        const TBM_bvector* bv2 = (TBM_bvector*)h2;
+        *pany = bm::any_xor(*bv1, *bv2);
+    }
+    CATCH (BM_ERR_BADALLOC)
+    {
+        return BM_ERR_BADALLOC;
+    }
+    ETRY;
+    return BM_OK;
+}
+
+// -----------------------------------------------------------------
+
+int BM_bvector_count_SUB(BM_BVHANDLE h1, BM_BVHANDLE h2, unsigned int* pcount)
+{
+    if (!h1 || !h2 || !pcount)
+        return BM_ERR_BADARG;
+    TRY
+    {
+        const TBM_bvector* bv1 = (TBM_bvector*)h1;
+        const TBM_bvector* bv2 = (TBM_bvector*)h2;
+        *pcount = bm::count_sub(*bv1, *bv2);
+    }
+    CATCH (BM_ERR_BADALLOC)
+    {
+        return BM_ERR_BADALLOC;
+    }
+    ETRY;
+    return BM_OK;
+}
+
+// -----------------------------------------------------------------
+
+int BM_bvector_any_SUB(BM_BVHANDLE h1, BM_BVHANDLE h2, unsigned int* pany)
+{
+    if (!h1 || !h2 || !pany)
+        return BM_ERR_BADARG;
+    TRY
+    {
+        const TBM_bvector* bv1 = (TBM_bvector*)h1;
+        const TBM_bvector* bv2 = (TBM_bvector*)h2;
+        *pany = bm::any_sub(*bv1, *bv2);
+    }
+    CATCH (BM_ERR_BADALLOC)
+    {
+        return BM_ERR_BADALLOC;
+    }
+    ETRY;
+    return BM_OK;
+}
+
+// -----------------------------------------------------------------
+
+int BM_bvector_count_OR(BM_BVHANDLE h1, BM_BVHANDLE h2, unsigned int* pcount)
+{
+    if (!h1 || !h2 || !pcount)
+        return BM_ERR_BADARG;
+    TRY
+    {
+        const TBM_bvector* bv1 = (TBM_bvector*)h1;
+        const TBM_bvector* bv2 = (TBM_bvector*)h2;
+        *pcount = bm::count_or(*bv1, *bv2);
+    }
+    CATCH (BM_ERR_BADALLOC)
+    {
+        return BM_ERR_BADALLOC;
+    }
+    ETRY;
+    return BM_OK;
+}
+
+// -----------------------------------------------------------------
+
+int BM_bvector_any_OR(BM_BVHANDLE h1, BM_BVHANDLE h2, unsigned int* pany)
+{
+    if (!h1 || !h2 || !pany)
+        return BM_ERR_BADARG;
+    TRY
+    {
+        const TBM_bvector* bv1 = (TBM_bvector*)h1;
+        const TBM_bvector* bv2 = (TBM_bvector*)h2;
+        *pany = bm::any_or(*bv1, *bv2);
+    }
+    CATCH (BM_ERR_BADALLOC)
+    {
+        return BM_ERR_BADALLOC;
+    }
+    ETRY;
+    return BM_OK;
+}
+
+// -----------------------------------------------------------------
+

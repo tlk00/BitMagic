@@ -425,7 +425,54 @@ int BM_bvector_deserialize(BM_BVHANDLE   h,
                            const char*   buf,
                            size_t        buf_size);
     
+    
+/* -------------------------------------------- */
+/* bvector algorithms                           */
+/* -------------------------------------------- */
 
+/* compute population count of AND of two const bit vectors
+   pcount - bit count of AND of two vectors
+*/
+int BM_bvector_count_AND(BM_BVHANDLE h1, BM_BVHANDLE h2, unsigned int* pcount);
+
+/* return true if AND operation of two vectors produce any result
+   (this is faster than count_AND)
+   pany - non-zero if any bits were found
+*/
+int BM_bvector_any_AND(BM_BVHANDLE h1, BM_BVHANDLE h2, unsigned int* pany);
+
+/* compute population count of XOR of two const bit vectors
+   pcount - bit count of XOR of two vectors
+*/
+int BM_bvector_count_XOR(BM_BVHANDLE h1, BM_BVHANDLE h2, unsigned int* pcount);
+
+/* return true if XOR operation of two vectors produce any result
+   (this is faster than count_XOR)
+   pany - non-zero if any bits were found
+*/
+int BM_bvector_any_XOR(BM_BVHANDLE h1, BM_BVHANDLE h2, unsigned int* pany);
+
+/* compute population count of SUB of two const bit vectors
+   pcount - bit count of SUB of two vectors
+*/
+int BM_bvector_count_SUB(BM_BVHANDLE h1, BM_BVHANDLE h2, unsigned int* pcount);
+
+/* return true if SUB operation of two vectors produce any result
+   (this is faster than count_SUB)
+   pany - non-zero if any bits were found
+*/
+int BM_bvector_any_SUB(BM_BVHANDLE h1, BM_BVHANDLE h2, unsigned int* pany);
+
+/* compute population count of OR of two const bit vectors
+   pcount - bit count of OR of two vectors
+*/
+int BM_bvector_count_OR(BM_BVHANDLE h1, BM_BVHANDLE h2, unsigned int* pcount);
+
+/* return true if SUB operation of two vectors produce any result
+   (this is faster than count_SUB)
+   pany - non-zero if any bits were found
+*/
+int BM_bvector_any_OR(BM_BVHANDLE h1, BM_BVHANDLE h2, unsigned int* pany);
 
 
 #ifdef __cplusplus
