@@ -1,4 +1,5 @@
 #include "bmserial.h"
+#include "bmalgo.h"
 
 
 typedef bm::bvector<libbm::standard_allocator>::enumerator TBM_bvector_enumerator;
@@ -690,6 +691,121 @@ int BM_bvector_combine_XOR(BM_BVHANDLE hdst, BM_BVHANDLE hsrc)
 {
     return BM_bvector_combine_operation(hdst, hsrc, 3);
 }
+
+// -----------------------------------------------------------------
+
+
+int BM_bvector_combine_AND_arr(BM_BVHANDLE hdst,
+                               const unsigned int* arr_begin,
+                               const unsigned int* arr_end)
+{
+    if (!hdst)
+        return BM_ERR_BADARG;
+    
+    TRY
+    {
+        TBM_bvector* bv = (TBM_bvector*)hdst;
+        bm::combine_and(*bv, arr_begin, arr_end);
+    }
+    CATCH (BM_ERR_BADALLOC)
+    {
+        return BM_ERR_BADALLOC;
+    }
+    ETRY;
+    return BM_OK;
+}
+
+// -----------------------------------------------------------------
+
+
+int BM_bvector_combine_AND_arr_sorted(BM_BVHANDLE hdst,
+                                      const unsigned int* arr_begin,
+                                      const unsigned int* arr_end)
+{
+    if (!hdst)
+        return BM_ERR_BADARG;
+    
+    TRY
+    {
+        TBM_bvector* bv = (TBM_bvector*)hdst;
+        bm::combine_and_sorted(*bv, arr_begin, arr_end);
+    }
+    CATCH (BM_ERR_BADALLOC)
+    {
+        return BM_ERR_BADALLOC;
+    }
+    ETRY;
+    return BM_OK;
+}
+
+// -----------------------------------------------------------------
+
+
+int BM_bvector_combine_OR_arr(BM_BVHANDLE hdst,
+                               const unsigned int* arr_begin,
+                               const unsigned int* arr_end)
+{
+    if (!hdst)
+        return BM_ERR_BADARG;
+    
+    TRY
+    {
+        TBM_bvector* bv = (TBM_bvector*)hdst;
+        bm::combine_or(*bv, arr_begin, arr_end);
+    }
+    CATCH (BM_ERR_BADALLOC)
+    {
+        return BM_ERR_BADALLOC;
+    }
+    ETRY;
+    return BM_OK;
+}
+
+// -----------------------------------------------------------------
+
+int BM_bvector_combine_XOR_arr(BM_BVHANDLE hdst,
+                               const unsigned int* arr_begin,
+                               const unsigned int* arr_end)
+{
+    if (!hdst)
+        return BM_ERR_BADARG;
+    
+    TRY
+    {
+        TBM_bvector* bv = (TBM_bvector*)hdst;
+        bm::combine_xor(*bv, arr_begin, arr_end);
+    }
+    CATCH (BM_ERR_BADALLOC)
+    {
+        return BM_ERR_BADALLOC;
+    }
+    ETRY;
+    return BM_OK;
+}
+
+
+// -----------------------------------------------------------------
+
+int BM_bvector_combine_SUB_arr(BM_BVHANDLE hdst,
+                               const unsigned int* arr_begin,
+                               const unsigned int* arr_end)
+{
+    if (!hdst)
+        return BM_ERR_BADARG;
+    
+    TRY
+    {
+        TBM_bvector* bv = (TBM_bvector*)hdst;
+        bm::combine_sub(*bv, arr_begin, arr_end);
+    }
+    CATCH (BM_ERR_BADALLOC)
+    {
+        return BM_ERR_BADALLOC;
+    }
+    ETRY;
+    return BM_OK;
+}
+
 
 // -----------------------------------------------------------------
 

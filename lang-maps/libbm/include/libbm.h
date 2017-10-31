@@ -293,11 +293,81 @@ int BM_bvector_calc_stat(BM_BVHANDLE h,
        XOR - 3
 */
 int BM_bvector_combine_operation(BM_BVHANDLE hdst, BM_BVHANDLE hsrc, int opcode);
-    
+
+/* perform logical AND operation on two bit vectors
+   hdst = hdst AND hsrc
+*/
 int BM_bvector_combine_AND(BM_BVHANDLE hdst, BM_BVHANDLE hsrc);
+
+/* perform logical OR operation on two bit vectors
+   hdst = hdst OR hsrc
+*/
 int BM_bvector_combine_OR(BM_BVHANDLE hdst, BM_BVHANDLE hsrc);
+
+/* perform logical SUB operation on two bit vectors
+   hdst = hdst SUB hsrc
+*/
 int BM_bvector_combine_SUB(BM_BVHANDLE hdst, BM_BVHANDLE hsrc);
+
+/* perform logical XOR operation on two bit vectors
+   hdst = hdst XOR hsrc
+*/
 int BM_bvector_combine_XOR(BM_BVHANDLE hdst, BM_BVHANDLE hsrc);
+
+
+/* -------------------------------------------- */
+/* bvector operations with arrays               */
+/* -------------------------------------------- */
+
+
+/* perform logical OR operation over bit vector and an array
+   hdst - destination bit vector handle
+   arr_begin - array start
+   arr_end   - array end (defined as start + size)
+*/
+int BM_bvector_combine_OR_arr(BM_BVHANDLE hdst,
+                               const unsigned int* arr_begin,
+                               const unsigned int* arr_end);
+
+/* perform logical XOR operation over bit vector and an array
+   hdst - destination bit vector handle
+   arr_begin - array start
+   arr_end   - array end (defined as start + size)
+*/
+int BM_bvector_combine_XOR_arr(BM_BVHANDLE hdst,
+                               const unsigned int* arr_begin,
+                               const unsigned int* arr_end);
+
+
+/* perform logical SUB(MINUS) operation over bit vector and an array
+   hdst - destination bit vector handle
+   arr_begin - array start
+   arr_end   - array end (defined as start + size)
+*/
+int BM_bvector_combine_SUB_arr(BM_BVHANDLE hdst,
+                               const unsigned int* arr_begin,
+                               const unsigned int* arr_end);
+
+
+/* perform logical AND operation over bit vector and an array
+   hdst - destination bit vector handle
+   arr_begin - array start
+   arr_end   - array end (defined as start + size)
+*/
+int BM_bvector_combine_AND_arr(BM_BVHANDLE hdst,
+                               const unsigned int* arr_begin,
+                               const unsigned int* arr_end);
+
+/* perform logical AND operation over bit vector and a sorted array
+   sort order has to ascending
+   hdst - destination bit vector handle
+   arr_begin - array start
+   arr_end   - array end (defined as start + size)
+*/
+int BM_bvector_combine_AND_arr_sorted(BM_BVHANDLE hdst,
+                                      const unsigned int* arr_begin,
+                                      const unsigned int* arr_end);
+
 
 /* -------------------------------------------- */
 /* bvector traversal/enumerator                 */
