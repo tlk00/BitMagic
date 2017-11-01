@@ -42,9 +42,9 @@ JNIEXPORT jlong JNICALL Java_io_bitmagic_core_BVIterator0_get0
 /*
  * Class:     io_bitmagic_core_BVIterator0
  * Method:    next0
- * Signature: (J)J
+ * Signature: (J)Z
  */
-JNIEXPORT jlong JNICALL Java_io_bitmagic_core_BVIterator0_next0
+JNIEXPORT jboolean JNICALL Java_io_bitmagic_core_BVIterator0_next0
   (JNIEnv *, jobject, jlong);
 
 #ifdef __cplusplus
