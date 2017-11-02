@@ -32,7 +32,6 @@ For more information please visit:  http://bitmagic.io
   Example of how to use bvector template class to set
   bits and then retrieve indexes of ON bits.
  
-  For more information please visit:  http://bmagic.sourceforge.net
 
   \sa bm::bvector<>::get_next() 
   \sa bm::bvector<>::get_first() 

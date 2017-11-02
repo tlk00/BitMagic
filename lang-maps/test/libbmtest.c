@@ -705,6 +705,80 @@ int OperationsTest()
     return res;
 }
 
+int OperationsArrTest()
+{
+    unsigned int arr1[] = {100, 10, 10000};
+    unsigned int arr2[] = {1,   10, 5};
+    unsigned int arr3_sorted[] = {1, 5, 10, 10000};
+    int res = 0;
+    BM_BVHANDLE bmh1 = 0;
+    unsigned int count1;
+    
+    res = BM_bvector_construct(&bmh1, 0);
+    BMERR_CHECK(res, "BM_bvector_construct()");
+    
+
+    res = BM_bvector_combine_OR_arr(bmh1, &arr1[0], &arr1[0] + (sizeof(arr1)/sizeof(arr1[0])));
+    BMERR_CHECK_GOTO(res, "BM_bvector_combine_OR_arr()", free_mem);
+    res = BM_bvector_count(bmh1, &count1);
+    BMERR_CHECK_GOTO(res, "BM_bvector_count()", free_mem);
+    if (count1 != 3)
+    {
+        printf("1. incorrrect count %i \n", count1);
+        res = 1; goto free_mem;
+    }
+
+    res = BM_bvector_combine_AND_arr(bmh1, &arr2[0], &arr2[0] + (sizeof(arr2)/sizeof(arr2[0])));
+    BMERR_CHECK_GOTO(res, "BM_bvector_combine_AND_arr()", free_mem);
+    res = BM_bvector_count(bmh1, &count1);
+    BMERR_CHECK_GOTO(res, "BM_bvector_count()", free_mem);
+    if (count1 != 1)
+    {
+        printf("2. incorrrect count %i \n", count1);
+        res = 1; goto free_mem;
+    }
+    
+    res = BM_bvector_combine_OR_arr(bmh1, &arr1[0], &arr1[0] + (sizeof(arr1)/sizeof(arr1[0])));
+    BMERR_CHECK_GOTO(res, "BM_bvector_combine_OR_arr()", free_mem);
+    res = BM_bvector_combine_AND_arr_sorted(bmh1, &arr3_sorted[0],
+                                                  &arr3_sorted[0] + (sizeof(arr3_sorted)/sizeof(arr3_sorted[0])));
+    BMERR_CHECK_GOTO(res, "BM_bvector_combine_AND_arr_sorted()", free_mem);
+    res = BM_bvector_count(bmh1, &count1);
+    BMERR_CHECK_GOTO(res, "BM_bvector_count()", free_mem);
+    if (count1 != 2)
+    {
+        printf("3. incorrrect count %i \n", count1);
+        res = 1; goto free_mem;
+    }
+
+    res = BM_bvector_combine_SUB_arr(bmh1, &arr1[0], &arr1[0] + (sizeof(arr1)/sizeof(arr1[0])));
+    BMERR_CHECK_GOTO(res, "BM_bvector_combine_SUB_arr()", free_mem);
+    res = BM_bvector_count(bmh1, &count1);
+    BMERR_CHECK_GOTO(res, "BM_bvector_count()", free_mem);
+    if (count1 != 0)
+    {
+        printf("4. incorrrect count %i \n", count1);
+        res = 1; goto free_mem;
+    }
+    
+    res = BM_bvector_combine_XOR_arr(bmh1, &arr3_sorted[0], &arr3_sorted[0] + (sizeof(arr3_sorted)/sizeof(arr3_sorted[0])));
+    BMERR_CHECK_GOTO(res, "BM_bvector_combine_XOR_arr()", free_mem);
+    res = BM_bvector_count(bmh1, &count1);
+    BMERR_CHECK_GOTO(res, "BM_bvector_count()", free_mem);
+    if (count1 != 4)
+    {
+        printf("5. incorrrect count %i \n", count1);
+        res = 1; goto free_mem;
+    }
+
+    
+    free_mem:
+        res = BM_bvector_free(bmh1);
+        BMERR_CHECK(res, "bvector free failed");
+
+    return res;
+}
+
 int EnumeratorTest()
 {
     int res = 0;
@@ -957,6 +1031,15 @@ int main(void)
         return res;
     }
     printf("\n---------------------------------- OperationsTest OK\n");
+
+    res = OperationsArrTest();
+    if (res != 0)
+    {
+        printf("\nOperationsArrTest failed!\n");
+        return res;
+    }
+    printf("\n---------------------------------- OperationsArrTest OK\n");
+
 
     res = EnumeratorTest();
     if (res != 0)

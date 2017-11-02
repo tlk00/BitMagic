@@ -6,6 +6,7 @@ BitMagic Library samples
 ./bvsample04 - serialization of bvector<> to save compressed BLOB to a file or a database
 ./bvsample05 - use of bvector<>::enumerator - fast iterator to get bits from container
 ./bvsample06 - allocator example
+./bvsample07 - Example how to use logical operations between arrays and bit vectors
 ./bvsample08 - STL interoperability and set operations with iterators
 ./bvsample09 - simple binary distance functions and pipeline for complex binary distance formulas
 ./bvsample10 - extraction of a random subset for Monte Carlo simulations

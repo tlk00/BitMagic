@@ -293,11 +293,81 @@ int BM_bvector_calc_stat(BM_BVHANDLE h,
        XOR - 3
 */
 int BM_bvector_combine_operation(BM_BVHANDLE hdst, BM_BVHANDLE hsrc, int opcode);
-    
+
+/* perform logical AND operation on two bit vectors
+   hdst = hdst AND hsrc
+*/
 int BM_bvector_combine_AND(BM_BVHANDLE hdst, BM_BVHANDLE hsrc);
+
+/* perform logical OR operation on two bit vectors
+   hdst = hdst OR hsrc
+*/
 int BM_bvector_combine_OR(BM_BVHANDLE hdst, BM_BVHANDLE hsrc);
+
+/* perform logical SUB operation on two bit vectors
+   hdst = hdst SUB hsrc
+*/
 int BM_bvector_combine_SUB(BM_BVHANDLE hdst, BM_BVHANDLE hsrc);
+
+/* perform logical XOR operation on two bit vectors
+   hdst = hdst XOR hsrc
+*/
 int BM_bvector_combine_XOR(BM_BVHANDLE hdst, BM_BVHANDLE hsrc);
+
+
+/* -------------------------------------------- */
+/* bvector operations with arrays               */
+/* -------------------------------------------- */
+
+
+/* perform logical OR operation over bit vector and an array
+   hdst - destination bit vector handle
+   arr_begin - array start
+   arr_end   - array end (defined as start + size)
+*/
+int BM_bvector_combine_OR_arr(BM_BVHANDLE hdst,
+                               const unsigned int* arr_begin,
+                               const unsigned int* arr_end);
+
+/* perform logical XOR operation over bit vector and an array
+   hdst - destination bit vector handle
+   arr_begin - array start
+   arr_end   - array end (defined as start + size)
+*/
+int BM_bvector_combine_XOR_arr(BM_BVHANDLE hdst,
+                               const unsigned int* arr_begin,
+                               const unsigned int* arr_end);
+
+
+/* perform logical SUB(MINUS) operation over bit vector and an array
+   hdst - destination bit vector handle
+   arr_begin - array start
+   arr_end   - array end (defined as start + size)
+*/
+int BM_bvector_combine_SUB_arr(BM_BVHANDLE hdst,
+                               const unsigned int* arr_begin,
+                               const unsigned int* arr_end);
+
+
+/* perform logical AND operation over bit vector and an array
+   hdst - destination bit vector handle
+   arr_begin - array start
+   arr_end   - array end (defined as start + size)
+*/
+int BM_bvector_combine_AND_arr(BM_BVHANDLE hdst,
+                               const unsigned int* arr_begin,
+                               const unsigned int* arr_end);
+
+/* perform logical AND operation over bit vector and a sorted array
+   sort order has to ascending
+   hdst - destination bit vector handle
+   arr_begin - array start
+   arr_end   - array end (defined as start + size)
+*/
+int BM_bvector_combine_AND_arr_sorted(BM_BVHANDLE hdst,
+                                      const unsigned int* arr_begin,
+                                      const unsigned int* arr_end);
+
 
 /* -------------------------------------------- */
 /* bvector traversal/enumerator                 */
@@ -355,7 +425,54 @@ int BM_bvector_deserialize(BM_BVHANDLE   h,
                            const char*   buf,
                            size_t        buf_size);
     
+    
+/* -------------------------------------------- */
+/* bvector algorithms                           */
+/* -------------------------------------------- */
 
+/* compute population count of AND of two const bit vectors
+   pcount - bit count of AND of two vectors
+*/
+int BM_bvector_count_AND(BM_BVHANDLE h1, BM_BVHANDLE h2, unsigned int* pcount);
+
+/* return true if AND operation of two vectors produce any result
+   (this is faster than count_AND)
+   pany - non-zero if any bits were found
+*/
+int BM_bvector_any_AND(BM_BVHANDLE h1, BM_BVHANDLE h2, unsigned int* pany);
+
+/* compute population count of XOR of two const bit vectors
+   pcount - bit count of XOR of two vectors
+*/
+int BM_bvector_count_XOR(BM_BVHANDLE h1, BM_BVHANDLE h2, unsigned int* pcount);
+
+/* return true if XOR operation of two vectors produce any result
+   (this is faster than count_XOR)
+   pany - non-zero if any bits were found
+*/
+int BM_bvector_any_XOR(BM_BVHANDLE h1, BM_BVHANDLE h2, unsigned int* pany);
+
+/* compute population count of SUB of two const bit vectors
+   pcount - bit count of SUB of two vectors
+*/
+int BM_bvector_count_SUB(BM_BVHANDLE h1, BM_BVHANDLE h2, unsigned int* pcount);
+
+/* return true if SUB operation of two vectors produce any result
+   (this is faster than count_SUB)
+   pany - non-zero if any bits were found
+*/
+int BM_bvector_any_SUB(BM_BVHANDLE h1, BM_BVHANDLE h2, unsigned int* pany);
+
+/* compute population count of OR of two const bit vectors
+   pcount - bit count of OR of two vectors
+*/
+int BM_bvector_count_OR(BM_BVHANDLE h1, BM_BVHANDLE h2, unsigned int* pcount);
+
+/* return true if SUB operation of two vectors produce any result
+   (this is faster than count_SUB)
+   pany - non-zero if any bits were found
+*/
+int BM_bvector_any_OR(BM_BVHANDLE h1, BM_BVHANDLE h2, unsigned int* pany);
 
 
 #ifdef __cplusplus
