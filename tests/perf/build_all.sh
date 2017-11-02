@@ -21,5 +21,8 @@ mv ./perf ./perf_release_sse2
 make BMOPTFLAGS=-DBMSSE42OPT rebuild
 mv ./perf ./perf_release_sse42
 
+make BMOPTFLAGS=-DBMAVX2OPT rebuild
+mv ./perf ./perf_release_avx2
+
 make BMOPTFLAGS=-DBM64OPT rebuild
 mv ./perf ./perf_release_64

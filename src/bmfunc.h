@@ -134,7 +134,7 @@ template <> struct conditional<false>
 BMFORCEINLINE
 bm::id_t word_bitcount(bm::id_t w)
 {
-#ifdef BMSSE42OPT
+#if defined(BMSSE42OPT) || defined(BMAVX2OPT)
     return _mm_popcnt_u32(w);
 #else
     return
@@ -156,11 +156,11 @@ int parallel_popcnt_32(unsigned int n)
 }
 
 #ifdef BM64OPT
+
 /*! 
 	Function calculates number of 1 bits in 64-bit word.
     @ingroup bitfunc 
 */
-
 inline 
 int word_bitcount64(bm::id64_t x)
 {
@@ -293,9 +293,9 @@ bm::operation setop2op(bm::set_operation op)
 */
 template<bool T> struct all_set
 {
-    struct BM_ALIGN16 all_set_block
+    struct BM_VECT_ALIGN all_set_block
     {
-        bm::word_t  _p[bm::set_block_size] BM_ALIGN16ATTR;
+        bm::word_t  _p[bm::set_block_size] BM_VECT_ALIGN_ATTR;
 		bm::word_t* _p_fullp;
 
         all_set_block()

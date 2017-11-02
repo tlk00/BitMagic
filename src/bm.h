@@ -49,6 +49,14 @@ For more information please visit:  http://bitmagic.io
 #include "bmdef.h"
 
 
+#ifdef BMAVX2OPT
+# undef BMSSE42OPT
+# undef BMSSE2OPT
+# define BMVECTOPT
+# include "bmavx2.h"
+#endif
+
+
 #ifdef BMSSE42OPT
 # define BMVECTOPT
 # include "bmsse4.h"

@@ -193,7 +193,7 @@ void combine_count_operation_with_block(const bm::word_t*           blk,
                      break;
                  case bm::COUNT_SUB_AB:
                      {
-                     bm::word_t  BM_ALIGN16 temp_bit_blk[bm::set_block_size] BM_ALIGN16ATTR;
+                     bm::word_t  BM_VECT_ALIGN temp_bit_blk[bm::set_block_size] BM_VECT_ALIGN_ATTR;
 
                      gap_convert_to_bitset((bm::word_t*) temp_bit_blk, g1);
                      dmd.result += 
@@ -463,7 +463,7 @@ void combine_any_operation_with_block(const bm::word_t* blk,
                      break;
                  case bm::COUNT_SUB_AB:
                      {
-                     bm::word_t  BM_ALIGN16 temp_blk[bm::set_block_size] BM_ALIGN16ATTR;
+                     bm::word_t  BM_VECT_ALIGN temp_blk[bm::set_block_size] BM_VECT_ALIGN_ATTR;
                      gap_convert_to_bitset((bm::word_t*) temp_blk, g1);
                      dmd.result += 
                        bit_operation_sub_any((bm::word_t*)temp_blk, 

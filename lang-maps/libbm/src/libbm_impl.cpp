@@ -1,4 +1,5 @@
 #include "bmserial.h"
+#include "bmalgo.h"
 
 
 typedef bm::bvector<libbm::standard_allocator>::enumerator TBM_bvector_enumerator;
@@ -694,6 +695,121 @@ int BM_bvector_combine_XOR(BM_BVHANDLE hdst, BM_BVHANDLE hsrc)
 // -----------------------------------------------------------------
 
 
+int BM_bvector_combine_AND_arr(BM_BVHANDLE hdst,
+                               const unsigned int* arr_begin,
+                               const unsigned int* arr_end)
+{
+    if (!hdst)
+        return BM_ERR_BADARG;
+    
+    TRY
+    {
+        TBM_bvector* bv = (TBM_bvector*)hdst;
+        bm::combine_and(*bv, arr_begin, arr_end);
+    }
+    CATCH (BM_ERR_BADALLOC)
+    {
+        return BM_ERR_BADALLOC;
+    }
+    ETRY;
+    return BM_OK;
+}
+
+// -----------------------------------------------------------------
+
+
+int BM_bvector_combine_AND_arr_sorted(BM_BVHANDLE hdst,
+                                      const unsigned int* arr_begin,
+                                      const unsigned int* arr_end)
+{
+    if (!hdst)
+        return BM_ERR_BADARG;
+    
+    TRY
+    {
+        TBM_bvector* bv = (TBM_bvector*)hdst;
+        bm::combine_and_sorted(*bv, arr_begin, arr_end);
+    }
+    CATCH (BM_ERR_BADALLOC)
+    {
+        return BM_ERR_BADALLOC;
+    }
+    ETRY;
+    return BM_OK;
+}
+
+// -----------------------------------------------------------------
+
+
+int BM_bvector_combine_OR_arr(BM_BVHANDLE hdst,
+                               const unsigned int* arr_begin,
+                               const unsigned int* arr_end)
+{
+    if (!hdst)
+        return BM_ERR_BADARG;
+    
+    TRY
+    {
+        TBM_bvector* bv = (TBM_bvector*)hdst;
+        bm::combine_or(*bv, arr_begin, arr_end);
+    }
+    CATCH (BM_ERR_BADALLOC)
+    {
+        return BM_ERR_BADALLOC;
+    }
+    ETRY;
+    return BM_OK;
+}
+
+// -----------------------------------------------------------------
+
+int BM_bvector_combine_XOR_arr(BM_BVHANDLE hdst,
+                               const unsigned int* arr_begin,
+                               const unsigned int* arr_end)
+{
+    if (!hdst)
+        return BM_ERR_BADARG;
+    
+    TRY
+    {
+        TBM_bvector* bv = (TBM_bvector*)hdst;
+        bm::combine_xor(*bv, arr_begin, arr_end);
+    }
+    CATCH (BM_ERR_BADALLOC)
+    {
+        return BM_ERR_BADALLOC;
+    }
+    ETRY;
+    return BM_OK;
+}
+
+
+// -----------------------------------------------------------------
+
+int BM_bvector_combine_SUB_arr(BM_BVHANDLE hdst,
+                               const unsigned int* arr_begin,
+                               const unsigned int* arr_end)
+{
+    if (!hdst)
+        return BM_ERR_BADARG;
+    
+    TRY
+    {
+        TBM_bvector* bv = (TBM_bvector*)hdst;
+        bm::combine_sub(*bv, arr_begin, arr_end);
+    }
+    CATCH (BM_ERR_BADALLOC)
+    {
+        return BM_ERR_BADALLOC;
+    }
+    ETRY;
+    return BM_OK;
+}
+
+
+// -----------------------------------------------------------------
+
+
 int BM_bvector_serialize(BM_BVHANDLE h,
                          char*       buf,
                          size_t      buf_size,
@@ -859,3 +975,164 @@ int BM_bvector_enumerator_next(BM_BVEHANDLE eh,
 }
 
 // -----------------------------------------------------------------
+
+int BM_bvector_count_AND(BM_BVHANDLE h1, BM_BVHANDLE h2, unsigned int* pcount)
+{
+    if (!h1 || !h2 || !pcount)
+        return BM_ERR_BADARG;
+    TRY
+    {
+        const TBM_bvector* bv1 = (TBM_bvector*)h1;
+        const TBM_bvector* bv2 = (TBM_bvector*)h2;
+        *pcount = bm::count_and(*bv1, *bv2);
+    }
+    CATCH (BM_ERR_BADALLOC)
+    {
+        return BM_ERR_BADALLOC;
+    }
+    ETRY;
+    return BM_OK;
+}
+
+// -----------------------------------------------------------------
+
+int BM_bvector_any_AND(BM_BVHANDLE h1, BM_BVHANDLE h2, unsigned int* pany)
+{
+    if (!h1 || !h2 || !pany)
+        return BM_ERR_BADARG;
+    TRY
+    {
+        const TBM_bvector* bv1 = (TBM_bvector*)h1;
+        const TBM_bvector* bv2 = (TBM_bvector*)h2;
+        *pany = bm::any_and(*bv1, *bv2);
+    }
+    CATCH (BM_ERR_BADALLOC)
+    {
+        return BM_ERR_BADALLOC;
+    }
+    ETRY;
+    return BM_OK;
+}
+
+// -----------------------------------------------------------------
+
+int BM_bvector_count_XOR(BM_BVHANDLE h1, BM_BVHANDLE h2, unsigned int* pcount)
+{
+    if (!h1 || !h2 || !pcount)
+        return BM_ERR_BADARG;
+    TRY
+    {
+        const TBM_bvector* bv1 = (TBM_bvector*)h1;
+        const TBM_bvector* bv2 = (TBM_bvector*)h2;
+        *pcount = bm::count_xor(*bv1, *bv2);
+    }
+    CATCH (BM_ERR_BADALLOC)
+    {
+        return BM_ERR_BADALLOC;
+    }
+    ETRY;
+    return BM_OK;
+}
+
+// -----------------------------------------------------------------
+
+int BM_bvector_any_XOR(BM_BVHANDLE h1, BM_BVHANDLE h2, unsigned int* pany)
+{
+    if (!h1 || !h2 || !pany)
+        return BM_ERR_BADARG;
+    TRY
+    {
+        const TBM_bvector* bv1 = (TBM_bvector*)h1;
+        const TBM_bvector* bv2 = (TBM_bvector*)h2;
+        *pany = bm::any_xor(*bv1, *bv2);
+    }
+    CATCH (BM_ERR_BADALLOC)
+    {
+        return BM_ERR_BADALLOC;
+    }
+    ETRY;
+    return BM_OK;
+}
+
+// -----------------------------------------------------------------
+
+int BM_bvector_count_SUB(BM_BVHANDLE h1, BM_BVHANDLE h2, unsigned int* pcount)
+{
+    if (!h1 || !h2 || !pcount)
+        return BM_ERR_BADARG;
+    TRY
+    {
+        const TBM_bvector* bv1 = (TBM_bvector*)h1;
+        const TBM_bvector* bv2 = (TBM_bvector*)h2;
+        *pcount = bm::count_sub(*bv1, *bv2);
+    }
+    CATCH (BM_ERR_BADALLOC)
+    {
+        return BM_ERR_BADALLOC;
+    }
+    ETRY;
+    return BM_OK;
+}
+
+// -----------------------------------------------------------------
+
+int BM_bvector_any_SUB(BM_BVHANDLE h1, BM_BVHANDLE h2, unsigned int* pany)
+{
+    if (!h1 || !h2 || !pany)
+        return BM_ERR_BADARG;
+    TRY
+    {
+        const TBM_bvector* bv1 = (TBM_bvector*)h1;
+        const TBM_bvector* bv2 = (TBM_bvector*)h2;
+        *pany = bm::any_sub(*bv1, *bv2);
+    }
+    CATCH (BM_ERR_BADALLOC)
+    {
+        return BM_ERR_BADALLOC;
+    }
+    ETRY;
+    return BM_OK;
+}
+
+// -----------------------------------------------------------------
+
+int BM_bvector_count_OR(BM_BVHANDLE h1, BM_BVHANDLE h2, unsigned int* pcount)
+{
+    if (!h1 || !h2 || !pcount)
+        return BM_ERR_BADARG;
+    TRY
+    {
+        const TBM_bvector* bv1 = (TBM_bvector*)h1;
+        const TBM_bvector* bv2 = (TBM_bvector*)h2;
+        *pcount = bm::count_or(*bv1, *bv2);
+    }
+    CATCH (BM_ERR_BADALLOC)
+    {
+        return BM_ERR_BADALLOC;
+    }
+    ETRY;
+    return BM_OK;
+}
+
+// -----------------------------------------------------------------
+
+int BM_bvector_any_OR(BM_BVHANDLE h1, BM_BVHANDLE h2, unsigned int* pany)
+{
+    if (!h1 || !h2 || !pany)
+        return BM_ERR_BADARG;
+    TRY
+    {
+        const TBM_bvector* bv1 = (TBM_bvector*)h1;
+        const TBM_bvector* bv2 = (TBM_bvector*)h2;
+        *pany = bm::any_or(*bv1, *bv2);
+    }
+    CATCH (BM_ERR_BADALLOC)
+    {
+        return BM_ERR_BADALLOC;
+    }
+    ETRY;
+    return BM_OK;
+}
+
+// -----------------------------------------------------------------
+

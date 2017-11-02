@@ -35,7 +35,7 @@ For more information please visit:  http://bitmagic.io
 #include <sstream>
 
 //#define BMSSE2OPT
-#define BMSSE42OPT
+//#define BMSSE42OPT
 
 
 #ifdef _MSC_VER
