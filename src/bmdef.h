@@ -55,7 +55,7 @@
 
 // cxx11 features
 //
-#ifdef BM_NO_CXX11
+#if defined(BM_NO_CXX11)  ||  (defined(_MSC_VER)  &&  _MSC_VER < 1900)
 # define BMNOEXEPT
 #else
 # ifndef BMNOEXEPT
