@@ -29,6 +29,13 @@ echo SSE42
 
 echo
 echo
+echo AVX2
+
+./perf_release_avx2 || exit 1
+
+
+echo
+echo
 echo 64-bit
 
 

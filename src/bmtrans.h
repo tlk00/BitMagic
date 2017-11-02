@@ -49,7 +49,7 @@ struct tmatrix
 {
     typedef T value_type;
     
-    T BM_ALIGN16 value[ROWS][COLS] BM_ALIGN16ATTR;
+    T BM_VECT_ALIGN value[ROWS][COLS] BM_VECT_ALIGN_ATTR;
 
     enum params
     {

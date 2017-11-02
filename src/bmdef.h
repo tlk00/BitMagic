@@ -184,15 +184,18 @@
 # undef BMSSE2OPT
 #endif
 
-
-#if !(defined(BMSSE2OPT) || defined(BMSSE42OPT)) 
-
 # ifndef BM_SET_MMX_GUARD
 #  define BM_SET_MMX_GUARD
 # endif
 
+
+#if !(defined(BMSSE2OPT) || defined(BMSSE42OPT) || defined(BMAVX2OPT))
+
+
 #define BM_ALIGN16 
 #define BM_ALIGN16ATTR
+#define BM_ALIGN32
+#define BM_ALIGN32ATTR
 
 #else  
 
@@ -207,6 +210,12 @@
 #  define BM_ALIGN16ATTR
 #endif
 
+#ifndef BM_ALIGN32
+#  define BM_ALIGN32 __declspec(align(32))
+#  define BM_ALIGN32ATTR
+#endif
+
+
 # else // GCC
 
 #ifndef BM_ALIGN16
@@ -214,9 +223,31 @@
 #  define BM_ALIGN16ATTR __attribute__((aligned(16)))
 #endif
 
+#ifndef BM_ALIGN32
+#  define BM_ALIGN32
+#  define BM_ALIGN32ATTR __attribute__((aligned(32)))
+#endif
+
+
 #endif
 
 #endif
+
+#if (defined(BMSSE2OPT) || defined(BMSSE42OPT))
+#   define BM_VECT_ALIGN BM_ALIGN16
+#   define BM_VECT_ALIGN_ATTR BM_ALIGN16ATTR
+#else
+#   if defined(BMAVX2OPT)
+#       define BM_VECT_ALIGN BM_ALIGN32
+#       define BM_VECT_ALIGN_ATTR BM_ALIGN32ATTR
+#   else
+#       define BM_VECT_ALIGN
+#       define BM_VECT_ALIGN_ATTR
+#   endif
+#endif
+
+
+
 
 /*! 
     Define calculates number of 1 bits in 32-bit word.

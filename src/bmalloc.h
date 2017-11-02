@@ -63,15 +63,22 @@ public:
     static bm::word_t* allocate(size_t n, const void *)
     {
         bm::word_t* ptr;
-#if defined(BMSSE2OPT) || defined(BMSSE42OPT)
-# ifdef _MSC_VER
-        ptr = (bm::word_t*) ::_aligned_malloc(n * sizeof(bm::word_t), 16);
+#if defined(BMAVX2OPT)
+    # ifdef _MSC_VER
+            ptr = (bm::word_t*) ::_aligned_malloc(n * sizeof(bm::word_t), 32);
+    #else
+            ptr = (bm::word_t*) ::_mm_malloc(n * sizeof(bm::word_t), 32);
+    # endif
 #else
-        ptr = (bm::word_t*) ::_mm_malloc(n * sizeof(bm::word_t), 16);
-# endif
-
-#else  
-        ptr = (bm::word_t*) ::malloc(n * sizeof(bm::word_t));
+    #if defined(BMSSE2OPT) || defined(BMSSE42OPT)
+        # ifdef _MSC_VER
+                ptr = (bm::word_t*) ::_aligned_malloc(n * sizeof(bm::word_t), 16);
+        #else
+                ptr = (bm::word_t*) ::_mm_malloc(n * sizeof(bm::word_t), 16);
+        # endif
+    #else
+            ptr = (bm::word_t*) ::malloc(n * sizeof(bm::word_t));
+    #endif
 #endif
         if (!ptr)
         {
@@ -86,14 +93,13 @@ public:
     */
     static void deallocate(bm::word_t* p, size_t)
     {
-#if defined(BMSSE2OPT) || defined(BMSSE42OPT)
-# ifdef _MSC_VER
-        ::_aligned_free(p);
+#if defined(BMAVX2OPT) || defined(BMSSE2OPT) || defined(BMSSE42OPT)
+    # ifdef _MSC_VER
+            ::_aligned_free(p);
+    #else
+            ::_mm_free(p);
+    # endif
 #else
-        ::_mm_free(p);
-# endif
-
-#else  
         ::free(p);
 #endif
     }

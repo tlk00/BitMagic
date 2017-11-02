@@ -149,47 +149,6 @@ bm::id_t sse4_bit_count_op(const __m128i* BMRESTRICT block,
     return count;
 }
 
-/*
-template<class Func>
-bm::id_t sse4_bit_count_op2(const __m128i* BMRESTRICT block, 
-                            const __m128i* BMRESTRICT block_end,
-                            const __m128i* BMRESTRICT mask_block,
-                           Func op_func)
-{
-    bm::id_t count = 0;
-#ifdef BM64_SSE4    
-    do
-    {
-        unsigned *r1 = (unsigned*) block;
-        unsigned *r2 = (unsigned*) mask_block;
-
-        count += _mm_popcnt_u32(op_func(r1[0], r2[0]));
-        count += _mm_popcnt_u32(op_func(r1[1], r2[1]));
-        count += _mm_popcnt_u32(op_func(r1[2], r2[2]));
-        count += _mm_popcnt_u32(op_func(r1[3], r2[3]));
-
-        ++mask_block;
-
-    } while (++block < block_end);
-#else
-    do
-    {
-        unsigned *r1 = (unsigned*) block;
-        unsigned *r2 = (unsigned*) mask_block;
-
-        count += _mm_popcnt_u32(op_func(r1[0], r2[0]));
-        count += _mm_popcnt_u32(op_func(r1[1], r2[1]));
-        count += _mm_popcnt_u32(op_func(r1[2], r2[2]));
-        count += _mm_popcnt_u32(op_func(r1[3], r2[3]));
-
-        ++mask_block;
-
-    } while (++block < block_end);
-#endif    
-    return count;
-
-}
-*/
 
 
 #define VECT_XOR_ARR_2_MASK(dst, src, src_end, mask)\
