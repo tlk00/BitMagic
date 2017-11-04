@@ -2865,8 +2865,18 @@ bm::id_t bit_block_calc_count_change(const bm::word_t* block,
                                      const bm::word_t* block_end,
                                      unsigned*         bit_count)
 {
-#if defined(BMSSE2OPT) || defined(BMSSE42OPT)
+#if defined(BMSSE2OPT) || defined(BMSSE42OPT) || defined (BMAVX2OPT)
 
+#ifdef BMAVX2OPT
+    // TODO: debug true avx2 function (stress test failure)
+    // temp use SSE4.2 variant
+    return sse42_bit_block_calc_count_change(
+        (const __m128i*)block, (const __m128i*)block_end, bit_count);
+/*
+    return avx2_bit_block_calc_count_change(
+        (const __m256i*)block, (const __m256i*)block_end, bit_count);
+*/
+#else
 #ifdef BMSSE42OPT
     return sse4_bit_block_calc_count_change(
         (const __m128i*)block, (const __m128i*)block_end, bit_count);
@@ -2876,8 +2886,9 @@ bm::id_t bit_block_calc_count_change(const bm::word_t* block,
         (const __m128i*)block, (const __m128i*)block_end, bit_count);
 # endif
 #endif
+#endif
 
-#else // non-SSE code
+#else // non-SIMD code
 
     BM_ASSERT(block < block_end);
     BM_ASSERT(bit_count);
