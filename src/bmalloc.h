@@ -63,23 +63,30 @@ public:
     static bm::word_t* allocate(size_t n, const void *)
     {
         bm::word_t* ptr;
+        int align = 0;
+
 #if defined(BMAVX2OPT)
-    # ifdef _MSC_VER
-            ptr = (bm::word_t*) ::_aligned_malloc(n * sizeof(bm::word_t), 32);
+        align = 32; 
+#endif
+#if defined(BMSSE2OPT) || defined(BMSSE42OPT)
+        align = 16;
+#endif
+
+        if (align)
+        {
+#if defined(BMSSE2OPT) || defined(BMSSE42OPT) || defined(BMAVX2OPT)
+    #ifdef _MSC_VER
+                ptr = (bm::word_t*) ::_aligned_malloc(n * sizeof(bm::word_t), align);
     #else
-            ptr = (bm::word_t*) ::_mm_malloc(n * sizeof(bm::word_t), 32);
-    # endif
-#else
-    #if defined(BMSSE2OPT) || defined(BMSSE42OPT)
-        # ifdef _MSC_VER
-                ptr = (bm::word_t*) ::_aligned_malloc(n * sizeof(bm::word_t), 16);
-        #else
-                ptr = (bm::word_t*) ::_mm_malloc(n * sizeof(bm::word_t), 16);
-        # endif
-    #else
-            ptr = (bm::word_t*) ::malloc(n * sizeof(bm::word_t));
+                ptr = (bm::word_t*) ::_mm_malloc(n * sizeof(bm::word_t), align);
     #endif
 #endif
+        }
+        else
+        {
+            ptr = (bm::word_t*) ::malloc(n * sizeof(bm::word_t));
+        }
+
         if (!ptr)
         {
             throw std::bad_alloc();

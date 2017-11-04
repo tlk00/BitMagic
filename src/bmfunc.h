@@ -295,7 +295,7 @@ template<bool T> struct all_set
 {
     struct BM_VECT_ALIGN all_set_block
     {
-        bm::word_t  _p[bm::set_block_size] BM_VECT_ALIGN_ATTR;
+        bm::word_t BM_VECT_ALIGN _p[bm::set_block_size] BM_VECT_ALIGN_ATTR;
 		bm::word_t* _p_fullp;
 
         all_set_block()
@@ -3639,9 +3639,9 @@ unsigned bit_block_xor_any(const bm::word_t* BMRESTRICT src1,
    @ingroup bitfunc
 */
 inline 
-unsigned bit_block_sub_count(const bm::word_t* BMRESTRICT src1, 
-                             const bm::word_t* BMRESTRICT src1_end, 
-                             const bm::word_t* BMRESTRICT src2)
+unsigned bit_block_sub_count(const bm::word_t* BMRESTRICT src1,
+    const bm::word_t* BMRESTRICT src1_end,
+    const bm::word_t* BMRESTRICT src2)
 {
     unsigned count;
 #ifdef BMVECTOPT

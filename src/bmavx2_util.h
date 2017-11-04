@@ -54,13 +54,13 @@ void avx2_xor_arr_2_mask(__m256i* BMRESTRICT dst,
                          const __m256i* BMRESTRICT src_end,
                          bm::word_t mask)
 {
-     __m256i xmm2 = _mm256_set_epi32(mask, mask, mask, mask, mask, mask, mask, mask);
+     __m256i ymm2 = _mm256_set_epi32(mask, mask, mask, mask, mask, mask, mask, mask);
      do
      {
-        __m256i xmm1 = _mm256_load_si256(src);
+        __m256i ymm1 = _mm256_load_si256(src);
 
-        xmm1 = _mm256_xor_si256(xmm1, xmm2);
-        _mm256_store_si256(dst, xmm1);
+        ymm1 = _mm256_xor_si256(ymm1, ymm2);
+        _mm256_store_si256(dst, ymm1);
         ++dst;
         ++src;
 
@@ -80,14 +80,14 @@ void avx2_andnot_arr_2_mask(__m256i* BMRESTRICT dst,
                             const __m256i* BMRESTRICT src_end,
                             bm::word_t mask)
 {
-     __m256i xmm2 = _mm256_set_epi32(mask, mask, mask, mask, mask, mask, mask, mask);
+     __m256i ymm2 = _mm256_set_epi32(mask, mask, mask, mask, mask, mask, mask, mask);
 
      do
      {
-        __m256i xmm1 = _mm256_load_si256(src);
+        __m256i ymm1 = _mm256_load_si256(src);
 
-        xmm1 = _mm256_andnot_si256(xmm1, xmm2); // xmm1 = (~xmm1) & xmm2
-        _mm256_store_si256(dst, xmm1);
+        ymm1 = _mm256_andnot_si256(ymm1, ymm2); // ymm1 = (~ymm1) & ymm2
+        _mm256_store_si256(dst, ymm1);
         ++dst;
         ++src;
 
@@ -105,29 +105,29 @@ void avx2_and_arr(__m256i* BMRESTRICT dst,
                   const __m256i* BMRESTRICT src,
                   const __m256i* BMRESTRICT src_end)
 {
-    __m256i xmm1, xmm2;
+    __m256i ymm1, ymm2;
     do
     {
-        xmm1 = _mm256_load_si256(src++);
-        xmm2 = _mm256_load_si256(dst);
-        xmm1 = _mm256_and_si256(xmm1, xmm2);
-        _mm256_store_si256(dst++, xmm1);
+        ymm1 = _mm256_load_si256(src++);
+        ymm2 = _mm256_load_si256(dst);
+        ymm1 = _mm256_and_si256(ymm1, ymm2);
+        _mm256_store_si256(dst++, ymm1);
         
-        xmm1 = _mm256_load_si256(src++);
-        xmm2 = _mm256_load_si256(dst);
-        xmm1 = _mm256_and_si256(xmm1, xmm2);
-        _mm256_store_si256(dst++, xmm1);
-/*
-        xmm1 = _mm256_load_si256(src++);
-        xmm2 = _mm256_load_si256(dst);
-        xmm1 = _mm256_and_si256(xmm1, xmm2);
-        _mm256_store_si256(dst++, xmm1);
+        ymm1 = _mm256_load_si256(src++);
+        ymm2 = _mm256_load_si256(dst);
+        ymm1 = _mm256_and_si256(ymm1, ymm2);
+        _mm256_store_si256(dst++, ymm1);
 
-        xmm1 = _mm256_load_si256(src++);
-        xmm2 = _mm256_load_si256(dst);
-        xmm1 = _mm256_and_si256(xmm1, xmm2);
-        _mm256_store_si256(dst++, xmm1);
-*/
+        ymm1 = _mm256_load_si256(src++);
+        ymm2 = _mm256_load_si256(dst);
+        ymm1 = _mm256_and_si256(ymm1, ymm2);
+        _mm256_store_si256(dst++, ymm1);
+
+        ymm1 = _mm256_load_si256(src++);
+        ymm2 = _mm256_load_si256(dst);
+        ymm1 = _mm256_and_si256(ymm1, ymm2);
+        _mm256_store_si256(dst++, ymm1);
+
     } while (src < src_end);
 }
 
@@ -143,29 +143,28 @@ void avx2_or_arr(__m256i* BMRESTRICT dst,
                  const __m256i* BMRESTRICT src,
                  const __m256i* BMRESTRICT src_end)
 {
-    __m256i xmm1, xmm2;
+    __m256i ymm1, ymm2;
     do
     {
-        xmm1 = _mm256_load_si256(src++);
-        xmm2 = _mm256_load_si256(dst);
-        xmm1 = _mm256_or_si256(xmm1, xmm2);
-        _mm256_store_si256(dst++, xmm1);
+        ymm1 = _mm256_load_si256(src++);
+        ymm2 = _mm256_load_si256(dst);
+        ymm1 = _mm256_or_si256(ymm1, ymm2);
+        _mm256_store_si256(dst++, ymm1);
         
-        xmm1 = _mm256_load_si256(src++);
-        xmm2 = _mm256_load_si256(dst);
-        xmm1 = _mm256_or_si256(xmm1, xmm2);
-        _mm256_store_si256(dst++, xmm1);
-/*
-        xmm1 = _mm256_load_si256(src++);
-        xmm2 = _mm256_load_si256(dst);
-        xmm1 = _mm256_or_si256(xmm1, xmm2);
-        _mm256_store_si256(dst++, xmm1);
+        ymm1 = _mm256_load_si256(src++);
+        ymm2 = _mm256_load_si256(dst);
+        ymm1 = _mm256_or_si256(ymm1, ymm2);
+        _mm256_store_si256(dst++, ymm1);
 
-        xmm1 = _mm256_load_si256(src++);
-        xmm2 = _mm256_load_si256(dst);
-        xmm1 = _mm256_or_si256(xmm1, xmm2);
-        _mm_store_si128(dst++, xmm1);
-*/
+        ymm1 = _mm256_load_si256(src++);
+        ymm2 = _mm256_load_si256(dst);
+        ymm1 = _mm256_or_si256(ymm1, ymm2);
+        _mm256_store_si256(dst++, ymm1);
+
+        ymm1 = _mm256_load_si256(src++);
+        ymm2 = _mm256_load_si256(dst);
+        ymm1 = _mm256_or_si256(ymm1, ymm2);
+        _mm256_store_si256(dst++, ymm1);
     } while (src < src_end);
 }
 
@@ -181,29 +180,28 @@ void avx2_xor_arr(__m256i* BMRESTRICT dst,
                   const __m256i* BMRESTRICT src,
                   const __m256i* BMRESTRICT src_end)
 {
-    __m256i xmm1, xmm2;
+    __m256i ymm1, ymm2;
     do
     {
-        xmm1 = _mm256_load_si256(src++);
-        xmm2 = _mm256_load_si256(dst);
-        xmm1 = _mm256_xor_si256(xmm1, xmm2);
-        _mm256_store_si256(dst++, xmm1);
+        ymm1 = _mm256_load_si256(src++);
+        ymm2 = _mm256_load_si256(dst);
+        ymm1 = _mm256_xor_si256(ymm1, ymm2);
+        _mm256_store_si256(dst++, ymm1);
 
-        xmm1 = _mm256_load_si256(src++);
-        xmm2 = _mm256_load_si256(dst);
-        xmm1 = _mm256_xor_si256(xmm1, xmm2);
-        _mm256_store_si256(dst++, xmm1);
-/*
-        xmm1 = _mm256_load_si256(src++);
-        xmm2 = _mm256_load_si256(dst);
-        xmm1 = _mm256_xor_si256(xmm1, xmm2);
-        _mm256_store_si256(dst++, xmm1);
+        ymm1 = _mm256_load_si256(src++);
+        ymm2 = _mm256_load_si256(dst);
+        ymm1 = _mm256_xor_si256(ymm1, ymm2);
+        _mm256_store_si256(dst++, ymm1);
 
-        xmm1 = _mm256_load_si256(src++);
-        xmm2 = _mm256_load_si256(dst);
-        xmm1 = _mm256_xor_si256(xmm1, xmm2);
-        _mm256_store_si256(dst++, xmm1);
-*/
+        ymm1 = _mm256_load_si256(src++);
+        ymm2 = _mm256_load_si256(dst);
+        ymm1 = _mm256_xor_si256(ymm1, ymm2);
+        _mm256_store_si256(dst++, ymm1);
+
+        ymm1 = _mm256_load_si256(src++);
+        ymm2 = _mm256_load_si256(dst);
+        ymm1 = _mm256_xor_si256(ymm1, ymm2);
+        _mm256_store_si256(dst++, ymm1);
     } while (src < src_end);
 }
 
@@ -220,29 +218,29 @@ void avx2_sub_arr(__m256i* BMRESTRICT dst,
                  const __m256i* BMRESTRICT src,
                  const __m256i* BMRESTRICT src_end)
 {
-    __m256i xmm1, xmm2;
+    __m256i ymm1, ymm2;
     do
     {
-        xmm1 = _mm256_load_si256(src++);
-        xmm2 = _mm256_load_si256(dst);
-        xmm1 = _mm256_andnot_si256(xmm1, xmm2);
-        _mm256_store_si256(dst++, xmm1);
+        ymm1 = _mm256_load_si256(src++);
+        ymm2 = _mm256_load_si256(dst);
+        ymm1 = _mm256_andnot_si256(ymm1, ymm2);
+        _mm256_store_si256(dst++, ymm1);
         
-        xmm1 = _mm256_load_si256(src++);
-        xmm2 = _mm256_load_si256(dst);
-        xmm1 = _mm256_andnot_si256(xmm1, xmm2);
-        _mm256_store_si256(dst++, xmm1);
-/*
-        xmm1 = _mm256_load_si256(src++);
-        xmm2 = _mm256_load_si256(dst);
-        xmm1 = _mm256_andnot_si256(xmm1, xmm2);
-        _mm256_store_si256(dst++, xmm1);
+        ymm1 = _mm256_load_si256(src++);
+        ymm2 = _mm256_load_si256(dst);
+        ymm1 = _mm256_andnot_si256(ymm1, ymm2);
+        _mm256_store_si256(dst++, ymm1);
 
-        xmm1 = _mm256_load_si256(src++);
-        xmm2 = _mm256_load_si256(dst);
-        xmm1 = _mm256_andnot_si256(xmm1, xmm2);
-        _mm256_store_si256(dst++, xmm1);
-*/
+        ymm1 = _mm256_load_si256(src++);
+        ymm2 = _mm256_load_si256(dst);
+        ymm1 = _mm256_andnot_si256(ymm1, ymm2);
+        _mm256_store_si256(dst++, ymm1);
+
+        ymm1 = _mm256_load_si256(src++);
+        ymm2 = _mm256_load_si256(dst);
+        ymm1 = _mm256_andnot_si256(ymm1, ymm2);
+        _mm256_store_si256(dst++, ymm1);
+
     } while (src < src_end);    
 }
 
@@ -258,10 +256,10 @@ void avx2_set_block(__m256i* BMRESTRICT dst,
                     __m256i* BMRESTRICT dst_end,
                     bm::word_t value)
 {
-    __m256i xmm0 = _mm256_set_epi32 (value, value, value, value, value, value, value, value);
+    __m256i ymm0 = _mm256_set_epi32 (value, value, value, value, value, value, value, value);
     do
     {            
-        _mm256_store_si256(dst, xmm0);
+        _mm256_store_si256(dst, ymm0);
     } while (++dst < dst_end);
     
     _mm_sfence();
@@ -280,28 +278,28 @@ void avx2_copy_block(__m256i* BMRESTRICT dst,
                      const __m256i* BMRESTRICT src,
                      const __m256i* BMRESTRICT src_end)
 {
-    __m256i xmm0, xmm1, xmm2, xmm3;
+    __m256i ymm0, ymm1, ymm2, ymm3;
     do
     {
-        xmm0 = _mm256_load_si256(src+0);
-        xmm1 = _mm256_load_si256(src+1);
-        xmm2 = _mm256_load_si256(src+2);
-        xmm3 = _mm256_load_si256(src+3);
+        ymm0 = _mm256_load_si256(src+0);
+        ymm1 = _mm256_load_si256(src+1);
+        ymm2 = _mm256_load_si256(src+2);
+        ymm3 = _mm256_load_si256(src+3);
         
-        _mm256_store_si256(dst+0, xmm0);
-        _mm256_store_si256(dst+1, xmm1);
-        _mm256_store_si256(dst+2, xmm2);
-        _mm256_store_si256(dst+3, xmm3);
+        _mm256_store_si256(dst+0, ymm0);
+        _mm256_store_si256(dst+1, ymm1);
+        _mm256_store_si256(dst+2, ymm2);
+        _mm256_store_si256(dst+3, ymm3);
         
-        xmm0 = _mm256_load_si256(src+4);
-        xmm1 = _mm256_load_si256(src+5);
-        xmm2 = _mm256_load_si256(src+6);
-        xmm3 = _mm256_load_si256(src+7);
+        ymm0 = _mm256_load_si256(src+4);
+        ymm1 = _mm256_load_si256(src+5);
+        ymm2 = _mm256_load_si256(src+6);
+        ymm3 = _mm256_load_si256(src+7);
         
-        _mm256_store_si256(dst+4, xmm0);
-        _mm256_store_si256(dst+5, xmm1);
-        _mm256_store_si256(dst+6, xmm2);
-        _mm256_store_si256(dst+7, xmm3);
+        _mm256_store_si256(dst+4, ymm0);
+        _mm256_store_si256(dst+5, ymm1);
+        _mm256_store_si256(dst+6, ymm2);
+        _mm256_store_si256(dst+7, ymm3);
         
         src += 8;
         dst += 8;
@@ -320,45 +318,36 @@ void avx2_copy_block(__m256i* BMRESTRICT dst,
 BMFORCEINLINE 
 void avx2_invert_arr(bm::word_t* first, bm::word_t* last)
 {
-    __m256i xmm1 = _mm256_set_epi32(0xFFFFFFFF, 0xFFFFFFFF,
+    __m256i ymm1 = _mm256_set_epi32(0xFFFFFFFF, 0xFFFFFFFF,
                                     0xFFFFFFFF, 0xFFFFFFFF,
                                     0xFFFFFFFF, 0xFFFFFFFF,
                                     0xFFFFFFFF, 0xFFFFFFFF
                                     );
     __m256i* wrd_ptr = (__m256i*)first;
-
+    __m256i ymm0;
     do 
     {
-        __m256i xmm0 = _mm256_load_si256(wrd_ptr);
-        xmm0 = _mm256_xor_si256(xmm0, xmm1);
-        _mm256_store_si256(wrd_ptr, xmm0);
+        ymm0 = _mm256_load_si256(wrd_ptr);
+        ymm0 = _mm256_xor_si256(ymm0, ymm1);
+        _mm256_store_si256(wrd_ptr, ymm0);
         ++wrd_ptr;
+
+        ymm0 = _mm256_load_si256(wrd_ptr);
+        ymm0 = _mm256_xor_si256(ymm0, ymm1);
+        _mm256_store_si256(wrd_ptr, ymm0);
+        ++wrd_ptr;
+
+        ymm0 = _mm256_load_si256(wrd_ptr);
+        ymm0 = _mm256_xor_si256(ymm0, ymm1);
+        _mm256_store_si256(wrd_ptr, ymm0);
+        ++wrd_ptr;
+
+        ymm0 = _mm256_load_si256(wrd_ptr);
+        ymm0 = _mm256_xor_si256(ymm0, ymm1);
+        _mm256_store_si256(wrd_ptr, ymm0);
+        ++wrd_ptr;
+
     } while (wrd_ptr < (__m256i*)last);
-}
-
-BMFORCEINLINE 
-__m256i avx2_and(__m256i a, __m256i b)
-{
-    return _mm256_and_si256(a, b);
-}
-
-BMFORCEINLINE 
-__m256i avx2_or(__m256i a, __m256i b)
-{
-    return _mm256_or_si256(a, b);
-}
-
-
-BMFORCEINLINE 
-__m256i avx2_xor(__m256i a, __m256i b)
-{
-    return _mm256_xor_si256(a, b);
-}
-
-BMFORCEINLINE 
-__m256i avx2_sub(__m256i a, __m256i b)
-{
-    return _mm256_andnot_si256(b, a);
 }
 
 

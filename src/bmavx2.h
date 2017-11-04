@@ -79,38 +79,34 @@ For more information please visit:  http://bitmagic.io
 namespace bm
 {
 
-
-inline void CSA256(__m256i* h, __m256i* l, __m256i a, __m256i b, __m256i c)
-{
-  __m256i u = _mm256_xor_si256(a, b);
-  *h = _mm256_or_si256(_mm256_and_si256(a, b), _mm256_and_si256(u, c));
-  *l = _mm256_xor_si256(u, c);
+#define BM_CSA256(h, l, a, b, c) \
+{ \
+    __m256i u = _mm256_xor_si256(a, b); \
+    h = _mm256_or_si256(_mm256_and_si256(a, b), _mm256_and_si256(u, c)); \
+    l = _mm256_xor_si256(u, c); \
 }
 
-inline __m256i avx2_bit_count(__m256i v)
-{
-  __m256i lookup1 = _mm256_setr_epi8(
-      4, 5, 5, 6, 5, 6, 6, 7,
-      5, 6, 6, 7, 6, 7, 7, 8,
-      4, 5, 5, 6, 5, 6, 6, 7,
-      5, 6, 6, 7, 6, 7, 7, 8
-  );
+#define BM_AVX2_BIT_COUNT(ret, v) \
+{ \
+    __m256i lo = _mm256_and_si256(v, low_mask); \
+    __m256i hi = _mm256_and_si256(_mm256_srli_epi16(v, 4), low_mask); \
+    __m256i cnt1 = _mm256_shuffle_epi8(lookup1, lo); \
+    __m256i cnt2 = _mm256_shuffle_epi8(lookup2, hi); \
+    ret = _mm256_sad_epu8(cnt1, cnt2); \
+} 
 
-  __m256i lookup2 = _mm256_setr_epi8(
-      4, 3, 3, 2, 3, 2, 2, 1,
-      3, 2, 2, 1, 2, 1, 1, 0,
-      4, 3, 3, 2, 3, 2, 2, 1,
-      3, 2, 2, 1, 2, 1, 1, 0
-  );
+#define BM_AVX2_DECL_LOOKUP1 \
+  __m256i lookup1 = _mm256_setr_epi8(4, 5, 5, 6, 5, 6, 6, 7, 5, 6, 6, 7, 6, 7, 7, 8, \
+                                     4, 5, 5, 6, 5, 6, 6, 7, 5, 6, 6, 7, 6, 7, 7, 8);
+#define BM_AVX2_DECL_LOOKUP2 \
+__m256i lookup2 = _mm256_setr_epi8(4, 3, 3, 2, 3, 2, 2, 1, 3, 2, 2, 1, 2, 1, 1, 0, \
+                                   4, 3, 3, 2, 3, 2, 2, 1, 3, 2, 2, 1, 2, 1, 1, 0);
 
-  __m256i low_mask = _mm256_set1_epi8(0x0f);
-  __m256i lo = _mm256_and_si256(v, low_mask);
-  __m256i hi = _mm256_and_si256(_mm256_srli_epi16(v, 4), low_mask);
-  __m256i cnt1 = _mm256_shuffle_epi8(lookup1, lo);
-  __m256i cnt2 = _mm256_shuffle_epi8(lookup2, hi);
-
-  return _mm256_sad_epu8(cnt1, cnt2);
-}
+#define BM_AVX2_POPCNT_PROLOG \
+  BM_AVX2_DECL_LOOKUP1 \
+  BM_AVX2_DECL_LOOKUP2 \
+  __m256i low_mask = _mm256_set1_epi8(0x0f); \
+  __m256i bc;
 
 /*
  * AVX2 Harley-Seal popcount (4th iteration).
@@ -119,12 +115,12 @@ inline __m256i avx2_bit_count(__m256i v)
  * Wojciech Mula (23 Nov 2016).
  * @see https://arxiv.org/abs/1611.07612
  */
+    /*
+#if !defined(_MSC_VER)
+__attribute__((target("avx2")))
+#endif
 inline bm::id_t avx2_bit_count(const __m256i* block, const __m256i* block_end)
 {
-  unsigned i = 0;
-  unsigned size = block_end - block;
-  uint64_t* cnt64;
-
   __m256i cnt = _mm256_setzero_si256();
   __m256i ones = _mm256_setzero_si256();
   __m256i twos = _mm256_setzero_si256();
@@ -132,83 +128,229 @@ inline bm::id_t avx2_bit_count(const __m256i* block, const __m256i* block_end)
   __m256i eights = _mm256_setzero_si256();
   __m256i sixteens = _mm256_setzero_si256();
   __m256i twosA, twosB, foursA, foursB, eightsA, eightsB;
+  //__m256i b, c;
 
-  for(; i < size; i += 16)
+  BM_AVX2_POPCNT_PROLOG
+  size_t i = 0;
+  size_t size = block_end - block;
+  uint64_t* cnt64;
+
+  //for(; i < size; i += 16)
+  do
   {
-        CSA256(&twosA, &ones, ones, block[i+0], block[i+1]);
-        CSA256(&twosB, &ones, ones, block[i+2], block[i+3]);
-        CSA256(&foursA, &twos, twos, twosA, twosB);
-        CSA256(&twosA, &ones, ones, block[i+4], block[i+5]);
-        CSA256(&twosB, &ones, ones, block[i+6], block[i+7]);
-        CSA256(&foursB, &twos, twos, twosA, twosB);
-        CSA256(&eightsA, &fours, fours, foursA, foursB);
-        CSA256(&twosA, &ones, ones, block[i+8], block[i+9]);
-        CSA256(&twosB, &ones, ones, block[i+10], block[i+11]);
-        CSA256(&foursA, &twos, twos, twosA, twosB);
-        CSA256(&twosA, &ones, ones, block[i+12], block[i+13]);
-        CSA256(&twosB, &ones, ones, block[i+14], block[i+15]);
-        CSA256(&foursB, &twos, twos, twosA, twosB);
-        CSA256(&eightsB, &fours, fours, foursA, foursB);
-        CSA256(&sixteens, &eights, eights, eightsA, eightsB);
+        //b = _mm256_load_si256(block+i+0);
+        //c = _mm256_load_si256(block+i+1);
+        BM_CSA256(twosA, ones, ones, block[i + 0], block[i + 1]);
+        BM_CSA256(twosB, ones, ones, block[i + 2], block[i + 3]);
+        BM_CSA256(foursA, twos, twos, twosA, twosB);
+        BM_CSA256(twosA, ones, ones, block[i+4], block[i+5]);
+        BM_CSA256(twosB, ones, ones, block[i+6], block[i+7]);
+        BM_CSA256(foursB, twos, twos, twosA, twosB);
+        BM_CSA256(eightsA, fours, fours, foursA, foursB);
+        BM_CSA256(twosA, ones, ones, block[i+8], block[i+9]);
+        BM_CSA256(twosB, ones, ones, block[i+10], block[i+11]);
+        BM_CSA256(foursA, twos, twos, twosA, twosB);
+        BM_CSA256(twosA, ones, ones, block[i+12], block[i+13]);
+        BM_CSA256(twosB, ones, ones, block[i+14], block[i+15]);
+        BM_CSA256(foursB, twos, twos, twosA, twosB);
+        BM_CSA256(eightsB, fours, fours, foursA, foursB);
+        BM_CSA256(sixteens, eights, eights, eightsA, eightsB);
+        
+        BM_AVX2_BIT_COUNT(bc, sixteens)
+        cnt = _mm256_add_epi64(cnt, bc);
 
-        cnt = _mm256_add_epi64(cnt, avx2_bit_count(sixteens));
-  }
+        block += 16;
+  } while (block < block_end);
   cnt = _mm256_slli_epi64(cnt, 4);
-  cnt = _mm256_add_epi64(cnt, _mm256_slli_epi64(avx2_bit_count(eights), 3));
-  cnt = _mm256_add_epi64(cnt, _mm256_slli_epi64(avx2_bit_count(fours), 2));
-  cnt = _mm256_add_epi64(cnt, _mm256_slli_epi64(avx2_bit_count(twos), 1));
-  cnt = _mm256_add_epi64(cnt, avx2_bit_count(ones));
+  BM_AVX2_BIT_COUNT(bc, eights)
+  cnt = _mm256_add_epi64(cnt, _mm256_slli_epi64(bc, 3));
+  BM_AVX2_BIT_COUNT(bc, fours);
+  cnt = _mm256_add_epi64(cnt, _mm256_slli_epi64(bc, 2));
+  BM_AVX2_BIT_COUNT(bc, twos); 
+  cnt = _mm256_add_epi64(cnt, _mm256_slli_epi64(bc, 1));
+  BM_AVX2_BIT_COUNT(bc, ones);
+  cnt = _mm256_add_epi64(cnt, bc);
 
   cnt64 = (uint64_t*) &cnt;
 
   return cnt64[0] + cnt64[1] + cnt64[2] + cnt64[3];
 }
-
-
-template<class Func>
-bm::id_t avx2_bit_count_op(const __m256i* BMRESTRICT block,
-                           const __m256i* BMRESTRICT block_end,
-                           const __m256i* BMRESTRICT mask_block,
-                           Func avx2_func)
+*/
+#if !defined(_MSC_VER)
+__attribute__((target("avx2")))
+#endif
+inline bm::id_t avx2_bit_count(const __m256i* block, const __m256i* block_end)
 {
-//    bm::id_t count = 0;
-//    id64_t cnt2 = 0;
+    __m256i cnt = _mm256_setzero_si256();
+    __m256i ones = _mm256_setzero_si256();
+    __m256i twos = _mm256_setzero_si256();
+    __m256i fours = _mm256_setzero_si256();
+    __m256i eights = _mm256_setzero_si256();
+    __m256i sixteens = _mm256_setzero_si256();
+    __m256i twosA, twosB, foursA, foursB, eightsA, eightsB;
+
+    BM_AVX2_POPCNT_PROLOG
+        size_t i = 0;
+    size_t size = block_end - block;
     uint64_t* cnt64;
+
+    for (; i < size; i += 16)
+    {
+        //      __m256i b = _mm256_load_si256(block+i+0);
+        //      __m256i c = _mm256_load_si256(block+i+1);
+        BM_CSA256(twosA, ones, ones, block[i + 0], block[i + 1]);
+        BM_CSA256(twosB, ones, ones, block[i + 2], block[i + 3]);
+        BM_CSA256(foursA, twos, twos, twosA, twosB);
+        BM_CSA256(twosA, ones, ones, block[i + 4], block[i + 5]);
+        BM_CSA256(twosB, ones, ones, block[i + 6], block[i + 7]);
+        BM_CSA256(foursB, twos, twos, twosA, twosB);
+        BM_CSA256(eightsA, fours, fours, foursA, foursB);
+        BM_CSA256(twosA, ones, ones, block[i + 8], block[i + 9]);
+        BM_CSA256(twosB, ones, ones, block[i + 10], block[i + 11]);
+        BM_CSA256(foursA, twos, twos, twosA, twosB);
+        BM_CSA256(twosA, ones, ones, block[i + 12], block[i + 13]);
+        BM_CSA256(twosB, ones, ones, block[i + 14], block[i + 15]);
+        BM_CSA256(foursB, twos, twos, twosA, twosB);
+        BM_CSA256(eightsB, fours, fours, foursA, foursB);
+        BM_CSA256(sixteens, eights, eights, eightsA, eightsB);
+
+        BM_AVX2_BIT_COUNT(bc, sixteens)
+            cnt = _mm256_add_epi64(cnt, bc);
+    }
+    cnt = _mm256_slli_epi64(cnt, 4);
+    BM_AVX2_BIT_COUNT(bc, eights)
+        cnt = _mm256_add_epi64(cnt, _mm256_slli_epi64(bc, 3));
+    BM_AVX2_BIT_COUNT(bc, fours);
+    cnt = _mm256_add_epi64(cnt, _mm256_slli_epi64(bc, 2));
+    BM_AVX2_BIT_COUNT(bc, twos);
+    cnt = _mm256_add_epi64(cnt, _mm256_slli_epi64(bc, 1));
+    BM_AVX2_BIT_COUNT(bc, ones);
+    cnt = _mm256_add_epi64(cnt, bc);
+
+    cnt64 = (uint64_t*)&cnt;
+
+    return cnt64[0] + cnt64[1] + cnt64[2] + cnt64[3];
+}
+
+bm::id_t avx2_bit_count_and(const __m256i* BMRESTRICT block,
+                            const __m256i* BMRESTRICT block_end,
+                            const __m256i* BMRESTRICT mask_block)
+{
+    uint64_t* cnt64;
+    BM_AVX2_POPCNT_PROLOG
     __m256i cnt = _mm256_setzero_si256();
     do
     {
         __m256i tmp0 = _mm256_load_si256(block);
         __m256i tmp1 = _mm256_load_si256(mask_block);
 
-        __m256i b = avx2_func(tmp0, tmp1);
-        
-        cnt = _mm256_add_epi64(cnt, avx2_bit_count(b));
-/*
-        count += (unsigned)_mm_popcnt_u64(_mm256_extract_epi64(b, 0));
-        count += (unsigned)_mm_popcnt_u64(_mm256_extract_epi64(b, 1));
-        count += (unsigned)_mm_popcnt_u64(_mm256_extract_epi64(b, 2));
-        count += (unsigned)_mm_popcnt_u64(_mm256_extract_epi64(b, 3));
-*/
+        tmp0 = _mm256_and_si256(tmp0, tmp1);
+
+        BM_AVX2_BIT_COUNT(bc, tmp0)
+        cnt = _mm256_add_epi64(cnt, bc);
+
         ++block; ++mask_block;
 
     } while (block < block_end);
-    
-    cnt64 = (uint64_t*) &cnt;
+
+    cnt64 = (uint64_t*)&cnt;
     return cnt64[0] + cnt64[1] + cnt64[2] + cnt64[3];
-/*
-    cnt2 = cnt64[0] + cnt64[1] + cnt64[2] + cnt64[3];
+}
 
-    if (count != cnt2)
+bm::id_t avx2_bit_count_or(const __m256i* BMRESTRICT block,
+    const __m256i* BMRESTRICT block_end,
+    const __m256i* BMRESTRICT mask_block)
+{
+    uint64_t* cnt64;
+    BM_AVX2_POPCNT_PROLOG
+        __m256i cnt = _mm256_setzero_si256();
+    do
     {
-        printf("COUNTING ERR %i %i\n", (int)cnt2, count);
-        exit(1);
-    }
+        __m256i tmp0 = _mm256_load_si256(block);
+        __m256i tmp1 = _mm256_load_si256(mask_block);
 
-    return count;
-*/
+        tmp0 = _mm256_or_si256(tmp0, tmp1);
+
+        BM_AVX2_BIT_COUNT(bc, tmp0)
+        cnt = _mm256_add_epi64(cnt, bc);
+
+        ++block; ++mask_block;
+
+    } while (block < block_end);
+
+    cnt64 = (uint64_t*)&cnt;
+    return cnt64[0] + cnt64[1] + cnt64[2] + cnt64[3];
+}
+
+bm::id_t avx2_bit_count_xor(const __m256i* BMRESTRICT block,
+    const __m256i* BMRESTRICT block_end,
+    const __m256i* BMRESTRICT mask_block)
+{
+    uint64_t* cnt64;
+    BM_AVX2_POPCNT_PROLOG
+    __m256i cnt = _mm256_setzero_si256();
+    __m256i ymm0, ymm1;
+    do
+    {
+        ymm0 = _mm256_load_si256(block);
+        ymm1 = _mm256_load_si256(mask_block);
+        ymm0 = _mm256_xor_si256(ymm0, ymm1);
+        ++block; ++mask_block;
+        BM_AVX2_BIT_COUNT(bc, ymm0)
+        cnt = _mm256_add_epi64(cnt, bc);
+
+        ymm0 = _mm256_load_si256(block);
+        ymm1 = _mm256_load_si256(mask_block);
+        ymm0 = _mm256_xor_si256(ymm0, ymm1);
+        ++block; ++mask_block;
+        BM_AVX2_BIT_COUNT(bc, ymm0);
+        cnt = _mm256_add_epi64(cnt, bc);
+
+        ymm0 = _mm256_load_si256(block);
+        ymm1 = _mm256_load_si256(mask_block);
+        ymm0 = _mm256_xor_si256(ymm0, ymm1);
+        ++block; ++mask_block;
+        BM_AVX2_BIT_COUNT(bc, ymm0);
+        cnt = _mm256_add_epi64(cnt, bc);
+
+        ymm0 = _mm256_load_si256(block);
+        ymm1 = _mm256_load_si256(mask_block);
+        ymm0 = _mm256_xor_si256(ymm0, ymm1);
+        ++block; ++mask_block;
+        BM_AVX2_BIT_COUNT(bc, ymm0);
+        cnt = _mm256_add_epi64(cnt, bc);
+
+    } while (block < block_end);
+
+    cnt64 = (uint64_t*)&cnt;
+    return cnt64[0] + cnt64[1] + cnt64[2] + cnt64[3];
 }
 
 
+bm::id_t avx2_bit_count_sub(const __m256i* BMRESTRICT block,
+    const __m256i* BMRESTRICT block_end,
+    const __m256i* BMRESTRICT mask_block)
+{
+    uint64_t* cnt64;
+    BM_AVX2_POPCNT_PROLOG
+    __m256i cnt = _mm256_setzero_si256();
+    do
+    {
+        __m256i tmp0 = _mm256_load_si256(block);
+        __m256i tmp1 = _mm256_load_si256(mask_block);
+
+        tmp0 = _mm256_andnot_si256(tmp1, tmp0);
+
+        BM_AVX2_BIT_COUNT(bc, tmp0)
+        cnt = _mm256_add_epi64(cnt, bc);
+
+        ++block; ++mask_block;
+
+    } while (block < block_end);
+
+    cnt64 = (uint64_t*)&cnt;
+    return cnt64[0] + cnt64[1] + cnt64[2] + cnt64[3];
+}
 
 
 #define VECT_XOR_ARR_2_MASK(dst, src, src_end, mask)\
@@ -221,16 +363,16 @@ bm::id_t avx2_bit_count_op(const __m256i* BMRESTRICT block,
     avx2_bit_count((__m256i*) (first), (__m256i*) (last))
 
 #define VECT_BITCOUNT_AND(first, last, mask) \
-    avx2_bit_count_op((__m256i*) (first), (__m256i*) (last), (__m256i*) (mask), avx2_and)
+    avx2_bit_count_and((__m256i*) (first), (__m256i*) (last), (__m256i*) (mask))
 
 #define VECT_BITCOUNT_OR(first, last, mask) \
-    avx2_bit_count_op((__m256i*) (first), (__m256i*) (last), (__m256i*) (mask), avx2_or)
+    avx2_bit_count_or((__m256i*) (first), (__m256i*) (last), (__m256i*) (mask))
 
 #define VECT_BITCOUNT_XOR(first, last, mask) \
-    avx2_bit_count_op((__m256i*) (first), (__m256i*) (last), (__m256i*) (mask), avx2_xor)
+    avx2_bit_count_xor((__m256i*) (first), (__m256i*) (last), (__m256i*) (mask))
 
 #define VECT_BITCOUNT_SUB(first, last, mask) \
-    avx2_bit_count_op((__m256i*) (first), (__m256i*) (last), (__m256i*) (mask), avx2_sub)
+    avx2_bit_count_sub((__m256i*) (first), (__m256i*) (last), (__m256i*) (mask))
 
 #define VECT_INVERT_ARR(first, last) \
     avx2_invert_arr((bm::word_t*)first, (bm::word_t*)last);
