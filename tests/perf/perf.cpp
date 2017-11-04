@@ -242,10 +242,10 @@ void BitCountTest()
 
     FillSetsIntervals(*bset, *bv, 0, BSIZE, 10);
 
-    if (!platform_test)
+    //if (!platform_test)
     {
-    TimeTaker tt("BitCount. Random bitvector", REPEATS*2);
-    for (unsigned i = 0; i < REPEATS*2; ++i)
+    TimeTaker tt("BitCount. Random bitvector", REPEATS*20);
+    for (unsigned i = 0; i < REPEATS*20; ++i)
     {    
         value+=bv->count();
     }
@@ -286,7 +286,7 @@ void BitForEachTest()
         test_arr[j] = j;		
     }
 
-    if (!platform_test)
+    if (platform_test)
     {
     unsigned bit_list[32];
     TimeTaker tt("BitList algorithm. Conventional (AND based check)", REPEATS*10);
@@ -301,6 +301,7 @@ void BitForEachTest()
     }
     }
     
+    if (platform_test)
     {
     unsigned bit_list[32];
     TimeTaker tt("BitList4 algorithm(sub-octet+switch)", REPEATS*20);
@@ -365,8 +366,8 @@ void BitCountSparseTest()
     bv->optimize(tb);
 
     {
-    TimeTaker tt("BitCount: GAP Sparse bitset", REPEATS*1000);
-    for (unsigned i = 0; i < REPEATS*1000; ++i)
+    TimeTaker tt("BitCount: GAP Sparse bitset", REPEATS*100);
+    for (unsigned i = 0; i < REPEATS*100; ++i)
     {    
         value += bv->count();
     }
@@ -1470,9 +1471,10 @@ int main(void)
 
     BitCountTest();
 
+    BitCountSparseTest();
+
     BitForEachTest();
 
-    BitCountSparseTest();
 
     BitCompareTest();
 
