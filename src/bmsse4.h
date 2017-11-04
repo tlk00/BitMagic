@@ -201,8 +201,6 @@ bm::id_t sse4_bit_count_op(const __m128i* BMRESTRICT block,
     SSE4.2 optimized bitcounting and number of GAPs
     @ingroup SSE4
 */
-
-
 inline
 bm::id_t sse4_bit_block_calc_count_change(const __m128i* BMRESTRICT block,
                                           const __m128i* BMRESTRICT block_end,

@@ -723,7 +723,8 @@ void avx2_copy_block(__m256i* BMRESTRICT dst,
     @ingroup AVX2
 */
 inline
-void avx2_invert_arr(bm::word_t* first, bm::word_t* last)
+void avx2_invert_arr(bm::word_t* BMRESTRICT first,
+                     bm::word_t* BMRESTRICT last)
 {
     __m256i ymm1 = _mm256_set_epi32(0xFFFFFFFF, 0xFFFFFFFF,
                                     0xFFFFFFFF, 0xFFFFFFFF,
@@ -804,158 +805,250 @@ void avx2_invert_arr(bm::word_t* first, bm::word_t* last)
     avx2_set_block((__m256i*) dst, (__m256i*) (dst_end), (value))
 
 
-// TODO: write correct AVX implementation
-/*
-
+// TODO: write better pipelined AVX2 implementation
+/*!
+    @brief AVX2 optimized bitcounting and number of GAPs
+    @ingroup AVX2
+*/
 inline
-bm::id_t sse2_bit_block_calc_count_change(const __m128i* BMRESTRICT block,
-                                          const __m128i* BMRESTRICT block_end,
+bm::id_t avx2_bit_block_calc_count_change(const __m256i* BMRESTRICT block,
+                                          const __m256i* BMRESTRICT block_end,
                                                unsigned* BMRESTRICT bit_count)
 {
-   const unsigned mu1 = 0x55555555;
-   const unsigned mu2 = 0x33333333;
-   const unsigned mu3 = 0x0F0F0F0F;
-   const unsigned mu4 = 0x0000003F;
+   int count = (unsigned)(block_end - block)*8;
 
-   // Loading masks
-   __m128i m1 = _mm_set_epi32 (mu1, mu1, mu1, mu1);
-   __m128i m2 = _mm_set_epi32 (mu2, mu2, mu2, mu2);
-   __m128i m3 = _mm_set_epi32 (mu3, mu3, mu3, mu3);
-   __m128i m4 = _mm_set_epi32 (mu4, mu4, mu4, mu4);
-   __m128i mcnt;//, ccnt;
-   mcnt = _mm_xor_si128(m1, m1); // bit_cnt = 0
-   //ccnt = _mm_xor_si128(m1, m1); // change_cnt = 0
-
-   __m128i tmp1, tmp2;
-
-   int count = (block_end - block)*4; //0;//1;
-
-   bm::word_t  w, w0, w_prev;//, w_l;
-   const int w_shift = sizeof(w) * 8 - 1;
+   bm::word_t  w0, w_prev;
+   const int w_shift = sizeof(w0) * 8 - 1;
    bool first_word = true;
+   *bit_count = 0;
  
    // first word
    {
+       bm::word_t  w;
        const bm::word_t* blk = (const bm::word_t*) block;
        w = w0 = blk[0];
+       *bit_count += _mm_popcnt_u32(w);
        w ^= (w >> 1);
-       BM_INCWORD_BITCOUNT(count, w);
-       count -= (w_prev = (w0 >> w_shift)); // negative value correction
+       count += _mm_popcnt_u32(w);
+       count -= (w_prev = (w0 >> w_shift));
    }
-
-   bm::id_t BM_VECT_ALIGN tcnt[4] BM_VECT_ALIGN_ATTR;
 
    do
    {
-       // compute bit-count
+       __m256i b = _mm256_load_si256(block);
+       __m256i tmp2 = _mm256_xor_si256(b, _mm256_srli_epi32(b, 1)); // tmp2=(b >> 1) ^ b;
+       __m256i tmp3 = _mm256_srli_epi32(b, w_shift); // tmp3 = w0 >> w_shift
+
        // ---------------------------------------------------------------------
        {
-       __m128i b = _mm_load_si128(block);
-
-       // w ^(w >> 1)
-       tmp1 = _mm_srli_epi32(b, 1);       // tmp1 = b >> 1
-       tmp2 = _mm_xor_si128(b, tmp1);     // tmp2 = tmp1 ^ b;
-       _mm_store_si128((__m128i*)tcnt, tmp2);
-       
-
-       // compare with zero
-       // SSE4: _mm_test_all_zero()
-       {
-           // b = (b & 0x55555555) + (b >> 1 & 0x55555555);
-           //tmp1 = _mm_srli_epi32(b, 1);                    // tmp1 = (b >> 1 & 0x55555555)
-           tmp1 = _mm_and_si128(tmp1, m1);
-           tmp2 = _mm_and_si128(b, m1);                    // tmp2 = (b & 0x55555555)
-           b    = _mm_add_epi32(tmp1, tmp2);               //  b = tmp1 + tmp2
-
-           // b = (b & 0x33333333) + (b >> 2 & 0x33333333);
-           tmp1 = _mm_srli_epi32(b, 2);                    // (b >> 2 & 0x33333333)
-           tmp1 = _mm_and_si128(tmp1, m2);
-           tmp2 = _mm_and_si128(b, m2);                    // (b & 0x33333333)
-           b    = _mm_add_epi32(tmp1, tmp2);               // b = tmp1 + tmp2
-
-           // b = (b + (b >> 4)) & 0x0F0F0F0F;
-           tmp1 = _mm_srli_epi32(b, 4);                    // tmp1 = b >> 4
-           b = _mm_add_epi32(b, tmp1);                     // b = b + (b >> 4)
-           b = _mm_and_si128(b, m3);                       //& 0x0F0F0F0F
-
-           // b = b + (b >> 8);
-           tmp1 = _mm_srli_epi32 (b, 8);                   // tmp1 = b >> 8
-           b = _mm_add_epi32(b, tmp1);                     // b = b + (b >> 8)
-
-           // b = (b + (b >> 16)) & 0x0000003F;
-           tmp1 = _mm_srli_epi32 (b, 16);                  // b >> 16
-           b = _mm_add_epi32(b, tmp1);                     // b + (b >> 16)
-           b = _mm_and_si128(b, m4);                       // (b >> 16) & 0x0000003F;
-
-           mcnt = _mm_add_epi32(mcnt, b);                  // mcnt += b
-       }
-
-       }
-       // ---------------------------------------------------------------------
-       {
-           //__m128i b = _mm_load_si128(block);
-           // TODO: SSE4...
-           //w = _mm_extract_epi32(b, i);               
-
-           const bm::word_t* BMRESTRICT blk = (const bm::word_t*) block;
-
            if (first_word)
            {
                first_word = false;
            }
            else
            {
-               if ((w0=blk[0]))
+               w0 = _mm256_extract_epi32(b, 0);
+               if (w0)
                {
-                   BM_INCWORD_BITCOUNT(count, tcnt[0]);
+                   *bit_count += _mm_popcnt_u32(w0);
+                   count += _mm_popcnt_u32(_mm256_extract_epi32(tmp2, 0));
                    count -= !(w_prev ^ (w0 & 1));
-                   count -= w_prev = (w0 >> w_shift);
+                   count -= w_prev = _mm256_extract_epi32(tmp3, 0);
                }
                else
                {
                    count -= !w_prev; w_prev ^= w_prev;
-               }  
+               }
            }
-           if ((w0=blk[1]))
+           w0 = _mm256_extract_epi32(b, 1);
+           if (w0)
            {
-               BM_INCWORD_BITCOUNT(count, tcnt[1]);
+               *bit_count += _mm_popcnt_u32(w0);
+               count += _mm_popcnt_u32(_mm256_extract_epi32(tmp2, 1));
                count -= !(w_prev ^ (w0 & 1));
-               count -= w_prev = (w0 >> w_shift);                    
+               count -= w_prev = _mm256_extract_epi32(tmp3, 1);
            }
            else
            {
                count -= !w_prev; w_prev ^= w_prev;
-           }    
-           if ((w0=blk[2]))
+           }
+           w0 = _mm256_extract_epi32(b, 2);
+           if (w0)
            {
-               BM_INCWORD_BITCOUNT(count, tcnt[2]);
+               *bit_count += _mm_popcnt_u32(w0);
+               count += _mm_popcnt_u32(_mm256_extract_epi32(tmp2, 2));
                count -= !(w_prev ^ (w0 & 1));
-               count -= w_prev = (w0 >> w_shift);                    
+               count -= w_prev = _mm256_extract_epi32(tmp3, 2);
            }
            else
            {
                count -= !w_prev; w_prev ^= w_prev;
-           }      
-           if ((w0=blk[3]))
+           }
+           w0 = _mm256_extract_epi32(b, 3);
+           if (w0)
            {
-               BM_INCWORD_BITCOUNT(count, tcnt[3]);
+               *bit_count += _mm_popcnt_u32(w0);
+               count += _mm_popcnt_u32(_mm256_extract_epi32(tmp2, 3));
                count -= !(w_prev ^ (w0 & 1));
-               count -= w_prev = (w0 >> w_shift);                    
+               count -= w_prev = _mm256_extract_epi32(tmp3, 3);
            }
            else
            {
                count -= !w_prev; w_prev ^= w_prev;
-           }               
+           }
+           w0 = _mm256_extract_epi32(b, 4);
+           if (w0)
+           {
+               *bit_count += _mm_popcnt_u32(w0);
+               count += _mm_popcnt_u32(_mm256_extract_epi32(tmp2, 4));
+               count -= !(w_prev ^ (w0 & 1));
+               count -= w_prev = _mm256_extract_epi32(tmp3, 4);
+           }
+           else
+           {
+               count -= !w_prev; w_prev ^= w_prev;
+           }
+           w0 = _mm256_extract_epi32(b, 5);
+           if (w0)
+           {
+               *bit_count += _mm_popcnt_u32(w0);
+               count += _mm_popcnt_u32(_mm256_extract_epi32(tmp2, 5));
+               count -= !(w_prev ^ (w0 & 1));
+               count -= w_prev = _mm256_extract_epi32(tmp3, 5);
+           }
+           else
+           {
+               count -= !w_prev; w_prev ^= w_prev;
+           }
+           w0 = _mm256_extract_epi32(b, 6);
+           if (w0)
+           {
+               *bit_count += _mm_popcnt_u32(w0);
+               count += _mm_popcnt_u32(_mm256_extract_epi32(tmp2, 6));
+               count -= !(w_prev ^ (w0 & 1));
+               count -= w_prev = _mm256_extract_epi32(tmp3, 6);
+           }
+           else
+           {
+               count -= !w_prev; w_prev ^= w_prev;
+           }
+           w0 = _mm256_extract_epi32(b, 7);
+           if (w0)
+           {
+               *bit_count += _mm_popcnt_u32(w0);
+               count += _mm_popcnt_u32(_mm256_extract_epi32(tmp2, 7));
+               count -= !(w_prev ^ (w0 & 1));
+               count -= w_prev = _mm256_extract_epi32(tmp3, 7);
+           }
+           else
+           {
+               count -= !w_prev; w_prev ^= w_prev;
+           }
        }
    } while (++block < block_end);
-
-   _mm_store_si128((__m128i*)tcnt, mcnt);
-   *bit_count = tcnt[0] + tcnt[1] + tcnt[2] + tcnt[3];
 
    return count;
 }
 
+/*!
+    SSE4.2 optimized bitcounting and number of GAPs
+    @ingroup SSE4
 */
+inline
+bm::id_t sse42_bit_block_calc_count_change(const __m128i* BMRESTRICT block,
+                                          const __m128i* BMRESTRICT block_end,
+                                               unsigned* BMRESTRICT bit_count)
+{
+//   __m128i mask1 = _mm_set_epi32(0x1, 0x1, 0x1, 0x1);
+   BMREGISTER int count = (unsigned)(block_end - block)*4;
+
+   BMREGISTER bm::word_t  w0, w_prev;
+   const int w_shift = sizeof(w0) * 8 - 1;
+   bool first_word = true;
+   *bit_count = 0;
+ 
+   // first word
+   {
+       bm::word_t  w;
+       const bm::word_t* blk = (const bm::word_t*) block;
+       w = w0 = blk[0];
+       *bit_count += _mm_popcnt_u32(w);
+       w ^= (w >> 1);
+       count += _mm_popcnt_u32(w);
+       count -= (w_prev = (w0 >> w_shift));
+   }
+
+   do
+   {
+       __m128i b = _mm_load_si128(block);
+       __m128i tmp2 = _mm_xor_si128(b, _mm_srli_epi32(b, 1)); // tmp2=(b >> 1) ^ b;
+       __m128i tmp3 = _mm_srli_epi32(b, w_shift); // tmp3 = w0 >> w_shift
+//       __m128i tmp4 = _mm_and_si128(b, mask1);    // tmp4 = w0 & 1
+
+       // ---------------------------------------------------------------------
+       {
+           if (first_word)
+           {
+               first_word = false;
+           }
+           else
+           {
+               w0 = _mm_extract_epi32(b, 0);
+               if (w0)
+               {
+                   *bit_count += _mm_popcnt_u32(w0);
+                   count += _mm_popcnt_u32(_mm_extract_epi32(tmp2, 0));
+                   count -= !(w_prev ^ (w0 & 1));
+                   count -= w_prev = _mm_extract_epi32(tmp3, 0);
+               }
+               else
+               {
+                   count -= !w_prev; w_prev ^= w_prev;
+               }
+           }
+           w0 = _mm_extract_epi32(b, 1);
+           if (w0)
+           {
+               *bit_count += _mm_popcnt_u32(w0);
+               count += _mm_popcnt_u32(_mm_extract_epi32(tmp2, 1));
+               count -= !(w_prev ^ (w0 & 1));
+               count -= w_prev = _mm_extract_epi32(tmp3, 1);
+           }
+           else
+           {
+               count -= !w_prev; w_prev ^= w_prev;
+           }
+           w0 = _mm_extract_epi32(b, 2);
+           if (w0)
+           {
+               *bit_count += _mm_popcnt_u32(w0);
+               count += _mm_popcnt_u32(_mm_extract_epi32(tmp2, 2));
+               count -= !(w_prev ^ (w0 & 1));
+               count -= w_prev = _mm_extract_epi32(tmp3, 2);
+           }
+           else
+           {
+               count -= !w_prev; w_prev ^= w_prev;
+           }
+           w0 = _mm_extract_epi32(b, 3);
+           if (w0)
+           {
+               *bit_count += _mm_popcnt_u32(w0);
+               count += _mm_popcnt_u32(_mm_extract_epi32(tmp2, 3));
+               count -= !(w_prev ^ (w0 & 1));
+               count -= w_prev = _mm_extract_epi32(tmp3, 3);
+           }
+           else
+           {
+               count -= !w_prev; w_prev ^= w_prev;
+           }
+       }
+   } while (++block < block_end);
+
+   return count;
+}
+
+
 
 // undefine some local macro definitions to avoid preprocessor pollution
 //
