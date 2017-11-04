@@ -32,6 +32,7 @@ For more information please visit:  http://bitmagic.io
 //#define BM_SET_MMX_GUARD
 //#define BMSSE2OPT
 //#define BMSSE42OPT
+//#define BMAVX2OPT
 ///#define BMCOUNTOPT
 //#define BM_USE_EXPLICIT_TEMP
 
@@ -230,7 +231,7 @@ private:
 void* pool_ptr_allocator::free_ptr_blocks_[POOL_SIZE];
 int pool_ptr_allocator::ptr_blocks_idx_ = 0;
 
-#if defined(BMSSE2OPT) || defined(BMSSE42OPT)
+#if defined(BMSSE2OPT) || defined(BMSSE42OPT) || defined(BMAVX2OPT)
 #else
 # define MEM_DEBUG
 #endif
@@ -7202,10 +7203,10 @@ void DNACompressionTest()
     const unsigned arr_size = bm::set_block_size*4;
     const unsigned arr_plain_size = arr_size / 8;    
     
-    unsigned char BM_ALIGN16 block1[arr_size] BM_ALIGN16ATTR = {0,};
+    unsigned char BM_VECT_ALIGN block1[arr_size] BM_VECT_ALIGN_ATTR = {0,};
 
-    unsigned char BM_ALIGN16 tmatrix1[8][arr_plain_size] BM_ALIGN16ATTR;
-    unsigned BM_ALIGN16 distance1[8][8] BM_ALIGN16ATTR;
+    unsigned char BM_VECT_ALIGN tmatrix1[8][arr_plain_size] BM_VECT_ALIGN_ATTR;
+    unsigned BM_VECT_ALIGN distance1[8][8] BM_VECT_ALIGN_ATTR;
     unsigned char pc_vector1[8] = {0,};
     unsigned pc_vector_stat1[bm::ibpc_end];
 /*

@@ -36,7 +36,7 @@ For more information please visit:  http://bitmagic.io
 
 //#define BMSSE2OPT
 //#define BMSSE42OPT
-
+//#define BMAVX2OPT
 
 #ifdef _MSC_VER
 #pragma warning( push )
@@ -731,6 +731,40 @@ void AndTest()
     delete bset2;
 }
 
+void XorTest()
+{
+    bvect*  bv1 = new bvect();
+    test_bitset*  bset1 = new test_bitset();
+    test_bitset*  bset2 = new test_bitset();
+    bvect*  bv2 = new bvect();
+    unsigned i;
+    //unsigned value = 0;
+
+    SimpleFillSets(*bset1, *bv1, 0, BSIZE, 100);
+    SimpleFillSets(*bset1, *bv2, 0, BSIZE, 100);
+    {
+        TimeTaker tt("XOR bvector test", REPEATS * 4);
+        for (i = 0; i < REPEATS * 4; ++i)
+        {
+            *bv1 ^= *bv2;
+        }
+    }
+
+    if (!platform_test)
+    {
+        TimeTaker tt("XOR bvector test(STL)", REPEATS * 4);
+        for (i = 0; i < REPEATS * 4; ++i)
+        {
+            *bset1 ^= *bset2;
+        }
+    }
+
+    delete bv1;
+    delete bv2;
+
+    delete bset1;
+    delete bset2;
+}
 
 void SubTest()
 {
@@ -874,7 +908,7 @@ void XorCountTest()
     }
 
     {
-    TimeTaker tt("XOR COUNT bvector test", REPEATS*4);
+    TimeTaker tt("XOR COUNT bvector(opt) test", REPEATS*4);
     for (i = 0; i < REPEATS*4; ++i)
     {
         count2 += (unsigned)bm::count_xor(*bv1, *bv2);
@@ -896,6 +930,147 @@ void XorCountTest()
     delete bset2;    
 }
 
+void AndCountTest()
+{
+    bvect*  bv1 = new bvect();
+    bvect*  bv2 = new bvect();
+    test_bitset*  bset1 = new test_bitset();
+    test_bitset*  bset2 = new test_bitset();
+    unsigned i;
+
+    SimpleFillSets(*bset1, *bv1, 0, BSIZE, 400);
+    SimpleFillSets(*bset2, *bv2, 0, BSIZE, 500);
+
+    unsigned count1 = 0;
+    unsigned count2 = 0;
+    unsigned test_count = 0;
+
+    if (!platform_test)
+    {
+        bvect bv_tmp;
+        TimeTaker tt("AND COUNT bvector test with TEMP vector", REPEATS * 4);
+        for (i = 0; i < REPEATS * 4; ++i)
+        {
+            bv_tmp.clear(false);
+            bv_tmp |= *bv1;
+            bv_tmp &= *bv2;
+            count1 += bv_tmp.count();
+        }
+    }
+
+    if (!platform_test)
+    {
+        test_bitset*  bset_tmp = new test_bitset();
+        TimeTaker tt("AND COUNT bvector test with TEMP vector (STL)", REPEATS * 4);
+        for (i = 0; i < REPEATS * 4; ++i)
+        {
+            bset_tmp->reset();
+            *bset_tmp |= *bset1;
+            *bset_tmp &= *bset2;
+            test_count += (unsigned)bset_tmp->count();
+        }
+    }
+
+
+    {
+        TimeTaker tt("AND COUNT bvector test", REPEATS * 4);
+        for (i = 0; i < REPEATS * 4; ++i)
+        {
+            count2 += bm::count_and(*bv1, *bv2);
+        }
+    }
+
+
+    if (!platform_test)
+        if (count1 != count2)
+        {
+            cout << "Check failed !" << endl;
+            cout << count1 << " " << count2 << " " << test_count << endl;
+            exit(1);
+        }
+    count1 = count2 = 0;
+
+    // -----------------------------------------
+    if (!platform_test)
+    {
+        cout << "One optimized vector" << endl;
+    }
+    BM_DECLARE_TEMP_BLOCK(tb)
+        bv2->optimize(tb);
+
+    if (!platform_test)
+    {
+        bvect bv_tmp;
+        TimeTaker tt("AND COUNT bvector test with TEMP vector", REPEATS * 4);
+        for (i = 0; i < REPEATS * 4; ++i)
+        {
+            bv_tmp.clear(false);
+            bv_tmp |= *bv1;
+            bv_tmp &= *bv2;
+            count1 += (unsigned)bv_tmp.count();
+        }
+    }
+
+    {
+        TimeTaker tt("AND COUNT bvector test", REPEATS * 4);
+        for (i = 0; i < REPEATS * 4; ++i)
+        {
+            count2 += (unsigned)bm::count_and(*bv1, *bv2);
+        }
+    }
+
+    if (!platform_test)
+        if (count1 != count2)
+        {
+            cout << "Check failed !" << endl;
+            exit(1);
+        }
+    count1 = count2 = 0;
+
+    // -----------------------------------------
+    if (!platform_test)
+    {
+        cout << "Both vectors optimized" << endl;
+    }
+    bv1->optimize(tb);
+    //bv1->stat();
+    if (!platform_test)
+    {
+        bvect bv_tmp;
+        TimeTaker tt("AND COUNT bvector test with TEMP vector", REPEATS * 4);
+        for (i = 0; i < REPEATS * 4; ++i)
+        {
+            bv_tmp.clear(false);
+            bv_tmp |= *bv1;
+            bv_tmp &= *bv2;
+            count1 += (unsigned)bv_tmp.count();
+        }
+    }
+
+    {
+        TimeTaker tt("AND COUNT bvector(opt) test", REPEATS * 4);
+        for (i = 0; i < REPEATS * 4; ++i)
+        {
+            count2 += (unsigned)bm::count_and(*bv1, *bv2);
+        }
+    }
+    if (!platform_test)
+        if (count1 != count2)
+        {
+            cout << "Check failed !" << endl;
+            exit(1);
+        }
+    count1 = count2 = 0;
+
+
+    delete bv1;
+    delete bv2;
+
+    delete bset1;
+    delete bset2;
+}
+
+
 
 void TI_MetricTest()
 {
@@ -913,7 +1088,6 @@ void TI_MetricTest()
     unsigned countA=0, countB=0, test_countA=0, test_countB=0;
     unsigned test_count = 0;
     double ti1=0, ti2=0;
-
     {
     TimeTaker tt("Tversky Index bvector test vector", REPEATS);
     for (i = 0; i < REPEATS; ++i)
@@ -1083,9 +1257,8 @@ void TI_MetricTest()
 
 void BitBlockTransposeTest()
 {
-    bm::word_t BM_ALIGN16 block1[bm::set_block_size] BM_ALIGN16ATTR = { 0, };
-    //bm::word_t BM_ALIGN16 block2[bm::set_block_size] = {0xFF,};
-    unsigned   BM_ALIGN16 tmatrix1[32][bm::set_block_plain_size] BM_ALIGN16ATTR;
+    bm::word_t BM_VECT_ALIGN block1[bm::set_block_size] BM_VECT_ALIGN_ATTR = { 0, };
+    unsigned   BM_VECT_ALIGN tmatrix1[32][bm::set_block_plain_size] BM_VECT_ALIGN_ATTR;
 
     for (unsigned i = 0; i < bm::set_block_size; ++i)
     {
@@ -1310,18 +1483,20 @@ int main(void)
     EnumeratorTestGAP();
 
     AndTest();
+    XorTest();
     SubTest();  
 
     InvertTest();  
 
     XorCountTest();
+    AndCountTest();
 
     TI_MetricTest();
-
+/*
     SerializationTest();
     
     SparseVectorAccessTest();
-    
+*/    
     return 0;
 }
 
