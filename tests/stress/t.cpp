@@ -9730,7 +9730,7 @@ int main(void)
 
      ComparisonTest();
 
-     BitBlockTransposeTest();
+     //BitBlockTransposeTest();
 
      MutationTest();
 
