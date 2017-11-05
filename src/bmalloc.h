@@ -36,6 +36,13 @@ For more information please visit:  http://bitmagic.io
 namespace bm
 {
 
+#if defined(BMSSE2OPT) || defined(BMSSE42OPT)
+#define BM_ALLOC_ALIGN 16
+#endif
+#if defined(BMAVX2OPT)
+#define BM_ALLOC_ALIGN 32
+#endif
+
 
 /*! 
     @defgroup alloc Allocator
@@ -63,29 +70,16 @@ public:
     static bm::word_t* allocate(size_t n, const void *)
     {
         bm::word_t* ptr;
-        int align = 0;
 
-#if defined(BMAVX2OPT)
-        align = 32; 
-#endif
-#if defined(BMSSE2OPT) || defined(BMSSE42OPT)
-        align = 16;
-#endif
-
-        if (align)
-        {
-#if defined(BMSSE2OPT) || defined(BMSSE42OPT) || defined(BMAVX2OPT)
+#if defined(BM_ALLOC_ALIGN)
     #ifdef _MSC_VER
-                ptr = (bm::word_t*) ::_aligned_malloc(n * sizeof(bm::word_t), align);
+        ptr = (bm::word_t*) ::_aligned_malloc(n * sizeof(bm::word_t), BM_ALLOC_ALIGN);
     #else
-                ptr = (bm::word_t*) ::_mm_malloc(n * sizeof(bm::word_t), align);
+        ptr = (bm::word_t*) ::_mm_malloc(n * sizeof(bm::word_t), BM_ALLOC_ALIGN);
     #endif
-#endif
-        }
-        else
-        {
+#else
             ptr = (bm::word_t*) ::malloc(n * sizeof(bm::word_t));
-        }
+#endif
 
         if (!ptr)
         {
@@ -100,7 +94,7 @@ public:
     */
     static void deallocate(bm::word_t* p, size_t)
     {
-#if defined(BMAVX2OPT) || defined(BMSSE2OPT) || defined(BMSSE42OPT)
+#ifdef BM_ALLOC_ALIGN
     # ifdef _MSC_VER
             ::_aligned_free(p);
     #else
@@ -255,6 +249,7 @@ typedef mem_alloc<block_allocator, ptr_allocator> standard_allocator;
 
 /** @} */
 
+#undef BM_ALLOC_ALIGN
 
 } // namespace bm
 
