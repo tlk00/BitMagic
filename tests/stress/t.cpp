@@ -32,7 +32,7 @@ For more information please visit:  http://bitmagic.io
 //#define BM_SET_MMX_GUARD
 //#define BMSSE2OPT
 //#define BMSSE42OPT
-//#define BMAVX2OPT
+#define BMAVX2OPT
 ///#define BMCOUNTOPT
 //#define BM_USE_EXPLICIT_TEMP
 
@@ -715,15 +715,12 @@ void FillSetsRegular(bvect_mini* bvect_min,
               unsigned max,
               unsigned /*fill_factor*/)
 {
-    for (unsigned i = 0; i < max; i+=2)
+    unsigned step = rand() % 4;
+    if (step < 2) ++step;
+    for (unsigned i = 0; i < max; i+=step)
     {
-        unsigned bn = i;
-        if (bn > max)
-        {
-            break;
-        }
-        bvect_min->set_bit(bn);
-        bvect_full->set_bit(bn);
+        bvect_min->set_bit(i);
+        bvect_full->set_bit(i);
         
         if ( (i  % PROGRESS_PRINT) == 0)
         {
@@ -752,7 +749,7 @@ void FillSetsRandomMethod(bvect_mini* bvect_min,
         method = rand() % 7;
     }
     unsigned factor;
-method = 5;
+//method = 5;
     switch (method)
     {
 
@@ -9710,7 +9707,6 @@ int main(void)
     exit(1);
 */                                                                                                        
 
-/*
      ExportTest();
      ResizeTest();
 
@@ -9775,7 +9771,7 @@ int main(void)
      StressTest(100, 0); // OR
      StressTest(100, 1); // SUB
      StressTest(100, 2); // XOR
-*/
+
      StressTest(100, 3); // AND
 
      TestSparseVector();
