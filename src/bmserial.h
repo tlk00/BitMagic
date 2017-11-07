@@ -2086,12 +2086,11 @@ serial_stream_iterator<DEC>::get_bit_block_AND(bm::word_t* BMRESTRICT dst_block,
 {
     BM_ASSERT(this->state_ == e_bit_block);
     BM_ASSERT(dst_block != tmp_block);
-printf("block_type=%i,", block_type_);
     unsigned count = 0;
     switch (block_type_)
     {
     case set_block_bit:
-/*
+
 #ifdef BMAVX2OPT
         for (unsigned i = 0; i < bm::set_block_size; i+=8)
         {
@@ -2110,15 +2109,14 @@ printf("block_type=%i,", block_type_);
             _mm256_store_si256((__m256i*)(dst_block+i), ymm0);
         }
 #else
-*/
         for (unsigned i = 0; i < bm::set_block_size; i+=4)
 		{
-            dst_block[i]   |= decoder_.get_32();
+            dst_block[i+0] &= decoder_.get_32();
             dst_block[i+1] &= decoder_.get_32();
             dst_block[i+2] &= decoder_.get_32();
             dst_block[i+3] &= decoder_.get_32();
 		}
-//#endif
+#endif
         break;
     case set_block_bit_0runs:
         {
