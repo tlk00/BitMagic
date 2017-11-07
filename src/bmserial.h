@@ -1038,7 +1038,9 @@ unsigned serializer<BV>::serialize(const BV& bv,
         
         // if interval block is a winner
         if (interval_block_size < arr_block_size &&
-            interval_block_size < gap_block_size)
+            interval_block_size < gap_block_size &&
+            interval_block_size < (bm::set_block_size * sizeof(bm::word_t))
+            )
         {
             encode_bit_interval(blk, enc, interval_block_size);
             continue;
@@ -1064,7 +1066,6 @@ unsigned serializer<BV>::serialize(const BV& bv,
         {
             goto bit_as_array;
         }
-        
         // full bit-block
         enc.put_prefixed_array_32(set_block_bit, blk, bm::set_block_size);
         continue;            
@@ -2080,30 +2081,52 @@ serial_stream_iterator<DEC>::get_bit_block_OR(bm::word_t*  dst_block,
 
 template<class DEC>
 unsigned 
-serial_stream_iterator<DEC>::get_bit_block_AND(bm::word_t*  dst_block,
-                                               bm::word_t*  tmp_block)
+serial_stream_iterator<DEC>::get_bit_block_AND(bm::word_t* BMRESTRICT dst_block,
+                                               bm::word_t* BMRESTRICT tmp_block)
 {
     BM_ASSERT(this->state_ == e_bit_block);
     BM_ASSERT(dst_block != tmp_block);
-
+printf("block_type=%i,", block_type_);
     unsigned count = 0;
     switch (block_type_)
     {
     case set_block_bit:
+/*
+#ifdef BMAVX2OPT
+        for (unsigned i = 0; i < bm::set_block_size; i+=8)
+        {
+            unsigned i0 = decoder_.get_32();
+            unsigned i1 = decoder_.get_32();
+            unsigned i2 = decoder_.get_32();
+            unsigned i3 = decoder_.get_32();
+            unsigned i4 = decoder_.get_32();
+            unsigned i5 = decoder_.get_32();
+            unsigned i6 = decoder_.get_32();
+            unsigned i7 = decoder_.get_32();
+            
+            __m256i ymm0 = _mm256_setr_epi32(i0, i1, i2, i3, i4, i5, i6, i7);
+            __m256i ymm1 = _mm256_load_si256((__m256i*)(dst_block+i));
+            ymm0 = _mm256_and_si256(ymm0, ymm1);
+            _mm256_store_si256((__m256i*)(dst_block+i), ymm0);
+        }
+#else
+*/
         for (unsigned i = 0; i < bm::set_block_size; i+=4)
 		{
-            dst_block[i]   &= decoder_.get_32();
+            dst_block[i]   |= decoder_.get_32();
             dst_block[i+1] &= decoder_.get_32();
             dst_block[i+2] &= decoder_.get_32();
             dst_block[i+3] &= decoder_.get_32();
 		}
+//#endif
         break;
-    case set_block_bit_0runs: 
+    case set_block_bit_0runs:
         {
         unsigned char run_type = decoder_.get_8();
         for (unsigned j = 0; j < bm::set_block_size;run_type = !run_type)
         {
             unsigned run_length = decoder_.get_16();
+
             unsigned run_end = j + run_length;
             if (run_type)
             {
@@ -3349,7 +3372,6 @@ void iterator_deserializer<BV, SerialIterator>::deserialize(
                 }
                 else  // mask block exists
                 {
-
                     bm::operation bop = bm::setop2op(op);
                     bman_target.copy_block(bv_block_idx, bman_mask);
                     bv_target.combine_operation_with_block(

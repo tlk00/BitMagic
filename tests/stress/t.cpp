@@ -709,6 +709,32 @@ void FillSetsRandom(bvect_mini* bvect_min,
 
 }
 
+void FillSetsRegular(bvect_mini* bvect_min,
+                     bvect* bvect_full,
+              unsigned /*min*/,
+              unsigned max,
+              unsigned /*fill_factor*/)
+{
+    for (unsigned i = 0; i < max; i+=2)
+    {
+        unsigned bn = i;
+        if (bn > max)
+        {
+            break;
+        }
+        bvect_min->set_bit(bn);
+        bvect_full->set_bit(bn);
+        
+        if ( (i  % PROGRESS_PRINT) == 0)
+        {
+            cout << "+" << flush;
+        }
+    }
+    cout << "Ok" << endl;
+}
+
+
+
 
 //
 //  Quasi random filling with choosing randomizing method.
@@ -723,10 +749,10 @@ void FillSetsRandomMethod(bvect_mini* bvect_min,
 {
     if (method == -1)
     {
-        method = rand() % 6;
+        method = rand() % 7;
     }
     unsigned factor;
-//method = 0;
+method = 5;
     switch (method)
     {
 
@@ -754,6 +780,10 @@ void FillSetsRandomMethod(bvect_mini* bvect_min,
     case 4:
         cout << "Random set one bit" << endl;
         FillSetsRandomOne(bvect_min, bvect_full, min, max);
+        break;
+    case 5:
+        cout << "Regular pattern filling" << endl;
+        FillSetsRegular(bvect_min, bvect_full, min, max, 2);
         break;
     default:
         cout << "Random filling: method - Set Intervals - factor(random)" << endl;
@@ -9680,7 +9710,7 @@ int main(void)
     exit(1);
 */                                                                                                        
 
-
+/*
      ExportTest();
      ResizeTest();
 
@@ -9745,6 +9775,7 @@ int main(void)
      StressTest(100, 0); // OR
      StressTest(100, 1); // SUB
      StressTest(100, 2); // XOR
+*/
      StressTest(100, 3); // AND
 
      TestSparseVector();
