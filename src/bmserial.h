@@ -986,6 +986,7 @@ unsigned serializer<BV>::serialize(const BV& bv,
         unsigned gap_block_size = unsigned(sizeof(gap_word_t) + ((bit_gaps+1) * sizeof(gap_word_t)));
         unsigned interval_block_size;
         interval_block_size = bit_count_nonzero_size(blk, bm::set_block_size);
+        
         bool inverted = false;
 
         if (arr_block_size_inv < arr_block_size &&
@@ -1037,6 +1038,12 @@ unsigned serializer<BV>::serialize(const BV& bv,
         }
         
         // if interval block is a winner
+        // it needs to have a compelling advantage of 25% over bit block
+        //
+        unsigned threashold_block_size =
+            bm::set_block_size * sizeof(bm::word_t);
+        threashold_block_size -= threashold_block_size / 4;
+            
         if (interval_block_size < arr_block_size &&
             interval_block_size < gap_block_size &&
             interval_block_size < (bm::set_block_size * sizeof(bm::word_t))
@@ -2028,6 +2035,33 @@ serial_stream_iterator<DEC>::get_bit_block_OR(bm::word_t*  dst_block,
     {
     case set_block_bit:
         {
+#ifdef BMAVX2OPT
+        for (unsigned i = 0; i < bm::set_block_size; i+=8)
+        {
+            unsigned i0 = decoder_.get_32();
+            unsigned i1 = decoder_.get_32();
+            unsigned i2 = decoder_.get_32();
+            unsigned i3 = decoder_.get_32();
+            unsigned i4 = decoder_.get_32();
+            unsigned i5 = decoder_.get_32();
+            unsigned i6 = decoder_.get_32();
+            unsigned i7 = decoder_.get_32();
+            
+            __m256i ymm0 = _mm256_setr_epi32(i0, i1, i2, i3, i4, i5, i6, i7);
+            __m256i ymm1 = _mm256_load_si256((__m256i*)(dst_block+i));
+            ymm0 = _mm256_or_si256(ymm0, ymm1);
+            _mm256_store_si256((__m256i*)(dst_block+i), ymm0);
+        }
+#else
+        for (unsigned i = 0; i < bm::set_block_size; i+=4)
+        {
+            dst_block[i+0] |= decoder_.get_32();
+            dst_block[i+1] |= decoder_.get_32();
+            dst_block[i+2] |= decoder_.get_32();
+            dst_block[i+3] |= decoder_.get_32();
+        }
+#endif
+/*
         bitblock_get_adapter ga(dst_block);
         bit_OR<bm::word_t> func;
         bitblock_store_adapter sa(dst_block);
@@ -2037,7 +2071,9 @@ serial_stream_iterator<DEC>::get_bit_block_OR(bm::word_t*  dst_block,
                    func,
                    sa
                   );
+*/
         }
+
         break;
     case set_block_bit_interval:
         {

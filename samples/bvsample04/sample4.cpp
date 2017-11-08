@@ -130,7 +130,7 @@ int main(void)
         //
         bm::serializer<bm::bvector<> > bvs;
 
-        // next settings provide lowest serilized size
+        // next settings provide lowest size
         bvs.byte_order_serialization(false);
         bvs.gap_length_serialization(false);
         bvs.set_compression_level(4);
