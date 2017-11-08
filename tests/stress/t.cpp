@@ -32,7 +32,7 @@ For more information please visit:  http://bitmagic.io
 //#define BM_SET_MMX_GUARD
 //#define BMSSE2OPT
 //#define BMSSE42OPT
-#define BMAVX2OPT
+//#define BMAVX2OPT
 ///#define BMCOUNTOPT
 //#define BM_USE_EXPLICIT_TEMP
 
@@ -9768,11 +9768,10 @@ int main(void)
 
      BlockLevelTest();
 
-     StressTest(100, 0); // OR
-     StressTest(100, 1); // SUB
-     StressTest(100, 2); // XOR
-
-     StressTest(100, 3); // AND
+     StressTest(120, 0); // OR
+     StressTest(120, 1); // SUB
+     StressTest(120, 2); // XOR
+     StressTest(120, 3); // AND
 
      TestSparseVector();
      TestSparseVector_Stress(2);
