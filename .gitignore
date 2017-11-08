@@ -42,7 +42,3 @@ utils/svutil/bmsvutil
 build/
 
 tests/bench-tpch/bench01
-
-xcode/bm\.build/
-
-xcode/bm\.xcodeproj/

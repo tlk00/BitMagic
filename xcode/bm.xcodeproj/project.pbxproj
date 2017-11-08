@@ -1,0 +1,3315 @@
+// !$*UTF8*$!
+{
+	archiveVersion = 1;
+	classes = {
+	};
+	objectVersion = 46;
+	objects = {
+
+/* Begin PBXAggregateTarget section */
+		60DD5E3E154C420B8AE8746B /* ZERO_CHECK */ = {
+			isa = PBXAggregateTarget;
+			buildConfigurationList = AD08D834C1FA4287AFB83062 /* Build configuration list for PBXAggregateTarget "ZERO_CHECK" */;
+			buildPhases = (
+				F556C010BFD64BA09FDC703C /* CMake Rules */,
+			);
+			dependencies = (
+			);
+			name = ZERO_CHECK;
+			productName = ZERO_CHECK;
+		};
+		7E48F642710D4BD1A9CB61E9 /* ALL_BUILD */ = {
+			isa = PBXAggregateTarget;
+			buildConfigurationList = 0DFFB4B2DFB64B819FD0CBAE /* Build configuration list for PBXAggregateTarget "ALL_BUILD" */;
+			buildPhases = (
+				DCD087F12DF94E4E9579CB94 /* CMake Rules */,
+			);
+			dependencies = (
+				E821E4BEFE904509A3EB85F9 /* PBXTargetDependency */,
+				25ED75611F464740ABB11B76 /* PBXTargetDependency */,
+				43432C31B26245258F044CC7 /* PBXTargetDependency */,
+				1C90767C268246069887A67D /* PBXTargetDependency */,
+				CD0CAE1EB3824D169BB92843 /* PBXTargetDependency */,
+				059C9A7F780D441DB638B5D0 /* PBXTargetDependency */,
+				EA6AEBC23A8F4912B782D8C2 /* PBXTargetDependency */,
+				540ECB76170B4987A6AF5766 /* PBXTargetDependency */,
+				FEAC79D798C641E293BA6558 /* PBXTargetDependency */,
+				ADB2747E4B314214B133C944 /* PBXTargetDependency */,
+				3A38D556F7374A11AE8C92DD /* PBXTargetDependency */,
+				E9B717926DD24DE09B396F88 /* PBXTargetDependency */,
+				C24A3C899EF344E18F6818DF /* PBXTargetDependency */,
+				2E90644FB7384201A8B27A02 /* PBXTargetDependency */,
+				59CE788BA1A3404DA5383EA9 /* PBXTargetDependency */,
+				15F893C30A1B45F89A21D845 /* PBXTargetDependency */,
+			);
+			name = ALL_BUILD;
+			productName = ALL_BUILD;
+		};
+/* End PBXAggregateTarget section */
+
+/* Begin PBXBuildFile section */
+		04436EDD599B4F258801E43D /* /Users/anatoliykuznetsov/Desktop/dev/git/BitMagic/samples/bvsample10/sample10.cpp */ = {isa = PBXBuildFile; fileRef = 5C53B05DE4184EC889E1D7F0 /* /Users/anatoliykuznetsov/Desktop/dev/git/BitMagic/samples/bvsample10/sample10.cpp */; };
+		0FA2425674CE4207B42443DE /* /Users/anatoliykuznetsov/Desktop/dev/git/BitMagic/CMakeLists.txt */ = {isa = PBXBuildFile; fileRef = 2A241B7439004DD4A1F8DC3C /* /Users/anatoliykuznetsov/Desktop/dev/git/BitMagic/CMakeLists.txt */; };
+		334D6DA681D6472A862DC79C /* /Users/anatoliykuznetsov/Desktop/dev/git/BitMagic/samples/bvsample02/sample2.cpp */ = {isa = PBXBuildFile; fileRef = D81EBD849A1D41E7AFD837AC /* /Users/anatoliykuznetsov/Desktop/dev/git/BitMagic/samples/bvsample02/sample2.cpp */; };
+		3520C3E57C5F43B6BB6AEB0E /* /Users/anatoliykuznetsov/Desktop/dev/git/BitMagic/CMakeLists.txt */ = {isa = PBXBuildFile; fileRef = 06562F5347A24971B4873A8D /* /Users/anatoliykuznetsov/Desktop/dev/git/BitMagic/CMakeLists.txt */; };
+		36B194857FF84092BAA10F1F /* /Users/anatoliykuznetsov/Desktop/dev/git/BitMagic/samples/svsample03/svsample03.cpp */ = {isa = PBXBuildFile; fileRef = CCD1560BAF0344E8BAC14D87 /* /Users/anatoliykuznetsov/Desktop/dev/git/BitMagic/samples/svsample03/svsample03.cpp */; };
+		39AD25C390AB4C21B876732F /* /Users/anatoliykuznetsov/Desktop/dev/git/BitMagic/utils/svutil/svutil.cpp */ = {isa = PBXBuildFile; fileRef = 0D8F43F5D4224FA3ADD93988 /* /Users/anatoliykuznetsov/Desktop/dev/git/BitMagic/utils/svutil/svutil.cpp */; };
+		3A8C4E8748FE499E9A2A80FA /* /Users/anatoliykuznetsov/Desktop/dev/git/BitMagic/samples/bvsample05/sample5.cpp */ = {isa = PBXBuildFile; fileRef = 440BFC29867F43818043B9FC /* /Users/anatoliykuznetsov/Desktop/dev/git/BitMagic/samples/bvsample05/sample5.cpp */; };
+		4880D9D085F7458CBC4231E8 /* /Users/anatoliykuznetsov/Desktop/dev/git/BitMagic/tests/stress/t.cpp */ = {isa = PBXBuildFile; fileRef = 9726A65A9BE2407B99B977E5 /* /Users/anatoliykuznetsov/Desktop/dev/git/BitMagic/tests/stress/t.cpp */; };
+		4B9007FB812E42CBB979D4EB /* /Users/anatoliykuznetsov/Desktop/dev/git/BitMagic/CMakeLists.txt */ = {isa = PBXBuildFile; fileRef = 1366CDA908204953ADB7C411 /* /Users/anatoliykuznetsov/Desktop/dev/git/BitMagic/CMakeLists.txt */; };
+		537FA8F158D143CA80B11AC2 /* /Users/anatoliykuznetsov/Desktop/dev/git/BitMagic/CMakeLists.txt */ = {isa = PBXBuildFile; fileRef = 11AF7583E28A49B19349462A /* /Users/anatoliykuznetsov/Desktop/dev/git/BitMagic/CMakeLists.txt */; };
+		5A3C44E952AB499AB3CF0411 /* /Users/anatoliykuznetsov/Desktop/dev/git/BitMagic/samples/bvsample09/sample9.cpp */ = {isa = PBXBuildFile; fileRef = 9CFAD1057C254A48A94DE4FC /* /Users/anatoliykuznetsov/Desktop/dev/git/BitMagic/samples/bvsample09/sample9.cpp */; };
+		6FE9E7F1A963410096C42B87 /* /Users/anatoliykuznetsov/Desktop/dev/git/BitMagic/CMakeLists.txt */ = {isa = PBXBuildFile; fileRef = B711D33A00DF4C1B969B1E4E /* /Users/anatoliykuznetsov/Desktop/dev/git/BitMagic/CMakeLists.txt */; };
+		7413CA28ED0843F295FDEC04 /* /Users/anatoliykuznetsov/Desktop/dev/git/BitMagic/samples/bvsample08/sample8.cpp */ = {isa = PBXBuildFile; fileRef = 5855CCAAB3F049D0A3952CA2 /* /Users/anatoliykuznetsov/Desktop/dev/git/BitMagic/samples/bvsample08/sample8.cpp */; };
+		74ED1B33CA5B41EDACDF297C /* /Users/anatoliykuznetsov/Desktop/dev/git/BitMagic/CMakeLists.txt */ = {isa = PBXBuildFile; fileRef = 5CC795BBC5F44A2EBBB2F160 /* /Users/anatoliykuznetsov/Desktop/dev/git/BitMagic/CMakeLists.txt */; };
+		80F9441E29134C0A9719F6F5 /* /Users/anatoliykuznetsov/Desktop/dev/git/BitMagic/samples/bvsample06/sample6.cpp */ = {isa = PBXBuildFile; fileRef = BF78FED4485747D5AF74F68F /* /Users/anatoliykuznetsov/Desktop/dev/git/BitMagic/samples/bvsample06/sample6.cpp */; };
+		858A152DC337447D95D6EFD8 /* /Users/anatoliykuznetsov/Desktop/dev/git/BitMagic/CMakeLists.txt */ = {isa = PBXBuildFile; fileRef = 0E1B5202F86547F086F36F4D /* /Users/anatoliykuznetsov/Desktop/dev/git/BitMagic/CMakeLists.txt */; };
+		A02FF089BC67489B8A94D00A /* /Users/anatoliykuznetsov/Desktop/dev/git/BitMagic/samples/bvsample01/sample1.cpp */ = {isa = PBXBuildFile; fileRef = 9BFDE923BE05499686810473 /* /Users/anatoliykuznetsov/Desktop/dev/git/BitMagic/samples/bvsample01/sample1.cpp */; };
+		A0F7628F92F04363AADABFDB /* /Users/anatoliykuznetsov/Desktop/dev/git/BitMagic/CMakeLists.txt */ = {isa = PBXBuildFile; fileRef = DACE5BE2B59D4938856D8005 /* /Users/anatoliykuznetsov/Desktop/dev/git/BitMagic/CMakeLists.txt */; };
+		A2FD6AE53D414E7B9293697F /* /Users/anatoliykuznetsov/Desktop/dev/git/BitMagic/samples/svsample02/svsample02.cpp */ = {isa = PBXBuildFile; fileRef = EA8D6694E3A347E8A2D4B527 /* /Users/anatoliykuznetsov/Desktop/dev/git/BitMagic/samples/svsample02/svsample02.cpp */; };
+		A35D11A811D04081B132D9B6 /* /Users/anatoliykuznetsov/Desktop/dev/git/BitMagic/CMakeLists.txt */ = {isa = PBXBuildFile; fileRef = EDDA9616E48C496D8F6CFF97 /* /Users/anatoliykuznetsov/Desktop/dev/git/BitMagic/CMakeLists.txt */; };
+		BFCA77504EB9473AAD5C3F82 /* /Users/anatoliykuznetsov/Desktop/dev/git/BitMagic/samples/bvsample03/sample3.cpp */ = {isa = PBXBuildFile; fileRef = AEE8EECCC4F74CD995BD4A49 /* /Users/anatoliykuznetsov/Desktop/dev/git/BitMagic/samples/bvsample03/sample3.cpp */; };
+		CC940FDF78234014AFA839C1 /* /Users/anatoliykuznetsov/Desktop/dev/git/BitMagic/CMakeLists.txt */ = {isa = PBXBuildFile; fileRef = 9F1D02064760480A9063716E /* /Users/anatoliykuznetsov/Desktop/dev/git/BitMagic/CMakeLists.txt */; };
+		D5795C02FD424C1CB7AF6732 /* /Users/anatoliykuznetsov/Desktop/dev/git/BitMagic/CMakeLists.txt */ = {isa = PBXBuildFile; fileRef = E6CEDE82321B4381923EB39F /* /Users/anatoliykuznetsov/Desktop/dev/git/BitMagic/CMakeLists.txt */; };
+		E1C79E0EC91E48529618AAF5 /* /Users/anatoliykuznetsov/Desktop/dev/git/BitMagic/tests/perf/perf.cpp */ = {isa = PBXBuildFile; fileRef = A2E5F00003464B739EA60A96 /* /Users/anatoliykuznetsov/Desktop/dev/git/BitMagic/tests/perf/perf.cpp */; };
+		E32FF00C28AF4419AF977317 /* /Users/anatoliykuznetsov/Desktop/dev/git/BitMagic/CMakeLists.txt */ = {isa = PBXBuildFile; fileRef = 16DE99C07AB5426F897DA10C /* /Users/anatoliykuznetsov/Desktop/dev/git/BitMagic/CMakeLists.txt */; };
+		E367E527091B4807B130D58C /* /Users/anatoliykuznetsov/Desktop/dev/git/BitMagic/CMakeLists.txt */ = {isa = PBXBuildFile; fileRef = FB2C8B994FE9466694180CBB /* /Users/anatoliykuznetsov/Desktop/dev/git/BitMagic/CMakeLists.txt */; };
+		E3C0F94DBA45423F9661F61C /* /Users/anatoliykuznetsov/Desktop/dev/git/BitMagic/CMakeLists.txt */ = {isa = PBXBuildFile; fileRef = 8C32AD4DCE684BD5905869F6 /* /Users/anatoliykuznetsov/Desktop/dev/git/BitMagic/CMakeLists.txt */; };
+		F2F8A4814D2A48EBA8A9D1D2 /* /Users/anatoliykuznetsov/Desktop/dev/git/BitMagic/CMakeLists.txt */ = {isa = PBXBuildFile; fileRef = 6B5ABF6D787740B285ED9C8A /* /Users/anatoliykuznetsov/Desktop/dev/git/BitMagic/CMakeLists.txt */; };
+		FB9C83A08813486DBCE7D69C /* /Users/anatoliykuznetsov/Desktop/dev/git/BitMagic/samples/svsample01/svsample01.cpp */ = {isa = PBXBuildFile; fileRef = E47B86282F7041D5A4520CB1 /* /Users/anatoliykuznetsov/Desktop/dev/git/BitMagic/samples/svsample01/svsample01.cpp */; };
+		FFBD69BB21314B18AD55A3EC /* /Users/anatoliykuznetsov/Desktop/dev/git/BitMagic/samples/bvsample04/sample4.cpp */ = {isa = PBXBuildFile; fileRef = C7A0D9A6C5604C7EA3738A32 /* /Users/anatoliykuznetsov/Desktop/dev/git/BitMagic/samples/bvsample04/sample4.cpp */; };
+/* End PBXBuildFile section */
+
+/* Begin PBXBuildStyle section */
+		319AB717A88F45B3871269F1 /* Debug */ = {
+			isa = PBXBuildStyle;
+			buildSettings = {
+				COPY_PHASE_STRIP = NO;
+			};
+			name = Debug;
+		};
+		31B60C2409DC487EA8B69073 /* MinSizeRel */ = {
+			isa = PBXBuildStyle;
+			buildSettings = {
+				COPY_PHASE_STRIP = NO;
+			};
+			name = MinSizeRel;
+		};
+		73BC0E8B0E7741FF85842C5E /* RelWithDebInfo */ = {
+			isa = PBXBuildStyle;
+			buildSettings = {
+				COPY_PHASE_STRIP = NO;
+			};
+			name = RelWithDebInfo;
+		};
+		AB44D71A913F437D980E1A60 /* Release */ = {
+			isa = PBXBuildStyle;
+			buildSettings = {
+				COPY_PHASE_STRIP = NO;
+			};
+			name = Release;
+		};
+/* End PBXBuildStyle section */
+
+/* Begin PBXContainerItemProxy section */
+		0022D5BAC50B40098BA6AE15 /* PBXContainerItemProxy */ = {
+			isa = PBXContainerItemProxy;
+			containerPortal = 56318B67704543FEA052890E /* Project object */;
+			proxyType = 1;
+			remoteGlobalIDString = 60DD5E3E154C420B8AE8746B;
+			remoteInfo = ZERO_CHECK;
+		};
+		017ACA8D62FE46999BE70EF1 /* PBXContainerItemProxy */ = {
+			isa = PBXContainerItemProxy;
+			containerPortal = 56318B67704543FEA052890E /* Project object */;
+			proxyType = 1;
+			remoteGlobalIDString = 60DD5E3E154C420B8AE8746B;
+			remoteInfo = ZERO_CHECK;
+		};
+		1953DB4607C6499983ECF739 /* PBXContainerItemProxy */ = {
+			isa = PBXContainerItemProxy;
+			containerPortal = 56318B67704543FEA052890E /* Project object */;
+			proxyType = 1;
+			remoteGlobalIDString = 3256EE8D4C324DA798D89B0E;
+			remoteInfo = bmperf;
+		};
+		1E7DBBBC35FE424DA0EED6C8 /* PBXContainerItemProxy */ = {
+			isa = PBXContainerItemProxy;
+			containerPortal = 56318B67704543FEA052890E /* Project object */;
+			proxyType = 1;
+			remoteGlobalIDString = 60DD5E3E154C420B8AE8746B;
+			remoteInfo = ZERO_CHECK;
+		};
+		2473291711784F01A4420B2E /* PBXContainerItemProxy */ = {
+			isa = PBXContainerItemProxy;
+			containerPortal = 56318B67704543FEA052890E /* Project object */;
+			proxyType = 1;
+			remoteGlobalIDString = 3F9170FF431949FDB796FE7D;
+			remoteInfo = bmtest;
+		};
+		24C4937E78104B49AA4CC238 /* PBXContainerItemProxy */ = {
+			isa = PBXContainerItemProxy;
+			containerPortal = 56318B67704543FEA052890E /* Project object */;
+			proxyType = 1;
+			remoteGlobalIDString = 60DD5E3E154C420B8AE8746B;
+			remoteInfo = ZERO_CHECK;
+		};
+		4F4FFAC7BFE342378A298234 /* PBXContainerItemProxy */ = {
+			isa = PBXContainerItemProxy;
+			containerPortal = 56318B67704543FEA052890E /* Project object */;
+			proxyType = 1;
+			remoteGlobalIDString = 3694A277CB274E179D133146;
+			remoteInfo = bvsample05;
+		};
+		505072DA7B404BB6BD1C4F66 /* PBXContainerItemProxy */ = {
+			isa = PBXContainerItemProxy;
+			containerPortal = 56318B67704543FEA052890E /* Project object */;
+			proxyType = 1;
+			remoteGlobalIDString = 60DD5E3E154C420B8AE8746B;
+			remoteInfo = ZERO_CHECK;
+		};
+		5D1E781579F84EA4974C352F /* PBXContainerItemProxy */ = {
+			isa = PBXContainerItemProxy;
+			containerPortal = 56318B67704543FEA052890E /* Project object */;
+			proxyType = 1;
+			remoteGlobalIDString = 60DD5E3E154C420B8AE8746B;
+			remoteInfo = ZERO_CHECK;
+		};
+		5FFA771BC45847E3B11A7664 /* PBXContainerItemProxy */ = {
+			isa = PBXContainerItemProxy;
+			containerPortal = 56318B67704543FEA052890E /* Project object */;
+			proxyType = 1;
+			remoteGlobalIDString = 60DD5E3E154C420B8AE8746B;
+			remoteInfo = ZERO_CHECK;
+		};
+		65168143BC4C4F2DBD76CF00 /* PBXContainerItemProxy */ = {
+			isa = PBXContainerItemProxy;
+			containerPortal = 56318B67704543FEA052890E /* Project object */;
+			proxyType = 1;
+			remoteGlobalIDString = 56ED0307777A4016A1C4EA78;
+			remoteInfo = bvsample01;
+		};
+		7947DD908F6944519A04B5F2 /* PBXContainerItemProxy */ = {
+			isa = PBXContainerItemProxy;
+			containerPortal = 56318B67704543FEA052890E /* Project object */;
+			proxyType = 1;
+			remoteGlobalIDString = 60DD5E3E154C420B8AE8746B;
+			remoteInfo = ZERO_CHECK;
+		};
+		7BB9C45CCE174F25B3115B8B /* PBXContainerItemProxy */ = {
+			isa = PBXContainerItemProxy;
+			containerPortal = 56318B67704543FEA052890E /* Project object */;
+			proxyType = 1;
+			remoteGlobalIDString = 0C7A038607C54482BA59785F;
+			remoteInfo = bvsample06;
+		};
+		7C8C1122CC2F457EAB46F44E /* PBXContainerItemProxy */ = {
+			isa = PBXContainerItemProxy;
+			containerPortal = 56318B67704543FEA052890E /* Project object */;
+			proxyType = 1;
+			remoteGlobalIDString = 60DD5E3E154C420B8AE8746B;
+			remoteInfo = ZERO_CHECK;
+		};
+		7F0B0753E2094C3C8E03B77E /* PBXContainerItemProxy */ = {
+			isa = PBXContainerItemProxy;
+			containerPortal = 56318B67704543FEA052890E /* Project object */;
+			proxyType = 1;
+			remoteGlobalIDString = 60DD5E3E154C420B8AE8746B;
+			remoteInfo = ZERO_CHECK;
+		};
+		83AE5C9700B24865944154B0 /* PBXContainerItemProxy */ = {
+			isa = PBXContainerItemProxy;
+			containerPortal = 56318B67704543FEA052890E /* Project object */;
+			proxyType = 1;
+			remoteGlobalIDString = B5888142299A4B399E649B20;
+			remoteInfo = svsample02;
+		};
+		8C844364AF7B4474B3F27805 /* PBXContainerItemProxy */ = {
+			isa = PBXContainerItemProxy;
+			containerPortal = 56318B67704543FEA052890E /* Project object */;
+			proxyType = 1;
+			remoteGlobalIDString = 1DFDCD3CF51A474B8302B106;
+			remoteInfo = bvsample03;
+		};
+		8DF04767DC7E4681B8485C20 /* PBXContainerItemProxy */ = {
+			isa = PBXContainerItemProxy;
+			containerPortal = 56318B67704543FEA052890E /* Project object */;
+			proxyType = 1;
+			remoteGlobalIDString = 72C4C885F905408288391594;
+			remoteInfo = svsample01;
+		};
+		9333159E9EE14CF89D441AEF /* PBXContainerItemProxy */ = {
+			isa = PBXContainerItemProxy;
+			containerPortal = 56318B67704543FEA052890E /* Project object */;
+			proxyType = 1;
+			remoteGlobalIDString = 50B22F1DD6A240A799BD4382;
+			remoteInfo = bvsample10;
+		};
+		A0E8DE24FFFB4E27A1D0F4AE /* PBXContainerItemProxy */ = {
+			isa = PBXContainerItemProxy;
+			containerPortal = 56318B67704543FEA052890E /* Project object */;
+			proxyType = 1;
+			remoteGlobalIDString = 60DD5E3E154C420B8AE8746B;
+			remoteInfo = ZERO_CHECK;
+		};
+		A46FAC32897543AF8D47515B /* PBXContainerItemProxy */ = {
+			isa = PBXContainerItemProxy;
+			containerPortal = 56318B67704543FEA052890E /* Project object */;
+			proxyType = 1;
+			remoteGlobalIDString = 60DD5E3E154C420B8AE8746B;
+			remoteInfo = ZERO_CHECK;
+		};
+		AD42EFA11A0B4F26B822996D /* PBXContainerItemProxy */ = {
+			isa = PBXContainerItemProxy;
+			containerPortal = 56318B67704543FEA052890E /* Project object */;
+			proxyType = 1;
+			remoteGlobalIDString = BF9C31D5BBCF4D4EBBDF9EE9;
+			remoteInfo = bvsample02;
+		};
+		B3110F669DC44395BB769EE8 /* PBXContainerItemProxy */ = {
+			isa = PBXContainerItemProxy;
+			containerPortal = 56318B67704543FEA052890E /* Project object */;
+			proxyType = 1;
+			remoteGlobalIDString = 60DD5E3E154C420B8AE8746B;
+			remoteInfo = ZERO_CHECK;
+		};
+		B3A6A39C72864B769D01F193 /* PBXContainerItemProxy */ = {
+			isa = PBXContainerItemProxy;
+			containerPortal = 56318B67704543FEA052890E /* Project object */;
+			proxyType = 1;
+			remoteGlobalIDString = 60DD5E3E154C420B8AE8746B;
+			remoteInfo = ZERO_CHECK;
+		};
+		D6A5A78640CF4DD2AC521FD0 /* PBXContainerItemProxy */ = {
+			isa = PBXContainerItemProxy;
+			containerPortal = 56318B67704543FEA052890E /* Project object */;
+			proxyType = 1;
+			remoteGlobalIDString = 60DD5E3E154C420B8AE8746B;
+			remoteInfo = ZERO_CHECK;
+		};
+		D91BF81ED71F48F181497684 /* PBXContainerItemProxy */ = {
+			isa = PBXContainerItemProxy;
+			containerPortal = 56318B67704543FEA052890E /* Project object */;
+			proxyType = 1;
+			remoteGlobalIDString = 2FB97E36ABC44268B4F126C6;
+			remoteInfo = bmsvutil;
+		};
+		EBA56F3B007C43C78EC10259 /* PBXContainerItemProxy */ = {
+			isa = PBXContainerItemProxy;
+			containerPortal = 56318B67704543FEA052890E /* Project object */;
+			proxyType = 1;
+			remoteGlobalIDString = 60DD5E3E154C420B8AE8746B;
+			remoteInfo = ZERO_CHECK;
+		};
+		ED2D731D526444AA982B9EAF /* PBXContainerItemProxy */ = {
+			isa = PBXContainerItemProxy;
+			containerPortal = 56318B67704543FEA052890E /* Project object */;
+			proxyType = 1;
+			remoteGlobalIDString = BA46205D129942F5A832C857;
+			remoteInfo = bvsample04;
+		};
+		EEA3417AA0F645AFBFFDF3AC /* PBXContainerItemProxy */ = {
+			isa = PBXContainerItemProxy;
+			containerPortal = 56318B67704543FEA052890E /* Project object */;
+			proxyType = 1;
+			remoteGlobalIDString = 2452FD21FB0A41138DED21FD;
+			remoteInfo = bvsample08;
+		};
+		F0BE891317B1455FB3CF1F4C /* PBXContainerItemProxy */ = {
+			isa = PBXContainerItemProxy;
+			containerPortal = 56318B67704543FEA052890E /* Project object */;
+			proxyType = 1;
+			remoteGlobalIDString = D0E649229FEC46248602F556;
+			remoteInfo = bvsample09;
+		};
+		F216F44C96AF4997A6F86C15 /* PBXContainerItemProxy */ = {
+			isa = PBXContainerItemProxy;
+			containerPortal = 56318B67704543FEA052890E /* Project object */;
+			proxyType = 1;
+			remoteGlobalIDString = 86F53F57C31A4D789E705F3B;
+			remoteInfo = svsample03;
+		};
+/* End PBXContainerItemProxy section */
+
+/* Begin PBXFileReference section */
+		06562F5347A24971B4873A8D /* /Users/anatoliykuznetsov/Desktop/dev/git/BitMagic/CMakeLists.txt */ = {isa = PBXFileReference; explicitFileType = sourcecode.text; fileEncoding = 4; name = CMakeLists.txt; path = CMakeLists.txt; sourceTree = SOURCE_ROOT; };
+		0777F28791AF475EAF8A6303 /* bvsample03 */ = {isa = PBXFileReference; explicitFileType = "compiled.mach-o.executable"; path = bvsample03; sourceTree = BUILT_PRODUCTS_DIR; };
+		0D8F43F5D4224FA3ADD93988 /* /Users/anatoliykuznetsov/Desktop/dev/git/BitMagic/utils/svutil/svutil.cpp */ = {isa = PBXFileReference; explicitFileType = sourcecode.cpp.cpp; fileEncoding = 4; name = svutil.cpp; path = utils/svutil/svutil.cpp; sourceTree = SOURCE_ROOT; };
+		0E1B5202F86547F086F36F4D /* /Users/anatoliykuznetsov/Desktop/dev/git/BitMagic/CMakeLists.txt */ = {isa = PBXFileReference; explicitFileType = sourcecode.text; fileEncoding = 4; name = CMakeLists.txt; path = CMakeLists.txt; sourceTree = SOURCE_ROOT; };
+		0ED0B68DCC94410C9499BB4F /* /Users/anatoliykuznetsov/Desktop/dev/git/BitMagic/CMakeLists.txt */ = {isa = PBXFileReference; explicitFileType = sourcecode.text; fileEncoding = 4; name = CMakeLists.txt; path = CMakeLists.txt; sourceTree = SOURCE_ROOT; };
+		11AF7583E28A49B19349462A /* /Users/anatoliykuznetsov/Desktop/dev/git/BitMagic/CMakeLists.txt */ = {isa = PBXFileReference; explicitFileType = sourcecode.text; fileEncoding = 4; name = CMakeLists.txt; path = CMakeLists.txt; sourceTree = SOURCE_ROOT; };
+		1366CDA908204953ADB7C411 /* /Users/anatoliykuznetsov/Desktop/dev/git/BitMagic/CMakeLists.txt */ = {isa = PBXFileReference; explicitFileType = sourcecode.text; fileEncoding = 4; name = CMakeLists.txt; path = CMakeLists.txt; sourceTree = SOURCE_ROOT; };
+		16DE99C07AB5426F897DA10C /* /Users/anatoliykuznetsov/Desktop/dev/git/BitMagic/CMakeLists.txt */ = {isa = PBXFileReference; explicitFileType = sourcecode.text; fileEncoding = 4; name = CMakeLists.txt; path = CMakeLists.txt; sourceTree = SOURCE_ROOT; };
+		1F213502EBA943F2A214237B /* bvsample09 */ = {isa = PBXFileReference; explicitFileType = "compiled.mach-o.executable"; path = bvsample09; sourceTree = BUILT_PRODUCTS_DIR; };
+		2A241B7439004DD4A1F8DC3C /* /Users/anatoliykuznetsov/Desktop/dev/git/BitMagic/CMakeLists.txt */ = {isa = PBXFileReference; explicitFileType = sourcecode.text; fileEncoding = 4; name = CMakeLists.txt; path = CMakeLists.txt; sourceTree = SOURCE_ROOT; };
+		40916B5B50D9438496725370 /* /Users/anatoliykuznetsov/Desktop/dev/git/BitMagic/CMakeLists.txt */ = {isa = PBXFileReference; explicitFileType = sourcecode.text; fileEncoding = 4; name = CMakeLists.txt; path = CMakeLists.txt; sourceTree = SOURCE_ROOT; };
+		415E46F948384840986D00E0 /* svsample03 */ = {isa = PBXFileReference; explicitFileType = "compiled.mach-o.executable"; path = svsample03; sourceTree = BUILT_PRODUCTS_DIR; };
+		440BFC29867F43818043B9FC /* /Users/anatoliykuznetsov/Desktop/dev/git/BitMagic/samples/bvsample05/sample5.cpp */ = {isa = PBXFileReference; explicitFileType = sourcecode.cpp.cpp; fileEncoding = 4; name = sample5.cpp; path = samples/bvsample05/sample5.cpp; sourceTree = SOURCE_ROOT; };
+		4936F44A00084C858EF30793 /* bvsample01 */ = {isa = PBXFileReference; explicitFileType = "compiled.mach-o.executable"; path = bvsample01; sourceTree = BUILT_PRODUCTS_DIR; };
+		5855CCAAB3F049D0A3952CA2 /* /Users/anatoliykuznetsov/Desktop/dev/git/BitMagic/samples/bvsample08/sample8.cpp */ = {isa = PBXFileReference; explicitFileType = sourcecode.cpp.cpp; fileEncoding = 4; name = sample8.cpp; path = samples/bvsample08/sample8.cpp; sourceTree = SOURCE_ROOT; };
+		593F5E0BCB9D4EB389AF36F0 /* svsample02 */ = {isa = PBXFileReference; explicitFileType = "compiled.mach-o.executable"; path = svsample02; sourceTree = BUILT_PRODUCTS_DIR; };
+		5C53B05DE4184EC889E1D7F0 /* /Users/anatoliykuznetsov/Desktop/dev/git/BitMagic/samples/bvsample10/sample10.cpp */ = {isa = PBXFileReference; explicitFileType = sourcecode.cpp.cpp; fileEncoding = 4; name = sample10.cpp; path = samples/bvsample10/sample10.cpp; sourceTree = SOURCE_ROOT; };
+		5CC795BBC5F44A2EBBB2F160 /* /Users/anatoliykuznetsov/Desktop/dev/git/BitMagic/CMakeLists.txt */ = {isa = PBXFileReference; explicitFileType = sourcecode.text; fileEncoding = 4; name = CMakeLists.txt; path = CMakeLists.txt; sourceTree = SOURCE_ROOT; };
+		5D20A71E412040B29C114038 /* bvsample05 */ = {isa = PBXFileReference; explicitFileType = "compiled.mach-o.executable"; path = bvsample05; sourceTree = BUILT_PRODUCTS_DIR; };
+		6B5ABF6D787740B285ED9C8A /* /Users/anatoliykuznetsov/Desktop/dev/git/BitMagic/CMakeLists.txt */ = {isa = PBXFileReference; explicitFileType = sourcecode.text; fileEncoding = 4; name = CMakeLists.txt; path = CMakeLists.txt; sourceTree = SOURCE_ROOT; };
+		781A5433D2F8400D9BECF65F /* bvsample08 */ = {isa = PBXFileReference; explicitFileType = "compiled.mach-o.executable"; path = bvsample08; sourceTree = BUILT_PRODUCTS_DIR; };
+		855EC356885E4589A25B776C /* bvsample02 */ = {isa = PBXFileReference; explicitFileType = "compiled.mach-o.executable"; path = bvsample02; sourceTree = BUILT_PRODUCTS_DIR; };
+		8C32AD4DCE684BD5905869F6 /* /Users/anatoliykuznetsov/Desktop/dev/git/BitMagic/CMakeLists.txt */ = {isa = PBXFileReference; explicitFileType = sourcecode.text; fileEncoding = 4; name = CMakeLists.txt; path = CMakeLists.txt; sourceTree = SOURCE_ROOT; };
+		9726A65A9BE2407B99B977E5 /* /Users/anatoliykuznetsov/Desktop/dev/git/BitMagic/tests/stress/t.cpp */ = {isa = PBXFileReference; explicitFileType = sourcecode.cpp.cpp; fileEncoding = 4; name = t.cpp; path = tests/stress/t.cpp; sourceTree = SOURCE_ROOT; };
+		9AD62B40642F40BFAE42BECB /* bmperf */ = {isa = PBXFileReference; explicitFileType = "compiled.mach-o.executable"; path = bmperf; sourceTree = BUILT_PRODUCTS_DIR; };
+		9BFDE923BE05499686810473 /* /Users/anatoliykuznetsov/Desktop/dev/git/BitMagic/samples/bvsample01/sample1.cpp */ = {isa = PBXFileReference; explicitFileType = sourcecode.cpp.cpp; fileEncoding = 4; name = sample1.cpp; path = samples/bvsample01/sample1.cpp; sourceTree = SOURCE_ROOT; };
+		9CFAD1057C254A48A94DE4FC /* /Users/anatoliykuznetsov/Desktop/dev/git/BitMagic/samples/bvsample09/sample9.cpp */ = {isa = PBXFileReference; explicitFileType = sourcecode.cpp.cpp; fileEncoding = 4; name = sample9.cpp; path = samples/bvsample09/sample9.cpp; sourceTree = SOURCE_ROOT; };
+		9F1D02064760480A9063716E /* /Users/anatoliykuznetsov/Desktop/dev/git/BitMagic/CMakeLists.txt */ = {isa = PBXFileReference; explicitFileType = sourcecode.text; fileEncoding = 4; name = CMakeLists.txt; path = CMakeLists.txt; sourceTree = SOURCE_ROOT; };
+		A2E5F00003464B739EA60A96 /* /Users/anatoliykuznetsov/Desktop/dev/git/BitMagic/tests/perf/perf.cpp */ = {isa = PBXFileReference; explicitFileType = sourcecode.cpp.cpp; fileEncoding = 4; name = perf.cpp; path = tests/perf/perf.cpp; sourceTree = SOURCE_ROOT; };
+		AA34C8D41532499C8BB10E7F /* bmsvutil */ = {isa = PBXFileReference; explicitFileType = "compiled.mach-o.executable"; path = bmsvutil; sourceTree = BUILT_PRODUCTS_DIR; };
+		AEE8EECCC4F74CD995BD4A49 /* /Users/anatoliykuznetsov/Desktop/dev/git/BitMagic/samples/bvsample03/sample3.cpp */ = {isa = PBXFileReference; explicitFileType = sourcecode.cpp.cpp; fileEncoding = 4; name = sample3.cpp; path = samples/bvsample03/sample3.cpp; sourceTree = SOURCE_ROOT; };
+		B711D33A00DF4C1B969B1E4E /* /Users/anatoliykuznetsov/Desktop/dev/git/BitMagic/CMakeLists.txt */ = {isa = PBXFileReference; explicitFileType = sourcecode.text; fileEncoding = 4; name = CMakeLists.txt; path = CMakeLists.txt; sourceTree = SOURCE_ROOT; };
+		BF78FED4485747D5AF74F68F /* /Users/anatoliykuznetsov/Desktop/dev/git/BitMagic/samples/bvsample06/sample6.cpp */ = {isa = PBXFileReference; explicitFileType = sourcecode.cpp.cpp; fileEncoding = 4; name = sample6.cpp; path = samples/bvsample06/sample6.cpp; sourceTree = SOURCE_ROOT; };
+		C7A0D9A6C5604C7EA3738A32 /* /Users/anatoliykuznetsov/Desktop/dev/git/BitMagic/samples/bvsample04/sample4.cpp */ = {isa = PBXFileReference; explicitFileType = sourcecode.cpp.cpp; fileEncoding = 4; name = sample4.cpp; path = samples/bvsample04/sample4.cpp; sourceTree = SOURCE_ROOT; };
+		CCD1560BAF0344E8BAC14D87 /* /Users/anatoliykuznetsov/Desktop/dev/git/BitMagic/samples/svsample03/svsample03.cpp */ = {isa = PBXFileReference; explicitFileType = sourcecode.cpp.cpp; fileEncoding = 4; name = svsample03.cpp; path = samples/svsample03/svsample03.cpp; sourceTree = SOURCE_ROOT; };
+		D5C8D9A011FC42D98E5FD3E8 /* bvsample06 */ = {isa = PBXFileReference; explicitFileType = "compiled.mach-o.executable"; path = bvsample06; sourceTree = BUILT_PRODUCTS_DIR; };
+		D81EBD849A1D41E7AFD837AC /* /Users/anatoliykuznetsov/Desktop/dev/git/BitMagic/samples/bvsample02/sample2.cpp */ = {isa = PBXFileReference; explicitFileType = sourcecode.cpp.cpp; fileEncoding = 4; name = sample2.cpp; path = samples/bvsample02/sample2.cpp; sourceTree = SOURCE_ROOT; };
+		DACE5BE2B59D4938856D8005 /* /Users/anatoliykuznetsov/Desktop/dev/git/BitMagic/CMakeLists.txt */ = {isa = PBXFileReference; explicitFileType = sourcecode.text; fileEncoding = 4; name = CMakeLists.txt; path = CMakeLists.txt; sourceTree = SOURCE_ROOT; };
+		E25F91C92DBE4453B7DFE3F5 /* bvsample04 */ = {isa = PBXFileReference; explicitFileType = "compiled.mach-o.executable"; path = bvsample04; sourceTree = BUILT_PRODUCTS_DIR; };
+		E47B86282F7041D5A4520CB1 /* /Users/anatoliykuznetsov/Desktop/dev/git/BitMagic/samples/svsample01/svsample01.cpp */ = {isa = PBXFileReference; explicitFileType = sourcecode.cpp.cpp; fileEncoding = 4; name = svsample01.cpp; path = samples/svsample01/svsample01.cpp; sourceTree = SOURCE_ROOT; };
+		E6CEDE82321B4381923EB39F /* /Users/anatoliykuznetsov/Desktop/dev/git/BitMagic/CMakeLists.txt */ = {isa = PBXFileReference; explicitFileType = sourcecode.text; fileEncoding = 4; name = CMakeLists.txt; path = CMakeLists.txt; sourceTree = SOURCE_ROOT; };
+		EA8D6694E3A347E8A2D4B527 /* /Users/anatoliykuznetsov/Desktop/dev/git/BitMagic/samples/svsample02/svsample02.cpp */ = {isa = PBXFileReference; explicitFileType = sourcecode.cpp.cpp; fileEncoding = 4; name = svsample02.cpp; path = samples/svsample02/svsample02.cpp; sourceTree = SOURCE_ROOT; };
+		EDDA9616E48C496D8F6CFF97 /* /Users/anatoliykuznetsov/Desktop/dev/git/BitMagic/CMakeLists.txt */ = {isa = PBXFileReference; explicitFileType = sourcecode.text; fileEncoding = 4; name = CMakeLists.txt; path = CMakeLists.txt; sourceTree = SOURCE_ROOT; };
+		F1F61F9FB5164710A979C088 /* bmtest */ = {isa = PBXFileReference; explicitFileType = "compiled.mach-o.executable"; path = bmtest; sourceTree = BUILT_PRODUCTS_DIR; };
+		F239780B91F04C4E9164A1E8 /* svsample01 */ = {isa = PBXFileReference; explicitFileType = "compiled.mach-o.executable"; path = svsample01; sourceTree = BUILT_PRODUCTS_DIR; };
+		F537BB1E90844180805A8C14 /* bvsample10 */ = {isa = PBXFileReference; explicitFileType = "compiled.mach-o.executable"; path = bvsample10; sourceTree = BUILT_PRODUCTS_DIR; };
+		FB2C8B994FE9466694180CBB /* /Users/anatoliykuznetsov/Desktop/dev/git/BitMagic/CMakeLists.txt */ = {isa = PBXFileReference; explicitFileType = sourcecode.text; fileEncoding = 4; name = CMakeLists.txt; path = CMakeLists.txt; sourceTree = SOURCE_ROOT; };
+/* End PBXFileReference section */
+
+/* Begin PBXGroup section */
+		16CE696FDDDA4FEABEC903E6 /* bvsample06 */ = {
+			isa = PBXGroup;
+			children = (
+				9B709B95FE2847D08C1E6BB8 /* Source Files */,
+				2A241B7439004DD4A1F8DC3C /* /Users/anatoliykuznetsov/Desktop/dev/git/BitMagic/CMakeLists.txt */,
+			);
+			name = bvsample06;
+			sourceTree = "<group>";
+		};
+		19BD6DF8CBBE4FC087CE73EC /* bvsample04 */ = {
+			isa = PBXGroup;
+			children = (
+				57793CC7CC7C46F5A65A1F5F /* Source Files */,
+				6B5ABF6D787740B285ED9C8A /* /Users/anatoliykuznetsov/Desktop/dev/git/BitMagic/CMakeLists.txt */,
+			);
+			name = bvsample04;
+			sourceTree = "<group>";
+		};
+		1C68F2ACAC78486C8263118C /* Source Files */ = {
+			isa = PBXGroup;
+			children = (
+				0D8F43F5D4224FA3ADD93988 /* /Users/anatoliykuznetsov/Desktop/dev/git/BitMagic/utils/svutil/svutil.cpp */,
+			);
+			name = "Source Files";
+			sourceTree = "<group>";
+		};
+		26CED6866F6D4026A1A342E5 /* bvsample09 */ = {
+			isa = PBXGroup;
+			children = (
+				941FA991EADF4AF2A53FCF13 /* Source Files */,
+				EDDA9616E48C496D8F6CFF97 /* /Users/anatoliykuznetsov/Desktop/dev/git/BitMagic/CMakeLists.txt */,
+			);
+			name = bvsample09;
+			sourceTree = "<group>";
+		};
+		2C9B26E1B8B34F7A96633B82 /* bvsample03 */ = {
+			isa = PBXGroup;
+			children = (
+				CDD9E9111C784999B75BBC0B /* Source Files */,
+				DACE5BE2B59D4938856D8005 /* /Users/anatoliykuznetsov/Desktop/dev/git/BitMagic/CMakeLists.txt */,
+			);
+			name = bvsample03;
+			sourceTree = "<group>";
+		};
+		4877C5F2EC324E13A980BD64 /* Source Files */ = {
+			isa = PBXGroup;
+			children = (
+				EA8D6694E3A347E8A2D4B527 /* /Users/anatoliykuznetsov/Desktop/dev/git/BitMagic/samples/svsample02/svsample02.cpp */,
+			);
+			name = "Source Files";
+			sourceTree = "<group>";
+		};
+		48AC24D505BD49C287F6607C /* bvsample10 */ = {
+			isa = PBXGroup;
+			children = (
+				58DB4CC11F204C9EAC6644C9 /* Source Files */,
+				5CC795BBC5F44A2EBBB2F160 /* /Users/anatoliykuznetsov/Desktop/dev/git/BitMagic/CMakeLists.txt */,
+			);
+			name = bvsample10;
+			sourceTree = "<group>";
+		};
+		4A3BA1B927BA492C84D59AAA /* Source Files */ = {
+			isa = PBXGroup;
+			children = (
+				A2E5F00003464B739EA60A96 /* /Users/anatoliykuznetsov/Desktop/dev/git/BitMagic/tests/perf/perf.cpp */,
+			);
+			name = "Source Files";
+			sourceTree = "<group>";
+		};
+		4B438EE81C684367AA3C97D8 /* bmperf */ = {
+			isa = PBXGroup;
+			children = (
+				4A3BA1B927BA492C84D59AAA /* Source Files */,
+				0E1B5202F86547F086F36F4D /* /Users/anatoliykuznetsov/Desktop/dev/git/BitMagic/CMakeLists.txt */,
+			);
+			name = bmperf;
+			sourceTree = "<group>";
+		};
+		4C9D9329046B4042B62AF344 /* Source Files */ = {
+			isa = PBXGroup;
+			children = (
+				440BFC29867F43818043B9FC /* /Users/anatoliykuznetsov/Desktop/dev/git/BitMagic/samples/bvsample05/sample5.cpp */,
+			);
+			name = "Source Files";
+			sourceTree = "<group>";
+		};
+		551F65FC733943E893B0CB6D /* bmsvutil */ = {
+			isa = PBXGroup;
+			children = (
+				1C68F2ACAC78486C8263118C /* Source Files */,
+				8C32AD4DCE684BD5905869F6 /* /Users/anatoliykuznetsov/Desktop/dev/git/BitMagic/CMakeLists.txt */,
+			);
+			name = bmsvutil;
+			sourceTree = "<group>";
+		};
+		57793CC7CC7C46F5A65A1F5F /* Source Files */ = {
+			isa = PBXGroup;
+			children = (
+				C7A0D9A6C5604C7EA3738A32 /* /Users/anatoliykuznetsov/Desktop/dev/git/BitMagic/samples/bvsample04/sample4.cpp */,
+			);
+			name = "Source Files";
+			sourceTree = "<group>";
+		};
+		58DB4CC11F204C9EAC6644C9 /* Source Files */ = {
+			isa = PBXGroup;
+			children = (
+				5C53B05DE4184EC889E1D7F0 /* /Users/anatoliykuznetsov/Desktop/dev/git/BitMagic/samples/bvsample10/sample10.cpp */,
+			);
+			name = "Source Files";
+			sourceTree = "<group>";
+		};
+		5A4B4CA4E1B942A29B0E85A4 /* bvsample05 */ = {
+			isa = PBXGroup;
+			children = (
+				4C9D9329046B4042B62AF344 /* Source Files */,
+				E6CEDE82321B4381923EB39F /* /Users/anatoliykuznetsov/Desktop/dev/git/BitMagic/CMakeLists.txt */,
+			);
+			name = bvsample05;
+			sourceTree = "<group>";
+		};
+		5CB62490F9CE4A0C908EE13B /* Source Files */ = {
+			isa = PBXGroup;
+			children = (
+				D81EBD849A1D41E7AFD837AC /* /Users/anatoliykuznetsov/Desktop/dev/git/BitMagic/samples/bvsample02/sample2.cpp */,
+			);
+			name = "Source Files";
+			sourceTree = "<group>";
+		};
+		68A1104422C045368AF93FA0 /* Source Files */ = {
+			isa = PBXGroup;
+			children = (
+				5855CCAAB3F049D0A3952CA2 /* /Users/anatoliykuznetsov/Desktop/dev/git/BitMagic/samples/bvsample08/sample8.cpp */,
+			);
+			name = "Source Files";
+			sourceTree = "<group>";
+		};
+		762329601E764D03891FB63E = {
+			isa = PBXGroup;
+			children = (
+				F0003A19C8104738A8FE9365 /* svsample02 */,
+				551F65FC733943E893B0CB6D /* bmsvutil */,
+				19BD6DF8CBBE4FC087CE73EC /* bvsample04 */,
+				4B438EE81C684367AA3C97D8 /* bmperf */,
+				94B916012C0E4BA1B299CA50 /* bvsample08 */,
+				26CED6866F6D4026A1A342E5 /* bvsample09 */,
+				2C9B26E1B8B34F7A96633B82 /* bvsample03 */,
+				ACDF7300F6524A0086007BF6 /* svsample03 */,
+				5A4B4CA4E1B942A29B0E85A4 /* bvsample05 */,
+				D2D5C9DB5CAB4EAC90489A22 /* bvsample01 */,
+				DB45F73916E548D38B01FB89 /* bmtest */,
+				48AC24D505BD49C287F6607C /* bvsample10 */,
+				7D79AC00F6EF4574B834FC42 /* bvsample02 */,
+				E911BB5E8BAC4D32A3C360F0 /* svsample01 */,
+				16CE696FDDDA4FEABEC903E6 /* bvsample06 */,
+				7D0AD617EC2042DF9E955463 /* ALL_BUILD */,
+				AFA7BAF5142543C89A233201 /* ZERO_CHECK */,
+				D0737A817B704FA3836F6074 /* Products */,
+			);
+			sourceTree = "<group>";
+		};
+		7D0AD617EC2042DF9E955463 /* ALL_BUILD */ = {
+			isa = PBXGroup;
+			children = (
+				A1EC1A1F7DB14016B10F3D0C /* CMake Rules */,
+				0ED0B68DCC94410C9499BB4F /* /Users/anatoliykuznetsov/Desktop/dev/git/BitMagic/CMakeLists.txt */,
+			);
+			name = ALL_BUILD;
+			sourceTree = "<group>";
+		};
+		7D79AC00F6EF4574B834FC42 /* bvsample02 */ = {
+			isa = PBXGroup;
+			children = (
+				5CB62490F9CE4A0C908EE13B /* Source Files */,
+				9F1D02064760480A9063716E /* /Users/anatoliykuznetsov/Desktop/dev/git/BitMagic/CMakeLists.txt */,
+			);
+			name = bvsample02;
+			sourceTree = "<group>";
+		};
+		8301B9257BE74BA39C2B64F0 /* Source Files */ = {
+			isa = PBXGroup;
+			children = (
+				9726A65A9BE2407B99B977E5 /* /Users/anatoliykuznetsov/Desktop/dev/git/BitMagic/tests/stress/t.cpp */,
+			);
+			name = "Source Files";
+			sourceTree = "<group>";
+		};
+		89B67CB8F50D417FA0A86B79 /* CMake Rules */ = {
+			isa = PBXGroup;
+			children = (
+			);
+			name = "CMake Rules";
+			sourceTree = "<group>";
+		};
+		941FA991EADF4AF2A53FCF13 /* Source Files */ = {
+			isa = PBXGroup;
+			children = (
+				9CFAD1057C254A48A94DE4FC /* /Users/anatoliykuznetsov/Desktop/dev/git/BitMagic/samples/bvsample09/sample9.cpp */,
+			);
+			name = "Source Files";
+			sourceTree = "<group>";
+		};
+		94B916012C0E4BA1B299CA50 /* bvsample08 */ = {
+			isa = PBXGroup;
+			children = (
+				68A1104422C045368AF93FA0 /* Source Files */,
+				1366CDA908204953ADB7C411 /* /Users/anatoliykuznetsov/Desktop/dev/git/BitMagic/CMakeLists.txt */,
+			);
+			name = bvsample08;
+			sourceTree = "<group>";
+		};
+		9B709B95FE2847D08C1E6BB8 /* Source Files */ = {
+			isa = PBXGroup;
+			children = (
+				BF78FED4485747D5AF74F68F /* /Users/anatoliykuznetsov/Desktop/dev/git/BitMagic/samples/bvsample06/sample6.cpp */,
+			);
+			name = "Source Files";
+			sourceTree = "<group>";
+		};
+		A1EC1A1F7DB14016B10F3D0C /* CMake Rules */ = {
+			isa = PBXGroup;
+			children = (
+			);
+			name = "CMake Rules";
+			sourceTree = "<group>";
+		};
+		ACDF7300F6524A0086007BF6 /* svsample03 */ = {
+			isa = PBXGroup;
+			children = (
+				DDE5B11B556842CA8152773A /* Source Files */,
+				B711D33A00DF4C1B969B1E4E /* /Users/anatoliykuznetsov/Desktop/dev/git/BitMagic/CMakeLists.txt */,
+			);
+			name = svsample03;
+			sourceTree = "<group>";
+		};
+		ADE5DCCB1DFD409B994C2538 /* Source Files */ = {
+			isa = PBXGroup;
+			children = (
+				9BFDE923BE05499686810473 /* /Users/anatoliykuznetsov/Desktop/dev/git/BitMagic/samples/bvsample01/sample1.cpp */,
+			);
+			name = "Source Files";
+			sourceTree = "<group>";
+		};
+		AFA7BAF5142543C89A233201 /* ZERO_CHECK */ = {
+			isa = PBXGroup;
+			children = (
+				89B67CB8F50D417FA0A86B79 /* CMake Rules */,
+				40916B5B50D9438496725370 /* /Users/anatoliykuznetsov/Desktop/dev/git/BitMagic/CMakeLists.txt */,
+			);
+			name = ZERO_CHECK;
+			sourceTree = "<group>";
+		};
+		B3D6755552C74F54A8D3AB93 /* Source Files */ = {
+			isa = PBXGroup;
+			children = (
+				E47B86282F7041D5A4520CB1 /* /Users/anatoliykuznetsov/Desktop/dev/git/BitMagic/samples/svsample01/svsample01.cpp */,
+			);
+			name = "Source Files";
+			sourceTree = "<group>";
+		};
+		CDD9E9111C784999B75BBC0B /* Source Files */ = {
+			isa = PBXGroup;
+			children = (
+				AEE8EECCC4F74CD995BD4A49 /* /Users/anatoliykuznetsov/Desktop/dev/git/BitMagic/samples/bvsample03/sample3.cpp */,
+			);
+			name = "Source Files";
+			sourceTree = "<group>";
+		};
+		D0737A817B704FA3836F6074 /* Products */ = {
+			isa = PBXGroup;
+			children = (
+				9AD62B40642F40BFAE42BECB /* bmperf */,
+				AA34C8D41532499C8BB10E7F /* bmsvutil */,
+				F1F61F9FB5164710A979C088 /* bmtest */,
+				4936F44A00084C858EF30793 /* bvsample01 */,
+				855EC356885E4589A25B776C /* bvsample02 */,
+				0777F28791AF475EAF8A6303 /* bvsample03 */,
+				E25F91C92DBE4453B7DFE3F5 /* bvsample04 */,
+				5D20A71E412040B29C114038 /* bvsample05 */,
+				D5C8D9A011FC42D98E5FD3E8 /* bvsample06 */,
+				781A5433D2F8400D9BECF65F /* bvsample08 */,
+				1F213502EBA943F2A214237B /* bvsample09 */,
+				F537BB1E90844180805A8C14 /* bvsample10 */,
+				F239780B91F04C4E9164A1E8 /* svsample01 */,
+				593F5E0BCB9D4EB389AF36F0 /* svsample02 */,
+				415E46F948384840986D00E0 /* svsample03 */,
+			);
+			name = Products;
+			sourceTree = "<group>";
+		};
+		D2D5C9DB5CAB4EAC90489A22 /* bvsample01 */ = {
+			isa = PBXGroup;
+			children = (
+				ADE5DCCB1DFD409B994C2538 /* Source Files */,
+				16DE99C07AB5426F897DA10C /* /Users/anatoliykuznetsov/Desktop/dev/git/BitMagic/CMakeLists.txt */,
+			);
+			name = bvsample01;
+			sourceTree = "<group>";
+		};
+		DB45F73916E548D38B01FB89 /* bmtest */ = {
+			isa = PBXGroup;
+			children = (
+				8301B9257BE74BA39C2B64F0 /* Source Files */,
+				06562F5347A24971B4873A8D /* /Users/anatoliykuznetsov/Desktop/dev/git/BitMagic/CMakeLists.txt */,
+			);
+			name = bmtest;
+			sourceTree = "<group>";
+		};
+		DDE5B11B556842CA8152773A /* Source Files */ = {
+			isa = PBXGroup;
+			children = (
+				CCD1560BAF0344E8BAC14D87 /* /Users/anatoliykuznetsov/Desktop/dev/git/BitMagic/samples/svsample03/svsample03.cpp */,
+			);
+			name = "Source Files";
+			sourceTree = "<group>";
+		};
+		E911BB5E8BAC4D32A3C360F0 /* svsample01 */ = {
+			isa = PBXGroup;
+			children = (
+				B3D6755552C74F54A8D3AB93 /* Source Files */,
+				11AF7583E28A49B19349462A /* /Users/anatoliykuznetsov/Desktop/dev/git/BitMagic/CMakeLists.txt */,
+			);
+			name = svsample01;
+			sourceTree = "<group>";
+		};
+		F0003A19C8104738A8FE9365 /* svsample02 */ = {
+			isa = PBXGroup;
+			children = (
+				4877C5F2EC324E13A980BD64 /* Source Files */,
+				FB2C8B994FE9466694180CBB /* /Users/anatoliykuznetsov/Desktop/dev/git/BitMagic/CMakeLists.txt */,
+			);
+			name = svsample02;
+			sourceTree = "<group>";
+		};
+/* End PBXGroup section */
+
+/* Begin PBXNativeTarget section */
+		0C7A038607C54482BA59785F /* bvsample06 */ = {
+			isa = PBXNativeTarget;
+			buildConfigurationList = 9E11BAE29C58406194894542 /* Build configuration list for PBXNativeTarget "bvsample06" */;
+			buildPhases = (
+				6D7F874C5F8A443FB22F7A1E /* Sources */,
+			);
+			buildRules = (
+			);
+			dependencies = (
+				AEAD50E80D654E5C90C806C4 /* PBXTargetDependency */,
+			);
+			name = bvsample06;
+			productName = bvsample06;
+			productReference = D5C8D9A011FC42D98E5FD3E8 /* bvsample06 */;
+			productType = "com.apple.product-type.tool";
+		};
+		1DFDCD3CF51A474B8302B106 /* bvsample03 */ = {
+			isa = PBXNativeTarget;
+			buildConfigurationList = 878FFAC6E9D846A39A7EBCB7 /* Build configuration list for PBXNativeTarget "bvsample03" */;
+			buildPhases = (
+				5A8CB1F47618444A873AE71F /* Sources */,
+			);
+			buildRules = (
+			);
+			dependencies = (
+				5CA02E8FB5304B57AD07DD92 /* PBXTargetDependency */,
+			);
+			name = bvsample03;
+			productName = bvsample03;
+			productReference = 0777F28791AF475EAF8A6303 /* bvsample03 */;
+			productType = "com.apple.product-type.tool";
+		};
+		2452FD21FB0A41138DED21FD /* bvsample08 */ = {
+			isa = PBXNativeTarget;
+			buildConfigurationList = A2DCAE2CF4AA4E2CB5D8D63A /* Build configuration list for PBXNativeTarget "bvsample08" */;
+			buildPhases = (
+				F25EF7D60178410DBC061DC4 /* Sources */,
+			);
+			buildRules = (
+			);
+			dependencies = (
+				30F1FEF62EE64AC2933CC9EC /* PBXTargetDependency */,
+			);
+			name = bvsample08;
+			productName = bvsample08;
+			productReference = 781A5433D2F8400D9BECF65F /* bvsample08 */;
+			productType = "com.apple.product-type.tool";
+		};
+		2FB97E36ABC44268B4F126C6 /* bmsvutil */ = {
+			isa = PBXNativeTarget;
+			buildConfigurationList = 640BE7E0E3D948AE804959A1 /* Build configuration list for PBXNativeTarget "bmsvutil" */;
+			buildPhases = (
+				AAE900D74E73402AA853A879 /* Sources */,
+			);
+			buildRules = (
+			);
+			dependencies = (
+				5DB80B747E4B40FD86DD5D34 /* PBXTargetDependency */,
+			);
+			name = bmsvutil;
+			productName = bmsvutil;
+			productReference = AA34C8D41532499C8BB10E7F /* bmsvutil */;
+			productType = "com.apple.product-type.tool";
+		};
+		3256EE8D4C324DA798D89B0E /* bmperf */ = {
+			isa = PBXNativeTarget;
+			buildConfigurationList = 4F730C4307FE477A8F45C484 /* Build configuration list for PBXNativeTarget "bmperf" */;
+			buildPhases = (
+				82598228E70F4C66959C1E56 /* Sources */,
+			);
+			buildRules = (
+			);
+			dependencies = (
+				5BF3C50361094552A0C24F7D /* PBXTargetDependency */,
+			);
+			name = bmperf;
+			productName = bmperf;
+			productReference = 9AD62B40642F40BFAE42BECB /* bmperf */;
+			productType = "com.apple.product-type.tool";
+		};
+		3694A277CB274E179D133146 /* bvsample05 */ = {
+			isa = PBXNativeTarget;
+			buildConfigurationList = DF148D3571854071B770829B /* Build configuration list for PBXNativeTarget "bvsample05" */;
+			buildPhases = (
+				C6EBE635A08145F4959C98DD /* Sources */,
+			);
+			buildRules = (
+			);
+			dependencies = (
+				6459025FF2A542BA9B7DD651 /* PBXTargetDependency */,
+			);
+			name = bvsample05;
+			productName = bvsample05;
+			productReference = 5D20A71E412040B29C114038 /* bvsample05 */;
+			productType = "com.apple.product-type.tool";
+		};
+		3F9170FF431949FDB796FE7D /* bmtest */ = {
+			isa = PBXNativeTarget;
+			buildConfigurationList = 559D48B20DFF463DA3174DAE /* Build configuration list for PBXNativeTarget "bmtest" */;
+			buildPhases = (
+				5C4A4AB3A671442AB33DDF88 /* Sources */,
+			);
+			buildRules = (
+			);
+			dependencies = (
+				A5BB403879594EFCB21B3A02 /* PBXTargetDependency */,
+			);
+			name = bmtest;
+			productName = bmtest;
+			productReference = F1F61F9FB5164710A979C088 /* bmtest */;
+			productType = "com.apple.product-type.tool";
+		};
+		50B22F1DD6A240A799BD4382 /* bvsample10 */ = {
+			isa = PBXNativeTarget;
+			buildConfigurationList = F865837CE3A84926809B607D /* Build configuration list for PBXNativeTarget "bvsample10" */;
+			buildPhases = (
+				AF9C5950595B48DA9EE4B041 /* Sources */,
+			);
+			buildRules = (
+			);
+			dependencies = (
+				0CCCE3C178744ECE88EF80AA /* PBXTargetDependency */,
+			);
+			name = bvsample10;
+			productName = bvsample10;
+			productReference = F537BB1E90844180805A8C14 /* bvsample10 */;
+			productType = "com.apple.product-type.tool";
+		};
+		56ED0307777A4016A1C4EA78 /* bvsample01 */ = {
+			isa = PBXNativeTarget;
+			buildConfigurationList = 8A61C8DB33A2497EA352B7F8 /* Build configuration list for PBXNativeTarget "bvsample01" */;
+			buildPhases = (
+				FD9D01E363F34203862134F3 /* Sources */,
+			);
+			buildRules = (
+			);
+			dependencies = (
+				60E552CB39384093B8CBC1C7 /* PBXTargetDependency */,
+			);
+			name = bvsample01;
+			productName = bvsample01;
+			productReference = 4936F44A00084C858EF30793 /* bvsample01 */;
+			productType = "com.apple.product-type.tool";
+		};
+		72C4C885F905408288391594 /* svsample01 */ = {
+			isa = PBXNativeTarget;
+			buildConfigurationList = D41002DF62D94A78B192EE8E /* Build configuration list for PBXNativeTarget "svsample01" */;
+			buildPhases = (
+				D75D8CDAC78948F4BA261E9D /* Sources */,
+			);
+			buildRules = (
+			);
+			dependencies = (
+				AD385992EE124AECB1AB6C63 /* PBXTargetDependency */,
+			);
+			name = svsample01;
+			productName = svsample01;
+			productReference = F239780B91F04C4E9164A1E8 /* svsample01 */;
+			productType = "com.apple.product-type.tool";
+		};
+		86F53F57C31A4D789E705F3B /* svsample03 */ = {
+			isa = PBXNativeTarget;
+			buildConfigurationList = 4BF6543831CC46069B3EEB0E /* Build configuration list for PBXNativeTarget "svsample03" */;
+			buildPhases = (
+				653A3E1F6F944B2892B79EB9 /* Sources */,
+			);
+			buildRules = (
+			);
+			dependencies = (
+				E8F1A13176D44A96A934E001 /* PBXTargetDependency */,
+			);
+			name = svsample03;
+			productName = svsample03;
+			productReference = 415E46F948384840986D00E0 /* svsample03 */;
+			productType = "com.apple.product-type.tool";
+		};
+		B5888142299A4B399E649B20 /* svsample02 */ = {
+			isa = PBXNativeTarget;
+			buildConfigurationList = 25952FF32FEB4852909EB0BC /* Build configuration list for PBXNativeTarget "svsample02" */;
+			buildPhases = (
+				3BEB77634137407CB9ACC645 /* Sources */,
+			);
+			buildRules = (
+			);
+			dependencies = (
+				B43B6D589BF94E2AAABC1AFE /* PBXTargetDependency */,
+			);
+			name = svsample02;
+			productName = svsample02;
+			productReference = 593F5E0BCB9D4EB389AF36F0 /* svsample02 */;
+			productType = "com.apple.product-type.tool";
+		};
+		BA46205D129942F5A832C857 /* bvsample04 */ = {
+			isa = PBXNativeTarget;
+			buildConfigurationList = DB613953A2AE4319852062EB /* Build configuration list for PBXNativeTarget "bvsample04" */;
+			buildPhases = (
+				38FF091537084C629EFE5B8F /* Sources */,
+			);
+			buildRules = (
+			);
+			dependencies = (
+				2D83644C0832492084EF872E /* PBXTargetDependency */,
+			);
+			name = bvsample04;
+			productName = bvsample04;
+			productReference = E25F91C92DBE4453B7DFE3F5 /* bvsample04 */;
+			productType = "com.apple.product-type.tool";
+		};
+		BF9C31D5BBCF4D4EBBDF9EE9 /* bvsample02 */ = {
+			isa = PBXNativeTarget;
+			buildConfigurationList = 2A03290F8A58409FBF8F6FB6 /* Build configuration list for PBXNativeTarget "bvsample02" */;
+			buildPhases = (
+				300944A691084BCA858FBD43 /* Sources */,
+			);
+			buildRules = (
+			);
+			dependencies = (
+				D4836A3349F64083A886BB47 /* PBXTargetDependency */,
+			);
+			name = bvsample02;
+			productName = bvsample02;
+			productReference = 855EC356885E4589A25B776C /* bvsample02 */;
+			productType = "com.apple.product-type.tool";
+		};
+		D0E649229FEC46248602F556 /* bvsample09 */ = {
+			isa = PBXNativeTarget;
+			buildConfigurationList = 91F9813DBCB24125A63C966E /* Build configuration list for PBXNativeTarget "bvsample09" */;
+			buildPhases = (
+				19C694C19AA64BBAA0CE139A /* Sources */,
+			);
+			buildRules = (
+			);
+			dependencies = (
+				A91222B733254BC688A31C58 /* PBXTargetDependency */,
+			);
+			name = bvsample09;
+			productName = bvsample09;
+			productReference = 1F213502EBA943F2A214237B /* bvsample09 */;
+			productType = "com.apple.product-type.tool";
+		};
+/* End PBXNativeTarget section */
+
+/* Begin PBXProject section */
+		56318B67704543FEA052890E /* Project object */ = {
+			isa = PBXProject;
+			attributes = {
+				BuildIndependentTargetsInParallel = YES;
+				LastUpgradeCheck = 0830;
+			};
+			buildConfigurationList = 813C98FDE5F04CA288FE6EC2 /* Build configuration list for PBXProject "bm" */;
+			buildSettings = {
+			};
+			buildStyles = (
+				319AB717A88F45B3871269F1 /* Debug */,
+				AB44D71A913F437D980E1A60 /* Release */,
+				31B60C2409DC487EA8B69073 /* MinSizeRel */,
+				73BC0E8B0E7741FF85842C5E /* RelWithDebInfo */,
+			);
+			compatibilityVersion = "Xcode 3.2";
+			hasScannedForEncodings = 0;
+			mainGroup = 762329601E764D03891FB63E;
+			projectDirPath = ../;
+			projectRoot = "";
+			targets = (
+				7E48F642710D4BD1A9CB61E9 /* ALL_BUILD */,
+				60DD5E3E154C420B8AE8746B /* ZERO_CHECK */,
+				3256EE8D4C324DA798D89B0E /* bmperf */,
+				2FB97E36ABC44268B4F126C6 /* bmsvutil */,
+				3F9170FF431949FDB796FE7D /* bmtest */,
+				56ED0307777A4016A1C4EA78 /* bvsample01 */,
+				BF9C31D5BBCF4D4EBBDF9EE9 /* bvsample02 */,
+				1DFDCD3CF51A474B8302B106 /* bvsample03 */,
+				BA46205D129942F5A832C857 /* bvsample04 */,
+				3694A277CB274E179D133146 /* bvsample05 */,
+				0C7A038607C54482BA59785F /* bvsample06 */,
+				2452FD21FB0A41138DED21FD /* bvsample08 */,
+				D0E649229FEC46248602F556 /* bvsample09 */,
+				50B22F1DD6A240A799BD4382 /* bvsample10 */,
+				72C4C885F905408288391594 /* svsample01 */,
+				B5888142299A4B399E649B20 /* svsample02 */,
+				86F53F57C31A4D789E705F3B /* svsample03 */,
+			);
+		};
+/* End PBXProject section */
+
+/* Begin PBXShellScriptBuildPhase section */
+		BDADD44EBB7941B4AE2A3BD8 = {
+			isa = PBXShellScriptBuildPhase;
+			buildActionMask = 2147483647;
+			files = (
+			);
+			inputPaths = (
+			);
+			outputPaths = (
+			);
+			runOnlyForDeploymentPostprocessing = 0;
+			shellPath = /bin/sh;
+			shellScript = "# shell script goes here
+exit 0";
+			showEnvVarsInLog = 0;
+		};
+		DCD087F12DF94E4E9579CB94 /* CMake Rules */ = {
+			isa = PBXShellScriptBuildPhase;
+			buildActionMask = 2147483647;
+			files = (
+			);
+			name = "CMake Rules";
+			outputPaths = (
+/Users/anatoliykuznetsov/Desktop/dev/git/BitMagic/xcode/CMakeFiles/ALL_BUILD			);
+			runOnlyForDeploymentPostprocessing = 0;
+			shellPath = /bin/sh;
+			shellScript = "make -C /Users/anatoliykuznetsov/Desktop/dev/git/BitMagic/xcode -f /Users/anatoliykuznetsov/Desktop/dev/git/BitMagic/xcode/CMakeScripts/ALL_BUILD_cmakeRulesBuildPhase.make$CONFIGURATION all";
+			showEnvVarsInLog = 0;
+		};
+		EDBF527EA2EE417FA91E4A3F = {
+			isa = PBXShellScriptBuildPhase;
+			buildActionMask = 2147483647;
+			files = (
+			);
+			inputPaths = (
+			);
+			outputPaths = (
+			);
+			runOnlyForDeploymentPostprocessing = 0;
+			shellPath = /bin/sh;
+			shellScript = "# shell script goes here
+exit 0";
+			showEnvVarsInLog = 0;
+		};
+		F556C010BFD64BA09FDC703C /* CMake Rules */ = {
+			isa = PBXShellScriptBuildPhase;
+			buildActionMask = 2147483647;
+			files = (
+			);
+			name = "CMake Rules";
+			outputPaths = (
+/Users/anatoliykuznetsov/Desktop/dev/git/BitMagic/xcode/CMakeFiles/ZERO_CHECK			);
+			runOnlyForDeploymentPostprocessing = 0;
+			shellPath = /bin/sh;
+			shellScript = "make -C /Users/anatoliykuznetsov/Desktop/dev/git/BitMagic/xcode -f /Users/anatoliykuznetsov/Desktop/dev/git/BitMagic/xcode/CMakeScripts/ZERO_CHECK_cmakeRulesBuildPhase.make$CONFIGURATION all";
+			showEnvVarsInLog = 0;
+		};
+/* End PBXShellScriptBuildPhase section */
+
+/* Begin PBXSourcesBuildPhase section */
+		19C694C19AA64BBAA0CE139A /* Sources */ = {
+			isa = PBXSourcesBuildPhase;
+			buildActionMask = 2147483647;
+			files = (
+				5A3C44E952AB499AB3CF0411 /* /Users/anatoliykuznetsov/Desktop/dev/git/BitMagic/samples/bvsample09/sample9.cpp */,
+			);
+			runOnlyForDeploymentPostprocessing = 0;
+		};
+		300944A691084BCA858FBD43 /* Sources */ = {
+			isa = PBXSourcesBuildPhase;
+			buildActionMask = 2147483647;
+			files = (
+				334D6DA681D6472A862DC79C /* /Users/anatoliykuznetsov/Desktop/dev/git/BitMagic/samples/bvsample02/sample2.cpp */,
+			);
+			runOnlyForDeploymentPostprocessing = 0;
+		};
+		38FF091537084C629EFE5B8F /* Sources */ = {
+			isa = PBXSourcesBuildPhase;
+			buildActionMask = 2147483647;
+			files = (
+				FFBD69BB21314B18AD55A3EC /* /Users/anatoliykuznetsov/Desktop/dev/git/BitMagic/samples/bvsample04/sample4.cpp */,
+			);
+			runOnlyForDeploymentPostprocessing = 0;
+		};
+		3BEB77634137407CB9ACC645 /* Sources */ = {
+			isa = PBXSourcesBuildPhase;
+			buildActionMask = 2147483647;
+			files = (
+				A2FD6AE53D414E7B9293697F /* /Users/anatoliykuznetsov/Desktop/dev/git/BitMagic/samples/svsample02/svsample02.cpp */,
+			);
+			runOnlyForDeploymentPostprocessing = 0;
+		};
+		5A8CB1F47618444A873AE71F /* Sources */ = {
+			isa = PBXSourcesBuildPhase;
+			buildActionMask = 2147483647;
+			files = (
+				BFCA77504EB9473AAD5C3F82 /* /Users/anatoliykuznetsov/Desktop/dev/git/BitMagic/samples/bvsample03/sample3.cpp */,
+			);
+			runOnlyForDeploymentPostprocessing = 0;
+		};
+		5C4A4AB3A671442AB33DDF88 /* Sources */ = {
+			isa = PBXSourcesBuildPhase;
+			buildActionMask = 2147483647;
+			files = (
+				4880D9D085F7458CBC4231E8 /* /Users/anatoliykuznetsov/Desktop/dev/git/BitMagic/tests/stress/t.cpp */,
+			);
+			runOnlyForDeploymentPostprocessing = 0;
+		};
+		653A3E1F6F944B2892B79EB9 /* Sources */ = {
+			isa = PBXSourcesBuildPhase;
+			buildActionMask = 2147483647;
+			files = (
+				36B194857FF84092BAA10F1F /* /Users/anatoliykuznetsov/Desktop/dev/git/BitMagic/samples/svsample03/svsample03.cpp */,
+			);
+			runOnlyForDeploymentPostprocessing = 0;
+		};
+		6D7F874C5F8A443FB22F7A1E /* Sources */ = {
+			isa = PBXSourcesBuildPhase;
+			buildActionMask = 2147483647;
+			files = (
+				80F9441E29134C0A9719F6F5 /* /Users/anatoliykuznetsov/Desktop/dev/git/BitMagic/samples/bvsample06/sample6.cpp */,
+			);
+			runOnlyForDeploymentPostprocessing = 0;
+		};
+		82598228E70F4C66959C1E56 /* Sources */ = {
+			isa = PBXSourcesBuildPhase;
+			buildActionMask = 2147483647;
+			files = (
+				E1C79E0EC91E48529618AAF5 /* /Users/anatoliykuznetsov/Desktop/dev/git/BitMagic/tests/perf/perf.cpp */,
+			);
+			runOnlyForDeploymentPostprocessing = 0;
+		};
+		AAE900D74E73402AA853A879 /* Sources */ = {
+			isa = PBXSourcesBuildPhase;
+			buildActionMask = 2147483647;
+			files = (
+				39AD25C390AB4C21B876732F /* /Users/anatoliykuznetsov/Desktop/dev/git/BitMagic/utils/svutil/svutil.cpp */,
+			);
+			runOnlyForDeploymentPostprocessing = 0;
+		};
+		AF9C5950595B48DA9EE4B041 /* Sources */ = {
+			isa = PBXSourcesBuildPhase;
+			buildActionMask = 2147483647;
+			files = (
+				04436EDD599B4F258801E43D /* /Users/anatoliykuznetsov/Desktop/dev/git/BitMagic/samples/bvsample10/sample10.cpp */,
+			);
+			runOnlyForDeploymentPostprocessing = 0;
+		};
+		C6EBE635A08145F4959C98DD /* Sources */ = {
+			isa = PBXSourcesBuildPhase;
+			buildActionMask = 2147483647;
+			files = (
+				3A8C4E8748FE499E9A2A80FA /* /Users/anatoliykuznetsov/Desktop/dev/git/BitMagic/samples/bvsample05/sample5.cpp */,
+			);
+			runOnlyForDeploymentPostprocessing = 0;
+		};
+		D75D8CDAC78948F4BA261E9D /* Sources */ = {
+			isa = PBXSourcesBuildPhase;
+			buildActionMask = 2147483647;
+			files = (
+				FB9C83A08813486DBCE7D69C /* /Users/anatoliykuznetsov/Desktop/dev/git/BitMagic/samples/svsample01/svsample01.cpp */,
+			);
+			runOnlyForDeploymentPostprocessing = 0;
+		};
+		F25EF7D60178410DBC061DC4 /* Sources */ = {
+			isa = PBXSourcesBuildPhase;
+			buildActionMask = 2147483647;
+			files = (
+				7413CA28ED0843F295FDEC04 /* /Users/anatoliykuznetsov/Desktop/dev/git/BitMagic/samples/bvsample08/sample8.cpp */,
+			);
+			runOnlyForDeploymentPostprocessing = 0;
+		};
+		FD9D01E363F34203862134F3 /* Sources */ = {
+			isa = PBXSourcesBuildPhase;
+			buildActionMask = 2147483647;
+			files = (
+				A02FF089BC67489B8A94D00A /* /Users/anatoliykuznetsov/Desktop/dev/git/BitMagic/samples/bvsample01/sample1.cpp */,
+			);
+			runOnlyForDeploymentPostprocessing = 0;
+		};
+/* End PBXSourcesBuildPhase section */
+
+/* Begin PBXTargetDependency section */
+		059C9A7F780D441DB638B5D0 /* PBXTargetDependency */ = {
+			isa = PBXTargetDependency;
+			target = D0E649229FEC46248602F556 /* bvsample09 */;
+			targetProxy = F0BE891317B1455FB3CF1F4C /* PBXContainerItemProxy */;
+		};
+		0CCCE3C178744ECE88EF80AA /* PBXTargetDependency */ = {
+			isa = PBXTargetDependency;
+			target = 60DD5E3E154C420B8AE8746B /* ZERO_CHECK */;
+			targetProxy = A0E8DE24FFFB4E27A1D0F4AE /* PBXContainerItemProxy */;
+		};
+		15F893C30A1B45F89A21D845 /* PBXTargetDependency */ = {
+			isa = PBXTargetDependency;
+			target = 60DD5E3E154C420B8AE8746B /* ZERO_CHECK */;
+			targetProxy = 0022D5BAC50B40098BA6AE15 /* PBXContainerItemProxy */;
+		};
+		1C90767C268246069887A67D /* PBXTargetDependency */ = {
+			isa = PBXTargetDependency;
+			target = 3256EE8D4C324DA798D89B0E /* bmperf */;
+			targetProxy = 1953DB4607C6499983ECF739 /* PBXContainerItemProxy */;
+		};
+		25ED75611F464740ABB11B76 /* PBXTargetDependency */ = {
+			isa = PBXTargetDependency;
+			target = 2FB97E36ABC44268B4F126C6 /* bmsvutil */;
+			targetProxy = D91BF81ED71F48F181497684 /* PBXContainerItemProxy */;
+		};
+		2D83644C0832492084EF872E /* PBXTargetDependency */ = {
+			isa = PBXTargetDependency;
+			target = 60DD5E3E154C420B8AE8746B /* ZERO_CHECK */;
+			targetProxy = 017ACA8D62FE46999BE70EF1 /* PBXContainerItemProxy */;
+		};
+		2E90644FB7384201A8B27A02 /* PBXTargetDependency */ = {
+			isa = PBXTargetDependency;
+			target = 72C4C885F905408288391594 /* svsample01 */;
+			targetProxy = 8DF04767DC7E4681B8485C20 /* PBXContainerItemProxy */;
+		};
+		30F1FEF62EE64AC2933CC9EC /* PBXTargetDependency */ = {
+			isa = PBXTargetDependency;
+			target = 60DD5E3E154C420B8AE8746B /* ZERO_CHECK */;
+			targetProxy = EBA56F3B007C43C78EC10259 /* PBXContainerItemProxy */;
+		};
+		3A38D556F7374A11AE8C92DD /* PBXTargetDependency */ = {
+			isa = PBXTargetDependency;
+			target = 3F9170FF431949FDB796FE7D /* bmtest */;
+			targetProxy = 2473291711784F01A4420B2E /* PBXContainerItemProxy */;
+		};
+		43432C31B26245258F044CC7 /* PBXTargetDependency */ = {
+			isa = PBXTargetDependency;
+			target = BA46205D129942F5A832C857 /* bvsample04 */;
+			targetProxy = ED2D731D526444AA982B9EAF /* PBXContainerItemProxy */;
+		};
+		540ECB76170B4987A6AF5766 /* PBXTargetDependency */ = {
+			isa = PBXTargetDependency;
+			target = 86F53F57C31A4D789E705F3B /* svsample03 */;
+			targetProxy = F216F44C96AF4997A6F86C15 /* PBXContainerItemProxy */;
+		};
+		59CE788BA1A3404DA5383EA9 /* PBXTargetDependency */ = {
+			isa = PBXTargetDependency;
+			target = 0C7A038607C54482BA59785F /* bvsample06 */;
+			targetProxy = 7BB9C45CCE174F25B3115B8B /* PBXContainerItemProxy */;
+		};
+		5BF3C50361094552A0C24F7D /* PBXTargetDependency */ = {
+			isa = PBXTargetDependency;
+			target = 60DD5E3E154C420B8AE8746B /* ZERO_CHECK */;
+			targetProxy = A46FAC32897543AF8D47515B /* PBXContainerItemProxy */;
+		};
+		5CA02E8FB5304B57AD07DD92 /* PBXTargetDependency */ = {
+			isa = PBXTargetDependency;
+			target = 60DD5E3E154C420B8AE8746B /* ZERO_CHECK */;
+			targetProxy = 7947DD908F6944519A04B5F2 /* PBXContainerItemProxy */;
+		};
+		5DB80B747E4B40FD86DD5D34 /* PBXTargetDependency */ = {
+			isa = PBXTargetDependency;
+			target = 60DD5E3E154C420B8AE8746B /* ZERO_CHECK */;
+			targetProxy = 505072DA7B404BB6BD1C4F66 /* PBXContainerItemProxy */;
+		};
+		60E552CB39384093B8CBC1C7 /* PBXTargetDependency */ = {
+			isa = PBXTargetDependency;
+			target = 60DD5E3E154C420B8AE8746B /* ZERO_CHECK */;
+			targetProxy = 5D1E781579F84EA4974C352F /* PBXContainerItemProxy */;
+		};
+		6459025FF2A542BA9B7DD651 /* PBXTargetDependency */ = {
+			isa = PBXTargetDependency;
+			target = 60DD5E3E154C420B8AE8746B /* ZERO_CHECK */;
+			targetProxy = 5FFA771BC45847E3B11A7664 /* PBXContainerItemProxy */;
+		};
+		A5BB403879594EFCB21B3A02 /* PBXTargetDependency */ = {
+			isa = PBXTargetDependency;
+			target = 60DD5E3E154C420B8AE8746B /* ZERO_CHECK */;
+			targetProxy = D6A5A78640CF4DD2AC521FD0 /* PBXContainerItemProxy */;
+		};
+		A91222B733254BC688A31C58 /* PBXTargetDependency */ = {
+			isa = PBXTargetDependency;
+			target = 60DD5E3E154C420B8AE8746B /* ZERO_CHECK */;
+			targetProxy = B3A6A39C72864B769D01F193 /* PBXContainerItemProxy */;
+		};
+		AD385992EE124AECB1AB6C63 /* PBXTargetDependency */ = {
+			isa = PBXTargetDependency;
+			target = 60DD5E3E154C420B8AE8746B /* ZERO_CHECK */;
+			targetProxy = 24C4937E78104B49AA4CC238 /* PBXContainerItemProxy */;
+		};
+		ADB2747E4B314214B133C944 /* PBXTargetDependency */ = {
+			isa = PBXTargetDependency;
+			target = 56ED0307777A4016A1C4EA78 /* bvsample01 */;
+			targetProxy = 65168143BC4C4F2DBD76CF00 /* PBXContainerItemProxy */;
+		};
+		AEAD50E80D654E5C90C806C4 /* PBXTargetDependency */ = {
+			isa = PBXTargetDependency;
+			target = 60DD5E3E154C420B8AE8746B /* ZERO_CHECK */;
+			targetProxy = 1E7DBBBC35FE424DA0EED6C8 /* PBXContainerItemProxy */;
+		};
+		B43B6D589BF94E2AAABC1AFE /* PBXTargetDependency */ = {
+			isa = PBXTargetDependency;
+			target = 60DD5E3E154C420B8AE8746B /* ZERO_CHECK */;
+			targetProxy = 7C8C1122CC2F457EAB46F44E /* PBXContainerItemProxy */;
+		};
+		C24A3C899EF344E18F6818DF /* PBXTargetDependency */ = {
+			isa = PBXTargetDependency;
+			target = BF9C31D5BBCF4D4EBBDF9EE9 /* bvsample02 */;
+			targetProxy = AD42EFA11A0B4F26B822996D /* PBXContainerItemProxy */;
+		};
+		CD0CAE1EB3824D169BB92843 /* PBXTargetDependency */ = {
+			isa = PBXTargetDependency;
+			target = 2452FD21FB0A41138DED21FD /* bvsample08 */;
+			targetProxy = EEA3417AA0F645AFBFFDF3AC /* PBXContainerItemProxy */;
+		};
+		D4836A3349F64083A886BB47 /* PBXTargetDependency */ = {
+			isa = PBXTargetDependency;
+			target = 60DD5E3E154C420B8AE8746B /* ZERO_CHECK */;
+			targetProxy = 7F0B0753E2094C3C8E03B77E /* PBXContainerItemProxy */;
+		};
+		E821E4BEFE904509A3EB85F9 /* PBXTargetDependency */ = {
+			isa = PBXTargetDependency;
+			target = B5888142299A4B399E649B20 /* svsample02 */;
+			targetProxy = 83AE5C9700B24865944154B0 /* PBXContainerItemProxy */;
+		};
+		E8F1A13176D44A96A934E001 /* PBXTargetDependency */ = {
+			isa = PBXTargetDependency;
+			target = 60DD5E3E154C420B8AE8746B /* ZERO_CHECK */;
+			targetProxy = B3110F669DC44395BB769EE8 /* PBXContainerItemProxy */;
+		};
+		E9B717926DD24DE09B396F88 /* PBXTargetDependency */ = {
+			isa = PBXTargetDependency;
+			target = 50B22F1DD6A240A799BD4382 /* bvsample10 */;
+			targetProxy = 9333159E9EE14CF89D441AEF /* PBXContainerItemProxy */;
+		};
+		EA6AEBC23A8F4912B782D8C2 /* PBXTargetDependency */ = {
+			isa = PBXTargetDependency;
+			target = 1DFDCD3CF51A474B8302B106 /* bvsample03 */;
+			targetProxy = 8C844364AF7B4474B3F27805 /* PBXContainerItemProxy */;
+		};
+		FEAC79D798C641E293BA6558 /* PBXTargetDependency */ = {
+			isa = PBXTargetDependency;
+			target = 3694A277CB274E179D133146 /* bvsample05 */;
+			targetProxy = 4F4FFAC7BFE342378A298234 /* PBXContainerItemProxy */;
+		};
+/* End PBXTargetDependency section */
+
+/* Begin XCBuildConfiguration section */
+		00B7D52DDBE0492DAB5CF11F /* Release */ = {
+			isa = XCBuildConfiguration;
+			buildSettings = {
+				COMBINE_HIDPI_IMAGES = YES;
+				CONFIGURATION_BUILD_DIR = /Users/anatoliykuznetsov/Desktop/dev/git/BitMagic/build/bin/Release;
+				EXECUTABLE_PREFIX = "";
+				EXECUTABLE_SUFFIX = "";
+				GCC_GENERATE_DEBUGGING_SYMBOLS = NO;
+				GCC_INLINES_ARE_PRIVATE_EXTERN = NO;
+				GCC_OPTIMIZATION_LEVEL = 3;
+				GCC_PREPROCESSOR_DEFINITIONS = ("'CMAKE_INTDIR=\"$(CONFIGURATION)$(EFFECTIVE_PLATFORM_NAME)\"'");
+				GCC_SYMBOLS_PRIVATE_EXTERN = NO;
+				HEADER_SEARCH_PATHS = (/Users/anatoliykuznetsov/Desktop/dev/git/BitMagic/src);
+				INSTALL_PATH = "";
+				LIBRARY_SEARCH_PATHS = "";
+				OTHER_CPLUSPLUSFLAGS = " -Wall -Wextra -march=core2 -msse4.2 -fPIC     -DNDEBUG '-std=gnu++11'  ";
+				OTHER_LDFLAGS = " -Wl,-search_paths_first -Wl,-headerpad_max_install_names  ";
+				OTHER_REZFLAGS = "";
+				PRODUCT_NAME = bmsvutil;
+				SECTORDER_FLAGS = "";
+				SYMROOT = /Users/anatoliykuznetsov/Desktop/dev/git/BitMagic/xcode;
+				USE_HEADERMAP = NO;
+				WARNING_CFLAGS = ("-Wmost","-Wno-four-char-constants","-Wno-unknown-pragmas","$(inherited)");
+			};
+			name = Release;
+		};
+		00DB17005196457DA5567DB9 /* Debug */ = {
+			isa = XCBuildConfiguration;
+			buildSettings = {
+				COMBINE_HIDPI_IMAGES = YES;
+				CONFIGURATION_BUILD_DIR = /Users/anatoliykuznetsov/Desktop/dev/git/BitMagic/build/bin/Debug;
+				EXECUTABLE_PREFIX = "";
+				EXECUTABLE_SUFFIX = "";
+				GCC_GENERATE_DEBUGGING_SYMBOLS = YES;
+				GCC_INLINES_ARE_PRIVATE_EXTERN = NO;
+				GCC_OPTIMIZATION_LEVEL = 0;
+				GCC_PREPROCESSOR_DEFINITIONS = ("'CMAKE_INTDIR=\"$(CONFIGURATION)$(EFFECTIVE_PLATFORM_NAME)\"'");
+				GCC_SYMBOLS_PRIVATE_EXTERN = NO;
+				HEADER_SEARCH_PATHS = (/Users/anatoliykuznetsov/Desktop/dev/git/BitMagic/src);
+				INSTALL_PATH = "";
+				LIBRARY_SEARCH_PATHS = "";
+				OTHER_CPLUSPLUSFLAGS = " -Wall -Wextra -march=core2 -msse4.2 -fPIC    '-std=gnu++11'  ";
+				OTHER_LDFLAGS = " -Wl,-search_paths_first -Wl,-headerpad_max_install_names  ";
+				OTHER_REZFLAGS = "";
+				PRODUCT_NAME = bvsample03;
+				SECTORDER_FLAGS = "";
+				SYMROOT = /Users/anatoliykuznetsov/Desktop/dev/git/BitMagic/xcode;
+				USE_HEADERMAP = NO;
+				WARNING_CFLAGS = ("-Wmost","-Wno-four-char-constants","-Wno-unknown-pragmas","$(inherited)");
+			};
+			name = Debug;
+		};
+		0379613D60154EB08C532FCB /* Release */ = {
+			isa = XCBuildConfiguration;
+			buildSettings = {
+				COMBINE_HIDPI_IMAGES = YES;
+				CONFIGURATION_BUILD_DIR = /Users/anatoliykuznetsov/Desktop/dev/git/BitMagic/build/bin/Release;
+				EXECUTABLE_PREFIX = "";
+				EXECUTABLE_SUFFIX = "";
+				GCC_GENERATE_DEBUGGING_SYMBOLS = NO;
+				GCC_INLINES_ARE_PRIVATE_EXTERN = NO;
+				GCC_OPTIMIZATION_LEVEL = 3;
+				GCC_PREPROCESSOR_DEFINITIONS = ("'CMAKE_INTDIR=\"$(CONFIGURATION)$(EFFECTIVE_PLATFORM_NAME)\"'");
+				GCC_SYMBOLS_PRIVATE_EXTERN = NO;
+				HEADER_SEARCH_PATHS = (/Users/anatoliykuznetsov/Desktop/dev/git/BitMagic/src);
+				INSTALL_PATH = "";
+				LIBRARY_SEARCH_PATHS = "";
+				OTHER_CPLUSPLUSFLAGS = " -Wall -Wextra -march=core2 -msse4.2 -fPIC     -DNDEBUG '-std=gnu++11'  ";
+				OTHER_LDFLAGS = " -Wl,-search_paths_first -Wl,-headerpad_max_install_names  ";
+				OTHER_REZFLAGS = "";
+				PRODUCT_NAME = bmtest;
+				SECTORDER_FLAGS = "";
+				SYMROOT = /Users/anatoliykuznetsov/Desktop/dev/git/BitMagic/xcode;
+				USE_HEADERMAP = NO;
+				WARNING_CFLAGS = ("-Wmost","-Wno-four-char-constants","-Wno-unknown-pragmas","$(inherited)");
+			};
+			name = Release;
+		};
+		0671CD8ADDC44CF394B1A1C3 /* RelWithDebInfo */ = {
+			isa = XCBuildConfiguration;
+			buildSettings = {
+				COMBINE_HIDPI_IMAGES = YES;
+				CONFIGURATION_BUILD_DIR = /Users/anatoliykuznetsov/Desktop/dev/git/BitMagic/build/bin/RelWithDebInfo;
+				EXECUTABLE_PREFIX = "";
+				EXECUTABLE_SUFFIX = "";
+				GCC_GENERATE_DEBUGGING_SYMBOLS = YES;
+				GCC_INLINES_ARE_PRIVATE_EXTERN = NO;
+				GCC_OPTIMIZATION_LEVEL = 2;
+				GCC_PREPROCESSOR_DEFINITIONS = ("'CMAKE_INTDIR=\"$(CONFIGURATION)$(EFFECTIVE_PLATFORM_NAME)\"'");
+				GCC_SYMBOLS_PRIVATE_EXTERN = NO;
+				HEADER_SEARCH_PATHS = (/Users/anatoliykuznetsov/Desktop/dev/git/BitMagic/src);
+				INSTALL_PATH = "";
+				LIBRARY_SEARCH_PATHS = "";
+				OTHER_CPLUSPLUSFLAGS = " -Wall -Wextra -march=core2 -msse4.2 -fPIC        -DNDEBUG '-std=gnu++11'  ";
+				OTHER_LDFLAGS = " -Wl,-search_paths_first -Wl,-headerpad_max_install_names  ";
+				OTHER_REZFLAGS = "";
+				PRODUCT_NAME = bvsample03;
+				SECTORDER_FLAGS = "";
+				SYMROOT = /Users/anatoliykuznetsov/Desktop/dev/git/BitMagic/xcode;
+				USE_HEADERMAP = NO;
+				WARNING_CFLAGS = ("-Wmost","-Wno-four-char-constants","-Wno-unknown-pragmas","$(inherited)");
+			};
+			name = RelWithDebInfo;
+		};
+		0B8E20496F0F4AC5AAC65A7D /* MinSizeRel */ = {
+			isa = XCBuildConfiguration;
+			buildSettings = {
+				COMBINE_HIDPI_IMAGES = YES;
+				CONFIGURATION_BUILD_DIR = /Users/anatoliykuznetsov/Desktop/dev/git/BitMagic/build/bin/MinSizeRel;
+				EXECUTABLE_PREFIX = "";
+				EXECUTABLE_SUFFIX = "";
+				GCC_GENERATE_DEBUGGING_SYMBOLS = NO;
+				GCC_INLINES_ARE_PRIVATE_EXTERN = NO;
+				GCC_OPTIMIZATION_LEVEL = s;
+				GCC_PREPROCESSOR_DEFINITIONS = ("'CMAKE_INTDIR=\"$(CONFIGURATION)$(EFFECTIVE_PLATFORM_NAME)\"'");
+				GCC_SYMBOLS_PRIVATE_EXTERN = NO;
+				HEADER_SEARCH_PATHS = (/Users/anatoliykuznetsov/Desktop/dev/git/BitMagic/src);
+				INSTALL_PATH = "";
+				LIBRARY_SEARCH_PATHS = "";
+				OTHER_CPLUSPLUSFLAGS = " -Wall -Wextra -march=core2 -msse4.2 -fPIC     -DNDEBUG '-std=gnu++11'  ";
+				OTHER_LDFLAGS = " -Wl,-search_paths_first -Wl,-headerpad_max_install_names  ";
+				OTHER_REZFLAGS = "";
+				PRODUCT_NAME = bvsample03;
+				SECTORDER_FLAGS = "";
+				SYMROOT = /Users/anatoliykuznetsov/Desktop/dev/git/BitMagic/xcode;
+				USE_HEADERMAP = NO;
+				WARNING_CFLAGS = ("-Wmost","-Wno-four-char-constants","-Wno-unknown-pragmas","$(inherited)");
+			};
+			name = MinSizeRel;
+		};
+		1499EA16434845C7BFFE4B91 /* MinSizeRel */ = {
+			isa = XCBuildConfiguration;
+			buildSettings = {
+				COMBINE_HIDPI_IMAGES = YES;
+				CONFIGURATION_BUILD_DIR = /Users/anatoliykuznetsov/Desktop/dev/git/BitMagic/build/bin/MinSizeRel;
+				EXECUTABLE_PREFIX = "";
+				EXECUTABLE_SUFFIX = "";
+				GCC_GENERATE_DEBUGGING_SYMBOLS = NO;
+				GCC_INLINES_ARE_PRIVATE_EXTERN = NO;
+				GCC_OPTIMIZATION_LEVEL = s;
+				GCC_PREPROCESSOR_DEFINITIONS = ("'CMAKE_INTDIR=\"$(CONFIGURATION)$(EFFECTIVE_PLATFORM_NAME)\"'");
+				GCC_SYMBOLS_PRIVATE_EXTERN = NO;
+				HEADER_SEARCH_PATHS = (/Users/anatoliykuznetsov/Desktop/dev/git/BitMagic/src);
+				INSTALL_PATH = "";
+				LIBRARY_SEARCH_PATHS = "";
+				OTHER_CPLUSPLUSFLAGS = " -Wall -Wextra -march=core2 -msse4.2 -fPIC     -DNDEBUG '-std=gnu++11'  ";
+				OTHER_LDFLAGS = " -Wl,-search_paths_first -Wl,-headerpad_max_install_names  ";
+				OTHER_REZFLAGS = "";
+				PRODUCT_NAME = bmperf;
+				SECTORDER_FLAGS = "";
+				SYMROOT = /Users/anatoliykuznetsov/Desktop/dev/git/BitMagic/xcode;
+				USE_HEADERMAP = NO;
+				WARNING_CFLAGS = ("-Wmost","-Wno-four-char-constants","-Wno-unknown-pragmas","$(inherited)");
+			};
+			name = MinSizeRel;
+		};
+		187234E3A9234C419B8FFB06 /* Release */ = {
+			isa = XCBuildConfiguration;
+			buildSettings = {
+				COMBINE_HIDPI_IMAGES = YES;
+				CONFIGURATION_BUILD_DIR = /Users/anatoliykuznetsov/Desktop/dev/git/BitMagic/build/bin/Release;
+				EXECUTABLE_PREFIX = "";
+				EXECUTABLE_SUFFIX = "";
+				GCC_GENERATE_DEBUGGING_SYMBOLS = NO;
+				GCC_INLINES_ARE_PRIVATE_EXTERN = NO;
+				GCC_OPTIMIZATION_LEVEL = 3;
+				GCC_PREPROCESSOR_DEFINITIONS = ("'CMAKE_INTDIR=\"$(CONFIGURATION)$(EFFECTIVE_PLATFORM_NAME)\"'");
+				GCC_SYMBOLS_PRIVATE_EXTERN = NO;
+				HEADER_SEARCH_PATHS = (/Users/anatoliykuznetsov/Desktop/dev/git/BitMagic/src);
+				INSTALL_PATH = "";
+				LIBRARY_SEARCH_PATHS = "";
+				OTHER_CPLUSPLUSFLAGS = " -Wall -Wextra -march=core2 -msse4.2 -fPIC     -DNDEBUG '-std=gnu++11'  ";
+				OTHER_LDFLAGS = " -Wl,-search_paths_first -Wl,-headerpad_max_install_names  ";
+				OTHER_REZFLAGS = "";
+				PRODUCT_NAME = bmperf;
+				SECTORDER_FLAGS = "";
+				SYMROOT = /Users/anatoliykuznetsov/Desktop/dev/git/BitMagic/xcode;
+				USE_HEADERMAP = NO;
+				WARNING_CFLAGS = ("-Wmost","-Wno-four-char-constants","-Wno-unknown-pragmas","$(inherited)");
+			};
+			name = Release;
+		};
+		1E2D1F170CEE490FBEF0F2FC /* Release */ = {
+			isa = XCBuildConfiguration;
+			buildSettings = {
+				COMBINE_HIDPI_IMAGES = YES;
+				GCC_GENERATE_DEBUGGING_SYMBOLS = YES;
+				GCC_INLINES_ARE_PRIVATE_EXTERN = NO;
+				GCC_OPTIMIZATION_LEVEL = 0;
+				GCC_PREPROCESSOR_DEFINITIONS = ("'CMAKE_INTDIR=\"$(CONFIGURATION)$(EFFECTIVE_PLATFORM_NAME)\"'");
+				GCC_SYMBOLS_PRIVATE_EXTERN = NO;
+				HEADER_SEARCH_PATHS = (/Users/anatoliykuznetsov/Desktop/dev/git/BitMagic/src);
+				INSTALL_PATH = "";
+				OTHER_LDFLAGS = " ";
+				OTHER_REZFLAGS = "";
+				PRODUCT_NAME = ZERO_CHECK;
+				SECTORDER_FLAGS = "";
+				SYMROOT = /Users/anatoliykuznetsov/Desktop/dev/git/BitMagic/xcode;
+				USE_HEADERMAP = NO;
+				WARNING_CFLAGS = ("-Wmost","-Wno-four-char-constants","-Wno-unknown-pragmas","$(inherited)");
+			};
+			name = Release;
+		};
+		1F12D9D491A84C12A43646E1 /* MinSizeRel */ = {
+			isa = XCBuildConfiguration;
+			buildSettings = {
+				COMBINE_HIDPI_IMAGES = YES;
+				CONFIGURATION_BUILD_DIR = /Users/anatoliykuznetsov/Desktop/dev/git/BitMagic/build/bin/MinSizeRel;
+				EXECUTABLE_PREFIX = "";
+				EXECUTABLE_SUFFIX = "";
+				GCC_GENERATE_DEBUGGING_SYMBOLS = NO;
+				GCC_INLINES_ARE_PRIVATE_EXTERN = NO;
+				GCC_OPTIMIZATION_LEVEL = s;
+				GCC_PREPROCESSOR_DEFINITIONS = ("'CMAKE_INTDIR=\"$(CONFIGURATION)$(EFFECTIVE_PLATFORM_NAME)\"'");
+				GCC_SYMBOLS_PRIVATE_EXTERN = NO;
+				HEADER_SEARCH_PATHS = (/Users/anatoliykuznetsov/Desktop/dev/git/BitMagic/src);
+				INSTALL_PATH = "";
+				LIBRARY_SEARCH_PATHS = "";
+				OTHER_CPLUSPLUSFLAGS = " -Wall -Wextra -march=core2 -msse4.2 -fPIC     -DNDEBUG '-std=gnu++11'  ";
+				OTHER_LDFLAGS = " -Wl,-search_paths_first -Wl,-headerpad_max_install_names  ";
+				OTHER_REZFLAGS = "";
+				PRODUCT_NAME = bvsample08;
+				SECTORDER_FLAGS = "";
+				SYMROOT = /Users/anatoliykuznetsov/Desktop/dev/git/BitMagic/xcode;
+				USE_HEADERMAP = NO;
+				WARNING_CFLAGS = ("-Wmost","-Wno-four-char-constants","-Wno-unknown-pragmas","$(inherited)");
+			};
+			name = MinSizeRel;
+		};
+		22E76CA1001F430984733A07 /* RelWithDebInfo */ = {
+			isa = XCBuildConfiguration;
+			buildSettings = {
+				COMBINE_HIDPI_IMAGES = YES;
+				CONFIGURATION_BUILD_DIR = /Users/anatoliykuznetsov/Desktop/dev/git/BitMagic/build/bin/RelWithDebInfo;
+				EXECUTABLE_PREFIX = "";
+				EXECUTABLE_SUFFIX = "";
+				GCC_GENERATE_DEBUGGING_SYMBOLS = YES;
+				GCC_INLINES_ARE_PRIVATE_EXTERN = NO;
+				GCC_OPTIMIZATION_LEVEL = 2;
+				GCC_PREPROCESSOR_DEFINITIONS = ("'CMAKE_INTDIR=\"$(CONFIGURATION)$(EFFECTIVE_PLATFORM_NAME)\"'");
+				GCC_SYMBOLS_PRIVATE_EXTERN = NO;
+				HEADER_SEARCH_PATHS = (/Users/anatoliykuznetsov/Desktop/dev/git/BitMagic/src);
+				INSTALL_PATH = "";
+				LIBRARY_SEARCH_PATHS = "";
+				OTHER_CPLUSPLUSFLAGS = " -Wall -Wextra -march=core2 -msse4.2 -fPIC        -DNDEBUG '-std=gnu++11'  ";
+				OTHER_LDFLAGS = " -Wl,-search_paths_first -Wl,-headerpad_max_install_names  ";
+				OTHER_REZFLAGS = "";
+				PRODUCT_NAME = bmsvutil;
+				SECTORDER_FLAGS = "";
+				SYMROOT = /Users/anatoliykuznetsov/Desktop/dev/git/BitMagic/xcode;
+				USE_HEADERMAP = NO;
+				WARNING_CFLAGS = ("-Wmost","-Wno-four-char-constants","-Wno-unknown-pragmas","$(inherited)");
+			};
+			name = RelWithDebInfo;
+		};
+		2798A83FB2704780BD447448 /* MinSizeRel */ = {
+			isa = XCBuildConfiguration;
+			buildSettings = {
+				COMBINE_HIDPI_IMAGES = YES;
+				CONFIGURATION_BUILD_DIR = /Users/anatoliykuznetsov/Desktop/dev/git/BitMagic/build/bin/MinSizeRel;
+				EXECUTABLE_PREFIX = "";
+				EXECUTABLE_SUFFIX = "";
+				GCC_GENERATE_DEBUGGING_SYMBOLS = NO;
+				GCC_INLINES_ARE_PRIVATE_EXTERN = NO;
+				GCC_OPTIMIZATION_LEVEL = s;
+				GCC_PREPROCESSOR_DEFINITIONS = ("'CMAKE_INTDIR=\"$(CONFIGURATION)$(EFFECTIVE_PLATFORM_NAME)\"'");
+				GCC_SYMBOLS_PRIVATE_EXTERN = NO;
+				HEADER_SEARCH_PATHS = (/Users/anatoliykuznetsov/Desktop/dev/git/BitMagic/src);
+				INSTALL_PATH = "";
+				LIBRARY_SEARCH_PATHS = "";
+				OTHER_CPLUSPLUSFLAGS = " -Wall -Wextra -march=core2 -msse4.2 -fPIC     -DNDEBUG '-std=gnu++11'  ";
+				OTHER_LDFLAGS = " -Wl,-search_paths_first -Wl,-headerpad_max_install_names  ";
+				OTHER_REZFLAGS = "";
+				PRODUCT_NAME = bvsample02;
+				SECTORDER_FLAGS = "";
+				SYMROOT = /Users/anatoliykuznetsov/Desktop/dev/git/BitMagic/xcode;
+				USE_HEADERMAP = NO;
+				WARNING_CFLAGS = ("-Wmost","-Wno-four-char-constants","-Wno-unknown-pragmas","$(inherited)");
+			};
+			name = MinSizeRel;
+		};
+		2825121B1D594515BE93A95E /* MinSizeRel */ = {
+			isa = XCBuildConfiguration;
+			buildSettings = {
+				COMBINE_HIDPI_IMAGES = YES;
+				GCC_GENERATE_DEBUGGING_SYMBOLS = YES;
+				GCC_INLINES_ARE_PRIVATE_EXTERN = NO;
+				GCC_OPTIMIZATION_LEVEL = 0;
+				GCC_PREPROCESSOR_DEFINITIONS = ("'CMAKE_INTDIR=\"$(CONFIGURATION)$(EFFECTIVE_PLATFORM_NAME)\"'");
+				GCC_SYMBOLS_PRIVATE_EXTERN = NO;
+				HEADER_SEARCH_PATHS = (/Users/anatoliykuznetsov/Desktop/dev/git/BitMagic/src);
+				INSTALL_PATH = "";
+				OTHER_LDFLAGS = " ";
+				OTHER_REZFLAGS = "";
+				PRODUCT_NAME = ALL_BUILD;
+				SECTORDER_FLAGS = "";
+				SYMROOT = /Users/anatoliykuznetsov/Desktop/dev/git/BitMagic/xcode;
+				USE_HEADERMAP = NO;
+				WARNING_CFLAGS = ("-Wmost","-Wno-four-char-constants","-Wno-unknown-pragmas","$(inherited)");
+			};
+			name = MinSizeRel;
+		};
+		286399A66CE24E8C8E76D451 /* MinSizeRel */ = {
+			isa = XCBuildConfiguration;
+			buildSettings = {
+				COMBINE_HIDPI_IMAGES = YES;
+				CONFIGURATION_BUILD_DIR = /Users/anatoliykuznetsov/Desktop/dev/git/BitMagic/build/bin/MinSizeRel;
+				EXECUTABLE_PREFIX = "";
+				EXECUTABLE_SUFFIX = "";
+				GCC_GENERATE_DEBUGGING_SYMBOLS = NO;
+				GCC_INLINES_ARE_PRIVATE_EXTERN = NO;
+				GCC_OPTIMIZATION_LEVEL = s;
+				GCC_PREPROCESSOR_DEFINITIONS = ("'CMAKE_INTDIR=\"$(CONFIGURATION)$(EFFECTIVE_PLATFORM_NAME)\"'");
+				GCC_SYMBOLS_PRIVATE_EXTERN = NO;
+				HEADER_SEARCH_PATHS = (/Users/anatoliykuznetsov/Desktop/dev/git/BitMagic/src);
+				INSTALL_PATH = "";
+				LIBRARY_SEARCH_PATHS = "";
+				OTHER_CPLUSPLUSFLAGS = " -Wall -Wextra -march=core2 -msse4.2 -fPIC     -DNDEBUG '-std=gnu++11'  ";
+				OTHER_LDFLAGS = " -Wl,-search_paths_first -Wl,-headerpad_max_install_names  ";
+				OTHER_REZFLAGS = "";
+				PRODUCT_NAME = bvsample10;
+				SECTORDER_FLAGS = "";
+				SYMROOT = /Users/anatoliykuznetsov/Desktop/dev/git/BitMagic/xcode;
+				USE_HEADERMAP = NO;
+				WARNING_CFLAGS = ("-Wmost","-Wno-four-char-constants","-Wno-unknown-pragmas","$(inherited)");
+			};
+			name = MinSizeRel;
+		};
+		28B4C88D41C945249834E617 /* Release */ = {
+			isa = XCBuildConfiguration;
+			buildSettings = {
+				COMBINE_HIDPI_IMAGES = YES;
+				CONFIGURATION_BUILD_DIR = /Users/anatoliykuznetsov/Desktop/dev/git/BitMagic/build/bin/Release;
+				EXECUTABLE_PREFIX = "";
+				EXECUTABLE_SUFFIX = "";
+				GCC_GENERATE_DEBUGGING_SYMBOLS = NO;
+				GCC_INLINES_ARE_PRIVATE_EXTERN = NO;
+				GCC_OPTIMIZATION_LEVEL = 3;
+				GCC_PREPROCESSOR_DEFINITIONS = ("'CMAKE_INTDIR=\"$(CONFIGURATION)$(EFFECTIVE_PLATFORM_NAME)\"'");
+				GCC_SYMBOLS_PRIVATE_EXTERN = NO;
+				HEADER_SEARCH_PATHS = (/Users/anatoliykuznetsov/Desktop/dev/git/BitMagic/src);
+				INSTALL_PATH = "";
+				LIBRARY_SEARCH_PATHS = "";
+				OTHER_CPLUSPLUSFLAGS = " -Wall -Wextra -march=core2 -msse4.2 -fPIC     -DNDEBUG '-std=gnu++11'  ";
+				OTHER_LDFLAGS = " -Wl,-search_paths_first -Wl,-headerpad_max_install_names  ";
+				OTHER_REZFLAGS = "";
+				PRODUCT_NAME = bvsample06;
+				SECTORDER_FLAGS = "";
+				SYMROOT = /Users/anatoliykuznetsov/Desktop/dev/git/BitMagic/xcode;
+				USE_HEADERMAP = NO;
+				WARNING_CFLAGS = ("-Wmost","-Wno-four-char-constants","-Wno-unknown-pragmas","$(inherited)");
+			};
+			name = Release;
+		};
+		2A26E092D9C948F1A6F5B059 /* RelWithDebInfo */ = {
+			isa = XCBuildConfiguration;
+			buildSettings = {
+				COMBINE_HIDPI_IMAGES = YES;
+				GCC_GENERATE_DEBUGGING_SYMBOLS = YES;
+				GCC_INLINES_ARE_PRIVATE_EXTERN = NO;
+				GCC_OPTIMIZATION_LEVEL = 0;
+				GCC_PREPROCESSOR_DEFINITIONS = ("'CMAKE_INTDIR=\"$(CONFIGURATION)$(EFFECTIVE_PLATFORM_NAME)\"'");
+				GCC_SYMBOLS_PRIVATE_EXTERN = NO;
+				HEADER_SEARCH_PATHS = (/Users/anatoliykuznetsov/Desktop/dev/git/BitMagic/src);
+				INSTALL_PATH = "";
+				OTHER_LDFLAGS = " ";
+				OTHER_REZFLAGS = "";
+				PRODUCT_NAME = ALL_BUILD;
+				SECTORDER_FLAGS = "";
+				SYMROOT = /Users/anatoliykuznetsov/Desktop/dev/git/BitMagic/xcode;
+				USE_HEADERMAP = NO;
+				WARNING_CFLAGS = ("-Wmost","-Wno-four-char-constants","-Wno-unknown-pragmas","$(inherited)");
+			};
+			name = RelWithDebInfo;
+		};
+		2C3AA5F083CA413484ACD124 /* MinSizeRel */ = {
+			isa = XCBuildConfiguration;
+			buildSettings = {
+				COMBINE_HIDPI_IMAGES = YES;
+				GCC_GENERATE_DEBUGGING_SYMBOLS = YES;
+				GCC_INLINES_ARE_PRIVATE_EXTERN = NO;
+				GCC_OPTIMIZATION_LEVEL = 0;
+				GCC_PREPROCESSOR_DEFINITIONS = ("'CMAKE_INTDIR=\"$(CONFIGURATION)$(EFFECTIVE_PLATFORM_NAME)\"'");
+				GCC_SYMBOLS_PRIVATE_EXTERN = NO;
+				HEADER_SEARCH_PATHS = (/Users/anatoliykuznetsov/Desktop/dev/git/BitMagic/src);
+				INSTALL_PATH = "";
+				OTHER_LDFLAGS = " ";
+				OTHER_REZFLAGS = "";
+				PRODUCT_NAME = ZERO_CHECK;
+				SECTORDER_FLAGS = "";
+				SYMROOT = /Users/anatoliykuznetsov/Desktop/dev/git/BitMagic/xcode;
+				USE_HEADERMAP = NO;
+				WARNING_CFLAGS = ("-Wmost","-Wno-four-char-constants","-Wno-unknown-pragmas","$(inherited)");
+			};
+			name = MinSizeRel;
+		};
+		35F74B20E0D7455AAEB2E070 /* MinSizeRel */ = {
+			isa = XCBuildConfiguration;
+			buildSettings = {
+				COMBINE_HIDPI_IMAGES = YES;
+				CONFIGURATION_BUILD_DIR = /Users/anatoliykuznetsov/Desktop/dev/git/BitMagic/build/bin/MinSizeRel;
+				EXECUTABLE_PREFIX = "";
+				EXECUTABLE_SUFFIX = "";
+				GCC_GENERATE_DEBUGGING_SYMBOLS = NO;
+				GCC_INLINES_ARE_PRIVATE_EXTERN = NO;
+				GCC_OPTIMIZATION_LEVEL = s;
+				GCC_PREPROCESSOR_DEFINITIONS = ("'CMAKE_INTDIR=\"$(CONFIGURATION)$(EFFECTIVE_PLATFORM_NAME)\"'");
+				GCC_SYMBOLS_PRIVATE_EXTERN = NO;
+				HEADER_SEARCH_PATHS = (/Users/anatoliykuznetsov/Desktop/dev/git/BitMagic/src);
+				INSTALL_PATH = "";
+				LIBRARY_SEARCH_PATHS = "";
+				OTHER_CPLUSPLUSFLAGS = " -Wall -Wextra -march=core2 -msse4.2 -fPIC     -DNDEBUG '-std=gnu++11'  ";
+				OTHER_LDFLAGS = " -Wl,-search_paths_first -Wl,-headerpad_max_install_names  ";
+				OTHER_REZFLAGS = "";
+				PRODUCT_NAME = svsample02;
+				SECTORDER_FLAGS = "";
+				SYMROOT = /Users/anatoliykuznetsov/Desktop/dev/git/BitMagic/xcode;
+				USE_HEADERMAP = NO;
+				WARNING_CFLAGS = ("-Wmost","-Wno-four-char-constants","-Wno-unknown-pragmas","$(inherited)");
+			};
+			name = MinSizeRel;
+		};
+		363D88C52CE847BFBA011FA7 /* Debug */ = {
+			isa = XCBuildConfiguration;
+			buildSettings = {
+				COMBINE_HIDPI_IMAGES = YES;
+				CONFIGURATION_BUILD_DIR = /Users/anatoliykuznetsov/Desktop/dev/git/BitMagic/build/bin/Debug;
+				EXECUTABLE_PREFIX = "";
+				EXECUTABLE_SUFFIX = "";
+				GCC_GENERATE_DEBUGGING_SYMBOLS = YES;
+				GCC_INLINES_ARE_PRIVATE_EXTERN = NO;
+				GCC_OPTIMIZATION_LEVEL = 0;
+				GCC_PREPROCESSOR_DEFINITIONS = ("'CMAKE_INTDIR=\"$(CONFIGURATION)$(EFFECTIVE_PLATFORM_NAME)\"'");
+				GCC_SYMBOLS_PRIVATE_EXTERN = NO;
+				HEADER_SEARCH_PATHS = (/Users/anatoliykuznetsov/Desktop/dev/git/BitMagic/src);
+				INSTALL_PATH = "";
+				LIBRARY_SEARCH_PATHS = "";
+				OTHER_CPLUSPLUSFLAGS = " -Wall -Wextra -march=core2 -msse4.2 -fPIC    '-std=gnu++11'  ";
+				OTHER_LDFLAGS = " -Wl,-search_paths_first -Wl,-headerpad_max_install_names  ";
+				OTHER_REZFLAGS = "";
+				PRODUCT_NAME = bvsample05;
+				SECTORDER_FLAGS = "";
+				SYMROOT = /Users/anatoliykuznetsov/Desktop/dev/git/BitMagic/xcode;
+				USE_HEADERMAP = NO;
+				WARNING_CFLAGS = ("-Wmost","-Wno-four-char-constants","-Wno-unknown-pragmas","$(inherited)");
+			};
+			name = Debug;
+		};
+		37367AA58D684E8482999392 /* RelWithDebInfo */ = {
+			isa = XCBuildConfiguration;
+			buildSettings = {
+				COMBINE_HIDPI_IMAGES = YES;
+				CONFIGURATION_BUILD_DIR = /Users/anatoliykuznetsov/Desktop/dev/git/BitMagic/build/bin/RelWithDebInfo;
+				EXECUTABLE_PREFIX = "";
+				EXECUTABLE_SUFFIX = "";
+				GCC_GENERATE_DEBUGGING_SYMBOLS = YES;
+				GCC_INLINES_ARE_PRIVATE_EXTERN = NO;
+				GCC_OPTIMIZATION_LEVEL = 2;
+				GCC_PREPROCESSOR_DEFINITIONS = ("'CMAKE_INTDIR=\"$(CONFIGURATION)$(EFFECTIVE_PLATFORM_NAME)\"'");
+				GCC_SYMBOLS_PRIVATE_EXTERN = NO;
+				HEADER_SEARCH_PATHS = (/Users/anatoliykuznetsov/Desktop/dev/git/BitMagic/src);
+				INSTALL_PATH = "";
+				LIBRARY_SEARCH_PATHS = "";
+				OTHER_CPLUSPLUSFLAGS = " -Wall -Wextra -march=core2 -msse4.2 -fPIC        -DNDEBUG '-std=gnu++11'  ";
+				OTHER_LDFLAGS = " -Wl,-search_paths_first -Wl,-headerpad_max_install_names  ";
+				OTHER_REZFLAGS = "";
+				PRODUCT_NAME = bvsample01;
+				SECTORDER_FLAGS = "";
+				SYMROOT = /Users/anatoliykuznetsov/Desktop/dev/git/BitMagic/xcode;
+				USE_HEADERMAP = NO;
+				WARNING_CFLAGS = ("-Wmost","-Wno-four-char-constants","-Wno-unknown-pragmas","$(inherited)");
+			};
+			name = RelWithDebInfo;
+		};
+		434B6DD945F44048A34348A1 /* Release */ = {
+			isa = XCBuildConfiguration;
+			buildSettings = {
+				COMBINE_HIDPI_IMAGES = YES;
+				CONFIGURATION_BUILD_DIR = /Users/anatoliykuznetsov/Desktop/dev/git/BitMagic/build/bin/Release;
+				EXECUTABLE_PREFIX = "";
+				EXECUTABLE_SUFFIX = "";
+				GCC_GENERATE_DEBUGGING_SYMBOLS = NO;
+				GCC_INLINES_ARE_PRIVATE_EXTERN = NO;
+				GCC_OPTIMIZATION_LEVEL = 3;
+				GCC_PREPROCESSOR_DEFINITIONS = ("'CMAKE_INTDIR=\"$(CONFIGURATION)$(EFFECTIVE_PLATFORM_NAME)\"'");
+				GCC_SYMBOLS_PRIVATE_EXTERN = NO;
+				HEADER_SEARCH_PATHS = (/Users/anatoliykuznetsov/Desktop/dev/git/BitMagic/src);
+				INSTALL_PATH = "";
+				LIBRARY_SEARCH_PATHS = "";
+				OTHER_CPLUSPLUSFLAGS = " -Wall -Wextra -march=core2 -msse4.2 -fPIC     -DNDEBUG '-std=gnu++11'  ";
+				OTHER_LDFLAGS = " -Wl,-search_paths_first -Wl,-headerpad_max_install_names  ";
+				OTHER_REZFLAGS = "";
+				PRODUCT_NAME = bvsample08;
+				SECTORDER_FLAGS = "";
+				SYMROOT = /Users/anatoliykuznetsov/Desktop/dev/git/BitMagic/xcode;
+				USE_HEADERMAP = NO;
+				WARNING_CFLAGS = ("-Wmost","-Wno-four-char-constants","-Wno-unknown-pragmas","$(inherited)");
+			};
+			name = Release;
+		};
+		43FD6C3C548D416DAC56DDA9 /* Debug */ = {
+			isa = XCBuildConfiguration;
+			buildSettings = {
+				COMBINE_HIDPI_IMAGES = YES;
+				CONFIGURATION_BUILD_DIR = /Users/anatoliykuznetsov/Desktop/dev/git/BitMagic/build/bin/Debug;
+				EXECUTABLE_PREFIX = "";
+				EXECUTABLE_SUFFIX = "";
+				GCC_GENERATE_DEBUGGING_SYMBOLS = YES;
+				GCC_INLINES_ARE_PRIVATE_EXTERN = NO;
+				GCC_OPTIMIZATION_LEVEL = 0;
+				GCC_PREPROCESSOR_DEFINITIONS = ("'CMAKE_INTDIR=\"$(CONFIGURATION)$(EFFECTIVE_PLATFORM_NAME)\"'");
+				GCC_SYMBOLS_PRIVATE_EXTERN = NO;
+				HEADER_SEARCH_PATHS = (/Users/anatoliykuznetsov/Desktop/dev/git/BitMagic/src);
+				INSTALL_PATH = "";
+				LIBRARY_SEARCH_PATHS = "";
+				OTHER_CPLUSPLUSFLAGS = " -Wall -Wextra -march=core2 -msse4.2 -fPIC    '-std=gnu++11'  ";
+				OTHER_LDFLAGS = " -Wl,-search_paths_first -Wl,-headerpad_max_install_names  ";
+				OTHER_REZFLAGS = "";
+				PRODUCT_NAME = bmsvutil;
+				SECTORDER_FLAGS = "";
+				SYMROOT = /Users/anatoliykuznetsov/Desktop/dev/git/BitMagic/xcode;
+				USE_HEADERMAP = NO;
+				WARNING_CFLAGS = ("-Wmost","-Wno-four-char-constants","-Wno-unknown-pragmas","$(inherited)");
+			};
+			name = Debug;
+		};
+		479481D0AA164FC9B59F1156 /* Release */ = {
+			isa = XCBuildConfiguration;
+			buildSettings = {
+				COMBINE_HIDPI_IMAGES = YES;
+				CONFIGURATION_BUILD_DIR = /Users/anatoliykuznetsov/Desktop/dev/git/BitMagic/build/bin/Release;
+				EXECUTABLE_PREFIX = "";
+				EXECUTABLE_SUFFIX = "";
+				GCC_GENERATE_DEBUGGING_SYMBOLS = NO;
+				GCC_INLINES_ARE_PRIVATE_EXTERN = NO;
+				GCC_OPTIMIZATION_LEVEL = 3;
+				GCC_PREPROCESSOR_DEFINITIONS = ("'CMAKE_INTDIR=\"$(CONFIGURATION)$(EFFECTIVE_PLATFORM_NAME)\"'");
+				GCC_SYMBOLS_PRIVATE_EXTERN = NO;
+				HEADER_SEARCH_PATHS = (/Users/anatoliykuznetsov/Desktop/dev/git/BitMagic/src);
+				INSTALL_PATH = "";
+				LIBRARY_SEARCH_PATHS = "";
+				OTHER_CPLUSPLUSFLAGS = " -Wall -Wextra -march=core2 -msse4.2 -fPIC     -DNDEBUG '-std=gnu++11'  ";
+				OTHER_LDFLAGS = " -Wl,-search_paths_first -Wl,-headerpad_max_install_names  ";
+				OTHER_REZFLAGS = "";
+				PRODUCT_NAME = bvsample03;
+				SECTORDER_FLAGS = "";
+				SYMROOT = /Users/anatoliykuznetsov/Desktop/dev/git/BitMagic/xcode;
+				USE_HEADERMAP = NO;
+				WARNING_CFLAGS = ("-Wmost","-Wno-four-char-constants","-Wno-unknown-pragmas","$(inherited)");
+			};
+			name = Release;
+		};
+		4833FAF158E84124B091CC95 /* Debug */ = {
+			isa = XCBuildConfiguration;
+			buildSettings = {
+				COMBINE_HIDPI_IMAGES = YES;
+				CONFIGURATION_BUILD_DIR = /Users/anatoliykuznetsov/Desktop/dev/git/BitMagic/build/bin/Debug;
+				EXECUTABLE_PREFIX = "";
+				EXECUTABLE_SUFFIX = "";
+				GCC_GENERATE_DEBUGGING_SYMBOLS = YES;
+				GCC_INLINES_ARE_PRIVATE_EXTERN = NO;
+				GCC_OPTIMIZATION_LEVEL = 0;
+				GCC_PREPROCESSOR_DEFINITIONS = ("'CMAKE_INTDIR=\"$(CONFIGURATION)$(EFFECTIVE_PLATFORM_NAME)\"'");
+				GCC_SYMBOLS_PRIVATE_EXTERN = NO;
+				HEADER_SEARCH_PATHS = (/Users/anatoliykuznetsov/Desktop/dev/git/BitMagic/src);
+				INSTALL_PATH = "";
+				LIBRARY_SEARCH_PATHS = "";
+				OTHER_CPLUSPLUSFLAGS = " -Wall -Wextra -march=core2 -msse4.2 -fPIC    '-std=gnu++11'  ";
+				OTHER_LDFLAGS = " -Wl,-search_paths_first -Wl,-headerpad_max_install_names  ";
+				OTHER_REZFLAGS = "";
+				PRODUCT_NAME = bvsample08;
+				SECTORDER_FLAGS = "";
+				SYMROOT = /Users/anatoliykuznetsov/Desktop/dev/git/BitMagic/xcode;
+				USE_HEADERMAP = NO;
+				WARNING_CFLAGS = ("-Wmost","-Wno-four-char-constants","-Wno-unknown-pragmas","$(inherited)");
+			};
+			name = Debug;
+		};
+		4EB641291BE14FC6ACF8A034 /* Release */ = {
+			isa = XCBuildConfiguration;
+			buildSettings = {
+				COMBINE_HIDPI_IMAGES = YES;
+				CONFIGURATION_BUILD_DIR = /Users/anatoliykuznetsov/Desktop/dev/git/BitMagic/build/bin/Release;
+				EXECUTABLE_PREFIX = "";
+				EXECUTABLE_SUFFIX = "";
+				GCC_GENERATE_DEBUGGING_SYMBOLS = NO;
+				GCC_INLINES_ARE_PRIVATE_EXTERN = NO;
+				GCC_OPTIMIZATION_LEVEL = 3;
+				GCC_PREPROCESSOR_DEFINITIONS = ("'CMAKE_INTDIR=\"$(CONFIGURATION)$(EFFECTIVE_PLATFORM_NAME)\"'");
+				GCC_SYMBOLS_PRIVATE_EXTERN = NO;
+				HEADER_SEARCH_PATHS = (/Users/anatoliykuznetsov/Desktop/dev/git/BitMagic/src);
+				INSTALL_PATH = "";
+				LIBRARY_SEARCH_PATHS = "";
+				OTHER_CPLUSPLUSFLAGS = " -Wall -Wextra -march=core2 -msse4.2 -fPIC     -DNDEBUG '-std=gnu++11'  ";
+				OTHER_LDFLAGS = " -Wl,-search_paths_first -Wl,-headerpad_max_install_names  ";
+				OTHER_REZFLAGS = "";
+				PRODUCT_NAME = bvsample10;
+				SECTORDER_FLAGS = "";
+				SYMROOT = /Users/anatoliykuznetsov/Desktop/dev/git/BitMagic/xcode;
+				USE_HEADERMAP = NO;
+				WARNING_CFLAGS = ("-Wmost","-Wno-four-char-constants","-Wno-unknown-pragmas","$(inherited)");
+			};
+			name = Release;
+		};
+		4F2E165EBFA24DC8A6CC41E1 /* Release */ = {
+			isa = XCBuildConfiguration;
+			buildSettings = {
+				COMBINE_HIDPI_IMAGES = YES;
+				CONFIGURATION_BUILD_DIR = /Users/anatoliykuznetsov/Desktop/dev/git/BitMagic/build/bin/Release;
+				EXECUTABLE_PREFIX = "";
+				EXECUTABLE_SUFFIX = "";
+				GCC_GENERATE_DEBUGGING_SYMBOLS = NO;
+				GCC_INLINES_ARE_PRIVATE_EXTERN = NO;
+				GCC_OPTIMIZATION_LEVEL = 3;
+				GCC_PREPROCESSOR_DEFINITIONS = ("'CMAKE_INTDIR=\"$(CONFIGURATION)$(EFFECTIVE_PLATFORM_NAME)\"'");
+				GCC_SYMBOLS_PRIVATE_EXTERN = NO;
+				HEADER_SEARCH_PATHS = (/Users/anatoliykuznetsov/Desktop/dev/git/BitMagic/src);
+				INSTALL_PATH = "";
+				LIBRARY_SEARCH_PATHS = "";
+				OTHER_CPLUSPLUSFLAGS = " -Wall -Wextra -march=core2 -msse4.2 -fPIC     -DNDEBUG '-std=gnu++11'  ";
+				OTHER_LDFLAGS = " -Wl,-search_paths_first -Wl,-headerpad_max_install_names  ";
+				OTHER_REZFLAGS = "";
+				PRODUCT_NAME = bvsample01;
+				SECTORDER_FLAGS = "";
+				SYMROOT = /Users/anatoliykuznetsov/Desktop/dev/git/BitMagic/xcode;
+				USE_HEADERMAP = NO;
+				WARNING_CFLAGS = ("-Wmost","-Wno-four-char-constants","-Wno-unknown-pragmas","$(inherited)");
+			};
+			name = Release;
+		};
+		51DC083AB4DD40FA8FA0E2E7 /* RelWithDebInfo */ = {
+			isa = XCBuildConfiguration;
+			buildSettings = {
+				COMBINE_HIDPI_IMAGES = YES;
+				CONFIGURATION_BUILD_DIR = /Users/anatoliykuznetsov/Desktop/dev/git/BitMagic/build/bin/RelWithDebInfo;
+				EXECUTABLE_PREFIX = "";
+				EXECUTABLE_SUFFIX = "";
+				GCC_GENERATE_DEBUGGING_SYMBOLS = YES;
+				GCC_INLINES_ARE_PRIVATE_EXTERN = NO;
+				GCC_OPTIMIZATION_LEVEL = 2;
+				GCC_PREPROCESSOR_DEFINITIONS = ("'CMAKE_INTDIR=\"$(CONFIGURATION)$(EFFECTIVE_PLATFORM_NAME)\"'");
+				GCC_SYMBOLS_PRIVATE_EXTERN = NO;
+				HEADER_SEARCH_PATHS = (/Users/anatoliykuznetsov/Desktop/dev/git/BitMagic/src);
+				INSTALL_PATH = "";
+				LIBRARY_SEARCH_PATHS = "";
+				OTHER_CPLUSPLUSFLAGS = " -Wall -Wextra -march=core2 -msse4.2 -fPIC        -DNDEBUG '-std=gnu++11'  ";
+				OTHER_LDFLAGS = " -Wl,-search_paths_first -Wl,-headerpad_max_install_names  ";
+				OTHER_REZFLAGS = "";
+				PRODUCT_NAME = bvsample08;
+				SECTORDER_FLAGS = "";
+				SYMROOT = /Users/anatoliykuznetsov/Desktop/dev/git/BitMagic/xcode;
+				USE_HEADERMAP = NO;
+				WARNING_CFLAGS = ("-Wmost","-Wno-four-char-constants","-Wno-unknown-pragmas","$(inherited)");
+			};
+			name = RelWithDebInfo;
+		};
+		54B7189C46674622A420A71B /* Release */ = {
+			isa = XCBuildConfiguration;
+			buildSettings = {
+				COMBINE_HIDPI_IMAGES = YES;
+				CONFIGURATION_BUILD_DIR = /Users/anatoliykuznetsov/Desktop/dev/git/BitMagic/build/bin/Release;
+				EXECUTABLE_PREFIX = "";
+				EXECUTABLE_SUFFIX = "";
+				GCC_GENERATE_DEBUGGING_SYMBOLS = NO;
+				GCC_INLINES_ARE_PRIVATE_EXTERN = NO;
+				GCC_OPTIMIZATION_LEVEL = 3;
+				GCC_PREPROCESSOR_DEFINITIONS = ("'CMAKE_INTDIR=\"$(CONFIGURATION)$(EFFECTIVE_PLATFORM_NAME)\"'");
+				GCC_SYMBOLS_PRIVATE_EXTERN = NO;
+				HEADER_SEARCH_PATHS = (/Users/anatoliykuznetsov/Desktop/dev/git/BitMagic/src);
+				INSTALL_PATH = "";
+				LIBRARY_SEARCH_PATHS = "";
+				OTHER_CPLUSPLUSFLAGS = " -Wall -Wextra -march=core2 -msse4.2 -fPIC     -DNDEBUG '-std=gnu++11'  ";
+				OTHER_LDFLAGS = " -Wl,-search_paths_first -Wl,-headerpad_max_install_names  ";
+				OTHER_REZFLAGS = "";
+				PRODUCT_NAME = svsample03;
+				SECTORDER_FLAGS = "";
+				SYMROOT = /Users/anatoliykuznetsov/Desktop/dev/git/BitMagic/xcode;
+				USE_HEADERMAP = NO;
+				WARNING_CFLAGS = ("-Wmost","-Wno-four-char-constants","-Wno-unknown-pragmas","$(inherited)");
+			};
+			name = Release;
+		};
+		5AA869B81A674A0196DCBBD3 /* RelWithDebInfo */ = {
+			isa = XCBuildConfiguration;
+			buildSettings = {
+				COMBINE_HIDPI_IMAGES = YES;
+				GCC_GENERATE_DEBUGGING_SYMBOLS = YES;
+				GCC_INLINES_ARE_PRIVATE_EXTERN = NO;
+				GCC_OPTIMIZATION_LEVEL = 0;
+				GCC_PREPROCESSOR_DEFINITIONS = ("'CMAKE_INTDIR=\"$(CONFIGURATION)$(EFFECTIVE_PLATFORM_NAME)\"'");
+				GCC_SYMBOLS_PRIVATE_EXTERN = NO;
+				HEADER_SEARCH_PATHS = (/Users/anatoliykuznetsov/Desktop/dev/git/BitMagic/src);
+				INSTALL_PATH = "";
+				OTHER_LDFLAGS = " ";
+				OTHER_REZFLAGS = "";
+				PRODUCT_NAME = ZERO_CHECK;
+				SECTORDER_FLAGS = "";
+				SYMROOT = /Users/anatoliykuznetsov/Desktop/dev/git/BitMagic/xcode;
+				USE_HEADERMAP = NO;
+				WARNING_CFLAGS = ("-Wmost","-Wno-four-char-constants","-Wno-unknown-pragmas","$(inherited)");
+			};
+			name = RelWithDebInfo;
+		};
+		5D968E40505E4E4EA8DCAA0A /* Release */ = {
+			isa = XCBuildConfiguration;
+			buildSettings = {
+				COMBINE_HIDPI_IMAGES = YES;
+				CONFIGURATION_BUILD_DIR = /Users/anatoliykuznetsov/Desktop/dev/git/BitMagic/build/bin/Release;
+				EXECUTABLE_PREFIX = "";
+				EXECUTABLE_SUFFIX = "";
+				GCC_GENERATE_DEBUGGING_SYMBOLS = NO;
+				GCC_INLINES_ARE_PRIVATE_EXTERN = NO;
+				GCC_OPTIMIZATION_LEVEL = 3;
+				GCC_PREPROCESSOR_DEFINITIONS = ("'CMAKE_INTDIR=\"$(CONFIGURATION)$(EFFECTIVE_PLATFORM_NAME)\"'");
+				GCC_SYMBOLS_PRIVATE_EXTERN = NO;
+				HEADER_SEARCH_PATHS = (/Users/anatoliykuznetsov/Desktop/dev/git/BitMagic/src);
+				INSTALL_PATH = "";
+				LIBRARY_SEARCH_PATHS = "";
+				OTHER_CPLUSPLUSFLAGS = " -Wall -Wextra -march=core2 -msse4.2 -fPIC     -DNDEBUG '-std=gnu++11'  ";
+				OTHER_LDFLAGS = " -Wl,-search_paths_first -Wl,-headerpad_max_install_names  ";
+				OTHER_REZFLAGS = "";
+				PRODUCT_NAME = svsample01;
+				SECTORDER_FLAGS = "";
+				SYMROOT = /Users/anatoliykuznetsov/Desktop/dev/git/BitMagic/xcode;
+				USE_HEADERMAP = NO;
+				WARNING_CFLAGS = ("-Wmost","-Wno-four-char-constants","-Wno-unknown-pragmas","$(inherited)");
+			};
+			name = Release;
+		};
+		5DF253085C95474BBF2AE961 /* MinSizeRel */ = {
+			isa = XCBuildConfiguration;
+			buildSettings = {
+				COMBINE_HIDPI_IMAGES = YES;
+				CONFIGURATION_BUILD_DIR = /Users/anatoliykuznetsov/Desktop/dev/git/BitMagic/build/bin/MinSizeRel;
+				EXECUTABLE_PREFIX = "";
+				EXECUTABLE_SUFFIX = "";
+				GCC_GENERATE_DEBUGGING_SYMBOLS = NO;
+				GCC_INLINES_ARE_PRIVATE_EXTERN = NO;
+				GCC_OPTIMIZATION_LEVEL = s;
+				GCC_PREPROCESSOR_DEFINITIONS = ("'CMAKE_INTDIR=\"$(CONFIGURATION)$(EFFECTIVE_PLATFORM_NAME)\"'");
+				GCC_SYMBOLS_PRIVATE_EXTERN = NO;
+				HEADER_SEARCH_PATHS = (/Users/anatoliykuznetsov/Desktop/dev/git/BitMagic/src);
+				INSTALL_PATH = "";
+				LIBRARY_SEARCH_PATHS = "";
+				OTHER_CPLUSPLUSFLAGS = " -Wall -Wextra -march=core2 -msse4.2 -fPIC     -DNDEBUG '-std=gnu++11'  ";
+				OTHER_LDFLAGS = " -Wl,-search_paths_first -Wl,-headerpad_max_install_names  ";
+				OTHER_REZFLAGS = "";
+				PRODUCT_NAME = svsample01;
+				SECTORDER_FLAGS = "";
+				SYMROOT = /Users/anatoliykuznetsov/Desktop/dev/git/BitMagic/xcode;
+				USE_HEADERMAP = NO;
+				WARNING_CFLAGS = ("-Wmost","-Wno-four-char-constants","-Wno-unknown-pragmas","$(inherited)");
+			};
+			name = MinSizeRel;
+		};
+		6829B2313D404AFD8E428182 /* MinSizeRel */ = {
+			isa = XCBuildConfiguration;
+			buildSettings = {
+				ONLY_ACTIVE_ARCH = YES;
+				SDKROOT = /Applications/Xcode.app/Contents/Developer/Platforms/MacOSX.platform/Developer/SDKs/MacOSX10.12.sdk;
+				SYMROOT = /Users/anatoliykuznetsov/Desktop/dev/git/BitMagic/xcode/build;
+			};
+			name = MinSizeRel;
+		};
+		6F4F2FF43DF34CAC99DB6150 /* MinSizeRel */ = {
+			isa = XCBuildConfiguration;
+			buildSettings = {
+				COMBINE_HIDPI_IMAGES = YES;
+				CONFIGURATION_BUILD_DIR = /Users/anatoliykuznetsov/Desktop/dev/git/BitMagic/build/bin/MinSizeRel;
+				EXECUTABLE_PREFIX = "";
+				EXECUTABLE_SUFFIX = "";
+				GCC_GENERATE_DEBUGGING_SYMBOLS = NO;
+				GCC_INLINES_ARE_PRIVATE_EXTERN = NO;
+				GCC_OPTIMIZATION_LEVEL = s;
+				GCC_PREPROCESSOR_DEFINITIONS = ("'CMAKE_INTDIR=\"$(CONFIGURATION)$(EFFECTIVE_PLATFORM_NAME)\"'");
+				GCC_SYMBOLS_PRIVATE_EXTERN = NO;
+				HEADER_SEARCH_PATHS = (/Users/anatoliykuznetsov/Desktop/dev/git/BitMagic/src);
+				INSTALL_PATH = "";
+				LIBRARY_SEARCH_PATHS = "";
+				OTHER_CPLUSPLUSFLAGS = " -Wall -Wextra -march=core2 -msse4.2 -fPIC     -DNDEBUG '-std=gnu++11'  ";
+				OTHER_LDFLAGS = " -Wl,-search_paths_first -Wl,-headerpad_max_install_names  ";
+				OTHER_REZFLAGS = "";
+				PRODUCT_NAME = bvsample01;
+				SECTORDER_FLAGS = "";
+				SYMROOT = /Users/anatoliykuznetsov/Desktop/dev/git/BitMagic/xcode;
+				USE_HEADERMAP = NO;
+				WARNING_CFLAGS = ("-Wmost","-Wno-four-char-constants","-Wno-unknown-pragmas","$(inherited)");
+			};
+			name = MinSizeRel;
+		};
+		704A085CE8DF453FAC38B7AC /* RelWithDebInfo */ = {
+			isa = XCBuildConfiguration;
+			buildSettings = {
+				ONLY_ACTIVE_ARCH = YES;
+				SDKROOT = /Applications/Xcode.app/Contents/Developer/Platforms/MacOSX.platform/Developer/SDKs/MacOSX10.12.sdk;
+				SYMROOT = /Users/anatoliykuznetsov/Desktop/dev/git/BitMagic/xcode/build;
+			};
+			name = RelWithDebInfo;
+		};
+		71A82B71A5DB44C3ABE23B1E /* Release */ = {
+			isa = XCBuildConfiguration;
+			buildSettings = {
+				COMBINE_HIDPI_IMAGES = YES;
+				GCC_GENERATE_DEBUGGING_SYMBOLS = YES;
+				GCC_INLINES_ARE_PRIVATE_EXTERN = NO;
+				GCC_OPTIMIZATION_LEVEL = 0;
+				GCC_PREPROCESSOR_DEFINITIONS = ("'CMAKE_INTDIR=\"$(CONFIGURATION)$(EFFECTIVE_PLATFORM_NAME)\"'");
+				GCC_SYMBOLS_PRIVATE_EXTERN = NO;
+				HEADER_SEARCH_PATHS = (/Users/anatoliykuznetsov/Desktop/dev/git/BitMagic/src);
+				INSTALL_PATH = "";
+				OTHER_LDFLAGS = " ";
+				OTHER_REZFLAGS = "";
+				PRODUCT_NAME = ALL_BUILD;
+				SECTORDER_FLAGS = "";
+				SYMROOT = /Users/anatoliykuznetsov/Desktop/dev/git/BitMagic/xcode;
+				USE_HEADERMAP = NO;
+				WARNING_CFLAGS = ("-Wmost","-Wno-four-char-constants","-Wno-unknown-pragmas","$(inherited)");
+			};
+			name = Release;
+		};
+		7220EEE64CEA49B4860DF8BE /* Release */ = {
+			isa = XCBuildConfiguration;
+			buildSettings = {
+				COMBINE_HIDPI_IMAGES = YES;
+				CONFIGURATION_BUILD_DIR = /Users/anatoliykuznetsov/Desktop/dev/git/BitMagic/build/bin/Release;
+				EXECUTABLE_PREFIX = "";
+				EXECUTABLE_SUFFIX = "";
+				GCC_GENERATE_DEBUGGING_SYMBOLS = NO;
+				GCC_INLINES_ARE_PRIVATE_EXTERN = NO;
+				GCC_OPTIMIZATION_LEVEL = 3;
+				GCC_PREPROCESSOR_DEFINITIONS = ("'CMAKE_INTDIR=\"$(CONFIGURATION)$(EFFECTIVE_PLATFORM_NAME)\"'");
+				GCC_SYMBOLS_PRIVATE_EXTERN = NO;
+				HEADER_SEARCH_PATHS = (/Users/anatoliykuznetsov/Desktop/dev/git/BitMagic/src);
+				INSTALL_PATH = "";
+				LIBRARY_SEARCH_PATHS = "";
+				OTHER_CPLUSPLUSFLAGS = " -Wall -Wextra -march=core2 -msse4.2 -fPIC     -DNDEBUG '-std=gnu++11'  ";
+				OTHER_LDFLAGS = " -Wl,-search_paths_first -Wl,-headerpad_max_install_names  ";
+				OTHER_REZFLAGS = "";
+				PRODUCT_NAME = bvsample05;
+				SECTORDER_FLAGS = "";
+				SYMROOT = /Users/anatoliykuznetsov/Desktop/dev/git/BitMagic/xcode;
+				USE_HEADERMAP = NO;
+				WARNING_CFLAGS = ("-Wmost","-Wno-four-char-constants","-Wno-unknown-pragmas","$(inherited)");
+			};
+			name = Release;
+		};
+		7E70B3D3414642E1B9B131AC /* Debug */ = {
+			isa = XCBuildConfiguration;
+			buildSettings = {
+				COMBINE_HIDPI_IMAGES = YES;
+				CONFIGURATION_BUILD_DIR = /Users/anatoliykuznetsov/Desktop/dev/git/BitMagic/build/bin/Debug;
+				EXECUTABLE_PREFIX = "";
+				EXECUTABLE_SUFFIX = "";
+				GCC_GENERATE_DEBUGGING_SYMBOLS = YES;
+				GCC_INLINES_ARE_PRIVATE_EXTERN = NO;
+				GCC_OPTIMIZATION_LEVEL = 0;
+				GCC_PREPROCESSOR_DEFINITIONS = ("'CMAKE_INTDIR=\"$(CONFIGURATION)$(EFFECTIVE_PLATFORM_NAME)\"'");
+				GCC_SYMBOLS_PRIVATE_EXTERN = NO;
+				HEADER_SEARCH_PATHS = (/Users/anatoliykuznetsov/Desktop/dev/git/BitMagic/src);
+				INSTALL_PATH = "";
+				LIBRARY_SEARCH_PATHS = "";
+				OTHER_CPLUSPLUSFLAGS = " -Wall -Wextra -march=core2 -msse4.2 -fPIC    '-std=gnu++11'  ";
+				OTHER_LDFLAGS = " -Wl,-search_paths_first -Wl,-headerpad_max_install_names  ";
+				OTHER_REZFLAGS = "";
+				PRODUCT_NAME = bvsample02;
+				SECTORDER_FLAGS = "";
+				SYMROOT = /Users/anatoliykuznetsov/Desktop/dev/git/BitMagic/xcode;
+				USE_HEADERMAP = NO;
+				WARNING_CFLAGS = ("-Wmost","-Wno-four-char-constants","-Wno-unknown-pragmas","$(inherited)");
+			};
+			name = Debug;
+		};
+		7FA889DF6F8B4AC19ADDA65F /* MinSizeRel */ = {
+			isa = XCBuildConfiguration;
+			buildSettings = {
+				COMBINE_HIDPI_IMAGES = YES;
+				CONFIGURATION_BUILD_DIR = /Users/anatoliykuznetsov/Desktop/dev/git/BitMagic/build/bin/MinSizeRel;
+				EXECUTABLE_PREFIX = "";
+				EXECUTABLE_SUFFIX = "";
+				GCC_GENERATE_DEBUGGING_SYMBOLS = NO;
+				GCC_INLINES_ARE_PRIVATE_EXTERN = NO;
+				GCC_OPTIMIZATION_LEVEL = s;
+				GCC_PREPROCESSOR_DEFINITIONS = ("'CMAKE_INTDIR=\"$(CONFIGURATION)$(EFFECTIVE_PLATFORM_NAME)\"'");
+				GCC_SYMBOLS_PRIVATE_EXTERN = NO;
+				HEADER_SEARCH_PATHS = (/Users/anatoliykuznetsov/Desktop/dev/git/BitMagic/src);
+				INSTALL_PATH = "";
+				LIBRARY_SEARCH_PATHS = "";
+				OTHER_CPLUSPLUSFLAGS = " -Wall -Wextra -march=core2 -msse4.2 -fPIC     -DNDEBUG '-std=gnu++11'  ";
+				OTHER_LDFLAGS = " -Wl,-search_paths_first -Wl,-headerpad_max_install_names  ";
+				OTHER_REZFLAGS = "";
+				PRODUCT_NAME = bmsvutil;
+				SECTORDER_FLAGS = "";
+				SYMROOT = /Users/anatoliykuznetsov/Desktop/dev/git/BitMagic/xcode;
+				USE_HEADERMAP = NO;
+				WARNING_CFLAGS = ("-Wmost","-Wno-four-char-constants","-Wno-unknown-pragmas","$(inherited)");
+			};
+			name = MinSizeRel;
+		};
+		86A2C4FD8075432C86EA0AA3 /* Debug */ = {
+			isa = XCBuildConfiguration;
+			buildSettings = {
+				COMBINE_HIDPI_IMAGES = YES;
+				CONFIGURATION_BUILD_DIR = /Users/anatoliykuznetsov/Desktop/dev/git/BitMagic/build/bin/Debug;
+				EXECUTABLE_PREFIX = "";
+				EXECUTABLE_SUFFIX = "";
+				GCC_GENERATE_DEBUGGING_SYMBOLS = YES;
+				GCC_INLINES_ARE_PRIVATE_EXTERN = NO;
+				GCC_OPTIMIZATION_LEVEL = 0;
+				GCC_PREPROCESSOR_DEFINITIONS = ("'CMAKE_INTDIR=\"$(CONFIGURATION)$(EFFECTIVE_PLATFORM_NAME)\"'");
+				GCC_SYMBOLS_PRIVATE_EXTERN = NO;
+				HEADER_SEARCH_PATHS = (/Users/anatoliykuznetsov/Desktop/dev/git/BitMagic/src);
+				INSTALL_PATH = "";
+				LIBRARY_SEARCH_PATHS = "";
+				OTHER_CPLUSPLUSFLAGS = " -Wall -Wextra -march=core2 -msse4.2 -fPIC    '-std=gnu++11'  ";
+				OTHER_LDFLAGS = " -Wl,-search_paths_first -Wl,-headerpad_max_install_names  ";
+				OTHER_REZFLAGS = "";
+				PRODUCT_NAME = bvsample09;
+				SECTORDER_FLAGS = "";
+				SYMROOT = /Users/anatoliykuznetsov/Desktop/dev/git/BitMagic/xcode;
+				USE_HEADERMAP = NO;
+				WARNING_CFLAGS = ("-Wmost","-Wno-four-char-constants","-Wno-unknown-pragmas","$(inherited)");
+			};
+			name = Debug;
+		};
+		871EEA7998954F118D1B735D /* Release */ = {
+			isa = XCBuildConfiguration;
+			buildSettings = {
+				COMBINE_HIDPI_IMAGES = YES;
+				CONFIGURATION_BUILD_DIR = /Users/anatoliykuznetsov/Desktop/dev/git/BitMagic/build/bin/Release;
+				EXECUTABLE_PREFIX = "";
+				EXECUTABLE_SUFFIX = "";
+				GCC_GENERATE_DEBUGGING_SYMBOLS = NO;
+				GCC_INLINES_ARE_PRIVATE_EXTERN = NO;
+				GCC_OPTIMIZATION_LEVEL = 3;
+				GCC_PREPROCESSOR_DEFINITIONS = ("'CMAKE_INTDIR=\"$(CONFIGURATION)$(EFFECTIVE_PLATFORM_NAME)\"'");
+				GCC_SYMBOLS_PRIVATE_EXTERN = NO;
+				HEADER_SEARCH_PATHS = (/Users/anatoliykuznetsov/Desktop/dev/git/BitMagic/src);
+				INSTALL_PATH = "";
+				LIBRARY_SEARCH_PATHS = "";
+				OTHER_CPLUSPLUSFLAGS = " -Wall -Wextra -march=core2 -msse4.2 -fPIC     -DNDEBUG '-std=gnu++11'  ";
+				OTHER_LDFLAGS = " -Wl,-search_paths_first -Wl,-headerpad_max_install_names  ";
+				OTHER_REZFLAGS = "";
+				PRODUCT_NAME = svsample02;
+				SECTORDER_FLAGS = "";
+				SYMROOT = /Users/anatoliykuznetsov/Desktop/dev/git/BitMagic/xcode;
+				USE_HEADERMAP = NO;
+				WARNING_CFLAGS = ("-Wmost","-Wno-four-char-constants","-Wno-unknown-pragmas","$(inherited)");
+			};
+			name = Release;
+		};
+		89CE41828008464D865F32AF /* Debug */ = {
+			isa = XCBuildConfiguration;
+			buildSettings = {
+				COMBINE_HIDPI_IMAGES = YES;
+				CONFIGURATION_BUILD_DIR = /Users/anatoliykuznetsov/Desktop/dev/git/BitMagic/build/bin/Debug;
+				EXECUTABLE_PREFIX = "";
+				EXECUTABLE_SUFFIX = "";
+				GCC_GENERATE_DEBUGGING_SYMBOLS = YES;
+				GCC_INLINES_ARE_PRIVATE_EXTERN = NO;
+				GCC_OPTIMIZATION_LEVEL = 0;
+				GCC_PREPROCESSOR_DEFINITIONS = ("'CMAKE_INTDIR=\"$(CONFIGURATION)$(EFFECTIVE_PLATFORM_NAME)\"'");
+				GCC_SYMBOLS_PRIVATE_EXTERN = NO;
+				HEADER_SEARCH_PATHS = (/Users/anatoliykuznetsov/Desktop/dev/git/BitMagic/src);
+				INSTALL_PATH = "";
+				LIBRARY_SEARCH_PATHS = "";
+				OTHER_CPLUSPLUSFLAGS = " -Wall -Wextra -march=core2 -msse4.2 -fPIC    '-std=gnu++11'  ";
+				OTHER_LDFLAGS = " -Wl,-search_paths_first -Wl,-headerpad_max_install_names  ";
+				OTHER_REZFLAGS = "";
+				PRODUCT_NAME = bvsample01;
+				SECTORDER_FLAGS = "";
+				SYMROOT = /Users/anatoliykuznetsov/Desktop/dev/git/BitMagic/xcode;
+				USE_HEADERMAP = NO;
+				WARNING_CFLAGS = ("-Wmost","-Wno-four-char-constants","-Wno-unknown-pragmas","$(inherited)");
+			};
+			name = Debug;
+		};
+		931FAA38BF374196ABD40ECA /* RelWithDebInfo */ = {
+			isa = XCBuildConfiguration;
+			buildSettings = {
+				COMBINE_HIDPI_IMAGES = YES;
+				CONFIGURATION_BUILD_DIR = /Users/anatoliykuznetsov/Desktop/dev/git/BitMagic/build/bin/RelWithDebInfo;
+				EXECUTABLE_PREFIX = "";
+				EXECUTABLE_SUFFIX = "";
+				GCC_GENERATE_DEBUGGING_SYMBOLS = YES;
+				GCC_INLINES_ARE_PRIVATE_EXTERN = NO;
+				GCC_OPTIMIZATION_LEVEL = 2;
+				GCC_PREPROCESSOR_DEFINITIONS = ("'CMAKE_INTDIR=\"$(CONFIGURATION)$(EFFECTIVE_PLATFORM_NAME)\"'");
+				GCC_SYMBOLS_PRIVATE_EXTERN = NO;
+				HEADER_SEARCH_PATHS = (/Users/anatoliykuznetsov/Desktop/dev/git/BitMagic/src);
+				INSTALL_PATH = "";
+				LIBRARY_SEARCH_PATHS = "";
+				OTHER_CPLUSPLUSFLAGS = " -Wall -Wextra -march=core2 -msse4.2 -fPIC        -DNDEBUG '-std=gnu++11'  ";
+				OTHER_LDFLAGS = " -Wl,-search_paths_first -Wl,-headerpad_max_install_names  ";
+				OTHER_REZFLAGS = "";
+				PRODUCT_NAME = bvsample05;
+				SECTORDER_FLAGS = "";
+				SYMROOT = /Users/anatoliykuznetsov/Desktop/dev/git/BitMagic/xcode;
+				USE_HEADERMAP = NO;
+				WARNING_CFLAGS = ("-Wmost","-Wno-four-char-constants","-Wno-unknown-pragmas","$(inherited)");
+			};
+			name = RelWithDebInfo;
+		};
+		94133F4A8B16461489E15FF1 /* MinSizeRel */ = {
+			isa = XCBuildConfiguration;
+			buildSettings = {
+				COMBINE_HIDPI_IMAGES = YES;
+				CONFIGURATION_BUILD_DIR = /Users/anatoliykuznetsov/Desktop/dev/git/BitMagic/build/bin/MinSizeRel;
+				EXECUTABLE_PREFIX = "";
+				EXECUTABLE_SUFFIX = "";
+				GCC_GENERATE_DEBUGGING_SYMBOLS = NO;
+				GCC_INLINES_ARE_PRIVATE_EXTERN = NO;
+				GCC_OPTIMIZATION_LEVEL = s;
+				GCC_PREPROCESSOR_DEFINITIONS = ("'CMAKE_INTDIR=\"$(CONFIGURATION)$(EFFECTIVE_PLATFORM_NAME)\"'");
+				GCC_SYMBOLS_PRIVATE_EXTERN = NO;
+				HEADER_SEARCH_PATHS = (/Users/anatoliykuznetsov/Desktop/dev/git/BitMagic/src);
+				INSTALL_PATH = "";
+				LIBRARY_SEARCH_PATHS = "";
+				OTHER_CPLUSPLUSFLAGS = " -Wall -Wextra -march=core2 -msse4.2 -fPIC     -DNDEBUG '-std=gnu++11'  ";
+				OTHER_LDFLAGS = " -Wl,-search_paths_first -Wl,-headerpad_max_install_names  ";
+				OTHER_REZFLAGS = "";
+				PRODUCT_NAME = bvsample06;
+				SECTORDER_FLAGS = "";
+				SYMROOT = /Users/anatoliykuznetsov/Desktop/dev/git/BitMagic/xcode;
+				USE_HEADERMAP = NO;
+				WARNING_CFLAGS = ("-Wmost","-Wno-four-char-constants","-Wno-unknown-pragmas","$(inherited)");
+			};
+			name = MinSizeRel;
+		};
+		94EE2ABB5B3A47DA8B5F0957 /* MinSizeRel */ = {
+			isa = XCBuildConfiguration;
+			buildSettings = {
+				COMBINE_HIDPI_IMAGES = YES;
+				CONFIGURATION_BUILD_DIR = /Users/anatoliykuznetsov/Desktop/dev/git/BitMagic/build/bin/MinSizeRel;
+				EXECUTABLE_PREFIX = "";
+				EXECUTABLE_SUFFIX = "";
+				GCC_GENERATE_DEBUGGING_SYMBOLS = NO;
+				GCC_INLINES_ARE_PRIVATE_EXTERN = NO;
+				GCC_OPTIMIZATION_LEVEL = s;
+				GCC_PREPROCESSOR_DEFINITIONS = ("'CMAKE_INTDIR=\"$(CONFIGURATION)$(EFFECTIVE_PLATFORM_NAME)\"'");
+				GCC_SYMBOLS_PRIVATE_EXTERN = NO;
+				HEADER_SEARCH_PATHS = (/Users/anatoliykuznetsov/Desktop/dev/git/BitMagic/src);
+				INSTALL_PATH = "";
+				LIBRARY_SEARCH_PATHS = "";
+				OTHER_CPLUSPLUSFLAGS = " -Wall -Wextra -march=core2 -msse4.2 -fPIC     -DNDEBUG '-std=gnu++11'  ";
+				OTHER_LDFLAGS = " -Wl,-search_paths_first -Wl,-headerpad_max_install_names  ";
+				OTHER_REZFLAGS = "";
+				PRODUCT_NAME = bvsample04;
+				SECTORDER_FLAGS = "";
+				SYMROOT = /Users/anatoliykuznetsov/Desktop/dev/git/BitMagic/xcode;
+				USE_HEADERMAP = NO;
+				WARNING_CFLAGS = ("-Wmost","-Wno-four-char-constants","-Wno-unknown-pragmas","$(inherited)");
+			};
+			name = MinSizeRel;
+		};
+		99F5A948E8D142099CF54538 /* Debug */ = {
+			isa = XCBuildConfiguration;
+			buildSettings = {
+				COMBINE_HIDPI_IMAGES = YES;
+				GCC_GENERATE_DEBUGGING_SYMBOLS = YES;
+				GCC_INLINES_ARE_PRIVATE_EXTERN = NO;
+				GCC_OPTIMIZATION_LEVEL = 0;
+				GCC_PREPROCESSOR_DEFINITIONS = ("'CMAKE_INTDIR=\"$(CONFIGURATION)$(EFFECTIVE_PLATFORM_NAME)\"'");
+				GCC_SYMBOLS_PRIVATE_EXTERN = NO;
+				HEADER_SEARCH_PATHS = (/Users/anatoliykuznetsov/Desktop/dev/git/BitMagic/src);
+				INSTALL_PATH = "";
+				OTHER_LDFLAGS = " ";
+				OTHER_REZFLAGS = "";
+				PRODUCT_NAME = ZERO_CHECK;
+				SECTORDER_FLAGS = "";
+				SYMROOT = /Users/anatoliykuznetsov/Desktop/dev/git/BitMagic/xcode;
+				USE_HEADERMAP = NO;
+				WARNING_CFLAGS = ("-Wmost","-Wno-four-char-constants","-Wno-unknown-pragmas","$(inherited)");
+			};
+			name = Debug;
+		};
+		9F4130BE746D414181773097 /* Debug */ = {
+			isa = XCBuildConfiguration;
+			buildSettings = {
+				COMBINE_HIDPI_IMAGES = YES;
+				CONFIGURATION_BUILD_DIR = /Users/anatoliykuznetsov/Desktop/dev/git/BitMagic/build/bin/Debug;
+				EXECUTABLE_PREFIX = "";
+				EXECUTABLE_SUFFIX = "";
+				GCC_GENERATE_DEBUGGING_SYMBOLS = YES;
+				GCC_INLINES_ARE_PRIVATE_EXTERN = NO;
+				GCC_OPTIMIZATION_LEVEL = 0;
+				GCC_PREPROCESSOR_DEFINITIONS = ("'CMAKE_INTDIR=\"$(CONFIGURATION)$(EFFECTIVE_PLATFORM_NAME)\"'");
+				GCC_SYMBOLS_PRIVATE_EXTERN = NO;
+				HEADER_SEARCH_PATHS = (/Users/anatoliykuznetsov/Desktop/dev/git/BitMagic/src);
+				INSTALL_PATH = "";
+				LIBRARY_SEARCH_PATHS = "";
+				OTHER_CPLUSPLUSFLAGS = " -Wall -Wextra -march=core2 -msse4.2 -fPIC    '-std=gnu++11'  ";
+				OTHER_LDFLAGS = " -Wl,-search_paths_first -Wl,-headerpad_max_install_names  ";
+				OTHER_REZFLAGS = "";
+				PRODUCT_NAME = bmtest;
+				SECTORDER_FLAGS = "";
+				SYMROOT = /Users/anatoliykuznetsov/Desktop/dev/git/BitMagic/xcode;
+				USE_HEADERMAP = NO;
+				WARNING_CFLAGS = ("-Wmost","-Wno-four-char-constants","-Wno-unknown-pragmas","$(inherited)");
+			};
+			name = Debug;
+		};
+		A059A2E39B0243A086A0BAFE /* RelWithDebInfo */ = {
+			isa = XCBuildConfiguration;
+			buildSettings = {
+				COMBINE_HIDPI_IMAGES = YES;
+				CONFIGURATION_BUILD_DIR = /Users/anatoliykuznetsov/Desktop/dev/git/BitMagic/build/bin/RelWithDebInfo;
+				EXECUTABLE_PREFIX = "";
+				EXECUTABLE_SUFFIX = "";
+				GCC_GENERATE_DEBUGGING_SYMBOLS = YES;
+				GCC_INLINES_ARE_PRIVATE_EXTERN = NO;
+				GCC_OPTIMIZATION_LEVEL = 2;
+				GCC_PREPROCESSOR_DEFINITIONS = ("'CMAKE_INTDIR=\"$(CONFIGURATION)$(EFFECTIVE_PLATFORM_NAME)\"'");
+				GCC_SYMBOLS_PRIVATE_EXTERN = NO;
+				HEADER_SEARCH_PATHS = (/Users/anatoliykuznetsov/Desktop/dev/git/BitMagic/src);
+				INSTALL_PATH = "";
+				LIBRARY_SEARCH_PATHS = "";
+				OTHER_CPLUSPLUSFLAGS = " -Wall -Wextra -march=core2 -msse4.2 -fPIC        -DNDEBUG '-std=gnu++11'  ";
+				OTHER_LDFLAGS = " -Wl,-search_paths_first -Wl,-headerpad_max_install_names  ";
+				OTHER_REZFLAGS = "";
+				PRODUCT_NAME = bvsample09;
+				SECTORDER_FLAGS = "";
+				SYMROOT = /Users/anatoliykuznetsov/Desktop/dev/git/BitMagic/xcode;
+				USE_HEADERMAP = NO;
+				WARNING_CFLAGS = ("-Wmost","-Wno-four-char-constants","-Wno-unknown-pragmas","$(inherited)");
+			};
+			name = RelWithDebInfo;
+		};
+		A110D26F015644CA991070BD /* MinSizeRel */ = {
+			isa = XCBuildConfiguration;
+			buildSettings = {
+				COMBINE_HIDPI_IMAGES = YES;
+				CONFIGURATION_BUILD_DIR = /Users/anatoliykuznetsov/Desktop/dev/git/BitMagic/build/bin/MinSizeRel;
+				EXECUTABLE_PREFIX = "";
+				EXECUTABLE_SUFFIX = "";
+				GCC_GENERATE_DEBUGGING_SYMBOLS = NO;
+				GCC_INLINES_ARE_PRIVATE_EXTERN = NO;
+				GCC_OPTIMIZATION_LEVEL = s;
+				GCC_PREPROCESSOR_DEFINITIONS = ("'CMAKE_INTDIR=\"$(CONFIGURATION)$(EFFECTIVE_PLATFORM_NAME)\"'");
+				GCC_SYMBOLS_PRIVATE_EXTERN = NO;
+				HEADER_SEARCH_PATHS = (/Users/anatoliykuznetsov/Desktop/dev/git/BitMagic/src);
+				INSTALL_PATH = "";
+				LIBRARY_SEARCH_PATHS = "";
+				OTHER_CPLUSPLUSFLAGS = " -Wall -Wextra -march=core2 -msse4.2 -fPIC     -DNDEBUG '-std=gnu++11'  ";
+				OTHER_LDFLAGS = " -Wl,-search_paths_first -Wl,-headerpad_max_install_names  ";
+				OTHER_REZFLAGS = "";
+				PRODUCT_NAME = bvsample05;
+				SECTORDER_FLAGS = "";
+				SYMROOT = /Users/anatoliykuznetsov/Desktop/dev/git/BitMagic/xcode;
+				USE_HEADERMAP = NO;
+				WARNING_CFLAGS = ("-Wmost","-Wno-four-char-constants","-Wno-unknown-pragmas","$(inherited)");
+			};
+			name = MinSizeRel;
+		};
+		A32237C29A024C7E93F45B0D /* RelWithDebInfo */ = {
+			isa = XCBuildConfiguration;
+			buildSettings = {
+				COMBINE_HIDPI_IMAGES = YES;
+				CONFIGURATION_BUILD_DIR = /Users/anatoliykuznetsov/Desktop/dev/git/BitMagic/build/bin/RelWithDebInfo;
+				EXECUTABLE_PREFIX = "";
+				EXECUTABLE_SUFFIX = "";
+				GCC_GENERATE_DEBUGGING_SYMBOLS = YES;
+				GCC_INLINES_ARE_PRIVATE_EXTERN = NO;
+				GCC_OPTIMIZATION_LEVEL = 2;
+				GCC_PREPROCESSOR_DEFINITIONS = ("'CMAKE_INTDIR=\"$(CONFIGURATION)$(EFFECTIVE_PLATFORM_NAME)\"'");
+				GCC_SYMBOLS_PRIVATE_EXTERN = NO;
+				HEADER_SEARCH_PATHS = (/Users/anatoliykuznetsov/Desktop/dev/git/BitMagic/src);
+				INSTALL_PATH = "";
+				LIBRARY_SEARCH_PATHS = "";
+				OTHER_CPLUSPLUSFLAGS = " -Wall -Wextra -march=core2 -msse4.2 -fPIC        -DNDEBUG '-std=gnu++11'  ";
+				OTHER_LDFLAGS = " -Wl,-search_paths_first -Wl,-headerpad_max_install_names  ";
+				OTHER_REZFLAGS = "";
+				PRODUCT_NAME = svsample03;
+				SECTORDER_FLAGS = "";
+				SYMROOT = /Users/anatoliykuznetsov/Desktop/dev/git/BitMagic/xcode;
+				USE_HEADERMAP = NO;
+				WARNING_CFLAGS = ("-Wmost","-Wno-four-char-constants","-Wno-unknown-pragmas","$(inherited)");
+			};
+			name = RelWithDebInfo;
+		};
+		A6DDC39E7A8846A7AEEA3CC5 /* Release */ = {
+			isa = XCBuildConfiguration;
+			buildSettings = {
+				COMBINE_HIDPI_IMAGES = YES;
+				CONFIGURATION_BUILD_DIR = /Users/anatoliykuznetsov/Desktop/dev/git/BitMagic/build/bin/Release;
+				EXECUTABLE_PREFIX = "";
+				EXECUTABLE_SUFFIX = "";
+				GCC_GENERATE_DEBUGGING_SYMBOLS = NO;
+				GCC_INLINES_ARE_PRIVATE_EXTERN = NO;
+				GCC_OPTIMIZATION_LEVEL = 3;
+				GCC_PREPROCESSOR_DEFINITIONS = ("'CMAKE_INTDIR=\"$(CONFIGURATION)$(EFFECTIVE_PLATFORM_NAME)\"'");
+				GCC_SYMBOLS_PRIVATE_EXTERN = NO;
+				HEADER_SEARCH_PATHS = (/Users/anatoliykuznetsov/Desktop/dev/git/BitMagic/src);
+				INSTALL_PATH = "";
+				LIBRARY_SEARCH_PATHS = "";
+				OTHER_CPLUSPLUSFLAGS = " -Wall -Wextra -march=core2 -msse4.2 -fPIC     -DNDEBUG '-std=gnu++11'  ";
+				OTHER_LDFLAGS = " -Wl,-search_paths_first -Wl,-headerpad_max_install_names  ";
+				OTHER_REZFLAGS = "";
+				PRODUCT_NAME = bvsample02;
+				SECTORDER_FLAGS = "";
+				SYMROOT = /Users/anatoliykuznetsov/Desktop/dev/git/BitMagic/xcode;
+				USE_HEADERMAP = NO;
+				WARNING_CFLAGS = ("-Wmost","-Wno-four-char-constants","-Wno-unknown-pragmas","$(inherited)");
+			};
+			name = Release;
+		};
+		A83D001872194CF79813A2D8 /* RelWithDebInfo */ = {
+			isa = XCBuildConfiguration;
+			buildSettings = {
+				COMBINE_HIDPI_IMAGES = YES;
+				CONFIGURATION_BUILD_DIR = /Users/anatoliykuznetsov/Desktop/dev/git/BitMagic/build/bin/RelWithDebInfo;
+				EXECUTABLE_PREFIX = "";
+				EXECUTABLE_SUFFIX = "";
+				GCC_GENERATE_DEBUGGING_SYMBOLS = YES;
+				GCC_INLINES_ARE_PRIVATE_EXTERN = NO;
+				GCC_OPTIMIZATION_LEVEL = 2;
+				GCC_PREPROCESSOR_DEFINITIONS = ("'CMAKE_INTDIR=\"$(CONFIGURATION)$(EFFECTIVE_PLATFORM_NAME)\"'");
+				GCC_SYMBOLS_PRIVATE_EXTERN = NO;
+				HEADER_SEARCH_PATHS = (/Users/anatoliykuznetsov/Desktop/dev/git/BitMagic/src);
+				INSTALL_PATH = "";
+				LIBRARY_SEARCH_PATHS = "";
+				OTHER_CPLUSPLUSFLAGS = " -Wall -Wextra -march=core2 -msse4.2 -fPIC        -DNDEBUG '-std=gnu++11'  ";
+				OTHER_LDFLAGS = " -Wl,-search_paths_first -Wl,-headerpad_max_install_names  ";
+				OTHER_REZFLAGS = "";
+				PRODUCT_NAME = svsample02;
+				SECTORDER_FLAGS = "";
+				SYMROOT = /Users/anatoliykuznetsov/Desktop/dev/git/BitMagic/xcode;
+				USE_HEADERMAP = NO;
+				WARNING_CFLAGS = ("-Wmost","-Wno-four-char-constants","-Wno-unknown-pragmas","$(inherited)");
+			};
+			name = RelWithDebInfo;
+		};
+		AB412C262EDB4A87840F93DE /* Debug */ = {
+			isa = XCBuildConfiguration;
+			buildSettings = {
+				COMBINE_HIDPI_IMAGES = YES;
+				CONFIGURATION_BUILD_DIR = /Users/anatoliykuznetsov/Desktop/dev/git/BitMagic/build/bin/Debug;
+				EXECUTABLE_PREFIX = "";
+				EXECUTABLE_SUFFIX = "";
+				GCC_GENERATE_DEBUGGING_SYMBOLS = YES;
+				GCC_INLINES_ARE_PRIVATE_EXTERN = NO;
+				GCC_OPTIMIZATION_LEVEL = 0;
+				GCC_PREPROCESSOR_DEFINITIONS = ("'CMAKE_INTDIR=\"$(CONFIGURATION)$(EFFECTIVE_PLATFORM_NAME)\"'");
+				GCC_SYMBOLS_PRIVATE_EXTERN = NO;
+				HEADER_SEARCH_PATHS = (/Users/anatoliykuznetsov/Desktop/dev/git/BitMagic/src);
+				INSTALL_PATH = "";
+				LIBRARY_SEARCH_PATHS = "";
+				OTHER_CPLUSPLUSFLAGS = " -Wall -Wextra -march=core2 -msse4.2 -fPIC    '-std=gnu++11'  ";
+				OTHER_LDFLAGS = " -Wl,-search_paths_first -Wl,-headerpad_max_install_names  ";
+				OTHER_REZFLAGS = "";
+				PRODUCT_NAME = svsample03;
+				SECTORDER_FLAGS = "";
+				SYMROOT = /Users/anatoliykuznetsov/Desktop/dev/git/BitMagic/xcode;
+				USE_HEADERMAP = NO;
+				WARNING_CFLAGS = ("-Wmost","-Wno-four-char-constants","-Wno-unknown-pragmas","$(inherited)");
+			};
+			name = Debug;
+		};
+		B484127CAA134B9390A825E0 /* RelWithDebInfo */ = {
+			isa = XCBuildConfiguration;
+			buildSettings = {
+				COMBINE_HIDPI_IMAGES = YES;
+				CONFIGURATION_BUILD_DIR = /Users/anatoliykuznetsov/Desktop/dev/git/BitMagic/build/bin/RelWithDebInfo;
+				EXECUTABLE_PREFIX = "";
+				EXECUTABLE_SUFFIX = "";
+				GCC_GENERATE_DEBUGGING_SYMBOLS = YES;
+				GCC_INLINES_ARE_PRIVATE_EXTERN = NO;
+				GCC_OPTIMIZATION_LEVEL = 2;
+				GCC_PREPROCESSOR_DEFINITIONS = ("'CMAKE_INTDIR=\"$(CONFIGURATION)$(EFFECTIVE_PLATFORM_NAME)\"'");
+				GCC_SYMBOLS_PRIVATE_EXTERN = NO;
+				HEADER_SEARCH_PATHS = (/Users/anatoliykuznetsov/Desktop/dev/git/BitMagic/src);
+				INSTALL_PATH = "";
+				LIBRARY_SEARCH_PATHS = "";
+				OTHER_CPLUSPLUSFLAGS = " -Wall -Wextra -march=core2 -msse4.2 -fPIC        -DNDEBUG '-std=gnu++11'  ";
+				OTHER_LDFLAGS = " -Wl,-search_paths_first -Wl,-headerpad_max_install_names  ";
+				OTHER_REZFLAGS = "";
+				PRODUCT_NAME = bvsample02;
+				SECTORDER_FLAGS = "";
+				SYMROOT = /Users/anatoliykuznetsov/Desktop/dev/git/BitMagic/xcode;
+				USE_HEADERMAP = NO;
+				WARNING_CFLAGS = ("-Wmost","-Wno-four-char-constants","-Wno-unknown-pragmas","$(inherited)");
+			};
+			name = RelWithDebInfo;
+		};
+		B48AD814AEA04EA19630556D /* RelWithDebInfo */ = {
+			isa = XCBuildConfiguration;
+			buildSettings = {
+				COMBINE_HIDPI_IMAGES = YES;
+				CONFIGURATION_BUILD_DIR = /Users/anatoliykuznetsov/Desktop/dev/git/BitMagic/build/bin/RelWithDebInfo;
+				EXECUTABLE_PREFIX = "";
+				EXECUTABLE_SUFFIX = "";
+				GCC_GENERATE_DEBUGGING_SYMBOLS = YES;
+				GCC_INLINES_ARE_PRIVATE_EXTERN = NO;
+				GCC_OPTIMIZATION_LEVEL = 2;
+				GCC_PREPROCESSOR_DEFINITIONS = ("'CMAKE_INTDIR=\"$(CONFIGURATION)$(EFFECTIVE_PLATFORM_NAME)\"'");
+				GCC_SYMBOLS_PRIVATE_EXTERN = NO;
+				HEADER_SEARCH_PATHS = (/Users/anatoliykuznetsov/Desktop/dev/git/BitMagic/src);
+				INSTALL_PATH = "";
+				LIBRARY_SEARCH_PATHS = "";
+				OTHER_CPLUSPLUSFLAGS = " -Wall -Wextra -march=core2 -msse4.2 -fPIC        -DNDEBUG '-std=gnu++11'  ";
+				OTHER_LDFLAGS = " -Wl,-search_paths_first -Wl,-headerpad_max_install_names  ";
+				OTHER_REZFLAGS = "";
+				PRODUCT_NAME = bvsample10;
+				SECTORDER_FLAGS = "";
+				SYMROOT = /Users/anatoliykuznetsov/Desktop/dev/git/BitMagic/xcode;
+				USE_HEADERMAP = NO;
+				WARNING_CFLAGS = ("-Wmost","-Wno-four-char-constants","-Wno-unknown-pragmas","$(inherited)");
+			};
+			name = RelWithDebInfo;
+		};
+		B700DA391BAB4E0EA84C0F7C /* Debug */ = {
+			isa = XCBuildConfiguration;
+			buildSettings = {
+				COMBINE_HIDPI_IMAGES = YES;
+				CONFIGURATION_BUILD_DIR = /Users/anatoliykuznetsov/Desktop/dev/git/BitMagic/build/bin/Debug;
+				EXECUTABLE_PREFIX = "";
+				EXECUTABLE_SUFFIX = "";
+				GCC_GENERATE_DEBUGGING_SYMBOLS = YES;
+				GCC_INLINES_ARE_PRIVATE_EXTERN = NO;
+				GCC_OPTIMIZATION_LEVEL = 0;
+				GCC_PREPROCESSOR_DEFINITIONS = ("'CMAKE_INTDIR=\"$(CONFIGURATION)$(EFFECTIVE_PLATFORM_NAME)\"'");
+				GCC_SYMBOLS_PRIVATE_EXTERN = NO;
+				HEADER_SEARCH_PATHS = (/Users/anatoliykuznetsov/Desktop/dev/git/BitMagic/src);
+				INSTALL_PATH = "";
+				LIBRARY_SEARCH_PATHS = "";
+				OTHER_CPLUSPLUSFLAGS = " -Wall -Wextra -march=core2 -msse4.2 -fPIC    '-std=gnu++11'  ";
+				OTHER_LDFLAGS = " -Wl,-search_paths_first -Wl,-headerpad_max_install_names  ";
+				OTHER_REZFLAGS = "";
+				PRODUCT_NAME = bmperf;
+				SECTORDER_FLAGS = "";
+				SYMROOT = /Users/anatoliykuznetsov/Desktop/dev/git/BitMagic/xcode;
+				USE_HEADERMAP = NO;
+				WARNING_CFLAGS = ("-Wmost","-Wno-four-char-constants","-Wno-unknown-pragmas","$(inherited)");
+			};
+			name = Debug;
+		};
+		B8ECC92AF4EA4AE0BE7C5EA2 /* Debug */ = {
+			isa = XCBuildConfiguration;
+			buildSettings = {
+				COMBINE_HIDPI_IMAGES = YES;
+				CONFIGURATION_BUILD_DIR = /Users/anatoliykuznetsov/Desktop/dev/git/BitMagic/build/bin/Debug;
+				EXECUTABLE_PREFIX = "";
+				EXECUTABLE_SUFFIX = "";
+				GCC_GENERATE_DEBUGGING_SYMBOLS = YES;
+				GCC_INLINES_ARE_PRIVATE_EXTERN = NO;
+				GCC_OPTIMIZATION_LEVEL = 0;
+				GCC_PREPROCESSOR_DEFINITIONS = ("'CMAKE_INTDIR=\"$(CONFIGURATION)$(EFFECTIVE_PLATFORM_NAME)\"'");
+				GCC_SYMBOLS_PRIVATE_EXTERN = NO;
+				HEADER_SEARCH_PATHS = (/Users/anatoliykuznetsov/Desktop/dev/git/BitMagic/src);
+				INSTALL_PATH = "";
+				LIBRARY_SEARCH_PATHS = "";
+				OTHER_CPLUSPLUSFLAGS = " -Wall -Wextra -march=core2 -msse4.2 -fPIC    '-std=gnu++11'  ";
+				OTHER_LDFLAGS = " -Wl,-search_paths_first -Wl,-headerpad_max_install_names  ";
+				OTHER_REZFLAGS = "";
+				PRODUCT_NAME = bvsample04;
+				SECTORDER_FLAGS = "";
+				SYMROOT = /Users/anatoliykuznetsov/Desktop/dev/git/BitMagic/xcode;
+				USE_HEADERMAP = NO;
+				WARNING_CFLAGS = ("-Wmost","-Wno-four-char-constants","-Wno-unknown-pragmas","$(inherited)");
+			};
+			name = Debug;
+		};
+		C4109862FD84402ABC4489BC /* Debug */ = {
+			isa = XCBuildConfiguration;
+			buildSettings = {
+				COMBINE_HIDPI_IMAGES = YES;
+				CONFIGURATION_BUILD_DIR = /Users/anatoliykuznetsov/Desktop/dev/git/BitMagic/build/bin/Debug;
+				EXECUTABLE_PREFIX = "";
+				EXECUTABLE_SUFFIX = "";
+				GCC_GENERATE_DEBUGGING_SYMBOLS = YES;
+				GCC_INLINES_ARE_PRIVATE_EXTERN = NO;
+				GCC_OPTIMIZATION_LEVEL = 0;
+				GCC_PREPROCESSOR_DEFINITIONS = ("'CMAKE_INTDIR=\"$(CONFIGURATION)$(EFFECTIVE_PLATFORM_NAME)\"'");
+				GCC_SYMBOLS_PRIVATE_EXTERN = NO;
+				HEADER_SEARCH_PATHS = (/Users/anatoliykuznetsov/Desktop/dev/git/BitMagic/src);
+				INSTALL_PATH = "";
+				LIBRARY_SEARCH_PATHS = "";
+				OTHER_CPLUSPLUSFLAGS = " -Wall -Wextra -march=core2 -msse4.2 -fPIC    '-std=gnu++11'  ";
+				OTHER_LDFLAGS = " -Wl,-search_paths_first -Wl,-headerpad_max_install_names  ";
+				OTHER_REZFLAGS = "";
+				PRODUCT_NAME = bvsample10;
+				SECTORDER_FLAGS = "";
+				SYMROOT = /Users/anatoliykuznetsov/Desktop/dev/git/BitMagic/xcode;
+				USE_HEADERMAP = NO;
+				WARNING_CFLAGS = ("-Wmost","-Wno-four-char-constants","-Wno-unknown-pragmas","$(inherited)");
+			};
+			name = Debug;
+		};
+		C84C4E3FD27545ABB9894B02 /* Debug */ = {
+			isa = XCBuildConfiguration;
+			buildSettings = {
+				COMBINE_HIDPI_IMAGES = YES;
+				CONFIGURATION_BUILD_DIR = /Users/anatoliykuznetsov/Desktop/dev/git/BitMagic/build/bin/Debug;
+				EXECUTABLE_PREFIX = "";
+				EXECUTABLE_SUFFIX = "";
+				GCC_GENERATE_DEBUGGING_SYMBOLS = YES;
+				GCC_INLINES_ARE_PRIVATE_EXTERN = NO;
+				GCC_OPTIMIZATION_LEVEL = 0;
+				GCC_PREPROCESSOR_DEFINITIONS = ("'CMAKE_INTDIR=\"$(CONFIGURATION)$(EFFECTIVE_PLATFORM_NAME)\"'");
+				GCC_SYMBOLS_PRIVATE_EXTERN = NO;
+				HEADER_SEARCH_PATHS = (/Users/anatoliykuznetsov/Desktop/dev/git/BitMagic/src);
+				INSTALL_PATH = "";
+				LIBRARY_SEARCH_PATHS = "";
+				OTHER_CPLUSPLUSFLAGS = " -Wall -Wextra -march=core2 -msse4.2 -fPIC    '-std=gnu++11'  ";
+				OTHER_LDFLAGS = " -Wl,-search_paths_first -Wl,-headerpad_max_install_names  ";
+				OTHER_REZFLAGS = "";
+				PRODUCT_NAME = bvsample06;
+				SECTORDER_FLAGS = "";
+				SYMROOT = /Users/anatoliykuznetsov/Desktop/dev/git/BitMagic/xcode;
+				USE_HEADERMAP = NO;
+				WARNING_CFLAGS = ("-Wmost","-Wno-four-char-constants","-Wno-unknown-pragmas","$(inherited)");
+			};
+			name = Debug;
+		};
+		CB3FB5F9A80446BA8AC9748D /* Debug */ = {
+			isa = XCBuildConfiguration;
+			buildSettings = {
+				COMBINE_HIDPI_IMAGES = YES;
+				CONFIGURATION_BUILD_DIR = /Users/anatoliykuznetsov/Desktop/dev/git/BitMagic/build/bin/Debug;
+				EXECUTABLE_PREFIX = "";
+				EXECUTABLE_SUFFIX = "";
+				GCC_GENERATE_DEBUGGING_SYMBOLS = YES;
+				GCC_INLINES_ARE_PRIVATE_EXTERN = NO;
+				GCC_OPTIMIZATION_LEVEL = 0;
+				GCC_PREPROCESSOR_DEFINITIONS = ("'CMAKE_INTDIR=\"$(CONFIGURATION)$(EFFECTIVE_PLATFORM_NAME)\"'");
+				GCC_SYMBOLS_PRIVATE_EXTERN = NO;
+				HEADER_SEARCH_PATHS = (/Users/anatoliykuznetsov/Desktop/dev/git/BitMagic/src);
+				INSTALL_PATH = "";
+				LIBRARY_SEARCH_PATHS = "";
+				OTHER_CPLUSPLUSFLAGS = " -Wall -Wextra -march=core2 -msse4.2 -fPIC    '-std=gnu++11'  ";
+				OTHER_LDFLAGS = " -Wl,-search_paths_first -Wl,-headerpad_max_install_names  ";
+				OTHER_REZFLAGS = "";
+				PRODUCT_NAME = svsample01;
+				SECTORDER_FLAGS = "";
+				SYMROOT = /Users/anatoliykuznetsov/Desktop/dev/git/BitMagic/xcode;
+				USE_HEADERMAP = NO;
+				WARNING_CFLAGS = ("-Wmost","-Wno-four-char-constants","-Wno-unknown-pragmas","$(inherited)");
+			};
+			name = Debug;
+		};
+		D42056E0430A4602A549D41D /* RelWithDebInfo */ = {
+			isa = XCBuildConfiguration;
+			buildSettings = {
+				COMBINE_HIDPI_IMAGES = YES;
+				CONFIGURATION_BUILD_DIR = /Users/anatoliykuznetsov/Desktop/dev/git/BitMagic/build/bin/RelWithDebInfo;
+				EXECUTABLE_PREFIX = "";
+				EXECUTABLE_SUFFIX = "";
+				GCC_GENERATE_DEBUGGING_SYMBOLS = YES;
+				GCC_INLINES_ARE_PRIVATE_EXTERN = NO;
+				GCC_OPTIMIZATION_LEVEL = 2;
+				GCC_PREPROCESSOR_DEFINITIONS = ("'CMAKE_INTDIR=\"$(CONFIGURATION)$(EFFECTIVE_PLATFORM_NAME)\"'");
+				GCC_SYMBOLS_PRIVATE_EXTERN = NO;
+				HEADER_SEARCH_PATHS = (/Users/anatoliykuznetsov/Desktop/dev/git/BitMagic/src);
+				INSTALL_PATH = "";
+				LIBRARY_SEARCH_PATHS = "";
+				OTHER_CPLUSPLUSFLAGS = " -Wall -Wextra -march=core2 -msse4.2 -fPIC        -DNDEBUG '-std=gnu++11'  ";
+				OTHER_LDFLAGS = " -Wl,-search_paths_first -Wl,-headerpad_max_install_names  ";
+				OTHER_REZFLAGS = "";
+				PRODUCT_NAME = svsample01;
+				SECTORDER_FLAGS = "";
+				SYMROOT = /Users/anatoliykuznetsov/Desktop/dev/git/BitMagic/xcode;
+				USE_HEADERMAP = NO;
+				WARNING_CFLAGS = ("-Wmost","-Wno-four-char-constants","-Wno-unknown-pragmas","$(inherited)");
+			};
+			name = RelWithDebInfo;
+		};
+		D58AA81B323D4B1A9D118CEC /* Debug */ = {
+			isa = XCBuildConfiguration;
+			buildSettings = {
+				ONLY_ACTIVE_ARCH = YES;
+				SDKROOT = /Applications/Xcode.app/Contents/Developer/Platforms/MacOSX.platform/Developer/SDKs/MacOSX10.12.sdk;
+				SYMROOT = /Users/anatoliykuznetsov/Desktop/dev/git/BitMagic/xcode/build;
+			};
+			name = Debug;
+		};
+		D6BDB512D97A46F6AC6583C0 /* MinSizeRel */ = {
+			isa = XCBuildConfiguration;
+			buildSettings = {
+				COMBINE_HIDPI_IMAGES = YES;
+				CONFIGURATION_BUILD_DIR = /Users/anatoliykuznetsov/Desktop/dev/git/BitMagic/build/bin/MinSizeRel;
+				EXECUTABLE_PREFIX = "";
+				EXECUTABLE_SUFFIX = "";
+				GCC_GENERATE_DEBUGGING_SYMBOLS = NO;
+				GCC_INLINES_ARE_PRIVATE_EXTERN = NO;
+				GCC_OPTIMIZATION_LEVEL = s;
+				GCC_PREPROCESSOR_DEFINITIONS = ("'CMAKE_INTDIR=\"$(CONFIGURATION)$(EFFECTIVE_PLATFORM_NAME)\"'");
+				GCC_SYMBOLS_PRIVATE_EXTERN = NO;
+				HEADER_SEARCH_PATHS = (/Users/anatoliykuznetsov/Desktop/dev/git/BitMagic/src);
+				INSTALL_PATH = "";
+				LIBRARY_SEARCH_PATHS = "";
+				OTHER_CPLUSPLUSFLAGS = " -Wall -Wextra -march=core2 -msse4.2 -fPIC     -DNDEBUG '-std=gnu++11'  ";
+				OTHER_LDFLAGS = " -Wl,-search_paths_first -Wl,-headerpad_max_install_names  ";
+				OTHER_REZFLAGS = "";
+				PRODUCT_NAME = bmtest;
+				SECTORDER_FLAGS = "";
+				SYMROOT = /Users/anatoliykuznetsov/Desktop/dev/git/BitMagic/xcode;
+				USE_HEADERMAP = NO;
+				WARNING_CFLAGS = ("-Wmost","-Wno-four-char-constants","-Wno-unknown-pragmas","$(inherited)");
+			};
+			name = MinSizeRel;
+		};
+		E4349E25C79B49D4A2E3022A /* Debug */ = {
+			isa = XCBuildConfiguration;
+			buildSettings = {
+				COMBINE_HIDPI_IMAGES = YES;
+				CONFIGURATION_BUILD_DIR = /Users/anatoliykuznetsov/Desktop/dev/git/BitMagic/build/bin/Debug;
+				EXECUTABLE_PREFIX = "";
+				EXECUTABLE_SUFFIX = "";
+				GCC_GENERATE_DEBUGGING_SYMBOLS = YES;
+				GCC_INLINES_ARE_PRIVATE_EXTERN = NO;
+				GCC_OPTIMIZATION_LEVEL = 0;
+				GCC_PREPROCESSOR_DEFINITIONS = ("'CMAKE_INTDIR=\"$(CONFIGURATION)$(EFFECTIVE_PLATFORM_NAME)\"'");
+				GCC_SYMBOLS_PRIVATE_EXTERN = NO;
+				HEADER_SEARCH_PATHS = (/Users/anatoliykuznetsov/Desktop/dev/git/BitMagic/src);
+				INSTALL_PATH = "";
+				LIBRARY_SEARCH_PATHS = "";
+				OTHER_CPLUSPLUSFLAGS = " -Wall -Wextra -march=core2 -msse4.2 -fPIC    '-std=gnu++11'  ";
+				OTHER_LDFLAGS = " -Wl,-search_paths_first -Wl,-headerpad_max_install_names  ";
+				OTHER_REZFLAGS = "";
+				PRODUCT_NAME = svsample02;
+				SECTORDER_FLAGS = "";
+				SYMROOT = /Users/anatoliykuznetsov/Desktop/dev/git/BitMagic/xcode;
+				USE_HEADERMAP = NO;
+				WARNING_CFLAGS = ("-Wmost","-Wno-four-char-constants","-Wno-unknown-pragmas","$(inherited)");
+			};
+			name = Debug;
+		};
+		E5F7C267B0D145CF8DE24B38 /* RelWithDebInfo */ = {
+			isa = XCBuildConfiguration;
+			buildSettings = {
+				COMBINE_HIDPI_IMAGES = YES;
+				CONFIGURATION_BUILD_DIR = /Users/anatoliykuznetsov/Desktop/dev/git/BitMagic/build/bin/RelWithDebInfo;
+				EXECUTABLE_PREFIX = "";
+				EXECUTABLE_SUFFIX = "";
+				GCC_GENERATE_DEBUGGING_SYMBOLS = YES;
+				GCC_INLINES_ARE_PRIVATE_EXTERN = NO;
+				GCC_OPTIMIZATION_LEVEL = 2;
+				GCC_PREPROCESSOR_DEFINITIONS = ("'CMAKE_INTDIR=\"$(CONFIGURATION)$(EFFECTIVE_PLATFORM_NAME)\"'");
+				GCC_SYMBOLS_PRIVATE_EXTERN = NO;
+				HEADER_SEARCH_PATHS = (/Users/anatoliykuznetsov/Desktop/dev/git/BitMagic/src);
+				INSTALL_PATH = "";
+				LIBRARY_SEARCH_PATHS = "";
+				OTHER_CPLUSPLUSFLAGS = " -Wall -Wextra -march=core2 -msse4.2 -fPIC        -DNDEBUG '-std=gnu++11'  ";
+				OTHER_LDFLAGS = " -Wl,-search_paths_first -Wl,-headerpad_max_install_names  ";
+				OTHER_REZFLAGS = "";
+				PRODUCT_NAME = bmtest;
+				SECTORDER_FLAGS = "";
+				SYMROOT = /Users/anatoliykuznetsov/Desktop/dev/git/BitMagic/xcode;
+				USE_HEADERMAP = NO;
+				WARNING_CFLAGS = ("-Wmost","-Wno-four-char-constants","-Wno-unknown-pragmas","$(inherited)");
+			};
+			name = RelWithDebInfo;
+		};
+		E6F2E29F841846EB8A8DBEE0 /* RelWithDebInfo */ = {
+			isa = XCBuildConfiguration;
+			buildSettings = {
+				COMBINE_HIDPI_IMAGES = YES;
+				CONFIGURATION_BUILD_DIR = /Users/anatoliykuznetsov/Desktop/dev/git/BitMagic/build/bin/RelWithDebInfo;
+				EXECUTABLE_PREFIX = "";
+				EXECUTABLE_SUFFIX = "";
+				GCC_GENERATE_DEBUGGING_SYMBOLS = YES;
+				GCC_INLINES_ARE_PRIVATE_EXTERN = NO;
+				GCC_OPTIMIZATION_LEVEL = 2;
+				GCC_PREPROCESSOR_DEFINITIONS = ("'CMAKE_INTDIR=\"$(CONFIGURATION)$(EFFECTIVE_PLATFORM_NAME)\"'");
+				GCC_SYMBOLS_PRIVATE_EXTERN = NO;
+				HEADER_SEARCH_PATHS = (/Users/anatoliykuznetsov/Desktop/dev/git/BitMagic/src);
+				INSTALL_PATH = "";
+				LIBRARY_SEARCH_PATHS = "";
+				OTHER_CPLUSPLUSFLAGS = " -Wall -Wextra -march=core2 -msse4.2 -fPIC        -DNDEBUG '-std=gnu++11'  ";
+				OTHER_LDFLAGS = " -Wl,-search_paths_first -Wl,-headerpad_max_install_names  ";
+				OTHER_REZFLAGS = "";
+				PRODUCT_NAME = bvsample04;
+				SECTORDER_FLAGS = "";
+				SYMROOT = /Users/anatoliykuznetsov/Desktop/dev/git/BitMagic/xcode;
+				USE_HEADERMAP = NO;
+				WARNING_CFLAGS = ("-Wmost","-Wno-four-char-constants","-Wno-unknown-pragmas","$(inherited)");
+			};
+			name = RelWithDebInfo;
+		};
+		E9F7BF83C82A41F3AAB1E799 /* RelWithDebInfo */ = {
+			isa = XCBuildConfiguration;
+			buildSettings = {
+				COMBINE_HIDPI_IMAGES = YES;
+				CONFIGURATION_BUILD_DIR = /Users/anatoliykuznetsov/Desktop/dev/git/BitMagic/build/bin/RelWithDebInfo;
+				EXECUTABLE_PREFIX = "";
+				EXECUTABLE_SUFFIX = "";
+				GCC_GENERATE_DEBUGGING_SYMBOLS = YES;
+				GCC_INLINES_ARE_PRIVATE_EXTERN = NO;
+				GCC_OPTIMIZATION_LEVEL = 2;
+				GCC_PREPROCESSOR_DEFINITIONS = ("'CMAKE_INTDIR=\"$(CONFIGURATION)$(EFFECTIVE_PLATFORM_NAME)\"'");
+				GCC_SYMBOLS_PRIVATE_EXTERN = NO;
+				HEADER_SEARCH_PATHS = (/Users/anatoliykuznetsov/Desktop/dev/git/BitMagic/src);
+				INSTALL_PATH = "";
+				LIBRARY_SEARCH_PATHS = "";
+				OTHER_CPLUSPLUSFLAGS = " -Wall -Wextra -march=core2 -msse4.2 -fPIC        -DNDEBUG '-std=gnu++11'  ";
+				OTHER_LDFLAGS = " -Wl,-search_paths_first -Wl,-headerpad_max_install_names  ";
+				OTHER_REZFLAGS = "";
+				PRODUCT_NAME = bvsample06;
+				SECTORDER_FLAGS = "";
+				SYMROOT = /Users/anatoliykuznetsov/Desktop/dev/git/BitMagic/xcode;
+				USE_HEADERMAP = NO;
+				WARNING_CFLAGS = ("-Wmost","-Wno-four-char-constants","-Wno-unknown-pragmas","$(inherited)");
+			};
+			name = RelWithDebInfo;
+		};
+		ED4B4233D3E14DCF80746E96 /* MinSizeRel */ = {
+			isa = XCBuildConfiguration;
+			buildSettings = {
+				COMBINE_HIDPI_IMAGES = YES;
+				CONFIGURATION_BUILD_DIR = /Users/anatoliykuznetsov/Desktop/dev/git/BitMagic/build/bin/MinSizeRel;
+				EXECUTABLE_PREFIX = "";
+				EXECUTABLE_SUFFIX = "";
+				GCC_GENERATE_DEBUGGING_SYMBOLS = NO;
+				GCC_INLINES_ARE_PRIVATE_EXTERN = NO;
+				GCC_OPTIMIZATION_LEVEL = s;
+				GCC_PREPROCESSOR_DEFINITIONS = ("'CMAKE_INTDIR=\"$(CONFIGURATION)$(EFFECTIVE_PLATFORM_NAME)\"'");
+				GCC_SYMBOLS_PRIVATE_EXTERN = NO;
+				HEADER_SEARCH_PATHS = (/Users/anatoliykuznetsov/Desktop/dev/git/BitMagic/src);
+				INSTALL_PATH = "";
+				LIBRARY_SEARCH_PATHS = "";
+				OTHER_CPLUSPLUSFLAGS = " -Wall -Wextra -march=core2 -msse4.2 -fPIC     -DNDEBUG '-std=gnu++11'  ";
+				OTHER_LDFLAGS = " -Wl,-search_paths_first -Wl,-headerpad_max_install_names  ";
+				OTHER_REZFLAGS = "";
+				PRODUCT_NAME = bvsample09;
+				SECTORDER_FLAGS = "";
+				SYMROOT = /Users/anatoliykuznetsov/Desktop/dev/git/BitMagic/xcode;
+				USE_HEADERMAP = NO;
+				WARNING_CFLAGS = ("-Wmost","-Wno-four-char-constants","-Wno-unknown-pragmas","$(inherited)");
+			};
+			name = MinSizeRel;
+		};
+		EF0550F4619143C6AE7ADC81 /* Release */ = {
+			isa = XCBuildConfiguration;
+			buildSettings = {
+				COMBINE_HIDPI_IMAGES = YES;
+				CONFIGURATION_BUILD_DIR = /Users/anatoliykuznetsov/Desktop/dev/git/BitMagic/build/bin/Release;
+				EXECUTABLE_PREFIX = "";
+				EXECUTABLE_SUFFIX = "";
+				GCC_GENERATE_DEBUGGING_SYMBOLS = NO;
+				GCC_INLINES_ARE_PRIVATE_EXTERN = NO;
+				GCC_OPTIMIZATION_LEVEL = 3;
+				GCC_PREPROCESSOR_DEFINITIONS = ("'CMAKE_INTDIR=\"$(CONFIGURATION)$(EFFECTIVE_PLATFORM_NAME)\"'");
+				GCC_SYMBOLS_PRIVATE_EXTERN = NO;
+				HEADER_SEARCH_PATHS = (/Users/anatoliykuznetsov/Desktop/dev/git/BitMagic/src);
+				INSTALL_PATH = "";
+				LIBRARY_SEARCH_PATHS = "";
+				OTHER_CPLUSPLUSFLAGS = " -Wall -Wextra -march=core2 -msse4.2 -fPIC     -DNDEBUG '-std=gnu++11'  ";
+				OTHER_LDFLAGS = " -Wl,-search_paths_first -Wl,-headerpad_max_install_names  ";
+				OTHER_REZFLAGS = "";
+				PRODUCT_NAME = bvsample09;
+				SECTORDER_FLAGS = "";
+				SYMROOT = /Users/anatoliykuznetsov/Desktop/dev/git/BitMagic/xcode;
+				USE_HEADERMAP = NO;
+				WARNING_CFLAGS = ("-Wmost","-Wno-four-char-constants","-Wno-unknown-pragmas","$(inherited)");
+			};
+			name = Release;
+		};
+		F98D5A44A4804DEDAC82381D /* Release */ = {
+			isa = XCBuildConfiguration;
+			buildSettings = {
+				ONLY_ACTIVE_ARCH = YES;
+				SDKROOT = /Applications/Xcode.app/Contents/Developer/Platforms/MacOSX.platform/Developer/SDKs/MacOSX10.12.sdk;
+				SYMROOT = /Users/anatoliykuznetsov/Desktop/dev/git/BitMagic/xcode/build;
+			};
+			name = Release;
+		};
+		FA0E845F19B94C19BD49125F /* Release */ = {
+			isa = XCBuildConfiguration;
+			buildSettings = {
+				COMBINE_HIDPI_IMAGES = YES;
+				CONFIGURATION_BUILD_DIR = /Users/anatoliykuznetsov/Desktop/dev/git/BitMagic/build/bin/Release;
+				EXECUTABLE_PREFIX = "";
+				EXECUTABLE_SUFFIX = "";
+				GCC_GENERATE_DEBUGGING_SYMBOLS = NO;
+				GCC_INLINES_ARE_PRIVATE_EXTERN = NO;
+				GCC_OPTIMIZATION_LEVEL = 3;
+				GCC_PREPROCESSOR_DEFINITIONS = ("'CMAKE_INTDIR=\"$(CONFIGURATION)$(EFFECTIVE_PLATFORM_NAME)\"'");
+				GCC_SYMBOLS_PRIVATE_EXTERN = NO;
+				HEADER_SEARCH_PATHS = (/Users/anatoliykuznetsov/Desktop/dev/git/BitMagic/src);
+				INSTALL_PATH = "";
+				LIBRARY_SEARCH_PATHS = "";
+				OTHER_CPLUSPLUSFLAGS = " -Wall -Wextra -march=core2 -msse4.2 -fPIC     -DNDEBUG '-std=gnu++11'  ";
+				OTHER_LDFLAGS = " -Wl,-search_paths_first -Wl,-headerpad_max_install_names  ";
+				OTHER_REZFLAGS = "";
+				PRODUCT_NAME = bvsample04;
+				SECTORDER_FLAGS = "";
+				SYMROOT = /Users/anatoliykuznetsov/Desktop/dev/git/BitMagic/xcode;
+				USE_HEADERMAP = NO;
+				WARNING_CFLAGS = ("-Wmost","-Wno-four-char-constants","-Wno-unknown-pragmas","$(inherited)");
+			};
+			name = Release;
+		};
+		FA92287F296448D69D0289A7 /* MinSizeRel */ = {
+			isa = XCBuildConfiguration;
+			buildSettings = {
+				COMBINE_HIDPI_IMAGES = YES;
+				CONFIGURATION_BUILD_DIR = /Users/anatoliykuznetsov/Desktop/dev/git/BitMagic/build/bin/MinSizeRel;
+				EXECUTABLE_PREFIX = "";
+				EXECUTABLE_SUFFIX = "";
+				GCC_GENERATE_DEBUGGING_SYMBOLS = NO;
+				GCC_INLINES_ARE_PRIVATE_EXTERN = NO;
+				GCC_OPTIMIZATION_LEVEL = s;
+				GCC_PREPROCESSOR_DEFINITIONS = ("'CMAKE_INTDIR=\"$(CONFIGURATION)$(EFFECTIVE_PLATFORM_NAME)\"'");
+				GCC_SYMBOLS_PRIVATE_EXTERN = NO;
+				HEADER_SEARCH_PATHS = (/Users/anatoliykuznetsov/Desktop/dev/git/BitMagic/src);
+				INSTALL_PATH = "";
+				LIBRARY_SEARCH_PATHS = "";
+				OTHER_CPLUSPLUSFLAGS = " -Wall -Wextra -march=core2 -msse4.2 -fPIC     -DNDEBUG '-std=gnu++11'  ";
+				OTHER_LDFLAGS = " -Wl,-search_paths_first -Wl,-headerpad_max_install_names  ";
+				OTHER_REZFLAGS = "";
+				PRODUCT_NAME = svsample03;
+				SECTORDER_FLAGS = "";
+				SYMROOT = /Users/anatoliykuznetsov/Desktop/dev/git/BitMagic/xcode;
+				USE_HEADERMAP = NO;
+				WARNING_CFLAGS = ("-Wmost","-Wno-four-char-constants","-Wno-unknown-pragmas","$(inherited)");
+			};
+			name = MinSizeRel;
+		};
+		FADC3D556F6B4C90A5D9B87F /* Debug */ = {
+			isa = XCBuildConfiguration;
+			buildSettings = {
+				COMBINE_HIDPI_IMAGES = YES;
+				GCC_GENERATE_DEBUGGING_SYMBOLS = YES;
+				GCC_INLINES_ARE_PRIVATE_EXTERN = NO;
+				GCC_OPTIMIZATION_LEVEL = 0;
+				GCC_PREPROCESSOR_DEFINITIONS = ("'CMAKE_INTDIR=\"$(CONFIGURATION)$(EFFECTIVE_PLATFORM_NAME)\"'");
+				GCC_SYMBOLS_PRIVATE_EXTERN = NO;
+				HEADER_SEARCH_PATHS = (/Users/anatoliykuznetsov/Desktop/dev/git/BitMagic/src);
+				INSTALL_PATH = "";
+				OTHER_LDFLAGS = " ";
+				OTHER_REZFLAGS = "";
+				PRODUCT_NAME = ALL_BUILD;
+				SECTORDER_FLAGS = "";
+				SYMROOT = /Users/anatoliykuznetsov/Desktop/dev/git/BitMagic/xcode;
+				USE_HEADERMAP = NO;
+				WARNING_CFLAGS = ("-Wmost","-Wno-four-char-constants","-Wno-unknown-pragmas","$(inherited)");
+			};
+			name = Debug;
+		};
+		FBA7771A708C449884F0B83F /* RelWithDebInfo */ = {
+			isa = XCBuildConfiguration;
+			buildSettings = {
+				COMBINE_HIDPI_IMAGES = YES;
+				CONFIGURATION_BUILD_DIR = /Users/anatoliykuznetsov/Desktop/dev/git/BitMagic/build/bin/RelWithDebInfo;
+				EXECUTABLE_PREFIX = "";
+				EXECUTABLE_SUFFIX = "";
+				GCC_GENERATE_DEBUGGING_SYMBOLS = YES;
+				GCC_INLINES_ARE_PRIVATE_EXTERN = NO;
+				GCC_OPTIMIZATION_LEVEL = 2;
+				GCC_PREPROCESSOR_DEFINITIONS = ("'CMAKE_INTDIR=\"$(CONFIGURATION)$(EFFECTIVE_PLATFORM_NAME)\"'");
+				GCC_SYMBOLS_PRIVATE_EXTERN = NO;
+				HEADER_SEARCH_PATHS = (/Users/anatoliykuznetsov/Desktop/dev/git/BitMagic/src);
+				INSTALL_PATH = "";
+				LIBRARY_SEARCH_PATHS = "";
+				OTHER_CPLUSPLUSFLAGS = " -Wall -Wextra -march=core2 -msse4.2 -fPIC        -DNDEBUG '-std=gnu++11'  ";
+				OTHER_LDFLAGS = " -Wl,-search_paths_first -Wl,-headerpad_max_install_names  ";
+				OTHER_REZFLAGS = "";
+				PRODUCT_NAME = bmperf;
+				SECTORDER_FLAGS = "";
+				SYMROOT = /Users/anatoliykuznetsov/Desktop/dev/git/BitMagic/xcode;
+				USE_HEADERMAP = NO;
+				WARNING_CFLAGS = ("-Wmost","-Wno-four-char-constants","-Wno-unknown-pragmas","$(inherited)");
+			};
+			name = RelWithDebInfo;
+		};
+/* End XCBuildConfiguration section */
+
+/* Begin XCConfigurationList section */
+		0DFFB4B2DFB64B819FD0CBAE /* Build configuration list for PBXAggregateTarget "ALL_BUILD" */ = {
+			isa = XCConfigurationList;
+			buildConfigurations = (
+				FADC3D556F6B4C90A5D9B87F /* Debug */,
+				71A82B71A5DB44C3ABE23B1E /* Release */,
+				2825121B1D594515BE93A95E /* MinSizeRel */,
+				2A26E092D9C948F1A6F5B059 /* RelWithDebInfo */,
+			);
+			defaultConfigurationIsVisible = 0;
+			defaultConfigurationName = Debug;
+		};
+		25952FF32FEB4852909EB0BC /* Build configuration list for PBXNativeTarget "svsample02" */ = {
+			isa = XCConfigurationList;
+			buildConfigurations = (
+				E4349E25C79B49D4A2E3022A /* Debug */,
+				871EEA7998954F118D1B735D /* Release */,
+				35F74B20E0D7455AAEB2E070 /* MinSizeRel */,
+				A83D001872194CF79813A2D8 /* RelWithDebInfo */,
+			);
+			defaultConfigurationIsVisible = 0;
+			defaultConfigurationName = Debug;
+		};
+		2A03290F8A58409FBF8F6FB6 /* Build configuration list for PBXNativeTarget "bvsample02" */ = {
+			isa = XCConfigurationList;
+			buildConfigurations = (
+				7E70B3D3414642E1B9B131AC /* Debug */,
+				A6DDC39E7A8846A7AEEA3CC5 /* Release */,
+				2798A83FB2704780BD447448 /* MinSizeRel */,
+				B484127CAA134B9390A825E0 /* RelWithDebInfo */,
+			);
+			defaultConfigurationIsVisible = 0;
+			defaultConfigurationName = Debug;
+		};
+		4BF6543831CC46069B3EEB0E /* Build configuration list for PBXNativeTarget "svsample03" */ = {
+			isa = XCConfigurationList;
+			buildConfigurations = (
+				AB412C262EDB4A87840F93DE /* Debug */,
+				54B7189C46674622A420A71B /* Release */,
+				FA92287F296448D69D0289A7 /* MinSizeRel */,
+				A32237C29A024C7E93F45B0D /* RelWithDebInfo */,
+			);
+			defaultConfigurationIsVisible = 0;
+			defaultConfigurationName = Debug;
+		};
+		4F730C4307FE477A8F45C484 /* Build configuration list for PBXNativeTarget "bmperf" */ = {
+			isa = XCConfigurationList;
+			buildConfigurations = (
+				B700DA391BAB4E0EA84C0F7C /* Debug */,
+				187234E3A9234C419B8FFB06 /* Release */,
+				1499EA16434845C7BFFE4B91 /* MinSizeRel */,
+				FBA7771A708C449884F0B83F /* RelWithDebInfo */,
+			);
+			defaultConfigurationIsVisible = 0;
+			defaultConfigurationName = Debug;
+		};
+		559D48B20DFF463DA3174DAE /* Build configuration list for PBXNativeTarget "bmtest" */ = {
+			isa = XCConfigurationList;
+			buildConfigurations = (
+				9F4130BE746D414181773097 /* Debug */,
+				0379613D60154EB08C532FCB /* Release */,
+				D6BDB512D97A46F6AC6583C0 /* MinSizeRel */,
+				E5F7C267B0D145CF8DE24B38 /* RelWithDebInfo */,
+			);
+			defaultConfigurationIsVisible = 0;
+			defaultConfigurationName = Debug;
+		};
+		640BE7E0E3D948AE804959A1 /* Build configuration list for PBXNativeTarget "bmsvutil" */ = {
+			isa = XCConfigurationList;
+			buildConfigurations = (
+				43FD6C3C548D416DAC56DDA9 /* Debug */,
+				00B7D52DDBE0492DAB5CF11F /* Release */,
+				7FA889DF6F8B4AC19ADDA65F /* MinSizeRel */,
+				22E76CA1001F430984733A07 /* RelWithDebInfo */,
+			);
+			defaultConfigurationIsVisible = 0;
+			defaultConfigurationName = Debug;
+		};
+		813C98FDE5F04CA288FE6EC2 /* Build configuration list for PBXProject "bm" */ = {
+			isa = XCConfigurationList;
+			buildConfigurations = (
+				D58AA81B323D4B1A9D118CEC /* Debug */,
+				F98D5A44A4804DEDAC82381D /* Release */,
+				6829B2313D404AFD8E428182 /* MinSizeRel */,
+				704A085CE8DF453FAC38B7AC /* RelWithDebInfo */,
+			);
+			defaultConfigurationIsVisible = 0;
+			defaultConfigurationName = Debug;
+		};
+		878FFAC6E9D846A39A7EBCB7 /* Build configuration list for PBXNativeTarget "bvsample03" */ = {
+			isa = XCConfigurationList;
+			buildConfigurations = (
+				00DB17005196457DA5567DB9 /* Debug */,
+				479481D0AA164FC9B59F1156 /* Release */,
+				0B8E20496F0F4AC5AAC65A7D /* MinSizeRel */,
+				0671CD8ADDC44CF394B1A1C3 /* RelWithDebInfo */,
+			);
+			defaultConfigurationIsVisible = 0;
+			defaultConfigurationName = Debug;
+		};
+		8A61C8DB33A2497EA352B7F8 /* Build configuration list for PBXNativeTarget "bvsample01" */ = {
+			isa = XCConfigurationList;
+			buildConfigurations = (
+				89CE41828008464D865F32AF /* Debug */,
+				4F2E165EBFA24DC8A6CC41E1 /* Release */,
+				6F4F2FF43DF34CAC99DB6150 /* MinSizeRel */,
+				37367AA58D684E8482999392 /* RelWithDebInfo */,
+			);
+			defaultConfigurationIsVisible = 0;
+			defaultConfigurationName = Debug;
+		};
+		91F9813DBCB24125A63C966E /* Build configuration list for PBXNativeTarget "bvsample09" */ = {
+			isa = XCConfigurationList;
+			buildConfigurations = (
+				86A2C4FD8075432C86EA0AA3 /* Debug */,
+				EF0550F4619143C6AE7ADC81 /* Release */,
+				ED4B4233D3E14DCF80746E96 /* MinSizeRel */,
+				A059A2E39B0243A086A0BAFE /* RelWithDebInfo */,
+			);
+			defaultConfigurationIsVisible = 0;
+			defaultConfigurationName = Debug;
+		};
+		9E11BAE29C58406194894542 /* Build configuration list for PBXNativeTarget "bvsample06" */ = {
+			isa = XCConfigurationList;
+			buildConfigurations = (
+				C84C4E3FD27545ABB9894B02 /* Debug */,
+				28B4C88D41C945249834E617 /* Release */,
+				94133F4A8B16461489E15FF1 /* MinSizeRel */,
+				E9F7BF83C82A41F3AAB1E799 /* RelWithDebInfo */,
+			);
+			defaultConfigurationIsVisible = 0;
+			defaultConfigurationName = Debug;
+		};
+		A2DCAE2CF4AA4E2CB5D8D63A /* Build configuration list for PBXNativeTarget "bvsample08" */ = {
+			isa = XCConfigurationList;
+			buildConfigurations = (
+				4833FAF158E84124B091CC95 /* Debug */,
+				434B6DD945F44048A34348A1 /* Release */,
+				1F12D9D491A84C12A43646E1 /* MinSizeRel */,
+				51DC083AB4DD40FA8FA0E2E7 /* RelWithDebInfo */,
+			);
+			defaultConfigurationIsVisible = 0;
+			defaultConfigurationName = Debug;
+		};
+		AD08D834C1FA4287AFB83062 /* Build configuration list for PBXAggregateTarget "ZERO_CHECK" */ = {
+			isa = XCConfigurationList;
+			buildConfigurations = (
+				99F5A948E8D142099CF54538 /* Debug */,
+				1E2D1F170CEE490FBEF0F2FC /* Release */,
+				2C3AA5F083CA413484ACD124 /* MinSizeRel */,
+				5AA869B81A674A0196DCBBD3 /* RelWithDebInfo */,
+			);
+			defaultConfigurationIsVisible = 0;
+			defaultConfigurationName = Debug;
+		};
+		D41002DF62D94A78B192EE8E /* Build configuration list for PBXNativeTarget "svsample01" */ = {
+			isa = XCConfigurationList;
+			buildConfigurations = (
+				CB3FB5F9A80446BA8AC9748D /* Debug */,
+				5D968E40505E4E4EA8DCAA0A /* Release */,
+				5DF253085C95474BBF2AE961 /* MinSizeRel */,
+				D42056E0430A4602A549D41D /* RelWithDebInfo */,
+			);
+			defaultConfigurationIsVisible = 0;
+			defaultConfigurationName = Debug;
+		};
+		DB613953A2AE4319852062EB /* Build configuration list for PBXNativeTarget "bvsample04" */ = {
+			isa = XCConfigurationList;
+			buildConfigurations = (
+				B8ECC92AF4EA4AE0BE7C5EA2 /* Debug */,
+				FA0E845F19B94C19BD49125F /* Release */,
+				94EE2ABB5B3A47DA8B5F0957 /* MinSizeRel */,
+				E6F2E29F841846EB8A8DBEE0 /* RelWithDebInfo */,
+			);
+			defaultConfigurationIsVisible = 0;
+			defaultConfigurationName = Debug;
+		};
+		DF148D3571854071B770829B /* Build configuration list for PBXNativeTarget "bvsample05" */ = {
+			isa = XCConfigurationList;
+			buildConfigurations = (
+				363D88C52CE847BFBA011FA7 /* Debug */,
+				7220EEE64CEA49B4860DF8BE /* Release */,
+				A110D26F015644CA991070BD /* MinSizeRel */,
+				931FAA38BF374196ABD40ECA /* RelWithDebInfo */,
+			);
+			defaultConfigurationIsVisible = 0;
+			defaultConfigurationName = Debug;
+		};
+		F865837CE3A84926809B607D /* Build configuration list for PBXNativeTarget "bvsample10" */ = {
+			isa = XCConfigurationList;
+			buildConfigurations = (
+				C4109862FD84402ABC4489BC /* Debug */,
+				4EB641291BE14FC6ACF8A034 /* Release */,
+				286399A66CE24E8C8E76D451 /* MinSizeRel */,
+				B48AD814AEA04EA19630556D /* RelWithDebInfo */,
+			);
+			defaultConfigurationIsVisible = 0;
+			defaultConfigurationName = Debug;
+		};
+/* End XCConfigurationList section */
+	};
+	rootObject = 56318B67704543FEA052890E /* Project object */;
+}
