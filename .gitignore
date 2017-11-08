@@ -40,3 +40,5 @@ samples/svsample03/svsample03
 utils/svutil/bmsvutil
 
 build/
+msvc/
+utils/svutil/match.raw
