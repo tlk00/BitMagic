@@ -75,7 +75,7 @@ unsigned nations_cnt = 200;
 unsigned nations_top_cnt = 10;
 unsigned suppliers_cnt   = 100000;
 unsigned customers_cnt   = 1500000;
-unsigned orders_cnt      = customers_cnt * 10;
+unsigned orders_cnt      = customers_cnt * 5;
 //unsigned lineitem_cnt    = orders_cnt * 6;
 
 
@@ -176,22 +176,56 @@ struct LineItem
     }
 
     TBVector*  lineitem_total_bv;
-    TID64Map   lineitem_shipdate_bvmap; // lineitem shipdate index
-    TIDMap     lineitem_order_bvmap;    // lineitem shipdate index
+    TID64Map   lineitem_shipdate_bvmap; // shipdate index
+    TID64SMap  lineitem_shipdate_smap; // shipdate index (compressed)
+
+    TIDMap     lineitem_supplier_bvmap; // supplier index
+    TIDSMap    lineitem_supplier_smap;  // supplier index (compressed)
+    
+    TIDMap     lineitem_order_bvmap;    // order index
+    TIDSMap    lineitem_order_smap;     // order index (compressed)
 };
 
 
-static
-void OptimizeIDMap(TIDMap& id_map)
+template<typename TM>
+void OptimizeIDMap(TM& id_map, bool opt_gap = false)
 {
-    for (TIDMap::iterator it = id_map.begin();
+    for (typename TM::iterator it = id_map.begin();
          it != id_map.end();
          ++it)
     {
         it->second.optimize();
+        if (opt_gap)
+        {
+            it->second.optimize_gap_size();
+        }
     } // for
 }
 
+
+static
+size_t ComputeIndexSize(const TIDSMap& sm)
+{
+    size_t s = 0;
+    for (TIDSMap::const_iterator it = sm.begin();
+         it != sm.end();
+         ++it)
+    {
+        const std::vector<char>& v = it->second;
+        if (v.size()==0)
+        {
+            std::cerr << "Empty vector found!" << std::endl;
+            exit(1);
+        }
+        s += v.size();
+    } // for
+    return s;
+}
+
+/// bit-vector serializer works over temp buffer but the final result gets
+/// saved in a smaller target buffer
+/// std::vector<char> is used as a simple dynamic buffer class
+///
 static
 void SerializeBVector(bm::serializer<TBVector>& bvs,
                                 TBVector& bv,
@@ -224,6 +258,47 @@ void SerializeBVector(bm::serializer<TBVector>& bvs,
     }
     #endif
 }
+
+/// Function assumes that src_vect contains a serialized BVector
+/// it applies merge/join/OR between serialized and argument bv
+/// then performs serialization
+///
+static
+void SerializeORBVector(bm::serializer<TBVector>& bvs,
+                                TBVector& bv,
+                                std::vector<char>& temp_buf_vect,
+                                std::vector<char>& buf_vect,
+                                const std::vector<char>& src_vect
+                                )
+{
+    // bv = bv OR src_vect
+    if (src_vect.size() != 0)
+        bm::deserialize(bv, (unsigned char*)&src_vect[0]);
+    
+    SerializeBVector(bvs, bv, temp_buf_vect, buf_vect);
+}
+
+template<typename TM1, typename TM2>
+void SerializeMergeIDMap(bm::serializer<TBVector>& bvs,
+                         std::vector<char>&        temp_buf_vect,
+                         TM1&                      id_map,
+                         TM2&                      id_smap)
+{
+    for (typename TM1::iterator it = id_map.begin();
+         it != id_map.end();
+         ++it)
+    {
+        TBVector &bv = it->second;
+        typename TM1::key_type id = it->first;
+        
+        std::vector<char>& buf_vect = id_smap[id];
+        SerializeORBVector(bvs, bv, temp_buf_vect, buf_vect, buf_vect);
+    } // for
+    
+    id_map.clear();
+}
+
+
 
 
 // Generate bit vector indexes for SUPPLIER table
@@ -261,7 +336,7 @@ void GenerateSuppliersIdx(Suppliers& sup)
             TBVector supp50_10_bv;
             rsub.sample(supp50_10_bv, supp50p_bv, big10_cnt);
             
-            std::cout << "Nation:" << nation_id << " " << supp50_10_bv.count() << std::endl;
+            //std::cout << "Nation:" << nation_id << " " << supp50_10_bv.count() << std::endl;
             assigned_supp_bv |= supp50_10_bv;
             supp50p_bv -= supp50_10_bv;
             //std::cout << "Remained:" << supp50p_bv.count() << std::endl;
@@ -343,7 +418,7 @@ void GenerateCustomersIdx(Customer& cust)
             TBVector cust50_10_bv;
             rsub.sample(cust50_10_bv, cust50p_bv, big10_cnt);
             
-            std::cout << "Nation:" << nation_id << " " << cust50_10_bv.count() << std::endl;
+            //std::cout << "Nation:" << nation_id << " " << cust50_10_bv.count() << std::endl;
             assigned_cust_bv |= cust50_10_bv;
             cust50p_bv -= cust50_10_bv;
             //std::cout << "Remained:" << supp50p_bv.count() << std::endl;
@@ -433,6 +508,24 @@ void GenerateOrdersIdx(Order& ord, const Customer& cust)
             SerializeBVector(bvs, ord_bv, temp_buf_vect, buf_vect);
             
             ord.orders_customer_smap[cust_id] = buf_vect;
+            
+#ifdef DEBUG
+            // integrity check
+            std::vector<char>& bufv = ord.orders_customer_smap[cust_id];
+            if (bufv.size() != buf_vect.size())
+            {
+                std::cout << "Problem!" << std::endl;
+                exit(1);
+            }
+            TBVector bv1;
+            bm::deserialize(bv1, (unsigned char*)&bufv[0]);
+            if (bv1.compare(ord_bv)!=0)
+            {
+                std::cerr << "Deserialization check failed!" << std::endl;
+                exit(1);
+            }
+#endif
+
         }
         if ((i % 10000)==0)
         {
@@ -446,8 +539,14 @@ void GenerateOrdersIdx(Order& ord, const Customer& cust)
     }
     std::cout << std::endl;
     
+    std::cout << "Orders count = " << ord.orders_total_bv->count() << std::endl;
     std::cout << "Orders customers index size = " << ord.orders_customer_smap.size()
               << std::endl;
+    
+    size_t buf_sum = ComputeIndexSize(ord.orders_customer_smap);
+    std::cout << "Orders customers index mem.size = " << buf_sum
+              << std::endl;
+
 }
 
 // Generate bit vector indexes for ORDER table
@@ -455,6 +554,14 @@ void GenerateOrdersIdx(Order& ord, const Customer& cust)
 void GenerateLineItemIdx(LineItem& litem, const Order& ord, const Customer& cust)
 {
     bm::random_subset<TBVector> rsub; // random subset sampler
+    
+    bm::serializer<bm::bvector<> > bvs; // bit vector serialization utility
+    bvs.byte_order_serialization(false);
+    bvs.gap_length_serialization(false);
+    bvs.set_compression_level(4);
+
+    std::vector<char> temp_buf_vect;
+
     unsigned i, j;
     
     // fill in total vector of customers as a monotonically increasing id
@@ -464,40 +571,117 @@ void GenerateLineItemIdx(LineItem& litem, const Order& ord, const Customer& cust
     
     unsigned li_id = 0;
     unsigned year_from = 1994;
-    unsigned date = 1;
     
     // for each order, generate line items
+    //
     for (i = 0; i < orders_cnt; ++i)
     {
+        unsigned order_id = i;
         // lets assume that each order has 20 to 1 line items
         //
-        unsigned li_cnt = rand() % 10;
+        unsigned li_cnt = rand() % 7;
         if (li_cnt == 0)
             li_cnt = 1;
         
         // pick a random year from 10
-        unsigned order_year = year_from + (rand()%10);
+        uint64_t order_year = year_from + (rand()%10);
         
-        if (li_cnt < 3) // small order
+        TBVector& bv_order = litem.lineitem_order_bvmap[order_id];
+
+        if (li_cnt < 4) // small order
         {
             // day of a year, assume all items shipped the same date
             unsigned li_day = rand() % 365;
+            // pick a random supplier (one for all items)
+            unsigned supp_id = rand() % suppliers_cnt;
+            uint64_t li_date = (order_year << 32) | li_day;
+            
+            TBVector& bv_date = litem.lineitem_shipdate_bvmap[li_date];
+            TBVector& bv_supp = litem.lineitem_supplier_bvmap[supp_id];
+
             for (j = 0; j < li_cnt; ++j)
             {
-                // pick a supplier
-                unsigned supp_id = rand() % suppliers_cnt;
-                
+                bv_date[li_id] = true;
+                bv_supp[li_id] = true;
+                bv_litem[li_id] = true;
+                bv_order[li_id] = true;
+                ++li_id;
             }
+        }
+        else
+        {
+            // day of a year, assume all items shipped the same date
+            unsigned li_day = rand() % 365;
+            
+            // pick a random supplier (one for all items)
+            unsigned supp_id = rand() % suppliers_cnt;
+            
+            for (j = 0; j < li_cnt; ++j)
+            {
+                uint64_t li_date = (order_year << 32) | li_day;
+                TBVector& bv_date = litem.lineitem_shipdate_bvmap[li_date];
+                TBVector& bv_supp = litem.lineitem_supplier_bvmap[supp_id];
+                
+                bv_date[li_id] = true;
+                bv_supp[li_id] = true;
+                bv_litem[li_id] = true;
+                bv_order[li_id] = true;
+
+                if (rand()%3 == 0)
+                {
+                    ++li_day;
+                    supp_id = rand() % suppliers_cnt;
+                }
+                if (li_day > 365) { li_day = 1; ++order_year; }
+                ++li_id;
+            } // for j
+        }
+        
+        // periodic index compression
+        if ((i % 200000) == 0)
+        {
+            std::cout << "\r" << i << "[OPT]" << std::flush;            
+            SerializeMergeIDMap(bvs,
+                                temp_buf_vect,
+                                litem.lineitem_shipdate_bvmap,
+                                litem.lineitem_shipdate_smap);
+            SerializeMergeIDMap(bvs,
+                                temp_buf_vect,
+                                litem.lineitem_supplier_bvmap,
+                                litem.lineitem_supplier_smap);
+            
+            SerializeMergeIDMap(bvs,
+                                temp_buf_vect,
+                                litem.lineitem_order_bvmap,
+                                litem.lineitem_order_smap);
+            std::cout << "\r" << i << "      " << std::flush;
         }
         
     } // for i
+    std::cout << std::endl;
+    
+    SerializeMergeIDMap(bvs,
+                        temp_buf_vect,
+                        litem.lineitem_shipdate_bvmap,
+                        litem.lineitem_shipdate_smap);
 
+    SerializeMergeIDMap(bvs,
+                        temp_buf_vect,
+                        litem.lineitem_supplier_bvmap,
+                        litem.lineitem_supplier_smap);
     
-    for (i = 0; i < lineitem_cnt; ++i)
-    {
-    
-    }
-    
+    SerializeMergeIDMap(bvs,
+                        temp_buf_vect,
+                        litem.lineitem_order_bvmap,
+                        litem.lineitem_order_smap);
+
+    std::cout
+      << "Lineitems count = " << litem.lineitem_total_bv->count() << std::endl
+      << "Lineitems shipdate index size = " << litem.lineitem_shipdate_smap.size() << std::endl
+      << "Lineitems supplier index size = " << litem.lineitem_supplier_smap.size() << std::endl
+      << "Lineitems order index size = " << litem.lineitem_order_smap.size()
+      << std::endl;
+
 }
 
 int main(int argc, char *argv[])
@@ -505,6 +689,7 @@ int main(int argc, char *argv[])
     Suppliers supp;
     Customer  cust;
     Order     ord;
+    LineItem  lineitem;
 /*
     if (argc < 3)
     {
@@ -523,6 +708,9 @@ int main(int argc, char *argv[])
         GenerateSuppliersIdx(supp);
         GenerateCustomersIdx(cust);
         GenerateOrdersIdx(ord, cust);
+        GenerateLineItemIdx(lineitem, ord, cust);
+        
+        getchar();
 
         
         if (is_timing)  // print all collected timings
