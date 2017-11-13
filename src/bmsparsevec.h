@@ -515,8 +515,8 @@ void sparse_vector<Val, BV>::import(const value_type* arr,
     } // for k
     
     
-    if (i > size_)
-        size_ = i;
+    if (i + offset > size_)
+        size_ = i + offset;
 }
 
 
