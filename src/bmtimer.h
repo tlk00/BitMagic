@@ -114,10 +114,9 @@ public:
         is_stopped_ = true;
     }
     
-    unsigned add_repeats(unsigned inc)
+    void add_repeats(unsigned inc)
     {
         repeats_ += inc;
-        return repeats_;
     }
 
     
@@ -139,8 +138,8 @@ public:
                 break;
             case ct_ops_per_sec:
                 {
-                double ops = it->second.repeats / (it->second.duration.count() * 1000);
-                std::cout << it->first << "; " << ops << std::endl;
+                unsigned ops = ((double)it->second.repeats / (double)it->second.duration.count()) * 1000;
+                std::cout << it->first << "; " << ops << " ops/sec" <<std::endl;
                 }
                 break;
             default:
