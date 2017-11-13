@@ -42,9 +42,17 @@ For more information please visit:  http://bitmagic.io
 
 
 #include "bm.h"
-#include "bmserial.h"
 #include "bmalgo.h"
 #include "bmtimer.h"
+#include "bmserial.h"
+#include "bmsparsevec.h"
+
+#include "bmsparsevec_algo.h"
+#include "bmsparsevec_serial.h"
+#include "bmalgo_similarity.h"
+
+#include "bmdbg.h"
+
 
 // ----------------------------------------------------
 // Global parameters and types
@@ -160,6 +168,25 @@ struct vect_index
 };
 
 
+// Sample index structure as in-memory sparse_vector
+//
+struct sparse_vect_index
+{
+    struct vect_addr
+    {
+        unsigned offset;
+        unsigned size;
+    };
+    
+    typedef bm::sparse_vector<unsigned, bm::bvector<> > sparse_vector_type;
+    typedef std::map<unsigned, vect_addr>               map_type;
+    
+    sparse_vector_type  sv_storage_;
+    map_type            idx_;
+    
+};
+
+
 // --------------------------------------------------------------------
 
 
@@ -169,7 +196,7 @@ struct vect_index
 //
 void generate_random_vector(TBVector* bv)
 {
-    unsigned method = rand()%2; // pick a generation method
+    unsigned method = rand() % 5; // pick a generation method
     if (method == 0) // generate a incremental linear sequence at random location
     {
         unsigned seed_id = rand() % max_size;
@@ -180,15 +207,28 @@ void generate_random_vector(TBVector* bv)
             bv->set_bit(i);
         } // for i
     }
+    else
+    if (method == 1)
+    {
+        unsigned seed_id = rand() % max_size;
+        unsigned id = seed_id;
+        for (unsigned i = 0; i < bits_per_vect; ++i)
+        {
+            if (id >= max_size)
+                break;
+            bv->set_bit(id);
+            id += (rand() % 10);
+            if (i >= max_size)
+                break;
+        } // for i
+    }
     else // generate a few random bits
     {
         for (unsigned i  = 0; i < bits_per_vect; ++i)
         {
             unsigned id = rand() % max_size;
             if (i >= max_size) // paranoiya check
-            {
                 break;
-            }
             bv->set_bit(id);
         } // for i
     }
@@ -328,6 +368,68 @@ size_t convert_bv2vect(const bv_index& bvi, vect_index& vidx)
     return mem_total;
 }
 
+// convert bit-vector index to bm::sparse_vector
+//
+size_t convert_bv2sv(const bv_index& bvi, sparse_vect_index& sv_idx)
+{
+    size_t  mem_total = 0;
+    
+    std::vector<unsigned> vect;
+    
+    unsigned sv_pos = 0; // current position in sparse vector
+    
+    for (bv_index::map_type::const_iterator it = bvi.idx_.begin();
+         it != bvi.idx_.end();
+         ++it)
+    {
+        unsigned id = it->first;
+        const TBVector* bvp = it->second;
+        
+        // convert into a plain vector first
+        //
+        unsigned count = bvp->count();
+        vect.resize(count);
+        for (TBVector::enumerator en = bvp->first(); en.valid(); ++en)
+        {
+            vect.push_back(*en);
+        }
+        
+        // convert into delta-vector
+        //
+        for (unsigned k  = 1; k < count; ++k)
+        {
+            vect[k] -= vect[k-1];
+        }
+        
+        // merge to sparse vector
+        sparse_vect_index::vect_addr vaddr;
+        vaddr.offset = sv_pos;
+        vaddr.size = (unsigned)vect.size();
+        
+        sv_idx.sv_storage_.import(vect.data(), vaddr.size, vaddr.offset);
+        sv_pos += vaddr.size;
+        
+        sv_idx.idx_[id] = vaddr;
+        
+        //std::cout << "offs=" << sv_pos << sv_idx.sv_storage_.size() << " " << std::flush;
+        
+    } // for
+    
+    // optimize sparse vector storage, compute memory consumption
+    {
+        sparse_vect_index::sparse_vector_type::statistics st;
+        
+        BM_DECLARE_TEMP_BLOCK(tb)
+        sv_idx.sv_storage_.optimize(tb, TBVector::opt_compress, &st);
+        mem_total += st.memory_used;
+    }
+    //mem_total += sv_idx.idx_.size() * sizeof(sparse_vect_index::vect_addr);
+    //bm::print_svector_stat(sv_idx.sv_storage_, false);
+
+    return mem_total;
+}
+
+
 // speed test for in-memory bit vectors
 // benchmark performs a mix of logical operations
 //
@@ -343,9 +445,9 @@ void speed_test_bv_index(const bv_index& bvi)
          ++it)
     {
         const TBVector* bvp = it->second;
-        
         bv_join |= *bvp;
     } // for
+    tt1.add_repeats(bvi.idx_.size());
     
     // a group of random vectors from the index map, compute OR
     // then compute AND with the join vector
@@ -380,6 +482,8 @@ void speed_test_bv_index(const bv_index& bvi)
         }
 
     } // for i
+    tt1.add_repeats(benchmark_ops * sample_cnt + 1);
+
     std::cout << std::endl;
 }
 
@@ -413,6 +517,7 @@ void speed_test_bvs_index(const bvs_index& bvs)
         
         des.deserialize(bv_join, buf, tb, bm::set_OR);
     } // for
+    tt1.add_repeats(bvs.idx_.size());
 
     // a group of random vectors from the index map, compute OR
     // then compute AND with the join vector
@@ -433,7 +538,6 @@ void speed_test_bvs_index(const bvs_index& bvs)
             if (it == bvs.idx_.end())
                 continue;
             
-            const bvs_index::buffer_type& svect = it->second;
             const unsigned char* buf = it->second.data();
             des.deserialize(bv_res, buf, tb, bm::set_OR);
         } // for j
@@ -447,9 +551,10 @@ void speed_test_bvs_index(const bvs_index& bvs)
         {
             result_set.push_back(*en);
         }
-        //std::cout << "result=" << result_set.size() << " " << std::flush;
 
     } // for i
+    tt1.add_repeats(benchmark_ops * sample_cnt + 1);
+
 
     std::cout << std::endl;
 }
@@ -474,6 +579,8 @@ void speed_test_vect_index(const vect_index& vecti)
         
         bm::combine_or(bv_join, vect.begin(), vect.end());
     } // for
+    tt1.add_repeats(vecti.idx_.size());
+
 
     // a group of random vectors from the index map, compute OR
     // then compute AND with the join vector
@@ -508,13 +615,12 @@ void speed_test_vect_index(const vect_index& vecti)
         {
             result_set.push_back(*en);
         }
-        //std::cout << "result=" << result_set.size() << " " << std::flush;
 
     } // for i
+    tt1.add_repeats(benchmark_ops * sample_cnt + 1);
 
     std::cout << std::endl;
 }
-
 
 
 
@@ -525,6 +631,7 @@ int main(void)
         bv_index  bvi; // regular in-memory index id to bvector<>
         bvs_index bvs; // compressed in-memory index id to bvector<> BLOB
         vect_index vecti; // index based on plain uncompressed vector<unsigned>
+        sparse_vect_index svi; // all ids in a sparse vector
         
         generate_bv_index(bvi);
         
@@ -549,14 +656,20 @@ int main(void)
                   << vecti_mem_total << " (" << vecti_mem_total_MB << "MB)"
                   << std::endl;
 
-        
+        size_t svi_mem_total = convert_bv2sv(bvi, svi);
+        size_t svi_mem_total_MB = svi_mem_total / (1024*1024);
+
+        std::cout << "bm::sparse_vector index memory footprint = "
+                  << svi_mem_total << " (" << svi_mem_total_MB << "MB)"
+                  << std::endl;
+
 
         speed_test_bv_index(bvi);
         speed_test_bvs_index(bvs);
         speed_test_vect_index(vecti);
 
-        std::cout << std::endl << "Timings (ms):" << std::endl;
-        bm::chrono_taker::print_duration_map(timing_map);
+        std::cout << std::endl << "Performance (ops/sec):" << std::endl;
+        bm::chrono_taker::print_duration_map(timing_map, bm::chrono_taker::ct_ops_per_sec);
 
 
         //getchar();
