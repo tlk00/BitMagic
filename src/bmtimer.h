@@ -60,6 +60,12 @@ public:
         {}
     };
     
+    enum format
+    {
+        ct_time = 0,
+        ct_ops_per_sec = 1
+    };
+    
     /// test name to duration map
     ///
     typedef std::map<std::string, statistics > duration_map_type;
@@ -108,17 +114,40 @@ public:
         is_stopped_ = true;
     }
     
-    static void print_duration_map(const duration_map_type& dmap)
+    unsigned add_repeats(unsigned inc)
+    {
+        repeats_ += inc;
+        return repeats_;
+    }
+
+    
+    static void print_duration_map(const duration_map_type& dmap, format fmt = ct_time)
     {
         duration_map_type::const_iterator it = dmap.begin();
         duration_map_type::const_iterator it_end = dmap.end();
         
-        for (;it != it_end; ++it)
+        for ( ;it != it_end; ++it)
         {
-            std::cout << it->first << "; " << it->second.duration.count() << std::endl;
-        }
+            const chrono_taker::statistics& st = it->second;
+            if (st.repeats <= 1)
+                fmt = ct_time;
+
+            switch (fmt)
+            {
+            case ct_time:
+                std::cout << it->first << "; " << it->second.duration.count() << std::endl;
+                break;
+            case ct_ops_per_sec:
+                {
+                double ops = it->second.repeats / (it->second.duration.count() * 1000);
+                std::cout << it->first << "; " << ops << std::endl;
+                }
+                break;
+            default:
+                break;
+            }
+        } // for
     }
-    
     
 
     chrono_taker(const chrono_taker&) = delete;
