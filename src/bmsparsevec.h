@@ -537,7 +537,9 @@ sparse_vector<Val, BV>::extract(value_type* arr,
     size_type start = offset;
     size_type end = start + size;
     if (end > size_)
+    {
         end = size_;
+    }
     
 	bool masked_scan = !(offset == 0 && size == this->size());
 
@@ -823,6 +825,11 @@ void sparse_vector<Val, BV>::optimize(
     typename bvector_type::optmode               opt_mode,
     typename sparse_vector<Val, BV>::statistics* st)
 {
+    if (st)
+    {
+        st->bit_blocks = st->gap_blocks = 0;
+        st->max_serialize_mem = st->memory_used = 0;
+    }
     for (unsigned j = 0; j < sizeof(Val) * 8; ++j)
     {
         bvector_type* bv = this->plains_[j];
