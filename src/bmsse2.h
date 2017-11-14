@@ -258,7 +258,7 @@ bm::id_t sse2_bit_block_calc_count_change(const __m128i* BMRESTRICT block,
 
    __m128i tmp1, tmp2;
 
-   int count = (block_end - block)*4; //0;//1;
+   int count = (int)(block_end - block)*4; //0;//1;
 
    bm::word_t  w, w0, w_prev;//, w_l;
    const int w_shift = sizeof(w) * 8 - 1;
