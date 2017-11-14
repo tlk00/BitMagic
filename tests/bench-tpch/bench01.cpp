@@ -640,7 +640,7 @@ void GenerateLineItemIdx(LineItem& litem, const Order& ord, const Customer& cust
         // periodic index compression
         if ((i % 200000) == 0)
         {
-            std::cout << "\r" << i << "[OPT]" << std::flush;            
+            std::cout << "\r" << i << "[OPT]" << std::flush;
             SerializeMergeIDMap(bvs,
                                 temp_buf_vect,
                                 litem.lineitem_shipdate_bvmap,
