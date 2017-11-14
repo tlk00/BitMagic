@@ -162,7 +162,7 @@ struct bvs_index
 struct vect_index
 {
     typedef std::vector<unsigned int>           buffer_type;
-    typedef std::map<unsigned, buffer_type>      map_type;
+    typedef std::map<unsigned, buffer_type>     map_type;
     
     map_type  idx_;
 };
@@ -181,11 +181,33 @@ struct sparse_vect_index
     typedef bm::sparse_vector<unsigned, bm::bvector<> > sparse_vector_type;
     typedef std::map<unsigned, vect_addr>               map_type;
     
+    void get_vector(unsigned id, std::vector<unsigned>& vect) const;
+    
+    
     sparse_vector_type  sv_storage_;
     map_type            idx_;
-    
 };
 
+void sparse_vect_index::get_vector(unsigned id, std::vector<unsigned>& vect) const
+{
+    map_type::const_iterator it = idx_.find(id);
+    if (it != idx_.end())
+    {
+        const sparse_vect_index::vect_addr& vaddr = it->second;
+        vect.resize(vaddr.size);
+        vect[0] = sv_storage_.at(vaddr.offset);
+        for (unsigned j = 1; j < vaddr.size; ++j)
+        {
+            unsigned a = sv_storage_.at(j + vaddr.offset);
+            a += (vect[j-1] + 1);
+            vect[j] = a;
+        } // for j
+    }
+    else
+    {
+        vect.resize(0);
+    }
+}
 
 // --------------------------------------------------------------------
 
@@ -387,8 +409,7 @@ size_t convert_bv2sv(const bv_index& bvi, sparse_vect_index& sv_idx)
         
         // convert into a plain vector first
         //
-        unsigned count = bvp->count();
-        vect.resize(count);
+        vect.resize(0);
         for (TBVector::enumerator en = bvp->first(); en.valid(); ++en)
         {
             vect.push_back(*en);
@@ -396,10 +417,11 @@ size_t convert_bv2sv(const bv_index& bvi, sparse_vect_index& sv_idx)
         
         // convert into delta-vector
         //
-        for (unsigned k  = 1; k < count; ++k)
+        for (int k  = vect.size()-1; k >= 1; --k)
         {
             vect[k] -= vect[k-1];
-        }
+            --vect[k];
+        } // for
         
         // merge to sparse vector
         sparse_vect_index::vect_addr vaddr;
@@ -423,6 +445,43 @@ size_t convert_bv2sv(const bv_index& bvi, sparse_vect_index& sv_idx)
         sv_idx.sv_storage_.optimize(tb, TBVector::opt_compress, &st);
         mem_total += st.memory_used;
     }
+    
+    // check
+    for (bv_index::map_type::const_iterator it = bvi.idx_.begin();
+         it != bvi.idx_.end();
+         ++it)
+    {
+        unsigned id = it->first;
+        const TBVector* bvp = it->second;
+        
+        // convert into a plain vector first
+        //
+        vect.resize(0);
+        for (TBVector::enumerator en = bvp->first(); en.valid(); ++en)
+        {
+            vect.push_back(*en);
+        }
+        
+        //sparse_vect_index::vect_addr vaddr = sv_idx.idx_[id];
+        std::vector<unsigned> svect;
+        sv_idx.get_vector(id, svect);
+        if (svect.size() != vect.size())
+        {
+            std::cerr << "Size check failed!" << std::endl;
+            exit(1);
+        }
+        
+        for (unsigned k = 0; k < vect.size(); ++k)
+        {
+            if (vect[k] != svect[k])
+            {
+                std::cerr << "SV content check failed!" << std::endl;
+                exit(1);
+            }
+        } // for k
+
+    } // for
+    
     //mem_total += sv_idx.idx_.size() * sizeof(sparse_vect_index::vect_addr);
     //bm::print_svector_stat(sv_idx.sv_storage_, false);
 
@@ -447,7 +506,7 @@ void speed_test_bv_index(const bv_index& bvi)
         const TBVector* bvp = it->second;
         bv_join |= *bvp;
     } // for
-    tt1.add_repeats(bvi.idx_.size());
+    bv_join.optimize();
     
     // a group of random vectors from the index map, compute OR
     // then compute AND with the join vector
@@ -482,9 +541,8 @@ void speed_test_bv_index(const bv_index& bvi)
         }
 
     } // for i
-    tt1.add_repeats(benchmark_ops * sample_cnt + 1);
-
-    std::cout << std::endl;
+    
+    tt1.add_repeats(benchmark_ops + 1);
 }
 
 // speed test for in-memory serialized bit vectors
@@ -517,7 +575,7 @@ void speed_test_bvs_index(const bvs_index& bvs)
         
         des.deserialize(bv_join, buf, tb, bm::set_OR);
     } // for
-    tt1.add_repeats(bvs.idx_.size());
+    bv_join.optimize();
 
     // a group of random vectors from the index map, compute OR
     // then compute AND with the join vector
@@ -551,12 +609,9 @@ void speed_test_bvs_index(const bvs_index& bvs)
         {
             result_set.push_back(*en);
         }
-
     } // for i
-    tt1.add_repeats(benchmark_ops * sample_cnt + 1);
-
-
-    std::cout << std::endl;
+    
+    tt1.add_repeats(benchmark_ops + 1);
 }
 
 void speed_test_vect_index(const vect_index& vecti)
@@ -579,7 +634,7 @@ void speed_test_vect_index(const vect_index& vecti)
         
         bm::combine_or(bv_join, vect.begin(), vect.end());
     } // for
-    tt1.add_repeats(vecti.idx_.size());
+    bv_join.optimize();
 
 
     // a group of random vectors from the index map, compute OR
@@ -617,10 +672,68 @@ void speed_test_vect_index(const vect_index& vecti)
         }
 
     } // for i
-    tt1.add_repeats(benchmark_ops * sample_cnt + 1);
-
-    std::cout << std::endl;
+    
+    tt1.add_repeats(benchmark_ops + 1);
 }
+
+void speed_test_sv_index(const sparse_vect_index& svi)
+{
+    TBVector bv_join; // OR join vector
+    
+    bm::chrono_taker tt1("4. sparse_vector<unsigned> operations", 1, &timing_map);
+    
+    std::vector<unsigned> vect;
+
+    // join all vectors using OR operation
+    for (sparse_vect_index::map_type::const_iterator it = svi.idx_.begin();
+         it != svi.idx_.end();
+         ++it)
+    {
+        unsigned id = it->first;
+        svi.get_vector(id, vect);
+        
+        bm::combine_or(bv_join, vect.begin(), vect.end());
+    } // for
+    bv_join.optimize();
+
+
+    // a group of random vectors from the index map, compute OR
+    // then compute AND with the join vector
+    //
+    TBVector bv_res(bm::BM_GAP);
+    std::vector<unsigned> result_set;
+    result_set.reserve(result_set_cnt); // memory reservation to avoid reallocs
+    
+    for (unsigned i = 0; i < benchmark_ops; ++i)
+    {
+        bv_res.clear(true); // free all blocks
+        result_set.resize(0);
+        
+        for (unsigned j = 0; j < sample_cnt; ++j)
+        {
+            unsigned id = rand() % index_size;
+            svi.get_vector(id, vect);
+            if (vect.size() == 0)
+                continue;
+            
+            bm::combine_or(bv_join, vect.begin(), vect.end());
+        } // for j
+        
+        bv_res &= bv_join;
+        
+        // enumerate the final result set, extract first N elements
+        //
+        TBVector::enumerator en = bv_res.first();
+        for (unsigned k = 0; en.valid() && k < result_set_cnt; ++k)
+        {
+            result_set.push_back(*en);
+        }
+
+    } // for i
+
+    tt1.add_repeats(benchmark_ops + 1);
+}
+
 
 
 
@@ -667,6 +780,7 @@ int main(void)
         speed_test_bv_index(bvi);
         speed_test_bvs_index(bvs);
         speed_test_vect_index(vecti);
+        speed_test_sv_index(svi);
 
         std::cout << std::endl << "Performance (ops/sec):" << std::endl;
         bm::chrono_taker::print_duration_map(timing_map, bm::chrono_taker::ct_ops_per_sec);
