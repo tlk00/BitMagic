@@ -26,12 +26,12 @@ PLATFORM_CFLAGS = -D_REENTRANT $(OS_VER) -std=c++11
 COMMON_LDFLAGS = $(LINKER_DFLAGS)  -L/usr/local/lib
 COMMON_CLDFLAGS = $(COMMON_LDFLAGS)
 EXTERN_LIBS = $(EXTERN_LIBS_BASE)/lib
-CXX = g++ -mavx2 -march=native -Wall -std=c++11
+CXX = g++ $(CXXARCHFLAGS) -Wall -std=c++11
 CC = gcc  -Wall
 LD = g++
 CC_PIC_FLAGS = -fPIC
 CXX_PIC_FLAGS = -fPIC
-OPT_FLAGS = -g0 -O2 -march=native -fomit-frame-pointer -pipe
+OPT_FLAGS = -g0 -O2 -fomit-frame-pointer -pipe
 SO_FLAGS = -shared
 SO_LIBS =
 
