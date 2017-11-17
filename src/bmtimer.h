@@ -138,7 +138,7 @@ public:
                 break;
             case ct_ops_per_sec:
                 {
-                unsigned ops = ((double)it->second.repeats / (double)it->second.duration.count()) * 1000;
+                unsigned ops = unsigned(((double)it->second.repeats / (double)it->second.duration.count()) * 1000);
                 std::cout << it->first << "; " << ops << " ops/sec" <<std::endl;
                 }
                 break;

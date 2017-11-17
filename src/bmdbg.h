@@ -536,7 +536,7 @@ void print_svector_stat(const SV& svect, bool print_sim = false)
     struct Jaccard_Func
     {
         unsigned operator () (distance_metric_descriptor* dmit,
-                              distance_metric_descriptor* dmit_end)
+                              distance_metric_descriptor* /*dmit_end*/)
         {
             BM_ASSERT(dmit_end - dmit == 2);
             double d;

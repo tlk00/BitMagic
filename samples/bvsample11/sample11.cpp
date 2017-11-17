@@ -407,7 +407,7 @@ void bv2delta(const TBVector& bv, std::vector<unsigned>& vect)
     // convert into delta-vector
     //
     {
-        for (int k  = vect.size()-1; k >= 1; --k)
+        for (size_t k  = vect.size()-1; k >= 1; --k)
         {
             vect[k] -= vect[k-1];
             --vect[k];
