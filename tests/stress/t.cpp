@@ -6209,6 +6209,8 @@ void SyntaxTest()
     bvect::reference ref = bv1[10];
     bool bn = !ref;
     bool bn2 = ~ref;
+    bv1[10] = bn2;
+    bv1[10] = bn;
 
     bn = bn2 = false;
 
@@ -9647,7 +9649,7 @@ int main(void)
     unsigned long long  *i1 = reinterpret_cast<unsigned long long*>(&d1);
     cerr << "i1= " << *i1 << endl;
     
-    double d2;
+    double d2 = 0.0;
     unsigned long long  *i2 = reinterpret_cast<unsigned long long*>(&d2);
     *i2 ^= 0;
     cerr << "i2=" << *i2 << endl;
