@@ -437,7 +437,7 @@ size_t convert_bv2sv(const bv_index& bvi, sparse_vect_index& sv_idx)
         // compute sum of the delta-vector elements add to the sort map
         {
             uint64_t sum = 0;
-            for (int k  = 1; k < vect.size(); ++k)
+            for (unsigned k  = 1; k < vect.size(); ++k)
             {
                 sum += vect[k];
             } // for
