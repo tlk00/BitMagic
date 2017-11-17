@@ -39,7 +39,7 @@ For more information please visit:  http://bitmagic.io
 #include <map>
 #include <vector>
 #include <chrono>
-
+#include <algorithm>
 
 #include "bm.h"
 #include "bmalgo.h"
@@ -178,13 +178,16 @@ struct sparse_vect_index
         unsigned size;
     };
     
-    typedef bm::sparse_vector<unsigned, bm::bvector<> > sparse_vector_type;
-    typedef std::map<unsigned, vect_addr>               map_type;
+    typedef bm::sparse_vector<unsigned, bm::bvector<> >   sparse_vector_type;
+    typedef std::map<unsigned, vect_addr>                 map_type;
+    typedef std::vector< std::pair<uint64_t, unsigned> >  delta_sum_map_type;
+
     
     void get_vector(unsigned id, std::vector<unsigned>& vect) const;
     
     
     sparse_vector_type  sv_storage_;
+    sparse_vector_type  sv_storage1_;
     map_type            idx_;
 };
 
@@ -194,11 +197,11 @@ void sparse_vect_index::get_vector(unsigned id, std::vector<unsigned>& vect) con
     if (it != idx_.end())
     {
         const sparse_vect_index::vect_addr& vaddr = it->second;
-        vect.resize(vaddr.size);
-        vect[0] = sv_storage_.at(vaddr.offset);
-        for (unsigned j = 1; j < vaddr.size; ++j)
+        vect.resize(vaddr.size+1);
+        vect[0] = sv_storage1_.at(id);
+        for (unsigned j = 1; j < vect.size(); ++j)
         {
-            unsigned a = sv_storage_.at(j + vaddr.offset);
+            unsigned a = sv_storage_.at(j + vaddr.offset - 1);
             a += (vect[j-1] + 1);
             vect[j] = a;
         } // for j
@@ -240,8 +243,8 @@ void generate_random_vector(TBVector* bv)
                 break;
             bv->set_bit(id);
             id += (rand() % 10);
-            if (i >= max_size)
-                break;
+            if (id >= max_size)
+                id = rand() % max_size;
         } // for i
     }
     else // generate a few random bits
@@ -390,6 +393,28 @@ size_t convert_bv2vect(const bv_index& bvi, vect_index& vidx)
     return mem_total;
 }
 
+static
+void bv2delta(const TBVector& bv, std::vector<unsigned>& vect)
+{
+    // convert into a plain vector first
+    //
+    vect.resize(0);
+    for (TBVector::enumerator en = bv.first(); en.valid(); ++en)
+    {
+        vect.push_back(*en);
+    }
+
+    // convert into delta-vector
+    //
+    {
+        for (int k  = vect.size()-1; k >= 1; --k)
+        {
+            vect[k] -= vect[k-1];
+            --vect[k];
+        } // for
+    }
+}
+
 // convert bit-vector index to bm::sparse_vector
 //
 size_t convert_bv2sv(const bv_index& bvi, sparse_vect_index& sv_idx)
@@ -398,7 +423,7 @@ size_t convert_bv2sv(const bv_index& bvi, sparse_vect_index& sv_idx)
     
     std::vector<unsigned> vect;
     
-    unsigned sv_pos = 0; // current position in sparse vector
+    sparse_vect_index::delta_sum_map_type  delta_map;
     
     for (bv_index::map_type::const_iterator it = bvi.idx_.begin();
          it != bvi.idx_.end();
@@ -407,35 +432,62 @@ size_t convert_bv2sv(const bv_index& bvi, sparse_vect_index& sv_idx)
         unsigned id = it->first;
         const TBVector* bvp = it->second;
         
-        // convert into a plain vector first
-        //
-        vect.resize(0);
-        for (TBVector::enumerator en = bvp->first(); en.valid(); ++en)
+        bv2delta(*bvp, vect);
+        
+        // compute sum of the delta-vector elements add to the sort map
         {
-            vect.push_back(*en);
+            uint64_t sum = 0;
+            for (int k  = 1; k < vect.size(); ++k)
+            {
+                sum += vect[k];
+            } // for
+            delta_map.push_back(std::make_pair(sum, id));
         }
-        
-        // convert into delta-vector
-        //
-        for (int k  = vect.size()-1; k >= 1; --k)
-        {
-            vect[k] -= vect[k-1];
-            --vect[k];
-        } // for
-        
-        // merge to sparse vector
-        sparse_vect_index::vect_addr vaddr;
-        vaddr.offset = sv_pos;
-        vaddr.size = (unsigned)vect.size();
-        
-        sv_idx.sv_storage_.import(vect.data(), vaddr.size, vaddr.offset);
-        sv_pos += vaddr.size;
-        
-        sv_idx.idx_[id] = vaddr;
+
         
         //std::cout << "offs=" << sv_pos << sv_idx.sv_storage_.size() << " " << std::flush;
         
     } // for
+    
+    // sort by "enthropy" (sort of)
+    //
+    std::sort(delta_map.begin(), delta_map.end());
+    if (delta_map.size() != bvi.idx_.size()) // paranoia check
+    {
+        std::cerr << "Delta map size is incorrect!" << std::endl;
+        exit(1);
+    }
+    
+    unsigned sv_pos = 0; // current position in sparse vector
+    for (unsigned j = 0; j < delta_map.size(); ++j)
+    {
+        unsigned id = delta_map[j].second;
+        
+        bv_index::map_type::const_iterator it = bvi.idx_.find(id);
+        if (it == bvi.idx_.end())
+            continue;
+        const TBVector& bv = *(it->second);
+        
+        // convert into a plain delta vector again
+        bv2delta(bv, vect);
+
+        sparse_vect_index::vect_addr vaddr;
+        vaddr.offset = sv_pos;
+        vaddr.size = (unsigned)(vect.size() - 1);
+        //vaddr.size = (unsigned)(vect.size());
+        
+        sv_idx.sv_storage1_.set(id, vect[0]);
+        
+        if (vaddr.size)
+        {
+            sv_idx.sv_storage_.import(&vect[1], vaddr.size, vaddr.offset);
+            //sv_idx.sv_storage_.import(vect.data(), vaddr.size, vaddr.offset);
+            sv_pos += vaddr.size;
+        }
+        
+        sv_idx.idx_[id] = vaddr;
+    } // for
+
     
     // optimize sparse vector storage, compute memory consumption
     {
@@ -443,6 +495,8 @@ size_t convert_bv2sv(const bv_index& bvi, sparse_vect_index& sv_idx)
         
         BM_DECLARE_TEMP_BLOCK(tb)
         sv_idx.sv_storage_.optimize(tb, TBVector::opt_compress, &st);
+        mem_total += st.memory_used;
+        sv_idx.sv_storage1_.optimize(tb, TBVector::opt_compress, &st);
         mem_total += st.memory_used;
     }
     
@@ -462,12 +516,14 @@ size_t convert_bv2sv(const bv_index& bvi, sparse_vect_index& sv_idx)
             vect.push_back(*en);
         }
         
-        //sparse_vect_index::vect_addr vaddr = sv_idx.idx_[id];
+        
         std::vector<unsigned> svect;
         sv_idx.get_vector(id, svect);
         if (svect.size() != vect.size())
         {
-            std::cerr << "Size check failed!" << std::endl;
+            std::cerr << "Size check failed! id = " << id
+                      << "size() = " << svect.size()
+                      << std::endl;
             exit(1);
         }
         
@@ -475,7 +531,14 @@ size_t convert_bv2sv(const bv_index& bvi, sparse_vect_index& sv_idx)
         {
             if (vect[k] != svect[k])
             {
-                std::cerr << "SV content check failed!" << std::endl;
+                std::cerr << "SV content check failed! id = " << id
+                          <<  " i=" << k << std::endl;
+                for (unsigned h = 0; h < vect.size(); ++h)
+                {
+                    std::cout << "[" << vect[h] << "=" << svect[h] << "], ";
+                } // for h
+                std::cout << std::endl;
+                
                 exit(1);
             }
         } // for k
@@ -483,7 +546,8 @@ size_t convert_bv2sv(const bv_index& bvi, sparse_vect_index& sv_idx)
     } // for
     
     //mem_total += sv_idx.idx_.size() * sizeof(sparse_vect_index::vect_addr);
-    //bm::print_svector_stat(sv_idx.sv_storage_, false);
+    bm::print_svector_stat(sv_idx.sv_storage_, true);
+    bm::print_svector_stat(sv_idx.sv_storage1_, true);
 
     return mem_total;
 }

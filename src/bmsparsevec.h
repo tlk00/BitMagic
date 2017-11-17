@@ -466,7 +466,7 @@ void sparse_vector<Val, BV>::import(const value_type* arr,
     bm::tmatrix<bm::id_t, sizeof(Val)*8, transpose_window> tm; // matrix accumulator
     
     if (size == 0)
-        throw std::range_error("sparse vector range error");
+        throw std::range_error("sparse vector range error (zero import size)");
     
     // clear all plains in the range to provide corrrect import of 0 values
     this->clear_range(offset, offset + size - 1);
