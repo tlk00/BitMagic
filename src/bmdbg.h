@@ -588,15 +588,17 @@ void print_svector_stat(const SV& svect, bool print_sim = false)
                 
                 unsigned bv_size_x = compute_serialization_size(bvx);
                 int diff = bv_size2 - bv_size_x;
-                
-                std:: cout << "["  << sim_vec[k].get_first_idx()
-                           << ", " << sim_vec[k].get_second_idx()
-                           << "] = "  << sim
-                           << " size(" << sim_vec[k].get_second_idx() << ")="
-                           << bv_size2
-                           << " size(x)=" << bv_size_x
-                           << " diff=" << diff
-                           << std:: endl;
+                if (diff > 0) // only positive diff (saving) counts
+                {
+                    std:: cout << "["  << sim_vec[k].get_first_idx()
+                               << ", " << sim_vec[k].get_second_idx()
+                               << "] = "  << sim
+                               << " size(" << sim_vec[k].get_second_idx() << ")="
+                               << bv_size2
+                               << " size(x)=" << bv_size_x
+                               << " diff=" << diff
+                               << std:: endl;
+                }
             }
         } // for k
     }
