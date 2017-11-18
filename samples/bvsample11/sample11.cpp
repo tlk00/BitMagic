@@ -40,6 +40,7 @@ For more information please visit:  http://bitmagic.io
 #include <vector>
 #include <chrono>
 #include <algorithm>
+#include <stdexcept>
 
 #include "bm.h"
 #include "bmalgo.h"
@@ -198,10 +199,10 @@ void sparse_vect_index::get_vector(unsigned id, std::vector<unsigned>& vect) con
     {
         const sparse_vect_index::vect_addr& vaddr = it->second;
         vect.resize(vaddr.size+1);
-        vect[0] = sv_storage1_.at(id);
+        vect[0] = sv_storage1_.get(id);
         for (unsigned j = 1; j < vect.size(); ++j)
         {
-            unsigned a = sv_storage_.at(j + vaddr.offset - 1);
+            unsigned a = sv_storage_.get(j + vaddr.offset - 1);
             a += (vect[j-1] + 1);
             vect[j] = a;
         } // for j
@@ -215,8 +216,10 @@ void sparse_vect_index::get_vector(unsigned id, std::vector<unsigned>& vect) con
 // --------------------------------------------------------------------
 
 
-// set bits in a vector using two methods picked at random
+// set bits in a vector using various methods picked at random
+///
 // one method will generate a plato of non-random integers,
+// another random integers of near neighbors
 // the other adds ints randomly without following any system
 //
 void generate_random_vector(TBVector* bv)
@@ -233,7 +236,7 @@ void generate_random_vector(TBVector* bv)
         } // for i
     }
     else
-    if (method == 1)
+    if (method == 1) // generate near neighbors
     {
         unsigned seed_id = rand() % max_size;
         unsigned id = seed_id;
@@ -247,7 +250,7 @@ void generate_random_vector(TBVector* bv)
                 id = rand() % max_size;
         } // for i
     }
-    else // generate a few random bits
+    else // generate completely random bits
     {
         for (unsigned i  = 0; i < bits_per_vect; ++i)
         {
@@ -351,8 +354,7 @@ size_t convert_bv2bvs(const bv_index& bvi, bvs_index& bvs)
             bm::deserialize(bv1, vbuf.data());
             if (bv1.compare(*bvp) !=0 )
             {
-                std::cerr << "Deserialization check failed!" << std::endl;
-                exit(1);
+                throw std::runtime_error("deserialization check failed");
             }
         }
         #endif
@@ -443,9 +445,6 @@ size_t convert_bv2sv(const bv_index& bvi, sparse_vect_index& sv_idx)
             } // for
             delta_map.push_back(std::make_pair(sum, id));
         }
-
-        
-        //std::cout << "offs=" << sv_pos << sv_idx.sv_storage_.size() << " " << std::flush;
         
     } // for
     
@@ -454,8 +453,7 @@ size_t convert_bv2sv(const bv_index& bvi, sparse_vect_index& sv_idx)
     std::sort(delta_map.begin(), delta_map.end());
     if (delta_map.size() != bvi.idx_.size()) // paranoia check
     {
-        std::cerr << "Delta map size is incorrect!" << std::endl;
-        exit(1);
+        throw std::runtime_error("delta map size is incorrect");
     }
     
     unsigned sv_pos = 0; // current position in sparse vector
@@ -474,14 +472,12 @@ size_t convert_bv2sv(const bv_index& bvi, sparse_vect_index& sv_idx)
         sparse_vect_index::vect_addr vaddr;
         vaddr.offset = sv_pos;
         vaddr.size = (unsigned)(vect.size() - 1);
-        //vaddr.size = (unsigned)(vect.size());
         
         sv_idx.sv_storage1_.set(id, vect[0]);
         
         if (vaddr.size)
         {
             sv_idx.sv_storage_.import(&vect[1], vaddr.size, vaddr.offset);
-            //sv_idx.sv_storage_.import(vect.data(), vaddr.size, vaddr.offset);
             sv_pos += vaddr.size;
         }
         
@@ -524,7 +520,7 @@ size_t convert_bv2sv(const bv_index& bvi, sparse_vect_index& sv_idx)
             std::cerr << "Size check failed! id = " << id
                       << "size() = " << svect.size()
                       << std::endl;
-            exit(1);
+            throw std::runtime_error("sparse vector content check failed");
         }
         
         for (unsigned k = 0; k < vect.size(); ++k)
@@ -538,16 +534,16 @@ size_t convert_bv2sv(const bv_index& bvi, sparse_vect_index& sv_idx)
                     std::cout << "[" << vect[h] << "=" << svect[h] << "], ";
                 } // for h
                 std::cout << std::endl;
-                
-                exit(1);
+                throw std::runtime_error("sparse vector content check failed");
             }
         } // for k
 
     } // for
     
-    //mem_total += sv_idx.idx_.size() * sizeof(sparse_vect_index::vect_addr);
+    #ifdef DEBUG
     bm::print_svector_stat(sv_idx.sv_storage_, true);
     bm::print_svector_stat(sv_idx.sv_storage1_, true);
+    #endif
 
     return mem_total;
 }
@@ -632,8 +628,7 @@ void speed_test_bvs_index(const bvs_index& bvs)
         const bvs_index::buffer_type& svect = it->second;
         if (svect.size() == 0)
         {
-            std::cerr << "Error! Empty buffer detected." << std::endl;
-            exit(1);
+           throw std::runtime_error("empty buffer error");
         }
         const unsigned char* buf = it->second.data();
         
@@ -692,8 +687,7 @@ void speed_test_vect_index(const vect_index& vecti)
         const vect_index::buffer_type& vect = it->second;
         if (vect.size() == 0)
         {
-            std::cerr << "Error! Empty vector detected." << std::endl;
-            exit(1);
+            throw std::runtime_error("empty buffer error");
         }
         
         bm::combine_or(bv_join, vect.begin(), vect.end());
@@ -800,7 +794,6 @@ void speed_test_sv_index(const sparse_vect_index& svi)
 
 
 
-
 int main(void)
 {
     try
@@ -810,6 +803,8 @@ int main(void)
         vect_index vecti; // index based on plain uncompressed vector<unsigned>
         sparse_vect_index svi; // all ids in a sparse vector
         
+        // experiments generation, measuring memory footprints
+        //
         generate_bv_index(bvi);
         
         size_t bv_mem_total = calc_memory_footprint(bvi);
@@ -840,17 +835,19 @@ int main(void)
                   << svi_mem_total << " (" << svi_mem_total_MB << "MB)"
                   << std::endl;
 
+        // run performance tests
+        //
 
         speed_test_bv_index(bvi);
         speed_test_bvs_index(bvs);
         speed_test_vect_index(vecti);
         speed_test_sv_index(svi);
 
+
         std::cout << std::endl << "Performance (ops/sec):" << std::endl;
         bm::chrono_taker::print_duration_map(timing_map, bm::chrono_taker::ct_ops_per_sec);
 
-
-        //getchar();
+        //getchar();  // uncomment to check memory consumption at the OS level
 
     }
     catch(std::exception& ex)
