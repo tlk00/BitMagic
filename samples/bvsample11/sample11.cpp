@@ -556,7 +556,7 @@ void speed_test_bv_index(const bv_index& bvi)
 {
     TBVector bv_join; // OR join vector
     
-    bm::chrono_taker tt1("1. BitVector index operations", 1, &timing_map);
+    bm::chrono_taker tt1("1. bm::bvector<> index", 1, &timing_map);
 
     // join all vectors using OR operation
     for (bv_index::map_type::const_iterator it = bvi.idx_.begin();
@@ -618,7 +618,7 @@ void speed_test_bvs_index(const bvs_index& bvs)
 
     bm::operation_deserializer<TBVector> des;
     
-    bm::chrono_taker tt1("2. BitVector BLOB operations", 1, &timing_map);
+    bm::chrono_taker tt1("2. serialized bvector", 1, &timing_map);
 
     // join all vectors using OR operation
     for (bvs_index::map_type::const_iterator it = bvs.idx_.begin();
@@ -677,7 +677,7 @@ void speed_test_vect_index(const vect_index& vecti)
 {
     TBVector bv_join; // OR join vector
     
-    bm::chrono_taker tt1("3. vector<unsigned> operations", 1, &timing_map);
+    bm::chrono_taker tt1("3. std::vector<unsigned> ", 1, &timing_map);
 
     // join all vectors using OR operation
     for (vect_index::map_type::const_iterator it = vecti.idx_.begin();
@@ -738,7 +738,7 @@ void speed_test_sv_index(const sparse_vect_index& svi)
 {
     TBVector bv_join; // OR join vector
     
-    bm::chrono_taker tt1("4. sparse_vector<unsigned> operations", 1, &timing_map);
+    bm::chrono_taker tt1("4. bm::sparse_vector<unsigned> ", 1, &timing_map);
     
     std::vector<unsigned> vect;
 
@@ -810,28 +810,28 @@ int main(void)
         size_t bv_mem_total = calc_memory_footprint(bvi);
         size_t bv_mem_total_MB = bv_mem_total / (1024*1024);
         
-        std::cout << "bvector index memory footprint = "
+        std::cout << "bm::bvector<> memory footprint = "
                   << bv_mem_total << " (" << bv_mem_total_MB << "MB)"
                   << std::endl;
         
         size_t bvs_mem_total = convert_bv2bvs(bvi, bvs);
         size_t bvs_mem_total_MB = bvs_mem_total / (1024*1024);
 
-        std::cout << "bvector BLOB index memory footprint = "
+        std::cout << "bm::bvector<> BLOB memory footprint = "
                   << bvs_mem_total << " (" << bvs_mem_total_MB << "MB)"
                   << std::endl;
 
         size_t vecti_mem_total = convert_bv2vect(bvi, vecti);
         size_t vecti_mem_total_MB = vecti_mem_total / (1024*1024);
 
-        std::cout << "vector<unsigned> index memory footprint = "
+        std::cout << "std::vector<unsigned> memory footprint = "
                   << vecti_mem_total << " (" << vecti_mem_total_MB << "MB)"
                   << std::endl;
 
         size_t svi_mem_total = convert_bv2sv(bvi, svi);
         size_t svi_mem_total_MB = svi_mem_total / (1024*1024);
 
-        std::cout << "bm::sparse_vector index memory footprint = "
+        std::cout << "bm::sparse_vector<> memory footprint = "
                   << svi_mem_total << " (" << svi_mem_total_MB << "MB)"
                   << std::endl;
 
