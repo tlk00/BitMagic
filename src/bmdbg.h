@@ -538,7 +538,6 @@ void print_svector_stat(const SV& svect, bool print_sim = false)
         unsigned operator () (distance_metric_descriptor* dmit,
                               distance_metric_descriptor* /*dmit_end*/)
         {
-            BM_ASSERT(dmit_end - dmit == 2);
             double d;
             BM_ASSERT(dmit->metric == COUNT_AND);
             unsigned cnt_and = dmit->result;
