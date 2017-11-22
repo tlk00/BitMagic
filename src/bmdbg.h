@@ -687,6 +687,33 @@ int file_save_svector(const SV& sv, const std::string& fname, size_t* sv_blob_si
     return 0;
 }
 
+template<class SV>
+int file_load_svector(SV& sv, const std::string& fname)
+{
+    std::vector<unsigned char> buffer;
+
+    // read the input buffer, validate errors
+    auto ret = bm::read_dump_file(fname, buffer);
+    if (ret != 0)
+    {
+        return -2;
+    }
+    if (buffer.size() == 0)
+    {
+        return -3;
+    }
+    
+    const unsigned char* buf = &buffer[0];
+    BM_DECLARE_TEMP_BLOCK(tb)
+    auto res = bm::sparse_vector_deserialize(sv, buf, tb);
+    if (res != 0)
+    {
+        return -4;
+    }
+    return 0;
+}
+
+
 // comapre-check if sparse vector is excatly coresponds to vector 
 //
 // returns 0 - if equal
