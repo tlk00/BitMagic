@@ -668,6 +668,42 @@ sparse_vector<Val, BV>::get(bm::id_t i) const
     
     value_type v = 0;
     const bvector_type* bv;
+    
+    // calculate logical block coordinates and masks
+    //
+    unsigned nb = unsigned(i >>  bm::set_block_shift);
+    unsigned i0 = nb >> bm::set_array_shift; // top block address
+    unsigned j0 = nb &  bm::set_array_mask;  // address in sub-block
+    unsigned nbit = unsigned(i & bm::set_block_mask);
+    unsigned nword  = unsigned(nbit >> bm::set_word_shift);
+    unsigned nbit0 = nbit & bm::set_word_mask;
+    unsigned mask0 = 1u << nbit0;
+    unsigned is_set;
+    
+    for (unsigned j = 0; j < sizeof(Val)*8; ++j)
+    {
+        bv = this->plains_[j];
+        if (!bv)
+            continue;
+        const typename bvector_type::blocks_manager_type& bman = bv->get_blocks_manager();
+        const bm::word_t* blk = bman.get_block(i0, j0);
+        if (blk == 0)
+            continue;
+        if (BM_IS_GAP(blk))
+        {
+            is_set = gap_test(BMGAP_PTR(blk), nbit);
+        }
+        else
+        {
+            is_set = (blk[nword] & mask0);
+        }
+
+        bool b = (is_set != 0);
+        BM_ASSERT(b == bv->test(i));
+        v |= (b << j);
+    } // for j
+    
+    /*
     for (unsigned j = 0; j < sizeof(Val)*8; ++j)
     {
         if ((bv = this->plains_[j])!=0)   v |= ((bv->test(i))<<j);
@@ -675,6 +711,7 @@ sparse_vector<Val, BV>::get(bm::id_t i) const
         if ((bv = this->plains_[++j])!=0) v |= ((bv->test(i))<<j);
         if ((bv = this->plains_[++j])!=0) v |= ((bv->test(i))<<j);
     }
+    */
     return v;
 }
 
