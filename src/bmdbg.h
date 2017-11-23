@@ -614,11 +614,19 @@ void print_svector_stat(const SV& svect, bool print_sim = false)
     std::cout << "Memory used:      " << st.memory_used << " "
               << (st.memory_used / (1024 * 1024))       << "MB" << std::endl;
     
-    std::cout << "Projected mem usage for vector<int>:" << sizeof(int) * svect.size() << std::endl;
-    std::cout << "Projected mem usage for vector<long long>:" << sizeof(long long) * svect.size() << std::endl;
+    std::cout << "Projected mem usage for vector<int>:"
+              << sizeof(int) * svect.size() << " "
+              << (sizeof(int) * svect.size()) / (1024 * 1024) << "MB"
+              << std::endl;
+    if (sizeof(typename SV::value_type) > 4)
+    {
+        std::cout << "Projected mem usage for vector<long long>:"
+                  << sizeof(long long) * svect.size() << std::endl;
+    }
     
-    std::cout << "Plains:" << std::endl;
-    
+    std::cout << "\nPlains:" << std::endl;
+
+    typename SV::bvector_type bv_join; // global OR of all plains
     for (unsigned i = 0; i < svect.plains(); ++i)
     {
         const typename SV::bvector_type* bv_plain = svect.plain(i);
@@ -642,11 +650,31 @@ void print_svector_stat(const SV& svect, bool print_sim = false)
             }
             else
             {
+                bv_join |= *bv_plain;
+                
                 std::cout << bv_plain->count();
+                typename SV::bvector_type::statistics bst;
+                bv_plain->calc_stat(&bst);
+                std::cout << " - Blocks: [ "
+                          << "B:" << bst.bit_blocks
+                          << ", G:" << bst.gap_blocks << "]"
+                          ;
+                
             }
             std::cout << std::endl;
-        
     } // for i
+    if (svect.size())
+    {
+        bm::id64_t bv_join_cnt = bv_join.count();
+        double fr = double(bv_join_cnt) / double (svect.size());
+        std::cout << "Non-zero elements: " << bv_join_cnt << " "
+                  << "ratio=" << fr
+                  << std::endl;
+        size_t non_zero_mem = bv_join_cnt * sizeof(typename SV::value_type);
+        std::cout << "Projected mem usage for non-zero elements: " << non_zero_mem << " "
+                  << non_zero_mem / (1024*1024) << " MB"
+                  << std::endl;
+    }
 }
 
 // save sparse_vector dump to disk
