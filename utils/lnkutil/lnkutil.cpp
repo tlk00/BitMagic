@@ -638,10 +638,7 @@ void run_benchmark(link_matrix& lm)
             bv_res = bv_remap;
             bv_res &= bv_sample_to;
             
-            //std::cout << bv_res.count() << ", " << std::flush;
-            
         } // for i
-        //std::cout << std::endl;
     }
 
 
