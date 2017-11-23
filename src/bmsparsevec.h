@@ -51,6 +51,20 @@ namespace bm
 
 /*!
    \brief sparse vector with runtime compression using bit transposition method
+ 
+   Sparse vector implements variable bit-depth storage model.
+   Initial data is bit-transposed into bit-planes so initial each element
+   may use less memory than the original native data type prescribes.
+   For example, 32-bit integer may only use 20 bits.
+ 
+   Another level of compression is provided by bit-vector (BV template parameter)
+   used for storing bit planes. bvector<> implements varians of on the fly block
+   compression, so if a significant area of a sparse vector uses less bits - it
+   will save memory.
+ 
+   Overall it provides variable bit-depth compression, sparse compression in
+   bit-plains.
+ 
    \ingroup svector
 */
 template<class Val, class BV>
