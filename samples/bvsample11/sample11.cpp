@@ -595,7 +595,7 @@ void speed_test_bv_index(const bv_index& bvi)
         // enumerate the final result set, extract first N elements
         //
         TBVector::enumerator en = bv_res.first();
-        for (unsigned k = 0; en.valid() && k < result_set_cnt; ++k)
+        for (unsigned k = 0; en.valid() && k < result_set_cnt; ++k, ++en)
         {
             result_set.push_back(*en);
         }
@@ -664,7 +664,7 @@ void speed_test_bvs_index(const bvs_index& bvs)
         // enumerate the final result set, extract first N elements
         //
         TBVector::enumerator en = bv_res.first();
-        for (unsigned k = 0; en.valid() && k < result_set_cnt; ++k)
+        for (unsigned k = 0; en.valid() && k < result_set_cnt; ++k, ++en)
         {
             result_set.push_back(*en);
         }
@@ -724,7 +724,7 @@ void speed_test_vect_index(const vect_index& vecti)
         // enumerate the final result set, extract first N elements
         //
         TBVector::enumerator en = bv_res.first();
-        for (unsigned k = 0; en.valid() && k < result_set_cnt; ++k)
+        for (unsigned k = 0; en.valid() && k < result_set_cnt; ++k, ++en)
         {
             result_set.push_back(*en);
         }
@@ -782,7 +782,7 @@ void speed_test_sv_index(const sparse_vect_index& svi)
         // enumerate the final result set, extract first N elements
         //
         TBVector::enumerator en = bv_res.first();
-        for (unsigned k = 0; en.valid() && k < result_set_cnt; ++k)
+        for (unsigned k = 0; en.valid() && k < result_set_cnt; ++k, ++en)
         {
             result_set.push_back(*en);
         }
