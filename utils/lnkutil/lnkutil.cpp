@@ -242,14 +242,28 @@ void link_matrix::optimize()
 
 void link_matrix::print_stat() const
 {
-    std::cout << "sv 11 statistics:" << std::endl;
+    std::cout << "\nsv 11 statistics:" << std::endl;
+    std::cout << "-----------------" << std::endl;
     bm::print_svector_stat(sv_11, false);
-    std::cout << "sv offs statistics:" << std::endl;
+    std::cout << "\nsv offs statistics:" << std::endl;
+    std::cout << "-----------------" << std::endl;
     bm::print_svector_stat(sv_offs, false);
-    std::cout << "sv size statistics:" << std::endl;
+    std::cout << "\nsv size statistics:" << std::endl;
+    std::cout << "-----------------" << std::endl;
     bm::print_svector_stat(sv_sz, false);
-    std::cout << "sv 1M statistics:" << std::endl;
+    std::cout << "\nsv 1M statistics:" << std::endl;
+    std::cout << "-----------------" << std::endl;
     bm::print_svector_stat(sv_1m, false);
+
+/*
+    std::cout << "\nbvector-from statistics:" << std::endl;
+    std::cout << "-----------------" << std::endl;
+    bm::print_stat(bv_from);
+    
+    std::cout << "\nbvector-to statistics:" << std::endl;
+    std::cout << "-----------------" << std::endl;
+    bm::print_stat(bv_to);
+*/
 }
 
 void link_matrix::save(const std::string& base_name) const
