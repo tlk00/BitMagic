@@ -68,6 +68,7 @@ For more information please visit:  http://bitmagic.io
 /** @defgroup AVX2 AVX2 functions
     Processor specific optimizations for AVX2 instructions (internals)
     @ingroup bvector
+    @internal
  */
 
 

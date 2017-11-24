@@ -40,7 +40,7 @@ ENABLED_SECTIONS       =
 MAX_INITIALIZER_LINES  = 30
 OPTIMIZE_OUTPUT_FOR_C  = YES
 SHOW_USED_FILES        = YES
-INTERNAL_DOC           = YES
+INTERNAL_DOC           = NO
 #---------------------------------------------------------------------------
 # configuration options related to warning and progress messages
 #---------------------------------------------------------------------------
