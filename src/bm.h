@@ -1223,7 +1223,7 @@ public:
     */
     bm::id_t count_range(bm::id_t left, 
                          bm::id_t right, 
-                         unsigned* block_count_arr=0) const;
+                         const unsigned* block_count_arr=0) const;
 
 
     bm::id_t recalc_count()
@@ -1815,7 +1815,7 @@ void bvector<Alloc>::resize(size_type new_size)
 template<typename Alloc> 
 bm::id_t bvector<Alloc>::count_range(bm::id_t left, 
                                          bm::id_t right, 
-                                         unsigned* block_count_arr) const
+                                         const unsigned* block_count_arr) const
 {
     BM_ASSERT(left <= right);
     
