@@ -389,6 +389,20 @@ void print_bc(unsigned i, unsigned count)
     }
 }
 
+template<class BV>
+void print_bvector_stat(const BV& bvect)
+{
+    typename BV::statistics st;
+    bvect.calc_stat(&st);
+    
+    std::cout << " - Blocks: [ "
+              << "B:"     << st.bit_blocks
+              << ", G:"   << st.gap_blocks << "] "
+              << ", mem = " << st.memory_used << " " << (st.memory_used / (1024 * 1024)) << "MB "
+              << ", max smem:" << st.max_serialize_mem << " " << (st.max_serialize_mem / (1024 * 1024)) << "MB "
+              << std::endl;
+}
+
 
 template<class BV>
 void print_stat(const BV& bv, unsigned blocks = 0)
@@ -652,16 +666,8 @@ void print_svector_stat(const SV& svect, bool print_sim = false)
             {
                 bv_join |= *bv_plain;
                 
-                std::cout << bv_plain->count();
-                typename SV::bvector_type::statistics bst;
-                bv_plain->calc_stat(&bst);
-                std::cout << " - Blocks: [ "
-                          << "B:" << bst.bit_blocks
-                          << ", G:" << bst.gap_blocks << "]"
-                          ;
-                
+                print_bvector_stat(*bv_plain);
             }
-            std::cout << std::endl;
     } // for i
     if (svect.size())
     {
