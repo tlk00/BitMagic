@@ -183,7 +183,89 @@ void convert_from_delta(std::vector<unsigned>& vect)
 //
 typedef bm::sparse_vector<unsigned, bm::bvector<> > sparse_vector_u32;
 
+
+
+
+/// compressed sparse vector
 ///
+struct compress_svector
+{
+    sparse_vector_u32::bvector_type   bv_descr;  ///< bit-vector descriptor
+    sparse_vector_u32                 sv_stor;   ///< sparse-vector store
+    unsigned                          blocks_bc[bm::set_total_blocks];
+    
+    void load_from(const sparse_vector_u32& sv);
+    bool equal(const sparse_vector_u32& sv) const;
+    
+    sparse_vector_u32::value_type get(unsigned i) const;
+    void optimize_gap_size();
+    
+};
+
+void compress_svector::load_from(const sparse_vector_u32& sv)
+{
+    bm::compute_nonzero_bvector(sv, bv_descr);
+    sparse_vector_u32::bvector_type::counted_enumerator enc = bv_descr.first();
+    for (;enc.valid(); ++enc)
+    {
+        unsigned idx = *enc;
+        unsigned pos = enc.count();
+        
+        unsigned v = sv.get(idx);
+        
+        if (v == 0)
+        {
+            std::cerr << "Compress vector build error" << std::endl;
+            exit(1);
+        }
+        
+        sv_stor.set(pos, v);
+    } // for en
+    
+    BM_DECLARE_TEMP_BLOCK(tb)
+    bv_descr.optimize(tb);
+    sv_stor.optimize(tb);
+    
+    bv_descr.count_blocks(blocks_bc); // compute popcount skip list
+}
+
+void compress_svector::optimize_gap_size()
+{
+    bv_descr.optimize_gap_size();
+    sv_stor.optimize_gap_size();
+}
+
+sparse_vector_u32::value_type compress_svector::get(unsigned i) const
+{
+    sparse_vector_u32::value_type v = 0;
+    bool found = bv_descr.test(i);
+    if (!found)
+        return v;
+    
+    unsigned pos = bv_descr.count_range(0, i, blocks_bc);
+    v = sv_stor.get(pos);
+    return v;
+}
+
+bool compress_svector::equal(const sparse_vector_u32& sv) const
+{
+    for (unsigned i = 0; i < sv.size(); ++i)
+    {
+        unsigned v0 = sv.get(i);
+        unsigned v1 = get(i);
+        if (v0 != v1)
+            return false;
+        if (i % 10000 == 0)
+        {
+            std::cout << "\r" << i << " / " << sv.size() << std::flush;
+        }
+    }
+    std::cout << std::endl;
+    return true;
+}
+
+
+/// Sparse matrix storage for experiments with precalculated ER joins
 ///
 struct link_matrix
 {
@@ -199,6 +281,9 @@ struct link_matrix
     sparse_vector_u32  sv_1m;      ///< vector of 1xM relationships
     
     unsigned off;  /// accumulated offset for vectors
+    
+    compress_svector  sv_11_c;  ///< compressed vector of 1x1 relationships
+    compress_svector  sv_offs_c;///< compressed vector of offsets
     
     link_matrix()
      : bv_from(bm::BM_GAP),
@@ -255,15 +340,26 @@ void link_matrix::print_stat() const
     std::cout << "-----------------" << std::endl;
     bm::print_svector_stat(sv_1m, false);
 
-/*
+
     std::cout << "\nbvector-from statistics:" << std::endl;
     std::cout << "-----------------" << std::endl;
-    bm::print_stat(bv_from);
+    bm::print_bvector_stat(bv_from);
     
     std::cout << "\nbvector-to statistics:" << std::endl;
     std::cout << "-----------------" << std::endl;
-    bm::print_stat(bv_to);
-*/
+    bm::print_bvector_stat(bv_to);
+
+
+    std::cout << "\nsv 11 C statistics:" << std::endl;
+    std::cout << "-----------------" << std::endl;
+    bm::print_svector_stat(sv_11_c.sv_stor, false);
+    bm::print_bvector_stat(sv_11_c.bv_descr);
+
+    std::cout << "\nsv OFFS C statistics:" << std::endl;
+    std::cout << "-----------------" << std::endl;
+    bm::print_svector_stat(sv_offs_c.sv_stor, false);
+    bm::print_bvector_stat(sv_offs_c.bv_descr);
+
 }
 
 void link_matrix::save(const std::string& base_name) const
@@ -295,7 +391,21 @@ void link_matrix::save(const std::string& base_name) const
         std::cerr << "File save error." << std::endl;
     }
     }
-    
+
+    {
+    std::string sv11c_fname = base_name;
+    sv11c_fname.append("_sv11-c.sv");
+    int res = file_save_svector(sv_11_c.sv_stor, sv11c_fname);
+    if (res != 0)
+    {
+        std::cerr << "File save error." << std::endl;
+    }
+    sv11c_fname = base_name;
+    sv11c_fname.append("_sv11-c.bv");
+    SaveBVector(sv11c_fname.c_str(), sv_11_c.bv_descr);
+    }
+
+
     {
     std::string svoffs_fname = base_name;
     svoffs_fname.append("_svoffs.sv");
@@ -305,6 +415,20 @@ void link_matrix::save(const std::string& base_name) const
         std::cerr << "File save error." << std::endl;
     }
     }
+    
+    {
+    std::string svoffsc_fname = base_name;
+    svoffsc_fname.append("_svoffs-c.sv");
+    int res = file_save_svector(sv_offs_c.sv_stor, svoffsc_fname);
+    if (res != 0)
+    {
+        std::cerr << "File save error." << std::endl;
+    }
+    svoffsc_fname = base_name;
+    svoffsc_fname.append("_svoffs-c.bv");
+    SaveBVector(svoffsc_fname.c_str(), sv_offs_c.bv_descr);
+    }
+
     
     {
     std::string svsz_fname = base_name;
@@ -329,24 +453,29 @@ void link_matrix::save(const std::string& base_name) const
 
 void link_matrix::load(const std::string& base_name)
 {
+
     {
     std::string bv_from_fname = base_name;
     bv_from_fname.append("_bvfrom.bv");
     LoadBVector(bv_from_fname.c_str(), bv_from);
+    //bv_from.optimize_gap_size();
     }
 
     {
     std::string bv_to_fname = base_name;
     bv_to_fname.append("_bvto.bv");
     LoadBVector(bv_to_fname.c_str(), bv_to);
+    //bv_to.optimize_gap_size();
     }
-    
+
     {
     std::string bv_11f_fname = base_name;
     bv_11f_fname.append("_bv11f.bv");
     LoadBVector(bv_11f_fname.c_str(), bv_11_flag);
+    //bv_11_flag.optimize_gap_size();
     }
 
+    /*
     {
     std::string sv11_fname = base_name;
     sv11_fname.append("_sv11.sv");
@@ -356,7 +485,24 @@ void link_matrix::load(const std::string& base_name)
         std::cerr << "File load error." << std::endl;
     }
     }
+    */
     
+    {
+    std::string sv11c_fname = base_name;
+    sv11c_fname.append("_sv11-c.sv");
+    int res = file_load_svector(sv_11_c.sv_stor, sv11c_fname);
+    if (res != 0)
+    {
+        std::cerr << "File load error." << std::endl;
+    }
+    sv11c_fname = base_name;
+    sv11c_fname.append("_sv11-c.bv");
+    LoadBVector(sv11c_fname.c_str(), sv_11_c.bv_descr);
+    
+    //sv_11_c.optimize_gap_size();
+    }
+
+    /*
     {
     std::string svoffs_fname = base_name;
     svoffs_fname.append("_svoffs.sv");
@@ -366,6 +512,23 @@ void link_matrix::load(const std::string& base_name)
         std::cerr << "File load error." << std::endl;
     }
     }
+    */
+    
+    {
+    std::string svoffsc_fname = base_name;
+    svoffsc_fname.append("_svoffs-c.sv");
+    int res = file_load_svector(sv_offs_c.sv_stor, svoffsc_fname);
+    if (res != 0)
+    {
+        std::cerr << "File load error." << std::endl;
+    }
+    svoffsc_fname = base_name;
+    svoffsc_fname.append("_svoffs-c.bv");
+    LoadBVector(svoffsc_fname.c_str(), sv_offs_c.bv_descr);
+    
+    //sv_offs_c.optimize_gap_size();
+    }
+
     
     {
     std::string svsz_fname = base_name;
@@ -375,6 +538,7 @@ void link_matrix::load(const std::string& base_name)
     {
         std::cerr << "File load error." << std::endl;
     }
+    //sv_sz.optimize_gap_size();
     }
 
     {
@@ -385,21 +549,52 @@ void link_matrix::load(const std::string& base_name)
     {
         std::cerr << "File load error." << std::endl;
     }
+    //sv_1m.optimize_gap_size();
     }
+    
+    // ---------------------------------
+    // build compress vectors
+    /*
+    std::cout << "Building compressed vector (sv_11) " << std::endl;
+    sv_11_c.load_from(sv_11);
+    std::cout << "OK " << std::endl;
+    
+    std::cout << "Building compressed vector (sv_offs) " << std::endl;
+    sv_offs_c.load_from(sv_offs);
+    std::cout << "OK " << std::endl;
+    */
+    
+    /*
+    std::cout << "Validating compressed vector " << std::endl;
+    bool check = sv_11_c.equal(sv_11);
+    if (!check)
+    {
+        std::cerr << "Compressed sparse comparison failed" << std::endl;
+        exit(1);
+    }
+    */
 }
 
 
 bool link_matrix::get_vector(unsigned id_from, std::vector<unsigned>& vect) const
 {
+/*
     if (!bv_from.test(id_from))
     {
+        std::cerr << "id from not found" << std::endl;
+        exit(1);
         vect.resize(0);
         return false;
     }
-    
+*/
+    unsigned vc;
+    //std::cout << id_from << ", " << std::flush;
     if (bv_11_flag.test(id_from))
     {
+        vc = sv_11_c.get(id_from);
+        /*
         unsigned v = sv_11.get(id_from);
+        
         if (v == 0)
         {
             std::cerr << "Single value find error" << std::endl;
@@ -407,24 +602,50 @@ bool link_matrix::get_vector(unsigned id_from, std::vector<unsigned>& vect) cons
             vect.resize(0);
             return false;
         }
-        vect.push_back(v);
+     
+        if (v != vc)
+        {
+            std::cerr << "Single value get error" << std::endl;
+            exit(1);
+        }
+        */
+     
+        vect.push_back(vc);
         return true;
     }
     
-    unsigned sz = sv_sz.get(id_from);
-    unsigned offs = sv_offs.get(id_from);
     
+    unsigned offs_c = sv_offs_c.get(id_from);
+/*
+    unsigned offs = sv_offs.get(id_from);
+    if (offs_c != offs)
+    {
+        std::cerr << "offset check error" << std::endl;
+        exit(1);
+    }
+*/
+    unsigned sz = sv_sz.get(id_from);
+    vect.resize(sz);
     if (sz==0)
     {
+        return false;
         std::cerr << "vector size error" << std::endl;
         exit(1);
     }
     
-    vect.resize(sz);
-    vect[0] = sv_11.get(id_from);
+    vc = sv_11_c.get(id_from);
+/*
+    unsigned v = sv_11.get(id_from);
+    if (v != vc)
+    {
+        std::cerr << "Array 0 value get error" << std::endl;
+        exit(1);
+    }
+*/
+    vect[0] = vc;
     for (unsigned j = 1; j < sz; ++j)
     {
-        unsigned v = sv_1m.get(j + offs - 1);
+        unsigned v = sv_1m.get(j + offs_c - 1);
         vect[j] = v;
     }
     
@@ -535,7 +756,7 @@ int load_ln(const std::string& fname, link_matrix& lm)
                 std::sort(vbuf.begin(), vbuf.end());
 
             lm.add_vector(id, vbuf);
-            
+            /*
             {
                 std::vector<unsigned> vcheck;
                 bool found = lm.get_vector(id, vcheck);
@@ -565,6 +786,7 @@ int load_ln(const std::string& fname, link_matrix& lm)
                     }
                 } // for
             }
+            */
             
             vbuf.resize(0);
             
@@ -585,6 +807,15 @@ int load_ln(const std::string& fname, link_matrix& lm)
         lm.add_vector(id, vbuf);
     }
     lm.optimize();
+    
+    std::cout << "Building compressed vector (sv_11) " << std::endl;
+    lm.sv_11_c.load_from(lm.sv_11);
+    std::cout << "OK " << std::endl;
+    
+    std::cout << "Building compressed vector (sv_offs) " << std::endl;
+    lm.sv_offs_c.load_from(lm.sv_offs);
+    std::cout << "OK " << std::endl;
+
 
     std::cout << std::endl;
     
@@ -651,7 +882,7 @@ void run_benchmark(link_matrix& lm)
             
             bv_res = bv_remap;
             bv_res &= bv_sample_to;
-            
+std::cout << "." << std::flush;
         } // for i
     }
 
@@ -684,17 +915,18 @@ int main(int argc, char *argv[])
             }
         }
         
-        if (!lm_out_name.empty())
-        {
-            bm::chrono_taker tt1("1. matrix save", 1, &timing_map);
-            link_m.save(lm_out_name);
-        }
-        
         if (!lm_in_name.empty())
         {
             bm::chrono_taker tt1("2. matrix load", 1, &timing_map);
             link_m.load(lm_in_name);
         }
+        
+        if (!lm_out_name.empty())
+        {
+            bm::chrono_taker tt1("1. matrix save", 1, &timing_map);
+            link_m.save(lm_out_name);
+        }
+
 
         if (is_diag)
         {
@@ -718,7 +950,7 @@ int main(int argc, char *argv[])
 
         }
         
-        //getchar();
+        getchar();
     }
     catch (std::exception& ex)
     {
