@@ -8552,6 +8552,15 @@ void TestSparseVector()
         cout << sv.at(i) << ",";
     }
     cout << endl;
+    
+    bm::bvector<> bv;
+    bm::compute_nonzero_bvector(sv, bv);
+    if (bv.count() != sv.size())
+    {
+        cerr << "compute_nonzero_bvector test failed" << endl;
+        exit(1);
+    }
+    
     }}
     
     cout << "Import test..." << endl;
