@@ -298,6 +298,13 @@ public:
     void optimize(bm::word_t* temp_block = 0,
                   typename bvector_type::optmode opt_mode = bvector_type::opt_compress,
                   typename sparse_vector<Val, BV>::statistics* stat = 0);
+    /*!
+       \brief Optimize sizes of GAP blocks
+
+       This method runs an analysis to find optimal GAP levels for all bit plains
+       of the vector.
+    */
+    void optimize_gap_size();
     
     /*!
         \brief join all with another sparse vector using OR operation
@@ -918,6 +925,22 @@ void sparse_vector<Val, BV>::optimize(
         }
     } // for j
 
+}
+
+//---------------------------------------------------------------------
+
+
+template<class Val, class BV>
+void sparse_vector<Val, BV>::optimize_gap_size()
+{
+    for (unsigned j = 0; j < sizeof(Val) * 8; ++j)
+    {
+        bvector_type* bv = this->plains_[j];
+        if (bv)
+        {
+            bv->optimize_gap_size();
+        }
+    }
 }
 
 //---------------------------------------------------------------------
