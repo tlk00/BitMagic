@@ -1051,14 +1051,6 @@ bm::id_t sse42_bit_block_calc_count_change(const __m128i* BMRESTRICT block,
 
 
 
-// undefine some local macro definitions to avoid preprocessor pollution
-//
-#undef BM_CSA256
-#undef BM_AVX2_BIT_COUNT
-#undef BM_AVX2_DECL_LOOKUP1
-#undef BM_AVX2_POPCNT_PROLOG
-
-
 } // namespace
 
 
