@@ -16,5 +16,5 @@ BitMagic Library samples
 ./svsample02 - sparse_vector<> serialization example
 ./svsample03 - sparse_vector<> import, join, extract methods
 
-./xsample01 - advanced: different methods of handling of super sparse sets. Benchmarks of set operations for each method.
+./xsample01 - advanced: different methods of handling of super sparse sets. Benchmarks of set operations for each method. Details at: http://bitmagic.io/pdf/bv-mem-footprint.pdf
 
