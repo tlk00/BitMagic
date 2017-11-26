@@ -1841,7 +1841,7 @@ void bvector<Alloc>::resize(size_type new_size)
 // -----------------------------------------------------------------------
 
 template<typename Alloc>
-void bvector<Alloc>::running_count_blocks(bvector<Alloc>::blocks_count* blocks_cnt) const
+void bvector<Alloc>::running_count_blocks(blocks_count* blocks_cnt) const
 {
     BM_ASSERT(blocks_cnt);
     
