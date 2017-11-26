@@ -1155,6 +1155,31 @@ void CheckIntervals(const bvect& bv, unsigned max_bit)
     }
 }
 
+template<class T> void CheckCountGapRange(const T& vect,
+                                       unsigned left,
+                                       unsigned right,
+                                       unsigned* block_count_arr=0)
+{
+    unsigned cnt1 = vect.count_range(left, right, block_count_arr);
+    unsigned cnt2 = 0;
+    for (unsigned i = left; i <= right; ++i)
+    {
+        if (vect.test(i))
+        {
+            ++cnt2;
+        }
+    }
+    if (cnt1 != cnt2)
+    {
+        cout << "Bitcount range failed!" << "left=" << left
+             << " right=" << right << endl
+             << "count_range()=" << cnt1
+             << " check=" << cnt2;
+        exit(1);
+    }
+}
+
+
 template<class T> void CheckCountRange(const T& vect, 
                                        unsigned left, 
                                        unsigned right,
@@ -1162,16 +1187,13 @@ template<class T> void CheckCountRange(const T& vect,
 {
     unsigned cnt1 = vect.count_range(left, right, block_count_arr);
     unsigned cnt2 = 0;
-//cout << endl;
     for (unsigned i = left; i <= right; ++i)
     {
         if (vect.test(i))
         {
-//            cout << i << " " << flush;
             ++cnt2;
         }
     }
-//cout << endl;
     if (cnt1 != cnt2)
     {
         cout << "Bitcount range failed!" << "left=" << left 
@@ -1179,6 +1201,26 @@ template<class T> void CheckCountRange(const T& vect,
              << "count_range()=" << cnt1 
              << " check=" << cnt2;
         exit(1);
+    }
+    
+    bvect::blocks_count bc_arr;
+    vect.running_count_blocks(&bc_arr);
+    
+    // run a cycle to check count_to()
+    //
+    left = 0;
+    //for (unsigned i = 0; i <= right; ++i)
+    {
+        unsigned cnt1 = vect.count_range(left, right, block_count_arr);
+        unsigned cnt2 = vect.count_to(right, bc_arr);
+        if (cnt1 != cnt2)
+        {
+            cout << "Bitcount range TO failed!" << "left=" << left
+                 << " right=" << right << endl
+                 << "count_range()=" << cnt1
+                 << " check=" << cnt2;
+            exit(1);
+        }
     }
 }
 
@@ -4117,8 +4159,8 @@ void GAPCheck()
        exit(1);
    }
    
-   CheckCountRange(gapv, 10, 20);
-   CheckCountRange(gapv, 0, 20);
+   CheckCountGapRange(gapv, 10, 20);
+   CheckCountGapRange(gapv, 0, 20);
 
    CheckGap2DGap(gapv);
 
@@ -4159,8 +4201,8 @@ void GAPCheck()
        cout << "count_range failed:" << cnt << endl;
        exit(1);
    }
-   CheckCountRange(gapv, 10, 20);
-   CheckCountRange(gapv, 0, 20);
+   CheckCountGapRange(gapv, 10, 20);
+   CheckCountGapRange(gapv, 0, 20);
 
    CheckGap2DGap(gapv);
 
@@ -4176,7 +4218,7 @@ void GAPCheck()
    gapv.set_bit(0);
 
    gapv.control();
-   CheckCountRange(gapv, 0, 20);
+   CheckCountGapRange(gapv, 0, 20);
 
    int bit = gapv.is_bit_true(0);
 
@@ -4217,12 +4259,12 @@ void GAPCheck()
    gapv.control();
    gapv.set_bit(5);
    gapv.control();
-   CheckCountRange(gapv, 4, 5);
-   CheckCountRange(gapv, 3, 5);
+   CheckCountGapRange(gapv, 4, 5);
+   CheckCountGapRange(gapv, 3, 5);
 
    gapv.set_bit(3);
-   CheckCountRange(gapv, 3, 3);
-   CheckCountRange(gapv, 3, 5);
+   CheckCountGapRange(gapv, 3, 3);
+   CheckCountGapRange(gapv, 3, 5);
 
    gapv.control();
    
@@ -4270,7 +4312,7 @@ void GAPCheck()
         
         cout << "++++++4" << endl;
 
-        CheckCountRange(gapv, 13, 150);
+        CheckCountGapRange(gapv, 13, 150);
         gapv.control();
         
         CheckGap2DGap(gapv);
@@ -4331,7 +4373,7 @@ void GAPCheck()
             bvect_min.set_bit(i);
             gapv.set_bit(i);
             gapv.control();
-            CheckCountRange(gapv, 0, i);
+            CheckCountGapRange(gapv, 0, i);
             
 
             int bit1 = (gapv.is_bit_true(i) == 1);
@@ -4379,8 +4421,8 @@ void GAPCheck()
             bvect_min.set_bit(id);
             gapv.set_bit(id);
             gapv.control();
-            CheckCountRange(gapv, 0, id);
-            CheckCountRange(gapv, id, 65535);
+            CheckCountGapRange(gapv, 0, id);
+            CheckCountGapRange(gapv, id, 65535);
             
             CheckGap2DGap(gapv);
 
@@ -4572,7 +4614,7 @@ void GAPCheck()
    gapv.set_bit(11);
    gapv.set_bit(12);
    
-   CheckCountRange(gapv, 3, 15);
+   CheckCountGapRange(gapv, 3, 15);
 
    print_gap(gapv, 100);
    bvect.set_bit(0);
@@ -4631,7 +4673,7 @@ void GAPCheck()
       cout << "Wrong bit" << endl;
       exit(1);
    }
-   CheckCountRange(gapv1, 0, 17);
+   CheckCountGapRange(gapv1, 0, 17);
 
    }
 
@@ -4703,7 +4745,7 @@ void GAPCheck()
         bvect_min2.set_bit(65535);
         gapv2.set_bit(3);
         bvect_min2.set_bit(3);
-        CheckCountRange(gapv2, 3, 65535);
+        CheckCountGapRange(gapv2, 3, 65535);
 
         gapv2.control();
 
@@ -4735,8 +4777,8 @@ void GAPCheck()
             bvect_min1.set_bit(id);
             gapv1.set_bit(id);
             gapv1.control();
-            CheckCountRange(gapv1, 0, id);
-            CheckCountRange(gapv1, id, 65535);
+            CheckCountGapRange(gapv1, 0, id);
+            CheckCountGapRange(gapv1, id, 65535);
         }
         for (i = 0; i < 25; ++i)
         {
@@ -7224,6 +7266,8 @@ void BitCountChangeTest()
 }
 
 
+
+
 void DNACompressionTest()
 {
     const char seeds[] = 
@@ -7939,8 +7983,83 @@ void ResizeTest()
         ++en;
     }
     }}
-
 }
+
+void VerifyCountRange(const bvect& bv,
+                      const bvect::blocks_count& bc_arr,
+                      bm::id_t to)
+{
+    for (unsigned i = 0; i < to; ++i)
+    {
+        bm::id_t cnt1 = bv.count_range(0, i);
+        bm::id_t cnt2 = bv.count_to(i, bc_arr);
+        
+        assert(cnt1 == cnt2);
+    }
+}
+
+void CountRangeTest()
+{
+    cout << "---------------------------- CountRangeTest..." << endl;
+    
+    {{
+    bvect bv1;
+    bv1.set(0);
+    bv1.set(1);
+    
+    bvect::blocks_count bc_arr;
+    bv1.running_count_blocks(&bc_arr);
+    
+    for (unsigned i = 0; i < bm::set_total_blocks; ++i)
+    {
+        assert(bc_arr.cnt[i] == 2);
+    } // for
+    
+    VerifyCountRange(bv1, bc_arr, 200000);
+    
+    bv1.optimize();
+    bvect::blocks_count bc_arr1;
+    bv1.running_count_blocks(&bc_arr1);
+    
+    for (unsigned i = 0; i < bm::set_total_blocks; ++i)
+    {
+        assert(bc_arr1.cnt[i] == 2);
+    } // for
+    
+    VerifyCountRange(bv1, bc_arr1, 200000);
+
+    }}
+    
+    {{
+    bvect bv1;
+    bv1.set(0);
+    bv1.set(1);
+    
+    bv1.set(65535+10);
+    bv1.set(65535+20);
+    bv1.set(65535+21);
+
+    
+    bvect::blocks_count bc_arr;
+    bv1.running_count_blocks(&bc_arr);
+
+    assert(bc_arr.cnt[0] == 2);
+    assert(bc_arr.cnt[1] == 5);
+
+    for (unsigned i = 2; i < bm::set_total_blocks; ++i)
+    {
+        assert(bc_arr.cnt[i] == 5);
+    } // for
+    
+    VerifyCountRange(bv1, bc_arr, 200000);
+    
+    }}
+
+    
+    
+    cout << "---------------------------- CountRangeTest OK" << endl;
+}
+
 
 void ExportTest()
 {
@@ -9728,6 +9847,7 @@ int main(void)
      SetTest();
  
      BitCountChangeTest();
+    
    
      Log2Test();
 
@@ -9740,6 +9860,8 @@ int main(void)
      EmptyBVTest();
 
      EnumeratorTest();
+    
+     CountRangeTest();
 
      BasicFunctionalityTest();
 
