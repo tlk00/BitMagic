@@ -255,7 +255,7 @@
 */
 #ifndef BM_INCWORD_BITCOUNT
 
-#ifdef BMSSE42OPT
+#if (defined(BMSSE42OPT) || defined(BMAVX2OPT))
 
 # define BM_INCWORD_BITCOUNT(cnt, w) cnt += _mm_popcnt_u32(w);
 
@@ -266,6 +266,7 @@
      bm::bit_count_table<true>::_count[(unsigned char)((w) >> 8)] + \
      bm::bit_count_table<true>::_count[(unsigned char)((w) >> 16)] + \
      bm::bit_count_table<true>::_count[(unsigned char)((w) >> 24)];
+
 
 #endif
 
