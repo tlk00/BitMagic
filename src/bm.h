@@ -826,6 +826,14 @@ public:
         : strat(s), glevel_len(glevels)
         {}
     };
+    
+    /*! @brief structure for bit counts per block
+        Structure is used to accelerate bit range scans
+    */
+    struct blocks_count
+    {
+        unsigned  BM_VECT_ALIGN cnt[bm::set_total_blocks] BM_VECT_ALIGN_ATTR;
+    };
 
 public:
 
@@ -1219,11 +1227,27 @@ public:
        \param block_count_arr - optional parameter (bitcount by bvector blocks)
               calculated by count_blocks method. Used to improve performance of
               wide range searches
-       \return Total number of bits ON. 
+       \return population count in the diapason
     */
     bm::id_t count_range(bm::id_t left, 
                          bm::id_t right, 
                          const unsigned* block_count_arr=0) const;
+    
+    /*! \brief compute running total of all blocks in bit vector
+        \param blocks_cnt - pointer to counting structure, holding the array
+        Function will fill full array of running totals
+    */
+    void running_count_blocks(blocks_count* blocks_cnt) const;
+    
+    /*!
+       \brief Returns count of 1 bits (population) in [0..right] diapason.
+       \param right - index of last bit
+       \param blocks_cnt - block count structure to accelerate search
+                           should be prepared using running_count_blocks
+       \return population count in the diapason
+       \sa running_count_blocks
+    */
+    bm::id_t count_to(bm::id_t right, const blocks_count&  blocks_cnt) const;
 
 
     bm::id_t recalc_count()
@@ -1808,6 +1832,60 @@ void bvector<Alloc>::resize(size_type new_size)
         set_range(new_size, size_ - 1, false); // clear the tail
         size_ = new_size;
     }
+}
+
+// -----------------------------------------------------------------------
+
+template<typename Alloc>
+void bvector<Alloc>::running_count_blocks(bvector<Alloc>::blocks_count* blocks_cnt) const
+{
+    BM_ASSERT(blocks_cnt);
+    
+    ::memset(blocks_cnt->cnt, 0, sizeof(blocks_cnt->cnt));
+    
+    this->count_blocks(blocks_cnt->cnt);  // simple count
+    // compute running count
+    for (unsigned i = 1; i < bm::set_total_blocks; ++i)
+    {
+        blocks_cnt->cnt[i] += blocks_cnt->cnt[i-1];
+    }
+}
+// -----------------------------------------------------------------------
+
+template<typename Alloc>
+bm::id_t bvector<Alloc>::count_to(bm::id_t right,
+                                  const blocks_count&  blocks_cnt) const
+{
+    unsigned nblock_right = unsigned(right >>  bm::set_block_shift);
+    if (nblock_right == 0)
+        return count_range(0, right);
+
+    if (!blockman_.is_init())
+        return 0;
+    
+    unsigned nbit_right = unsigned(right & bm::set_block_mask);
+
+    // running count of all blocks before target
+    bm::id_t cnt = blocks_cnt.cnt[nblock_right-1];
+
+    const bm::word_t* block = blockman_.get_block(nblock_right);
+    if (!block)
+        return cnt;
+    bool gap = BM_IS_GAP(block);
+
+    if (gap)
+    {
+        cnt +=
+            gap_bit_count_range(BMGAP_PTR(block),
+                               (gap_word_t)0,
+                               (gap_word_t)(gap_word_t)nbit_right);
+    }
+    else
+    {
+        cnt += bit_block_calc_count_to(block, nbit_right);
+    }
+
+    return cnt;
 }
 
 // -----------------------------------------------------------------------

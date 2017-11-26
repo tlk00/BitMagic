@@ -157,15 +157,17 @@ int parallel_popcnt_32(unsigned int n)
    return ((tmp + (tmp >> 3)) & 030707070707) % 63;
 }
 
-#ifdef BM64OPT
 
 /*! 
     Function calculates number of 1 bits in 64-bit word.
     @ingroup bitfunc 
 */
-inline 
+BMFORCEINLINE
 int word_bitcount64(bm::id64_t x)
 {
+#if defined(BMSSE42OPT) || defined(BMAVX2OPT)
+    return _mm_popcnt_u64(x);
+#else
     x = x - ((x >> 1) & 0x5555555555555555);
     x = (x & 0x3333333333333333) + ((x >> 2) & 0x3333333333333333);
     x = (x + (x >> 4)) & 0x0F0F0F0F0F0F0F0F;
@@ -173,6 +175,7 @@ int word_bitcount64(bm::id64_t x)
     x = x + (x >> 16);
     x = x + (x >> 32); 
     return x & 0xFF;
+#endif
 }
 
 inline 
@@ -203,7 +206,7 @@ unsigned bitcount64_4way(bm::id64_t x, bm::id64_t y,
     x = x + (x >> 32);
     return x & 0x000001FF;
 }
-#endif
+
 
 
 /*!
@@ -707,11 +710,12 @@ template<typename T> unsigned gap_bit_count(const T* buf, unsigned dsize=0)
 
 
 /*!
-   \brief Counts 1 bits in GAP buffer in the closed [left, right] diapason.
+   \brief Counts 1 bits in GAP buffer in the closed [left, right] range.
    \param buf - GAP buffer pointer.
    \param left - leftmost bit index to start from
    \param right- rightmost bit index
    \return Number of non-zero bits.
+   @ingroup gapfunc
 */
 template<typename T>
 unsigned gap_bit_count_range(const T* buf, T left, T right)
@@ -751,6 +755,7 @@ unsigned gap_bit_count_range(const T* buf, T left, T right)
 
     return bits_counter;
 }
+
 
 /*! 
     D-GAP block for_each algorithm
@@ -2955,7 +2960,7 @@ bm::id_t bit_block_calc_count_change(const bm::word_t* block,
 /*!
     Function calculates number of 1 bits in the given array of words in
     the range between left anf right bits (borders included)
-    Make sure the addresses are aligned.
+    Make sure the addr is aligned.
 
     @ingroup bitfunc
 */
@@ -3016,6 +3021,70 @@ bm::id_t bit_block_calc_count_range(const bm::word_t* block,
 
     return count;
 }
+
+/*!
+    Function calculates number of 1 bits in the given array of words in
+    the range between 0 anf right bits (borders included)
+    Make sure the addr is aligned.
+
+    @ingroup bitfunc
+*/
+inline
+bm::id_t bit_block_calc_count_to(const bm::word_t* block,
+                                 bm::word_t        right)
+{
+    BM_ASSERT(block);
+    if (right == 0)
+        return *block & 1;
+    bm::id_t count = 0;
+
+    unsigned bitcount = right + 1;
+
+    // AVX2 or 64-bit loop unroll
+    #if defined(BMAVX2OPT)
+        BM_AVX2_POPCNT_PROLOG
+    
+        __m256i cnt = _mm256_setzero_si256();
+        uint64_t* cnt64;
+    
+        for ( ;bitcount >= 256; bitcount -= 256)
+        {
+            const __m256i* src = (__m256i*)block;
+            __m256i xmm256 = _mm256_load_si256(src);
+            BM_AVX2_BIT_COUNT(bc, xmm256);
+            cnt = _mm256_add_epi64(cnt, bc);
+
+            block += 8;
+        }
+        cnt64 = (uint64_t*)&cnt;
+        count += cnt64[0] + cnt64[1] + cnt64[2] + cnt64[3];
+    #else
+        for ( ;bitcount >= 64; bitcount -= 64)
+        {
+            bm::id64_t* p = (bm::id64_t*)block;
+            bm::id64_t a64 = *p;
+            
+            count += bm::word_bitcount64(a64);
+            block += 2;
+        }
+    #endif
+
+    // now word aligned, count bits the usual way
+    for ( ;bitcount >= 32; bitcount -= 32)
+    {
+        unsigned acc = *block++;
+        count += bm::word_bitcount(acc);
+    }
+
+    if (bitcount)  // tail to count
+    {
+        unsigned acc = (*block) & block_set_table<true>::_left[bitcount-1];
+        count += bm::word_bitcount(acc);
+    }
+
+    return count;
+}
+
 
 
 /*!
