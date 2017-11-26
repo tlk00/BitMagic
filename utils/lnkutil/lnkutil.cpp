@@ -192,13 +192,15 @@ struct compress_svector
 {
     sparse_vector_u32::bvector_type   bv_descr;  ///< bit-vector descriptor
     sparse_vector_u32                 sv_stor;   ///< sparse-vector store
-    unsigned                          blocks_bc[bm::set_total_blocks];
+    sparse_vector_u32::bvector_type::blocks_count blocks_bc;
     
     void load_from(const sparse_vector_u32& sv);
     bool equal(const sparse_vector_u32& sv) const;
     
     sparse_vector_u32::value_type get(unsigned i) const;
     void optimize_gap_size();
+    
+    void count_blocks();
     
 };
 
@@ -225,8 +227,11 @@ void compress_svector::load_from(const sparse_vector_u32& sv)
     BM_DECLARE_TEMP_BLOCK(tb)
     bv_descr.optimize(tb);
     sv_stor.optimize(tb);
-    
-    bv_descr.count_blocks(blocks_bc); // compute popcount skip list
+}
+
+void compress_svector::count_blocks()
+{
+    bv_descr.running_count_blocks(&blocks_bc); // compute popcount skip list
 }
 
 void compress_svector::optimize_gap_size()
@@ -242,7 +247,7 @@ sparse_vector_u32::value_type compress_svector::get(unsigned i) const
     if (!found)
         return v;
     
-    unsigned pos = bv_descr.count_range(0, i, blocks_bc);
+    unsigned pos = bv_descr.count_to(i, blocks_bc);
     v = sv_stor.get(pos);
     return v;
 }
@@ -499,6 +504,8 @@ void link_matrix::load(const std::string& base_name)
     sv11c_fname.append("_sv11-c.bv");
     LoadBVector(sv11c_fname.c_str(), sv_11_c.bv_descr);
     
+    sv_11_c.count_blocks();
+    
     //sv_11_c.optimize_gap_size();
     }
 
@@ -525,6 +532,8 @@ void link_matrix::load(const std::string& base_name)
     svoffsc_fname = base_name;
     svoffsc_fname.append("_svoffs-c.bv");
     LoadBVector(svoffsc_fname.c_str(), sv_offs_c.bv_descr);
+    
+    sv_offs_c.count_blocks();
     
     //sv_offs_c.optimize_gap_size();
     }
@@ -882,7 +891,6 @@ void run_benchmark(link_matrix& lm)
             
             bv_res = bv_remap;
             bv_res &= bv_sample_to;
-std::cout << "." << std::flush;
         } // for i
     }
 
