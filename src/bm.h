@@ -1234,7 +1234,7 @@ public:
                          const unsigned* block_count_arr=0) const;
     
     /*! \brief compute running total of all blocks in bit vector
-        \param blocks_cnt - pointer to counting structure, holding the array
+        \param blocks_cnt - out pointer to counting structure, holding the array
         Function will fill full array of running totals
     */
     void running_count_blocks(blocks_count* blocks_cnt) const;
@@ -1250,6 +1250,10 @@ public:
     bm::id_t count_to(bm::id_t right, const blocks_count&  blocks_cnt) const;
 
 
+    /*! Recalculate bitcount
+        this function only make sense when BMCOUNTOPT is defined
+        and bvector<> keeps its bitcount. Otherwise, equivalent of cout().
+    */
     bm::id_t recalc_count()
     {
         BMCOUNT_VALID(false)
