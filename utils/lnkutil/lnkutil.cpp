@@ -63,6 +63,7 @@ void show_help()
 {
     std::cerr
       << "BitMagic Link Test Utility (c) 2017"                     << std::endl
+      << "-iset   file-name          -- input set file to parse"   << std::endl
       << "-lin    link-input-file    -- test pairs to load"        << std::endl
       << "-lmout  link-matrix-name   -- Link Matrix name to save"  << std::endl
       << "-lmin   link-matrix-name   -- Link Matrix name to load"  << std::endl
@@ -80,6 +81,7 @@ void show_help()
 std::string  ln_in_file;
 std::string  lm_out_name;
 std::string  lm_in_name;
+std::string  iset_name;
 bool         is_diag = false;
 bool         is_timing = false;
 bool         is_bench = false;
@@ -131,6 +133,19 @@ int parse_args(int argc, char *argv[])
             else
             {
                 std::cerr << "Error: -lmin requires file name" << std::endl;
+                return 1;
+            }
+            continue;
+        }
+        if (arg == "-iset" || arg == "--iset")
+        {
+            if (i + 1 < argc)
+            {
+                iset_name = argv[++i];
+            }
+            else
+            {
+                std::cerr << "Error: -iset requires file name" << std::endl;
                 return 1;
             }
             continue;
@@ -703,6 +718,69 @@ link_matrix            link_m;
 bm::chrono_taker::duration_map_type  timing_map;
 
 
+// parse the input re-mapping vector
+//
+int load_bv(const std::string& fname, bm::bvector<>& bv)
+{
+    std::string line;
+
+    std::string regex_str = "<Id>[0-9]+</Id>";
+    std::regex reg1(regex_str);
+
+    std::string regex_str2 = "[0-9]+";
+    std::regex reg2(regex_str2);
+
+
+    std::ifstream fin(fname.c_str(), std::ios::in);
+    if (!fin.good())
+    {
+        return -1;
+    }
+
+    unsigned id = 0;
+    std::vector<unsigned> vbuf;
+
+    for (unsigned i = 0; std::getline(fin, line); i++)
+    {
+        if (line.empty())
+            continue;
+
+        unsigned id_from = 0;
+        unsigned id_to = 0;
+
+        std::sregex_iterator it(line.begin(), line.end(), reg1);
+        std::sregex_iterator it_end;
+        for (unsigned j = 0; it != it_end; ++it, ++j)
+        {
+            std::smatch match = *it;
+            std::string ms = match.str();
+
+            if (ms.empty())
+                continue;
+
+            std::sregex_iterator it1(ms.begin(), ms.end(), reg2);
+            std::sregex_iterator it1_end;
+            for (; it1 != it1_end; ++it1)
+            {
+                std::smatch match2 = *it1;
+                std::string ms2 = match2.str();
+                unsigned long id = std::stoul(ms2);
+                if (id)
+                {
+                    bv.set(id);
+                }
+                
+            } // for
+
+        } // for j
+    } // for i
+    bv.optimize();
+
+    std::cout << "input vector count=" << bv.count() << std::endl;
+    return 0;
+}
+
+
 // load sparse_vector from a file
 //
 int load_ln(const std::string& fname, link_matrix& lm)
@@ -897,6 +975,41 @@ void run_benchmark(link_matrix& lm)
 
 }
 
+// id remapping benchmark
+//
+void remap(const link_matrix& lm, const bm::bvector<>& bv_in)
+{
+    if (!lm.bv_from.any())  // nothing to do
+        return;
+    BM_DECLARE_TEMP_BLOCK(tb)
+
+
+    {
+        bm::chrono_taker tt1("5. input remap", 1, &timing_map);
+
+        std::vector<unsigned> vect;
+        bm::bvector<>         bv_remap;
+
+        const bm::bvector<>& bv = bv_in;
+
+        bm::bvector<>::enumerator en = bv.first();
+        for (unsigned k = 0; en.valid(); ++k, ++en)
+        {
+            unsigned id = *en;
+
+            lm.get_vector(id, vect);
+            if (vect.size())
+            {
+                bm::combine_or(bv_remap, vect.begin(), vect.end());
+            }
+        } // for k
+
+        
+        std::cout << "Remap count =" << bv_remap.count() << std::endl;
+    }
+}
+
+
 
 int main(int argc, char *argv[])
 {
@@ -911,12 +1024,23 @@ int main(int argc, char *argv[])
         auto ret = parse_args(argc, argv);
         if (ret != 0)
             return ret;
-      
+
+        bm::bvector<> bv_inp(bm::BM_GAP);
+
         
         if (!ln_in_file.empty())
         {
             bm::chrono_taker tt1("0. link pairs load", 1, &timing_map);
             auto res = load_ln(ln_in_file, link_m);
+            if (res != 0)
+            {
+                return res;
+            }
+        }
+
+        if (!iset_name.empty())
+        {
+            auto res = load_bv(iset_name, bv_inp);
             if (res != 0)
             {
                 return res;
@@ -944,6 +1068,11 @@ int main(int argc, char *argv[])
         if (is_bench)
         {
             run_benchmark(link_m);
+        }
+
+        if (bv_inp.any())
+        {
+            remap(link_m, bv_inp);
         }
 
         
