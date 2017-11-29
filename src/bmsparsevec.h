@@ -717,11 +717,15 @@ sparse_vector<Val, BV>::get(bm::id_t i) const
     
     for (unsigned j = 0; j < sizeof(Val)*8; j+=4)
     {
-        blka[0+0] = get_block(j+0, i0, j0);
-        blka[0+1] = get_block(j+1, i0, j0);
-        blka[0+2] = get_block(j+2, i0, j0);
-        blka[0+3] = get_block(j+3, i0, j0);
-        
+        bool b = plains_[j+0] || plains_[j+1] || plains_[j+2] || plains_[j+3];
+        if (!b)
+            continue;
+
+        blka[0] = get_block(j+0, i0, j0);
+        blka[1] = get_block(j+1, i0, j0);
+        blka[2] = get_block(j+2, i0, j0);
+        blka[3] = get_block(j+3, i0, j0);
+
         if ((blk = blka[0+0])!=0)
         {
             unsigned is_set = (BM_IS_GAP(blk)) ? gap_test(BMGAP_PTR(blk), nbit) : (blk[nword] & mask0);
@@ -742,6 +746,7 @@ sparse_vector<Val, BV>::get(bm::id_t i) const
             unsigned is_set = (BM_IS_GAP(blk)) ? gap_test(BMGAP_PTR(blk), nbit) : (blk[nword] & mask0);
             v |= (bool(is_set != 0) << (j+3));
         }
+
     } // for j
     
     return v;
