@@ -6812,9 +6812,10 @@ void BitCountChangeTest()
             exit(1);
         }
     }
-  
+    cout << "!" << endl;
 
-    bm::word_t  BM_ALIGN16 arr[16] BM_ALIGN16ATTR = {0,};
+    //bm::word_t  BM_VECT_ALIGN arr[16] BM_VECT_ALIGN = {0,};
+    bm::word_t  BM_VECT_ALIGN arr[32] BM_VECT_ALIGN = { 0, };
     arr[0] = (bm::word_t)(1 << 31);
     arr[1] = 1; //(bm::word_t)(1 << 31);
     
@@ -6828,10 +6829,11 @@ void BitCountChangeTest()
         cout << "0.count_change() failed " << cnt << endl;
         exit(1);
     }
-    
-    cnt = bm::bit_block_calc_count_change(arr, arr+4, &bc);
-    
-    bc1 = bit_block_calc_count(arr, arr+4);
+#if !defined(BMAVX2OPT)    
+    cnt = bm::bit_block_calc_count_change(arr, arr+8, &bc);
+    cout << "*" << endl;
+    bc1 = bit_block_calc_count(arr, arr+8);
+    cout << "@" << endl;
     if (bc != bc1)
     {
         cout << "1. bitcount comparison failed " << endl;
@@ -6863,7 +6865,7 @@ void BitCountChangeTest()
         cout << "1.1 count_intervals() failed " << cnt << endl;
         exit(1);
     }
-    
+#endif    
  
     cout << "---------------------------- STEP 4 " << endl;
 
@@ -9845,7 +9847,7 @@ int main(void)
      SyntaxTest();
 
      SetTest();
- 
+
      BitCountChangeTest();
     
    
