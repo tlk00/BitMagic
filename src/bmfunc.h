@@ -718,7 +718,7 @@ template<typename T> unsigned gap_bit_count(const T* buf, unsigned dsize=0)
    @ingroup gapfunc
 */
 template<typename T>
-unsigned gap_bit_count_range(const T* buf, T left, T right)
+unsigned gap_bit_count_range(const T* const buf, T left, T right)
 {
     BM_ASSERT(left <= right);
     
@@ -3030,8 +3030,8 @@ bm::id_t bit_block_calc_count_range(const bm::word_t* block,
     @ingroup bitfunc
 */
 inline
-bm::id_t bit_block_calc_count_to(const bm::word_t* block,
-                                 bm::word_t        right)
+bm::id_t bit_block_calc_count_to(const bm::word_t*  block,
+                                 bm::word_t         right)
 {
     BM_ASSERT(block);
     if (right == 0)
