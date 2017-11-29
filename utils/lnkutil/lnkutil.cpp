@@ -602,6 +602,7 @@ void link_matrix::load(const std::string& base_name)
 
 bool link_matrix::get_vector(unsigned id_from, std::vector<unsigned>& vect) const
 {
+    vect.resize(0);
 /*
     if (!bv_from.test(id_from))
     {
@@ -722,6 +723,8 @@ bm::chrono_taker::duration_map_type  timing_map;
 //
 int load_bv(const std::string& fname, bm::bvector<>& bv)
 {
+    bm::chrono_taker tt1("1. parse input bit-vector", 1, &timing_map);
+
     std::string line;
 
     std::string regex_str = "<Id>[0-9]+</Id>";
@@ -1079,15 +1082,12 @@ int main(int argc, char *argv[])
         
         if (is_timing)  // print all collected timings
         {
-            std::cout << std::endl << "Timings (ms):" << std::endl;
-            bm::chrono_taker::print_duration_map(timing_map);
-            
             std::cout << std::endl << "Performance (ops/sec):" << std::endl;
             bm::chrono_taker::print_duration_map(timing_map, bm::chrono_taker::ct_ops_per_sec);
 
         }
         
-        getchar();
+        //getchar();
     }
     catch (std::exception& ex)
     {
