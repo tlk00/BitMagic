@@ -30,7 +30,11 @@ For more information please visit:  http://bitmagic.io
 
 /** \example sample11.cpp
   Example of how to use various bit counting techniques
- 
+
+  \sa bm::bvector<>::count() 
+  \sa bm::bvector<>::count_range()
+  \sa bm::bvector<>::count_to() 
+  \sa bm::count_and() 
  */
 
 
