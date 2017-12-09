@@ -35,6 +35,7 @@ For more information please visit:  http://bitmagic.io
   \sa bm::bvector<>::count_range()
   \sa bm::bvector<>::count_to() 
   \sa bm::count_and() 
+  \sa bm::bvector<>::counted_enumerator
  */
 
 
@@ -200,6 +201,35 @@ void bv_count_and(const bm::bvector<>& bv)
     std::cout << "count AND finished." << cnt << std::endl;
 }
 
+/// count_range implemented via bm::bvector<>::counted_enumerator
+///
+/// Counted enumerator is an iterator automata, which counts the running population count 
+/// along the iteration sequence
+///
+void bv_counted_enumerator(const bm::bvector<>& bv)
+{
+    bm::chrono_taker tt1("7. bm::bvector<>::counted_enumerator", benchmark_count, &timing_map);
+
+    unsigned cnt = 0;
+
+    for (unsigned i = 0; i < benchmark_count; ++i)
+    {
+        unsigned to = rand() % vector_max;
+
+        bm::bvector<>::counted_enumerator en = bv.first();
+        bm::bvector<>::counted_enumerator en_end = bv.end();
+
+        for (;en < en_end; ++en)
+        {
+            if (*en > to)
+                break;
+        }
+        cnt += en.count();
+    }
+    std::cout << "counted_enumerator finished." << cnt << std::endl;
+}
+
+
 
 
 int main(void)
@@ -251,6 +281,12 @@ int main(void)
         // Not the fastest method, but can be useful, when multiple ranges needs to be computed
         //
         bv_count_and(bv);
+
+        // Test 7.
+        // Compute cout using counted_enumerator iterator
+        // method combines iteratrion over bit vector and sliding population count
+        bv_counted_enumerator(bv);
+
 
         // print all test timing results
         bm::chrono_taker::print_duration_map(timing_map, bm::chrono_taker::ct_ops_per_sec);
