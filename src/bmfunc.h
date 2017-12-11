@@ -3109,26 +3109,24 @@ void bit_block_rotate_left_1_unr(bm::word_t* block)
 {
     bm::word_t co_flag = (block[0] >> 31) & 1; // carry over bit
     const unsigned unroll_factor = 4;
-    bm::word_t tmp_w[unroll_factor];
+    bm::word_t w0, w1, w2, w3;
 
     unsigned i;
-    for (i = 0; i < set_block_size - unroll_factor; i+=unroll_factor)
+    for (i = 0; i < set_block_size - unroll_factor; i += unroll_factor)
     {
-        tmp_w[0] = block[0 + i + 1] >> 31;
-        tmp_w[1] = block[1 + i + 1] >> 31;
-        tmp_w[2] = block[2 + i + 1] >> 31;
-        tmp_w[3] = block[3 + i + 1] >> 31;
+        w0 = block[i + 1] >> 31;
+        w1 = block[i + 2] >> 31;
+        w2 = block[i + 3] >> 31;
+        w3 = block[i + 4] >> 31;
 
-        block[0 + i] = (block[0 + i] << 1) | tmp_w[0];
-        block[1 + i] = (block[1 + i] << 1) | tmp_w[1];
-        block[2 + i] = (block[2 + i] << 1) | tmp_w[2];
-        block[3 + i] = (block[3 + i] << 1) | tmp_w[3];
+        block[0 + i] = (block[0 + i] << 1) | w0;
+        block[1 + i] = (block[1 + i] << 1) | w1;
+        block[2 + i] = (block[2 + i] << 1) | w2;
+        block[3 + i] = (block[3 + i] << 1) | w3;
     }
-    for (; i < set_block_size - 1; ++i)
-    { 
-        block[i] = (block[i] << 1) | (block[i + 1] >> 31);
-    }
-
+    block[i] = (block[i] << 1) | (block[i + 1] >> 31);
+    block[i + 1] = (block[i + 1] << 1) | (block[i + 2] >> 31);
+    block[i + 2] = (block[i + 2] << 1) | (block[i + 3] >> 31);
     block[set_block_size - 1] = (block[set_block_size - 1] << 1) | co_flag;
 }
 

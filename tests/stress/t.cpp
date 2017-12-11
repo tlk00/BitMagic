@@ -1473,6 +1473,87 @@ void WordCmpTest()
     cout << "Ok." << endl;
 }
 
+
+
+void ShiftRotateTest()
+{
+    cout << "---------------------------- ShiftRotate test" << endl;
+
+    bm::word_t blk0[bm::set_block_size] = { 0 };
+    bm::word_t blk1[bm::set_block_size] = { 0 };
+    unsigned i;
+
+    for (i = 0; i < bm::set_block_size; ++i)
+    {
+        blk0[i] = blk1[i] = 1;
+    }
+
+    bm::bit_block_rotate_left_1(blk0);
+    bm::bit_block_rotate_left_1_unr(blk1);
+
+    for (i = 0; i < bm::set_block_size; ++i)
+    {
+        if (blk0[i] != 2 || blk0[i] != blk1[i])
+        {
+            cerr << "Cyclic rotate check failed" << endl;
+            exit(1);
+        }
+    }
+
+    bm::bit_block_rotate_left_1(blk0);
+    bm::bit_block_rotate_left_1_unr(blk1);
+
+    for (i = 0; i < bm::set_block_size; ++i)
+    {
+        if (blk0[i] != 4 || blk0[i] != blk1[i])
+        {
+            cerr << "Cyclic rotate check failed" << endl;
+            exit(1);
+        }
+    }
+
+    for (i = 0; i < bm::set_block_size; ++i)
+    {
+        blk0[i] = blk1[i] = 1 << 31;
+    }
+    bm::bit_block_rotate_left_1(blk0);
+    bm::bit_block_rotate_left_1_unr(blk1);
+
+    for (i = 0; i < bm::set_block_size; ++i)
+    {
+        if (blk0[i] != 1 || blk0[i] != blk1[i])
+        {
+            cerr << "Cyclic rotate check failed" << endl;
+            exit(1);
+        }
+    }
+
+
+    for (i = 0; i < bm::set_block_size; ++i)
+    {
+        blk0[i] = blk1[i] = rand();
+    }
+
+    for (unsigned j = 0; j < bm::set_block_size * 32; ++j)
+    {
+        bm::bit_block_rotate_left_1(blk0);
+        bm::bit_block_rotate_left_1_unr(blk1);
+
+        for (i = 0; i < bm::set_block_size; ++i)
+        {
+            if (blk0[i] != blk1[i])
+            {
+                cerr << "Steress Cyclic rotate check failed" << endl;
+                exit(1);
+            }
+        }
+
+    }
+
+    cout << "---------------------------- ShiftRotate test OK" << endl;
+}
+
+
 void EmptyBVTest()
 {
     cout << "---------------------------- Empty bvector test" << endl;
@@ -9888,6 +9969,8 @@ int main(void)
      SubOperationsTest();
 
      WordCmpTest();
+
+     ShiftRotateTest();
 
      ComparisonTest();
 
