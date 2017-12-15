@@ -667,12 +667,9 @@ bool link_matrix::get_vector(unsigned id_from, std::vector<unsigned>& vect) cons
         exit(1);
     }
 */
+
     vect[0] = vc;
-    for (unsigned j = 1; j < sz; ++j)
-    {
-        unsigned v = sv_1m.get(j + offs_c - 1);
-        vect[j] = v;
-    }
+    sv_1m.extract_range(&vect[1], sz-1, offs_c);
     
     //convert_from_delta(vect);
 

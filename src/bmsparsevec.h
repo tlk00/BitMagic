@@ -230,9 +230,14 @@ public:
     size_type extract(value_type* arr,
                       size_type size,
                       size_type offset = 0,
-                      bool      zero_mem = true);
+                      bool      zero_mem = true) const;
 
-    
+    /** \brief extract small window without use of masking vector */
+    size_type extract_range(value_type* arr,
+                            size_type size,
+                            size_type offset,
+                            bool      zero_mem = true) const;
+
     
     /*! \brief return size of the vector
         \return size of sparse vector
@@ -361,12 +366,14 @@ private:
     */
     void free_vectors() BMNOEXEPT;
 
+
+protected:
     /*! \brief set value without checking boundaries
     */
-protected:
     void set_value(size_type idx, value_type v);
     const bm::word_t* get_block(unsigned p, unsigned i, unsigned j) const;
-    
+
+
 private:
     
     size_type                bv_size_;
@@ -547,10 +554,81 @@ void sparse_vector<Val, BV>::import(const value_type* arr,
 
 template<class Val, class BV>
 typename sparse_vector<Val, BV>::size_type
+sparse_vector<Val, BV>::extract_range(value_type* arr,
+                                      size_type size,
+                                      size_type offset,
+                                      bool      zero_mem) const
+{
+    if (size == 0)
+        return 0;
+    if (zero_mem)
+        ::memset(arr, 0, sizeof(value_type)*size);
+
+    size_type start = offset;
+    size_type end = start + size;
+    if (end > size_)
+    {
+        end = size_;
+    }
+    
+    // calculate logical block coordinates and masks
+    //
+    unsigned nb = unsigned(start >>  bm::set_block_shift);
+    unsigned i0 = nb >> bm::set_array_shift; // top block address
+    unsigned j0 = nb &  bm::set_array_mask;  // address in sub-block
+    unsigned nbit = unsigned(start & bm::set_block_mask);
+    unsigned nword  = unsigned(nbit >> bm::set_word_shift);
+    unsigned mask0 = 1u << (nbit & bm::set_word_mask);
+    const bm::word_t* blk = 0;
+    unsigned is_set;
+    
+    for (unsigned j = 0; j < sizeof(Val)*8; ++j)
+    {
+        blk = get_block(j, i0, j0);
+        bool is_gap = BM_IS_GAP(blk);
+        
+        for (unsigned k = start; k < end; ++k)
+        {
+            unsigned nb1 = unsigned(k >>  bm::set_block_shift);
+            if (nb1 != nb) // block switch boundaries
+            {
+                nb = nb1;
+                i0 = nb >> bm::set_array_shift;
+                j0 = nb &  bm::set_array_mask;
+                blk = get_block(j, i0, j0);
+                is_gap = BM_IS_GAP(blk);
+            }
+        
+            if (!blk)
+                continue;
+            nbit = unsigned(k & bm::set_block_mask);
+            if (is_gap)
+            {
+                is_set = gap_test(BMGAP_PTR(blk), nbit);
+            }
+            else
+            {
+                nword  = unsigned(nbit >> bm::set_word_shift);
+                mask0 = 1u << (nbit & bm::set_word_mask);
+                is_set = (blk[nword] & mask0);
+            }
+            size_type idx = k - offset;
+            arr[idx] |= (bool(is_set != 0) << j);
+            
+        } // for k
+
+    } // for j
+    return 0;
+}
+
+//---------------------------------------------------------------------
+
+template<class Val, class BV>
+typename sparse_vector<Val, BV>::size_type
 sparse_vector<Val, BV>::extract(value_type* arr,
                                 size_type   size,
                                 size_type   offset,
-                                bool        zero_mem)
+                                bool        zero_mem) const
 {
     if (size == 0)
         return 0;
@@ -566,7 +644,7 @@ sparse_vector<Val, BV>::extract(value_type* arr,
     
 	bool masked_scan = !(offset == 0 && size == this->size());
 
-    if (masked_scan)
+    if (masked_scan) // use temp vector to decompress the area
     {
         bvector_type bv_mask;
         for (size_type i = 0; i < sizeof(Val)*8; ++i)

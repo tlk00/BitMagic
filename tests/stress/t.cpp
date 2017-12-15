@@ -8576,12 +8576,32 @@ bool CompareSparseVector(const SV& sv, const Vect& vect)
         typename Vect::value_type v1 = vect[i];
         typename SV::value_type v2 = sv[i];
         
-        if (v1 != v2) {
+        if (v1 != v2)
+        {
             cout << "SV discrepancy:" << "sv[" << i << "]=" << v2
                  <<  "vect[" << i << "]=" << v1
                  << endl;
             return false;
         }
+    }
+    
+    // extraction comparison
+    {
+    std::vector<unsigned> v1(sv.size());
+    std::vector<unsigned> v1r(sv.size());
+    sv.extract(&v1[0], sv.size(), 0);
+    sv.extract_range(&v1r[0], sv.size(), 0);
+    for (unsigned i = 0; i < sv.size(); ++i)
+    {
+        if (v1r[i] != v1[i] || v1[i] != vect[i])
+        {
+            cerr << "TestEqualSparseVectors Extract 1 failed at:" << i
+                 << " v1[i]=" << v1[i] << " v1r[i]=" << v1r[i]
+                 << endl;
+            exit(1);
+        }
+    } // for
+
     }
     
     // serialization comparison
@@ -8619,6 +8639,30 @@ bool TestEqualSparseVectors(const SV& sv1, const SV& sv2)
     if (!b)
     {
         return b;
+    }
+    
+    if (sv1.size() != sv2.size())
+    {
+        cerr << "TestEqualSparseVectors failed incorrect size" << endl;
+        exit(1);
+    }
+    
+
+    {
+    std::vector<unsigned> v1(sv1.size());
+    std::vector<unsigned> v1r(sv1.size());
+    sv1.extract(&v1[0], sv1.size(), 0);
+    sv1.extract_range(&v1r[0], sv1.size(), 0);
+    for (unsigned i = 0; i < sv1.size(); ++i)
+    {
+        if (v1r[i] != v1[i])
+        {
+            cerr << "TestEqualSparseVectors Extract 1 failed at:" << i
+                 << " v1[i]=" << v1[i] << " v1r[i]=" << v1r[i]
+                 << endl;
+            exit(1);
+        }
+    } // for
     }
 
     {
@@ -8875,10 +8919,12 @@ void TestSparseVector()
     }
         
     std::vector<unsigned> v1(16);
+    std::vector<unsigned> v1r(16);
     sv.extract(&v1[0], 16, 0);
+    sv.extract_range(&v1r[0], 16, 0);
     for (unsigned i = 0; i < 16; ++i)
     {
-        if (v1[i] != 8)
+        if (v1[i] != 8 || v1r[i] != v1[i])
         {
             cerr << "Extract 1 failed at:" << i << endl;
             exit(1);
@@ -8886,12 +8932,14 @@ void TestSparseVector()
     } // for
     
     std::vector<unsigned> v2(10);
+    std::vector<unsigned> v2r(10);
     sv.extract(&v2[0], 10, 32);
+    sv.extract_range(&v2r[0], 10, 32);
     for (unsigned i = 0; i < 10; ++i)
     {
-        if (v2[i] != 255)
+        if (v2[i] != 255 || v2r[i] != v2[i])
         {
-            cerr << "Extract 2 failed at:" << i << "=" << v2[i] << "sv=" << sv[i+32] << endl;
+            cerr << "Extract 2 failed at:" << i << "=" << v2[i] << " r=" << v2r[i] << " sv=" << sv[i+32] << endl;
             exit(1);
         }
     } // for
@@ -9246,7 +9294,7 @@ void TestSparseVector_Stress(unsigned count)
 {
 
     cout << "---------------------------- Bit-plain sparse vector stress" << endl;
-    
+
     cout << "Interval shift check.";
     // interval shift check
     for (unsigned i = 0; i < count; ++i)
@@ -9919,6 +9967,7 @@ int main(void)
     //LoadVectors("c:/dev/bv_perf", 3, 27);
     exit(1);
 */                                                                                                        
+
 
      ExportTest();
      ResizeTest();
