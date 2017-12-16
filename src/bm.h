@@ -668,15 +668,18 @@ public:
         */
         enumerator& go_to(bm::id_t pos)
         {
-            // find the real bit pos
-            bm::id_t next_pos = this->bv_->check_or_next(pos);
-            if (next_pos == 0)
+            if (pos == 0)
+            {
+                go_first();
+                return *this;
+            }
+
+            pos = this->bv_->check_or_next(pos); // find the real bit pos and use it
+            if (pos == 0)
             {
                 this->invalidate();
                 return *this;
             }
-            if (next_pos != pos)
-                pos = next_pos;
             
             this->position_ = pos;
             unsigned nb = this->block_idx_ = unsigned(pos >>  bm::set_block_shift);
@@ -699,18 +702,23 @@ public:
             {
                 block_descr_type* bdescr = &(this->bdescr_);
                 unsigned nbit = unsigned(pos & bm::set_block_mask);
+                if (nbit == 0)
+                {
+                    search_in_bitblock();
+                    return *this;
+                }
+
                 unsigned nword  = unsigned(nbit >> bm::set_word_shift);
                 bdescr->bit_.ptr = this->block_ + nword;
                 bm::word_t w = *(bdescr->bit_.ptr);
                 bdescr->bit_.cnt = bm::bitscan_popcnt(w, bdescr->bit_.bits);
                 
-                bdescr->bit_.pos = nword ? (nword-1) * 32 : 0;
+                bdescr->bit_.pos = nword * 32;
                 bdescr->bit_.idx = 0;
                 nbit &= bm::set_word_mask;
                 for (unsigned i = 0; i < bdescr->bit_.cnt; ++i)
                 {
-                    unsigned a = bdescr->bit_.bits[i];
-                    if (a == nbit)
+                    if (bdescr->bit_.bits[i] == nbit)
                         return *this;
                     bdescr->bit_.idx++;
                 }
