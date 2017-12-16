@@ -699,15 +699,10 @@ public:
 
             if (this->block_type_) // gap
             {
-                if (nbit == 0)
-                {
-                    search_in_gapblock();
-                    return *this;
-                }
-                unsigned block_start_pos = nb * bm::set_block_size * 32;
-                this->position_ = block_start_pos;
-                search_in_gapblock();
-                
+                // use iterative increment for GAP block positioning
+                // TODO: optimization
+                this->position_ = nb * bm::set_block_size * 32;
+                search_in_gapblock();                
                 while (this->position_ != pos)
                 {
                     go_up();
@@ -726,7 +721,7 @@ public:
                 bm::word_t w = *(bdescr->bit_.ptr);
                 bdescr->bit_.cnt = bm::bitscan_popcnt(w, bdescr->bit_.bits);
                 
-                bdescr->bit_.pos = nword * 32;
+                bdescr->bit_.pos = this->position_ - 1; // nword * 32;
                 bdescr->bit_.idx = 0;
                 nbit &= bm::set_word_mask;
                 for (unsigned i = 0; i < bdescr->bit_.cnt; ++i)
