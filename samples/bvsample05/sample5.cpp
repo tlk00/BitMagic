@@ -57,15 +57,17 @@ int main(void)
         bv[10] = true;
         bv[100] = true;
         bv[10000] = true;
+        bv[65536] = true;
 
         bm::bvector<>::enumerator en = bv.first();
         bm::bvector<>::enumerator en_end = bv.end();
 
         while (en < en_end)
         {
-            cout << *en << endl;
+            cout << *en << ", ";
             ++en;  // Fastest way to increment enumerator
         }
+        cout << endl;
 
         en = bv.first();
 
@@ -75,6 +77,17 @@ int main(void)
         // But it can be useful for some STL loyal applications.
 
         std::for_each(en, en_end, Print);
+        cout << endl;
+
+        // example to illustrate random positioning of enumerator 
+        // go to a random bit number, enumerator automatically finds the available bit
+        //
+        en.go_to(65536);
+        for (; en.valid(); ++en)
+        {
+            cout << *en << ", ";
+        }
+        cout << endl;
     }
     catch(std::exception& ex)
     {
