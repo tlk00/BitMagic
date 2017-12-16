@@ -6022,6 +6022,15 @@ void CalcEndMask()
     printf("\n");
 }
 
+void CompareEnumerators(const bvect::enumerator& en1, const bvect::enumerator& en2)
+{
+    bool fsm_equal = en1.compare_state(en2);
+    if (!fsm_equal)
+    {
+        cerr << "Enumerators FSM comparison failed" << endl;
+        exit(1);
+    }
+}
 
 void EnumeratorTest()
 {
@@ -6035,23 +6044,26 @@ void EnumeratorTest()
     bvect::enumerator en = bvect1.first();
     unsigned n = bvect1.get_next(0);
     
-    if (*en != 100 || n != 100)
+    bvect::enumerator en1 = bvect1.get_enumerator(n);
+    if (*en != 100 || n != 100 || *en1 != 100)
     {
         cout << "Enumerator error !" << endl;
         exit(1);
     }
+    CompareEnumerators(en, en1);
 
     bvect1.clear_bit(100);
 
     bvect1.set_bit(2000000000);
     en.go_first();
     n = bvect1.get_next(0);
-
-    if (*en != 2000000000 || n != *en)
+    en1.go_to(n);
+    if (*en != 2000000000 || n != *en || *en1 != *en)
     {
         cout << "Enumerator error !" << endl;
         exit(1);
     }
+    CompareEnumerators(en, en1);
     }
 
     {
@@ -6071,15 +6083,22 @@ void EnumeratorTest()
         bvect::enumerator end = bvect1.end();
         while (en < end)
         {
-            if (*en != num)
+            bvect::enumerator en1 = bvect1.get_enumerator(num-1);
+            if (*en != num || *en != *en1)
             {
                 cout << "Enumeration comparison failed !" << 
                         " enumerator = " << *en <<
-                        " get_next() = " << num << endl; 
+                        " get_next() = " << num <<
+                        " goto enumerator = " << *en1 <<
+                        endl;
                 exit(1);
             }
+            CompareEnumerators(en, en1);
+            
             ++en;
             num = bvect1.get_next(num);
+            ++en1;
+            CompareEnumerators(en, en1);
         }
         if (num != 0)
         {
@@ -9968,7 +9987,7 @@ int main(void)
     exit(1);
 */                                                                                                        
 
-
+/*
      ExportTest();
      ResizeTest();
 
@@ -9990,7 +10009,7 @@ int main(void)
      GammaEncoderTest();
 
      EmptyBVTest();
-
+*/
      EnumeratorTest();
     
      CountRangeTest();

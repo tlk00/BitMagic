@@ -290,6 +290,39 @@ public:
         {
             position_ = bm::id_max;
         }
+        
+        /** \brief Compare FSMs for testing purposes
+            \internal
+        */
+        bool compare_state(const iterator_base& ib) const
+        {
+            if (this->bv_ != ib.bv_)                 return false;
+            if (this->position_ != ib.position_)     return false;
+            if (this->block_ != ib.block_)           return false;
+            if (this->block_type_ != ib.block_type_) return false;
+            if (this->block_idx_ != ib.block_idx_)   return false;
+            
+            const block_descr& bd = this->bdescr_;
+            const block_descr& ib_db = ib.bdescr_;
+
+            if (this->block_type_ == 0) // bit block
+            {
+                if (bd.bit_.ptr != ib_db.bit_.ptr) return false;
+                if (bd.bit_.idx != ib_db.bit_.idx) return false;
+                if (bd.bit_.cnt != ib_db.bit_.cnt) return false;
+                if (bd.bit_.pos != ib_db.bit_.pos) return false;
+                for (unsigned i = 0; i < bd.bit_.cnt; ++i)
+                {
+                    if (bd.bit_.bits[i] != bd.bit_.bits[i]) return false;
+                }
+            }
+            else // GAP block
+            {
+                if (bd.gap_.ptr != ib_db.gap_.ptr) return false;
+                if (bd.gap_.gap_len != ib_db.gap_.gap_len) return false;
+            }
+            return true;
+        }
 
     public:
 
@@ -400,8 +433,7 @@ public:
         bm::id_t              max_bit_;
     };
 
-    /*!
-        @brief Constant iterator designed to enumerate "ON" bits
+    /*! @brief Constant iterator designed to enumerate "ON" bits
         @ingroup bvector
     */
     class enumerator : public iterator_base
@@ -416,31 +448,44 @@ public:
         typedef unsigned&  reference;
 
     public:
-        enumerator() : iterator_base() {}
-        enumerator(const bvector<Alloc>* bv, int position)
+        enumerator() : iterator_base()
+        {}
+        
+        /*! @brief Construct enumerator associated with a vector.
+            This construction creates unpositioned iterator with status
+            valid() == false. It can be re-positioned using go_first() or go_to()
+        */
+        enumerator(const bvector<Alloc>* bv)
+            : iterator_base()
+        {
+            this->bv_ = const_cast<bvector<Alloc>*>(bv);
+        }
+
+        /*! @brief Construct enumerator for bit vector
+            @param bv  bit-vector pointer
+            @param pos bit position in the vector
+                       if position is 0, it finds the next 1 or becomes not valid
+                       (en.valid() == false)
+        */
+        enumerator(const bvector<Alloc>* bv, bm::id_t pos)
             : iterator_base()
         { 
             this->bv_ = const_cast<bvector<Alloc>*>(bv);
-            if (position == 0)
-            {
-                go_first();
-            }
-            else
-            {
-                this->invalidate();
-            }
+            this->go_to(pos);
         }
 
+        /*! \brief Get current position (value) */
         bm::id_t operator*() const
         { 
             return this->position_; 
         }
 
+        /*! \brief Get current position (value) */
         bm::id_t value() const
         {
             return this->position_;
         }
-
+        /*! \brief Advance enumerator forward to the next available bit */
         enumerator& operator++()
         {
             return this->go_up();
@@ -454,6 +499,7 @@ public:
         }
 
 
+        /*! \brief Position enumerator to the first available bit */
         void go_first()
         {
             BM_ASSERT(this->bv_);
@@ -527,6 +573,7 @@ public:
             this->invalidate();
         }
 
+        /*! \brief Advance enumerator to the next available bit */
         enumerator& go_up()
         {
             // Current block search.
@@ -874,7 +921,10 @@ public:
             For the first bit in bitvector it is 1, for the second 2 
         */
         bm::id_t count() const { return bit_count_; }
-        
+    private:
+        /*! Function closed for usage */
+        counted_enumerator& go_to(bm::id_t pos);
+
     private:
         bm::id_t   bit_count_;
     };
@@ -1649,8 +1699,7 @@ public:
     */
     enumerator first() const
     {
-        typedef typename bvector<Alloc>::enumerator enumerator_type;
-        return enumerator_type(this, 0);
+        return get_enumerator(0);
     }
 
     /**
@@ -1660,7 +1709,16 @@ public:
     enumerator end() const
     {
         typedef typename bvector<Alloc>::enumerator enumerator_type;
-        return enumerator_type(this, 1);
+        return enumerator_type(this);
+    }
+    
+    /**
+       \brief Returns enumerator pointing on specified or the next available bit.
+    */
+    enumerator get_enumerator(bm::id_t pos) const
+    {
+        typedef typename bvector<Alloc>::enumerator enumerator_type;
+        return enumerator_type(this, pos);
     }
 
 
