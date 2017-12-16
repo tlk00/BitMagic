@@ -1380,7 +1380,7 @@ void CheckVectors(bvect_mini &bvect_min,
            ++en1;
            CompareEnumerators(en, en1);
 
-           if (bit_count % 10)
+           if ((bit_count % 10 == 0) || (bit_count % 128 == 0))
            {
                 bvect::enumerator en2 = bvect_full.get_enumerator(*en);
                 CompareEnumerators(en, en2);
