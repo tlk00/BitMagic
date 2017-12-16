@@ -674,8 +674,8 @@ public:
                 return *this;
             }
 
-            pos = this->bv_->check_or_next(pos); // find the real bit pos and use it
-            if (pos == 0)
+            pos = this->bv_->check_or_next(pos); // find the true pos
+            if (pos == 0) // no bits available
             {
                 this->invalidate();
                 return *this;
@@ -694,14 +694,27 @@ public:
             this->block_type_ = (bool)BM_IS_GAP(this->block_);
             typedef typename iterator_base::block_descr block_descr_type;
 
+            block_descr_type* bdescr = &(this->bdescr_);
+            unsigned nbit = unsigned(pos & bm::set_block_mask);
+
             if (this->block_type_) // gap
             {
-                BM_ASSERT(0);
+                if (nbit == 0)
+                {
+                    search_in_gapblock();
+                    return *this;
+                }
+                unsigned block_start_pos = nb * bm::set_block_size * 32;
+                this->position_ = block_start_pos;
+                search_in_gapblock();
+                
+                while (this->position_ != pos)
+                {
+                    go_up();
+                }
             }
             else // bit
             {
-                block_descr_type* bdescr = &(this->bdescr_);
-                unsigned nbit = unsigned(pos & bm::set_block_mask);
                 if (nbit == 0)
                 {
                     search_in_bitblock();
