@@ -6083,7 +6083,7 @@ void EnumeratorTest()
         bvect::enumerator end = bvect1.end();
         while (en < end)
         {
-            bvect::enumerator en1 = bvect1.get_enumerator(num-1);
+            bvect::enumerator en1 = bvect1.get_enumerator(num ? num-1 : num);
             if (*en != num || *en != *en1)
             {
                 cout << "Enumeration comparison failed !" << 
@@ -6151,16 +6151,18 @@ void EnumeratorTest()
 
 
         bvect::enumerator en = bvect1.first();
-
         unsigned num = bvect1.get_first();
 
         while (en < bvect1.end())
         {
-            if (*en != num)
+            bvect::enumerator en1 = bvect1.get_enumerator(num);
+            if (*en != num || *en != *en1)
             {
                 cout << "Enumeration comparison failed !" << 
                         " enumerator = " << *en <<
-                        " get_next() = " << num << endl; 
+                        " get_next() = " << num <<
+                        " goto enumerator = " << *en1
+                        << endl; 
                 exit(1);
             }
             ++en;
@@ -6169,6 +6171,8 @@ void EnumeratorTest()
             {
                 num = num + 0;
             }
+            ++en1;
+            CompareEnumerators(en, en1);
         }
         if (num != 0)
         {
@@ -6184,23 +6188,26 @@ void EnumeratorTest()
     bvect1.set_bit(100);
 
     bvect::enumerator en = bvect1.first();
-
-    if (*en != 100)
+    bvect::enumerator en1 = bvect1.get_enumerator(*en - 1);
+    if (*en != 100 || *en != *en1)
     {
         cout << "Enumerator error !" << endl;
         exit(1);
     }
+    CompareEnumerators(en, en1);
 
     bvect1.clear_bit(100);
 
     bvect1.set_bit(2000000);
     en.go_first();
+    en1.go_to(10);
 
-    if (*en != 2000000)
+    if (*en != 2000000 || *en != *en1)
     {
         cout << "Enumerator error !" << endl;
         exit(1);
     }
+    CompareEnumerators(en, en1);
     print_stat(bvect1);
     }
 
@@ -6219,15 +6226,20 @@ void EnumeratorTest()
 
         while (en < bvect1.end())
         {
-            if (*en != num)
+            bvect::enumerator en1 = bvect1.get_enumerator(num);
+            if (*en != num || *en != *en1)
             {
                 cout << "Enumeration comparison failed !" << 
                         " enumerator = " << *en <<
-                        " get_next() = " << num << endl; 
+                        " get_next() = " << num << 
+                        " goto enumerator = " << *en1 << endl; 
                 exit(1);
             }
+            CompareEnumerators(en, en1);
             ++en;
             num = bvect1.get_next(num);
+            ++en1;
+            CompareEnumerators(en, en1);
         }
         if (num != 0)
         {
