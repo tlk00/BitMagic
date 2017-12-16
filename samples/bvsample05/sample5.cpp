@@ -31,10 +31,12 @@ For more information please visit:  http://bitmagic.io
 /** \example sample5.cpp
  Example demonstrates using enumerators - the fastest way to retrieve 
  indexes of 1 bits from the bitvector. This approach works faster than
- get_first/get_next functions.
+ get_first()/get_next() functions.
  
   \sa bm::bvector<>::enumerator 
-
+  \sa bm::bvector<>::first()
+  \sa bm::bvector<>::end()
+  \sa bm::bvector<>::get_enumerator()
 */
 
 #include <iostream>
