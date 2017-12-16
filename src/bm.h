@@ -767,8 +767,8 @@ public:
                 bdescr->bit_.ptr = this->block_ + nword;
                 bm::word_t w = *(bdescr->bit_.ptr);
                 bdescr->bit_.cnt = bm::bitscan_popcnt(w, bdescr->bit_.bits);
-                
-                bdescr->bit_.pos = this->position_ - 1; // nword * 32;
+
+                bdescr->bit_.pos = (nb * bm::set_block_size * 32) + (nword * 32);
                 bdescr->bit_.idx = 0;
                 nbit &= bm::set_word_mask;
                 for (unsigned i = 0; i < bdescr->bit_.cnt; ++i)
@@ -776,6 +776,7 @@ public:
                     if (bdescr->bit_.bits[i] == nbit)
                         return *this;
                     bdescr->bit_.idx++;
+
                 }
                 BM_ASSERT(0);
             }
