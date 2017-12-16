@@ -58,6 +58,9 @@ int main(void)
         bv[100] = true;
         bv[10000] = true;
         bv[65536] = true;
+        bv[65537] = true;
+        bv[65538] = true;
+        bv[65540] = true;
 
         bm::bvector<>::enumerator en = bv.first();
         bm::bvector<>::enumerator en_end = bv.end();
@@ -82,7 +85,7 @@ int main(void)
         // example to illustrate random positioning of enumerator 
         // go to a random bit number, enumerator automatically finds the available bit
         //
-        en.go_to(65536);
+        en.go_to(65537);
         for (; en.valid(); ++en)
         {
             cout << *en << ", ";
