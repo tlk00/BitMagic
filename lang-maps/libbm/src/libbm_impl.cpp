@@ -864,6 +864,16 @@ int BM_bvector_deserialize(BM_BVHANDLE   h,
 
 int BM_bvector_enumerator_construct(BM_BVHANDLE h, BM_BVEHANDLE* peh)
 {
+    return BM_bvector_enumerator_construct_from(h, peh, 0);
+}
+
+// -----------------------------------------------------------------
+
+
+int BM_bvector_enumerator_construct_from(BM_BVHANDLE h,
+                                         BM_BVEHANDLE* peh,
+                                         unsigned int  pos)
+{
     if (h == 0 || peh == 0)
         return BM_ERR_BADARG;
 
@@ -878,7 +888,7 @@ int BM_bvector_enumerator_construct(BM_BVHANDLE h, BM_BVEHANDLE* peh)
             return BM_ERR_BADALLOC;
         }
         // placement new just to call the constructor
-        TBM_bvector_enumerator* bvenum = new(mem) TBM_bvector_enumerator(bv, 0);
+        TBM_bvector_enumerator* bvenum = new(mem) TBM_bvector_enumerator(bv, pos);
         *peh = bvenum;
         
     }

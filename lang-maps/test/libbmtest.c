@@ -784,6 +784,7 @@ int EnumeratorTest()
     int res = 0;
     BM_BVHANDLE bmh1 = 0;
     BM_BVEHANDLE bmeh1 = 0;
+    BM_BVEHANDLE bmeh2 = 0;
     int valid;
     unsigned int pos;
     
@@ -842,9 +843,19 @@ int EnumeratorTest()
         res = 1; goto free_mem;
     }
 
-    
+    res = BM_bvector_enumerator_construct_from(bmh1, &bmeh2, 3);
+    BMERR_CHECK_GOTO(res, "BM_bvector_enumerator_construct_from()", free_mem);
+
+    res = BM_bvector_enumerator_get_value(bmeh1, &pos);
+    BMERR_CHECK_GOTO(res, "BM_bvector_enumerator_get_value()", free_mem);
+    if (pos != 3)
+    {
+        printf("4. incorrrect enumerator traversal position %u \n", pos);
+        res = 1; goto free_mem;
+    }
 
     free_mem:
+        res = BM_bvector_enumerator_free(bmeh2);
         res = BM_bvector_enumerator_free(bmeh1);
         res = BM_bvector_free(bmh1);
 

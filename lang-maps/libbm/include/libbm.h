@@ -373,11 +373,23 @@ int BM_bvector_combine_AND_arr_sorted(BM_BVHANDLE hdst,
 /* bvector traversal/enumerator                 */
 /* -------------------------------------------- */
 
-/* construct bvector enumerator for bit index traversal
+/* construct bvector enumerator for ON bit index traversal
+   (starting from first ON bit)
    h  - handle of source bvector
    peh - pointer on enumerator to be created
 */
 int BM_bvector_enumerator_construct(BM_BVHANDLE h, BM_BVEHANDLE* peh);
+
+/* construct bvector enumerator for ON bit index traversal
+   starting from position
+   h  - handle of source bvector
+   peh - pointer on enumerator to be created
+   pos - start position, if 0 - it starts from the first available bit
+*/
+int BM_bvector_enumerator_construct_from(BM_BVHANDLE h,
+                                         BM_BVEHANDLE* peh,
+                                         unsigned int pos);
+
 
 /* destroy bvector enumerator handle */
 int BM_bvector_enumerator_free(BM_BVEHANDLE eh);
