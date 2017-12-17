@@ -413,6 +413,17 @@ int BM_bvector_enumerator_next(BM_BVEHANDLE eh,
                                int* pvalid, unsigned int* pvalue);
 
 
+/* Advance enumerator to the specieid traversal position.
+   If bit-vector position is not 1 it will automatically go to the next available
+   1 bit.
+   pos    - requested position
+   pvalid - (optional) returns 0 if traversal ended
+   pvalue - (optional) current value
+*/
+int BM_bvector_enumerator_goto(BM_BVEHANDLE eh, unsigned int pos,
+                               int* pvalid, unsigned int* pvalue);
+
+
 /* -------------------------------------------- */
 /* bvector serialization                        */
 /* -------------------------------------------- */

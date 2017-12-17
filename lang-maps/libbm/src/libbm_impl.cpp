@@ -986,6 +986,36 @@ int BM_bvector_enumerator_next(BM_BVEHANDLE eh,
 
 // -----------------------------------------------------------------
 
+int BM_bvector_enumerator_goto(BM_BVEHANDLE eh, unsigned int pos,
+                               int* pvalid, unsigned int* pvalue)
+{
+    if (!eh)
+        return BM_ERR_BADARG;
+    
+    TRY
+    {
+        TBM_bvector_enumerator* bvenum = (TBM_bvector_enumerator*)eh;
+        bvenum->go_to(pos);
+        if (pvalid)
+        {
+            *pvalid = bvenum->valid();
+        }
+        if (pvalue)
+        {
+            *pvalue = bvenum->value();
+        }
+    }
+    CATCH (BM_ERR_BADALLOC)
+    {
+        return BM_ERR_BADALLOC;
+    }
+    ETRY;
+    return BM_OK;
+}
+
+
+// -----------------------------------------------------------------
+
 int BM_bvector_count_AND(BM_BVHANDLE h1, BM_BVHANDLE h2, unsigned int* pcount)
 {
     if (!h1 || !h2 || !pcount)
