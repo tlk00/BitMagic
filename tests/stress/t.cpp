@@ -1155,6 +1155,31 @@ void CheckIntervals(const bvect& bv, unsigned max_bit)
     }
 }
 
+template<class T> void CheckCountGapRange(const T& vect,
+                                       unsigned left,
+                                       unsigned right,
+                                       unsigned* block_count_arr=0)
+{
+    unsigned cnt1 = vect.count_range(left, right, block_count_arr);
+    unsigned cnt2 = 0;
+    for (unsigned i = left; i <= right; ++i)
+    {
+        if (vect.test(i))
+        {
+            ++cnt2;
+        }
+    }
+    if (cnt1 != cnt2)
+    {
+        cout << "Bitcount range failed!" << "left=" << left
+             << " right=" << right << endl
+             << "count_range()=" << cnt1
+             << " check=" << cnt2;
+        exit(1);
+    }
+}
+
+
 template<class T> void CheckCountRange(const T& vect, 
                                        unsigned left, 
                                        unsigned right,
@@ -1162,16 +1187,13 @@ template<class T> void CheckCountRange(const T& vect,
 {
     unsigned cnt1 = vect.count_range(left, right, block_count_arr);
     unsigned cnt2 = 0;
-//cout << endl;
     for (unsigned i = left; i <= right; ++i)
     {
         if (vect.test(i))
         {
-//            cout << i << " " << flush;
             ++cnt2;
         }
     }
-//cout << endl;
     if (cnt1 != cnt2)
     {
         cout << "Bitcount range failed!" << "left=" << left 
@@ -1179,6 +1201,26 @@ template<class T> void CheckCountRange(const T& vect,
              << "count_range()=" << cnt1 
              << " check=" << cnt2;
         exit(1);
+    }
+    
+    bvect::blocks_count bc_arr;
+    vect.running_count_blocks(&bc_arr);
+    
+    // run a cycle to check count_to()
+    //
+    left = 0;
+    //for (unsigned i = 0; i <= right; ++i)
+    {
+        unsigned cnt1 = vect.count_range(left, right, block_count_arr);
+        unsigned cnt2 = vect.count_to(right, bc_arr);
+        if (cnt1 != cnt2)
+        {
+            cout << "Bitcount range TO failed!" << "left=" << left
+                 << " right=" << right << endl
+                 << "count_range()=" << cnt1
+                 << " check=" << cnt2;
+            exit(1);
+        }
     }
 }
 
@@ -1239,6 +1281,18 @@ void DetailedCheckVectors(const bvect_mini &bvect_min,
 
 }
 
+void CompareEnumerators(const bvect::enumerator& en1, const bvect::enumerator& en2)
+{
+    if (!en1.valid() && !en2.valid())
+        return;
+    bool fsm_equal = en1.compare_state(en2);
+    if (!fsm_equal)
+    {
+        cerr << "Enumerators FSM comparison failed" << endl;
+        exit(1);
+    }
+}
+
 
 // vectors comparison check
 
@@ -1284,6 +1338,7 @@ void CheckVectors(bvect_mini &bvect_min,
 
     bvect::counted_enumerator en = bvect_full.first();
     unsigned nb_en = *en;
+    bvect::enumerator en1 = bvect_full.get_enumerator(*en);
     if (nb_min != nb_ful)
     {
          cout << "!!!! First bit comparison failed. Full id = " 
@@ -1305,6 +1360,7 @@ void CheckVectors(bvect_mini &bvect_min,
 
          exit(1);
     }
+    CompareEnumerators(en, en1);
 
     if (full_count)
     {
@@ -1321,6 +1377,14 @@ void CheckVectors(bvect_mini &bvect_min,
 
            en_prev = nb_en;
            ++en;
+           ++en1;
+           CompareEnumerators(en, en1);
+
+           if ((bit_count % 10 == 0) || (bit_count % 128 == 0))
+           {
+                bvect::enumerator en2 = bvect_full.get_enumerator(*en);
+                CompareEnumerators(en, en2);
+           }
 
            nb_en = *en;
 //           nb_en = bvect_full.get_next(nb_en);
@@ -1430,6 +1494,87 @@ void WordCmpTest()
 
     cout << "Ok." << endl;
 }
+
+
+
+void ShiftRotateTest()
+{
+    cout << "---------------------------- ShiftRotate test" << endl;
+
+    bm::word_t blk0[bm::set_block_size] = { 0 };
+    bm::word_t blk1[bm::set_block_size] = { 0 };
+    unsigned i;
+
+    for (i = 0; i < bm::set_block_size; ++i)
+    {
+        blk0[i] = blk1[i] = 1;
+    }
+
+    bm::bit_block_rotate_left_1(blk0);
+    bm::bit_block_rotate_left_1_unr(blk1);
+
+    for (i = 0; i < bm::set_block_size; ++i)
+    {
+        if (blk0[i] != 2 || blk0[i] != blk1[i])
+        {
+            cerr << "Cyclic rotate check failed" << endl;
+            exit(1);
+        }
+    }
+
+    bm::bit_block_rotate_left_1(blk0);
+    bm::bit_block_rotate_left_1_unr(blk1);
+
+    for (i = 0; i < bm::set_block_size; ++i)
+    {
+        if (blk0[i] != 4 || blk0[i] != blk1[i])
+        {
+            cerr << "Cyclic rotate check failed" << endl;
+            exit(1);
+        }
+    }
+
+    for (i = 0; i < bm::set_block_size; ++i)
+    {
+        blk0[i] = blk1[i] = 1 << 31;
+    }
+    bm::bit_block_rotate_left_1(blk0);
+    bm::bit_block_rotate_left_1_unr(blk1);
+
+    for (i = 0; i < bm::set_block_size; ++i)
+    {
+        if (blk0[i] != 1 || blk0[i] != blk1[i])
+        {
+            cerr << "Cyclic rotate check failed" << endl;
+            exit(1);
+        }
+    }
+
+
+    for (i = 0; i < bm::set_block_size; ++i)
+    {
+        blk0[i] = blk1[i] = rand();
+    }
+
+    for (unsigned j = 0; j < bm::set_block_size * 32; ++j)
+    {
+        bm::bit_block_rotate_left_1(blk0);
+        bm::bit_block_rotate_left_1_unr(blk1);
+
+        for (i = 0; i < bm::set_block_size; ++i)
+        {
+            if (blk0[i] != blk1[i])
+            {
+                cerr << "Steress Cyclic rotate check failed" << endl;
+                exit(1);
+            }
+        }
+
+    }
+
+    cout << "---------------------------- ShiftRotate test OK" << endl;
+}
+
 
 void EmptyBVTest()
 {
@@ -1654,7 +1799,9 @@ void EmptyBVTest()
     {
         bvect  bv1;
         bvect::enumerator en1 = bv1.first();
-        if (en1.valid())
+        bvect::enumerator en2 = bv1.get_enumerator(65535);
+        CompareEnumerators(en1, en2);
+        if (en1.valid() || en2.valid())
         {
             cerr << "failed first enumerator" << endl;
             exit(1);
@@ -4117,8 +4264,8 @@ void GAPCheck()
        exit(1);
    }
    
-   CheckCountRange(gapv, 10, 20);
-   CheckCountRange(gapv, 0, 20);
+   CheckCountGapRange(gapv, 10, 20);
+   CheckCountGapRange(gapv, 0, 20);
 
    CheckGap2DGap(gapv);
 
@@ -4159,8 +4306,8 @@ void GAPCheck()
        cout << "count_range failed:" << cnt << endl;
        exit(1);
    }
-   CheckCountRange(gapv, 10, 20);
-   CheckCountRange(gapv, 0, 20);
+   CheckCountGapRange(gapv, 10, 20);
+   CheckCountGapRange(gapv, 0, 20);
 
    CheckGap2DGap(gapv);
 
@@ -4176,7 +4323,7 @@ void GAPCheck()
    gapv.set_bit(0);
 
    gapv.control();
-   CheckCountRange(gapv, 0, 20);
+   CheckCountGapRange(gapv, 0, 20);
 
    int bit = gapv.is_bit_true(0);
 
@@ -4217,12 +4364,12 @@ void GAPCheck()
    gapv.control();
    gapv.set_bit(5);
    gapv.control();
-   CheckCountRange(gapv, 4, 5);
-   CheckCountRange(gapv, 3, 5);
+   CheckCountGapRange(gapv, 4, 5);
+   CheckCountGapRange(gapv, 3, 5);
 
    gapv.set_bit(3);
-   CheckCountRange(gapv, 3, 3);
-   CheckCountRange(gapv, 3, 5);
+   CheckCountGapRange(gapv, 3, 3);
+   CheckCountGapRange(gapv, 3, 5);
 
    gapv.control();
    
@@ -4270,7 +4417,7 @@ void GAPCheck()
         
         cout << "++++++4" << endl;
 
-        CheckCountRange(gapv, 13, 150);
+        CheckCountGapRange(gapv, 13, 150);
         gapv.control();
         
         CheckGap2DGap(gapv);
@@ -4331,7 +4478,7 @@ void GAPCheck()
             bvect_min.set_bit(i);
             gapv.set_bit(i);
             gapv.control();
-            CheckCountRange(gapv, 0, i);
+            CheckCountGapRange(gapv, 0, i);
             
 
             int bit1 = (gapv.is_bit_true(i) == 1);
@@ -4379,8 +4526,8 @@ void GAPCheck()
             bvect_min.set_bit(id);
             gapv.set_bit(id);
             gapv.control();
-            CheckCountRange(gapv, 0, id);
-            CheckCountRange(gapv, id, 65535);
+            CheckCountGapRange(gapv, 0, id);
+            CheckCountGapRange(gapv, id, 65535);
             
             CheckGap2DGap(gapv);
 
@@ -4572,7 +4719,7 @@ void GAPCheck()
    gapv.set_bit(11);
    gapv.set_bit(12);
    
-   CheckCountRange(gapv, 3, 15);
+   CheckCountGapRange(gapv, 3, 15);
 
    print_gap(gapv, 100);
    bvect.set_bit(0);
@@ -4631,7 +4778,7 @@ void GAPCheck()
       cout << "Wrong bit" << endl;
       exit(1);
    }
-   CheckCountRange(gapv1, 0, 17);
+   CheckCountGapRange(gapv1, 0, 17);
 
    }
 
@@ -4703,7 +4850,7 @@ void GAPCheck()
         bvect_min2.set_bit(65535);
         gapv2.set_bit(3);
         bvect_min2.set_bit(3);
-        CheckCountRange(gapv2, 3, 65535);
+        CheckCountGapRange(gapv2, 3, 65535);
 
         gapv2.control();
 
@@ -4735,8 +4882,8 @@ void GAPCheck()
             bvect_min1.set_bit(id);
             gapv1.set_bit(id);
             gapv1.control();
-            CheckCountRange(gapv1, 0, id);
-            CheckCountRange(gapv1, id, 65535);
+            CheckCountGapRange(gapv1, 0, id);
+            CheckCountGapRange(gapv1, id, 65535);
         }
         for (i = 0; i < 25; ++i)
         {
@@ -5912,23 +6059,26 @@ void EnumeratorTest()
     bvect::enumerator en = bvect1.first();
     unsigned n = bvect1.get_next(0);
     
-    if (*en != 100 || n != 100)
+    bvect::enumerator en1 = bvect1.get_enumerator(n);
+    if (*en != 100 || n != 100 || *en1 != 100)
     {
         cout << "Enumerator error !" << endl;
         exit(1);
     }
+    CompareEnumerators(en, en1);
 
     bvect1.clear_bit(100);
 
     bvect1.set_bit(2000000000);
     en.go_first();
     n = bvect1.get_next(0);
-
-    if (*en != 2000000000 || n != *en)
+    en1.go_to(n);
+    if (*en != 2000000000 || n != *en || *en1 != *en)
     {
         cout << "Enumerator error !" << endl;
         exit(1);
     }
+    CompareEnumerators(en, en1);
     }
 
     {
@@ -5948,15 +6098,22 @@ void EnumeratorTest()
         bvect::enumerator end = bvect1.end();
         while (en < end)
         {
-            if (*en != num)
+            bvect::enumerator en1 = bvect1.get_enumerator(num ? num-1 : num);
+            if (*en != num || *en != *en1)
             {
                 cout << "Enumeration comparison failed !" << 
                         " enumerator = " << *en <<
-                        " get_next() = " << num << endl; 
+                        " get_next() = " << num <<
+                        " goto enumerator = " << *en1 <<
+                        endl;
                 exit(1);
             }
+            CompareEnumerators(en, en1);
+            
             ++en;
             num = bvect1.get_next(num);
+            ++en1;
+            CompareEnumerators(en, en1);
         }
         if (num != 0)
         {
@@ -6009,16 +6166,18 @@ void EnumeratorTest()
 
 
         bvect::enumerator en = bvect1.first();
-
         unsigned num = bvect1.get_first();
 
         while (en < bvect1.end())
         {
-            if (*en != num)
+            bvect::enumerator en1 = bvect1.get_enumerator(num);
+            if (*en != num || *en != *en1)
             {
                 cout << "Enumeration comparison failed !" << 
                         " enumerator = " << *en <<
-                        " get_next() = " << num << endl; 
+                        " get_next() = " << num <<
+                        " goto enumerator = " << *en1
+                        << endl; 
                 exit(1);
             }
             ++en;
@@ -6027,6 +6186,8 @@ void EnumeratorTest()
             {
                 num = num + 0;
             }
+            ++en1;
+            CompareEnumerators(en, en1);
         }
         if (num != 0)
         {
@@ -6042,23 +6203,26 @@ void EnumeratorTest()
     bvect1.set_bit(100);
 
     bvect::enumerator en = bvect1.first();
-
-    if (*en != 100)
+    bvect::enumerator en1 = bvect1.get_enumerator(*en - 1);
+    if (*en != 100 || *en != *en1)
     {
         cout << "Enumerator error !" << endl;
         exit(1);
     }
+    CompareEnumerators(en, en1);
 
     bvect1.clear_bit(100);
 
     bvect1.set_bit(2000000);
     en.go_first();
+    en1.go_to(10);
 
-    if (*en != 2000000)
+    if (*en != 2000000 || *en != *en1)
     {
         cout << "Enumerator error !" << endl;
         exit(1);
     }
+    CompareEnumerators(en, en1);
     print_stat(bvect1);
     }
 
@@ -6077,15 +6241,20 @@ void EnumeratorTest()
 
         while (en < bvect1.end())
         {
-            if (*en != num)
+            bvect::enumerator en1 = bvect1.get_enumerator(num);
+            if (*en != num || *en != *en1)
             {
                 cout << "Enumeration comparison failed !" << 
                         " enumerator = " << *en <<
-                        " get_next() = " << num << endl; 
+                        " get_next() = " << num << 
+                        " goto enumerator = " << *en1 << endl; 
                 exit(1);
             }
+            CompareEnumerators(en, en1);
             ++en;
             num = bvect1.get_next(num);
+            ++en1;
+            CompareEnumerators(en, en1);
         }
         if (num != 0)
         {
@@ -6209,6 +6378,8 @@ void SyntaxTest()
     bvect::reference ref = bv1[10];
     bool bn = !ref;
     bool bn2 = ~ref;
+    bv1[10] = bn2;
+    bv1[10] = bn;
 
     bn = bn2 = false;
 
@@ -6768,9 +6939,10 @@ void BitCountChangeTest()
             exit(1);
         }
     }
-  
+    cout << "!" << endl;
 
-    bm::word_t  BM_ALIGN16 arr[16] BM_ALIGN16ATTR = {0,};
+    //bm::word_t  BM_VECT_ALIGN arr[16] BM_VECT_ALIGN = {0,};
+    bm::word_t  BM_VECT_ALIGN arr[32] BM_VECT_ALIGN = { 0, };
     arr[0] = (bm::word_t)(1 << 31);
     arr[1] = 1; //(bm::word_t)(1 << 31);
     
@@ -6784,10 +6956,11 @@ void BitCountChangeTest()
         cout << "0.count_change() failed " << cnt << endl;
         exit(1);
     }
-    
-    cnt = bm::bit_block_calc_count_change(arr, arr+4, &bc);
-    
-    bc1 = bit_block_calc_count(arr, arr+4);
+#if !defined(BMAVX2OPT)    
+    cnt = bm::bit_block_calc_count_change(arr, arr+8, &bc);
+    cout << "*" << endl;
+    bc1 = bit_block_calc_count(arr, arr+8);
+    cout << "@" << endl;
     if (bc != bc1)
     {
         cout << "1. bitcount comparison failed " << endl;
@@ -6819,7 +6992,7 @@ void BitCountChangeTest()
         cout << "1.1 count_intervals() failed " << cnt << endl;
         exit(1);
     }
-    
+#endif    
  
     cout << "---------------------------- STEP 4 " << endl;
 
@@ -7220,6 +7393,8 @@ void BitCountChangeTest()
 
     cout << "---------------------------- BitCountChangeTest Ok." << endl;
 }
+
+
 
 
 void DNACompressionTest()
@@ -7937,8 +8112,83 @@ void ResizeTest()
         ++en;
     }
     }}
-
 }
+
+void VerifyCountRange(const bvect& bv,
+                      const bvect::blocks_count& bc_arr,
+                      bm::id_t to)
+{
+    for (unsigned i = 0; i < to; ++i)
+    {
+        bm::id_t cnt1 = bv.count_range(0, i);
+        bm::id_t cnt2 = bv.count_to(i, bc_arr);
+        
+        assert(cnt1 == cnt2);
+    }
+}
+
+void CountRangeTest()
+{
+    cout << "---------------------------- CountRangeTest..." << endl;
+    
+    {{
+    bvect bv1;
+    bv1.set(0);
+    bv1.set(1);
+    
+    bvect::blocks_count bc_arr;
+    bv1.running_count_blocks(&bc_arr);
+    
+    for (unsigned i = 0; i < bm::set_total_blocks; ++i)
+    {
+        assert(bc_arr.cnt[i] == 2);
+    } // for
+    
+    VerifyCountRange(bv1, bc_arr, 200000);
+    
+    bv1.optimize();
+    bvect::blocks_count bc_arr1;
+    bv1.running_count_blocks(&bc_arr1);
+    
+    for (unsigned i = 0; i < bm::set_total_blocks; ++i)
+    {
+        assert(bc_arr1.cnt[i] == 2);
+    } // for
+    
+    VerifyCountRange(bv1, bc_arr1, 200000);
+
+    }}
+    
+    {{
+    bvect bv1;
+    bv1.set(0);
+    bv1.set(1);
+    
+    bv1.set(65535+10);
+    bv1.set(65535+20);
+    bv1.set(65535+21);
+
+    
+    bvect::blocks_count bc_arr;
+    bv1.running_count_blocks(&bc_arr);
+
+    assert(bc_arr.cnt[0] == 2);
+    assert(bc_arr.cnt[1] == 5);
+
+    for (unsigned i = 2; i < bm::set_total_blocks; ++i)
+    {
+        assert(bc_arr.cnt[i] == 5);
+    } // for
+    
+    VerifyCountRange(bv1, bc_arr, 200000);
+    
+    }}
+
+    
+    
+    cout << "---------------------------- CountRangeTest OK" << endl;
+}
+
 
 void ExportTest()
 {
@@ -8372,12 +8622,32 @@ bool CompareSparseVector(const SV& sv, const Vect& vect)
         typename Vect::value_type v1 = vect[i];
         typename SV::value_type v2 = sv[i];
         
-        if (v1 != v2) {
+        if (v1 != v2)
+        {
             cout << "SV discrepancy:" << "sv[" << i << "]=" << v2
                  <<  "vect[" << i << "]=" << v1
                  << endl;
             return false;
         }
+    }
+    
+    // extraction comparison
+    {
+    std::vector<unsigned> v1(sv.size());
+    std::vector<unsigned> v1r(sv.size());
+    sv.extract(&v1[0], sv.size(), 0);
+    sv.extract_range(&v1r[0], sv.size(), 0);
+    for (unsigned i = 0; i < sv.size(); ++i)
+    {
+        if (v1r[i] != v1[i] || v1[i] != vect[i])
+        {
+            cerr << "TestEqualSparseVectors Extract 1 failed at:" << i
+                 << " v1[i]=" << v1[i] << " v1r[i]=" << v1r[i]
+                 << endl;
+            exit(1);
+        }
+    } // for
+
     }
     
     // serialization comparison
@@ -8415,6 +8685,30 @@ bool TestEqualSparseVectors(const SV& sv1, const SV& sv2)
     if (!b)
     {
         return b;
+    }
+    
+    if (sv1.size() != sv2.size())
+    {
+        cerr << "TestEqualSparseVectors failed incorrect size" << endl;
+        exit(1);
+    }
+    
+
+    {
+    std::vector<unsigned> v1(sv1.size());
+    std::vector<unsigned> v1r(sv1.size());
+    sv1.extract(&v1[0], sv1.size(), 0);
+    sv1.extract_range(&v1r[0], sv1.size(), 0);
+    for (unsigned i = 0; i < sv1.size(); ++i)
+    {
+        if (v1r[i] != v1[i])
+        {
+            cerr << "TestEqualSparseVectors Extract 1 failed at:" << i
+                 << " v1[i]=" << v1[i] << " v1r[i]=" << v1r[i]
+                 << endl;
+            exit(1);
+        }
+    } // for
     }
 
     {
@@ -8550,6 +8844,15 @@ void TestSparseVector()
         cout << sv.at(i) << ",";
     }
     cout << endl;
+    
+    bm::bvector<> bv;
+    bm::compute_nonzero_bvector(sv, bv);
+    if (bv.count() != sv.size())
+    {
+        cerr << "compute_nonzero_bvector test failed" << endl;
+        exit(1);
+    }
+    
     }}
     
     cout << "Import test..." << endl;
@@ -8662,10 +8965,12 @@ void TestSparseVector()
     }
         
     std::vector<unsigned> v1(16);
+    std::vector<unsigned> v1r(16);
     sv.extract(&v1[0], 16, 0);
+    sv.extract_range(&v1r[0], 16, 0);
     for (unsigned i = 0; i < 16; ++i)
     {
-        if (v1[i] != 8)
+        if (v1[i] != 8 || v1r[i] != v1[i])
         {
             cerr << "Extract 1 failed at:" << i << endl;
             exit(1);
@@ -8673,12 +8978,14 @@ void TestSparseVector()
     } // for
     
     std::vector<unsigned> v2(10);
+    std::vector<unsigned> v2r(10);
     sv.extract(&v2[0], 10, 32);
+    sv.extract_range(&v2r[0], 10, 32);
     for (unsigned i = 0; i < 10; ++i)
     {
-        if (v2[i] != 255)
+        if (v2[i] != 255 || v2r[i] != v2[i])
         {
-            cerr << "Extract 2 failed at:" << i << "=" << v2[i] << "sv=" << sv[i+32] << endl;
+            cerr << "Extract 2 failed at:" << i << "=" << v2[i] << " r=" << v2r[i] << " sv=" << sv[i+32] << endl;
             exit(1);
         }
     } // for
@@ -9033,7 +9340,7 @@ void TestSparseVector_Stress(unsigned count)
 {
 
     cout << "---------------------------- Bit-plain sparse vector stress" << endl;
-    
+
     cout << "Interval shift check.";
     // interval shift check
     for (unsigned i = 0; i < count; ++i)
@@ -9647,7 +9954,7 @@ int main(void)
     unsigned long long  *i1 = reinterpret_cast<unsigned long long*>(&d1);
     cerr << "i1= " << *i1 << endl;
     
-    double d2;
+    double d2 = 0.0;
     unsigned long long  *i2 = reinterpret_cast<unsigned long long*>(&d2);
     *i2 ^= 0;
     cerr << "i2=" << *i2 << endl;
@@ -9707,6 +10014,7 @@ int main(void)
     exit(1);
 */                                                                                                        
 
+
      ExportTest();
      ResizeTest();
 
@@ -9715,8 +10023,9 @@ int main(void)
      SyntaxTest();
 
      SetTest();
- 
+
      BitCountChangeTest();
+    
    
      Log2Test();
 
@@ -9729,6 +10038,8 @@ int main(void)
      EmptyBVTest();
 
      EnumeratorTest();
+    
+     CountRangeTest();
 
      BasicFunctionalityTest();
 
@@ -9753,6 +10064,8 @@ int main(void)
      SubOperationsTest();
 
      WordCmpTest();
+
+     ShiftRotateTest();
 
      ComparisonTest();
 

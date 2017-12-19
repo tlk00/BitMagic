@@ -68,6 +68,7 @@ For more information please visit:  http://bitmagic.io
 /** @defgroup AVX2 AVX2 functions
     Processor specific optimizations for AVX2 instructions (internals)
     @ingroup bvector
+    @internal
  */
 
 
@@ -1048,14 +1049,6 @@ bm::id_t sse42_bit_block_calc_count_change(const __m128i* BMRESTRICT block,
    return count;
 }
 
-
-
-// undefine some local macro definitions to avoid preprocessor pollution
-//
-#undef BM_CSA256
-#undef BM_AVX2_BIT_COUNT
-#undef BM_AVX2_DECL_LOOKUP1
-#undef BM_AVX2_POPCNT_PROLOG
 
 
 } // namespace

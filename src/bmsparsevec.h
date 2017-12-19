@@ -51,6 +51,20 @@ namespace bm
 
 /*!
    \brief sparse vector with runtime compression using bit transposition method
+ 
+   Sparse vector implements variable bit-depth storage model.
+   Initial data is bit-transposed into bit-planes so initial each element
+   may use less memory than the original native data type prescribes.
+   For example, 32-bit integer may only use 20 bits.
+ 
+   Another level of compression is provided by bit-vector (BV template parameter)
+   used for storing bit planes. bvector<> implements varians of on the fly block
+   compression, so if a significant area of a sparse vector uses less bits - it
+   will save memory.
+ 
+   Overall it provides variable bit-depth compression, sparse compression in
+   bit-plains.
+ 
    \ingroup svector
 */
 template<class Val, class BV>
@@ -216,9 +230,14 @@ public:
     size_type extract(value_type* arr,
                       size_type size,
                       size_type offset = 0,
-                      bool      zero_mem = true);
+                      bool      zero_mem = true) const;
 
-    
+    /** \brief extract small window without use of masking vector */
+    size_type extract_range(value_type* arr,
+                            size_type size,
+                            size_type offset,
+                            bool      zero_mem = true) const;
+
     
     /*! \brief return size of the vector
         \return size of sparse vector
@@ -284,6 +303,13 @@ public:
     void optimize(bm::word_t* temp_block = 0,
                   typename bvector_type::optmode opt_mode = bvector_type::opt_compress,
                   typename sparse_vector<Val, BV>::statistics* stat = 0);
+    /*!
+       \brief Optimize sizes of GAP blocks
+
+       This method runs an analysis to find optimal GAP levels for all bit plains
+       of the vector.
+    */
+    void optimize_gap_size();
     
     /*!
         \brief join all with another sparse vector using OR operation
@@ -340,10 +366,14 @@ private:
     */
     void free_vectors() BMNOEXEPT;
 
+
+protected:
     /*! \brief set value without checking boundaries
     */
-protected:
     void set_value(size_type idx, value_type v);
+    const bm::word_t* get_block(unsigned p, unsigned i, unsigned j) const;
+
+
 private:
     
     size_type                bv_size_;
@@ -466,7 +496,7 @@ void sparse_vector<Val, BV>::import(const value_type* arr,
     bm::tmatrix<bm::id_t, sizeof(Val)*8, transpose_window> tm; // matrix accumulator
     
     if (size == 0)
-        throw std::range_error("sparse vector range error");
+        throw std::range_error("sparse vector range error (zero import size)");
     
     // clear all plains in the range to provide corrrect import of 0 values
     this->clear_range(offset, offset + size - 1);
@@ -524,10 +554,81 @@ void sparse_vector<Val, BV>::import(const value_type* arr,
 
 template<class Val, class BV>
 typename sparse_vector<Val, BV>::size_type
+sparse_vector<Val, BV>::extract_range(value_type* arr,
+                                      size_type size,
+                                      size_type offset,
+                                      bool      zero_mem) const
+{
+    if (size == 0)
+        return 0;
+    if (zero_mem)
+        ::memset(arr, 0, sizeof(value_type)*size);
+
+    size_type start = offset;
+    size_type end = start + size;
+    if (end > size_)
+    {
+        end = size_;
+    }
+    
+    // calculate logical block coordinates and masks
+    //
+    unsigned nb = unsigned(start >>  bm::set_block_shift);
+    unsigned i0 = nb >> bm::set_array_shift; // top block address
+    unsigned j0 = nb &  bm::set_array_mask;  // address in sub-block
+    unsigned nbit = unsigned(start & bm::set_block_mask);
+    unsigned nword  = unsigned(nbit >> bm::set_word_shift);
+    unsigned mask0 = 1u << (nbit & bm::set_word_mask);
+    const bm::word_t* blk = 0;
+    unsigned is_set;
+    
+    for (unsigned j = 0; j < sizeof(Val)*8; ++j)
+    {
+        blk = get_block(j, i0, j0);
+        bool is_gap = BM_IS_GAP(blk);
+        
+        for (unsigned k = start; k < end; ++k)
+        {
+            unsigned nb1 = unsigned(k >>  bm::set_block_shift);
+            if (nb1 != nb) // block switch boundaries
+            {
+                nb = nb1;
+                i0 = nb >> bm::set_array_shift;
+                j0 = nb &  bm::set_array_mask;
+                blk = get_block(j, i0, j0);
+                is_gap = BM_IS_GAP(blk);
+            }
+        
+            if (!blk)
+                continue;
+            nbit = unsigned(k & bm::set_block_mask);
+            if (is_gap)
+            {
+                is_set = gap_test(BMGAP_PTR(blk), nbit);
+            }
+            else
+            {
+                nword  = unsigned(nbit >> bm::set_word_shift);
+                mask0 = 1u << (nbit & bm::set_word_mask);
+                is_set = (blk[nword] & mask0);
+            }
+            size_type idx = k - offset;
+            arr[idx] |= (bool(is_set != 0) << j);
+            
+        } // for k
+
+    } // for j
+    return 0;
+}
+
+//---------------------------------------------------------------------
+
+template<class Val, class BV>
+typename sparse_vector<Val, BV>::size_type
 sparse_vector<Val, BV>::extract(value_type* arr,
                                 size_type   size,
                                 size_type   offset,
-                                bool        zero_mem)
+                                bool        zero_mem) const
 {
     if (size == 0)
         return 0;
@@ -537,11 +638,13 @@ sparse_vector<Val, BV>::extract(value_type* arr,
     size_type start = offset;
     size_type end = start + size;
     if (end > size_)
+    {
         end = size_;
+    }
     
 	bool masked_scan = !(offset == 0 && size == this->size());
 
-    if (masked_scan)
+    if (masked_scan) // use temp vector to decompress the area
     {
         bvector_type bv_mask;
         for (size_type i = 0; i < sizeof(Val)*8; ++i)
@@ -657,6 +760,19 @@ sparse_vector<Val, BV>::at(typename sparse_vector<Val, BV>::size_type idx) const
 
 //---------------------------------------------------------------------
 
+template<class Val, class BV>
+const bm::word_t* sparse_vector<Val, BV>::get_block(unsigned p, unsigned i, unsigned j) const
+{
+    const bvector_type* bv = this->plains_[p];
+    if (bv)
+    {
+        const typename bvector_type::blocks_manager_type& bman = bv->get_blocks_manager();
+        return bman.get_block(i, j);
+    }
+    return 0;
+}
+
+//---------------------------------------------------------------------
 
 template<class Val, class BV>
 typename sparse_vector<Val, BV>::value_type
@@ -665,14 +781,52 @@ sparse_vector<Val, BV>::get(bm::id_t i) const
     BM_ASSERT(i < size_);
     
     value_type v = 0;
-    const bvector_type* bv;
-    for (unsigned j = 0; j < sizeof(Val)*8; ++j)
+    
+    // calculate logical block coordinates and masks
+    //
+    unsigned nb = unsigned(i >>  bm::set_block_shift);
+    unsigned i0 = nb >> bm::set_array_shift; // top block address
+    unsigned j0 = nb &  bm::set_array_mask;  // address in sub-block
+    unsigned nbit = unsigned(i & bm::set_block_mask);
+    unsigned nword  = unsigned(nbit >> bm::set_word_shift);
+    unsigned mask0 = 1u << (nbit & bm::set_word_mask);
+    const bm::word_t* blk;
+    const bm::word_t* blka[4];
+    
+    for (unsigned j = 0; j < sizeof(Val)*8; j+=4)
     {
-        if ((bv = this->plains_[j])!=0)   v |= ((bv->test(i))<<j);
-        if ((bv = this->plains_[++j])!=0) v |= ((bv->test(i))<<j);
-        if ((bv = this->plains_[++j])!=0) v |= ((bv->test(i))<<j);
-        if ((bv = this->plains_[++j])!=0) v |= ((bv->test(i))<<j);
-    }
+        bool b = plains_[j+0] || plains_[j+1] || plains_[j+2] || plains_[j+3];
+        if (!b)
+            continue;
+
+        blka[0] = get_block(j+0, i0, j0);
+        blka[1] = get_block(j+1, i0, j0);
+        blka[2] = get_block(j+2, i0, j0);
+        blka[3] = get_block(j+3, i0, j0);
+
+        if ((blk = blka[0+0])!=0)
+        {
+            unsigned is_set = (BM_IS_GAP(blk)) ? gap_test(BMGAP_PTR(blk), nbit) : (blk[nword] & mask0);
+            v |= (bool(is_set != 0) << (j+0));
+        }
+        if ((blk = blka[0+1])!=0)
+        {
+            unsigned is_set = (BM_IS_GAP(blk)) ? gap_test(BMGAP_PTR(blk), nbit) : (blk[nword] & mask0);
+            v |= (bool(is_set != 0) << (j+1));
+        }
+        if ((blk = blka[0+2])!=0)
+        {
+            unsigned is_set = (BM_IS_GAP(blk)) ? gap_test(BMGAP_PTR(blk), nbit) : (blk[nword] & mask0);
+            v |= (bool(is_set != 0) << (j+2));
+        }
+        if ((blk = blka[0+3])!=0)
+        {
+            unsigned is_set = (BM_IS_GAP(blk)) ? gap_test(BMGAP_PTR(blk), nbit) : (blk[nword] & mask0);
+            v |= (bool(is_set != 0) << (j+3));
+        }
+
+    } // for j
+    
     return v;
 }
 
@@ -823,6 +977,11 @@ void sparse_vector<Val, BV>::optimize(
     typename bvector_type::optmode               opt_mode,
     typename sparse_vector<Val, BV>::statistics* st)
 {
+    if (st)
+    {
+        st->bit_blocks = st->gap_blocks = 0;
+        st->max_serialize_mem = st->memory_used = 0;
+    }
     for (unsigned j = 0; j < sizeof(Val) * 8; ++j)
     {
         bvector_type* bv = this->plains_[j];
@@ -849,6 +1008,22 @@ void sparse_vector<Val, BV>::optimize(
         }
     } // for j
 
+}
+
+//---------------------------------------------------------------------
+
+
+template<class Val, class BV>
+void sparse_vector<Val, BV>::optimize_gap_size()
+{
+    for (unsigned j = 0; j < sizeof(Val) * 8; ++j)
+    {
+        bvector_type* bv = this->plains_[j];
+        if (bv)
+        {
+            bv->optimize_gap_size();
+        }
+    }
 }
 
 //---------------------------------------------------------------------

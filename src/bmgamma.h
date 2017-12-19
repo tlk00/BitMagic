@@ -36,8 +36,9 @@ namespace bm
 {
 
 /*! 
-    \defgroup gammacode Elias Gamma Code
+    \defgroup gammacode Elias Gamma Code (internal)
     Elias Gamma Encoder
+    \internal
     \ingroup bvserial
  
  */

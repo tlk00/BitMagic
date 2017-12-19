@@ -37,6 +37,7 @@ namespace bm
 
 /** @defgroup SSE2 SSE2 functions
     Processor specific optimizations for SSE2 instructions (internals)
+    @internal
     @ingroup bvector
  */
 

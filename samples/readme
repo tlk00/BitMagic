@@ -10,10 +10,13 @@ BitMagic Library samples
 ./bvsample08 - STL interoperability and set operations with iterators
 ./bvsample09 - simple binary distance functions and pipeline for complex binary distance formulas
 ./bvsample10 - extraction of a random subset for Monte Carlo simulations
+./bvsample11 - how to compute population counts for ranges in bit-vector (cout_range(), count_to(), count_and())
 
 
 ./svsample01 - basic example of sparse_vector<> container
 ./svsample02 - sparse_vector<> serialization example
 ./svsample03 - sparse_vector<> import, join, extract methods
 
+./xsample01 - advanced: different methods of handling of super sparse sets. Benchmarks of set operations for each method. 
+               Details at: http://bitmagic.io/case-ER-join.html
 

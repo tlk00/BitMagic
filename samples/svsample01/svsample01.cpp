@@ -61,12 +61,26 @@ int main(void)
         cout << "sv1.size() = " << sv1.size() << endl;
         cout << "sv[]:";
         
-        // print the vector elements using direc access operator
+        // print the vector elements using direct access operator
         for (unsigned i = 0; i < sv1.size(); ++i)
         {
             cout << sv1.at(i) << ",";
         }
         cout << endl;
+
+        // add more at the end
+        unsigned arr2[5] = {10, 20, 30, 40, 50};
+        sv1.import(arr2, 5, sv1.size());
+        
+        cout << "sv1.size() = " << sv1.size() << endl;
+        cout << "sv[]:";
+        for (unsigned i = 0; i < sv1.size(); ++i)
+        {
+            cout << sv1.at(i) << ",";
+        }
+        cout << endl;
+
+        
     }
     catch(std::exception& ex)
     {

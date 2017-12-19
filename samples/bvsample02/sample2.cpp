@@ -30,8 +30,6 @@ For more information please visit:  http://bitmagic.io
 
 /** \example sample2.cpp
   Example demonstrates using set operations AND, OR, XOR, etc.
-  For more information please visit:  http://bmagic.sourceforge.net
- 
 */
 
 

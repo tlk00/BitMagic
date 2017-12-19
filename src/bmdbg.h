@@ -389,6 +389,20 @@ void print_bc(unsigned i, unsigned count)
     }
 }
 
+template<class BV>
+void print_bvector_stat(const BV& bvect)
+{
+    typename BV::statistics st;
+    bvect.calc_stat(&st);
+    
+    std::cout << " - Blocks: [ "
+              << "B:"     << st.bit_blocks
+              << ", G:"   << st.gap_blocks << "] "
+              << ", mem = " << st.memory_used << " " << (st.memory_used / (1024 * 1024)) << "MB "
+              << ", max smem:" << st.max_serialize_mem << " " << (st.max_serialize_mem / (1024 * 1024)) << "MB "
+              << std::endl;
+}
+
 
 template<class BV>
 void print_stat(const BV& bv, unsigned blocks = 0)
@@ -536,9 +550,8 @@ void print_svector_stat(const SV& svect, bool print_sim = false)
     struct Jaccard_Func
     {
         unsigned operator () (distance_metric_descriptor* dmit,
-                              distance_metric_descriptor* dmit_end)
+                              distance_metric_descriptor* /*dmit_end*/)
         {
-            BM_ASSERT(dmit_end - dmit == 2);
             double d;
             BM_ASSERT(dmit->metric == COUNT_AND);
             unsigned cnt_and = dmit->result;
@@ -588,15 +601,17 @@ void print_svector_stat(const SV& svect, bool print_sim = false)
                 
                 unsigned bv_size_x = compute_serialization_size(bvx);
                 int diff = bv_size2 - bv_size_x;
-                
-                std:: cout << "["  << sim_vec[k].get_first_idx()
-                           << ", " << sim_vec[k].get_second_idx()
-                           << "] = "  << sim
-                           << " size(" << sim_vec[k].get_second_idx() << ")="
-                           << bv_size2
-                           << " size(x)=" << bv_size_x
-                           << " diff=" << diff
-                           << std:: endl;
+                if (diff > 0) // only positive diff (saving) counts
+                {
+                    std:: cout << "["  << sim_vec[k].get_first_idx()
+                               << ", " << sim_vec[k].get_second_idx()
+                               << "] = "  << sim
+                               << " size(" << sim_vec[k].get_second_idx() << ")="
+                               << bv_size2
+                               << " size(x)=" << bv_size_x
+                               << " diff=" << diff
+                               << std:: endl;
+                }
             }
         } // for k
     }
@@ -613,11 +628,19 @@ void print_svector_stat(const SV& svect, bool print_sim = false)
     std::cout << "Memory used:      " << st.memory_used << " "
               << (st.memory_used / (1024 * 1024))       << "MB" << std::endl;
     
-    std::cout << "Projected mem usage for vector<int>:" << sizeof(int) * svect.size() << std::endl;
-    std::cout << "Projected mem usage for vector<long long>:" << sizeof(long long) * svect.size() << std::endl;
+    std::cout << "Projected mem usage for vector<int>:"
+              << sizeof(int) * svect.size() << " "
+              << (sizeof(int) * svect.size()) / (1024 * 1024) << "MB"
+              << std::endl;
+    if (sizeof(typename SV::value_type) > 4)
+    {
+        std::cout << "Projected mem usage for vector<long long>:"
+                  << sizeof(long long) * svect.size() << std::endl;
+    }
     
-    std::cout << "Plains:" << std::endl;
-    
+    std::cout << "\nPlains:" << std::endl;
+
+    typename SV::bvector_type bv_join; // global OR of all plains
     for (unsigned i = 0; i < svect.plains(); ++i)
     {
         const typename SV::bvector_type* bv_plain = svect.plain(i);
@@ -641,11 +664,23 @@ void print_svector_stat(const SV& svect, bool print_sim = false)
             }
             else
             {
-                std::cout << bv_plain->count();
+                bv_join |= *bv_plain;
+                
+                print_bvector_stat(*bv_plain);
             }
-            std::cout << std::endl;
-        
     } // for i
+    if (svect.size())
+    {
+        bm::id64_t bv_join_cnt = bv_join.count();
+        double fr = double(bv_join_cnt) / double (svect.size());
+        std::cout << "Non-zero elements: " << bv_join_cnt << " "
+                  << "ratio=" << fr
+                  << std::endl;
+        size_t non_zero_mem = bv_join_cnt * sizeof(typename SV::value_type);
+        std::cout << "Projected mem usage for non-zero elements: " << non_zero_mem << " "
+                  << non_zero_mem / (1024*1024) << " MB"
+                  << std::endl;
+    }
 }
 
 // save sparse_vector dump to disk
@@ -684,6 +719,33 @@ int file_save_svector(const SV& sv, const std::string& fname, size_t* sv_blob_si
     }
     return 0;
 }
+
+template<class SV>
+int file_load_svector(SV& sv, const std::string& fname)
+{
+    std::vector<unsigned char> buffer;
+
+    // read the input buffer, validate errors
+    auto ret = bm::read_dump_file(fname, buffer);
+    if (ret != 0)
+    {
+        return -2;
+    }
+    if (buffer.size() == 0)
+    {
+        return -3;
+    }
+    
+    const unsigned char* buf = &buffer[0];
+    BM_DECLARE_TEMP_BLOCK(tb)
+    auto res = bm::sparse_vector_deserialize(sv, buf, tb);
+    if (res != 0)
+    {
+        return -4;
+    }
+    return 0;
+}
+
 
 // comapre-check if sparse vector is excatly coresponds to vector 
 //

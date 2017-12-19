@@ -137,7 +137,41 @@ void dynamic_range_clip_low(SV& svect, unsigned low_bit)
     bv_low_plain->bit_or(bv_acc1);
 }
 
-
+/*!
+    \brief Compute bit-vector of non-zero elements
+ 
+    \param  svect - input sparse vector to compute non-zero elements
+    \param  bvect - output bit-bector of non-zero elements
+ 
+    Output vector is computed as a logical OR (join) of all plains
+ 
+    \ingroup svalgo
+*/
+template<class SV>
+void compute_nonzero_bvector(const SV& svect, typename SV::bvector_type& bvect)
+{
+    bool first = true;
+    for (unsigned i = 0; i < svect.plains(); ++i)
+    {
+        const typename SV::bvector_type* bv_plain = svect.plain(i);
+        if (bv_plain)
+        {
+            if (first) // first found plain - use simple assignment
+            {
+                bvect = *bv_plain;
+                first = false;
+            }
+            else // for everything else - use OR
+            {
+                bvect |= *bv_plain;
+            }
+        }
+    } // for i
+    if (first) // no plains were found, just clear the result
+    {
+        bvect.clear(true);
+    }
+}
     
 } // namespace bm
 

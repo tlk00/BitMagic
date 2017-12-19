@@ -290,6 +290,39 @@ public:
         {
             position_ = bm::id_max;
         }
+        
+        /** \brief Compare FSMs for testing purposes
+            \internal
+        */
+        bool compare_state(const iterator_base& ib) const
+        {
+            if (this->bv_ != ib.bv_)                 return false;
+            if (this->position_ != ib.position_)     return false;
+            if (this->block_ != ib.block_)           return false;
+            if (this->block_type_ != ib.block_type_) return false;
+            if (this->block_idx_ != ib.block_idx_)   return false;
+            
+            const block_descr& bd = this->bdescr_;
+            const block_descr& ib_db = ib.bdescr_;
+
+            if (this->block_type_ == 0) // bit block
+            {
+                if (bd.bit_.ptr != ib_db.bit_.ptr) return false;
+                if (bd.bit_.idx != ib_db.bit_.idx) return false;
+                if (bd.bit_.cnt != ib_db.bit_.cnt) return false;
+                if (bd.bit_.pos != ib_db.bit_.pos) return false;
+                for (unsigned i = 0; i < bd.bit_.cnt; ++i)
+                {
+                    if (bd.bit_.bits[i] != bd.bit_.bits[i]) return false;
+                }
+            }
+            else // GAP block
+            {
+                if (bd.gap_.ptr != ib_db.gap_.ptr) return false;
+                if (bd.gap_.gap_len != ib_db.gap_.gap_len) return false;
+            }
+            return true;
+        }
 
     public:
 
@@ -400,8 +433,7 @@ public:
         bm::id_t              max_bit_;
     };
 
-    /*!
-        @brief Constant iterator designed to enumerate "ON" bits
+    /*! @brief Constant iterator designed to enumerate "ON" bits
         @ingroup bvector
     */
     class enumerator : public iterator_base
@@ -416,31 +448,44 @@ public:
         typedef unsigned&  reference;
 
     public:
-        enumerator() : iterator_base() {}
-        enumerator(const bvector<Alloc>* bv, int position)
+        enumerator() : iterator_base()
+        {}
+        
+        /*! @brief Construct enumerator associated with a vector.
+            This construction creates unpositioned iterator with status
+            valid() == false. It can be re-positioned using go_first() or go_to()
+        */
+        enumerator(const bvector<Alloc>* bv)
+            : iterator_base()
+        {
+            this->bv_ = const_cast<bvector<Alloc>*>(bv);
+        }
+
+        /*! @brief Construct enumerator for bit vector
+            @param bv  bit-vector pointer
+            @param pos bit position in the vector
+                       if position is 0, it finds the next 1 or becomes not valid
+                       (en.valid() == false)
+        */
+        enumerator(const bvector<Alloc>* bv, bm::id_t pos)
             : iterator_base()
         { 
             this->bv_ = const_cast<bvector<Alloc>*>(bv);
-            if (position == 0)
-            {
-                go_first();
-            }
-            else
-            {
-                this->invalidate();
-            }
+            this->go_to(pos);
         }
 
+        /*! \brief Get current position (value) */
         bm::id_t operator*() const
         { 
             return this->position_; 
         }
 
+        /*! \brief Get current position (value) */
         bm::id_t value() const
         {
             return this->position_;
         }
-
+        /*! \brief Advance enumerator forward to the next available bit */
         enumerator& operator++()
         {
             return this->go_up();
@@ -454,6 +499,7 @@ public:
         }
 
 
+        /*! \brief Position enumerator to the first available bit */
         void go_first()
         {
             BM_ASSERT(this->bv_);
@@ -527,6 +573,7 @@ public:
             this->invalidate();
         }
 
+        /*! \brief Advance enumerator to the next available bit */
         enumerator& go_up()
         {
             // Current block search.
@@ -660,6 +707,79 @@ public:
 
 
             this->invalidate();
+            return *this;
+        }
+        
+        /*!
+            @brief go to a specific position in the bit-vector (or next)
+        */
+        enumerator& go_to(bm::id_t pos)
+        {
+            if (pos == 0)
+            {
+                go_first();
+                return *this;
+            }
+
+            pos = this->bv_->check_or_next(pos); // find the true pos
+            if (pos == 0) // no bits available
+            {
+                this->invalidate();
+                return *this;
+            }
+            
+            this->position_ = pos;
+            unsigned nb = this->block_idx_ = unsigned(pos >>  bm::set_block_shift);
+            bm::bvector<Alloc>::blocks_manager_type& bman =
+                                                 this->bv_->get_blocks_manager();
+            unsigned i0 = nb >> bm::set_array_shift; // top block address
+            unsigned j0 = nb &  bm::set_array_mask;  // address in sub-block
+            this->block_ = bman.get_block(i0, j0);
+
+            BM_ASSERT(this->block_);
+            
+            this->block_type_ = (bool)BM_IS_GAP(this->block_);
+            typedef typename iterator_base::block_descr block_descr_type;
+
+            block_descr_type* bdescr = &(this->bdescr_);
+            unsigned nbit = unsigned(pos & bm::set_block_mask);
+
+            if (this->block_type_) // gap
+            {
+                // use iterative increment for GAP block positioning
+                // TODO: optimization
+                this->position_ = nb * bm::set_block_size * 32;
+                search_in_gapblock();                
+                while (this->position_ != pos)
+                {
+                    go_up();
+                }
+            }
+            else // bit
+            {
+                if (nbit == 0)
+                {
+                    search_in_bitblock();
+                    return *this;
+                }
+
+                unsigned nword  = unsigned(nbit >> bm::set_word_shift);
+                bdescr->bit_.ptr = this->block_ + nword;
+                bm::word_t w = *(bdescr->bit_.ptr);
+                bdescr->bit_.cnt = bm::bitscan_popcnt(w, bdescr->bit_.bits);
+
+                bdescr->bit_.pos = (nb * bm::set_block_size * 32) + (nword * 32);
+                bdescr->bit_.idx = 0;
+                nbit &= bm::set_word_mask;
+                for (unsigned i = 0; i < bdescr->bit_.cnt; ++i)
+                {
+                    if (bdescr->bit_.bits[i] == nbit)
+                        return *this;
+                    bdescr->bit_.idx++;
+
+                }
+                BM_ASSERT(0);
+            }
             return *this;
         }
 
@@ -802,7 +922,10 @@ public:
             For the first bit in bitvector it is 1, for the second 2 
         */
         bm::id_t count() const { return bit_count_; }
-        
+    private:
+        /*! Function closed for usage */
+        counted_enumerator& go_to(bm::id_t pos);
+
     private:
         bm::id_t   bit_count_;
     };
@@ -825,6 +948,14 @@ public:
                           const gap_word_t* glevels = bm::gap_len_table<true>::_len)
         : strat(s), glevel_len(glevels)
         {}
+    };
+    
+    /*! @brief structure for bit counts per block
+        Structure is used to accelerate bit range scans
+    */
+    struct blocks_count
+    {
+        unsigned  BM_VECT_ALIGN cnt[bm::set_total_blocks] BM_VECT_ALIGN_ATTR;
     };
 
 public:
@@ -1219,13 +1350,33 @@ public:
        \param block_count_arr - optional parameter (bitcount by bvector blocks)
               calculated by count_blocks method. Used to improve performance of
               wide range searches
-       \return Total number of bits ON. 
+       \return population count in the diapason
     */
     bm::id_t count_range(bm::id_t left, 
                          bm::id_t right, 
-                         unsigned* block_count_arr=0) const;
+                         const unsigned* block_count_arr=0) const;
+    
+    /*! \brief compute running total of all blocks in bit vector
+        \param blocks_cnt - out pointer to counting structure, holding the array
+        Function will fill full array of running totals
+    */
+    void running_count_blocks(blocks_count* blocks_cnt) const;
+    
+    /*!
+       \brief Returns count of 1 bits (population) in [0..right] diapason.
+       \param right - index of last bit
+       \param blocks_cnt - block count structure to accelerate search
+                           should be prepared using running_count_blocks
+       \return population count in the diapason
+       \sa running_count_blocks
+    */
+    bm::id_t count_to(bm::id_t right, const blocks_count&  blocks_cnt) const;
 
 
+    /*! Recalculate bitcount
+        this function only make sense when BMCOUNTOPT is defined
+        and bvector<> keeps its bitcount. Otherwise, equivalent of cout().
+    */
     bm::id_t recalc_count()
     {
         BMCOUNT_VALID(false)
@@ -1549,8 +1700,7 @@ public:
     */
     enumerator first() const
     {
-        typedef typename bvector<Alloc>::enumerator enumerator_type;
-        return enumerator_type(this, 0);
+        return get_enumerator(0);
     }
 
     /**
@@ -1560,7 +1710,16 @@ public:
     enumerator end() const
     {
         typedef typename bvector<Alloc>::enumerator enumerator_type;
-        return enumerator_type(this, 1);
+        return enumerator_type(this);
+    }
+    
+    /**
+       \brief Returns enumerator pointing on specified or the next available bit.
+    */
+    enumerator get_enumerator(bm::id_t pos) const
+    {
+        typedef typename bvector<Alloc>::enumerator enumerator_type;
+        return enumerator_type(this, pos);
     }
 
 
@@ -1812,10 +1971,64 @@ void bvector<Alloc>::resize(size_type new_size)
 
 // -----------------------------------------------------------------------
 
+template<typename Alloc>
+void bvector<Alloc>::running_count_blocks(blocks_count* blocks_cnt) const
+{
+    BM_ASSERT(blocks_cnt);
+    
+    ::memset(blocks_cnt->cnt, 0, sizeof(blocks_cnt->cnt));
+    
+    this->count_blocks(blocks_cnt->cnt);  // simple count
+    // compute running count
+    for (unsigned i = 1; i < bm::set_total_blocks; ++i)
+    {
+        blocks_cnt->cnt[i] += blocks_cnt->cnt[i-1];
+    }
+}
+// -----------------------------------------------------------------------
+
+template<typename Alloc>
+bm::id_t bvector<Alloc>::count_to(bm::id_t right,
+                                  const blocks_count&  blocks_cnt) const
+{
+    unsigned nblock_right = unsigned(right >>  bm::set_block_shift);
+    if (nblock_right == 0)
+        return count_range(0, right);
+
+    if (!blockman_.is_init())
+        return 0;
+    
+    unsigned nbit_right = unsigned(right & bm::set_block_mask);
+
+    // running count of all blocks before target
+    bm::id_t cnt = blocks_cnt.cnt[nblock_right-1];
+
+    const bm::word_t* block = blockman_.get_block(nblock_right);
+    if (!block)
+        return cnt;
+    bool gap = BM_IS_GAP(block);
+
+    if (gap)
+    {
+        cnt +=
+            gap_bit_count_range(BMGAP_PTR(block),
+                               (gap_word_t)0,
+                               (gap_word_t)(gap_word_t)nbit_right);
+    }
+    else
+    {
+        cnt += bit_block_calc_count_to(block, nbit_right);
+    }
+
+    return cnt;
+}
+
+// -----------------------------------------------------------------------
+
 template<typename Alloc> 
 bm::id_t bvector<Alloc>::count_range(bm::id_t left, 
                                          bm::id_t right, 
-                                         unsigned* block_count_arr) const
+                                         const unsigned* block_count_arr) const
 {
     BM_ASSERT(left <= right);
     

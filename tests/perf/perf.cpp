@@ -1343,6 +1343,44 @@ void BitBlockTransposeTest()
 
 }
 
+void BitBlockRotateTest()
+{
+    bm::word_t blk0[bm::set_block_size] = { 0 };
+    bm::word_t blk1[bm::set_block_size] = { 0 };
+    unsigned i;
+    unsigned repeats = 10000000;
+
+    for (i = 0; i < bm::set_block_size; ++i)
+    {
+        blk0[i] = blk1[i] = rand();
+    }
+
+    {
+        TimeTaker tt("Bit-block left rotate 1", repeats);
+        for (i = 0; i < repeats; ++i)
+        {
+            bm::bit_block_rotate_left_1(blk0);
+        }
+    }
+    {
+        TimeTaker tt("Bit-block left rotate 1 unrolled", repeats);
+        for (i = 0; i < repeats; ++i)
+        {
+            bm::bit_block_rotate_left_1_unr(blk1);
+        }
+    }
+
+    for (i = 0; i < bm::set_block_size; ++i)
+    {
+        if (blk0[i] != blk1[i])
+        {
+            cerr << "Steress Cyclic rotate check failed" << endl;
+            exit(1);
+        }
+    }
+
+}
+
 void ptest()
 {
     bvect*  bv_small = new bvect(bm::BM_GAP);
@@ -1475,10 +1513,11 @@ int main(void)
 
     BitForEachTest();
 
-
     BitCompareTest();
 
     BitBlockTransposeTest();
+
+    BitBlockRotateTest();
 
     EnumeratorTest();
 

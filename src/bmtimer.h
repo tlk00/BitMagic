@@ -128,18 +128,21 @@ public:
         for ( ;it != it_end; ++it)
         {
             const chrono_taker::statistics& st = it->second;
+            format f;
             if (st.repeats <= 1)
-                fmt = ct_time;
+                f = ct_time;
+            else
+                f = fmt;
 
-            switch (fmt)
+            switch (f)
             {
             case ct_time:
-                std::cout << it->first << "; " << it->second.duration.count() << std::endl;
+                std::cout << it->first << "; " << it->second.duration.count() << " ms" << std::endl;
                 break;
             case ct_ops_per_sec:
                 {
-                unsigned ops = ((double)it->second.repeats / (double)it->second.duration.count()) * 1000;
-                std::cout << it->first << "; " << ops << " ops/sec" <<std::endl;
+                unsigned ops = unsigned(((double)st.repeats / (double)it->second.duration.count()) * 1000);
+                std::cout << it->first << "; " << ops << " ops/sec" << std::endl;
                 }
                 break;
             default:
