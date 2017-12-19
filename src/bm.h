@@ -3148,7 +3148,7 @@ bvector<Alloc>::combine_operation_with_block(unsigned          nb,
                 gap_word_t* gap_blk = BMGAP_PTR(blk);
                 if (opcode == BM_AND)
                 {
-                    unsigned gap_cnt = gap_bit_count(gap_blk);
+                    unsigned gap_cnt = gap_bit_count_unr(gap_blk);
                     if (gap_cnt < 128)
                     {
                         

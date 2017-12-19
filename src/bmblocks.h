@@ -1365,7 +1365,7 @@ public:
 
         if (BM_IS_GAP(block))
         {
-            count = gap_bit_count(BMGAP_PTR(block));
+            count = gap_bit_count_unr(BMGAP_PTR(block));
         }
         else // bitset
         {

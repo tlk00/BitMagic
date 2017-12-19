@@ -674,6 +674,8 @@ template<class T> T sum_arr(T* first, T* last)
 
 
 
+
+
 /*! 
    \brief Calculates number of bits ON in GAP buffer.
    \param buf - GAP buffer pointer.
@@ -707,6 +709,52 @@ template<typename T> unsigned gap_bit_count(const T* buf, unsigned dsize=0)
 
     return bits_counter;
 }
+
+/*!
+    \brief Calculates number of bits ON in GAP buffer. Loop unrolled version.
+    \param buf - GAP buffer pointer.
+    \param dsize - buffer size
+    \return Number of non-zero bits.
+    @ingroup gapfunc
+*/
+template<typename T> unsigned gap_bit_count_unr(const T* buf)
+{
+    const T* pcurr = buf;
+    unsigned dsize = (*pcurr >> 3);
+
+    unsigned cnt = 0;
+    pcurr = buf + 1; // set up start position
+    T a = *buf & 1;
+    if (a)
+    {
+        cnt += *pcurr + a;
+        ++pcurr;
+    }
+    ++pcurr;  // set GAP to 1
+
+    if (dsize > 8)
+    {
+        const unsigned unr_factor = 8;
+        unsigned block = (dsize - unr_factor) / unr_factor;
+        for (unsigned i = 0; i < block; i += unr_factor)
+        {
+            cnt += pcurr[0] - pcurr[0 - 1];
+            cnt += pcurr[2] - pcurr[2 - 1];
+            cnt += pcurr[4] - pcurr[4 - 1];
+            cnt += pcurr[6] - pcurr[6 - 1];
+
+            pcurr += unr_factor;
+        } // for
+    }
+    const T* pend = buf + dsize;
+    for ( ; pcurr <= pend ; pcurr+=2)
+    {
+        cnt += *pcurr - *(pcurr - 1);
+    }
+    BM_ASSERT(cnt == gap_bit_count(buf));
+    return cnt;
+}
+
 
 
 /*!

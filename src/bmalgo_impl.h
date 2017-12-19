@@ -161,10 +161,10 @@ void combine_count_operation_with_block(const bm::word_t*           blk,
                      dmd.result += gap_count_xor(g1, g2);
                     break;
                  case bm::COUNT_A:
-                    dmd.result += gap_bit_count(g1);
+                    dmd.result += gap_bit_count_unr(g1);
                     break;
                  case bm::COUNT_B:
-                    dmd.result += gap_bit_count(g2);
+                    dmd.result += gap_bit_count_unr(g2);
                     break;
                  } // switch
                                      
@@ -187,7 +187,7 @@ void combine_count_operation_with_block(const bm::word_t*           blk,
                      break;
                  case bm::COUNT_OR:
                      if (!arg_blk)
-                        dmd.result += gap_bit_count(g1);
+                        dmd.result += gap_bit_count_unr(g1);
                      else
                         dmd.result += gap_bitset_or_count(arg_blk, g1); 
                      break;
@@ -211,13 +211,13 @@ void combine_count_operation_with_block(const bm::word_t*           blk,
                      break;
                  case bm::COUNT_XOR:
                      if (!arg_blk)
-                        dmd.result += gap_bit_count(g1);
+                        dmd.result += gap_bit_count_unr(g1);
                      else
                         dmd.result += gap_bitset_xor_count(arg_blk, g1);
                      break;
                  case bm::COUNT_A:
                     if (g1)
-                        dmd.result += gap_bit_count(g1);
+                        dmd.result += gap_bit_count_unr(g1);
                     break;
                  case bm::COUNT_B:
                     if (arg_blk)
@@ -251,7 +251,7 @@ void combine_count_operation_with_block(const bm::word_t*           blk,
                      break;
                  case bm::COUNT_OR:
                      if (!blk)
-                        dmd.result += gap_bit_count(g2);
+                        dmd.result += gap_bit_count_unr(g2);
                      else
                         dmd.result += gap_bitset_or_count(blk, g2);
                      break;
@@ -270,7 +270,7 @@ void combine_count_operation_with_block(const bm::word_t*           blk,
                      break;
                  case bm::COUNT_XOR:
                      if (!blk)
-                        dmd.result += gap_bit_count(g2);
+                        dmd.result += gap_bit_count_unr(g2);
                      else
                         dmd.result += gap_bitset_xor_count(blk, g2); 
                     break;
@@ -284,7 +284,7 @@ void combine_count_operation_with_block(const bm::word_t*           blk,
                     break;
                  case bm::COUNT_B:
                     if (g2)
-                        dmd.result += gap_bit_count(g2);
+                        dmd.result += gap_bit_count_unr(g2);
                     break;
                  } // switch
                                      

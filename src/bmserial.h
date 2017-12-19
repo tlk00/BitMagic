@@ -761,7 +761,7 @@ void serializer<BV>::encode_gap_block(bm::gap_word_t* gap_block, bm::encoder& en
         gap_word_t*  gap_temp_block = (gap_word_t*) temp_block_;    
         gap_word_t arr_len;
 
-        unsigned bc = gap_bit_count(gap_block);
+        unsigned bc = gap_bit_count_unr(gap_block);
         if (bc == 1)
         {
             arr_len = gap_convert_to_arr(gap_temp_block,
