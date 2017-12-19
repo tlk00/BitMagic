@@ -340,8 +340,7 @@ void BitCountSparseTest()
     size_t value = 0, c1;
     volatile size_t* p = &value;
 
-    SimpleFillSets(*bset, *bv, 0, BSIZE, 2500);
-
+    SimpleFillSets(*bset, *bv, 0, BSIZE, 130);
     {
     TimeTaker tt("BitCount: Sparse bitset ", REPEATS*10);
     for (unsigned i = 0; i < REPEATS*10; ++i)
@@ -1508,7 +1507,7 @@ int main(void)
     MemCpyTest();
 
     BitCountTest();
-
+ 
     BitCountSparseTest();
 
     BitForEachTest();
@@ -1533,11 +1532,11 @@ int main(void)
     AndCountTest();
 
     TI_MetricTest();
-/*
+
     SerializationTest();
     
     SparseVectorAccessTest();
-*/    
+    
     return 0;
 }
 
