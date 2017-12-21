@@ -1072,9 +1072,11 @@ const bm::gap_word_t* avx2_gap_sum_arr(const bm::gap_word_t* BMRESTRICT pbuf,
     }
     unsigned short* cnt16 = (unsigned short*)&xcnt;
     *sum += cnt16[0] + cnt16[2] + cnt16[4] + cnt16[6] +
-            cnt16[8] + cnt16[10] + cnt16[12] + cnt16[14] +
+            cnt16[8] + cnt16[10] + cnt16[12] + cnt16[14];
+/*             +
             cnt16[16] + cnt16[18] + cnt16[20] + cnt16[22] +
             cnt16[24] + cnt16[26] + cnt16[28] + cnt16[30];
+*/
     return pbuf;
 }
 
