@@ -950,7 +950,7 @@ public:
         {}
     };
     
-    /*! @brief structure for bit counts per block
+    /*! @brief structure for bit counts per block.
         Structure is used to accelerate bit range scans
     */
     struct blocks_count

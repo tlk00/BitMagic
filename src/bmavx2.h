@@ -1050,6 +1050,30 @@ bm::id_t sse42_bit_block_calc_count_change(const __m128i* BMRESTRICT block,
 }
 
 
+BMFORCEINLINE
+unsigned avx2_gap_sum_arr(const bm::gap_word_t* BMRESTRICT pbuf,
+                          unsigned vect_cnt)
+{
+    __m256i xcnt = _mm256_setzero_si256();
+
+    for (unsigned i = 0; i < vect_cnt; ++i)
+    {
+        __m256i xmm1 = _mm256_loadu_si256((__m256i*)(pbuf));
+        __m256i xmm0 = _mm256_loadu_si256((__m256i*)(pbuf-1));
+        __m256i xmm_s1 = _mm256_sub_epi16(xmm1, xmm0);
+        
+        xmm1 = _mm256_loadu_si256((__m256i*)(pbuf+16));
+        xmm0 = _mm256_loadu_si256((__m256i*)(pbuf+16-1));
+        __m256i xmm_s2 = _mm256_sub_epi16(xmm1, xmm0);
+        
+        xcnt = _mm256_add_epi16(xmm_s1, xmm_s2);
+        pbuf += 32;
+    }
+    uint64_t* cnt64 = (uint64_t*)&xcnt;
+    return cnt64[0] + cnt64[1] + cnt64[2] + cnt64[3];
+}
+
+
 
 } // namespace
 
