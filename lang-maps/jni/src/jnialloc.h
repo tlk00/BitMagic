@@ -26,16 +26,99 @@ For more information please visit:  http://bmagic.sourceforge.net
 
 */
 
+#include <stdio.h>
 #include <stdlib.h>
+#include "jni.h"
 #include "try_throw_catch.h"
 
 #include "bmfunc.h"
 
+#define LOG2(x) (((x) & 8) ? 3 : (((x) & 4) ? 2 : (((x) & 2) ? 1 : 0)))
+#define SIZE_OF_JAVA_LONG 8
+
+struct Jalloc {
+  jlongArray ja;
+  jobject ref;
+};
+
+static JavaVM *cached_jvm = 0;
+
+JNIEXPORT jint JNICALL
+JNI_OnLoad(JavaVM *jvm, void *reserved)
+{
+  cached_jvm = jvm;
+  return JNI_VERSION_1_8;
+}
+
+static JNIEnv* JNU_GetEnv() {
+  JNIEnv *env;
+  jint rc = cached_jvm->GetEnv((void **)&env, JNI_VERSION_1_8);
+  if (rc == JNI_EDETACHED)
+    THROW(BM_ERR_DETACHED);
+  if (rc == JNI_EVERSION)
+    THROW(BM_ERR_JVM_NOT_SUPPORTED);
+
+  return env;
+}
 
 namespace libbm
 {
 
+void * array_alloc(int shift, size_t n) {
+  //printf("Shift: %d\n", shift);
+  if (shift < 0)
+    THROW(BM_ERR_BADALLOC);
 
+  JNIEnv *env = JNU_GetEnv();
+  int sz = (n >> shift) + 1 + (sizeof(Jalloc) >> 3) + 1;
+  //printf("Size to allocate: %d\n", sz);
+  jlongArray ja = env->NewLongArray((n >> shift) + 1 + (sizeof(Jalloc) >> 3) + 1);
+  if (env->ExceptionOccurred())
+    THROW(BM_ERR_BADALLOC);
+  void *jbuffer = static_cast<void*>(env->GetLongArrayElements(ja, 0));
+  if (env->ExceptionOccurred())
+    THROW(BM_ERR_BADALLOC);
+  Jalloc *pJalloc = static_cast<Jalloc*>(jbuffer);
+  pJalloc->ja = ja;
+  pJalloc->ref = env->NewGlobalRef(ja);
+  if (env->ExceptionOccurred())
+    THROW(BM_ERR_BADALLOC);
+  return jbuffer;
+}
+
+template<typename T> 
+T* jni_alloc(size_t n) {
+//  printf("Allocating %d units in %s\n", n, __FUNCSIG__);
+  //printf("Size of T: %d\n", LOG2(sizeof(T)));
+  // Making array of longs to accommodate max value of unsigned int. 
+  // Java long size is 8 bytes
+  int shift = LOG2(SIZE_OF_JAVA_LONG) - LOG2(sizeof(T));
+  void* jbuffer = array_alloc(shift, n);
+  return reinterpret_cast<T*>(static_cast<char*>(jbuffer) + sizeof(Jalloc));
+}
+
+template <> 
+void* jni_alloc(size_t n) {
+  //printf("Allocating %d units in %s\n", n, __FUNCSIG__);
+  int shift = LOG2(SIZE_OF_JAVA_LONG) - LOG2(sizeof(void*));
+  void* jbuffer = array_alloc(shift, n);
+  return static_cast<void*>(static_cast<char*>(jbuffer) + sizeof(Jalloc));
+}
+
+
+
+static void jni_free(void *p) {
+  if (p != 0) {
+    void *buffer = static_cast<void*>(static_cast<char*>(p) - sizeof(Jalloc));
+    Jalloc *pJalloc = static_cast<Jalloc*>(buffer);
+    if (pJalloc->ref) {
+      JNIEnv *env = JNU_GetEnv();
+      env->DeleteGlobalRef(pJalloc->ref);
+      env->ReleaseLongArrayElements(pJalloc->ja, static_cast<jlong*>(buffer), 0);
+      //printf("Freeing %04x\n", p);
+    }
+  }
+}
 
 class block_allocator
 {
@@ -51,6 +134,10 @@ public:
 # endif
 
 #else  
+      if (cached_jvm != 0) {
+        ptr = jni_alloc<bm::word_t>(n);
+      }
+      else
         ptr = (bm::word_t*) ::malloc(n * sizeof(bm::word_t));
 #endif
         if (!ptr)
@@ -70,6 +157,10 @@ public:
 # endif
 
 #else  
+      if (cached_jvm != 0) {
+        jni_free(p);
+      }
+      else
         ::free(p);
 #endif
     }
@@ -81,16 +172,25 @@ class ptr_allocator
 public:
     static void* allocate(size_t n, const void *)
     {
-        void* ptr = ::malloc(n * sizeof(void*));
-        if (!ptr)
-        {
-            THROW( BM_ERR_BADALLOC );
-        }
-        return ptr;
+      void* ptr = 0;
+      if (cached_jvm != 0) {
+        ptr = jni_alloc<void>(n);
+      }
+      else 
+        ptr = ::malloc(n * sizeof(void*));
+
+      if (!ptr)
+      {
+          THROW( BM_ERR_BADALLOC );
+      }
+      return ptr;
     }
 
     static void deallocate(void* p, size_t)
     {
+      if (cached_jvm != 0)
+        jni_free(p);
+      else
         ::free(p);
     }
 };
