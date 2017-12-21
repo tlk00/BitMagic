@@ -733,7 +733,7 @@ template<typename T> unsigned gap_bit_count_unr(const T* buf)
     ++pcurr;  // set GAP to 1
 
     #if defined(BMAVX2OPT)
-    if (dsize > 32)
+    if (dsize > 64)
     {
         const unsigned unr_factor = 32;
         unsigned block = dsize / unr_factor;
@@ -741,7 +741,7 @@ template<typename T> unsigned gap_bit_count_unr(const T* buf)
         pcurr += unr_factor;
     }
     #else
-    if (dsize > 8)
+    if (dsize > 16)
     {
         const unsigned unr_factor = 8;
         unsigned block = (dsize /*- unr_factor*/) / unr_factor;
