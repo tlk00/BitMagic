@@ -739,6 +739,13 @@ template<typename T> unsigned gap_bit_count_unr(const T* buf)
         unsigned waves = (dsize-2) / unr_factor;
         pcurr = avx2_gap_sum_arr(pcurr, waves, &cnt);
     }
+    #elif defined(BMSSE42OPT)
+    if (dsize > 18)
+    {
+        const unsigned unr_factor = 16;
+        unsigned waves = (dsize - 2) / unr_factor;
+        pcurr = sse4_gap_sum_arr(pcurr, waves, &cnt);
+    }
     #else
     if (dsize > 10)
     {
@@ -4873,12 +4880,12 @@ template<typename T,typename B> unsigned bit_list_4(T w, B* bits)
 }
 
 /*!
-\brief Unpacks word into list of ON bit indexes using popcnt method
-\param w - value
-\param bits - pointer on the result array
-\return number of bits in the list
+    \brief Unpacks word into list of ON bit indexes using popcnt method
+    \param w - value
+    \param bits - pointer on the result array
+    \return number of bits in the list
 
-@ingroup bitfunc
+    @ingroup bitfunc
 */
 
 template<typename T, typename B>
