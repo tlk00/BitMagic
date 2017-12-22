@@ -166,7 +166,7 @@ BMFORCEINLINE
 int word_bitcount64(bm::id64_t x)
 {
 #if defined(BMSSE42OPT) || defined(BMAVX2OPT)
-    return _mm_popcnt_u64(x);
+    return (int)_mm_popcnt_u64(x);
 #else
     x = x - ((x >> 1) & 0x5555555555555555);
     x = (x & 0x3333333333333333) + ((x >> 2) & 0x3333333333333333);
@@ -724,10 +724,10 @@ template<typename T> unsigned gap_bit_count_unr(const T* buf)
 
     unsigned cnt = 0;
     pcurr = buf + 1; // set up start position
-    T a = *buf & 1;
-    if (a)
+    T first_one = *buf & 1;
+    if (first_one)
     {
-        cnt += *pcurr + a;
+        cnt += *pcurr + 1;
         ++pcurr;
     }
     ++pcurr;  // set GAP to 1
@@ -736,16 +736,15 @@ template<typename T> unsigned gap_bit_count_unr(const T* buf)
     if (dsize > 34)
     {
         const unsigned unr_factor = 32;
-        unsigned block = dsize / unr_factor;
-        pcurr = avx2_gap_sum_arr(pcurr, block, &cnt);
-        
+        unsigned waves = (dsize-2) / unr_factor;
+        pcurr = avx2_gap_sum_arr(pcurr, waves, &cnt);
     }
     #else
     if (dsize > 10)
     {
         const unsigned unr_factor = 8;
-        unsigned block = (dsize /*- unr_factor*/) / unr_factor;
-        for (unsigned i = 0; i < block; i += unr_factor)
+        unsigned waves = (dsize - 2) / unr_factor;
+        for (unsigned i = 0; i < waves; i += unr_factor)
         {
             cnt += pcurr[0] - pcurr[0 - 1];
             cnt += pcurr[2] - pcurr[2 - 1];
@@ -3116,7 +3115,7 @@ bm::id_t bit_block_calc_count_to(const bm::word_t*  block,
             block += 8;
         }
         cnt64 = (uint64_t*)&cnt;
-        count += cnt64[0] + cnt64[1] + cnt64[2] + cnt64[3];
+        count += (unsigned)(cnt64[0] + cnt64[1] + cnt64[2] + cnt64[3]);
     #else
         for ( ;bitcount >= 64; bitcount -= 64)
         {

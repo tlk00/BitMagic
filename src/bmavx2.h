@@ -182,7 +182,7 @@ bm::id_t avx2_bit_count(const __m256i* BMRESTRICT block,
 
   cnt64 = (uint64_t*) &cnt;
 
-  return cnt64[0] + cnt64[1] + cnt64[2] + cnt64[3];
+  return (unsigned)(cnt64[0] + cnt64[1] + cnt64[2] + cnt64[3]);
 }
 
 /*!
@@ -233,7 +233,7 @@ bm::id_t avx2_bit_count_and(const __m256i* BMRESTRICT block,
     } while (block < block_end);
 
     cnt64 = (uint64_t*)&cnt;
-    return cnt64[0] + cnt64[1] + cnt64[2] + cnt64[3];
+    return (unsigned)(cnt64[0] + cnt64[1] + cnt64[2] + cnt64[3]);
 }
 
 inline
@@ -259,7 +259,7 @@ bm::id_t avx2_bit_count_or(const __m256i* BMRESTRICT block,
     } while (block < block_end);
 
     cnt64 = (uint64_t*)&cnt;
-    return cnt64[0] + cnt64[1] + cnt64[2] + cnt64[3];
+    return (unsigned)(cnt64[0] + cnt64[1] + cnt64[2] + cnt64[3]);
 }
 // experimental code for Harley-Seal Hamming
 // (needs more testing)
@@ -414,7 +414,7 @@ bm::id_t avx2_bit_count_xor(const __m256i* BMRESTRICT block,
     } while (block < block_end);
 
     cnt64 = (uint64_t*)&cnt;
-    return cnt64[0] + cnt64[1] + cnt64[2] + cnt64[3];
+    return (unsigned)(cnt64[0] + cnt64[1] + cnt64[2] + cnt64[3]);
 }
 
 
@@ -445,7 +445,7 @@ bm::id_t avx2_bit_count_sub(const __m256i* BMRESTRICT block,
     } while (block < block_end);
 
     cnt64 = (uint64_t*)&cnt;
-    return cnt64[0] + cnt64[1] + cnt64[2] + cnt64[3];
+    return (unsigned)(cnt64[0] + cnt64[1] + cnt64[2] + cnt64[3]);
 }
 
 
@@ -1049,7 +1049,8 @@ bm::id_t sse42_bit_block_calc_count_change(const __m128i* BMRESTRICT block,
    return count;
 }
 
-
+#if(0)
+// initial version of sum_arr (keeping for the future reference)
 inline
 const bm::gap_word_t* avx2_gap_sum_arr(const bm::gap_word_t* BMRESTRICT pbuf,
                                        unsigned vect_cnt,
@@ -1067,16 +1068,57 @@ const bm::gap_word_t* avx2_gap_sum_arr(const bm::gap_word_t* BMRESTRICT pbuf,
         xmm0 = _mm256_loadu_si256((__m256i*)(pbuf+16-1));
         __m256i xmm_s2 = _mm256_sub_epi16(xmm1, xmm0);
         
-        xcnt = _mm256_add_epi16(xmm_s1, xmm_s2);
+        __m256i sum = _mm256_add_epi16(xmm_s1, xmm_s2);
+        xcnt = _mm256_add_epi16(xcnt, sum);
         pbuf += 32;
     }
     unsigned short* cnt16 = (unsigned short*)&xcnt;
     *sum += cnt16[0] + cnt16[2] + cnt16[4] + cnt16[6] +
             cnt16[8] + cnt16[10] + cnt16[12] + cnt16[14];
-/*             +
-            cnt16[16] + cnt16[18] + cnt16[20] + cnt16[22] +
-            cnt16[24] + cnt16[26] + cnt16[28] + cnt16[30];
+
+    return pbuf;
+}
+#endif
+
+/* @brief Gap block population count (array sum) utility
+   @param pbuf - unrolled, aligned to 1-start GAP buffer
+   @param avx_vect_waves - number of AVX vector lines to process
+   @param sum - result acumulator
+   @return tail pointer
+
+   @internal
 */
+inline
+const bm::gap_word_t* avx2_gap_sum_arr(const bm::gap_word_t* BMRESTRICT pbuf,
+                                       unsigned                         avx_vect_waves,
+                                       unsigned*                        sum)
+{
+    __m256i xcnt = _mm256_setzero_si256();
+
+    // accumulate odd and even elements of the vector the result is 
+    // correct based on modulus 16 (max element value in gap blocks is 65535
+    // overflow is not an issue here
+    for (unsigned i = 0; i < avx_vect_waves; ++i)
+    {
+        __m256i xmm0 = _mm256_loadu_si256((__m256i*)(pbuf - 1));
+        __m256i xmm1 = _mm256_loadu_si256((__m256i*)(pbuf + 16 - 1));
+        __m256i xmm_s2 = _mm256_add_epi16(xmm1, xmm0);
+        xcnt = _mm256_add_epi16(xcnt, xmm_s2);
+        pbuf += 32;
+    }
+    // odd minus even vector elements clears the result for 1111 blocks
+    // bsrli - byte shifts the vector element by 2 bytes (1 short int)
+    xcnt = _mm256_sub_epi16(_mm256_bsrli_epi128(xcnt, 2), xcnt);
+
+    // horizontal sum of vector elements
+    // cnt16[0] + cnt16[2] + cnt16[4] + cnt16[6] + cnt16[8] + cnt16[10] + cnt16[12] + cnt16[14];
+    //
+    xcnt = _mm256_add_epi16(_mm256_bsrli_epi128(xcnt, 4), xcnt);
+    xcnt = _mm256_add_epi16(_mm256_bsrli_epi128(xcnt, 8), xcnt);
+    __m128i xcnt2 = _mm_add_epi16(_mm256_extracti128_si256(xcnt, 1), _mm256_extracti128_si256(xcnt, 0));
+
+    // extract 32-bit word and mask to take first 16 bits
+    *sum += _mm_cvtsi128_si32(xcnt2) & 0xffff;
     return pbuf;
 }
 
