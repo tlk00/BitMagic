@@ -576,6 +576,8 @@ public:
         /*! \brief Advance enumerator to the next available bit */
         enumerator& go_up()
         {
+            BM_ASSERT(this->valid());
+
             // Current block search.
             ++this->position_;
             typedef typename iterator_base::block_descr block_descr_type;
