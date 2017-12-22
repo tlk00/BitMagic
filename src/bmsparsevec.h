@@ -869,7 +869,7 @@ void sparse_vector<Val, BV>::set_value(size_type idx, value_type v)
 
     // set bits in plains
     unsigned b_list[sizeof(Val) * 8];
-    unsigned bcnt = bm::bit_list_4(v, b_list);
+    unsigned bcnt = bm::bitscan_popcnt(v, b_list);
 
     for (unsigned j = 0; j < bcnt; ++j)
     {
