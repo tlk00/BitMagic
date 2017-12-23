@@ -2356,9 +2356,8 @@ int bvector<Alloc>::compare(const bvector<Alloc>& bv) const
 
             if (arg_gap != gap)
             {
-                bm::wordop_t temp_blk[bm::set_block_size_op]; 
-                bm::wordop_t* blk1;
-                bm::wordop_t* blk2;
+                bm::wordop_t BM_VECT_ALIGN temp_blk[bm::set_block_size_op] BM_VECT_ALIGN_ATTR;
+                bm::wordop_t* blk1, blk2;
 
                 if (gap)
                 {
@@ -2377,7 +2376,7 @@ int bvector<Alloc>::compare(const bvector<Alloc>& bv) const
                     blk2 = (bm::wordop_t*)temp_blk;
 
                 }                        
-                res = bitcmp(blk1, blk2, bm::set_block_size_op);  
+                res = bm::bitcmp(blk1, blk2, bm::set_block_size_op);
 
             }
             else
@@ -2388,9 +2387,9 @@ int bvector<Alloc>::compare(const bvector<Alloc>& bv) const
                 }
                 else
                 {
-                    res = bitcmp((bm::wordop_t*)blk, 
-                                    (bm::wordop_t*)arg_blk, 
-                                    bm::set_block_size_op);
+                    res = bm::bitcmp((bm::wordop_t*)blk,
+                                     (bm::wordop_t*)arg_blk,
+                                     bm::set_block_size_op);
                 }
             }
 
