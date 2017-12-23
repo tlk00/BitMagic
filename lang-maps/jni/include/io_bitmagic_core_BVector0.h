@@ -239,6 +239,30 @@ JNIEXPORT void JNICALL Java_io_bitmagic_core_BVector0_sub0
 JNIEXPORT void JNICALL Java_io_bitmagic_core_BVector0_xor0
   (JNIEnv *, jclass, jlong, jlong);
 
+/*
+ * Class:     io_bitmagic_core_BVector0
+ * Method:    orArr0
+ * Signature: (J[I)V
+ */
+JNIEXPORT void JNICALL Java_io_bitmagic_core_BVector0_orArr0
+  (JNIEnv *, jclass, jlong, jintArray);
+
+/*
+ * Class:     io_bitmagic_core_BVector0
+ * Method:    deserialize0
+ * Signature: (J[B)V
+ */
+JNIEXPORT void JNICALL Java_io_bitmagic_core_BVector0_deserialize0
+  (JNIEnv *, jclass, jlong, jbyteArray);
+
+/*
+ * Class:     io_bitmagic_core_BVector0
+ * Method:    serialize0
+ * Signature: (J[B)J
+ */
+JNIEXPORT jlong JNICALL Java_io_bitmagic_core_BVector0_serialize0
+  (JNIEnv *, jclass, jlong, jbyteArray);
+
 #ifdef __cplusplus
 }
 #endif

@@ -40,7 +40,7 @@ JNIEXPORT void JNICALL Java_io_bitmagic_core_BVector0_init0
  * Signature: (IJ)J
  */
 JNIEXPORT jlong JNICALL Java_io_bitmagic_core_BVector0_create0
-  (JNIEnv *env, jobject obj, jint x, jlong size) {
+  (JNIEnv *env, jobject obj, jint strategy, jlong size) {
   BM_BVHANDLE ptr;
   exec(BM_bvector_construct(&ptr, size));
   return (jlong)ptr;
@@ -363,6 +363,35 @@ JNIEXPORT void JNICALL Java_io_bitmagic_core_BVector0_sub0
 JNIEXPORT void JNICALL Java_io_bitmagic_core_BVector0_xor0
 (JNIEnv *env, jclass obj, jlong dst, jlong src) {
   exec(BM_bvector_combine_XOR((BM_BVHANDLE)dst, (BM_BVHANDLE)src));
+}
+
+/*
+* Class:     io_bitmagic_core_BVector0
+* Method:    deserialize0
+* Signature: (J[B)V
+*/
+JNIEXPORT void JNICALL Java_io_bitmagic_core_BVector0_deserialize0
+(JNIEnv *env, jclass obj, jlong ptr, jbyteArray ba) {
+  jsize size = (*env)->GetArrayLength(env, ba);
+  jbyte *start = (*env)->GetByteArrayElements(env, ba, 0);
+  exec(BM_bvector_deserialize((BM_BVHANDLE)ptr, (const char*)start, size));
+  (*env)->ReleaseByteArrayElements(env, ba, start, JNI_ABORT); // The array is read-only
+}
+
+/*
+* Class:     io_bitmagic_core_BVector0
+* Method:    serialize0
+* Signature: (J[B)J
+*/
+JNIEXPORT jlong JNICALL Java_io_bitmagic_core_BVector0_serialize0
+(JNIEnv *env, jclass obj, jlong ptr, jbyteArray ba) {
+  jsize size = (*env)->GetArrayLength(env, ba);
+  jbyte *start = (*env)->GetByteArrayElements(env, ba, 0);
+  size_t actualSize;
+
+  exec(BM_bvector_serialize((BM_BVHANDLE)ptr, start, size, &actualSize));
+  (*env)->ReleaseByteArrayElements(env, ba, start, 0); 
+  return actualSize;
 }
 
 /***************************************** BitVector Iterator ****************************************/
