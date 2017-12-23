@@ -2012,14 +2012,13 @@ bm::id_t bvector<Alloc>::count_to(bm::id_t right,
 
     if (gap)
     {
-        cnt +=
-            gap_bit_count_range(BMGAP_PTR(block),
-                               (gap_word_t)0,
-                               (gap_word_t)(gap_word_t)nbit_right);
+        unsigned c = bm::gap_bit_count_to(BMGAP_PTR(block),(gap_word_t)nbit_right);
+        BM_ASSERT(c == bm::gap_bit_count_range(BMGAP_PTR(block), (gap_word_t)0, (gap_word_t)nbit_right));
+        cnt += c;
     }
     else
     {
-        cnt += bit_block_calc_count_to(block, nbit_right);
+        cnt += bm::bit_block_calc_count_to(block, nbit_right);
     }
 
     return cnt;
