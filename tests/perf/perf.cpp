@@ -334,28 +334,28 @@ void BitForEachTest()
 
 void BitCountSparseTest()
 {
-    {
     bvect*  bv = new bvect();
     test_bitset*  bset = new test_bitset();
     size_t value = 0, c1;
     volatile size_t* p = &value;
 
     SimpleFillSets(*bset, *bv, 0, BSIZE, 130);
+    
     {
-    TimeTaker tt("BitCount: Sparse bitset ", REPEATS*10);
-    for (unsigned i = 0; i < REPEATS*10; ++i)
-    {    
-        value += bv->count();
-    }
+        TimeTaker tt("BitCount: Sparse bitset ", REPEATS*10);
+        for (unsigned i = 0; i < REPEATS*10; ++i)
+        {    
+            value += bv->count();
+        }
     }
 
     if (!platform_test)
     {
-    TimeTaker tt("BitCount: Sparse bitset (STL)", REPEATS*10);
-    for (unsigned int i = 0; i < REPEATS*10; ++i)
-    {    
-        value += bset->count();
-    }
+        TimeTaker tt("BitCount: Sparse bitset (STL)", REPEATS*10);
+        for (unsigned int i = 0; i < REPEATS*10; ++i)
+        {    
+            value += bset->count();
+        }
     }
 
     c1 = *p;
@@ -365,20 +365,33 @@ void BitCountSparseTest()
     bv->optimize(tb);
 
     {
-    TimeTaker tt("BitCount: GAP Sparse bitset", REPEATS*100);
-    for (unsigned i = 0; i < REPEATS*100; ++i)
-    {    
-        value += bv->count();
+        TimeTaker tt("BitCount: GAP Sparse bitset", REPEATS*100);
+        for (unsigned i = 0; i < REPEATS*100; ++i)
+        {    
+            value += bv->count();
+        }
+    }
+
+    bvect::blocks_count bc_arr;
+    bv->running_count_blocks(&bc_arr);
+
+    {
+        unsigned right = 65535;
+        TimeTaker tt("count_to: GAP Sparse bitset", REPEATS * 100);
+        for (unsigned i = 0; i < REPEATS * 100000; ++i)
+        {
+            right = 65525 + (i * 10);
+            if (right > BSIZE)
+                right = 0;
+            value += bv->count_to(right, bc_arr);
+        }
     }
     delete bv;
     delete bset;
-    }
-    c1 = *p;
-    value = c1 = 0;
-
-    }
-
 }
+
+
+
 
 
 
@@ -1507,7 +1520,7 @@ int main(void)
     MemCpyTest();
 
     BitCountTest();
- 
+
     BitCountSparseTest();
 
     BitForEachTest();
