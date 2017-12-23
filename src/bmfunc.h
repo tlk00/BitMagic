@@ -4715,7 +4715,7 @@ void bit_for_each_4(T w, F& func)
 {
     for (unsigned sub_octet = 0; w != 0; w >>= 4, sub_octet += 4)
     {
-        switch (w & 15)
+        switch (w & 15) // 1111
         {
         case 0: // 0000
             break;
