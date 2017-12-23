@@ -1478,31 +1478,45 @@ void SparseVectorAccessTest()
 {
     std::vector<unsigned> target;
     svect   sv1;
+    svect   sv2;
 
     FillSparseIntervals(sv1);
     BM_DECLARE_TEMP_BLOCK(tb)
     sv1.optimize(tb);
     target.resize(250000000);
 
-    unsigned long long cnt = 0;
     {
-    TimeTaker tt("sparse_vector random element access test", REPEATS/10 );
-    for (unsigned i = 0; i < REPEATS/10; ++i)
-    {
-        for (unsigned j = 256000; j < 190000000/2; ++j)
+        TimeTaker tt("sparse_vector random element assignment test", REPEATS/10 );
+        for (unsigned i = 0; i < REPEATS/10; ++i)
         {
-            unsigned v = sv1[j];
-            cnt += v;
+            for (unsigned j = 256000; j < 19000000/2; ++j)
+            {
+                sv2.set(j, rand()%0xFFF);
+            }
         }
     }
-    }
+
+
+    unsigned long long cnt = 0;
     {
-    TimeTaker tt("sparse_vector extraction access test", REPEATS/10 );
-    for (unsigned i = 0; i < REPEATS/10; ++i)
-    {
-        unsigned target_size = 190000000/2 - 256000;
-        sv1.extract(&target[0], 256000, target_size);
+        TimeTaker tt("sparse_vector random element access test", REPEATS/10 );
+        for (unsigned i = 0; i < REPEATS/10; ++i)
+        {
+            for (unsigned j = 256000; j < 190000000/2; ++j)
+            {
+                unsigned v = sv1[j];
+                cnt += v;
+            }
+        }
     }
+    
+    {
+        TimeTaker tt("sparse_vector extraction access test", REPEATS/10 );
+        for (unsigned i = 0; i < REPEATS/10; ++i)
+        {
+            unsigned target_size = 190000000/2 - 256000;
+            sv1.extract(&target[0], 256000, target_size);
+        }
     }
     
     char buf[256];
@@ -1547,7 +1561,7 @@ int main(void)
     TI_MetricTest();
 
     SerializationTest();
-    
+
     SparseVectorAccessTest();
     
     return 0;
