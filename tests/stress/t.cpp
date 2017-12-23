@@ -1141,7 +1141,7 @@ void CheckIntervals(const bvect& bv, unsigned max_bit)
 {
     unsigned cnt0 = count_intervals(bv);
     unsigned cnt1 = 1;
-    bool bit_prev = bv.test(0);
+    //bool bit_prev = bv.test(0);
 
     unsigned cnt2 = 0;
     bvect::enumerator en = bv.first();
@@ -8721,7 +8721,7 @@ bool CompareSparseVector(const SV& sv, const Vect& vect)
 }
 
 template<class SV>
-bool TestEqualSparseVectors(const SV& sv1, const SV& sv2)
+bool TestEqualSparseVectors(const SV& sv1, const SV& sv2, bool detailed = true)
 {
     bool b = sv1.equal(sv2);
     if (!b)
@@ -8765,27 +8765,27 @@ bool TestEqualSparseVectors(const SV& sv1, const SV& sv2)
     }
 
     // comparison using elements assignment via reference
+    if (detailed)
     {
-    SV sv3;
-    sv3.resize(sv1.size());
-    for (unsigned i = 0; i < sv1.size(); ++i)
-    {
-        sv3[i] = sv1[i];
-        unsigned v1 = sv1[i];
-        unsigned v2 = sv3[i];
-        if (v1 != v2)
+        SV sv3;
+        sv3.resize(sv1.size());
+        for (unsigned i = 0; i < sv1.size(); ++i)
         {
-            cerr << "1. sparse_vector reference assignment validation failed" << endl;
-            return false;
+            sv3[i] = sv1[i];
+            unsigned v1 = sv1[i];
+            unsigned v2 = sv3[i];
+            if (v1 != v2)
+            {
+                cerr << "1. sparse_vector reference assignment validation failed" << endl;
+                return false;
+            }
         }
-    }
-    b = sv1.equal(sv3);
-    if (!b)
-    {
-        cerr << "2. sparse_vector reference assignment validation failed" << endl;
-        return b;
-    }
-
+        b = sv1.equal(sv3);
+        if (!b)
+        {
+            cerr << "2. sparse_vector reference assignment validation failed" << endl;
+            return b;
+        }
     }
 
     // comparison through serialization
@@ -9448,7 +9448,7 @@ void TestSparseVector_Stress(unsigned count)
                 {
                     sv1.optimize();
                 }
-                if (rand()%2)
+                if (rand()%3 == 0)
                 {
                     sv2.optimize();
                 }
@@ -9479,20 +9479,20 @@ void TestSparseVector_Stress(unsigned count)
                     }
                 } // for i
                 
-                bool b1 = TestEqualSparseVectors(sv1, sv3);
+                bool b1 = TestEqualSparseVectors(sv1, sv3, false);
                 if (!b1)
                 {
                     cerr << "Equal 1 comparison failed" << endl;
                     exit(1);
                 }
-                bool b2 = TestEqualSparseVectors(sv1, sv4);
+                bool b2 = TestEqualSparseVectors(sv1, sv4, false);
                 if (!b2)
                 {
                     cerr << "Equal 2 comparison failed" << endl;
                     exit(1);
                 }
                 
-                bool b3 = TestEqualSparseVectors(sv3, sv4);
+                bool b3 = TestEqualSparseVectors(sv3, sv4, false);
                 if (!b3)
                 {
                     cerr << "Equal 3 comparison failed" << endl;
@@ -10054,7 +10054,6 @@ int main(void)
     //LoadVectors("c:/dev/bv_perf", 3, 27);
     exit(1);
 */                                                                                                        
-
 
      ExportTest();
      ResizeTest();
