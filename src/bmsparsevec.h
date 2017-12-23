@@ -857,14 +857,22 @@ void sparse_vector<Val, BV>::push_back(value_type v)
 template<class Val, class BV>
 void sparse_vector<Val, BV>::set_value(size_type idx, value_type v)
 {
-    // TODO: optimize to clear and set in just one pass
+    // calculate logical block coordinates and masks
+    //
+    unsigned nb = unsigned(idx >>  bm::set_block_shift);
+    unsigned i0 = nb >> bm::set_array_shift; // top block address
+    unsigned j0 = nb &  bm::set_array_mask;  // address in sub-block
 
-    // clear the plains
+    // clear the plains where needed
     for (unsigned i = 0; i < sizeof(Val) * 8; ++i)
     {
-        bvector_type* bv = plains_[i];
-        if (bv)
+        const bm::word_t* blk = get_block(i, i0, j0);
+        if (blk)
+        {
+            BM_ASSERT(plains_[i]);
+            bvector_type* bv = plains_[i];
             bv->clear_bit(idx);
+        }
     }
 
     // set bits in plains
@@ -878,8 +886,6 @@ void sparse_vector<Val, BV>::set_value(size_type idx, value_type v)
         bv->set_bit(idx);
     } // for j
 }
-
-
 
 //---------------------------------------------------------------------
 
