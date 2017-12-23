@@ -33,7 +33,7 @@ For more information please visit:  http://bitmagic.io
 //#define BMSSE2OPT
 //#define BMSSE42OPT
 //#define BMAVX2OPT
-///#define BMCOUNTOPT
+//#define BMCOUNTOPT
 //#define BM_USE_EXPLICIT_TEMP
 
 #include <stdio.h>
@@ -1045,47 +1045,48 @@ void SerializationOperation2Test(bvect*        bv_target,
     unsigned scount1 = SerializationOperation(0, 
                                               bv1,
                                               bv2,
-                                              op_count,
-                                              true //reverse check
-                                              );
-    cout << "Serialization operation count OK." << endl;
+op_count,
+true //reverse check
+);
+cout << "Serialization operation count OK." << endl;
 
-    cout << "Serialization operation. " << endl;
-    unsigned scount2 = SerializationOperation(bv_target, 
-                                              bv1,
-                                              bv2,
-                                              op_combine);
-    scount2 = bv_target->count();
-    if (predicted_count != scount2 || scount1 != scount2)
+cout << "Serialization operation. " << endl;
+unsigned scount2 = SerializationOperation(bv_target,
+    bv1,
+    bv2,
+    op_combine);
+scount2 = bv_target->count();
+if (predicted_count != scount2 || scount1 != scount2)
+{
+    cout << "Serialization count != predicted" << endl
+        << " predicted=" << predicted_count
+        << " scount1=" << scount1
+        << " scount2=" << scount2
+        << endl;
+
+    cout << endl << "target:" << endl;
+    print_stat(*bv_target);
+    cout << endl << endl << "Reference" << endl;
+    if (op_combine == set_OR)
     {
-        cout << "Serialization count != predicted" << endl 
-             << " predicted=" << predicted_count 
-             << " scount1="   << scount1
-             << " scount2="   << scount2
-             << endl;
-
-        cout << endl << "target:" << endl;
-        print_stat(*bv_target);
-        cout << endl << endl << "Reference" << endl;
-        if (op_combine == set_OR)
+        bv1 |= bv2;
+        if (bv1 != *bv_target)
         {
-            bv1 |= bv2;
-            if (bv1 != *bv_target)
-            {
-                cout << "Comparison OR error!" << endl;
-            }
-            cout << "OR operation count=" << bv1.count() << endl;
-            print_stat(bv1);
-        } else
+            cout << "Comparison OR error!" << endl;
+        }
+        cout << "OR operation count=" << bv1.count() << endl;
+        print_stat(bv1);
+    }
+    else
         if (op_combine == set_AND)
         {
             bv1 &= bv2;
             print_stat(bv1);
         }
 
-        exit(1);
-    }
-    cout << "OK" << endl;
+    exit(1);
+}
+cout << "OK" << endl;
 }
 
 
@@ -1094,7 +1095,7 @@ void print_mv(const bvect_mini &bvect_min, unsigned size)
     unsigned i;
     for (i = 0; i < size; ++i)
     {
-        bool bflag = bvect_min.is_bit_true(i) != 0; 
+        bool bflag = bvect_min.is_bit_true(i) != 0;
 
         if (bflag)
             printf("1");
@@ -1127,11 +1128,11 @@ void CheckGAPMin(const gap_vector& gapv, const bvect_mini& bvect_min, unsigned l
     {
         int bit1 = (gapv.is_bit_true(i) == 1);
         int bit2 = (bvect_min.is_bit_true(i) != 0);
-        if(bit1 != bit2)
+        if (bit1 != bit2)
         {
-           cout << "Bit comparison failed. " << "Bit N=" << i << endl;
-           assert(0);
-           exit(1);
+            cout << "Bit comparison failed. " << "Bit N=" << i << endl;
+            assert(0);
+            exit(1);
         }
     }
 }
@@ -1141,13 +1142,40 @@ void CheckIntervals(const bvect& bv, unsigned max_bit)
     unsigned cnt0 = count_intervals(bv);
     unsigned cnt1 = 1;
     bool bit_prev = bv.test(0);
+
+    unsigned cnt2 = 0;
+    bvect::enumerator en = bv.first();
+    if (!en.valid())
+    {
+        cnt2 = 1;
+    }
+    else
+    {
+        if (*en > 0)
+            ++cnt2;
+        unsigned prev = *en;
+        for (++en; en.valid(); ++en)
+        {
+            if (++prev == *en)
+            {
+            }
+            else
+            {
+                cnt2 += 2;
+                prev = *en;
+            }
+        }
+        cnt2 += 2;
+    }
+/*
     for (unsigned i = 1; i < max_bit; ++i)
     {
         bool bit = bv.test(i);
         cnt1 += bit_prev ^ bit;
         bit_prev = bit;
     }
-    if (cnt0 != cnt1)
+*/
+    if (cnt0 != cnt2)
     {
         cout << "CheckIntervals error. " << "bm count=" << cnt0
              << " Control = " << cnt1 << endl;
@@ -1187,6 +1215,15 @@ template<class T> void CheckCountRange(const T& vect,
 {
     unsigned cnt1 = vect.count_range(left, right, block_count_arr);
     unsigned cnt2 = 0;
+
+    typename T::enumerator en = vect.get_enumerator(left);
+    for (; en.valid(); ++en)
+    {
+        if (*en > right)
+            break;
+        cnt2 += en.valid();
+    }
+    /*
     for (unsigned i = left; i <= right; ++i)
     {
         if (vect.test(i))
@@ -1194,6 +1231,7 @@ template<class T> void CheckCountRange(const T& vect,
             ++cnt2;
         }
     }
+    */
     if (cnt1 != cnt2)
     {
         cout << "Bitcount range failed!" << "left=" << left 
@@ -1208,11 +1246,15 @@ template<class T> void CheckCountRange(const T& vect,
     
     // run a cycle to check count_to()
     //
-    left = 0;
     //for (unsigned i = 0; i <= right; ++i)
     {
+        if (left > right)
+            swap(left, right);
+
         unsigned cnt1 = vect.count_range(left, right, block_count_arr);
-        unsigned cnt2 = vect.count_to(right, bc_arr);
+        unsigned cnt_to_r = vect.count_to(right, bc_arr);
+        unsigned cnt_to_l = left ? vect.count_to(left - 1, bc_arr) : 0;
+                 cnt2 = cnt_to_r - cnt_to_l;
         if (cnt1 != cnt2)
         {
             cout << "Bitcount range TO failed!" << "left=" << left
@@ -6942,7 +6984,7 @@ void BitCountChangeTest()
     cout << "!" << endl;
 
     //bm::word_t  BM_VECT_ALIGN arr[16] BM_VECT_ALIGN = {0,};
-    bm::word_t  BM_VECT_ALIGN arr[32] BM_VECT_ALIGN = { 0, };
+    bm::word_t  BM_VECT_ALIGN arr[32] BM_VECT_ALIGN_ATTR = { 0, };
     arr[0] = (bm::word_t)(1 << 31);
     arr[1] = 1; //(bm::word_t)(1 << 31);
     
@@ -9986,7 +10028,6 @@ int main(void)
     
     }}
     
-    
 /*
     LoadBVDump("C:/dev/group-by-sets/sets/geo_organization.bvdump", 
                "C:/dev/group-by-sets/sets/geo_organization.bvdump2", 
@@ -10025,7 +10066,6 @@ int main(void)
      SetTest();
 
      BitCountChangeTest();
-    
    
      Log2Test();
 
