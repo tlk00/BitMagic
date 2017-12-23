@@ -793,31 +793,63 @@ unsigned gap_bit_count_range(const T* const buf, T left, T right)
     unsigned bits_counter = 0;
     unsigned is_set;
     unsigned start_pos = gap_bfind(buf, left, &is_set);
+    is_set = ~(is_set - 1u); // 0xFFF.. if true (mask for branchless code)
 
     pcurr = buf + start_pos;
     if (right <= *pcurr) // we are in the target block right now
     {
-        if (is_set)
-            bits_counter = (right - left + 1);
+        bits_counter = unsigned(right - left + 1u) & is_set; // & is_set == if(is_set)
         return bits_counter;
     }
-    if (is_set)
-        bits_counter += *pcurr - left + 1;
+    bits_counter += unsigned(*pcurr - left + 1u) & is_set;
 
     unsigned prev_gap = *pcurr++;
-    is_set ^= 1;
-    while (right > *pcurr)
+    for (is_set ^= ~0u; right > *pcurr; is_set ^= ~0u)
     {
-        if (is_set)
-            bits_counter += *pcurr - prev_gap;
+        bits_counter += (*pcurr - prev_gap) & is_set;
         if (pcurr == pend) 
             return bits_counter;
         prev_gap = *pcurr++;
-        is_set ^= 1;
     }
-    if (is_set)
-        bits_counter += right - prev_gap;
+    bits_counter += unsigned(right - prev_gap) & is_set;
+    return bits_counter;
+}
 
+
+/*!
+    \brief Counts 1 bits in GAP buffer in the closed [0, right] range.
+    \param buf - GAP buffer pointer.
+    \param right- rightmost bit index
+    \return Number of non-zero bits.
+    @ingroup gapfunc
+*/
+template<typename T>
+unsigned gap_bit_count_to(const T* const buf, T right)
+{
+    const T* pcurr = buf;
+    const T* pend = pcurr + (*pcurr >> 3);
+
+    unsigned bits_counter = 0;
+    unsigned is_set = ~((unsigned(*buf) & 1u) - 1u); // 0xFFF.. if true (mask for branchless code)
+    BM_ASSERT(is_set == 0u || is_set == ~0u);
+    pcurr = buf + 1;
+
+    if (right <= *pcurr) // we are in the target block right now
+    {
+        bits_counter = (right + 1u) & is_set; // & is_set == if (is_set)
+        return bits_counter;
+    }
+    bits_counter += (*pcurr + 1u) & is_set;
+
+    unsigned prev_gap = *pcurr++;
+    for (is_set ^= ~0u; right > *pcurr; is_set ^= ~0u)
+    {
+        bits_counter += (*pcurr - prev_gap) & is_set;
+        if (pcurr == pend)
+            return bits_counter;
+        prev_gap = *pcurr++;
+    }
+    bits_counter += (right - prev_gap) & is_set;
     return bits_counter;
 }
 
