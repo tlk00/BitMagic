@@ -38,8 +38,8 @@ For more information please visit:  http://bitmagic.io
   \sa bm::bvector<>::counted_enumerator
  */
 
-
 #include <iostream>
+#include <random>
 
 #include "bm.h"
 #include "bmalgo.h"
@@ -51,21 +51,49 @@ using namespace std;
 bm::chrono_taker::duration_map_type  timing_map;
 
 const unsigned benchmark_count = 10000;
-unsigned       vector_max = 40000000;
+unsigned       vector_max = 400000000;
 
-/// generate pseudo-random bit-vector for testing
-///
+std::random_device rand_dev;  
+std::mt19937 gen(rand_dev()); // mersenne_twister_engine 
+std::uniform_int_distribution<> rand_dis(1, vector_max); // generate uniform numebrs for [1, vector_max]
+
+
+/// generate pseudo-random bit-vector, mix of blocks
+/// 
 void generate_bvector(bm::bvector<>& bv)
 {
-    unsigned i;
-    for (i = 0; i < 30000; i += 10)
+    unsigned i, j;
+    for (i = 0; i < vector_max;)
     {
-        bv.set(i);
+        // generate bit-blocks
+        for (j = 0; j < 65535*8; i += 10, j++)
+        {
+            bv.set(i);
+        }
+        if (i > vector_max)
+            break;
+        // generate GAP (compressed) blocks
+        for (j = 0; j < 65535; i += 120, j++)
+        {
+            unsigned len = rand() % 64;
+            bv.set_range(i, i + len);
+            i += len;
+            if (i > vector_max)
+                break;
+        }
     }
-    for (i = 300000; i < vector_max; i += 100)
-    {
-        bv.set(i);
-    }
+
+    // compress vector
+    BM_DECLARE_TEMP_BLOCK(tb)
+    bv.optimize(tb);
+
+    // compute bit-vector statistics
+    bm::bvector<>::statistics st;
+    bv.calc_stat(&st);
+
+    std::cout << "Bit-vector statistics: GAP (compressed blocks)=" << st.gap_blocks
+              << ", BIT (uncompressed blocks)=" << st.bit_blocks
+              << std::endl << std::endl;
 }
 
 
@@ -73,10 +101,10 @@ void generate_bvector(bm::bvector<>& bv)
 ///
 void bv_count_test(const bm::bvector<>& bv)
 {
-    bm::chrono_taker tt1("1. bvector<>::count()", benchmark_count, &timing_map);
+    bm::chrono_taker tt1("1. bvector<>::count()", benchmark_count / 2, &timing_map);
 
     unsigned cnt = 0;
-    for (unsigned i = 0; i < benchmark_count; ++i)
+    for (unsigned i = 0; i < benchmark_count / 2; ++i)
     {
         cnt += bv.count();
     }
@@ -93,8 +121,8 @@ void bv_count_range(const bm::bvector<>& bv)
     unsigned cnt = 0;
     for (unsigned i = 0; i < benchmark_count; ++i)
     {
-        unsigned from = rand() % vector_max;
-        unsigned to = rand() % vector_max;
+        unsigned from = rand_dis(gen);
+        unsigned to = rand_dis(gen);
         if (from > to)
             swap(from, to);
         cnt += bv.count_range(from, to);
@@ -116,8 +144,8 @@ void bv_count_range_acc(const bm::bvector<>& bv)
     unsigned cnt = 0;
     for (unsigned i = 0; i < benchmark_count; ++i)
     {
-        unsigned from = rand() % vector_max;
-        unsigned to = rand() % vector_max;
+        unsigned from = rand_dis(gen);
+        unsigned to = rand_dis(gen);
         if (from > to)
             swap(from, to);
         cnt += bv.count_range(from, to, blocks_cnt); // use blocks count for acceleration
@@ -139,7 +167,7 @@ void bv_count_to_acc(const bm::bvector<>& bv)
     unsigned cnt = 0;
     for (unsigned i = 0; i < benchmark_count; ++i)
     {
-        unsigned to = rand() % vector_max;
+        unsigned to = rand_dis(gen);
         cnt += bv.count_to(to, bc); // use blocks count for acceleration
     }
     // this is mostly to prevent compiler to optimize loop away
@@ -160,8 +188,8 @@ void bv_count_to_range_acc(const bm::bvector<>& bv)
     unsigned cnt = 0;
     for (unsigned i = 0; i < benchmark_count; ++i)
     {
-        unsigned from = 1 + rand() % vector_max;
-        unsigned to = rand() % vector_max;
+        unsigned from = rand_dis(gen);
+        unsigned to = rand_dis(gen);
         if (from > to)
             swap(from, to);
         
@@ -183,12 +211,12 @@ void bv_count_and(const bm::bvector<>& bv)
     bm::chrono_taker tt1("6. bm::count_and with mask vector", benchmark_count, &timing_map);
 
     unsigned cnt = 0;
-    bm::bvector<> mask_bv(bm::BM_GAP);
+    bm::bvector<> mask_bv(bm::BM_GAP); // use compressed mask, better seluts on long ranges
 
     for (unsigned i = 0; i < benchmark_count; ++i)
     {
-        unsigned from = 1 + rand() % vector_max;
-        unsigned to = rand() % vector_max;
+        unsigned from = rand_dis(gen);
+        unsigned to = rand_dis(gen);
         if (from > to)
             swap(from, to);
 
@@ -201,25 +229,23 @@ void bv_count_and(const bm::bvector<>& bv)
     std::cout << "count AND finished." << cnt << std::endl;
 }
 
-/// count_range implemented via bm::bvector<>::counted_enumerator
+/// count_to implemented via bm::bvector<>::counted_enumerator
 ///
 /// Counted enumerator is an iterator automata, which counts the running population count 
 /// along the iteration sequence
 ///
 void bv_counted_enumerator(const bm::bvector<>& bv)
 {
-    bm::chrono_taker tt1("7. bm::bvector<>::counted_enumerator", benchmark_count, &timing_map);
+    // This is a slow method so we use less iterators
+    bm::chrono_taker tt1("7. bm::bvector<>::counted_enumerator", benchmark_count/20, &timing_map);
 
     unsigned cnt = 0;
-
-    for (unsigned i = 0; i < benchmark_count; ++i)
+    for (unsigned i = 0; i < benchmark_count/20; ++i)
     {
-        unsigned to = rand() % vector_max;
+        unsigned to = rand_dis(gen);
 
         bm::bvector<>::counted_enumerator en = bv.first();
-        bm::bvector<>::counted_enumerator en_end = bv.end();
-
-        for (;en < en_end; ++en)
+        for (; en.valid(); ++en)   
         {
             if (*en > to)
                 break;
@@ -289,9 +315,10 @@ int main(void)
 
 
         // print all test timing results
+        //
+        std::cout << std::endl;
         bm::chrono_taker::print_duration_map(timing_map, bm::chrono_taker::ct_ops_per_sec);
-
-     }
+    }
     catch(std::exception& ex)
     {
         std::cerr << ex.what() << std::endl;
