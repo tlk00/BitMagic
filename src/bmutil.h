@@ -41,19 +41,6 @@ namespace bm
 {
 
 
-/*
-// SSE2 vector equality comparison
-int _mm_any_eq( vFloat a, vFloat b )
-{
-
-    //test a==b for each float in a & b
-    vFloat mask = _mm_cmpeq_ps( a, b );
-
-    //copy top bit of each result to maskbits
-    int maskBits = _mm_movemask_ps( mask );
-    return maskBits != 0;
-}
-*/
 
 // From:
 // http://citeseerx.ist.psu.edu/viewdoc/summary?doi=10.1.1.37.8562
