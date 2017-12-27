@@ -7,10 +7,12 @@
 
 #define exec(x) \
   switch(x) { \
+  case BM_OK: \
+    break; \
   case BM_ERR_BADALLOC: \
   { \
     jclass ex = (*env)->FindClass(env, "java/lang/RuntimeException"); \
-    (*env)->ThrowNew(env, ex,BM_ERR_BADALLOC_MSG " in native call: " #x); \
+    (*env)->ThrowNew(env, ex, BM_ERR_BADALLOC_MSG " in native call: " #x); \
     break; \
   } \
   case BM_ERR_BADARG: \
@@ -26,6 +28,8 @@
     break; \
   } \
   default: \
+    jclass ex = (*env)->FindClass(env, "java/lang/RuntimeException"); \
+    (*env)->ThrowNew(env, ex, "Unknown error in native call: " #x); \
     break; \
   }
 
