@@ -3495,17 +3495,17 @@ void DesrializationTest2()
    struct bvect::statistics st1;
    bv1.calc_stat(&st1);
 
-
-   unsigned char* sermem = new unsigned char[st1.max_serialize_mem];
+   std::vector<unsigned char> sermemv(st1.max_serialize_mem);
+   //unsigned char* sermem = new unsigned char[st1.max_serialize_mem];
    
-   unsigned slen2 = bm::serialize(bv1, sermem, tb);
+   unsigned slen2 = bm::serialize(bv1, sermemv.data(), tb);
    assert(slen2);
    slen2 = 0;
 
-   bm::deserialize(bvtotal, sermem);
+   bm::deserialize(bvtotal, sermemv.data());
     bvect  bv_target_s;
     operation_deserializer<bvect>::deserialize(bv_target_s,
-                                                sermem,
+                                                sermemv.data(),
                                                 0,
                                                 set_OR);
 
@@ -3527,16 +3527,16 @@ void DesrializationTest2()
    struct bvect::statistics st2;
    bv2.calc_stat(&st2);
 
-   unsigned char* sermem2 = new unsigned char[st2.max_serialize_mem];
+   std::vector<unsigned char> sermemv2(st2.max_serialize_mem);
 
-   unsigned slen = bm::serialize(bv2, sermem2);
+   unsigned slen = bm::serialize(bv2, sermemv2.data());
    assert(slen);
    slen = 0;
 
-   bm::deserialize(bvtotal, sermem2);
+   bm::deserialize(bvtotal, sermemv2.data());
    print_stat(bvtotal);
     operation_deserializer<bvect>::deserialize(bv_target_s,
-                                               sermem2,
+                                               sermemv2.data(),
                                                0,
                                                set_OR);
     res = bvtotal.compare(bv_target_s);
@@ -3549,16 +3549,16 @@ void DesrializationTest2()
 //   bvtotal.optimize();
  //  bvtotal.stat();
 
-   bm::deserialize(bvtotal, sermem2);
+   bm::deserialize(bvtotal, sermemv2.data());
 
-   bm::deserialize(bvtotal, sermem);
+   bm::deserialize(bvtotal, sermemv.data());
 
     operation_deserializer<bvect>::deserialize(bv_target_s,
-                                               sermem2,
+                                               sermemv2.data(),
                                                0,
                                                set_OR);
     operation_deserializer<bvect>::deserialize(bv_target_s,
-                                               sermem,
+                                               sermemv2.data(),
                                                0,
                                                set_OR);
 
@@ -3568,9 +3568,6 @@ void DesrializationTest2()
         cout << "Deserialization test failed! 3" << endl;
         exit(1);
     }
-
-   delete [] sermem;
-   delete [] sermem2;
 
 
    bvtotal.clear();
@@ -3591,12 +3588,12 @@ void DesrializationTest2()
        struct bvect::statistics st;
        bvect_full1->calc_stat(&st);
 
-       unsigned char* sermem1 = new unsigned char[st.max_serialize_mem];
+       std::vector<unsigned char> sermemv1(st.max_serialize_mem);
 
-       slen = bm::serialize(*bvect_full1, sermem1, tb);
+       slen = bm::serialize(*bvect_full1, sermemv1.data(), tb);
 
-       unsigned char* smem = new unsigned char[slen];
-       ::memcpy(smem, sermem1, slen);
+       std::vector<unsigned char> smemv(slen);
+       ::memcpy(smemv.data(), sermemv1.data(), slen);
 
 //       cout << "Serialized vector" << endl;
 //       bvect_full1->stat();
@@ -3604,9 +3601,9 @@ void DesrializationTest2()
 //       cout << "Before deserialization" << endl;
 //       bvtotal.stat();
 
-        bm::deserialize(bvtotal, smem);
+        bm::deserialize(bvtotal, smemv.data());
         operation_deserializer<bvect>::deserialize(bv_target_s,
-                                                   smem,
+                                                   smemv.data(),
                                                    0,
                                                    set_OR);
         res = bvtotal.compare(bv_target_s);
@@ -3640,9 +3637,6 @@ void DesrializationTest2()
 
        }
 
-       delete [] sermem;
-       delete[] sermem1;
-       delete [] smem;
        delete bvect_min1;
        delete bvect_full1;
 
