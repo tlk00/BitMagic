@@ -329,6 +329,13 @@ const bm::gap_word_t* sse4_gap_sum_arr(
     return pbuf;
 }
 
+
+#ifdef __GNUG__
+// necessary measure to silence false warning from GCC about negative pointer arithmetics
+#pragma GCC diagnostic push
+#pragma GCC diagnostic ignored "-Warray-bounds"
+#endif
+
 /*!
      SSE4.2 check for one to two (variable len) 128 bit SSE lines for gap search results (8 elements)
      \internal
@@ -394,8 +401,10 @@ unsigned sse4_gap_find(const bm::gap_word_t* BMRESTRICT pbuf, const bm::gap_word
         return unroll_factor - bc;   // address of first one element (target)
     }
     // inspect the next lane with possible step back (to avoid over-read the block boundaries)
-    //   
+    //   GCC gives a false warning for "- unroll_factor" here
     const bm::gap_word_t* BMRESTRICT pbuf2 = pbuf + size - unroll_factor;
+
+    BM_ASSERT(pbuf2 > pbuf); // assert in place to make sure GCC warning is indeed false
 
     m1 = _mm_loadu_si128((__m128i*)(pbuf2)); // load next elements (with possible overlap)
     mge_mask = _mm_cmpeq_epi16(_mm_subs_epu16(mp, m1), mz); // m1 >= mp
@@ -407,6 +416,9 @@ unsigned sse4_gap_find(const bm::gap_word_t* BMRESTRICT pbuf, const bm::gap_word
 
     return size - bc;
 }
+#ifdef __GNUG__
+#pragma GCC diagnostic pop
+#endif
 
 } // namespace
 
