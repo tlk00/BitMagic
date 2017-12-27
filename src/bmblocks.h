@@ -183,12 +183,12 @@ public:
                     cnt = gap_length(gap_block) - 1;
                     if (idx)
                     {
-                        first_bit = gap_test(gap_block, 0);
+                        first_bit = bm::gap_test_unr(gap_block, 0);
                         cnt -= !(prev_block_border_bit_ ^ first_bit);
                     }
                         
                     prev_block_border_bit_ = 
-                        gap_test(gap_block, gap_max_bits-1);
+                        bm::gap_test_unr(gap_block, gap_max_bits-1);
                 }
                 else // bitset
                 {

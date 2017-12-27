@@ -2172,7 +2172,7 @@ bool bvector<Alloc>::get_bit(bm::id_t n) const
 
         if (BM_IS_GAP(block))
         {
-            is_set = gap_test(BMGAP_PTR(block), nbit);
+            is_set = gap_test_unr(BMGAP_PTR(block), nbit);
         }
         else 
         {
@@ -2592,7 +2592,7 @@ bool bvector<Alloc>::set_bit_conditional_impl(bm::id_t n,
     if (block_type == 1) // gap
     {
         bm::gap_word_t* gap_blk = BMGAP_PTR(blk);
-        bool old_val = (gap_test(gap_blk, nbit) != 0);
+        bool old_val = (bm::gap_test_unr(gap_blk, nbit) != 0);
 
         if (old_val != condition) 
         {
@@ -2671,7 +2671,7 @@ bool bvector<Alloc>::and_bit_no_check(bm::id_t n, bool val)
     if (block_type == 1) // gap
     {
         bm::gap_word_t* gap_blk = BMGAP_PTR(blk);
-        bool old_val = (gap_test(gap_blk, nbit) != 0);
+        bool old_val = (bm::gap_test_unr(gap_blk, nbit) != 0);
 
         bool new_val = val & old_val;
         if (new_val != old_val)

@@ -1282,7 +1282,7 @@ void combine_xor(BV& bv, It  first, It last)
                 unsigned is_set;
                 unsigned nbit   = (*first) & bm::set_block_mask; 
                 
-                is_set = gap_test(gap_blk, nbit);
+                is_set = bm::gap_test_unr(gap_blk, nbit);
                 BM_ASSERT(is_set <= 1);
                 is_set ^= 1; 
                 
@@ -1370,7 +1370,7 @@ void combine_sub(BV& bv, It  first, It last)
                 unsigned is_set;
                 unsigned nbit   = (*first) & bm::set_block_mask; 
                 
-                is_set = gap_test(gap_blk, nbit);
+                is_set = bm::gap_test_unr(gap_blk, nbit);
                 if (!is_set)
                     continue;
                 

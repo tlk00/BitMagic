@@ -526,6 +526,51 @@ template<typename T> unsigned gap_test(const T* buf, unsigned pos)
     return ((*buf) & 1) ^ ((--start) & 1); 
 }
 
+/*!
+    \brief Tests if bit = pos is true. Analog of bm::gap_test with SIMD unrolling.
+    \param buf - GAP buffer pointer.
+    \param pos - index of the element.
+    \return true if position is in "1" gap
+    @ingroup gapfunc
+*/
+template<typename T> 
+unsigned gap_test_unr(const T* buf, const unsigned pos)
+{
+#if defined(BMSSE42OPT)
+    BM_ASSERT(pos < bm::gap_max_bits);
+
+    unsigned start = 1;
+    unsigned end = 1 + ((*buf) >> 3);
+    unsigned dsize = end - start;
+
+    if (dsize < 17)
+    {
+        start = bm::sse4_gap_find(buf+1, (bm::gap_word_t)pos, dsize);
+        unsigned res = ((*buf) & 1) ^ ((start) & 1);
+        BM_ASSERT(start != -1);
+        BM_ASSERT(buf[start+1] >= pos);
+        BM_ASSERT(buf[start] < pos || (start==0));
+        BM_ASSERT(res == bm::gap_test(buf, pos));
+        return res;
+    }
+    else
+    while (start != end)
+    {
+        unsigned curr = (start + end) >> 1;
+        if (buf[curr] < pos)
+            start = curr + 1;
+        else
+            end = curr;
+    }
+    
+    unsigned res = ((*buf) & 1) ^ ((--start) & 1);
+
+    BM_ASSERT(res == bm::gap_test(buf, pos));
+    return res;
+#else
+    return bm::gap_test(buf, pos);
+#endif
+}
 
 
 /*! For each non-zero block executes supplied function.

@@ -41,6 +41,7 @@ For more information please visit:  http://bitmagic.io
 
 #include "bmdef.h"
 #include "bmsse_util.h"
+#include "bmutil.h"
 
 namespace bm
 {
@@ -296,7 +297,7 @@ bm::id_t sse4_bit_block_calc_count_change(const __m128i* BMRESTRICT block,
    return count;
 }
 
-/* 
+/*! 
     @brief Gap block population count (array sum) utility 
     @param pbuf - unrolled, aligned to 1-start GAP buffer
     @param sse_vect_waves - number of SSE vector lines to process
@@ -328,7 +329,84 @@ const bm::gap_word_t* sse4_gap_sum_arr(
     return pbuf;
 }
 
+/*!
+     SSE4.2 check for one to two (variable len) 128 bit SSE lines for gap search results (8 elements)
+     \internal
+*/
+inline
+unsigned sse4_gap_find(const bm::gap_word_t* BMRESTRICT pbuf, const bm::gap_word_t pos, const unsigned size)
+{
+    BM_ASSERT(size <= 16);
 
+    const unsigned unroll_factor = 8;
+    __m128i m1, maskF, maskF1, maskF2;
+
+    switch (size)
+    {
+    case 1:
+    case 2:
+    case 3:
+    case 4:
+        if (pbuf[0] >= pos) return 0;
+        if (pbuf[1] >= pos) return 1;
+        if (pbuf[2] >= pos) return 2;
+        if (pbuf[3] >= pos) return 3;
+        if (pbuf[4] >= pos) return 4;
+        BM_ASSERT(0);
+        return 0;
+    case 5:
+        m1 = _mm_loadu_si128((__m128i*)(pbuf)); // load first 8 elements
+        maskF = _mm_set1_epi16(-1); // set all to FF
+        maskF1 = _mm_srli_si128(maskF, (unroll_factor - 5) * 2);
+        maskF2 = _mm_slli_si128(maskF, 5 * 2);
+        m1 = _mm_and_si128(m1, maskF1);
+        m1 = _mm_or_si128(m1, maskF2);
+        break;
+    case 6:
+        m1 = _mm_loadu_si128((__m128i*)(pbuf)); // load first 8 elements
+        maskF = _mm_set1_epi16(-1); // set all to FF
+        maskF1 = _mm_srli_si128(maskF, (unroll_factor - 6) * 2);
+        maskF2 = _mm_slli_si128(maskF, 6 * 2);
+        m1 = _mm_and_si128(m1, maskF1);
+        m1 = _mm_or_si128(m1, maskF2);
+        break;
+    case 7:
+        m1 = _mm_loadu_si128((__m128i*)(pbuf)); // load first 8 elements
+        maskF = _mm_set1_epi16(-1); // set all to FF
+        maskF1 = _mm_srli_si128(maskF, (unroll_factor - 7) * 2);
+        maskF2 = _mm_slli_si128(maskF, 7 * 2);
+        m1 = _mm_and_si128(m1, maskF1);
+        m1 = _mm_or_si128(m1, maskF2);
+        break;
+    default:
+        m1 = _mm_loadu_si128((__m128i*)(pbuf)); // load first 8 elements
+    };
+    
+    __m128i mz = _mm_setzero_si128();
+    __m128i mp = _mm_set1_epi16(pos);  // broadcast pos into all elements of a SIMD vector
+    __m128i  mge_mask = _mm_cmpeq_epi16(_mm_subs_epu16(mp, m1), mz); // unsigned m1 >= mp
+    __m128i  c_mask = _mm_slli_epi16(mge_mask, 15); // clear not needed flag bits by shift
+    int mi = _mm_movemask_epi8(c_mask);  // collect flag bits
+    if (mi)
+    {
+        // alternative: int bsr_i= bm::bit_scan_fwd(mi) >> 1;
+        unsigned bc = _mm_popcnt_u32(mi); // gives us number of elements >= pos
+        return unroll_factor - bc;   // address of first one element (target)
+    }
+    // inspect the next lane with possible step back (to avoid over-read the block boundaries)
+    //   
+    const bm::gap_word_t* BMRESTRICT pbuf2 = pbuf + size - unroll_factor;
+
+    m1 = _mm_loadu_si128((__m128i*)(pbuf2)); // load next elements (with possible overlap)
+    mge_mask = _mm_cmpeq_epi16(_mm_subs_epu16(mp, m1), mz); // m1 >= mp
+        
+    BM_ASSERT(!_mm_test_all_zeros(mge_mask, mge_mask)); // something found
+
+    mi = _mm_movemask_epi8(_mm_slli_epi16(mge_mask, 15));
+    unsigned bc = _mm_popcnt_u32(mi); 
+
+    return size - bc;
+}
 
 } // namespace
 

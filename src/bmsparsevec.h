@@ -604,7 +604,7 @@ sparse_vector<Val, BV>::extract_range(value_type* arr,
             nbit = unsigned(k & bm::set_block_mask);
             if (is_gap)
             {
-                is_set = gap_test(BMGAP_PTR(blk), nbit);
+                is_set = bm::gap_test_unr(BMGAP_PTR(blk), nbit);
             }
             else
             {
@@ -806,22 +806,22 @@ sparse_vector<Val, BV>::get(bm::id_t i) const
 
         if ((blk = blka[0+0])!=0)
         {
-            unsigned is_set = (BM_IS_GAP(blk)) ? gap_test(BMGAP_PTR(blk), nbit) : (blk[nword] & mask0);
+            unsigned is_set = (BM_IS_GAP(blk)) ? bm::gap_test_unr(BMGAP_PTR(blk), nbit) : (blk[nword] & mask0);
             v |= (bool(is_set != 0) << (j+0));
         }
         if ((blk = blka[0+1])!=0)
         {
-            unsigned is_set = (BM_IS_GAP(blk)) ? gap_test(BMGAP_PTR(blk), nbit) : (blk[nword] & mask0);
+            unsigned is_set = (BM_IS_GAP(blk)) ? bm::gap_test_unr(BMGAP_PTR(blk), nbit) : (blk[nword] & mask0);
             v |= (bool(is_set != 0) << (j+1));
         }
         if ((blk = blka[0+2])!=0)
         {
-            unsigned is_set = (BM_IS_GAP(blk)) ? gap_test(BMGAP_PTR(blk), nbit) : (blk[nword] & mask0);
+            unsigned is_set = (BM_IS_GAP(blk)) ? bm::gap_test_unr(BMGAP_PTR(blk), nbit) : (blk[nword] & mask0);
             v |= (bool(is_set != 0) << (j+2));
         }
         if ((blk = blka[0+3])!=0)
         {
-            unsigned is_set = (BM_IS_GAP(blk)) ? gap_test(BMGAP_PTR(blk), nbit) : (blk[nword] & mask0);
+            unsigned is_set = (BM_IS_GAP(blk)) ? bm::gap_test_unr(BMGAP_PTR(blk), nbit) : (blk[nword] & mask0);
             v |= (bool(is_set != 0) << (j+3));
         }
 
