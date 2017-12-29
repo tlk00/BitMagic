@@ -547,13 +547,12 @@ unsigned gap_test_unr(const T* buf, const unsigned pos)
     {
         start = bm::sse4_gap_find(buf+1, (bm::gap_word_t)pos, dsize);
         unsigned res = ((*buf) & 1) ^ ((start) & 1);
-        BM_ASSERT(start != -1);
         BM_ASSERT(buf[start+1] >= pos);
         BM_ASSERT(buf[start] < pos || (start==0));
         BM_ASSERT(res == bm::gap_test(buf, pos));
         return res;
     }
-    else
+    unsigned arr_end = end;
     while (start != end)
     {
         unsigned curr = (start + end) >> 1;
@@ -561,6 +560,18 @@ unsigned gap_test_unr(const T* buf, const unsigned pos)
             start = curr + 1;
         else
             end = curr;
+
+        unsigned size = end - start;
+        if (size < 16)
+        {
+            size += (end != arr_end);
+            unsigned idx = bm::sse4_gap_find(buf + start, (bm::gap_word_t)pos, size);
+            start += idx;
+
+            BM_ASSERT(buf[start] >= pos);
+            BM_ASSERT(buf[start - 1] < pos || (start == 1));
+            break;
+        }
     }
     
     unsigned res = ((*buf) & 1) ^ ((--start) & 1);
