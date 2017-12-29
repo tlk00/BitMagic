@@ -1630,7 +1630,6 @@ void EmptyBVTest()
         bvect bv3(bv1 & bv2);
         bvect bv4 = (bv1 & bv2);
         
-        bvect bv5(bvect);
         std::vector< bvect > v;
         v.push_back(bvect());
     }
@@ -5123,8 +5122,50 @@ void GAPCheck()
 
 
    }
+}
 
+// -----------------------------------------------------------------------------
 
+void SimpleGapFillSets(bvect&   bv0,
+                       bvect&   bv1,
+                       unsigned min,
+                       unsigned max,
+                       unsigned fill_factor)
+{
+    for (unsigned i = min; i < max; i += fill_factor)
+    {
+        bv0.set(i);
+        bv1.set(i);
+    } // for i
+}
+
+void GAPTestStress()
+{
+    cout << "----------------------------------- GAP test stress " << endl;
+    const unsigned BV_SIZE = 65535 * 3;
+
+    for (unsigned ff = 64; ff < 10000; ff++)
+    {
+        bvect bv0, bv1;
+        SimpleGapFillSets(bv0, bv1, 0, BV_SIZE, ff);
+        bv1.optimize();
+        for (unsigned i = 0; i < BV_SIZE+1; ++i)
+        {
+            bool b0 = bv0.test(i);
+            bool b1 = bv1.test(i);
+            if (b0 != b1)
+            {
+                cerr << "GAP Test Stress failure!" << " FillFactor=" << ff << " bit=" << i << endl;
+                exit(1);
+            }
+        } // for i
+        if (ff % 100 == 0)
+        {
+            cout << "*" << flush;
+        }
+    } // for j
+
+    cout << "----------------------------------- GAP test stress " << endl;
 }
 
 // -----------------------------------------------------------------------------
@@ -9976,10 +10017,22 @@ void TestSIMDUtils()
     }
 
     {
-        unsigned short buf[16] = { 10, 65535, 127, 255, 256, 1000, 2000, 2001, 2005, 0xFF, };
+        unsigned short buf[16] = { 60000, 127, 255, 256, 1000, 2000, 2001, 2005, 0xFF, 0, };
+        idx = bm::sse4_gap_find(buf, 65535, 1);
+        assert(idx == 1);
+        idx = bm::sse4_gap_find(buf, 0, 1);
+        assert(idx == 0);
+        idx = bm::sse4_gap_find(buf, 10, 1);
+        assert(idx == 0);
+    }
+
+    {
+        unsigned short buf[16] = { 10, 65530, 127, 255, 256, 1000, 2000, 2001, 2005, 0xFF, };
         const unsigned vsize = 2;
         idx = bm::sse4_gap_find(buf, 0, vsize);
         assert(idx == 0);
+        idx = bm::sse4_gap_find(buf, 65535, vsize);
+        assert(idx == vsize);
         for (unsigned i = 0; i < vsize; ++i)
         {
             unsigned short v = buf[i];
@@ -9991,10 +10044,12 @@ void TestSIMDUtils()
     }
 
     {
-        unsigned short buf[16] = { 10, 256, 65535, 127, 255, 256, 1000, 2000, 2001, 2005, 0xFF, };
+        unsigned short buf[16] = { 10, 256, 65530, 127, 255, 256, 1000, 2000, 2001, 2005, 0xFF, };
         const unsigned vsize = 3;
         idx = bm::sse4_gap_find(buf, 0, vsize);
         assert(idx == 0);
+        idx = bm::sse4_gap_find(buf, 65535, vsize);
+        assert(idx == vsize);
         for (unsigned i = 0; i < vsize; ++i)
         {
             unsigned short v = buf[i];
@@ -10005,10 +10060,12 @@ void TestSIMDUtils()
         }
     }
     {
-        unsigned short buf[16] = { 10, 256, 258, 65535, 127, 255, 256, 1000, 2000, 2001, 2005, 0xFF, };
+        unsigned short buf[16] = { 10, 256, 258, 65500, 127, 255, 256, 1000, 2000, 2001, 2005, 0xFF, };
         const unsigned vsize = 4;
         idx = bm::sse4_gap_find(buf, 0, vsize);
         assert(idx == 0);
+        idx = bm::sse4_gap_find(buf, 65535, vsize);
+        assert(idx == vsize);
         for (unsigned i = 0; i < vsize; ++i)
         {
             unsigned short v = buf[i];
@@ -10020,10 +10077,14 @@ void TestSIMDUtils()
     }
     
     {
-        unsigned short buf[16] = { 10, 256, 258, 15525, 65535, 127, 255, 256, 1000, 2000, 2001, 2005, 0xFF, };
+//        unsigned short buf[16] = { 10, 256, 258, 15525, 64500, 127, 255, 256, 1000, 2000, 2001, 2005, 0xFF, };
+        unsigned short buf[16] = { 10, 20, 30, 40, 50, 127, 255, 256, 1000, 2000, 2001, 2005, 0xFF, };
         const unsigned vsize = 5;
         idx = bm::sse4_gap_find(buf, 0, vsize);
         assert(idx == 0);
+        idx = bm::sse4_gap_find(buf, 65535, vsize);
+        assert(idx == vsize);
+
         for (unsigned i = 0; i < vsize; ++i)
         {
             unsigned short v = buf[i];
@@ -10035,10 +10096,12 @@ void TestSIMDUtils()
     }
     
     {
-        unsigned short buf[127] = { 2, 10, 256, 258, 15525, 65535, 127, 255, 256, 1000, 2000, 2001, 2005, 0xFF, };
+        unsigned short buf[127] = { 2, 10, 256, 258, 15525, 65530, 127, 255, 256, 1000, 2000, 2001, 2005, 0xFF, };
         const unsigned vsize = 6;
         idx = bm::sse4_gap_find(buf, 0, vsize);
         assert(idx == 0);
+        idx = bm::sse4_gap_find(buf, 65535, vsize);
+        assert(idx == vsize);
         for (unsigned i = 0; i < vsize; ++i)
         {
             unsigned short v = buf[i];
@@ -10050,10 +10113,13 @@ void TestSIMDUtils()
     }
 
     {
-        unsigned short buf[16] = { 1, 2, 10, 256, 258, 15525, 65535, 127, 255, 256, 1000, 2000, 2001, 2005, 0xFF, };
+        unsigned short buf[16] = { 1, 2, 10, 256, 258, 15525, 65530, 127, 255, 256, 1000, 2000, 2001, 2005, 0xFF, };
         const unsigned vsize = 7;
         idx = bm::sse4_gap_find(buf, 0, vsize);
         assert(idx == 0);
+        idx = bm::sse4_gap_find(buf, 65535, vsize);
+        assert(idx == vsize);
+
         for (unsigned i = 0; i < vsize; ++i)
         {
             unsigned short v = buf[i];
@@ -10064,16 +10130,18 @@ void TestSIMDUtils()
         }
     }
     {
-    unsigned short buf[16] = { 1, 2, 10, 256, 258, 1024, 15525, 65535, 127, 255, 256, 0xFF, };
+    unsigned short buf[16] = { 1, 2, 10, 256,  258, 1024, 15525, 65530,  127, 255, 256, 0xFF, };
     const unsigned vsize = 8;
     idx = bm::sse4_gap_find(buf, 0, vsize);
     assert(idx == 0);
+    idx = bm::sse4_gap_find(buf, 65535, vsize);
+    assert(idx == vsize);
     for (unsigned i = 0; i < vsize; ++i)
     {
         unsigned short v = buf[i];
         if (i == vsize - 1)
         {
-            assert(v == 65535);
+            assert(v != 65535);
         }
         idx = bm::sse4_gap_find(buf, v, vsize);
         assert(idx == i);
@@ -10085,16 +10153,19 @@ void TestSIMDUtils()
     {
         unsigned short buf[16] = { 6217, 6300, 6400, 6500,  
                                    6600, 6700, 30584, 40255, 
-                                   50256, 60000, 61001, 65255, 65535, 12, 23, 0,  };
+                                   50256, 60000, 61001, 65255, 65530, 12, 23, 0,  };
         const unsigned vsize = 13;
         idx = bm::sse4_gap_find(buf, 0, vsize);
         assert(idx == 0);
+        idx = bm::sse4_gap_find(buf, 65535, vsize);
+        assert(idx == vsize);
+
         for (unsigned i = 0; i < vsize; ++i)
         {
             unsigned short v = buf[i];
             if (i == vsize - 1)
             {
-                assert(v == 65535);
+                assert(v != 65535);
             }
             idx = bm::sse4_gap_find(buf, v, vsize);
             assert(idx == i);
@@ -10107,16 +10178,18 @@ void TestSIMDUtils()
         unsigned short buf[16] = { 6217, 6300, 6400, 6500,
             6600, 6700, 30584, 40255,
             50256, 60000, 61001, 65255, 
-            65256, 65257, 65300, 65535  };
+            65256, 65257, 65300, 65530  };
         const unsigned vsize = 16;
         idx = bm::sse4_gap_find(buf, 0, vsize);
         assert(idx == 0);
+        idx = bm::sse4_gap_find(buf, 65535, vsize);
+        assert(idx == 16);
         for (unsigned i = 0; i < vsize; ++i)
         {
             unsigned short v = buf[i];
             if (i == vsize - 1)
             {
-                assert(v == 65535);
+                assert(v != 65535);
             }
             idx = bm::sse4_gap_find(buf, v, vsize);
             assert(idx == i);
@@ -10244,6 +10317,8 @@ int main(void)
      ClearAllTest();
 
      GAPCheck();
+
+     GAPTestStress();
 
      MaxSTest();
 
