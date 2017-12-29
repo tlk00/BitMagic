@@ -44,6 +44,8 @@ For more information please visit:  http://bitmagic.io
 #endif
 
 #include <vector>
+#include <random>
+#include <memory>
 
 #include "bm.h"
 #include "bmalgo.h"
@@ -64,6 +66,10 @@ const unsigned int REPEATS = 300;
 typedef  bitset<BSIZE>  test_bitset;
 
 unsigned platform_test = 1;
+
+std::random_device rand_dev;
+std::mt19937 gen(rand_dev()); // mersenne_twister_engine 
+std::uniform_int_distribution<> rand_dis(0, BSIZE); // generate uniform numebrs for [1, vector_max]
 
 
 class TimeTaker
@@ -391,6 +397,58 @@ void BitCountSparseTest()
 }
 
 
+void BitTestSparseTest()
+{
+    auto_ptr<bvect>  bv0(new bvect(bm::BM_GAP));
+    auto_ptr<bvect>  bv1(new bvect());
+    auto_ptr<bvect>  bv2(new bvect());
+    auto_ptr<test_bitset>  bset0(new test_bitset());
+    auto_ptr<test_bitset>  bset1(new test_bitset());
+    auto_ptr<test_bitset>  bset2(new test_bitset());
+
+    const unsigned repeats = REPEATS * 300000;
+
+    size_t value = 0, c1;
+    volatile size_t* p = &value;
+
+    SimpleFillSets(*bset0, *bv0, 0, BSIZE, 9530);
+    SimpleFillSets(*bset1, *bv1, 0, BSIZE, 1000);
+    SimpleFillSets(*bset2, *bv2, 0, BSIZE, 120);
+
+
+//    if (0)
+    {
+        TimeTaker tt("BitTest: Sparse bitset ", repeats);
+        for (unsigned i = 0; i < repeats; ++i)
+        {
+            unsigned idx = rand_dis(gen);
+            value += bv0->test(idx);
+            value += bv1->test(idx);
+            value += bv2->test(idx);
+        }
+    }
+
+
+    c1 = *p;
+    value = c1 = 0;
+
+    BM_DECLARE_TEMP_BLOCK(tb)
+    bv0->optimize(tb);
+    bv1->optimize(tb);
+    bv2->optimize(tb);
+
+    {
+        TimeTaker tt("BitTest: Sparse bitset (GAP) ", repeats);
+        for (unsigned i = 0; i < repeats; ++i)
+        {
+            unsigned idx = rand_dis(gen);
+            value += bv0->test(idx);
+            value += bv1->test(idx);
+            value += bv2->test(idx);
+        }
+    }
+
+}
 
 
 
@@ -1538,6 +1596,8 @@ int main(void)
     BitCountSparseTest();
 
     BitForEachTest();
+
+    BitTestSparseTest();
 
     BitCompareTest();
 
