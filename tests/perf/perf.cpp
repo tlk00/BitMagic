@@ -416,9 +416,8 @@ void BitTestSparseTest()
     SimpleFillSets(*bset2, *bv2, 0, BSIZE, 120);
 
 
-//    if (0)
     {
-        TimeTaker tt("BitTest: Sparse bitset ", repeats);
+        TimeTaker tt("BitTest: bitset ", repeats);
         for (unsigned i = 0; i < repeats; ++i)
         {
             unsigned idx = rand_dis(gen);
