@@ -41,6 +41,7 @@ For more information please visit:  http://bitmagic.io
 #define BM_ERR_RANGE (3)
 #define BM_ERR_DETACHED (4)
 #define BM_ERR_JVM_NOT_SUPPORTED (5)
+#define BM_ERR_OUT_OF_MEMORY (6)
 
 /*
     error codes and messages
@@ -51,6 +52,7 @@ For more information please visit:  http://bitmagic.io
 #define BM_ERR_RANGE_MSG    "BM-03: Incorrect range or index"
 #define BM_ERR_DETACHED_MSG    "BM-04: Current thread no attached to JVM"
 #define BM_ERR_JVM_NOT_SUPPORTED_MSG    "BM-05: JVM version not supported"
+#define BM_ERR_OUT_OF_MEMORY_MSG    "BM-06: Out of memory error"
 
 #define BM_UNK_MSG          "BM-XX: Unknown error"
 

@@ -128,7 +128,7 @@ JNIEXPORT void JNICALL Java_io_bitmagic_core_BVector0_setSize0
  */
 JNIEXPORT void JNICALL Java_io_bitmagic_core_BVector0_set0
 (JNIEnv *env, jobject obj, jlong ptr, jlong idx, jboolean bit) {
-  exec(BM_bvector_set_bit((BM_BVHANDLE)ptr, (unsigned int)idx, bit ? 1 : 0));
+  exec(BM_bvector_set_bit((BM_BVHANDLE)ptr, (unsigned int)idx, bit & 1));
 }
 
 /*
@@ -376,10 +376,15 @@ JNIEXPORT void JNICALL Java_io_bitmagic_core_BVector0_xor0
 */
 JNIEXPORT void JNICALL Java_io_bitmagic_core_BVector0_deserialize0
 (JNIEnv *env, jclass obj, jlong ptr, jbyteArray ba) {
+  void *start = (*env)->GetPrimitiveArrayCritical(env, ba, 0);
+  if (start == NULL) {
+    jclass ex = (*env)->FindClass(env, "java/lang/OutOfMemoryError");
+    (*env)->ThrowNew(env, ex, "Out of memory error in native call deserailize0()");
+    return 0;
+  }
   jsize size = (*env)->GetArrayLength(env, ba);
-  jbyte *start = (*env)->GetByteArrayElements(env, ba, 0);
   exec(BM_bvector_deserialize((BM_BVHANDLE)ptr, (const char*)start, size));
-  (*env)->ReleaseByteArrayElements(env, ba, start, JNI_ABORT); // The array is read-only
+  (*env)->ReleasePrimitiveArrayCritical(env, ba, start, JNI_ABORT); // The array is read-only
 }
 
 /*
@@ -389,12 +394,17 @@ JNIEXPORT void JNICALL Java_io_bitmagic_core_BVector0_deserialize0
 */
 JNIEXPORT jlong JNICALL Java_io_bitmagic_core_BVector0_serialize0
 (JNIEnv *env, jclass obj, jlong ptr, jbyteArray ba) {
+  void *start = (*env)->GetPrimitiveArrayCritical(env, ba, 0);
+  if (start == NULL) {
+    jclass ex = (*env)->FindClass(env, "java/lang/OutOfMemoryError"); 
+    (*env)->ThrowNew(env, ex, "Out of memory error in native call serailize0()");
+    return 0;
+  }
   jsize size = (*env)->GetArrayLength(env, ba);
-  jbyte *start = (*env)->GetByteArrayElements(env, ba, 0);
   size_t actualSize;
 
   exec(BM_bvector_serialize((BM_BVHANDLE)ptr, start, size, &actualSize));
-  (*env)->ReleaseByteArrayElements(env, ba, start, 0); 
+  (*env)->ReleasePrimitiveArrayCritical(env, ba, start, 0); 
   return actualSize;
 }
 

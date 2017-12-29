@@ -38,7 +38,8 @@ For more information please visit:  http://bmagic.sourceforge.net
 #define DEADBEEF 0xdeadbeefdeadbeef
 
 struct Jalloc {
-  jlongArray ja;
+//  jlongArray ja;
+  jbyteArray ja;
   jobject ref;
   jsize sz;
 };
@@ -48,7 +49,7 @@ static JavaVM *cached_jvm = 0;
 JNIEXPORT jint JNICALL
 JNI_OnLoad(JavaVM *jvm, void *reserved)
 {
-  cached_jvm = jvm;
+  cached_jvm = 0; // disable java allocations
   return JNI_VERSION_1_8;
 }
 
@@ -66,28 +67,87 @@ static JNIEnv* JNU_GetEnv() {
 namespace libbm
 {
 
+//static void * array_alloc(int shift, size_t n) {
+//  //printf("Shift: %d\n", shift);
+//  if (shift < 0)
+//    THROW(BM_ERR_BADALLOC);
+//
+//  JNIEnv *env = JNU_GetEnv();
+//  jsize sz = (n >> shift) + 1 + (sizeof(Jalloc) >> 3) + 1 + 1; // The last one for overrun check
+//                                                               //printf("Size to allocate: %d\n", sz);
+//  jlongArray ja = env->NewLongArray(sz);
+//  if (ja == NULL) {
+//    printf("Could not allocate %d units.", n);
+//    THROW(BM_ERR_BADALLOC);
+//  }
+//  
+//  jlong *jlongbuf = env->GetLongArrayElements(ja, 0);
+//  if (jlongbuf == NULL)
+//    THROW(BM_ERR_BADALLOC);
+//  
+//  // Put the marker
+//  jlongbuf[sz - 1] = 1;
+//
+//  Jalloc *pJalloc = reinterpret_cast<Jalloc*>(jlongbuf);
+//  pJalloc->ref = env->NewGlobalRef(ja);
+//  if (pJalloc->ref == NULL)
+//    THROW(BM_ERR_BADALLOC);
+//  pJalloc->ja = ja;
+//  pJalloc->sz = sz;
+//
+//  //printf("Requested %d, allocated %p of size %d, with marker 0x%llx, ref %p, ja %p\n", n, jlongbuf, sz, jlongbuf[sz - 1], pJalloc->ref, ja);
+//  return static_cast<void*>(jlongbuf);
+//}
+
+//static void jni_free(void *p) {
+//  if (p != 0) {
+//    jlong *buffer = reinterpret_cast<jlong*>(static_cast<char*>(p) - sizeof(Jalloc));
+//    //printf("Freeing %p\n", buffer);
+//    Jalloc *pJalloc = reinterpret_cast<Jalloc*>(buffer);
+//    if (pJalloc->ref) {
+//      JNIEnv *env = JNU_GetEnv();
+//      // Check marker
+//      //     jsize sz = env->GetArrayLength(pJalloc->ja);
+//      jsize sz = pJalloc->sz;
+//      switch (buffer[sz - 1]) {
+//      case 1L:
+//        --buffer[sz - 1];
+//        env->DeleteGlobalRef(pJalloc->ref);
+//        env->ReleaseLongArrayElements(pJalloc->ja, buffer, 0);
+//        printf("Released at %p\n", buffer);
+//        break;
+//      case 0:
+//        printf("Double deletion at %p\n", buffer);
+//        break;
+//      default:
+//        printf("Memory corruption 0x%llx at %p\n", buffer[sz - 1], buffer);
+//      }
+//    }
+//  }
+//}
+  
 static void * array_alloc(int shift, size_t n) {
   //printf("Shift: %d\n", shift);
   if (shift < 0)
     THROW(BM_ERR_BADALLOC);
 
   JNIEnv *env = JNU_GetEnv();
-  jsize sz = (n >> shift) + 1 + (sizeof(Jalloc) >> 3) + 1 + 1; // The last one for overrun check
-  //printf("Size to allocate: %d\n", sz);
-  jlongArray ja = env->NewLongArray(sz);
+  jsize sz = n + sizeof(Jalloc) + 1; // The last one for overrun check
+  printf("Sizes to allocate: n: %d, Jalloc: %d, total: %d\n", n, sizeof(Jalloc), sz);
+  jbyteArray ja = env->NewByteArray(sz);
   if (ja == NULL) {
     printf("Could not allocate %d units.", n);
     THROW(BM_ERR_BADALLOC);
   }
-  
-  jlong *jlongbuf = env->GetLongArrayElements(ja, 0);
-  if (jlongbuf == NULL)
-    THROW(BM_ERR_BADALLOC);
-  
-  // Put the marker
-  jlongbuf[sz - 1] = 1L;
 
-  Jalloc *pJalloc = reinterpret_cast<Jalloc*>(jlongbuf);
+  jbyte *jbuf = env->GetByteArrayElements(ja, 0);
+  if (jbuf == NULL)
+    THROW(BM_ERR_BADALLOC);
+
+  // Put the marker
+  jbuf[sz - 1] = 1;
+
+  Jalloc *pJalloc = reinterpret_cast<Jalloc*>(jbuf);
   pJalloc->ref = env->NewGlobalRef(ja);
   if (pJalloc->ref == NULL)
     THROW(BM_ERR_BADALLOC);
@@ -95,10 +155,37 @@ static void * array_alloc(int shift, size_t n) {
   pJalloc->sz = sz;
 
   //printf("Requested %d, allocated %p of size %d, with marker 0x%llx, ref %p, ja %p\n", n, jlongbuf, sz, jlongbuf[sz - 1], pJalloc->ref, ja);
-  return static_cast<void*>(jlongbuf);
+  return static_cast<void*>(jbuf);
 }
 
-template<typename T> 
+static void jni_free(void *p) {
+  if (p != 0) {
+    jbyte *buffer = reinterpret_cast<jbyte*>(static_cast<char*>(p) - sizeof(Jalloc));
+    //printf("Freeing %p\n", buffer);
+    Jalloc *pJalloc = reinterpret_cast<Jalloc*>(buffer);
+    if (pJalloc->ref) {
+      JNIEnv *env = JNU_GetEnv();
+      // Check marker
+      //     jsize sz = env->GetArrayLength(pJalloc->ja);
+      jsize sz = pJalloc->sz;
+      switch (buffer[sz - 1]) {
+      case 1:
+        --buffer[sz - 1];
+        env->DeleteGlobalRef(pJalloc->ref);
+        env->ReleaseByteArrayElements(pJalloc->ja, buffer, 0);
+        printf("Released size %d at %p\n", sz, buffer);
+        break;
+      case 0:
+        printf("Double deletion, size %d at %p\n", sz, buffer);
+        break;
+      default:
+        printf("Memory corruption, size %d,  0x%x at %p\n", sz, buffer[sz - 1], buffer);
+      }
+    }
+  }
+}
+  
+template<typename T>
 T* jni_alloc(size_t n) {
 //  printf("Allocating %d units in %s\n", n, __FUNCSIG__);
   //printf("Size of T: %d\n", LOG2(sizeof(T)));
@@ -106,7 +193,9 @@ T* jni_alloc(size_t n) {
   // Java long size is 8 bytes
   int shift = LOG2(SIZE_OF_JAVA_LONG) - LOG2(sizeof(T));
   void* jbuffer = array_alloc(shift, n);
-  return reinterpret_cast<T*>(static_cast<char*>(jbuffer) + sizeof(Jalloc));
+  void *mem = static_cast<char*>(jbuffer) + sizeof(Jalloc);
+  fprintf(stderr, "Allocated %d at %p\n", n, mem);
+  return reinterpret_cast<T*>(mem);
 }
 
 template <> 
@@ -114,37 +203,13 @@ void* jni_alloc(size_t n) {
   //printf("Allocating %d units in %s\n", n, __FUNCSIG__);
   int shift = LOG2(SIZE_OF_JAVA_LONG) - LOG2(sizeof(void*));
   void* jbuffer = array_alloc(shift, n);
-  return static_cast<void*>(static_cast<char*>(jbuffer) + sizeof(Jalloc));
+  void *mem = static_cast<char*>(jbuffer) + sizeof(Jalloc);
+  fprintf(stderr, "Allocated %d at %p\n", n, mem);
+  return mem;
 }
 
 
 
-static void jni_free(void *p) {
-  if (p != 0) {
-    jlong *buffer = reinterpret_cast<jlong*>(static_cast<char*>(p) - sizeof(Jalloc));
-    //printf("Freeing %p\n", buffer);
-    Jalloc *pJalloc = reinterpret_cast<Jalloc*>(buffer);
-    if (pJalloc->ref) {
-      JNIEnv *env = JNU_GetEnv();
-      // Check marker
- //     jsize sz = env->GetArrayLength(pJalloc->ja);
-      jsize sz = pJalloc->sz;
-      switch(buffer[sz - 1]) {
-      case 1L:
-        --buffer[sz - 1];
-        env->DeleteGlobalRef(pJalloc->ref);
-        env->ReleaseLongArrayElements(pJalloc->ja, buffer, 0);
-        printf("Released at %p\n", buffer);
-        break;
-      case 0:
-        printf("Double deletion at %p\n", buffer);
-        break;
-      default:
-        printf("Memory corruption 0x%llx at %p\n", buffer[sz - 1], buffer);
-      }
-    }
-  }
-}
 
 class block_allocator
 {
