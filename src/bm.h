@@ -2154,34 +2154,25 @@ bool bvector<Alloc>::get_bit(bm::id_t n) const
 {    
     BM_ASSERT(n < size_);
 
-    if (!blockman_.is_init())
-        return false;
-
     // calculate logical block number
     unsigned nblock = unsigned(n >>  bm::set_block_shift); 
-
-    const bm::word_t* block = blockman_.get_block(nblock);
-    if (IS_FULL_BLOCK(block))
-        return true;
+    const bm::word_t* block = blockman_.get_block_ptr(nblock); // get unsanitized block ptr
 
     if (block)
     {
         // calculate word number in block and bit
         unsigned nbit = unsigned(n & bm::set_block_mask); 
-        unsigned is_set;
-
         if (BM_IS_GAP(block))
         {
-            is_set = gap_test_unr(BMGAP_PTR(block), nbit);
+            return gap_test_unr(BMGAP_PTR(block), nbit);
         }
         else 
         {
-            unsigned nword  = unsigned(nbit >> bm::set_word_shift); 
-            nbit &= bm::set_word_mask;
-
-            is_set = (block[nword] & (((bm::word_t)1) << nbit));
+            block = BLOCK_ADDR_SAN(block); // FULL BLOCK ADDR check
+            unsigned nword  = unsigned(nbit >> bm::set_word_shift);
+            unsigned w = block[nword];
+            return w & (1u << (nbit & bm::set_word_mask));
         }
-        return is_set != 0;
     }
     return false;
 }
