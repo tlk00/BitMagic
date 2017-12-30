@@ -10002,7 +10002,203 @@ void deser_test()
 void TestSIMDUtils()
 {
     cout << "------------------------ Test SIMD Utils" << endl;
-    
+#if defined(BMSSE2OPT)
+    unsigned idx;
+    cout << "----------------------------> [ SSE2 ]" << endl;
+    {
+        unsigned short buf[127] = { 65535, 127, 255, 256, 1000, 2000, 2001, 2005, 0xFF, 0, };
+        idx = bm::sse2_gap_find(buf, 65535, 1);
+        assert(idx == 0);
+        idx = bm::sse2_gap_find(buf, 0, 1);
+        assert(idx == 0);
+        idx = bm::sse2_gap_find(buf, 10, 1);
+        assert(idx == 0);
+    }
+
+    {
+        unsigned short buf[16] = { 60000, 127, 255, 256, 1000, 2000, 2001, 2005, 0xFF, 0, };
+        idx = bm::sse2_gap_find(buf, 65535, 1);
+        assert(idx == 1);
+        idx = bm::sse2_gap_find(buf, 0, 1);
+        assert(idx == 0);
+        idx = bm::sse2_gap_find(buf, 10, 1);
+        assert(idx == 0);
+    }
+
+    {
+        unsigned short buf[16] = { 10, 65530, 127, 255, 256, 1000, 2000, 2001, 2005, 0xFF, };
+        const unsigned vsize = 2;
+        idx = bm::sse2_gap_find(buf, 0, vsize);
+        assert(idx == 0);
+        idx = bm::sse2_gap_find(buf, 65535, vsize);
+        assert(idx == vsize);
+        for (unsigned i = 0; i < vsize; ++i)
+        {
+            unsigned short v = buf[i];
+            idx = bm::sse2_gap_find(buf, v, vsize);
+            assert(idx == i);
+            idx = bm::sse2_gap_find(buf, v - 1, vsize);
+            assert(idx == i);
+        }
+    }
+
+    {
+        unsigned short buf[16] = { 10, 256, 65530, 127, 255, 256, 1000, 2000, 2001, 2005, 0xFF, };
+        const unsigned vsize = 3;
+        idx = bm::sse2_gap_find(buf, 0, vsize);
+        assert(idx == 0);
+        idx = bm::sse2_gap_find(buf, 65535, vsize);
+        assert(idx == vsize);
+        for (unsigned i = 0; i < vsize; ++i)
+        {
+            unsigned short v = buf[i];
+            idx = bm::sse2_gap_find(buf, v, vsize);
+            assert(idx == i);
+            idx = bm::sse2_gap_find(buf, v - 1, vsize);
+            assert(idx == i);
+        }
+    }
+    {
+        unsigned short buf[16] = { 10, 256, 258, 65500, 127, 255, 256, 1000, 2000, 2001, 2005, 0xFF, };
+        const unsigned vsize = 4;
+        idx = bm::sse2_gap_find(buf, 0, vsize);
+        assert(idx == 0);
+        idx = bm::sse2_gap_find(buf, 65535, vsize);
+        assert(idx == vsize);
+        for (unsigned i = 0; i < vsize; ++i)
+        {
+            unsigned short v = buf[i];
+            idx = bm::sse2_gap_find(buf, v, vsize);
+            assert(idx == i);
+            idx = bm::sse2_gap_find(buf, v - 1, vsize);
+            assert(idx == i);
+        }
+    }
+
+    {
+        //        unsigned short buf[16] = { 10, 256, 258, 15525, 64500, 127, 255, 256, 1000, 2000, 2001, 2005, 0xFF, };
+        unsigned short buf[16] = { 10, 20, 30, 40, 50, 127, 255, 256, 1000, 2000, 2001, 2005, 0xFF, };
+        const unsigned vsize = 5;
+        idx = bm::sse2_gap_find(buf, 0, vsize);
+        assert(idx == 0);
+        idx = bm::sse2_gap_find(buf, 65535, vsize);
+        assert(idx == vsize);
+
+        for (unsigned i = 0; i < vsize; ++i)
+        {
+            unsigned short v = buf[i];
+            idx = bm::sse2_gap_find(buf, v, vsize);
+            assert(idx == i);
+            idx = bm::sse2_gap_find(buf, v - 1, vsize);
+            assert(idx == i);
+        }
+    }
+
+    {
+        unsigned short buf[127] = { 2, 10, 256, 258, 15525, 65530, 127, 255, 256, 1000, 2000, 2001, 2005, 0xFF, };
+        const unsigned vsize = 6;
+        idx = bm::sse2_gap_find(buf, 0, vsize);
+        assert(idx == 0);
+        idx = bm::sse2_gap_find(buf, 65535, vsize);
+        assert(idx == vsize);
+        for (unsigned i = 0; i < vsize; ++i)
+        {
+            unsigned short v = buf[i];
+            idx = bm::sse2_gap_find(buf, v, vsize);
+            assert(idx == i);
+            idx = bm::sse2_gap_find(buf, v - 1, vsize);
+            assert(idx == i);
+        }
+    }
+
+    {
+        unsigned short buf[16] = { 1, 2, 10, 256, 258, 15525, 65530, 127, 255, 256, 1000, 2000, 2001, 2005, 0xFF, };
+        const unsigned vsize = 7;
+        idx = bm::sse2_gap_find(buf, 0, vsize);
+        assert(idx == 0);
+        idx = bm::sse2_gap_find(buf, 65535, vsize);
+        assert(idx == vsize);
+
+        for (unsigned i = 0; i < vsize; ++i)
+        {
+            unsigned short v = buf[i];
+            idx = bm::sse2_gap_find(buf, v, vsize);
+            assert(idx == i);
+            idx = bm::sse2_gap_find(buf, v - 1, vsize);
+            assert(idx == i || (buf[i - 1] == v - 1));
+        }
+    }
+    {
+        unsigned short buf[16] = { 1, 2, 10, 256,  258, 1024, 15525, 65530,  127, 255, 256, 0xFF, };
+        const unsigned vsize = 8;
+        idx = bm::sse2_gap_find(buf, 0, vsize);
+        assert(idx == 0);
+        idx = bm::sse2_gap_find(buf, 65535, vsize);
+        assert(idx == vsize);
+        for (unsigned i = 0; i < vsize; ++i)
+        {
+            unsigned short v = buf[i];
+            if (i == vsize - 1)
+            {
+                assert(v != 65535);
+            }
+            idx = bm::sse2_gap_find(buf, v, vsize);
+            assert(idx == i);
+            idx = bm::sse2_gap_find(buf, v - 1, vsize);
+            assert(idx == i || (buf[i - 1] == v - 1));
+        }
+    }
+
+    {
+        unsigned short buf[16] = { 6217, 6300, 6400, 6500,
+            6600, 6700, 30584, 40255,
+            50256, 60000, 61001, 65255, 65530, 12, 23, 0, };
+        const unsigned vsize = 13;
+        idx = bm::sse2_gap_find(buf, 0, vsize);
+        assert(idx == 0);
+        idx = bm::sse2_gap_find(buf, 65535, vsize);
+        assert(idx == vsize);
+
+        for (unsigned i = 0; i < vsize; ++i)
+        {
+            unsigned short v = buf[i];
+            if (i == vsize - 1)
+            {
+                assert(v != 65535);
+            }
+            idx = bm::sse2_gap_find(buf, v, vsize);
+            assert(idx == i);
+            idx = bm::sse2_gap_find(buf, v - 1, vsize);
+            assert(idx == i || (buf[i - 1] == v - 1));
+        }
+    }
+
+    {
+        unsigned short buf[16] = { 6217, 6300, 6400, 6500,
+            6600, 6700, 30584, 40255,
+            50256, 60000, 61001, 65255,
+            65256, 65257, 65300, 65530 };
+        const unsigned vsize = 16;
+        idx = bm::sse2_gap_find(buf, 0, vsize);
+        assert(idx == 0);
+        idx = bm::sse2_gap_find(buf, 65535, vsize);
+        assert(idx == 16);
+        for (unsigned i = 0; i < vsize; ++i)
+        {
+            unsigned short v = buf[i];
+            if (i == vsize - 1)
+            {
+                assert(v != 65535);
+            }
+            idx = bm::sse2_gap_find(buf, v, vsize);
+            assert(idx == i);
+            idx = bm::sse2_gap_find(buf, v - 1, vsize);
+            assert(idx == i || (buf[i - 1] == v - 1));
+        }
+    }
+
+#endif
+
 #if defined(BMSSE42OPT)
     unsigned idx;
     cout << "----------------------------> [ SSE 4.2 ]" << endl;
