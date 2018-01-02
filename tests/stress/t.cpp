@@ -57,6 +57,7 @@ For more information please visit:  http://bitmagic.io
 #include <bmsparsevec_algo.h>
 #include <bmsparsevec_serial.h>
 #include <bmalgo_similarity.h>
+#include <bmsparsevec_util.h>
 
 using namespace bm;
 using namespace std;
@@ -10398,6 +10399,51 @@ void TestSIMDUtils()
     cout << "------------------------ Test SIMD Utils OK" << endl;
 }
 
+void AddressResolverTest()
+{
+    bm::id_t id_to;
+    bool found;
+    
+    {
+    bvps_addr_resolver<bvect>  ares;
+    
+    found = ares.resolve(10, &id_to);
+    assert(!found);
+    assert(id_to == ~0u);
+    }
+
+    {
+    bvps_addr_resolver<bvect>  ares;
+    
+    ares.set(1000);
+    ares.set(10000);
+    ares.set(100000);
+    
+    found = ares.resolve(10, &id_to);
+    assert(!found);
+    assert(id_to == ~0u);
+
+    found = ares.resolve(100000, &id_to);
+    assert(found);
+    assert(id_to == 3);
+    
+    assert(ares.in_sync() == false);
+    
+    ares.optimize();
+    assert(ares.in_sync() == false);
+    
+    ares.sync();
+    assert(ares.in_sync());
+
+    found = ares.resolve(100000, &id_to);
+    assert(found);
+    assert(id_to == 3);
+
+    }
+
+    
+}
+
 
 
 int main(void)
@@ -10513,13 +10559,15 @@ int main(void)
      ClearAllTest();
 
      GAPCheck();
+    
+     AddressResolverTest();
 
      GAPTestStress();
 
      MaxSTest();
 
      GetNextTest();
-
+    
      SimpleRandomFillTest();
      
      RangeRandomFillTest();
