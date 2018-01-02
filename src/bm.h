@@ -952,12 +952,22 @@ public:
         {}
     };
     
-    /*! @brief structure for bit counts per block.
+    /*! @brief structure for bit counts per block (prefix sum)
         Structure is used to accelerate bit range scans
     */
     struct blocks_count
     {
         unsigned  BM_VECT_ALIGN cnt[bm::set_total_blocks] BM_VECT_ALIGN_ATTR;
+        
+        blocks_count() {}
+        blocks_count(const blocks_count& bc)
+        {
+            copy_from(bc);
+        }
+        void copy_from(const blocks_count& bc)
+        {
+            ::memcpy(this->cnt, bc.cnt, sizeof(this->cnt));
+        }
     };
 
 public:
