@@ -1100,10 +1100,10 @@ const bm::gap_word_t* avx2_gap_sum_arr(const bm::gap_word_t* BMRESTRICT pbuf,
     // overflow is not an issue here
     for (unsigned i = 0; i < avx_vect_waves; ++i)
     {
-        __m256i xmm0 = _mm256_loadu_si256((__m256i*)(pbuf - 1));
-        __m256i xmm1 = _mm256_loadu_si256((__m256i*)(pbuf + 16 - 1));
-        __m256i xmm_s2 = _mm256_add_epi16(xmm1, xmm0);
-        xcnt = _mm256_add_epi16(xcnt, xmm_s2);
+        __m256i ymm0 = _mm256_loadu_si256((__m256i*)(pbuf - 1));
+        __m256i ymm1 = _mm256_loadu_si256((__m256i*)(pbuf + 16 - 1));
+        __m256i ymm_s2 = _mm256_add_epi16(ymm1, ymm0);
+        xcnt = _mm256_add_epi16(xcnt, ymm_s2);
         pbuf += 32;
     }
     // odd minus even vector elements clears the result for 1111 blocks
