@@ -751,11 +751,27 @@ public:
                 // use iterative increment for GAP block positioning
                 // TODO: optimization
                 this->position_ = nb * bm::set_block_size * 32;
-                search_in_gapblock();                
+                search_in_gapblock();
+                
+                
                 while (this->position_ != pos)
                 {
                     go_up();
                 }
+                
+                /*
+                if (this->position_ == pos)
+                {
+                    return *this;
+                }
+                gap_word_t* gptr = BMGAP_PTR(this->block_);
+                unsigned is_set;
+                unsigned gpos = bm::gap_bfind(gptr, nbit, &is_set);
+                BM_ASSERT(is_set);
+                
+                bdescr->gap_.ptr = gptr + gpos;
+                bdescr->gap_.gap_len = gptr[gpos] - gptr[gpos-1] - nbit;
+                */
             }
             else // bit
             {
