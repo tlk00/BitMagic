@@ -141,8 +141,16 @@ public:
                 break;
             case ct_ops_per_sec:
                 {
-                unsigned ops = unsigned(((double)st.repeats / (double)it->second.duration.count()) * 1000);
-                std::cout << it->first << "; " << ops << " ops/sec" << std::endl;
+                unsigned iops = (unsigned)((double)st.repeats / (double)it->second.duration.count()) * 1000;
+                if (iops)
+                {
+                    std::cout << it->first << "; " << iops << " ops/sec" << std::endl;
+                }
+                else
+                {
+                    double ops = ((double)st.repeats / (double)it->second.duration.count()) * 1000;
+                    std::cout << it->first << "; " << std::setprecision(4) << ops << " ops/sec" << std::endl;
+                }
                 }
                 break;
             default:
