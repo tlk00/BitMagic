@@ -765,12 +765,12 @@ public:
                 bdescr->gap_.ptr = gptr + gpos;
                 if (gpos == 1)
                 {
-                    bdescr->gap_.gap_len = gptr[gpos] - (nbit - 1);
+                    bdescr->gap_.gap_len = gptr[gpos] - bm::gap_word_t(nbit - 1);
                 }
                 else
                 {
                     bm::gap_word_t interval = gptr[gpos] - gptr[gpos - 1];
-                    bm::gap_word_t interval2 = nbit - gptr[gpos - 1];
+                    bm::gap_word_t interval2 = (bm::gap_word_t)(nbit - gptr[gpos - 1]);
                     bdescr->gap_.gap_len = interval - interval2 + 1;
                 }
             }

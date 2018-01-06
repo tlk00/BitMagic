@@ -67,6 +67,7 @@ public:
         for (size_t i = 0; i < DMD_SZ; ++i)
             dmd_[i] = dmd_ptr[i];
     }
+
     similarity_descriptor(const SO* so1, IDX_VALUE i1,
                           const SO* so2, IDX_VALUE i2,
                           const distance_metric_descriptor* dmd_ptr)
@@ -210,9 +211,7 @@ void build_jaccard_similarity_batch(SIMBATCH& sbatch, const SV& sv)
                 const typename SV::bvector_type* bv2 = sv.plain(j);
                 if (bv2 && bv1 != bv2)
                 {
-                    typename
-                    SIMBATCH::similaruty_descriptor_type sdescr(bv1, i, bv2, j, &dmd[0]);
-                    sbatch.push_back(sdescr);
+                    sbatch.push_back(typename SIMBATCH::similaruty_descriptor_type(bv1, i, bv2, j, &dmd[0]));
                 }
             } // for j
         }
