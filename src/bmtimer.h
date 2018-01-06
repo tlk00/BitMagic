@@ -33,6 +33,7 @@ For more information please visit:  http://bitmagic.io
 // BitMagic timing functions (internal header)
 
 #include <iostream>
+#include <iomanip>
 #include <string>
 #include <map>
 #include <chrono>
