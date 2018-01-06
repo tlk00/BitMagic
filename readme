@@ -43,6 +43,11 @@ MacOS
 
 XCODE - project files are available via CMAKE generation
 
+=================================================================================
+
+API documentation and examples:
+http://www.bitmagic.io/apis.html
+
 
 Fine tuning and optimizations:
 ------------------------------
