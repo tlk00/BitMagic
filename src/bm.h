@@ -2020,32 +2020,37 @@ template<typename Alloc>
 bm::id_t bvector<Alloc>::count_to(bm::id_t right,
                                   const blocks_count&  blocks_cnt) const
 {
-    unsigned nblock_right = unsigned(right >>  bm::set_block_shift);
-    if (nblock_right == 0)
-        return count_range(0, right);
-
     if (!blockman_.is_init())
         return 0;
-    
+
+    unsigned nblock_right = unsigned(right >>  bm::set_block_shift);    
     unsigned nbit_right = unsigned(right & bm::set_block_mask);
 
     // running count of all blocks before target
-    bm::id_t cnt = blocks_cnt.cnt[nblock_right-1];
+    //
+    bm::id_t cnt = nblock_right ? blocks_cnt.cnt[nblock_right-1] : 0;
 
-    const bm::word_t* block = blockman_.get_block(nblock_right);
+    const bm::word_t* block = blockman_.get_block_ptr(nblock_right);
     if (!block)
         return cnt;
-    bool gap = BM_IS_GAP(block);
 
-    if (gap)
+    if (block == FULL_BLOCK_FAKE_ADDR) 
     {
-        unsigned c = bm::gap_bit_count_to(BMGAP_PTR(block),(gap_word_t)nbit_right);
-        BM_ASSERT(c == bm::gap_bit_count_range(BMGAP_PTR(block), (gap_word_t)0, (gap_word_t)nbit_right));
-        cnt += c;
+        cnt += nbit_right + 1;
     }
     else
     {
-        cnt += bm::bit_block_calc_count_to(block, nbit_right);
+        bool gap = BM_IS_GAP(block);
+        if (gap)
+        {
+            unsigned c = bm::gap_bit_count_to(BMGAP_PTR(block), (gap_word_t)nbit_right);
+            BM_ASSERT(c == bm::gap_bit_count_range(BMGAP_PTR(block), (gap_word_t)0, (gap_word_t)nbit_right));
+            cnt += c;
+        }
+        else
+        {
+            cnt += bm::bit_block_calc_count_to(block, nbit_right);
+        }
     }
 
     return cnt;
