@@ -8203,6 +8203,11 @@ void VerifyCountRange(const bvect& bv,
         bm::id_t cnt2 = bv.count_to(i, bc_arr);
         
         assert(cnt1 == cnt2);
+        if (cnt1 != cnt2)
+        {
+            cerr << "VerifyCountRange failed!" << " count_range()=" << cnt1
+                << " count_to()=" << cnt2 << endl;
+        }
     }
 }
 
@@ -8263,7 +8268,18 @@ void CountRangeTest()
     
     }}
 
-    
+    cout << "check inverted bvector" << endl;
+    {{
+            bvect bv1;
+            
+            bv1.invert();
+
+            bvect::blocks_count bc_arr;
+            bv1.running_count_blocks(&bc_arr);
+
+            VerifyCountRange(bv1, bc_arr, 200000);
+    }}
+
     
     cout << "---------------------------- CountRangeTest OK" << endl;
 }
