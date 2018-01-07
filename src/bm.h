@@ -45,8 +45,8 @@ For more information please visit:  http://bitmagic.io
 #endif
 
 
-#include "bmconst.h"
 #include "bmdef.h"
+#include "bmconst.h"
 
 
 #ifdef BMAVX2OPT
@@ -296,6 +296,7 @@ public:
         */
         bool compare_state(const iterator_base& ib) const
         {
+return true;
             if (this->bv_ != ib.bv_)                 return false;
             if (this->position_ != ib.position_)     return false;
             if (this->block_ != ib.block_)           return false;
@@ -307,6 +308,8 @@ public:
 
             if (this->block_type_ == 0) // bit block
             {
+                if (bd.bit_.bit_grp_sz != ib_db.bit_.bit_grp_sz)
+                    return true; // impossible to directly compare...
                 if (bd.bit_.ptr != ib_db.bit_.ptr) return false;
                 if (bd.bit_.idx != ib_db.bit_.idx) return false;
                 if (bd.bit_.cnt != ib_db.bit_.cnt) return false;
@@ -330,10 +333,11 @@ public:
         struct bitblock_descr
         {
             const bm::word_t*   ptr;      //!< Word pointer.
-            unsigned char       bits[32]; //!< Unpacked list of ON bits
-            unsigned            idx;      //!< Current position in the bit list
-            unsigned            cnt;      //!< Number of ON bits
+            unsigned char       bits[64]; //!< Unpacked list of ON bits
+            unsigned short      idx;      //!< Current position in the bit list
+            unsigned short      cnt;      //!< Number of ON bits
             bm::id_t            pos;      //!< Last bit position decode before
+            unsigned short      bit_grp_sz; //!< Size of decoded bit group (words)
         };
 
         /** Information about current DGAP block. */
@@ -589,16 +593,17 @@ public:
                 {
                 // check if we can get the value from the 
                 // bits traversal cache
-                unsigned idx = ++(bdescr->bit_.idx);
+                unsigned short idx = ++(bdescr->bit_.idx);
                 if (idx < bdescr->bit_.cnt)
                 {
                     this->position_ = bdescr->bit_.pos + 
                                       bdescr->bit_.bits[idx];
                     return *this; 
                 }
-                this->position_ += 32 - 1 - bdescr->bit_.bits[--idx];
+                this->position_ +=
+                    (bdescr->bit_.bit_grp_sz * 32) - 1 - bdescr->bit_.bits[--idx];
                 
-                ++(bdescr->bit_.ptr);
+                bdescr->bit_.ptr += bdescr->bit_.bit_grp_sz;
                 if (decode_bit_group(bdescr))
                 {
                     return *this;
@@ -771,6 +776,7 @@ public:
                 bdescr->bit_.ptr = this->block_ + nword;
                 bm::word_t w = *(bdescr->bit_.ptr);
                 bdescr->bit_.cnt = bm::bitscan_popcnt(w, bdescr->bit_.bits);
+                bdescr->bit_.bit_grp_sz = 1;
 
                 bdescr->bit_.pos = (nb * bm::set_block_size * 32) + (nword * 32);
                 bdescr->bit_.idx = 0;
@@ -794,13 +800,25 @@ public:
         bool decode_bit_group(block_descr_type* bdescr)
         {
             const word_t* block_end = this->block_ + bm::set_block_size;
+            
             for (; bdescr->bit_.ptr < block_end; ++(bdescr->bit_.ptr))
             {
                 bm::word_t w0 = *(bdescr->bit_.ptr);
                 if (w0)
                 {
-                    bdescr->bit_.cnt = bm::bitscan_popcnt(w0, bdescr->bit_.bits);
-                    
+                    #if defined(xBMAVX2OPT) || defined(xBMSSE42OPT)
+                        bm::word_t w1 =
+                            (bdescr->bit_.ptr+1 < block_end) ? bdescr->bit_.ptr[1] : 0;
+                        bm::id64_t w = w1;
+                        w <<= 32;
+                        w |= w0;
+                        bdescr->bit_.cnt = bm::bitscan_popcnt64(w, bdescr->bit_.bits);
+                        bdescr->bit_.bit_grp_sz = 2;
+                    #else
+                        bdescr->bit_.cnt = bm::bitscan_popcnt(w0, bdescr->bit_.bits);
+                        bdescr->bit_.bit_grp_sz = 1;
+                    #endif
+
                     BM_ASSERT(bdescr->bit_.cnt);
                     
                     bdescr->bit_.idx = 0;
@@ -814,6 +832,7 @@ public:
                     this->position_ += 32;
                 }
             } // for
+            
             return false;
         }
         
