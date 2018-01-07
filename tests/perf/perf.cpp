@@ -286,10 +286,11 @@ void BitForEachTest()
 {
     // setup the test data
     //
+    size_t value = 0;
     unsigned* test_arr = new unsigned[65536];
     for (unsigned j = 0; j < 65536; ++j)
     {
-        test_arr[j] = j;		
+        test_arr[j] = j * j;
     }
 
     if (platform_test)
@@ -333,6 +334,49 @@ void BitForEachTest()
             }
         }
     }
+
+
+    {
+        unsigned bit_list[64];
+        TimeTaker tt("BitScan on bitcount (block)", REPEATS * 20);
+        for (unsigned i = 0; i < REPEATS * 20; ++i)
+        {
+            for (unsigned j = 0; j < 65536; ++j)
+            {
+                unsigned cnt = bm::bitscan_popcnt(test_arr[j], bit_list);
+                for (unsigned k =  0; j < cnt; j++)
+                {
+                    value += bit_list[k];
+                }
+            }
+        }
+    }
+
+    {
+        unsigned bit_list[64];
+        TimeTaker tt("BitScan on bitcount64 (block)", REPEATS * 20);
+        for (unsigned i = 0; i < REPEATS * 20; ++i)
+        {
+            for (unsigned j = 0; j < 65536; j+=2)
+            {
+                bm::wordop_t w0 = test_arr[j];
+                bm::wordop_t w1 = test_arr[j+1];
+                
+                bm::wordop_t w = w0 | (w1 << 32);
+                
+                unsigned cnt = bm::bitscan_popcnt64(w, bit_list);
+                for (unsigned k =  0; j < cnt; j++)
+                {
+                    value += bit_list[k];
+                }
+            }
+        }
+    }
+
+
+    char buf[256];
+    sprintf(buf, "%i", (int)value); // to fool some smart compilers like ICC
+
 
     delete [] test_arr;
 }
@@ -606,27 +650,52 @@ void BitCompareTest()
 
 void EnumeratorTest()
 {
-    bvect  bv;
+    bvect  bv1, bv2, bv3, bv4;
     test_bitset*  bset = new test_bitset();
     unsigned value = 0;
 
-    FillSetsIntervals(*bset, bv, 0, BSIZE, 10);
-
-    unsigned cnt1 = bv.count();
-    //unsigned cnt2 = bset->count();
-
+    SimpleFillSets(*bset, bv1, 0, BSIZE, 3);
+    SimpleFillSets(*bset, bv1, 0, BSIZE, 4);
+    SimpleFillSets(*bset, bv1, 0, BSIZE, 5);
     
+    FillSetsIntervals(*bset, bv2, 0, BSIZE, 8);
+    FillSetsIntervals(*bset, bv3, 0, BSIZE, 12);
+    FillSetsIntervals(*bset, bv4, 0, BSIZE, 120);
+
+    unsigned cnt1 = bv1.count();
     unsigned i;
 
     {
-    TimeTaker tt("bvector<>::enumerator", REPEATS);
-    for (i = 0; i < REPEATS; ++i)
-    {    
-        bvect::enumerator en = bv.first();
-
-        for (;en.valid();++en)
+    TimeTaker tt("bvector<>::enumerator", REPEATS/4);
+    for (i = 0; i < REPEATS/4; ++i)
+    {
         {
-            value = *en;
+            bvect::enumerator en = bv1.first();
+            for (;en.valid();++en)
+            {
+                value += *en;
+            }
+        }
+        {
+            bvect::enumerator en = bv2.first();
+            for (;en.valid();++en)
+            {
+                value += *en;
+            }
+        }
+        {
+            bvect::enumerator en = bv3.first();
+            for (;en.valid();++en)
+            {
+                value += *en;
+            }
+        }
+        {
+            bvect::enumerator en = bv4.first();
+            for (;en.valid();++en)
+            {
+                value += *en;
+            }
         }
     }
     }
@@ -636,15 +705,42 @@ void EnumeratorTest()
 
     unsigned cnt = 0;
     {
-        TimeTaker tt("bvector<>::get_next()", REPEATS);
-        for (i = 0; i < REPEATS; ++i)
+        TimeTaker tt("bvector<>::get_next()", REPEATS/4);
+        for (i = 0; i < REPEATS/4; ++i)
         {
-            if (bv.any())
+            if (bv1.any())
             {
-                unsigned v = bv.get_first();
+                unsigned v = bv1.get_first();
                 do
                 {
-                    v = bv.get_next(value);
+                    v = bv1.get_next(value);
+                    cnt += v;
+                } while(v);
+            }
+            if (bv2.any())
+            {
+                unsigned v = bv2.get_first();
+                do
+                {
+                    v = bv2.get_next(value);
+                    cnt += v;
+                } while(v);
+            }
+            if (bv3.any())
+            {
+                unsigned v = bv3.get_first();
+                do
+                {
+                    v = bv3.get_next(value);
+                    cnt += v;
+                } while(v);
+            }
+            if (bv4.any())
+            {
+                unsigned v = bv4.get_first();
+                do
+                {
+                    v = bv4.get_next(value);
                     cnt += v;
                 } while(v);
             }
