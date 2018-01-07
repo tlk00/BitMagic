@@ -603,25 +603,6 @@ public:
                 {
                     return *this;
                 }
-                /*
-                const bm::word_t* pend = this->block_ + bm::set_block_size;
-                while (++(bdescr->bit_.ptr) < pend)
-                {
-                    bm::word_t w = *(bdescr->bit_.ptr);					
-                    bdescr->bit_.cnt = bm::bitscan_popcnt(w, bdescr->bit_.bits);
-                    if (bdescr->bit_.cnt)
-                    {
-                        bdescr->bit_.idx = 0;
-                        bdescr->bit_.pos = this->position_;
-                        this->position_ += bdescr->bit_.bits[0];
-                        return *this;
-                    }
-                    else
-                    {
-                        this->position_ += 32;
-                    }
-                }
-                */
     
                 }
                 break;
@@ -844,29 +825,6 @@ public:
             bdescr->bit_.ptr = this->block_;
             
             return decode_bit_group(bdescr);
-/*
-            const word_t* ptr_end = this->block_ + bm::set_block_size;
-
-            do
-            {
-                bm::word_t w = *(bdescr->bit_.ptr);
-                bdescr->bit_.cnt = bm::bitscan_popcnt(w, bdescr->bit_.bits);
-                if (bdescr->bit_.cnt)
-                {
-                    bdescr->bit_.idx = 0;
-                    bdescr->bit_.pos = this->position_;
-                    this->position_ += bdescr->bit_.bits[0];
-                    return true;
-                }
-                else
-                {
-                    this->position_ += 32;
-                }
-            } 
-            while (++(bdescr->bit_.ptr) < ptr_end);
-
-            return false;
-*/
         }
 
         bool search_in_gapblock()
