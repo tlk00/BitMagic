@@ -8789,21 +8789,52 @@ bool TestEqualSparseVectors(const SV& sv1, const SV& sv2, bool detailed = true)
     }
     
 
+    // test non-offset extraction
+    //
     {
-    std::vector<unsigned> v1(sv1.size());
-    std::vector<unsigned> v1r(sv1.size());
-    sv1.extract(&v1[0], sv1.size(), 0);
-    sv1.extract_range(&v1r[0], sv1.size(), 0);
-    for (unsigned i = 0; i < sv1.size(); ++i)
-    {
-        if (v1r[i] != v1[i])
+        std::vector<unsigned> v1(sv1.size());
+        std::vector<unsigned> v1r(sv1.size());
+        std::vector<unsigned> v1p(sv1.size());
+        
+        sv1.extract(&v1[0], sv1.size(), 0);
+        sv1.extract_range(&v1r[0], sv1.size(), 0);
+        sv1.extract_plains(&v1p[0], sv1.size(), 0);
+        
+        for (unsigned i = 0; i < sv1.size(); ++i)
         {
-            cerr << "TestEqualSparseVectors Extract 1 failed at:" << i
-                 << " v1[i]=" << v1[i] << " v1r[i]=" << v1r[i]
-                 << endl;
-            exit(1);
-        }
-    } // for
+            if (v1r[i] != v1[i] || v1p[i] != v1[i])
+            {
+                cerr << "TestEqualSparseVectors Extract 1 failed at:" << i
+                     << " v1[i]=" << v1[i] << " v1r[i]=" << v1r[i] << " v1p[i]=" << v1p[i]
+                     << endl;
+                exit(1);
+            }
+        } // for
+    }
+
+    // test offset offset extraction
+    //
+    {
+        std::vector<unsigned> v1(sv1.size());
+        std::vector<unsigned> v1r(sv1.size());
+        std::vector<unsigned> v1p(sv1.size());
+        
+        unsigned pos = sv1.size() / 2;
+        
+        sv1.extract(&v1[0], sv1.size(), pos);
+        sv1.extract_range(&v1r[0], sv1.size(), pos);
+        sv1.extract_plains(&v1p[0], sv1.size(), pos);
+        
+        for (unsigned i = 0; i < sv1.size(); ++i)
+        {
+            if (v1r[i] != v1[i] || v1p[i] != v1[i])
+            {
+                cerr << "TestEqualSparseVectors Extract 1 failed at:" << i
+                     << " v1[i]=" << v1[i] << " v1r[i]=" << v1r[i] << " v1p[i]=" << v1p[i]
+                     << endl;
+                exit(1);
+            }
+        } // for
     }
 
     {
@@ -9061,11 +9092,14 @@ void TestSparseVector()
         
     std::vector<unsigned> v1(16);
     std::vector<unsigned> v1r(16);
+    std::vector<unsigned> v1p(16);
+    
     sv.extract(&v1[0], 16, 0);
     sv.extract_range(&v1r[0], 16, 0);
+    sv.extract_plains(&v1p[0], 16, 0);
     for (unsigned i = 0; i < 16; ++i)
     {
-        if (v1[i] != 8 || v1r[i] != v1[i])
+        if (v1[i] != 8 || v1r[i] != v1[i] || v1p[i] != v1[i])
         {
             cerr << "Extract 1 failed at:" << i << endl;
             exit(1);
@@ -9074,11 +9108,15 @@ void TestSparseVector()
     
     std::vector<unsigned> v2(10);
     std::vector<unsigned> v2r(10);
+    std::vector<unsigned> v2p(10);
+    
     sv.extract(&v2[0], 10, 32);
     sv.extract_range(&v2r[0], 10, 32);
+    sv.extract_plains(&v2p[0], 10, 32);
+        
     for (unsigned i = 0; i < 10; ++i)
     {
-        if (v2[i] != 255 || v2r[i] != v2[i])
+        if (v2[i] != 255 || v2r[i] != v2[i] || v2p[i] != v2[i])
         {
             cerr << "Extract 2 failed at:" << i << "=" << v2[i] << " r=" << v2r[i] << " sv=" << sv[i+32] << endl;
             exit(1);
@@ -9342,9 +9380,6 @@ void TestSparseVector()
                 exit(1);
             }
         } // for i
-        
-        
-        
     }
     cout << "Sparse vector join ok" << endl;
     

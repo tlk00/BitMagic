@@ -237,6 +237,12 @@ public:
                             size_type size,
                             size_type offset,
                             bool      zero_mem = true) const;
+    
+    /** \brief extract medium window without use of masking vector */
+    size_type extract_plains(value_type* arr,
+                             size_type size,
+                             size_type offset,
+                             bool      zero_mem = true) const;
 
     
     /*! \brief return size of the vector
@@ -625,6 +631,50 @@ sparse_vector<Val, BV>::extract_range(value_type* arr,
 
 template<class Val, class BV>
 typename sparse_vector<Val, BV>::size_type
+sparse_vector<Val, BV>::extract_plains(value_type* arr,
+                                       size_type   size,
+                                       size_type   offset,
+                                       bool        zero_mem) const
+{
+    if (size == 0)
+        return 0;
+
+    if (zero_mem)
+        ::memset(arr, 0, sizeof(value_type)*size);
+    
+    size_type start = offset;
+    size_type end = start + size;
+    if (end > size_)
+    {
+        end = size_;
+    }
+    
+    for (size_type i = 0; i < sizeof(Val) * 8; ++i)
+    {
+        const bvector_type* bv = plains_[i];
+        if (!bv)
+            continue;
+       
+        value_type mask = 1 << i;
+        typename BV::enumerator en(bv, offset);
+        for (;en.valid(); ++en)
+        {
+            size_type idx = *en - offset;
+            if (idx >= size)
+                break;
+            arr[idx] |= mask;
+        } // for
+        
+    } // for i
+
+    return 0;
+}
+
+
+//---------------------------------------------------------------------
+
+template<class Val, class BV>
+typename sparse_vector<Val, BV>::size_type
 sparse_vector<Val, BV>::extract(value_type* arr,
                                 size_type   size,
                                 size_type   offset,
@@ -632,11 +682,6 @@ sparse_vector<Val, BV>::extract(value_type* arr,
 {
     if (size == 0)
         return 0;
-
-    if (size < 100) // for small arrays direct extraction is faster
-    {
-        return extract_range(arr, size, offset, zero_mem);
-    }
 
     if (zero_mem)
         ::memset(arr, 0, sizeof(value_type)*size);
@@ -652,51 +697,27 @@ sparse_vector<Val, BV>::extract(value_type* arr,
 
     if (masked_scan) // use temp vector to decompress the area
     {
-        // for large array extraction use logical opartions 
+        // for large array extraction use logical opartions
         // (faster due to vectorization)
-        if (size > 65535 * 2) 
+        bvector_type bv_mask;
+        for (size_type i = 0; i < sizeof(Val) * 8; ++i)
         {
-            bvector_type bv_mask;
-            for (size_type i = 0; i < sizeof(Val) * 8; ++i)
+            const bvector_type* bv = plains_[i];
+            if (bv)
             {
-                const bvector_type* bv = plains_[i];
-                if (bv)
-                {
-                    value_type mask = 1 << i;
-                    bv_mask.set_range(offset, end - 1);
-                    bv_mask.bit_and(*bv);
-
-                    for (typename BV::enumerator en(&bv_mask, 0); en.valid(); ++en)
-                    {
-                        size_type idx = *en - offset;
-                        BM_ASSERT(idx < size);
-                        arr[idx] |= mask;
-                    } // for
-                    bv_mask.clear();
-                }
-            } // for i
-        }
-        else // use enumerator positioning (medium size extraction)
-        {
-            for (size_type i = 0; i < sizeof(Val) * 8; ++i)
-            {
-                const bvector_type* bv = plains_[i];
-                if (!bv)
-                    continue;
-               
                 value_type mask = 1 << i;
-                typename BV::enumerator en(bv, offset);
-                for (;en.valid(); ++en)
+                bv_mask.set_range(offset, end - 1);
+                bv_mask.bit_and(*bv);
+
+                for (typename BV::enumerator en(&bv_mask, 0); en.valid(); ++en)
                 {
                     size_type idx = *en - offset;
-                    if (idx >= size)
-                        break;
+                    BM_ASSERT(idx < size);
                     arr[idx] |= mask;
                 } // for
-                
-            } // for i
-        }
-
+                bv_mask.clear();
+            }
+        } // for i
     }
     else
     {

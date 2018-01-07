@@ -330,10 +330,10 @@ public:
         struct bitblock_descr
         {
             const bm::word_t*   ptr;      //!< Word pointer.
-            unsigned            bits[32]; //!< Unpacked list of ON bits
+            unsigned char       bits[32]; //!< Unpacked list of ON bits
             unsigned            idx;      //!< Current position in the bit list
             unsigned            cnt;      //!< Number of ON bits
-            bm::id_t            pos;      //!< Last bit position before 
+            bm::id_t            pos;      //!< Last bit position decode before
         };
 
         /** Information about current DGAP block. */
@@ -580,7 +580,6 @@ public:
 
             // Current block search.
             ++this->position_;
-            typedef typename iterator_base::block_descr block_descr_type;
             
             block_descr_type* bdescr = &(this->bdescr_);
 
@@ -588,10 +587,8 @@ public:
             {
             case 0:   //  BitBlock
                 {
-
                 // check if we can get the value from the 
-                // bits cache
-
+                // bits traversal cache
                 unsigned idx = ++(bdescr->bit_.idx);
                 if (idx < bdescr->bit_.cnt)
                 {
@@ -599,8 +596,14 @@ public:
                                       bdescr->bit_.bits[idx];
                     return *this; 
                 }
-                this->position_ += 31 - bdescr->bit_.bits[--idx];
-
+                this->position_ += 32 - 1 - bdescr->bit_.bits[--idx];
+                
+                ++(bdescr->bit_.ptr);
+                if (decode_bit_group(bdescr))
+                {
+                    return *this;
+                }
+                /*
                 const bm::word_t* pend = this->block_ + bm::set_block_size;
                 while (++(bdescr->bit_.ptr) < pend)
                 {
@@ -618,6 +621,7 @@ public:
                         this->position_ += 32;
                     }
                 }
+                */
     
                 }
                 break;
@@ -795,8 +799,7 @@ public:
                     if (bdescr->bit_.bits[i] == nbit)
                         return *this;
                     bdescr->bit_.idx++;
-
-                }
+                } // for
                 BM_ASSERT(0);
             }
             return *this;
@@ -804,16 +807,44 @@ public:
 
 
     private:
+        typedef typename iterator_base::block_descr block_descr_type;
+        
+        
+        bool decode_bit_group(block_descr_type* bdescr)
+        {
+            const word_t* block_end = this->block_ + bm::set_block_size;
+            for (; bdescr->bit_.ptr < block_end; ++(bdescr->bit_.ptr))
+            {
+                bm::word_t w0 = *(bdescr->bit_.ptr);
+                if (w0)
+                {
+                    bdescr->bit_.cnt = bm::bitscan_popcnt(w0, bdescr->bit_.bits);
+                    
+                    BM_ASSERT(bdescr->bit_.cnt);
+                    
+                    bdescr->bit_.idx = 0;
+                    bdescr->bit_.pos = this->position_;
+                    this->position_ += bdescr->bit_.bits[0];
+                    
+                    return true;
+                }
+                else
+                {
+                    this->position_ += 32;
+                }
+            } // for
+            return false;
+        }
+        
         bool search_in_bitblock()
         {
             BM_ASSERT(this->block_type_ == 0);
             
-            typedef typename iterator_base::block_descr block_descr_type;
-            block_descr_type* bdescr = &(this->bdescr_);            
-
-            // now lets find the first bit in block.
+            block_descr_type* bdescr = &(this->bdescr_);
             bdescr->bit_.ptr = this->block_;
-
+            
+            return decode_bit_group(bdescr);
+/*
             const word_t* ptr_end = this->block_ + bm::set_block_size;
 
             do
@@ -835,6 +866,7 @@ public:
             while (++(bdescr->bit_.ptr) < ptr_end);
 
             return false;
+*/
         }
 
         bool search_in_gapblock()
