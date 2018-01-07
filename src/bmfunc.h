@@ -5015,7 +5015,6 @@ template<typename T,typename B> unsigned bit_list_4(T w, B* bits)
 
     @ingroup bitfunc
 */
-
 template<typename T, typename B>
 unsigned bitscan_popcnt(T w, B* bits)
 {
@@ -5028,6 +5027,28 @@ unsigned bitscan_popcnt(T w, B* bits)
     }
     return pos;
 }
+
+/*!
+    \brief Unpacks word into list of ON bit indexes using popcnt method
+    \param w - value
+    \param bits - pointer on the result array
+    \return number of bits in the list
+
+    @ingroup bitfunc
+*/
+template<typename B>
+unsigned bitscan_popcnt64(bm::wordop_t w, B* bits)
+{
+    unsigned pos = 0;
+    while (w)
+    {
+        bm::wordop_t t = w & -w;
+        bits[pos++] = bm::word_bitcount64(t - 1);
+        w &= w - 1;
+    }
+    return pos;
+}
+
 
 /*!
    \brief Unpacks word into list of ON bit indexes
