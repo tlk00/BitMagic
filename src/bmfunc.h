@@ -5037,12 +5037,12 @@ unsigned bitscan_popcnt(T w, B* bits)
     @ingroup bitfunc
 */
 template<typename B>
-unsigned bitscan_popcnt64(bm::wordop_t w, B* bits)
+unsigned bitscan_popcnt64(bm::id64_t w, B* bits)
 {
     unsigned pos = 0;
     while (w)
     {
-        bm::wordop_t t = w & -w;
+        bm::id64_t t = w & -w;
         bits[pos++] = bm::word_bitcount64(t - 1);
         w &= w - 1;
     }
