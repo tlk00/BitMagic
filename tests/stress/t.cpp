@@ -8405,31 +8405,84 @@ void BitForEachTest()
 {
     cout << "---------------------------- BitForEachTest..." << endl;
 
-    unsigned bit_list1[32];
-    unsigned bit_list2[32];
-    unsigned bit_list3[32];
-
-
-    for (unsigned i = 0; i < 65536*50; ++i)
+    cout << "testing bit_list_4(), bitscan_popcnt().." << endl;
     {
-        unsigned bits1 = bm::bit_list(i, bit_list1);
-        unsigned bits2 = bm::bit_list_4(i, bit_list2);
-        unsigned bits3 = bitscan_popcnt(i, bit_list3);
-        if (bits1 != bits2 || bits1 != bits3)
+        unsigned bit_list1[32];
+        unsigned bit_list2[32];
+        unsigned bit_list3[32];
+
+
+        for (unsigned i = 0; i < 65536*50; ++i)
         {
-            cout << "Bit for each test failed bit_cnt criteria!" << endl;
-            exit(1);
-        }
-        for (unsigned j = 0; j < bits1; ++j)
-        {
-            if (bit_list1[j] != bit_list2[j] || bit_list1[j] != bit_list3[j])
+            unsigned bits1 = bm::bit_list(i, bit_list1);
+            unsigned bits2 = bm::bit_list_4(i, bit_list2);
+            unsigned bits3 = bm::bitscan_popcnt(i, bit_list3);
+            if (bits1 != bits2 || bits1 != bits3)
             {
-                cout << "Bit for each check failed for " << j << endl;
+                cout << "Bit for each test failed bit_cnt criteria!" << endl;
                 exit(1);
             }
-        }
+            for (unsigned j = 0; j < bits1; ++j)
+            {
+                if (bit_list1[j] != bit_list2[j] || bit_list1[j] != bit_list3[j])
+                {
+                    cout << "Bit for each check failed for " << j << endl;
+                    exit(1);
+                }
+            }
 
-    } // for
+        } // for
+    }
+    
+    {
+        cout << "testing bitscan_popcnt64()..." << endl;
+
+        unsigned char bit_list[64];
+        bm::id64_t w = 0;
+        unsigned cnt;
+        
+        cnt = bm::bitscan_popcnt64(w, bit_list);
+        if (cnt)
+        {
+            cout << "bitscan_popcnt64 cnt for 0x00 failed " << cnt << endl;
+            exit(1);
+        }
+        
+        w = ~w; // 0xFFFFF...
+        
+        cnt = bm::bitscan_popcnt64(w, bit_list);
+        if (cnt != 64)
+        {
+            cout << "bitscan_popcnt64 cnt for 0xFFF failed " << cnt << endl;
+            exit(1);
+        }
+        for (unsigned i = 0; i < cnt; ++i)
+        {
+            if (bit_list[i] != i)
+            {
+                cout << "bitscan_popcnt64 cnt at " << i << " != " << bit_list[i] << endl;
+                exit(1);
+            }
+        } // for
+        
+        for (unsigned k = 63; k != 0; --k)
+        {
+            w <<= 1;
+            cnt = bm::bitscan_popcnt64(w, bit_list);
+            if (cnt != k)
+            {
+                cout << "bitscan_popcnt64 cnt for " << w << " cnt=" << cnt << endl;
+                exit(1);
+            }
+            cout << "[" << cnt << "]:";
+            for (unsigned i = 0; i < cnt; ++i)
+            {
+                cout << (unsigned)bit_list[i] << ", ";
+            } // for
+            cout << endl;
+        } // for
+    }
+    
 
     cout << "---------------------------- BitForEachTest Ok." << endl;
 }
