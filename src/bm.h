@@ -773,6 +773,26 @@ return true;
                 }
 
                 unsigned nword  = unsigned(nbit >> bm::set_word_shift);
+                
+                // check if we need to step back to match the wave
+/*
+                unsigned parity = nword % 2;
+                bdescr->bit_.ptr = this->block_ + (nword - parity);
+                bdescr->bit_.cnt = bm::bitscan_wave(bdescr->bit_.ptr, bdescr->bit_.bits);
+                BM_ASSERT(bdescr->bit_.cnt);
+                bdescr->bit_.bit_grp_sz = 2;
+                bdescr->bit_.pos = (nb * bm::set_block_size * 32) + ((nword - parity) * 32);
+                bdescr->bit_.idx = 0;
+                nbit &= bm::set_word_mask;
+                nbit += 32 * parity;
+                for (unsigned i = 0; i < bdescr->bit_.cnt; ++i)
+                {
+                    if (bdescr->bit_.bits[i] == nbit)
+                        return *this;
+                    bdescr->bit_.idx++;
+                } // for
+*/
+
                 bdescr->bit_.ptr = this->block_ + nword;
                 bm::word_t w = *(bdescr->bit_.ptr);
                 bdescr->bit_.cnt = bm::bitscan_popcnt(w, bdescr->bit_.bits);
@@ -787,6 +807,7 @@ return true;
                         return *this;
                     bdescr->bit_.idx++;
                 } // for
+
                 BM_ASSERT(0);
             }
             return *this;
@@ -801,8 +822,23 @@ return true;
         {
             const word_t* block_end = this->block_ + bm::set_block_size;
             
-            for (; bdescr->bit_.ptr < block_end; ++(bdescr->bit_.ptr))
+            for (; bdescr->bit_.ptr < block_end;)
             {
+/*
+                bdescr->bit_.cnt = bm::bitscan_wave(bdescr->bit_.ptr, bdescr->bit_.bits);
+                if (bdescr->bit_.cnt) // found
+                {
+                    bdescr->bit_.bit_grp_sz = 2;
+                    
+                    bdescr->bit_.idx = 0;
+                    bdescr->bit_.pos = this->position_;
+                    this->position_ += bdescr->bit_.bits[0];
+                    return true;
+                }
+                this->position_ += 64; // wave size
+                bdescr->bit_.ptr += 2;
+*/
+
                 bm::word_t w0 = *(bdescr->bit_.ptr);
                 if (w0)
                 {
@@ -831,6 +867,8 @@ return true;
                 {
                     this->position_ += 32;
                 }
+                ++(bdescr->bit_.ptr);
+
             } // for
             
             return false;
