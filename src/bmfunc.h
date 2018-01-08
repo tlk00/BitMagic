@@ -5049,6 +5049,38 @@ unsigned bitscan_popcnt64(bm::id64_t w, B* bits)
     return pos;
 }
 
+/*!
+    \brief Unpacks word wave (2x 32-bit words)
+    \param w_ptr - pointer on wave start
+    \param bits - pointer on the result array
+    \return number of bits in the list
+
+    @ingroup bitfunc
+    @internal
+*/
+template<typename B>
+unsigned bitscan_wave(const bm::word_t* w_ptr, B* bits)
+{
+    bm::word_t w0, w1;
+    unsigned cnt;
+    
+    w0 = w_ptr[0];
+    w1 = w_ptr[1];
+    
+#if defined(BMAVX2OPT) || defined(BMSSE42OPT)
+    // combine into 64-bit word and scan (when HW popcnt64 is available)
+    bm::id64_t w = w1;
+    w <<= 32;
+    w |= w0;
+    cnt = bm::bitscan_popcnt64(w, bdescr->bit_.bits);
+#else
+    // decode wave as two 32-bit bitscan decodes
+    cnt  = w0 ? bm::bitscan_popcnt(w0, bits) : 0;
+    cnt += w1 ? bm::bitscan_popcnt(w1, bits+cnt) : 0;
+#endif
+    return cnt;
+}
+
 
 /*!
    \brief Unpacks word into list of ON bit indexes
