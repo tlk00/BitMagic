@@ -1217,7 +1217,7 @@ void combine_or(BV& bv, It  first, It last)
                 unsigned nbit   = unsigned(*first & bm::set_block_mask); 
                 unsigned nword  = unsigned(nbit >> bm::set_word_shift); 
                 nbit &= bm::set_word_mask;
-                blk[nword] |= (bm::word_t)1 << nbit;
+                blk[nword] |= (1u << nbit);
             } // for
         }
     } // while
