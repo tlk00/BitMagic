@@ -390,13 +390,16 @@ public:
             : bvect_(&bvect), 
               max_bit_(bvect.size())
         {
+            bvect_->init();
         }
         
         insert_iterator(const insert_iterator& iit)
         : bvect_(iit.bvect_),
           max_bit_(iit.max_bit_)
         {
+            bvect_->init();
         }
+        
         insert_iterator& operator=(const insert_iterator& ii)
         {
             bvect_ = ii.bvect_; 
@@ -407,6 +410,7 @@ public:
         insert_iterator& operator=(bm::id_t n)
         {
             BM_ASSERT(n < bm::id_max);
+            BM_ASSERT_THROW(n < bm::id_max, BM_ERR_RANGE);
 
             if (n >= max_bit_) 
             {
@@ -417,7 +421,7 @@ public:
                 }
             }
 
-            bvect_->set(n);
+            bvect_->set_bit_no_check(n);
             return *this;
         }
         
@@ -1058,6 +1062,15 @@ public:
     {}
 
 #endif
+
+    /*!
+        \brief Explicit post-construction initialization
+    */
+    void init()
+    {
+        if (!blockman_.is_init())
+            blockman_.init_tree();
+    }
 
     /*! 
         \brief Copy assignment operator
@@ -1737,16 +1750,39 @@ public:
         typedef typename bvector<Alloc>::enumerator enumerator_type;
         return enumerator_type(this, pos);
     }
-
-
-    const bm::word_t* get_block(unsigned nb) const 
-    { 
-        return blockman_.get_block(nb); 
-    }
     
     void combine_operation(const bm::bvector<Alloc>& bvect, 
                             bm::operation            opcode);
+
+    /**
+        \brief get access to internal block by number
+     
+        This is an internal method, declared public to add low level
+        optimized algorithms outside of the main bvector<> class.
+        Use it AT YOUR OWN RISK!
+     
+        \param nb - block number
+     
+        \internal
+    */
+    const bm::word_t* get_block(unsigned nb) const
+    {
+        return blockman_.get_block(nb);
+    }
     
+    /**
+        \brief Set bit without checking preconditions (size, etc)
+     
+        Fast set bit method, without safety net.
+        Make sure you call bvector<>::init() before setting bits with this
+        function.
+     
+        Side effect: invalidates bit-count optimization (BMCOUNTOPT)
+     
+        \param n - bit number
+    */
+    void set_bit_no_check(bm::id_t n);
+
 private:
 
     bm::id_t check_or_next(bm::id_t prev) const;
@@ -2511,6 +2547,55 @@ void bvector<Alloc>::calc_stat(struct bvector<Alloc>::statistics* st) const
 
 // -----------------------------------------------------------------------
 
+template<class Alloc>
+void bvector<Alloc>::set_bit_no_check(bm::id_t n)
+{
+    BM_ASSERT(blockman_.is_init());
+    BM_ASSERT_THROW(n < bm::id_max, BM_ERR_RANGE);
+    
+    BMCOUNT_VALID(false)
+    
+    bool val = true; // set bit
+    
+    // calculate logical block number
+    unsigned nblock = unsigned(n >>  bm::set_block_shift);
+    // calculate word number in block and bit
+    unsigned nbit   = unsigned(n & bm::set_block_mask);
+
+    int block_type;
+    bm::word_t* blk =
+        blockman_.check_allocate_block(nblock,
+                                       val,
+                                       get_new_blocks_strat(),
+                                       &block_type);
+    if (!blk) return; // nothing to do
+
+    if (block_type == 1) // gap block
+    {
+        unsigned is_set, new_block_len;
+        bm::gap_word_t* gap_blk = BMGAP_PTR(blk);
+        new_block_len =
+            bm::gap_set_value(val, gap_blk, nbit, &is_set);
+        if (is_set)
+        {
+            unsigned threshold =  bm::gap_limit(gap_blk, blockman_.glen());
+            if (new_block_len > threshold)
+            {
+                extend_gap_block(nblock, gap_blk);
+            }
+            return;
+        }
+    }
+    else  // bit block
+    {
+        unsigned nword  = nbit >> bm::set_word_shift;
+        nbit &= bm::set_word_mask;
+        blk[nword] |= (1u << nbit); // set bit
+    }
+}
+
+// -----------------------------------------------------------------------
+
 
 template<class Alloc> 
 bool bvector<Alloc>::set_bit_no_check(bm::id_t n, bool val)
@@ -2519,7 +2604,6 @@ bool bvector<Alloc>::set_bit_no_check(bm::id_t n, bool val)
     unsigned nblock = unsigned(n >>  bm::set_block_shift); 
 
     int block_type;
-
     bm::word_t* blk = 
         blockman_.check_allocate_block(nblock, 
                                         val,
@@ -2531,23 +2615,20 @@ bool bvector<Alloc>::set_bit_no_check(bm::id_t n, bool val)
     // calculate word number in block and bit
     unsigned nbit   = unsigned(n & bm::set_block_mask); 
 
-    if (block_type == 1) // gap
+    if (block_type) // gap
     {
-        unsigned is_set;
-        unsigned new_block_len;
-        
+        unsigned is_set, new_block_len;
+        bm::gap_word_t* gap_blk = BMGAP_PTR(blk);
         new_block_len = 
-            gap_set_value(val, BMGAP_PTR(blk), nbit, &is_set);
+            bm::gap_set_value(val, gap_blk, nbit, &is_set);
         if (is_set)
         {
             BMCOUNT_ADJ(val)
 
-            unsigned threshold = 
-            bm::gap_limit(BMGAP_PTR(blk), blockman_.glen());
-
+            unsigned threshold =  bm::gap_limit(gap_blk, blockman_.glen());
             if (new_block_len > threshold) 
             {
-                extend_gap_block(nblock, BMGAP_PTR(blk));
+                extend_gap_block(nblock, gap_blk);
             }
             return true;
         }
