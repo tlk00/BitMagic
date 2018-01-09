@@ -7026,7 +7026,6 @@ void BitCountChangeTest()
     arr0[1] = 1; //(bm::word_t)(1 << 31);
 
     bm::id_t cnt;
-    bm::id_t bc, bc1;
 
     cnt = bm::bit_count_change(arr0[1]);
     cout << cnt << endl;
@@ -7036,6 +7035,7 @@ void BitCountChangeTest()
         exit(1);
     }
 #if !defined(BMAVX2OPT)    
+    bm::id_t bc, bc1;
     cnt = bm::bit_block_calc_count_change(arr0, arr0 + 8, &bc);
     cout << "*" << endl;
     bc1 = bit_block_calc_count(arr0, arr0 + 8);
