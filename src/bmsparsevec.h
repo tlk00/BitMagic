@@ -796,6 +796,7 @@ typename sparse_vector<Val, BV>::bvector_type_ptr
         bv = new bvector_type(ap_.strat, ap_.glevel_len,
                               bv_size_,
                               alloc_);
+        bv->init();
         plains_[i] = bv;
     }
     return bv;
@@ -937,7 +938,7 @@ void sparse_vector<Val, BV>::set_value(size_type idx, value_type v)
     {
         unsigned p = b_list[j];
         bvector_type* bv = get_plain(p);
-        bv->set_bit(idx);
+        bv->set_bit_no_check(idx);
     } // for j
 }
 
