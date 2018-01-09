@@ -7,6 +7,10 @@ static jmp_buf ex_buf__;
 #define BM_NO_CXX11
 #define BMALLOC__H__INCLUDED__
 
+#define BM_ASSERT_THROW(x, xerrcode) if (!(x)) BM_THROW( xerrcode )
+
+
+#include "bmdef.h"
 #include "bmconst.h"
 #include "bmcalloc.h"
 #include "bm.h"

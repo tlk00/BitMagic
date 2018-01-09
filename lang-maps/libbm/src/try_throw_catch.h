@@ -1,4 +1,4 @@
-/* Copyright (C) 2009-2014 Francesco Nidito 
+/* Copyright (C) 2009-2014 Francesco Nidito
  *
  * Permission is hereby granted, free of charge, to any person obtaining a copy
  * of this software and associated documentation files (the "Software"), to deal
@@ -29,10 +29,10 @@
  * http://www.di.unipi.it/~nids/docs/longjump_try_trow_catch.html
  */
 
-#define TRY do { /*jmp_buf ex_buf__;*/ switch( setjmp(ex_buf__) ) { case 0: while(1) {
+#define BM_TRY do { /*jmp_buf ex_buf__;*/ switch( setjmp(ex_buf__) ) { case 0: while(1) {
 #define CATCH(x) break; case x:
 #define FINALLY break; } default: {
 #define ETRY break; } } } while(0)
-#define THROW(x) longjmp(ex_buf__, x)
+#define BM_THROW(x) longjmp(ex_buf__, x)
 
 #endif /*!_TRY_THROW_CATCH_H_*/

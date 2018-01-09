@@ -35,12 +35,15 @@ For more information please visit:  http://bitmagic.io
 
 /* Error codes */
 
+/* General purpose codes */
 #define BM_OK (0)
 #define BM_ERR_BADALLOC (1)
 #define BM_ERR_BADARG (2)
 #define BM_ERR_RANGE (3)
-#define BM_ERR_DETACHED (4)
-#define BM_ERR_JVM_NOT_SUPPORTED (5)
+
+/* Error codes for Java/JNI incapsulation */
+#define BM_ERR_DETACHED (101)
+#define BM_ERR_JVM_NOT_SUPPORTED (102)
 
 /*
     error codes and messages
@@ -49,6 +52,7 @@ For more information please visit:  http://bitmagic.io
 #define BM_ERR_BADALLOC_MSG "BM-01: Allocation error"
 #define BM_ERR_BADARG_MSG   "BM-02: Invalid or missing function argument"
 #define BM_ERR_RANGE_MSG    "BM-03: Incorrect range or index"
+
 #define BM_ERR_DETACHED_MSG    "BM-04: Current thread no attached to JVM"
 #define BM_ERR_JVM_NOT_SUPPORTED_MSG    "BM-05: JVM version not supported"
 
