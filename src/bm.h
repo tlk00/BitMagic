@@ -577,6 +577,7 @@ public:
         enumerator& go_up()
         {
             BM_ASSERT(this->valid());
+            BM_ASSERT_THROW(this->valid(), BM_ERR_RANGE);
 
             // Current block search.
             //
@@ -1191,6 +1192,8 @@ public:
     bool set_bit(bm::id_t n, bool val = true)
     {
         BM_ASSERT(n < size_);
+        BM_ASSERT_THROW(n < size_, BM_ERR_RANGE);
+
         if (!blockman_.is_init())
             blockman_.init_tree();
         return set_bit_no_check(n, val);
@@ -1205,6 +1208,8 @@ public:
     bool set_bit_and(bm::id_t n, bool val = true)
     {
         BM_ASSERT(n < size_);
+        BM_ASSERT_THROW(n < size_, BM_ERR_RANGE);
+        
         if (!blockman_.is_init())
             blockman_.init_tree();
         return and_bit_no_check(n, val);
@@ -1220,6 +1225,8 @@ public:
     bool set_bit_conditional(bm::id_t n, bool val, bool condition)
     {
         BM_ASSERT(n < size_);
+        BM_ASSERT_THROW(n < size_, BM_ERR_RANGE);
+
         if (val == condition) return false;
         if (!blockman_.is_init())
             blockman_.init_tree();
@@ -2040,10 +2047,14 @@ bm::id_t bvector<Alloc>::count_to(bm::id_t right,
 
 template<typename Alloc> 
 bm::id_t bvector<Alloc>::count_range(bm::id_t left, 
-                                         bm::id_t right, 
-                                         const unsigned* block_count_arr) const
+                                     bm::id_t right,
+                                     const unsigned* block_count_arr) const
 {
     BM_ASSERT(left <= right);
+
+    BM_ASSERT_THROW(right < bm::id_max, BM_ERR_RANGE);
+    BM_ASSERT_THROW(left <= right, BM_ERR_RANGE);
+
     
     if (!blockman_.is_init())
         return 0;
@@ -2165,6 +2176,7 @@ template<typename Alloc>
 bool bvector<Alloc>::get_bit(bm::id_t n) const
 {    
     BM_ASSERT(n < size_);
+    BM_ASSERT_THROW((n < size_), BM_ERR_RANGE);
 
     // calculate logical block number
     unsigned nblock = unsigned(n >>  bm::set_block_shift); 
@@ -2727,6 +2739,8 @@ bool bvector<Alloc>::and_bit_no_check(bm::id_t n, bool val)
 template<class Alloc>
 bool bvector<Alloc>::find(bm::id_t from, bm::id_t& pos) const
 {
+    BM_ASSERT_THROW(from < bm::id_max, BM_ERR_RANGE);
+
     bool found;
     if (from == 0)
     {
