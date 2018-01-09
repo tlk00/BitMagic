@@ -357,14 +357,10 @@ void BitForEachTest()
         TimeTaker tt("BitScan on bitcount64 (block)", REPEATS * 20);
         for (unsigned i = 0; i < REPEATS * 20; ++i)
         {
-            for (unsigned j = 0; j < 65536; j+=2)
+            for (unsigned j = 0; j < 65536/2; j+=2)
             {
-                bm::wordop_t w0 = test_arr[j];
-                bm::wordop_t w1 = test_arr[j+1];
-                
-                bm::wordop_t w = w0 | (w1 << 32);
-                
-                unsigned cnt = bm::bitscan_popcnt64(w, bit_list);
+                unsigned cnt = bm::bitscan_wave(test_arr + j, bit_list);
+
                 for (unsigned k =  0; j < cnt; j++)
                 {
                     value += bit_list[k];
