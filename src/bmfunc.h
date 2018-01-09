@@ -5073,9 +5073,7 @@ unsigned short bitscan_wave(const bm::word_t* w_ptr, B* bits)
     
 #if defined(BMAVX2OPT) || defined(BMSSE42OPT)
     // combine into 64-bit word and scan (when HW popcnt64 is available)
-    bm::id64_t w = w1;
-    w <<= 32;
-    w |= w0;
+    bm::id64_t w = (bm::id64_t(w1) << 32) | w0;
     cnt = bm::bitscan_popcnt64(w, bits);
 #else
     // decode wave as two 32-bit bitscan decodes
