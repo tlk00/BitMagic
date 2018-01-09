@@ -5016,22 +5016,24 @@ template<typename T,typename B> unsigned bit_list_4(T w, B* bits)
     @ingroup bitfunc
 */
 template<typename T, typename B>
-unsigned bitscan_popcnt(T w, B* bits)
+BMFORCEINLINE 
+unsigned short bitscan_popcnt(T w, B* bits, unsigned  offs = 0)
 {
     unsigned pos = 0;
     while (w)
     {
         T t = w & -w;
-        bits[pos++] = bm::word_bitcount(t - 1);
+        bits[pos++] = (B)bm::word_bitcount(t - 1) + (B) offs;
         w &= w - 1;
     }
-    return pos;
+    return (unsigned short)pos;
 }
 
 /*!
     \brief Unpacks word into list of ON bit indexes using popcnt method
     \param w - value
     \param bits - pointer on the result array
+    \param offs - bit address offset to add (0 - default)
     \return number of bits in the list
 
     @ingroup bitfunc
@@ -5043,12 +5045,14 @@ unsigned bitscan_popcnt64(bm::id64_t w, B* bits)
     while (w)
     {
         bm::id64_t t = w & -w;
-        bits[pos++] = bm::word_bitcount64(t - 1);
+        bits[pos++] = (B) bm::word_bitcount64(t - 1);
         w &= w - 1;
     }
     return pos;
 }
 
+
+const unsigned short set_bitscan_wave_size = 2;
 /*!
     \brief Unpacks word wave (2x 32-bit words)
     \param w_ptr - pointer on wave start
@@ -5059,10 +5063,10 @@ unsigned bitscan_popcnt64(bm::id64_t w, B* bits)
     @internal
 */
 template<typename B>
-unsigned bitscan_wave(const bm::word_t* w_ptr, B* bits)
+unsigned short bitscan_wave(const bm::word_t* w_ptr, B* bits)
 {
     bm::word_t w0, w1;
-    unsigned cnt;
+    unsigned short cnt;
     
     w0 = w_ptr[0];
     w1 = w_ptr[1];
@@ -5072,11 +5076,11 @@ unsigned bitscan_wave(const bm::word_t* w_ptr, B* bits)
     bm::id64_t w = w1;
     w <<= 32;
     w |= w0;
-    cnt = bm::bitscan_popcnt64(w, bdescr->bit_.bits);
+    cnt = bm::bitscan_popcnt64(w, bits);
 #else
     // decode wave as two 32-bit bitscan decodes
     cnt  = w0 ? bm::bitscan_popcnt(w0, bits) : 0;
-    cnt += w1 ? bm::bitscan_popcnt(w1, bits+cnt) : 0;
+    cnt += w1 ? bm::bitscan_popcnt(w1, bits+cnt, 32) : 0; // +32 offset from the first word
 #endif
     return cnt;
 }

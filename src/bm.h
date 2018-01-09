@@ -296,7 +296,6 @@ public:
         */
         bool compare_state(const iterator_base& ib) const
         {
-return true;
             if (this->bv_ != ib.bv_)                 return false;
             if (this->position_ != ib.position_)     return false;
             if (this->block_ != ib.block_)           return false;
@@ -308,8 +307,6 @@ return true;
 
             if (this->block_type_ == 0) // bit block
             {
-                if (bd.bit_.bit_grp_sz != ib_db.bit_.bit_grp_sz)
-                    return true; // impossible to directly compare...
                 if (bd.bit_.ptr != ib_db.bit_.ptr) return false;
                 if (bd.bit_.idx != ib_db.bit_.idx) return false;
                 if (bd.bit_.cnt != ib_db.bit_.cnt) return false;
@@ -337,7 +334,6 @@ return true;
             unsigned short      idx;      //!< Current position in the bit list
             unsigned short      cnt;      //!< Number of ON bits
             bm::id_t            pos;      //!< Last bit position decode before
-            unsigned short      bit_grp_sz; //!< Size of decoded bit group (words)
         };
 
         /** Information about current DGAP block. */
@@ -550,8 +546,6 @@ return true;
                         this->position_ += bits_in_block;
                         continue;
                     }
-                    if (this->block_ == FULL_BLOCK_FAKE_ADDR)
-                        this->block_ = FULL_BLOCK_REAL_ADDR;
 
                     if (BM_IS_GAP(this->block_))
                     {
@@ -563,6 +557,9 @@ return true;
                     }
                     else
                     {
+                        if (this->block_ == FULL_BLOCK_FAKE_ADDR)
+                            this->block_ = FULL_BLOCK_REAL_ADDR;
+
                         this->block_type_ = 0;
                         if (search_in_bitblock())
                         {
@@ -583,7 +580,7 @@ return true;
             BM_ASSERT(this->valid());
 
             // Current block search.
-            ++this->position_;
+            //++this->position_;
             
             block_descr_type* bdescr = &(this->bdescr_);
 
@@ -601,9 +598,9 @@ return true;
                     return *this; 
                 }
                 this->position_ +=
-                    (bdescr->bit_.bit_grp_sz * 32) - 1 - bdescr->bit_.bits[--idx];
+                    (bm::set_bitscan_wave_size * 32) /*- 1*/ - bdescr->bit_.bits[--idx];
                 
-                bdescr->bit_.ptr += bdescr->bit_.bit_grp_sz;
+                bdescr->bit_.ptr += bm::set_bitscan_wave_size;// bdescr->bit_.bit_grp_sz;
                 if (decode_bit_group(bdescr))
                 {
                     return *this;
@@ -614,6 +611,7 @@ return true;
 
             case 1:   // DGAP Block
                 {
+                    ++this->position_;
                     if (--(bdescr->gap_.gap_len))
                     {
                         return *this;
@@ -626,10 +624,9 @@ return true;
                     }
                     gap_word_t prev = *(bdescr->gap_.ptr);
                     unsigned int val = *(++(bdescr->gap_.ptr));
-
+                    
                     this->position_ += val - prev;
                     // next gap is now "ON"
-
                     if (*(bdescr->gap_.ptr) == bm::gap_max_bits - 1)
                     {
                         break;
@@ -672,8 +669,6 @@ return true;
                         this->position_ += bm::bits_in_block;
                         continue;
                     }
-                    if (this->block_ == FULL_BLOCK_FAKE_ADDR)
-                        this->block_ = FULL_BLOCK_REAL_ADDR;
 
                     if (BM_IS_GAP(this->block_))
                     {
@@ -685,6 +680,8 @@ return true;
                     }
                     else
                     {
+                        if (this->block_ == FULL_BLOCK_FAKE_ADDR)
+                            this->block_ = FULL_BLOCK_REAL_ADDR;
                         this->block_type_ = 0;
                         if (search_in_bitblock())
                         {
@@ -692,7 +689,6 @@ return true;
                         }
                     }
 
-            
                 } // for j
 
             } // for i
@@ -775,12 +771,11 @@ return true;
                 unsigned nword  = unsigned(nbit >> bm::set_word_shift);
                 
                 // check if we need to step back to match the wave
-/*
                 unsigned parity = nword % 2;
                 bdescr->bit_.ptr = this->block_ + (nword - parity);
                 bdescr->bit_.cnt = bm::bitscan_wave(bdescr->bit_.ptr, bdescr->bit_.bits);
                 BM_ASSERT(bdescr->bit_.cnt);
-                bdescr->bit_.bit_grp_sz = 2;
+//                bdescr->bit_.bit_grp_sz = 2;
                 bdescr->bit_.pos = (nb * bm::set_block_size * 32) + ((nword - parity) * 32);
                 bdescr->bit_.idx = 0;
                 nbit &= bm::set_word_mask;
@@ -791,8 +786,7 @@ return true;
                         return *this;
                     bdescr->bit_.idx++;
                 } // for
-*/
-
+/*
                 bdescr->bit_.ptr = this->block_ + nword;
                 bm::word_t w = *(bdescr->bit_.ptr);
                 bdescr->bit_.cnt = bm::bitscan_popcnt(w, bdescr->bit_.bits);
@@ -807,7 +801,7 @@ return true;
                         return *this;
                     bdescr->bit_.idx++;
                 } // for
-
+*/
                 BM_ASSERT(0);
             }
             return *this;
@@ -824,21 +818,20 @@ return true;
             
             for (; bdescr->bit_.ptr < block_end;)
             {
-/*
                 bdescr->bit_.cnt = bm::bitscan_wave(bdescr->bit_.ptr, bdescr->bit_.bits);
                 if (bdescr->bit_.cnt) // found
                 {
-                    bdescr->bit_.bit_grp_sz = 2;
+//                    bdescr->bit_.bit_grp_sz = 2;
                     
                     bdescr->bit_.idx = 0;
                     bdescr->bit_.pos = this->position_;
                     this->position_ += bdescr->bit_.bits[0];
                     return true;
                 }
-                this->position_ += 64; // wave size
-                bdescr->bit_.ptr += 2;
-*/
+                this->position_ += bm::set_bitscan_wave_size * 32; // wave size
+                bdescr->bit_.ptr += bm::set_bitscan_wave_size;
 
+/*
                 bm::word_t w0 = *(bdescr->bit_.ptr);
                 if (w0)
                 {
@@ -868,7 +861,7 @@ return true;
                     this->position_ += 32;
                 }
                 ++(bdescr->bit_.ptr);
-
+*/
             } // for
             
             return false;
