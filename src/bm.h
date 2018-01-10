@@ -1787,6 +1787,10 @@ private:
 
     bm::id_t check_or_next(bm::id_t prev) const;
     
+    /// set bit in GAP block withlength extension control
+    bool gap_block_set(bm::gap_word_t* gap_blk,
+                       bool val, unsigned nblock, unsigned nbit);
+    
     /// check if specified bit is 1, and set it to 0
     /// if specified bit is 0, scan for the next 1 and returns it
     /// if no 1 found returns 0
@@ -2570,21 +2574,10 @@ void bvector<Alloc>::set_bit_no_check(bm::id_t n)
                                        &block_type);
     if (!blk) return; // nothing to do
 
-    if (block_type == 1) // gap block
+    if (block_type) // gap block
     {
-        unsigned is_set, new_block_len;
         bm::gap_word_t* gap_blk = BMGAP_PTR(blk);
-        new_block_len =
-            bm::gap_set_value(val, gap_blk, nbit, &is_set);
-        if (is_set)
-        {
-            unsigned threshold =  bm::gap_limit(gap_blk, blockman_.glen());
-            if (new_block_len > threshold)
-            {
-                extend_gap_block(nblock, gap_blk);
-            }
-            return;
-        }
+        gap_block_set(gap_blk, val, nblock, nbit);
     }
     else  // bit block
     {
@@ -2617,21 +2610,9 @@ bool bvector<Alloc>::set_bit_no_check(bm::id_t n, bool val)
 
     if (block_type) // gap
     {
-        unsigned is_set, new_block_len;
         bm::gap_word_t* gap_blk = BMGAP_PTR(blk);
-        new_block_len = 
-            bm::gap_set_value(val, gap_blk, nbit, &is_set);
-        if (is_set)
-        {
-            BMCOUNT_ADJ(val)
-
-            unsigned threshold =  bm::gap_limit(gap_blk, blockman_.glen());
-            if (new_block_len > threshold) 
-            {
-                extend_gap_block(nblock, gap_blk);
-            }
-            return true;
-        }
+        unsigned is_set = gap_block_set(gap_blk, val, nblock, nbit);
+        return is_set;
     }
     else  // bit block
     {
@@ -2661,6 +2642,28 @@ bool bvector<Alloc>::set_bit_no_check(bm::id_t n, bool val)
         }
     }
     return false;
+}
+
+// -----------------------------------------------------------------------
+
+template<class Alloc>
+bool bvector<Alloc>::gap_block_set(bm::gap_word_t* gap_blk,
+                                   bool val, unsigned nblock, unsigned nbit)
+{
+    unsigned is_set, new_block_len;
+    new_block_len =
+        bm::gap_set_value(val, gap_blk, nbit, &is_set);
+    if (is_set)
+    {
+        BMCOUNT_ADJ(val)
+
+        unsigned threshold =  bm::gap_limit(gap_blk, blockman_.glen());
+        if (new_block_len > threshold)
+        {
+            extend_gap_block(nblock, gap_blk);
+        }
+    }
+    return is_set;
 }
 
 // -----------------------------------------------------------------------
@@ -2697,19 +2700,9 @@ bool bvector<Alloc>::set_bit_conditional_impl(bm::id_t n,
 
         if (val != old_val)
         {
-            unsigned is_set;
-            unsigned new_block_len = 
-                gap_set_value(val, gap_blk, nbit, &is_set);
+            unsigned is_set = gap_block_set(gap_blk, val, nblock, nbit);
             BM_ASSERT(is_set);
-            BMCOUNT_ADJ(val)
-
-            unsigned threshold = 
-                bm::gap_limit(gap_blk, blockman_.glen());
-            if (new_block_len > threshold) 
-            {
-                extend_gap_block(nblock, gap_blk);
-            }
-            return true;
+            return is_set;
         }
     }
     else  // bit block
@@ -2772,19 +2765,9 @@ bool bvector<Alloc>::and_bit_no_check(bm::id_t n, bool val)
         bool new_val = val & old_val;
         if (new_val != old_val)
         {
-            unsigned is_set;
-            unsigned new_block_len = 
-                gap_set_value(new_val, gap_blk, nbit, &is_set);
+            unsigned is_set = gap_block_set(gap_blk, val, nblock, nbit);
             BM_ASSERT(is_set);
-            BMCOUNT_ADJ(val)
-
-            unsigned threshold = 
-                bm::gap_limit(gap_blk, blockman_.glen());
-            if (new_block_len > threshold) 
-            {
-                extend_gap_block(nblock, gap_blk);
-            }
-            return true;
+            return is_set;
         }
     }
     else  // bit block
@@ -2852,8 +2835,7 @@ bm::id_t bvector<Alloc>::check_or_next(bm::id_t prev) const
 
         if (blockman_.is_subblock_null(nblock >> bm::set_array_shift))
         {
-            prev += (bm::set_blkblk_mask + 1) -
-                            (prev & bm::set_blkblk_mask);
+            prev += (bm::set_blkblk_mask + 1) - (prev & bm::set_blkblk_mask);
         }
         else
         {
@@ -2870,7 +2852,6 @@ bm::id_t bvector<Alloc>::check_or_next(bm::id_t prev) const
 
             if (block)
             {
-                if (IS_FULL_BLOCK(block)) return prev;
                 if (BM_IS_GAP(block))
                 {
                     if (bm::gap_find_in_block(BMGAP_PTR(block),
@@ -2882,7 +2863,8 @@ bm::id_t bvector<Alloc>::check_or_next(bm::id_t prev) const
                 }
                 else
                 {
-                    if (bm::bit_find_in_block(block, nbit, &prev)) 
+                    if (IS_FULL_BLOCK(block)) return prev;
+                    if (bm::bit_find_in_block(block, nbit, &prev))
                     {
                         return prev;
                     }
@@ -2890,8 +2872,7 @@ bm::id_t bvector<Alloc>::check_or_next(bm::id_t prev) const
             }
             else
             {
-                prev += (bm::set_block_mask + 1) - 
-                            (prev & bm::set_block_mask);
+                prev += (bm::set_block_mask + 1) - (prev & bm::set_block_mask);
             }
 
         }
@@ -2947,7 +2928,8 @@ bm::id_t bvector<Alloc>::check_or_next_extract(bm::id_t prev)
                     unsigned is_set;
                     unsigned new_block_len = 
                         gap_set_value(0, BMGAP_PTR(block), nbit, &is_set);
-                    if (is_set) {
+                    if (is_set)
+                    {
                         BMCOUNT_DEC
                         unsigned threshold = 
                             bm::gap_limit(BMGAP_PTR(block), blockman_.glen());
@@ -2956,7 +2938,9 @@ bm::id_t bvector<Alloc>::check_or_next_extract(bm::id_t prev)
                             extend_gap_block(nblock, BMGAP_PTR(block));
                         }
                         return prev;
-                    } else {
+                    }
+                    else
+                    {
                         if (bm::gap_find_in_block(BMGAP_PTR(block),
                                                     nbit,
                                                     &prev))

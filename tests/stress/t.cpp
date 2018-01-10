@@ -541,6 +541,7 @@ void FillSetsIntervals(bvect_mini* bvect_min,
     {
         fill_factor=rand()%10;
     }
+    bvect_full->init();
 
     cout << "Intervals filling. Factor=" 
          <<  fill_factor << endl << endl;
@@ -628,7 +629,7 @@ if (set_flag == false)
                 if (set_flag)
                 {
                     bvect_min->set_bit(i);
-                    bvect_full->set_bit(i);            
+                    bvect_full->set_bit_no_check(i);
                 }
                 else
                 {
@@ -717,12 +718,13 @@ void FillSetsRegular(bvect_mini* bvect_min,
               unsigned max,
               unsigned /*fill_factor*/)
 {
+    bvect_full->init();
     unsigned step = rand() % 4;
     if (step < 2) ++step;
     for (unsigned i = 0; i < max; i+=step)
     {
         bvect_min->set_bit(i);
-        bvect_full->set_bit(i);
+        bvect_full->set_bit_no_check(i);
         
         if ( (i  % PROGRESS_PRINT) == 0)
         {
