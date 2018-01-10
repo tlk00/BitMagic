@@ -1297,10 +1297,11 @@ public:
     /*!
        \brief Clears bit n.
        \param n - bit's index to be cleaned.
+       \return true if bit was cleared
     */
-    void clear_bit(bm::id_t n)
+    bool clear_bit(bm::id_t n)
     {
-        set(n, false);
+        return set_bit(n, false);
     }
 
 
@@ -1322,7 +1323,7 @@ public:
     */
     bvector<Alloc>& reset()
     {
-        clear();
+        clear(true);
         return *this;
     }
 

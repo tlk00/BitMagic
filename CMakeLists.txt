@@ -33,6 +33,7 @@ add_executable(bmsvutil ${PROJECT_SOURCE_DIR}/utils/svutil/svutil.cpp)
 
 add_executable(bmtest ${PROJECT_SOURCE_DIR}/tests/stress/t.cpp)
 add_executable(bmperf ${PROJECT_SOURCE_DIR}/tests/perf/perf.cpp)
+add_executable(bmlnkutil ${PROJECT_SOURCE_DIR}/utils/lnkutil/lnkutil.cpp)
 
 add_executable(bvsample01 ${PROJECT_SOURCE_DIR}/samples/bvsample01/sample1.cpp)
 add_executable(bvsample02 ${PROJECT_SOURCE_DIR}/samples/bvsample02/sample2.cpp)
@@ -45,6 +46,7 @@ add_executable(bvsample08 ${PROJECT_SOURCE_DIR}/samples/bvsample08/sample8.cpp)
 add_executable(bvsample09 ${PROJECT_SOURCE_DIR}/samples/bvsample09/sample9.cpp)
 add_executable(bvsample10 ${PROJECT_SOURCE_DIR}/samples/bvsample10/sample10.cpp)
 add_executable(bvsample11 ${PROJECT_SOURCE_DIR}/samples/bvsample11/sample11.cpp)
+add_executable(bvsample12 ${PROJECT_SOURCE_DIR}/samples/bvsample12/sample12.cpp)
 add_executable(xsample01 ${PROJECT_SOURCE_DIR}/samples/xsample01/xsample01.cpp)
 
 add_executable(svsample01 ${PROJECT_SOURCE_DIR}/samples/svsample01/svsample01.cpp)

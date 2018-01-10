@@ -1,0 +1,298 @@
+/*
+Copyright(c) 2002-2017 Anatoliy Kuznetsov(anatoliy_kuznetsov at yahoo.com)
+
+Permission is hereby granted, free of charge, to any person
+obtaining a copy of this software and associated documentation
+files (the "Software"), to deal in the Software without restriction,
+including without limitation the rights to use, copy, modify, merge,
+publish, distribute, sublicense, and/or sell copies of the Software,
+and to permit persons to whom the Software is furnished to do so,
+subject to the following conditions:
+
+The above copyright notice and this permission notice shall be included
+in all copies or substantial portions of the Software.
+
+THE SOFTWARE IS PROVIDED "AS IS", WITHOUT WARRANTY OF ANY KIND,
+EXPRESS OR IMPLIED, INCLUDING BUT NOT LIMITED TO THE WARRANTIES
+OF MERCHANTABILITY, FITNESS FOR A PARTICULAR PURPOSE AND NONINFRINGEMENT.
+IN NO EVENT SHALL THE AUTHORS OR COPYRIGHT HOLDERS BE LIABLE FOR ANY CLAIM,
+DAMAGES OR OTHER LIABILITY, WHETHER IN AN ACTION OF CONTRACT, TORT OR OTHERWISE,
+ARISING FROM, OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR
+OTHER DEALINGS IN THE SOFTWARE.
+
+You have to explicitly mention BitMagic project in any derivative product,
+its WEB Site, published materials, articles or any other work derived from this
+project or based on our code or know-how.
+
+For more information please visit:  http://bitmagic.io
+
+*/
+
+/** \example sample12.cpp
+  Example of how to use various bit setting techniques
+
+  \sa bm::bvector<>::set() 
+  \sa bm::bvector<>::set_bit()
+  \sa bm::bvector<>::set_bit_conditional()
+  \sa bm::bvector<>::set_range()
+  \sa bm::bvector<>::clear_bit()
+  \sa bm::bvector<>::reset()
+  \sa bm::bvector<>::flip()
+  \sa bm::bvector<>::swap()
+  \sa bm::bvector<>::extract_next()
+  \sa bm::bvector<>::set_bit_no_check()
+  \sa bm::combine_or()
+ */
+
+#include <iostream>
+#include <random>
+
+#include "bm.h"
+#include "bmalgo.h"
+#include "bmtimer.h"
+
+using namespace std;
+
+// timing storage for benchmarking
+bm::chrono_taker::duration_map_type  timing_map;
+
+const unsigned benchmark_count = 1000;
+unsigned       vector_max = 4000000;
+
+std::random_device rand_dev;  
+std::mt19937 gen(rand_dev()); // mersenne_twister_engine 
+std::uniform_int_distribution<> rand_dis(1, vector_max); // generate uniform numebrs for [1, vector_max]
+
+
+// Utility template function used to print container
+template<class T> void PrintContainer(T first, T last)
+{
+    if (first == last)
+        std::cout << "<EMPTY SET>";
+    else
+        for (; first != last; ++first)
+            std::cout << *first << ";";
+    std::cout << endl;
+}
+
+void generate_test_vectors(std::vector<bm::id_t> &v1,
+                           std::vector<bm::id_t> &v2,
+                           std::vector<bm::id_t> &v3)
+{
+    bm::id_t j;
+    for (j = 0; j < vector_max; j += 2)
+    {
+        v1.push_back(j);
+    }
+    for (j = 0; j < vector_max; j += 10)
+    {
+        v2.push_back(j);
+    }
+    for (j = 0; j < vector_max; j += 120)
+    {
+        v3.push_back(j);
+    }
+}
+
+
+// stress test for bm::bvector<>::set_bit() 
+//
+void bv_set_bit_test()
+{
+    bm::chrono_taker tt1("1. bvector<>::set_bit()", benchmark_count, &timing_map);
+    bm::bvector<> bv1, bv2, bv3;
+
+    for (unsigned i = 0; i < benchmark_count; ++i)
+    {
+        bm::id_t j;
+        for (j = 0; j < vector_max; j += 2)
+        {
+            bv1.set_bit(j, true);
+        }
+        for (j = 0; j < vector_max; j += 10)
+        {
+            bv2.set_bit(j, true);
+        }
+        for (j = 0; j < vector_max; j += 120)
+        {
+            bv3.set_bit(j, true);
+        }
+        bv1.reset();
+        bv2.reset();
+        bv3.reset();
+    } // for
+}
+
+
+// stress test for bm::bvector<>::set_bit() 
+//
+void bv_set_bit_no_check_test()
+{
+    bm::chrono_taker tt1("2. bvector<>::set_bit_no_check()", benchmark_count, &timing_map);
+    bm::bvector<> bv1, bv2, bv3;
+
+    bv1.init();
+    bv2.init();
+    bv3.init();
+
+    for (unsigned i = 0; i < benchmark_count; ++i)
+    {
+        bm::id_t j;
+        for (j = 0; j < vector_max; j += 2)
+        {
+            bv1.set_bit_no_check(j);
+        }
+        for (j = 0; j < vector_max; j += 10)
+        {
+            bv2.set_bit_no_check(j);
+        }
+        for (j = 0; j < vector_max; j += 120)
+        {
+            bv3.set_bit_no_check(j);
+        }
+    }
+}
+
+void combine_or_test(std::vector<bm::id_t> &v1,
+                     std::vector<bm::id_t> &v2,
+                     std::vector<bm::id_t> &v3)
+{
+    bm::chrono_taker tt1("3. combine_or()", benchmark_count, &timing_map);
+    bm::bvector<> bv1, bv2, bv3;
+
+    for (unsigned i = 0; i < benchmark_count; ++i)
+    {
+        bm::combine_or(bv1, v1.begin(), v1.end());
+        bm::combine_or(bv2, v2.begin(), v2.end());
+        bm::combine_or(bv3, v3.begin(), v3.end());
+    }
+}
+
+
+int main(void)
+{
+    try
+    {
+        bm::bvector<>   bv1;    
+
+        // 1. Set some bits using regular bvector<>::set() method
+        //
+        bv1.set(10);
+        bv1.set(256);
+        bv1.set(1000000);
+
+        PrintContainer(bv1.first(), bv1.end()); // 10, 256, 1000000
+
+        // 2. now use bvector<>::set_bit()
+        // it returns a report if target actually changed
+        //
+
+        bm::id_t bits[] = { 256, 512, 10 };
+        unsigned cnt = 0;
+
+        for (unsigned i = 0; i < sizeof(bits) / sizeof(bits[0]); ++i)
+        {
+            bool b = bv1.set_bit(bits[i], true);
+            cnt += b;
+        }
+        std::cout << "Number of bits changed:" << cnt << std::endl;
+        PrintContainer(bv1.first(), bv1.end());
+
+        // 3. set and clear some bits using bvector<>::set_bit_conditional()
+        // method sets bit n only if current value equals the condition
+        //
+        bool b;
+        b = bv1.set_bit_conditional(5, true, false); // set bit 5 to true if it is false (yes)
+        std::cout << "Bit 5 set:" << (b ? " yes " : " no ") << std::endl; // (yes)
+        
+        b = bv1.set_bit_conditional(256, true, false); // set bit 256 to true if it is false
+        std::cout << "Bit 256 set:" << (b ? " yes " : " no ") << std::endl; // (no)
+        
+        b = bv1.set_bit_conditional(256, true, true); // set bit 256 to true if it is true 
+        std::cout << "Bit 256 set:" << (b ? " yes " : " no ") << std::endl; // (no)
+
+        PrintContainer(bv1.first(), bv1.end());
+
+        // 4. set or clear multiple bits using bvector::set_range()
+        // This method is faster than calling bvector::set() many times in a row
+        //
+        bv1.set_range(10, 15, true); // set all bits in [10..15] closed interval 
+        PrintContainer(bv1.first(), bv1.end());
+
+        bv1.set_range(10, 12, false); // clear all bits in [10..15] closed interval 
+        PrintContainer(bv1.first(), bv1.end());
+
+        // 5. bvector::clear_bit() - same as set_bit() just a syntax sugar
+        //
+        b = bv1.clear_bit(13);
+        std::cout << "Bit 13 set:" << (b ? " yes " : " no ") << std::endl; // (yes)
+
+        // 6. bvector<>::reset() - clears all the bits, frees the blocks memory
+        // same as bvector<>::clear(true);
+        //
+        bv1.reset();
+        PrintContainer(bv1.first(), bv1.end());  // <EMPTY>
+
+        // 7. use bm::combine_or() to set bits
+        //
+        bm::combine_or(bv1, &bits[0], &bits[0] + (sizeof(bits) / sizeof(bits[0])));
+        PrintContainer(bv1.first(), bv1.end()); // 10, 256, 512
+
+        // 8. use bvector<>::flip( ) to flip a bit
+        //
+        bv1.flip(256); 
+        bv1.flip(257);
+        PrintContainer(bv1.first(), bv1.end()); // 10, 257, 512
+
+        // 9. bvector<>::swap() to flip content of two bit-vectors
+        //
+        bm::bvector<> bv2;
+        bv1.swap(bv2);
+        PrintContainer(bv1.first(), bv1.end());  // <EMPTY>
+        PrintContainer(bv2.first(), bv2.end()); // 10, 257, 512
+
+        // 10. use bvector<>::extract_next() to find ON bit and turn it to 0
+        // this function is useful for building FIFO queues on bvector
+        //
+        bm::id_t p = 1;
+        for (p = bv2.extract_next(p); p != 0; p = bv2.extract_next(p))
+        {
+            std::cout << "Extracted p = " << p << std::endl;
+        } 
+        PrintContainer(bv2.first(), bv2.end()); // <EMPTY>
+
+        // 11. use bvector<>::set_bit_no_check() to set bits faster
+        //
+        bm::bvector<> bv3;
+        bv3.init();   // the key here you MUST call init() before setting bits this way
+                      
+        bv3.set_bit_no_check(10);
+        bv3.set_bit_no_check(100);
+        bv3.set_bit_no_check(1000);
+
+        PrintContainer(bv3.first(), bv3.end()); // 10, 100, 1000
+
+
+        std::vector<bm::id_t> v1, v2, v3;
+        generate_test_vectors(v1, v2, v3);
+
+        std::cout << std::endl << "Running benchmarks..." << std::endl;
+
+        bv_set_bit_test();
+        bv_set_bit_no_check_test();
+        combine_or_test(v1, v2, v3);
+
+        // print all test timing results
+        //
+        std::cout << std::endl;
+        bm::chrono_taker::print_duration_map(timing_map, bm::chrono_taker::ct_ops_per_sec);
+    }
+    catch(std::exception& ex)
+    {
+        std::cerr << ex.what() << std::endl;
+        return 1;
+    }
+
+    return 0;
+}
+
