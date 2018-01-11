@@ -8203,12 +8203,23 @@ void VerifyCountRange(const bvect& bv,
     {
         bm::id_t cnt1 = bv.count_range(0, i);
         bm::id_t cnt2 = bv.count_to(i, bc_arr);
+
+        bm::id_t cnt3 = bv.count_to_test(i, bc_arr);
         
         assert(cnt1 == cnt2);
         if (cnt1 != cnt2)
         {
             cerr << "VerifyCountRange failed!" << " count_range()=" << cnt1
                 << " count_to()=" << cnt2 << endl;
+        }
+        if (cnt3 != cnt1)
+        {
+            bool b = bv.test(i);
+            if (b)
+            {
+                cerr << "VerifyCountRange failed! count_to_test()" << cnt3 << " count_range()=" << cnt1
+                     << endl;
+            }
         }
     }
 }
@@ -10515,7 +10526,7 @@ void AddressResolverTest()
     
     found = ares.resolve(10, &id_to);
     assert(!found);
-    assert(id_to == ~0u);
+    assert(id_to == 0);
     }
 
     {
@@ -10527,7 +10538,7 @@ void AddressResolverTest()
     
     found = ares.resolve(10, &id_to);
     assert(!found);
-    assert(id_to == ~0u);
+    assert(id_to == 0);
 
     found = ares.resolve(100000, &id_to);
     assert(found);
