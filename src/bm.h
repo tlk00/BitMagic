@@ -1389,19 +1389,34 @@ public:
     /*! \brief compute running total of all blocks in bit vector
         \param blocks_cnt - out pointer to counting structure, holding the array
         Function will fill full array of running totals
+        \sa count_to
     */
     void running_count_blocks(blocks_count* blocks_cnt) const;
     
     /*!
-       \brief Returns count of 1 bits (population) in [0..right] diapason.
+       \brief Returns count of 1 bits (population) in [0..right] range.
        \param right - index of last bit
        \param blocks_cnt - block count structure to accelerate search
                            should be prepared using running_count_blocks
        \return population count in the diapason
        \sa running_count_blocks
+       \sa count_to_test
     */
     bm::id_t count_to(bm::id_t right, const blocks_count&  blocks_cnt) const;
 
+    /*!
+        \brief Returns count of 1 bits (population) in [0..right] range if test(right) == true.
+        Faster than test() plus count_to()
+        \param right - index of last bit
+        \param blocks_cnt - block count structure to accelerate search
+               should be prepared using running_count_blocks
+
+        \return population count in the diapason or 0 if right bit test failed
+
+        \sa running_count_blocks
+        \sa count_to
+    */
+    bm::id_t count_to_test(bm::id_t right, const blocks_count&  blocks_cnt) const;
 
     /*! Recalculate bitcount
         this function only make sense when BMCOUNTOPT is defined
@@ -2062,27 +2077,72 @@ bm::id_t bvector<Alloc>::count_to(bm::id_t right,
     if (!block)
         return cnt;
 
-    if (block == FULL_BLOCK_FAKE_ADDR) 
+    bool gap = BM_IS_GAP(block);
+    if (gap)
     {
-        cnt += nbit_right + 1;
+        unsigned c = bm::gap_bit_count_to(BMGAP_PTR(block), (gap_word_t)nbit_right);
+        BM_ASSERT(c == bm::gap_bit_count_range(BMGAP_PTR(block), (gap_word_t)0, (gap_word_t)nbit_right));
+        cnt += c;
     }
     else
     {
-        bool gap = BM_IS_GAP(block);
-        if (gap)
-        {
-            unsigned c = bm::gap_bit_count_to(BMGAP_PTR(block), (gap_word_t)nbit_right);
-            BM_ASSERT(c == bm::gap_bit_count_range(BMGAP_PTR(block), (gap_word_t)0, (gap_word_t)nbit_right));
-            cnt += c;
-        }
-        else
-        {
-            cnt += bm::bit_block_calc_count_to(block, nbit_right);
-        }
+        cnt += 
+            (block == FULL_BLOCK_FAKE_ADDR) ? (nbit_right + 1) : bm::bit_block_calc_count_to(block, nbit_right);
     }
 
     return cnt;
 }
+
+// -----------------------------------------------------------------------
+
+template<typename Alloc>
+bm::id_t bvector<Alloc>::count_to_test(bm::id_t right,
+                                       const blocks_count&  blocks_cnt) const
+{
+    if (!blockman_.is_init())
+        return 0;
+
+    unsigned nblock_right = unsigned(right >> bm::set_block_shift);
+    unsigned nbit_right = unsigned(right & bm::set_block_mask);
+
+    // running count of all blocks before target
+    //
+    bm::id_t cnt = 0;
+    
+    const bm::word_t* block = blockman_.get_block_ptr(nblock_right);
+    if (!block)
+        return 0;
+
+    bool gap = BM_IS_GAP(block);
+    if (gap)
+    {
+        bm::gap_word_t *gap_blk = BMGAP_PTR(block);
+        if (bm::gap_test_unr(gap_blk, (gap_word_t)nbit_right))
+            cnt = bm::gap_bit_count_to(gap_blk, (gap_word_t)nbit_right);
+        else
+            return 0;
+    }
+    else
+    {
+        if (block == FULL_BLOCK_FAKE_ADDR)
+        {
+            cnt = nbit_right + 1;
+        }
+        else
+        {
+            unsigned nword = nbit_right >> bm::set_word_shift;
+            unsigned w = block[nword];
+            w &= (1u << (nbit_right & bm::set_word_mask));
+            if (w)
+                cnt = bm::bit_block_calc_count_to(block, nbit_right);
+            else
+                return 0;
+        }
+    }
+    cnt += nblock_right ? blocks_cnt.cnt[nblock_right - 1] : 0;
+    return cnt;
+}
+
 
 // -----------------------------------------------------------------------
 
