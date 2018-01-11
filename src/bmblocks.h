@@ -803,7 +803,7 @@ public:
     \return block adress or NULL if not yet allocated or FULL_BLOCK_FAKE_ADDR
     */
     BMFORCEINLINE
-    const bm::word_t* get_block_ptr(unsigned nb) const
+    bm::word_t* get_block_ptr(unsigned nb) const
     {
         unsigned block_idx = nb >> bm::set_array_shift;
         if (!top_blocks_ || (block_idx >= top_block_size_))
@@ -1056,7 +1056,7 @@ public:
                                      int*     actual_block_type,
                                      bool     allow_null_ret=true)
     {
-        bm::word_t* block = this->get_block(nb);
+        bm::word_t* block = this->get_block_ptr(nb);
 
         if (!IS_VALID_ADDR(block)) // NULL block or ALLSET
         {
