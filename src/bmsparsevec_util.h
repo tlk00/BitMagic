@@ -163,22 +163,23 @@ bool bvps_addr_resolver<BV>::resolve(bm::id_t id_from, bm::id_t* id_to) const
 {
     BM_ASSERT(id_to);
 
-    bool found = addr_bv_.test(id_from);
-    if (!found)
-    {
-        *id_to = ~0u;
-        return false;
-    }
-
     if (in_sync_)
     {
-        *id_to = addr_bv_.count_to(id_from, bv_blocks_);
+        *id_to = addr_bv_.count_to_test(id_from, bv_blocks_);
     }
     else  // slow access
     {
-        *id_to = addr_bv_.count_range(0, id_from);
+        bool found = addr_bv_.test(id_from);
+        if (!found)
+        {
+            *id_to = 0;
+        }
+        else
+        {
+            *id_to = addr_bv_.count_range(0, id_from);
+        }
     }
-    return found;
+    return (bool) *id_to;
 }
 
 //---------------------------------------------------------------------
@@ -189,15 +190,8 @@ bool bvps_addr_resolver<BV>::get(bm::id_t id_from, bm::id_t* id_to) const
     BM_ASSERT(id_to);
     BM_ASSERT(in_sync_);
 
-    bool found = addr_bv_.test(id_from);
-    if (!found)
-    {
-        *id_to = ~0u;
-        return found;
-    }
-
-    *id_to = addr_bv_.count_to(id_from, bv_blocks_);
-    return found;
+    *id_to = addr_bv_.count_to_test(id_from, bv_blocks_);
+    return (bool)*id_to;
 }
 
 //---------------------------------------------------------------------
