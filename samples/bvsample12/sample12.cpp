@@ -45,7 +45,7 @@ For more information please visit:  http://bitmagic.io
  */
 
 #include <iostream>
-#include <random>
+#include <vector>
 
 #include "bm.h"
 #include "bmalgo.h"
@@ -58,10 +58,6 @@ bm::chrono_taker::duration_map_type  timing_map;
 
 const unsigned benchmark_count = 1000;
 unsigned       vector_max = 4000000;
-
-std::random_device rand_dev;  
-std::mt19937 gen(rand_dev()); // mersenne_twister_engine 
-std::uniform_int_distribution<> rand_dis(1, vector_max); // generate uniform numebrs for [1, vector_max]
 
 
 // Utility template function used to print container
@@ -275,6 +271,18 @@ int main(void)
 
         std::vector<bm::id_t> v1, v2, v3;
         generate_test_vectors(v1, v2, v3);
+
+        for (unsigned k = 0; k < 1000; ++k)
+        {
+            // run a few CPU "pre-heat" loops to get consistent results
+            unsigned s = 0;
+            unsigned i;
+            for (i = 0; i < v1.size(); ++i)
+                s = s + s* v1[i] + i;
+            for (i = 0; i < v2.size(); ++i)
+                s = s + s* v2[i] + i;
+            std::cout << s << "\r";
+        }
 
         std::cout << std::endl << "Running benchmarks..." << std::endl;
 
