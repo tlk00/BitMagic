@@ -87,6 +87,22 @@ int BM_bvector_construct(BM_BVHANDLE* h, unsigned int bv_max)
 
 // -----------------------------------------------------------------
 
+int BM_bvector_init(BM_BVHANDLE h)
+{
+    if (!h)
+        return BM_ERR_BADARG;
+    BM_TRY
+    {
+        TBM_bvector* bv = (TBM_bvector*)h;
+        bv->init();
+    }
+    BM_CATCH_ALL
+    ETRY;
+    return BM_OK;
+}
+
+// -----------------------------------------------------------------
+
 int BM_bvector_construct_copy(BM_BVHANDLE* h, BM_BVHANDLE hfrom)
 {
     if (h == 0 || !hfrom)
@@ -264,6 +280,24 @@ int BM_bvector_set_bit_conditional(BM_BVHANDLE  h,
     BM_CATCH_ALL
     ETRY;
     return BM_OK;
+}
+
+// -----------------------------------------------------------------
+
+
+int BM_bvector_set_bit_no_check(BM_BVHANDLE h, unsigned int i)
+{
+    if (!h)
+        return BM_ERR_BADARG;
+    BM_TRY
+    {
+        TBM_bvector* bv = (TBM_bvector*)h;
+        bv->set_bit_no_check(i);
+    }
+    BM_CATCH_ALL
+    ETRY;
+    return BM_OK;
+
 }
 
 // -----------------------------------------------------------------

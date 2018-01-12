@@ -114,6 +114,13 @@ const char* BM_error_msg(int errcode);
 */
 int BM_bvector_construct(BM_BVHANDLE* h, unsigned int bv_max);
 
+/* init bvector handle to finilize construction
+    This step is optional, unless we need to call "_no_check()" functions, which bypass
+    certain checks
+*/
+int BM_bvector_init(BM_BVHANDLE h);
+
+
 /* construct bvector handle as a copy
    hfrom - another handle to copy from
 */
@@ -149,11 +156,17 @@ int BM_bvector_swap(BM_BVHANDLE h1, BM_BVHANDLE h2);
 /* -------------------------------------------- */
 
 
-/* set bit 
+/* set bit to 1 or 0 
    i - index of a bit to set
    val - value (0 | 1)
 */
 int BM_bvector_set_bit(BM_BVHANDLE h, unsigned int i, int val);
+
+/* set bit to 1 without extra checks (faster).
+   Use of this function requires full initialization by BM_bvector_init(); 
+   i - index of a bit to set
+*/
+int BM_bvector_set_bit_no_check(BM_BVHANDLE h, unsigned int i);
 
 
 /* set bit only if current value equals the condition
