@@ -50,9 +50,9 @@ int main(void)
 {
     try
     {
-        bm::bvector<>   bv;    // Bitvector variable declaration.
+        bm::bvector<>   bv { 1, 2, 3 };    // Bitvector variable declaration with init list
 
-        cout << bv.count() << endl;
+        cout << "1. bitcount: " << bv.count() << endl;
 
         // Set some bits.
 
@@ -62,7 +62,7 @@ int main(void)
 
         // New bitvector's count.
 
-        cout << bv.count() << endl;
+        cout << "2. bitcount: " << bv.count() << endl;
 
 
         // Print the bitvector.
@@ -86,7 +86,7 @@ int main(void)
 
         bv.clear();   // Clean up.
 
-        cout << bv.count() << endl;
+        cout << "3. bitcount: " << bv.count() << endl;
 
         // We also can use operators to set-clear bits;
 
@@ -94,14 +94,14 @@ int main(void)
         bv[100] = true;
         bv[10000] = true;
 
-        cout << bv.count() << endl;
+        cout << "4. bitcount: " << bv.count() << endl;
 
         if (bv[10])
         {
             bv[10] = false;
         }
 
-        cout << bv.count() << endl;
+        cout << "5. bitcount: " << bv.count() << endl;
     }
     catch(std::exception& ex)
     {

@@ -35,6 +35,7 @@ For more information please visit:  http://bitmagic.io
 // to disable any references to STL headers
 #ifndef BM_NO_STL
 # include <iterator>
+# include <initializer_list>
 #endif
 
 #include <limits.h>
@@ -1025,7 +1026,7 @@ public:
           "no limits" (recommended). 
           bit vector allocates this space dynamically on demand.
         \param alloc - alllocator for this instance
-
+         
         \sa bm::gap_len_table bm::gap_len_table_min set_new_blocks_strat
     */
     bvector(strategy          strat      = BM_BIT,
@@ -1101,7 +1102,30 @@ public:
         count_is_valid_ = bvect.count_is_valid_;
 #endif
     }
-    
+
+
+    /*!
+        \brief Brace constructor
+    */
+    bvector(std::initializer_list<bm::id_t> il) 
+        : blockman_(bm::gap_len_table<true>::_len, bm::id_max, Alloc()),
+          new_blocks_strat_(BM_BIT),
+          size_(bm::id_max)
+    {
+        init();
+        std::initializer_list<bm::id_t>::const_iterator start = il.begin();
+        std::initializer_list<bm::id_t>::const_iterator end = il.end();
+        for (; start < end; ++start)
+        {
+            this->set_bit_no_check(*start);
+        }
+#ifdef BMCOUNTOPT
+        count_ = (bm::id_t)il.size();
+        count_is_valid_ = true;
+#endif
+    }
+
+
     /*! 
         \brief Move assignment operator
     */

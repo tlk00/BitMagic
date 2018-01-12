@@ -33,7 +33,7 @@ For more information please visit:  http://bitmagic.io
 //#define BMSSE2OPT
 //#define BMSSE42OPT
 //#define BMAVX2OPT
-//#define BMCOUNTOPT
+#define BMCOUNTOPT
 //#define BM_USE_EXPLICIT_TEMP
 
 #include <stdio.h>
@@ -1866,7 +1866,6 @@ void BasicFunctionalityTest()
     cout << "---------------------------- Basic functinality test" << endl;
 
     assert(ITERATIONS < BITVECT_SIZE);
-
 
     bvect_mini     bvect_min(BITVECT_SIZE);
     bvect          bvect_full;
@@ -6482,6 +6481,23 @@ void SyntaxTest()
 
 void SetTest()
 {
+    {
+        bvect bv{ 0, 10, 65536, 10000 };
+        unsigned cnt = bv.count();
+        if (cnt != 4)
+        {
+            cout << "Brace initialization test failed!." << endl;
+            exit(1);
+        }
+        bvect bv2;
+        bv2.set(0).set(10).set(65536).set(10000);
+
+        if (bv != bv2)
+        {
+            cout << "Brace initialization comparison test failed!." << endl;
+            exit(1);
+        }
+    }
     {
     unsigned cnt;
     bvect bv;

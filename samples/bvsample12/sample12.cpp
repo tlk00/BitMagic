@@ -169,7 +169,13 @@ int main(void)
 {
     try
     {
-        bm::bvector<>   bv1;    
+
+        // 0. create bvector, use brace initialization to add some initial data
+        //
+        bm::bvector<>   bv1 { 2, 3, 4 };
+        
+        PrintContainer(bv1.first(), bv1.end()); // 2, 3, 4
+        bv1.clear();
 
         // 1. Set some bits using regular bvector<>::set() method
         //
