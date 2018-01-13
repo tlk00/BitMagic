@@ -92,34 +92,23 @@ public:
         reference(sparse_vector<Val, BV>& sv, size_type idx) BMNOEXEPT
         : sv_(sv), idx_(idx)
         {}
-        
-        operator value_type() const
-        {
-            return sv_.get(idx_);
-        }
-        
+        operator value_type() const { return sv_.get(idx_); }
         reference& operator=(const reference& ref)
         {
             sv_.set(idx_, (value_type)ref);
             return *this;
         }
-        
         reference& operator=(value_type val)
         {
             sv_.set(idx_, val);
             return *this;
         }
-        
         bool operator==(const reference& ref) const
-        {
-            return bool(*this) == bool(ref);
-        }
-        
+                                { return bool(*this) == bool(ref); }
     private:
         sparse_vector<Val, BV>& sv_;
         size_type               idx_;
     };
-    
 
 public:
     /*!
@@ -774,8 +763,7 @@ void sparse_vector<Val, BV>::resize(typename sparse_vector<Val, BV>::size_type s
     
     if (sz < size_) // vector shrink
     {
-        // clear the tails
-        this->clear_range(sz, size_-1);
+        this->clear_range(sz, size_-1);   // clear the tails
     }
     
     size_ = sz;
