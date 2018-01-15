@@ -76,6 +76,19 @@ For more information please visit:  http://bitmagic.io
 #include "bmalloc.h"
 #include "bmblocks.h"
 
+
+extern "C"
+{
+    /**
+    Callback type to visit (callback style) bits in bit-vector(s)
+    
+    @param handle_ptr - custom pointer to callback specific data
+    @param bit_idx - number/index of visited bit
+    */
+    typedef int (*bit_visitor_callback_type)(void* handle_ptr, bm::id_t bit_idx);
+}
+
+
 namespace bm
 {
 
@@ -104,18 +117,18 @@ namespace bm
 
 /** @defgroup bmagic BitMagic Library
     BitMagic C++ Library
-    For more information please visit:  http://bmagic.sourceforge.net 
+    For more information please visit:
+    http://bmagic.sourceforge.net
     https://github.com/tlk00/BitMagic
- *  
- */
+ 
+*/
 
 
 /** @defgroup bvector bvector<>
     The Main bvector<> Group
     bvector<> template: front end of the BitMagic library.
- *  @ingroup bmagic 
- */
-
+    @ingroup bmagic
+*/
 
 
 
@@ -124,7 +137,6 @@ namespace bm
    Bit-vector container with runtime compression of bits
    @ingroup bvector
 */
-
 template<class Alloc> 
 class bvector
 {

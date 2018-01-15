@@ -669,6 +669,41 @@ sparse_vector<Val, BV>::extract(value_type* arr,
                                 size_type   offset,
                                 bool        zero_mem) const
 {
+    /// Decoder functor
+    /// @internal
+    ///
+    struct sv_decode_visitor_func
+    {
+        sv_decode_visitor_func(value_type* arr,
+                               value_type mask,
+                               size_type  offset)
+        : arr_(arr), mask_(mask), off_(offset)
+        {}
+        
+        void add_bits(bm::id_t offset, const unsigned char* bits, unsigned size)
+        {
+            size_type idx_base = offset - off_;
+            for (unsigned i = 0; i < size; ++i)
+            {
+                size_type idx = idx_base + bits[i];
+                arr_[idx] |= mask_;
+            }
+            
+        }
+        void add_range(bm::id_t offset, unsigned size)
+        {
+            size_type idx_base = offset - off_;
+            for (unsigned i = 0; i < size; ++i)
+            {
+                arr_[i + idx_base] |= mask_;
+            }
+        }
+        value_type* arr_;
+        value_type mask_;
+        size_type  off_;
+    };
+
+
     if (size == 0)
         return 0;
 
@@ -698,12 +733,16 @@ sparse_vector<Val, BV>::extract(value_type* arr,
                 bv_mask.set_range(offset, end - 1);
                 bv_mask.bit_and(*bv);
 
+                sv_decode_visitor_func func(arr, mask, offset);
+                bm::for_each_bit(bv_mask, func);
+/*
                 for (typename BV::enumerator en(&bv_mask, 0); en.valid(); ++en)
                 {
                     size_type idx = *en - offset;
                     BM_ASSERT(idx < size);
                     arr[idx] |= mask;
                 } // for
+*/
                 bv_mask.clear();
             }
         } // for i
@@ -715,13 +754,20 @@ sparse_vector<Val, BV>::extract(value_type* arr,
             const bvector_type* bv = plains_[i];
             if (bv)
             {
-                value_type mask = (1 << i);            
+                value_type mask = (1 << i);
+
+                sv_decode_visitor_func func(arr, mask, 0);
+                bm::for_each_bit(*bv, func);
+
+/*
                 for (typename BV::enumerator en(bv, 0); en.valid(); ++en)
                 {
                     size_type idx = *en;
                     BM_ASSERT(idx < size);
                     arr[idx] |= mask;
                 } // for
+*/
+                
             }
         } // for i
     }

@@ -551,7 +551,6 @@ void EnumeratorGoToTest()
 
 
 
-
 void BitCompareTest()
 {
     {
@@ -644,73 +643,92 @@ void BitCompareTest()
     sprintf(buf, "%p", p);
 }
 
+extern "C" {
+    int bit_visitor_func(void* handle_ptr, bm::id_t bit_idx)
+    {
+        std::vector<bm::id_t>* vp = (std::vector<bm::id_t>*)handle_ptr;
+        vp->push_back(bit_idx);
+        return 0;
+    }
+} // extern C
+
+
 void EnumeratorTest()
 {
-    bvect  bv1, bv2, bv3, bv4;
-    test_bitset*  bset = new test_bitset();
-    unsigned value = 0;
-
-    SimpleFillSets(*bset, bv1, 0, BSIZE, 3);
-    SimpleFillSets(*bset, bv1, 0, BSIZE, 4);
-    SimpleFillSets(*bset, bv1, 0, BSIZE, 5);
+    bvect                 bv1, bv2, bv3, bv4;
+    std::vector<bm::id_t> v1,  v2,  v3,  v4;
     
-    FillSetsIntervals(*bset, bv2, 0, BSIZE, 8);
-    FillSetsIntervals(*bset, bv3, 0, BSIZE, 12);
-    FillSetsIntervals(*bset, bv4, 0, BSIZE, 120);
+    test_bitset*  bset = new test_bitset();
 
-    unsigned cnt1 = bv1.count();
+    SimpleFillSets(*bset, bv1, 0, BSIZE/2, 3);
+    SimpleFillSets(*bset, bv1, 0, BSIZE/2, 4);
+    SimpleFillSets(*bset, bv1, 0, BSIZE/2, 5);
+    
+    FillSetsIntervals(*bset, bv2, 0, BSIZE/2, 8);
+    FillSetsIntervals(*bset, bv3, 0, BSIZE/2, 12);
+    FillSetsIntervals(*bset, bv4, 0, BSIZE/2, 120);
+    
+    v1.reserve(bv1.count());
+    v2.reserve(bv2.count());
+    v3.reserve(bv3.count());
+    v4.reserve(bv4.count());
+
     unsigned i;
 
     {
-    TimeTaker tt("bvector<>::enumerator", REPEATS/4);
-    for (i = 0; i < REPEATS/4; ++i)
-    {
+        TimeTaker tt("bvector<>::enumerator", REPEATS/10);
+        for (i = 0; i < REPEATS/10; ++i)
         {
-            bvect::enumerator en = bv1.first();
-            for (;en.valid();++en)
             {
-                value += *en;
+                bvect::enumerator en = bv1.first();
+                for (;en.valid();++en)
+                {
+                    v1.push_back(*en);
+                }
             }
-        }
-        {
-            bvect::enumerator en = bv2.first();
-            for (;en.valid();++en)
             {
-                value += *en;
+                bvect::enumerator en = bv2.first();
+                for (;en.valid();++en)
+                {
+                    v2.push_back(*en);
+                }
             }
-        }
-        {
-            bvect::enumerator en = bv3.first();
-            for (;en.valid();++en)
             {
-                value += *en;
+                bvect::enumerator en = bv3.first();
+                for (;en.valid();++en)
+                {
+                    v3.push_back(*en);
+                }
             }
-        }
-        {
-            bvect::enumerator en = bv4.first();
-            for (;en.valid();++en)
             {
-                value += *en;
+                bvect::enumerator en = bv4.first();
+                for (;en.valid();++en)
+                {
+                    v4.push_back(*en);
+                }
             }
-        }
+            v1.resize(0);
+            v2.resize(0);
+            v3.resize(0);
+            v4.resize(0);
+
+        } // for REPEATS
     }
-    }
+    
 
 
     // -----------------------------------------------
-
-    unsigned cnt = 0;
     {
-        TimeTaker tt("bvector<>::get_next()", REPEATS/4);
-        for (i = 0; i < REPEATS/4; ++i)
+        TimeTaker tt("bvector<>::get_next()", REPEATS/10);
+        for (i = 0; i < REPEATS/10; ++i)
         {
             if (bv1.any())
             {
                 unsigned v = bv1.get_first();
                 do
                 {
-                    v = bv1.get_next(value);
-                    cnt += v;
+                    v = bv1.get_next(v);
+                    v1.push_back(v);
                 } while(v);
             }
             if (bv2.any())
@@ -718,8 +736,8 @@ void EnumeratorTest()
                 unsigned v = bv2.get_first();
                 do
                 {
-                    v = bv2.get_next(value);
-                    cnt += v;
+                    v = bv2.get_next(v);
+                    v2.push_back(v);
                 } while(v);
             }
             if (bv3.any())
@@ -727,8 +745,8 @@ void EnumeratorTest()
                 unsigned v = bv3.get_first();
                 do
                 {
-                    v = bv3.get_next(value);
-                    cnt += v;
+                    v = bv3.get_next(v);
+                    v3.push_back(v);
                 } while(v);
             }
             if (bv4.any())
@@ -736,17 +754,43 @@ void EnumeratorTest()
                 unsigned v = bv4.get_first();
                 do
                 {
-                    v = bv4.get_next(value);
-                    cnt += v;
+                    v = bv4.get_next(v);
+                    v4.push_back(v);
                 } while(v);
             }
-        }
+            v1.resize(0);
+            v2.resize(0);
+            v3.resize(0);
+            v4.resize(0);
+
+        } // for REPEATS
     }
+
+    // -----------------------------------------------
+    
+    
+    {
+        TimeTaker tt("bm::visit_each_bit()", REPEATS/10);
+        for (i = 0; i < REPEATS/10; ++i)
+        {
+            bm::visit_each_bit(bv1, (void*)&v1, bit_visitor_func);
+            bm::visit_each_bit(bv2, (void*)&v2, bit_visitor_func);
+            bm::visit_each_bit(bv3, (void*)&v3, bit_visitor_func);
+            bm::visit_each_bit(bv4, (void*)&v4, bit_visitor_func);
+
+            v1.resize(0);
+            v2.resize(0);
+            v3.resize(0);
+            v4.resize(0);
+        } // for REPEATS
+
+    }
+    
+    // -----------------------------------------------
+
 
     delete bset;
 
-    char buf[256];
-    sprintf(buf, "%i %i ", cnt, cnt1);//, cnt2);
 
 }
 
@@ -1720,11 +1764,12 @@ void SparseVectorAccessTest()
     }
     
     {
-        TimeTaker tt("sparse_vector extraction access test", REPEATS/10 );
+        TimeTaker tt("sparse_vector extract test", REPEATS );
         for (unsigned i = 0; i < REPEATS/10; ++i)
         {
-            unsigned target_size = 190000000/2 - 256000;
-            sv1.extract(&target[0], 256000, target_size);
+            unsigned target_off = 190000000/2 - 256000;
+            sv1.extract(&target[0], sv1.size());
+            sv1.extract(&target[0], 256000, target_off);
         }
     }
     

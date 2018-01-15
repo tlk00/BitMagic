@@ -1662,6 +1662,73 @@ void export_array(BV& bv, It first, It last)
 
 }
 
+
+/*!
+   \brief for-each visitor, calls a special visitor functor for each 1 bit group
+ 
+   \param block - bit block buffer pointer
+   \param offset - global block offset (number of bits)
+   \param bit_functor - functor must support .add_bits(offset, bits_ptr, size)
+ 
+   @ingroup bitfunc
+   @internal
+*/
+template<class Func>
+void for_each_bit_blk(const bm::word_t* block, bm::id_t offset,
+                      Func&  bit_functor)
+{
+    unsigned char bits[bm::set_bitscan_wave_size*32];
+
+    unsigned offs = offset;
+    unsigned cnt;
+    
+    const word_t* block_end = block + bm::set_block_size;
+    for ( ;block < block_end; )
+    {
+        cnt = bm::bitscan_wave(block, bits);
+        
+        bit_functor.add_bits(offs, bits, cnt);
+        
+        offs += bm::set_bitscan_wave_size * 32;
+        block += bm::set_bitscan_wave_size;
+    } // for
+}
+
+
+/*!
+   \brief for-each visitor, calls a special visitor functor for each 1 bit range
+ 
+   \param block - bit block buffer pointer
+   \param offset - global block offset (number of bits)
+   \param bit_functor - functor must support .add_range(offset, bits_ptr, size)
+ 
+   @ingroup gapfunc
+   @internal
+*/
+template<typename T, typename Func>
+void for_each_gap_blk(const T* buf, bm::id_t offset,
+                      Func&  bit_functor)
+{
+    const T* pcurr = buf + 1;
+    const T* pend = buf + (*buf >> 3);
+
+    if (*buf & 1)
+    {
+        bit_functor.add_range(offset, *pcurr + 1);
+        ++pcurr;
+    }
+    for (++pcurr; pcurr <= pend; pcurr += 2)
+    {
+        T prev = *(pcurr-1);
+        bit_functor.add_range(offset + prev + 1, *pcurr - prev);
+    }
+}
+
+
+
+
+
+
 } // namespace bm
 
 #ifdef _MSC_VER

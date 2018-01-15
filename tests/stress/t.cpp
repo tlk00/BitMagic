@@ -1049,48 +1049,48 @@ void SerializationOperation2Test(bvect*        bv_target,
     unsigned scount1 = SerializationOperation(0, 
                                               bv1,
                                               bv2,
-op_count,
-true //reverse check
-);
-cout << "Serialization operation count OK." << endl;
+                                              op_count,
+                                              true //reverse check
+                                            );
+    cout << "Serialization operation count OK." << endl;
 
-cout << "Serialization operation. " << endl;
-unsigned scount2 = SerializationOperation(bv_target,
-    bv1,
-    bv2,
-    op_combine);
-scount2 = bv_target->count();
-if (predicted_count != scount2 || scount1 != scount2)
-{
-    cout << "Serialization count != predicted" << endl
-        << " predicted=" << predicted_count
-        << " scount1=" << scount1
-        << " scount2=" << scount2
-        << endl;
-
-    cout << endl << "target:" << endl;
-    print_stat(*bv_target);
-    cout << endl << endl << "Reference" << endl;
-    if (op_combine == set_OR)
+    cout << "Serialization operation. " << endl;
+    unsigned scount2 = SerializationOperation(bv_target,
+        bv1,
+        bv2,
+        op_combine);
+    scount2 = bv_target->count();
+    if (predicted_count != scount2 || scount1 != scount2)
     {
-        bv1 |= bv2;
-        if (bv1 != *bv_target)
+        cout << "Serialization count != predicted" << endl
+            << " predicted=" << predicted_count
+            << " scount1=" << scount1
+            << " scount2=" << scount2
+            << endl;
+
+        cout << endl << "target:" << endl;
+        print_stat(*bv_target);
+        cout << endl << endl << "Reference" << endl;
+        if (op_combine == set_OR)
         {
-            cout << "Comparison OR error!" << endl;
-        }
-        cout << "OR operation count=" << bv1.count() << endl;
-        print_stat(bv1);
-    }
-    else
-        if (op_combine == set_AND)
-        {
-            bv1 &= bv2;
+            bv1 |= bv2;
+            if (bv1 != *bv_target)
+            {
+                cout << "Comparison OR error!" << endl;
+            }
+            cout << "OR operation count=" << bv1.count() << endl;
             print_stat(bv1);
         }
+        else
+            if (op_combine == set_AND)
+            {
+                bv1 &= bv2;
+                print_stat(bv1);
+            }
 
-    exit(1);
-}
-cout << "OK" << endl;
+        exit(1);
+    }
+    cout << "OK" << endl;
 }
 
 
@@ -1338,6 +1338,8 @@ void CompareEnumerators(const bvect::enumerator& en1, const bvect::enumerator& e
         exit(1);
     }
 }
+
+
 
 
 // vectors comparison check
@@ -6342,8 +6344,6 @@ void EnumeratorTest()
             exit(1);
         }
     }
-
-
 }
 
 
@@ -10577,6 +10577,203 @@ void AddressResolverTest()
     
 }
 
+/// generate pseudo-random bit-vector, mix of blocks
+///
+void generate_bvector(bm::bvector<>& bv)
+{
+    unsigned       vector_max = 40000000;
+
+    unsigned i, j;
+    for (i = 0; i < vector_max;)
+    {
+        // generate bit-blocks
+        for (j = 0; j < 65535*8; i += 10, j++)
+        {
+            bv.set(i);
+        }
+        if (i > vector_max)
+            break;
+        // generate GAP (compressed) blocks
+        for (j = 0; j < 65535; i += 120, j++)
+        {
+            unsigned len = rand() % 64;
+            bv.set_range(i, i + len);
+            i += len;
+            if (i > vector_max)
+                break;
+        }
+    }
+}
+
+extern "C" {
+    int bit_decode_func(void* handle_ptr, bm::id_t bit_idx)
+    {
+        std::vector<bm::id_t>* vp = (std::vector<bm::id_t>*)handle_ptr;
+        vp->push_back(bit_idx);
+        return 0;
+    }
+} // extern C
+
+
+
+void BvectorBitForEachTest()
+{
+    cout << "------------------------ bvector BitForEach Test" << endl;
+    int res;
+    
+    {
+        cout << "test empty vector" << endl;
+        bm::bvector<> bv1;
+        std::vector<unsigned> v1;
+        
+        bm::visit_each_bit(bv1, (void*)&v1, bit_decode_func);
+        if (v1.size())
+        {
+            cerr << "1. Failed empty vector decode " << v1.size() << endl;
+            exit(1);
+        }
+        bv1.init();
+        bm::visit_each_bit(bv1, (void*)&v1, bit_decode_func);
+        if (v1.size())
+        {
+            cerr << "2. Failed empty vector decode " << v1.size() << endl;
+            exit(1);
+        }
+        
+        bv1.set(100000, true);
+        bv1.set(100000, false);
+        
+        bm::visit_each_bit(bv1, (void*)&v1, bit_decode_func);
+        if (v1.size())
+        {
+            cerr << "3. Failed empty vector decode " << v1.size() << endl;
+            exit(1);
+        }
+
+        bv1.optimize();
+        bm::visit_each_bit(bv1, (void*)&v1, bit_decode_func);
+        if (v1.size())
+        {
+            cerr << "3. Failed empty vector decode " << v1.size() << endl;
+            exit(1);
+        }
+    }
+    
+    {
+        bm::bvector<> bv1 { 0,1,2, 10, 32, 100, 65535,
+                            65535+1, 65535+2, 65535+10, 65535+11, 65535+31,
+                            20000000 };
+        bm::bvector<> bv2;
+        std::vector<unsigned> v1;
+        
+        bm::visit_each_bit(bv1, (void*)&v1, bit_decode_func);
+
+        //bm::for_each_bit(bv1, func);
+
+        {
+            for (size_t i = 0; i < v1.size(); ++i)
+                cout << v1[i] << ", ";
+            cout << endl;
+        }
+
+        if (v1.size() != bv1.count())
+        {
+            std::cerr << "0. Bit for each failed size test. " << v1.size()
+                      << " should be " << bv1.count() << std::endl;
+            exit(1);
+        }
+        bm::combine_or(bv2, v1.begin(), v1.end());
+        
+        res = bv2.compare(bv1);
+        if (res != 0)
+        {
+            std::cerr << "0. Bit for each failed comparison test. " << endl;
+            exit(1);
+        }
+        
+        bv1.optimize();
+        bv2.reset();
+        v1.resize(0);
+//        bm::for_each_bit(bv1, func);
+        bm::visit_each_bit(bv1, (void*)&v1, bit_decode_func);
+        
+        {
+            for (size_t i = 0; i < v1.size(); ++i)
+                cout << v1[i] << ", ";
+            cout << endl;
+        }
+
+        if (v1.size() != bv1.count())
+        {
+            std::cerr << "1. Bit for each failed size test. " << v1.size()
+                      << " should be " << bv1.count() << std::endl;
+            exit(1);
+        }
+        bm::combine_or(bv2, v1.begin(), v1.end());
+        
+        res = bv2.compare(bv1);
+        if (res != 0)
+        {
+            std::cerr << "1. Bit for each failed comparison test. " << endl;
+            exit(1);
+        }
+
+    }
+    
+    {
+        bm::bvector<> bv1, bv2;
+        std::vector<unsigned> v1;
+        
+        generate_bvector(bv1);
+        v1.reserve(bv1.count());
+        
+//        DecodeFunc func(v1);
+//        bm::for_each_bit(bv1, func);
+        bm::visit_each_bit(bv1, (void*)&v1, bit_decode_func);
+
+        if (v1.size() != bv1.count())
+        {
+            std::cerr << "Bit for each failed size test. " << v1.size()
+                      << " should be " << bv1.count() << std::endl;
+            exit(1);
+        }
+        bm::combine_or(bv2, v1.begin(), v1.end());
+        
+        res = bv2.compare(bv1);
+        if (res != 0)
+        {
+            std::cerr << "Bit for each failed comparison test. " << endl;
+            exit(1);
+        }
+
+        cout << "for each bit in optimized bit-vector..." << endl;
+        
+        v1.resize(0);
+        bv2.clear(true);
+        bv1.optimize();
+
+//        bm::for_each_bit(bv1, func);
+        bm::visit_each_bit(bv1, (void*)&v1, bit_decode_func);
+
+        if (v1.size() != bv1.count())
+        {
+            std::cerr << "Bit for each failed size test. " << v1.size()
+                      << " should be " << bv1.count() << std::endl;
+            exit(1);
+        }
+        bm::combine_or(bv2, v1.begin(), v1.end());
+        
+        res = bv2.compare(bv1);
+        if (res != 0)
+        {
+            std::cerr << "Bit for each failed comparison test. " << endl;
+            exit(1);
+        }
+    }
+    
+    
+    cout << "------------------------ bvector BitForEach Test OK" << endl;
+}
 
 
 int main(void)
@@ -10694,6 +10891,8 @@ int main(void)
      GAPCheck();
     
      AddressResolverTest();
+
+     BvectorBitForEachTest();
 
      GAPTestStress();
 

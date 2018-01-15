@@ -625,9 +625,10 @@ unsigned gap_test_unr(const T* buf, const unsigned pos)
 
 
 /*! For each non-zero block executes supplied function.
+    \internal
 */
 template<class T, class F> 
-void for_each_nzblock(T*** root, unsigned size1, //unsigned size2, 
+void for_each_nzblock(T*** root, unsigned size1,
                       F& f)
 {
     for (unsigned i = 0; i < size1; ++i)
@@ -771,8 +772,7 @@ template<class T> T sum_arr(T* first, T* last)
 
 
 
-
-/*! 
+/*!
    \brief Calculates number of bits ON in GAP buffer.
    \param buf - GAP buffer pointer.
    \param dsize - buffer size
@@ -892,7 +892,7 @@ unsigned gap_bit_count_range(const T* const buf, T left, T right)
     is_set = ~(is_set - 1u); // 0xFFF.. if true (mask for branchless code)
 
     pcurr = buf + start_pos;
-    if (right <= *pcurr) // we are in the target block right now
+    if (right <= *pcurr) // we are in the target gap right now
     {
         bits_counter = unsigned(right - left + 1u) & is_set; // & is_set == if(is_set)
         return bits_counter;
@@ -3278,6 +3278,8 @@ bm::id_t bit_block_calc_count_to(const bm::word_t*  block,
     return count;
 }
 
+
+
 /*!
     Cyclic rotation of bit-block left by 1 bit
     @ingroup bitfunc
@@ -3286,7 +3288,7 @@ inline
 void bit_block_rotate_left_1(bm::word_t* block)
 {
     bm::word_t co_flag = (block[0] >> 31) & 1; // carry over bit
-    for (unsigned i = 0; i < set_block_size-1; ++i)
+    for (unsigned i = 0; i < bm::set_block_size-1; ++i)
     {
         block[i] = (block[i] << 1) | (block[i + 1] >> 31);
     } 
@@ -3305,7 +3307,7 @@ void bit_block_rotate_left_1_unr(bm::word_t* block)
     bm::word_t w0, w1, w2, w3;
 
     unsigned i;
-    for (i = 0; i < set_block_size - unroll_factor; i += unroll_factor)
+    for (i = 0; i < bm::set_block_size - unroll_factor; i += unroll_factor)
     {
         w0 = block[i + 1] >> 31;
         w1 = block[i + 2] >> 31;
@@ -5052,36 +5054,6 @@ unsigned bitscan_popcnt64(bm::id64_t w, B* bits)
 }
 
 
-const unsigned short set_bitscan_wave_size = 2;
-/*!
-    \brief Unpacks word wave (2x 32-bit words)
-    \param w_ptr - pointer on wave start
-    \param bits - pointer on the result array
-    \return number of bits in the list
-
-    @ingroup bitfunc
-    @internal
-*/
-template<typename B>
-unsigned short bitscan_wave(const bm::word_t* w_ptr, B* bits)
-{
-    bm::word_t w0, w1;
-    unsigned short cnt;
-    
-    w0 = w_ptr[0];
-    w1 = w_ptr[1];
-    
-#if defined(BMAVX2OPT) || defined(BMSSE42OPT)
-    // combine into 64-bit word and scan (when HW popcnt64 is available)
-    bm::id64_t w = (bm::id64_t(w1) << 32) | w0;
-    cnt = bm::bitscan_popcnt64(w, bits);
-#else
-    // decode wave as two 32-bit bitscan decodes
-    cnt  = w0 ? bm::bitscan_popcnt(w0, bits) : 0;
-    cnt += w1 ? bm::bitscan_popcnt(w1, bits+cnt, 32) : 0; // +32 offset from the first word
-#endif
-    return cnt;
-}
 
 
 /*!
@@ -5659,6 +5631,40 @@ operation_functions<T>::bit_op_count_table_[bm::set_END] = {
     0,                            // set_COUNT_A
     0,                            // set_COUNT_B
 };
+
+
+const unsigned short set_bitscan_wave_size = 2;
+/*!
+    \brief Unpacks word wave (2x 32-bit words)
+    \param w_ptr - pointer on wave start
+    \param bits - pointer on the result array
+    \return number of bits in the list
+
+    @ingroup bitfunc
+    @internal
+*/
+template<typename B>
+unsigned short bitscan_wave(const bm::word_t* w_ptr, B* bits)
+{
+    bm::word_t w0, w1;
+    unsigned short cnt;
+    
+    w0 = w_ptr[0];
+    w1 = w_ptr[1];
+    
+#if defined(BMAVX2OPT) || defined(BMSSE42OPT)
+    // combine into 64-bit word and scan (when HW popcnt64 is available)
+    bm::id64_t w = (bm::id64_t(w1) << 32) | w0;
+    cnt = bm::bitscan_popcnt64(w, bits);
+#else
+    // decode wave as two 32-bit bitscan decodes
+    cnt  = w0 ? bm::bitscan_popcnt(w0, bits) : 0;
+    cnt += w1 ? bm::bitscan_popcnt(w1, bits+cnt, 32) : 0; // +32 offset from the first word
+#endif
+    return cnt;
+}
+
+
 
 } // namespace bm
 
