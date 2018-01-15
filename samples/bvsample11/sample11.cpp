@@ -96,82 +96,108 @@ void generate_bvector(bm::bvector<>& bv)
               << std::endl << std::endl;
 }
 
+/// "pre-heat" CPU to minimize dynamic overclocking effects
+///
+unsigned pre_heat(const bm::bvector<>& bv)
+{
+    unsigned cnt = 0;
+    unsigned m = 1;
+    for (unsigned i = 0; i < benchmark_count; ++i)
+    {
+        cnt += bv.count();
+        m+=cnt*cnt;
+    }
+    return m;
+}
+
+
 
 /// simple population count for the whole vector
 ///
 void bv_count_test(const bm::bvector<>& bv)
 {
-    bm::chrono_taker tt1("1. bvector<>::count()", benchmark_count / 2, &timing_map);
-
     unsigned cnt = 0;
-    for (unsigned i = 0; i < benchmark_count / 2; ++i)
+
     {
-        cnt += bv.count();
+        bm::chrono_taker tt1("1. bvector<>::count()", benchmark_count / 2, &timing_map);
+        for (unsigned i = 0; i < benchmark_count / 2; ++i)
+        {
+            cnt += bv.count();
+        }
     }
     // this is mostly to prevent compiler to optimize loop away
-    std::cout << "Count test finished." << cnt << std::endl;
+    std::cout << "Count test finished." << cnt << "\r";
 }
 
 /// count_range() test
 ///
 void bv_count_range(const bm::bvector<>& bv)
 {
-    bm::chrono_taker tt1("2. bvector<>::count_range()", benchmark_count, &timing_map);
-
     unsigned cnt = 0;
-    for (unsigned i = 0; i < benchmark_count; ++i)
     {
-        unsigned from = rand_dis(gen);
-        unsigned to = rand_dis(gen);
-        if (from > to)
-            swap(from, to);
-        cnt += bv.count_range(from, to);
+        bm::chrono_taker tt1("2. bvector<>::count_range()", benchmark_count, &timing_map);
+        for (unsigned i = 0; i < benchmark_count; ++i)
+        {
+            unsigned from = rand_dis(gen);
+            unsigned to = rand_dis(gen);
+            if (from > to)
+                swap(from, to);
+            cnt += bv.count_range(from, to);
+        }
     }
     // this is mostly to prevent compiler to optimize loop away
-    std::cout << "Count range test finished." << cnt << std::endl;
+    std::cout << "Count range test finished." << cnt << "\r";
 }
 
 /// count_range() test using pre-calculated blocks bit count
 ///
 void bv_count_range_acc(const bm::bvector<>& bv)
 {
+    unsigned cnt = 0;
+    
     // build a block population count list, used for count_range() acceleration
+    // for this test it is intentionally excluded from the timing measurements
+    
     unsigned  blocks_cnt[bm::set_total_blocks];
     bv.count_blocks(blocks_cnt);
 
-    bm::chrono_taker tt1("3. bvector<>::count_range() with blocks list", benchmark_count, &timing_map);
-
-    unsigned cnt = 0;
-    for (unsigned i = 0; i < benchmark_count; ++i)
     {
-        unsigned from = rand_dis(gen);
-        unsigned to = rand_dis(gen);
-        if (from > to)
-            swap(from, to);
-        cnt += bv.count_range(from, to, blocks_cnt); // use blocks count for acceleration
+        bm::chrono_taker tt1("3. bvector<>::count_range() with blocks list", benchmark_count, &timing_map);
+        unsigned cnt = 0;
+        for (unsigned i = 0; i < benchmark_count; ++i)
+        {
+            unsigned from = rand_dis(gen);
+            unsigned to = rand_dis(gen);
+            if (from > to)
+                swap(from, to);
+            cnt += bv.count_range(from, to, blocks_cnt); // use blocks count for acceleration
+        }
     }
     // this is mostly to prevent compiler to optimize loop away
-    std::cout << "Count range with blocks test finished." << cnt << std::endl;
+    std::cout << "Count range with blocks test finished." << cnt << "\r";
 }
 
 /// count_to() test using pre-calculated blocks bit count
 ///
 void bv_count_to_acc(const bm::bvector<>& bv)
 {
+    unsigned cnt = 0;
+    
     // build a block population count list, used for count_to() acceleration
     bm::bvector<>::blocks_count bc;
     bv.running_count_blocks(&bc);
 
-    bm::chrono_taker tt1("4. bvector<>::count_to() with blocks list", benchmark_count, &timing_map);
-
-    unsigned cnt = 0;
-    for (unsigned i = 0; i < benchmark_count; ++i)
     {
-        unsigned to = rand_dis(gen);
-        cnt += bv.count_to(to, bc); // use blocks count for acceleration
+        bm::chrono_taker tt1("4. bvector<>::count_to() with blocks list", benchmark_count, &timing_map);
+
+        for (unsigned i = 0; i < benchmark_count; ++i)
+        {
+            unsigned to = rand_dis(gen);
+            cnt += bv.count_to(to, bc); // use blocks count for acceleration
+        }
     }
     // this is mostly to prevent compiler to optimize loop away
-    std::cout << "Count to with blocks test finished." << cnt << std::endl;
+    std::cout << "Count to with blocks test finished." << cnt << "\r";
 }
 
 
@@ -179,27 +205,30 @@ void bv_count_to_acc(const bm::bvector<>& bv)
 ///
 void bv_count_to_range_acc(const bm::bvector<>& bv)
 {
+    unsigned cnt = 0;
+    
     // build a block population count list, used for count_to() acceleration
     bm::bvector<>::blocks_count bc;
     bv.running_count_blocks(&bc);
 
-    bm::chrono_taker tt1("5. bvector<>::count_to to simulate count_range()", benchmark_count, &timing_map);
-
-    unsigned cnt = 0;
-    for (unsigned i = 0; i < benchmark_count; ++i)
     {
-        unsigned from = rand_dis(gen);
-        unsigned to = rand_dis(gen);
-        if (from > to)
-            swap(from, to);
-        
-        unsigned cnt_to = bv.count_to(to, bc);
-        unsigned cnt_from = bv.count_to(from - 1, bc);
-        unsigned cnt_r = cnt_to - cnt_from;
-        cnt += cnt_r;
+        bm::chrono_taker tt1("5. bvector<>::count_to to simulate count_range()", benchmark_count, &timing_map);
+
+        for (unsigned i = 0; i < benchmark_count; ++i)
+        {
+            unsigned from = rand_dis(gen);
+            unsigned to = rand_dis(gen);
+            if (from > to)
+                swap(from, to);
+            
+            unsigned cnt_to = bv.count_to(to, bc);
+            unsigned cnt_from = bv.count_to(from - 1, bc);
+            unsigned cnt_r = cnt_to - cnt_from;
+            cnt += cnt_r;
+        }
     }
     // this is mostly to prevent compiler to optimize loop away
-    std::cout << "Count range via count_to test finished." << cnt << std::endl;
+    std::cout << "Count range via count_to test finished." << cnt << "\r";
 }
 
 /// count_range implemented via bm::count_and
@@ -208,25 +237,26 @@ void bv_count_to_range_acc(const bm::bvector<>& bv)
 ///
 void bv_count_and(const bm::bvector<>& bv)
 {
-    bm::chrono_taker tt1("6. bm::count_and with mask vector", benchmark_count, &timing_map);
-
     unsigned cnt = 0;
-    bm::bvector<> mask_bv(bm::BM_GAP); // use compressed mask, better seluts on long ranges
-
-    for (unsigned i = 0; i < benchmark_count; ++i)
     {
-        unsigned from = rand_dis(gen);
-        unsigned to = rand_dis(gen);
-        if (from > to)
-            swap(from, to);
+        bm::chrono_taker tt1("6. bm::count_and with mask vector", benchmark_count, &timing_map);
 
-        mask_bv.set_range(from, to, true); // set mask vector
+        bm::bvector<> mask_bv(bm::BM_GAP); // use compressed mask, better seluts on long ranges
+        for (unsigned i = 0; i < benchmark_count; ++i)
+        {
+            unsigned from = rand_dis(gen);
+            unsigned to = rand_dis(gen);
+            if (from > to)
+                swap(from, to);
 
-        cnt += bm::count_and(bv, mask_bv);
-        mask_bv.clear(true); // clear and free memory (faster)
+            mask_bv.set_range(from, to, true); // set mask vector
+
+            cnt += bm::count_and(bv, mask_bv);
+            mask_bv.clear(true); // clear and free memory (faster)
+        }
     }
     // this is mostly to prevent compiler to optimize loop away
-    std::cout << "count AND finished." << cnt << std::endl;
+    std::cout << "count AND finished." << cnt << "\r";
 }
 
 /// count_to implemented via bm::bvector<>::counted_enumerator
@@ -236,23 +266,24 @@ void bv_count_and(const bm::bvector<>& bv)
 ///
 void bv_counted_enumerator(const bm::bvector<>& bv)
 {
-    // This is a slow method so we use less iterators
-    bm::chrono_taker tt1("7. bm::bvector<>::counted_enumerator", benchmark_count/20, &timing_map);
-
     unsigned cnt = 0;
-    for (unsigned i = 0; i < benchmark_count/20; ++i)
     {
-        unsigned to = rand_dis(gen);
+        // This is a slow method so we use less iterators
+        bm::chrono_taker tt1("7. bm::bvector<>::counted_enumerator", benchmark_count/20, &timing_map);
 
-        bm::bvector<>::counted_enumerator en = bv.first();
-        for (; en.valid(); ++en)   
+        for (unsigned i = 0; i < benchmark_count/20; ++i)
         {
-            if (*en > to)
-                break;
+            unsigned to = rand_dis(gen);
+            bm::bvector<>::counted_enumerator en = bv.first();
+            for (; en.valid(); ++en)
+            {
+                if (*en > to)
+                    break;
+            }
+            cnt += en.count();
         }
-        cnt += en.count();
     }
-    std::cout << "counted_enumerator finished." << cnt << std::endl;
+    std::cout << "counted_enumerator finished." << cnt << "\r";
 }
 
 
@@ -264,6 +295,11 @@ int main(void)
     {
         bm::bvector<>   bv;
         generate_bvector(bv);
+        
+        /// pre-heat CPU to minimize dynamic overclocking
+        unsigned s = pre_heat(bv);
+        std::cout << s << "\r";
+
 
         // Test 1.
         // Uses plain bvector<>::count() to compute global population count
@@ -316,7 +352,9 @@ int main(void)
 
         // print all test timing results
         //
-        std::cout << std::endl;
+        std::cout << "                                                        "
+                  << std::endl;
+                  
         bm::chrono_taker::print_duration_map(timing_map, bm::chrono_taker::ct_ops_per_sec);
     }
     catch(std::exception& ex)
