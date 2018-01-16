@@ -5,6 +5,8 @@ project(bm)
 
 set( CMAKE_VERBOSE_MAKEFILE on )
 
+SET(BMOPTFLAGS "BMSSE42OPT" CACHE STRING "User-specified optimization flag")
+
 set(CMAKE_BINARY_DIR ${CMAKE_SOURCE_DIR}/build/bin)
 set(EXECUTABLE_OUTPUT_PATH ${CMAKE_BINARY_DIR})
 set(LIBRARY_OUTPUT_PATH ${CMAKE_BINARY_DIR})
@@ -15,8 +17,15 @@ set (CMAKE_CXX_STANDARD 11)
 
 if ("${CMAKE_CXX_COMPILER_ID}" STREQUAL "GNU" OR
     "${CMAKE_CXX_COMPILER_ID}" STREQUAL "Clang")
-    set(flags "-Wall -Wextra -march=core2 -msse4.2 -fPIC")
-    set(optflags, -g0 -O3)
+
+    if ("${BMOPTFLAGS}" STREQUAL "BMSSE42OPT")
+	set(bmoptf "-march=core2 -msse4.2 -DBMSSE42OPT")
+    elseif("${BMOPTFLAGS}" STREQUAL "BMAVX2OPT")
+        set(bmoptf "-march=native -mavx2 -DBMAVX2OPT") 
+    endif()
+
+    set(flags "-Wall -Wextra -Wno-ignored-qualifiers -march=core2 -fPIC")
+    set(optflags -g0 -O3)
 elseif ("${CMAKE_CXX_COMPILER_ID}" STREQUAL "Intel")
     set(flags, "-tpp7 -march=core2 -restrict -DBM_HASRESTRICT -fno-fnalias -Wall")
     set(optflags, "-g0 -O3 -opt_report_fileopt.txt -opt_report_levelmax")
@@ -26,8 +35,8 @@ elseif ("${CMAKE_CXX_COMPILER_ID}" STREQUAL "MSVC")
     SET( CMAKE_EXE_LINKER_FLAGS  "${CMAKE_EXE_LINKER_FLAGS} /STACK:\"10000000\"")
 endif()
 
-set(CMAKE_C_FLAGS   "${CMAKE_C_FLAGS} ${flags}")
-set(CMAKE_CXX_FLAGS "${CMAKE_CXX_FLAGS} ${flags}")
+set(CMAKE_C_FLAGS   "${CMAKE_C_FLAGS} ${flags} ${bmoptf}")
+set(CMAKE_CXX_FLAGS "${CMAKE_CXX_FLAGS} ${flags} ${bmoptf}")
 
 add_executable(bmsvutil ${PROJECT_SOURCE_DIR}/utils/svutil/svutil.cpp)
 
