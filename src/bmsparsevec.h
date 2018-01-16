@@ -729,20 +729,11 @@ sparse_vector<Val, BV>::extract(value_type* arr,
             const bvector_type* bv = plains_[i];
             if (bv)
             {
-                value_type mask = 1 << i;
                 bv_mask.set_range(offset, end - 1);
                 bv_mask.bit_and(*bv);
 
-                sv_decode_visitor_func func(arr, mask, offset);
+                sv_decode_visitor_func func(arr, (1 << i), offset);
                 bm::for_each_bit(bv_mask, func);
-/*
-                for (typename BV::enumerator en(&bv_mask, 0); en.valid(); ++en)
-                {
-                    size_type idx = *en - offset;
-                    BM_ASSERT(idx < size);
-                    arr[idx] |= mask;
-                } // for
-*/
                 bv_mask.clear();
             }
         } // for i
@@ -754,20 +745,8 @@ sparse_vector<Val, BV>::extract(value_type* arr,
             const bvector_type* bv = plains_[i];
             if (bv)
             {
-                value_type mask = (1 << i);
-
-                sv_decode_visitor_func func(arr, mask, 0);
+                sv_decode_visitor_func func(arr, (1 << i), 0);
                 bm::for_each_bit(*bv, func);
-
-/*
-                for (typename BV::enumerator en(bv, 0); en.valid(); ++en)
-                {
-                    size_type idx = *en;
-                    BM_ASSERT(idx < size);
-                    arr[idx] |= mask;
-                } // for
-*/
-                
             }
         } // for i
     }
