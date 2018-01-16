@@ -94,6 +94,17 @@ make BMOPTFLAGS=-DBMSSE42OPT rebuild
 It automatically applies the right set of compiler (GCC) flags for the target 
 build.
 
+CMAKE
+
+cd build
+cmake -DBMOPTFLAGS:STRING=BMSSE42OPT ..
+make
+
+OR
+
+cmake -DBMOPTFLAGS:STRING=BMAVX2OPT ..
+
+
 =================================================================================
 
 BM library uses ‘register’ keyword, but it is disabled now because in C++11 
