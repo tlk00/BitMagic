@@ -33,12 +33,12 @@ For more information please visit:  http://bitmagic.io
 #include <memory.h>
 #include <stdexcept>
 
-#include "bmdef.h"
+
 
 #include "bm.h"
 #include "bmtrans.h"
-#include "bmalgo_impl.h"
-
+#include "bmalgo.h"
+#include "bmdef.h"
 
 namespace bm
 {
