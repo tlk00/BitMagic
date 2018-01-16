@@ -59,17 +59,6 @@ bm::chrono_taker::duration_map_type  timing_map;
 const unsigned benchmark_count = 1000;
 unsigned       vector_max = 4000000;
 
-// Functor for bit printing
-//
-struct PrintBitFunc
-{
-    PrintBitFunc(){}
-    ~PrintBitFunc() { try { std::cout << std::endl; } catch(...) {} }
-    void operator()(bm::id_t idx) const { std::cout << idx << ", "; }
-};
-
-
-
 
 // Utility template function used to print container
 template<class T> void PrintContainer(T first, T last)
@@ -186,7 +175,6 @@ int main(void)
         bm::bvector<>   bv1 { 2, 3, 4 };
         
         PrintContainer(bv1.first(), bv1.end()); // 2, 3, 4
-        bm::for_each_bit(bv1, PrintBitFunc());
         bv1.clear();
 
         // 1. Set some bits using regular bvector<>::set() method
