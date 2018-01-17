@@ -35,7 +35,6 @@ For more information please visit:  http://bitmagic.io
 
 #include "bmfunc.h"
 
-
 namespace libbm
 {
 

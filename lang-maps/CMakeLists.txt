@@ -19,7 +19,7 @@ if ("${CMAKE_CXX_COMPILER_ID}" STREQUAL "GNU" OR
     if ("${BMOPTFLAGS}" STREQUAL "BMSSE42OPT")
         set(bmoptf "-march=nehalem -msse4.2 -DBMSSE42OPT")
     elseif("${BMOPTFLAGS}" STREQUAL "BMAVX2OPT")
-        set(bmoptf "-march=skylake -mavx2 -DBMAVX2OPT")
+        set(bmoptf "-march=native -mavx2 -DBMAVX2OPT")
     else()
         set(bmoptf "-march=core2")
     endif()
@@ -28,7 +28,7 @@ if ("${CMAKE_CXX_COMPILER_ID}" STREQUAL "GNU" OR
     set(LD_FLAGS ${LINKER_FLAGS})
     set(LDFLAGS ${LINKER_FLAGS})
     set(CMAKE_SHARED_LINKER_FLAGS  ${LINKER_FLAGS})
-    set(flags "-Wall -Wextra -march=core2 -fPIC -fno-rtti -fno-exceptions ")
+    set(flags "-Wall -Wextra -fPIC -fno-rtti -fno-exceptions ")
     set(optflags "-g0 -O2")
 elseif ("${CMAKE_CXX_COMPILER_ID}" STREQUAL "Intel")
     set(flags, "-tpp7 -march=core2 -restrict -DBM_HASRESTRICT -fno-fnalias -Wall -fPIC")
@@ -38,13 +38,24 @@ elseif ("${CMAKE_CXX_COMPILER_ID}" STREQUAL "MSVC")
     set(optflags "-O2")
 endif()
 
-set(CMAKE_C_FLAGS   "${CMAKE_C_FLAGS} ${flags} ")
-set(CMAKE_CXX_FLAGS "${CMAKE_CXX_FLAGS} ${flags} ${optflags}")
+set(CMAKE_C_FLAGS   "${CMAKE_C_FLAGS} ${flags} ${bmoptf}")
+set(CMAKE_CXX_FLAGS "${CMAKE_CXX_FLAGS} ${flags} ${optflags} ${bmoptf}")
 #set(CMAKE_EXE_LINKER_FLAGS "${CMAKE_EXE_LINKER_FLAGS} ${ldflags}")
 #set(CMAKE_EXE_LINKER_FLAGS "${CMAKE_EXE_LINKER_FLAGS} ${ldflags}")
 
 add_library(bm-static STATIC "libbm/src/libbm.cpp")
 add_library(bm-dll SHARED "libbm/src/libbm.cpp")
+
+
+if ("${BMOPTFLAGS}" STREQUAL "BMSSE42OPT")
+    add_library(bm-dll-sse42 SHARED "libbm/src/libbm.cpp")
+elseif("${BMOPTFLAGS}" STREQUAL "BMAVX2OPT")
+    add_library(bm-dll-avx2 SHARED "libbm/src/libbm.cpp")
+else()
+endif()
+
+
+
 
 add_executable(libbmtest ${PROJECT_SOURCE_DIR}/test/libbmtest.c)
 

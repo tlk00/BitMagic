@@ -12,6 +12,7 @@ static jmp_buf ex_buf__;
 
 #include "bmdef.h"
 #include "bmconst.h"
+#include "bmsimd.h"
 #include "bmcalloc.h"
 #include "bm.h"
 
