@@ -1089,9 +1089,9 @@ const bm::gap_word_t* avx2_gap_sum_arr(const bm::gap_word_t* BMRESTRICT pbuf,
    @internal
 */
 inline
-const bm::gap_word_t* avx2_gap_sum_arr(const bm::gap_word_t* BMRESTRICT pbuf,
-                                       unsigned                         avx_vect_waves,
-                                       unsigned*                        sum)
+const bm::gap_word_t* avx2_gap_sum_arr(const bm::gap_word_t*  pbuf,
+                                       unsigned               avx_vect_waves,
+                                       unsigned*              sum)
 {
     __m256i xcnt = _mm256_setzero_si256();
 

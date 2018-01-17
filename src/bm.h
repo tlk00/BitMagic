@@ -3443,7 +3443,7 @@ bvector<Alloc>::combine_operation_with_block(unsigned          nb,
             VECT_XOR_ARR_2_MASK(ret, 
                                 arg_blk, 
                                 arg_blk + bm::set_block_size, 
-                                bm::all_bits_mask);
+                                ~0u);
 #else
                 bm::wordop_t* dst_ptr = (wordop_t*)ret;
                 const bm::wordop_t* wrd_ptr = (wordop_t*) arg_blk;
@@ -3484,7 +3484,7 @@ bvector<Alloc>::combine_operation_with_block(unsigned          nb,
                 VECT_ANDNOT_ARR_2_MASK(ret, 
                                     arg_blk,
                                     arg_blk + bm::set_block_size,
-                                    bm::all_bits_mask);
+                                    ~0u);
 #else
 
                 bm::wordop_t* dst_ptr = (wordop_t*)ret;

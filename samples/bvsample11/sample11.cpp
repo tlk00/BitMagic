@@ -163,7 +163,7 @@ void bv_count_range_acc(const bm::bvector<>& bv)
 
     {
         bm::chrono_taker tt1("3. bvector<>::count_range() with blocks list", benchmark_count, &timing_map);
-        unsigned cnt = 0;
+        cnt = 0;
         for (unsigned i = 0; i < benchmark_count; ++i)
         {
             unsigned from = rand_dis(gen);
