@@ -33,7 +33,7 @@ For more information please visit:  http://bitmagic.io
  
   \sa bm::sparse_vector<>::set
   \sa bm::sparse_vector<>::import
-  \sa bm::sparse_vector<>::export
+  \sa bm::sparse_vector<>::decode
   \sa bm::sparse_vector<>::join
  */
 
@@ -82,7 +82,7 @@ int main(void)
     
     
     std::vector<unsigned> v1(16);
-    sv1.extract(&v1[0], 16, 65530); // extract 16 elements starting from 65530
+    sv1.decode(&v1[0], 65530, 16); // extract 16 elements starting from 65530
     for (i = 0; i < 16; ++i)
     {
         cout << v1[i] << ",";
