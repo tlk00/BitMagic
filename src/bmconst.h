@@ -281,6 +281,18 @@ template<bool T>
 const gap_word_t gap_len_table_nl<T>::_len[bm::gap_levels] =
                 { 32, 128, 512, bm::gap_max_buff_len };
 
+/*!
+    @brief codes for supported SIMD optimizations
+    @internal
+*/
+enum simd_codes
+{
+    simd_none  = 0,   ///!< No SIMD or any other optimization
+    simd_sse2  = 1,   ///!< Intel SSE2
+    simd_sse42 = 2,   ///!< Intel SSE4.2
+    simd_avx2  = 5    ///!< Intel AVX2
+};
+
 
 
 } // namespace

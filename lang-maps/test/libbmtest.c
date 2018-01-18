@@ -61,12 +61,11 @@ int InitTest()
     const char* c;
     int major, minor, patch;
     const char* msg;
-    
+    int simd_version;
     
     
     res = BM_init(0);
     BMERR_CHECK(res, "BM_init()");
-    
     
     c = BM_version(&major, &minor, &patch);
     BMERR_CHECK(res, "BM_version()");
@@ -83,6 +82,27 @@ int InitTest()
     }
     
     printf ("%s\n", c);
+    
+    simd_version = BM_simd_version();
+    switch(simd_version)
+    {
+    case BM_SIMD_NO:
+        printf("BitMagic vanilla.\n");
+        break;
+    case BM_SIMD_SSE2:
+        printf("BitMagic for SSE2 \n");
+        break;
+    case BM_SIMD_SSE42:
+        printf("BitMagic for SSE4.2 \n");
+        break;
+    case BM_SIMD_AVX2:
+        printf("BitMagic for AVX2 \n");
+        break;
+    default:
+        printf("Unknown SIMD code \n");
+        break;
+    }
+
     return 0;
 }
 

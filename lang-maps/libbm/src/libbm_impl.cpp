@@ -10,11 +10,84 @@ typedef bm::bvector<libbm::standard_allocator>::enumerator TBM_bvector_enumerato
     CATCH (BM_ERR_RANGE)    { return BM_ERR_RANGE; }
 
 
+// -------------------------------------------------------------------
+//
+// code credit for CPU caps identification:
+// https://attractivechaos.wordpress.com/2017/09/04/on-cpu-dispatch/
+//
+// -------------------------------------------------------------------
+
+#define SIMD_SSE     0x1
+#define SIMD_SSE2    0x2
+#define SIMD_SSE3    0x4
+#define SIMD_SSE4_1  0x8
+#define SIMD_SSE4_2  0x10
+#define SIMD_AVX     0x20
+#define SIMD_AVX2    0x40
+#define SIMD_AVX512F 0x80
+
+unsigned static x86_simd(void)
+{
+  unsigned eax, ebx, ecx, edx, flag = 0;
+#ifdef _MSC_VER
+  int cpuid[4];
+  __cpuid(cpuid, 1);
+  eax = cpuid[0], ebx = cpuid[1], ecx = cpuid[2], edx = cpuid[3];
+#else
+  asm volatile("cpuid" : "=a" (eax), "=b" (ebx), "=c" (ecx), "=d" (edx) : "a" (1));
+#endif
+  if (edx>>25&1) flag |= SIMD_SSE;
+  if (edx>>26&1) flag |= SIMD_SSE2;
+  if (ecx>>0 &1) flag |= SIMD_SSE3;
+  if (ecx>>19&1) flag |= SIMD_SSE4_1;
+  if (ecx>>20&1) flag |= SIMD_SSE4_2;
+  if (ecx>>28&1) flag |= SIMD_AVX;
+  if (ebx>>5 &1) flag |= SIMD_AVX2;
+  if (ebx>>16&1) flag |= SIMD_AVX512F;
+  return flag;
+}
+
 // -----------------------------------------------------------------
 
 int BM_init(void*)
 {
+    int bm_simd;
+    unsigned cpu_simd;
+    
+    bm_simd = BM_simd_version();
+    
+    if (bm_simd != BM_SIMD_NO) // BM compiled for some SIMD optimization
+    {
+        cpu_simd = x86_simd();
+        switch (bm_simd)
+        {
+        case BM_SIMD_NO:
+            break;
+        case BM_SIMD_SSE2:
+            if (!(cpu_simd & SIMD_SSE2))
+                return BM_ERR_CPU;
+            break;
+        case BM_SIMD_SSE42:
+            if (!(cpu_simd & SIMD_SSE4_2))
+                return BM_ERR_CPU;
+            break;
+        case BM_SIMD_AVX2:
+            if (!(cpu_simd & SIMD_AVX2))
+                return BM_ERR_CPU;
+        default:
+            return BM_ERR_CPU;  // ?!
+        }
+    }
+    
     return BM_OK;
+}
+
+// -----------------------------------------------------------------
+
+int BM_simd_version(void)
+{
+    int ret = bm::simd_version();
+    return ret;
 }
 
 // -----------------------------------------------------------------
@@ -45,6 +118,8 @@ const char* BM_error_msg(int errcode)
         return BM_ERR_BADARG_MSG;
     case BM_ERR_RANGE:
         return BM_ERR_RANGE_MSG;
+    case BM_ERR_CPU:
+        return BM_ERR_CPU_MSG;
     }
     return BM_UNK_MSG;
 }

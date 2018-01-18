@@ -40,6 +40,7 @@ For more information please visit:  http://bitmagic.io
 #define BM_ERR_BADALLOC (1)
 #define BM_ERR_BADARG (2)
 #define BM_ERR_RANGE (3)
+#define BM_ERR_CPU   (4)
 
 /* Error codes for Java/JNI incapsulation */
 #define BM_ERR_DETACHED (101)
@@ -52,11 +53,23 @@ For more information please visit:  http://bitmagic.io
 #define BM_ERR_BADALLOC_MSG "BM-01: Allocation error"
 #define BM_ERR_BADARG_MSG   "BM-02: Invalid or missing function argument"
 #define BM_ERR_RANGE_MSG    "BM-03: Incorrect range or index"
+#define BM_ERR_CPU_MSG      "BM-04: Incorrect CPU vectorization (SIMD) version"
 
-#define BM_ERR_DETACHED_MSG    "BM-04: Current thread no attached to JVM"
-#define BM_ERR_JVM_NOT_SUPPORTED_MSG    "BM-05: JVM version not supported"
+#define BM_ERR_DETACHED_MSG    "BM-101: Current thread no attached to JVM"
+#define BM_ERR_JVM_NOT_SUPPORTED_MSG    "BM-102: JVM version not supported"
 
 #define BM_UNK_MSG          "BM-XX: Unknown error"
+
+
+/*
+    List of supported SIMD versions
+*/
+
+#define BM_SIMD_NO    0
+#define BM_SIMD_SSE2  1
+#define BM_SIMD_SSE42 2
+#define BM_SIMD_AVX2  5
+
 
 
 /* bit-vector handle */
@@ -96,6 +109,13 @@ int BM_init(void*);
     return copyright info string and version information.
 */
 const char* BM_version(int* major, int* minor, int* patch);
+
+/**
+    return SIMD version used to build binaries
+    one of BM_SIMD_* defines
+*/
+int BM_simd_version(void);
+
 
 /**
     return error message by code
