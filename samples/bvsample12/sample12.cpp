@@ -29,7 +29,8 @@ For more information please visit:  http://bitmagic.io
 */
 
 /** \example sample12.cpp
-  Example of how to use various bit setting techniques
+  Example of how to use various bit setting techniques. 
+  Several techniques benchmarked to better illustrate relative performance.
 
   \sa bm::bvector<>::set() 
   \sa bm::bvector<>::set_bit()
