@@ -346,8 +346,8 @@ int main(int argc, char *argv[])
             {
                 vect_u32_out.resize(sv_u32_in.size());
                 {
-                    bm::chrono_taker tt("sparse vector extract", 1, &timing_map);
-                    sv_u32_in.extract(&vect_u32_out[0], sv_u32_in.size(), 0, false);
+                    bm::chrono_taker tt("sparse vector decode", 1, &timing_map);
+                    sv_u32_in.decode(&vect_u32_out[0], 0, sv_u32_in.size(), false);
                     tt.stop(is_timing);
                 }
                 {

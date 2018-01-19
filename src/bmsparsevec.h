@@ -210,40 +210,32 @@ public:
     */
     void import(const value_type* arr, size_type size, size_type offset = 0);
 
+
     /*!
         \brief Bulk export list of elements to a C-style array
-        
-        For efficiency, this is left as a low level function, 
-        it does not do any bounds checking on the target array, it will 
+     
+        For efficiency, this is left as a low level function,
+        it does not do any bounds checking on the target array, it will
         override memory and crash if you are not careful with allocation
-        
-        This method uses cache-miss optimized algorithm which is by far faster 
-        than random element access functions.
+        and request size.
      
         \param arr  - dest array
-        \param size - dest size
-        \param offset - target index in the sparse vector to export from
-        \param zero_mem - set to false if target array is pre-initialized 
+        \param idx_from - index in the sparse vector to export from
+        \param size - decoding size (array allocation should match)
+        \param zero_mem - set to false if target array is pre-initialized
                           with 0s to avoid performance penalty
      
-        \return number of exported elements
+        \return number of actually exported elements (can be less than requested)
+     
+        \sa decode
+     
+        @internal
     */
-    size_type extract(value_type* arr,
-                      size_type size,
-                      size_type offset = 0,
-                      bool      zero_mem = true) const;
+    size_type decode(value_type* arr,
+                     size_type   idx_from,
+                     size_type   size,
+                     bool        zero_mem = true) const;
 
-    /** \brief extract small window without use of masking vector */
-    size_type extract_range(value_type* arr,
-                            size_type size,
-                            size_type offset,
-                            bool      zero_mem = true) const;
-    
-    /** \brief extract medium window without use of masking vector */
-    size_type extract_plains(value_type* arr,
-                             size_type size,
-                             size_type offset,
-                             bool      zero_mem = true) const;
 
     
     /*! \brief return size of the vector
@@ -367,6 +359,51 @@ public:
         \param right - interval end (closed interval)
     */
     sparse_vector<Val, BV>& clear_range(size_type left, size_type right);
+    
+    
+    // -------------------------- auxiliary methods, for internal use
+    
+    /*!
+        \brief Bulk export list of elements to a C-style array
+     
+        Use of all extract() methods is restricted.
+        Please consider decode() for the same purpose.
+     
+        \param arr  - dest array
+        \param size - dest size
+        \param offset - target index in the sparse vector to export from
+        \param zero_mem - set to false if target array is pre-initialized
+                          with 0s to avoid performance penalty
+     
+        \return number of exported elements
+     
+        \sa decode
+     
+        @internal
+    */
+    size_type extract(value_type* arr,
+                      size_type size,
+                      size_type offset = 0,
+                      bool      zero_mem = true) const;
+
+    /** \brief extract small window without use of masking vector
+        \sa decode
+        @internal
+    */
+    size_type extract_range(value_type* arr,
+                            size_type size,
+                            size_type offset,
+                            bool      zero_mem = true) const;
+    
+    /** \brief extract medium window without use of masking vector
+        \sa decode
+        @internal
+    */
+    size_type extract_plains(value_type* arr,
+                             size_type size,
+                             size_type offset,
+                             bool      zero_mem = true) const;
+
 private:
 
     /*! \brief free all internal vectors
@@ -569,6 +606,25 @@ void sparse_vector<Val, BV>::import(const value_type* arr,
         size_ = i + offset;
 }
 
+//---------------------------------------------------------------------
+
+template<class Val, class BV>
+typename sparse_vector<Val, BV>::size_type
+sparse_vector<Val, BV>::decode(value_type* arr,
+                               size_type   idx_from,
+                               size_type   size,
+                               bool        zero_mem) const
+{
+    if (size < 32)
+    {
+        return extract_range(arr, size, idx_from, zero_mem);
+    }
+    if (size < 1024)
+    {
+        return extract_plains(arr, size, idx_from, zero_mem);
+    }
+    return extract(arr, size, idx_from, zero_mem);
+}
 
 //---------------------------------------------------------------------
 
