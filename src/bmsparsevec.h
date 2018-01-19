@@ -31,9 +31,10 @@ For more information please visit:  http://bitmagic.io
 */
 
 #include <memory.h>
+
+#ifndef BM_NO_STL
 #include <stdexcept>
-
-
+#endif
 
 #include "bm.h"
 #include "bmtrans.h"
@@ -163,7 +164,18 @@ public:
             {
                 const bvector_type* bv = sv.plains_[i];
                 if (bv)
+                {
+#ifdef BM_NO_STL   // C compatibility mode
+                    void* mem = ::malloc(sizeof(bvector_type));
+                    if (mem == 0)
+                    {
+                        BM_ASSERT_THROW(false, BM_ERR_BADALLOC);
+                    }
+                    plains[i] = new(mem) bvector_type(*bv);
+#else
                     plains_[i] = new bvector_type(*bv);
+#endif
+                }
             } // for i
         }
         return *this;
@@ -367,7 +379,7 @@ protected:
     */
     void set_value(size_type idx, value_type v);
     const bm::word_t* get_block(unsigned p, unsigned i, unsigned j) const;
-
+    void throw_range_error(const char* err_msg) const;
 
 private:
     
@@ -476,6 +488,17 @@ void sparse_vector<Val, BV>::swap(sparse_vector<Val, BV>& sv) BMNOEXEPT
     }
 }
 
+//---------------------------------------------------------------------
+
+template<class Val, class BV>
+void sparse_vector<Val, BV>::throw_range_error(const char* err_msg) const
+{
+#ifndef BM_NO_STL
+    throw std::range_error(err_msg);
+#else
+    BM_ASSERT_THROW(false, BM_ERR_RANGE);
+#endif
+}
 
 //---------------------------------------------------------------------
 
@@ -491,7 +514,9 @@ void sparse_vector<Val, BV>::import(const value_type* arr,
     bm::tmatrix<bm::id_t, sizeof(Val)*8, transpose_window> tm; // matrix accumulator
     
     if (size == 0)
-        throw std::range_error("sparse vector range error (zero import size)");
+    {
+        throw_range_error("sparse_vector range error (import size 0)");
+    }
     
     // clear all plains in the range to provide corrrect import of 0 values
     this->clear_range(offset, offset + size - 1);
@@ -806,9 +831,22 @@ typename sparse_vector<Val, BV>::bvector_type_ptr
     bvector_type_ptr bv = plains_[i];
     if (!bv)
     {
+#ifdef BM_NO_STL   // C compatibility mode
+        void* mem = ::malloc(sizeof(bvector_type));
+        if (mem == 0)
+        {
+            BM_ASSERT_THROW(false, BM_ERR_BADALLOC);
+        }
+        bv = new(mem) bvector_type(ap_.strat, ap_.glevel_len,
+                                   bv_size_,
+                                   alloc_);
+
+#else
         bv = new bvector_type(ap_.strat, ap_.glevel_len,
                               bv_size_,
                               alloc_);
+#endif
+
         bv->init();
         plains_[i] = bv;
     }
@@ -822,7 +860,7 @@ typename sparse_vector<Val, BV>::value_type
 sparse_vector<Val, BV>::at(typename sparse_vector<Val, BV>::size_type idx) const
 {
     if (idx >= size_)
-        throw std::range_error("sparse vector range error");
+        throw_range_error("sparse vector range error");
     return this->get(idx);
 }
 
