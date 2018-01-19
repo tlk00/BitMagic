@@ -418,13 +418,13 @@ __m128i sse2_sub(__m128i a, __m128i b)
 
 
 /*!
-@brief Gap block population count (array sum) utility
-@param pbuf - unrolled, aligned to 1-start GAP buffer
-@param sse_vect_waves - number of SSE vector lines to process
-@param sum - result acumulator
-@return tail pointer
+    @brief Gap block population count (array sum) utility
+    @param pbuf - unrolled, aligned to 1-start GAP buffer
+    @param sse_vect_waves - number of SSE vector lines to process
+    @param sum - result acumulator
+    @return tail pointer
 
-@internal
+    @internal
 */
 inline
 const bm::gap_word_t* sse2_gap_sum_arr(
@@ -448,7 +448,6 @@ const bm::gap_word_t* sse2_gap_sum_arr(
     *sum += (cnt8[0]) + (cnt8[2]) + (cnt8[4]) + (cnt8[6]);
     return pbuf;
 }
-
 
 
 } // namespace

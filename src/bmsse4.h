@@ -151,6 +151,33 @@ bm::id_t sse4_bit_count_op(const __m128i* BMRESTRICT block,
     return count;
 }
 
+/*!
+    @brief check if block is all zero bits
+    @ingroup AVX2
+*/
+inline
+bool sse4_is_all_zero(const __m128i* BMRESTRICT block,
+                      const __m128i* BMRESTRICT block_end)
+{
+    __m128i maskz = _mm_setzero_si128();
+
+    do
+    {
+        __m128i w0 = _mm_load_si128(block+0);
+        __m128i w1 = _mm_load_si128(block+1);
+        
+        __m128i w = _mm_or_si128(w0, w1);
+        if (!_mm_test_all_ones(_mm_cmpeq_epi8(w, maskz))) // (w0 | w1) != maskz
+        {
+            return false;
+        }
+
+        block += 2;
+    
+    } while (block < block_end);
+    return true;
+}
+
 
 
 #define VECT_XOR_ARR_2_MASK(dst, src, src_end, mask)\
@@ -195,6 +222,8 @@ bm::id_t sse4_bit_count_op(const __m128i* BMRESTRICT block,
 #define VECT_SET_BLOCK(dst, dst_end, value) \
     sse2_set_block((__m128i*) dst, (__m128i*) (dst_end), (value))
 
+#define VECT_IS_ZERO_BLOCK(dst, dst_end) \
+    sse4_is_all_zero((__m128i*) dst, (__m128i*) (dst_end))
 
 
 
@@ -365,6 +394,9 @@ unsigned sse4_gap_find(const bm::gap_word_t* BMRESTRICT pbuf, const bm::gap_word
 #ifdef __GNUG__
 #pragma GCC diagnostic pop
 #endif
+
+
+
 
 } // namespace
 

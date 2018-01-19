@@ -3442,9 +3442,13 @@ inline bool is_bits_one(const bm::wordop_t* start,
 /*! @brief Returns "true" if all bits in the block are 0
     @ingroup bitfunc 
 */
-inline bool bit_is_all_zero(const bm::wordop_t* start, 
-                            const bm::wordop_t* end)
+inline
+bool bit_is_all_zero(const bm::wordop_t* start,
+                     const bm::wordop_t* end)
 {
+#if defined(BMSSE42OPT) || defined(BMAVX2OPT)
+    return VECT_IS_ZERO_BLOCK(start, end);
+#else
    do
    {
         bm::wordop_t tmp = 
@@ -3453,8 +3457,8 @@ inline bool bit_is_all_zero(const bm::wordop_t* start,
            return false;
        start += 4;
    } while (start < end);
-
    return true;
+#endif
 }
 
 // ----------------------------------------------------------------------

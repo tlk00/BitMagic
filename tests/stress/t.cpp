@@ -33,7 +33,7 @@ For more information please visit:  http://bitmagic.io
 //#define BMSSE2OPT
 //#define BMSSE42OPT
 //#define BMAVX2OPT
-#define BMCOUNTOPT
+//#define BMCOUNTOPT
 //#define BM_USE_EXPLICIT_TEMP
 
 #include <stdio.h>
@@ -10336,6 +10336,21 @@ void TestSIMDUtils()
 #if defined(BMSSE42OPT)
     unsigned idx;
     cout << "----------------------------> [ SSE 4.2 ]" << endl;
+    
+    {
+        BM_DECLARE_TEMP_BLOCK(tb)
+        for (unsigned i = 0; i < bm::set_block_size; ++i)
+        {
+            tb[i] = 0;
+        }
+        bool all_z = sse4_is_all_zero((__m128i*)tb, (__m128i*)(tb + bm::set_block_size));
+        assert(all_z);
+        
+        tb[256] = 1;
+        all_z = sse4_is_all_zero((__m128i*)tb, (__m128i*)(tb + bm::set_block_size));
+        assert(!all_z);
+    }
+    
     {
         unsigned short buf[127] = { 65535, 127, 255, 256, 1000, 2000, 2001, 2005, 0xFF, 0,  };
         idx = bm::sse4_gap_find(buf, 65535, 1);
@@ -10526,6 +10541,25 @@ void TestSIMDUtils()
             idx = bm::sse4_gap_find(buf, v - 1, vsize);
             assert(idx == i || (buf[i - 1] == v - 1));
         }
+    }
+
+#endif
+
+#if defined(BMAVX2OPT)
+    cout << "----------------------------> [ AVX2 ]" << endl;
+    
+    {
+        BM_DECLARE_TEMP_BLOCK(tb)
+        for (unsigned i = 0; i < bm::set_block_size; ++i)
+        {
+            tb[i] = 0;
+        }
+        bool all_z = avx2_is_all_zero((__m256i*)tb, (__m256i*)(tb + bm::set_block_size));
+        assert(all_z);
+        
+        tb[256] = 1;
+        all_z = avx2_is_all_zero((__m256i*)tb, (__m256i*)(tb + bm::set_block_size));
+        assert(!all_z);
     }
 
 #endif

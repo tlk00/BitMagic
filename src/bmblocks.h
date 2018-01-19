@@ -232,8 +232,6 @@ public:
 
         bool operator()(const bm::word_t* block, unsigned /*idx*/)
         {
-            if (IS_FULL_BLOCK(block)) return true;
-
             if (BM_IS_GAP(block)) // gap block
             {
                 if (!gap_is_all_zero(BMGAP_PTR(block), bm::gap_max_bits))
@@ -243,6 +241,8 @@ public:
             }
             else  // bitset
             {
+                if (IS_FULL_BLOCK(block)) return true;
+                
                 bm::wordop_t* blk1 = (wordop_t*)block;
                 bm::wordop_t* blk2 = 
                     (wordop_t*)(block + bm::set_block_size);
@@ -415,7 +415,7 @@ public:
                     else
                     if (opt_mode_ == 2) // check if it is all 1 block
                     {
-                        b = is_bits_one(blk1, blk2);
+                        b = bm::is_bits_one(blk1, blk2);
                         if (b) 
                         {
                             bman.get_allocator().free_bit_block(block);
@@ -1502,10 +1502,9 @@ public:
         if (BM_IS_GAP(blk))
         {
             gap_word_t* b = BMGAP_PTR(blk);
-            return gap_is_all_one(b, bm::gap_max_bits);
+            return bm::gap_is_all_one(b, bm::gap_max_bits);
         }
 
-        // BIT block
         if (IS_FULL_BLOCK(blk))
         {
             return true;
@@ -1513,8 +1512,8 @@ public:
         if (!deep_scan) 
             return false; // block exists - presume it has 0 bits
 
-        return is_bits_one((wordop_t*)blk, 
-                           (wordop_t*)(blk + bm::set_block_size));
+        return bm::is_bits_one((wordop_t*)blk,
+                               (wordop_t*)(blk + bm::set_block_size));
     }
 
     /*! Returns temporary block, allocates if needed. */

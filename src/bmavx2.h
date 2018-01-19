@@ -727,38 +727,61 @@ inline
 void avx2_invert_arr(bm::word_t* BMRESTRICT first,
                      bm::word_t* BMRESTRICT last)
 {
-    __m256i ymm1 = _mm256_set_epi32(0xFFFFFFFF, 0xFFFFFFFF,
-                                    0xFFFFFFFF, 0xFFFFFFFF,
-                                    0xFFFFFFFF, 0xFFFFFFFF,
-                                    0xFFFFFFFF, 0xFFFFFFFF
-                                    );
+    __m256i maskz = _mm256_setzero_si256();
+    __m256i ymm1 = _mm256_cmpeq_epi64(maskz, maskz); // set all FF
+
     __m256i* wrd_ptr = (__m256i*)first;
     __m256i ymm0;
     do
     {
-        ymm0 = _mm256_load_si256(wrd_ptr);
+        ymm0 = _mm256_load_si256(wrd_ptr+0);
         ymm0 = _mm256_xor_si256(ymm0, ymm1);
-        _mm256_store_si256(wrd_ptr, ymm0);
-        ++wrd_ptr;
+        _mm256_store_si256(wrd_ptr+0, ymm0);
 
-        ymm0 = _mm256_load_si256(wrd_ptr);
+        ymm0 = _mm256_load_si256(wrd_ptr+1);
         ymm0 = _mm256_xor_si256(ymm0, ymm1);
-        _mm256_store_si256(wrd_ptr, ymm0);
-        ++wrd_ptr;
+        _mm256_store_si256(wrd_ptr+1, ymm0);
 
-        ymm0 = _mm256_load_si256(wrd_ptr);
+        ymm0 = _mm256_load_si256(wrd_ptr+2);
         ymm0 = _mm256_xor_si256(ymm0, ymm1);
-        _mm256_store_si256(wrd_ptr, ymm0);
-        ++wrd_ptr;
+        _mm256_store_si256(wrd_ptr+2, ymm0);
 
-        ymm0 = _mm256_load_si256(wrd_ptr);
+        ymm0 = _mm256_load_si256(wrd_ptr+3);
         ymm0 = _mm256_xor_si256(ymm0, ymm1);
-        _mm256_store_si256(wrd_ptr, ymm0);
-        ++wrd_ptr;
+        _mm256_store_si256(wrd_ptr+3, ymm0);
+        wrd_ptr += 4;
 
     } while (wrd_ptr < (__m256i*)last);
 }
 
+/*!
+    @brief check if block is all zero bits
+    @ingroup AVX2
+*/
+inline
+bool avx2_is_all_zero(const __m256i* BMRESTRICT block,
+                      const __m256i* BMRESTRICT block_end)
+{
+    __m256i maskz = _mm256_setzero_si256();
+
+    do
+    {
+        __m256i w0 = _mm256_load_si256(block+0);
+        __m256i w1 = _mm256_load_si256(block+1);
+        
+        __m256i w = _mm256_or_si256(w0, w1);
+        __m256i wcmp= _mm256_cmpeq_epi8(w, maskz); // (w0 | w1) == maskz
+        unsigned mask = _mm256_movemask_epi8(wcmp);
+        if (mask != ~0u)
+        {
+            return false;
+        }
+
+        block += 2;
+    
+    } while (block < block_end);
+    return true;
+}
 
 
 
@@ -804,6 +827,9 @@ void avx2_invert_arr(bm::word_t* BMRESTRICT first,
 
 #define VECT_SET_BLOCK(dst, dst_end, value) \
     avx2_set_block((__m256i*) dst, (__m256i*) (dst_end), (value))
+
+#define VECT_IS_ZERO_BLOCK(dst, dst_end) \
+    avx2_is_all_zero((__m256i*) dst, (__m256i*) (dst_end))
 
 
 // TODO: write better pipelined AVX2 implementation
