@@ -4948,58 +4948,6 @@ private:
     B* bp_;
 };
 
-/*! @brief Adaptor to copy 1 bits to array with base increment
-    @internal
-*/
-template<typename B> class copy_to_array_functor_inc
-{
-public:
-    copy_to_array_functor_inc(B* bits, unsigned base_idx)
-    : bp_(bits), base_idx_(base_idx)
-    {}
-
-    B* ptr() { return bp_; }
-    
-    void operator()(unsigned bit_idx) 
-    { 
-        *bp_++ = (B)(bit_idx + base_idx_);
-    }
-
-    
-    void operator()(unsigned bit_idx0, 
-                    unsigned bit_idx1) 
-    { 
-        bp_[0]=(B)(bit_idx0+base_idx_);bp_[1]=(B)(bit_idx1+base_idx_);
-        bp_+=2;
-    }
-    
-    void operator()(unsigned bit_idx0, 
-                    unsigned bit_idx1, 
-                    unsigned bit_idx2) 
-    { 
-        bp_[0]=(B)(bit_idx0+base_idx_);bp_[1]=(B)(bit_idx1+base_idx_);
-        bp_[2]=(B)(bit_idx2+base_idx_);
-        bp_+=3;
-    }
-    
-    void operator()(unsigned bit_idx0, 
-                    unsigned bit_idx1, 
-                    unsigned bit_idx2, 
-                    unsigned bit_idx3) 
-    { 
-        bp_[0]=(B)(bit_idx0+base_idx_);bp_[1]=(B)(bit_idx1+base_idx_);
-        bp_[2]=(B)(bit_idx2+base_idx_);bp_[3]=(B)(bit_idx3+base_idx_);
-        bp_+=4;
-    }
-
-private:
-    copy_to_array_functor_inc(const copy_to_array_functor_inc&);
-    copy_to_array_functor_inc& operator=(const copy_to_array_functor_inc&);
-private:
-    B*        bp_;
-    unsigned  base_idx_; ///< Base increment factor
-};
-
 
 /*!
    \brief Unpacks word into list of ON bit indexes (quad-bit based)
@@ -5137,80 +5085,16 @@ template<typename T> T bit_convert_to_arr(T* BMRESTRICT dest,
         {
             return 0;
         }
-
-        copy_to_array_functor_inc<T> func(pcurr, bit_idx);
-        bit_for_each_4(val, func);    	
-        unsigned word_bit_cnt = (unsigned)(func.ptr() - pcurr);
-        pcurr += word_bit_cnt;    
-
+        unsigned char bits[64];
+        unsigned word_bit_cnt  = bm::bitscan_popcnt(val, bits);
+        for (unsigned j = 0; j < word_bit_cnt; ++j)
+        {
+            *pcurr++ = bits[j] + bit_idx;
+        }
     } // for
     return (T)(pcurr - dest);
 }
 
-
-
-
-/*!
-    OBSOLETE function
-    \brief Convert bit block into an array of ints corresponding to 1 bits
-    \internal
-    @ingroup bitfunc 
-*/
-/*
-template<typename T> T bit_convert_to_arr2(T* BMRESTRICT dest, 
-                                          const unsigned* BMRESTRICT src, 
-                                          bm::id_t bits, 
-                                          unsigned dest_len)
-{
-    BMREGISTER T* BMRESTRICT pcurr = dest;
-    T* BMRESTRICT end = dest + dest_len; 
-    unsigned  bit_idx = 0;
-
-    do
-    {
-        BMREGISTER unsigned val = *src;
-        // We can skip if *src == 0 
-
-        while (val == 0)
-        {
-            bit_idx += sizeof(*src) * 8;
-            if (bit_idx >= bits)
-            {
-               return (T)(pcurr - dest);
-            }
-            val = *(++src);
-        }
-
-        if (pcurr + sizeof(val)*8 > end) // insufficient space
-        {
-            return 0;
-        }
-                
-        for (int i = 0; i < 32; i+=4)
-        {
-            if (val & 1)
-                *pcurr++ = bit_idx;
-            val >>= 1; ++bit_idx;
-            if (val & 1)
-                *pcurr++ = bit_idx;
-            val >>= 1; ++bit_idx;
-            if (val & 1)
-                *pcurr++ = bit_idx;
-            val >>= 1; ++bit_idx;
-            if (val & 1)
-                *pcurr++ = bit_idx;
-            val >>= 1; ++bit_idx;
-        }
-        
-        if (bits <= bit_idx)
-            break;
-
-        val = *(++src);
-    } while (1);
-
-    return (T)(pcurr - dest);
-}
-*/
 
 
 /*! @brief Calculates memory overhead for number of gap blocks sharing 
