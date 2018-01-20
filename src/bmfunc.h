@@ -3424,6 +3424,9 @@ template<typename T> void bit_invert(T* start, T* end)
 inline bool is_bits_one(const bm::wordop_t* start, 
                         const bm::wordop_t* end)
 {
+#if defined(BMSSE42OPT) || defined(BMAVX2OPT)
+    return VECT_IS_ONE_BLOCK(start, end);
+#else
    do
    {
         bm::wordop_t tmp = 
@@ -3432,8 +3435,8 @@ inline bool is_bits_one(const bm::wordop_t* start,
             return false;
         start += 4;
    } while (start < end);
-
    return true;
+#endif
 }
 
 // ----------------------------------------------------------------------

@@ -153,7 +153,7 @@ bm::id_t sse4_bit_count_op(const __m128i* BMRESTRICT block,
 
 /*!
     @brief check if block is all zero bits
-    @ingroup AVX2
+    @ingroup SSE4
 */
 inline
 bool sse4_is_all_zero(const __m128i* BMRESTRICT block,
@@ -174,6 +174,27 @@ bool sse4_is_all_zero(const __m128i* BMRESTRICT block,
 
         block += 2;
     
+    } while (block < block_end);
+    return true;
+}
+
+
+/*!
+    @brief check if block is all zero bits
+    @ingroup SSE4
+*/
+inline
+bool sse4_is_all_one(const __m128i* BMRESTRICT block,
+                     const __m128i* BMRESTRICT block_end)
+{
+    do
+    {
+        __m128i w0 = _mm_load_si128(block);
+        if (!_mm_test_all_ones(w0))
+        {
+            return false;
+        }
+        ++block;
     } while (block < block_end);
     return true;
 }
@@ -225,6 +246,8 @@ bool sse4_is_all_zero(const __m128i* BMRESTRICT block,
 #define VECT_IS_ZERO_BLOCK(dst, dst_end) \
     sse4_is_all_zero((__m128i*) dst, (__m128i*) (dst_end))
 
+#define VECT_IS_ONE_BLOCK(dst, dst_end) \
+    sse4_is_all_one((__m128i*) dst, (__m128i*) (dst_end))
 
 
 

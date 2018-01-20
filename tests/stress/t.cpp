@@ -10341,7 +10341,21 @@ void TestSIMDUtils()
         BM_DECLARE_TEMP_BLOCK(tb)
         for (unsigned i = 0; i < bm::set_block_size; ++i)
         {
-            tb[i] = 0;
+            tb[i] = ~0u;
+        }
+        bool all_one = sse4_is_all_one((__m128i*)tb, (__m128i*)(tb + bm::set_block_size));
+        assert(all_one);
+        
+        tb[256] = 1;
+        all_one = sse4_is_all_one((__m128i*)tb, (__m128i*)(tb + bm::set_block_size));
+        assert(!all_one);
+    }
+
+    {
+        BM_DECLARE_TEMP_BLOCK(tb)
+        for (unsigned i = 0; i < bm::set_block_size; ++i)
+        {
+            tb[i] = 0u;
         }
         bool all_z = sse4_is_all_zero((__m128i*)tb, (__m128i*)(tb + bm::set_block_size));
         assert(all_z);
@@ -10350,7 +10364,8 @@ void TestSIMDUtils()
         all_z = sse4_is_all_zero((__m128i*)tb, (__m128i*)(tb + bm::set_block_size));
         assert(!all_z);
     }
-    
+
+
     {
         unsigned short buf[127] = { 65535, 127, 255, 256, 1000, 2000, 2001, 2005, 0xFF, 0,  };
         idx = bm::sse4_gap_find(buf, 65535, 1);
@@ -10562,6 +10577,19 @@ void TestSIMDUtils()
         assert(!all_z);
     }
 
+    {
+        BM_DECLARE_TEMP_BLOCK(tb)
+        for (unsigned i = 0; i < bm::set_block_size; ++i)
+        {
+            tb[i] = ~0u;
+        }
+        bool all_one = avx2_is_all_one((__m256i*)tb, (__m256i*)(tb + bm::set_block_size));
+        assert(all_one);
+        
+        tb[256] = 1;
+        all_one = avx2_is_all_one((__m256i*)tb, (__m256i*)(tb + bm::set_block_size));
+        assert(!all_one);
+    }
 #endif
     cout << "------------------------ Test SIMD Utils OK" << endl;
 }

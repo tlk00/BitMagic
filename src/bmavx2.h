@@ -783,6 +783,31 @@ bool avx2_is_all_zero(const __m256i* BMRESTRICT block,
     return true;
 }
 
+/*!
+    @brief check if block is all one bits
+    @ingroup AVX2
+*/
+inline
+bool avx2_is_all_one(const __m256i* BMRESTRICT block,
+                     const __m256i* BMRESTRICT block_end)
+{
+    __m256i maskz = _mm256_setzero_si256();
+    __m256i maskF = _mm256_cmpeq_epi8(maskz, maskz); // set FF
+    
+    do
+    {
+        __m256i w0 = _mm256_load_si256(block);
+        
+        __m256i wcmp= _mm256_cmpeq_epi8(w0, maskF); // (w0 == maskF)
+        unsigned mask = _mm256_movemask_epi8(wcmp);
+        if (mask != ~0u)
+        {
+            return false;
+        }
+        ++block;
+    } while (block < block_end);
+    return true;
+}
 
 
 
@@ -830,6 +855,9 @@ bool avx2_is_all_zero(const __m256i* BMRESTRICT block,
 
 #define VECT_IS_ZERO_BLOCK(dst, dst_end) \
     avx2_is_all_zero((__m256i*) dst, (__m256i*) (dst_end))
+
+#define VECT_IS_ONE_BLOCK(dst, dst_end) \
+    avx2_is_all_one((__m256i*) dst, (__m256i*) (dst_end))
 
 
 // TODO: write better pipelined AVX2 implementation
@@ -1075,36 +1103,7 @@ bm::id_t sse42_bit_block_calc_count_change(const __m128i* BMRESTRICT block,
    return count;
 }
 
-#if(0)
-// initial version of sum_arr (keeping for the future reference)
-inline
-const bm::gap_word_t* avx2_gap_sum_arr(const bm::gap_word_t* BMRESTRICT pbuf,
-                                       unsigned vect_cnt,
-                                       unsigned* sum)
-{
-    __m256i xcnt = _mm256_setzero_si256();
 
-    for (unsigned i = 0; i < vect_cnt; ++i)
-    {
-        __m256i xmm1 = _mm256_loadu_si256((__m256i*)(pbuf));
-        __m256i xmm0 = _mm256_loadu_si256((__m256i*)(pbuf-1));
-        __m256i xmm_s1 = _mm256_sub_epi16(xmm1, xmm0);
-        
-        xmm1 = _mm256_loadu_si256((__m256i*)(pbuf+16));
-        xmm0 = _mm256_loadu_si256((__m256i*)(pbuf+16-1));
-        __m256i xmm_s2 = _mm256_sub_epi16(xmm1, xmm0);
-        
-        __m256i sum = _mm256_add_epi16(xmm_s1, xmm_s2);
-        xcnt = _mm256_add_epi16(xcnt, sum);
-        pbuf += 32;
-    }
-    unsigned short* cnt16 = (unsigned short*)&xcnt;
-    *sum += cnt16[0] + cnt16[2] + cnt16[4] + cnt16[6] +
-            cnt16[8] + cnt16[10] + cnt16[12] + cnt16[14];
-
-    return pbuf;
-}
-#endif
 
 /* @brief Gap block population count (array sum) utility
    @param pbuf - unrolled, aligned to 1-start GAP buffer
