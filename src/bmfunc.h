@@ -4972,22 +4972,21 @@ template<typename T,typename B> unsigned bit_list_4(T w, B* bits)
 
     @ingroup bitfunc
 */
-template<typename T, typename B>
-BMFORCEINLINE 
-unsigned short bitscan_popcnt(T w, B* bits, unsigned  offs = 0)
+template<typename B>
+unsigned short bitscan_popcnt(bm::id_t w, B* bits, unsigned  offs = 0)
 {
     unsigned pos = 0;
     while (w)
     {
-        T t = w & -w;
-        bits[pos++] = (B)bm::word_bitcount(t - 1) + (B) offs;
+        bm::id_t t = w & -w;
+        bits[pos++] = (B)(bm::word_bitcount(t - 1) + offs);
         w &= w - 1;
     }
     return (unsigned short)pos;
 }
 
 /*!
-    \brief Unpacks word into list of ON bit indexes using popcnt method
+    \brief Unpacks 64-bit word into list of ON bit indexes using popcnt method
     \param w - value
     \param bits - pointer on the result array
     \param offs - bit address offset to add (0 - default)
@@ -4996,9 +4995,9 @@ unsigned short bitscan_popcnt(T w, B* bits, unsigned  offs = 0)
     @ingroup bitfunc
 */
 template<typename B>
-unsigned bitscan_popcnt64(bm::id64_t w, B* bits)
+unsigned short bitscan_popcnt64(bm::id64_t w, B* bits)
 {
-    unsigned pos = 0;
+    unsigned short pos = 0;
     while (w)
     {
         bm::id64_t t = w & -w;
@@ -5006,6 +5005,19 @@ unsigned bitscan_popcnt64(bm::id64_t w, B* bits)
         w &= w - 1;
     }
     return pos;
+}
+
+template<typename V, typename B>
+unsigned short bitscan(V w, B* bits)
+{
+    if (bm::conditional<sizeof(V) == 8>::test())
+    {
+        return bm::bitscan_popcnt64(w, bits);
+    }
+    else
+    {
+        return bm::bitscan_popcnt(w, bits);
+    }
 }
 
 
@@ -5085,11 +5097,11 @@ template<typename T> T bit_convert_to_arr(T* BMRESTRICT dest,
         {
             return 0;
         }
-        unsigned char bits[64];
-        unsigned word_bit_cnt  = bm::bitscan_popcnt(val, bits);
+        unsigned char b_list[64];
+        unsigned word_bit_cnt  = bm::bitscan_popcnt(val, b_list);
         for (unsigned j = 0; j < word_bit_cnt; ++j)
         {
-            *pcurr++ = bits[j] + bit_idx;
+            *pcurr++ = b_list[j] + bit_idx;
         }
     } // for
     return (T)(pcurr - dest);
@@ -5534,8 +5546,8 @@ const unsigned short set_bitscan_wave_size = 2;
     @ingroup bitfunc
     @internal
 */
-template<typename B>
-unsigned short bitscan_wave(const bm::word_t* w_ptr, B* bits)
+inline
+unsigned short bitscan_wave(const bm::word_t* w_ptr, unsigned char* bits)
 {
     bm::word_t w0, w1;
     unsigned short cnt;

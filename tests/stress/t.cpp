@@ -8802,7 +8802,7 @@ bool CompareSparseVector(const SV& sv, const Vect& vect)
         if (v1 != v2)
         {
             cout << "SV discrepancy:" << "sv[" << i << "]=" << v2
-                 <<  "vect[" << i << "]=" << v1
+                 <<  " vect[" << i << "]=" << v1
                  << endl;
             return false;
         }
@@ -8810,8 +8810,8 @@ bool CompareSparseVector(const SV& sv, const Vect& vect)
     
     // extraction comparison
     {
-    std::vector<unsigned> v1(sv.size());
-    std::vector<unsigned> v1r(sv.size());
+    std::vector<typename SV::value_type> v1(sv.size());
+    std::vector<typename SV::value_type> v1r(sv.size());
     sv.extract(&v1[0], sv.size(), 0);
     sv.extract_range(&v1r[0], sv.size(), 0);
     for (unsigned i = 0; i < sv.size(); ++i)
@@ -9004,6 +9004,8 @@ void TestSparseVector()
     cout << "---------------------------- Bit-plain sparse vector test" << endl;
 
     typedef bm::sparse_vector<unsigned, bm::bvector<> > svector;
+    typedef bm::sparse_vector<unsigned long long, bm::bvector<> > svector64;
+
     
     // test empty vector serialization
     {{
@@ -9066,79 +9068,170 @@ void TestSparseVector()
     cout << "Import test..." << endl;
     
     {{
-    std::vector<unsigned> vect;
-    for (unsigned i = 0; i < 128000; ++i)
-    {
-        vect.push_back(i);
-    }
-    
-    bm::sparse_vector<unsigned, bm::bvector<> > sv;
-    sv.import(&vect[0], (unsigned)vect.size());
-    bool res = CompareSparseVector(sv, vect);
-    if (!res)
-    {
-        cerr << "Bit Plain import test failed" << endl;
-        exit(1);
-    }
-    sv.optimize();
-    print_svector_stat(sv);
-    res = CompareSparseVector(sv, vect);
-    if (!res)
-    {
-        cerr << "optimized Bit Plain import test failed" << endl;
-        exit(1);
-    }
+        std::vector<unsigned> vect;
+        for (unsigned i = 0; i < 128000; ++i)
+        {
+            vect.push_back(i);
+        }
+        
+        svector sv;
+        sv.import(&vect[0], (unsigned)vect.size());
+        bool res = CompareSparseVector(sv, vect);
+        if (!res)
+        {
+            cerr << "Bit Plain import test failed" << endl;
+            exit(1);
+        }
+        sv.optimize();
+        print_svector_stat(sv);
+        res = CompareSparseVector(sv, vect);
+        if (!res)
+        {
+            cerr << "optimized Bit Plain import test failed" << endl;
+            exit(1);
+        }
 
-    bm::sparse_vector<unsigned, bm::bvector<> > sv_1;
-    std::copy(vect.begin(), vect.end(), std::back_inserter(sv_1));
-    res = CompareSparseVector(sv_1, vect);
-    if (!res)
-    {
-        cerr << "Bit Plain push_back test failed" << endl;
-        exit(1);
-    }
+        bm::sparse_vector<unsigned, bm::bvector<> > sv_1;
+        std::copy(vect.begin(), vect.end(), std::back_inserter(sv_1));
+        res = CompareSparseVector(sv_1, vect);
+        if (!res)
+        {
+            cerr << "Bit Plain push_back test failed" << endl;
+            exit(1);
+        }
 
-    
-    bm::sparse_vector<unsigned, bm::bvector<> >::statistics st;
-    sv.calc_stat(&st);
-    
-    bm::sparse_vector<unsigned, bm::bvector<> > sv2(sv);
-    res = CompareSparseVector(sv2, vect);
-    if (!res)
-    {
-        cerr << "Bit Plain copy-ctor test failed" << endl;
-        exit(1);
-    }
-    
-    sv2.clear();
-    sv2.import(&vect[0], (unsigned)vect.size());
-    res = CompareSparseVector(sv2, vect);
-    if (!res)
-    {
-        cerr << "Bit Plain copy-ctor test failed" << endl;
-        exit(1);
-    }
+        
+        bm::sparse_vector<unsigned, bm::bvector<> >::statistics st;
+        sv.calc_stat(&st);
+        
+        bm::sparse_vector<unsigned, bm::bvector<> > sv2(sv);
+        res = CompareSparseVector(sv2, vect);
+        if (!res)
+        {
+            cerr << "Bit Plain copy-ctor test failed" << endl;
+            exit(1);
+        }
+        
+        sv2.clear();
+        sv2.import(&vect[0], (unsigned)vect.size());
+        res = CompareSparseVector(sv2, vect);
+        if (!res)
+        {
+            cerr << "Bit Plain copy-ctor test failed" << endl;
+            exit(1);
+        }
 
-    bm::sparse_vector<unsigned, bm::bvector<> > sv3;
-    sv3.set(65536, 10); // set some bit to initiate it
-    sv3 = sv;
-    res = CompareSparseVector(sv3, vect);
-    if (!res)
-    {
-        cerr << "Bit Plain assignmnet test failed" << endl;
-        exit(1);
-    }
-    
-    sv3.clear();
-    sv3.import(&vect[0], (unsigned)vect.size());
-    res = CompareSparseVector(sv3, vect);
-    if (!res)
-    {
-        cerr << "Bit Plain assignment test failed" << endl;
-        exit(1);
-    }
+        bm::sparse_vector<unsigned, bm::bvector<> > sv3;
+        sv3.set(65536, 10); // set some bit to initiate it
+        sv3 = sv;
+        res = CompareSparseVector(sv3, vect);
+        if (!res)
+        {
+            cerr << "Bit Plain assignmnet test failed" << endl;
+            exit(1);
+        }
+        
+        sv3.clear();
+        sv3.import(&vect[0], (unsigned)vect.size());
+        res = CompareSparseVector(sv3, vect);
+        if (!res)
+        {
+            cerr << "Bit Plain assignment test failed" << endl;
+            exit(1);
+        }
     }}
+
+    cout << "Import test 64..." << endl;
     
+    {{
+        std::vector<unsigned long long> vect;
+        for (unsigned long long i = 0; i < 128000; ++i)
+        {
+            vect.push_back(i << 33);
+        }
+        
+        {{
+            svector64 sv;
+            unsigned long long v = 3;
+            v = v << 33;
+            sv.set(10, v);
+            unsigned long long v1;
+            v1 = sv.get(10);
+            if (v != v1)
+            {
+                cerr << "SV 64-bit set failed" << endl;
+                exit(1);
+            }
+        }}
+        
+        svector64 sv;
+        sv.import(&vect[0], (unsigned)vect.size());
+        bool res = CompareSparseVector(sv, vect);
+        if (!res)
+        {
+            cerr << "Bit Plain import test failed" << endl;
+            exit(1);
+        }
+        sv.optimize();
+        print_svector_stat(sv);
+        res = CompareSparseVector(sv, vect);
+        if (!res)
+        {
+            cerr << "optimized Bit Plain import test failed" << endl;
+            exit(1);
+        }
+
+        svector64 sv_1;
+        std::copy(vect.begin(), vect.end(), std::back_inserter(sv_1));
+        res = CompareSparseVector(sv_1, vect);
+        if (!res)
+        {
+            cerr << "Bit Plain push_back test failed" << endl;
+            exit(1);
+        }
+
+        
+        svector64::statistics st;
+        sv.calc_stat(&st);
+        
+        svector64 sv2(sv);
+        res = CompareSparseVector(sv2, vect);
+        if (!res)
+        {
+            cerr << "Bit Plain copy-ctor test failed" << endl;
+            exit(1);
+        }
+        
+        sv2.clear();
+        sv2.import(&vect[0], (unsigned)vect.size());
+        res = CompareSparseVector(sv2, vect);
+        if (!res)
+        {
+            cerr << "Bit Plain copy-ctor test failed" << endl;
+            exit(1);
+        }
+
+        svector64 sv3;
+        sv3.set(65536, 10); // set some bit to initiate it
+        sv3 = sv;
+        res = CompareSparseVector(sv3, vect);
+        if (!res)
+        {
+            cerr << "Bit Plain assignmnet test failed" << endl;
+            exit(1);
+        }
+        
+        sv3.clear();
+        sv3.import(&vect[0], (unsigned)vect.size());
+        res = CompareSparseVector(sv3, vect);
+        if (!res)
+        {
+            cerr << "Bit Plain assignment test failed" << endl;
+            exit(1);
+        }
+    }}
+
+
     cout << "Linear assignment test" << endl;
 
     {{
