@@ -156,6 +156,174 @@ class serializer
 public:
     typedef typename BV::allocator_type      allocator_type;
     typedef typename BV::blocks_manager_type blocks_manager_type;
+    
+    /// Helper class to store serialized memory buffers
+    ///
+    class buffer
+    {
+    public:
+        typedef typename BV::allocator_type      allocator_type;
+    public:
+        buffer()
+            : byte_buf_(0), size_(0), capacity_(0), alloc_factor_(0)
+        {}
+        
+        buffer(size_t capacity)
+            : byte_buf_(0), size_(0), capacity_(0), alloc_factor_(0)
+        {
+            allocate(capacity);
+        }
+        
+        buffer(const buffer& buf)
+            : byte_buf_(0), alloc_(buf.alloc_)
+        {
+            if (buf.byte_buf_)
+            {
+                copy_from(buf.byte_buf_, buf.size_);
+            }
+        }
+        
+#ifndef BM_NO_CXX11
+        /// Move constructor
+        buffer(buffer&& buf) BMNOEXEPT
+        : alloc_(buf.alloc_)
+        {
+            byte_buf_ = buf.byte_buf_;
+            buf.byte_buf_ = 0;
+            size_ = buf.size_;
+            capacity_ = buf.capacity_;
+            alloc_factor_ = buf.alloc_factor_;
+        }
+        
+        /// Move assignment operator
+        buffer& operator=(buffer&& buf) BMNOEXEPT
+        {
+            free_buffer();
+            
+            alloc_ = buf.alloc_;
+            byte_buf_ = buf.byte_buf_;
+            buf.byte_buf_ = 0;
+            size_ = buf.size_;
+            capacity_ = buf.capacity_;
+            alloc_factor_ = buf.alloc_factor_;
+        }
+#endif
+
+        buffer& operator=(const buffer& buf)
+        {
+            copy_from(buf.buf(), buf.size());
+            return *this;
+        }
+        
+        ~buffer()
+        {
+            free_buffer();
+        }
+        
+        /// swap content with another buffer
+        void swap(buffer& buf) BMNOEXEPT
+        {
+            unsigned char* btmp = byte_buf_;
+            byte_buf_ = buf.byte_buf_;
+            buf.byte_buf_ = btmp;
+            
+            bm::xor_swap(size_, buf.size_);
+            bm::xor_swap(capacity_, buf.capacity_);
+            bm::xor_swap(alloc_factor_, buf.alloc_factor_);
+        }
+
+        /// copy data from an external buffer
+        ///
+        void copy_from(const unsigned char* buf, size_t size)
+        {
+            allocate(size);
+            ::memcpy(byte_buf_, buf, size);
+            size_ = size;
+        }
+
+        /// Get read access to buffer memory
+        const unsigned char* buf() const { return byte_buf_; }
+        
+        /// Get write access to buffer memory
+        unsigned char* data() { return byte_buf_; }
+        
+        /// Get buffer size
+        size_t size() const { return size_; }
+        
+        /// Get buffer capacity
+        size_t capacity() const { return capacity_; }
+
+        /// adjust current size
+        void resize(size_t new_size)
+        {
+            if (new_size <= capacity_)
+            {
+                size_ = new_size;
+                return;
+            }
+            buffer tmp_buffer(new_size);
+            tmp_buffer = *this;
+            this->swap(tmp_buffer);
+        }
+        
+        /// try to shrink the capacity to more optimal size
+        void optimize()
+        {
+            if (!byte_buf_)
+                return;
+            size_t blocks = compute_blocks(size_);
+            if (blocks < alloc_factor_) // possible to shrink
+            {
+                buffer tmp_buffer(*this);
+                this->swap(tmp_buffer);
+            }
+        }
+        
+    private:
+    
+        /// compute number of blocks for the needed capacity
+        static size_t compute_blocks(size_t capacity)
+        {
+            size_t block_size = (bm::set_block_size * sizeof(bm::word_t));
+            size_t blocks = (capacity / block_size);
+            if (capacity % block_size )
+                blocks++;
+            return blocks;
+        }
+        
+        void allocate(size_t new_capacity)
+        {
+            if (byte_buf_ && new_capacity <= capacity_)
+                return;
+            
+            free_buffer();
+        
+            size_t blocks = compute_blocks(new_capacity);
+            
+            bm::word_t* p = alloc_.alloc_bit_block(blocks);
+            byte_buf_ = (unsigned char*) p;
+            size_ = 0;
+            alloc_factor_ = (unsigned)blocks;
+            capacity_ = alloc_factor_ * (bm::set_block_size * sizeof(bm::word_t));
+        }
+        
+        void free_buffer()
+        {
+            if (byte_buf_)
+            {
+                alloc_.free_bit_block((bm::word_t*)byte_buf_, alloc_factor_);
+                byte_buf_ = 0;
+            }
+        }
+        
+    private:
+        allocator_type alloc_;        ///< bit-vector allocator
+        unsigned char* byte_buf_;     ///< byte buffer allocated to hold data
+        size_t         size_;         ///< current buffer size
+        size_t         capacity_;     ///< current capacity
+        unsigned       alloc_factor_; ///< number of blocks allocated for buffer
+    };
+    
 public:
     /**
         Construct serializer
