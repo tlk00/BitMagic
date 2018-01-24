@@ -4127,7 +4127,7 @@ void StressTest(unsigned repetitions, int set_operation = -1)
         bm::serializer<bvect>::buffer sermem_buf;
        
         bv_ser.serialize(*bvect_full1, sermem_buf, 0);
-        unsigned slen = sermem_buf.size();
+        unsigned slen = (unsigned)sermem_buf.size();
        
         delete bvect_full1;
 
@@ -5401,7 +5401,7 @@ void MutationOperationsTest()
     bm::serializer<bvect>::buffer sermem_buf;
     
     bv_ser.serialize(bvect_full1, sermem_buf, 0);
-    unsigned slen = sermem_buf.size();
+    unsigned slen = (unsigned)sermem_buf.size();
 
     cout << "BVECTOR SERMEM=" << slen << endl;
 
@@ -5532,7 +5532,7 @@ void SerializationTest()
     bm::serializer<bvect> bv_ser(tb);
     bm::serializer<bvect>::buffer sermem_buf;
     bv_ser.serialize(*bvect_full1, sermem_buf, &st);
-    unsigned slen = sermem_buf.size();
+    unsigned slen = (unsigned)sermem_buf.size();
 
     cout << "Serialized mem_max = " << st.max_serialize_mem
          << " size= " << slen 
@@ -5681,7 +5681,7 @@ void SerializationTest()
     bm::serializer<bvect>::buffer sermem_buf;
        
     bv_ser.serialize(*bvect_full1, sermem_buf, &st);
-    unsigned slen = sermem_buf.size();
+    unsigned slen = (unsigned)sermem_buf.size();
 
     cout << "Serialized mem_max = " << st.max_serialize_mem
          << " size= " << slen 

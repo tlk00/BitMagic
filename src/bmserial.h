@@ -342,7 +342,7 @@ public:
         
             size_t blocks = compute_blocks(new_capacity);
             
-            bm::word_t* p = alloc_.alloc_bit_block(blocks);
+            bm::word_t* p = alloc_.alloc_bit_block((unsigned)blocks);
             byte_buf_ = (unsigned char*) p;
             size_ = 0;
             alloc_factor_ = (unsigned)blocks;
@@ -422,7 +422,7 @@ public:
         @param bv_stat  - input (optional) bit-vector statistics object
                           if NULL, serizlize will compute statistics
     */
-    void serialize(const BV& bv, buffer& buf, const statistics_type* bv_stat);
+    void serialize(const BV& bv, typename serializer<BV>::buffer& buf, const statistics_type* bv_stat);
 
     
     /**
@@ -1104,7 +1104,7 @@ void serializer<BV>::encode_bit_interval(const bm::word_t* blk,
 
 template<class BV>
 void serializer<BV>::serialize(const BV& bv,
-                               serializer<BV>::buffer& buf,
+                               typename serializer<BV>::buffer& buf,
                                const statistics_type* bv_stat)
 {
     statistics_type stat;

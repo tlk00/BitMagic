@@ -5016,7 +5016,7 @@ unsigned short bitscan(V w, B* bits)
     }
     else
     {
-        return bm::bitscan_popcnt(w, bits);
+        return bm::bitscan_popcnt((bm::word_t)w, bits);
     }
 }
 
@@ -5101,7 +5101,7 @@ template<typename T> T bit_convert_to_arr(T* BMRESTRICT dest,
         unsigned word_bit_cnt  = bm::bitscan_popcnt(val, b_list);
         for (unsigned j = 0; j < word_bit_cnt; ++j)
         {
-            *pcurr++ = b_list[j] + bit_idx;
+            *pcurr++ = (T)(b_list[j] + bit_idx);
         }
     } // for
     return (T)(pcurr - dest);
