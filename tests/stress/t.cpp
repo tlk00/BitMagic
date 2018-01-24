@@ -3499,7 +3499,6 @@ void DesrializationTest2()
    bv1.calc_stat(&st1);
 
    std::vector<unsigned char> sermemv(st1.max_serialize_mem);
-   //unsigned char* sermem = new unsigned char[st1.max_serialize_mem];
    
    unsigned slen2 = bm::serialize(bv1, sermemv.data(), tb);
    assert(slen2);
@@ -4120,19 +4119,16 @@ void StressTest(unsigned repetitions, int set_operation = -1)
 
 
         // Serialization
-        bvect_full1->calc_stat(&st2);
-
-        cout << "Memory allocation: " << st2.max_serialize_mem << endl;
-        unsigned char* sermem = new unsigned char[st2.max_serialize_mem];
-
-//    bvect_full1->stat();
-
-        cout << "Serialization...";
-        unsigned slen = 
-            bm::serialize(*bvect_full1, sermem, 
-                          BM_NO_GAP_LENGTH|BM_NO_BYTE_ORDER);
-        cout << "Ok" << endl;
-
+       
+        bm::serializer<bvect> bv_ser;
+        bv_ser.gap_length_serialization(false);
+        bv_ser.byte_order_serialization(false);
+       
+        bm::serializer<bvect>::buffer sermem_buf;
+       
+        bv_ser.serialize(*bvect_full1, sermem_buf, 0);
+        unsigned slen = sermem_buf.size();
+       
         delete bvect_full1;
 
         unsigned SRatio = unsigned((slen*100)/st2.memory_used);
@@ -4147,24 +4143,23 @@ void StressTest(unsigned repetitions, int set_operation = -1)
              << endl;
 
         bvect*        bvect_full3= new bvect();
-        unsigned char* new_sermem = new unsigned char[slen];
-        memcpy(new_sermem, sermem, slen);
-        delete [] sermem;
-
+       
+        bm::serializer<bvect>::buffer new_sermem_buf;
+        new_sermem_buf = sermem_buf;
         cout << "Deserialization...";
 
-        bm::deserialize(*bvect_full3, new_sermem);
+        bm::deserialize(*bvect_full3, new_sermem_buf.buf());
 
-        bm::deserialize(bvtotal, new_sermem);
+        bm::deserialize(bvtotal, new_sermem_buf.buf());
 
         bvect* bv_target_s=new bvect();
         operation_deserializer<bvect>::deserialize(*bv_target_s,
-                                            new_sermem,
+                                            new_sermem_buf.buf(),
                                             0,
                                             set_OR);
 
         cout << "Ok." << endl;
-        delete [] new_sermem;
+//        delete [] new_sermem;
 
         cout << "Optimization...";
         bvtotal.optimize();
@@ -5402,23 +5397,22 @@ void MutationOperationsTest()
     // serialization
     
     BM_DECLARE_TEMP_BLOCK(tb)
+    bm::serializer<bvect> bv_ser(tb);
+    bm::serializer<bvect>::buffer sermem_buf;
+    
+    bv_ser.serialize(bvect_full1, sermem_buf, 0);
+    unsigned slen = sermem_buf.size();
 
-    unsigned char* sermem = new unsigned char[st.max_serialize_mem];
-    unsigned slen = bm::serialize(bvect_full1, sermem, tb);
     cout << "BVECTOR SERMEM=" << slen << endl;
 
 
     
     bvect        bvect_full3;
-    bm::deserialize(bvect_full3, sermem);
+    bm::deserialize(bvect_full3, sermem_buf.buf());
     print_stat(bvect_full3);
     CheckVectors(bvect_min1, bvect_full3, max+10, true);
     
-    delete [] sermem;
-    
-
     cout << "Copy constructor check." << endl;
-
 
     {
     bvect       bvect_full4(bvect_full3);
@@ -5429,6 +5423,75 @@ void MutationOperationsTest()
 
    }
 
+}
+
+
+void SerializationBufferTest()
+{
+   cout << " ----------------------------------- Serialization Buffer test" << endl;
+
+    {
+        bm::serializer<bvect>::buffer buf1;
+
+        assert(buf1.size() == 0);
+        assert(buf1.capacity() == 0);
+        
+        bm::serializer<bvect>::buffer buf2(100);
+        assert(buf2.size() == 0);
+        assert(buf2.capacity() != 0);
+        
+        buf1.reserve(100);
+        assert(buf1.capacity() == buf2.capacity());
+        
+        const unsigned char str[] = "abc";
+        buf1.copy_from(str, 3);
+        assert(buf1.size() == 3);
+        
+        {
+            const unsigned char* s = buf1.buf();
+            assert(s[0] == 'a' && s[1] == 'b' && s[2] == 'c');
+        }
+        
+        buf2 = buf1;
+        assert(buf2.size() == buf1.size());
+
+        {
+            const unsigned char* s = buf2.buf();
+            assert(s[0] == 'a' && s[1] == 'b' && s[2] == 'c');
+        }
+        buf2.reserve(100000);
+        assert(buf2.size() == buf1.size());
+        {
+            const unsigned char* s = buf2.buf();
+            assert(s[0] == 'a' && s[1] == 'b' && s[2] == 'c');
+        }
+        size_t cap2_1 = buf2.capacity();
+
+        buf2.optimize();
+        size_t cap2_2 = buf2.capacity();
+        
+        assert(cap2_2 < cap2_1);
+        assert(buf2.size() == buf1.size());
+        
+        {
+            const unsigned char* s = buf2.buf();
+            assert(s[0] == 'a' && s[1] == 'b' && s[2] == 'c');
+        }
+
+        bm::serializer<bvect>::buffer buf3(buf2);
+        assert(buf3.size() == buf2.size());
+        {
+            const unsigned char* s = buf3.buf();
+            assert(s[0] == 'a' && s[1] == 'b' && s[2] == 'c');
+        }
+        
+        buf3.reinit(1000000);
+        assert(buf3.size() == 0);
+
+    }
+   
+
+   cout << " ----------------------------------- Serialization Buffer test OK" << endl;
 }
 
 
@@ -5465,20 +5528,22 @@ void SerializationTest()
     bvect::statistics st;
     bvect_full1->calc_stat(&st);
     BM_DECLARE_TEMP_BLOCK(tb)
+    
+    bm::serializer<bvect> bv_ser(tb);
+    bm::serializer<bvect>::buffer sermem_buf;
+    bv_ser.serialize(*bvect_full1, sermem_buf, &st);
+    unsigned slen = sermem_buf.size();
 
-    unsigned char* sermem = new unsigned char[st.max_serialize_mem];
-    unsigned slen = bm::serialize(*bvect_full1, sermem, tb);
-    cout << "Serialized mem_max = " << st.max_serialize_mem 
+    cout << "Serialized mem_max = " << st.max_serialize_mem
          << " size= " << slen 
          << " Ratio=" << (slen*100)/st.max_serialize_mem << "%"
          << endl;
 
-    bm::deserialize(*bvect_full2, sermem);
+    bm::deserialize(*bvect_full2, sermem_buf.buf());
     operation_deserializer<bvect>::deserialize(*bv_target_s,
-                                               sermem,
-                                               0,
+                                               sermem_buf.buf(),
+                                               tb,
                                                set_OR);
-    delete [] sermem;
 
 
     CheckVectors(*bvect_min1, *bvect_full2, size, true);
@@ -5609,32 +5674,28 @@ void SerializationTest()
     FillSetsRandomMethod(bvect_min1, bvect_full1, 1, BITVECT_SIZE-10, 1);
 //    FillSetsRandomMethod(bvect_min2, bvect_full2, 1, BITVECT_SIZE-10, 1);
 
-//bvect_full1->stat();
-cout << "Filling. OK." << endl;
     bvect::statistics st;
     bvect_full1->calc_stat(&st);
-cout << st.max_serialize_mem << endl;
-    unsigned char* sermem = new unsigned char[st.max_serialize_mem];
-cout << "Serialization" << endl;
-    unsigned slen = bm::serialize(*bvect_full1, sermem);
 
-    cout << "Serialized mem_max = " << st.max_serialize_mem 
+    bm::serializer<bvect> bv_ser;
+    bm::serializer<bvect>::buffer sermem_buf;
+       
+    bv_ser.serialize(*bvect_full1, sermem_buf, &st);
+    unsigned slen = sermem_buf.size();
+
+    cout << "Serialized mem_max = " << st.max_serialize_mem
          << " size= " << slen 
          << " Ratio=" << (slen*100)/st.max_serialize_mem << "%"
          << endl;
-cout << "Deserialization" << endl;
-    bm::deserialize(*bvect_full2, sermem);
-cout << "Deserialization ok" << endl;
+    bm::deserialize(*bvect_full2, sermem_buf.buf());
     bvect*  bv_target_s=new bvect();
     operation_deserializer<bvect>::deserialize(*bv_target_s,
-                                               sermem,
+                                               sermem_buf.buf(),
                                                0,
                                                set_OR);
 
     CheckVectors(*bvect_min1, *bvect_full2, BITVECT_SIZE, true);
     CheckVectors(*bvect_min1, *bv_target_s, BITVECT_SIZE, true);
-
-    delete [] sermem;
 
     delete bv_target_s;
     delete bvect_full2;
@@ -11078,6 +11139,8 @@ int main(void)
      MutationTest();
 
      MutationOperationsTest();
+
+     SerializationBufferTest();
 
      SerializationTest();
 
