@@ -353,7 +353,7 @@ void BitForEachTest()
     }
 
     {
-        unsigned bit_list[64];
+        unsigned char bit_list[64];
         TimeTaker tt("BitScan on bitcount64 (block)", REPEATS * 20);
         for (unsigned i = 0; i < REPEATS * 20; ++i)
         {

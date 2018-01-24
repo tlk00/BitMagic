@@ -2986,7 +2986,8 @@ bm::id_t bit_count_change(bm::word_t w)
     unsigned count = 1;
     w ^= (w >> 1);
 
-    BM_INCWORD_BITCOUNT(count, w);
+    count += bm::word_bitcount(w);
+    //BM_INCWORD_BITCOUNT(count, w);
     count -= (w >> ((sizeof(w) * 8) - 1));
     return count;
 }
