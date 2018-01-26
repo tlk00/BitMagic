@@ -10754,39 +10754,74 @@ void AddressResolverTest()
     bool found;
     
     {
-    bvps_addr_resolver<bvect>  ares;
-    
-    found = ares.resolve(10, &id_to);
-    assert(!found);
-    assert(id_to == 0);
+        bvps_addr_resolver<bvect>  ares;
+        
+        found = ares.resolve(10, &id_to);
+        assert(!found);
+        assert(id_to == 0);
     }
 
     {
-    bvps_addr_resolver<bvect>  ares;
-    
-    ares.set(1000);
-    ares.set(10000);
-    ares.set(100000);
-    
-    found = ares.resolve(10, &id_to);
-    assert(!found);
-    assert(id_to == 0);
+        bvps_addr_resolver<bvect>  ares;
+        
+        ares.set(1000);
+        ares.set(10000);
+        ares.set(100000);
+        
+        found = ares.resolve(10, &id_to);
+        assert(!found);
+        assert(id_to == 0);
 
-    found = ares.resolve(100000, &id_to);
-    assert(found);
-    assert(id_to == 3);
-    
-    assert(ares.in_sync() == false);
-    
-    ares.optimize();
-    assert(ares.in_sync() == false);
-    
-    ares.sync();
-    assert(ares.in_sync());
+        found = ares.resolve(100000, &id_to);
+        assert(found);
+        assert(id_to == 3);
+        
+        assert(ares.in_sync() == false);
+        
+        ares.optimize();
+        assert(ares.in_sync() == false);
+        
+        ares.sync();
+        assert(ares.in_sync());
 
-    found = ares.resolve(100000, &id_to);
-    assert(found);
-    assert(id_to == 3);
+        found = ares.resolve(100000, &id_to);
+        assert(found);
+        assert(id_to == 3);
+    }
+    
+    {
+        sv_addr_resolver<sparse_vector<bm::id_t, bvect> > ares;
+        
+        found = ares.resolve(10, &id_to);
+        assert(!found);
+        assert(id_to == 0);
+    }
+    
+    {
+        sv_addr_resolver<sparse_vector<bm::id_t, bvect> > ares;
+        
+        ares.set(1000);  // 1
+        ares.set(10000); // 2
+        ares.set(100000); // 3
+        ares.set(5);      // 4
+        
+        found = ares.resolve(10, &id_to);
+        assert(!found);
+        assert(id_to == 0);
+        
+        found = ares.resolve(1000, &id_to);
+        assert(found);
+        assert(id_to == 1);
+
+        found = ares.resolve(10000, &id_to);
+        assert(found);
+        assert(id_to == 2);
+        
+        ares.optimize();
+        
+        found = ares.resolve(5, &id_to);
+        assert(found);
+        assert(id_to == 4);
 
     }
 

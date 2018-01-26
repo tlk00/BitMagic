@@ -135,12 +135,71 @@ private:
     bool                      in_sync_;   ///< flag if prefix sum is in-sync with vector
 };
 
+
+/*!
+    \brief sparse vector based address resolver
+    (no space compactor, just bit-plane compressors provided by sparse_vector)
+ 
+    \internal
+*/
+template<class SV>
+class sv_addr_resolver
+{
+public:
+    typedef bm::id_t                              size_type;
+    typedef SV                                    sparse_vector_type;
+    typedef typename SV::bvector_type             bvector_type;
+public:
+    sv_addr_resolver();
+    sv_addr_resolver(const sv_addr_resolver& addr_res);
+    
+    /*!
+        \brief Resolve id to integer id (address)
+     
+        \param id_from - input id to resolve
+        \param id_to   - output id
+     
+        \return true if id is known and resolved successfully
+    */
+    bool resolve(bm::id_t id_from, bm::id_t* id_to) const;
+    
+    /*!
+        \brief Resolve id to integer id (address)
+     
+        \param id_from - input id to resolve
+        \param id_to   - output id
+     
+        \return true if id is known and resolved successfully
+    */
+    bool get(bm::id_t id_from, bm::id_t* id_to) const;
+    
+    /*!
+        \brief Set id (bit) to address resolver
+    */
+    void set(bm::id_t id_from);
+    
+    /*!
+        \brief optimize underlying sparse vectors
+    */
+    void optimize(bm::word_t* temp_block = 0);
+
+    
+private:
+    bvector_type              set_flags_bv_;   ///< bit-vector of set flags
+    sparse_vector_type        addr_sv_;     ///< sparse vector for address map
+    unsigned                  max_addr_;    ///< maximum allocated address/index
+};
+
+
+
+
 //---------------------------------------------------------------------
 
 template<class BV>
 bvps_addr_resolver<BV>::bvps_addr_resolver()
 : in_sync_(false)
 {
+    addr_bv_.init();
 }
 
 //---------------------------------------------------------------------
@@ -154,6 +213,7 @@ bvps_addr_resolver<BV>::bvps_addr_resolver(const bvps_addr_resolver& addr_res)
     {
         bv_blocks_.copy_from(addr_res.bv_blocks_);
     }
+    addr_bv_.init();
 }
 
 //---------------------------------------------------------------------
@@ -225,6 +285,63 @@ template<class BV>
 void bvps_addr_resolver<BV>::optimize(bm::word_t* temp_block)
 {
     addr_bv_.optimize(temp_block);
+}
+
+//---------------------------------------------------------------------
+
+
+
+
+template<class SV>
+sv_addr_resolver<SV>::sv_addr_resolver()
+: max_addr_(0)
+{
+    set_flags_bv_.init();
+}
+
+//---------------------------------------------------------------------
+
+template<class SV>
+sv_addr_resolver<SV>::sv_addr_resolver(const sv_addr_resolver& addr_res)
+: set_flags_bv_(addr_res.set_flags_bv_),
+  addr_sv_(addr_res.addr_sv_),
+  max_addr_(addr_res.max_addr_)
+{
+}
+
+//---------------------------------------------------------------------
+
+template<class SV>
+bool sv_addr_resolver<SV>::resolve(bm::id_t id_from, bm::id_t* id_to) const
+{
+    BM_ASSERT(id_to);
+    
+    bool found = set_flags_bv_.test(id_from);
+    *id_to = found ? addr_sv_.at(id_from) : 0;
+    return found;
+}
+
+//---------------------------------------------------------------------
+
+template<class SV>
+void sv_addr_resolver<SV>::set(bm::id_t id_from)
+{
+    bool found = set_flags_bv_.test(id_from);
+    if (!found)
+    {
+        set_flags_bv_.set(id_from);
+        ++max_addr_;
+        addr_sv_.set(id_from, max_addr_);
+    }
+}
+
+//---------------------------------------------------------------------
+
+template<class SV>
+void sv_addr_resolver<SV>::optimize(bm::word_t* temp_block)
+{
+    set_flags_bv_.optimize(temp_block);
+    addr_sv_.optimize(temp_block);
 }
 
 //---------------------------------------------------------------------
