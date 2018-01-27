@@ -45,6 +45,8 @@ For more information please visit:  http://bitmagic.io
 #include <chrono>
 #include <map>
 
+//#define BMAVX2OPT
+
 #include "bm.h"
 #include "bmalgo.h"
 #include "bmserial.h"
@@ -53,6 +55,7 @@ For more information please visit:  http://bitmagic.io
 #include "bmsparsevec_algo.h"
 #include "bmsparsevec_serial.h"
 #include "bmalgo_similarity.h"
+#include "bmsparsevec_util.h"
 
 
 #include "bmdbg.h"
@@ -198,30 +201,160 @@ void convert_from_delta(std::vector<unsigned>& vect)
 //
 typedef bm::sparse_vector<unsigned, bm::bvector<> > sparse_vector_u32;
 
+// ----------------------------------------------------------------------------
+
+/// raw data read accumulator for sparse matrix data
+///
+struct sm_accum
+{
+    typedef std::vector< std::vector<unsigned> >  dense_matr_type;
+    typedef bm::sv_addr_resolver<sparse_vector_u32> sparse_addr_resolver_type;
+    typedef sparse_addr_resolver_type::bvector_type  bvector_type;
+    typedef bm::serializer<bvector_type>             serializer_type;
+    typedef serializer_type::buffer                  buffer_type;
+    typedef std::vector<buffer_type>                 buffer_collection_type;
+
+    void add_pair(bm::id_t id_from, bm::id_t id_to);
+    void optimize(bool all);
+private:
+    void optimize(bm::id_t id_from, unsigned cut_off);
+
+private:
+    dense_matr_type             link_storage;
+    buffer_collection_type      buffer_storage;
+    sparse_addr_resolver_type   addr_resolver;
+};
+
+void sm_accum::optimize(bool all)
+{
+    unsigned cut_off = all ? 0 : 512;
+    const bvector_type& bv_set = addr_resolver.get_bvector();
+    bvector_type::enumerator en = bv_set.first();
+    for (; en.valid(); ++en)
+    {
+        bm::id_t id_from = *en;
+        optimize(id_from, cut_off);
+    }
+    if (all)
+    {
+        addr_resolver.optimize();
+    }
+}
+
+void sm_accum::optimize(bm::id_t id_from, unsigned cut_off)
+{
+    bm::id_t addr_idx;
+    bool found = addr_resolver.resolve(id_from, &addr_idx);
+    if (found)
+    {
+        std::vector<unsigned>& vu = link_storage.at(addr_idx);
+        if (vu.size())
+        {
+            buffer_type& bv_buf = buffer_storage.at(addr_idx);
+
+            bvector_type bv;
+            if (bv_buf.size() >= cut_off)
+            {
+                bm::deserialize(bv, bv_buf.buf());
+                bv_buf.resize(0);
+            }
+            bm::combine_or(bv, vu.begin(), vu.end());
+            vu.resize(0);
+            vu.shrink_to_fit();
+
+            BM_DECLARE_TEMP_BLOCK(tb)
+            bm::serializer<bvector_type> bvs(tb);
+            bvs.set_compression_level(4);
+
+            bvector_type::statistics st;
+            bv.optimize(tb, bvector_type::opt_compress, &st);
+
+            bvs.serialize(bv, bv_buf, &st);
+        }        
+    }
+}
+
+void sm_accum::add_pair(bm::id_t id_from, bm::id_t id_to)
+{
+    bm::id_t addr_idx;
+    bool found = addr_resolver.resolve(id_from, &addr_idx);
+    if (found)
+    {
+        std::vector<unsigned>& vu = link_storage.at(addr_idx);
+        vu.push_back(id_to);
+    }
+    else
+    {
+        addr_resolver.set(id_from);
+        found = addr_resolver.resolve(id_from, &addr_idx);
+        assert(found);
+        if (addr_idx >= link_storage.size())
+        {
+            link_storage.resize(addr_idx + 1);
+            buffer_storage.resize(addr_idx + 1);
+        }
+
+        std::vector<unsigned>& vu = link_storage.at(addr_idx);
+        vu.push_back(id_to);
+    }
+}
 
 
+
+
+/// Accumulator for unsorted pairs
+///
+struct pairs_accum
+{
+    typedef std::pair<unsigned, unsigned> pair_u32_type;
+    typedef std::vector<pair_u32_type>    pair_vector_type;
+
+    void add_pair(unsigned first, unsigned second);
+    void sort();
+
+    pair_vector_type  pair_vec;
+};
+
+void pairs_accum::add_pair(unsigned first, unsigned second)
+{
+    pair_vec.push_back(std::make_pair(first, second));
+}
+
+void pairs_accum::sort()
+{
+    std::sort(pair_vec.begin(), pair_vec.end()); // sort by first AND second
+}
+
+
+
+// -----------------------------------------------------------------------------
 
 /// compressed sparse vector
 ///
 struct compress_svector
 {
-    sparse_vector_u32::bvector_type   bv_descr;  ///< bit-vector descriptor
-    sparse_vector_u32                 sv_stor;   ///< sparse-vector store
-    sparse_vector_u32::bvector_type::blocks_count blocks_bc;
+    typedef bm::bvps_addr_resolver<bm::bvector<> > address_resolver_type;
     
     void load_from(const sparse_vector_u32& sv);
     bool equal(const sparse_vector_u32& sv) const;
+
     
     sparse_vector_u32::value_type get(unsigned i) const;
     void optimize_gap_size();
     
     void count_blocks();
+    unsigned size() const { return bv_ares.get_bvector().count(); }
     
+    address_resolver_type             bv_ares;   /// bit-vector, prefix sum address resolver
+    sparse_vector_u32                 sv_stor;   ///< sparse-vector store
 };
 
 void compress_svector::load_from(const sparse_vector_u32& sv)
 {
+    bm::bvector<>& bv_descr = bv_ares.get_bvector();
     bm::compute_nonzero_bvector(sv, bv_descr);
+    bv_ares.sync();
+
     sparse_vector_u32::bvector_type::counted_enumerator enc = bv_descr.first();
     for (;enc.valid(); ++enc)
     {
@@ -240,29 +373,28 @@ void compress_svector::load_from(const sparse_vector_u32& sv)
     } // for en
     
     BM_DECLARE_TEMP_BLOCK(tb)
-    bv_descr.optimize(tb);
+    bv_ares.optimize(tb);
     sv_stor.optimize(tb);
 }
 
 void compress_svector::count_blocks()
 {
-    bv_descr.running_count_blocks(&blocks_bc); // compute popcount skip list
+    bv_ares.sync();
 }
 
 void compress_svector::optimize_gap_size()
 {
-    bv_descr.optimize_gap_size();
     sv_stor.optimize_gap_size();
 }
 
 sparse_vector_u32::value_type compress_svector::get(unsigned i) const
 {
     sparse_vector_u32::value_type v = 0;
-    bool found = bv_descr.test(i);
+    bm::id_t pos;
+    bool found = bv_ares.get(i, &pos);
     if (!found)
         return v;
     
-    unsigned pos = bv_descr.count_to(i, blocks_bc);
     v = sv_stor.get(pos);
     return v;
 }
@@ -373,12 +505,12 @@ void link_matrix::print_stat() const
     std::cout << "\nsv 11 C statistics:" << std::endl;
     std::cout << "-----------------" << std::endl;
     bm::print_svector_stat(sv_11_c.sv_stor, false);
-    bm::print_bvector_stat(sv_11_c.bv_descr);
+    bm::print_bvector_stat(sv_11_c.bv_ares.get_bvector());
 
     std::cout << "\nsv OFFS C statistics:" << std::endl;
     std::cout << "-----------------" << std::endl;
     bm::print_svector_stat(sv_offs_c.sv_stor, false);
-    bm::print_bvector_stat(sv_offs_c.bv_descr);
+    bm::print_bvector_stat(sv_offs_c.bv_ares.get_bvector());
 
 }
 
@@ -422,7 +554,7 @@ void link_matrix::save(const std::string& base_name) const
     }
     sv11c_fname = base_name;
     sv11c_fname.append("_sv11-c.bv");
-    SaveBVector(sv11c_fname.c_str(), sv_11_c.bv_descr);
+    SaveBVector(sv11c_fname.c_str(), sv_11_c.bv_ares.get_bvector());
     }
 
 
@@ -437,16 +569,17 @@ void link_matrix::save(const std::string& base_name) const
     }
     
     {
-    std::string svoffsc_fname = base_name;
-    svoffsc_fname.append("_svoffs-c.sv");
-    int res = file_save_svector(sv_offs_c.sv_stor, svoffsc_fname);
-    if (res != 0)
-    {
-        std::cerr << "File save error." << std::endl;
-    }
-    svoffsc_fname = base_name;
-    svoffsc_fname.append("_svoffs-c.bv");
-    SaveBVector(svoffsc_fname.c_str(), sv_offs_c.bv_descr);
+        std::string svoffsc_fname = base_name;
+        svoffsc_fname.append("_svoffs-c.sv");
+        int res = file_save_svector(sv_offs_c.sv_stor, svoffsc_fname);
+        if (res != 0)
+        {
+            std::cerr << "File save error." << std::endl;
+        }
+        svoffsc_fname = base_name;
+        svoffsc_fname.append("_svoffs-c.bv");
+        const bm::bvector<> & bv = sv_offs_c.bv_ares.get_bvector();
+        SaveBVector(svoffsc_fname.c_str(), bv);
     }
 
     
@@ -515,12 +648,16 @@ void link_matrix::load(const std::string& base_name)
     {
         std::cerr << "File load error." << std::endl;
     }
-    sv11c_fname = base_name;
-    sv11c_fname.append("_sv11-c.bv");
-    LoadBVector(sv11c_fname.c_str(), sv_11_c.bv_descr);
-    
-    sv_11_c.count_blocks();
-    
+
+    {
+        sv11c_fname = base_name;
+        sv11c_fname.append("_sv11-c.bv");
+        bm::bvector<>& bv_ares_11 = sv_11_c.bv_ares.get_bvector();
+        LoadBVector(sv11c_fname.c_str(), bv_ares_11);
+
+        sv_11_c.count_blocks();
+    }
+
     //sv_11_c.optimize_gap_size();
     }
 
@@ -544,12 +681,16 @@ void link_matrix::load(const std::string& base_name)
     {
         std::cerr << "File load error." << std::endl;
     }
-    svoffsc_fname = base_name;
-    svoffsc_fname.append("_svoffs-c.bv");
-    LoadBVector(svoffsc_fname.c_str(), sv_offs_c.bv_descr);
-    
-    sv_offs_c.count_blocks();
-    
+
+    {
+        svoffsc_fname = base_name;
+        svoffsc_fname.append("_svoffs-c.bv");
+        bm::bvector<>& bv_ares_11 = sv_offs_c.bv_ares.get_bvector();
+
+        LoadBVector(svoffsc_fname.c_str(), bv_ares_11);
+
+        sv_offs_c.count_blocks();
+    }
     //sv_offs_c.optimize_gap_size();
     }
 
@@ -650,6 +791,7 @@ bool link_matrix::get_vector(unsigned id_from, std::vector<unsigned>& vect) cons
     }
 */
     unsigned sz = sv_sz.get(id_from);
+
     vect.resize(sz);
     if (sz==0)
     {
@@ -668,9 +810,12 @@ bool link_matrix::get_vector(unsigned id_from, std::vector<unsigned>& vect) cons
     }
 */
 
+    //std::cout << "Extract size = " << sz << std::endl;
+
     vect[0] = vc;
-    sv_1m.extract_range(&vect[1], sz-1, offs_c);
-    
+    sv_1m.extract(&vect[1], sz - 1, offs_c);
+
+
     //convert_from_delta(vect);
 
     return true;
@@ -737,16 +882,12 @@ int load_bv(const std::string& fname, bm::bvector<>& bv)
         return -1;
     }
 
-    unsigned id = 0;
     std::vector<unsigned> vbuf;
 
     for (unsigned i = 0; std::getline(fin, line); i++)
     {
         if (line.empty())
             continue;
-
-        unsigned id_from = 0;
-        unsigned id_to = 0;
 
         std::sregex_iterator it(line.begin(), line.end(), reg1);
         std::sregex_iterator it_end;
@@ -781,7 +922,7 @@ int load_bv(const std::string& fname, bm::bvector<>& bv)
 }
 
 
-// load sparse_vector from a file
+// load sorted pairs from a file
 //
 int load_ln(const std::string& fname, link_matrix& lm)
 {
@@ -910,7 +1051,150 @@ int load_ln(const std::string& fname, link_matrix& lm)
     return 0;
 }
 
-unsigned benchmark_ops = 1000;
+
+// load un-sorted pairs from a file
+//
+int load_ln_unsorted(const std::string& fname, link_matrix& lm)
+{
+//    pairs_accum pacc;
+    sm_accum   macc;
+
+    std::string line;
+
+    std::string regex_str = "[0-9]+";
+    std::regex reg1(regex_str);
+
+    std::ifstream fin(fname.c_str(), std::ios::in);
+    if (!fin.good())
+    {
+        return -1;
+    }
+
+
+    for (unsigned i = 0; std::getline(fin, line); i++)
+    {
+        if (line.empty())
+            continue;
+
+        unsigned id_from = 0;
+        unsigned id_to = 0;
+
+        std::sregex_iterator it(line.begin(), line.end(), reg1);
+        std::sregex_iterator it_end;
+        for (unsigned j = 0; it != it_end; ++it, ++j)
+        {
+            std::smatch match = *it;
+            std::string ms = match.str();
+
+            unsigned long ul = std::stoul(ms);
+            switch (j)
+            {
+            case 0: id_from = (unsigned)ul; break;
+            case 1: id_to = (unsigned)ul; break;
+            default:
+                break;
+            }
+
+        } // for
+
+        macc.add_pair(id_from, id_to);
+
+
+        if ((i != 0) && (i % 1000000) == 0)
+        {
+            std::cout << "\r" << i << std::flush;
+        }
+        if ((i != 0) && (i % 20000000) == 0)
+        {
+            std::cout << "\r Optimization at " << i << std::endl;
+            macc.optimize(false); // "fast" memory compression
+            std::cout << "\r" << i << std::flush;
+        }
+    } // for getline()
+
+    macc.optimize(true); // full garbage collection
+
+    std::cout << "Buffer loading ok. " << std::endl;
+    getchar();
+/*
+    std::cout << "\nSorting pairs..." << std::endl;
+    pacc.sort();
+    std::cout << "Sorting pairs DONE!" << std::endl;
+    std::cout << "size=" << pacc.pair_vec.size() << std::endl;
+
+    std::cout << "\nAdding to the matrix..." << std::endl;
+
+    // process sorted pair storage
+    {
+        unsigned id = 0;
+        unsigned id_from, id_to;
+
+        std::vector<unsigned> vbuf;
+
+        for (unsigned i = 0; i < pacc.pair_vec.size(); ++i)
+        {
+            id_from = pacc.pair_vec[i].first;
+            id_to = pacc.pair_vec[i].second;
+
+            // mini-FSM for vector accumulation
+            if (id == 0) // first vector element
+            {
+                id = id_from;
+                vbuf.push_back(id_to);
+            }
+            else
+            {
+                if (id == id_from)  // same id_from - use accumulation mode
+                {
+                    vbuf.push_back(id_to);
+                }
+                else // id_from changed
+                {
+                    if (vbuf.size() > 1) // sort just in case, not needed
+                        std::sort(vbuf.begin(), vbuf.end());
+
+                    if (vbuf.size() > 100)
+                    {
+                        std::cout << "v" << std::flush;
+                    }
+                    lm.add_vector(id, vbuf);
+
+                    vbuf.resize(0);
+
+                    id = id_from;
+                    vbuf.push_back(id_to);
+                }
+            }
+
+            if ((i != 0) && (i % 1000000) == 0)
+            {
+                std::cout << "\r" << i << std::flush;
+            }
+
+        } // for i
+    }
+
+
+    lm.optimize();
+
+    std::cout << "Building compressed vector (sv_11) " << std::endl;
+    lm.sv_11_c.load_from(lm.sv_11);
+    std::cout << "OK size = " << lm.sv_11_c.size() << std::endl;
+
+    std::cout << "Building compressed vector (sv_offs) " << std::endl;
+    lm.sv_offs_c.load_from(lm.sv_offs);
+    std::cout << "OK size = " << lm.sv_offs_c.size() << std::endl;
+*/
+
+
+    std::cout << std::endl;
+
+
+    return 0;
+}
+
+
+unsigned benchmark_ops = 200;
 
 // id remapping benchmark
 //
@@ -981,8 +1265,6 @@ void remap(const link_matrix& lm, const bm::bvector<>& bv_in)
 {
     if (!lm.bv_from.any())  // nothing to do
         return;
-    BM_DECLARE_TEMP_BLOCK(tb)
-
 
     {
         bm::chrono_taker tt1("5. input remap", 1, &timing_map);
@@ -1031,7 +1313,7 @@ int main(int argc, char *argv[])
         if (!ln_in_file.empty())
         {
             bm::chrono_taker tt1("0. link pairs load", 1, &timing_map);
-            auto res = load_ln(ln_in_file, link_m);
+            auto res = load_ln_unsorted(ln_in_file, link_m);
             if (res != 0)
             {
                 return res;
@@ -1074,14 +1356,11 @@ int main(int argc, char *argv[])
         {
             remap(link_m, bv_inp);
         }
-
-        
         
         if (is_timing)  // print all collected timings
         {
             std::cout << std::endl << "Performance (ops/sec):" << std::endl;
             bm::chrono_taker::print_duration_map(timing_map, bm::chrono_taker::ct_ops_per_sec);
-
         }
         
         //getchar();

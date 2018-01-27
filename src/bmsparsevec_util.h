@@ -183,7 +183,11 @@ public:
     */
     void optimize(bm::word_t* temp_block = 0);
 
-    
+    /*!
+    \brief Get const reference to the underlying bit-vector of set values
+    */
+    const bvector_type& get_bvector() const { return set_flags_bv_; }
+
 private:
     bvector_type              set_flags_bv_;   ///< bit-vector of set flags
     sparse_vector_type        addr_sv_;     ///< sparse vector for address map
