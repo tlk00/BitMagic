@@ -43,7 +43,7 @@ namespace bm
     \brief Bit-bector prefix sum address resolver using bit-vector prefix sum
     as a space compactor.
  
-    \internal
+    @internal
 */
 template<class BV>
 class bvps_addr_resolver
@@ -140,7 +140,7 @@ private:
     \brief sparse vector based address resolver
     (no space compactor, just bit-plane compressors provided by sparse_vector)
  
-    \internal
+    @internal
 */
 template<class SV>
 class sv_addr_resolver
@@ -194,6 +194,64 @@ private:
     unsigned                  max_addr_;    ///< maximum allocated address/index
 };
 
+
+/**
+    \brief Compressed (sparse collection of objects)
+    @internal
+*/
+template<class Value, class BV>
+class compressed_collection
+{
+public:
+    typedef bm::id_t                             key_type;
+    typedef bm::id_t                             address_type;
+    typedef Value                                value_type;
+    typedef Value                                mapped_type;
+    typedef BV                                   bvector_type;
+    typedef std::vector<value_type>              container_type;
+    typedef bm::bvps_addr_resolver<bvector_type> address_resolver_type;
+    
+public:
+    compressed_collection();
+    
+    /**
+        Add new value to compressed collection.
+        Must be added in sorted key order (growing).
+     
+        Unsorted will not be added!
+     
+        \return true if value was added (does not violate sorted key order)
+    */
+    bool push_back(key_type key, const value_type& val);
+    
+    /**
+        find and return associated value (with bounds/presense checking)
+    */
+    const value_type& at(key_type key) const;
+    
+    /** Checkpoint method to prepare collection for reading
+    */
+    void sync();
+    
+    /** perform memory optimizations/compression
+    */
+    void optimize();
+
+    /** Resolve key address (index) in the dense vector
+    */
+    bool resolve(key_type key, address_type* addr) const;
+    
+    /** Get access to associated value by resolved address
+    */
+    const value_type& get(address_type addr) const;
+protected:
+    void throw_range_error(const char* err_msg) const;
+    
+private:
+    address_resolver_type             addr_res_;    ///< address resolver
+    container_type                    dense_vect_;  ///< compressed space container
+    key_type                          last_add_;    ///< last added element
+};
 
 
 
@@ -350,6 +408,101 @@ void sv_addr_resolver<SV>::optimize(bm::word_t* temp_block)
 
 //---------------------------------------------------------------------
 
+
+
+template<class Value, class BV>
+compressed_collection<Value, BV>::compressed_collection()
+: last_add_(0)
+{
+}
+
+
+//---------------------------------------------------------------------
+
+template<class Value, class BV>
+bool compressed_collection<Value, BV>::push_back(key_type key, const value_type& val)
+{
+    if (dense_vect_.empty()) // adding first one
+    {
+    }
+    else
+    if (key <= last_add_)
+    {
+        BM_ASSERT(0);
+        return false;
+    }
+    
+    addr_res_.set(key);
+    last_add_ = key;
+    dense_vect_.push_back(val);
+    return true;
+}
+
+//---------------------------------------------------------------------
+
+template<class Value, class BV>
+void compressed_collection<Value, BV>::sync()
+{
+    addr_res_.sync();
+}
+
+//---------------------------------------------------------------------
+
+template<class Value, class BV>
+void compressed_collection<Value, BV>::optimize()
+{
+    addr_res_.optimize();
+}
+
+//---------------------------------------------------------------------
+
+template<class Value, class BV>
+bool compressed_collection<Value, BV>::resolve(key_type key,
+                                               address_type* addr) const
+{
+    bool found = addr_res_.resolve(key, addr);
+    *addr -= found;
+    return found;
+}
+
+//---------------------------------------------------------------------
+
+
+template<class Value, class BV>
+const typename compressed_collection<Value, BV>::value_type&
+compressed_collection<Value, BV>::get(address_type addr) const
+{
+    return dense_vect_.at(addr);
+}
+
+//---------------------------------------------------------------------
+
+template<class Value, class BV>
+const typename compressed_collection<Value, BV>::value_type&
+compressed_collection<Value, BV>::at(key_type key) const
+{
+    address_type idx;
+    bool found = addr_res_.resolve(key, &idx);
+    if (!found)
+    {
+        throw_range_error("compressed collection item not found");
+    }
+    return get(idx-1);
+}
+
+//---------------------------------------------------------------------
+
+template<class Value, class BV>
+void compressed_collection<Value, BV>::throw_range_error(const char* err_msg) const
+{
+#ifndef BM_NO_STL
+    throw std::range_error(err_msg);
+#else
+    BM_ASSERT_THROW(false, BM_ERR_RANGE);
+#endif
+}
+
+//---------------------------------------------------------------------
 
 } // namespace bm
 

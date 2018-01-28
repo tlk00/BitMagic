@@ -10919,8 +10919,6 @@ void BvectorBitForEachTest()
         
         bm::visit_each_bit(bv1, (void*)&v1, bit_decode_func);
 
-        //bm::for_each_bit(bv1, func);
-
         {
             for (size_t i = 0; i < v1.size(); ++i)
                 cout << v1[i] << ", ";
@@ -10945,7 +10943,6 @@ void BvectorBitForEachTest()
         bv1.optimize();
         bv2.reset();
         v1.resize(0);
-//        bm::for_each_bit(bv1, func);
         bm::visit_each_bit(bv1, (void*)&v1, bit_decode_func);
         
         {
@@ -10978,8 +10975,6 @@ void BvectorBitForEachTest()
         generate_bvector(bv1);
         v1.reserve(bv1.count());
         
-//        DecodeFunc func(v1);
-//        bm::for_each_bit(bv1, func);
         bm::visit_each_bit(bv1, (void*)&v1, bit_decode_func);
 
         if (v1.size() != bv1.count())
@@ -11003,7 +10998,6 @@ void BvectorBitForEachTest()
         bv2.clear(true);
         bv1.optimize();
 
-//        bm::for_each_bit(bv1, func);
         bm::visit_each_bit(bv1, (void*)&v1, bit_decode_func);
 
         if (v1.size() != bv1.count())
@@ -11026,6 +11020,71 @@ void BvectorBitForEachTest()
     cout << "------------------------ bvector BitForEach Test OK" << endl;
 }
 
+
+void TestCompressedCollection()
+{
+    cout << "------------------------ Compressed collection Test" << endl;
+    
+    {
+        bm::compressed_collection<unsigned, bvect> coll;
+        bool added;
+        unsigned v;
+        
+        added = coll.push_back(0, 100);
+        assert(added);
+        added = coll.push_back(10, 5);
+        assert(added);
+        added = coll.push_back(150000, 500);
+        assert(added);
+        
+        coll.sync();
+        
+        bool found;
+        bm::id_t idx;
+        
+        found = coll.resolve(0, &idx);
+        assert(found);
+        v = coll.get(idx);
+        assert(v == 100);
+
+        found = coll.resolve(10, &idx);
+        assert(found);
+        v = coll.get(idx);
+        assert(v == 5);
+
+        found = coll.resolve(150000, &idx);
+        assert(found);
+        v = coll.get(idx);
+        assert(v == 500);
+
+        found = coll.resolve(256, &idx);
+        assert(!found);
+        
+        coll.optimize();
+        
+        found = coll.resolve(0, &idx);
+        assert(found);
+        v = coll.get(idx);
+        assert(v == 100);
+
+        found = coll.resolve(10, &idx);
+        assert(found);
+        v = coll.get(idx);
+        assert(v == 5);
+
+        found = coll.resolve(150000, &idx);
+        assert(found);
+        v = coll.get(idx);
+        assert(v == 500);
+
+        found = coll.resolve(256, &idx);
+        assert(!found);
+
+    }
+    
+    
+    cout << "------------------------ Compressed collection Test OK" << endl;
+}
 
 int main(void)
 {
@@ -11182,6 +11241,8 @@ int main(void)
      DesrializationTest2();
 
      BlockLevelTest();
+
+     TestCompressedCollection();
 
      StressTest(120, 0); // OR
      StressTest(120, 1); // SUB
