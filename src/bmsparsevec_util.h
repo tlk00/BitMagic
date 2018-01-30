@@ -270,7 +270,17 @@ public:
     typedef typename serializer<BV>::buffer     buffer_type;
     typedef compressed_collection<typename serializer<BV>::buffer, BV> parent_type;
 public:
-    bool move_buffer(typename parent_type::key_type key, buffer_type& buffer);
+
+    bool move_buffer(typename parent_type::key_type key, buffer_type& buffer)
+    {
+        bool added = push_back(key, buffer_type());
+        if (!added)
+            return added;
+        buffer_type& buf = this->at(key);
+        buf.swap(buffer);
+        return added;
+    }
+
 };
 
 
@@ -535,19 +545,6 @@ void compressed_collection<Value, BV>::throw_range_error(const char* err_msg) co
 #else
     BM_ASSERT_THROW(false, BM_ERR_RANGE);
 #endif
-}
-
-//---------------------------------------------------------------------
-
-template<class BV>
-bool compressed_buffer_collection<BV>::move_buffer(typename parent_type::key_type key, buffer_type& buffer)
-{
-    bool added = push_back(key, buffer_type());
-    if (!added)
-        return added;
-    buffer_type& buf = this->at(key);
-    buf.swap(buffer);
-    return added;
 }
 
 //---------------------------------------------------------------------
