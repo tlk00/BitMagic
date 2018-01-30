@@ -225,10 +225,15 @@ public:
     bool push_back(key_type key, const value_type& val);
     
     /**
-        find and return associated value (with bounds/presense checking)
+        find and return const associated value (with bounds/presense checking)
     */
     const value_type& at(key_type key) const;
-    
+
+    /**
+        find and return associated value (with bounds/presense checking)
+    */
+    value_type& at(key_type key);
+
     /** Checkpoint method to prepare collection for reading
     */
     void sync();
@@ -253,6 +258,20 @@ private:
     key_type                          last_add_;    ///< last added element
 };
 
+/**
+    \brief Compressed (sparse collection of objects)
+    @internal
+*/
+template<class BV>
+class compressed_buffer_collection :
+               public compressed_collection<typename serializer<BV>::buffer, BV>
+{
+public:
+    typedef typename serializer<BV>::buffer     buffer_type;
+    typedef compressed_collection<typename serializer<BV>::buffer, BV> parent_type;
+public:
+    bool move_buffer(typename parent_type::key_type key, buffer_type& buffer);
+};
 
 
 //---------------------------------------------------------------------
@@ -493,6 +512,22 @@ compressed_collection<Value, BV>::at(key_type key) const
 //---------------------------------------------------------------------
 
 template<class Value, class BV>
+typename compressed_collection<Value, BV>::value_type&
+compressed_collection<Value, BV>::at(key_type key)
+{
+    address_type idx;
+    bool found = addr_res_.resolve(key, &idx);
+    if (!found)
+    {
+        throw_range_error("compressed collection item not found");
+    }
+    return get(idx-1);
+}
+
+
+//---------------------------------------------------------------------
+
+template<class Value, class BV>
 void compressed_collection<Value, BV>::throw_range_error(const char* err_msg) const
 {
 #ifndef BM_NO_STL
@@ -500,6 +535,19 @@ void compressed_collection<Value, BV>::throw_range_error(const char* err_msg) co
 #else
     BM_ASSERT_THROW(false, BM_ERR_RANGE);
 #endif
+}
+
+//---------------------------------------------------------------------
+
+template<class BV>
+bool compressed_buffer_collection<BV>::move_buffer(typename parent_type::key_type key, buffer_type& buffer)
+{
+    bool added = push_back(key, buffer_type());
+    if (!added)
+        return added;
+    buffer_type& buf = this->at(key);
+    buf.swap(buffer);
+    return added;
 }
 
 //---------------------------------------------------------------------
