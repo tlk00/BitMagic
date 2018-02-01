@@ -269,6 +269,7 @@ class compressed_buffer_collection :
 public:
     typedef typename serializer<BV>::buffer     buffer_type;
     typedef compressed_collection<typename serializer<BV>::buffer, BV> parent_type;
+    
 public:
 
     bool move_buffer(typename parent_type::key_type key, buffer_type& buffer)
@@ -280,6 +281,7 @@ public:
         buf.swap(buffer);
         return added;
     }
+    
 
 };
 
