@@ -531,7 +531,7 @@ compressed_collection<Value, BV>::at(key_type key)
     {
         throw_range_error("compressed collection item not found");
     }
-    return get(idx-1);
+    return dense_vect_.at(idx-1);
 }
 
 

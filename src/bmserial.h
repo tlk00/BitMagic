@@ -183,6 +183,10 @@ public:
             {
                 copy_from(buf.byte_buf_, buf.size_);
             }
+            else
+            {
+                size_ = capacity_ = 0;
+            }
         }
         
 #ifndef BM_NO_CXX11
@@ -194,6 +198,7 @@ public:
             buf.byte_buf_ = 0;
             size_ = buf.size_;
             capacity_ = buf.capacity_;
+            buf.size_ = buf.capacity_ = 0;
             alloc_factor_ = buf.alloc_factor_;
         }
         
@@ -241,6 +246,13 @@ public:
             bm::xor_swap(size_, buf.size_);
             bm::xor_swap(capacity_, buf.capacity_);
             bm::xor_swap(alloc_factor_, buf.alloc_factor_);
+        }
+
+        /// Free underlying memory 
+        void release()
+        {
+            free_buffer();
+            size_ = capacity_ = 0;
         }
 
         /// copy data from an external buffer
