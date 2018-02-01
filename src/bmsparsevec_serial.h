@@ -265,7 +265,7 @@ int sparse_vector_deserialize(SV& sv,
     typedef typename SV::bvector_type   bvector_type;
 
     // TODO: implement correct processing of byte-order corect deserialization
-//    ByteOrder bo_current = globals<true>::byte_order();
+    //    ByteOrder bo_current = globals<true>::byte_order();
 
     bm::decoder dec(buf);
     unsigned char h1 = dec.get_8();
