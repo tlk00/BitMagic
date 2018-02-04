@@ -377,17 +377,17 @@ void compressed_collection_serializer<CBC>::serialize(const CBC&    buffer_coll,
 
     const address_resolver_type& addr_res = buffer_coll.resolver();
     const bvector_type& bv = addr_res.get_bvector();
-
-        bm::serializer<bvector_type > bvs;
+    {
+        bm::serializer<bvector_type > bvs(temp_block);
         bvs.gap_length_serialization(false);
         bvs.set_compression_level(4);
-    
+
         size_t addr_bv_size = bvs.serialize(bv, buf_ptr, buf.size());
         buf_ptr += addr_bv_size;
-    
+
         enc.set_pos(mbuf1); // rewind to bookmark
         enc.put_64(addr_bv_size); // save the address vector size
-    
+    }
     enc.set_pos(buf_ptr);
     size_t coll_size = buffer_coll.size();
     
@@ -395,7 +395,7 @@ void compressed_collection_serializer<CBC>::serialize(const CBC&    buffer_coll,
     
     // pass 1 (save buffer sizes)
     {
-        for (size_t i = 0; i < buffer_coll.size(); ++i)
+        for (unsigned i = 0; i < buffer_coll.size(); ++i)
         {
             const buffer_type& cbuf = buffer_coll.get(i);
             unsigned sz = (unsigned)cbuf.size();
@@ -404,7 +404,7 @@ void compressed_collection_serializer<CBC>::serialize(const CBC&    buffer_coll,
     }
     // pass 2 (save buffers)
     {
-        for (size_t i = 0; i < buffer_coll.size(); ++i)
+        for (unsigned i = 0; i < buffer_coll.size(); ++i)
         {
             const buffer_type& cbuf = buffer_coll.get(i);
             unsigned sz = (unsigned)cbuf.size();
