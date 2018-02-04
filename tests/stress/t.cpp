@@ -268,7 +268,7 @@ static unsigned nf_;
         --p;
         if(*p != n)
         {
-            printf("Block memory deallocation error!\n");
+            printf("Block memory deallocation error! n = %i (expected %i)\n", (int)n, (int)*p);
             assert(0);
             exit(1);
         }
@@ -4202,7 +4202,7 @@ void StressTest(unsigned repetitions, int set_operation = -1)
 void CheckGap2DGap(gap_vector& gapv)
 {
    bm::gap_word_t   dgap_buf[bm::gap_max_buff_len+3]; 
-   bm::gap_word_t    gap_buf[bm::gap_max_buff_len+3] = {0, }; 
+   bm::gap_word_t   gap_buf[bm::gap_max_buff_len+3] = {0, };
    
    bm::gap_2_dgap(gapv.get_buf(), dgap_buf);
    bm::dgap_2_gap(dgap_buf, gap_buf);
@@ -8891,15 +8891,10 @@ bool CompareSparseVector(const SV& sv, const Vect& vect)
     // serialization comparison
     BM_DECLARE_TEMP_BLOCK(tb)
     sparse_vector_serial_layout<SV> sv_lay;
-    int res = bm::sparse_vector_serialize<SV>(sv, sv_lay, tb);
-    if (res != 0)
-    {
-        cerr << "Serialization error" << endl;
-        exit(1);
-    }
+    bm::sparse_vector_serialize<SV>(sv, sv_lay, tb);
     SV sv2;
     const unsigned char* buf = sv_lay.buf();
-    res = bm::sparse_vector_deserialize(sv2, buf, tb);
+    int res = bm::sparse_vector_deserialize(sv2, buf, tb);
     if (res != 0)
     {
         cerr << "De-Serialization error" << endl;
@@ -9018,14 +9013,9 @@ bool TestEqualSparseVectors(const SV& sv1, const SV& sv2, bool detailed = true)
     // comparison through serialization
     //
     {{
+        int res;
         sparse_vector_serial_layout<SV> sv_lay;
-        int res = sparse_vector_serialize(sv1, sv_lay);
-        if (res != 0)
-        {
-            cerr << "Serialization error in TestEqualSparseVectors()" << endl;
-            exit(1);
-        }
-        
+        sparse_vector_serialize(sv1, sv_lay);
         
         // copy buffer to check if serialization size is actually correct
         const unsigned char* buf = sv_lay.buf();
@@ -9070,17 +9060,13 @@ void TestSparseVector()
     
     // test empty vector serialization
     {{
-    
+    int res;
 
     bm::sparse_vector<unsigned, bm::bvector<> > sv1;
     bm::sparse_vector<unsigned, bm::bvector<> > sv2;
     bm::sparse_vector_serial_layout<svector> sv_layout;
-    int res = bm::sparse_vector_serialize(sv1, sv_layout);
-    if (res != 0)
-    {
-        cerr << "Serialization error" << endl;
-        exit(1);
-    }
+    bm::sparse_vector_serialize(sv1, sv_layout);
+
     const unsigned char* buf = sv_layout.buf();
     res = bm::sparse_vector_deserialize(sv2, buf);
     if (res != 0)
@@ -11080,6 +11066,31 @@ void TestCompressedCollection()
         found = coll.resolve(256, &idx);
         assert(!found);
 
+    }
+    
+    {
+    bm::compressed_buffer_collection<bvect> cbc;
+    {
+        bm::compressed_buffer_collection<bvect>::buffer_type buf;
+        buf.copy_from((unsigned char*)"ABC", 3);
+        cbc.move_buffer(10, buf);
+    }
+    {
+        bm::compressed_buffer_collection<bvect>::buffer_type buf;
+        buf.copy_from((unsigned char*)"1234", 4);
+        cbc.move_buffer(15, buf);
+    }
+    cbc.sync();
+    
+    assert(cbc.size() == 2);
+    bm::compressed_buffer_collection<bvect>::statistics st;
+    cbc.calc_stat(&st);
+    
+    bm::compressed_collection_serializer<compressed_buffer_collection<bvect> > cbcs;
+    bm::compressed_buffer_collection<bvect>::buffer_type sbuf;
+    
+    cbcs.serialize(cbc, sbuf);
+    assert(sbuf.size() > 0);
     }
     
     

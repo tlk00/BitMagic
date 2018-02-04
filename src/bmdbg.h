@@ -693,11 +693,7 @@ int file_save_svector(const SV& sv, const std::string& fname, size_t* sv_blob_si
     bm::sparse_vector_serial_layout<SV> sv_lay;
     
     BM_DECLARE_TEMP_BLOCK(tb)
-    auto res = bm::sparse_vector_serialize(sv, sv_lay, tb);
-    if (res != 0)
-    {
-        return res;
-    }
+    bm::sparse_vector_serialize(sv, sv_lay, tb);
 
     std::ofstream fout(fname.c_str(), std::ios::binary);
     if (!fout.good())

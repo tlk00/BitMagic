@@ -249,10 +249,19 @@ public:
     /** Get access to associated value by resolved address
     */
     const value_type& get(address_type addr) const;
+    
+    /** Get address resolver
+    */
+    const address_resolver_type& resolver() const { return addr_res_; }
+    
+    /** size of collection
+    */
+    size_t size() const { return dense_vect_.size(); }
+    
 protected:
     void throw_range_error(const char* err_msg) const;
     
-private:
+protected:
     address_resolver_type             addr_res_;    ///< address resolver
     container_type                    dense_vect_;  ///< compressed space container
     key_type                          last_add_;    ///< last added element
@@ -267,14 +276,23 @@ class compressed_buffer_collection :
                public compressed_collection<typename serializer<BV>::buffer, BV>
 {
 public:
+    typedef BV                                  bvector_type;
     typedef typename serializer<BV>::buffer     buffer_type;
     typedef compressed_collection<typename serializer<BV>::buffer, BV> parent_type;
     
+    /// collection statistics
+    struct statistics
+    {
+        size_t memory_used;       ///< total capacity
+        size_t max_serialize_mem; ///< memory needed for serialization
+    };
 public:
 
+    /// move external buffer into collection
+    ///
     bool move_buffer(typename parent_type::key_type key, buffer_type& buffer)
     {
-        bool added = push_back(key, buffer_type());
+        bool added = this->push_back(key, buffer_type());
         if (!added)
             return added;
         buffer_type& buf = this->at(key);
@@ -282,7 +300,39 @@ public:
         return added;
     }
     
-
+    /// compute statistics on memory consumption
+    ///
+    void calc_stat(statistics* st) const
+    {
+        BM_ASSERT(st);
+        
+        // evaluate address resolver consumption
+        //
+        typename BV::statistics  bv_st;
+        const BV& addr_bv = this->addr_res_.get_bvector();
+        addr_bv.calc_stat(&bv_st);
+        st->memory_used = bv_st.memory_used;
+        st->max_serialize_mem = bv_st.max_serialize_mem;
+        
+        // sum-up all buffers
+        for (size_t i = 0; i < this->dense_vect_.size(); ++i)
+        {
+            const buffer_type& buf = this->dense_vect_.at(i);
+            st->memory_used += buf.capacity();
+            st->max_serialize_mem += buf.size();
+        } // for i
+        
+        // header needs
+        size_t h_size = 2 + 1 + ((this->dense_vect_.size()+1) * 8);
+        st->max_serialize_mem += h_size;
+        
+        // 10% extra on top (safety) for serialization
+        size_t extra_mem = (st->max_serialize_mem / 10);
+        if (!extra_mem)
+            extra_mem = 4096;
+        st->max_serialize_mem += extra_mem;
+    }
+    
 };
 
 
