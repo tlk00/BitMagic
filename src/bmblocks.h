@@ -798,6 +798,21 @@ public:
     }
 
     /**
+    \brief Finds const block in 2-level blocks array (returns unsanitized address!)
+    \param nb - Index of block (logical linear number)
+    \return block adress or NULL if not yet allocated or FULL_BLOCK_FAKE_ADDR
+    */
+    BMFORCEINLINE
+    const bm::word_t* get_block_ptr(unsigned nb) const
+    {
+        unsigned block_idx = nb >> bm::set_array_shift;
+        if (!top_blocks_ || (block_idx >= top_block_size_))
+            return 0;
+        bm::word_t** blk_blk = top_blocks_[block_idx];
+        return blk_blk ? blk_blk[nb & bm::set_array_mask] : 0;
+    }
+
+    /**
         \brief Finds block in 2-level blocks array  
         Specilized version of get_block(unsigned), returns an additional
         condition when there are no more blocks

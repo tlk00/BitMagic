@@ -57,6 +57,7 @@ For more information please visit:  http://bitmagic.io
 #include <bmsparsevec_algo.h>
 #include <bmsparsevec_serial.h>
 #include <bmalgo_similarity.h>
+#include <bmsparsevec_util.h>
 
 using namespace bm;
 using namespace std;
@@ -394,7 +395,7 @@ void FillSets(bvect_mini* bvect_min,
             id = random_minmax(min, max);
             bvect_min->set_bit(id);
             bvect_full->set_bit(id);
-            if (PROGRESS_PRINT)
+            if (bm::conditional< bool(PROGRESS_PRINT) >::test())
             {
                 if ( (i % PROGRESS_PRINT) == 0)
                 {
@@ -457,7 +458,7 @@ void FillSets(bvect_mini* bvect_min,
                             start += inc;
                         }
 
-                        if (PROGRESS_PRINT)
+                        if (bm::conditional< bool(PROGRESS_PRINT) >::test())
                         {
                             if ( ( ((i+1)*(end-start))  % PROGRESS_PRINT) == 0)
                             {
@@ -481,7 +482,7 @@ void FillSets(bvect_mini* bvect_min,
                         bvect_full->set_bit(start);
                     }
 
-                    if (PROGRESS_PRINT)
+                    if (bm::conditional< bool(PROGRESS_PRINT) >::test())
                     {
                         if ( ( ((i+1)*(end-start))  % PROGRESS_PRINT) == 0)
                         {
@@ -506,7 +507,7 @@ void FillSets(bvect_mini* bvect_min,
                         start += c;
                     }
 
-                    if (PROGRESS_PRINT)
+                    if (bm::conditional< bool(PROGRESS_PRINT) >::test())
                     {
                         if ( ( ((i+1)*(end-start))  % PROGRESS_PRINT) == 0)
                         {
@@ -984,7 +985,7 @@ unsigned SerializationOperation(bvect*             bv_target,
                                                    smem2,
                                                    0,
                                                    set_ASSIGN);
-        int res = bv_tmp2.compare(bv2);
+        res = bv_tmp2.compare(bv2);
         if (res != 0)
         {
             cout << "set_ASSIGN failed 2! " << endl;
@@ -1138,7 +1139,7 @@ void CheckGAPMin(const gap_vector& gapv, const bvect_mini& bvect_min, unsigned l
     }
 }
 
-void CheckIntervals(const bvect& bv, unsigned max_bit)
+void CheckIntervals(const bvect& bv, unsigned /*max_bit*/)
 {
     unsigned cnt0 = count_intervals(bv);
     unsigned cnt1 = 1;
@@ -1252,7 +1253,7 @@ template<class T> void CheckCountRange(const T& vect,
         if (left > right)
             swap(left, right);
 
-        unsigned cnt1 = vect.count_range(left, right, block_count_arr);
+        cnt1 = vect.count_range(left, right, block_count_arr);
         unsigned cnt_to_r = vect.count_to(right, bc_arr);
         unsigned cnt_to_l = left ? vect.count_to(left - 1, bc_arr) : 0;
                  cnt2 = cnt_to_r - cnt_to_l;
@@ -1310,7 +1311,7 @@ void DetailedCheckVectors(const bvect_mini &bvect_min,
             exit(1);
         }
 
-        if (PROGRESS_PRINT)
+        if (bm::conditional< bool(PROGRESS_PRINT) >::test())
         {
             if ( (i % PROGRESS_PRINT) == 0)
             {
@@ -1342,7 +1343,7 @@ void CompareEnumerators(const bvect::enumerator& en1, const bvect::enumerator& e
 void CheckVectors(bvect_mini &bvect_min, 
                   bvect      &bvect_full,
                   unsigned size,
-                  bool     detailed)
+                  bool     /*detailed*/)
 {
     cout << "\nVectors checking...bits to compare = " << size << endl;
 
@@ -1579,7 +1580,7 @@ void ShiftRotateTest()
 
     for (i = 0; i < bm::set_block_size; ++i)
     {
-        blk0[i] = blk1[i] = 1 << 31;
+        blk0[i] = blk1[i] = 1u << 31;
     }
     bm::bit_block_rotate_left_1(blk0);
     bm::bit_block_rotate_left_1_unr(blk1);
@@ -1630,7 +1631,6 @@ void EmptyBVTest()
         bvect bv3(bv1 & bv2);
         bvect bv4 = (bv1 & bv2);
         
-        bvect bv5(bvect);
         std::vector< bvect > v;
         v.push_back(bvect());
     }
@@ -3495,17 +3495,17 @@ void DesrializationTest2()
    struct bvect::statistics st1;
    bv1.calc_stat(&st1);
 
-
-   unsigned char* sermem = new unsigned char[st1.max_serialize_mem];
+   std::vector<unsigned char> sermemv(st1.max_serialize_mem);
+   //unsigned char* sermem = new unsigned char[st1.max_serialize_mem];
    
-   unsigned slen2 = bm::serialize(bv1, sermem, tb);
+   unsigned slen2 = bm::serialize(bv1, sermemv.data(), tb);
    assert(slen2);
    slen2 = 0;
 
-   bm::deserialize(bvtotal, sermem);
+   bm::deserialize(bvtotal, sermemv.data());
     bvect  bv_target_s;
     operation_deserializer<bvect>::deserialize(bv_target_s,
-                                                sermem,
+                                                sermemv.data(),
                                                 0,
                                                 set_OR);
 
@@ -3527,16 +3527,16 @@ void DesrializationTest2()
    struct bvect::statistics st2;
    bv2.calc_stat(&st2);
 
-   unsigned char* sermem2 = new unsigned char[st2.max_serialize_mem];
+   std::vector<unsigned char> sermemv2(st2.max_serialize_mem);
 
-   unsigned slen = bm::serialize(bv2, sermem2);
+   unsigned slen = bm::serialize(bv2, sermemv2.data());
    assert(slen);
    slen = 0;
 
-   bm::deserialize(bvtotal, sermem2);
+   bm::deserialize(bvtotal, sermemv2.data());
    print_stat(bvtotal);
     operation_deserializer<bvect>::deserialize(bv_target_s,
-                                               sermem2,
+                                               sermemv2.data(),
                                                0,
                                                set_OR);
     res = bvtotal.compare(bv_target_s);
@@ -3549,16 +3549,16 @@ void DesrializationTest2()
 //   bvtotal.optimize();
  //  bvtotal.stat();
 
-   bm::deserialize(bvtotal, sermem2);
+   bm::deserialize(bvtotal, sermemv2.data());
 
-   bm::deserialize(bvtotal, sermem);
+   bm::deserialize(bvtotal, sermemv.data());
 
     operation_deserializer<bvect>::deserialize(bv_target_s,
-                                               sermem2,
+                                               sermemv2.data(),
                                                0,
                                                set_OR);
     operation_deserializer<bvect>::deserialize(bv_target_s,
-                                               sermem,
+                                               sermemv2.data(),
                                                0,
                                                set_OR);
 
@@ -3568,9 +3568,6 @@ void DesrializationTest2()
         cout << "Deserialization test failed! 3" << endl;
         exit(1);
     }
-
-   delete [] sermem;
-   delete [] sermem2;
 
 
    bvtotal.clear();
@@ -3591,12 +3588,12 @@ void DesrializationTest2()
        struct bvect::statistics st;
        bvect_full1->calc_stat(&st);
 
-       unsigned char* sermem = new unsigned char[st.max_serialize_mem];
+       std::vector<unsigned char> sermemv1(st.max_serialize_mem);
 
-       unsigned slen = bm::serialize(*bvect_full1, sermem, tb);
+       slen = bm::serialize(*bvect_full1, sermemv1.data(), tb);
 
-       unsigned char* smem = new unsigned char[slen];
-       ::memcpy(smem, sermem, slen);
+       std::vector<unsigned char> smemv(slen);
+       ::memcpy(smemv.data(), sermemv1.data(), slen);
 
 //       cout << "Serialized vector" << endl;
 //       bvect_full1->stat();
@@ -3604,9 +3601,9 @@ void DesrializationTest2()
 //       cout << "Before deserialization" << endl;
 //       bvtotal.stat();
 
-        bm::deserialize(bvtotal, smem);
+        bm::deserialize(bvtotal, smemv.data());
         operation_deserializer<bvect>::deserialize(bv_target_s,
-                                                   smem,
+                                                   smemv.data(),
                                                    0,
                                                    set_OR);
         res = bvtotal.compare(bv_target_s);
@@ -3622,7 +3619,6 @@ void DesrializationTest2()
 //       cout << "After deserialization" << endl;
 //       bvtotal.stat();
 
-       BM_DECLARE_TEMP_BLOCK(tb)
        bvtotal.optimize(tb);
        bv_target_s.optimize(tb);
 
@@ -3641,8 +3637,6 @@ void DesrializationTest2()
 
        }
 
-       delete [] sermem;
-       delete [] smem;
        delete bvect_min1;
        delete bvect_full1;
 
@@ -3651,7 +3645,7 @@ void DesrializationTest2()
 }
 
 
-void StressTest(int repetitions, int set_operation = -1)
+void StressTest(unsigned repetitions, int set_operation = -1)
 {
 
    unsigned RatioSum = 0;
@@ -3671,7 +3665,7 @@ void StressTest(int repetitions, int set_operation = -1)
 
    unsigned size = BITVECT_SIZE - 10;
 //size = BITVECT_SIZE / 10;
-   int i;
+   unsigned i;
    for (i = 0; i < repetitions; ++i)
    {
         cout << endl << " - - - - - - - - - - - - STRESS STEP " << i; 
@@ -3753,7 +3747,7 @@ void StressTest(int repetitions, int set_operation = -1)
             cout << "Array sum = " << sum << endl;
             cout << "BitCount = " << cnt << endl;
             cnt = bvect_full1->count();
-            for (unsigned i = 0; i <= last_block; ++i)
+            for ( i = 0; i <= last_block; ++i)
             {
                 if (arr[i])
                 {
@@ -5129,8 +5123,50 @@ void GAPCheck()
 
 
    }
+}
 
+// -----------------------------------------------------------------------------
 
+void SimpleGapFillSets(bvect&   bv0,
+                       bvect&   bv1,
+                       unsigned min,
+                       unsigned max,
+                       unsigned fill_factor)
+{
+    for (unsigned i = min; i < max; i += fill_factor)
+    {
+        bv0.set(i);
+        bv1.set(i);
+    } // for i
+}
+
+void GAPTestStress()
+{
+    cout << "----------------------------------- GAP test stress " << endl;
+    const unsigned BV_SIZE = 65535 * 3;
+
+    for (unsigned ff = 64; ff < 10000; ff++)
+    {
+        bvect bv0, bv1;
+        SimpleGapFillSets(bv0, bv1, 0, BV_SIZE, ff);
+        bv1.optimize();
+        for (unsigned i = 0; i < BV_SIZE+1; ++i)
+        {
+            bool b0 = bv0.test(i);
+            bool b1 = bv1.test(i);
+            if (b0 != b1)
+            {
+                cerr << "GAP Test Stress failure!" << " FillFactor=" << ff << " bit=" << i << endl;
+                exit(1);
+            }
+        } // for i
+        if (ff % 100 == 0)
+        {
+            cout << "*" << flush;
+        }
+    } // for j
+
+    cout << "----------------------------------- GAP test stress " << endl;
 }
 
 // -----------------------------------------------------------------------------
@@ -5139,46 +5175,46 @@ void MutationTest()
 {
 
     cout << "--------------------------------- MutationTest" << endl;
-
-    bvect_mini     bvect_min(BITVECT_SIZE);
-    bvect          bvect_full;
-
-    printf("\nMutation test.\n");
-
-    bvect_full.set_new_blocks_strat(bm::BM_GAP);
-
-    bvect_full.set_bit(5);
-    bvect_full.set_bit(5);
-
-    bvect_min.set_bit(5);
-
-    bvect_full.set_bit(65535);
-    bvect_full.set_bit(65537);
-    bvect_min.set_bit(65535);
-    bvect_min.set_bit(65537);
-
-    bvect_min.set_bit(100000);
-    bvect_full.set_bit(100000);
-
-    // detailed vectors verification
-    ::CheckVectors(bvect_min, bvect_full, ITERATIONS, false);
-
-    int i;
-    for (i = 5; i < 20000; i+=3)
     {
-        bvect_min.set_bit(i);
-        bvect_full.set_bit(i);
+        bvect_mini     bvect_min(BITVECT_SIZE);
+        bvect          bvect_full;
+
+        printf("\nMutation test.\n");
+
+        bvect_full.set_new_blocks_strat(bm::BM_GAP);
+
+        bvect_full.set_bit(5);
+        bvect_full.set_bit(5);
+
+        bvect_min.set_bit(5);
+
+        bvect_full.set_bit(65535);
+        bvect_full.set_bit(65537);
+        bvect_min.set_bit(65535);
+        bvect_min.set_bit(65537);
+
+        bvect_min.set_bit(100000);
+        bvect_full.set_bit(100000);
+
+        // detailed vectors verification
+        ::CheckVectors(bvect_min, bvect_full, ITERATIONS, false);
+
+        int i;
+        for (i = 5; i < 20000; i += 3)
+        {
+            bvect_min.set_bit(i);
+            bvect_full.set_bit(i);
+        }
+        ::CheckVectors(bvect_min, bvect_full, ITERATIONS, false);
+
+        for (i = 100000; i < 200000; i += 3)
+        {
+            bvect_min.set_bit(i);
+            bvect_full.set_bit(i);
+        }
+
+        ::CheckVectors(bvect_min, bvect_full, 300000);
     }
-    ::CheckVectors(bvect_min, bvect_full, ITERATIONS, false);
-
-    for (i = 100000; i < 200000; i+=3)
-    {
-        bvect_min.set_bit(i);
-        bvect_full.set_bit(i);
-    }
-
-    ::CheckVectors(bvect_min, bvect_full, 300000);
-
     // set-clear functionality
 
     {
@@ -6444,6 +6480,7 @@ void SyntaxTest()
 
 void SetTest()
 {
+    {
     unsigned cnt;
     bvect bv;
 
@@ -6465,7 +6502,7 @@ void SetTest()
     }
 
     bv.set(0);
-    bv.set(bm::id_max-1);
+    bv.set(bm::id_max - 1);
     cnt = bv.count();
 
     assert(cnt == 2);
@@ -6474,7 +6511,7 @@ void SetTest()
     print_stat(bv);
     cnt = bv.count();
 
-    if (cnt != bm::id_max-2)
+    if (cnt != bm::id_max - 2)
     {
         cout << "Set invert test failed!." << endl;
         exit(1);
@@ -6507,7 +6544,7 @@ void SetTest()
         cout << "Set &= test failed (2)!" << endl;
         exit(1);
     }
-
+    }
 
     bvect bv2;
     bv2[1] = true;
@@ -6533,7 +6570,7 @@ void SetTest()
         bvect bv3;
         bool changed;
         changed = bv3.set_bit_conditional(10, true, true);
-        v = bv3[10];
+        bool v = bv3[10];
         if (v || changed) {
             cout << "Conditional bit set failed." << endl;
             exit(1);
@@ -6562,7 +6599,7 @@ void SetTest()
         bvect bv3(bm::BM_GAP);
         bool changed;
         changed = bv3.set_bit_conditional(10, true, true);
-        v = bv3[10];
+        bool v = bv3[10];
         if (v || changed) {
             cout << "Conditional bit set failed." << endl;
             exit(1);
@@ -6593,7 +6630,7 @@ void SetTest()
         bv3.optimize();
         bool changed;
         changed = bv3.set_bit_conditional(10, true, true);
-        v = bv3[10];
+        bool v = bv3[10];
         if (!v || changed) {
             cout << "Conditional bit set failed." << endl;
             exit(1);
@@ -6933,35 +6970,35 @@ void BitCountChangeTest()
     cout << "---------------------------- BitCountChangeTest " << endl;
 
     unsigned i;
-    for(i = 0xFFFFFFFF; i; i <<= 1) 
-    { 
+    for (i = 0xFFFFFFFF; i; i <<= 1)
+    {
         unsigned a0 = bm::bit_count_change(i);
         unsigned a1 = BitCountChange(i);
-        
+
         if (a0 != a1)
         {
-            cout << hex 
-                 << "Bit count change test failed!" 
-                 << " i = " << i << " return = " 
-                 << a0 << " check = " << a1
-                 << endl;
+            cout << hex
+                << "Bit count change test failed!"
+                << " i = " << i << " return = "
+                << a0 << " check = " << a1
+                << endl;
             exit(1);
         }
     }
 
     cout << "---------------------------- STEP 2 " << endl;
 
-    for(i = 0xFFFFFFFF; i; i >>= 1) 
-    { 
+    for (i = 0xFFFFFFFF; i; i >>= 1)
+    {
         unsigned a0 = bm::bit_count_change(i);
         unsigned a1 = BitCountChange(i);
-        
+
         if (a0 != a1)
         {
-            cout << "Bit count change test failed!" 
-                 << " i = " << i << " return = " 
-                 << a0 << " check = " << a1
-                 << endl;
+            cout << "Bit count change test failed!"
+                << " i = " << i << " return = "
+                << a0 << " check = " << a1
+                << endl;
             exit(1);
         }
     }
@@ -6972,27 +7009,26 @@ void BitCountChangeTest()
     {
         unsigned a0 = bm::bit_count_change(i);
         unsigned a1 = BitCountChange(i);
-        
+
         if (a0 != a1)
         {
-            cout << "Bit count change test failed!" 
-                 << " i = " << i << " return = " 
-                 << a0 << " check = " << a1
-                 << endl;
+            cout << "Bit count change test failed!"
+                << " i = " << i << " return = "
+                << a0 << " check = " << a1
+                << endl;
             exit(1);
         }
     }
     cout << "!" << endl;
 
-    //bm::word_t  BM_VECT_ALIGN arr[16] BM_VECT_ALIGN = {0,};
-    bm::word_t  BM_VECT_ALIGN arr[32] BM_VECT_ALIGN_ATTR = { 0, };
-    arr[0] = (bm::word_t)(1 << 31);
-    arr[1] = 1; //(bm::word_t)(1 << 31);
-    
+    bm::word_t  BM_VECT_ALIGN arr0[32] BM_VECT_ALIGN_ATTR = { 0, };
+    arr0[0] = (bm::word_t)(1 << 31);
+    arr0[1] = 1; //(bm::word_t)(1 << 31);
+
     bm::id_t cnt;
     bm::id_t bc, bc1;
-    
-    cnt = bm::bit_count_change(arr[1]);
+
+    cnt = bm::bit_count_change(arr0[1]);
     cout << cnt << endl;
     if (cnt != 2)
     {
@@ -7000,35 +7036,35 @@ void BitCountChangeTest()
         exit(1);
     }
 #if !defined(BMAVX2OPT)    
-    cnt = bm::bit_block_calc_count_change(arr, arr+8, &bc);
+    cnt = bm::bit_block_calc_count_change(arr0, arr0 + 8, &bc);
     cout << "*" << endl;
-    bc1 = bit_block_calc_count(arr, arr+8);
+    bc1 = bit_block_calc_count(arr0, arr0 + 8);
     cout << "@" << endl;
     if (bc != bc1)
     {
         cout << "1. bitcount comparison failed " << endl;
     }
-    
+
     if (cnt != 3)
     {
         cout << "1. count_intervals() failed " << cnt << endl;
         exit(1);
     }
 
-    ::memset(arr, 0, sizeof(arr));
+    ::memset(arr0, 0, sizeof(arr0));
 
-    arr[0] = arr[1] = arr[2] = 0xFFFFFFFF;
-    arr[3] = (bm::word_t)(0xFFFFFFFF >> 1);
-    
-    cnt = bm::bit_block_calc_count_change(arr, arr+4, &bc);
+    arr0[0] = arr0[1] = arr0[2] = 0xFFFFFFFF;
+    arr0[3] = (bm::word_t)(0xFFFFFFFF >> 1);
+
+    cnt = bm::bit_block_calc_count_change(arr0, arr0 + 4, &bc);
     cout << cnt << endl;
 
-    bc1 = bit_block_calc_count(arr, arr+4);
+    bc1 = bit_block_calc_count(arr0, arr0 + 4);
     if (bc != bc1)
     {
         cout << "1.1 bitcount comparison failed " << endl;
     }
-    
+
     // this test is not correct for both 32 and 64 bit mode because of loop unroll
     if (cnt != 2 && cnt != 3)
     {
@@ -7036,65 +7072,65 @@ void BitCountChangeTest()
         exit(1);
     }
 #endif    
- 
-    cout << "---------------------------- STEP 4 " << endl;
 
+    cout << "---------------------------- STEP 4 " << endl;
+    
     bvect   bv1;
     cnt = bm::count_intervals(bv1);
-    
+
     if (cnt != 1)
     {
         cout << "1.count_intervals() failed " << cnt << endl;
         exit(1);
     }
     CheckIntervals(bv1, 65536);
-    
+
     bv1.invert();
 
     cnt = count_intervals(bv1);
     cout << "Inverted cnt=" << cnt << endl;
-    
+
     if (cnt != 2)
     {
         cout << "2.inverted count_intervals() failed " << cnt << endl;
         exit(1);
     }
-    
+
     bv1.invert();
-        
+
     for (i = 10; i < 100000; ++i)
     {
         bv1.set(i);
     }
-    
+
     cnt = count_intervals(bv1);
-    
+
     if (cnt != 3)
     {
         cout << "3.count_intervals() failed " << cnt << endl;
         exit(1);
     }
     cout << "-----" << endl;
-    CheckIntervals(bv1, 65536*2);
-    cout << "Optmization..." << endl; 
+    CheckIntervals(bv1, 65536 * 2);
+    cout << "Optmization..." << endl;
     bv1.optimize();
     cnt = count_intervals(bv1);
-    
+
     if (cnt != 3)
     {
         cout << "4.count_intervals() failed " << cnt << endl;
         exit(1);
     }
-    
-    CheckIntervals(bv1, 65536*2);
 
+    CheckIntervals(bv1, 65536 * 2);
+    
     cout << "---------------------------- array GAP test " << endl;
 
     {
         bm::gap_word_t arr[] = { 0 };
 
         unsigned gap_count;
-
+        
         gap_count = bit_array_compute_gaps(arr, sizeof(arr)/sizeof(arr[0]));
         if (gap_count != 1)
         {
@@ -7106,7 +7142,7 @@ void BitCountChangeTest()
         bm::gap_word_t gap_cntrl[20] = {0};
 
         gap_set_all(gap_cntrl, bm::gap_max_bits, 0);
-        for (unsigned i = 0; i < sizeof(arr)/sizeof(arr[0]); ++i)
+        for (i = 0; i < sizeof(arr)/sizeof(arr[0]); ++i)
         {
             unsigned is_set;
             gap_set_value(1, gap_cntrl, arr[i], &is_set);
@@ -7144,7 +7180,7 @@ void BitCountChangeTest()
         bm::gap_word_t gap_cntrl[20] = {0};
 
         gap_set_all(gap_cntrl, bm::gap_max_bits, 0);
-        for (unsigned i = 0; i < sizeof(arr)/sizeof(arr[0]); ++i)
+        for (i = 0; i < sizeof(arr)/sizeof(arr[0]); ++i)
         {
             unsigned is_set;
             gap_set_value(1, gap_cntrl, arr[i], &is_set);
@@ -7183,7 +7219,7 @@ void BitCountChangeTest()
         bm::gap_word_t gap_cntrl[20] = {0};
 
         gap_set_all(gap_cntrl, bm::gap_max_bits, 0);
-        for (unsigned i = 0; i < sizeof(arr)/sizeof(arr[0]); ++i)
+        for (i = 0; i < sizeof(arr)/sizeof(arr[0]); ++i)
         {
             unsigned is_set;
             gap_set_value(1, gap_cntrl, arr[i], &is_set);
@@ -7222,7 +7258,7 @@ void BitCountChangeTest()
         bm::gap_word_t gap_cntrl[20] = {0};
 
         gap_set_all(gap_cntrl, bm::gap_max_bits, 0);
-        for (unsigned i = 0; i < sizeof(arr)/sizeof(arr[0]); ++i)
+        for (i = 0; i < sizeof(arr)/sizeof(arr[0]); ++i)
         {
             unsigned is_set;
             gap_set_value(1, gap_cntrl, arr[i], &is_set);
@@ -7259,7 +7295,7 @@ void BitCountChangeTest()
         bm::gap_word_t gap_cntrl[20] = {0};
 
         gap_set_all(gap_cntrl, bm::gap_max_bits, 0);
-        for (unsigned i = 0; i < sizeof(arr)/sizeof(arr[0]); ++i)
+        for (i = 0; i < sizeof(arr)/sizeof(arr[0]); ++i)
         {
             unsigned is_set;
             gap_set_value(1, gap_cntrl, arr[i], &is_set);
@@ -7297,7 +7333,7 @@ void BitCountChangeTest()
         bm::gap_word_t gap_cntrl[20] = {0};
 
         gap_set_all(gap_cntrl, bm::gap_max_bits, 0);
-        for (unsigned i = 0; i < sizeof(arr)/sizeof(arr[0]); ++i)
+        for (i = 0; i < sizeof(arr)/sizeof(arr[0]); ++i)
         {
             unsigned is_set;
             gap_set_value(1, gap_cntrl, arr[i], &is_set);
@@ -7334,7 +7370,7 @@ void BitCountChangeTest()
         bm::gap_word_t gap_cntrl[20] = {0};
 
         gap_set_all(gap_cntrl, bm::gap_max_bits, 0);
-        for (unsigned i = 0; i < sizeof(arr)/sizeof(arr[0]); ++i)
+        for ( i = 0; i < sizeof(arr)/sizeof(arr[0]); ++i)
         {
             unsigned is_set;
             gap_set_value(1, gap_cntrl, arr[i], &is_set);
@@ -7371,7 +7407,7 @@ void BitCountChangeTest()
         bm::gap_word_t gap_cntrl[20] = {0};
 
         gap_set_all(gap_cntrl, bm::gap_max_bits, 0);
-        for (unsigned i = 0; i < sizeof(arr)/sizeof(arr[0]); ++i)
+        for ( i = 0; i < sizeof(arr)/sizeof(arr[0]); ++i)
         {
             unsigned is_set;
             gap_set_value(1, gap_cntrl, arr[i], &is_set);
@@ -7409,7 +7445,7 @@ void BitCountChangeTest()
         bm::gap_word_t gap_cntrl[20] = {0};
 
         gap_set_all(gap_cntrl, bm::gap_max_bits, 0);
-        for (unsigned i = 0; i < sizeof(arr)/sizeof(arr[0]); ++i)
+        for ( i = 0; i < sizeof(arr)/sizeof(arr[0]); ++i)
         {
             unsigned is_set;
             gap_set_value(1, gap_cntrl, arr[i], &is_set);
@@ -7783,7 +7819,7 @@ void BitBlockTransposeTest()
 
     for (unsigned i = 0; i < bm::set_block_size; ++i)
     {
-        block1[i] = ~1;
+        block1[i] = ~1u;
     }
 
     bm::vect_bit_transpose<unsigned, 
@@ -7872,7 +7908,7 @@ void BitBlockTransposeTest()
 
     gap_transpose_engine<bm::gap_word_t, bm::word_t, bm::set_block_size> gte;
     
-    if (sizeof(gte.tmatrix_) != (2048 * sizeof(bm::word_t)))
+    if ( bm::conditional<sizeof(gte.tmatrix_) != (2048 * sizeof(bm::word_t))>::test())
     {
         cout << "TMatrix recalculation error!" << sizeof(gte.tmatrix_) << endl;
         exit(1);
@@ -8167,6 +8203,11 @@ void VerifyCountRange(const bvect& bv,
         bm::id_t cnt2 = bv.count_to(i, bc_arr);
         
         assert(cnt1 == cnt2);
+        if (cnt1 != cnt2)
+        {
+            cerr << "VerifyCountRange failed!" << " count_range()=" << cnt1
+                << " count_to()=" << cnt2 << endl;
+        }
     }
 }
 
@@ -8227,7 +8268,18 @@ void CountRangeTest()
     
     }}
 
-    
+    cout << "check inverted bvector" << endl;
+    {{
+            bvect bv1;
+            
+            bv1.invert();
+
+            bvect::blocks_count bc_arr;
+            bv1.running_count_blocks(&bc_arr);
+
+            VerifyCountRange(bv1, bc_arr, 200000);
+    }}
+
     
     cout << "---------------------------- CountRangeTest OK" << endl;
 }
@@ -8389,9 +8441,9 @@ void Log2Test()
     cout << "Stage 1" << endl;
     for (unsigned  i = 1; i <= 65535; ++i)
     {
-        unsigned l1 = bm::ilog2<unsigned short>(i);
+        unsigned l1 = bm::ilog2<unsigned short>((unsigned short)i);
         unsigned l2 = iLog2(i);
-        unsigned l3 = ilog2_LUT<unsigned short>(i);
+        unsigned l3 = ilog2_LUT<unsigned short>((unsigned short)i);
         unsigned l4 = l3;//bm::bsr_asm32(i);
         if (l1 != l2 || l2 != l3 || l2 != l4)
         {
@@ -8615,7 +8667,7 @@ void GammaEncoderTest()
          
         for (unsigned j = 0; j < 1000; ++j)
         {
-            gap_word_t a = code_value;
+            gap_word_t a = (unsigned short)code_value;
             if (!a) 
             {
                 code_value = a = 65535;
@@ -9468,7 +9520,7 @@ void TestSparseVector_Stress(unsigned count)
                 }
                 
                 
-                for (unsigned i = 0; i < sv1.size(); ++i)
+                for ( i = 0; i < sv1.size(); ++i)
                 {
                     unsigned v1 = sv1[i];
                     unsigned v3 = sv3[i];
@@ -9967,9 +10019,206 @@ void deser_test()
 void TestSIMDUtils()
 {
     cout << "------------------------ Test SIMD Utils" << endl;
+#if defined(BMSSE2OPT)
     unsigned idx;
+    cout << "----------------------------> [ SSE2 ]" << endl;
+    {
+        unsigned short buf[127] = { 65535, 127, 255, 256, 1000, 2000, 2001, 2005, 0xFF, 0, };
+        idx = bm::sse2_gap_find(buf, 65535, 1);
+        assert(idx == 0);
+        idx = bm::sse2_gap_find(buf, 0, 1);
+        assert(idx == 0);
+        idx = bm::sse2_gap_find(buf, 10, 1);
+        assert(idx == 0);
+    }
+
+    {
+        unsigned short buf[16] = { 60000, 127, 255, 256, 1000, 2000, 2001, 2005, 0xFF, 0, };
+        idx = bm::sse2_gap_find(buf, 65535, 1);
+        assert(idx == 1);
+        idx = bm::sse2_gap_find(buf, 0, 1);
+        assert(idx == 0);
+        idx = bm::sse2_gap_find(buf, 10, 1);
+        assert(idx == 0);
+    }
+
+    {
+        unsigned short buf[16] = { 10, 65530, 127, 255, 256, 1000, 2000, 2001, 2005, 0xFF, };
+        const unsigned vsize = 2;
+        idx = bm::sse2_gap_find(buf, 0, vsize);
+        assert(idx == 0);
+        idx = bm::sse2_gap_find(buf, 65535, vsize);
+        assert(idx == vsize);
+        for (unsigned i = 0; i < vsize; ++i)
+        {
+            unsigned short v = buf[i];
+            idx = bm::sse2_gap_find(buf, v, vsize);
+            assert(idx == i);
+            idx = bm::sse2_gap_find(buf, v - 1, vsize);
+            assert(idx == i);
+        }
+    }
+
+    {
+        unsigned short buf[16] = { 10, 256, 65530, 127, 255, 256, 1000, 2000, 2001, 2005, 0xFF, };
+        const unsigned vsize = 3;
+        idx = bm::sse2_gap_find(buf, 0, vsize);
+        assert(idx == 0);
+        idx = bm::sse2_gap_find(buf, 65535, vsize);
+        assert(idx == vsize);
+        for (unsigned i = 0; i < vsize; ++i)
+        {
+            unsigned short v = buf[i];
+            idx = bm::sse2_gap_find(buf, v, vsize);
+            assert(idx == i);
+            idx = bm::sse2_gap_find(buf, v - 1, vsize);
+            assert(idx == i);
+        }
+    }
+    {
+        unsigned short buf[16] = { 10, 256, 258, 65500, 127, 255, 256, 1000, 2000, 2001, 2005, 0xFF, };
+        const unsigned vsize = 4;
+        idx = bm::sse2_gap_find(buf, 0, vsize);
+        assert(idx == 0);
+        idx = bm::sse2_gap_find(buf, 65535, vsize);
+        assert(idx == vsize);
+        for (unsigned i = 0; i < vsize; ++i)
+        {
+            unsigned short v = buf[i];
+            idx = bm::sse2_gap_find(buf, v, vsize);
+            assert(idx == i);
+            idx = bm::sse2_gap_find(buf, v - 1, vsize);
+            assert(idx == i);
+        }
+    }
+
+    {
+        //        unsigned short buf[16] = { 10, 256, 258, 15525, 64500, 127, 255, 256, 1000, 2000, 2001, 2005, 0xFF, };
+        unsigned short buf[16] = { 10, 20, 30, 40, 50, 127, 255, 256, 1000, 2000, 2001, 2005, 0xFF, };
+        const unsigned vsize = 5;
+        idx = bm::sse2_gap_find(buf, 0, vsize);
+        assert(idx == 0);
+        idx = bm::sse2_gap_find(buf, 65535, vsize);
+        assert(idx == vsize);
+
+        for (unsigned i = 0; i < vsize; ++i)
+        {
+            unsigned short v = buf[i];
+            idx = bm::sse2_gap_find(buf, v, vsize);
+            assert(idx == i);
+            idx = bm::sse2_gap_find(buf, v - 1, vsize);
+            assert(idx == i);
+        }
+    }
+
+    {
+        unsigned short buf[127] = { 2, 10, 256, 258, 15525, 65530, 127, 255, 256, 1000, 2000, 2001, 2005, 0xFF, };
+        const unsigned vsize = 6;
+        idx = bm::sse2_gap_find(buf, 0, vsize);
+        assert(idx == 0);
+        idx = bm::sse2_gap_find(buf, 65535, vsize);
+        assert(idx == vsize);
+        for (unsigned i = 0; i < vsize; ++i)
+        {
+            unsigned short v = buf[i];
+            idx = bm::sse2_gap_find(buf, v, vsize);
+            assert(idx == i);
+            idx = bm::sse2_gap_find(buf, v - 1, vsize);
+            assert(idx == i);
+        }
+    }
+
+    {
+        unsigned short buf[16] = { 1, 2, 10, 256, 258, 15525, 65530, 127, 255, 256, 1000, 2000, 2001, 2005, 0xFF, };
+        const unsigned vsize = 7;
+        idx = bm::sse2_gap_find(buf, 0, vsize);
+        assert(idx == 0);
+        idx = bm::sse2_gap_find(buf, 65535, vsize);
+        assert(idx == vsize);
+
+        for (unsigned i = 0; i < vsize; ++i)
+        {
+            unsigned short v = buf[i];
+            idx = bm::sse2_gap_find(buf, v, vsize);
+            assert(idx == i);
+            idx = bm::sse2_gap_find(buf, v - 1, vsize);
+            assert(idx == i || (buf[i - 1] == v - 1));
+        }
+    }
+    {
+        unsigned short buf[16] = { 1, 2, 10, 256,  258, 1024, 15525, 65530,  127, 255, 256, 0xFF, };
+        const unsigned vsize = 8;
+        idx = bm::sse2_gap_find(buf, 0, vsize);
+        assert(idx == 0);
+        idx = bm::sse2_gap_find(buf, 65535, vsize);
+        assert(idx == vsize);
+        for (unsigned i = 0; i < vsize; ++i)
+        {
+            unsigned short v = buf[i];
+            if (i == vsize - 1)
+            {
+                assert(v != 65535);
+            }
+            idx = bm::sse2_gap_find(buf, v, vsize);
+            assert(idx == i);
+            idx = bm::sse2_gap_find(buf, v - 1, vsize);
+            assert(idx == i || (buf[i - 1] == v - 1));
+        }
+    }
+
+    {
+        unsigned short buf[16] = { 6217, 6300, 6400, 6500,
+            6600, 6700, 30584, 40255,
+            50256, 60000, 61001, 65255, 65530, 12, 23, 0, };
+        const unsigned vsize = 13;
+        idx = bm::sse2_gap_find(buf, 0, vsize);
+        assert(idx == 0);
+        idx = bm::sse2_gap_find(buf, 65535, vsize);
+        assert(idx == vsize);
+
+        for (unsigned i = 0; i < vsize; ++i)
+        {
+            unsigned short v = buf[i];
+            if (i == vsize - 1)
+            {
+                assert(v != 65535);
+            }
+            idx = bm::sse2_gap_find(buf, v, vsize);
+            assert(idx == i);
+            idx = bm::sse2_gap_find(buf, v - 1, vsize);
+            assert(idx == i || (buf[i - 1] == v - 1));
+        }
+    }
+
+    {
+        unsigned short buf[16] = { 6217, 6300, 6400, 6500,
+            6600, 6700, 30584, 40255,
+            50256, 60000, 61001, 65255,
+            65256, 65257, 65300, 65530 };
+        const unsigned vsize = 16;
+        idx = bm::sse2_gap_find(buf, 0, vsize);
+        assert(idx == 0);
+        idx = bm::sse2_gap_find(buf, 65535, vsize);
+        assert(idx == 16);
+        for (unsigned i = 0; i < vsize; ++i)
+        {
+            unsigned short v = buf[i];
+            if (i == vsize - 1)
+            {
+                assert(v != 65535);
+            }
+            idx = bm::sse2_gap_find(buf, v, vsize);
+            assert(idx == i);
+            idx = bm::sse2_gap_find(buf, v - 1, vsize);
+            assert(idx == i || (buf[i - 1] == v - 1));
+        }
+    }
+
+#endif
+
 #if defined(BMSSE42OPT)
-    cout << "------------------------- [ SSE 4.2 ]" << endl;
+    unsigned idx;
+    cout << "----------------------------> [ SSE 4.2 ]" << endl;
     {
         unsigned short buf[127] = { 65535, 127, 255, 256, 1000, 2000, 2001, 2005, 0xFF, 0,  };
         idx = bm::sse4_gap_find(buf, 65535, 1);
@@ -9981,38 +10230,22 @@ void TestSIMDUtils()
     }
 
     {
-        unsigned short buf[16] = { 10, 65535, 127, 255, 256, 1000, 2000, 2001, 2005, 0xFF, };
+        unsigned short buf[16] = { 60000, 127, 255, 256, 1000, 2000, 2001, 2005, 0xFF, 0, };
+        idx = bm::sse4_gap_find(buf, 65535, 1);
+        assert(idx == 1);
+        idx = bm::sse4_gap_find(buf, 0, 1);
+        assert(idx == 0);
+        idx = bm::sse4_gap_find(buf, 10, 1);
+        assert(idx == 0);
+    }
+
+    {
+        unsigned short buf[16] = { 10, 65530, 127, 255, 256, 1000, 2000, 2001, 2005, 0xFF, };
         const unsigned vsize = 2;
         idx = bm::sse4_gap_find(buf, 0, vsize);
         assert(idx == 0);
-        for (unsigned i = 0; i < vsize; ++i)
-        {
-            unsigned short v = buf[i];
-            idx = bm::sse4_gap_find(buf, v, vsize);
-            assert(idx == i);
-            idx = bm::sse4_gap_find(buf, v - 1, vsize);
-            assert(idx == i);
-        }
-    }
-    {
-        unsigned short buf[16] = { 10, 256, 65535, 127, 255, 256, 1000, 2000, 2001, 2005, 0xFF, };
-        const unsigned vsize = 3;
-        idx = bm::sse4_gap_find(buf, 0, vsize);
-        assert(idx == 0);
-        for (unsigned i = 0; i < vsize; ++i)
-        {
-            unsigned short v = buf[i];
-            idx = bm::sse4_gap_find(buf, v, vsize);
-            assert(idx == i);
-            idx = bm::sse4_gap_find(buf, v - 1, vsize);
-            assert(idx == i);
-        }
-    }
-    {
-        unsigned short buf[16] = { 10, 256, 258, 65535, 127, 255, 256, 1000, 2000, 2001, 2005, 0xFF, };
-        const unsigned vsize = 4;
-        idx = bm::sse4_gap_find(buf, 0, vsize);
-        assert(idx == 0);
+        idx = bm::sse4_gap_find(buf, 65535, vsize);
+        assert(idx == vsize);
         for (unsigned i = 0; i < vsize; ++i)
         {
             unsigned short v = buf[i];
@@ -10024,10 +10257,47 @@ void TestSIMDUtils()
     }
 
     {
-        unsigned short buf[16] = { 10, 256, 258, 15525, 65535, 127, 255, 256, 1000, 2000, 2001, 2005, 0xFF, };
+        unsigned short buf[16] = { 10, 256, 65530, 127, 255, 256, 1000, 2000, 2001, 2005, 0xFF, };
+        const unsigned vsize = 3;
+        idx = bm::sse4_gap_find(buf, 0, vsize);
+        assert(idx == 0);
+        idx = bm::sse4_gap_find(buf, 65535, vsize);
+        assert(idx == vsize);
+        for (unsigned i = 0; i < vsize; ++i)
+        {
+            unsigned short v = buf[i];
+            idx = bm::sse4_gap_find(buf, v, vsize);
+            assert(idx == i);
+            idx = bm::sse4_gap_find(buf, v - 1, vsize);
+            assert(idx == i);
+        }
+    }
+    {
+        unsigned short buf[16] = { 10, 256, 258, 65500, 127, 255, 256, 1000, 2000, 2001, 2005, 0xFF, };
+        const unsigned vsize = 4;
+        idx = bm::sse4_gap_find(buf, 0, vsize);
+        assert(idx == 0);
+        idx = bm::sse4_gap_find(buf, 65535, vsize);
+        assert(idx == vsize);
+        for (unsigned i = 0; i < vsize; ++i)
+        {
+            unsigned short v = buf[i];
+            idx = bm::sse4_gap_find(buf, v, vsize);
+            assert(idx == i);
+            idx = bm::sse4_gap_find(buf, v - 1, vsize);
+            assert(idx == i);
+        }
+    }
+    
+    {
+//        unsigned short buf[16] = { 10, 256, 258, 15525, 64500, 127, 255, 256, 1000, 2000, 2001, 2005, 0xFF, };
+        unsigned short buf[16] = { 10, 20, 30, 40, 50, 127, 255, 256, 1000, 2000, 2001, 2005, 0xFF, };
         const unsigned vsize = 5;
         idx = bm::sse4_gap_find(buf, 0, vsize);
         assert(idx == 0);
+        idx = bm::sse4_gap_find(buf, 65535, vsize);
+        assert(idx == vsize);
+
         for (unsigned i = 0; i < vsize; ++i)
         {
             unsigned short v = buf[i];
@@ -10037,11 +10307,14 @@ void TestSIMDUtils()
             assert(idx == i);
         }
     }
+    
     {
-        unsigned short buf[16] = { 2, 10, 256, 258, 15525, 65535, 127, 255, 256, 1000, 2000, 2001, 2005, 0xFF, };
+        unsigned short buf[127] = { 2, 10, 256, 258, 15525, 65530, 127, 255, 256, 1000, 2000, 2001, 2005, 0xFF, };
         const unsigned vsize = 6;
         idx = bm::sse4_gap_find(buf, 0, vsize);
         assert(idx == 0);
+        idx = bm::sse4_gap_find(buf, 65535, vsize);
+        assert(idx == vsize);
         for (unsigned i = 0; i < vsize; ++i)
         {
             unsigned short v = buf[i];
@@ -10051,11 +10324,15 @@ void TestSIMDUtils()
             assert(idx == i);
         }
     }
+
     {
-        unsigned short buf[16] = { 1, 2, 10, 256, 258, 15525, 65535, 127, 255, 256, 1000, 2000, 2001, 2005, 0xFF, };
+        unsigned short buf[16] = { 1, 2, 10, 256, 258, 15525, 65530, 127, 255, 256, 1000, 2000, 2001, 2005, 0xFF, };
         const unsigned vsize = 7;
         idx = bm::sse4_gap_find(buf, 0, vsize);
         assert(idx == 0);
+        idx = bm::sse4_gap_find(buf, 65535, vsize);
+        assert(idx == vsize);
+
         for (unsigned i = 0; i < vsize; ++i)
         {
             unsigned short v = buf[i];
@@ -10066,16 +10343,18 @@ void TestSIMDUtils()
         }
     }
     {
-    unsigned short buf[16] = { 1, 2, 10, 256, 258, 1024, 15525, 65535, 127, 255, 256, 0xFF, };
+    unsigned short buf[16] = { 1, 2, 10, 256,  258, 1024, 15525, 65530,  127, 255, 256, 0xFF, };
     const unsigned vsize = 8;
     idx = bm::sse4_gap_find(buf, 0, vsize);
     assert(idx == 0);
+    idx = bm::sse4_gap_find(buf, 65535, vsize);
+    assert(idx == vsize);
     for (unsigned i = 0; i < vsize; ++i)
     {
         unsigned short v = buf[i];
         if (i == vsize - 1)
         {
-            assert(v == 65535);
+            assert(v != 65535);
         }
         idx = bm::sse4_gap_find(buf, v, vsize);
         assert(idx == i);
@@ -10087,16 +10366,19 @@ void TestSIMDUtils()
     {
         unsigned short buf[16] = { 6217, 6300, 6400, 6500,  
                                    6600, 6700, 30584, 40255, 
-                                   50256, 60000, 61001, 65255, 65535, 12, 23, 0,  };
+                                   50256, 60000, 61001, 65255, 65530, 12, 23, 0,  };
         const unsigned vsize = 13;
         idx = bm::sse4_gap_find(buf, 0, vsize);
         assert(idx == 0);
+        idx = bm::sse4_gap_find(buf, 65535, vsize);
+        assert(idx == vsize);
+
         for (unsigned i = 0; i < vsize; ++i)
         {
             unsigned short v = buf[i];
             if (i == vsize - 1)
             {
-                assert(v == 65535);
+                assert(v != 65535);
             }
             idx = bm::sse4_gap_find(buf, v, vsize);
             assert(idx == i);
@@ -10109,16 +10391,18 @@ void TestSIMDUtils()
         unsigned short buf[16] = { 6217, 6300, 6400, 6500,
             6600, 6700, 30584, 40255,
             50256, 60000, 61001, 65255, 
-            65256, 65257, 65300, 65535  };
+            65256, 65257, 65300, 65530  };
         const unsigned vsize = 16;
         idx = bm::sse4_gap_find(buf, 0, vsize);
         assert(idx == 0);
+        idx = bm::sse4_gap_find(buf, 65535, vsize);
+        assert(idx == 16);
         for (unsigned i = 0; i < vsize; ++i)
         {
             unsigned short v = buf[i];
             if (i == vsize - 1)
             {
-                assert(v == 65535);
+                assert(v != 65535);
             }
             idx = bm::sse4_gap_find(buf, v, vsize);
             assert(idx == i);
@@ -10129,6 +10413,51 @@ void TestSIMDUtils()
 
 #endif
     cout << "------------------------ Test SIMD Utils OK" << endl;
+}
+
+void AddressResolverTest()
+{
+    bm::id_t id_to;
+    bool found;
+    
+    {
+    bvps_addr_resolver<bvect>  ares;
+    
+    found = ares.resolve(10, &id_to);
+    assert(!found);
+    assert(id_to == ~0u);
+    }
+
+    {
+    bvps_addr_resolver<bvect>  ares;
+    
+    ares.set(1000);
+    ares.set(10000);
+    ares.set(100000);
+    
+    found = ares.resolve(10, &id_to);
+    assert(!found);
+    assert(id_to == ~0u);
+
+    found = ares.resolve(100000, &id_to);
+    assert(found);
+    assert(id_to == 3);
+    
+    assert(ares.in_sync() == false);
+    
+    ares.optimize();
+    assert(ares.in_sync() == false);
+    
+    ares.sync();
+    assert(ares.in_sync());
+
+    found = ares.resolve(100000, &id_to);
+    assert(found);
+    assert(id_to == 3);
+
+    }
+
+    
 }
 
 
@@ -10246,11 +10575,15 @@ int main(void)
      ClearAllTest();
 
      GAPCheck();
+    
+     AddressResolverTest();
+
+     GAPTestStress();
 
      MaxSTest();
 
      GetNextTest();
-
+    
      SimpleRandomFillTest();
      
      RangeRandomFillTest();

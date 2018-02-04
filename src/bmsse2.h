@@ -39,6 +39,7 @@ For more information please visit:  http://bitmagic.io
 
 #include "bmdef.h"
 #include "bmsse_util.h"
+#include "bmutil.h"
 
 
 namespace bm
@@ -384,6 +385,78 @@ bm::id_t sse2_bit_block_calc_count_change(const __m128i* BMRESTRICT block,
 
    return count;
 }
+
+#ifdef __GNUG__
+// necessary measure to silence false warning from GCC about negative pointer arithmetics
+#pragma GCC diagnostic push
+#pragma GCC diagnostic ignored "-Warray-bounds"
+#endif
+
+/*!
+SSE4.2 check for one to two (variable len) 128 bit SSE lines for gap search results (8 elements)
+\internal
+*/
+inline
+unsigned sse2_gap_find(const bm::gap_word_t* BMRESTRICT pbuf, const bm::gap_word_t pos, const unsigned size)
+{
+    BM_ASSERT(size <= 16);
+    BM_ASSERT(size);
+
+    const unsigned unroll_factor = 8;
+    if (size < 4) // for very short vector use conventional scan
+    {
+        unsigned j;
+        for (j = 0; j < size; ++j)
+        {
+            if (pbuf[j] >= pos)
+                break;
+        }
+        return j;
+    }
+
+    __m128i m1, mz, maskF, maskFL;
+
+    mz = _mm_setzero_si128();
+    m1 = _mm_loadu_si128((__m128i*)(pbuf)); // load first 8 elements
+
+    maskF = _mm_cmpeq_epi32(mz, mz); // set all FF
+    maskFL = _mm_slli_si128(maskF, 4 * 2); // byle shift to make [0000 FFFF] 
+    int shiftL = (64 - (unroll_factor - size) * 16);
+    maskFL = _mm_slli_epi64(maskFL, shiftL); // additional bit shift to  [0000 00FF]
+
+    m1 = _mm_andnot_si128(maskFL, m1); // m1 = (~mask) & m1
+    m1 = _mm_or_si128(m1, maskFL);
+
+    __m128i mp = _mm_set1_epi16(pos);  // broadcast pos into all elements of a SIMD vector
+    __m128i  mge_mask = _mm_cmpeq_epi16(_mm_subs_epu16(mp, m1), mz); // unsigned m1 >= mp
+    int mi = _mm_movemask_epi8(mge_mask);  // collect flag bits
+    if (mi)
+    {
+        int bsr_i= bm::bit_scan_fwd(mi) >> 1;
+        return bsr_i;   // address of first one element (target)
+    }
+    if (size == 8)
+        return size;
+
+    // inspect the next lane with possible step back (to avoid over-read the block boundaries)
+    //   GCC gives a false warning for "- unroll_factor" here
+    const bm::gap_word_t* BMRESTRICT pbuf2 = pbuf + size - unroll_factor;
+    BM_ASSERT(pbuf2 > pbuf); // assert in place to make sure GCC warning is indeed false
+
+    m1 = _mm_loadu_si128((__m128i*)(pbuf2)); // load next elements (with possible overlap)
+    mge_mask = _mm_cmpeq_epi16(_mm_subs_epu16(mp, m1), mz); // m1 >= mp        
+    mi = _mm_movemask_epi8(mge_mask);
+    if (mi)
+    {
+        int bsr_i = bm::bit_scan_fwd(mi) >> 1;
+        return size - (unroll_factor - bsr_i);
+    }
+    return size;
+}
+#ifdef __GNUG__
+#pragma GCC diagnostic pop
+#endif
+
 
 } // namespace
 

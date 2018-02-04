@@ -536,9 +536,49 @@ template<typename T> unsigned gap_test(const T* buf, unsigned pos)
 template<typename T> 
 unsigned gap_test_unr(const T* buf, const unsigned pos)
 {
-#if defined(BMSSE42OPT)
     BM_ASSERT(pos < bm::gap_max_bits);
+#if defined(BMSSE2OPT)
+    unsigned start = 1;
+    unsigned end = 1 + ((*buf) >> 3);
+    unsigned dsize = end - start;
 
+    if (dsize < 17)
+    {
+        start = bm::sse2_gap_find(buf + 1, (bm::gap_word_t)pos, dsize);
+        unsigned res = ((*buf) & 1) ^ ((start) & 1);
+        BM_ASSERT(buf[start + 1] >= pos);
+        BM_ASSERT(buf[start] < pos || (start == 0));
+        BM_ASSERT(res == bm::gap_test(buf, pos));
+        return res;
+    }
+    unsigned arr_end = end;
+    while (start != end)
+    {
+        unsigned curr = (start + end) >> 1;
+        if (buf[curr] < pos)
+            start = curr + 1;
+        else
+            end = curr;
+
+        unsigned size = end - start;
+        if (size < 16)
+        {
+            size += (end != arr_end);
+            unsigned idx = bm::sse2_gap_find(buf + start, (bm::gap_word_t)pos, size);
+            start += idx;
+
+            BM_ASSERT(buf[start] >= pos);
+            BM_ASSERT(buf[start - 1] < pos || (start == 1));
+            break;
+        }
+    }
+
+    unsigned res = ((*buf) & 1) ^ ((--start) & 1);
+
+    BM_ASSERT(res == bm::gap_test(buf, pos));
+    return res;
+#endif
+#if defined(BMSSE42OPT)
     unsigned start = 1;
     unsigned end = 1 + ((*buf) >> 3);
     unsigned dsize = end - start;
@@ -547,13 +587,12 @@ unsigned gap_test_unr(const T* buf, const unsigned pos)
     {
         start = bm::sse4_gap_find(buf+1, (bm::gap_word_t)pos, dsize);
         unsigned res = ((*buf) & 1) ^ ((start) & 1);
-        BM_ASSERT(start != -1);
         BM_ASSERT(buf[start+1] >= pos);
         BM_ASSERT(buf[start] < pos || (start==0));
         BM_ASSERT(res == bm::gap_test(buf, pos));
         return res;
     }
-    else
+    unsigned arr_end = end;
     while (start != end)
     {
         unsigned curr = (start + end) >> 1;
@@ -561,6 +600,18 @@ unsigned gap_test_unr(const T* buf, const unsigned pos)
             start = curr + 1;
         else
             end = curr;
+
+        unsigned size = end - start;
+        if (size < 16)
+        {
+            size += (end != arr_end);
+            unsigned idx = bm::sse4_gap_find(buf + start, (bm::gap_word_t)pos, size);
+            start += idx;
+
+            BM_ASSERT(buf[start] >= pos);
+            BM_ASSERT(buf[start - 1] < pos || (start == 1));
+            break;
+        }
     }
     
     unsigned res = ((*buf) & 1) ^ ((--start) & 1);
@@ -784,12 +835,12 @@ template<typename T> unsigned gap_bit_count_unr(const T* buf)
         unsigned waves = (dsize-2) / unr_factor;
         pcurr = avx2_gap_sum_arr(pcurr, waves, &cnt);
     }
-    #elif defined(BMSSE42OPT)
+    #elif defined(BMSSE42OPT) || defined(BMSSE2OPT)
     if (dsize > 18)
     {
         const unsigned unr_factor = 16;
         unsigned waves = (dsize - 2) / unr_factor;
-        pcurr = sse4_gap_sum_arr(pcurr, waves, &cnt);
+        pcurr = sse2_gap_sum_arr(pcurr, waves, &cnt);
     }
     #else
     if (dsize > 10)

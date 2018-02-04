@@ -748,13 +748,30 @@ public:
 
             if (this->block_type_) // gap
             {
-                // use iterative increment for GAP block positioning
-                // TODO: optimization
                 this->position_ = nb * bm::set_block_size * 32;
-                search_in_gapblock();                
-                while (this->position_ != pos)
+                search_in_gapblock();
+                
+                if (this->position_ == pos)
                 {
-                    go_up();
+                    return *this;
+                }
+                this->position_ = pos;
+
+                gap_word_t* gptr = BMGAP_PTR(this->block_);
+                unsigned is_set;
+                unsigned gpos = bm::gap_bfind(gptr, nbit, &is_set);
+                BM_ASSERT(is_set);
+                
+                bdescr->gap_.ptr = gptr + gpos;
+                if (gpos == 1)
+                {
+                    bdescr->gap_.gap_len = gptr[gpos] - bm::gap_word_t(nbit - 1);
+                }
+                else
+                {
+                    bm::gap_word_t interval = gptr[gpos] - gptr[gpos - 1];
+                    bm::gap_word_t interval2 = (bm::gap_word_t)(nbit - gptr[gpos - 1]);
+                    bdescr->gap_.gap_len = interval - interval2 + 1;
                 }
             }
             else // bit
@@ -952,12 +969,22 @@ public:
         {}
     };
     
-    /*! @brief structure for bit counts per block.
+    /*! @brief structure for bit counts per block (prefix sum)
         Structure is used to accelerate bit range scans
     */
     struct blocks_count
     {
         unsigned  BM_VECT_ALIGN cnt[bm::set_total_blocks] BM_VECT_ALIGN_ATTR;
+        
+        blocks_count() {}
+        blocks_count(const blocks_count& bc)
+        {
+            copy_from(bc);
+        }
+        void copy_from(const blocks_count& bc)
+        {
+            ::memcpy(this->cnt, bc.cnt, sizeof(this->cnt));
+        }
     };
 
 public:
@@ -1993,32 +2020,37 @@ template<typename Alloc>
 bm::id_t bvector<Alloc>::count_to(bm::id_t right,
                                   const blocks_count&  blocks_cnt) const
 {
-    unsigned nblock_right = unsigned(right >>  bm::set_block_shift);
-    if (nblock_right == 0)
-        return count_range(0, right);
-
     if (!blockman_.is_init())
         return 0;
-    
+
+    unsigned nblock_right = unsigned(right >>  bm::set_block_shift);    
     unsigned nbit_right = unsigned(right & bm::set_block_mask);
 
     // running count of all blocks before target
-    bm::id_t cnt = blocks_cnt.cnt[nblock_right-1];
+    //
+    bm::id_t cnt = nblock_right ? blocks_cnt.cnt[nblock_right-1] : 0;
 
-    const bm::word_t* block = blockman_.get_block(nblock_right);
+    const bm::word_t* block = blockman_.get_block_ptr(nblock_right);
     if (!block)
         return cnt;
-    bool gap = BM_IS_GAP(block);
 
-    if (gap)
+    if (block == FULL_BLOCK_FAKE_ADDR) 
     {
-        unsigned c = bm::gap_bit_count_to(BMGAP_PTR(block),(gap_word_t)nbit_right);
-        BM_ASSERT(c == bm::gap_bit_count_range(BMGAP_PTR(block), (gap_word_t)0, (gap_word_t)nbit_right));
-        cnt += c;
+        cnt += nbit_right + 1;
     }
     else
     {
-        cnt += bm::bit_block_calc_count_to(block, nbit_right);
+        bool gap = BM_IS_GAP(block);
+        if (gap)
+        {
+            unsigned c = bm::gap_bit_count_to(BMGAP_PTR(block), (gap_word_t)nbit_right);
+            BM_ASSERT(c == bm::gap_bit_count_range(BMGAP_PTR(block), (gap_word_t)0, (gap_word_t)nbit_right));
+            cnt += c;
+        }
+        else
+        {
+            cnt += bm::bit_block_calc_count_to(block, nbit_right);
+        }
     }
 
     return cnt;
@@ -2154,34 +2186,25 @@ bool bvector<Alloc>::get_bit(bm::id_t n) const
 {    
     BM_ASSERT(n < size_);
 
-    if (!blockman_.is_init())
-        return false;
-
     // calculate logical block number
     unsigned nblock = unsigned(n >>  bm::set_block_shift); 
-
-    const bm::word_t* block = blockman_.get_block(nblock);
-    if (IS_FULL_BLOCK(block))
-        return true;
+    const bm::word_t* block = blockman_.get_block_ptr(nblock); // get unsanitized block ptr
 
     if (block)
     {
         // calculate word number in block and bit
         unsigned nbit = unsigned(n & bm::set_block_mask); 
-        unsigned is_set;
-
         if (BM_IS_GAP(block))
         {
-            is_set = gap_test_unr(BMGAP_PTR(block), nbit);
+            return gap_test_unr(BMGAP_PTR(block), nbit);
         }
         else 
         {
-            unsigned nword  = unsigned(nbit >> bm::set_word_shift); 
-            nbit &= bm::set_word_mask;
-
-            is_set = (block[nword] & (((bm::word_t)1) << nbit));
+            block = BLOCK_ADDR_SAN(block); // FULL BLOCK ADDR check
+            unsigned nword  = unsigned(nbit >> bm::set_word_shift);
+            unsigned w = block[nword];
+            return w & (1u << (nbit & bm::set_word_mask));
         }
-        return is_set != 0;
     }
     return false;
 }

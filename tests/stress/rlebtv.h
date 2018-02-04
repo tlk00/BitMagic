@@ -33,13 +33,14 @@ For more information please visit:  http://bitmagic.io
 
 #include <cassert>
 
-/*
+/**
     GAP vector is designed to be very small.
     The size of buffer is fixed 128 short values.
     First word is a start flag.
     Used for debugging purposes.
-*/
 
+    \internal
+*/
 class gap_vector
 {
 public:
@@ -200,12 +201,15 @@ inline void gap_vector::control() const
 
 inline int gap_vector::is_bit_true(unsigned pos) const
 {
-    return bm::gap_test(m_buf, pos);
+    int r1 = bm::gap_test(m_buf, pos);
+    int r2 = bm::gap_test_unr(m_buf, pos);
+    assert(r1 == r2);
+    return r2;
 }
 
 inline int gap_vector::test(unsigned pos) const
 {
-    return bm::gap_test(m_buf, pos);
+    return is_bit_true(pos);
 }
 
 
