@@ -82,17 +82,21 @@ class decoder_base
 {
 public:
     decoder_base(const unsigned char* buf) { buf_ = start_ = buf; }
+    
     /// Reads character from the decoding buffer. 
-    BMFORCEINLINE unsigned char get_8() { return *buf_++; }
+    unsigned char get_8() { return *buf_++; }
+    
     /// Returns size of the current decoding stream.
-    BMFORCEINLINE 
     unsigned size() const { return (unsigned)(buf_ - start_); }
+    
     /// change current position
-    BMFORCEINLINE
     void seek(int delta) { buf_ += delta; }
     
     /// read bytes from the decode buffer
     void memcpy(unsigned char* dst, size_t count);
+    
+    /// Return current buffer pointer
+    const unsigned char* get_pos() const { return buf_; }
 protected:
    const unsigned char*   buf_;
    const unsigned char*   start_;

@@ -253,10 +253,19 @@ public:
     /** Get address resolver
     */
     const address_resolver_type& resolver() const { return addr_res_; }
-    
+
+    /** Get address resolver
+    */
+    address_resolver_type& resolver() { return addr_res_; }
+
     /** size of collection
     */
     size_t size() const { return dense_vect_.size(); }
+    
+    /** return dense container for direct access
+        (this should be treated as an internal function designed for deserialization)
+    */
+    container_type& container() { return dense_vect_; }
     
 protected:
     void throw_range_error(const char* err_msg) const;
