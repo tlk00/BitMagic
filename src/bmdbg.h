@@ -683,6 +683,37 @@ void print_svector_stat(const SV& svect, bool print_sim = false)
     }
 }
 
+// save compressed collection to disk
+//
+template<class CBC>
+int file_save_compressed_collection(const CBC& cbc, const std::string& fname, size_t* blob_size = 0)
+{
+    bm::compressed_collection_serializer<CBC > cbcs;
+    typename CBC::buffer_type sbuf;
+
+    cbcs.serialize(cbc, sbuf);
+
+    std::ofstream fout(fname.c_str(), std::ios::binary);
+    if (!fout.good())
+    {
+        return -1;
+    }
+    const char* buf = (char*)sbuf.buf();
+    fout.write(buf, sbuf.size());
+    if (!fout.good())
+    {
+        return -1;
+    }
+
+    fout.close();
+
+    if (blob_size)
+    {
+        *blob_size = sbuf.size();
+    }
+    return 0;
+}
+
 // save sparse_vector dump to disk
 //
 template<class SV>
