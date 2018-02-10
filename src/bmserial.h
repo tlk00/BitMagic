@@ -58,6 +58,7 @@ For more information please visit:  http://bitmagic.io
 #include "bmtrans.h"
 #include "bmalgo_impl.h"
 #include "bmutil.h"
+#include "bmbuffer.h"
 
 //#include "bmgamma.h"
 
@@ -154,30 +155,30 @@ template<class BV>
 class serializer
 {
 public:
-    typedef BV                                         bvector_type;
-    typedef typename bvector_type::allocator_type      allocator_type;
-    typedef typename bvector_type::blocks_manager_type blocks_manager_type;
-    typedef typename bvector_type::statistics          statistics_type;
+    typedef BV                                                bvector_type;
+    typedef typename bvector_type::allocator_type             allocator_type;
+    typedef typename bvector_type::blocks_manager_type        blocks_manager_type;
+    typedef typename bvector_type::statistics                 statistics_type;
     
     /// Helper class to store serialized memory buffers
     ///
-    class buffer
+    class buffer : public byte_buffer_ptr
     {
     public:
-        typedef typename BV::allocator_type      allocator_type;
+        typedef typename BV::allocator_type      bv_allocator_type;
+        typedef typename bv_allocator_type::block_allocator_type allocator_type;
+        
     public:
-        buffer()
-            : byte_buf_(0), size_(0), capacity_(0), alloc_factor_(0)
+        buffer() : capacity_(0), alloc_factor_(0)
         {}
         
         buffer(size_t capacity)
-            : byte_buf_(0), size_(0), capacity_(0), alloc_factor_(0)
+            : capacity_(0), alloc_factor_(0)
         {
             allocate(capacity);
         }
         
         buffer(const buffer& buf)
-            : alloc_(buf.alloc_), byte_buf_(0)
         {
             if (buf.byte_buf_)
             {
@@ -185,6 +186,7 @@ public:
             }
             else
             {
+                byte_buf_ = 0;
                 size_ = capacity_ = 0;
             }
         }
@@ -192,11 +194,10 @@ public:
 #ifndef BM_NO_CXX11
         /// Move constructor
         buffer(buffer&& buf) BMNOEXEPT
-        : alloc_(buf.alloc_)
         {
             byte_buf_ = buf.byte_buf_;
             buf.byte_buf_ = 0;
-            size_ = buf.size_;
+            this->size_ = buf.size_;
             capacity_ = buf.capacity_;
             buf.size_ = buf.capacity_ = 0;
             alloc_factor_ = buf.alloc_factor_;
@@ -210,10 +211,9 @@ public:
 
             free_buffer();
             
-            alloc_ = buf.alloc_;
-            byte_buf_ = buf.byte_buf_;
+            this->byte_buf_ = buf.byte_buf_;
             buf.byte_buf_ = 0;
-            size_ = buf.size_;
+            this->size_ = buf.size_;
             capacity_ = buf.capacity_;
             alloc_factor_ = buf.alloc_factor_;
             return *this;
@@ -243,7 +243,7 @@ public:
             byte_buf_ = buf.byte_buf_;
             buf.byte_buf_ = btmp;
             
-            bm::xor_swap(size_, buf.size_);
+            bm::xor_swap(this->size_, buf.size_);
             bm::xor_swap(capacity_, buf.capacity_);
             bm::xor_swap(alloc_factor_, buf.alloc_factor_);
         }
@@ -252,7 +252,7 @@ public:
         void release()
         {
             free_buffer();
-            size_ = capacity_ = 0;
+            this->size_ = capacity_ = 0;
         }
 
         /// copy data from an external buffer
@@ -264,17 +264,9 @@ public:
                 allocate(size);
                 ::memcpy(byte_buf_, buf, size);
             }
-            size_ = size;
+            this->size_ = size;
         }
-
-        /// Get read access to buffer memory
-        const unsigned char* buf() const { return byte_buf_; }
         
-        /// Get write access to buffer memory
-        unsigned char* data() { return byte_buf_; }
-        
-        /// Get buffer size
-        size_t size() const { return size_; }
         
         /// Get buffer capacity
         size_t capacity() const { return capacity_; }
@@ -284,14 +276,14 @@ public:
         {
             if (new_size <= capacity_)
             {
-                size_ = new_size;
+                this->size_ = new_size;
                 return;
             }
             buffer tmp_buffer(new_size); // temp with new capacity
             tmp_buffer = *this;
             this->swap(tmp_buffer);
             
-            size_ = new_size;
+            this->size_ = new_size;
         }
         
         /// reserve new capacity (buffer content preserved)
@@ -309,7 +301,7 @@ public:
         void reinit(size_t new_capacity)
         {
             allocate(new_capacity);
-            size_ = 0;
+            this->size_ = 0;
         }
         
         /// reserve new capacity (buffer content NOT preserved, size set to 0)
@@ -319,14 +311,13 @@ public:
             reinit(new_capacity);
         }
 
-
         /// try to shrink the capacity to more optimal size
         void optimize()
         {
             if (!byte_buf_)
                 return;
-            size_t blocks = compute_blocks(size_);
-            if (blocks < alloc_factor_) // possible to shrink
+            size_t words = compute_words(size_);
+            if (words < alloc_factor_) // possible to shrink
             {
                 buffer tmp_buffer(*this);
                 this->swap(tmp_buffer);
@@ -334,15 +325,14 @@ public:
         }
         
     private:
+        /// Override from the base class
+        void set_buf(unsigned char* buf, size_t size);
     
-        /// compute number of blocks for the needed capacity
-        static size_t compute_blocks(size_t capacity)
+        /// compute number of words for the desired capacity
+        static size_t compute_words(size_t capacity)
         {
-            size_t block_size = (bm::set_block_size * sizeof(bm::word_t));
-            size_t blocks = (capacity / block_size);
-            if (capacity % block_size )
-                blocks++;
-            return blocks;
+            size_t words = (capacity / sizeof(bm::word_t))+1;
+            return words;
         }
         
         void allocate(size_t new_capacity)
@@ -352,30 +342,26 @@ public:
             
             free_buffer();
         
-            size_t blocks = compute_blocks(new_capacity);
+            size_t words = compute_words(new_capacity);
             
-            bm::word_t* p = alloc_.alloc_bit_block((unsigned)blocks);
-            byte_buf_ = (unsigned char*) p;
-            size_ = 0;
-            alloc_factor_ = (unsigned)blocks;
-            capacity_ = alloc_factor_ * (bm::set_block_size * sizeof(bm::word_t));
+            bm::word_t* p = allocator_type::allocate(words, 0);
+            this->byte_buf_ = (unsigned char*) p;
+            this->size_ = 0;
+            alloc_factor_ = (unsigned)words;
+            capacity_ = alloc_factor_ * sizeof(bm::word_t);
         }
-        
+
         void free_buffer()
         {
             if (byte_buf_)
             {
-                alloc_.free_bit_block((bm::word_t*)byte_buf_, alloc_factor_);
-                byte_buf_ = 0;
+                allocator_type::deallocate((bm::word_t*)byte_buf_, alloc_factor_);
+                this->byte_buf_ = 0;
             }
         }
-        
     private:
-        allocator_type alloc_;        ///< bit-vector allocator
-        unsigned char* byte_buf_;     ///< byte buffer allocated to hold data
-        size_t         size_;         ///< current buffer size
         size_t         capacity_;     ///< current capacity
-        unsigned       alloc_factor_; ///< number of blocks allocated for buffer
+        size_t         alloc_factor_; ///< number of blocks allocated for buffer
     };
     
 public:

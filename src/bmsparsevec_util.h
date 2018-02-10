@@ -262,6 +262,8 @@ public:
     */
     size_t size() const { return dense_vect_.size(); }
     
+    bool equals(const compressed_collection<Value, BV>& ccoll) const;
+    
     /** return dense container for direct access
         (this should be treated as an internal function designed for deserialization)
     */
@@ -609,6 +611,30 @@ void compressed_collection<Value, BV>::throw_range_error(const char* err_msg) co
 }
 
 //---------------------------------------------------------------------
+
+template<class Value, class BV>
+bool compressed_collection<Value, BV>::equals(
+                     const compressed_collection<Value, BV>& ccoll) const
+{
+    const bvector_type& bv = addr_res_.get_bvector();
+    const bvector_type& bva = ccoll.addr_res_.get_bvector();
+    
+    int cmp = bv.compare(bva);
+    if (cmp != 0)
+        return false;
+    BM_ASSERT(dense_vect_.size() == ccoll.dense_vect_.size());
+    for (size_t i = 0; i < dense_vect_.size(); ++i)
+    {
+        const value_type& v = dense_vect_[i];
+        const value_type& va = ccoll.dense_vect_[i];
+        if (!(v == va))
+            return false;
+    }
+    return true;
+}
+
+//---------------------------------------------------------------------
+
 
 } // namespace bm
 

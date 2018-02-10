@@ -338,7 +338,7 @@ public:
 public:
     int deserialize(CBC&                 buffer_coll,
                     const unsigned char* buf,
-                    bm::word_t*          temp_block);
+                    bm::word_t*          temp_block=0);
 };
 
 
@@ -435,6 +435,7 @@ void compressed_collection_serializer<CBC>::serialize(const CBC&    buffer_coll,
             enc.memcpy(cbuf.buf(), sz);
         } // for i
     }
+    buf.resize(enc.size());
     
 }
 
@@ -508,7 +509,9 @@ int compressed_collection_deserializer<CBC>::deserialize(
         } // for i
     }
     
-
+    buffer_coll.sync();
+    
+    return 0;
 }
 
 

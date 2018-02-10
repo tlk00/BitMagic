@@ -11007,6 +11007,41 @@ void BvectorBitForEachTest()
 }
 
 
+void FillTestBuffer(bm::compressed_buffer_collection<bvect>::buffer_type& buf)
+{
+    unsigned sz_factor = rand() % 10;
+    if (!sz_factor)
+        sz_factor = 1;
+    unsigned size = 65000 + (128000 / sz_factor);
+    
+    buf.resize(size);
+    unsigned char* data = buf.data();
+    
+    for (unsigned i = 0; i < size; ++i)
+    {
+        data[i] = (unsigned char)i;
+    }
+}
+
+void GenerateCompressedBufferCollection(bm::compressed_buffer_collection<bvect>& cbc)
+{
+    unsigned sz = rand() % 10000;
+    unsigned key = 0;
+    unsigned key_factor = rand() % 128;
+    if (!key_factor)
+        key_factor = 1;
+    for (unsigned i = 0; i < sz; ++i)
+    {
+        {
+            bm::compressed_buffer_collection<bvect>::buffer_type buf;
+            FillTestBuffer(buf);
+            cbc.move_buffer(key, buf);
+        }
+        key += key_factor;
+    } // for
+    cbc.sync();
+}
+
 void TestCompressedCollection()
 {
     cout << "------------------------ Compressed collection Test" << endl;
@@ -11091,6 +11126,55 @@ void TestCompressedCollection()
     
     cbcs.serialize(cbc, sbuf);
     assert(sbuf.size() > 0);
+    
+    bm::compressed_buffer_collection<bvect>::buffer_type sbuf2(sbuf);
+    bm::compressed_buffer_collection<bvect> cbc2;
+    compressed_collection_deserializer<compressed_buffer_collection<bvect> > cbcd;
+    cbcd.deserialize(cbc2, sbuf2.buf());
+    
+    if (!cbc2.equals(cbc))
+    {
+        std::cerr << "Compressed collection serialization error" << endl;
+        exit(1);
+    }
+
+    }
+    
+    {
+        cout << "Compressed buffer collection stress." << endl;
+        const unsigned test_count = 160;
+        for (unsigned i = 0; i < test_count; ++i)
+        {
+            bm::compressed_buffer_collection<bvect> cbc1;
+            bm::compressed_buffer_collection<bvect> cbc2;
+            
+            GenerateCompressedBufferCollection(cbc1);
+
+            bm::compressed_buffer_collection<bvect>::statistics st;
+            cbc1.calc_stat(&st);
+            
+            bm::compressed_collection_serializer<compressed_buffer_collection<bvect> > cbcs;
+            bm::compressed_buffer_collection<bvect>::buffer_type sbuf;
+    
+            cbcs.serialize(cbc1, sbuf);
+            
+            bm::compressed_buffer_collection<bvect>::buffer_type sbuf2(sbuf);
+            sbuf.release();
+
+            compressed_collection_deserializer<compressed_buffer_collection<bvect> > cbcd;
+            cbcd.deserialize(cbc2, sbuf2.buf());
+            
+            if (!cbc2.equals(cbc1))
+            {
+                std::cerr << "Compressed collection serialization error at step " << i << endl;
+                exit(1);
+            }
+
+
+            cout << "\r" << i << " of " << test_count << flush;
+        } // for
+        
+        cout << endl;
     }
     
     
