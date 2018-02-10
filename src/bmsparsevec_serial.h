@@ -477,7 +477,7 @@ int compressed_collection_deserializer<CBC>::deserialize(
     
     unsigned addr_cnt = bv.count();
     
-    dec.seek(addr_bv_size);
+    dec.seek((int)addr_bv_size);
     
     // -----------------------------------------
     // read buffer sizes
