@@ -240,7 +240,7 @@ public:
     
     /** perform memory optimizations/compression
     */
-    void optimize();
+    void optimize(bm::word_t* temp_block=0);
 
     /** Resolve key address (index) in the dense vector
     */
@@ -541,9 +541,9 @@ void compressed_collection<Value, BV>::sync()
 //---------------------------------------------------------------------
 
 template<class Value, class BV>
-void compressed_collection<Value, BV>::optimize()
+void compressed_collection<Value, BV>::optimize(bm::word_t* temp_block)
 {
-    addr_res_.optimize();
+    addr_res_.optimize(temp_block);
 }
 
 //---------------------------------------------------------------------

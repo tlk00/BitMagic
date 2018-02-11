@@ -447,7 +447,6 @@ struct link_matrix
 
     bm::bvector<> bv_11_flag;
 
-
     sparse_vector_u32  sv_11;      ///< vector of 1x1 relationships
     sparse_vector_u32  sv_offs;    ///< vector of location offsets
     sparse_vector_u32  sv_sz;      ///< vector of sizes
@@ -537,6 +536,8 @@ void link_matrix::optimize()
     sv_offs.optimize(tb, bm::bvector<>::opt_compress, &st);
     sv_sz.optimize(tb, bm::bvector<>::opt_compress, &st);
     sv_1m.optimize(tb, bm::bvector<>::opt_compress, &st);
+    
+    buf_coll.optimize(tb);
 }
 
 void link_matrix::print_stat() const

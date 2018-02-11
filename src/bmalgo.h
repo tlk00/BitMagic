@@ -47,6 +47,7 @@ namespace bm
     @param bv - bit vector to scan
     @param bit_functor (should support add_bits() and add_range() methods
  
+    \ingroup setalgo
 */
 template<class BV, class Func>
 void for_each_bit(const BV&    bv,
@@ -97,6 +98,8 @@ void for_each_bit(const BV&    bv,
     @param bv - bit vector to scan
     @param handle_ptr - handle to private memory used by callback
     @param callback_ptr - callback function
+ 
+    \ingroup setalgo
  
     @sa bit_visitor_callback_type
 */
