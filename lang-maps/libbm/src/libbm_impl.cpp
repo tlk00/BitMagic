@@ -43,7 +43,8 @@ typedef bm::bvector<libbm::standard_allocator>::enumerator TBM_bvector_enumerato
 #define SIMD_AVX2    0x40
 #define SIMD_AVX512F 0x80
 
-unsigned static x86_simd(void)
+static
+unsigned x86_simd(void)
 {
   unsigned eax, ebx, ecx, edx, flag = 0;
 #ifdef _MSC_VER
