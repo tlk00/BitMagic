@@ -45,6 +45,7 @@ set(CMAKE_CXX_FLAGS "${CMAKE_CXX_FLAGS} ${flags} ${optflags} ${bmoptf}")
 
 add_library(bm-static STATIC "libbm/src/libbm.cpp")
 add_library(bm-dll SHARED "libbm/src/libbm.cpp")
+add_library(bmcpuid SHARED "libbm/src/libbmcpuid.c")
 
 
 if ("${BMOPTFLAGS}" STREQUAL "BMSSE42OPT")

@@ -1,31 +1,19 @@
 /*
-Copyright(c) 2002-2017 Anatoliy Kuznetsov(anatoliy_kuznetsov at yahoo.com)
+Copyright(c) 2002-2018 Anatoliy Kuznetsov(anatoliy_kuznetsov at yahoo.com)
 
-Permission is hereby granted, free of charge, to any person
-obtaining a copy of this software and associated documentation
-files (the "Software"), to deal in the Software without restriction,
-including without limitation the rights to use, copy, modify, merge,
-publish, distribute, sublicense, and/or sell copies of the Software,
-and to permit persons to whom the Software is furnished to do so,
-subject to the following conditions:
+Licensed under the Apache License, Version 2.0 (the "License");
+you may not use this file except in compliance with the License.
+You may obtain a copy of the License at
 
-The above copyright notice and this permission notice shall be included
-in all copies or substantial portions of the Software.
+    http://www.apache.org/licenses/LICENSE-2.0
 
-THE SOFTWARE IS PROVIDED "AS IS", WITHOUT WARRANTY OF ANY KIND,
-EXPRESS OR IMPLIED, INCLUDING BUT NOT LIMITED TO THE WARRANTIES
-OF MERCHANTABILITY, FITNESS FOR A PARTICULAR PURPOSE AND NONINFRINGEMENT.
-IN NO EVENT SHALL THE AUTHORS OR COPYRIGHT HOLDERS BE LIABLE FOR ANY CLAIM,
-DAMAGES OR OTHER LIABILITY, WHETHER IN AN ACTION OF CONTRACT, TORT OR OTHERWISE,
-ARISING FROM, OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR
-OTHER DEALINGS IN THE SOFTWARE.
-
-You have to explicitly mention BitMagic project in any derivative product,
-its WEB Site, published materials, articles or any other work derived from this
-project or based on our code or know-how.
+Unless required by applicable law or agreed to in writing, software
+distributed under the License is distributed on an "AS IS" BASIS,
+WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
+See the License for the specific language governing permissions and
+limitations under the License.
 
 For more information please visit:  http://bitmagic.io
-
 */
 
 
@@ -11007,6 +10995,41 @@ void BvectorBitForEachTest()
 }
 
 
+void FillTestBuffer(bm::compressed_buffer_collection<bvect>::buffer_type& buf)
+{
+    unsigned sz_factor = rand() % 10;
+    if (!sz_factor)
+        sz_factor = 1;
+    unsigned size = 65000 + (128000 / sz_factor);
+    
+    buf.resize(size);
+    unsigned char* data = buf.data();
+    
+    for (unsigned i = 0; i < size; ++i)
+    {
+        data[i] = (unsigned char)i;
+    }
+}
+
+void GenerateCompressedBufferCollection(bm::compressed_buffer_collection<bvect>& cbc)
+{
+    unsigned sz = rand() % 10000;
+    unsigned key = 0;
+    unsigned key_factor = rand() % 128;
+    if (!key_factor)
+        key_factor = 1;
+    for (unsigned i = 0; i < sz; ++i)
+    {
+        {
+            bm::compressed_buffer_collection<bvect>::buffer_type buf;
+            FillTestBuffer(buf);
+            cbc.move_buffer(key, buf);
+        }
+        key += key_factor;
+    } // for
+    cbc.sync();
+}
+
 void TestCompressedCollection()
 {
     cout << "------------------------ Compressed collection Test" << endl;
@@ -11091,6 +11114,55 @@ void TestCompressedCollection()
     
     cbcs.serialize(cbc, sbuf);
     assert(sbuf.size() > 0);
+    
+    bm::compressed_buffer_collection<bvect>::buffer_type sbuf2(sbuf);
+    bm::compressed_buffer_collection<bvect> cbc2;
+    compressed_collection_deserializer<compressed_buffer_collection<bvect> > cbcd;
+    cbcd.deserialize(cbc2, sbuf2.buf());
+    
+    if (!cbc2.equals(cbc))
+    {
+        std::cerr << "Compressed collection serialization error" << endl;
+        exit(1);
+    }
+
+    }
+    
+    {
+        cout << "Compressed buffer collection stress." << endl;
+        const unsigned test_count = 160;
+        for (unsigned i = 0; i < test_count; ++i)
+        {
+            bm::compressed_buffer_collection<bvect> cbc1;
+            bm::compressed_buffer_collection<bvect> cbc2;
+            
+            GenerateCompressedBufferCollection(cbc1);
+
+            bm::compressed_buffer_collection<bvect>::statistics st;
+            cbc1.calc_stat(&st);
+            
+            bm::compressed_collection_serializer<compressed_buffer_collection<bvect> > cbcs;
+            bm::compressed_buffer_collection<bvect>::buffer_type sbuf;
+    
+            cbcs.serialize(cbc1, sbuf);
+            
+            bm::compressed_buffer_collection<bvect>::buffer_type sbuf2(sbuf);
+            sbuf.release();
+
+            compressed_collection_deserializer<compressed_buffer_collection<bvect> > cbcd;
+            cbcd.deserialize(cbc2, sbuf2.buf());
+            
+            if (!cbc2.equals(cbc1))
+            {
+                std::cerr << "Compressed collection serialization error at step " << i << endl;
+                exit(1);
+            }
+
+
+            cout << "\r" << i << " of " << test_count << flush;
+        } // for
+        
+        cout << endl;
     }
     
     

@@ -3,31 +3,19 @@
 /*
 Copyright(c) 2002-2017 Anatoliy Kuznetsov(anatoliy_kuznetsov at yahoo.com)
 
-Permission is hereby granted, free of charge, to any person
-obtaining a copy of this software and associated documentation
-files (the "Software"), to deal in the Software without restriction,
-including without limitation the rights to use, copy, modify, merge,
-publish, distribute, sublicense, and/or sell copies of the Software,
-and to permit persons to whom the Software is furnished to do so,
-subject to the following conditions:
+Licensed under the Apache License, Version 2.0 (the "License");
+you may not use this file except in compliance with the License.
+You may obtain a copy of the License at
 
-The above copyright notice and this permission notice shall be included
-in all copies or substantial portions of the Software.
+    http://www.apache.org/licenses/LICENSE-2.0
 
-THE SOFTWARE IS PROVIDED "AS IS", WITHOUT WARRANTY OF ANY KIND,
-EXPRESS OR IMPLIED, INCLUDING BUT NOT LIMITED TO THE WARRANTIES
-OF MERCHANTABILITY, FITNESS FOR A PARTICULAR PURPOSE AND NONINFRINGEMENT.
-IN NO EVENT SHALL THE AUTHORS OR COPYRIGHT HOLDERS BE LIABLE FOR ANY CLAIM,
-DAMAGES OR OTHER LIABILITY, WHETHER IN AN ACTION OF CONTRACT, TORT OR OTHERWISE,
-ARISING FROM, OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR
-OTHER DEALINGS IN THE SOFTWARE.
-
-You have to explicitly mention BitMagic project in any derivative product,
-its WEB Site, published materials, articles or any other work derived from this
-project or based on our code or know-how.
+Unless required by applicable law or agreed to in writing, software
+distributed under the License is distributed on an "AS IS" BASIS,
+WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
+See the License for the specific language governing permissions and
+limitations under the License.
 
 For more information please visit:  http://bitmagic.io
-
 */
 
 #include <memory.h>
@@ -240,7 +228,7 @@ public:
     
     /** perform memory optimizations/compression
     */
-    void optimize();
+    void optimize(bm::word_t* temp_block=0);
 
     /** Resolve key address (index) in the dense vector
     */
@@ -261,6 +249,8 @@ public:
     /** size of collection
     */
     size_t size() const { return dense_vect_.size(); }
+    
+    bool equals(const compressed_collection<Value, BV>& ccoll) const;
     
     /** return dense container for direct access
         (this should be treated as an internal function designed for deserialization)
@@ -539,9 +529,9 @@ void compressed_collection<Value, BV>::sync()
 //---------------------------------------------------------------------
 
 template<class Value, class BV>
-void compressed_collection<Value, BV>::optimize()
+void compressed_collection<Value, BV>::optimize(bm::word_t* temp_block)
 {
-    addr_res_.optimize();
+    addr_res_.optimize(temp_block);
 }
 
 //---------------------------------------------------------------------
@@ -609,6 +599,30 @@ void compressed_collection<Value, BV>::throw_range_error(const char* err_msg) co
 }
 
 //---------------------------------------------------------------------
+
+template<class Value, class BV>
+bool compressed_collection<Value, BV>::equals(
+                     const compressed_collection<Value, BV>& ccoll) const
+{
+    const bvector_type& bv = addr_res_.get_bvector();
+    const bvector_type& bva = ccoll.addr_res_.get_bvector();
+    
+    int cmp = bv.compare(bva);
+    if (cmp != 0)
+        return false;
+    BM_ASSERT(dense_vect_.size() == ccoll.dense_vect_.size());
+    for (size_t i = 0; i < dense_vect_.size(); ++i)
+    {
+        const value_type& v = dense_vect_[i];
+        const value_type& va = ccoll.dense_vect_[i];
+        if (!(v == va))
+            return false;
+    }
+    return true;
+}
+
+//---------------------------------------------------------------------
+
 
 } // namespace bm
 

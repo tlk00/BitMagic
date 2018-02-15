@@ -3,31 +3,19 @@
 /*
 Copyright(c) 2002-2017 Anatoliy Kuznetsov(anatoliy_kuznetsov at yahoo.com)
 
-Permission is hereby granted, free of charge, to any person
-obtaining a copy of this software and associated documentation
-files (the "Software"), to deal in the Software without restriction,
-including without limitation the rights to use, copy, modify, merge,
-publish, distribute, sublicense, and/or sell copies of the Software,
-and to permit persons to whom the Software is furnished to do so,
-subject to the following conditions:
+Licensed under the Apache License, Version 2.0 (the "License");
+you may not use this file except in compliance with the License.
+You may obtain a copy of the License at
 
-The above copyright notice and this permission notice shall be included
-in all copies or substantial portions of the Software.
+    http://www.apache.org/licenses/LICENSE-2.0
 
-THE SOFTWARE IS PROVIDED "AS IS", WITHOUT WARRANTY OF ANY KIND,
-EXPRESS OR IMPLIED, INCLUDING BUT NOT LIMITED TO THE WARRANTIES
-OF MERCHANTABILITY, FITNESS FOR A PARTICULAR PURPOSE AND NONINFRINGEMENT.
-IN NO EVENT SHALL THE AUTHORS OR COPYRIGHT HOLDERS BE LIABLE FOR ANY CLAIM,
-DAMAGES OR OTHER LIABILITY, WHETHER IN AN ACTION OF CONTRACT, TORT OR OTHERWISE,
-ARISING FROM, OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR
-OTHER DEALINGS IN THE SOFTWARE.
-
-You have to explicitly mention BitMagic project in any derivative product,
-its WEB Site, published materials, articles or any other work derived from this
-project or based on our code or know-how.
+Unless required by applicable law or agreed to in writing, software
+distributed under the License is distributed on an "AS IS" BASIS,
+WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
+See the License for the specific language governing permissions and
+limitations under the License.
 
 For more information please visit:  http://bitmagic.io
-
 */
 
 
@@ -58,6 +46,7 @@ For more information please visit:  http://bitmagic.io
 #include "bmtrans.h"
 #include "bmalgo_impl.h"
 #include "bmutil.h"
+#include "bmbuffer.h"
 
 //#include "bmgamma.h"
 
@@ -154,230 +143,12 @@ template<class BV>
 class serializer
 {
 public:
-    typedef BV                                         bvector_type;
-    typedef typename bvector_type::allocator_type      allocator_type;
-    typedef typename bvector_type::blocks_manager_type blocks_manager_type;
-    typedef typename bvector_type::statistics          statistics_type;
-    
-    /// Helper class to store serialized memory buffers
-    ///
-    class buffer
-    {
-    public:
-        typedef typename BV::allocator_type      allocator_type;
-    public:
-        buffer()
-            : byte_buf_(0), size_(0), capacity_(0), alloc_factor_(0)
-        {}
-        
-        buffer(size_t capacity)
-            : byte_buf_(0), size_(0), capacity_(0), alloc_factor_(0)
-        {
-            allocate(capacity);
-        }
-        
-        buffer(const buffer& buf)
-            : alloc_(buf.alloc_), byte_buf_(0)
-        {
-            if (buf.byte_buf_)
-            {
-                copy_from(buf.byte_buf_, buf.size_);
-            }
-            else
-            {
-                size_ = capacity_ = 0;
-            }
-        }
-        
-#ifndef BM_NO_CXX11
-        /// Move constructor
-        buffer(buffer&& buf) BMNOEXEPT
-        : alloc_(buf.alloc_)
-        {
-            byte_buf_ = buf.byte_buf_;
-            buf.byte_buf_ = 0;
-            size_ = buf.size_;
-            capacity_ = buf.capacity_;
-            buf.size_ = buf.capacity_ = 0;
-            alloc_factor_ = buf.alloc_factor_;
-        }
-        
-        /// Move assignment operator
-        buffer& operator=(buffer&& buf) BMNOEXEPT
-        {
-            if (this == &buf)
-                return *this;
+    typedef BV                                                bvector_type;
+    typedef typename bvector_type::allocator_type             allocator_type;
+    typedef typename bvector_type::blocks_manager_type        blocks_manager_type;
+    typedef typename bvector_type::statistics                 statistics_type;
 
-            free_buffer();
-            
-            alloc_ = buf.alloc_;
-            byte_buf_ = buf.byte_buf_;
-            buf.byte_buf_ = 0;
-            size_ = buf.size_;
-            capacity_ = buf.capacity_;
-            alloc_factor_ = buf.alloc_factor_;
-            return *this;
-        }
-#endif
-
-        buffer& operator=(const buffer& buf)
-        {
-            if (this == &buf)
-                return *this;
-
-            copy_from(buf.buf(), buf.size());
-            return *this;
-        }
-        
-        ~buffer()
-        {
-            free_buffer();
-        }
-        
-        /// swap content with another buffer
-        void swap(buffer& buf) BMNOEXEPT
-        {
-            if (this == &buf)
-                return;
-            unsigned char* btmp = byte_buf_;
-            byte_buf_ = buf.byte_buf_;
-            buf.byte_buf_ = btmp;
-            
-            bm::xor_swap(size_, buf.size_);
-            bm::xor_swap(capacity_, buf.capacity_);
-            bm::xor_swap(alloc_factor_, buf.alloc_factor_);
-        }
-
-        /// Free underlying memory 
-        void release()
-        {
-            free_buffer();
-            size_ = capacity_ = 0;
-        }
-
-        /// copy data from an external buffer
-        ///
-        void copy_from(const unsigned char* buf, size_t size)
-        {
-            if (size)
-            {
-                allocate(size);
-                ::memcpy(byte_buf_, buf, size);
-            }
-            size_ = size;
-        }
-
-        /// Get read access to buffer memory
-        const unsigned char* buf() const { return byte_buf_; }
-        
-        /// Get write access to buffer memory
-        unsigned char* data() { return byte_buf_; }
-        
-        /// Get buffer size
-        size_t size() const { return size_; }
-        
-        /// Get buffer capacity
-        size_t capacity() const { return capacity_; }
-
-        /// adjust current size (buffer content preserved)
-        void resize(size_t new_size)
-        {
-            if (new_size <= capacity_)
-            {
-                size_ = new_size;
-                return;
-            }
-            buffer tmp_buffer(new_size); // temp with new capacity
-            tmp_buffer = *this;
-            this->swap(tmp_buffer);
-            
-            size_ = new_size;
-        }
-        
-        /// reserve new capacity (buffer content preserved)
-        void reserve(size_t new_capacity)
-        {
-            if (new_capacity <= capacity_)
-                return;
-            
-            buffer tmp_buffer(new_capacity);
-            tmp_buffer = *this;
-            this->swap(tmp_buffer);
-        }
-        
-        /// reserve new capacity (buffer content NOT preserved, size set to 0)
-        void reinit(size_t new_capacity)
-        {
-            allocate(new_capacity);
-            size_ = 0;
-        }
-        
-        /// reserve new capacity (buffer content NOT preserved, size set to 0)
-        /// @sa reinit
-        void reallocate(size_t new_capacity)
-        {
-            reinit(new_capacity);
-        }
-
-
-        /// try to shrink the capacity to more optimal size
-        void optimize()
-        {
-            if (!byte_buf_)
-                return;
-            size_t blocks = compute_blocks(size_);
-            if (blocks < alloc_factor_) // possible to shrink
-            {
-                buffer tmp_buffer(*this);
-                this->swap(tmp_buffer);
-            }
-        }
-        
-    private:
-    
-        /// compute number of blocks for the needed capacity
-        static size_t compute_blocks(size_t capacity)
-        {
-            size_t block_size = (bm::set_block_size * sizeof(bm::word_t));
-            size_t blocks = (capacity / block_size);
-            if (capacity % block_size )
-                blocks++;
-            return blocks;
-        }
-        
-        void allocate(size_t new_capacity)
-        {
-            if (byte_buf_ && new_capacity <= capacity_)
-                return;
-            
-            free_buffer();
-        
-            size_t blocks = compute_blocks(new_capacity);
-            
-            bm::word_t* p = alloc_.alloc_bit_block((unsigned)blocks);
-            byte_buf_ = (unsigned char*) p;
-            size_ = 0;
-            alloc_factor_ = (unsigned)blocks;
-            capacity_ = alloc_factor_ * (bm::set_block_size * sizeof(bm::word_t));
-        }
-        
-        void free_buffer()
-        {
-            if (byte_buf_)
-            {
-                alloc_.free_bit_block((bm::word_t*)byte_buf_, alloc_factor_);
-                byte_buf_ = 0;
-            }
-        }
-        
-    private:
-        allocator_type alloc_;        ///< bit-vector allocator
-        unsigned char* byte_buf_;     ///< byte buffer allocated to hold data
-        size_t         size_;         ///< current buffer size
-        size_t         capacity_;     ///< current capacity
-        unsigned       alloc_factor_; ///< number of blocks allocated for buffer
-    };
-    
+    typedef byte_buffer<allocator_type> buffer;
 public:
     /**
         Construct serializer
@@ -529,7 +300,7 @@ protected:
 };
 
 /**
-    Class deserializer
+    Deserializer for bit-vector
     \ingroup bvserial 
 */
 template<class BV, class DEC>
@@ -538,7 +309,6 @@ class deserializer : protected deseriaizer_base<DEC>
 public:
     typedef BV bvector_type;
     typedef typename deseriaizer_base<DEC>::decoder_type decoder_type;
-//    typedef DEC decoder_type;
 public:
     deserializer() : temp_block_(0) {}
     
@@ -751,7 +521,7 @@ protected:
 };
 
 /**
-    Class deserializer, can perform logical operation on bit-vector and
+    Deserializer, performs logical operations between bit-vector and
     serialized bit-vector. This utility class potentially provides faster
     and/or more memory efficient operation than more conventional deserialization
     into memory bvector and then logical operation
