@@ -30,6 +30,8 @@ For more information please visit:  http://bitmagic.io
 
 */
 
+#include <vector>
+
 #include "bmsparsevec.h"
 #include "bmserial.h"
 #include "bmdef.h"
@@ -57,17 +59,16 @@ namespace bm
 template<class SV>
 struct sparse_vector_serial_layout
 {
-    typedef typename SV::value_type value_type;
+    typedef typename SV::value_type   value_type;
+    typedef typename SV::bvector_type bvector_type;
+    typedef typename serializer<bvector_type>::buffer buffer_type;
 
     sparse_vector_serial_layout()
-    : buffer_(0), capacity_(0), serialized_size_(0)
     {
     }
     
     ~sparse_vector_serial_layout()
     {
-        if (buffer_)
-            ::free(buffer_);
     }
     
     /*!
@@ -82,38 +83,23 @@ struct sparse_vector_serial_layout
             freemem();
             return 0;
         }
-        if (capacity <= capacity_)  // buffer reduction - avoid
-        {
-            serialized_size_ = 0;
-            return buffer_;
-        }
-        // buffer growth
-        freemem();
-        buffer_ = (unsigned char*) ::malloc(capacity);
-        if (buffer_)
-        {
-            capacity_ = capacity;
-        }
-        return buffer_;
+        buf_.reinit(capacity);
+        return buf_.data();
     }
     
     /// return current serialized size
-    size_t  size() const { return serialized_size_; }
+    size_t  size() const { return buf_.size(); /*return serialized_size_;*/ }
     
     /// Set new serialized size
-    void resize(size_t ssize) { serialized_size_ = ssize; }
+    void resize(size_t ssize) { buf_.resize(ssize); /*serialized_size_ = ssize;*/ }
     
     /// return serialization buffer capacity
-    size_t  capacity() const { return capacity_; }
+    size_t  capacity() const { return buf_.capacity(); /* return capacity_; */ }
     
     /// free memory
     void freemem()
     {
-        if (buffer_)
-        {
-            ::free(buffer_);
-            buffer_ = 0; capacity_ = serialized_size_ = 0;
-        }
+        buf_.release();
     }
     
     /// Set plain output pointer and size
@@ -130,16 +116,13 @@ struct sparse_vector_serial_layout
     }
     
     /// Return serializatio buffer pointer
-    const unsigned char* buf() const { return buffer_; }
+    const unsigned char* buf() const { return buf_.buf(); /*return buffer_;*/ }
     
 private:
     sparse_vector_serial_layout(const sparse_vector_serial_layout&);
     void operator=(const sparse_vector_serial_layout&);
 protected:
-    unsigned char* buffer_;                       ///< serialization buffer
-    size_t         capacity_;                     ///< buffer capacity
-    size_t         serialized_size_;              ///< serialized size
-
+    buffer_type    buf_;                              ///< serialization buffer
     unsigned char* plain_ptrs_[sizeof(value_type)*8]; ///< pointers on serialized bit-palins
     unsigned plane_size_[sizeof(value_type)*8];       ///< serialized plain size
 };
@@ -148,7 +131,7 @@ protected:
 
 
 /*!
-    \brief Serialize sparse vector into a buffer(s) structure
+    \brief Serialize sparse vector into a memory buffer(s) structure
  
  Serialization format:
  <pre>
@@ -174,37 +157,33 @@ protected:
     \param bv_serialization_flags - bit-vector serialization flags
     as defined in bm::serialization_flags    
     
-    \return "0" - success, "-1" memory allocation error
-    
     \ingroup svserial
     
     @sa serialization_flags
 */
 template<class SV>
-int sparse_vector_serialize(
+void sparse_vector_serialize(
                 const SV&                        sv,
                 sparse_vector_serial_layout<SV>& sv_layout,
-                bm::word_t*                      temp_block = 0,
-                unsigned                         bv_serialization_flags = 0)
+                bm::word_t*                      temp_block = 0)
 {
     typename SV::statistics sv_stat;
     sv.calc_stat(&sv_stat);
     
     unsigned char* buf = sv_layout.reserve(sv_stat.max_serialize_mem);
-    if (!buf) // memory allocation error
-    {
-        return -1;
-    }
     bm::encoder enc(buf, (unsigned)sv_layout.capacity());
     unsigned plains = sv.plains();
 
-    
     // calculate header size in bytes
     unsigned h_size = 1 + 1 + 1 + 1 + 8 + (8 * plains) + 4;
 
-    // ptr where bit-vectors start
+    // ptr where bit-plains start
     unsigned char* buf_ptr = buf + h_size;
 
+    bm::serializer<bm::bvector<> > bvs(temp_block);
+    bvs.gap_length_serialization(false);
+    bvs.set_compression_level(4);
+    
     unsigned i;
     for (i = 0; i < plains; ++i)
     {
@@ -214,17 +193,20 @@ int sparse_vector_serialize(
             sv_layout.set_plain(i, 0, 0);
             continue;
         }
+        
         unsigned buf_size =
-            bm::serialize(*bv, buf_ptr, temp_block, bv_serialization_flags);
+            bvs.serialize(*bv, buf_ptr, sv_stat.max_serialize_mem);
+        
         sv_layout.set_plain(i, buf_ptr, buf_size);
         buf_ptr += buf_size;
+        sv_stat.max_serialize_mem -= buf_size;
         
     } // for i
     
     sv_layout.resize(buf_ptr - buf);
     
     
-    // save header
+    // save the header
     ByteOrder bo = globals<true>::byte_order();
     
     enc.put_8('B');
@@ -244,8 +226,6 @@ int sparse_vector_serialize(
         size_t offset = p - buf;
         enc.put_64(offset);
     }
-
-    return 0;
 }
 
 // -------------------------------------------------------------------------
@@ -255,6 +235,9 @@ int sparse_vector_serialize(
     \param sv         - target sparse vector
     \param buf        - source memory buffer
     \param temp_block - temporary block buffer to avoid re-allocations
+ 
+    \return error non-zero codes means failure
+ 
     \ingroup svector
 */
 template<class SV>
@@ -265,7 +248,7 @@ int sparse_vector_deserialize(SV& sv,
     typedef typename SV::bvector_type   bvector_type;
 
     // TODO: implement correct processing of byte-order corect deserialization
-//    ByteOrder bo_current = globals<true>::byte_order();
+    //    ByteOrder bo_current = globals<true>::byte_order();
 
     bm::decoder dec(buf);
     unsigned char h1 = dec.get_8();
@@ -319,8 +302,216 @@ int sparse_vector_deserialize(SV& sv,
 
 // -------------------------------------------------------------------------
 
-
+/**
+    Seriaizer for compressed collections
+*/
+template<class CBC>
+class compressed_collection_serializer
+{
+public:
+    typedef CBC                                  compressed_collection_type;
+    typedef typename CBC::bvector_type           bvector_type;
+    typedef typename CBC::buffer_type            buffer_type;
+    typedef typename CBC::statistics             statistics_type;
+    typedef typename CBC::address_resolver_type  address_resolver_type;
     
+public:
+    void serialize(const CBC&    buffer_coll,
+                   buffer_type&  buf,
+                   bm::word_t*   temp_block = 0);
+};
+
+/**
+    Deseriaizer for compressed collections
+*/
+template<class CBC>
+class compressed_collection_deserializer
+{
+public:
+    typedef CBC                                  compressed_collection_type;
+    typedef typename CBC::bvector_type           bvector_type;
+    typedef typename CBC::buffer_type            buffer_type;
+    typedef typename CBC::statistics             statistics_type;
+    typedef typename CBC::address_resolver_type  address_resolver_type;
+    typedef typename CBC::container_type         container_type;
+
+public:
+    int deserialize(CBC&                 buffer_coll,
+                    const unsigned char* buf,
+                    bm::word_t*          temp_block);
+};
+
+
+// -------------------------------------------------------------------------
+
+/**
+    \brief Serialize compressed collection into memory buffer
+
+Serialization format:
+
+
+<pre>
+ | MAGIC_HEADER | ADDRESS_BITVECTROR | LIST_OF_BUFFER_SIZES | BUFFER(s)
+ 
+   MAGIC_HEADER:
+   BYTE+BYTE: Magic-signature 'BM'
+   BYTE : Byte order ( 0 - Big Endian, 1 - Little Endian)
+ 
+   ADDRESS_BITVECTROR:
+   INT64: address bit-vector size
+   <memblock>: serialized address bit-vector
+ 
+   LIST_OF_BUFFER_SIZES:
+   INT64 - buffer sizes count
+   INT32 - buffer size 0
+   INT32 - buffer size 1
+   ...
+ 
+   BUFFERS:
+   <memblock>: block0
+   <memblock>: block1
+   ...
+ 
+</pre>
+*/
+
+template<class CBC>
+void compressed_collection_serializer<CBC>::serialize(const CBC&    buffer_coll,
+                                                      buffer_type&  buf,
+                                                      bm::word_t*   temp_block)
+{
+    statistics_type st;
+    buffer_coll.calc_stat(&st);
+    
+    buf.resize(st.max_serialize_mem);
+    
+    // ptr where bit-plains start
+    unsigned char* buf_ptr = buf.data();
+    
+    bm::encoder enc(buf.data(), buf.capacity());
+    ByteOrder bo = globals<true>::byte_order();
+    enc.put_8('B');
+    enc.put_8('C');
+    enc.put_8((unsigned char)bo);
+    
+    unsigned char* mbuf1 = enc.get_pos(); // bookmark position
+    enc.put_64(0);  // address vector size (reservation)
+
+    buf_ptr = enc.get_pos();
+
+    const address_resolver_type& addr_res = buffer_coll.resolver();
+    const bvector_type& bv = addr_res.get_bvector();
+    {
+        bm::serializer<bvector_type > bvs(temp_block);
+        bvs.gap_length_serialization(false);
+        bvs.set_compression_level(4);
+
+        size_t addr_bv_size = bvs.serialize(bv, buf_ptr, buf.size());
+        buf_ptr += addr_bv_size;
+
+        enc.set_pos(mbuf1); // rewind to bookmark
+        enc.put_64(addr_bv_size); // save the address vector size
+    }
+    enc.set_pos(buf_ptr); // restore stream position
+    size_t coll_size = buffer_coll.size();
+    
+    enc.put_64(coll_size);
+    
+    // pass 1 (save buffer sizes)
+    {
+        for (unsigned i = 0; i < buffer_coll.size(); ++i)
+        {
+            const buffer_type& cbuf = buffer_coll.get(i);
+            unsigned sz = (unsigned)cbuf.size();
+            enc.put_32(sz);
+        } // for i
+    }
+    // pass 2 (save buffers)
+    {
+        for (unsigned i = 0; i < buffer_coll.size(); ++i)
+        {
+            const buffer_type& cbuf = buffer_coll.get(i);
+            unsigned sz = (unsigned)cbuf.size();
+            enc.memcpy(cbuf.buf(), sz);
+        } // for i
+    }
+    
+}
+
+// -------------------------------------------------------------------------
+template<class CBC>
+int compressed_collection_deserializer<CBC>::deserialize(
+                                CBC&                 buffer_coll,
+                                const unsigned char* buf,
+                                bm::word_t*          temp_block)
+{
+    // TODO: implement correct processing of byte-order corect deserialization
+    //    ByteOrder bo_current = globals<true>::byte_order();
+    
+    bm::decoder dec(buf);
+    unsigned char h1 = dec.get_8();
+    unsigned char h2 = dec.get_8();
+
+    BM_ASSERT(h1 == 'B' && h2 == 'C');
+    if (h1 != 'B' && h2 != 'C')  // no magic header? issue...
+    {
+        return -1;
+    }
+    //unsigned char bv_bo =
+        dec.get_8();
+
+    // -----------------------------------------
+    // restore address resolver
+    //
+    bm::id64_t addr_bv_size = dec.get_64();
+    
+    const unsigned char* bv_buf_ptr = dec.get_pos();
+    
+    address_resolver_type& addr_res = buffer_coll.resolver();
+    bvector_type& bv = addr_res.get_bvector();
+    bv.clear();
+    
+    bm::deserialize(bv, bv_buf_ptr, temp_block);
+    addr_res.sync();
+    
+    unsigned addr_cnt = bv.count();
+    
+    dec.seek(addr_bv_size);
+    
+    // -----------------------------------------
+    // read buffer sizes
+    //
+    bm::id64_t coll_size = dec.get_64();
+    if (coll_size != addr_cnt)
+    {
+        return -2; // buffer size collection does not match address vector
+    }
+    
+    std::vector<unsigned> buf_size_vec(coll_size);
+    {
+        for (unsigned i = 0; i < coll_size; ++i)
+        {
+            unsigned sz = dec.get_32();
+            buf_size_vec[i] = sz;
+        } // for i
+    }
+
+    {
+        container_type& buf_vect = buffer_coll.container();
+        buf_vect.resize(coll_size);
+        for (unsigned i = 0; i < coll_size; ++i)
+        {
+            unsigned sz = buf_size_vec[i];
+            buffer_type& b = buf_vect.at(i);
+            b.resize(sz);
+            dec.memcpy(b.data(), sz);
+        } // for i
+    }
+    
+
+}
+
+
 } // namespace bm
 
 #include "bmundef.h"

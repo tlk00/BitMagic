@@ -43,6 +43,11 @@ MacOS
 
 XCODE - project files are available via CMAKE generation
 
+=================================================================================
+
+API documentation and examples:
+http://www.bitmagic.io/apis.html
+
 
 Fine tuning and optimizations:
 ------------------------------
@@ -61,17 +66,44 @@ to explicitly disable use of CXX11 features for your build
 BM library includes some code optimized for 64-bit systems. This optimization 
 gets applied automatically.
 
-BM library contains hand tuned code for SIMD extensions SSE2 and SSE4.2
+BM library contains hand tuned code (intrinsics) for SIMD extensions SSE2, SSE4.2, AVX2.
 
-To turn on SSE2 optimization #define BMSSE2OPT 
-To turn on SSE4.2 optimization #define BMSSE42OPT. SSE42 optimization automatically
-assumes SSE2 as a subset of SSE4.2. (you don’t need to use both BMSSE2OPT and 
-BMSSE42OPT).You will need compiler supporting Intel SSE intrinsics.
-MSVC and GCC both has it.
+To turn on SSE2 optimization #define BMSSE2OPT in your build environment.
+To use SSE4.2  #define BMSSE42OPT (this enables hardware popcount via intrinsics).
+SSE42 optimization automatically assumes SSE2 as a subset of SSE4.2. 
+(you don’t need to use both BMSSE2OPT and BMSSE42OPT). 
+You will need compiler supporting Intel SIMD intrinsics (MSVC, GCC - are ok).
+
+To turn on AVX2 - #define BMAVX2OPT
+This will automatically enable AVX2 256-bit SIMD, popcount (SSE4.2) and other 
+compatible harware instructions.
 
 BM library does NOT support multiple code paths and runtime CPU identification.
 You have to build specifically for your target system or use default portable
 build.
+
+To correctly build for the target SIMD instruction set - please set correct 
+code generation flags for the build environment.
+
+BitMagic examples and tests can be build with GCC using cmd-line settings: 
+
+make BMOPTFLAGS=-DBMAVX2OPT rebuild
+or
+make BMOPTFLAGS=-DBMSSE42OPT rebuild
+
+It automatically applies the right set of compiler (GCC) flags for the target 
+build.
+
+CMAKE
+
+cd build
+cmake -DBMOPTFLAGS:STRING=BMSSE42OPT ..
+make
+
+OR
+
+cmake -DBMOPTFLAGS:STRING=BMAVX2OPT ..
+
 
 =================================================================================
 
@@ -96,14 +128,15 @@ to correct keyword.
 
 
 Bitcounting optimization can be turned ON by defining BMCOUNTOPT.
-Please note this optimization is not completely thread safe. 
+Please note this optimization is not completely thread safe and in general may not
+be needed on systems with SSE4.2 and up with available harware popcnt and vectrization. 
 bvector<> template keeps mutable variable inside it and update it 
-when it count() function is called. So it creates a certain chance that this
-function will be called from multiple threads and crash on updating this 
+when it count() function is called. It creates a certain chance that this
+function will be called from multiple threads and conflict/crash on updating this 
 variable.
 
 If BMCOUNTOPT is not defined (default) BM library should be considered thread
-safe - all const functions and methods are honored. 
+safe for all reads - all "const" on functions, methods, parameters are honored. 
 
 =================================================================================
 

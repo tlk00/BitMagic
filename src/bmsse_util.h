@@ -417,6 +417,38 @@ __m128i sse2_sub(__m128i a, __m128i b)
 }
 
 
+/*!
+    @brief Gap block population count (array sum) utility
+    @param pbuf - unrolled, aligned to 1-start GAP buffer
+    @param sse_vect_waves - number of SSE vector lines to process
+    @param sum - result acumulator
+    @return tail pointer
+
+    @internal
+*/
+inline
+const bm::gap_word_t* sse2_gap_sum_arr(
+    const bm::gap_word_t* BMRESTRICT pbuf,
+    unsigned sse_vect_waves,
+    unsigned* sum)
+{
+    __m128i xcnt = _mm_setzero_si128();
+
+    for (unsigned i = 0; i < sse_vect_waves; ++i)
+    {
+        __m128i mm0 = _mm_loadu_si128((__m128i*)(pbuf - 1));
+        __m128i mm1 = _mm_loadu_si128((__m128i*)(pbuf + 8 - 1));
+        __m128i mm_s2 = _mm_add_epi16(mm1, mm0);
+        xcnt = _mm_add_epi16(xcnt, mm_s2);
+        pbuf += 16;
+    }
+    xcnt = _mm_sub_epi16(_mm_srli_epi32(xcnt, 16), xcnt);
+
+    unsigned short* cnt8 = (unsigned short*)&xcnt;
+    *sum += (cnt8[0]) + (cnt8[2]) + (cnt8[4]) + (cnt8[6]);
+    return pbuf;
+}
+
 
 } // namespace
 

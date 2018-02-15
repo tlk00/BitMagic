@@ -28,10 +28,11 @@
     break; \
   } \
   default: \
+  { \
     jclass ex = (*env)->FindClass(env, "java/lang/RuntimeException"); \
     (*env)->ThrowNew(env, ex, "Unknown error in native call: " #x); \
     break; \
-  }
+  }}
 
 JNIEXPORT void JNICALL Java_io_bitmagic_core_BVector0_init0
   (JNIEnv *env, jobject obj, jlong ptr) {
@@ -380,7 +381,7 @@ JNIEXPORT void JNICALL Java_io_bitmagic_core_BVector0_deserialize0
   if (start == NULL) {
     jclass ex = (*env)->FindClass(env, "java/lang/OutOfMemoryError");
     (*env)->ThrowNew(env, ex, "Out of memory error in native call deserailize0()");
-    return 0;
+    return;
   }
   jsize size = (*env)->GetArrayLength(env, ba);
   exec(BM_bvector_deserialize((BM_BVHANDLE)ptr, (const char*)start, size));

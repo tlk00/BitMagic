@@ -1,13 +1,28 @@
 BitMagic Language mappings libraries.
 
-This section provides BitMagic for languages other than C++.
+
+This section provides BitMagic Library for C and Java JNI.
 
 libbm - C language library
-jni   - Java native interface mappings
-
-This experimental work in progress. (use at your own risk).
+jni   - Java native interface mappings (experimental)
 
 
 The build system is based on cmake. 
-Currently we managed to build lib without C++ runtime dependency, which makes language bindings feasible.
+Currently we managed to build bmlib without C++ runtime dependency, which makes language bindings easier.
+
+Linux build:
+
+cd build
+./cmake-gen.sh
+make
+
+cmake-geh.sh provides a default build instructions, please use it as a sample-template
+to build AVX2 and SSE4.2 packages.
+
+
+
+
+
+
+
 

@@ -11,6 +11,8 @@ BitMagic Library samples
 ./bvsample09 - simple binary distance functions and pipeline for complex binary distance formulas
 ./bvsample10 - extraction of a random subset for Monte Carlo simulations
 ./bvsample11 - how to compute population counts for ranges in bit-vector (cout_range(), count_to(), count_and())
+./bvsample12 - review and comparison of different methods to set and clear bits 
+./bvsample14 - serialization of bvector<>, logical operations on compressed BLOBs
 
 
 ./svsample01 - basic example of sparse_vector<> container

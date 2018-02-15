@@ -92,6 +92,7 @@
 #  endif
 #endif
 
+
 #ifndef BM_ASSERT
 
 # ifndef BM_NOASSERT
@@ -268,6 +269,12 @@
      bm::bit_count_table<true>::_count[(unsigned char)((w) >> 24)];
 
 
+#endif
+
+// throw redefinintion for compatibility with language wrappers
+//
+#ifndef BM_ASSERT_THROW
+#define BM_ASSERT_THROW(x, xerrcode)
 #endif
 
 #endif

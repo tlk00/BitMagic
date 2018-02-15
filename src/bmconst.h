@@ -140,7 +140,7 @@ template<bool T> struct _copyright
 };
 
 template<bool T> const char _copyright<T>::_p[] = 
-    "BitMagic C++ Library. v.3.9.0 (c) 2002-2017 Anatoliy Kuznetsov.";
+    "BitMagic C++ Library. v.3.10.1 (c) 2002-2017 Anatoliy Kuznetsov.";
 template<bool T> const unsigned _copyright<T>::_v[3] = {3, 9, 0};
 
 
@@ -280,6 +280,18 @@ template<bool T> struct gap_len_table_nl
 template<bool T>
 const gap_word_t gap_len_table_nl<T>::_len[bm::gap_levels] =
                 { 32, 128, 512, bm::gap_max_buff_len };
+
+/*!
+    @brief codes for supported SIMD optimizations
+    @internal
+*/
+enum simd_codes
+{
+    simd_none  = 0,   ///!< No SIMD or any other optimization
+    simd_sse2  = 1,   ///!< Intel SSE2
+    simd_sse42 = 2,   ///!< Intel SSE4.2
+    simd_avx2  = 5    ///!< Intel AVX2
+};
 
 
 

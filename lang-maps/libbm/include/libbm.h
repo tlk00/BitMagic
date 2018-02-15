@@ -35,13 +35,17 @@ For more information please visit:  http://bitmagic.io
 
 /* Error codes */
 
+/* General purpose codes */
 #define BM_OK (0)
 #define BM_ERR_BADALLOC (1)
 #define BM_ERR_BADARG (2)
 #define BM_ERR_RANGE (3)
-#define BM_ERR_DETACHED (4)
-#define BM_ERR_JVM_NOT_SUPPORTED (5)
-#define BM_ERR_OUT_OF_MEMORY (6)
+#define BM_ERR_CPU   (4)
+
+/* Error codes for Java/JNI incapsulation */
+#define BM_ERR_DETACHED (101)
+#define BM_ERR_JVM_NOT_SUPPORTED (102)
+#define BM_ERR_JVM_OUT_OF_MEMORY (103)
 
 /*
     error codes and messages
@@ -50,11 +54,24 @@ For more information please visit:  http://bitmagic.io
 #define BM_ERR_BADALLOC_MSG "BM-01: Allocation error"
 #define BM_ERR_BADARG_MSG   "BM-02: Invalid or missing function argument"
 #define BM_ERR_RANGE_MSG    "BM-03: Incorrect range or index"
-#define BM_ERR_DETACHED_MSG    "BM-04: Current thread no attached to JVM"
-#define BM_ERR_JVM_NOT_SUPPORTED_MSG    "BM-05: JVM version not supported"
-#define BM_ERR_OUT_OF_MEMORY_MSG    "BM-06: Out of memory error"
+#define BM_ERR_CPU_MSG      "BM-04: Incorrect CPU vectorization (SIMD) version"
+
+#define BM_ERR_DETACHED_MSG    "BM-101: Current thread no attached to JVM"
+#define BM_ERR_JVM_NOT_SUPPORTED_MSG    "BM-102: JVM version not supported"
+#define BM_ERR_JVM_OUT_OF_MEMORY_MSG    "BM-103: Out of memory error"
 
 #define BM_UNK_MSG          "BM-XX: Unknown error"
+
+
+/*
+    List of supported SIMD versions
+*/
+
+#define BM_SIMD_NO    0
+#define BM_SIMD_SSE2  1
+#define BM_SIMD_SSE42 2
+#define BM_SIMD_AVX2  5
+
 
 
 /* bit-vector handle */
@@ -96,6 +113,13 @@ int BM_init(void*);
 const char* BM_version(int* major, int* minor, int* patch);
 
 /**
+    return SIMD version used to build binaries
+    one of BM_SIMD_* defines
+*/
+int BM_simd_version(void);
+
+
+/**
     return error message by code
 */
 const char* BM_error_msg(int errcode);
@@ -111,6 +135,13 @@ const char* BM_error_msg(int errcode);
    (it is recommened to set size to maximum always and do not use size params)
 */
 int BM_bvector_construct(BM_BVHANDLE* h, unsigned int bv_max);
+
+/* init bvector handle to finilize construction
+    This step is optional, unless we need to call "_no_check()" functions, which bypass
+    certain checks
+*/
+int BM_bvector_init(BM_BVHANDLE h);
+
 
 /* construct bvector handle as a copy
    hfrom - another handle to copy from
@@ -147,11 +178,17 @@ int BM_bvector_swap(BM_BVHANDLE h1, BM_BVHANDLE h2);
 /* -------------------------------------------- */
 
 
-/* set bit 
+/* set bit to 1 or 0 
    i - index of a bit to set
    val - value (0 | 1)
 */
 int BM_bvector_set_bit(BM_BVHANDLE h, unsigned int i, int val);
+
+/* set bit to 1 without extra checks (faster).
+   Use of this function requires full initialization by BM_bvector_init(); 
+   i - index of a bit to set
+*/
+int BM_bvector_set_bit_no_check(BM_BVHANDLE h, unsigned int i);
 
 
 /* set bit only if current value equals the condition

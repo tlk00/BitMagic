@@ -154,8 +154,230 @@ template<class BV>
 class serializer
 {
 public:
-    typedef typename BV::allocator_type      allocator_type;
-    typedef typename BV::blocks_manager_type blocks_manager_type;
+    typedef BV                                         bvector_type;
+    typedef typename bvector_type::allocator_type      allocator_type;
+    typedef typename bvector_type::blocks_manager_type blocks_manager_type;
+    typedef typename bvector_type::statistics          statistics_type;
+    
+    /// Helper class to store serialized memory buffers
+    ///
+    class buffer
+    {
+    public:
+        typedef typename BV::allocator_type      allocator_type;
+    public:
+        buffer()
+            : byte_buf_(0), size_(0), capacity_(0), alloc_factor_(0)
+        {}
+        
+        buffer(size_t capacity)
+            : byte_buf_(0), size_(0), capacity_(0), alloc_factor_(0)
+        {
+            allocate(capacity);
+        }
+        
+        buffer(const buffer& buf)
+            : alloc_(buf.alloc_), byte_buf_(0)
+        {
+            if (buf.byte_buf_)
+            {
+                copy_from(buf.byte_buf_, buf.size_);
+            }
+            else
+            {
+                size_ = capacity_ = 0;
+            }
+        }
+        
+#ifndef BM_NO_CXX11
+        /// Move constructor
+        buffer(buffer&& buf) BMNOEXEPT
+        : alloc_(buf.alloc_)
+        {
+            byte_buf_ = buf.byte_buf_;
+            buf.byte_buf_ = 0;
+            size_ = buf.size_;
+            capacity_ = buf.capacity_;
+            buf.size_ = buf.capacity_ = 0;
+            alloc_factor_ = buf.alloc_factor_;
+        }
+        
+        /// Move assignment operator
+        buffer& operator=(buffer&& buf) BMNOEXEPT
+        {
+            if (this == &buf)
+                return *this;
+
+            free_buffer();
+            
+            alloc_ = buf.alloc_;
+            byte_buf_ = buf.byte_buf_;
+            buf.byte_buf_ = 0;
+            size_ = buf.size_;
+            capacity_ = buf.capacity_;
+            alloc_factor_ = buf.alloc_factor_;
+            return *this;
+        }
+#endif
+
+        buffer& operator=(const buffer& buf)
+        {
+            if (this == &buf)
+                return *this;
+
+            copy_from(buf.buf(), buf.size());
+            return *this;
+        }
+        
+        ~buffer()
+        {
+            free_buffer();
+        }
+        
+        /// swap content with another buffer
+        void swap(buffer& buf) BMNOEXEPT
+        {
+            if (this == &buf)
+                return;
+            unsigned char* btmp = byte_buf_;
+            byte_buf_ = buf.byte_buf_;
+            buf.byte_buf_ = btmp;
+            
+            bm::xor_swap(size_, buf.size_);
+            bm::xor_swap(capacity_, buf.capacity_);
+            bm::xor_swap(alloc_factor_, buf.alloc_factor_);
+        }
+
+        /// Free underlying memory 
+        void release()
+        {
+            free_buffer();
+            size_ = capacity_ = 0;
+        }
+
+        /// copy data from an external buffer
+        ///
+        void copy_from(const unsigned char* buf, size_t size)
+        {
+            if (size)
+            {
+                allocate(size);
+                ::memcpy(byte_buf_, buf, size);
+            }
+            size_ = size;
+        }
+
+        /// Get read access to buffer memory
+        const unsigned char* buf() const { return byte_buf_; }
+        
+        /// Get write access to buffer memory
+        unsigned char* data() { return byte_buf_; }
+        
+        /// Get buffer size
+        size_t size() const { return size_; }
+        
+        /// Get buffer capacity
+        size_t capacity() const { return capacity_; }
+
+        /// adjust current size (buffer content preserved)
+        void resize(size_t new_size)
+        {
+            if (new_size <= capacity_)
+            {
+                size_ = new_size;
+                return;
+            }
+            buffer tmp_buffer(new_size); // temp with new capacity
+            tmp_buffer = *this;
+            this->swap(tmp_buffer);
+            
+            size_ = new_size;
+        }
+        
+        /// reserve new capacity (buffer content preserved)
+        void reserve(size_t new_capacity)
+        {
+            if (new_capacity <= capacity_)
+                return;
+            
+            buffer tmp_buffer(new_capacity);
+            tmp_buffer = *this;
+            this->swap(tmp_buffer);
+        }
+        
+        /// reserve new capacity (buffer content NOT preserved, size set to 0)
+        void reinit(size_t new_capacity)
+        {
+            allocate(new_capacity);
+            size_ = 0;
+        }
+        
+        /// reserve new capacity (buffer content NOT preserved, size set to 0)
+        /// @sa reinit
+        void reallocate(size_t new_capacity)
+        {
+            reinit(new_capacity);
+        }
+
+
+        /// try to shrink the capacity to more optimal size
+        void optimize()
+        {
+            if (!byte_buf_)
+                return;
+            size_t blocks = compute_blocks(size_);
+            if (blocks < alloc_factor_) // possible to shrink
+            {
+                buffer tmp_buffer(*this);
+                this->swap(tmp_buffer);
+            }
+        }
+        
+    private:
+    
+        /// compute number of blocks for the needed capacity
+        static size_t compute_blocks(size_t capacity)
+        {
+            size_t block_size = (bm::set_block_size * sizeof(bm::word_t));
+            size_t blocks = (capacity / block_size);
+            if (capacity % block_size )
+                blocks++;
+            return blocks;
+        }
+        
+        void allocate(size_t new_capacity)
+        {
+            if (byte_buf_ && new_capacity <= capacity_)
+                return;
+            
+            free_buffer();
+        
+            size_t blocks = compute_blocks(new_capacity);
+            
+            bm::word_t* p = alloc_.alloc_bit_block((unsigned)blocks);
+            byte_buf_ = (unsigned char*) p;
+            size_ = 0;
+            alloc_factor_ = (unsigned)blocks;
+            capacity_ = alloc_factor_ * (bm::set_block_size * sizeof(bm::word_t));
+        }
+        
+        void free_buffer()
+        {
+            if (byte_buf_)
+            {
+                alloc_.free_bit_block((bm::word_t*)byte_buf_, alloc_factor_);
+                byte_buf_ = 0;
+            }
+        }
+        
+    private:
+        allocator_type alloc_;        ///< bit-vector allocator
+        unsigned char* byte_buf_;     ///< byte buffer allocated to hold data
+        size_t         size_;         ///< current buffer size
+        size_t         capacity_;     ///< current capacity
+        unsigned       alloc_factor_; ///< number of blocks allocated for buffer
+    };
+    
 public:
     /**
         Construct serializer
@@ -163,15 +385,21 @@ public:
         \param alloc - memory allocator
         \param temp_block - temporary block for various operations
                (if NULL it will be allocated and managed by serializer class)
+        Temp block is used as a scratch memory during serialization,
+        use of external temp block allows to avoid unnecessary re-allocations.
+     
+        Temp block attached is not owned by the class and NOT deallocated on
+        destruction.
     */
     serializer(const allocator_type&   alloc  = allocator_type(),
               bm::word_t*  temp_block = 0);
-              
+    
+    serializer(bm::word_t*  temp_block);
+
     ~serializer();
 
     /**
         Set compression level. Higher compression takes more time to process.
-
         @param clevel - compression level (0-4)
     */
     void set_compression_level(unsigned clevel);
@@ -197,6 +425,16 @@ public:
     */
     unsigned serialize(const BV& bv, 
                        unsigned char* buf, size_t buf_size);
+    
+    /**
+        Bitvector serilization into buffer object (it gets resized automatically)
+     
+        @param bv       - input bitvector
+        @param buf      - output buffer object
+        @param bv_stat  - input (optional) bit-vector statistics object
+                          if NULL, serizlize will compute statistics
+    */
+    void serialize(const BV& bv, typename serializer<BV>::buffer& buf, const statistics_type* bv_stat);
 
     
     /**
@@ -595,8 +833,27 @@ serializer<BV>::serializer(const allocator_type&   alloc,
         temp_block_ = temp_block;
         own_temp_block_ = false;
     }
-        
 }
+
+template<class BV>
+serializer<BV>::serializer(bm::word_t*    temp_block)
+: alloc_(allocator_type()),
+  gap_serial_(false),
+  byte_order_serial_(true),
+  compression_level_(4)
+{
+    if (temp_block == 0)
+    {
+        temp_block_ = alloc_.alloc_bit_block();
+        own_temp_block_ = true;
+    }
+    else
+    {
+        temp_block_ = temp_block;
+        own_temp_block_ = false;
+    }
+}
+
 
 template<class BV>
 void serializer<BV>::set_compression_level(unsigned clevel)
@@ -855,6 +1112,27 @@ void serializer<BV>::encode_bit_interval(const bm::word_t* blk,
             i = j - 1;
         }
     }
+}
+
+template<class BV>
+void serializer<BV>::serialize(const BV& bv,
+                               typename serializer<BV>::buffer& buf,
+                               const statistics_type* bv_stat)
+{
+    statistics_type stat;
+    if (!bv_stat)
+    {
+        bv.calc_stat(&stat);
+        bv_stat = &stat;
+    }
+    
+    buf.resize(bv_stat->max_serialize_mem);
+    
+    unsigned slen = this->serialize(bv, buf.data(), buf.size());
+    BM_ASSERT(slen <= buf.size()); // or we have a BIG problem with prediction
+    BM_ASSERT(slen);
+    
+    buf.resize(slen);
 }
 
 
@@ -2061,17 +2339,6 @@ serial_stream_iterator<DEC>::get_bit_block_OR(bm::word_t*  dst_block,
             dst_block[i+3] |= decoder_.get_32();
         }
 #endif
-/*
-        bitblock_get_adapter ga(dst_block);
-        bit_OR<bm::word_t> func;
-        bitblock_store_adapter sa(dst_block);
-
-        bit_recomb(ga,
-                   decoder_,
-                   func,
-                   sa
-                  );
-*/
         }
 
         break;

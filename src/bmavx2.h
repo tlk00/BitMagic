@@ -727,39 +727,87 @@ inline
 void avx2_invert_arr(bm::word_t* BMRESTRICT first,
                      bm::word_t* BMRESTRICT last)
 {
-    __m256i ymm1 = _mm256_set_epi32(0xFFFFFFFF, 0xFFFFFFFF,
-                                    0xFFFFFFFF, 0xFFFFFFFF,
-                                    0xFFFFFFFF, 0xFFFFFFFF,
-                                    0xFFFFFFFF, 0xFFFFFFFF
-                                    );
+    __m256i maskz = _mm256_setzero_si256();
+    __m256i ymm1 = _mm256_cmpeq_epi64(maskz, maskz); // set all FF
+
     __m256i* wrd_ptr = (__m256i*)first;
     __m256i ymm0;
     do
     {
-        ymm0 = _mm256_load_si256(wrd_ptr);
+        ymm0 = _mm256_load_si256(wrd_ptr+0);
         ymm0 = _mm256_xor_si256(ymm0, ymm1);
-        _mm256_store_si256(wrd_ptr, ymm0);
-        ++wrd_ptr;
+        _mm256_store_si256(wrd_ptr+0, ymm0);
 
-        ymm0 = _mm256_load_si256(wrd_ptr);
+        ymm0 = _mm256_load_si256(wrd_ptr+1);
         ymm0 = _mm256_xor_si256(ymm0, ymm1);
-        _mm256_store_si256(wrd_ptr, ymm0);
-        ++wrd_ptr;
+        _mm256_store_si256(wrd_ptr+1, ymm0);
 
-        ymm0 = _mm256_load_si256(wrd_ptr);
+        ymm0 = _mm256_load_si256(wrd_ptr+2);
         ymm0 = _mm256_xor_si256(ymm0, ymm1);
-        _mm256_store_si256(wrd_ptr, ymm0);
-        ++wrd_ptr;
+        _mm256_store_si256(wrd_ptr+2, ymm0);
 
-        ymm0 = _mm256_load_si256(wrd_ptr);
+        ymm0 = _mm256_load_si256(wrd_ptr+3);
         ymm0 = _mm256_xor_si256(ymm0, ymm1);
-        _mm256_store_si256(wrd_ptr, ymm0);
-        ++wrd_ptr;
+        _mm256_store_si256(wrd_ptr+3, ymm0);
+        wrd_ptr += 4;
 
     } while (wrd_ptr < (__m256i*)last);
 }
 
+/*!
+    @brief check if block is all zero bits
+    @ingroup AVX2
+*/
+inline
+bool avx2_is_all_zero(const __m256i* BMRESTRICT block,
+                      const __m256i* BMRESTRICT block_end)
+{
+    __m256i maskz = _mm256_setzero_si256();
 
+    do
+    {
+        __m256i w0 = _mm256_load_si256(block+0);
+        __m256i w1 = _mm256_load_si256(block+1);
+        
+        __m256i w = _mm256_or_si256(w0, w1);
+        __m256i wcmp= _mm256_cmpeq_epi8(w, maskz); // (w0 | w1) == maskz
+        unsigned mask = _mm256_movemask_epi8(wcmp);
+        if (mask != ~0u)
+        {
+            return false;
+        }
+
+        block += 2;
+    
+    } while (block < block_end);
+    return true;
+}
+
+/*!
+    @brief check if block is all one bits
+    @ingroup AVX2
+*/
+inline
+bool avx2_is_all_one(const __m256i* BMRESTRICT block,
+                     const __m256i* BMRESTRICT block_end)
+{
+    __m256i maskz = _mm256_setzero_si256();
+    __m256i maskF = _mm256_cmpeq_epi8(maskz, maskz); // set FF
+    
+    do
+    {
+        __m256i w0 = _mm256_load_si256(block);
+        
+        __m256i wcmp= _mm256_cmpeq_epi8(w0, maskF); // (w0 == maskF)
+        unsigned mask = _mm256_movemask_epi8(wcmp);
+        if (mask != ~0u)
+        {
+            return false;
+        }
+        ++block;
+    } while (block < block_end);
+    return true;
+}
 
 
 
@@ -804,6 +852,12 @@ void avx2_invert_arr(bm::word_t* BMRESTRICT first,
 
 #define VECT_SET_BLOCK(dst, dst_end, value) \
     avx2_set_block((__m256i*) dst, (__m256i*) (dst_end), (value))
+
+#define VECT_IS_ZERO_BLOCK(dst, dst_end) \
+    avx2_is_all_zero((__m256i*) dst, (__m256i*) (dst_end))
+
+#define VECT_IS_ONE_BLOCK(dst, dst_end) \
+    avx2_is_all_one((__m256i*) dst, (__m256i*) (dst_end))
 
 
 // TODO: write better pipelined AVX2 implementation
@@ -1049,36 +1103,7 @@ bm::id_t sse42_bit_block_calc_count_change(const __m128i* BMRESTRICT block,
    return count;
 }
 
-#if(0)
-// initial version of sum_arr (keeping for the future reference)
-inline
-const bm::gap_word_t* avx2_gap_sum_arr(const bm::gap_word_t* BMRESTRICT pbuf,
-                                       unsigned vect_cnt,
-                                       unsigned* sum)
-{
-    __m256i xcnt = _mm256_setzero_si256();
 
-    for (unsigned i = 0; i < vect_cnt; ++i)
-    {
-        __m256i xmm1 = _mm256_loadu_si256((__m256i*)(pbuf));
-        __m256i xmm0 = _mm256_loadu_si256((__m256i*)(pbuf-1));
-        __m256i xmm_s1 = _mm256_sub_epi16(xmm1, xmm0);
-        
-        xmm1 = _mm256_loadu_si256((__m256i*)(pbuf+16));
-        xmm0 = _mm256_loadu_si256((__m256i*)(pbuf+16-1));
-        __m256i xmm_s2 = _mm256_sub_epi16(xmm1, xmm0);
-        
-        __m256i sum = _mm256_add_epi16(xmm_s1, xmm_s2);
-        xcnt = _mm256_add_epi16(xcnt, sum);
-        pbuf += 32;
-    }
-    unsigned short* cnt16 = (unsigned short*)&xcnt;
-    *sum += cnt16[0] + cnt16[2] + cnt16[4] + cnt16[6] +
-            cnt16[8] + cnt16[10] + cnt16[12] + cnt16[14];
-
-    return pbuf;
-}
-#endif
 
 /* @brief Gap block population count (array sum) utility
    @param pbuf - unrolled, aligned to 1-start GAP buffer
@@ -1089,9 +1114,9 @@ const bm::gap_word_t* avx2_gap_sum_arr(const bm::gap_word_t* BMRESTRICT pbuf,
    @internal
 */
 inline
-const bm::gap_word_t* avx2_gap_sum_arr(const bm::gap_word_t* BMRESTRICT pbuf,
-                                       unsigned                         avx_vect_waves,
-                                       unsigned*                        sum)
+const bm::gap_word_t* avx2_gap_sum_arr(const bm::gap_word_t*  pbuf,
+                                       unsigned               avx_vect_waves,
+                                       unsigned*              sum)
 {
     __m256i xcnt = _mm256_setzero_si256();
 
@@ -1100,10 +1125,10 @@ const bm::gap_word_t* avx2_gap_sum_arr(const bm::gap_word_t* BMRESTRICT pbuf,
     // overflow is not an issue here
     for (unsigned i = 0; i < avx_vect_waves; ++i)
     {
-        __m256i xmm0 = _mm256_loadu_si256((__m256i*)(pbuf - 1));
-        __m256i xmm1 = _mm256_loadu_si256((__m256i*)(pbuf + 16 - 1));
-        __m256i xmm_s2 = _mm256_add_epi16(xmm1, xmm0);
-        xcnt = _mm256_add_epi16(xcnt, xmm_s2);
+        __m256i ymm0 = _mm256_loadu_si256((__m256i*)(pbuf - 1));
+        __m256i ymm1 = _mm256_loadu_si256((__m256i*)(pbuf + 16 - 1));
+        __m256i ymm_s2 = _mm256_add_epi16(ymm1, ymm0);
+        xcnt = _mm256_add_epi16(xcnt, ymm_s2);
         pbuf += 32;
     }
     // odd minus even vector elements clears the result for 1111 blocks

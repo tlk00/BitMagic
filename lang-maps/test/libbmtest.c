@@ -61,12 +61,11 @@ int InitTest()
     const char* c;
     int major, minor, patch;
     const char* msg;
-    
+    int simd_version;
     
     
     res = BM_init(0);
     BMERR_CHECK(res, "BM_init()");
-    
     
     c = BM_version(&major, &minor, &patch);
     BMERR_CHECK(res, "BM_version()");
@@ -83,6 +82,27 @@ int InitTest()
     }
     
     printf ("%s\n", c);
+    
+    simd_version = BM_simd_version();
+    switch(simd_version)
+    {
+    case BM_SIMD_NO:
+        printf("BitMagic vanilla.\n");
+        break;
+    case BM_SIMD_SSE2:
+        printf("BitMagic for SSE2 \n");
+        break;
+    case BM_SIMD_SSE42:
+        printf("BitMagic for SSE4.2 \n");
+        break;
+    case BM_SIMD_AVX2:
+        printf("BitMagic for AVX2 \n");
+        break;
+    default:
+        printf("Unknown SIMD code \n");
+        break;
+    }
+
     return 0;
 }
 
@@ -254,14 +274,21 @@ static
 int SetGetTest()
 {
     int res = 0;
-    BM_BVHANDLE bmh = 0;
+    BM_BVHANDLE bmh1 = 0;
+    BM_BVHANDLE bmh2 = 0;
     int val;
     unsigned int count;
     
-    res = BM_bvector_construct(&bmh, 200);
+    res = BM_bvector_construct(&bmh1, 200);
     BMERR_CHECK(res, "BM_bvector_construct()");
-    
-    res = BM_bvector_any(bmh, &val);
+
+    res = BM_bvector_construct(&bmh2, 0);
+    BMERR_CHECK_GOTO(res, "BM_bvector_construct()", free_mem);
+
+    res = BM_bvector_init(bmh2);
+    BMERR_CHECK_GOTO(res, "BM_bvector_init()", free_mem);
+
+    res = BM_bvector_any(bmh1, &val);
     BMERR_CHECK_GOTO(res, "BM_bvector_any()", free_mem);
     if (val)
     {
@@ -269,10 +296,14 @@ int SetGetTest()
         res = 1; goto free_mem;
     }
     
-    res = BM_bvector_set_bit(bmh, 10, BM_TRUE);
+    res = BM_bvector_set_bit(bmh1, 10, BM_TRUE);
     BMERR_CHECK_GOTO(res, "BM_bvector_set_bit()", free_mem);
-    
-    res = BM_bvector_any(bmh, &val);
+
+    res = BM_bvector_set_bit_no_check(bmh2, 10);
+    BMERR_CHECK_GOTO(res, "BM_bvector_set_bit_no_check()", free_mem);
+
+
+    res = BM_bvector_any(bmh1, &val);
     BMERR_CHECK_GOTO(res, "BM_bvector_any()", free_mem);
     if (val==0)
     {
@@ -281,7 +312,7 @@ int SetGetTest()
     }
     
     
-    res = BM_bvector_get_bit(bmh, 10, &val);
+    res = BM_bvector_get_bit(bmh1, 10, &val);
     BMERR_CHECK_GOTO(res, "BM_bvector_get_bit()", free_mem);
     if (!val)
     {
@@ -289,7 +320,16 @@ int SetGetTest()
         res = 1; goto free_mem;
     }
 
-    res = BM_bvector_get_bit(bmh, 0, &val);
+    res = BM_bvector_get_bit(bmh2, 10, &val);
+    BMERR_CHECK_GOTO(res, "BM_bvector_get_bit()", free_mem);
+    if (!val)
+    {
+        printf("bvector get_bit incorrect value \n");
+        res = 1; goto free_mem;
+    }
+
+
+    res = BM_bvector_get_bit(bmh1, 0, &val);
     BMERR_CHECK_GOTO(res, "BM_bvector_get_bit()", free_mem);
     if (val)
     {
@@ -297,21 +337,21 @@ int SetGetTest()
         res = 1; goto free_mem;
     }
     
-    res = BM_bvector_flip_bit(bmh, 0);
+    res = BM_bvector_flip_bit(bmh1, 0);
     BMERR_CHECK_GOTO(res, "BM_bvector_flip_bit()", free_mem);
 
-    res = BM_bvector_get_bit(bmh, 0, &val);
+    res = BM_bvector_get_bit(bmh1, 0, &val);
     BMERR_CHECK_GOTO(res, "BM_bvector_get_bit()", free_mem);
     if (val == 0)
     {
         printf("bvector get_bit incorrect value \n");
         res = 1; goto free_mem;
     }
-    res = BM_bvector_flip_bit(bmh, 0);
+    res = BM_bvector_flip_bit(bmh1, 0);
     BMERR_CHECK_GOTO(res, "BM_bvector_flip_bit()", free_mem);
     
     
-    res = BM_bvector_count(bmh, &count);
+    res = BM_bvector_count(bmh1, &count);
     BMERR_CHECK_GOTO(res, "BM_bvector_count()", free_mem);
     if (count != 1)
     {
@@ -319,17 +359,17 @@ int SetGetTest()
         res = 1; goto free_mem;
     }
     
-    res = BM_bvector_set_bit(bmh, 10, BM_FALSE);
+    res = BM_bvector_set_bit(bmh1, 10, BM_FALSE);
     BMERR_CHECK_GOTO(res, "BM_bvector_set_bit()", free_mem);
     
-    res = BM_bvector_get_bit(bmh, 0, &val);
+    res = BM_bvector_get_bit(bmh1, 0, &val);
     BMERR_CHECK_GOTO(res, "BM_bvector_get_bit()", free_mem);
     if (val != BM_FALSE)
     {
         printf("bvector get_bit incorrect value %i\n", val);
         res = 1; goto free_mem;
     }
-    res = BM_bvector_count(bmh, &count);
+    res = BM_bvector_count(bmh1, &count);
     BMERR_CHECK_GOTO(res, "BM_bvector_count()", free_mem);
     if (count != 0)
     {
@@ -339,21 +379,21 @@ int SetGetTest()
     
     {
         int change;
-        res = BM_bvector_set_bit_conditional(bmh, 0, BM_TRUE, BM_FALSE, &change);
+        res = BM_bvector_set_bit_conditional(bmh1, 0, BM_TRUE, BM_FALSE, &change);
         BMERR_CHECK_GOTO(res, "BM_bvector_set_bit_conditional()", free_mem);
         if (!change)
         {
             printf("bvector set_bit_conditional error \n");
             res = 1; goto free_mem;
         }
-        res = BM_bvector_count(bmh, &count);
+        res = BM_bvector_count(bmh1, &count);
         BMERR_CHECK_GOTO(res, "BM_bvector_count()", free_mem);
         if (count != 1)
         {
             printf("incorrrect count %i \n", count);
             res = 1; goto free_mem;
         }
-        res = BM_bvector_set_bit_conditional(bmh, 0, BM_TRUE, BM_FALSE, &change);
+        res = BM_bvector_set_bit_conditional(bmh1, 0, BM_TRUE, BM_FALSE, &change);
         BMERR_CHECK_GOTO(res, "BM_bvector_set_bit_conditional()", free_mem);
         if (change)
         {
@@ -362,20 +402,20 @@ int SetGetTest()
         }
     }
     
-    res = BM_bvector_set(bmh);
+    res = BM_bvector_set(bmh1);
     BMERR_CHECK_GOTO(res, "BM_bvector_set()", free_mem);
 
-    res = BM_bvector_count(bmh, &count);
+    res = BM_bvector_count(bmh1, &count);
     BMERR_CHECK_GOTO(res, "BM_bvector_count()", free_mem);
     if (count == 0)
     {
         printf("incorrrect count %i \n", count);
         res = 1; goto free_mem;
     }
-    res = BM_bvector_clear(bmh, BM_TRUE);
+    res = BM_bvector_clear(bmh1, BM_TRUE);
     BMERR_CHECK_GOTO(res, "BM_bvector_clear()", free_mem);
 
-    res = BM_bvector_count(bmh, &count);
+    res = BM_bvector_count(bmh1, &count);
     BMERR_CHECK_GOTO(res, "BM_bvector_count()", free_mem);
     if (count != 0)
     {
@@ -386,7 +426,9 @@ int SetGetTest()
     
     
     free_mem:
-        res = BM_bvector_free(bmh);
+        res = BM_bvector_free(bmh1);
+        BMERR_CHECK(res, "bvector free failed");
+        res = BM_bvector_free(bmh2);
         BMERR_CHECK(res, "bvector free failed");
 
     return res;

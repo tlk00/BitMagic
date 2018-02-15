@@ -69,12 +69,7 @@ int main(void)
         sv1.optimize(tb);
         
         bm::sparse_vector_serial_layout<svector> sv_lay;
-        int res = bm::sparse_vector_serialize(sv1, sv_lay, tb);
-        if (res != 0)
-        {
-            cerr << "Sparse vector serialization error!" << endl;
-            exit(1);
-        }
+        bm::sparse_vector_serialize(sv1, sv_lay, tb);
         
         // copy serialization buffer to some other location
         // to simulate data-base storage or network transaction
@@ -85,7 +80,7 @@ int main(void)
         vector<unsigned char> tmp_buf(buf_size);
         ::memcpy(&tmp_buf[0], buf, buf_size);
         
-        res = bm::sparse_vector_deserialize(sv2, &tmp_buf[0], tb);
+        int res = bm::sparse_vector_deserialize(sv2, &tmp_buf[0], tb);
         if (res != 0)
         {
             cerr << "De-Serialization error in TestEqualSparseVectors()" << endl;
