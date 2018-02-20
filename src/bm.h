@@ -942,11 +942,11 @@ public:
         unsigned  BM_VECT_ALIGN cnt[bm::set_total_blocks] BM_VECT_ALIGN_ATTR;
         
         blocks_count() {}
-        blocks_count(const blocks_count& bc)
+        blocks_count(const blocks_count& bc) BMNOEXEPT
         {
             copy_from(bc);
         }
-        void copy_from(const blocks_count& bc)
+        void copy_from(const blocks_count& bc) BMNOEXEPT
         {
             ::memcpy(this->cnt, bc.cnt, sizeof(this->cnt));
         }
@@ -1103,12 +1103,21 @@ public:
         count_is_valid_ = true;
 #endif
     }
-
-
+    
     /*! 
         \brief Move assignment operator
     */
     bvector& operator=(bvector<Alloc>&& bvect) BMNOEXEPT
+    {
+        this->move_from(bvect);
+        return *this;
+    }
+#endif
+
+    /*!
+        \brief Move bvector content from another vector
+    */
+    void move_from(bvector<Alloc>& bvect) BMNOEXEPT
     {
         if (this != &bvect)
         {
@@ -1121,9 +1130,7 @@ public:
             count_is_valid_ = bvect.count_is_valid_;
     #endif
         }
-        return *this;
     }
-#endif
 
     reference operator[](bm::id_t n)
     {
