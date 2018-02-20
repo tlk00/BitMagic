@@ -44,6 +44,25 @@ public:
     bvps_addr_resolver();
     bvps_addr_resolver(const bvps_addr_resolver& addr_res);
     
+    bvps_addr_resolver& operator=(const bvps_addr_resolver& addr_res)
+    {
+        if (this != &addr_res)
+        {
+            addr_bv_ = addr_res.addr_bv_;
+            in_sync_ = addr_res.in_sync_;
+            if (in_sync_)
+            {
+                bv_blocks_.copy_from(addr_res.bv_blocks_);
+            }
+        }
+        return *this;
+    }
+    
+    /*!
+        \brief Move content from the argument address resolver
+    */
+    void move_from(bvps_addr_resolver& addr_res) BMNOEXEPT;
+    
     /*!
         \brief Resolve id to integer id (address)
      
@@ -115,6 +134,11 @@ public:
         \brief optimize underlying bit-vector
     */
     void optimize(bm::word_t* temp_block = 0);
+    
+    /*!
+        \brief equality comparison
+    */
+    bool equals(const bvps_addr_resolver& addr_res) const;
 
     
 private:
@@ -250,6 +274,8 @@ public:
     */
     size_t size() const { return dense_vect_.size(); }
     
+    /** perform equality comparison with another collection
+    */
     bool equals(const compressed_collection<Value, BV>& ccoll) const;
     
     /** return dense container for direct access
@@ -360,6 +386,23 @@ bvps_addr_resolver<BV>::bvps_addr_resolver(const bvps_addr_resolver& addr_res)
 
 //---------------------------------------------------------------------
 
+
+template<class BV>
+void bvps_addr_resolver<BV>::move_from(bvps_addr_resolver& addr_res) BMNOEXEPT
+{
+    if (this != &addr_res)
+    {
+        addr_bv_.move_from(addr_res.addr_bv_);
+        in_sync_ = addr_res.in_sync_;
+        if (in_sync_)
+        {
+            bv_blocks_.copy_from(addr_res.bv_blocks_);
+        }
+    }
+}
+
+//---------------------------------------------------------------------
+
 template<class BV>
 bool bvps_addr_resolver<BV>::resolve(bm::id_t id_from, bm::id_t* id_to) const
 {
@@ -431,6 +474,14 @@ void bvps_addr_resolver<BV>::optimize(bm::word_t* temp_block)
 
 //---------------------------------------------------------------------
 
+template<class BV>
+bool bvps_addr_resolver<BV>::equals(const bvps_addr_resolver& addr_res) const
+{
+    int cmp = addr_bv_.compare(addr_res.addr_bv_);
+    return (cmp == 0);
+}
+
+//---------------------------------------------------------------------
 
 
 

@@ -10733,6 +10733,12 @@ void AddressResolverTest()
         found = ares.resolve(10, &id_to);
         assert(!found);
         assert(id_to == 0);
+        
+        bvps_addr_resolver<bvect>  ares2(ares);
+        
+        found = ares2.resolve(10, &id_to);
+        assert(!found);
+        assert(id_to == 0);
     }
 
     {
@@ -10761,6 +10767,16 @@ void AddressResolverTest()
         found = ares.resolve(100000, &id_to);
         assert(found);
         assert(id_to == 3);
+        
+        bvps_addr_resolver<bvect>  ares2(ares);
+        bool same = ares.equals(ares2);
+        assert(same);
+        
+        bvps_addr_resolver<bvect>  ares3;
+        ares3.move_from(ares2);
+        same = ares.equals(ares3);
+        assert(same);
+
     }
     
     {
