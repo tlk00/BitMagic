@@ -154,16 +154,7 @@ public:
                 const bvector_type* bv = sv.plains_[i];
                 if (bv)
                 {
-#ifdef BM_NO_STL   // C compatibility mode
-                    void* mem = ::malloc(sizeof(bvector_type));
-                    if (mem == 0)
-                    {
-                        BM_ASSERT_THROW(false, BM_ERR_BADALLOC);
-                    }
-                    plains[i] = new(mem) bvector_type(*bv);
-#else
-                    plains_[i] = new bvector_type(*bv);
-#endif
+                    plains_[i] = bv ? construct_bvector(bv) : 0;
                 }
             } // for i
         }
@@ -409,6 +400,7 @@ protected:
     const bm::word_t* get_block(unsigned p, unsigned i, unsigned j) const;
     void throw_range_error(const char* err_msg) const;
 
+    bvector_type* construct_bvector(const bvector_type* bv) const;
 private:
     
     size_type                bv_size_;
@@ -440,6 +432,26 @@ sparse_vector<Val, BV>::sparse_vector(
 //---------------------------------------------------------------------
 
 template<class Val, class BV>
+typename sparse_vector<Val, BV>::bvector_type* 
+sparse_vector<Val, BV>::construct_bvector(const bvector_type* bv) const
+{
+    bvector_type* rbv = 0;
+#ifdef BM_NO_STL   // C compatibility mode
+    void* mem = ::malloc(sizeof(bvector_type));
+    if (mem == 0)
+    {
+        BM_ASSERT_THROW(false, BM_ERR_BADALLOC);
+    }
+    rbv = new(mem) bvector_type(*bv);
+#else
+    rbv = new bvector_type(*bv);
+#endif
+    return rbv;
+}
+
+//---------------------------------------------------------------------
+
+template<class Val, class BV>
 sparse_vector<Val, BV>::sparse_vector(const sparse_vector<Val, BV>& sv)
 : bv_size_ (sv.bv_size_),
   alloc_(sv.alloc_),
@@ -452,11 +464,8 @@ sparse_vector<Val, BV>::sparse_vector(const sparse_vector<Val, BV>& sv)
         for (size_type i = 0; i < sizeof(Val)*8; ++i)
         {
             const bvector_type* bv = sv.plains_[i];
-            if (bv)
-                plains_[i] = new bvector_type(*bv);
-            else
-                plains_[i] = 0;
-        } // for i
+            plains_[i] = bv ? construct_bvector(bv) : 0;
+        }
     }
 }
 
