@@ -138,7 +138,7 @@ public:
     /*!
         \brief equality comparison
     */
-    bool equals(const bvps_addr_resolver& addr_res) const;
+    bool equal(const bvps_addr_resolver& addr_res) const;
 
     
 private:
@@ -276,7 +276,7 @@ public:
     
     /** perform equality comparison with another collection
     */
-    bool equals(const compressed_collection<Value, BV>& ccoll) const;
+    bool equal(const compressed_collection<Value, BV>& ccoll) const;
     
     /** return dense container for direct access
         (this should be treated as an internal function designed for deserialization)
@@ -475,7 +475,7 @@ void bvps_addr_resolver<BV>::optimize(bm::word_t* temp_block)
 //---------------------------------------------------------------------
 
 template<class BV>
-bool bvps_addr_resolver<BV>::equals(const bvps_addr_resolver& addr_res) const
+bool bvps_addr_resolver<BV>::equal(const bvps_addr_resolver& addr_res) const
 {
     int cmp = addr_bv_.compare(addr_res.addr_bv_);
     return (cmp == 0);
@@ -652,7 +652,7 @@ void compressed_collection<Value, BV>::throw_range_error(const char* err_msg) co
 //---------------------------------------------------------------------
 
 template<class Value, class BV>
-bool compressed_collection<Value, BV>::equals(
+bool compressed_collection<Value, BV>::equal(
                      const compressed_collection<Value, BV>& ccoll) const
 {
     const bvector_type& bv = addr_res_.get_bvector();

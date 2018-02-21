@@ -10769,12 +10769,12 @@ void AddressResolverTest()
         assert(id_to == 3);
         
         bvps_addr_resolver<bvect>  ares2(ares);
-        bool same = ares.equals(ares2);
+        bool same = ares.equal(ares2);
         assert(same);
         
         bvps_addr_resolver<bvect>  ares3;
         ares3.move_from(ares2);
-        same = ares.equals(ares3);
+        same = ares.equal(ares3);
         assert(same);
 
     }
@@ -11136,7 +11136,7 @@ void TestCompressedCollection()
     compressed_collection_deserializer<compressed_buffer_collection<bvect> > cbcd;
     cbcd.deserialize(cbc2, sbuf2.buf());
     
-    if (!cbc2.equals(cbc))
+    if (!cbc2.equal(cbc))
     {
         std::cerr << "Compressed collection serialization error" << endl;
         exit(1);
@@ -11168,7 +11168,7 @@ void TestCompressedCollection()
             compressed_collection_deserializer<compressed_buffer_collection<bvect> > cbcd;
             cbcd.deserialize(cbc2, sbuf2.buf());
             
-            if (!cbc2.equals(cbc1))
+            if (!cbc2.equal(cbc1))
             {
                 std::cerr << "Compressed collection serialization error at step " << i << endl;
                 exit(1);
@@ -11267,7 +11267,7 @@ int main(void)
     //LoadVectors("c:/dev/bv_perf", 3, 27);
     exit(1);
 */                                                                                                        
-
+/*
      ExportTest();
      ResizeTest();
 
@@ -11347,7 +11347,7 @@ int main(void)
      StressTest(120, 1); // SUB
      StressTest(120, 2); // XOR
      StressTest(120, 3); // AND
-
+*/
      TestSparseVector();
      TestSparseVector_Stress(2);
 
