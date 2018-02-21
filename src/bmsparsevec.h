@@ -120,6 +120,25 @@ public:
     /*! copy-ctor */
     sparse_vector(const sparse_vector<Val, BV>& sv);
 
+    /*! copy assignmment operator */
+    sparse_vector<Val,BV>& operator = (const sparse_vector<Val, BV>& sv)
+    {
+        if (this != &sv)
+        {
+            clear();
+            resize(sv.size());
+            bv_size_ = sv.bv_size_;
+            alloc_ = sv.alloc_;
+            effective_plains_ = sv.effective_plains_;
+
+            for (size_type i = 0; i < sv.stored_plains(); ++i)
+            {
+                const bvector_type* bv = sv.plains_[i];
+                plains_[i] = bv ? construct_bvector(bv) : 0;
+            } // for i
+        }
+        return *this;
+    }
 
 #ifndef BM_NO_CXX11
     /*! move-ctor */
@@ -138,28 +157,6 @@ public:
     }
 #endif
 
-    /*! copy assignmment operator */
-    sparse_vector<Val,BV>& operator = (const sparse_vector<Val, BV>& sv)
-    {
-        if (this != &sv)
-        {
-            clear();
-            resize(sv.size());
-            bv_size_ = sv.bv_size_;
-            alloc_ = sv.alloc_;
-            effective_plains_ = sv.effective_plains_;
-
-            for (size_type i = 0; i < sv.effective_plains(); ++i)
-            {
-                const bvector_type* bv = sv.plains_[i];
-                if (bv)
-                {
-                    plains_[i] = bv ? construct_bvector(bv) : 0;
-                }
-            } // for i
-        }
-        return *this;
-    }
     
     
     ~sparse_vector() BMNOEXEPT;
@@ -1209,7 +1206,7 @@ void sparse_vector<Val, BV>::optimize(
 template<class Val, class BV>
 void sparse_vector<Val, BV>::optimize_gap_size()
 {
-    unsigned stored_plains = stored_plains();
+    unsigned stored_plains = this->stored_plains();
     for (unsigned j = 0; j < stored_plains; ++j)
     {
         bvector_type* bv = this->plains_[j];
@@ -1269,19 +1266,13 @@ bool sparse_vector<Val, BV>::equal(const sparse_vector<Val, BV>& sv) const
     {
         const bvector_type* bv = plains_[j];
         const bvector_type* arg_bv = sv.plains_[j];
-        if (!bv && !arg_bv)
+        if (bv == arg_bv) // same NULL
             continue;
         // check if any not NULL and not empty
         if (!bv && arg_bv)
-        {
-            if (arg_bv->any())
-                return false;
-        }
+            return !arg_bv->any();
         if (bv && !arg_bv)
-        {
-            if (bv->any())
-                return false;
-        }
+            return !bv->any();
         // both not NULL
         int cmp = bv->compare(*arg_bv);
         if (cmp != 0)
