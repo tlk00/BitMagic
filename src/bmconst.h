@@ -118,6 +118,17 @@ enum set_representation
     set_array0  = 3   //!< array of 0 values
 };
 
+/*!
+   @brief NULL-able value support
+   @ingroup bvector
+*/
+enum null_support
+{
+    use_null = 0, //!< support "non-assigned" or "NULL" logic
+    no_null  = 1   //!< do not support NULL values
+};
+
+
 /**
     Internal structure. Copyright information.
 */
@@ -128,7 +139,7 @@ template<bool T> struct _copyright
 };
 
 template<bool T> const char _copyright<T>::_p[] = 
-    "BitMagic C++ Library. v.3.10.1 (c) 2002-2017 Anatoliy Kuznetsov.";
+    "BitMagic C++ Library. v.3.11.0 (c) 2002-2017 Anatoliy Kuznetsov.";
 template<bool T> const unsigned _copyright<T>::_v[3] = {3, 9, 0};
 
 
