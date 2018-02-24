@@ -160,7 +160,7 @@ void sparse_vector_serialize(
     
     unsigned char* buf = sv_layout.reserve(sv_stat.max_serialize_mem);
     bm::encoder enc(buf, (unsigned)sv_layout.capacity());
-    unsigned plains = sv.plains();
+    unsigned plains = sv.stored_plains();
 
     // calculate header size in bytes
     unsigned h_size = 1 + 1 + 1 + 1 + 8 + (8 * plains) + 4;
@@ -252,12 +252,13 @@ int sparse_vector_deserialize(SV& sv,
         dec.get_8();
     unsigned plains = dec.get_8();
     
-    if (!plains || plains > sv.plains())
+    if (!plains || plains > sv.stored_plains())
     {
         return -2; // incorrect number of plains for the target svector
     }
     
     sv.clear();
+    
     bm::id64_t sv_size = dec.get_64();
     if (sv_size == 0)
     {

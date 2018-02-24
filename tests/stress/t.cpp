@@ -8835,12 +8835,27 @@ void GammaEncoderTest()
 }
 
 template<class SV, class Vect>
-bool CompareSparseVector(const SV& sv, const Vect& vect)
+bool CompareSparseVector(const SV& sv, const Vect& vect, bool interval_filled = false)
 {
     if (vect.size() != sv.size())
     {
         cerr << "Sparse vector size test failed!" << vect.size() << "!=" << sv.size() << endl;
         return false;
+    }
+    
+    if (sv.is_nullable())
+    {
+        const typename SV::bvector_type* bv_null = sv.get_null_bvector();
+        assert(bv_null);
+        unsigned non_null_cnt = bv_null->count();
+        if (vect.size() != non_null_cnt)
+        {
+            if (!interval_filled)
+            {
+                cerr << "NULL vector count failed." << non_null_cnt << " size=" << vect.size() << endl;
+                exit(1);
+            }
+        }
     }
     
     for (unsigned i = 0; i < vect.size(); ++i)
@@ -8888,13 +8903,33 @@ bool CompareSparseVector(const SV& sv, const Vect& vect)
         cerr << "De-Serialization error" << endl;
         exit(1);
     }
+    if (sv.is_nullable() != sv2.is_nullable())
+    {
+        cerr << "Serialization comparison of two svectors failed (NULL vector)" << endl;
+        exit(1);
+    }
+    const typename SV::bvector_type* bv_null = sv.get_null_bvector();
+    const typename SV::bvector_type* bv_null2 = sv.get_null_bvector();
+    
+    if (bv_null != bv_null2 && (bv_null == 0 || bv_null2 == 0))
+    {
+        cerr << "Serialization comparison (NUUL vector missing)!" << endl;
+        exit(1);
+    }
+    if (bv_null)
+    {
+        if (bv_null->compare(*bv_null2) != 0)
+        {
+            cerr << "Serialization comparison of two svectors (NUUL vectors unmatch)!" << endl;
+            exit(1);
+        }
+    }
+
     if (!sv.equal(sv2) )
     {
         cerr << "Serialization comparison of two svectors failed" << endl;
         exit(1);
     }
-    
-    
     
     return true;
 }
@@ -8902,16 +8937,36 @@ bool CompareSparseVector(const SV& sv, const Vect& vect)
 template<class SV>
 bool TestEqualSparseVectors(const SV& sv1, const SV& sv2, bool detailed = true)
 {
-    bool b = sv1.equal(sv2);
-    if (!b)
-    {
-        return b;
-    }
-    
     if (sv1.size() != sv2.size())
     {
         cerr << "TestEqualSparseVectors failed incorrect size" << endl;
         exit(1);
+    }
+    
+    if (sv1.is_nullable() == sv2.is_nullable())
+    {
+        bool b = sv1.equal(sv2);
+        if (!b)
+        {
+            cerr << "sv1.equal(sv2) failed" << endl;
+            return b;
+        }
+        const typename SV::bvector_type* bv_null1 = sv1.get_null_bvector();
+        const typename SV::bvector_type* bv_null2 = sv2.get_null_bvector();
+        
+        if (bv_null1 != bv_null2)
+        {
+            int r = bv_null1->compare(*bv_null2);
+            if (r != 0)
+            {
+                cerr << "sparse NULL-vectors comparison failed" << endl;
+                exit(1);
+            }
+        }
+    }
+    else  // NULLable does not match
+    {
+        detailed = true; // simple check not possible, use slow, detailed
     }
     
 
@@ -8966,10 +9021,21 @@ bool TestEqualSparseVectors(const SV& sv1, const SV& sv2, bool detailed = true)
     {
         SV svv1(sv1);
         SV svv2(sv2);
-        svv1.swap(svv2);
-        b = svv1.equal(svv2);
+        
+        bm::null_support is_null = (sv1.is_nullable() == sv2.is_nullable()) ? bm::use_null : bm::no_null;
+        
+        bool b = svv1.equal(svv2, is_null);
         if (!b)
         {
+            cerr << "Equal, copyctor comparison failed" << endl;
+            return b;
+        }
+
+        svv1.swap(svv2);
+        b = svv1.equal(svv2, is_null);
+        if (!b)
+        {
+            cerr << "Equal, copyctor-swap comparison failed" << endl;
             return b;
         }
     }
@@ -8990,7 +9056,8 @@ bool TestEqualSparseVectors(const SV& sv1, const SV& sv2, bool detailed = true)
                 return false;
             }
         }
-        b = sv1.equal(sv3);
+        bm::null_support is_null = (sv1.is_nullable() == sv3.is_nullable()) ? bm::use_null : bm::no_null;
+        bool b = sv1.equal(sv3, is_null);
         if (!b)
         {
             cerr << "2. sparse_vector reference assignment validation failed" << endl;
@@ -9020,14 +9087,37 @@ bool TestEqualSparseVectors(const SV& sv1, const SV& sv2, bool detailed = true)
             exit(1);
         }
         
+        const typename SV::bvector_type* bv_null1 = sv1.get_null_bvector();
+        const typename SV::bvector_type* bv_null2 = sv2.get_null_bvector();
+        const typename SV::bvector_type* bv_null3 = sv3.get_null_bvector();
         
-        
-        if (!sv1.equal(sv3) )
+        if (bv_null1 && bv_null3)
+        {
+            int r = bv_null1->compare(*bv_null3);
+            if (r != 0)
+            {
+                cerr << "2. NULL bvectors comparison failed" << endl;
+                exit(1);
+            }
+        }
+        if (bv_null1 && bv_null2)
+        {
+            int r = bv_null1->compare(*bv_null2);
+            if (r != 0)
+            {
+                cerr << "3. NULL bvectors comparison failed" << endl;
+                exit(1);
+            }
+        }
+
+        bm::null_support is_null = (sv1.is_nullable() == sv3.is_nullable()) ? bm::use_null : bm::no_null;
+        if (!sv1.equal(sv3, is_null) )
         {
             cerr << "Serialization comparison of two svectors failed (1)" << endl;
             exit(1);
         }
-        if (!sv2.equal(sv3) )
+        is_null = (sv2.is_nullable() == sv3.is_nullable()) ? bm::use_null : bm::no_null;
+        if (!sv2.equal(sv3, is_null) )
         {
             cerr << "Serialization comparison of two svectors failed (2)" << endl;
             exit(1);
@@ -9035,7 +9125,7 @@ bool TestEqualSparseVectors(const SV& sv1, const SV& sv2, bool detailed = true)
         
     
     }}
-    return b;
+    return true;
 }
 
 void TestSparseVector()
@@ -9045,6 +9135,32 @@ void TestSparseVector()
     typedef bm::sparse_vector<unsigned, bm::bvector<> > svector;
     typedef bm::sparse_vector<unsigned long long, bm::bvector<> > svector64;
 
+    // basic construction (NULL-able vector)
+    {{
+        bm::sparse_vector<unsigned, bm::bvector<> > sv1;
+        bool n = sv1.is_nullable();
+        assert(!n);
+        const bm::bvector<>* bvp = sv1.get_null_bvector();
+        assert(bvp==0);
+        
+        bm::sparse_vector<unsigned, bm::bvector<> > sv2(bm::use_null);
+        n = sv2.is_nullable();
+        assert(n);
+        
+        sv1 = sv2;
+        assert(sv1.is_nullable());
+        
+        bm::sparse_vector<unsigned, bm::bvector<> > sv3(sv1);
+        assert(sv3.is_nullable());
+        
+        bm::sparse_vector<unsigned, bm::bvector<> > sv4;
+        sv3.swap(sv4);
+        assert(sv4.is_nullable());
+        assert(!sv3.is_nullable());
+        bvp = sv4.get_null_bvector();
+        assert(bvp);
+
+    }}
     
     // test empty vector serialization
     {{
@@ -9076,6 +9192,59 @@ void TestSparseVector()
         v.push_back(svector());
         v.push_back(svector());
         v[0] = svector();
+    }}
+    
+    // test NULL operations
+    {{
+        bm::sparse_vector<unsigned, bm::bvector<> > sv1;
+        bm::sparse_vector<unsigned, bm::bvector<> > sv2(bm::use_null);
+        sv1.resize(10);
+        sv2.resize(10);
+        for (unsigned i = 0; i < sv1.size(); ++i)
+        {
+            assert(!sv1.is_null(i));
+            assert(sv2.is_null(i));
+        }
+        unsigned arr[3] = {1,2,3};
+        sv1.import(arr, 3);
+        sv2.import(arr, 3);
+        assert(!sv1.is_null(0));
+        assert(!sv2.is_null(0));
+        assert(!sv2.is_null(1));
+        assert(!sv2.is_null(2));
+        assert(sv2.is_null(3));
+        
+        assert(sv2.is_null(5));
+        sv2.set(5, 123);
+        assert(!sv2.is_null(5));
+        
+        sv2.set_null(5);
+        assert(sv2.is_null(5));
+        assert(sv2[5].is_null());
+
+        
+        bm::sparse_vector<unsigned, bm::bvector<> > sv3(sv2);
+        assert(sv3.is_nullable());
+        
+        assert(!sv3.is_null(0));
+        assert(!sv3.is_null(1));
+        assert(!sv3.is_null(2));
+        
+        sv3.clear_range(0, 1, true);
+        assert(sv3.is_null(0));
+        assert(sv3.is_null(1));
+        assert(!sv3.is_null(2));
+        
+        
+        sv3 = sv1;
+        assert(!sv3.is_nullable());
+        
+        sv1.clear();
+        assert(!sv1.is_nullable());
+        sv2.clear();
+        assert(sv2.is_nullable());
+
+
     }}
     
     {{
@@ -9272,17 +9441,25 @@ void TestSparseVector()
     {{
     std::vector<unsigned> vect(128000);
     bm::sparse_vector<unsigned, bm::bvector<> > sv;
+    bm::sparse_vector<unsigned, bm::bvector<> > sv1(bm::use_null);
     for (unsigned i = 0; i < 128000; ++i)
     {
         vect[i] = i;
         sv.set(i, i);
+        sv1.set(i, i);
     }
     
 
     bool res = CompareSparseVector(sv, vect);
     if (!res)
     {
-        cerr << "Bit Plain import test failed" << endl;
+        cerr << "linear assignment test failed" << endl;
+        exit(1);
+    }
+    res = CompareSparseVector(sv1, vect);
+    if (!res)
+    {
+        cerr << "linear assignment test failed (2)" << endl;
         exit(1);
     }
     }}
@@ -9370,22 +9547,39 @@ void TestSparseVector()
     {{
         cout << "Resize test" << endl;
         bm::sparse_vector<unsigned, bm::bvector<> > sv;
+        bm::sparse_vector<unsigned, bm::bvector<> > sv1(bm::use_null);
         unsigned i;
         for (i = 0; i < 16; ++i)
         {
             sv.set(i, i);
+            sv1.set(i, i);
         }
         if (sv.size()!= 16)
         {
             cerr << "1.Incorrect sparse vector size:" << sv.size() << endl;
             exit(1);
         }
+        
+        
+        const bm::bvector<>* bv_null1 = sv1.get_null_bvector();
+        assert(bv_null1);
+        if (bv_null1->count() != sv1.size())
+        {
+            cerr << "1.1. Incorrect sparse vector size() - NOT NULL comparison" << sv1.size() << " " << bv_null1->count() << endl;
+        }
+        
         sv.resize(10);
-        if (sv.size()!= 10)
+        sv1.resize(10);
+        if (sv.size()!= 10 || sv1.size() != 10)
         {
             cerr << "2.Incorrect sparse vector size:" << sv.size() << endl;
             exit(1);
         }
+        if (bv_null1->count() != sv1.size())
+        {
+            cerr << "2.1. Incorrect sparse vector size() - NOT NULL comparison" << sv1.size() << " " << bv_null1->count() << endl;
+        }
+
         
         cout << "check values for size()=" << sv.size() << endl;
         for (i = 0; i < sv.size(); ++i)
@@ -9396,10 +9590,18 @@ void TestSparseVector()
                 cerr << "Wrong sparse vector value: at[" << i << "]=" << v << endl;
                 exit(1);
             }
+            assert(!sv1[i].is_null());
+            v = sv1[i];
+            if (v != i)
+            {
+                cerr << "Wrong null sparse vector value: at[" << i << "]=" << v << endl;
+                exit(1);
+            }
         }
         
         sv.resize(20);
-        if (sv.size()!= 20)
+        sv1.resize(20);
+        if (sv.size() != 20 || sv1.size() != 20)
         {
             cerr << "3.Incorrect sparse vector size:" << sv.size() << endl;
             exit(1);
@@ -9408,36 +9610,58 @@ void TestSparseVector()
         for (i = 0; i < sv.size(); ++i)
         {
             unsigned v = sv[i];
+            unsigned v1 = sv1[i];
+            
+            bool b_null = sv[i].is_null();
+            bool b1_null = sv1[i].is_null();
+            
             if (i < 10)
             {
-                if (v != i)
+                if (v != i || v1 != i)
                 {
                     cerr << "Wrong sparse vector value: at[" << i << "]=" << v << endl;
                     exit(1);
                 }
+                assert(!b_null);
+                assert(!b1_null);
             }
             else
             {
-                if (v != 0)
+                if (v != 0 || v1 != 0)
                 {
                     cerr << "Wrong sparse (non-zero) vector value " << v << endl;
                     exit(1);
                 }
+                assert(!b_null);
+                assert(b1_null);
             }
         } // for i
         
         sv.resize(0);
-        if (sv.size()!= 0)
+        sv1.resize(0);
+        if (sv.size()!= 0 || sv1.size() != 0)
         {
             cerr << "2.Incorrect sparse vector size:" << sv.size() << endl;
             exit(1);
         }
+        if (bv_null1->count() != 0)
+        {
+            cerr << "3. Incorrect sparse vector size() - NOT NULL comparison" << sv1.size() << " " << bv_null1->count() << endl;
+        }
+
         
         sv.resize(65536);
+        sv1.resize(65536);
+        if (bv_null1->count() != 0)
+        {
+            cerr << "4. Incorrect sparse vector size() - NOT NULL comparison" << sv1.size() << " " << bv_null1->count() << endl;
+        }
+
         for (i = 0; i < sv.size(); ++i)
         {
             unsigned v = sv[i];
-            if (v)
+            unsigned v1 = sv1[i];
+            if (v || v1)
             {
                 if (v != 0)
                 {
@@ -9445,9 +9669,8 @@ void TestSparseVector()
                     exit(1);
                 }
             }
+            assert(sv1[i].is_null());
         }
-        
-        
     
     }}
     
@@ -9521,39 +9744,163 @@ void TestSparseVector()
 
     cout << "Test Sparse vector join" << endl;
     {
-    
-    bm::sparse_vector<unsigned, bm::bvector<> > sv1;
-    bm::sparse_vector<unsigned, bm::bvector<> > sv2;
-    
-    
-    sv1.set(0, 0);
-    sv1.set(1, 1);
-    sv1.set(2, 2);
+        bm::sparse_vector<unsigned, bm::bvector<> > sv1;
+        bm::sparse_vector<unsigned, bm::bvector<> > sv2;
+        
+        
+        sv1.set(0, 0);
+        sv1.set(1, 1);
+        sv1.set(2, 2);
 
-    sv2.set(3, 3);
-    sv2.set(4, 4);
-    sv2.set(5, 5);
+        sv2.set(3, 3);
+        sv2.set(4, 4);
+        sv2.set(5, 5);
 
-    sv1.join(sv2);
-    
-    if (sv1.size()!=6)
-    {
-        cerr << "Sparse join size failed:" << sv1.size() << endl;
-        exit(1);
-    
-    }
-    for (unsigned i = 0; i < sv1.size(); ++i)
-    {
-        unsigned v1 = sv1[i];
-        if (v1 != i)
+        sv1.join(sv2);
+        
+        if (sv1.size()!=6)
         {
-            cerr << "Sparse join cmp failed:" << sv1.size() << endl;
+            cerr << "Sparse join size failed:" << sv1.size() << endl;
             exit(1);
+        
+        }
+        for (unsigned i = 0; i < sv1.size(); ++i)
+        {
+            unsigned v1 = sv1[i];
+            if (v1 != i)
+            {
+                cerr << "Sparse join cmp failed:" << sv1.size() << endl;
+                exit(1);
+            }
         }
     }
     
+    cout << "Test Sparse vector join with NULL-able" << endl;
+    {
+        bm::sparse_vector<unsigned, bm::bvector<> > sv1;
+        bm::sparse_vector<unsigned, bm::bvector<> > sv2(bm::use_null);
+
+        assert(!sv1.is_nullable());
+        
+        sv1.set(0, 0);
+        sv1.set(1, 1);
+        sv1.set(2, 2);
+
+        sv2.set(3, 3);
+        sv2.set(4, 4);
+        sv2.set(5, 5);
+
+        sv1.join(sv2);
+        assert(!sv1.is_nullable());
+        
+        if (sv1.size()!=6)
+        {
+            cerr << "Sparse join size failed:" << sv1.size() << endl;
+            exit(1);
+        
+        }
+        for (unsigned i = 0; i < sv1.size(); ++i)
+        {
+            unsigned v1 = sv1[i];
+            if (v1 != i)
+            {
+                cerr << "Sparse join cmp failed:" << sv1.size() << endl;
+                exit(1);
+            }
+            assert(!sv1[i].is_null());
+        }
+    }
+
+    cout << "Test Sparse vector join NULL-able with not NULL-able" << endl;
+    {
+        bm::sparse_vector<unsigned, bm::bvector<> > sv1(bm::use_null);
+        bm::sparse_vector<unsigned, bm::bvector<> > sv2;
+
+        assert(sv1.is_nullable());
+        
+        //sv1.set(0, 0);
+        sv1.set(1, 1);
+        sv1.set(2, 2);
+
+        sv2.set(3, 3);
+        sv2.set(4, 4);
+        sv2.set(5, 5);
+
+        sv1.join(sv2);
+        assert(sv1.is_nullable());
+        
+        if (sv1.size()!=6)
+        {
+            cerr << "Sparse join size failed:" << sv1.size() << endl;
+            exit(1);
+        }
+        for (unsigned i = 0; i < sv1.size(); ++i)
+        {
+            unsigned v1 = sv1[i];
+            if (v1 != i)
+            {
+                cerr << "Sparse join cmp failed:" << i << endl;
+                exit(1);
+            }
+            assert(!sv1[i].is_null());
+        }
+    }
+
+    cout << "Test Sparse vector join NULL-able with NULL-able" << endl;
+    {
+        bm::sparse_vector<unsigned, bm::bvector<> > sv1(bm::use_null);
+        bm::sparse_vector<unsigned, bm::bvector<> > sv2(bm::use_null);
+
+        assert(sv1.is_nullable());
+        assert(sv2.is_nullable());
+        
+        //sv1.set(0, 0);
+        sv1.set(1, 1);
+        sv1.set(2, 2);
+
+        //sv2.set(3, 3);
+        sv2.set(4, 4);
+        sv2.set(5, 5);
+
+        sv1.join(sv2);
+        assert(sv1.is_nullable());
+        
+        if (sv1.size()!=6)
+        {
+            cerr << "Sparse join size failed:" << sv1.size() << endl;
+            exit(1);
+        }
+        for (unsigned i = 0; i < sv1.size(); ++i)
+        {
+            unsigned v1 = sv1[i];
+            if (v1 != i)
+            {
+                if (i == 0 || i == 3) // legitimate test-case exceptions
+                {
+                }
+                else
+                {
+                    cerr << "Sparse join cmp failed:" << i << endl;
+                    exit(1);
+                }
+            }
+            if (sv1[i].is_null())
+            {
+                assert(i == 0 || i == 3);
+            }
+        }
     }
     
+    cout << "check if optimize keeps the NULL vector" << std::endl;
+    {
+        bm::sparse_vector<unsigned, bm::bvector<> > sv(bm::use_null);
+        assert(sv.is_nullable());
+        sv.optimize();
+        assert(sv.is_nullable());
+    }
+
+
+
     {
         bm::sparse_vector<unsigned, bm::bvector<> > sv1;
         bm::sparse_vector<unsigned, bm::bvector<> > sv2;
@@ -9690,12 +10037,15 @@ void TestSparseVector_Stress(unsigned count)
         {
             unsigned max = min + (65535 * 10);
             {{
+                bm::null_support null_able =
+                                (min % 2 == 0) ? bm::no_null : bm::use_null;
+                
                 std::vector<unsigned> vect;
-                bm::sparse_vector<unsigned, bm::bvector<> > sv;
+                bm::sparse_vector<unsigned, bm::bvector<> > sv(null_able);
             
                 FillSparseIntervals(vect, sv, min, max, fill_factor);
                 
-                bool res = CompareSparseVector(sv, vect);
+                bool res = CompareSparseVector(sv, vect, true);
                 if (!res)
                 {
                     cerr << "sparse-dense vector comparison failed" << endl;
@@ -9703,7 +10053,7 @@ void TestSparseVector_Stress(unsigned count)
                 }
                 
                 sv.optimize();
-                res = CompareSparseVector(sv, vect);
+                res = CompareSparseVector(sv, vect, true);
                 if (!res)
                 {
                     cerr << "sparse-dense vector comparison failed" << endl;
@@ -9732,12 +10082,15 @@ void TestSparseVector_Stress(unsigned count)
             unsigned max = min + (65535 * 10);
             unsigned min2 = max + rand() % 65536;
             unsigned max2 = min2 + (65535 * 10);
-            
+
+            bm::null_support null_able1 =
+                            (min % 2 == 0) ? bm::no_null : bm::use_null;
+
             {{
                 std::vector<unsigned> vect1;
                 std::vector<unsigned> vect2;
-                bm::sparse_vector<unsigned, bm::bvector<> > sv1;
-                bm::sparse_vector<unsigned, bm::bvector<> > sv2;
+                bm::sparse_vector<unsigned, bm::bvector<> > sv1(null_able1);
+                bm::sparse_vector<unsigned, bm::bvector<> > sv2(null_able1);
             
                 FillSparseIntervals(vect1, sv1, min, max, fill_factor);
                 FillSparseIntervals(vect2, sv2, min2, max2, fill_factor);
@@ -11267,7 +11620,7 @@ int main(void)
     //LoadVectors("c:/dev/bv_perf", 3, 27);
     exit(1);
 */                                                                                                        
-/*
+
      ExportTest();
      ResizeTest();
 
@@ -11347,8 +11700,9 @@ int main(void)
      StressTest(120, 1); // SUB
      StressTest(120, 2); // XOR
      StressTest(120, 3); // AND
-*/
+
      TestSparseVector();
+
      TestSparseVector_Stress(2);
 
      StressTest(300);
