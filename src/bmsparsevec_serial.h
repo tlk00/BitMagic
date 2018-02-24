@@ -111,8 +111,8 @@ private:
     void operator=(const sparse_vector_serial_layout&);
 protected:
     buffer_type    buf_;                              ///< serialization buffer
-    unsigned char* plain_ptrs_[sizeof(value_type)*8]; ///< pointers on serialized bit-palins
-    unsigned plane_size_[sizeof(value_type)*8];       ///< serialized plain size
+    unsigned char* plain_ptrs_[SV::sv_plains]; ///< pointers on serialized bit-palins
+    unsigned plane_size_[SV::sv_plains];       ///< serialized plain size
 };
 
 // -------------------------------------------------------------------------

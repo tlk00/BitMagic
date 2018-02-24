@@ -100,6 +100,12 @@ public:
         size_type               idx_;
     };
 
+    enum bit_plains
+    {
+        sv_plains = (sizeof(value_type) * 8 + 1),
+        sv_value_plains = (sizeof(value_type) * 8)
+    };
+
 public:
     /*!
         \brief Sparse vector constructor
@@ -439,7 +445,7 @@ private:
     unsigned effective_plains() const { return effective_plains_ + 1; }
 
     /** Number of total bit-plains in the value type*/
-    static unsigned value_bits() { return sizeof(Val) * 8; }
+    static unsigned value_bits() { return sv_value_plains; }
     
     /** plain index for the "NOT NULL" flags plain */
     static unsigned null_plain() { return value_bits(); }
@@ -461,7 +467,7 @@ private:
     allocator_type           alloc_;
     allocation_policy_type   ap_;
     
-    bvector_type_ptr         plains_[sizeof(Val)*8 + 1];
+    bvector_type_ptr         plains_[sv_plains];
     size_type                size_;
     unsigned                 effective_plains_;
 };
