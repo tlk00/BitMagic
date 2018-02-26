@@ -248,6 +248,7 @@ void PrintBits32(unsigned val)
     PrintBinary(val);
 }
 
+inline
 void PrintDistanceMatrix(
    const unsigned distance[bm::set_block_plain_cnt][bm::set_block_plain_cnt])
 {

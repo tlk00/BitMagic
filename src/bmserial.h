@@ -1017,13 +1017,15 @@ unsigned serializer<BV>::serialize(const BV& bv,
         switch (block_bc)
         {
         case 1: // corner case: only 1 bit on
-        {
-            bm::id_t bit_idx = 0;
-            bit_find_in_block(blk, bit_idx, &bit_idx);
-            enc.put_8(set_block_bit_1bit); enc.put_16((short)bit_idx);
-            continue;
-        }
+            {
+                bm::id_t bit_idx = 0;
+                bit_find_in_block(blk, bit_idx, &bit_idx);
+                enc.put_8(set_block_bit_1bit); enc.put_16((short)bit_idx);
+                continue;
+            }
         case 0: goto zero_block; // empty block
+        default:
+            break;
         }
        
        
@@ -3153,6 +3155,7 @@ iterator_deserializer<BV, SerialIterator>::finalize_target_vector(
 
         }
         break;
+    case set_END:
     default:
         BM_ASSERT(0);
     }
@@ -3219,7 +3222,7 @@ iterator_deserializer<BV, SerialIterator>::process_id_list(
             // TODO: get rid of the temp vector
             BV bv_tmp(BM_GAP);
             load_id_list(bv_tmp, sit, id_count, true);
-            count += count_xor(bv, bv_tmp);
+            count += bm::count_xor(bv, bv_tmp);
         }
         break;
     case set_COUNT_OR:
@@ -3227,7 +3230,7 @@ iterator_deserializer<BV, SerialIterator>::process_id_list(
             // TODO: get rid of the temp. vector
             BV bv_tmp(BM_GAP);
             load_id_list(bv_tmp, sit, id_count, true);
-            count += count_or(bv, bv_tmp);
+            count += bm::count_or(bv, bv_tmp);
         }
         break;
     case set_COUNT_SUB_AB:
@@ -3238,6 +3241,14 @@ iterator_deserializer<BV, SerialIterator>::process_id_list(
             count += bv_tmp.count();
         }
         break;
+    case set_COUNT_SUB_BA:
+        {
+            BV bv_tmp(BM_GAP);
+            load_id_list(bv_tmp, sit, id_count, true);
+            count += bm::count_sub(bv_tmp, bv);        
+        }
+        break;
+    case set_END:
     default:
         BM_ASSERT(0);
     } // switch

@@ -3297,6 +3297,8 @@ bvector<Alloc>::combine_operation_with_block(unsigned          nb,
                         return;
                     case BM_OR: case BM_SUB: case BM_XOR:
                         return; // nothing to do
+                    default:
+                        return; // nothing to do
                     }
                 }
                 gap_word_t* gap_blk = BMGAP_PTR(blk);
