@@ -111,7 +111,7 @@ public:
         in_buf.byte_buf_ = 0;
         this->size_ = in_buf.size_;
         capacity_ = in_buf.capacity_;
-        buf.size_ = in_buf.capacity_ = 0;
+        in_buf.size_ = in_buf.capacity_ = 0;
         alloc_factor_ = in_buf.alloc_factor_;
     }
     
@@ -153,7 +153,7 @@ public:
             return;
         unsigned char* btmp = byte_buf_;
         byte_buf_ = other.byte_buf_;
-        buf.byte_buf_ = btmp;
+        other.byte_buf_ = btmp;
         
         bm::xor_swap(this->size_, other.size_);
         bm::xor_swap(capacity_, other.capacity_);
