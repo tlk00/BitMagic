@@ -356,14 +356,14 @@ void CheckVectors(bvect_mini &bvect_min,
                   unsigned size,
                   bool     detailed = false);
 
-
+static
 unsigned random_minmax(unsigned min, unsigned max)
 {
     unsigned r = (rand() << 16) | rand();
     return r % (max-min) + min;
 }
 
-
+static
 void FillSets(bvect_mini* bvect_min, 
               bvect* bvect_full,
               unsigned min, 
@@ -516,7 +516,7 @@ void FillSets(bvect_mini* bvect_min,
 // 111........111111........111111..........11111111.......1111111...
 //
 
-
+static
 void FillSetsIntervals(bvect_mini* bvect_min, 
               bvect* bvect_full,
               unsigned min, 
@@ -632,6 +632,7 @@ if (set_flag == false)
 
 }
 
+static
 void FillSetClearIntervals(bvect_mini* bvect_min, 
               bvect* bvect_full,
               unsigned min, 
@@ -642,6 +643,7 @@ void FillSetClearIntervals(bvect_mini* bvect_min,
     FillSetsIntervals(bvect_min, bvect_full, min, max, fill_factor, false);
 }
 
+static
 void FillSetsRandomOne(bvect_mini* bvect_min, 
                        bvect* bvect_full,
                        unsigned min, 
@@ -654,6 +656,7 @@ void FillSetsRandomOne(bvect_mini* bvect_min,
     cout << "Bit_idx=" << bit_idx << endl;
 }
 
+static
 void FillSetsRandom(bvect_mini* bvect_min, 
               bvect* bvect_full,
               unsigned min, 
@@ -700,6 +703,7 @@ void FillSetsRandom(bvect_mini* bvect_min,
 
 }
 
+static
 void FillSetsRegular(bvect_mini* bvect_min,
                      bvect* bvect_full,
               unsigned /*min*/,
@@ -729,6 +733,7 @@ void FillSetsRegular(bvect_mini* bvect_min,
 //  Quasi random filling with choosing randomizing method.
 //
 //
+static
 void FillSetsRandomMethod(bvect_mini* bvect_min, 
                           bvect* bvect_full,
                           unsigned min, 
@@ -792,6 +797,7 @@ void FillSetsRandomMethod(bvect_mini* bvect_min,
 }
 
 // do logical operation through serialization
+static
 unsigned SerializationOperation(bvect*             bv_target,
                                 /*const*/ bvect&   bv1,
                                 /*const*/ bvect&   bv2,
@@ -1024,6 +1030,7 @@ unsigned SerializationOperation(bvect*             bv_target,
    return count;
 }
 
+static
 void SerializationOperation2Test(bvect*        bv_target,
                                  bvect&        bv1,
                                  bvect&        bv2,
@@ -1081,7 +1088,7 @@ void SerializationOperation2Test(bvect*        bv_target,
     cout << "OK" << endl;
 }
 
-
+static
 void print_mv(const bvect_mini &bvect_min, unsigned size)
 {
     unsigned i;
@@ -1100,6 +1107,7 @@ void print_mv(const bvect_mini &bvect_min, unsigned size)
     printf("\n");
 }
 
+static
 void print_gap(const gap_vector& gap_vect, unsigned /*size*/)
 {
     const gap_word_t *buf = gap_vect.get_buf();
@@ -1114,6 +1122,7 @@ void print_gap(const gap_vector& gap_vect, unsigned /*size*/)
     printf("\n");
 }
 
+static
 void CheckGAPMin(const gap_vector& gapv, const bvect_mini& bvect_min, unsigned len)
 {
     for (unsigned i = 0; i < len; ++i)
@@ -1129,6 +1138,7 @@ void CheckGAPMin(const gap_vector& gapv, const bvect_mini& bvect_min, unsigned l
     }
 }
 
+static
 void CheckIntervals(const bvect& bv, unsigned /*max_bit*/)
 {
     unsigned cnt0 = count_intervals(bv);
@@ -1258,7 +1268,7 @@ template<class T> void CheckCountRange(const T& vect,
     }
 }
 
-
+static
 unsigned BitCountChange(unsigned word)
 {
     unsigned count = 1;
@@ -1274,7 +1284,7 @@ unsigned BitCountChange(unsigned word)
     return count;
 }
 
-
+static
 void DetailedCheckVectors(const bvect_mini &bvect_min, 
                           const bvect      &bvect_full,
                           unsigned size)
@@ -1315,6 +1325,7 @@ void DetailedCheckVectors(const bvect_mini &bvect_min,
 
 }
 
+static
 void CompareEnumerators(const bvect::enumerator& en1, const bvect::enumerator& en2)
 {
     if (!en1.valid() && !en2.valid())
@@ -1462,7 +1473,7 @@ void CheckVectors(bvect_mini &bvect_min,
     return;
 }
 
-
+static
 void ClearAllTest()
 {
     bvect     bvect_full;
@@ -1482,7 +1493,7 @@ void ClearAllTest()
     print_stat(bvect_full);
 }
 
-
+static
 void WordCmpTest()
 {
     cout << "---------------------------- WordCmp test" << endl;
@@ -1532,7 +1543,7 @@ void WordCmpTest()
 }
 
 
-
+static
 void ShiftRotateTest()
 {
     cout << "---------------------------- ShiftRotate test" << endl;
@@ -1611,7 +1622,7 @@ void ShiftRotateTest()
     cout << "---------------------------- ShiftRotate test OK" << endl;
 }
 
-
+static
 void EmptyBVTest()
 {
     cout << "---------------------------- Empty bvector test" << endl;
@@ -1851,6 +1862,7 @@ void EmptyBVTest()
     
 }
 
+static
 void BasicFunctionalityTest()
 {
     cout << "---------------------------- Basic functinality test" << endl;
@@ -1969,7 +1981,7 @@ void BasicFunctionalityTest()
 }
 
 
-
+static
 void TestRandomSubset(const bvect& bv, bm::random_subset<bvect>& rsub)
 {
     bvect bv_subset;
@@ -2006,6 +2018,7 @@ void TestRandomSubset(const bvect& bv, bm::random_subset<bvect>& rsub)
     printf("\n");
 }
 
+static
 void SimpleRandomFillTest()
 {
     assert(ITERATIONS < BITVECT_SIZE);
@@ -2114,7 +2127,7 @@ void SimpleRandomFillTest()
 
 
 
-
+static
 void RangeRandomFillTest()
 {
     assert(ITERATIONS < BITVECT_SIZE);
@@ -2161,7 +2174,7 @@ void RangeRandomFillTest()
 }
 
 
-
+static
 void AndOperationsTest()
 {
     assert(ITERATIONS < BITVECT_SIZE);
@@ -2429,7 +2442,7 @@ void AndOperationsTest()
 
 }
 
-
+static
 void OrOperationsTest()
 {
     assert(ITERATIONS < BITVECT_SIZE);
@@ -2680,7 +2693,7 @@ void OrOperationsTest()
 }
 
 
-
+static
 void SubOperationsTest()
 {
     assert(ITERATIONS < BITVECT_SIZE);
@@ -2860,7 +2873,7 @@ void SubOperationsTest()
 }
 
 
-
+static
 void XorOperationsTest()
 {
     assert(ITERATIONS < BITVECT_SIZE);
@@ -3328,7 +3341,7 @@ void XorOperationsTest()
 
 }
 
-
+static
 void ComparisonTest()
 {
     cout << "-------------------------------------- ComparisonTest" << endl;
@@ -3465,6 +3478,7 @@ void ComparisonTest()
 
 }
 
+static
 void DesrializationTest2()
 {
    bvect  bvtotal;
@@ -3634,7 +3648,7 @@ void DesrializationTest2()
 
 }
 
-
+static
 void StressTest(unsigned repetitions, int set_operation = -1)
 {
 
@@ -4186,7 +4200,7 @@ void StressTest(unsigned repetitions, int set_operation = -1)
          << endl;
 }
 
-
+static
 void CheckGap2DGap(gap_vector& gapv)
 {
    bm::gap_word_t   dgap_buf[bm::gap_max_buff_len+3]; 
@@ -4210,7 +4224,7 @@ void CheckGap2DGap(gap_vector& gapv)
    }
 } 
 
-
+static
 void GAPCheck()
 {
    cout << "-------------------------------------------GAPCheck" << endl;
@@ -4586,27 +4600,27 @@ void GAPCheck()
    
    {
    // aligned position test
-   bvect        bvect;
+   bvect        bvect_a;
 
-   bvect.set_bit(1);
-   bvect.clear();
+   bvect_a.set_bit(1);
+   bvect_a.clear();
 
 
-   unsigned* buf = (unsigned*) bvect.get_block(0);
+   unsigned* buf = (unsigned*) bvect_a.get_block(0);
 
    bm::or_bit_block(buf, 0, 4);
    unsigned cnt = bm::bit_block_calc_count_range(buf, 0, 3);
    assert(cnt == 4);
    
-   bool bit = bvect.get_bit(0);
+   bool bit = bvect_a.get_bit(0);
    assert(bit);
-   bit = bvect.get_bit(1);
+   bit = bvect_a.get_bit(1);
    assert(bit);
-   bit = bvect.get_bit(2);
+   bit = bvect_a.get_bit(2);
    assert(bit);
-   bit = bvect.get_bit(3);
+   bit = bvect_a.get_bit(3);
    assert(bit);
-   bit = bvect.get_bit(4);
+   bit = bvect_a.get_bit(4);
    assert(bit==0);
 
    bm::or_bit_block(buf, 0, 36); 
@@ -4615,13 +4629,13 @@ void GAPCheck()
 
    for (int i = 0; i < 36; ++i)
    {
-        bit = (bvect.get_bit(i) != 0);
+        bit = (bvect_a.get_bit(i) != 0);
         assert(bit);
    }
-   bit = (bvect.get_bit(36) != 0);
+   bit = (bvect_a.get_bit(36) != 0);
    assert(bit==0);
 
-   unsigned count = bvect.recalc_count();
+   unsigned count = bvect_a.recalc_count();
    assert(count == 36);   
    
    cout << "Aligned position test ok." << endl; 
@@ -4631,15 +4645,15 @@ void GAPCheck()
 
    {
    // unaligned position test
-   bvect   bvect;
+   bvect   bvect_u;
 
-   bvect.set_bit(0);
-   bvect.clear();
+   bvect_u.set_bit(0);
+   bvect_u.clear();
 
-   unsigned* buf = (unsigned*) bvect.get_block(0);
+   unsigned* buf = (unsigned*) bvect_u.get_block(0);
 
    bm::or_bit_block(buf, 5, 32);
-   bool bit = (bvect.get_bit(4) != 0);
+   bool bit = (bvect_u.get_bit(4) != 0);
    assert(bit==0);
    unsigned cnt = bm::bit_block_calc_count_range(buf, 5, 5+32-1);
    assert(cnt == 32);
@@ -4649,10 +4663,10 @@ void GAPCheck()
    int i;
    for (i = 5; i < 4 + 32; ++i)
    {
-        bit = bvect.get_bit(i);
+        bit = bvect_u.get_bit(i);
         assert(bit);
    }
-   int count = bvect.recalc_count();
+   int count = bvect_u.recalc_count();
    assert(count==32);
 
    cout << "Unaligned position ok." << endl;
@@ -4663,12 +4677,12 @@ void GAPCheck()
    {
    cout << "random test" << endl;
 
-   bvect   bvect;
+   bvect   bvect_r;
 
-   bvect.set_bit(0);
-   bvect.clear();
+   bvect_r.set_bit(0);
+   bvect_r.clear();
 
-   unsigned* buf = (unsigned*) bvect.get_block(0);
+   unsigned* buf = (unsigned*) bvect_r.get_block(0);
    for (int i = 0; i < 5000; ++i)
    {
         unsigned start = rand() % 65535;
@@ -4692,7 +4706,7 @@ void GAPCheck()
                  exit(1);
            }
 
-           unsigned count = bvect.recalc_count();
+           unsigned count = bvect_r.recalc_count();
 
            if (count != len)
            {
@@ -4704,7 +4718,7 @@ void GAPCheck()
 
            for (unsigned j = start; j < end; ++j)
            {
-                bool bit = bvect.get_bit(j);
+                bool bit = bvect_r.get_bit(j);
                 if (!bit)
                 {
                     cout << "random test: bit comparison failed. bit#" 
@@ -4714,7 +4728,7 @@ void GAPCheck()
            } // for j
 
         } 
-        bvect.clear();
+        bvect_r.clear();
 
         if ((i % 100)==0)
         {
@@ -4734,7 +4748,7 @@ void GAPCheck()
    {
    
    gap_vector gapv(0);
-   bvect   bvect;
+   bvect   bvect_a;
 
    gapv.set_bit(0);
    gapv.set_bit(2);
@@ -4745,16 +4759,16 @@ void GAPCheck()
    CheckCountGapRange(gapv, 3, 15);
 
    print_gap(gapv, 100);
-   bvect.set_bit(0);
-   bvect.clear();
+   bvect_a.set_bit(0);
+   bvect_a.clear();
 
-   unsigned* buf = (unsigned*) bvect.get_block(0);
+   unsigned* buf = (unsigned*) bvect_a.get_block(0);
 
 
    gapv.convert_to_bitset(buf);
 
 
-   unsigned bitcount = bvect.recalc_count();
+   unsigned bitcount = bvect_a.recalc_count();
 
 
    if (bitcount != 5)
@@ -5112,7 +5126,7 @@ void GAPCheck()
 }
 
 // -----------------------------------------------------------------------------
-
+static
 void SimpleGapFillSets(bvect&   bv0,
                        bvect&   bv1,
                        unsigned min,
@@ -5126,6 +5140,7 @@ void SimpleGapFillSets(bvect&   bv0,
     } // for i
 }
 
+static
 void GAPTestStress()
 {
     cout << "----------------------------------- GAP test stress " << endl;
@@ -5156,7 +5171,7 @@ void GAPTestStress()
 }
 
 // -----------------------------------------------------------------------------
-
+static
 void MutationTest()
 {
 
@@ -5231,6 +5246,7 @@ void MutationTest()
 
 }
 
+static
 void MutationOperationsTest()
 {
 
@@ -5413,7 +5429,7 @@ void MutationOperationsTest()
 
 }
 
-
+static
 void SerializationBufferTest()
 {
    cout << " ----------------------------------- Serialization Buffer test" << endl;
@@ -5482,7 +5498,7 @@ void SerializationBufferTest()
    cout << " ----------------------------------- Serialization Buffer test OK" << endl;
 }
 
-
+static
 void SerializationTest()
 {
 
@@ -5857,6 +5873,7 @@ void SerializationTest()
 
 }
 
+static
 void GetNextTest()
 {
    cout << "-------------------------------------------- GetNextTest" << endl;
@@ -6105,7 +6122,7 @@ void GetNextTest()
 }
 
 // Test contributed by Maxim Shemanarev.
-
+static
 void MaxSTest()
 {
    bvect vec;
@@ -6128,7 +6145,7 @@ void MaxSTest()
    }
 }
 
-
+static
 void CalcBeginMask()
 {
     printf("BeginMask:\n");
@@ -6153,6 +6170,7 @@ void CalcBeginMask()
     printf("\n");
 }
 
+static
 void CalcEndMask()
 {
     printf("EndMask:\n");
@@ -6177,7 +6195,7 @@ void CalcEndMask()
     printf("\n");
 }
 
-
+static
 void EnumeratorTest()
 {
     cout << "-------------------------------------------- EnumeratorTest" << endl;
@@ -6396,7 +6414,7 @@ void EnumeratorTest()
 }
 
 
-
+static
 void BlockLevelTest()
 {
     bvect  bv;
@@ -6452,6 +6470,7 @@ __int64 CalcBitCount64(__int64 b)
 // function to return bvector by value to test move semantics
 //
 
+static
 bvect bvect_test_return()
 {
     bvect bv1;
@@ -6471,7 +6490,7 @@ bvect bvect_test_return()
 
 
 
-
+static
 void SyntaxTest()
 {
     cout << "----------------------------- Syntax test." << endl;
@@ -6527,7 +6546,7 @@ void SyntaxTest()
     cout << "----------------------------- Syntax test ok." << endl;
 }
 
-
+static
 void SetTest()
 {
     {
@@ -6794,6 +6813,7 @@ template<class A, class B> void CompareMiniSet(const A& ms,
     }
 }
 
+static
 void MiniSetTest()
 {
     cout << "----------------------- MiniSetTest" << endl;
@@ -6946,7 +6966,7 @@ void MiniSetTest()
     cout << "----------------------- MiniSetTest ok" << endl;
 }
 
-
+inline
 unsigned CalcBitCount32(unsigned b)
 {
     b = (b & 0x55555555) + (b >> 1 & 0x55555555);
@@ -6957,7 +6977,7 @@ unsigned CalcBitCount32(unsigned b)
     return b;
 }
 
-
+static
 void PrintGapLevels(const gap_word_t* glevel)
 {
     cout << "Gap levels:" << endl;
@@ -6969,6 +6989,7 @@ void PrintGapLevels(const gap_word_t* glevel)
     cout << endl;
 }
 
+static
 void OptimGAPTest()
 {
     gap_word_t    glevel[bm::gap_levels];
@@ -7031,7 +7052,7 @@ void OptimGAPTest()
 }
 
 
-
+static
 void BitCountChangeTest()
 {
     cout << "---------------------------- BitCountChangeTest " << endl;
@@ -7542,7 +7563,7 @@ void BitCountChangeTest()
 
 
 
-
+static
 void DNACompressionTest()
 {
     const char seeds[] = 
@@ -7666,6 +7687,8 @@ void DNACompressionTest()
             cout << " popcnt="  << distance1[j][j]
                  << " Humming=" << distance1[j][n_row];            
             break;
+        default:
+            assert(0);
         }
         cout << endl;
     }
@@ -7772,6 +7795,8 @@ void DNACompressionTest()
 */    
     
 }
+
+void BitBlockTransposeTest();
 
 void BitBlockTransposeTest()
 {
@@ -8078,6 +8103,7 @@ void BitListTest()
 }
 */
 
+static
 void ResizeTest()
 {
     {{
@@ -8260,6 +8286,7 @@ void ResizeTest()
     }}
 }
 
+static
 void VerifyCountRange(const bvect& bv,
                       const bvect::blocks_count& bc_arr,
                       bm::id_t to)
@@ -8289,6 +8316,7 @@ void VerifyCountRange(const bvect& bv,
     }
 }
 
+static
 void CountRangeTest()
 {
     cout << "---------------------------- CountRangeTest..." << endl;
@@ -8362,7 +8390,7 @@ void CountRangeTest()
     cout << "---------------------------- CountRangeTest OK" << endl;
 }
 
-
+static
 void ExportTest()
 {
     cout << "---------------------------- ExportTest..." << endl;
@@ -8435,7 +8463,7 @@ void ExportTest()
     cout << "---------------------------- ExportTest Ok." << endl;
 }
 
-
+static
 void TestRecomb()
 {
     bm::word_t b1[bm::set_block_size]= {0,};
@@ -8478,7 +8506,7 @@ void TestRecomb()
 */
 }
 
-
+static
 void BitForEachTest()
 {
     cout << "---------------------------- BitForEachTest..." << endl;
@@ -8565,6 +8593,7 @@ void BitForEachTest()
     cout << "---------------------------- BitForEachTest Ok." << endl;
 }
 
+static
 void Log2Test()
 {
     cout << "---------------------------- Log2 Test..." << endl;
@@ -8679,6 +8708,7 @@ void BitEncoderTest()
 }
 */
 
+static
 void GammaEncoderTest()
 {
     cout << "---------------------------- GammaEncoderTest" << endl;
@@ -9128,6 +9158,7 @@ bool TestEqualSparseVectors(const SV& sv1, const SV& sv2, bool detailed = true)
     return true;
 }
 
+static
 void TestSparseVector()
 {
     cout << "---------------------------- Bit-plain sparse vector test" << endl;
@@ -9949,6 +9980,7 @@ void TestSparseVector()
 
 // fill pseudo-random plato pattern into two vectors
 //
+static
 void FillSparseIntervals(std::vector<unsigned>&                       vect,
                          bm::sparse_vector<unsigned, bm::bvector<> >& svect,
                          unsigned min,
@@ -10022,7 +10054,7 @@ void FillSparseIntervals(std::vector<unsigned>&                       vect,
     
 }
 
-
+static
 void TestSparseVector_Stress(unsigned count)
 {
 
@@ -10170,6 +10202,7 @@ void TestSparseVector_Stress(unsigned count)
 
 }
 
+inline
 void LoadBVDump(const char* filename, const char* filename_out=0, bool validate=false)
 {
     ifstream bv_file (filename, ios::in | ios::binary);
@@ -10283,6 +10316,7 @@ void LoadBVDump(const char* filename, const char* filename_out=0, bool validate=
 
 }
 
+inline
 void GroupByTest(const char* filename, const char* query_filename)
 {
     bvect bv_query;
@@ -10423,7 +10457,7 @@ void GroupByTest(const char* filename, const char* query_filename)
 }
 
 
-
+inline
 void LoadVectors(const char* dir_name, unsigned from, unsigned to)
 {
     vector<bvect*>   bv_list;
@@ -10561,59 +10595,8 @@ void LoadVectors(const char* dir_name, unsigned from, unsigned to)
 
 }
 
-void deser_test()
-{
-    const char* file_names[] = {"1", "2", "3", "4"};
-    const int file_lengths[] = {413760, 127855, 128640, 415192};
 
-    string base_path("c:\\dev\\deser\\");
-
-    bm::bvector<> bv(bm::BM_GAP);
-    bm::bvector<> bv2(bm::BM_GAP);
-
-    for(unsigned i = 0; i < sizeof(file_names) / sizeof(file_names[0]); ++i) {
-        string fname(base_path);
-        fname.append(file_names[i]);
-
-        ifstream f(fname.c_str(), ios::in | ios::binary);
-
-        if (!f.good()) {
-            std::cerr << "Bad file name " << fname.c_str() << endl;
-            return;
-        }
-
-        vector<char> v;
-        v.resize(file_lengths[i]);
-        f.read(&v[0], file_lengths[i]);
-
-        if (i == 3)
-        {
-            cout << " ";
-        }
-        bm::deserialize(bv, (unsigned char*)&v[0]);
-
-        bm::bvector<> bv_temp(bm::BM_GAP);
-        bm::deserialize(bv_temp, (unsigned char*)&v[0]);
-
-        bv2 |= bv_temp;
-
-    }
-    cerr << bv.count() << " (correct answer = " << bv2.count() << ")" << endl;
-    cerr << abs((int)(bv.count() - bv2.count())) << endl;
-
-    bv ^= bv2;
-    bv.optimize();
-
-    cerr << bv.count() << endl;
-
-//    print_stat(bv);
-    cout << endl;
-
-    bv2.optimize();
-//    print_stat(bv2, 126);
-
-}
-
+static
 void TestSIMDUtils()
 {
     cout << "------------------------ Test SIMD Utils" << endl;
@@ -11075,6 +11058,7 @@ void TestSIMDUtils()
     cout << "------------------------ Test SIMD Utils OK" << endl;
 }
 
+static
 void AddressResolverTest()
 {
     bm::id_t id_to;
@@ -11171,8 +11155,9 @@ void AddressResolverTest()
     
 }
 
-/// generate pseudo-random bit-vector, mix of blocks
-///
+// generate pseudo-random bit-vector, mix of blocks
+//
+static
 void generate_bvector(bm::bvector<>& bv)
 {
     unsigned       vector_max = 40000000;
@@ -11200,6 +11185,7 @@ void generate_bvector(bm::bvector<>& bv)
 }
 
 extern "C" {
+    static
     int bit_decode_func(void* handle_ptr, bm::id_t bit_idx)
     {
         std::vector<bm::id_t>* vp = (std::vector<bm::id_t>*)handle_ptr;
@@ -11209,7 +11195,7 @@ extern "C" {
 } // extern C
 
 
-
+static
 void BvectorBitForEachTest()
 {
     cout << "------------------------ bvector BitForEach Test" << endl;
@@ -11363,7 +11349,7 @@ void BvectorBitForEachTest()
     cout << "------------------------ bvector BitForEach Test OK" << endl;
 }
 
-
+static
 void FillTestBuffer(bm::compressed_buffer_collection<bvect>::buffer_type& buf)
 {
     unsigned sz_factor = rand() % 10;
@@ -11380,6 +11366,7 @@ void FillTestBuffer(bm::compressed_buffer_collection<bvect>::buffer_type& buf)
     }
 }
 
+static
 void GenerateCompressedBufferCollection(bm::compressed_buffer_collection<bvect>& cbc)
 {
     unsigned sz = rand() % 10000;
@@ -11399,6 +11386,7 @@ void GenerateCompressedBufferCollection(bm::compressed_buffer_collection<bvect>&
     cbc.sync();
 }
 
+static
 void TestCompressedCollection()
 {
     cout << "------------------------ Compressed collection Test" << endl;

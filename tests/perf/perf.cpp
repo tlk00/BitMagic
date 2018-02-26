@@ -102,7 +102,7 @@ private:
 typedef bm::bvector<> bvect;
 
 
-
+static
 void SimpleFillSets(test_bitset& bset, 
                        bvect& bv,
                        unsigned min, 
@@ -122,7 +122,7 @@ void SimpleFillSets(test_bitset& bset,
 // Interval filling.
 // 111........111111........111111..........11111111.......1111111...
 //
-
+static
 void FillSetsIntervals(test_bitset& bset, 
                        bvect& bv,
                        unsigned min, 
@@ -190,7 +190,7 @@ void FillSetsIntervals(test_bitset& bset,
 
 }
 
-
+static
 void MemCpyTest()
 {
     unsigned* m1 = new unsigned[BSIZE/32];
@@ -226,7 +226,7 @@ void MemCpyTest()
     delete [] m2;
 }
 
-
+static
 void BitCountTest()
 {
     {
@@ -269,7 +269,7 @@ void BitCountTest()
     }
 }
 
-
+static
 void BitForEachTest()
 {
     // setup the test data
@@ -365,7 +365,7 @@ void BitForEachTest()
     delete [] test_arr;
 }
 
-
+static
 void BitCountSparseTest()
 {
     bvect*  bv = new bvect();
@@ -424,7 +424,7 @@ void BitCountSparseTest()
     delete bset;
 }
 
-
+static
 void BitTestSparseTest()
 {
     auto_ptr<bvect>  bv0(new bvect());
@@ -477,7 +477,7 @@ void BitTestSparseTest()
 
 }
 
-
+static
 void EnumeratorGoToTest()
 {
     auto_ptr<bvect>  bv0(new bvect());
@@ -538,7 +538,7 @@ void EnumeratorGoToTest()
 }
 
 
-
+static
 void BitCompareTest()
 {
     {
@@ -632,6 +632,7 @@ void BitCompareTest()
 }
 
 extern "C" {
+    static
     int bit_visitor_func(void* handle_ptr, bm::id_t bit_idx)
     {
         std::vector<bm::id_t>* vp = (std::vector<bm::id_t>*)handle_ptr;
@@ -640,7 +641,7 @@ extern "C" {
     }
 } // extern C
 
-
+static
 void EnumeratorTest()
 {
     bvect                 bv1, bv2, bv3, bv4;
@@ -782,7 +783,7 @@ void EnumeratorTest()
 
 }
 
-
+static
 void EnumeratorTestGAP()
 {
     bvect*  bv = new bvect();
@@ -855,6 +856,7 @@ void EnumeratorTestGAP()
 
 }
 
+static
 void SerializationTest()
 {
     bvect bv_sparse;
@@ -920,6 +922,7 @@ void SerializationTest()
     delete [] buf;
 }
 
+static
 void InvertTest()
 {
     bvect*  bv = new bvect();
@@ -949,7 +952,7 @@ void InvertTest()
     delete bset;
 }
 
-
+static
 void AndTest()
 {
     bvect*  bv1 = new bvect();
@@ -985,6 +988,7 @@ void AndTest()
     delete bset2;
 }
 
+static
 void XorTest()
 {
     bvect*  bv1 = new bvect();
@@ -1020,6 +1024,7 @@ void XorTest()
     delete bset2;
 }
 
+static
 void SubTest()
 {
     bvect*  bv1 = new bvect();
@@ -1043,7 +1048,7 @@ void SubTest()
     delete bv2;
 }
 
-
+static
 void XorCountTest()
 {
     bvect*  bv1 = new bvect();
@@ -1184,6 +1189,7 @@ void XorCountTest()
     delete bset2;    
 }
 
+static
 void AndCountTest()
 {
     bvect*  bv1 = new bvect();
@@ -1325,7 +1331,7 @@ void AndCountTest()
 }
 
 
-
+static
 void TI_MetricTest()
 {
     bvect*  bv1 = new bvect();
@@ -1509,15 +1515,18 @@ void TI_MetricTest()
     delete bset2;    
 }
 
+static
 void BitBlockTransposeTest()
 {
+/*
     bm::word_t BM_VECT_ALIGN block1[bm::set_block_size] BM_VECT_ALIGN_ATTR = { 0, };
-    unsigned   BM_VECT_ALIGN tmatrix1[32][bm::set_block_plain_size] BM_VECT_ALIGN_ATTR;
 
     for (unsigned i = 0; i < bm::set_block_size; ++i)
     {
         block1[i] = 1 | (1 << 5) | (7 << 15) | (3 << 22);
     }
+*/
+    unsigned   BM_VECT_ALIGN tmatrix1[32][bm::set_block_plain_size] BM_VECT_ALIGN_ATTR;
 
     const unsigned blocks_count = 70000;
     bm::word_t* blocks[blocks_count];
@@ -1596,6 +1605,7 @@ void BitBlockTransposeTest()
 
 }
 
+static
 void BitBlockRotateTest()
 {
     bm::word_t blk0[bm::set_block_size] = { 0 };
@@ -1634,6 +1644,7 @@ void BitBlockRotateTest()
 
 }
 
+static
 void ptest()
 {
     bvect*  bv_small = new bvect(bm::BM_GAP);
@@ -1688,7 +1699,7 @@ typedef bm::sparse_vector<unsigned, bvect> svect;
 
 // create a benchmark vector with a few dufferent distribution patterns
 //
-
+static
 void FillSparseIntervals(svect& sv)
 {
     sv.resize(250000000);
@@ -1714,7 +1725,7 @@ void FillSparseIntervals(svect& sv)
     }
 }
 
-
+static
 void SparseVectorAccessTest()
 {
     std::vector<unsigned> target;
