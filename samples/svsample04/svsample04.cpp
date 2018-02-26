@@ -28,6 +28,7 @@ For more information please visit:  http://bitmagic.io
 
 using namespace std;
 
+static
 void print_svector(const bm::sparse_vector<unsigned, bm::bvector<> >& sv)
 {
     if (sv.size() == 0)
@@ -121,6 +122,27 @@ int main(void)
         sv1.join(sv3);
         
         print_svector(sv1); // 10: [ 100, 200, NULL, 10, 20, NULL, NULL, NULL, NULL, 300 ]
+
+        // traverse and print the non-NULL values
+        // using bit-vector of assigned values
+        //
+        //          [0] = 100, [1] = 200, [3] = 10, [4] = 20, [9] = 300
+        //
+        {
+            const bm::bvector<>* bv_non_null = sv1.get_null_bvector();
+            if (bv_non_null)
+            {
+                bm::bvector<>::enumerator en = bv_non_null->first();
+
+                for (; en.valid(); ++en)
+                {
+                    unsigned idx = *en;
+                    unsigned v = sv1[idx];
+                    std::cout << "[" << idx << "] = " << v << ", ";
+                }
+                std::cout << endl;
+            }
+        }
 
 
         // decode sparse_vector with NULL values

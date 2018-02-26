@@ -26,6 +26,7 @@ For more information please visit:  http://bitmagic.io
 
 using namespace std;
 
+static
 void print_bvector(const bm::bvector<>& bv)
 {
     unsigned value = bv.get_first();

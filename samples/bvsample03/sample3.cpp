@@ -40,7 +40,7 @@ const unsigned MAX_VALUE = 1000000;
 // This procedure creates very dense bitvectors.
 // The resulting set will consists mostly from ON (1) bits
 // interrupted with small gaps of 0 bits.
-
+static
 void fill_bvector(bm::bvector<>* bv1, bm::bvector<>* bv2)
 {
     for (unsigned i = 0; i < MAX_VALUE; ++i)
@@ -53,7 +53,7 @@ void fill_bvector(bm::bvector<>* bv1, bm::bvector<>* bv2)
     }
 }
 
-
+static
 void print_statistics(const bm::bvector<>& bv)
 {
     bm::bvector<>::statistics st;

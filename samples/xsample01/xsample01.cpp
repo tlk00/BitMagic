@@ -93,6 +93,7 @@ const bm::gap_word_t gap_len_table_sparse<T>::_len[bm::gap_levels] =
 
 // simple bit-vector class factory for the project
 //
+static
 TBVector* construct_bvector()
 {
     // in this example we plan to keep lots of vectors in memory, thus
@@ -210,6 +211,7 @@ void sparse_vect_index::get_vector(unsigned id, std::vector<unsigned>& vect) con
 // another random integers of near neighbors
 // the other adds ints randomly without following any system
 //
+static
 void generate_random_vector(TBVector* bv)
 {
     unsigned method = rand() % 5; // pick a generation method
@@ -252,6 +254,7 @@ void generate_random_vector(TBVector* bv)
 
 // generate map of bit-vectors, each filled with just a few bits
 //
+static
 void generate_bv_index(bv_index& bvi)
 {
     for (unsigned i = 0; i < index_size; ++i)
@@ -272,6 +275,7 @@ void generate_bv_index(bv_index& bvi)
 
 // calculate memory footprint for in memory index
 //
+static
 size_t calc_memory_footprint(const bv_index& bvi)
 {
     size_t mem_total = 0;
@@ -293,6 +297,7 @@ size_t calc_memory_footprint(const bv_index& bvi)
 
 // convert bit-vector index to bit-vector serialized index
 //
+static
 size_t convert_bv2bvs(const bv_index& bvi, bvs_index& bvs)
 {
     size_t  mem_total = 0;
@@ -354,6 +359,7 @@ size_t convert_bv2bvs(const bv_index& bvi, bvs_index& bvs)
 
 // convert bit-vector index to vector<usingned>
 //
+static
 size_t convert_bv2vect(const bv_index& bvi, vect_index& vidx)
 {
     size_t  mem_total = 0;
@@ -407,6 +413,7 @@ void bv2delta(const TBVector& bv, std::vector<unsigned>& vect)
 
 // convert bit-vector index to bm::sparse_vector
 //
+static
 size_t convert_bv2sv(const bv_index& bvi, sparse_vect_index& sv_idx)
 {
     size_t  mem_total = 0;
@@ -540,6 +547,7 @@ size_t convert_bv2sv(const bv_index& bvi, sparse_vect_index& sv_idx)
 // speed test for in-memory bit vectors
 // benchmark performs a mix of logical operations
 //
+static
 void speed_test_bv_index(const bv_index& bvi)
 {
     TBVector bv_join; // OR join vector
@@ -598,6 +606,7 @@ void speed_test_bv_index(const bv_index& bvi)
 // to perform logical operation between a BLOB and bvector<> in memory
 // and avoids extra decompression overhead
 //
+static
 void speed_test_bvs_index(const bvs_index& bvs)
 {
     TBVector bv_join; // OR join vector
@@ -661,6 +670,7 @@ void speed_test_bvs_index(const bvs_index& bvs)
     tt1.add_repeats(benchmark_ops + 1);
 }
 
+static
 void speed_test_vect_index(const vect_index& vecti)
 {
     TBVector bv_join; // OR join vector
@@ -722,6 +732,7 @@ void speed_test_vect_index(const vect_index& vecti)
     tt1.add_repeats(benchmark_ops + 1);
 }
 
+static
 void speed_test_sv_index(const sparse_vect_index& svi)
 {
     TBVector bv_join; // OR join vector

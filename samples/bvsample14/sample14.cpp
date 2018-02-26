@@ -39,6 +39,7 @@ using namespace std;
 
 const unsigned MAX_VALUE = 1000000;
 
+static
 void fill_bvector(bm::bvector<>* bv)
 {
     for (unsigned i = 0; i < MAX_VALUE; ++i)

@@ -44,6 +44,7 @@ const unsigned MAX_VALUE = 1000000;
 // The resulting set will consists mostly from ON (1) bits
 // interrupted with small gaps of 0 bits.
 
+static
 void fill_bvector(bm::bvector<>* bv)
 {
     for (unsigned i = 0; i < MAX_VALUE; ++i)
@@ -55,7 +56,7 @@ void fill_bvector(bm::bvector<>* bv)
     }
 }
 
-
+static
 void print_statistics(const bm::bvector<>& bv)
 {
     bm::bvector<>::statistics st;
@@ -68,7 +69,7 @@ void print_statistics(const bm::bvector<>& bv)
     cout << "Max.serialize mem.:" << st.max_serialize_mem << endl << endl;;
 }
 
-
+static
 unsigned char* serialize_bvector(bm::serializer<bm::bvector<> >& bvs, 
                                  bm::bvector<>& bv)
 {
