@@ -92,14 +92,11 @@ public:
     
     byte_buffer(const byte_buffer& lhs)
     {
+        byte_buf_ = 0;
+        size_ = capacity_ = alloc_factor_ = 0;
         if (lhs.byte_buf_)
         {
             copy_from(lhs.byte_buf_, lhs.size_);
-        }
-        else
-        {
-            byte_buf_ = 0;
-            size_ = capacity_ = 0;
         }
     }
     
