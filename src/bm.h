@@ -1092,11 +1092,11 @@ public:
           size_(bm::id_max)
     {
         init();
-        std::initializer_list<bm::id_t>::const_iterator start = il.begin();
-        std::initializer_list<bm::id_t>::const_iterator end = il.end();
-        for (; start < end; ++start)
+        std::initializer_list<bm::id_t>::const_iterator it_start = il.begin();
+        std::initializer_list<bm::id_t>::const_iterator it_end = il.end();
+        for (; it_start < it_end; ++it_start)
         {
-            this->set_bit_no_check(*start);
+            this->set_bit_no_check(*it_start);
         }
 #ifdef BMCOUNTOPT
         count_ = (bm::id_t)il.size();
