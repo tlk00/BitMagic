@@ -641,12 +641,23 @@ void for_each_nzblock2(T*** root, unsigned size1, F& f)
         {
             if (bm::conditional<sizeof(T*) == 8>::test()) // 64-bit SSE4
             {
-                for (unsigned j = 0; j < bm::set_array_size; j+=2)
+                T* blk0, *blk1;
+                __m128i w0;
+                for (unsigned j = 0; j < bm::set_array_size; j+=4)
                 {
-                    T* blk0 = blk_blk[j];
-                    T* blk1 = blk_blk[j+1];
-                    
-                    __m128i w0 = _mm_set_epi64x((bm::id64_t)blk0, (bm::id64_t)blk1);
+                    blk0 = blk_blk[j + 0];
+                    blk1 = blk_blk[j + 1];
+                    w0 = _mm_set_epi64x((bm::id64_t)blk0, (bm::id64_t)blk1);
+                    if (!_mm_testz_si128(w0, w0))
+                    {
+                        if (blk0)
+                            f(blk0);
+                        if (blk1)
+                            f(blk1);
+                    }
+                    blk0 = blk_blk[j + 2];
+                    blk1 = blk_blk[j + 3];
+                    w0 = _mm_set_epi64x((bm::id64_t)blk0, (bm::id64_t)blk1);
                     if (!_mm_testz_si128(w0, w0))
                     {
                         if (blk0)
@@ -665,6 +676,47 @@ void for_each_nzblock2(T*** root, unsigned size1, F& f)
             }
         }
     }  // for i
+#elif defined(BMAVX2OPT)
+    for (unsigned i = 0; i < size1; ++i)
+    {
+        T** blk_blk;
+        if ((blk_blk = root[i]) != 0)
+        {
+            if (bm::conditional<sizeof(T*) == 8>::test()) // 64-bit SSE4
+            {
+                T* blk0, *blk1, *blk2, *blk3;
+                __m256i w0;
+                for (unsigned j = 0; j < bm::set_array_size; j += 4)
+                {
+                    blk0 = blk_blk[j + 0];
+                    blk1 = blk_blk[j + 1];
+                    blk2 = blk_blk[j + 2];
+                    blk3 = blk_blk[j + 3];
+
+                    w0 = _mm256_set_epi64x((bm::id64_t)blk3, (bm::id64_t)blk2, (bm::id64_t)blk1, (bm::id64_t)blk0);
+                    if (!_mm256_testz_si256(w0, w0))
+                    {
+                        if (blk0)
+                            f(blk0);
+                        if (blk1)
+                            f(blk1);
+                        if (blk2)
+                            f(blk2);
+                        if (blk3)
+                            f(blk3);
+                    }
+                } // for j
+            }
+            else
+            {
+                for (unsigned j = 0; j < bm::set_array_size; ++j)
+                {
+                    if (blk_blk[j]) f(blk_blk[j]);
+                }
+            }
+        }
+    }  // for i
+
 #else // non-SIMD mode
     for (unsigned i = 0; i < size1; ++i)
     {
