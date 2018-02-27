@@ -3355,6 +3355,16 @@ void iterator_deserializer<BV, SerialIterator>::deserialize(
                     case set_OR: case set_XOR:
                         blk_target = bman_target.make_bit_block(bv_block_idx);
                         break;
+                    case set_ASSIGN:
+                    case set_COUNT:
+                    case set_COUNT_AND:
+                    case set_COUNT_XOR:
+                    case set_COUNT_OR:
+                    case set_COUNT_SUB_AB:
+                    case set_COUNT_SUB_BA:
+                    case set_COUNT_A:
+                    case set_COUNT_B:
+                    case set_END:
                     default:
                         BM_ASSERT(0);
                     }
@@ -3754,6 +3764,7 @@ iterator_deserializer<BV, SerialIterator>::deserialize(
                         bman.set_gap_block(
                             bv_block_idx, gap_temp_block, level);
                         break;
+                    
                     default:
                         BM_ASSERT(0);
                     } // switch

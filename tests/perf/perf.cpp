@@ -1644,7 +1644,7 @@ void BitBlockRotateTest()
 
 }
 
-static
+inline
 void ptest()
 {
     bvect*  bv_small = new bvect(bm::BM_GAP);

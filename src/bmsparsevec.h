@@ -878,26 +878,26 @@ sparse_vector<Val, BV>::extract(value_type* arr,
     ///
     struct sv_decode_visitor_func
     {
-        sv_decode_visitor_func(value_type* arr,
-                               value_type mask,
-                               size_type  offset)
-        : arr_(arr), mask_(mask), off_(offset)
+        sv_decode_visitor_func(value_type* varr,
+                               value_type  mask,
+                               size_type   off)
+        : arr_(varr), mask_(mask), off_(off)
         {}
         
-        void add_bits(bm::id_t offset, const unsigned char* bits, unsigned size)
+        void add_bits(bm::id_t arr_offset, const unsigned char* bits, unsigned bits_size)
         {
-            size_type idx_base = offset - off_;
-            for (unsigned i = 0; i < size; ++i)
+            size_type idx_base = arr_offset - off_;
+            for (unsigned i = 0; i < bits_size; ++i)
             {
                 size_type idx = idx_base + bits[i];
                 arr_[idx] |= mask_;
             }
             
         }
-        void add_range(bm::id_t offset, unsigned size)
+        void add_range(bm::id_t arr_offset, unsigned sz)
         {
-            size_type idx_base = offset - off_;
-            for (unsigned i = 0; i < size; ++i)
+            size_type idx_base = arr_offset - off_;
+            for (unsigned i = 0; i < sz; ++i)
             {
                 arr_[i + idx_base] |= mask_;
             }
