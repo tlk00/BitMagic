@@ -103,14 +103,14 @@ struct sparse_vector_serial_layout
         return plain_ptrs_[i];
     }
     
-    /// Return serializatio buffer pointer
+    /// Return serialization buffer pointer
     const unsigned char* buf() const { return buf_.buf(); /*return buffer_;*/ }
     
 private:
     sparse_vector_serial_layout(const sparse_vector_serial_layout&);
     void operator=(const sparse_vector_serial_layout&);
 protected:
-    buffer_type    buf_;                              ///< serialization buffer
+    buffer_type    buf_;                       ///< serialization buffer
     unsigned char* plain_ptrs_[SV::sv_plains]; ///< pointers on serialized bit-palins
     unsigned plane_size_[SV::sv_plains];       ///< serialized plain size
 };
