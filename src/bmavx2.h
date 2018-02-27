@@ -411,6 +411,7 @@ bm::id_t avx2_bit_count_xor(const __m256i* BMRESTRICT block,
   @brief AND NOT bit count for two aligned bit-blocks
   @ingroup AVX2
 */
+inline
 bm::id_t avx2_bit_count_sub(const __m256i* BMRESTRICT block,
     const __m256i* BMRESTRICT block_end,
     const __m256i* BMRESTRICT mask_block)
