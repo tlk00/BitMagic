@@ -633,26 +633,60 @@ void for_each_nzblock(T*** root, unsigned size1,
 template<class T, class F> 
 void for_each_nzblock2(T*** root, unsigned size1, F& f)
 {
+#ifdef BMSSE42OPT
+    for (unsigned i = 0; i < size1; ++i)
+    {
+        T** blk_blk;
+        if ((blk_blk = root[i])!=0)
+        {
+            if (bm::conditional<sizeof(T*) == 8>::test()) // 64-bit SSE4
+            {
+                for (unsigned j = 0; j < bm::set_array_size; j+=2)
+                {
+                    T* blk0 = blk_blk[j];
+                    T* blk1 = blk_blk[j+1];
+                    
+                    __m128i w0 = _mm_set_epi64x((bm::id64_t)blk0, (bm::id64_t)blk1);
+                    if (!_mm_testz_si128(w0, w0))
+                    {
+                        if (blk0)
+                            f(blk0);
+                        if (blk1)
+                            f(blk1);
+                    }
+                } // for j
+            }
+            else
+            {
+                for (unsigned j = 0; j < bm::set_array_size; ++j)
+                {
+                    if (blk_blk[j]) f(blk_blk[j]);
+                }
+            }
+        }
+    }  // for i
+#else // non-SIMD mode
     for (unsigned i = 0; i < size1; ++i)
     {
         T** blk_blk;
         if ((blk_blk = root[i])!=0) 
-        {            
+        {
             unsigned j = 0;
             do
-            {                
-                if (blk_blk[j]) 
+            {
+                if (blk_blk[j])
                     f(blk_blk[j]);
-                if (blk_blk[j+1]) 
+                if (blk_blk[j+1])
                     f(blk_blk[j+1]);
-                if (blk_blk[j+2]) 
+                if (blk_blk[j+2])
                     f(blk_blk[j+2]);
-                if (blk_blk[j+3]) 
+                if (blk_blk[j+3])
                     f(blk_blk[j+3]);
                 j += 4;
             } while (j < bm::set_array_size);
         }
     }  // for i
+#endif
 }
 
 

@@ -3148,7 +3148,7 @@ iterator_deserializer<BV, SerialIterator>::finalize_target_vector(
                 for (;j < bm::set_array_size; ++j, ++bv_block_idx)
                 {
                     if (blk_blk[j])
-                        count += bman.block_bitcount(blk_blk[j]);//, bv_block_idx);
+                        count += bman.block_bitcount(blk_blk[j]);
                 } // for j
                 j = 0;
             } // for i
@@ -3625,8 +3625,7 @@ iterator_deserializer<BV, SerialIterator>::deserialize(
                     // results with same block data
                     // all we need is to bitcount bv block
                     {
-                    unsigned c = bman.block_bitcount(blk);//, bv_block_idx);
-                    count += c;
+                    count += blk ? bman.block_bitcount(blk) : 0;
 					if (exit_on_one && count) // early exit
 						return count;
                     }
@@ -3661,7 +3660,7 @@ iterator_deserializer<BV, SerialIterator>::deserialize(
                 // nothing to do
                 break;
             case set_COUNT_AND: case set_COUNT_A:
-                count += bman.block_bitcount(blk);//, bv_block_idx);
+                count += blk ? bman.block_bitcount(blk) : 0;
                 break;
             default:
                 if (blk)

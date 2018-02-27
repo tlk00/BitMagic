@@ -561,7 +561,7 @@ public:
     public:
         block_free_func(blocks_manager& bm) : bm_func_base(bm) {}
 
-        void operator()(bm::word_t* block)//, unsigned idx)
+        void operator()(bm::word_t* block)
         {
             blocks_manager& bman = this->bm_;
             if (BM_IS_GAP(block)) // gap block
@@ -1361,11 +1361,11 @@ public:
     /**
         Count number of bits ON in the block
     */
-    bm::id_t block_bitcount(const bm::word_t* block) const
-    { 
-        if (!block) return 0;
+    static
+    bm::id_t block_bitcount(const bm::word_t* block)
+    {
+        BM_ASSERT(block);
         id_t count;
-
         if (BM_IS_GAP(block))
         {
             count = gap_bit_count_unr(BMGAP_PTR(block));
