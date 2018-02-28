@@ -609,9 +609,64 @@ void for_each_nzblock(T*** root, unsigned size1,
 
         unsigned non_empty_top = 0;
         unsigned r = i * bm::set_array_size;
-        for (unsigned j = 0;j < bm::set_array_size; ++j)
+        for (unsigned j = 0; j < bm::set_array_size; )
         {
-            if (blk_blk[j]) 
+#ifdef BMAVX2OPT
+            T* blk0 = blk_blk[j + 0];
+            T* blk1 = blk_blk[j + 1];
+            T* blk2 = blk_blk[j + 2];
+            T* blk3 = blk_blk[j + 3];
+
+            __m256i w0 = 
+                _mm256_set_epi64x((bm::id64_t)blk3, (bm::id64_t)blk2, (bm::id64_t)blk1, (bm::id64_t)blk0);
+            if (!_mm256_testz_si256(w0, w0))
+            {
+                unsigned block_idx = r + j + 0;
+                if (blk0)
+                {
+                    f(blk0, block_idx);
+                    non_empty_top += (blk_blk[j] != 0);
+                }
+                else
+                    f.on_empty_block(block_idx);
+
+                ++block_idx;
+                if (blk1)
+                {
+                    f(blk1, block_idx);
+                    non_empty_top += (blk_blk[j + 1] != 0);
+                }
+                else
+                    f.on_empty_block(block_idx);
+
+                ++block_idx;
+                if (blk2)
+                {
+                    f(blk2, block_idx);
+                    non_empty_top += (blk_blk[j + 2] != 0);
+                }
+                else
+                    f.on_empty_block(block_idx);
+
+                ++block_idx;
+                if (blk3)
+                {
+                    f(blk3, block_idx);
+                    non_empty_top += (blk_blk[j + 3] != 0);
+                }
+                else
+                    f.on_empty_block(block_idx);
+            }
+            else
+            {
+                f.on_empty_block(r + j + 0);
+                f.on_empty_block(r + j + 1);
+                f.on_empty_block(r + j + 2);
+                f.on_empty_block(r + j + 3);
+            }
+            j += 4;
+#else
+            if (blk_blk[j])
             {
                 f(blk_blk[j], r + j);
                 non_empty_top += (blk_blk[j] != 0);// re-check for mutation
@@ -620,6 +675,8 @@ void for_each_nzblock(T*** root, unsigned size1,
             {
                 f.on_empty_block(r + j);
             }
+            ++j;
+#endif
         } // for j
         if (non_empty_top == 0)
         {
@@ -3292,7 +3349,7 @@ bm::id_t bit_block_calc_count_to(const bm::word_t*  block,
         BM_AVX2_POPCNT_PROLOG
     
         __m256i cnt = _mm256_setzero_si256();
-        uint64_t* cnt64;
+        bm::id64_t* cnt64;
     
         for ( ;bitcount >= 256; bitcount -= 256)
         {
@@ -3303,7 +3360,7 @@ bm::id_t bit_block_calc_count_to(const bm::word_t*  block,
 
             block += 8;
         }
-        cnt64 = (uint64_t*)&cnt;
+        cnt64 = (bm::id64_t*)&cnt;
         count += (unsigned)(cnt64[0] + cnt64[1] + cnt64[2] + cnt64[3]);
     #else
         for ( ;bitcount >= 64; bitcount -= 64)
