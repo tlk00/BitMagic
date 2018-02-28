@@ -154,7 +154,11 @@ BMFORCEINLINE
 int word_bitcount64(bm::id64_t x)
 {
 #if defined(BMSSE42OPT) || defined(BMAVX2OPT)
+#  ifdef BM64OPT
     return (int)_mm_popcnt_u64(x);
+#  else
+    return _mm_popcnt_u32(x >> 32) + _mm_popcnt_u32(x & 0xFFFFFFFFUL);
+#  endif
 #else
     x = x - ((x >> 1) & 0x5555555555555555);
     x = (x & 0x3333333333333333) + ((x >> 2) & 0x3333333333333333);
