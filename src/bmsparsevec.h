@@ -94,14 +94,24 @@ public:
         }
         bool operator==(const reference& ref) const
                                 { return bool(*this) == bool(ref); }
+        bool is_null() const { return sv_.is_null(idx_); }
     private:
         sparse_vector<Val, BV>& sv_;
         size_type               idx_;
     };
 
+    enum bit_plains
+    {
+        sv_plains = (sizeof(value_type) * 8 + 1),
+        sv_value_plains = (sizeof(value_type) * 8)
+    };
+
 public:
     /*!
         \brief Sparse vector constructor
+     
+        \param null_able - defines if vector supports NULL values flag
+            by default it is OFF, use bm::use_null to enable it
         \param ap - allocation strategy for underlying bit-vectors
         Default allocation policy uses BM_BIT setting (fastest access)
         \param bv_max_size - maximum possible size of underlying bit-vectors
@@ -113,13 +123,33 @@ public:
         \sa bm::bvector<>::allocation_policy
         \sa bm::startegy
     */
-    sparse_vector(allocation_policy_type ap = allocation_policy_type(),
+    sparse_vector(bm::null_support null_able = bm::no_null,
+                  allocation_policy_type ap = allocation_policy_type(),
                   size_type bv_max_size = bm::id_max,
                   const allocator_type&   alloc  = allocator_type());
     
     /*! copy-ctor */
     sparse_vector(const sparse_vector<Val, BV>& sv);
 
+    /*! copy assignmment operator */
+    sparse_vector<Val,BV>& operator = (const sparse_vector<Val, BV>& sv)
+    {
+        if (this != &sv)
+        {
+            clear();
+            resize(sv.size());
+            bv_size_ = sv.bv_size_;
+            alloc_ = sv.alloc_;
+            effective_plains_ = sv.effective_plains_;
+
+            for (size_type i = 0; i < sv.stored_plains(); ++i)
+            {
+                const bvector_type* bv = sv.plains_[i];
+                plains_[i] = bv ? construct_bvector(bv) : 0;
+            } // for i
+        }
+        return *this;
+    }
 
 #ifndef BM_NO_CXX11
     /*! move-ctor */
@@ -138,47 +168,16 @@ public:
     }
 #endif
 
-    /*! copy assignmment operator */
-    sparse_vector<Val,BV>& operator = (const sparse_vector<Val, BV>& sv)
-    {
-        if (this != &sv)
-        {
-            clear();
-            resize(sv.size());
-            bv_size_ = sv.bv_size_;
-            alloc_ = sv.alloc_;
-            effective_plains_ = sv.effective_plains_;
-
-            for (size_type i = 0; i < sv.effective_plains(); ++i)
-            {
-                const bvector_type* bv = sv.plains_[i];
-                if (bv)
-                {
-#ifdef BM_NO_STL   // C compatibility mode
-                    void* mem = ::malloc(sizeof(bvector_type));
-                    if (mem == 0)
-                    {
-                        BM_ASSERT_THROW(false, BM_ERR_BADALLOC);
-                    }
-                    plains[i] = new(mem) bvector_type(*bv);
-#else
-                    plains_[i] = new bvector_type(*bv);
-#endif
-                }
-            } // for i
-        }
-        return *this;
-    }
-    
-    
     ~sparse_vector() BMNOEXEPT;
     
+    /**
+        \brief Operator to get write access to an element
+    */
     reference operator[](size_type idx)
     {
         BM_ASSERT(idx < size_);
         return reference(*this, idx);
     }
-
     
     /*! \brief content exchange
     */
@@ -191,6 +190,30 @@ public:
     */
     value_type operator[](size_type idx) const { return this->get(idx); }
     
+    
+    /**
+        \brief check if container supports NULL(unassigned) values
+    */
+    bool is_nullable() const;
+    
+    /**
+        \brief Get bit-vector of assigned values or NULL
+        (if not constructed that way)
+    */
+    const bvector_type* get_null_bvector() const;
+    
+    /** \brief test if specified element is NULL
+        \param idx - element index
+        \return true if it is NULL false if it was assigned or container
+        is not configured to support assignment flags
+    */
+    bool is_null(size_type idx) const;
+    
+    /** \brief set specified element to unassigned value (NULL)
+        \param idx - element index
+    */
+    void set_null(size_type idx);
+
     /*!
         \brief Import list of elements from a C-style array
         \param arr  - source array
@@ -270,6 +293,13 @@ public:
     void set(size_type idx, value_type v);
 
     /*!
+        \brief clear specified element with bounds checking and automatic resize
+        \param idx - element index
+    */
+    void clear(size_type idx, bool set_null = false);
+
+
+    /*!
         \brief push value back into vector
         \param v   - element value
     */
@@ -277,9 +307,15 @@ public:
     
     /*!
         \brief check if another sparse vector has the same content and size
+     
+        \param sv        - sparse vector for comparison
+        \param null_able - flag to consider NULL vector in comparison (default)
+                           or compare only value content plains
+     
         \return true, if it is the same
     */
-    bool equal(const sparse_vector<Val, BV>& sv) const;
+    bool equal(const sparse_vector<Val, BV>& sv,
+               bm::null_support null_able = bm::use_null) const;
 
 
     /*!
@@ -329,8 +365,11 @@ public:
     /*!
         \brief get total number of bit-plains in the vector
     */
-    static unsigned plains() { return unsigned(sizeof(Val)*8); }
-    
+    static unsigned plains() { return value_bits(); }
+
+    /** Number of stored bit-plains (value plains + extra */
+    static unsigned stored_plains() { return value_bits()+1; }
+
     /*!
         \brief get access to bit-plain as is (can return NULL)
     */
@@ -346,8 +385,11 @@ public:
         \brief clear range (assign bit 0 for all plains)
         \param left  - interval start
         \param right - interval end (closed interval)
+        \param set_null - set cleared values to unassigned (NULL)
     */
-    sparse_vector<Val, BV>& clear_range(size_type left, size_type right);
+    sparse_vector<Val, BV>& clear_range(size_type left,
+                                        size_type right,
+                                        bool set_null = false);
     
     
     // -------------------------- auxiliary methods, for internal use
@@ -399,8 +441,14 @@ private:
     */
     void free_vectors() BMNOEXEPT;
     
+    /** Number of effective bit-plains in the value type*/
     unsigned effective_plains() const { return effective_plains_ + 1; }
 
+    /** Number of total bit-plains in the value type*/
+    static unsigned value_bits() { return sv_value_plains; }
+    
+    /** plain index for the "NOT NULL" flags plain */
+    static unsigned null_plain() { return value_bits(); }
 
 protected:
     /*! \brief set value without checking boundaries
@@ -409,15 +457,19 @@ protected:
     const bm::word_t* get_block(unsigned p, unsigned i, unsigned j) const;
     void throw_range_error(const char* err_msg) const;
 
+    bvector_type* construct_bvector(const bvector_type* bv) const;
+    void destruct_bvector(bvector_type* bv) const;
+    bvector_type* get_null_bvect() { return plains_[this->null_plain()]; }
+
 private:
     
     size_type                bv_size_;
     allocator_type           alloc_;
     allocation_policy_type   ap_;
     
-    bvector_type_ptr    plains_[sizeof(Val)*8];
-    size_type           size_;
-    unsigned            effective_plains_;
+    bvector_type_ptr         plains_[sv_plains];
+    size_type                size_;
+    unsigned                 effective_plains_;
 };
 
 //---------------------------------------------------------------------
@@ -425,6 +477,7 @@ private:
 
 template<class Val, class BV>
 sparse_vector<Val, BV>::sparse_vector(
+        bm::null_support null_able,
         allocation_policy_type  ap,
         size_type               bv_max_size,
         const allocator_type&   alloc)
@@ -435,6 +488,12 @@ sparse_vector<Val, BV>::sparse_vector(
   effective_plains_(0)
 {
     ::memset(plains_, 0, sizeof(plains_));
+    if (null_able == bm::use_null)
+    {
+        unsigned i = null_plain();
+        plains_[i] = construct_bvector(0);
+        plains_[i]->init();
+    }
 }
 
 //---------------------------------------------------------------------
@@ -449,14 +508,11 @@ sparse_vector<Val, BV>::sparse_vector(const sparse_vector<Val, BV>& sv)
 {
     if (this != &sv)
     {
-        for (size_type i = 0; i < sizeof(Val)*8; ++i)
+        for (size_type i = 0; i < stored_plains(); ++i)
         {
             const bvector_type* bv = sv.plains_[i];
-            if (bv)
-                plains_[i] = new bvector_type(*bv);
-            else
-                plains_[i] = 0;
-        } // for i
+            plains_[i] = bv ? construct_bvector(bv) : 0;
+        }
     }
 }
 
@@ -472,7 +528,7 @@ sparse_vector<Val, BV>::sparse_vector(sparse_vector<Val, BV>&& sv) BMNOEXEPT
     size_ = sv.size_;
     effective_plains_ = sv.effective_plains_;
         
-    for (size_type i = 0; i < sizeof(Val)*8; ++i)
+    for (size_type i = 0; i < stored_plains(); ++i)
     {
         plains_[i] = sv.plains_[i];
         sv.plains_[i] = 0;
@@ -481,7 +537,6 @@ sparse_vector<Val, BV>::sparse_vector(sparse_vector<Val, BV>&& sv) BMNOEXEPT
 }
 
 #endif
-
 
 
 //---------------------------------------------------------------------
@@ -509,7 +564,7 @@ void sparse_vector<Val, BV>::swap(sparse_vector<Val, BV>& sv) BMNOEXEPT
         ap_ = sv.ap_;
         sv.ap_ = ap_tmp;
         
-        for (size_type i = 0; i < sizeof(Val)*8; ++i)
+        for (size_type i = 0; i < stored_plains(); ++i)
         {
             bvector_type* bv_tmp = plains_[i];
             plains_[i] = sv.plains_[i];
@@ -530,6 +585,70 @@ void sparse_vector<Val, BV>::throw_range_error(const char* err_msg) const
 #else
     BM_ASSERT_THROW(false, BM_ERR_RANGE);
 #endif
+}
+
+
+//---------------------------------------------------------------------
+
+template<class Val, class BV>
+typename sparse_vector<Val, BV>::bvector_type*
+sparse_vector<Val, BV>::construct_bvector(const bvector_type* bv) const
+{
+    bvector_type* rbv = 0;
+#ifdef BM_NO_STL   // C compatibility mode
+    void* mem = ::malloc(sizeof(bvector_type));
+    if (mem == 0)
+    {
+        BM_ASSERT_THROW(false, BM_ERR_BADALLOC);
+    }
+    rbv = bv ? new(mem) bvector_type(*bv)
+             : new(mem) bvector_type(ap_.strat, ap_.glevel_len,
+                                     bv_size_,
+                                     alloc_);
+#else
+    rbv = bv ? new bvector_type(*bv)
+             : new bvector_type(ap_.strat, ap_.glevel_len,
+                                bv_size_,
+                                alloc_);
+#endif
+    return rbv;
+}
+
+//---------------------------------------------------------------------
+
+template<class Val, class BV>
+bool sparse_vector<Val, BV>::is_nullable() const
+{
+    return (plains_[this->null_plain()] != 0);
+}
+
+//---------------------------------------------------------------------
+
+template<class Val, class BV>
+const typename sparse_vector<Val, BV>::bvector_type*
+sparse_vector<Val, BV>::get_null_bvector() const
+{
+    return plains_[this->null_plain()];
+}
+
+//---------------------------------------------------------------------
+
+template<class Val, class BV>
+bool sparse_vector<Val, BV>::is_null(size_type idx) const
+{
+    if (idx >= size_)
+        throw_range_error("sparse vector range error");
+
+    const bvector_type* bv_null = get_null_bvector();
+    return (bv_null) ? (!bv_null->test(idx)) : false;
+}
+
+//---------------------------------------------------------------------
+
+template<class Val, class BV>
+void sparse_vector<Val, BV>::set_null(size_type idx)
+{
+    clear(idx, true);
 }
 
 //---------------------------------------------------------------------
@@ -599,6 +718,12 @@ void sparse_vector<Val, BV>::import(const value_type* arr,
     
     if (i + offset > size_)
         size_ = i + offset;
+    
+    bvector_type* bv_null = get_null_bvect();
+    if (bv_null) // configured to support NULL assignments
+    {
+        bv_null->set_range(offset, offset + size - 1);
+    }
 }
 
 //---------------------------------------------------------------------
@@ -716,7 +841,7 @@ sparse_vector<Val, BV>::extract_plains(value_type* arr,
         end = size_;
     }
     
-    for (size_type i = 0; i < sizeof(Val) * 8; ++i)
+    for (size_type i = 0; i < value_bits(); ++i)
     {
         const bvector_type* bv = plains_[i];
         if (!bv)
@@ -753,26 +878,26 @@ sparse_vector<Val, BV>::extract(value_type* arr,
     ///
     struct sv_decode_visitor_func
     {
-        sv_decode_visitor_func(value_type* arr,
-                               value_type mask,
-                               size_type  offset)
-        : arr_(arr), mask_(mask), off_(offset)
+        sv_decode_visitor_func(value_type* varr,
+                               value_type  mask,
+                               size_type   off)
+        : arr_(varr), mask_(mask), off_(off)
         {}
         
-        void add_bits(bm::id_t offset, const unsigned char* bits, unsigned size)
+        void add_bits(bm::id_t arr_offset, const unsigned char* bits, unsigned bits_size)
         {
-            size_type idx_base = offset - off_;
-            for (unsigned i = 0; i < size; ++i)
+            size_type idx_base = arr_offset - off_;
+            for (unsigned i = 0; i < bits_size; ++i)
             {
                 size_type idx = idx_base + bits[i];
                 arr_[idx] |= mask_;
             }
             
         }
-        void add_range(bm::id_t offset, unsigned size)
+        void add_range(bm::id_t arr_offset, unsigned sz)
         {
-            size_type idx_base = offset - off_;
-            for (unsigned i = 0; i < size; ++i)
+            size_type idx_base = arr_offset - off_;
+            for (unsigned i = 0; i < sz; ++i)
             {
                 arr_[i + idx_base] |= mask_;
             }
@@ -803,7 +928,7 @@ sparse_vector<Val, BV>::extract(value_type* arr,
         // for large array extraction use logical opartions
         // (faster due to vectorization)
         bvector_type bv_mask;
-        for (size_type i = 0; i < sizeof(Val) * 8; ++i)
+        for (size_type i = 0; i < value_bits(); ++i)
         {
             const bvector_type* bv = plains_[i];
             if (bv)
@@ -819,7 +944,7 @@ sparse_vector<Val, BV>::extract(value_type* arr,
     }
     else
     {
-        for (size_type i = 0; i < sizeof(Val)*8; ++i)
+        for (size_type i = 0; i < value_bits(); ++i)
         {
             const bvector_type* bv = plains_[i];
             if (bv)
@@ -867,7 +992,7 @@ void sparse_vector<Val, BV>::resize(typename sparse_vector<Val, BV>::size_type s
     
     if (sz < size_) // vector shrink
     {
-        this->clear_range(sz, size_-1);   // clear the tails
+        this->clear_range(sz, size_-1, true);   // clear the tails and NULL vect
     }
     
     size_ = sz;
@@ -880,30 +1005,13 @@ template<class Val, class BV>
 typename sparse_vector<Val, BV>::bvector_type_ptr
    sparse_vector<Val, BV>::get_plain(unsigned i)
 {
-    BM_ASSERT(i < (sizeof(Val)*8));
-
     bvector_type_ptr bv = plains_[i];
     if (!bv)
     {
-#ifdef BM_NO_STL   // C compatibility mode
-        void* mem = ::malloc(sizeof(bvector_type));
-        if (mem == 0)
-        {
-            BM_ASSERT_THROW(false, BM_ERR_BADALLOC);
-        }
-        bv = new(mem) bvector_type(ap_.strat, ap_.glevel_len,
-                                   bv_size_,
-                                   alloc_);
-
-#else
-        bv = new bvector_type(ap_.strat, ap_.glevel_len,
-                              bv_size_,
-                              alloc_);
-#endif
-
+        bv = construct_bvector(0);
         bv->init();
         plains_[i] = bv;
-        if (i > effective_plains_)
+        if (i > effective_plains_ && i < value_bits())
             effective_plains_ = i;
     }
     return bv;
@@ -1017,6 +1125,23 @@ void sparse_vector<Val, BV>::set(size_type idx, value_type v)
 //---------------------------------------------------------------------
 
 template<class Val, class BV>
+void sparse_vector<Val, BV>::clear(size_type idx, bool set_null)
+{
+    if (idx >= size_)
+        size_ = idx+1;
+
+    set_value(idx, (value_type)0);
+    if (set_null)
+    {
+        bvector_type* bv_null = get_null_bvect();
+        if (bv_null)
+            bv_null->set(idx, false);
+    }
+}
+
+//---------------------------------------------------------------------
+
+template<class Val, class BV>
 void sparse_vector<Val, BV>::push_back(value_type v)
 {
     set_value(size_, v);
@@ -1057,6 +1182,11 @@ void sparse_vector<Val, BV>::set_value(size_type idx, value_type v)
         bvector_type* bv = get_plain(p);
         bv->set_bit_no_check(idx);
     } // for j
+    
+    bvector_type* bv_null = get_null_bvect();
+    if (bv_null)
+        bv_null->set_bit_no_check(idx);
+
 }
 
 //---------------------------------------------------------------------
@@ -1064,20 +1194,47 @@ void sparse_vector<Val, BV>::set_value(size_type idx, value_type v)
 template<class Val, class BV>
 void sparse_vector<Val, BV>::clear() BMNOEXEPT
 {
-    free_vectors();
+    for (size_type i = 0; i < value_bits(); ++i)
+    {
+        bvector_type* bv = plains_[i];
+        if (bv)
+        {
+            destruct_bvector(bv);
+            plains_[i] = 0;
+        }
+    }
     size_ = 0;
-    effective_plains_ = 0;
-    ::memset(plains_, 0, sizeof(plains_));
+    bvector_type* bv_null = get_null_bvect();
+    if (bv_null)
+    {
+        bv_null->clear(true);
+        bv_null->init();
+    }
 }
 
 //---------------------------------------------------------------------
 
+template<class Val, class BV>
+void sparse_vector<Val, BV>::destruct_bvector(bvector_type* bv) const
+{
+#ifdef BM_NO_STL   // C compatibility mode
+    bv->~TBM_bvector();
+    ::free((void*)bv);
+#else
+    delete bv;
+#endif
+}
+
+//---------------------------------------------------------------------
 
 template<class Val, class BV>
 void sparse_vector<Val, BV>::free_vectors() BMNOEXEPT
 {
-    for (size_type i = 0; i < sizeof(Val)*8; ++i)
-        delete plains_[i];
+    for (size_type i = 0; i < stored_plains(); ++i)
+    {
+        bvector_type* bv = plains_[i];
+        destruct_bvector(bv);
+    }
 }
 
 //---------------------------------------------------------------------
@@ -1086,9 +1243,9 @@ void sparse_vector<Val, BV>::free_vectors() BMNOEXEPT
 template<class Val, class BV>
 void sparse_vector<Val, BV>::free_plain(unsigned i)
 {
-    BM_ASSERT(i < sizeof(Val)*8);
+    BM_ASSERT(i < stored_plains());
     bvector_type* bv = plains_[i];
-    delete bv;
+    destruct_bvector(bv);
     plains_[i] = 0;
 }
 
@@ -1098,7 +1255,8 @@ template<class Val, class BV>
 sparse_vector<Val, BV>&
 sparse_vector<Val, BV>::clear_range(
     typename sparse_vector<Val, BV>::size_type left,
-    typename sparse_vector<Val, BV>::size_type right)
+    typename sparse_vector<Val, BV>::size_type right,
+    bool set_null)
 {
     if (right < left)
     {
@@ -1114,6 +1272,13 @@ sparse_vector<Val, BV>::clear_range(
         }
     } // for i
     
+    if (set_null)
+    {
+        bvector_type* bv_null = get_null_bvect();
+        if (bv_null)
+            bv_null->set_range(left, right, false);
+    }
+    
     return *this;
 }
 
@@ -1128,8 +1293,8 @@ void sparse_vector<Val, BV>::calc_stat(
 	st->bit_blocks = st->gap_blocks = 0; 
 	st->max_serialize_mem = st->memory_used = 0;
 
-    unsigned eff_plains = effective_plains();
-    for (unsigned j = 0; j < eff_plains; ++j)
+    unsigned stored_plains = this->stored_plains();
+    for (unsigned j = 0; j < stored_plains; ++j)
     {
         const bvector_type* bv = this->plains_[j];
         if (bv)
@@ -1144,7 +1309,7 @@ void sparse_vector<Val, BV>::calc_stat(
         }
     } // for j
     // header accounting
-    st->max_serialize_mem += 1 + 1 + 1 + 1 + 8 + (8 * sizeof(Val) * 8);
+    st->max_serialize_mem += 1 + 1 + 1 + 1 + 8 + (8 * this->stored_plains());
 
 }
 
@@ -1161,17 +1326,22 @@ void sparse_vector<Val, BV>::optimize(
         st->bit_blocks = st->gap_blocks = 0;
         st->max_serialize_mem = st->memory_used = 0;
     }
-    unsigned eff_plains = effective_plains();
-    for (unsigned j = 0; j < eff_plains; ++j)
+    bvector_type* bv_null = this->get_null_bvect();
+    
+    unsigned stored_plains = this->stored_plains();
+    for (unsigned j = 0; j < stored_plains; ++j)
     {
         bvector_type* bv = this->plains_[j];
         if (bv)
         {
-            if (!bv->any())  // empty vector?
+            if (bv != bv_null) // protect the NULL vector from de-allocation
             {
-                delete this->plains_[j];
-                this->plains_[j] = 0;
-                continue;
+                if (!bv->any())  // empty vector?
+                {
+                    destruct_bvector(this->plains_[j]);
+                    this->plains_[j] = 0;
+                    continue;
+                }
             }
             
             typename bvector_type::statistics stbv;
@@ -1184,7 +1354,6 @@ void sparse_vector<Val, BV>::optimize(
                 st->max_serialize_mem += stbv.max_serialize_mem + 8;
                 st->memory_used += stbv.memory_used;
             }
-
         }
     } // for j
 
@@ -1196,8 +1365,8 @@ void sparse_vector<Val, BV>::optimize(
 template<class Val, class BV>
 void sparse_vector<Val, BV>::optimize_gap_size()
 {
-    unsigned eff_plains = effective_plains();
-    for (unsigned j = 0; j < eff_plains; ++j)
+    unsigned stored_plains = this->stored_plains();
+    for (unsigned j = 0; j < stored_plains; ++j)
     {
         bvector_type* bv = this->plains_[j];
         if (bv)
@@ -1218,8 +1387,15 @@ sparse_vector<Val, BV>::join(const sparse_vector<Val, BV>& sv)
     {
         resize(arg_size);
     }
-    unsigned arg_eff_plains = sv.effective_plains();
-    for (unsigned j = 0; j < arg_eff_plains; ++j)
+    bvector_type* bv_null = this->get_null_bvect();
+    
+    unsigned plains;
+    if (bv_null)
+        plains = this->stored_plains();
+    else
+        plains = this->plains();
+    
+    for (unsigned j = 0; j < plains; ++j)
     {
         bvector_type* arg_bv = sv.plains_[j];
         if (arg_bv)
@@ -1232,6 +1408,13 @@ sparse_vector<Val, BV>::join(const sparse_vector<Val, BV>& sv)
             *bv |= *arg_bv;
         }
     } // for j
+    
+    // our vector is NULL-able but argument is not (assumed all values are real)
+    if (bv_null && !sv.is_nullable())
+    {
+        bv_null->set_range(0, arg_size-1);
+    }
+    
     return *this;
 }
 
@@ -1239,41 +1422,49 @@ sparse_vector<Val, BV>::join(const sparse_vector<Val, BV>& sv)
 //---------------------------------------------------------------------
 
 template<class Val, class BV>
-bool sparse_vector<Val, BV>::equal(const sparse_vector<Val, BV>& sv) const
+bool sparse_vector<Val, BV>::equal(const sparse_vector<Val, BV>& sv,
+                                   bm::null_support null_able) const
 {
     size_type arg_size = sv.size();
     if (size_ != arg_size)
     {
         return false;
     }
-    
-    unsigned eff_plains = effective_plains();
-    unsigned arg_eff_plains = sv.effective_plains();
-    if (arg_eff_plains > eff_plains)
-        eff_plains = arg_eff_plains;
-    
-    for (unsigned j = 0; j < eff_plains; ++j)
+    unsigned plains = this->plains();
+    for (unsigned j = 0; j < plains; ++j)
     {
         const bvector_type* bv = plains_[j];
         const bvector_type* arg_bv = sv.plains_[j];
-        if (!bv && !arg_bv)
+        if (bv == arg_bv) // same NULL
             continue;
         // check if any not NULL and not empty
         if (!bv && arg_bv)
-        {
-            if (arg_bv->any())
-                return false;
-        }
+            return !arg_bv->any();
         if (bv && !arg_bv)
-        {
-            if (bv->any())
-                return false;
-        }
+            return !bv->any();
         // both not NULL
         int cmp = bv->compare(*arg_bv);
         if (cmp != 0)
             return false;
     } // for j
+    
+    if (null_able == bm::use_null)
+    {
+        const bvector_type* bv_null = this->get_null_bvector();
+        const bvector_type* bv_null_arg = sv.get_null_bvector();
+        
+        // check the NULL vectors
+        if (bv_null == bv_null_arg)
+            return true;
+        if (!bv_null || !bv_null_arg)
+            return false;
+        BM_ASSERT(bv_null);
+        BM_ASSERT(bv_null_arg);
+        int cmp = bv_null->compare(*bv_null);
+        if (cmp != 0)
+            return false;
+    }
+
     return true;
 }
 

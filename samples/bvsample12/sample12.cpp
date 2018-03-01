@@ -60,7 +60,7 @@ template<class T> void PrintContainer(T first, T last)
     std::cout << endl;
 }
 
-
+static
 void generate_test_vectors(std::vector<bm::id_t> &v1,
                            std::vector<bm::id_t> &v2,
                            std::vector<bm::id_t> &v3)
@@ -83,6 +83,7 @@ void generate_test_vectors(std::vector<bm::id_t> &v1,
 
 // stress test for bm::bvector<>::set_bit() 
 //
+static
 void bv_set_bit_test()
 {
     bm::chrono_taker tt1("1. bvector<>::set_bit()", benchmark_count, &timing_map);
@@ -112,6 +113,7 @@ void bv_set_bit_test()
 
 // stress test for bm::bvector<>::set_bit() 
 //
+static
 void bv_set_bit_no_check_test()
 {
     bm::chrono_taker tt1("2. bvector<>::set_bit_no_check()", benchmark_count, &timing_map);
@@ -139,6 +141,7 @@ void bv_set_bit_no_check_test()
     }
 }
 
+static
 void combine_or_test(std::vector<bm::id_t> &v1,
                      std::vector<bm::id_t> &v2,
                      std::vector<bm::id_t> &v3)

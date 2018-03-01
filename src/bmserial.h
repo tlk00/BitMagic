@@ -1017,13 +1017,15 @@ unsigned serializer<BV>::serialize(const BV& bv,
         switch (block_bc)
         {
         case 1: // corner case: only 1 bit on
-        {
-            bm::id_t bit_idx = 0;
-            bit_find_in_block(blk, bit_idx, &bit_idx);
-            enc.put_8(set_block_bit_1bit); enc.put_16((short)bit_idx);
-            continue;
-        }
+            {
+                bm::id_t bit_idx = 0;
+                bit_find_in_block(blk, bit_idx, &bit_idx);
+                enc.put_8(set_block_bit_1bit); enc.put_16((short)bit_idx);
+                continue;
+            }
         case 0: goto zero_block; // empty block
+        default:
+            break;
         }
        
        
@@ -3146,13 +3148,14 @@ iterator_deserializer<BV, SerialIterator>::finalize_target_vector(
                 for (;j < bm::set_array_size; ++j, ++bv_block_idx)
                 {
                     if (blk_blk[j])
-                        count += bman.block_bitcount(blk_blk[j]);//, bv_block_idx);
+                        count += bman.block_bitcount(blk_blk[j]);
                 } // for j
                 j = 0;
             } // for i
 
         }
         break;
+    case set_END:
     default:
         BM_ASSERT(0);
     }
@@ -3219,7 +3222,7 @@ iterator_deserializer<BV, SerialIterator>::process_id_list(
             // TODO: get rid of the temp vector
             BV bv_tmp(BM_GAP);
             load_id_list(bv_tmp, sit, id_count, true);
-            count += count_xor(bv, bv_tmp);
+            count += bm::count_xor(bv, bv_tmp);
         }
         break;
     case set_COUNT_OR:
@@ -3227,7 +3230,7 @@ iterator_deserializer<BV, SerialIterator>::process_id_list(
             // TODO: get rid of the temp. vector
             BV bv_tmp(BM_GAP);
             load_id_list(bv_tmp, sit, id_count, true);
-            count += count_or(bv, bv_tmp);
+            count += bm::count_or(bv, bv_tmp);
         }
         break;
     case set_COUNT_SUB_AB:
@@ -3238,6 +3241,14 @@ iterator_deserializer<BV, SerialIterator>::process_id_list(
             count += bv_tmp.count();
         }
         break;
+    case set_COUNT_SUB_BA:
+        {
+            BV bv_tmp(BM_GAP);
+            load_id_list(bv_tmp, sit, id_count, true);
+            count += bm::count_sub(bv_tmp, bv);        
+        }
+        break;
+    case set_END:
     default:
         BM_ASSERT(0);
     } // switch
@@ -3344,6 +3355,16 @@ void iterator_deserializer<BV, SerialIterator>::deserialize(
                     case set_OR: case set_XOR:
                         blk_target = bman_target.make_bit_block(bv_block_idx);
                         break;
+                    case set_ASSIGN:
+                    case set_COUNT:
+                    case set_COUNT_AND:
+                    case set_COUNT_XOR:
+                    case set_COUNT_OR:
+                    case set_COUNT_SUB_AB:
+                    case set_COUNT_SUB_BA:
+                    case set_COUNT_A:
+                    case set_COUNT_B:
+                    case set_END:
                     default:
                         BM_ASSERT(0);
                     }
@@ -3604,8 +3625,7 @@ iterator_deserializer<BV, SerialIterator>::deserialize(
                     // results with same block data
                     // all we need is to bitcount bv block
                     {
-                    unsigned c = bman.block_bitcount(blk);//, bv_block_idx);
-                    count += c;
+                    count += blk ? bman.block_bitcount(blk) : 0;
 					if (exit_on_one && count) // early exit
 						return count;
                     }
@@ -3640,7 +3660,7 @@ iterator_deserializer<BV, SerialIterator>::deserialize(
                 // nothing to do
                 break;
             case set_COUNT_AND: case set_COUNT_A:
-                count += bman.block_bitcount(blk);//, bv_block_idx);
+                count += blk ? bman.block_bitcount(blk) : 0;
                 break;
             default:
                 if (blk)
@@ -3743,6 +3763,7 @@ iterator_deserializer<BV, SerialIterator>::deserialize(
                         bman.set_gap_block(
                             bv_block_idx, gap_temp_block, level);
                         break;
+                    
                     default:
                         BM_ASSERT(0);
                     } // switch

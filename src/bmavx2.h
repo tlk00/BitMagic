@@ -124,7 +124,7 @@ bm::id_t avx2_bit_count(const __m256i* BMRESTRICT block,
   __m256i b, c;
 
   BM_AVX2_POPCNT_PROLOG
-  uint64_t* cnt64;
+  bm::id64_t* cnt64;
 
   do
   {
@@ -168,7 +168,7 @@ bm::id_t avx2_bit_count(const __m256i* BMRESTRICT block,
   BM_AVX2_BIT_COUNT(bc, ones);
   cnt = _mm256_add_epi64(cnt, bc);
 
-  cnt64 = (uint64_t*) &cnt;
+  cnt64 = (bm::id64_t*) &cnt;
 
   return (unsigned)(cnt64[0] + cnt64[1] + cnt64[2] + cnt64[3]);
 }
@@ -182,7 +182,7 @@ bm::id_t avx2_bit_count_and(const __m256i* BMRESTRICT block,
                             const __m256i* BMRESTRICT block_end,
                             const __m256i* BMRESTRICT mask_block)
 {
-    uint64_t* cnt64;
+    bm::id64_t* cnt64;
     BM_AVX2_POPCNT_PROLOG;
     __m256i cnt = _mm256_setzero_si256();
     __m256i ymm0, ymm1;
@@ -220,7 +220,7 @@ bm::id_t avx2_bit_count_and(const __m256i* BMRESTRICT block,
 
     } while (block < block_end);
 
-    cnt64 = (uint64_t*)&cnt;
+    cnt64 = (bm::id64_t*)&cnt;
     return (unsigned)(cnt64[0] + cnt64[1] + cnt64[2] + cnt64[3]);
 }
 
@@ -229,7 +229,7 @@ bm::id_t avx2_bit_count_or(const __m256i* BMRESTRICT block,
     const __m256i* BMRESTRICT block_end,
     const __m256i* BMRESTRICT mask_block)
 {
-    uint64_t* cnt64;
+    bm::id64_t* cnt64;
     BM_AVX2_POPCNT_PROLOG;
     __m256i cnt = _mm256_setzero_si256();
     do
@@ -246,7 +246,7 @@ bm::id_t avx2_bit_count_or(const __m256i* BMRESTRICT block,
 
     } while (block < block_end);
 
-    cnt64 = (uint64_t*)&cnt;
+    cnt64 = (bm::id64_t*)&cnt;
     return (unsigned)(cnt64[0] + cnt64[1] + cnt64[2] + cnt64[3]);
 }
 // experimental code for Harley-Seal Hamming
@@ -365,7 +365,7 @@ bm::id_t avx2_bit_count_xor(const __m256i* BMRESTRICT block,
     const __m256i* BMRESTRICT block_end,
     const __m256i* BMRESTRICT mask_block)
 {
-    uint64_t* cnt64;
+    bm::id64_t* cnt64;
     BM_AVX2_POPCNT_PROLOG
     __m256i cnt = _mm256_setzero_si256();
     __m256i ymm0, ymm1;
@@ -401,7 +401,7 @@ bm::id_t avx2_bit_count_xor(const __m256i* BMRESTRICT block,
 
     } while (block < block_end);
 
-    cnt64 = (uint64_t*)&cnt;
+    cnt64 = (bm::id64_t*)&cnt;
     return (unsigned)(cnt64[0] + cnt64[1] + cnt64[2] + cnt64[3]);
 }
 
@@ -411,11 +411,12 @@ bm::id_t avx2_bit_count_xor(const __m256i* BMRESTRICT block,
   @brief AND NOT bit count for two aligned bit-blocks
   @ingroup AVX2
 */
+inline
 bm::id_t avx2_bit_count_sub(const __m256i* BMRESTRICT block,
     const __m256i* BMRESTRICT block_end,
     const __m256i* BMRESTRICT mask_block)
 {
-    uint64_t* cnt64;
+    bm::id64_t* cnt64;
     BM_AVX2_POPCNT_PROLOG
     __m256i cnt = _mm256_setzero_si256();
     do
@@ -432,7 +433,7 @@ bm::id_t avx2_bit_count_sub(const __m256i* BMRESTRICT block,
 
     } while (block < block_end);
 
-    cnt64 = (uint64_t*)&cnt;
+    cnt64 = (bm::id64_t*)&cnt;
     return (unsigned)(cnt64[0] + cnt64[1] + cnt64[2] + cnt64[3]);
 }
 

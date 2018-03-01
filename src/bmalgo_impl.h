@@ -153,6 +153,8 @@ void combine_count_operation_with_block(const bm::word_t*           blk,
                  case bm::COUNT_B:
                     dmd.result += gap_bit_count_unr(g2);
                     break;
+                 default:
+                     BM_ASSERT(0);
                  } // switch
                                      
              } // for it
@@ -214,6 +216,8 @@ void combine_count_operation_with_block(const bm::word_t*           blk,
                                                arg_blk + bm::set_block_size);
                     }
                     break;
+                 default:
+                     BM_ASSERT(0);
                  } // switch
                                      
              } // for it
@@ -273,6 +277,8 @@ void combine_count_operation_with_block(const bm::word_t*           blk,
                     if (g2)
                         dmd.result += gap_bit_count_unr(g2);
                     break;
+                 default:
+                     BM_ASSERT(0);
                  } // switch
                                      
              } // for it
@@ -284,13 +290,6 @@ void combine_count_operation_with_block(const bm::word_t*           blk,
      // --------------------------------------------
      //
      // Here we combine two plain bitblocks 
-
-     //const bm::word_t* blk_end;
-     //const bm::word_t* arg_end;
-
-     //blk_end = blk + (bm::set_block_size);
-     //arg_end = arg_blk + (bm::set_block_size);
-
 
      for (distance_metric_descriptor* it = dmit; it < dmit_end; ++it)
      {
@@ -315,6 +314,11 @@ void combine_count_operation_with_block(const bm::word_t*           blk,
                         bit_block_calc_count(arg_blk, 
                                              arg_blk + bm::set_block_size);
                 break;
+            case bm::COUNT_AND:
+            case bm::COUNT_XOR:
+            case bm::COUNT_OR:
+            case bm::COUNT_SUB_AB:
+            case bm::COUNT_SUB_BA:
             default:
                 BM_ASSERT(0);
             } // switch
@@ -417,6 +421,8 @@ void combine_any_operation_with_block(const bm::word_t* blk,
                  case bm::COUNT_B:
                     res = g2;
                     break;
+                 default:
+                     BM_ASSERT(0);
                  } // switch
                 if (res)
                     dmd.result += !gap_is_all_zero(res, bm::gap_max_bits);
@@ -485,6 +491,8 @@ void combine_any_operation_with_block(const bm::word_t* blk,
                                            (bm::wordop_t*)(arg_blk + bm::set_block_size));
                     }
                     break;
+                 default:
+                     BM_ASSERT(0);
                  } // switch
                                      
              } // for it
@@ -548,6 +556,8 @@ void combine_any_operation_with_block(const bm::word_t* blk,
                     if (g2)
                         dmd.result += !gap_is_all_zero(g2, bm::gap_max_bits);
                     break;
+                 default:
+                     BM_ASSERT(0);
                  } // switch
                                      
              } // for it
@@ -606,6 +616,8 @@ void combine_any_operation_with_block(const bm::word_t* blk,
                 dmd.result += !bit_is_all_zero((bm::wordop_t*)arg_blk, 
                                                (bm::wordop_t*)arg_end);
             break;
+        default:
+            BM_ASSERT(0);
         } // switch
 
      } // for it
@@ -620,16 +632,12 @@ void combine_any_operation_with_block(const bm::word_t* blk,
 */
 inline
 unsigned combine_count_operation_with_block(const bm::word_t* blk,
-//                                            unsigned gap,
                                             const bm::word_t* arg_blk,
-//                                            int arg_gap,
-                                            //bm::word_t* temp_blk,
                                             distance_metric metric)
 {
     distance_metric_descriptor dmd(metric);
     combine_count_operation_with_block(blk, //gap, 
                                        arg_blk, //arg_gap, 
-                                       //temp_blk,
                                        &dmd, &dmd+1);
     return dmd.result;
 }

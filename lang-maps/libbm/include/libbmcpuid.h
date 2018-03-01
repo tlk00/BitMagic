@@ -31,8 +31,25 @@ For more information please visit:  http://bitmagic.io
 #define SIMD_AVX2    0x40
 #define SIMD_AVX512F 0x80
 
-unsigned BM_x86_simd(void);
+#ifdef _WIN32
+#ifdef BMDLLEXPORTS
+#    define BM_API_EXPORT __declspec(dllexport)
+#else
+#    define BM_API_EXPORT __declspec(dllimport)
+#endif
+#else
+#   define BM_API_EXPORT
+#endif
 
+#ifdef __cplusplus
+extern "C" {
+#endif /* __cplusplus */
+
+BM_API_EXPORT unsigned BM_x86_simd(void);
+
+#ifdef __cplusplus
+}
+#endif /* __cplusplus */
 
 
 #endif

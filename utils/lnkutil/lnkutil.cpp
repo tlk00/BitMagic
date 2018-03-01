@@ -460,6 +460,7 @@ struct link_matrix
     void add_vector(unsigned id_from, std::vector<unsigned>& vect);
     void add_vector(unsigned id_from, const bm::bvector<>& bv);
     bool get_vector(unsigned id_from, std::vector<unsigned>& vect) const;
+    bool combine_or(unsigned id_from, bm::bvector<>& bv) const;
     
     /// print statistics
     void print_stat() const;
@@ -499,6 +500,13 @@ void link_matrix::load_from_acc_matrix(sm_accum& sm_acc)
             else
             {
                 buf_coll.move_buffer(id_from, buf);
+                if (bv_from.test(id_from))
+                {
+                    std::cerr << "Duplicate unsorted id = " << id_from << std::endl;
+                    exit(1);
+                }
+
+                bv_from.set(id_from);
             }
             buf.release();
         }
@@ -775,6 +783,18 @@ void link_matrix::load(const std::string& base_name)
     }
     //sv_1m.optimize_gap_size();
     }
+
+    // load buffer collection
+    {
+        std::string cbc_fname = base_name;
+        cbc_fname.append("_bvcoll.cbc");
+        int res = file_load_compressed_collection(buf_coll, cbc_fname);
+        if (res != 0)
+        {
+            std::cerr << "compressed collection load error." << std::endl;
+        }
+    }
+
     
     // ---------------------------------
     // build compress vectors
@@ -800,6 +820,17 @@ void link_matrix::load(const std::string& base_name)
 }
 
 
+extern "C" {
+    int bit_visitor_func(void* handle_ptr, bm::id_t bit_idx)
+    {
+        std::vector<bm::id_t>* vp = (std::vector<bm::id_t>*)handle_ptr;
+        vp->push_back(bit_idx);
+        return 0;
+    }
+} // extern C
+
+
+
 bool link_matrix::get_vector(unsigned id_from, std::vector<unsigned>& vect) const
 {
     vect.resize(0);
@@ -812,6 +843,21 @@ bool link_matrix::get_vector(unsigned id_from, std::vector<unsigned>& vect) cons
         return false;
     }
 */
+    // check if vector is in the buffer storage
+    //
+    bm::id_t bv_addr;
+    bool cbc_found = buf_coll.resolve(id_from, &bv_addr);
+    if (cbc_found)
+    {
+        BM_DECLARE_TEMP_BLOCK(tb)
+
+        const bm::compressed_buffer_collection<bvector_type>::buffer_type& bv_buf = buf_coll.get(bv_addr);
+        bvector_type bv_tmp;
+        bm::deserialize(bv_tmp, bv_buf.buf(), tb);
+        bm::visit_each_bit(bv_tmp, (void*)&vect, bit_visitor_func);
+        return true;
+    }
+
     unsigned vc;
     //std::cout << id_from << ", " << std::flush;
     if (bv_11_flag.test(id_from))
@@ -869,7 +915,7 @@ bool link_matrix::get_vector(unsigned id_from, std::vector<unsigned>& vect) cons
     }
 */
 
-    //std::cout << "Extract size = " << sz << std::endl;
+   // std::cout << "Extract size = " << sz << std::endl;
 
     vect[0] = vc;
     sv_1m.extract(&vect[1], sz - 1, offs_c);
@@ -879,6 +925,68 @@ bool link_matrix::get_vector(unsigned id_from, std::vector<unsigned>& vect) cons
 
     return true;
 }
+
+bool link_matrix::combine_or(unsigned id_from, bm::bvector<>& bv) const
+{
+    /*
+    if (!bv_from.test(id_from))
+    {
+    std::cerr << "id from not found" << std::endl;
+    exit(1);
+    vect.resize(0);
+    return false;
+    }
+    */
+    // check if vector is in the buffer storage
+    //
+    bm::id_t bv_addr;
+    bool cbc_found = buf_coll.resolve(id_from, &bv_addr);
+    if (cbc_found)
+    {
+        BM_DECLARE_TEMP_BLOCK(tb)
+
+        const bm::compressed_buffer_collection<bvector_type>::buffer_type& bv_buf = buf_coll.get(bv_addr);
+        bm::operation_deserializer<bm::bvector<> >::deserialize(bv,
+            bv_buf.buf(),
+            tb,
+            bm::set_OR);
+        return true;
+    }
+
+    unsigned vc;
+    if (bv_11_flag.test(id_from))
+    {
+        vc = sv_11_c.get(id_from);
+        bv.set_bit(vc);
+        return true;
+    }
+
+
+    unsigned offs_c = sv_offs_c.get(id_from);
+    unsigned sz = sv_sz.get(id_from);
+
+    std::vector<unsigned> vect(sz);
+    if (sz == 0)
+    {
+        std::cerr << "vector size error" << std::endl;
+        exit(1);
+
+        return false;
+    }
+
+    vc = sv_11_c.get(id_from);
+
+    vect[0] = vc;
+    sv_1m.extract(&vect[1], sz - 1, offs_c);
+
+    bm::combine_or(bv, vect.begin(), vect.end());
+
+    //convert_from_delta(vect);
+
+    return true;
+}
+
+
 
 void link_matrix::add_vector(unsigned id_from, const bm::bvector<>& bv)
 {
@@ -1064,7 +1172,7 @@ int load_ln_unsorted(const std::string& fname, link_matrix& lm)
 }
 
 
-unsigned benchmark_ops = 200;
+unsigned benchmark_ops = 1000;
 
 // id remapping benchmark
 //
@@ -1102,7 +1210,7 @@ void run_benchmark(link_matrix& lm)
     {
     bm::chrono_taker tt1("4. remapping", benchmark_ops, &timing_map);
     
-        std::vector<unsigned> vect;
+        //std::vector<unsigned> vect;
         bm::bvector<>         bv_remap;
     
         for (unsigned i = 0; i < benchmark_ops; ++i)
@@ -1113,13 +1221,15 @@ void run_benchmark(link_matrix& lm)
             for (unsigned k = 0; en.valid(); ++k, ++en)
             {
                 unsigned id = *en;
-                
-                lm.get_vector(id, vect);
-                if (vect.size())
+
+                bool found = lm.combine_or(id, bv_remap);
+
+                if (!found)
                 {
-                    bm::combine_or(bv_remap, vect.begin(), vect.end());
+                    std::cerr << "row not found! " << id << std::endl;
                 }
-            } // for k
+
+             } // for k
             
             bv_res = bv_remap;
             bv_res &= bv_sample_to;

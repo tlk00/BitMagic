@@ -942,11 +942,11 @@ public:
         unsigned  BM_VECT_ALIGN cnt[bm::set_total_blocks] BM_VECT_ALIGN_ATTR;
         
         blocks_count() {}
-        blocks_count(const blocks_count& bc)
+        blocks_count(const blocks_count& bc) BMNOEXEPT
         {
             copy_from(bc);
         }
-        void copy_from(const blocks_count& bc)
+        void copy_from(const blocks_count& bc) BMNOEXEPT
         {
             ::memcpy(this->cnt, bc.cnt, sizeof(this->cnt));
         }
@@ -1092,23 +1092,32 @@ public:
           size_(bm::id_max)
     {
         init();
-        std::initializer_list<bm::id_t>::const_iterator start = il.begin();
-        std::initializer_list<bm::id_t>::const_iterator end = il.end();
-        for (; start < end; ++start)
+        std::initializer_list<bm::id_t>::const_iterator it_start = il.begin();
+        std::initializer_list<bm::id_t>::const_iterator it_end = il.end();
+        for (; it_start < it_end; ++it_start)
         {
-            this->set_bit_no_check(*start);
+            this->set_bit_no_check(*it_start);
         }
 #ifdef BMCOUNTOPT
         count_ = (bm::id_t)il.size();
         count_is_valid_ = true;
 #endif
     }
-
-
+    
     /*! 
         \brief Move assignment operator
     */
     bvector& operator=(bvector<Alloc>&& bvect) BMNOEXEPT
+    {
+        this->move_from(bvect);
+        return *this;
+    }
+#endif
+
+    /*!
+        \brief Move bvector content from another vector
+    */
+    void move_from(bvector<Alloc>& bvect) BMNOEXEPT
     {
         if (this != &bvect)
         {
@@ -1121,9 +1130,7 @@ public:
             count_is_valid_ = bvect.count_is_valid_;
     #endif
         }
-        return *this;
     }
-#endif
 
     reference operator[](bm::id_t n)
     {
@@ -3289,6 +3296,8 @@ bvector<Alloc>::combine_operation_with_block(unsigned          nb,
                         blockman_.zero_block(nb);
                         return;
                     case BM_OR: case BM_SUB: case BM_XOR:
+                        return; // nothing to do
+                    default:
                         return; // nothing to do
                     }
                 }

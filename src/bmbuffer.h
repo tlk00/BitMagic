@@ -35,14 +35,14 @@ public:
     
     /// construct byte buffer pointer
     ///
-    byte_buffer_ptr(unsigned char* buf, size_t size)
-        : byte_buf_(buf), size_(size)
+    byte_buffer_ptr(unsigned char* in_buf, size_t in_size)
+        : byte_buf_(in_buf), size_(in_size)
     {}
     
     /// Set buffer pointer
-    void set_buf(unsigned char* buf, size_t size)
+    void set_buf(unsigned char* in_buf, size_t in_size)
     {
-        byte_buf_ = buf; size_= size;
+        byte_buf_ = in_buf; size_= in_size;
     }
 
     /// Get buffer size
@@ -54,13 +54,13 @@ public:
     /// Get write access to buffer memory
     unsigned char* data() { return byte_buf_; }
 
-    bool operator==(const byte_buffer_ptr& buf) const
+    bool operator==(const byte_buffer_ptr& lhs) const
     {
-        if (this == &buf)
+        if (this == &lhs)
             return true;
-        if (size_ != buf.size_)
+        if (size_ != lhs.size_)
             return false;
-        int cmp = ::memcmp(byte_buf_, buf.byte_buf_, size_);
+        int cmp = ::memcmp(byte_buf_, lhs.byte_buf_, size_);
         return (cmp  == 0);
     }
 
@@ -84,60 +84,57 @@ public:
     byte_buffer() : capacity_(0), alloc_factor_(0)
     {}
     
-    byte_buffer(size_t capacity)
+    byte_buffer(size_t in_capacity)
         : capacity_(0), alloc_factor_(0)
     {
-        allocate(capacity);
+        allocate(in_capacity);
     }
     
-    byte_buffer(const byte_buffer& buf)
+    byte_buffer(const byte_buffer& lhs)
     {
-        if (buf.byte_buf_)
+        byte_buf_ = 0;
+        size_ = capacity_ = alloc_factor_ = 0;
+        if (lhs.byte_buf_)
         {
-            copy_from(buf.byte_buf_, buf.size_);
-        }
-        else
-        {
-            byte_buf_ = 0;
-            size_ = capacity_ = 0;
+            copy_from(lhs.byte_buf_, lhs.size_);
         }
     }
     
 #ifndef BM_NO_CXX11
     /// Move constructor
-    byte_buffer(byte_buffer&& buf) BMNOEXEPT
+    byte_buffer(byte_buffer&& in_buf) BMNOEXEPT
     {
-        byte_buf_ = buf.byte_buf_;
-        buf.byte_buf_ = 0;
-        this->size_ = buf.size_;
-        capacity_ = buf.capacity_;
-        buf.size_ = buf.capacity_ = 0;
-        alloc_factor_ = buf.alloc_factor_;
+        byte_buf_ = in_buf.byte_buf_;
+        in_buf.byte_buf_ = 0;
+        this->size_ = in_buf.size_;
+        capacity_ = in_buf.capacity_;
+        in_buf.size_ = in_buf.capacity_ = 0;
+        alloc_factor_ = in_buf.alloc_factor_;
     }
     
     /// Move assignment operator
-    byte_buffer& operator=(byte_buffer&& buf) BMNOEXEPT
+    byte_buffer& operator=(byte_buffer&& lhs) BMNOEXEPT
     {
-        if (this == &buf)
+        if (this == &lhs)
             return *this;
 
         free_buffer();
         
-        this->byte_buf_ = buf.byte_buf_;
-        buf.byte_buf_ = 0;
-        this->size_ = buf.size_;
-        capacity_ = buf.capacity_;
-        alloc_factor_ = buf.alloc_factor_;
+        this->byte_buf_ = lhs.byte_buf_;
+        lhs.byte_buf_ = 0;
+        this->size_ = lhs.size_;
+        capacity_ = lhs.capacity_;
+        alloc_factor_ = lhs.alloc_factor_;
         return *this;
     }
 #endif
 
-    byte_buffer& operator=(const byte_buffer& buf)
+    byte_buffer& operator=(const byte_buffer& lhs)
     {
-        if (this == &buf)
+        if (this == &lhs)
             return *this;
 
-        copy_from(buf.buf(), buf.size());
+        copy_from(lhs.buf(), lhs.size());
         return *this;
     }
     
@@ -147,17 +144,17 @@ public:
     }
     
     /// swap content with another buffer
-    void swap(byte_buffer& buf) BMNOEXEPT
+    void swap(byte_buffer& other) BMNOEXEPT
     {
-        if (this == &buf)
+        if (this == &other)
             return;
         unsigned char* btmp = byte_buf_;
-        byte_buf_ = buf.byte_buf_;
-        buf.byte_buf_ = btmp;
+        byte_buf_ = other.byte_buf_;
+        other.byte_buf_ = btmp;
         
-        bm::xor_swap(this->size_, buf.size_);
-        bm::xor_swap(capacity_, buf.capacity_);
-        bm::xor_swap(alloc_factor_, buf.alloc_factor_);
+        bm::xor_swap(this->size_, other.size_);
+        bm::xor_swap(capacity_, other.capacity_);
+        bm::xor_swap(alloc_factor_, other.alloc_factor_);
     }
 
     /// Free underlying memory
@@ -169,14 +166,14 @@ public:
 
     /// copy data from an external buffer
     ///
-    void copy_from(const unsigned char* buf, size_t size)
+    void copy_from(const unsigned char* in_buf, size_t in_size)
     {
-        if (size)
+        if (in_size)
         {
-            allocate(size);
-            ::memcpy(byte_buf_, buf, size);
+            allocate(in_size);
+            ::memcpy(byte_buf_, in_buf, in_size);
         }
-        this->size_ = size;
+        this->size_ = in_size;
     }
     
     
