@@ -154,7 +154,11 @@ BMFORCEINLINE
 int word_bitcount64(bm::id64_t x)
 {
 #if defined(BMSSE42OPT) || defined(BMAVX2OPT)
+#if defined(BM64_SSE4) || defined(BM64_AVX2)
     return (int)_mm_popcnt_u64(x);
+#else
+    return _mm_popcnt_u32(x >> 32) + _mm_popcnt_u32((unsigned)x);
+#endif
 #else
     x = x - ((x >> 1) & 0x5555555555555555);
     x = (x & 0x3333333333333333) + ((x >> 2) & 0x3333333333333333);
@@ -612,15 +616,14 @@ void for_each_nzblock(T*** root, unsigned size1,
         for (unsigned j = 0; j < bm::set_array_size; )
         {
 #ifdef BMAVX2OPT
-            T* blk0 = blk_blk[j + 0];
-            T* blk1 = blk_blk[j + 1];
-            T* blk2 = blk_blk[j + 2];
-            T* blk3 = blk_blk[j + 3];
-
-            __m256i w0 = 
-                _mm256_set_epi64x((bm::id64_t)blk3, (bm::id64_t)blk2, (bm::id64_t)blk1, (bm::id64_t)blk0);
+            __m256i w0 = _mm256_loadu_si256((__m256i*)(blk_blk + j));
             if (!_mm256_testz_si256(w0, w0))
             {
+                T* blk0 = blk_blk[j + 0];
+                T* blk1 = blk_blk[j + 1];
+                T* blk2 = blk_blk[j + 2];
+                T* blk3 = blk_blk[j + 3];
+
                 unsigned block_idx = r + j + 0;
                 if (blk0)
                 {
@@ -696,27 +699,27 @@ void for_each_nzblock2(T*** root, unsigned size1, F& f)
         T** blk_blk;
         if ((blk_blk = root[i])!=0)
         {
-            if (bm::conditional<sizeof(T*) == 8>::test()) // 64-bit SSE4
+            if (bm::conditional<sizeof(T*) == 8>::test()) // 64-bit target
             {
-                T* blk0, *blk1;
                 __m128i w0;
                 for (unsigned j = 0; j < bm::set_array_size; j+=4)
                 {
-                    blk0 = blk_blk[j + 0];
-                    blk1 = blk_blk[j + 1];
-                    w0 = _mm_set_epi64x((bm::id64_t)blk0, (bm::id64_t)blk1);
+                    w0 = _mm_loadu_si128((__m128i*)(blk_blk + j));
                     if (!_mm_testz_si128(w0, w0))
                     {
+                        T* blk0 = blk_blk[j + 0];
+                        T* blk1 = blk_blk[j + 1];
+
                         if (blk0)
                             f(blk0);
                         if (blk1)
                             f(blk1);
                     }
-                    blk0 = blk_blk[j + 2];
-                    blk1 = blk_blk[j + 3];
-                    w0 = _mm_set_epi64x((bm::id64_t)blk0, (bm::id64_t)blk1);
+                    w0 = _mm_loadu_si128((__m128i*)(blk_blk + j + 2));
                     if (!_mm_testz_si128(w0, w0))
                     {
+                        T* blk0 = blk_blk[j + 2];
+                        T* blk1 = blk_blk[j + 3];
                         if (blk0)
                             f(blk0);
                         if (blk1)
@@ -739,20 +742,19 @@ void for_each_nzblock2(T*** root, unsigned size1, F& f)
         T** blk_blk;
         if ((blk_blk = root[i]) != 0)
         {
-            if (bm::conditional<sizeof(T*) == 8>::test()) // 64-bit SSE4
+            if (bm::conditional<sizeof(T*) == 8>::test()) // 64-bit target
             {
-                T* blk0, *blk1, *blk2, *blk3;
-                __m256i w0;
                 for (unsigned j = 0; j < bm::set_array_size; j += 4)
                 {
-                    blk0 = blk_blk[j + 0];
-                    blk1 = blk_blk[j + 1];
-                    blk2 = blk_blk[j + 2];
-                    blk3 = blk_blk[j + 3];
-
-                    w0 = _mm256_set_epi64x((bm::id64_t)blk3, (bm::id64_t)blk2, (bm::id64_t)blk1, (bm::id64_t)blk0);
+                    __m256i w0 = _mm256_loadu_si256((__m256i*)(blk_blk + j));
                     if (!_mm256_testz_si256(w0, w0))
                     {
+                        // as a variant could use: blk0 = (T*)_mm256_extract_epi64(w0, 0);
+                        // but it measures marginally slower
+                        T* blk0 = blk_blk[j + 0];
+                        T* blk1 = blk_blk[j + 1];
+                        T* blk2 = blk_blk[j + 2];
+                        T* blk3 = blk_blk[j + 3];
                         if (blk0)
                             f(blk0);
                         if (blk1)
