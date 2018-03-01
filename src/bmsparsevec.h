@@ -1066,10 +1066,27 @@ sparse_vector<Val, BV>::get(bm::id_t i) const
     unsigned eff_plains = effective_plains();
     for (unsigned j = 0; j < eff_plains; j+=4)
     {
-        bool b = plains_[j+0] || plains_[j+1] || plains_[j+2] || plains_[j+3];
+#if defined(BM64_SSE4)
+        __m128i w0 = _mm_loadu_si128((__m128i*)(plains_ + j));
+        __m128i w1 = _mm_loadu_si128((__m128i*)(plains_ + j + 2));
+        w0 = _mm_or_si128(w0, w1);
+        if (_mm_testz_si128(w0, w0))
+        {
+            BM_ASSERT(!(plains_[j + 0] || plains_[j + 1] || plains_[j + 2] || plains_[j + 3]));
+            continue;
+        }
+#elif defined(BM64_AVX2)
+        __m256i w0 = _mm256_loadu_si256((__m256i*)(plains_ + j));
+        if (_mm256_testz_si256(w0, w0))
+        {
+            BM_ASSERT(!(plains_[j + 0] || plains_[j + 1] || plains_[j + 2] || plains_[j + 3]));
+            continue;
+        }
+#else
+        bool b = plains_[j + 0] || plains_[j + 1] || plains_[j + 2] || plains_[j + 3];
         if (!b)
             continue;
-
+#endif
         blka[0] = get_block(j+0, i0, j0);
         blka[1] = get_block(j+1, i0, j0);
         blka[2] = get_block(j+2, i0, j0);
