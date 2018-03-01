@@ -54,15 +54,25 @@ set(CMAKE_CXX_FLAGS "${CMAKE_CXX_FLAGS} ${flags} ${optflags} ${bmoptf}")
 add_library(bm-static STATIC "libbm/src/libbm.cpp")
 add_library(bm-dll SHARED "libbm/src/libbm.cpp")
 add_library(bmcpuid SHARED "libbm/src/libbmcpuid.c")
+add_library(bm-dll-test SHARED "libbm/src/libbm.cpp")
+add_library(bm-dll-sse42 SHARED "libbm/src/libbm.cpp")
+add_library(bm-dll-avx2 SHARED "libbm/src/libbm.cpp")
 
+if ("${CMAKE_CXX_COMPILER_ID}" STREQUAL "MSVC")
+   set_target_properties(bmcpuid PROPERTIES COMPILE_FLAGS "-DBMDLLEXPORTS")
+   set_target_properties(bm-dll PROPERTIES COMPILE_FLAGS "-DBMDLLEXPORTS")
+   set_target_properties(bm-dll-sse42 PROPERTIES COMPILE_FLAGS "-DBMDLLEXPORTS -DBMSSE42OPT")
+   set_target_properties(bm-dll-avx2 PROPERTIES COMPILE_FLAGS "-DBMDLLEXPORTS -DBMAVX2OPT")
+endif()
 
 if ("${BMOPTFLAGS}" STREQUAL "BMSSE42OPT")
     add_library(bm-dll-sse42 SHARED "libbm/src/libbm.cpp")
+    set_target_properties(bm-dll-sse42 PROPERTIES COMPILE_FLAGS "-DBMDLLEXPORTS")
 elseif("${BMOPTFLAGS}" STREQUAL "BMAVX2OPT")
     add_library(bm-dll-avx2 SHARED "libbm/src/libbm.cpp")
+    set_target_properties(bm-dll-avx2 PROPERTIES COMPILE_FLAGS "-DBMDLLEXPORTS")
 else()
 endif()
-
 
 
 
