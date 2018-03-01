@@ -29,8 +29,10 @@ set(CMAKE_C_FLAGS   "${CMAKE_C_FLAGS} ${flags}")
 set(CMAKE_CXX_FLAGS "${CMAKE_CXX_FLAGS} ${flags}")
 
 
+add_library(bmcpuidj SHARED "../libbm/src/libbmcpuid.c" "src/bmcpuidj.c")
 add_library(bmjni SHARED "src/libbmjni.cpp" "src/bmjni.c")
 
+target_link_libraries(bmcpuidj ${JNI_LIBRARIES})
 target_link_libraries(bmjni ${JNI_LIBRARIES})
 
 
