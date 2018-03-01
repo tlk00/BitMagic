@@ -28,7 +28,7 @@ For more information please visit:  http://bitmagic.io
 #include "libbm.h"
 
 
-
+static
 int check_report_error(int res, const char* msg)
 {
     if (res != BM_OK)
