@@ -615,7 +615,7 @@ void for_each_nzblock(T*** root, unsigned size1,
         unsigned r = i * bm::set_array_size;
         for (unsigned j = 0; j < bm::set_array_size; )
         {
-#ifdef BMAVX2OPT
+#ifdef BM64_AVX2
             __m256i w0 = _mm256_loadu_si256((__m256i*)(blk_blk + j));
             if (!_mm256_testz_si256(w0, w0))
             {
@@ -668,6 +668,37 @@ void for_each_nzblock(T*** root, unsigned size1,
                 f.on_empty_block(r + j + 3);
             }
             j += 4;
+#elif defined(BM64_SSE4)
+            __m128i w0 = _mm_loadu_si128((__m128i*)(blk_blk + j));
+            if (!_mm_testz_si128(w0, w0))
+            {
+                T* blk0 = blk_blk[j + 0];
+                T* blk1 = blk_blk[j + 1];
+
+                unsigned block_idx = r + j + 0;
+                if (blk0)
+                {
+                    f(blk0, block_idx);
+                    non_empty_top += (blk_blk[j] != 0);
+                }
+                else
+                    f.on_empty_block(block_idx);
+
+                ++block_idx;
+                if (blk1)
+                {
+                    f(blk1, block_idx);
+                    non_empty_top += (blk_blk[j + 1] != 0);
+                }
+                else
+                    f.on_empty_block(block_idx);
+            }
+            else
+            {
+                f.on_empty_block(r + j + 0);
+                f.on_empty_block(r + j + 1);
+            }
+            j += 2;
 #else
             if (blk_blk[j])
             {
@@ -693,13 +724,12 @@ void for_each_nzblock(T*** root, unsigned size1,
 template<class T, class F> 
 void for_each_nzblock2(T*** root, unsigned size1, F& f)
 {
-#ifdef BMSSE42OPT
+#ifdef BM64_SSE4
     for (unsigned i = 0; i < size1; ++i)
     {
         T** blk_blk;
         if ((blk_blk = root[i])!=0)
         {
-            if (bm::conditional<sizeof(T*) == 8>::test()) // 64-bit target
             {
                 __m128i w0;
                 for (unsigned j = 0; j < bm::set_array_size; j+=4)
@@ -727,22 +757,14 @@ void for_each_nzblock2(T*** root, unsigned size1, F& f)
                     }
                 } // for j
             }
-            else
-            {
-                for (unsigned j = 0; j < bm::set_array_size; ++j)
-                {
-                    if (blk_blk[j]) f(blk_blk[j]);
-                }
-            }
         }
     }  // for i
-#elif defined(BMAVX2OPT)
+#elif defined(BM64_AVX2)
     for (unsigned i = 0; i < size1; ++i)
     {
         T** blk_blk;
         if ((blk_blk = root[i]) != 0)
         {
-            if (bm::conditional<sizeof(T*) == 8>::test()) // 64-bit target
             {
                 for (unsigned j = 0; j < bm::set_array_size; j += 4)
                 {
@@ -765,13 +787,6 @@ void for_each_nzblock2(T*** root, unsigned size1, F& f)
                             f(blk3);
                     }
                 } // for j
-            }
-            else
-            {
-                for (unsigned j = 0; j < bm::set_array_size; ++j)
-                {
-                    if (blk_blk[j]) f(blk_blk[j]);
-                }
             }
         }
     }  // for i
