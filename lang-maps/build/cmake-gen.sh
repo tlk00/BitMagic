@@ -9,7 +9,7 @@
 # Specific build can be activated by setting cmake cache variable
 # Example: cmake -DBMOPTFLAGS:STRING=BMSSE42OPT
 
-
+cmake -DBMOPTFLAGS:STRING=none ..
 #cmake -DBMOPTFLAGS:STRING=BMSSE42OPT ..
 #cmake -DBMOPTFLAGS:STRING=BMAVX2OPT ..
 cmake ..
