@@ -162,54 +162,64 @@ void compute_nonzero_bvector(const SV& svect, typename SV::bvector_type& bvect)
 }
 
 /*!
-    \brief Integer set to set transformation (functional image)
+    \brief Integer set to set transformation (functional image in groups theory)
     https://en.wikipedia.org/wiki/Image_(mathematics)
  
     Input sets gets translated through the function, which is defined as
     "one to one (or NULL)" binary relation object (sparse_vector).
  
-    \param bvect_in  - input set, defined as a bit-vector
-    \param sv_brel   - binary relation table defined as a sparse_vector<>
-    \param bvect_out - output set as a bit-vector
- 
     \ingroup svalgo
     \ingroup setalgo
 */
 template<class SV>
-void bvector_transform_11(typename SV::bvector_type& bvect_in,
-                          const    SV&               sv_brel,
-                          typename SV::bvector_type& bvect_out)
+class set2set_11_transform
 {
-    if (sv_brel.empty())
-        return; // nothing to do
-    
-    bvect_out.init(); // just in case to "fast set" later
-    
-    const typename SV::bvector_type * bv_non_null = sv_brel.get_null_bvector();
-    typename SV::bvector_type bv_product;
-
-    if (bv_non_null) // NULL-able association vector
+public:
+    typedef typename SV::bvector_type       bvector_type;
+public:
+    /** Perform transformation
+   
+     \param bvect_in  - input set, defined as a bit-vector
+     \param sv_brel   - binary relation vector
+     \param bvect_out - output set as a bit-vector
+    */
+    void run(typename SV::bvector_type& bvect_in,
+             const    SV&               sv_brel,
+             typename SV::bvector_type& bvect_out)
     {
-        bv_product = bvect_in;
-        bv_product &= *bv_non_null;
+        if (sv_brel.empty())
+            return; // nothing to do
+        
+        bvect_out.init(); // just in case to "fast set" later
+        
+        const typename SV::bvector_type * bv_non_null = sv_brel.get_null_bvector();
+        
+        if (bv_non_null) // NULL-able association vector
+        {
+            bv_product_ = bvect_in;
+            bv_product_ &= *bv_non_null;
+        }
+        else
+        {
+            bv_product_.clear(true);
+            bv_product_.set_range(0, sv_brel.size()-1);
+            bv_product_ &= bvect_in;
+        }
+        
+        typename SV::bvector_type::enumerator en(bv_product_.first());
+        for (; en.valid(); ++en)
+        {
+            auto idx = *en;
+            idx = sv_brel.translate_address(idx);
+            typename SV::value_type translated_id = sv_brel.get(idx);
+            bvect_out.set_bit_no_check(translated_id);
+        } // for en
     }
-    else
-    {
-        bv_product.set_range(0, sv_brel.size()-1);
-        bv_product &= bvect_in;
-    }
     
-    typename SV::bvector_type::enumerator en(bv_product.first());
+protected:
+    bvector_type   bv_product_;
+};
 
-    for (; en.valid(); ++en)
-    {
-        auto idx = *en;
-        idx = sv_brel.translate_address(idx);
-        typename SV::value_type translated_id = sv_brel.get(idx);
-        bvect_out.set_bit_no_check(translated_id);
-    } // for en
-    
-}
 
 
 

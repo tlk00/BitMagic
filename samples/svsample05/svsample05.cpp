@@ -70,6 +70,8 @@ void print_bvector(const bm::bvector<>& bv)
     cout << "]" << endl;
 }
 
+typedef bm::sparse_vector<bm::id_t, bm::bvector<> > sparse_vector_u32;
+
 int main(void)
 {
     try
@@ -77,7 +79,7 @@ int main(void)
         // initialize sparse_vector as a binary relation (transform function)
         // to translate from one set to another
         //
-        bm::sparse_vector<unsigned, bm::bvector<> > sv_transform(bm::use_null);
+        sparse_vector_u32 sv_transform(bm::use_null);
         
         // transformation function defined as an association table:
         // 2 -> 25
@@ -100,7 +102,8 @@ int main(void)
         
         bm::bvector<> bv_out;
        
-        bm::bvector_transform_11(bv_in, sv_transform, bv_out);
+        bm::set2set_11_transform<sparse_vector_u32> func;
+        func.run(bv_in, sv_transform, bv_out);
         
         print_bvector(bv_out); // ( count = 4): [25, 35, 2000, 2001, ]
     }

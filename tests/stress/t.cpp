@@ -9981,6 +9981,17 @@ void TestSparseVector()
     cout << "---------------------------- Bit-plain sparse vector test OK" << endl;
 }
 
+
+template<class SV>
+void bvector_transform_11(typename SV::bvector_type& bvect_in,
+                          const    SV&               sv_brel,
+                          typename SV::bvector_type& bvect_out)
+{
+    bm::set2set_11_transform<SV> bin_trans;
+    bin_trans.run(bvect_in, sv_brel, bvect_out);
+}
+
+
 static
 void TestSparseVectorTransform()
 {
@@ -9991,7 +10002,7 @@ void TestSparseVectorTransform()
         bvect bv_in { 1, 2, 3, 10, 20 };
         bvect bv_out;
         
-        bm::bvector_transform_11(bv_in, sv, bv_out);
+        bvector_transform_11(bv_in, sv, bv_out);
         assert(bv_out.count() == 0);
         cout << "Transform11 with empty sv - ok" << endl;
     }
@@ -10008,7 +10019,7 @@ void TestSparseVectorTransform()
         bvect bv_in { 1, 2, 3, 10, 20 };
         bvect bv_out;
         
-        bm::bvector_transform_11(bv_in, sv, bv_out);
+        bvector_transform_11(bv_in, sv, bv_out);
         
         bvect bv_control {25, 35, 2 };
         int cmp = bv_control.compare(bv_out);
@@ -10035,7 +10046,7 @@ void TestSparseVectorTransform()
                 sv.set(idx, idx); // 1 to 1 direct
             }
         }
-        bm::bvector_transform_11(bv_in, sv, bv_out);
+        bvector_transform_11(bv_in, sv, bv_out);
         int cmp = bv_in.compare(bv_out);
         if (cmp != 0)
         {
@@ -10069,7 +10080,7 @@ void TestSparseVectorTransform()
                 sv.set(idx, idx + 50000000); // 1 to 1 direct with a base shift
             }
         }
-        bm::bvector_transform_11(bv_in, sv, bv_out);
+        bvector_transform_11(bv_in, sv, bv_out);
         
         int cmp = bv_control.compare(bv_out);
         if (cmp != 0)
@@ -10098,7 +10109,7 @@ void TestSparseVectorTransform()
                 sv.set(idx, 50000000); // M:1
             }
         }
-        bm::bvector_transform_11(bv_in, sv, bv_out);
+        bvector_transform_11(bv_in, sv, bv_out);
         
         int cmp = bv_control.compare(bv_out);
         if (cmp != 0)
