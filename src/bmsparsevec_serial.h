@@ -168,7 +168,7 @@ void sparse_vector_serialize(
     // ptr where bit-plains start
     unsigned char* buf_ptr = buf + h_size;
 
-    bm::serializer<bm::bvector<> > bvs(temp_block);
+    bm::serializer<typename SV::bvector_type > bvs(temp_block);
     bvs.gap_length_serialization(false);
     bvs.set_compression_level(4);
     
