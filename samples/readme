@@ -19,6 +19,8 @@ BitMagic Library samples
 ./svsample02 - sparse_vector<> serialization example
 ./svsample03 - sparse_vector<> import, join, extract methods
 ./svsample04 - sparse_vector<> operations with NULL-able vectors and values
+./svsample05 - set transformation algorithm (image) to translate one set to another
+               using memory-efficient bit-transposed sparse_vector as a translation function
 
 ./xsample01 - advanced: different methods of handling of super sparse sets. Benchmarks of set operations for each method. 
                Details at: http://bitmagic.io/case-ER-join.html
