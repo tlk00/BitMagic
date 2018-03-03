@@ -434,6 +434,12 @@ public:
                              size_type size,
                              size_type offset,
                              bool      zero_mem = true) const;
+    
+    /** \brief address translation for this type of container
+        \internal
+    */
+    static
+    size_type translate_address(size_type i) { return i; }
 
 private:
 
