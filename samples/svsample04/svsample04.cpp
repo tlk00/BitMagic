@@ -17,7 +17,7 @@ For more information please visit:  http://bitmagic.io
 */
 
 /** \example svsample04.cpp
-  Example of how to use NULL-enabled sparse vector
+  Example how to use NULL-enabled sparse vector
  
   \sa bm::sparse_vector<>
  */
