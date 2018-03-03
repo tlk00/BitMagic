@@ -341,6 +341,8 @@ typedef bm::bvector_mini<bm::block_allocator> bvect_mini;
 
 #endif
 
+typedef bm::sparse_vector<unsigned, bvect > sparse_vector_u32;
+
 //const unsigned BITVECT_SIZE = 100000000 * 8;
 
 // This this setting program will consume around 150M of RAM
@@ -355,6 +357,8 @@ void CheckVectors(bvect_mini &bvect_min,
                   bvect      &bvect_full,
                   unsigned size,
                   bool     detailed = false);
+
+void generate_bvector(bvect& bv, unsigned vector_max = 40000000);
 
 static
 unsigned random_minmax(unsigned min, unsigned max)
@@ -9099,8 +9103,8 @@ bool TestEqualSparseVectors(const SV& sv1, const SV& sv2, bool detailed = true)
     //
     {{
         int res;
-        sparse_vector_serial_layout<SV> sv_lay;
-        sparse_vector_serialize(sv1, sv_lay);
+        bm::sparse_vector_serial_layout<SV> sv_lay;
+        bm::sparse_vector_serialize(sv1, sv_lay);
         
         // copy buffer to check if serialization size is actually correct
         const unsigned char* buf = sv_lay.buf();
@@ -9977,12 +9981,145 @@ void TestSparseVector()
     cout << "---------------------------- Bit-plain sparse vector test OK" << endl;
 }
 
+static
+void TestSparseVectorTransform()
+{
+    cout << " Test set transformation with sparse vector" << endl;
+
+    {
+        sparse_vector_u32 sv(bm::use_null);
+        bvect bv_in { 1, 2, 3, 10, 20 };
+        bvect bv_out;
+        
+        bm::bvector_transform_11(bv_in, sv, bv_out);
+        assert(bv_out.count() == 0);
+        cout << "Transform11 with empty sv - ok" << endl;
+    }
+
+    {
+        sparse_vector_u32 sv(bm::use_null);
+
+        sv.set(2, 25);
+        sv.set(3, 35);
+        sv.set(7, 75);
+        sv.set(10, 2);
+        sv.set(21, 201);
+
+        bvect bv_in { 1, 2, 3, 10, 20 };
+        bvect bv_out;
+        
+        bm::bvector_transform_11(bv_in, sv, bv_out);
+        
+        bvect bv_control {25, 35, 2 };
+        int cmp = bv_control.compare(bv_out);
+        if (cmp != 0)
+        {
+            cerr << "Transform11 (1) control comparison failed" << endl;
+            exit(1);
+        }
+        
+        cout << "Transform11 (1) - ok" << endl;
+    }
+    
+    {
+        bvect bv_in, bv_out;
+        sparse_vector_u32 sv(bm::use_null);
+        
+        generate_bvector(bv_in);
+        
+        {
+            bvect::enumerator en = bv_in.first();
+            for (;en.valid(); ++en)
+            {
+                bm::id_t idx = *en;
+                sv.set(idx, idx); // 1 to 1 direct
+            }
+        }
+        bm::bvector_transform_11(bv_in, sv, bv_out);
+        int cmp = bv_in.compare(bv_out);
+        if (cmp != 0)
+        {
+            cerr << "Transform11 (2) control comparison failed" << endl;
+            exit(1);
+        }
+        cout << "Transform11 (2) - ok" << endl;
+    }
+
+    {
+        bvect bv_in, bv_out;
+        sparse_vector_u32 sv(bm::use_null);
+        
+        generate_bvector(bv_in);
+        
+        bvect bv_control;
+        {
+            bvect::enumerator en = bv_in.first();
+            for (;en.valid(); ++en)
+            {
+                bm::id_t idx = *en;
+                bv_control.set(idx + 50000000);
+            }
+        }
+        
+        {
+            bvect::enumerator en = bv_in.first();
+            for (;en.valid(); ++en)
+            {
+                bm::id_t idx = *en;
+                sv.set(idx, idx + 50000000); // 1 to 1 direct with a base shift
+            }
+        }
+        bm::bvector_transform_11(bv_in, sv, bv_out);
+        
+        int cmp = bv_control.compare(bv_out);
+        if (cmp != 0)
+        {
+            cerr << "Transform11 (3) control comparison failed" << endl;
+            exit(1);
+        }
+        cout << "Transform11 (3) - ok" << endl;
+    }
+
+
+    {
+        bvect bv_in, bv_out;
+        sparse_vector_u32 sv(bm::use_null);
+        
+        generate_bvector(bv_in);
+        
+        bvect bv_control;
+        bv_control.set(50000000);
+        
+        {
+            bvect::enumerator en = bv_in.first();
+            for (;en.valid(); ++en)
+            {
+                bm::id_t idx = *en;
+                sv.set(idx, 50000000); // M:1
+            }
+        }
+        bm::bvector_transform_11(bv_in, sv, bv_out);
+        
+        int cmp = bv_control.compare(bv_out);
+        if (cmp != 0)
+        {
+            cerr << "Transform11 (4) control comparison failed" << endl;
+            exit(1);
+        }
+        cout << "Transform11 (4) - ok" << endl;
+    }
+
+
+
+    cout << " --------------- Test set transformation with sparse vector OK" << endl;
+}
+
 
 // fill pseudo-random plato pattern into two vectors
 //
-static
+template<class SV>
 void FillSparseIntervals(std::vector<unsigned>&                       vect,
-                         bm::sparse_vector<unsigned, bm::bvector<> >& svect,
+                         SV& svect,
                          unsigned min,
                          unsigned max,
                          unsigned fill_factor
@@ -10050,8 +10187,6 @@ void FillSparseIntervals(std::vector<unsigned>&                       vect,
         } // for i
         
     } // for min
-    
-    
 }
 
 static
@@ -10073,7 +10208,7 @@ void TestSparseVector_Stress(unsigned count)
                                 (min % 2 == 0) ? bm::no_null : bm::use_null;
                 
                 std::vector<unsigned> vect;
-                bm::sparse_vector<unsigned, bm::bvector<> > sv(null_able);
+                bm::sparse_vector<unsigned, bvect > sv(null_able);
             
                 FillSparseIntervals(vect, sv, min, max, fill_factor);
                 
@@ -10121,8 +10256,8 @@ void TestSparseVector_Stress(unsigned count)
             {{
                 std::vector<unsigned> vect1;
                 std::vector<unsigned> vect2;
-                bm::sparse_vector<unsigned, bm::bvector<> > sv1(null_able1);
-                bm::sparse_vector<unsigned, bm::bvector<> > sv2(null_able1);
+                bm::sparse_vector<unsigned, bvect > sv1(null_able1);
+                bm::sparse_vector<unsigned, bvect > sv2(null_able1);
             
                 FillSparseIntervals(vect1, sv1, min, max, fill_factor);
                 FillSparseIntervals(vect2, sv2, min2, max2, fill_factor);
@@ -10135,8 +10270,8 @@ void TestSparseVector_Stress(unsigned count)
                 {
                     sv2.optimize();
                 }
-                bm::sparse_vector<unsigned, bm::bvector<> > sv3;
-                bm::sparse_vector<unsigned, bm::bvector<> > sv4(sv2);
+                bm::sparse_vector<unsigned, bvect > sv3;
+                bm::sparse_vector<unsigned, bvect > sv4(sv2);
                 
                 sv1.join(sv2);
                 sv3.join(sv1);
@@ -11157,11 +11292,8 @@ void AddressResolverTest()
 
 // generate pseudo-random bit-vector, mix of blocks
 //
-static
-void generate_bvector(bm::bvector<>& bv)
+void generate_bvector(bvect& bv, unsigned vector_max)
 {
-    unsigned       vector_max = 40000000;
-
     unsigned i, j;
     for (i = 0; i < vector_max;)
     {
@@ -11203,7 +11335,7 @@ void BvectorBitForEachTest()
     
     {
         cout << "test empty vector" << endl;
-        bm::bvector<> bv1;
+        bvect bv1;
         std::vector<unsigned> v1;
         
         bm::visit_each_bit(bv1, (void*)&v1, bit_decode_func);
@@ -11240,10 +11372,10 @@ void BvectorBitForEachTest()
     }
     
     {
-        bm::bvector<> bv1 { 0,1,2, 10, 32, 100, 65535,
+        bvect bv1 { 0,1,2, 10, 32, 100, 65535,
                             65535+1, 65535+2, 65535+10, 65535+11, 65535+31,
                             20000000 };
-        bm::bvector<> bv2;
+        bvect bv2;
         std::vector<unsigned> v1;
         
         bm::visit_each_bit(bv1, (void*)&v1, bit_decode_func);
@@ -11298,7 +11430,7 @@ void BvectorBitForEachTest()
     }
     
     {
-        bm::bvector<> bv1, bv2;
+        bvect bv1, bv2;
         std::vector<unsigned> v1;
         
         generate_bvector(bv1);
@@ -11682,16 +11814,18 @@ int main(void)
 
      BlockLevelTest();
 
-     TestCompressedCollection();
-
      StressTest(120, 0); // OR
      StressTest(120, 1); // SUB
      StressTest(120, 2); // XOR
      StressTest(120, 3); // AND
 
      TestSparseVector();
+    
+     TestSparseVectorTransform();
 
      TestSparseVector_Stress(2);
+ 
+     TestCompressedCollection();
 
      StressTest(300);
 
