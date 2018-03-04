@@ -1313,8 +1313,7 @@ void sparse_vector<Val, BV>::calc_stat(
 {
     BM_ASSERT(st);
     
-	st->bit_blocks = st->gap_blocks = 0; 
-	st->max_serialize_mem = st->memory_used = 0;
+    st->reset();
 
     unsigned stored_plains = this->stored_plains();
     for (unsigned j = 0; j < stored_plains; ++j)

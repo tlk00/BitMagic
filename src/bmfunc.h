@@ -63,7 +63,6 @@ struct bv_statistics
     gap_word_t  gap_levels[bm::gap_levels];
 
 
-
     /// cound bit block
     void add_bit_block()
     {
@@ -76,10 +75,18 @@ struct bv_statistics
     /// count gap block
     void add_gap_block(unsigned capacity, unsigned length)
     {
+        (gap_blocks < bm::set_total_blocks) ? gap_length[gap_blocks] = length : 0;
         ++gap_blocks;
         unsigned mem_used = (unsigned)(capacity * sizeof(gap_word_t));
         memory_used += mem_used;
         max_serialize_mem += (unsigned)(length * sizeof(gap_word_t));
+    }
+    
+    /// Reset statisctics
+    void reset()
+    {
+        bit_blocks = gap_blocks = 0;
+        max_serialize_mem = memory_used = 0;
     }
 };
 

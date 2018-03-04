@@ -2337,9 +2337,8 @@ void bvector<Alloc>::optimize(bm::word_t* temp_block,
                                                 stat);
     if (stat)
     {
-        stat->bit_blocks = stat->gap_blocks = 0;
-        stat->max_serialize_mem = stat->memory_used = 0;
-        ::memcpy(stat->gap_levels, 
+        stat->reset();
+        ::memcpy(stat->gap_levels,
                 blockman_.glen(), sizeof(gap_word_t) * bm::gap_levels);
         stat->max_serialize_mem = (unsigned)sizeof(id_t) * 4;
     }
@@ -2541,34 +2540,27 @@ void bvector<Alloc>::calc_stat(struct bvector<Alloc>::statistics* st) const
 {
     BM_ASSERT(st);
     
-    st->bit_blocks = st->gap_blocks = 0;
-    st->max_serialize_mem = st->memory_used = 0;
+    st->reset();
 
     ::memcpy(st->gap_levels, 
              blockman_.glen(), sizeof(gap_word_t) * bm::gap_levels);
 
     unsigned empty_blocks = 0;
-    unsigned blocks_memory = 0;
-    gap_word_t* gapl_ptr = st->gap_length;
 
     st->max_serialize_mem = unsigned(sizeof(id_t) * 4);
 
-    unsigned block_idx = 0;
-
     unsigned top_size = blockman_.effective_top_block_size();
-    // Walk the blocks, calculate statistics.
     for (unsigned i = 0; i < top_size; ++i)
     {
         const bm::word_t* const* blk_blk = blockman_.get_topblock(i);
 
         if (!blk_blk) 
         {
-            block_idx += bm::set_array_size;
             st->max_serialize_mem += unsigned(sizeof(unsigned) + 1);
             continue;
         }
 
-        for (unsigned j = 0;j < bm::set_array_size; ++j, ++block_idx)
+        for (unsigned j = 0;j < bm::set_array_size; ++j)
         {
             const bm::word_t* blk = blk_blk[j];
             if (IS_VALID_ADDR(blk))
@@ -2578,27 +2570,15 @@ void bvector<Alloc>::calc_stat(struct bvector<Alloc>::statistics* st) const
 
                 if (BM_IS_GAP(blk))
                 {
-                    ++(st->gap_blocks);
-
                     bm::gap_word_t* gap_blk = BMGAP_PTR(blk);
-
-                    unsigned mem_used = 
-                        unsigned(bm::gap_capacity(gap_blk, blockman_.glen())
-                        * sizeof(gap_word_t));
-
-                    *gapl_ptr = gap_length(gap_blk);
-
-                    st->max_serialize_mem += unsigned(*gapl_ptr * sizeof(gap_word_t));
-                    blocks_memory += mem_used;
-
-                    ++gapl_ptr;
+                    unsigned capacity = bm::gap_capacity(gap_blk, blockman_.glen());
+                    unsigned length = gap_length(gap_blk);
+                    
+                    st->add_gap_block(capacity, length);
                 }
                 else // bit block
                 {
-                    ++(st->bit_blocks);
-                    unsigned mem_used = unsigned(sizeof(bm::word_t) * bm::set_block_size);
-                    st->max_serialize_mem += mem_used;
-                    blocks_memory += mem_used;
+                    st->add_bit_block();
                 }
             }
             else
@@ -2616,7 +2596,6 @@ void bvector<Alloc>::calc_stat(struct bvector<Alloc>::statistics* st) const
 
     st->memory_used += unsigned(sizeof(*this) - sizeof(blockman_));
     st->memory_used += blockman_.mem_used();
-    st->memory_used += blocks_memory;
 }
 
 
@@ -3132,11 +3111,11 @@ void bvector<Alloc>::combine_operation(
             }
             // 0 - self, non-zero argument
             unsigned r = i * bm::set_array_size;
-            for (j = 0; j < bm::set_array_size; ++j)//,++block_idx)
+            for (j = 0; j < bm::set_array_size; ++j)
             {
                 const bm::word_t* arg_blk = bv.blockman_.get_block(i, j);
                 if (arg_blk )
-                    combine_operation_with_block(r + j,//block_idx, 
+                    combine_operation_with_block(r + j,
                                                  0, 0, 
                                                  arg_blk, BM_IS_GAP(arg_blk), 
                                                  opcode);
@@ -3167,7 +3146,7 @@ void bvector<Alloc>::combine_operation(
         else // OR, SUB, XOR
         {
             unsigned r = i * bm::set_array_size;
-            for (j = 0; j < bm::set_array_size; ++j)//, ++block_idx)
+            for (j = 0; j < bm::set_array_size; ++j)
             {            
                 bm::word_t* blk = blk_blk[j];
                 const bm::word_t* arg_blk = bv.blockman_.get_block(i, j);
