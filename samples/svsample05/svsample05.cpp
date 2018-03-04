@@ -21,7 +21,7 @@ For more information please visit:  http://bitmagic.io
   based on sparse_vector as a translation table
  
   \sa bm::sparse_vector<>
-  \sa bm::bvector_set_transform
+  \sa bm::set2set_11_transform
  */
 
 #include <iostream>
@@ -31,8 +31,10 @@ For more information please visit:  http://bitmagic.io
 
 using namespace std;
 
+typedef bm::sparse_vector<bm::id_t, bm::bvector<> > sparse_vector_u32;
+
 static
-void print_svector(const bm::sparse_vector<unsigned, bm::bvector<> >& sv)
+void print_svector(const sparse_vector_u32& sv)
 {
     if (sv.size() == 0)
     {
@@ -70,7 +72,6 @@ void print_bvector(const bm::bvector<>& bv)
     cout << "]" << endl;
 }
 
-typedef bm::sparse_vector<bm::id_t, bm::bvector<> > sparse_vector_u32;
 
 int main(void)
 {
