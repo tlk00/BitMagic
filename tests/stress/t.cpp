@@ -10940,6 +10940,9 @@ void TestSIMDUtils()
             assert(idx == i || (buf[i - 1] == v - 1));
         }
     }
+    
+    // SSE2 AND block check
+    
 
 #endif
 
@@ -11201,6 +11204,8 @@ void TestSIMDUtils()
         assert(!all_one);
     }
 #endif
+
+
     cout << "------------------------ Test SIMD Utils OK" << endl;
 }
 
@@ -11669,6 +11674,86 @@ void TestCompressedCollection()
     cout << "------------------------ Compressed collection Test OK" << endl;
 }
 
+static
+void TestBlockAND()
+{
+    cout << " ------------------------------ Test bit-block AND" << endl;
+    {
+        BM_DECLARE_TEMP_BLOCK(tb1)
+        BM_DECLARE_TEMP_BLOCK(tb2)
+        BM_DECLARE_TEMP_BLOCK(tb3)
+        for (unsigned i = 0; i < bm::set_block_size; ++i)
+        {
+            tb1[i] = tb2[i] = 0;
+        }
+        auto any = bm::bit_block_and(tb1, tb2);
+        assert(any == 0);
+//        tb1[1] = 1;
+        any = bm::bit_block_and(tb1, tb2);
+        cout << tb2[1] << endl;
+        cout << tb1[1] << endl;
+        assert(any == 0);
+        assert(tb1[1] == 0);
+        
+        
+        tb1[1] = tb2[1] = 1;
+        any = bm::bit_block_and(tb1, tb2);
+        
+        cout << tb1[1] << endl;
+        assert(tb1[1] == 1);
+        assert(any);
+        for (unsigned j = 0; j < 32; ++j)
+        {
+            tb1[10] = tb2[10] = (1 << j);
+            if (tb1[10])
+            {
+                any = bm::bit_block_and(tb1, tb2);
+                assert(any);
+            }
+        }
+        
+        for (unsigned i = 0; i < bm::set_block_size; ++i)
+        {
+            tb1[i] = tb2[i] = 8;
+        }
+        any = bm::bit_block_and(tb1, tb2);
+        assert(any);
+        for (unsigned i = 0; i < bm::set_block_size; ++i)
+        {
+            assert(tb1[i] == tb2[i]);
+        }
+
+
+        for (unsigned i = 0; i < bm::set_block_size; ++i)
+        {
+            tb1[i] = tb2[i] = 0;
+        }
+        
+        for (unsigned i = 0; i < bm::set_block_size; ++i)
+        {
+            for (unsigned j = 1; j < 32; ++j)
+            {
+                tb1[i] = tb2[i] = (1u << j);
+                if (tb1[i])
+                {
+                    auto any1 = bm::bit_block_and(tb1, tb2);
+                    cout << any1 <<" j=" << j << " i=" << i << " " << tb1[i] << " " << tb2[i] << endl;
+                    assert(tb1[i] == (1u << j));
+                    if (any1 == 0)
+                    {
+                        cerr << "any 0 " << endl;
+                        exit(1);
+                    }
+                    assert(any1);
+                }
+            }
+            tb1[i] = tb2[i] = 0;
+        }
+    }
+    cout << " ------------------------------ Test bit-block AND  OK" << endl;
+
+}
+
 int main(void)
 {
     time_t      start_time = time(0);
@@ -11750,7 +11835,9 @@ int main(void)
 
     //LoadVectors("c:/dev/bv_perf", 3, 27);
     exit(1);
-*/                                                                                                        
+*/
+
+     //TestBlockAND();
 
      ExportTest();
      ResizeTest();

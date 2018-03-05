@@ -3903,29 +3903,59 @@ void bit_block_copy(bm::word_t* BMRESTRICT dst, const bm::word_t* BMRESTRICT src
 
    \param dst - destination block.
    \param src - source block.
+ 
+   \return 0 if AND operation did not produced anything (no 1s in the output)
 
    @ingroup bitfunc
 */
 inline 
-void bit_block_and(bm::word_t* BMRESTRICT dst, const bm::word_t* BMRESTRICT src)
+bm::wordop_t bit_block_and(bm::word_t* /*BMRESTRICT*/ dst, const bm::word_t* /*BMRESTRICT*/ src)
 {
 #ifdef BMVECTOPT
     VECT_AND_ARR(dst, src, src + bm::set_block_size);
+    return 1;
 #else
-    const bm::wordop_t* BMRESTRICT wrd_ptr = (wordop_t*)src;
-    const bm::wordop_t* BMRESTRICT wrd_end = (wordop_t*)(src + bm::set_block_size);
-    bm::wordop_t* BMRESTRICT dst_ptr = (wordop_t*)dst;
+    const bm::wordop_t* /*BMRESTRICT*/ wrd_ptr = (wordop_t*)src;
+    const bm::wordop_t* /*BMRESTRICT*/ wrd_end = (wordop_t*)(src + bm::set_block_size);
+    bm::wordop_t* /*BMRESTRICT*/ dst_ptr = (wordop_t*)dst;
+    bm::wordop_t any  = 0;
 
     do
     {
-        dst_ptr[0] &= wrd_ptr[0];
-        dst_ptr[1] &= wrd_ptr[1];
-        dst_ptr[2] &= wrd_ptr[2];
-        dst_ptr[3] &= wrd_ptr[3];
+        bm::wordop_t a0 = (dst_ptr[0] & wrd_ptr[0]);
+        dst_ptr[0] = a0;
+        bm::wordop_t a1 = (dst_ptr[1] & wrd_ptr[1]);
+        dst_ptr[1] = a1;
+        bm::wordop_t a2 = (dst_ptr[2] & wrd_ptr[2]);
+        dst_ptr[2] = a2;
+        bm::wordop_t a3 = (dst_ptr[3] & wrd_ptr[3]);
+        dst_ptr[3] = a3;
 
         dst_ptr+=4;
         wrd_ptr+=4;
+        
+        any = a0 | a1 | a2 | a3;
+        if (any)
+            break;
+        
     } while (wrd_ptr < wrd_end);
+    
+    for (; wrd_ptr < wrd_end; )
+    {
+        bm::wordop_t a0 = (dst_ptr[0] & wrd_ptr[0]);
+        dst_ptr[0] = a0;
+        bm::wordop_t a1 = (dst_ptr[1] & wrd_ptr[1]);
+        dst_ptr[1] = a1;
+        bm::wordop_t a2 = (dst_ptr[2] & wrd_ptr[2]);
+        dst_ptr[2] = a2;
+        bm::wordop_t a3 = (dst_ptr[3] & wrd_ptr[3]);
+        dst_ptr[3] = a3;
+
+        dst_ptr+=4;
+        wrd_ptr+=4;
+    }
+    
+    return any;
 #endif
 }
 
