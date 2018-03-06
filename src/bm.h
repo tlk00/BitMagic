@@ -38,6 +38,50 @@ For more information please visit:  http://bitmagic.io
 #include "bmconst.h"
 #include "bmsimd.h"
 #include "bmfwd.h"
+
+/**
+bit-block array wrapped into union for correct interpretation of
+32-bit vs 64-bit access vs SIMD
+@internal
+*/
+namespace bm
+{
+    struct bit_block_t
+    {
+        union bunion_t
+        {
+            bm::word_t BM_VECT_ALIGN w32[bm::set_block_size] BM_VECT_ALIGN_ATTR;
+            bm::id64_t BM_VECT_ALIGN w64[bm::set_block_size / 2] BM_VECT_ALIGN_ATTR;
+#ifdef BMAVX2OPT
+            __m256i  BM_VECT_ALIGN w256[bm::set_block_size / 8] BM_VECT_ALIGN_ATTR;
+#endif
+#if defined(BMSSE2OPT) || defined(BMSSE42OPT)
+            __m128i  BM_VECT_ALIGN w128[bm::set_block_size / 4] BM_VECT_ALIGN_ATTR;
+#endif
+        } b_;
+
+        operator bm::word_t*() { return &(b_.w32[0]); }
+        operator const bm::word_t*() const { return &(b_.w32[0]); }
+        explicit operator bm::id64_t*() { return &b_.w64[0]; }
+        explicit operator const bm::id64_t*() const { return &b_.w64[0]; }
+#ifdef BMAVX2OPT
+        explicit operator __m256i*() { return &b_.w256[0]; }
+        explicit operator const __m256i*() const { return &b_.w256[0]; }
+#endif
+#if defined(BMSSE2OPT) || defined(BMSSE42OPT)
+        explicit operator __m128i*() { return &b_.w128[0]; }
+        explicit operator const __m128i*() const { return &b_.w128[0]; }
+#endif
+
+        const bm::word_t* begin() const { return (b_.w32 + 0); }
+        bm::word_t* begin() { return (b_.w32 + 0); }
+        const bm::word_t* end() const { return (b_.w32 + bm::set_block_size); }
+        bm::word_t* end() { return (b_.w32 + bm::set_block_size); }
+    };
+}
+# define BM_DECLARE_TEMP_BLOCK(x) bm::bit_block_t x;
+
+
 #include "bmfunc.h"
 #include "encoding.h"
 #include "bmalloc.h"

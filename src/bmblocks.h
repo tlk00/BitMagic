@@ -30,7 +30,6 @@ For more information please visit:  http://bitmagic.io
 namespace bm
 {
 
-
 /*!
    @brief bitvector blocks manager
         Embedded class managing bit-blocks on very low level.

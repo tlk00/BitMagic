@@ -3580,17 +3580,16 @@ inline bool is_bits_one(const bm::wordop_t* start,
 /*! @brief Returns "true" if all bits in the block are 0
     @ingroup bitfunc 
 */
-inline
-bool bit_is_all_zero(const bm::wordop_t* start,
-                     const bm::wordop_t* end)
+template<typename TW>
+bool bit_is_all_zero(const TW* start,
+                     const TW* end)
 {
 #if defined(BMSSE42OPT) || defined(BMAVX2OPT)
     return VECT_IS_ZERO_BLOCK(start, end);
 #else
    do
    {
-        bm::wordop_t tmp = 
-            start[0] | start[1] | start[2] | start[3];
+        TW tmp = start[0] | start[1] | start[2] | start[3];
        if (tmp) 
            return false;
        start += 4;
@@ -3909,53 +3908,30 @@ void bit_block_copy(bm::word_t* BMRESTRICT dst, const bm::word_t* BMRESTRICT src
    @ingroup bitfunc
 */
 inline 
-bm::wordop_t bit_block_and(bm::word_t* /*BMRESTRICT*/ dst, const bm::word_t* /*BMRESTRICT*/ src)
+bool bit_block_and(bm::word_t* BMRESTRICT dst, const bm::word_t* BMRESTRICT src)
 {
+    BM_ASSERT(dst);
+    BM_ASSERT(src);
+    BM_ASSERT(dst != src);
+
 #ifdef BMVECTOPT
     VECT_AND_ARR(dst, src, src + bm::set_block_size);
     return 1;
 #else
-    const bm::wordop_t* /*BMRESTRICT*/ wrd_ptr = (wordop_t*)src;
-    const bm::wordop_t* /*BMRESTRICT*/ wrd_end = (wordop_t*)(src + bm::set_block_size);
-    bm::wordop_t* /*BMRESTRICT*/ dst_ptr = (wordop_t*)dst;
-    bm::wordop_t any  = 0;
+    unsigned arr_sz = bm::set_block_size / 2;
 
-    do
+    const bm::bit_block_t::bunion_t* BMRESTRICT src_u = (const bm::bit_block_t::bunion_t*)src;
+    bm::bit_block_t::bunion_t* BMRESTRICT dst_u = (bm::bit_block_t::bunion_t*)dst;
+    bm::id64_t acc = 0;
+    unsigned i = 0;
+    for (i = 0; i < arr_sz; i+=4)
     {
-        bm::wordop_t a0 = (dst_ptr[0] & wrd_ptr[0]);
-        dst_ptr[0] = a0;
-        bm::wordop_t a1 = (dst_ptr[1] & wrd_ptr[1]);
-        dst_ptr[1] = a1;
-        bm::wordop_t a2 = (dst_ptr[2] & wrd_ptr[2]);
-        dst_ptr[2] = a2;
-        bm::wordop_t a3 = (dst_ptr[3] & wrd_ptr[3]);
-        dst_ptr[3] = a3;
-
-        dst_ptr+=4;
-        wrd_ptr+=4;
-        
-        any = a0 | a1 | a2 | a3;
-        if (any)
-            break;
-        
-    } while (wrd_ptr < wrd_end);
-    
-    for (; wrd_ptr < wrd_end; )
-    {
-        bm::wordop_t a0 = (dst_ptr[0] & wrd_ptr[0]);
-        dst_ptr[0] = a0;
-        bm::wordop_t a1 = (dst_ptr[1] & wrd_ptr[1]);
-        dst_ptr[1] = a1;
-        bm::wordop_t a2 = (dst_ptr[2] & wrd_ptr[2]);
-        dst_ptr[2] = a2;
-        bm::wordop_t a3 = (dst_ptr[3] & wrd_ptr[3]);
-        dst_ptr[3] = a3;
-
-        dst_ptr+=4;
-        wrd_ptr+=4;
+        acc |= dst_u->w64[i] &= src_u->w64[i];
+        acc |= dst_u->w64[i+1] &= src_u->w64[i+1];
+        acc |= dst_u->w64[i+2] &= src_u->w64[i+2];
+        acc |= dst_u->w64[i+3] &= src_u->w64[i+3];
     }
-    
-    return any;
+    return (acc != 0);
 #endif
 }
 

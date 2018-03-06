@@ -301,6 +301,8 @@ For more information please visit:  http://bitmagic.io
 #define BM_ASSERT_THROW(x, xerrcode)
 #endif
 
+
+
 #endif
 
 

@@ -92,8 +92,6 @@ const unsigned set_block_size_op  = bm::set_block_size;
 
 #endif
 
-# define BM_DECLARE_TEMP_BLOCK(x)  unsigned BM_VECT_ALIGN x[bm::set_block_size] BM_VECT_ALIGN_ATTR;
-
 
 /*!
    @brief Block allocation strategies.

@@ -10252,7 +10252,7 @@ void TestSparseVector_Stress(unsigned count)
     cout << "--------------------------- Interval shift check Ok" << endl;
 
     cout << "Join check" << endl;
-    for (unsigned i = 0; i < count; ++i)
+    for (unsigned i = 0; i < 1; ++i)
     {
         unsigned fill_factor = 0;
         for (unsigned min = 0; min < 10000000; min+= rand()%100000)
@@ -11679,33 +11679,33 @@ void TestBlockAND()
 {
     cout << " ------------------------------ Test bit-block AND" << endl;
     {
-        BM_DECLARE_TEMP_BLOCK(tb1)
-        BM_DECLARE_TEMP_BLOCK(tb2)
-        BM_DECLARE_TEMP_BLOCK(tb3)
+        BM_DECLARE_TEMP_BLOCK(tb2);
+        BM_DECLARE_TEMP_BLOCK(tb1);
+
+        unsigned pad = 0xDEAD;
         for (unsigned i = 0; i < bm::set_block_size; ++i)
         {
-            tb1[i] = tb2[i] = 0;
+            tb1.b_.w32[i] = tb2.b_.w32[i] = 0;
         }
+
         auto any = bm::bit_block_and(tb1, tb2);
         assert(any == 0);
-//        tb1[1] = 1;
+        tb1.b_.w32[1] = 1;
         any = bm::bit_block_and(tb1, tb2);
-        cout << tb2[1] << endl;
-        cout << tb1[1] << endl;
         assert(any == 0);
-        assert(tb1[1] == 0);
+        assert(tb1.b_.w32[1] == 0);
         
         
-        tb1[1] = tb2[1] = 1;
+        tb1.b_.w32[1] = tb2.b_.w32[1] = 1;
         any = bm::bit_block_and(tb1, tb2);
         
-        cout << tb1[1] << endl;
-        assert(tb1[1] == 1);
+        cout << tb1.b_.w32[1] << endl;
+        assert(tb1.b_.w32[1] == 1);
         assert(any);
         for (unsigned j = 0; j < 32; ++j)
         {
-            tb1[10] = tb2[10] = (1 << j);
-            if (tb1[10])
+            tb1.b_.w32[10] = tb2.b_.w32[10] = (1 << j);
+            if (tb1.b_.w32[10])
             {
                 any = bm::bit_block_and(tb1, tb2);
                 assert(any);
@@ -11714,41 +11714,45 @@ void TestBlockAND()
         
         for (unsigned i = 0; i < bm::set_block_size; ++i)
         {
-            tb1[i] = tb2[i] = 8;
+            tb1.b_.w32[i] = tb2.b_.w32[i] = 8;
         }
         any = bm::bit_block_and(tb1, tb2);
         assert(any);
         for (unsigned i = 0; i < bm::set_block_size; ++i)
         {
-            assert(tb1[i] == tb2[i]);
+            assert(tb1.b_.w32[i] == tb2.b_.w32[i]);
         }
 
 
         for (unsigned i = 0; i < bm::set_block_size; ++i)
         {
-            tb1[i] = tb2[i] = 0;
+            tb1.b_.w32[i] = tb2.b_.w32[i] = 0;
         }
-        
-        for (unsigned i = 0; i < bm::set_block_size; ++i)
+
+        unsigned i, j;
+        for (i = 0; i < bm::set_block_size; ++i)
         {
-            for (unsigned j = 1; j < 32; ++j)
+            for (j = 0; j < 32; ++j)
             {
-                tb1[i] = tb2[i] = (1u << j);
+                unsigned v = (1u << j);
+                ::memset(tb1, 0, sizeof(tb1));
+                ::memset(tb2, 0, sizeof(tb1));
+                tb1.b_.w32[i] = tb2.b_.w32[i] = v;
                 if (tb1[i])
                 {
                     auto any1 = bm::bit_block_and(tb1, tb2);
-                    cout << any1 <<" j=" << j << " i=" << i << " " << tb1[i] << " " << tb2[i] << endl;
-                    assert(tb1[i] == (1u << j));
-                    if (any1 == 0)
-                    {
-                        cerr << "any 0 " << endl;
-                        exit(1);
-                    }
+                    auto all_zero = bm::bit_is_all_zero(tb1.begin(), tb1.end());
+                    
+                    //cout << any1 <<" j=" << j << " i=" << i << " " << tb1[i] << " " << tb2[i] << endl;
+                    assert(pad == 0xDEAD);
+                    assert(tb1.b_.w32[i] == v);
+                    assert(all_zero != any1);
                     assert(any1);
                 }
             }
-            tb1[i] = tb2[i] = 0;
+            tb1.b_.w32[i] = tb2.b_.w32[i] = 0;
         }
+        cout << tb1.b_.w32[0] << pad << endl;
     }
     cout << " ------------------------------ Test bit-block AND  OK" << endl;
 
@@ -11837,7 +11841,7 @@ int main(void)
     exit(1);
 */
 
-     //TestBlockAND();
+//     TestBlockAND();
 
      ExportTest();
      ResizeTest();
