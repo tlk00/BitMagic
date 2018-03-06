@@ -495,37 +495,51 @@ void avx2_andnot_arr_2_mask(__m256i* BMRESTRICT dst,
     @brief AND array elements against another array
     *dst &= *src
 
+    @return 0 if destination does not have any bits
+
     @ingroup AVX2
 */
 inline
-void avx2_and_arr(__m256i* BMRESTRICT dst,
+unsigned avx2_and_arr(__m256i* BMRESTRICT dst,
                   const __m256i* BMRESTRICT src,
                   const __m256i* BMRESTRICT src_end)
 {
     __m256i ymm1, ymm2;
+    __m256i acc = _mm256_setzero_si256();
+
     do
     {
         ymm1 = _mm256_load_si256(src++);
         ymm2 = _mm256_load_si256(dst);
         ymm1 = _mm256_and_si256(ymm1, ymm2);
         _mm256_store_si256(dst++, ymm1);
+        acc = _mm256_or_si256(acc, ymm1);
         
         ymm1 = _mm256_load_si256(src++);
         ymm2 = _mm256_load_si256(dst);
         ymm1 = _mm256_and_si256(ymm1, ymm2);
         _mm256_store_si256(dst++, ymm1);
+        acc = _mm256_or_si256(acc, ymm1);
 
         ymm1 = _mm256_load_si256(src++);
         ymm2 = _mm256_load_si256(dst);
         ymm1 = _mm256_and_si256(ymm1, ymm2);
         _mm256_store_si256(dst++, ymm1);
+        acc = _mm256_or_si256(acc, ymm1);
 
         ymm1 = _mm256_load_si256(src++);
         ymm2 = _mm256_load_si256(dst);
         ymm1 = _mm256_and_si256(ymm1, ymm2);
         _mm256_store_si256(dst++, ymm1);
+        acc = _mm256_or_si256(acc, ymm1);
 
     } while (src < src_end);
+    
+    if (_mm256_testz_si256(acc, acc))
+    {
+        return 0;
+    }
+    return 1;
 }
 
 

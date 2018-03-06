@@ -2414,7 +2414,6 @@ void AndOperationsTest()
 
     }
 
-    cout << "------------------------------" << endl;
     printf("AND test stage 4. combine_and_sorted\n");
     {
     unsigned ids[] = {0, 1, 2, 3, 10, 65535, 65536, 65535*2, 65535*3};
@@ -2443,6 +2442,23 @@ void AndOperationsTest()
     bm::combine_and_sorted(bvect_full1, first, last);
     CheckVectors(bvect_min1, bvect_full1, BITVECT_SIZE);
     }
+    
+    {
+    bvect        bvect1 { 1, 10, 12 };
+    bvect        bvect2 { 2, 15, 165535 };
+    
+    bvect1 &= bvect2;
+    
+    bvect::statistics st;
+    bvect1.calc_stat(&st);
+    if (st.bit_blocks != 0 || st.gap_blocks != 0)
+    {
+        cerr << "Error: AND-optimization reduction failed!" << endl;
+        exit(1);
+    }
+    }
+    
+    cout << "------------------------------" << endl;
 
 }
 
@@ -11841,7 +11857,7 @@ int main(void)
     exit(1);
 */
 
-//     TestBlockAND();
+     TestBlockAND();
 
      ExportTest();
      ResizeTest();

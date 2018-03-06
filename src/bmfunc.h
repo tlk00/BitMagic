@@ -3908,15 +3908,15 @@ void bit_block_copy(bm::word_t* BMRESTRICT dst, const bm::word_t* BMRESTRICT src
    @ingroup bitfunc
 */
 inline 
-bool bit_block_and(bm::word_t* BMRESTRICT dst, const bm::word_t* BMRESTRICT src)
+bm::id64_t bit_block_and(bm::word_t* BMRESTRICT dst, const bm::word_t* BMRESTRICT src)
 {
     BM_ASSERT(dst);
     BM_ASSERT(src);
     BM_ASSERT(dst != src);
 
 #ifdef BMVECTOPT
-    VECT_AND_ARR(dst, src, src + bm::set_block_size);
-    return 1;
+    bm::id64_t acc = VECT_AND_ARR(dst, src, src + bm::set_block_size);
+    return acc;
 #else
     unsigned arr_sz = bm::set_block_size / 2;
 
@@ -3931,7 +3931,7 @@ bool bit_block_and(bm::word_t* BMRESTRICT dst, const bm::word_t* BMRESTRICT src)
         acc |= dst_u->w64[i+2] &= src_u->w64[i+2];
         acc |= dst_u->w64[i+3] &= src_u->w64[i+3];
     }
-    return (acc != 0);
+    return acc;
 #endif
 }
 
@@ -4291,7 +4291,13 @@ inline bm::word_t* bit_operation_and(bm::word_t* BMRESTRICT dst,
         else
         {
             // Regular operation AND on the whole block.
-            bit_block_and(dst, src);
+            //
+            auto any = bit_block_and(dst, src);
+            if (!any)
+            {
+                BM_ASSERT(bit_is_all_zero(dst, dst+bm::set_block_size));
+                ret = 0;
+            }
         }
     }
     else // The destination block does not exist yet
