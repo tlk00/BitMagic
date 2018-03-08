@@ -564,8 +564,8 @@ bool compressed_collection<Value, BV>::push_back(key_type key, const value_type&
     }
     
     addr_res_.set(key);
-    last_add_ = key;
     dense_vect_.push_back(val);
+    last_add_ = key;
     return true;
 }
 
