@@ -41,6 +41,7 @@ For more information please visit:  http://bitmagic.io
 #include "bmsparsevec.h"
 #include "bmsparsevec_algo.h"
 #include "bmsparsevec_serial.h"
+#include "bmrandom.h"
 
 //#include "bmdbg.h"
 
@@ -100,6 +101,34 @@ private:
 };
 
 typedef bm::bvector<> bvect;
+
+
+// generate pseudo-random bit-vector, mix of compressed/non-compressed blocks
+//
+static
+void generate_bvector(bvect& bv, unsigned vector_max = 40000000)
+{
+    unsigned i, j;
+    for (i = 0; i < vector_max;)
+    {
+        // generate bit-blocks
+        for (j = 0; j < 65535 * 8; i += 10, j++)
+        {
+            bv.set(i);
+        }
+        if (i > vector_max)
+            break;
+        // generate GAP (compressed) blocks
+        for (j = 0; j < 65535; i += 120, j++)
+        {
+            unsigned len = rand() % 64;
+            bv.set_range(i, i + len);
+            i += len;
+            if (i > vector_max)
+                break;
+        }
+    }
+}
 
 
 static
@@ -1777,12 +1806,57 @@ void SparseVectorAccessTest()
     
 }
 
+static
+void RankCompressionTest()
+{
+    bvect bv_i1, bv_s1, bv1, bv2;
+    bvect bv_i2, bv_s2;
+
+    generate_bvector(bv_i1);
+    generate_bvector(bv_i2);
+    bv_i2.optimize();
+
+    bm::random_subset<bvect> rsub;
+    rsub.sample(bv_s1, bv_i1, 1000);
+    rsub.sample(bv_s2, bv_i2, 1000);
+    bv_s2.optimize();
+
+    bm::bvector_rank_compressor<bvect> rc;
+
+    bvect::blocks_count bc1;
+    bv_i1.running_count_blocks(&bc1);
+    bvect::blocks_count bc2;
+    bv_i2.running_count_blocks(&bc2);
+
+    {
+        TimeTaker tt("Rank compression test", REPEATS * 10);
+        for (unsigned i = 0; i < REPEATS * 10; ++i)
+        {
+            rc.compress(bv1, bv_i1, bv_s1);
+            rc.compress(bv1, bv_i2, bv_s2);
+        } // for
+    }
+    {
+        TimeTaker tt("Rank compression (by source) test", REPEATS * 10);
+        for (unsigned i = 0; i < REPEATS * 10; ++i)
+        {
+            rc.compress_by_source(bv2, bv_i1, bc1, bv_s1);
+            rc.compress_by_source(bv2, bv_i2, bc2, bv_s2);
+        } // for
+    }
+
+    bv1 |= bv2;
+    char buf[256];
+    sprintf(buf, "%i", (int)bv1.count()); // to fool some smart compilers like ICC
+}
+
 
 int main(void)
 {
 //    ptest();
 
     TimeTaker tt("TOTAL", 1);
+
 
     MemCpyTest();
 
@@ -1820,7 +1894,9 @@ int main(void)
     SerializationTest();
 
     SparseVectorAccessTest();
-    
+
+    RankCompressionTest();
+
     return 0;
 }
 
