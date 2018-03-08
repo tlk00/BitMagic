@@ -174,34 +174,52 @@ void bvector_rank_compressor<BV>::compress(BV& bv_target,
         return;
     }
     
-    typedef typename BV::counted_enumerator enumerator_t;
+    typedef typename BV::enumerator enumerator_t;
     enumerator_t en_s = bv_src.first();
     enumerator_t en_i = bv_idx.first();
 
+    bm::id_t r_idx = 0;
+    bm::id_t i, s;
     for (; en_i.valid(); )
     {
         if (!en_s.valid())
             return;
-
-        bm::id_t i = *en_i;
-        bm::id_t s = *en_s;
+        i = *en_i; s = *en_s;
 
         BM_ASSERT(s >= i);
+        BM_ASSERT(bv_idx.test(i));
+
+        if (s < i)
+            return;
         
         if (i == s)
         {
-            bm::id_t r_idx = en_i.count()-1; // current rank based on index vector sequence
-            bv_target.set_bit_no_check(r_idx);
+            bv_target.set_bit_no_check(r_idx++);
             ++en_i; ++en_s;
-            continue;
         }
-
-        while (s > i)
+        else
         {
-            ++en_i;
-            if (!en_i.valid())
-                return;
-            i = *en_i;
+            if (s > i)
+            {
+                if ((s - i) >= 256) // sufficiently far away, jump
+                {
+                    bm::id_t r_dist = bv_idx.count_range(i + 1, s);
+                    en_i.go_to(s);
+                    BM_ASSERT(en_i.valid());
+                    r_idx += r_dist;
+                }
+                else  // small distance, iterate to close the gap
+                {
+                    for (; s > i; ++r_idx)
+                    {
+                        ++en_i;
+                        i = *en_i;
+                        BM_ASSERT(en_i.valid());
+                        if (!en_i.valid())
+                            return;
+                    } // for
+                }
+            }
         }
     } // for
 }
