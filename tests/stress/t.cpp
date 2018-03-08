@@ -46,6 +46,7 @@ For more information please visit:  http://bitmagic.io
 #include <bmsparsevec_serial.h>
 #include <bmalgo_similarity.h>
 #include <bmsparsevec_util.h>
+#include <bmtimer.h>
 
 using namespace bm;
 using namespace std;
@@ -10034,14 +10035,24 @@ void TestSparseVectorTransform()
 
         bvect bv_in { 1, 2, 3, 10, 20 };
         bvect bv_out;
-        
-        bvector_transform_11(bv_in, sv, bv_out);
-        
+
         bvect bv_control {25, 35, 2 };
+
+        bvector_transform_11(bv_in, sv, bv_out);
         int cmp = bv_control.compare(bv_out);
         if (cmp != 0)
         {
             cerr << "Transform11 (1) control comparison failed" << endl;
+            exit(1);
+        }
+        
+        sv.optimize();
+        
+        bvector_transform_11(bv_in, sv, bv_out);
+        cmp = bv_control.compare(bv_out);
+        if (cmp != 0)
+        {
+            cerr << "Transform11 (1, 1) control comparison failed" << endl;
             exit(1);
         }
         
@@ -10069,6 +10080,17 @@ void TestSparseVectorTransform()
             cerr << "Transform11 (2) control comparison failed" << endl;
             exit(1);
         }
+        
+        sv.optimize();
+        
+        bvector_transform_11(bv_in, sv, bv_out);
+        cmp = bv_in.compare(bv_out);
+        if (cmp != 0)
+        {
+            cerr << "Transform11 (2, 2) control comparison failed" << endl;
+            exit(1);
+        }
+        
         cout << "Transform11 (2) - ok" << endl;
     }
 
@@ -10104,6 +10126,15 @@ void TestSparseVectorTransform()
             cerr << "Transform11 (3) control comparison failed" << endl;
             exit(1);
         }
+        
+        sv.optimize();
+        
+        cmp = bv_control.compare(bv_out);
+        if (cmp != 0)
+        {
+            cerr << "Transform11 (3, 2) control comparison failed" << endl;
+            exit(1);
+        }
         cout << "Transform11 (3) - ok" << endl;
     }
 
@@ -10131,6 +10162,15 @@ void TestSparseVectorTransform()
         if (cmp != 0)
         {
             cerr << "Transform11 (4) control comparison failed" << endl;
+            exit(1);
+        }
+        
+        sv.optimize();
+        
+        cmp = bv_control.compare(bv_out);
+        if (cmp != 0)
+        {
+            cerr << "Transform11 (4, 2) control comparison failed" << endl;
             exit(1);
         }
         cout << "Transform11 (4) - ok" << endl;
@@ -11774,6 +11814,186 @@ void TestBlockAND()
 
 }
 
+template<class BV>
+void DetailedCompareBVectors(const BV& bv1, const BV& bv2)
+{
+    bvect::counted_enumerator en1 = bv1.first();
+    bvect::counted_enumerator en2 = bv2.first();
+    
+    for (; en1.valid(); ++en1)
+    {
+        assert(en2.valid());
+        
+        bm::id_t i1 = *en1;
+        bm::id_t i2 = *en2;
+        
+        if (i1 != i2)
+        {
+            std::cerr << "Difference detected at: position="
+                      << i1 << " other position = " << i2 << std::endl;
+            std::cerr << " count1=" << en1.count() << " count2=" << en2.count()
+                      << std::endl;
+            exit(1);
+        }
+        ++en2;
+    } // for
+
+}
+
+void TestRankCompress()
+{
+    cout << " ------------------------------ Test Rank Compressor " << endl;
+    
+    int cmp;
+
+    {
+        bvect bv1, bv2;
+        bvect bv_s { 0, 1,        16 };
+        bvect bv_i { 0, 1, 2, 10, 16 };
+
+        bvect bv_ref { 0, 1, 4 };
+        bm::bvector_rank_compressor<bvect> rc;
+
+        bvect::blocks_count bc;
+        bv_i.running_count_blocks(&bc);
+
+        for (unsigned i = 0; i < 2; ++i)
+        {
+            rc.compress(bv1, bv_i, bv_s);
+            assert(bv1.count() == bv_s.count());
+            
+            cmp = bv1.compare(bv_ref);
+            assert(cmp == 0);
+            
+            rc.compress_by_source(bv2, bv_i, bc, bv_s);
+            assert(bv2.count() == bv_s.count());
+
+            cmp = bv2.compare(bv_ref);
+            assert(cmp == 0);
+            
+            bv_i.optimize();
+            bv_s.optimize();
+        }
+    }
+
+    {
+        bvect bv1, bv2;
+        bvect bv_s { 0, 100000, 100001,                  1600000, 1600001  };
+        bvect bv_i { 0, 100000, 100001, 200000, 1000000, 1600000, 1600001 };
+
+        bm::bvector_rank_compressor<bvect> rc;
+
+        bvect::blocks_count bc;
+        bv_i.running_count_blocks(&bc);
+
+        for (unsigned i = 0; i < 2; ++i)
+        {
+            rc.compress(bv1, bv_i, bv_s);
+            assert(bv1.count() == bv_s.count());
+ 
+            rc.compress_by_source(bv2, bv_i, bc, bv_s);
+            assert(bv2.count() == bv_s.count());
+
+            cmp = bv2.compare(bv1);
+            assert(cmp == 0);
+ 
+            bv_i.optimize();
+            bv_s.optimize();
+        }
+    }
+    std::cout << "basic test OK..." << std::endl;
+
+
+    {
+        std::cout << "Stress rank compression..." << std::endl;
+        bm::bvector_rank_compressor<bvect> rc;
+        unsigned test_count = 10;
+        unsigned bv_size = 1000000;
+        for (unsigned i  = 0; i < test_count; ++i)
+        {
+            if (bv_size > 40000000)
+                break;
+            cout << "target size = " << bv_size << " " << endl;
+            bvect bv_i, bv_s;
+            generate_bvector(bv_i, bv_size);
+            generate_bvector(bv_s, bv_size);
+            bv_i |= bv_s;
+            
+            assert(bv_i.count() >= bv_s.count());
+
+            bvect::blocks_count bc;
+            bv_i.running_count_blocks(&bc);
+            
+            // quick rank test
+            //
+            /*
+            bm::id_t pos = 5308470;
+            bm::id_t r1 = bv_i.count_range(0, pos)-1;
+            bm::id_t r2 = bv_i.count_to(pos, bc)-1;
+            assert(r1 == r2);
+            cout << "i=" << pos << " rank()=" << r1 << endl;
+            */
+
+            bvect bv1, bv2;
+            
+            for (unsigned j = 0; j < 2; ++ j)
+            {
+                {
+                chrono_taker ct("c1");
+                rc.compress(bv1, bv_i, bv_s);
+                }
+                assert(bv1.count() == bv_s.count());
+
+                {
+                chrono_taker ct("c2");
+                rc.compress_by_source(bv2, bv_i, bc, bv_s);
+                }
+                assert(bv2.count() == bv_s.count());
+
+                cmp = bv2.compare(bv1);
+                if (cmp!=0)
+                {
+                    DetailedCompareBVectors(bv1, bv2);
+                    exit(1);
+                }
+                assert(cmp == 0);
+
+                {
+                    bm::random_subset<bvect> rsub;
+                    bvect bv_subset;
+                    rsub.sample(bv_subset, bv_s, 100);
+                    {
+                    chrono_taker ct("c1-1");
+                    rc.compress(bv1, bv_i, bv_subset);
+                    }
+                    assert(bv1.count() == bv_subset.count());
+                    
+                    {
+                    chrono_taker ct("c2-2");
+                    rc.compress_by_source(bv2, bv_i, bc, bv_subset);
+                    }
+                    assert(bv2.count() == bv_subset.count());
+                    
+                    cmp = bv2.compare(bv1);
+                    assert(cmp == 0);
+                }
+
+
+                bv_i.optimize();
+                bv_s.optimize();
+            } // for j
+            cout << "\n" << i << " of " << test_count << "  " << endl;
+            
+            bv_size += bv_size;
+        } // for i
+        std::cout << endl << "Stress rank compression... OK" << std::endl;
+    }
+    
+    
+    cout << " ------------------------------ Test Rank Compressor OK " << endl;
+}
+
+
 int main(void)
 {
     time_t      start_time = time(0);
@@ -11893,6 +12113,8 @@ int main(void)
      AddressResolverTest();
 
      BvectorBitForEachTest();
+
+     TestRankCompress();
 
      GAPTestStress();
 
