@@ -11802,7 +11802,7 @@ void TestBlockAND()
                     //cout << any1 <<" j=" << j << " i=" << i << " " << tb1[i] << " " << tb2[i] << endl;
                     assert(pad == 0xDEAD);
                     assert(tb1.b_.w32[i] == v);
-                    assert(all_zero != any1);
+                    assert((unsigned)(all_zero) != any1);
                     assert(any1);
                 }
             }
@@ -11840,6 +11840,7 @@ void DetailedCompareBVectors(const BV& bv1, const BV& bv2)
 
 }
 
+static
 void TestRankCompress()
 {
     cout << " ------------------------------ Test Rank Compressor " << endl;
