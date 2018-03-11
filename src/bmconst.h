@@ -92,8 +92,6 @@ const unsigned set_block_size_op  = bm::set_block_size;
 
 #endif
 
-# define BM_DECLARE_TEMP_BLOCK(x)  unsigned BM_VECT_ALIGN x[bm::set_block_size] BM_VECT_ALIGN_ATTR;
-
 
 /*!
    @brief Block allocation strategies.
@@ -104,6 +102,29 @@ enum strategy
     BM_BIT = 0, //!< No GAP compression strategy. All new blocks are bit blocks.
     BM_GAP = 1  //!< GAP compression is ON.
 };
+
+/**
+    Codes of set operations
+*/
+enum set_operation
+{
+    set_AND         = 0,
+    set_OR          = 1,
+    set_SUB         = 2,
+    set_XOR         = 3,
+    set_ASSIGN      = 4,
+    set_COUNT       = 5,
+    set_COUNT_AND   = 6,
+    set_COUNT_XOR   = 7,
+    set_COUNT_OR    = 8,
+    set_COUNT_SUB_AB= 9,
+    set_COUNT_SUB_BA= 10,
+    set_COUNT_A     = 11,
+    set_COUNT_B     = 12,
+
+    set_END
+};
+
 
 
 /*!
@@ -118,6 +139,17 @@ enum set_representation
     set_array0  = 3   //!< array of 0 values
 };
 
+/*!
+   @brief NULL-able value support
+   @ingroup bvector
+*/
+enum null_support
+{
+    use_null = 0, //!< support "non-assigned" or "NULL" logic
+    no_null  = 1   //!< do not support NULL values
+};
+
+
 /**
     Internal structure. Copyright information.
 */
@@ -128,7 +160,7 @@ template<bool T> struct _copyright
 };
 
 template<bool T> const char _copyright<T>::_p[] = 
-    "BitMagic C++ Library. v.3.10.1 (c) 2002-2017 Anatoliy Kuznetsov.";
+    "BitMagic C++ Library. v.3.11.0 (c) 2002-2017 Anatoliy Kuznetsov.";
 template<bool T> const unsigned _copyright<T>::_v[3] = {3, 9, 0};
 
 

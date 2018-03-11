@@ -123,6 +123,168 @@ void visit_each_bit(const BV&                 bv,
 }
 
 
+/**
+    Algorithms for rank compression of bit-vector
+
+    1. Source vector (bv_src) is a subset of index vector (bv_idx)
+    2. As a subset it can be collapsed using bit-rank method, where each position
+    in the source vector is defined by population count (range) [0..index_position] (count_range())
+    As a result all integer set of source vector gets re-mapped in
+    accord with the index vector.
+ 
+    \ingroup setalgo
+*/
+template<class BV>
+class bvector_rank_compressor
+{
+public:
+    typedef BV                         bvector_type;
+    typedef typename BV::blocks_count  block_count_type;
+public:
+    /**
+    Basic algorithm based on two palallel iterators/enumerators set of source
+    vector gets re-mapped in accord with the index/rank vector.
+
+    \param bv_target - target bit-vector
+    \param bv_idx    - index (rank) vector used for address recalculation
+    \param bv_src    - source vector for re-mapping
+    */
+    void compress(BV& bv_target, const BV& bv_idx, const BV& bv_src);
+    
+    /**
+    \brief Source vector priority + index based rank
+    */
+    void compress_by_source(BV& bv_target,
+                                const BV& bv_idx,
+                                const block_count_type& bc_idx,
+                                const BV& bv_src);
+};
+
+template<class BV>
+void bvector_rank_compressor<BV>::compress(BV& bv_target,
+                                           const BV& bv_idx,
+                                           const BV& bv_src)
+{
+    bv_target.clear();
+    bv_target.init();
+
+    if (&bv_idx == &bv_src)
+    {
+        bv_target = bv_src;
+        return;
+    }
+    
+    typedef typename BV::enumerator enumerator_t;
+    enumerator_t en_s = bv_src.first();
+    enumerator_t en_i = bv_idx.first();
+
+    bm::id_t r_idx = 0;
+    bm::id_t i, s;
+    for (; en_i.valid(); )
+    {
+        if (!en_s.valid())
+            return;
+        i = *en_i; s = *en_s;
+
+        BM_ASSERT(s >= i);
+        BM_ASSERT(bv_idx.test(i));
+
+        if (s < i)
+            return;
+        
+        if (i == s)
+        {
+            bv_target.set_bit_no_check(r_idx++);
+            ++en_i; ++en_s;
+        }
+        else
+        {
+            if (s > i)
+            {
+                if ((s - i) >= 256) // sufficiently far away, jump
+                {
+                    bm::id_t r_dist = bv_idx.count_range(i + 1, s);
+                    en_i.go_to(s);
+                    BM_ASSERT(en_i.valid());
+                    r_idx += r_dist;
+                }
+                else  // small distance, iterate to close the gap
+                {
+                    for (; s > i; ++r_idx)
+                    {
+                        ++en_i;
+                        i = *en_i;
+                        BM_ASSERT(en_i.valid());
+                        if (!en_i.valid())
+                            return;
+                    } // for
+                }
+            }
+        }
+    } // for
+}
+
+template<class BV>
+void bvector_rank_compressor<BV>::compress_by_source(BV& bv_target,
+                                           const BV& bv_idx,
+                                           const block_count_type& bc_idx,
+                                           const BV& bv_src)
+{
+    /// Rand compressor visitor functor
+    /// @internal
+    ///
+    struct visitor_func
+    {
+        visitor_func(bvector_type&       bv_out,
+                     const bvector_type& bv_index,
+                     const block_count_type& bc_index)
+        : bv_target_(bv_out),
+          bv_index_(bv_index),
+          bc_index_(bc_index)
+        {}
+        
+        void add_bits(bm::id_t arr_offset, const unsigned char* bits, unsigned bits_size)
+        {
+            for (unsigned i = 0; i < bits_size; ++i)
+            {
+                bm::id_t idx = arr_offset + bits[i];
+                BM_ASSERT(bv_index_.test(idx));
+
+                bm::id_t r_idx = bv_index_.count_to(idx, bc_index_) - 1;
+                bv_target_.set_bit_no_check(r_idx);
+            }
+        }
+        void add_range(bm::id_t arr_offset, unsigned sz)
+        {
+            for (unsigned i = 0; i < sz; ++i)
+            {
+                bm::id_t idx = i + arr_offset;
+                BM_ASSERT(bv_index_.test(idx));
+
+                bm::id_t r_idx = bv_index_.count_to(idx, bc_index_) - 1;
+                bv_target_.set_bit_no_check(r_idx);
+            }
+        }
+        
+        bvector_type&           bv_target_;
+        const bvector_type&     bv_index_;
+        const block_count_type& bc_index_;
+    };
+    // ------------------------------------
+
+
+    bv_target.clear();
+    bv_target.init();
+
+    if (&bv_idx == &bv_src)
+    {
+        bv_target = bv_src;
+        return;
+    }
+    visitor_func func(bv_target, bv_idx, bc_idx);
+    bm::for_each_bit(bv_src, func);
+}
+
 
 } // bm
 

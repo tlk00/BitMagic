@@ -43,7 +43,7 @@ For more information please visit:  http://bitmagic.io
 #include "bmdbg.h"
 #include "bmtimer.h"
 
-
+static
 void show_help()
 {
     std::cerr
@@ -69,7 +69,7 @@ std::string  u32_out_file;
 bool         is_diag = false;
 bool         is_timing = false;
 
-
+static
 int parse_args(int argc, char *argv[])
 {
     for (int i = 1; i < argc; ++i)
@@ -164,6 +164,7 @@ bm::chrono_taker::duration_map_type  timing_map;
 
 // load sparse_vector from a file
 //
+static
 int load_sv(const std::string& fname, sparse_vector_u32& sv)
 {
     std::vector<unsigned char> buffer;
@@ -204,6 +205,7 @@ int load_sv(const std::string& fname, sparse_vector_u32& sv)
 
 // load raw unsigned file
 //
+static
 int load_u32(const std::string& fname, std::vector<unsigned>& vect)
 {
     bm::chrono_taker tt("u32 BLOB read", 1, &timing_map);
@@ -227,6 +229,7 @@ int load_u32(const std::string& fname, std::vector<unsigned>& vect)
 
 // convert unsigned vector to sparse format
 //
+static
 int convert_u32(const std::vector<unsigned>& u32, sparse_vector_u32& sv)
 {
     BM_DECLARE_TEMP_BLOCK(tb)

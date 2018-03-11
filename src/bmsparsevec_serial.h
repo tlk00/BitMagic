@@ -103,16 +103,16 @@ struct sparse_vector_serial_layout
         return plain_ptrs_[i];
     }
     
-    /// Return serializatio buffer pointer
+    /// Return serialization buffer pointer
     const unsigned char* buf() const { return buf_.buf(); /*return buffer_;*/ }
     
 private:
     sparse_vector_serial_layout(const sparse_vector_serial_layout&);
     void operator=(const sparse_vector_serial_layout&);
 protected:
-    buffer_type    buf_;                              ///< serialization buffer
-    unsigned char* plain_ptrs_[sizeof(value_type)*8]; ///< pointers on serialized bit-palins
-    unsigned plane_size_[sizeof(value_type)*8];       ///< serialized plain size
+    buffer_type    buf_;                       ///< serialization buffer
+    unsigned char* plain_ptrs_[SV::sv_plains]; ///< pointers on serialized bit-palins
+    unsigned plane_size_[SV::sv_plains];       ///< serialized plain size
 };
 
 // -------------------------------------------------------------------------
@@ -160,7 +160,7 @@ void sparse_vector_serialize(
     
     unsigned char* buf = sv_layout.reserve(sv_stat.max_serialize_mem);
     bm::encoder enc(buf, (unsigned)sv_layout.capacity());
-    unsigned plains = sv.plains();
+    unsigned plains = sv.stored_plains();
 
     // calculate header size in bytes
     unsigned h_size = 1 + 1 + 1 + 1 + 8 + (8 * plains) + 4;
@@ -168,7 +168,7 @@ void sparse_vector_serialize(
     // ptr where bit-plains start
     unsigned char* buf_ptr = buf + h_size;
 
-    bm::serializer<bm::bvector<> > bvs(temp_block);
+    bm::serializer<typename SV::bvector_type > bvs(temp_block);
     bvs.gap_length_serialization(false);
     bvs.set_compression_level(4);
     
@@ -252,12 +252,13 @@ int sparse_vector_deserialize(SV& sv,
         dec.get_8();
     unsigned plains = dec.get_8();
     
-    if (!plains || plains > sv.plains())
+    if (!plains || plains > sv.stored_plains())
     {
         return -2; // incorrect number of plains for the target svector
     }
     
     sv.clear();
+    
     bm::id64_t sv_size = dec.get_64();
     if (sv_size == 0)
     {

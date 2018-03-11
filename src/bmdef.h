@@ -197,6 +197,18 @@ For more information please visit:  http://bitmagic.io
 # undef BMSSE2OPT
 #endif
 
+#ifdef BMAVX2OPT
+# if defined(BM64OPT) || defined(__x86_64) || defined(_M_AMD64) || defined(_WIN64) || \
+    defined(__LP64__) || defined(_LP64)
+#   undef BM64OPT
+#   undef  BM64_SSE4
+#   define BM64_AVX2
+# endif
+# undef BMSSE2OPT
+# undef BMSSE42OPT
+#endif
+
+
 # ifndef BM_SET_MMX_GUARD
 #  define BM_SET_MMX_GUARD
 # endif
@@ -288,6 +300,8 @@ For more information please visit:  http://bitmagic.io
 #ifndef BM_ASSERT_THROW
 #define BM_ASSERT_THROW(x, xerrcode)
 #endif
+
+
 
 #endif
 

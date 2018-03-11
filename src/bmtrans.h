@@ -436,6 +436,8 @@ void bit_iblock_make_pcv(
         case total_possible_max:
             pc_vector[i] = ibpc_all_one; 
             continue;
+        default:
+            break;
         }
         
         // Dense-populated set, leave it as is

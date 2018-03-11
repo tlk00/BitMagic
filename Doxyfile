@@ -75,7 +75,8 @@ INPUT                  = ./src/bm.h ./src/bmfunc.h  \
 ./samples/xsample01/xsample01.cpp \
 ./samples/svsample01/svsample01.cpp \
 ./samples/svsample02/svsample02.cpp \
-./samples/svsample03/svsample03.cpp 
+./samples/svsample03/svsample03.cpp \
+./samples/svsample04/svsample04.cpp 
  
 
 FILE_PATTERNS          = *.cpp \

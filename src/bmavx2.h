@@ -124,7 +124,7 @@ bm::id_t avx2_bit_count(const __m256i* BMRESTRICT block,
   __m256i b, c;
 
   BM_AVX2_POPCNT_PROLOG
-  uint64_t* cnt64;
+  bm::id64_t* cnt64;
 
   do
   {
@@ -168,7 +168,7 @@ bm::id_t avx2_bit_count(const __m256i* BMRESTRICT block,
   BM_AVX2_BIT_COUNT(bc, ones);
   cnt = _mm256_add_epi64(cnt, bc);
 
-  cnt64 = (uint64_t*) &cnt;
+  cnt64 = (bm::id64_t*) &cnt;
 
   return (unsigned)(cnt64[0] + cnt64[1] + cnt64[2] + cnt64[3]);
 }
@@ -182,7 +182,7 @@ bm::id_t avx2_bit_count_and(const __m256i* BMRESTRICT block,
                             const __m256i* BMRESTRICT block_end,
                             const __m256i* BMRESTRICT mask_block)
 {
-    uint64_t* cnt64;
+    bm::id64_t* cnt64;
     BM_AVX2_POPCNT_PROLOG;
     __m256i cnt = _mm256_setzero_si256();
     __m256i ymm0, ymm1;
@@ -220,7 +220,7 @@ bm::id_t avx2_bit_count_and(const __m256i* BMRESTRICT block,
 
     } while (block < block_end);
 
-    cnt64 = (uint64_t*)&cnt;
+    cnt64 = (bm::id64_t*)&cnt;
     return (unsigned)(cnt64[0] + cnt64[1] + cnt64[2] + cnt64[3]);
 }
 
@@ -229,7 +229,7 @@ bm::id_t avx2_bit_count_or(const __m256i* BMRESTRICT block,
     const __m256i* BMRESTRICT block_end,
     const __m256i* BMRESTRICT mask_block)
 {
-    uint64_t* cnt64;
+    bm::id64_t* cnt64;
     BM_AVX2_POPCNT_PROLOG;
     __m256i cnt = _mm256_setzero_si256();
     do
@@ -246,7 +246,7 @@ bm::id_t avx2_bit_count_or(const __m256i* BMRESTRICT block,
 
     } while (block < block_end);
 
-    cnt64 = (uint64_t*)&cnt;
+    cnt64 = (bm::id64_t*)&cnt;
     return (unsigned)(cnt64[0] + cnt64[1] + cnt64[2] + cnt64[3]);
 }
 // experimental code for Harley-Seal Hamming
@@ -365,7 +365,7 @@ bm::id_t avx2_bit_count_xor(const __m256i* BMRESTRICT block,
     const __m256i* BMRESTRICT block_end,
     const __m256i* BMRESTRICT mask_block)
 {
-    uint64_t* cnt64;
+    bm::id64_t* cnt64;
     BM_AVX2_POPCNT_PROLOG
     __m256i cnt = _mm256_setzero_si256();
     __m256i ymm0, ymm1;
@@ -401,7 +401,7 @@ bm::id_t avx2_bit_count_xor(const __m256i* BMRESTRICT block,
 
     } while (block < block_end);
 
-    cnt64 = (uint64_t*)&cnt;
+    cnt64 = (bm::id64_t*)&cnt;
     return (unsigned)(cnt64[0] + cnt64[1] + cnt64[2] + cnt64[3]);
 }
 
@@ -411,11 +411,12 @@ bm::id_t avx2_bit_count_xor(const __m256i* BMRESTRICT block,
   @brief AND NOT bit count for two aligned bit-blocks
   @ingroup AVX2
 */
+inline
 bm::id_t avx2_bit_count_sub(const __m256i* BMRESTRICT block,
     const __m256i* BMRESTRICT block_end,
     const __m256i* BMRESTRICT mask_block)
 {
-    uint64_t* cnt64;
+    bm::id64_t* cnt64;
     BM_AVX2_POPCNT_PROLOG
     __m256i cnt = _mm256_setzero_si256();
     do
@@ -432,7 +433,7 @@ bm::id_t avx2_bit_count_sub(const __m256i* BMRESTRICT block,
 
     } while (block < block_end);
 
-    cnt64 = (uint64_t*)&cnt;
+    cnt64 = (bm::id64_t*)&cnt;
     return (unsigned)(cnt64[0] + cnt64[1] + cnt64[2] + cnt64[3]);
 }
 
@@ -494,37 +495,51 @@ void avx2_andnot_arr_2_mask(__m256i* BMRESTRICT dst,
     @brief AND array elements against another array
     *dst &= *src
 
+    @return 0 if destination does not have any bits
+
     @ingroup AVX2
 */
 inline
-void avx2_and_arr(__m256i* BMRESTRICT dst,
+unsigned avx2_and_arr(__m256i* BMRESTRICT dst,
                   const __m256i* BMRESTRICT src,
                   const __m256i* BMRESTRICT src_end)
 {
     __m256i ymm1, ymm2;
+    __m256i acc = _mm256_setzero_si256();
+
     do
     {
         ymm1 = _mm256_load_si256(src++);
         ymm2 = _mm256_load_si256(dst);
         ymm1 = _mm256_and_si256(ymm1, ymm2);
         _mm256_store_si256(dst++, ymm1);
+        acc = _mm256_or_si256(acc, ymm1);
         
         ymm1 = _mm256_load_si256(src++);
         ymm2 = _mm256_load_si256(dst);
         ymm1 = _mm256_and_si256(ymm1, ymm2);
         _mm256_store_si256(dst++, ymm1);
+        acc = _mm256_or_si256(acc, ymm1);
 
         ymm1 = _mm256_load_si256(src++);
         ymm2 = _mm256_load_si256(dst);
         ymm1 = _mm256_and_si256(ymm1, ymm2);
         _mm256_store_si256(dst++, ymm1);
+        acc = _mm256_or_si256(acc, ymm1);
 
         ymm1 = _mm256_load_si256(src++);
         ymm2 = _mm256_load_si256(dst);
         ymm1 = _mm256_and_si256(ymm1, ymm2);
         _mm256_store_si256(dst++, ymm1);
+        acc = _mm256_or_si256(acc, ymm1);
 
     } while (src < src_end);
+    
+    if (_mm256_testz_si256(acc, acc))
+    {
+        return 0;
+    }
+    return 1;
 }
 
 

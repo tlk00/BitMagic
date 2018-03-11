@@ -38,6 +38,50 @@ For more information please visit:  http://bitmagic.io
 #include "bmconst.h"
 #include "bmsimd.h"
 #include "bmfwd.h"
+
+/**
+bit-block array wrapped into union for correct interpretation of
+32-bit vs 64-bit access vs SIMD
+@internal
+*/
+namespace bm
+{
+    struct bit_block_t
+    {
+        union bunion_t
+        {
+            bm::word_t BM_VECT_ALIGN w32[bm::set_block_size] BM_VECT_ALIGN_ATTR;
+            bm::id64_t BM_VECT_ALIGN w64[bm::set_block_size / 2] BM_VECT_ALIGN_ATTR;
+#ifdef BMAVX2OPT
+            __m256i  BM_VECT_ALIGN w256[bm::set_block_size / 8] BM_VECT_ALIGN_ATTR;
+#endif
+#if defined(BMSSE2OPT) || defined(BMSSE42OPT)
+            __m128i  BM_VECT_ALIGN w128[bm::set_block_size / 4] BM_VECT_ALIGN_ATTR;
+#endif
+        } b_;
+
+        operator bm::word_t*() { return &(b_.w32[0]); }
+        operator const bm::word_t*() const { return &(b_.w32[0]); }
+        explicit operator bm::id64_t*() { return &b_.w64[0]; }
+        explicit operator const bm::id64_t*() const { return &b_.w64[0]; }
+#ifdef BMAVX2OPT
+        explicit operator __m256i*() { return &b_.w256[0]; }
+        explicit operator const __m256i*() const { return &b_.w256[0]; }
+#endif
+#if defined(BMSSE2OPT) || defined(BMSSE42OPT)
+        explicit operator __m128i*() { return &b_.w128[0]; }
+        explicit operator const __m128i*() const { return &b_.w128[0]; }
+#endif
+
+        const bm::word_t* begin() const { return (b_.w32 + 0); }
+        bm::word_t* begin() { return (b_.w32 + 0); }
+        const bm::word_t* end() const { return (b_.w32 + bm::set_block_size); }
+        bm::word_t* end() { return (b_.w32 + bm::set_block_size); }
+    };
+}
+# define BM_DECLARE_TEMP_BLOCK(x) bm::bit_block_t x;
+
+
 #include "bmfunc.h"
 #include "encoding.h"
 #include "bmalloc.h"
@@ -942,11 +986,11 @@ public:
         unsigned  BM_VECT_ALIGN cnt[bm::set_total_blocks] BM_VECT_ALIGN_ATTR;
         
         blocks_count() {}
-        blocks_count(const blocks_count& bc)
+        blocks_count(const blocks_count& bc) BMNOEXEPT
         {
             copy_from(bc);
         }
-        void copy_from(const blocks_count& bc)
+        void copy_from(const blocks_count& bc) BMNOEXEPT
         {
             ::memcpy(this->cnt, bc.cnt, sizeof(this->cnt));
         }
@@ -1092,23 +1136,32 @@ public:
           size_(bm::id_max)
     {
         init();
-        std::initializer_list<bm::id_t>::const_iterator start = il.begin();
-        std::initializer_list<bm::id_t>::const_iterator end = il.end();
-        for (; start < end; ++start)
+        std::initializer_list<bm::id_t>::const_iterator it_start = il.begin();
+        std::initializer_list<bm::id_t>::const_iterator it_end = il.end();
+        for (; it_start < it_end; ++it_start)
         {
-            this->set_bit_no_check(*start);
+            this->set_bit_no_check(*it_start);
         }
 #ifdef BMCOUNTOPT
         count_ = (bm::id_t)il.size();
         count_is_valid_ = true;
 #endif
     }
-
-
+    
     /*! 
         \brief Move assignment operator
     */
     bvector& operator=(bvector<Alloc>&& bvect) BMNOEXEPT
+    {
+        this->move_from(bvect);
+        return *this;
+    }
+#endif
+
+    /*!
+        \brief Move bvector content from another vector
+    */
+    void move_from(bvector<Alloc>& bvect) BMNOEXEPT
     {
         if (this != &bvect)
         {
@@ -1121,9 +1174,7 @@ public:
             count_is_valid_ = bvect.count_is_valid_;
     #endif
         }
-        return *this;
     }
-#endif
 
     reference operator[](bm::id_t n)
     {
@@ -2330,9 +2381,8 @@ void bvector<Alloc>::optimize(bm::word_t* temp_block,
                                                 stat);
     if (stat)
     {
-        stat->bit_blocks = stat->gap_blocks = 0;
-        stat->max_serialize_mem = stat->memory_used = 0;
-        ::memcpy(stat->gap_levels, 
+        stat->reset();
+        ::memcpy(stat->gap_levels,
                 blockman_.glen(), sizeof(gap_word_t) * bm::gap_levels);
         stat->max_serialize_mem = (unsigned)sizeof(id_t) * 4;
     }
@@ -2534,34 +2584,27 @@ void bvector<Alloc>::calc_stat(struct bvector<Alloc>::statistics* st) const
 {
     BM_ASSERT(st);
     
-    st->bit_blocks = st->gap_blocks = 0;
-    st->max_serialize_mem = st->memory_used = 0;
+    st->reset();
 
     ::memcpy(st->gap_levels, 
              blockman_.glen(), sizeof(gap_word_t) * bm::gap_levels);
 
     unsigned empty_blocks = 0;
-    unsigned blocks_memory = 0;
-    gap_word_t* gapl_ptr = st->gap_length;
 
     st->max_serialize_mem = unsigned(sizeof(id_t) * 4);
 
-    unsigned block_idx = 0;
-
     unsigned top_size = blockman_.effective_top_block_size();
-    // Walk the blocks, calculate statistics.
     for (unsigned i = 0; i < top_size; ++i)
     {
         const bm::word_t* const* blk_blk = blockman_.get_topblock(i);
 
         if (!blk_blk) 
         {
-            block_idx += bm::set_array_size;
             st->max_serialize_mem += unsigned(sizeof(unsigned) + 1);
             continue;
         }
 
-        for (unsigned j = 0;j < bm::set_array_size; ++j, ++block_idx)
+        for (unsigned j = 0;j < bm::set_array_size; ++j)
         {
             const bm::word_t* blk = blk_blk[j];
             if (IS_VALID_ADDR(blk))
@@ -2571,27 +2614,15 @@ void bvector<Alloc>::calc_stat(struct bvector<Alloc>::statistics* st) const
 
                 if (BM_IS_GAP(blk))
                 {
-                    ++(st->gap_blocks);
-
                     bm::gap_word_t* gap_blk = BMGAP_PTR(blk);
-
-                    unsigned mem_used = 
-                        unsigned(bm::gap_capacity(gap_blk, blockman_.glen())
-                        * sizeof(gap_word_t));
-
-                    *gapl_ptr = gap_length(gap_blk);
-
-                    st->max_serialize_mem += unsigned(*gapl_ptr * sizeof(gap_word_t));
-                    blocks_memory += mem_used;
-
-                    ++gapl_ptr;
+                    unsigned capacity = bm::gap_capacity(gap_blk, blockman_.glen());
+                    unsigned length = gap_length(gap_blk);
+                    
+                    st->add_gap_block(capacity, length);
                 }
                 else // bit block
                 {
-                    ++(st->bit_blocks);
-                    unsigned mem_used = unsigned(sizeof(bm::word_t) * bm::set_block_size);
-                    st->max_serialize_mem += mem_used;
-                    blocks_memory += mem_used;
+                    st->add_bit_block();
                 }
             }
             else
@@ -2609,7 +2640,6 @@ void bvector<Alloc>::calc_stat(struct bvector<Alloc>::statistics* st) const
 
     st->memory_used += unsigned(sizeof(*this) - sizeof(blockman_));
     st->memory_used += blockman_.mem_used();
-    st->memory_used += blocks_memory;
 }
 
 
@@ -3125,11 +3155,11 @@ void bvector<Alloc>::combine_operation(
             }
             // 0 - self, non-zero argument
             unsigned r = i * bm::set_array_size;
-            for (j = 0; j < bm::set_array_size; ++j)//,++block_idx)
+            for (j = 0; j < bm::set_array_size; ++j)
             {
                 const bm::word_t* arg_blk = bv.blockman_.get_block(i, j);
                 if (arg_blk )
-                    combine_operation_with_block(r + j,//block_idx, 
+                    combine_operation_with_block(r + j,
                                                  0, 0, 
                                                  arg_blk, BM_IS_GAP(arg_blk), 
                                                  opcode);
@@ -3160,7 +3190,7 @@ void bvector<Alloc>::combine_operation(
         else // OR, SUB, XOR
         {
             unsigned r = i * bm::set_array_size;
-            for (j = 0; j < bm::set_array_size; ++j)//, ++block_idx)
+            for (j = 0; j < bm::set_array_size; ++j)
             {            
                 bm::word_t* blk = blk_blk[j];
                 const bm::word_t* arg_blk = bv.blockman_.get_block(i, j);
@@ -3289,6 +3319,8 @@ bvector<Alloc>::combine_operation_with_block(unsigned          nb,
                         blockman_.zero_block(nb);
                         return;
                     case BM_OR: case BM_SUB: case BM_XOR:
+                        return; // nothing to do
+                    default:
                         return; // nothing to do
                     }
                 }

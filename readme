@@ -1,6 +1,40 @@
+
+BitMagic Library
+
+Algorithms and tools for integer set algebra operations used for information retrieval, 
+indexing of databases, scientific algorithms, ranking, clustering and signal processing.
+
+BitMagic library uses compressed bit-vectors as a main vehicle for implementing set algebraic operations, 
+because of high efficiency and bit-level parallelism of this representation. 
+To compress memory it uses delta / prefix sum coding. One of our goals is constant improvement of 
+performance via SIMD vectorization (SSE2, SSE4.2, AVX2), CPU cache-friendly algorithms and 
+data-parallel thread-safe structures.
+
+
+Main Functions:
+
+- compressed bit-vector container with mechanisms to iterate integer set it represents
+- set algebraic operations: AND, OR, XOR, MINUS on bit-vectors and integer sets
+- serialization off bit-vectors into compressed BLOBs for persistence or in-memory compression
+- set algebraic operations on compressed BLOBs
+- statistical algorithms to efficiently construct similarity and distance metrics, measure similarity between bit-vectors, 
+integer sets and compressed BLOBs
+- sparse vector(s) for native int types using bit transposition and separate compression of bit-plains, 
+with support of NULL values for construction of in-memory columnar structures. 
+- algorithms on sparse vectors (dynamic range clipping, etc) 
+functional operations on binary sets: translations between sets, mathematical images (work in progress!)
+compressed binary relational and adjacency matrixes and operations on matrixes for Entity-Relationship acceleration, graph operations, materialized RDBMS joins, etc (work in progress!)
+portable C-library layer working as a bridge to high level languages like Python, Java, Scala, .Net (work in progress!)
+
+
+License:
+- Apache 2.0
+
+
+
 How to build BitMagic library:
 
-BM is small software package and you probably can just take the
+BitMagic C++ is a header-only software package and you probably can just take the
 sources and put it into your project directly. All library sources are in src
 directory.
 

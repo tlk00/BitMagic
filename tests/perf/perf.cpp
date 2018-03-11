@@ -41,6 +41,7 @@ For more information please visit:  http://bitmagic.io
 #include "bmsparsevec.h"
 #include "bmsparsevec_algo.h"
 #include "bmsparsevec_serial.h"
+#include "bmrandom.h"
 
 //#include "bmdbg.h"
 
@@ -102,7 +103,35 @@ private:
 typedef bm::bvector<> bvect;
 
 
+// generate pseudo-random bit-vector, mix of compressed/non-compressed blocks
+//
+static
+void generate_bvector(bvect& bv, unsigned vector_max = 40000000)
+{
+    unsigned i, j;
+    for (i = 0; i < vector_max;)
+    {
+        // generate bit-blocks
+        for (j = 0; j < 65535 * 8; i += 10, j++)
+        {
+            bv.set(i);
+        }
+        if (i > vector_max)
+            break;
+        // generate GAP (compressed) blocks
+        for (j = 0; j < 65535; i += 120, j++)
+        {
+            unsigned len = rand() % 64;
+            bv.set_range(i, i + len);
+            i += len;
+            if (i > vector_max)
+                break;
+        }
+    }
+}
 
+
+static
 void SimpleFillSets(test_bitset& bset, 
                        bvect& bv,
                        unsigned min, 
@@ -122,7 +151,7 @@ void SimpleFillSets(test_bitset& bset,
 // Interval filling.
 // 111........111111........111111..........11111111.......1111111...
 //
-
+static
 void FillSetsIntervals(test_bitset& bset, 
                        bvect& bv,
                        unsigned min, 
@@ -190,7 +219,7 @@ void FillSetsIntervals(test_bitset& bset,
 
 }
 
-
+static
 void MemCpyTest()
 {
     unsigned* m1 = new unsigned[BSIZE/32];
@@ -226,7 +255,7 @@ void MemCpyTest()
     delete [] m2;
 }
 
-
+static
 void BitCountTest()
 {
     {
@@ -269,7 +298,7 @@ void BitCountTest()
     }
 }
 
-
+static
 void BitForEachTest()
 {
     // setup the test data
@@ -365,7 +394,7 @@ void BitForEachTest()
     delete [] test_arr;
 }
 
-
+static
 void BitCountSparseTest()
 {
     bvect*  bv = new bvect();
@@ -424,7 +453,7 @@ void BitCountSparseTest()
     delete bset;
 }
 
-
+static
 void BitTestSparseTest()
 {
     auto_ptr<bvect>  bv0(new bvect());
@@ -477,7 +506,7 @@ void BitTestSparseTest()
 
 }
 
-
+static
 void EnumeratorGoToTest()
 {
     auto_ptr<bvect>  bv0(new bvect());
@@ -538,7 +567,7 @@ void EnumeratorGoToTest()
 }
 
 
-
+static
 void BitCompareTest()
 {
     {
@@ -632,6 +661,7 @@ void BitCompareTest()
 }
 
 extern "C" {
+    static
     int bit_visitor_func(void* handle_ptr, bm::id_t bit_idx)
     {
         std::vector<bm::id_t>* vp = (std::vector<bm::id_t>*)handle_ptr;
@@ -640,7 +670,7 @@ extern "C" {
     }
 } // extern C
 
-
+static
 void EnumeratorTest()
 {
     bvect                 bv1, bv2, bv3, bv4;
@@ -782,7 +812,7 @@ void EnumeratorTest()
 
 }
 
-
+static
 void EnumeratorTestGAP()
 {
     bvect*  bv = new bvect();
@@ -855,6 +885,7 @@ void EnumeratorTestGAP()
 
 }
 
+static
 void SerializationTest()
 {
     bvect bv_sparse;
@@ -920,6 +951,7 @@ void SerializationTest()
     delete [] buf;
 }
 
+static
 void InvertTest()
 {
     bvect*  bv = new bvect();
@@ -949,7 +981,7 @@ void InvertTest()
     delete bset;
 }
 
-
+static
 void AndTest()
 {
     bvect*  bv1 = new bvect();
@@ -985,6 +1017,7 @@ void AndTest()
     delete bset2;
 }
 
+static
 void XorTest()
 {
     bvect*  bv1 = new bvect();
@@ -1020,6 +1053,7 @@ void XorTest()
     delete bset2;
 }
 
+static
 void SubTest()
 {
     bvect*  bv1 = new bvect();
@@ -1043,7 +1077,7 @@ void SubTest()
     delete bv2;
 }
 
-
+static
 void XorCountTest()
 {
     bvect*  bv1 = new bvect();
@@ -1184,6 +1218,7 @@ void XorCountTest()
     delete bset2;    
 }
 
+static
 void AndCountTest()
 {
     bvect*  bv1 = new bvect();
@@ -1325,7 +1360,7 @@ void AndCountTest()
 }
 
 
-
+static
 void TI_MetricTest()
 {
     bvect*  bv1 = new bvect();
@@ -1509,15 +1544,18 @@ void TI_MetricTest()
     delete bset2;    
 }
 
+static
 void BitBlockTransposeTest()
 {
+/*
     bm::word_t BM_VECT_ALIGN block1[bm::set_block_size] BM_VECT_ALIGN_ATTR = { 0, };
-    unsigned   BM_VECT_ALIGN tmatrix1[32][bm::set_block_plain_size] BM_VECT_ALIGN_ATTR;
 
     for (unsigned i = 0; i < bm::set_block_size; ++i)
     {
         block1[i] = 1 | (1 << 5) | (7 << 15) | (3 << 22);
     }
+*/
+    unsigned   BM_VECT_ALIGN tmatrix1[32][bm::set_block_plain_size] BM_VECT_ALIGN_ATTR;
 
     const unsigned blocks_count = 70000;
     bm::word_t* blocks[blocks_count];
@@ -1596,6 +1634,7 @@ void BitBlockTransposeTest()
 
 }
 
+static
 void BitBlockRotateTest()
 {
     bm::word_t blk0[bm::set_block_size] = { 0 };
@@ -1634,6 +1673,7 @@ void BitBlockRotateTest()
 
 }
 
+inline
 void ptest()
 {
     bvect*  bv_small = new bvect(bm::BM_GAP);
@@ -1688,7 +1728,7 @@ typedef bm::sparse_vector<unsigned, bvect> svect;
 
 // create a benchmark vector with a few dufferent distribution patterns
 //
-
+static
 void FillSparseIntervals(svect& sv)
 {
     sv.resize(250000000);
@@ -1714,7 +1754,7 @@ void FillSparseIntervals(svect& sv)
     }
 }
 
-
+static
 void SparseVectorAccessTest()
 {
     std::vector<unsigned> target;
@@ -1766,12 +1806,57 @@ void SparseVectorAccessTest()
     
 }
 
+static
+void RankCompressionTest()
+{
+    bvect bv_i1, bv_s1, bv1, bv2;
+    bvect bv_i2, bv_s2;
+
+    generate_bvector(bv_i1);
+    generate_bvector(bv_i2);
+    bv_i2.optimize();
+
+    bm::random_subset<bvect> rsub;
+    rsub.sample(bv_s1, bv_i1, 1000);
+    rsub.sample(bv_s2, bv_i2, 1000);
+    bv_s2.optimize();
+
+    bm::bvector_rank_compressor<bvect> rc;
+
+    bvect::blocks_count bc1;
+    bv_i1.running_count_blocks(&bc1);
+    bvect::blocks_count bc2;
+    bv_i2.running_count_blocks(&bc2);
+
+    {
+        TimeTaker tt("Rank compression test", REPEATS * 10);
+        for (unsigned i = 0; i < REPEATS * 10; ++i)
+        {
+            rc.compress(bv1, bv_i1, bv_s1);
+            rc.compress(bv1, bv_i2, bv_s2);
+        } // for
+    }
+    {
+        TimeTaker tt("Rank compression (by source) test", REPEATS * 10);
+        for (unsigned i = 0; i < REPEATS * 10; ++i)
+        {
+            rc.compress_by_source(bv2, bv_i1, bc1, bv_s1);
+            rc.compress_by_source(bv2, bv_i2, bc2, bv_s2);
+        } // for
+    }
+
+    bv1 |= bv2;
+    char buf[256];
+    sprintf(buf, "%i", (int)bv1.count()); // to fool some smart compilers like ICC
+}
+
 
 int main(void)
 {
 //    ptest();
 
     TimeTaker tt("TOTAL", 1);
+
 
     MemCpyTest();
 
@@ -1809,7 +1894,9 @@ int main(void)
     SerializationTest();
 
     SparseVectorAccessTest();
-    
+
+    RankCompressionTest();
+
     return 0;
 }
 

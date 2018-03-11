@@ -19,9 +19,9 @@ if ("${CMAKE_CXX_COMPILER_ID}" STREQUAL "GNU" OR
     if ("${BMOPTFLAGS}" STREQUAL "BMSSE42OPT")
         set(bmoptf "-march=nehalem -msse4.2 -DBMSSE42OPT")
     elseif("${BMOPTFLAGS}" STREQUAL "BMAVX2OPT")
-        set(bmoptf "-march=native -mavx2 -DBMAVX2OPT")
+        set(bmoptf "-march=skylake -mavx2 -DBMAVX2OPT")
     else()
-        set(bmoptf "-march=core2")
+        #set(bmoptf "-march=core2")
     endif()
 
     set(LINKER_FLAGS "-nodefaultlibs -lc")
@@ -34,8 +34,16 @@ elseif ("${CMAKE_CXX_COMPILER_ID}" STREQUAL "Intel")
     set(flags, "-tpp7 -march=core2 -restrict -DBM_HASRESTRICT -fno-fnalias -Wall -fPIC")
     set(optflags, "-g0 -O3 -opt_report_fileopt.txt -opt_report_levelmax")
 elseif ("${CMAKE_CXX_COMPILER_ID}" STREQUAL "MSVC")
-    set(flags "/W4 /EHsc")
+    if ("${BMOPTFLAGS}" STREQUAL "BMSSE42OPT")
+	set(bmoptf "-DBMSSE42OPT")
+    elseif("${BMOPTFLAGS}" STREQUAL "BMAVX2OPT")
+        set(bmoptf "-DBMAVX2OPT") 
+    endif()
+
+    set(flags "/W4 /EHsc /F 5000000 ")
     set(optflags "-O2")
+    SET( CMAKE_EXE_LINKER_FLAGS  "${CMAKE_EXE_LINKER_FLAGS} /STACK:\"10000000\"")
+
 endif()
 
 set(CMAKE_C_FLAGS   "${CMAKE_C_FLAGS} ${flags} ${bmoptf}")
@@ -46,15 +54,24 @@ set(CMAKE_CXX_FLAGS "${CMAKE_CXX_FLAGS} ${flags} ${optflags} ${bmoptf}")
 add_library(bm-static STATIC "libbm/src/libbm.cpp")
 add_library(bm-dll SHARED "libbm/src/libbm.cpp")
 add_library(bmcpuid SHARED "libbm/src/libbmcpuid.c")
+add_library(bm-dll-sse42 SHARED "libbm/src/libbm.cpp")
+add_library(bm-dll-avx2 SHARED "libbm/src/libbm.cpp")
 
 
-if ("${BMOPTFLAGS}" STREQUAL "BMSSE42OPT")
-    add_library(bm-dll-sse42 SHARED "libbm/src/libbm.cpp")
-elseif("${BMOPTFLAGS}" STREQUAL "BMAVX2OPT")
-    add_library(bm-dll-avx2 SHARED "libbm/src/libbm.cpp")
-else()
+if ("${CMAKE_CXX_COMPILER_ID}" STREQUAL "MSVC")
+   set_target_properties(bmcpuid      PROPERTIES COMPILE_FLAGS "-DBMDLLEXPORTS")
+   set_target_properties(bm-dll       PROPERTIES COMPILE_FLAGS "-DBMDLLEXPORTS")
+   set_target_properties(bm-dll-sse42 PROPERTIES COMPILE_FLAGS "-DBMDLLEXPORTS -DBMSSE42OPT")
+   set_target_properties(bm-dll-avx2  PROPERTIES COMPILE_FLAGS "-DBMDLLEXPORTS -DBMAVX2OPT")
 endif()
 
+
+if ("${CMAKE_CXX_COMPILER_ID}" STREQUAL "GNU" OR
+    "${CMAKE_CXX_COMPILER_ID}" STREQUAL "Clang")
+   set_target_properties(bm-dll       PROPERTIES COMPILE_FLAGS "-march=core2")
+   set_target_properties(bm-dll-sse42 PROPERTIES COMPILE_FLAGS "-march=nehalem -msse4.2 -DBMSSE42OPT")
+   set_target_properties(bm-dll-avx2  PROPERTIES COMPILE_FLAGS "-march=skylake -mavx2 -DBMAVX2OPT")
+endif()
 
 
 

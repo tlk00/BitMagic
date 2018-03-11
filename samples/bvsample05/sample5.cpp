@@ -33,6 +33,7 @@ For more information please visit:  http://bitmagic.io
 
 using namespace std;
 
+inline
 void Print(unsigned n)
 {
     cout << n << endl;;

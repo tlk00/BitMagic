@@ -63,7 +63,6 @@ struct bv_statistics
     gap_word_t  gap_levels[bm::gap_levels];
 
 
-
     /// cound bit block
     void add_bit_block()
     {
@@ -76,10 +75,18 @@ struct bv_statistics
     /// count gap block
     void add_gap_block(unsigned capacity, unsigned length)
     {
+        (gap_blocks < bm::set_total_blocks) ? gap_length[gap_blocks] = (gap_word_t)length : 0;
         ++gap_blocks;
         unsigned mem_used = (unsigned)(capacity * sizeof(gap_word_t));
         memory_used += mem_used;
         max_serialize_mem += (unsigned)(length * sizeof(gap_word_t));
+    }
+    
+    /// Reset statisctics
+    void reset()
+    {
+        bit_blocks = gap_blocks = 0;
+        max_serialize_mem = memory_used = 0;
     }
 };
 
@@ -154,7 +161,11 @@ BMFORCEINLINE
 int word_bitcount64(bm::id64_t x)
 {
 #if defined(BMSSE42OPT) || defined(BMAVX2OPT)
+#if defined(BM64_SSE4) || defined(BM64_AVX2)
     return (int)_mm_popcnt_u64(x);
+#else
+    return _mm_popcnt_u32(x >> 32) + _mm_popcnt_u32((unsigned)x);
+#endif
 #else
     x = x - ((x >> 1) & 0x5555555555555555);
     x = (x & 0x3333333333333333) + ((x >> 2) & 0x3333333333333333);
@@ -225,27 +236,6 @@ bm::id_t word_trailing_zeros(bm::id_t w)
 
 //---------------------------------------------------------------------
 
-/**
-    Nomenclature of set operations
-*/
-enum set_operation
-{
-    set_AND         = 0,
-    set_OR          = 1,
-    set_SUB         = 2,
-    set_XOR         = 3,
-    set_ASSIGN      = 4,
-    set_COUNT       = 5,
-    set_COUNT_AND   = 6,
-    set_COUNT_XOR   = 7,
-    set_COUNT_OR    = 8,
-    set_COUNT_SUB_AB= 9,
-    set_COUNT_SUB_BA= 10,
-    set_COUNT_A     = 11,
-    set_COUNT_B     = 12,
-
-    set_END
-};
 
 /// Returns true if set operation is constant (bitcount)
 inline
@@ -630,9 +620,94 @@ void for_each_nzblock(T*** root, unsigned size1,
 
         unsigned non_empty_top = 0;
         unsigned r = i * bm::set_array_size;
-        for (unsigned j = 0;j < bm::set_array_size; ++j)
+        for (unsigned j = 0; j < bm::set_array_size; )
         {
-            if (blk_blk[j]) 
+#ifdef BM64_AVX2
+            __m256i w0 = _mm256_loadu_si256((__m256i*)(blk_blk + j));
+            if (!_mm256_testz_si256(w0, w0))
+            {
+                T* blk0 = blk_blk[j + 0];
+                T* blk1 = blk_blk[j + 1];
+                T* blk2 = blk_blk[j + 2];
+                T* blk3 = blk_blk[j + 3];
+
+                unsigned block_idx = r + j + 0;
+                if (blk0)
+                {
+                    f(blk0, block_idx);
+                    non_empty_top += (blk_blk[j] != 0);
+                }
+                else
+                    f.on_empty_block(block_idx);
+
+                ++block_idx;
+                if (blk1)
+                {
+                    f(blk1, block_idx);
+                    non_empty_top += (blk_blk[j + 1] != 0);
+                }
+                else
+                    f.on_empty_block(block_idx);
+
+                ++block_idx;
+                if (blk2)
+                {
+                    f(blk2, block_idx);
+                    non_empty_top += (blk_blk[j + 2] != 0);
+                }
+                else
+                    f.on_empty_block(block_idx);
+
+                ++block_idx;
+                if (blk3)
+                {
+                    f(blk3, block_idx);
+                    non_empty_top += (blk_blk[j + 3] != 0);
+                }
+                else
+                    f.on_empty_block(block_idx);
+            }
+            else
+            {
+                f.on_empty_block(r + j + 0);
+                f.on_empty_block(r + j + 1);
+                f.on_empty_block(r + j + 2);
+                f.on_empty_block(r + j + 3);
+            }
+            j += 4;
+#elif defined(BM64_SSE4)
+            __m128i w0 = _mm_loadu_si128((__m128i*)(blk_blk + j));
+            if (!_mm_testz_si128(w0, w0))
+            {
+                T* blk0 = blk_blk[j + 0];
+                T* blk1 = blk_blk[j + 1];
+
+                unsigned block_idx = r + j + 0;
+                if (blk0)
+                {
+                    f(blk0, block_idx);
+                    non_empty_top += (blk_blk[j] != 0);
+                }
+                else
+                    f.on_empty_block(block_idx);
+
+                ++block_idx;
+                if (blk1)
+                {
+                    f(blk1, block_idx);
+                    non_empty_top += (blk_blk[j + 1] != 0);
+                }
+                else
+                    f.on_empty_block(block_idx);
+            }
+            else
+            {
+                f.on_empty_block(r + j + 0);
+                f.on_empty_block(r + j + 1);
+            }
+            j += 2;
+#else
+            if (blk_blk[j])
             {
                 f(blk_blk[j], r + j);
                 non_empty_top += (blk_blk[j] != 0);// re-check for mutation
@@ -641,6 +716,8 @@ void for_each_nzblock(T*** root, unsigned size1,
             {
                 f.on_empty_block(r + j);
             }
+            ++j;
+#endif
         } // for j
         if (non_empty_top == 0)
         {
@@ -654,26 +731,95 @@ void for_each_nzblock(T*** root, unsigned size1,
 template<class T, class F> 
 void for_each_nzblock2(T*** root, unsigned size1, F& f)
 {
+#ifdef BM64_SSE4
+    for (unsigned i = 0; i < size1; ++i)
+    {
+        T** blk_blk;
+        if ((blk_blk = root[i])!=0)
+        {
+            {
+                __m128i w0;
+                for (unsigned j = 0; j < bm::set_array_size; j+=4)
+                {
+                    w0 = _mm_loadu_si128((__m128i*)(blk_blk + j));
+                    if (!_mm_testz_si128(w0, w0))
+                    {
+                        T* blk0 = blk_blk[j + 0];
+                        T* blk1 = blk_blk[j + 1];
+
+                        if (blk0)
+                            f(blk0);
+                        if (blk1)
+                            f(blk1);
+                    }
+                    w0 = _mm_loadu_si128((__m128i*)(blk_blk + j + 2));
+                    if (!_mm_testz_si128(w0, w0))
+                    {
+                        T* blk0 = blk_blk[j + 2];
+                        T* blk1 = blk_blk[j + 3];
+                        if (blk0)
+                            f(blk0);
+                        if (blk1)
+                            f(blk1);
+                    }
+                } // for j
+            }
+        }
+    }  // for i
+#elif defined(BM64_AVX2)
+    for (unsigned i = 0; i < size1; ++i)
+    {
+        T** blk_blk;
+        if ((blk_blk = root[i]) != 0)
+        {
+            {
+                for (unsigned j = 0; j < bm::set_array_size; j += 4)
+                {
+                    __m256i w0 = _mm256_loadu_si256((__m256i*)(blk_blk + j));
+                    if (!_mm256_testz_si256(w0, w0))
+                    {
+                        // as a variant could use: blk0 = (T*)_mm256_extract_epi64(w0, 0);
+                        // but it measures marginally slower
+                        T* blk0 = blk_blk[j + 0];
+                        T* blk1 = blk_blk[j + 1];
+                        T* blk2 = blk_blk[j + 2];
+                        T* blk3 = blk_blk[j + 3];
+                        if (blk0)
+                            f(blk0);
+                        if (blk1)
+                            f(blk1);
+                        if (blk2)
+                            f(blk2);
+                        if (blk3)
+                            f(blk3);
+                    }
+                } // for j
+            }
+        }
+    }  // for i
+
+#else // non-SIMD mode
     for (unsigned i = 0; i < size1; ++i)
     {
         T** blk_blk;
         if ((blk_blk = root[i])!=0) 
-        {            
+        {
             unsigned j = 0;
             do
-            {                
-                if (blk_blk[j]) 
+            {
+                if (blk_blk[j])
                     f(blk_blk[j]);
-                if (blk_blk[j+1]) 
+                if (blk_blk[j+1])
                     f(blk_blk[j+1]);
-                if (blk_blk[j+2]) 
+                if (blk_blk[j+2])
                     f(blk_blk[j+2]);
-                if (blk_blk[j+3]) 
+                if (blk_blk[j+3])
                     f(blk_blk[j+3]);
                 j += 4;
             } while (j < bm::set_array_size);
         }
     }  // for i
+#endif
 }
 
 
@@ -3227,7 +3373,7 @@ bm::id_t bit_block_calc_count_to(const bm::word_t*  block,
         BM_AVX2_POPCNT_PROLOG
     
         __m256i cnt = _mm256_setzero_si256();
-        uint64_t* cnt64;
+        bm::id64_t* cnt64;
     
         for ( ;bitcount >= 256; bitcount -= 256)
         {
@@ -3238,7 +3384,7 @@ bm::id_t bit_block_calc_count_to(const bm::word_t*  block,
 
             block += 8;
         }
-        cnt64 = (uint64_t*)&cnt;
+        cnt64 = (bm::id64_t*)&cnt;
         count += (unsigned)(cnt64[0] + cnt64[1] + cnt64[2] + cnt64[3]);
     #else
         for ( ;bitcount >= 64; bitcount -= 64)
@@ -3434,17 +3580,16 @@ inline bool is_bits_one(const bm::wordop_t* start,
 /*! @brief Returns "true" if all bits in the block are 0
     @ingroup bitfunc 
 */
-inline
-bool bit_is_all_zero(const bm::wordop_t* start,
-                     const bm::wordop_t* end)
+template<typename TW>
+bool bit_is_all_zero(const TW* start,
+                     const TW* end)
 {
 #if defined(BMSSE42OPT) || defined(BMAVX2OPT)
     return VECT_IS_ZERO_BLOCK(start, end);
 #else
    do
    {
-        bm::wordop_t tmp = 
-            start[0] | start[1] | start[2] | start[3];
+        TW tmp = start[0] | start[1] | start[2] | start[3];
        if (tmp) 
            return false;
        start += 4;
@@ -3757,29 +3902,36 @@ void bit_block_copy(bm::word_t* BMRESTRICT dst, const bm::word_t* BMRESTRICT src
 
    \param dst - destination block.
    \param src - source block.
+ 
+   \return 0 if AND operation did not produced anything (no 1s in the output)
 
    @ingroup bitfunc
 */
 inline 
-void bit_block_and(bm::word_t* BMRESTRICT dst, const bm::word_t* BMRESTRICT src)
+bm::id64_t bit_block_and(bm::word_t* BMRESTRICT dst, const bm::word_t* BMRESTRICT src)
 {
+    BM_ASSERT(dst);
+    BM_ASSERT(src);
+    BM_ASSERT(dst != src);
+
 #ifdef BMVECTOPT
-    VECT_AND_ARR(dst, src, src + bm::set_block_size);
+    bm::id64_t acc = VECT_AND_ARR(dst, src, src + bm::set_block_size);
+    return acc;
 #else
-    const bm::wordop_t* BMRESTRICT wrd_ptr = (wordop_t*)src;
-    const bm::wordop_t* BMRESTRICT wrd_end = (wordop_t*)(src + bm::set_block_size);
-    bm::wordop_t* BMRESTRICT dst_ptr = (wordop_t*)dst;
+    unsigned arr_sz = bm::set_block_size / 2;
 
-    do
+    const bm::bit_block_t::bunion_t* BMRESTRICT src_u = (const bm::bit_block_t::bunion_t*)src;
+    bm::bit_block_t::bunion_t* BMRESTRICT dst_u = (bm::bit_block_t::bunion_t*)dst;
+    bm::id64_t acc = 0;
+    unsigned i = 0;
+    for (i = 0; i < arr_sz; i+=4)
     {
-        dst_ptr[0] &= wrd_ptr[0];
-        dst_ptr[1] &= wrd_ptr[1];
-        dst_ptr[2] &= wrd_ptr[2];
-        dst_ptr[3] &= wrd_ptr[3];
-
-        dst_ptr+=4;
-        wrd_ptr+=4;
-    } while (wrd_ptr < wrd_end);
+        acc |= dst_u->w64[i] &= src_u->w64[i];
+        acc |= dst_u->w64[i+1] &= src_u->w64[i+1];
+        acc |= dst_u->w64[i+2] &= src_u->w64[i+2];
+        acc |= dst_u->w64[i+3] &= src_u->w64[i+3];
+    }
+    return acc;
 #endif
 }
 
@@ -4139,7 +4291,13 @@ inline bm::word_t* bit_operation_and(bm::word_t* BMRESTRICT dst,
         else
         {
             // Regular operation AND on the whole block.
-            bit_block_and(dst, src);
+            //
+            auto any = bit_block_and(dst, src);
+            if (!any)
+            {
+                BM_ASSERT(bit_is_all_zero(dst, dst+bm::set_block_size));
+                ret = 0;
+            }
         }
     }
     else // The destination block does not exist yet
