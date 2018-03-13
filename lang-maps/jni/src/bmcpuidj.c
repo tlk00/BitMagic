@@ -20,34 +20,35 @@ For more information please visit:  http://bitmagic.io
 #include "libbmcpuid.h"
 #include <stdio.h>
 
-#define BMJNI_SSE 		  "bmjni_sse"
-#define BMJNI_SSE2 		  "bmjni_sse2"
-#define BMJNI_SSE3		  "bmjni_sse3"
-#define BMJNI_SSE4_1  	"bmjni_sse4_1"
-#define BMJNI_SSE4_2  	"bmjni_sse4_2"
-#define BMJNI_AVX     	"bmjni_avx"
-#define BMJNI_AVX2    	"bmjni_avx2"
-#define BMJNI_AVX512F 	"bmjni_avx512f"
+#define BMJNI			"bmjni"
+#define BMJNI_SSE		"bmjni-sse"
+#define BMJNI_SSE2 		"bmjni-sse2"
+#define BMJNI_SSE3		"bmjni-sse3"
+#define BMJNI_SSE4_1	"bmjni-sse41"
+#define BMJNI_SSE4_2  	"bmjni-sse42"
+#define BMJNI_AVX     	"bmjni-avx"
+#define BMJNI_AVX2    	"bmjni-avx2"
+#define BMJNI_AVX512F 	"bmjni-avx512f"
 
 const char* BM_simd_libname(void) {
   unsigned simd = BM_x86_simd();
-  printf("Simd code: %x\n", simd);
+  //printf("Simd code: %x\n", simd);
   if (simd & SIMD_AVX512F) 
-    return BMJNI_AVX512F;
+    return BMJNI_AVX2;
   else if (simd & SIMD_AVX2)
     return BMJNI_AVX2;
   else if (simd & SIMD_AVX)
-    return BMJNI_AVX;
+    return BMJNI_SSE4_2;
   else if (simd & SIMD_SSE4_2)
     return BMJNI_SSE4_2;
   else if (simd & SIMD_SSE4_1)
-    return BMJNI_SSE4_1;
+    return BMJNI;
   else if (simd & SIMD_SSE3)
-    return BMJNI_SSE3;
+    return BMJNI;
   else if (simd & SIMD_SSE2)
-    return BMJNI_SSE2;
+    return BMJNI;
   else if (simd & SIMD_SSE)
-    return BMJNI_SSE;
+    return BMJNI;
   else
     return "Unknown simd code, no library name found";  
 }

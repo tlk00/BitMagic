@@ -27,6 +27,12 @@
     (*env)->ThrowNew(env, ex, BM_ERR_RANGE_MSG " in: " #x); \
     break; \
   } \
+  case BM_ERR_CPU: \
+  { \
+    jclass ex = (*env)->FindClass(env, "java/lang/RuntimeException"); \
+    (*env)->ThrowNew(env, ex, BM_ERR_CPU_MSG " in: " #x); \
+    break; \
+  } \
   default: \
   { \
     jclass ex = (*env)->FindClass(env, "java/lang/RuntimeException"); \
