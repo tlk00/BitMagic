@@ -17,6 +17,9 @@ For more information please visit:  http://bitmagic.io
 */
 
 #include "libbmcpuid.h"
+#ifdef _MSC_VER
+#include <intrin.h>
+#endif
 
 // -------------------------------------------------------------------
 //
