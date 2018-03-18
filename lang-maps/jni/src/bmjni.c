@@ -7,10 +7,12 @@
 
 #define exec(x) \
   switch(x) { \
+  case BM_OK: \
+    break; \
   case BM_ERR_BADALLOC: \
   { \
     jclass ex = (*env)->FindClass(env, "java/lang/RuntimeException"); \
-    (*env)->ThrowNew(env, ex,BM_ERR_BADALLOC_MSG " in native call: " #x); \
+    (*env)->ThrowNew(env, ex, BM_ERR_BADALLOC_MSG " in native call: " #x); \
     break; \
   } \
   case BM_ERR_BADARG: \
@@ -25,12 +27,21 @@
     (*env)->ThrowNew(env, ex, BM_ERR_RANGE_MSG " in: " #x); \
     break; \
   } \
-  default: \
+  case BM_ERR_CPU: \
+  { \
+    jclass ex = (*env)->FindClass(env, "java/lang/RuntimeException"); \
+    (*env)->ThrowNew(env, ex, BM_ERR_CPU_MSG " in: " #x); \
     break; \
-  }
+  } \
+  default: \
+  { \
+    jclass ex = (*env)->FindClass(env, "java/lang/RuntimeException"); \
+    (*env)->ThrowNew(env, ex, "Unknown error in native call: " #x); \
+    break; \
+  }}
 
 JNIEXPORT void JNICALL Java_io_bitmagic_core_BVector0_init0
-  (JNIEnv *env, jobject obj, jlong ptr) {
+  (JNIEnv *env, jclass clazz, jlong ptr) {
   exec(BM_init((void*)ptr));
 }
 
@@ -40,7 +51,7 @@ JNIEXPORT void JNICALL Java_io_bitmagic_core_BVector0_init0
  * Signature: (IJ)J
  */
 JNIEXPORT jlong JNICALL Java_io_bitmagic_core_BVector0_create0
-  (JNIEnv *env, jobject obj, jint strategy, jlong size) {
+  (JNIEnv *env, jclass clazz, jint strategy, jlong size) {
   BM_BVHANDLE ptr;
   exec(BM_bvector_construct(&ptr, size));
   return (jlong)ptr;
@@ -52,7 +63,7 @@ JNIEXPORT jlong JNICALL Java_io_bitmagic_core_BVector0_create0
  * Signature: (J)J
  */
 JNIEXPORT jlong JNICALL Java_io_bitmagic_core_BVector0_copy0
-  (JNIEnv *env, jobject obj, jlong ptr) {
+  (JNIEnv *env, jclass clazz, jlong ptr) {
   BM_BVHANDLE cptr;
   exec(BM_bvector_construct_copy(&cptr, (BM_BVHANDLE)ptr));
   return (jlong)cptr;
@@ -64,7 +75,7 @@ JNIEXPORT jlong JNICALL Java_io_bitmagic_core_BVector0_copy0
  * Signature: (J)V
  */
 JNIEXPORT void JNICALL Java_io_bitmagic_core_BVector0_dispose0
-  (JNIEnv *env, jobject obj, jlong ptr) {
+  (JNIEnv *env, jclass clazz, jlong ptr) {
   exec(BM_bvector_free((BM_BVHANDLE)ptr));
 }
 
@@ -74,7 +85,7 @@ JNIEXPORT void JNICALL Java_io_bitmagic_core_BVector0_dispose0
  * Signature: ()Ljava/lang/String;
  */
 JNIEXPORT jstring JNICALL Java_io_bitmagic_core_BVector0_version0
-(JNIEnv *env, jobject obj) {
+(JNIEnv *env, jclass clazz) {
   int major;
   int minor;
   int patch;
@@ -91,7 +102,7 @@ JNIEXPORT jstring JNICALL Java_io_bitmagic_core_BVector0_version0
  * Signature: ()Ljava/lang/String;
  */
 JNIEXPORT jstring JNICALL Java_io_bitmagic_core_BVector0_copyright0
-(JNIEnv *env, jobject obj) {
+(JNIEnv *env, jclass clazz) {
   return (*env)->NewStringUTF(env, BM_version(0, 0, 0));
 }
 
@@ -101,7 +112,7 @@ JNIEXPORT jstring JNICALL Java_io_bitmagic_core_BVector0_copyright0
 * Signature: (J)J
 */
 JNIEXPORT jlong JNICALL Java_io_bitmagic_core_BVector0_getSize0
-(JNIEnv *env, jclass obj, jlong ptr) {
+(JNIEnv *env, jclass clazz, jlong ptr) {
   unsigned int size;
   exec(BM_bvector_get_size((BM_BVHANDLE)ptr, &size));
   return (jlong)size;
@@ -113,7 +124,7 @@ JNIEXPORT jlong JNICALL Java_io_bitmagic_core_BVector0_getSize0
 * Signature: (JJ)V
 */
 JNIEXPORT void JNICALL Java_io_bitmagic_core_BVector0_setSize0
-(JNIEnv *env, jclass obj, jlong ptr, jlong size) {
+(JNIEnv *env, jclass clazz, jlong ptr, jlong size) {
   exec(BM_bvector_set_size((BM_BVHANDLE)ptr, size));
 }
 
@@ -123,8 +134,8 @@ JNIEXPORT void JNICALL Java_io_bitmagic_core_BVector0_setSize0
  * Signature: (JJZ)V
  */
 JNIEXPORT void JNICALL Java_io_bitmagic_core_BVector0_set0
-(JNIEnv *env, jobject obj, jlong ptr, jlong idx, jboolean bit) {
-  exec(BM_bvector_set_bit((BM_BVHANDLE)ptr, (unsigned int)idx, bit ? 1 : 0));
+(JNIEnv *env, jclass clazz, jlong ptr, jlong idx, jboolean bit) {
+  exec(BM_bvector_set_bit((BM_BVHANDLE)ptr, (unsigned int)idx, bit & 1));
 }
 
 /*
@@ -133,7 +144,7 @@ JNIEXPORT void JNICALL Java_io_bitmagic_core_BVector0_set0
  * Signature: (JJZZ)Z
  */
 JNIEXPORT jboolean JNICALL Java_io_bitmagic_core_BVector0_setConditional0
-(JNIEnv *env, jclass obj, jlong ptr, jlong idx, jboolean bit, jboolean condition) {
+(JNIEnv *env, jclass clazz, jlong ptr, jlong idx, jboolean bit, jboolean condition) {
   int changed;
   exec(BM_bvector_set_bit_conditional((BM_BVHANDLE)ptr, (unsigned int)idx, bit ? 1 : 0, condition ? 1 : 0, &changed));
   return (jboolean)changed;
@@ -145,7 +156,7 @@ JNIEXPORT jboolean JNICALL Java_io_bitmagic_core_BVector0_setConditional0
  * Signature: (JJ)V
  */
 JNIEXPORT void JNICALL Java_io_bitmagic_core_BVector0_flip0
-(JNIEnv *env, jclass obj, jlong ptr, jlong idx) {
+(JNIEnv *env, jclass clazz, jlong ptr, jlong idx) {
   exec(BM_bvector_flip_bit((BM_BVHANDLE)ptr, (unsigned int)idx))
 }
 
@@ -155,7 +166,7 @@ JNIEXPORT void JNICALL Java_io_bitmagic_core_BVector0_flip0
  * Signature: (J)V
  */
 JNIEXPORT void JNICALL Java_io_bitmagic_core_BVector0_setAll0
-(JNIEnv *env, jclass obj, jlong ptr) {
+(JNIEnv *env, jclass clazz, jlong ptr) {
   exec(BM_bvector_set((BM_BVHANDLE)ptr));
 }
 
@@ -165,7 +176,7 @@ JNIEXPORT void JNICALL Java_io_bitmagic_core_BVector0_setAll0
  * Signature: (JJJZ)V
  */
 JNIEXPORT void JNICALL Java_io_bitmagic_core_BVector0_setRange0
-(JNIEnv *env, jclass obj, jlong ptr, jlong left, jlong right, jboolean bit) {
+(JNIEnv *env, jclass clazz, jlong ptr, jlong left, jlong right, jboolean bit) {
   exec(BM_bvector_set_range((BM_BVHANDLE)ptr, (unsigned int)left, (unsigned int)right, bit ? 1 : 0));
 }
 
@@ -175,7 +186,7 @@ JNIEXPORT void JNICALL Java_io_bitmagic_core_BVector0_setRange0
  * Signature: (J)V
  */
 JNIEXPORT void JNICALL Java_io_bitmagic_core_BVector0_invert0
-(JNIEnv *env, jclass obj, jlong ptr) {
+(JNIEnv *env, jclass clazz, jlong ptr) {
   exec(BM_bvector_invert((BM_BVHANDLE)ptr));
 }
 
@@ -185,7 +196,7 @@ JNIEXPORT void JNICALL Java_io_bitmagic_core_BVector0_invert0
  * Signature: (JI)V
  */
 JNIEXPORT void JNICALL Java_io_bitmagic_core_BVector0_clear0
-(JNIEnv *env, jclass obj, jlong ptr, jint free_mem) {
+(JNIEnv *env, jclass clazz, jlong ptr, jint free_mem) {
   exec(BM_bvector_clear((BM_BVHANDLE)ptr, free_mem));
 }
 
@@ -195,7 +206,7 @@ JNIEXPORT void JNICALL Java_io_bitmagic_core_BVector0_clear0
  * Signature: (JJ)J
  */
 JNIEXPORT jlong JNICALL Java_io_bitmagic_core_BVector0_extract0
-(JNIEnv *env, jclass obj, jlong ptr, jlong start) {
+(JNIEnv *env, jclass clazz, jlong ptr, jlong start) {
   unsigned int next;
   exec(BM_bvector_extract_next((BM_BVHANDLE)ptr, (unsigned int)start, &next));
   return next == 0 ? -1 : (jlong)next;
@@ -207,7 +218,7 @@ JNIEXPORT jlong JNICALL Java_io_bitmagic_core_BVector0_extract0
  * Signature: (JJ)Z
  */
 JNIEXPORT jboolean JNICALL Java_io_bitmagic_core_BVector0_get0
-(JNIEnv *env, jobject obj, jlong ptr, jlong idx) {
+(JNIEnv *env, jclass clazz, jlong ptr, jlong idx) {
   int ret;
   exec(BM_bvector_get_bit((BM_BVHANDLE)ptr, (unsigned int)idx, &ret));
   return (jboolean)ret;
@@ -219,7 +230,7 @@ JNIEXPORT jboolean JNICALL Java_io_bitmagic_core_BVector0_get0
  * Signature: (J)J
  */
 JNIEXPORT jlong JNICALL Java_io_bitmagic_core_BVector0_count0
-(JNIEnv *env, jclass obj, jlong ptr) {
+(JNIEnv *env, jclass clazz, jlong ptr) {
   unsigned int count;
   exec(BM_bvector_count((BM_BVHANDLE)ptr, &count));
   return (jlong)count;
@@ -231,7 +242,7 @@ JNIEXPORT jlong JNICALL Java_io_bitmagic_core_BVector0_count0
  * Signature: (JJJ)J
  */
 JNIEXPORT jlong JNICALL Java_io_bitmagic_core_BVector0_countInRange0
-(JNIEnv *env, jclass obj, jlong ptr, jlong left, jlong right) {
+(JNIEnv *env, jclass clazz, jlong ptr, jlong left, jlong right) {
   unsigned int count;
   exec(BM_bvector_count_range((BM_BVHANDLE)ptr, (unsigned int)left, (unsigned int)right, &count));
   return (jlong)count;
@@ -243,7 +254,7 @@ JNIEXPORT jlong JNICALL Java_io_bitmagic_core_BVector0_countInRange0
  * Signature: (J)Z
  */
 JNIEXPORT jboolean JNICALL Java_io_bitmagic_core_BVector0_nonEmpty0
-(JNIEnv *env, jclass obj, jlong ptr) {
+(JNIEnv *env, jclass clazz, jlong ptr) {
   int val;
   exec(BM_bvector_any((BM_BVHANDLE)ptr, &val));
   return (jboolean)val;
@@ -255,7 +266,7 @@ JNIEXPORT jboolean JNICALL Java_io_bitmagic_core_BVector0_nonEmpty0
  * Signature: (JJ)J
  */
 JNIEXPORT jlong JNICALL Java_io_bitmagic_core_BVector0_indexOf0
-(JNIEnv *env, jclass obj, jlong ptr, jlong start) {
+(JNIEnv *env, jclass clazz, jlong ptr, jlong start) {
   int found;
   unsigned int pos;
   exec(BM_bvector_find((BM_BVHANDLE)ptr, (unsigned int)start, &pos, &found));
@@ -271,7 +282,7 @@ JNIEXPORT jlong JNICALL Java_io_bitmagic_core_BVector0_indexOf0
  * Signature: (JJ)I
  */
 JNIEXPORT jint JNICALL Java_io_bitmagic_core_BVector0_compare0
-(JNIEnv *env, jclass obj, jlong ptr1, jlong ptr2) {
+(JNIEnv *env, jclass clazz, jlong ptr1, jlong ptr2) {
   int comp;
   exec(BM_bvector_compare((BM_BVHANDLE)ptr1, (BM_BVHANDLE)ptr2, &comp));
   return (jint)comp;
@@ -283,16 +294,16 @@ JNIEXPORT jint JNICALL Java_io_bitmagic_core_BVector0_compare0
  * Signature: (JI)Lio/bitmagic/BitVectorStat;
  */
 JNIEXPORT jobject JNICALL Java_io_bitmagic_core_BVector0_optimize0
-(JNIEnv *env, jclass obj, jlong ptr, jint opt_mode) {
+(JNIEnv *env, jclass clazz, jlong ptr, jint opt_mode) {
   struct BM_bvector_statistics stat;
-  jobject object;
+  jclass clazzect;
   jmethodID constructor;
   jobject cls;
 
   exec(BM_bvector_optimize((BM_BVHANDLE)ptr, opt_mode, &stat));
   cls = (*env)->FindClass(env, "io/bitmagic/core/BitVectorStat");
   constructor = (*env)->GetMethodID(env, cls, "<init>", "(JJJJ)V");
-  object = (*env)->NewObject(env, cls, constructor, (jlong)stat.bit_blocks, (jlong)stat.gap_blocks, (jlong)stat.max_serialize_mem, (jlong)stat.memory_used);
+  jobject object = (*env)->NewObject(env, cls, constructor, (jlong)stat.bit_blocks, (jlong)stat.gap_blocks, (jlong)stat.max_serialize_mem, (jlong)stat.memory_used);
   return object;
 }
 
@@ -302,16 +313,16 @@ JNIEXPORT jobject JNICALL Java_io_bitmagic_core_BVector0_optimize0
  * Signature: (J)Lio/bitmagic/BitVectorStat;
  */
 JNIEXPORT jobject JNICALL Java_io_bitmagic_core_BVector0_calcStat0
-(JNIEnv *env, jclass obj, jlong ptr) {
+(JNIEnv *env, jclass clazz, jlong ptr) {
   struct BM_bvector_statistics stat;
-  jobject object;
+  jclass clazzect;
   jmethodID constructor;
   jobject cls;
   
   exec(BM_bvector_calc_stat((BM_BVHANDLE)ptr, &stat));
   cls = (*env)->FindClass(env, "io/bitmagic/core/BitVectorStat");
   constructor = (*env)->GetMethodID(env, cls, "<init>", "(JJJJ)V");
-  object = (*env)->NewObject(env, cls, constructor, (jlong)stat.bit_blocks, (jlong)stat.gap_blocks, (jlong)stat.max_serialize_mem, (jlong)stat.memory_used);
+  jobject object = (*env)->NewObject(env, cls, constructor, (jlong)stat.bit_blocks, (jlong)stat.gap_blocks, (jlong)stat.max_serialize_mem, (jlong)stat.memory_used);
   return object;
 }
 
@@ -321,7 +332,7 @@ JNIEXPORT jobject JNICALL Java_io_bitmagic_core_BVector0_calcStat0
  * Signature: (JJI)V
  */
 JNIEXPORT void JNICALL Java_io_bitmagic_core_BVector0_operation0
-(JNIEnv *env, jclass obj, jlong dst, jlong src, jint op) {
+(JNIEnv *env, jclass clazz, jlong dst, jlong src, jint op) {
   exec(BM_bvector_combine_operation((BM_BVHANDLE)dst, (BM_BVHANDLE)src, op));
 }
 
@@ -331,7 +342,7 @@ JNIEXPORT void JNICALL Java_io_bitmagic_core_BVector0_operation0
  * Signature: (JJ)V
  */
 JNIEXPORT void JNICALL Java_io_bitmagic_core_BVector0_and0
-(JNIEnv *env, jclass obj, jlong dst, jlong src) {
+(JNIEnv *env, jclass clazz, jlong dst, jlong src) {
   exec(BM_bvector_combine_AND((BM_BVHANDLE)dst, (BM_BVHANDLE)src));
 }
 
@@ -341,7 +352,7 @@ JNIEXPORT void JNICALL Java_io_bitmagic_core_BVector0_and0
  * Signature: (JJ)V
  */
 JNIEXPORT void JNICALL Java_io_bitmagic_core_BVector0_or0
-(JNIEnv *env, jclass obj, jlong dst, jlong src) {
+(JNIEnv *env, jclass clazz, jlong dst, jlong src) {
   exec(BM_bvector_combine_OR((BM_BVHANDLE)dst, (BM_BVHANDLE)src));
 }
 
@@ -351,7 +362,7 @@ JNIEXPORT void JNICALL Java_io_bitmagic_core_BVector0_or0
  * Signature: (JJ)V
  */
 JNIEXPORT void JNICALL Java_io_bitmagic_core_BVector0_sub0
-(JNIEnv *env, jclass obj, jlong dst, jlong src) {
+(JNIEnv *env, jclass clazz, jlong dst, jlong src) {
   exec(BM_bvector_combine_SUB((BM_BVHANDLE)dst, (BM_BVHANDLE)src));
 }
 
@@ -361,7 +372,7 @@ JNIEXPORT void JNICALL Java_io_bitmagic_core_BVector0_sub0
  * Signature: (JJ)V
  */
 JNIEXPORT void JNICALL Java_io_bitmagic_core_BVector0_xor0
-(JNIEnv *env, jclass obj, jlong dst, jlong src) {
+(JNIEnv *env, jclass clazz, jlong dst, jlong src) {
   exec(BM_bvector_combine_XOR((BM_BVHANDLE)dst, (BM_BVHANDLE)src));
 }
 
@@ -371,11 +382,16 @@ JNIEXPORT void JNICALL Java_io_bitmagic_core_BVector0_xor0
 * Signature: (J[B)V
 */
 JNIEXPORT void JNICALL Java_io_bitmagic_core_BVector0_deserialize0
-(JNIEnv *env, jclass obj, jlong ptr, jbyteArray ba) {
+(JNIEnv *env, jclass clazz, jlong ptr, jbyteArray ba) {
+  void *start = (*env)->GetPrimitiveArrayCritical(env, ba, 0);
+  if (start == NULL) {
+    jclass ex = (*env)->FindClass(env, "java/lang/OutOfMemoryError");
+    (*env)->ThrowNew(env, ex, "Out of memory error in native call deserailize0()");
+    return;
+  }
   jsize size = (*env)->GetArrayLength(env, ba);
-  jbyte *start = (*env)->GetByteArrayElements(env, ba, 0);
   exec(BM_bvector_deserialize((BM_BVHANDLE)ptr, (const char*)start, size));
-  (*env)->ReleaseByteArrayElements(env, ba, start, JNI_ABORT); // The array is read-only
+  (*env)->ReleasePrimitiveArrayCritical(env, ba, start, JNI_ABORT); // The array is read-only
 }
 
 /*
@@ -384,13 +400,18 @@ JNIEXPORT void JNICALL Java_io_bitmagic_core_BVector0_deserialize0
 * Signature: (J[B)J
 */
 JNIEXPORT jlong JNICALL Java_io_bitmagic_core_BVector0_serialize0
-(JNIEnv *env, jclass obj, jlong ptr, jbyteArray ba) {
+(JNIEnv *env, jclass clazz, jlong ptr, jbyteArray ba) {
+  void *start = (*env)->GetPrimitiveArrayCritical(env, ba, 0);
+  if (start == NULL) {
+    jclass ex = (*env)->FindClass(env, "java/lang/OutOfMemoryError"); 
+    (*env)->ThrowNew(env, ex, "Out of memory error in native call serailize0()");
+    return 0;
+  }
   jsize size = (*env)->GetArrayLength(env, ba);
-  jbyte *start = (*env)->GetByteArrayElements(env, ba, 0);
   size_t actualSize;
 
   exec(BM_bvector_serialize((BM_BVHANDLE)ptr, start, size, &actualSize));
-  (*env)->ReleaseByteArrayElements(env, ba, start, 0); 
+  (*env)->ReleasePrimitiveArrayCritical(env, ba, start, 0); 
   return actualSize;
 }
 
@@ -401,7 +422,7 @@ JNIEXPORT jlong JNICALL Java_io_bitmagic_core_BVector0_serialize0
 * Signature: (J)J
 */
 JNIEXPORT jlong JNICALL Java_io_bitmagic_core_BVIterator0_create0
-(JNIEnv *env, jclass obj, jlong bvPtr) {
+(JNIEnv *env, jclass clazz, jlong bvPtr) {
   BM_BVEHANDLE eh;
   exec(BM_bvector_enumerator_construct((BM_BVHANDLE)bvPtr, &eh));
   return (jlong)eh;
@@ -413,7 +434,7 @@ JNIEXPORT jlong JNICALL Java_io_bitmagic_core_BVIterator0_create0
 * Signature: (J)V
 */
 JNIEXPORT void JNICALL Java_io_bitmagic_core_BVIterator0_dispose0
-(JNIEnv *env, jclass obj, jlong ptr) {
+(JNIEnv *env, jclass clazz, jlong ptr) {
   exec(BM_bvector_enumerator_free((BM_BVEHANDLE)ptr));
 }
 
@@ -423,7 +444,7 @@ JNIEXPORT void JNICALL Java_io_bitmagic_core_BVIterator0_dispose0
 * Signature: (J)Z
 */
 JNIEXPORT jboolean JNICALL Java_io_bitmagic_core_BVIterator0_isValid0
-(JNIEnv *env, jobject obj, jlong ptr) {
+(JNIEnv *env, jclass clazz, jlong ptr) {
   int valid;
   exec(BM_bvector_enumerator_is_valid((BM_BVEHANDLE)ptr, &valid));
   return (jboolean)(valid != 0);
@@ -435,7 +456,7 @@ JNIEXPORT jboolean JNICALL Java_io_bitmagic_core_BVIterator0_isValid0
 * Signature: (J)J
 */
 JNIEXPORT jlong JNICALL Java_io_bitmagic_core_BVIterator0_get0
-(JNIEnv *env, jobject obj, jlong ptr) {
+(JNIEnv *env, jclass clazz, jlong ptr) {
   unsigned int value;
   exec(BM_bvector_enumerator_get_value((BM_BVEHANDLE)ptr, &value));
   return (jlong)value;
@@ -447,7 +468,7 @@ JNIEXPORT jlong JNICALL Java_io_bitmagic_core_BVIterator0_get0
 * Signature: (J)Z
 */
 JNIEXPORT jboolean JNICALL Java_io_bitmagic_core_BVIterator0_next0
-(JNIEnv *env, jobject obj, jlong ptr) {
+(JNIEnv *env, jclass clazz, jlong ptr) {
   unsigned int value;
   int valid;
   exec(BM_bvector_enumerator_next((BM_BVEHANDLE)ptr, &valid, &value));

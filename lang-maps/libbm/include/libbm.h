@@ -34,6 +34,7 @@ For more information please visit:  http://bitmagic.io
 /* Error codes for Java/JNI incapsulation */
 #define BM_ERR_DETACHED (101)
 #define BM_ERR_JVM_NOT_SUPPORTED (102)
+#define BM_ERR_JVM_OUT_OF_MEMORY (103)
 
 /*
     error codes and messages
@@ -46,6 +47,7 @@ For more information please visit:  http://bitmagic.io
 
 #define BM_ERR_DETACHED_MSG    "BM-101: Current thread no attached to JVM"
 #define BM_ERR_JVM_NOT_SUPPORTED_MSG    "BM-102: JVM version not supported"
+#define BM_ERR_JVM_OUT_OF_MEMORY_MSG    "BM-103: Out of memory error"
 
 #define BM_UNK_MSG          "BM-XX: Unknown error"
 
