@@ -153,6 +153,8 @@ public:
     
     /**
     \brief Source vector priority + index based rank
+    
+    @sa compress
     */
     void compress_by_source(BV& bv_target,
                                 const BV& bv_idx,
