@@ -356,12 +356,19 @@ public:
     */
     void calc_stat(struct sparse_vector<Val, BV>::statistics* st) const;
     
-
     /*!
         \brief get access to bit-plain, function checks and creates a plain
+        \return bit-vector for the bit plain
     */
     bvector_type_ptr get_plain(unsigned i);
-    
+
+    /*!
+        \brief get read-only access to bit-plain
+        \return bit-vector for the bit plain or NULL
+    */
+    const bvector_type_ptr get_plain(unsigned i) const { return plains_[i]; }
+
+
     /*!
         \brief get total number of bit-plains in the vector
     */
