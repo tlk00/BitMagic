@@ -440,6 +440,12 @@ public:
     */
     static
     size_type translate_address(size_type i) { return i; }
+    
+    /**
+        \brief throw range error
+        \internal
+    */
+    void throw_range_error(const char* err_msg) const;
 
 private:
 
@@ -461,7 +467,6 @@ protected:
     */
     void set_value(size_type idx, value_type v);
     const bm::word_t* get_block(unsigned p, unsigned i, unsigned j) const;
-    void throw_range_error(const char* err_msg) const;
 
     bvector_type* construct_bvector(const bvector_type* bv) const;
     void destruct_bvector(bvector_type* bv) const;
@@ -478,6 +483,8 @@ private:
     unsigned                 effective_plains_;
 };
 
+
+//---------------------------------------------------------------------
 //---------------------------------------------------------------------
 
 
