@@ -46,6 +46,7 @@ For more information please visit:  http://bitmagic.io
 #include <bmsparsevec_serial.h>
 #include <bmalgo_similarity.h>
 #include <bmsparsevec_util.h>
+#include <bmsparsevec_compr.h>
 #include <bmtimer.h>
 
 using namespace bm;
@@ -343,6 +344,7 @@ typedef bm::bvector_mini<bm::block_allocator> bvect_mini;
 #endif
 
 typedef bm::sparse_vector<unsigned, bvect > sparse_vector_u32;
+typedef bm::compressed_sparse_vector<unsigned, sparse_vector_u32> compressed_sparse_vector_u32;
 
 //const unsigned BITVECT_SIZE = 100000000 * 8;
 
@@ -11994,6 +11996,23 @@ void TestRankCompress()
     cout << " ------------------------------ Test Rank Compressor OK " << endl;
 }
 
+static
+void TestCompressSparseVector()
+{
+    cout << " ------------------------------ Test Compressed Sparse Vector " << endl;
+    
+    {
+        compressed_sparse_vector_u32 csv1;
+        assert(csv1.equal(csv1));
+        compressed_sparse_vector_u32 csv2;
+        assert(csv1.equal(csv2));
+        compressed_sparse_vector_u32 csv3(csv1);
+        assert(csv3.equal(csv2));
+    }
+    cout << " ------------------------------ Test Compressed Sparse Vector OK" << endl;
+}
+
+
 
 int main(void)
 {
@@ -12163,6 +12182,8 @@ int main(void)
      TestSparseVector();
     
      TestSparseVectorTransform();
+    
+     TestCompressSparseVector();
 
      TestSparseVector_Stress(2);
  
