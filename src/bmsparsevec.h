@@ -38,6 +38,9 @@ namespace bm
  */
 
 
+template<class Val, class SV> class compressed_sparse_vector;
+
+
 /*!
    \brief sparse vector with runtime compression using bit transposition method
  
@@ -453,7 +456,7 @@ public:
         \internal
     */
     void throw_range_error(const char* err_msg) const;
-
+    
 private:
 
     /*! \brief free all internal vectors
@@ -470,17 +473,26 @@ private:
     static unsigned null_plain() { return value_bits(); }
 
 protected:
-    /*! \brief set value without checking boundaries
-    */
+    /*! \brief set value without checking boundaries */
     void set_value(size_type idx, value_type v);
+    
+    /*! \brief set value without checking boundaries or support of NULL */
+    void set_value_no_null(size_type idx, value_type v);
+
+    /*! \brief push value back into vector without NULL semantics */
+    void push_back_no_null(value_type v);
+
+
     const bm::word_t* get_block(unsigned p, unsigned i, unsigned j) const;
 
     bvector_type* construct_bvector(const bvector_type* bv) const;
     void destruct_bvector(bvector_type* bv) const;
     bvector_type* get_null_bvect() { return plains_[this->null_plain()]; }
 
+
+    template<class V, class SVect> friend class compressed_sparse_vector;
+
 private:
-    
     size_type                bv_size_;
     allocator_type           alloc_;
     allocation_policy_type   ap_;
@@ -1188,7 +1200,27 @@ void sparse_vector<Val, BV>::push_back(value_type v)
 //---------------------------------------------------------------------
 
 template<class Val, class BV>
+void sparse_vector<Val, BV>::push_back_no_null(value_type v)
+{
+    set_value_no_null(size_, v);
+    ++size_;
+}
+
+//---------------------------------------------------------------------
+
+template<class Val, class BV>
 void sparse_vector<Val, BV>::set_value(size_type idx, value_type v)
+{
+    set_value_no_null(idx, v);
+    bvector_type* bv_null = get_null_bvect();
+    if (bv_null)
+        bv_null->set_bit_no_check(idx);
+}
+
+//---------------------------------------------------------------------
+
+template<class Val, class BV>
+void sparse_vector<Val, BV>::set_value_no_null(size_type idx, value_type v)
 {
     // calculate logical block coordinates and masks
     //
@@ -1219,12 +1251,8 @@ void sparse_vector<Val, BV>::set_value(size_type idx, value_type v)
         bvector_type* bv = get_plain(p);
         bv->set_bit_no_check(idx);
     } // for j
-    
-    bvector_type* bv_null = get_null_bvect();
-    if (bv_null)
-        bv_null->set_bit_no_check(idx);
-
 }
+
 
 //---------------------------------------------------------------------
 

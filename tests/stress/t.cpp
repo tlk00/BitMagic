@@ -12009,6 +12009,33 @@ void TestCompressSparseVector()
         compressed_sparse_vector_u32 csv3(csv1);
         assert(csv3.equal(csv2));
     }
+    
+    {
+    unsigned v;
+    
+        compressed_sparse_vector_u32 csv1;
+        
+        csv1.push_back(10, 100);
+        csv1.push_back(20, 200);
+        csv1.push_back(21, 201);
+
+        v = csv1.at(10);
+        assert(v == 100);
+        v = csv1.at(20);
+        assert(v == 200);
+        v = csv1.at(21);
+        assert(v == 201);
+
+        csv1.sync();
+        
+        v = csv1.at(10);
+        assert(v == 100);
+        v = csv1.at(20);
+        assert(v == 200);
+        v = csv1.at(21);
+        assert(v == 201);
+    }
+    
     cout << " ------------------------------ Test Compressed Sparse Vector OK" << endl;
 }
 
@@ -12097,6 +12124,7 @@ int main(void)
     exit(1);
 */
 
+
      TestBlockAND();
 
      ExportTest();
@@ -12182,7 +12210,7 @@ int main(void)
      TestSparseVector();
     
      TestSparseVectorTransform();
-    
+
      TestCompressSparseVector();
 
      TestSparseVector_Stress(2);

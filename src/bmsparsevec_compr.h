@@ -25,6 +25,7 @@ For more information please visit:  http://bitmagic.io
 #endif
 
 #include "bmsparsevec.h"
+#include "bmdef.h"
 
 namespace bm
 {
@@ -47,6 +48,8 @@ public:
     typedef bvector_type*                            bvector_type_ptr;
     typedef typename bvector_type::allocator_type    allocator_type;
     typedef typename bvector_type::allocation_policy allocation_policy_type;
+    typedef typename bvector_type::blocks_count      bvector_blocks_psum_type;
+    
 public:
     /*! Statistical information about  memory allocation details. */
     struct statistics : public bv_statistics
@@ -67,6 +70,13 @@ public:
         }
         return *this;
     }
+    
+    /*!
+        \brief access specified element with bounds checking
+        \param idx - element index
+        \return value of the element
+    */
+    value_type at(bm::id_t idx) const;
 
     /*!
         \brief check if another vector has the same content
@@ -78,7 +88,7 @@ public:
         \brief set specified element with bounds checking and automatic resize
      
         Method cannot insert elements, so every new idx has to be greater or equal
-        than what it used before.
+        than what it used before. Elements must be loaded in a sorted order.
      
         \param idx - element index
         \param v   - element value
@@ -92,11 +102,38 @@ public:
     */
     void load_from(const sparse_vector_type& sv_src);
 
+    /*!
+        \brief Re-calculate prefix sum table used for rank search
+        \param force - force recalculation even if it is already recalculated
+    */
+    void sync(bool force = false);
+    
+    /*!
+        \brief returns true if prefix sum table is in sync with the vector
+    */
+    bool in_sync() const { return in_sync_; }
+    
+    /*!
+        \brief Unsync the prefix sum table
+    */
+    void unsync() { in_sync_ = false; }
 
 protected:
+    /*!
+        \brief Resolve logical address to access via rank compressed address
+     
+        \param idx    - input id to resolve
+        \param idx_to - output id
+     
+        \return true if id is known and resolved successfully
+    */
+    bool resolve(bm::id_t idx, bm::id_t* idx_to) const;
+
 private:
-    sparse_vector_type                    sv_;
-    bm::id_t                              max_id_;
+    sparse_vector_type            sv_;       ///< transpose-sparse vector for "dense" packing
+    bm::id_t                      max_id_;   ///< control variable for sorted load
+    bool                          in_sync_;  ///< flag if prefix sum is in-sync with vector
+    bvector_blocks_psum_type      bv_blocks_; ///< prefix sum for rank translation
 };
 
 //---------------------------------------------------------------------
@@ -107,9 +144,8 @@ compressed_sparse_vector<Val, SV>::compressed_sparse_vector(allocation_policy_ty
                                                             size_type bv_max_size,
                                                             const allocator_type&   alloc)
     : sv_(bm::use_null, ap, bv_max_size, alloc),
-      max_id_(0)
-{
-}
+      max_id_(0), in_sync_(false)
+{}
 
 //---------------------------------------------------------------------
 
@@ -117,8 +153,13 @@ template<class Val, class SV>
 compressed_sparse_vector<Val, SV>::compressed_sparse_vector(
                           const compressed_sparse_vector<Val, SV>& csv)
 : sv_(csv.sv_),
-  max_id_(csv.max_id_)
+  max_id_(csv.max_id_),
+  in_sync_(csv.in_sync_)
 {
+    if (in_sync_)
+    {
+        bv_blocks_.copy_from(csv.bv_blocks_);
+    }
 }
 
 //---------------------------------------------------------------------
@@ -139,9 +180,10 @@ void compressed_sparse_vector<Val, SV>::push_back(size_type idx, value_type v)
     BM_ASSERT(bv_null);
     
     bv_null->set(idx);
-    sv_.push_back(v);
+    sv_.push_back_no_null(v);
     
     max_id_ = idx;
+    in_sync_ = false;
 }
 
 //---------------------------------------------------------------------
@@ -190,10 +232,65 @@ void compressed_sparse_vector<Val, SV>::load_from(const sparse_vector_type& sv_s
     } // for
     
     max_id_ = bv_null->count()-1;
+    in_sync_ = false;
 }
 
 //---------------------------------------------------------------------
 
+template<class Val, class SV>
+void compressed_sparse_vector<Val, SV>::sync(bool force)
+{
+    if (in_sync_ && force == false)
+        return;  // nothing to do
+    const bvector_type* bv_null = sv_.get_null_bvector();
+    if (bv_null)
+        bv_null->running_count_blocks(&bv_blocks_); // compute popcount prefix list
+    in_sync_ = true;
+}
+
+//---------------------------------------------------------------------
+
+template<class Val, class SV>
+bool compressed_sparse_vector<Val, SV>::resolve(bm::id_t idx, bm::id_t* idx_to) const
+{
+    BM_ASSERT(idx_to);
+    
+    const bvector_type* bv_null = sv_.get_null_bvector();
+    if (in_sync_)
+    {
+        *idx_to = bv_null->count_to_test(idx, bv_blocks_);
+    }
+    else  // slow access
+    {
+        bool found = bv_null->test(idx);
+        if (!found)
+        {
+            *idx_to = 0;
+        }
+        else
+        {
+            *idx_to = bv_null->count_range(0, idx);
+        }
+    }
+    return bool(*idx_to);
+}
+
+//---------------------------------------------------------------------
+
+template<class Val, class SV>
+typename compressed_sparse_vector<Val, SV>::value_type
+compressed_sparse_vector<Val, SV>::at(bm::id_t idx) const
+{
+    bm::id_t sv_idx;
+    bool found = resolve(idx, &sv_idx);
+    if (!found)
+    {
+        sv_.throw_range_error("compressed collection item not found");
+    }
+    return sv_.at(--sv_idx);
+}
+
+//---------------------------------------------------------------------
 
 } // namespace bm
 
