@@ -143,7 +143,7 @@ public:
     
 private:
     bvector_type              addr_bv_;   ///< bit-vector for id translation
-    bvector_blocks_psum_type  bv_blocks_; ///< prefix sum for fast translation
+    bvector_blocks_psum_type  bv_blocks_; ///< prefix sum for rank translation
     bool                      in_sync_;   ///< flag if prefix sum is in-sync with vector
 };
 
