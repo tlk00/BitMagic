@@ -670,6 +670,92 @@ extern "C" {
     }
 } // extern C
 
+
+static
+void FindTest()
+{
+    bvect                 bv1, bv2, bv3, bv4;
+    bvect                 bv_empty;
+    test_bitset*  bset = new test_bitset();
+    
+    bv_empty[1] = true;
+    bv_empty[1] = false;
+    bv_empty[100000000] = true;
+    bv_empty[100000000] = false;
+    
+    SimpleFillSets(*bset, bv1, 0, BSIZE/2, 3);
+    SimpleFillSets(*bset, bv1, 0, BSIZE/2, 4);
+    SimpleFillSets(*bset, bv1, 0, BSIZE/2, 5);
+    
+    FillSetsIntervals(*bset, bv2, 0, BSIZE/2, 8);
+    FillSetsIntervals(*bset, bv3, 0, BSIZE/2, 12);
+    FillSetsIntervals(*bset, bv4, 0, BSIZE/2, 120);
+    
+    unsigned i;
+    unsigned pos_sum = 0;
+    {
+        TimeTaker tt("bvector<>::find_reverse()", REPEATS*100);
+        for (i = 0; i < REPEATS*100; ++i)
+        {
+            bm::id_t pos;
+            bool found;
+            found = bv1.find_reverse(pos);
+            if (found)
+                pos_sum += pos;
+            found = bv2.find_reverse(pos);
+            if (found)
+                pos_sum += pos;
+            found = bv3.find_reverse(pos);
+            if (found)
+                pos_sum += pos;
+            found = bv4.find_reverse(pos);
+            if (found)
+                pos_sum += pos;
+            found = bv_empty.find_reverse(pos);
+            if (!found)
+                pos_sum += pos;
+            else
+            {
+                cerr << "incorrect find result!" << endl;
+                exit(1);
+            }
+        }
+    }
+    char cbuf[256];
+    sprintf(cbuf, "%i ", pos_sum); // attempt to avoid agressive optmizations
+
+    {
+        TimeTaker tt("bvector<>::find()", REPEATS*100);
+        for (i = 0; i < REPEATS*100; ++i)
+        {
+            bm::id_t pos;
+            bool found;
+            found = bv1.find(0, pos);
+            if (found)
+                pos_sum += pos;
+            found = bv2.find(0, pos);
+            if (found)
+                pos_sum += pos;
+            found = bv3.find(0, pos);
+            if (found)
+                pos_sum += pos;
+            found = bv4.find(0, pos);
+            if (found)
+                pos_sum += pos;
+            found = bv_empty.find(0, pos);
+            if (!found)
+                pos_sum += pos;
+            else
+            {
+                cerr << "incorrect find result!" << endl;
+                exit(1);
+            }
+        }
+    }
+
+    delete bset;
+}
+
 static
 void EnumeratorTest()
 {
@@ -1857,7 +1943,6 @@ int main(void)
 
     TimeTaker tt("TOTAL", 1);
 
-
     MemCpyTest();
 
     BitCountTest();
@@ -1870,6 +1955,8 @@ int main(void)
 
     BitCompareTest();
 
+    FindTest();
+
     BitBlockTransposeTest();
 
     BitBlockRotateTest();
@@ -1879,6 +1966,7 @@ int main(void)
     EnumeratorTestGAP();
 
     EnumeratorGoToTest();
+    
 
     AndTest();
     XorTest();

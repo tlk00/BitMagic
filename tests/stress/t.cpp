@@ -1380,7 +1380,19 @@ void CompareEnumerators(const bvect::enumerator& en1, const bvect::enumerator& e
     }
 }
 
-
+// find last set bit by scan (not optimal)
+//
+bool FindLastBit(const bvect& bv, bm::id_t& last_pos)
+{
+    bvect::enumerator en = bv.first();
+    if (!en.valid())
+        return false;
+    for (; en.valid(); ++en)
+    {
+        last_pos = *en;
+    }
+    return true;
+}
 
 
 // vectors comparison check
@@ -1419,6 +1431,20 @@ void CheckVectors(bvect_mini &bvect_min,
         }
     }
 
+    // find_last check
+    {
+        bm::id_t pos1 = 0;
+        bm::id_t pos2 = 0;
+        bool last_found1 = FindLastBit(bvect_full, pos1);
+        bool last_found2 = bvect_full.find_reverse(pos2);
+        
+        assert(last_found1 == last_found2);
+        if (last_found1)
+        {
+            assert(pos1 == pos2);
+        }
+    }
+    
     // get_next comparison
 
     cout << "Positive bits comparison..." << flush;
@@ -5949,6 +5975,9 @@ void GetNextTest()
            cout << "1. find() failed" << endl;
            exit(1);
        }
+       found = bv.find_reverse(pos);
+       assert(!found);
+       
        bv[0] = true;
        found = bv.find(0, pos);
        if (!found || pos != 0)
@@ -5956,12 +5985,21 @@ void GetNextTest()
            cout << "2. find() failed" << endl;
            exit(1);
        }
+       found = bv.find_reverse(pos);
+       assert(found && pos == 0);
+       
+       bv[0] = false;
+       found = bv.find_reverse(pos);
+       assert(!found);
+       bv[0] = true;
+
        found = bv.find(1, pos);
        if (found)
        {
            cout << "3. find() failed" << endl;
            exit(1);
        }
+       
        bv[100000] = true;
        bv[100001] = true;
        found = bv.find(1, pos);
@@ -5970,6 +6008,9 @@ void GetNextTest()
            cout << "4. find() failed " << pos << " " << found << endl;
            exit(1);
        }
+       found = bv.find_reverse(pos);
+       assert(found && pos == 100001);
+
        found = bv.find(100000, pos);
        if (!found || pos != 100000)
        {
@@ -5988,6 +6029,10 @@ void GetNextTest()
            cout << "7. find() failed "<< endl;
            exit(1);
        }
+       bv[100001] = false;
+       found = bv.find_reverse(pos);
+       assert(found && pos == 100000);
+
 
    }
 
@@ -5998,12 +6043,14 @@ void GetNextTest()
        bool found;
        bm::id_t pos;
        found = bv.find(0, pos);
-       
        if (found)
        {
            cout << "1. find() failed" << endl;
            exit(1);
        }
+       found = bv.find_reverse(pos);
+       assert(!found);
+
        bv[0] = true;
        found = bv.find(0, pos);
        if (!found || pos != 0)
@@ -6011,6 +6058,9 @@ void GetNextTest()
            cout << "2. find() failed" << endl;
            exit(1);
        }
+       found = bv.find_reverse(pos);
+       assert(found && pos == 0);
+
        found = bv.find(1, pos);
        if (found)
        {
@@ -6037,13 +6087,69 @@ void GetNextTest()
            cout << "6. find() failed " << pos << " " << found << endl;
            exit(1);
        }
+       found = bv.find_reverse(pos);
+       assert(found && pos == 100001);
+
        found = bv.find(100002, pos);
        if (found)
        {
            cout << "7. find() failed "<< endl;
            exit(1);
        }
+       bv[100001] = false;
+       found = bv.find_reverse(pos);
+       assert(found && pos == 100000);
 
+
+   }
+
+   {
+       bvect  bv;
+       bool found;
+       
+       bv.set_range(100000, 20000000);
+       bm::id_t pos;
+       found = bv.find_reverse(pos);
+       assert(found && pos == 20000000);
+
+       bv.optimize();
+       found = bv.find_reverse(pos);
+       assert(found && pos == 20000000);
+       
+       bv[bm::id_max-1] = true;
+       found = bv.find_reverse(pos);
+       assert(found && pos == bm::id_max-1);
+       
+       bv[bm::id_max-1] = false;
+       found = bv.find_reverse(pos);
+       assert(found && pos == 20000000);
+
+       bv.set_range(100000, 20000000, false);
+       found = bv.find_reverse(pos);
+       assert(!found);
+
+       found = bv.find(0, pos);
+       assert(!found);
+   }
+   
+   {
+       bvect  bv;
+       bool found;
+       bm::id_t pos;
+       bv.invert();
+       
+       found = bv.find_reverse(pos);
+       assert(found && pos == bm::id_max-1);
+
+       bv.optimize();
+       found = bv.find_reverse(pos);
+       assert(found && pos == bm::id_max-1);
+       
+       bv.invert();
+       found = bv.find_reverse(pos);
+       assert(!found);
+       found = bv.find(0, pos);
+       assert(!found);
    }
 
 
@@ -6159,6 +6265,7 @@ void GetNextTest()
       exit(1);
    }
 
+   unsigned last_found;
    while (nbit1)
    {
       cout << nbit1 << endl;
@@ -6169,8 +6276,13 @@ void GetNextTest()
          cout << "get_next failed " <<  nbit1 << " " << nbit2 << endl;
          exit(1);
       }
-
+     if (nbit1)
+        last_found = nbit1;
    } // while
+   
+   unsigned pos;
+   bool found = bvect_full1.find_reverse(pos);
+   assert(found && pos == last_found);
 
    }
 
@@ -8662,7 +8774,7 @@ void Log2Test()
         unsigned l1 = bm::ilog2<unsigned short>((unsigned short)i);
         unsigned l2 = iLog2(i);
         unsigned l3 = ilog2_LUT<unsigned short>((unsigned short)i);
-        unsigned l4 = l3;//bm::bsr_asm32(i);
+        unsigned l4 = bm::bit_scan_reverse(i);
         if (l1 != l2 || l2 != l3 || l2 != l4)
         {
             cout << "Log2 error for " << i << endl;
@@ -8671,18 +8783,35 @@ void Log2Test()
         }
     }
     cout << "Stage 2" << endl;
-    for (unsigned  i = 1; i <= 100*65535; ++i)
+    for (unsigned  i = 1; i <= 10000*65535; ++i)
     {
         unsigned l1 = bm::ilog2<unsigned>(i);
         unsigned l2 = iLog2(i);
         unsigned l3 = ilog2_LUT<unsigned>(i);
-        unsigned l4 = l3; //bm::bsr_asm32(i);
+        unsigned l4 = bm::bit_scan_reverse(i);
         if (l1 != l2 || l2 != l3 || l2 != l4)
         {
             cout << "Log2 error for " << i << endl;
             cout << l2 << " " << l3 << endl;;
             exit(1);
         }
+    }
+    cout << "Stage 3" << endl;
+    unsigned v = 1;
+    for (unsigned  i = 1; i <= 31; ++i)
+    {
+        v |= 1;
+        unsigned l1 = bm::ilog2<unsigned>(v);
+        unsigned l2 = iLog2(v);
+        unsigned l3 = ilog2_LUT<unsigned>(v);
+        unsigned l4 = bm::bit_scan_reverse(v);
+        if (l1 != l2 || l2 != l3 || l2 != l4)
+        {
+            cout << "Log2 error for " << i << endl;
+            cout << l2 << " " << l3 << endl;;
+            exit(1);
+        }
+        v <<= 1;
     }
     cout << "---------------------------- Log2 Test Ok." << endl;
 }
