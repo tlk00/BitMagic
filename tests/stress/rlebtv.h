@@ -81,6 +81,8 @@ public:
     gap_word_t* get_buf() { return m_buf; }
 
     int compare(const gap_vector& vect);
+    
+    bool get_last(unsigned* last) const;
 
 private:
     gap_word_t   m_buf[bm::gap_max_buff_len+3];    
@@ -194,6 +196,15 @@ inline int gap_vector::is_bit_true(unsigned pos) const
     assert(r1 == r2);
     return r2;
 }
+
+inline bool gap_vector::get_last(unsigned* last) const
+{
+    gap_word_t glast;
+    bool found = bm::gap_find_last(m_buf, &glast);
+    *last = glast;
+    return found;
+}
+
 
 inline int gap_vector::test(unsigned pos) const
 {
