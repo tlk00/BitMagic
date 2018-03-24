@@ -191,7 +191,7 @@ BMFORCEINLINE
 unsigned int bit_scan_reverse(unsigned int value)
 {
     BM_ASSERT(value);
-#ifdef BM_x86
+#if defined(BM_x86) 
     return bm::bsr_asm32(value);
 #else
     return bm::ilog2_LUT<unsigned int>(value);

@@ -2929,12 +2929,12 @@ bool bvector<Alloc>::find_reverse(bm::id_t& pos) const
     bool found;
     
     unsigned top_blocks = blockman_.effective_top_block_size();
-    for (unsigned i = top_blocks-1; true; --i)
+    for (unsigned short i = top_blocks-1; true; --i)
     {
         const bm::word_t* const* blk_blk = blockman_.get_topblock(i);
         if (blk_blk)
         {
-            for (unsigned j = bm::set_array_size-1; true; --j)
+            for (unsigned short j = bm::set_array_size-1; true; --j)
             {
                 const bm::word_t* blk = blk_blk[j];
                 if (blk)
@@ -2955,8 +2955,7 @@ bool bvector<Alloc>::find_reverse(bm::id_t& pos) const
                     }
                     if (found)
                     {
-                        unsigned base_idx =
-                            base_idx = i * bm::set_array_size * bm::gap_max_bits;
+                        unsigned base_idx = i * bm::set_array_size * bm::gap_max_bits;
                         base_idx += j * bm::gap_max_bits;
                         pos += base_idx;
                         return found;

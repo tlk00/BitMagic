@@ -1382,6 +1382,7 @@ void CompareEnumerators(const bvect::enumerator& en1, const bvect::enumerator& e
 
 // find last set bit by scan (not optimal)
 //
+static
 bool FindLastBit(const bvect& bv, bm::id_t& last_pos)
 {
     bvect::enumerator en = bv.first();
@@ -6265,7 +6266,7 @@ void GetNextTest()
       exit(1);
    }
 
-   unsigned last_found;
+   unsigned last_found = 0;
    while (nbit1)
    {
       cout << nbit1 << endl;
@@ -6280,7 +6281,7 @@ void GetNextTest()
         last_found = nbit1;
    } // while
    
-   unsigned pos;
+   unsigned pos = 0;
    bool found = bvect_full1.find_reverse(pos);
    assert(found && pos == last_found);
 
@@ -12428,9 +12429,7 @@ int main(void)
     //LoadVectors("c:/dev/bv_perf", 3, 27);
     exit(1);
 */
-
-     TestBlockLast();
-    
+  
      TestBlockAND();
 
      ExportTest();
@@ -12445,6 +12444,8 @@ int main(void)
      BitCountChangeTest();
    
      Log2Test();
+
+     TestBlockLast();
 
      BitForEachTest();
 
