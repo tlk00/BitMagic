@@ -1129,16 +1129,51 @@ void print_gap(const gap_vector& gap_vect, unsigned /*size*/)
     printf("\n");
 }
 
+
 static
 void CheckGAPMin(const gap_vector& gapv, const bvect_mini& bvect_min, unsigned len)
 {
-    for (unsigned i = 0; i < len; ++i)
+    int last_bit = -1;
+    for (int i = 0; i < (int)len; ++i)
     {
         int bit1 = (gapv.is_bit_true(i) == 1);
         int bit2 = (bvect_min.is_bit_true(i) != 0);
         if (bit1 != bit2)
         {
             cout << "Bit comparison failed. " << "Bit N=" << i << endl;
+            assert(0);
+            exit(1);
+        }
+        if (bvect_min.is_bit_true(i))
+        {
+            last_bit = i;
+        }
+    }
+    unsigned glast;
+    bool found = gapv.get_last(&glast);
+    if (!found && last_bit != -1)
+    {
+        cout << "Gap last search failed. " << "Bit=" << last_bit << endl;
+        assert(0);
+        exit(1);
+    }
+
+    if (found && last_bit == -1)
+    {
+        cout << "Gap last search ok but should failed. " << "Bit=" <<
+             glast << endl;
+        assert(0);
+        exit(1);
+    }
+
+    if (last_bit != (int)glast)
+    {
+        if (!found && last_bit == -1)
+        {}
+        else
+        {
+            cout << "Gap last search discrepancy:" << " found Bit=" <<
+                 glast << " last=" << last_bit << endl;
             assert(0);
             exit(1);
         }
@@ -11733,6 +11768,106 @@ void TestCompressedCollection()
 }
 
 static
+void TestBlockLast()
+{
+    cout << " ------------------------------ Test bit-block LAST find" << endl;
+    
+    {
+        bool found;
+        unsigned last;
+        
+        BM_DECLARE_TEMP_BLOCK(tb);
+        for (unsigned i = 0; i < bm::set_block_size; ++i)
+        {
+            tb.b_.w32[i] = 0u;
+        }
+        found = bm::bit_find_last(tb, &last);
+        assert(!found);
+        
+        tb.b_.w32[0] = 1u;
+        found = bm::bit_find_last(tb, &last);
+        assert(found);
+        assert(last == 0);
+        
+        for (unsigned j = 0; j < 31; ++j)
+        {
+            tb.b_.w32[0] = 1u << j;
+            found = bm::bit_find_last(tb, &last);
+            assert(found);
+            assert(last == j);
+        }
+        tb.b_.w32[0] = 0;
+        for (unsigned j = 0; j < 31; ++j)
+        {
+            tb.b_.w32[0] |= 1u << j;
+            found = bm::bit_find_last(tb, &last);
+            //cout << "last = " << last << " j = " << j << endl;
+            assert(found);
+            assert(last == j);
+        }
+        
+        tb.b_.w32[1] = 1u;
+        found = bm::bit_find_last(tb, &last);
+        cout << "last = " << last << endl;
+        assert(found);
+        assert(last == 32);
+
+        tb.b_.w32[1] = 1u << 1;
+        found = bm::bit_find_last(tb, &last);
+        cout << "last = " << last << endl;
+        assert(found);
+        assert(last == 33);
+
+
+        tb.b_.w32[bm::set_block_size-1] = 1u << 31;
+        found = bm::bit_find_last(tb, &last);
+        cout << "last = " << last << endl;
+        assert(found);
+        assert(last == 65535);
+
+        tb.b_.w32[bm::set_block_size-1] = 1u << 30;
+        found = bm::bit_find_last(tb, &last);
+        //cout << "last = " << last << " j = " << j << endl;
+        assert(found);
+        assert(last == 65534);
+    }
+    cout << "Unit 1 ok." << endl;
+    
+    {
+        bool found;
+        unsigned last;
+        
+        BM_DECLARE_TEMP_BLOCK(tb);
+        for (unsigned i = 0; i < bm::set_block_size; ++i)
+        {
+            tb.b_.w32[i] = 0u;
+        }
+        for (unsigned i = 0; i < bm::set_block_size; ++i)
+        {
+            tb.b_.w32[i] = 1u;
+            found = bm::bit_find_last(tb, &last);
+            assert(found);
+            assert(last == (i * 32));
+        }
+        for (unsigned i = 0; i < bm::set_block_size; ++i)
+        {
+            tb.b_.w32[i] = 0u;
+        }
+        for (unsigned i = 0; i < bm::set_block_size; ++i)
+        {
+            tb.b_.w32[i] = 2;
+            found = bm::bit_find_last(tb, &last);
+            assert(found);
+            assert(last == (i * 32)+1);
+        }
+    }
+    cout << "Unit 2 ok." << endl;
+
+    cout << " ------------------------------ Test bit-block LAST find OK" << endl;
+}
+
+
+static
 void TestBlockAND()
 {
     cout << " ------------------------------ Test bit-block AND" << endl;
@@ -12011,6 +12146,7 @@ void TestCompressSparseVector()
     }
     
     {
+    cout << "push_back() test" << endl;
     unsigned v;
     
         compressed_sparse_vector_u32 csv1;
@@ -12034,6 +12170,46 @@ void TestCompressSparseVector()
         assert(v == 200);
         v = csv1.at(21);
         assert(v == 201);
+        
+        csv1.optimize();
+        v = csv1.at(10);
+        assert(v == 100);
+        v = csv1.at(20);
+        assert(v == 200);
+        v = csv1.at(21);
+        assert(v == 201);
+
+    }
+    
+    {
+    cout << "load() test" << endl;
+    unsigned v;
+        sparse_vector_u32 sv1(bm::use_null);
+        compressed_sparse_vector_u32 csv1;
+        compressed_sparse_vector_u32 csv2;
+
+        sv1.set(10, 100);
+        sv1.set(20, 200);
+        sv1.set(21, 201);
+        
+        csv1.load_from(sv1);
+        csv1.sync();
+        
+        csv2.push_back(10, 100);
+        csv2.push_back(20, 200);
+        csv2.push_back(21, 201);
+        csv2.sync();
+
+
+        v = csv1.at(10);
+        assert(v == 100);
+        v = csv1.at(20);
+        assert(v == 200);
+        v = csv1.at(21);
+        assert(v == 201);
+        
+        bool same = csv1.equal(csv2);
+        assert(same);
     }
     
     cout << " ------------------------------ Test Compressed Sparse Vector OK" << endl;
@@ -12124,7 +12300,8 @@ int main(void)
     exit(1);
 */
 
-
+     TestBlockLast();
+    
      TestBlockAND();
 
      ExportTest();
@@ -12211,7 +12388,7 @@ int main(void)
     
      TestSparseVectorTransform();
 
-     TestCompressSparseVector();
+     //TestCompressSparseVector();
 
      TestSparseVector_Stress(2);
  
