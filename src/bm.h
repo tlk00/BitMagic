@@ -1586,7 +1586,7 @@ public:
        \param from - position to start search from
        \param pos - index of the found 1 bit
        \return true if search returned result
-       \sa get_first, get_next, extract_next
+       \sa get_first, get_next, extract_next, find_reverse
     */
     bool find(bm::id_t from, bm::id_t& pos) const;
 
@@ -1597,7 +1597,7 @@ public:
        actually set or bit-vector is empty
      
        \return Index of the first 1 bit, may return 0
-       \sa get_next, find, extract_next
+       \sa get_next, find, extract_next, find_reverse
     */
     bm::id_t get_first() const { return check_or_next(0); }
 
@@ -1606,7 +1606,7 @@ public:
        \brief Finds the number of the next bit ON.
        \param prev - Index of the previously found bit. 
        \return Index of the next bit which is ON or 0 if not found.
-       \sa get_first, find, extract_next
+       \sa get_first, find, extract_next, find_reverse
     */
     bm::id_t get_next(bm::id_t prev) const
     {
@@ -1618,12 +1618,20 @@ public:
        \brief Finds the number of the next bit ON and sets it to 0.
        \param prev - Index of the previously found bit. 
        \return Index of the next bit which is ON or 0 if not found.
-       \sa get_first, get_next, 
+       \sa get_first, get_next, find_reverse
     */
     bm::id_t extract_next(bm::id_t prev)
     {
         return (++prev == bm::id_max) ? 0 : check_or_next_extract(prev);
     }
+
+    /*!
+       \brief Finds last index of 1 bit
+       \param pos - index of the last found 1 bit
+       \return true if search returned result
+       \sa get_first, get_next, extract_next, find
+    */
+    bool find_reverse(bm::id_t& pos) const;
 
 
     /*!
@@ -2604,7 +2612,7 @@ void bvector<Alloc>::calc_stat(struct bvector<Alloc>::statistics* st) const
             continue;
         }
 
-        for (unsigned j = 0;j < bm::set_array_size; ++j)
+        for (unsigned j = 0; j < bm::set_array_size; ++j)
         {
             const bm::word_t* blk = blk_blk[j];
             if (IS_VALID_ADDR(blk))
@@ -2911,6 +2919,59 @@ bool bvector<Alloc>::find(bm::id_t from, bm::id_t& pos) const
     }
     pos = check_or_next(from);
     return (pos != 0);
+}
+
+//---------------------------------------------------------------------
+
+template<class Alloc>
+bool bvector<Alloc>::find_reverse(bm::id_t& pos) const
+{
+    bool found;
+    
+    unsigned top_blocks = blockman_.effective_top_block_size();
+    for (unsigned i = top_blocks-1; true; --i)
+    {
+        const bm::word_t* const* blk_blk = blockman_.get_topblock(i);
+        if (blk_blk)
+        {
+            for (unsigned j = bm::set_array_size-1; true; --j)
+            {
+                const bm::word_t* blk = blk_blk[j];
+                if (blk)
+                {
+                    if (blk == FULL_BLOCK_FAKE_ADDR)
+                        blk = FULL_BLOCK_REAL_ADDR;
+                    
+                    bool is_gap = BM_IS_GAP(blk);
+                    if (is_gap)
+                    {
+                        bm::gap_word_t glast;
+                        found = bm::gap_find_last(BMGAP_PTR(blk), &glast);
+                        pos = glast;
+                    }
+                    else
+                    {
+                        found = bm::bit_find_last(blk, &pos);
+                    }
+                    if (found)
+                    {
+                        unsigned base_idx =
+                            base_idx = i * bm::set_array_size * bm::gap_max_bits;
+                        base_idx += j * bm::gap_max_bits;
+                        pos += base_idx;
+                        return found;
+                    }
+                }
+                
+                if (j == 0)
+                    break;
+            } // for j
+        } // if blk_blk
+        
+        if (i == 0)
+            break;
+    } // for i
+    return false;
 }
 
 

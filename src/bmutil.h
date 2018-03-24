@@ -29,17 +29,6 @@ namespace bm
 {
 
 
-
-// From:
-// http://citeseerx.ist.psu.edu/viewdoc/summary?doi=10.1.1.37.8562
-//
-template<typename T>
-T bit_scan_fwd(T v)
-{
-    return 
-        DeBruijn_bit_position<true>::_multiply[((word_t)((v & -v) * 0x077CB531U)) >> 27];
-}
-
 /**
     Get minimum of 2 values
 */
@@ -187,6 +176,27 @@ BMFORCEINLINE unsigned int bsf_asm32(register unsigned int value)
 
 #endif // BM_x86
 
+
+// From:
+// http://citeseerx.ist.psu.edu/viewdoc/summary?doi=10.1.1.37.8562
+//
+template<typename T>
+T bit_scan_fwd(T v)
+{
+    return
+        DeBruijn_bit_position<true>::_multiply[((word_t)((v & -v) * 0x077CB531U)) >> 27];
+}
+
+BMFORCEINLINE
+unsigned int bit_scan_reverse(unsigned int value)
+{
+    BM_ASSERT(value);
+#ifdef BM_x86
+    return bm::bsr_asm32(value);
+#else
+    return bm::ilog2_LUT<unsigned int>(value);
+#endif
+}
 
 
 } // bm

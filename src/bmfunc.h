@@ -3140,10 +3140,19 @@ inline
 bool bit_find_last(const bm::word_t* block, unsigned* last)
 {
     BM_ASSERT(last);
-    unsigned mask = (1u << 31u);
+//    unsigned mask = (1u << 31u);
 
     for (unsigned i = bm::set_block_size-1; true; --i)
     {
+        unsigned w = block[i];
+        if (w)
+        {
+            unsigned idx = bm::bit_scan_reverse(w);
+            BM_ASSERT(idx);
+            *last = idx + (i * 8u * sizeof(bm::word_t));
+            return true;
+        }
+        /*
         unsigned total_bits = (i+1u) * 8u * sizeof(bm::word_t);
         for (unsigned w = block[i]; w; w <<= 1u)
         {
@@ -3154,6 +3163,7 @@ bool bit_find_last(const bm::word_t* block, unsigned* last)
                 return true;
             }
         } // for w
+        */
         if (i == 0)
             break;
     } // for i
