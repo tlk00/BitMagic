@@ -97,10 +97,19 @@ public:
     
     /*!
         \brief Load compressed vector from a sparse vector (with NULLs)
-     
         \param sv_src - source sparse vector
     */
     void load_from(const sparse_vector_type& sv_src);
+
+    /*!
+        \brief run memory optimization for all vector plains
+        \param temp_block - pre-allocated memory block to avoid unnecessary re-allocs
+        \param opt_mode - requested compression depth
+        \param stat - memory allocation statistics after optimization
+    */
+    void optimize(bm::word_t* temp_block = 0,
+                  typename bvector_type::optmode opt_mode = bvector_type::opt_compress,
+                  statistics* stat = 0);
 
     /*!
         \brief Re-calculate prefix sum table used for rank search
@@ -231,8 +240,16 @@ void compressed_sparse_vector<Val, SV>::load_from(const sparse_vector_type& sv_s
         }
     } // for
     
-    max_id_ = bv_null->count()-1;
+    unsigned count = bv_null->count(); // set correct sizes
+    sv_.resize(count+1);
+    
     in_sync_ = false;
+    
+    // find the last idx used
+    //
+
+    //max_id_ =
+    
 }
 
 //---------------------------------------------------------------------
@@ -288,6 +305,16 @@ compressed_sparse_vector<Val, SV>::at(bm::id_t idx) const
         sv_.throw_range_error("compressed collection item not found");
     }
     return sv_.at(--sv_idx);
+}
+
+//---------------------------------------------------------------------
+
+template<class Val, class SV>
+void compressed_sparse_vector<Val, SV>::optimize(bm::word_t*  temp_block,
+                    typename bvector_type::optmode opt_mode,
+                    statistics* stat)
+{
+    sv_.optimize(temp_block, opt_mode, (typename sparse_vector_type::statistics*)stat);
 }
 
 //---------------------------------------------------------------------
