@@ -3,7 +3,7 @@
 #---------------------------------------------------------------------------
 # General configuration options
 #---------------------------------------------------------------------------
-PROJECT_NAME           = BitMagic C++ Library
+PROJECT_NAME           = BitMagic-C++
 PROJECT_NUMBER         = 
 OUTPUT_DIRECTORY       = doc
 OUTPUT_LANGUAGE        = English
@@ -59,6 +59,7 @@ INPUT                  = ./src/bm.h ./src/bmfunc.h  \
                          ./src/bmdef.h ./src/bmtrans.h ./src/bmutil.h \
                          ./src/bmundef.h ./src/bmserial.h ./src/bmalloc.h ./src/bmrandom.h \                        
                          ./src/bmsparsevec.h ./src/bmsparsevec_algo.h ./src/bmsparsevec_serial.h \
+                         ./src/bmsparsevec_compr.h bmsparsevec_util.h \ 
 ./samples/bvsample01/sample1.cpp \
 ./samples/bvsample02/sample2.cpp \
 ./samples/bvsample03/sample3.cpp \
@@ -72,6 +73,7 @@ INPUT                  = ./src/bm.h ./src/bmfunc.h  \
 ./samples/bvsample11/sample11.cpp \
 ./samples/bvsample12/sample12.cpp \
 ./samples/bvsample14/sample14.cpp \
+./samples/bvsample15/sample15.cpp \
 ./samples/xsample01/xsample01.cpp \
 ./samples/svsample01/svsample01.cpp \
 ./samples/svsample02/svsample02.cpp \
