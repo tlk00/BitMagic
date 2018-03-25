@@ -199,9 +199,7 @@ inline int gap_vector::is_bit_true(unsigned pos) const
 
 inline bool gap_vector::get_last(unsigned* last) const
 {
-    gap_word_t glast;
-    bool found = bm::gap_find_last(m_buf, &glast);
-    *last = glast;
+    bool found = bm::gap_find_last(m_buf, last);
     return found;
 }
 

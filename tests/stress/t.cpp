@@ -5983,7 +5983,7 @@ void GetNextTest()
        found = bv.find(0, pos);
        if (!found || pos != 0)
        {
-           cout << "2. find() failed" << endl;
+           cout << "2. find() failed " << pos << endl;
            exit(1);
        }
        found = bv.find_reverse(pos);
@@ -6056,7 +6056,7 @@ void GetNextTest()
        found = bv.find(0, pos);
        if (!found || pos != 0)
        {
-           cout << "2. find() failed" << endl;
+           cout << "2. find() failed " << pos << endl;
            exit(1);
        }
        found = bv.find_reverse(pos);
@@ -12429,7 +12429,7 @@ int main(void)
     //LoadVectors("c:/dev/bv_perf", 3, 27);
     exit(1);
 */
-  
+
      TestBlockAND();
 
      ExportTest();
