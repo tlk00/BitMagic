@@ -1641,6 +1641,15 @@ public:
        \sa get_first, get_next, extract_next, find
     */
     bool find_reverse(bm::id_t& pos) const;
+    
+    /*!
+       \brief Finds dynamic range of bit-vector [first, last]
+       \param first - index of the first found 1 bit
+       \param last - index of the last found 1 bit
+       \return true if search returned result
+       \sa get_first, get_next, extract_next, find, find_reverse
+    */
+    bool find_range(bm::id_t& first, bm::id_t& last) const;
 
 
     /*!
@@ -3010,6 +3019,19 @@ bool bvector<Alloc>::find(bm::id_t& pos) const
     return false;
 }
 
+//---------------------------------------------------------------------
+
+template<class Alloc>
+bool bvector<Alloc>::find_range(bm::id_t& first, bm::id_t& last) const
+{
+    bool found = find(first);
+    if (found)
+    {
+        found = find_reverse(last);
+        BM_ASSERT(found);
+    }
+    return found;
+}
 
 //---------------------------------------------------------------------
 
