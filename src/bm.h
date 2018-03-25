@@ -1581,6 +1581,15 @@ public:
 
 
     /*!
+       \fn bool bvector::find(bm::id_t& pos) const
+       \brief Finds index of first 1 bit
+       \param pos - index of the found 1 bit
+       \return true if search returned result
+       \sa get_first, get_next, extract_next, find_reverse
+    */
+    bool find(bm::id_t& pos) const;
+
+    /*!
        \fn bool bvector::find(bm::id_t from, bm::id_t& pos) const
        \brief Finds index of 1 bit starting from position
        \param from - position to start search from
@@ -2907,15 +2916,9 @@ bool bvector<Alloc>::find(bm::id_t from, bm::id_t& pos) const
 {
     BM_ASSERT_THROW(from < bm::id_max, BM_ERR_RANGE);
 
-    bool found;
     if (from == 0)
     {
-        found = test(from);
-        if (found)
-        {
-            pos = from;
-            return found;
-        }
+        return find(pos);
     }
     pos = check_or_next(from);
     return (pos != 0);
@@ -2943,16 +2946,8 @@ bool bvector<Alloc>::find_reverse(bm::id_t& pos) const
                         blk = FULL_BLOCK_REAL_ADDR;
                     
                     bool is_gap = BM_IS_GAP(blk);
-                    if (is_gap)
-                    {
-                        bm::gap_word_t glast;
-                        found = bm::gap_find_last(BMGAP_PTR(blk), &glast);
-                        pos = glast;
-                    }
-                    else
-                    {
-                        found = bm::bit_find_last(blk, &pos);
-                    }
+                    found = is_gap ? bm::gap_find_last(BMGAP_PTR(blk), &pos)
+                                   : bm::bit_find_last(blk, &pos);
                     if (found)
                     {
                         unsigned base_idx = i * bm::set_array_size * bm::gap_max_bits;
@@ -2969,6 +2964,48 @@ bool bvector<Alloc>::find_reverse(bm::id_t& pos) const
         
         if (i == 0)
             break;
+    } // for i
+    return false;
+}
+
+//---------------------------------------------------------------------
+
+template<class Alloc>
+bool bvector<Alloc>::find(bm::id_t& pos) const
+{
+    bool found;
+    
+    unsigned top_blocks = blockman_.effective_top_block_size();
+    for (unsigned short i = 0; i < top_blocks; ++i)
+    {
+        const bm::word_t* const* blk_blk = blockman_.get_topblock(i);
+        if (blk_blk)
+        {
+            for (unsigned short j = 0; j < bm::set_array_size; ++j)
+            {
+                const bm::word_t* blk = blk_blk[j];
+                if (blk)
+                {
+                    if (blk == FULL_BLOCK_FAKE_ADDR)
+                    {
+                        found = true; pos = 0;
+                    }
+                    else
+                    {
+                        bool is_gap = BM_IS_GAP(blk);
+                        found = (is_gap) ? bm::gap_find_first(BMGAP_PTR(blk), &pos)
+                                         : bm::bit_find_first(blk, &pos);
+                    }
+                    if (found)
+                    {
+                        unsigned base_idx = i * bm::set_array_size * bm::gap_max_bits;
+                        base_idx += j * bm::gap_max_bits;
+                        pos += base_idx;
+                        return found;
+                    }
+                }
+            } // for j
+        } // if blk_blk
     } // for i
     return false;
 }

@@ -216,7 +216,7 @@ BMFORCEINLINE
 bm::id_t word_trailing_zeros(bm::id_t w)
 {
     // TODO: find a better variant for MSVC 
-#if defined(BMSSE42OPT) && defined(__GNUC__)
+#if (defined(BMSSE42OPT) || defined(BMAVX2OPT)) && defined(__GNUC__)
         return __builtin_ctzl(w);
 #else
     // implementation from
@@ -432,12 +432,13 @@ template<bool T> typename globals<T>::bo globals<T>::_bo;
 
     \param buf - GAP buffer pointer.
     \param last - index of the last 1 bit
-    \return true if 1 bit was found
+ 
+    \return 0 if 1 bit was NOT found
 
     @ingroup gapfunc
 */
 template<typename T>
-bool gap_find_last(const T* buf, T* last)
+unsigned gap_find_last(const T* buf, unsigned* last)
 {
     BM_ASSERT(last);
 
@@ -454,6 +455,33 @@ bool gap_find_last(const T* buf, T* last)
     }
     *last = buf[--end];
     return end;
+}
+
+/*!
+    \brief GAP block find the first set bit
+
+    \param buf - GAP buffer pointer.
+    \param last - index of the first 1 bit
+ 
+    \return 0 if 1 bit was NOT found
+
+    @ingroup gapfunc
+*/
+template<typename T>
+unsigned gap_find_first(const T* buf, unsigned* first)
+{
+    BM_ASSERT(first);
+
+    T is_set = (*buf) & 1u;
+    if (is_set)
+    {
+        *first = 0;
+        return is_set;
+    }
+    if (buf[1] == bm::gap_max_bits - 1)
+        return 0;
+    *first = buf[1] + 1;
+    return 1;
 }
 
 
@@ -1794,12 +1822,15 @@ unsigned bit_array_compute_gaps(const T* arr,
     \param buf - GAP buffer
     \param nbit - bit index to start checking from.
     \param prev - returns previously checked value
+ 
+    \return 0 if not found
 
     @ingroup gapfunc
 */
-template<typename T> int gap_find_in_block(const T* buf, 
-                                           unsigned nbit, 
-                                           bm::id_t* prev)
+template<typename T>
+unsigned gap_find_in_block(const T* buf,
+                           unsigned nbit,
+                           bm::id_t* prev)
 {
     BM_ASSERT(nbit < bm::gap_max_bits);
 
@@ -1808,10 +1839,10 @@ template<typename T> int gap_find_in_block(const T* buf,
 
     if (bitval) // positive block.
     {
-       return 1;
+       return 1u;
     }
 
-    BMREGISTER unsigned val = buf[gap_idx] + 1;
+    unsigned val = buf[gap_idx] + 1;
     *prev += val - nbit;
  
     return (val != bm::gap_max_bits);  // no bug here.
@@ -3126,36 +3157,6 @@ bm::id_t bit_block_calc_count(const bm::word_t* block,
 #endif	
     return count;
 }
-
-/*!
-    \brief BIT block find the last set bit (backward search)
-
-    \param block - bit block buffer pointer
-    \param last - index of the last 1 bit (out)
-    \return true if 1 bit was found
-
-    @ingroup bitfunc
-*/
-inline
-bool bit_find_last(const bm::word_t* block, unsigned* last)
-{
-    BM_ASSERT(last);
-
-    for (unsigned i = bm::set_block_size-1; true; --i)
-    {
-        unsigned w = block[i];
-        if (w)
-        {
-            unsigned idx = bm::bit_scan_reverse(w);
-            *last = idx + (i * 8u * sizeof(bm::word_t));
-            return true;
-        }
-        if (i == 0)
-            break;
-    } // for i
-    return false;
-}
-
 
 
 /*!
@@ -5010,6 +5011,65 @@ int bit_find_in_block(const bm::word_t* data,
     *prev = p;
     return found;
 }
+
+/*!
+    \brief BIT block find the last set bit (backward search)
+
+    \param block - bit block buffer pointer
+    \param last - index of the last 1 bit (out)
+    \return 0 is not found
+
+    @ingroup bitfunc
+*/
+inline
+unsigned bit_find_last(const bm::word_t* block, unsigned* last)
+{
+    BM_ASSERT(block);
+    BM_ASSERT(last);
+
+    for (unsigned i = bm::set_block_size-1; true; --i)
+    {
+        bm::word_t w = block[i];
+        if (w)
+        {
+            unsigned idx = bm::bit_scan_reverse(w);
+            *last = idx + (i * 8u * sizeof(bm::word_t));
+            return w;
+        }
+        if (i == 0)
+            break;
+    } // for i
+    return 0u;
+}
+
+/*!
+    \brief BIT block find the first set bit
+
+    \param block - bit block buffer pointer
+    \param first - index of the first 1 bit (out)
+    \return 0 if not foud
+
+    @ingroup bitfunc
+*/
+inline
+unsigned bit_find_first(const bm::word_t* block, unsigned* first)
+{
+    BM_ASSERT(block);
+    BM_ASSERT(first);
+
+    for (unsigned i = 0; i < bm::set_block_size; ++i)
+    {
+        bm::word_t w = block[i];
+        if (w)
+        {
+            unsigned idx = bm::word_trailing_zeros(w);
+            *first = idx + (i * 8u * sizeof(bm::word_t));
+            return w;
+        }
+    } // for i
+    return 0u;
+}
+
 
 /*!
    \brief Templated algorithm to unpacks octet based word into list of ON bit indexes
