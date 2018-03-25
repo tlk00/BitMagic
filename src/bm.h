@@ -461,6 +461,7 @@ public:
         bm::id_t              max_bit_;
     };
 
+
     /*! @brief Constant iterator designed to enumerate "ON" bits
         @ingroup bvector
     */
@@ -958,6 +959,7 @@ public:
         bm::id_t   bit_count_;
     };
 
+
     friend class iterator_base;
     friend class enumerator;
 
@@ -997,6 +999,8 @@ public:
     };
 
 public:
+    /*! @name Construction, initialization, assignment */
+    //@{
 
 #ifdef BMCOUNTOPT
     bvector(strategy          strat      = BM_BIT,
@@ -1157,9 +1161,8 @@ public:
         return *this;
     }
 #endif
-
     /*!
-        \brief Move bvector content from another vector
+        \brief Move bvector content from another bvector
     */
     void move_from(bvector<Alloc>& bvect) BMNOEXEPT
     {
@@ -1175,6 +1178,13 @@ public:
     #endif
         }
     }
+    
+    /*! \brief Exchanges content of bv and this bvector.
+    */
+    void swap(bvector<Alloc>& bvect) BMNOEXEPT;
+    
+    //@}
+
 
     reference operator[](bm::id_t n)
     {
@@ -1249,6 +1259,9 @@ public:
         return blockman_.get_allocator();
     }
 
+    // --------------------------------------------------------------------
+    /*! @name Bit access/modification methods  */
+    //@{
 
     /*!
        \brief Sets bit n.
@@ -1323,6 +1336,19 @@ public:
         set_range(0, size_ - 1, true);
         return *this;
     }
+    
+    /*!
+        \brief Set bit without checking preconditions (size, etc)
+     
+        Fast set bit method, without safety net.
+        Make sure you call bvector<>::init() before setting bits with this
+        function.
+     
+        Side effect: invalidates bit-count optimization (BMCOUNTOPT)
+     
+        \param n - bit number
+    */
+    void set_bit_no_check(bm::id_t n);
 
 
     /*!
@@ -1340,14 +1366,6 @@ public:
                               bm::id_t right,
                               bool     value = true);
 
-    
-    /*! Function erturns insert iterator for this bitvector */
-    insert_iterator inserter()
-    {
-        return insert_iterator(*this);
-    }
-
-
     /*!
        \brief Clears bit n.
        \param n - bit's index to be cleaned.
@@ -1357,8 +1375,7 @@ public:
     {
         return set_bit(n, false);
     }
-
-
+    
     /*!
        \brief Clears every bit in the bitvector.
 
@@ -1380,25 +1397,51 @@ public:
         clear(true);
         return *this;
     }
-
+    
+    /*!
+       \brief Flips bit n
+       \return *this
+    */
+    bvector<Alloc>& flip(bm::id_t n)
+    {
+        set(n, !get_bit(n));
+        return *this;
+    }
 
     /*!
-       \brief Returns count of bits which are 1.
-       \return Total number of bits ON. 
+       \brief Flips all bits
+       \return *this
+       @sa invert
     */
-    bm::id_t count() const;
+    bvector<Alloc>& flip()
+    {
+        return invert();
+    }
 
-    /**
-        \brief Returns bvector's capacity (number of bits it can store)
+    //@}
+    // --------------------------------------------------------------------
+
+    
+    /*! Function erturns insert iterator for this bitvector */
+    insert_iterator inserter()
+    {
+        return insert_iterator(*this);
+    }
+
+    // --------------------------------------------------------------------
+    /*! @name Size and capacity
+        By default bvector is dynamically sized, manual control methods
+        available
     */
+    //@{
+
+    /** \brief Returns bvector's capacity (number of bits it can store) */
     size_type capacity() const 
     {
         return blockman_.capacity();
     }
 
-    /*!
-        \brief return current size of the vector (bits)
-    */
+    /*! \brief return current size of the vector (bits) */
     size_type size() const 
     {
         return size_;
@@ -1409,6 +1452,19 @@ public:
         \param new_size - new size in bits
     */
     void resize(size_type new_size);
+    
+    //@}
+    // --------------------------------------------------------------------
+
+    /*! @name Population counting methods
+    */
+    //@{
+
+    /*!
+       \brief population cout (count of ON bits)
+       \return Total number of bits ON.
+    */
+    bm::id_t count() const;
 
     /*! \brief Computes bitcount values for all bvector blocks
         \param arr - pointer on array of block bit counts
@@ -1493,12 +1549,11 @@ public:
     {
         BMCOUNT_VALID(false)    
     }
-
-    /*!
-        \brief Inverts all bits.
-    */
-    bvector<Alloc>& invert();
-
+    //@}
+    
+    // --------------------------------------------------------------------
+    /*! @name Bit access (read-only)  */
+    //@{
 
     /*!
        \brief returns true if bit n is set and false is bit n is 0. 
@@ -1516,6 +1571,11 @@ public:
     { 
         return get_bit(n); 
     }
+    //@}
+
+    // --------------------------------------------------------------------
+    /*! @name Check for empty-ness of container  */
+    //@{
 
     /*!
        \brief Returns true if any bits in this bitset are set, and otherwise returns false.
@@ -1544,42 +1604,13 @@ public:
     {
         return !any();
     }
-
-    /*!
-       \brief Flips bit n
-       \return *this
-    */
-    bvector<Alloc>& flip(bm::id_t n) 
-    {
-        set(n, !get_bit(n));
-        return *this;
-    }
-
-    /*!
-       \brief Flips all bits
-       \return *this
-    */
-    bvector<Alloc>& flip() 
-    {
-        return invert();
-    }
-
-    /*! \brief Exchanges content of bv and this bvector.
-    */
-    void swap(bvector<Alloc>& bvect) BMNOEXEPT
-    {
-        if (this != &bvect)
-        {
-            blockman_.swap(bvect.blockman_);
-            bm::xor_swap(size_,bvect.size_);
-    #ifdef BMCOUNTOPT
-            bm::xor_swap(count_, bvect.count_);
-            bm::xor_swap(count_is_valid_, bvect.count_is_valid_);
-    #endif
-        }
-    }
+    //@}
+    // --------------------------------------------------------------------
 
 
+    /*! @name Scan and find bit and indexes */
+    //@{
+    
     /*!
        \fn bool bvector::find(bm::id_t& pos) const
        \brief Finds index of first 1 bit
@@ -1650,20 +1681,13 @@ public:
        \sa get_first, get_next, extract_next, find, find_reverse
     */
     bool find_range(bm::id_t& first, bm::id_t& last) const;
+    
+    //@}
 
 
-    /*!
-       @brief Calculates bitvector statistics.
-
-       @param st - pointer on statistics structure to be filled in. 
-
-       Function fills statistics structure containing information about how 
-       this vector uses memory and estimation of max. amount of memory 
-       bvector needs to serialize itself.
-
-       @sa statistics
-    */
-    void calc_stat(struct bm::bvector<Alloc>::statistics* st) const;
+    // --------------------------------------------------------------------
+    /*! @name Set Algebra operations  */
+    //@{
 
     /*!
        \brief Logical OR operation.
@@ -1708,7 +1732,69 @@ public:
         combine_operation(vect, BM_SUB);
         return *this;
     }
+    
+    /*!
+        \brief Inverts all bits.
+    */
+    bvector<Alloc>& invert();
+    
+    /*! \brief perform a set-algebra operation by operation code
+    */
+    void combine_operation(const bm::bvector<Alloc>& bvect,
+                            bm::operation            opcode);
 
+    // @}
+
+    // --------------------------------------------------------------------
+    /*! @name Iterator-traversal methods  */
+    //@{
+
+    /**
+       \brief Returns enumerator pointing on the first non-zero bit.
+    */
+    enumerator first() const
+    {
+        return get_enumerator(0);
+    }
+
+    /**
+       \fn bvector::enumerator bvector::end() const
+       \brief Returns enumerator pointing on the next bit after the last.
+    */
+    enumerator end() const
+    {
+        typedef typename bvector<Alloc>::enumerator enumerator_type;
+        return enumerator_type(this);
+    }
+    
+    /**
+       \brief Returns enumerator pointing on specified or the next available bit.
+    */
+    enumerator get_enumerator(bm::id_t pos) const
+    {
+        typedef typename bvector<Alloc>::enumerator enumerator_type;
+        return enumerator_type(this, pos);
+    }
+    
+    //@}
+
+    // --------------------------------------------------------------------
+    /*! @name Memory management and compression  */
+    
+    //@{
+    
+    /*!
+       @brief Calculates bitvector statistics.
+
+       @param st - pointer on statistics structure to be filled in.
+
+       Function fills statistics structure containing information about how
+       this vector uses memory and estimation of max. amount of memory
+       bvector needs to serialize itself.
+
+       @sa statistics
+    */
+    void calc_stat(struct bm::bvector<Alloc>::statistics* st) const;
 
     /*!
        \brief Sets new blocks allocation strategy.
@@ -1730,7 +1816,6 @@ public:
     { 
         return new_blocks_strat_; 
     }
-
 
     /*! 
         \brief Optimization mode
@@ -1777,6 +1862,13 @@ public:
         @param glevel_len - pointer on C-style array keeping GAP block sizes. 
     */
     void set_gap_levels(const gap_word_t* glevel_len);
+    
+    //@}
+    
+    // --------------------------------------------------------------------
+    
+    /*! @name Comparison  */
+    //@{
 
     /*!
         \brief Lexicographical comparison with a bitvector.
@@ -1786,6 +1878,12 @@ public:
         1 - greater, 0 - equal.
     */
     int compare(const bvector<Alloc>& bvect) const;
+    
+    //@}
+
+    // --------------------------------------------------------------------
+    /*! @name Open internals   */
+    //@{
 
     /*! @brief Allocates temporary block of memory. 
 
@@ -1820,37 +1918,8 @@ public:
         bm->get_allocator().free_bit_block(block);
     }
 
-    /**
-       \brief Returns enumerator pointing on the first non-zero bit.
-    */
-    enumerator first() const
-    {
-        return get_enumerator(0);
-    }
 
-    /**
-       \fn bvector::enumerator bvector::end() const
-       \brief Returns enumerator pointing on the next bit after the last.
-    */
-    enumerator end() const
-    {
-        typedef typename bvector<Alloc>::enumerator enumerator_type;
-        return enumerator_type(this);
-    }
-    
-    /**
-       \brief Returns enumerator pointing on specified or the next available bit.
-    */
-    enumerator get_enumerator(bm::id_t pos) const
-    {
-        typedef typename bvector<Alloc>::enumerator enumerator_type;
-        return enumerator_type(this, pos);
-    }
-    
-    void combine_operation(const bm::bvector<Alloc>& bvect, 
-                            bm::operation            opcode);
-
-    /**
+    /*!
         \brief get access to internal block by number
      
         This is an internal method, declared public to add low level
@@ -1866,19 +1935,30 @@ public:
         return blockman_.get_block(nb);
     }
     
-    /**
-        \brief Set bit without checking preconditions (size, etc)
-     
-        Fast set bit method, without safety net.
-        Make sure you call bvector<>::init() before setting bits with this
-        function.
-     
-        Side effect: invalidates bit-count optimization (BMCOUNTOPT)
-     
-        \param n - bit number
+    /*!
+    @internal
     */
-    void set_bit_no_check(bm::id_t n);
+    void combine_operation_with_block(unsigned nb,
+                                      const bm::word_t* arg_blk,
+                                      bool arg_gap,
+                                      bm::operation opcode)
+    {
+        bm::word_t* blk = const_cast<bm::word_t*>(get_block(nb));
+        bool gap = BM_IS_GAP(blk);
+        combine_operation_with_block(nb, gap, blk, arg_blk, arg_gap, opcode);
+    }
+    const blocks_manager_type& get_blocks_manager() const
+    {
+        return blockman_;
+    }
+    blocks_manager_type& get_blocks_manager()
+    {
+        return blockman_;
+    }
 
+    //@}
+    
+    
 private:
 
     bm::id_t check_or_next(bm::id_t prev) const;
@@ -1911,16 +1991,6 @@ private:
                                       const bm::word_t* arg_blk,
                                       bool arg_gap,
                                       bm::operation opcode);
-public:
-    void combine_operation_with_block(unsigned nb,
-                                      const bm::word_t* arg_blk,
-                                      bool arg_gap,
-                                      bm::operation opcode)
-    {
-        bm::word_t* blk = const_cast<bm::word_t*>(get_block(nb));
-        bool gap = BM_IS_GAP(blk);
-        combine_operation_with_block(nb, gap, blk, arg_blk, arg_gap, opcode);
-    }
 private:
 #if 0
     void combine_count_operation_with_block(unsigned nb,
@@ -1953,15 +2023,6 @@ private:
                             bool     value);
 public:
 
-    const blocks_manager_type& get_blocks_manager() const
-    {
-        return blockman_;
-    }
-
-    blocks_manager_type& get_blocks_manager()
-    {
-        return blockman_;
-    }
 
 
 private:
@@ -2602,6 +2663,21 @@ int bvector<Alloc>::compare(const bvector<Alloc>& bv) const
     return 0;
 }
 
+// -----------------------------------------------------------------------
+
+template<typename Alloc>
+void bvector<Alloc>::swap(bvector<Alloc>& bvect) BMNOEXEPT
+{
+    if (this != &bvect)
+    {
+        blockman_.swap(bvect.blockman_);
+        bm::xor_swap(size_,bvect.size_);
+#ifdef BMCOUNTOPT
+        bm::xor_swap(count_, bvect.count_);
+        bm::xor_swap(count_is_valid_, bvect.count_is_valid_);
+#endif
+    }
+}
 
 // -----------------------------------------------------------------------
 
