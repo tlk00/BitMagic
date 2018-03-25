@@ -11,20 +11,31 @@ performance via SIMD vectorization (SSE2, SSE4.2, AVX2), CPU cache-friendly algo
 data-parallel thread-safe structures.
 
 
-Main Functions:
+Features:
 
 - compressed bit-vector container with mechanisms to iterate integer set it represents
+
 - set algebraic operations: AND, OR, XOR, MINUS on bit-vectors and integer sets
-- serialization off bit-vectors into compressed BLOBs for persistence or in-memory compression
-- set algebraic operations on compressed BLOBs
+
+- serialization/hybernation of bit-vector containers into compressed BLOBs for persistence (or in-RAM compression)
+
+- set algebraic operations on compressed BLOBs (on the fly deserialization with set-algebraic function)
+
 - statistical algorithms to efficiently construct similarity and distance metrics, measure similarity between bit-vectors, 
 integer sets and compressed BLOBs
+
 - sparse vector(s) for native int types using bit transposition and separate compression of bit-plains, 
 with support of NULL values for construction of in-memory columnar structures. 
+
 - algorithms on sparse vectors (dynamic range clipping, etc) 
-functional operations on binary sets: translations between sets, mathematical images (work in progress!)
-compressed binary relational and adjacency matrixes and operations on matrixes for Entity-Relationship acceleration, graph operations, materialized RDBMS joins, etc (work in progress!)
-portable C-library layer working as a bridge to high level languages like Python, Java, Scala, .Net (work in progress!)
+
+Features In Progress:
+
+- functional operations on binary sets: translations between sets, mathematical images 
+
+- compressed binary relational and adjacency matrixes and operations on matrixes for Entity-Relationship acceleration, graph operations, materialized RDBMS joins, etc 
+
+- portable C-library layer working as a bridge to high level languages like Python, Java, Scala, .Net 
 
 
 License:
