@@ -13,6 +13,7 @@ BitMagic Library samples
 ./bvsample11 - how to compute population counts for ranges in bit-vector (cout_range(), count_to(), count_and())
 ./bvsample12 - review and comparison of different methods to set and clear bits 
 ./bvsample14 - serialization of bvector<>, logical operations on compressed BLOBs
+./bvsample15 - bvector<>::find, search for first and last set bit, dynamic range detection
 
 
 ./svsample01 - basic example of sparse_vector<> container
