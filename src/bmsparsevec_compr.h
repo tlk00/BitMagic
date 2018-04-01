@@ -241,15 +241,11 @@ void compressed_sparse_vector<Val, SV>::load_from(const sparse_vector_type& sv_s
     } // for
     
     unsigned count = bv_null->count(); // set correct sizes
-    sv_.resize(count+1);
+    sv_.resize(count);
     
     in_sync_ = false;
     
-    // find the last idx used
-    //
-
-    //max_id_ =
-    
+    bv_null->find_reverse(max_id_);
 }
 
 //---------------------------------------------------------------------
