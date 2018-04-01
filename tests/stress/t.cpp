@@ -12262,6 +12262,51 @@ void TestRankCompress()
 }
 
 static
+void DetailedCompareSparseVectors(const compressed_sparse_vector_u32& csv,
+                          const sparse_vector_u32&            sv)
+{
+
+    size_t csv_size = csv.size();
+    size_t sv_size = sv.size();
+    
+    if (csv_size != sv_size)
+    {
+        cerr << "Sparse compressed vector comparison failed (size check):"
+             << "csv.size()=" << csv_size
+             << "sv.size()=" << sv_size
+             << endl;
+        exit(1);
+    }
+    
+    for (unsigned i = 0; i < sv_size; ++i)
+    {
+        bool is_null_sv = sv.is_null(i);
+        bool is_null_csv = csv.is_null(i);
+        if (is_null_sv != is_null_csv)
+        {
+            cerr << "Detailed csv check failed (null mismatch) at i=" << i
+                 << endl;
+            exit(1);
+        }
+        if (!is_null_sv)
+        {
+            unsigned v1 = sv.get(i);
+            unsigned v2 = csv.get(i);
+            
+            if (v1 != v2)
+            {
+                cerr << "Detailed csv check failed (value mismatch) at i=" << i
+                     << " v1=" << v1
+                     << " v2=" << v2
+                     << endl;
+                exit(1);
+            }
+        }
+    }
+    
+}
+
+static
 void TestCompressSparseVector()
 {
     cout << " ------------------------------ Test Compressed Sparse Vector " << endl;
@@ -12340,6 +12385,9 @@ void TestCompressSparseVector()
         
         bool same = csv1.equal(csv2);
         assert(same);
+        assert(sv1.size() == csv1.size());
+        
+        DetailedCompareSparseVectors(csv1, sv1);
     }
     
     cout << " ------------------------------ Test Compressed Sparse Vector OK" << endl;
@@ -12430,6 +12478,7 @@ int main(void)
     exit(1);
 */
 
+
      TestBlockAND();
 
      ExportTest();
@@ -12518,7 +12567,7 @@ int main(void)
     
      TestSparseVectorTransform();
 
-     //TestCompressSparseVector();
+     TestCompressSparseVector();
 
      TestSparseVector_Stress(2);
  
