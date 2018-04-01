@@ -71,12 +71,33 @@ public:
         return *this;
     }
     
+    /*! \brief return size of the vector
+        \return size of sparse vector
+    */
+    size_type size() const;
+
+    
     /*!
         \brief access specified element with bounds checking
         \param idx - element index
         \return value of the element
     */
     value_type at(bm::id_t idx) const;
+    
+    /*!
+        \brief get specified element without bounds checking
+        \param idx - element index
+        \return value of the element
+    */
+    value_type get(bm::id_t idx) const;
+
+    
+    /** \brief test if specified element is NULL
+        \param idx - element index
+        \return true if it is NULL false if it was assigned or container
+        is not configured to support assignment flags
+    */
+    bool is_null(size_type idx) const;
 
     /*!
         \brief check if another vector has the same content
@@ -169,6 +190,15 @@ compressed_sparse_vector<Val, SV>::compressed_sparse_vector(
     {
         bv_blocks_.copy_from(csv.bv_blocks_);
     }
+}
+
+//---------------------------------------------------------------------
+
+template<class Val, class SV>
+typename compressed_sparse_vector<Val, SV>::size_type
+compressed_sparse_vector<Val, SV>::size() const
+{
+    return max_id_+1;
 }
 
 //---------------------------------------------------------------------
@@ -301,6 +331,32 @@ compressed_sparse_vector<Val, SV>::at(bm::id_t idx) const
         sv_.throw_range_error("compressed collection item not found");
     }
     return sv_.at(--sv_idx);
+}
+
+//---------------------------------------------------------------------
+
+template<class Val, class SV>
+typename compressed_sparse_vector<Val, SV>::value_type
+compressed_sparse_vector<Val, SV>::get(bm::id_t idx) const
+{
+    bm::id_t sv_idx;
+    bool found = resolve(idx, &sv_idx);
+    BM_ASSERT(found);
+    if (!found)
+    {
+        return value_type();
+    }
+    return sv_.get(--sv_idx);
+}
+
+//---------------------------------------------------------------------
+
+template<class Val, class SV>
+bool compressed_sparse_vector<Val, SV>::is_null(size_type idx) const
+{
+    const bvector_type* bv_null = sv_.get_null_bvector();
+    BM_ASSERT(bv_null);
+    return !(bv_null->test(idx));
 }
 
 //---------------------------------------------------------------------
