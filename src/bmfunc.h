@@ -5830,7 +5830,37 @@ unsigned short bitscan_wave(const bm::word_t* w_ptr, unsigned char* bits)
     return cnt;
 }
 
+// --------------------------------------------------------------
+// Functions tpo work with int values stored in 64-bit pointers 
+// --------------------------------------------------------------
 
+/*!
+    \brief helper union to interpret pointer as integers 
+    @internal
+*/
+union ptr_payload_t
+{
+    bm::word_t* blk;
+    bm::id64_t  i64;
+    unsigned short i16[4];
+};
+
+/*!
+    Test presense of value in payload pointer
+    @internal
+*/
+inline
+bm::id64_t ptrp_test(ptr_payload_t ptr, bm::gap_word_t v)
+{
+    if (v == 0)
+    {
+        return (ptr.i16[1] == 0);
+    }
+    bm::id64_t r = (ptr.i16[1] == v) | (ptr.i16[2] == v) | (ptr.i16[3] == v);
+    return r;
+}
+
+// --------------------------------------------------------------------------
 
 } // namespace bm
 
