@@ -3017,7 +3017,7 @@ bool bvector<Alloc>::find_reverse(bm::id_t& pos) const
     bool found;
     
     unsigned top_blocks = blockman_.effective_top_block_size();
-    for (unsigned short i = top_blocks-1; true; --i)
+    for (unsigned i = top_blocks-1; true; --i)
     {
         const bm::word_t* const* blk_blk = blockman_.get_topblock(i);
         if (blk_blk)
