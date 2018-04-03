@@ -131,6 +131,11 @@ public:
     void optimize(bm::word_t* temp_block = 0,
                   typename bvector_type::optmode opt_mode = bvector_type::opt_compress,
                   statistics* stat = 0);
+    
+    /*! \brief resize to zero, free memory
+    */
+    void clear() BMNOEXEPT;
+
 
     /*!
         \brief Re-calculate prefix sum table used for rank search
@@ -147,6 +152,11 @@ public:
         \brief Unsync the prefix sum table
     */
     void unsync() { in_sync_ = false; }
+    
+    /**
+        \brief Get bit-vector of assigned values (or NULL)
+    */
+    const bvector_type* get_null_bvector() const;
 
 protected:
     /*!
@@ -275,7 +285,12 @@ void compressed_sparse_vector<Val, SV>::load_from(const sparse_vector_type& sv_s
     
     in_sync_ = false;
     
-    bv_null->find_reverse(max_id_);
+    bool found = bv_null->find_reverse(max_id_);
+    if (!found)
+    {
+        BM_ASSERT(!bv_null->any());
+        max_id_ = 0;
+    }
 }
 
 //---------------------------------------------------------------------
@@ -370,6 +385,24 @@ void compressed_sparse_vector<Val, SV>::optimize(bm::word_t*  temp_block,
 }
 
 //---------------------------------------------------------------------
+
+template<class Val, class SV>
+void compressed_sparse_vector<Val, SV>::clear() BMNOEXEPT
+{
+    sv_.clear();
+    in_sync_ = max_id_ = 0;
+}
+
+//---------------------------------------------------------------------
+
+template<class Val, class SV>
+const typename compressed_sparse_vector<Val, SV>::bvector_type*
+compressed_sparse_vector<Val, SV>::get_null_bvector() const
+{
+    return sv_.get_null_bvector();
+}
+
+
 
 } // namespace bm
 
