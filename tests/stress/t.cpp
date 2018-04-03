@@ -12261,9 +12261,92 @@ void TestRankCompress()
     cout << " ------------------------------ Test Rank Compressor OK " << endl;
 }
 
+
+static
+void GenerateSV(sparse_vector_u32&   sv, unsigned strategy = 0)
+{
+    unsigned max_idx_value = 40000000;
+    switch (strategy)
+    {
+    case 0:
+    {
+        cout << "SV Ultra sparse generation" << endl;
+        for (unsigned i = 0; i < max_idx_value;)
+        {
+            unsigned v = (rand() * rand()) % 650000;
+            sv[i] = v;
+            i += 10000 + rand() % 65535;
+        }
+        break;
+    }
+    case 1:
+    {
+        cout << "SV Dense intervals generation 1" << endl;
+        for (unsigned i = 0; i < max_idx_value;)
+        {
+            unsigned v = (rand() * rand()) % 650000;
+            for (unsigned j = 0; i < max_idx_value; ++i, ++j)
+            {
+                sv[i] = v + j;
+                if (j > 256)
+                    break;
+            }
+            i += 20000 + rand() % 65535;
+        }
+        break;
+    }
+    case 2:
+    {
+        cout << "SV Dense intervals generation 2" << endl;
+        unsigned v = (rand() * rand()) % 650000;
+        for (unsigned i = 0; i < max_idx_value/4; ++i)
+        {
+            sv[i] = v;
+        }
+
+        for (unsigned i = 0; i < max_idx_value;)
+        {
+            v = (rand() * rand()) % 650000;
+            for (unsigned j = 0; i < max_idx_value; ++i, ++j)
+            {
+                sv[i] = v + i;
+                if (j > 256)
+                    break;
+            }
+            i += 30000 + rand() % 65535;
+        }
+        break;
+    }
+    case 3:
+    {
+        cout << "SV random generation" << endl;
+        unsigned rand_max = rand() % 300000;
+        for (unsigned i = 0; i < rand_max; ++i)
+        {
+            unsigned v = (rand() * rand());
+            unsigned idx = rand() % max_idx_value;
+            sv[idx] = v;
+            if (i % 2 == 0)
+            {
+                sv.clear(idx, true);
+            }
+        }
+        break;
+    }
+    case 4:
+        {
+        cout << "SV empty generation" << endl;
+        unsigned idx = rand() % max_idx_value;
+        sv[idx] = 25557890;
+        sv.clear(idx, true);
+        }
+        break;
+    } // switch
+}
+
 static
 void DetailedCompareSparseVectors(const compressed_sparse_vector_u32& csv,
-                          const sparse_vector_u32&            sv)
+                                  const sparse_vector_u32&            sv)
 {
 
     size_t csv_size = csv.size();
@@ -12271,11 +12354,24 @@ void DetailedCompareSparseVectors(const compressed_sparse_vector_u32& csv,
     
     if (csv_size != sv_size)
     {
-        cerr << "Sparse compressed vector comparison failed (size check):"
-             << "csv.size()=" << csv_size
-             << "sv.size()=" << sv_size
-             << endl;
-        exit(1);
+        const sparse_vector_u32::bvector_type* bv_null_sv = sv.get_null_bvector();
+        const sparse_vector_u32::bvector_type* bv_null_csv = csv.get_null_bvector();
+        
+        assert(bv_null_sv != bv_null_csv);
+        
+        unsigned cnt_sv = bv_null_sv->count();
+        unsigned cnt_csv = bv_null_csv->count();
+        
+        if (cnt_sv != cnt_csv)
+        {
+            cerr << "Sparse compressed vector comparison failed (size check):"
+                 << "csv.size()=" << csv_size
+                 << "sv.size()=" << sv_size
+                 << "cnt sv = " << cnt_sv
+                 << "cnt csv = " << cnt_csv
+                 << endl;
+            exit(1);
+        }
     }
     
     for (unsigned i = 0; i < sv_size; ++i)
@@ -12366,6 +12462,8 @@ void TestCompressSparseVector()
         sv1.set(10, 100);
         sv1.set(20, 200);
         sv1.set(21, 201);
+        sv1.set(100, 65535);
+        sv1.clear(100, true);
         
         csv1.load_from(sv1);
         csv1.sync();
@@ -12385,9 +12483,43 @@ void TestCompressSparseVector()
         
         bool same = csv1.equal(csv2);
         assert(same);
-        assert(sv1.size() == csv1.size());
         
         DetailedCompareSparseVectors(csv1, sv1);
+    }
+    
+    {
+    cout << "Compressed load() stress test" << endl;
+    BM_DECLARE_TEMP_BLOCK(tb)
+    for (unsigned i = 0; i < 10; ++i)
+    {
+        cout << "Pass " << i << endl;
+        
+        sparse_vector_u32 sv(bm::use_null);
+        GenerateSV(sv, i);
+        
+        compressed_sparse_vector_u32 csv1;
+        csv1.load_from(sv);
+        csv1.sync();
+        
+        cout << "cmp 1...";
+        DetailedCompareSparseVectors(csv1, sv);
+        cout << "ok" << endl;
+        
+        cout << "cmp 2...";
+        csv1.optimize(tb);
+        DetailedCompareSparseVectors(csv1, sv);
+        cout << "ok" << endl;
+        
+        csv1.clear();
+        
+        sv.optimize(tb);
+        compressed_sparse_vector_u32 csv2;
+        csv2.load_from(sv);
+        csv2.sync();
+    } // for
+    cout << "Compressed load() stress test OK" << endl;
+
+    
     }
     
     cout << " ------------------------------ Test Compressed Sparse Vector OK" << endl;
