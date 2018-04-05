@@ -596,14 +596,18 @@ void sparse_vector<Val, BV>::swap(sparse_vector<Val, BV>& sv) BMNOEXEPT
         ap_ = sv.ap_;
         sv.ap_ = ap_tmp;
         
-        for (size_type i = 0; i < stored_plains(); ++i)
+        for (size_type i = 0; i < sv_plains; ++i)
         {
-            bvector_type* bv_tmp = plains_[i];
-            plains_[i] = sv.plains_[i];
-            sv.plains_[i] = bv_tmp;
+            if (plains_[i] != sv.plains_[i])
+            {
+                bvector_type* bv_tmp = plains_[i];
+                plains_[i] = sv.plains_[i];
+                sv.plains_[i] = bv_tmp;
+            }
         } // for i
         
-        bm::xor_swap(size_, sv.size_);        
+        bm::xor_swap(size_, sv.size_);
+        bm::xor_swap(effective_plains_, sv.effective_plains_);
     }
 }
 
