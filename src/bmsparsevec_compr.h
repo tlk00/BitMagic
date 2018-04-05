@@ -55,28 +55,54 @@ public:
     struct statistics : public bv_statistics
     {};
 public:
+    // ------------------------------------------------------------
+    /*! @name Construction and assignment  */
+    //@{
+
     compressed_sparse_vector(allocation_policy_type ap = allocation_policy_type(),
                              size_type bv_max_size = bm::id_max,
                              const allocator_type&   alloc  = allocator_type());
     /*! copy-ctor */
     compressed_sparse_vector(const compressed_sparse_vector<Val, SV>& csv);
     
+    /*! Compression constructor, loads data from non-compressed sparse vector */
+    compressed_sparse_vector(const sparse_vector_type& sv);
+    
     /*! copy assignmment operator */
     compressed_sparse_vector<Val,SV>& operator = (const compressed_sparse_vector<Val, SV>& csv)
     {
         if (this != &csv)
-        {
             sv_ = csv.sv_;
+        return *this;
+    }
+    
+#ifndef BM_NO_CXX11
+    /*! move assignmment operator */
+    compressed_sparse_vector<Val,SV>& operator=(compressed_sparse_vector<Val,SV>&& csv) BMNOEXEPT
+    {
+        if (this != &csv)
+        {
+            clear();
+            sv_.swap(csv.sv_);
+            max_id_ = csv.max_id_; in_sync_ = csv.in_sync_;
+            if (in_sync_)
+                bv_blocks_.copy_from(csv.bv_blocks_);
         }
         return *this;
     }
+#endif
+
+    //@}
     
     /*! \brief return size of the vector
         \return size of sparse vector
     */
     size_type size() const;
 
-    
+    // ------------------------------------------------------------
+    /*! @name Element access and modification  */
+    //@{
+
     /*!
         \brief access specified element with bounds checking
         \param idx - element index
@@ -98,6 +124,7 @@ public:
         is not configured to support assignment flags
     */
     bool is_null(size_type idx) const;
+    //@}
 
     /*!
         \brief check if another vector has the same content
@@ -137,6 +164,9 @@ public:
     void clear() BMNOEXEPT;
 
 
+    // ------------------------------------------------------------
+    /*! @name Read-acess fast sync */
+    //@{
     /*!
         \brief Re-calculate prefix sum table used for rank search
         \param force - force recalculation even if it is already recalculated
@@ -152,6 +182,7 @@ public:
         \brief Unsync the prefix sum table
     */
     void unsync() { in_sync_ = false; }
+    //@}
     
     /**
         \brief Get bit-vector of assigned values (or NULL)
@@ -201,6 +232,19 @@ compressed_sparse_vector<Val, SV>::compressed_sparse_vector(
         bv_blocks_.copy_from(csv.bv_blocks_);
     }
 }
+
+//---------------------------------------------------------------------
+
+template<class Val, class SV>
+compressed_sparse_vector<Val, SV>::compressed_sparse_vector(
+    const typename compressed_sparse_vector<Val, SV>::sparse_vector_type& sv)
+: sv_(bm::use_null),
+  max_id_(0), in_sync_(false)
+{
+    load_from(sv);
+    sync();
+}
+
 
 //---------------------------------------------------------------------
 
