@@ -2881,9 +2881,6 @@ bool bvector<Alloc>::gap_block_set(bm::gap_word_t* gap_blk,
 template<class Alloc>
 bool bvector<Alloc>::inc(bm::id_t n)
 {
-    if (!blockman_.is_init())
-        blockman_.init_tree();
-
     // calculate logical block number
     unsigned nblock = unsigned(n >>  bm::set_block_shift);
     bm::word_t* blk =
