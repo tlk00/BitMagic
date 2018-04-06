@@ -1100,8 +1100,9 @@ public:
             {
                 bm::gap_word_t* gap_block = allocate_gap_block(0);
                 gap_set_all(gap_block, bm::gap_max_bits, block_flag);
-                set_block(nb, (bm::word_t*)gap_block, true/*gap*/);
-                block = this->get_block_ptr(nb);
+                block = (bm::word_t*)gap_block;
+                set_block(nb, block, true/*gap*/);
+                BMSET_PTRGAP(block);
             }
         }
         return block;
