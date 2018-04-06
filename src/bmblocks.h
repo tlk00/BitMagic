@@ -1101,10 +1101,9 @@ public:
                 bm::gap_word_t* gap_block = allocate_gap_block(0);
                 gap_set_all(gap_block, bm::gap_max_bits, block_flag);
                 set_block(nb, (bm::word_t*)gap_block, true/*gap*/);
-                return (bm::word_t*)gap_block;
+                block = this->get_block_ptr(nb);
             }
         }
-
         return block;
     }
 

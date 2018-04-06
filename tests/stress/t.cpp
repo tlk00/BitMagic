@@ -12744,7 +12744,7 @@ int main(void)
 
      BasicFunctionalityTest();
 
-     //BvectorIncTest();
+     BvectorIncTest();
 
      ClearAllTest();
 

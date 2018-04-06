@@ -1417,8 +1417,8 @@ public:
     */
     bvector<Alloc>& flip(bm::id_t n)
     {
-        set(n, !get_bit(n));
-        //this->inc(n);
+        //set(n, !get_bit(n));
+        this->inc(n);
         return *this;
     }
 
@@ -2897,8 +2897,8 @@ bool bvector<Alloc>::inc(bm::id_t n)
     if (BM_IS_GAP(blk))
     {
         bm::gap_word_t* gap_blk = BMGAP_PTR(blk);
-        bool curr_val = (bm::gap_test_unr(gap_blk, nbit) != 0);
-        is_set = this->gap_block_set(gap_blk, !curr_val, nblock, nbit); // flip
+        is_set = (bm::gap_test_unr(gap_blk, nbit) != 0);
+        this->gap_block_set(gap_blk, !is_set, nblock, nbit); // flip
     }
     else // bit block
     {
@@ -2909,16 +2909,8 @@ bool bvector<Alloc>::inc(bm::id_t n)
         bm::word_t  mask = (((bm::word_t)1) << nbit);
         is_set = ((*word) & mask);
         
-        if (is_set) // need to clear the bit (because we do flip here)
-        {
-            *word &= ~mask;
-            BMCOUNT_DEC;
-        }
-        else // set the bit
-        {
-            *word |= mask;
-            BMCOUNT_INC;
-        }
+        *word = (is_set) ? (*word & ~mask) : (*word | mask);
+        BMCOUNT_VALID(false);
     }
     return is_set;
 }
