@@ -301,6 +301,11 @@ public:
     */
     void clear(size_type idx, bool set_null = false);
 
+    /*!
+        \brief increment specified element by one
+        \param idx - element index
+    */
+    void inc(size_type idx);
 
     /*!
         \brief push value back into vector
@@ -1257,6 +1262,25 @@ void sparse_vector<Val, BV>::set_value_no_null(size_type idx, value_type v)
     } // for j
 }
 
+//---------------------------------------------------------------------
+
+template<class Val, class BV>
+void sparse_vector<Val, BV>::inc(size_type idx)
+{
+    if (idx >= size_)
+        size_ = idx+1;
+
+    for (unsigned i = 0; i < sv_value_plains; ++i)
+    {
+        bvector_type* bv = get_plain(i);
+        bool carry_over = bv->inc(idx);
+        if (!carry_over)
+            break;
+    }
+    bvector_type* bv_null = get_null_bvect();
+    if (bv_null)
+        bv_null->set_bit_no_check(idx);
+}
 
 //---------------------------------------------------------------------
 
