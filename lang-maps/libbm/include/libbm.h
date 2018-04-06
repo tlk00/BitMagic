@@ -215,8 +215,18 @@ int BM_bvector_set_bit_conditional(BM_BVHANDLE  h,
 /* flip bit
    i - index of a bit to flip
 */
-BM_API_EXPORT int BM_bvector_flip_bit(BM_BVHANDLE h, unsigned int i);
+BM_API_EXPORT 
+int BM_bvector_flip_bit(BM_BVHANDLE h, unsigned int i);
     
+/* inc bit at position
+   i           - index of a bit to flip
+   1 + 0 = 1 (no carry over)
+   1 + 1 = 0 (1 carry over)
+   carry_over  - carry over bit
+*/
+BM_API_EXPORT 
+int BM_bvector_inc_bit(BM_BVHANDLE h, unsigned int i, int* carry_over);
+
 
 /* set all bits to 1
 */
@@ -294,6 +304,14 @@ BM_API_EXPORT int BM_bvector_any(BM_BVHANDLE h, int* pval);
 */
 BM_API_EXPORT int BM_bvector_find(BM_BVHANDLE h,
                     unsigned int from, unsigned int* ppos, int* pfound);
+
+/* Finds index of 1 bit starting from the end of the vector
+    ppos - found position of 1 bit (from the end)
+    pfound - 0 if nothing found
+*/
+BM_API_EXPORT int BM_bvector_find_reverse(BM_BVHANDLE h,
+                     unsigned int* ppos, int* pfound);
+
 
 /* find first 1 bit index in the vector
 

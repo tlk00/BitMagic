@@ -265,6 +265,7 @@ int SetGetTest()
     BM_BVHANDLE bmh2 = 0;
     int val;
     unsigned int count;
+    int carry_over;
     
     res = BM_bvector_construct(&bmh1, 200);
     BMERR_CHECK(res, "BM_bvector_construct()");
@@ -312,6 +313,22 @@ int SetGetTest()
     if (!val)
     {
         printf("bvector get_bit incorrect value \n");
+        res = 1; goto free_mem;
+    }
+
+    res = BM_bvector_inc_bit(bmh2, 10, &carry_over);
+    BMERR_CHECK_GOTO(res, "BM_bvector_inc_bit()", free_mem);
+    if (!carry_over)
+    {
+        printf("bvector inc_bit incorrect value \n");
+        res = 1; goto free_mem;
+    }
+
+    res = BM_bvector_inc_bit(bmh2, 10, &carry_over);
+    BMERR_CHECK_GOTO(res, "BM_bvector_inc_bit()", free_mem);
+    if (carry_over)
+    {
+        printf("bvector inc_bit incorrect value \n");
         res = 1; goto free_mem;
     }
 
@@ -525,7 +542,14 @@ int GetNextTest()
         printf("1.1 incorrrect find found on an empty vector \n");
         res = 1; goto free_mem;
     }
-    
+    res = BM_bvector_find_reverse(bmh, &idx, &found);
+    BMERR_CHECK_GOTO(res, "BM_bvector_find_reverse()", free_mem);
+    if (found)
+    {
+        printf("1.2 incorrrect find_reverse found on an empty vector \n");
+        res = 1; goto free_mem;
+    }
+
     res = BM_bvector_set_bit(bmh, 0, BM_TRUE);
     BMERR_CHECK_GOTO(res, "BM_bvector_set_bit()", free_mem);
     
@@ -541,6 +565,13 @@ int GetNextTest()
     if (!found || idx != 0)
     {
         printf("2.1 incorrrect find found in 0 position \n");
+        res = 1; goto free_mem;
+    }
+    res = BM_bvector_find_reverse(bmh, &idx, &found);
+    BMERR_CHECK_GOTO(res, "BM_bvector_find_reverse()", free_mem);
+    if (!found || idx != 0)
+    {
+        printf("1.2 incorrrect find_reverse found in 0 position \n");
         res = 1; goto free_mem;
     }
 

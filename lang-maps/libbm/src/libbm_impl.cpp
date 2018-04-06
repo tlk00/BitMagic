@@ -343,7 +343,22 @@ int BM_bvector_flip_bit(BM_BVHANDLE h, unsigned int i)
     return BM_OK;
 }
 
+// -----------------------------------------------------------------
 
+int BM_bvector_inc_bit(BM_BVHANDLE h, unsigned int i, int* carry_over)
+{
+    if (!h || !carry_over)
+        return BM_ERR_BADARG;
+    BM_TRY
+    {
+        TBM_bvector* bv = (TBM_bvector*)h;
+        *carry_over = bv->inc(i);
+    }
+    BM_CATCH_ALL
+    ETRY;
+
+    return BM_OK;
+}
 
 // -----------------------------------------------------------------
 
@@ -555,6 +570,24 @@ int BM_bvector_find(BM_BVHANDLE h,
     return BM_OK;
 }
 
+// -----------------------------------------------------------------
+
+int BM_bvector_find_reverse(BM_BVHANDLE h,
+                            unsigned int* ppos, int* pfound)
+{
+    if (!h || !ppos || !pfound)
+        return BM_ERR_BADARG;
+
+    BM_TRY
+    {
+        const TBM_bvector* bv = (TBM_bvector*)h;
+        *pfound = bv->find_reverse(*ppos);
+    }
+    BM_CATCH_ALL
+    ETRY;
+    return BM_OK;
+
+}
 
 // -----------------------------------------------------------------
 
