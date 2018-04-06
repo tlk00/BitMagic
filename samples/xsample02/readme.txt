@@ -1,1 +1,1 @@
-Bucket sort / histogram construction using sparse vectors. 
+Counting sort / histogram construction using sparse vectors compared to std::sort(). 
