@@ -25,4 +25,5 @@ BitMagic Library samples
 
 ./xsample01 - advanced: different methods of handling of super sparse sets. Benchmarks of set operations for each method. 
                Details at: http://bitmagic.io/case-ER-join.html
+m	./xsample02 - sparse vector based bucket sort of ints plus histogram 
 
