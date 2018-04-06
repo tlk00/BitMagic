@@ -1078,6 +1078,37 @@ public:
         return block;
     }
 
+    /**
+        Function checks if block is not yet allocated, allocates and returns
+    */
+    bm::word_t* check_allocate_block(unsigned nb, int initial_block_type)
+    {
+        bm::word_t* block = this->get_block_ptr(nb);
+
+        if (!IS_VALID_ADDR(block)) // NULL block or ALLSET
+        {
+            // if we wanted ALLSET and requested block is ALLSET return NULL
+            unsigned block_flag = IS_FULL_BLOCK(block);
+            if (initial_block_type == 0) // bitset requested
+            {
+                block = alloc_.alloc_bit_block();
+                // initialize block depending on its previous status
+                bit_block_set(block, block_flag ? 0xFF : 0);
+                set_block(nb, block);
+            }
+            else // gap block requested
+            {
+                bm::gap_word_t* gap_block = allocate_gap_block(0);
+                gap_set_all(gap_block, bm::gap_max_bits, block_flag);
+                set_block(nb, (bm::word_t*)gap_block, true/*gap*/);
+                return (bm::word_t*)gap_block;
+            }
+        }
+
+        return block;
+    }
+
+
     /*! @brief Fills all blocks with 0.
         @param free_mem - if true function frees the resources
     */

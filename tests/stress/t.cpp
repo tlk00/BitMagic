@@ -34,6 +34,7 @@ For more information please visit:  http://bitmagic.io
 
 #include <iostream>
 #include <iomanip>
+#include <utility>
 
 #include <bm.h>
 #include <bmalgo.h>
@@ -2049,6 +2050,66 @@ void BasicFunctionalityTest()
     }
 }
 
+
+static
+void BvectorIncTest()
+{
+    cout << "---------------------------- Bvector inc test" << endl;
+    
+    {
+    bvect bv1;
+    bool b;
+    
+    b = bv1.inc(0);
+    assert(!b);
+    b = bv1.inc(0);
+    assert(b);
+    
+    b = bv1.inc(10);
+    assert(!b);
+    b = bv1.inc(10);
+    assert(b);
+    }
+    
+    {
+    bvect bv1(BM_GAP);
+    bool b;
+    
+    assert(bv1.count()==0);
+    
+    b = bv1.inc(0);
+    assert(!b);
+    cout << bv1.count() << endl;
+    assert(bv1.count()==1);
+    b = bv1.inc(0);
+    assert(b);
+    assert(bv1.count()==0);
+
+    b = bv1.inc(10);
+    assert(!b);
+    b = bv1.inc(10);
+    assert(b);
+    }
+
+    {
+    bvect bv1(BM_GAP);
+    bool b;
+
+    bv1.flip();
+    
+    b = bv1.inc(0);
+    assert(b);
+    b = bv1.inc(0);
+    assert(!b);
+    
+    b = bv1.inc(10);
+    assert(b);
+    b = bv1.inc(10);
+    assert(!b);
+    }
+
+    cout << "---------------------------- Bvector inc test OK" << endl;
+}
 
 static
 void TestRandomSubset(const bvect& bv, bm::random_subset<bvect>& rsub)
@@ -12352,11 +12413,11 @@ void DetailedCompareSparseVectors(const compressed_sparse_vector_u32& csv,
     size_t csv_size = csv.size();
     size_t sv_size = sv.size();
     
+    const sparse_vector_u32::bvector_type* bv_null_sv = sv.get_null_bvector();
+    const sparse_vector_u32::bvector_type* bv_null_csv = csv.get_null_bvector();
+
     if (csv_size != sv_size)
     {
-        const sparse_vector_u32::bvector_type* bv_null_sv = sv.get_null_bvector();
-        const sparse_vector_u32::bvector_type* bv_null_csv = csv.get_null_bvector();
-        
         assert(bv_null_sv != bv_null_csv);
         
         unsigned cnt_sv = bv_null_sv->count();
@@ -12381,7 +12442,15 @@ void DetailedCompareSparseVectors(const compressed_sparse_vector_u32& csv,
         if (is_null_sv != is_null_csv)
         {
             cerr << "Detailed csv check failed (null mismatch) at i=" << i
-                 << endl;
+                << " sv=" << is_null_sv
+                << " csv=" << is_null_csv
+                << endl;
+            int cmp = bv_null_sv->compare(*bv_null_csv);
+            if (cmp != 0)
+            {
+                cerr << "cmp=" << cmp << endl;
+            }
+
             exit(1);
         }
         if (!is_null_sv)
@@ -12449,6 +12518,17 @@ void TestCompressSparseVector()
         assert(v == 200);
         v = csv1.at(21);
         assert(v == 201);
+        
+        compressed_sparse_vector_u32 csv2(csv1);
+        bool same = csv2.equal(csv1);
+        assert(same);
+        
+        compressed_sparse_vector_u32 csv3;
+        csv3 = ::move(csv2);
+        same = csv3.equal(csv1);
+        assert(same);
+
+
 
     }
     
@@ -12459,7 +12539,7 @@ void TestCompressSparseVector()
         compressed_sparse_vector_u32 csv1;
         compressed_sparse_vector_u32 csv2;
 
-        sv1.set(10, 100);
+        sv1.set(10, 9);
         sv1.set(20, 200);
         sv1.set(21, 201);
         sv1.set(100, 65535);
@@ -12468,14 +12548,14 @@ void TestCompressSparseVector()
         csv1.load_from(sv1);
         csv1.sync();
         
-        csv2.push_back(10, 100);
+        csv2.push_back(10, 9);
         csv2.push_back(20, 200);
         csv2.push_back(21, 201);
         csv2.sync();
 
 
         v = csv1.at(10);
-        assert(v == 100);
+        assert(v == 9);
         v = csv1.at(20);
         assert(v == 200);
         v = csv1.at(21);
@@ -12485,6 +12565,14 @@ void TestCompressSparseVector()
         assert(same);
         
         DetailedCompareSparseVectors(csv1, sv1);
+        
+        compressed_sparse_vector_u32 csv4;
+        csv4 = std::move(csv1);
+        v = csv4.at(10);
+        assert(v == 9);
+        DetailedCompareSparseVectors(csv4, sv1);
+        
+
     }
     
     {
@@ -12511,11 +12599,26 @@ void TestCompressSparseVector()
         cout << "ok" << endl;
         
         csv1.clear();
-        
+
         sv.optimize(tb);
-        compressed_sparse_vector_u32 csv2;
-        csv2.load_from(sv);
-        csv2.sync();
+        compressed_sparse_vector_u32 csv2(sv);
+        DetailedCompareSparseVectors(csv2, sv);
+
+        csv2.optimize(tb);
+        DetailedCompareSparseVectors(csv2, sv);
+
+        {
+        compressed_sparse_vector_u32 csv3(csv2);
+        DetailedCompareSparseVectors(csv3, sv);
+        }
+        
+        {
+        compressed_sparse_vector_u32 csv4;
+        csv4 = std::move(csv2);
+        DetailedCompareSparseVectors(csv4, sv);
+
+        }
+
     } // for
     cout << "Compressed load() stress test OK" << endl;
 
@@ -12610,7 +12713,6 @@ int main(void)
     exit(1);
 */
 
-
      TestBlockAND();
 
      ExportTest();
@@ -12641,6 +12743,8 @@ int main(void)
      CountRangeTest();
 
      BasicFunctionalityTest();
+
+     //BvectorIncTest();
 
      ClearAllTest();
 

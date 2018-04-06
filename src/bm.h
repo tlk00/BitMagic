@@ -1294,6 +1294,19 @@ public:
             blockman_.init_tree();
         return and_bit_no_check(n, val);
     }
+    
+    /*!
+       \brief Increment the specified element
+     
+       Bit increment rules:
+        0 + 1 = 1 (no carry over)
+        1 + 1 = 0 (with carry over returned)
+     
+       \param n - index of the bit to be set
+       \return  TRUE if carry over created (1+1)
+    */
+    bool inc(bm::id_t n);
+    
 
     /*!
        \brief Sets bit n only if current value equals the condition
@@ -1405,6 +1418,7 @@ public:
     bvector<Alloc>& flip(bm::id_t n)
     {
         set(n, !get_bit(n));
+        //this->inc(n);
         return *this;
     }
 
@@ -2857,6 +2871,53 @@ bool bvector<Alloc>::gap_block_set(bm::gap_word_t* gap_blk,
         if (new_block_len > threshold)
         {
             extend_gap_block(nblock, gap_blk);
+        }
+    }
+    return is_set;
+}
+
+// -----------------------------------------------------------------------
+
+template<class Alloc>
+bool bvector<Alloc>::inc(bm::id_t n)
+{
+    if (!blockman_.is_init())
+        blockman_.init_tree();
+
+    // calculate logical block number
+    unsigned nblock = unsigned(n >>  bm::set_block_shift);
+    bm::word_t* blk =
+        blockman_.check_allocate_block(nblock,
+                                       get_new_blocks_strat());
+    BM_ASSERT(blk);
+
+    unsigned nbit   = unsigned(n & bm::set_block_mask);
+
+    unsigned is_set;
+    if (BM_IS_GAP(blk))
+    {
+        bm::gap_word_t* gap_blk = BMGAP_PTR(blk);
+        bool curr_val = (bm::gap_test_unr(gap_blk, nbit) != 0);
+        is_set = this->gap_block_set(gap_blk, !curr_val, nblock, nbit); // flip
+    }
+    else // bit block
+    {
+        unsigned nword  = unsigned(nbit >> bm::set_word_shift);
+        nbit &= bm::set_word_mask;
+
+        bm::word_t* word = blk + nword;
+        bm::word_t  mask = (((bm::word_t)1) << nbit);
+        is_set = ((*word) & mask);
+        
+        if (is_set) // need to clear the bit (because we do flip here)
+        {
+            *word &= ~mask;
+            BMCOUNT_DEC;
+        }
+        else // set the bit
+        {
+            *word |= mask;
+            BMCOUNT_INC;
         }
     }
     return is_set;
