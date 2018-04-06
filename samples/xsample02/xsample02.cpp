@@ -58,22 +58,10 @@ bm::chrono_taker::duration_map_type  timing_map;
 static
 void bucket_sort(sparse_vector_u32& sv_out, const std::vector<unsigned>& vin)
 {
-    sparse_vector_u32::bvector_type* bv_null =
-        const_cast<sparse_vector_u32::bvector_type*>(sv_out.get_null_bvector());
-    
     for(auto v : vin)
     {
-        if (!bv_null->test(v)) // first occurence of v
-        {
-            bv_null->set_bit_no_check(v); // fast set
-        }
-        else
-        {
-            unsigned v_cnt_prev = sv_out.get(v); // get previous occurence count
-            ++v_cnt_prev;
-            sv_out.set(v, v_cnt_prev);
-        }
-    } // for v
+        sv_out.inc(v);
+    }
 }
 
 void print_sorted(const sparse_vector_u32& sv)
@@ -84,7 +72,6 @@ void print_sorted(const sparse_vector_u32& sv)
     for (; en.valid(); ++en)
     {
         unsigned v = *en;
-        std::cout << v << ", ";
         unsigned cnt = sv.get(v);
         for (unsigned j = 0; j < cnt; ++j)
         {
