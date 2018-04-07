@@ -239,6 +239,15 @@ int main(void)
             counting_sort(r_sv, v);
 
             print_sorted(r_sv); // 1, 4, 5, 8, 8, 8, 10,
+            
+            sparse_vector_u32 p_sv(bm::use_null);
+            counting_sort_parallel(p_sv, v);
+            print_sorted(r_sv);
+            
+            map_u32  h_map;
+            sort_map(h_map, v);
+            print_sorted(h_map);
+
 
             std::sort(v.begin(), v.end());
             sparse_vector_u32 h_sv(bm::use_null);  // histogram vector
@@ -250,13 +259,6 @@ int main(void)
                 return 1;
             }
 
-            sparse_vector_u32 p_sv(bm::use_null);
-            counting_sort_parallel(p_sv, v);
-            print_sorted(r_sv);
-            
-            map_u32  h_map;
-            sort_map(h_map, v);
-            print_sorted(h_map);
         }
         
         // run benchmarks
@@ -287,12 +289,6 @@ int main(void)
         }
 
         {
-            bm::chrono_taker tt1("2. std::sort() + histogram", 1, &timing_map);
-            std::sort(v.begin(), v.end());
-            build_histogram(h_sv, v);
-        }
-
-        {
             bm::chrono_taker tt1("4. counting sort (parallel) ", 1, &timing_map);
             counting_sort_parallel(p_sv, v);
         }
@@ -300,6 +296,12 @@ int main(void)
         {
             bm::chrono_taker tt1("5. counting sort (map) ", 1, &timing_map);
             sort_map(h_map, v);
+        }
+        
+        {
+            bm::chrono_taker tt1("2. std::sort() + histogram", 1, &timing_map);
+            std::sort(v.begin(), v.end());
+            build_histogram(h_sv, v);
         }
 
 
