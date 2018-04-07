@@ -19,7 +19,10 @@ For more information please visit:  http://bitmagic.io
 /** \example xsample02.cpp
   Counting sort using bit-vector and sparse vector to build histogram of unsigned ints.
   Benchmark compares different histogram buiding techniques using BitMagic and std::sort()
-  
+ 
+  Histogram construction, based on integer events is a common problem,
+  this demo studies different approaches, potential for parallelization and other
+  aspects.
 */
 
 
@@ -44,8 +47,12 @@ For more information please visit:  http://bitmagic.io
 // Global parameters and types
 // ----------------------------------------------------
 
-const unsigned  value_max = 1250000;
-const unsigned  test_size = 100000000;
+const unsigned  value_max = 1250000;    // range of variants of events [0..max]
+const unsigned  test_size = 250000000;  // number of events (ints) to generate
+
+// -------------------------------------------
+// Random generator
+// -------------------------------------------
 
 std::random_device rand_dev;
 std::mt19937 gen(rand_dev());
@@ -59,6 +66,13 @@ typedef bm::sparse_vector<bm::id_t, bm::bvector<> > sparse_vector_u32;
 bm::chrono_taker::duration_map_type  timing_map;
 
 
+// -------------------------------------------
+// Counting sort / histogram construction (naive)
+// -------------------------------------------
+
+// This sorting method uses sparse_vector<> as a storage but implements increment
+// as an get-inc-put operations (decoding-encoding every value in the sum)
+//
 static
 void counting_sort_naive(sparse_vector_u32& sv_out, const std::vector<unsigned>& vin)
 {
@@ -69,7 +83,16 @@ void counting_sort_naive(sparse_vector_u32& sv_out, const std::vector<unsigned>&
     }
 }
 
+// -------------------------------------------
+// Counting sort / histogram construction
+// -------------------------------------------
 
+// This sorting method uses sparse_vector<> as a storage but implements increment
+// but increment was implemented as a bm::sparse_vector::inc() method
+// which in turn is based on uses bvector<>::inc()
+//
+// This approach is faster than decoding-encoding used in naive counting sort
+//
 static
 void counting_sort(sparse_vector_u32& sv_out, const std::vector<unsigned>& vin)
 {
@@ -77,7 +100,11 @@ void counting_sort(sparse_vector_u32& sv_out, const std::vector<unsigned>& vin)
         sv_out.inc(v);
 }
 
+// --------------------------------------------------
+// Counting sort / histogram construction (parallel)
+// --------------------------------------------------
 
+// parallel subproblem for all odd numbers
 inline 
 unsigned counting_sort_subbatch(sparse_vector_u32* sv_out, const std::vector<unsigned>* vin)
 {
@@ -90,6 +117,11 @@ unsigned counting_sort_subbatch(sparse_vector_u32* sv_out, const std::vector<uns
     return 0;
 }
 
+// Parallel histogram construction uses a very simple divide and conquer technique
+// splitting by even/odd numbers, uses std::async() for parallelization
+//
+// (should be possible to do a lot better than that)
+//
 static
 void counting_sort_parallel(sparse_vector_u32& sv_out, const std::vector<unsigned>& vin)
 {
@@ -108,6 +140,8 @@ void counting_sort_parallel(sparse_vector_u32& sv_out, const std::vector<unsigne
     sv_out.join(sv_out2);
 }
 
+// Test utility. It also illustrates histogram access method
+//
 static
 void print_sorted(const sparse_vector_u32& sv)
 {
@@ -127,6 +161,7 @@ void print_sorted(const sparse_vector_u32& sv)
 }
 
 // build histogram using sorted vector
+//
 static
 void build_histogram(sparse_vector_u32& sv_out, const std::vector<unsigned>& vin)
 {
@@ -151,6 +186,8 @@ void build_histogram(sparse_vector_u32& sv_out, const std::vector<unsigned>& vin
         sv_out.set(start, count);
     }
 }
+
+
 
 
 int main(void)
