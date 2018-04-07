@@ -59,11 +59,26 @@ std::mt19937 gen(rand_dev());
 std::uniform_int_distribution<> rand_dis(1, value_max); // generate uniform numebrs for [1, vector_max]
 
 
-typedef bm::sparse_vector<bm::id_t, bm::bvector<> > sparse_vector_u32;
+typedef bm::sparse_vector<unsigned, bm::bvector<> > sparse_vector_u32;
+typedef std::map<unsigned, unsigned>                map_u32;
 
 
 // timing storage for benchmarking
 bm::chrono_taker::duration_map_type  timing_map;
+
+
+// -------------------------------------------
+// Counting sort / histogram construction (std::map)
+// -------------------------------------------
+
+static
+void sort_map(map_u32& hmap, const std::vector<unsigned>& vin)
+{
+    for (auto v : vin)
+    {
+        hmap[v]++;
+    }
+}
 
 
 // -------------------------------------------
@@ -160,6 +175,27 @@ void print_sorted(const sparse_vector_u32& sv)
     std::cout << std::endl;
 }
 
+// Test utility for std::map
+//
+static
+void print_sorted(const map_u32& hmap)
+{
+    map_u32::const_iterator it = hmap.begin();
+    map_u32::const_iterator it_end = hmap.end();
+    
+    for (; it != it_end; ++it)
+    {
+        unsigned v = it->first;
+        unsigned cnt = it->second;
+        for (unsigned j = 0; j < cnt; ++j)
+        {
+            std::cout << v << ", ";
+        } // for
+    } // for en
+    std::cout << std::endl;
+}
+
+
 // build histogram using sorted vector
 //
 static
@@ -216,7 +252,11 @@ int main(void)
 
             sparse_vector_u32 p_sv(bm::use_null);
             counting_sort_parallel(p_sv, v);
-            print_sorted(r_sv); 
+            print_sorted(r_sv);
+            
+            map_u32  h_map;
+            sort_map(h_map, v);
+            print_sorted(h_map);
         }
         
         // run benchmarks
@@ -234,6 +274,7 @@ int main(void)
         sparse_vector_u32 h_sv(bm::use_null);
         sparse_vector_u32 n_sv(bm::use_null);
         sparse_vector_u32 p_sv(bm::use_null);
+        map_u32  h_map;
 
         {
             bm::chrono_taker tt1("1. counting sort ", 1, &timing_map);
@@ -254,6 +295,11 @@ int main(void)
         {
             bm::chrono_taker tt1("4. counting sort (parallel) ", 1, &timing_map);
             counting_sort_parallel(p_sv, v);
+        }
+
+        {
+            bm::chrono_taker tt1("5. counting sort (map) ", 1, &timing_map);
+            sort_map(h_map, v);
         }
 
 
