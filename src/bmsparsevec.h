@@ -178,7 +178,6 @@ public:
     */
     reference operator[](size_type idx)
     {
-        BM_ASSERT(idx < size_);
         return reference(*this, idx);
     }
     
