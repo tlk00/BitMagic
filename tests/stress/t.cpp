@@ -8830,6 +8830,27 @@ void Log2Test()
 {
     cout << "---------------------------- Log2 Test..." << endl;
 
+    {
+    unsigned l = bm::bit_scan_reverse32(~0u);
+    cout << l << endl;
+    assert(l == 31);
+    l = bm::bit_scan_reverse(~0u);
+    cout << l << endl;
+    assert(l == 31);
+    l = bm::bit_scan_reverse(~0ull);
+    cout << l << endl;
+    assert(l == 63);
+    }
+
+    {
+    bm::id64_t v8 = 0x8000000000000000U;
+    unsigned l = bm::bit_scan_reverse(v8);
+    assert(l = 64);
+    v8 = 0x4000000000000000U;
+    l = bm::bit_scan_reverse(v8);
+    assert(l = 63);
+    }
+
     cout << "Stage 1" << endl;
     for (unsigned  i = 1; i <= 65535; ++i)
     {
@@ -8873,6 +8894,17 @@ void Log2Test()
             cout << l2 << " " << l3 << endl;;
             exit(1);
         }
+        
+        bm::id64_t v8 = v;
+        v8 <<= 32;
+        unsigned l5 = bm::bit_scan_reverse(v8);
+        if ((l4 + 32) != l5)
+        {
+            cout << "Log2 error for " << v8 << " " << v << endl;
+            cout << i << " " <<" " << l4 << " " << (l4+32) << " " << l5 << endl;;
+            exit(1);
+        }
+        
         v <<= 1;
     }
     cout << "---------------------------- Log2 Test Ok." << endl;
@@ -12725,7 +12757,7 @@ int main(void)
      SetTest();
 
      BitCountChangeTest();
-   
+
      Log2Test();
 
      TestBlockLast();
