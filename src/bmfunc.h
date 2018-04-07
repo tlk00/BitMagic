@@ -122,6 +122,23 @@ template <> struct conditional<false>
 
 
 
+template <class T>
+unsigned bit_scan_reverse(T value)
+{
+    BM_ASSERT(value);
+    
+    if (bm::conditional<sizeof(T)==8>::test())
+    {
+        bm::id64_t v8 = value;
+        v8 >>= 32;
+        unsigned v = (unsigned)v8;
+        if (v)
+        {
+            return bit_scan_reverse32(v) + 32;
+        }
+    }
+    return bit_scan_reverse32((unsigned)value);
+}
 
 
 /*!
@@ -5829,6 +5846,7 @@ unsigned short bitscan_wave(const bm::word_t* w_ptr, unsigned char* bits)
 #endif
     return cnt;
 }
+
 
 // --------------------------------------------------------------
 // Functions tpo work with int values stored in 64-bit pointers 
