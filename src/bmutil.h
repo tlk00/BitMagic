@@ -197,12 +197,12 @@ BMFORCEINLINE unsigned int bsf_asm32(unsigned int value)
 
 #else
 
-BMFORCEINLINE unsigned int bsr_asm32(register unsigned int value)
+BMFORCEINLINE unsigned int bsr_asm32(unsigned int value)
 {   
   __asm  bsr  eax, value
 }
 
-BMFORCEINLINE unsigned int bsf_asm32(register unsigned int value)
+BMFORCEINLINE unsigned int bsf_asm32(unsigned int value)
 {   
   __asm  bsf  eax, value
 }
@@ -224,11 +224,11 @@ T bit_scan_fwd(T v)
         DeBruijn_bit_position<true>::_multiply[((word_t)((v & -v) * 0x077CB531U)) >> 27];
 }
 
-BMFORCEINLINE
-unsigned int bit_scan_reverse(unsigned int value)
+inline
+unsigned bit_scan_reverse32(unsigned value)
 {
     BM_ASSERT(value);
-#if defined(BM_x86) 
+#if defined(BM_x86)
     return bm::bsr_asm32(value);
 #else
     return bm::ilog2_LUT<unsigned int>(value);
