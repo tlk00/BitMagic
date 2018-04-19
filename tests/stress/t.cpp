@@ -9827,6 +9827,25 @@ void TestSparseVector()
     }}
     
     
+    {{
+    cout << "sparse vector inc test" << endl;
+
+    bm::sparse_vector<unsigned, bm::bvector<> > sv;
+    
+    for (unsigned i = 1; i < 65536; ++i)
+    {
+        for (unsigned j = 0; j < 256000; ++j)
+        {
+            sv.inc(j);
+            
+            unsigned v = sv.get(j);
+            assert(v == i);
+        } // for j
+    } // for i
+
+
+    cout << "Ok" << endl;
+    }}
     
 
 
@@ -12744,6 +12763,7 @@ int main(void)
     //LoadVectors("c:/dev/bv_perf", 3, 27);
     exit(1);
 */
+
 
      TestBlockAND();
 
