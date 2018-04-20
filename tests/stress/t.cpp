@@ -12623,6 +12623,10 @@ void TestCompressSparseVector()
         assert(v == 9);
         DetailedCompareSparseVectors(csv4, sv1);
         
+        compressed_sparse_vector_u32 csv5(std::move(csv4));
+        v = csv5.at(10);
+        assert(v == 9);
+        DetailedCompareSparseVectors(csv5, sv1);
 
     }
     
@@ -12667,6 +12671,9 @@ void TestCompressSparseVector()
         compressed_sparse_vector_u32 csv4;
         csv4 = std::move(csv2);
         DetailedCompareSparseVectors(csv4, sv);
+        
+        compressed_sparse_vector_u32 csv5(std::move(csv4));
+        DetailedCompareSparseVectors(csv5, sv);
 
         }
 

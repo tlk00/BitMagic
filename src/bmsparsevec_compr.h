@@ -77,6 +77,9 @@ public:
     }
     
 #ifndef BM_NO_CXX11
+    /*! move-ctor */
+    compressed_sparse_vector(compressed_sparse_vector<Val,SV>&& csv) BMNOEXEPT;
+
     /*! move assignmment operator */
     compressed_sparse_vector<Val,SV>& operator=(compressed_sparse_vector<Val,SV>&& csv) BMNOEXEPT
     {
@@ -230,6 +233,22 @@ compressed_sparse_vector<Val, SV>::compressed_sparse_vector(
     if (in_sync_)
     {
         bv_blocks_.copy_from(csv.bv_blocks_);
+    }
+}
+
+//---------------------------------------------------------------------
+
+template<class Val, class SV>
+compressed_sparse_vector<Val, SV>::compressed_sparse_vector(compressed_sparse_vector<Val,SV>&& csv) BMNOEXEPT
+: sv_(bm::use_null),
+  max_id_(0), in_sync_(false)
+{
+    if (this != &csv)
+    {
+        sv_.swap(csv.sv_);
+        max_id_ = csv.max_id_; in_sync_ = csv.in_sync_;
+        if (in_sync_)
+            bv_blocks_.copy_from(csv.bv_blocks_);
     }
 }
 
