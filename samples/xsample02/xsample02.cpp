@@ -318,6 +318,19 @@ int main(void)
             return 1;
         }
 
+        // compute memory consumption of sparse vector
+        {
+            std::cout << std::endl;
+
+            BM_DECLARE_TEMP_BLOCK(tb);
+            sparse_vector_u32::statistics st;
+            r_sv.optimize(tb, sparse_vector_u32::bvector_type::opt_compress, &st);
+            
+            std::cout << "Sparse vector memory usage:" << st.memory_used / (1024*1024)<< "MB" << std::endl;
+            std::cout << "vector<unsigned> usage:" << v.size() * sizeof(v[0]) / (1024 * 1024) << "MB" << std::endl << std::endl;
+        }
+
+
         bm::chrono_taker::print_duration_map(timing_map, bm::chrono_taker::ct_ops_per_sec);
 
     }
