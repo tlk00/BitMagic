@@ -1238,6 +1238,45 @@ void sparse_vector<Val, BV>::set_value_no_null(size_type idx, value_type v)
 
     // clear the plains where needed
     unsigned eff_plains = effective_plains();
+    unsigned bsr = v ? bm::bit_scan_reverse(v) : 0u;
+        
+    for (unsigned i = bsr; i < eff_plains; ++i)
+    {
+        const bm::word_t* blk = get_block(i, i0, j0);
+        if (blk)
+        {
+            BM_ASSERT(plains_[i]);
+            bvector_type* bv = plains_[i];
+            bv->clear_bit_no_check(idx);
+        }
+    }
+    if (v)
+    {
+        value_type mask = 1u;
+        for (unsigned j = 0; j <= bsr; ++j)
+        {
+            if (v & mask)
+            {
+                bvector_type* bv = get_plain(j);
+                bv->set_bit_no_check(idx);
+            }
+            else
+            {
+                const bm::word_t* blk = get_block(j, i0, j0);
+                if (blk)
+                {
+                    BM_ASSERT(plains_[j]);
+                    bvector_type* bv = plains_[j];
+                    bv->clear_bit_no_check(idx);
+                }
+            }
+            mask <<=  1;
+        }
+    }
+
+
+    
+/*
     for (unsigned i = 0; i < eff_plains; ++i)
     {
         const bm::word_t* blk = get_block(i, i0, j0);
@@ -1259,6 +1298,7 @@ void sparse_vector<Val, BV>::set_value_no_null(size_type idx, value_type v)
         bvector_type* bv = get_plain(p);
         bv->set_bit_no_check(idx);
     } // for j
+*/
 }
 
 //---------------------------------------------------------------------
