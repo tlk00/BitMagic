@@ -1274,31 +1274,6 @@ void sparse_vector<Val, BV>::set_value_no_null(size_type idx, value_type v)
         }
     }
 
-
-    
-/*
-    for (unsigned i = 0; i < eff_plains; ++i)
-    {
-        const bm::word_t* blk = get_block(i, i0, j0);
-        if (blk)
-        {
-            BM_ASSERT(plains_[i]);
-            bvector_type* bv = plains_[i];
-            bv->clear_bit(idx);
-        }
-    }
-
-    // set bits in plains
-    unsigned b_list[sizeof(Val) * 8];
-    unsigned bcnt = bm::bitscan(v, b_list);
-
-    for (unsigned j = 0; j < bcnt; ++j)
-    {
-        unsigned p = b_list[j];
-        bvector_type* bv = get_plain(p);
-        bv->set_bit_no_check(idx);
-    } // for j
-*/
 }
 
 //---------------------------------------------------------------------
