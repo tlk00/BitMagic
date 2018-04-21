@@ -9841,10 +9841,12 @@ void TestSparseVector()
             unsigned v = sv.get(j);
             assert(v == i);
         } // for j
+        if ((i % 100) == 0)
+            cout << "*" << flush;
+
     } // for i
 
-
-    cout << "Ok" << endl;
+    cout <<  "\nOk" << endl;
     }}
     
 
