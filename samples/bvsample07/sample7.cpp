@@ -46,6 +46,7 @@ using std::list;
 
 using namespace std;
 
+inline
 void Print(unsigned n)
 {
     cout << n << endl;;

@@ -48,6 +48,7 @@ std::uniform_int_distribution<> rand_dis(1, vector_max); // generate uniform num
 
 /// generate pseudo-random bit-vector, mix of blocks
 /// 
+static
 void generate_bvector(bm::bvector<>& bv)
 {
     unsigned i, j;
@@ -86,6 +87,7 @@ void generate_bvector(bm::bvector<>& bv)
 
 /// "pre-heat" CPU to minimize dynamic overclocking effects
 ///
+static
 unsigned pre_heat(const bm::bvector<>& bv)
 {
     unsigned cnt = 0;
@@ -102,6 +104,7 @@ unsigned pre_heat(const bm::bvector<>& bv)
 
 /// simple population count for the whole vector
 ///
+static
 void bv_count_test(const bm::bvector<>& bv)
 {
     unsigned cnt = 0;
@@ -119,6 +122,7 @@ void bv_count_test(const bm::bvector<>& bv)
 
 /// count_range() test
 ///
+static
 void bv_count_range(const bm::bvector<>& bv)
 {
     unsigned cnt = 0;
@@ -139,6 +143,7 @@ void bv_count_range(const bm::bvector<>& bv)
 
 /// count_range() test using pre-calculated blocks bit count
 ///
+static
 void bv_count_range_acc(const bm::bvector<>& bv)
 {
     unsigned cnt = 0;
@@ -167,6 +172,7 @@ void bv_count_range_acc(const bm::bvector<>& bv)
 
 /// count_to() test using pre-calculated blocks bit count
 ///
+static
 void bv_count_to_acc(const bm::bvector<>& bv)
 {
     unsigned cnt = 0;
@@ -191,6 +197,7 @@ void bv_count_to_acc(const bm::bvector<>& bv)
 
 /// count_range implemented via two count_to() calls using pre-calculated running count
 ///
+static
 void bv_count_to_range_acc(const bm::bvector<>& bv)
 {
     unsigned cnt = 0;
@@ -223,6 +230,7 @@ void bv_count_to_range_acc(const bm::bvector<>& bv)
 ///
 /// this method can be used, when we need co compute multiple ranges in one call
 ///
+static
 void bv_count_and(const bm::bvector<>& bv)
 {
     unsigned cnt = 0;
@@ -252,6 +260,7 @@ void bv_count_and(const bm::bvector<>& bv)
 /// Counted enumerator is an iterator automata, which counts the running population count 
 /// along the iteration sequence
 ///
+static
 void bv_counted_enumerator(const bm::bvector<>& bv)
 {
     unsigned cnt = 0;
