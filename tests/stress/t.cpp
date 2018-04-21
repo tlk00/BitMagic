@@ -8845,10 +8845,10 @@ void Log2Test()
     {
     bm::id64_t v8 = 0x8000000000000000U;
     unsigned l = bm::bit_scan_reverse(v8);
-    assert(l = 64);
+    assert(l == 63);
     v8 = 0x4000000000000000U;
     l = bm::bit_scan_reverse(v8);
-    assert(l = 63);
+    assert(l == 62);
     }
 
     cout << "Stage 1" << endl;
@@ -12455,6 +12455,8 @@ void GenerateSV(sparse_vector_u32&   sv, unsigned strategy = 0)
         sv.clear(idx, true);
         }
         break;
+    default:
+        break;
     } // switch
 }
 
@@ -12772,7 +12774,6 @@ int main(void)
     //LoadVectors("c:/dev/bv_perf", 3, 27);
     exit(1);
 */
-
 
      TestBlockAND();
 
