@@ -480,7 +480,7 @@ template<class Val, class SV>
 void compressed_sparse_vector<Val, SV>::clear() BMNOEXEPT
 {
     sv_.clear();
-    in_sync_ = max_id_ = 0;
+    in_sync_ = false;  max_id_ = 0;
 }
 
 //---------------------------------------------------------------------
