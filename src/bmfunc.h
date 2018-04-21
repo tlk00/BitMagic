@@ -122,6 +122,10 @@ template <> struct conditional<false>
 
 
 
+/*!
+    Returns BSR value
+    @ingroup bitfunc
+*/
 template <class T>
 unsigned bit_scan_reverse(T value)
 {
