@@ -1343,10 +1343,15 @@ public:
        \param n - bit's index to be cleaned.
        \return true if bit was cleared
     */
-    bool clear_bit(bm::id_t n)
-    {
-        return set_bit(n, false);
-    }
+    bool clear_bit(bm::id_t n) { return set_bit(n, false); }
+    
+    /*!
+       \brief Clears bit n without precondiion checks
+       \param n - bit's index to be cleaned.
+    */
+    void clear_bit_no_check(bm::id_t n) { set_bit_no_check(n, false); }
+
+    
     
     /*!
        \brief Clears every bit in the bitvector.
@@ -2716,7 +2721,6 @@ void bvector<Alloc>::calc_stat(struct bvector<Alloc>::statistics* st) const
     st->memory_used += unsigned(sizeof(*this) - sizeof(blockman_));
     st->memory_used += blockman_.mem_used();
 }
-
 
 // -----------------------------------------------------------------------
 
