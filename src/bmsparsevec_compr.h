@@ -54,6 +54,26 @@ public:
     /*! Statistical information about  memory allocation details. */
     struct statistics : public bv_statistics
     {};
+    
+public:
+    /**
+         Reference class to access elements via common [] operator
+    */
+    class reference
+    {
+    public:
+        reference(compressed_sparse_vector<Val, SV>& csv, size_type idx) BMNOEXEPT
+        : csv_(csv), idx_(idx)
+        {}
+        operator value_type() const { return csv_.get(idx_); }
+        bool operator==(const reference& ref) const
+                                { return bool(*this) == bool(ref); }
+        bool is_null() const { return csv_.is_null(idx_); }
+    private:
+        compressed_sparse_vector<Val, SV>& csv_;
+        size_type                          idx_;
+    };
+
 public:
     // ------------------------------------------------------------
     /*! @name Construction and assignment  */
@@ -105,6 +125,13 @@ public:
     // ------------------------------------------------------------
     /*! @name Element access and modification  */
     //@{
+    
+    /*!
+        \brief get specified element without bounds checking
+        \param idx - element index
+        \return value of the element
+    */
+    value_type operator[](size_type idx) const { return this->get(idx); }
 
     /*!
         \brief access specified element with bounds checking
