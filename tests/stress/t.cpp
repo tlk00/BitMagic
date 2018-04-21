@@ -12506,8 +12506,8 @@ void DetailedCompareSparseVectors(const compressed_sparse_vector_u32& csv,
         }
         if (!is_null_sv)
         {
-            unsigned v1 = sv.get(i);
-            unsigned v2 = csv.get(i);
+            unsigned v1 = sv[i];
+            unsigned v2 = csv[i];
             
             if (v1 != v2)
             {
