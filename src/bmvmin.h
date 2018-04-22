@@ -18,6 +18,11 @@ limitations under the License.
 For more information please visit:  http://bitmagic.io
 */
 
+/*! \file bmvmin.h
+    \brief Mini bitset for testing and utility purposes (internal)
+*/
+
+
 #ifdef _MSC_VER
 #pragma warning( push )
 #pragma warning( disable : 4100)
@@ -41,7 +46,7 @@ namespace bm
 
 /*!
     @brief Template class implements memory saving set functionality
-    
+    @ingroup mset
     @sa bvmini
 */
 template <class A, size_t N> class miniset
@@ -201,7 +206,7 @@ private:
 
 /*!
     @brief Mini bitvector used in bvector template to keep block type flags
- 
+    @ingroup mset
     @sa miniset
 */
 template<size_t N> class bvmini

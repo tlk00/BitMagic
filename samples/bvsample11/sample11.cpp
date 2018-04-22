@@ -26,6 +26,10 @@ For more information please visit:  http://bitmagic.io
   \sa bm::bvector<>::counted_enumerator
  */
 
+/*! \file sample11.cpp
+    \brief Example: bvector<> bit-counting techniques analysis
+*/
+
 #include <iostream>
 #include <random>
 

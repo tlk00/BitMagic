@@ -18,13 +18,15 @@ limitations under the License.
 For more information please visit:  http://bitmagic.io
 */
 
+/*! \file bmserial.h
+    \brief Serialization / compression of bvector<>. Set operations on compressed BLOBs.
+*/
 
 /*! 
     \defgroup bvserial bvector<> serialization
     Serialization for bvector<> container
     \ingroup bvector
- 
- */
+*/
 
 #ifndef BM__H__INCLUDED__
 #define BM__H__INCLUDED__

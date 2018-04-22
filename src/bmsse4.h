@@ -18,10 +18,10 @@ limitations under the License.
 For more information please visit:  http://bitmagic.io
 */
 
+/*! \file bmsse4.h
+    \brief Compute functions for SSE4.2 SIMD instruction set (internal)
+*/
 
-
-//    Header implements processor specific intrinsics declarations for SSE2
-//    instruction set
 #include<mmintrin.h>
 #include<emmintrin.h>
 #include<smmintrin.h>

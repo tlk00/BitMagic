@@ -18,6 +18,10 @@ limitations under the License.
 For more information please visit:  http://bitmagic.io
 */
 
+/*! \file bmalloc.h
+    \brief Default SIMD friendly allocator 
+*/
+
 #include <stdlib.h>
 #include <new>
 

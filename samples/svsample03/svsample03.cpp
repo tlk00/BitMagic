@@ -23,7 +23,12 @@ For more information please visit:  http://bitmagic.io
   \sa bm::sparse_vector<>::import
   \sa bm::sparse_vector<>::decode
   \sa bm::sparse_vector<>::join
- */
+*/
+
+/*! \file svsample03.cpp
+    \brief Example: sparse_vector<> merge and fast extraction of content
+*/
+
 
 #include <iostream>
 #include <vector>

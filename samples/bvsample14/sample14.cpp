@@ -21,9 +21,13 @@ For more information please visit:  http://bitmagic.io
  searialized BLOBs
  
   \sa bm::serializer
-  \sa bm::deserialize 
-
+  \sa bm::deserialize
 */
+
+/*! \file sample14.cpp
+    \brief Example: bvector<> set operations on serialized/compressed BLOBs
+*/
+
 
 #include <stdlib.h>
 #include <iostream>

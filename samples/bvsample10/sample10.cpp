@@ -22,6 +22,10 @@ For more information please visit:  http://bitmagic.io
   \sa bm::random_subset  
  */
 
+/*! \file sample10.cpp
+    \brief Example: bvector<> generation of random sub-set
+*/
+
 
 #include <iostream>
 #include "bm.h"

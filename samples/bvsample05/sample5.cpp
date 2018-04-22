@@ -27,6 +27,11 @@ For more information please visit:  http://bitmagic.io
   \sa bm::bvector<>::get_enumerator()
 */
 
+/*! \file sample5.cpp
+    \brief Example: bvector<>::enumerator use
+*/
+
+
 #include <iostream>
 #include <algorithm>
 #include "bm.h"

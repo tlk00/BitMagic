@@ -18,6 +18,10 @@ limitations under the License.
 For more information please visit:  http://bitmagic.io
 */
 
+/*! \file bmconst.h
+    \brief Various constants and tables
+*/
+
 namespace bm
 {
 
@@ -105,6 +109,7 @@ enum strategy
 
 /**
     Codes of set operations
+    @ingroup bvector
 */
 enum set_operation
 {
@@ -152,6 +157,7 @@ enum null_support
 
 /**
     Internal structure. Copyright information.
+    @internal
 */
 template<bool T> struct _copyright
 {
@@ -161,7 +167,7 @@ template<bool T> struct _copyright
 
 template<bool T> const char _copyright<T>::_p[] = 
     "BitMagic C++ Library. v.3.11.0 (c) 2002-2017 Anatoliy Kuznetsov.";
-template<bool T> const unsigned _copyright<T>::_v[3] = {3, 9, 0};
+template<bool T> const unsigned _copyright<T>::_v[3] = {3, 11, 0};
 
 
 template<bool T> struct DeBruijn_bit_position
@@ -169,13 +175,18 @@ template<bool T> struct DeBruijn_bit_position
     static const unsigned _multiply[32];
 };
 
+/**
+    DeBruijn majic table
+    @internal
+*/
 template<bool T>
 const unsigned DeBruijn_bit_position<T>::_multiply[32] = { 
   0, 1, 28, 2, 29, 14, 24, 3, 30, 22, 20, 15, 25, 17, 4, 8, 
   31, 27, 13, 23, 21, 19, 16, 7, 26, 12, 18, 6, 11, 5, 10, 9
 };
 
-/** Structure keeps index of first right 1 bit for every byte.  
+/**
+    Structure keeps index of first right 1 bit for every byte.
     @ingroup bitfunc 
 */
 template<bool T> struct first_bit_table
@@ -303,7 +314,6 @@ const gap_word_t gap_len_table_nl<T>::_len[bm::gap_levels] =
 
 /*!
     @brief codes for supported SIMD optimizations
-    @internal
 */
 enum simd_codes
 {

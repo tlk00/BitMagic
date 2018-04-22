@@ -28,6 +28,10 @@ belong to different ranges.
     @sa bm::bvector<>::find_range()
 */
 
+/*! \file sample15.cpp
+    \brief Example: bvector<> methods to find last bit and bit-vectors effective range
+*/
+
 #include <stdlib.h>
 #include <iostream>
 #include <vector>

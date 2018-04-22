@@ -22,7 +22,12 @@ For more information please visit:  http://bitmagic.io
  
   \sa bm::sparse_vector<>
   \sa bm::set2set_11_transform
- */
+*/
+
+/*! \file svsample05.cpp
+    \brief Example: sparse_vector<> used for set 2 set remapping (theory of groups Image)
+*/
+
 
 #include <iostream>
 #include <vector>

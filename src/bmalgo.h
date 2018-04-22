@@ -18,6 +18,10 @@ limitations under the License.
 For more information please visit:  http://bitmagic.io
 */
 
+/*! \file bmalgo.h
+    \brief Algorithms for bvector<> (main include)
+*/
+
 #include "bm.h"
 #include "bmfunc.h"
 #include "bmdef.h"

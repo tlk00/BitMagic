@@ -18,7 +18,9 @@ limitations under the License.
 For more information please visit:  http://bitmagic.io
 */
 
-// BitMagic timing functions (internal header)
+/*! \file bmtimer.h
+    \brief Timing utilities for benchmarking (internal)
+*/
 
 #include <iostream>
 #include <iomanip>
@@ -31,6 +33,8 @@ namespace bm
 
 
 /// Utility class to collect performance measurements and statistics.
+///
+/// @internal
 ///
 class chrono_taker
 {

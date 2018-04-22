@@ -28,6 +28,9 @@ For more information please visit:  http://bitmagic.io
   For more information please visit: http://bmagic.sourceforge.net
 
 */
+/*! \file sample3.cpp
+    \brief Example: bvector<> with different allocation/compression strategies
+*/
 
 #include <stdlib.h>
 #include <iostream>

@@ -18,7 +18,9 @@ limitations under the License.
 For more information please visit:  http://bitmagic.io
 */
 
-
+/*! \file bmsse_util.h
+    \brief Compute functions for SSE SIMD instruction set (internal)
+*/
 
 namespace bm
 {

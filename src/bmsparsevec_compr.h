@@ -18,6 +18,10 @@ limitations under the License.
 For more information please visit:  http://bitmagic.io
 */
 
+/*! \file bmsparsevec_compr.h
+    \brief Compressed sparse constainer compressed_sparse_vector<> for integer types
+*/
+
 #include <memory.h>
 
 #ifndef BM_NO_STL

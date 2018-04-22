@@ -18,7 +18,9 @@ For more information please visit:  http://bitmagic.io
 
 /** \example xsample01.cpp
   Demo and a benchmark on memory consumption control and logical operation
- 
+*/
+/*! \file xsample01.cpp
+    \brief Example: Example: memory consumption techniques
 */
 
 

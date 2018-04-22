@@ -18,6 +18,10 @@ limitations under the License.
 For more information please visit:  http://bitmagic.io
 */
 
+/*! \file bm.h
+    \brief Compressed bit-vector bvector<> container, set algebraic methods, traversal iterators
+*/
+
 
 // define BM_NO_STL if you use BM in "STL free" environment and want
 // to disable any references to STL headers
@@ -54,6 +58,8 @@ extern "C"
     
     @param handle_ptr - custom pointer to callback specific data
     @param bit_idx - number/index of visited bit
+    
+    @ingroup bvector
     */
     typedef int (*bit_visitor_callback_type)(void* handle_ptr, bm::id_t bit_idx);
 }

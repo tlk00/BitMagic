@@ -18,7 +18,10 @@ limitations under the License.
 For more information please visit:  http://bitmagic.io
 */
 
-/// BitMagic debugging functions (internal header)
+/*! \file bmdbg.h
+    \brief Debugging functions (internal)
+*/
+
 
 #include <stdio.h>
 #include <stdlib.h>

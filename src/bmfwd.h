@@ -18,6 +18,10 @@ limitations under the License.
 For more information please visit:  http://bitmagic.io
 */
 
+/*! \file bmfwd.h
+    \brief Forward declarations
+*/
+
 #include "bmconst.h"
 
 namespace bm

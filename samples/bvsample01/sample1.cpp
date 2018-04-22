@@ -17,8 +17,7 @@ For more information please visit:  http://bitmagic.io
 */
 
 /** \example sample1.cpp
-  Example of how to use bvector template class to set
-  bits and then retrieve indexes of ON bits.
+  Example how to use bvector<> to set bits and then retrieve indexes of ON bits
  
 
   \sa bm::bvector<>::get_next() 
@@ -26,8 +25,11 @@ For more information please visit:  http://bitmagic.io
   \sa bm::bvector<>::set()
   \sa bm::bvector<>::count() 
   \sa bm::bvector<>::clear()
-  
  */
+
+/*! \file sample1.cpp
+    \brief Example: bvector<> set bits and then retrieve indexes of ON bits
+*/
 
 #include <iostream>
 #include "bm.h"

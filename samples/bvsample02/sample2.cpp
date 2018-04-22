@@ -20,6 +20,10 @@ For more information please visit:  http://bitmagic.io
   Example demonstrates using set operations AND, OR, XOR, etc.
 */
 
+/*! \file sample2.cpp
+    \brief Example: bvector<> set algebra operations AND, OR, XOR, etc.
+*/
+
 
 #include <iostream>
 #include "bm.h"

@@ -18,6 +18,10 @@ limitations under the License.
 For more information please visit:  http://bitmagic.io
 */
 
+/*! \file bmrandom.h
+    \brief Generation of random subset 
+*/
+
 #include "bm.h"
 #include "bmfunc.h"
 #include "bmdef.h"

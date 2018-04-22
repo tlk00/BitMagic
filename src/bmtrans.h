@@ -17,6 +17,11 @@ limitations under the License.
 
 For more information please visit:  http://bitmagic.io
 */
+
+/*! \file bmtrans.h
+    \brief Utilities for bit transposition (internal) (experimental!)
+*/
+
 #ifdef _MSC_VER
 #pragma warning( push )
 #pragma warning( disable : 4311 4312 4127)

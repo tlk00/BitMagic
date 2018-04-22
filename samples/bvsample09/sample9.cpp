@@ -28,8 +28,12 @@ For more information please visit:  http://bitmagic.io
   \sa bm::distance_operation
 
    For more information please visit:  http://bmagic.sourceforge.net
-
 */
+
+/*! \file sample9.cpp
+    \brief Example: bvector<> binary similarity / distance algorithms
+*/
+
 
 #include <iostream>
 

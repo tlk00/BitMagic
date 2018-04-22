@@ -16,6 +16,11 @@ limitations under the License.
 For more information please visit:  http://bitmagic.io
 */
 
+/*! \file bmgamma.h
+    \brief Elias Gamma Utils used for compact serialization (internal)
+*/
+
+
 #ifndef BMGAMMAENC__H__INCLUDED__
 #define BMGAMMAENC__H__INCLUDED__
 
@@ -26,7 +31,7 @@ namespace bm
 /*! 
     \defgroup gammacode Elias Gamma Code (internal)
     Elias Gamma Encoder
-    \internal
+    @internal
     \ingroup bvserial
  
  */

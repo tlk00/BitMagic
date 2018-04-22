@@ -17,6 +17,9 @@ limitations under the License.
 
 For more information please visit:  http://bitmagic.io
 */
+/*! \file bmsimd.h
+    \brief SIMD target version definitions
+*/
 
 
 #ifdef BMAVX2OPT
@@ -44,6 +47,8 @@ namespace bm
 /**
     @brief return SIMD optimization used for building BitMagic
     @return SIMD code
+ 
+    @ingroup bmagic
 */
 inline int simd_version()
 {

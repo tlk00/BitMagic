@@ -22,8 +22,11 @@ For more information please visit:  http://bitmagic.io
 For more information please visit:  http://bmagic.sourceforge.net
 
   \sa bm::serializer
-  \sa bm::deserialize 
+  \sa bm::deserialize
+*/
 
+/*! \file sample4.cpp
+    \brief Example: bvector<> serialization/deserialization.
 */
 
 #include <stdlib.h>

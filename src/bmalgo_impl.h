@@ -18,6 +18,10 @@ limitations under the License.
 For more information please visit:  http://bitmagic.io
 */
 
+/*! \file bmalgo_impl.h
+    \brief Algorithms for bvector<>
+*/
+
 #ifdef _MSC_VER
 #pragma warning( push )
 #pragma warning( disable : 4311 4312 4127)
@@ -702,7 +706,6 @@ void distance_stage(const distance_metric_descriptor* dmit,
     \ingroup  distance
     
 */
-
 template<class BV>
 void distance_operation(const BV& bv1, 
                         const BV& bv2, 
@@ -792,7 +795,6 @@ void distance_operation(const BV& bv1,
 \ingroup  distance
 
 */
-
 template<class BV>
 unsigned distance_and_operation(const BV& bv1, 
                                 const BV& bv2)
@@ -862,9 +864,7 @@ unsigned distance_and_operation(const BV& bv1,
                       computation is added to "result" field
     \param dmit_end - pointer to (last+1) element of metric descriptors array
     \ingroup  distance
-    
 */
-
 template<class BV>
 void distance_operation_any(const BV& bv1, 
                             const BV& bv2, 

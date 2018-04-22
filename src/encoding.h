@@ -18,6 +18,11 @@ limitations under the License.
 For more information please visit:  http://bitmagic.io
 */
 
+/*! \file encoding.h
+    \brief Encoding utilities for serialization (internal)
+*/
+
+
 #include <memory.h>
 #include "bmutil.h"
 

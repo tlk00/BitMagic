@@ -16,6 +16,10 @@ limitations under the License.
 For more information please visit:  http://bitmagic.io
 */
 
+/*! \file bmundef.h
+    \brief pre-processor un-defines to avoid global space pollution (internal)
+*/
+
 #undef BMCOUNT_INC
 #undef BMCOUNT_DEC
 #undef BMCOUNT_VALID

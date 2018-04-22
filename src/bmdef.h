@@ -16,6 +16,10 @@ limitations under the License.
 For more information please visit:  http://bitmagic.io
 */
 
+/*! \file bmdef.h
+    \brief Definitions(internal)
+*/
+
 #include <climits>
 
 // Incorporate appropriate tuneups when the NCBI C++ Toolkit's core

@@ -18,6 +18,10 @@ limitations under the License.
 For more information please visit:  http://bitmagic.io
 */
 
+/*! \file bmutil.h
+    \brief Bit manipulation primitives (internal)
+*/
+
 #include "bmdef.h"
 #include "bmconst.h"
 
@@ -28,11 +32,11 @@ For more information please visit:  http://bitmagic.io
 namespace bm
 {
 
-    /**
-    bit-block array wrapped into union for correct interpretation of
-    32-bit vs 64-bit access vs SIMD
-    @internal
-    */
+        /**
+        bit-block array wrapped into union for correct interpretation of
+        32-bit vs 64-bit access vs SIMD
+        @internal
+        */
         struct bit_block_t
         {
             union bunion_t

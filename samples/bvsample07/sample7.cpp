@@ -25,8 +25,12 @@ For more information please visit:  http://bitmagic.io
   \sa bm::combine_sub()
   \sa bm::combine_or()
   \sa bm::combine_xor()
-
 */
+
+/*! \file sample7.cpp
+    \brief Example: set operations between bvector<> and arrays of integers.
+*/
+
 
 #include <iostream>
 #include <algorithm>

@@ -25,7 +25,11 @@ For more information please visit:  http://bitmagic.io
   \sa bm::sparse_vector_serialize
   \sa bm::sparse_vector_deserialize
   
- */
+*/
+
+/*! \file svsample02.cpp
+    \brief Example: sparse_vector<> serialization
+*/
 
 #include <iostream>
 #include <vector>

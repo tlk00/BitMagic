@@ -18,6 +18,10 @@ limitations under the License.
 For more information please visit:  http://bitmagic.io
 */
 
+/*! \file bmsparsevec_serial.h
+    \brief Serialization for sparse_vector<>
+*/
+
 #include <vector>
 
 #include "bmsparsevec.h"

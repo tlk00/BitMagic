@@ -18,6 +18,10 @@ limitations under the License.
 For more information please visit:  http://bitmagic.io
 */
 
+/*! \file bmfunc.h
+    \brief Bit manipulation primitives (internal)
+*/
+
 #include <memory.h>
 
 #include "bmdef.h"

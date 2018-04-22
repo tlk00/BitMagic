@@ -20,7 +20,11 @@ For more information please visit:  http://bitmagic.io
   Example how to use NULL-enabled sparse vector
  
   \sa bm::sparse_vector<>
- */
+*/
+
+/*! \file svsample04.cpp
+    \brief Example: sparse_vector<> with NULL (unset) values
+*/
 
 #include <iostream>
 #include <vector>

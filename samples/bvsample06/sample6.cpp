@@ -19,8 +19,10 @@ For more information please visit:  http://bitmagic.io
 /** \example sample6.cpp
  This example demonstrates using of custom memory allocators.
  In this case allocator works as a memory checker, counts number of 
- allocations and deallocations to make sure that there is no memory leaks. 
-
+ allocations and deallocations to make sure that there is no memory leaks.
+*/
+/*! \file sample6.cpp
+    \brief Example: bvector<> custom memory allocator
 */
 
 #include <iostream>

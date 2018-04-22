@@ -25,6 +25,10 @@ For more information please visit:  http://bitmagic.io
   aspects.
 */
 
+/*! \file xsample02.cpp
+    \brief Example: sparse_vector<> used for counting sort / historgam construction
+*/
+
 
 #include <iostream>
 #include <memory>

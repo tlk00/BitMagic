@@ -24,6 +24,10 @@ For more information please visit:  http://bitmagic.io
   \sa bm::bvector<>::insert_iterator
 */
 
+/*! \file sample8.cpp
+    \brief Example: bvector<> - STL interoperability
+*/
+
 #include <iostream>
 #include <algorithm>
 #include <vector>

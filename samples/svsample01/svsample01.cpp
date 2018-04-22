@@ -23,8 +23,12 @@ For more information please visit:  http://bitmagic.io
   \sa bm::sparse_vector<>::at
   \sa bm::sparse_vector<>::optimize
   \sa bm::sparse_vector<>::size
- 
- */
+*/
+
+/*! \file svsample01.cpp
+    \brief Example: sparse_vector<> container set values
+*/
+
 
 #include <iostream>
 #include "bmsparsevec.h"

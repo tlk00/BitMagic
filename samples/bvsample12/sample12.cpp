@@ -33,6 +33,10 @@ For more information please visit:  http://bitmagic.io
   \sa bm::combine_or()
  */
 
+/*! \file sample12.cpp
+    \brief Example: bvector<> analysis of bit setting methods
+*/
+
 #include <iostream>
 #include <vector>
 
