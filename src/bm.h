@@ -87,24 +87,27 @@ namespace bm
 
 /** @defgroup bmagic BitMagic Library
     BitMagic C++ Library
-    For more information please visit:
-    http://bmagic.sourceforge.net
-    https://github.com/tlk00/BitMagic
- 
+    For more information please visit: http://bitmagic.io
 */
 
 
-/** @defgroup bvector bvector<>
+/** @defgroup bvector bvector<> container
     The Main bvector<> Group
     bvector<> template: front end of the BitMagic library.
+ 
     @ingroup bmagic
 */
 
+/** @defgroup bvit bvector<> iterators
+    Iterators for compressed bit-vector traversal
+    @ingroup bvector
+*/
 
 
 /*!
    @brief bitvector 
    Bit-vector container with runtime compression of bits
+ 
    @ingroup bvector
 */
 template<class Alloc> 
@@ -217,7 +220,7 @@ public:
 
     /*!
         @brief Base class for all iterators.
-        @ingroup bvector
+        @ingroup bvit
     */
     class iterator_base
     {
@@ -354,7 +357,7 @@ public:
         instead of explicitly calling set, because iterator may implement
         some performance specific tricks to make sure bulk insert is fast.
 
-        @ingroup bvector
+        @ingroup bvit
     */
     class insert_iterator
     {
@@ -422,7 +425,7 @@ public:
 
 
     /*! @brief Constant iterator designed to enumerate "ON" bits
-        @ingroup bvector
+        @ingroup bvit
     */
     class enumerator : public iterator_base
     {
@@ -861,7 +864,7 @@ public:
         
         When increment operator called current position is increased by 1.
         
-        @ingroup bvector
+        @ingroup bvit
     */
     class counted_enumerator : public enumerator
     {

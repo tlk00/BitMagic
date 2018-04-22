@@ -32,9 +32,17 @@ For more information please visit:  http://bitmagic.io
 namespace bm
 {
 
-/** \defgroup svector Sparse vector
+/** \defgroup svector Sparse and compressed vectors
     Sparse vector for integer types using bit transposition transform
-    \ingroup bmagic
+ 
+    @ingroup bmagic
+ */
+
+
+/** \defgroup sv sparse_vector<>
+    Sparse vector for integer types using bit transposition transform
+ 
+    @ingroup bmagic
  */
 
 
@@ -57,7 +65,7 @@ template<class Val, class SV> class compressed_sparse_vector;
    Overall it provides variable bit-depth compression, sparse compression in
    bit-plains.
  
-   \ingroup svector
+   @ingroup sv
 */
 template<class Val, class BV>
 class sparse_vector

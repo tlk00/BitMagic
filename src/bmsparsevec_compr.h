@@ -34,7 +34,7 @@ namespace bm
 /*!
    \brief compressed sparse vector for NULL-able sparse vectors
  
-   \ingroup svector
+   \ingroup sv
 */
 template<class Val, class SV>
 class compressed_sparse_vector
@@ -123,7 +123,7 @@ public:
     size_type size() const;
 
     // ------------------------------------------------------------
-    /*! @name Element access and modification  */
+    /*! @name Element access */
     //@{
     
     /*!
@@ -154,14 +154,30 @@ public:
         is not configured to support assignment flags
     */
     bool is_null(size_type idx) const;
+    
+    /**
+        \brief Get bit-vector of assigned values (or NULL)
+    */
+    const bvector_type* get_null_bvector() const;
+
     //@}
+    
+    // ------------------------------------------------------------
+    /*! @name Comparison */
+    //@{
 
     /*!
         \brief check if another vector has the same content
         \return true, if it is the same
     */
     bool equal(const compressed_sparse_vector<Val, SV>& csv) const;
+    //@}
+
+    // ------------------------------------------------------------
+    /*! @name Construct/Load compressed vector with data */
     
+    //@{
+
     /*!
         \brief set specified element with bounds checking and automatic resize
      
@@ -178,6 +194,8 @@ public:
         \param sv_src - source sparse vector
     */
     void load_from(const sparse_vector_type& sv_src);
+    //@}
+
 
     /*!
         \brief run memory optimization for all vector plains
@@ -214,11 +232,6 @@ public:
     void unsync() { in_sync_ = false; }
     //@}
     
-    /**
-        \brief Get bit-vector of assigned values (or NULL)
-    */
-    const bvector_type* get_null_bvector() const;
-
 protected:
     /*!
         \brief Resolve logical address to access via rank compressed address
