@@ -123,7 +123,7 @@ void counting_sort(sparse_vector_u32& sv_out, const std::vector<unsigned>& vin)
 // Counting sort / histogram construction (parallel)
 // --------------------------------------------------
 
-// parallel subproblem for all odd numbers
+// parallel subproblem for all even numbers: (v & 1) == 0
 inline 
 unsigned counting_sort_subbatch(sparse_vector_u32* sv_out, const std::vector<unsigned>* vin)
 {
@@ -145,10 +145,10 @@ static
 void counting_sort_parallel(sparse_vector_u32& sv_out, const std::vector<unsigned>& vin)
 {
     sparse_vector_u32 sv_out2(bm::use_null);
+    // process evens in parallel
     std::future<unsigned> f1 = std::async(std::launch::async, counting_sort_subbatch, &sv_out2, &vin);
 
-    // process all even elements
-    //
+    // process all odd elements
     for (size_t i = 0; i < vin.size(); i++)
     {
         auto v = vin[i];
