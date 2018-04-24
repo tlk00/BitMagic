@@ -75,9 +75,10 @@ relprep: .DIRS_BLD
 	$(RM) -rf *.suo
 	$(RM) -rf debug release cvsenv.sh
 	cd platforms; dos2unix *.mk; cd -
+	dos2unix canon-system config.guess
 	dos2unix readme *.txt
 	cd src; dos2unix *.h
 	chmod -x src/*
-	chmod -x Makefile makefile.in Doxyfile license.txt *.sln readme
+	chmod -x Makefile makefile.in Doxyfile readme
 
 install : .DIRS_INST
