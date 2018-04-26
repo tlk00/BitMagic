@@ -1525,7 +1525,7 @@ void export_array(BV& bv, It first, It last)
                                               false /*no NULL ret*/);
                 if (block_type == 1) // gap
                 {
-                    blk = bman.convert_gap2bitset(i, BMGAP_PTR(blk));
+                    blk = bman.deoptimize_block(i);
                 }
                 
                 bm::word_t* wrd_ptr = blk;
@@ -1577,10 +1577,8 @@ void export_array(BV& bv, It first, It last)
                                               BM_BIT, 
                                               &block_type,
                                               false /*no NULL ret*/);
-                if (block_type == 1) // gap
-                {
-                    blk = bman.convert_gap2bitset(i, BMGAP_PTR(blk));
-                }
+                if (block_type) // gap
+                    blk = bman.deoptimize_block(i);
                 
                 bm::word_t* wrd_ptr = blk;
                 if (word_cnt >= bm::set_block_size) {
@@ -1626,9 +1624,7 @@ void export_array(BV& bv, It first, It last)
                                               &block_type,
                                               false /*no NULL ret*/);
                 if (block_type == 1) // gap
-                {
-                    blk = bman.convert_gap2bitset(i, BMGAP_PTR(blk));
-                }
+                    blk = bman.deoptimize_block(i);
                 
                 bm::word_t* wrd_ptr = blk;
                 if (word_cnt >= bm::set_block_size) {

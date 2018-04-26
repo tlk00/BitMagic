@@ -3801,7 +3801,6 @@ void bvector<Alloc>::set_range_no_check(bm::id_t left,
             bool is_gap = BM_IS_GAP(block);
 
             blockman_.set_block(nb, FULL_BLOCK_FAKE_ADDR);
-            blockman_.set_block_bit(nb);
             
             if (is_gap)
             {

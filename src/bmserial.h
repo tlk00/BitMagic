@@ -932,7 +932,7 @@ unsigned serializer<BV>::serialize(const BV& bv,
         // Empty or ONE block serialization
 
         bool flag;
-        flag = bman.is_block_zero(i, blk, false);
+        flag = bm::check_block_zero(blk, false/*shallow check*/);
         if (flag)
         {
         zero_block:
@@ -962,14 +962,14 @@ unsigned serializer<BV>::serialize(const BV& bv,
         }
         else
         {
-            flag = bman.is_block_one(i, blk, false);
+            flag = bm::check_block_one(blk, false);
             if (flag)
             {
                 // Look ahead for similar blocks
                 for(j = i+1; j < bm::set_total_blocks; ++j)
                 {
                    bm::word_t* blk_next = bman.get_block(j);
-                   if (flag != bman.is_block_one(j, blk_next, false))
+                   if (flag != bm::check_block_one(blk_next, false))
                        break;
                 }
                 if (j == bm::set_total_blocks)
@@ -1470,8 +1470,10 @@ deserializer<BV, DEC>::deserialize_gap(unsigned char btype, decoder_type& dec,
             gap_word_t* gap_blk_ptr = BMGAP_PTR(gap_blk);
             *gap_blk_ptr = gap_head;
             set_gap_level(gap_blk_ptr, level);
-            bman.set_block(i, (bm::word_t*)gap_blk);
-            bman.set_block_gap(i);
+            bm::word_t* old_block = bman.set_block(i, (bm::word_t*)BMPTR_SETBIT0(gap_blk));
+            BM_ASSERT(old_block == 0);
+//            bman.set_block_gap_ptr(i, gap_blk);
+            
             dec.get_16(gap_blk + 1, len - 1);
             gap_blk[len] = bm::gap_max_bits - 1;
         }
@@ -1605,6 +1607,7 @@ unsigned deserializer<BV, DEC>::deserialize(bvector_type&        bv,
     {
         btype = dec.get_8();
         bm::word_t* blk = bman.get_block(i);
+        
         // pre-check if we have short zero-run packaging here
         //
         if (btype & (1 << 7))
@@ -1748,19 +1751,17 @@ unsigned deserializer<BV, DEC>::deserialize(bvector_type&        bv,
             gap_word_t len = (gap_word_t)
                 (sizeof(gap_word_t) == 2 ? dec.get_16() : dec.get_32());
 
-            if (bman.is_block_gap(i))
+            if (BM_IS_GAP(blk))
             {
-                // Here we most probably does not want to keep
-                // the block GAP since generic bitblock offers better
-                // performance.
-                blk = bman.convert_gap2bitset(i);
+                // convert from GAP cause generic bitblock is faster
+                blk = bman.deoptimize_block(i);
             }
             else
             {
                 if (blk == 0)  // block does not exists yet
                 {
                     blk = bman.get_allocator().alloc_bit_block();
-                    bit_block_set(blk, 0);
+                    bm::bit_block_set(blk, 0);
                     bman.set_block(i, blk);
                 }
             }
@@ -1769,7 +1770,7 @@ unsigned deserializer<BV, DEC>::deserialize(bvector_type&        bv,
             for (unsigned k = 0; k < len; ++k)
             {
                 gap_word_t bit_idx = dec.get_16();
-				set_bit(blk, bit_idx);
+				bm::set_bit(blk, bit_idx);
             }
             continue;
         }
@@ -3796,7 +3797,7 @@ iterator_deserializer<BV, SerialIterator>::deserialize(
                     blk = bman.get_block(bv_block_idx);
                     if (blk) 
                     {
-                        bool z = bman.is_block_zero(bv_block_idx, blk);
+                        bool z = bm::check_block_zero(blk, true/*deep check*/);
                         if (!z) 
                             return 1;
                     } 

@@ -5395,6 +5395,51 @@ template<typename T> T bit_convert_to_arr(T* BMRESTRICT dest,
     return (T)(pcurr - dest);
 }
 
+/**
+    \brief Checks all conditions and returns true if block consists of only 0 bits
+    \param blk - Blocks's pointer
+    \param deep_scan - flag to do full bit block verification (scan)
+                       when deep scan is not requested result can be approximate
+    \returns true if all bits are in the block are 0.
+*/
+inline
+bool check_block_zero(const bm::word_t* blk, bool  deep_scan)
+{
+    if (!blk) return true;
+
+    bool ret;
+    if (BM_IS_GAP(blk))
+        ret = gap_is_all_zero(BMGAP_PTR(blk), bm::gap_max_bits);
+    else
+        ret = deep_scan ? bm::bit_is_all_zero(blk, blk+bm::set_block_size) : 0;
+    return ret;
+}
+
+
+/**
+    \brief Checks if block has only 1 bits
+    \param blk - Block's pointer
+    \param deep_scan - flag to do full bit block verification (scan)
+                       when deep scan is not requested result can be approximate
+    \return true if block consists of 1 bits.
+*/
+bool check_block_one(const bm::word_t* blk, bool deep_scan)
+{
+    if (blk == 0) return false;
+
+    if (BM_IS_GAP(blk))
+        return bm::gap_is_all_one(BMGAP_PTR(blk), bm::gap_max_bits);
+
+    if (IS_FULL_BLOCK(blk))
+        return true;
+    
+    if (!deep_scan)
+        return false; // block exists - presume it has 0 bits
+
+    return bm::is_bits_one((wordop_t*)blk,
+                           (wordop_t*)(blk + bm::set_block_size));
+}
+
 
 
 /*! @brief Calculates memory overhead for number of gap blocks sharing 
@@ -5857,7 +5902,7 @@ unsigned short bitscan_wave(const bm::word_t* w_ptr, unsigned char* bits)
 
 
 // --------------------------------------------------------------
-// Functions tpo work with int values stored in 64-bit pointers 
+// Functions to work with int values stored in 64-bit pointers
 // --------------------------------------------------------------
 
 /*!

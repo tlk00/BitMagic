@@ -423,7 +423,7 @@ void print_stat(const BV& bv, unsigned blocks = 0)
 
         if (IS_FULL_BLOCK(blk))
         {
-           if (bman.is_block_gap(nb)) // gap block
+           if (BM_IS_GAP(blk)) // gap block
            {
                printf("[Alert!%i]", nb);
                assert(0);
@@ -435,7 +435,7 @@ void print_stat(const BV& bv, unsigned blocks = 0)
                blk = bman.get_block(nb);
                if (IS_FULL_BLOCK(blk))
                {
-                 if (bman.is_block_gap(nb)) // gap block
+                 if (BM_IS_GAP(blk)) // gap block
                  {
                      printf("[Alert!%i]", nb);
                      assert(0);
@@ -461,7 +461,7 @@ void print_stat(const BV& bv, unsigned blocks = 0)
                 printf("..%i..", (int)nb-nb_prev);
             }
 
-            if (bman.is_block_gap(nb)) // gap block
+            if (BM_IS_GAP(blk))
             {
                 unsigned bc = bm::gap_bit_count(BMGAP_PTR(blk));
                 /*unsigned sum = */bm::gap_control_sum(BMGAP_PTR(blk));
