@@ -5400,7 +5400,9 @@ template<typename T> T bit_convert_to_arr(T* BMRESTRICT dest,
     \param blk - Blocks's pointer
     \param deep_scan - flag to do full bit block verification (scan)
                        when deep scan is not requested result can be approximate
-    \returns true if all bits are in the block are 0.
+    \returns true if all bits are in the block are 0
+
+    @internal
 */
 inline
 bool check_block_zero(const bm::word_t* blk, bool  deep_scan)
@@ -5422,7 +5424,10 @@ bool check_block_zero(const bm::word_t* blk, bool  deep_scan)
     \param deep_scan - flag to do full bit block verification (scan)
                        when deep scan is not requested result can be approximate
     \return true if block consists of 1 bits.
+
+    @internal
 */
+inline
 bool check_block_one(const bm::word_t* blk, bool deep_scan)
 {
     if (blk == 0) return false;
