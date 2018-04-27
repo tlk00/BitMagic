@@ -127,10 +127,10 @@ public:
 #ifndef BM_NO_STL
         typedef std::input_iterator_tag  iterator_category;
 #endif
-        typedef sparse_vector::value_type   value_type;
+        typedef typename sparse_vector<Val, BV>::value_type   value_type;
         typedef unsigned                    difference_type;
         typedef unsigned*                   pointer;
-        typedef sparse_vector::value_type&  reference;
+        typedef value_type&                 reference;
         
         typedef bm::sparse_vector<Val, BV> sparse_vector_type;
         typedef sparse_vector_type*        sparse_vector_type_ptr;
@@ -1663,7 +1663,7 @@ sparse_vector<Val, BV>::const_iterator::const_iterator()
 
 template<class Val, class BV>
 sparse_vector<Val, BV>::const_iterator::const_iterator(
-          const sparse_vector<Val, BV>::const_iterator::sparse_vector_type* sv)
+          const typename sparse_vector<Val, BV>::const_iterator::sparse_vector_type* sv)
 : sv_(sv)
 {
     BM_ASSERT(sv_);
