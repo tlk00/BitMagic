@@ -114,6 +114,61 @@ public:
         sparse_vector<Val, BV>& sv_;
         size_type               idx_;
     };
+    
+    /**
+        Const iterator to traverse the sparse vector
+        @ingroup sv
+    */
+    class const_iterator
+    {
+    public:
+    friend class sparse_vector;
+
+#ifndef BM_NO_STL
+        typedef std::input_iterator_tag  iterator_category;
+#endif
+        typedef sparse_vector::value_type   value_type;
+        typedef unsigned                    difference_type;
+        typedef unsigned*                   pointer;
+        typedef sparse_vector::value_type&  reference;
+        
+        typedef bm::sparse_vector<Val, BV> sparse_vector_type;
+        typedef sparse_vector_type*        sparse_vector_type_ptr;
+
+    public:
+        const_iterator();
+        const_iterator(const sparse_vector_type* sv);
+        
+        bool operator==(const const_iterator& it) const
+                                { return (pos_ == it.pos_) && (sv_ == it.sv_); }
+        bool operator!=(const const_iterator& it) const
+                                { return ! operator==(it); }
+        bool operator < (const const_iterator& it) const
+                                { return pos_ < it.pos_; }
+        bool operator <= (const const_iterator& it) const
+                                { return pos_ <= it.pos_; }
+        bool operator > (const const_iterator& it) const
+                                { return pos_ > it.pos_; }
+        bool operator >= (const const_iterator& it) const
+                                { return pos_ >= it.pos_; }
+
+
+
+        
+        /// Returns true if iterator is at a valid position
+        bool valid() const { return pos_ != bm::id_max; }
+        
+        /// Invalidate current iterator
+        void invalidate() { pos_ = bm::id_max; }
+        
+        /// re-position enumerator to a specified position
+        void go_to(bm::id_t pos);
+
+        
+    private:
+        const bm::sparse_vector<Val, BV>* sv_;
+        bm::id_t                          pos_;   //!< Position
+    };
 
     enum bit_plains
     {
@@ -188,10 +243,7 @@ public:
     /**
         \brief Operator to get write access to an element
     */
-    reference operator[](size_type idx)
-    {
-        return reference(*this, idx);
-    }
+    reference operator[](size_type idx) { return reference(*this, idx); }
     
     /*! \brief content exchange
     */
@@ -204,6 +256,9 @@ public:
     */
     value_type operator[](size_type idx) const { return this->get(idx); }
     
+    /** Provide const iterator access to container content
+    */
+    const_iterator begin() const;
     
     /**
         \brief check if container supports NULL(unassigned) values
@@ -1584,6 +1639,43 @@ bool sparse_vector<Val, BV>::equal(const sparse_vector<Val, BV>& sv,
     }
 
     return true;
+}
+
+//---------------------------------------------------------------------
+
+template<class Val, class BV>
+typename sparse_vector<Val, BV>::const_iterator
+sparse_vector<Val, BV>::begin() const
+{
+    typedef typename sparse_vector<Val, BV>::const_iterator it_type;
+    return it_type(this);
+}
+
+//---------------------------------------------------------------------
+//---------------------------------------------------------------------
+
+template<class Val, class BV>
+sparse_vector<Val, BV>::const_iterator::const_iterator()
+: sv_(0), pos_(bm::id_max)
+{}
+
+//---------------------------------------------------------------------
+
+template<class Val, class BV>
+sparse_vector<Val, BV>::const_iterator::const_iterator(
+          const sparse_vector<Val, BV>::const_iterator::sparse_vector_type* sv)
+: sv_(sv)
+{
+    BM_ASSERT(sv_);
+    pos_ = sv_->empty() ? bm::id_max : 0u;
+}
+
+//---------------------------------------------------------------------
+
+template<class Val, class BV>
+void sparse_vector<Val, BV>::const_iterator::go_to(bm::id_t pos)
+{
+    pos_ = (!sv_ || pos >= sv_->size()) ? bm::id_max : pos;
 }
 
 //---------------------------------------------------------------------

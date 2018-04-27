@@ -9471,7 +9471,22 @@ void TestSparseVector()
         assert(!sv3.is_nullable());
         bvp = sv4.get_null_bvector();
         assert(bvp);
-
+    }}
+    
+    // basic const_iterator construction
+    {{
+        bm::sparse_vector<unsigned, bm::bvector<> > sv1;
+        svector::const_iterator it_end;
+        svector::const_iterator it = sv1.begin();
+        
+        assert(!it.valid());
+        assert(!it_end.valid());
+        assert(it != it_end);
+        it.invalidate();
+        assert(!it.valid());
+        
+        it.go_to(1);
+        assert(!it.valid());
     }}
     
     // test empty vector serialization
