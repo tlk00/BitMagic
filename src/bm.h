@@ -1062,11 +1062,7 @@ public:
     /*!
         \brief Explicit post-construction initialization
     */
-    void init()
-    {
-        if (!blockman_.is_init())
-            blockman_.init_tree();
-    }
+    void init();
 
     /*! 
         \brief Copy assignment operator
@@ -1132,20 +1128,7 @@ public:
     /*!
         \brief Move bvector content from another bvector
     */
-    void move_from(bvector<Alloc>& bvect) BMNOEXEPT
-    {
-        if (this != &bvect)
-        {
-            blockman_.move_from(bvect.blockman_);
-            size_ = bvect.size_;
-            new_blocks_strat_ = bvect.new_blocks_strat_;
-            
-    #ifdef BMCOUNTOPT
-            count_ = bvect.count_;
-            count_is_valid_ = bvect.count_is_valid_;
-    #endif
-        }
-    }
+    void move_from(bvector<Alloc>& bvect) BMNOEXEPT;
     
     /*! \brief Exchanges content of bv and this bvector.
     */
@@ -2090,6 +2073,33 @@ inline bvector<Alloc> operator- (const bvector<Alloc>& v1,
 #endif
 }
 
+
+// -----------------------------------------------------------------------
+
+template<typename Alloc>
+void bvector<Alloc>::init()
+{
+    if (!blockman_.is_init())
+        blockman_.init_tree();
+}
+
+// -----------------------------------------------------------------------
+
+template<typename Alloc>
+void bvector<Alloc>::move_from(bvector<Alloc>& bvect) BMNOEXEPT
+{
+    if (this != &bvect)
+    {
+        blockman_.move_from(bvect.blockman_);
+        size_ = bvect.size_;
+        new_blocks_strat_ = bvect.new_blocks_strat_;
+        
+#ifdef BMCOUNTOPT
+        count_ = bvect.count_;
+        count_is_valid_ = bvect.count_is_valid_;
+#endif
+    }
+}
 
 
 
