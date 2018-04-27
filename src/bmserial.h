@@ -1470,8 +1470,8 @@ deserializer<BV, DEC>::deserialize_gap(unsigned char btype, decoder_type& dec,
             gap_word_t* gap_blk_ptr = BMGAP_PTR(gap_blk);
             *gap_blk_ptr = gap_head;
             set_gap_level(gap_blk_ptr, level);
-            bm::word_t* old_block = bman.set_block(i, (bm::word_t*)BMPTR_SETBIT0(gap_blk));
-            BM_ASSERT(old_block == 0);
+            blk = bman.set_block(i, (bm::word_t*)BMPTR_SETBIT0(gap_blk));
+            BM_ASSERT(blk == 0);
             
             dec.get_16(gap_blk + 1, len - 1);
             gap_blk[len] = bm::gap_max_bits - 1;
