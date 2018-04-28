@@ -49,8 +49,10 @@ namespace bm
     @ingroup bmagic
  */
 
-
+// forward declarations
+//
 template<class Val, class SV> class compressed_sparse_vector;
+template<typename EN, typename Val, unsigned CNT> class enumerator_group;
 
 
 /*!
@@ -75,6 +77,13 @@ template<class Val, class BV>
 class sparse_vector
 {
 public:
+
+    enum bit_plains
+    {
+        sv_plains = (sizeof(Val) * 8 + 1),
+        sv_value_plains = (sizeof(Val) * 8)
+    };
+
     typedef Val                                      value_type;
     typedef bm::id_t                                 size_type;
     typedef BV                                       bvector_type;
@@ -82,7 +91,12 @@ public:
 	typedef const value_type&                        const_reference;
     typedef typename BV::allocator_type              allocator_type;
     typedef typename bvector_type::allocation_policy allocation_policy_type;
+    typedef typename bvector_type::enumerator        bvector_enumerator_type;
     
+    typedef enumerator_group<bvector_enumerator_type,
+                             value_type,
+                             sv_value_plains>        enumerator_group_type;
+
     /*! Statistical information about  memory allocation details. */
     struct statistics : public bv_statistics
     {};
@@ -115,6 +129,7 @@ public:
         size_type               idx_;
     };
     
+    
     /**
         Const iterator to traverse the sparse vector
         @ingroup sv
@@ -127,18 +142,21 @@ public:
 #ifndef BM_NO_STL
         typedef std::input_iterator_tag  iterator_category;
 #endif
-        typedef typename sparse_vector<Val, BV>::value_type   value_type;
+        typedef sparse_vector<Val, BV>                     sparse_vector_type;
+        typedef sparse_vector_type*                        sparse_vector_type_ptr;
+        typedef typename sparse_vector_type::value_type    value_type;
+        typedef typename sparse_vector_type::bvector_type  bvector_type;
         typedef unsigned                    difference_type;
         typedef unsigned*                   pointer;
         typedef value_type&                 reference;
         
-        typedef bm::sparse_vector<Val, BV> sparse_vector_type;
-        typedef sparse_vector_type*        sparse_vector_type_ptr;
 
     public:
         const_iterator();
         const_iterator(const sparse_vector_type* sv);
-        
+        const_iterator(const sparse_vector_type* sv, bm::id_t pos);
+        const_iterator(const const_iterator& it);
+
         bool operator==(const const_iterator& it) const
                                 { return (pos_ == it.pos_) && (sv_ == it.sv_); }
         bool operator!=(const const_iterator& it) const
@@ -152,8 +170,23 @@ public:
         bool operator >= (const const_iterator& it) const
                                 { return pos_ >= it.pos_; }
 
+        /*! \brief Get current position (value) */
+        value_type operator*() const { return this->value(); }
+        
+        
+        /*! \brief Advance to the next available value */
+        const_iterator& operator++() { this->advance(); return *this; }
+
+        /*! \brief Advance to the next available value */
+        const_iterator& operator++(int)
+            { const_iterator tmp(*this);this->advance(); return tmp; }
 
 
+        /*! \brief Get current position (value) */
+        value_type value() const;
+        
+        /*! \brief Get NULL status */
+        bool is_null() const;
         
         /// Returns true if iterator is at a valid position
         bool valid() const { return pos_ != bm::id_max; }
@@ -161,20 +194,21 @@ public:
         /// Invalidate current iterator
         void invalidate() { pos_ = bm::id_max; }
         
-        /// re-position enumerator to a specified position
+        /// re-position to a specified position
         void go_to(bm::id_t pos);
-
+        
+        /// advance iterator forward by one
+        void advance();
+    private:
+        void init_enumerators(bm::id_t pos);
         
     private:
         const bm::sparse_vector<Val, BV>* sv_;
         bm::id_t                          pos_;   //!< Position
+        mutable enumerator_group_type    en_grp_; //!< enumerators
     };
-
-    enum bit_plains
-    {
-        sv_plains = (sizeof(value_type) * 8 + 1),
-        sv_value_plains = (sizeof(value_type) * 8)
-    };
+    
+    friend const_iterator;
 
 public:
     /*!
@@ -259,7 +293,11 @@ public:
     /** Provide const iterator access to container content
     */
     const_iterator begin() const;
-    
+
+    /** Provide const iterator access to the end
+    */
+    const_iterator end() const { return const_iterator(this, bm::id_max); }
+
     /**
         \brief check if container supports NULL(unassigned) values
     */
@@ -572,6 +610,87 @@ private:
     size_type                size_;
     unsigned                 effective_plains_;
 };
+
+
+/*!
+    \brief Class to keep and sync-advance a group of enumerators
+ 
+    @internal
+*/
+template<typename EN, typename Val, unsigned CNT>
+class enumerator_group
+{
+public:
+    typedef Val value_type;
+
+    enumerator_group() : size_(0) {}
+    enumerator_group(const enumerator_group& en_grp)
+    {
+        init(en_grp);
+    }
+    void operator=(const enumerator_group& en_grp)
+    {
+        init(en_grp);
+    }
+    
+    /// add enumerator to collection
+    ///
+    void add(const EN& en, int order)
+    {
+        BM_ASSERT(size_ < CNT);
+        
+        orders_[size_] = order; ens_[size_] = en;
+        ++size_;
+    };
+    
+    /// return pkg size
+    unsigned size() const { return size_; }
+    
+    /// assemble current value out of collection of enumerators
+    /// (each enumerator gets advanced)
+    value_type get_value(unsigned pos)
+    {
+        value_type rval = 0;
+        for (unsigned i = 0; i < size_; ++i) // TODO: loop unroll
+        {
+            if (ens_[i].value() == pos)
+            {
+                rval |= (value_type(1) << orders_[i]);
+                ++ens_[i];
+            }
+        } // for
+        return rval;
+    }
+
+    /// return TRUE if any iterator is still valid
+    bool valid() const
+    {
+        for (unsigned i = 0; i < size_; ++i) // TODO: loop unroll
+        {
+            if (ens_[i].valid())
+                return true;
+        }
+        return false;
+    }
+protected:
+
+    void init(const enumerator_group& en_grp)
+    {
+        size_ = en_grp.size_;
+        for (unsigned i = 0; i < size_; ++i)
+        {
+            orders_[i] = en_grp.orders_[i];
+            ens_[i] = en_grp.ens_[i];
+        } // for
+    }
+    
+protected:
+    unsigned   orders_[CNT];
+    EN         ens_[CNT];
+    
+    unsigned   size_;       ///< Size of pairs
+};
+
 
 
 //---------------------------------------------------------------------
@@ -1654,6 +1773,7 @@ sparse_vector<Val, BV>::begin() const
 //---------------------------------------------------------------------
 //---------------------------------------------------------------------
 
+
 template<class Val, class BV>
 sparse_vector<Val, BV>::const_iterator::const_iterator()
 : sv_(0), pos_(bm::id_max)
@@ -1663,11 +1783,53 @@ sparse_vector<Val, BV>::const_iterator::const_iterator()
 
 template<class Val, class BV>
 sparse_vector<Val, BV>::const_iterator::const_iterator(
-          const typename sparse_vector<Val, BV>::const_iterator::sparse_vector_type* sv)
+                        const sparse_vector<Val, BV>::const_iterator& it)
+: sv_(it.sv_), pos_(it.pos_), en_grp_(it.en_grp_)
+{}
+
+//---------------------------------------------------------------------
+
+template<class Val, class BV>
+sparse_vector<Val, BV>::const_iterator::const_iterator(
+  const typename sparse_vector<Val, BV>::const_iterator::sparse_vector_type* sv)
 : sv_(sv)
 {
     BM_ASSERT(sv_);
-    pos_ = sv_->empty() ? bm::id_max : 0u;
+    if (sv_->empty())
+    {
+        pos_ = bm::id_max;
+    }
+    else
+    {
+        init_enumerators(pos_ = 0u);
+    }
+}
+
+//---------------------------------------------------------------------
+
+template<class Val, class BV>
+sparse_vector<Val, BV>::const_iterator::const_iterator(
+ const typename sparse_vector<Val, BV>::const_iterator::sparse_vector_type* sv,
+ bm::id_t pos)
+: sv_(sv)
+{
+    BM_ASSERT(sv_);
+    this->go_to(pos);
+}
+
+//---------------------------------------------------------------------
+
+template<class Val, class BV>
+void sparse_vector<Val, BV>::const_iterator::init_enumerators(bm::id_t pos)
+{
+    BM_ASSERT(sv_);
+    unsigned plains = sv_->effective_plains();
+    for (unsigned i = 0; i < plains; ++i)
+    {
+        const bvector_type* bv = sv_->get_plain(i);
+        if (bv)
+            en_grp_.add(bv->get_enumerator(pos), i);
+    } // for
 }
 
 //---------------------------------------------------------------------
@@ -1679,6 +1841,39 @@ void sparse_vector<Val, BV>::const_iterator::go_to(bm::id_t pos)
 }
 
 //---------------------------------------------------------------------
+
+template<class Val, class BV>
+void sparse_vector<Val, BV>::const_iterator::advance()
+{
+    if (pos_ < bm::id_max)
+    {
+        if (++pos_ >= sv_->size())
+            pos_ = bm::id_max;
+    }
+}
+
+//---------------------------------------------------------------------
+
+template<class Val, class BV>
+typename sparse_vector<Val, BV>::const_iterator::value_type
+sparse_vector<Val, BV>::const_iterator::value() const
+{
+    BM_ASSERT(this->valid());
+    value_type v = en_grp_.get_value(pos_);
+    BM_ASSERT(v == sv_->get(pos_));
+    return v;
+}
+
+//---------------------------------------------------------------------
+
+template<class Val, class BV>
+bool sparse_vector<Val, BV>::const_iterator::is_null() const
+{
+    return sv_->is_null(pos_);
+}
+
+//---------------------------------------------------------------------
+
 
 
 } // namespace bm

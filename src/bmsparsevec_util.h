@@ -21,11 +21,13 @@ For more information please visit:  http://bitmagic.io
 #include <memory.h>
 #include <stdexcept>
 
+#include "bmserial.h"
 #include "bmdef.h"
-
 
 namespace bm
 {
+
+
 
 /*!
     \brief Bit-bector prefix sum address resolver using bit-vector prefix sum
@@ -357,8 +359,8 @@ public:
             extra_mem = 4096;
         st->max_serialize_mem += extra_mem;
     }
-    
 };
+
 
 
 //---------------------------------------------------------------------
