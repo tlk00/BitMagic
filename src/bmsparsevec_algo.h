@@ -33,6 +33,7 @@ For more information please visit:  http://bitmagic.io
 namespace bm
 {
 
+
 /*!
     \brief Clip dynamic range for signal higher than specified
     
@@ -223,6 +224,70 @@ protected:
     bvector_type   bv_product_;
 };
 
+/**
+    \brief algorithms for sparse_vector scan/seach
+*/
+template<class SV>
+class sparse_vector_scan
+{
+public:
+    typedef typename SV::bvector_type       bvector_type;
+    typedef typename SV::value_type         value_type;
+    
+public:
+
+    /**
+        \brief find all sparse vector elements EQ to search value
+    */
+    void find_eq(const SV&                  svect,
+                 typename SV::value_type    value,
+                 typename SV::bvector_type& bvect)
+    {
+        if (svect.empty())
+            return; // nothing to do
+
+        unsigned sv_plains = svect.plains();
+        
+        unsigned char bits[sizeof(value)*8];
+        unsigned short bit_count_v = bm::bitscan(value, bits);
+
+
+        // accumulate AND all matching vectors
+        //
+        bool first = true;
+        for (unsigned i = 0; i < bit_count_v; ++i)
+        {
+            unsigned plain = bits[i];
+            const bvector_type* bv_plain = svect.get_plain(plain);
+
+            if (bv_plain)
+            {
+                if (first)
+                {
+                    bvect = *bv_plain;
+                    first = false;
+                }
+                else
+                {
+                    bvect &= *bv_plain;
+                }
+                // TODO: better detect when accumulator is empty to break early
+            }
+        } // for i
+        
+        // logical MINUS all other plains
+        //
+        for (unsigned i = 0; i < sv_plains; ++i)
+        {
+            const bvector_type* bv_plain = svect.get_plain(i);
+            if (bv_plain && !(value & (value_type(1) << i)))
+            {
+                // TODO: better detect when result is empty to break early
+                bvect -= *bv_plain;
+            }
+        } // for i
+    }
+};
 
 
 
