@@ -488,6 +488,9 @@ public:
             return this->go_up();
         }
 
+        /*! \brief Advance enumerator forward to the next available bit.
+             Possibly do NOT use this operator it is slower than the pre-fix increment.
+         */
         enumerator operator++(int)
         {
             enumerator tmp = *this;
