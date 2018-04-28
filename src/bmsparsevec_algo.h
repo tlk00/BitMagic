@@ -239,18 +239,21 @@ public:
     /**
         \brief find all sparse vector elements EQ to search value
     */
-    void find_eq(const SV&                  svect,
+    void find_eq(const SV&                  sv,
                  typename SV::value_type    value,
                  typename SV::bvector_type& bvect)
     {
-        if (svect.empty())
+        if (sv.empty())
             return; // nothing to do
-
-        unsigned sv_plains = svect.plains();
+        
+        if (!value)
+        {
+            find_zero(sv, bvect);
+            return;
+        }
         
         unsigned char bits[sizeof(value)*8];
         unsigned short bit_count_v = bm::bitscan(value, bits);
-
 
         // accumulate AND all matching vectors
         //
@@ -258,7 +261,7 @@ public:
         for (unsigned i = 0; i < bit_count_v; ++i)
         {
             unsigned plain = bits[i];
-            const bvector_type* bv_plain = svect.get_plain(plain);
+            const bvector_type* bv_plain = sv.get_plain(plain);
 
             if (bv_plain)
             {
@@ -266,6 +269,12 @@ public:
                 {
                     bvect = *bv_plain;
                     first = false;
+                    
+                    const bvector_type* bv_null = sv.get_null_bvector();
+                    if (bv_null) // correct not to find NULL values
+                    {
+                        bvect &= *bv_null;
+                    }
                 }
                 else
                 {
@@ -273,13 +282,19 @@ public:
                 }
                 // TODO: better detect when accumulator is empty to break early
             }
+            else // mandatory plain not found - empty result
+            {
+                bvect.clear(true);
+                return;
+            }
         } // for i
         
         // logical MINUS all other plains
         //
+        unsigned sv_plains = sv.plains();
         for (unsigned i = 0; i < sv_plains; ++i)
         {
-            const bvector_type* bv_plain = svect.get_plain(i);
+            const bvector_type* bv_plain = sv.get_plain(i);
             if (bv_plain && !(value & (value_type(1) << i)))
             {
                 // TODO: better detect when result is empty to break early
@@ -287,6 +302,15 @@ public:
             }
         } // for i
     }
+    
+    void find_zero(const SV&                  sv,
+                   typename SV::bvector_type& bvect)
+    {
+        bm::compute_nonzero_bvector(sv, bvect);
+        bvect.invert();
+        bvect.set_range(sv.size(), bm::id_max-1, false);
+    }
+
 };
 
 

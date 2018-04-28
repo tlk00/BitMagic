@@ -345,6 +345,7 @@ typedef bm::bvector_mini<bm::block_allocator> bvect_mini;
 #endif
 
 typedef bm::sparse_vector<unsigned, bvect > sparse_vector_u32;
+typedef bm::sparse_vector<unsigned long long, bvect > sparse_vector_u64;
 typedef bm::compressed_sparse_vector<unsigned, sparse_vector_u32> compressed_sparse_vector_u32;
 
 //const unsigned BITVECT_SIZE = 100000000 * 8;
@@ -10517,6 +10518,169 @@ void TestSparseVectorTransform()
     cout << " --------------- Test set transformation with sparse vector OK" << endl;
 }
 
+static
+void TestSparseVectorScan()
+{
+    cout << " --------------- Test sparse_vector<> scan algo" << endl;
+    
+    bm::sparse_vector_scan<sparse_vector_u32> scanner;
+    bm::sparse_vector_scan<sparse_vector_u64> scanner_64;
+
+    {
+        sparse_vector_u32 sv(bm::use_null);
+        bvect bv_control;
+        scanner.find_eq(sv, 25, bv_control);
+        assert(!bv_control.any());
+    }
+
+    {
+        sparse_vector_u32 sv;
+        bvect bv_control;
+        for (unsigned i = 0; i < 20; ++i)
+        {
+            sv.set(i, 0);
+        }
+        scanner.find_eq(sv, 0, bv_control);
+        unsigned found = bv_control.count();
+        assert(found == 20);
+    }
+    
+    {
+        cout << endl << "Unique search check" << endl;
+        sparse_vector_u32 sv;
+        bvect bv_control;
+        
+        unsigned sv_size = 1256000;
+        for (unsigned j = 0; j < sv_size; ++j)
+        {
+            sv.set(j, j);
+        }
+        
+        {
+        chrono_taker ct("sparse_vector<> search");
+
+            for (unsigned j = 0; j < sv_size; ++j)
+            {
+                scanner.find_eq(sv, j, bv_control);
+                if (bv_control.count()!= 1)
+                {
+                    cerr << "1. Unique search discrepancy at value=" << j
+                         << " count = " << bv_control.count() << endl;
+                    exit(1);
+                }
+                unsigned v1, v2;
+                bool b = bv_control.find_range(v1, v2);
+                assert(b);
+                if (v1 != v2)
+                {
+                    cerr << "2. Unique search discrepancy at value=" << j
+                         << " count = " << bv_control.count() << endl;
+                    exit(1);
+                }
+                
+                if (j % 10 == 0)
+                    cout << "\r" << j << "/" << sv_size << "    " << flush;
+            } // for
+            cout << endl;
+        }
+        
+        
+        cout << "Unique search OK" << endl;
+    }
+
+
+    {
+        cout << "Find EQ test on flat data" << endl;
+        unsigned max_value = 128000;
+        for (unsigned value = 0; value < max_value; ++value)
+        {
+            sparse_vector_u32 sv;
+            sparse_vector_u64 sv_64;
+            bvect bv_control;
+
+            unsigned sv_size = 67000;
+            for (unsigned j = 0; j < 67000; ++j)
+            {
+                sv.set(j, value);
+                bm::id64_t v64 = value;
+                v64 <<= 32;
+                sv_64.set(j, v64);
+            }
+            scanner.find_eq(sv, value, bv_control);
+            unsigned found = bv_control.count();
+            
+            if (found != sv_size)
+            {
+                cerr << "1. sparse_vector<>::find_eq() discrepancy for value=" << value
+                     << " count = " << found << endl;
+                exit(1);
+            }
+            
+            {
+                bm::id64_t v64 = value;
+                v64 <<= 32;
+
+                scanner_64.find_eq(sv_64, v64, bv_control);
+                found = bv_control.count();
+                
+                if (found != sv_size)
+                {
+                    cerr << "1. (64) sparse_vector<>::find_eq() discrepancy for value=" << value
+                         << " count = " << found << endl;
+                    exit(1);
+                }
+            }
+            
+            // not found check
+            scanner.find_eq(sv, value+1, bv_control);
+            if (bv_control.any())
+            {
+                cerr << "1. sparse_vector<>::find_eq() (any) discrepancy for value=" << value+1
+                     << " count = " << bv_control.count() << endl;
+                exit(1);
+            }
+
+            {
+            BM_DECLARE_TEMP_BLOCK(tb)
+            sv.optimize(tb);
+            }
+            
+            bv_control.clear();
+            
+            scanner.find_eq(sv, value, bv_control);
+            found = bv_control.count();
+            
+            if (found != sv_size)
+            {
+                cerr << "2. sparse_vector<>::find_eq() discrepancy for value=" << value
+                     << " count = " << found << endl;
+                exit(1);
+            }
+            
+            // not found check
+            scanner.find_eq(sv, value+1, bv_control);
+            if (bv_control.any())
+            {
+                cerr << "2. sparse_vector<>::find_eq() (any) discrepancy for value=" << value+1
+                     << " count = " << bv_control.count() << endl;
+                exit(1);
+            }
+
+
+            
+            if (value % 10 == 0)
+                cout << "\r" << value << "/" << max_value << "    " << flush;
+        }
+        
+        cout << endl << "Flat EQ ok" << endl;
+    }
+    
+
+    
+    cout << " \n--------------- Test sparse_vector<> scan algo OK" << endl;
+}
+
+
 
 // fill pseudo-random plato pattern into two vectors
 //
@@ -12830,7 +12994,6 @@ int main(void)
     exit(1);
 */
 
-/*
      TestBlockAND();
 
      ExportTest();
@@ -12916,10 +13079,12 @@ int main(void)
      StressTest(120, 1); // SUB
      StressTest(120, 2); // XOR
      StressTest(120, 3); // AND
-*/
+
      TestSparseVector();
     
      TestSparseVectorTransform();
+    
+     TestSparseVectorScan();
 
      TestCompressSparseVector();
 
