@@ -1783,7 +1783,7 @@ sparse_vector<Val, BV>::const_iterator::const_iterator()
 
 template<class Val, class BV>
 sparse_vector<Val, BV>::const_iterator::const_iterator(
-                        const sparse_vector<Val, BV>::const_iterator& it)
+                        const typename sparse_vector<Val, BV>::const_iterator& it)
 : sv_(it.sv_), pos_(it.pos_), en_grp_(it.en_grp_)
 {}
 
