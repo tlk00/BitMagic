@@ -100,11 +100,12 @@ void vector_search(const std::vector<unsigned>& vect,
     bv_res.clear(true);
     for (size_t i = 0; i < vect.size(); ++i)
     {
-        if (vect[i] == value && bv_null.test(i))
+        if (vect[i] == value)
         {
             bv_res.set_bit_no_check(i);
         }
     } // for
+    bv_res &= bv_null;
 }
 
 
