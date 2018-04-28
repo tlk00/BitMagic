@@ -9169,18 +9169,39 @@ bool CompareSparseVector(const SV& sv, const Vect& vect, bool interval_filled = 
         }
     }
     
+    {
+    typename SV::const_iterator it = sv.begin();
+    typename SV::const_iterator it_end = sv.end();
+
     for (unsigned i = 0; i < vect.size(); ++i)
     {
         typename Vect::value_type v1 = vect[i];
         typename SV::value_type v2 = sv[i];
-        
+        typename SV::value_type v3 = *it;
+
         if (v1 != v2)
         {
-            cout << "SV discrepancy:" << "sv[" << i << "]=" << v2
+            cerr << "SV discrepancy:" << "sv[" << i << "]=" << v2
                  <<  " vect[" << i << "]=" << v1
                  << endl;
             return false;
         }
+        if (v1 != v3)
+        {
+            cerr << "SV discrepancy:" << "sv[" << i << "]=" << v2
+                 <<  " *it" << v3
+                 << endl;
+            return false;
+        }
+        assert(it < it_end);
+        ++it;
+    } // for
+    if (it != it_end)
+    {
+        cerr << "sv const_iterator discrepancy!" << endl;
+        return false;
+    }
+    
     }
     
     // extraction comparison
@@ -9304,7 +9325,7 @@ bool TestEqualSparseVectors(const SV& sv1, const SV& sv2, bool detailed = true)
         } // for
     }
 
-    // test offset offset extraction
+    // test offset extraction
     //
     {
         std::vector<unsigned> v1(sv1.size());
@@ -9375,6 +9396,23 @@ bool TestEqualSparseVectors(const SV& sv1, const SV& sv2, bool detailed = true)
             return b;
         }
     }
+    
+    // comparison via const_iterators
+    //
+    {{
+        typename SV::const_iterator it1 = sv1.begin();
+        typename SV::const_iterator it2 = sv2.begin();
+        typename SV::const_iterator it1_end = sv1.end();
+        
+        for (; it1 < it1_end; ++it1, ++it2)
+        {
+            if (*it1 != *it2)
+            {
+                cerr << "1. sparse_vector::const_iterator validation failed" << endl;
+                return false;
+            }
+        }
+    }}
 
     // comparison through serialization
     //
@@ -9487,30 +9525,32 @@ void TestSparseVector()
         
         it.go_to(1);
         assert(!it.valid());
+        
+        svector::const_iterator it_end2 = sv1.end();
+        assert(!it_end2.valid());
     }}
     
     // test empty vector serialization
     {{
-    int res;
+        int res;
 
-    bm::sparse_vector<unsigned, bm::bvector<> > sv1;
-    bm::sparse_vector<unsigned, bm::bvector<> > sv2;
-    bm::sparse_vector_serial_layout<svector> sv_layout;
-    bm::sparse_vector_serialize(sv1, sv_layout);
+        bm::sparse_vector<unsigned, bm::bvector<> > sv1;
+        bm::sparse_vector<unsigned, bm::bvector<> > sv2;
+        bm::sparse_vector_serial_layout<svector> sv_layout;
+        bm::sparse_vector_serialize(sv1, sv_layout);
 
-    const unsigned char* buf = sv_layout.buf();
-    res = bm::sparse_vector_deserialize(sv2, buf);
-    if (res != 0)
-    {
-        cerr << "De-Serialization error" << endl;
-        exit(1);
-    }
-    if (!sv1.equal(sv2) )
-    {
-        cerr << "Serialization comparison of empty vectors failed" << endl;
-        exit(1);
-    }
-    
+        const unsigned char* buf = sv_layout.buf();
+        res = bm::sparse_vector_deserialize(sv2, buf);
+        if (res != 0)
+        {
+            cerr << "De-Serialization error" << endl;
+            exit(1);
+        }
+        if (!sv1.equal(sv2) )
+        {
+            cerr << "Serialization comparison of empty vectors failed" << endl;
+            exit(1);
+        }
     }}
     
     // test move construction
@@ -12790,6 +12830,7 @@ int main(void)
     exit(1);
 */
 
+/*
      TestBlockAND();
 
      ExportTest();
@@ -12875,7 +12916,7 @@ int main(void)
      StressTest(120, 1); // SUB
      StressTest(120, 2); // XOR
      StressTest(120, 3); // AND
-
+*/
      TestSparseVector();
     
      TestSparseVectorTransform();
