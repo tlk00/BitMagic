@@ -12428,6 +12428,105 @@ void TestBlockAND()
 
 }
 
+
+static
+void TestBlockSUB()
+{
+    cout << " ------------------------------ Test bit-block SUB" << endl;
+    {
+        BM_DECLARE_TEMP_BLOCK(tb2);
+        BM_DECLARE_TEMP_BLOCK(tb1);
+
+        unsigned pad = 0xDEAD;
+        for (unsigned i = 0; i < bm::set_block_size; ++i)
+        {
+            tb1.b_.w32[i] = tb2.b_.w32[i] = 0;
+        }
+
+        auto any = bm::bit_block_sub(tb1, tb2);
+        assert(any == 0);
+        tb1.b_.w32[1] = 1;
+        any = bm::bit_block_sub(tb1, tb2);
+        assert(any);
+        assert(tb1.b_.w32[1] == 1);
+        
+        
+        tb1.b_.w32[1] = tb2.b_.w32[1] = 1;
+        any = bm::bit_block_sub(tb1, tb2);
+        
+        cout << tb1.b_.w32[1] << endl;
+        assert(tb1.b_.w32[1] == 0);
+        assert(!any);
+        for (unsigned j = 0; j < 32; ++j)
+        {
+            tb1.b_.w32[10] = tb2.b_.w32[10] = (1 << j);
+            if (tb1.b_.w32[10])
+            {
+                any = bm::bit_block_sub(tb1, tb2);
+                assert(!any);
+            }
+        }
+        
+        for (unsigned i = 0; i < bm::set_block_size; ++i)
+        {
+            tb1.b_.w32[i] = tb2.b_.w32[i] = 8;
+        }
+        any = bm::bit_block_sub(tb1, tb2);
+        assert(!any);
+        for (unsigned i = 0; i < bm::set_block_size; ++i)
+        {
+            assert(tb1.b_.w32[i] != tb2.b_.w32[i]);
+        }
+
+        for (unsigned i = 0; i < bm::set_block_size; ++i)
+        {
+            tb1.b_.w32[i] = tb2.b_.w32[i] = 0;
+        }
+
+        unsigned i, j;
+        for (i = 0; i < bm::set_block_size; ++i)
+        {
+            for (j = 0; j < 32; ++j)
+            {
+                unsigned v = (1u << j);
+                ::memset(tb1, 0, sizeof(tb1));
+                ::memset(tb2, 0, sizeof(tb1));
+                tb1.b_.w32[i] = tb2.b_.w32[i] = v;
+                if (tb1[i])
+                {
+                    auto any1 = bm::bit_block_sub(tb1, tb2);
+                    auto all_zero = bm::bit_is_all_zero(tb1.begin(), tb1.end());
+                    assert(all_zero);
+                    
+                    //cout << any1 <<" j=" << j << " i=" << i << " " << tb1[i] << " " << tb2[i] << endl;
+                    assert(pad == 0xDEAD);
+                    assert(tb1.b_.w32[i] == 0);
+                    assert(!any1);
+                }
+            }
+            tb1.b_.w32[i] = tb2.b_.w32[i] = 0;
+        }
+        cout << tb1.b_.w32[0] << pad << endl;
+        
+        
+        for (i = 0; i < bm::set_block_size; ++i)
+        {
+            ::memset(tb1, 0, sizeof(tb1));
+            ::memset(tb2, 0, sizeof(tb1));
+            
+            tb1.b_.w32[i] = tb2.b_.w32[i] = 8u;
+
+            auto any1 = bm::bit_block_sub(tb1, tb2);
+            assert(tb1.b_.w32[i] == 0);
+            assert(!any1);
+        }
+
+    }
+    cout << " ------------------------------ Test bit-block SUB  OK" << endl;
+
+}
+
+
 template<class BV>
 void DetailedCompareBVectors(const BV& bv1, const BV& bv2)
 {
@@ -13009,7 +13108,8 @@ int main(void)
 */
 
      TestBlockAND();
-
+     TestBlockSUB();
+    
      ExportTest();
      ResizeTest();
 
