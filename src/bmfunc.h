@@ -4005,8 +4005,7 @@ bm::id64_t bit_block_and(bm::word_t* BMRESTRICT dst, const bm::word_t* BMRESTRIC
     const bm::bit_block_t::bunion_t* BMRESTRICT src_u = (const bm::bit_block_t::bunion_t*)src;
     bm::bit_block_t::bunion_t* BMRESTRICT dst_u = (bm::bit_block_t::bunion_t*)dst;
     bm::id64_t acc = 0;
-    unsigned i = 0;
-    for (i = 0; i < arr_sz; i+=4)
+    for (unsigned i = 0; i < arr_sz; i+=4)
     {
         acc |= dst_u->w64[i] &= src_u->w64[i];
         acc |= dst_u->w64[i+1] &= src_u->w64[i+1];
