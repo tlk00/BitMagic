@@ -12409,6 +12409,20 @@ void TestBlockAND()
             tb1.b_.w32[i] = tb2.b_.w32[i] = 0;
         }
         cout << tb1.b_.w32[0] << pad << endl;
+        
+        
+        for (i = 0; i < bm::set_block_size; ++i)
+        {
+            ::memset(tb1, 0, sizeof(tb1));
+            ::memset(tb2, 0, sizeof(tb1));
+            
+            tb1.b_.w32[i] = tb2.b_.w32[i] = 8u;
+
+            auto any1 = bm::bit_block_and(tb1, tb2);
+            assert(tb1.b_.w32[i] == 8u);
+            assert(any1);
+        }
+
     }
     cout << " ------------------------------ Test bit-block AND  OK" << endl;
 
