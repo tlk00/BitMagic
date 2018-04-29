@@ -3985,7 +3985,7 @@ void bit_block_copy(bm::word_t* BMRESTRICT dst, const bm::word_t* BMRESTRICT src
    \param dst - destination block.
    \param src - source block.
  
-   \return 0 if AND operation did not produced anything (no 1s in the output)
+   \return 0 if AND operation did not produce anything (no 1s in the output)
 
    @ingroup bitfunc
 */
@@ -4004,6 +4004,7 @@ bm::id64_t bit_block_and(bm::word_t* BMRESTRICT dst, const bm::word_t* BMRESTRIC
 
     const bm::bit_block_t::bunion_t* BMRESTRICT src_u = (const bm::bit_block_t::bunion_t*)src;
     bm::bit_block_t::bunion_t* BMRESTRICT dst_u = (bm::bit_block_t::bunion_t*)dst;
+
     bm::id64_t acc = 0;
     for (unsigned i = 0; i < arr_sz; i+=4)
     {
@@ -4707,34 +4708,34 @@ bm::word_t* bit_operation_or(bm::word_t* BMRESTRICT dst,
    \param dst - destination block.
    \param src - source block.
 
+   \return 0 if SUB operation did not produce anything (no 1s in the output)
+
    @ingroup bitfunc
 */
-inline 
-void bit_block_sub(bm::word_t* BMRESTRICT dst, 
-                   const bm::word_t* BMRESTRICT src)
+inline
+bm::id64_t bit_block_sub(bm::word_t* BMRESTRICT dst, const bm::word_t* BMRESTRICT src)
 {
 #ifdef BMVECTOPT
-    VECT_SUB_ARR(dst, src, src + bm::set_block_size);
+    bm::id64_t acc = VECT_SUB_ARR(dst, src, src + bm::set_block_size);
+    return acc;
 #else
-    const bm::wordop_t* BMRESTRICT wrd_ptr = (wordop_t*) src;
-    const bm::wordop_t* BMRESTRICT wrd_end = 
-                     (wordop_t*) (src + bm::set_block_size);
-    bm::wordop_t* dst_ptr = (wordop_t*)dst;
-    
-    // Regular operation AND-NOT on the whole block.
-    do
-    {
-        dst_ptr[0] &= ~wrd_ptr[0];
-        dst_ptr[1] &= ~wrd_ptr[1];
-        dst_ptr[2] &= ~wrd_ptr[2];
-        dst_ptr[3] &= ~wrd_ptr[3];
+    unsigned arr_sz = bm::set_block_size / 2;
 
-        dst_ptr+=4;
-        wrd_ptr+=4;
-    } while (wrd_ptr < wrd_end);
+    const bm::bit_block_t::bunion_t* BMRESTRICT src_u = (const bm::bit_block_t::bunion_t*)src;
+    bm::bit_block_t::bunion_t* BMRESTRICT dst_u = (bm::bit_block_t::bunion_t*)dst;
+
+    bm::id64_t acc = 0;
+    for (unsigned i = 0; i < arr_sz; i+=4)
+    {
+        acc |= dst_u->w64[i] &= ~src_u->w64[i];
+        acc |= dst_u->w64[i+1] &= ~src_u->w64[i+1];
+        acc |= dst_u->w64[i+2] &= ~src_u->w64[i+2];
+        acc |= dst_u->w64[i+3] &= ~src_u->w64[i+3];
+    }
+    return acc;
 #endif
-    
 }
+
 
 
 /*!
@@ -4769,7 +4770,12 @@ bm::word_t* bit_operation_sub(bm::word_t* BMRESTRICT dst,
         }
         else
         {
-            bit_block_sub(dst, src);
+            auto any = bm::bit_block_sub(dst, src);
+            if (!any)
+            {
+                BM_ASSERT(bm::bit_is_all_zero(dst, dst+bm::set_block_size));
+                ret = 0;
+            }
         }
     }
     else // The destination block does not exist yet

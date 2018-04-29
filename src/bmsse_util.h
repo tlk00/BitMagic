@@ -247,7 +247,7 @@ void sse2_or_arr(__m128i* BMRESTRICT dst,
 
     @ingroup SSE2
 */
-BMFORCEINLINE 
+inline
 void sse2_xor_arr(__m128i* BMRESTRICT dst, 
                   const __m128i* BMRESTRICT src, 
                   const __m128i* BMRESTRICT src_end)
@@ -286,40 +286,62 @@ void sse2_xor_arr(__m128i* BMRESTRICT dst,
     @brief AND-NOT (SUB) array elements against another array
     *dst &= ~*src
 
+    @return 0 if no bits were set
+
     @ingroup SSE2
 */
-BMFORCEINLINE 
-void sse2_sub_arr(__m128i* BMRESTRICT dst, 
-                 const __m128i* BMRESTRICT src, 
-                 const __m128i* BMRESTRICT src_end)
+inline
+unsigned sse2_sub_arr(__m128i* BMRESTRICT dst,
+                      const __m128i* BMRESTRICT src,
+                      const __m128i* BMRESTRICT src_end)
 {
-    __m128i xmm1, xmm2;
+    __m128i m1A, m2A, m1B, m2B, m1C, m2C, m1D, m2D;
+    __m128i accA, accB, accC, accD;
+
+    accA = _mm_setzero_si128();
+    accB = _mm_setzero_si128();
+    accC = _mm_setzero_si128();
+    accD = _mm_setzero_si128();
+
     do
     {
-        _mm_prefetch((const char*)(src)+512,  _MM_HINT_NTA);
-    
-        xmm1 = _mm_load_si128(src++);
-        xmm2 = _mm_load_si128(dst);
-        xmm1 = _mm_andnot_si128(xmm1, xmm2);
-        _mm_store_si128(dst++, xmm1);
+        m1A = _mm_load_si128(src+0);
+        m2A = _mm_load_si128(dst+0);
+        m1A = _mm_andnot_si128(m1A, m2A);
+        _mm_store_si128(dst+0, m1A);
+        accA = _mm_or_si128(accA, m1A);
         
-        xmm1 = _mm_load_si128(src++);
-        xmm2 = _mm_load_si128(dst);
-        xmm1 = _mm_andnot_si128(xmm1, xmm2);
-        _mm_store_si128(dst++, xmm1);
+        m1B = _mm_load_si128(src+1);
+        m2B = _mm_load_si128(dst+1);
+        m1B = _mm_andnot_si128(m1B, m2B);
+        _mm_store_si128(dst+1, m1B);
+        accB = _mm_or_si128(accB, m1B);
 
-        xmm1 = _mm_load_si128(src++);
-        xmm2 = _mm_load_si128(dst);
-        xmm1 = _mm_andnot_si128(xmm1, xmm2);
-        _mm_store_si128(dst++, xmm1);
+        m1C = _mm_load_si128(src+2);
+        m2C = _mm_load_si128(dst+2);
+        m1C = _mm_andnot_si128(m1C, m2C);
+        _mm_store_si128(dst+2, m1C);
+        accC = _mm_or_si128(accC, m1C);
 
-        xmm1 = _mm_load_si128(src++);
-        xmm2 = _mm_load_si128(dst);
-        xmm1 = _mm_andnot_si128(xmm1, xmm2);
-        _mm_store_si128(dst++, xmm1);
+        m1D = _mm_load_si128(src+3);
+        m2D = _mm_load_si128(dst+3);
+        m1D = _mm_andnot_si128(m1D, m2D);
+        _mm_store_si128(dst+3, m1D);
+        accD = _mm_or_si128(accD, m1D);
+        
+        src += 4; dst += 4;
+    } while (src < src_end);
+    
+    accA = _mm_or_si128(accA, accB); // A = A | B
+    accC = _mm_or_si128(accC, accD); // C = C | D
+    accA = _mm_or_si128(accA, accC); // A = A | C
 
-    } while (src < src_end);    
+
+    bm::id_t BM_ALIGN16 macc[4] BM_ALIGN16ATTR;
+    _mm_store_si128((__m128i*)macc, accA);
+    return macc[0] | macc[1] | macc[2] | macc[3];
 }
+
 
 /*! 
     @brief SSE2 block memset
