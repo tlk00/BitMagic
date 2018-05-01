@@ -2595,10 +2595,7 @@ int bvector<Alloc>::compare(const bvector<Alloc>& bv) const
                 }
                 else
                 {
-                    bm::wordop_t* blk1 = (wordop_t*)pblk;
-                    bm::wordop_t* blk2 = 
-                        (wordop_t*)(pblk + bm::set_block_size);
-                    if (!bit_is_all_zero(blk1, blk2))
+                    if (!bit_is_all_zero(pblk, pblk + bm::set_block_size))
                     {
                         return res;
                     }

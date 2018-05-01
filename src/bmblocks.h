@@ -221,22 +221,12 @@ public:
         {
             if (BM_IS_GAP(block)) // gap block
             {
-                if (!gap_is_all_zero(BMGAP_PTR(block), bm::gap_max_bits))
-                {
-                    return true;
-                }
+                return (!gap_is_all_zero(BMGAP_PTR(block), bm::gap_max_bits));
             }
             else  // bitset
             {
                 if (IS_FULL_BLOCK(block)) return true;
-                
-                bm::wordop_t* blk1 = (wordop_t*)block;
-                bm::wordop_t* blk2 = 
-                    (wordop_t*)(block + bm::set_block_size);
-                if (!bit_is_all_zero(blk1, blk2))
-                {
-                    return true;
-                }
+                return (!bit_is_all_zero(block, (block + bm::set_block_size)));
             }
             return false;
         }
@@ -390,7 +380,7 @@ public:
                     bm::wordop_t* blk2 = 
                         (wordop_t*)(block + bm::set_block_size);
                 
-                    bool b = bit_is_all_zero(blk1, blk2);
+                    bool b = bm::bit_is_all_zero((bm::word_t*)blk1, (bm::word_t*)blk2);
                     if (b)
                     {
                         bman.get_allocator().free_bit_block(block);

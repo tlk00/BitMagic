@@ -3662,18 +3662,17 @@ inline bool is_bits_one(const bm::wordop_t* start,
 /*! @brief Returns "true" if all bits in the block are 0
     @ingroup bitfunc 
 */
-template<typename TW>
-bool bit_is_all_zero(const TW* start,
-                     const TW* end)
+inline
+bool bit_is_all_zero(const bm::word_t* BMRESTRICT start,
+                     const bm::word_t* BMRESTRICT end)
 {
 #if defined(BMSSE42OPT) || defined(BMAVX2OPT)
     return VECT_IS_ZERO_BLOCK(start, end);
 #else
    do
    {
-        TW tmp = start[0] | start[1] | start[2] | start[3];
-       if (tmp) 
-           return false;
+        if (start[0] | start[1] | start[2] | start[3])
+            return false;
        start += 4;
    } while (start < end);
    return true;
@@ -4532,7 +4531,7 @@ bm::id_t bit_operation_sub_any(const bm::word_t* BMRESTRICT src1,
     
     if (IS_EMPTY_BLOCK(src2)) // nothing to diff
     {
-        return !bit_is_all_zero((bm::wordop_t*)src1, (bm::wordop_t*)src1_end);
+        return !bit_is_all_zero(src1, src1_end);
     }
     return bit_block_sub_any(src1, src1_end, src2);
 }
@@ -4590,15 +4589,14 @@ bm::id_t bit_operation_or_any(const bm::word_t* BMRESTRICT src1,
     if (IS_EMPTY_BLOCK(src1))
     {
         if (!IS_EMPTY_BLOCK(src2))
-            return !bit_is_all_zero((bm::wordop_t*)src2, 
-                                     (bm::wordop_t*)(src2 + (src1_end - src1)));
+            return !bit_is_all_zero(src2,(src2 + (src1_end - src1)));
         else
             return 0; // both blocks are empty        
     }
     else
     {
         if (IS_EMPTY_BLOCK(src2))
-            return !bit_is_all_zero((bm::wordop_t*)src1, (bm::wordop_t*)src1_end);
+            return !bit_is_all_zero(src1, src1_end);
     }
 
     return bit_block_or_any(src1, src1_end, src2);
@@ -4926,8 +4924,7 @@ bm::id_t bit_operation_xor_any(const bm::word_t* BMRESTRICT src1,
         if (IS_EMPTY_BLOCK(src1) && IS_EMPTY_BLOCK(src2))
             return 0;
         const bm::word_t* block = IS_EMPTY_BLOCK(src1) ? src2 : src1;
-        return !bit_is_all_zero((bm::wordop_t*)block, 
-                                (bm::wordop_t*)(block + (src1_end - src1)));
+        return !bit_is_all_zero(block, (block + (src1_end - src1)));
     }
     return bit_block_xor_any(src1, src1_end, src2);
 }

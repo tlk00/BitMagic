@@ -793,23 +793,24 @@ inline
 bool avx2_is_all_zero(const __m256i* BMRESTRICT block,
                       const __m256i* BMRESTRICT block_end)
 {
-    __m256i maskz = _mm256_setzero_si256();
-
     do
     {
         __m256i w0 = _mm256_load_si256(block+0);
         __m256i w1 = _mm256_load_si256(block+1);
+
+        __m256i wA = _mm256_or_si256(w0, w1);
         
-        __m256i w = _mm256_or_si256(w0, w1);
-        __m256i wcmp= _mm256_cmpeq_epi8(w, maskz); // (w0 | w1) == maskz
-        unsigned mask = _mm256_movemask_epi8(wcmp);
-        if (mask != ~0u)
+        __m256i w2 = _mm256_load_si256(block+2);
+        __m256i w3 = _mm256_load_si256(block+3);
+
+        __m256i wB = _mm256_or_si256(w2, w3);
+        wA = _mm256_or_si256(wA, wB);
+        
+        if (!_mm256_testz_si256(wA, wA))
         {
             return false;
         }
-
-        block += 2;
-    
+        block += 4;
     } while (block < block_end);
     return true;
 }

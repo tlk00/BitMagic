@@ -12331,6 +12331,38 @@ void TestBlockLast()
 
 
 static
+void TestBlockZero()
+{
+    cout << " ------------------------------ Test bit-block ZERO" << endl;
+    {
+        BM_DECLARE_TEMP_BLOCK(tb1);
+
+        unsigned pad = 0xDEAD;
+        for (unsigned i = 0; i < bm::set_block_size; ++i)
+        {
+            tb1.b_.w32[i] = 0;
+        }
+
+        auto zero = bm::bit_is_all_zero(tb1, tb1 + bm::set_block_size);
+        assert(zero);
+        cout << zero << endl;
+
+        for (unsigned i = 0; i < bm::set_block_size; ++i)
+        {
+            ::memset(tb1, 0, sizeof(tb1));
+            tb1.b_.w32[i] = 1;
+            zero = bm::bit_is_all_zero(tb1, tb1 + bm::set_block_size);
+            assert(!zero);
+            cout << zero;
+        }
+        cout << pad << endl;
+    }
+    cout << "\n ------------------------------ Test bit-block ZERO OK" << endl;
+
+}
+
+
+static
 void TestBlockAND()
 {
     cout << " ------------------------------ Test bit-block AND" << endl;
@@ -13107,6 +13139,8 @@ int main(void)
     exit(1);
 */
 
+     TestBlockZero();
+    
      TestBlockAND();
      TestBlockSUB();
     

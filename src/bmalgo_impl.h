@@ -491,8 +491,7 @@ void combine_any_operation_with_block(const bm::word_t* blk,
                     if (arg_blk)
                     {
                         dmd.result += 
-                          !bit_is_all_zero((bm::wordop_t*)arg_blk, 
-                                           (bm::wordop_t*)(arg_blk + bm::set_block_size));
+                          !bit_is_all_zero(arg_blk,(arg_blk + bm::set_block_size));
                     }
                     break;
                  default:
@@ -552,8 +551,7 @@ void combine_any_operation_with_block(const bm::word_t* blk,
                     if (blk)
                     {
                         dmd.result+=
-                            !bit_is_all_zero((bm::wordop_t*)blk, 
-                                              (bm::wordop_t*)blk + bm::set_block_size);
+                            !bm::bit_is_all_zero(blk, blk + bm::set_block_size);
                     }
                     break;
                  case bm::COUNT_B:
@@ -612,13 +610,11 @@ void combine_any_operation_with_block(const bm::word_t* blk,
             break;
         case bm::COUNT_A:
             if (blk)
-                dmd.result += !bit_is_all_zero((bm::wordop_t*)blk, 
-                                               (bm::wordop_t*)blk_end);
+                dmd.result += !bit_is_all_zero(blk, blk_end);
             break;
         case bm::COUNT_B:
             if (arg_blk)
-                dmd.result += !bit_is_all_zero((bm::wordop_t*)arg_blk, 
-                                               (bm::wordop_t*)arg_end);
+                dmd.result += !bit_is_all_zero(arg_blk, arg_end);
             break;
         default:
             BM_ASSERT(0);
