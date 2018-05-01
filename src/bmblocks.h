@@ -220,15 +220,10 @@ public:
         bool operator()(const bm::word_t* block, unsigned /*idx*/)
         {
             if (BM_IS_GAP(block)) // gap block
-            {
                 return (!gap_is_all_zero(BMGAP_PTR(block), bm::gap_max_bits));
-            }
-            else  // bitset
-            {
-                if (IS_FULL_BLOCK(block)) return true;
-                return (!bit_is_all_zero(block, (block + bm::set_block_size)));
-            }
-            return false;
+            if (IS_FULL_BLOCK(block)) 
+                return true;
+            return (!bit_is_all_zero(block, (block + bm::set_block_size)));
         }
     };
 
