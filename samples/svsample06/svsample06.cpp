@@ -190,18 +190,27 @@ int main(void)
         bm::bvector<> bv_res;
         sparse_vector_u32 sv(bm::use_null);
         
-        
-        unsigned seach_repeats = 500;
-        
         generate_test_set(vect, bv_null, sv);
+
+        unsigned seach_repeats = 500;
+
+        // generate a search vector
+        //
+        std::vector<unsigned> search_vect;
+        for (unsigned i = 0; i < seach_repeats; ++i)
+        {
+            search_vect.push_back(rand_dis(gen));
+        }
         
+        // run benchmarks
+        //
         
         {
             bm::chrono_taker tt1("1. std::vector<> scan ", seach_repeats, &timing_map);
             
             for (unsigned i = 0; i < seach_repeats; ++i)
             {
-                unsigned vs = rand_dis(gen);
+                unsigned vs = search_vect[i];
                 vector_search(vect, bv_null, vs, bv_res);
             } // for
         }
@@ -216,7 +225,7 @@ int main(void)
             
             for (unsigned i = 0; i < seach_repeats; ++i)
             {
-                unsigned vs = rand_dis(gen);
+                unsigned vs = search_vect[i];
                 scanner.find_eq(sv, vs, bv_res);
             } // for
         }
