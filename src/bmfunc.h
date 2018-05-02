@@ -4672,7 +4672,7 @@ bm::word_t* bit_operation_or(bm::word_t* BMRESTRICT dst,
         else
         {
             // Regular operation OR on the whole block
-            bit_block_or(dst, src);
+            bm::bit_block_or(dst, src);
         }
     }
     else // The destination block does not exist yet
