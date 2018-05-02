@@ -2049,6 +2049,16 @@ void BasicFunctionalityTest()
         cout << "Swap test failed!" << endl;
         exit(1);
     }
+
+    {
+        bm::standard_alloc_pool pool;
+        bvect bv3, bv4;
+        bv3.set_allocator_pool(&pool);
+        bv3.set(10, true);
+        bv4.set(10, true);
+        bv4.set(10, false);
+        bv3 &= bv4;
+    }
 }
 
 
@@ -13168,7 +13178,7 @@ int main(void)
     //LoadVectors("c:/dev/bv_perf", 3, 27);
     exit(1);
 */
-
+/*
      TestBlockZero();
     
      TestBlockAND();
@@ -13201,9 +13211,9 @@ int main(void)
      EnumeratorTest();
     
      CountRangeTest();
-
+*/
      BasicFunctionalityTest();
-
+/*
      BvectorIncTest();
 
      ClearAllTest();
@@ -13272,7 +13282,7 @@ int main(void)
      TestCompressedCollection();
 
      StressTest(300);
-
+*/
     finish_time = time(0);
 
 
