@@ -701,10 +701,15 @@ void avx2_set_block(__m256i* BMRESTRICT dst,
     __m256i ymm0 = _mm256_set_epi32 (value, value, value, value, value, value, value, value);
     do
     {
-        _mm256_store_si256(dst, ymm0);
-    } while (++dst < dst_end);
+        _mm256_store_si256(dst,   ymm0);
+        _mm256_store_si256(dst+1, ymm0);
+        _mm256_store_si256(dst+2, ymm0);
+        _mm256_store_si256(dst+3, ymm0);
+        
+        dst += 4;
+    } while (dst < dst_end);
     
-    _mm_sfence();
+    //_mm_sfence();
 }
 
 
