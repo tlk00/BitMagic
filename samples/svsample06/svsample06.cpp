@@ -26,6 +26,7 @@ For more information please visit:  http://bitmagic.io
     \brief Example: sparse_vector<> scan search
 */
 
+//#define BMAVX2OPT
 
 #include <iostream>
 #include <vector>
@@ -72,6 +73,8 @@ void generate_test_set(std::vector<unsigned>& vect,
                        sparse_vector_u32&     sv
                        )
 {
+    std::cout << "Test set generation..." << std::endl;
+
     vect.resize(test_size);
     bv_null.reset();
     
@@ -87,7 +90,10 @@ void generate_test_set(std::vector<unsigned>& vect,
         {
             i += 5;  // insert a small NULL plate (unassigned values)
         }
+        if (i % 20000000 == 0)
+            std::cout << "." << std::flush;
     } // for
+    std::cout << std::endl << "Generation finished." << std::endl;
 }
 
 
@@ -185,7 +191,7 @@ int main(void)
         sparse_vector_u32 sv(bm::use_null);
         
         
-        unsigned seach_repeats = 100;
+        unsigned seach_repeats = 500;
         
         generate_test_set(vect, bv_null, sv);
         
@@ -201,6 +207,9 @@ int main(void)
         }
 
         {
+            bm::bvector<>::allocator_pool_type pool;
+            bm::bvector<>::mem_pool_guard(pool, bv_res);
+
             bm::sparse_vector_scan<sparse_vector_u32> scanner;
 
             bm::chrono_taker tt1("2. sparse_vector<> scan ", seach_repeats, &timing_map);
