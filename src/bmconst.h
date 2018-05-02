@@ -26,19 +26,18 @@ namespace bm
 {
 
 #if defined(_WIN32) || defined (_WIN64)
-
 typedef unsigned __int64 id64_t;
-
 #else
-
 typedef unsigned long long int id64_t;
-
 #endif
 
 typedef unsigned int   id_t;
 typedef unsigned int   word_t;
 typedef unsigned short short_t;
 
+#ifndef BM_DEFAULT_POOL_SIZE
+# define BM_DEFAULT_POOL_SIZE 4096
+#endif
 
 
 const unsigned id_max = 0xFFFFFFFF;

@@ -120,11 +120,10 @@ template<class Alloc>
 class bvector
 {
 public:
-
-    typedef Alloc  allocator_type;
-    typedef blocks_manager<Alloc>      blocks_manager_type;
-    /** Type used to count bits in the bit vector */
-    typedef bm::id_t                   size_type; 
+    typedef Alloc                                        allocator_type;
+    typedef typename allocator_type::allocator_pool_type allocator_pool_type;
+    typedef blocks_manager<Alloc>                        blocks_manager_type;
+    typedef bm::id_t                                     size_type; 
 
     /** Statistical information about bitset's memory allocation details. */
     struct statistics : public bv_statistics
@@ -930,6 +929,27 @@ public:
         bm::id_t   bit_count_;
     };
 
+    /*! 
+        Resource guard for bvector<>::set_allocator_pool()
+        @ingroup bvector
+    */
+    class mem_pool_guard
+    {
+    public:
+        mem_pool_guard(allocator_pool_type& pool, bvector<Alloc>& bv)
+            : bv_(&bv)
+        {
+            bv.set_allocator_pool(&pool);
+        }
+        ~mem_pool_guard()
+        {
+            BM_ASSERT(bv_);
+            bv_->set_allocator_pool(0);
+        }
+    private:
+        bvector<Alloc>* bv_; ///< gaurded object
+    };
+
 
     friend class iterator_base;
     friend class enumerator;
@@ -1211,6 +1231,14 @@ public:
     Alloc get_allocator() const
     {
         return blockman_.get_allocator();
+    }
+
+    /// Set allocator pool for local (non-threaded) 
+    /// memory cyclic(lots of alloc-free ops) opertations
+    ///
+    void set_allocator_pool(allocator_pool_type* pool_ptr)
+    {
+        blockman_.get_allocator().set_pool(pool_ptr);
     }
 
     // --------------------------------------------------------------------
