@@ -12460,6 +12460,36 @@ void TestBlockAND()
 
 }
 
+static
+void TestBlockOR()
+{
+    cout << " ------------------------------ Test bit-block OR" << endl;
+    {
+        BM_DECLARE_TEMP_BLOCK(tb2);
+        BM_DECLARE_TEMP_BLOCK(tb1);
+
+        for (unsigned i = 0; i < bm::set_block_size; ++i)
+        {
+            tb1.b_.w32[i] = 0;
+            tb2.b_.w32[i] = 8;
+        }
+
+        bm::bit_block_or(tb1, tb2);
+
+        for (unsigned i = 0; i < bm::set_block_size; ++i)
+        {
+            assert(tb1.b_.w32[i] == 8);
+            if (tb1.b_.w32[i] != 8)
+            {
+                cerr << "TestOR failed!" << endl;
+                exit(1);
+            }
+        }
+
+    }
+    cout << " ------------------------------ Test bit-block OR  OK" << endl;
+
+}
 
 static
 void TestBlockSUB()
@@ -13143,7 +13173,8 @@ int main(void)
     
      TestBlockAND();
      TestBlockSUB();
-    
+     TestBlockOR();
+
      ExportTest();
      ResizeTest();
 
