@@ -566,15 +566,15 @@ public:
     */
     void throw_range_error(const char* err_msg) const;
     
+    /** Number of effective bit-plains in the value type*/
+    unsigned effective_plains() const { return effective_plains_ + 1; }
+
 private:
 
     /*! \brief free all internal vectors
     */
     void free_vectors() BMNOEXEPT;
     
-    /** Number of effective bit-plains in the value type*/
-    unsigned effective_plains() const { return effective_plains_ + 1; }
-
     /** Number of total bit-plains in the value type*/
     static unsigned value_bits() { return sv_value_plains; }
     

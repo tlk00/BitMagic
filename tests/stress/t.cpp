@@ -13178,7 +13178,7 @@ int main(void)
     //LoadVectors("c:/dev/bv_perf", 3, 27);
     exit(1);
 */
-/*
+
      TestBlockZero();
     
      TestBlockAND();
@@ -13211,9 +13211,9 @@ int main(void)
      EnumeratorTest();
     
      CountRangeTest();
-*/
+
      BasicFunctionalityTest();
-/*
+
      BvectorIncTest();
 
      ClearAllTest();
@@ -13282,7 +13282,7 @@ int main(void)
      TestCompressedCollection();
 
      StressTest(300);
-*/
+
     finish_time = time(0);
 
 

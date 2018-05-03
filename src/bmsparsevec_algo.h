@@ -44,7 +44,7 @@ namespace bm
     \ingroup svalgo
     \sa dynamic_range_clip_low
 */
-template<class SV>
+template<typename SV>
 void dynamic_range_clip_high(SV& svect, unsigned high_bit)
 {
     unsigned sv_plains = svect.plains();
@@ -85,7 +85,7 @@ void dynamic_range_clip_high(SV& svect, unsigned high_bit)
     \ingroup svalgo
     \sa dynamic_range_clip_high 
 */
-template<class SV>
+template<typename SV>
 void dynamic_range_clip_low(SV& svect, unsigned low_bit)
 {
     if (low_bit == 0) return; // nothing to do
@@ -139,7 +139,7 @@ void dynamic_range_clip_low(SV& svect, unsigned low_bit)
  
     \ingroup svalgo
 */
-template<class SV>
+template<typename SV>
 void compute_nonzero_bvector(const SV& svect, typename SV::bvector_type& bvect)
 {
     bool first = true;
@@ -175,7 +175,7 @@ void compute_nonzero_bvector(const SV& svect, typename SV::bvector_type& bvect)
     \ingroup svalgo
     \ingroup setalgo
 */
-template<class SV>
+template<typename SV>
 class set2set_11_transform
 {
 public:
@@ -226,8 +226,13 @@ protected:
 
 /**
     \brief algorithms for sparse_vector scan/seach
+ 
+    Scanner uses properties of bit-vector plains to find the answer
+    using logical operations with transposed plains.
+ 
+    @ingroup svalgo
 */
-template<class SV>
+template<typename SV>
 class sparse_vector_scan
 {
 public:
@@ -241,74 +246,89 @@ public:
     */
     void find_eq(const SV&                  sv,
                  typename SV::value_type    value,
-                 typename SV::bvector_type& bvect)
+                 typename SV::bvector_type& bv_out)
     {
         if (sv.empty())
             return; // nothing to do
         
         if (!value)
         {
-            find_zero(sv, bvect);
+            find_zero(sv, bv_out);
             return;
         }
         
         unsigned char bits[sizeof(value)*8];
         unsigned short bit_count_v = bm::bitscan(value, bits);
+        BM_ASSERT(bit_count_v);
 
-        // accumulate AND all matching vectors
+        // aggregate AND all matching vectors
         //
-        bool first = true;
-        for (unsigned i = 0; i < bit_count_v; ++i)
         {
-            unsigned plain = bits[i];
-            const bvector_type* bv_plain = sv.get_plain(plain);
-
+            const bvector_type* bv_plain = sv.get_plain(bits[0]);
+            if (bv_plain)
+                bv_out = *bv_plain;
+            else // plain not found
+            {
+                bv_out.clear(true);
+                return;
+            }
+        }
+        
+        for (unsigned i = 1; i < bit_count_v; ++i)
+        {
+            const bvector_type* bv_plain = sv.get_plain(bits[i]);
             if (bv_plain)
             {
-                if (first)
-                {
-                    bvect = *bv_plain;
-                    first = false;
-                    
-                    const bvector_type* bv_null = sv.get_null_bvector();
-                    if (bv_null) // correct not to find NULL values
-                    {
-                        bvect &= *bv_null;
-                    }
-                }
-                else
-                {
-                    bvect &= *bv_plain;
-                }
+                bv_out &= *bv_plain;
+                value &= ~(value_type(1) << i);
                 // TODO: better detect when accumulator is empty to break early
             }
             else // mandatory plain not found - empty result
             {
-                bvect.clear(true);
+                bv_out.clear(true);
                 return;
             }
         } // for i
         
-        // logical MINUS all other plains
+        // SUB all other plains
         //
-        unsigned sv_plains = sv.plains();
-        for (unsigned i = 0; i < sv_plains; ++i)
+        unsigned sv_plains = sv.effective_plains();
+        for (unsigned i = 0; (i < sv_plains) && value; ++i)
         {
+            if (!(value & 1u))
+            {
+                const bvector_type* bv_plain = sv.get_plain(i);
+                if (bv_plain)
+                    bv_out -= *bv_plain;
+            }
+            value >>= 1;
+/*
             const bvector_type* bv_plain = sv.get_plain(i);
             if (bv_plain && !(value & (value_type(1) << i)))
             {
                 // TODO: better detect when result is empty to break early
-                bvect -= *bv_plain;
+                bv_out -= *bv_plain;
             }
+*/
         } // for i
+        
+        const bvector_type* bv_not_null = sv.get_null_bvector();
+        if (bv_not_null) // correct not to find NULL values
+            bv_out &= *bv_not_null;
+
     }
     
     void find_zero(const SV&                  sv,
-                   typename SV::bvector_type& bvect)
+                   typename SV::bvector_type& bv_out)
     {
-        bm::compute_nonzero_bvector(sv, bvect);
-        bvect.invert();
-        bvect.set_range(sv.size(), bm::id_max-1, false);
+        bm::compute_nonzero_bvector(sv, bv_out);
+        bv_out.invert();
+        
+        const bvector_type* bv_null = sv.get_null_bvector();
+        if (bv_null) // correct not to find NULL values
+            bv_out &= *bv_null;
+        else
+            bv_out.set_range(sv.size(), bm::id_max-1, false);
     }
 
 };
