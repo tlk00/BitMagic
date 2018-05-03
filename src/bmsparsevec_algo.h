@@ -266,21 +266,21 @@ public:
         {
             const bvector_type* bv_plain = sv.get_plain(bits[0]);
             if (bv_plain)
+            {
                 bv_out = *bv_plain;
+            }
             else // plain not found
             {
                 bv_out.clear(true);
                 return;
             }
         }
-        
         for (unsigned i = 1; i < bit_count_v; ++i)
         {
             const bvector_type* bv_plain = sv.get_plain(bits[i]);
             if (bv_plain)
             {
                 bv_out &= *bv_plain;
-                value &= ~(value_type(1) << i);
                 // TODO: better detect when accumulator is empty to break early
             }
             else // mandatory plain not found - empty result
@@ -295,21 +295,12 @@ public:
         unsigned sv_plains = sv.effective_plains();
         for (unsigned i = 0; (i < sv_plains) && value; ++i)
         {
-            if (!(value & 1u))
-            {
-                const bvector_type* bv_plain = sv.get_plain(i);
-                if (bv_plain)
-                    bv_out -= *bv_plain;
-            }
-            value >>= 1;
-/*
             const bvector_type* bv_plain = sv.get_plain(i);
             if (bv_plain && !(value & (value_type(1) << i)))
             {
                 // TODO: better detect when result is empty to break early
                 bv_out -= *bv_plain;
             }
-*/
         } // for i
         
         const bvector_type* bv_not_null = sv.get_null_bvector();
