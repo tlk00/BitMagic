@@ -90,8 +90,6 @@ void generate_test_set(std::vector<unsigned>& vect,
         {
             i += 5;  // insert a small NULL plate (unassigned values)
         }
-        if (i % 20000000 == 0)
-            std::cout << "." << std::flush;
     } // for
     std::cout << std::endl << "Generation finished." << std::endl;
 }
@@ -165,17 +163,12 @@ int main(void)
         {
             sparse_vector_u32 sv(bm::use_null);
             
-            // 2 -> 25
-            // 3 -> 35
-            // 7 -> 75
-            // 1000 -> 2000
-            // 256 -> 2001
-            
             sv.set(2, 25);
             sv.set(3, 35);
             sv.set(7, 75);
             sv.set(1000, 2000);
             sv.set(256, 2001);
+            sv.set(77, 25);
 
             bm::bvector<> bv_found;
             
