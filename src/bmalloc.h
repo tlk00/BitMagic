@@ -136,16 +136,18 @@ public:
 /*! 
     @brief Pool of pointers to buffer cyclic allocations
 */
-template<unsigned POOL_SIZE> 
 class pointer_pool_array
 {
 public:
     enum params
     {
-        n_pool_max_size = POOL_SIZE
+        n_pool_max_size = BM_DEFAULT_POOL_SIZE
     };
 
-    pointer_pool_array() : size_(0) {}
+    pointer_pool_array() : size_(0) 
+    {
+        allocate_pool(n_pool_max_size);
+    }
 
     pointer_pool_array(const pointer_pool_array&) = delete;
     pointer_pool_array& operator=(const pointer_pool_array&) = delete;
@@ -153,6 +155,7 @@ public:
     ~pointer_pool_array() 
     { 
         BM_ASSERT(size_ == 0); // at destruction point should be empty (otherwise it is a leak) 
+        free_pool();
     }
 
     /// Push pointer to the pool (if it is not full)
@@ -161,10 +164,8 @@ public:
     unsigned push(void* ptr)
     {
         if (size_ == n_pool_max_size - 1)
-        {
             return 0;
-        }
-        pool_[size_++] = ptr;
+        pool_ptr_[size_++] = ptr;
         return size_;
     }
 
@@ -174,17 +175,29 @@ public:
     {
         if (size_ == 0)
             return 0;
-        return pool_[--size_];
+        return pool_ptr_[--size_];
     }
 private:
-    void*     pool_[n_pool_max_size]; ///< array of pointers in the pool
+    void allocate_pool(size_t pool_size)
+    {
+        pool_ptr_ = (void**)::malloc(sizeof(void*) * pool_size);
+        if (!pool_ptr_)
+            throw std::bad_alloc();
+    }
+
+    void free_pool()
+    {
+        ::free(pool_ptr_);
+    }
+private:
+    void**     pool_ptr_;  ///< array of pointers in the pool
     unsigned  size_;                  ///< current size 
 };
 
 /**
     Allocation pool object
 */
-template<class BA, class PA, unsigned POOL_SIZE>
+template<class BA, class PA>
 class alloc_pool
 {
 public:
@@ -228,8 +241,8 @@ public:
     }
 
 protected:
-    pointer_pool_array<POOL_SIZE>  block_pool_;
-    BA                             block_alloc_;
+    pointer_pool_array  block_pool_;
+    BA                  block_alloc_;
 };
 
 
@@ -365,7 +378,7 @@ private:
     allocator_pool_type*   alloc_pool_p_;
 };
 
-typedef bm::alloc_pool<block_allocator, ptr_allocator, BM_DEFAULT_POOL_SIZE> standard_alloc_pool;
+typedef bm::alloc_pool<block_allocator, ptr_allocator> standard_alloc_pool;
 typedef bm::mem_alloc<block_allocator, ptr_allocator, standard_alloc_pool> standard_allocator;
 
 /** @} */
