@@ -129,41 +129,6 @@ void dynamic_range_clip_low(SV& svect, unsigned low_bit)
     bv_low_plain->bit_or(bv_acc1);
 }
 
-/*!
-    \brief Compute bit-vector of non-zero elements
- 
-    \param  svect - input sparse vector to compute non-zero elements
-    \param  bvect - output bit-bector of non-zero elements
- 
-    Output vector is computed as a logical OR (join) of all plains
- 
-    \ingroup svalgo
-*/
-template<typename SV>
-void compute_nonzero_bvector(const SV& svect, typename SV::bvector_type& bvect)
-{
-    bool first = true;
-    for (unsigned i = 0; i < svect.plains(); ++i)
-    {
-        const typename SV::bvector_type* bv_plain = svect.plain(i);
-        if (bv_plain)
-        {
-            if (first) // first found plain - use simple assignment
-            {
-                bvect = *bv_plain;
-                first = false;
-            }
-            else // for everything else - use OR
-            {
-                bvect |= *bv_plain;
-            }
-        }
-    } // for i
-    if (first) // no plains were found, just clear the result
-    {
-        bvect.clear(true);
-    }
-}
 
 /*!
     \brief Integer set to set transformation (functional image in groups theory)
@@ -183,31 +148,30 @@ public:
 public:
     /** Perform transformation
    
-     \param bvect_in  - input set, defined as a bit-vector
-     \param sv_brel   - binary relation vector
-     \param bvect_out - output set as a bit-vector
+     \param bv_in  - input set, defined as a bit-vector
+     \param sv_brel   - binary relation sparse vector
+     \param bv_out - output set as a bit-vector
     */
-    void run(typename SV::bvector_type& bvect_in,
+    void run(typename SV::bvector_type& bv_in,
              const    SV&               sv_brel,
-             typename SV::bvector_type& bvect_out)
+             typename SV::bvector_type& bv_out)
     {
         if (sv_brel.empty())
             return; // nothing to do
         
-        bvect_out.init(); // just in case to "fast set" later
+        bv_out.init(); // just in case to "fast set" later
         
-        const typename SV::bvector_type * bv_non_null = sv_brel.get_null_bvector();
-        
+        const typename SV::bvector_type * bv_non_null = sv_brel.get_null_bvector(); 
         if (bv_non_null) // NULL-able association vector
         {
-            bv_product_ = bvect_in;
-            bv_product_ &= *bv_non_null;
+            bv_product_ = bv_in;
+            bv_product_.bit_and(*bv_non_null);
         }
         else
         {
             bv_product_.clear(true);
             bv_product_.set_range(0, sv_brel.size()-1);
-            bv_product_ &= bvect_in;
+            bv_product_.bit_and(bv_in);
         }
         
         typename SV::bvector_type::enumerator en(bv_product_.first());
@@ -216,7 +180,7 @@ public:
             auto idx = *en;
             idx = sv_brel.translate_address(idx);
             typename SV::value_type translated_id = sv_brel.get(idx);
-            bvect_out.set_bit_no_check(translated_id);
+            bv_out.set_bit_no_check(translated_id);
         } // for en
     }
     
@@ -227,104 +191,183 @@ protected:
 /**
     \brief algorithms for sparse_vector scan/seach
  
-    Scanner uses properties of bit-vector plains to find the answer
-    using logical operations with transposed plains.
+    Scanner uses properties of bit-vector plains to answer questions
+    like "find all sparse vector elements equivalent to XYZ".
+
+    Class uses fast algorithms based on properties of bit-plains.
+    This is NOT a brute force, direct scan.
  
     @ingroup svalgo
 */
 template<typename SV>
-class sparse_vector_scan
+class sparse_vector_scanner
 {
 public:
     typedef typename SV::bvector_type       bvector_type;
     typedef typename SV::value_type         value_type;
     
 public:
-
     /**
         \brief find all sparse vector elements EQ to search value
+
+        Find all sparse vector elements equivalent to specified value
+
+        \param sv - input sparse vector
+        \param value - value to search for
+        \param bv_out - output bit-vector (search result masks 1 elements)
     */
     void find_eq(const SV&                  sv,
                  typename SV::value_type    value,
-                 typename SV::bvector_type& bv_out)
-    {
-        if (sv.empty())
-            return; // nothing to do
-        
-        if (!value)
-        {
-            find_zero(sv, bv_out);
-            return;
-        }
-        
-        unsigned char bits[sizeof(value)*8];
-        unsigned short bit_count_v = bm::bitscan(value, bits);
-        BM_ASSERT(bit_count_v);
-
-        // aggregate AND all matching vectors
-        //
-        {
-            const bvector_type* bv_plain = sv.get_plain(bits[0]);
-            if (bv_plain)
-            {
-                bv_out = *bv_plain;
-            }
-            else // plain not found
-            {
-                bv_out.clear(true);
-                return;
-            }
-        }
-        for (unsigned i = 1; i < bit_count_v; ++i)
-        {
-            const bvector_type* bv_plain = sv.get_plain(bits[i]);
-            if (bv_plain)
-            {
-                bv_out &= *bv_plain;
-                // TODO: better detect when accumulator is empty to break early
-            }
-            else // mandatory plain not found - empty result
-            {
-                bv_out.clear(true);
-                return;
-            }
-        } // for i
-        
-        // SUB all other plains
-        //
-        unsigned sv_plains = sv.effective_plains();
-        for (unsigned i = 0; (i < sv_plains) && value; ++i)
-        {
-            const bvector_type* bv_plain = sv.get_plain(i);
-            if (bv_plain && !(value & (value_type(1) << i)))
-            {
-                // TODO: better detect when result is empty to break early
-                bv_out -= *bv_plain;
-            }
-        } // for i
-        
-        const bvector_type* bv_not_null = sv.get_null_bvector();
-        if (bv_not_null) // correct not to find NULL values
-            bv_out &= *bv_not_null;
-
-    }
-    
+                 typename SV::bvector_type& bv_out);
+    /**
+        \brief find all sparse vector elements EQ to 0
+        \param sv - input sparse vector
+        \param bv_out - output bit-vector (search result masks 1 elements)
+    */
     void find_zero(const SV&                  sv,
-                   typename SV::bvector_type& bv_out)
-    {
-        bm::compute_nonzero_bvector(sv, bv_out);
-        bv_out.invert();
-        
-        const bvector_type* bv_null = sv.get_null_bvector();
-        if (bv_null) // correct not to find NULL values
-            bv_out &= *bv_null;
-        else
-            bv_out.set_range(sv.size(), bm::id_max-1, false);
-    }
+                   typename SV::bvector_type& bv_out);
 
+    /*!
+        \brief Find non-zero elements
+        Output vector is computed as a logical OR (join) of all plains
+
+        \param  sv - input sparse vector
+        \param  bv_out - output bit-bector of non-zero elements
+    */
+    void find_nonzero(const SV& sv, typename SV::bvector_type& bv_out);
+
+    /**
+        \brief invert search result ("EQ" to "not EQ")
+
+        \param  sv - input sparse vector
+        \param  bv_out - output bit-bector of non-zero elements
+    */
+    void invert(const SV& sv, typename SV::bvector_type& bv_out);
 };
 
 
+//----------------------------------------------------------------------------
+//
+//----------------------------------------------------------------------------
+
+template<typename SV>
+void sparse_vector_scanner<SV>::find_zero(const SV&                  sv,
+                                          typename SV::bvector_type& bv_out)
+{
+    find_nonzero(sv, bv_out);
+    invert(sv, bv_out);
+}
+
+//----------------------------------------------------------------------------
+
+template<typename SV>
+void sparse_vector_scanner<SV>::invert(const SV& sv, typename SV::bvector_type& bv_out)
+{
+    if (sv.size() == 0)
+        return;
+    bv_out.invert();
+    const bvector_type* bv_null = sv.get_null_bvector();
+    if (bv_null) // correct result to only use not NULL elements
+        bv_out &= *bv_null;
+    else
+        bv_out.set_range(sv.size(), bm::id_max - 1, false);
+}
+
+//----------------------------------------------------------------------------
+
+template<typename SV>
+void sparse_vector_scanner<SV>::find_eq(const SV&                  sv,
+                                        typename SV::value_type    value,
+                                        typename SV::bvector_type& bv_out)
+{
+    if (sv.empty())
+        return; // nothing to do
+
+    if (!value)
+    {
+        find_zero(sv, bv_out);
+        return;
+    }
+
+    unsigned char bits[sizeof(value) * 8];
+    unsigned short bit_count_v = bm::bitscan(value, bits);
+    BM_ASSERT(bit_count_v);
+
+    // aggregate AND all matching vectors
+    //
+    {
+        const bvector_type* bv_plain = sv.get_plain(bits[--bit_count_v]);
+        if (bv_plain)
+        {
+            bv_out = *bv_plain;
+        }
+        else // plain not found
+        {
+            bv_out.clear(true);
+            return;
+        }
+    }
+    for (unsigned i = 0; i < bit_count_v; ++i)
+    {
+        const bvector_type* bv_plain = sv.get_plain(bits[i]);
+        if (bv_plain)
+        {
+            bv_out &= *bv_plain;
+            // TODO: better detect when accumulator is empty to break early
+        }
+        else // mandatory plain not found - empty result!
+        {
+            bv_out.clear(true);
+            return;
+        }
+    } // for i
+
+    // SUB all other plains
+    //
+    unsigned sv_plains = sv.effective_plains();
+    for (unsigned i = 0; (i < sv_plains) && value; ++i)
+    {
+        const bvector_type* bv_plain = sv.get_plain(i);
+        if (bv_plain && !(value & (value_type(1) << i)))
+        {
+            // TODO: better detect when result is empty to break early
+            bv_out -= *bv_plain;
+        }
+    } // for i
+
+    const bvector_type* bv_not_null = sv.get_null_bvector();
+    if (bv_not_null) // correct not to find NULL values
+        bv_out &= *bv_not_null;
+}
+
+template<typename SV>
+void sparse_vector_scanner<SV>::find_nonzero(const SV& sv, 
+                                             typename SV::bvector_type& bv_out)
+{
+    bool first = true;
+    for (unsigned i = 0; i < sv.plains(); ++i)
+    {
+        const typename SV::bvector_type* bv_plain = sv.plain(i);
+        if (bv_plain)
+        {
+            if (first) // first found plain - use simple assignment
+            {
+                bv_out = *bv_plain;
+                first = false;
+            }
+            else // for everything else - use OR
+            {
+                bv_out.bit_or(*bv_plain);
+            }
+        }
+    } // for i
+    if (first) // no plains were found, just clear the result
+        bv_out.clear(true);
+}
+
+//----------------------------------------------------------------------------
+//
+//----------------------------------------------------------------------------
 
 
 } // namespace bm
