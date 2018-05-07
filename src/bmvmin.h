@@ -171,7 +171,7 @@ private:
     void init_gapbuf(bm::word_t* buf)
     {
         unsigned arr_size = 
-            BM_MINISET_GAPLEN / (sizeof(bm::word_t) / sizeof(bm::gap_word_t));
+            unsigned(BM_MINISET_GAPLEN / (sizeof(bm::word_t) / sizeof(bm::gap_word_t)));
         m_buf = A::allocate(arr_size, 0);
         if (buf)
         {
@@ -192,7 +192,7 @@ private:
 
         gap_convert_to_bitset(buf, (gap_word_t*) m_buf, arr_size);
         arr_size = 
-            BM_MINISET_GAPLEN / (sizeof(bm::word_t) / sizeof(bm::gap_word_t));
+            unsigned(BM_MINISET_GAPLEN / (sizeof(bm::word_t) / sizeof(bm::gap_word_t)));
         A::deallocate(m_buf, arr_size);
         m_buf = buf;
         m_type = 0;
@@ -314,7 +314,7 @@ public:
         unsigned char  mask = (unsigned char)(0x1 << (pos & 7));
         unsigned char* offs = (unsigned char*)m_buf + (pos >> 3); 
 
-        *offs &= ~mask;
+        *offs &= (unsigned char)~mask;
     }
 
     /// Counts number of bits ON 
@@ -375,21 +375,19 @@ public:
         unsigned pos = 0;
         const unsigned char* ptr = (unsigned char*) m_buf;
 
-        for (unsigned i = 0; i < (m_size/8)+1; ++i)
+        for (unsigned i = 0; i < ((m_size/8)+1); ++i)
         {
             unsigned char w = ptr[i];
-
-
             if (w != 0)
             {
-                while ((w & 1) == 0)
+                while ((w & 1u) == 0)
                 {
-                    w >>= 1;
+                    w = (unsigned char)(w >> 1u);
                     ++pos;
                 }
                 return pos;
             }
-            pos += sizeof(unsigned char) * 8;
+            pos = unsigned(pos + sizeof(unsigned char) * 8u);
         }
         return 0;
     }
@@ -473,7 +471,7 @@ public:
     const unsigned* get_buf() const { return m_buf; }
     unsigned mem_used() const
     {
-        return sizeof(bvector_mini) + (m_size / 32) + 1;
+        return unsigned(sizeof(bvector_mini) + (m_size / 32) + 1);
     }
 
     void swap(bvector_mini& bvm)

@@ -70,7 +70,7 @@ public:
 
     const gap_word_t* get_buf() const { return m_buf; }
 
-    void invert() { *m_buf = 1 - *m_buf; }
+    void invert() { *m_buf = bm::gap_word_t(1 - *m_buf); }
 
     void temp_invert() const;
 

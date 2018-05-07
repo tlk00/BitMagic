@@ -881,7 +881,10 @@ inline decoder_little_endian::decoder_little_endian(const unsigned char* buf)
 
 BMFORCEINLINE bm::short_t decoder_little_endian::get_16()
 {
-    bm::short_t a = bm::short_t((bm::short_t)buf_[0] << 8) + ((bm::short_t)buf_[1]);
+    bm::short_t v1 = bm::short_t(buf_[0]);
+    bm::short_t v2 = bm::short_t(buf_[1]);
+    bm::short_t a = bm::short_t((v1 << 8) + v2);
+    //bm::short_t a = bm::short_t((bm::short_t)buf_[0] << 8) + ((bm::short_t)buf_[1]);
     buf_ += sizeof(a);
     return a;
 }
@@ -926,7 +929,10 @@ inline void decoder_little_endian::get_16(bm::short_t* s, unsigned count)
     const bm::short_t* s_end = s + count;
     do 
     {
-        bm::short_t a = bm::short_t((bm::short_t)buf[0] << 8) + ((bm::short_t)buf[1]);
+        bm::short_t v1 = bm::short_t(buf_[0]);
+        bm::short_t v2 = bm::short_t(buf_[1]);
+        bm::short_t a = bm::short_t((v1 << 8) + v2);
+        //bm::short_t a = bm::short_t((bm::short_t)buf[0] << 8) + ((bm::short_t)buf[1]);
         *s++ = a;
         buf += sizeof(a);
     } while (s < s_end);

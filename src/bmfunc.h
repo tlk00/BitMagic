@@ -468,11 +468,11 @@ unsigned gap_find_last(const T* buf, unsigned* last)
     BM_ASSERT(last);
 
     T is_set = (*buf) & 1u;
-    unsigned end = ((*buf) >> 3);
+    T end = T((*buf) >> 3u);
 
     BM_ASSERT(buf[end] == bm::gap_max_bits - 1);
 
-    is_set ^= ((end-1) & 1u);
+    is_set ^= T((end-1) & 1u);
     if (is_set)
     {
         *last = buf[end];
@@ -1261,12 +1261,12 @@ void dgap_2_gap(const T* dgap_buf, T* gap_buf, T gap_header=0)
     if (*gap_buf == 0) 
         *gap_buf = 65535; // fix +1 overflow
     else
-        *gap_buf = *gap_buf - 1;
+        *gap_buf = T(*gap_buf - 1);
     
     for (++gap_buf; pcurr < pend; ++pcurr)
     {
         T prev = *(gap_buf-1); // don't remove temp(undef expression!)           
-        *gap_buf++ = *pcurr + prev;
+        *gap_buf++ = T(*pcurr + prev);
     }
     *gap_buf = 65535; // add missing last element  
 }
@@ -5060,7 +5060,7 @@ unsigned bit_find_last(const bm::word_t* block, unsigned* last)
         if (w)
         {
             unsigned idx = bm::bit_scan_reverse(w);
-            *last = idx + (i * 8u * sizeof(bm::word_t));
+            *last = unsigned(idx + (i * 8u * sizeof(bm::word_t)));
             return w;
         }
         if (i == 0)
@@ -5090,7 +5090,7 @@ unsigned bit_find_first(const bm::word_t* block, unsigned* first)
         if (w)
         {
             unsigned idx = bm::word_trailing_zeros(w);
-            *first = idx + (i * 8u * sizeof(bm::word_t));
+            *first = unsigned(idx + (i * 8u * sizeof(bm::word_t)));
             return w;
         }
     } // for i
@@ -5500,7 +5500,7 @@ bool improve_gap_levels(const T* length,
     }
     if (max_len < 5 || lsize <= bm::gap_levels)
     {
-        glevel_len[0] = max_len + 4;
+        glevel_len[0] = T(max_len + 4);
         for (i = 1; i < bm::gap_levels; ++i)
         {
             glevel_len[i] = bm::gap_max_buff_len;
@@ -5508,7 +5508,7 @@ bool improve_gap_levels(const T* length,
         return true;
     }
 
-    glevel_len[bm::gap_levels-1] = max_len + 5;
+    glevel_len[bm::gap_levels-1] = T(max_len + 5);
 
     unsigned min_overhead = gap_overhead(length, length_end, glevel_len);
     bool is_improved = false;
@@ -5523,7 +5523,7 @@ bool improve_gap_levels(const T* length,
         gap_word_t gap_saved_value = glevel_len[i];
         for (j = 0; j < lsize; ++j)
         {
-            glevel_len[i] = length[j]+4;
+            glevel_len[i] = T(length[j] + 4);
             unsigned ov = gap_overhead(length, length_end, glevel_len);
             if (ov <= min_overhead)
             {
