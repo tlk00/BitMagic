@@ -13272,7 +13272,7 @@ int main(void)
      TestSparseVector();
     
      TestSparseVectorTransform();
-    
+
      TestSparseVectorScan();
 
      TestCompressSparseVector();
