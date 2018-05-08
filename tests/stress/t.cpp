@@ -7837,7 +7837,7 @@ void DNACompressionTest()
     // generate pseudo-random DNA sequence
     for (unsigned i = 0; i < arr_size; ++i)
     {
-        unsigned letter_idx = rand() % sizeof(seeds);
+        unsigned letter_idx = unsigned(rand() % sizeof(seeds));
         unsigned char l = seeds[letter_idx];
         unsigned char c = 0;
         switch (l)
@@ -9078,7 +9078,7 @@ void GammaEncoderTest()
 
         for (unsigned j = 0; j < 64; ++j)
         {
-            gap_word_t a = rand() % 65535;
+            gap_word_t a = gap_word_t(rand() % 65535);
             if (!a) a = 65535; // 0 is illegal
             gap_word_t value = short_block[j] = a;
             gamma(value);
@@ -9636,9 +9636,10 @@ void TestSparseVector()
         cout << sv.at(i) << ",";
     }
     cout << endl;
-    
+
+    bm::sparse_vector_scanner<bm::sparse_vector<unsigned, bm::bvector<> > > scanner;
     bm::bvector<> bv;
-    bm::compute_nonzero_bvector(sv, bv);
+    scanner.find_nonzero(sv, bv);
     if (bv.count() != sv.size())
     {
         cerr << "compute_nonzero_bvector test failed" << endl;
@@ -10533,13 +10534,15 @@ void TestSparseVectorScan()
 {
     cout << " --------------- Test sparse_vector<> scan algo" << endl;
     
-    bm::sparse_vector_scan<sparse_vector_u32> scanner;
-    bm::sparse_vector_scan<sparse_vector_u64> scanner_64;
+    bm::sparse_vector_scanner<sparse_vector_u32> scanner;
+    bm::sparse_vector_scanner<sparse_vector_u64> scanner_64;
 
     {
         sparse_vector_u32 sv(bm::use_null);
         bvect bv_control;
         scanner.find_eq(sv, 25, bv_control);
+        assert(!bv_control.any());
+        scanner.invert(sv, bv_control);
         assert(!bv_control.any());
     }
 
@@ -10553,13 +10556,18 @@ void TestSparseVectorScan()
         scanner.find_eq(sv, 0, bv_control);
         unsigned found = bv_control.count();
         assert(found == 20);
+        scanner.invert(sv, bv_control);
+        found = bv_control.count();
+        assert(!found);
     }
     
     {
         cout << endl << "Unique search check" << endl;
         sparse_vector_u32 sv;
         bvect bv_control;
-        
+        bvect::allocator_pool_type pool;
+        bvect::mem_pool_guard(pool, bv_control);
+
         unsigned sv_size = 1256000;
         for (unsigned j = 0; j < sv_size; ++j)
         {
@@ -10588,7 +10596,7 @@ void TestSparseVectorScan()
                     exit(1);
                 }
                 
-                if (j % 10 == 0)
+                if (j % 1000 == 0)
                     cout << "\r" << j << "/" << sv_size << "    " << flush;
             } // for
             cout << endl;
@@ -10601,12 +10609,14 @@ void TestSparseVectorScan()
 
     {
         cout << "Find EQ test on flat data" << endl;
+        bvect::allocator_pool_type pool;
         unsigned max_value = 128000;
         for (unsigned value = 0; value < max_value; ++value)
         {
             sparse_vector_u32 sv;
             sparse_vector_u64 sv_64;
             bvect bv_control;
+            bvect::mem_pool_guard(pool, bv_control);
 
             unsigned sv_size = 67000;
             for (unsigned j = 0; j < 67000; ++j)
@@ -11547,7 +11557,7 @@ void TestSIMDUtils()
 
     {
         unsigned short buf[127] = { 65535, 127, 255, 256, 1000, 2000, 2001, 2005, 0xFF, 0,  };
-        idx = bm::sse4_gap_find(buf, 65535, 1);
+        idx = bm::sse4_gap_find(buf, (unsigned short)65535, 1);
         assert(idx == 0);
         idx = bm::sse4_gap_find(buf, 0, 1);
         assert(idx == 0);
@@ -11577,7 +11587,7 @@ void TestSIMDUtils()
             unsigned short v = buf[i];
             idx = bm::sse4_gap_find(buf, v, vsize);
             assert(idx == i);
-            idx = bm::sse4_gap_find(buf, v - 1, vsize);
+            idx = bm::sse4_gap_find(buf, (unsigned short)(v - 1), vsize);
             assert(idx == i);
         }
     }
@@ -11594,7 +11604,7 @@ void TestSIMDUtils()
             unsigned short v = buf[i];
             idx = bm::sse4_gap_find(buf, v, vsize);
             assert(idx == i);
-            idx = bm::sse4_gap_find(buf, v - 1, vsize);
+            idx = bm::sse4_gap_find(buf, (unsigned short)(v - 1), vsize);
             assert(idx == i);
         }
     }
@@ -11603,14 +11613,14 @@ void TestSIMDUtils()
         const unsigned vsize = 4;
         idx = bm::sse4_gap_find(buf, 0, vsize);
         assert(idx == 0);
-        idx = bm::sse4_gap_find(buf, 65535, vsize);
+        idx = bm::sse4_gap_find(buf, (unsigned short)(65535), vsize);
         assert(idx == vsize);
         for (unsigned i = 0; i < vsize; ++i)
         {
             unsigned short v = buf[i];
             idx = bm::sse4_gap_find(buf, v, vsize);
             assert(idx == i);
-            idx = bm::sse4_gap_find(buf, v - 1, vsize);
+            idx = bm::sse4_gap_find(buf, (unsigned short)(v - 1), vsize);
             assert(idx == i);
         }
     }
@@ -11629,7 +11639,7 @@ void TestSIMDUtils()
             unsigned short v = buf[i];
             idx = bm::sse4_gap_find(buf, v, vsize);
             assert(idx == i);
-            idx = bm::sse4_gap_find(buf, v - 1, vsize);
+            idx = bm::sse4_gap_find(buf, (unsigned short)(v - 1), vsize);
             assert(idx == i);
         }
     }
@@ -11646,7 +11656,7 @@ void TestSIMDUtils()
             unsigned short v = buf[i];
             idx = bm::sse4_gap_find(buf, v, vsize);
             assert(idx == i);
-            idx = bm::sse4_gap_find(buf, v - 1, vsize);
+            idx = bm::sse4_gap_find(buf, (unsigned short)(v - 1), vsize);
             assert(idx == i);
         }
     }
@@ -11664,7 +11674,7 @@ void TestSIMDUtils()
             unsigned short v = buf[i];
             idx = bm::sse4_gap_find(buf, v, vsize);
             assert(idx == i);
-            idx = bm::sse4_gap_find(buf, v - 1, vsize);
+            idx = bm::sse4_gap_find(buf, (unsigned short)(v - 1), vsize);
             assert(idx == i || (buf[i-1] == v-1));
         }
     }
@@ -11673,7 +11683,7 @@ void TestSIMDUtils()
     const unsigned vsize = 8;
     idx = bm::sse4_gap_find(buf, 0, vsize);
     assert(idx == 0);
-    idx = bm::sse4_gap_find(buf, 65535, vsize);
+    idx = bm::sse4_gap_find(buf, (unsigned short)(65535), vsize);
     assert(idx == vsize);
     for (unsigned i = 0; i < vsize; ++i)
     {
@@ -11684,7 +11694,7 @@ void TestSIMDUtils()
         }
         idx = bm::sse4_gap_find(buf, v, vsize);
         assert(idx == i);
-        idx = bm::sse4_gap_find(buf, v - 1, vsize);
+        idx = bm::sse4_gap_find(buf, (unsigned short)(v - 1), vsize);
         assert(idx == i || (buf[i - 1] == v - 1));
     }
     }
@@ -11696,7 +11706,7 @@ void TestSIMDUtils()
         const unsigned vsize = 13;
         idx = bm::sse4_gap_find(buf, 0, vsize);
         assert(idx == 0);
-        idx = bm::sse4_gap_find(buf, 65535, vsize);
+        idx = bm::sse4_gap_find(buf, (unsigned short)(65535), vsize);
         assert(idx == vsize);
 
         for (unsigned i = 0; i < vsize; ++i)
@@ -11708,7 +11718,7 @@ void TestSIMDUtils()
             }
             idx = bm::sse4_gap_find(buf, v, vsize);
             assert(idx == i);
-            idx = bm::sse4_gap_find(buf, v - 1, vsize);
+            idx = bm::sse4_gap_find(buf, (unsigned short)(v - 1), vsize);
             assert(idx == i || (buf[i - 1] == v - 1));
         }
     }
@@ -11732,7 +11742,7 @@ void TestSIMDUtils()
             }
             idx = bm::sse4_gap_find(buf, v, vsize);
             assert(idx == i);
-            idx = bm::sse4_gap_find(buf, v - 1, vsize);
+            idx = bm::sse4_gap_find(buf, (unsigned short)(v - 1), vsize);
             assert(idx == i || (buf[i - 1] == v - 1));
         }
     }

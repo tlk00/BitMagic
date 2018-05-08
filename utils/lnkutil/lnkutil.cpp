@@ -358,8 +358,9 @@ struct compress_svector
 
 void compress_svector::load_from(const sparse_vector_u32& sv)
 {
+    bm::sparse_vector_scanner<sparse_vector_u32> scanner;
     bm::bvector<>& bv_descr = bv_ares.get_bvector();
-    bm::compute_nonzero_bvector(sv, bv_descr);
+    scanner.find_nonzero(sv, bv_descr);
     bv_ares.sync();
 
     sparse_vector_u32::bvector_type::counted_enumerator enc = bv_descr.first();

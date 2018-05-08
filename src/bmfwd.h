@@ -30,8 +30,8 @@ namespace bm
 class block_allocator;
 class ptr_allocator;
 
-template<class BA, class PA, unsigned POOL_SIZE> class alloc_pool;
-typedef bm::alloc_pool<block_allocator, ptr_allocator, BM_DEFAULT_POOL_SIZE> standard_alloc_pool;
+template<class BA, class PA> class alloc_pool;
+typedef bm::alloc_pool<block_allocator, ptr_allocator> standard_alloc_pool;
 
 template<class BA = block_allocator, class PA = ptr_allocator, class APool = standard_alloc_pool > class mem_alloc;
 

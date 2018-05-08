@@ -161,14 +161,15 @@ struct bit_grabber<unsigned char, 8>
     static
     unsigned get(const unsigned char* arr, unsigned j)
     {
-        return  (((arr[0] >> j) & 1) << 0) |
+        return  unsigned(
+                (((arr[0] >> j) & 1) << 0) |
                 (((arr[1] >> j) & 1) << 1) |
                 (((arr[2] >> j) & 1) << 2) |
                 (((arr[3] >> j) & 1) << 3) |
                 (((arr[4] >> j) & 1) << 4) |
                 (((arr[5] >> j) & 1) << 5) |
                 (((arr[6] >> j) & 1) << 6) |
-                (((arr[7] >> j) & 1) << 7);
+                (((arr[7] >> j) & 1) << 7));
     }
 };
 
@@ -724,8 +725,8 @@ void compute_tmatrix_rstat(const TMatrix& tmatrix,
             bm::bit_count_change32((bm::word_t*)r1, (bm::word_t*)r1_end, 
                                     &rstat[i].bit_count, &rstat[i].gap_count);
 
-            const unsigned bitset_size = sizeof(value_type) * cols;
-            const unsigned total_possible_max_bits = sizeof(value_type)*8*cols;
+            const unsigned bitset_size = unsigned(sizeof(value_type) * cols);
+            const unsigned total_possible_max_bits = unsigned(sizeof(value_type)*8*cols);
 
             rstat[i].best_rep = 
                 bm::best_representation(rstat[i].bit_count,

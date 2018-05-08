@@ -69,22 +69,20 @@ public:
 
     @ingroup SSE2
 */
-BMFORCEINLINE 
+inline 
 void sse2_xor_arr_2_mask(__m128i* BMRESTRICT dst, 
                          const __m128i* BMRESTRICT src, 
                          const __m128i* BMRESTRICT src_end,
                          bm::word_t mask)
 {
-     __m128i xmm2 = _mm_set_epi32(mask, mask, mask, mask);
+     __m128i xM = _mm_set1_epi32(mask);
      do
      {
-        __m128i xmm1 = _mm_load_si128(src);
-
-        xmm1 = _mm_xor_si128(xmm1, xmm2);
-        _mm_store_si128(dst, xmm1);
-        ++dst;
-        ++src;
-
+        _mm_store_si128(dst+0, _mm_xor_si128(_mm_load_si128(src+0), xM));
+        _mm_store_si128(dst+1, _mm_xor_si128(_mm_load_si128(src+1), xM));
+        _mm_store_si128(dst+2, _mm_xor_si128(_mm_load_si128(src+2), xM));
+        _mm_store_si128(dst+3, _mm_xor_si128(_mm_load_si128(src+3), xM));
+        dst += 4; src += 4;
      } while (src < src_end);
 }
 
@@ -101,16 +99,14 @@ void sse2_andnot_arr_2_mask(__m128i* BMRESTRICT dst,
                             const __m128i* BMRESTRICT src_end,
                             bm::word_t mask)
 {
-     __m128i xmm2 = _mm_set_epi32(mask, mask, mask, mask);
+     __m128i xM = _mm_set1_epi32(mask);
      do
      {
-        __m128i xmm1 = _mm_load_si128(src);
-
-        xmm1 = _mm_andnot_si128(xmm1, xmm2); // xmm1 = (~xmm1) & xmm2 
-        _mm_store_si128(dst, xmm1);
-        ++dst;
-        ++src;
-
+        _mm_store_si128(dst+0, _mm_andnot_si128(_mm_load_si128(src+0), xM)); // xmm1 = (~xmm1) & xM
+        _mm_store_si128(dst+1, _mm_andnot_si128(_mm_load_si128(src+1), xM)); 
+        _mm_store_si128(dst+2, _mm_andnot_si128(_mm_load_si128(src+2), xM)); 
+        _mm_store_si128(dst+3, _mm_andnot_si128(_mm_load_si128(src+3), xM)); 
+        dst += 4; src += 4;
      } while (src < src_end);
 }
 
