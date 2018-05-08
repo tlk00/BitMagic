@@ -92,7 +92,8 @@ public:
     typedef typename BV::allocator_type              allocator_type;
     typedef typename bvector_type::allocation_policy allocation_policy_type;
     typedef typename bvector_type::enumerator        bvector_enumerator_type;
-    
+    typedef typename bvector_type::allocator_type::allocator_pool_type allocator_pool_type;
+
     typedef enumerator_group<bvector_enumerator_type,
                              value_type,
                              sv_value_plains>        enumerator_group_type;
@@ -146,6 +147,8 @@ public:
         typedef sparse_vector_type*                        sparse_vector_type_ptr;
         typedef typename sparse_vector_type::value_type    value_type;
         typedef typename sparse_vector_type::bvector_type  bvector_type;
+        typedef typename bvector_type::allocator_type::allocator_pool_type allocator_pool_type;
+
         typedef unsigned                    difference_type;
         typedef unsigned*                   pointer;
         typedef value_type&                 reference;

@@ -932,10 +932,14 @@ public:
     /*! 
         Resource guard for bvector<>::set_allocator_pool()
         @ingroup bvector
+        @internal
     */
     class mem_pool_guard
     {
     public:
+        mem_pool_guard() : bv_(0)
+        {}
+
         mem_pool_guard(allocator_pool_type& pool, bvector<Alloc>& bv)
             : bv_(&bv)
         {
@@ -943,11 +947,25 @@ public:
         }
         ~mem_pool_guard()
         {
-            BM_ASSERT(bv_);
-            bv_->set_allocator_pool(0);
+            if (bv_)
+                bv_->set_allocator_pool(0);
         }
+
+        void assign_if_not_set(allocator_pool_type& pool, bvector<Alloc>& bv)
+        {
+            if (bv.get_allocator_pool() == 0) // alloc pool not set yet
+            {
+                BM_ASSERT(!bv_);
+                bv_ = &bv;
+                bv.set_allocator_pool(&pool);
+            }
+        }
+
     private:
-        bvector<Alloc>* bv_; ///< gaurded object
+        mem_pool_guard(const mem_pool_guard&) = delete;
+        void operator=(const mem_pool_guard&) = delete;
+    private:
+        bvector<Alloc>* bv_; ///< garded object
     };
 
 
@@ -1239,6 +1257,13 @@ public:
     void set_allocator_pool(allocator_pool_type* pool_ptr)
     {
         blockman_.get_allocator().set_pool(pool_ptr);
+    }
+
+    /// Get curent allocator pool (if set)
+    ///
+    allocator_pool_type* get_allocator_pool()
+    {
+        return blockman_.get_allocator().get_pool();
     }
 
     // --------------------------------------------------------------------

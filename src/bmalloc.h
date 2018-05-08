@@ -304,6 +304,12 @@ public:
         alloc_pool_p_ = pool;
     }
 
+    /*! @brief get pointer to allocation pool (if set) */
+    allocator_pool_type* get_pool()
+    {
+        return alloc_pool_p_;
+    }
+
     /*! @brief Allocates and returns bit block.
         @param alloc_factor 
             indicated how many blocks we want to allocate in chunk

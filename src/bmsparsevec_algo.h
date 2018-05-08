@@ -136,6 +136,7 @@ void dynamic_range_clip_low(SV& svect, unsigned low_bit)
  
     Input sets gets translated through the function, which is defined as
     "one to one (or NULL)" binary relation object (sparse_vector).
+    Also works for M:1 relationships.
  
     \ingroup svalgo
     \ingroup setalgo
@@ -205,8 +206,11 @@ class sparse_vector_scanner
 public:
     typedef typename SV::bvector_type       bvector_type;
     typedef typename SV::value_type         value_type;
+    typedef typename bvector_type::allocator_type::allocator_pool_type allocator_pool_type;
     
 public:
+    sparse_vector_scanner() {}
+
     /**
         \brief find all sparse vector elements EQ to search value
 
@@ -243,6 +247,48 @@ public:
         \param  bv_out - output bit-bector of non-zero elements
     */
     void invert(const SV& sv, typename SV::bvector_type& bv_out);
+
+    /**
+        \brief find all values A IN (C, D, E, F)
+        \param  sv - input sparse vector
+        \param  start - start iterator (set to search) 
+        \param  end   - end iterator (set to search)
+        \param  bv_out - output bit-bector of non-zero elements
+     */
+    template<typename It>
+    void find_eq(const SV&  sv,
+                 It    start, 
+                 It    end,
+                 typename SV::bvector_type& bv_out)
+    {
+        typename bvector_type::mem_pool_guard mp_guard;
+        mp_guard.assign_if_not_set(pool_, bv_out); // set local memory pool
+
+        bvector_type bv1;
+        typename bvector_type::mem_pool_guard mp_guard1(pool_, bv1);
+
+        for (; start < end; ++start)
+        {
+            value_type v = *start;
+            find_eq_with_nulls(sv, v, bv1);
+            bv_out.bit_or(bv1);
+        } // for
+        correct_nulls(sv, bv_out);
+    }
+
+    void find_eq_with_nulls(const SV&   sv,
+        typename SV::value_type           value,
+        typename SV::bvector_type&        bv_out);
+
+    void correct_nulls(const SV&   sv,
+        typename SV::bvector_type& bv_out);
+
+
+protected:
+    sparse_vector_scanner(const sparse_vector_scanner&) = delete;
+    void operator=(const sparse_vector_scanner&) = delete;
+private:
+    allocator_pool_type  pool_;
 };
 
 
@@ -276,9 +322,20 @@ void sparse_vector_scanner<SV>::invert(const SV& sv, typename SV::bvector_type& 
 //----------------------------------------------------------------------------
 
 template<typename SV>
-void sparse_vector_scanner<SV>::find_eq(const SV&                  sv,
-                                        typename SV::value_type    value,
-                                        typename SV::bvector_type& bv_out)
+void sparse_vector_scanner<SV>::correct_nulls(const SV&   sv,
+                           typename SV::bvector_type& bv_out)
+{
+    const bvector_type* bv_null = sv.get_null_bvector();
+    if (bv_null) // correct result to only use not NULL elements
+        bv_out.bit_and(*bv_null);
+}
+
+//----------------------------------------------------------------------------
+
+template<typename SV>
+void sparse_vector_scanner<SV>::find_eq_with_nulls(const SV&  sv,
+    typename SV::value_type    value,
+    typename SV::bvector_type& bv_out)
 {
     if (sv.empty())
         return; // nothing to do
@@ -334,10 +391,26 @@ void sparse_vector_scanner<SV>::find_eq(const SV&                  sv,
             bv_out -= *bv_plain;
         }
     } // for i
+}
 
-    const bvector_type* bv_not_null = sv.get_null_bvector();
-    if (bv_not_null) // correct not to find NULL values
-        bv_out &= *bv_not_null;
+//----------------------------------------------------------------------------
+
+template<typename SV>
+void sparse_vector_scanner<SV>::find_eq(const SV&                  sv,
+                                        typename SV::value_type    value,
+                                        typename SV::bvector_type& bv_out)
+{
+    if (sv.empty())
+        return; // nothing to do
+
+    if (!value)
+    {
+        find_zero(sv, bv_out);
+        return;
+    }
+
+    find_eq_with_nulls(sv, value, bv_out);
+    correct_nulls(sv, bv_out);
 }
 
 template<typename SV>
