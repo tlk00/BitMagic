@@ -172,7 +172,7 @@ unsigned bsf_asm32(unsigned int v)
     return r;
 }
  
-BMFORCEINLINE unsigned bsr_asm32(register unsigned int v)
+BMFORCEINLINE unsigned bsr_asm32(unsigned int v)
 {
     unsigned r;
     asm volatile(" bsrl %1, %0": "=r"(r): "rm"(v) );
