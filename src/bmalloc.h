@@ -343,7 +343,7 @@ public:
         @param glevel_len table of level lengths
     */
     bm::gap_word_t* alloc_gap_block(unsigned level, 
-                                    const gap_word_t* glevel_len)
+                                    const bm::gap_word_t* glevel_len)
     {
         BM_ASSERT(level < bm::gap_levels);
         unsigned len = 
@@ -355,11 +355,11 @@ public:
     /*! @brief Frees GAP block using bot block allocator (BA)
     */
     void free_gap_block(bm::gap_word_t*   block,
-                        const gap_word_t* glevel_len)
+                        const bm::gap_word_t* glevel_len)
     {
         BM_ASSERT(IS_VALID_ADDR((bm::word_t*)block));
          
-        unsigned len = gap_capacity(block, glevel_len);
+        unsigned len = bm::gap_capacity(block, glevel_len);
         len /= (unsigned)(sizeof(bm::word_t) / sizeof(bm::gap_word_t));
         block_alloc_.deallocate((bm::word_t*)block, len);        
     }
