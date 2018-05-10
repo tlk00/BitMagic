@@ -1770,7 +1770,7 @@ template<class Val, class BV>
 sparse_vector<Val, BV>::const_iterator::const_iterator(
  const typename sparse_vector<Val, BV>::const_iterator::sparse_vector_type* sv,
  bm::id_t pos)
-: sv_(sv)
+: sv_(sv), buf_(0), buf_ptr_(0)
 {
     BM_ASSERT(sv_);
     this->go_to(pos);
