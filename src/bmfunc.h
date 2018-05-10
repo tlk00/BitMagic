@@ -5263,7 +5263,7 @@ template<typename T,typename B> unsigned bit_list_4(T w, B* bits)
     @ingroup bitfunc
 */
 template<typename B>
-unsigned short bitscan_popcnt(bm::id_t w, B* bits, unsigned  offs = 0)
+unsigned short bitscan_popcnt(bm::id_t w, B* bits, unsigned short offs = 0)
 {
     unsigned pos = 0;
     while (w)
@@ -5890,21 +5890,23 @@ inline
 unsigned short bitscan_wave(const bm::word_t* w_ptr, unsigned char* bits)
 {
     bm::word_t w0, w1;
-    unsigned short cnt;
-    
+    unsigned short cnt0;
+
     w0 = w_ptr[0];
     w1 = w_ptr[1];
     
 #if defined(BMAVX2OPT) || defined(BMSSE42OPT)
     // combine into 64-bit word and scan (when HW popcnt64 is available)
     bm::id64_t w = (bm::id64_t(w1) << 32) | w0;
-    cnt = (unsigned short) bm::bitscan_popcnt64(w, bits);
+    cnt0 = (unsigned short) bm::bitscan_popcnt64(w, bits);
 #else
+    unsigned short cnt1;
     // decode wave as two 32-bit bitscan decodes
-    cnt  = w0 ? bm::bitscan_popcnt(w0, bits) : 0;
-    cnt += w1 ? bm::bitscan_popcnt(w1, bits+cnt, 32) : 0; // +32 offset from the first word
+    cnt0 = w0 ? bm::bitscan_popcnt(w0, bits) : 0;
+    cnt1 = w1 ? bm::bitscan_popcnt(w1, bits + cnt0, 32) : 0;
+    cnt0 = (unsigned short)(cnt0 + cnt1);
 #endif
-    return cnt;
+    return cnt0;
 }
 
 
