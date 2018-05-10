@@ -1820,6 +1820,8 @@ void FillSparseIntervals(svect& sv)
     sv.resize(250000000);
     
     unsigned i;
+    
+
     for (i = 256000; i < 256000 * 2; ++i)
     {
         sv.set(i, 0xFFE);
@@ -1838,12 +1840,13 @@ void FillSparseIntervals(svect& sv)
     {
         sv.set(i, rand() % 128000);
     }
+
 }
 
 static
 void SparseVectorAccessTest()
 {
-    std::vector<unsigned> target;
+    std::vector<unsigned> target, target1, target2;
     svect   sv1;
     svect   sv2;
 
@@ -1851,6 +1854,8 @@ void SparseVectorAccessTest()
     BM_DECLARE_TEMP_BLOCK(tb)
     sv1.optimize(tb);
     target.resize(250000000);
+    target1.resize(250000000);
+    target2.resize(250000000);
 
     {
         TimeTaker tt("sparse_vector random element assignment test", REPEATS/10 );
@@ -1858,13 +1863,14 @@ void SparseVectorAccessTest()
         {
             for (unsigned j = 256000; j < 19000000/2; ++j)
             {
-                sv2.set(j, rand()%0xFFF);
+                sv2.set(j, 4096);//rand()%0xFFF);
             }
         }
     }
 
 
     unsigned long long cnt = 0;
+
     {
         TimeTaker tt("sparse_vector random element access test", REPEATS/10 );
         for (unsigned i = 0; i < REPEATS/10; ++i)
@@ -1876,16 +1882,45 @@ void SparseVectorAccessTest()
             }
         }
     }
-    
+
     {
         TimeTaker tt("sparse_vector extract test", REPEATS );
         for (unsigned i = 0; i < REPEATS/10; ++i)
         {
             unsigned target_off = 190000000/2 - 256000;
-            sv1.extract(&target[0], sv1.size());
+            sv1.extract(&target1[0], sv1.size());
             sv1.extract(&target[0], 256000, target_off);
         }
     }
+
+    {
+        TimeTaker tt("sparse_vector const_iterator test", REPEATS );
+        for (unsigned i = 0; i < REPEATS/10; ++i)
+        {
+            auto it = sv1.begin();
+            auto it_end = sv1.end();
+            for (unsigned k = 0; it != it_end; ++it, ++k)
+            {
+                auto v = *it;
+                target2[k] = v;
+            }
+        }
+    }
+
+    // check just in case
+    //
+    for (unsigned j = 0; j < target2.size(); ++j)
+    {
+        if (target1[j] != target2[j])
+        {
+            std::cerr << "Error! sparse_vector mismatch at: " << j
+            << " t1 = " << target1[j] << " t2 = " << target2[j]
+            << " sv[] = " << sv1[j]
+            << std::endl;
+            exit(1);
+        }
+    }
+
     
     char buf[256];
     sprintf(buf, "%i", (int)cnt); // to fool some smart compilers like ICC
