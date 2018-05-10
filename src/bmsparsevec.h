@@ -1721,7 +1721,7 @@ sparse_vector<Val, BV>::begin() const
 
 template<class Val, class BV>
 void sparse_vector<Val, BV>::set_allocator_pool(
-    sparse_vector<Val, BV>::allocator_pool_type* pool_ptr)
+    typename sparse_vector<Val, BV>::allocator_pool_type* pool_ptr)
 {
     pool_ = pool_ptr;
 }
@@ -1819,9 +1819,8 @@ sparse_vector<Val, BV>::const_iterator::value() const
     {
         if (!buf_)
         {
-            buf_ = (value_type*)::malloc(buf_size * sizeof(value_type));
-            if (!buf_)
-                BM_ASSERT_THROW(false, BM_ERR_BADALLOC);
+            buf_ = (value_type*)::malloc(buf_size * sizeof(value_type));            
+            BM_ASSERT_THROW(buf_, BM_ERR_BADALLOC);
         }
         sv_->extract(buf_, buf_size, pos_, true, &pool_);
         buf_ptr_ = buf_;
