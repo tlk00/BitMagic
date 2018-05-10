@@ -91,71 +91,263 @@ public:
     }
 };
 
-template<class BA, class PA> class mem_alloc
+/*!
+@brief Pool of pointers to buffer cyclic allocations
+*/
+class pointer_pool_array
+{
+public:
+    enum params
+    {
+        n_pool_max_size = BM_DEFAULT_POOL_SIZE
+    };
+
+    pointer_pool_array() : size_(0)
+    {
+        allocate_pool(n_pool_max_size);
+    }
+
+    pointer_pool_array(const pointer_pool_array&) = delete;
+    pointer_pool_array& operator=(const pointer_pool_array&) = delete;
+
+    ~pointer_pool_array()
+    {
+        BM_ASSERT(size_ == 0); // at destruction point should be empty (otherwise it is a leak) 
+        free_pool();
+    }
+
+    /// Push pointer to the pool (if it is not full)
+    ///
+    /// @return 0 if pointer is not accepted (pool is full)
+    unsigned push(void* ptr)
+    {
+        if (size_ == n_pool_max_size - 1)
+            return 0;
+        pool_ptr_[size_++] = ptr;
+        return size_;
+    }
+
+    /// Get a pointer if there are any vacant
+    ///
+    void* pop()
+    {
+        if (size_ == 0)
+            return 0;
+        return pool_ptr_[--size_];
+    }
+private:
+    void allocate_pool(size_t pool_size)
+    {
+        pool_ptr_ = (void**)::malloc(sizeof(void*) * pool_size);
+        if (!pool_ptr_)
+            BM_THROW(BM_ERR_BADALLOC);
+    }
+
+    void free_pool()
+    {
+        ::free(pool_ptr_);
+    }
+private:
+    void**     pool_ptr_;  ///< array of pointers in the pool
+    unsigned  size_;                  ///< current size 
+};
+
+/**
+Allocation pool object
+*/
+template<class BA, class PA>
+class alloc_pool
 {
 public:
     typedef BA  block_allocator_type;
     typedef PA  ptr_allocator_type;
 
 public:
+
+    alloc_pool() {}
+    ~alloc_pool()
+    {
+        free_pools();
+    }
+
+    bm::word_t* alloc_bit_block()
+    {
+        bm::word_t* ptr = (bm::word_t*)block_pool_.pop();
+        if (ptr == 0)
+            ptr = block_alloc_.allocate(bm::set_block_size, 0);
+        return ptr;
+    }
+
+    void free_bit_block(bm::word_t* block)
+    {
+        BM_ASSERT(IS_VALID_ADDR(block));
+        if (!block_pool_.push(block))
+        {
+            block_alloc_.deallocate(block, bm::set_block_size);
+        }
+    }
+
+    void free_pools()
+    {
+        bm::word_t* block;
+        do
+        {
+            block = (bm::word_t*)block_pool_.pop();
+            if (block)
+                block_alloc_.deallocate(block, bm::set_block_size);
+        } while (block);
+    }
+
+protected:
+    pointer_pool_array  block_pool_;
+    BA                  block_alloc_;
+};
+
+
+
+/*! @brief BM style allocator adapter.
+
+Template takes parameters:
+BA - allocator object for bit blocks
+PA - allocator object for pointer blocks
+APool - Allocation pool
+*/
+template<class BA, class PA, class APool>
+class mem_alloc
+{
+public:
+
+    typedef BA      block_allocator_type;
+    typedef PA      ptr_allocator_type;
+    typedef APool   allocator_pool_type;
+
+public:
+
     mem_alloc(const BA& block_alloc = BA(), const PA& ptr_alloc = PA())
-    : block_alloc_(block_alloc),
-      ptr_alloc_(ptr_alloc)
+        : block_alloc_(block_alloc),
+        ptr_alloc_(ptr_alloc),
+        alloc_pool_p_(0)
     {}
-    
-    block_allocator_type get_block_allocator() const 
-    { 
-        return BA(block_alloc_); 
+
+    mem_alloc(const mem_alloc& ma)
+        : block_alloc_(ma.block_alloc_),
+        ptr_alloc_(ma.ptr_alloc_),
+        alloc_pool_p_(0) // do not inherit pool (has to be explicitly defined)
+    {}
+
+    mem_alloc& operator=(const mem_alloc& ma)
+    {
+        block_alloc_ = ma.block_alloc_;
+        ptr_alloc_ = ma.ptr_alloc_;
+        // alloc_pool_p_ - do not inherit pool (has to be explicitly defined)
+        return *this;
     }
 
-    ptr_allocator_type get_ptr_allocator() const 
-    { 
-       return PA(block_alloc_); 
+    /*! @brief Returns copy of the block allocator object
+    */
+    block_allocator_type get_block_allocator() const
+    {
+        return BA(block_alloc_);
     }
 
+    /*! @brief Returns copy of the ptr allocator object
+    */
+    ptr_allocator_type get_ptr_allocator() const
+    {
+        return PA(block_alloc_);
+    }
+
+    /*! @brief set pointer to external pool */
+    void set_pool(allocator_pool_type* pool)
+    {
+        alloc_pool_p_ = pool;
+    }
+
+    /*! @brief get pointer to allocation pool (if set) */
+    allocator_pool_type* get_pool()
+    {
+        return alloc_pool_p_;
+    }
+
+    /*! @brief Allocates and returns bit block.
+    @param alloc_factor
+    indicated how many blocks we want to allocate in chunk
+    total allocation is going to be bm::set_block_size * alloc_factor
+    Default allocation factor is 1
+    */
     bm::word_t* alloc_bit_block(unsigned alloc_factor = 1)
     {
+        if (alloc_pool_p_ && alloc_factor == 1)
+            return alloc_pool_p_->alloc_bit_block();
         return block_alloc_.allocate(bm::set_block_size * alloc_factor, 0);
     }
 
+    /*! @brief Frees bit block allocated by alloc_bit_block.
+    */
     void free_bit_block(bm::word_t* block, unsigned alloc_factor = 1)
     {
-		block_alloc_.deallocate(block, bm::set_block_size * alloc_factor);
+        BM_ASSERT(IS_VALID_ADDR(block));
+        if (alloc_pool_p_ && alloc_factor == 1)
+            alloc_pool_p_->free_bit_block(block);
+        else
+            block_alloc_.deallocate(block, bm::set_block_size * alloc_factor);
     }
 
-    bm::gap_word_t* alloc_gap_block(unsigned level, 
-                                    const bm::gap_word_t* glevel_len)
+    /*! @brief Allocates GAP block using bit block allocator (BA).
+
+    GAP blocks in BM library belong to levels. Each level has a
+    correspondent length described in bm::gap_len_table<>
+
+    @param level GAP block level.
+    @param glevel_len table of level lengths
+    */
+    bm::gap_word_t* alloc_gap_block(unsigned level,
+                   const bm::gap_word_t* glevel_len)
     {
-        unsigned len = 
+        BM_ASSERT(level < bm::gap_levels);
+        unsigned len =
             (unsigned)(glevel_len[level] / (sizeof(bm::word_t) / sizeof(bm::gap_word_t)));
 
         return (bm::gap_word_t*)block_alloc_.allocate(len, 0);
     }
 
+    /*! @brief Frees GAP block using bot block allocator (BA)
+    */
     void free_gap_block(bm::gap_word_t*   block,
-                        const bm::gap_word_t* glevel_len)
+        const bm::gap_word_t* glevel_len)
     {
+        BM_ASSERT(IS_VALID_ADDR((bm::word_t*)block));
+
         unsigned len = bm::gap_capacity(block, glevel_len);
         len /= (unsigned)(sizeof(bm::word_t) / sizeof(bm::gap_word_t));
-        block_alloc_.deallocate((bm::word_t*)block, len);        
+        block_alloc_.deallocate((bm::word_t*)block, len);
     }
 
+    /*! @brief Allocates block of pointers.
+    */
     void* alloc_ptr(unsigned size = bm::set_array_size)
     {
         return ptr_alloc_.allocate(size, 0);
     }
 
+    /*! @brief Frees block of pointers.
+    */
     void free_ptr(void* p, unsigned size = bm::set_array_size)
     {
         if (p)
             ptr_alloc_.deallocate(p, size);
     }
 private:
-    BA            block_alloc_;
-    PA            ptr_alloc_;
+    BA                     block_alloc_;
+    PA                     ptr_alloc_;
+    allocator_pool_type*   alloc_pool_p_;
 };
 
-typedef mem_alloc<block_allocator, ptr_allocator> standard_allocator;
+
+//typedef mem_alloc<block_allocator, ptr_allocator> standard_allocator;
+
+typedef libbm::alloc_pool<block_allocator, ptr_allocator> standard_alloc_pool;
+typedef libbm::mem_alloc<block_allocator, ptr_allocator, standard_alloc_pool> standard_allocator;
 
 
 } // namespace libbm
