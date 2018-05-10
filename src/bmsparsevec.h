@@ -133,6 +133,11 @@ public:
     
     /**
         Const iterator to traverse the sparse vector
+     
+        Please note, that this implementation uses buffer for decoding
+        so, competing chnages to the original vector may not match the iterator
+        returned values.
+     
         @ingroup sv
     */
     class const_iterator
@@ -146,6 +151,7 @@ public:
         typedef sparse_vector<Val, BV>                     sparse_vector_type;
         typedef sparse_vector_type*                        sparse_vector_type_ptr;
         typedef typename sparse_vector_type::value_type    value_type;
+        typedef typename sparse_vector_type::size_type     size_type;
         typedef typename sparse_vector_type::bvector_type  bvector_type;
         typedef typename bvector_type::allocator_type::allocator_pool_type allocator_pool_type;
 
@@ -159,6 +165,9 @@ public:
         const_iterator(const sparse_vector_type* sv);
         const_iterator(const sparse_vector_type* sv, bm::id_t pos);
         const_iterator(const const_iterator& it);
+        
+        ~const_iterator();
+
 
         bool operator==(const const_iterator& it) const
                                 { return (pos_ == it.pos_) && (sv_ == it.sv_); }
@@ -203,12 +212,17 @@ public:
         /// advance iterator forward by one
         void advance();
     private:
-        void init_enumerators(bm::id_t pos);
+        enum buf_size_e
+        {
+            buf_size = 4096 * 2
+        };
         
     private:
         const bm::sparse_vector<Val, BV>* sv_;
-        bm::id_t                          pos_;   //!< Position
-        mutable enumerator_group_type    en_grp_; //!< enumerators
+        bm::id_t                          pos_;     ///!< Position
+        mutable value_type*               buf_;     ///!< value buffer
+        mutable value_type*               buf_ptr_; ///!< position in the buffer
+        mutable allocator_pool_type       pool_;
     };
     
     friend const_iterator;
@@ -537,7 +551,8 @@ public:
     size_type extract(value_type* arr,
                       size_type size,
                       size_type offset = 0,
-                      bool      zero_mem = true) const;
+                      bool      zero_mem = true,
+                      allocator_pool_type* pool_ptr = 0) const;
 
     /** \brief extract small window without use of masking vector
         \sa decode
@@ -571,6 +586,12 @@ public:
     
     /** Number of effective bit-plains in the value type*/
     unsigned effective_plains() const { return effective_plains_ + 1; }
+    
+    /// Set allocator pool for local (non-threaded)
+    /// memory cyclic(lots of alloc-free ops) opertations
+    ///
+    void set_allocator_pool(allocator_pool_type* pool_ptr);
+
 
 private:
 
@@ -608,92 +629,12 @@ private:
     size_type                bv_size_;
     allocator_type           alloc_;
     allocation_policy_type   ap_;
+    allocator_pool_type*     pool_;
     
     bvector_type_ptr         plains_[sv_plains];
     size_type                size_;
     unsigned                 effective_plains_;
 };
-
-
-/*!
-    \brief Class to keep and sync-advance a group of enumerators
- 
-    @internal
-*/
-template<typename EN, typename Val, unsigned CNT>
-class enumerator_group
-{
-public:
-    typedef Val value_type;
-
-    enumerator_group() : size_(0) {}
-    enumerator_group(const enumerator_group& en_grp)
-    {
-        init(en_grp);
-    }
-    void operator=(const enumerator_group& en_grp)
-    {
-        init(en_grp);
-    }
-    
-    /// add enumerator to collection
-    ///
-    void add(const EN& en, int order)
-    {
-        BM_ASSERT(size_ < CNT);
-        
-        orders_[size_] = order; ens_[size_] = en;
-        ++size_;
-    };
-    
-    /// return pkg size
-    unsigned size() const { return size_; }
-    
-    /// assemble current value out of collection of enumerators
-    /// (each enumerator gets advanced)
-    value_type get_value(unsigned pos)
-    {
-        value_type rval = 0;
-        for (unsigned i = 0; i < size_; ++i) // TODO: loop unroll
-        {
-            if (ens_[i].value() == pos)
-            {
-                rval |= (value_type(1) << orders_[i]);
-                ++ens_[i];
-            }
-        } // for
-        return rval;
-    }
-
-    /// return TRUE if any iterator is still valid
-    bool valid() const
-    {
-        for (unsigned i = 0; i < size_; ++i) // TODO: loop unroll
-        {
-            if (ens_[i].valid())
-                return true;
-        }
-        return false;
-    }
-protected:
-
-    void init(const enumerator_group& en_grp)
-    {
-        size_ = en_grp.size_;
-        for (unsigned i = 0; i < size_; ++i)
-        {
-            orders_[i] = en_grp.orders_[i];
-            ens_[i] = en_grp.ens_[i];
-        } // for
-    }
-    
-protected:
-    unsigned   orders_[CNT];
-    EN         ens_[CNT];
-    
-    unsigned   size_;       ///< Size of pairs
-};
-
 
 
 //---------------------------------------------------------------------
@@ -1100,7 +1041,8 @@ typename sparse_vector<Val, BV>::size_type
 sparse_vector<Val, BV>::extract(value_type* arr,
                                 size_type   size,
                                 size_type   offset,
-                                bool        zero_mem) const
+                                bool        zero_mem,
+                                allocator_pool_type* pool_ptr) const
 {
     /// Decoder functor
     /// @internal
@@ -1157,6 +1099,8 @@ sparse_vector<Val, BV>::extract(value_type* arr,
         // for large array extraction use logical opartions
         // (faster due to vectorization)
         bvector_type bv_mask;
+        bv_mask.set_allocator_pool(pool_ptr);
+        
         for (size_type i = 0; i < value_bits(); ++i)
         {
             const bvector_type* bv = plains_[i];
@@ -1184,7 +1128,7 @@ sparse_vector<Val, BV>::extract(value_type* arr,
         } // for i
     }
 
-    return 0;
+    return end - start;
 }
 
 //---------------------------------------------------------------------
@@ -1774,20 +1718,39 @@ sparse_vector<Val, BV>::begin() const
 }
 
 //---------------------------------------------------------------------
+
+template<class Val, class BV>
+void sparse_vector<Val, BV>::set_allocator_pool(
+    sparse_vector<Val, BV>::allocator_pool_type* pool_ptr)
+{
+    pool_ = pool_ptr;
+}
+
+
+//---------------------------------------------------------------------
+//
 //---------------------------------------------------------------------
 
 
 template<class Val, class BV>
 sparse_vector<Val, BV>::const_iterator::const_iterator()
-: sv_(0), pos_(bm::id_max)
+: sv_(0), pos_(bm::id_max), buf_(0), buf_ptr_(0)
 {}
+
+template<class Val, class BV>
+sparse_vector<Val, BV>::const_iterator::~const_iterator()
+{
+    if (buf_)
+        ::free(buf_);
+}
+
 
 //---------------------------------------------------------------------
 
 template<class Val, class BV>
 sparse_vector<Val, BV>::const_iterator::const_iterator(
                         const typename sparse_vector<Val, BV>::const_iterator& it)
-: sv_(it.sv_), pos_(it.pos_), en_grp_(it.en_grp_)
+: sv_(it.sv_), pos_(it.pos_), buf_(0), buf_ptr_(0)
 {}
 
 //---------------------------------------------------------------------
@@ -1795,17 +1758,10 @@ sparse_vector<Val, BV>::const_iterator::const_iterator(
 template<class Val, class BV>
 sparse_vector<Val, BV>::const_iterator::const_iterator(
   const typename sparse_vector<Val, BV>::const_iterator::sparse_vector_type* sv)
-: sv_(sv)
+: sv_(sv), buf_(0), buf_ptr_(0)
 {
     BM_ASSERT(sv_);
-    if (sv_->empty())
-    {
-        pos_ = bm::id_max;
-    }
-    else
-    {
-        init_enumerators(pos_ = 0u);
-    }
+    pos_ = sv_->empty() ? bm::id_max : 0u;
 }
 
 //---------------------------------------------------------------------
@@ -1823,24 +1779,10 @@ sparse_vector<Val, BV>::const_iterator::const_iterator(
 //---------------------------------------------------------------------
 
 template<class Val, class BV>
-void sparse_vector<Val, BV>::const_iterator::init_enumerators(bm::id_t pos)
-{
-    BM_ASSERT(sv_);
-    unsigned plains = sv_->effective_plains();
-    for (unsigned i = 0; i < plains; ++i)
-    {
-        const bvector_type* bv = sv_->get_plain(i);
-        if (bv)
-            en_grp_.add(bv->get_enumerator(pos), i);
-    } // for
-}
-
-//---------------------------------------------------------------------
-
-template<class Val, class BV>
 void sparse_vector<Val, BV>::const_iterator::go_to(bm::id_t pos)
 {
     pos_ = (!sv_ || pos >= sv_->size()) ? bm::id_max : pos;
+    buf_ptr_ = 0;
 }
 
 //---------------------------------------------------------------------
@@ -1848,10 +1790,19 @@ void sparse_vector<Val, BV>::const_iterator::go_to(bm::id_t pos)
 template<class Val, class BV>
 void sparse_vector<Val, BV>::const_iterator::advance()
 {
-    if (pos_ < bm::id_max)
+    if (pos_ == bm::id_max) // nothing to do, we are at the end
+        return;
+    ++pos_;
+    if (pos_ >= sv_->size())
+        pos_ = bm::id_max;
+    else
     {
-        if (++pos_ >= sv_->size())
-            pos_ = bm::id_max;
+        if (buf_ptr_)
+        {
+            ++buf_ptr_;
+            if (buf_ptr_ - buf_ >= buf_size)
+                buf_ptr_ = 0;
+        }
     }
 }
 
@@ -1862,7 +1813,21 @@ typename sparse_vector<Val, BV>::const_iterator::value_type
 sparse_vector<Val, BV>::const_iterator::value() const
 {
     BM_ASSERT(this->valid());
-    value_type v = en_grp_.get_value(pos_);
+    value_type v;
+    
+    if (!buf_ptr_)
+    {
+        if (!buf_)
+        {
+            buf_ = (value_type*)::malloc(buf_size * sizeof(value_type));
+            if (!buf_)
+                BM_ASSERT_THROW(false, BM_ERR_BADALLOC);
+        }
+        sv_->extract(buf_, buf_size, pos_, true, &pool_);
+        buf_ptr_ = buf_;
+    }
+    v = *buf_ptr_;
+    
     BM_ASSERT(v == sv_->get(pos_));
     return v;
 }
