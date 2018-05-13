@@ -31,6 +31,7 @@ For more information please visit:  http://bitmagic.io
 #include "bm.h"
 #include "bmtrans.h"
 #include "bmalgo.h"
+#include "bmbuffer.h"
 #include "bmdef.h"
 
 namespace bm
@@ -92,8 +93,8 @@ public:
     typedef typename BV::allocator_type              allocator_type;
     typedef typename bvector_type::allocation_policy allocation_policy_type;
     typedef typename bvector_type::enumerator        bvector_enumerator_type;
-    typedef typename bvector_type::allocator_type::allocator_pool_type allocator_pool_type;
-
+    typedef typename allocator_type::allocator_pool_type allocator_pool_type;
+    
     typedef enumerator_group<bvector_enumerator_type,
                              value_type,
                              sv_value_plains>        enumerator_group_type;
@@ -132,11 +133,13 @@ public:
     
     
     /**
-        Const iterator to traverse the sparse vector
+        Const iterator to traverse the sparse vector.
      
-        Please note, that this implementation uses buffer for decoding
-        so, competing chnages to the original vector may not match the iterator
-        returned values.
+        Implementation uses buffer for decoding so, competing changes
+        to the original vector may not match the iterator returned values.
+     
+        This iterator keeps an operational buffer for 8K elements,
+        so memory footprint is not negligable (about 64K for unsigned int)
      
         @ingroup sv
     */
@@ -153,7 +156,9 @@ public:
         typedef typename sparse_vector_type::value_type    value_type;
         typedef typename sparse_vector_type::size_type     size_type;
         typedef typename sparse_vector_type::bvector_type  bvector_type;
+        typedef typename bvector_type::allocator_type      allocator_type;
         typedef typename bvector_type::allocator_type::allocator_pool_type allocator_pool_type;
+        typedef bm::byte_buffer<allocator_type>            buffer_type;
 
         typedef unsigned                    difference_type;
         typedef unsigned*                   pointer;
@@ -166,8 +171,6 @@ public:
         const_iterator(const sparse_vector_type* sv, bm::id_t pos);
         const_iterator(const const_iterator& it);
         
-        ~const_iterator();
-
 
         bool operator==(const const_iterator& it) const
                                 { return (pos_ == it.pos_) && (sv_ == it.sv_); }
@@ -214,18 +217,74 @@ public:
     private:
         enum buf_size_e
         {
-            buf_size = 4096 * 2
+            n_buf_size = 1024 * 8
         };
         
     private:
         const bm::sparse_vector<Val, BV>* sv_;
         bm::id_t                          pos_;     ///!< Position
-        mutable value_type*               buf_;     ///!< value buffer
+        mutable buffer_type               buffer_;  ///!< value buffer
         mutable value_type*               buf_ptr_; ///!< position in the buffer
         mutable allocator_pool_type       pool_;
     };
     
+    class back_insert_iterator
+    {
+    public:
+#ifndef BM_NO_STL
+        typedef std::output_iterator_tag  iterator_category;
+#endif
+        typedef sparse_vector<Val, BV>                     sparse_vector_type;
+        typedef sparse_vector_type*                        sparse_vector_type_ptr;
+        typedef typename sparse_vector_type::value_type    value_type;
+        typedef typename sparse_vector_type::size_type     size_type;
+        typedef typename sparse_vector_type::bvector_type  bvector_type;
+        typedef typename bvector_type::allocator_type      allocator_type;
+        typedef typename bvector_type::allocator_type::allocator_pool_type allocator_pool_type;
+        typedef bm::byte_buffer<allocator_type>            buffer_type;
+
+        typedef void difference_type;
+        typedef void pointer;
+        typedef void reference;
+        
+    public:
+        back_insert_iterator();
+        back_insert_iterator(sparse_vector_type* sv);
+        ~back_insert_iterator();
+        
+        back_insert_iterator& operator=(value_type v) { this->add(v); return *this; }
+        back_insert_iterator& operator*() { return *this; }
+        back_insert_iterator& operator++() { return *this; }
+        back_insert_iterator& operator++( int ) { return *this; }
+        
+        void add(value_type v);
+        void add_null();
+        
+        void flush();
+    protected:
+    
+        /** add value to the buffer without touyching the NULL vector
+            @param v - value to push back
+            @return index of added value in the internal buffer
+            @internal
+        */
+        unsigned add_value(value_type v);
+        
+    private:
+        enum buf_size_e
+        {
+            n_buf_size = 1024 * 8
+        };
+    private:
+        bm::sparse_vector<Val, BV>* sv_;      ///!< pointer on the parent vector
+        bvector_type*               bv_null_; ///!< not NULL vector pointer
+        buffer_type                 buffer_;  ///!< value buffer
+        value_type*                 buf_ptr_; ///!< position in the buffer
+
+    };
+    
     friend const_iterator;
+    friend back_insert_iterator;
 
 public:
     /*!
@@ -314,6 +373,10 @@ public:
     /** Provide const iterator access to the end
     */
     const_iterator end() const { return const_iterator(this, bm::id_max); }
+    
+    /** Provide back insert iterator
+    */
+    back_insert_iterator get_back_inserter() { return back_insert_iterator(this); }
 
     /**
         \brief check if container supports NULL(unassigned) values
@@ -345,6 +408,13 @@ public:
         \param offset - target index in the sparse vector
     */
     void import(const value_type* arr, size_type size, size_type offset = 0);
+    
+    /*!
+        \brief Import list of elements from a C-style array (pushed back)
+        \param arr  - source array
+        \param size - source size
+    */
+    void import_back(const value_type* arr, size_type size);
 
 
     /*!
@@ -582,8 +652,17 @@ public:
         \brief throw range error
         \internal
     */
-    void throw_range_error(const char* err_msg) const;
-    
+    static
+    void throw_range_error(const char* err_msg);
+
+    /**
+        \brief throw bad alloc
+        \internal
+    */
+    static
+    void throw_bad_alloc();
+
+
     /** Number of effective bit-plains in the value type*/
     unsigned effective_plains() const { return effective_plains_ + 1; }
     
@@ -748,12 +827,24 @@ void sparse_vector<Val, BV>::swap(sparse_vector<Val, BV>& sv) BMNOEXEPT
 //---------------------------------------------------------------------
 
 template<class Val, class BV>
-void sparse_vector<Val, BV>::throw_range_error(const char* err_msg) const
+void sparse_vector<Val, BV>::throw_range_error(const char* err_msg)
 {
 #ifndef BM_NO_STL
     throw std::range_error(err_msg);
 #else
     BM_ASSERT_THROW(false, BM_ERR_RANGE);
+#endif
+}
+
+//---------------------------------------------------------------------
+
+template<class Val, class BV>
+void sparse_vector<Val, BV>::throw_bad_alloc()
+{
+#ifndef BM_NO_STL
+    throw std::bad_alloc();
+#else
+    BM_ASSERT_THROW(false, BM_BAD_ALLOC);
 #endif
 }
 
@@ -835,9 +926,7 @@ void sparse_vector<Val, BV>::import(const value_type* arr,
     bm::tmatrix<bm::id_t, sizeof(Val)*8, transpose_window> tm; // matrix accumulator
     
     if (size == 0)
-    {
         throw_range_error("sparse_vector range error (import size 0)");
-    }
     
     // clear all plains in the range to provide corrrect import of 0 values
     this->clear_range(offset, offset + size - 1);
@@ -894,6 +983,15 @@ void sparse_vector<Val, BV>::import(const value_type* arr,
     {
         bv_null->set_range(offset, offset + size - 1);
     }
+}
+
+//---------------------------------------------------------------------
+
+template<class Val, class BV>
+void sparse_vector<Val, BV>::import_back(const value_type* arr,
+                                         size_type         size)
+{
+    this->import(arr, size, this->size());
 }
 
 //---------------------------------------------------------------------
@@ -1734,23 +1832,15 @@ void sparse_vector<Val, BV>::set_allocator_pool(
 
 template<class Val, class BV>
 sparse_vector<Val, BV>::const_iterator::const_iterator()
-: sv_(0), pos_(bm::id_max), buf_(0), buf_ptr_(0)
+: sv_(0), pos_(bm::id_max), /*buf_(0),*/ buf_ptr_(0)
 {}
-
-template<class Val, class BV>
-sparse_vector<Val, BV>::const_iterator::~const_iterator()
-{
-    if (buf_)
-        ::free(buf_);
-}
-
 
 //---------------------------------------------------------------------
 
 template<class Val, class BV>
 sparse_vector<Val, BV>::const_iterator::const_iterator(
                         const typename sparse_vector<Val, BV>::const_iterator& it)
-: sv_(it.sv_), pos_(it.pos_), buf_(0), buf_ptr_(0)
+: sv_(it.sv_), pos_(it.pos_), buf_ptr_(0)
 {}
 
 //---------------------------------------------------------------------
@@ -1758,7 +1848,7 @@ sparse_vector<Val, BV>::const_iterator::const_iterator(
 template<class Val, class BV>
 sparse_vector<Val, BV>::const_iterator::const_iterator(
   const typename sparse_vector<Val, BV>::const_iterator::sparse_vector_type* sv)
-: sv_(sv), buf_(0), buf_ptr_(0)
+: sv_(sv), /*buf_(0),*/ buf_ptr_(0)
 {
     BM_ASSERT(sv_);
     pos_ = sv_->empty() ? bm::id_max : 0u;
@@ -1770,7 +1860,7 @@ template<class Val, class BV>
 sparse_vector<Val, BV>::const_iterator::const_iterator(
  const typename sparse_vector<Val, BV>::const_iterator::sparse_vector_type* sv,
  bm::id_t pos)
-: sv_(sv), buf_(0), buf_ptr_(0)
+: sv_(sv), buf_ptr_(0)
 {
     BM_ASSERT(sv_);
     this->go_to(pos);
@@ -1800,7 +1890,7 @@ void sparse_vector<Val, BV>::const_iterator::advance()
         if (buf_ptr_)
         {
             ++buf_ptr_;
-            if (buf_ptr_ - buf_ >= buf_size)
+            if (buf_ptr_ - ((value_type*)buffer_.data()) >= n_buf_size)
                 buf_ptr_ = 0;
         }
     }
@@ -1817,13 +1907,9 @@ sparse_vector<Val, BV>::const_iterator::value() const
     
     if (!buf_ptr_)
     {
-        if (!buf_)
-        {
-            buf_ = (value_type*)::malloc(buf_size * sizeof(value_type));            
-            BM_ASSERT_THROW(buf_, BM_ERR_BADALLOC);
-        }
-        sv_->extract(buf_, buf_size, pos_, true, &pool_);
-        buf_ptr_ = buf_;
+        buffer_.reserve(n_buf_size * sizeof(value_type));
+        buf_ptr_ = (value_type*)(buffer_.data());
+        sv_->extract(buf_ptr_, n_buf_size, pos_, true, &pool_);
     }
     v = *buf_ptr_;
     
@@ -1840,7 +1926,95 @@ bool sparse_vector<Val, BV>::const_iterator::is_null() const
 }
 
 //---------------------------------------------------------------------
+//
+//---------------------------------------------------------------------
 
+
+template<class Val, class BV>
+sparse_vector<Val, BV>::back_insert_iterator::back_insert_iterator()
+: sv_(0), bv_null_(0), buf_ptr_(0)
+{}
+
+//---------------------------------------------------------------------
+
+template<class Val, class BV>
+sparse_vector<Val, BV>::back_insert_iterator::back_insert_iterator(
+   typename sparse_vector<Val, BV>::back_insert_iterator::sparse_vector_type* sv)
+: sv_(sv), buf_ptr_(0)
+{
+    bv_null_ = sv_? sv_->get_null_bvect() : 0;
+}
+
+//---------------------------------------------------------------------
+
+template<class Val, class BV>
+sparse_vector<Val, BV>::back_insert_iterator::~back_insert_iterator()
+{
+    this->flush();
+}
+
+//---------------------------------------------------------------------
+
+template<class Val, class BV>
+void sparse_vector<Val, BV>::back_insert_iterator::add(
+         sparse_vector<Val, BV>::back_insert_iterator::value_type v)
+{
+    unsigned buf_idx = this->add_value(v);
+    if (bv_null_)
+    {
+        typename sparse_vector<Val, BV>::size_type sz = sv_->size();
+        bv_null_->set_bit_no_check(sz + buf_idx);
+    }
+}
+
+//---------------------------------------------------------------------
+
+template<class Val, class BV>
+unsigned sparse_vector<Val, BV>::back_insert_iterator::add_value(
+         sparse_vector<Val, BV>::back_insert_iterator::value_type v)
+{
+    BM_ASSERT(sv_);
+    if (!buf_ptr_) // not allocated (yet)
+    {
+        buffer_.reserve(n_buf_size * sizeof(value_type));
+        buf_ptr_ = (value_type*)(buffer_.data());
+        *buf_ptr_ = v;
+        ++buf_ptr_;
+        return 0;
+    }
+    if (buf_ptr_ - ((value_type*)buffer_.data()) >= n_buf_size)
+    {
+        this->flush();
+        buf_ptr_ = (value_type*)(buffer_.data());
+    }
+    
+    *buf_ptr_ = v;
+    unsigned buf_idx = buf_ptr_ - ((value_type*)buffer_.data());
+    ++buf_ptr_;
+    return buf_idx;
+}
+
+//---------------------------------------------------------------------
+
+template<class Val, class BV>
+void sparse_vector<Val, BV>::back_insert_iterator::add_null()
+{
+    this->add_value(value_type(0));
+}
+
+//---------------------------------------------------------------------
+
+template<class Val, class BV>
+void sparse_vector<Val, BV>::back_insert_iterator::flush()
+{
+    if (!buf_ptr_ || !sv_) // empty buffer
+        return;
+    value_type* d = (value_type*)buffer_.data();
+    sv_->import_back(d, buf_ptr_ - d);
+    buf_ptr_ = 0;
+}
+
+//---------------------------------------------------------------------
 
 
 } // namespace bm
