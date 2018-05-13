@@ -13189,6 +13189,7 @@ int main(void)
     exit(1);
 */
 
+
      TestBlockZero();
     
      TestBlockAND();
