@@ -1849,6 +1849,7 @@ void SparseVectorAccessTest()
     std::vector<unsigned> target, target1, target2;
     svect   sv1;
     svect   sv2;
+    svect   sv3;
 
     FillSparseIntervals(sv1);
     BM_DECLARE_TEMP_BLOCK(tb)
@@ -1863,11 +1864,51 @@ void SparseVectorAccessTest()
         {
             for (unsigned j = 256000; j < 19000000/2; ++j)
             {
-                sv2.set(j, 4096);//rand()%0xFFF);
+                sv2.set(j, 0xFFF);
             }
         }
     }
 
+    {
+        TimeTaker tt("sparse_vector back_inserter test", REPEATS/10 );
+        for (unsigned i = 0; i < REPEATS/10; ++i)
+        {
+            {
+                sv3.resize(256000);
+                svect::back_insert_iterator bi(sv3.get_back_inserter());
+                for (unsigned j = 256000; j < 19000000/2; ++j)
+                {
+                    *bi = 0xFFF;
+                }
+            }
+        }
+    }
+    
+    // check just in case
+    //
+    if (!sv2.equal(sv3))
+    {
+        std::cerr << "Error! sparse_vector back_insert mismatch."
+                  << std::endl;
+        std::cerr << "sv2.size()=" << sv2.size() << std::endl;
+        std::cerr << "sv3.size()=" << sv3.size() << std::endl;
+        
+        for (unsigned i = 0; i < sv2.size(); ++i)
+        {
+            unsigned v2 = sv2[i];
+            unsigned v3 = sv3[i];
+            if (v2 != v3)
+            {
+                std::cerr << "mismatch at: " << i
+                << " v2=" << v2 << " v3=" << v3
+                << std::endl;
+                exit(1);
+            }
+        }
+        exit(1);
+    }
+
+    
 
     unsigned long long cnt = 0;
 

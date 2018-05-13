@@ -9821,11 +9821,18 @@ void TestSparseVector()
     std::vector<unsigned> vect(128000);
     bm::sparse_vector<unsigned, bm::bvector<> > sv;
     bm::sparse_vector<unsigned, bm::bvector<> > sv1(bm::use_null);
-    for (unsigned i = 0; i < 128000; ++i)
+    bm::sparse_vector<unsigned, bm::bvector<> > sv2;
+    
     {
-        vect[i] = i;
-        sv.set(i, i);
-        sv1.set(i, i);
+    bm::sparse_vector<unsigned, bm::bvector<> >::back_insert_iterator bi(sv2.get_back_inserter());
+        for (unsigned i = 0; i < 128000; ++i)
+        {
+            vect[i] = i;
+            sv.set(i, i);
+            sv1.set(i, i);
+            *bi = i;
+        }
+        bi.flush();
     }
     
 
@@ -9839,6 +9846,12 @@ void TestSparseVector()
     if (!res)
     {
         cerr << "linear assignment test failed (2)" << endl;
+        exit(1);
+    }
+    res = CompareSparseVector(sv2, vect);
+    if (!res)
+    {
+        cerr << "linear assignment test failed (3 - back_inserter)" << endl;
         exit(1);
     }
     }}
