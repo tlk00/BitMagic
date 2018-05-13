@@ -1957,7 +1957,7 @@ sparse_vector<Val, BV>::back_insert_iterator::~back_insert_iterator()
 
 template<class Val, class BV>
 void sparse_vector<Val, BV>::back_insert_iterator::add(
-         sparse_vector<Val, BV>::back_insert_iterator::value_type v)
+         typename sparse_vector<Val, BV>::back_insert_iterator::value_type v)
 {
     unsigned buf_idx = this->add_value(v);
     if (bv_null_)
@@ -1971,7 +1971,7 @@ void sparse_vector<Val, BV>::back_insert_iterator::add(
 
 template<class Val, class BV>
 unsigned sparse_vector<Val, BV>::back_insert_iterator::add_value(
-         sparse_vector<Val, BV>::back_insert_iterator::value_type v)
+         typename sparse_vector<Val, BV>::back_insert_iterator::value_type v)
 {
     BM_ASSERT(sv_);
     if (!buf_ptr_) // not allocated (yet)
@@ -1989,7 +1989,7 @@ unsigned sparse_vector<Val, BV>::back_insert_iterator::add_value(
     }
     
     *buf_ptr_ = v;
-    unsigned buf_idx = buf_ptr_ - ((value_type*)buffer_.data());
+    size_type buf_idx = size_type(buf_ptr_ - ((value_type*)buffer_.data()));
     ++buf_ptr_;
     return buf_idx;
 }
@@ -2010,7 +2010,7 @@ void sparse_vector<Val, BV>::back_insert_iterator::flush()
     if (!buf_ptr_ || !sv_) // empty buffer
         return;
     value_type* d = (value_type*)buffer_.data();
-    sv_->import_back(d, buf_ptr_ - d);
+    sv_->import_back(d, size_type(buf_ptr_ - d));
     buf_ptr_ = 0;
 }
 
