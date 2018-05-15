@@ -10281,6 +10281,85 @@ void TestSparseVector()
     cout << "---------------------------- Bit-plain sparse vector test OK" << endl;
 }
 
+static
+void TestSparseVectorInserter()
+{
+    cout << "---------------------------- Test sparse vector inserter" << endl;
+    
+    {
+        sparse_vector_u32 sv1(bm::use_null);
+        sparse_vector_u32 sv2(bm::use_null);
+        sparse_vector_u32::back_insert_iterator bi2(sv2.get_back_inserter());
+        sparse_vector_u32::back_insert_iterator bi3(bi2);
+        sparse_vector_u32::back_insert_iterator bi4;
+
+        assert(bi2.empty());
+        assert(bi3.empty());
+        
+        bi4 = bi2;
+        assert(bi4.empty());
+
+        for (unsigned i = 0; i < 1280000; ++i)
+        {
+            if (i % 100 == 0)
+            {
+                sv1.set_null(i);
+                bi2.add_null();
+            }
+            else
+            {
+                sv1.set(i, i);
+                *bi2 = i;
+            }
+            assert(!bi2.empty());
+        }
+        bi2.flush();
+        
+        if (!sv1.equal(sv2))
+        {
+            cout << "ERROR! sparse_vector back_insert_iterator mismatch." << endl;
+            exit(1);
+        }
+    }
+
+    {
+        sparse_vector_u32 sv1(bm::use_null);
+        sparse_vector_u32 sv2(bm::use_null);
+        sparse_vector_u32::back_insert_iterator bi2(sv2.get_back_inserter());
+        
+        for (unsigned i = 0; i < 1280000; ++i)
+        {
+            if (i % 100 == 0)
+            {
+                sv1.set_null(i);
+                ++i;
+                sv1.set_null(i);
+                bi2.add_null(2);
+            }
+            else
+            {
+                sv1.set(i, i);
+                *bi2 = i;
+            }
+            if (i % 10000 == 0)
+            {
+                bi2.flush();
+            }
+
+        }
+        bi2.flush();
+        
+        if (!sv1.equal(sv2))
+        {
+            cout << "ERROR! (2)sparse_vector back_insert_iterator mismatch." << endl;
+            exit(1);
+        }
+    }
+
+
+    cout << "---------------------------- Bit-plain sparse vector inserter OK" << endl;
+}
+
 
 template<class SV>
 void bvector_transform_11(typename SV::bvector_type& bvect_in,
@@ -13214,7 +13293,9 @@ int main(void)
      StressTest(120, 3); // AND
 
      TestSparseVector();
-    
+
+     TestSparseVectorInserter();
+
      TestSparseVectorTransform();
 
      TestSparseVectorScan();

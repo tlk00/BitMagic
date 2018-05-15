@@ -250,6 +250,15 @@ public:
     public:
         back_insert_iterator();
         back_insert_iterator(sparse_vector_type* sv);
+        back_insert_iterator(const back_insert_iterator& bi);
+        
+        back_insert_iterator& operator=(const back_insert_iterator& bi)
+        {
+            BM_ASSERT(bi.empty());
+            this->flush(); sv_ = bi.sv_;
+            return *this;
+        }
+
         ~back_insert_iterator();
         
         back_insert_iterator& operator=(value_type v) { this->add(v); return *this; }
@@ -259,6 +268,9 @@ public:
         
         void add(value_type v);
         void add_null();
+        void add_null(size_type count);
+        
+        bool empty() const;
         
         void flush();
     protected:
@@ -280,7 +292,6 @@ public:
         bvector_type*               bv_null_; ///!< not NULL vector pointer
         buffer_type                 buffer_;  ///!< value buffer
         value_type*                 buf_ptr_; ///!< position in the buffer
-
     };
     
     friend const_iterator;
@@ -1948,6 +1959,16 @@ sparse_vector<Val, BV>::back_insert_iterator::back_insert_iterator(
 //---------------------------------------------------------------------
 
 template<class Val, class BV>
+sparse_vector<Val, BV>::back_insert_iterator::back_insert_iterator(
+    const typename sparse_vector<Val, BV>::back_insert_iterator::back_insert_iterator& bi)
+: sv_(bi.sv_), buf_ptr_(0)
+{
+    BM_ASSERT(bi.empty());
+}
+
+//---------------------------------------------------------------------
+
+template<class Val, class BV>
 sparse_vector<Val, BV>::back_insert_iterator::~back_insert_iterator()
 {
     this->flush();
@@ -2005,9 +2026,27 @@ void sparse_vector<Val, BV>::back_insert_iterator::add_null()
 //---------------------------------------------------------------------
 
 template<class Val, class BV>
+void sparse_vector<Val, BV>::back_insert_iterator::add_null(
+    typename sparse_vector<Val, BV>::back_insert_iterator::size_type count)
+{
+    for (size_type i = 0; i < count; ++i) // TODO: optimization
+        this->add_value(value_type(0));
+}
+
+//---------------------------------------------------------------------
+
+template<class Val, class BV>
+bool sparse_vector<Val, BV>::back_insert_iterator::empty() const
+{
+    return (!buf_ptr_ || !sv_);
+}
+
+//---------------------------------------------------------------------
+
+template<class Val, class BV>
 void sparse_vector<Val, BV>::back_insert_iterator::flush()
 {
-    if (!buf_ptr_ || !sv_) // empty buffer
+    if (this->empty())
         return;
     value_type* d = (value_type*)buffer_.data();
     sv_->import_back(d, buf_ptr_ - d);
