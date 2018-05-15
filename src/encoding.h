@@ -183,9 +183,10 @@ public:
         }
         for (;count;)
         {  
+            unsigned free_bits = (sizeof(accum_) * 8) - used;
+            BM_ASSERT(free_bits);
             acc |= value << used;
 
-            unsigned free_bits = (sizeof(accum_) * 8) - used;
             if (count <= free_bits)
             {
                 used += count;
@@ -199,6 +200,11 @@ public:
                 acc = used = 0;
                 continue;
             }
+        }
+        if (used == (sizeof(accum_) * 8))
+        {
+            dest_.put_32(acc);
+            acc = used = 0;
         }
         used_bits_ = used;
         accum_ = acc;
@@ -428,6 +434,36 @@ public:
         accum_ = acc;
         used_bits_ = used;
         return current;
+    }
+    
+    unsigned get_bits(unsigned count)
+    {
+        BM_ASSERT(count);
+        
+        unsigned value = 0;
+        unsigned free_bits = unsigned((sizeof(accum_) * 8) - used_bits_);
+        if (count <= free_bits)
+        {
+        take_accum:
+            value =
+                (accum_ & block_set_table<true>::_left[count-1]);
+            accum_ >>= count;
+            used_bits_ += count;
+            return value;
+        }
+        if (used_bits_ == (sizeof(accum_) * 8))
+        {
+            accum_ = src_.get_32();
+            used_bits_ ^= used_bits_;
+            goto take_accum;
+        }
+        value = accum_;
+        accum_ = src_.get_32();
+        used_bits_ = count - free_bits;
+        value |=
+            ((accum_ & block_set_table<true>::_left[used_bits_-1]) << free_bits);
+        accum_ >>= used_bits_;
+        return value;
     }
 
 
