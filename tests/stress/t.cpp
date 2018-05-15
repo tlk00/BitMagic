@@ -8923,6 +8923,97 @@ void Log2Test()
 
 
 static
+void BitEncoderTest()
+{
+    cout << "---------------------------- BitEncoderTest" << endl;
+    
+    unsigned char buf[1024 * 200] = {0, };
+    
+    {
+        bm::encoder enc(buf, sizeof(buf));
+        bm::bit_out<bm::encoder> bout(enc);
+        
+        unsigned value = 1024 + 3;
+        bout.put_bits(value, 32);
+        value = 1024 + 5;
+        bout.put_bits(value, 32);
+        
+        bout.flush();
+        
+        bm::decoder dec(buf);
+        bm::bit_in<bm::decoder> bin(dec);
+        value = bin.get_bits(32);
+        assert(value == 1024 + 3);
+        value = bin.get_bits(32);
+        assert(value == 1024 + 5);
+    }
+    
+    {
+        unsigned bits = 1;
+        for (unsigned i = 1; i < (1u << 31u); i <<= 1, bits++)
+        {
+            bm::encoder enc(buf, sizeof(buf));
+            bm::bit_out<bm::encoder> bout(enc);
+            
+            for (unsigned j = 0; j < 160; ++j)
+            {
+                bout.put_bits(i, bits);
+            }
+            bout.flush();
+            
+            bm::decoder dec(buf);
+            bm::bit_in<bm::decoder> bin(dec);
+            for (unsigned j = 0; j < 160; ++j)
+            {
+                unsigned value = bin.get_bits(bits);
+                if (value != i)
+                {
+                    cerr << "Invalid encoding for i=" << i
+                         << " value=" << value << " bits=" << bits << endl;
+                    exit(1);
+                }
+            }
+            
+        } // for
+    }
+    
+    {
+        bm::encoder enc(buf, sizeof(buf));
+        bm::bit_out<bm::encoder> bout(enc);
+        
+        for (unsigned i = 1; i < 65536; ++i)
+        {
+            unsigned bits = bm::bit_scan_reverse(i)+1;
+            bout.put_bits(i, bits);
+        } // for
+        bout.flush();
+        
+        bm::decoder dec(buf);
+        bm::bit_in<bm::decoder> bin(dec);
+        for (unsigned i = 1; i < 65536; ++i)
+        {
+            unsigned bits = bm::bit_scan_reverse(i)+1;
+            unsigned value = bin.get_bits(bits);
+            if (value != i)
+            {
+                cerr << "2. Invalid encoding for i=" << i
+                     << " value=" << value << " bits=" << bits << endl;
+                exit(1);
+            }
+
+        } // for
+        
+
+    }
+
+    
+    
+    
+    cout << "---------------------------- BitEncoderTest" << endl;
+}
+
+
+static
 void GammaEncoderTest()
 {
     cout << "---------------------------- GammaEncoderTest" << endl;
@@ -13125,57 +13216,6 @@ int main(void)
     time_t      start_time = time(0);
     time_t      finish_time;
 
-    //deser_test();
-    //return 0;
-
-    TestRecomb();
-
-    OptimGAPTest();
-
-    CalcBeginMask();
-    CalcEndMask();
-
-    TestSIMDUtils();
-
-
-    {{
-    double d1 = 100.234;
-    unsigned long long  *i1 = reinterpret_cast<unsigned long long*>(&d1);
-    cerr << "i1= " << *i1 << endl;
-    
-    double d2 = 0.0;
-    unsigned long long  *i2 = reinterpret_cast<unsigned long long*>(&d2);
-    *i2 ^= 0;
-    cerr << "i2=" << *i2 << endl;
-    
-    unsigned long long ii1 = *i1;
-    cout << "ii=" << ii1 << endl;
-    
-    unsigned long long ii2 = 0;
-    for (unsigned i = 0; ii1; ii1 >>= 1, ++i)
-    {
-        unsigned long long m = ii1 & 1u;
-        m <<= i;
-        ii2 |= m;
-    }
-    
-    if (*i1 == ii2)
-    {
-       cout << "yes!" << endl;
-    }
-    else
-    {
-        cout << "Nope!" << endl;
-    }
-
-    *i2 = ii2;
-    cout << endl;
-    cout << "i2=" << *i2 << endl;
-    cout << d1 << " = " << d2 << endl;
-    
-    }}
-
-     
 /*
     LoadBVDump("C:/dev/group-by-sets/sets/geo_organization.bvdump", 
                "C:/dev/group-by-sets/sets/geo_organization.bvdump2", 
@@ -13203,6 +13243,14 @@ int main(void)
     exit(1);
 */
 
+    TestRecomb();
+
+    OptimGAPTest();
+
+    CalcBeginMask();
+    CalcEndMask();
+
+    TestSIMDUtils();
 
      TestBlockZero();
     
@@ -13226,7 +13274,9 @@ int main(void)
      TestBlockLast();
 
      BitForEachTest();
-  
+
+     BitEncoderTest();
+
      GammaEncoderTest();
 
      EmptyBVTest();
