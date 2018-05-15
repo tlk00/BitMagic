@@ -183,7 +183,7 @@ public:
         }
         for (;count;)
         {  
-            unsigned free_bits = (sizeof(accum_) * 8) - used;
+            unsigned free_bits = unsigned(sizeof(accum_) * 8) - used;
             BM_ASSERT(free_bits);
             acc |= value << used;
 
