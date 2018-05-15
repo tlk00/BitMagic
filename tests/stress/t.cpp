@@ -8921,84 +8921,6 @@ void Log2Test()
     cout << "---------------------------- Log2 Test Ok." << endl;
 }
 
-/*
-void BitEncoderTest()
-{
-    cout << "---------------------------- BitEncoderTest..." << endl;
-
-    cout << "Bit encoder stage 1" << endl;
-    
-    unsigned char buf1[2048] = {0, };
-    {
-    encoder enc(buf1, sizeof(buf1));
-    bit_out<encoder> bout(enc);
-
-    bout.put_bit(1);
-    bout.put_zero_bit();
-    bout.put_zero_bits(8);
-    bout.put_bit(1);
-    bout.put_bit(0);
-    bout.put_bit(1);
-    bout.flush();
-
-    decoder dec(buf1);
-    bit_in<decoder> bin(dec);
-    unsigned bit_value;
-
-    bit_value = bin.get_bit();
-    if (bit_value != 1) { cout << "BitEncoder failed!" << endl; exit(1);}
-    bit_value = bin.get_bit();
-    if (bit_value != 0) { cout << "BitEncoder failed!" << endl; exit(1);}
-    unsigned zeros = bin.eat_zero_bits();
-    if (zeros != 8) { cout << "BitEncoder failed!" << endl; exit(1);}
-    bit_value = bin.get_bit();
-    if (bit_value != 1) { cout << "BitEncoder failed!" << endl; exit(1);}
-    zeros = bin.eat_zero_bits();
-    if (zeros != 1) { cout << "BitEncoder failed!" << endl; exit(1);}
-    bit_value = bin.get_bit();
-    if (bit_value != 1) { cout << "BitEncoder failed!" << endl; exit(1);}
-    
-    }
-    
-    cout << "Bit encoder stage 2" << endl;
-    
-    {
-    unsigned char  bits[2048] = {0, };
-
-    {
-    encoder enc(buf1, sizeof(buf1));
-    bit_out<encoder> bout(enc);
-        
-        for (unsigned i = 0; i < 2048; ++i)
-        {
-            unsigned val = rand() % 2;
-            if (val > 1 ) val = 1;
-            bits[i] = (unsigned char) val;
-            
-            bout.put_bit(val);
-        }
-    }
-  
-    {
-    decoder dec(buf1);
-    bit_in<decoder> bin(dec);
-    
-        for (unsigned i = 0; i < 2048; ++i)
-        {
-            unsigned val = bits[i];
-            unsigned bit_value = bin.get_bit();
-            if (val != bit_value)
-            {
-                cout << "Bit " << i << " incorrect!" << endl;
-                exit(1);
-            }
-        }
-    }
-
-    }
-    cout << "---------------------------- BitForEncoderTest Ok." << endl;
-}
-*/
 
 static
 void GammaEncoderTest()
@@ -13225,8 +13147,6 @@ int main(void)
      TestBlockLast();
 
      BitForEachTest();
-
-//     BitEncoderTest();
   
      GammaEncoderTest();
 
