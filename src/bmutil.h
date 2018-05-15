@@ -232,7 +232,7 @@ inline
 unsigned bit_scan_reverse32(unsigned value)
 {
     BM_ASSERT(value);
-#if defined(BM_x86)
+#if defined(BM_x86) && (defined(__GNUG__) || defined(_MSC_VER))
     return bm::bsr_asm32(value);
 #else
     return bm::ilog2_LUT<unsigned int>(value);

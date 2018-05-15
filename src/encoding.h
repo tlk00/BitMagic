@@ -242,12 +242,7 @@ public:
     {
         BM_ASSERT(value);
 
-        unsigned logv = 
-        #if defined(BM_x86) && (defined(__GNUG__) || defined(_MSC_VER))
-            bm::bsr_asm32(value);
-        #else
-            bm::ilog2_LUT(value);
-        #endif
+        unsigned logv = bm::bit_scan_reverse32(value);
 
         // Put zeroes + 1 bit
 
@@ -257,29 +252,29 @@ public:
         unsigned free_bits = acc_bits - used;
 
         {
-        unsigned count = logv;
-        if (count >= free_bits)
-        {
-            dest_.put_32(acc);
-            acc = used ^= used;
-            count -= free_bits;
-
-            for ( ;count >= acc_bits; count -= acc_bits)
+            unsigned count = logv;
+            if (count >= free_bits)
             {
-                dest_.put_32(0);
+                dest_.put_32(acc);
+                acc = used ^= used;
+                count -= free_bits;
+
+                for ( ;count >= acc_bits; count -= acc_bits)
+                {
+                    dest_.put_32(0);
+                }
+                used += count;
             }
-            used += count; 
-        }
-        else
-        {
-            used += count;
-        }
-        acc |= (1 << used);
-        if (++used == acc_bits)
-        {
-            dest_.put_32(acc);
-            acc = used ^= used;
-        }
+            else
+            {
+                used += count;
+            }
+            acc |= (1 << used);
+            if (++used == acc_bits)
+            {
+                dest_.put_32(acc);
+                acc = used ^= used;
+            }
         }
 
         // Put the value bits
