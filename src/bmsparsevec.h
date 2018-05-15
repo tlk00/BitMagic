@@ -53,7 +53,6 @@ namespace bm
 // forward declarations
 //
 template<class Val, class SV> class compressed_sparse_vector;
-template<typename EN, typename Val, unsigned CNT> class enumerator_group;
 
 
 /*!
@@ -95,9 +94,6 @@ public:
     typedef typename bvector_type::enumerator        bvector_enumerator_type;
     typedef typename allocator_type::allocator_pool_type allocator_pool_type;
     
-    typedef enumerator_group<bvector_enumerator_type,
-                             value_type,
-                             sv_value_plains>        enumerator_group_type;
 
     /*! Statistical information about  memory allocation details. */
     struct statistics : public bv_statistics
@@ -228,6 +224,17 @@ public:
         mutable allocator_pool_type       pool_;
     };
     
+    /**
+        Back insert iterator implements buffered insert, faster than generic
+        access assignment.
+     
+        Limitations for bufferen inserter:
+        1. Do not use more than one inserter competitively
+        2. Use method flush() at the end to send the rest of accumulated buffer
+        flush is happening automatically on destruction, but if flush produces an
+        exception (for whatever reason) it will be an exception in destructor.
+        As such, explicit flush() is safer way to finilize the sparse vector load.
+    */
     class back_insert_iterator
     {
     public:
@@ -261,17 +268,28 @@ public:
 
         ~back_insert_iterator();
         
+        /** push value to the vector */
         back_insert_iterator& operator=(value_type v) { this->add(v); return *this; }
+        /** noop */
         back_insert_iterator& operator*() { return *this; }
+        /** noop */
         back_insert_iterator& operator++() { return *this; }
+        /** noop */
         back_insert_iterator& operator++( int ) { return *this; }
         
+        /** add value to the container*/
         void add(value_type v);
-        void add_null();
-        void add_null(size_type count);
         
+        /** add NULL (no-value) to the container */
+        void add_null();
+        
+        /** add a series of consequitve NULLs (no-value) to the container */
+        void add_null(size_type count);
+
+        /** return true if insertion buffer is empty */
         bool empty() const;
         
+        /** flush the accumulated buffer */
         void flush();
     protected:
     
