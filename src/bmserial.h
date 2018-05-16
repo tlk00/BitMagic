@@ -1021,8 +1021,8 @@ unsigned serializer<BV>::serialize(const BV& bv,
         case 1: // corner case: only 1 bit on
             {
                 bm::id_t bit_idx = 0;
-                bit_find_in_block(blk, bit_idx, &bit_idx);
-                enc.put_8(set_block_bit_1bit); enc.put_16((short)bit_idx);
+                bm::bit_find_in_block(blk, bit_idx, &bit_idx);
+                enc.put_8(set_block_bit_1bit); enc.put_16(bm::short_t(bit_idx));
                 continue;
             }
         case 0: goto zero_block; // empty block
@@ -1071,7 +1071,7 @@ unsigned serializer<BV>::serialize(const BV& bv,
             {
             bit_as_array:
                 gap_word_t arr_len;
-                unsigned mask = inverted ? ~0 : 0;
+                unsigned mask = inverted ? ~0u : 0u;
                 arr_len = bit_convert_to_arr(gap_temp_block, 
                                              blk, 
                                              bm::gap_max_bits, 
@@ -1465,11 +1465,12 @@ deserializer<BV, DEC>::deserialize_gap(unsigned char btype, decoder_type& dec,
 
         if (blk == 0)
         {
+            BM_ASSERT(level >= 0);
             gap_word_t* gap_blk = 
-              bman.get_allocator().alloc_gap_block(level, bman.glen());
+              bman.get_allocator().alloc_gap_block(unsigned(level), bman.glen());
             gap_word_t* gap_blk_ptr = BMGAP_PTR(gap_blk);
             *gap_blk_ptr = gap_head;
-            set_gap_level(gap_blk_ptr, level);
+            bm::set_gap_level(gap_blk_ptr, level);
             blk = bman.set_block(i, (bm::word_t*)BMPTR_SETBIT0(gap_blk));
             BM_ASSERT(blk == 0);
             

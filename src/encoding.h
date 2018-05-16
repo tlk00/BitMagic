@@ -177,7 +177,7 @@ public:
         unsigned acc = accum_;
 
         {
-            unsigned mask = ~0;
+            unsigned mask = ~0u;
             mask >>= (sizeof(accum_) * 8) - count;
             value &= mask;
         }

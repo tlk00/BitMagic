@@ -2832,9 +2832,10 @@ unsigned gap_limit(const T* buf, const T* glevel_len)
 
    @ingroup gapfunc
 */
-template<typename T> unsigned gap_level(const T* buf)
+template<typename T>
+T gap_level(const T* buf)
 {
-    return (*buf >> 1) & 3;
+    return T((*buf >> 1) & 3u);
 }
 
 
@@ -2846,9 +2847,10 @@ template<typename T> unsigned gap_level(const T* buf)
    @ingroup gapfunc
 */
 template<typename T> 
-void set_gap_level(T* buf, unsigned level)
+void set_gap_level(T* buf, int level)
 {
-    BM_ASSERT(level < bm::gap_levels);
+    BM_ASSERT(level < bm::gap_levels && level >= 0);    
+    
     *buf = (T)(((level & 3) << 1) | (*buf & 1) | (*buf & ~7));
 }
 
@@ -2862,7 +2864,7 @@ void set_gap_level(T* buf, unsigned level)
    @ingroup gapfunc
 */
 template<typename T>
-inline int gap_calc_level(int len, const T* glevel_len)
+inline int gap_calc_level(unsigned len, const T* glevel_len)
 {
     if (len <= (glevel_len[0]-4)) return 0;
     if (len <= (glevel_len[1]-4)) return 1;

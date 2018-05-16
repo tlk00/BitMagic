@@ -140,7 +140,7 @@ T ilog2_LUT(T x)
     {
         l += 8; x >>= 8;
     }
-    return l + first_bit_table<true>::_idx[x];
+    return l + T(first_bit_table<true>::_idx[x]);
 }
 
 /**

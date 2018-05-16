@@ -80,13 +80,13 @@ struct sparse_vector_serial_layout
     }
     
     /// return current serialized size
-    size_t  size() const { return buf_.size(); /*return serialized_size_;*/ }
+    size_t  size() const { return buf_.size();  }
     
     /// Set new serialized size
-    void resize(size_t ssize) { buf_.resize(ssize); /*serialized_size_ = ssize;*/ }
+    void resize(size_t ssize) { buf_.resize(ssize);  }
     
     /// return serialization buffer capacity
-    size_t  capacity() const { return buf_.capacity(); /* return capacity_; */ }
+    size_t  capacity() const { return buf_.capacity(); }
     
     /// free memory
     void freemem()
@@ -195,7 +195,7 @@ void sparse_vector_serialize(
         
     } // for i
     
-    sv_layout.resize(buf_ptr - buf);
+    sv_layout.resize(size_t(buf_ptr - buf));
     
     
     // save the header
@@ -215,7 +215,7 @@ void sparse_vector_serialize(
             enc.put_64(0);
             continue;
         }
-        size_t offset = p - buf;
+        size_t offset = size_t(p - buf);
         enc.put_64(offset);
     }
 }

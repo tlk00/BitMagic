@@ -3543,8 +3543,9 @@ bvector<Alloc>::combine_operation_with_block(unsigned          nb,
 
                 // mutation check
 
-                level = gap_level(BMGAP_PTR(blk));
-                threshold = blockman_.glen(level)-4;
+                level = bm::gap_level(BMGAP_PTR(blk));
+                BM_ASSERT(level >= 0);
+                threshold = unsigned(blockman_.glen(unsigned(level)) - 4u);
                 assign_gap_result(nb, res, res_len, level, threshold, blk, tmp_buf);
                 
                 return;
@@ -3776,7 +3777,7 @@ void bvector<Alloc>::assign_gap_result(
                        gap_word_t*           tmp_buf)
 {
     int new_level = gap_calc_level(res_len, blockman_.glen());
-    if (new_level == -1)
+    if (new_level < 0)
     {
         blockman_.convert_gap2bitset(nb, res);
         return;
@@ -3784,8 +3785,9 @@ void bvector<Alloc>::assign_gap_result(
 
     if (res_len > threshold)
     {
+        BM_ASSERT(new_level >= 0);
         gap_word_t* new_blk =
-            blockman_.allocate_gap_block(new_level, res);
+            blockman_.allocate_gap_block(unsigned(new_level), res);
         set_gap_level(new_blk, new_level);
 
         bm::word_t* p = (bm::word_t*)new_blk;

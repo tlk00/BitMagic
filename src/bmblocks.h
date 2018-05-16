@@ -429,9 +429,9 @@ public:
                     else
                     {
                         int level = bm::gap_calc_level(len, bman.glen());
-
+                        BM_ASSERT(level >= 0);
                         gap_blk = 
-                            bman.allocate_gap_block(level, tmp_gap_blk);
+                            bman.allocate_gap_block(unsigned(level), tmp_gap_blk);
                         bman.set_block_gap_ptr(idx, gap_blk);
                         if (stat_)
                         {
@@ -580,8 +580,8 @@ public:
                 new_blk = (bm::word_t*)
                     bman.get_allocator().alloc_gap_block(level, 
                                                         bman.glen());
-                int len = gap_length(BMGAP_PTR(block));
-                ::memcpy(new_blk, gap_block, len * sizeof(gap_word_t));
+                unsigned len = bm::gap_length(BMGAP_PTR(block));
+                ::memcpy(new_blk, gap_block, len * sizeof(bm::gap_word_t));
             }
             else
             {
