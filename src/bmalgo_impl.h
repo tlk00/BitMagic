@@ -1487,7 +1487,7 @@ bm::id_t count_intervals(const BV& bv)
 
     \ingroup setalgo
 */
-template<class BV, class It>
+template<typename BV, class It>
 void export_array(BV& bv, It first, It last)
 {
     typename BV::blocks_manager_type& bman = bv.get_blocks_manager();
@@ -1495,11 +1495,11 @@ void export_array(BV& bv, It first, It last)
         bman.init_tree();
     
     unsigned inp_word_size = sizeof(*first);
-    size_t array_size = last - first;
+    size_t array_size = size_t(last - first);
     size_t bit_cnt = array_size * inp_word_size * 8;
     int block_type;
     bm::word_t tmp;
-    unsigned b1, b2, b3, b4;
+    bm::word_t b1, b2, b3, b4;
 
     if (bit_cnt >= bv.size())
         bv.resize((bm::id_t)bit_cnt + 1);
@@ -1528,33 +1528,33 @@ void export_array(BV& bv, It first, It last)
                 if (word_cnt >= bm::set_block_size) {
                     bm::word_t* wrd_end = blk + bm::set_block_size;
                     do {
-                        b1 = *first++; b2 = *first++;
-                        b3 = *first++; b4 = *first++;
-                        tmp = b1 | (b2 << 8) | (b3 << 16) | (b4 << 24);
+                        b1 = bm::word_t(*first++); b2 = bm::word_t(*first++);
+                        b3 = bm::word_t(*first++); b4 = bm::word_t(*first++);
+                        tmp = b1 | (b2 << 8u) | (b3 << 16u) | (b4 << 24u);
                         *wrd_ptr++ = tmp;
                     } while (wrd_ptr < wrd_end);
                     word_cnt -= bm::set_block_size;
                 } 
                 else 
                 {
-                    size_t to_convert = last - first;
+                    size_t to_convert = size_t(last - first);
                     for (size_t j = 0; j < to_convert / 4; ++j)
                     {
-                        b1 = *first++; b2 = *first++;
-                        b3 = *first++; b4 = *first++;
-                        tmp = b1 | (b2 << 8) | (b3 << 16) | (b4 << 24);
+                        b1 = bm::word_t(*first++); b2 = bm::word_t(*first++);
+                        b3 = bm::word_t(*first++); b4 = bm::word_t(*first++);
+                        tmp = b1 | (b2 << 8u) | (b3 << 16u) | (b4 << 24u);
                         *wrd_ptr++ = tmp;
                     }
                     while (1)
                     {
                         if (first == last) break;
-                        *wrd_ptr = *first++;
+                        *wrd_ptr = bm::word_t(*first++);
                         if (first == last) break;
-                        *wrd_ptr |= (*first++) << 8;
+                        *wrd_ptr |= bm::word_t(*first++) << 8u;
                         if (first == last) break;
-                        *wrd_ptr |= (*first++) << 16;
+                        *wrd_ptr |= bm::word_t(*first++) << 16u;
                         if (first == last) break;
-                        *wrd_ptr |= (*first++) << 24;
+                        *wrd_ptr |= bm::word_t(*first++) << 24u;
                         ++wrd_ptr;
                     }
                 }
@@ -1580,7 +1580,7 @@ void export_array(BV& bv, It first, It last)
                 if (word_cnt >= bm::set_block_size) {
                     bm::word_t* wrd_end = blk + bm::set_block_size;
                     do {
-                        b1 = *first++; b2 = *first++;
+                        b1 = bm::word_t(*first++); b2 = bm::word_t(*first++);
                         tmp = b1 | (b2 << 16);
                         *wrd_ptr++ = tmp;
                     } while (wrd_ptr < wrd_end);
@@ -1588,19 +1588,19 @@ void export_array(BV& bv, It first, It last)
                 } 
                 else 
                 {
-                    size_t to_convert = last - first;
+                    size_t to_convert = size_t(last - first);
                     for (unsigned j = 0; j < to_convert / 2; ++j)
                     {
-                        b1 = *first++; b2 = *first++;
-                        tmp = b1 | (b2 << 16);
+                        b1 = bm::word_t(*first++); b2 = bm::word_t(*first++);
+                        tmp = b1 | (b2 << 16u);
                         *wrd_ptr++ = tmp;
                     }
                     while (1)
                     {
                         if (first == last) break;
-                        *wrd_ptr = *first++;
+                        *wrd_ptr = bm::word_t(*first++);
                         if (first == last) break;
-                        *wrd_ptr |= (*first++) << 16;
+                        *wrd_ptr |= bm::word_t((*first++) << 16u);
                         ++wrd_ptr;
                     }
                 }
@@ -1625,8 +1625,9 @@ void export_array(BV& bv, It first, It last)
                 bm::word_t* wrd_ptr = blk;
                 if (word_cnt >= bm::set_block_size) {
                     bm::word_t* wrd_end = blk + bm::set_block_size;
-                    do {
-                        *wrd_ptr++ = *first++;
+                    do
+                    {
+                        *wrd_ptr++ = bm::word_t(*first++);
                     } while (wrd_ptr < wrd_end);
                     word_cnt -= bm::set_block_size;
                 } 
@@ -1635,7 +1636,7 @@ void export_array(BV& bv, It first, It last)
                     while (1)
                     {
                         if (first == last) break;
-                        *wrd_ptr = *first++;
+                        *wrd_ptr = bm::word_t(*first++);
                         ++wrd_ptr;
                     }
                 }

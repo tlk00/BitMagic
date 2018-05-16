@@ -1903,9 +1903,9 @@ void serial_stream_iterator<DEC>::next()
 
         // pre-check for 7-bit zero block
         //
-        if (block_type_ & (1 << 7))
+        if (block_type_ & (1u << 7u))
         {
-            mono_block_cnt_ = (block_type_ & ~(1 << 7)) - 1;
+            mono_block_cnt_ = (block_type_ & ~(1u << 7u)) - 1;
             state_ = e_zero_blocks;
             break;
         }
