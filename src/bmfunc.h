@@ -2866,10 +2866,10 @@ void set_gap_level(T* buf, int level)
 template<typename T>
 inline int gap_calc_level(unsigned len, const T* glevel_len)
 {
-    if (len <= (glevel_len[0]-4)) return 0;
-    if (len <= (glevel_len[1]-4)) return 1;
-    if (len <= (glevel_len[2]-4)) return 2;
-    if (len <= (glevel_len[3]-4)) return 3;
+    if (len <= unsigned(glevel_len[0]-4)) return 0;
+    if (len <= unsigned(glevel_len[1]-4)) return 1;
+    if (len <= unsigned(glevel_len[2]-4)) return 2;
+    if (len <= unsigned(glevel_len[3]-4)) return 3;
 
     BM_ASSERT(bm::gap_levels == 4);
     return -1;
