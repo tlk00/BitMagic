@@ -262,7 +262,7 @@ public:
                  typename SV::bvector_type& bv_out)
     {
         typename bvector_type::mem_pool_guard mp_guard;
-        mp_guard.assign_if_not_set(pool_, bv_out); // set local memory pool
+        mp_guard.assign_if_not_set(pool_, bv_out); // set algorithm-local memory pool to avoid heap contention
 
         bvector_type bv1;
         typename bvector_type::mem_pool_guard mp_guard1(pool_, bv1);
