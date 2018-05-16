@@ -20,13 +20,12 @@ For more information please visit:  http://bitmagic.io
   Example how to search for an element.
  
   \sa bm::sparse_vector<>
+  \sa bm::sparse_vector<>::back_insert_iterator
 */
 
 /*! \file svsample06.cpp
-    \brief Example: sparse_vector<> scan search
+    \brief Example: sparse_vector<> scan search (non-ordered set functionality)
 */
-
-//#define BMAVX2OPT
 
 #include <iostream>
 #include <vector>
@@ -64,58 +63,59 @@ std::uniform_int_distribution<> rand_dis(1, value_max); // generate uniform nume
 bm::chrono_taker::duration_map_type  timing_map;
 
 
+
 // Function to generate test vector set with some NULL values stored as a
 // separate bit-bector
 //
 static
 void generate_test_set(std::vector<unsigned>& vect,
-                       bm::bvector<>&         bv_null,
-                       sparse_vector_u32&     sv
-                       )
+                        bm::bvector<>&         bv_null,
+                        sparse_vector_u32&     sv)
 {
-    std::cout << "Test set generation..." << std::endl;
+    // back insert iterator is faster than random element access for sparse vector
+    //
+    sparse_vector_u32::back_insert_iterator bi(sv.get_back_inserter());
 
     vect.resize(test_size);
     bv_null.reset();
-    
+
     for (unsigned i = 0; i < test_size; ++i)
     {
         unsigned v = rand_dis(gen);
+
         vect[i] = v;
-        bv_null.set(i);
-        
-        sv.set(i, v);
-        
+        bv_null[i] = true; // not NULL(assigned) element
+
+        *bi = v; // push back an element to sparse vector
+
         if (i % 64 == 0)
         {
+            bi.add_null(5);  // add 5 unassigned elements using back inserter
             i += 5;  // insert a small NULL plate (unassigned values)
         }
     } // for
-    std::cout << std::endl << "Generation finished." << std::endl;
 }
 
 
+// plain scan in std::vector<>, matching values are indexed 
+// in result bit-vector (subset projection)
+// values are added, so multiple calls result in subset addition
 static
 void vector_search(const std::vector<unsigned>& vect,
                    const bm::bvector<>&         bv_null,
                    unsigned                     value,
                    bm::bvector<>&               bv_res)
 {
-    bv_res.clear(true);
     for (size_t i = 0; i < vect.size(); ++i)
     {
         if (vect[i] == value)
-        {
-            bv_res.set_bit_no_check(i);
-        }
+            bv_res.set_bit_no_check((bm::id_t)i);
     } // for
-    bv_res &= bv_null;
+    bv_res &= bv_null; // correct results to only include non-NULL values
 }
 
 
-
-
-static
+inline
 void print_svector(const sparse_vector_u32& sv)
 {
     if (sv.size() == 0)
@@ -172,9 +172,12 @@ int main(void)
 
             bm::bvector<> bv_found;
             
-            bm::sparse_vector_scan<sparse_vector_u32> scanner;
+            bm::sparse_vector_scanner<sparse_vector_u32> scanner;
             scanner.find_eq(sv, 25, bv_found);
             
+            print_bvector(bv_found);
+
+            scanner.invert(sv, bv_found); // invert search results to NOT EQ
             print_bvector(bv_found);
         }
         
@@ -182,15 +185,19 @@ int main(void)
         bm::bvector<> bv_null;
         bm::bvector<> bv_res;
         sparse_vector_u32 sv(bm::use_null);
-        
-        generate_test_set(vect, bv_null, sv);
 
-        unsigned seach_repeats = 500;
+        {
+            bm::chrono_taker tt1("0. test set generate ", 1, &timing_map);
+            generate_test_set(vect, bv_null, sv);
+        }
 
-        // generate a search vector
+        unsigned search_repeats = 500;
+
+        // generate a search vector for benchmarking
         //
         std::vector<unsigned> search_vect;
-        for (unsigned i = 0; i < seach_repeats; ++i)
+        search_vect.reserve(search_repeats);
+        for (unsigned i = 0; i < search_repeats; ++i)
         {
             search_vect.push_back(rand_dis(gen));
         }
@@ -199,9 +206,9 @@ int main(void)
         //
         
         {
-            bm::chrono_taker tt1("1. std::vector<> scan ", seach_repeats, &timing_map);
+            bm::chrono_taker tt1("1. std::vector<> scan ", search_repeats, &timing_map);
             
-            for (unsigned i = 0; i < seach_repeats; ++i)
+            for (unsigned i = 0; i < search_repeats; ++i)
             {
                 unsigned vs = search_vect[i];
                 vector_search(vect, bv_null, vs, bv_res);
@@ -209,19 +216,12 @@ int main(void)
         }
 
         {
-            bm::bvector<>::allocator_pool_type pool;
-            bm::bvector<>::mem_pool_guard(pool, bv_res);
+            bm::chrono_taker tt1("2. sparse_vector<> scan ", search_repeats, &timing_map);
 
-            bm::sparse_vector_scan<sparse_vector_u32> scanner;
+            bm::sparse_vector_scanner<sparse_vector_u32> scanner;
 
-            bm::chrono_taker tt1("2. sparse_vector<> scan ", seach_repeats, &timing_map);
-            
-            for (unsigned i = 0; i < seach_repeats; ++i)
-            {
-                unsigned vs = search_vect[i];
-                scanner.find_eq(sv, vs, bv_res);
-            } // for
-        }
+            scanner.find_eq(sv, search_vect.begin(), search_vect.end(), bv_res);
+         }
 
         
         bm::chrono_taker::print_duration_map(timing_map, bm::chrono_taker::ct_ops_per_sec);
