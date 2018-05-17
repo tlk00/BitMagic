@@ -187,7 +187,7 @@ unsigned word_bitcount64(bm::id64_t x)
 {
 #if defined(BMSSE42OPT) || defined(BMAVX2OPT)
 #if defined(BM64_SSE4) || defined(BM64_AVX2)
-    return _mm_popcnt_u64(x);
+    return unsigned(_mm_popcnt_u64(x));
 #else
     return _mm_popcnt_u32(x >> 32) + _mm_popcnt_u32((unsigned)x);
 #endif
