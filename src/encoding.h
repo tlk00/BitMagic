@@ -847,12 +847,12 @@ inline void decoder::get_32(bm::word_t* w, unsigned count)
 {
     if (!w) 
     {
-        seek(count * 4);
+        seek(int(count * sizeof(bm::word_t)));
         return;
     }
 #if (BM_UNALIGNED_ACCESS_OK == 1)
 	::memcpy(w, buf_, count * sizeof(bm::word_t));
-	seek(count * 4);
+	seek(int(count * sizeof(bm::word_t)));
 	return;
 #else
     const unsigned char* buf = buf_;
@@ -878,7 +878,7 @@ inline void decoder::get_16(bm::short_t* s, unsigned count)
 {
     if (!s) 
     {
-        seek(count * 2);
+        seek(int(count * sizeof(bm::short_t)));
         return;
     }
 #if (BM_UNALIGNED_ACCESS_OK == 1)
@@ -910,7 +910,8 @@ inline decoder_little_endian::decoder_little_endian(const unsigned char* buf)
 {
 }
 
-BMFORCEINLINE bm::short_t decoder_little_endian::get_16()
+BMFORCEINLINE
+bm::short_t decoder_little_endian::get_16()
 {
     bm::short_t v1 = bm::short_t(buf_[0]);
     bm::short_t v2 = bm::short_t(buf_[1]);
@@ -919,7 +920,8 @@ BMFORCEINLINE bm::short_t decoder_little_endian::get_16()
     return a;
 }
 
-BMFORCEINLINE bm::word_t decoder_little_endian::get_32() 
+BMFORCEINLINE
+bm::word_t decoder_little_endian::get_32()
 {
     bm::word_t a = ((unsigned)buf_[0] << 24)+ ((unsigned)buf_[1] << 16) +
                    ((unsigned)buf_[2] << 8) + ((unsigned)buf_[3]);
@@ -927,11 +929,12 @@ BMFORCEINLINE bm::word_t decoder_little_endian::get_32()
     return a;
 }
 
-inline void decoder_little_endian::get_32(bm::word_t* w, unsigned count)
+inline
+void decoder_little_endian::get_32(bm::word_t* w, unsigned count)
 {
     if (!w) 
     {
-        seek(count * 4);
+        seek(int(count * sizeof(bm::word_t)));
         return;
     }
 
@@ -947,11 +950,12 @@ inline void decoder_little_endian::get_32(bm::word_t* w, unsigned count)
     buf_ = (unsigned char*)buf;
 }
 
-inline void decoder_little_endian::get_16(bm::short_t* s, unsigned count)
+inline
+void decoder_little_endian::get_16(bm::short_t* s, unsigned count)
 {
     if (!s) 
     {
-        seek(count * 2);
+        seek(int(count * sizeof(bm::short_t)));
         return;
     }
 

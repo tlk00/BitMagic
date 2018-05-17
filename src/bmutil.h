@@ -147,15 +147,15 @@ T ilog2_LUT(T x)
     Lookup table based short integer LOG2
 */
 template<>
-inline bm::gap_word_t ilog2_LUT<bm::gap_word_t>(bm::gap_word_t x)
+bm::gap_word_t ilog2_LUT<bm::gap_word_t>(bm::gap_word_t x)
 {
-    unsigned l = 0;    
+    bm::gap_word_t l = 0;
     if (x & 0xff00) 
     {
         l += 8;
         x = (bm::gap_word_t)(x >> 8);
     }
-    return (bm::gap_word_t)(l + first_bit_table<true>::_idx[x]);
+    return (l + bm::gap_word_t(first_bit_table<true>::_idx[x]));
 }
 
 

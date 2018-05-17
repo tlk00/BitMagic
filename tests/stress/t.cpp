@@ -235,8 +235,8 @@ int pool_ptr_allocator::ptr_blocks_idx_ = 0;
 class dbg_block_allocator
 {
 public:
-static unsigned na_;
-static unsigned nf_;
+static size_t na_;
+static size_t nf_;
 
     static bm::word_t* allocate(size_t n, const void *)
     {
@@ -266,20 +266,20 @@ static unsigned nf_;
         ::free(p);
     }
 
-    static int balance()
+    static size_t balance()
     {
         return nf_ - na_;
     }
 };
 
-unsigned dbg_block_allocator::na_ = 0;
-unsigned dbg_block_allocator::nf_ = 0;
+size_t dbg_block_allocator::na_ = 0;
+size_t dbg_block_allocator::nf_ = 0;
 
 class dbg_ptr_allocator
 {
 public:
-static unsigned na_;
-static unsigned nf_;
+static size_t na_;
+static size_t nf_;
 
     static void* allocate(size_t n, const void *)
     {
@@ -310,15 +310,15 @@ static unsigned nf_;
         ::free(s);
     }
 
-    static int balance()
+    static size_t balance()
     {
         return nf_ - na_;
     }
 
 };
 
-unsigned dbg_ptr_allocator::na_ = 0;
-unsigned dbg_ptr_allocator::nf_ = 0;
+size_t dbg_ptr_allocator::na_ = 0;
+size_t dbg_ptr_allocator::nf_ = 0;
 
 
 typedef mem_alloc<dbg_block_allocator, dbg_ptr_allocator> dbg_alloc;
@@ -368,7 +368,7 @@ void generate_bvector(bvect& bv, unsigned vector_max = 40000000);
 static
 unsigned random_minmax(unsigned min, unsigned max)
 {
-    unsigned r = (rand() << 16) | rand();
+    unsigned r = (unsigned(rand()) << 16u) | unsigned(rand());
     return r % (max-min) + min;
 }
 
@@ -408,7 +408,7 @@ void FillSets(bvect_mini* bvect_min,
 
         for(i = 0; i < fill_factor; i++)
         {
-            int k = rand() % 10;
+            unsigned k = unsigned(rand()) % 10;
             if (k == 0)
                 k+=2;
 
@@ -439,11 +439,11 @@ void FillSets(bvect_mini* bvect_min,
             {
                 for(; start < end;)
                 {
-                    int r = rand() % 8;
+                    unsigned r = unsigned(rand()) % 8;
 
                     if (r > 7)
                     {
-                        int inc = rand() % 3;
+                        unsigned inc = unsigned(rand()) % 3;
                         ++inc;
                         unsigned end2 = start + rand() % 1000;
                         if (end2 > end)
@@ -491,7 +491,7 @@ void FillSets(bvect_mini* bvect_min,
             }
             else
             {
-                int c = rand() % 15;
+                unsigned c = unsigned(rand()) % 15;
                 if (c == 0)
                     ++c;
                 for(; start < end; ++start)
@@ -551,7 +551,7 @@ void FillSetsIntervals(bvect_mini* bvect_min,
 
         do
         {
-            len = rand() % factor;
+            len = unsigned(rand()) % factor;
             end = i+len;
             
         } while (end >= max);
@@ -605,10 +605,10 @@ void FillSetsIntervals(bvect_mini* bvect_min,
         i = end;
 
 
-        len = rand() % (factor* 10 * bm::gap_max_bits);
+        len = unsigned(rand()) % (factor* 10 * bm::gap_max_bits);
         if (len % 2)
         {
-            len *= rand() % (factor * 10);
+            len *= unsigned(rand()) % (factor * 10);
         }
 
         i+=len;
@@ -659,7 +659,7 @@ void FillSetsRandomOne(bvect_mini* bvect_min,
                        unsigned max)
 {
     unsigned range = max - min;
-    unsigned bit_idx = rand() % range;
+    unsigned bit_idx = unsigned(rand()) % range;
     bvect_min->set_bit(bit_idx);
     bvect_full->set_bit(bit_idx);
     cout << "Bit_idx=" << bit_idx << endl;
@@ -693,7 +693,7 @@ void FillSetsRandom(bvect_mini* bvect_min,
 
     for (unsigned i = 0; i < count; ++i)
     {
-        unsigned bn = rand() % count;
+        unsigned bn = unsigned(rand()) % count;
         bn += min;
 
         if (bn > max)
@@ -1136,7 +1136,7 @@ static
 void CheckGAPMin(const gap_vector& gapv, const bvect_mini& bvect_min, unsigned len)
 {
     int last_bit = -1;
-    for (int i = 0; i < (int)len; ++i)
+    for (unsigned i = 0; i < len; ++i)
     {
         int bit1 = (gapv.is_bit_true(i) == 1);
         int bit2 = (bvect_min.is_bit_true(i) != 0);
@@ -1148,7 +1148,7 @@ void CheckGAPMin(const gap_vector& gapv, const bvect_mini& bvect_min, unsigned l
         }
         if (bvect_min.is_bit_true(i))
         {
-            last_bit = i;
+            last_bit = (int)i;
         }
     }
     unsigned glast;
@@ -1549,7 +1549,7 @@ void ClearAllTest()
 {
     bvect     bvect_full;
 
-    for (int i = 0; i < 100000; ++i)
+    for (unsigned i = 0; i < 100000; ++i)
     {
         bvect_full.set_bit(i);
     }
@@ -1559,7 +1559,7 @@ void ClearAllTest()
 
     print_stat(bvect_full);
 
-    int count = bvect_full.count();
+    unsigned count = bvect_full.count();
     assert(count == 0);
     print_stat(bvect_full);
 }
@@ -1571,8 +1571,8 @@ void WordCmpTest()
 
     for (int i = 0; i < 10000000; ++i)
     {
-        unsigned w1 = rand();
-        unsigned w2 = rand();
+        unsigned w1 = unsigned(rand());
+        unsigned w2 = unsigned(rand());
         int res = wordcmp0(w1, w2);
         int res2 = wordcmp(w1, w2);
         if (res != res2)
@@ -1671,7 +1671,7 @@ void ShiftRotateTest()
 
     for (i = 0; i < bm::set_block_size; ++i)
     {
-        blk0[i] = blk1[i] = rand();
+        blk0[i] = blk1[i] = unsigned(rand());
     }
 
     for (unsigned j = 0; j < bm::set_block_size * 32; ++j)
@@ -2194,7 +2194,7 @@ void SimpleRandomFillTest()
     unsigned i;
     for (i = 0; i < iter; ++i)
     {
-        unsigned num = ::rand() % iter;
+        unsigned num = unsigned(::rand()) % iter;
         bvect_min.set_bit(num);
         bvect_full.set_bit(num);
         if ((i % 1000) == 0) cout << "." << flush;
@@ -2211,7 +2211,7 @@ void SimpleRandomFillTest()
 
     for(i = 0; i < iter; ++i)
     {
-        unsigned num = ::rand() % iter;
+        unsigned num = unsigned(::rand()) % iter;
         bvect_min.clear_bit(num);
         bvect_full.clear_bit(num);
     }
@@ -2233,7 +2233,7 @@ void SimpleRandomFillTest()
     unsigned i;
     for(i = 0; i < iter; ++i)
     {
-        unsigned num = ::rand() % iter;
+        unsigned num = unsigned(::rand()) % iter;
         bvect_min.set_bit(num);
         bvect_full.set_bit(num);
         CheckCountRange(bvect_full, 0, 65535);
@@ -2250,7 +2250,7 @@ void SimpleRandomFillTest()
 
     for(i = 0; i < iter; ++i)
     {
-        unsigned num = ::rand() % iter;
+        unsigned num = unsigned(rand()) % iter;
         bvect_min.clear_bit(num);
         bvect_full.clear_bit(num);
         CheckCountRange(bvect_full, 0, num);
@@ -2395,7 +2395,7 @@ void AndOperationsTest()
 
     printf("AND test stage 1.\n");
 
-    for (int i = 0; i < 112; ++i)
+    for (unsigned i = 0; i < 112; ++i)
     {
         bvect_min1.set_bit(i);
         bvect_full1.set_bit(i);
@@ -3106,7 +3106,7 @@ void XorOperationsTest()
         bvect_mini  bvect_min2(BITVECT_SIZE);
 
 
-        for (int i = 0; i < 150000; ++i)
+        for (unsigned i = 0; i < 150000; ++i)
         {
             bvect2.set_bit(i);
             bvect_min2.set_bit(i);
@@ -3155,7 +3155,7 @@ void XorOperationsTest()
         bvect_mini  bvect_min2(BITVECT_SIZE);
 
 
-        for (int i = 0; i < 150000; ++i)
+        for (unsigned i = 0; i < 150000; ++i)
         {
             bvect1.set_bit(i);
             bvect_min1.set_bit(i);
@@ -3203,7 +3203,7 @@ void XorOperationsTest()
         bvect_mini  bvect_min2(BITVECT_SIZE);
 
 
-        for (int i = 0; i < 150000; ++i)
+        for (unsigned i = 0; i < 150000; ++i)
         {
             bvect1.set_bit(i);
             bvect_min1.set_bit(i);
@@ -3645,7 +3645,7 @@ void DesrializationTest2()
 
    bvect  bv1;
    bvect  bv2;
-   int i;
+   unsigned i;
    for (i = 10; i < 165536; i+=2)
    {
       bv1.set_bit(i);
@@ -3736,7 +3736,7 @@ void DesrializationTest2()
 
    int clcnt = 0;
 
-   int repetitions = 25;
+   unsigned repetitions = 25;
    for (i = 0; i < repetitions; ++i)
    {
         cout << endl << endl << "Deserialization STEP " << i << endl;
@@ -4177,7 +4177,7 @@ void StressTest(unsigned repetitions, int set_operation = -1)
 
         {
             bvect bv1(*bvect_full1);
-            unsigned idx = rand() % size;
+            unsigned idx = unsigned(rand()) % size;
             bool b = bv1[idx];
             bool changed;
             if (b) 
@@ -4441,7 +4441,7 @@ void GAPCheck()
       exit(1);
    }
    
-   int i;
+   unsigned i;
    for (i = 0; i < 65536; ++i)
    {
         bit = gapv.is_bit_true(i);
@@ -4478,7 +4478,7 @@ void GAPCheck()
       exit(1);
    }
       
-   int i;
+   unsigned i;
    for (i = 0; i < 65536; ++i)
    {
         bit = gapv.is_bit_true(i);
@@ -4666,7 +4666,7 @@ void GAPCheck()
         gap_vector gapv(0);
         bvect_mini   bvect_min(65536);
         
-        int i;
+        unsigned i;
         for (i = 10; i > 0; i-=2)
         {
             bvect_min.set_bit(i);
@@ -4729,8 +4729,9 @@ void GAPCheck()
 
         for (i = 0; i < (int)bm::gap_max_bits; ++i)
         {
-            int bit1 = (gapv.is_bit_true(i) == 1);
-            int bit2 = (bvect_min.is_bit_true(i) != 0);
+            unsigned idx = unsigned(i);
+            int bit1 = (gapv.is_bit_true(idx) == 1);
+            int bit2 = (bvect_min.is_bit_true(idx) != 0);
             if (bit1 != bit2)
             {
                 cout << "4.problem with bit comparison " << i << endl;
@@ -4739,8 +4740,9 @@ void GAPCheck()
 
         for (i = bm::gap_max_bits; i < 0; --i)
         {
-            int bit1 = (gapv.is_bit_true(i) == 1);
-            int bit2 = (bvect_min.is_bit_true(i) != 0);
+            unsigned idx = unsigned(i);
+            int bit1 = (gapv.is_bit_true(idx) == 1);
+            int bit2 = (bvect_min.is_bit_true(idx) != 0);
             if (bit1 != bit2)
             {
                 cout << "5.problem with bit comparison " << i << endl;
@@ -4784,7 +4786,7 @@ void GAPCheck()
    cnt = bm::bit_block_calc_count_range(buf, 0, 35);
    assert(cnt == 36);
 
-   for (int i = 0; i < 36; ++i)
+   for (unsigned i = 0; i < 36; ++i)
    {
         bit = (bvect_a.get_bit(i) != 0);
         assert(bit);
@@ -4817,13 +4819,13 @@ void GAPCheck()
    cnt = bm::bit_block_calc_count_range(buf, 5, 5+32);
    assert(cnt == 32);
 
-   int i;
+   unsigned i;
    for (i = 5; i < 4 + 32; ++i)
    {
         bit = bvect_u.get_bit(i);
         assert(bit);
    }
-   int count = bvect_u.recalc_count();
+   unsigned count = bvect_u.recalc_count();
    assert(count==32);
 
    cout << "Unaligned position ok." << endl;
@@ -4964,7 +4966,7 @@ void GAPCheck()
    gapv1.control();
    print_gap(gapv1, 0);
 
-   int count = gapv1.bit_count();
+   unsigned count = gapv1.bit_count();
    assert(count == 1);
    int bit = gapv1.is_bit_true(2);
    if(bit == 0)
@@ -4986,7 +4988,7 @@ void GAPCheck()
    gapv1.control();
    print_gap(gapv1, 0);
 
-   int count = gapv1.bit_count();
+   unsigned count = gapv1.bit_count();
    assert(count == 1);
    int bit = gapv1.is_bit_true(2);
    assert(bit);
@@ -5055,7 +5057,7 @@ void GAPCheck()
         printf("vect1:");print_gap(gapv1, 0);
 
         gapv1.control();
-        unsigned bit1 = gapv1.is_bit_true(65535);
+        unsigned bit1 = (unsigned)gapv1.is_bit_true(65535u);
         assert(bit1);
 
         bvect_min1.combine_and(bvect_min2);
@@ -5147,7 +5149,7 @@ void GAPCheck()
 
 
    {
-        int i;
+        unsigned i;
         printf("gap random OR test.\n");
         gap_vector gapv1(0);
         gap_vector gapv2(0);
@@ -5187,7 +5189,7 @@ void GAPCheck()
 
 
    {
-        int i;
+        unsigned i;
         printf("gap random SUB test.\n");
         gap_vector gapv1(0);
         gap_vector gapv2(0);
@@ -5357,7 +5359,7 @@ void MutationTest()
         // detailed vectors verification
         ::CheckVectors(bvect_min, bvect_full, ITERATIONS, false);
 
-        int i;
+        unsigned i;
         for (i = 5; i < 20000; i += 3)
         {
             bvect_min.set_bit(i);
@@ -5382,7 +5384,7 @@ void MutationTest()
         bvect          bvect_full;
         bvect_full.set_new_blocks_strat(bm::BM_GAP);
 
-        int i;
+        unsigned i;
         for (i = 100000; i < 100010; ++i)
         {
             bvect_min.set_bit(i);
@@ -5422,7 +5424,7 @@ void MutationOperationsTest()
     bvect_full1.set_bit(100);
     bvect_min1.set_bit(100);
 
-    int i;
+    unsigned i;
     for(i = 0; i < 10000; i+=2)
     {
        bvect_full2.set_bit(i);
@@ -5449,7 +5451,7 @@ void MutationOperationsTest()
     bvect_full1.set_new_blocks_strat(bm::BM_GAP);
     bvect_full2.set_new_blocks_strat(bm::BM_GAP);
 
-    int i;
+    unsigned i;
     for(i = 0; i < 1000; i+=1)
     {
        bvect_full1.set_bit(delta+i);
@@ -5785,10 +5787,10 @@ void SerializationTest()
 
     // shot some random bits
 
-    int i;
+    unsigned i;
     for (i = 0; i < 10000; ++i)
     {
-        unsigned bit = rand() % BITVECT_SIZE;
+        unsigned bit = unsigned(rand()) % BITVECT_SIZE;
         bvect_full1.set_bit(bit);
         bvect_min1.set_bit(bit);
     }
@@ -6393,12 +6395,12 @@ void CalcBeginMask()
 {
     printf("BeginMask:\n");
 
-    int i;
+    unsigned i;
     for (i = 0; i < 32; ++i)
     {
     unsigned mask = 0;
 
-        for(int j = i; j < 32; ++j)
+        for(unsigned j = i; j < 32; ++j)
         {
             unsigned nbit  = j; 
             nbit &= bm::set_word_mask;
@@ -6418,12 +6420,12 @@ void CalcEndMask()
 {
     printf("EndMask:\n");
 
-    int i;
+    unsigned i;
     for (i = 0; i < 32; ++i)
     {
     unsigned mask = 1;
 
-        for(int j = i; j > 0; --j)
+        for(unsigned j = i; j > 0; --j)
         {
             unsigned nbit  = j; 
             nbit &= bm::set_word_mask;
@@ -6546,7 +6548,7 @@ void EnumeratorTest()
     {
         bvect bvect1;
 
-        int i;
+        unsigned i;
         for(i = 0; i < 65536; ++i)
         {
             bvect1.set_bit(i);
@@ -6666,7 +6668,7 @@ void BlockLevelTest()
     bv.set_new_blocks_strat(bm::BM_GAP);
     bv2.set_new_blocks_strat(bm::BM_GAP);
 
-    int i;
+    unsigned i;
     for (i = 0; i < 500; i+=1)
     {
         bv.set_bit(i);
@@ -6689,7 +6691,6 @@ void BlockLevelTest()
     slen = 0;
     
     bm::deserialize(bv, sermem);
-//    bv.optimize();
 
     print_stat(bv);
 
@@ -7837,8 +7838,8 @@ void DNACompressionTest()
     // generate pseudo-random DNA sequence
     for (unsigned i = 0; i < arr_size; ++i)
     {
-        unsigned letter_idx = unsigned(rand() % sizeof(seeds));
-        unsigned char l = seeds[letter_idx];
+        unsigned letter_idx = unsigned(rand()) % sizeof(seeds);
+        unsigned char l = (unsigned char)seeds[letter_idx];
         unsigned char c = 0;
         switch (l)
         {
@@ -12939,14 +12940,14 @@ void GenerateSV(sparse_vector_u32&   sv, unsigned strategy = 0)
 
         for (unsigned i = 0; i < max_idx_value;)
         {
-            v = (rand() * rand()) % 650000;
+            v = unsigned(rand() * rand()) % 650000;
             for (unsigned j = 0; i < max_idx_value; ++i, ++j)
             {
                 sv[i] = v + i;
                 if (j > 256)
                     break;
             }
-            i += 30000 + rand() % 65535;
+            i += 30000 + unsigned(rand()) % 65535;
         }
         break;
     }
@@ -12956,8 +12957,8 @@ void GenerateSV(sparse_vector_u32&   sv, unsigned strategy = 0)
         unsigned rand_max = rand() % 300000;
         for (unsigned i = 0; i < rand_max; ++i)
         {
-            unsigned v = (rand() * rand());
-            unsigned idx = rand() % max_idx_value;
+            unsigned v = unsigned(rand() * rand());
+            unsigned idx = unsigned(rand()) % max_idx_value;
             sv[idx] = v;
             if (i % 2 == 0)
             {
@@ -12969,7 +12970,7 @@ void GenerateSV(sparse_vector_u32&   sv, unsigned strategy = 0)
     case 4:
         {
         cout << "SV empty generation" << endl;
-        unsigned idx = rand() % max_idx_value;
+        unsigned idx = unsigned(rand()) % max_idx_value;
         sv[idx] = 25557890;
         sv.clear(idx, true);
         }

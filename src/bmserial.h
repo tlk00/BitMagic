@@ -2060,7 +2060,9 @@ serial_stream_iterator<DEC>::get_bit_block_ASSIGN(
             }
             else
             {
-                decoder_.seek((tail_idx - head_idx + 1) * 4);
+                int pos = int(tail_idx - head_idx) + 1;
+                pos *= 4u;
+                decoder_.seek(pos);
             }
         }
         break;

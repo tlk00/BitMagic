@@ -275,7 +275,7 @@ public:
             else
             {
                 gap_word_t* gap_blk_new = 
-                    bman.allocate_gap_block(level, gap_blk, glevel_len_);
+                    bman.allocate_gap_block(unsigned(level), gap_blk, glevel_len_);
 
                 bm::word_t* p = (bm::word_t*) gap_blk_new;
                 BMSET_PTRGAP(p);
@@ -975,12 +975,12 @@ public:
         if (is_gap)
         {
             bm::gap_word_t* gap_block = BMGAP_PTR(block); 
-            unsigned level = gap_level(gap_block);
+            auto level = bm::gap_level(gap_block);
             new_blk = (bm::word_t*)
                 get_allocator().alloc_gap_block(level, glen());
-            int len = gap_length(BMGAP_PTR(block));
-            ::memcpy(new_blk, gap_block, len * sizeof(gap_word_t));
-            set_gap_level(new_blk, level);
+            unsigned len = bm::gap_length(BMGAP_PTR(block));
+            ::memcpy(new_blk, gap_block, len * sizeof(bm::gap_word_t));
+            bm::set_gap_level(new_blk, level);
         }
         else
         {
@@ -1165,7 +1165,7 @@ public:
                           int               level)
     {
         BM_ASSERT(top_blocks_);
-        if (level == -1)
+        if (level < 0)
         {
             bm::word_t* blk = get_allocator().alloc_bit_block();
             set_block(nb, blk);
@@ -1175,7 +1175,7 @@ public:
         else
         {
             gap_word_t* gap_blk = get_allocator().alloc_gap_block(
-                                                         level, this->glen());
+                                                unsigned(level), this->glen());
             gap_word_t* gap_blk_ptr = BMGAP_PTR(gap_blk);
             ::memcpy(gap_blk_ptr, gap_block_src, 
                                   gap_length(gap_block_src) * sizeof(gap_word_t));

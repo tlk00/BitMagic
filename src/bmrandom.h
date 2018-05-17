@@ -291,7 +291,7 @@ void random_subset<BV>::get_random_subset(bm::word_t*       blk_out,
     {
         // pick random scan start and scan direction
         //
-        unsigned i = rand() % bm::set_block_size;
+        unsigned i = unsigned(rand()) % bm::set_block_size;
         unsigned new_count;
 
         for (; i < bm::set_block_size && take_count; ++i)
@@ -335,7 +335,7 @@ unsigned random_subset<BV>::process_word(bm::word_t*       blk_out,
 
     do 
     {    
-        mask = rand();
+        mask = unsigned(rand());
         mask ^= mask << 16;
     } while (mask == 0);
 
@@ -352,7 +352,8 @@ unsigned random_subset<BV>::process_word(bm::word_t*       blk_out,
             BM_ASSERT(count);
 
             unsigned char blist[64];
-            unsigned arr_size = bm::bit_list_4(new_bits, blist);
+            unsigned arr_size = bm::bitscan_popcnt(new_bits, blist);
+                                //bm::bit_list_4(new_bits, blist);
             BM_ASSERT(arr_size == new_count);
             std::random_shuffle(blist, blist + arr_size);
             unsigned value = 0;
@@ -407,8 +408,8 @@ unsigned random_subset<BV>::find_max_block()
         }
         else
         {
-            unsigned diff = abs((int)block_bits_take_[i] - (int)candidate);
-            double d = (double)diff / (double)candidate;
+            int diff = ::abs((int)block_bits_take_[i] - (int)candidate);
+            double d = double(diff) / double(candidate);
 
             if (d < 0.20f) // delta is statistically insignificant
             {

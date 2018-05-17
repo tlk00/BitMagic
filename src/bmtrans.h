@@ -135,22 +135,22 @@ struct bit_grabber<unsigned short, 16>
     static
     unsigned get(const unsigned short* arr, unsigned j)
     {
-        return  (((arr[0] >> j) & 1) << 0) |
-                (((arr[1] >> j) & 1) << 1) |
-                (((arr[2] >> j) & 1) << 2) |
-                (((arr[3] >> j) & 1) << 3) |
-                (((arr[4] >> j) & 1) << 4) |
-                (((arr[5] >> j) & 1) << 5) |
-                (((arr[6] >> j) & 1) << 6) |
-                (((arr[7] >> j) & 1) << 7) |
-                (((arr[8] >> j) & 1) << 8) |
-                (((arr[9] >> j) & 1) << 9) |
-                (((arr[10]>> j) & 1) << 10)|
-                (((arr[11]>> j) & 1) << 11)|
-                (((arr[12]>> j) & 1) << 12)|
-                (((arr[13]>> j) & 1) << 13)|
-                (((arr[14]>> j) & 1) << 14)|
-                (((arr[15]>> j) & 1) << 15);
+        return  (((arr[0] >> j) & 1u) << 0u) |
+                (((arr[1] >> j) & 1u) << 1u) |
+                (((arr[2] >> j) & 1u) << 2u) |
+                (((arr[3] >> j) & 1u) << 3u) |
+                (((arr[4] >> j) & 1u) << 4u) |
+                (((arr[5] >> j) & 1u) << 5u) |
+                (((arr[6] >> j) & 1u) << 6u) |
+                (((arr[7] >> j) & 1u) << 7u) |
+                (((arr[8] >> j) & 1u) << 8u) |
+                (((arr[9] >> j) & 1u) << 9u) |
+                (((arr[10]>> j) & 1u) << 10u)|
+                (((arr[11]>> j) & 1u) << 11u)|
+                (((arr[12]>> j) & 1u) << 12u)|
+                (((arr[13]>> j) & 1u) << 13u)|
+                (((arr[14]>> j) & 1u) << 14u)|
+                (((arr[15]>> j) & 1u) << 15u);
     }
 };
 
@@ -615,12 +615,12 @@ void tmatrix_restore(TMatrix& tmatrix,
     typedef typename TMatrix::value_type value_type;
 
     unsigned cols = effective_cols ? effective_cols : tmatrix.cols();
-    for (int row = tmatrix.rows()-1; row >= 0; --row)
+    for (unsigned row = tmatrix.rows()-1u; 1; --row)
     {
-        unsigned ibpc = pc_vector[row] & 7;  
-        int n_row = pc_vector[row] >> 3;
+        unsigned ibpc = pc_vector[row] & 7u;
+        unsigned n_row = pc_vector[row] >> 3u;
 
-        value_type* r1 = tmatrix.row(row);
+        value_type* r1 = tmatrix.row(unsigned(row));
 
         switch(ibpc)
         {
@@ -654,6 +654,9 @@ void tmatrix_restore(TMatrix& tmatrix,
             BM_ASSERT(0);
             break;
         } // switch
+        
+        if (row == 0)
+            break;
     }  // for
 
 }

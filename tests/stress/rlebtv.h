@@ -191,10 +191,10 @@ inline void gap_vector::control() const
 
 inline int gap_vector::is_bit_true(unsigned pos) const
 {
-    int r1 = bm::gap_test(m_buf, pos);
-    int r2 = bm::gap_test_unr(m_buf, pos);
+    auto r1 = bm::gap_test(m_buf, pos);
+    auto r2 = bm::gap_test_unr(m_buf, pos);
     assert(r1 == r2);
-    return r2;
+    return int(r2);
 }
 
 inline bool gap_vector::get_last(unsigned* last) const

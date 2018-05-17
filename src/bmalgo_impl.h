@@ -377,7 +377,7 @@ inline
 void combine_any_operation_with_block(const bm::word_t* blk,
                                       unsigned gap,
                                       const bm::word_t* arg_blk,
-                                      int arg_gap,
+                                      unsigned arg_gap,
                                       distance_metric_descriptor* dmit,
                                       distance_metric_descriptor* dmit_end)
                                             
@@ -652,7 +652,7 @@ inline
 unsigned combine_any_operation_with_block(const bm::word_t* blk,
                                           unsigned gap,
                                           const bm::word_t* arg_blk,
-                                          int arg_gap,
+                                          unsigned arg_gap,
                                           distance_metric metric)
 {
     distance_metric_descriptor dmd(metric);

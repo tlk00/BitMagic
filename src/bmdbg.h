@@ -458,7 +458,7 @@ void print_stat(const BV& bv, unsigned blocks = 0)
         {
             if ((nb-1) != nb_prev)
             {
-                printf("..%i..", (int)nb-nb_prev);
+                printf("..%zd..", (size_t)nb-nb_prev);
             }
 
             if (BM_IS_GAP(blk))
@@ -470,12 +470,12 @@ void print_stat(const BV& bv, unsigned blocks = 0)
                unsigned len = bm::gap_length(BMGAP_PTR(blk))-1;
                unsigned raw_size=bc*2;
                unsigned cmr_len=len*2;
-               int mem_eff = raw_size - cmr_len;
+               size_t mem_eff = raw_size - cmr_len;
                total_gap_eff += mem_eff;
                
                unsigned i,j;
                bman.get_block_coord(nb, &i, &j);
-                printf(" [GAP %i(%i,%i)=%i:%i-L%i(%i)] ", nb, i, j, bc, level, len, mem_eff);
+                printf(" [GAP %i(%i,%i)=%i:%i-L%i(%zd)] ", nb, i, j, bc, level, len, mem_eff);
                 ++printed;
             }
             else // bitset

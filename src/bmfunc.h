@@ -183,11 +183,11 @@ int parallel_popcnt_32(unsigned int n)
     @ingroup bitfunc 
 */
 BMFORCEINLINE
-int word_bitcount64(bm::id64_t x)
+unsigned word_bitcount64(bm::id64_t x)
 {
 #if defined(BMSSE42OPT) || defined(BMAVX2OPT)
 #if defined(BM64_SSE4) || defined(BM64_AVX2)
-    return (int)_mm_popcnt_u64(x);
+    return _mm_popcnt_u64(x);
 #else
     return _mm_popcnt_u32(x >> 32) + _mm_popcnt_u32((unsigned)x);
 #endif
@@ -252,7 +252,7 @@ bm::id_t word_trailing_zeros(bm::id_t w)
         7, 17, 0, 25, 22, 31, 15, 29, 10, 12, 6, 0, 21, 14, 9, 5,
         20, 8, 19, 18
     };
-    return mod37_pos[(-w & w) % 37];
+    return unsigned(mod37_pos[(-w & w) % 37]);
 #endif
 }
 
@@ -2556,7 +2556,7 @@ void bit_block_set(bm::word_t* BMRESTRICT dst, bm::word_t value)
 //#ifdef BMVECTOPT
 //    VECT_SET_BLOCK(dst, dst + bm::set_block_size, value);
 //#else
-    ::memset(dst, value, bm::set_block_size * sizeof(bm::word_t));
+    ::memset(dst, int(value), bm::set_block_size * sizeof(bm::word_t));
 //#endif
 }
 
@@ -2849,7 +2849,8 @@ T gap_level(const T* buf)
 template<typename T> 
 void set_gap_level(T* buf, int level)
 {
-    BM_ASSERT(level < bm::gap_levels && level >= 0);    
+    BM_ASSERT(level >= 0);
+    BM_ASSERT(unsigned(level) < bm::gap_levels);    
     
     *buf = (T)(((level & 3) << 1) | (*buf & 1) | (*buf & ~7));
 }
@@ -4986,7 +4987,7 @@ unsigned bit_count_nonzero_size(const T*     blk,
             }
             count += unsigned(sizeof(gap_word_t));
             // count all bit-words now
-            count += (unsigned)((blk_j - blk) * sizeof(T));
+            count += unsigned(blk_j - blk) * sizeof(T);
             blk = blk_j;
         }
         ++blk;
@@ -5260,12 +5261,14 @@ template<typename T,typename B> unsigned bit_list_4(T w, B* bits)
     \brief Unpacks word into list of ON bit indexes using popcnt method
     \param w - value
     \param bits - pointer on the result array
+    \param offset - value to add to bit position (programmed shift)
     \return number of bits in the list
 
     @ingroup bitfunc
+    @internal
 */
 template<typename B>
-unsigned short bitscan_popcnt(bm::id_t w, B* bits, unsigned short offs = 0)
+unsigned short bitscan_popcnt(bm::id_t w, B* bits, unsigned short offs)
 {
     unsigned pos = 0;
     while (w)
@@ -5276,6 +5279,29 @@ unsigned short bitscan_popcnt(bm::id_t w, B* bits, unsigned short offs = 0)
     }
     return (unsigned short)pos;
 }
+
+/*!
+    \brief Unpacks word into list of ON bit indexes using popcnt method
+    \param w - value
+    \param bits - pointer on the result array
+    \return number of bits in the list
+ 
+    @ingroup bitfunc
+    @internal
+*/
+template<typename B>
+unsigned short bitscan_popcnt(bm::id_t w, B* bits)
+{
+    unsigned pos = 0;
+    while (w)
+    {
+        bm::id_t t = w & -w;
+        bits[pos++] = (B)(bm::word_bitcount(t - 1));
+        w &= w - 1;
+    }
+    return (unsigned short)pos;
+}
+
 
 /*!
     \brief Unpacks 64-bit word into list of ON bit indexes using popcnt method
@@ -5489,7 +5515,7 @@ bool improve_gap_levels(const T* length,
 {
     BM_ASSERT(length && length_end && glevel_len);
 
-    size_t lsize = length_end - length;
+    size_t lsize = size_t(length_end - length);
 
     BM_ASSERT(lsize);
     
