@@ -152,10 +152,10 @@ bm::gap_word_t ilog2_LUT<bm::gap_word_t>(bm::gap_word_t x)
     bm::gap_word_t l = 0;
     if (x & 0xff00) 
     {
-        l += 8;
-        x = (bm::gap_word_t)(x >> 8);
+        l = bm::gap_word_t( + 8u);
+        x = bm::gap_word_t(x >> 8u);
     }
-    return (l + bm::gap_word_t(first_bit_table<true>::_idx[x]));
+    return bm::gap_word_t(l + bm::gap_word_t(first_bit_table<true>::_idx[x]));
 }
 
 

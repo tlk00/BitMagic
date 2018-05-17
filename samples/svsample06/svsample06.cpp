@@ -183,7 +183,6 @@ int main(void)
         
         std::vector<unsigned> vect;
         bm::bvector<> bv_null;
-        bm::bvector<> bv_res;
         sparse_vector_u32 sv(bm::use_null);
 
         {
@@ -196,22 +195,34 @@ int main(void)
         // generate a search vector for benchmarking
         //
         std::vector<unsigned> search_vect;
-        search_vect.reserve(search_repeats);
-        for (unsigned i = 0; i < search_repeats; ++i)
         {
-            search_vect.push_back(rand_dis(gen));
+            bm::bvector<> bv_tmp;
+            search_vect.reserve(search_repeats);
+            for (unsigned i = 0; i < search_repeats;)
+            {
+                bm::id_t idx = rand_dis(gen);
+                if (!bv_tmp.test(idx)) // check if number is unique
+                {
+                    search_vect.push_back(idx);
+                    bv_tmp[idx] = 1;
+                    ++i;
+                }
+            }
         }
         
         // run benchmarks
         //
-        
+        bm::bvector<> bv_res1;
+        bm::bvector<> bv_res2;
+        bm::bvector<> bv_res3;
+
         {
             bm::chrono_taker tt1("1. std::vector<> scan ", search_repeats, &timing_map);
             
             for (unsigned i = 0; i < search_repeats; ++i)
             {
                 unsigned vs = search_vect[i];
-                vector_search(vect, bv_null, vs, bv_res);
+                vector_search(vect, bv_null, vs, bv_res1);
             } // for
         }
 
@@ -219,9 +230,37 @@ int main(void)
             bm::chrono_taker tt1("2. sparse_vector<> scan ", search_repeats, &timing_map);
 
             bm::sparse_vector_scanner<sparse_vector_u32> scanner;
-
-            scanner.find_eq(sv, search_vect.begin(), search_vect.end(), bv_res);
+            scanner.find_eq(sv, search_vect.begin(), search_vect.end(), bv_res2);
          }
+
+        if (bv_res1.compare(bv_res2) != 0)
+        {
+            std::cerr << "2. Search result mismatch!" << std::endl;
+        }
+
+        {
+            bm::chrono_taker tt1("3. sparse_vector<>::const_iterator search ", search_repeats, &timing_map);
+
+            // prepare a unique search set
+            bm::bvector<> bv_search(bm::BM_GAP);
+            bm::combine_or(bv_search, search_vect.begin(), search_vect.end());
+
+            sparse_vector_u32::const_iterator it = sv.begin();
+            sparse_vector_u32::const_iterator it_end = sv.end();
+            for (; it != it_end; ++it)
+            {
+                unsigned v = *it;
+                if (bv_search.test(v))
+                {
+                    bv_res3.set_bit_no_check(it.pos());
+                }
+            } // for
+        }
+
+        if (bv_res1.compare(bv_res3) != 0)
+        {
+            std::cerr << "3. Search result mismatch!" << std::endl;
+        }
 
         
         bm::chrono_taker::print_duration_map(timing_map, bm::chrono_taker::ct_ops_per_sec);

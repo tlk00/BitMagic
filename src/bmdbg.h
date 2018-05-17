@@ -471,7 +471,7 @@ void print_stat(const BV& bv, unsigned blocks = 0)
                unsigned raw_size=bc*2;
                unsigned cmr_len=len*2;
                size_t mem_eff = raw_size - cmr_len;
-               total_gap_eff += mem_eff;
+               total_gap_eff += unsigned(mem_eff);
                
                unsigned i,j;
                bman.get_block_coord(nb, &i, &j);

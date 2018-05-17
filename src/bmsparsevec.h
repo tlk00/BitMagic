@@ -205,6 +205,9 @@ public:
         /// Invalidate current iterator
         void invalidate() { pos_ = bm::id_max; }
         
+        /// Current position (index) in the vector
+        bm::id_t pos() const { return pos_; }
+        
         /// re-position to a specified position
         void go_to(bm::id_t pos);
         
