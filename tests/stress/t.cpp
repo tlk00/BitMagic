@@ -7838,7 +7838,7 @@ void DNACompressionTest()
     // generate pseudo-random DNA sequence
     for (unsigned i = 0; i < arr_size; ++i)
     {
-        unsigned letter_idx = unsigned(rand()) % sizeof(seeds);
+        unsigned letter_idx = unsigned(rand()) % unsigned(sizeof(seeds));
         unsigned char l = (unsigned char)seeds[letter_idx];
         unsigned char c = 0;
         switch (l)

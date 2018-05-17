@@ -4987,7 +4987,7 @@ unsigned bit_count_nonzero_size(const T*     blk,
             }
             count += unsigned(sizeof(gap_word_t));
             // count all bit-words now
-            count += unsigned(blk_j - blk) * sizeof(T);
+            count += unsigned(blk_j - blk) * unsigned(sizeof(T));
             blk = blk_j;
         }
         ++blk;
