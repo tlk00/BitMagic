@@ -2850,7 +2850,7 @@ template<typename T>
 void set_gap_level(T* buf, int level)
 {
     BM_ASSERT(level >= 0);
-    BM_ASSERT(unsigned(level) < bm::gap_levels);    
+    BM_ASSERT(unsigned(level) < bm::gap_levels);
     
     *buf = (T)(((level & 3) << 1) | (*buf & 1) | (*buf & ~7));
 }
