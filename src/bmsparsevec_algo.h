@@ -266,14 +266,16 @@ public:
 
         bvector_type bv1;
         typename bvector_type::mem_pool_guard mp_guard1(pool_, bv1);
-
+        bool any_zero = false;
         for (; start < end; ++start)
         {
             value_type v = *start;
+            any_zero |= (v == 0);
             find_eq_with_nulls(sv, v, bv1);
             bv_out.bit_or(bv1);
         } // for
-        correct_nulls(sv, bv_out);
+        if (any_zero)
+            correct_nulls(sv, bv_out);
     }
 
     void find_eq_with_nulls(const SV&   sv,
