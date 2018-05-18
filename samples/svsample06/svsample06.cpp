@@ -17,10 +17,11 @@ For more information please visit:  http://bitmagic.io
 */
 
 /** \example svsample06.cpp
-  Example how to search for an element.
+   Search/scan for elements in unordered, non-unique sparse vector
  
-  \sa bm::sparse_vector<>
+  \sa bm::sparse_vector<>::const_iterator
   \sa bm::sparse_vector<>::back_insert_iterator
+  \sa bm::sparse_vector_scanner<>
 */
 
 /*! \file svsample06.cpp
@@ -81,7 +82,7 @@ void generate_test_set(std::vector<unsigned>& vect,
 
     for (unsigned i = 0; i < test_size; ++i)
     {
-        unsigned v = rand_dis(gen);
+        unsigned v = unsigned(rand_dis(gen));
 
         vect[i] = v;
         bv_null[i] = true; // not NULL(assigned) element
@@ -200,7 +201,7 @@ int main(void)
             search_vect.reserve(search_repeats);
             for (unsigned i = 0; i < search_repeats;)
             {
-                bm::id_t idx = rand_dis(gen);
+                bm::id_t idx = bm::id_t(rand_dis(gen));
                 if (!bv_tmp.test(idx)) // check if number is unique
                 {
                     search_vect.push_back(idx);
