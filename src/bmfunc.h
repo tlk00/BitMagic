@@ -157,7 +157,7 @@ BMFORCEINLINE
 bm::id_t word_bitcount(bm::id_t w)
 {
 #if defined(BMSSE42OPT) || defined(BMAVX2OPT)
-    return _mm_popcnt_u32(w);
+    return bm::id_t(_mm_popcnt_u32(w));
 #else
     return
     bm::bit_count_table<true>::_count[(unsigned char)(w)] + 
@@ -242,7 +242,7 @@ bm::id_t word_trailing_zeros(bm::id_t w)
 {
     // TODO: find a better variant for MSVC 
 #if (defined(BMSSE42OPT) || defined(BMAVX2OPT)) && defined(__GNUC__)
-        return __builtin_ctzl(w);
+        return bm::id_t(__builtin_ctzl(w));
 #else
     // implementation from
     // https://gist.github.com/andrewrk/1883543

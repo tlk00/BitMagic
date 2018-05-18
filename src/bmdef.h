@@ -286,7 +286,7 @@ For more information please visit:  http://bitmagic.io
 
 #if (defined(BMSSE42OPT) || defined(BMAVX2OPT))
 
-# define BM_INCWORD_BITCOUNT(cnt, w) cnt += _mm_popcnt_u32(w);
+# define BM_INCWORD_BITCOUNT(cnt, w) cnt += unsigned(_mm_popcnt_u32(w));
 
 #else
 
