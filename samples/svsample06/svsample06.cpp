@@ -21,7 +21,7 @@ For more information please visit:  http://bitmagic.io
  
   \sa bm::sparse_vector<>::const_iterator
   \sa bm::sparse_vector<>::back_insert_iterator
-  \sa bm::sparse_vector_scanner<>
+  \sa bm::sparse_vector_scanner
 */
 
 /*! \file svsample06.cpp

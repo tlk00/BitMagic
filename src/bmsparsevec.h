@@ -101,6 +101,7 @@ public:
 
     /**
          Reference class to access elements via common [] operator
+         @ingroup sv
     */
     class reference
     {
@@ -237,6 +238,8 @@ public:
         flush is happening automatically on destruction, but if flush produces an
         exception (for whatever reason) it will be an exception in destructor.
         As such, explicit flush() is safer way to finilize the sparse vector load.
+
+        @ingroup sv
     */
     class back_insert_iterator
     {
@@ -319,6 +322,10 @@ public:
     friend back_insert_iterator;
 
 public:
+    // ------------------------------------------------------------
+    /*! @name Construction and assignment  */
+    ///@{
+
     /*!
         \brief Sparse vector constructor
      
@@ -381,35 +388,89 @@ public:
 #endif
 
     ~sparse_vector() BMNOEXEPT;
+    ///@}
+
     
-    /**
-        \brief Operator to get write access to an element
-    */
+    // ------------------------------------------------------------
+    /*! @name Element access */
+    ///@{
+
+    /** \brief Operator to get write access to an element  */
     reference operator[](size_type idx) { return reference(*this, idx); }
-    
-    /*! \brief content exchange
-    */
-    void swap(sparse_vector<Val, BV>& sv) BMNOEXEPT;
-    
+
     /*!
         \brief get specified element without bounds checking
         \param idx - element index
         \return value of the element
     */
     value_type operator[](size_type idx) const { return this->get(idx); }
-    
-    /** Provide const iterator access to container content
+
+    /*!
+        \brief access specified element with bounds checking
+        \param idx - element index
+        \return value of the element
     */
+    value_type at(size_type idx) const;
+    /*!
+        \brief get specified element without bounds checking
+        \param idx - element index
+        \return value of the element
+    */
+    value_type get(bm::id_t idx) const;
+
+    /*!
+        \brief set specified element with bounds checking and automatic resize
+        \param idx - element index
+        \param v   - element value
+    */
+    void set(size_type idx, value_type v);
+
+    /*!
+        \brief increment specified element by one
+        \param idx - element index
+    */
+    void inc(size_type idx);
+
+    /*!
+        \brief push value back into vector
+        \param v   - element value
+    */
+    void push_back(value_type v);
+
+    /*!
+        \brief clear specified element with bounds checking and automatic resize
+        \param idx - element index
+    */
+    void clear(size_type idx, bool set_null = false);
+
+    ///@}
+
+    // ------------------------------------------------------------
+    /*! @name Iterator access */
+    //@{
+
+    /** Provide const iterator access to container content  */
     const_iterator begin() const;
 
-    /** Provide const iterator access to the end
-    */
+    /** Provide const iterator access to the end    */
     const_iterator end() const { return const_iterator(this, bm::id_max); }
-    
+
+    /** Get const_itertor re-positioned to specific element
+    @param idx - position in the sparse vector
+    */
+    const_iterator get_const_iterator(size_type idx) const { return const_iterator(this, idx); }
+ 
     /** Provide back insert iterator
+    Back insert iterator implements buffered insertion, which is faster, than random access
+    or push_back
     */
     back_insert_iterator get_back_inserter() { return back_insert_iterator(this); }
+    ///@}
 
+
+    // ------------------------------------------------------------
+    /*! @name NULL (unassigned) elements access */
+    //@{
     /**
         \brief check if container supports NULL(unassigned) values
     */
@@ -432,7 +493,12 @@ public:
         \param idx - element index
     */
     void set_null(size_type idx);
+    ///@}
 
+
+    // ------------------------------------------------------------
+    /*! @name Loading of sparse vector from C-stype array       */
+    //@{
     /*!
         \brief Import list of elements from a C-style array
         \param arr  - source array
@@ -447,7 +513,11 @@ public:
         \param size - source size
     */
     void import_back(const value_type* arr, size_type size);
+    ///@}
 
+    // ------------------------------------------------------------
+    /*! @name Export of sparse vector to C-stype array       */
+    ///@{
 
     /*!
         \brief Bulk export list of elements to a C-style array
@@ -473,69 +543,53 @@ public:
                      size_type   idx_from,
                      size_type   size,
                      bool        zero_mem = true) const;
+    ///@}
 
+    /*! \brief content exchange
+    */
+    void swap(sparse_vector<Val, BV>& sv) BMNOEXEPT;
 
-    
+    // ------------------------------------------------------------
+    /*! @name Clear                                              */
+    ///@{
+
+    /*! \brief resize to zero, free memory */
+    void clear() BMNOEXEPT;
+
+    /*!
+        \brief clear range (assign bit 0 for all plains)
+        \param left  - interval start
+        \param right - interval end (closed interval)
+        \param set_null - set cleared values to unassigned (NULL)
+    */
+    sparse_vector<Val, BV>& clear_range(size_type left, size_type right, bool set_null = false);
+
+    ///@}
+
+    // ------------------------------------------------------------
+    /*! @name Size, etc       */
+    ///@{
+
     /*! \brief return size of the vector
         \return size of sparse vector
     */
     size_type size() const;
-    
     
     /*! \brief return true if vector is empty
         \return true if empty
     */
     bool empty() const;
     
-    
     /*! \brief resize vector
         \param sz - new size
     */
     void resize(size_type sz);
-    
-    /*! \brief resize to zero, free memory
-    */
-    void clear() BMNOEXEPT;
-    
-    /*!
-        \brief access specified element with bounds checking
-        \param idx - element index
-        \return value of the element
-    */
-    value_type at(size_type idx) const;
-    
-    /*!
-        \brief get specified element without bounds checking
-        \param idx - element index
-        \return value of the element
-    */
-    value_type get(bm::id_t idx) const;
-    
-    /*!
-        \brief set specified element with bounds checking and automatic resize
-        \param idx - element index
-        \param v   - element value
-    */
-    void set(size_type idx, value_type v);
+    ///@}
+        
+    // ------------------------------------------------------------
+    /*! @name Comparison       */
+    ///@{
 
-    /*!
-        \brief clear specified element with bounds checking and automatic resize
-        \param idx - element index
-    */
-    void clear(size_type idx, bool set_null = false);
-
-    /*!
-        \brief increment specified element by one
-        \param idx - element index
-    */
-    void inc(size_type idx);
-
-    /*!
-        \brief push value back into vector
-        \param v   - element value
-    */
-    void push_back(value_type v);
-    
     /*!
         \brief check if another sparse vector has the same content and size
      
@@ -547,7 +601,11 @@ public:
     */
     bool equal(const sparse_vector<Val, BV>& sv,
                bm::null_support null_able = bm::use_null) const;
+    ///@}
 
+    // ------------------------------------------------------------
+    /*! @name Memory optimization                                */
+    ///@{
 
     /*!
         \brief run memory optimization for all vector plains
@@ -565,7 +623,25 @@ public:
        of the vector.
     */
     void optimize_gap_size();
-    
+
+    /*!
+        @brief Calculates memory statistics.
+
+        Function fills statistics structure containing information about how
+        this vector uses memory and estimation of max. amount of memory
+        bvector needs to serialize itself.
+
+        @param st - pointer on statistics structure to be filled in.
+
+        @sa statistics
+    */
+    void calc_stat(struct sparse_vector<Val, BV>::statistics* st) const;
+    ///@}
+
+    // ------------------------------------------------------------
+    /*! @name Merge data                                         */
+    ///@{
+
     /*!
         \brief join all with another sparse vector using OR operation
         \param sv - argument vector to join with
@@ -573,20 +649,13 @@ public:
     */
     sparse_vector<Val, BV>& join(const sparse_vector<Val, BV>& sv);
 
-
-    /*!
-       @brief Calculates memory statistics.
-
-       @param st - pointer on statistics structure to be filled in. 
-
-       Function fills statistics structure containing information about how 
-       this vector uses memory and estimation of max. amount of memory 
-       bvector needs to serialize itself.
-
-       @sa statistics
-    */
-    void calc_stat(struct sparse_vector<Val, BV>::statistics* st) const;
+    ///@}
     
+
+    // ------------------------------------------------------------
+    /*! @name Access to internals                                */
+    ///@{
+
     /*!
         \brief get access to bit-plain, function checks and creates a plain
         \return bit-vector for the bit plain
@@ -598,7 +667,6 @@ public:
         \return bit-vector for the bit plain or NULL
     */
     const bvector_type_ptr get_plain(unsigned i) const { return plains_[i]; }
-
 
     /*!
         \brief get total number of bit-plains in the vector
@@ -618,20 +686,7 @@ public:
         \brief free memory in bit-plain
     */
     void free_plain(unsigned i);
-    
-    /*!
-        \brief clear range (assign bit 0 for all plains)
-        \param left  - interval start
-        \param right - interval end (closed interval)
-        \param set_null - set cleared values to unassigned (NULL)
-    */
-    sparse_vector<Val, BV>& clear_range(size_type left,
-                                        size_type right,
-                                        bool set_null = false);
-    
-    
-    // -------------------------- auxiliary methods, for internal use
-    
+               
     /*!
         \brief Bulk export list of elements to a C-style array
      
@@ -694,10 +749,10 @@ public:
     static
     void throw_bad_alloc();
 
-
     /** Number of effective bit-plains in the value type*/
     unsigned effective_plains() const { return effective_plains_ + 1; }
-    
+    ///@}
+
     /// Set allocator pool for local (non-threaded)
     /// memory cyclic(lots of alloc-free ops) opertations
     ///
