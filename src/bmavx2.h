@@ -491,9 +491,7 @@ void avx2_andnot_arr_2_mask(__m256i* BMRESTRICT dst,
 /*!
     @brief AND array elements against another array
     *dst &= *src
-
     @return 0 if destination does not have any bits
-
     @ingroup AVX2
 */
 inline
@@ -530,6 +528,63 @@ unsigned avx2_and_arr(__m256i* BMRESTRICT dst,
         accC = _mm256_or_si256(accC, m1C);
 
         m1D = _mm256_load_si256(src+3);
+        m2D = _mm256_load_si256(dst+3);
+        m1D = _mm256_and_si256(m1D, m2D);
+        _mm256_store_si256(dst+3, m1D);
+        accD = _mm256_or_si256(accD, m1D);
+        
+        src += 4; dst += 4;
+
+    } while (src < src_end);
+    
+    accA = _mm256_or_si256(accA, accB); // A = A | B
+    accC = _mm256_or_si256(accC, accD); // C = C | D
+    accA = _mm256_or_si256(accA, accC); // A = A | C
+    
+    return !_mm256_testz_si256(accA, accA);
+}
+
+
+/*!
+    @brief AND array elements against another array (unaligned)
+    *dst &= *src
+    @return 0 if destination does not have any bits
+    @ingroup AVX2
+*/
+inline
+unsigned avx2_and_arr_unal(__m256i* BMRESTRICT dst,
+                  const __m256i* BMRESTRICT src,
+                  const __m256i* BMRESTRICT src_end)
+{
+    __m256i m1A, m2A, m1B, m2B, m1C, m2C, m1D, m2D;
+    __m256i accA, accB, accC, accD;
+    
+    accA = _mm256_setzero_si256();
+    accB = _mm256_setzero_si256();
+    accC = _mm256_setzero_si256();
+    accD = _mm256_setzero_si256();
+
+    do
+    {
+        m1A = _mm256_loadu_si256(src+0);
+        m2A = _mm256_load_si256(dst+0);
+        m1A = _mm256_and_si256(m1A, m2A);
+        _mm256_store_si256(dst+0, m1A);
+        accA = _mm256_or_si256(accA, m1A);
+        
+        m1B = _mm256_loadu_si256(src+1);
+        m2B = _mm256_load_si256(dst+1);
+        m1B = _mm256_and_si256(m1B, m2B);
+        _mm256_store_si256(dst+1, m1B);
+        accB = _mm256_or_si256(accB, m1B);
+
+        m1C = _mm256_loadu_si256(src+2);
+        m2C = _mm256_load_si256(dst+2);
+        m1C = _mm256_and_si256(m1C, m2C);
+        _mm256_store_si256(dst+2, m1C);
+        accC = _mm256_or_si256(accC, m1C);
+
+        m1D = _mm256_loadu_si256(src+3);
         m2D = _mm256_load_si256(dst+3);
         m1D = _mm256_and_si256(m1D, m2D);
         _mm256_store_si256(dst+3, m1D);
@@ -1092,9 +1147,9 @@ bm::id_t sse42_bit_block_calc_count_change(const __m128i* BMRESTRICT block,
                                                unsigned* BMRESTRICT bit_count)
 {
 //   __m128i mask1 = _mm_set_epi32(0x1, 0x1, 0x1, 0x1);
-   BMREGISTER int count = (unsigned)(block_end - block)*4;
+   unsigned count = (unsigned)(block_end - block)*4;
 
-   BMREGISTER bm::word_t  w0, w_prev;
+   bm::word_t  w0, w_prev;
    const int w_shift = sizeof(w0) * 8 - 1;
    bool first_word = true;
    *bit_count = 0;

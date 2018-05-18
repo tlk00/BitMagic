@@ -2142,33 +2142,7 @@ serial_stream_iterator<DEC>::get_bit_block_AND(bm::word_t* BMRESTRICT dst_block,
     switch (block_type_)
     {
     case set_block_bit:
-
-#ifdef BMAVX2OPT
-        for (unsigned i = 0; i < bm::set_block_size; i+=8)
-        {
-            unsigned i0 = decoder_.get_32();
-            unsigned i1 = decoder_.get_32();
-            unsigned i2 = decoder_.get_32();
-            unsigned i3 = decoder_.get_32();
-            unsigned i4 = decoder_.get_32();
-            unsigned i5 = decoder_.get_32();
-            unsigned i6 = decoder_.get_32();
-            unsigned i7 = decoder_.get_32();
-            
-            __m256i ymm0 = _mm256_setr_epi32(i0, i1, i2, i3, i4, i5, i6, i7);
-            __m256i ymm1 = _mm256_load_si256((__m256i*)(dst_block+i));
-            ymm0 = _mm256_and_si256(ymm0, ymm1);
-            _mm256_store_si256((__m256i*)(dst_block+i), ymm0);
-        }
-#else
-        for (unsigned i = 0; i < bm::set_block_size; i+=4)
-		{
-            dst_block[i+0] &= decoder_.get_32();
-            dst_block[i+1] &= decoder_.get_32();
-            dst_block[i+2] &= decoder_.get_32();
-            dst_block[i+3] &= decoder_.get_32();
-		}
-#endif
+        decoder_.get_32_AND(dst_block, bm::set_block_size);
         break;
     case set_block_bit_0runs:
         {
