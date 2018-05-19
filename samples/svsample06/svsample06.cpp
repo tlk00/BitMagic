@@ -117,42 +117,13 @@ void vector_search(const std::vector<unsigned>& vect,
 
 
 inline
-void print_svector(const sparse_vector_u32& sv)
-{
-    if (sv.size() == 0)
-    {
-        cout << sv.size() << ": [ EMPTY ]" << endl;
-        return;
-    }
-    cout << sv.size() << ": [ ";
-    for (unsigned i = 0; i < sv.size(); ++i)
-    {
-        unsigned v = sv.at(i);
-        bool is_null = sv.is_null(i);
-        
-        if (is_null)
-            cout << "NULL";
-        else
-            cout << v << "";
-        
-        if (i == sv.size()-1)
-            cout << " ]";
-        else
-            cout << ", ";
-    }
-    cout << endl;
-}
-
-inline
 void print_bvector(const bm::bvector<>& bv)
 {
     cout << "( count = " << bv.count() << ")" << ": [";
     
     bm::bvector<>::enumerator en = bv.first();
     for (; en.valid(); ++en)
-    {
         cout << *en << ", ";
-    }
     cout << "]" << endl;
 }
 
@@ -161,6 +132,8 @@ int main(void)
 {
     try
     {
+        // First, lets run, simple (printable) search case
+        //
         {
             sparse_vector_u32 sv(bm::use_null);
             
@@ -171,16 +144,17 @@ int main(void)
             sv.set(256, 2001);
             sv.set(77, 25);
 
-            bm::bvector<> bv_found;
+            bm::bvector<> bv_found;  // search results vector
             
-            bm::sparse_vector_scanner<sparse_vector_u32> scanner;
-            scanner.find_eq(sv, 25, bv_found);
+            bm::sparse_vector_scanner<sparse_vector_u32> scanner; // scanner class
+            scanner.find_eq(sv, 25, bv_found); // seach for all values == 25
             
-            print_bvector(bv_found);
+            print_bvector(bv_found); // print results 
 
             scanner.invert(sv, bv_found); // invert search results to NOT EQ
-            print_bvector(bv_found);
+            print_bvector(bv_found);  // print all != 25
         }
+
         
         std::vector<unsigned> vect;
         bm::bvector<> bv_null;
@@ -232,8 +206,9 @@ int main(void)
 
             bm::sparse_vector_scanner<sparse_vector_u32> scanner;
             scanner.find_eq(sv, search_vect.begin(), search_vect.end(), bv_res2);
-         }
+        }
 
+        // check jus in case if results look correct
         if (bv_res1.compare(bv_res2) != 0)
         {
             std::cerr << "2. Search result mismatch!" << std::endl;
@@ -258,6 +233,7 @@ int main(void)
             } // for
         }
 
+        // paranoiya check
         if (bv_res1.compare(bv_res3) != 0)
         {
             std::cerr << "3. Search result mismatch!" << std::endl;
