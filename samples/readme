@@ -22,8 +22,12 @@ BitMagic Library samples
 ./svsample04 - sparse_vector<> operations with NULL-able vectors and values
 ./svsample05 - set transformation algorithm (image) to translate one set to another
                using memory-efficient bit-transposed sparse_vector as a translation function
+./svsample06 - load data and search for value(s) in sparse_vector. This sample illustrates back insert 
+               iterator, const_iterator and special seach scanner. Benchmark cases comparing different search/scan methods.
+ 
 
 ./xsample01 - advanced: different methods of handling of super sparse sets. Benchmarks of set operations for each method. 
                Details at: http://bitmagic.io/case-ER-join.html
 ./xsample02 - sparse vector based counting sort and histogram construction techniques compared to std::sort()
+               Details at: http://bitmagic.io/hist-sort.html
 
