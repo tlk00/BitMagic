@@ -451,7 +451,7 @@ void avx2_xor_arr_2_mask(__m256i* BMRESTRICT dst,
                          const __m256i* BMRESTRICT src_end,
                          bm::word_t mask)
 {
-     __m256i yM = _mm256_set1_epi32(mask);
+     __m256i yM = _mm256_set1_epi32(int(mask));
      do
      {
         _mm256_store_si256(dst+0, _mm256_xor_si256(_mm256_load_si256(src+0), yM)); // ymm1 = (~ymm1) & ymm2
@@ -476,7 +476,7 @@ void avx2_andnot_arr_2_mask(__m256i* BMRESTRICT dst,
                             const __m256i* BMRESTRICT src_end,
                             bm::word_t mask)
 {
-     __m256i yM = _mm256_set1_epi32(mask);
+     __m256i yM = _mm256_set1_epi32(int(mask));
      do
      {
         _mm256_store_si256(dst+0, _mm256_andnot_si256(_mm256_load_si256(src+0), yM)); // ymm1 = (~ymm1) & ymm2
@@ -790,7 +790,7 @@ void avx2_set_block(__m256i* BMRESTRICT dst,
                     __m256i* BMRESTRICT dst_end,
                     bm::word_t value)
 {
-    __m256i ymm0 = _mm256_set1_epi32(value);
+    __m256i ymm0 = _mm256_set1_epi32(int(value));
     do
     {
         _mm256_store_si256(dst,   ymm0);
@@ -931,7 +931,7 @@ bool avx2_is_all_one(const __m256i* BMRESTRICT block,
         __m256i w0 = _mm256_load_si256(block);
         
         __m256i wcmp= _mm256_cmpeq_epi8(w0, maskF); // (w0 == maskF)
-        unsigned mask = _mm256_movemask_epi8(wcmp);
+        unsigned mask = unsigned(_mm256_movemask_epi8(wcmp));
         if (mask != ~0u)
         {
             return false;
@@ -997,6 +997,7 @@ bool avx2_is_all_one(const __m256i* BMRESTRICT block,
     @brief AVX2 optimized bitcounting and number of GAPs
     @ingroup AVX2
 */
+/*
 inline
 bm::id_t avx2_bit_block_calc_count_change(const __m256i* BMRESTRICT block,
                                           const __m256i* BMRESTRICT block_end,
@@ -1136,6 +1137,7 @@ bm::id_t avx2_bit_block_calc_count_change(const __m256i* BMRESTRICT block,
 
    return count;
 }
+*/
 
 /*!
     SSE4.2 optimized bitcounting and number of GAPs
@@ -1159,9 +1161,9 @@ bm::id_t sse42_bit_block_calc_count_change(const __m128i* BMRESTRICT block,
        bm::word_t  w;
        const bm::word_t* blk = (const bm::word_t*) block;
        w = w0 = blk[0];
-       *bit_count += _mm_popcnt_u32(w);
+       *bit_count += unsigned(_mm_popcnt_u32(w));
        w ^= (w >> 1);
-       count += _mm_popcnt_u32(w);
+       count += unsigned(_mm_popcnt_u32(w));
        count -= (w_prev = (w0 >> w_shift));
    }
 
@@ -1180,50 +1182,50 @@ bm::id_t sse42_bit_block_calc_count_change(const __m128i* BMRESTRICT block,
            }
            else
            {
-               w0 = _mm_extract_epi32(b, 0);
+               w0 = unsigned(_mm_extract_epi32(b, 0));
                if (w0)
                {
-                   *bit_count += _mm_popcnt_u32(w0);
-                   count += _mm_popcnt_u32(_mm_extract_epi32(tmp2, 0));
+                   *bit_count += unsigned(_mm_popcnt_u32(w0));
+                   count += unsigned(_mm_popcnt_u32((unsigned)_mm_extract_epi32(tmp2, 0)));
                    count -= !(w_prev ^ (w0 & 1));
-                   count -= w_prev = _mm_extract_epi32(tmp3, 0);
+                   count -= w_prev = unsigned(_mm_extract_epi32(tmp3, 0));
                }
                else
                {
                    count -= !w_prev; w_prev ^= w_prev;
                }
            }
-           w0 = _mm_extract_epi32(b, 1);
+           w0 = unsigned(_mm_extract_epi32(b, 1));
            if (w0)
            {
-               *bit_count += _mm_popcnt_u32(w0);
-               count += _mm_popcnt_u32(_mm_extract_epi32(tmp2, 1));
+               *bit_count += unsigned(_mm_popcnt_u32(w0));
+               count += unsigned(_mm_popcnt_u32((unsigned)_mm_extract_epi32(tmp2, 1)));
                count -= !(w_prev ^ (w0 & 1));
-               count -= w_prev = _mm_extract_epi32(tmp3, 1);
+               count -= w_prev = unsigned(_mm_extract_epi32(tmp3, 1));
            }
            else
            {
                count -= !w_prev; w_prev ^= w_prev;
            }
-           w0 = _mm_extract_epi32(b, 2);
+           w0 = unsigned(_mm_extract_epi32(b, 2));
            if (w0)
            {
-               *bit_count += _mm_popcnt_u32(w0);
-               count += _mm_popcnt_u32(_mm_extract_epi32(tmp2, 2));
+               *bit_count += unsigned(_mm_popcnt_u32(w0));
+               count += unsigned(_mm_popcnt_u32((unsigned)_mm_extract_epi32(tmp2, 2)));
                count -= !(w_prev ^ (w0 & 1));
-               count -= w_prev = _mm_extract_epi32(tmp3, 2);
+               count -= w_prev = unsigned(_mm_extract_epi32(tmp3, 2));
            }
            else
            {
                count -= !w_prev; w_prev ^= w_prev;
            }
-           w0 = _mm_extract_epi32(b, 3);
+           w0 = unsigned(_mm_extract_epi32(b, 3));
            if (w0)
            {
-               *bit_count += _mm_popcnt_u32(w0);
-               count += _mm_popcnt_u32(_mm_extract_epi32(tmp2, 3));
+               *bit_count += unsigned(_mm_popcnt_u32(w0));
+               count += unsigned(_mm_popcnt_u32((unsigned)_mm_extract_epi32(tmp2, 3)));
                count -= !(w_prev ^ (w0 & 1));
-               count -= w_prev = _mm_extract_epi32(tmp3, 3);
+               count -= w_prev = unsigned(_mm_extract_epi32(tmp3, 3));
            }
            else
            {
