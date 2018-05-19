@@ -661,6 +661,14 @@ void print_svector_stat(const SV& svect, bool print_sim = false)
                 print_bvector_stat(*bv_plain);
             }
     } // for i
+
+    const typename SV::bvector_type* bv_null = svect.get_null_bvector();
+    if (bv_null)
+    {
+        std::cout << "(not) NULL plain:\n";
+        print_bvector_stat(*bv_null);
+    }
+
     if (svect.size())
     {
         bm::id64_t bv_join_cnt = bv_join.count();
