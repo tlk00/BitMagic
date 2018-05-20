@@ -42,3 +42,4 @@ utils/svutil/bmsvutil
 build/
 msvc/
 utils/svutil/match.raw
+*.d~
