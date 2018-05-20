@@ -130,7 +130,16 @@ public:
             switch (f)
             {
             case ct_time:
-                std::cout << it->first << "; " << it->second.duration.count() << " ms" << std::endl;
+                {
+                auto ms = it->second.duration.count();
+                if (ms > 1000)
+                {
+                    double sec = ms / 1000;
+                    std::cout << it->first << "; " << std::setprecision(4) << sec << " sec" << std::endl;
+                }
+                else
+                    std::cout << it->first << "; " << it->second.duration.count() << " ms" << std::endl;
+                }
                 break;
             case ct_ops_per_sec:
                 {

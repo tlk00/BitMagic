@@ -656,8 +656,7 @@ void print_svector_stat(const SV& svect, bool print_sim = false)
             }
             else
             {
-                bv_join |= *bv_plain;
-                
+                bv_join |= *bv_plain;                
                 print_bvector_stat(*bv_plain);
             }
     } // for i
@@ -667,6 +666,7 @@ void print_svector_stat(const SV& svect, bool print_sim = false)
     {
         std::cout << "(not) NULL plain:\n";
         print_bvector_stat(*bv_null);
+        std::cout << " - Bitcount: " << bv_null->count() << std::endl;
     }
 
     if (svect.size())
