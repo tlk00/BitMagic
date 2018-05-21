@@ -145,8 +145,14 @@ public:
     typedef BV                         bvector_type;
     typedef typename BV::blocks_count  block_count_type;
 public:
+
     /**
-    Basic algorithm based on two palallel iterators/enumerators set of source
+    Rank decompression
+    */
+    void decompress(BV& bv_target, const BV& bv_idx, const BV& bv_src);
+
+    /**
+    Rank compression algorithm based on two palallel iterators/enumerators set of source
     vector gets re-mapped in accord with the index/rank vector.
 
     \param bv_target - target bit-vector
@@ -165,6 +171,7 @@ public:
                                 const block_count_type& bc_idx,
                                 const BV& bv_src);
 };
+
 
 template<class BV>
 void bvector_rank_compressor<BV>::compress(BV& bv_target,
@@ -231,14 +238,47 @@ void bvector_rank_compressor<BV>::compress(BV& bv_target,
 }
 
 template<class BV>
+void bvector_rank_compressor<BV>::decompress(BV& bv_target,
+                                             const BV& bv_idx,
+                                             const BV& bv_src)
+{
+    bv_target.clear();
+    bv_target.init();
+
+    if (&bv_idx == &bv_src)
+    {
+        bv_target = bv_src;
+        return;
+    }
+
+    bm::id_t r_idx = 0;
+    //bm::id_t i;
+
+    typedef typename BV::enumerator enumerator_t;
+//    enumerator_t en_s = bv_src.first();
+    enumerator_t en_i = bv_idx.first();
+    for ( ;en_i.valid(); )
+    {
+        //i = *en_i;
+        if (bv_src.test(r_idx))
+        {
+            bv_target.set_bit_no_check(r_idx);
+        }
+        ++en_i;
+        ++r_idx;
+        
+    } // for
+}
+
+
+template<class BV>
 void bvector_rank_compressor<BV>::compress_by_source(BV& bv_target,
                                            const BV& bv_idx,
                                            const block_count_type& bc_idx,
                                            const BV& bv_src)
 {
-    /// Rand compressor visitor functor
+    /// Rank compressor visitor (functor)
     /// @internal
-    ///
     struct visitor_func
     {
         visitor_func(bvector_type&       bv_out,
