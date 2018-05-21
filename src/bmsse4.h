@@ -40,6 +40,12 @@ namespace bm
     @ingroup bvector
  */
 
+#ifdef __GNUG__
+// necessary measure to silence false warning from GCC about negative pointer arithmetics
+#pragma GCC diagnostic push
+#pragma GCC diagnostic ignored "-Wconversion"
+#endif
+
 
 
 /*!
@@ -413,6 +419,9 @@ unsigned sse4_gap_find(const bm::gap_word_t* BMRESTRICT pbuf, const bm::gap_word
 #endif
 
 
+#ifdef __GNUG__
+#pragma GCC diagnostic pop
+#endif
 
 
 } // namespace
