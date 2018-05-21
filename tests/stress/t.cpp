@@ -12770,7 +12770,7 @@ void TestRankCompress()
             assert(cmp == 0);
             
             rc.decompress(bv_sr, bv_i, bv1);
-            cmp = bv_sr.compare(bv_ref);
+            cmp = bv_sr.compare(bv_s);
             assert(cmp == 0);
             
             
@@ -12791,6 +12791,7 @@ void TestRankCompress()
         bvect bv1, bv2;
         bvect bv_s { 0, 100000, 100001,                  1600000, 1600001  };
         bvect bv_i { 0, 100000, 100001, 200000, 1000000, 1600000, 1600001 };
+        bvect bv_sr;
 
         bm::bvector_rank_compressor<bvect> rc;
 
@@ -12801,12 +12802,25 @@ void TestRankCompress()
         {
             rc.compress(bv1, bv_i, bv_s);
             assert(bv1.count() == bv_s.count());
+
+            rc.decompress(bv_sr, bv_i, bv1);
+            cmp = bv_sr.compare(bv_s);
+            if (cmp != 0)
+            {
+                DetailedCompareBVectors(bv_sr, bv_s);
+            }
+            assert(cmp == 0);
  
             rc.compress_by_source(bv2, bv_i, bc, bv_s);
             assert(bv2.count() == bv_s.count());
 
             cmp = bv2.compare(bv1);
             assert(cmp == 0);
+
+            rc.decompress(bv_sr, bv_i, bv2);
+            cmp = bv_sr.compare(bv_s);
+            assert(cmp == 0);
+
  
             bv_i.optimize();
             bv_s.optimize();
@@ -12825,7 +12839,7 @@ void TestRankCompress()
             if (bv_size > 40000000)
                 break;
             cout << "target size = " << bv_size << " " << endl;
-            bvect bv_i, bv_s;
+            bvect bv_i, bv_s, bv_sr;
             generate_bvector(bv_i, bv_size);
             generate_bvector(bv_s, bv_size);
             bv_i |= bv_s;
@@ -12852,14 +12866,20 @@ void TestRankCompress()
                 {
                 chrono_taker ct("c1");
                 rc.compress(bv1, bv_i, bv_s);
+                rc.decompress(bv_sr, bv_i, bv1);
                 }
                 assert(bv1.count() == bv_s.count());
+                cmp = bv_sr.compare(bv_s);
+                assert(cmp == 0);
 
                 {
                 chrono_taker ct("c2");
                 rc.compress_by_source(bv2, bv_i, bc, bv_s);
+                rc.decompress(bv_sr, bv_i, bv2);
                 }
                 assert(bv2.count() == bv_s.count());
+                cmp = bv_sr.compare(bv_s);
+                assert(cmp == 0);
 
                 cmp = bv2.compare(bv1);
                 if (cmp!=0)
@@ -12876,16 +12896,23 @@ void TestRankCompress()
                     {
                     chrono_taker ct("c1-1");
                     rc.compress(bv1, bv_i, bv_subset);
+                    rc.decompress(bv_sr, bv_i, bv1);
                     }
                     assert(bv1.count() == bv_subset.count());
-                    
+                    cmp = bv_sr.compare(bv_subset);
+                    assert(cmp == 0);
+
                     {
                     chrono_taker ct("c2-2");
                     rc.compress_by_source(bv2, bv_i, bc, bv_subset);
+                    rc.decompress(bv_sr, bv_i, bv2);
                     }
                     assert(bv2.count() == bv_subset.count());
                     
                     cmp = bv2.compare(bv1);
+                    assert(cmp == 0);
+
+                    cmp = bv_sr.compare(bv_subset);
                     assert(cmp == 0);
                 }
 
@@ -13252,7 +13279,7 @@ int main(void)
     //LoadVectors("c:/dev/bv_perf", 3, 27);
     exit(1);
 */
-
+/*
     TestRecomb();
 
     OptimGAPTest();
@@ -13306,7 +13333,7 @@ int main(void)
      AddressResolverTest();
 
      BvectorBitForEachTest();
-
+*/
      TestRankCompress();
 
      GAPTestStress();

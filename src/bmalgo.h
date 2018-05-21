@@ -252,21 +252,19 @@ void bvector_rank_compressor<BV>::decompress(BV& bv_target,
     }
 
     bm::id_t r_idx = 0;
-    //bm::id_t i;
+    bm::id_t i;
 
     typedef typename BV::enumerator enumerator_t;
 //    enumerator_t en_s = bv_src.first();
     enumerator_t en_i = bv_idx.first();
     for ( ;en_i.valid(); )
     {
-        //i = *en_i;
+        i = *en_i;
         if (bv_src.test(r_idx))
         {
-            bv_target.set_bit_no_check(r_idx);
+            bv_target.set_bit_no_check(i);
         }
-        ++en_i;
-        ++r_idx;
-        
+        ++en_i; ++r_idx;
     } // for
 }
 
