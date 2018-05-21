@@ -178,7 +178,7 @@ public:
     //@}
 
     // ------------------------------------------------------------
-    /*! @name Construct/Load compressed vector with data */
+    /*! @name Load-Export compressed vector with data */
     
     //@{
 
@@ -198,6 +198,13 @@ public:
         \param sv_src - source sparse vector
     */
     void load_from(const sparse_vector_type& sv_src);
+    
+    /*!
+        \brief Exort compressed vector to a sparse vector (with NULLs)
+        \param sv - target sparse vector
+    */
+    void load_to(sparse_vector_type& sv) const;
+    
     //@}
 
 
@@ -405,6 +412,39 @@ void compressed_sparse_vector<Val, SV>::load_from(const sparse_vector_type& sv_s
 //---------------------------------------------------------------------
 
 template<class Val, class SV>
+void compressed_sparse_vector<Val, SV>::load_to(sparse_vector_type& sv) const
+{
+    sv.clear();
+    
+    const bvector_type* bv_null_src = this->get_null_bvector();
+    if (!bv_null_src)
+    {
+        BM_ASSERT(bv_null_src);
+        return;
+    }
+    
+    bvector_type* bv_null = sv.get_null_bvect();
+    BM_ASSERT(bv_null);
+    *bv_null = *bv_null_src;
+    
+    bm::bvector_rank_compressor<bvector_type> rank_compr; // re-used for plains
+
+    unsigned src_plains = sv_.plains();
+    for (unsigned i = 0; i < src_plains; ++i)
+    {
+        const bvector_type* bv_src_plain = sv_.get_plain(i);
+        if (bv_src_plain)
+        {
+            bvector_type* bv_plain = sv.get_plain(i);
+            rank_compr.decompress(*bv_plain, *bv_null, *bv_src_plain);
+        }
+    } // for
+    sv.resize(this->size());
+}
+
+//---------------------------------------------------------------------
+
+template<class Val, class SV>
 void compressed_sparse_vector<Val, SV>::sync(bool force)
 {
     if (in_sync_ && force == false)
@@ -465,11 +505,9 @@ compressed_sparse_vector<Val, SV>::get(bm::id_t idx) const
 {
     bm::id_t sv_idx;
     bool found = resolve(idx, &sv_idx);
-    BM_ASSERT(found);
     if (!found)
-    {
         return value_type();
-    }
+    
     return sv_.get(--sv_idx);
 }
 

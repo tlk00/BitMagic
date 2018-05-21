@@ -13020,18 +13020,33 @@ static
 void DetailedCompareSparseVectors(const compressed_sparse_vector_u32& csv,
                                   const sparse_vector_u32&            sv)
 {
+    sparse_vector_u32   sv_s(bm::use_null);  // sparse vector decompressed
+    
+    // de-compression test
+    csv.load_to(sv_s);
+    /*
+    if (!sv.equal(sv_s))
+    {
+        cerr << "compressed vector load_to (decompression) failed!" << endl;
+        exit(1);
+    }
+    */
+
 
     size_t csv_size = csv.size();
     size_t sv_size = sv.size();
-    
+    size_t sv_s_size = sv_s.size();
+
     const sparse_vector_u32::bvector_type* bv_null_sv = sv.get_null_bvector();
+    const sparse_vector_u32::bvector_type* bv_null_sv_s = sv_s.get_null_bvector();
     const sparse_vector_u32::bvector_type* bv_null_csv = csv.get_null_bvector();
 
-    if (csv_size != sv_size)
+    if (csv_size != sv_size || sv_s_size != sv_size)
     {
         assert(bv_null_sv != bv_null_csv);
         
         unsigned cnt_sv = bv_null_sv->count();
+        unsigned cnt_sv_s = bv_null_sv_s->count();
         unsigned cnt_csv = bv_null_csv->count();
         
         if (cnt_sv != cnt_csv)
@@ -13044,35 +13059,58 @@ void DetailedCompareSparseVectors(const compressed_sparse_vector_u32& csv,
                  << endl;
             exit(1);
         }
+        if (cnt_sv_s != cnt_csv)
+        {
+            cerr << "Restored Sparse vector comparison failed (size check):"
+                 << "csv.size()=" << csv_size
+                 << "sv_s.size()=" << sv_s_size
+                 << "cnt sv = " << cnt_sv
+                 << "cnt csv = " << cnt_csv
+                 << endl;
+            exit(1);
+        }
     }
     
     for (unsigned i = 0; i < sv_size; ++i)
     {
         bool is_null_sv = sv.is_null(i);
+        bool is_null_sv_s = sv_s.is_null(i);
         bool is_null_csv = csv.is_null(i);
-        if (is_null_sv != is_null_csv)
+        if (is_null_sv != is_null_csv || is_null_sv != is_null_sv_s)
         {
             cerr << "Detailed csv check failed (null mismatch) at i=" << i
                 << " sv=" << is_null_sv
+                << " sv_s=" << is_null_sv_s
                 << " csv=" << is_null_csv
                 << endl;
             int cmp = bv_null_sv->compare(*bv_null_csv);
             if (cmp != 0)
             {
-                cerr << "cmp=" << cmp << endl;
+                cerr << "1. cmp=" << cmp << endl;
+                exit(1);
+            }
+            cmp = bv_null_sv->compare(*bv_null_sv_s);
+            if (cmp != 0)
+            {
+                cerr << "2. cmp=" << cmp << endl;
+                exit(1);
             }
 
             exit(1);
         }
+        
+        
         if (!is_null_sv)
         {
             unsigned v1 = sv[i];
+            unsigned v1_s = sv_s[i];
             unsigned v2 = csv[i];
             
-            if (v1 != v2)
+            if (v1 != v2 || v1_s != v1)
             {
                 cerr << "Detailed csv check failed (value mismatch) at i=" << i
                      << " v1=" << v1
+                     << " v1_s=" << v1_s
                      << " v2=" << v2
                      << endl;
                 exit(1);
@@ -13098,20 +13136,31 @@ void TestCompressSparseVector()
     
     {
     cout << "push_back() test" << endl;
-    unsigned v;
+    unsigned v, v1;
     
         compressed_sparse_vector_u32 csv1;
+        sparse_vector_u32 sv1(bm::use_null);
         
         csv1.push_back(10, 100);
         csv1.push_back(20, 200);
         csv1.push_back(21, 201);
+        
+        csv1.load_to(sv1);
 
         v = csv1.at(10);
         assert(v == 100);
+        v1 = sv1.at(10);
+        assert(v1 == 100);
+        
         v = csv1.at(20);
         assert(v == 200);
+        v1 = sv1.at(20);
+        assert(v1 == 200);
+
         v = csv1.at(21);
         assert(v == 201);
+        v1 = sv1.at(21);
+        assert(v1 == 201);
 
         csv1.sync();
         
@@ -13138,9 +13187,6 @@ void TestCompressSparseVector()
         csv3 = ::move(csv2);
         same = csv3.equal(csv1);
         assert(same);
-
-
-
     }
     
     {
@@ -13279,7 +13325,7 @@ int main(void)
     //LoadVectors("c:/dev/bv_perf", 3, 27);
     exit(1);
 */
-/*
+
     TestRecomb();
 
     OptimGAPTest();
@@ -13333,7 +13379,7 @@ int main(void)
      AddressResolverTest();
 
      BvectorBitForEachTest();
-*/
+
      TestRankCompress();
 
      GAPTestStress();
