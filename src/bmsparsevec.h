@@ -984,9 +984,6 @@ sparse_vector<Val, BV>::get_null_bvector() const
 template<class Val, class BV>
 bool sparse_vector<Val, BV>::is_null(size_type idx) const
 {
-    if (idx >= size_)
-        throw_range_error("sparse vector range error");
-
     const bvector_type* bv_null = get_null_bvector();
     return (bv_null) ? (!bv_null->test(idx)) : false;
 }
