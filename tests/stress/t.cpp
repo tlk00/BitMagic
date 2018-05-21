@@ -12748,10 +12748,12 @@ void TestRankCompress()
     
     int cmp;
 
+    cout << "Step 1" << endl;
     {
         bvect bv1, bv2;
         bvect bv_s { 0, 1,        16 };
         bvect bv_i { 0, 1, 2, 10, 16 };
+        bvect bv_sr; // restored vector
 
         bvect bv_ref { 0, 1, 4 };
         bm::bvector_rank_compressor<bvect> rc;
@@ -12767,16 +12769,23 @@ void TestRankCompress()
             cmp = bv1.compare(bv_ref);
             assert(cmp == 0);
             
+            rc.decompress(bv_sr, bv_i, bv1);
+            cmp = bv_sr.compare(bv_ref);
+            assert(cmp == 0);
+            
+            
             rc.compress_by_source(bv2, bv_i, bc, bv_s);
             assert(bv2.count() == bv_s.count());
 
             cmp = bv2.compare(bv_ref);
             assert(cmp == 0);
             
+            
             bv_i.optimize();
             bv_s.optimize();
         }
     }
+    cout << "Step 1 - OK" << endl;
 
     {
         bvect bv1, bv2;
