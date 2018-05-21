@@ -235,6 +235,8 @@ public:
     */
     void unsync() { in_sync_ = false; }
     //@}
+
+    const sparse_vector_type& get_sv() const { return sv_; }
     
 protected:
     /*!
