@@ -214,7 +214,7 @@ void bvector_rank_compressor<BV>::compress(BV& bv_target,
         {
             if (s > i)
             {
-                if ((s - i) >= 256) // sufficiently far away, jump
+                if ((s - i) >= 128) // sufficiently far away, jump
                 {
                     bm::id_t r_dist = bv_idx.count_range(i + 1, s);
                     en_i.go_to(s);
@@ -237,6 +237,7 @@ void bvector_rank_compressor<BV>::compress(BV& bv_target,
     } // for
 }
 
+
 template<class BV>
 void bvector_rank_compressor<BV>::decompress(BV& bv_target,
                                              const BV& bv_idx,
@@ -252,22 +253,31 @@ void bvector_rank_compressor<BV>::decompress(BV& bv_target,
     }
 
     bm::id_t r_idx = 0;
-    bm::id_t i;
+    bm::id_t i, s;
 
     typedef typename BV::enumerator enumerator_t;
-//    enumerator_t en_s = bv_src.first();
+    enumerator_t en_s = bv_src.first();
     enumerator_t en_i = bv_idx.first();
-    for ( ;en_i.valid(); )
+    for (; en_i.valid(); )
     {
-        i = *en_i;
-        if (bv_src.test(r_idx))
+        if (!en_s.valid())
+            break;
+        s = *en_s; 
+        if (s == r_idx)
         {
+            i = *en_i;
             bv_target.set_bit_no_check(i);
+            ++en_i; ++en_s;
+            ++r_idx;
+            continue;
         }
-        ++en_i; ++r_idx;
+        BM_ASSERT(s > r_idx);
+        for (; s > r_idx; ++r_idx) // TODO: optimization of rank finding
+        {
+            ++en_i;
+        } // for
     } // for
 }
-
 
 template<class BV>
 void bvector_rank_compressor<BV>::compress_by_source(BV& bv_target,
