@@ -49,7 +49,7 @@ For more information please visit:  http://bitmagic.io
 
 using namespace std;
 
-const unsigned BSIZE = 150000000;
+const unsigned int BSIZE = 150000000;
 const unsigned int REPEATS = 300;
 
 typedef  bitset<BSIZE>  test_bitset;
@@ -172,7 +172,7 @@ void FillSetsIntervals(test_bitset& bset,
 
         do
         {
-            len = rand() % factor;
+            len = unsigned(rand()) % factor;
             end = i+len;
             
         } while (end >= max);
@@ -477,7 +477,7 @@ void BitTestSparseTest()
         TimeTaker tt("BitTest: bitset ", repeats);
         for (unsigned i = 0; i < repeats; ++i)
         {
-            unsigned idx = rand_dis(gen);
+            unsigned idx = unsigned(rand_dis(gen));
             value += bv0->test(idx);
             value += bv1->test(idx);
             value += bv2->test(idx);
@@ -497,7 +497,7 @@ void BitTestSparseTest()
         TimeTaker tt("BitTest: Sparse bitset (GAP) ", repeats);
         for (unsigned i = 0; i < repeats; ++i)
         {
-            unsigned idx = rand_dis(gen);
+            unsigned idx = unsigned(rand_dis(gen));
             value += bv0->test(idx);
             value += bv1->test(idx);
             value += bv2->test(idx);
@@ -530,7 +530,7 @@ void EnumeratorGoToTest()
         TimeTaker tt("Enumerator at bit pos:  ", repeats);
         for (unsigned i = 0; i < repeats; ++i)
         {
-            unsigned idx = rand_dis(gen);
+            unsigned idx = unsigned(rand_dis(gen));
             bvect::enumerator en0 = bv0->get_enumerator(idx);
             bvect::enumerator en1 = bv1->get_enumerator(idx);
             bvect::enumerator en2 = bv2->get_enumerator(idx);
@@ -553,7 +553,7 @@ void EnumeratorGoToTest()
         TimeTaker tt("Enumerator at gap pos: ", repeats);
         for (unsigned i = 0; i < repeats; ++i)
         {
-            unsigned idx = rand_dis(gen);
+            unsigned idx = unsigned(rand_dis(gen));
             bvect::enumerator en0 = bv0->get_enumerator(idx);
             bvect::enumerator en1 = bv1->get_enumerator(idx);
             bvect::enumerator en2 = bv2->get_enumerator(idx);
@@ -608,8 +608,8 @@ void BitCompareTest()
         }
         else 
         {
-            arr1[i] = rand();
-            arr2[i] = rand();   
+            arr1[i] = unsigned(rand());
+            arr2[i] = unsigned(rand());
         }
     }
 
@@ -908,7 +908,7 @@ void EnumeratorTestGAP()
     SimpleFillSets(*bset, *bv, 0, BSIZE, 2500);
     bv->count();
 
-    for (int k = 0; k < 2; ++k)
+    for (unsigned k = 0; k < 2; ++k)
     {
 
     {
@@ -1730,7 +1730,7 @@ void BitBlockRotateTest()
 
     for (i = 0; i < bm::set_block_size; ++i)
     {
-        blk0[i] = blk1[i] = rand();
+        blk0[i] = blk1[i] = unsigned(rand());
     }
 
     {
@@ -1769,7 +1769,7 @@ void ptest()
 
     FillSetsIntervals(*bset, *bv_large, 0, 2000000000, 10);
 
-    for (int i = 0; i < 2000; ++i)
+    for (unsigned i = 0; i < 2000; ++i)
     {
         bv_small->set(i*10000);
     }
@@ -1971,8 +1971,9 @@ void SparseVectorAccessTest()
 static
 void RankCompressionTest()
 {
-    bvect bv_i1, bv_s1, bv1, bv2;
+    bvect bv_i1, bv_s1, bv11, bv12, bv21, bv22;
     bvect bv_i2, bv_s2;
+    bvect bv11_s, bv12_s, bv21_s, bv22_s;
 
     generate_bvector(bv_i1);
     generate_bvector(bv_i2);
@@ -1994,22 +1995,56 @@ void RankCompressionTest()
         TimeTaker tt("Rank compression test", REPEATS * 10);
         for (unsigned i = 0; i < REPEATS * 10; ++i)
         {
-            rc.compress(bv1, bv_i1, bv_s1);
-            rc.compress(bv1, bv_i2, bv_s2);
+            rc.compress(bv11, bv_i1, bv_s1);
+            rc.compress(bv12, bv_i2, bv_s2);
         } // for
     }
     {
         TimeTaker tt("Rank compression (by source) test", REPEATS * 10);
         for (unsigned i = 0; i < REPEATS * 10; ++i)
         {
-            rc.compress_by_source(bv2, bv_i1, bc1, bv_s1);
-            rc.compress_by_source(bv2, bv_i2, bc2, bv_s2);
+            rc.compress_by_source(bv21, bv_i1, bc1, bv_s1);
+            rc.compress_by_source(bv22, bv_i2, bc2, bv_s2);
+        } // for
+    }
+    
+    {
+        TimeTaker tt("Rank decompression test", REPEATS * 10);
+        for (unsigned i = 0; i < REPEATS * 10; ++i)
+        {
+            rc.decompress(bv11_s, bv_i1, bv11);
+            rc.decompress(bv12_s, bv_i2, bv12);
+            rc.decompress(bv21_s, bv_i1, bv21);
+            rc.decompress(bv22_s, bv_i2, bv22);
         } // for
     }
 
-    bv1 |= bv2;
-    char buf[256];
-    sprintf(buf, "%i", (int)bv1.count()); // to fool some smart compilers like ICC
+    int cmp;
+    cmp = bv11_s.compare(bv_s1);
+    if (cmp != 0)
+    {
+        std::cerr << "1. Rank check failed!" << std::endl;
+        exit(1);
+    }
+    cmp = bv12_s.compare(bv_s2);
+    if (cmp != 0)
+    {
+        std::cerr << "2. Rank check failed!" << std::endl;
+        exit(1);
+    }
+    cmp = bv21_s.compare(bv_s1);
+    if (cmp != 0)
+    {
+        std::cerr << "3. Rank check failed!" << std::endl;
+        exit(1);
+    }
+    cmp = bv22_s.compare(bv_s2);
+    if (cmp != 0)
+    {
+        std::cerr << "4. Rank check failed!" << std::endl;
+        exit(1);
+    }
+    
 }
 
 
