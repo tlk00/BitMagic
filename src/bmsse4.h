@@ -41,7 +41,6 @@ namespace bm
  */
 
 #ifdef __GNUG__
-// necessary measure to silence false warning from GCC about negative pointer arithmetics
 #pragma GCC diagnostic push
 #pragma GCC diagnostic ignored "-Wconversion"
 #endif

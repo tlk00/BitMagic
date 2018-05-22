@@ -30,6 +30,11 @@ For more information please visit:  http://bitmagic.io
 #include "bmutil.h"
 
 
+#ifdef __GNUG__
+#pragma GCC diagnostic push
+#pragma GCC diagnostic ignored "-Wconversion"
+#endif
+
 namespace bm
 {
 
@@ -371,7 +376,7 @@ bm::id_t sse2_bit_block_calc_count_change(const __m128i* BMRESTRICT block,
    _mm_store_si128((__m128i*)tcnt, mcnt);
    *bit_count = tcnt[0] + tcnt[1] + tcnt[2] + tcnt[3];
 
-   return count;
+   return unsigned(count);
 }
 
 #ifdef __GNUG__
@@ -449,6 +454,9 @@ unsigned sse2_gap_find(const bm::gap_word_t* BMRESTRICT pbuf, const bm::gap_word
 } // namespace
 
 
+#ifdef __GNUG__
+#pragma GCC diagnostic pop
+#endif
 
 
 #endif

@@ -29,6 +29,12 @@ For more information please visit:  http://bitmagic.io
 #include <intrin.h>
 #endif
 
+#ifdef __GNUG__
+#pragma GCC diagnostic push
+#pragma GCC diagnostic ignored "-Wconversion"
+#endif
+
+
 namespace bm
 {
 
@@ -225,7 +231,7 @@ template<typename T>
 T bit_scan_fwd(T v)
 {
     return
-        DeBruijn_bit_position<true>::_multiply[((word_t)((v & -v) * 0x077CB531U)) >> 27];
+        DeBruijn_bit_position<true>::_multiply[(((v & -v) * 0x077CB531U)) >> 27];
 }
 
 inline
@@ -238,6 +244,10 @@ unsigned bit_scan_reverse32(unsigned value)
     return bm::ilog2_LUT<unsigned int>(value);
 #endif
 }
+
+#ifdef __GNUG__
+#pragma GCC diagnostic pop
+#endif
 
 
 } // bm
