@@ -1482,7 +1482,7 @@ public:
     //@}
     // --------------------------------------------------------------------
 
-    /*! @name Population counting methods
+    /*! @name Population counting and ranking methods
     */
     //@{
 
@@ -1510,7 +1510,8 @@ public:
     }
 
     /*!
-       \brief Returns count of 1 bits in the given diapason.
+       \brief Returns count of 1 bits in the given range
+     
        \param left - index of first bit start counting from
        \param right - index of last bit 
        \param block_count_arr - optional parameter (bitcount by bvector blocks)
@@ -1531,19 +1532,25 @@ public:
     
     /*!
        \brief Returns count of 1 bits (population) in [0..right] range.
-       \param right - index of last bit
+     
+       This operation is also known as rank of bit N.
+     
+       \param n - index of bit to rank
        \param blocks_cnt - block count structure to accelerate search
                            should be prepared using running_count_blocks
-       \return population count in the diapason
+       \return population count in the range
        \sa running_count_blocks
        \sa count_to_test
     */
-    bm::id_t count_to(bm::id_t right, const blocks_count&  blocks_cnt) const;
+    bm::id_t count_to(bm::id_t n, const blocks_count&  blocks_cnt) const;
 
     /*!
-        \brief Returns count of 1 bits (population) in [0..right] range if test(right) == true.
-        Faster than test() plus count_to()
-        \param right - index of last bit
+        \brief Returns count of 1 bits (population) in [0..right] range if test(right) == true
+     
+        This is conditional rank operation, which is faster than test()
+        plus count_to()
+     
+        \param n - index of bit to test and rank
         \param blocks_cnt - block count structure to accelerate search
                should be prepared using running_count_blocks
 
@@ -1552,7 +1559,8 @@ public:
         \sa running_count_blocks
         \sa count_to
     */
-    bm::id_t count_to_test(bm::id_t right, const blocks_count&  blocks_cnt) const;
+    bm::id_t count_to_test(bm::id_t n, const blocks_count&  blocks_cnt) const;
+
 
     /*! Recalculate bitcount
         this function only make sense when BMCOUNTOPT is defined
@@ -1634,7 +1642,7 @@ public:
     // --------------------------------------------------------------------
 
 
-    /*! @name Scan and find bit and indexes */
+    /*! @name Scan and find bits and indexes */
     //@{
     
     /*!
@@ -1707,6 +1715,22 @@ public:
        \sa get_first, get_next, extract_next, find, find_reverse
     */
     bool find_range(bm::id_t& first, bm::id_t& last) const;
+    
+    /*!
+        \brief Find bit-vector position for the specified rank(bitcount)
+     
+        Rank based search, counts number of 1s from specified position until
+        finds the ranked position relative to start from position.
+        In other words: range population count between from and pos == rank.
+     
+        \param rank - rank to find (bitcount)
+        \param from - start positioon for rank search
+        \param pos  - position with speciefied rank (relative to from position)
+     
+        \return true if requested rank was found
+    */
+    bool find_rank(bm::id_t rank, bm::id_t from, bm::id_t& pos) const;
+
     
     //@}
 
@@ -3190,6 +3214,38 @@ bool bvector<Alloc>::find_range(bm::id_t& first, bm::id_t& last) const
         BM_ASSERT(found);
     }
     return found;
+}
+
+//---------------------------------------------------------------------
+
+template<class Alloc>
+bool bvector<Alloc>::find_rank(bm::id_t rank, bm::id_t from, bm::id_t& pos) const
+{
+    BM_ASSERT_THROW(from < bm::id_max, BM_ERR_RANGE);
+
+    bool ret = false;
+    
+    if (!rank || !blockman_.is_init())
+        return ret;
+    
+    unsigned nb  = unsigned(from  >>  bm::set_block_shift);
+    unsigned nbit = unsigned(from & bm::set_block_mask);
+    unsigned top_blocks = blockman_.effective_top_block_size();
+
+    for (; nb < top_blocks; ++nb)
+    {
+        const bm::word_t* block = blockman_.get_block(nb);
+        if (!block)
+            continue;
+        if (BM_IS_GAP(block))
+        {
+            const bm::gap_word_t* gap_block = BMGAP_PTR(block);
+        }
+        else
+        {
+        }
+    } // for nb
+    return ret;
 }
 
 //---------------------------------------------------------------------
