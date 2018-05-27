@@ -1102,7 +1102,7 @@ unsigned gap_bit_count_range(const T* const buf, T left, T right)
     
     unsigned bits_counter = 0;
     unsigned is_set;
-    unsigned start_pos = gap_bfind(buf, left, &is_set);
+    unsigned start_pos = bm::gap_bfind(buf, left, &is_set);
     is_set = ~(is_set - 1u); // 0xFFF.. if true (mask for branchless code)
 
     pcurr = buf + start_pos;
@@ -1124,6 +1124,61 @@ unsigned gap_bit_count_range(const T* const buf, T left, T right)
     bits_counter += unsigned(right - prev_gap) & is_set;
     return bits_counter;
 }
+
+/*!
+    \brief GAP block find position for the rank
+
+    \param block - bit block buffer pointer
+    \param rank - rank to find (must be > 0)
+    \param nbit_from - start bit position in block
+    \param nbit_pos - found position
+ 
+    \return 0 if position with rank was found, or
+              the remaining rank (rank - population count)
+
+    @ingroup gapfunc
+*/
+template<typename T>
+bm::id_t gap_find_rank(const T* const block,
+                       bm::id_t rank,
+                       bm::gap_word_t  nbit_from,
+                       unsigned&       nbit_pos)
+{
+    BM_ASSERT(block);
+    BM_ASSERT(rank);
+
+    const T* pcurr = block;
+    const T* pend = pcurr + (*pcurr >> 3);
+
+    unsigned bits_counter = 0;
+    unsigned is_set;
+    unsigned start_pos = bm::gap_bfind(block, nbit_from, &is_set);
+    is_set = ~(is_set - 1u); // 0xFFF.. if true (mask for branchless code)
+
+    pcurr = block + start_pos;
+    bits_counter += unsigned(*pcurr - nbit_from + 1u) & is_set;
+    if (bits_counter >= rank) // found!
+    {
+        nbit_pos = nbit_from + rank - 1u;
+        return 0;
+    }
+    rank -= bits_counter;
+    unsigned prev_gap = *pcurr++;
+    for (is_set ^= ~0u; pcurr <= pend; is_set ^= ~0u)
+    {
+        bits_counter = (*pcurr - prev_gap) & is_set;
+        if (bits_counter >= rank) // found!
+        {
+            nbit_pos = prev_gap + rank;
+            return 0;
+        }
+        rank -= bits_counter;
+        prev_gap = *pcurr++;
+    } // for
+    
+    return rank;
+}
+                       
 
 
 /*!
@@ -5011,15 +5066,16 @@ int bit_find_in_block(const bm::word_t* data,
                       unsigned          nbit, 
                       bm::id_t*         prev)
 {
-    BMREGISTER bm::id_t p = *prev;
+    bm::id_t p = *prev;
     int found = 0;
 
     for(;;)
     {
         unsigned nword  = nbit >> bm::set_word_shift;
-        if (nword >= bm::set_block_size) break;
+        if (nword >= bm::set_block_size)
+            break;
 
-        BMREGISTER bm::word_t val = data[nword] >> (p & bm::set_word_mask);
+        bm::word_t val = data[nword] >> (p & bm::set_word_mask);
         if (val)
         {
             unsigned trail_z = bm::word_trailing_zeros(val);
@@ -5098,6 +5154,76 @@ unsigned bit_find_first(const bm::word_t* block, unsigned* first)
         }
     } // for i
     return 0u;
+}
+
+/*!
+    \brief BIT block find position for the rank
+
+    \param block - bit block buffer pointer
+    \param rank - rank to find (must be > 0)
+    \param nbit_from - start bit position in block
+    \param nbit_pos - found position
+ 
+    \return 0 if position with rank was found, or
+              the remaining rank (rank - population count)
+
+    @ingroup bitfunc
+*/
+inline
+bm::id_t bit_find_rank(const bm::word_t* const block,
+                       bm::id_t          rank,
+                       unsigned          nbit_from,
+                       unsigned&         nbit_pos)
+{
+    BM_ASSERT(block);
+    BM_ASSERT(rank);
+    
+    unsigned nword  = nbit_from >> bm::set_word_shift;
+    BM_ASSERT(nword < bm::set_block_size);
+
+    bm::id_t nbit = (nbit_from & bm::set_word_mask);
+    unsigned pos = nbit_from;
+
+    if (nbit)
+    {
+        bm::id_t w = block[nword];
+        w >>= nbit;
+        for (; w; w >>= 1u)
+        {
+            rank -= (w & 1u);
+            if (!rank)
+            {
+                nbit_pos = pos;
+                return rank;
+            }
+            ++nbit; ++pos;
+        } // for
+        pos += unsigned(32u - nbit);
+        ++nword;
+    }
+    
+    for (; nword < bm::set_block_size; ++nword)
+    {
+        bm::id_t w = block[nword];
+        bm::id_t bc = bm::word_bitcount(w);
+        if (rank > bc)
+        {
+            rank -= bc;
+            pos += 32u;
+            continue;
+        }
+        for (; w; w >>= 1u)
+        {
+            rank -= (w & 1u);
+            if (!rank)
+            {
+                nbit_pos = pos;
+                return rank;
+            }
+            ++pos;
+        } // for
+    } // for nword
+    return rank;
 }
 
 

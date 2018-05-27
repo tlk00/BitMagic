@@ -262,21 +262,31 @@ void bvector_rank_compressor<BV>::decompress(BV& bv_target,
     {
         if (!en_s.valid())
             break;
-        s = *en_s; 
+        s = *en_s;
+        i = *en_i;
         if (s == r_idx)
         {
-            i = *en_i;
             bv_target.set_bit_no_check(i);
             ++en_i; ++en_s;
             ++r_idx;
             continue;
         }
         BM_ASSERT(s > r_idx);
-        for (; s > r_idx; ++r_idx) // TODO: optimization of rank finding
+        unsigned rank = s - r_idx + 1u;
+        if (rank < 256)
         {
-            ++en_i;
-        } // for
-    } // for
+            for (; s > r_idx; ++r_idx)
+                ++en_i;
+        }
+        else
+        {
+            unsigned new_pos = 0;
+            bv_idx.find_rank(rank, i, new_pos);
+            BM_ASSERT(new_pos);
+            r_idx = s;
+            en_i.go_to(new_pos);
+        }
+    } // for en
 }
 
 template<class BV>

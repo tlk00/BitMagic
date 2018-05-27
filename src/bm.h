@@ -3229,22 +3229,41 @@ bool bvector<Alloc>::find_rank(bm::id_t rank, bm::id_t from, bm::id_t& pos) cons
         return ret;
     
     unsigned nb  = unsigned(from  >>  bm::set_block_shift);
-    unsigned nbit = unsigned(from & bm::set_block_mask);
-    unsigned top_blocks = blockman_.effective_top_block_size();
+    unsigned nb_right  = unsigned((bm::id_max-1)  >>  bm::set_block_shift);
+    bm::gap_word_t nbit = bm::gap_word_t(from & bm::set_block_mask);
+    unsigned bit_pos;
 
-    for (; nb < top_blocks; ++nb)
+    for (; nb < nb_right; ++nb)
     {
-        const bm::word_t* block = blockman_.get_block(nb);
-        if (!block)
-            continue;
-        if (BM_IS_GAP(block))
+        int no_more_blocks;
+        const bm::word_t* block = blockman_.get_block(nb, &no_more_blocks);
+        if (block)
         {
-            const bm::gap_word_t* gap_block = BMGAP_PTR(block);
+            if (BM_IS_GAP(block))
+            {
+                const bm::gap_word_t* const gap_block = BMGAP_PTR(block);
+                rank = bm::gap_find_rank(gap_block, rank, nbit, bit_pos);
+            }
+            else
+            {
+                rank = bm::bit_find_rank(block, rank, nbit, bit_pos);
+            }
+            
+            if (!rank) // target found
+            {
+                bm::id_t prev_pos = nb ? (nb * bm::set_block_size * 32) : 0;
+                pos = bit_pos + prev_pos;
+                return true;
+            }
         }
         else
         {
+            if (no_more_blocks)
+                break;
         }
+        nbit = 0;
     } // for nb
+    
     return ret;
 }
 
