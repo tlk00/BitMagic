@@ -635,57 +635,96 @@ public:
 
             } // switch
 
-
-            // next bit not present in the current block
-            // keep looking in the next blocks.
-            ++(this->block_idx_);
-            unsigned i = this->block_idx_ >> bm::set_array_shift;
-            unsigned top_block_size = this->bv_->blockman_.top_block_size();
-            for (; i < top_block_size; ++i)
-            {
-                bm::word_t** blk_blk = this->bv_->blockman_.top_blocks_root()[i];
-                if (blk_blk == 0)
-                {
-                    this->block_idx_ += bm::set_array_size;
-                    this->position_ += bm::bits_in_array;
-                    continue;
-                }
-
-                unsigned j = this->block_idx_ & bm::set_array_mask;
-
-                for(; j < bm::set_array_size; ++j, ++(this->block_idx_))
-                {
-                    this->block_ = blk_blk[j];
-
-                    if (this->block_ == 0)
-                    {
-                        this->position_ += bm::bits_in_block;
-                        continue;
-                    }
-
-                    this->block_type_ = BM_IS_GAP(this->block_);
-                    if (this->block_type_)
-                    {
-                        if (search_in_gapblock())
-                        {
-                            return *this;
-                        }
-                    }
-                    else
-                    {
-                        if (this->block_ == FULL_BLOCK_FAKE_ADDR)
-                            this->block_ = FULL_BLOCK_REAL_ADDR;
-                        if (search_in_bitblock())
-                        {
-                            return *this;
-                        }
-                    }
-
-                } // for j
-
-            } // for i
-
+            if (search_in_blocks())
+                return *this;
+            
             this->invalidate();
+            return *this;
+        }
+        
+        /*!
+            @brief Skip to specified relative rank
+            @param rank - number of ON bits to go for
+        */
+        enumerator& skip_to_rank(bm::id_t rank)
+        {
+            --rank;
+            if (!rank)
+                return *this;
+            return skip(rank);
+        }
+        
+        /*!
+            @brief Skip specified number of bits from enumeration
+            @param rank - number of ON bits to skip
+        */
+        enumerator& skip(bm::id_t rank)
+        {
+            if (!this->valid() || !rank)
+                return *this;
+            for (; rank; --rank)
+            {
+                block_descr_type* bdescr = &(this->bdescr_);
+                switch (this->block_type_)
+                {
+                case 0:   //  BitBlock
+                    for (; rank; --rank)
+                    {
+                        unsigned short idx = ++(bdescr->bit_.idx);
+                        if (idx < bdescr->bit_.cnt)
+                        {
+                            this->position_ = bdescr->bit_.pos + bdescr->bit_.bits[idx];
+                            continue;
+                        }
+                        this->position_ +=
+                            (bm::set_bitscan_wave_size * 32) - bdescr->bit_.bits[--idx];
+                        bdescr->bit_.ptr += bm::set_bitscan_wave_size;
+                        
+                        if (!decode_bit_group(bdescr, rank))
+                            break;
+                    } // for rank
+                    break;
+                case 1:   // DGAP Block
+                    for (; rank; --rank) // TODO: better skip logic
+                    {
+                        ++this->position_;
+                        if (--(bdescr->gap_.gap_len))
+                        {
+                            continue;
+                        }
+
+                        // next gap is "OFF" by definition.
+                        if (*(bdescr->gap_.ptr) == bm::gap_max_bits - 1)
+                        {
+                            break;
+                        }
+                        gap_word_t prev = *(bdescr->gap_.ptr);
+                        unsigned int val = *(++(bdescr->gap_.ptr));
+                        
+                        this->position_ += val - prev;
+                        // next gap is now "ON"
+                        if (*(bdescr->gap_.ptr) == bm::gap_max_bits - 1)
+                        {
+                            break;
+                        }
+                        prev = *(bdescr->gap_.ptr);
+                        val = *(++(bdescr->gap_.ptr));
+                        bdescr->gap_.gap_len = (gap_word_t)(val - prev);
+                    } // for rank
+                    break;
+                default:
+                    BM_ASSERT(0);
+                } // switch
+                
+                if (!rank)
+                    return *this;
+
+                if (!search_in_blocks())
+                {
+                    this->invalidate();
+                    return *this;
+                }
+            } // for rank
             return *this;
         }
         
@@ -786,27 +825,57 @@ public:
         typedef typename iterator_base::block_descr block_descr_type;
         
         
+        bool decode_wave(block_descr_type* bdescr)
+        {
+            bdescr->bit_.cnt = bm::bitscan_wave(bdescr->bit_.ptr, bdescr->bit_.bits);
+            if (bdescr->bit_.cnt) // found
+            {
+                bdescr->bit_.idx ^= bdescr->bit_.idx; // = 0;
+                bdescr->bit_.pos = this->position_;
+                this->position_ += bdescr->bit_.bits[0];
+                return true;
+            }
+            return false;
+        }
+        
         bool decode_bit_group(block_descr_type* bdescr)
         {
             const word_t* block_end = this->block_ + bm::set_block_size;
             
             for (; bdescr->bit_.ptr < block_end;)
             {
-                bdescr->bit_.cnt = bm::bitscan_wave(bdescr->bit_.ptr, bdescr->bit_.bits);
-                if (bdescr->bit_.cnt) // found
-                {
-                    bdescr->bit_.idx = 0;
-                    bdescr->bit_.pos = this->position_;
-                    this->position_ += bdescr->bit_.bits[0];
+                if (decode_wave(bdescr))
                     return true;
+                this->position_ += bm::set_bitscan_wave_size * 32; // wave size
+                bdescr->bit_.ptr += bm::set_bitscan_wave_size;
+            } // for
+            return false;
+        }
+        
+        bool decode_bit_group(block_descr_type* bdescr, bm::id_t& rank)
+        {
+            const word_t* block_end = this->block_ + bm::set_block_size;
+            
+            for (; bdescr->bit_.ptr < block_end;)
+            {
+                const bm::id64_t* w64_p = (bm::id64_t*)bdescr->bit_.ptr;
+                bm::id64_t w64 = *w64_p;
+                unsigned cnt = bm::word_bitcount64(w64);
+                if (rank > cnt)
+                {
+                    rank -= cnt;
+                }
+                else
+                {
+                    if (decode_wave(bdescr))
+                        return true;
                 }
                 this->position_ += bm::set_bitscan_wave_size * 32; // wave size
                 bdescr->bit_.ptr += bm::set_bitscan_wave_size;
             } // for
-            
             return false;
         }
-        
+
         bool search_in_bitblock()
         {
             BM_ASSERT(this->block_type_ == 0);
@@ -849,20 +918,60 @@ public:
                     return true;
                 }
                 this->position_ += val + 1;
-
                 if (val == bm::gap_max_bits - 1)
                 {
                     break;
                 }
-
                 bitval ^= 1;
                 ++(bdescr->gap_.ptr);
-
             }
-
             return false;
         }
+        
+        bool search_in_blocks()
+        {
+            ++(this->block_idx_);
+            unsigned i = this->block_idx_ >> bm::set_array_shift;
+            unsigned top_block_size = this->bv_->blockman_.top_block_size();
+            for (; i < top_block_size; ++i)
+            {
+                bm::word_t** blk_blk = this->bv_->blockman_.top_blocks_root()[i];
+                if (blk_blk == 0)
+                {
+                    this->block_idx_ += bm::set_array_size;
+                    this->position_ += bm::bits_in_array;
+                    continue;
+                }
 
+                unsigned j = this->block_idx_ & bm::set_array_mask;
+
+                for(; j < bm::set_array_size; ++j, ++(this->block_idx_))
+                {
+                    this->block_ = blk_blk[j];
+
+                    if (this->block_ == 0)
+                    {
+                        this->position_ += bm::bits_in_block;
+                        continue;
+                    }
+
+                    this->block_type_ = BM_IS_GAP(this->block_);
+                    if (this->block_type_)
+                    {
+                        if (search_in_gapblock())
+                            return true;
+                    }
+                    else
+                    {
+                        if (this->block_ == FULL_BLOCK_FAKE_ADDR)
+                            this->block_ = FULL_BLOCK_REAL_ADDR;
+                        if (search_in_bitblock())
+                            return true;
+                    }
+                } // for j
+            } // for i
+            return false;
+        }
     };
     
     /*!
