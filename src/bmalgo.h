@@ -222,12 +222,13 @@ void bvector_rank_compressor<BV>::compress(BV& bv_target,
         }
         BM_ASSERT(s > i);
         
-        if ((s - i) >= 128) // sufficiently far away, jump
+        bm::id_t dist = s - i;
+        if (dist >= 64) // sufficiently far away, jump
         {
             bm::id_t r_dist = bv_idx.count_range(i + 1, s);
+            r_idx += r_dist;
             en_i.go_to(s);
             BM_ASSERT(en_i.valid());
-            r_idx += r_dist;
         }
         else  // small distance, iterate to close the gap
         {
@@ -294,8 +295,12 @@ void bvector_rank_compressor<BV>::decompress(BV& bv_target,
         
         if (rank < 256)
         {
+            en_i.skip(s - r_idx);
+            //r_idx = s;
+            /*
             for (; s > r_idx; ++r_idx) // TODO: optimization
                 ++en_i;
+            */
             BM_ASSERT(en_i.valid());
             new_pos = *en_i;
         }
@@ -303,11 +308,12 @@ void bvector_rank_compressor<BV>::decompress(BV& bv_target,
         {
             bv_idx.find_rank(rank, i, new_pos);
             BM_ASSERT(new_pos);
-            r_idx = s;
+            //r_idx = s;
             en_i.go_to(new_pos);
             BM_ASSERT(en_i.valid());
         }
         
+        r_idx = s;
         ibuffer[b_size++] = new_pos;
         if (b_size == n_buffer_cap)
         {
