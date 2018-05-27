@@ -3231,7 +3231,7 @@ bool bvector<Alloc>::find_rank(bm::id_t rank, bm::id_t from, bm::id_t& pos) cons
     unsigned nb  = unsigned(from  >>  bm::set_block_shift);
     unsigned nb_right  = unsigned((bm::id_max-1)  >>  bm::set_block_shift);
     bm::gap_word_t nbit = bm::gap_word_t(from & bm::set_block_mask);
-    unsigned bit_pos;
+    unsigned bit_pos = 0;
 
     for (; nb < nb_right; ++nb)
     {
