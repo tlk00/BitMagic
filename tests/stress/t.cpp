@@ -1257,8 +1257,13 @@ template<typename T>
 bool FindRank(const T& bv, bm::id_t rank, bm::id_t from, bm::id_t& pos)
 {
     assert(rank);
+    bool res = false;
     
     typename T::enumerator en = bv.get_enumerator(from);
+    
+    typename T::enumerator en2 = bv.get_enumerator(from);
+    if (rank > 1)
+        en2.skip_to_rank(rank);
     if (!en.valid())
         return false;
     for (; en.valid(); ++en)
@@ -1267,10 +1272,22 @@ bool FindRank(const T& bv, bm::id_t rank, bm::id_t from, bm::id_t& pos)
         if (rank == 0)
         {
             pos = *en;
-            return true;
+            res = true;
+            break;
         }
     } // for en
-    return false;
+    
+    bm::id_t pos2 = *en2;
+    if (pos != pos2)
+    {
+        cerr << "FindRank enumerator::skip() failed: "
+        << "pos=" << pos << " skip()pos=" << pos2
+        << " from=" << from
+        << endl;
+        exit(1);
+    }
+    
+    return res;
 }
 
 
