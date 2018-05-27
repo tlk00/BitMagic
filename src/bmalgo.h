@@ -144,6 +144,10 @@ class bvector_rank_compressor
 public:
     typedef BV                         bvector_type;
     typedef typename BV::blocks_count  block_count_type;
+    enum buffer_cap
+    {
+        n_buffer_cap = 1024
+    };
 public:
 
     /**
@@ -186,55 +190,61 @@ void bvector_rank_compressor<BV>::compress(BV& bv_target,
         bv_target = bv_src;
         return;
     }
+    bm::id_t ibuffer[n_buffer_cap];
+    bm::id_t b_size;
     
     typedef typename BV::enumerator enumerator_t;
     enumerator_t en_s = bv_src.first();
     enumerator_t en_i = bv_idx.first();
 
-    bm::id_t r_idx = 0;
+    bm::id_t r_idx = b_size = 0;
     bm::id_t i, s;
+    
     for (; en_i.valid(); )
     {
         if (!en_s.valid())
-            return;
+            break;
         i = *en_i; s = *en_s;
 
         BM_ASSERT(s >= i);
         BM_ASSERT(bv_idx.test(i));
 
-        if (s < i)
-            return;
-        
         if (i == s)
         {
-            bv_target.set_bit_no_check(r_idx++);
-            ++en_i; ++en_s;
-        }
-        else
-        {
-            if (s > i)
+            ibuffer[b_size++] = r_idx++;
+            if (b_size == n_buffer_cap)
             {
-                if ((s - i) >= 128) // sufficiently far away, jump
-                {
-                    bm::id_t r_dist = bv_idx.count_range(i + 1, s);
-                    en_i.go_to(s);
-                    BM_ASSERT(en_i.valid());
-                    r_idx += r_dist;
-                }
-                else  // small distance, iterate to close the gap
-                {
-                    for (; s > i; ++r_idx)
-                    {
-                        ++en_i;
-                        i = *en_i;
-                        BM_ASSERT(en_i.valid());
-                        if (!en_i.valid())
-                            return;
-                    } // for
-                }
+                bm::combine_or(bv_target, ibuffer+0, ibuffer+b_size);
+                b_size ^= b_size; // = 0
             }
+            ++en_i; ++en_s;
+            continue;
+        }
+        BM_ASSERT(s > i);
+        
+        if ((s - i) >= 128) // sufficiently far away, jump
+        {
+            bm::id_t r_dist = bv_idx.count_range(i + 1, s);
+            en_i.go_to(s);
+            BM_ASSERT(en_i.valid());
+            r_idx += r_dist;
+        }
+        else  // small distance, iterate to close the gap
+        {
+            for (; s > i; ++r_idx)
+            {
+                ++en_i;
+                i = *en_i;
+            } // for
+            BM_ASSERT(en_i.valid());
         }
     } // for
+    
+    if (b_size)
+    {
+        bm::combine_or(bv_target, ibuffer+0, ibuffer+b_size);
+    }
+
 }
 
 
@@ -251,9 +261,11 @@ void bvector_rank_compressor<BV>::decompress(BV& bv_target,
         bv_target = bv_src;
         return;
     }
-
-    bm::id_t r_idx = 0;
-    bm::id_t i, s;
+    
+    bm::id_t r_idx, i, s, b_size;
+    bm::id_t ibuffer[n_buffer_cap];
+    
+    b_size = r_idx = 0;
 
     typedef typename BV::enumerator enumerator_t;
     enumerator_t en_s = bv_src.first();
@@ -266,27 +278,50 @@ void bvector_rank_compressor<BV>::decompress(BV& bv_target,
         i = *en_i;
         if (s == r_idx)
         {
-            bv_target.set_bit_no_check(i);
-            ++en_i; ++en_s;
-            ++r_idx;
+            ibuffer[b_size++] = i;
+            if (b_size == n_buffer_cap)
+            {
+                bm::combine_or(bv_target, ibuffer+0, ibuffer+b_size);
+                b_size ^= b_size; // = 0
+            }
+            ++en_i; ++en_s; ++r_idx;
             continue;
         }
+        // source is "faster" than index, need to re-align
         BM_ASSERT(s > r_idx);
         unsigned rank = s - r_idx + 1u;
+        unsigned new_pos = 0;
+        
         if (rank < 256)
         {
-            for (; s > r_idx; ++r_idx)
+            for (; s > r_idx; ++r_idx) // TODO: optimization
                 ++en_i;
+            BM_ASSERT(en_i.valid());
+            new_pos = *en_i;
         }
         else
         {
-            unsigned new_pos = 0;
             bv_idx.find_rank(rank, i, new_pos);
             BM_ASSERT(new_pos);
             r_idx = s;
             en_i.go_to(new_pos);
+            BM_ASSERT(en_i.valid());
         }
+        
+        ibuffer[b_size++] = new_pos;
+        if (b_size == n_buffer_cap)
+        {
+            bm::combine_or(bv_target, ibuffer+0, ibuffer+b_size);
+            b_size ^= b_size; // = 0
+        }
+        ++en_i; ++en_s; ++r_idx;
+        
     } // for en
+    
+    if (b_size)
+    {
+        bm::combine_or(bv_target, ibuffer+0, ibuffer+b_size);
+    }
 }
 
 template<class BV>
