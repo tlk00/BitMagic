@@ -755,7 +755,7 @@ void FillSetsRandomMethod(bvect_mini* bvect_min,
         method = rand() % 7;
     }
     unsigned factor;
-//method = 5;
+///method = 3;
     switch (method)
     {
 
@@ -1253,6 +1253,26 @@ template<class T> void CheckCountGapRange(const T& vect,
     }
 }
 
+template<typename T>
+bool FindRank(const T& bv, bm::id_t rank, bm::id_t from, bm::id_t& pos)
+{
+    assert(rank);
+    
+    typename T::enumerator en = bv.get_enumerator(from);
+    if (!en.valid())
+        return false;
+    for (; en.valid(); ++en)
+    {
+        rank -= en.valid();
+        if (rank == 0)
+        {
+            pos = *en;
+            return true;
+        }
+    } // for en
+    return false;
+}
+
 
 template<class T> void CheckCountRange(const T& vect, 
                                        unsigned left, 
@@ -1308,6 +1328,78 @@ template<class T> void CheckCountRange(const T& vect,
                  << "count_range()=" << cnt1
                  << " check=" << cnt2;
             exit(1);
+        }
+        
+        bm::id_t range = 1 + right - left;
+        if (cnt1 > range)
+        {
+            cerr << "Impossible count_range detected!" << endl;
+            exit(1);
+        }
+        
+        
+        if (cnt1) // check if we can reverse the search (rank)
+        {
+            unsigned pos;
+            bool rf = vect.find_rank(cnt1, left, pos);
+            if (!rf)
+            {
+                cerr << "1. find_rank() failed!" << "left=" << left
+                     << " right=" << right
+                     << " count_range()=" << cnt1
+                     << " pos=" << pos
+                     << " range=" << range
+                     << endl;
+                
+                unsigned pos2;
+                bool rf2 = FindRank(vect, cnt1, left, pos2);
+                if (!rf2)
+                {
+                    cerr << "Debug FindRank failed!" << endl;
+                }
+                else
+                {
+                    cerr << " rank=" << pos2 << endl;
+                }
+                
+                cerr << "detailed bug search..." << endl;
+                for (unsigned k = 1; k <= cnt1; ++k)
+                {
+                    rf = vect.find_rank(k, left, pos);
+                    rf2 = FindRank(vect, k, left, pos2);
+                    if (rf != rf2 || pos != pos2)
+                    {
+                        rf = vect.find_rank(k, left, pos);
+                        
+                        cerr << "Failed for rank=" << k << endl;
+                        cerr << rf << " " << rf2 << endl;
+                        cerr << "pos = " << pos << " pos2 = " << pos2 << endl;
+                        exit(1);
+                    }
+                }
+                
+                
+                exit(1);
+            }
+            if (right != pos)
+            {
+                unsigned pos2;
+                bool rf2 = FindRank(vect, cnt1, left, pos2);
+                assert(rf2);
+                // check if we found zero-tail
+                //auto cnt3 = vect.count_range(pos+1, right, block_count_arr);
+                if (pos2 != pos)
+                {
+                    rf = vect.find_rank(cnt1, left, pos);
+                    cout << "2. find_rank() check failed! \n" << "left=" << left
+                         << " right=" << right
+                         << " count_range()=" << cnt1
+                         << " pos=" << pos
+                         << " rank = " << pos2
+                         << endl;
+                    exit(1);
+                }
+            }
         }
     }
 }
@@ -1953,12 +2045,50 @@ void BasicFunctionalityTest()
     {
         bvect_min.set_bit(i);
         bvect_full.set_bit(i);
+        
+        bm::id_t pos1, pos2;
+        auto rf1 = FindRank(bvect_full, i+1, 0, pos1);
+        auto rf2 = bvect_full.find_rank(i+1, 0, pos2);
+        assert(rf1);
+        assert(rf2);
+        if (pos1 != pos2)
+        {
+            rf2 = bvect_full.find_rank(i+1, 0, pos2);
+            cerr << "1.Rank check error!\n"
+                 << " pos1 = " << pos1
+                 << " pos2 = " << pos2
+                 ;
+            exit(1);
+        }
     }
-    
     bvect_full1.set_range(0, ITERATIONS-1);
+    
+    cout << "Rank check 2" << endl;
+    
+    for (i = 0; i < ITERATIONS; ++i)
+    {
+        bm::id_t pos1, pos2;
+        auto rf1 = FindRank(bvect_full1, i+1, 0, pos1);
+        auto rf2 = bvect_full1.find_rank(i+1, 0, pos2);
+        assert(rf1);
+        assert(rf2);
+        if (pos1 != pos2)
+        {
+            rf2 = bvect_full1.find_rank(i+1, 0, pos2);
+            cerr << "2.Rank check error!\n"
+                 << " pos1 = " << pos1
+                 << " pos2 = " << pos2
+                 ;
+            exit(1);
+        }
+    }
+
     
     CheckCountRange(bvect_full, 0, ITERATIONS);
     CheckCountRange(bvect_full, 10, ITERATIONS+10);
+    CheckCountRange(bvect_full1, 0, ITERATIONS);
+    CheckCountRange(bvect_full1, 10, ITERATIONS+10);
+
 
     if (bvect_full1 != bvect_full)
     {
@@ -1978,6 +2108,19 @@ void BasicFunctionalityTest()
             ++count_min;
     }
 
+    cout << "Rank check 3" << endl;
+    for (i = 0; i < ITERATIONS; ++i)
+    {
+        CheckCountRange(bvect_full, i, ITERATIONS);
+        CheckCountRange(bvect_full1, i, ITERATIONS);
+    }
+
+    cout << "Rank check 4" << endl;
+    for (i = ITERATIONS; i > 0; --i)
+    {
+        CheckCountRange(bvect_full, 0, i);
+        CheckCountRange(bvect_full1, 0, i);
+    }
 
     
     unsigned count_full = bvect_full.count();
@@ -2061,6 +2204,30 @@ void BasicFunctionalityTest()
     }
 }
 
+
+static
+void RankFindTest()
+{
+    cout << "---------------------------- Find Rank test" << endl;
+    
+    {
+    bvect bv1;
+    bv1[30] = true;
+    bv1[65534] = true;
+    
+    bool rf1, rf2;
+    bm::id_t pos;
+    rf1 = bv1.find_rank(1, 20, pos);
+    assert(rf1);
+    assert(pos == 30);
+
+    rf2 = bv1.find_rank(2, 30, pos);
+    assert(rf1);
+    assert(pos == 65534);
+    }
+    
+    cout << "---------------------------- Find Rank test OK" << endl;
+}
 
 static
 void BvectorIncTest()
@@ -13370,6 +13537,8 @@ int main(void)
 
      BasicFunctionalityTest();
 
+     RankFindTest();
+
      BvectorIncTest();
 
      ClearAllTest();
@@ -13387,13 +13556,13 @@ int main(void)
      MaxSTest();
 
      GetNextTest();
-    
+
      SimpleRandomFillTest();
-     
+
      RangeRandomFillTest();
 
      AndOperationsTest();   
-          
+
      OrOperationsTest();
 
      XorOperationsTest();
