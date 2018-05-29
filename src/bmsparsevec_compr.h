@@ -164,6 +164,11 @@ public:
     */
     const bvector_type* get_null_bvector() const;
 
+    /**
+        \brief find position of compressed element by its rank
+    */
+    bool find_rank(bm::id_t rank, bm::id_t& pos) const;
+
     //@}
     
     // ------------------------------------------------------------
@@ -549,7 +554,19 @@ compressed_sparse_vector<Val, SV>::get_null_bvector() const
     return sv_.get_null_bvector();
 }
 
+//---------------------------------------------------------------------
 
+template<class Val, class SV>
+bool compressed_sparse_vector<Val, SV>::find_rank(bm::id_t rank, bm::id_t& pos) const
+{
+    BM_ASSERT(rank);
+
+    const bvector_type* bv_null = get_null_bvector();
+    bool b = bv_null->find_rank(rank, 0, pos);
+    return b;
+}
+
+//---------------------------------------------------------------------
 
 } // namespace bm
 

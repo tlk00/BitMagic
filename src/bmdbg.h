@@ -620,9 +620,9 @@ void print_svector_stat(const SV& svect, bool print_sim = false)
     std::cout << "Memory used:      " << st.memory_used << " "
               << (st.memory_used / (1024 * 1024))       << "MB" << std::endl;
     
-    std::cout << "Projected mem usage for vector<int>:"
-              << sizeof(int) * svect.size() << " "
-              << (sizeof(int) * svect.size()) / (1024 * 1024) << "MB"
+    std::cout << "Projected mem usage for vector<value_type>:"
+              << sizeof(typename SV::value_type) * svect.size() << " "
+              << (sizeof(typename SV::value_type) * svect.size()) / (1024 * 1024) << "MB"
               << std::endl;
     if (sizeof(typename SV::value_type) > 4)
     {
@@ -666,7 +666,13 @@ void print_svector_stat(const SV& svect, bool print_sim = false)
     {
         std::cout << "(not) NULL plain:\n";
         print_bvector_stat(*bv_null);
-        std::cout << " - Bitcount: " << bv_null->count() << std::endl;
+        unsigned not_null_cnt = bv_null->count();
+        std::cout << " - Bitcount: " << not_null_cnt << std::endl;
+
+        std::cout << "Projected mem usage for std::vector<pair<unsigned, value_type> >:"
+            << ((sizeof(typename SV::value_type) + sizeof(unsigned)) * not_null_cnt) << " "
+            << ((sizeof(typename SV::value_type) + sizeof(unsigned)) * not_null_cnt) / (1024 * 1024) << "MB"
+            << std::endl;
     }
 
     if (svect.size())
@@ -680,6 +686,8 @@ void print_svector_stat(const SV& svect, bool print_sim = false)
         std::cout << "Projected mem usage for non-zero elements: " << non_zero_mem << " "
                   << non_zero_mem / (1024*1024) << " MB"
                   << std::endl;
+
+        
     }
 }
 
