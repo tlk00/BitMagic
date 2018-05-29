@@ -542,8 +542,6 @@ T gap_level(const T* buf)
 }
 
 
-
-
 /*!
     \brief GAP block find the last set bit
 
@@ -617,8 +615,8 @@ unsigned gap_bfind(const T* buf, unsigned pos, unsigned* is_set)
     BM_ASSERT(pos < bm::gap_max_bits);
     *is_set = (*buf) & 1;
 
-    BMREGISTER unsigned start = 1;
-    BMREGISTER unsigned end = 1 + ((*buf) >> 3);
+    unsigned start = 1;
+    unsigned end = 1 + ((*buf) >> 3);
 
     while ( start != end )
     {
@@ -1087,13 +1085,13 @@ template<class T> T sum_arr(T* first, T* last)
 */
 template<typename T> unsigned gap_bit_count(const T* buf, unsigned dsize=0) 
 {
-    BMREGISTER const T* pcurr = buf;
+    const T* pcurr = buf;
     if (dsize == 0)
         dsize = (*pcurr >> 3);
 
-    BMREGISTER const T* pend = pcurr + dsize;
+    const T* pend = pcurr + dsize;
 
-    BMREGISTER unsigned bits_counter = 0;
+    unsigned bits_counter = 0;
     ++pcurr;
 
     if (*buf & 1)
@@ -1389,7 +1387,7 @@ T* gap_2_dgap(const T* gap_buf, T* dgap_buf, bool copy_head=true)
 template<typename T>
 void dgap_2_gap(const T* dgap_buf, T* gap_buf, T gap_header=0)
 {
-    BMREGISTER const T* pcurr = dgap_buf;
+    const T* pcurr = dgap_buf;
     unsigned len;    
     if (!gap_header) // GAP header is already part of the stream
     {
@@ -1402,7 +1400,7 @@ void dgap_2_gap(const T* dgap_buf, T* gap_buf, T gap_header=0)
         *gap_buf++ = gap_header; // assign GAP header
     }    
     --len; // last element is actually not encoded
-    BMREGISTER const T* pend = pcurr + len;
+    const T* pend = pcurr + len;
 
     *gap_buf = *pcurr++; // copy first element
     if (*gap_buf == 0) 
@@ -1502,8 +1500,8 @@ void gap_buff_op(T*         BMRESTRICT dest,
                  F&         f,
                  unsigned&  dlen)
 {
-    BMREGISTER const T*  cur1 = vect1;
-    BMREGISTER const T*  cur2 = vect2;
+    const T*  cur1 = vect1;
+    const T*  cur2 = vect2;
 
     T bitval1 = (T)((*cur1++ & 1) ^ vect1_mask);
     T bitval2 = (T)((*cur2++ & 1) ^ vect2_mask);
@@ -1511,7 +1509,7 @@ void gap_buff_op(T*         BMRESTRICT dest,
     T bitval = (T) f(bitval1, bitval2);
     T bitval_prev = bitval;
 
-    BMREGISTER T* res = dest; 
+    T* res = dest;
     *res = bitval;
     ++res;
 
@@ -1558,7 +1556,6 @@ void gap_buff_op(T*         BMRESTRICT dest,
 
     dlen = (unsigned)(res - dest);
     *dest = (T)((*dest & 7) + (dlen << 3));
-
 }
 
 /*!
@@ -1582,8 +1579,8 @@ unsigned gap_buff_any_op(const T*   BMRESTRICT vect1,
                          unsigned              vect2_mask, 
                          F                     f)
 {
-    BMREGISTER const T*  cur1 = vect1;
-    BMREGISTER const T*  cur2 = vect2;
+    const T*  cur1 = vect1;
+    const T*  cur2 = vect2;
 
     unsigned bitval1 = (*cur1++ & 1) ^ vect1_mask;
     unsigned bitval2 = (*cur2++ & 1) ^ vect2_mask;
@@ -2518,9 +2515,6 @@ bm::id_t gap_bitset_xor_any(const unsigned* block, const T*  buf)
         if (bitval) // 1 gap; means Result = Total_Bits - BitCount;
             c = (*pcurr - prev + 1) - c;
         count += c;
-/*
-        if (count)
-            return count; */
     }
     return count;
 }
@@ -2887,7 +2881,7 @@ int bitcmp(const T* buf1, const T* buf2, unsigned len)
 
    @ingroup gapfunc
 */
-template<typename T> 
+template<typename T>
 unsigned bit_convert_to_gap(T* BMRESTRICT dest,
                             const unsigned* BMRESTRICT src,
                             bm::id_t bits,
@@ -2895,13 +2889,13 @@ unsigned bit_convert_to_gap(T* BMRESTRICT dest,
 {
     T* BMRESTRICT pcurr = dest;
     T* BMRESTRICT end = dest + dest_len; 
-    int bitval = (*src) & 1;
+    unsigned bitval = (*src) & 1u;
     *pcurr = (T)bitval;
 
     ++pcurr;
     *pcurr = 0;
     unsigned bit_idx = 0;
-    int bitval_next;
+    unsigned bitval_next;
 
     unsigned val = *src;
 
@@ -2930,7 +2924,6 @@ unsigned bit_convert_to_gap(T* BMRESTRICT dest,
            ++src;
            val = *src;
         }
-
 
         unsigned mask = 1;
         while (mask)

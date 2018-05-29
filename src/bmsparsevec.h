@@ -749,7 +749,7 @@ public:
     static
     void throw_bad_alloc();
 
-    /** Number of effective bit-plains in the value type*/
+    /** Number of effective bit-plains in the value type */
     unsigned effective_plains() const { return effective_plains_ + 1; }
     ///@}
 

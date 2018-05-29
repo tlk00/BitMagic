@@ -223,6 +223,7 @@ public:
     void find_eq(const SV&                  sv,
                  typename SV::value_type    value,
                  typename SV::bvector_type& bv_out);
+    
     /**
         \brief find all sparse vector elements EQ to 0
         \param sv - input sparse vector
