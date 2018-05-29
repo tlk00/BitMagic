@@ -45,6 +45,10 @@ inline
 bm::id_t bit_block_any_range(const bm::word_t* block,
                              bm::word_t left,
                              bm::word_t right);
+inline
+bool bit_is_all_zero(const bm::word_t* start,
+                     const bm::word_t* end);
+
 
 /*!
     @brief Structure with statistical information about bitset's memory 
@@ -450,6 +454,94 @@ template<bool T> struct globals
 };
 
 template<bool T> typename globals<T>::bo globals<T>::_bo;
+
+
+
+/*!
+   \brief Checks if GAP block is all-zero.
+   \param buf - GAP buffer pointer.
+   \param set_max - max possible bitset length
+   \returns true if all-zero.
+
+   @ingroup gapfunc
+*/
+template<typename T>
+bool gap_is_all_zero(const T* buf, unsigned set_max)
+{
+    return (((*buf & 1)==0)  && (*(++buf) == set_max - 1));
+}
+
+/*!
+   \brief Checks if GAP block is all-one.
+   \param buf - GAP buffer pointer.
+   \param set_max - max possible bitset length
+   \returns true if all-one.
+
+   @ingroup gapfunc
+*/
+template<typename T>
+bool gap_is_all_one(const T* buf, unsigned set_max)
+{
+    return ((*buf & 1)  && (*(++buf) == set_max - 1));
+}
+
+/*!
+   \brief Returs GAP block length.
+   \param buf - GAP buffer pointer.
+   \returns GAP block length.
+
+   @ingroup gapfunc
+*/
+template<typename T> T gap_length(const T* buf)
+{
+    return (T)((*buf >> 3) + 1);
+}
+
+
+/*!
+   \brief Returs GAP block capacity
+   \param buf - GAP buffer pointer
+   \param glevel_len - pointer on GAP header word
+   \returns GAP block capacity.
+
+   @ingroup gapfunc
+*/
+template<typename T>
+unsigned gap_capacity(const T* buf, const T* glevel_len)
+{
+    return glevel_len[(*buf >> 1) & 3];
+}
+
+
+/*!
+   \brief Returs GAP block capacity limit.
+   \param buf - GAP buffer pointer.
+   \param glevel_len - GAP lengths table (gap_len_table)
+   \returns GAP block limit.
+
+   @ingroup gapfunc
+*/
+template<typename T>
+unsigned gap_limit(const T* buf, const T* glevel_len)
+{
+    return glevel_len[(*buf >> 1) & 3]-4;
+}
+
+
+/*!
+   \brief Returs GAP blocks capacity level.
+   \param buf - GAP buffer pointer.
+   \returns GAP block capacity level.
+
+   @ingroup gapfunc
+*/
+template<typename T>
+T gap_level(const T* buf)
+{
+    return T((*buf >> 1) & 3u);
+}
+
+
 
 
 /*!
@@ -1645,7 +1737,7 @@ template<typename T> unsigned gap_set_value(unsigned val,
     BM_ASSERT(pos < bm::gap_max_bits);
     unsigned curr = gap_bfind(buf, pos, is_set);
 
-    BMREGISTER T end = (T)(*buf >> 3);
+    T end = (T)(*buf >> 3);
     if (*is_set == val)
     {
         *is_set = 0;
@@ -1653,9 +1745,9 @@ template<typename T> unsigned gap_set_value(unsigned val,
     }
     *is_set = 1;
 
-    BMREGISTER T* pcurr = buf + curr;
-    BMREGISTER T* pprev = pcurr - 1;
-    BMREGISTER T* pend = buf + end;
+    T* pcurr = buf + curr;
+    T* pprev = pcurr - 1;
+    T* pend = buf + end;
 
     // Special case, first bit GAP operation. There is no platform beside it.
     // initial flag must be inverted.
@@ -1734,11 +1826,11 @@ unsigned gap_add_value(T* buf, unsigned pos)
 {
     BM_ASSERT(pos < bm::gap_max_bits);
 
-    BMREGISTER T end = (T)(*buf >> 3);
+    T end = (T)(*buf >> 3);
     T curr = end;
-    BMREGISTER T* pcurr = buf + end;
-    BMREGISTER T* pend  = pcurr;
-    BMREGISTER T* pprev = pcurr - 1;
+    T* pcurr = buf + end;
+    T* pend  = pcurr;
+    T* pprev = pcurr - 1;
 
     // Special case, first bit GAP operation. There is no platform beside it.
     // initial flag must be inverted.
@@ -1933,12 +2025,13 @@ unsigned gap_find_in_block(const T* buf,
     
     @ingroup bitfunc
 */
-BMFORCEINLINE void set_bit(unsigned* dest, unsigned  bitpos)
+BMFORCEINLINE
+void set_bit(unsigned* dest, unsigned  bitpos)
 {
     unsigned nbit  = unsigned(bitpos & bm::set_block_mask); 
     unsigned nword = unsigned(nbit >> bm::set_word_shift); 
     nbit &= bm::set_word_mask;
-    dest[nword] |= unsigned(1 << nbit);
+    dest[nword] |= unsigned(1u << nbit);
 }
 
 /*! 
@@ -1946,7 +2039,8 @@ BMFORCEINLINE void set_bit(unsigned* dest, unsigned  bitpos)
     
     @ingroup bitfunc
 */
-BMFORCEINLINE unsigned test_bit(const unsigned* block, unsigned  bitpos)
+BMFORCEINLINE
+unsigned test_bit(const unsigned* block, unsigned  bitpos)
 {
     unsigned nbit  = unsigned(bitpos & bm::set_block_mask); 
     unsigned nword = unsigned(nbit >> bm::set_word_shift); 
@@ -1963,9 +2057,8 @@ BMFORCEINLINE unsigned test_bit(const unsigned* block, unsigned  bitpos)
 
    @ingroup bitfunc
 */  
-inline void or_bit_block(unsigned* dest, 
-                         unsigned bitpos, 
-                         unsigned bitcount)
+inline
+void or_bit_block(unsigned* dest, unsigned bitpos, unsigned bitcount)
 {
     unsigned nbit  = unsigned(bitpos & bm::set_block_mask); 
     unsigned nword = unsigned(nbit >> bm::set_word_shift); 
@@ -1975,7 +2068,7 @@ inline void or_bit_block(unsigned* dest,
 
     if (bitcount == 1)  // special case (only 1 bit to set)
     {
-        *word |= unsigned(1 << nbit);
+        *word |= bitcount << nbit;
         return;
     }
 
@@ -1992,28 +2085,24 @@ inline void or_bit_block(unsigned* dest,
                 block_set_table<true>::_right[nbit] & 
                 block_set_table<true>::_left[right_margin-1];
             *word |= mask;
-            return; // we are done
+            return;
         }
-        else
-        {
-            *word |= block_set_table<true>::_right[nbit];
-            bitcount -= 32 - nbit;
-        }
+        *word |= block_set_table<true>::_right[nbit];
+        bitcount -= 32 - nbit;
         ++word;
     }
-
-    // now we are word aligned, lets find out how many words we 
-    // can now turn ON using loop
-
-    for ( ;bitcount >= 32; bitcount -= 32) 
+    // now word aligned, use unrolled loops
+    //
+    for ( ;bitcount >= 64; bitcount-=64, word+=2)
+        word[0] = word[1] = ~0u;
+    if (bitcount >= 32)
     {
-        *word++ = 0xffffffff;
+        *word++ = ~0u; bitcount -= 32;
     }
+    BM_ASSERT(bitcount < 32);
 
     if (bitcount) 
-    {
         *word |= block_set_table<true>::_left[bitcount-1];
-    }
 }
 
 
@@ -2054,25 +2143,21 @@ inline void sub_bit_block(unsigned* dest,
                 block_set_table<true>::_right[nbit] & 
                 block_set_table<true>::_left[right_margin-1];
             *word &= ~mask;
-            return; // we are done
+            return;
         }
-        else
-        {
-            *word &= ~block_set_table<true>::_right[nbit];
-            bitcount -= 32 - nbit;
-        }
+        *word &= ~block_set_table<true>::_right[nbit];
+        bitcount -= 32 - nbit;
         ++word;
     }
-
-    // now we are word aligned, lets find out how many words we 
-    // can now turn ON using loop
-
-    for ( ;bitcount >= 32; bitcount -= 32) 
+    // now word aligned, use unrolled loops
+    //
+    for ( ;bitcount >= 64; bitcount-=64, word+=2)
+        word[0] = word[1] = 0u;
+    if (bitcount >= 32)
     {
-        *word++ = 0;
+        *word++ = 0u; bitcount -= 32;
     }
-
-    if (bitcount) 
+    if (bitcount)
     {
         *word &= ~block_set_table<true>::_left[bitcount-1];
     }
@@ -2116,59 +2201,47 @@ inline void xor_bit_block(unsigned* dest,
                 block_set_table<true>::_right[nbit] & 
                 block_set_table<true>::_left[right_margin-1];
             *word ^= mask;
-            return; // we are done
+            return;
         }
-        else
-        {
-            *word ^= block_set_table<true>::_right[nbit];
-            bitcount -= 32 - nbit;
-        }
+        *word ^= block_set_table<true>::_right[nbit];
+        bitcount -= 32 - nbit;
         ++word;
     }
-
-    // now we are word aligned, lets find out how many words we 
-    // can now turn ON using loop
-
-    for ( ;bitcount >= 32; bitcount -= 32) 
+    for ( ;bitcount >= 64; bitcount-=64, word+=2)
     {
-        *word++ ^= 0xffffffff;
+        word[0] ^= ~0u; word[1] ^= ~0u;
     }
-
-    if (bitcount) 
+    if (bitcount >= 32)
     {
+        *word++ ^= ~0u; bitcount -= 32;
+    }
+    if (bitcount)
         *word ^= block_set_table<true>::_left[bitcount-1];
-    }
 }
 
 
 /*!
    \brief SUB (AND NOT) GAP block to bitblock.
    \param dest - bitblock buffer pointer.
-   \param buf  - GAP buffer pointer.
+   \param pcurr  - GAP buffer pointer.
 
    @ingroup gapfunc
 */
 template<typename T> 
-void gap_sub_to_bitset(unsigned* dest, const T*  buf)
+void gap_sub_to_bitset(unsigned* dest, const T*  pcurr)
 {
-    BMREGISTER const T* pcurr = buf;    
-    BMREGISTER const T* pend = pcurr + (*pcurr >> 3);
-    ++pcurr;
-
-    if (*buf & 1)  // Starts with 1
+    BM_ASSERT(dest && pcurr);
+    
+    const T* pend = pcurr + (*pcurr >> 3);
+    if (*pcurr & 1)  // Starts with 1
     {
-        sub_bit_block(dest, 0, *pcurr + 1);
+        bm::sub_bit_block(dest, 0, 1 + pcurr[1]);
         ++pcurr;
     }
-    ++pcurr; // now we are in GAP "1" again
-
-    while (pcurr <= pend)
+    for (pcurr += 2; pcurr <= pend; pcurr += 2)
     {
-        unsigned bitpos = *(pcurr-1) + 1;
-        BM_ASSERT(*pcurr > *(pcurr-1));
-        unsigned gap_len = *pcurr - *(pcurr-1);
-        sub_bit_block(dest, bitpos, gap_len);
-        pcurr += 2;
+        BM_ASSERT(*pcurr > pcurr[-1]);
+        bm::sub_bit_block(dest, 1 + pcurr[-1], *pcurr - pcurr[-1]);
     }
 }
 
@@ -2176,31 +2249,25 @@ void gap_sub_to_bitset(unsigned* dest, const T*  buf)
 /*!
    \brief XOR GAP block to bitblock.
    \param dest - bitblock buffer pointer.
-   \param buf  - GAP buffer pointer.
+   \param pcurr  - GAP buffer pointer.
 
    @ingroup gapfunc
 */
 template<typename T> 
-void gap_xor_to_bitset(unsigned* dest, const T*  buf)
+void gap_xor_to_bitset(unsigned* dest, const T*  pcurr)
 {
-    BMREGISTER const T* pcurr = buf;    
-    BMREGISTER const T* pend = pcurr + (*pcurr >> 3);
-    ++pcurr;
+    BM_ASSERT(dest && pcurr);
 
-    if (*buf & 1)  // Starts with 1
+    const T* pend = pcurr + (*pcurr >> 3);
+    if (*pcurr & 1)  // Starts with 1
     {
-        xor_bit_block(dest, 0, *pcurr + 1);
+        bm::xor_bit_block(dest, 0, 1 + pcurr[1]);
         ++pcurr;
     }
-    ++pcurr; // now we are in GAP "1" again
-
-    while (pcurr <= pend)
+    for (pcurr += 2; pcurr <= pend; pcurr += 2)
     {
-        unsigned bitpos = *(pcurr-1) + 1;
-        BM_ASSERT(*pcurr > *(pcurr-1));
-        unsigned gap_len = *pcurr - *(pcurr-1);
-        xor_bit_block(dest, bitpos, gap_len);
-        pcurr += 2;
+        BM_ASSERT(*pcurr > pcurr[-1]);
+        bm::xor_bit_block(dest, 1 + pcurr[-1], *pcurr - pcurr[-1]);
     }
 }
 
@@ -2208,64 +2275,50 @@ void gap_xor_to_bitset(unsigned* dest, const T*  buf)
 /*!
    \brief Adds(OR) GAP block to bitblock.
    \param dest - bitblock buffer pointer.
-   \param buf  - GAP buffer pointer.
+   \param pcurr  - GAP buffer pointer.
 
    @ingroup gapfunc
 */
-template<typename T> 
-void gap_add_to_bitset(unsigned* dest, const T*  buf)
+template<typename T>
+void gap_add_to_bitset(unsigned* dest, const T*  pcurr)
 {
-    BMREGISTER const T* pcurr = buf;    
-    BMREGISTER const T* pend = pcurr + (*pcurr >> 3);
-    ++pcurr;
-
-    if (*buf & 1)  // Starts with 1
+    BM_ASSERT(dest && pcurr);
+    
+    const T* pend = pcurr + (*pcurr >> 3);
+    if (*pcurr & 1)  // Starts with 1
     {
-        or_bit_block(dest, 0, *pcurr + 1);
+        bm::or_bit_block(dest, 0, 1 + pcurr[1]);
         ++pcurr;
     }
-    ++pcurr; // now we are in GAP "1" again
-
-    while (pcurr <= pend)
+    for (pcurr += 2; pcurr <= pend; pcurr += 2)
     {
-        unsigned bitpos = *(pcurr-1) + 1;
-        BM_ASSERT(*pcurr > *(pcurr-1));
-        unsigned gap_len = *pcurr - *(pcurr-1);
-        or_bit_block(dest, bitpos, gap_len);
-        pcurr += 2;
+        BM_ASSERT(*pcurr > pcurr[-1]);
+        bm::or_bit_block(dest, 1 + pcurr[-1], *pcurr - pcurr[-1]);
     }
 }
-
 
 /*!
    \brief ANDs GAP block to bitblock.
    \param dest - bitblock buffer pointer.
-   \param buf  - GAP buffer pointer.
+   \param pcurr  - GAP buffer pointer.
 
    @ingroup gapfunc
 */
 template<typename T> 
-void gap_and_to_bitset(unsigned* dest, const T*  buf)
+void gap_and_to_bitset(unsigned* dest, const T*  pcurr)
 {
-    BMREGISTER const T* pcurr = buf;    
-    BMREGISTER const T* pend = pcurr + (*pcurr >> 3);
-    ++pcurr;
-
-    if (! (*buf & 1) )  // Starts with 0 
+    BM_ASSERT(dest && pcurr);
+    
+    const T* pend = pcurr + (*pcurr >> 3);
+    if (!(*pcurr & 1) )  // Starts with 0
     {
-        // Instead of AND we can SUB 0 gaps here 
-        sub_bit_block(dest, 0, *pcurr + 1);
+        bm::sub_bit_block(dest, 0, pcurr[1] + 1); // (not AND) - SUB [0] gaps
         ++pcurr;
     }
-    ++pcurr; // now we are in GAP "0" again
-
-    while (pcurr <= pend)
+    for (pcurr += 2; pcurr <= pend; pcurr += 2) // now we are in GAP "0" again
     {
-        unsigned bitpos = *(pcurr-1) + 1;
         BM_ASSERT(*pcurr > *(pcurr-1));
-        unsigned gap_len = *pcurr - *(pcurr-1);
-        sub_bit_block(dest, bitpos, gap_len);
-        pcurr += 2;
+        bm::sub_bit_block(dest, pcurr[-1]+1, *pcurr - pcurr[-1]);
     }
 }
 
@@ -2273,30 +2326,25 @@ void gap_and_to_bitset(unsigned* dest, const T*  buf)
 /*!
    \brief Compute bitcount of bit block AND masked by GAP block
    \param block - bitblock buffer pointer
-   \param buf  - GAP buffer pointer
+   \param pcurr  - GAP buffer pointer
    \return bitcount - cardinality of the AND product
 
    @ingroup gapfunc
 */
 template<typename T> 
-bm::id_t gap_bitset_and_count(const unsigned* block, const T*  buf)
+bm::id_t gap_bitset_and_count(const unsigned* block, const T*  pcurr)
 {
     BM_ASSERT(block);
-
-    const T* pcurr = buf;    
     const T* pend = pcurr + (*pcurr >> 3);
-    ++pcurr;
-
     bm::id_t count = 0;
-    if (*buf & 1)  // Starts with 1
+    if (*pcurr & 1)  // Starts with 1
     {
-        count += bit_block_calc_count_range(block, 0, *pcurr);
+        count += bm::bit_block_calc_count_range(block, 0, pcurr[1]);
         ++pcurr;
     }
-    ++pcurr; // now we are in GAP "1" again
-    for (;pcurr <= pend; pcurr += 2)
+    for (pcurr +=2 ;pcurr <= pend; pcurr += 2)
     {
-        count += bit_block_calc_count_range(block, *(pcurr-1)+1, *pcurr);
+        count += bm::bit_block_calc_count_range(block, pcurr[-1]+1, *pcurr);
     }
     return count;
 }
@@ -2305,37 +2353,26 @@ bm::id_t gap_bitset_and_count(const unsigned* block, const T*  buf)
 /*!
    \brief Bitcount test of bit block AND masked by GAP block.
    \param block - bitblock buffer pointer
-   \param buf  - GAP buffer pointer
+   \param pcurr  - GAP buffer pointer
    \return non-zero value if AND produces any result
 
    @ingroup gapfunc
 */
 template<typename T> 
-bm::id_t gap_bitset_and_any(const unsigned* block, const T*  buf)
+bm::id_t gap_bitset_and_any(const unsigned* block, const T* pcurr)
 {
     BM_ASSERT(block);
 
-    BMREGISTER const T* pcurr = buf;    
-    BMREGISTER const T* pend = pcurr + (*pcurr >> 3);
-    ++pcurr;
-
+    const T* pend = pcurr + (*pcurr >> 3);
     bm::id_t count = 0;
-    if (*buf & 1)  // Starts with 1
+    if (*pcurr & 1)  // Starts with 1
     {
-        count += bit_block_any_range(block, 0, *pcurr);
-        if (count)
-            return count;
+        count = bm::bit_block_any_range(block, 0, pcurr[1]);
         ++pcurr;
     }
-    ++pcurr; // now we are in GAP "1" again
-
-    while (pcurr <= pend)
+    for (pcurr +=2 ;!count && pcurr <= pend; pcurr += 2)
     {
-        bm::id_t c = bit_block_any_range(block, *(pcurr-1)+1, *pcurr);
-        count += c;
-        if (count)
-            break;
-        pcurr += 2;
+        count = bm::bit_block_any_range(block, pcurr[-1]+1, *pcurr);
     }
     return count;
 }
@@ -2355,8 +2392,8 @@ bm::id_t gap_bitset_sub_count(const unsigned* block, const T*  buf)
 {
     BM_ASSERT(block);
 
-    BMREGISTER const T* pcurr = buf;    
-    BMREGISTER const T* pend = pcurr + (*pcurr >> 3);
+    const T* pcurr = buf;
+    const T* pend = pcurr + (*pcurr >> 3);
     ++pcurr;
 
     bm::id_t count = 0;
@@ -2370,7 +2407,7 @@ bm::id_t gap_bitset_sub_count(const unsigned* block, const T*  buf)
 
     for (;pcurr <= pend; pcurr+=2)
     {
-        count += bit_block_calc_count_range(block, *(pcurr-1)+1, *pcurr);
+        count += bm::bit_block_calc_count_range(block, *(pcurr-1)+1, *pcurr);
     }
     return count;
 }
@@ -2389,8 +2426,8 @@ bm::id_t gap_bitset_sub_any(const unsigned* block, const T*  buf)
 {
     BM_ASSERT(block);
 
-    BMREGISTER const T* pcurr = buf;    
-    BMREGISTER const T* pend = pcurr + (*pcurr >> 3);
+    const T* pcurr = buf;
+    const T* pend = pcurr + (*pcurr >> 3);
     ++pcurr;
 
     bm::id_t count = 0;
@@ -2404,11 +2441,9 @@ bm::id_t gap_bitset_sub_any(const unsigned* block, const T*  buf)
     }
     ++pcurr; // now we are in GAP "0" again
 
-    for (;pcurr <= pend; pcurr+=2)
+    for (; !count && pcurr <= pend; pcurr+=2)
     {
-        count += bit_block_any_range(block, *(pcurr-1)+1, *pcurr);
-        if (count)
-            return count;
+        count += bm::bit_block_any_range(block, *(pcurr-1)+1, *pcurr);
     }
     return count;
 }
@@ -2428,13 +2463,13 @@ bm::id_t gap_bitset_xor_count(const unsigned* block, const T*  buf)
 {
     BM_ASSERT(block);
 
-    BMREGISTER const T* pcurr = buf;    
-    BMREGISTER const T* pend = pcurr + (*pcurr >> 3);
+    const T* pcurr = buf;
+    const T* pend = pcurr + (*pcurr >> 3);
     ++pcurr;
 
     unsigned bitval = *buf & 1;
     
-    BMREGISTER bm::id_t count = bit_block_calc_count_range(block, 0, *pcurr);
+    bm::id_t count = bm::bit_block_calc_count_range(block, 0, *pcurr);
     if (bitval)
     {
         count = *pcurr + 1 - count;
@@ -2446,9 +2481,7 @@ bm::id_t gap_bitset_xor_count(const unsigned* block, const T*  buf)
         bm::id_t c = bit_block_calc_count_range(block, prev, *pcurr);
         
         if (bitval) // 1 gap; means Result = Total_Bits - BitCount;
-        {
             c = (*pcurr - prev + 1) - c;
-        }
         count += c;
     }
     return count;
@@ -2467,31 +2500,27 @@ bm::id_t gap_bitset_xor_any(const unsigned* block, const T*  buf)
 {
     BM_ASSERT(block);
 
-    BMREGISTER const T* pcurr = buf;    
-    BMREGISTER const T* pend = pcurr + (*pcurr >> 3);
+    const T* pcurr = buf;
+    const T* pend = pcurr + (*pcurr >> 3);
     ++pcurr;
 
     unsigned bitval = *buf & 1;
     
-    BMREGISTER bm::id_t count = bit_block_any_range(block, 0, *pcurr);
+    bm::id_t count = bit_block_any_range(block, 0, *pcurr);
     if (bitval)
-    {
         count = *pcurr + 1 - count;
-    }
     
-    for (bitval^=1, ++pcurr; pcurr <= pend; bitval^=1, ++pcurr)
+    for (bitval^=1, ++pcurr; !count && pcurr <= pend; bitval^=1, ++pcurr)
     {
         T prev = (T)(*(pcurr-1)+1);
         bm::id_t c = bit_block_any_range(block, prev, *pcurr);
         
         if (bitval) // 1 gap; means Result = Total_Bits - BitCount;
-        {
             c = (*pcurr - prev + 1) - c;
-        }
-        
         count += c;
+/*
         if (count)
-            return count;
+            return count; */
     }
     return count;
 }
@@ -2511,36 +2540,20 @@ bm::id_t gap_bitset_or_count(const unsigned* block, const T*  buf)
 {
     BM_ASSERT(block);
 
-    BMREGISTER const T* pcurr = buf;    
-    BMREGISTER const T* pend = pcurr + (*pcurr >> 3);
+    const T* pcurr = buf;
+    const T* pend = pcurr + (*pcurr >> 3);
     ++pcurr;
 
     unsigned bitval = *buf & 1;
     
-    BMREGISTER bm::id_t count;
-    if (bitval)
-    {
-        count = *pcurr + 1;
-    } 
-    else
-    {
-        count = bit_block_calc_count_range(block, 0, *pcurr);
-    }
-    
+    bm::id_t count = bitval ? *pcurr + 1
+                            : bm::bit_block_calc_count_range(block, 0, *pcurr);
     for (bitval^=1, ++pcurr; pcurr <= pend; bitval^=1, ++pcurr)
     {
         T prev = (T)(*(pcurr-1)+1);
-        bm::id_t c;
-        
-        if (bitval)
-        {
-            c = (*pcurr - prev + 1);
-        }
-        else
-        {
-            c = bit_block_calc_count_range(block, prev, *pcurr);
-        }
-        
+        bm::id_t c =
+            bitval ? (*pcurr - prev + 1)
+                   : bm::bit_block_calc_count_range(block, prev, *pcurr);
         count += c;
     }
     return count;
@@ -2557,42 +2570,9 @@ bm::id_t gap_bitset_or_count(const unsigned* block, const T*  buf)
 template<typename T> 
 bm::id_t gap_bitset_or_any(const unsigned* block, const T*  buf)
 {
-    BM_ASSERT(block);
-
-    BMREGISTER const T* pcurr = buf;    
-    BMREGISTER const T* pend = pcurr + (*pcurr >> 3);
-    ++pcurr;
-
-    unsigned bitval = *buf & 1;
-    
-    BMREGISTER bm::id_t count;
-    if (bitval)
-    {
-        count = *pcurr + 1;
-    } 
-    else
-    {
-        count = bit_block_any_range(block, 0, *pcurr);
-    }
-    
-    for (bitval^=1, ++pcurr; pcurr <= pend; bitval^=1, ++pcurr)
-    {
-        T prev = (T)(*(pcurr-1)+1);
-        bm::id_t c;
-        
-        if (bitval)
-        {
-            c = (*pcurr - prev + 1);
-        }
-        else
-        {
-            c = bit_block_any_range(block, prev, *pcurr);
-        }        
-        count += c;
-        if (count)
-            return count;
-    }
-    return count;
+    bool b = !bm::gap_is_all_zero(buf, bm::gap_max_bits) ||
+             !bm::bit_is_all_zero(block, block+bm::set_block_size);
+    return b;
 }
 
 
@@ -2647,7 +2627,6 @@ void gap_convert_to_bitset(unsigned* dest, const T*  buf,  unsigned  dest_len)
 }
 
 
-
 /*!
    \brief Smart GAP block to bitblock conversion.
 
@@ -2682,13 +2661,14 @@ template<typename T>
    \return Sum of all words.
 
    @ingroup gapfunc
+   @internal
 */
 template<typename T> unsigned gap_control_sum(const T* buf)
 {
     unsigned end = *buf >> 3;
 
-    BMREGISTER const T* pcurr = buf;    
-    BMREGISTER const T* pend = pcurr + (*pcurr >> 3);
+    const T* pcurr = buf;
+    const T* pend = pcurr + (*pcurr >> 3);
     ++pcurr;
 
     if (*buf & 1)  // Starts with 1
@@ -2703,7 +2683,6 @@ template<typename T> unsigned gap_control_sum(const T* buf)
         pcurr += 2;
     }
     return buf[end];
-
 }
 
 
@@ -2809,89 +2788,6 @@ template<typename T> void gap_temp_invert(const T* buf)
 }
 */
 
-/*!
-   \brief Checks if GAP block is all-zero.
-   \param buf - GAP buffer pointer.
-   \param set_max - max possible bitset length
-   \returns true if all-zero.
-
-   @ingroup gapfunc
-*/
-template<typename T> 
-             bool gap_is_all_zero(const T* buf, unsigned set_max)
-{
-    return (((*buf & 1)==0)  && (*(++buf) == set_max - 1));
-}
-
-/*!
-   \brief Checks if GAP block is all-one.
-   \param buf - GAP buffer pointer.
-   \param set_max - max possible bitset length
-   \returns true if all-one.
-
-   @ingroup gapfunc
-*/
-template<typename T> 
-         bool gap_is_all_one(const T* buf, unsigned set_max)
-{
-    return ((*buf & 1)  && (*(++buf) == set_max - 1));
-}
-
-/*!
-   \brief Returs GAP block length.
-   \param buf - GAP buffer pointer.
-   \returns GAP block length.
-
-   @ingroup gapfunc
-*/
-template<typename T> T gap_length(const T* buf)
-{
-    return (T)((*buf >> 3) + 1);
-}
-
-
-/*!
-   \brief Returs GAP block capacity
-   \param buf - GAP buffer pointer
-   \param glevel_len - pointer on GAP header word
-   \returns GAP block capacity.
-
-   @ingroup gapfunc
-*/
-template<typename T> 
-unsigned gap_capacity(const T* buf, const T* glevel_len)
-{
-    return glevel_len[(*buf >> 1) & 3];
-}
-
-
-/*!
-   \brief Returs GAP block capacity limit.
-   \param buf - GAP buffer pointer.
-   \param glevel_len - GAP lengths table (gap_len_table)
-   \returns GAP block limit.
-
-   @ingroup gapfunc
-*/
-template<typename T> 
-unsigned gap_limit(const T* buf, const T* glevel_len)
-{
-    return glevel_len[(*buf >> 1) & 3]-4;
-}
-
-
-/*!
-   \brief Returs GAP blocks capacity level.
-   \param buf - GAP buffer pointer.
-   \returns GAP block capacity level.
-
-   @ingroup gapfunc
-*/
-template<typename T>
-T gap_level(const T* buf)
-{
-    return T((*buf >> 1) & 3u);
-}
 
 
 /*!
@@ -2997,16 +2893,15 @@ unsigned bit_convert_to_gap(T* BMRESTRICT dest,
                             bm::id_t bits,
                             unsigned dest_len)
 {
-    BMREGISTER T* BMRESTRICT pcurr = dest;
+    T* BMRESTRICT pcurr = dest;
     T* BMRESTRICT end = dest + dest_len; 
-    BMREGISTER int bitval = (*src) & 1;
-//    *pcurr |= bitval;
+    int bitval = (*src) & 1;
     *pcurr = (T)bitval;
 
     ++pcurr;
     *pcurr = 0;
-    BMREGISTER unsigned bit_idx = 0;
-    BMREGISTER int bitval_next;
+    unsigned bit_idx = 0;
+    int bitval_next;
 
     unsigned val = *src;
 
@@ -3037,7 +2932,7 @@ unsigned bit_convert_to_gap(T* BMRESTRICT dest,
         }
 
 
-        BMREGISTER unsigned mask = 1;
+        unsigned mask = 1;
         while (mask)
         {
             // Now plain bitshifting. TODO: Optimization wanted.
@@ -3049,20 +2944,14 @@ unsigned bit_convert_to_gap(T* BMRESTRICT dest,
                 BM_ASSERT((pcurr-1) == (dest+1) || *(pcurr-1) > *(pcurr-2));
                 bitval = bitval_next;
                 if (pcurr >= end)
-                {
                     return 0; // OUT of memory
-                }
             }
-
             mask <<= 1;
             ++bit_idx;
-
         } // while mask
 
         if (bit_idx >= bits)
-        {
             goto complete;
-        }
 
         ++src;
         val = *src;
@@ -3261,7 +3150,6 @@ bm::id_t bit_count_change(bm::word_t w)
     w ^= (w >> 1);
 
     count += bm::word_bitcount(w);
-    //BM_INCWORD_BITCOUNT(count, w);
     count -= (w >> ((sizeof(w) * 8) - 1));
     return count;
 }
@@ -3318,7 +3206,6 @@ void bit_count_change32(const bm::word_t* block,
             w_prev = (w0 >> w_shift);
         }
     } // for
-
 }
 
 
@@ -3438,55 +3325,58 @@ bm::id_t bit_block_calc_count_range(const bm::word_t* block,
                                     bm::word_t right)
 {
     BM_ASSERT(left <= right);
-    unsigned nword, nbit;    
+    
+    unsigned nword, nbit, bitcount, count;
     nbit = left & bm::set_word_mask;
     const bm::word_t* word = 
         block + (nword = unsigned(left >> bm::set_word_shift));
     if (left == right)  // special case (only 1 bit to check)
     {
-        return (*word >> nbit) & 1;
+        return (*word >> nbit) & 1u;
     }
-    bm::id_t count = 0;
-
-    unsigned acc;
-    unsigned bitcount = right - left + 1;
-
+    
+    count = 0;
+    bitcount = right - left + 1u;
     if (nbit) // starting position is not aligned
     {
-        unsigned right_margin = nbit + (right - left);
-
+        unsigned right_margin = nbit + right - left;
         if (right_margin < 32)
         {
             unsigned mask =
                 block_set_table<true>::_right[nbit] &
                 block_set_table<true>::_left[right_margin];
-            acc = *word & mask;
-            
-            BM_INCWORD_BITCOUNT(count, acc);
-            return count;
+            return bm::word_bitcount(*word & mask);
         }
-        else
-        {
-            acc = *word & block_set_table<true>::_right[nbit];
-            BM_INCWORD_BITCOUNT(count, acc);
-            bitcount -= 32 - nbit;
-        }
+        count = bm::word_bitcount(*word & block_set_table<true>::_right[nbit]);
+        bitcount -= 32 - nbit;
         ++word;
     }
-
+    
     // now when we are word aligned, we can count bits the usual way
-    for ( ;bitcount >= 32; bitcount -= 32)
-    {
-        acc = *word++;
-        BM_INCWORD_BITCOUNT(count, acc);
-    }
-
+    //
+    #if defined(BM64_SSE4) || defined(BM64_AVX2)
+        for ( ;bitcount >= 64; bitcount-=64)
+        {
+            bm::id64_t w64 = *((bm::id64_t*)word); // x86 unaligned(!) read
+            count += unsigned(_mm_popcnt_u64(w64));
+            word += 2;
+        }
+        if (bitcount >= 32)
+        {
+            count += bm::word_bitcount(*word++);
+            bitcount-=32;
+        }
+    #else
+        for ( ;bitcount >= 32; bitcount-=32, ++word)
+            count += bm::word_bitcount(*word);
+    #endif
+    BM_ASSERT(bitcount < 32);
+    
     if (bitcount)  // we have a tail to count
     {
-        acc = (*word) & block_set_table<true>::_left[bitcount-1];
-        BM_INCWORD_BITCOUNT(count, acc);
+        count += bm::word_bitcount(
+                        *word & block_set_table<true>::_left[bitcount-1]);
     }
-
     return count;
 }
 
@@ -3502,8 +3392,8 @@ bm::id_t bit_block_calc_count_to(const bm::word_t*  block,
                                  bm::word_t         right)
 {
     BM_ASSERT(block);
-    if (right == 0)
-        return *block & 1;
+    if (!right) // special case, first bit check
+        return *block & 1u;
     bm::id_t count = 0;
 
     unsigned bitcount = right + 1;
@@ -3526,30 +3416,25 @@ bm::id_t bit_block_calc_count_to(const bm::word_t*  block,
         }
         cnt64 = (bm::id64_t*)&cnt;
         count += (unsigned)(cnt64[0] + cnt64[1] + cnt64[2] + cnt64[3]);
-    #else
-        for ( ;bitcount >= 64; bitcount -= 64)
-        {
-            bm::id64_t* p = (bm::id64_t*)block;
-            bm::id64_t a64 = *p;
-            
-            count += bm::word_bitcount64(a64);
-            block += 2;
-        }
     #endif
-
-    // now word aligned, count bits the usual way
-    for ( ;bitcount >= 32; bitcount -= 32)
+    
+    for ( ;bitcount >= 64; bitcount -= 64)
     {
-        unsigned acc = *block++;
-        count += bm::word_bitcount(acc);
+        bm::id64_t* p = (bm::id64_t*)block;
+        count += bm::word_bitcount64(*p);
+        block += 2;
+    }
+    if (bitcount >= 32)
+    {
+        count += bm::word_bitcount(*block++);
+        bitcount-=32;
     }
 
-    if (bitcount)  // tail to count
+    if (bitcount)  // we have a tail to count
     {
-        unsigned acc = (*block) & block_set_table<true>::_left[bitcount-1];
-        count += bm::word_bitcount(acc);
+        count +=
+        bm::word_bitcount(*block & block_set_table<true>::_left[bitcount-1]);
     }
-
     return count;
 }
 
@@ -3667,8 +3552,6 @@ bm::id_t bit_block_any_range(const bm::word_t* block,
 
     return 0;
 }
-
-
 
 // ----------------------------------------------------------------------
 
@@ -5698,10 +5581,9 @@ bool improve_gap_levels(const T* length,
         if (i == 0) 
             break;
     }
-    // 
+    
     // Remove duplicates
     //
-
     T val = *glevel_len;
     T* gp = glevel_len;
     T* res = glevel_len;
