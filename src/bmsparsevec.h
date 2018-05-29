@@ -751,6 +751,12 @@ public:
 
     /** Number of effective bit-plains in the value type*/
     unsigned effective_plains() const { return effective_plains_ + 1; }
+
+    /**
+    \brief find position of compressed element by its rank
+    */
+    bool find_rank(bm::id_t rank, bm::id_t& pos) const;
+
     ///@}
 
     /// Set allocator pool for local (non-threaded)
@@ -1661,6 +1667,16 @@ void sparse_vector<Val, BV>::free_vectors() BMNOEXEPT
 
 //---------------------------------------------------------------------
 
+template<class Val, class BV>
+bool sparse_vector<Val, BV>::find_rank(bm::id_t rank, bm::id_t& pos) const
+{
+    BM_ASSERT(rank);
+    pos = rank - 1; 
+    return true;
+}
+
+//---------------------------------------------------------------------
+
 
 template<class Val, class BV>
 void sparse_vector<Val, BV>::free_plain(unsigned i)
@@ -2008,6 +2024,7 @@ bool sparse_vector<Val, BV>::const_iterator::is_null() const
 {
     return sv_->is_null(pos_);
 }
+
 
 //---------------------------------------------------------------------
 //
