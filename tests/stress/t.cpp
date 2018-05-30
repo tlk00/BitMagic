@@ -10886,6 +10886,21 @@ void TestSparseVectorScan()
                     exit(1);
                 }
                 
+                bm::id_t pos;
+                bool found = scanner.find_eq(sv, j, pos);
+                if (!found)
+                {
+                    cerr << "3. Unique search failure at value=" << j
+                         << endl;
+                    exit(1);
+                }
+                if (v1 != pos)
+                {
+                    cerr << "4. Unique search discrepancy at value=" << j
+                         << " found = " << pos << endl;
+                    exit(1);
+                }
+
                 if (j % 1000 == 0)
                     cout << "\r" << j << "/" << sv_size << "    " << flush;
             } // for
@@ -12940,7 +12955,7 @@ void TestRankCompress()
         bvect bv_sr; // restored vector
 
         bvect bv_ref { 0, 1, 4 };
-        bm::bvector_rank_compressor<bvect> rc;
+        bm::rank_compressor<bvect> rc;
 
         bvect::blocks_count bc;
         bv_i.running_count_blocks(&bc);
@@ -12977,7 +12992,7 @@ void TestRankCompress()
         bvect bv_i { 0, 100000, 100001, 200000, 1000000, 1600000, 1600001 };
         bvect bv_sr;
 
-        bm::bvector_rank_compressor<bvect> rc;
+        bm::rank_compressor<bvect> rc;
 
         bvect::blocks_count bc;
         bv_i.running_count_blocks(&bc);
@@ -13015,7 +13030,7 @@ void TestRankCompress()
 
     {
         std::cout << "Stress rank compression..." << std::endl;
-        bm::bvector_rank_compressor<bvect> rc;
+        bm::rank_compressor<bvect> rc;
         unsigned test_count = 10;
         unsigned bv_size = 1000000;
         for (unsigned i  = 0; i < test_count; ++i)
@@ -13371,6 +13386,13 @@ void TestCompressSparseVector()
         csv3 = ::move(csv2);
         same = csv3.equal(csv1);
         assert(same);
+        
+        bm::sparse_vector_scanner<compressed_sparse_vector_u32> scanner;
+        bm::id_t pos;
+        bool found = scanner.find_eq(csv1, 201, pos);
+        assert(found);
+        assert(pos == 21);
+        
     }
     
     {
@@ -13509,6 +13531,7 @@ int main(void)
     //LoadVectors("c:/dev/bv_perf", 3, 27);
     exit(1);
 */
+
 
     TestRecomb();
 
