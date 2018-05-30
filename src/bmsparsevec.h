@@ -469,7 +469,7 @@ public:
 
 
     // ------------------------------------------------------------
-    /*! @name NULL (unassigned) elements access */
+    /*! @name Various traits                                     */
     //@{
     /**
         \brief check if container supports NULL(unassigned) values
@@ -493,6 +493,12 @@ public:
         \param idx - element index
     */
     void set_null(size_type idx);
+    
+    /** \brief trait if sparse vector is "compressed" (false)
+    */
+    static
+    bool is_compressed() { return false; }
+    
     ///@}
 
 

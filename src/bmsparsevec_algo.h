@@ -206,6 +206,7 @@ class sparse_vector_scanner
 public:
     typedef typename SV::bvector_type       bvector_type;
     typedef typename SV::value_type         value_type;
+    typedef typename SV::size_type          size_type;
     typedef typename bvector_type::allocator_type::allocator_pool_type allocator_pool_type;
     
 public:
@@ -223,7 +224,22 @@ public:
     void find_eq(const SV&                  sv,
                  typename SV::value_type    value,
                  typename SV::bvector_type& bv_out);
-    
+
+    /**
+        \brief find first sparse vector element
+
+        Find all sparse vector elements equivalent to specified value.
+        Works well if sperse vector represents unordered set
+
+        \param sv - input sparse vector
+        \param value - value to search for
+        \param bv_out - output bit-vector (search result masks 1 elements)
+    */
+    bool find_eq(const SV&                  sv,
+                 typename SV::value_type    value,
+                 typename SV::size_type&    pos);
+
+
     /**
         \brief find all sparse vector elements EQ to 0
         \param sv - input sparse vector
@@ -416,6 +432,40 @@ void sparse_vector_scanner<SV>::find_eq(const SV&                  sv,
     correct_nulls(sv, bv_out);
 }
 
+//----------------------------------------------------------------------------
+
+template<typename SV>
+bool sparse_vector_scanner<SV>::find_eq(const SV&                  sv,
+                                        typename SV::value_type    value,
+                                        typename SV::size_type&    pos)
+{
+    bvector_type bv_tmp;
+    bv_tmp.set_allocator_pool(&pool_);
+    
+    find_eq_with_nulls(sv, value, bv_tmp);
+    bm::id_t found_pos;
+    bool found = bv_tmp.find(found_pos);
+    
+    if (found)
+    {
+        if (sv.is_compressed()) // if compressed vector - need rank translation
+            found = sv.find_rank(found_pos + 1, pos);
+        else
+            pos = found_pos;
+        
+        if (!value && found)
+        {
+            const bvector_type* bv_null = sv.get_null_bvector();
+            if (bv_null) // correct result to only use not NULL elements
+                found = bv_null->test(pos);
+        }
+    }
+
+    return found;
+}
+
+//----------------------------------------------------------------------------
+
 template<typename SV>
 void sparse_vector_scanner<SV>::find_nonzero(const SV& sv, 
                                              typename SV::bvector_type& bv_out)
@@ -423,7 +473,7 @@ void sparse_vector_scanner<SV>::find_nonzero(const SV& sv,
     bool first = true;
     for (unsigned i = 0; i < sv.plains(); ++i)
     {
-        const typename SV::bvector_type* bv_plain = sv.plain(i);
+        const typename SV::bvector_type* bv_plain = sv.get_plain(i);
         if (bv_plain)
         {
             if (first) // first found plain - use simple assignment

@@ -120,11 +120,21 @@ public:
 #endif
 
     //@}
-    
+    // ------------------------------------------------------------
+    /*! @name Size, etc                                          */
+    ///@{
+
     /*! \brief return size of the vector
         \return size of sparse vector
     */
     size_type size() const;
+    
+    /*! \brief return true if vector is empty
+        \return true if empty
+    */
+    bool empty() const { return sv_.empty(); }
+    
+    ///@}
 
     // ------------------------------------------------------------
     /*! @name Element access */
@@ -170,6 +180,22 @@ public:
     bool find_rank(bm::id_t rank, bm::id_t& pos) const;
 
     //@}
+    
+    // ------------------------------------------------------------
+    /*! @name Various traits                                     */
+    //@{
+    /**
+        \brief if container supports NULL(unassigned) values (true)
+    */
+    bool is_nullable() const { return true; }
+    
+    /** \brief trait if sparse vector is "compressed" (true)
+    */
+    static
+    bool is_compressed() { return true; }
+
+    ///@}
+
     
     // ------------------------------------------------------------
     /*! @name Comparison */
@@ -246,9 +272,34 @@ public:
         \brief Unsync the prefix sum table
     */
     void unsync() { in_sync_ = false; }
-    //@}
+    ///@}
 
+    // ------------------------------------------------------------
+    /*! @name Access to internals                                */
+    ///@{
+
+    /*!
+        \brief get access to bit-plain, function checks and creates a plain
+        \return bit-vector for the bit plain
+    */
+    const bvector_type_ptr get_plain(unsigned i) const { return sv_.get_plain(i); }
+
+    /*!
+        Number of effective bit-plains in the value type
+    */
+    unsigned effective_plains() const { return sv_.effective_plains(); }
+    
+    /*!
+        \brief get total number of bit-plains in the vector
+    */
+    static unsigned plains() { return sparse_vector_type::plains(); }
+
+    /*!
+        \brief access dense vector
+    */
     const sparse_vector_type& get_sv() const { return sv_; }
+    
+    ///@}
     
 protected:
     /*!
@@ -388,7 +439,7 @@ void compressed_sparse_vector<Val, SV>::load_from(const sparse_vector_type& sv_s
     BM_ASSERT(bv_null);
     *bv_null = *bv_null_src;
     
-    bm::bvector_rank_compressor<bvector_type> rank_compr; // re-used for plains
+    bm::rank_compressor<bvector_type> rank_compr; // re-used for plains
     
     unsigned src_plains = sv_src.plains();
     for (unsigned i = 0; i < src_plains; ++i)
@@ -432,7 +483,7 @@ void compressed_sparse_vector<Val, SV>::load_to(sparse_vector_type& sv) const
     BM_ASSERT(bv_null);
     *bv_null = *bv_null_src;
     
-    bm::bvector_rank_compressor<bvector_type> rank_compr; // re-used for plains
+    bm::rank_compressor<bvector_type> rank_compr; // re-used for plains
 
     unsigned src_plains = sv_.plains();
     for (unsigned i = 0; i < src_plains; ++i)

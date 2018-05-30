@@ -139,7 +139,7 @@ void visit_each_bit(const BV&                 bv,
     \ingroup setalgo
 */
 template<class BV>
-class bvector_rank_compressor
+class rank_compressor
 {
 public:
     typedef BV                         bvector_type;
@@ -178,9 +178,9 @@ public:
 
 
 template<class BV>
-void bvector_rank_compressor<BV>::compress(BV& bv_target,
-                                           const BV& bv_idx,
-                                           const BV& bv_src)
+void rank_compressor<BV>::compress(BV& bv_target,
+                                   const BV& bv_idx,
+                                   const BV& bv_src)
 {
     bv_target.clear();
     bv_target.init();
@@ -250,9 +250,9 @@ void bvector_rank_compressor<BV>::compress(BV& bv_target,
 
 
 template<class BV>
-void bvector_rank_compressor<BV>::decompress(BV& bv_target,
-                                             const BV& bv_idx,
-                                             const BV& bv_src)
+void rank_compressor<BV>::decompress(BV& bv_target,
+                                     const BV& bv_idx,
+                                     const BV& bv_src)
 {
     bv_target.clear();
     bv_target.init();
@@ -331,10 +331,10 @@ void bvector_rank_compressor<BV>::decompress(BV& bv_target,
 }
 
 template<class BV>
-void bvector_rank_compressor<BV>::compress_by_source(BV& bv_target,
-                                           const BV& bv_idx,
-                                           const block_count_type& bc_idx,
-                                           const BV& bv_src)
+void rank_compressor<BV>::compress_by_source(BV& bv_target,
+                                             const BV& bv_idx,
+                                             const block_count_type& bc_idx,
+                                             const BV& bv_src)
 {
     /// Rank compressor visitor (functor)
     /// @internal
