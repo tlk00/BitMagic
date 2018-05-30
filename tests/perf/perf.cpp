@@ -1984,7 +1984,7 @@ void RankCompressionTest()
     rsub.sample(bv_s2, bv_i2, 1000);
     bv_s2.optimize();
 
-    bm::bvector_rank_compressor<bvect> rc;
+    bm::rank_compressor<bvect> rc;
 
     bvect::blocks_count bc1;
     bv_i1.running_count_blocks(&bc1);
