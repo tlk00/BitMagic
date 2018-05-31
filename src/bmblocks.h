@@ -1542,28 +1542,34 @@ public:
     /*!
         \brief Make sure blocks manager has enough blocks capacity
     */
-    void reserve_top_blocks(unsigned top_blocks) 
+    unsigned reserve_top_blocks(unsigned top_blocks)
     {
         BM_ASSERT(top_blocks <= bm::set_array_size);
-        
+
         if (!is_init())
             init_tree();
-        
-        if (top_blocks <= top_block_size_) return; // nothing to do
+
+        if (top_blocks <= top_block_size_)
+            return top_block_size_; // nothing to do
         bm::word_t*** new_blocks = 
             (bm::word_t***)alloc_.alloc_ptr(top_blocks);
 
-        for (unsigned i = 0; i < top_block_size_; ++i)
-        {
+        unsigned i;
+        for (i = 0; i < top_block_size_; ++i)
             new_blocks[i] = top_blocks_[i];
-        }
+        for (; i < top_blocks; ++i)
+            new_blocks[i] = 0;
+
+        /*
         for (unsigned j = top_block_size_; j < top_blocks; ++j)
         {
             new_blocks[j] = 0;
         }
+        */
         alloc_.free_ptr(top_blocks_, top_block_size_);
         top_blocks_ = new_blocks;
         top_block_size_ = top_blocks;
+        return top_block_size_;
     }
     
     /** \brief Returns reference on the allocator
