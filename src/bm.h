@@ -1906,6 +1906,9 @@ public:
     */
     void combine_operation_and(const bm::bvector<Alloc>& bvect);
 
+    /*! \brief perform a set-algebra operation MINUS (AND NOT)
+    */
+    void combine_operation_sub(const bm::bvector<Alloc>& bvect);
 
     // @}
 
@@ -2156,10 +2159,8 @@ private:
                                       bm::operation opcode);
     
     void combine_operation_block_and(unsigned nb,
-                                     bool gap,
                                      bm::word_t* blk,
-                                     const bm::word_t* arg_blk,
-                                     bool arg_gap);
+                                     const bm::word_t* arg_blk);
 
     void assign_gap_result(unsigned              nb,
                            const bm::gap_word_t* res,
@@ -3589,15 +3590,60 @@ void bvector<Alloc>::combine_operation_and(const bm::bvector<Alloc>& bv)
             {
                 const bm::word_t* arg_blk = BLOCK_ADDR_SAN(blk_blk_arg[j]);
                 if (arg_blk)
-                    combine_operation_block_and(r + j,
-                                                BM_IS_GAP(blk), blk,
-                                                arg_blk, BM_IS_GAP(arg_blk));
+                    combine_operation_block_and(r + j, blk, arg_blk);
                 else
                     blockman_.zero_block(i, j);
             }
         } // for j
     } // for i
 }
+
+//---------------------------------------------------------------------
+
+template<class Alloc>
+void bvector<Alloc>::combine_operation_sub(const bm::bvector<Alloc>& bv)
+{
+    if (!blockman_.is_init())
+        return;  
+    if (!bv.blockman_.is_init())
+        return;
+
+    unsigned top_blocks = blockman_.top_block_size();
+    if (size_ < bv.size_) // this vect shorter than the arg.
+    {
+        size_ = bv.size_;
+        unsigned arg_top_blocks = bv.blockman_.top_block_size();
+        top_blocks = blockman_.reserve_top_blocks(arg_top_blocks);
+    }
+    bm::word_t*** blk_root = blockman_.top_blocks_root();
+    bm::word_t*** blk_root_arg = bv.blockman_.top_blocks_root();
+
+    for (unsigned i = 0; i < top_blocks; ++i)
+    {
+        bm::word_t** blk_blk = blk_root[i];
+        if (!blk_blk) // nothing to do (0 AND NOT 1 == 0)
+            continue;
+        bm::word_t** blk_blk_arg = blk_root_arg[i];
+        if (!blk_blk_arg) // nothing to do (1 AND NOT 0 == 1)
+            continue;
+
+        unsigned r = i * bm::set_array_size;
+        for (unsigned j = 0; j < bm::set_array_size; ++j)
+        {
+            bm::word_t* blk = BLOCK_ADDR_SAN(blk_blk[j]);
+            if (blk)
+            {
+                const bm::word_t* arg_blk = BLOCK_ADDR_SAN(blk_blk_arg[j]);
+                if (arg_blk)
+                    combine_operation_with_block(r + j,
+                        BM_IS_GAP(blk), blk,
+                        arg_blk, BM_IS_GAP(arg_blk),
+                        BM_SUB);
+            }
+        } // for j
+    } // for i
+}
+
 
 //---------------------------------------------------------------------
 
@@ -3729,16 +3775,14 @@ void bvector<Alloc>::combine_operation(
 
 
 template<class Alloc>
-void
-bvector<Alloc>::combine_operation_block_and(unsigned           nb,
-                                             bool              gap,
-                                             bm::word_t*       blk,
-                                             const bm::word_t* arg_blk,
-                                             bool              arg_gap)
+void bvector<Alloc>::combine_operation_block_and(
+                unsigned nb, bm::word_t* blk, const bm::word_t* arg_blk)
 {
     gap_word_t tmp_buf[bm::gap_equiv_len * 3]; // temporary result
     const bm::gap_word_t* res;
     unsigned res_len;
+    bool gap = BM_IS_GAP(blk);
+    bool arg_gap = BM_IS_GAP(arg_blk);
     
     if (gap) // our block GAP-type
     {
@@ -3771,7 +3815,7 @@ bvector<Alloc>::combine_operation_block_and(unsigned           nb,
         }
         // else: argument is BITSET-type (own block is GAP)
         //
-        if (arg_blk == 0)  // Combining against an empty block
+        if (!arg_blk)  // Combining against an empty block
         {
             blockman_.zero_block(nb);
             return;
@@ -3832,12 +3876,6 @@ bvector<Alloc>::combine_operation_with_block(unsigned          nb,
                                              bool              arg_gap,
                                              bm::operation     opcode)
 {
-    if (opcode == BM_AND)
-    {
-        combine_operation_block_and(nb, gap, blk, arg_blk, arg_gap);
-        return;
-    }
-
     gap_word_t tmp_buf[bm::gap_equiv_len * 3]; // temporary result            
     const bm::gap_word_t* res;
     unsigned res_len;
@@ -3917,7 +3955,6 @@ bvector<Alloc>::combine_operation_with_block(unsigned          nb,
                     unsigned gap_cnt = gap_bit_count_unr(gap_blk);
                     if (gap_cnt < 128)
                     {
-                        
                         gap_word_t arr_len = 
                             gap_convert_to_arr(tmp_buf, gap_blk, 
                                                bm::gap_equiv_len-10);
