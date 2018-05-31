@@ -3830,6 +3830,9 @@ void bvector<Alloc>::combine_operation_block_and(
             if (IS_VALID_ADDR(blk))  // gap combined to bitset
             {
                 bm::gap_and_to_bitset(blk, BMGAP_PTR(arg_blk));
+                bool b = bm::bit_is_all_zero(blk, blk + bm::set_block_size);
+                if (b) // operation converged bit-block to empty
+                    blockman_.zero_block(nb);
                 return;
             }
             // the worst case: convert argument block to bitset
