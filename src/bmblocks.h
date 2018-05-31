@@ -1319,15 +1319,10 @@ public:
         bm::word_t* block = this->get_block(nb);
         if (!block) return block;
         if (BM_IS_GAP(block)) // gap block
-        {
             get_allocator().free_gap_block(BMGAP_PTR(block), glen());
-        }
         else
-        {
-            // deallocates only valid pointers
             if (IS_VALID_ADDR(block))
                 get_allocator().free_bit_block(block);
-        }
         set_block(nb, 0);
         return 0;
     }
@@ -1344,14 +1339,10 @@ public:
         blk_blk[j] = 0;
 
         if (BM_IS_GAP(block))
-        {
             get_allocator().free_gap_block(BMGAP_PTR(block), glen());
-        }
         else
-        {
             if (IS_VALID_ADDR(block))
                 get_allocator().free_bit_block(block);
-        }
         return 0;
     }
 
