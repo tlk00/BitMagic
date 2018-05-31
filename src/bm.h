@@ -1885,10 +1885,10 @@ public:
        \brief Logical SUB operation.
        \param vect - Argument vector.
     */
-    bm::bvector<Alloc>& bit_sub(const bm::bvector<Alloc>& vect)
+    bm::bvector<Alloc>& bit_sub(const bm::bvector<Alloc>& bv)
     {
         BMCOUNT_VALID(false);
-        combine_operation(vect, BM_SUB);
+        combine_operation_sub(bv);
         return *this;
     }
     
@@ -2159,6 +2159,9 @@ private:
                                       bm::operation opcode);
     
     void combine_operation_block_and(unsigned nb,
+                                     bm::word_t* blk,
+                                     const bm::word_t* arg_blk);
+    void combine_operation_block_sub(unsigned nb,
                                      bm::word_t* blk,
                                      const bm::word_t* arg_blk);
 
@@ -3635,10 +3638,13 @@ void bvector<Alloc>::combine_operation_sub(const bm::bvector<Alloc>& bv)
             {
                 const bm::word_t* arg_blk = BLOCK_ADDR_SAN(blk_blk_arg[j]);
                 if (arg_blk)
+                    combine_operation_block_sub(r + j, blk, arg_blk);
+/*
                     combine_operation_with_block(r + j,
                         BM_IS_GAP(blk), blk,
                         arg_blk, BM_IS_GAP(arg_blk),
                         BM_SUB);
+*/
             }
         } // for j
     } // for i
@@ -3854,7 +3860,7 @@ void bvector<Alloc>::combine_operation_block_and(
     if (ret && (ret == arg_blk) && !IS_FULL_BLOCK(ret))
     {
         ret = blockman_.get_allocator().alloc_bit_block();
-        bit_block_copy(ret, arg_blk);
+        bm::bit_block_copy(ret, arg_blk);
     }
 
     if (ret != dst) // block mutation
@@ -3865,10 +3871,124 @@ void bvector<Alloc>::combine_operation_block_and(
     }
 }
 
-
-
 //---------------------------------------------------------------------
 
+template<class Alloc>
+void bvector<Alloc>::combine_operation_block_sub(
+                unsigned nb, bm::word_t* blk, const bm::word_t* arg_blk)
+{
+    gap_word_t tmp_buf[bm::gap_equiv_len * 3]; // temporary result
+    const bm::gap_word_t* res;
+    unsigned res_len;
+    bool gap = BM_IS_GAP(blk);
+    bool arg_gap = BM_IS_GAP(arg_blk);
+    
+    if (gap) // our block GAP-type
+    {
+        if (arg_gap)  // both blocks GAP-type
+        {
+            res = bm::gap_operation_sub(BMGAP_PTR(blk),
+                                        BMGAP_PTR(arg_blk),
+                                        tmp_buf,
+                                        res_len);
+            ++res_len;
+
+            BM_ASSERT(res == tmp_buf);
+            BM_ASSERT(!(res == tmp_buf && res_len == 0));
+
+            // if as a result of the operation gap block turned to zero
+            // we can now replace it with NULL
+            if (gap_is_all_zero(res, bm::gap_max_bits))
+            {
+                blockman_.zero_block(nb);
+                return;
+            }
+            // block mutation check
+            //
+            int level = bm::gap_level(BMGAP_PTR(blk));
+            BM_ASSERT(level >= 0);
+            unsigned threshold = unsigned(blockman_.glen(unsigned(level)) - 4u);
+            assign_gap_result(nb, res, res_len, level, threshold, blk, tmp_buf);
+            
+            return;
+        }
+        // else: argument is BITSET-type (own block is GAP)
+        //
+        if (!arg_blk)  // Combining against an empty block
+        {
+            return;
+        }
+        blk = blockman_.convert_gap2bitset(nb, BMGAP_PTR(blk));
+        // fall through to bit-block to bit-block operation
+    }
+    else // our block is BITSET-type
+    {
+        
+        if (arg_gap) // argument block is GAP-type
+        {
+            if (IS_VALID_ADDR(blk))  // gap combined to bitset
+            {
+                bm::gap_sub_to_bitset(blk, BMGAP_PTR(arg_blk));
+                bool b = bm::bit_is_all_zero(blk, blk + bm::set_block_size);
+                if (b) // operation converged bit-block to empty
+                    blockman_.zero_block(nb);
+                return;
+            }
+            // the worst case: convert argument block to bitset
+            arg_blk =
+                gap_convert_to_bitset_smart(blockman_.check_allocate_tempblock(),
+                                            BMGAP_PTR(arg_blk),
+                                            bm::gap_max_bits);
+        }
+    }
+
+    // Now here we combine two plain bitblocks using supplied bit function.
+    bm::word_t* dst = blk;
+
+    bm::word_t* ret;
+    if (!dst || !arg_blk)
+        return;
+
+    ret = bm::bit_operation_sub(dst, arg_blk);
+    if (ret && ret == arg_blk)
+    {
+        ret = blockman_.get_allocator().alloc_bit_block();
+        bm::bit_andnot_arr_ffmask(ret, arg_blk, arg_blk + bm::set_block_size);
+/*
+#ifdef BMVECTOPT
+        VECT_ANDNOT_ARR_2_MASK(ret,
+                            arg_blk,
+                            arg_blk + bm::set_block_size,
+                            ~0u);
+#else
+
+        bm::wordop_t* dst_ptr = (wordop_t*)ret;
+        const bm::wordop_t* wrd_ptr = (wordop_t*) arg_blk;
+        const bm::wordop_t* wrd_end =
+        (wordop_t*) (arg_blk + bm::set_block_size);
+
+        do
+        {
+            dst_ptr[0] = bm::all_bits_mask & ~wrd_ptr[0];
+            dst_ptr[1] = bm::all_bits_mask & ~wrd_ptr[1];
+            dst_ptr[2] = bm::all_bits_mask & ~wrd_ptr[2];
+            dst_ptr[3] = bm::all_bits_mask & ~wrd_ptr[3];
+            dst_ptr+=4; wrd_ptr+=4;
+        } while (wrd_ptr < wrd_end);
+#endif
+*/
+    }
+
+
+    if (ret != dst) // block mutation
+    {
+        blockman_.set_block(nb, ret);
+        if (IS_VALID_ADDR(dst))
+            blockman_.get_allocator().free_bit_block(dst);
+    }
+}
+
+//---------------------------------------------------------------------
 
 template<class Alloc> 
 void 
@@ -4032,6 +4152,14 @@ bvector<Alloc>::combine_operation_with_block(unsigned          nb,
                         operation_functions<true>::gap_op_to_bit(opcode);
                     BM_ASSERT(gfunc);
                     (*gfunc)(blk, BMGAP_PTR(arg_blk));
+
+                    if (opcode != BM_OR)
+                    {
+                        bool b = bm::bit_is_all_zero(blk, blk + bm::set_block_size);
+                        if (b) // operation converged bit-block to empty
+                            blockman_.zero_block(nb);
+                    }
+
                     return;
                 }
                 
@@ -4106,6 +4234,8 @@ bvector<Alloc>::combine_operation_with_block(unsigned          nb,
             if (ret && ret == arg_blk)
             {
                 ret = blockman_.get_allocator().alloc_bit_block();
+                bm::bit_andnot_arr_ffmask(ret, arg_blk, arg_blk + bm::set_block_size);
+/*
 #ifdef BMVECTOPT
                 VECT_ANDNOT_ARR_2_MASK(ret, 
                                     arg_blk,
@@ -4130,6 +4260,7 @@ bvector<Alloc>::combine_operation_with_block(unsigned          nb,
 
                 } while (wrd_ptr < wrd_end);
 #endif
+*/
             }
             break;
         default:

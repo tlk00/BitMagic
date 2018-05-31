@@ -4767,9 +4767,39 @@ void bit_block_xor(bm::word_t* BMRESTRICT dst,
         wrd_ptr+=4;
     } while (wrd_ptr < wrd_end);
 #endif
-    
 }
 
+/*!
+   \brief bitblock AND NOT with constant ~0 mask operation.
+
+   \param dst - destination block.
+   \param src - source block.
+
+   @ingroup bitfunc
+*/
+inline
+void bit_andnot_arr_ffmask(bm::word_t* BMRESTRICT dst,
+                           const bm::word_t* BMRESTRICT src,
+                           const bm::word_t* BMRESTRICT src_end)
+{
+#ifdef BMVECTOPT
+        VECT_ANDNOT_ARR_2_MASK(dst, src, src_end, ~0u);
+#else
+
+        bm::wordop_t* dst_ptr = (wordop_t*)dst;
+        const bm::wordop_t* wrd_ptr = (wordop_t*) src;
+        const bm::wordop_t* wrd_end = (wordop_t*) src_end;
+
+        do
+        {
+            dst_ptr[0] = bm::all_bits_mask & ~wrd_ptr[0];
+            dst_ptr[1] = bm::all_bits_mask & ~wrd_ptr[1];
+            dst_ptr[2] = bm::all_bits_mask & ~wrd_ptr[2];
+            dst_ptr[3] = bm::all_bits_mask & ~wrd_ptr[3];
+            dst_ptr+=4; wrd_ptr+=4;
+        } while (wrd_ptr < wrd_end);
+#endif
+}
 
 /*!
    \brief bitblock XOR operation. 
