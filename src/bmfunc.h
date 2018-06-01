@@ -776,8 +776,7 @@ unsigned gap_test_unr(const T* buf, const unsigned pos)
     \internal
 */
 template<class T, class F> 
-void for_each_nzblock(T*** root, unsigned size1,
-                      F& f)
+void for_each_nzblock(T*** root, unsigned size1, F& f)
 {
     for (unsigned i = 0; i < size1; ++i)
     {
@@ -790,12 +789,13 @@ void for_each_nzblock(T*** root, unsigned size1,
 
         unsigned non_empty_top = 0;
         unsigned r = i * bm::set_array_size;
-        for (unsigned j = 0; j < bm::set_array_size; )
+        unsigned j = 0;
+        do
         {
 #ifdef BM64_AVX2
-            __m256i w0 = _mm256_loadu_si256((__m256i*)(blk_blk + j));
-            if (!_mm256_testz_si256(w0, w0))
+            if (!avx2_test_all_zero_wave(blk_blk + j))
             {
+                non_empty_top = 1;
                 T* blk0 = blk_blk[j + 0];
                 T* blk1 = blk_blk[j + 1];
                 T* blk2 = blk_blk[j + 2];
@@ -805,50 +805,48 @@ void for_each_nzblock(T*** root, unsigned size1,
                 if (blk0)
                 {
                     f(blk0, block_idx);
-                    non_empty_top += (blk_blk[j] != 0);
+//                    non_empty_top += (blk_blk[j] != 0);
                 }
                 else
                     f.on_empty_block(block_idx);
 
-                ++block_idx;
+                //++block_idx;
                 if (blk1)
                 {
-                    f(blk1, block_idx);
-                    non_empty_top += (blk_blk[j + 1] != 0);
+                    f(blk1, block_idx + 1);
+//                    non_empty_top += (blk_blk[j + 1] != 0);
                 }
                 else
-                    f.on_empty_block(block_idx);
+                    f.on_empty_block(block_idx + 1);
 
-                ++block_idx;
+                //++block_idx;
                 if (blk2)
                 {
-                    f(blk2, block_idx);
-                    non_empty_top += (blk_blk[j + 2] != 0);
+                    f(blk2, block_idx + 2);
+//                    non_empty_top += (blk_blk[j + 2] != 0);
                 }
                 else
-                    f.on_empty_block(block_idx);
+                    f.on_empty_block(block_idx + 2);
 
-                ++block_idx;
+                //++block_idx;
                 if (blk3)
                 {
-                    f(blk3, block_idx);
-                    non_empty_top += (blk_blk[j + 3] != 0);
+                    f(blk3, block_idx + 3);
+//                    non_empty_top += (blk_blk[j + 3] != 0);
                 }
                 else
-                    f.on_empty_block(block_idx);
+                    f.on_empty_block(block_idx + 3);
             }
             else
             {
-                f.on_empty_block(r + j + 0);
-                f.on_empty_block(r + j + 1);
-                f.on_empty_block(r + j + 2);
-                f.on_empty_block(r + j + 3);
+                f.on_empty_block(r + j + 0); f.on_empty_block(r + j + 1);
+                f.on_empty_block(r + j + 2); f.on_empty_block(r + j + 3);
             }
             j += 4;
 #elif defined(BM64_SSE4)
-            __m128i w0 = _mm_loadu_si128((__m128i*)(blk_blk + j));
-            if (!_mm_testz_si128(w0, w0))
+            if (!sse42_test_all_zero_wave((blk_blk + j)))
             {
+                non_empty_top = 1;
                 T* blk0 = blk_blk[j + 0];
                 T* blk1 = blk_blk[j + 1];
 
@@ -856,7 +854,7 @@ void for_each_nzblock(T*** root, unsigned size1,
                 if (blk0)
                 {
                     f(blk0, block_idx);
-                    non_empty_top += (blk_blk[j] != 0);
+//                    non_empty_top += (blk_blk[j] != 0);
                 }
                 else
                     f.on_empty_block(block_idx);
@@ -865,7 +863,7 @@ void for_each_nzblock(T*** root, unsigned size1,
                 if (blk1)
                 {
                     f(blk1, block_idx);
-                    non_empty_top += (blk_blk[j + 1] != 0);
+  //                  non_empty_top += (blk_blk[j + 1] != 0);
                 }
                 else
                     f.on_empty_block(block_idx);
@@ -883,16 +881,13 @@ void for_each_nzblock(T*** root, unsigned size1,
                 non_empty_top += (blk_blk[j] != 0);// re-check for mutation
             }
             else
-            {
                 f.on_empty_block(r + j);
-            }
             ++j;
 #endif
-        } // for j
+        } while (j < bm::set_array_size);
+
         if (non_empty_top == 0)
-        {
             f.on_empty_top(i);
-        }
     }  // for i
 }
 
@@ -4785,7 +4780,6 @@ void bit_andnot_arr_ffmask(bm::word_t* BMRESTRICT dst,
 #ifdef BMVECTOPT
         VECT_ANDNOT_ARR_2_MASK(dst, src, src_end, ~0u);
 #else
-
         bm::wordop_t* dst_ptr = (wordop_t*)dst;
         const bm::wordop_t* wrd_ptr = (wordop_t*) src;
         const bm::wordop_t* wrd_end = (wordop_t*) src_end;

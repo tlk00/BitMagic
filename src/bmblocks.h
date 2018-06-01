@@ -472,26 +472,20 @@ public:
         void operator()(bm::word_t* block, unsigned idx)
         {
             if (!block)
-            {
                 this->bm_.set_block(idx, FULL_BLOCK_FAKE_ADDR);
-            }
             else
             if (IS_FULL_BLOCK(block))
-            {
                 this->bm_.set_block_ptr(idx, 0);
-            }
             else
             {
                 if (BM_IS_GAP(block)) // gap block
-                {
                     gap_invert(BMGAP_PTR(block));
-                }
                 else  // bit block
                 {
                     bm::wordop_t* wrd_ptr = (wordop_t*) block;
                     bm::wordop_t* wrd_end = 
                             (wordop_t*) (block + bm::set_block_size);
-                    bit_invert(wrd_ptr, wrd_end);
+                    bm::bit_invert(wrd_ptr, wrd_end);
                 }
             }
 
@@ -503,21 +497,32 @@ public:
     {
     public:
         block_zero_func(blocks_manager& bm) 
-        : bm_func_base(bm)
+        : bm_func_base(bm), alloc_(bm.get_allocator())
         {}
 
         void operator()(bm::word_t* block, unsigned idx)
         {
             if (BM_IS_GAP(block))
-                gap_set_all(BMGAP_PTR(block), bm::gap_max_bits, 0);
+                bm::gap_set_all(BMGAP_PTR(block), bm::gap_max_bits, 0);
             else  // BIT block
             {
                 if (IS_FULL_BLOCK(block))
                     this->bm_.set_block_ptr(idx, 0);
                 else
-                    bit_block_set(block, 0);
+                {
+                    BM_ASSERT(block);
+                    {
+                        // faster to free and re-aquire than set to zero
+                        alloc_.free_bit_block(block);
+                        this->bm_.set_block_ptr(idx, 0);
+                    }
+
+//                    bit_block_set(block, 0);
+                }
             }
         }
+    private:
+        allocator_type& alloc_;
     };
 
     /** Fill block with all-one bits functor */
@@ -529,9 +534,7 @@ public:
         void operator()(bm::word_t* block, unsigned idx)
         {
             if (!IS_FULL_BLOCK(block))
-            {
                 this->bm_.set_block_all_set(idx);
-            }
         }
     };
 
@@ -539,22 +542,20 @@ public:
     class block_free_func : public bm_func_base
     {
     public:
-        block_free_func(blocks_manager& bm) : bm_func_base(bm) {}
+        block_free_func(blocks_manager& bm)
+        : bm_func_base(bm), alloc_(bm.get_allocator())
+        {}
 
         void operator()(bm::word_t* block)
         {
-            blocks_manager& bman = this->bm_;
-            if (BM_IS_GAP(block)) // gap block
-            {
-                bman.get_allocator().free_gap_block(BMGAP_PTR(block),
-                                                    bman.glen());
-            }
+            if (BM_IS_GAP(block))
+                alloc_.free_gap_block(BMGAP_PTR(block), this->bm_.glen());
             else
-            {
                 if (IS_VALID_ADDR(block))
-                    bman.get_allocator().free_bit_block(block);
-            }
+                    alloc_.free_bit_block(block);
         }
+    private:
+        allocator_type& alloc_;
     };
 
     /** Block copy functor */
@@ -564,22 +565,20 @@ public:
         block_copy_func(blocks_manager&        bm_target, 
                         const blocks_manager&  bm_src) 
             : bm_func_base(bm_target), 
-              bm_src_(bm_src) 
+              bm_src_(bm_src),
+              alloc_(bm_target.get_allocator())
         {}
 
         void operator()(bm::word_t* block, unsigned idx)
         {
-            bm::word_t* new_blk;            
-            blocks_manager& bman = this->bm_;
-
+            bm::word_t* new_blk;
             bool is_gap = BM_IS_GAP(block);
             if (is_gap)
             {
                 bm::gap_word_t* gap_block = BMGAP_PTR(block); 
                 unsigned level = gap_level(gap_block);
                 new_blk = (bm::word_t*)
-                    bman.get_allocator().alloc_gap_block(level, 
-                                                        bman.glen());
+                            alloc_.alloc_gap_block(level, this->bm_.glen());
                 unsigned len = bm::gap_length(BMGAP_PTR(block));
                 ::memcpy(new_blk, gap_block, len * sizeof(bm::gap_word_t));
             }
@@ -588,11 +587,11 @@ public:
                 new_blk = block;
                 if (!IS_FULL_BLOCK(block))
                 {
-                    new_blk = bman.get_allocator().alloc_bit_block();
-                    bit_block_copy(new_blk, block);
+                    new_blk = alloc_.alloc_bit_block();
+                    bm::bit_block_copy(new_blk, block);
                 }
             }
-            bman.set_block(idx, new_blk, is_gap);
+            this->bm_.set_block(idx, new_blk, is_gap);
         }
 
     private:
@@ -600,6 +599,7 @@ public:
         block_copy_func& operator=(const block_copy_func&);
     private:
         const blocks_manager&  bm_src_;
+        allocator_type&        alloc_;
     };
 
 
@@ -642,10 +642,9 @@ public:
         if (blockman.is_init())
         {
             init_tree();
-            blocks_manager* bm = 
-                const_cast<blocks_manager*>(&blockman);
+            //blocks_manager* bm = const_cast<blocks_manager*>(&blockman);
 
-            word_t*** blk_root = bm->top_blocks_root();
+            word_t*** blk_root = blockman.top_blocks_;//bm->top_blocks_root();
 
             block_copy_func copy_func(*this, blockman);
             for_each_nzblock(blk_root, top_block_size_, copy_func);
@@ -723,9 +722,7 @@ public:
     unsigned compute_top_block_size(bm::id_t bits_to_store)
     {
         if (bits_to_store == bm::id_max)  // working in full-range mode
-        {
             return bm::set_array_size;
-        }
 
         unsigned top_block_sz = (unsigned)
             (bits_to_store / (bm::set_block_size * sizeof(bm::word_t) *
@@ -770,7 +767,6 @@ public:
     \param nb - Index of block (logical linear number)
     \return block adress or NULL if not yet allocated or FULL_BLOCK_FAKE_ADDR
     */
-    BMFORCEINLINE
     bm::word_t* get_block_ptr(unsigned nb) const
     {
         unsigned block_idx = nb >> bm::set_array_shift;
@@ -911,13 +907,9 @@ public:
         if (IS_VALID_ADDR(old_block))
         {
             if (BM_IS_GAP(old_block))
-            {
                 alloc_.free_gap_block(BMGAP_PTR(old_block), glen());
-            }
             else
-            {
                 alloc_.free_bit_block(old_block);
-            }
         }
         return block;
     }
@@ -1086,16 +1078,16 @@ public:
     void set_all_zero(bool free_mem)
     {
         if (!is_init()) return;
+        
+        unsigned top_size = this->effective_top_block_size();
         if (free_mem)
         {
             // TODO: optimization of top-level realloc
             deinit_tree();
-            //init_tree();
         }
         else
         {
             block_zero_func zero_func(*this);
-            unsigned top_size = this->effective_top_block_size();
             for_each_nzblock(top_blocks_, top_size,  zero_func);
         }
     }
@@ -1208,7 +1200,7 @@ public:
         }
 
         // top block index
-        BMREGISTER unsigned nblk_blk = nb >> bm::set_array_shift;
+        unsigned nblk_blk = nb >> bm::set_array_shift;
 
         // auto-resize the top block array
         if (nblk_blk >= top_block_size_)
@@ -1551,12 +1543,6 @@ public:
         for (; i < top_blocks; ++i)
             new_blocks[i] = 0;
 
-        /*
-        for (unsigned j = top_block_size_; j < top_blocks; ++j)
-        {
-            new_blocks[j] = 0;
-        }
-        */
         alloc_.free_ptr(top_blocks_, top_block_size_);
         top_blocks_ = new_blocks;
         top_block_size_ = top_blocks;
@@ -1619,8 +1605,6 @@ private:
             }
         }
     }
-
-    
 
 private:
     /// maximum addresable bits

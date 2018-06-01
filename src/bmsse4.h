@@ -198,6 +198,16 @@ bool sse4_is_all_one(const __m128i* BMRESTRICT block,
     return true;
 }
 
+/*!
+    @brief check if wave of pointers is all NULL
+    @ingroup AVX2
+*/
+BMFORCEINLINE
+bool sse42_test_all_zero_wave(void* ptr)
+{
+    __m128i w0 = _mm_load_si128((__m128i*)ptr);
+    return _mm_testz_si128(w0, w0);
+}
 
 
 #define VECT_XOR_ARR_2_MASK(dst, src, src_end, mask)\
@@ -259,10 +269,9 @@ bm::id_t sse4_bit_block_calc_count_change(const __m128i* BMRESTRICT block,
                                           const __m128i* BMRESTRICT block_end,
                                                unsigned* BMRESTRICT bit_count)
 {
-//   __m128i mask1 = _mm_set_epi32(0x1, 0x1, 0x1, 0x1);
-   BMREGISTER int count = (unsigned)(block_end - block)*4;
+   int count = (unsigned)(block_end - block)*4;
 
-   BMREGISTER bm::word_t  w0, w_prev;
+   bm::word_t  w0, w_prev;
    const int w_shift = sizeof(w0) * 8 - 1;
    bool first_word = true;
    *bit_count = 0;

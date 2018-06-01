@@ -940,6 +940,16 @@ bool avx2_is_all_one(const __m256i* BMRESTRICT block,
     } while (block < block_end);
     return true;
 }
+/*!
+    @brief check if wave of pointers is all NULL
+    @ingroup AVX2
+*/
+BMFORCEINLINE
+bool avx2_test_all_zero_wave(void* ptr)
+{
+    __m256i w0 = _mm256_load_si256((__m256i*)ptr);
+    return _mm256_testz_si256(w0, w0);
+}
 
 
 

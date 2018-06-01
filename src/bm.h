@@ -1369,7 +1369,7 @@ public:
     }
 
     /// Get curent allocator pool (if set)
-    ///
+    /// @return pointer to the current pool or NULL
     allocator_pool_type* get_allocator_pool()
     {
         return blockman_.get_allocator().get_pool();
@@ -2350,8 +2350,7 @@ bm::id_t bvector<Alloc>::count() const
         return 0;
     }    
     typename blocks_manager_type::block_count_func func(blockman_);
-    for_each_nzblock2(blk_root, blockman_.effective_top_block_size(), 
-                      func);
+    for_each_nzblock2(blk_root, blockman_.effective_top_block_size(), func);
 
     BMCOUNT_SET(func.count());
     return func.count();
@@ -3586,18 +3585,20 @@ void bvector<Alloc>::combine_operation_and(const bm::bvector<Alloc>& bv)
             continue;
         }
         unsigned r = i * bm::set_array_size;
-        for (unsigned j = 0; j < bm::set_array_size; ++j)
+        unsigned j = 0;
+        bm::word_t* blk;
+        const bm::word_t* arg_blk;
+        do
         {
-            bm::word_t* blk = BLOCK_ADDR_SAN(blk_blk[j]);
-            if (blk)
+            if (0 != (blk = blk_blk[j]))
             {
-                const bm::word_t* arg_blk = BLOCK_ADDR_SAN(blk_blk_arg[j]);
-                if (arg_blk)
-                    combine_operation_block_and(r + j, blk, arg_blk);
+                if (0 != (arg_blk = blk_blk_arg[j]))
+                    combine_operation_block_and(r + j, BLOCK_ADDR_SAN(blk), BLOCK_ADDR_SAN(arg_blk));
                 else
                     blockman_.zero_block(i, j);
             }
-        } // for j
+            ++j;
+        } while (j < bm::set_array_size);
     } // for i
 }
 
@@ -3631,22 +3632,15 @@ void bvector<Alloc>::combine_operation_sub(const bm::bvector<Alloc>& bv)
             continue;
 
         unsigned r = i * bm::set_array_size;
-        for (unsigned j = 0; j < bm::set_array_size; ++j)
+        unsigned j = 0;
+        bm::word_t* blk;
+        const bm::word_t* arg_blk;
+        do
         {
-            bm::word_t* blk = BLOCK_ADDR_SAN(blk_blk[j]);
-            if (blk)
-            {
-                const bm::word_t* arg_blk = BLOCK_ADDR_SAN(blk_blk_arg[j]);
-                if (arg_blk)
-                    combine_operation_block_sub(r + j, blk, arg_blk);
-/*
-                    combine_operation_with_block(r + j,
-                        BM_IS_GAP(blk), blk,
-                        arg_blk, BM_IS_GAP(arg_blk),
-                        BM_SUB);
-*/
-            }
-        } // for j
+            if ((0 != (blk = blk_blk[j])) && (0 != (arg_blk = blk_blk_arg[j])))
+                combine_operation_block_sub(r + j, BLOCK_ADDR_SAN(blk), BLOCK_ADDR_SAN(arg_blk));
+            ++j;
+        } while (j < bm::set_array_size);
     } // for i
 }
 
@@ -3954,31 +3948,7 @@ void bvector<Alloc>::combine_operation_block_sub(
     {
         ret = blockman_.get_allocator().alloc_bit_block();
         bm::bit_andnot_arr_ffmask(ret, arg_blk, arg_blk + bm::set_block_size);
-/*
-#ifdef BMVECTOPT
-        VECT_ANDNOT_ARR_2_MASK(ret,
-                            arg_blk,
-                            arg_blk + bm::set_block_size,
-                            ~0u);
-#else
-
-        bm::wordop_t* dst_ptr = (wordop_t*)ret;
-        const bm::wordop_t* wrd_ptr = (wordop_t*) arg_blk;
-        const bm::wordop_t* wrd_end =
-        (wordop_t*) (arg_blk + bm::set_block_size);
-
-        do
-        {
-            dst_ptr[0] = bm::all_bits_mask & ~wrd_ptr[0];
-            dst_ptr[1] = bm::all_bits_mask & ~wrd_ptr[1];
-            dst_ptr[2] = bm::all_bits_mask & ~wrd_ptr[2];
-            dst_ptr[3] = bm::all_bits_mask & ~wrd_ptr[3];
-            dst_ptr+=4; wrd_ptr+=4;
-        } while (wrd_ptr < wrd_end);
-#endif
-*/
     }
-
 
     if (ret != dst) // block mutation
     {
@@ -4235,32 +4205,6 @@ bvector<Alloc>::combine_operation_with_block(unsigned          nb,
             {
                 ret = blockman_.get_allocator().alloc_bit_block();
                 bm::bit_andnot_arr_ffmask(ret, arg_blk, arg_blk + bm::set_block_size);
-/*
-#ifdef BMVECTOPT
-                VECT_ANDNOT_ARR_2_MASK(ret, 
-                                    arg_blk,
-                                    arg_blk + bm::set_block_size,
-                                    ~0u);
-#else
-
-                bm::wordop_t* dst_ptr = (wordop_t*)ret;
-                const bm::wordop_t* wrd_ptr = (wordop_t*) arg_blk;
-                const bm::wordop_t* wrd_end = 
-                (wordop_t*) (arg_blk + bm::set_block_size);
-
-                do
-                {
-                    dst_ptr[0] = bm::all_bits_mask & ~wrd_ptr[0];
-                    dst_ptr[1] = bm::all_bits_mask & ~wrd_ptr[1];
-                    dst_ptr[2] = bm::all_bits_mask & ~wrd_ptr[2];
-                    dst_ptr[3] = bm::all_bits_mask & ~wrd_ptr[3];
-
-                    dst_ptr+=4;
-                    wrd_ptr+=4;
-
-                } while (wrd_ptr < wrd_end);
-#endif
-*/
             }
             break;
         default:
