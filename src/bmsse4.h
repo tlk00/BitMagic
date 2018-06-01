@@ -205,7 +205,7 @@ bool sse4_is_all_one(const __m128i* BMRESTRICT block,
 BMFORCEINLINE
 bool sse42_test_all_zero_wave(void* ptr)
 {
-    __m128i w0 = _mm_load_si128((__m128i*)ptr);
+    __m128i w0 = _mm_loadu_si128((__m128i*)ptr);
     return _mm_testz_si128(w0, w0);
 }
 
