@@ -354,7 +354,7 @@ typedef bm::compressed_sparse_vector<unsigned, sparse_vector_u32> compressed_spa
 const unsigned BITVECT_SIZE = 100000000 * 2;
 
 const unsigned ITERATIONS = 100000;
-const unsigned PROGRESS_PRINT = 2000000;
+//const unsigned PROGRESS_PRINT = 2000000;
 
 
 
@@ -392,13 +392,6 @@ void FillSets(bvect_mini* bvect_min,
             id = random_minmax(min, max);
             bvect_min->set_bit(id);
             bvect_full->set_bit(id);
-            if (bm::conditional< bool(PROGRESS_PRINT) >::test())
-            {
-                if ( (i % PROGRESS_PRINT) == 0)
-                {
-                    cout << "+" << flush;
-                }
-            }
         }
         cout << endl;
     }
@@ -454,15 +447,6 @@ void FillSets(bvect_mini* bvect_min,
                             bvect_full->set_bit(start);  
                             start += inc;
                         }
-
-                        if (bm::conditional< bool(PROGRESS_PRINT) >::test())
-                        {
-                            if ( ( ((i+1)*(end-start))  % PROGRESS_PRINT) == 0)
-                            {
-                                cout << "+" << flush;
-                            }
-                        }
-
                         continue;
                     }
 
@@ -478,14 +462,6 @@ void FillSets(bvect_mini* bvect_min,
                         bvect_min->set_bit(start);
                         bvect_full->set_bit(start);
                     }
-
-                    if (bm::conditional< bool(PROGRESS_PRINT) >::test())
-                    {
-                        if ( ( ((i+1)*(end-start))  % PROGRESS_PRINT) == 0)
-                        {
-                            std::cout << "+" << std::flush;
-                        }
-                    }
                 }
 
             }
@@ -498,20 +474,10 @@ void FillSets(bvect_mini* bvect_min,
                 {
                     bvect_min->set_bit(start);
                     bvect_full->set_bit(start);
-
                     if (start % c)
                     {
                         start += c;
                     }
-
-                    if (bm::conditional< bool(PROGRESS_PRINT) >::test())
-                    {
-                        if ( ( ((i+1)*(end-start))  % PROGRESS_PRINT) == 0)
-                        {
-                            cout << "+" << flush;
-                        }
-                    }
-
                 }
             }
             cout << endl;
@@ -555,16 +521,6 @@ void FillSetsIntervals(bvect_mini* bvect_min,
             end = i+len;
             
         } while (end >= max);
-/*
-        if (set_flag == false)
-        {
-            cout << "Cleaning: " << i << "-" << end << endl;
-        }
-        else
-        {
-            cout << "Add: " << i << "-" << end << endl;
-        }
-*/
         if (i < end)
         {
             bvect_full->set_range(i, end-1, set_flag);
@@ -581,25 +537,10 @@ void FillSetsIntervals(bvect_mini* bvect_min,
             {
                 bvect_min->clear_bit(j);
                 //bvect_full->clear_bit(j);
-/*
-        if (g_cnt_check)
-        {
-            bool b = bvect_full->count_check();
-            if(!b)
-            {
-                cout << "Count check failed (clear)!" << endl;
-                cout << "bit=" << j << endl;
-                exit(1);
-            }
-        }
-*/
             }
 
                            
         } // j
-
-//cout << "Checking range filling " << from << "-" << to << endl;
-//CheckVectors(*bvect_min, *bvect_full, 100000000);
 
 
         i = end;
@@ -615,12 +556,6 @@ void FillSetsIntervals(bvect_mini* bvect_min,
 
         if ( (len % 6) == 0)  
         {
-/*
-if (set_flag == false)
-{
-    cout << "Additional Cleaning: " << i << "-" << end << endl;
-}
-*/
             for(unsigned k=0; k < 1000 && i < max; k+=3,i+=3)
             {
                 if (set_flag)
@@ -636,7 +571,6 @@ if (set_flag == false)
 
             }
         }
-
     } // for i
 
 }
@@ -702,11 +636,6 @@ void FillSetsRandom(bvect_mini* bvect_min,
         }
         bvect_min->set_bit(bn);
         bvect_full->set_bit(bn);   
-        
-        if ( (i  % PROGRESS_PRINT) == 0)
-        {
-            cout << "+" << flush;
-        }
     }
     cout << "Ok" << endl;
 
@@ -726,11 +655,6 @@ void FillSetsRegular(bvect_mini* bvect_min,
     {
         bvect_min->set_bit(i);
         bvect_full->set_bit_no_check(i);
-        
-        if ( (i  % PROGRESS_PRINT) == 0)
-        {
-            cout << "+" << flush;
-        }
     }
     cout << "Ok" << endl;
 }
@@ -1460,18 +1384,8 @@ void DetailedCheckVectors(const bvect_mini &bvect_min,
                 i, (int)bv_m_flag, (int)bv_f_flag);
 
             cout << "Non-conformant block number is: " << unsigned(i >>  bm::set_block_shift) << endl;
-//            throw 110;
             exit(1);
         }
-
-        if (bm::conditional< bool(PROGRESS_PRINT) >::test())
-        {
-            if ( (i % PROGRESS_PRINT) == 0)
-            {
-                printf(".");
-            }
-        }
-             
     }
     
     printf("\n detailed check ok.\n");
@@ -1614,8 +1528,6 @@ void CheckVectors(bvect_mini &bvect_min,
            }
 
            nb_en = *en;
-//           nb_en = bvect_full.get_next(nb_en);
-
            ++bit_count;
 
            if (nb_en != nb_min)
@@ -1632,11 +1544,6 @@ void CheckVectors(bvect_mini &bvect_min,
 
                exit(1);
            }
-            if ( (bit_count % PROGRESS_PRINT) == 0)
-           {
-                cout << "." << flush;
-            }
-
        } while (en.valid());
        if (bit_count != min_count)
        {
@@ -2423,7 +2330,6 @@ void SimpleRandomFillTest()
         CheckCountRange(bvect_full, 0, 65535);
         CheckCountRange(bvect_full, 0, num);
         CheckCountRange(bvect_full, num, num+iter);
-        if ((i % 1000) == 0) cout << "." << flush;
     }
 
     CheckVectors(bvect_min, bvect_full, iter);
@@ -2439,7 +2345,6 @@ void SimpleRandomFillTest()
         bvect_full.clear_bit(num);
         CheckCountRange(bvect_full, 0, num);
         CheckCountRange(bvect_full, num, num+iter);
-        if ((i % 1000) == 0) cout << "." << flush;
     }
 
     CheckVectors(bvect_min, bvect_full, iter);
@@ -4946,7 +4851,8 @@ void GAPCheck()
    bvect        bvect_a;
 
    bvect_a.set_bit(1);
-   bvect_a.clear();
+   bvect_a.set_bit(1, false);
+   //bvect_a.clear();
 
 
    unsigned* buf = (unsigned*) bvect_a.get_block(0);
@@ -4991,7 +4897,8 @@ void GAPCheck()
    bvect   bvect_u;
 
    bvect_u.set_bit(0);
-   bvect_u.clear();
+   bvect_u.set_bit(0, false);
+//   bvect_u.clear();
 
    unsigned* buf = (unsigned*) bvect_u.get_block(0);
 
@@ -5023,11 +4930,13 @@ void GAPCheck()
    bvect   bvect_r;
 
    bvect_r.set_bit(0);
-   bvect_r.clear();
+   bvect_r.set_bit(0, false);
+   //bvect_r.clear();
 
-   unsigned* buf = (unsigned*) bvect_r.get_block(0);
    for (int i = 0; i < 5000; ++i)
    {
+        unsigned* buf = (unsigned*) bvect_r.get_block(0);
+        assert(buf);
         unsigned start = rand() % 65535;
         unsigned end = rand() % 65535;
         if (start > end)
@@ -5072,6 +4981,8 @@ void GAPCheck()
 
         } 
         bvect_r.clear();
+        bvect_r.set_bit(0);
+        bvect_r.set_bit(0, false);
 
         if ((i % 100)==0)
         {
@@ -5103,7 +5014,8 @@ void GAPCheck()
 
    print_gap(gapv, 100);
    bvect_a.set_bit(0);
-   bvect_a.clear();
+   bvect_a.set_bit(0, false);
+   //bvect_a.clear();
 
    unsigned* buf = (unsigned*) bvect_a.get_block(0);
 
@@ -10107,21 +10019,18 @@ void TestSparseVector()
     
     {{
     cout << "sparse vector inc test" << endl;
-
     bm::sparse_vector<unsigned, bm::bvector<> > sv;
     
     for (unsigned i = 1; i < 65536; ++i)
     {
-        for (unsigned j = 0; j < 256000; ++j)
+        for (unsigned j = 0; j < 200000; ++j)
         {
             sv.inc(j);
-            
             unsigned v = sv.get(j);
             assert(v == i);
         } // for j
-        if ((i % 100) == 0)
-            cout << "*" << flush;
-
+        if ((i % 200) == 0)
+            cout << "\r" << i << " / " << 65536 << flush;
     } // for i
 
     cout <<  "\nOk" << endl;
@@ -13532,7 +13441,6 @@ int main(void)
     exit(1);
 */
 
-
     TestRecomb();
 
     OptimGAPTest();
@@ -13629,10 +13537,10 @@ int main(void)
 
      BlockLevelTest();
 
+     StressTest(120, 3); // AND
      StressTest(120, 0); // OR
      StressTest(120, 1); // SUB
      StressTest(120, 2); // XOR
-     StressTest(120, 3); // AND
 
      TestSparseVector();
 
