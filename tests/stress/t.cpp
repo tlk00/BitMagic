@@ -2146,7 +2146,7 @@ void RankFindTest()
     assert(pos == 30);
 
     rf2 = bv1.find_rank(2, 30, pos);
-    assert(rf1);
+    assert(rf2);
     assert(pos == 65534);
     }
     
