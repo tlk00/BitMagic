@@ -246,7 +246,7 @@ static size_t nf_;
             (bm::word_t*) ::malloc((n+1) * sizeof(bm::word_t));
         if (!p)
         {
-            std::cerr << "Failed allocation!" << endl;
+            std::cerr << "ERROR Failed allocation!" << endl;
             exit(1);
         }
         *p = (bm::word_t)n;
@@ -257,9 +257,9 @@ static size_t nf_;
     {
         ++nf_;
         --p;
-        if(*p != n)
+        if (*p != n)
         {
-            printf("Block memory deallocation error! n = %i (expected %i)\n", (int)n, (int)*p);
+            printf("Block memory deallocation ERROR! n = %i (expected %i)\n", (int)n, (int)*p);
             assert(0);
             exit(1);
         }
@@ -288,7 +288,7 @@ static size_t nf_;
         void* p = ::malloc((n+1) * sizeof(void*));
         if (!p)
         {
-            std::cerr << "Failed allocation!" << endl;
+            std::cerr << "ERROR! Failed allocation!" << endl;
             exit(1);
         }
         size_t* s = (size_t*) p;
@@ -303,7 +303,7 @@ static size_t nf_;
         --s;
         if(*s != n)
         {
-            printf("Ptr memory deallocation error!\n");
+            printf("Ptr memory deallocation ERROR!\n");
             assert(0);
             exit(1);
         }
@@ -13564,22 +13564,24 @@ int main(void)
     cout << "Test execution time = " << finish_time - start_time << endl;
 
 #ifdef MEM_DEBUG
+    cout << "[--------------  Allocation digest -------------------]" << endl;
     cout << "Number of BLOCK allocations = " <<  dbg_block_allocator::na_ << endl;
     cout << "Number of PTR allocations = " <<  dbg_ptr_allocator::na_ << endl << endl;
 
     if(dbg_block_allocator::balance() != 0)
     {
-        cout << "Block memory leak! " << endl;
+        cout << "ERROR! Block memory leak! " << endl;
         cout << dbg_block_allocator::balance() << endl;
         exit(1);
     }
 
     if(dbg_ptr_allocator::balance() != 0)
     {
-        cout << "Ptr memory leak! " << endl;
+        cout << "ERROR! Ptr memory leak! " << endl;
         cout << dbg_ptr_allocator::balance() << endl;
         exit(1);
     }
+    cout << "[--------------  Debug Allocation balance OK -------------------]" << endl;
 #endif
 
     return 0;
