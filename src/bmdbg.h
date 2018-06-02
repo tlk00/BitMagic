@@ -474,7 +474,7 @@ void print_stat(const BV& bv, unsigned blocks = 0)
                total_gap_eff += unsigned(mem_eff);
                
                unsigned i,j;
-               bman.get_block_coord(nb, &i, &j);
+               bman.get_block_coord(nb, i, j);
                 printf(" [GAP %i(%i,%i)=%i:%i-L%i(%zd)] ", nb, i, j, bc, level, len, mem_eff);
                 ++printed;
             }

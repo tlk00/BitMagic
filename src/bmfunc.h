@@ -803,37 +803,22 @@ void for_each_nzblock(T*** root, unsigned size1, F& f)
 
                 unsigned block_idx = r + j + 0;
                 if (blk0)
-                {
                     f(blk0, block_idx);
-//                    non_empty_top += (blk_blk[j] != 0);
-                }
                 else
                     f.on_empty_block(block_idx);
 
-                //++block_idx;
                 if (blk1)
-                {
                     f(blk1, block_idx + 1);
-//                    non_empty_top += (blk_blk[j + 1] != 0);
-                }
                 else
                     f.on_empty_block(block_idx + 1);
 
-                //++block_idx;
                 if (blk2)
-                {
                     f(blk2, block_idx + 2);
-//                    non_empty_top += (blk_blk[j + 2] != 0);
-                }
                 else
                     f.on_empty_block(block_idx + 2);
 
-                //++block_idx;
                 if (blk3)
-                {
                     f(blk3, block_idx + 3);
-//                    non_empty_top += (blk_blk[j + 3] != 0);
-                }
                 else
                     f.on_empty_block(block_idx + 3);
             }
@@ -852,19 +837,13 @@ void for_each_nzblock(T*** root, unsigned size1, F& f)
 
                 unsigned block_idx = r + j + 0;
                 if (blk0)
-                {
                     f(blk0, block_idx);
-//                    non_empty_top += (blk_blk[j] != 0);
-                }
                 else
                     f.on_empty_block(block_idx);
 
                 ++block_idx;
                 if (blk1)
-                {
                     f(blk1, block_idx);
-  //                  non_empty_top += (blk_blk[j + 1] != 0);
-                }
                 else
                     f.on_empty_block(block_idx);
             }
@@ -878,7 +857,7 @@ void for_each_nzblock(T*** root, unsigned size1, F& f)
             if (blk_blk[j])
             {
                 f(blk_blk[j], r + j);
-                non_empty_top += (blk_blk[j] != 0);// re-check for mutation
+                non_empty_top = 1;
             }
             else
                 f.on_empty_block(r + j);

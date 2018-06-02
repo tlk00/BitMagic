@@ -3055,7 +3055,7 @@ iterator_deserializer<BV, SerialIterator>::finalize_target_vector(
         // clear the rest of the target vector
         {
             unsigned i, j;
-            bman.get_block_coord(bv_block_idx, &i, &j);
+            bman.get_block_coord(bv_block_idx, i, j);
             bm::word_t*** blk_root = bman.top_blocks_root();
             unsigned effective_top_size = 
                 bman.effective_top_block_size();
@@ -3070,7 +3070,7 @@ iterator_deserializer<BV, SerialIterator>::finalize_target_vector(
                 }
                 for (;j < bm::set_array_size; ++j, ++bv_block_idx)
                 {
-                    if (blk_blk[j])
+                    //if (blk_blk[j])
                         bman.zero_block(bv_block_idx);
                 } // for j
                 j = 0;
@@ -3083,7 +3083,7 @@ iterator_deserializer<BV, SerialIterator>::finalize_target_vector(
         // count bits in the target vector
         {
             unsigned i, j;
-            bman.get_block_coord(bv_block_idx, &i, &j);
+            bman.get_block_coord(bv_block_idx, i, j);
             bm::word_t*** blk_root = bman.top_blocks_root();
             unsigned effective_top_size = 
                 bman.effective_top_block_size();
@@ -3562,7 +3562,8 @@ iterator_deserializer<BV, SerialIterator>::deserialize(
                 {
                 case set_AND: case set_ASSIGN:
                     // the result is 0
-                    blk = bman.zero_block(bv_block_idx);
+                    //blk =
+                    bman.zero_block(bv_block_idx);
                     break;
 
                 case set_SUB: case set_COUNT_AND:    case set_OR:
@@ -3605,7 +3606,8 @@ iterator_deserializer<BV, SerialIterator>::deserialize(
                 count += bm::bits_in_block;
                 break;
             case set_SUB:
-                blk = bman.zero_block(bv_block_idx);
+                //blk =
+                bman.zero_block(bv_block_idx);
                 break;
             case set_COUNT_SUB_AB: case set_AND:
                 // nothing to do
@@ -3701,7 +3703,8 @@ iterator_deserializer<BV, SerialIterator>::deserialize(
             {
                 if ((sop == set_ASSIGN) && blk) // target block override
                 {
-                    blk = bman.zero_block(bv_block_idx);
+                    //blk =
+                    bman.zero_block(bv_block_idx);
                     sop = set_OR;
                 }
                 if (blk == 0) // target block not found

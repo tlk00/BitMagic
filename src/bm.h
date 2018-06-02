@@ -3859,7 +3859,7 @@ void bvector<Alloc>::combine_operation_block_and(
 
     if (ret != dst) // block mutation
     {
-        blockman_.set_block(nb, ret);
+        blockman_.set_block_ptr(nb, ret);
         if (IS_VALID_ADDR(dst))
             blockman_.get_allocator().free_bit_block(dst);
     }
@@ -3909,15 +3909,13 @@ void bvector<Alloc>::combine_operation_block_sub(
         // else: argument is BITSET-type (own block is GAP)
         //
         if (!arg_blk)  // Combining against an empty block
-        {
             return;
-        }
+        
         blk = blockman_.convert_gap2bitset(nb, BMGAP_PTR(blk));
         // fall through to bit-block to bit-block operation
     }
     else // our block is BITSET-type
     {
-        
         if (arg_gap) // argument block is GAP-type
         {
             if (IS_VALID_ADDR(blk))  // gap combined to bitset
@@ -3952,7 +3950,7 @@ void bvector<Alloc>::combine_operation_block_sub(
 
     if (ret != dst) // block mutation
     {
-        blockman_.set_block(nb, ret);
+        blockman_.set_block_ptr(nb, ret);
         if (IS_VALID_ADDR(dst))
             blockman_.get_allocator().free_bit_block(dst);
     }
@@ -4234,7 +4232,7 @@ void bvector<Alloc>::assign_gap_result(
                        bm::word_t*           blk,
                        gap_word_t*           tmp_buf)
 {
-    int new_level = gap_calc_level(res_len, blockman_.glen());
+    int new_level = bm::gap_calc_level(res_len, blockman_.glen());
     if (new_level < 0)
     {
         blockman_.convert_gap2bitset(nb, res);
