@@ -3057,9 +3057,8 @@ iterator_deserializer<BV, SerialIterator>::finalize_target_vector(
             unsigned i, j;
             bman.get_block_coord(bv_block_idx, i, j);
             bm::word_t*** blk_root = bman.top_blocks_root();
-            unsigned effective_top_size = 
-                bman.effective_top_block_size();
-            for (;i < effective_top_size; ++i) 
+            unsigned top_size = bman.top_block_size();
+            for (; i < top_size; ++i)
             {
                 bm::word_t** blk_blk = blk_root[i];
                 if (blk_blk == 0) 
@@ -3085,9 +3084,8 @@ iterator_deserializer<BV, SerialIterator>::finalize_target_vector(
             unsigned i, j;
             bman.get_block_coord(bv_block_idx, i, j);
             bm::word_t*** blk_root = bman.top_blocks_root();
-            unsigned effective_top_size = 
-                bman.effective_top_block_size();
-            for (;i < effective_top_size; ++i) 
+            unsigned top_size = bman.top_block_size();
+            for (;i < top_size; ++i)
             {
                 bm::word_t** blk_blk = blk_root[i];
                 if (blk_blk == 0) 

@@ -1986,9 +1986,9 @@ void BasicFunctionalityTest()
         }
     }
     bvect_full1.set_range(0, ITERATIONS-1);
-    
+
     cout << "Rank check 2" << endl;
-    
+
     for (i = 0; i < ITERATIONS; ++i)
     {
         bm::id_t pos1, pos2;
@@ -2045,7 +2045,6 @@ void BasicFunctionalityTest()
         CheckCountRange(bvect_full, 0, i);
         CheckCountRange(bvect_full1, 0, i);
     }
-
     
     unsigned count_full = bvect_full.count();
 
@@ -10996,7 +10995,7 @@ void TestSparseVector_Stress(unsigned count)
 
     cout << "---------------------------- Bit-plain sparse vector stress" << endl;
 
-    cout << "Interval shift check.";
+    cout << "Interval shift check.\n";
     // interval shift check
     for (unsigned i = 0; i < count; ++i)
     {
@@ -11028,7 +11027,7 @@ void TestSparseVector_Stress(unsigned count)
                     exit(1);
                 }
                 
-                cout << "+" << flush;
+                //cout << "+" << flush;
                 
             }}
             ++fill_factor;

@@ -723,12 +723,12 @@ void distance_operation(const BV& bv1,
 
     BM_SET_MMX_GUARD
 
-    unsigned effective_top_block_size = bman1.effective_top_block_size();
-    unsigned ebs2 = bman2.effective_top_block_size();
-    if (ebs2 > effective_top_block_size)
-        effective_top_block_size = ebs2;
+    unsigned top_block_size = bman1.top_block_size();
+    unsigned ebs2 = bman2.top_block_size();
+    if (ebs2 > top_block_size)
+        top_block_size = ebs2;
 
-    for (i = 0; i < effective_top_block_size; ++i)
+    for (i = 0; i < top_block_size; ++i)
     {
         bm::word_t** blk_blk = blk_root ? blk_root[i] : 0;
 
@@ -805,13 +805,10 @@ unsigned distance_and_operation(const BV& bv1,
     bm::word_t*** blk_root_arg = bman2.top_blocks_root();
     unsigned count = 0;
 
-    BM_SET_MMX_GUARD
+    unsigned top_block_size =
+        bm::min_value(bman1.top_block_size(),bman2.top_block_size());
 
-    unsigned effective_top_block_size = 
-        bm::min_value(bman1.effective_top_block_size(), 
-                      bman2.effective_top_block_size());
-
-    for (unsigned i = 0; i < effective_top_block_size; ++i)
+    for (unsigned i = 0; i < top_block_size; ++i)
     {
         bm::word_t** blk_blk;
         bm::word_t** blk_blk_arg;
@@ -884,12 +881,12 @@ void distance_operation_any(const BV& bv1,
 
     BM_SET_MMX_GUARD
 
-    unsigned effective_top_block_size = bman1.effective_top_block_size();
-    unsigned ebs2 = bman2.effective_top_block_size();
-    if (ebs2 > effective_top_block_size)
-        effective_top_block_size = ebs2;
+    unsigned top_block_size = bman1.top_block_size();
+    unsigned ebs2 = bman2.top_block_size();
+    if (ebs2 > top_block_size)
+        top_block_size = ebs2;
 
-    for (i = 0; i < effective_top_block_size; ++i)
+    for (i = 0; i < top_block_size; ++i)
     {
         bm::word_t** blk_blk = blk_root ? blk_root[i] : 0;
 
