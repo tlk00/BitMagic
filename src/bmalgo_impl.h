@@ -429,7 +429,7 @@ void combine_any_operation_with_block(const bm::word_t* blk,
                      BM_ASSERT(0);
                  } // switch
                 if (res)
-                    dmd.result += !gap_is_all_zero(res, bm::gap_max_bits);
+                    dmd.result += !gap_is_all_zero(res);
                                      
              } // for it
              
@@ -454,7 +454,7 @@ void combine_any_operation_with_block(const bm::word_t* blk,
                      break;
                  case bm::COUNT_OR:
                      if (!arg_blk)
-                        dmd.result += !gap_is_all_zero(g1, bm::gap_max_bits);
+                        dmd.result += !gap_is_all_zero(g1);
                      else
                         dmd.result += gap_bitset_or_any(arg_blk, g1); 
                      break;
@@ -479,19 +479,19 @@ void combine_any_operation_with_block(const bm::word_t* blk,
                      break;
                  case bm::COUNT_XOR:
                      if (!arg_blk)
-                        dmd.result += !gap_is_all_zero(g1, bm::gap_max_bits);
+                        dmd.result += !gap_is_all_zero(g1);
                      else
                         dmd.result += gap_bitset_xor_any(arg_blk, g1);
                      break;
                  case bm::COUNT_A:
                     if (g1)
-                        dmd.result += !gap_is_all_zero(g1, bm::gap_max_bits);
+                        dmd.result += !gap_is_all_zero(g1);
                     break;
                  case bm::COUNT_B:
                     if (arg_blk)
                     {
                         dmd.result += 
-                          !bit_is_all_zero(arg_blk,(arg_blk + bm::set_block_size));
+                          !bit_is_all_zero(arg_blk);
                     }
                     break;
                  default:
@@ -524,7 +524,7 @@ void combine_any_operation_with_block(const bm::word_t* blk,
                      break;
                  case bm::COUNT_OR:
                      if (!blk)
-                        dmd.result += !gap_is_all_zero(g2, bm::gap_max_bits);
+                        dmd.result += !gap_is_all_zero(g2);
                      else
                         dmd.result += gap_bitset_or_any(blk, g2);
                      break;
@@ -543,7 +543,7 @@ void combine_any_operation_with_block(const bm::word_t* blk,
                      break;
                  case bm::COUNT_XOR:
                      if (!blk)
-                        dmd.result += !gap_is_all_zero(g2, bm::gap_max_bits);
+                        dmd.result += !gap_is_all_zero(g2);
                      else
                         dmd.result += gap_bitset_xor_any(blk, g2); 
                     break;
@@ -551,12 +551,12 @@ void combine_any_operation_with_block(const bm::word_t* blk,
                     if (blk)
                     {
                         dmd.result+=
-                            !bm::bit_is_all_zero(blk, blk + bm::set_block_size);
+                            !bm::bit_is_all_zero(blk);
                     }
                     break;
                  case bm::COUNT_B:
                     if (g2)
-                        dmd.result += !gap_is_all_zero(g2, bm::gap_max_bits);
+                        dmd.result += !gap_is_all_zero(g2);
                     break;
                  default:
                      BM_ASSERT(0);
@@ -610,11 +610,11 @@ void combine_any_operation_with_block(const bm::word_t* blk,
             break;
         case bm::COUNT_A:
             if (blk)
-                dmd.result += !bit_is_all_zero(blk, blk_end);
+                dmd.result += !bit_is_all_zero(blk);
             break;
         case bm::COUNT_B:
             if (arg_blk)
-                dmd.result += !bit_is_all_zero(arg_blk, arg_end);
+                dmd.result += !bit_is_all_zero(arg_blk);
             break;
         default:
             BM_ASSERT(0);

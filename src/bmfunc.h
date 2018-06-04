@@ -45,10 +45,6 @@ inline
 bm::id_t bit_block_any_range(const bm::word_t* block,
                              bm::word_t left,
                              bm::word_t right);
-inline
-bool bit_is_all_zero(const bm::word_t* start,
-                     const bm::word_t* end);
-
 
 /*!
     @brief Structure with statistical information about bitset's memory 
@@ -455,21 +451,51 @@ template<bool T> struct globals
 
 template<bool T> typename globals<T>::bo globals<T>::_bo;
 
+// ----------------------------------------------------------------------
 
+
+/*! @brief Returns "true" if all bits in the block are 0
+    @ingroup bitfunc
+*/
+inline
+bool bit_is_all_zero(const bm::word_t* BMRESTRICT start)
+{
+#if defined(BMSSE42OPT) || defined(BMAVX2OPT)
+    return VECT_IS_ZERO_BLOCK(start, start + bm::set_block_size);
+#else
+   const bm::wordop_t* BMRESTRICT blk = (bm::wordop_t*) (start);
+   const bm::wordop_t* BMRESTRICT blk_end = (bm::wordop_t*)(start + bm::set_block_size);
+   do
+   {
+        if (blk[0] | blk[1] | blk[2] | blk[3])
+            return false;
+        blk += 4;
+   } while (blk < blk_end);
+   return true;
+#endif
+}
+
+// ----------------------------------------------------------------------
 
 /*!
    \brief Checks if GAP block is all-zero.
    \param buf - GAP buffer pointer.
-   \param set_max - max possible bitset length
    \returns true if all-zero.
 
    @ingroup gapfunc
 */
-template<typename T>
-bool gap_is_all_zero(const T* buf, unsigned set_max)
+BMFORCEINLINE
+bool gap_is_all_zero(const bm::gap_word_t* buf)
 {
-    return (((*buf & 1)==0)  && (*(++buf) == set_max - 1));
+    // branchless code transformation:
+    // ((*buf & 1)==0) && (buf[1] == set_max - 1)
+    //  because (buf[1] == set_max - 1) => (bm::gap_max_bits - buf[1] == 1)
+    // ~(*buf & 1) & (bm::gap_max_bits - buf[1])
+//    return (~(buf[0] & 1u) & ~((bm::gap_max_bits - buf[1]) - 1));
+    return (!(*buf & 1u)) & (!(gap_max_bits - 1 - buf[1]));
+    //return ((*buf & 1u) == 0) && (buf[1] == bm::gap_max_bits - 1);
 }
+
 
 /*!
    \brief Checks if GAP block is all-one.
@@ -480,9 +506,10 @@ bool gap_is_all_zero(const T* buf, unsigned set_max)
    @ingroup gapfunc
 */
 template<typename T>
+BMFORCEINLINE
 bool gap_is_all_one(const T* buf, unsigned set_max)
 {
-    return ((*buf & 1)  && (*(++buf) == set_max - 1));
+    return ((*buf & 1u) && (buf[1] == set_max - 1));
 }
 
 /*!
@@ -2217,6 +2244,7 @@ void gap_sub_to_bitset(unsigned* dest, const T*  pcurr)
 }
 
 
+
 /*!
    \brief XOR GAP block to bitblock.
    \param dest - bitblock buffer pointer.
@@ -2538,8 +2566,8 @@ bm::id_t gap_bitset_or_count(const unsigned* block, const T*  buf)
 template<typename T> 
 bm::id_t gap_bitset_or_any(const unsigned* block, const T*  buf)
 {
-    bool b = !bm::gap_is_all_zero(buf, bm::gap_max_bits) ||
-             !bm::bit_is_all_zero(block, block+bm::set_block_size);
+    bool b = !bm::gap_is_all_zero(buf) ||
+             !bm::bit_is_all_zero(block);
     return b;
 }
 
@@ -2574,8 +2602,8 @@ void bit_block_set(bm::word_t* BMRESTRICT dst, bm::word_t value)
 template<typename T> 
 void gap_convert_to_bitset(unsigned* dest, const T*  buf)
 {
-    bit_block_set(dest, 0);
-    gap_add_to_bitset(dest, buf);
+    bm::bit_block_set(dest, 0);
+    bm::gap_add_to_bitset(dest, buf);
 }
 
 
@@ -2591,7 +2619,7 @@ template<typename T>
 void gap_convert_to_bitset(unsigned* dest, const T*  buf,  unsigned  dest_len)
 {
    ::memset(dest, 0, dest_len * sizeof(unsigned));
-    gap_add_to_bitset(dest, buf);
+    bm::gap_add_to_bitset(dest, buf);
 }
 
 
@@ -2608,16 +2636,14 @@ void gap_convert_to_bitset(unsigned* dest, const T*  buf,  unsigned  dest_len)
    @ingroup gapfunc
 */
 template<typename T> 
-        unsigned* gap_convert_to_bitset_smart(unsigned* dest,
-                                              const T* buf, 
-                                              id_t set_max)
+unsigned* gap_convert_to_bitset_smart(unsigned* dest,
+                                      const T* buf,
+                                      id_t set_max)
 {
     if (buf[1] == set_max - 1)
-    {
         return (buf[0] & 1) ? FULL_BLOCK_REAL_ADDR : 0;
-    }
 
-    gap_convert_to_bitset(dest, buf);
+    bm::gap_convert_to_bitset(dest, buf);
     return dest;
 }
 
@@ -2757,6 +2783,10 @@ template<typename T> void gap_temp_invert(const T* buf)
 */
 
 
+#ifdef __GNUG__
+#pragma GCC diagnostic push
+#pragma GCC diagnostic ignored "-Wconversion"
+#endif
 
 /*!
    \brief Sets GAP block capacity level.
@@ -2773,6 +2803,10 @@ void set_gap_level(T* buf, int level)
     
     *buf = (T)(((level & 3) << 1) | (*buf & 1) | (*buf & ~7));
 }
+#ifdef __GNUG__
+#pragma GCC diagnostic pop
+#endif
+
 
 
 /*!
@@ -3566,29 +3600,6 @@ inline bool is_bits_one(const bm::wordop_t* start,
 
 // ----------------------------------------------------------------------
 
-
-/*! @brief Returns "true" if all bits in the block are 0
-    @ingroup bitfunc 
-*/
-inline
-bool bit_is_all_zero(const bm::word_t* BMRESTRICT start,
-                     const bm::word_t* BMRESTRICT end)
-{
-#if defined(BMSSE42OPT) || defined(BMAVX2OPT)
-    return VECT_IS_ZERO_BLOCK(start, end);
-#else
-   do
-   {
-        if (start[0] | start[1] | start[2] | start[3])
-            return false;
-       start += 4;
-   } while (start < end);
-   return true;
-#endif
-}
-
-// ----------------------------------------------------------------------
-
 // GAP blocks manipulation functions:
 
 /*! \brief GAP and functor */
@@ -4267,7 +4278,6 @@ inline bm::word_t* bit_operation_and(bm::word_t* BMRESTRICT dst,
 
     if (IS_VALID_ADDR(dst))  // The destination block already exists
     {
-
         if (!IS_VALID_ADDR(src))
         {
             if (IS_EMPTY_BLOCK(src))
@@ -4281,12 +4291,9 @@ inline bm::word_t* bit_operation_and(bm::word_t* BMRESTRICT dst,
         {
             // Regular operation AND on the whole block.
             //
-            auto any = bit_block_and(dst, src);
+            auto any = bm::bit_block_and(dst, src);
             if (!any)
-            {
-                BM_ASSERT(bit_is_all_zero(dst, dst+bm::set_block_size));
                 ret = 0;
-            }
         }
     }
     else // The destination block does not exist yet
@@ -4305,9 +4312,7 @@ inline bm::word_t* bit_operation_and(bm::word_t* BMRESTRICT dst,
         else // destination block does not exists, src - valid block
         {
             if (IS_FULL_BLOCK(dst))
-            {
                 return const_cast<bm::word_t*>(src);
-            }
             // Nothng to do.
             // Dst block is all ZERO no combination required.
         }
@@ -4439,7 +4444,7 @@ bm::id_t bit_operation_sub_any(const bm::word_t* BMRESTRICT src1,
     
     if (IS_EMPTY_BLOCK(src2)) // nothing to diff
     {
-        return !bit_is_all_zero(src1, src1_end);
+        return !bit_is_all_zero(src1);
     }
     return bit_block_sub_any(src1, src1_end, src2);
 }
@@ -4497,14 +4502,14 @@ bm::id_t bit_operation_or_any(const bm::word_t* BMRESTRICT src1,
     if (IS_EMPTY_BLOCK(src1))
     {
         if (!IS_EMPTY_BLOCK(src2))
-            return !bit_is_all_zero(src2,(src2 + (src1_end - src1)));
+            return !bit_is_all_zero(src2);
         else
             return 0; // both blocks are empty        
     }
     else
     {
         if (IS_EMPTY_BLOCK(src2))
-            return !bit_is_all_zero(src1, src1_end);
+            return !bit_is_all_zero(src1);
     }
 
     return bit_block_or_any(src1, src1_end, src2);
@@ -4678,10 +4683,7 @@ bm::word_t* bit_operation_sub(bm::word_t* BMRESTRICT dst,
         {
             auto any = bm::bit_block_sub(dst, src);
             if (!any)
-            {
-                BM_ASSERT(bm::bit_is_all_zero(dst, dst+bm::set_block_size));
                 ret = 0;
-            }
         }
     }
     else // The destination block does not exist yet
@@ -4753,24 +4755,24 @@ void bit_block_xor(bm::word_t* BMRESTRICT dst,
 */
 inline
 void bit_andnot_arr_ffmask(bm::word_t* BMRESTRICT dst,
-                           const bm::word_t* BMRESTRICT src,
-                           const bm::word_t* BMRESTRICT src_end)
+                           const bm::word_t* BMRESTRICT src)
 {
+    const bm::word_t* BMRESTRICT src_end = src + bm::set_block_size;
 #ifdef BMVECTOPT
-        VECT_ANDNOT_ARR_2_MASK(dst, src, src_end, ~0u);
+    VECT_ANDNOT_ARR_2_MASK(dst, src, src_end, ~0u);
 #else
-        bm::wordop_t* dst_ptr = (wordop_t*)dst;
-        const bm::wordop_t* wrd_ptr = (wordop_t*) src;
-        const bm::wordop_t* wrd_end = (wordop_t*) src_end;
+    bm::wordop_t* dst_ptr = (wordop_t*)dst;
+    const bm::wordop_t* wrd_ptr = (wordop_t*) src;
+    const bm::wordop_t* wrd_end = (wordop_t*) src_end;
 
-        do
-        {
-            dst_ptr[0] = bm::all_bits_mask & ~wrd_ptr[0];
-            dst_ptr[1] = bm::all_bits_mask & ~wrd_ptr[1];
-            dst_ptr[2] = bm::all_bits_mask & ~wrd_ptr[2];
-            dst_ptr[3] = bm::all_bits_mask & ~wrd_ptr[3];
-            dst_ptr+=4; wrd_ptr+=4;
-        } while (wrd_ptr < wrd_end);
+    do
+    {
+        dst_ptr[0] = bm::all_bits_mask & ~wrd_ptr[0];
+        dst_ptr[1] = bm::all_bits_mask & ~wrd_ptr[1];
+        dst_ptr[2] = bm::all_bits_mask & ~wrd_ptr[2];
+        dst_ptr[3] = bm::all_bits_mask & ~wrd_ptr[3];
+        dst_ptr+=4; wrd_ptr+=4;
+    } while (wrd_ptr < wrd_end);
 #endif
 }
 
@@ -4861,7 +4863,7 @@ bm::id_t bit_operation_xor_any(const bm::word_t* BMRESTRICT src1,
         if (IS_EMPTY_BLOCK(src1) && IS_EMPTY_BLOCK(src2))
             return 0;
         const bm::word_t* block = IS_EMPTY_BLOCK(src1) ? src2 : src1;
-        return !bit_is_all_zero(block, (block + (src1_end - src1)));
+        return !bit_is_all_zero(block);
     }
     return bit_block_xor_any(src1, src1_end, src2);
 }
@@ -5446,9 +5448,9 @@ bool check_block_zero(const bm::word_t* blk, bool  deep_scan)
 
     bool ret;
     if (BM_IS_GAP(blk))
-        ret = gap_is_all_zero(BMGAP_PTR(blk), bm::gap_max_bits);
+        ret = gap_is_all_zero(BMGAP_PTR(blk));
     else
-        ret = deep_scan ? bm::bit_is_all_zero(blk, blk+bm::set_block_size) : 0;
+        ret = deep_scan ? bm::bit_is_all_zero(blk) : 0;
     return ret;
 }
 

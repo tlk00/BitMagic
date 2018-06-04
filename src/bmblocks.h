@@ -220,10 +220,10 @@ public:
         bool operator()(const bm::word_t* block, unsigned /*idx*/)
         {
             if (BM_IS_GAP(block)) // gap block
-                return (!gap_is_all_zero(BMGAP_PTR(block), bm::gap_max_bits));
+                return (!gap_is_all_zero(BMGAP_PTR(block)));
             if (IS_FULL_BLOCK(block)) 
                 return true;
-            return (!bit_is_all_zero(block, (block + bm::set_block_size)));
+            return (!bit_is_all_zero(block));
         }
     };
 
@@ -248,7 +248,7 @@ public:
             gap_word_t* gap_blk = BMGAP_PTR(block);
 
             // TODO: Use the same code as in the optimize functor
-            if (gap_is_all_zero(gap_blk, bm::gap_max_bits))
+            if (gap_is_all_zero(gap_blk))
             {
                 bman.set_block_ptr(idx, 0);
                 bman.get_allocator().free_gap_block(gap_blk,
@@ -343,7 +343,7 @@ public:
             {
                 gap_blk = BMGAP_PTR(block);
                 // check if block is empty (or all 1)
-                if (gap_is_all_zero(gap_blk, bm::gap_max_bits))
+                if (gap_is_all_zero(gap_blk))
                 {
                     bman.set_block_ptr(idx, 0);
                     this->free_block(gap_blk);
@@ -372,10 +372,10 @@ public:
                 if (opt_mode_ < 3) // free_01 optimization
                 {  
                     bm::wordop_t* blk1 = (wordop_t*)block;
-                    bm::wordop_t* blk2 = 
+                    bm::wordop_t* blk2 =
                         (wordop_t*)(block + bm::set_block_size);
                 
-                    bool b = bm::bit_is_all_zero((bm::word_t*)blk1, (bm::word_t*)blk2);
+                    bool b = bm::bit_is_all_zero((bm::word_t*)blk1);
                     if (b)
                     {
                         bman.get_allocator().free_bit_block(block);
@@ -416,7 +416,7 @@ public:
                     bman.get_allocator().free_bit_block(block);
 
                     // check if new gap block can be eliminated
-                    if (gap_is_all_zero(tmp_gap_blk, bm::gap_max_bits))
+                    if (gap_is_all_zero(tmp_gap_blk))
                     {
                         bman.set_block_ptr(idx, 0);
                         ++empty_;
@@ -573,12 +573,7 @@ public:
             bool is_gap = BM_IS_GAP(block);
             if (is_gap)
             {
-                bm::gap_word_t* gap_block = BMGAP_PTR(block); 
-                unsigned level = gap_level(gap_block);
-                new_blk = (bm::word_t*)
-                            alloc_.alloc_gap_block(level, this->bm_.glen());
-                unsigned len = bm::gap_length(BMGAP_PTR(block));
-                ::memcpy(new_blk, gap_block, len * sizeof(bm::gap_word_t));
+                new_blk = this->bm_.clone_gap_block(BMGAP_PTR(block), is_gap);
             }
             else
             {
@@ -609,7 +604,7 @@ public:
       alloc_(Alloc())
     {
         ::memcpy(glevel_len_, bm::gap_len_table<true>::_len, sizeof(glevel_len_));
-        top_block_size_ = 0;// effective_top_block_size_ = 0;
+        top_block_size_ = 0;
     }
 
     blocks_manager(const gap_word_t* glevel_len, 
@@ -652,7 +647,6 @@ public:
         : max_bits_(blockman.max_bits_),
           top_blocks_(0),
           top_block_size_(blockman.top_block_size_),
-          //effective_top_block_size_(blockman.effective_top_block_size_),
           temp_block_(0),
           alloc_(blockman.alloc_)
     {
@@ -942,7 +936,37 @@ public:
         }
         return block;
     }
+    
 
+    /**
+        Clone GAP block from another GAP
+        It can mutate into a bit-block if does not fit
+    */
+    bm::word_t* clone_gap_block(const bm::gap_word_t* gap_block, bool& gap_res)
+    {
+        BM_ASSERT(gap_block);
+        
+        bm::word_t* new_block;
+        unsigned len = bm::gap_length(gap_block);
+        int new_level = bm::gap_calc_level(len, glen());
+        if (new_level < 0) // mutation
+        {
+            gap_res = false;
+            new_block = alloc_.alloc_bit_block();
+            bm::gap_convert_to_bitset(new_block, gap_block);
+        }
+        else
+        {
+            gap_res = true;
+            new_block = (bm::word_t*)
+                    get_allocator().alloc_gap_block(unsigned(new_level), glen());
+            ::memcpy(new_block, gap_block, len * sizeof(bm::gap_word_t));
+            bm::set_gap_level(new_block, new_level);
+        }
+        return new_block;
+    }
+    
+    
     /**
         Copy block from another vector.
         Note:Target block is always replaced through re-allocation.
@@ -960,13 +984,8 @@ public:
 
         if (is_gap)
         {
-            bm::gap_word_t* gap_block = BMGAP_PTR(block); 
-            auto level = bm::gap_level(gap_block);
-            new_blk = (bm::word_t*)
-                get_allocator().alloc_gap_block(level, glen());
-            unsigned len = bm::gap_length(BMGAP_PTR(block));
-            ::memcpy(new_blk, gap_block, len * sizeof(bm::gap_word_t));
-            bm::set_gap_level(new_blk, level);
+            bm::gap_word_t* gap_block = BMGAP_PTR(block);
+            new_blk = clone_gap_block(gap_block, is_gap); // is_gap - output
         }
         else
         {
@@ -976,8 +995,8 @@ public:
             }
             else
             {
-                new_blk = get_allocator().alloc_bit_block();
-                bit_block_copy(new_blk, block);
+                new_blk = alloc_.alloc_bit_block();
+                bm::bit_block_copy(new_blk, block);
             }
         }
         set_block(idx, new_blk, is_gap);
@@ -1147,14 +1166,14 @@ public:
         BM_ASSERT(top_blocks_);
         if (level < 0)
         {
-            bm::word_t* blk = get_allocator().alloc_bit_block();
+            bm::word_t* blk = alloc_.alloc_bit_block();
             set_block(nb, blk);
             gap_convert_to_bitset(blk, gap_block_src);
             return blk;
         }
         else
         {
-            gap_word_t* gap_blk = get_allocator().alloc_gap_block(
+            gap_word_t* gap_blk = alloc_.alloc_gap_block(
                                                 unsigned(level), this->glen());
             gap_word_t* gap_blk_ptr = BMGAP_PTR(gap_blk);
             ::memcpy(gap_blk_ptr, gap_block_src, 
@@ -1314,7 +1333,7 @@ public:
         }
         if (IS_FULL_BLOCK(block)) 
         {
-            bm::word_t* new_block = get_allocator().alloc_bit_block();
+            bm::word_t* new_block = alloc_.alloc_bit_block();
             bm::bit_block_copy(new_block, FULL_BLOCK_REAL_ADDR);
             
             set_block_ptr(nb, new_block);
@@ -1347,11 +1366,28 @@ public:
             blk_blk[j] = 0;
 
             if (BM_IS_GAP(block))
-                get_allocator().free_gap_block(BMGAP_PTR(block), glen());
+                alloc_.free_gap_block(BMGAP_PTR(block), glen());
             else
                 if (IS_VALID_ADDR(block))
-                    get_allocator().free_bit_block(block);
+                    alloc_.free_bit_block(block);
         }
+    }
+    
+    /**
+    Free block, make it zero pointer in the tree
+    */
+    void zero_gap_block_ptr(unsigned i, unsigned j)
+    {
+        BM_ASSERT(top_blocks_ && i < top_block_size_);
+        
+        bm::word_t** blk_blk = top_blocks_[i];
+        bm::word_t* block = blk_blk[j];
+
+        BM_ASSERT(blk_blk);
+        BM_ASSERT(BM_IS_GAP(block));
+
+        blk_blk[j] = 0;
+        alloc_.free_gap_block(BMGAP_PTR(block), glen());
     }
 
 
@@ -1509,8 +1545,7 @@ public:
     {
         return glevel_len_[level];
     }
-
-
+    
     /*! \brief Returns size of the top block array in the tree 
     */
     unsigned top_block_size() const
