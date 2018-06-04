@@ -2239,12 +2239,27 @@ void TestRandomSubset(const bvect& bv, bm::random_subset<bvect>& rsub)
                    bv_subset.count());
             exit(1);
         }
+        {
+            bvect bv_subset_copy(bv_subset);
+            bvect bv_set_copy(bv);
+            bv_set_copy.invert();
+            bv_subset_copy -= bv_set_copy;
+            int res = bv_subset_copy.compare(bv_subset);
+            if (res != 0)
+            {
+                printf("\nRandom subset failed! inverted set MINUS error! \n");
+                exit(1);
+            }
+        }
+
         bv_subset -= bv;
         if (bv_subset.count() != 0)
         {
             printf("\nRandom subset failed! Extra bits set! \n");
             exit(1);
-        }    
+        }
+        
+        
     }
     printf("\n");
 }
@@ -2472,6 +2487,31 @@ void AndOperationsTest()
     CheckCountRange(bvect_full1, 0, 256);
 
     }
+    
+    {
+        bvect        bvect1;
+        bvect        bvect2 { 256, 165535 };
+        bvect        bvect_control { 256  };
+        bvect1.set_range(0, 100000);
+
+        bvect2.optimize();
+
+        bvect1 &= bvect2;
+        int res = bvect1.compare(bvect_control);
+        assert(res==0);
+    }
+    
+    {
+        bvect        bvect1 { 1, 2, 3};
+        bvect        bvect2 { 256, 165535 };
+        bvect        bvect_control;
+        bvect1.optimize();
+
+        bvect1 &= bvect2;
+        int res = bvect1.compare(bvect_control);
+        assert(res==0);
+    }
+
 
     {
 
@@ -12576,7 +12616,7 @@ void TestBlockZero()
             tb1.b_.w32[i] = 0;
         }
 
-        auto zero = bm::bit_is_all_zero(tb1, tb1 + bm::set_block_size);
+        auto zero = bm::bit_is_all_zero(tb1);
         assert(zero);
         cout << zero << endl;
 
@@ -12584,7 +12624,7 @@ void TestBlockZero()
         {
             ::memset(tb1, 0, sizeof(tb1));
             tb1.b_.w32[i] = 1;
-            zero = bm::bit_is_all_zero(tb1, tb1 + bm::set_block_size);
+            zero = bm::bit_is_all_zero(tb1);
             assert(!zero);
             cout << zero;
         }
@@ -12662,7 +12702,7 @@ void TestBlockAND()
                 if (tb1[i])
                 {
                     auto any1 = bm::bit_block_and(tb1, tb2);
-                    auto all_zero = bm::bit_is_all_zero(tb1.begin(), tb1.end());
+                    auto all_zero = bm::bit_is_all_zero(tb1.begin());
                     
                     //cout << any1 <<" j=" << j << " i=" << i << " " << tb1[i] << " " << tb2[i] << endl;
                     assert(pad == 0xDEAD);
@@ -12790,7 +12830,7 @@ void TestBlockSUB()
                 if (tb1[i])
                 {
                     auto any1 = bm::bit_block_sub(tb1, tb2);
-                    auto all_zero = bm::bit_is_all_zero(tb1.begin(), tb1.end());
+                    auto all_zero = bm::bit_is_all_zero(tb1.begin());
                     assert(all_zero);
                     
                     //cout << any1 <<" j=" << j << " i=" << i << " " << tb1[i] << " " << tb2[i] << endl;
@@ -13440,6 +13480,7 @@ int main(void)
     exit(1);
 */
 
+
     TestRecomb();
 
     OptimGAPTest();
@@ -13537,8 +13578,9 @@ int main(void)
      BlockLevelTest();
 
      StressTest(120, 3); // AND
-     StressTest(120, 0); // OR
      StressTest(120, 1); // SUB
+
+     StressTest(120, 0); // OR
      StressTest(120, 2); // XOR
 
      TestSparseVector();
