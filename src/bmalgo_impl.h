@@ -568,12 +568,6 @@ void combine_any_operation_with_block(const bm::word_t* blk,
      //
      // Here we combine two plain bitblocks 
 
-     const bm::word_t* blk_end;
-     const bm::word_t* arg_end;
-
-     blk_end = blk + (bm::set_block_size);
-     arg_end = arg_blk + (bm::set_block_size);
-
      for (distance_metric_descriptor* it = dmit; it < dmit_end; ++it)
      {
         distance_metric_descriptor& dmd = *it;

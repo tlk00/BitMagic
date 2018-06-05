@@ -533,25 +533,6 @@ public:
         }
     };
 
-    /** Block deallocation functor */
-    class block_free_func : public bm_func_base
-    {
-    public:
-        block_free_func(blocks_manager& bm)
-        : bm_func_base(bm), alloc_(bm.get_allocator())
-        {}
-
-        void operator()(bm::word_t* block)
-        {
-            if (BM_IS_GAP(block))
-                alloc_.free_gap_block(BMGAP_PTR(block), this->bm_.glen());
-            else
-                if (IS_VALID_ADDR(block))
-                    alloc_.free_bit_block(block);
-        }
-    private:
-        allocator_type& alloc_;
-    };
 
     /** Block copy functor */
     class block_copy_func : public bm_func_base
@@ -655,7 +636,8 @@ public:
     {
         if (temp_block_)
             alloc_.free_bit_block(temp_block_);
-        deinit_tree();
+        //deinit_tree();
+        destroy_tree();
     }
     
     /*! \brief Swaps content 
@@ -686,7 +668,7 @@ public:
         deinit_tree();
         swap(bm);
         alloc_ = bm.alloc_;
-        if (temp_block_ == 0)  // this does not have temp_block, borrow it from the donor
+        if (!temp_block_)  // this does not have temp_block, borrow it from the donor
         {
             temp_block_ = bm.temp_block_;
             bm.temp_block_ = 0;
@@ -840,11 +822,10 @@ public:
     const bm::word_t* get_block(unsigned i, unsigned j) const
     {
         if (!top_blocks_ || i >= top_block_size_) return 0;
+
         const bm::word_t* const* blk_blk = top_blocks_[i];
         const bm::word_t* ret = (blk_blk == 0) ? 0 : blk_blk[j];
-        if (ret == FULL_BLOCK_FAKE_ADDR)
-            ret = FULL_BLOCK_REAL_ADDR;
-        return ret;
+        return (ret == FULL_BLOCK_FAKE_ADDR) ? FULL_BLOCK_REAL_ADDR : ret;
     }
 
     /**
@@ -1620,24 +1601,66 @@ private:
 
     void operator =(const blocks_manager&);
 
+    #define BM_FREE_OP(x) blk = blk_blk[j + x]; \
+        if (IS_VALID_ADDR(blk)) \
+        { \
+            if (BM_IS_GAP(blk)) \
+                alloc_.free_gap_block(BMGAP_PTR(blk), glen()); \
+            else \
+                alloc_.free_bit_block(blk); \
+        } 
+
+    /** destroy tree, free memory in all blocks and control structures
+        Note: pointers are NOT assigned to zero(!)
+    */
+    void destroy_tree() BMNOEXEPT
+    {
+        if (!top_blocks_) 
+            return;
+
+        unsigned top_blocks = top_block_size();
+        for (unsigned i = 0; i < top_blocks; ++i)
+        {
+            bm::word_t** blk_blk = top_blocks_[i];
+            if (!blk_blk) 
+                continue;
+            unsigned j = 0; bm::word_t* blk;
+            do
+            {
+            #ifdef BM64_AVX2
+                if (!avx2_test_all_zero_wave(blk_blk + j))
+                {
+                    BM_FREE_OP(0)
+                    BM_FREE_OP(1)
+                    BM_FREE_OP(2)
+                    BM_FREE_OP(3)
+                }
+                j += 4;
+            #elif defined(BM64_SSE4)
+                if (!sse42_test_all_zero_wave(blk_blk + j))
+                {
+                    BM_FREE_OP(0)
+                    BM_FREE_OP(1)
+                }
+                j += 2;
+            #else
+                BM_FREE_OP(0)
+                ++j;
+            #endif
+            } while (j < bm::set_array_size);
+
+            alloc_.free_ptr(top_blocks_[i]); // free second level
+        } // for i
+
+        alloc_.free_ptr(top_blocks_, top_block_size_); // free the top
+    }
+    #undef BM_FREE_OP 
+
     void deinit_tree() BMNOEXEPT
     {
-        if (top_blocks_ == 0) return;
-        unsigned top_size = this->top_block_size();
-        block_free_func  free_func(*this);
-        for_each_nzblock2(top_blocks_, top_size, free_func);
-        free_top_block();
-        alloc_.free_ptr(top_blocks_, top_block_size_);
+        destroy_tree();
         top_blocks_ = 0; top_block_size_ = 0;
     }
-
-    void free_top_block() BMNOEXEPT
-    {
-        for(unsigned i = 0; i < top_block_size_; ++i)
-            if (top_blocks_[i])
-                alloc_.free_ptr(top_blocks_[i]);
-    }
-
 private:
     /// maximum addresable bits
     bm::id_t                               max_bits_;

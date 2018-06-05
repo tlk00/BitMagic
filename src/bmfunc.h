@@ -308,7 +308,7 @@ template<bool T> struct all_set
 
         all_set_block()
         {
-            ::memset(_p, 0xFF, sizeof(_p));
+            ::memset(_p, 0xFF, sizeof(_p)); // set FULL BLOCK content (all 1s)
             if (bm::conditional<sizeof(void*) == 8>::test())
             {
                 const unsigned long long magic_mask = 0xFFFFfffeFFFFfffe;
@@ -322,12 +322,63 @@ template<bool T> struct all_set
         }
     };
 
+    // version with minimal branching, super-scalar friendly
+    //
+
+//#if defined(BM64OPT) || defined(BM64_SSE4) || defined(BM64_AVX2)
+
+    inline
+    static bm::id64_t block_type(const bm::word_t* bp)
+    {
+        bm::id64_t type;
+        if (bm::conditional<sizeof(void*) == 8>::test())
+        {
+            bm::id64_t w = reinterpret_cast<unsigned long long>(bp);
+            type = (w & 3) | // FULL BLOCK or GAP
+                ((bp == _block._p) << 1);
+            type = type ? type : w;
+        }
+        else
+        {
+            unsigned w = reinterpret_cast<unsigned long>(bp);
+            type = (w & 3) | // FULL BLOCK or GAP
+                ((bp == _block._p) << 1);
+            type = type ? type : w;
+        }
+        return type;
+    }
+    /*
+    inline
+    static bool is_invalid_addr(const unsigned* bp)
+    {
+        return 
+            (!bp) | ((reinterpret_cast<unsigned long long>(bp) >> 1u) & 1u)
+                  | (bp == _block._p);
+    }
+
+    inline
+    static bool is_full_block(const bm::word_t* bp)
+    {
+        return ((reinterpret_cast<unsigned long long>(bp) >> 1u) & 1u) | 
+               (bp == _block._p);
+    }
+    inline
+    static bool is_valid_block_addr(const bm::word_t* bp)
+    {
+        return !is_invalid_addr(bp);
+    }
+    */
+//#endif
+
     BMFORCEINLINE 
     static bool is_full_block(const bm::word_t* bp) 
         { return (bp == _block._p || bp == _block._p_fullp); }
+
     BMFORCEINLINE 
     static bool is_valid_block_addr(const bm::word_t* bp) 
         { return (bp && !(bp == _block._p || bp == _block._p_fullp)); }
+
+
     static all_set_block  _block;
 };
 

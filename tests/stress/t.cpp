@@ -13579,7 +13579,6 @@ int main(void)
 
      StressTest(120, 3); // AND
      StressTest(120, 1); // SUB
-
      StressTest(120, 0); // OR
      StressTest(120, 2); // XOR
 
