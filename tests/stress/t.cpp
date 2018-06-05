@@ -13622,7 +13622,7 @@ int main(void)
         cout << dbg_ptr_allocator::balance() << endl;
         exit(1);
     }
-    cout << "[--------------  Debug Allocation balance OK -------------------]" << endl;
+    cout << "[------------  Debug Allocation balance OK ----------]" << endl;
 #endif
 
     return 0;
