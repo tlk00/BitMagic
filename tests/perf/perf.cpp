@@ -1080,7 +1080,7 @@ void AndTest()
     SimpleFillSets(*bset1, *bv1, 0, BSIZE, 100);
     SimpleFillSets(*bset1, *bv2, 0, BSIZE, 100);
     {
-    TimeTaker tt("AND bvector test", REPEATS*4);
+    TimeTaker tt("AND bvector test", REPEATS*10);
     for (i = 0; i < REPEATS*4; ++i)
     {
         *bv1 &= *bv2;
@@ -1089,7 +1089,7 @@ void AndTest()
 
     if (!platform_test)
     {
-    TimeTaker tt("AND bvector test(STL)", REPEATS*4);
+    TimeTaker tt("AND bvector test(STL)", REPEATS*10);
     for (i = 0; i < REPEATS*4; ++i)
     {
         *bset1 &= *bset2;
@@ -1116,7 +1116,7 @@ void XorTest()
     SimpleFillSets(*bset1, *bv1, 0, BSIZE, 100);
     SimpleFillSets(*bset1, *bv2, 0, BSIZE, 100);
     {
-        TimeTaker tt("XOR bvector test", REPEATS * 4);
+        TimeTaker tt("XOR bvector test", REPEATS * 10);
         for (i = 0; i < REPEATS * 4; ++i)
         {
             *bv1 ^= *bv2;
@@ -1125,7 +1125,7 @@ void XorTest()
 
     if (!platform_test)
     {
-        TimeTaker tt("XOR bvector test(STL)", REPEATS * 4);
+        TimeTaker tt("XOR bvector test(STL)", REPEATS * 10);
         for (i = 0; i < REPEATS * 4; ++i)
         {
             *bset1 ^= *bset2;
@@ -1152,7 +1152,7 @@ void SubTest()
     delete bset1;
 
     {
-    TimeTaker tt("SUB bvector test", REPEATS*4);
+    TimeTaker tt("SUB bvector test", REPEATS*10);
     for (i = 0; i < REPEATS*4; ++i)
     {
         *bv1 -= *bv2;
@@ -1182,7 +1182,7 @@ void XorCountTest()
     if (!platform_test)
     {
     bvect bv_tmp;
-    TimeTaker tt("XOR COUNT bvector test with TEMP vector", REPEATS*4);
+    TimeTaker tt("XOR COUNT bvector test with TEMP vector", REPEATS*10);
     for (i = 0; i < REPEATS*4; ++i)
     {
         bv_tmp.clear(false);
@@ -1195,7 +1195,7 @@ void XorCountTest()
     if (!platform_test)
     {
     test_bitset*  bset_tmp = new test_bitset();
-    TimeTaker tt("XOR COUNT bvector test with TEMP vector (STL)", REPEATS*4);
+    TimeTaker tt("XOR COUNT bvector test with TEMP vector (STL)", REPEATS*10);
     for (i = 0; i < REPEATS*4; ++i)
     {
         bset_tmp->reset();
@@ -1207,7 +1207,7 @@ void XorCountTest()
 
 
     {
-    TimeTaker tt("XOR COUNT bvector test", REPEATS*4);
+    TimeTaker tt("XOR COUNT bvector test", REPEATS*10);
     for (i = 0; i < REPEATS*4; ++i)
     {
         count2 += bm::count_xor(*bv1, *bv2);
@@ -1235,7 +1235,7 @@ void XorCountTest()
     if (!platform_test)
     {
     bvect bv_tmp;
-    TimeTaker tt("XOR COUNT bvector test with TEMP vector", REPEATS*4);
+    TimeTaker tt("XOR COUNT bvector test with TEMP vector", REPEATS*10);
     for (i = 0; i < REPEATS*4; ++i)
     {
         bv_tmp.clear(false);
@@ -1246,7 +1246,7 @@ void XorCountTest()
     }
 
     {
-    TimeTaker tt("XOR COUNT bvector test", REPEATS*4);
+    TimeTaker tt("XOR COUNT bvector test", REPEATS*10);
     for (i = 0; i < REPEATS*4; ++i)
     {
         count2 += (unsigned)bm::count_xor(*bv1, *bv2);
@@ -1271,7 +1271,7 @@ void XorCountTest()
     if (!platform_test)
     {
     bvect bv_tmp;
-    TimeTaker tt("XOR COUNT bvector test with TEMP vector", REPEATS*4);
+    TimeTaker tt("XOR COUNT bvector test with TEMP vector", REPEATS*10);
     for (i = 0; i < REPEATS*4; ++i)
     {
         bv_tmp.clear(false);
@@ -1282,7 +1282,7 @@ void XorCountTest()
     }
 
     {
-    TimeTaker tt("XOR COUNT bvector(opt) test", REPEATS*4);
+    TimeTaker tt("XOR COUNT bvector(opt) test", REPEATS*10);
     for (i = 0; i < REPEATS*4; ++i)
     {
         count2 += (unsigned)bm::count_xor(*bv1, *bv2);
@@ -1323,7 +1323,7 @@ void AndCountTest()
     if (!platform_test)
     {
         bvect bv_tmp;
-        TimeTaker tt("AND COUNT bvector test with TEMP vector", REPEATS * 4);
+        TimeTaker tt("AND COUNT bvector test with TEMP vector", REPEATS * 10);
         for (i = 0; i < REPEATS * 4; ++i)
         {
             bv_tmp.clear(false);
@@ -1336,7 +1336,7 @@ void AndCountTest()
     if (!platform_test)
     {
         test_bitset*  bset_tmp = new test_bitset();
-        TimeTaker tt("AND COUNT bvector test with TEMP vector (STL)", REPEATS * 4);
+        TimeTaker tt("AND COUNT bvector test with TEMP vector (STL)", REPEATS * 10);
         for (i = 0; i < REPEATS * 4; ++i)
         {
             bset_tmp->reset();
@@ -1348,7 +1348,7 @@ void AndCountTest()
 
 
     {
-        TimeTaker tt("AND COUNT bvector test", REPEATS * 4);
+        TimeTaker tt("AND COUNT bvector test", REPEATS * 10);
         for (i = 0; i < REPEATS * 4; ++i)
         {
             count2 += bm::count_and(*bv1, *bv2);
@@ -1376,7 +1376,7 @@ void AndCountTest()
     if (!platform_test)
     {
         bvect bv_tmp;
-        TimeTaker tt("AND COUNT bvector test with TEMP vector", REPEATS * 4);
+        TimeTaker tt("AND COUNT bvector test with TEMP vector", REPEATS * 10);
         for (i = 0; i < REPEATS * 4; ++i)
         {
             bv_tmp.clear(false);
@@ -1387,7 +1387,7 @@ void AndCountTest()
     }
 
     {
-        TimeTaker tt("AND COUNT bvector test", REPEATS * 4);
+        TimeTaker tt("AND COUNT bvector test", REPEATS * 10);
         for (i = 0; i < REPEATS * 4; ++i)
         {
             count2 += (unsigned)bm::count_and(*bv1, *bv2);
@@ -1412,7 +1412,7 @@ void AndCountTest()
     if (!platform_test)
     {
         bvect bv_tmp;
-        TimeTaker tt("AND COUNT bvector test with TEMP vector", REPEATS * 4);
+        TimeTaker tt("AND COUNT bvector test with TEMP vector", REPEATS * 10);
         for (i = 0; i < REPEATS * 4; ++i)
         {
             bv_tmp.clear(false);
@@ -1423,7 +1423,7 @@ void AndCountTest()
     }
 
     {
-        TimeTaker tt("AND COUNT bvector(opt) test", REPEATS * 4);
+        TimeTaker tt("AND COUNT bvector(opt) test", REPEATS * 10);
         for (i = 0; i < REPEATS * 4; ++i)
         {
             count2 += (unsigned)bm::count_and(*bv1, *bv2);
@@ -2077,7 +2077,6 @@ int main(void)
     EnumeratorTestGAP();
 
     EnumeratorGoToTest();
-    
 
     AndTest();
     XorTest();
