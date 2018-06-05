@@ -139,6 +139,8 @@ For more information please visit:  http://bitmagic.io
 #define IS_FULL_BLOCK(addr) bm::all_set<true>::is_full_block(addr)
 #define IS_EMPTY_BLOCK(addr) bool(addr == 0)
 
+#define BM_BLOCK_TYPE(addr) bm::all_set<true>::block_type(addr)
+
 // Macro definitions to manipulate bits in pointers
 // This trick is based on the fact that pointers allocated by malloc are
 // aligned and bit 0 is never set. It means we are safe to use it.
