@@ -7501,7 +7501,7 @@ void BitCountChangeTest()
         cout << "0.count_change() failed " << cnt << endl;
         exit(1);
     }
-#if !defined(BMAVX2OPT)    
+#if 0
     bm::id_t bc, bc1;
     cnt = bm::bit_block_calc_count_change(arr0, arr0 + 8, &bc);
     cout << "*" << endl;
