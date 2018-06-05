@@ -487,11 +487,7 @@ bool bit_is_all_zero(const bm::word_t* BMRESTRICT start)
 BMFORCEINLINE
 bool gap_is_all_zero(const bm::gap_word_t* buf)
 {
-    // branchless code transformation:
-    // ((*buf & 1)==0) && (buf[1] == set_max - 1)
-    //  because (buf[1] == set_max - 1) => (bm::gap_max_bits - buf[1] == 1)
-    // ~(*buf & 1) & (bm::gap_max_bits - buf[1])
-//    return (~(buf[0] & 1u) & ~((bm::gap_max_bits - buf[1]) - 1));
+    // (almost) branchless variant:
     return (!(*buf & 1u)) & (!(gap_max_bits - 1 - buf[1]));
     //return ((*buf & 1u) == 0) && (buf[1] == bm::gap_max_bits - 1);
 }
@@ -2764,24 +2760,6 @@ template<typename T> void gap_invert(T* buf)
     *buf ^= 1;
 }
 
-/*! 
-   \brief Temporary inverts all bits in the GAP buffer.
-   
-   In this function const-ness of the buffer means nothing.
-   Calling this function again restores the status of the buffer.
-
-   \param buf - GAP buffer pointer. (Buffer IS changed) 
-
-   @ingroup gapfunc
-*/
-/*
-template<typename T> void gap_temp_invert(const T* buf)
-{
-    T* buftmp = const_cast<T*>(buf);
-    *buftmp ^= 1;
-}
-*/
-
 
 #ifdef __GNUG__
 #pragma GCC diagnostic push
@@ -3941,17 +3919,16 @@ bm::id64_t bit_block_and(bm::word_t* BMRESTRICT dst, const bm::word_t* BMRESTRIC
    Function does not analyse availability of source blocks.
 
    \param src1     - first bit block
-   \param src1_end - first bit block end
    \param src2     - second bit block
 
    @ingroup bitfunc
 */
 inline 
-unsigned bit_block_and_count(const bm::word_t* src1, 
-                             const bm::word_t* src1_end,
-                             const bm::word_t* src2)
+unsigned bit_block_and_count(const bm::word_t* BMRESTRICT src1,
+                             const bm::word_t* BMRESTRICT src2)
 {
     unsigned count;
+    const bm::word_t* src1_end = src1 + bm::set_block_size;
 #ifdef BMVECTOPT
     count = VECT_BITCOUNT_AND(src1, src1_end, src2);
 #else  
@@ -3991,17 +3968,16 @@ unsigned bit_block_and_count(const bm::word_t* src1,
    Function does not analyse availability of source blocks.
 
    \param src1     - first bit block
-   \param src1_end - first bit block end
    \param src2     - second bit block
 
    @ingroup bitfunc
 */
 inline 
 unsigned bit_block_and_any(const bm::word_t* src1, 
-                           const bm::word_t* src1_end,
                            const bm::word_t* src2)
 {
     unsigned count = 0;
+    const bm::word_t* src1_end = src1 + bm::set_block_size;
     do
     {
         count = (src1[0] & src2[0]) |
@@ -4010,7 +3986,7 @@ unsigned bit_block_and_any(const bm::word_t* src1,
                 (src1[3] & src2[3]);
 
         src1+=4; src2+=4;
-    } while ((src1 < src1_end) && (count == 0));
+    } while ((src1 < src1_end) && !count);
     return count;
 }
 
@@ -4021,18 +3997,17 @@ unsigned bit_block_and_any(const bm::word_t* src1,
    \brief Function XORs two bitblocks and computes the bitcount. 
    Function does not analyse availability of source blocks.
 
-   \param src1     - first bit block.
-   \param src1_end - first bit block end
-   \param src2     - second bit block.
+   \param src1     - first bit block
+   \param src2     - second bit block
 
    @ingroup bitfunc
 */
 inline 
 unsigned bit_block_xor_count(const bm::word_t* BMRESTRICT src1,
-                             const bm::word_t* BMRESTRICT src1_end, 
                              const bm::word_t* BMRESTRICT src2)
 {
     unsigned count;
+    const bm::word_t* BMRESTRICT src1_end = src1 + bm::set_block_size;
 #ifdef BMVECTOPT
     count = VECT_BITCOUNT_XOR(src1, src1_end, src2);
 #else  
@@ -4072,17 +4047,16 @@ unsigned bit_block_xor_count(const bm::word_t* BMRESTRICT src1,
    Function does not analyse availability of source blocks.
 
    \param src1     - first bit block.
-   \param src1_end - first bit block end
    \param src2     - second bit block.
 
    @ingroup bitfunc
 */
 inline 
 unsigned bit_block_xor_any(const bm::word_t* BMRESTRICT src1,
-                             const bm::word_t* BMRESTRICT src1_end, 
-                             const bm::word_t* BMRESTRICT src2)
+                           const bm::word_t* BMRESTRICT src2)
 {
     unsigned count = 0;
+    const bm::word_t* BMRESTRICT src1_end = src1 + bm::set_block_size;
     do
     {
         count = (src1[0] ^ src2[0]) |
@@ -4091,7 +4065,7 @@ unsigned bit_block_xor_any(const bm::word_t* BMRESTRICT src1,
                 (src1[3] ^ src2[3]);
 
         src1+=4; src2+=4;
-    } while ((src1 < src1_end) && (count == 0));
+    } while (!count && (src1 < src1_end));
     return count;
 }
 
@@ -4103,17 +4077,16 @@ unsigned bit_block_xor_any(const bm::word_t* BMRESTRICT src1,
    Function does not analyse availability of source blocks.
 
    \param src1     - first bit block.
-   \param src1_end - first bit block end
    \param src2     - second bit block.
 
    @ingroup bitfunc
 */
 inline 
 unsigned bit_block_sub_count(const bm::word_t* BMRESTRICT src1,
-    const bm::word_t* BMRESTRICT src1_end,
-    const bm::word_t* BMRESTRICT src2)
+                             const bm::word_t* BMRESTRICT src2)
 {
     unsigned count;
+    const bm::word_t* BMRESTRICT src1_end = src1 + bm::set_block_size;
 #ifdef BMVECTOPT
     count = VECT_BITCOUNT_SUB(src1, src1_end, src2);
 #else  
@@ -4152,17 +4125,17 @@ unsigned bit_block_sub_count(const bm::word_t* BMRESTRICT src1,
    Function does not analyse availability of source blocks.
 
    \param src1     - first bit block.
-   \param src1_end - first bit block end
    \param src2     - second bit block.
 
    @ingroup bitfunc
 */
 inline 
 unsigned bit_block_sub_any(const bm::word_t* BMRESTRICT src1,
-                             const bm::word_t* BMRESTRICT src1_end, 
-                             const bm::word_t* BMRESTRICT src2)
+                           const bm::word_t* BMRESTRICT src2)
 {
     unsigned count = 0;
+    const bm::word_t* BMRESTRICT src1_end = src1 + bm::set_block_size;
+
     do
     {
         count = (src1[0] & ~src2[0]) |
@@ -4182,17 +4155,16 @@ unsigned bit_block_sub_any(const bm::word_t* BMRESTRICT src1,
    Function does not analyse availability of source blocks.
 
    \param src1     - first bit block
-   \param src1_end - first block end
    \param src2     - second bit block.
 
    @ingroup bitfunc
 */
 inline 
 unsigned bit_block_or_count(const bm::word_t* src1, 
-                            const bm::word_t* src1_end,
                             const bm::word_t* src2)
 {
     unsigned count;
+    const bm::word_t* src1_end = src1 + bm::set_block_size;
 #ifdef BMVECTOPT
     count = VECT_BITCOUNT_OR(src1, src1_end, src2);
 #else  
@@ -4231,17 +4203,16 @@ unsigned bit_block_or_count(const bm::word_t* src1,
    Function does not analyse availability of source blocks.
 
    \param src1     - first bit block.
-   \param src1_end - first bit block end
    \param src2     - second bit block.
 
    @ingroup bitfunc
 */
 inline 
 unsigned bit_block_or_any(const bm::word_t* BMRESTRICT src1,
-                          const bm::word_t* BMRESTRICT src1_end, 
                           const bm::word_t* BMRESTRICT src2)
 {
     unsigned count = 0;
+    const bm::word_t* BMRESTRICT src1_end = src1 + bm::set_block_size;
     do
     {
         count = (src1[0] | src2[0]) |
@@ -4250,7 +4221,7 @@ unsigned bit_block_or_any(const bm::word_t* BMRESTRICT src1,
                 (src1[3] | src2[3]);
 
         src1+=4; src2+=4;
-    } while ((src1 < src1_end) && (count == 0));
+    } while (!count && (src1 < src1_end));
     return count;
 }
 
@@ -4326,7 +4297,6 @@ inline bm::word_t* bit_operation_and(bm::word_t* BMRESTRICT dst,
    \brief Performs bitblock AND operation and calculates bitcount of the result. 
 
    \param src1     - first bit block.
-   \param src1_end - first bit block end
    \param src2     - second bit block.
 
    \returns bitcount value 
@@ -4335,21 +4305,17 @@ inline bm::word_t* bit_operation_and(bm::word_t* BMRESTRICT dst,
 */
 inline 
 bm::id_t bit_operation_and_count(const bm::word_t* BMRESTRICT src1,
-                                 const bm::word_t* BMRESTRICT src1_end,
                                  const bm::word_t* BMRESTRICT src2)
 {
     if (IS_EMPTY_BLOCK(src1) || IS_EMPTY_BLOCK(src2))
-    {
         return 0;
-    }
-    return bit_block_and_count(src1, src1_end, src2);
+    return bit_block_and_count(src1, src2);
 }
 
 /*!
    \brief Performs bitblock AND operation test. 
 
    \param src1     - first bit block.
-   \param src1_end - first bit block end
    \param src2     - second bit block.
 
    \returns non zero if there is any value 
@@ -4358,14 +4324,11 @@ bm::id_t bit_operation_and_count(const bm::word_t* BMRESTRICT src1,
 */
 inline 
 bm::id_t bit_operation_and_any(const bm::word_t* BMRESTRICT src1,
-                               const bm::word_t* BMRESTRICT src1_end,
                                const bm::word_t* BMRESTRICT src2)
 {
     if (IS_EMPTY_BLOCK(src1) || IS_EMPTY_BLOCK(src2))
-    {
         return 0;
-    }
-    return bit_block_and_any(src1, src1_end, src2);
+    return bit_block_and_any(src1, src2);
 }
 
 
@@ -4374,7 +4337,6 @@ bm::id_t bit_operation_and_any(const bm::word_t* BMRESTRICT src1,
    \brief Performs bitblock SUB operation and calculates bitcount of the result. 
 
    \param src1      - first bit block.
-   \param src1_end  - first bit block end
    \param src2      - second bit block
 
    \returns bitcount value 
@@ -4383,19 +4345,16 @@ bm::id_t bit_operation_and_any(const bm::word_t* BMRESTRICT src1,
 */
 inline 
 bm::id_t bit_operation_sub_count(const bm::word_t* BMRESTRICT src1, 
-                                 const bm::word_t* BMRESTRICT src1_end,
                                  const bm::word_t* BMRESTRICT src2)
 {
     if (IS_EMPTY_BLOCK(src1))
-    {
         return 0;
-    }
     
     if (IS_EMPTY_BLOCK(src2)) // nothing to diff
     {
-        return bit_block_calc_count(src1, src1_end);
+        return bit_block_calc_count(src1, src1 + bm::set_block_size);
     }
-    return bit_block_sub_count(src1, src1_end, src2);
+    return bit_block_sub_count(src1, src2);
 }
 
 
@@ -4404,7 +4363,6 @@ bm::id_t bit_operation_sub_count(const bm::word_t* BMRESTRICT src1,
           bitcount of the result. 
 
    \param src1      - first bit block.
-   \param src1_end  - first bit block end
    \param src2      - second bit block
 
    \returns bitcount value 
@@ -4413,11 +4371,9 @@ bm::id_t bit_operation_sub_count(const bm::word_t* BMRESTRICT src1,
 */
 inline 
 bm::id_t bit_operation_sub_count_inv(const bm::word_t* BMRESTRICT src1, 
-                                     const bm::word_t* BMRESTRICT src1_end,
                                      const bm::word_t* BMRESTRICT src2)
 {
-    unsigned arr_size = unsigned(src1_end - src1);
-    return bit_operation_sub_count(src2, src2+arr_size, src1);
+    return bit_operation_sub_count(src2, src1);
 }
 
 
@@ -4425,7 +4381,6 @@ bm::id_t bit_operation_sub_count_inv(const bm::word_t* BMRESTRICT src1,
    \brief Performs bitblock test of SUB operation. 
 
    \param src1      - first bit block.
-   \param src1_end  - first bit block end
    \param src2      - second bit block
 
    \returns non zero value if there are any bits
@@ -4434,19 +4389,14 @@ bm::id_t bit_operation_sub_count_inv(const bm::word_t* BMRESTRICT src1,
 */
 inline 
 bm::id_t bit_operation_sub_any(const bm::word_t* BMRESTRICT src1, 
-                               const bm::word_t* BMRESTRICT src1_end,
                                const bm::word_t* BMRESTRICT src2)
 {
     if (IS_EMPTY_BLOCK(src1))
-    {
         return 0;
-    }
     
     if (IS_EMPTY_BLOCK(src2)) // nothing to diff
-    {
         return !bit_is_all_zero(src1);
-    }
-    return bit_block_sub_any(src1, src1_end, src2);
+    return bit_block_sub_any(src1, src2);
 }
 
 
@@ -4464,30 +4414,28 @@ bm::id_t bit_operation_sub_any(const bm::word_t* BMRESTRICT src1,
 */
 inline 
 bm::id_t bit_operation_or_count(const bm::word_t* BMRESTRICT src1,
-                                const bm::word_t* BMRESTRICT src1_end, 
                                 const bm::word_t* BMRESTRICT src2)
 {
     if (IS_EMPTY_BLOCK(src1))
     {
         if (!IS_EMPTY_BLOCK(src2))
-            return bit_block_calc_count(src2, src2 + (src1_end - src1));
+            return bit_block_calc_count(src2, src2 + bm::set_block_size);
         else
             return 0; // both blocks are empty        
     }
     else
     {
         if (IS_EMPTY_BLOCK(src2))
-            return bit_block_calc_count(src1, src1_end);
+            return bit_block_calc_count(src1, src1 + bm::set_block_size);
     }
 
-    return bit_block_or_count(src1, src1_end, src2);
+    return bit_block_or_count(src1, src2);
 }
 
 /*!
    \brief Performs bitblock OR operation test. 
 
    \param src1     - first bit block.
-   \param src1_end - first bit block end
    \param src2     - second bit block.
 
    \returns non zero value if there are any bits
@@ -4496,7 +4444,6 @@ bm::id_t bit_operation_or_count(const bm::word_t* BMRESTRICT src1,
 */
 inline 
 bm::id_t bit_operation_or_any(const bm::word_t* BMRESTRICT src1,
-                              const bm::word_t* BMRESTRICT src1_end, 
                               const bm::word_t* BMRESTRICT src2)
 {
     if (IS_EMPTY_BLOCK(src1))
@@ -4512,7 +4459,7 @@ bm::id_t bit_operation_or_any(const bm::word_t* BMRESTRICT src1,
             return !bit_is_all_zero(src1);
     }
 
-    return bit_block_or_any(src1, src1_end, src2);
+    return bit_block_or_any(src1, src2);
 }
 
 
@@ -4829,7 +4776,6 @@ bm::word_t* bit_operation_xor(bm::word_t* BMRESTRICT dst,
 */
 inline 
 bm::id_t bit_operation_xor_count(const bm::word_t* BMRESTRICT src1,
-                                 const bm::word_t* BMRESTRICT src1_end,
                                  const bm::word_t* BMRESTRICT src2)
 {
     if (IS_EMPTY_BLOCK(src1) || IS_EMPTY_BLOCK(src2))
@@ -4837,16 +4783,15 @@ bm::id_t bit_operation_xor_count(const bm::word_t* BMRESTRICT src1,
         if (IS_EMPTY_BLOCK(src1) && IS_EMPTY_BLOCK(src2))
             return 0;
         const bm::word_t* block = IS_EMPTY_BLOCK(src1) ? src2 : src1;
-        return bit_block_calc_count(block, block + (src1_end - src1));
+        return bit_block_calc_count(block, block + bm::set_block_size);
     }
-    return bit_block_xor_count(src1, src1_end, src2);
+    return bit_block_xor_count(src1, src2);
 }
 
 /*!
    \brief Performs bitblock XOR operation test. 
 
    \param src1 - bit block start ptr
-   \param src1_end - bit block end ptr
    \param src2 - second bit block ptr
 
    \returns non zero value if there are bits
@@ -4855,7 +4800,6 @@ bm::id_t bit_operation_xor_count(const bm::word_t* BMRESTRICT src1,
 */
 inline 
 bm::id_t bit_operation_xor_any(const bm::word_t* BMRESTRICT src1,
-                               const bm::word_t* BMRESTRICT src1_end,
                                const bm::word_t* BMRESTRICT src2)
 {
     if (IS_EMPTY_BLOCK(src1) || IS_EMPTY_BLOCK(src2))
@@ -4865,7 +4809,7 @@ bm::id_t bit_operation_xor_any(const bm::word_t* BMRESTRICT src1,
         const bm::word_t* block = IS_EMPTY_BLOCK(src1) ? src2 : src1;
         return !bit_is_all_zero(block);
     }
-    return bit_block_xor_any(src1, src1_end, src2);
+    return bit_block_xor_any(src1, src2);
 }
 
 
@@ -5837,7 +5781,6 @@ gap_word_t* (*gap_operation_func_type)(const gap_word_t* BMRESTRICT,
 
 typedef
 bm::id_t (*bit_operation_count_func_type)(const bm::word_t* BMRESTRICT,
-                                          const bm::word_t* BMRESTRICT, 
                                           const bm::word_t* BMRESTRICT);
 
 

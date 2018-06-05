@@ -190,9 +190,7 @@ void combine_count_operation_with_block(const bm::word_t*           blk,
 
                      gap_convert_to_bitset((bm::word_t*) temp_bit_blk, g1);
                      dmd.result += 
-                       bit_operation_sub_count((bm::word_t*)temp_bit_blk, 
-                          ((bm::word_t*)temp_bit_blk) + bm::set_block_size,
-                           arg_blk);
+                       bit_operation_sub_count((bm::word_t*)temp_bit_blk, arg_blk);
                      }
                      break;
                  case bm::COUNT_SUB_BA:
@@ -302,7 +300,7 @@ void combine_count_operation_with_block(const bm::word_t*           blk,
             operation_functions<true>::bit_operation_count(dmd.metric);
         if (gfunc)
         {
-            dmd.result += (*gfunc)(blk, blk + bm::set_block_size, arg_blk);
+            dmd.result += (*gfunc)(blk, arg_blk);
         }
         else
         {
@@ -364,7 +362,7 @@ unsigned combine_count_and_operation_with_block(const bm::word_t* blk,
     // --------------------------------------------
     // Here we combine two plain bitblocks 
 
-    return bit_operation_and_count(blk, blk + (bm::set_block_size), arg_blk);
+    return bit_operation_and_count(blk, arg_blk);
 }
 
 
@@ -463,9 +461,7 @@ void combine_any_operation_with_block(const bm::word_t* blk,
                      bm::word_t  BM_VECT_ALIGN temp_blk[bm::set_block_size] BM_VECT_ALIGN_ATTR;
                      gap_convert_to_bitset((bm::word_t*) temp_blk, g1);
                      dmd.result += 
-                       bit_operation_sub_any((bm::word_t*)temp_blk, 
-                          ((bm::word_t*)temp_blk) + bm::set_block_size,
-                           arg_blk);
+                       bit_operation_sub_any((bm::word_t*)temp_blk, arg_blk);
                      }
                      break;
                  case bm::COUNT_SUB_BA:
@@ -590,23 +586,23 @@ void combine_any_operation_with_block(const bm::word_t* blk,
         {
         case bm::COUNT_AND:
             dmd.result += 
-            bit_operation_and_any(blk, blk_end, arg_blk);
+            bit_operation_and_any(blk, arg_blk);
             break;
         case bm::COUNT_OR:
             dmd.result += 
-            bit_operation_or_any(blk, blk_end, arg_blk);
+            bit_operation_or_any(blk, arg_blk);
             break;
         case bm::COUNT_SUB_AB:
             dmd.result += 
-            bit_operation_sub_any(blk, blk_end, arg_blk);
+            bit_operation_sub_any(blk, arg_blk);
             break;
         case bm::COUNT_SUB_BA:
             dmd.result += 
-            bit_operation_sub_any(arg_blk, arg_end, blk);
+            bit_operation_sub_any(arg_blk, blk);
             break;
         case bm::COUNT_XOR:
             dmd.result += 
-            bit_operation_xor_any(blk, blk_end, arg_blk);
+            bit_operation_xor_any(blk, arg_blk);
             break;
         case bm::COUNT_A:
             if (blk)

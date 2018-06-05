@@ -1013,8 +1013,7 @@ unsigned serializer<BV>::serialize(const BV& bv,
         // compute bit-block statistics: bit-count and number of GAPS
         unsigned block_bc = 0;
         bm::id_t bit_gaps = 
-            bit_block_calc_count_change(blk, blk + bm::set_block_size,
-							            &block_bc);
+            bm::bit_block_calc_count_change(blk, blk + bm::set_block_size, &block_bc);
         unsigned block_bc_inv = bm::gap_max_bits - block_bc;
         switch (block_bc)
         {
@@ -2485,8 +2484,7 @@ serial_stream_iterator<DEC>::get_bit_block_COUNT_AND(bm::word_t*  dst_block,
     case set_block_arrbit:
         get_arr_bit(tmp_block, true /*clear target*/);
         count += 
-            bit_operation_and_count(dst_block, dst_block + bm::set_block_size, 
-                                    tmp_block);
+            bit_operation_and_count(dst_block, tmp_block);
         break;
     default:
         BM_ASSERT(0);
@@ -2563,9 +2561,7 @@ serial_stream_iterator<DEC>::get_bit_block_COUNT_OR(bm::word_t*  dst_block,
     case set_block_arrbit:
         get_arr_bit(tmp_block, true /* clear target*/);
         return 
-            bit_operation_or_count(dst_block, 
-                                   dst_block + bm::set_block_size,
-                                   tmp_block);
+            bit_operation_or_count(dst_block, tmp_block);
     default:
         BM_ASSERT(0);
     } // switch
@@ -2641,9 +2637,7 @@ serial_stream_iterator<DEC>::get_bit_block_COUNT_XOR(bm::word_t*  dst_block,
     case set_block_arrbit:
         get_arr_bit(tmp_block, true /* clear target*/);
         return 
-            bit_operation_xor_count(dst_block, 
-                                    dst_block + bm::set_block_size,
-                                    tmp_block);
+            bit_operation_xor_count(dst_block, tmp_block);
     default:
         BM_ASSERT(0);
     } // switch
@@ -2720,9 +2714,7 @@ serial_stream_iterator<DEC>::get_bit_block_COUNT_SUB_AB(bm::word_t*  dst_block,
     case set_block_arrbit:
         get_arr_bit(tmp_block, true /* clear target*/);
         return 
-            bit_operation_sub_count(dst_block, 
-                                    dst_block + bm::set_block_size,
-                                    tmp_block);
+            bit_operation_sub_count(dst_block, tmp_block);
     default:
         BM_ASSERT(0);
     } // switch
@@ -2792,9 +2784,7 @@ serial_stream_iterator<DEC>::get_bit_block_COUNT_SUB_BA(bm::word_t*  dst_block,
     case set_block_arrbit:
         get_arr_bit(tmp_block, true /* clear target*/);
         return 
-            bit_operation_sub_count(tmp_block,
-                                    tmp_block + bm::set_block_size,
-                                    dst_block);
+            bit_operation_sub_count(tmp_block, dst_block);
     default:
         BM_ASSERT(0);
     } // switch

@@ -2167,8 +2167,6 @@ private:
     void assign_gap_result(unsigned              nb,
                            const bm::gap_word_t* res,
                            unsigned              res_len,
-                           int                   level,
-                           unsigned              threshold,
                            bm::word_t*           blk,
                            gap_word_t*           tmp_buf);
 
@@ -4015,19 +4013,13 @@ bvector<Alloc>::combine_operation_with_block(unsigned          nb,
     gap_word_t tmp_buf[bm::gap_equiv_len * 3]; // temporary result            
     const bm::gap_word_t* res;
     unsigned res_len;
-    int      level;
-    unsigned threshold;
-
 
     if (opcode == BM_OR || opcode == BM_XOR)
     {        
         if (!blk && arg_gap) 
         {
-            res = BMGAP_PTR(arg_blk);
-            res_len = bm::gap_length(res);
-            level = -1;
-            threshold = 0;
-            assign_gap_result(nb, res, res_len, level, threshold, blk, tmp_buf);
+            blk = blockman_.clone_gap_block(BMGAP_PTR(arg_blk), gap);
+            blockman_.set_block(nb, blk, gap);
             return;
         }
     }
@@ -4046,24 +4038,16 @@ bvector<Alloc>::combine_operation_with_block(unsigned          nb,
                                res_len);
             }
             BM_ASSERT(res == tmp_buf);
-            ++res_len;// = bm::gap_length(res);
+//            ++res_len;
 
             BM_ASSERT(!(res == tmp_buf && res_len == 0));
 
             // if as a result of the operation gap block turned to zero
             // we can now replace it with NULL
             if (gap_is_all_zero(res))
-            {
                 blockman_.zero_block(nb);
-            }
             else
-            {
-                // mutation check
-                level = bm::gap_level(BMGAP_PTR(blk));
-                BM_ASSERT(level >= 0);
-                threshold = unsigned(blockman_.glen(unsigned(level)) - 4u);
-                assign_gap_result(nb, res, res_len, level, threshold, blk, tmp_buf);
-            }
+                assign_gap_result(nb, res, ++res_len,  blk, tmp_buf);
             return;
         }
         else // argument is BITSET-type (own block is GAP)
@@ -4085,72 +4069,6 @@ bvector<Alloc>::combine_operation_with_block(unsigned          nb,
                 }
             }
             gap_word_t* gap_blk = BMGAP_PTR(blk);
-/*
-            if (opcode == BM_AND)
-            {
-                unsigned gap_cnt = gap_bit_count_unr(gap_blk);
-                if (gap_cnt < 128)
-                {
-                    gap_word_t arr_len =
-                        gap_convert_to_arr(tmp_buf, gap_blk,
-                                           bm::gap_equiv_len-10);
-                    BM_ASSERT(gap_cnt == arr_len);
-                    blockman_.zero_block(nb);
-                    unsigned arr_i = 0;
-                    int block_type;
-                    blk =
-                        blockman_.check_allocate_block(nb,
-                                                       true,
-                                                       BM_GAP,
-                                                       &block_type,
-                                                       false //no null return
-                                                       );
-                    BM_ASSERT(block_type==1); // GAP
-                    gap_blk = BMGAP_PTR(blk);
-                    threshold = bm::gap_limit(gap_blk, blockman_.glen());
-                    for (; arr_i < arr_len; ++arr_i)
-                    {
-                        gap_word_t bit_idx = tmp_buf[arr_i];
-                        if (bm::test_bit(arg_blk, bit_idx))
-                        {
-                            unsigned is_set;
-                            unsigned new_block_len =
-                                gap_set_value(true, gap_blk, bit_idx, &is_set);
-                            BM_ASSERT(is_set);
-                            if (new_block_len > threshold)
-                            {
-                                gap_blk =
-                                    blockman_.extend_gap_block(nb, gap_blk);
-                                if (gap_blk == 0) // mutated into bit-block
-                                {
-                                    blk = blockman_.check_allocate_block(
-                                                     nb,
-                                                     true,
-                                                     this->get_new_blocks_strat(),
-                                                     &block_type,
-                                                     false // no null return
-                                                     );
-                                    BM_ASSERT(block_type == 0); // BIT
-                                    // target block became bit-block
-                                    for (++arr_i; arr_i < arr_len; ++arr_i)
-                                    {
-                                        bit_idx = tmp_buf[arr_i];
-                                        if (bm::test_bit(arg_blk, bit_idx))
-                                        {
-                                            //bm::set_bit(blk, bit_idx);
-                                            bm::or_bit_block(blk, bit_idx, 1);
-                                        }
-                                    } // for arr_i
-                                    return;
-                                } // if gap mutated
-                            }
-                        } // for arr_i
-                    }
-
-                    return;
-                }
-            } // BM_AND
-*/
 
             blk = blockman_.convert_gap2bitset(nb, gap_blk);
         }
@@ -4274,11 +4192,14 @@ void bvector<Alloc>::assign_gap_result(
                        unsigned              nb,
                        const bm::gap_word_t* res,
                        unsigned              res_len,
-                       int                   level,
-                       unsigned              threshold,
                        bm::word_t*           blk,
                        gap_word_t*           tmp_buf)
 {
+    int level = bm::gap_level(BMGAP_PTR(blk));
+    BM_ASSERT(level >= 0);
+    unsigned threshold = unsigned(blockman_.glen(unsigned(level)) - 4u);
+
+
     int new_level = bm::gap_calc_level(res_len, blockman_.glen());
     if (new_level < 0)
     {

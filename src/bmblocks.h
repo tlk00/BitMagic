@@ -180,9 +180,7 @@ public:
                 else // bitset
                 {
                     unsigned bit_count;
-                    cnt = bit_block_calc_count_change(block,
-                                                block + bm::set_block_size,
-                                                &bit_count);
+                    cnt = bit_block_calc_count_change(block, block + bm::set_block_size, &bit_count);
                     if (idx)
                     {
                         first_bit = block[0] & 1;
@@ -372,9 +370,8 @@ public:
                 if (opt_mode_ < 3) // free_01 optimization
                 {  
                     bm::wordop_t* blk1 = (wordop_t*)block;
-                    bm::wordop_t* blk2 =
-                        (wordop_t*)(block + bm::set_block_size);
-                
+                    bm::wordop_t* blk2 = (wordop_t*)(block + bm::set_block_size);
+
                     bool b = bm::bit_is_all_zero((bm::word_t*)blk1);
                     if (b)
                     {
@@ -623,7 +620,6 @@ public:
         : max_bits_(blockman.max_bits_),
           top_blocks_(0),
           top_block_size_(blockman.top_block_size_),
-          //effective_top_block_size_(blockman.effective_top_block_size_),
         #ifdef BM_DISBALE_BIT_IN_PTR
             gap_flags_(blockman.gap_flags_),
         #endif
