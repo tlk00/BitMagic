@@ -6873,6 +6873,16 @@ static
 void SyntaxTest()
 {
     cout << "----------------------------- Syntax test." << endl;
+    
+    {
+        bvect bv1;
+        bv1.set_bit(100);
+        bv1.set_bit(100 + 10 *65535 * 256);
+        {
+        bvect bv2(bv1);
+        }
+    }
+    
     bvect bv1;
     
     //bvect::allocator_type a = bv1.get_allocator();
@@ -13479,7 +13489,6 @@ int main(void)
     //LoadVectors("c:/dev/bv_perf", 3, 27);
     exit(1);
 */
-
 
     TestRecomb();
 
