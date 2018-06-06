@@ -2591,10 +2591,10 @@ template<typename Alloc>
 bvector<Alloc>& bvector<Alloc>::invert()
 {
     BMCOUNT_VALID(false)
-    BM_SET_MMX_GUARD
     
-    if (!blockman_.is_init())
-        blockman_.init_tree();
+    blockman_.reserve_top_blocks(bm::set_array_size);
+//    if (!blockman_.is_init())
+//        blockman_.init_tree();
 
     bm::word_t*** blk_root = blockman_.top_blocks_root();
     typename blocks_manager_type::block_invert_func func(blockman_);    
@@ -3577,9 +3577,11 @@ void bvector<Alloc>::combine_operation_and(const bm::bvector<Alloc>& bv)
     if (size_ < bv.size_) // this vect shorter than the arg.
     {
         size_ = bv.size_;
-        unsigned arg_top_blocks = bv.blockman_.top_block_size();
-        top_blocks = blockman_.reserve_top_blocks(arg_top_blocks);
     }
+    unsigned arg_top_blocks = bv.blockman_.top_block_size();
+    top_blocks = blockman_.reserve_top_blocks(arg_top_blocks);
+
+    
     bm::word_t*** blk_root = blockman_.top_blocks_root();
     bm::word_t*** blk_root_arg = bv.blockman_.top_blocks_root();
 
@@ -3588,7 +3590,7 @@ void bvector<Alloc>::combine_operation_and(const bm::bvector<Alloc>& bv)
         bm::word_t** blk_blk = blk_root[i];
         if (!blk_blk) // nothing to do (0 AND 1 == 0)
             continue;
-        bm::word_t** blk_blk_arg = blk_root_arg[i];
+        bm::word_t** blk_blk_arg = (i < arg_top_blocks) ? blk_root_arg[i] : 0;
         if (!blk_blk_arg) // free a whole group of blocks
         {
             for (unsigned j = 0; j < bm::set_array_size; ++j)
@@ -3646,16 +3648,17 @@ void bvector<Alloc>::combine_operation_sub(const bm::bvector<Alloc>& bv)
     if (size_ < bv.size_) // this vect shorter than the arg.
     {
         size_ = bv.size_;
-        unsigned arg_top_blocks = bv.blockman_.top_block_size();
-        top_blocks = blockman_.reserve_top_blocks(arg_top_blocks);
     }
+    unsigned arg_top_blocks = bv.blockman_.top_block_size();
+    top_blocks = blockman_.reserve_top_blocks(arg_top_blocks);
+
     bm::word_t*** blk_root = blockman_.top_blocks_root();
     bm::word_t*** blk_root_arg = bv.blockman_.top_blocks_root();
 
     for (unsigned i = 0; i < top_blocks; ++i)
     {
         bm::word_t** blk_blk = blk_root[i];
-        bm::word_t** blk_blk_arg = blk_root_arg[i];
+        bm::word_t** blk_blk_arg = (i < arg_top_blocks) ? blk_root_arg[i] : 0;
         if (!blk_blk || !blk_blk_arg) // nothing to do (0 AND NOT 1 == 0)
             continue;
         bm::word_t* blk;
@@ -3707,12 +3710,10 @@ void bvector<Alloc>::combine_operation(
 
     unsigned top_blocks = blockman_.top_block_size();
     unsigned arg_top_blocks = bv.blockman_.top_block_size();
+    
+    if (arg_top_blocks > top_blocks)
+        top_blocks = blockman_.reserve_top_blocks(arg_top_blocks);
 
-    if (size_ == bv.size_)
-    {
-        BM_ASSERT(top_blocks >= arg_top_blocks);
-    }
-    else
     if (size_ < bv.size_) // this vect shorter than the arg.
     {
         size_ = bv.size_;
@@ -4038,8 +4039,6 @@ bvector<Alloc>::combine_operation_with_block(unsigned          nb,
                                res_len);
             }
             BM_ASSERT(res == tmp_buf);
-//            ++res_len;
-
             BM_ASSERT(!(res == tmp_buf && res_len == 0));
 
             // if as a result of the operation gap block turned to zero

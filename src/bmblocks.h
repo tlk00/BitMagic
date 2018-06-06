@@ -582,7 +582,7 @@ public:
       alloc_(Alloc())
     {
         ::memcpy(glevel_len_, bm::gap_len_table<true>::_len, sizeof(glevel_len_));
-        top_block_size_ = 0;
+        top_block_size_ = 1;
     }
 
     blocks_manager(const gap_word_t* glevel_len, 
@@ -594,7 +594,7 @@ public:
           alloc_(alloc)
     {
         ::memcpy(glevel_len_, glevel_len, sizeof(glevel_len_));
-        top_block_size_ = 0; //effective_top_block_size_ = 0;
+        top_block_size_ = 1;
     }
 
     blocks_manager(const blocks_manager& blockman)
@@ -611,12 +611,18 @@ public:
 
         if (blockman.is_init())
         {
-            init_tree();
+            reserve_top_blocks(blockman.top_block_size());
+//            init_tree();
+//            this->copy(blockman);
+            
+//            init_tree();
             word_t*** blk_root = blockman.top_blocks_;
 
             block_copy_func copy_func(*this, blockman);
             for_each_nzblock(blk_root, top_block_size_, copy_func);
+            
         }
+
     }
     
 #ifndef BM_NO_CXX11
@@ -1110,7 +1116,7 @@ public:
 
         // top block index
         unsigned nblk_blk = nb >> bm::set_array_shift;
-        reserve_top_blocks(nblk_blk);
+        reserve_top_blocks(nblk_blk+1);
         
         // If first level array not yet allocated, allocate it and
         // assign block to it
@@ -1167,8 +1173,8 @@ public:
     */
     bm::word_t* set_block(unsigned nb, bm::word_t* block, bool gap)
     {
-        if (!is_init())
-            init_tree();
+//        if (!is_init())
+//            init_tree();
         
         unsigned i, j;
         get_block_coord(nb, i, j);
@@ -1183,6 +1189,8 @@ public:
     */
     bm::word_t* set_block(unsigned i, unsigned j, bm::word_t* block, bool gap)
     {
+        BM_ASSERT(i < top_block_size_);
+     
         bm::word_t* old_block;
         if (block)
         {
@@ -1195,7 +1203,7 @@ public:
 
         // If first level array not yet allocated, allocate it and
         // assign block to it
-        if (top_blocks_[i] == 0)
+        if (!top_blocks_[i])
         {
             top_blocks_[i] = (bm::word_t**)alloc_.alloc_ptr();
             ::memset(top_blocks_[i], 0, bm::set_array_size * sizeof(void*));
@@ -1326,6 +1334,8 @@ public:
     {
         unsigned i, j;
         get_block_coord(nb, i, j);
+        if (!top_blocks_ || i >= top_block_size_)
+            return;
         zero_block(i, j);
     }
 
@@ -1548,21 +1558,24 @@ public:
     unsigned reserve_top_blocks(unsigned top_blocks)
     {
         BM_ASSERT(top_blocks <= bm::set_array_size);
-        BM_ASSERT(is_init());
+        //BM_ASSERT(is_init());
 
-        if (top_blocks <= top_block_size_)
+        if (top_blocks_ && top_blocks <= top_block_size_)
             return top_block_size_; // nothing to do
         
         bm::word_t*** new_blocks = 
             (bm::word_t***)alloc_.alloc_ptr(top_blocks);
 
-        unsigned i;
-        for (i = 0; i < top_block_size_; ++i)
-            new_blocks[i] = top_blocks_[i];
+        unsigned i = 0;
+        if (top_blocks_)
+        {
+            for (; i < top_block_size_; ++i)
+                new_blocks[i] = top_blocks_[i];
+            alloc_.free_ptr(top_blocks_, top_block_size_);
+        }
         for (; i < top_blocks; ++i)
             new_blocks[i] = 0;
-
-        alloc_.free_ptr(top_blocks_, top_block_size_);
+        
         top_blocks_ = new_blocks;
         top_block_size_ = top_blocks;
         return top_block_size_;
@@ -1585,7 +1598,6 @@ public:
     {
         BM_ASSERT(top_blocks_ == 0);
         
-        top_block_size_ = compute_top_block_size(max_bits_);
         if (top_block_size_)
         {
             top_blocks_ = (bm::word_t***) alloc_.alloc_ptr(top_block_size_);
@@ -1600,7 +1612,8 @@ public:
 private:
 
     void operator =(const blocks_manager&);
-
+    
+    // ----------------------------------------------------------------
     #define BM_FREE_OP(x) blk = blk_blk[j + x]; \
         if (IS_VALID_ADDR(blk)) \
         { \
@@ -1661,6 +1674,88 @@ private:
         destroy_tree();
         top_blocks_ = 0; top_block_size_ = 0;
     }
+    
+    // ----------------------------------------------------------------
+    
+    void copy(const blocks_manager& blockman)
+    {
+        BM_ASSERT(blockman.is_init());
+        
+        unsigned arg_top_blocks = blockman.top_block_size();
+        this->reserve_top_blocks(arg_top_blocks);
+        
+        bm::word_t*** blk_root = top_blocks_root();
+        bm::word_t*** blk_root_arg = blockman.top_blocks_root();
+
+
+        for (unsigned i = 0; i < arg_top_blocks; ++i)
+        {
+            bm::word_t** blk_blk_arg = blk_root_arg[i];
+            if (!blk_blk_arg)
+                continue;
+            
+            BM_ASSERT(blk_root[i] == 0);
+
+            bm::word_t** blk_blk = blk_root[i] = (bm::word_t**)alloc_.alloc_ptr();
+            ::memset(blk_blk, 0, bm::set_array_size * sizeof(bm::word_t*));
+            
+            unsigned j = 0;
+            bm::word_t* blk;
+            const bm::word_t* blk_arg;
+            do
+            {
+                blk_arg = blk_blk_arg[j];
+                if (blk_arg)
+                {
+                    bool is_gap = BM_IS_GAP(blk_arg);
+                    if (is_gap)
+                    {
+                        blk = clone_gap_block(BMGAP_PTR(blk_arg), is_gap);
+                        if (is_gap)
+                        {
+                            BMSET_PTRGAP(blk);
+                        }
+                    }
+                    else
+                    {
+                        if (IS_FULL_BLOCK(blk_arg))
+                            blk = FULL_BLOCK_FAKE_ADDR;
+                        else
+                        {
+                            blk = alloc_.alloc_bit_block();
+                            bm::bit_block_copy(blk, blk_arg);
+                        }
+                    }
+                    blk_blk[j] = blk;
+
+                }
+                ++j;
+
+/*
+            #ifdef BM64_AVX2
+                if (!avx2_test_all_zero_wave(blk_blk_arg + j))
+                {
+                }
+                j += 4;
+            #elif defined(BM64_SSE4)
+                if (!sse42_test_all_zero_wave(blk_blk_arg + j))
+                {
+                }
+                j += 2;
+            #else
+                //BM_FREE_OP(0)
+                ++j;
+            #endif
+*/
+                
+            } while (j < bm::set_array_size);
+
+        } // for i
+
+        alloc_.free_ptr(top_blocks_, top_block_size_); // free the top
+    }
+
+
 private:
     /// maximum addresable bits
     bm::id_t                               max_bits_;

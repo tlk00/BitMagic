@@ -48,6 +48,10 @@ void for_each_bit(const BV&    bv,
     const typename BV::blocks_manager_type& bman = bv.get_blocks_manager();
     bm::word_t*** blk_root = bman.top_blocks_root();
     
+    
+    if (!blk_root)
+        return;
+    
     unsigned tsize = bman.top_block_size();
     for (unsigned i = 0; i < tsize; ++i)
     {

@@ -752,20 +752,18 @@ void distance_operation(const BV& bv1,
 
         for (j = 0; j < bm::set_array_size; ++j, ++block_idx)
         {
-            blk = BLOCK_ADDR_SAN(blk_blk[j]);
+            blk = bman1.get_block(i, j);
             if (blk == 0 && is_all_and)
                 continue;
 
             arg_blk = bman2.get_block(i, j);
 
-            if (blk == 0 && arg_blk == 0)
+            if (!blk & !arg_blk)
                 continue;
                 
             combine_count_operation_with_block(blk, 
                                                arg_blk, 
                                                dmit, dmit_end);
-            
-
         } // for j
 
     } // for i
@@ -869,8 +867,6 @@ void distance_operation_any(const BV& bv1,
     bool  blk_gap;
     bool  arg_gap;
 
-    BM_SET_MMX_GUARD
-
     unsigned top_block_size = bman1.top_block_size();
     unsigned ebs2 = bman2.top_block_size();
     if (ebs2 > top_block_size)
@@ -931,7 +927,8 @@ void distance_operation_any(const BV& bv1,
 
         for (j = 0; j < bm::set_array_size; ++j, ++block_idx)
         {
-            blk = BLOCK_ADDR_SAN(blk_blk[j]);
+            blk = bman1.get_block(i, j);
+            //BLOCK_ADDR_SAN(blk_blk[j]);
             if (blk == 0 && is_all_and)
                 continue;
 
