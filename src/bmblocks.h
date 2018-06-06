@@ -1509,11 +1509,12 @@ public:
     bool is_subblock_null(unsigned nsub) const
     {
         BM_ASSERT(top_blocks_);
+        if (nsub >= top_block_size_)
+            return true;
         return top_blocks_[nsub] == NULL;
     }
 
-
-    bm::word_t***  top_blocks_root()
+    bm::word_t*** top_blocks_root()
     {
         return top_blocks_;
     }
@@ -1704,6 +1705,7 @@ private:
             const bm::word_t* blk_arg;
             do
             {
+                blk = blk_blk[j];
                 blk_arg = blk_blk_arg[j];
                 if (blk_arg)
                 {
@@ -1727,7 +1729,6 @@ private:
                         }
                     }
                     blk_blk[j] = blk;
-
                 }
                 ++j;
 
