@@ -130,22 +130,29 @@ bm::id_t avx2_bit_count(const __m256i* BMRESTRICT block,
   {
         b = _mm256_load_si256(block+0); c = _mm256_load_si256(block+1);
         BM_CSA256(twosA, ones, ones, b, c);
+      
         b = _mm256_load_si256(block+2); c = _mm256_load_si256(block+3);
         BM_CSA256(twosB, ones, ones, b, c);
         BM_CSA256(foursA, twos, twos, twosA, twosB);
+      
         b = _mm256_load_si256(block+4); c = _mm256_load_si256(block+5);
         BM_CSA256(twosA, ones, ones, b, c);
+      
         b = _mm256_load_si256(block+6); c = _mm256_load_si256(block+7);
         BM_CSA256(twosB, ones, ones, b, c);
         BM_CSA256(foursB, twos, twos, twosA, twosB);
         BM_CSA256(eightsA, fours, fours, foursA, foursB);
+      
         b = _mm256_load_si256(block+8); c = _mm256_load_si256(block+9);
         BM_CSA256(twosA, ones, ones, b, c);
+      
         b = _mm256_load_si256(block+10); c = _mm256_load_si256(block+11);
         BM_CSA256(twosB, ones, ones, b, c);
         BM_CSA256(foursA, twos, twos, twosA, twosB);
+      
         b = _mm256_load_si256(block+12); c = _mm256_load_si256(block+13);
         BM_CSA256(twosA, ones, ones, b, c);
+      
         b = _mm256_load_si256(block+14); c = _mm256_load_si256(block+15);
         BM_CSA256(twosB, ones, ones, b, c);
         BM_CSA256(foursB, twos, twos, twosA, twosB);
@@ -249,12 +256,10 @@ bm::id_t avx2_bit_count_or(const __m256i* BMRESTRICT block,
     cnt64 = (bm::id64_t*)&cnt;
     return (unsigned)(cnt64[0] + cnt64[1] + cnt64[2] + cnt64[3]);
 }
+
 // experimental code for Harley-Seal Hamming
 // (needs more testing)
 /*
-#if !defined(_MSC_VER)
-__attribute__((target("avx2")))
-#endif
 inline bm::id_t avx2_bit_count_xor(const __m256i* BMRESTRICT block,
                                    const __m256i* BMRESTRICT block_end,
                                    const __m256i* BMRESTRICT m_block
@@ -268,67 +273,65 @@ inline bm::id_t avx2_bit_count_xor(const __m256i* BMRESTRICT block,
   __m256i sixteens = _mm256_setzero_si256();
   __m256i twosA, twosB, foursA, foursB, eightsA, eightsB;
   __m256i b, c;
-  __m256i m, n;
+  __m256i n, m;
 
   BM_AVX2_POPCNT_PROLOG
-  uint64_t* cnt64;
+  bm::id64_t* cnt64;
 
   do
   {
-        b = _mm256_load_si256(block+0);   c = _mm256_load_si256(block+1);
-        m = _mm256_load_si256(m_block+0); n = _mm256_load_si256(m_block+1);
-        b = _mm256_xor_si256(b, m);
-        c = _mm256_xor_si256(c, n);
+        b = _mm256_load_si256(block+0); c = _mm256_load_si256(block+1);
+        n = _mm256_load_si256(m_block+0); m = _mm256_load_si256(m_block+1);
+        b = _mm256_xor_si256(b, n);
+        c = _mm256_xor_si256(c, m);
         BM_CSA256(twosA, ones, ones, b, c);
       
         b = _mm256_load_si256(block+2); c = _mm256_load_si256(block+3);
-        m = _mm256_load_si256(m_block+2); n = _mm256_load_si256(m_block+3);
-        b = _mm256_xor_si256(b, m);
-        c = _mm256_xor_si256(c, n);
+        n = _mm256_load_si256(m_block+2); m = _mm256_load_si256(m_block+3);
+        b = _mm256_xor_si256(b, n);
+        c = _mm256_xor_si256(c, m);
         BM_CSA256(twosB, ones, ones, b, c);
-      
         BM_CSA256(foursA, twos, twos, twosA, twosB);
       
-        b = _mm256_load_si256(block+4);   c = _mm256_load_si256(block+5);
-        m = _mm256_load_si256(m_block+4); n = _mm256_load_si256(m_block+5);
-        b = _mm256_xor_si256(b, m);
-        c = _mm256_xor_si256(c, n);
+        b = _mm256_load_si256(block+4); c = _mm256_load_si256(block+5);
+        n = _mm256_load_si256(m_block+4); m = _mm256_load_si256(m_block+5);
+        b = _mm256_xor_si256(b, n);
+        c = _mm256_xor_si256(c, m);
         BM_CSA256(twosA, ones, ones, b, c);
       
-        b = _mm256_load_si256(block+6);   c = _mm256_load_si256(block+7);
-        m = _mm256_load_si256(m_block+6); n = _mm256_load_si256(m_block+7);
-        b = _mm256_xor_si256(b, m);
-        c = _mm256_xor_si256(c, n);
+        b = _mm256_load_si256(block+6); c = _mm256_load_si256(block+7);
+        n = _mm256_load_si256(m_block+6); m = _mm256_load_si256(m_block+7);
+        b = _mm256_xor_si256(b, n);
+        c = _mm256_xor_si256(c, m);
         BM_CSA256(twosB, ones, ones, b, c);
-      
         BM_CSA256(foursB, twos, twos, twosA, twosB);
         BM_CSA256(eightsA, fours, fours, foursA, foursB);
       
-        b = _mm256_load_si256(block+8);   c = _mm256_load_si256(block+9);
-        m = _mm256_load_si256(m_block+8); n = _mm256_load_si256(m_block+9);
-        b = _mm256_xor_si256(b, m);
-        c = _mm256_xor_si256(c, n);
+        b = _mm256_load_si256(block+8); c = _mm256_load_si256(block+9);
+        n = _mm256_load_si256(m_block+8); m = _mm256_load_si256(m_block+9);
+        b = _mm256_xor_si256(b, n);
+        c = _mm256_xor_si256(c, m);
         BM_CSA256(twosA, ones, ones, b, c);
       
-        b = _mm256_load_si256(block+10);   c = _mm256_load_si256(block+11);
-        m = _mm256_load_si256(m_block+10); n = _mm256_load_si256(m_block+11);
-        b = _mm256_xor_si256(b, m);
-        c = _mm256_xor_si256(c, n);
+        b = _mm256_load_si256(block+10); c = _mm256_load_si256(block+11);
+        n = _mm256_load_si256(m_block+10); m = _mm256_load_si256(m_block+11);
+        b = _mm256_xor_si256(b, n);
+        c = _mm256_xor_si256(c, m);
         BM_CSA256(twosB, ones, ones, b, c);
         BM_CSA256(foursA, twos, twos, twosA, twosB);
       
-        b = _mm256_load_si256(block+12);   c = _mm256_load_si256(block+13);
-        m = _mm256_load_si256(m_block+12); n = _mm256_load_si256(m_block+13);
-        b = _mm256_xor_si256(b, m);
-        c = _mm256_xor_si256(c, n);
+        b = _mm256_load_si256(block+12); c = _mm256_load_si256(block+13);
+        n = _mm256_load_si256(m_block+12); m = _mm256_load_si256(m_block+13);
+        b = _mm256_xor_si256(b, n);
+        c = _mm256_xor_si256(c, m);
         BM_CSA256(twosA, ones, ones, b, c);
       
-        b = _mm256_load_si256(block+14);   c = _mm256_load_si256(block+15);
-        m = _mm256_load_si256(m_block+15); n = _mm256_load_si256(m_block+15);
-        b = _mm256_xor_si256(b, m);
-        c = _mm256_xor_si256(c, n);
+        b = _mm256_load_si256(block+14); c = _mm256_load_si256(block+15);
+        n = _mm256_load_si256(m_block+14); m = _mm256_load_si256(m_block+15);
+        b = _mm256_xor_si256(b, n);
+        c = _mm256_xor_si256(c, m);
+
         BM_CSA256(twosB, ones, ones, b, c);
-      
         BM_CSA256(foursB, twos, twos, twosA, twosB);
         BM_CSA256(eightsB, fours, fours, foursA, foursB);
         BM_CSA256(sixteens, eights, eights, eightsA, eightsB);
@@ -336,8 +339,7 @@ inline bm::id_t avx2_bit_count_xor(const __m256i* BMRESTRICT block,
         BM_AVX2_BIT_COUNT(bc, sixteens);
         cnt = _mm256_add_epi64(cnt, bc);
 
-        block += 16; m_block += 16;
-      
+        block += 16;
   } while (block < block_end);
   
   cnt = _mm256_slli_epi64(cnt, 4);
@@ -350,9 +352,9 @@ inline bm::id_t avx2_bit_count_xor(const __m256i* BMRESTRICT block,
   BM_AVX2_BIT_COUNT(bc, ones);
   cnt = _mm256_add_epi64(cnt, bc);
 
-  cnt64 = (uint64_t*) &cnt;
+  cnt64 = (bm::id64_t*) &cnt;
 
-  return cnt64[0] + cnt64[1] + cnt64[2] + cnt64[3];
+  return (unsigned)(cnt64[0] + cnt64[1] + cnt64[2] + cnt64[3]);
 }
 */
 
@@ -362,43 +364,37 @@ inline bm::id_t avx2_bit_count_xor(const __m256i* BMRESTRICT block,
 */
 inline
 bm::id_t avx2_bit_count_xor(const __m256i* BMRESTRICT block,
-    const __m256i* BMRESTRICT block_end,
-    const __m256i* BMRESTRICT mask_block)
+                            const __m256i* BMRESTRICT block_end,
+                            const __m256i* BMRESTRICT mask_block)
 {
     bm::id64_t* cnt64;
     BM_AVX2_POPCNT_PROLOG
     __m256i cnt = _mm256_setzero_si256();
-    __m256i ymm0, ymm1;
+    __m256i mA, mB, mC, mD;
     do
     {
-        ymm0 = _mm256_load_si256(block);
-        ymm1 = _mm256_load_si256(mask_block);
-        ymm0 = _mm256_xor_si256(ymm0, ymm1);
-        ++block; ++mask_block;
-        BM_AVX2_BIT_COUNT(bc, ymm0)
+        mA = _mm256_xor_si256(_mm256_load_si256(block+0),
+                              _mm256_load_si256(mask_block+0));
+        BM_AVX2_BIT_COUNT(bc, mA)
         cnt = _mm256_add_epi64(cnt, bc);
 
-        ymm0 = _mm256_load_si256(block);
-        ymm1 = _mm256_load_si256(mask_block);
-        ymm0 = _mm256_xor_si256(ymm0, ymm1);
-        ++block; ++mask_block;
-        BM_AVX2_BIT_COUNT(bc, ymm0);
+        mB = _mm256_xor_si256(_mm256_load_si256(block+1),
+                              _mm256_load_si256(mask_block+1));
+        BM_AVX2_BIT_COUNT(bc, mB);
         cnt = _mm256_add_epi64(cnt, bc);
 
-        ymm0 = _mm256_load_si256(block);
-        ymm1 = _mm256_load_si256(mask_block);
-        ymm0 = _mm256_xor_si256(ymm0, ymm1);
-        ++block; ++mask_block;
-        BM_AVX2_BIT_COUNT(bc, ymm0);
+        mC = _mm256_xor_si256(_mm256_load_si256(block+2),
+                              _mm256_load_si256(mask_block+2));
+        BM_AVX2_BIT_COUNT(bc, mC);
         cnt = _mm256_add_epi64(cnt, bc);
 
-        ymm0 = _mm256_load_si256(block);
-        ymm1 = _mm256_load_si256(mask_block);
-        ymm0 = _mm256_xor_si256(ymm0, ymm1);
-        ++block; ++mask_block;
-        BM_AVX2_BIT_COUNT(bc, ymm0);
+        mD = _mm256_xor_si256(_mm256_load_si256(block+3),
+                              _mm256_load_si256(mask_block+3));
+        BM_AVX2_BIT_COUNT(bc, mD);
         cnt = _mm256_add_epi64(cnt, bc);
-
+        
+        block += 4; mask_block += 4;
+        
     } while (block < block_end);
 
     cnt64 = (bm::id64_t*)&cnt;
