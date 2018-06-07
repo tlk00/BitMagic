@@ -1221,9 +1221,9 @@ public:
     {
         if (this != &bvect)
         {
-            clear(true); // memory free cleaning
+            blockman_.deinit_tree();
+            blockman_.copy(bvect.blockman_);
             resize(bvect.size());
-            bit_or(bvect);
         }
         return *this;
     }

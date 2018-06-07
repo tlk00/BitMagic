@@ -42,6 +42,7 @@ template<class Alloc>
 class blocks_manager
 {
 public:
+    template<typename TAlloc> friend class bvector;
 
     typedef Alloc allocator_type;
 
@@ -533,47 +534,6 @@ public:
         }
     };
 
-
-    /** Block copy functor */
-    class block_copy_func : public bm_func_base
-    {
-    public:
-        block_copy_func(blocks_manager&        bm_target, 
-                        const blocks_manager&  bm_src) 
-            : bm_func_base(bm_target), 
-              bm_src_(bm_src),
-              alloc_(bm_target.get_allocator())
-        {}
-
-        void operator()(bm::word_t* block, unsigned idx)
-        {
-            bm::word_t* new_blk;
-            bool is_gap = BM_IS_GAP(block);
-            if (is_gap)
-            {
-                new_blk = this->bm_.clone_gap_block(BMGAP_PTR(block), is_gap);
-            }
-            else
-            {
-                new_blk = block;
-                if (!IS_FULL_BLOCK(block))
-                {
-                    new_blk = alloc_.alloc_bit_block();
-                    bm::bit_block_copy(new_blk, block);
-                }
-            }
-            this->bm_.set_block(idx, new_blk, is_gap);
-        }
-
-    private:
-        block_copy_func(const block_copy_func&);
-        block_copy_func& operator=(const block_copy_func&);
-    private:
-        const blocks_manager&  bm_src_;
-        allocator_type&        alloc_;
-    };
-
-
 public:
     blocks_manager()
     : max_bits_(bm::id_max),
@@ -612,17 +572,8 @@ public:
         if (blockman.is_init())
         {
             reserve_top_blocks(blockman.top_block_size());
-//            init_tree();
-//            this->copy(blockman);
-            
-//            init_tree();
-            word_t*** blk_root = blockman.top_blocks_;
-
-            block_copy_func copy_func(*this, blockman);
-            for_each_nzblock(blk_root, top_block_size_, copy_func);
-            
+            this->copy(blockman);
         }
-
     }
     
 #ifndef BM_NO_CXX11
@@ -1688,7 +1639,6 @@ private:
         bm::word_t*** blk_root = top_blocks_root();
         bm::word_t*** blk_root_arg = blockman.top_blocks_root();
 
-
         for (unsigned i = 0; i < arg_top_blocks; ++i)
         {
             bm::word_t** blk_blk_arg = blk_root_arg[i];
@@ -1705,8 +1655,7 @@ private:
             const bm::word_t* blk_arg;
             do
             {
-                blk = blk_blk[j];
-                blk_arg = blk_blk_arg[j];
+                blk = blk_blk[j]; blk_arg = blk_blk_arg[j];
                 if (blk_arg)
                 {
                     bool is_gap = BM_IS_GAP(blk_arg);
@@ -1714,9 +1663,7 @@ private:
                     {
                         blk = clone_gap_block(BMGAP_PTR(blk_arg), is_gap);
                         if (is_gap)
-                        {
                             BMSET_PTRGAP(blk);
-                        }
                     }
                     else
                     {
@@ -1731,31 +1678,9 @@ private:
                     blk_blk[j] = blk;
                 }
                 ++j;
-
-/*
-            #ifdef BM64_AVX2
-                if (!avx2_test_all_zero_wave(blk_blk_arg + j))
-                {
-                }
-                j += 4;
-            #elif defined(BM64_SSE4)
-                if (!sse42_test_all_zero_wave(blk_blk_arg + j))
-                {
-                }
-                j += 2;
-            #else
-                //BM_FREE_OP(0)
-                ++j;
-            #endif
-*/
-                
             } while (j < bm::set_array_size);
-
         } // for i
-
-        alloc_.free_ptr(top_blocks_, top_block_size_); // free the top
     }
-
 
 private:
     /// maximum addresable bits
