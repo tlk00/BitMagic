@@ -6880,6 +6880,8 @@ void SyntaxTest()
         bv1.set_bit(100 + 10 *65535 * 256);
         {
         bvect bv2(bv1);
+        int res = bv2.compare(bv1);
+        assert(res == 0);
         }
     }
     
