@@ -219,7 +219,7 @@ void generate_random_vector(TBVector* bv)
     unsigned method = rand() % 5; // pick a generation method
     if (method == 0) // generate a incremental linear sequence at random location
     {
-        unsigned seed_id = rand() % max_size;
+        unsigned seed_id = unsigned(rand()) % max_size;
         for (unsigned i = seed_id; i < seed_id+bits_per_vect; ++i)
         {
             if (i >= max_size)
@@ -230,7 +230,7 @@ void generate_random_vector(TBVector* bv)
     else
     if (method == 1) // generate near neighbors
     {
-        unsigned seed_id = rand() % max_size;
+        unsigned seed_id = unsigned(rand()) % max_size;
         unsigned id = seed_id;
         for (unsigned i = 0; i < bits_per_vect; ++i)
         {
@@ -239,14 +239,14 @@ void generate_random_vector(TBVector* bv)
             bv->set_bit(id);
             id += (rand() % 10);
             if (id >= max_size)
-                id = rand() % max_size;
+                id = unsigned(rand()) % max_size;
         } // for i
     }
     else // generate completely random bits
     {
         for (unsigned i  = 0; i < bits_per_vect; ++i)
         {
-            unsigned id = rand() % max_size;
+            unsigned id = unsigned(rand()) % max_size;
             if (i >= max_size) // paranoiya check
                 break;
             bv->set_bit(id);
@@ -580,7 +580,7 @@ void speed_test_bv_index(const bv_index& bvi)
         
         for (unsigned j = 0; j < sample_cnt; ++j)
         {
-            unsigned id = rand() % index_size;
+            unsigned id = unsigned(rand()) % index_size;
             bv_index::map_type::const_iterator it = bvi.idx_.find(id);
             if (it == bvi.idx_.end())
                 continue;
@@ -649,7 +649,7 @@ void speed_test_bvs_index(const bvs_index& bvs)
         
         for (unsigned j = 0; j < sample_cnt; ++j)
         {
-            unsigned id = rand() % index_size;
+            unsigned id = unsigned(rand()) % index_size;
             bvs_index::map_type::const_iterator it = bvs.idx_.find(id);
             if (it == bvs.idx_.end())
                 continue;
@@ -709,7 +709,7 @@ void speed_test_vect_index(const vect_index& vecti)
         
         for (unsigned j = 0; j < sample_cnt; ++j)
         {
-            unsigned id = rand() % index_size;
+            unsigned id = unsigned(rand()) % index_size;
             vect_index::map_type::const_iterator it = vecti.idx_.find(id);
             if (it == vecti.idx_.end())
                 continue;
@@ -770,7 +770,7 @@ void speed_test_sv_index(const sparse_vect_index& svi)
         
         for (unsigned j = 0; j < sample_cnt; ++j)
         {
-            unsigned id = rand() % index_size;
+            unsigned id = unsigned(rand()) % index_size;
             svi.get_vector(id, vect);
             if (vect.size() == 0)
                 continue;

@@ -272,7 +272,7 @@ int main(void)
         // generate vector of random numbers
         for (unsigned i = 0; i < test_size; ++i)
         {
-            v.push_back(rand_dis(gen));
+            v.push_back(unsigned(rand_dis(gen)));
         }
         std::cout << "test vector generation ok" << std::endl;
 
