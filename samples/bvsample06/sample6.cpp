@@ -66,7 +66,7 @@ static unsigned nf_;
 
     static int balance()
     {
-        return nf_ - na_;
+        return int(nf_ - na_);
     }
 };
 
@@ -99,7 +99,7 @@ static unsigned nf_;
 
     static int balance()
     {
-        return nf_ - na_;
+        return int(nf_ - na_);
     }
 
 };
