@@ -480,7 +480,7 @@ void print_stat(const BV& bv, unsigned blocks = 0)
             }
             else // bitset
             {
-                unsigned bc = bm::bit_block_calc_count(blk);
+                unsigned bc = bm::bit_block_count(blk);
 
                 unsigned zw = 0;
                 for (unsigned i = 0; i < bm::set_block_size; ++i) 

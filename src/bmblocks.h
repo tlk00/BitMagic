@@ -1344,7 +1344,7 @@ public:
         else // bitset
         {
             count = (IS_FULL_BLOCK(block)) ? bm::bits_in_block
-                                           : bit_block_calc_count(block);
+                                           : bit_block_count(block);
         }
         return count;
     }

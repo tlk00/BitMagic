@@ -2381,8 +2381,7 @@ serial_stream_iterator<DEC>::get_bit_block_COUNT_A(bm::word_t*  dst_block,
     if (dst_block)
     {
         // count the block bitcount
-        count = 
-            bit_block_calc_count(dst_block);
+        count = bm::bit_block_count(dst_block);
     }
 
     switch (block_type_)

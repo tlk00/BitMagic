@@ -214,7 +214,7 @@ void combine_count_operation_with_block(const bm::word_t*           blk,
                     if (arg_blk)
                     {
                         dmd.result += 
-                          bit_block_calc_count(arg_blk);
+                          bit_block_count(arg_blk);
                     }
                     break;
                  default:
@@ -270,7 +270,7 @@ void combine_count_operation_with_block(const bm::word_t*           blk,
                     if (blk)
                     {
                         dmd.result += 
-                            bit_block_calc_count(blk);
+                            bit_block_count(blk);
                     }
                     break;
                  case bm::COUNT_B:
@@ -306,12 +306,11 @@ void combine_count_operation_with_block(const bm::word_t*           blk,
             {
             case bm::COUNT_A:
                 if (blk)
-                    dmd.result += bit_block_calc_count(blk);
+                    dmd.result += bm::bit_block_count(blk);
                 break;
             case bm::COUNT_B:
                 if (arg_blk)
-                    dmd.result += 
-                        bit_block_calc_count(arg_blk);
+                    dmd.result += bm::bit_block_count(arg_blk);
                 break;
             case bm::COUNT_AND:
             case bm::COUNT_XOR:

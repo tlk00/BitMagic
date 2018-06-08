@@ -3115,7 +3115,7 @@ D gap_convert_to_arr(D* BMRESTRICT       dest,
     @ingroup bitfunc 
 */
 inline 
-bm::id_t bit_block_calc_count(const bm::word_t* block)
+bm::id_t bit_block_count(const bm::word_t* block)
 {
     const bm::word_t* block_end = block + bm::set_block_size;
     bm::id_t count = 0;
@@ -3158,6 +3158,37 @@ bm::id_t bit_block_calc_count(const bm::word_t* block)
 #endif	
     return count;
 }
+
+/*!
+    @brief Bitcount for bit string
+
+    Added for back-compatibility purposes, not block aligned,
+    not SIMD accelerated
+
+    @ingroup bitfunc
+*/
+inline
+bm::id_t bit_block_calc_count(const bm::word_t* block,
+                              const bm::word_t* block_end)
+{
+    bm::id_t count = 0;
+    bm::word_t  acc = *block++;
+    do
+    {
+        bm::word_t in = *block++;
+        bm::word_t acc_prev = acc;
+        acc |= in;
+        if (acc_prev &= in)  // accumulator miss: counting bits
+        {
+            BM_INCWORD_BITCOUNT(count, acc);
+            acc = acc_prev;
+        }
+    } while (block < block_end);
+
+    BM_INCWORD_BITCOUNT(count, acc); // count-in remaining accumulator
+    return count;
+}
+
 
 
 /*!
@@ -4402,7 +4433,7 @@ bm::id_t bit_operation_sub_count(const bm::word_t* BMRESTRICT src1,
     
     if (IS_EMPTY_BLOCK(src2)) // nothing to diff
     {
-        return bit_block_calc_count(src1);
+        return bit_block_count(src1);
     }
     return bit_block_sub_count(src1, src2);
 }
@@ -4469,14 +4500,14 @@ bm::id_t bit_operation_or_count(const bm::word_t* BMRESTRICT src1,
     if (IS_EMPTY_BLOCK(src1))
     {
         if (!IS_EMPTY_BLOCK(src2))
-            return bit_block_calc_count(src2);
+            return bit_block_count(src2);
         else
             return 0; // both blocks are empty        
     }
     else
     {
         if (IS_EMPTY_BLOCK(src2))
-            return bit_block_calc_count(src1);
+            return bit_block_count(src1);
     }
 
     return bit_block_or_count(src1, src2);
@@ -4833,7 +4864,7 @@ bm::id_t bit_operation_xor_count(const bm::word_t* BMRESTRICT src1,
         if (IS_EMPTY_BLOCK(src1) && IS_EMPTY_BLOCK(src2))
             return 0;
         const bm::word_t* block = IS_EMPTY_BLOCK(src1) ? src2 : src1;
-        return bit_block_calc_count(block);
+        return bit_block_count(block);
     }
     return bit_block_xor_count(src1, src2);
 }

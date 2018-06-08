@@ -153,7 +153,7 @@ T ilog2_LUT(T x)
     Lookup table based short integer LOG2
 */
 template<>
-bm::gap_word_t ilog2_LUT<bm::gap_word_t>(bm::gap_word_t x)
+inline bm::gap_word_t ilog2_LUT<bm::gap_word_t>(bm::gap_word_t x)
 {
     bm::gap_word_t l = 0;
     if (x & 0xff00) 
@@ -170,7 +170,7 @@ bm::gap_word_t ilog2_LUT<bm::gap_word_t>(bm::gap_word_t x)
 #ifdef BM_x86
 #ifdef __GNUG__
 
-inline 
+BMFORCEINLINE
 unsigned bsf_asm32(unsigned int v)
 {
     unsigned r;
@@ -178,7 +178,8 @@ unsigned bsf_asm32(unsigned int v)
     return r;
 }
  
-BMFORCEINLINE unsigned bsr_asm32(unsigned int v)
+BMFORCEINLINE
+unsigned bsr_asm32(unsigned int v)
 {
     unsigned r;
     asm volatile(" bsrl %1, %0": "=r"(r): "rm"(v) );
@@ -191,14 +192,16 @@ BMFORCEINLINE unsigned bsr_asm32(unsigned int v)
 
 #if defined(_M_AMD64) || defined(_M_X64) // inline assembly not supported
 
-BMFORCEINLINE unsigned int bsr_asm32(unsigned int value)
+BMFORCEINLINE
+unsigned int bsr_asm32(unsigned int value)
 {
     unsigned long r;
     _BitScanReverse(&r, value);
     return r;
 }
 
-BMFORCEINLINE unsigned int bsf_asm32(unsigned int value)
+BMFORCEINLINE
+unsigned int bsf_asm32(unsigned int value)
 {
     unsigned long r;
     _BitScanForward(&r, value);
@@ -207,12 +210,14 @@ BMFORCEINLINE unsigned int bsf_asm32(unsigned int value)
 
 #else
 
-BMFORCEINLINE unsigned int bsr_asm32(unsigned int value)
+BMFORCEINLINE
+unsigned int bsr_asm32(unsigned int value)
 {   
   __asm  bsr  eax, value
 }
 
-BMFORCEINLINE unsigned int bsf_asm32(unsigned int value)
+BMFORCEINLINE
+unsigned int bsf_asm32(unsigned int value)
 {   
   __asm  bsf  eax, value
 }
