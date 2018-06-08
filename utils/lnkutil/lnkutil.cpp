@@ -1026,12 +1026,12 @@ void link_matrix::add_vector(unsigned id_from, std::vector<unsigned>& vect)
     //convert_to_delta(vect);
 
     sv_offs.set(id_from, off);
-    sv_sz.set(id_from, sz);  // save true size
+    sv_sz.set(id_from, unsigned(sz));  // save true size
     sz--;
     sv_11.set(id_from, vect[0]);
-    sv_1m.import(&vect[1], sz, off);
+    sv_1m.import(&vect[1], unsigned(sz), off);
     
-    off += sz;
+    off += unsigned(sz);
 }
 
 link_matrix            link_m;
