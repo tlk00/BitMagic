@@ -43,11 +43,11 @@ using namespace std;
 bm::chrono_taker::duration_map_type  timing_map;
 
 const unsigned benchmark_count = 10000;
-unsigned       vector_max = 400000000;
+unsigned            vector_max = 400000000;
 
 std::random_device rand_dev;  
 std::mt19937 gen(rand_dev()); // mersenne_twister_engine 
-std::uniform_int_distribution<> rand_dis(1, vector_max); // generate uniform numebrs for [1, vector_max]
+std::uniform_int_distribution<> rand_dis(1, int(vector_max)); // generate uniform numebrs for [1, vector_max]
 
 
 /// generate pseudo-random bit-vector, mix of blocks
@@ -134,8 +134,8 @@ void bv_count_range(const bm::bvector<>& bv)
         bm::chrono_taker tt1("2. bvector<>::count_range()", benchmark_count, &timing_map);
         for (unsigned i = 0; i < benchmark_count; ++i)
         {
-            unsigned from = rand_dis(gen);
-            unsigned to = rand_dis(gen);
+            unsigned from = unsigned(rand_dis(gen));
+            unsigned to = unsigned(rand_dis(gen));
             if (from > to)
                 swap(from, to);
             cnt += bv.count_range(from, to);
@@ -163,8 +163,8 @@ void bv_count_range_acc(const bm::bvector<>& bv)
         cnt = 0;
         for (unsigned i = 0; i < benchmark_count; ++i)
         {
-            unsigned from = rand_dis(gen);
-            unsigned to = rand_dis(gen);
+            unsigned from = unsigned(rand_dis(gen));
+            unsigned to = unsigned(rand_dis(gen));
             if (from > to)
                 swap(from, to);
             cnt += bv.count_range(from, to, blocks_cnt); // use blocks count for acceleration
@@ -190,7 +190,7 @@ void bv_count_to_acc(const bm::bvector<>& bv)
 
         for (unsigned i = 0; i < benchmark_count; ++i)
         {
-            unsigned to = rand_dis(gen);
+            unsigned to = unsigned(rand_dis(gen));
             cnt += bv.count_to(to, bc); // use blocks count for acceleration
         }
     }
@@ -215,8 +215,8 @@ void bv_count_to_range_acc(const bm::bvector<>& bv)
 
         for (unsigned i = 0; i < benchmark_count; ++i)
         {
-            unsigned from = rand_dis(gen);
-            unsigned to = rand_dis(gen);
+            unsigned from = unsigned(rand_dis(gen));
+            unsigned to = unsigned(rand_dis(gen));
             if (from > to)
                 swap(from, to);
             
@@ -244,8 +244,8 @@ void bv_count_and(const bm::bvector<>& bv)
         bm::bvector<> mask_bv(bm::BM_GAP); // use compressed mask, better seluts on long ranges
         for (unsigned i = 0; i < benchmark_count; ++i)
         {
-            unsigned from = rand_dis(gen);
-            unsigned to = rand_dis(gen);
+            unsigned from = unsigned(rand_dis(gen));
+            unsigned to = unsigned(rand_dis(gen));
             if (from > to)
                 swap(from, to);
 
@@ -274,7 +274,7 @@ void bv_counted_enumerator(const bm::bvector<>& bv)
 
         for (unsigned i = 0; i < benchmark_count/20; ++i)
         {
-            unsigned to = rand_dis(gen);
+            unsigned to = unsigned(rand_dis(gen));
             bm::bvector<>::counted_enumerator en = bv.first();
             for (; en.valid(); ++en)
             {
