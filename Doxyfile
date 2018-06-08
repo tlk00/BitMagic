@@ -76,6 +76,7 @@ INPUT                  = ./src/bm.h ./src/bmfunc.h  ./src/bmsimd.h \
 ./samples/bvsample15/sample15.cpp \
 ./samples/xsample01/xsample01.cpp \
 ./samples/xsample02/xsample02.cpp \
+./samples/xsample02/xsample03.cpp \
 ./samples/svsample01/svsample01.cpp \
 ./samples/svsample02/svsample02.cpp \
 ./samples/svsample03/svsample03.cpp \
