@@ -364,7 +364,7 @@ void tmatrix_distance(const T  tmatrix[BPC][BPS],
         const T* r1 = tmatrix[i];
         const T* r1_end = r1 + BPS;
         distance[i][i] = 
-            bm::bit_block_calc_count((bm::word_t*)r1, (bm::word_t*)r1_end);
+            bm::bit_block_calc_count((bm::word_t*)r1/*, (bm::word_t*)r1_end*/);
 
         for (unsigned j = i + 1; j < BPC; ++j)
         {

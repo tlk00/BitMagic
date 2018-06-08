@@ -68,29 +68,6 @@ extern "C"
 namespace bm
 {
 
-
-#ifdef BMCOUNTOPT
-
-# define BMCOUNT_INC ++count_;
-# define BMCOUNT_DEC --count_;
-# define BMCOUNT_VALID(x) count_is_valid_ = x;
-# define BMCOUNT_SET(x) count_ = x; count_is_valid_ = true;
-# define BMCOUNT_ADJ(x) if (x) ++count_; else --count_;
-
-#else
-
-# define BMCOUNT_INC
-# define BMCOUNT_DEC
-# define BMCOUNT_VALID(x)
-# define BMCOUNT_SET(x)
-# define BMCOUNT_ADJ(x)
-
-#endif
-
-
-
-
-
 /** @defgroup bmagic BitMagic Library
     BitMagic C++ Library
     For more information please visit: http://bitmagic.io
@@ -502,16 +479,7 @@ public:
         void go_first()
         {
             BM_ASSERT(this->bv_);
-
-        #ifdef BMCOUNTOPT
-            if (this->bv_->count_is_valid_ && 
-                this->bv_->count_ == 0)
-            {
-                this->invalidate();
-                return;
-            }
-        #endif
-
+            
             blocks_manager_type* bman = &(this->bv_->blockman_);
             if (!bman->is_init())
             {
@@ -1119,40 +1087,7 @@ public:
 public:
     /*! @name Construction, initialization, assignment */
     //@{
-
-#ifdef BMCOUNTOPT
-    bvector(strategy          strat      = BM_BIT,
-            const gap_word_t* glevel_len = bm::gap_len_table<true>::_len,
-            size_type         bv_size    = bm::id_max,
-            const Alloc&      alloc      = Alloc()) 
-    : count_(0),
-      count_is_valid_(true),
-      blockman_(glevel_len, bv_size, alloc),
-      new_blocks_strat_(strat),
-      size_(bv_size)
-    {}
-
-    bvector(size_type         bv_size,
-            bm::strategy      strat      = BM_BIT,
-            const gap_word_t* glevel_len = bm::gap_len_table<true>::_len,
-            const Alloc&      alloc = Alloc()) 
-    : count_(0),
-      count_is_valid_(true),
-      blockman_(glevel_len, bv_size, alloc),
-      new_blocks_strat_(strat),
-      size_(bv_size)
-    {}
-
-
-    bvector(const bm::bvector<Alloc>& bvect)
-     : count_(bvect.count_),
-       count_is_valid_(bvect.count_is_valid_),
-       blockman_(bvect.blockman_),
-       new_blocks_strat_(bvect.new_blocks_strat_),
-       size_(bvect.size_)
-    {}
-
-#else
+    
     /*!
         \brief Constructs bvector class
         \param strat - operation mode strategy, 
@@ -1206,9 +1141,7 @@ public:
     
     ~bvector() BMNOEXEPT
     {}
-
-#endif
-
+    
     /*!
         \brief Explicit post-construction initialization
     */
@@ -1237,11 +1170,6 @@ public:
         blockman_.move_from(bvect.blockman_);
         size_ = bvect.size_;
         new_blocks_strat_ = bvect.new_blocks_strat_;
-            
-#ifdef BMCOUNTOPT
-        count_ = bvect.count_;
-        count_is_valid_ = bvect.count_is_valid_;
-#endif
     }
 
 
@@ -1260,10 +1188,6 @@ public:
         {
             this->set_bit_no_check(*it_start);
         }
-#ifdef BMCOUNTOPT
-        count_ = (bm::id_t)il.size();
-        count_is_valid_ = true;
-#endif
     }
     
     /*! 
@@ -1461,7 +1385,6 @@ public:
     */
     bvector<Alloc>& set()
     {
-        BMCOUNT_VALID(false)
         set_range(0, size_ - 1, true);
         return *this;
     }
@@ -1472,8 +1395,6 @@ public:
         Fast set bit method, without safety net.
         Make sure you call bvector<>::init() before setting bits with this
         function.
-     
-        Side effect: invalidates bit-count optimization (BMCOUNTOPT)
      
         \param n - bit number
     */
@@ -1519,7 +1440,6 @@ public:
     void clear(bool free_mem = false)
     {
         blockman_.set_all_zero(free_mem);
-        BMCOUNT_SET(0);
     }
 
     /*!
@@ -1670,26 +1590,18 @@ public:
     bm::id_t count_to_test(bm::id_t n, const blocks_count&  blocks_cnt) const;
 
 
-    /*! Recalculate bitcount
-        this function only make sense when BMCOUNTOPT is defined
-        and bvector<> keeps its bitcount. Otherwise, equivalent of cout().
+    /*! Recalculate bitcount (deprecated)
     */
     bm::id_t recalc_count()
     {
-        BMCOUNT_VALID(false)
         return count();
     }
     
     /*!
-        Disables count cache. Next call to count() or recalc_count()
-        restores count caching.
-        
-        @note Works only if BMCOUNTOPT enabled(defined). 
-        Othewise does nothing.
+        Disables count cache. (deprecated).
     */
     void forget_count()
     {
-        BMCOUNT_VALID(false)    
     }
     //@}
     
@@ -1725,11 +1637,6 @@ public:
     */
     bool any() const
     {
-    #ifdef BMCOUNTOPT
-        if (count_is_valid_)
-            return count_ != 0;
-    #endif
-        
         word_t*** blk_root = blockman_.top_blocks_root();
         if (!blk_root) 
             return false;
@@ -1851,7 +1758,6 @@ public:
     */
     bm::bvector<Alloc>& bit_or(const  bm::bvector<Alloc>& vect)
     {
-        BMCOUNT_VALID(false);
         combine_operation(vect, BM_OR);
         return *this;
     }
@@ -1862,7 +1768,6 @@ public:
     */
     bm::bvector<Alloc>& bit_and(const bm::bvector<Alloc>& bv)
     {
-        BMCOUNT_VALID(false);
         combine_operation_and(bv);
         return *this;
     }
@@ -1873,7 +1778,6 @@ public:
     */
     bm::bvector<Alloc>& bit_xor(const bm::bvector<Alloc>& vect)
     {
-        BMCOUNT_VALID(false);
         combine_operation(vect, BM_XOR);
         return *this;
     }
@@ -1884,7 +1788,6 @@ public:
     */
     bm::bvector<Alloc>& bit_sub(const bm::bvector<Alloc>& bv)
     {
-        BMCOUNT_VALID(false);
         combine_operation_sub(bv);
         return *this;
     }
@@ -2178,7 +2081,6 @@ private:
                            gap_word_t*           tmp_buf);
 
 private:
-
     /**
        \brief Extends GAP block to the next level or converts it to bit block.
        \param nb - Block's linear index.
@@ -2195,19 +2097,7 @@ private:
     void set_range_no_check(bm::id_t left,
                             bm::id_t right,
                             bool     value);
-public:
-
-
-
 private:
-
-// This block defines two additional hidden variables used for bitcount
-// optimization, in rare cases can make bitvector thread unsafe.
-#ifdef BMCOUNTOPT
-    mutable id_t      count_;            //!< number of 1 bits in the vector
-    mutable bool      count_is_valid_;   //!< actualization flag
-#endif
-
     blocks_manager_type  blockman_;         //!< bitblocks manager
     strategy             new_blocks_strat_; //!< block allocation strategy
     size_type            size_;             //!< size in bits
@@ -2297,11 +2187,6 @@ void bvector<Alloc>::move_from(bvector<Alloc>& bvect) BMNOEXEPT
         blockman_.move_from(bvect.blockman_);
         size_ = bvect.size_;
         new_blocks_strat_ = bvect.new_blocks_strat_;
-        
-#ifdef BMCOUNTOPT
-        count_ = bvect.count_;
-        count_is_valid_ = bvect.count_is_valid_;
-#endif
     }
 }
 
@@ -2329,8 +2214,6 @@ bvector<Alloc>& bvector<Alloc>::set_range(bm::id_t left,
     BM_ASSERT(left < size_);
     BM_ASSERT(right < size_);
 
-    BMCOUNT_VALID(false)
-
     set_range_no_check(left, right, value);
 
     return *this;
@@ -2341,22 +2224,17 @@ bvector<Alloc>& bvector<Alloc>::set_range(bm::id_t left,
 template<typename Alloc> 
 bm::id_t bvector<Alloc>::count() const
 {
-#ifdef BMCOUNTOPT
-    if (count_is_valid_) return count_;
-#endif
     if (!blockman_.is_init())
         return 0;
     
     word_t*** blk_root = blockman_.top_blocks_root();
     if (!blk_root) 
     {
-        BMCOUNT_SET(0);
         return 0;
     }    
     typename blocks_manager_type::block_count_func func(blockman_);
     for_each_nzblock2(blk_root, blockman_.top_block_size(), func);
 
-    BMCOUNT_SET(func.count());
     return func.count();
 }
 
@@ -2590,11 +2468,7 @@ bm::id_t bvector<Alloc>::count_range(bm::id_t left,
 template<typename Alloc>
 bvector<Alloc>& bvector<Alloc>::invert()
 {
-    BMCOUNT_VALID(false)
-    
     blockman_.reserve_top_blocks(bm::set_array_size);
-//    if (!blockman_.is_init())
-//        blockman_.init_tree();
 
     bm::word_t*** blk_root = blockman_.top_blocks_root();
     typename blocks_manager_type::block_invert_func func(blockman_);    
@@ -2867,10 +2741,6 @@ void bvector<Alloc>::swap(bvector<Alloc>& bvect) BMNOEXEPT
     {
         blockman_.swap(bvect.blockman_);
         bm::xor_swap(size_,bvect.size_);
-#ifdef BMCOUNTOPT
-        bm::xor_swap(count_, bvect.count_);
-        bm::xor_swap(count_is_valid_, bvect.count_is_valid_);
-#endif
     }
 }
 
@@ -2947,8 +2817,6 @@ void bvector<Alloc>::set_bit_no_check(bm::id_t n)
     BM_ASSERT(blockman_.is_init());
     BM_ASSERT_THROW(n < bm::id_max, BM_ERR_RANGE);
     
-    BMCOUNT_VALID(false)
-    
     bool val = true; // set bit
     
     // calculate logical block number
@@ -3017,7 +2885,6 @@ bool bvector<Alloc>::set_bit_no_check(bm::id_t n, bool val)
             if ( ((*word) & mask) == 0 )
             {
                 *word |= mask; // set bit
-                BMCOUNT_INC;
                 return true;
             }
         }
@@ -3026,7 +2893,6 @@ bool bvector<Alloc>::set_bit_no_check(bm::id_t n, bool val)
             if ((*word) & mask)
             {
                 *word &= ~mask; // clear bit
-                BMCOUNT_DEC;
                 return true;
             }
         }
@@ -3045,8 +2911,6 @@ bool bvector<Alloc>::gap_block_set(bm::gap_word_t* gap_blk,
         bm::gap_set_value(val, gap_blk, nbit, &is_set);
     if (is_set)
     {
-        BMCOUNT_ADJ(val)
-
         unsigned threshold =  bm::gap_limit(gap_blk, blockman_.glen());
         if (new_block_len > threshold)
         {
@@ -3087,7 +2951,6 @@ bool bvector<Alloc>::inc(bm::id_t n)
         is_set = ((*word) & mask);
         
         *word = (is_set) ? (*word & ~mask) : (*word | mask);
-        BMCOUNT_VALID(false);
     }
     return is_set;
 }
@@ -3149,12 +3012,10 @@ bool bvector<Alloc>::set_bit_conditional_impl(bm::id_t n,
             if (val)          // set bit
             {
                 *word |= mask;
-                BMCOUNT_INC;
             }
             else               // clear bit
             {
                 *word &= ~mask;
-                BMCOUNT_DEC;
             }
             return true;
         }
@@ -3211,12 +3072,10 @@ bool bvector<Alloc>::and_bit_no_check(bm::id_t n, bool val)
             if (new_val)       // set bit
             {
                 *word |= mask;
-                BMCOUNT_INC;
             }
             else               // clear bit
             {
                 *word &= ~mask;
-                BMCOUNT_DEC;
             }
             return true;
         }
@@ -3500,8 +3359,7 @@ bm::id_t bvector<Alloc>::check_or_next_extract(bm::id_t prev)
                         gap_set_value(0, BMGAP_PTR(block), nbit, &is_set);
                     if (is_set)
                     {
-                        BMCOUNT_DEC
-                        unsigned threshold = 
+                        unsigned threshold =
                             bm::gap_limit(BMGAP_PTR(block), blockman_.glen());
                         if (new_block_len > threshold) 
                         {
@@ -3524,9 +3382,7 @@ bm::id_t bvector<Alloc>::check_or_next_extract(bm::id_t prev)
                 {
                     if (bm::bit_find_in_block(block, nbit, &prev)) 
                     {
-                        BMCOUNT_DEC
-
-                        unsigned nbit1 = 
+                        unsigned nbit1 =
                             unsigned(prev & bm::set_block_mask); 
                         unsigned nword = 
                             unsigned(nbit1 >> bm::set_word_shift);
