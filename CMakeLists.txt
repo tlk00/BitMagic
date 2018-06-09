@@ -19,9 +19,9 @@ if ("${CMAKE_CXX_COMPILER_ID}" STREQUAL "GNU" OR
     "${CMAKE_CXX_COMPILER_ID}" STREQUAL "Clang")
 
     if ("${BMOPTFLAGS}" STREQUAL "BMSSE42OPT")
-	    set(bmoptf "-march=nehalem -msse4.2 -DBMSSE42OPT")
+	    set(bmoptf "-march=nehalem -O2 -msse4.2 -DBMSSE42OPT")
     elseif("${BMOPTFLAGS}" STREQUAL "BMAVX2OPT")
-        set(bmoptf "-march=skylake -mavx2 -DBMAVX2OPT")
+        set(bmoptf "-march=skylake -mavx2 -O2 -DBMAVX2OPT")
     else()
         set(bmoptf "-march=core2")
     endif()

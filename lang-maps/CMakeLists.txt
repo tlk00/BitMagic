@@ -4,6 +4,8 @@ project(bmlangmap)
 
 
 set( CMAKE_VERBOSE_MAKEFILE on )
+set (CMAKE_CXX_STANDARD 11)
+
 
 set(CMAKE_BINARY_DIR ${CMAKE_SOURCE_DIR}/build/bin)
 set(EXECUTABLE_OUTPUT_PATH ${CMAKE_BINARY_DIR})
@@ -17,9 +19,9 @@ if ("${CMAKE_CXX_COMPILER_ID}" STREQUAL "GNU" OR
     "${CMAKE_CXX_COMPILER_ID}" STREQUAL "Clang")
 
     if ("${BMOPTFLAGS}" STREQUAL "BMSSE42OPT")
-        set(bmoptf "-march=nehalem -msse4.2 -DBMSSE42OPT")
+        set(bmoptf "-march=nehalem -O2 -msse4.2 -DBMSSE42OPT")
     elseif("${BMOPTFLAGS}" STREQUAL "BMAVX2OPT")
-        set(bmoptf "-march=skylake -mavx2 -DBMAVX2OPT")
+        set(bmoptf "-march=skylake -mavx2 -O2 -DBMAVX2OPT")
     else()
         #set(bmoptf "-march=core2")
     endif()
