@@ -1630,6 +1630,7 @@ void TI_MetricTest()
     delete bset2;    
 }
 
+#if 0
 static
 void BitBlockTransposeTest()
 {
@@ -1719,6 +1720,7 @@ void BitBlockTransposeTest()
     }
 
 }
+#endif
 
 static
 void BitBlockRotateTest()
@@ -2067,8 +2069,6 @@ int main(void)
     BitCompareTest();
 
     FindTest();
-
-    BitBlockTransposeTest();
 
     BitBlockRotateTest();
 
