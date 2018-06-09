@@ -20,7 +20,6 @@ For more information please visit:  http://bitmagic.io
 //#define BMSSE2OPT
 //#define BMSSE42OPT
 //#define BMAVX2OPT
-#define BMCOUNTOPT
 //#define BM_USE_EXPLICIT_TEMP
 
 #include <stdio.h>
@@ -11621,7 +11620,7 @@ void TestSIMDUtils()
             unsigned short v = buf[i];
             idx = bm::sse2_gap_find(buf, v, vsize);
             assert(idx == i);
-            idx = bm::sse2_gap_find(buf, v - 1, vsize);
+            idx = bm::sse2_gap_find(buf, gap_word_t(v - 1), vsize);
             assert(idx == i);
         }
     }
@@ -11638,7 +11637,7 @@ void TestSIMDUtils()
             unsigned short v = buf[i];
             idx = bm::sse2_gap_find(buf, v, vsize);
             assert(idx == i);
-            idx = bm::sse2_gap_find(buf, v - 1, vsize);
+            idx = bm::sse2_gap_find(buf, gap_word_t(v - 1), vsize);
             assert(idx == i);
         }
     }
@@ -11654,7 +11653,7 @@ void TestSIMDUtils()
             unsigned short v = buf[i];
             idx = bm::sse2_gap_find(buf, v, vsize);
             assert(idx == i);
-            idx = bm::sse2_gap_find(buf, v - 1, vsize);
+            idx = bm::sse2_gap_find(buf, gap_word_t(v - 1), vsize);
             assert(idx == i);
         }
     }
@@ -11673,7 +11672,7 @@ void TestSIMDUtils()
             unsigned short v = buf[i];
             idx = bm::sse2_gap_find(buf, v, vsize);
             assert(idx == i);
-            idx = bm::sse2_gap_find(buf, v - 1, vsize);
+            idx = bm::sse2_gap_find(buf, gap_word_t(v - 1), vsize);
             assert(idx == i);
         }
     }
@@ -11690,7 +11689,7 @@ void TestSIMDUtils()
             unsigned short v = buf[i];
             idx = bm::sse2_gap_find(buf, v, vsize);
             assert(idx == i);
-            idx = bm::sse2_gap_find(buf, v - 1, vsize);
+            idx = bm::sse2_gap_find(buf, gap_word_t(v - 1), vsize);
             assert(idx == i);
         }
     }
@@ -11708,7 +11707,7 @@ void TestSIMDUtils()
             unsigned short v = buf[i];
             idx = bm::sse2_gap_find(buf, v, vsize);
             assert(idx == i);
-            idx = bm::sse2_gap_find(buf, v - 1, vsize);
+            idx = bm::sse2_gap_find(buf, gap_word_t(v - 1), vsize);
             assert(idx == i || (buf[i - 1] == v - 1));
         }
     }
@@ -11728,7 +11727,7 @@ void TestSIMDUtils()
             }
             idx = bm::sse2_gap_find(buf, v, vsize);
             assert(idx == i);
-            idx = bm::sse2_gap_find(buf, v - 1, vsize);
+            idx = bm::sse2_gap_find(buf, gap_word_t(v - 1), vsize);
             assert(idx == i || (buf[i - 1] == v - 1));
         }
     }
@@ -11752,7 +11751,7 @@ void TestSIMDUtils()
             }
             idx = bm::sse2_gap_find(buf, v, vsize);
             assert(idx == i);
-            idx = bm::sse2_gap_find(buf, v - 1, vsize);
+            idx = bm::sse2_gap_find(buf, gap_word_t(v - 1), vsize);
             assert(idx == i || (buf[i - 1] == v - 1));
         }
     }
@@ -11776,7 +11775,7 @@ void TestSIMDUtils()
             }
             idx = bm::sse2_gap_find(buf, v, vsize);
             assert(idx == i);
-            idx = bm::sse2_gap_find(buf, v - 1, vsize);
+            idx = bm::sse2_gap_find(buf, gap_word_t(v - 1), vsize);
             assert(idx == i || (buf[i - 1] == v - 1));
         }
     }
