@@ -17,11 +17,10 @@ For more information please visit:  http://bitmagic.io
 */
 
 
-//#define BM_SET_MMX_GUARD
 //#define BMSSE2OPT
 //#define BMSSE42OPT
 //#define BMAVX2OPT
-//#define BMCOUNTOPT
+#define BMCOUNTOPT
 //#define BM_USE_EXPLICIT_TEMP
 
 #include <stdio.h>
