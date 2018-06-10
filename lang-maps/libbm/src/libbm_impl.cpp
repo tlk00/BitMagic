@@ -586,8 +586,28 @@ int BM_bvector_find_reverse(BM_BVHANDLE h,
     BM_CATCH_ALL
     ETRY;
     return BM_OK;
-
 }
+
+// -----------------------------------------------------------------
+
+int BM_bvector_find_rank(BM_BVHANDLE h, unsigned int rank,
+                                        unsigned int from,
+                                        unsigned int* pidx,
+                                        int* pfound)
+{
+    if (!h || !pidx || !pfound)
+        return BM_ERR_BADARG;
+    
+    BM_TRY
+    {
+        const TBM_bvector* bv = (TBM_bvector*)h;
+        *pfound = bv->find_rank(rank, from, *pidx);
+    }
+    BM_CATCH_ALL
+    ETRY;
+    return BM_OK;
+}
+
 
 // -----------------------------------------------------------------
 

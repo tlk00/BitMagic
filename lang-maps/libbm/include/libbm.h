@@ -312,6 +312,20 @@ BM_API_EXPORT int BM_bvector_find(BM_BVHANDLE h,
 BM_API_EXPORT int BM_bvector_find_reverse(BM_BVHANDLE h,
                      unsigned int* ppos, int* pfound);
 
+/* Finds bit-vector position (index) with specified rank
+   starting from another poistion (if 0 rank is absolute).
+ 
+   rank - search rank value
+   from - bit-vector position to find from
+   pidx - (out) position with relative rank
+   pfound - 0 if nothing found
+*/
+BM_API_EXPORT int BM_bvector_find_rank(BM_BVHANDLE h,
+                                       unsigned int rank,
+                                       unsigned int from,
+                                       unsigned int* pidx,
+                                       int* pfound);
+
 
 /* find first 1 bit index in the vector
 

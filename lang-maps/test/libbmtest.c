@@ -466,6 +466,18 @@ int RangeTest()
         res = 1; goto free_mem;
     }
     
+    {
+    unsigned int idx;
+    int found;
+    res = BM_bvector_find_rank(bmh, 10, 11, &idx, &found);
+    BMERR_CHECK_GOTO(res, "BM_bvector_find_rank()", free_mem);
+    if (idx != 20)
+    {
+        printf("incorrrect find_rank %i \n", idx);
+        res = 1; goto free_mem;
+    }
+    }
+    
     res = BM_bvector_count_range(bmh, 0, 9, &count);
     BMERR_CHECK_GOTO(res, "BM_bvector_count_range()", free_mem);
     if (count != 0)
