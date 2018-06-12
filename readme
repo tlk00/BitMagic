@@ -24,18 +24,23 @@ Features:
 - statistical algorithms to efficiently construct similarity and distance metrics, measure similarity between bit-vectors, 
 integer sets and compressed BLOBs
 
-- sparse vector(s) for native int types using bit transposition and separate compression of bit-plains, 
-with support of NULL values for construction of in-memory columnar structures. 
+- operations with rank: population count distances on bit-vector
 
-- algorithms on sparse vectors (dynamic range clipping, etc) 
+- sparse vector(s) for native int types using bit transposition and separate compression of bit-plains, 
+with support of NULL values (unassigned) for construction of in-memory columnar structures. Bit-transposed
+sparse vectors can be used for on-the fly compression of astronomical, molecular biology or other data,
+efficient store of associations for graphs, etc.
+
+- algorithms on sparse vectors: dynamic range clipping, search, group theory image (re-mapping).
+Collection of algorithms is increasing, please check our samples and the API lists. 
 
 Features In Progress:
-
-- functional operations on binary sets: translations between sets, mathematical images 
 
 - compressed binary relational and adjacency matrixes and operations on matrixes for Entity-Relationship acceleration, graph operations, materialized RDBMS joins, etc 
 
 - portable C-library layer working as a bridge to high level languages like Python, Java, Scala, .Net 
+Please visit our repository at: 
+https://github.com/tlk00/BitMagicC
 
 
 License:
@@ -104,7 +109,7 @@ All BM fine tuning parameters are controlled by the preprocessor defines.
 BM library supports CXX-11. Move semantics, noexept, etc.
 use
 #define BM_NO_CXX11
-to explicitly disable use of CXX11 features for your build
+to explicitly disable use of CXX11 features for your build.
 
 =================================================================================
 
@@ -121,7 +126,7 @@ You will need compiler supporting Intel SIMD intrinsics (MSVC, GCC - are ok).
 
 To turn on AVX2 - #define BMAVX2OPT
 This will automatically enable AVX2 256-bit SIMD, popcount (SSE4.2) and other 
-compatible harware instructions.
+compatible hardware instructions.
 
 BM library does NOT support multiple code paths and runtime CPU identification.
 You have to build specifically for your target system or use default portable
@@ -152,17 +157,8 @@ cmake -DBMOPTFLAGS:STRING=BMAVX2OPT ..
 
 =================================================================================
 
-BM library uses ‘register’ keyword, but it is disabled now because in C++11 
-it is obsolete. 
-Use 
-#define BMREGISTER register
-to turn it on.
-
-
-=================================================================================
-
 BM library supports "restrict" keyword, some compilers 
-(for example Intel C++ for Itanium) generate better
+(for example Intel C++) generate better
 code (out of order load-stores) when restrict keyword is helping. This option is 
 turned OFF by default since most of the C++ compilers does not support it. 
 To turn it ON please #define BM_HASRESTRICT in your project. Some compilers
@@ -172,26 +168,13 @@ to correct keyword.
 =================================================================================
 
 
-Bitcounting optimization can be turned ON by defining BMCOUNTOPT.
-Please note this optimization is not completely thread safe and in general may not
-be needed on systems with SSE4.2 and up with available harware popcnt and vectrization. 
-bvector<> template keeps mutable variable inside it and update it 
-when it count() function is called. It creates a certain chance that this
-function will be called from multiple threads and conflict/crash on updating this 
-variable.
-
-If BMCOUNTOPT is not defined (default) BM library should be considered thread
-safe for all reads - all "const" on functions, methods, parameters are honored. 
-
-=================================================================================
-
 If you want to use BM library in STL-free project you need to define
 BM_NO_STL variable. It will disable inclusion of certain headers and also 
-will make bvector iterators incompatible with STL algorithms 
+will make bm::bvector<> iterators incompatible with STL algorithms 
 (which you said you are not using anyway).
 
-This rule only applies to the core bvector methods. Auxiliary algorithms may use 
-STL.
+This rule only applies to the core bm::bvector<> methods. 
+Auxiliary algorithms may still use STL.
 
 =================================================================================
 
