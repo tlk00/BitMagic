@@ -153,9 +153,9 @@ public:
      \param sv_brel   - binary relation sparse vector
      \param bv_out - output set as a bit-vector
     */
-    void run(typename SV::bvector_type& bv_in,
+    void run(const bvector_type&        bv_in,
              const    SV&               sv_brel,
-             typename SV::bvector_type& bv_out)
+             bvector_type&              bv_out)
     {
         if (sv_brel.empty())
             return; // nothing to do
