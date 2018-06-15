@@ -593,7 +593,6 @@ public:
     {
         if (temp_block_)
             alloc_.free_bit_block(temp_block_);
-        //deinit_tree();
         destroy_tree();
     }
     
@@ -1629,17 +1628,26 @@ private:
     
     // ----------------------------------------------------------------
     
-    void copy(const blocks_manager& blockman)
+    void copy(const blocks_manager& blockman,
+              unsigned block_from = 0, unsigned block_to = 65535)
     {
-        BM_ASSERT(blockman.is_init());
-        
         unsigned arg_top_blocks = blockman.top_block_size();
         this->reserve_top_blocks(arg_top_blocks);
         
         bm::word_t*** blk_root = top_blocks_root();
         bm::word_t*** blk_root_arg = blockman.top_blocks_root();
+        
+        unsigned i_from, j_from, i_to, j_to;
+        get_block_coord(block_from, i_from, j_from);
+        get_block_coord(block_to, i_to, j_to);
+        
+        if (i_to >= arg_top_blocks-1)
+        {
+            i_to = arg_top_blocks-1;
+            j_to = bm::set_array_size-1;
+        }
 
-        for (unsigned i = 0; i < arg_top_blocks; ++i)
+        for (unsigned i = i_from; i <= i_to; ++i)
         {
             bm::word_t** blk_blk_arg = blk_root_arg[i];
             if (!blk_blk_arg)
@@ -1650,7 +1658,8 @@ private:
             bm::word_t** blk_blk = blk_root[i] = (bm::word_t**)alloc_.alloc_ptr();
             ::memset(blk_blk, 0, bm::set_array_size * sizeof(bm::word_t*));
             
-            unsigned j = 0;
+            unsigned j = (i == i_from) ? j_from : 0;
+            unsigned j_limit = (i == i_to) ? j_to+1 : bm::set_array_size;
             bm::word_t* blk;
             const bm::word_t* blk_arg;
             do
@@ -1678,9 +1687,10 @@ private:
                     blk_blk[j] = blk;
                 }
                 ++j;
-            } while (j < bm::set_array_size);
+            } while (j < j_limit);
         } // for i
     }
+
 
 private:
     /// maximum addresable bits

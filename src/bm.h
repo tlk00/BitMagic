@@ -1139,6 +1139,22 @@ public:
            size_(bvect.size_)
     {}
     
+    /*!
+        \brief Copy constructor for range copy [left..right]
+     
+        \sa copy_range
+    */
+    bvector(const bvector<Alloc>& bvect, bm::id_t left, bm::id_t right)
+        : blockman_(bvect.blockman_.glevel_len_, bvect.blockman_.max_bits_, bvect.blockman_.alloc_),
+          new_blocks_strat_(bvect.new_blocks_strat_),
+          size_(bvect.size_)
+    {
+        if (!bvect.blockman_.is_init())
+            return;
+        copy_range_no_check(bvect, left, right);
+    }
+
+    
     ~bvector() BMNOEXEPT
     {}
     
@@ -1315,7 +1331,9 @@ public:
         BM_ASSERT_THROW(n < size_, BM_ERR_RANGE);
 
         if (!blockman_.is_init())
+        {
             blockman_.init_tree();
+        }
         return set_bit_no_check(n, val);
     }
 
@@ -1331,7 +1349,9 @@ public:
         BM_ASSERT_THROW(n < size_, BM_ERR_RANGE);
         
         if (!blockman_.is_init())
+        {
             blockman_.init_tree();
+        }
         return and_bit_no_check(n, val);
     }
     
@@ -1415,6 +1435,17 @@ public:
     bvector<Alloc>& set_range(bm::id_t left,
                               bm::id_t right,
                               bool     value = true);
+    
+    /*!
+        \brief Copy all bits in the specified closed interval [left,right]
+
+        \param bvect - source bit-vector
+        \param left  - interval start
+        \param right - interval end (closed interval)
+    */
+    void copy_range(const bvector<Alloc>& bvect,
+                    bm::id_t left,
+                    bm::id_t right);
 
     /*!
        \brief Clears bit n.
@@ -2079,6 +2110,10 @@ private:
                            unsigned              res_len,
                            bm::word_t*           blk,
                            gap_word_t*           tmp_buf);
+    
+    void copy_range_no_check(const bvector<Alloc>& bvect,
+                             bm::id_t left,
+                             bm::id_t right);
 
 private:
     /**
@@ -4232,12 +4267,17 @@ void bvector<Alloc>::set_range_no_check(bm::id_t left,
     {
         for (; nb < nb_to; ++nb)
         {
-            block = blockman_.get_block(nb);
-            if (block == 0)  // nothing to do
+            int no_more_blocks;
+            block = blockman_.get_block(nb, &no_more_blocks);
+            if (no_more_blocks)
+            {
+                BM_ASSERT(block == 0);
+                return;
+            }
+            if (!block)  // nothing to do
                 continue;
             bool is_gap = BM_IS_GAP(block);
             blockman_.set_block(nb, 0, false /*bit*/);
-            //blockman_.set_block_bit(nb);
 
             if (is_gap) 
             {
@@ -4275,6 +4315,55 @@ void bvector<Alloc>::set_range_no_check(bm::id_t left,
 }
 
 //---------------------------------------------------------------------
+
+template<class Alloc>
+void bvector<Alloc>::copy_range(const bvector<Alloc>& bvect,
+                                bm::id_t left,
+                                bm::id_t right)
+{
+    if (!bvect.blockman_.is_init())
+    {
+        clear();
+        return;
+    }
+    
+    if (blockman_.is_init())
+    {
+        blockman_.deinit_tree();
+    }
+    copy_range_no_check(bvect, left, right);
+}
+
+
+//---------------------------------------------------------------------
+
+template<class Alloc>
+void bvector<Alloc>::copy_range_no_check(const bvector<Alloc>& bvect,
+                                         bm::id_t left,
+                                         bm::id_t right)
+{
+    BM_ASSERT(left <= right);
+    BM_ASSERT_THROW(right < bm::id_max, BM_ERR_RANGE);
+    
+    // copy all block(s) belonging to our range
+    unsigned nblock_left  = unsigned(left  >>  bm::set_block_shift);
+    unsigned nblock_right = unsigned(right >>  bm::set_block_shift);
+    
+    blockman_.copy(bvect.blockman_, nblock_left, nblock_right);
+    
+    // clear the flanks
+    //
+    if (left)
+    {
+        bm::id_t from =
+            (left + bm::gap_max_bits >= left) ? 0u : left - bm::gap_max_bits;
+        set_range(from, left-1, false);
+    }
+    if (right+1 < bm::id_max)
+    {
+        set_range(right+1, bm::id_max-1, false);
+    }
+}
 
 
 } // namespace
