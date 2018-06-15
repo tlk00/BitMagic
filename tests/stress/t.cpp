@@ -2451,7 +2451,7 @@ void RangeRandomFillTest()
     }
 }
 
-
+static
 void RangeCopyTest()
 {
     cout << "----------------------------------- RangeCopyTest" << endl;
