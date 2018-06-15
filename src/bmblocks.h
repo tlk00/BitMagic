@@ -1676,10 +1676,11 @@ private:
                     }
                     else
                     {
-                        if (IS_FULL_BLOCK(blk_arg))
+                        if (blk_arg == FULL_BLOCK_FAKE_ADDR /*IS_FULL_BLOCK(blk_arg)*/)
                             blk = FULL_BLOCK_FAKE_ADDR;
                         else
                         {
+                            BM_ASSERT(!IS_FULL_BLOCK(blk_arg));
                             blk = alloc_.alloc_bit_block();
                             bm::bit_block_copy(blk, blk_arg);
                         }

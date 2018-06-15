@@ -2769,7 +2769,7 @@ void gap_init_range_block(T* buf,
     {
         if (to == set_max - 1)
         {
-            gap_set_all(buf, set_max, value);
+            bm::gap_set_all(buf, set_max, value);
         }
         else
         {
