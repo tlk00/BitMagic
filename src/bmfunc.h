@@ -2751,18 +2751,18 @@ template<class T> void gap_set_all(T* buf,
     \param from - one block start
     \param to   - one block end
     \param value - (block value)1 or 0
-    \param set_max - max possible bitset length
-    
+ 
    @ingroup gapfunc
 */
 template<class T> 
 void gap_init_range_block(T* buf,
                           T  from,
                           T  to,
-                          T  value,
-                          unsigned set_max)
+                          T  value)
+                          //unsigned set_max)
 {
     BM_ASSERT(value == 0 || value == 1);
+    const unsigned set_max = bm::bits_in_block;
 
     unsigned gap_len;
     if (from == 0)
