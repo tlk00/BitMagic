@@ -155,36 +155,7 @@ public:
     */
     void run(const bvector_type&        bv_in,
              const    SV&               sv_brel,
-             bvector_type&              bv_out)
-    {
-        if (sv_brel.empty())
-            return; // nothing to do
-        
-        bv_out.init(); // just in case to "fast set" later
-        
-        const typename SV::bvector_type * bv_non_null = sv_brel.get_null_bvector(); 
-        if (bv_non_null) // NULL-able association vector
-        {
-            bv_product_ = bv_in;
-            bv_product_.bit_and(*bv_non_null);
-        }
-        else
-        {
-            bv_product_.clear(true);
-            bv_product_.set_range(0, sv_brel.size()-1);
-            bv_product_.bit_and(bv_in);
-        }
-        
-        typename SV::bvector_type::enumerator en(bv_product_.first());
-        for (; en.valid(); ++en)
-        {
-            auto idx = *en;
-            idx = sv_brel.translate_address(idx);
-            typename SV::value_type translated_id = sv_brel.get(idx);
-            bv_out.set_bit_no_check(translated_id);
-        } // for en
-    }
-    
+             bvector_type&              bv_out);
 protected:
     bvector_type   bv_product_;
 };
@@ -310,6 +281,43 @@ private:
     allocator_pool_type  pool_;
 };
 
+
+//----------------------------------------------------------------------------
+//
+//----------------------------------------------------------------------------
+
+template<typename SV>
+void set2set_11_transform<SV>::run(const bvector_type&        bv_in,
+                                   const    SV&               sv_brel,
+                                   bvector_type&              bv_out)
+{
+    if (sv_brel.empty())
+        return; // nothing to do
+
+    bv_out.init(); // just in case to "fast set" later
+
+    const typename SV::bvector_type * bv_non_null = sv_brel.get_null_bvector();
+    if (bv_non_null) // NULL-able association vector
+    {
+        bv_product_ = bv_in;
+        bv_product_.bit_and(*bv_non_null);
+    }
+    else
+    {
+        bv_product_.clear(true);
+        bv_product_.set_range(0, sv_brel.size()-1);
+        bv_product_.bit_and(bv_in);
+    }
+
+    typename SV::bvector_type::enumerator en(bv_product_.first());
+    for (; en.valid(); ++en)
+    {
+        auto idx = *en;
+        idx = sv_brel.translate_address(idx);
+        typename SV::value_type translated_id = sv_brel.get(idx);
+        bv_out.set_bit_no_check(translated_id);
+    } // for en
+}
 
 //----------------------------------------------------------------------------
 //

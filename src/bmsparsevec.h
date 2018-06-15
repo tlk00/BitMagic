@@ -1027,7 +1027,7 @@ void sparse_vector<Val, BV>::import(const value_type* arr,
     // clear all plains in the range to provide corrrect import of 0 values
     this->clear_range(offset, offset + size - 1);
     
-    // transposition algorithm uses bitscen to find index bits and store it
+    // transposition algorithm uses bitscan to find index bits and store it
     // in temporary matrix (list for each bit plain), matrix here works
     // when array gets to big - the list gets loaded into bit-vector using
     // bulk load algorithm, which is faster than single bit access
