@@ -1212,6 +1212,51 @@ bool FindRank(const T& bv, bm::id_t rank, bm::id_t from, bm::id_t& pos)
     return res;
 }
 
+inline
+void CheckRangeCopy(const bvect& bv, unsigned from, unsigned to)
+{
+    bm::id_t f1, l1, f2, l2;
+    
+    bvect bv_cp(bv, from, to);
+    
+    bvect bv_control;
+    bv_control.set_range(from, to);
+    bv_control &= bv;
+    
+    int res = bv_control.compare(bv_cp);
+    if (res != 0)
+    {
+        bool found1 =  bv_cp.find_range(f1, l1);
+        bool found2 =  bv_control.find_range(f2, l2);
+        
+        cerr << "Error: bvector<>::range_copy() failed. from=" << from << " to=" << to << endl;
+        if (found1)
+            cerr << " range copy from=" << f1 << " to=" << l1 << endl;
+        if (found2)
+            cerr << " control    from=" << f2 << " to=" << l2 << endl;
+        exit(1);
+    }
+    
+    bool found1 =  bv_cp.find_range(f1, l1);
+    bool found2 =  bv_control.find_range(f2, l2);
+    if (found1 != found2)
+    {
+        cerr << "Error: Dynamic range integrity check." << endl;
+        exit(1);
+    }
+    if (found1)
+    {
+        if (f1 != f2 || l1 != l2)
+        {
+            cerr << "Error: bvector<>::range_copy() failed (dynamic range check). from=" << from << " to=" << to << endl;
+            cerr << " range copy from=" << f1 << " to=" << l1 << endl;
+            cerr << " control    from=" << f2 << " to=" << l2 << endl;
+            exit(1);
+        }
+    }
+
+}
+
 
 template<class T> void CheckCountRange(const T& vect, 
                                        unsigned left, 
@@ -1228,15 +1273,6 @@ template<class T> void CheckCountRange(const T& vect,
             break;
         cnt2 += en.valid();
     }
-    /*
-    for (unsigned i = left; i <= right; ++i)
-    {
-        if (vect.test(i))
-        {
-            ++cnt2;
-        }
-    }
-    */
     if (cnt1 != cnt2)
     {
         cout << "Bitcount range failed!" << "left=" << left 
@@ -1245,6 +1281,8 @@ template<class T> void CheckCountRange(const T& vect,
              << " check=" << cnt2;
         exit(1);
     }
+    
+    CheckRangeCopy(vect, left, right);
     
     bvect::blocks_count bc_arr;
     vect.running_count_blocks(&bc_arr);
@@ -2411,9 +2449,68 @@ void RangeRandomFillTest()
     CheckVectors(bvect_min, bvect_full, BITVECT_SIZE);
     CheckCountRange(bvect_full, min, max);
     }
+}
+
+
+void RangeCopyTest()
+{
+    cout << "----------------------------------- RangeCopyTest" << endl;
+    
+    {
+        cout << "Basic test" << endl;
+        bvect     bvect1 { 10, 20, 21, 100, 65535, 65536, 100000 };
+
+        CheckRangeCopy(bvect1, 0, 0);
+        CheckRangeCopy(bvect1, 10, 10);
+        CheckRangeCopy(bvect1, 15, 15);
+        CheckRangeCopy(bvect1, 65535, 65535);
+        CheckRangeCopy(bvect1, 65536, 65536);
+        CheckRangeCopy(bvect1, 65535, 65536);
+
+        for (unsigned k = 0; k < 2; ++k)
+        {
+            unsigned to = 128000;
+            for (unsigned i = 0; i < to; ++i)
+            {
+                CheckRangeCopy(bvect1, i, to);
+            }
+            for (unsigned i = 128000; i > 0; --i)
+            {
+                CheckRangeCopy(bvect1, 0, i);
+            }
+            for (unsigned i = 0; i != to; ++i, --to)
+            {
+                CheckRangeCopy(bvect1, i, to);
+            }
+            bvect1.optimize();
+        } // for k
+    }
+    
+    {
+        cout << "Inverted vector test" << endl;
+        bvect     bvect1;
+        bvect1.invert();
+        
+        unsigned to = 128000;
+        for (unsigned i = 0; i < to; ++i)
+        {
+            CheckRangeCopy(bvect1, i, to);
+        }
+        for (unsigned i = 128000; i > 0; --i)
+        {
+            CheckRangeCopy(bvect1, 0, i);
+        }
+        for (unsigned i = 0; i != to; ++i, --to)
+        {
+            CheckRangeCopy(bvect1, i, to);
+        }
+    }
+    
     
 
+    cout << "----------------------------------- RangeCopyTest OK" << endl;
 }
+
 
 
 static
@@ -13565,6 +13662,8 @@ int main(void)
      XorOperationsTest();
 
      SubOperationsTest();
+
+     RangeCopyTest();
 
      WordCmpTest();
 
