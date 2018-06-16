@@ -10845,6 +10845,7 @@ void TestSparseVectorRange()
     cout << " ---------------- Sparse vector Range partitioning test  OK\n" << endl;
 }
 
+static
 void CheckSparseVectorFilter(const sparse_vector_u32& sv, unsigned factor)
 {
     sparse_vector_u32 sv1(sv);
