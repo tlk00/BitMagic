@@ -319,7 +319,7 @@ size_t dbg_ptr_allocator::na_ = 0;
 size_t dbg_ptr_allocator::nf_ = 0;
 
 
-typedef mem_alloc<dbg_block_allocator, dbg_ptr_allocator> dbg_alloc;
+typedef mem_alloc<dbg_block_allocator, dbg_ptr_allocator, alloc_pool<dbg_block_allocator, dbg_ptr_allocator> > dbg_alloc;
 
 typedef bm::bvector<dbg_alloc> bvect;
 typedef bm::bvector_mini<dbg_block_allocator> bvect_mini;
@@ -2153,7 +2153,8 @@ void BasicFunctionalityTest()
     }
 
     {
-        bm::standard_alloc_pool pool;
+        //bm::standard_alloc_pool pool;
+        bvect::allocator_pool_type pool;
         bvect bv3, bv4;
         bv3.set_allocator_pool(&pool);
         bv3.set(10, true);
@@ -10701,11 +10702,292 @@ void bvector_transform_11(typename SV::bvector_type& bvect_in,
     bin_trans.run(bvect_in, sv_brel, bvect_out);
 }
 
+static
+void CheckSparseVectorRange(const sparse_vector_u32& sv,
+                            unsigned left, unsigned right)
+{
+    sparse_vector_u32 sv1(bm::use_null);
+    sparse_vector_u32 sv2(sv);
+    sv1.copy_range(sv, left, right);
+    
+    if (right >= sv.size())
+    {
+        right = sv.size()-1;
+    }
+    
+    if (left == right)
+    {
+        unsigned v1 = sv.get(left);
+        unsigned v2 = sv1[right];
+        assert(v1 == v2);
+        return;
+    }
+    
+    if (left)
+    {
+        sv2.clear_range(0, left-1, true);
+    }
+    if (right < sv2.size()-1)
+    {
+        sv2.clear_range(right+1, sv2.size()-1, true);
+    }
+    
+    bool same = sv2.equal(sv1);
+    if (!same)
+    {
+        cerr << "Hmmm... Range comaprison failed, detailed check..." << endl;
+        cerr << "[" << left << ".." << right << "]" << endl;
+        for (unsigned i = left; i <= right; ++i)
+        {
+            unsigned v1 = sv.get(i);
+            unsigned v2 = sv1[i];
+            if (v1 != v2)
+            {
+                cerr << "Error! Copy range check failed at:" << i << endl;
+                exit(1);
+            }
+        } // for
+        cerr << "detailed check did not find issues. error in test?" << endl;
+        exit(1);
+    }
+}
+
+static
+void TestSparseVectorRange()
+{
+    cout << " ---------------- Sparse vector Range partitioning test" << endl;
+
+    cout << "Basic check" << endl;
+    {
+        sparse_vector_u32 sv(bm::use_null);
+        sv.set(2, 25);
+        sv.set(3, 35);
+        sv.set(7, 75);
+        sv.set(10, 2);
+        sv.set(21, 201);
+        
+        CheckSparseVectorRange(sv, 0, 0);
+        CheckSparseVectorRange(sv, 2, 2);
+        CheckSparseVectorRange(sv, 7, 10);
+    }
+
+    cout << "Stress check 1 (constant)" << endl;
+    {
+        sparse_vector_u32 sv(bm::use_null);
+        const unsigned sv_max = 120000;
+        cout << "Filling the vector" << endl;
+        for (unsigned i = 0; i < sv_max; ++i)
+        {
+            sv.push_back(9);
+        }
+        
+        cout << "Phase 1.." << endl;
+        for (unsigned i = 0; i < sv_max; ++i)
+        {
+            CheckSparseVectorRange(sv, 0, i);
+            CheckSparseVectorRange(sv, i, sv_max+10);
+            cout << "\r" << i << "/" << sv_max << flush;
+        }
+        cout << endl;
+        
+        cout << "\nPhase 2.." << endl;
+        unsigned k = sv_max;
+        for (unsigned i = 0; i < k; ++i, --k)
+        {
+            CheckSparseVectorRange(sv, i, k);
+        }
+        
+        sv.optimize();
+        
+        cout << "Phase 3.." << endl;
+        for (unsigned i = 0; i < sv_max; ++i)
+        {
+            CheckSparseVectorRange(sv, 0, i);
+            CheckSparseVectorRange(sv, i, sv_max+10);
+        }
+        
+        cout << "Phase 4.." << endl;
+        k = sv_max;
+        for (unsigned i = 0; i < k; ++i, --k)
+        {
+            CheckSparseVectorRange(sv, i, k);
+        }
+
+    }
+
+    cout << "\nStress check 2 (liner function)" << endl;
+    {
+        sparse_vector_u32 sv(bm::use_null);
+        const unsigned sv_max = 250000;
+        cout << "Filling the vector" << endl;
+        for (unsigned i = 0; i < sv_max; ++i)
+        {
+            sv.push_back(i);
+        }
+        
+        cout << "Phase 2-1.." << endl;
+        for (unsigned i = 0; i < sv_max; ++i)
+        {
+            CheckSparseVectorRange(sv, i, i);
+            CheckSparseVectorRange(sv, 0, i);
+            CheckSparseVectorRange(sv, i, sv_max+10);
+            cout << "\r" << i << "/" << sv_max << flush;
+        }
+        
+        cout << "\nPhase 2-2.." << endl;
+        unsigned k = sv_max;
+        for (unsigned i = 0; i < k; ++i, --k)
+        {
+            CheckSparseVectorRange(sv, i, k);
+        }
+    }
+    
+    cout << " ---------------- Sparse vector Range partitioning test  OK\n" << endl;
+}
+
+void CheckSparseVectorFilter(const sparse_vector_u32& sv, unsigned factor)
+{
+    sparse_vector_u32 sv1(sv);
+    
+    sparse_vector_u32::bvector_type bv_mask;
+    for (unsigned i = 0; i < sv.size(); ++i)
+    {
+        if (i % factor == 0)
+            bv_mask.set(i);
+    }
+    
+    sv1.filter(bv_mask);
+    
+    for (unsigned i = 0; i < sv.size(); ++i)
+    {
+        unsigned v = sv.get(i);
+        bool is_null = sv.is_null(i);
+        unsigned v1 = sv1.get(i);
+        bool is_null1 = sv1.is_null(i);
+
+        if (i % factor == 0)
+        {
+            if (v != v1 || is_null != is_null1)
+            {
+                cerr << "Error! (1)sparse_vector<>::filter() failed at:" << i << endl;
+                exit(1);
+            }
+        }
+        else
+        {
+            if (v == v1 || is_null == is_null1)
+            {
+                cerr << "Error! (2)sparse_vector<>::filter() failed at:" << i << endl;
+                exit(1);
+            }
+        }
+    }
+}
+
+static
+void TestSparseVectorFilter()
+{
+    cout << " ---------------- Sparse vector Filter test" << endl;
+    cout << "Basic check" << endl;
+    {
+        sparse_vector_u32 sv(bm::use_null);
+        sv.set(2, 25);
+        sv.set(3, 35);
+        sv.set(7, 75);
+        sv.set(10, 2);
+        sv.set(21, 201);
+        
+        sparse_vector_u32::bvector_type bv_mask { 2, 7 };
+        
+        sv.filter(bv_mask);
+        
+        for (unsigned i = 0; i < sv.size(); ++i)
+        {
+            unsigned v = sv.get(i);
+            bool is_null = sv.is_null(i);
+            if (i == 2 || i == 7)
+            {
+                assert(v != 0);
+                assert(!is_null);
+            }
+            else
+            {
+                assert(v == 0);
+                assert(is_null);
+            }
+        }
+        
+    }
+    
+    cout << "Stress check 1" << endl;
+
+    {
+        sparse_vector_u32 sv(bm::use_null);
+        const unsigned sv_max = 250000;
+        cout << "Filling the vector ... " << flush;
+        for (unsigned i = 0; i < sv_max; ++i)
+        {
+            sv.push_back(i);
+        }
+        sv[0] = 113213;
+
+        
+        sparse_vector_u32::bvector_type bv_mask;
+        for (unsigned i = 0; i < sv_max; ++i)
+        {
+            if (i % 2 == 0)
+                bv_mask.set(i);
+        }
+        cout << "done." << endl;
+        
+        sv.filter(bv_mask);
+        for (unsigned i = 0; i < sv_max; ++i)
+        {
+            unsigned v = sv.get(i);
+            bool is_null = sv.is_null(i);
+            if (i % 2 == 0)
+            {
+                assert(v == i || (i == 0 && v == 113213));
+                assert(!is_null);
+            }
+            else
+            {
+                assert(v == 0);
+                assert(is_null);
+            }
+        }
+    }
+
+    cout << "Stress check 2" << endl;
+
+    {
+        sparse_vector_u32 sv(bm::use_null);
+        const unsigned sv_max = 250000;
+        cout << "Filling the vector ... " << flush;
+        for (unsigned i = 0; i < sv_max; ++i)
+        {
+            sv.push_back(i);
+        }
+        cout << "done" << endl;
+        
+        const unsigned max_factor = 10000;
+        for (unsigned i = 2; i < max_factor; ++i)
+        {
+            CheckSparseVectorFilter(sv, i);
+            cout << "\r" << i << "/" << max_factor << flush;
+        }
+        cout << endl;
+    }
+    
+    cout << " ---------------- Sparse vector Filter test OK" << endl;
+}
+
+
 
 static
 void TestSparseVectorTransform()
 {
-    cout << " Test set transformation with sparse vector" << endl;
+    cout << " ---------------- Test set transformation with sparse vector" << endl;
 
     {
         sparse_vector_u32 sv(bm::use_null);
@@ -10727,9 +11009,10 @@ void TestSparseVectorTransform()
         sv.set(21, 201);
 
         bvect bv_in { 1, 2, 3, 10, 20 };
-        bvect bv_out;
-
         bvect bv_control {25, 35, 2 };
+
+        {
+        bvect bv_out;
 
         bvector_transform_11(bv_in, sv, bv_out);
         int cmp = bv_control.compare(bv_out);
@@ -10740,6 +11023,7 @@ void TestSparseVectorTransform()
         }
         
         sv.optimize();
+        bv_out.clear();
         
         bvector_transform_11(bv_in, sv, bv_out);
         cmp = bv_control.compare(bv_out);
@@ -10747,6 +11031,7 @@ void TestSparseVectorTransform()
         {
             cerr << "Transform11 (1, 1) control comparison failed" << endl;
             exit(1);
+        }
         }
         
         cout << "Transform11 (1) - ok" << endl;
@@ -13694,6 +13979,10 @@ int main(void)
 
      TestSparseVectorInserter();
 
+     TestSparseVectorRange();
+
+     TestSparseVectorFilter();
+    
      TestSparseVectorTransform();
 
      TestSparseVectorScan();
