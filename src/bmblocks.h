@@ -785,6 +785,22 @@ public:
     }
 
     /**
+        \brief Finds block in 2-level blocks array (unsinitized)
+        \param i - top level block index
+        \param j - second level block index
+        \return block adress or NULL if not yet allocated
+    */
+    const bm::word_t* get_block_ptr(unsigned i, unsigned j) const
+    {
+        if (!top_blocks_ || i >= top_block_size_) return 0;
+
+        const bm::word_t* const* blk_blk = top_blocks_[i];
+        const bm::word_t* ret = (blk_blk == 0) ? 0 : blk_blk[j];
+        return ret;
+    }
+
+
+    /**
         \brief Function returns top-level block in 2-level blocks array
         \param i - top level block index
         \return block adress or NULL if not yet allocated

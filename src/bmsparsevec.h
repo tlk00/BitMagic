@@ -218,6 +218,7 @@ public:
         enum buf_size_e
         {
             n_buf_size = 1024 * 8
+            //n_buf_size = 65535 * 10
         };
         
     private:
@@ -645,7 +646,7 @@ public:
     ///@}
 
     // ------------------------------------------------------------
-    /*! @name Merge data                                         */
+    /*! @name Merge, split, partition data                        */
     ///@{
 
     /*!
@@ -654,6 +655,26 @@ public:
         \return slf reference
     */
     sparse_vector<Val, BV>& join(const sparse_vector<Val, BV>& sv);
+
+    /**
+        @brief copy range of values from another sparse vector
+     
+        Copy [left..right] values from the source vector,
+        clear everything outside the range.
+     
+        \param sv - source vector
+        \param left  - index from in losed diapason of [left..right]
+        \param right - index to in losed diapason of [left..right]
+    */
+    void copy_range(const sparse_vector<Val, BV>& sv,
+                    size_type left, size_type right);
+    
+    /**
+        @brief Apply value filter, defined by mask vector
+     
+        All bit-plains are ANDed against the filter mask.
+    */
+    void filter(const bvector_type& bv_mask);
 
     ///@}
     
@@ -1168,9 +1189,16 @@ sparse_vector<Val, BV>::extract_range(value_type* arr,
             }
             else
             {
-                nword  = unsigned(nbit >> bm::set_word_shift);
-                mask0 = 1u << (nbit & bm::set_word_mask);
-                is_set = (blk[nword] & mask0);
+                if (blk == FULL_BLOCK_FAKE_ADDR)
+                {
+                    is_set = 1;
+                }
+                else
+                {
+                    nword  = unsigned(nbit >> bm::set_word_shift);
+                    mask0 = 1u << (nbit & bm::set_word_mask);
+                    is_set = (blk[nword] & mask0);
+                }
             }
             size_type idx = k - offset;
             value_type vm = (bool) is_set;
@@ -1252,19 +1280,48 @@ sparse_vector<Val, BV>::extract(value_type* arr,
         void add_bits(bm::id_t arr_offset, const unsigned char* bits, unsigned bits_size)
         {
             size_type idx_base = arr_offset - off_;
+            
+            /*
             for (unsigned i = 0; i < bits_size; ++i)
             {
                 size_type idx = idx_base + bits[i];
-                arr_[idx] |= mask_;
+                arr_[idx_base + bits[i]] |= mask_;
             }
-            
+            */
+            const value_type m = mask_;
+            unsigned i = 0;
+            /*
+            for (i = 0; i < bits_size/4; i+=4)
+            {
+                arr_[idx_base + bits[i+0]] |= m;
+                arr_[idx_base + bits[i+1]] |= m;
+                arr_[idx_base + bits[i+2]] |= m;
+                arr_[idx_base + bits[i+3]] |= m;
+            }
+            */
+            for (; i < bits_size; ++i)
+            {
+                arr_[idx_base + bits[i]] |= m;
+            }
+
         }
         void add_range(bm::id_t arr_offset, unsigned sz)
         {
             size_type idx_base = arr_offset - off_;
-            for (unsigned i = 0; i < sz; ++i)
+            const value_type m = mask_;
+            unsigned i = 0;
+            /*
+            for (; i < sz/4; i+=4)
             {
-                arr_[i + idx_base] |= mask_;
+                arr_[i + idx_base + 0] |= m;
+                arr_[i + idx_base + 1] |= m;
+                arr_[i + idx_base + 2] |= m;
+                arr_[i + idx_base + 3] |= m;
+            }
+            */
+            for (; i < sz; ++i)
+            {
+                arr_[i + idx_base] |= m;
             }
         }
         value_type*  arr_;
@@ -1290,7 +1347,7 @@ sparse_vector<Val, BV>::extract(value_type* arr,
 
     if (masked_scan) // use temp vector to decompress the area
     {
-        // for large array extraction use logical opartions
+        // for large array extraction use logical opertions
         // (faster due to vectorization)
         bvector_type bv_mask;
         bv_mask.set_allocator_pool(pool_ptr);
@@ -1301,11 +1358,11 @@ sparse_vector<Val, BV>::extract(value_type* arr,
             if (bv)
             {
                 bv_mask.set_range(offset, end - 1);
-                bv_mask.bit_and(*bv);
-
+                bv_mask.bit_and(*bv); // TODO: make copy-and fusion
+            
                 sv_decode_visitor_func func(arr, (value_type(1) << i), offset);
                 bm::for_each_bit(bv_mask, func);
-                bv_mask.clear();
+                bv_mask.set_range(offset, end - 1, false);
             }
         } // for i
     }
@@ -1404,7 +1461,7 @@ const bm::word_t* sparse_vector<Val, BV>::get_block(unsigned p, unsigned i, unsi
     if (bv)
     {
         const typename bvector_type::blocks_manager_type& bman = bv->get_blocks_manager();
-        return bman.get_block(i, j);
+        return bman.get_block_ptr(i, j);
     }
     return 0;
 }
@@ -1458,31 +1515,44 @@ sparse_vector<Val, BV>::get(bm::id_t i) const
         blka[1] = get_block(j+1, i0, j0);
         blka[2] = get_block(j+2, i0, j0);
         blka[3] = get_block(j+3, i0, j0);
+        unsigned is_set;
 
         if ((blk = blka[0+0])!=0)
         {
-            unsigned is_set = (BM_IS_GAP(blk)) ? bm::gap_test_unr(BMGAP_PTR(blk), nbit) : (blk[nword] & mask0);
+            if (blk == FULL_BLOCK_FAKE_ADDR)
+                is_set = 1;
+            else
+                is_set = (BM_IS_GAP(blk)) ? bm::gap_test_unr(BMGAP_PTR(blk), nbit) : (blk[nword] & mask0);
             value_type vm = (bool) is_set;
             vm <<= (j+0);
             v |= vm;
         }
         if ((blk = blka[0+1])!=0)
         {
-            unsigned is_set = (BM_IS_GAP(blk)) ? bm::gap_test_unr(BMGAP_PTR(blk), nbit) : (blk[nword] & mask0);
+            if (blk == FULL_BLOCK_FAKE_ADDR)
+                is_set = 1;
+            else
+                is_set = (BM_IS_GAP(blk)) ? bm::gap_test_unr(BMGAP_PTR(blk), nbit) : (blk[nword] & mask0);
             value_type vm = (bool) is_set;
             vm <<= (j+1);
             v |= vm;
         }
         if ((blk = blka[0+2])!=0)
         {
-            unsigned is_set = (BM_IS_GAP(blk)) ? bm::gap_test_unr(BMGAP_PTR(blk), nbit) : (blk[nword] & mask0);
+            if (blk == FULL_BLOCK_FAKE_ADDR)
+                is_set = 1;
+            else
+                is_set = (BM_IS_GAP(blk)) ? bm::gap_test_unr(BMGAP_PTR(blk), nbit) : (blk[nword] & mask0);
             value_type vm = (bool) is_set;
             vm <<= (j+2);
             v |= vm;
         }
         if ((blk = blka[0+3])!=0)
         {
-            unsigned is_set = (BM_IS_GAP(blk)) ? bm::gap_test_unr(BMGAP_PTR(blk), nbit) : (blk[nword] & mask0);
+            if (blk == FULL_BLOCK_FAKE_ADDR)
+                is_set = 1;
+            else
+                is_set = (BM_IS_GAP(blk)) ? bm::gap_test_unr(BMGAP_PTR(blk), nbit) : (blk[nword] & mask0);
             value_type vm = (bool) is_set;
             vm <<= (j+3);
             v |= vm;
@@ -1831,7 +1901,6 @@ sparse_vector<Val, BV>::join(const sparse_vector<Val, BV>& sv)
         resize(arg_size);
     }
     bvector_type* bv_null = this->get_null_bvect();
-    
     unsigned plains;
     if (bv_null)
         plains = this->stored_plains();
@@ -1840,7 +1909,7 @@ sparse_vector<Val, BV>::join(const sparse_vector<Val, BV>& sv)
     
     for (unsigned j = 0; j < plains; ++j)
     {
-        bvector_type* arg_bv = sv.plains_[j];
+        const bvector_type* arg_bv = sv.plains_[j];
         if (arg_bv)
         {
             bvector_type* bv = this->plains_[j];
@@ -1859,6 +1928,65 @@ sparse_vector<Val, BV>::join(const sparse_vector<Val, BV>& sv)
     }
     
     return *this;
+}
+
+//---------------------------------------------------------------------
+
+template<class Val, class BV>
+void sparse_vector<Val, BV>::copy_range(const sparse_vector<Val, BV>& sv,
+                                        sparse_vector<Val, BV>::size_type left,
+                                        sparse_vector<Val, BV>::size_type right)
+{
+    if (left > right)
+        bm::xor_swap(left, right);
+    
+    bvector_type* bv_null = this->get_null_bvect();
+    unsigned plains;
+    if (bv_null)
+    {
+        plains = this->stored_plains();
+        const bvector_type* bv_null_arg = sv.get_null_bvector();
+        if (bv_null_arg)
+            bv_null->copy_range(*bv_null_arg, left, right);
+    }
+    else
+        plains = this->plains();
+    
+    for (unsigned j = 0; j < plains; ++j)
+    {
+        const bvector_type* arg_bv = sv.plains_[j];
+        if (arg_bv)
+        {
+            bvector_type* bv = this->plains_[j];
+            if (!bv)
+                bv = get_plain(j);
+            bv->copy_range(*arg_bv, left, right);
+        }
+    } // for j
+    this->resize(sv.size());
+}
+//---------------------------------------------------------------------
+
+template<class Val, class BV>
+void sparse_vector<Val, BV>::filter(
+                    const sparse_vector<Val, BV>::bvector_type& bv_mask)
+{
+    bvector_type* bv_null = this->get_null_bvect();
+    unsigned plains;
+    if (bv_null)
+    {
+        plains = this->stored_plains();
+        bv_null->bit_and(bv_mask);
+    }
+    else
+        plains = this->plains();
+    
+    for (unsigned j = 0; j < plains; ++j)
+    {
+        bvector_type* bv = this->plains_[j];
+        if (bv)
+            bv->bit_and(bv_mask);
+    }
 }
 
 
@@ -1938,7 +2066,7 @@ void sparse_vector<Val, BV>::set_allocator_pool(
 
 template<class Val, class BV>
 sparse_vector<Val, BV>::const_iterator::const_iterator()
-: sv_(0), pos_(bm::id_max), /*buf_(0),*/ buf_ptr_(0)
+: sv_(0), pos_(bm::id_max), buf_ptr_(0)
 {}
 
 //---------------------------------------------------------------------
@@ -1954,7 +2082,7 @@ sparse_vector<Val, BV>::const_iterator::const_iterator(
 template<class Val, class BV>
 sparse_vector<Val, BV>::const_iterator::const_iterator(
   const typename sparse_vector<Val, BV>::const_iterator::sparse_vector_type* sv)
-: sv_(sv), /*buf_(0),*/ buf_ptr_(0)
+: sv_(sv), buf_ptr_(0)
 {
     BM_ASSERT(sv_);
     pos_ = sv_->empty() ? bm::id_max : 0u;

@@ -146,6 +146,10 @@ class set2set_11_transform
 {
 public:
     typedef typename SV::bvector_type       bvector_type;
+    typedef typename SV::value_type         value_type;
+    typedef typename SV::size_type          size_type;
+    typedef typename bvector_type::allocator_type::allocator_pool_type allocator_pool_type;
+
 public:
     /** Perform transformation
    
@@ -156,8 +160,13 @@ public:
     void run(const bvector_type&        bv_in,
              const    SV&               sv_brel,
              bvector_type&              bv_out);
+    
+    void one_pass_run(const bvector_type&        bv_in,
+                      const    SV&               sv_brel,
+                      bvector_type&              bv_out);
 protected:
-    bvector_type   bv_product_;
+    bvector_type         bv_product_;
+    allocator_pool_type  pool_;
 };
 
 /**
@@ -291,10 +300,17 @@ void set2set_11_transform<SV>::run(const bvector_type&        bv_in,
                                    const    SV&               sv_brel,
                                    bvector_type&              bv_out)
 {
+    bv_out.clear();
+
     if (sv_brel.empty())
         return; // nothing to do
 
     bv_out.init(); // just in case to "fast set" later
+    
+    typename bvector_type::mem_pool_guard mp_g_out, mp_g_p;
+    mp_g_out.assign_if_not_set(pool_, bv_out);
+    mp_g_p.assign_if_not_set(pool_, bv_product_);
+
 
     const typename SV::bvector_type * bv_non_null = sv_brel.get_null_bvector();
     if (bv_non_null) // NULL-able association vector
@@ -304,8 +320,11 @@ void set2set_11_transform<SV>::run(const bvector_type&        bv_in,
     }
     else
     {
-        bv_product_.clear(true);
-        bv_product_.set_range(0, sv_brel.size()-1);
+        bm::sparse_vector_scanner<SV> scanner;
+        scanner.find_nonzero(sv_brel, bv_product_);
+    
+        //bv_product_.clear(true);
+        //bv_product_.set_range(0, sv_brel.size()-1);
         bv_product_.bit_and(bv_in);
     }
 
@@ -318,6 +337,79 @@ void set2set_11_transform<SV>::run(const bvector_type&        bv_in,
         bv_out.set_bit_no_check(translated_id);
     } // for en
 }
+
+//----------------------------------------------------------------------------
+/*
+template<typename SV>
+void set2set_11_transform<SV>::one_pass_run(const bvector_type&        bv_in,
+                                            const    SV&               sv_brel,
+                                            bvector_type&              bv_out)
+{
+    if (sv_brel.empty())
+        return; // nothing to do
+
+    bv_out.init();
+
+    //const typename SV::bvector_type * bv_non_null = sv_brel.get_null_bvector();
+    typename SV::const_iterator it = sv_brel.begin();
+    for (; it.valid(); ++it)
+    {
+        typename SV::value_type t_id = *it;
+        bm::id_t idx = it.pos();
+        if (bv_in.test(idx))
+        {
+            bv_out.set_bit_no_check(t_id);
+        }
+    } // for
+}
+*/
+
+template<typename SV>
+void set2set_11_transform<SV>::one_pass_run(const bvector_type&        bv_in,
+                                            const    SV&               sv_brel,
+                                            bvector_type&              bv_out)
+{
+    if (sv_brel.empty())
+        return; // nothing to do
+
+    bv_out.init();
+
+    //std::cout << "remap(1)=" << bv_in.count() << std::endl;
+
+    typename bvector_type::mem_pool_guard mp_g_out, mp_g_p;
+    mp_g_out.assign_if_not_set(pool_, bv_out);
+    mp_g_p.assign_if_not_set(pool_, bv_product_);
+
+    bm::sparse_vector_scanner<SV> scanner;
+    scanner.find_nonzero(sv_brel, bv_product_);
+
+    bv_product_.bit_and(bv_in);
+    
+    bm::id_t from, to;
+    bool found = bv_product_.find_range(from, to);
+    if (!found)
+    {
+        bv_out.clear();
+        return;
+    }
+    SV sv_f(sv_brel);
+    sv_f.filter(bv_product_);
+    sv_f.optimize();
+
+    //std::cout << "remap(2)=" << bv_product_.count() << std::endl;
+    typename SV::const_iterator it = sv_f.begin();
+    for (; it.valid(); ++it)
+    {
+    continue;
+        typename SV::value_type t_id = *it;
+        if (!t_id)
+            continue;
+        //bm::id_t idx = it.pos();
+        bv_out.set_bit_no_check(t_id);
+    } // for
+
+}
+
 
 //----------------------------------------------------------------------------
 //

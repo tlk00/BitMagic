@@ -1140,7 +1140,7 @@ void combine_or(BV& bv, It  first, It last)
     while (first < last)
     {
         unsigned nblock = unsigned((*first) >> bm::set_block_shift);     
-        It right = block_range_scan(first, last, nblock, &max_id);
+        It right = bm::block_range_scan(first, last, nblock, &max_id);
 
         if (max_id >= bv.size())
         {
@@ -1692,8 +1692,33 @@ void for_each_gap_blk(const T* buf, bm::id_t offset,
     }
 }
 
-
-
+/**
+    @brief Test bits in bit-vector, set corresponding masks in the output
+    \internal
+*/
+template<typename BV>
+void bvector_select_decode(bm::id_t* out_arr,
+                           const BV& bv,
+                           const bm::id_t* bits_arr, unsigned size,
+                           bm::id_t mask)
+{
+    BM_ASSERT(bits_arr && size);
+    BM_ASSERT(mask);
+    
+    const typename BV::blocks_manager_type& bman = bv.get_blocks_manager();
+    if (!bman.is_init())
+        return;
+    
+    //unsigned nblock = unsigned((bits_arr[0]) >> bm::set_block_shift);
+    for (unsigned i = 0; i < size; ++i)
+    {
+        bm::id_t idx = bits_arr[i];
+        if (bv.test(idx))
+        {
+            out_arr[idx] |= mask;
+        }
+    }
+}
 
 
 
