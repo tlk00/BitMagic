@@ -1934,8 +1934,8 @@ sparse_vector<Val, BV>::join(const sparse_vector<Val, BV>& sv)
 
 template<class Val, class BV>
 void sparse_vector<Val, BV>::copy_range(const sparse_vector<Val, BV>& sv,
-                                        sparse_vector<Val, BV>::size_type left,
-                                        sparse_vector<Val, BV>::size_type right)
+                                        typename sparse_vector<Val, BV>::size_type left,
+                                        typename sparse_vector<Val, BV>::size_type right)
 {
     if (left > right)
         bm::xor_swap(left, right);
@@ -1969,7 +1969,7 @@ void sparse_vector<Val, BV>::copy_range(const sparse_vector<Val, BV>& sv,
 
 template<class Val, class BV>
 void sparse_vector<Val, BV>::filter(
-                    const sparse_vector<Val, BV>::bvector_type& bv_mask)
+                    const typename sparse_vector<Val, BV>::bvector_type& bv_mask)
 {
     bvector_type* bv_null = this->get_null_bvect();
     unsigned plains;
