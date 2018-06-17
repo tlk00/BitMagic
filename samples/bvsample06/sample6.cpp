@@ -108,7 +108,9 @@ unsigned dbg_ptr_allocator::na_ = 0;
 unsigned dbg_ptr_allocator::nf_ = 0;
 
 
-typedef bm::mem_alloc<dbg_block_allocator, dbg_ptr_allocator> dbg_alloc;
+typedef
+bm::mem_alloc<dbg_block_allocator, dbg_ptr_allocator,
+            bm::alloc_pool<dbg_block_allocator, dbg_ptr_allocator>> dbg_alloc;
 
 typedef bm::bvector<dbg_alloc> bvect;
 
