@@ -525,7 +525,7 @@ public:
     ///@}
 
     // ------------------------------------------------------------
-    /*! @name Export of sparse vector to C-stype array       */
+    /*! @name Export content to C-stype array       */
     ///@{
 
     /*!
@@ -544,14 +544,39 @@ public:
      
         \return number of actually exported elements (can be less than requested)
      
-        \sa decode
-     
-        @internal
+        \sa gather
     */
     size_type decode(value_type* arr,
                      size_type   idx_from,
                      size_type   size,
                      bool        zero_mem = true) const;
+    
+    
+    
+    /*!
+        \brief Gather elements to a C-style array
+     
+        Gather collects values from different locations, for best
+        performance feed it with sorted list of indexes.
+     
+        Faster than one-by-one random access.
+     
+        For efficiency, this is left as a low level function,
+        it does not do any bounds checking on the target array, it will
+        override memory and crash if you are not careful with allocation
+        and request size.
+     
+        \param arr  - dest array
+        \param idx - index list to gather elements
+        \param size - decoding index list size (array allocation should match)
+     
+        \return number of actually exported elements (can be less than requested)
+     
+        \sa decode
+    */
+    size_type gather(value_type* arr,
+                     const size_type* idx,
+                     size_type   size) const;
     ///@}
 
     /*! \brief content exchange
@@ -1131,6 +1156,98 @@ sparse_vector<Val, BV>::decode(value_type* arr,
         return extract_plains(arr, size, idx_from, zero_mem);
     }
     return extract(arr, size, idx_from, zero_mem);
+}
+
+//---------------------------------------------------------------------
+
+template<class Val, class BV>
+typename sparse_vector<Val, BV>::size_type
+sparse_vector<Val, BV>::gather(value_type*      arr,
+                               const size_type* idx,
+                               size_type        size) const
+{
+    BM_ASSERT(arr);
+    BM_ASSERT(idx);
+    BM_ASSERT(size);
+
+    if (size == 1) // corner case: get 1 value
+    {
+        arr[0] = this->get(idx[0]);
+        return size;
+    }
+
+    ::memset(arr, 0, sizeof(value_type)*size);
+    
+    for (unsigned i = 0; i < size;)
+    {
+        // look ahead for the depth of the same block (speculate input is sorted)
+        unsigned nb = unsigned(idx[i] >> bm::set_block_shift);
+        unsigned r = i;
+        for (; r < size; ++r)
+        {
+            unsigned nb_r = unsigned(idx[r] >> bm::set_block_shift);
+            if (nb != nb_r)
+                break;
+        }
+        if (r == i+1)
+        {
+            arr[i] = this->get(idx[i]);
+            ++i;
+            continue;
+        }
+
+        // process the same block co-located elements at ones
+        //
+        unsigned i0 = nb >> bm::set_array_shift; // top block address
+        unsigned j0 = nb &  bm::set_array_mask;  // address in sub-block
+        
+        unsigned eff_plains = effective_plains();
+        for (unsigned j = 0; j < eff_plains; ++j)
+        {
+            const bm::word_t* blk = get_block(j, i0, j0);
+            if (!blk)
+                continue;
+            value_type vm;
+            if (blk == FULL_BLOCK_FAKE_ADDR)
+            {
+                vm = 1u << j;
+                for (unsigned k = i; k < r; ++k)
+                    arr[k] |= vm;
+                continue;
+            }
+            if (BM_IS_GAP(blk))
+            {
+                // TODO: write a streaming check for sorted cases (faster)
+                for (unsigned k = i; k < r; ++k)
+                {
+                    unsigned gather_i = idx[k];
+                    unsigned nbit = unsigned(gather_i & bm::set_block_mask);
+                    unsigned is_set = bm::gap_test_unr(BMGAP_PTR(blk), nbit);
+                    vm = (bool)is_set;
+                    vm <<= j;
+                    arr[k] |= vm;
+                }
+                continue;
+            }
+            // bit block gather (TODO: SSE/AVX)
+            for (unsigned k = i; k < r; ++k)
+            {
+                unsigned gather_i = idx[k];
+                unsigned nbit = unsigned(gather_i & bm::set_block_mask);
+                unsigned nword  = unsigned(nbit >> bm::set_word_shift);
+                unsigned mask0 = 1u << (nbit & bm::set_word_mask);
+                unsigned is_set = blk[nword] & mask0;
+                vm = (bool)is_set;
+                vm <<= j;
+                arr[k] |= vm;
+            }
+        } // for (each plain)
+        
+        i = r;
+
+    } // for i
+
+    return size;
 }
 
 //---------------------------------------------------------------------
