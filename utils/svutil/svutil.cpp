@@ -281,7 +281,7 @@ int main(int argc, char *argv[])
             if (sv_u32_in_flag)  // input sparse vector loaded
             {
                 std::cout << "Input sparse vector statistics:" << std::endl;
-                bm::print_svector_stat(sv_u32_in);
+                bm::print_svector_stat(sv_u32_in, true);
                 std::cout << std::endl;
             }
             
@@ -291,6 +291,22 @@ int main(int argc, char *argv[])
                           << vect_u32_in.size() << " elements."
                           << std::endl;
             }
+        }
+        
+        if (is_timing && sv_u32_in_flag)
+        {
+            sparse_vector_u32::bvector_type bv_mask;
+            sparse_vector_u32::bvector_type bv_out;
+            bv_mask.set_range(1, 7000000);
+            
+            {
+            bm::chrono_taker tt("set2set transform benchmark", 1, &timing_map);
+            bm::set2set_11_transform<sparse_vector_u32> set2set;
+            
+            set2set.run(bv_mask, sv_u32_in, bv_out);
+            std::cout << bv_out.count() << std::endl;
+            }
+            
         }
         
         
