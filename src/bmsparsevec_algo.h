@@ -322,11 +322,12 @@ void set2set_11_transform<SV>::run(const bvector_type&        bv_in,
     {
         bm::sparse_vector_scanner<SV> scanner;
         scanner.find_nonzero(sv_brel, bv_product_);
-    
-        //bv_product_.clear(true);
-        //bv_product_.set_range(0, sv_brel.size()-1);
         bv_product_.bit_and(bv_in);
     }
+    
+    const unsigned buf_max = 1024;
+    unsigned buf_cnt = 0;
+    typename SV::value_type buffer[buf_max];
 
     typename SV::bvector_type::enumerator en(bv_product_.first());
     for (; en.valid(); ++en)
@@ -334,8 +335,19 @@ void set2set_11_transform<SV>::run(const bvector_type&        bv_in,
         auto idx = *en;
         idx = sv_brel.translate_address(idx);
         typename SV::value_type translated_id = sv_brel.get(idx);
-        bv_out.set_bit_no_check(translated_id);
+        
+        buffer[buf_cnt] = translated_id;
+        ++buf_cnt;
+        if (buf_cnt == buf_max)
+        {
+            bm::combine_or(bv_out, &buffer[0], &buffer[buf_cnt]);
+            buf_cnt = 0;
+        }
     } // for en
+    if (buf_cnt)
+    {
+        bm::combine_or(bv_out, &buffer[0], &buffer[buf_cnt]);
+    }
 }
 
 //----------------------------------------------------------------------------
@@ -385,6 +397,7 @@ void set2set_11_transform<SV>::one_pass_run(const bvector_type&        bv_in,
 
     bv_product_.bit_and(bv_in);
     
+    /*
     bm::id_t from, to;
     bool found = bv_product_.find_range(from, to);
     if (!found)
@@ -392,21 +405,42 @@ void set2set_11_transform<SV>::one_pass_run(const bvector_type&        bv_in,
         bv_out.clear();
         return;
     }
+    */
     SV sv_f(sv_brel);
     sv_f.filter(bv_product_);
-    sv_f.optimize();
+    //sv_f.optimize();
+    
+    const unsigned buf_max = 1024;
+    unsigned values[buf_max];
+    unsigned buf_cnt=0;
 
     //std::cout << "remap(2)=" << bv_product_.count() << std::endl;
     typename SV::const_iterator it = sv_f.begin();
     for (; it.valid(); ++it)
     {
-    continue;
-        typename SV::value_type t_id = *it;
+        typename SV::value_type t_id = it.value();
         if (!t_id)
-            continue;
+        {
+            it.skip_zero_values();
+            if (!it.valid())
+                break;
+            t_id = it.value();
+            if (!t_id)
+                continue;
+        }
         //bm::id_t idx = it.pos();
-        bv_out.set_bit_no_check(t_id);
+        //bv_out.set_bit_no_check(t_id);
+        values[buf_cnt] = t_id;
+        ++buf_cnt;
+        if (buf_cnt == buf_max)
+        {
+            buf_cnt = 0;
+        }
     } // for
+    
+    if (buf_cnt)
+    {
+    }
 
 }
 

@@ -214,6 +214,8 @@ public:
         
         /// advance iterator forward by one
         void advance();
+        
+        void skip_zero_values();
     private:
         enum buf_size_e
         {
@@ -1281,13 +1283,6 @@ sparse_vector<Val, BV>::extract(value_type* arr,
         {
             size_type idx_base = arr_offset - off_;
             
-            /*
-            for (unsigned i = 0; i < bits_size; ++i)
-            {
-                size_type idx = idx_base + bits[i];
-                arr_[idx_base + bits[i]] |= mask_;
-            }
-            */
             const value_type m = mask_;
             unsigned i = 0;
             /*
@@ -1303,26 +1298,14 @@ sparse_vector<Val, BV>::extract(value_type* arr,
             {
                 arr_[idx_base + bits[i]] |= m;
             }
-
         }
+        
         void add_range(bm::id_t arr_offset, unsigned sz)
         {
             size_type idx_base = arr_offset - off_;
             const value_type m = mask_;
-            unsigned i = 0;
-            /*
-            for (; i < sz/4; i+=4)
-            {
-                arr_[i + idx_base + 0] |= m;
-                arr_[i + idx_base + 1] |= m;
-                arr_[i + idx_base + 2] |= m;
-                arr_[i + idx_base + 3] |= m;
-            }
-            */
-            for (; i < sz; ++i)
-            {
+            for (unsigned i = 0;i < sz; ++i)
                 arr_[i + idx_base] |= m;
-            }
         }
         value_type*  arr_;
         value_type   mask_;
@@ -2146,9 +2129,35 @@ sparse_vector<Val, BV>::const_iterator::value() const
         sv_->extract(buf_ptr_, n_buf_size, pos_, true, &pool_);
     }
     v = *buf_ptr_;
-    
-    BM_ASSERT(v == sv_->get(pos_));
     return v;
+}
+
+//---------------------------------------------------------------------
+
+template<class Val, class BV>
+void sparse_vector<Val, BV>::const_iterator::skip_zero_values()
+{
+    value_type v = value();
+    if (buf_ptr_)
+    {
+        v = *buf_ptr_;
+        value_type* buf_end = ((value_type*)buffer_.data()) + n_buf_size;
+        while(!v)
+        {
+            ++pos_;
+            if (++buf_ptr_ < buf_end)
+                v = *buf_ptr_;
+            else
+                break;
+        }
+        if (pos_ >= sv_->size())
+        {
+            pos_ = bm::id_max;
+            return;
+        }
+        if (buf_ptr_ >= buf_end)
+            buf_ptr_ = 0;
+    }
 }
 
 //---------------------------------------------------------------------
