@@ -5936,7 +5936,7 @@ operation_functions<T>::bit_op_count_table_[bm::set_END] = {
 
 const unsigned short set_bitscan_wave_size = 2;
 /*!
-    \brief Unpacks word wave (2x 32-bit words)
+    \brief Unpacks word wave (Nx 32-bit words)
     \param w_ptr - pointer on wave start
     \param bits - pointer on the result array
     \return number of bits in the list
