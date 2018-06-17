@@ -33,6 +33,22 @@ For more information please visit:  http://bitmagic.io
 namespace bm
 {
 
+#define BM_SCANNER_OP(x) \
+    if (0 != (block = blk_blk[j+x])) \
+    { \
+        if (BM_IS_GAP(block)) \
+        { \
+            bm::for_each_gap_blk(BMGAP_PTR(block), (r+j+x)*bm::bits_in_block,\
+                                 bit_functor); \
+        } \
+        else \
+        { \
+            block = BLOCK_ADDR_SAN(block);\
+            bm::for_each_bit_blk(block, (r+j+x)*bm::bits_in_block,bit_functor); \
+        } \
+    }
+    
+
 /**
     @brief bit-vector visitor scanner to traverse each 1 bit using C++ visitor
  
@@ -48,7 +64,6 @@ void for_each_bit(const BV&    bv,
     const typename BV::blocks_manager_type& bman = bv.get_blocks_manager();
     bm::word_t*** blk_root = bman.top_blocks_root();
     
-    
     if (!blk_root)
         return;
     
@@ -60,33 +75,38 @@ void for_each_bit(const BV&    bv,
         {
             continue;
         }
+        const bm::word_t* block;
         unsigned r = i * bm::set_array_size;
-        for (unsigned j = 0; j < bm::set_array_size; ++j)
+        unsigned j = 0;
+        do
         {
-            const bm::word_t* block = blk_blk[j];
-            if (block)
+        #ifdef BM64_AVX2
+            if (!avx2_test_all_zero_wave(blk_blk + j))
             {
-                unsigned nb = r + j;
-                if (BM_IS_GAP(block))
-                {
-                    bm::for_each_gap_blk(BMGAP_PTR(block),
-                                         nb * bm::bits_in_block,
-                                         bit_functor);
-                }
-                else
-                {
-                    // TODO: optimize FULL BLOCK ADDRESS scan
-                    block = BLOCK_ADDR_SAN(block);
-                    
-                    bm::for_each_bit_blk(block, nb * bm::bits_in_block,
-                                         bit_functor);
-                }
+                BM_SCANNER_OP(0)
+                BM_SCANNER_OP(1)
+                BM_SCANNER_OP(2)
+                BM_SCANNER_OP(3)
             }
-        } // for j
+            j += 4;
+        #elif defined(BM64_SSE4)
+            if (!sse42_test_all_zero_wave(blk_blk + j))
+            {
+                BM_SCANNER_OP(0)
+                BM_SCANNER_OP(1)
+            }
+            j += 2;
+        #else
+            BM_SCANNER_OP(0)
+            ++j;
+        #endif
+        
+        } while (j < bm::set_array_size);
+        
     }  // for i
-
 }
 
+#undef BM_SCANNER_OP
 
 /**
     @brief bit-vector visitor scanner to traverse each 1 bit using C callback
@@ -300,11 +320,6 @@ void rank_compressor<BV>::decompress(BV& bv_target,
         if (rank < 256)
         {
             en_i.skip(s - r_idx);
-            //r_idx = s;
-            /*
-            for (; s > r_idx; ++r_idx) // TODO: optimization
-                ++en_i;
-            */
             BM_ASSERT(en_i.valid());
             new_pos = *en_i;
         }
@@ -312,7 +327,6 @@ void rank_compressor<BV>::decompress(BV& bv_target,
         {
             bv_idx.find_rank(rank, i, new_pos);
             BM_ASSERT(new_pos);
-            //r_idx = s;
             en_i.go_to(new_pos);
             BM_ASSERT(en_i.valid());
         }
