@@ -327,13 +327,22 @@ void set2set_11_transform<SV>::run(const bvector_type&        bv_in,
     
     const unsigned buf_max = 1024;
     unsigned buf_cnt = 0;
+    typename SV::size_type gather_idx[buf_max];
     typename SV::value_type buffer[buf_max];
 
     typename SV::bvector_type::enumerator en(bv_product_.first());
     for (; en.valid(); ++en)
     {
-        auto idx = *en;
+        typename SV::size_type idx = *en;
         idx = sv_brel.translate_address(idx);
+        gather_idx[buf_cnt++] = idx;
+        if (buf_cnt == buf_max)
+        {
+            sv_brel.gather(&buffer[0], &gather_idx[0], buf_cnt);
+            bm::combine_or(bv_out, &buffer[0], &buffer[buf_cnt]);
+            buf_cnt = 0;
+        }
+/*
         typename SV::value_type translated_id = sv_brel.get(idx);
         
         buffer[buf_cnt] = translated_id;
@@ -343,9 +352,11 @@ void set2set_11_transform<SV>::run(const bvector_type&        bv_in,
             bm::combine_or(bv_out, &buffer[0], &buffer[buf_cnt]);
             buf_cnt = 0;
         }
+*/
     } // for en
     if (buf_cnt)
     {
+        sv_brel.gather(&buffer[0], &gather_idx[0], buf_cnt);
         bm::combine_or(bv_out, &buffer[0], &buffer[buf_cnt]);
     }
 }
