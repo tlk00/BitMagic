@@ -27,6 +27,8 @@ For more information please visit:  http://bitmagic.io
 
 #if defined(_M_AMD64) || defined(_M_X64) 
 #include <intrin.h>
+#elif defined(BMSSE2OPT) || defined(BMSSE42OPT)
+#include <emmintrin.h>
 #endif
 
 #ifdef __GNUG__
