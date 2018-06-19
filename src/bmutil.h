@@ -29,6 +29,9 @@ For more information please visit:  http://bitmagic.io
 #include <intrin.h>
 #elif defined(BMSSE2OPT) || defined(BMSSE42OPT)
 #include <emmintrin.h>
+#elif defined(BMAVX2OPT)
+#include <emmintrin.h>
+#include <avx2intrin.h>
 #endif
 
 #ifdef __GNUG__
