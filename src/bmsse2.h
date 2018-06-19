@@ -329,7 +329,7 @@ bm::id_t sse2_bit_block_calc_count_change(const __m128i* BMRESTRICT block,
            }
            else
            {
-               if ((w0=blk[0]))
+               if (0!=(w0=blk[0]))
                {
                    BM_INCWORD_BITCOUNT(count, tcnt[0]);
                    count -= !(w_prev ^ (w0 & 1));
@@ -340,7 +340,7 @@ bm::id_t sse2_bit_block_calc_count_change(const __m128i* BMRESTRICT block,
                    count -= !w_prev; w_prev ^= w_prev;
                }  
            }
-           if ((w0=blk[1]))
+           if (0!=(w0=blk[1]))
            {
                BM_INCWORD_BITCOUNT(count, tcnt[1]);
                count -= !(w_prev ^ (w0 & 1));
@@ -350,7 +350,7 @@ bm::id_t sse2_bit_block_calc_count_change(const __m128i* BMRESTRICT block,
            {
                count -= !w_prev; w_prev ^= w_prev;
            }    
-           if ((w0=blk[2]))
+           if (0!=(w0=blk[2]))
            {
                BM_INCWORD_BITCOUNT(count, tcnt[2]);
                count -= !(w_prev ^ (w0 & 1));
@@ -360,7 +360,7 @@ bm::id_t sse2_bit_block_calc_count_change(const __m128i* BMRESTRICT block,
            {
                count -= !w_prev; w_prev ^= w_prev;
            }      
-           if ((w0=blk[3]))
+           if (0!=(w0=blk[3]))
            {
                BM_INCWORD_BITCOUNT(count, tcnt[3]);
                count -= !(w_prev ^ (w0 & 1));
