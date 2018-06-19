@@ -11192,6 +11192,14 @@ void TestSparseVectorTransform()
         bvector_transform_11(bv_in, sv, bv_out);
         assert(bv_out.count() == 0);
         cout << "Transform11 with empty sv - ok" << endl;
+
+        bm::set2set_11_transform<sparse_vector_u32> set2set;
+        unsigned to;
+        bool found = set2set.remap(0, sv, to);
+        assert(!found);
+        found = set2set.remap(3, sv, to);
+        assert(!found);
+
     }
 
     {
@@ -11203,35 +11211,91 @@ void TestSparseVectorTransform()
         sv.set(10, 2);
         sv.set(21, 201);
 
+        bm::set2set_11_transform<sparse_vector_u32> set2set;
+        unsigned to;
+        bool found = set2set.remap(0, sv, to);
+        assert(!found);
+        found = set2set.remap(3, sv, to);
+        assert(found);
+        assert(to == 35);
+
         bvect bv_in { 1, 2, 3, 10, 20 };
         bvect bv_control {25, 35, 2 };
 
         {
-        bvect bv_out;
-
-        bvector_transform_11(bv_in, sv, bv_out);
-        int cmp = bv_control.compare(bv_out);
-        if (cmp != 0)
-        {
-            cerr << "Transform11 (1) control comparison failed" << endl;
-            exit(1);
-        }
-        
-        sv.optimize();
-        bv_out.clear();
-        
-        bvector_transform_11(bv_in, sv, bv_out);
-        cmp = bv_control.compare(bv_out);
-        if (cmp != 0)
-        {
-            cerr << "Transform11 (1, 1) control comparison failed" << endl;
-            exit(1);
-        }
+            bvect bv_out;
+            bvector_transform_11(bv_in, sv, bv_out);
+            int cmp = bv_control.compare(bv_out);
+            if (cmp != 0)
+            {
+                cerr << "Transform11 (1) control comparison failed" << endl;
+                exit(1);
+            }
+            
+            sv.optimize();
+            bv_out.clear();
+            
+            bvector_transform_11(bv_in, sv, bv_out);
+            cmp = bv_control.compare(bv_out);
+            if (cmp != 0)
+            {
+                cerr << "Transform11 (1, 1) control comparison failed" << endl;
+                exit(1);
+            }
         }
         
         cout << "Transform11 (1) - ok" << endl;
     }
-    
+    {
+        sparse_vector_u32 sv;
+
+        sv.set(2, 25);
+        sv.set(3, 35);
+        sv.set(7, 75);
+        sv.set(10, 2);
+        sv.set(21, 201);
+
+        bm::set2set_11_transform<sparse_vector_u32> set2set;
+        unsigned to;
+        bool found = set2set.remap(0, sv, to);
+        assert(found);
+        assert(to == 0);
+        found = set2set.remap(8, sv, to);
+        assert(found);
+        assert(to == 0);
+        found = set2set.remap(3, sv, to);
+        assert(found);
+        assert(to == 35);
+
+
+        bvect bv_in { 0, 2, 3, 10};
+        bvect bv_control {0, 25, 35, 2 };
+
+        {
+            bvect bv_out;
+            bvector_transform_11(bv_in, sv, bv_out);
+            int cmp = bv_control.compare(bv_out);
+            if (cmp != 0)
+            {
+                cerr << "Transform11 (1-1) control comparison failed" << endl;
+                exit(1);
+            }
+            
+            sv.optimize();
+            bv_out.clear();
+            
+            bvector_transform_11(bv_in, sv, bv_out);
+            cmp = bv_control.compare(bv_out);
+            if (cmp != 0)
+            {
+                cerr << "Transform11 (1-1, 1) control comparison failed" << endl;
+                exit(1);
+            }
+        }
+        
+        cout << "Transform11 (1-1) - ok" << endl;
+    }
+
     {
         bvect bv_in, bv_out;
         sparse_vector_u32 sv(bm::use_null);
@@ -14104,6 +14168,7 @@ int main(void)
     //LoadVectors("c:/dev/bv_perf", 3, 27);
     exit(1);
 */
+
 
     TestRecomb();
 
