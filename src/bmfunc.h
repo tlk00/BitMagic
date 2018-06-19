@@ -799,8 +799,8 @@ unsigned gap_test_unr(const T* buf, const unsigned pos)
 
     BM_ASSERT(res == bm::gap_test(buf, pos));
     return res;
-#endif
-#if defined(BMSSE42OPT)
+//#endif
+#elif defined(BMSSE42OPT)
     unsigned start = 1;
     unsigned end = 1 + ((*buf) >> 3);
     unsigned dsize = end - start;
