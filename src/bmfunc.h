@@ -5968,6 +5968,28 @@ unsigned short bitscan_wave(const bm::word_t* w_ptr, unsigned char* bits)
 }
 
 
+/**
+    bit index to word gather-scatter algorithm
+    @ingroup bitfunc
+    @internal
+*/
+template<typename TRGW, typename IDX, typename SZ>
+void bit_block_gather_scatter(TRGW* arr, const bm::word_t* blk,
+                              const IDX* idx, SZ size, unsigned start, unsigned bit_idx)
+{
+    unsigned nbit, nword, mask0;
+    
+    // bit block gather (TODO: SSE/AVX)
+    for (unsigned k = start; k < size; ++k)
+    {
+        nbit = unsigned(idx[k] & bm::set_block_mask);
+        nword  = unsigned(nbit >> bm::set_word_shift);
+        mask0 = 1u << (nbit & bm::set_word_mask);
+        arr[k] |= TRGW(bool(blk[nword] & mask0) << bit_idx);
+    }
+}
+
+
 // --------------------------------------------------------------
 // Functions to work with int values stored in 64-bit pointers
 // --------------------------------------------------------------

@@ -1220,8 +1220,7 @@ sparse_vector<Val, BV>::gather(value_type*      arr,
                 // TODO: write a streaming check for sorted cases (faster)
                 for (unsigned k = i; k < r; ++k)
                 {
-                    unsigned gather_i = idx[k];
-                    unsigned nbit = unsigned(gather_i & bm::set_block_mask);
+                    unsigned nbit = unsigned(idx[k] & bm::set_block_mask);
                     unsigned is_set = bm::gap_test_unr(BMGAP_PTR(blk), nbit);
                     vm = (bool)is_set;
                     vm <<= j;
@@ -1229,18 +1228,7 @@ sparse_vector<Val, BV>::gather(value_type*      arr,
                 }
                 continue;
             }
-            // bit block gather (TODO: SSE/AVX)
-            for (unsigned k = i; k < r; ++k)
-            {
-                unsigned gather_i = idx[k];
-                unsigned nbit = unsigned(gather_i & bm::set_block_mask);
-                unsigned nword  = unsigned(nbit >> bm::set_word_shift);
-                unsigned mask0 = 1u << (nbit & bm::set_word_mask);
-                unsigned is_set = blk[nword] & mask0;
-                vm = (bool)is_set;
-                vm <<= j;
-                arr[k] |= vm;
-            }
+            bm::bit_block_gather_scatter(arr, blk, idx, r, i, j);
         } // for (each plain)
         
         i = r;
@@ -1402,15 +1390,6 @@ sparse_vector<Val, BV>::extract(value_type* arr,
             
             const value_type m = mask_;
             unsigned i = 0;
-            /*
-            for (i = 0; i < bits_size/4; i+=4)
-            {
-                arr_[idx_base + bits[i+0]] |= m;
-                arr_[idx_base + bits[i+1]] |= m;
-                arr_[idx_base + bits[i+2]] |= m;
-                arr_[idx_base + bits[i+3]] |= m;
-            }
-            */
             for (; i < bits_size; ++i)
             {
                 arr_[idx_base + bits[i]] |= m;
