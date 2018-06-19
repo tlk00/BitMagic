@@ -18,7 +18,10 @@ For more information please visit:  http://bitmagic.io
 
 /** \example svsample05.cpp
   Example how to use for bvector re-mapping / transformation
-  based on sparse_vector as a translation table
+  based on sparse_vector as a translation table.
+
+  Example discusses how use of NULL (unassigned) sparse_vector<> semantics affects
+  behavior of image transformation algorithm.
  
   \sa bm::sparse_vector<>
   \sa bm::set2set_11_transform
@@ -83,7 +86,7 @@ int main(void)
     try
     {
         // initialize sparse_vector as a binary relation (transform function)
-        // to translate from one set to another
+        // to translate from one set to another (please note it uses NULL values)
         //
         sparse_vector_u32 sv_transform(bm::use_null);
         
@@ -111,7 +114,48 @@ int main(void)
         bm::set2set_11_transform<sparse_vector_u32> func;
         func.run(bv_in, sv_transform, bv_out);
         
+        std::cout << "re-mapped vector:" << endl;
         print_bvector(bv_out); // ( count = 4): [25, 35, 2000, 2001, ]
+
+        // Please note, that remapping request for "1" cannot be satisfied
+        // as sv_transform vector did not assign this element so it has
+        // special unassigned, NULL value
+
+        bm::id_t from = 1;
+        bm::id_t to;
+        bool found = func.remap(1, sv_transform, to);
+        if (!found)
+            std::cout << from << " not mapped" << std::endl;  // THIS works!
+        else
+            std::cout << from << " mapped to " << to << std::endl;
+
+
+        // now lets try another experiment here, construct image transform 
+        // function as default NOT using NULL values
+
+        sparse_vector_u32 sv_transform2;
+
+        sv_transform2.set(2, 25);
+        sv_transform2.set(3, 35);
+        sv_transform2.set(7, 75);
+        sv_transform2.set(1000, 2000);
+        sv_transform2.set(256, 2001);
+
+        found = func.remap(1, sv_transform2, to);
+        if (!found)
+            std::cout << from << " not mapped" << std::endl;
+        else
+            std::cout << from << " mapped to " << to << std::endl; // Now THIS works!
+
+        // Please note that remapping for unassigned value - works and maps to 0
+        // because transformation sparse vector does not keep information about
+        // unassigned values, all unassigned are now implicitly assumed to be "0"
+
+        func.run(bv_in, sv_transform2, bv_out);
+
+        std::cout << "re-mapped vector2:" << endl;
+        print_bvector(bv_out); // ( count = 5): [0, 25, 35, 2000, 2001, ]
+
     }
     catch(std::exception& ex)
     {
