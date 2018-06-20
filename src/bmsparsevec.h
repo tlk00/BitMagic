@@ -1198,13 +1198,9 @@ sparse_vector<Val, BV>::gather(value_type*       arr,
         case BM_UNKNOWN:
         {
             size_type idx_prev = idx[r];
-            for (; r < size; ++r)
+            for (; (r < size) && (nb == unsigned(idx[r] >> bm::set_block_shift)); ++r)
             {
-                unsigned nb_r = unsigned(idx[r] >> bm::set_block_shift);
-                if (nb != nb_r)
-                    break;
-                if (idx[r] < idx_prev) // less tan prev.breaks the sort order
-                    sorted_block = false;
+                sorted_block = !(idx[r] < idx_prev);
                 idx_prev = idx[r];
             }
         }
@@ -1217,18 +1213,14 @@ sparse_vector<Val, BV>::gather(value_type*       arr,
         break;
         case BM_SORTED:
         {
-            // if sorted and last element is in the same block - they all are
+            // if sorted and LAST index is in the same block - they all are
             //  (can avoid a look ahead scan)
-            size_type last_idx = idx[size-1];
-            if (nb == unsigned(last_idx >> bm::set_block_shift))
-            {
+            if (nb == unsigned(idx[size-1] >> bm::set_block_shift))
                 r = size;
-            }
             else // look ahead to understand block request depth
             {
-                for (; r < size; ++r)
-                    if (nb != unsigned(idx[r] >> bm::set_block_shift))
-                        break;
+                for (;(r < size) &&
+                      (nb == unsigned(idx[r] >> bm::set_block_shift)); ++r){}
             }
         }
         break;
@@ -1258,7 +1250,7 @@ sparse_vector<Val, BV>::gather(value_type*       arr,
             value_type vm;
             if (blk == FULL_BLOCK_FAKE_ADDR)
             {
-                vm = 1u << j;
+                vm = (1u << j);
                 for (unsigned k = i; k < r; ++k)
                     arr[k] |= vm;
                 continue;
@@ -1278,24 +1270,21 @@ sparse_vector<Val, BV>::gather(value_type*       arr,
                         unsigned gap_value = gap_blk[gidx];
                         if (is_set)
                         {
-                            arr[k] |= (1 << j);
+                            arr[k] |= vm = (1u << j);
                             for (++k; k < r; ++k) // speculative look-up
                             {
-                                nbit = unsigned(idx[k] & bm::set_block_mask);
-                                if (nbit <= gap_value)
-                                    arr[k] |= (1 << j);
+                                if (unsigned(idx[k] & bm::set_block_mask) <= gap_value)
+                                    arr[k] |= vm;
                                 else
                                     break;
                             }
                         }
                         else // 0 GAP - skip. not set
                         {
-                            for (++k; k < r; ++k) // speculative look-up
-                            {
-                                nbit = unsigned(idx[k] & bm::set_block_mask);
-                                if (nbit > gap_value)
-                                    break;
-                            }
+                            for (++k;
+                                 (k < r) &&
+                                 (unsigned(idx[k] & bm::set_block_mask) <= gap_value);
+                                 ++k) {}
                         }
                     } // for k
                 }
