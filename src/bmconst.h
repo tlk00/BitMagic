@@ -130,6 +130,17 @@ enum set_operation
 };
 
 
+/*!
+   @brief Sort order declaration
+   @ingroup bvector
+*/
+enum sort_order
+{
+    BM_UNSORTED = 0,  //!< input set is NOT sorted
+    BM_SORTED = 1,    //!< input set is sorted (ascending order)
+    BM_UNKNOWN = 2    //!< sort order unknown
+};
+
 
 /*!
     @brief set representation variants

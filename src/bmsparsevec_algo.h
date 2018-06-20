@@ -415,14 +415,14 @@ void set2set_11_transform<SV>::remap(const bvector_type&        bv_in,
         gather_idx_[buf_cnt++] = idx;
         if (buf_cnt == sv_g_size)
         {
-            sv_brel.gather(&buffer_[0], &gather_idx_[0], buf_cnt);
+            sv_brel.gather(&buffer_[0], &gather_idx_[0], buf_cnt, BM_SORTED);
             bm::combine_or(bv_out, &buffer_[0], &buffer_[buf_cnt]);
             buf_cnt ^= buf_cnt;
         }
     } // for en
     if (buf_cnt)
     {
-        sv_brel.gather(&buffer_[0], &gather_idx_[0], buf_cnt);
+        sv_brel.gather(&buffer_[0], &gather_idx_[0], buf_cnt, BM_SORTED);
         bm::combine_or(bv_out, &buffer_[0], &buffer_[buf_cnt]);
     }
 }

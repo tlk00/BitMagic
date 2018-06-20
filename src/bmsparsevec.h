@@ -552,7 +552,6 @@ public:
                      bool        zero_mem = true) const;
     
     
-    
     /*!
         \brief Gather elements to a C-style array
      
@@ -569,6 +568,10 @@ public:
         \param arr  - dest array
         \param idx - index list to gather elements
         \param size - decoding index list size (array allocation should match)
+        \param sorted_idx - sort order directive for the idx array
+                            (BM_UNSORTED, BM_SORTED, BM_UNKNOWN)
+        Sort order affects both performance and correctness(!), use BM_UNKNOWN
+        if not sure.
      
         \return number of actually exported elements (can be less than requested)
      
@@ -576,7 +579,8 @@ public:
     */
     size_type gather(value_type* arr,
                      const size_type* idx,
-                     size_type   size) const;
+                     size_type   size,
+                     bm::sort_order sorted_idx) const;
     ///@}
 
     /*! \brief content exchange
@@ -1162,9 +1166,10 @@ sparse_vector<Val, BV>::decode(value_type* arr,
 
 template<class Val, class BV>
 typename sparse_vector<Val, BV>::size_type
-sparse_vector<Val, BV>::gather(value_type*      arr,
-                               const size_type* idx,
-                               size_type        size) const
+sparse_vector<Val, BV>::gather(value_type*       arr,
+                               const size_type*  idx,
+                               size_type         size,
+                               bm::sort_order    sorted_idx) const
 {
     BM_ASSERT(arr);
     BM_ASSERT(idx);
@@ -1180,15 +1185,56 @@ sparse_vector<Val, BV>::gather(value_type*      arr,
     
     for (unsigned i = 0; i < size;)
     {
-        // look ahead for the depth of the same block (speculate input is sorted)
+        bool sorted_block = true;
+        
+        // look ahead for the depth of the same block
+        //          (speculate more than one index lookup per block)
+        //
         unsigned nb = unsigned(idx[i] >> bm::set_block_shift);
         unsigned r = i;
-        for (; r < size; ++r)
+        
+        switch (sorted_idx)
         {
-            unsigned nb_r = unsigned(idx[r] >> bm::set_block_shift);
-            if (nb != nb_r)
-                break;
+        case BM_UNKNOWN:
+        {
+            size_type idx_prev = idx[r];
+            for (; r < size; ++r)
+            {
+                unsigned nb_r = unsigned(idx[r] >> bm::set_block_shift);
+                if (nb != nb_r)
+                    break;
+                if (idx[r] < idx_prev) // less tan prev.breaks the sort order
+                    sorted_block = false;
+                idx_prev = idx[r];
+            }
         }
+        break;
+        case BM_UNSORTED:
+            sorted_block = false;
+            for (; r < size; ++r)
+                if (nb != unsigned(idx[r] >> bm::set_block_shift))
+                    break;
+        break;
+        case BM_SORTED:
+        {
+            // if sorted and last element is in the same block - they all are
+            //  (can avoid a look ahead scan)
+            size_type last_idx = idx[size-1];
+            if (nb == unsigned(last_idx >> bm::set_block_shift))
+            {
+                r = size;
+            }
+            else // look ahead to understand block request depth
+            {
+                for (; r < size; ++r)
+                    if (nb != unsigned(idx[r] >> bm::set_block_shift))
+                        break;
+            }
+        }
+        break;
+        } // switch
+        
+        // single element hit, use plain random access
         if (r == i+1)
         {
             arr[i] = this->get(idx[i]);
@@ -1196,7 +1242,7 @@ sparse_vector<Val, BV>::gather(value_type*      arr,
             continue;
         }
 
-        // process the same block co-located elements at ones
+        // process block co-located elements at ones for best (CPU cache opt)
         //
         unsigned i0 = nb >> bm::set_array_shift; // top block address
         unsigned j0 = nb &  bm::set_array_mask;  // address in sub-block
@@ -1217,14 +1263,50 @@ sparse_vector<Val, BV>::gather(value_type*      arr,
             }
             if (BM_IS_GAP(blk))
             {
-                // TODO: write a streaming check for sorted cases (faster)
-                for (unsigned k = i; k < r; ++k)
+                const bm::gap_word_t* gap_blk = BMGAP_PTR(blk);
+                unsigned is_set;
+                
+                if (sorted_block) // b-search hybrid with scan lookup
                 {
-                    unsigned nbit = unsigned(idx[k] & bm::set_block_mask);
-                    unsigned is_set = bm::gap_test_unr(BMGAP_PTR(blk), nbit);
-                    vm = (bool)is_set;
-                    vm <<= j;
-                    arr[k] |= vm;
+                    for (unsigned k = i; k < r; )
+                    {
+                        unsigned nbit = unsigned(idx[k] & bm::set_block_mask);
+                        
+                        unsigned gidx = bm::gap_bfind(gap_blk, nbit, &is_set);
+                        unsigned gap_value = gap_blk[gidx];
+                        if (is_set)
+                        {
+                            arr[k] |= (1 << j);
+                            for (++k; k < r; ++k) // speculative look-up
+                            {
+                                nbit = unsigned(idx[k] & bm::set_block_mask);
+                                if (nbit <= gap_value)
+                                    arr[k] |= (1 << j);
+                                else
+                                    break;
+                            }
+                        }
+                        else // 0 GAP - skip. not set
+                        {
+                            for (++k; k < r; ++k) // speculative look-up
+                            {
+                                nbit = unsigned(idx[k] & bm::set_block_mask);
+                                if (nbit > gap_value)
+                                    break;
+                            }
+                        }
+                    } // for k
+                }
+                else // unsorted block gather request: b-search lookup
+                {
+                    for (unsigned k = i; k < r; ++k)
+                    {
+                        unsigned nbit = unsigned(idx[k] & bm::set_block_mask);
+                        is_set = bm::gap_test_unr(gap_blk, nbit);
+                        vm = (bool)is_set;
+                        vm <<= j;
+                        arr[k] |= vm;
+                    } // for k
                 }
                 continue;
             }
