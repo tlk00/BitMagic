@@ -3,31 +3,23 @@
 /*
 Copyright(c) 2002-2017 Anatoliy Kuznetsov(anatoliy_kuznetsov at yahoo.com)
 
-Permission is hereby granted, free of charge, to any person
-obtaining a copy of this software and associated documentation
-files (the "Software"), to deal in the Software without restriction,
-including without limitation the rights to use, copy, modify, merge,
-publish, distribute, sublicense, and/or sell copies of the Software,
-and to permit persons to whom the Software is furnished to do so,
-subject to the following conditions:
+Licensed under the Apache License, Version 2.0 (the "License");
+you may not use this file except in compliance with the License.
+You may obtain a copy of the License at
 
-The above copyright notice and this permission notice shall be included
-in all copies or substantial portions of the Software.
+    http://www.apache.org/licenses/LICENSE-2.0
 
-THE SOFTWARE IS PROVIDED "AS IS", WITHOUT WARRANTY OF ANY KIND,
-EXPRESS OR IMPLIED, INCLUDING BUT NOT LIMITED TO THE WARRANTIES
-OF MERCHANTABILITY, FITNESS FOR A PARTICULAR PURPOSE AND NONINFRINGEMENT.
-IN NO EVENT SHALL THE AUTHORS OR COPYRIGHT HOLDERS BE LIABLE FOR ANY CLAIM,
-DAMAGES OR OTHER LIABILITY, WHETHER IN AN ACTION OF CONTRACT, TORT OR OTHERWISE,
-ARISING FROM, OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR
-OTHER DEALINGS IN THE SOFTWARE.
-
-You have to explicitly mention BitMagic project in any derivative product,
-its WEB Site, published materials, articles or any other work derived from this
-project or based on our code or know-how.
+Unless required by applicable law or agreed to in writing, software
+distributed under the License is distributed on an "AS IS" BASIS,
+WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
+See the License for the specific language governing permissions and
+limitations under the License.
 
 For more information please visit:  http://bitmagic.io
+*/
 
+/*! \file bmutil.h
+    \brief Bit manipulation primitives (internal)
 */
 
 #include "bmdef.h"
@@ -40,17 +32,43 @@ For more information please visit:  http://bitmagic.io
 namespace bm
 {
 
+        /**
+        bit-block array wrapped into union for correct interpretation of
+        32-bit vs 64-bit access vs SIMD
+        @internal
+        */
+        struct bit_block_t
+        {
+            union bunion_t
+            {
+                bm::word_t BM_VECT_ALIGN w32[bm::set_block_size] BM_VECT_ALIGN_ATTR;
+                bm::id64_t BM_VECT_ALIGN w64[bm::set_block_size / 2] BM_VECT_ALIGN_ATTR;
+#ifdef BMAVX2OPT
+                __m256i  BM_VECT_ALIGN w256[bm::set_block_size / 8] BM_VECT_ALIGN_ATTR;
+#endif
+#if defined(BMSSE2OPT) || defined(BMSSE42OPT)
+                __m128i  BM_VECT_ALIGN w128[bm::set_block_size / 4] BM_VECT_ALIGN_ATTR;
+#endif
+            } b_;
 
+            operator bm::word_t*() { return &(b_.w32[0]); }
+            operator const bm::word_t*() const { return &(b_.w32[0]); }
+            explicit operator bm::id64_t*() { return &b_.w64[0]; }
+            explicit operator const bm::id64_t*() const { return &b_.w64[0]; }
+#ifdef BMAVX2OPT
+            explicit operator __m256i*() { return &b_.w256[0]; }
+            explicit operator const __m256i*() const { return &b_.w256[0]; }
+#endif
+#if defined(BMSSE2OPT) || defined(BMSSE42OPT)
+            explicit operator __m128i*() { return &b_.w128[0]; }
+            explicit operator const __m128i*() const { return &b_.w128[0]; }
+#endif
 
-// From:
-// http://citeseerx.ist.psu.edu/viewdoc/summary?doi=10.1.1.37.8562
-//
-template<typename T>
-T bit_scan_fwd(T v)
-{
-    return 
-        DeBruijn_bit_position<true>::_multiply[((word_t)((v & -v) * 0x077CB531U)) >> 27];
-}
+            const bm::word_t* begin() const { return (b_.w32 + 0); }
+            bm::word_t* begin() { return (b_.w32 + 0); }
+            const bm::word_t* end() const { return (b_.w32 + bm::set_block_size); }
+            bm::word_t* end() { return (b_.w32 + bm::set_block_size); }
+        };
 
 /**
     Get minimum of 2 values
@@ -183,12 +201,12 @@ BMFORCEINLINE unsigned int bsf_asm32(unsigned int value)
 
 #else
 
-BMFORCEINLINE unsigned int bsr_asm32(register unsigned int value)
+BMFORCEINLINE unsigned int bsr_asm32(unsigned int value)
 {   
   __asm  bsr  eax, value
 }
 
-BMFORCEINLINE unsigned int bsf_asm32(register unsigned int value)
+BMFORCEINLINE unsigned int bsf_asm32(unsigned int value)
 {   
   __asm  bsf  eax, value
 }
@@ -199,6 +217,27 @@ BMFORCEINLINE unsigned int bsf_asm32(register unsigned int value)
 
 #endif // BM_x86
 
+
+// From:
+// http://citeseerx.ist.psu.edu/viewdoc/summary?doi=10.1.1.37.8562
+//
+template<typename T>
+T bit_scan_fwd(T v)
+{
+    return
+        DeBruijn_bit_position<true>::_multiply[((word_t)((v & -v) * 0x077CB531U)) >> 27];
+}
+
+inline
+unsigned bit_scan_reverse32(unsigned value)
+{
+    BM_ASSERT(value);
+#if defined(BM_x86)
+    return bm::bsr_asm32(value);
+#else
+    return bm::ilog2_LUT<unsigned int>(value);
+#endif
+}
 
 
 } // bm

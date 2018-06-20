@@ -35,10 +35,17 @@ TARGETS_BLD =  \
               samples/bvsample08 \
               samples/bvsample09 \
               samples/bvsample10 \
+              samples/bvsample11 \
+              samples/bvsample12 \
+              samples/bvsample14 \
+              samples/bvsample15 \
               samples/xsample01 \
+              samples/xsample02 \
               samples/svsample01 \
               samples/svsample02 \
               samples/svsample03 \
+              samples/svsample04 \
+              samples/svsample05 \
               utils/svutil \
               tests/stress tests/perf 
         
@@ -68,9 +75,10 @@ relprep: .DIRS_BLD
 	$(RM) -rf *.suo
 	$(RM) -rf debug release cvsenv.sh
 	cd platforms; dos2unix *.mk; cd -
+	dos2unix canon-system config.guess bmenv.sh
 	dos2unix readme *.txt
 	cd src; dos2unix *.h
 	chmod -x src/*
-	chmod -x Makefile makefile.in Doxyfile license.txt *.sln readme
+	chmod -x Makefile makefile.in Doxyfile readme
 
 install : .DIRS_INST

@@ -1,31 +1,19 @@
 /*
 Copyright(c) 2002-2017 Anatoliy Kuznetsov(anatoliy_kuznetsov at yahoo.com)
 
-Permission is hereby granted, free of charge, to any person
-obtaining a copy of this software and associated documentation
-files (the "Software"), to deal in the Software without restriction,
-including without limitation the rights to use, copy, modify, merge,
-publish, distribute, sublicense, and/or sell copies of the Software,
-and to permit persons to whom the Software is furnished to do so,
-subject to the following conditions:
+Licensed under the Apache License, Version 2.0 (the "License");
+you may not use this file except in compliance with the License.
+You may obtain a copy of the License at
 
-The above copyright notice and this permission notice shall be included
-in all copies or substantial portions of the Software.
+    http://www.apache.org/licenses/LICENSE-2.0
 
-THE SOFTWARE IS PROVIDED "AS IS", WITHOUT WARRANTY OF ANY KIND,
-EXPRESS OR IMPLIED, INCLUDING BUT NOT LIMITED TO THE WARRANTIES
-OF MERCHANTABILITY, FITNESS FOR A PARTICULAR PURPOSE AND NONINFRINGEMENT.
-IN NO EVENT SHALL THE AUTHORS OR COPYRIGHT HOLDERS BE LIABLE FOR ANY CLAIM,
-DAMAGES OR OTHER LIABILITY, WHETHER IN AN ACTION OF CONTRACT, TORT OR OTHERWISE,
-ARISING FROM, OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR
-OTHER DEALINGS IN THE SOFTWARE.
-
-You have to explicitly mention BitMagic project in any derivative product,
-its WEB Site, published materials, articles or any other work derived from this
-project or based on our code or know-how.
+Unless required by applicable law or agreed to in writing, software
+distributed under the License is distributed on an "AS IS" BASIS,
+WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
+See the License for the specific language governing permissions and
+limitations under the License.
 
 For more information please visit:  http://bitmagic.io
-
 */
 
 #include <iostream>
@@ -55,7 +43,7 @@ For more information please visit:  http://bitmagic.io
 #include "bmdbg.h"
 #include "bmtimer.h"
 
-
+static
 void show_help()
 {
     std::cerr
@@ -81,7 +69,7 @@ std::string  u32_out_file;
 bool         is_diag = false;
 bool         is_timing = false;
 
-
+static
 int parse_args(int argc, char *argv[])
 {
     for (int i = 1; i < argc; ++i)
@@ -176,6 +164,7 @@ bm::chrono_taker::duration_map_type  timing_map;
 
 // load sparse_vector from a file
 //
+static
 int load_sv(const std::string& fname, sparse_vector_u32& sv)
 {
     std::vector<unsigned char> buffer;
@@ -216,6 +205,7 @@ int load_sv(const std::string& fname, sparse_vector_u32& sv)
 
 // load raw unsigned file
 //
+static
 int load_u32(const std::string& fname, std::vector<unsigned>& vect)
 {
     bm::chrono_taker tt("u32 BLOB read", 1, &timing_map);
@@ -239,6 +229,7 @@ int load_u32(const std::string& fname, std::vector<unsigned>& vect)
 
 // convert unsigned vector to sparse format
 //
+static
 int convert_u32(const std::vector<unsigned>& u32, sparse_vector_u32& sv)
 {
     BM_DECLARE_TEMP_BLOCK(tb)
@@ -346,8 +337,8 @@ int main(int argc, char *argv[])
             {
                 vect_u32_out.resize(sv_u32_in.size());
                 {
-                    bm::chrono_taker tt("sparse vector extract", 1, &timing_map);
-                    sv_u32_in.extract(&vect_u32_out[0], sv_u32_in.size(), 0, false);
+                    bm::chrono_taker tt("sparse vector decode", 1, &timing_map);
+                    sv_u32_in.decode(&vect_u32_out[0], 0, sv_u32_in.size(), false);
                     tt.stop(is_timing);
                 }
                 {

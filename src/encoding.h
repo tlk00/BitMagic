@@ -3,32 +3,25 @@
 /*
 Copyright(c) 2002-2017 Anatoliy Kuznetsov(anatoliy_kuznetsov at yahoo.com)
 
-Permission is hereby granted, free of charge, to any person
-obtaining a copy of this software and associated documentation
-files (the "Software"), to deal in the Software without restriction,
-including without limitation the rights to use, copy, modify, merge,
-publish, distribute, sublicense, and/or sell copies of the Software,
-and to permit persons to whom the Software is furnished to do so,
-subject to the following conditions:
+Licensed under the Apache License, Version 2.0 (the "License");
+you may not use this file except in compliance with the License.
+You may obtain a copy of the License at
 
-The above copyright notice and this permission notice shall be included
-in all copies or substantial portions of the Software.
+    http://www.apache.org/licenses/LICENSE-2.0
 
-THE SOFTWARE IS PROVIDED "AS IS", WITHOUT WARRANTY OF ANY KIND,
-EXPRESS OR IMPLIED, INCLUDING BUT NOT LIMITED TO THE WARRANTIES
-OF MERCHANTABILITY, FITNESS FOR A PARTICULAR PURPOSE AND NONINFRINGEMENT.
-IN NO EVENT SHALL THE AUTHORS OR COPYRIGHT HOLDERS BE LIABLE FOR ANY CLAIM,
-DAMAGES OR OTHER LIABILITY, WHETHER IN AN ACTION OF CONTRACT, TORT OR OTHERWISE,
-ARISING FROM, OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR
-OTHER DEALINGS IN THE SOFTWARE.
-
-You have to explicitly mention BitMagic project in any derivative product,
-its WEB Site, published materials, articles or any other work derived from this
-project or based on our code or know-how.
+Unless required by applicable law or agreed to in writing, software
+distributed under the License is distributed on an "AS IS" BASIS,
+WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
+See the License for the specific language governing permissions and
+limitations under the License.
 
 For more information please visit:  http://bitmagic.io
-
 */
+
+/*! \file encoding.h
+    \brief Encoding utilities for serialization (internal)
+*/
+
 
 #include <memory.h>
 #include "bmutil.h"
@@ -63,6 +56,7 @@ public:
     void put_prefixed_array_16(unsigned char c, 
                                const bm::short_t* s, unsigned count,
                                bool encode_count);
+    void memcpy(const unsigned char* src, size_t count);
     unsigned size() const;
     unsigned char* get_pos() const;
     void set_pos(unsigned char* buf_pos);
@@ -81,14 +75,21 @@ class decoder_base
 {
 public:
     decoder_base(const unsigned char* buf) { buf_ = start_ = buf; }
+    
     /// Reads character from the decoding buffer. 
-    BMFORCEINLINE unsigned char get_8() { return *buf_++; }
+    unsigned char get_8() { return *buf_++; }
+    
     /// Returns size of the current decoding stream.
-    BMFORCEINLINE 
     unsigned size() const { return (unsigned)(buf_ - start_); }
+    
     /// change current position
-    BMFORCEINLINE
     void seek(int delta) { buf_ += delta; }
+    
+    /// read bytes from the decode buffer
+    void memcpy(unsigned char* dst, size_t count);
+    
+    /// Return current buffer pointer
+    const unsigned char* get_pos() const { return buf_; }
 protected:
    const unsigned char*   buf_;
    const unsigned char*   start_;
@@ -610,6 +611,18 @@ inline void encoder::put_16(const bm::short_t* s, unsigned count)
 #endif
 }
 
+/*!
+    \brief copy bytes into target buffer or just rewind if src is NULL
+*/
+inline
+void encoder::memcpy(const unsigned char* src, size_t count)
+{
+    BM_ASSERT((buf_ + count) < (start_ + size_));
+    if (src)
+        ::memcpy(buf_, src, count);
+    buf_ += count;
+}
+
 
 /*!
    \fn unsigned encoder::size() const
@@ -717,6 +730,18 @@ void encoder::put_32(const bm::word_t* w, unsigned count)
 
 // ---------------------------------------------------------------------
 
+
+/*!
+    Load bytes from the decode buffer
+*/
+inline
+void decoder_base::memcpy(unsigned char* dst, size_t count)
+{
+    if (dst)
+        ::memcpy(dst, buf_, count);
+    buf_ += count;
+}
+
 /*!
    \fn decoder::decoder(const unsigned char* buf) 
    \brief Construction
@@ -795,7 +820,7 @@ inline void decoder::get_32(bm::word_t* w, unsigned count)
         return;
     }
 #if (BM_UNALIGNED_ACCESS_OK == 1)
-	memcpy(w, buf_, count * sizeof(bm::word_t));
+	::memcpy(w, buf_, count * sizeof(bm::word_t));
 	seek(count * 4);
 	return;
 #else

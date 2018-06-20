@@ -57,9 +57,9 @@ static JNIEnv* JNU_GetEnv() {
   JNIEnv *env;
   jint rc = cached_jvm->GetEnv((void **)&env, JNI_VERSION_1_8);
   if (rc == JNI_EDETACHED)
-    THROW(BM_ERR_DETACHED);
+    BM_THROW(BM_ERR_DETACHED);
   if (rc == JNI_EVERSION)
-    THROW(BM_ERR_JVM_NOT_SUPPORTED);
+    BM_THROW(BM_ERR_JVM_NOT_SUPPORTED);
 
   return env;
 }
@@ -70,7 +70,7 @@ namespace libbm
 //static void * array_alloc(int shift, size_t n) {
 //  //printf("Shift: %d\n", shift);
 //  if (shift < 0)
-//    THROW(BM_ERR_BADALLOC);
+//    BM_THROW(BM_ERR_BADALLOC);
 //
 //  JNIEnv *env = JNU_GetEnv();
 //  jsize sz = (n >> shift) + 1 + (sizeof(Jalloc) >> 3) + 1 + 1; // The last one for overrun check
@@ -78,12 +78,12 @@ namespace libbm
 //  jlongArray ja = env->NewLongArray(sz);
 //  if (ja == NULL) {
 //    printf("Could not allocate %d units.", n);
-//    THROW(BM_ERR_BADALLOC);
+//    BM_THROW(BM_ERR_BADALLOC);
 //  }
 //  
 //  jlong *jlongbuf = env->GetLongArrayElements(ja, 0);
 //  if (jlongbuf == NULL)
-//    THROW(BM_ERR_BADALLOC);
+//    BM_THROW(BM_ERR_BADALLOC);
 //  
 //  // Put the marker
 //  jlongbuf[sz - 1] = 1;
@@ -91,7 +91,7 @@ namespace libbm
 //  Jalloc *pJalloc = reinterpret_cast<Jalloc*>(jlongbuf);
 //  pJalloc->ref = env->NewGlobalRef(ja);
 //  if (pJalloc->ref == NULL)
-//    THROW(BM_ERR_BADALLOC);
+//    BM_THROW(BM_ERR_BADALLOC);
 //  pJalloc->ja = ja;
 //  pJalloc->sz = sz;
 //
@@ -129,7 +129,7 @@ namespace libbm
 static void * array_alloc(int shift, size_t n) {
   //printf("Shift: %d\n", shift);
   if (shift < 0)
-    THROW(BM_ERR_BADALLOC);
+    BM_THROW(BM_ERR_BADALLOC);
 
   JNIEnv *env = JNU_GetEnv();
   jsize sz = n + sizeof(Jalloc) + 1; // The last one for overrun check
@@ -137,12 +137,12 @@ static void * array_alloc(int shift, size_t n) {
   jbyteArray ja = env->NewByteArray(sz);
   if (ja == NULL) {
     printf("Could not allocate %d units.", n);
-    THROW(BM_ERR_BADALLOC);
+    BM_THROW(BM_ERR_BADALLOC);
   }
 
   jbyte *jbuf = env->GetByteArrayElements(ja, 0);
   if (jbuf == NULL)
-    THROW(BM_ERR_BADALLOC);
+    BM_THROW(BM_ERR_BADALLOC);
 
   // Put the marker
   jbuf[sz - 1] = 1;
@@ -150,7 +150,7 @@ static void * array_alloc(int shift, size_t n) {
   Jalloc *pJalloc = reinterpret_cast<Jalloc*>(jbuf);
   pJalloc->ref = env->NewGlobalRef(ja);
   if (pJalloc->ref == NULL)
-    THROW(BM_ERR_BADALLOC);
+    BM_THROW(BM_ERR_BADALLOC);
   pJalloc->ja = ja;
   pJalloc->sz = sz;
 
@@ -185,29 +185,29 @@ static void jni_free(void *p) {
   }
 }
   
-template<typename T>
-T* jni_alloc(size_t n) {
-//  printf("Allocating %d units in %s\n", n, __FUNCSIG__);
-  //printf("Size of T: %d\n", LOG2(sizeof(T)));
-  // Making array of longs to accommodate max value of unsigned int. 
-  // Java long size is 8 bytes
-  int shift = LOG2(SIZE_OF_JAVA_LONG) - LOG2(sizeof(T));
-  void* jbuffer = array_alloc(shift, n);
-  void *mem = static_cast<char*>(jbuffer) + sizeof(Jalloc);
-  fprintf(stderr, "Allocated %d at %p\n", n, mem);
-  return reinterpret_cast<T*>(mem);
-}
-
-template <> 
-void* jni_alloc(size_t n) {
-  //printf("Allocating %d units in %s\n", n, __FUNCSIG__);
-  int shift = LOG2(SIZE_OF_JAVA_LONG) - LOG2(sizeof(void*));
-  void* jbuffer = array_alloc(shift, n);
-  void *mem = static_cast<char*>(jbuffer) + sizeof(Jalloc);
-  fprintf(stderr, "Allocated %d at %p\n", n, mem);
-  return mem;
-}
-
+//template<typename T>
+//T* jni_alloc(size_t n) {
+////  printf("Allocating %d units in %s\n", n, __FUNCSIG__);
+//  //printf("Size of T: %d\n", LOG2(sizeof(T)));
+//  // Making array of longs to accommodate max value of unsigned int. 
+//  // Java long size is 8 bytes
+//  int shift = LOG2(SIZE_OF_JAVA_LONG) - LOG2(sizeof(T));
+//  void* jbuffer = array_alloc(shift, n);
+//  void *mem = static_cast<char*>(jbuffer) + sizeof(Jalloc);
+//  fprintf(stderr, "Allocated %d at %p\n", n, mem);
+//  return reinterpret_cast<T*>(mem);
+//}
+//
+//template <> 
+//void* jni_alloc(size_t n) {
+//  //printf("Allocating %d units in %s\n", n, __FUNCSIG__);
+//  int shift = LOG2(SIZE_OF_JAVA_LONG) - LOG2(sizeof(void*));
+//  void* jbuffer = array_alloc(shift, n);
+//  void *mem = static_cast<char*>(jbuffer) + sizeof(Jalloc);
+//  fprintf(stderr, "Allocated %d at %p\n", n, mem);
+//  return mem;
+//}
+//
 
 
 
@@ -225,15 +225,15 @@ public:
 # endif
 
 #else  
-      if (cached_jvm != 0) {
-        ptr = jni_alloc<bm::word_t>(n);
-      }
-      else
+      //if (cached_jvm != 0) {
+      //  ptr = jni_alloc<bm::word_t>(n);
+      //}
+      //else
         ptr = (bm::word_t*) ::malloc(n * sizeof(bm::word_t));
 #endif
         if (!ptr)
         {
-            THROW( BM_ERR_BADALLOC );
+            BM_THROW( BM_ERR_BADALLOC );
         }
         return ptr;
     }
@@ -248,10 +248,10 @@ public:
 # endif
 
 #else  
-      if (cached_jvm != 0) {
-        jni_free(p);
-      }
-      else
+      //if (cached_jvm != 0) {
+      //  jni_free(p);
+      //}
+      //else
         ::free(p);
 #endif
     }
@@ -264,24 +264,24 @@ public:
     static void* allocate(size_t n, const void *)
     {
       void* ptr = 0;
-      if (cached_jvm != 0) {
-        ptr = jni_alloc<void>(n);
-      }
-      else 
+      //if (cached_jvm != 0) {
+      //  ptr = jni_alloc<void>(n);
+      //}
+      //else 
         ptr = ::malloc(n * sizeof(void*));
 
       if (!ptr)
       {
-          THROW( BM_ERR_BADALLOC );
+          BM_THROW( BM_ERR_BADALLOC );
       }
       return ptr;
     }
 
     static void deallocate(void* p, size_t)
     {
-      if (cached_jvm != 0)
-        jni_free(p);
-      else
+      //if (cached_jvm != 0)
+      //  jni_free(p);
+      //else
         ::free(p);
     }
 };

@@ -3,31 +3,22 @@
 /*
 Copyright(c) 2002-2017 Anatoliy Kuznetsov(anatoliy_kuznetsov at yahoo.com)
 
-Permission is hereby granted, free of charge, to any person
-obtaining a copy of this software and associated documentation
-files (the "Software"), to deal in the Software without restriction,
-including without limitation the rights to use, copy, modify, merge,
-publish, distribute, sublicense, and/or sell copies of the Software,
-and to permit persons to whom the Software is furnished to do so,
-subject to the following conditions:
+Licensed under the Apache License, Version 2.0 (the "License");
+you may not use this file except in compliance with the License.
+You may obtain a copy of the License at
 
-The above copyright notice and this permission notice shall be included
-in all copies or substantial portions of the Software.
+    http://www.apache.org/licenses/LICENSE-2.0
 
-THE SOFTWARE IS PROVIDED "AS IS", WITHOUT WARRANTY OF ANY KIND,
-EXPRESS OR IMPLIED, INCLUDING BUT NOT LIMITED TO THE WARRANTIES
-OF MERCHANTABILITY, FITNESS FOR A PARTICULAR PURPOSE AND NONINFRINGEMENT.
-IN NO EVENT SHALL THE AUTHORS OR COPYRIGHT HOLDERS BE LIABLE FOR ANY CLAIM,
-DAMAGES OR OTHER LIABILITY, WHETHER IN AN ACTION OF CONTRACT, TORT OR OTHERWISE,
-ARISING FROM, OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR
-OTHER DEALINGS IN THE SOFTWARE.
-
-You have to explicitly mention BitMagic project in any derivative product,
-its WEB Site, published materials, articles or any other work derived from this
-project or based on our code or know-how.
+Unless required by applicable law or agreed to in writing, software
+distributed under the License is distributed on an "AS IS" BASIS,
+WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
+See the License for the specific language governing permissions and
+limitations under the License.
 
 For more information please visit:  http://bitmagic.io
-
+*/
+/*! \file bmsparsevec_algo.h
+    \brief Algorithms for sparse_vector<>
 */
 
 #include "bmdef.h"
@@ -172,7 +163,70 @@ void compute_nonzero_bvector(const SV& svect, typename SV::bvector_type& bvect)
         bvect.clear(true);
     }
 }
+
+/*!
+    \brief Integer set to set transformation (functional image in groups theory)
+    https://en.wikipedia.org/wiki/Image_(mathematics)
+ 
+    Input sets gets translated through the function, which is defined as
+    "one to one (or NULL)" binary relation object (sparse_vector).
+ 
+    \ingroup svalgo
+    \ingroup setalgo
+*/
+template<class SV>
+class set2set_11_transform
+{
+public:
+    typedef typename SV::bvector_type       bvector_type;
+public:
+    /** Perform transformation
+   
+     \param bvect_in  - input set, defined as a bit-vector
+     \param sv_brel   - binary relation vector
+     \param bvect_out - output set as a bit-vector
+    */
+    void run(typename SV::bvector_type& bvect_in,
+             const    SV&               sv_brel,
+             typename SV::bvector_type& bvect_out)
+    {
+        if (sv_brel.empty())
+            return; // nothing to do
+        
+        bvect_out.init(); // just in case to "fast set" later
+        
+        const typename SV::bvector_type * bv_non_null = sv_brel.get_null_bvector();
+        
+        if (bv_non_null) // NULL-able association vector
+        {
+            bv_product_ = bvect_in;
+            bv_product_ &= *bv_non_null;
+        }
+        else
+        {
+            bv_product_.clear(true);
+            bv_product_.set_range(0, sv_brel.size()-1);
+            bv_product_ &= bvect_in;
+        }
+        
+        typename SV::bvector_type::enumerator en(bv_product_.first());
+        for (; en.valid(); ++en)
+        {
+            auto idx = *en;
+            idx = sv_brel.translate_address(idx);
+            typename SV::value_type translated_id = sv_brel.get(idx);
+            bvect_out.set_bit_no_check(translated_id);
+        } // for en
+    }
     
+protected:
+    bvector_type   bv_product_;
+};
+
+
+
+
+
 } // namespace bm
 
 #include "bmundef.h"

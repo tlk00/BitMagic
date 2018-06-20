@@ -1,8 +1,24 @@
-// Copyright(c) 2002-2009 Anatoliy Kuznetsov(anatoliy_kuznetsov at yahoo.com)
-//
-// BM library internal header
-//
-// Set all required preprocessor defines
+/*
+Copyright(c) 2002-2017 Anatoliy Kuznetsov(anatoliy_kuznetsov at yahoo.com)
+
+Licensed under the Apache License, Version 2.0 (the "License");
+you may not use this file except in compliance with the License.
+You may obtain a copy of the License at
+
+    http://www.apache.org/licenses/LICENSE-2.0
+
+Unless required by applicable law or agreed to in writing, software
+distributed under the License is distributed on an "AS IS" BASIS,
+WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
+See the License for the specific language governing permissions and
+limitations under the License.
+
+For more information please visit:  http://bitmagic.io
+*/
+
+/*! \file bmdef.h
+    \brief Definitions(internal)
+*/
 
 #include <climits>
 
@@ -91,6 +107,7 @@
 #    define BM_NOASSERT
 #  endif
 #endif
+
 
 #ifndef BM_ASSERT
 
@@ -184,6 +201,18 @@
 # undef BMSSE2OPT
 #endif
 
+#ifdef BMAVX2OPT
+# if defined(BM64OPT) || defined(__x86_64) || defined(_M_AMD64) || defined(_WIN64) || \
+    defined(__LP64__) || defined(_LP64)
+#   undef BM64OPT
+#   undef  BM64_SSE4
+#   define BM64_AVX2
+# endif
+# undef BMSSE2OPT
+# undef BMSSE42OPT
+#endif
+
+
 # ifndef BM_SET_MMX_GUARD
 #  define BM_SET_MMX_GUARD
 # endif
@@ -269,6 +298,14 @@
 
 
 #endif
+
+// throw redefinintion for compatibility with language wrappers
+//
+#ifndef BM_ASSERT_THROW
+#define BM_ASSERT_THROW(x, xerrcode)
+#endif
+
+
 
 #endif
 

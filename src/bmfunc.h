@@ -3,31 +3,23 @@
 /*
 Copyright(c) 2002-2017 Anatoliy Kuznetsov(anatoliy_kuznetsov at yahoo.com)
 
-Permission is hereby granted, free of charge, to any person
-obtaining a copy of this software and associated documentation
-files (the "Software"), to deal in the Software without restriction,
-including without limitation the rights to use, copy, modify, merge,
-publish, distribute, sublicense, and/or sell copies of the Software,
-and to permit persons to whom the Software is furnished to do so,
-subject to the following conditions:
+Licensed under the Apache License, Version 2.0 (the "License");
+you may not use this file except in compliance with the License.
+You may obtain a copy of the License at
 
-The above copyright notice and this permission notice shall be included
-in all copies or substantial portions of the Software.
+    http://www.apache.org/licenses/LICENSE-2.0
 
-THE SOFTWARE IS PROVIDED "AS IS", WITHOUT WARRANTY OF ANY KIND,
-EXPRESS OR IMPLIED, INCLUDING BUT NOT LIMITED TO THE WARRANTIES
-OF MERCHANTABILITY, FITNESS FOR A PARTICULAR PURPOSE AND NONINFRINGEMENT.
-IN NO EVENT SHALL THE AUTHORS OR COPYRIGHT HOLDERS BE LIABLE FOR ANY CLAIM,
-DAMAGES OR OTHER LIABILITY, WHETHER IN AN ACTION OF CONTRACT, TORT OR OTHERWISE,
-ARISING FROM, OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR
-OTHER DEALINGS IN THE SOFTWARE.
-
-You have to explicitly mention BitMagic project in any derivative product,
-its WEB Site, published materials, articles or any other work derived from this
-project or based on our code or know-how.
+Unless required by applicable law or agreed to in writing, software
+distributed under the License is distributed on an "AS IS" BASIS,
+WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
+See the License for the specific language governing permissions and
+limitations under the License.
 
 For more information please visit:  http://bitmagic.io
+*/
 
+/*! \file bmfunc.h
+    \brief Bit manipulation primitives (internal)
 */
 
 #include <memory.h>
@@ -75,7 +67,6 @@ struct bv_statistics
     gap_word_t  gap_levels[bm::gap_levels];
 
 
-
     /// cound bit block
     void add_bit_block()
     {
@@ -88,10 +79,18 @@ struct bv_statistics
     /// count gap block
     void add_gap_block(unsigned capacity, unsigned length)
     {
+        (gap_blocks < bm::set_total_blocks) ? gap_length[gap_blocks] = (gap_word_t)length : 0;
         ++gap_blocks;
         unsigned mem_used = (unsigned)(capacity * sizeof(gap_word_t));
         memory_used += mem_used;
         max_serialize_mem += (unsigned)(length * sizeof(gap_word_t));
+    }
+    
+    /// Reset statisctics
+    void reset()
+    {
+        bit_blocks = gap_blocks = 0;
+        max_serialize_mem = memory_used = 0;
     }
 };
 
@@ -127,6 +126,27 @@ template <> struct conditional<false>
 
 
 
+/*!
+    Returns BSR value
+    @ingroup bitfunc
+*/
+template <class T>
+unsigned bit_scan_reverse(T value)
+{
+    BM_ASSERT(value);
+    
+    if (bm::conditional<sizeof(T)==8>::test())
+    {
+        bm::id64_t v8 = value;
+        v8 >>= 32;
+        unsigned v = (unsigned)v8;
+        if (v)
+        {
+            return bit_scan_reverse32(v) + 32;
+        }
+    }
+    return bit_scan_reverse32((unsigned)value);
+}
 
 
 /*!
@@ -166,7 +186,11 @@ BMFORCEINLINE
 int word_bitcount64(bm::id64_t x)
 {
 #if defined(BMSSE42OPT) || defined(BMAVX2OPT)
+#if defined(BM64_SSE4) || defined(BM64_AVX2)
     return (int)_mm_popcnt_u64(x);
+#else
+    return _mm_popcnt_u32(x >> 32) + _mm_popcnt_u32((unsigned)x);
+#endif
 #else
     x = x - ((x >> 1) & 0x5555555555555555);
     x = (x & 0x3333333333333333) + ((x >> 2) & 0x3333333333333333);
@@ -217,7 +241,7 @@ BMFORCEINLINE
 bm::id_t word_trailing_zeros(bm::id_t w)
 {
     // TODO: find a better variant for MSVC 
-#if defined(BMSSE42OPT) && defined(__GNUC__)
+#if (defined(BMSSE42OPT) || defined(BMAVX2OPT)) && defined(__GNUC__)
         return __builtin_ctzl(w);
 #else
     // implementation from
@@ -237,27 +261,6 @@ bm::id_t word_trailing_zeros(bm::id_t w)
 
 //---------------------------------------------------------------------
 
-/**
-    Nomenclature of set operations
-*/
-enum set_operation
-{
-    set_AND         = 0,
-    set_OR          = 1,
-    set_SUB         = 2,
-    set_XOR         = 3,
-    set_ASSIGN      = 4,
-    set_COUNT       = 5,
-    set_COUNT_AND   = 6,
-    set_COUNT_XOR   = 7,
-    set_COUNT_OR    = 8,
-    set_COUNT_SUB_AB= 9,
-    set_COUNT_SUB_BA= 10,
-    set_COUNT_A     = 11,
-    set_COUNT_B     = 12,
-
-    set_END
-};
 
 /// Returns true if set operation is constant (bitcount)
 inline
@@ -449,7 +452,62 @@ template<bool T> struct globals
 template<bool T> typename globals<T>::bo globals<T>::_bo;
 
 
+/*!
+    \brief GAP block find the last set bit
 
+    \param buf - GAP buffer pointer.
+    \param last - index of the last 1 bit
+ 
+    \return 0 if 1 bit was NOT found
+
+    @ingroup gapfunc
+*/
+template<typename T>
+unsigned gap_find_last(const T* buf, unsigned* last)
+{
+    BM_ASSERT(last);
+
+    T is_set = (*buf) & 1u;
+    unsigned end = ((*buf) >> 3);
+
+    BM_ASSERT(buf[end] == bm::gap_max_bits - 1);
+
+    is_set ^= ((end-1) & 1u);
+    if (is_set)
+    {
+        *last = buf[end];
+        return is_set;
+    }
+    *last = buf[--end];
+    return end;
+}
+
+/*!
+    \brief GAP block find the first set bit
+
+    \param buf - GAP buffer pointer.
+    \param last - index of the first 1 bit
+ 
+    \return 0 if 1 bit was NOT found
+
+    @ingroup gapfunc
+*/
+template<typename T>
+unsigned gap_find_first(const T* buf, unsigned* first)
+{
+    BM_ASSERT(first);
+
+    T is_set = (*buf) & 1u;
+    if (is_set)
+    {
+        *first = 0;
+        return is_set;
+    }
+    if (buf[1] == bm::gap_max_bits - 1)
+        return 0;
+    *first = buf[1] + 1;
+    return 1;
+}
 
 
 
@@ -625,9 +683,10 @@ unsigned gap_test_unr(const T* buf, const unsigned pos)
 
 
 /*! For each non-zero block executes supplied function.
+    \internal
 */
 template<class T, class F> 
-void for_each_nzblock(T*** root, unsigned size1, //unsigned size2, 
+void for_each_nzblock(T*** root, unsigned size1,
                       F& f)
 {
     for (unsigned i = 0; i < size1; ++i)
@@ -641,9 +700,94 @@ void for_each_nzblock(T*** root, unsigned size1, //unsigned size2,
 
         unsigned non_empty_top = 0;
         unsigned r = i * bm::set_array_size;
-        for (unsigned j = 0;j < bm::set_array_size; ++j)
+        for (unsigned j = 0; j < bm::set_array_size; )
         {
-            if (blk_blk[j]) 
+#ifdef BM64_AVX2
+            __m256i w0 = _mm256_loadu_si256((__m256i*)(blk_blk + j));
+            if (!_mm256_testz_si256(w0, w0))
+            {
+                T* blk0 = blk_blk[j + 0];
+                T* blk1 = blk_blk[j + 1];
+                T* blk2 = blk_blk[j + 2];
+                T* blk3 = blk_blk[j + 3];
+
+                unsigned block_idx = r + j + 0;
+                if (blk0)
+                {
+                    f(blk0, block_idx);
+                    non_empty_top += (blk_blk[j] != 0);
+                }
+                else
+                    f.on_empty_block(block_idx);
+
+                ++block_idx;
+                if (blk1)
+                {
+                    f(blk1, block_idx);
+                    non_empty_top += (blk_blk[j + 1] != 0);
+                }
+                else
+                    f.on_empty_block(block_idx);
+
+                ++block_idx;
+                if (blk2)
+                {
+                    f(blk2, block_idx);
+                    non_empty_top += (blk_blk[j + 2] != 0);
+                }
+                else
+                    f.on_empty_block(block_idx);
+
+                ++block_idx;
+                if (blk3)
+                {
+                    f(blk3, block_idx);
+                    non_empty_top += (blk_blk[j + 3] != 0);
+                }
+                else
+                    f.on_empty_block(block_idx);
+            }
+            else
+            {
+                f.on_empty_block(r + j + 0);
+                f.on_empty_block(r + j + 1);
+                f.on_empty_block(r + j + 2);
+                f.on_empty_block(r + j + 3);
+            }
+            j += 4;
+#elif defined(BM64_SSE4)
+            __m128i w0 = _mm_loadu_si128((__m128i*)(blk_blk + j));
+            if (!_mm_testz_si128(w0, w0))
+            {
+                T* blk0 = blk_blk[j + 0];
+                T* blk1 = blk_blk[j + 1];
+
+                unsigned block_idx = r + j + 0;
+                if (blk0)
+                {
+                    f(blk0, block_idx);
+                    non_empty_top += (blk_blk[j] != 0);
+                }
+                else
+                    f.on_empty_block(block_idx);
+
+                ++block_idx;
+                if (blk1)
+                {
+                    f(blk1, block_idx);
+                    non_empty_top += (blk_blk[j + 1] != 0);
+                }
+                else
+                    f.on_empty_block(block_idx);
+            }
+            else
+            {
+                f.on_empty_block(r + j + 0);
+                f.on_empty_block(r + j + 1);
+            }
+            j += 2;
+#else
+            if (blk_blk[j])
             {
                 f(blk_blk[j], r + j);
                 non_empty_top += (blk_blk[j] != 0);// re-check for mutation
@@ -652,6 +796,8 @@ void for_each_nzblock(T*** root, unsigned size1, //unsigned size2,
             {
                 f.on_empty_block(r + j);
             }
+            ++j;
+#endif
         } // for j
         if (non_empty_top == 0)
         {
@@ -665,26 +811,95 @@ void for_each_nzblock(T*** root, unsigned size1, //unsigned size2,
 template<class T, class F> 
 void for_each_nzblock2(T*** root, unsigned size1, F& f)
 {
+#ifdef BM64_SSE4
+    for (unsigned i = 0; i < size1; ++i)
+    {
+        T** blk_blk;
+        if ((blk_blk = root[i])!=0)
+        {
+            {
+                __m128i w0;
+                for (unsigned j = 0; j < bm::set_array_size; j+=4)
+                {
+                    w0 = _mm_loadu_si128((__m128i*)(blk_blk + j));
+                    if (!_mm_testz_si128(w0, w0))
+                    {
+                        T* blk0 = blk_blk[j + 0];
+                        T* blk1 = blk_blk[j + 1];
+
+                        if (blk0)
+                            f(blk0);
+                        if (blk1)
+                            f(blk1);
+                    }
+                    w0 = _mm_loadu_si128((__m128i*)(blk_blk + j + 2));
+                    if (!_mm_testz_si128(w0, w0))
+                    {
+                        T* blk0 = blk_blk[j + 2];
+                        T* blk1 = blk_blk[j + 3];
+                        if (blk0)
+                            f(blk0);
+                        if (blk1)
+                            f(blk1);
+                    }
+                } // for j
+            }
+        }
+    }  // for i
+#elif defined(BM64_AVX2)
+    for (unsigned i = 0; i < size1; ++i)
+    {
+        T** blk_blk;
+        if ((blk_blk = root[i]) != 0)
+        {
+            {
+                for (unsigned j = 0; j < bm::set_array_size; j += 4)
+                {
+                    __m256i w0 = _mm256_loadu_si256((__m256i*)(blk_blk + j));
+                    if (!_mm256_testz_si256(w0, w0))
+                    {
+                        // as a variant could use: blk0 = (T*)_mm256_extract_epi64(w0, 0);
+                        // but it measures marginally slower
+                        T* blk0 = blk_blk[j + 0];
+                        T* blk1 = blk_blk[j + 1];
+                        T* blk2 = blk_blk[j + 2];
+                        T* blk3 = blk_blk[j + 3];
+                        if (blk0)
+                            f(blk0);
+                        if (blk1)
+                            f(blk1);
+                        if (blk2)
+                            f(blk2);
+                        if (blk3)
+                            f(blk3);
+                    }
+                } // for j
+            }
+        }
+    }  // for i
+
+#else // non-SIMD mode
     for (unsigned i = 0; i < size1; ++i)
     {
         T** blk_blk;
         if ((blk_blk = root[i])!=0) 
-        {            
+        {
             unsigned j = 0;
             do
-            {                
-                if (blk_blk[j]) 
+            {
+                if (blk_blk[j])
                     f(blk_blk[j]);
-                if (blk_blk[j+1]) 
+                if (blk_blk[j+1])
                     f(blk_blk[j+1]);
-                if (blk_blk[j+2]) 
+                if (blk_blk[j+2])
                     f(blk_blk[j+2]);
-                if (blk_blk[j+3]) 
+                if (blk_blk[j+3])
                     f(blk_blk[j+3]);
                 j += 4;
             } while (j < bm::set_array_size);
         }
     }  // for i
+#endif
 }
 
 
@@ -771,8 +986,7 @@ template<class T> T sum_arr(T* first, T* last)
 
 
 
-
-/*! 
+/*!
    \brief Calculates number of bits ON in GAP buffer.
    \param buf - GAP buffer pointer.
    \param dsize - buffer size
@@ -892,7 +1106,7 @@ unsigned gap_bit_count_range(const T* const buf, T left, T right)
     is_set = ~(is_set - 1u); // 0xFFF.. if true (mask for branchless code)
 
     pcurr = buf + start_pos;
-    if (right <= *pcurr) // we are in the target block right now
+    if (right <= *pcurr) // we are in the target gap right now
     {
         bits_counter = unsigned(right - left + 1u) & is_set; // & is_set == if(is_set)
         return bits_counter;
@@ -1633,12 +1847,15 @@ unsigned bit_array_compute_gaps(const T* arr,
     \param buf - GAP buffer
     \param nbit - bit index to start checking from.
     \param prev - returns previously checked value
+ 
+    \return 0 if not found
 
     @ingroup gapfunc
 */
-template<typename T> int gap_find_in_block(const T* buf, 
-                                           unsigned nbit, 
-                                           bm::id_t* prev)
+template<typename T>
+unsigned gap_find_in_block(const T* buf,
+                           unsigned nbit,
+                           bm::id_t* prev)
 {
     BM_ASSERT(nbit < bm::gap_max_bits);
 
@@ -1647,10 +1864,10 @@ template<typename T> int gap_find_in_block(const T* buf,
 
     if (bitval) // positive block.
     {
-       return 1;
+       return 1u;
     }
 
-    BMREGISTER unsigned val = buf[gap_idx] + 1;
+    unsigned val = buf[gap_idx] + 1;
     *prev += val - nbit;
  
     return (val != bm::gap_max_bits);  // no bug here.
@@ -2717,10 +2934,10 @@ int bitcmp(const T* buf1, const T* buf2, unsigned len)
    @ingroup gapfunc
 */
 template<typename T> 
-    unsigned bit_convert_to_gap(T* BMRESTRICT dest, 
-                                const unsigned* BMRESTRICT src, 
-                                bm::id_t bits, 
-                                unsigned dest_len)
+unsigned bit_convert_to_gap(T* BMRESTRICT dest,
+                            const unsigned* BMRESTRICT src,
+                            bm::id_t bits,
+                            unsigned dest_len)
 {
     BMREGISTER T* BMRESTRICT pcurr = dest;
     T* BMRESTRICT end = dest + dest_len; 
@@ -2967,7 +3184,6 @@ bm::id_t bit_block_calc_count(const bm::word_t* block,
 }
 
 
-
 /*!
     Function calculates number of times when bit value changed 
     (1-0 or 0-1).
@@ -2986,7 +3202,8 @@ bm::id_t bit_count_change(bm::word_t w)
     unsigned count = 1;
     w ^= (w >> 1);
 
-    BM_INCWORD_BITCOUNT(count, w);
+    count += bm::word_bitcount(w);
+    //BM_INCWORD_BITCOUNT(count, w);
     count -= (w >> ((sizeof(w) * 8) - 1));
     return count;
 }
@@ -3238,7 +3455,7 @@ bm::id_t bit_block_calc_count_to(const bm::word_t*  block,
         BM_AVX2_POPCNT_PROLOG
     
         __m256i cnt = _mm256_setzero_si256();
-        uint64_t* cnt64;
+        bm::id64_t* cnt64;
     
         for ( ;bitcount >= 256; bitcount -= 256)
         {
@@ -3249,7 +3466,7 @@ bm::id_t bit_block_calc_count_to(const bm::word_t*  block,
 
             block += 8;
         }
-        cnt64 = (uint64_t*)&cnt;
+        cnt64 = (bm::id64_t*)&cnt;
         count += (unsigned)(cnt64[0] + cnt64[1] + cnt64[2] + cnt64[3]);
     #else
         for ( ;bitcount >= 64; bitcount -= 64)
@@ -3278,6 +3495,8 @@ bm::id_t bit_block_calc_count_to(const bm::word_t*  block,
     return count;
 }
 
+
+
 /*!
     Cyclic rotation of bit-block left by 1 bit
     @ingroup bitfunc
@@ -3286,7 +3505,7 @@ inline
 void bit_block_rotate_left_1(bm::word_t* block)
 {
     bm::word_t co_flag = (block[0] >> 31) & 1; // carry over bit
-    for (unsigned i = 0; i < set_block_size-1; ++i)
+    for (unsigned i = 0; i < bm::set_block_size-1; ++i)
     {
         block[i] = (block[i] << 1) | (block[i + 1] >> 31);
     } 
@@ -3305,7 +3524,7 @@ void bit_block_rotate_left_1_unr(bm::word_t* block)
     bm::word_t w0, w1, w2, w3;
 
     unsigned i;
-    for (i = 0; i < set_block_size - unroll_factor; i += unroll_factor)
+    for (i = 0; i < bm::set_block_size - unroll_factor; i += unroll_factor)
     {
         w0 = block[i + 1] >> 31;
         w1 = block[i + 2] >> 31;
@@ -3422,6 +3641,9 @@ template<typename T> void bit_invert(T* start, T* end)
 inline bool is_bits_one(const bm::wordop_t* start, 
                         const bm::wordop_t* end)
 {
+#if defined(BMSSE42OPT) || defined(BMAVX2OPT)
+    return VECT_IS_ONE_BLOCK(start, end);
+#else
    do
    {
         bm::wordop_t tmp = 
@@ -3430,8 +3652,8 @@ inline bool is_bits_one(const bm::wordop_t* start,
             return false;
         start += 4;
    } while (start < end);
-
    return true;
+#endif
 }
 
 // ----------------------------------------------------------------------
@@ -3440,19 +3662,22 @@ inline bool is_bits_one(const bm::wordop_t* start,
 /*! @brief Returns "true" if all bits in the block are 0
     @ingroup bitfunc 
 */
-inline bool bit_is_all_zero(const bm::wordop_t* start, 
-                            const bm::wordop_t* end)
+template<typename TW>
+bool bit_is_all_zero(const TW* start,
+                     const TW* end)
 {
+#if defined(BMSSE42OPT) || defined(BMAVX2OPT)
+    return VECT_IS_ZERO_BLOCK(start, end);
+#else
    do
    {
-        bm::wordop_t tmp = 
-            start[0] | start[1] | start[2] | start[3];
+        TW tmp = start[0] | start[1] | start[2] | start[3];
        if (tmp) 
            return false;
        start += 4;
    } while (start < end);
-
    return true;
+#endif
 }
 
 // ----------------------------------------------------------------------
@@ -3759,29 +3984,36 @@ void bit_block_copy(bm::word_t* BMRESTRICT dst, const bm::word_t* BMRESTRICT src
 
    \param dst - destination block.
    \param src - source block.
+ 
+   \return 0 if AND operation did not produced anything (no 1s in the output)
 
    @ingroup bitfunc
 */
 inline 
-void bit_block_and(bm::word_t* BMRESTRICT dst, const bm::word_t* BMRESTRICT src)
+bm::id64_t bit_block_and(bm::word_t* BMRESTRICT dst, const bm::word_t* BMRESTRICT src)
 {
+    BM_ASSERT(dst);
+    BM_ASSERT(src);
+    BM_ASSERT(dst != src);
+
 #ifdef BMVECTOPT
-    VECT_AND_ARR(dst, src, src + bm::set_block_size);
+    bm::id64_t acc = VECT_AND_ARR(dst, src, src + bm::set_block_size);
+    return acc;
 #else
-    const bm::wordop_t* BMRESTRICT wrd_ptr = (wordop_t*)src;
-    const bm::wordop_t* BMRESTRICT wrd_end = (wordop_t*)(src + bm::set_block_size);
-    bm::wordop_t* BMRESTRICT dst_ptr = (wordop_t*)dst;
+    unsigned arr_sz = bm::set_block_size / 2;
 
-    do
+    const bm::bit_block_t::bunion_t* BMRESTRICT src_u = (const bm::bit_block_t::bunion_t*)src;
+    bm::bit_block_t::bunion_t* BMRESTRICT dst_u = (bm::bit_block_t::bunion_t*)dst;
+    bm::id64_t acc = 0;
+    unsigned i = 0;
+    for (i = 0; i < arr_sz; i+=4)
     {
-        dst_ptr[0] &= wrd_ptr[0];
-        dst_ptr[1] &= wrd_ptr[1];
-        dst_ptr[2] &= wrd_ptr[2];
-        dst_ptr[3] &= wrd_ptr[3];
-
-        dst_ptr+=4;
-        wrd_ptr+=4;
-    } while (wrd_ptr < wrd_end);
+        acc |= dst_u->w64[i] &= src_u->w64[i];
+        acc |= dst_u->w64[i+1] &= src_u->w64[i+1];
+        acc |= dst_u->w64[i+2] &= src_u->w64[i+2];
+        acc |= dst_u->w64[i+3] &= src_u->w64[i+3];
+    }
+    return acc;
 #endif
 }
 
@@ -4141,7 +4373,13 @@ inline bm::word_t* bit_operation_and(bm::word_t* BMRESTRICT dst,
         else
         {
             // Regular operation AND on the whole block.
-            bit_block_and(dst, src);
+            //
+            auto any = bit_block_and(dst, src);
+            if (!any)
+            {
+                BM_ASSERT(bit_is_all_zero(dst, dst+bm::set_block_size));
+                ret = 0;
+            }
         }
     }
     else // The destination block does not exist yet
@@ -4800,6 +5038,65 @@ int bit_find_in_block(const bm::word_t* data,
 }
 
 /*!
+    \brief BIT block find the last set bit (backward search)
+
+    \param block - bit block buffer pointer
+    \param last - index of the last 1 bit (out)
+    \return 0 is not found
+
+    @ingroup bitfunc
+*/
+inline
+unsigned bit_find_last(const bm::word_t* block, unsigned* last)
+{
+    BM_ASSERT(block);
+    BM_ASSERT(last);
+
+    for (unsigned i = bm::set_block_size-1; true; --i)
+    {
+        bm::word_t w = block[i];
+        if (w)
+        {
+            unsigned idx = bm::bit_scan_reverse(w);
+            *last = idx + (i * 8u * sizeof(bm::word_t));
+            return w;
+        }
+        if (i == 0)
+            break;
+    } // for i
+    return 0u;
+}
+
+/*!
+    \brief BIT block find the first set bit
+
+    \param block - bit block buffer pointer
+    \param first - index of the first 1 bit (out)
+    \return 0 if not foud
+
+    @ingroup bitfunc
+*/
+inline
+unsigned bit_find_first(const bm::word_t* block, unsigned* first)
+{
+    BM_ASSERT(block);
+    BM_ASSERT(first);
+
+    for (unsigned i = 0; i < bm::set_block_size; ++i)
+    {
+        bm::word_t w = block[i];
+        if (w)
+        {
+            unsigned idx = bm::word_trailing_zeros(w);
+            *first = idx + (i * 8u * sizeof(bm::word_t));
+            return w;
+        }
+    } // for i
+    return 0u;
+}
+
+
+/*!
    \brief Templated algorithm to unpacks octet based word into list of ON bit indexes
    \param w - value
    \param func - bit functor 
@@ -4939,58 +5236,6 @@ private:
     B* bp_;
 };
 
-/*! @brief Adaptor to copy 1 bits to array with base increment
-    @internal
-*/
-template<typename B> class copy_to_array_functor_inc
-{
-public:
-    copy_to_array_functor_inc(B* bits, unsigned base_idx)
-    : bp_(bits), base_idx_(base_idx)
-    {}
-
-    B* ptr() { return bp_; }
-    
-    void operator()(unsigned bit_idx) 
-    { 
-        *bp_++ = (B)(bit_idx + base_idx_);
-    }
-
-    
-    void operator()(unsigned bit_idx0, 
-                    unsigned bit_idx1) 
-    { 
-        bp_[0]=(B)(bit_idx0+base_idx_);bp_[1]=(B)(bit_idx1+base_idx_);
-        bp_+=2;
-    }
-    
-    void operator()(unsigned bit_idx0, 
-                    unsigned bit_idx1, 
-                    unsigned bit_idx2) 
-    { 
-        bp_[0]=(B)(bit_idx0+base_idx_);bp_[1]=(B)(bit_idx1+base_idx_);
-        bp_[2]=(B)(bit_idx2+base_idx_);
-        bp_+=3;
-    }
-    
-    void operator()(unsigned bit_idx0, 
-                    unsigned bit_idx1, 
-                    unsigned bit_idx2, 
-                    unsigned bit_idx3) 
-    { 
-        bp_[0]=(B)(bit_idx0+base_idx_);bp_[1]=(B)(bit_idx1+base_idx_);
-        bp_[2]=(B)(bit_idx2+base_idx_);bp_[3]=(B)(bit_idx3+base_idx_);
-        bp_+=4;
-    }
-
-private:
-    copy_to_array_functor_inc(const copy_to_array_functor_inc&);
-    copy_to_array_functor_inc& operator=(const copy_to_array_functor_inc&);
-private:
-    B*        bp_;
-    unsigned  base_idx_; ///< Base increment factor
-};
-
 
 /*!
    \brief Unpacks word into list of ON bit indexes (quad-bit based)
@@ -5015,19 +5260,56 @@ template<typename T,typename B> unsigned bit_list_4(T w, B* bits)
 
     @ingroup bitfunc
 */
-
-template<typename T, typename B>
-unsigned bitscan_popcnt(T w, B* bits)
+template<typename B>
+unsigned short bitscan_popcnt(bm::id_t w, B* bits, unsigned  offs = 0)
 {
     unsigned pos = 0;
     while (w)
     {
-        T t = w & -w;
-        bits[pos++] = bm::word_bitcount(t - 1);
+        bm::id_t t = w & -w;
+        bits[pos++] = (B)(bm::word_bitcount(t - 1) + offs);
+        w &= w - 1;
+    }
+    return (unsigned short)pos;
+}
+
+/*!
+    \brief Unpacks 64-bit word into list of ON bit indexes using popcnt method
+    \param w - value
+    \param bits - pointer on the result array
+    \param offs - bit address offset to add (0 - default)
+    \return number of bits in the list
+
+    @ingroup bitfunc
+*/
+template<typename B>
+unsigned short bitscan_popcnt64(bm::id64_t w, B* bits)
+{
+    unsigned short pos = 0;
+    while (w)
+    {
+        bm::id64_t t = w & -w;
+        bits[pos++] = (B) bm::word_bitcount64(t - 1);
         w &= w - 1;
     }
     return pos;
 }
+
+template<typename V, typename B>
+unsigned short bitscan(V w, B* bits)
+{
+    if (bm::conditional<sizeof(V) == 8>::test())
+    {
+        return bm::bitscan_popcnt64(w, bits);
+    }
+    else
+    {
+        return bm::bitscan_popcnt((bm::word_t)w, bits);
+    }
+}
+
+
+
 
 /*!
    \brief Unpacks word into list of ON bit indexes
@@ -5103,80 +5385,66 @@ template<typename T> T bit_convert_to_arr(T* BMRESTRICT dest,
         {
             return 0;
         }
-
-        copy_to_array_functor_inc<T> func(pcurr, bit_idx);
-        bit_for_each_4(val, func);    	
-        unsigned word_bit_cnt = (unsigned)(func.ptr() - pcurr);
-        pcurr += word_bit_cnt;    
-
+        unsigned char b_list[64];
+        unsigned word_bit_cnt  = bm::bitscan_popcnt(val, b_list);
+        for (unsigned j = 0; j < word_bit_cnt; ++j)
+        {
+            *pcurr++ = (T)(b_list[j] + bit_idx);
+        }
     } // for
     return (T)(pcurr - dest);
 }
 
+/**
+    \brief Checks all conditions and returns true if block consists of only 0 bits
+    \param blk - Blocks's pointer
+    \param deep_scan - flag to do full bit block verification (scan)
+                       when deep scan is not requested result can be approximate
+    \returns true if all bits are in the block are 0
 
-
-
-/*!
-    OBSOLETE function
-    \brief Convert bit block into an array of ints corresponding to 1 bits
-    \internal
-    @ingroup bitfunc 
+    @internal
 */
-/*
-template<typename T> T bit_convert_to_arr2(T* BMRESTRICT dest, 
-                                          const unsigned* BMRESTRICT src, 
-                                          bm::id_t bits, 
-                                          unsigned dest_len)
+inline
+bool check_block_zero(const bm::word_t* blk, bool  deep_scan)
 {
-    BMREGISTER T* BMRESTRICT pcurr = dest;
-    T* BMRESTRICT end = dest + dest_len; 
-    unsigned  bit_idx = 0;
+    if (!blk) return true;
 
-    do
-    {
-        BMREGISTER unsigned val = *src;
-        // We can skip if *src == 0 
-
-        while (val == 0)
-        {
-            bit_idx += sizeof(*src) * 8;
-            if (bit_idx >= bits)
-            {
-               return (T)(pcurr - dest);
-            }
-            val = *(++src);
-        }
-
-        if (pcurr + sizeof(val)*8 > end) // insufficient space
-        {
-            return 0;
-        }
-                
-        for (int i = 0; i < 32; i+=4)
-        {
-            if (val & 1)
-                *pcurr++ = bit_idx;
-            val >>= 1; ++bit_idx;
-            if (val & 1)
-                *pcurr++ = bit_idx;
-            val >>= 1; ++bit_idx;
-            if (val & 1)
-                *pcurr++ = bit_idx;
-            val >>= 1; ++bit_idx;
-            if (val & 1)
-                *pcurr++ = bit_idx;
-            val >>= 1; ++bit_idx;
-        }
-        
-        if (bits <= bit_idx)
-            break;
-
-        val = *(++src);
-    } while (1);
-
-    return (T)(pcurr - dest);
+    bool ret;
+    if (BM_IS_GAP(blk))
+        ret = gap_is_all_zero(BMGAP_PTR(blk), bm::gap_max_bits);
+    else
+        ret = deep_scan ? bm::bit_is_all_zero(blk, blk+bm::set_block_size) : 0;
+    return ret;
 }
+
+
+/**
+    \brief Checks if block has only 1 bits
+    \param blk - Block's pointer
+    \param deep_scan - flag to do full bit block verification (scan)
+                       when deep scan is not requested result can be approximate
+    \return true if block consists of 1 bits.
+
+    @internal
 */
+inline
+bool check_block_one(const bm::word_t* blk, bool deep_scan)
+{
+    if (blk == 0) return false;
+
+    if (BM_IS_GAP(blk))
+        return bm::gap_is_all_one(BMGAP_PTR(blk), bm::gap_max_bits);
+
+    if (IS_FULL_BLOCK(blk))
+        return true;
+    
+    if (!deep_scan)
+        return false; // block exists - presume it has 0 bits
+
+    return bm::is_bits_one((wordop_t*)blk,
+                           (wordop_t*)(blk + bm::set_block_size));
+}
+
 
 
 /*! @brief Calculates memory overhead for number of gap blocks sharing 
@@ -5604,6 +5872,71 @@ operation_functions<T>::bit_op_count_table_[bm::set_END] = {
     0,                            // set_COUNT_A
     0,                            // set_COUNT_B
 };
+
+
+const unsigned short set_bitscan_wave_size = 2;
+/*!
+    \brief Unpacks word wave (2x 32-bit words)
+    \param w_ptr - pointer on wave start
+    \param bits - pointer on the result array
+    \return number of bits in the list
+
+    @ingroup bitfunc
+    @internal
+*/
+inline
+unsigned short bitscan_wave(const bm::word_t* w_ptr, unsigned char* bits)
+{
+    bm::word_t w0, w1;
+    unsigned short cnt;
+    
+    w0 = w_ptr[0];
+    w1 = w_ptr[1];
+    
+#if defined(BMAVX2OPT) || defined(BMSSE42OPT)
+    // combine into 64-bit word and scan (when HW popcnt64 is available)
+    bm::id64_t w = (bm::id64_t(w1) << 32) | w0;
+    cnt = (unsigned short) bm::bitscan_popcnt64(w, bits);
+#else
+    // decode wave as two 32-bit bitscan decodes
+    cnt  = w0 ? bm::bitscan_popcnt(w0, bits) : 0;
+    cnt += w1 ? bm::bitscan_popcnt(w1, bits+cnt, 32) : 0; // +32 offset from the first word
+#endif
+    return cnt;
+}
+
+
+// --------------------------------------------------------------
+// Functions to work with int values stored in 64-bit pointers
+// --------------------------------------------------------------
+
+/*!
+    \brief helper union to interpret pointer as integers 
+    @internal
+*/
+union ptr_payload_t
+{
+    bm::word_t* blk;
+    bm::id64_t  i64;
+    unsigned short i16[4];
+};
+
+/*!
+    Test presense of value in payload pointer
+    @internal
+*/
+inline
+bm::id64_t ptrp_test(ptr_payload_t ptr, bm::gap_word_t v)
+{
+    if (v == 0)
+    {
+        return (ptr.i16[1] == 0);
+    }
+    bm::id64_t r = (ptr.i16[1] == v) | (ptr.i16[2] == v) | (ptr.i16[3] == v);
+    return r;
+}
+
+// --------------------------------------------------------------------------
 
 } // namespace bm
 

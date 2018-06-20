@@ -3,31 +3,19 @@
 /*
 Copyright(c) 2002-2017 Anatoliy Kuznetsov(anatoliy_kuznetsov at yahoo.com)
 
-Permission is hereby granted, free of charge, to any person
-obtaining a copy of this software and associated documentation
-files (the "Software"), to deal in the Software without restriction,
-including without limitation the rights to use, copy, modify, merge,
-publish, distribute, sublicense, and/or sell copies of the Software,
-and to permit persons to whom the Software is furnished to do so,
-subject to the following conditions:
+Licensed under the Apache License, Version 2.0 (the "License");
+you may not use this file except in compliance with the License.
+You may obtain a copy of the License at
 
-The above copyright notice and this permission notice shall be included
-in all copies or substantial portions of the Software.
+    http://www.apache.org/licenses/LICENSE-2.0
 
-THE SOFTWARE IS PROVIDED "AS IS", WITHOUT WARRANTY OF ANY KIND,
-EXPRESS OR IMPLIED, INCLUDING BUT NOT LIMITED TO THE WARRANTIES
-OF MERCHANTABILITY, FITNESS FOR A PARTICULAR PURPOSE AND NONINFRINGEMENT.
-IN NO EVENT SHALL THE AUTHORS OR COPYRIGHT HOLDERS BE LIABLE FOR ANY CLAIM,
-DAMAGES OR OTHER LIABILITY, WHETHER IN AN ACTION OF CONTRACT, TORT OR OTHERWISE,
-ARISING FROM, OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR
-OTHER DEALINGS IN THE SOFTWARE.
-
-You have to explicitly mention BitMagic project in any derivative product,
-its WEB Site, published materials, articles or any other work derived from this
-project or based on our code or know-how.
+Unless required by applicable law or agreed to in writing, software
+distributed under the License is distributed on an "AS IS" BASIS,
+WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
+See the License for the specific language governing permissions and
+limitations under the License.
 
 For more information please visit:  http://bitmagic.io
-
 */
 
 
@@ -41,7 +29,6 @@ For more information please visit:  http://bitmagic.io
 
 namespace bm
 {
-
 
 /*!
    @brief bitvector blocks manager
@@ -232,8 +219,6 @@ public:
 
         bool operator()(const bm::word_t* block, unsigned /*idx*/)
         {
-            if (IS_FULL_BLOCK(block)) return true;
-
             if (BM_IS_GAP(block)) // gap block
             {
                 if (!gap_is_all_zero(BMGAP_PTR(block), bm::gap_max_bits))
@@ -243,6 +228,8 @@ public:
             }
             else  // bitset
             {
+                if (IS_FULL_BLOCK(block)) return true;
+                
                 bm::wordop_t* blk1 = (wordop_t*)block;
                 bm::wordop_t* blk2 = 
                     (wordop_t*)(block + bm::set_block_size);
@@ -279,16 +266,15 @@ public:
             if (gap_is_all_zero(gap_blk, bm::gap_max_bits))
             {
                 bman.set_block_ptr(idx, 0);
-                goto free_block;
+                bman.get_allocator().free_gap_block(gap_blk,
+                                                    bman.glen());
             }
             else 
             if (gap_is_all_one(gap_blk, bm::gap_max_bits))
             {
                 bman.set_block_ptr(idx, FULL_BLOCK_FAKE_ADDR);
-            free_block:
-                bman.get_allocator().free_gap_block(gap_blk, 
+                bman.get_allocator().free_gap_block(gap_blk,
                                                     bman.glen());
-                bman.set_block_bit(idx);
                 return;
             }
 
@@ -299,8 +285,7 @@ public:
                 bm::word_t* blk = 
                     bman.get_allocator().alloc_bit_block();
                 bman.set_block_ptr(idx, blk);
-                bman.set_block_bit(idx);
-                gap_convert_to_bitset(blk, gap_blk);
+                bm::gap_convert_to_bitset(blk, gap_blk);
             }
             else
             {
@@ -376,14 +361,14 @@ public:
                 if (gap_is_all_zero(gap_blk, bm::gap_max_bits))
                 {
                     bman.set_block_ptr(idx, 0);
-                    this->free_block(gap_blk, idx);
+                    this->free_block(gap_blk);
                     ++empty_;
                 }
                 else 
                 if (gap_is_all_one(gap_blk, bm::gap_max_bits))
                 {
                     bman.set_block_ptr(idx, FULL_BLOCK_FAKE_ADDR);
-                    this->free_block(gap_blk, idx);
+                    this->free_block(gap_blk);
                     ++empty_;
                 }
                 else
@@ -415,7 +400,7 @@ public:
                     else
                     if (opt_mode_ == 2) // check if it is all 1 block
                     {
-                        b = is_bits_one(blk1, blk2);
+                        b = bm::is_bits_one(blk1, blk2);
                         if (b) 
                         {
                             bman.get_allocator().free_bit_block(block);
@@ -462,8 +447,7 @@ public:
 
                         gap_blk = 
                             bman.allocate_gap_block(level, tmp_gap_blk);
-                        bman.set_block_ptr(idx, (bm::word_t*)gap_blk);
-                        bman.set_block_gap(idx);
+                        bman.set_block_gap_ptr(idx, gap_blk);
                         if (stat_)
                         {
                             stat_->add_gap_block(
@@ -480,11 +464,10 @@ public:
             }
         }
     private:
-        void free_block(gap_word_t* gap_blk, unsigned idx)
+        void free_block(gap_word_t* gap_blk)
         {
             this->bm_.get_allocator().free_gap_block(gap_blk,
                                                      this->bm_.glen());
-            this->bm_.set_block_bit(idx);
         }
 
     private:
@@ -573,7 +556,7 @@ public:
     public:
         block_free_func(blocks_manager& bm) : bm_func_base(bm) {}
 
-        void operator()(bm::word_t* block)//, unsigned idx)
+        void operator()(bm::word_t* block)
         {
             blocks_manager& bman = this->bm_;
             if (BM_IS_GAP(block)) // gap block
@@ -803,7 +786,7 @@ public:
     \return block adress or NULL if not yet allocated or FULL_BLOCK_FAKE_ADDR
     */
     BMFORCEINLINE
-    const bm::word_t* get_block_ptr(unsigned nb) const
+    bm::word_t* get_block_ptr(unsigned nb) const
     {
         unsigned block_idx = nb >> bm::set_array_shift;
         if (!top_blocks_ || (block_idx >= top_block_size_))
@@ -873,10 +856,8 @@ public:
                    for (;j < bm::set_array_size; ++j, ++nb)
                    {
                        bm::word_t* blk = blk_blk[j];
-                       if (blk && !is_block_zero(nb, blk, deep_scan)) 
-                       {
+                       if (blk && !bm::check_block_zero(blk, deep_scan))
                            return nb;
-                       }
                    } // for j
                 j = 0;
             } // for i
@@ -926,16 +907,8 @@ public:
         bm::word_t* block = this->get_block(nb);
         set_block(nb, const_cast<bm::word_t*>(FULL_BLOCK_FAKE_ADDR));
 
-        // If we keep block type flag in pointer itself we dp not need 
-        // to clear gap bit 
-        #ifdef BM_DISBALE_BIT_IN_PTR
-        set_block_bit(nb);    
-        #endif
-
         if (BM_IS_GAP(block))
-        {
             alloc_.free_gap_block(BMGAP_PTR(block), glevel_len_);
-        }
         else
         {
             if (IS_VALID_ADDR(block))
@@ -1056,7 +1029,7 @@ public:
                                      int*     actual_block_type,
                                      bool     allow_null_ret=true)
     {
-        bm::word_t* block = this->get_block(nb);
+        bm::word_t* block = this->get_block_ptr(nb);
 
         if (!IS_VALID_ADDR(block)) // NULL block or ALLSET
         {
@@ -1091,6 +1064,37 @@ public:
         return block;
     }
 
+    /**
+        Function checks if block is not yet allocated, allocates and returns
+    */
+    bm::word_t* check_allocate_block(unsigned nb, int initial_block_type)
+    {
+        bm::word_t* block = this->get_block_ptr(nb);
+
+        if (!IS_VALID_ADDR(block)) // NULL block or ALLSET
+        {
+            // if we wanted ALLSET and requested block is ALLSET return NULL
+            unsigned block_flag = IS_FULL_BLOCK(block);
+            if (initial_block_type == 0) // bitset requested
+            {
+                block = alloc_.alloc_bit_block();
+                // initialize block depending on its previous status
+                bit_block_set(block, block_flag ? 0xFF : 0);
+                set_block(nb, block);
+            }
+            else // gap block requested
+            {
+                bm::gap_word_t* gap_block = allocate_gap_block(0);
+                gap_set_all(gap_block, bm::gap_max_bits, block_flag);
+                block = (bm::word_t*)gap_block;
+                set_block(nb, block, true/*gap*/);
+                BMSET_PTRGAP(block);
+            }
+        }
+        return block;
+    }
+
+
     /*! @brief Fills all blocks with 0.
         @param free_mem - if true function frees the resources
     */
@@ -1124,7 +1128,7 @@ public:
 
     /**
         Places new block into descriptors table, returns old block's address.
-        Old block is not deleted.
+        Old block is NOT deleted.
     */
     bm::word_t* set_block(unsigned nb, bm::word_t* block)
     {
@@ -1139,7 +1143,7 @@ public:
             block = FULL_BLOCK_FAKE_ADDR;
 
         // top block index
-        BMREGISTER unsigned nblk_blk = nb >> bm::set_array_shift;
+        unsigned nblk_blk = nb >> bm::set_array_shift;
 
         // auto-resize the top block array
         if (nblk_blk >= top_block_size_)
@@ -1254,10 +1258,9 @@ public:
     void set_block_ptr(unsigned nb, bm::word_t* block)
     {
         BM_ASSERT((nb >> bm::set_array_shift) < effective_top_block_size_);
-        if (!is_init())
-            init_tree();
+        BM_ASSERT(is_init());
         
-        // never use real full block adress, it may be instantiated in another DLL 
+        // never use real full block adress, it may be instantiated in another DLL
         // (unsafe static instantiation on windows)
         if (block == FULL_BLOCK_REAL_ADDR)
             block = FULL_BLOCK_FAKE_ADDR;
@@ -1268,17 +1271,13 @@ public:
     /** 
         \brief Converts block from type gap to conventional bitset block.
         \param nb - Block's index. 
-        \param gap_block - Pointer to the gap block, 
-                            if NULL block nb will be taken
+        \param gap_block - Pointer to the gap block, if NULL block nb is taken
         \return new bit block's memory
     */
     bm::word_t* convert_gap2bitset(unsigned nb, const gap_word_t* gap_block=0)
     {
         bm::word_t* block = this->get_block(nb);
-        if (gap_block == 0)
-        {
-            gap_block = BMGAP_PTR(block);
-        }
+        gap_block = gap_block ? gap_block : BMGAP_PTR(block);
 
         BM_ASSERT(IS_VALID_ADDR((bm::word_t*)gap_block));
 
@@ -1286,7 +1285,6 @@ public:
         gap_convert_to_bitset(new_block, gap_block);
 
         // new block will replace the old one(no deletion)
-        //set_block_ptr(nb, new_block); 
         if (block)
         {
             set_block_ptr(nb, new_block); 
@@ -1296,11 +1294,6 @@ public:
         {
             set_block(nb, new_block); 
         }
-
-        // If GAP flag is in block pointer no need to clean the gap bit twice
-        #ifdef BM_DISBALE_BIT_IN_PTR
-        set_block_bit(nb);
-        #endif
 
         return new_block;
     }
@@ -1313,13 +1306,21 @@ public:
         bm::word_t* block = this->get_block(nb);
         if (BM_IS_GAP(block))
         {
-            return convert_gap2bitset(nb);
+            gap_word_t* gap_block = BMGAP_PTR(block);
+            
+            bm::word_t* new_block = alloc_.alloc_bit_block();
+            gap_convert_to_bitset(new_block, gap_block);
+            alloc_.free_gap_block(gap_block, this->glen());
+            
+            set_block_ptr(nb, new_block);
+            return new_block;
         }
         if (IS_FULL_BLOCK(block)) 
         {
             bm::word_t* new_block = get_allocator().alloc_bit_block();
-            bit_block_copy(new_block, block);
-            set_block(nb, new_block);
+            bm::bit_block_copy(new_block, FULL_BLOCK_REAL_ADDR);
+            
+            set_block_ptr(nb, new_block);
             return new_block;
         }
         return block;
@@ -1373,11 +1374,11 @@ public:
     /**
         Count number of bits ON in the block
     */
-    bm::id_t block_bitcount(const bm::word_t* block) const
-    { 
-        if (!block) return 0;
+    static
+    bm::id_t block_bitcount(const bm::word_t* block)
+    {
+        BM_ASSERT(block);
         id_t count;
-
         if (BM_IS_GAP(block))
         {
             count = gap_bit_count_unr(BMGAP_PTR(block));
@@ -1403,7 +1404,7 @@ public:
         unsigned len = bm::gap_length(blk);
         if (level == bm::gap_max_level || len >= gap_max_buff_len)
         {
-            convert_gap2bitset(nb);
+            deoptimize_block(nb);
         }
         else
         {
@@ -1419,103 +1420,15 @@ public:
         }
         return 0;
     }
-
-    bool is_block_gap(unsigned nb) const 
-    {
-        #ifdef BM_DISBALE_BIT_IN_PTR
-        return gap_flags_.test(nb)!=0;
-        #else
-        bm::word_t* block = get_block(nb);
-        return BMPTR_TESTBIT0(block) != 0;
-        #endif
-    }
-
-    void set_block_bit(unsigned nb) 
-    { 
-        #ifdef BM_DISBALE_BIT_IN_PTR
-        gap_flags_.set(nb, false);
-        #else
-        bm::word_t* block = get_block(nb);
-        block = (bm::word_t*) BMPTR_CLEARBIT0(block);
-        set_block_ptr(nb, block);
-        #endif
-    }
-
-    void set_block_gap(unsigned nb) 
-    {
-        #ifdef BM_DISBALE_BIT_IN_PTR
-        gap_flags_.set(nb);
-        #else
-        bm::word_t* block = get_block(nb);
-        block = (bm::word_t*)BMPTR_SETBIT0(block);
-        set_block_ptr(nb, block);
-        #endif
-    }
-
     /**
-        \fn bool bm::bvector::blocks_manager::is_block_zero(unsigned nb, bm::word_t* blk)
-        \brief Checks all conditions and returns true if block consists of only 0 bits
-        \param nb - Block's linear index.
-        \param blk - Blocks's pointer
-        \param deep_scan - flag to do full bit block verification (scan)
-                           when deep scan is not requested result can be approximate
-        \returns true if all bits are in the block are 0.
+        Mark pointer as GAP and assign to the blocks tree
     */
-    bool is_block_zero(unsigned          /*nb*/,
-                       const bm::word_t* blk, 
-                       bool              deep_scan = true) const
+    void set_block_gap_ptr(unsigned nb, gap_word_t* gap_blk)
     {
-        if (blk == 0) return true;
-
-        if (BM_IS_GAP(blk))
-        {
-            gap_word_t* b = BMGAP_PTR(blk);
-            return gap_is_all_zero(b, bm::gap_max_bits);
-        }
-
-        if (!deep_scan) 
-            return false; // block exists - presume it has bits
-
-        // BIT
-        for (unsigned i = 0; i <  bm::set_block_size; ++i)
-        {
-            if (blk[i] != 0)
-                return false;
-        }
-        return true;
+        bm::word_t* block = (bm::word_t*)BMPTR_SETBIT0(gap_blk);
+        set_block_ptr(nb, block);
     }
 
-    /**
-        \brief Checks if block has only 1 bits
-        \param nb - Index of the block.
-        \param blk - Block's pointer
-        \param deep_scan - flag to do full bit block verification (scan)
-                           when deep scan is not requested result can be approximate
-        \return true if block consists of 1 bits.
-    */
-    bool is_block_one(unsigned          /*nb*/,
-                      const bm::word_t* blk,
-                      bool              deep_scan = true) const
-    {
-        if (blk == 0) return false;
-
-        if (BM_IS_GAP(blk))
-        {
-            gap_word_t* b = BMGAP_PTR(blk);
-            return gap_is_all_one(b, bm::gap_max_bits);
-        }
-
-        // BIT block
-        if (IS_FULL_BLOCK(blk))
-        {
-            return true;
-        }
-        if (!deep_scan) 
-            return false; // block exists - presume it has 0 bits
-
-        return is_bits_one((wordop_t*)blk, 
-                           (wordop_t*)(blk + bm::set_block_size));
-    }
 
     /*! Returns temporary block, allocates if needed. */
     bm::word_t* check_allocate_tempblock()

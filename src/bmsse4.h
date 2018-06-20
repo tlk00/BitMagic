@@ -3,37 +3,25 @@
 /*
 Copyright(c) 2002-2017 Anatoliy Kuznetsov(anatoliy_kuznetsov at yahoo.com)
 
-Permission is hereby granted, free of charge, to any person
-obtaining a copy of this software and associated documentation
-files (the "Software"), to deal in the Software without restriction,
-including without limitation the rights to use, copy, modify, merge,
-publish, distribute, sublicense, and/or sell copies of the Software,
-and to permit persons to whom the Software is furnished to do so,
-subject to the following conditions:
+Licensed under the Apache License, Version 2.0 (the "License");
+you may not use this file except in compliance with the License.
+You may obtain a copy of the License at
 
-The above copyright notice and this permission notice shall be included
-in all copies or substantial portions of the Software.
+    http://www.apache.org/licenses/LICENSE-2.0
 
-THE SOFTWARE IS PROVIDED "AS IS", WITHOUT WARRANTY OF ANY KIND,
-EXPRESS OR IMPLIED, INCLUDING BUT NOT LIMITED TO THE WARRANTIES
-OF MERCHANTABILITY, FITNESS FOR A PARTICULAR PURPOSE AND NONINFRINGEMENT.
-IN NO EVENT SHALL THE AUTHORS OR COPYRIGHT HOLDERS BE LIABLE FOR ANY CLAIM,
-DAMAGES OR OTHER LIABILITY, WHETHER IN AN ACTION OF CONTRACT, TORT OR OTHERWISE,
-ARISING FROM, OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR
-OTHER DEALINGS IN THE SOFTWARE.
-
-You have to explicitly mention BitMagic project in any derivative product,
-its WEB Site, published materials, articles or any other work derived from this
-project or based on our code or know-how.
+Unless required by applicable law or agreed to in writing, software
+distributed under the License is distributed on an "AS IS" BASIS,
+WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
+See the License for the specific language governing permissions and
+limitations under the License.
 
 For more information please visit:  http://bitmagic.io
-
 */
 
+/*! \file bmsse4.h
+    \brief Compute functions for SSE4.2 SIMD instruction set (internal)
+*/
 
-
-//    Header implements processor specific intrinsics declarations for SSE2
-//    instruction set
 #include<mmintrin.h>
 #include<emmintrin.h>
 #include<smmintrin.h>
@@ -151,6 +139,54 @@ bm::id_t sse4_bit_count_op(const __m128i* BMRESTRICT block,
     return count;
 }
 
+/*!
+    @brief check if block is all zero bits
+    @ingroup SSE4
+*/
+inline
+bool sse4_is_all_zero(const __m128i* BMRESTRICT block,
+                      const __m128i* BMRESTRICT block_end)
+{
+    __m128i maskz = _mm_setzero_si128();
+
+    do
+    {
+        __m128i w0 = _mm_load_si128(block+0);
+        __m128i w1 = _mm_load_si128(block+1);
+        
+        __m128i w = _mm_or_si128(w0, w1);
+        if (!_mm_test_all_ones(_mm_cmpeq_epi8(w, maskz))) // (w0 | w1) != maskz
+        {
+            return false;
+        }
+
+        block += 2;
+    
+    } while (block < block_end);
+    return true;
+}
+
+
+/*!
+    @brief check if block is all zero bits
+    @ingroup SSE4
+*/
+inline
+bool sse4_is_all_one(const __m128i* BMRESTRICT block,
+                     const __m128i* BMRESTRICT block_end)
+{
+    do
+    {
+        __m128i w0 = _mm_load_si128(block);
+        if (!_mm_test_all_ones(w0))
+        {
+            return false;
+        }
+        ++block;
+    } while (block < block_end);
+    return true;
+}
+
 
 
 #define VECT_XOR_ARR_2_MASK(dst, src, src_end, mask)\
@@ -195,7 +231,11 @@ bm::id_t sse4_bit_count_op(const __m128i* BMRESTRICT block,
 #define VECT_SET_BLOCK(dst, dst_end, value) \
     sse2_set_block((__m128i*) dst, (__m128i*) (dst_end), (value))
 
+#define VECT_IS_ZERO_BLOCK(dst, dst_end) \
+    sse4_is_all_zero((__m128i*) dst, (__m128i*) (dst_end))
 
+#define VECT_IS_ONE_BLOCK(dst, dst_end) \
+    sse4_is_all_one((__m128i*) dst, (__m128i*) (dst_end))
 
 
 
@@ -365,6 +405,9 @@ unsigned sse4_gap_find(const bm::gap_word_t* BMRESTRICT pbuf, const bm::gap_word
 #ifdef __GNUG__
 #pragma GCC diagnostic pop
 #endif
+
+
+
 
 } // namespace
 

@@ -3,7 +3,7 @@
 #---------------------------------------------------------------------------
 # General configuration options
 #---------------------------------------------------------------------------
-PROJECT_NAME           = BitMagic C++ Library
+PROJECT_NAME           = BitMagic-C++
 PROJECT_NUMBER         = 
 OUTPUT_DIRECTORY       = doc
 OUTPUT_LANGUAGE        = English
@@ -52,13 +52,14 @@ WARN_LOGFILE           = warn.log
 #---------------------------------------------------------------------------
 # configuration options related to the input files
 #---------------------------------------------------------------------------
-INPUT                  = ./src/bm.h ./src/bmfunc.h  \
+INPUT                  = ./src/bm.h ./src/bmfunc.h  ./src/bmsimd.h \
                          ./src/bmvmin.h ./src/encoding.h \
                          ./src/bmconst.h ./src/bmsse_util.h ./src/bmsse4.h ./src/bmsse2.h \
                          ./src/bmalgo.h ./src/bmalgo_impl.h ./src/bmgamma.h \
                          ./src/bmdef.h ./src/bmtrans.h ./src/bmutil.h \
                          ./src/bmundef.h ./src/bmserial.h ./src/bmalloc.h ./src/bmrandom.h \                        
                          ./src/bmsparsevec.h ./src/bmsparsevec_algo.h ./src/bmsparsevec_serial.h \
+                         ./src/bmsparsevec_compr.h ./src/bmsparsevec_util.h ./src/bmtimer.h \ 
 ./samples/bvsample01/sample1.cpp \
 ./samples/bvsample02/sample2.cpp \
 ./samples/bvsample03/sample3.cpp \
@@ -70,10 +71,16 @@ INPUT                  = ./src/bm.h ./src/bmfunc.h  \
 ./samples/bvsample09/sample9.cpp \
 ./samples/bvsample10/sample10.cpp \
 ./samples/bvsample11/sample11.cpp \
+./samples/bvsample12/sample12.cpp \
+./samples/bvsample14/sample14.cpp \
+./samples/bvsample15/sample15.cpp \
 ./samples/xsample01/xsample01.cpp \
+./samples/xsample02/xsample02.cpp \
 ./samples/svsample01/svsample01.cpp \
 ./samples/svsample02/svsample02.cpp \
-./samples/svsample03/svsample03.cpp 
+./samples/svsample03/svsample03.cpp \
+./samples/svsample04/svsample04.cpp \
+./samples/svsample05/svsample05.cpp 
  
 
 FILE_PATTERNS          = *.cpp \

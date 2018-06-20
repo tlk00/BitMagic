@@ -11,12 +11,19 @@ BitMagic Library samples
 ./bvsample09 - simple binary distance functions and pipeline for complex binary distance formulas
 ./bvsample10 - extraction of a random subset for Monte Carlo simulations
 ./bvsample11 - how to compute population counts for ranges in bit-vector (cout_range(), count_to(), count_and())
+./bvsample12 - review and comparison of different methods to set and clear bits 
+./bvsample14 - serialization of bvector<>, logical operations on compressed BLOBs
+./bvsample15 - bvector<>::find, search for first and last set bit, dynamic range detection
 
 
 ./svsample01 - basic example of sparse_vector<> container
 ./svsample02 - sparse_vector<> serialization example
 ./svsample03 - sparse_vector<> import, join, extract methods
+./svsample04 - sparse_vector<> operations with NULL-able vectors and values
+./svsample05 - set transformation algorithm (image) to translate one set to another
+               using memory-efficient bit-transposed sparse_vector as a translation function
 
 ./xsample01 - advanced: different methods of handling of super sparse sets. Benchmarks of set operations for each method. 
                Details at: http://bitmagic.io/case-ER-join.html
+./xsample02 - sparse vector based counting sort and histogram construction techniques compared to std::sort()
 

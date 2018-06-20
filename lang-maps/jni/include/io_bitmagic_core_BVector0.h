@@ -81,6 +81,14 @@ JNIEXPORT void JNICALL Java_io_bitmagic_core_BVector0_set0
 
 /*
  * Class:     io_bitmagic_core_BVector0
+ * Method:    inc0
+ * Signature: (JJ)I
+ */
+JNIEXPORT jint JNICALL Java_io_bitmagic_core_BVector0_inc0
+  (JNIEnv *, jclass, jlong, jlong);
+
+/*
+ * Class:     io_bitmagic_core_BVector0
  * Method:    setConditional0
  * Signature: (JJZZ)Z
  */
@@ -169,11 +177,19 @@ JNIEXPORT jboolean JNICALL Java_io_bitmagic_core_BVector0_nonEmpty0
 
 /*
  * Class:     io_bitmagic_core_BVector0
- * Method:    indexOf0
+ * Method:    findFirst0
  * Signature: (JJ)J
  */
-JNIEXPORT jlong JNICALL Java_io_bitmagic_core_BVector0_indexOf0
+JNIEXPORT jlong JNICALL Java_io_bitmagic_core_BVector0_findFirst0
   (JNIEnv *, jclass, jlong, jlong);
+
+/*
+ * Class:     io_bitmagic_core_BVector0
+ * Method:    findLast0
+ * Signature: (J)J
+ */
+JNIEXPORT jlong JNICALL Java_io_bitmagic_core_BVector0_findLast0
+  (JNIEnv *, jclass, jlong);
 
 /*
  * Class:     io_bitmagic_core_BVector0
@@ -241,10 +257,42 @@ JNIEXPORT void JNICALL Java_io_bitmagic_core_BVector0_xor0
 
 /*
  * Class:     io_bitmagic_core_BVector0
+ * Method:    andArr0
+ * Signature: (J[I)V
+ */
+JNIEXPORT void JNICALL Java_io_bitmagic_core_BVector0_andArr0
+  (JNIEnv *, jclass, jlong, jintArray);
+
+/*
+ * Class:     io_bitmagic_core_BVector0
+ * Method:    andArrSorted0
+ * Signature: (J[I)V
+ */
+JNIEXPORT void JNICALL Java_io_bitmagic_core_BVector0_andArrSorted0
+  (JNIEnv *, jclass, jlong, jintArray);
+
+/*
+ * Class:     io_bitmagic_core_BVector0
  * Method:    orArr0
  * Signature: (J[I)V
  */
 JNIEXPORT void JNICALL Java_io_bitmagic_core_BVector0_orArr0
+  (JNIEnv *, jclass, jlong, jintArray);
+
+/*
+ * Class:     io_bitmagic_core_BVector0
+ * Method:    xorArr0
+ * Signature: (J[I)V
+ */
+JNIEXPORT void JNICALL Java_io_bitmagic_core_BVector0_xorArr0
+  (JNIEnv *, jclass, jlong, jintArray);
+
+/*
+ * Class:     io_bitmagic_core_BVector0
+ * Method:    subArr0
+ * Signature: (J[I)V
+ */
+JNIEXPORT void JNICALL Java_io_bitmagic_core_BVector0_subArr0
   (JNIEnv *, jclass, jlong, jintArray);
 
 /*

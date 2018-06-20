@@ -29,7 +29,7 @@ JNIEXPORT void JNICALL Java_io_bitmagic_core_BVIterator0_dispose0
  * Signature: (J)Z
  */
 JNIEXPORT jboolean JNICALL Java_io_bitmagic_core_BVIterator0_isValid0
-  (JNIEnv *, jobject, jlong);
+  (JNIEnv *, jclass, jlong);
 
 /*
  * Class:     io_bitmagic_core_BVIterator0
@@ -37,7 +37,7 @@ JNIEXPORT jboolean JNICALL Java_io_bitmagic_core_BVIterator0_isValid0
  * Signature: (J)J
  */
 JNIEXPORT jlong JNICALL Java_io_bitmagic_core_BVIterator0_get0
-  (JNIEnv *, jobject, jlong);
+  (JNIEnv *, jclass, jlong);
 
 /*
  * Class:     io_bitmagic_core_BVIterator0
@@ -45,7 +45,7 @@ JNIEXPORT jlong JNICALL Java_io_bitmagic_core_BVIterator0_get0
  * Signature: (J)Z
  */
 JNIEXPORT jboolean JNICALL Java_io_bitmagic_core_BVIterator0_next0
-  (JNIEnv *, jobject, jlong);
+  (JNIEnv *, jclass, jlong);
 
 #ifdef __cplusplus
 }

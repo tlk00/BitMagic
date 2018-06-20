@@ -1,34 +1,25 @@
 #ifndef BMALGO_IMPL__H__INCLUDED__
 #define BMALGO_IMPL__H__INCLUDED__
-
 /*
 Copyright(c) 2002-2017 Anatoliy Kuznetsov(anatoliy_kuznetsov at yahoo.com)
 
-Permission is hereby granted, free of charge, to any person
-obtaining a copy of this software and associated documentation
-files (the "Software"), to deal in the Software without restriction,
-including without limitation the rights to use, copy, modify, merge,
-publish, distribute, sublicense, and/or sell copies of the Software,
-and to permit persons to whom the Software is furnished to do so,
-subject to the following conditions:
+Licensed under the Apache License, Version 2.0 (the "License");
+you may not use this file except in compliance with the License.
+You may obtain a copy of the License at
 
-The above copyright notice and this permission notice shall be included
-in all copies or substantial portions of the Software.
+    http://www.apache.org/licenses/LICENSE-2.0
 
-THE SOFTWARE IS PROVIDED "AS IS", WITHOUT WARRANTY OF ANY KIND,
-EXPRESS OR IMPLIED, INCLUDING BUT NOT LIMITED TO THE WARRANTIES
-OF MERCHANTABILITY, FITNESS FOR A PARTICULAR PURPOSE AND NONINFRINGEMENT.
-IN NO EVENT SHALL THE AUTHORS OR COPYRIGHT HOLDERS BE LIABLE FOR ANY CLAIM,
-DAMAGES OR OTHER LIABILITY, WHETHER IN AN ACTION OF CONTRACT, TORT OR OTHERWISE,
-ARISING FROM, OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR
-OTHER DEALINGS IN THE SOFTWARE.
-
-You have to explicitly mention BitMagic project in any derivative product,
-its WEB Site, published materials, articles or any other work derived from this
-project or based on our code or know-how.
+Unless required by applicable law or agreed to in writing, software
+distributed under the License is distributed on an "AS IS" BASIS,
+WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
+See the License for the specific language governing permissions and
+limitations under the License.
 
 For more information please visit:  http://bitmagic.io
+*/
 
+/*! \file bmalgo_impl.h
+    \brief Algorithms for bvector<>
 */
 
 #ifdef _MSC_VER
@@ -166,6 +157,8 @@ void combine_count_operation_with_block(const bm::word_t*           blk,
                  case bm::COUNT_B:
                     dmd.result += gap_bit_count_unr(g2);
                     break;
+                 default:
+                     BM_ASSERT(0);
                  } // switch
                                      
              } // for it
@@ -227,6 +220,8 @@ void combine_count_operation_with_block(const bm::word_t*           blk,
                                                arg_blk + bm::set_block_size);
                     }
                     break;
+                 default:
+                     BM_ASSERT(0);
                  } // switch
                                      
              } // for it
@@ -286,6 +281,8 @@ void combine_count_operation_with_block(const bm::word_t*           blk,
                     if (g2)
                         dmd.result += gap_bit_count_unr(g2);
                     break;
+                 default:
+                     BM_ASSERT(0);
                  } // switch
                                      
              } // for it
@@ -297,13 +294,6 @@ void combine_count_operation_with_block(const bm::word_t*           blk,
      // --------------------------------------------
      //
      // Here we combine two plain bitblocks 
-
-     //const bm::word_t* blk_end;
-     //const bm::word_t* arg_end;
-
-     //blk_end = blk + (bm::set_block_size);
-     //arg_end = arg_blk + (bm::set_block_size);
-
 
      for (distance_metric_descriptor* it = dmit; it < dmit_end; ++it)
      {
@@ -328,6 +318,11 @@ void combine_count_operation_with_block(const bm::word_t*           blk,
                         bit_block_calc_count(arg_blk, 
                                              arg_blk + bm::set_block_size);
                 break;
+            case bm::COUNT_AND:
+            case bm::COUNT_XOR:
+            case bm::COUNT_OR:
+            case bm::COUNT_SUB_AB:
+            case bm::COUNT_SUB_BA:
             default:
                 BM_ASSERT(0);
             } // switch
@@ -430,6 +425,8 @@ void combine_any_operation_with_block(const bm::word_t* blk,
                  case bm::COUNT_B:
                     res = g2;
                     break;
+                 default:
+                     BM_ASSERT(0);
                  } // switch
                 if (res)
                     dmd.result += !gap_is_all_zero(res, bm::gap_max_bits);
@@ -498,6 +495,8 @@ void combine_any_operation_with_block(const bm::word_t* blk,
                                            (bm::wordop_t*)(arg_blk + bm::set_block_size));
                     }
                     break;
+                 default:
+                     BM_ASSERT(0);
                  } // switch
                                      
              } // for it
@@ -561,6 +560,8 @@ void combine_any_operation_with_block(const bm::word_t* blk,
                     if (g2)
                         dmd.result += !gap_is_all_zero(g2, bm::gap_max_bits);
                     break;
+                 default:
+                     BM_ASSERT(0);
                  } // switch
                                      
              } // for it
@@ -619,6 +620,8 @@ void combine_any_operation_with_block(const bm::word_t* blk,
                 dmd.result += !bit_is_all_zero((bm::wordop_t*)arg_blk, 
                                                (bm::wordop_t*)arg_end);
             break;
+        default:
+            BM_ASSERT(0);
         } // switch
 
      } // for it
@@ -633,16 +636,12 @@ void combine_any_operation_with_block(const bm::word_t* blk,
 */
 inline
 unsigned combine_count_operation_with_block(const bm::word_t* blk,
-//                                            unsigned gap,
                                             const bm::word_t* arg_blk,
-//                                            int arg_gap,
-                                            //bm::word_t* temp_blk,
                                             distance_metric metric)
 {
     distance_metric_descriptor dmd(metric);
     combine_count_operation_with_block(blk, //gap, 
                                        arg_blk, //arg_gap, 
-                                       //temp_blk,
                                        &dmd, &dmd+1);
     return dmd.result;
 }
@@ -707,7 +706,6 @@ void distance_stage(const distance_metric_descriptor* dmit,
     \ingroup  distance
     
 */
-
 template<class BV>
 void distance_operation(const BV& bv1, 
                         const BV& bv2, 
@@ -797,7 +795,6 @@ void distance_operation(const BV& bv1,
 \ingroup  distance
 
 */
-
 template<class BV>
 unsigned distance_and_operation(const BV& bv1, 
                                 const BV& bv2)
@@ -867,9 +864,7 @@ unsigned distance_and_operation(const BV& bv1,
                       computation is added to "result" field
     \param dmit_end - pointer to (last+1) element of metric descriptors array
     \ingroup  distance
-    
 */
-
 template<class BV>
 void distance_operation_any(const BV& bv1, 
                             const BV& bv2, 
@@ -1217,7 +1212,7 @@ void combine_or(BV& bv, It  first, It last)
                 unsigned nbit   = unsigned(*first & bm::set_block_mask); 
                 unsigned nword  = unsigned(nbit >> bm::set_word_shift); 
                 nbit &= bm::set_word_mask;
-                blk[nword] |= (bm::word_t)1 << nbit;
+                blk[nword] |= (1u << nbit);
             } // for
         }
     } // while
@@ -1530,7 +1525,7 @@ void export_array(BV& bv, It first, It last)
                                               false /*no NULL ret*/);
                 if (block_type == 1) // gap
                 {
-                    blk = bman.convert_gap2bitset(i, BMGAP_PTR(blk));
+                    blk = bman.deoptimize_block(i);
                 }
                 
                 bm::word_t* wrd_ptr = blk;
@@ -1582,10 +1577,8 @@ void export_array(BV& bv, It first, It last)
                                               BM_BIT, 
                                               &block_type,
                                               false /*no NULL ret*/);
-                if (block_type == 1) // gap
-                {
-                    blk = bman.convert_gap2bitset(i, BMGAP_PTR(blk));
-                }
+                if (block_type) // gap
+                    blk = bman.deoptimize_block(i);
                 
                 bm::word_t* wrd_ptr = blk;
                 if (word_cnt >= bm::set_block_size) {
@@ -1631,9 +1624,7 @@ void export_array(BV& bv, It first, It last)
                                               &block_type,
                                               false /*no NULL ret*/);
                 if (block_type == 1) // gap
-                {
-                    blk = bman.convert_gap2bitset(i, BMGAP_PTR(blk));
-                }
+                    blk = bman.deoptimize_block(i);
                 
                 bm::word_t* wrd_ptr = blk;
                 if (word_cnt >= bm::set_block_size) {
@@ -1661,6 +1652,73 @@ void export_array(BV& bv, It first, It last)
     } // switch
 
 }
+
+
+/*!
+   \brief for-each visitor, calls a special visitor functor for each 1 bit group
+ 
+   \param block - bit block buffer pointer
+   \param offset - global block offset (number of bits)
+   \param bit_functor - functor must support .add_bits(offset, bits_ptr, size)
+ 
+   @ingroup bitfunc
+   @internal
+*/
+template<class Func>
+void for_each_bit_blk(const bm::word_t* block, bm::id_t offset,
+                      Func&  bit_functor)
+{
+    unsigned char bits[bm::set_bitscan_wave_size*32];
+
+    unsigned offs = offset;
+    unsigned cnt;
+    
+    const word_t* block_end = block + bm::set_block_size;
+    for ( ;block < block_end; )
+    {
+        cnt = bm::bitscan_wave(block, bits);
+        
+        bit_functor.add_bits(offs, bits, cnt);
+        
+        offs += bm::set_bitscan_wave_size * 32;
+        block += bm::set_bitscan_wave_size;
+    } // for
+}
+
+
+/*!
+   \brief for-each visitor, calls a special visitor functor for each 1 bit range
+ 
+   \param block - bit block buffer pointer
+   \param offset - global block offset (number of bits)
+   \param bit_functor - functor must support .add_range(offset, bits_ptr, size)
+ 
+   @ingroup gapfunc
+   @internal
+*/
+template<typename T, typename Func>
+void for_each_gap_blk(const T* buf, bm::id_t offset,
+                      Func&  bit_functor)
+{
+    const T* pcurr = buf + 1;
+    const T* pend = buf + (*buf >> 3);
+
+    if (*buf & 1)
+    {
+        bit_functor.add_range(offset, *pcurr + 1);
+        ++pcurr;
+    }
+    for (++pcurr; pcurr <= pend; pcurr += 2)
+    {
+        T prev = *(pcurr-1);
+        bit_functor.add_range(offset + prev + 1, *pcurr - prev);
+    }
+}
+
+
+
+
+
 
 } // namespace bm
 

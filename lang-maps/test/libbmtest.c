@@ -4,35 +4,22 @@
 
 
 /*
-Copyright(c) 2002-2017 Anatoliy Kuznetsov(anatoliy_kuznetsov at yahoo.com)
+Copyright(c) 2002-2018 Anatoliy Kuznetsov(anatoliy_kuznetsov at yahoo.com)
 
-Permission is hereby granted, free of charge, to any person
-obtaining a copy of this software and associated documentation
-files (the "Software"), to deal in the Software without restriction,
-including without limitation the rights to use, copy, modify, merge,
-publish, distribute, sublicense, and/or sell copies of the Software,
-and to permit persons to whom the Software is furnished to do so,
-subject to the following conditions:
+Licensed under the Apache License, Version 2.0 (the "License");
+you may not use this file except in compliance with the License.
+You may obtain a copy of the License at
 
-The above copyright notice and this permission notice shall be included
-in all copies or substantial portions of the Software.
+    http://www.apache.org/licenses/LICENSE-2.0
 
-THE SOFTWARE IS PROVIDED "AS IS", WITHOUT WARRANTY OF ANY KIND,
-EXPRESS OR IMPLIED, INCLUDING BUT NOT LIMITED TO THE WARRANTIES
-OF MERCHANTABILITY, FITNESS FOR A PARTICULAR PURPOSE AND NONINFRINGEMENT.
-IN NO EVENT SHALL THE AUTHORS OR COPYRIGHT HOLDERS BE LIABLE FOR ANY CLAIM,
-DAMAGES OR OTHER LIABILITY, WHETHER IN AN ACTION OF CONTRACT, TORT OR OTHERWISE,
-ARISING FROM, OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR
-OTHER DEALINGS IN THE SOFTWARE.
-
-You have to explicitly mention BitMagic project in any derivative product,
-its WEB Site, published materials, articles or any other work derived from this
-project or based on our code or know-how.
+Unless required by applicable law or agreed to in writing, software
+distributed under the License is distributed on an "AS IS" BASIS,
+WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
+See the License for the specific language governing permissions and
+limitations under the License.
 
 For more information please visit:  http://bitmagic.io
-
 */
-
 
 #include <stdio.h>
 #include <stdlib.h>
@@ -41,7 +28,7 @@ For more information please visit:  http://bitmagic.io
 #include "libbm.h"
 
 
-
+static
 int check_report_error(int res, const char* msg)
 {
     if (res != BM_OK)
@@ -61,12 +48,11 @@ int InitTest()
     const char* c;
     int major, minor, patch;
     const char* msg;
-    
+    int simd_version;
     
     
     res = BM_init(0);
     BMERR_CHECK(res, "BM_init()");
-    
     
     c = BM_version(&major, &minor, &patch);
     BMERR_CHECK(res, "BM_version()");
@@ -83,6 +69,27 @@ int InitTest()
     }
     
     printf ("%s\n", c);
+    
+    simd_version = BM_simd_version();
+    switch(simd_version)
+    {
+    case BM_SIMD_NO:
+        printf("BitMagic vanilla.\n");
+        break;
+    case BM_SIMD_SSE2:
+        printf("BitMagic for SSE2 \n");
+        break;
+    case BM_SIMD_SSE42:
+        printf("BitMagic for SSE4.2 \n");
+        break;
+    case BM_SIMD_AVX2:
+        printf("BitMagic for AVX2 \n");
+        break;
+    default:
+        printf("Unknown SIMD code \n");
+        break;
+    }
+
     return 0;
 }
 
@@ -254,14 +261,22 @@ static
 int SetGetTest()
 {
     int res = 0;
-    BM_BVHANDLE bmh = 0;
+    BM_BVHANDLE bmh1 = 0;
+    BM_BVHANDLE bmh2 = 0;
     int val;
     unsigned int count;
+    int carry_over;
     
-    res = BM_bvector_construct(&bmh, 200);
+    res = BM_bvector_construct(&bmh1, 200);
     BMERR_CHECK(res, "BM_bvector_construct()");
-    
-    res = BM_bvector_any(bmh, &val);
+
+    res = BM_bvector_construct(&bmh2, 0);
+    BMERR_CHECK_GOTO(res, "BM_bvector_construct()", free_mem);
+
+    res = BM_bvector_init(bmh2);
+    BMERR_CHECK_GOTO(res, "BM_bvector_init()", free_mem);
+
+    res = BM_bvector_any(bmh1, &val);
     BMERR_CHECK_GOTO(res, "BM_bvector_any()", free_mem);
     if (val)
     {
@@ -269,10 +284,14 @@ int SetGetTest()
         res = 1; goto free_mem;
     }
     
-    res = BM_bvector_set_bit(bmh, 10, BM_TRUE);
+    res = BM_bvector_set_bit(bmh1, 10, BM_TRUE);
     BMERR_CHECK_GOTO(res, "BM_bvector_set_bit()", free_mem);
-    
-    res = BM_bvector_any(bmh, &val);
+
+    res = BM_bvector_set_bit_no_check(bmh2, 10);
+    BMERR_CHECK_GOTO(res, "BM_bvector_set_bit_no_check()", free_mem);
+
+
+    res = BM_bvector_any(bmh1, &val);
     BMERR_CHECK_GOTO(res, "BM_bvector_any()", free_mem);
     if (val==0)
     {
@@ -281,7 +300,7 @@ int SetGetTest()
     }
     
     
-    res = BM_bvector_get_bit(bmh, 10, &val);
+    res = BM_bvector_get_bit(bmh1, 10, &val);
     BMERR_CHECK_GOTO(res, "BM_bvector_get_bit()", free_mem);
     if (!val)
     {
@@ -289,7 +308,32 @@ int SetGetTest()
         res = 1; goto free_mem;
     }
 
-    res = BM_bvector_get_bit(bmh, 0, &val);
+    res = BM_bvector_get_bit(bmh2, 10, &val);
+    BMERR_CHECK_GOTO(res, "BM_bvector_get_bit()", free_mem);
+    if (!val)
+    {
+        printf("bvector get_bit incorrect value \n");
+        res = 1; goto free_mem;
+    }
+
+    res = BM_bvector_inc_bit(bmh2, 10, &carry_over);
+    BMERR_CHECK_GOTO(res, "BM_bvector_inc_bit()", free_mem);
+    if (!carry_over)
+    {
+        printf("bvector inc_bit incorrect value \n");
+        res = 1; goto free_mem;
+    }
+
+    res = BM_bvector_inc_bit(bmh2, 10, &carry_over);
+    BMERR_CHECK_GOTO(res, "BM_bvector_inc_bit()", free_mem);
+    if (carry_over)
+    {
+        printf("bvector inc_bit incorrect value \n");
+        res = 1; goto free_mem;
+    }
+
+
+    res = BM_bvector_get_bit(bmh1, 0, &val);
     BMERR_CHECK_GOTO(res, "BM_bvector_get_bit()", free_mem);
     if (val)
     {
@@ -297,21 +341,21 @@ int SetGetTest()
         res = 1; goto free_mem;
     }
     
-    res = BM_bvector_flip_bit(bmh, 0);
+    res = BM_bvector_flip_bit(bmh1, 0);
     BMERR_CHECK_GOTO(res, "BM_bvector_flip_bit()", free_mem);
 
-    res = BM_bvector_get_bit(bmh, 0, &val);
+    res = BM_bvector_get_bit(bmh1, 0, &val);
     BMERR_CHECK_GOTO(res, "BM_bvector_get_bit()", free_mem);
     if (val == 0)
     {
         printf("bvector get_bit incorrect value \n");
         res = 1; goto free_mem;
     }
-    res = BM_bvector_flip_bit(bmh, 0);
+    res = BM_bvector_flip_bit(bmh1, 0);
     BMERR_CHECK_GOTO(res, "BM_bvector_flip_bit()", free_mem);
     
     
-    res = BM_bvector_count(bmh, &count);
+    res = BM_bvector_count(bmh1, &count);
     BMERR_CHECK_GOTO(res, "BM_bvector_count()", free_mem);
     if (count != 1)
     {
@@ -319,17 +363,17 @@ int SetGetTest()
         res = 1; goto free_mem;
     }
     
-    res = BM_bvector_set_bit(bmh, 10, BM_FALSE);
+    res = BM_bvector_set_bit(bmh1, 10, BM_FALSE);
     BMERR_CHECK_GOTO(res, "BM_bvector_set_bit()", free_mem);
     
-    res = BM_bvector_get_bit(bmh, 0, &val);
+    res = BM_bvector_get_bit(bmh1, 0, &val);
     BMERR_CHECK_GOTO(res, "BM_bvector_get_bit()", free_mem);
     if (val != BM_FALSE)
     {
         printf("bvector get_bit incorrect value %i\n", val);
         res = 1; goto free_mem;
     }
-    res = BM_bvector_count(bmh, &count);
+    res = BM_bvector_count(bmh1, &count);
     BMERR_CHECK_GOTO(res, "BM_bvector_count()", free_mem);
     if (count != 0)
     {
@@ -339,21 +383,21 @@ int SetGetTest()
     
     {
         int change;
-        res = BM_bvector_set_bit_conditional(bmh, 0, BM_TRUE, BM_FALSE, &change);
+        res = BM_bvector_set_bit_conditional(bmh1, 0, BM_TRUE, BM_FALSE, &change);
         BMERR_CHECK_GOTO(res, "BM_bvector_set_bit_conditional()", free_mem);
         if (!change)
         {
             printf("bvector set_bit_conditional error \n");
             res = 1; goto free_mem;
         }
-        res = BM_bvector_count(bmh, &count);
+        res = BM_bvector_count(bmh1, &count);
         BMERR_CHECK_GOTO(res, "BM_bvector_count()", free_mem);
         if (count != 1)
         {
             printf("incorrrect count %i \n", count);
             res = 1; goto free_mem;
         }
-        res = BM_bvector_set_bit_conditional(bmh, 0, BM_TRUE, BM_FALSE, &change);
+        res = BM_bvector_set_bit_conditional(bmh1, 0, BM_TRUE, BM_FALSE, &change);
         BMERR_CHECK_GOTO(res, "BM_bvector_set_bit_conditional()", free_mem);
         if (change)
         {
@@ -362,20 +406,20 @@ int SetGetTest()
         }
     }
     
-    res = BM_bvector_set(bmh);
+    res = BM_bvector_set(bmh1);
     BMERR_CHECK_GOTO(res, "BM_bvector_set()", free_mem);
 
-    res = BM_bvector_count(bmh, &count);
+    res = BM_bvector_count(bmh1, &count);
     BMERR_CHECK_GOTO(res, "BM_bvector_count()", free_mem);
     if (count == 0)
     {
         printf("incorrrect count %i \n", count);
         res = 1; goto free_mem;
     }
-    res = BM_bvector_clear(bmh, BM_TRUE);
+    res = BM_bvector_clear(bmh1, BM_TRUE);
     BMERR_CHECK_GOTO(res, "BM_bvector_clear()", free_mem);
 
-    res = BM_bvector_count(bmh, &count);
+    res = BM_bvector_count(bmh1, &count);
     BMERR_CHECK_GOTO(res, "BM_bvector_count()", free_mem);
     if (count != 0)
     {
@@ -386,7 +430,9 @@ int SetGetTest()
     
     
     free_mem:
-        res = BM_bvector_free(bmh);
+        res = BM_bvector_free(bmh1);
+        BMERR_CHECK(res, "bvector free failed");
+        res = BM_bvector_free(bmh2);
         BMERR_CHECK(res, "bvector free failed");
 
     return res;
@@ -496,7 +542,14 @@ int GetNextTest()
         printf("1.1 incorrrect find found on an empty vector \n");
         res = 1; goto free_mem;
     }
-    
+    res = BM_bvector_find_reverse(bmh, &idx, &found);
+    BMERR_CHECK_GOTO(res, "BM_bvector_find_reverse()", free_mem);
+    if (found)
+    {
+        printf("1.2 incorrrect find_reverse found on an empty vector \n");
+        res = 1; goto free_mem;
+    }
+
     res = BM_bvector_set_bit(bmh, 0, BM_TRUE);
     BMERR_CHECK_GOTO(res, "BM_bvector_set_bit()", free_mem);
     
@@ -512,6 +565,13 @@ int GetNextTest()
     if (!found || idx != 0)
     {
         printf("2.1 incorrrect find found in 0 position \n");
+        res = 1; goto free_mem;
+    }
+    res = BM_bvector_find_reverse(bmh, &idx, &found);
+    BMERR_CHECK_GOTO(res, "BM_bvector_find_reverse()", free_mem);
+    if (!found || idx != 0)
+    {
+        printf("1.2 incorrrect find_reverse found in 0 position \n");
         res = 1; goto free_mem;
     }
 

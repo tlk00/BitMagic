@@ -1,4 +1,19 @@
 ifeq ($(COMPILER),GNU_CC)
+
+    ifeq ($(BMOPTFLAGS),-DBMAVX2OPT)
+        CXXARCHFLAGS=-march=native -mavx2
+    else
+        ifeq ($(BMOPTFLAGS),-DBMSSE42OPT)
+            CXXARCHFLAGS=-march=core2 -msse4.2
+        else
+            ifeq ($(BMOPTFLAGS),-DBMSSE2OPT)
+                CXXARCHFLAGS=-march=core2 -msse2
+            else
+                CXXARCHFLAGS=-march=core2
+            endif
+        endif
+    endif
+
     COMMON_DFLAGS = 
     #-g -D_DEBUG
     LINKER_DFLAGS = 
@@ -10,8 +25,8 @@ ifeq ($(COMPILER),GNU_CC)
     COMMON_LDFLAGS = $(LINKER_DFLAGS) -export-dynamic
     COMMON_CLDFLAGS = $(COMMON_LDFLAGS)
     EXTERN_LIBS = $(EXTERN_LIBS_BASE)/lib
-    CXX = g++ -march=core2 -m64 -Wall 
-    CC = gcc -march=core2 -Wall 
+    CXX = g++ $(CXXARCHFLAGS) -Wall -std=c++11
+    CC = gcc -Wall
     LD = g++
     CC_PIC_FLAGS = -fPIC
     CXX_PIC_FLAGS = -fPIC

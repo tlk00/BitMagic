@@ -1,36 +1,24 @@
 #ifndef BMAVX2__H__INCLUDED__
 #define BMAVX2__H__INCLUDED__
 /*
-Copyright(c) 2017 Anatoliy Kuznetsov(anatoliy_kuznetsov at yahoo.com)
+Copyright(c) 2002-2017 Anatoliy Kuznetsov(anatoliy_kuznetsov at yahoo.com)
 
-Permission is hereby granted, free of charge, to any person
-obtaining a copy of this software and associated documentation
-files (the "Software"), to deal in the Software without restriction,
-including without limitation the rights to use, copy, modify, merge,
-publish, distribute, sublicense, and/or sell copies of the Software,
-and to permit persons to whom the Software is furnished to do so,
-subject to the following conditions:
+Licensed under the Apache License, Version 2.0 (the "License");
+you may not use this file except in compliance with the License.
+You may obtain a copy of the License at
 
-The above copyright notice and this permission notice shall be included
-in all copies or substantial portions of the Software.
+    http://www.apache.org/licenses/LICENSE-2.0
 
-THE SOFTWARE IS PROVIDED "AS IS", WITHOUT WARRANTY OF ANY KIND,
-EXPRESS OR IMPLIED, INCLUDING BUT NOT LIMITED TO THE WARRANTIES
-OF MERCHANTABILITY, FITNESS FOR A PARTICULAR PURPOSE AND NONINFRINGEMENT.
-IN NO EVENT SHALL THE AUTHORS OR COPYRIGHT HOLDERS BE LIABLE FOR ANY CLAIM,
-DAMAGES OR OTHER LIABILITY, WHETHER IN AN ACTION OF CONTRACT, TORT OR OTHERWISE,
-ARISING FROM, OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR
-OTHER DEALINGS IN THE SOFTWARE.
-
-You have to explicitly mention BitMagic project in any derivative product,
-its WEB Site, published materials, articles or any other work derived from this
-project or based on our code or know-how.
+Unless required by applicable law or agreed to in writing, software
+distributed under the License is distributed on an "AS IS" BASIS,
+WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
+See the License for the specific language governing permissions and
+limitations under the License.
 
 For more information please visit:  http://bitmagic.io
-
 */
 
-// code here is based on modified libpopcnt library by Kim Walisch
+// some of the algorithms here is based on modified libpopcnt library by Kim Walisch
 // https://github.com/kimwalisch/libpopcnt/
 //
 /*
@@ -136,7 +124,7 @@ bm::id_t avx2_bit_count(const __m256i* BMRESTRICT block,
   __m256i b, c;
 
   BM_AVX2_POPCNT_PROLOG
-  uint64_t* cnt64;
+  bm::id64_t* cnt64;
 
   do
   {
@@ -180,7 +168,7 @@ bm::id_t avx2_bit_count(const __m256i* BMRESTRICT block,
   BM_AVX2_BIT_COUNT(bc, ones);
   cnt = _mm256_add_epi64(cnt, bc);
 
-  cnt64 = (uint64_t*) &cnt;
+  cnt64 = (bm::id64_t*) &cnt;
 
   return (unsigned)(cnt64[0] + cnt64[1] + cnt64[2] + cnt64[3]);
 }
@@ -194,7 +182,7 @@ bm::id_t avx2_bit_count_and(const __m256i* BMRESTRICT block,
                             const __m256i* BMRESTRICT block_end,
                             const __m256i* BMRESTRICT mask_block)
 {
-    uint64_t* cnt64;
+    bm::id64_t* cnt64;
     BM_AVX2_POPCNT_PROLOG;
     __m256i cnt = _mm256_setzero_si256();
     __m256i ymm0, ymm1;
@@ -232,7 +220,7 @@ bm::id_t avx2_bit_count_and(const __m256i* BMRESTRICT block,
 
     } while (block < block_end);
 
-    cnt64 = (uint64_t*)&cnt;
+    cnt64 = (bm::id64_t*)&cnt;
     return (unsigned)(cnt64[0] + cnt64[1] + cnt64[2] + cnt64[3]);
 }
 
@@ -241,7 +229,7 @@ bm::id_t avx2_bit_count_or(const __m256i* BMRESTRICT block,
     const __m256i* BMRESTRICT block_end,
     const __m256i* BMRESTRICT mask_block)
 {
-    uint64_t* cnt64;
+    bm::id64_t* cnt64;
     BM_AVX2_POPCNT_PROLOG;
     __m256i cnt = _mm256_setzero_si256();
     do
@@ -258,7 +246,7 @@ bm::id_t avx2_bit_count_or(const __m256i* BMRESTRICT block,
 
     } while (block < block_end);
 
-    cnt64 = (uint64_t*)&cnt;
+    cnt64 = (bm::id64_t*)&cnt;
     return (unsigned)(cnt64[0] + cnt64[1] + cnt64[2] + cnt64[3]);
 }
 // experimental code for Harley-Seal Hamming
@@ -377,7 +365,7 @@ bm::id_t avx2_bit_count_xor(const __m256i* BMRESTRICT block,
     const __m256i* BMRESTRICT block_end,
     const __m256i* BMRESTRICT mask_block)
 {
-    uint64_t* cnt64;
+    bm::id64_t* cnt64;
     BM_AVX2_POPCNT_PROLOG
     __m256i cnt = _mm256_setzero_si256();
     __m256i ymm0, ymm1;
@@ -413,7 +401,7 @@ bm::id_t avx2_bit_count_xor(const __m256i* BMRESTRICT block,
 
     } while (block < block_end);
 
-    cnt64 = (uint64_t*)&cnt;
+    cnt64 = (bm::id64_t*)&cnt;
     return (unsigned)(cnt64[0] + cnt64[1] + cnt64[2] + cnt64[3]);
 }
 
@@ -423,11 +411,12 @@ bm::id_t avx2_bit_count_xor(const __m256i* BMRESTRICT block,
   @brief AND NOT bit count for two aligned bit-blocks
   @ingroup AVX2
 */
+inline
 bm::id_t avx2_bit_count_sub(const __m256i* BMRESTRICT block,
     const __m256i* BMRESTRICT block_end,
     const __m256i* BMRESTRICT mask_block)
 {
-    uint64_t* cnt64;
+    bm::id64_t* cnt64;
     BM_AVX2_POPCNT_PROLOG
     __m256i cnt = _mm256_setzero_si256();
     do
@@ -444,7 +433,7 @@ bm::id_t avx2_bit_count_sub(const __m256i* BMRESTRICT block,
 
     } while (block < block_end);
 
-    cnt64 = (uint64_t*)&cnt;
+    cnt64 = (bm::id64_t*)&cnt;
     return (unsigned)(cnt64[0] + cnt64[1] + cnt64[2] + cnt64[3]);
 }
 
@@ -506,37 +495,51 @@ void avx2_andnot_arr_2_mask(__m256i* BMRESTRICT dst,
     @brief AND array elements against another array
     *dst &= *src
 
+    @return 0 if destination does not have any bits
+
     @ingroup AVX2
 */
 inline
-void avx2_and_arr(__m256i* BMRESTRICT dst,
+unsigned avx2_and_arr(__m256i* BMRESTRICT dst,
                   const __m256i* BMRESTRICT src,
                   const __m256i* BMRESTRICT src_end)
 {
     __m256i ymm1, ymm2;
+    __m256i acc = _mm256_setzero_si256();
+
     do
     {
         ymm1 = _mm256_load_si256(src++);
         ymm2 = _mm256_load_si256(dst);
         ymm1 = _mm256_and_si256(ymm1, ymm2);
         _mm256_store_si256(dst++, ymm1);
+        acc = _mm256_or_si256(acc, ymm1);
         
         ymm1 = _mm256_load_si256(src++);
         ymm2 = _mm256_load_si256(dst);
         ymm1 = _mm256_and_si256(ymm1, ymm2);
         _mm256_store_si256(dst++, ymm1);
+        acc = _mm256_or_si256(acc, ymm1);
 
         ymm1 = _mm256_load_si256(src++);
         ymm2 = _mm256_load_si256(dst);
         ymm1 = _mm256_and_si256(ymm1, ymm2);
         _mm256_store_si256(dst++, ymm1);
+        acc = _mm256_or_si256(acc, ymm1);
 
         ymm1 = _mm256_load_si256(src++);
         ymm2 = _mm256_load_si256(dst);
         ymm1 = _mm256_and_si256(ymm1, ymm2);
         _mm256_store_si256(dst++, ymm1);
+        acc = _mm256_or_si256(acc, ymm1);
 
     } while (src < src_end);
+    
+    if (_mm256_testz_si256(acc, acc))
+    {
+        return 0;
+    }
+    return 1;
 }
 
 
@@ -727,39 +730,87 @@ inline
 void avx2_invert_arr(bm::word_t* BMRESTRICT first,
                      bm::word_t* BMRESTRICT last)
 {
-    __m256i ymm1 = _mm256_set_epi32(0xFFFFFFFF, 0xFFFFFFFF,
-                                    0xFFFFFFFF, 0xFFFFFFFF,
-                                    0xFFFFFFFF, 0xFFFFFFFF,
-                                    0xFFFFFFFF, 0xFFFFFFFF
-                                    );
+    __m256i maskz = _mm256_setzero_si256();
+    __m256i ymm1 = _mm256_cmpeq_epi64(maskz, maskz); // set all FF
+
     __m256i* wrd_ptr = (__m256i*)first;
     __m256i ymm0;
     do
     {
-        ymm0 = _mm256_load_si256(wrd_ptr);
+        ymm0 = _mm256_load_si256(wrd_ptr+0);
         ymm0 = _mm256_xor_si256(ymm0, ymm1);
-        _mm256_store_si256(wrd_ptr, ymm0);
-        ++wrd_ptr;
+        _mm256_store_si256(wrd_ptr+0, ymm0);
 
-        ymm0 = _mm256_load_si256(wrd_ptr);
+        ymm0 = _mm256_load_si256(wrd_ptr+1);
         ymm0 = _mm256_xor_si256(ymm0, ymm1);
-        _mm256_store_si256(wrd_ptr, ymm0);
-        ++wrd_ptr;
+        _mm256_store_si256(wrd_ptr+1, ymm0);
 
-        ymm0 = _mm256_load_si256(wrd_ptr);
+        ymm0 = _mm256_load_si256(wrd_ptr+2);
         ymm0 = _mm256_xor_si256(ymm0, ymm1);
-        _mm256_store_si256(wrd_ptr, ymm0);
-        ++wrd_ptr;
+        _mm256_store_si256(wrd_ptr+2, ymm0);
 
-        ymm0 = _mm256_load_si256(wrd_ptr);
+        ymm0 = _mm256_load_si256(wrd_ptr+3);
         ymm0 = _mm256_xor_si256(ymm0, ymm1);
-        _mm256_store_si256(wrd_ptr, ymm0);
-        ++wrd_ptr;
+        _mm256_store_si256(wrd_ptr+3, ymm0);
+        wrd_ptr += 4;
 
     } while (wrd_ptr < (__m256i*)last);
 }
 
+/*!
+    @brief check if block is all zero bits
+    @ingroup AVX2
+*/
+inline
+bool avx2_is_all_zero(const __m256i* BMRESTRICT block,
+                      const __m256i* BMRESTRICT block_end)
+{
+    __m256i maskz = _mm256_setzero_si256();
 
+    do
+    {
+        __m256i w0 = _mm256_load_si256(block+0);
+        __m256i w1 = _mm256_load_si256(block+1);
+        
+        __m256i w = _mm256_or_si256(w0, w1);
+        __m256i wcmp= _mm256_cmpeq_epi8(w, maskz); // (w0 | w1) == maskz
+        unsigned mask = _mm256_movemask_epi8(wcmp);
+        if (mask != ~0u)
+        {
+            return false;
+        }
+
+        block += 2;
+    
+    } while (block < block_end);
+    return true;
+}
+
+/*!
+    @brief check if block is all one bits
+    @ingroup AVX2
+*/
+inline
+bool avx2_is_all_one(const __m256i* BMRESTRICT block,
+                     const __m256i* BMRESTRICT block_end)
+{
+    __m256i maskz = _mm256_setzero_si256();
+    __m256i maskF = _mm256_cmpeq_epi8(maskz, maskz); // set FF
+    
+    do
+    {
+        __m256i w0 = _mm256_load_si256(block);
+        
+        __m256i wcmp= _mm256_cmpeq_epi8(w0, maskF); // (w0 == maskF)
+        unsigned mask = _mm256_movemask_epi8(wcmp);
+        if (mask != ~0u)
+        {
+            return false;
+        }
+        ++block;
+    } while (block < block_end);
+    return true;
+}
 
 
 
@@ -804,6 +855,12 @@ void avx2_invert_arr(bm::word_t* BMRESTRICT first,
 
 #define VECT_SET_BLOCK(dst, dst_end, value) \
     avx2_set_block((__m256i*) dst, (__m256i*) (dst_end), (value))
+
+#define VECT_IS_ZERO_BLOCK(dst, dst_end) \
+    avx2_is_all_zero((__m256i*) dst, (__m256i*) (dst_end))
+
+#define VECT_IS_ONE_BLOCK(dst, dst_end) \
+    avx2_is_all_one((__m256i*) dst, (__m256i*) (dst_end))
 
 
 // TODO: write better pipelined AVX2 implementation
@@ -1049,36 +1106,7 @@ bm::id_t sse42_bit_block_calc_count_change(const __m128i* BMRESTRICT block,
    return count;
 }
 
-#if(0)
-// initial version of sum_arr (keeping for the future reference)
-inline
-const bm::gap_word_t* avx2_gap_sum_arr(const bm::gap_word_t* BMRESTRICT pbuf,
-                                       unsigned vect_cnt,
-                                       unsigned* sum)
-{
-    __m256i xcnt = _mm256_setzero_si256();
 
-    for (unsigned i = 0; i < vect_cnt; ++i)
-    {
-        __m256i xmm1 = _mm256_loadu_si256((__m256i*)(pbuf));
-        __m256i xmm0 = _mm256_loadu_si256((__m256i*)(pbuf-1));
-        __m256i xmm_s1 = _mm256_sub_epi16(xmm1, xmm0);
-        
-        xmm1 = _mm256_loadu_si256((__m256i*)(pbuf+16));
-        xmm0 = _mm256_loadu_si256((__m256i*)(pbuf+16-1));
-        __m256i xmm_s2 = _mm256_sub_epi16(xmm1, xmm0);
-        
-        __m256i sum = _mm256_add_epi16(xmm_s1, xmm_s2);
-        xcnt = _mm256_add_epi16(xcnt, sum);
-        pbuf += 32;
-    }
-    unsigned short* cnt16 = (unsigned short*)&xcnt;
-    *sum += cnt16[0] + cnt16[2] + cnt16[4] + cnt16[6] +
-            cnt16[8] + cnt16[10] + cnt16[12] + cnt16[14];
-
-    return pbuf;
-}
-#endif
 
 /* @brief Gap block population count (array sum) utility
    @param pbuf - unrolled, aligned to 1-start GAP buffer
@@ -1089,9 +1117,9 @@ const bm::gap_word_t* avx2_gap_sum_arr(const bm::gap_word_t* BMRESTRICT pbuf,
    @internal
 */
 inline
-const bm::gap_word_t* avx2_gap_sum_arr(const bm::gap_word_t* BMRESTRICT pbuf,
-                                       unsigned                         avx_vect_waves,
-                                       unsigned*                        sum)
+const bm::gap_word_t* avx2_gap_sum_arr(const bm::gap_word_t*  pbuf,
+                                       unsigned               avx_vect_waves,
+                                       unsigned*              sum)
 {
     __m256i xcnt = _mm256_setzero_si256();
 

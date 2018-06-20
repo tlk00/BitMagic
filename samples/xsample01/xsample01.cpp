@@ -1,36 +1,26 @@
 /*
 Copyright(c) 2002-2017 Anatoliy Kuznetsov(anatoliy_kuznetsov at yahoo.com)
 
-Permission is hereby granted, free of charge, to any person
-obtaining a copy of this software and associated documentation
-files (the "Software"), to deal in the Software without restriction,
-including without limitation the rights to use, copy, modify, merge,
-publish, distribute, sublicense, and/or sell copies of the Software,
-and to permit persons to whom the Software is furnished to do so,
-subject to the following conditions:
+Licensed under the Apache License, Version 2.0 (the "License");
+you may not use this file except in compliance with the License.
+You may obtain a copy of the License at
 
-The above copyright notice and this permission notice shall be included
-in all copies or substantial portions of the Software.
+    http://www.apache.org/licenses/LICENSE-2.0
 
-THE SOFTWARE IS PROVIDED "AS IS", WITHOUT WARRANTY OF ANY KIND,
-EXPRESS OR IMPLIED, INCLUDING BUT NOT LIMITED TO THE WARRANTIES
-OF MERCHANTABILITY, FITNESS FOR A PARTICULAR PURPOSE AND NONINFRINGEMENT.
-IN NO EVENT SHALL THE AUTHORS OR COPYRIGHT HOLDERS BE LIABLE FOR ANY CLAIM,
-DAMAGES OR OTHER LIABILITY, WHETHER IN AN ACTION OF CONTRACT, TORT OR OTHERWISE,
-ARISING FROM, OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR
-OTHER DEALINGS IN THE SOFTWARE.
-
-You have to explicitly mention BitMagic project in any derivative product,
-its WEB Site, published materials, articles or any other work derived from this
-project or based on our code or know-how.
+Unless required by applicable law or agreed to in writing, software
+distributed under the License is distributed on an "AS IS" BASIS,
+WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
+See the License for the specific language governing permissions and
+limitations under the License.
 
 For more information please visit:  http://bitmagic.io
-
 */
 
 /** \example xsample01.cpp
   Demo and a benchmark on memory consumption control and logical operation
- 
+*/
+/*! \file xsample01.cpp
+    \brief Example: Example: memory consumption techniques
 */
 
 
@@ -105,6 +95,7 @@ const bm::gap_word_t gap_len_table_sparse<T>::_len[bm::gap_levels] =
 
 // simple bit-vector class factory for the project
 //
+static
 TBVector* construct_bvector()
 {
     // in this example we plan to keep lots of vectors in memory, thus
@@ -222,6 +213,7 @@ void sparse_vect_index::get_vector(unsigned id, std::vector<unsigned>& vect) con
 // another random integers of near neighbors
 // the other adds ints randomly without following any system
 //
+static
 void generate_random_vector(TBVector* bv)
 {
     unsigned method = rand() % 5; // pick a generation method
@@ -264,6 +256,7 @@ void generate_random_vector(TBVector* bv)
 
 // generate map of bit-vectors, each filled with just a few bits
 //
+static
 void generate_bv_index(bv_index& bvi)
 {
     for (unsigned i = 0; i < index_size; ++i)
@@ -284,6 +277,7 @@ void generate_bv_index(bv_index& bvi)
 
 // calculate memory footprint for in memory index
 //
+static
 size_t calc_memory_footprint(const bv_index& bvi)
 {
     size_t mem_total = 0;
@@ -305,6 +299,7 @@ size_t calc_memory_footprint(const bv_index& bvi)
 
 // convert bit-vector index to bit-vector serialized index
 //
+static
 size_t convert_bv2bvs(const bv_index& bvi, bvs_index& bvs)
 {
     size_t  mem_total = 0;
@@ -366,6 +361,7 @@ size_t convert_bv2bvs(const bv_index& bvi, bvs_index& bvs)
 
 // convert bit-vector index to vector<usingned>
 //
+static
 size_t convert_bv2vect(const bv_index& bvi, vect_index& vidx)
 {
     size_t  mem_total = 0;
@@ -419,6 +415,7 @@ void bv2delta(const TBVector& bv, std::vector<unsigned>& vect)
 
 // convert bit-vector index to bm::sparse_vector
 //
+static
 size_t convert_bv2sv(const bv_index& bvi, sparse_vect_index& sv_idx)
 {
     size_t  mem_total = 0;
@@ -552,6 +549,7 @@ size_t convert_bv2sv(const bv_index& bvi, sparse_vect_index& sv_idx)
 // speed test for in-memory bit vectors
 // benchmark performs a mix of logical operations
 //
+static
 void speed_test_bv_index(const bv_index& bvi)
 {
     TBVector bv_join; // OR join vector
@@ -610,6 +608,7 @@ void speed_test_bv_index(const bv_index& bvi)
 // to perform logical operation between a BLOB and bvector<> in memory
 // and avoids extra decompression overhead
 //
+static
 void speed_test_bvs_index(const bvs_index& bvs)
 {
     TBVector bv_join; // OR join vector
@@ -673,6 +672,7 @@ void speed_test_bvs_index(const bvs_index& bvs)
     tt1.add_repeats(benchmark_ops + 1);
 }
 
+static
 void speed_test_vect_index(const vect_index& vecti)
 {
     TBVector bv_join; // OR join vector
@@ -734,6 +734,7 @@ void speed_test_vect_index(const vect_index& vecti)
     tt1.add_repeats(benchmark_ops + 1);
 }
 
+static
 void speed_test_sv_index(const sparse_vect_index& svi)
 {
     TBVector bv_join; // OR join vector

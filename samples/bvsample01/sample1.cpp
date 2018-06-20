@@ -1,36 +1,23 @@
 /*
 Copyright(c) 2002-2017 Anatoliy Kuznetsov(anatoliy_kuznetsov at yahoo.com)
 
-Permission is hereby granted, free of charge, to any person
-obtaining a copy of this software and associated documentation
-files (the "Software"), to deal in the Software without restriction,
-including without limitation the rights to use, copy, modify, merge,
-publish, distribute, sublicense, and/or sell copies of the Software,
-and to permit persons to whom the Software is furnished to do so,
-subject to the following conditions:
+Licensed under the Apache License, Version 2.0 (the "License");
+you may not use this file except in compliance with the License.
+You may obtain a copy of the License at
 
-The above copyright notice and this permission notice shall be included
-in all copies or substantial portions of the Software.
+    http://www.apache.org/licenses/LICENSE-2.0
 
-THE SOFTWARE IS PROVIDED "AS IS", WITHOUT WARRANTY OF ANY KIND,
-EXPRESS OR IMPLIED, INCLUDING BUT NOT LIMITED TO THE WARRANTIES
-OF MERCHANTABILITY, FITNESS FOR A PARTICULAR PURPOSE AND NONINFRINGEMENT.
-IN NO EVENT SHALL THE AUTHORS OR COPYRIGHT HOLDERS BE LIABLE FOR ANY CLAIM,
-DAMAGES OR OTHER LIABILITY, WHETHER IN AN ACTION OF CONTRACT, TORT OR OTHERWISE,
-ARISING FROM, OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR
-OTHER DEALINGS IN THE SOFTWARE.
-
-You have to explicitly mention BitMagic project in any derivative product,
-its WEB Site, published materials, articles or any other work derived from this
-project or based on our code or know-how.
+Unless required by applicable law or agreed to in writing, software
+distributed under the License is distributed on an "AS IS" BASIS,
+WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
+See the License for the specific language governing permissions and
+limitations under the License.
 
 For more information please visit:  http://bitmagic.io
-
 */
 
 /** \example sample1.cpp
-  Example of how to use bvector template class to set
-  bits and then retrieve indexes of ON bits.
+  Example how to use bvector<> to set bits and then retrieve indexes of ON bits
  
 
   \sa bm::bvector<>::get_next() 
@@ -38,8 +25,11 @@ For more information please visit:  http://bitmagic.io
   \sa bm::bvector<>::set()
   \sa bm::bvector<>::count() 
   \sa bm::bvector<>::clear()
-  
  */
+
+/*! \file sample1.cpp
+    \brief Example: bvector<> set bits and then retrieve indexes of ON bits
+*/
 
 #include <iostream>
 #include "bm.h"
@@ -50,9 +40,9 @@ int main(void)
 {
     try
     {
-        bm::bvector<>   bv;    // Bitvector variable declaration.
+        bm::bvector<>   bv { 1, 2, 3 };    // Bitvector variable declaration with init list
 
-        cout << bv.count() << endl;
+        cout << "1. bitcount: " << bv.count() << endl;
 
         // Set some bits.
 
@@ -62,7 +52,7 @@ int main(void)
 
         // New bitvector's count.
 
-        cout << bv.count() << endl;
+        cout << "2. bitcount: " << bv.count() << endl;
 
 
         // Print the bitvector.
@@ -86,7 +76,7 @@ int main(void)
 
         bv.clear();   // Clean up.
 
-        cout << bv.count() << endl;
+        cout << "3. bitcount: " << bv.count() << endl;
 
         // We also can use operators to set-clear bits;
 
@@ -94,14 +84,14 @@ int main(void)
         bv[100] = true;
         bv[10000] = true;
 
-        cout << bv.count() << endl;
+        cout << "4. bitcount: " << bv.count() << endl;
 
         if (bv[10])
         {
             bv[10] = false;
         }
 
-        cout << bv.count() << endl;
+        cout << "5. bitcount: " << bv.count() << endl;
     }
     catch(std::exception& ex)
     {

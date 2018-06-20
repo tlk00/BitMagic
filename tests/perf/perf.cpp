@@ -1,31 +1,19 @@
 /*
 Copyright(c) 2002-2017 Anatoliy Kuznetsov(anatoliy_kuznetsov at yahoo.com)
 
-Permission is hereby granted, free of charge, to any person
-obtaining a copy of this software and associated documentation
-files (the "Software"), to deal in the Software without restriction,
-including without limitation the rights to use, copy, modify, merge,
-publish, distribute, sublicense, and/or sell copies of the Software,
-and to permit persons to whom the Software is furnished to do so,
-subject to the following conditions:
+Licensed under the Apache License, Version 2.0 (the "License");
+you may not use this file except in compliance with the License.
+You may obtain a copy of the License at
 
-The above copyright notice and this permission notice shall be included
-in all copies or substantial portions of the Software.
+    http://www.apache.org/licenses/LICENSE-2.0
 
-THE SOFTWARE IS PROVIDED "AS IS", WITHOUT WARRANTY OF ANY KIND,
-EXPRESS OR IMPLIED, INCLUDING BUT NOT LIMITED TO THE WARRANTIES
-OF MERCHANTABILITY, FITNESS FOR A PARTICULAR PURPOSE AND NONINFRINGEMENT.
-IN NO EVENT SHALL THE AUTHORS OR COPYRIGHT HOLDERS BE LIABLE FOR ANY CLAIM,
-DAMAGES OR OTHER LIABILITY, WHETHER IN AN ACTION OF CONTRACT, TORT OR OTHERWISE,
-ARISING FROM, OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR
-OTHER DEALINGS IN THE SOFTWARE.
-
-You have to explicitly mention BitMagic project in any derivative product,
-its WEB Site, published materials, articles or any other work derived from this
-project or based on our code or know-how.
+Unless required by applicable law or agreed to in writing, software
+distributed under the License is distributed on an "AS IS" BASIS,
+WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
+See the License for the specific language governing permissions and
+limitations under the License.
 
 For more information please visit:  http://bitmagic.io
-
 */
 
 #include <bitset>
@@ -53,6 +41,7 @@ For more information please visit:  http://bitmagic.io
 #include "bmsparsevec.h"
 #include "bmsparsevec_algo.h"
 #include "bmsparsevec_serial.h"
+#include "bmrandom.h"
 
 //#include "bmdbg.h"
 
@@ -114,7 +103,35 @@ private:
 typedef bm::bvector<> bvect;
 
 
+// generate pseudo-random bit-vector, mix of compressed/non-compressed blocks
+//
+static
+void generate_bvector(bvect& bv, unsigned vector_max = 40000000)
+{
+    unsigned i, j;
+    for (i = 0; i < vector_max;)
+    {
+        // generate bit-blocks
+        for (j = 0; j < 65535 * 8; i += 10, j++)
+        {
+            bv.set(i);
+        }
+        if (i > vector_max)
+            break;
+        // generate GAP (compressed) blocks
+        for (j = 0; j < 65535; i += 120, j++)
+        {
+            unsigned len = rand() % 64;
+            bv.set_range(i, i + len);
+            i += len;
+            if (i > vector_max)
+                break;
+        }
+    }
+}
 
+
+static
 void SimpleFillSets(test_bitset& bset, 
                        bvect& bv,
                        unsigned min, 
@@ -134,7 +151,7 @@ void SimpleFillSets(test_bitset& bset,
 // Interval filling.
 // 111........111111........111111..........11111111.......1111111...
 //
-
+static
 void FillSetsIntervals(test_bitset& bset, 
                        bvect& bv,
                        unsigned min, 
@@ -202,7 +219,7 @@ void FillSetsIntervals(test_bitset& bset,
 
 }
 
-
+static
 void MemCpyTest()
 {
     unsigned* m1 = new unsigned[BSIZE/32];
@@ -238,7 +255,7 @@ void MemCpyTest()
     delete [] m2;
 }
 
-
+static
 void BitCountTest()
 {
     {
@@ -281,15 +298,16 @@ void BitCountTest()
     }
 }
 
-
+static
 void BitForEachTest()
 {
     // setup the test data
     //
+    size_t value = 0;
     unsigned* test_arr = new unsigned[65536];
     for (unsigned j = 0; j < 65536; ++j)
     {
-        test_arr[j] = j;		
+        test_arr[j] = j * j;
     }
 
     if (platform_test)
@@ -334,10 +352,49 @@ void BitForEachTest()
         }
     }
 
+
+    {
+        unsigned bit_list[64];
+        TimeTaker tt("BitScan on bitcount (block)", REPEATS * 20);
+        for (unsigned i = 0; i < REPEATS * 20; ++i)
+        {
+            for (unsigned j = 0; j < 65536; ++j)
+            {
+                unsigned cnt = bm::bitscan_popcnt(test_arr[j], bit_list);
+                for (unsigned k =  0; j < cnt; j++)
+                {
+                    value += bit_list[k];
+                }
+            }
+        }
+    }
+
+    {
+        unsigned char bit_list[64];
+        TimeTaker tt("BitScan on bitcount64 (block)", REPEATS * 20);
+        for (unsigned i = 0; i < REPEATS * 20; ++i)
+        {
+            for (unsigned j = 0; j < 65536/2; j+=2)
+            {
+                unsigned cnt = bm::bitscan_wave(test_arr + j, bit_list);
+
+                for (unsigned k =  0; j < cnt; j++)
+                {
+                    value += bit_list[k];
+                }
+            }
+        }
+    }
+
+
+    char buf[256];
+    sprintf(buf, "%i", (int)value); // to fool some smart compilers like ICC
+
+
     delete [] test_arr;
 }
 
-
+static
 void BitCountSparseTest()
 {
     bvect*  bv = new bvect();
@@ -396,7 +453,7 @@ void BitCountSparseTest()
     delete bset;
 }
 
-
+static
 void BitTestSparseTest()
 {
     auto_ptr<bvect>  bv0(new bvect());
@@ -449,7 +506,7 @@ void BitTestSparseTest()
 
 }
 
-
+static
 void EnumeratorGoToTest()
 {
     auto_ptr<bvect>  bv0(new bvect());
@@ -510,8 +567,7 @@ void EnumeratorGoToTest()
 }
 
 
-
-
+static
 void BitCompareTest()
 {
     {
@@ -604,61 +660,245 @@ void BitCompareTest()
     sprintf(buf, "%p", p);
 }
 
-void EnumeratorTest()
+extern "C" {
+    static
+    int bit_visitor_func(void* handle_ptr, bm::id_t bit_idx)
+    {
+        std::vector<bm::id_t>* vp = (std::vector<bm::id_t>*)handle_ptr;
+        vp->push_back(bit_idx);
+        return 0;
+    }
+} // extern C
+
+
+static
+void FindTest()
 {
-    bvect  bv;
+    bvect                 bv1, bv2, bv3, bv4;
+    bvect                 bv_empty;
     test_bitset*  bset = new test_bitset();
-    unsigned value = 0;
-
-    FillSetsIntervals(*bset, bv, 0, BSIZE, 10);
-
-    unsigned cnt1 = bv.count();
-    //unsigned cnt2 = bset->count();
-
+    
+    bv_empty[1] = true;
+    bv_empty[1] = false;
+    bv_empty[100000000] = true;
+    bv_empty[100000000] = false;
+    
+    SimpleFillSets(*bset, bv1, 0, BSIZE/2, 3);
+    SimpleFillSets(*bset, bv1, 0, BSIZE/2, 4);
+    SimpleFillSets(*bset, bv1, 0, BSIZE/2, 5);
+    
+    FillSetsIntervals(*bset, bv2, 0, BSIZE/2, 8);
+    FillSetsIntervals(*bset, bv3, 0, BSIZE/2, 12);
+    FillSetsIntervals(*bset, bv4, 0, BSIZE/2, 120);
     
     unsigned i;
-
+    unsigned pos_sum = 0;
     {
-    TimeTaker tt("bvector<>::enumerator", REPEATS);
-    for (i = 0; i < REPEATS; ++i)
-    {    
-        bvect::enumerator en = bv.first();
-
-        for (;en.valid();++en)
+        TimeTaker tt("bvector<>::find_reverse()", REPEATS*100);
+        for (i = 0; i < REPEATS*100; ++i)
         {
-            value = *en;
+            bm::id_t pos;
+            bool found;
+            found = bv1.find_reverse(pos);
+            if (found)
+                pos_sum += pos;
+            found = bv2.find_reverse(pos);
+            if (found)
+                pos_sum += pos;
+            found = bv3.find_reverse(pos);
+            if (found)
+                pos_sum += pos;
+            found = bv4.find_reverse(pos);
+            if (found)
+                pos_sum += pos;
+            found = bv_empty.find_reverse(pos);
+            if (!found)
+                pos_sum += pos;
+            else
+            {
+                cerr << "incorrect find result!" << endl;
+                exit(1);
+            }
         }
     }
-    }
+    char cbuf[256];
+    sprintf(cbuf, "%i ", pos_sum); // attempt to avoid agressive optmizations
 
-
-    // -----------------------------------------------
-
-    unsigned cnt = 0;
     {
-        TimeTaker tt("bvector<>::get_next()", REPEATS);
-        for (i = 0; i < REPEATS; ++i)
+        TimeTaker tt("bvector<>::find()", REPEATS*100);
+        for (i = 0; i < REPEATS*100; ++i)
         {
-            if (bv.any())
+            bm::id_t pos;
+            bool found;
+            found = bv1.find(0, pos);
+            if (found)
+                pos_sum += pos;
+            found = bv2.find(0, pos);
+            if (found)
+                pos_sum += pos;
+            found = bv3.find(0, pos);
+            if (found)
+                pos_sum += pos;
+            found = bv4.find(0, pos);
+            if (found)
+                pos_sum += pos;
+            found = bv_empty.find(0, pos);
+            if (!found)
+                pos_sum += pos;
+            else
             {
-                unsigned v = bv.get_first();
-                do
-                {
-                    v = bv.get_next(value);
-                    cnt += v;
-                } while(v);
+                cerr << "incorrect find result!" << endl;
+                exit(1);
             }
         }
     }
 
     delete bset;
+}
 
-    char buf[256];
-    sprintf(buf, "%i %i ", cnt, cnt1);//, cnt2);
+static
+void EnumeratorTest()
+{
+    bvect                 bv1, bv2, bv3, bv4;
+    std::vector<bm::id_t> v1,  v2,  v3,  v4;
+    
+    test_bitset*  bset = new test_bitset();
+
+    SimpleFillSets(*bset, bv1, 0, BSIZE/2, 3);
+    SimpleFillSets(*bset, bv1, 0, BSIZE/2, 4);
+    SimpleFillSets(*bset, bv1, 0, BSIZE/2, 5);
+    
+    FillSetsIntervals(*bset, bv2, 0, BSIZE/2, 8);
+    FillSetsIntervals(*bset, bv3, 0, BSIZE/2, 12);
+    FillSetsIntervals(*bset, bv4, 0, BSIZE/2, 120);
+    
+    v1.reserve(bv1.count());
+    v2.reserve(bv2.count());
+    v3.reserve(bv3.count());
+    v4.reserve(bv4.count());
+
+    unsigned i;
+
+    {
+        TimeTaker tt("bvector<>::enumerator", REPEATS/10);
+        for (i = 0; i < REPEATS/10; ++i)
+        {
+            {
+                bvect::enumerator en = bv1.first();
+                for (;en.valid();++en)
+                {
+                    v1.push_back(*en);
+                }
+            }
+            {
+                bvect::enumerator en = bv2.first();
+                for (;en.valid();++en)
+                {
+                    v2.push_back(*en);
+                }
+            }
+            {
+                bvect::enumerator en = bv3.first();
+                for (;en.valid();++en)
+                {
+                    v3.push_back(*en);
+                }
+            }
+            {
+                bvect::enumerator en = bv4.first();
+                for (;en.valid();++en)
+                {
+                    v4.push_back(*en);
+                }
+            }
+            v1.resize(0);
+            v2.resize(0);
+            v3.resize(0);
+            v4.resize(0);
+
+        } // for REPEATS
+    }
+    
+
+
+    // -----------------------------------------------
+    {
+        TimeTaker tt("bvector<>::get_next()", REPEATS/10);
+        for (i = 0; i < REPEATS/10; ++i)
+        {
+            if (bv1.any())
+            {
+                unsigned v = bv1.get_first();
+                do
+                {
+                    v = bv1.get_next(v);
+                    v1.push_back(v);
+                } while(v);
+            }
+            if (bv2.any())
+            {
+                unsigned v = bv2.get_first();
+                do
+                {
+                    v = bv2.get_next(v);
+                    v2.push_back(v);
+                } while(v);
+            }
+            if (bv3.any())
+            {
+                unsigned v = bv3.get_first();
+                do
+                {
+                    v = bv3.get_next(v);
+                    v3.push_back(v);
+                } while(v);
+            }
+            if (bv4.any())
+            {
+                unsigned v = bv4.get_first();
+                do
+                {
+                    v = bv4.get_next(v);
+                    v4.push_back(v);
+                } while(v);
+            }
+            v1.resize(0);
+            v2.resize(0);
+            v3.resize(0);
+            v4.resize(0);
+
+        } // for REPEATS
+    }
+
+    // -----------------------------------------------
+    
+    
+    {
+        TimeTaker tt("bm::visit_each_bit()", REPEATS/10);
+        for (i = 0; i < REPEATS/10; ++i)
+        {
+            bm::visit_each_bit(bv1, (void*)&v1, bit_visitor_func);
+            bm::visit_each_bit(bv2, (void*)&v2, bit_visitor_func);
+            bm::visit_each_bit(bv3, (void*)&v3, bit_visitor_func);
+            bm::visit_each_bit(bv4, (void*)&v4, bit_visitor_func);
+
+            v1.resize(0);
+            v2.resize(0);
+            v3.resize(0);
+            v4.resize(0);
+        } // for REPEATS
+
+    }
+    
+    // -----------------------------------------------
+
+
+    delete bset;
+
 
 }
 
-
+static
 void EnumeratorTestGAP()
 {
     bvect*  bv = new bvect();
@@ -731,6 +971,7 @@ void EnumeratorTestGAP()
 
 }
 
+static
 void SerializationTest()
 {
     bvect bv_sparse;
@@ -796,6 +1037,7 @@ void SerializationTest()
     delete [] buf;
 }
 
+static
 void InvertTest()
 {
     bvect*  bv = new bvect();
@@ -825,7 +1067,7 @@ void InvertTest()
     delete bset;
 }
 
-
+static
 void AndTest()
 {
     bvect*  bv1 = new bvect();
@@ -861,6 +1103,7 @@ void AndTest()
     delete bset2;
 }
 
+static
 void XorTest()
 {
     bvect*  bv1 = new bvect();
@@ -896,6 +1139,7 @@ void XorTest()
     delete bset2;
 }
 
+static
 void SubTest()
 {
     bvect*  bv1 = new bvect();
@@ -919,7 +1163,7 @@ void SubTest()
     delete bv2;
 }
 
-
+static
 void XorCountTest()
 {
     bvect*  bv1 = new bvect();
@@ -1060,6 +1304,7 @@ void XorCountTest()
     delete bset2;    
 }
 
+static
 void AndCountTest()
 {
     bvect*  bv1 = new bvect();
@@ -1201,7 +1446,7 @@ void AndCountTest()
 }
 
 
-
+static
 void TI_MetricTest()
 {
     bvect*  bv1 = new bvect();
@@ -1385,15 +1630,18 @@ void TI_MetricTest()
     delete bset2;    
 }
 
+static
 void BitBlockTransposeTest()
 {
+/*
     bm::word_t BM_VECT_ALIGN block1[bm::set_block_size] BM_VECT_ALIGN_ATTR = { 0, };
-    unsigned   BM_VECT_ALIGN tmatrix1[32][bm::set_block_plain_size] BM_VECT_ALIGN_ATTR;
 
     for (unsigned i = 0; i < bm::set_block_size; ++i)
     {
         block1[i] = 1 | (1 << 5) | (7 << 15) | (3 << 22);
     }
+*/
+    unsigned   BM_VECT_ALIGN tmatrix1[32][bm::set_block_plain_size] BM_VECT_ALIGN_ATTR;
 
     const unsigned blocks_count = 70000;
     bm::word_t* blocks[blocks_count];
@@ -1472,6 +1720,7 @@ void BitBlockTransposeTest()
 
 }
 
+static
 void BitBlockRotateTest()
 {
     bm::word_t blk0[bm::set_block_size] = { 0 };
@@ -1510,6 +1759,7 @@ void BitBlockRotateTest()
 
 }
 
+inline
 void ptest()
 {
     bvect*  bv_small = new bvect(bm::BM_GAP);
@@ -1564,7 +1814,7 @@ typedef bm::sparse_vector<unsigned, bvect> svect;
 
 // create a benchmark vector with a few dufferent distribution patterns
 //
-
+static
 void FillSparseIntervals(svect& sv)
 {
     sv.resize(250000000);
@@ -1590,7 +1840,7 @@ void FillSparseIntervals(svect& sv)
     }
 }
 
-
+static
 void SparseVectorAccessTest()
 {
     std::vector<unsigned> target;
@@ -1628,17 +1878,62 @@ void SparseVectorAccessTest()
     }
     
     {
-        TimeTaker tt("sparse_vector extraction access test", REPEATS/10 );
+        TimeTaker tt("sparse_vector extract test", REPEATS );
         for (unsigned i = 0; i < REPEATS/10; ++i)
         {
-            unsigned target_size = 190000000/2 - 256000;
-            sv1.extract(&target[0], 256000, target_size);
+            unsigned target_off = 190000000/2 - 256000;
+            sv1.extract(&target[0], sv1.size());
+            sv1.extract(&target[0], 256000, target_off);
         }
     }
     
     char buf[256];
     sprintf(buf, "%i", (int)cnt); // to fool some smart compilers like ICC
     
+}
+
+static
+void RankCompressionTest()
+{
+    bvect bv_i1, bv_s1, bv1, bv2;
+    bvect bv_i2, bv_s2;
+
+    generate_bvector(bv_i1);
+    generate_bvector(bv_i2);
+    bv_i2.optimize();
+
+    bm::random_subset<bvect> rsub;
+    rsub.sample(bv_s1, bv_i1, 1000);
+    rsub.sample(bv_s2, bv_i2, 1000);
+    bv_s2.optimize();
+
+    bm::bvector_rank_compressor<bvect> rc;
+
+    bvect::blocks_count bc1;
+    bv_i1.running_count_blocks(&bc1);
+    bvect::blocks_count bc2;
+    bv_i2.running_count_blocks(&bc2);
+
+    {
+        TimeTaker tt("Rank compression test", REPEATS * 10);
+        for (unsigned i = 0; i < REPEATS * 10; ++i)
+        {
+            rc.compress(bv1, bv_i1, bv_s1);
+            rc.compress(bv1, bv_i2, bv_s2);
+        } // for
+    }
+    {
+        TimeTaker tt("Rank compression (by source) test", REPEATS * 10);
+        for (unsigned i = 0; i < REPEATS * 10; ++i)
+        {
+            rc.compress_by_source(bv2, bv_i1, bc1, bv_s1);
+            rc.compress_by_source(bv2, bv_i2, bc2, bv_s2);
+        } // for
+    }
+
+    bv1 |= bv2;
+    char buf[256];
+    sprintf(buf, "%i", (int)bv1.count()); // to fool some smart compilers like ICC
 }
 
 
@@ -1660,6 +1955,8 @@ int main(void)
 
     BitCompareTest();
 
+    FindTest();
+
     BitBlockTransposeTest();
 
     BitBlockRotateTest();
@@ -1669,6 +1966,7 @@ int main(void)
     EnumeratorTestGAP();
 
     EnumeratorGoToTest();
+    
 
     AndTest();
     XorTest();
@@ -1684,7 +1982,9 @@ int main(void)
     SerializationTest();
 
     SparseVectorAccessTest();
-    
+
+    RankCompressionTest();
+
     return 0;
 }
 

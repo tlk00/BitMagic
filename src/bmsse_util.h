@@ -3,34 +3,24 @@
 /*
 Copyright(c) 2002-2017 Anatoliy Kuznetsov(anatoliy_kuznetsov at yahoo.com)
 
-Permission is hereby granted, free of charge, to any person
-obtaining a copy of this software and associated documentation
-files (the "Software"), to deal in the Software without restriction,
-including without limitation the rights to use, copy, modify, merge,
-publish, distribute, sublicense, and/or sell copies of the Software,
-and to permit persons to whom the Software is furnished to do so,
-subject to the following conditions:
+Licensed under the Apache License, Version 2.0 (the "License");
+you may not use this file except in compliance with the License.
+You may obtain a copy of the License at
 
-The above copyright notice and this permission notice shall be included
-in all copies or substantial portions of the Software.
+    http://www.apache.org/licenses/LICENSE-2.0
 
-THE SOFTWARE IS PROVIDED "AS IS", WITHOUT WARRANTY OF ANY KIND,
-EXPRESS OR IMPLIED, INCLUDING BUT NOT LIMITED TO THE WARRANTIES
-OF MERCHANTABILITY, FITNESS FOR A PARTICULAR PURPOSE AND NONINFRINGEMENT.
-IN NO EVENT SHALL THE AUTHORS OR COPYRIGHT HOLDERS BE LIABLE FOR ANY CLAIM,
-DAMAGES OR OTHER LIABILITY, WHETHER IN AN ACTION OF CONTRACT, TORT OR OTHERWISE,
-ARISING FROM, OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR
-OTHER DEALINGS IN THE SOFTWARE.
-
-You have to explicitly mention BitMagic project in any derivative product,
-its WEB Site, published materials, articles or any other work derived from this
-project or based on our code or know-how.
+Unless required by applicable law or agreed to in writing, software
+distributed under the License is distributed on an "AS IS" BASIS,
+WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
+See the License for the specific language governing permissions and
+limitations under the License.
 
 For more information please visit:  http://bitmagic.io
-
 */
 
-
+/*! \file bmsse_util.h
+    \brief Compute functions for SSE SIMD instruction set (internal)
+*/
 
 namespace bm
 {
@@ -105,7 +95,7 @@ void sse2_xor_arr_2_mask(__m128i* BMRESTRICT dst,
 
     @ingroup SSE2
 */
-BMFORCEINLINE 
+inline
 void sse2_andnot_arr_2_mask(__m128i* BMRESTRICT dst, 
                             const __m128i* BMRESTRICT src, 
                             const __m128i* BMRESTRICT src_end,
@@ -130,15 +120,19 @@ void sse2_andnot_arr_2_mask(__m128i* BMRESTRICT dst,
 /*! 
     @brief AND array elements against another array
     *dst &= *src
+ 
+    @return 0 if no bits were set
 
     @ingroup SSE2
 */
-BMFORCEINLINE 
-void sse2_and_arr(__m128i* BMRESTRICT dst, 
-                  const __m128i* BMRESTRICT src, 
-                  const __m128i* BMRESTRICT src_end)
+inline
+unsigned sse2_and_arr(__m128i* BMRESTRICT dst,
+                       const __m128i* BMRESTRICT src,
+                       const __m128i* BMRESTRICT src_end)
 {
+    __m128i acc = _mm_setzero_si128();
     __m128i xmm1, xmm2;
+
     do
     {
         _mm_prefetch((const char*)(src)+512,  _MM_HINT_NTA);
@@ -147,25 +141,54 @@ void sse2_and_arr(__m128i* BMRESTRICT dst,
         xmm2 = _mm_load_si128(dst);
         xmm1 = _mm_and_si128(xmm1, xmm2);
         _mm_store_si128(dst++, xmm1);
+        acc = _mm_or_si128(acc, xmm1);
         
         xmm1 = _mm_load_si128(src++);
         xmm2 = _mm_load_si128(dst);
         xmm1 = _mm_and_si128(xmm1, xmm2);
         _mm_store_si128(dst++, xmm1);
+        acc = _mm_or_si128(acc, xmm1);
 
         xmm1 = _mm_load_si128(src++);
         xmm2 = _mm_load_si128(dst);
         xmm1 = _mm_and_si128(xmm1, xmm2);
         _mm_store_si128(dst++, xmm1);
+        acc = _mm_or_si128(acc, xmm1);
 
         xmm1 = _mm_load_si128(src++);
         xmm2 = _mm_load_si128(dst);
         xmm1 = _mm_and_si128(xmm1, xmm2);
         _mm_store_si128(dst++, xmm1);
+        acc = _mm_or_si128(acc, xmm1);
 
     } while (src < src_end);
 
+    bm::id_t BM_ALIGN16 macc[4] BM_ALIGN16ATTR;
+    _mm_store_si128((__m128i*)macc, acc);
+    return macc[0] | macc[1] | macc[2] | macc[3];
 }
+
+inline
+unsigned sse2_and_block(__m128i* BMRESTRICT dst,
+                       const __m128i* BMRESTRICT src)
+{
+    __m128i acc = _mm_setzero_si128();
+    __m128i xmm1, xmm2;
+    
+    for (unsigned i = 0; i < bm::set_block_size/4; ++i)
+    {
+        xmm1 = _mm_load_si128(src + i);
+        xmm2 = _mm_load_si128(dst + i);
+        xmm1 = _mm_and_si128(xmm1, xmm2);
+        _mm_store_si128(dst + i, xmm1);
+        acc = _mm_or_si128(acc, xmm1);
+    }
+    
+    bm::id_t BM_ALIGN16 macc[4] BM_ALIGN16ATTR;
+    _mm_store_si128((__m128i*)macc, acc);
+    return macc[0] | macc[1] | macc[2] | macc[3];
+}
+
 
 
 /*! 
@@ -174,7 +197,7 @@ void sse2_and_arr(__m128i* BMRESTRICT dst,
 
     @ingroup SSE2
 */
-BMFORCEINLINE 
+inline
 void sse2_or_arr(__m128i* BMRESTRICT dst, 
                  const __m128i* BMRESTRICT src, 
                  const __m128i* BMRESTRICT src_end)
@@ -418,13 +441,13 @@ __m128i sse2_sub(__m128i a, __m128i b)
 
 
 /*!
-@brief Gap block population count (array sum) utility
-@param pbuf - unrolled, aligned to 1-start GAP buffer
-@param sse_vect_waves - number of SSE vector lines to process
-@param sum - result acumulator
-@return tail pointer
+    @brief Gap block population count (array sum) utility
+    @param pbuf - unrolled, aligned to 1-start GAP buffer
+    @param sse_vect_waves - number of SSE vector lines to process
+    @param sum - result acumulator
+    @return tail pointer
 
-@internal
+    @internal
 */
 inline
 const bm::gap_word_t* sse2_gap_sum_arr(
@@ -448,7 +471,6 @@ const bm::gap_word_t* sse2_gap_sum_arr(
     *sum += (cnt8[0]) + (cnt8[2]) + (cnt8[4]) + (cnt8[6]);
     return pbuf;
 }
-
 
 
 } // namespace
