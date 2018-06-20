@@ -5977,8 +5977,25 @@ template<typename TRGW, typename IDX, typename SZ>
 void bit_block_gather_scatter(TRGW* arr, const bm::word_t* blk,
                               const IDX* idx, SZ size, unsigned start, unsigned bit_idx)
 {
-    unsigned nbit, nword, mask0;
-    
+    const unsigned len = (size - start);
+    const unsigned len_unr = len - (len % 2);
+    unsigned k;
+    for (k = 0; k < len_unr; k+=2)
+    {
+        const unsigned base = start + k;
+
+        const unsigned nbitA = unsigned(idx[base] & bm::set_block_mask);
+        arr[base]   |= TRGW(bool(blk[nbitA >> bm::set_word_shift] & (1u << (nbitA & bm::set_word_mask))) << bit_idx); 
+        const unsigned nbitB = unsigned(idx[base + 1] & bm::set_block_mask);
+        arr[base+1] |= TRGW(bool(blk[nbitB >> bm::set_word_shift] & (1u << (nbitB & bm::set_word_mask))) << bit_idx);
+    }
+    for (; k < len; ++k)
+    {
+        unsigned nbit = unsigned(idx[start + k] & bm::set_block_mask);
+        arr[start + k] |= TRGW(bool(blk[nbit >> bm::set_word_shift] & (1u << (nbit & bm::set_word_mask))) << bit_idx);
+    }
+
+#if 0    
     // bit block gather (TODO: SSE/AVX)
     for (unsigned k = start; k < size; ++k)
     {
@@ -5987,6 +6004,7 @@ void bit_block_gather_scatter(TRGW* arr, const bm::word_t* blk,
         mask0 = 1u << (nbit & bm::set_word_mask);
         arr[k] |= TRGW(bool(blk[nword] & mask0) << bit_idx);
     }
+#endif   
 }
 
 
