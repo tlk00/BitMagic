@@ -1940,7 +1940,7 @@ void SparseVectorAccessTest()
         TimeTaker tt("sparse_vectot<>::gather() ", REPEATS/10 );
         for (unsigned i = 0; i < REPEATS/10; ++i)
         {
-            sv1.gather(target_v.data(), idx.data(), unsigned(idx.size()));
+            sv1.gather(target_v.data(), idx.data(), unsigned(idx.size()), bm::BM_UNSORTED);
         }
     }
 
