@@ -48,6 +48,7 @@ void show_help()
 {
     std::cerr
       << "BitMagic Sparse Vector Analysis Utility (c) 2017"            << std::endl
+      << "-bvin  bv-file              -- bv file to load"              << std::endl
       << "-svin  sv-input-file        -- sv dump file to load"         << std::endl
       << "-u32in u32-input-file       -- raw 32-bit unsigned int file" << std::endl
       << "-svout sv-output-file       -- sv output file to produce"    << std::endl
@@ -62,6 +63,7 @@ void show_help()
 
 // Arguments
 //
+std::string  bv_in_file;
 std::string  sv_in_file;
 std::string  u32_in_file;
 std::string  sv_out_file;
@@ -90,6 +92,20 @@ int parse_args(int argc, char *argv[])
             else
             {
                 std::cerr << "Error: -svin requires file name" << std::endl;
+                return 1;
+            }
+            continue;
+        }
+
+        if (arg == "-bvin" || arg == "--bvin")
+        {
+            if (i + 1 < argc)
+            {
+                bv_in_file = argv[++i];
+            }
+            else
+            {
+                std::cerr << "Error: -bvin requires file name" << std::endl;
                 return 1;
             }
             continue;
@@ -153,6 +169,7 @@ int parse_args(int argc, char *argv[])
 //
 typedef bm::sparse_vector<unsigned, bm::bvector<> > sparse_vector_u32;
 
+bm::bvector<>          bv_in;
 sparse_vector_u32      sv_u32_in;
 sparse_vector_u32      sv_u32_out;
 bool                   sv_u32_in_flag = false;
@@ -161,6 +178,14 @@ std::vector<unsigned>  vect_u32_out;
 
 bm::chrono_taker::duration_map_type  timing_map;
 
+
+// load bvector from a file
+//
+static
+void load_bv(const std::string& fname, bm::bvector<>& bv)
+{
+    bm::LoadBVector(fname.c_str(), bv);
+}
 
 // load sparse_vector from a file
 //
@@ -255,7 +280,11 @@ int main(int argc, char *argv[])
         auto ret = parse_args(argc, argv);
         if (ret != 0)
             return ret;
-      
+  
+        if (!bv_in_file.empty())
+        {
+            load_bv(bv_in_file, bv_in);
+        }
         
         if (!sv_in_file.empty())
         {
@@ -297,7 +326,11 @@ int main(int argc, char *argv[])
         {
             sparse_vector_u32::bvector_type bv_mask;
             sparse_vector_u32::bvector_type bv_out;
-            bv_mask.set_range(1, 7000000);
+            if (bv_in.any())
+                bv_mask = bv_in;
+            else
+                bv_mask.set_range(1, 7000000);
+            std::cout << "remap input size = " << bv_mask.count() << std::endl;
             
             {
             bm::chrono_taker tt("set2set transform benchmark", 1, &timing_map);
