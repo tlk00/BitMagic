@@ -1232,6 +1232,8 @@ sparse_vector<Val, BV>::gather(value_type*       arr,
             }
         }
         break;
+        default:
+            BM_ASSERT(0);
         } // switch
         
         // single element hit, use plain random access
