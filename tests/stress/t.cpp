@@ -10711,10 +10711,10 @@ void CheckSparseVectorGather(const sparse_vector_u32& sv,
     {
         idx_v.push_back(i);
     }
-    
-    sv.gather(target_v.data(), idx_v.data(), gather_size);
     sv.decode(target_v_control.data(), from, gather_size);
-    
+
+
+    sv.gather(target_v.data(), idx_v.data(), gather_size, BM_SORTED);
     for (unsigned i = 0; i < gather_size; ++i)
     {
         unsigned vg = target_v[i];
@@ -10727,6 +10727,35 @@ void CheckSparseVectorGather(const sparse_vector_u32& sv,
             exit(1);
         }
     }
+    
+    sv.gather(target_v.data(), idx_v.data(), gather_size, BM_UNSORTED);
+    for (unsigned i = 0; i < gather_size; ++i)
+    {
+        unsigned vg = target_v[i];
+        unsigned vc = target_v_control[i];
+        if (vg != vc)
+        {
+            cerr << "Error! gather/decode control mismatch " << vc << " " << vg
+                 << " at=" << i << endl;
+            cerr << control_value << endl;
+            exit(1);
+        }
+    }
+
+    sv.gather(target_v.data(), idx_v.data(), gather_size, BM_UNKNOWN);
+    for (unsigned i = 0; i < gather_size; ++i)
+    {
+        unsigned vg = target_v[i];
+        unsigned vc = target_v_control[i];
+        if (vg != vc)
+        {
+            cerr << "Error! gather/decode control mismatch " << vc << " " << vg
+                 << " at=" << i << endl;
+            cerr << control_value << endl;
+            exit(1);
+        }
+    }
+
 
 #if 0
     // detailed check (very slow)
@@ -10781,7 +10810,7 @@ void CheckSparseVectorGatherRandom(const sparse_vector_u32& sv,
         idx_v.push_back(r_idx);
     }
     
-    sv.gather(target_v.data(), idx_v.data(), gather_size);
+    sv.gather(target_v.data(), idx_v.data(), gather_size, BM_UNSORTED);
 
     unsigned k = 0;
     for (unsigned i = 0; i < gather_size; ++i, ++k)
@@ -14279,11 +14308,11 @@ int main(void)
 
      TestSparseVectorGatherDecode();
 
+     TestSparseVectorTransform();
+
      TestSparseVectorRange();
 
      TestSparseVectorFilter();
-
-     TestSparseVectorTransform();
 
      TestSparseVectorScan();
 
