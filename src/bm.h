@@ -2825,10 +2825,10 @@ void bvector<Alloc>::calc_stat(struct bvector<Alloc>::statistics* st) const
                 if (BM_IS_GAP(blk))
                 {
                     bm::gap_word_t* gap_blk = BMGAP_PTR(blk);
-                    unsigned capacity = bm::gap_capacity(gap_blk, blockman_.glen());
-                    unsigned length = gap_length(gap_blk);
+                    unsigned _capacity = bm::gap_capacity(gap_blk, blockman_.glen());
+                    unsigned _length = gap_length(gap_blk);
                     
-                    st->add_gap_block(capacity, length);
+                    st->add_gap_block(_capacity, _length);
                 }
                 else // bit block
                 {
@@ -3230,12 +3230,12 @@ bool bvector<Alloc>::find(bm::id_t& pos) const
 //---------------------------------------------------------------------
 
 template<class Alloc>
-bool bvector<Alloc>::find_range(bm::id_t& first, bm::id_t& last) const
+bool bvector<Alloc>::find_range(bm::id_t& in_first, bm::id_t& in_last) const
 {
-    bool found = find(first);
+    bool found = find(in_first);
     if (found)
     {
-        found = find_reverse(last);
+        found = find_reverse(in_last);
         BM_ASSERT(found);
     }
     return found;
@@ -3808,8 +3808,8 @@ void bvector<Alloc>::combine_operation_block_and(
         
         return;
     }
-    auto any = bm::bit_block_and(blk, arg_blk);
-    if (!any)
+    auto _any = bm::bit_block_and(blk, arg_blk);
+    if (!_any)
     {
         blockman_.get_allocator().free_bit_block(blk);
         blockman_.set_block_ptr(i, j, 0);
