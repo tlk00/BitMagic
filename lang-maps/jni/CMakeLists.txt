@@ -2,7 +2,16 @@ cmake_minimum_required(VERSION 2.8)
 
 project(bmjni)
 
-FIND_PACKAGE(JNI REQUIRED)
+find_package(JNI)
+
+if (${APPLE})
+    execute_process(COMMAND /usr/libexec/java_home OUTPUT_VARIABLE MACOS_JAVA_HOME OUTPUT_STRIP_TRAILING_WHITESPACE)
+    set (PLATFORM_JNI_INCLUDES ${MACOS_JAVA_HOME}/include ${MACOS_JAVA_HOME}/include/darwin)
+else()
+    set (PLATFORM_JNI_INCLUDES ${JNI_INCLUDE_DIRS})
+endif()
+
+message(STATUS "JNI include: ${PLATFORM_JNI_INCLUDES}")
 
 set( CMAKE_VERBOSE_MAKEFILE on )
 
@@ -10,7 +19,7 @@ set(CMAKE_BINARY_DIR ${CMAKE_SOURCE_DIR}/build/bin)
 set(EXECUTABLE_OUTPUT_PATH ${CMAKE_BINARY_DIR})
 set(LIBRARY_OUTPUT_PATH ${CMAKE_BINARY_DIR})
 
-include_directories("${JNI_INCLUDE_DIRS}" "${PROJECT_SOURCE_DIR}/../../src" "${PROJECT_SOURCE_DIR}/include" "${PROJECT_SOURCE_DIR}/../libbm/include" "${PROJECT_SOURCE_DIR}/../libbm/src" "/System/Library/Frameworks/JavaVM.framework/Versions/Current/Headers")
+include_directories("${PLATFORM_JNI_INCLUDES}" "${PROJECT_SOURCE_DIR}/../../src" "${PROJECT_SOURCE_DIR}/include" "${PROJECT_SOURCE_DIR}/../libbm/include" "${PROJECT_SOURCE_DIR}/../libbm/src")
 
 
 if ("${CMAKE_CXX_COMPILER_ID}" STREQUAL "GNU" OR
