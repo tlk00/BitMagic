@@ -1294,9 +1294,9 @@ sparse_vector<Val, BV>::gather(value_type*       arr,
                     {
                         unsigned nbit = unsigned(idx[k] & bm::set_block_mask);
                         is_set = bm::gap_test_unr(gap_blk, nbit);
-                        vm = (bool)is_set;
-                        vm <<= j;
-                        arr[k] |= vm;
+                        //vm = (bool)is_set;
+                        //vm <<= j;
+                        arr[k] |= value_type(bool(is_set) << j);
                     } // for k
                 }
                 continue;
