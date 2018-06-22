@@ -40,6 +40,13 @@
     break; \
   }}
 
+#define null_out_of_memory(x) \
+  if ((x) == NULL) { \
+    jclass ex = (*env)->FindClass(env, "java/lang/OutOfMemoryError"); \
+    (*env)->ThrowNew(env, ex, "Out of memory error in native call andArr0()"); \
+    return; \
+  }
+
 JNIEXPORT void JNICALL Java_io_bitmagic_core_BVector0_init0
   (JNIEnv *env, jclass clazz, jlong ptr) {
   exec(BM_init((void*)ptr));
@@ -136,6 +143,18 @@ JNIEXPORT void JNICALL Java_io_bitmagic_core_BVector0_setSize0
 JNIEXPORT void JNICALL Java_io_bitmagic_core_BVector0_set0
 (JNIEnv *env, jclass clazz, jlong ptr, jlong idx, jboolean bit) {
   exec(BM_bvector_set_bit((BM_BVHANDLE)ptr, (unsigned int)idx, bit & 1));
+}
+
+/*
+* Class:     io_bitmagic_core_BVector0
+* Method:    inc0
+* Signature: (JJ)I
+*/
+JNIEXPORT jint JNICALL Java_io_bitmagic_core_BVector0_inc0
+(JNIEnv *env, jclass clazz, jlong ptr, jlong idx) {
+  int co;
+  exec(BM_bvector_inc_bit((BM_BVHANDLE)ptr, (unsigned int)idx, &co));
+  return (jint)co;
 }
 
 /*
@@ -261,15 +280,31 @@ JNIEXPORT jboolean JNICALL Java_io_bitmagic_core_BVector0_nonEmpty0
 }
 
 /*
- * Class:     io_bitmagic_core_BVector0
- * Method:    indexOf0
- * Signature: (JJ)J
- */
-JNIEXPORT jlong JNICALL Java_io_bitmagic_core_BVector0_indexOf0
+* Class:     io_bitmagic_core_BVector0
+* Method:    findFirst0
+* Signature: (JJ)J
+*/
+JNIEXPORT jlong JNICALL Java_io_bitmagic_core_BVector0_findFirst0
 (JNIEnv *env, jclass clazz, jlong ptr, jlong start) {
   int found;
   unsigned int pos;
   exec(BM_bvector_find((BM_BVHANDLE)ptr, (unsigned int)start, &pos, &found));
+  if (found)
+    return (jlong)pos;
+  else
+    return (jlong)-1;
+}
+
+/*
+* Class:     io_bitmagic_core_BVector0
+* Method:    findLast0
+* Signature: (J)J
+*/
+JNIEXPORT jlong JNICALL Java_io_bitmagic_core_BVector0_findReverse0
+(JNIEnv *env, jclass clazz, jlong ptr) {
+  int found;
+  unsigned int pos;
+  exec(BM_bvector_find_reverse((BM_BVHANDLE)ptr, &pos, &found));
   if (found)
     return (jlong)pos;
   else
@@ -326,6 +361,8 @@ JNIEXPORT jobject JNICALL Java_io_bitmagic_core_BVector0_calcStat0
   return object;
 }
 
+/***************************************** BitVector operations ****************************************/
+
 /*
  * Class:     io_bitmagic_core_BVector0
  * Method:    operation0
@@ -376,6 +413,79 @@ JNIEXPORT void JNICALL Java_io_bitmagic_core_BVector0_xor0
   exec(BM_bvector_combine_XOR((BM_BVHANDLE)dst, (BM_BVHANDLE)src));
 }
 
+/***************************************** BitVector operations with arrays ****************************************/
+
+/*
+* Class:     io_bitmagic_core_BVector0
+* Method:    andArr0
+* Signature: (J[I)V
+*/
+JNIEXPORT void JNICALL Java_io_bitmagic_core_BVector0_andArr0
+(JNIEnv *env, jclass class, jlong dst, jintArray arr) {
+  unsigned int *start = (unsigned int*)(*env)->GetPrimitiveArrayCritical(env, arr, 0);
+  null_out_of_memory(start);
+  jsize size = (*env)->GetArrayLength(env, arr);
+  exec(BM_bvector_combine_AND_arr((BM_BVHANDLE)dst, start, start + size));
+  (*env)->ReleasePrimitiveArrayCritical(env, arr, start, JNI_ABORT); // The array is read-only
+}
+
+/*
+* Class:     io_bitmagic_core_BVector0
+* Method:    andArrSorted0
+* Signature: (J[I)V
+*/
+JNIEXPORT void JNICALL Java_io_bitmagic_core_BVector0_andArrSorted0
+(JNIEnv *env, jclass class, jlong dst, jintArray arr) {
+  unsigned int *start = (unsigned int*)(*env)->GetPrimitiveArrayCritical(env, arr, 0);
+  null_out_of_memory(start);
+  jsize size = (*env)->GetArrayLength(env, arr);
+  exec(BM_bvector_combine_AND_arr_sorted((BM_BVHANDLE)dst, start, start + size));
+  (*env)->ReleasePrimitiveArrayCritical(env, arr, start, JNI_ABORT); // The array is read-only
+}
+
+/*
+* Class:     io_bitmagic_core_BVector0
+* Method:    orArr0
+* Signature: (J[I)V
+*/
+JNIEXPORT void JNICALL Java_io_bitmagic_core_BVector0_orArr0
+(JNIEnv *env, jclass class, jlong dst, jintArray arr) {
+  unsigned int *start = (unsigned int*)(*env)->GetPrimitiveArrayCritical(env, arr, 0);
+  null_out_of_memory(start);
+  jsize size = (*env)->GetArrayLength(env, arr);
+  exec(BM_bvector_combine_OR_arr((BM_BVHANDLE)dst, start, start + size));
+  (*env)->ReleasePrimitiveArrayCritical(env, arr, start, JNI_ABORT); // The array is read-only
+}
+
+/*
+* Class:     io_bitmagic_core_BVector0
+* Method:    xorArr0
+* Signature: (J[I)V
+*/
+JNIEXPORT void JNICALL Java_io_bitmagic_core_BVector0_xorArr0
+(JNIEnv *env, jclass class, jlong dst, jintArray arr) {
+  unsigned int *start = (unsigned int*)(*env)->GetPrimitiveArrayCritical(env, arr, 0);
+  null_out_of_memory(start);
+  jsize size = (*env)->GetArrayLength(env, arr);
+  exec(BM_bvector_combine_XOR_arr((BM_BVHANDLE)dst, start, start + size));
+  (*env)->ReleasePrimitiveArrayCritical(env, arr, start, JNI_ABORT); // The array is read-only
+}
+
+/*
+* Class:     io_bitmagic_core_BVector0
+* Method:    subArr0
+* Signature: (J[I)V
+*/
+JNIEXPORT void JNICALL Java_io_bitmagic_core_BVector0_subArr0
+(JNIEnv *env, jclass class, jlong dst, jintArray arr) {
+  unsigned int *start = (unsigned int*)(*env)->GetPrimitiveArrayCritical(env, arr, 0);
+  null_out_of_memory(start);
+  jsize size = (*env)->GetArrayLength(env, arr);
+  exec(BM_bvector_combine_SUB_arr((BM_BVHANDLE)dst, start, start + size));
+  (*env)->ReleasePrimitiveArrayCritical(env, arr, start, JNI_ABORT); // The array is read-only
+}
+
+/***************************************** BitVector serialization ****************************************/
 /*
 * Class:     io_bitmagic_core_BVector0
 * Method:    deserialize0
