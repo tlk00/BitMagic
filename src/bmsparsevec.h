@@ -1196,34 +1196,26 @@ sparse_vector<Val, BV>::gather(value_type*       arr,
         switch (sorted_idx)
         {
         case BM_UNKNOWN:
-        {
-            size_type idx_prev = idx[r];
-            for (; (r < size) && (nb == unsigned(idx[r] >> bm::set_block_shift)); ++r)
             {
-                sorted_block = !(idx[r] < idx_prev);
-                idx_prev = idx[r];
+                size_type idx_prev = idx[r];
+                for (; (r < size) && (nb == unsigned(idx[r] >> bm::set_block_shift)); ++r)
+                {
+                    sorted_block = !(idx[r] < idx_prev); // sorted check
+                    idx_prev = idx[r];
+                }
             }
-        }
-        break;
+            break;
         case BM_UNSORTED:
             sorted_block = false;
+            
             for (; r < size; ++r)
                 if (nb != unsigned(idx[r] >> bm::set_block_shift))
                     break;
-        break;
+            break;            
+            // no break(!) intentional fall through
         case BM_SORTED:
-        {
-            // if sorted and LAST index is in the same block - they all are
-            //  (can avoid a look ahead scan)
-            if (nb == unsigned(idx[size-1] >> bm::set_block_shift))
-                r = size;
-            else // look ahead to understand block request depth
-            {
-                for (;(r < size) &&
-                      (nb == unsigned(idx[r] >> bm::set_block_shift)); ++r){}
-            }
-        }
-        break;
+            r = bm::idx_arr_block_lookup(idx, size, nb, r);
+            break;
         default:
             BM_ASSERT(0);
         } // switch
@@ -1294,8 +1286,6 @@ sparse_vector<Val, BV>::gather(value_type*       arr,
                     {
                         unsigned nbit = unsigned(idx[k] & bm::set_block_mask);
                         is_set = bm::gap_test_unr(gap_blk, nbit);
-                        //vm = (bool)is_set;
-                        //vm <<= j;
                         arr[k] |= value_type(bool(is_set) << j);
                     } // for k
                 }

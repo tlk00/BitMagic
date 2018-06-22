@@ -1261,7 +1261,7 @@ const bm::gap_word_t* avx2_gap_sum_arr(const bm::gap_word_t*  pbuf,
     __m256i xcnt = _mm256_setzero_si256();
 
     // accumulate odd and even elements of the vector the result is 
-    // correct based on modulus 16 (max element value in gap blocks is 65535
+    // correct based on modulus 16 (max element value in gap blocks is 65535)
     // overflow is not an issue here
     for (unsigned i = 0; i < avx_vect_waves; ++i)
     {
@@ -1285,6 +1285,47 @@ const bm::gap_word_t* avx2_gap_sum_arr(const bm::gap_word_t*  pbuf,
     // extract 32-bit word and mask to take first 16 bits
     *sum += _mm_cvtsi128_si32(xcnt2) & 0xffff;
     return pbuf;
+}
+
+
+/*!
+     AVX2 index lookup to check what belongs to the same block (8 elements)
+     \internal
+*/
+inline
+unsigned avx2_idx_arr_block_lookup(const unsigned* idx, unsigned size,
+                                   unsigned nb, unsigned start)
+{
+    const unsigned unroll_factor = 16;
+    const unsigned len = (size - start);
+    const unsigned len_unr = len - (len % unroll_factor);
+    unsigned k;
+
+    idx += start;
+
+    __m256i nbM = _mm256_set1_epi32(int(nb));
+
+    for (k = 0; k < len_unr; k+=unroll_factor)
+    {
+        __m256i idxA = _mm256_loadu_si256((__m256i*)(idx+k));
+        __m256i nbA =  _mm256_srli_epi32(idxA, bm::set_block_shift); // idx[k] >> bm::set_block_shift
+
+        __m256i wcmpA= _mm256_cmpeq_epi8(nbM, nbA);
+        if (~0u != unsigned(_mm256_movemask_epi8(wcmpA)))
+            break;
+        __m256i idxB = _mm256_loadu_si256((__m256i*)(idx+k+8));
+        __m256i nbB =  _mm256_srli_epi32(idxB, bm::set_block_shift); // idx[k] >> bm::set_block_shift
+
+        __m256i wcmpB = _mm256_cmpeq_epi8(nbM, nbB);
+        if (~0u != unsigned(_mm256_movemask_epi8(wcmpB)))
+            break;
+    } // for k
+    for (; k < len; ++k)
+    {
+        if (nb != unsigned(idx[k] >> bm::set_block_shift))
+            break;
+    }
+    return start + k;
 }
 
 

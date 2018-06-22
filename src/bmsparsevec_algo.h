@@ -332,8 +332,8 @@ protected:
     
     allocator_pool_type  pool_;
 
-    size_type   gather_idx_[sv_g_size];
-    value_type  buffer_[sv_g_size];
+    size_type   BM_VECT_ALIGN gather_idx_[sv_g_size] BM_VECT_ALIGN_ATTR;
+    value_type  BM_VECT_ALIGN buffer_[sv_g_size] BM_VECT_ALIGN_ATTR;
 
 };
 
