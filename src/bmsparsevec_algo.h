@@ -385,7 +385,7 @@ void set2set_11_transform<SV>::remap(const bvector_type&        bv_in,
         bm::sparse_vector_scanner<SV> scanner;
         scanner.find_zero(sv_brel, bv_zero_);
     }
-    
+
     auto has_zero_mapping = bm::any_and(bv_in, bv_zero_);
 
     // TODO: optimize with 3-way ops
@@ -408,6 +408,7 @@ void set2set_11_transform<SV>::remap(const bvector_type&        bv_in,
     
     unsigned buf_cnt = 0;
     typename SV::bvector_type::enumerator en(bv_product_.first());
+    
     for (; en.valid(); ++en)
     {
         typename SV::size_type idx = *en;
@@ -425,6 +426,7 @@ void set2set_11_transform<SV>::remap(const bvector_type&        bv_in,
         sv_brel.gather(&buffer_[0], &gather_idx_[0], buf_cnt, BM_SORTED);
         bm::combine_or(bv_out, &buffer_[0], &buffer_[buf_cnt]);
     }
+
 }
 
 //----------------------------------------------------------------------------
