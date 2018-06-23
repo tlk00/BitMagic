@@ -1063,6 +1063,16 @@ public:
         for_each_block(top_blocks_, top_block_size_,
                                 bm::set_array_size, func);
     }
+    
+    
+    bm::word_t** alloc_top_subblock(unsigned nblk_blk)
+    {
+        BM_ASSERT(top_blocks_[nblk_blk] == 0);
+        bm::word_t** p = (bm::word_t**)alloc_.alloc_ptr();
+        ::memset(top_blocks_[nblk_blk] = p, 0,
+            bm::set_array_size * sizeof(bm::word_t*));
+        return p;
+    }
 
     /**
         Places new block into descriptors table, returns old block's address.
@@ -1088,10 +1098,12 @@ public:
         // assign block to it
         if (top_blocks_[nblk_blk] == 0)
         {
+            alloc_top_subblock(nblk_blk);
+            /*
             top_blocks_[nblk_blk] = (bm::word_t**)alloc_.alloc_ptr();
             ::memset(top_blocks_[nblk_blk], 0,
                 bm::set_array_size * sizeof(bm::word_t*));
-
+            */
             old_block = 0;
         }
         else
@@ -1139,9 +1151,6 @@ public:
     */
     bm::word_t* set_block(unsigned nb, bm::word_t* block, bool gap)
     {
-//        if (!is_init())
-//            init_tree();
-        
         unsigned i, j;
         get_block_coord(nb, i, j);
         reserve_top_blocks(i + 1);
@@ -1244,8 +1253,11 @@ public:
         
         if (!top_blocks_[i])
         {
+            alloc_top_subblock(i);
+            /*
             top_blocks_[i] = (bm::word_t**)alloc_.alloc_ptr();
             ::memset(top_blocks_[i], 0, bm::set_array_size * sizeof(void*));
+            */
         }
         bm::word_t* block = top_blocks_[i][j];
         gap_block = gap_block ? gap_block : BMGAP_PTR(block);
