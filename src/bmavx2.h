@@ -925,7 +925,7 @@ bool avx2_is_all_one(const __m256i* BMRESTRICT block,
         __m256i wcmpB= _mm256_cmpeq_epi8(_mm256_load_si256(block+1), maskF); // (w0 == maskF)
 
         unsigned maskA = unsigned(_mm256_movemask_epi8(wcmpA));
-        unsigned maskB = unsigned(_mm256_movemask_epi8(wcmpA));
+        unsigned maskB = unsigned(_mm256_movemask_epi8(wcmpB));
         if (maskA != ~0u || maskB != ~0u)
             return false;
         block += 2;
