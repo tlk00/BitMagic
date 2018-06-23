@@ -796,8 +796,6 @@ void avx2_set_block(__m256i* BMRESTRICT dst,
         
         dst += 4;
     } while (dst < dst_end);
-    
-    //_mm_sfence();
 }
 
 
@@ -854,8 +852,10 @@ inline
 void avx2_invert_arr(bm::word_t* BMRESTRICT first,
                      bm::word_t* BMRESTRICT last)
 {
-    __m256i maskz = _mm256_setzero_si256();
-    __m256i ymm1 = _mm256_cmpeq_epi64(maskz, maskz); // set all FF
+//    __m256i maskz = _mm256_setzero_si256();
+//    __m256i ymm1 = _mm256_cmpeq_epi64(maskz, maskz); // set all FF
+    __m256i ymm1 = _mm256_set1_epi32(~0u); // braodcast 0xFF
+
 
     __m256i* wrd_ptr = (__m256i*)first;
     __m256i ymm0;
@@ -876,8 +876,9 @@ void avx2_invert_arr(bm::word_t* BMRESTRICT first,
         ymm0 = _mm256_load_si256(wrd_ptr+3);
         ymm0 = _mm256_xor_si256(ymm0, ymm1);
         _mm256_store_si256(wrd_ptr+3, ymm0);
+        
         wrd_ptr += 4;
-
+        
     } while (wrd_ptr < (__m256i*)last);
 }
 
@@ -903,9 +904,7 @@ bool avx2_is_all_zero(const __m256i* BMRESTRICT block,
         wA = _mm256_or_si256(wA, wB);
         
         if (!_mm256_testz_si256(wA, wA))
-        {
             return false;
-        }
         block += 4;
     } while (block < block_end);
     return true;
@@ -919,20 +918,17 @@ inline
 bool avx2_is_all_one(const __m256i* BMRESTRICT block,
                      const __m256i* BMRESTRICT block_end)
 {
-    __m256i maskz = _mm256_setzero_si256();
-    __m256i maskF = _mm256_cmpeq_epi8(maskz, maskz); // set FF
-    
+    __m256i maskF = _mm256_set1_epi32(~0u); // braodcast 0xFF
     do
     {
-        __m256i w0 = _mm256_load_si256(block);
-        
-        __m256i wcmp= _mm256_cmpeq_epi8(w0, maskF); // (w0 == maskF)
-        unsigned mask = unsigned(_mm256_movemask_epi8(wcmp));
-        if (mask != ~0u)
-        {
+        __m256i wcmpA= _mm256_cmpeq_epi8(_mm256_load_si256(block), maskF); // (w0 == maskF)
+        __m256i wcmpB= _mm256_cmpeq_epi8(_mm256_load_si256(block+1), maskF); // (w0 == maskF)
+
+        unsigned maskA = unsigned(_mm256_movemask_epi8(wcmpA));
+        unsigned maskB = unsigned(_mm256_movemask_epi8(wcmpA));
+        if (maskA != ~0u || maskB != ~0u)
             return false;
-        }
-        ++block;
+        block += 2;
     } while (block < block_end);
     return true;
 }
@@ -1327,6 +1323,136 @@ unsigned avx2_idx_arr_block_lookup(const unsigned* idx, unsigned size,
     }
     return start + k;
 }
+
+#if 0
+inline
+void Print256(const char* prefix, const __m256i & value)
+{
+    const size_t n = sizeof(__m256i) / sizeof(unsigned);
+    unsigned buffer[n];
+    _mm256_storeu_si256((__m256i*)buffer, value);
+    std::cout << prefix << " [ ";
+    for (int i = 0; i < n; i++)
+        std::cout << buffer[i] << " ";
+    std::cout << "]" << std::endl;
+}
+#endif
+
+/*!
+     AVX2 bit block gather-scatter
+ 
+     @param arr - destination array to set bits
+     @param blk - source bit-block
+     @param idx - gather index array
+     @param size - gather array size
+     @param start - gaher start index
+     @param bit_idx - bit to set in the target array
+ 
+     \internal
+
+    C algorithm:
+ 
+    for (unsigned k = start; k < size; ++k)
+    {
+        nbit = unsigned(idx[k] & bm::set_block_mask);
+        nword  = unsigned(nbit >> bm::set_word_shift);
+        mask0 = 1u << (nbit & bm::set_word_mask);
+        arr[k] |= TRGW(bool(blk[nword] & mask0) << bit_idx);
+    }
+
+*/
+inline
+void avx2_bit_block_gather_scatter(unsigned* BMRESTRICT arr,
+                                   const unsigned* BMRESTRICT blk,
+                                   const unsigned* BMRESTRICT idx,
+                                   unsigned                   size,
+                                   unsigned                   start,
+                                   unsigned                   bit_idx)
+{
+    const unsigned unroll_factor = 8;
+    const unsigned len = (size - start);
+    const unsigned len_unr = len - (len % unroll_factor);
+    
+    __m256i sb_mask = _mm256_set1_epi32(bm::set_block_mask);
+    __m256i sw_mask = _mm256_set1_epi32(bm::set_word_mask);
+    __m256i maskFF  = _mm256_set1_epi32(~0u);
+    __m256i maskZ   = _mm256_xor_si256(maskFF, maskFF);
+
+    __m256i mask_tmp, mask_0;
+    
+    unsigned BM_ALIGN32 mshift_v[8] BM_ALIGN32ATTR;
+    unsigned BM_ALIGN32 mword_v[8] BM_ALIGN32ATTR;
+    unsigned BM_ALIGN32 mask0_v[8] BM_ALIGN32ATTR;
+
+    unsigned k = 0;
+    for (; k < len_unr; k+=unroll_factor)
+    {
+        const unsigned base = start + k;
+        
+        __m256i* idx_ptr = (__m256i*)(idx+base);   // idx[base]
+        __m256i* target_ptr = (__m256i*)(arr+base); // arr[base]
+
+        
+        __m256i nbitA = _mm256_and_si256 (_mm256_loadu_si256(idx_ptr), sb_mask); // nbit = idx[base] & bm::set_block_mask
+        __m256i nwordA = _mm256_srli_epi32 (nbitA, bm::set_word_shift); // nword  = nbit >> bm::set_word_shift
+        // (nbit & bm::set_word_mask)
+        _mm256_store_si256 ((__m256i*)mshift_v, _mm256_and_si256 (nbitA, sw_mask));
+        _mm256_store_si256((__m256i*)mword_v, nwordA);
+
+        unsigned w_idx = mword_v[0];
+        __m256i wcmp2 = _mm256_cmpeq_epi32(_mm256_set1_epi32(w_idx), nwordA);
+        unsigned mask = _mm256_movemask_epi8(wcmp2);
+        if (mask == ~0u) // all idxs belongs the same word avoid (costly) gather
+        {
+            mask_tmp = _mm256_set1_epi32(blk[w_idx]); // use broadcast
+        }
+        else // gather for: blk[nword]  (.. & mask0 )
+        {
+            mask_tmp = _mm256_set_epi32(blk[mword_v[7]], blk[mword_v[6]],
+                                        blk[mword_v[5]], blk[mword_v[4]],
+                                        blk[mword_v[3]], blk[mword_v[2]],
+                                        blk[mword_v[1]], blk[mword_v[0]]);
+        }
+        
+        // mask0 = 1u << (nbit & bm::set_word_mask);
+        //
+        mask0_v[0] = 1 << mshift_v[0];
+        mask0_v[1] = 1 << mshift_v[1];
+        mask0_v[2] = 1 << mshift_v[2];
+        mask0_v[3] = 1 << mshift_v[3];
+        mask0_v[4] = 1 << mshift_v[4];
+        mask0_v[5] = 1 << mshift_v[5];
+        mask0_v[6] = 1 << mshift_v[6];
+        mask0_v[7] = 1 << mshift_v[7];
+        
+        mask_0 = _mm256_load_si256((__m256i*)mask0_v);
+        
+        mask_tmp = _mm256_and_si256(mask_tmp, mask_0);
+        if (!_mm256_testz_si256(mask_tmp, mask_tmp)) // AND tests empty
+        {
+            // bool(blk[nword]  ... )
+            mask_tmp = _mm256_cmpeq_epi32 (mask_tmp, maskZ); // set 0xFF if==0
+            mask_tmp = _mm256_xor_si256 (mask_tmp, maskFF);  // invert
+            mask_tmp = _mm256_srli_epi32 (mask_tmp, 31); //(bool)1 only at 0 pos
+            
+            mask_tmp = _mm256_slli_epi32(mask_tmp, bit_idx); // << bit_idx
+            
+            _mm256_storeu_si256 (target_ptr,          // arr[base] |= MASK_EXPR
+                         _mm256_or_si256 (mask_tmp,
+                                          _mm256_loadu_si256(target_ptr)));
+        }
+        
+    } // for
+    
+    for (; k < len; ++k)
+    {
+        const unsigned base = start + k;
+        unsigned nbit = unsigned(idx[base] & bm::set_block_mask);
+        arr[base] |= unsigned(bool(blk[nbit >> bm::set_word_shift] & (1u << (nbit & bm::set_word_mask))) << bit_idx);
+    }
+
+}
+
 
 
 

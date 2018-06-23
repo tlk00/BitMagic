@@ -460,6 +460,29 @@ unsigned sse4_idx_arr_block_lookup(const unsigned* idx, unsigned size,
     return start + k;
 }
 
+/*!
+     SSE4.2 bit block gather-scatter
+ 
+     @param arr - destination array to set bits
+     @param blk - source bit-block
+     @param idx - gather index array
+     @param size - gather array size
+     @param start - gaher start index
+     @param bit_idx - bit to set in the target array
+ 
+     \internal
+
+    C algorithm:
+ 
+    for (unsigned k = start; k < size; ++k)
+    {
+        nbit = unsigned(idx[k] & bm::set_block_mask);
+        nword  = unsigned(nbit >> bm::set_word_shift);
+        mask0 = 1u << (nbit & bm::set_word_mask);
+        arr[k] |= TRGW(bool(blk[nword] & mask0) << bit_idx);
+    }
+
+*/
 inline
 void sse4_bit_block_gather_scatter(unsigned* BMRESTRICT arr,
                                    const unsigned* BMRESTRICT blk,
@@ -468,7 +491,7 @@ void sse4_bit_block_gather_scatter(unsigned* BMRESTRICT arr,
                                    unsigned                   start,
                                    unsigned                   bit_idx)
 {
-    const unsigned unroll_factor = 4;
+    const unsigned unroll_factor = 8;
     const unsigned len = (size - start);
     const unsigned len_unr = len - (len % unroll_factor);
     
@@ -507,7 +530,6 @@ void sse4_bit_block_gather_scatter(unsigned* BMRESTRICT arr,
         mask_tmp = _mm_and_si128 (_mm_slli_epi32(mask1, mshift_v[1]), _mm_bslli_si128 (am_0, 4));
         mask_0 = _mm_or_si128 (mask_0, mask_tmp);
     
-//        __m128i mask_2 = _mm_slli_epi32 (mask1, mshift_v[2]);
         __m128i mask_2 = _mm_and_si128 (_mm_slli_epi32 (mask1, mshift_v[2]),
                                         _mm_bslli_si128 (am_0, 8));
         mask_tmp = _mm_and_si128 (
@@ -534,6 +556,53 @@ void sse4_bit_block_gather_scatter(unsigned* BMRESTRICT arr,
         
         _mm_storeu_si128 (target_ptr,                  // arr[base] |= MASK_EXPR
                           _mm_or_si128 (mask_tmp, _mm_loadu_si128(target_ptr)));
+        
+
+       ++idx_ptr;
+       ++target_ptr;
+
+        {
+        __m128i nbitA = _mm_and_si128 (_mm_loadu_si128(idx_ptr), sb_mask); // nbit = idx[base] & bm::set_block_mask
+        __m128i nwordA = _mm_srli_epi32 (nbitA, bm::set_word_shift); // nword  = nbit >> bm::set_word_shift
+        // (nbit & bm::set_word_mask)
+        _mm_store_si128 ((__m128i*)mshift_v, _mm_and_si128 (nbitA, sw_mask));
+        _mm_store_si128((__m128i*)mword_v, nwordA);
+        }
+        
+        // mask0 = 1u << (nbit & bm::set_word_mask);
+        //
+        {
+        mask_0 = _mm_and_si128 (_mm_slli_epi32 (mask1, mshift_v[0]), am_0);
+        mask_tmp = _mm_and_si128 (_mm_slli_epi32(mask1, mshift_v[1]), _mm_bslli_si128 (am_0, 4));
+        mask_0 = _mm_or_si128 (mask_0, mask_tmp);
+    
+        __m128i mask_2 = _mm_and_si128 (_mm_slli_epi32 (mask1, mshift_v[2]),
+                                        _mm_bslli_si128 (am_0, 8));
+        mask_tmp = _mm_and_si128 (
+                      _mm_slli_epi32(mask1, mshift_v[3]),
+                      _mm_bslli_si128 (am_0, 12)
+                      );
+    
+        mask_0 = _mm_or_si128 (mask_0,
+                               _mm_or_si128 (mask_2, mask_tmp)); // assemble bit-test mask
+        }
+        
+        //  gather for: blk[nword]  (.. & mask0 )
+        //
+        mask_tmp = _mm_and_si128(_mm_set_epi32(blk[mword_v[3]], blk[mword_v[2]],
+                                               blk[mword_v[1]], blk[mword_v[0]]),
+                                 mask_0); // & mask0
+        
+        // bool(blk[nword]  ...)
+        mask_tmp = _mm_cmpeq_epi32 (mask_tmp, maskZ); // set 0xFF where == 0
+        mask_tmp = _mm_xor_si128 (mask_tmp, maskFF); // invert
+        mask_tmp = _mm_srli_epi32 (mask_tmp, 31); // (bool) 1 only to the 0 pos
+        
+        mask_tmp = _mm_slli_epi32(mask_tmp, bit_idx); // << bit_idx
+        
+        _mm_storeu_si128 (target_ptr,                  // arr[base] |= MASK_EXPR
+                          _mm_or_si128 (mask_tmp, _mm_loadu_si128(target_ptr)));
+
     }
     
     for (; k < len; ++k)

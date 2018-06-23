@@ -5977,84 +5977,22 @@ template<typename TRGW, typename IDX, typename SZ>
 void bit_block_gather_scatter(TRGW* arr, const bm::word_t* blk,
                               const IDX* idx, SZ size, unsigned start, unsigned bit_idx)
 {
-#ifdef BMSSE42OPT
-
+#if defined(BMSSE42OPT)
+    // optimized for unsigned
     if (bm::conditional<sizeof(TRGW)==4 && sizeof(IDX)==4>::test())
     {
         sse4_bit_block_gather_scatter(arr, blk, idx, size, start, bit_idx);
         return;
     }
-
-/*
-    const unsigned unroll_factor = 4;
-    const unsigned len = (size - start);
-    const unsigned len_unr = len - (len % unroll_factor);
+#elif defined(BMAVX2OPT)
+    // optimized for unsigned
     
-    __m128i sb_mask = _mm_set1_epi32(bm::set_block_mask);
-    __m128i sw_mask = _mm_set1_epi32(bm::set_word_mask);
-    __m128i maskFF = _mm_set1_epi32(~0u);
-    __m128i maskZ = _mm_xor_si128(maskFF, maskFF);
-    __m128i mask1 = _mm_srli_epi32 (maskFF, 31);
-    __m128i am_0 = _mm_set_epi32(0, 0, 0, ~0u);
-
-    __m128i mask_tmp, mask_0;
-    
-    unsigned BM_ALIGN16 mshift_v[4] BM_ALIGN16ATTR;
-    unsigned BM_ALIGN16 mword_v[4] BM_ALIGN16ATTR;
-
-    unsigned k = 0;
-    for (; k < len_unr; k+=unroll_factor)
+    if (bm::conditional<sizeof(TRGW)==4 && sizeof(IDX)==4>::test())
     {
-        const unsigned base = start + k;
-        
-        __m128i* idx_ptr = (__m128i*)(idx+base);   // idx[base]
-
-        {
-        __m128i nbitA = _mm_and_si128 (_mm_loadu_si128(idx_ptr), sb_mask); // nbit = idx[base] & bm::set_block_mask
-        __m128i nwordA = _mm_srli_epi32 (nbitA, bm::set_word_shift); // nword  = nbit >> bm::set_word_shift
-        // (nbit & bm::set_word_mask)
-        _mm_store_si128 ((__m128i*)mshift_v, _mm_and_si128 (nbitA, sw_mask));
-        _mm_store_si128((__m128i*)mword_v, nwordA);
-        }
-        
-        // mask0 = 1u << (nbit & bm::set_word_mask);
-        //
-        {
-        mask_0 = _mm_and_si128 (_mm_slli_epi32 (mask1, mshift_v[0]), am_0);
-        mask_tmp = _mm_and_si128 (_mm_slli_epi32(mask1, mshift_v[1]), _mm_bslli_si128 (am_0, 4));
-        mask_0 = _mm_or_si128 (mask_0, mask_tmp);
-    
-        __m128i mask_2 = _mm_slli_epi32 (mask1, mshift_v[2]);
-        mask_2 = _mm_and_si128 (mask_2, _mm_bslli_si128 (am_0, 8));
-        mask_tmp = _mm_and_si128 (_mm_slli_epi32(mask1, mshift_v[3]), _mm_bslli_si128 (am_0, 12));
-        mask_tmp = _mm_or_si128 (mask_2, mask_tmp);
-    
-        mask_0 = _mm_or_si128 (mask_0, mask_tmp); // assemble bit-test mask
-        }
-        
-        //  gather for: blk[nword]  (.. & mask0 )
-        //
-        mask_tmp = _mm_and_si128(_mm_set_epi32(blk[mword_v[3]], blk[mword_v[2]], blk[mword_v[1]], blk[mword_v[0]]),
-                                 mask_0); // & mask0
-        
-        // bool(blk[nword]  ...)
-        mask_tmp = _mm_cmpeq_epi32 (mask_tmp, maskZ); // set 0xFF where == 0
-        mask_tmp = _mm_xor_si128 (mask_tmp, maskFF); // invert
-        mask_tmp = _mm_srli_epi32 (mask_tmp, 31); // -> bool, 1 only in the first position
-        
-        mask_tmp = _mm_slli_epi32(mask_tmp, bit_idx); // << bit_idx
-        
-        __m128i* target_ptr = (__m128i*)(arr+base);   // arr[base] |= MASK_EXPR
-        _mm_storeu_si128 (target_ptr, _mm_or_si128 (mask_tmp, _mm_loadu_si128(target_ptr)));
+        avx2_bit_block_gather_scatter(arr, blk, idx, size, start, bit_idx);
+        return;
     }
     
-    for (; k < len; ++k)
-    {
-        const unsigned base = start + k;
-        unsigned nbit = unsigned(idx[base] & bm::set_block_mask);
-        arr[base] |= TRGW(bool(blk[nbit >> bm::set_word_shift] & (1u << (nbit & bm::set_word_mask))) << bit_idx);
-    }
-*/
 #endif
 
     const unsigned len = (size - start);
@@ -6074,17 +6012,6 @@ void bit_block_gather_scatter(TRGW* arr, const bm::word_t* blk,
         unsigned nbit = unsigned(idx[start + k] & bm::set_block_mask);
         arr[start + k] |= TRGW(bool(blk[nbit >> bm::set_word_shift] & (1u << (nbit & bm::set_word_mask))) << bit_idx);
     }
-    
-#if 0
-    // bit block gather (TODO: SSE/AVX)
-    for (unsigned k = start; k < size; ++k)
-    {
-        nbit = unsigned(idx[k] & bm::set_block_mask);
-        nword  = unsigned(nbit >> bm::set_word_shift);
-        mask0 = 1u << (nbit & bm::set_word_mask);
-        arr[k] |= TRGW(bool(blk[nword] & mask0) << bit_idx);
-    }
-#endif   
 }
 
 /**
