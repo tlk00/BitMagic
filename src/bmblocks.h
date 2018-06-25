@@ -1665,6 +1665,9 @@ private:
         bm::word_t*** blk_root = top_blocks_root();
         bm::word_t*** blk_root_arg = blockman.top_blocks_root();
         
+        if (!blk_root_arg)
+            return;
+        
         unsigned i_from, j_from, i_to, j_to;
         get_block_coord(block_from, i_from, j_from);
         get_block_coord(block_to, i_to, j_to);
