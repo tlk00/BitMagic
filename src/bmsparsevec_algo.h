@@ -614,25 +614,28 @@ template<typename SV>
 void sparse_vector_scanner<SV>::find_nonzero(const SV& sv, 
                                              typename SV::bvector_type& bv_out)
 {
-    bool first = true;
+    bvector_type* scan_list[SV::sv_plains];
+
+    unsigned cnt = 0;
     for (unsigned i = 0; i < sv.plains(); ++i)
     {
-        const typename SV::bvector_type* bv_plain = sv.get_plain(i);
-        if (bv_plain)
+        const bvector_type* bv = sv.get_plain(i);
+        if (bv)
         {
-            if (first) // first found plain - use simple assignment
-            {
-                bv_out = *bv_plain;
-                first = false;
-            }
-            else // for everything else - use OR
-            {
-                bv_out.bit_or(*bv_plain);
-            }
+            const typename bvector_type::blocks_manager_type& bman = bv->get_blocks_manager();
+            if (bman.is_init())
+                scan_list[cnt++] = sv.get_plain(i);
         }
-    } // for i
-    if (first) // no plains were found, just clear the result
+    }
+    if (cnt)
+    {
+        bm::aggregator<typename SV::bvector_type> agg;
+        agg.combine_or(bv_out, scan_list, cnt);
+    }
+    else
+    {
         bv_out.clear();
+    }
 }
 
 //----------------------------------------------------------------------------

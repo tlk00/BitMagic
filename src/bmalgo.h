@@ -162,7 +162,7 @@ void visit_each_bit(const BV&                 bv,
  
     \ingroup setalgo
 */
-template<class BV>
+template<typename BV>
 class rank_compressor
 {
 public:
@@ -199,6 +199,28 @@ public:
                                 const block_count_type& bc_idx,
                                 const BV& bv_src);
 };
+
+
+template<typename BV>
+class aggregator
+{
+public:
+    typedef BV                         bvector_type;
+    typedef bvector_type*              bvector_type_ptr;
+
+public:
+    void combine_or(bvector_type& bv_target,
+                    const bvector_type_ptr* bv_src, unsigned src_size);
+    
+    /// Horintal (potentially slow) method
+    void combine_or_horizontal(bvector_type& bv_target,
+                               const bvector_type_ptr* bv_src, unsigned src_size);
+};
+
+
+// ------------------------------------------------------------------------
+//
+// ------------------------------------------------------------------------
 
 
 template<class BV>
@@ -271,6 +293,8 @@ void rank_compressor<BV>::compress(BV& bv_target,
     }
 
 }
+
+// ------------------------------------------------------------------------
 
 
 template<class BV>
@@ -348,6 +372,8 @@ void rank_compressor<BV>::decompress(BV& bv_target,
     }
 }
 
+// ------------------------------------------------------------------------
+
 template<class BV>
 void rank_compressor<BV>::compress_by_source(BV& bv_target,
                                              const BV& bv_idx,
@@ -407,6 +433,71 @@ void rank_compressor<BV>::compress_by_source(BV& bv_target,
     visitor_func func(bv_target, bv_idx, bc_idx);
     bm::for_each_bit(bv_src, func);
 }
+
+// ------------------------------------------------------------------------
+//
+// ------------------------------------------------------------------------
+
+template<typename BV>
+void aggregator<BV>::combine_or(bvector_type& bv_target,
+                     const bvector_type_ptr* bv_src, unsigned src_size)
+{
+    BM_ASSERT(src_size);
+
+    const bvector_type* bv;
+    typename bvector_type::blocks_manager_type& bman_target = bv_target.get_blocks_manager();
+    unsigned top_blocks = bman_target.top_block_size();
+    auto size = bv_target.size();
+
+    // pre-scan to do target size harmonization
+    for (unsigned i = 0; i < src_size; ++i)
+    {
+        bv = bv_src[i];
+        BM_ASSERT(bv);
+        const typename bvector_type::blocks_manager_type& bman_arg = bv->get_blocks_manager();
+        unsigned arg_top_blocks = bman_arg.top_block_size();
+        if (arg_top_blocks > top_blocks)
+            top_blocks = bman_target.reserve_top_blocks(arg_top_blocks);
+        auto arg_size = bv->size();
+        if (arg_size > size)
+        {
+            bv_target.resize(arg_size);
+            size = arg_size;
+        }
+    } // for i
+    
+
+
+    bv = bv_src[0];
+    bv_target = *bv;
+    
+    for (unsigned i = 1; i < src_size; ++i)
+    {
+        bv = bv_src[i];
+        bv_target.bit_or(*bv);
+    }
+}
+
+// ------------------------------------------------------------------------
+
+template<typename BV>
+void aggregator<BV>::combine_or_horizontal(bvector_type& bv_target,
+                     const bvector_type_ptr* bv_src, unsigned src_size)
+{
+    BM_ASSERT(src_size);
+    
+    const bvector_type* bv = bv_src[0];
+    bv_target = *bv;
+    
+    for (unsigned i = 1; i < src_size; ++i)
+    {
+        bv = bv_src[i];
+        BM_ASSERT(bv);
+        bv_target.bit_or(*bv);
+    }
+}
+
+// ------------------------------------------------------------------------
 
 
 } // bm
