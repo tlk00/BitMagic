@@ -838,11 +838,21 @@ unsigned SerializationOperation(bvect*             bv_target,
 
     // check if operation was ok
     {
+        bvect bv_agg;
+        bm::aggregator<bvect> agg;
+        bvect* agg_list[10];
+        agg_list[0] = &bv1;
+        agg_list[1] = &bv2;
+
+        bool agg_check = false;
+
         bvect bvt(bv1);
         switch(op)
         {
         case bm::set_OR:
             bvt |= bv2;
+            agg.combine_or(bv_agg, agg_list, 2);
+            agg_check = true;
             break;
         case bm::set_XOR:
             bvt ^= bv2;
@@ -861,6 +871,12 @@ unsigned SerializationOperation(bvect*             bv_target,
             cout << "Direct Serial operation comparison failed!" << endl;
             exit(1);
         }
+        if (agg_check && bvt.compare(bv_agg) != 0)
+        {
+            cerr << "Aggregator operation comparison failed!" << endl;
+            exit(1);
+        }
+
         no_compare:
         ;
 
@@ -4027,6 +4043,124 @@ void DesrializationTest2()
 
    } // for i
 
+}
+
+static
+void StressTestAggregatorOR(unsigned repetitions)
+{
+  cout << "---------------------------- Aggregator OR Stress Test" << endl;
+   unsigned size = BITVECT_SIZE - 10;
+
+
+    unsigned i;
+    for (i = 0; i < repetitions; ++i)
+    {
+        int opt = rand() % 2;
+        cout << endl << " - - - - - - - - - - - - AGG OR STRESS STEP " << i << endl;;
+        
+        switch (rand() % 3)
+        {
+        case 0:
+            size = BITVECT_SIZE / 10;
+            break;
+        case 1:
+            size = BITVECT_SIZE / 2;
+            break;
+        default:
+            size = BITVECT_SIZE - 10;
+            break;
+        } // switch
+        
+        unsigned start1 = 0;
+        switch (rand() % 3)
+        {
+        case 1:
+            start1 += size / 5;
+            break;
+        default:
+            break;
+        }
+
+        unsigned start2 = 0;
+        switch (rand() % 3)
+        {
+        case 1:
+            start2 += size / 5;
+            break;
+        default:
+            break;
+        }
+
+        bvect_mini   bvect_min1(size);
+        bvect bv0, bv1, bv2, bv3, bv4, bv5, bv6, bv7, bv8, bv9;
+
+        // 0 skipped
+        FillSetsRandomMethod(&bvect_min1, &bv1, start1, size, opt);
+        FillSetsRandomMethod(&bvect_min1, &bv2, start2, size, opt);
+        // 3 skipped
+        FillSetsRandomMethod(&bvect_min1, &bv5, start1, size, opt);
+        FillSetsRandomMethod(&bvect_min1, &bv6, start2, size, opt);
+        FillSetsRandomMethod(&bvect_min1, &bv7, start1, size, opt);
+        FillSetsRandomMethod(&bvect_min1, &bv8, start2, size, opt);
+        FillSetsRandomMethod(&bvect_min1, &bv9, start2, size, opt);
+        
+        bm::aggregator<bvect> agg;
+        
+        bvect* agg_list[32] = {0, };
+        
+        agg_list[0] = &bv0;
+        agg_list[1] = &bv1;
+        agg_list[2] = &bv2;
+        agg_list[3] = &bv3;
+        agg_list[4] = &bv4;
+        agg_list[5] = &bv5;
+        agg_list[6] = &bv6;
+        agg_list[7] = &bv7;
+        agg_list[8] = &bv8;
+        agg_list[9] = &bv9;
+        
+        bvect bv_target1, bv_target2;
+        
+        unsigned cnt = 10;
+        agg.combine_or(bv_target1, agg_list, cnt);
+        agg.combine_or_horizontal(bv_target2, agg_list, cnt);
+
+        int res = bv_target1.compare(bv_target2);
+        if (res!=0)
+        {
+            cerr << "Error: Aggregator OR check failed!" << endl;
+            exit(1);
+        }
+        for (unsigned j = 1; j < cnt; ++j)
+        {
+            agg.combine_or(bv_target1, agg_list, j);
+            agg.combine_or_horizontal(bv_target2, agg_list, j);
+            res = bv_target1.compare(bv_target2);
+            if (res!=0)
+            {
+                cerr << "Error: Aggregator OR check failed! 1.laddder step = "
+                     << j << endl;
+                exit(1);
+            }
+        }
+        
+        for (unsigned j = 0; j < cnt; ++j)
+        {
+            agg.combine_or(bv_target1, agg_list+j, cnt-j);
+            agg.combine_or_horizontal(bv_target2, agg_list+j, cnt-j);
+            res = bv_target1.compare(bv_target2);
+            if (res!=0)
+            {
+                cerr << "Error: Aggregator OR check failed! 2.laddder step = "
+                     << j << endl;
+                exit(1);
+            }
+        }
+
+
+    } // for i
+
+  cout << "---------------------------- Aggregator OR Stress Test OK" << endl;
 }
 
 static
@@ -14198,7 +14332,7 @@ int main(void)
     exit(1);
 */
 
-
+/*
     TestRecomb();
 
     OptimGAPTest();
@@ -14296,10 +14430,13 @@ int main(void)
      DesrializationTest2();
 
      BlockLevelTest();
+*/
+     StressTest(120, 0); // OR
 
+     StressTestAggregatorOR(100);
+    
      StressTest(120, 3); // AND
      StressTest(120, 1); // SUB
-     StressTest(120, 0); // OR
      StressTest(120, 2); // XOR
 
      TestSparseVector();
