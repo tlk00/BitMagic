@@ -1789,7 +1789,7 @@ public:
     */
     bm::bvector<Alloc>& bit_or(const  bm::bvector<Alloc>& vect)
     {
-        combine_operation_or(vect);//, BM_OR);
+        combine_operation_or(vect);
         return *this;
     }
 
@@ -3789,12 +3789,11 @@ void bvector<Alloc>::combine_operation(
 
 template<class Alloc>
 void bvector<Alloc>::combine_operation_block_or(
-        unsigned i, unsigned j, bm::word_t* blk, const bm::word_t* arg_blk)
+        unsigned i, unsigned j,
+        bm::word_t* blk, const bm::word_t* arg_blk)
 {
-    gap_word_t tmp_buf[bm::gap_equiv_len * 3]; // temporary result
-    if (IS_FULL_BLOCK(blk)) // all bits are set
-        return; // nothing to do
-    if (!arg_blk)
+    bm::gap_word_t tmp_buf[bm::gap_equiv_len * 3]; // temporary result
+    if (IS_FULL_BLOCK(blk) || !arg_blk) // all bits are set
         return; // nothing to do
     
     if (IS_FULL_BLOCK(arg_blk))
@@ -3804,7 +3803,6 @@ void bvector<Alloc>::combine_operation_block_or(
         blockman_.set_block_ptr(i, j, FULL_BLOCK_FAKE_ADDR);
         return;
     }
-
     
     if (BM_IS_GAP(blk)) // our block GAP-type
     {
@@ -3822,29 +3820,19 @@ void bvector<Alloc>::combine_operation_block_or(
             assign_gap_result(i, j, res, ++res_len, blk, tmp_buf);
             return;
         }
-        // GAP & BIT
+        // GAP or BIT
         //
-/*
-        if (IS_FULL_BLOCK(arg_blk))
-        {
-            blockman_.get_allocator().free_gap_block(gap_blk, blockman_.glen());
-            blockman_.set_block_ptr(i, j, FULL_BLOCK_FAKE_ADDR);
-        }
-        else */
-        {
-            bm::word_t* new_blk = blockman_.get_allocator().alloc_bit_block();
-            bm::bit_block_copy(new_blk, arg_blk); // TODO: 3 way operation
-            bm::gap_add_to_bitset(new_blk, gap_blk);
-            
-            blockman_.get_allocator().free_gap_block(gap_blk, blockman_.glen());
-            blockman_.set_block_ptr(i, j, new_blk);
-        }
+        bm::word_t* new_blk = blockman_.get_allocator().alloc_bit_block();
+        bm::bit_block_copy(new_blk, arg_blk); // TODO: 3 way operation
+        bm::gap_add_to_bitset(new_blk, gap_blk);
+        
+        blockman_.get_allocator().free_gap_block(gap_blk, blockman_.glen());
+        blockman_.set_block_ptr(i, j, new_blk);
         
         return;
     }
     else // our block is BITSET-type (but NOT FULL_BLOCK we checked it)
     {
-        
         if (BM_IS_GAP(arg_blk)) // argument block is GAP-type
         {
             const bm::gap_word_t* arg_gap = BMGAP_PTR(arg_blk);
