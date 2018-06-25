@@ -854,6 +854,7 @@ protected:
 
 
     template<class V, class SVect> friend class compressed_sparse_vector;
+    template<class SVect> friend class sparse_vector_scanner;
 
 private:
     size_type                bv_size_;
