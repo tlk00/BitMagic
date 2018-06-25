@@ -1048,6 +1048,7 @@ public:
 
     friend class iterator_base;
     friend class enumerator;
+    template<class BV> friend class aggregator;
 
 public:
     /*! @brief memory allocation policy
@@ -3492,9 +3493,8 @@ void bvector<Alloc>::combine_operation_or(const bm::bvector<Alloc>& bv)
         if (blk_blk == blk_blk_arg || !blk_blk_arg) // nothing to do (0 OR 0 == 0)
             continue;
         if (!blk_blk)
-        {
             blk_blk = blockman_.alloc_top_subblock(i);
-        }
+
         unsigned j = 0;
         bm::word_t* blk;
         const bm::word_t* arg_blk;

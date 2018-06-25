@@ -798,6 +798,20 @@ public:
         const bm::word_t* ret = (blk_blk == 0) ? 0 : blk_blk[j];
         return ret;
     }
+    /**
+        \brief Finds block in 2-level blocks array (unsinitized)
+        \param i - top level block index
+        \param j - second level block index
+        \return block adress or NULL if not yet allocated
+    */
+    bm::word_t* get_block_ptr(unsigned i, unsigned j)
+    {
+        if (!top_blocks_ || i >= top_block_size_) return 0;
+
+        bm::word_t* const* blk_blk = top_blocks_[i];
+        bm::word_t* ret = (blk_blk == 0) ? 0 : blk_blk[j];
+        return ret;
+    }
 
 
     /**
@@ -1068,6 +1082,7 @@ public:
     bm::word_t** alloc_top_subblock(unsigned nblk_blk)
     {
         BM_ASSERT(top_blocks_[nblk_blk] == 0);
+
         bm::word_t** p = (bm::word_t**)alloc_.alloc_ptr();
         ::memset(top_blocks_[nblk_blk] = p, 0,
             bm::set_array_size * sizeof(bm::word_t*));
