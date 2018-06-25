@@ -44,6 +44,13 @@ template<class Val, class SV>
 class compressed_sparse_vector
 {
 public:
+
+    enum bit_plains
+    {
+        sv_plains = (sizeof(Val) * 8 + 1),
+        sv_value_plains = (sizeof(Val) * 8)
+    };
+
     typedef Val                                      value_type;
     typedef const value_type&                        const_reference;
     typedef bm::id_t                                 size_type;
