@@ -5977,22 +5977,19 @@ template<typename TRGW, typename IDX, typename SZ>
 void bit_block_gather_scatter(TRGW* arr, const bm::word_t* blk,
                               const IDX* idx, SZ size, unsigned start, unsigned bit_idx)
 {
-#if defined(BMSSE42OPT)
+#if defined(BM64_SSE4)
     // optimized for unsigned
     if (bm::conditional<sizeof(TRGW)==4 && sizeof(IDX)==4>::test())
     {
         sse4_bit_block_gather_scatter(arr, blk, idx, size, start, bit_idx);
         return;
     }
-#elif defined(BMAVX2OPT)
-    // optimized for unsigned
-    
+#elif defined(BM64_AVX2)
     if (bm::conditional<sizeof(TRGW)==4 && sizeof(IDX)==4>::test())
     {
         avx2_bit_block_gather_scatter(arr, blk, idx, size, start, bit_idx);
         return;
     }
-    
 #endif
 
     const unsigned len = (size - start);
