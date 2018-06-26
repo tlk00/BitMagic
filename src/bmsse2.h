@@ -215,6 +215,9 @@ bm::id_t sse2_bit_count_op(const __m128i* BMRESTRICT block,
 #define VECT_OR_ARR(dst, src, src_end) \
     sse2_or_arr((__m128i*) dst, (__m128i*) (src), (__m128i*) (src_end))
 
+#define VECT_OR_ARR_2WAY(dst, src1, src2, src1_end) \
+    sse2_or_arr_2way((__m128i*) (dst), (__m128i*) (src1), (__m128i*) (src2), (__m128i*) (src1_end))
+
 #define VECT_SUB_ARR(dst, src, src_end) \
     sse2_sub_arr((__m128i*) dst, (__m128i*) (src), (__m128i*) (src_end))
 
