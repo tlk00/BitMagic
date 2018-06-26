@@ -452,7 +452,7 @@ void rank_compressor<BV>::compress_by_source(BV& bv_target,
 
 template<typename BV>
 void aggregator<BV>::combine_or(bvector_type& bv_target,
-                     const bvector_type_ptr* bv_src, unsigned src_size)
+                        const bvector_type_ptr* bv_src, unsigned src_size)
 {
     BM_ASSERT(src_size);
 
@@ -535,7 +535,14 @@ void aggregator<BV>::combine_or(bvector_type& bv_target,
                     
                     for (; k < arg_blk_count; ++k)
                     {
-                        bm::bit_block_or(blk, v_arg_blk[k]);
+                        all_one = bm::bit_block_or(blk, v_arg_blk[k]);
+                        if (all_one)
+                        {
+                            BM_ASSERT(blk == tb);
+                            BM_ASSERT(bm::is_bits_one((bm::wordop_t*) blk, (bm::wordop_t*) (blk + bm::set_block_size)));
+                            bman_target.set_block(i, j, FULL_BLOCK_FAKE_ADDR, false);
+                            goto nothing_to_do;
+                        }
                     }
 
                     // process all GAP blocks
