@@ -31,6 +31,11 @@ namespace bm
     @ingroup bvector
  */
 
+#ifdef __GNUG__
+#pragma GCC diagnostic push
+#pragma GCC diagnostic ignored "-Wconversion"
+#endif
+
 
 /*! 
   @brief SSE2 reinitialization guard class
@@ -330,10 +335,9 @@ bool sse2_or_arr(__m128i* BMRESTRICT dst,
     } while (src < src_end);
 
     __m128i maskF = _mm_set1_epi32(~0u);
-    mAccF0 = _mm_and_si128(mAccF0, mAccF1);
     __m128i wcmpA = _mm_cmpeq_epi8(mAccF0, maskF);
     unsigned maskA = unsigned(_mm_movemask_epi8(wcmpA));
-    return (maskA == ~0u);
+    return (maskA == 0xFFFFu);
 }
 
 /*!
@@ -379,12 +383,11 @@ bool sse2_or_arr_unal(__m128i* BMRESTRICT dst,
 
         src += 4; dst += 4;
     } while (src < src_end);
-
+    
     __m128i maskF = _mm_set1_epi32(~0u);
-    mAccF0 = _mm_and_si128(mAccF0, mAccF1);
     __m128i wcmpA = _mm_cmpeq_epi8(mAccF0, maskF);
     unsigned maskA = unsigned(_mm_movemask_epi8(wcmpA));
-    return (maskA == ~0u);
+    return (maskA == 0xFFFFu);
 }
 
 
@@ -436,7 +439,7 @@ bool sse2_or_arr_2way(__m128i* BMRESTRICT dst,
     mAccF0 = _mm_and_si128(mAccF0, mAccF1);
     __m128i wcmpA = _mm_cmpeq_epi8(mAccF0, maskF);
     unsigned maskA = unsigned(_mm_movemask_epi8(wcmpA));
-    return (maskA == ~0u);
+    return (maskA == 0xFFFFu);
 
 }
 
@@ -710,6 +713,10 @@ const bm::gap_word_t* sse2_gap_sum_arr(
     *sum += (cnt8[0]) + (cnt8[2]) + (cnt8[4]) + (cnt8[6]);
     return pbuf;
 }
+
+#ifdef __GNUG__
+#pragma GCC diagnostic pop
+#endif
 
 
 } // namespace
