@@ -686,7 +686,7 @@ void avx2_or_arr_unal(__m256i* BMRESTRICT dst,
 
 /*!
     @brief OR array elements against another 2 arrays
-    *dst |= *src
+    *dst |= *src1 | src2
     @return true if all bits are 1
 
     @ingroup AVX2
@@ -701,7 +701,7 @@ bool avx2_or_arr_2way(__m256i* BMRESTRICT dst,
     __m256i mAccF0 = _mm256_set1_epi32(~0u); // broadcast 0xFF
     __m256i mAccF1 = _mm256_set1_epi32(~0u); // broadcast 0xFF
 
-    #pragma nounroll
+    //#pragma nounroll
     do
     {
         m1A = _mm256_or_si256(_mm256_load_si256(src1+0), _mm256_load_si256(dst+0));
