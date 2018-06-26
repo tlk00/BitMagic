@@ -362,6 +362,59 @@ void sse2_or_arr_unal(__m128i* BMRESTRICT dst,
 }
 
 
+/*!
+    @brief OR array elements against another 2 arrays
+    *dst |= *src1 | src2
+    @return true if all bits are 1
+
+    @ingroup SSE2
+*/
+inline
+bool sse2_or_arr_2way(__m128i* BMRESTRICT dst,
+    const __m128i* BMRESTRICT src1,
+    const __m128i* BMRESTRICT src2,
+    const __m128i* BMRESTRICT src_end1)
+{
+    __m128i m1A, m1B, m1C, m1D;
+    __m128i mAccF0 = _mm_set1_epi32(~0u); // broadcast 0xFF
+    __m128i mAccF1 = _mm_set1_epi32(~0u); // broadcast 0xFF
+
+//#pragma nounroll
+    do
+    {
+        m1A = _mm_or_si128(_mm_load_si128(src1 + 0), _mm_load_si128(dst + 0));
+        m1B = _mm_or_si128(_mm_load_si128(src1 + 1), _mm_load_si128(dst + 1));
+        m1C = _mm_or_si128(_mm_load_si128(src1 + 2), _mm_load_si128(dst + 2));
+        m1D = _mm_or_si128(_mm_load_si128(src1 + 3), _mm_load_si128(dst + 3));
+
+        m1A = _mm_or_si128(m1A, _mm_load_si128(src2 + 0));
+        m1B = _mm_or_si128(m1B, _mm_load_si128(src2 + 1));
+        m1C = _mm_or_si128(m1C, _mm_load_si128(src2 + 2));
+        m1D = _mm_or_si128(m1D, _mm_load_si128(src2 + 3));
+
+        _mm_stream_si128(dst + 0, m1A);
+        _mm_stream_si128(dst + 1, m1B);
+        _mm_stream_si128(dst + 2, m1C);
+        _mm_stream_si128(dst + 3, m1D);
+
+        mAccF1 = _mm_and_si128(mAccF1, m1C);
+        mAccF1 = _mm_and_si128(mAccF1, m1D);
+        mAccF0 = _mm_and_si128(mAccF0, m1A);
+        mAccF0 = _mm_and_si128(mAccF0, m1B);
+
+        src1 += 4; src2 += 4; dst += 4;
+
+    } while (src1 < src_end1);
+
+    __m128i maskF = _mm_set1_epi32(~0u);
+    mAccF0 = _mm_and_si128(mAccF0, mAccF1);
+    __m128i wcmpA = _mm_cmpeq_epi8(mAccF0, maskF);
+    unsigned maskA = unsigned(_mm_movemask_epi8(wcmpA));
+    return (maskA == ~0u);
+
+}
+
+
 /*! 
     @brief OR array elements against another array
     *dst ^= *src
