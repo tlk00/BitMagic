@@ -212,9 +212,21 @@ public:
     void combine_or(bvector_type& bv_target,
                     const bvector_type_ptr* bv_src, unsigned src_size);
     
-    /// Horintal (potentially slow) method
+    /// Horizonntal aggregation (potentially slower) method
     void combine_or_horizontal(bvector_type& bv_target,
                                const bvector_type_ptr* bv_src, unsigned src_size);
+protected:
+    static
+    unsigned resize_target(bvector_type& bv_target,
+                           const bvector_type_ptr* bv_src,
+                           unsigned src_size);
+    bool process_gap_blocks(typename bvector_type::blocks_manager_type& bman_target,
+                            unsigned i, unsigned j, unsigned block_count);
+private:
+    BM_DECLARE_TEMP_BLOCK(tb);
+    const bm::word_t*     v_arg_blk[256];     // source blocks list
+    const bm::gap_word_t* v_arg_blk_gap[256]; // source GAP blocks list
+
 };
 
 
@@ -444,35 +456,10 @@ void aggregator<BV>::combine_or(bvector_type& bv_target,
 {
     BM_ASSERT(src_size);
 
-    bv_target.clear(true);
-
     const bvector_type* bv;
     typename bvector_type::blocks_manager_type& bman_target = bv_target.get_blocks_manager();
-    unsigned top_blocks = bman_target.top_block_size();
-    auto size = bv_target.size();
 
-    // pre-scan to do target size harmonization
-    for (unsigned i = 0; i < src_size; ++i)
-    {
-        bv = bv_src[i];
-        BM_ASSERT(bv);
-        const typename bvector_type::blocks_manager_type& bman_arg = bv->get_blocks_manager();
-        unsigned arg_top_blocks = bman_arg.top_block_size();
-        if (arg_top_blocks > top_blocks)
-            top_blocks = bman_target.reserve_top_blocks(arg_top_blocks);
-        auto arg_size = bv->size();
-        if (arg_size > size)
-        {
-            bv_target.resize(arg_size);
-            size = arg_size;
-        }
-    } // for i
-
-    if (!bman_target.is_init())
-        bman_target.init_tree();
-
-    const bm::word_t*     v_arg_blk[256];     // source blocks list
-    const bm::gap_word_t* v_arg_blk_gap[256]; // source GAP blocks list
+    unsigned top_blocks = resize_target(bv_target, bv_src, src_size);
     
     for (unsigned i = 0; i < top_blocks; ++i)
     {
@@ -490,76 +477,163 @@ void aggregator<BV>::combine_or(bvector_type& bv_target,
                 const bm::word_t* arg_blk = bman_arg.get_block_ptr(i, j);
                 if (!arg_blk)
                     continue;
-                if (IS_FULL_BLOCK(arg_blk))
-                {
-                    blk = FULL_BLOCK_FAKE_ADDR;
-                    // bman_target.set_block_ptr(i, j, FULL_BLOCK_FAKE_ADDR);
-                    arg_blk_gap_count = arg_blk_count = 0;
-                    break;
-                }
                 if (BM_IS_GAP(arg_blk))
                 {
                     v_arg_blk_gap[arg_blk_gap_count] = BMGAP_PTR(arg_blk);
                     arg_blk_gap_count++;
                 }
-                else
+                else // FULL or bit block
                 {
+                    if (IS_FULL_BLOCK(arg_blk))
+                    {
+                        blk = FULL_BLOCK_FAKE_ADDR;
+                        arg_blk_gap_count = arg_blk_count = 0; // nothing to do
+                        break;
+                    }
                     v_arg_blk[arg_blk_count] = arg_blk;
                     arg_blk_count++;
                 }
-            }
-            //bm::word_t* blk = bman_target.get_block_ptr(i, j);
+            } // for k
+            
             BM_ASSERT(blk == 0 || blk == FULL_BLOCK_FAKE_ADDR);
 
-            if (blk == FULL_BLOCK_FAKE_ADDR)
+            if (blk == FULL_BLOCK_FAKE_ADDR) // nothing to do - golden block(!)
             {
-                bm::word_t*** blk_root = bman_target.top_blocks_root();
-                bm::word_t** blk_blk = blk_root[i];
-                if (!blk_blk)
-                    blk_blk = bman_target.alloc_top_subblock(i);
-
+                bman_target.check_alloc_top_subblock(i);
                 bman_target.set_block_ptr(i, j, blk);
             }
             else
             {
+                blk = tb;
                 if (arg_blk_count || arg_blk_gap_count)
                 {
-                    bm::word_t*** blk_root = bman_target.top_blocks_root();
-                    bm::word_t** blk_blk = blk_root[i];
-                    if (!blk_blk)
-                        blk_blk = bman_target.alloc_top_subblock(i);
+                    unsigned k = 0;
 
-                    blk = bman_target.get_allocator().alloc_bit_block();
-                    bman_target.set_block_ptr(i, j, blk);
-                    bm::bit_block_set(blk, 0);
+                    if (arg_blk_count)  // copy the first block
+                        bm::bit_block_copy(blk, v_arg_blk[k++]);
+                    else
+                        bm::bit_block_set(blk, 0);
+
+                    // process all BIT blocks
+                    //
+                    const unsigned unroll_factor = 2;
+                    const unsigned len = arg_blk_count - k;
+                    const unsigned len_unr = len - (len % unroll_factor);
+                    bool all_one;
+                    
+                    for( ;k < len_unr; k+=unroll_factor)
+                    {
+                        all_one = bm::bit_block_or_2way(blk, v_arg_blk[k], v_arg_blk[k+1]);
+                        if (all_one)
+                        {
+                            BM_ASSERT(blk == tb);
+                            BM_ASSERT(bm::is_bits_one((bm::wordop_t*) blk, (bm::wordop_t*) (blk + bm::set_block_size)));
+                            bman_target.set_block(i, j, FULL_BLOCK_FAKE_ADDR, false);
+                            goto nothing_to_do;
+                        }
+                    } // for k
+                    
+                    for (; k < arg_blk_count; ++k)
+                    {
+                        bm::bit_block_or(blk, v_arg_blk[k]);
+                    }
+
+                    // process all GAP blocks
+                    //
+                    all_one = process_gap_blocks(bman_target, i, j, arg_blk_gap_count);
+                    if (all_one)
+                    {
+                        goto nothing_to_do;
+                    }
+
+
+                    all_one = bm::is_bits_one((bm::wordop_t*) blk,
+                                          (bm::wordop_t*) (blk + bm::set_block_size));
+                    if (all_one)
+                    {
+                        BM_ASSERT(blk == tb);
+                        bman_target.set_block(i, j, FULL_BLOCK_FAKE_ADDR, false);
+                    }
+                    else
+                    {
+                        // we have some results, allocate block and copy from temp
+                        bman_target.check_alloc_top_subblock(i);
+                        blk = bman_target.get_allocator().alloc_bit_block();
+                        bman_target.set_block_ptr(i, j, blk);
+                        bm::bit_block_copy(blk, tb);
+                    }
+
+                    nothing_to_do: ;
+
                 }
-
-                for (unsigned k = 0; k < arg_blk_count; ++k)
-                {
-                    bm::bit_block_or(blk, v_arg_blk[k]);
-                } // for k
-
-                for (unsigned k = 0; k < arg_blk_gap_count; ++k)
-                {
-                    bm::gap_add_to_bitset(blk, v_arg_blk_gap[k]);
-                } // for k
             }
             ++j;
         } while (j < bm::set_array_size);
     } // for i
-    return;
 
-/*
-    bv = bv_src[0];
-    bv_target = *bv;
-    
-    for (unsigned i = 1; i < src_size; ++i)
-    {
-        bv = bv_src[i];
-        bv_target.bit_or(*bv);
-    }
-*/
 }
+
+// ------------------------------------------------------------------------
+
+template<typename BV>
+bool aggregator<BV>::process_gap_blocks(typename bvector_type::blocks_manager_type& bman_target,
+                                        unsigned i, unsigned j,
+                                        unsigned arg_blk_gap_count)
+{
+    bm::word_t* blk = tb;
+    bool all_one;
+    for (unsigned k = 0; k < arg_blk_gap_count; ++k)
+    {
+        bm::gap_add_to_bitset(blk, v_arg_blk_gap[k]);
+        if (k % 4 == 0)
+        {
+            all_one = bm::is_bits_one((bm::wordop_t*) blk,
+                      (bm::wordop_t*) (blk + bm::set_block_size));
+            if (all_one)
+            {
+                bman_target.set_block(i, j, FULL_BLOCK_FAKE_ADDR, false);
+                return true;
+            }
+        }
+    }
+    return false;
+}
+
+
+// ------------------------------------------------------------------------
+
+template<typename BV>
+unsigned aggregator<BV>::resize_target(bvector_type& bv_target,
+                            const bvector_type_ptr* bv_src, unsigned src_size)
+{
+    typename bvector_type::blocks_manager_type& bman_target = bv_target.get_blocks_manager();
+    if (!bman_target.is_init())
+        bman_target.init_tree();
+    else
+        bv_target.clear(true);
+    
+    unsigned top_blocks = bman_target.top_block_size();
+    auto size = bv_target.size();
+
+    // pre-scan to do target size harmonization
+    for (unsigned i = 0; i < src_size; ++i)
+    {
+        const bvector_type* bv = bv_src[i];
+        BM_ASSERT(bv);
+        const typename bvector_type::blocks_manager_type& bman_arg = bv->get_blocks_manager();
+        unsigned arg_top_blocks = bman_arg.top_block_size();
+        if (arg_top_blocks > top_blocks)
+            top_blocks = bman_target.reserve_top_blocks(arg_top_blocks);
+        auto arg_size = bv->size();
+        if (arg_size > size)
+        {
+            bv_target.resize(arg_size);
+            size = arg_size;
+        }
+    } // for i
+    return top_blocks;
+}
+
 
 // ------------------------------------------------------------------------
 

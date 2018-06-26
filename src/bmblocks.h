@@ -1088,6 +1088,16 @@ public:
             bm::set_array_size * sizeof(bm::word_t*));
         return p;
     }
+    
+    bm::word_t** check_alloc_top_subblock(unsigned nblk_blk)
+    {
+        if(top_blocks_[nblk_blk] == 0)
+        {
+            return alloc_top_subblock(nblk_blk);
+        }
+        return top_blocks_[nblk_blk];
+    }
+
 
     /**
         Places new block into descriptors table, returns old block's address.
