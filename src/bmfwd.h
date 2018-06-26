@@ -22,6 +22,7 @@ For more information please visit:  http://bitmagic.io
     \brief Forward declarations
 */
 
+#include <stddef.h>
 #include "bmconst.h"
 
 namespace bm

@@ -35,7 +35,7 @@ elseif ("${CMAKE_CXX_COMPILER_ID}" STREQUAL "MSVC")
 endif()
 
 set(CMAKE_C_FLAGS   "${CMAKE_C_FLAGS} ${flags}")
-set(CMAKE_CXX_FLAGS "${CMAKE_CXX_FLAGS} ${flags}")
+set(CMAKE_CXX_FLAGS "${CMAKE_CXX_FLAGS} ${flags} -std=c++11")
 
 
 add_library(bmcpuidj SHARED "../libbm/src/libbmcpuid.c" "src/bmcpuidj.c")
@@ -56,7 +56,7 @@ if ("${CMAKE_CXX_COMPILER_ID}" STREQUAL "GNU" OR
     "${CMAKE_CXX_COMPILER_ID}" STREQUAL "Clang")
    set_target_properties(bmjni        PROPERTIES COMPILE_FLAGS "-march=core2")
    set_target_properties(bmjni-sse42  PROPERTIES COMPILE_FLAGS "-march=nehalem -msse4.2 -DBMSSE42OPT")
-   set_target_properties(bmjni-avx2   PROPERTIES COMPILE_FLAGS "-march=skylake -mavx2 -DBMAVX2OPT")
+   set_target_properties(bmjni-avx2   PROPERTIES COMPILE_FLAGS "-march=native -mavx2 -DBMAVX2OPT")
 endif()
 
 target_link_libraries(bmcpuidj ${JNI_LIBRARIES})
