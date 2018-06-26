@@ -4555,27 +4555,31 @@ bm::id_t bit_operation_or_any(const bm::word_t* BMRESTRICT src1,
 
    @ingroup bitfunc
 */
-inline void bit_block_or(bm::word_t* BMRESTRICT dst, 
-                         const bm::word_t* BMRESTRICT src)
+inline 
+bool bit_block_or(bm::word_t* BMRESTRICT dst, 
+                  const bm::word_t* BMRESTRICT src)
 {
 #ifdef BMVECTOPT
-    VECT_OR_ARR(dst, src, src + bm::set_block_size);
+    return VECT_OR_ARR(dst, src, src + bm::set_block_size);
 #else
     const bm::wordop_t* BMRESTRICT wrd_ptr = (wordop_t*)src;
-    const bm::wordop_t* BMRESTRICT wrd_end = (wordop_t*)(src + set_block_size);
+    const bm::wordop_t* BMRESTRICT wrd_end = (wordop_t*)(src + bm::set_block_size);
     bm::wordop_t* BMRESTRICT dst_ptr = (wordop_t*)dst;
+
+    bm::wordop_t acc = 0;
+    const bm::wordop_t not_acc = acc = ~acc;
 
     do
     {
-        dst_ptr[0] |= wrd_ptr[0];
-        dst_ptr[1] |= wrd_ptr[1];
-        dst_ptr[2] |= wrd_ptr[2];
-        dst_ptr[3] |= wrd_ptr[3];
+        acc &= (dst_ptr[0] |= wrd_ptr[0]);
+        acc &= (dst_ptr[1] |= wrd_ptr[1]);
+        acc &= (dst_ptr[2] |= wrd_ptr[2]);
+        acc &= (dst_ptr[3] |= wrd_ptr[3]);
 
-        dst_ptr+=4;
-        wrd_ptr+=4;
+        dst_ptr+=4;wrd_ptr+=4;
 
     } while (wrd_ptr < wrd_end);
+    return acc == not_acc;
 #endif
 }
 

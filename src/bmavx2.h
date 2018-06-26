@@ -607,15 +607,18 @@ unsigned avx2_and_arr_unal(__m256i* BMRESTRICT dst,
 /*!
     @brief OR array elements against another array
     *dst |= *src
+    @return true if all bits are 1
 
     @ingroup AVX2
 */
 inline
-void avx2_or_arr(__m256i* BMRESTRICT dst,
+bool avx2_or_arr(__m256i* BMRESTRICT dst,
                  const __m256i* BMRESTRICT src,
                  const __m256i* BMRESTRICT src_end)
 {
     __m256i m1A, m2A, m1B, m2B, m1C, m2C, m1D, m2D;
+    __m256i mAccF0 = _mm256_set1_epi32(~0u); // broadcast 0xFF
+    __m256i mAccF1 = _mm256_set1_epi32(~0u); // broadcast 0xFF
     do
     {
         m1A = _mm256_load_si256(src+0);
@@ -637,25 +640,39 @@ void avx2_or_arr(__m256i* BMRESTRICT dst,
         m2D = _mm256_load_si256(dst+3);
         m1D = _mm256_or_si256(m1D, m2D);
         _mm256_store_si256(dst+3, m1D);
-        
+
+        mAccF1 = _mm256_and_si256(mAccF1, m1C);
+        mAccF1 = _mm256_and_si256(mAccF1, m1D);
+        mAccF0 = _mm256_and_si256(mAccF0, m1A);
+        mAccF0 = _mm256_and_si256(mAccF0, m1B);
+
         src += 4; dst += 4;
 
     } while (src < src_end);
+
+    __m256i maskF = _mm256_set1_epi32(~0u);
+    mAccF0 = _mm256_and_si256(mAccF0, mAccF1);
+    __m256i wcmpA = _mm256_cmpeq_epi8(mAccF0, maskF);
+    unsigned maskA = unsigned(_mm256_movemask_epi8(wcmpA));
+    return (maskA == ~0u);
 }
 
 
 /*!
     @brief OR array elements against another unaligned array
     *dst |= *src
+    @return true if all bits are 1
 
     @ingroup AVX2
 */
 inline
-void avx2_or_arr_unal(__m256i* BMRESTRICT dst,
+bool avx2_or_arr_unal(__m256i* BMRESTRICT dst,
                       const __m256i* BMRESTRICT src,
                       const __m256i* BMRESTRICT src_end)
 {
     __m256i m1A, m2A, m1B, m2B, m1C, m2C, m1D, m2D;
+    __m256i mAccF0 = _mm256_set1_epi32(~0u); // broadcast 0xFF
+    __m256i mAccF1 = _mm256_set1_epi32(~0u); // broadcast 0xFF
     do
     {
         m1A = _mm256_loadu_si256(src+0);
@@ -677,10 +694,21 @@ void avx2_or_arr_unal(__m256i* BMRESTRICT dst,
         m2D = _mm256_load_si256(dst+3);
         m1D = _mm256_or_si256(m1D, m2D);
         _mm256_store_si256(dst+3, m1D);
-        
+
+        mAccF1 = _mm256_and_si256(mAccF1, m1C);
+        mAccF1 = _mm256_and_si256(mAccF1, m1D);
+        mAccF0 = _mm256_and_si256(mAccF0, m1A);
+        mAccF0 = _mm256_and_si256(mAccF0, m1B);
+
         src += 4; dst += 4;
 
     } while (src < src_end);
+
+    __m256i maskF = _mm256_set1_epi32(~0u);
+    mAccF0 = _mm256_and_si256(mAccF0, mAccF1);
+    __m256i wcmpA = _mm256_cmpeq_epi8(mAccF0, maskF);
+    unsigned maskA = unsigned(_mm256_movemask_epi8(wcmpA));
+    return (maskA == ~0u);
 }
 
 
@@ -732,8 +760,7 @@ bool avx2_or_arr_2way(__m256i* BMRESTRICT dst,
      mAccF0 = _mm256_and_si256(mAccF0, mAccF1);
     __m256i wcmpA= _mm256_cmpeq_epi8(mAccF0, maskF);
      unsigned maskA = unsigned(_mm256_movemask_epi8(wcmpA));
-     return (maskA == ~0u);
-    
+     return (maskA == ~0u);    
 }
 
 
