@@ -13588,30 +13588,94 @@ void TestBlockAND()
 static
 void TestBlockOR()
 {
-    cout << " ------------------------------ Test bit-block OR" << endl;
-    {
-        BM_DECLARE_TEMP_BLOCK(tb2);
-        BM_DECLARE_TEMP_BLOCK(tb1);
+    BM_DECLARE_TEMP_BLOCK(tb3);
+    BM_DECLARE_TEMP_BLOCK(tb2);
+    BM_DECLARE_TEMP_BLOCK(tb1);
+    
+    bool all_one;
 
+    cout << " ------------------------------ Test bit-block OR" << endl;
+
+    {
         for (unsigned i = 0; i < bm::set_block_size; ++i)
         {
-            tb1.b_.w32[i] = 0;
+            tb1.b_.w32[i] = tb3.b_.w32[i] = 0;
             tb2.b_.w32[i] = 8;
         }
 
-        bm::bit_block_or(tb1, tb2);
+        all_one = bm::bit_block_or(tb1, tb2);
+        assert(!all_one);
+        all_one = bm::bit_block_or_2way(tb3, tb2, tb1);
+        assert(!all_one);
+
 
         for (unsigned i = 0; i < bm::set_block_size; ++i)
         {
             assert(tb1.b_.w32[i] == 8);
-            if (tb1.b_.w32[i] != 8)
+            if (tb1.b_.w32[i] != 8 || tb3.b_.w32[i] != 8)
             {
                 cerr << "TestOR failed!" << endl;
                 exit(1);
             }
         }
-
     }
+    
+    {
+        for (unsigned i = 0; i < bm::set_block_size; ++i)
+        {
+            tb1.b_.w32[i] = ~3u;
+            tb2.b_.w32[i] = 3u;
+            tb3.b_.w32[i] = 0;
+        }
+
+        all_one = bm::bit_block_or(tb1, tb2);
+        assert(all_one);
+        all_one = bm::bit_block_or_2way(tb3, tb2, tb1);
+        assert(all_one);
+
+
+        for (unsigned i = 0; i < bm::set_block_size; ++i)
+        {
+            assert(tb1.b_.w32[i] == ~0u);
+            assert(tb3.b_.w32[i] == ~0u);
+        }
+    }
+
+    {
+        for (unsigned i = 0; i < bm::set_block_size; ++i)
+        {
+            tb1.b_.w32[i] = 0;
+            tb2.b_.w32[i] = 0;
+            tb3.b_.w32[i] = 0;
+        }
+        for (unsigned i = 0; i < 100; ++i)
+        {
+            tb1.b_.w32[i] = ~0u;
+            tb2.b_.w32[i] = 0;
+            tb3.b_.w32[i] = 0;
+        }
+        for (unsigned i = 100; i < bm::set_block_size; ++i)
+        {
+            tb1.b_.w32[i] = 0;
+            tb2.b_.w32[i] = ~0u;
+            tb3.b_.w32[i] = 0;
+        }
+
+
+        all_one = bm::bit_block_or(tb1, tb2);
+        assert(all_one);
+        all_one = bm::bit_block_or_2way(tb3, tb2, tb1);
+        assert(all_one);
+
+
+        for (unsigned i = 0; i < bm::set_block_size; ++i)
+        {
+            assert(tb1.b_.w32[i] == ~0u);
+            assert(tb3.b_.w32[i] == ~0u);
+        }
+    }
+
+    
     cout << " ------------------------------ Test bit-block OR  OK" << endl;
 
 }
@@ -14332,7 +14396,7 @@ int main(void)
     exit(1);
 */
 
-/*
+
     TestRecomb();
 
     OptimGAPTest();
@@ -14430,11 +14494,10 @@ int main(void)
      DesrializationTest2();
 
      BlockLevelTest();
-*/
-     StressTest(120, 0); // OR
 
      StressTestAggregatorOR(100);
     
+     StressTest(120, 0); // OR
      StressTest(120, 3); // AND
      StressTest(120, 1); // SUB
      StressTest(120, 2); // XOR
