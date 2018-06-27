@@ -335,8 +335,10 @@ bool sse2_or_arr(__m128i* BMRESTRICT dst,
     } while (src < src_end);
 
     __m128i maskF = _mm_set1_epi32(~0u);
+    mAccF0 = _mm_and_si128(mAccF0, mAccF1);
     __m128i wcmpA = _mm_cmpeq_epi8(mAccF0, maskF);
     unsigned maskA = unsigned(_mm_movemask_epi8(wcmpA));
+
     return (maskA == 0xFFFFu);
 }
 
@@ -383,8 +385,9 @@ bool sse2_or_arr_unal(__m128i* BMRESTRICT dst,
 
         src += 4; dst += 4;
     } while (src < src_end);
-    
+
     __m128i maskF = _mm_set1_epi32(~0u);
+    mAccF0 = _mm_and_si128(mAccF0, mAccF1);
     __m128i wcmpA = _mm_cmpeq_epi8(mAccF0, maskF);
     unsigned maskA = unsigned(_mm_movemask_epi8(wcmpA));
     return (maskA == 0xFFFFu);
