@@ -3816,8 +3816,15 @@ void bvector<Alloc>::combine_operation_block_or(
                                         tmp_buf,
                                         res_len);
             BM_ASSERT(res == tmp_buf);
-
-            assign_gap_result(i, j, res, ++res_len, blk, tmp_buf);
+            if (bm::gap_is_all_one(res, bm::gap_max_bits))
+            {
+                blockman_.zero_gap_block_ptr(i, j);
+                blockman_.set_block_ptr(i, j, FULL_BLOCK_FAKE_ADDR);
+            }
+            else
+            {
+                assign_gap_result(i, j, res, ++res_len, blk, tmp_buf);
+            }
             return;
         }
         // GAP or BIT
@@ -3865,6 +3872,7 @@ void bvector<Alloc>::combine_operation_block_or(
         blockman_.get_allocator().free_bit_block(blk);
         blockman_.set_block_ptr(i, j, FULL_BLOCK_FAKE_ADDR);
     }
+
 }
 
 
