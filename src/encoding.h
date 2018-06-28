@@ -110,7 +110,7 @@ public:
     bm::word_t get_32();
     bm::id64_t get_64();
     void get_32(bm::word_t* w, unsigned count);
-    void get_32_OR(bm::word_t* w, unsigned count);
+    bool get_32_OR(bm::word_t* w, unsigned count);
     void get_32_AND(bm::word_t* w, unsigned count);
     void get_16(bm::short_t* s, unsigned count);
 };
@@ -141,7 +141,7 @@ public:
     bm::short_t get_16();
     bm::word_t get_32();
     void get_32(bm::word_t* w, unsigned count);
-    void get_32_OR(bm::word_t* w, unsigned count);
+    bool get_32_OR(bm::word_t* w, unsigned count);
     void get_32_AND(bm::word_t* w, unsigned count);
     void get_16(bm::short_t* s, unsigned count);
 };
@@ -871,7 +871,7 @@ inline void decoder::get_32(bm::word_t* w, unsigned count)
     buf_ = (unsigned char*)buf;
 #endif
 }
-
+ 
 /*!
    \brief Reads block of 32-bit words from the decoding buffer and ORs
    to the destination
@@ -879,33 +879,37 @@ inline void decoder::get_32(bm::word_t* w, unsigned count)
    \param count - should match bm::set_block_size
 */
 inline
-void decoder::get_32_OR(bm::word_t* w, unsigned count)
+bool decoder::get_32_OR(bm::word_t* w, unsigned count)
 {
     if (!w)
     {
         seek(int(count * sizeof(bm::word_t)));
-        return;
+        return false;
     }
 #if defined(BMAVX2OPT)
         __m256i* buf_start = (__m256i*)buf_;
         seek(int(count * sizeof(bm::word_t)));
         __m256i* buf_end = (__m256i*)buf_;
 
-        bm::avx2_or_arr_unal((__m256i*)w, buf_start, buf_end);
+        return bm::avx2_or_arr_unal((__m256i*)w, buf_start, buf_end);
 #elif defined(BMSSE42OPT) || defined(BMSSE2OPT)
         __m128i* buf_start = (__m128i*)buf_;
         seek(int(count * sizeof(bm::word_t)));
         __m128i* buf_end = (__m128i*)buf_;
 
-        bm::sse2_or_arr_unal((__m128i*)w, buf_start, buf_end);
+        return bm::sse2_or_arr_unal((__m128i*)w, buf_start, buf_end);
 #else
+        bm::word_t acc = 0;
+        const bm::word_t not_acc = acc = ~acc;
+
         for (unsigned i = 0; i < count; i+=4)
         {
-            w[i+0] |= get_32();
-            w[i+1] |= get_32();
-            w[i+2] |= get_32();
-            w[i+3] |= get_32();
+            acc &= (w[i+0] |= get_32());
+            acc &= (w[i+1] |= get_32());
+            acc &= (w[i+2] |= get_32());
+            acc &= (w[i+3] |= get_32());
         }
+        return acc == not_acc;
 #endif
 }
 
@@ -1031,15 +1035,25 @@ void decoder_little_endian::get_32(bm::word_t* w, unsigned count)
 }
 
 inline
-void decoder_little_endian::get_32_OR(bm::word_t* w, unsigned count)
+bool decoder_little_endian::get_32_OR(bm::word_t* w, unsigned count)
 {
+    if (!w)
+    {
+        seek(int(count * sizeof(bm::word_t)));
+        return false;
+    }
+
+    bm::word_t acc = 0;
+    const bm::word_t not_acc = acc = ~acc;
+
     for (unsigned i = 0; i < count; i+=4)
     {
-        w[i+0] |= get_32();
-        w[i+1] |= get_32();
-        w[i+2] |= get_32();
-        w[i+3] |= get_32();
+        acc &= (w[i+0] |= get_32());
+        acc &= (w[i+1] |= get_32());
+        acc &= (w[i+2] |= get_32());
+        acc &= (w[i+3] |= get_32());
     }
+    return acc == not_acc;
 }
 
 inline
