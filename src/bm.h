@@ -1230,7 +1230,8 @@ public:
 
     reference operator[](bm::id_t n)
     {
-        BM_ASSERT(n < size_);
+        if (n >= size_)
+            resize(n + 1);
         return reference(*this, n);
     }
 
@@ -1328,13 +1329,11 @@ public:
     */
     bool set_bit(bm::id_t n, bool val = true)
     {
-        BM_ASSERT(n < size_);
-        BM_ASSERT_THROW(n < size_, BM_ERR_RANGE);
-
         if (!blockman_.is_init())
-        {
             blockman_.init_tree();
-        }
+        if (n >= size_)
+            resize(n+1);
+        
         return set_bit_no_check(n, val);
     }
 
@@ -1378,12 +1377,12 @@ public:
     */
     bool set_bit_conditional(bm::id_t n, bool val, bool condition)
     {
-        BM_ASSERT(n < size_);
-        BM_ASSERT_THROW(n < size_, BM_ERR_RANGE);
-
         if (val == condition) return false;
         if (!blockman_.is_init())
             blockman_.init_tree();
+        if (n >= size_)
+            resize(n+1);
+
         return set_bit_conditional_impl(n, val, condition);
     }
 
