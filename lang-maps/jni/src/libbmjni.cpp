@@ -7,7 +7,6 @@
 #include "try_throw_catch.h"
 static jmp_buf ex_buf__;
 
-
 #include "jnialloc.h"
 
 #include <new>
