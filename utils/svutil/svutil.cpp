@@ -18,6 +18,7 @@ For more information please visit:  http://bitmagic.io
 
 #include <iostream>
 #include <chrono>
+#include <thread>
 #include <time.h>
 #include <stdio.h>
 
@@ -330,14 +331,22 @@ int main(int argc, char *argv[])
                 bv_mask = bv_in;
             else
                 bv_mask.set_range(1, 7000000);
-            std::cout << "remap input size = " << bv_mask.count() << std::endl;
+            std::cout << "remap vector size = " << bv_mask.count() << std::endl;
+
+            std::this_thread::sleep_for(std::chrono::seconds(5));
             
-            {
-            bm::chrono_taker tt("set2set transform benchmark", 1, &timing_map);
             bm::set2set_11_transform<sparse_vector_u32> set2set;
-            
-            set2set.run(bv_mask, sv_u32_in, bv_out);
-            std::cout << bv_out.count() << std::endl;
+
+            {
+                bm::chrono_taker tt("set2set transform attach sv", 1, &timing_map);
+                set2set.attach_sv(sv_u32_in);
+            }
+            const sparse_vector_u32::bvector_type& bv_zero = set2set.get_bv_zero();
+            std::cout << "All zero elements in remapping vector:" << bv_zero.count() << std::endl;
+
+            {
+                bm::chrono_taker tt("set2set transform remap", 1, &timing_map);            
+                set2set.remap(bv_mask, bv_out);
             }
             
         }

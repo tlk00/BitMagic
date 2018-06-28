@@ -200,7 +200,10 @@ public:
                                 const BV& bv_src);
 };
 
+/**
+    Algorithms for fast aggregation of a group of bit-vectors
 
+*/
 template<typename BV>
 class aggregator
 {
@@ -209,6 +212,12 @@ public:
     typedef bvector_type*              bvector_type_ptr;
 
 public:
+    /**
+    Aggregate group of vectors using logical OR
+    \param bv_target - target vector
+    \param bv_src    - array of pointers on bit-vector aggregate arguments
+    \param src_size  - size of bv_src (how many vectors to aggregate)
+    */
     void combine_or(bvector_type& bv_target,
                     const bvector_type_ptr* bv_src, unsigned src_size);
     
@@ -236,7 +245,6 @@ private:
     BM_DECLARE_TEMP_BLOCK(tb);
     const bm::word_t*     v_arg_blk[256];     // source blocks list
     const bm::gap_word_t* v_arg_blk_gap[256]; // source GAP blocks list
-
 };
 
 

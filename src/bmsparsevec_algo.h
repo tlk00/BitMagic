@@ -274,8 +274,31 @@ public:
     typedef typename bvector_type::allocator_type::allocator_pool_type allocator_pool_type;
 public:
 
-    set2set_11_transform(){}
+    set2set_11_transform(): sv_ptr_(0) {}
     
+    /** Attach a relationship vector for remapping (Image function)
+
+    \param sv_brel   - binary relation sparse vector
+    @sa remap
+    */
+    void attach_sv(const SV& sv_brel);
+
+    /**  Get read access to zero-elements vector
+         Zero vector gets populated after attach_sv() is called
+         or as a side-effect of remap() with immediate sv param
+    */
+    const bvector_type& get_bv_zero() const { return bv_zero_; }
+
+    /** Perform remapping (Image function) on attached vector
+
+    \param bv_in  - input set, defined as a bit-vector
+    \param bv_out - output set as a bit-vector
+
+    @sa attach_sv
+    */
+    void remap(const bvector_type&        bv_in,
+               bvector_type&              bv_out);
+
     /** Perform remapping (Image function)
    
      \param bv_in  - input set, defined as a bit-vector
@@ -327,6 +350,7 @@ protected:
     void operator=(const set2set_11_transform&) = delete;
 
 protected:
+    const SV*            sv_ptr_;     //
     bvector_type         bv_product_; //< temp vector
     bvector_type         bv_zero_;    //< bit-vector for zero elements
     
@@ -341,6 +365,23 @@ protected:
 
 //----------------------------------------------------------------------------
 //
+//----------------------------------------------------------------------------
+
+
+template<typename SV>
+void set2set_11_transform<SV>::attach_sv(const SV&  sv_brel)
+{
+    sv_ptr_ = &sv_brel;
+    if (sv_brel.empty())
+        return; // nothing to do
+
+    typename bvector_type::mem_pool_guard mp_g_z;
+    mp_g_z.assign_if_not_set(pool_, bv_zero_);
+
+    bm::sparse_vector_scanner<SV> scanner;
+    scanner.find_zero(sv_brel, bv_zero_);
+}
+
 //----------------------------------------------------------------------------
 
 template<typename SV>
@@ -428,6 +469,69 @@ void set2set_11_transform<SV>::remap(const bvector_type&        bv_in,
     }
 
 }
+
+template<typename SV>
+void set2set_11_transform<SV>::remap(const bvector_type&        bv_in,
+                                     bvector_type&              bv_out)
+{
+    BM_ASSERT(sv_ptr_);
+
+    bv_out.clear();
+
+    if (sv_ptr_ == 0 || sv_ptr_->empty())
+        return; // nothing to do
+
+    bv_out.init(); // just in case to "fast set" later
+
+    typename bvector_type::mem_pool_guard mp_g_out, mp_g_p, mp_g_z;
+    mp_g_out.assign_if_not_set(pool_, bv_out);
+    mp_g_p.assign_if_not_set(pool_, bv_product_);
+    mp_g_z.assign_if_not_set(pool_, bv_zero_);
+
+
+    auto has_zero_mapping = bm::any_and(bv_in, bv_zero_);
+
+    // TODO: optimize with 3-way ops
+    //
+    bv_product_ = bv_in;
+    const typename SV::bvector_type * bv_non_null = sv_ptr_->get_null_bvector();
+    if (bv_non_null)
+    {
+        bv_product_.bit_and(*bv_non_null);
+    }
+
+    // if we have any elements mapping into "0" on the other end
+    // we map it once (chances are there are many duplicates)
+    //
+    if (has_zero_mapping)
+    {
+        bv_out.set_bit_no_check(0);
+        bv_product_.bit_sub(bv_zero_);
+    }
+
+    unsigned buf_cnt = 0;
+    typename SV::bvector_type::enumerator en(bv_product_.first());
+
+    for (; en.valid(); ++en)
+    {
+        typename SV::size_type idx = *en;
+        idx = sv_ptr_->translate_address(idx);
+        gather_idx_[buf_cnt++] = idx;
+        if (buf_cnt == sv_g_size)
+        {
+            sv_ptr_->gather(&buffer_[0], &gather_idx_[0], buf_cnt, BM_SORTED);
+            bm::combine_or(bv_out, &buffer_[0], &buffer_[buf_cnt]);
+            buf_cnt ^= buf_cnt;
+        }
+    } // for en
+    if (buf_cnt)
+    {
+        sv_ptr_->gather(&buffer_[0], &gather_idx_[0], buf_cnt, BM_SORTED);
+        bm::combine_or(bv_out, &buffer_[0], &buffer_[buf_cnt]);
+    }
+
+}
+
 
 //----------------------------------------------------------------------------
 
