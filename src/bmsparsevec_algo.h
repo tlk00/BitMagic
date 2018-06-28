@@ -276,7 +276,7 @@ public:
 
     set2set_11_transform(): sv_ptr_(0) {}
     
-    /** Attach a relationship vector for remapping (Image function)
+    /** Attach a translation table vector for remapping (Image function)
 
     \param sv_brel   - binary relation sparse vector
     @sa remap
@@ -289,7 +289,7 @@ public:
     */
     const bvector_type& get_bv_zero() const { return bv_zero_; }
 
-    /** Perform remapping (Image function) on attached vector
+    /** Perform remapping (Image function) (based on attached translation table)
 
     \param bv_in  - input set, defined as a bit-vector
     \param bv_out - output set as a bit-vector
@@ -302,7 +302,7 @@ public:
     /** Perform remapping (Image function)
    
      \param bv_in  - input set, defined as a bit-vector
-     \param sv_brel   - binary relation sparse vector
+     \param sv_brel   - binary relation (translation table) sparse vector
      \param bv_out - output set as a bit-vector
     */
     void remap(const bvector_type&        bv_in,
@@ -312,7 +312,7 @@ public:
     /** Remap single element
    
      \param id_from  - input value
-     \param sv_brel  - binary relation sparse vector
+     \param sv_brel  - translation table sparse vector
      \param it_to    - out value
      
      \return - true if value was found and remapped
@@ -323,7 +323,7 @@ public:
     /** Run remap transformation
    
      \param bv_in  - input set, defined as a bit-vector
-     \param sv_brel   - binary relation sparse vector
+     \param sv_brel   - translation table sparse vector
      \param bv_out - output set as a bit-vector
      
      @sa remap
@@ -350,9 +350,9 @@ protected:
     void operator=(const set2set_11_transform&) = delete;
 
 protected:
-    const SV*            sv_ptr_;     //
-    bvector_type         bv_product_; //< temp vector
-    bvector_type         bv_zero_;    //< bit-vector for zero elements
+    const SV*            sv_ptr_;    //< current translation table vector
+    bvector_type         bv_product_;//< temp vector
+    bvector_type         bv_zero_;   //< bit-vector for zero elements
     
     allocator_pool_type  pool_;
 
@@ -410,64 +410,14 @@ void set2set_11_transform<SV>::remap(const bvector_type&        bv_in,
                                      const    SV&               sv_brel,
                                      bvector_type&              bv_out)
 {
-    bv_out.clear();
-
-    if (sv_brel.empty())
-        return; // nothing to do
-
-    bv_out.init(); // just in case to "fast set" later
-    
     typename bvector_type::mem_pool_guard mp_g_out, mp_g_p, mp_g_z;
     mp_g_out.assign_if_not_set(pool_, bv_out);
     mp_g_p.assign_if_not_set(pool_, bv_product_);
     mp_g_z.assign_if_not_set(pool_, bv_zero_);
 
-    {
-        bm::sparse_vector_scanner<SV> scanner;
-        scanner.find_zero(sv_brel, bv_zero_);
-    }
-
-    auto has_zero_mapping = bm::any_and(bv_in, bv_zero_);
-
-    // TODO: optimize with 3-way ops
-    //
-    bv_product_ = bv_in;
-    const typename SV::bvector_type * bv_non_null = sv_brel.get_null_bvector();
-    if (bv_non_null)
-    {
-        bv_product_.bit_and(*bv_non_null);
-    }
-    
-    // if we have any elements mapping into "0" on the other end
-    // we map it once (chances are there are many duplicates)
-    //
-    if (has_zero_mapping)
-    {
-        bv_out.set_bit_no_check(0);
-        bv_product_.bit_sub(bv_zero_);
-    }
-    
-    unsigned buf_cnt = 0;
-    typename SV::bvector_type::enumerator en(bv_product_.first());
-    
-    for (; en.valid(); ++en)
-    {
-        typename SV::size_type idx = *en;
-        idx = sv_brel.translate_address(idx);
-        gather_idx_[buf_cnt++] = idx;
-        if (buf_cnt == sv_g_size)
-        {
-            sv_brel.gather(&buffer_[0], &gather_idx_[0], buf_cnt, BM_SORTED);
-            bm::combine_or(bv_out, &buffer_[0], &buffer_[buf_cnt]);
-            buf_cnt ^= buf_cnt;
-        }
-    } // for en
-    if (buf_cnt)
-    {
-        sv_brel.gather(&buffer_[0], &gather_idx_[0], buf_cnt, BM_SORTED);
-        bm::combine_or(bv_out, &buffer_[0], &buffer_[buf_cnt]);
-    }
-
+    attach_sv(sv_brel);
+    remap(bv_in, bv_out);
+    sv_ptr_ = 0; // detach translation table
 }
 
 template<typename SV>
