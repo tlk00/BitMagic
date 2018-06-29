@@ -243,8 +243,9 @@ protected:
                             unsigned i, unsigned j, unsigned block_count);
 private:
     BM_DECLARE_TEMP_BLOCK(tb);
-    const bm::word_t*     v_arg_blk[256];     // source blocks list
-    const bm::gap_word_t* v_arg_blk_gap[256]; // source GAP blocks list
+    bm::gap_word_t        gap_res_buf[bm::gap_equiv_len * 3]; ///< temporary result
+    const bm::word_t*     v_arg_blk[256];     ///< source blocks list
+    const bm::gap_word_t* v_arg_blk_gap[256]; ///< source GAP blocks list
 };
 
 
@@ -534,20 +535,36 @@ bool aggregator<BV>::process_gap_blocks(typename bvector_type::blocks_manager_ty
 {
     bm::word_t* blk = tb;
     bool all_one;
-    for (unsigned k = 0; k < arg_blk_gap_count; ++k)
+
+    unsigned k = 0;
+
+    const unsigned unroll_factor = 2;
+    const unsigned len = arg_blk_gap_count - k;
+    const unsigned len_unr = len - (len % unroll_factor);
+    
+    for (; k < len_unr; k+=unroll_factor)
+    {
+        const bm::gap_word_t* gap1 = v_arg_blk_gap[k];
+        const bm::gap_word_t* gap2 = v_arg_blk_gap[k+1];
+        const bm::gap_word_t* res;
+        unsigned res_len;
+        res = bm::gap_operation_or(gap1, gap2, gap_res_buf, res_len);
+        BM_ASSERT(res == gap_res_buf);
+        if (bm::gap_is_all_one(res, bm::gap_max_bits))
+        {
+            bman_target.set_block(i, j, FULL_BLOCK_FAKE_ADDR, false);
+            return true; // golden block found (all 1s)!
+        }
+        // TODO: check for a corner case when we have only 2 GAP blocks
+        
+        // accumulate the result of 2x gap OR
+        bm::gap_add_to_bitset(blk, res);
+    }
+    for (; k < arg_blk_gap_count; ++k)
     {
         bm::gap_add_to_bitset(blk, v_arg_blk_gap[k]);
-        if (k % 4 == 0)
-        {
-            all_one = bm::is_bits_one((bm::wordop_t*) blk,
-                      (bm::wordop_t*) (blk + bm::set_block_size));
-            if (all_one)
-            {
-                bman_target.set_block(i, j, FULL_BLOCK_FAKE_ADDR, false);
-                return true;
-            }
-        }
     }
+        
     all_one = bm::is_bits_one((bm::wordop_t*) blk,
               (bm::wordop_t*) (blk + bm::set_block_size));
     if (all_one)
