@@ -402,7 +402,7 @@ bool sse2_or_arr_unal(__m128i* BMRESTRICT dst,
     @ingroup SSE2
 */
 inline
-bool sse2_or_arr_2way(__m128i* BMRESTRICT dst,
+bool sse2_or_arr_3way(__m128i* BMRESTRICT dst,
     const __m128i* BMRESTRICT src1,
     const __m128i* BMRESTRICT src2,
     const __m128i* BMRESTRICT src_end1)

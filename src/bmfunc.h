@@ -4595,12 +4595,12 @@ bool bit_block_or(bm::word_t* BMRESTRICT dst,
    @ingroup bitfunc
 */
 inline
-bool bit_block_or_2way(bm::word_t* BMRESTRICT dst,
+bool bit_block_or_3way(bm::word_t* BMRESTRICT dst,
                         const bm::word_t* BMRESTRICT src1,
                         const bm::word_t* BMRESTRICT src2)
 {
 #ifdef BMVECTOPT
-    return VECT_OR_ARR_2WAY(dst, src1, src2, src1 + bm::set_block_size);
+    return VECT_OR_ARR_3WAY(dst, src1, src2, src1 + bm::set_block_size);
 #else
     const bm::wordop_t* BMRESTRICT wrd_ptr1 = (wordop_t*)src1;
     const bm::wordop_t* BMRESTRICT wrd_end1 = (wordop_t*)(src1 + set_block_size);

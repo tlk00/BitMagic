@@ -564,7 +564,7 @@ bool aggregator<BV>::process_gap_blocks(typename bvector_type::blocks_manager_ty
     {
         bm::gap_add_to_bitset(blk, v_arg_blk_gap[k]);
     }
-        
+    
     all_one = bm::is_bits_one((bm::wordop_t*) blk,
               (bm::wordop_t*) (blk + bm::set_block_size));
     if (all_one)
@@ -602,7 +602,7 @@ bool aggregator<BV>::process_bit_blocks(typename bvector_type::blocks_manager_ty
 
     for( ;k < len_unr; k+=unroll_factor)
     {
-        all_one = bm::bit_block_or_2way(blk, v_arg_blk[k], v_arg_blk[k+1]);
+        all_one = bm::bit_block_or_3way(blk, v_arg_blk[k], v_arg_blk[k+1]);
         if (all_one)
         {
             BM_ASSERT(blk == tb);
