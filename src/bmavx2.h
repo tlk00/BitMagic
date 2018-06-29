@@ -720,7 +720,7 @@ bool avx2_or_arr_unal(__m256i* BMRESTRICT dst,
     @ingroup AVX2
 */
 inline
-bool avx2_or_arr_2way(__m256i* BMRESTRICT dst,
+bool avx2_or_arr_3way(__m256i* BMRESTRICT dst,
                       const __m256i* BMRESTRICT src1,
                       const __m256i* BMRESTRICT src2,
                       const __m256i* BMRESTRICT src_end1)
@@ -1059,8 +1059,8 @@ bool avx2_test_all_zero_wave(void* ptr)
 #define VECT_OR_ARR(dst, src, src_end) \
     avx2_or_arr((__m256i*) dst, (__m256i*) (src), (__m256i*) (src_end))
 
-#define VECT_OR_ARR_2WAY(dst, src1, src2, src1_end) \
-    avx2_or_arr_2way((__m256i*) dst, (__m256i*) (src1), (__m256i*) (src2), (__m256i*) (src1_end))
+#define VECT_OR_ARR_3WAY(dst, src1, src2, src1_end) \
+    avx2_or_arr_3way((__m256i*) dst, (__m256i*) (src1), (__m256i*) (src2), (__m256i*) (src1_end))
 
 #define VECT_SUB_ARR(dst, src, src_end) \
     avx2_sub_arr((__m256i*) dst, (__m256i*) (src), (__m256i*) (src_end))
@@ -1478,26 +1478,19 @@ void avx2_bit_block_gather_scatter(unsigned* BMRESTRICT arr,
         nbitA = _mm256_and_si256 (_mm256_loadu_si256(idx_ptr), sb_mask); // nbit = idx[base] & bm::set_block_mask
         nwordA = _mm256_srli_epi32 (nbitA, bm::set_word_shift); // nword  = nbit >> bm::set_word_shift
 
-        // SHUFFLE + PERMUTE seems slower than extract + broadcast
-        //   (commented out for now)
-        /*
-            mask_tmp = _mm256_shuffle_epi32 (nwordA, _MM_SHUFFLE(1,1,1,1));
-            mask_tmp = _mm256_permute2x128_si256 (mask_tmp, mask_tmp, 0);
-            mask = _mm256_movemask_epi8(_mm256_cmpeq_epi32(mask_tmp, nwordA));
-        */
-        
-        w_idx = _mm256_extract_epi32(nwordA, 0);
-        mask = _mm256_movemask_epi8(
-                        _mm256_cmpeq_epi32(_mm256_set1_epi32(w_idx), nwordA));
-        
+        // shufffle + permute to prepare comparison vector
+        mask_tmp = _mm256_shuffle_epi32 (nwordA, _MM_SHUFFLE(1,1,1,1));
+        mask_tmp = _mm256_permute2x128_si256 (mask_tmp, mask_tmp, 0);
+        mask = _mm256_movemask_epi8(_mm256_cmpeq_epi32(mask_tmp, nwordA));
+        _mm256_store_si256((__m256i*)mword_v, nwordA);
+
         if (mask == ~0u) // all idxs belongs the same word avoid (costly) gather
         {
-            w_idx = _mm256_extract_epi32(nwordA, 0);
+            w_idx = mword_v[0];
             mask_tmp = _mm256_set1_epi32(blk[w_idx]); // use broadcast
         }
         else // gather for: blk[nword]  (.. & mask0 )
         {
-            _mm256_store_si256((__m256i*)mword_v, nwordA);
             mask_tmp = _mm256_set_epi32(blk[mword_v[7]], blk[mword_v[6]],
                                         blk[mword_v[5]], blk[mword_v[4]],
                                         blk[mword_v[3]], blk[mword_v[2]],
