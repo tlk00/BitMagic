@@ -347,7 +347,7 @@ public:
     {
         BM_ASSERT(level < bm::gap_levels);
         unsigned len = 
-            (unsigned)(glevel_len[level] / (sizeof(bm::word_t) / sizeof(gap_word_t)));
+            (unsigned)(glevel_len[level] / (sizeof(bm::word_t) / sizeof(bm::gap_word_t)));
 
         return (bm::gap_word_t*)block_alloc_.allocate(len, 0);
     }
