@@ -7415,6 +7415,15 @@ void SetTest()
             exit(1);
         }
     }
+    
+    {
+        bvect bv(100);
+        assert(bv.size()==100);
+        bv[10000000] = true;
+        assert(bv.size() == 10000001);
+        bv.set_bit(10000001);
+        assert(bv.size() == 10000002);
+    }
 
 }
 
@@ -13605,7 +13614,7 @@ void TestBlockOR()
 
         all_one = bm::bit_block_or(tb1, tb2);
         assert(!all_one);
-        all_one = bm::bit_block_or_2way(tb3, tb2, tb1);
+        all_one = bm::bit_block_or_3way(tb3, tb2, tb1);
         assert(!all_one);
 
 
@@ -13630,7 +13639,7 @@ void TestBlockOR()
 
         all_one = bm::bit_block_or(tb1, tb2);
         assert(all_one);
-        all_one = bm::bit_block_or_2way(tb3, tb2, tb1);
+        all_one = bm::bit_block_or_3way(tb3, tb2, tb1);
         assert(all_one);
 
 
@@ -13664,7 +13673,7 @@ void TestBlockOR()
 
         all_one = bm::bit_block_or(tb1, tb2);
         assert(all_one);
-        all_one = bm::bit_block_or_2way(tb3, tb2, tb1);
+        all_one = bm::bit_block_or_3way(tb3, tb2, tb1);
         assert(all_one);
 
 
