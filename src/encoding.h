@@ -690,7 +690,7 @@ inline void encoder::set_pos(encoder::position_type buf_pos)
    \brief Puts 32 bits word into encoding buffer.
    \param w - word to encode.
 */
-BMFORCEINLINE void encoder::put_32(bm::word_t w)
+inline void encoder::put_32(bm::word_t w)
 {
 #if (BM_UNALIGNED_ACCESS_OK == 1)
 	*((bm::word_t*) buf_) = w;
@@ -827,7 +827,7 @@ inline bm::id64_t decoder::get_64()
 #if (BM_UNALIGNED_ACCESS_OK == 1)
 	bm::id64_t a = *((bm::id64_t*)buf_);
 #else
-	bm::word_t a = buf_[0]+
+	bm::id64_t a = buf_[0]+
                    ((bm::id64_t)buf_[1] << 8)  +
                    ((bm::id64_t)buf_[2] << 16) +
                    ((bm::id64_t)buf_[3] << 24) +
