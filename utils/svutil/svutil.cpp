@@ -326,6 +326,7 @@ int main(int argc, char *argv[])
         if (is_timing && sv_u32_in_flag)
         {
             sparse_vector_u32::bvector_type bv_mask;
+            sparse_vector_u32::bvector_type bv_out_control;
             sparse_vector_u32::bvector_type bv_out;
             if (bv_in.any())
                 bv_mask = bv_in;
@@ -333,9 +334,25 @@ int main(int argc, char *argv[])
                 bv_mask.set_range(1, 7000000);
             std::cout << "remap vector size = " << bv_mask.count() << std::endl;
 
-            std::this_thread::sleep_for(std::chrono::seconds(5));
+            std::this_thread::sleep_for(std::chrono::seconds(25));
             
             bm::set2set_11_transform<sparse_vector_u32> set2set;
+            
+            {
+                bm::chrono_taker tt("set2set transform one-by-one(control) remap", 1, &timing_map);
+                typename sparse_vector_u32::bvector_type::enumerator en(bv_mask.first());
+                for (; en.valid(); ++en)
+                {
+                    bm::id_t in = *en;
+                    bm::id_t out;
+                    bool found = set2set.remap(in, sv_u32_in, out);
+                    if (found)
+                    {
+                        bv_out_control.set(out);
+                    }
+                }
+
+            }
 
             {
                 bm::chrono_taker tt("set2set transform attach sv", 1, &timing_map);
@@ -347,6 +364,13 @@ int main(int argc, char *argv[])
             {
                 bm::chrono_taker tt("set2set transform remap", 1, &timing_map);            
                 set2set.remap(bv_mask, bv_out);
+            }
+            
+            int res = bv_out_control.compare(bv_out);
+            if (res != 0)
+            {
+                std::cerr << "ERROR:" << " control remap mismatch." << std::endl;
+                return 1;
             }
             
         }
