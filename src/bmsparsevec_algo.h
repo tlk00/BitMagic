@@ -309,7 +309,7 @@ public:
                const    SV&               sv_brel,
                bvector_type&              bv_out);
     
-    /** Remap single element
+    /** Remap single set element
    
      \param id_from  - input value
      \param sv_brel  - translation table sparse vector
