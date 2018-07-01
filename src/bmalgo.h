@@ -202,7 +202,8 @@ public:
 
 /**
     Algorithms for fast aggregation of a group of bit-vectors
-
+ 
+    \ingroup setalgo
 */
 template<typename BV>
 class aggregator
@@ -541,7 +542,7 @@ bool aggregator<BV>::process_gap_blocks(typename bvector_type::blocks_manager_ty
     const unsigned unroll_factor = 2;
     const unsigned len = arg_blk_gap_count - k;
     const unsigned len_unr = len - (len % unroll_factor);
-    
+/*
     for (; k < len_unr; k+=unroll_factor)
     {
         const bm::gap_word_t* gap1 = v_arg_blk_gap[k];
@@ -560,6 +561,7 @@ bool aggregator<BV>::process_gap_blocks(typename bvector_type::blocks_manager_ty
         // accumulate the result of 2x gap OR
         bm::gap_add_to_bitset(blk, res);
     }
+*/
     for (; k < arg_blk_gap_count; ++k)
     {
         bm::gap_add_to_bitset(blk, v_arg_blk_gap[k]);
@@ -588,18 +590,38 @@ bool aggregator<BV>::process_bit_blocks(typename bvector_type::blocks_manager_ty
     bool all_one;
 
     unsigned k = 0;
-
+/*
     if (arg_blk_count)  // copy the first block
         bm::bit_block_copy(blk, v_arg_blk[k++]);
     else
+*/
         bm::bit_block_set(blk, 0);
 
     // process all BIT blocks
     //
-    const unsigned unroll_factor = 2;
-    const unsigned len = arg_blk_count - k;
-    const unsigned len_unr = len - (len % unroll_factor);
+    unsigned unroll_factor, len, len_unr;
+    
+    unroll_factor = 4;
+    len = arg_blk_count - k;
+    len_unr = len - (len % unroll_factor);
+    for( ;k < len_unr; k+=unroll_factor)
+    {
+        all_one = bm::bit_block_or_5way(blk,
+                                        v_arg_blk[k], v_arg_blk[k+1],
+                                        v_arg_blk[k+2], v_arg_blk[k+3]);
+        if (all_one)
+        {
+            BM_ASSERT(blk == tb);
+            BM_ASSERT(bm::is_bits_one((bm::wordop_t*) blk, (bm::wordop_t*) (blk + bm::set_block_size)));
+            bman_target.set_block(i, j, FULL_BLOCK_FAKE_ADDR, false);
+            return true;
+        }
+    } // for k
 
+
+    unroll_factor = 2;
+    len = arg_blk_count - k;
+    len_unr = len - (len % unroll_factor);
     for( ;k < len_unr; k+=unroll_factor)
     {
         all_one = bm::bit_block_or_3way(blk, v_arg_blk[k], v_arg_blk[k+1]);
