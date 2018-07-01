@@ -4584,7 +4584,7 @@ bool bit_block_or(bm::word_t* BMRESTRICT dst,
 }
 
 /*!
-   \brief Plain bitblock OR operation.
+   \brief 3 way (target, source1, source2) bitblock OR operation.
    Function does not analyse availability of source and destination blocks.
 
    \param dst - destination block.
@@ -4622,6 +4622,53 @@ bool bit_block_or_3way(bm::word_t* BMRESTRICT dst,
     return acc == not_acc;
 #endif
 }
+
+
+/*!
+   \brief 5 way (target, source1, source2) bitblock OR operation.
+   Function does not analyse availability of source and destination blocks.
+
+   \param dst - destination block.
+   \param src - source block.
+ 
+   @return 1 if produced block of ALL ones
+
+   @ingroup bitfunc
+*/
+inline
+bool bit_block_or_5way(bm::word_t* BMRESTRICT dst,
+                        const bm::word_t* BMRESTRICT src1,
+                        const bm::word_t* BMRESTRICT src2,
+                        const bm::word_t* BMRESTRICT src3,
+                        const bm::word_t* BMRESTRICT src4)
+{
+#ifdef BMVECTOPT
+    return VECT_OR_ARR_5WAY(dst, src1, src2, src3, src4, src1 + bm::set_block_size);
+#else
+    const bm::wordop_t* BMRESTRICT wrd_ptr1 = (wordop_t*)src1;
+    const bm::wordop_t* BMRESTRICT wrd_end1 = (wordop_t*)(src1 + set_block_size);
+    const bm::wordop_t* BMRESTRICT wrd_ptr2 = (wordop_t*)src2;
+    const bm::wordop_t* BMRESTRICT wrd_ptr3 = (wordop_t*)src3;
+    const bm::wordop_t* BMRESTRICT wrd_ptr4 = (wordop_t*)src4;
+    bm::wordop_t* BMRESTRICT dst_ptr = (wordop_t*)dst;
+
+    bm::wordop_t acc = 0;
+    const bm::wordop_t not_acc = acc = ~acc;
+    do
+    {
+        acc &= (dst_ptr[0] |= wrd_ptr1[0] | wrd_ptr2[0] | wrd_ptr3[0] | wrd_ptr4[0]);
+        acc &= (dst_ptr[1] |= wrd_ptr1[1] | wrd_ptr2[1] | wrd_ptr3[1] | wrd_ptr4[1]);
+        acc &= (dst_ptr[2] |= wrd_ptr1[2] | wrd_ptr2[2] | wrd_ptr3[2] | wrd_ptr4[2]);
+        acc &= (dst_ptr[3] |= wrd_ptr1[3] | wrd_ptr2[3] | wrd_ptr3[3] | wrd_ptr4[3]);
+        
+        dst_ptr+=4;
+        wrd_ptr1+=4;wrd_ptr2+=4;wrd_ptr3+=4;wrd_ptr4+=4;
+        
+    } while (wrd_ptr1 < wrd_end1);
+    return acc == not_acc;
+#endif
+}
+
 
 
 

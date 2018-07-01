@@ -732,21 +732,24 @@ bool avx2_or_arr_3way(__m256i* BMRESTRICT dst,
     //#pragma nounroll
     do
     {
+//        _mm_prefetch (src1+4, _MM_HINT_T0);
+//        _mm_prefetch (src2+4, _MM_HINT_T0);
+        
         m1A = _mm256_or_si256(_mm256_load_si256(src1+0), _mm256_load_si256(dst+0));
         m1B = _mm256_or_si256(_mm256_load_si256(src1+1), _mm256_load_si256(dst+1));
         m1C = _mm256_or_si256(_mm256_load_si256(src1+2), _mm256_load_si256(dst+2));
         m1D = _mm256_or_si256(_mm256_load_si256(src1+3), _mm256_load_si256(dst+3));
-        
+
         m1A = _mm256_or_si256(m1A, _mm256_load_si256(src2+0));
         m1B = _mm256_or_si256(m1B, _mm256_load_si256(src2+1));
         m1C = _mm256_or_si256(m1C, _mm256_load_si256(src2+2));
         m1D = _mm256_or_si256(m1D, _mm256_load_si256(src2+3));
-        
+
         _mm256_stream_si256(dst+0, m1A);
         _mm256_stream_si256(dst+1, m1B);
         _mm256_stream_si256(dst+2, m1C);
         _mm256_stream_si256(dst+3, m1D);
-        
+
         mAccF1 = _mm256_and_si256(mAccF1, m1C);
         mAccF1 = _mm256_and_si256(mAccF1, m1D);
         mAccF0 = _mm256_and_si256(mAccF0, m1A);
@@ -761,6 +764,75 @@ bool avx2_or_arr_3way(__m256i* BMRESTRICT dst,
     __m256i wcmpA= _mm256_cmpeq_epi8(mAccF0, maskF);
      unsigned maskA = unsigned(_mm256_movemask_epi8(wcmpA));
      return (maskA == ~0u);    
+}
+
+
+/*!
+    @brief OR array elements against another 4 arrays
+    *dst |= *src1 | src2
+    @return true if all bits are 1
+
+    @ingroup AVX2
+*/
+inline
+bool avx2_or_arr_5way(__m256i* BMRESTRICT dst,
+                      const __m256i* BMRESTRICT src1,
+                      const __m256i* BMRESTRICT src2,
+                      const __m256i* BMRESTRICT src3,
+                      const __m256i* BMRESTRICT src4,
+                      const __m256i* BMRESTRICT src_end1)
+{
+    __m256i m1A, m1B, m1C, m1D;
+    __m256i mAccF0 = _mm256_set1_epi32(~0u); // broadcast 0xFF
+    __m256i mAccF1 = _mm256_set1_epi32(~0u); // broadcast 0xFF
+
+    //#pragma nounroll
+    do
+    {
+        m1A = _mm256_or_si256(_mm256_load_si256(src1+0), _mm256_load_si256(dst+0));
+        m1B = _mm256_or_si256(_mm256_load_si256(src1+1), _mm256_load_si256(dst+1));
+        m1C = _mm256_or_si256(_mm256_load_si256(src1+2), _mm256_load_si256(dst+2));
+        m1D = _mm256_or_si256(_mm256_load_si256(src1+3), _mm256_load_si256(dst+3));
+
+        m1A = _mm256_or_si256(m1A, _mm256_load_si256(src2+0));
+        m1B = _mm256_or_si256(m1B, _mm256_load_si256(src2+1));
+        m1C = _mm256_or_si256(m1C, _mm256_load_si256(src2+2));
+        m1D = _mm256_or_si256(m1D, _mm256_load_si256(src2+3));
+
+        m1A = _mm256_or_si256(m1A, _mm256_load_si256(src3+0));
+        m1B = _mm256_or_si256(m1B, _mm256_load_si256(src3+1));
+        m1C = _mm256_or_si256(m1C, _mm256_load_si256(src3+2));
+        m1D = _mm256_or_si256(m1D, _mm256_load_si256(src3+3));
+
+        m1A = _mm256_or_si256(m1A, _mm256_load_si256(src4+0));
+        m1B = _mm256_or_si256(m1B, _mm256_load_si256(src4+1));
+        m1C = _mm256_or_si256(m1C, _mm256_load_si256(src4+2));
+        m1D = _mm256_or_si256(m1D, _mm256_load_si256(src4+3));
+
+        _mm256_stream_si256(dst+0, m1A);
+        _mm256_stream_si256(dst+1, m1B);
+        _mm256_stream_si256(dst+2, m1C);
+        _mm256_stream_si256(dst+3, m1D);
+
+        mAccF1 = _mm256_and_si256(mAccF1, m1C);
+        mAccF1 = _mm256_and_si256(mAccF1, m1D);
+        mAccF0 = _mm256_and_si256(mAccF0, m1A);
+        mAccF0 = _mm256_and_si256(mAccF0, m1B);
+
+        src1 += 4; src2 += 4;
+        src3 += 4; src4 += 4;
+        _mm_prefetch (src3, _MM_HINT_T0);
+        _mm_prefetch (src4, _MM_HINT_T0);
+
+        dst += 4;
+
+    } while (src1 < src_end1);
+    
+    __m256i maskF = _mm256_set1_epi32(~0u);
+     mAccF0 = _mm256_and_si256(mAccF0, mAccF1);
+    __m256i wcmpA= _mm256_cmpeq_epi8(mAccF0, maskF);
+     unsigned maskA = unsigned(_mm256_movemask_epi8(wcmpA));
+     return (maskA == ~0u);
 }
 
 
@@ -1061,6 +1133,9 @@ bool avx2_test_all_zero_wave(void* ptr)
 
 #define VECT_OR_ARR_3WAY(dst, src1, src2, src1_end) \
     avx2_or_arr_3way((__m256i*) dst, (__m256i*) (src1), (__m256i*) (src2), (__m256i*) (src1_end))
+
+#define VECT_OR_ARR_5WAY(dst, src1, src2, src3, src4, src1_end) \
+    avx2_or_arr_5way((__m256i*) dst, (__m256i*) (src1), (__m256i*) (src2), (__m256i*) (src3), (__m256i*) (src4), (__m256i*) (src1_end))
 
 #define VECT_SUB_ARR(dst, src, src_end) \
     avx2_sub_arr((__m256i*) dst, (__m256i*) (src), (__m256i*) (src_end))
