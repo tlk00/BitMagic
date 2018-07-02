@@ -203,6 +203,10 @@ public:
 /**
     Algorithms for fast aggregation of a group of bit-vectors
  
+    Algorithms of this class use cache locality optimizations and efficient
+    on cases, wehen we need to apply the same logical operation (aggregate)
+    more than 2x vectors.
+ 
     \ingroup setalgo
 */
 template<typename BV>
@@ -211,13 +215,13 @@ class aggregator
 public:
     typedef BV                         bvector_type;
     typedef bvector_type*              bvector_type_ptr;
-
+    
 public:
     /**
-    Aggregate group of vectors using logical OR
-    \param bv_target - target vector
-    \param bv_src    - array of pointers on bit-vector aggregate arguments
-    \param src_size  - size of bv_src (how many vectors to aggregate)
+        Aggregate group of vectors using logical OR
+        \param bv_target - target vector
+        \param bv_src    - array of pointers on bit-vector aggregate arguments
+        \param src_size  - size of bv_src (how many vectors to aggregate)
     */
     void combine_or(bvector_type& bv_target,
                     const bvector_type_ptr* bv_src, unsigned src_size);
@@ -226,6 +230,10 @@ public:
     void combine_or_horizontal(bvector_type& bv_target,
                                const bvector_type_ptr* bv_src, unsigned src_size);
 protected:
+    void combine_or(unsigned i, unsigned j,
+                    bvector_type& bv_target,
+                    const bvector_type_ptr* bv_src, unsigned src_size);
+
     static
     unsigned resize_target(bvector_type& bv_target,
                            const bvector_type_ptr* bv_src,
@@ -476,54 +484,64 @@ void aggregator<BV>::combine_or(bvector_type& bv_target,
 {
     BM_ASSERT(src_size);
 
-    typename bvector_type::blocks_manager_type& bman_target = bv_target.get_blocks_manager();
-
     unsigned top_blocks = resize_target(bv_target, bv_src, src_size);
-    
     for (unsigned i = 0; i < top_blocks; ++i)
     {
         unsigned j = 0;
         do
         {
-            unsigned arg_blk_count = 0;
-            unsigned arg_blk_gap_count = 0;
-            bm::word_t* blk =
-                sort_input_blocks(bv_src, src_size,
-                                  i, j,
-                                  &arg_blk_count, &arg_blk_gap_count);
-            
-            BM_ASSERT(blk == 0 || blk == FULL_BLOCK_FAKE_ADDR);
-
-            if (blk == FULL_BLOCK_FAKE_ADDR) // nothing to do - golden block(!)
-            {
-                bman_target.check_alloc_top_subblock(i);
-                bman_target.set_block_ptr(i, j, blk);
-            }
-            else
-            {
-                blk = tb;
-                if (arg_blk_count || arg_blk_gap_count)
-                {
-                    bool all_one =
-                        process_bit_blocks(bman_target, i, j, arg_blk_count);
-                    if (!all_one)
-                    {
-                        all_one =
-                            process_gap_blocks(bman_target, i, j, arg_blk_gap_count);
-                        if (!all_one)
-                        {
-                            // we have some results, allocate block and copy from temp
-                            bman_target.check_alloc_top_subblock(i);
-                            blk = bman_target.get_allocator().alloc_bit_block();
-                            bman_target.set_block_ptr(i, j, blk);
-                            bm::bit_block_copy(blk, tb);
-                        }
-                    }
-                }
-            }
+            combine_or(i, j, bv_target, bv_src, src_size);
             ++j;
         } while (j < bm::set_array_size);
     } // for i
+}
+
+// ------------------------------------------------------------------------
+
+template<typename BV>
+void aggregator<BV>::combine_or(unsigned i, unsigned j,
+                                bvector_type& bv_target,
+                                const bvector_type_ptr* bv_src,
+                                unsigned src_size)
+{
+    typename bvector_type::blocks_manager_type& bman_target = bv_target.get_blocks_manager();
+
+    unsigned arg_blk_count = 0;
+    unsigned arg_blk_gap_count = 0;
+    bm::word_t* blk =
+        sort_input_blocks(bv_src, src_size,
+                          i, j,
+                          &arg_blk_count, &arg_blk_gap_count);
+
+    BM_ASSERT(blk == 0 || blk == FULL_BLOCK_FAKE_ADDR);
+
+    if (blk == FULL_BLOCK_FAKE_ADDR) // nothing to do - golden block(!)
+    {
+        bman_target.check_alloc_top_subblock(i);
+        bman_target.set_block_ptr(i, j, blk);
+    }
+    else
+    {
+        blk = tb;
+        if (arg_blk_count || arg_blk_gap_count)
+        {
+            bool all_one =
+                process_bit_blocks(bman_target, i, j, arg_blk_count);
+            if (!all_one)
+            {
+                all_one =
+                    process_gap_blocks(bman_target, i, j, arg_blk_gap_count);
+                if (!all_one)
+                {
+                    // we have some results, allocate block and copy from temp
+                    bman_target.check_alloc_top_subblock(i);
+                    blk = bman_target.get_allocator().alloc_bit_block();
+                    bman_target.set_block_ptr(i, j, blk);
+                    bm::bit_block_copy(blk, tb);
+                }
+            }
+        }
+    }
 
 }
 
@@ -538,11 +556,11 @@ bool aggregator<BV>::process_gap_blocks(typename bvector_type::blocks_manager_ty
     bool all_one;
 
     unsigned k = 0;
-
+#if 0
     const unsigned unroll_factor = 2;
     const unsigned len = arg_blk_gap_count - k;
     const unsigned len_unr = len - (len % unroll_factor);
-/*
+
     for (; k < len_unr; k+=unroll_factor)
     {
         const bm::gap_word_t* gap1 = v_arg_blk_gap[k];
@@ -561,7 +579,7 @@ bool aggregator<BV>::process_gap_blocks(typename bvector_type::blocks_manager_ty
         // accumulate the result of 2x gap OR
         bm::gap_add_to_bitset(blk, res);
     }
-*/
+#endif
     for (; k < arg_blk_gap_count; ++k)
     {
         bm::gap_add_to_bitset(blk, v_arg_blk_gap[k]);
@@ -590,11 +608,10 @@ bool aggregator<BV>::process_bit_blocks(typename bvector_type::blocks_manager_ty
     bool all_one;
 
     unsigned k = 0;
-/*
+
     if (arg_blk_count)  // copy the first block
         bm::bit_block_copy(blk, v_arg_blk[k++]);
     else
-*/
         bm::bit_block_set(blk, 0);
 
     // process all BIT blocks
