@@ -497,7 +497,7 @@ void sse4_bit_block_gather_scatter(unsigned* BMRESTRICT arr,
                                    unsigned                   start,
                                    unsigned                   bit_idx)
 {
-    const unsigned unroll_factor = 8;
+    const unsigned unroll_factor = 4;
     const unsigned len = (size - start);
     const unsigned len_unr = len - (len % unroll_factor);
     
@@ -505,37 +505,31 @@ void sse4_bit_block_gather_scatter(unsigned* BMRESTRICT arr,
     __m128i sw_mask = _mm_set1_epi32(bm::set_word_mask);
     __m128i maskFF  = _mm_set1_epi32(~0u);
     __m128i maskZ   = _mm_xor_si128(maskFF, maskFF);
-    __m128i am_0    = _mm_set_epi32(0, 0, 0, ~0u);
 
     __m128i mask_tmp, mask_0;
     
     unsigned BM_ALIGN16 mshift_v[4] BM_ALIGN16ATTR;
     unsigned BM_ALIGN16 mword_v[4] BM_ALIGN16ATTR;
 
-    unsigned mask;
     unsigned k = 0;
+    unsigned base = start + k;
+    __m128i* idx_ptr = (__m128i*)(idx + base);   // idx[base]
+    __m128i* target_ptr = (__m128i*)(arr + base); // arr[base]
     for (; k < len_unr; k+=unroll_factor)
     {
-        const unsigned base = start + k;
-        
-        __m128i* idx_ptr = (__m128i*)(idx+base);   // idx[base]
-        __m128i* target_ptr = (__m128i*)(arr+base); // arr[base]
-
-        {
         __m128i nbitA = _mm_and_si128 (_mm_loadu_si128(idx_ptr), sb_mask); // nbit = idx[base] & bm::set_block_mask
         __m128i nwordA = _mm_srli_epi32 (nbitA, bm::set_word_shift); // nword  = nbit >> bm::set_word_shift
         // (nbit & bm::set_word_mask)
         _mm_store_si128 ((__m128i*)mshift_v, _mm_and_si128 (nbitA, sw_mask));
-        _mm_store_si128((__m128i*)mword_v, nwordA);
-
-        // shufffle + permute to prepare comparison vector
-        mask_tmp = _mm_shuffle_epi32 (nwordA, _MM_SHUFFLE(1,1,1,1));
-        mask = _mm_movemask_epi8(_mm_cmpeq_epi32(mask_tmp, nwordA));
-        }
+        _mm_store_si128 ((__m128i*)mword_v, nwordA);
         
         // mask0 = 1u << (nbit & bm::set_word_mask);
         //
+#if 0
+        // ifdefed an alternative SHIFT implementation using SSE and masks
+        // (it is not faster than just doing scalar operations)
         {
+        __m128i am_0    = _mm_set_epi32(0, 0, 0, ~0u);
         __m128i mask1   = _mm_srli_epi32 (maskFF, 31);
         mask_0 = _mm_and_si128 (_mm_slli_epi32 (mask1, mshift_v[0]), am_0);
         mask_tmp = _mm_and_si128 (_mm_slli_epi32(mask1, mshift_v[1]), _mm_slli_si128 (am_0, 4));
@@ -551,23 +545,18 @@ void sse4_bit_block_gather_scatter(unsigned* BMRESTRICT arr,
         mask_0 = _mm_or_si128 (mask_0,
                                _mm_or_si128 (mask_2, mask_tmp)); // assemble bit-test mask
         }
+#endif
+        mask_0 = _mm_set_epi32(1 << mshift_v[3], 1 << mshift_v[2], 1 << mshift_v[1], 1 << mshift_v[0]);
 
 
         //  gather for: blk[nword]  (.. & mask0 )
         //
-        if (mask == ~0u) // all idxs belongs the same word avoid (costly) gather
-        {
-            mask_tmp = _mm_set1_epi32(blk[*mword_v]); // use broadcast
-        }
-        else
-        {
         mask_tmp = _mm_and_si128(_mm_set_epi32(blk[mword_v[3]], blk[mword_v[2]],
                                                blk[mword_v[1]], blk[mword_v[0]]),
-                                 mask_0); // & mask0
-        }
+                                 mask_0);
         
         // bool(blk[nword]  ...)
-        maskFF  = _mm_set1_epi32(~0u);
+        //maskFF  = _mm_set1_epi32(~0u);
         mask_tmp = _mm_cmpeq_epi32 (mask_tmp, maskZ); // set 0xFF where == 0
         mask_tmp = _mm_xor_si128 (mask_tmp, maskFF); // invert
         mask_tmp = _mm_srli_epi32 (mask_tmp, 31); // (bool) 1 only to the 0 pos
@@ -577,70 +566,13 @@ void sse4_bit_block_gather_scatter(unsigned* BMRESTRICT arr,
         _mm_storeu_si128 (target_ptr,                  // arr[base] |= MASK_EXPR
                           _mm_or_si128 (mask_tmp, _mm_loadu_si128(target_ptr)));
         
-
-       ++idx_ptr;
-       ++target_ptr;
-
-
-        {
-        __m128i nbitA = _mm_and_si128 (_mm_loadu_si128(idx_ptr), sb_mask); // nbit = idx[base] & bm::set_block_mask
-        __m128i nwordA = _mm_srli_epi32 (nbitA, bm::set_word_shift); // nword  = nbit >> bm::set_word_shift
-        // (nbit & bm::set_word_mask)
-        _mm_store_si128 ((__m128i*)mshift_v, _mm_and_si128 (nbitA, sw_mask));
-        _mm_store_si128((__m128i*)mword_v, nwordA);
-        // shufffle + permute to prepare comparison vector
-        mask_tmp = _mm_shuffle_epi32 (nwordA, _MM_SHUFFLE(1,1,1,1));
-        mask = _mm_movemask_epi8(_mm_cmpeq_epi32(mask_tmp, nwordA));
-        }
-        
-        // mask0 = 1u << (nbit & bm::set_word_mask);
-        //
-        {
-        __m128i mask1   = _mm_srli_epi32 (maskFF, 31);
-        mask_0 = _mm_and_si128 (_mm_slli_epi32 (mask1, mshift_v[0]), am_0);
-        mask_tmp = _mm_and_si128 (_mm_slli_epi32(mask1, mshift_v[1]), _mm_slli_si128 (am_0, 4));
-        mask_0 = _mm_or_si128 (mask_0, mask_tmp);
-    
-        __m128i mask_2 = _mm_and_si128 (_mm_slli_epi32 (mask1, mshift_v[2]),
-                                        _mm_slli_si128 (am_0, 8));
-        mask_tmp = _mm_and_si128 (
-                      _mm_slli_epi32(mask1, mshift_v[3]),
-                      _mm_slli_si128 (am_0, 12)
-                      );
-    
-        mask_0 = _mm_or_si128 (mask_0,
-                               _mm_or_si128 (mask_2, mask_tmp)); // assemble bit-test mask
-        }
-        
-        //  gather for: blk[nword]  (.. & mask0 )
-        //
-        if (mask == ~0u) // all idxs belongs the same word avoid (costly) gather
-        {
-            mask_tmp = _mm_set1_epi32(blk[*mword_v]); // use broadcast
-        }
-        else
-        {
-        mask_tmp = _mm_and_si128(_mm_set_epi32(blk[mword_v[3]], blk[mword_v[2]],
-                                               blk[mword_v[1]], blk[mword_v[0]]),
-                                 mask_0); // & mask0
-        }
-        
-        // bool(blk[nword]  ...)
-        maskFF  = _mm_set1_epi32(~0u);
-        mask_tmp = _mm_cmpeq_epi32 (mask_tmp, maskZ); // set 0xFF where == 0
-        mask_tmp = _mm_xor_si128 (mask_tmp, maskFF); // invert
-        mask_tmp = _mm_srli_epi32 (mask_tmp, 31); // (bool) 1 only to the 0 pos
-        
-        mask_tmp = _mm_slli_epi32(mask_tmp, bit_idx); // << bit_idx
-        
-        _mm_storeu_si128 (target_ptr,                  // arr[base] |= MASK_EXPR
-                          _mm_or_si128 (mask_tmp, _mm_loadu_si128(target_ptr)));
-
+        ++idx_ptr; ++target_ptr;
+        _mm_prefetch(target_ptr, _MM_HINT_T0);
     }
-    
+
     for (; k < len; ++k)
     {
-        const unsigned base = start + k;
+        base = start + k;
         unsigned nbit = unsigned(idx[base] & bm::set_block_mask);
         arr[base] |= unsigned(bool(blk[nbit >> bm::set_word_shift] & (1u << (nbit & bm::set_word_mask))) << bit_idx);
     }
