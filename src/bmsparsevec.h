@@ -1181,7 +1181,6 @@ sparse_vector<Val, BV>::gather(value_type*       arr,
         arr[0] = this->get(idx[0]);
         return size;
     }
-
     ::memset(arr, 0, sizeof(value_type)*size);
     
     for (unsigned i = 0; i < size;)
@@ -1216,6 +1215,9 @@ sparse_vector<Val, BV>::gather(value_type*       arr,
             // no break(!) intentional fall through
         case BM_SORTED:
             r = bm::idx_arr_block_lookup(idx, size, nb, r);
+            break;
+        case BM_SORTED_UNIFORM:
+            r = size;
             break;
         default:
             BM_ASSERT(0);

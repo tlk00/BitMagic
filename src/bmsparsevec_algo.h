@@ -274,14 +274,9 @@ public:
     typedef typename bvector_type::allocator_type::allocator_pool_type allocator_pool_type;
 public:
 
-    set2set_11_transform(): sv_ptr_(0) {}
-    
-    /** Attach a translation table vector for remapping (Image function)
+    set2set_11_transform();
+    ~set2set_11_transform();
 
-    \param sv_brel   - binary relation sparse vector
-    @sa remap
-    */
-    void attach_sv(const SV& sv_brel);
 
     /**  Get read access to zero-elements vector
          Zero vector gets populated after attach_sv() is called
@@ -335,30 +330,52 @@ public:
         remap(bv_in, sv_brel, bv_out);
     }
     
+    /** Attach a translation table vector for remapping (Image function)
+
+        \param sv_brel   - binary relation sparse vector pointer
+                          (pass NULL to detach)
+        \param compute_stats - flag to perform computation of some statistics
+                               later used in remapping. This only make sense
+                               for series of remappings on the same translation
+                               vector.
+        @sa remap
+    */
+    void attach_sv(const SV* sv_brel, bool compute_stats = false);
+
+    
 protected:
     void one_pass_run(const bvector_type&        bv_in,
                       const    SV&               sv_brel,
                       bvector_type&              bv_out);
     
+    /// @internal
+    template<unsigned BSIZE>
+    struct gather_buffer
+    {
+        size_type   BM_VECT_ALIGN gather_idx_[BSIZE] BM_VECT_ALIGN_ATTR;
+        value_type  BM_VECT_ALIGN buffer_[BSIZE] BM_VECT_ALIGN_ATTR;
+    };
+    
     enum gather_window_size
     {
-        sv_g_size = 1024
+        sv_g_size = 1024 * 8
     };
+    typedef gather_buffer<sv_g_size>  gather_buffer_type;
+    
 
 protected:
     set2set_11_transform(const set2set_11_transform&) = delete;
     void operator=(const set2set_11_transform&) = delete;
-
-protected:
-    const SV*            sv_ptr_;    //< current translation table vector
-    bvector_type         bv_product_;//< temp vector
-    bvector_type         bv_zero_;   //< bit-vector for zero elements
     
-    allocator_pool_type  pool_;
-
-    size_type   BM_VECT_ALIGN gather_idx_[sv_g_size] BM_VECT_ALIGN_ATTR;
-    value_type  BM_VECT_ALIGN buffer_[sv_g_size] BM_VECT_ALIGN_ATTR;
-
+protected:
+    const SV*              sv_ptr_;    ///< current translation table vector
+    gather_buffer_type*    gb_;        ///< intermediate buffers
+    bvector_type           bv_product_;///< temp vector
+    
+    bool                   have_stats_; ///< flag of statistics presense
+    bvector_type           bv_zero_;   ///< bit-vector for zero elements
+    
+    allocator_pool_type    pool_;
 };
 
 
@@ -367,19 +384,53 @@ protected:
 //
 //----------------------------------------------------------------------------
 
+template<typename SV>
+set2set_11_transform<SV>::set2set_11_transform()
+: sv_ptr_(0), gb_(0), have_stats_(false)
+{
+    gb_ = (gather_buffer_type*)::malloc(sizeof(gather_buffer_type));
+    if (!gb_)
+    {
+        SV::throw_bad_alloc();
+    }
+}
+
+//----------------------------------------------------------------------------
 
 template<typename SV>
-void set2set_11_transform<SV>::attach_sv(const SV&  sv_brel)
+set2set_11_transform<SV>::~set2set_11_transform()
 {
-    sv_ptr_ = &sv_brel;
-    if (sv_brel.empty())
-        return; // nothing to do
+    if (gb_)
+        ::free(gb_);
+}
 
-    typename bvector_type::mem_pool_guard mp_g_z;
-    mp_g_z.assign_if_not_set(pool_, bv_zero_);
 
-    bm::sparse_vector_scanner<SV> scanner;
-    scanner.find_zero(sv_brel, bv_zero_);
+//----------------------------------------------------------------------------
+
+template<typename SV>
+void set2set_11_transform<SV>::attach_sv(const SV*  sv_brel, bool compute_stats)
+{
+    sv_ptr_ = sv_brel;
+    if (!sv_ptr_)
+    {
+        have_stats_ = false;
+    }
+    else
+    {
+        if (sv_brel->empty() || !compute_stats)
+            return; // nothing to do
+        const bvector_type* bv_non_null = sv_brel->get_null_bvector();
+        if (bv_non_null)
+            return; // already have 0 elements vector
+        
+
+        typename bvector_type::mem_pool_guard mp_g_z;
+        mp_g_z.assign_if_not_set(pool_, bv_zero_);
+
+        bm::sparse_vector_scanner<SV> scanner;
+        scanner.find_zero(*sv_brel, bv_zero_);
+        have_stats_ = true;
+    }
 }
 
 //----------------------------------------------------------------------------
@@ -392,7 +443,7 @@ bool set2set_11_transform<SV>::remap(size_type  id_from,
     if (sv_brel.empty())
         return false; // nothing to do
 
-    const typename SV::bvector_type* bv_non_null = sv_brel.get_null_bvector();
+    const bvector_type* bv_non_null = sv_brel.get_null_bvector();
     if (bv_non_null)
     {
         if (!bv_non_null->test(id_from))
@@ -415,9 +466,11 @@ void set2set_11_transform<SV>::remap(const bvector_type&        bv_in,
     mp_g_p.assign_if_not_set(pool_, bv_product_);
     mp_g_z.assign_if_not_set(pool_, bv_zero_);
 
-    attach_sv(sv_brel);
+    attach_sv(&sv_brel);
+    
     remap(bv_in, bv_out);
-    sv_ptr_ = 0; // detach translation table
+
+    attach_sv(0); // detach translation table
 }
 
 template<typename SV>
@@ -439,45 +492,78 @@ void set2set_11_transform<SV>::remap(const bvector_type&        bv_in,
     mp_g_z.assign_if_not_set(pool_, bv_zero_);
 
 
-    auto has_zero_mapping = bm::any_and(bv_in, bv_zero_);
+    const bvector_type* enum_bv;
 
-    // TODO: optimize with 3-way ops
-    //
-    bv_product_ = bv_in;
-    const typename SV::bvector_type * bv_non_null = sv_ptr_->get_null_bvector();
+    const bvector_type * bv_non_null = sv_ptr_->get_null_bvector();
     if (bv_non_null)
     {
+        // TODO: optimize with 2-way ops
+        bv_product_ = bv_in;
         bv_product_.bit_and(*bv_non_null);
+        enum_bv = &bv_product_;
     }
-
-    // if we have any elements mapping into "0" on the other end
-    // we map it once (chances are there are many duplicates)
-    //
-    if (has_zero_mapping)
+    else // non-NULL vector is not available
     {
-        bv_out.set_bit_no_check(0);
-        bv_product_.bit_sub(bv_zero_);
+        enum_bv = &bv_in;
+        // if we have any elements mapping into "0" on the other end
+        // we map it once (chances are there are many duplicates)
+        //
+        
+        if (have_stats_) // pre-attached translation statistics
+        {
+            bv_product_ = bv_in;
+            unsigned cnt1 = bv_product_.count();
+            bv_product_.bit_sub(bv_zero_);
+            unsigned cnt2 = bv_product_.count();
+            
+            BM_ASSERT(cnt2 <= cnt1);
+            
+            if (cnt1 != cnt2) // mapping included 0 elements
+                bv_out.set_bit_no_check(0);
+            
+            enum_bv = &bv_product_;
+        }
     }
 
-    unsigned buf_cnt = 0;
-    typename SV::bvector_type::enumerator en(bv_product_.first());
+    
 
+    unsigned buf_cnt, nb_old, nb;
+    buf_cnt = nb_old = 0;
+    
+    typename bvector_type::enumerator en(enum_bv->first());
     for (; en.valid(); ++en)
     {
         typename SV::size_type idx = *en;
         idx = sv_ptr_->translate_address(idx);
-        gather_idx_[buf_cnt++] = idx;
+        
+        nb = unsigned(idx >> bm::set_block_shift);
+        if (nb != nb_old) // new blocks
+        {
+            if (buf_cnt)
+            {
+                sv_ptr_->gather(&gb_->buffer_[0], &gb_->gather_idx_[0], buf_cnt, BM_SORTED_UNIFORM);
+                bm::combine_or(bv_out, &gb_->buffer_[0], &gb_->buffer_[buf_cnt]);
+                buf_cnt ^= buf_cnt;
+            }
+            nb_old = nb;
+            gb_->gather_idx_[buf_cnt++] = idx;
+        }
+        else
+        {
+            gb_->gather_idx_[buf_cnt++] = idx;
+        }
+        
         if (buf_cnt == sv_g_size)
         {
-            sv_ptr_->gather(&buffer_[0], &gather_idx_[0], buf_cnt, BM_SORTED);
-            bm::combine_or(bv_out, &buffer_[0], &buffer_[buf_cnt]);
+            sv_ptr_->gather(&gb_->buffer_[0], &gb_->gather_idx_[0], buf_cnt, BM_SORTED_UNIFORM);
+            bm::combine_or(bv_out, &gb_->buffer_[0], &gb_->buffer_[buf_cnt]);
             buf_cnt ^= buf_cnt;
         }
     } // for en
     if (buf_cnt)
     {
-        sv_ptr_->gather(&buffer_[0], &gather_idx_[0], buf_cnt, BM_SORTED);
-        bm::combine_or(bv_out, &buffer_[0], &buffer_[buf_cnt]);
+        sv_ptr_->gather(&gb_->buffer_[0], &gb_->gather_idx_[0], buf_cnt, BM_SORTED_UNIFORM);
+        bm::combine_or(bv_out, &gb_->buffer_[0], &gb_->buffer_[buf_cnt]);
     }
 
 }
