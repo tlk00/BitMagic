@@ -354,16 +354,10 @@ int main(int argc, char *argv[])
 
             }
 
-            {
-                bm::chrono_taker tt("set2set transform attach sv", 1, &timing_map);
-                set2set.attach_sv(sv_u32_in);
-            }
-            const sparse_vector_u32::bvector_type& bv_zero = set2set.get_bv_zero();
-            std::cout << "All zero elements in remapping vector:" << bv_zero.count() << std::endl;
 
             {
                 bm::chrono_taker tt("set2set transform remap", 1, &timing_map);            
-                set2set.remap(bv_mask, bv_out);
+                set2set.remap(bv_mask, sv_u32_in, bv_out);
             }
             
             int res = bv_out_control.compare(bv_out);
@@ -432,7 +426,7 @@ int main(int argc, char *argv[])
                         return 1;
                     }
                     const char* buf = (const char*)&vect_u32_out[0];
-                    fout.write(buf, vect_u32_out.size() * sizeof(unsigned));
+                    fout.write(buf, std::streamsize(vect_u32_out.size() * sizeof(unsigned)));
                     if (!fout.good())
                     {
                         return 2;
