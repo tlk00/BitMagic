@@ -567,7 +567,7 @@ void sse4_bit_block_gather_scatter(unsigned* BMRESTRICT arr,
                           _mm_or_si128 (mask_tmp, _mm_loadu_si128(target_ptr)));
         
         ++idx_ptr; ++target_ptr;
-        _mm_prefetch(target_ptr, _MM_HINT_T0);
+        _mm_prefetch((const char*)target_ptr, _MM_HINT_T0);
     }
 
     for (; k < len; ++k)
