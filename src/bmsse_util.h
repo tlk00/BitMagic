@@ -501,8 +501,8 @@ bool sse2_or_arr_5way(__m128i* BMRESTRICT dst,
         src1 += 4; src2 += 4;
         src3 += 4; src4 += 4;
         
-        _mm_prefetch (src3, _MM_HINT_T0);
-        _mm_prefetch (src4, _MM_HINT_T0);
+        _mm_prefetch ((char*)src3, _MM_HINT_T0);
+        _mm_prefetch ((char*)src4, _MM_HINT_T0);
 
         dst += 4;
 
