@@ -106,8 +106,8 @@ int parse_args(int argc, char *argv[])
             }
             else
             {
-                std::cerr << "Error: -bvin requires file name" << std::endl;
                 return 1;
+                std::cerr << "Error: -bvin requires file name" << std::endl;
             }
             continue;
         }
@@ -170,7 +170,7 @@ int parse_args(int argc, char *argv[])
 //
 typedef bm::sparse_vector<unsigned, bm::bvector<> > sparse_vector_u32;
 
-bm::bvector<>          bv_in;
+bm::bvector<>          bv_inp;
 sparse_vector_u32      sv_u32_in;
 sparse_vector_u32      sv_u32_out;
 bool                   sv_u32_in_flag = false;
@@ -284,7 +284,7 @@ int main(int argc, char *argv[])
   
         if (!bv_in_file.empty())
         {
-            load_bv(bv_in_file, bv_in);
+            load_bv(bv_in_file, bv_inp);
         }
         
         if (!sv_in_file.empty())
@@ -328,13 +328,13 @@ int main(int argc, char *argv[])
             sparse_vector_u32::bvector_type bv_mask;
             sparse_vector_u32::bvector_type bv_out_control;
             sparse_vector_u32::bvector_type bv_out;
-            if (bv_in.any())
-                bv_mask = bv_in;
+            if (bv_inp.any())
+                bv_mask = bv_inp;
             else
                 bv_mask.set_range(1, 7000000);
-            std::cout << "remap vector size = " << bv_mask.count() << std::endl;
+            std::cout << "remap bit-vector count = " << bv_mask.count() << std::endl;
 
-            std::this_thread::sleep_for(std::chrono::seconds(25));
+            //std::this_thread::sleep_for(std::chrono::seconds(25));
             
             bm::set2set_11_transform<sparse_vector_u32> set2set;
             
