@@ -45,14 +45,25 @@ For more information please visit:  http://bitmagic.io
 #undef BMVECTOPT
 #undef VECT_XOR_ARR_2_MASK
 #undef VECT_ANDNOT_ARR_2_MASK
+#undef VECT_BITCOUNT
+#undef VECT_BITCOUNT_AND
+#undef VECT_BITCOUNT_OR
+#undef VECT_BITCOUNT_XOR
+#undef VECT_BITCOUNT_SUB
 #undef VECT_INVERT_ARR
 #undef VECT_AND_ARR
 #undef VECT_OR_ARR
+#undef VECT_OR_ARR_3WAY
+#undef VECT_OR_ARR_5WAY
 #undef VECT_SUB_ARR
 #undef VECT_XOR_ARR
 
 #undef VECT_COPY_BLOCK
 #undef VECT_SET_BLOCK
+#undef VECT_IS_ZERO_BLOCK
+#undef VECT_IS_ONE_BLOCK
+
+
 
 #undef BM_UNALIGNED_ACCESS_OK
 #undef BM_x86
