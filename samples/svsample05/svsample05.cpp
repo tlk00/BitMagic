@@ -90,7 +90,7 @@ int main(void)
         //
         sparse_vector_u32 sv_transform(bm::use_null);
         
-        // transformation function defined as an association table:
+        // transformation function defined as a table:
         // 2 -> 25
         // 3 -> 35
         // 7 -> 75
