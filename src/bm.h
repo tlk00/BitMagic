@@ -4521,6 +4521,9 @@ void bvector<Alloc>::copy_range(const bvector<Alloc>& bvect,
     {
         blockman_.deinit_tree();
     }
+    if (left > right)
+        bm::xor_swap(left, right);
+
     copy_range_no_check(bvect, left, right);
 }
 
