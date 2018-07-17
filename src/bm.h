@@ -385,7 +385,8 @@ public:
                 max_bit_ = n;
                 if (n >= bvect_->size()) 
                 {
-                    bvect_->resize(n + 1);
+                    bm::id_t new_size = (n == bm::id_max) ? bm::id_max : n + 1;
+                    bvect_->resize(new_size);
                 }
             }
 
@@ -1160,7 +1161,6 @@ public:
     
     ~bvector() BMNOEXEPT
     {}
-    
     /*!
         \brief Explicit post-construction initialization
     */
@@ -1233,7 +1233,10 @@ public:
     reference operator[](bm::id_t n)
     {
         if (n >= size_)
-            resize(n + 1);
+        {
+            bm::id_t new_size = (n == bm::id_max) ? bm::id_max : n + 1;
+            resize(new_size);
+        }
         return reference(*this, n);
     }
 
@@ -1331,10 +1334,15 @@ public:
     */
     bool set_bit(bm::id_t n, bool val = true)
     {
+        BM_ASSERT_THROW(n < bm::id_max, BM_ERR_RANGE);
+
         if (!blockman_.is_init())
             blockman_.init_tree();
         if (n >= size_)
-            resize(n+1);
+        {
+            bm::id_t new_size = (n == bm::id_max) ? bm::id_max : n + 1;
+            resize(new_size);
+        }
         
         return set_bit_no_check(n, val);
     }
@@ -1383,7 +1391,10 @@ public:
         if (!blockman_.is_init())
             blockman_.init_tree();
         if (n >= size_)
-            resize(n+1);
+        {
+            bm::id_t new_size = (n == bm::id_max) ? bm::id_max : n + 1;
+            resize(new_size);
+        }
 
         return set_bit_conditional_impl(n, val, condition);
     }
@@ -2262,8 +2273,19 @@ bvector<Alloc>& bvector<Alloc>::set_range(bm::id_t left,
         return set_range(right, left, value);
     }
 
+    BM_ASSERT_THROW(right < bm::id_max, BM_ERR_RANGE);
+    if (right >= size_) // this vect shorter than the arg.
+    {
+        bm::id_t new_size = (right == bm::id_max) ? bm::id_max : right + 1;
+        resize(new_size);
+    }
+
+    BM_ASSERT(left <= right);
+    if (left >= size_)
+    {
+        std::cout << "size:" << size_ << " left=" << left << std::endl;
+    }
     BM_ASSERT(left < size_);
-    BM_ASSERT(right < size_);
 
     if (value)
         set_range_no_check(left, right);
