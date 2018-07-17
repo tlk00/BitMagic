@@ -1234,7 +1234,8 @@ void CheckRangeCopy(const bvect& bv, unsigned from, unsigned to)
     bm::id_t f1, l1, f2, l2;
     
     bvect bv_cp(bv, from, to);
-    
+    bvect bv_cp2(bv, to, from); // swapped interval copy is legal
+
     bvect bv_control;
     bv_control.set_range(from, to);
     bv_control &= bv;
@@ -1252,7 +1253,21 @@ void CheckRangeCopy(const bvect& bv, unsigned from, unsigned to)
             cerr << " control    from=" << f2 << " to=" << l2 << endl;
         exit(1);
     }
-    
+
+    int res2 = bv_control.compare(bv_cp2);
+    if (res2 != 0)
+    {
+        bool found1 = bv_cp2.find_range(f1, l1);
+        bool found2 = bv_control.find_range(f2, l2);
+
+        cerr << "Error: reversed bvector<>::range_copy() failed. from=" << from << " to=" << to << endl;
+        if (found1)
+            cerr << " range copy from=" << f1 << " to=" << l1 << endl;
+        if (found2)
+            cerr << " control    from=" << f2 << " to=" << l2 << endl;
+        exit(1);
+    }
+
     bool found1 =  bv_cp.find_range(f1, l1);
     bool found2 =  bv_control.find_range(f2, l2);
     if (found1 != found2)
@@ -2177,6 +2192,13 @@ void BasicFunctionalityTest()
         bv4.set(10, true);
         bv4.set(10, false);
         bv3 &= bv4;
+    }
+    {
+        bvect bv(100);
+        bv.set_range(150, 151);
+        assert(bv.size() == 152);
+        bv.set_bit(160);
+        assert(bv.size() == 161);
     }
 }
 
