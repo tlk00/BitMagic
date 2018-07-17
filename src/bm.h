@@ -1152,6 +1152,8 @@ public:
     {
         if (!bvect.blockman_.is_init())
             return;
+        if (left > right)
+            bm::xor_swap(left, right);
         copy_range_no_check(bvect, left, right);
     }
 
