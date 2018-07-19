@@ -4467,7 +4467,7 @@ void bvector<Alloc>::clear_range_no_check(bm::id_t left,
 
     bm::gap_word_t tmp_gap_blk[5];
     tmp_gap_buf[0] = 0; // just to silence GCC warning on uninit var
-
+  
     // Set bits in the starting block
     bm::word_t* block;// = blockman_.get_block(nblock_left);
     
