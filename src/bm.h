@@ -4391,7 +4391,7 @@ void bvector<Alloc>::set_range_no_check(bm::id_t left,
     unsigned r = 
         (nblock_left == nblock_right) ? nbit_right :(bm::bits_in_block-1);
 
-    bm::gap_word_t tmp_gap_blk[5];// = { 0, };
+    bm::gap_word_t tmp_gap_blk[5] = { 0, };
 
     // Set bits in the starting block
 
@@ -4464,7 +4464,7 @@ void bvector<Alloc>::clear_range_no_check(bm::id_t left,
     unsigned r =
         (nblock_left == nblock_right) ? nbit_right : (bm::bits_in_block - 1);
 
-    bm::gap_word_t tmp_gap_blk[5];
+    bm::gap_word_t tmp_gap_blk[5] = { 0, };
 
     // Set bits in the starting block
     bm::word_t* block;// = blockman_.get_block(nblock_left);
