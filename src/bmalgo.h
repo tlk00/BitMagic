@@ -250,6 +250,10 @@ protected:
 
     bool process_gap_blocks(typename bvector_type::blocks_manager_type& bman_target,
                             unsigned i, unsigned j, unsigned block_count);
+    static
+    unsigned find_effective_sub_block_size(unsigned i,
+                                           const bvector_type_ptr* bv_src,
+                                           unsigned src_size);
 private:
     BM_DECLARE_TEMP_BLOCK(tb);
     bm::gap_word_t        gap_res_buf[bm::gap_equiv_len * 3]; ///< temporary result
@@ -487,13 +491,78 @@ void aggregator<BV>::combine_or(bvector_type& bv_target,
     unsigned top_blocks = resize_target(bv_target, bv_src, src_size);
     for (unsigned i = 0; i < top_blocks; ++i)
     {
+        unsigned set_array_max = find_effective_sub_block_size(i, bv_src, src_size);
         unsigned j = 0;
         do
         {
             combine_or(i, j, bv_target, bv_src, src_size);
             ++j;
-        } while (j < bm::set_array_size);
+        } while (j < set_array_max);
     } // for i
+}
+
+// ------------------------------------------------------------------------
+
+template<typename BV>
+unsigned
+aggregator<BV>::find_effective_sub_block_size(unsigned i,
+                                              const bvector_type_ptr* bv_src,
+                                              unsigned src_size) 
+{
+    unsigned max_size;
+    
+    #ifdef BM64_AVX2
+        max_size = 3;
+    #elif defined(BM64_SSE4)
+        max_size = 1;
+    #else
+        max_size = 1;
+    #endif
+
+    
+    for (unsigned k = 0; k < src_size; ++k)
+    {
+        const bvector_type* bv = bv_src[k];
+        BM_ASSERT(bv);
+        const typename bvector_type::blocks_manager_type& bman_arg = bv->get_blocks_manager();
+
+        const bm::word_t* const* blk_blk_arg = bman_arg.get_topblock(i);
+        if (!blk_blk_arg)
+            continue;
+        
+        // backward scan to find last non-NULL block
+        for (unsigned j = bm::set_array_size-1; j > max_size; )
+        {
+        #ifdef BM64_AVX2
+            BM_ASSERT(j - 4);
+            const void* addr = &(blk_blk_arg[j - 4]);
+            if (!avx2_test_all_zero_wave(addr))
+            {
+                max_size = j; break;
+            }
+            j -= 4;
+        #elif defined(BM64_SSE4)
+            const void* addr = blk_blk_arg + j - 2;
+            if (!sse42_test_all_zero_wave(addr))
+            {
+                max_size = j; break;
+            }
+            j -= 2;
+        #else
+            BM_ASSERT(j - 4);
+            if (blk_blk_arg[j] || blk_blk_arg[j-1])
+            {
+                max_size = j; break;
+            }
+            j -= 2;
+        #endif
+        } // for j
+
+    } // for k
+    ++max_size;
+    BM_ASSERT(max_size <= bm::set_array_size);
+    
+    return max_size;
 }
 
 // ------------------------------------------------------------------------
