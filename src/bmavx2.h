@@ -1093,7 +1093,7 @@ bool avx2_is_all_one(const __m256i* BMRESTRICT block,
     @ingroup AVX2
 */
 BMFORCEINLINE
-bool avx2_test_all_zero_wave(void* ptr)
+bool avx2_test_all_zero_wave(const void* ptr)
 {
     __m256i w0 = _mm256_loadu_si256((__m256i*)ptr);
     return _mm256_testz_si256(w0, w0);

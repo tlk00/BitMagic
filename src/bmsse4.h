@@ -203,7 +203,7 @@ bool sse4_is_all_one(const __m128i* BMRESTRICT block,
     @ingroup AVX2
 */
 BMFORCEINLINE
-bool sse42_test_all_zero_wave(void* ptr)
+bool sse42_test_all_zero_wave(const void* ptr)
 {
     __m128i w0 = _mm_loadu_si128((__m128i*)ptr);
     return _mm_testz_si128(w0, w0);
