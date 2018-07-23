@@ -509,16 +509,16 @@ aggregator<BV>::find_effective_sub_block_size(unsigned i,
                                               const bvector_type_ptr* bv_src,
                                               unsigned src_size) 
 {
-    unsigned max_size;
-    
+    unsigned max_size = 1;
+/*    
     #ifdef BM64_AVX2
-        max_size = 3;
+        max_size = 4;
     #elif defined(BM64_SSE4)
-        max_size = 1;
+        max_size = 2;
     #else
-        max_size = 1;
+        max_size = 2;
     #endif
-
+*/
     
     for (unsigned k = 0; k < src_size; ++k)
     {
@@ -529,7 +529,15 @@ aggregator<BV>::find_effective_sub_block_size(unsigned i,
         const bm::word_t* const* blk_blk_arg = bman_arg.get_topblock(i);
         if (!blk_blk_arg)
             continue;
-        
+
+        for (unsigned j = bm::set_array_size - 1; j > max_size; --j)
+        {
+            if (blk_blk_arg[j])
+            {
+                max_size = j; break;
+            }
+        }
+/*
         // backward scan to find last non-NULL block
         for (unsigned j = bm::set_array_size-1; j > max_size; )
         {
@@ -549,7 +557,7 @@ aggregator<BV>::find_effective_sub_block_size(unsigned i,
             }
             j -= 2;
         #else
-            BM_ASSERT(j - 4);
+            BM_ASSERT(j - 2);
             if (blk_blk_arg[j] || blk_blk_arg[j-1])
             {
                 max_size = j; break;
@@ -557,7 +565,7 @@ aggregator<BV>::find_effective_sub_block_size(unsigned i,
             j -= 2;
         #endif
         } // for j
-
+*/
     } // for k
     ++max_size;
     BM_ASSERT(max_size <= bm::set_array_size);
