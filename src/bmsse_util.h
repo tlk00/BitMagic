@@ -297,13 +297,15 @@ unsigned sse2_and_block(__m128i* BMRESTRICT dst,
     @ingroup SSE2
 */
 inline
-bool sse2_or_arr(__m128i* BMRESTRICT dst, 
-                 const __m128i* BMRESTRICT src, 
-                 const __m128i* BMRESTRICT src_end)
+bool sse2_or_block(__m128i* BMRESTRICT dst,
+                   const __m128i* BMRESTRICT src)
 {
     __m128i m1A, m2A, m1B, m2B, m1C, m2C, m1D, m2D;
     __m128i mAccF0 = _mm_set1_epi32(~0u); // broadcast 0xFF
     __m128i mAccF1 = _mm_set1_epi32(~0u); // broadcast 0xFF
+    const __m128i* BMRESTRICT src_end =
+        (const __m128i*)((bm::word_t*)(src) + bm::set_block_size);
+
     do
     {
         m1A = _mm_load_si128(src + 0);
@@ -402,16 +404,16 @@ bool sse2_or_arr_unal(__m128i* BMRESTRICT dst,
     @ingroup SSE2
 */
 inline
-bool sse2_or_arr_3way(__m128i* BMRESTRICT dst,
+bool sse2_or_block_3way(__m128i* BMRESTRICT dst,
     const __m128i* BMRESTRICT src1,
-    const __m128i* BMRESTRICT src2,
-    const __m128i* BMRESTRICT src_end1)
+    const __m128i* BMRESTRICT src2)
 {
     __m128i m1A, m1B, m1C, m1D;
     __m128i mAccF0 = _mm_set1_epi32(~0u); // broadcast 0xFF
     __m128i mAccF1 = _mm_set1_epi32(~0u); // broadcast 0xFF
+    const __m128i* BMRESTRICT src_end1 =
+        (const __m128i*)((bm::word_t*)(src1) + bm::set_block_size);
 
-//#pragma nounroll
     do
     {
         m1A = _mm_or_si128(_mm_load_si128(src1 + 0), _mm_load_si128(dst + 0));
@@ -443,12 +445,11 @@ bool sse2_or_arr_3way(__m128i* BMRESTRICT dst,
     __m128i wcmpA = _mm_cmpeq_epi8(mAccF0, maskF);
     unsigned maskA = unsigned(_mm_movemask_epi8(wcmpA));
     return (maskA == 0xFFFFu);
-
 }
 
 /*!
     @brief OR array elements against another 2 arrays
-    *dst |= *src1 | src2
+    *dst |= *src1 | src2 | src3 | src4
     @return true if all bits are 1
 
     @ingroup SSE2
@@ -465,7 +466,6 @@ bool sse2_or_arr_5way(__m128i* BMRESTRICT dst,
     __m128i mAccF0 = _mm_set1_epi32(~0u); // broadcast 0xFF
     __m128i mAccF1 = _mm_set1_epi32(~0u); // broadcast 0xFF
 
-//#pragma nounroll
     do
     {
         m1A = _mm_or_si128(_mm_load_si128(src1 + 0), _mm_load_si128(dst + 0));

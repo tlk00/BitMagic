@@ -226,7 +226,7 @@ public:
     void combine_or(bvector_type& bv_target,
                     const bvector_type_ptr* bv_src, unsigned src_size);
     
-    /// Horizonntal aggregation (potentially slower) method
+    /// Horizontal aggregation (potentially slower) method
     void combine_or_horizontal(bvector_type& bv_target,
                                const bvector_type_ptr* bv_src, unsigned src_size);
 protected:
@@ -606,8 +606,11 @@ void aggregator<BV>::combine_or(unsigned i, unsigned j,
                 process_bit_blocks(bman_target, i, j, arg_blk_count);
             if (!all_one)
             {
-                all_one =
-                    process_gap_blocks(bman_target, i, j, arg_blk_gap_count);
+                if (arg_blk_gap_count)
+                {
+                    all_one =
+                        process_gap_blocks(bman_target, i, j, arg_blk_gap_count);
+                }
                 if (!all_one)
                 {
                     // we have some results, allocate block and copy from temp
@@ -711,7 +714,6 @@ bool aggregator<BV>::process_bit_blocks(typename bvector_type::blocks_manager_ty
             return true;
         }
     } // for k
-
 
     unroll_factor = 2;
     len = arg_blk_count - k;

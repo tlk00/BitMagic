@@ -2105,6 +2105,8 @@ unsigned test_bit(const unsigned* block, unsigned  bitpos)
 inline
 void or_bit_block(unsigned* dest, unsigned bitpos, unsigned bitcount)
 {
+    const unsigned maskFF = ~0u;
+
     unsigned nbit  = unsigned(bitpos & bm::set_block_mask); 
     unsigned nword = unsigned(nbit >> bm::set_word_shift); 
     nbit &= bm::set_word_mask;
@@ -2119,35 +2121,36 @@ void or_bit_block(unsigned* dest, unsigned bitpos, unsigned bitcount)
 
     if (nbit) // starting position is not aligned
     {
+        unsigned mask_r = maskFF << nbit;
+        BM_ASSERT(mask_r == block_set_table<true>::_right[nbit]);
+
         unsigned right_margin = nbit + bitcount;
-
-        // here we checking if we setting bits only in the current
-        // word. Example: 00111000000000000000000000000000 (32 bits word)
-
-        if (right_margin < 32) 
+        if (right_margin < 32)
         {
-            unsigned mask = 
-                block_set_table<true>::_right[nbit] & 
-                block_set_table<true>::_left[right_margin-1];
-            *word |= mask;
+            unsigned mask_l = maskFF >> (32 - right_margin);
+            BM_ASSERT(mask_l == block_set_table<true>::_left[right_margin-1]);
+
+            *word |= mask_l & mask_r;
             return;
         }
-        *word |= block_set_table<true>::_right[nbit];
+        *word++ |= mask_r;
         bitcount -= 32 - nbit;
-        ++word;
     }
-    // now word aligned, use unrolled loops
-    //
+
     for ( ;bitcount >= 64; bitcount-=64, word+=2)
-        word[0] = word[1] = ~0u;
+        word[0] = word[1] = maskFF;
     if (bitcount >= 32)
     {
-        *word++ = ~0u; bitcount -= 32;
+        *word++ = maskFF; bitcount -= 32;
     }
     BM_ASSERT(bitcount < 32);
 
-    if (bitcount) 
-        *word |= block_set_table<true>::_left[bitcount-1];
+    if (bitcount)
+    {
+        unsigned mask_l = maskFF >> (32 - bitcount);
+        BM_ASSERT(mask_l == block_set_table<true>::_left[bitcount-1]);
+        *word |= mask_l;
+    }
 }
 
 
@@ -4560,7 +4563,7 @@ bool bit_block_or(bm::word_t* BMRESTRICT dst,
                   const bm::word_t* BMRESTRICT src)
 {
 #ifdef BMVECTOPT
-    return VECT_OR_ARR(dst, src, src + bm::set_block_size);
+    return VECT_OR_BLOCK(dst, src);
 #else
     const bm::wordop_t* BMRESTRICT wrd_ptr = (wordop_t*)src;
     const bm::wordop_t* BMRESTRICT wrd_end = (wordop_t*)(src + bm::set_block_size);
@@ -4600,7 +4603,7 @@ bool bit_block_or_3way(bm::word_t* BMRESTRICT dst,
                         const bm::word_t* BMRESTRICT src2)
 {
 #ifdef BMVECTOPT
-    return VECT_OR_ARR_3WAY(dst, src1, src2, src1 + bm::set_block_size);
+    return VECT_OR_BLOCK_3WAY(dst, src1, src2);
 #else
     const bm::wordop_t* BMRESTRICT wrd_ptr1 = (wordop_t*)src1;
     const bm::wordop_t* BMRESTRICT wrd_end1 = (wordop_t*)(src1 + set_block_size);
