@@ -243,8 +243,8 @@ bool sse42_test_all_zero_wave(const void* ptr)
 #define VECT_OR_BLOCK_3WAY(dst, src1, src2) \
     sse2_or_block_3way((__m128i*) (dst), (__m128i*) (src1), (__m128i*) (src2))
 
-#define VECT_OR_ARR_5WAY(dst, src1, src2, src3, src4, src1_end) \
-    sse2_or_arr_5way((__m128i*) (dst), (__m128i*) (src1), (__m128i*) (src2), (__m128i*) (src3), (__m128i*) (src4), (__m128i*) (src1_end))
+#define VECT_OR_BLOCK_5WAY(dst, src1, src2, src3, src4) \
+    sse2_or_block_5way((__m128i*) (dst), (__m128i*) (src1), (__m128i*) (src2), (__m128i*) (src3), (__m128i*) (src4))
 
 #define VECT_SUB_ARR(dst, src, src_end) \
     sse2_sub_arr((__m128i*) dst, (__m128i*) (src), (__m128i*) (src_end))

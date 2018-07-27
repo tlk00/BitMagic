@@ -455,16 +455,18 @@ bool sse2_or_block_3way(__m128i* BMRESTRICT dst,
     @ingroup SSE2
 */
 inline
-bool sse2_or_arr_5way(__m128i* BMRESTRICT dst,
+bool sse2_or_block_5way(__m128i* BMRESTRICT dst,
     const __m128i* BMRESTRICT src1,
     const __m128i* BMRESTRICT src2,
     const __m128i* BMRESTRICT src3,
-    const __m128i* BMRESTRICT src4,
-    const __m128i* BMRESTRICT src_end1)
+    const __m128i* BMRESTRICT src4)
 {
     __m128i m1A, m1B, m1C, m1D;
     __m128i mAccF0 = _mm_set1_epi32(~0u); // broadcast 0xFF
     __m128i mAccF1 = _mm_set1_epi32(~0u); // broadcast 0xFF
+
+    const __m128i* BMRESTRICT src_end1 =
+        (const __m128i*)((bm::word_t*)(src1) + bm::set_block_size);
 
     do
     {
@@ -513,7 +515,6 @@ bool sse2_or_arr_5way(__m128i* BMRESTRICT dst,
     __m128i wcmpA = _mm_cmpeq_epi8(mAccF0, maskF);
     unsigned maskA = unsigned(_mm_movemask_epi8(wcmpA));
     return (maskA == 0xFFFFu);
-
 }
 
 

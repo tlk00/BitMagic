@@ -4646,7 +4646,7 @@ bool bit_block_or_5way(bm::word_t* BMRESTRICT dst,
                         const bm::word_t* BMRESTRICT src4)
 {
 #ifdef BMVECTOPT
-    return VECT_OR_ARR_5WAY(dst, src1, src2, src3, src4, src1 + bm::set_block_size);
+    return VECT_OR_BLOCK_5WAY(dst, src1, src2, src3, src4);
 #else
     const bm::wordop_t* BMRESTRICT wrd_ptr1 = (wordop_t*)src1;
     const bm::wordop_t* BMRESTRICT wrd_end1 = (wordop_t*)(src1 + set_block_size);
