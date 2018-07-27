@@ -252,8 +252,8 @@ bool sse42_test_all_zero_wave(const void* ptr)
 #define VECT_XOR_ARR(dst, src, src_end) \
     sse2_xor_arr((__m128i*) dst, (__m128i*) (src), (__m128i*) (src_end))
 
-#define VECT_COPY_BLOCK(dst, src, src_end) \
-    sse2_copy_block((__m128i*) dst, (__m128i*) (src), (__m128i*) (src_end))
+#define VECT_COPY_BLOCK(dst, src) \
+    sse2_copy_block((__m128i*) dst, (__m128i*) (src))
 
 #define VECT_SET_BLOCK(dst, dst_end, value) \
     sse2_set_block((__m128i*) dst, (__m128i*) (dst_end), (value))

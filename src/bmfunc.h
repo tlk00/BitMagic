@@ -3952,7 +3952,7 @@ inline
 void bit_block_copy(bm::word_t* BMRESTRICT dst, const bm::word_t* BMRESTRICT src)
 {
 #ifdef BMVECTOPT
-    VECT_COPY_BLOCK(dst, src, src + bm::set_block_size);
+    VECT_COPY_BLOCK(dst, src);
 #else
     ::memcpy(dst, src, bm::set_block_size * sizeof(bm::word_t));
 #endif

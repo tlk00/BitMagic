@@ -662,10 +662,12 @@ void sse2_set_block(__m128i* BMRESTRICT dst,
 */
 BMFORCEINLINE 
 void sse2_copy_block(__m128i* BMRESTRICT dst, 
-                     const __m128i* BMRESTRICT src, 
-                     const __m128i* BMRESTRICT src_end)
+                     const __m128i* BMRESTRICT src)
 {
     __m128i xmm0, xmm1, xmm2, xmm3;
+    const __m128i* BMRESTRICT src_end =
+        (const __m128i*)((bm::word_t*)(src) + bm::set_block_size);
+
     do
     {
         xmm0 = _mm_load_si128(src+0);

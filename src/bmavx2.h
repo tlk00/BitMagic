@@ -965,10 +965,13 @@ void avx2_set_block(__m256i* BMRESTRICT dst,
 */
 inline
 void avx2_copy_block(__m256i* BMRESTRICT dst,
-                     const __m256i* BMRESTRICT src,
-                     const __m256i* BMRESTRICT src_end)
+                     const __m256i* BMRESTRICT src)
 {
     __m256i ymm0, ymm1, ymm2, ymm3;
+
+    const __m256i* BMRESTRICT src_end =
+        (const __m256i*)((bm::word_t*)(src) + bm::set_block_size);
+
     do
     {
         ymm0 = _mm256_load_si256(src+0);
@@ -990,10 +993,9 @@ void avx2_copy_block(__m256i* BMRESTRICT dst,
         _mm256_store_si256(dst+5, ymm1);
         _mm256_store_si256(dst+6, ymm2);
         _mm256_store_si256(dst+7, ymm3);
-        
-        src += 8;
-        dst += 8;
-        
+
+        src += 8; dst += 8;
+
     } while (src < src_end);
 }
 
@@ -1142,8 +1144,8 @@ bool avx2_test_all_zero_wave(const void* ptr)
 #define VECT_XOR_ARR(dst, src, src_end) \
     avx2_xor_arr((__m256i*) dst, (__m256i*) (src), (__m256i*) (src_end))
 
-#define VECT_COPY_BLOCK(dst, src, src_end) \
-    avx2_copy_block((__m256i*) dst, (__m256i*) (src), (__m256i*) (src_end))
+#define VECT_COPY_BLOCK(dst, src) \
+    avx2_copy_block((__m256i*) dst, (__m256i*) (src))
 
 #define VECT_SET_BLOCK(dst, dst_end, value) \
     avx2_set_block((__m256i*) dst, (__m256i*) (dst_end), (value))
