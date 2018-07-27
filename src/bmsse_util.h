@@ -567,9 +567,8 @@ void sse2_xor_arr(__m128i* BMRESTRICT dst,
     @ingroup SSE2
 */
 inline
-unsigned sse2_sub_arr(__m128i* BMRESTRICT dst,
-                      const __m128i* BMRESTRICT src,
-                      const __m128i* BMRESTRICT src_end)
+unsigned sse2_sub_block(__m128i* BMRESTRICT dst,
+                        const __m128i* BMRESTRICT src)
 {
     __m128i m1A, m2A, m1B, m2B, m1C, m2C, m1D, m2D;
     __m128i accA, accB, accC, accD;
@@ -578,6 +577,9 @@ unsigned sse2_sub_arr(__m128i* BMRESTRICT dst,
     accB = _mm_setzero_si128();
     accC = _mm_setzero_si128();
     accD = _mm_setzero_si128();
+
+    const __m128i* BMRESTRICT src_end =
+        (const __m128i*)((bm::word_t*)(src) + bm::set_block_size);
 
     do
     {

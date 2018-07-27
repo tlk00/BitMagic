@@ -880,9 +880,8 @@ void avx2_xor_arr(__m256i* BMRESTRICT dst,
     @ingroup AVX2
 */
 inline
-unsigned avx2_sub_arr(__m256i* BMRESTRICT dst,
-                      const __m256i* BMRESTRICT src,
-                      const __m256i* BMRESTRICT src_end)
+unsigned avx2_sub_block(__m256i* BMRESTRICT dst,
+                        const __m256i* BMRESTRICT src)
 {
     __m256i m1A, m2A, m1B, m2B, m1C, m2C, m1D, m2D;
     __m256i accA, accB, accC, accD;
@@ -892,11 +891,14 @@ unsigned avx2_sub_arr(__m256i* BMRESTRICT dst,
     accC = _mm256_setzero_si256();
     accD = _mm256_setzero_si256();
 
+    const __m256i* BMRESTRICT src_end =
+        (const __m256i*)((bm::word_t*)(src) + bm::set_block_size);
+
     do
     {
-        m1A = _mm256_load_si256(src+0);
-        m2A = _mm256_load_si256(dst+0);
-        m1A = _mm256_andnot_si256(m1A, m2A);
+//        m1A = _mm256_load_si256(src+0);
+//        m2A = _mm256_load_si256(dst+0);
+        m1A = _mm256_andnot_si256(_mm256_load_si256(src + 0), _mm256_load_si256(dst + 0));
         _mm256_store_si256(dst+0, m1A);
         accA = _mm256_or_si256(accA, m1A);
         
@@ -1134,8 +1136,8 @@ bool avx2_test_all_zero_wave(const void* ptr)
 #define VECT_OR_BLOCK_5WAY(dst, src1, src2, src3, src4) \
     avx2_or_block_5way((__m256i*) dst, (__m256i*) (src1), (__m256i*) (src2), (__m256i*) (src3), (__m256i*) (src4))
 
-#define VECT_SUB_ARR(dst, src, src_end) \
-    avx2_sub_arr((__m256i*) dst, (__m256i*) (src), (__m256i*) (src_end))
+#define VECT_SUB_BLOCK(dst, src) \
+    avx2_sub_block((__m256i*) dst, (__m256i*) (src))
 
 #define VECT_XOR_ARR(dst, src, src_end) \
     avx2_xor_arr((__m256i*) dst, (__m256i*) (src), (__m256i*) (src_end))

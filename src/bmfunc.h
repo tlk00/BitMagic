@@ -4751,7 +4751,7 @@ inline
 bm::id64_t bit_block_sub(bm::word_t* BMRESTRICT dst, const bm::word_t* BMRESTRICT src)
 {
 #ifdef BMVECTOPT
-    bm::id64_t acc = VECT_SUB_ARR(dst, src, src + bm::set_block_size);
+    bm::id64_t acc = VECT_SUB_BLOCK(dst, src);
     return acc;
 #else
     unsigned arr_sz = bm::set_block_size / 2;
