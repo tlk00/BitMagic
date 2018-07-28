@@ -230,8 +230,8 @@ bm::id_t sse2_bit_count_op(const __m128i* BMRESTRICT block,
 #define VECT_COPY_BLOCK(dst, src) \
     sse2_copy_block((__m128i*) dst, (__m128i*) (src))
 
-#define VECT_SET_BLOCK(dst, dst_end, value) \
-    sse2_set_block((__m128i*) dst, (__m128i*) (dst_end), (value))
+#define VECT_SET_BLOCK(dst, value) \
+    sse2_set_block((__m128i*) dst, value)
 
 
 

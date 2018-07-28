@@ -629,10 +629,11 @@ unsigned sse2_sub_block(__m128i* BMRESTRICT dst,
 */
 
 BMFORCEINLINE 
-void sse2_set_block(__m128i* BMRESTRICT dst, 
-                    __m128i* BMRESTRICT dst_end, 
-                    bm::word_t value)
+void sse2_set_block(__m128i* BMRESTRICT dst, bm::word_t value)
 {
+    __m128i* BMRESTRICT dst_end =
+        (__m128i*)((bm::word_t*)(dst) + bm::set_block_size);
+
     __m128i xmm0 = _mm_set1_epi32((int)value);
     do
     {            
@@ -648,11 +649,7 @@ void sse2_set_block(__m128i* BMRESTRICT dst,
 
         dst += 8;        
     } while (dst < dst_end);
-    
-    _mm_sfence();
 }
-
-
 
 /*! 
     @brief SSE2 block copy

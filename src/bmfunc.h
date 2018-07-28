@@ -2628,11 +2628,11 @@ bm::id_t gap_bitset_or_any(const unsigned* block, const T*  buf)
 inline 
 void bit_block_set(bm::word_t* BMRESTRICT dst, bm::word_t value)
 {
-//#ifdef BMVECTOPT
-//    VECT_SET_BLOCK(dst, dst + bm::set_block_size, value);
-//#else
+#ifdef BMVECTOPT
+    VECT_SET_BLOCK(dst, value);
+#else
     ::memset(dst, int(value), bm::set_block_size * sizeof(bm::word_t));
-//#endif
+#endif
 }
 
 
