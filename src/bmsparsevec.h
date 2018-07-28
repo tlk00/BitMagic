@@ -993,11 +993,7 @@ void sparse_vector<Val, BV>::throw_range_error(const char* err_msg)
 template<class Val, class BV>
 void sparse_vector<Val, BV>::throw_bad_alloc()
 {
-#ifndef BM_NO_STL
-    throw std::bad_alloc();
-#else
-    BM_ASSERT_THROW(false, BM_BAD_ALLOC);
-#endif
+    BV::throw_bad_alloc();
 }
 
 

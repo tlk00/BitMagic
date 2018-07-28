@@ -2072,6 +2072,8 @@ public:
 
     //@}
     
+    static
+    void throw_bad_alloc();
     
 private:
 
@@ -4584,6 +4586,19 @@ void bvector<Alloc>::copy_range_no_check(const bvector<Alloc>& bvect,
     }
 }
 
+//---------------------------------------------------------------------
+
+template<class Alloc>
+void bvector<Alloc>::throw_bad_alloc()
+{
+#ifndef BM_NO_STL
+    throw std::bad_alloc();
+#else
+    BM_ASSERT_THROW(false, BM_BAD_ALLOC);
+#endif
+}
+
+//---------------------------------------------------------------------
 
 } // namespace
 

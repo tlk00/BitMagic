@@ -2101,55 +2101,42 @@ unsigned test_bit(const unsigned* block, unsigned  bitpos)
    \param bitcount - number of bits to set.
 
    @ingroup bitfunc
-*/  
+*/
 inline
 void or_bit_block(unsigned* dest, unsigned bitpos, unsigned bitcount)
 {
     const unsigned maskFF = ~0u;
+    
+    dest += unsigned(bitpos >> bm::set_word_shift); // nword
+    bitpos &= bm::set_word_mask;
 
-    unsigned nbit  = unsigned(bitpos & bm::set_block_mask); 
-    unsigned nword = unsigned(nbit >> bm::set_word_shift); 
-    nbit &= bm::set_word_mask;
-
-    bm::word_t* word = dest + nword;
-
-    if (bitcount == 1)  // special case (only 1 bit to set)
+    if (bitcount == 1u)  // special case (only 1 bit to set)
     {
-        *word |= bitcount << nbit;
+        *dest |= (1u << bitpos);
         return;
     }
 
-    if (nbit) // starting position is not aligned
+    if (bitpos) // starting pos is not aligned
     {
-        unsigned mask_r = maskFF << nbit;
-        BM_ASSERT(mask_r == block_set_table<true>::_right[nbit]);
-
-        unsigned right_margin = nbit + bitcount;
+        unsigned mask_r = maskFF << bitpos;
+        unsigned right_margin = bitpos + bitcount;
         if (right_margin < 32)
         {
-            unsigned mask_l = maskFF >> (32 - right_margin);
-            BM_ASSERT(mask_l == block_set_table<true>::_left[right_margin-1]);
-
-            *word |= mask_l & mask_r;
+            *dest |= (maskFF >> (32 - right_margin)) & mask_r;
             return;
         }
-        *word++ |= mask_r;
-        bitcount -= 32 - nbit;
+        *dest++ |= mask_r;
+        bitcount -= 32 - bitpos;
     }
-
-    for ( ;bitcount >= 64; bitcount-=64, word+=2)
-        word[0] = word[1] = maskFF;
+    for ( ;bitcount >= 64; bitcount-=64, dest+=2)
+        dest[0] = dest[1] = maskFF;
     if (bitcount >= 32)
     {
-        *word++ = maskFF; bitcount -= 32;
+        *dest++ = maskFF; bitcount -= 32;
     }
-    BM_ASSERT(bitcount < 32);
-
     if (bitcount)
     {
-        unsigned mask_l = maskFF >> (32 - bitcount);
-        BM_ASSERT(mask_l == block_set_table<true>::_left[bitcount-1]);
-        *word |= mask_l;
+        *dest |= maskFF >> (32 - bitcount);
     }
 }
 
@@ -2337,12 +2324,19 @@ void gap_add_to_bitset(unsigned* dest, const T*  pcurr)
     if (*pcurr & 1)  // Starts with 1
     {
         bm::or_bit_block(dest, 0, 1 + pcurr[1]);
-        ++pcurr;
+        pcurr += 3;
     }
-    for (pcurr += 2; pcurr <= pend; pcurr += 2)
+    else
+        pcurr += 2;
+
+    unsigned bc, pos;
+    for (; pcurr <= pend; )
     {
         BM_ASSERT(*pcurr > pcurr[-1]);
-        bm::or_bit_block(dest, 1 + pcurr[-1], *pcurr - pcurr[-1]);
+        pos = 1u + pcurr[-1];
+        bc = *pcurr - pcurr[-1];
+        pcurr += 2;
+        bm::or_bit_block(dest, pos, bc);
     }
 }
 
