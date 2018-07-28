@@ -497,42 +497,32 @@ void avx2_andnot_arr_2_mask(__m256i* BMRESTRICT dst,
     @ingroup AVX2
 */
 inline
-unsigned avx2_and_arr(__m256i* BMRESTRICT dst,
-                  const __m256i* BMRESTRICT src,
-                  const __m256i* BMRESTRICT src_end)
+unsigned avx2_and_block(__m256i* BMRESTRICT dst,
+                        const __m256i* BMRESTRICT src)
 {
-    __m256i m1A, m2A, m1B, m2B, m1C, m2C, m1D, m2D;
+    __m256i m1A, m1B, m1C, m1D;
     __m256i accA, accB, accC, accD;
-    
-    accA = _mm256_setzero_si256();
-    accB = _mm256_setzero_si256();
-    accC = _mm256_setzero_si256();
-    accD = _mm256_setzero_si256();
+
+    const __m256i* BMRESTRICT src_end =
+        (const __m256i*)((bm::word_t*)(src) + bm::set_block_size);
+
+    accA = accB = accC = accD = _mm256_setzero_si256();
 
     do
     {
-        m1A = _mm256_load_si256(src+0);
-        m2A = _mm256_load_si256(dst+0);
-        m1A = _mm256_and_si256(m1A, m2A);
+        m1A = _mm256_and_si256(_mm256_load_si256(src+0), _mm256_load_si256(dst+0));
+        m1B = _mm256_and_si256(_mm256_load_si256(src+1), _mm256_load_si256(dst+1));
+        m1C = _mm256_and_si256(_mm256_load_si256(src+2), _mm256_load_si256(dst+2));
+        m1D = _mm256_and_si256(_mm256_load_si256(src+3), _mm256_load_si256(dst+3));
+
         _mm256_store_si256(dst+0, m1A);
-        accA = _mm256_or_si256(accA, m1A);
-        
-        m1B = _mm256_load_si256(src+1);
-        m2B = _mm256_load_si256(dst+1);
-        m1B = _mm256_and_si256(m1B, m2B);
         _mm256_store_si256(dst+1, m1B);
-        accB = _mm256_or_si256(accB, m1B);
-
-        m1C = _mm256_load_si256(src+2);
-        m2C = _mm256_load_si256(dst+2);
-        m1C = _mm256_and_si256(m1C, m2C);
         _mm256_store_si256(dst+2, m1C);
-        accC = _mm256_or_si256(accC, m1C);
-
-        m1D = _mm256_load_si256(src+3);
-        m2D = _mm256_load_si256(dst+3);
-        m1D = _mm256_and_si256(m1D, m2D);
         _mm256_store_si256(dst+3, m1D);
+        
+        accA = _mm256_or_si256(accA, m1A);
+        accB = _mm256_or_si256(accB, m1B);
+        accC = _mm256_or_si256(accC, m1C);
         accD = _mm256_or_si256(accD, m1D);
         
         src += 4; dst += 4;
@@ -1117,8 +1107,8 @@ bool avx2_test_all_zero_wave(const void* ptr)
 #define VECT_INVERT_BLOCK(first) \
     avx2_invert_block((__m256i*)first);
 
-#define VECT_AND_ARR(dst, src, src_end) \
-    avx2_and_arr((__m256i*) dst, (__m256i*) (src), (__m256i*) (src_end))
+#define VECT_AND_BLOCK(dst, src) \
+    avx2_and_block((__m256i*) dst, (__m256i*) (src))
 
 #define VECT_OR_BLOCK(dst, src) \
     avx2_or_block((__m256i*) dst, (__m256i*) (src))

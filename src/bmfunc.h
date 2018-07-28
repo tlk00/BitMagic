@@ -3615,11 +3615,12 @@ bm::id_t bit_block_any_range(const bm::word_t* block,
 /*! Function inverts block of bits 
     @ingroup bitfunc 
 */
-template<typename T> void bit_invert(T* start, T* end)
+template<typename T> void bit_invert(T* start)
 {
 #ifdef BMVECTOPT
     VECT_INVERT_BLOCK(start);
 #else
+    T* end = (T*)((unsigned*)(start) + bm::set_block_size);
     do
     {
         start[0] = ~start[0];
@@ -3972,7 +3973,7 @@ bm::id64_t bit_block_and(bm::word_t* BMRESTRICT dst, const bm::word_t* BMRESTRIC
     BM_ASSERT(dst != src);
 
 #ifdef BMVECTOPT
-    bm::id64_t acc = VECT_AND_ARR(dst, src, src + bm::set_block_size);
+    bm::id64_t acc = VECT_AND_BLOCK(dst, src);
     return acc;
 #else
     unsigned arr_sz = bm::set_block_size / 2;

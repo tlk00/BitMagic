@@ -476,15 +476,10 @@ public:
                 this->bm_.set_block_ptr(idx, 0);
             else
             {
-                if (BM_IS_GAP(block)) // gap block
+                if (BM_IS_GAP(block))
                     gap_invert(BMGAP_PTR(block));
-                else  // bit block
-                {
-                    bm::wordop_t* wrd_ptr = (wordop_t*) block;
-                    bm::wordop_t* wrd_end = 
-                            (wordop_t*) (block + bm::set_block_size);
-                    bm::bit_invert(wrd_ptr, wrd_end);
-                }
+                else
+                    bm::bit_invert((wordop_t*) block);
             }
 
         }

@@ -234,8 +234,8 @@ bool sse42_test_all_zero_wave(const void* ptr)
 #define VECT_INVERT_BLOCK(first) \
     sse2_invert_block((__m128i*)first);
 
-#define VECT_AND_ARR(dst, src, src_end) \
-    sse2_and_arr((__m128i*) dst, (__m128i*) (src), (__m128i*) (src_end))
+#define VECT_AND_BLOCK(dst, src) \
+    sse2_and_block((__m128i*) dst, (__m128i*) (src))
 
 #define VECT_OR_BLOCK(dst, src) \
     sse2_or_block((__m128i*) dst, (__m128i*) (src))
