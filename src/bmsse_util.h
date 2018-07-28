@@ -694,42 +694,45 @@ void sse2_copy_block(__m128i* BMRESTRICT dst,
 }
 
 /*! 
-    @brief Invert array elements
+    @brief Invert bit block
     *dst = ~*dst
     or
     *dst ^= *dst 
 
     @ingroup SSE2
 */
-BMFORCEINLINE 
-void sse2_invert_arr(bm::word_t* first, bm::word_t* last)
+inline 
+void sse2_invert_block(__m128i* dst)
 {
-    __m128i mZ = _mm_setzero_si128();
-    __m128i maskF = _mm_cmpeq_epi8(mZ, mZ); // 0xFF..
+    //__m128i mZ = _mm_setzero_si128();
+    //__m128i maskF = _mm_cmpeq_epi8(mZ, mZ); // 0xFF..
 
-    __m128i* wrd_ptr = (__m128i*)first;
+    __m128i maskF = _mm_set1_epi32(~0u);
+    __m128i* BMRESTRICT dst_end =
+        (__m128i*)((bm::word_t*)(dst) + bm::set_block_size);
+
     __m128i mA, mB, mC, mD;
     do 
     {
-        mA = _mm_load_si128(wrd_ptr + 0);
+        mA = _mm_load_si128(dst + 0);
         mA = _mm_xor_si128(mA, maskF);
-        _mm_store_si128(wrd_ptr+0, mA);
+        _mm_store_si128(dst+0, mA);
 
-        mB = _mm_load_si128(wrd_ptr + 1);
+        mB = _mm_load_si128(dst + 1);
         mB = _mm_xor_si128(mB, maskF);
-        _mm_store_si128(wrd_ptr + 1, mB);
+        _mm_store_si128(dst + 1, mB);
 
-        mC = _mm_load_si128(wrd_ptr + 2);
+        mC = _mm_load_si128(dst + 2);
         mC = _mm_xor_si128(mC, maskF);
-        _mm_store_si128(wrd_ptr + 2, mC);
+        _mm_store_si128(dst + 2, mC);
 
-        mD = _mm_load_si128(wrd_ptr + 3);
+        mD = _mm_load_si128(dst + 3);
         mD = _mm_xor_si128(mD, maskF);
-        _mm_store_si128(wrd_ptr + 3, mD);
+        _mm_store_si128(dst + 3, mD);
 
-        wrd_ptr += 4;
+        dst += 4;
 
-    } while (wrd_ptr < (__m128i*)last);
+    } while (dst < (__m128i*)dst_end);
 }
 
 BMFORCEINLINE 

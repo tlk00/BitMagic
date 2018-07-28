@@ -991,7 +991,7 @@ void avx2_copy_block(__m256i* BMRESTRICT dst,
 }
 
 /*!
-    @brief Invert array elements
+    @brief Invert bit-block
     *dst = ~*dst
     or
     *dst ^= *dst
@@ -999,34 +999,34 @@ void avx2_copy_block(__m256i* BMRESTRICT dst,
     @ingroup AVX2
 */
 inline
-void avx2_invert_arr(bm::word_t* BMRESTRICT first,
-                     bm::word_t* BMRESTRICT last)
+void avx2_invert_block(__m256i* BMRESTRICT dst)
 {
     __m256i ymm1 = _mm256_set1_epi32(~0u); // braodcast 0xFF
+    const __m256i* BMRESTRICT dst_end =
+        (const __m256i*)((bm::word_t*)(dst) + bm::set_block_size);
 
-    __m256i* wrd_ptr = (__m256i*)first;
     __m256i ymm0;
     do
     {
-        ymm0 = _mm256_load_si256(wrd_ptr+0);
+        ymm0 = _mm256_load_si256(dst+0);
         ymm0 = _mm256_xor_si256(ymm0, ymm1);
-        _mm256_store_si256(wrd_ptr+0, ymm0);
+        _mm256_store_si256(dst+0, ymm0);
 
-        ymm0 = _mm256_load_si256(wrd_ptr+1);
+        ymm0 = _mm256_load_si256(dst+1);
         ymm0 = _mm256_xor_si256(ymm0, ymm1);
-        _mm256_store_si256(wrd_ptr+1, ymm0);
+        _mm256_store_si256(dst+1, ymm0);
 
-        ymm0 = _mm256_load_si256(wrd_ptr+2);
+        ymm0 = _mm256_load_si256(dst+2);
         ymm0 = _mm256_xor_si256(ymm0, ymm1);
-        _mm256_store_si256(wrd_ptr+2, ymm0);
+        _mm256_store_si256(dst+2, ymm0);
 
-        ymm0 = _mm256_load_si256(wrd_ptr+3);
+        ymm0 = _mm256_load_si256(dst+3);
         ymm0 = _mm256_xor_si256(ymm0, ymm1);
-        _mm256_store_si256(wrd_ptr+3, ymm0);
+        _mm256_store_si256(dst+3, ymm0);
         
-        wrd_ptr += 4;
+        dst += 4;
         
-    } while (wrd_ptr < (__m256i*)last);
+    } while (dst < dst_end);
 }
 
 /*!
@@ -1114,8 +1114,8 @@ bool avx2_test_all_zero_wave(const void* ptr)
 #define VECT_BITCOUNT_SUB(first, last, mask) \
     avx2_bit_count_sub((__m256i*) (first), (__m256i*) (last), (__m256i*) (mask))
 
-#define VECT_INVERT_ARR(first, last) \
-    avx2_invert_arr((bm::word_t*)first, (bm::word_t*)last);
+#define VECT_INVERT_BLOCK(first) \
+    avx2_invert_block((__m256i*)first);
 
 #define VECT_AND_ARR(dst, src, src_end) \
     avx2_and_arr((__m256i*) dst, (__m256i*) (src), (__m256i*) (src_end))

@@ -3618,7 +3618,7 @@ bm::id_t bit_block_any_range(const bm::word_t* block,
 template<typename T> void bit_invert(T* start, T* end)
 {
 #ifdef BMVECTOPT
-    VECT_INVERT_ARR(start, end);
+    VECT_INVERT_BLOCK(start);
 #else
     do
     {

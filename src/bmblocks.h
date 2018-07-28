@@ -998,7 +998,7 @@ public:
             {
                 block = alloc_.alloc_bit_block();
                 // initialize block depending on its previous status
-                bit_block_set(block, block_flag ? 0xFF : 0);
+                bit_block_set(block, block_flag ? ~0u : 0u);
                 set_block(nb, block);
             }
             else // gap block requested

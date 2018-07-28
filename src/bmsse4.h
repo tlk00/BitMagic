@@ -231,8 +231,8 @@ bool sse42_test_all_zero_wave(const void* ptr)
 #define VECT_BITCOUNT_SUB(first, last, mask) \
     sse4_bit_count_op((__m128i*) (first), (__m128i*) (last), (__m128i*) (mask), sse2_sub) 
 
-#define VECT_INVERT_ARR(first, last) \
-    sse2_invert_arr((bm::word_t*)first, (bm::word_t*)last);
+#define VECT_INVERT_BLOCK(first) \
+    sse2_invert_block((__m128i*)first);
 
 #define VECT_AND_ARR(dst, src, src_end) \
     sse2_and_arr((__m128i*) dst, (__m128i*) (src), (__m128i*) (src_end))
