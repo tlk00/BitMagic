@@ -21,6 +21,7 @@ For more information please visit:  http://bitmagic.io
 #include <time.h>
 #include <stdio.h>
 #include <sstream>
+#include <cassert>
 
 //#define BMSSE2OPT
 //#define BMSSE42OPT
@@ -112,7 +113,7 @@ void generate_bvector(bvect& bv, unsigned vector_max = 40000000)
     for (i = 0; i < vector_max;)
     {
         // generate bit-blocks
-        for (j = 0; j < 65535 * 8; i += 10, j++)
+        for (j = 0; j < 65535 * 10; i += 10, j++)
         {
             bv.set(i);
         }
@@ -152,7 +153,7 @@ void SimpleFillSets(test_bitset& bset,
 // 111........111111........111111..........11111111.......1111111...
 //
 static
-void FillSetsIntervals(test_bitset& bset, 
+void FillSetsIntervals(test_bitset* bset,
                        bvect& bv,
                        unsigned min, 
                        unsigned max,
@@ -180,7 +181,8 @@ void FillSetsIntervals(test_bitset& bset,
         {
             if (set_flag)
             {
-                bset[j] = true;
+                if (bset)
+                    bset->set(j, true);
                 bv[j]= true;
             }
             else
@@ -190,33 +192,55 @@ void FillSetsIntervals(test_bitset& bset,
             }
                            
         } // j
-
         i = end;
-
-
         len = rand() % 10;
 
         i+=len;
-
         {
             for(unsigned k=0; k < 1000 && i < max; k+=3,i+=3)
             {
                 if (set_flag)
                 {
-                    bset[i] = true;
+                    if (bset)
+                        bset->set(i, true);
                     bv[i] = true;
                 }
                 else
                 {
-                    bset[j] = false;
+                    if (bset)
+                        bset->set(j, false);
                     bv[j] = false;
                 }
-
             }
         }
 
     } // for i
 
+}
+
+inline
+void GenerateTestCollection(std::vector<bvect>* target, unsigned count = 30, unsigned vector_max = 40000000)
+{
+    assert(target);
+    unsigned cnt1 = (count / 2);
+    
+    unsigned i = 0;
+    for (i = 0; i < cnt1; ++i)
+    {
+        std::unique_ptr<bvect> bv (new bvect);
+        generate_bvector(*bv, vector_max);
+        target->push_back(std::move(*bv));
+    } // for
+
+    unsigned fill_factor = 10;
+    for (; i < count; ++i)
+    {
+        std::unique_ptr<bvect> bv (new bvect);
+        FillSetsIntervals(0, *bv, vector_max/ 10, vector_max, fill_factor);
+        bv->optimize();
+
+        target->push_back(std::move(*bv));
+    } // for
 }
 
 static
@@ -263,7 +287,7 @@ void BitCountTest()
     test_bitset*  bset = new test_bitset();
     unsigned value = 0;
 
-    FillSetsIntervals(*bset, *bv, 0, BSIZE, 10);
+    FillSetsIntervals(bset, *bv, 0, BSIZE, 10);
 
     //if (!platform_test)
     {
@@ -687,9 +711,9 @@ void FindTest()
     SimpleFillSets(*bset, bv1, 0, BSIZE/2, 4);
     SimpleFillSets(*bset, bv1, 0, BSIZE/2, 5);
     
-    FillSetsIntervals(*bset, bv2, 0, BSIZE/2, 8);
-    FillSetsIntervals(*bset, bv3, 0, BSIZE/2, 12);
-    FillSetsIntervals(*bset, bv4, 0, BSIZE/2, 120);
+    FillSetsIntervals(bset, bv2, 0, BSIZE/2, 8);
+    FillSetsIntervals(bset, bv3, 0, BSIZE/2, 12);
+    FillSetsIntervals(bset, bv4, 0, BSIZE/2, 120);
     
     unsigned i;
     unsigned pos_sum = 0;
@@ -768,9 +792,9 @@ void EnumeratorTest()
     SimpleFillSets(*bset, bv1, 0, BSIZE/2, 4);
     SimpleFillSets(*bset, bv1, 0, BSIZE/2, 5);
     
-    FillSetsIntervals(*bset, bv2, 0, BSIZE/2, 8);
-    FillSetsIntervals(*bset, bv3, 0, BSIZE/2, 12);
-    FillSetsIntervals(*bset, bv4, 0, BSIZE/2, 120);
+    FillSetsIntervals(bset, bv2, 0, BSIZE/2, 8);
+    FillSetsIntervals(bset, bv3, 0, BSIZE/2, 12);
+    FillSetsIntervals(bset, bv4, 0, BSIZE/2, 120);
     
     v1.reserve(bv1.count());
     v2.reserve(bv2.count());
@@ -1769,7 +1793,7 @@ void ptest()
 
     test_bitset*  bset = new test_bitset();
 
-    FillSetsIntervals(*bset, *bv_large, 0, 2000000000, 10);
+    FillSetsIntervals(bset, *bv_large, 0, 2000000000, 10);
 
     for (unsigned i = 0; i < 2000; ++i)
     {
@@ -1824,11 +1848,11 @@ void FillSparseIntervals(svect& sv)
     unsigned i;
     
 
-    for (i = 256000; i < 256000 * 2; ++i)
+    for (i = 256000; i < 712000 * 2; ++i)
     {
         sv.set(i, 0xFFE);
     }
-    for (i = 256000 * 3; i < 256000 * 5; ++i)
+    for (i = 712000 * 3; i < 712000 * 5; ++i)
     {
         sv.set(i, i);
     }
@@ -1990,6 +2014,56 @@ void SparseVectorAccessTest()
 }
 
 static
+void AggregatorTest()
+{
+    bvect* bv_arr[64] = {0,};
+//    std::cout << sizeof(bv_arr) << std::endl;
+    std::unique_ptr<std::vector<bvect> > bv_coll;//(new std::vector<bvect>());
+    bv_coll.reset(new std::vector<bvect>);
+
+    GenerateTestCollection(bv_coll.get(), 25, 80000000);
+    
+    if (!bv_coll->size())
+        return;
+    
+    std::vector<bvect>& bvc = *bv_coll;
+    for (unsigned k = 0; k < bv_coll->size(); ++k)
+    {
+        bv_arr[k] = &(bvc[k]);
+        //std::cout << k << ":" << bv_arr[k]->count() << std::endl;
+    } // for
+    
+    bm::aggregator<bvect> agg;
+
+    std::unique_ptr<bvect> bv_target1(new bvect);
+    std::unique_ptr<bvect> bv_target2(new bvect);
+
+    {
+    TimeTaker tt("Aggregator OR (ref) test", REPEATS);
+    for (unsigned i = 0; i < REPEATS; ++i)
+    {
+        agg.combine_or_horizontal(*bv_target1, bv_arr, unsigned(bv_coll->size()));
+    } // for
+    }
+
+    {
+    TimeTaker tt("Aggregator OR test", REPEATS);
+    for (unsigned i = 0; i < REPEATS; ++i)
+    {
+        agg.combine_or(*bv_target2, bv_arr, unsigned(bv_coll->size()));
+    } // for
+    }
+
+    int res = bv_target1->compare(*bv_target2);
+    if (res != 0)
+    {
+        std::cerr << "Error: Aggregator integrity failed." << std::endl;
+        exit(1);
+    }
+//    std::cout << bv_target1->count() << std::endl;
+}
+
+static
 void Set2SetTransformTest()
 {
     svect   sv;
@@ -2031,7 +2105,7 @@ void Set2SetTransformTest()
     int cnt = 0;
 
     {
-    TimeTaker tt("set2set_11_transform::by_one", REPEATS/10);
+    TimeTaker tt("set2set_11_transform::run()", REPEATS/10);
 
         for (unsigned i = 0; i < REPEATS/10; ++i)
         {
@@ -2039,8 +2113,6 @@ void Set2SetTransformTest()
             set2set.run(bv_sample, sv, bv_out);
 
             cnt += bv_out.any();
-            //cout << bv_out.count() << endl;
-
         }
     }
 
@@ -2216,6 +2288,8 @@ int main(void)
     EnumeratorGoToTest();
 
     RangeCopyTest();
+
+    AggregatorTest();
 
     AndTest();
     XorTest();
