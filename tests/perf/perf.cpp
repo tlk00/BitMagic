@@ -155,9 +155,9 @@ void SimpleFillSets(test_bitset& bset,
 static
 void FillSetsIntervals(test_bitset* bset,
                        bvect& bv,
-                       unsigned min, 
-                       unsigned max,
-                       unsigned fill_factor,
+                       unsigned min = 0, 
+                       unsigned max = BSIZE,
+                       unsigned fill_factor = 10,
                        bool set_flag=true)
 {
     while(fill_factor==0)
@@ -187,7 +187,8 @@ void FillSetsIntervals(test_bitset* bset,
             }
             else
             {
-                bset[j] = false;
+                if (bset)
+                    bset->set(j, false);
                 bv[j] = false;
             }
                            
@@ -225,17 +226,19 @@ void GenerateTestCollection(std::vector<bvect>* target, unsigned count = 30, uns
     unsigned cnt1 = (count / 2);
     
     unsigned i = 0;
+    
     for (i = 0; i < cnt1; ++i)
     {
         std::unique_ptr<bvect> bv (new bvect);
         generate_bvector(*bv, vector_max);
         target->push_back(std::move(*bv));
     } // for
-
+    
     unsigned fill_factor = 10;
     for (; i < count; ++i)
     {
         std::unique_ptr<bvect> bv (new bvect);
+        
         FillSetsIntervals(0, *bv, vector_max/ 10, vector_max, fill_factor);
         bv->optimize();
 
@@ -2016,24 +2019,23 @@ void SparseVectorAccessTest()
 static
 void AggregatorTest()
 {
-    bvect* bv_arr[64] = {0,};
-//    std::cout << sizeof(bv_arr) << std::endl;
-    std::unique_ptr<std::vector<bvect> > bv_coll;//(new std::vector<bvect>());
-    bv_coll.reset(new std::vector<bvect>);
-
-    GenerateTestCollection(bv_coll.get(), 25, 80000000);
+    bm::aggregator<bvect> agg;
     
-    if (!bv_coll->size())
+    std::vector<bvect> bv_coll;
+    GenerateTestCollection(&bv_coll, 25, 80000000);
+    
+    if (!bv_coll.size())
         return;
     
-    std::vector<bvect>& bvc = *bv_coll;
-    for (unsigned k = 0; k < bv_coll->size(); ++k)
+    bvect* bv_arr[128] = { 0, };
+    std::vector<bvect>& bvc = bv_coll;
+    for (unsigned k = 0; k < bv_coll.size(); ++k)
     {
         bv_arr[k] = &(bvc[k]);
         //std::cout << k << ":" << bv_arr[k]->count() << std::endl;
     } // for
-    
-    bm::aggregator<bvect> agg;
+
+    return;
 
     std::unique_ptr<bvect> bv_target1(new bvect);
     std::unique_ptr<bvect> bv_target2(new bvect);
@@ -2042,7 +2044,7 @@ void AggregatorTest()
     TimeTaker tt("Aggregator OR (ref) test", REPEATS);
     for (unsigned i = 0; i < REPEATS; ++i)
     {
-        agg.combine_or_horizontal(*bv_target1, bv_arr, unsigned(bv_coll->size()));
+        agg.combine_or_horizontal(*bv_target1, bv_arr, unsigned(bv_coll.size()));
     } // for
     }
 
@@ -2050,7 +2052,7 @@ void AggregatorTest()
     TimeTaker tt("Aggregator OR test", REPEATS);
     for (unsigned i = 0; i < REPEATS; ++i)
     {
-        agg.combine_or(*bv_target2, bv_arr, unsigned(bv_coll->size()));
+        agg.combine_or(*bv_target2, bv_arr, unsigned(bv_coll.size()));
     } // for
     }
 
@@ -2060,6 +2062,7 @@ void AggregatorTest()
         std::cerr << "Error: Aggregator integrity failed." << std::endl;
         exit(1);
     }
+
 //    std::cout << bv_target1->count() << std::endl;
 }
 
