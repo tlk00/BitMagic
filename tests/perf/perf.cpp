@@ -2035,8 +2035,6 @@ void AggregatorTest()
         //std::cout << k << ":" << bv_arr[k]->count() << std::endl;
     } // for
 
-    return;
-
     std::unique_ptr<bvect> bv_target1(new bvect);
     std::unique_ptr<bvect> bv_target2(new bvect);
 
