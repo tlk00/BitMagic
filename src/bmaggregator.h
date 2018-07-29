@@ -62,12 +62,32 @@ public:
     */
     void combine_or(bvector_type& bv_target,
                     const bvector_type_ptr* bv_src, unsigned src_size);
-    
-    /// Horizontal aggregation (potentially slower) method
+
+    /**
+        Aggregate group of vectors using logical AND
+        \param bv_target - target vector
+        \param bv_src    - array of pointers on bit-vector aggregate arguments
+        \param src_size  - size of bv_src (how many vectors to aggregate)
+    */
+    void combine_and(bvector_type& bv_target,
+                    const bvector_type_ptr* bv_src, unsigned src_size);
+
+
+    /// Horizontal OR aggregation (potentially slower) method
     void combine_or_horizontal(bvector_type& bv_target,
                                const bvector_type_ptr* bv_src, unsigned src_size);
+    /// Horizontal AND aggregation (potentially slower) method
+    void combine_and_horizontal(bvector_type& bv_target,
+                                const bvector_type_ptr* bv_src, unsigned src_size);
+
 protected:
+    typedef typename bvector_type::blocks_manager_type blocks_manager_type;
+    
     void combine_or(unsigned i, unsigned j,
+                    bvector_type& bv_target,
+                    const bvector_type_ptr* bv_src, unsigned src_size);
+
+    void combine_and(unsigned i, unsigned j,
                     bvector_type& bv_target,
                     const bvector_type_ptr* bv_src, unsigned src_size);
 
@@ -76,17 +96,23 @@ protected:
                            const bvector_type_ptr* bv_src,
                            unsigned src_size);
     
-    bm::word_t* sort_input_blocks(const bvector_type_ptr* bv_src,
-                                   unsigned src_size,
-                                   unsigned i, unsigned j,
-                                   unsigned* arg_blk_count,
-                                   unsigned* arg_blk_gap_count);
+    bm::word_t* sort_input_blocks_or(const bvector_type_ptr* bv_src,
+                                     unsigned src_size,
+                                     unsigned i, unsigned j,
+                                     unsigned* arg_blk_count,
+                                     unsigned* arg_blk_gap_count);
+    
+    bm::word_t* sort_input_blocks_and(const bvector_type_ptr* bv_src,
+                                      unsigned src_size,
+                                      unsigned i, unsigned j,
+                                      unsigned* arg_blk_count,
+                                      unsigned* arg_blk_gap_count);
 
-    bool process_bit_blocks(typename bvector_type::blocks_manager_type& bman_target,
-                            unsigned i, unsigned j, unsigned block_count);
+    bool process_bit_blocks_or(blocks_manager_type& bman_target,
+                               unsigned i, unsigned j, unsigned block_count);
 
-    bool process_gap_blocks(typename bvector_type::blocks_manager_type& bman_target,
-                            unsigned i, unsigned j, unsigned block_count);
+    bool process_gap_blocks_or(blocks_manager_type& bman_target,
+                               unsigned i, unsigned j, unsigned block_count);
     static
     unsigned find_effective_sub_block_size(unsigned i,
                                            const bvector_type_ptr* bv_src,
@@ -114,6 +140,26 @@ private:
 //
 // ------------------------------------------------------------------------
 
+template<typename BV>
+aggregator<BV>::aggregator()
+{
+    db_ = (data_buffer*)::malloc(sizeof(data_buffer));
+    if (!db_)
+    {
+        BV::throw_bad_alloc();
+    }
+}
+
+// ------------------------------------------------------------------------
+
+template<typename BV>
+aggregator<BV>::~aggregator()
+{
+    if (!db_)
+        ::free(db_);
+}
+
+// ------------------------------------------------------------------------
 
 template<typename BV>
 void aggregator<BV>::combine_or(bvector_type& bv_target,
@@ -137,24 +183,23 @@ void aggregator<BV>::combine_or(bvector_type& bv_target,
 // ------------------------------------------------------------------------
 
 template<typename BV>
-aggregator<BV>::aggregator()
+void aggregator<BV>::combine_and(bvector_type& bv_target,
+                        const bvector_type_ptr* bv_src, unsigned src_size)
 {
-    db_ = (data_buffer*)::malloc(sizeof(data_buffer));
-    if (!db_)
+    BM_ASSERT(src_size);
+
+    unsigned top_blocks = resize_target(bv_target, bv_src, src_size);
+    for (unsigned i = 0; i < top_blocks; ++i)
     {
-        BV::throw_bad_alloc();
-    }
+        unsigned set_array_max = find_effective_sub_block_size(i, bv_src, src_size);
+        unsigned j = 0;
+        do
+        {
+            combine_and(i, j, bv_target, bv_src, src_size);
+            ++j;
+        } while (j < set_array_max);
+    } // for i
 }
-
-// ------------------------------------------------------------------------
-
-template<typename BV>
-aggregator<BV>::~aggregator()
-{
-    if (!db_)
-        ::free(db_);
-}
-
 
 // ------------------------------------------------------------------------
 
@@ -241,9 +286,8 @@ void aggregator<BV>::combine_or(unsigned i, unsigned j,
     unsigned arg_blk_count = 0;
     unsigned arg_blk_gap_count = 0;
     bm::word_t* blk =
-        sort_input_blocks(bv_src, src_size,
-                          i, j,
-                          &arg_blk_count, &arg_blk_gap_count);
+        sort_input_blocks_or(bv_src, src_size, i, j,
+                             &arg_blk_count, &arg_blk_gap_count);
 
     BM_ASSERT(blk == 0 || blk == FULL_BLOCK_FAKE_ADDR);
 
@@ -258,13 +302,13 @@ void aggregator<BV>::combine_or(unsigned i, unsigned j,
         if (arg_blk_count || arg_blk_gap_count)
         {
             bool all_one =
-                process_bit_blocks(bman_target, i, j, arg_blk_count);
+                process_bit_blocks_or(bman_target, i, j, arg_blk_count);
             if (!all_one)
             {
                 if (arg_blk_gap_count)
                 {
                     all_one =
-                        process_gap_blocks(bman_target, i, j, arg_blk_gap_count);
+                        process_gap_blocks_or(bman_target, i, j, arg_blk_gap_count);
                 }
                 if (!all_one)
                 {
@@ -283,9 +327,62 @@ void aggregator<BV>::combine_or(unsigned i, unsigned j,
 // ------------------------------------------------------------------------
 
 template<typename BV>
-bool aggregator<BV>::process_gap_blocks(typename bvector_type::blocks_manager_type& bman_target,
-                                        unsigned i, unsigned j,
-                                        unsigned arg_blk_gap_count)
+void aggregator<BV>::combine_and(unsigned i, unsigned j,
+                                 bvector_type& bv_target,
+                                 const bvector_type_ptr* bv_src,
+                                 unsigned src_size)
+{
+    typename bvector_type::blocks_manager_type& bman_target = bv_target.get_blocks_manager();
+
+    unsigned arg_blk_count = 0;
+    unsigned arg_blk_gap_count = 0;
+    bm::word_t* blk =
+        sort_input_blocks_and(bv_src, src_size,
+                              i, j,
+                              &arg_blk_count, &arg_blk_gap_count);
+
+    BM_ASSERT(blk == 0 || blk == FULL_BLOCK_FAKE_ADDR);
+
+    if (!blk) // nothing to do - golden block(!)
+    {
+        bman_target.check_alloc_top_subblock(i);
+        bman_target.set_block_ptr(i, j, blk);
+    }
+    else
+    {
+        blk = db_->tb;
+        if (arg_blk_count || arg_blk_gap_count)
+        {
+            bool all_one =
+                process_bit_blocks_or(bman_target, i, j, arg_blk_count);
+            if (!all_one)
+            {
+                if (arg_blk_gap_count)
+                {
+                    all_one =
+                        process_gap_blocks_or(bman_target, i, j, arg_blk_gap_count);
+                }
+                if (!all_one)
+                {
+                    // we have some results, allocate block and copy from temp
+                    bman_target.check_alloc_top_subblock(i);
+                    blk = bman_target.get_allocator().alloc_bit_block();
+                    bman_target.set_block_ptr(i, j, blk);
+                    bm::bit_block_copy(blk, db_->tb);
+                }
+            }
+        }
+    }
+
+}
+
+
+// ------------------------------------------------------------------------
+
+template<typename BV>
+bool aggregator<BV>::process_gap_blocks_or(blocks_manager_type& bman_target,
+                                           unsigned i, unsigned j,
+                                           unsigned arg_blk_gap_count)
 {
     bm::word_t* blk = db_->tb;
     bool all_one;
@@ -376,9 +473,9 @@ bool aggregator<BV>::process_gap_blocks(typename bvector_type::blocks_manager_ty
 // ------------------------------------------------------------------------
 
 template<typename BV>
-bool aggregator<BV>::process_bit_blocks(typename bvector_type::blocks_manager_type& bman_target,
-                                        unsigned i, unsigned j,
-                                        unsigned arg_blk_count)
+bool aggregator<BV>::process_bit_blocks_or(blocks_manager_type& bman_target,
+                                           unsigned i, unsigned j,
+                                           unsigned arg_blk_count)
 {
     bm::word_t* blk = db_->tb;
     bool all_one;
@@ -478,11 +575,11 @@ unsigned aggregator<BV>::resize_target(bvector_type& bv_target,
 // ------------------------------------------------------------------------
 
 template<typename BV>
-bm::word_t* aggregator<BV>::sort_input_blocks(const bvector_type_ptr* bv_src,
-                                              unsigned src_size,
-                                              unsigned i, unsigned j,
-                                              unsigned* arg_blk_count,
-                                              unsigned* arg_blk_gap_count)
+bm::word_t* aggregator<BV>::sort_input_blocks_or(const bvector_type_ptr* bv_src,
+                                                 unsigned src_size,
+                                                 unsigned i, unsigned j,
+                                                 unsigned* arg_blk_count,
+                                                 unsigned* arg_blk_gap_count)
 {
     bm::word_t* blk = 0;
     for (unsigned k = 0; k < src_size; ++k)
@@ -513,6 +610,43 @@ bm::word_t* aggregator<BV>::sort_input_blocks(const bvector_type_ptr* bv_src,
     return blk;
 }
 
+// ------------------------------------------------------------------------
+
+template<typename BV>
+bm::word_t* aggregator<BV>::sort_input_blocks_and(const bvector_type_ptr* bv_src,
+                                                  unsigned src_size,
+                                                  unsigned i, unsigned j,
+                                                  unsigned* arg_blk_count,
+                                                  unsigned* arg_blk_gap_count)
+{
+    bm::word_t* blk = 0;
+    for (unsigned k = 0; k < src_size; ++k)
+    {
+        const bvector_type* bv = bv_src[k];
+        BM_ASSERT(bv);
+        const typename bvector_type::blocks_manager_type& bman_arg = bv->get_blocks_manager();
+        const bm::word_t* arg_blk = bman_arg.get_block_ptr(i, j);
+        if (!arg_blk)
+        {
+            blk = 0;
+            *arg_blk_gap_count = *arg_blk_count = 0; // nothing to do
+            break;
+        }
+        if (BM_IS_GAP(arg_blk))
+        {
+            db_->v_arg_blk_gap[*arg_blk_gap_count] = BMGAP_PTR(arg_blk);
+            (*arg_blk_gap_count)++;
+        }
+        else // FULL or bit block
+        {
+            db_->v_arg_blk[*arg_blk_count] = arg_blk;
+            (*arg_blk_count)++;
+        }
+    } // for k
+    return blk;
+}
+
+
 
 // ------------------------------------------------------------------------
 
@@ -535,6 +669,24 @@ void aggregator<BV>::combine_or_horizontal(bvector_type& bv_target,
 
 // ------------------------------------------------------------------------
 
+template<typename BV>
+void aggregator<BV>::combine_and_horizontal(bvector_type& bv_target,
+                     const bvector_type_ptr* bv_src, unsigned src_size)
+{
+    BM_ASSERT(src_size);
+    
+    const bvector_type* bv = bv_src[0];
+    bv_target = *bv;
+    
+    for (unsigned i = 1; i < src_size; ++i)
+    {
+        bv = bv_src[i];
+        BM_ASSERT(bv);
+        bv_target.bit_and(*bv);
+    }
+}
+
+// ------------------------------------------------------------------------
 
 } // bm
 
