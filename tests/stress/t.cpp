@@ -4067,6 +4067,48 @@ void DesrializationTest2()
    } // for i
 
 }
+static
+void AggregatorTest()
+{
+  cout << "---------------------------- Aggregator Test" << endl;
+
+    bvect* bv_arr[128] = { 0, };
+    bm::aggregator<bvect> agg;
+    
+    {
+        bvect bv1, bv2, bv3;
+        bvect bv_empty;
+        bvect bv_control;
+        
+        bv_arr[0] = &bv1;
+        agg.combine_or(bv3, bv_arr, 1);
+        assert(bv3.count()==0);
+        
+        bv3[100] = true;
+        bv1.invert();
+        bv_control.invert();
+        bv_arr[0] = &bv1;
+        agg.combine_or(bv3, bv_arr, 1);
+        int res = bv_control.compare(bv3);
+        assert(res == 0);
+        
+        bv_arr[0] = &bv1;
+        bv_arr[1] = &bv2;
+        agg.combine_or(bv3, bv_arr, 2);
+        res = bv_control.compare(bv3);
+        assert(res == 0);
+        
+        bv2[1000000] = true;
+        bv_arr[0] = &bv1;
+        bv_arr[1] = &bv2;
+        agg.combine_or(bv3, bv_arr, 2);
+        res = bv_control.compare(bv3);
+        assert(res == 0);
+    }
+
+  cout << "---------------------------- Aggregator Test OK" << endl;
+}
+
 
 static
 void StressTestAggregatorOR(unsigned repetitions)
@@ -14428,7 +14470,7 @@ int main(void)
     exit(1);
 */
 
-
+/*
     TestRecomb();
 
     OptimGAPTest();
@@ -14526,6 +14568,8 @@ int main(void)
      DesrializationTest2();
 
      BlockLevelTest();
+*/
+     AggregatorTest();
 
      StressTestAggregatorOR(100);
     
