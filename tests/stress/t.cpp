@@ -36,6 +36,7 @@ For more information please visit:  http://bitmagic.io
 
 #include <bm.h>
 #include <bmalgo.h>
+#include <bmaggregator.h>
 #include <bmutil.h>
 #include <bmserial.h>
 #include <bmrandom.h>

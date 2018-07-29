@@ -38,6 +38,7 @@ For more information please visit:  http://bitmagic.io
 
 #include "bm.h"
 #include "bmalgo.h"
+#include "bmaggregator.h"
 #include "bmserial.h"
 #include "bmsparsevec.h"
 #include "bmsparsevec_algo.h"

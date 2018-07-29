@@ -23,6 +23,9 @@ For more information please visit:  http://bitmagic.io
 
 #include "bmdef.h"
 #include "bmsparsevec.h"
+#include "bmaggregator.h"
+#include "bmdef.h"
+
 
 /** \defgroup svalgo Sparse vector algorithms
     Sparse vector algorithms
