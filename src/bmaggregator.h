@@ -140,10 +140,20 @@ private:
 //
 // ------------------------------------------------------------------------
 
+#define BM_ALLOC_ALIGN 32
+
 template<typename BV>
 aggregator<BV>::aggregator()
 {
-    db_ = (data_buffer*)::malloc(sizeof(data_buffer));
+#if defined(BM_ALLOC_ALIGN)
+#ifdef _MSC_VER
+    db_ = (data_buffer*) ::_aligned_malloc(sizeof(data_buffer), BM_ALLOC_ALIGN);
+#else
+    db_ = (data_buffer*) ::_mm_malloc(sizeof(data_buffer), BM_ALLOC_ALIGN);
+#endif
+#else
+    db_ = (data_buffer*) ::malloc(sizeof(data_buffer));
+#endif
     if (!db_)
     {
         BV::throw_bad_alloc();
@@ -155,9 +165,18 @@ aggregator<BV>::aggregator()
 template<typename BV>
 aggregator<BV>::~aggregator()
 {
-    if (!db_)
-        ::free(db_);
+#ifdef BM_ALLOC_ALIGN
+# ifdef _MSC_VER
+    ::_aligned_free(db_);
+#else
+    ::_mm_free(db_);
+# endif
+#else
+    ::free(db_);
+#endif
 }
+
+#undef BM_ALLOC_ALIGN
 
 // ------------------------------------------------------------------------
 
