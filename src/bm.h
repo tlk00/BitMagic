@@ -2759,7 +2759,8 @@ int bvector<Alloc>::compare(const bvector<Alloc>& bv) const
 
             if (arg_gap != gap)
             {
-                bm::wordop_t temp_blk[bm::set_block_size_op]; 
+                BM_DECLARE_TEMP_BLOCK(temp_blk);
+                
                 bm::wordop_t* blk1;
                 bm::wordop_t* blk2;
 
