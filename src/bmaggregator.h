@@ -140,7 +140,12 @@ private:
 //
 // ------------------------------------------------------------------------
 
+#if defined(BMSSE2OPT) || defined(BMSSE42OPT)
+#define BM_ALLOC_ALIGN 16
+#endif
+#if defined(BMAVX2OPT)
 #define BM_ALLOC_ALIGN 32
+#endif
 
 template<typename BV>
 aggregator<BV>::aggregator()
