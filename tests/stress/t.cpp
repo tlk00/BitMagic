@@ -860,6 +860,8 @@ unsigned SerializationOperation(bvect*             bv_target,
             break;
         case bm::set_AND:
             bvt &= bv2;
+            agg.combine_and(bv_agg, agg_list, 2);
+            agg_check = true;
             break;
         case bm::set_SUB:
             bvt -= bv2;
@@ -874,7 +876,7 @@ unsigned SerializationOperation(bvect*             bv_target,
         }
         if (agg_check && bvt.compare(bv_agg) != 0)
         {
-            cerr << "Aggregator operation comparison failed!" << endl;
+            cerr << "Error: Aggregator operation comparison failed!" << endl;
             exit(1);
         }
 
@@ -14470,7 +14472,7 @@ int main(void)
     exit(1);
 */
 
-/*
+
     TestRecomb();
 
     OptimGAPTest();
@@ -14568,12 +14570,13 @@ int main(void)
      DesrializationTest2();
 
      BlockLevelTest();
-*/
+
      AggregatorTest();
 
      StressTestAggregatorOR(100);
     
      StressTest(120, 0); // OR
+
      StressTest(120, 3); // AND
      StressTest(120, 1); // SUB
      StressTest(120, 2); // XOR
