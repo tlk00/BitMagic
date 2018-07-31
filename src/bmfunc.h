@@ -2149,57 +2149,6 @@ void or_bit_block(unsigned* dest, unsigned bitpos, unsigned bitcount)
 
    @ingroup bitfunc
 */
-/*
-inline void sub_bit_block(unsigned* dest, 
-                          unsigned bitpos, 
-                          unsigned bitcount)
-{
-    unsigned nbit  = unsigned(bitpos & bm::set_block_mask); 
-    unsigned nword = unsigned(nbit >> bm::set_word_shift); 
-    nbit &= bm::set_word_mask;
-
-    bm::word_t* word = dest + nword;
-
-    if (bitcount == 1)  // special case (only 1 bit to set)
-    {
-        *word &= ~unsigned(1 << nbit);
-        return;
-    }
-
-    if (nbit) // starting position is not aligned
-    {
-        unsigned right_margin = nbit + bitcount;
-
-        // here we checking if we setting bits only in the current
-        // word. Example: 00111000000000000000000000000000 (32 bits word)
-
-        if (right_margin < 32) 
-        {
-            unsigned mask = 
-                block_set_table<true>::_right[nbit] & 
-                block_set_table<true>::_left[right_margin-1];
-            *word &= ~mask;
-            return;
-        }
-        *word &= ~block_set_table<true>::_right[nbit];
-        bitcount -= 32 - nbit;
-        ++word;
-    }
-    // now word aligned, use unrolled loops
-    //
-    for ( ;bitcount >= 64; bitcount-=64, word+=2)
-        word[0] = word[1] = 0u;
-    if (bitcount >= 32)
-    {
-        *word++ = 0u; bitcount -= 32;
-    }
-    if (bitcount)
-    {
-        *word &= ~block_set_table<true>::_left[bitcount-1];
-    }
-}
-*/
-
 inline
 void sub_bit_block(unsigned* dest, unsigned bitpos, unsigned bitcount)
 {
@@ -6228,7 +6177,7 @@ inline
 bm::id64_t calc_block_digest0(const bm::word_t* const block)
 {
     bm::id64_t digest0 = 0;
-    bm::id64_t mask(1ull);
+    const bm::id64_t mask(1ull);
     unsigned   off;
     
     for (unsigned i = 0; i < 64; ++i)
@@ -6247,6 +6196,49 @@ bm::id64_t calc_block_digest0(const bm::word_t* const block)
     } // for i
     return digest0;
 }
+
+/*!
+   \brief Compute digest for 64 non-zero areas based on existing digest
+          (function revalidates zero areas)
+   \param block - bit block
+   \param digest - start digest
+ 
+    @return digest bit-mask (0 means all block is empty)
+ 
+   @ingroup bitfunc
+   @internal
+*/
+inline
+bm::id64_t update_block_digest0(const bm::word_t* const block, bm::id64_t digest)
+{
+    unsigned short bits[65];
+    bm::id64_t idigest = ~digest;
+    if (!idigest)
+    {
+        return calc_block_digest0(block);
+    }
+    
+    const bm::id64_t mask(1ull);
+    
+    unsigned bcnt = bm::bitscan_popcnt64(idigest, bits);
+    for (unsigned i = 0; i < bcnt; ++i)
+    {
+        unsigned wave = bits[i];
+        unsigned off = wave * bm::set_block_digest_wave_size;
+        for (unsigned j = 0; j < bm::set_block_digest_wave_size; j+=4)
+        {
+            bm::word_t w =
+                block[off+j+0] | block[off+j+1] | block[off+j+2] | block[off+j+3];
+            if (w)
+            {
+                digest |= (mask << wave);
+                break;
+            }
+        } // for j
+    } // for i
+    return digest;
+}
+
 
 // --------------------------------------------------------------
 // Functions to work with int values stored in 64-bit pointers

@@ -13697,6 +13697,9 @@ void TestBlockDigest()
         bm::id64_t mask1 = bm::widx_to_digest_mask(k);
         bm::id64_t mask2 = bm::calc_block_digest0(tb1);
         assert(mask1 == mask2);
+        bm::id64_t mask3 = bm::update_block_digest0(tb1, mask1);
+        assert(mask1 == mask3);
+
     }
 
     unsigned start = 0;
@@ -13714,7 +13717,9 @@ void TestBlockDigest()
         bm::id64_t mask1 = mask_s1 | mask_e1;
         bm::id64_t mask2 = bm::calc_block_digest0(tb1);
         assert(mask1 == mask2);
-        
+        bm::id64_t mask3 = bm::update_block_digest0(tb1, mask1);
+        assert(mask1 == mask3);
+
         ++start; --end;
     } // while
 
