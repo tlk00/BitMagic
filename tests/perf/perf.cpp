@@ -220,10 +220,26 @@ void FillSetsIntervals(test_bitset* bset,
 
 }
 
-inline
+static
+void generate_sparse_bvector(bvect& bv,
+                             unsigned min = 0,
+                             unsigned max = BSIZE,
+                             unsigned fill_factor = 65536)
+{
+    for (unsigned i = min; i < max; i+= fill_factor)
+    {
+        bv.set(i);
+    }
+}
+
+
+static
 void GenerateTestCollection(std::vector<bvect>* target, unsigned count = 30, unsigned vector_max = 40000000)
 {
     assert(target);
+    bvect bv_common; // sub-vector common for all collection
+    generate_sparse_bvector(bv_common, vector_max/10, vector_max, 40000);
+    
     unsigned cnt1 = (count / 2);
     
     unsigned i = 0;
@@ -232,6 +248,7 @@ void GenerateTestCollection(std::vector<bvect>* target, unsigned count = 30, uns
     {
         std::unique_ptr<bvect> bv (new bvect);
         generate_bvector(*bv, vector_max);
+        *bv |= bv_common;
         target->push_back(std::move(*bv));
     } // for
     
@@ -242,6 +259,7 @@ void GenerateTestCollection(std::vector<bvect>* target, unsigned count = 30, uns
         
         FillSetsIntervals(0, *bv, vector_max/ 10, vector_max, fill_factor);
         bv->optimize();
+        *bv |= bv_common;
 
         target->push_back(std::move(*bv));
     } // for
@@ -2020,6 +2038,8 @@ void SparseVectorAccessTest()
 static
 void AggregatorTest()
 {
+    int res;
+    bvect* bv_arr[128] = { 0, };
     bm::aggregator<bvect> agg;
     
     std::vector<bvect> bv_coll;
@@ -2028,7 +2048,6 @@ void AggregatorTest()
     if (!bv_coll.size())
         return;
     
-    bvect* bv_arr[128] = { 0, };
     std::vector<bvect>& bvc = bv_coll;
     for (unsigned k = 0; k < bv_coll.size(); ++k)
     {
@@ -2055,12 +2074,36 @@ void AggregatorTest()
     } // for
     }
 
-    int res = bv_target1->compare(*bv_target2);
+    res = bv_target1->compare(*bv_target2);
     if (res != 0)
     {
-        std::cerr << "Error: Aggregator integrity failed." << std::endl;
+        std::cerr << "Error: Aggregator OR integrity failed." << std::endl;
         exit(1);
     }
+
+    {
+    TimeTaker tt("Aggregator AND (ref) test", REPEATS);
+    for (unsigned i = 0; i < REPEATS; ++i)
+    {
+        agg.combine_and_horizontal(*bv_target1, bv_arr, unsigned(bv_coll.size()));
+    } // for
+    }
+
+    {
+    TimeTaker tt("Aggregator AND test", REPEATS);
+    for (unsigned i = 0; i < REPEATS; ++i)
+    {
+        agg.combine_and(*bv_target2, bv_arr, unsigned(bv_coll.size()));
+    } // for
+    }
+
+    res = bv_target1->compare(*bv_target2);
+    if (res != 0)
+    {
+        std::cerr << "Error: Aggregator AND integrity failed." << std::endl;
+        exit(1);
+    }
+    
 
 //    std::cout << bv_target1->count() << std::endl;
 }
