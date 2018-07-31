@@ -4231,6 +4231,125 @@ void StressTestAggregatorOR(unsigned repetitions)
 }
 
 static
+void StressTestAggregatorAND(unsigned repetitions)
+{
+  cout << "---------------------------- Aggregator AND Stress Test" << endl;
+   unsigned size = BITVECT_SIZE - 10;
+
+
+    unsigned i;
+    for (i = 0; i < repetitions; ++i)
+    {
+        int opt = rand() % 2;
+        cout << endl << " - - - - - - - - - - - - AGG AND STRESS STEP " << i << endl;;
+        
+        switch (rand() % 3)
+        {
+        case 0:
+            size = BITVECT_SIZE / 10;
+            break;
+        case 1:
+            size = BITVECT_SIZE / 2;
+            break;
+        default:
+            size = BITVECT_SIZE - 10;
+            break;
+        } // switch
+        
+        unsigned start1 = 0;
+        switch (rand() % 3)
+        {
+        case 1:
+            start1 += size / 5;
+            break;
+        default:
+            break;
+        }
+
+        unsigned start2 = 0;
+        switch (rand() % 3)
+        {
+        case 1:
+            start2 += size / 5;
+            break;
+        default:
+            break;
+        }
+
+        bvect_mini   bvect_min1(size);
+        bvect bv0, bv1, bv2, bv3, bv4, bv5, bv6, bv7, bv8, bv9;
+
+        // 0 skipped
+        FillSetsRandomMethod(&bvect_min1, &bv1, start1, size, opt);
+        FillSetsRandomMethod(&bvect_min1, &bv2, start2, size, opt);
+        // 3 skipped
+        FillSetsRandomMethod(&bvect_min1, &bv5, start1, size, opt);
+        FillSetsRandomMethod(&bvect_min1, &bv6, start2, size, opt);
+        FillSetsRandomMethod(&bvect_min1, &bv7, start1, size, opt);
+        FillSetsRandomMethod(&bvect_min1, &bv8, start2, size, opt);
+        FillSetsRandomMethod(&bvect_min1, &bv9, start2, size, opt);
+        
+        bm::aggregator<bvect> agg;
+        
+        bvect* agg_list[32] = {0, };
+        
+        agg_list[0] = &bv0;
+        agg_list[1] = &bv1;
+        agg_list[2] = &bv2;
+        agg_list[3] = &bv3;
+        agg_list[4] = &bv4;
+        agg_list[5] = &bv5;
+        agg_list[6] = &bv6;
+        agg_list[7] = &bv7;
+        agg_list[8] = &bv8;
+        agg_list[9] = &bv9;
+        
+        bvect bv_target1, bv_target2;
+        
+        unsigned cnt = 10;
+        agg.combine_and(bv_target1, agg_list, cnt);
+        agg.combine_and_horizontal(bv_target2, agg_list, cnt);
+
+        int res = bv_target1.compare(bv_target2);
+        if (res!=0)
+        {
+            cerr << "Error: Aggregator AND check failed!" << endl;
+            exit(1);
+        }
+        for (unsigned j = 1; j < cnt; ++j)
+        {
+            agg.combine_and(bv_target1, agg_list, j);
+            agg.combine_and_horizontal(bv_target2, agg_list, j);
+            res = bv_target1.compare(bv_target2);
+            if (res!=0)
+            {
+                cerr << "Error: Aggregator AND check failed! 1.laddder step = "
+                     << j << endl;
+                exit(1);
+            }
+        }
+        
+        for (unsigned j = 0; j < cnt; ++j)
+        {
+            agg.combine_and(bv_target1, agg_list+j, cnt-j);
+            agg.combine_and_horizontal(bv_target2, agg_list+j, cnt-j);
+            res = bv_target1.compare(bv_target2);
+            if (res!=0)
+            {
+                cerr << "Error: Aggregator AND check failed! 2.laddder step = "
+                     << j << endl;
+                exit(1);
+            }
+        }
+
+
+    } // for i
+
+  cout << "---------------------------- Aggregator AND Stress Test OK" << endl;
+}
+
+
+static
 void StressTest(unsigned repetitions, int set_operation = -1)
 {
 
@@ -13564,6 +13683,46 @@ void TestBlockZero()
 
 
 static
+void TestBlockDigest()
+{
+    cout << " ------------------------------ Test bit-block DIGEST" << endl;
+
+    BM_DECLARE_TEMP_BLOCK(tb1);
+
+    for (unsigned k = 0; k < bm::set_block_size; ++k)
+    {
+        bm::bit_block_set(tb1, 0);
+        
+        tb1.b_.w32[k] = 1;
+        bm::id64_t mask1 = bm::widx_to_digest_mask(k);
+        bm::id64_t mask2 = bm::calc_block_digest0(tb1);
+        assert(mask1 == mask2);
+    }
+
+    unsigned start = 0;
+    unsigned end = bm::set_block_size-1;
+    
+    while(start <= end)
+    {
+        bm::bit_block_set(tb1, 0);
+
+        tb1.b_.w32[start] = 1;
+        tb1.b_.w32[end] = 1;
+        
+        bm::id64_t mask_s1 = bm::widx_to_digest_mask(start);
+        bm::id64_t mask_e1 = bm::widx_to_digest_mask(end);
+        bm::id64_t mask1 = mask_s1 | mask_e1;
+        bm::id64_t mask2 = bm::calc_block_digest0(tb1);
+        assert(mask1 == mask2);
+        
+        ++start; --end;
+    } // while
+
+    cout << " ------------------------------ Test bit-block DIGEST OK" << endl;
+}
+
+
+static
 void TestBlockAND()
 {
     cout << " ------------------------------ Test bit-block AND" << endl;
@@ -14472,7 +14631,6 @@ int main(void)
     exit(1);
 */
 
-
     TestRecomb();
 
     OptimGAPTest();
@@ -14483,6 +14641,8 @@ int main(void)
     TestSIMDUtils();
 
      TestBlockZero();
+    
+     TestBlockDigest();
     
      TestBlockAND();
      TestBlockSUB();
@@ -14574,7 +14734,9 @@ int main(void)
      AggregatorTest();
 
      StressTestAggregatorOR(100);
-    
+ 
+     StressTestAggregatorAND(100);
+
      StressTest(120, 0); // OR
 
      StressTest(120, 3); // AND
