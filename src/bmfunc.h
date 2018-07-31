@@ -2148,7 +2148,8 @@ void or_bit_block(unsigned* dest, unsigned bitpos, unsigned bitcount)
    \param bitcount - number of bits to set.
 
    @ingroup bitfunc
-*/  
+*/
+/*
 inline void sub_bit_block(unsigned* dest, 
                           unsigned bitpos, 
                           unsigned bitcount)
@@ -2197,6 +2198,46 @@ inline void sub_bit_block(unsigned* dest,
         *word &= ~block_set_table<true>::_left[bitcount-1];
     }
 }
+*/
+
+inline
+void sub_bit_block(unsigned* dest, unsigned bitpos, unsigned bitcount)
+{
+    const unsigned maskFF = ~0u;
+    
+    dest += unsigned(bitpos >> bm::set_word_shift); // nword
+    bitpos &= bm::set_word_mask;
+
+    if (bitcount == 1u)  // special case (only 1 bit to set)
+    {
+        *dest &= ~(1u << bitpos);
+        return;
+    }
+
+    if (bitpos) // starting pos is not aligned
+    {
+        unsigned mask_r = maskFF << bitpos;
+        unsigned right_margin = bitpos + bitcount;
+        if (right_margin < 32)
+        {
+            *dest &= ~((maskFF >> (32 - right_margin)) & mask_r);
+            return;
+        }
+        *dest++ &= ~mask_r;
+        bitcount -= 32 - bitpos;
+    }
+    for ( ;bitcount >= 64; bitcount-=64, dest+=2)
+        dest[0] = dest[1] = 0u;
+    if (bitcount >= 32)
+    {
+        *dest++ = 0u; bitcount -= 32;
+    }
+    if (bitcount)
+    {
+        *dest &= ~(maskFF >> (32 - bitcount));
+    }
+}
+
 
 
 /*! 
@@ -2356,9 +2397,12 @@ void gap_and_to_bitset(unsigned* dest, const T*  pcurr)
     if (!(*pcurr & 1) )  // Starts with 0
     {
         bm::sub_bit_block(dest, 0, pcurr[1] + 1); // (not AND) - SUB [0] gaps
-        ++pcurr;
+        pcurr += 3;
     }
-    for (pcurr += 2; pcurr <= pend; pcurr += 2) // now we are in GAP "0" again
+    else
+        pcurr += 2;
+    
+    for (; pcurr <= pend; pcurr += 2) // now we are in GAP "0" again
     {
         BM_ASSERT(*pcurr > *(pcurr-1));
         bm::sub_bit_block(dest, pcurr[-1]+1, *pcurr - pcurr[-1]);
@@ -6151,6 +6195,58 @@ unsigned idx_arr_block_lookup(const unsigned* idx, unsigned size, unsigned nb, u
 #endif
 }
 
+// --------------------------------------------------------------
+// Functions for bit-block digest calculation
+// --------------------------------------------------------------
+
+/*!
+   \brief Compute digest mask for word address in block
+
+    @return digest bit-mask
+ 
+   @ingroup bitfunc
+   @internal
+*/
+inline
+bm::id64_t  widx_to_digest_mask(unsigned w_idx)
+{
+    bm::id64_t mask(1ull);
+    return mask << (w_idx / bm::set_block_digest_wave_size);
+}
+
+
+/*!
+   \brief Compute digest for 64 non-zero areas
+   \param block - Bit block
+ 
+    @return digest bit-mask (0 means all block is empty)
+ 
+   @ingroup bitfunc
+   @internal
+*/
+inline
+bm::id64_t calc_block_digest0(const bm::word_t* const block)
+{
+    bm::id64_t digest0 = 0;
+    bm::id64_t mask(1ull);
+    unsigned   off;
+    
+    for (unsigned i = 0; i < 64; ++i)
+    {
+        off = i * bm::set_block_digest_wave_size;
+        for (unsigned j = 0; j < bm::set_block_digest_wave_size; j+=4)
+        {
+            bm::word_t w =
+                block[off+j+0] | block[off+j+1] | block[off+j+2] | block[off+j+3];
+            if (w)
+            {
+                digest0 |= (mask << i);
+                break;
+            }
+        } // for j
+    } // for i
+    return digest0;
+}
 
 // --------------------------------------------------------------
 // Functions to work with int values stored in 64-bit pointers

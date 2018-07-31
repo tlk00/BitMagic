@@ -49,8 +49,10 @@ const unsigned set_block_shift = 16u;
 const unsigned set_block_mask  = 0xFFFFu;
 const unsigned set_blkblk_mask = 0xFFFFFFu;
 
-const unsigned set_block_plain_size = set_block_size / 32u;
+const unsigned set_block_plain_size = bm::set_block_size / 32u;
 const unsigned set_block_plain_cnt = (unsigned)(sizeof(bm::word_t) * 8u);
+
+const unsigned set_block_digest_wave_size = bm::set_block_size / 64;
 
 // Word parameters
 
