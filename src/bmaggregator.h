@@ -384,7 +384,14 @@ void aggregator<BV>::combine_and(unsigned i, unsigned j,
     {
         if (arg_blk_count || arg_blk_gap_count)
         {
-            bm::bit_block_set(ar_->tb1, ~0u); // set buffer to 0xFF...
+            if (arg_blk_count)
+            {
+                bm::bit_block_copy(ar_->tb1, ar_->v_arg_blk[--arg_blk_count]);
+            }
+            else
+            {
+                bm::bit_block_set(ar_->tb1, ~0u); // set buffer to 0xFF...
+            }
             bool all_zero;
             // first, AND all GAP blocks (if any)
             //
@@ -521,6 +528,14 @@ bool aggregator<BV>::process_gap_blocks_and(unsigned arg_blk_gap_count)
     for (; k < arg_blk_gap_count; ++k)
     {
         bm::gap_and_to_bitset(blk, ar_->v_arg_blk_gap[k]);
+        if (k % 2 == 0)
+        {
+            bool all_zero = bm::bit_is_all_zero(blk);
+            if (all_zero)
+            {
+                return true;
+            }
+        }
     }
     
     bool all_zero = bm::bit_is_all_zero(blk);
