@@ -384,6 +384,9 @@ void aggregator<BV>::combine_and(unsigned i, unsigned j,
     {
         if (arg_blk_count || arg_blk_gap_count)
         {
+//std::cerr << "BITS=" << arg_blk_count << " ";
+//std::cerr << "GAPS=" << arg_blk_gap_count << " \n";
+
             if (arg_blk_count)
             {
                 bm::bit_block_copy(ar_->tb1, ar_->v_arg_blk[--arg_blk_count]);
@@ -393,21 +396,23 @@ void aggregator<BV>::combine_and(unsigned i, unsigned j,
                 bm::bit_block_set(ar_->tb1, ~0u); // set buffer to 0xFF...
             }
             bool all_zero;
-            // first, AND all GAP blocks (if any)
+            
+            // AND bit-blocks
             //
+            all_zero =
+                process_bit_blocks_and(arg_blk_count);
+            if (all_zero)
+                return;
+
+            // AND all GAP blocks (if any)
+            //
+
             if (arg_blk_gap_count)
             {
                 all_zero =
                     process_gap_blocks_and(arg_blk_gap_count);
-                if (all_zero)
-                    return;
             }
             
-            // AND bit-blocks
-            //
-            
-            all_zero =
-                process_bit_blocks_and(arg_blk_count);
             if (!all_zero)
             {
                 // we have some results, allocate block and copy from temp
@@ -416,6 +421,7 @@ void aggregator<BV>::combine_and(unsigned i, unsigned j,
                 bman_target.set_block_ptr(i, j, blk);
                 bm::bit_block_copy(blk, ar_->tb1);
             }
+
         }
     }
 
@@ -523,23 +529,24 @@ bool aggregator<BV>::process_gap_blocks_and(unsigned arg_blk_gap_count)
     BM_ASSERT(arg_blk_gap_count);
 
     bm::word_t* blk = ar_->tb1;
+    
+    bm::id64_t digest = bm::calc_block_digest0(blk);
 
     unsigned k = 0;
     for (; k < arg_blk_gap_count; ++k)
     {
-        bm::gap_and_to_bitset(blk, ar_->v_arg_blk_gap[k]);
-        if (k % 2 == 0)
+        bm::gap_and_to_bitset(blk, ar_->v_arg_blk_gap[k], digest);
+        digest = bm::update_block_digest0(blk, digest);
+//std::cerr << std::hex << digest << " ";
+
+        if (!digest)
         {
-            bool all_zero = bm::bit_is_all_zero(blk);
-            if (all_zero)
-            {
-                return true;
-            }
+            BM_ASSERT(bm::bit_is_all_zero(blk));
+            return true;
         }
+
     }
-    
-    bool all_zero = bm::bit_is_all_zero(blk);
-    if (all_zero)
+    if (bm::bit_is_all_zero(blk))
     {
         return true;
     }
@@ -622,6 +629,8 @@ template<typename BV>
 bool aggregator<BV>::process_bit_blocks_and(unsigned arg_blk_count)
 {
     bm::word_t* blk = ar_->tb1;
+    
+//bm::id64_t old_digest = bm::calc_block_digest0(blk);
 
     unsigned k = 0;
     for (; k < arg_blk_count; ++k)
@@ -629,10 +638,25 @@ bool aggregator<BV>::process_bit_blocks_and(unsigned arg_blk_count)
         auto any_bits = bm::bit_block_and(blk, ar_->v_arg_blk[k]);
         if (!any_bits)
         {
+///std::cerr << k << "/" << arg_blk_count << " \n";
             BM_ASSERT(blk == ar_->tb1);
             return true;
         }
+/*
+        bm::id64_t digest = bm::calc_block_digest0(blk);
+        
+        unsigned bcd = word_bitcount64(digest);
+        unsigned bcd_o = word_bitcount64(old_digest);
+        
+        if (bcd < bcd_o)
+        {
+            unsigned dd = bcd_o - bcd;
+            std::cerr << "DD=" << dd << " " << k << "/" << arg_blk_count << " ";
+            old_digest = digest;
+        }
+*/
     } // for k
+//std::cerr << k << "=" << arg_blk_count << " ";
 
     return false;
 }
