@@ -71,6 +71,23 @@ For more information please visit:  http://bitmagic.io
 
 namespace bm
 {
+/*
+inline
+void avx2_print256(const char* prefix, const __m256i & value)
+{
+    const size_t n = sizeof(__m256i) / sizeof(unsigned);
+    unsigned buffer[n];
+    _mm256_storeu_si256((__m256i*)buffer, value);
+    std::cout << prefix << " [ ";
+    for (int i = n-1; 1; --i)
+    {
+        std::cout << buffer[i] << " ";
+        if (i == 0)
+            break;
+    }
+    std::cout << "]" << std::endl;
+}
+*/
 
 #ifdef __GNUG__
 #pragma GCC diagnostic push
@@ -1048,6 +1065,21 @@ bool avx2_is_all_zero(const __m256i* BMRESTRICT block,
 }
 
 /*!
+    @brief check if digest stride is all zero bits
+    @ingroup AVX2
+*/
+inline
+bool avx2_is_digest_zero(const __m256i* BMRESTRICT block)
+{
+    __m256i wA = _mm256_or_si256(_mm256_load_si256(block+0), _mm256_load_si256(block+1));
+    __m256i wB = _mm256_or_si256(_mm256_load_si256(block+2), _mm256_load_si256(block+3));
+    wA = _mm256_or_si256(wA, wB);
+
+    return _mm256_testz_si256(wA, wA);
+}
+
+
+/*!
     @brief check if block is all one bits
     @return true if all bits are 1
     @ingroup AVX2
@@ -1082,60 +1114,6 @@ bool avx2_test_all_zero_wave(const void* ptr)
 }
 
 
-
-#define VECT_XOR_ARR_2_MASK(dst, src, src_end, mask)\
-    avx2_xor_arr_2_mask((__m256i*)(dst), (__m256i*)(src), (__m256i*)(src_end), (bm::word_t)mask)
-
-#define VECT_ANDNOT_ARR_2_MASK(dst, src, src_end, mask)\
-    avx2_andnot_arr_2_mask((__m256i*)(dst), (__m256i*)(src), (__m256i*)(src_end), (bm::word_t)mask)
-
-#define VECT_BITCOUNT(first, last) \
-    avx2_bit_count((__m256i*) (first), (__m256i*) (last))
-
-#define VECT_BITCOUNT_AND(first, last, mask) \
-    avx2_bit_count_and((__m256i*) (first), (__m256i*) (last), (__m256i*) (mask))
-
-#define VECT_BITCOUNT_OR(first, last, mask) \
-    avx2_bit_count_or((__m256i*) (first), (__m256i*) (last), (__m256i*) (mask))
-
-#define VECT_BITCOUNT_XOR(first, last, mask) \
-    avx2_bit_count_xor((__m256i*) (first), (__m256i*) (last), (__m256i*) (mask))
-
-#define VECT_BITCOUNT_SUB(first, last, mask) \
-    avx2_bit_count_sub((__m256i*) (first), (__m256i*) (last), (__m256i*) (mask))
-
-#define VECT_INVERT_BLOCK(first) \
-    avx2_invert_block((__m256i*)first);
-
-#define VECT_AND_BLOCK(dst, src) \
-    avx2_and_block((__m256i*) dst, (__m256i*) (src))
-
-#define VECT_OR_BLOCK(dst, src) \
-    avx2_or_block((__m256i*) dst, (__m256i*) (src))
-
-#define VECT_OR_BLOCK_3WAY(dst, src1, src2) \
-    avx2_or_block_3way((__m256i*) dst, (__m256i*) (src1), (__m256i*) (src2))
-
-#define VECT_OR_BLOCK_5WAY(dst, src1, src2, src3, src4) \
-    avx2_or_block_5way((__m256i*) dst, (__m256i*) (src1), (__m256i*) (src2), (__m256i*) (src3), (__m256i*) (src4))
-
-#define VECT_SUB_BLOCK(dst, src) \
-    avx2_sub_block((__m256i*) dst, (__m256i*) (src))
-
-#define VECT_XOR_ARR(dst, src, src_end) \
-    avx2_xor_arr((__m256i*) dst, (__m256i*) (src), (__m256i*) (src_end))
-
-#define VECT_COPY_BLOCK(dst, src) \
-    avx2_copy_block((__m256i*) dst, (__m256i*) (src))
-
-#define VECT_SET_BLOCK(dst, value) \
-    avx2_set_block((__m256i*) dst, (value))
-
-#define VECT_IS_ZERO_BLOCK(dst, dst_end) \
-    avx2_is_all_zero((__m256i*) dst, (__m256i*) (dst_end))
-
-#define VECT_IS_ONE_BLOCK(dst, dst_end) \
-    avx2_is_all_one((__m256i*) dst, (__m256i*) (dst_end))
 
 
 // TODO: write better pipelined AVX2 implementation
@@ -1468,19 +1446,7 @@ unsigned avx2_idx_arr_block_lookup(const unsigned* idx, unsigned size,
     return start + k;
 }
 
-/*
-inline
-void avx2_print256(const char* prefix, const __m256i & value)
-{
-    const size_t n = sizeof(__m256i) / sizeof(unsigned);
-    unsigned buffer[n];
-    _mm256_storeu_si256((__m256i*)buffer, value);
-    std::cout << prefix << " [ ";
-    for (int i = 0; i < n; i++)
-        std::cout << buffer[i] << " ";
-    std::cout << "]" << std::endl;
-}
-*/
+
 
 /*!
      AVX2 bit block gather-scatter
@@ -1589,6 +1555,64 @@ void avx2_bit_block_gather_scatter(unsigned* BMRESTRICT arr,
 #ifdef __GNUG__
 #pragma GCC diagnostic pop
 #endif
+
+
+#define VECT_XOR_ARR_2_MASK(dst, src, src_end, mask)\
+    avx2_xor_arr_2_mask((__m256i*)(dst), (__m256i*)(src), (__m256i*)(src_end), (bm::word_t)mask)
+
+#define VECT_ANDNOT_ARR_2_MASK(dst, src, src_end, mask)\
+    avx2_andnot_arr_2_mask((__m256i*)(dst), (__m256i*)(src), (__m256i*)(src_end), (bm::word_t)mask)
+
+#define VECT_BITCOUNT(first, last) \
+    avx2_bit_count((__m256i*) (first), (__m256i*) (last))
+
+#define VECT_BITCOUNT_AND(first, last, mask) \
+    avx2_bit_count_and((__m256i*) (first), (__m256i*) (last), (__m256i*) (mask))
+
+#define VECT_BITCOUNT_OR(first, last, mask) \
+    avx2_bit_count_or((__m256i*) (first), (__m256i*) (last), (__m256i*) (mask))
+
+#define VECT_BITCOUNT_XOR(first, last, mask) \
+    avx2_bit_count_xor((__m256i*) (first), (__m256i*) (last), (__m256i*) (mask))
+
+#define VECT_BITCOUNT_SUB(first, last, mask) \
+    avx2_bit_count_sub((__m256i*) (first), (__m256i*) (last), (__m256i*) (mask))
+
+#define VECT_INVERT_BLOCK(first) \
+    avx2_invert_block((__m256i*)first);
+
+#define VECT_AND_BLOCK(dst, src) \
+    avx2_and_block((__m256i*) dst, (__m256i*) (src))
+
+#define VECT_OR_BLOCK(dst, src) \
+    avx2_or_block((__m256i*) dst, (__m256i*) (src))
+
+#define VECT_OR_BLOCK_3WAY(dst, src1, src2) \
+    avx2_or_block_3way((__m256i*) dst, (__m256i*) (src1), (__m256i*) (src2))
+
+#define VECT_OR_BLOCK_5WAY(dst, src1, src2, src3, src4) \
+    avx2_or_block_5way((__m256i*) dst, (__m256i*) (src1), (__m256i*) (src2), (__m256i*) (src3), (__m256i*) (src4))
+
+#define VECT_SUB_BLOCK(dst, src) \
+    avx2_sub_block((__m256i*) dst, (__m256i*) (src))
+
+#define VECT_XOR_ARR(dst, src, src_end) \
+    avx2_xor_arr((__m256i*) dst, (__m256i*) (src), (__m256i*) (src_end))
+
+#define VECT_COPY_BLOCK(dst, src) \
+    avx2_copy_block((__m256i*) dst, (__m256i*) (src))
+
+#define VECT_SET_BLOCK(dst, value) \
+    avx2_set_block((__m256i*) dst, (value))
+
+#define VECT_IS_ZERO_BLOCK(dst, dst_end) \
+    avx2_is_all_zero((__m256i*) dst, (__m256i*) (dst_end))
+
+#define VECT_IS_ONE_BLOCK(dst, dst_end) \
+    avx2_is_all_one((__m256i*) dst, (__m256i*) (dst_end))
+
+#define VECT_IS_DIGEST_ZERO(start) \
+    avx2_is_digest_zero((__m256i*)start)
 
 
 
