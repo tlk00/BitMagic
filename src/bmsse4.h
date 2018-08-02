@@ -177,6 +177,25 @@ bool sse4_is_all_zero(const __m128i* BMRESTRICT block,
     return true;
 }
 
+/*!
+    @brief check if digest stride is all zero bits
+    @ingroup SSE4
+*/
+inline
+bool sse4_is_digest_zero(const __m128i* BMRESTRICT block)
+{
+    __m128i wA = _mm_or_si128(_mm_load_si128(block+0), _mm_load_si128(block+1));
+    __m128i wB = _mm_or_si128(_mm_load_si128(block+2), _mm_load_si128(block+3));
+    wA = _mm_or_si128(wA, wB);
+    bool z1 = _mm_test_all_zeros(wA, wA);
+
+    wA = _mm_or_si128(_mm_load_si128(block+4), _mm_load_si128(block+5));
+    wB = _mm_or_si128(_mm_load_si128(block+6), _mm_load_si128(block+7));
+    wA = _mm_or_si128(wA, wB);
+    bool z2 = _mm_test_all_zeros(wA, wA);
+    return z1 & z2;
+}
+
 
 /*!
     @brief check if block is all zero bits
@@ -208,61 +227,6 @@ bool sse42_test_all_zero_wave(const void* ptr)
     __m128i w0 = _mm_loadu_si128((__m128i*)ptr);
     return _mm_testz_si128(w0, w0);
 }
-
-
-#define VECT_XOR_ARR_2_MASK(dst, src, src_end, mask)\
-    sse2_xor_arr_2_mask((__m128i*)(dst), (__m128i*)(src), (__m128i*)(src_end), (bm::word_t)mask)
-
-#define VECT_ANDNOT_ARR_2_MASK(dst, src, src_end, mask)\
-    sse2_andnot_arr_2_mask((__m128i*)(dst), (__m128i*)(src), (__m128i*)(src_end), (bm::word_t)mask)
-
-#define VECT_BITCOUNT(first, last) \
-    sse4_bit_count((__m128i*) (first), (__m128i*) (last)) 
-
-#define VECT_BITCOUNT_AND(first, last, mask) \
-    sse4_bit_count_op((__m128i*) (first), (__m128i*) (last), (__m128i*) (mask), sse2_and) 
-
-#define VECT_BITCOUNT_OR(first, last, mask) \
-    sse4_bit_count_op((__m128i*) (first), (__m128i*) (last), (__m128i*) (mask), sse2_or) 
-
-#define VECT_BITCOUNT_XOR(first, last, mask) \
-    sse4_bit_count_op((__m128i*) (first), (__m128i*) (last), (__m128i*) (mask), sse2_xor) 
-
-#define VECT_BITCOUNT_SUB(first, last, mask) \
-    sse4_bit_count_op((__m128i*) (first), (__m128i*) (last), (__m128i*) (mask), sse2_sub) 
-
-#define VECT_INVERT_BLOCK(first) \
-    sse2_invert_block((__m128i*)first);
-
-#define VECT_AND_BLOCK(dst, src) \
-    sse2_and_block((__m128i*) dst, (__m128i*) (src))
-
-#define VECT_OR_BLOCK(dst, src) \
-    sse2_or_block((__m128i*) dst, (__m128i*) (src))
-
-#define VECT_OR_BLOCK_3WAY(dst, src1, src2) \
-    sse2_or_block_3way((__m128i*) (dst), (__m128i*) (src1), (__m128i*) (src2))
-
-#define VECT_OR_BLOCK_5WAY(dst, src1, src2, src3, src4) \
-    sse2_or_block_5way((__m128i*) (dst), (__m128i*) (src1), (__m128i*) (src2), (__m128i*) (src3), (__m128i*) (src4))
-
-#define VECT_SUB_BLOCK(dst, src) \
-    sse2_sub_block((__m128i*) dst, (__m128i*) (src))
-
-#define VECT_XOR_ARR(dst, src, src_end) \
-    sse2_xor_arr((__m128i*) dst, (__m128i*) (src), (__m128i*) (src_end))
-
-#define VECT_COPY_BLOCK(dst, src) \
-    sse2_copy_block((__m128i*) dst, (__m128i*) (src))
-
-#define VECT_SET_BLOCK(dst, value) \
-    sse2_set_block((__m128i*) dst, value)
-
-#define VECT_IS_ZERO_BLOCK(dst, dst_end) \
-    sse4_is_all_zero((__m128i*) dst, (__m128i*) (dst_end))
-
-#define VECT_IS_ONE_BLOCK(dst, dst_end) \
-    sse4_is_all_one((__m128i*) dst, (__m128i*) (dst_end))
 
 
 
@@ -579,6 +543,63 @@ void sse4_bit_block_gather_scatter(unsigned* BMRESTRICT arr,
 
 }
 
+
+#define VECT_XOR_ARR_2_MASK(dst, src, src_end, mask)\
+    sse2_xor_arr_2_mask((__m128i*)(dst), (__m128i*)(src), (__m128i*)(src_end), (bm::word_t)mask)
+
+#define VECT_ANDNOT_ARR_2_MASK(dst, src, src_end, mask)\
+    sse2_andnot_arr_2_mask((__m128i*)(dst), (__m128i*)(src), (__m128i*)(src_end), (bm::word_t)mask)
+
+#define VECT_BITCOUNT(first, last) \
+    sse4_bit_count((__m128i*) (first), (__m128i*) (last))
+
+#define VECT_BITCOUNT_AND(first, last, mask) \
+    sse4_bit_count_op((__m128i*) (first), (__m128i*) (last), (__m128i*) (mask), sse2_and)
+
+#define VECT_BITCOUNT_OR(first, last, mask) \
+    sse4_bit_count_op((__m128i*) (first), (__m128i*) (last), (__m128i*) (mask), sse2_or)
+
+#define VECT_BITCOUNT_XOR(first, last, mask) \
+    sse4_bit_count_op((__m128i*) (first), (__m128i*) (last), (__m128i*) (mask), sse2_xor)
+
+#define VECT_BITCOUNT_SUB(first, last, mask) \
+    sse4_bit_count_op((__m128i*) (first), (__m128i*) (last), (__m128i*) (mask), sse2_sub)
+
+#define VECT_INVERT_BLOCK(first) \
+    sse2_invert_block((__m128i*)first);
+
+#define VECT_AND_BLOCK(dst, src) \
+    sse2_and_block((__m128i*) dst, (__m128i*) (src))
+
+#define VECT_OR_BLOCK(dst, src) \
+    sse2_or_block((__m128i*) dst, (__m128i*) (src))
+
+#define VECT_OR_BLOCK_3WAY(dst, src1, src2) \
+    sse2_or_block_3way((__m128i*) (dst), (__m128i*) (src1), (__m128i*) (src2))
+
+#define VECT_OR_BLOCK_5WAY(dst, src1, src2, src3, src4) \
+    sse2_or_block_5way((__m128i*) (dst), (__m128i*) (src1), (__m128i*) (src2), (__m128i*) (src3), (__m128i*) (src4))
+
+#define VECT_SUB_BLOCK(dst, src) \
+    sse2_sub_block((__m128i*) dst, (__m128i*) (src))
+
+#define VECT_XOR_ARR(dst, src, src_end) \
+    sse2_xor_arr((__m128i*) dst, (__m128i*) (src), (__m128i*) (src_end))
+
+#define VECT_COPY_BLOCK(dst, src) \
+    sse2_copy_block((__m128i*) dst, (__m128i*) (src))
+
+#define VECT_SET_BLOCK(dst, value) \
+    sse2_set_block((__m128i*) dst, value)
+
+#define VECT_IS_ZERO_BLOCK(dst, dst_end) \
+    sse4_is_all_zero((__m128i*) dst, (__m128i*) (dst_end))
+
+#define VECT_IS_ONE_BLOCK(dst, dst_end) \
+    sse4_is_all_one((__m128i*) dst, (__m128i*) (dst_end))
+
+#define VECT_IS_DIGEST_ZERO(start) \
+    sse4_is_digest_zero((__m128i*)start)
 
 #ifdef __GNUG__
 #pragma GCC diagnostic pop
