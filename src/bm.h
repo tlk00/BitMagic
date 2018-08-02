@@ -3939,14 +3939,29 @@ void bvector<Alloc>::combine_operation_block_and(
         //
         bm::word_t* new_blk = blockman_.get_allocator().alloc_bit_block();
         bm::bit_block_copy(new_blk, arg_blk); // TODO: 3 way operation
-        bm::gap_and_to_bitset(new_blk, gap_blk);
+        bm::id64_t digest = bm::calc_block_digest0(new_blk);
         
+        bm::gap_and_to_bitset(new_blk, gap_blk, digest);
+        
+        digest = bm::update_block_digest0(new_blk, digest);
+        if (!digest)
+        {
+            BM_ASSERT(bm::bit_is_all_zero(new_blk));
+            blockman_.get_allocator().free_bit_block(new_blk);
+            new_blk = 0;
+        }
+        else
+        {
+            BM_ASSERT(!bm::bit_is_all_zero(new_blk));
+        }
+        /*
         bool empty = bm::bit_is_all_zero(new_blk);
         if (empty) // operation converged bit-block to empty
         {
             blockman_.get_allocator().free_bit_block(new_blk);
             new_blk = 0;
         }
+        */
         blockman_.get_allocator().free_gap_block(gap_blk, blockman_.glen());
         blockman_.set_block_ptr(i, j, new_blk);
         
