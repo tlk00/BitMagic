@@ -13689,17 +13689,44 @@ void TestBlockDigest()
 
     BM_DECLARE_TEMP_BLOCK(tb1);
 
+    {
+        bm::id64_t digest0 = 1;
+        bool all_zero;
+        all_zero = bm::check_zero_digest(digest0, 0, 0);
+        assert(!all_zero);
+        for (unsigned i = 0; i < bm::set_block_digest_wave_size * 32; ++i)
+        {
+            all_zero = bm::check_zero_digest(digest0, 0, i);
+            assert(!all_zero);
+        }
+        for (unsigned i = bm::set_block_digest_wave_size * 32+1; i < 65535; ++i)
+        {
+            all_zero = bm::check_zero_digest(digest0,
+                                        bm::set_block_digest_wave_size * 32+1,
+                                        i);
+            assert(all_zero);
+            
+        } // for
+    }
+
     for (unsigned k = 0; k < bm::set_block_size; ++k)
     {
         bm::bit_block_set(tb1, 0);
-        
+
         tb1.b_.w32[k] = 1;
         bm::id64_t mask1 = bm::widx_to_digest_mask(k);
         bm::id64_t mask2 = bm::calc_block_digest0(tb1);
         assert(mask1 == mask2);
         bm::id64_t mask3 = bm::update_block_digest0(tb1, mask1);
         assert(mask1 == mask3);
-
+        
+        assert(mask1);
+        unsigned bc = bm::word_bitcount64(mask1);
+        assert(bc == 1);
+        
+        bm::bit_block_set(tb1, 0);
+        mask3 = bm::update_block_digest0(tb1, mask1);
+        assert(!mask3);
     }
 
     unsigned start = 0;
@@ -13719,6 +13746,21 @@ void TestBlockDigest()
         assert(mask1 == mask2);
         bm::id64_t mask3 = bm::update_block_digest0(tb1, mask1);
         assert(mask1 == mask3);
+        
+        if (mask_s1 != mask_e1)
+        {
+            unsigned bc = bm::word_bitcount64(mask1);
+            assert(bc == 2);
+        }
+        else
+        {
+            unsigned bc = bm::word_bitcount64(mask1);
+            assert(bc == 1);
+        }
+        bm::bit_block_set(tb1, 0);
+        mask3 = bm::update_block_digest0(tb1, mask1);
+        assert(!mask3);
+        
 
         ++start; --end;
     } // while

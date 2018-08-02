@@ -130,6 +130,7 @@ void generate_bvector(bvect& bv, unsigned vector_max = 40000000)
                 break;
         }
     }
+    bv.optimize();
 }
 
 
@@ -226,9 +227,13 @@ void generate_sparse_bvector(bvect& bv,
                              unsigned max = BSIZE,
                              unsigned fill_factor = 65536)
 {
-    for (unsigned i = min; i < max; i+= fill_factor)
+    unsigned ff = fill_factor / 10;
+    for (unsigned i = min; i < max; i+= ff)
     {
         bv.set(i);
+        ff += ff / 2;
+        if (ff > fill_factor)
+            ff = fill_factor / 10;
     }
 }
 
@@ -238,7 +243,7 @@ void GenerateTestCollection(std::vector<bvect>* target, unsigned count = 30, uns
 {
     assert(target);
     bvect bv_common; // sub-vector common for all collection
-    generate_sparse_bvector(bv_common, vector_max/10, vector_max, 40000);
+    generate_sparse_bvector(bv_common, vector_max/10, vector_max, 250000);
     
     unsigned cnt1 = (count / 2);
     
@@ -249,6 +254,7 @@ void GenerateTestCollection(std::vector<bvect>* target, unsigned count = 30, uns
         std::unique_ptr<bvect> bv (new bvect);
         generate_bvector(*bv, vector_max);
         *bv |= bv_common;
+        bv->optimize();
         target->push_back(std::move(*bv));
     } // for
     
@@ -258,7 +264,6 @@ void GenerateTestCollection(std::vector<bvect>* target, unsigned count = 30, uns
         std::unique_ptr<bvect> bv (new bvect);
         
         FillSetsIntervals(0, *bv, vector_max/ 10, vector_max, fill_factor);
-        bv->optimize();
         *bv |= bv_common;
 
         target->push_back(std::move(*bv));
@@ -2105,7 +2110,7 @@ void AggregatorTest()
     }
     
 
-//    std::cout << bv_target1->count() << std::endl;
+///    std::cout << bv_target1->count() << std::endl;
 }
 
 static
@@ -2307,7 +2312,7 @@ void RankCompressionTest()
 int main(void)
 {
 //    ptest();
-
+/*
     TimeTaker tt("TOTAL", 1);
 
     MemCpyTest();
@@ -2333,7 +2338,7 @@ int main(void)
     EnumeratorGoToTest();
 
     RangeCopyTest();
-
+*/
     AggregatorTest();
 
     AndTest();
