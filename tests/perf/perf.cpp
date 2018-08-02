@@ -2312,7 +2312,7 @@ void RankCompressionTest()
 int main(void)
 {
 //    ptest();
-/*
+
     TimeTaker tt("TOTAL", 1);
 
     MemCpyTest();
@@ -2338,7 +2338,7 @@ int main(void)
     EnumeratorGoToTest();
 
     RangeCopyTest();
-*/
+
     AggregatorTest();
 
     AndTest();
