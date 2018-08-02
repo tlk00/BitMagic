@@ -257,9 +257,404 @@ bm::id_t word_trailing_zeros(bm::id_t w)
 }
 
 
+// --------------------------------------------------------------
+// Functions for bit-scanning
+// --------------------------------------------------------------
+
+/*!
+   \brief Templated algorithm to unpacks octet based word into list of ON bit indexes
+   \param w - value
+   \param func - bit functor
+
+   @ingroup bitfunc
+*/
+template<typename T, typename F>
+void bit_for_each_4(T w, F& func)
+{
+    for (unsigned sub_octet = 0; w != 0; w >>= 4, sub_octet += 4)
+    {
+        switch (w & 15) // 1111
+        {
+        case 0: // 0000
+            break;
+        case 1: // 0001
+            func(sub_octet);
+            break;
+        case 2: // 0010
+            func(sub_octet + 1);
+            break;
+        case 3:    // 0011
+            func(sub_octet, sub_octet + 1);
+            break;
+        case 4: // 0100
+            func(sub_octet + 2);
+            break;
+        case 5: // 0101
+            func(sub_octet, sub_octet + 2);
+            break;
+        case 6: // 0110
+            func(sub_octet + 1, sub_octet + 2);
+            break;
+        case 7: // 0111
+            func(sub_octet, sub_octet + 1, sub_octet + 2);
+            break;
+        case 8: // 1000
+            func(sub_octet + 3);
+            break;
+        case 9: // 1001
+            func(sub_octet, sub_octet + 3);
+            break;
+        case 10: // 1010
+            func(sub_octet + 1, sub_octet + 3);
+            break;
+        case 11: // 1011
+            func(sub_octet, sub_octet + 1, sub_octet + 3);
+            break;
+        case 12: // 1100
+            func(sub_octet + 2, sub_octet + 3);
+            break;
+        case 13: // 1101
+            func(sub_octet, sub_octet + 2, sub_octet + 3);
+            break;
+        case 14: // 1110
+            func(sub_octet + 1, sub_octet + 2, sub_octet + 3);
+            break;
+        case 15: // 1111
+            func(sub_octet, sub_octet + 1, sub_octet + 2, sub_octet + 3);
+            break;
+        default:
+            BM_ASSERT(0);
+            break;
+        }
+        
+    } // for
+}
 
 
-//---------------------------------------------------------------------
+/*!
+   \brief Templated algorithm to unpacks word into list of ON bit indexes
+   \param w - value
+   \param func - bit functor
+
+   @ingroup bitfunc
+*/
+template<typename T, typename F>
+void bit_for_each(T w, F& func)
+{
+    // Note: 4-bit table method works slower than plain check approach
+    for (unsigned octet = 0; w != 0; w >>= 8, octet += 8)
+    {
+        if (w & 1)   func(octet + 0);
+        if (w & 2)   func(octet + 1);
+        if (w & 4)   func(octet + 2);
+        if (w & 8)   func(octet + 3);
+        if (w & 16)  func(octet + 4);
+        if (w & 32)  func(octet + 5);
+        if (w & 64)  func(octet + 6);
+        if (w & 128) func(octet + 7);
+        
+    } // for
+}
+
+/*! @brief Adaptor to copy 1 bits to array
+    @internal
+*/
+template<typename B> class copy_to_array_functor
+{
+public:
+    copy_to_array_functor(B* bits): bp_(bits)
+    {}
+
+    B* ptr() { return bp_; }
+    
+    void operator()(unsigned bit_idx) { *bp_++ = (B)bit_idx; }
+    
+    void operator()(unsigned bit_idx0,
+                    unsigned bit_idx1)
+    {
+        bp_[0] = (B)bit_idx0; bp_[1] = (B)bit_idx1;
+        bp_+=2;
+    }
+    
+    void operator()(unsigned bit_idx0,
+                    unsigned bit_idx1,
+                    unsigned bit_idx2)
+    {
+        bp_[0] = (B)bit_idx0; bp_[1] = (B)bit_idx1; bp_[2] = (B)bit_idx2;
+        bp_+=3;
+    }
+    
+    void operator()(unsigned bit_idx0,
+                    unsigned bit_idx1,
+                    unsigned bit_idx2,
+                    unsigned bit_idx3)
+    {
+        bp_[0] = (B)bit_idx0; bp_[1] = (B)bit_idx1;
+        bp_[2] = (B)bit_idx2; bp_[3] = (B)bit_idx3;
+        bp_+=4;
+    }
+
+private:
+    copy_to_array_functor(const copy_to_array_functor&);
+    copy_to_array_functor& operator=(const copy_to_array_functor&);
+private:
+    B* bp_;
+};
+
+
+/*!
+   \brief Unpacks word into list of ON bit indexes
+   \param w - value
+   \param bits - pointer on the result array
+   \return number of bits in the list
+
+   @ingroup bitfunc
+*/
+template<typename T,typename B> unsigned bit_list(T w, B* bits)
+{
+    copy_to_array_functor<B> func(bits);
+    bit_for_each(w, func);
+    return (unsigned)(func.ptr() - bits);
+}
+
+
+
+/*!
+   \brief Unpacks word into list of ON bit indexes (quad-bit based)
+   \param w - value
+   \param bits - pointer on the result array
+   \return number of bits in the list
+
+   @ingroup bitfunc
+*/
+template<typename T,typename B> unsigned bit_list_4(T w, B* bits)
+{
+    copy_to_array_functor<B> func(bits);
+    bit_for_each_4(w, func);
+    return (unsigned)(func.ptr() - bits);
+}
+
+/*!
+    \brief Unpacks word into list of ON bit indexes using popcnt method
+    \param w - value
+    \param bits - pointer on the result array
+    \param offset - value to add to bit position (programmed shift)
+    \return number of bits in the list
+
+    @ingroup bitfunc
+    @internal
+*/
+template<typename B>
+unsigned short bitscan_popcnt(bm::id_t w, B* bits, unsigned short offs)
+{
+    unsigned pos = 0;
+    while (w)
+    {
+        bm::id_t t = w & -w;
+        bits[pos++] = (B)(bm::word_bitcount(t - 1) + offs);
+        w &= w - 1;
+    }
+    return (unsigned short)pos;
+}
+
+/*!
+    \brief Unpacks word into list of ON bit indexes using popcnt method
+    \param w - value
+    \param bits - pointer on the result array
+    \return number of bits in the list
+ 
+    @ingroup bitfunc
+    @internal
+*/
+template<typename B>
+unsigned short bitscan_popcnt(bm::id_t w, B* bits)
+{
+    unsigned pos = 0;
+    while (w)
+    {
+        bm::id_t t = w & -w;
+        bits[pos++] = (B)(bm::word_bitcount(t - 1));
+        w &= w - 1;
+    }
+    return (unsigned short)pos;
+}
+
+
+/*!
+    \brief Unpacks 64-bit word into list of ON bit indexes using popcnt method
+    \param w - value
+    \param bits - pointer on the result array
+    \param offs - bit address offset to add (0 - default)
+    \return number of bits in the list
+
+    @ingroup bitfunc
+*/
+template<typename B>
+unsigned short bitscan_popcnt64(bm::id64_t w, B* bits)
+{
+    unsigned short pos = 0;
+    while (w)
+    {
+        bm::id64_t t = w & -w;
+        bits[pos++] = (B) bm::word_bitcount64(t - 1);
+        w &= w - 1;
+    }
+    return pos;
+}
+
+template<typename V, typename B>
+unsigned short bitscan(V w, B* bits)
+{
+    if (bm::conditional<sizeof(V) == 8>::test())
+    {
+        return bm::bitscan_popcnt64(w, bits);
+    }
+    else
+    {
+        return bm::bitscan_popcnt((bm::word_t)w, bits);
+    }
+}
+// --------------------------------------------------------------
+// Functions for bit-block digest calculation
+// --------------------------------------------------------------
+
+/*!
+   \brief Compute digest mask for word address in block
+
+    @return digest bit-mask
+ 
+   @ingroup bitfunc
+   @internal
+*/
+BMFORCEINLINE
+bm::id64_t widx_to_digest_mask(unsigned w_idx)
+{
+    bm::id64_t mask(1ull);
+    return mask << (w_idx / bm::set_block_digest_wave_size);
+}
+
+/*!
+    \brief check if all digest bits for the range are 0
+ 
+    \param digest - current digest
+    \param bitpos_from - range from
+    \param bitpos_to - range to
+    @return true if all range is zero
+ 
+   @ingroup bitfunc
+   @internal
+*/
+inline
+bool check_zero_digest(bm::id64_t digest, unsigned bitpos_from, unsigned bitpos_to)
+{
+    BM_ASSERT(bitpos_from <= bitpos_to);
+    
+    unsigned digest_from = bitpos_from / (bm::set_block_digest_wave_size * 32);
+    unsigned digest_to = bitpos_to / (bm::set_block_digest_wave_size * 32);
+    
+    
+    const bm::id64_t mask(1ull);
+    for (; digest_from <= digest_to; ++digest_from)
+    {
+        if (digest & (mask << digest_from))
+            return false;
+    }
+    return true;
+}
+
+
+/*!
+   \brief Compute digest for 64 non-zero areas
+   \param block - Bit block
+ 
+    @return digest bit-mask (0 means all block is empty)
+ 
+   @ingroup bitfunc
+   @internal
+*/
+inline
+bm::id64_t calc_block_digest0(const bm::word_t* const block)
+{
+    bm::id64_t digest0 = 0;
+    unsigned   off;
+    
+    for (unsigned i = 0; i < 64; ++i)
+    {
+        off = i * bm::set_block_digest_wave_size;
+        #if defined(VECT_IS_DIGEST_ZERO)
+            bool all_zero = VECT_IS_DIGEST_ZERO(&block[off]);
+            digest0 |= bm::id64_t(!all_zero) << i;
+        #else
+            const bm::id64_t mask(1ull);
+            for (unsigned j = 0; j < bm::set_block_digest_wave_size; j+=4)
+            {
+                bm::word_t w =
+                    block[off+j+0] | block[off+j+1] | block[off+j+2] | block[off+j+3];
+                if (w)
+                {
+                    digest0 |= (mask << i);
+                    break;
+                }
+            } // for j
+        #endif
+        
+    } // for i
+    return digest0;
+}
+
+/*!
+   \brief Compute digest for 64 non-zero areas based on existing digest
+          (function revalidates zero areas)
+   \param block - bit block
+   \param digest - start digest
+ 
+    @return digest bit-mask (0 means all block is empty)
+ 
+   @ingroup bitfunc
+   @internal
+*/
+inline
+bm::id64_t update_block_digest0(const bm::word_t* const block, bm::id64_t digest)
+{
+    unsigned short bits[65];
+    if (!digest)
+    {
+        BM_ASSERT(!calc_block_digest0(block));
+        return digest;
+    }
+    
+    const bm::id64_t mask(1ull);
+    bool all_zero;
+    
+    unsigned bcnt = bm::bitscan_popcnt64(digest, bits);
+    for (unsigned i = 0; i < bcnt; ++i)
+    {
+        unsigned wave = bits[i];
+        unsigned off = wave * bm::set_block_digest_wave_size;
+        #if defined(VECT_IS_DIGEST_ZERO)
+            all_zero = VECT_IS_DIGEST_ZERO(&block[off]);
+        #else
+        all_zero = true;
+        for (unsigned j = 0; j < bm::set_block_digest_wave_size; j+=4)
+        {
+            bm::word_t w =
+                block[off+j+0] | block[off+j+1] | block[off+j+2] | block[off+j+3];
+            if (w)
+            {
+                all_zero = false;
+                break;
+            }
+        } // for j
+        #endif
+        digest &= ~((mask & all_zero) << wave);
+    } // for i
+    BM_ASSERT(digest == calc_block_digest0(block));
+    return digest;
+}
+
+// --------------------------------------------------------------
+
+
 
 
 /// Returns true if set operation is constant (bitcount)
@@ -501,6 +896,9 @@ template<bool T> struct globals
 };
 
 template<bool T> typename globals<T>::bo globals<T>::_bo;
+
+
+
 
 // ----------------------------------------------------------------------
 
@@ -2351,10 +2749,54 @@ void gap_and_to_bitset(unsigned* dest, const T*  pcurr)
     else
         pcurr += 2;
     
-    for (; pcurr <= pend; pcurr += 2) // now we are in GAP "0" again
+    unsigned bc, pos;
+    for (; pcurr <= pend; ) // now we are in GAP "0" again
     {
         BM_ASSERT(*pcurr > *(pcurr-1));
-        bm::sub_bit_block(dest, pcurr[-1]+1, *pcurr - pcurr[-1]);
+        pos = 1u + pcurr[-1];
+        bc = *pcurr - pcurr[-1];
+        pcurr += 2;
+        bm::sub_bit_block(dest, pos, bc);
+    }
+}
+
+
+/*!
+   \brief ANDs GAP block to bitblock with digest assist
+   \param dest - bitblock buffer pointer.
+   \param pcurr  - GAP buffer pointer.
+
+   @ingroup gapfunc
+*/
+template<typename T>
+void gap_and_to_bitset(unsigned* dest, const T*  pcurr, bm::id64_t digest0)
+{
+    BM_ASSERT(dest && pcurr);
+    
+    const T* pend = pcurr + (*pcurr >> 3);
+    if (!(*pcurr & 1) )  // Starts with 0
+    {
+        bool all_zero = bm::check_zero_digest(digest0, 0, pcurr[1]+1);
+        if (!all_zero)
+            bm::sub_bit_block(dest, 0, pcurr[1] + 1); // (not AND) - SUB [0] gaps
+        pcurr += 3;
+    }
+    else
+        pcurr += 2;
+    
+    unsigned bc, pos;
+    for (; pcurr <= pend; ) // now we are in GAP "0" again
+    {
+        BM_ASSERT(*pcurr > *(pcurr-1));
+        pos = 1u + pcurr[-1];
+        bc = *pcurr - pcurr[-1];
+
+        bool all_zero = bm::check_zero_digest(digest0, pcurr[-1], *pcurr);
+        
+        pcurr += 2;
+        
+        if (!all_zero)
+            bm::sub_bit_block(dest, pos, bc);
     }
 }
 
@@ -5217,260 +5659,7 @@ bm::id_t bit_find_rank(const bm::word_t* const block,
 }
 
 
-/*!
-   \brief Templated algorithm to unpacks octet based word into list of ON bit indexes
-   \param w - value
-   \param func - bit functor 
 
-   @ingroup bitfunc
-*/
-template<typename T, typename F> 
-void bit_for_each_4(T w, F& func)
-{
-    for (unsigned sub_octet = 0; w != 0; w >>= 4, sub_octet += 4)
-    {
-        switch (w & 15) // 1111
-        {
-        case 0: // 0000
-            break;
-        case 1: // 0001
-            func(sub_octet);
-            break;
-        case 2: // 0010
-            func(sub_octet + 1);
-            break;
-        case 3:	// 0011
-            func(sub_octet, sub_octet + 1);
-            break;
-        case 4: // 0100
-            func(sub_octet + 2);
-            break;
-        case 5: // 0101
-            func(sub_octet, sub_octet + 2);
-            break;
-        case 6: // 0110
-            func(sub_octet + 1, sub_octet + 2);
-            break;
-        case 7: // 0111
-            func(sub_octet, sub_octet + 1, sub_octet + 2);
-            break;
-        case 8: // 1000
-            func(sub_octet + 3);
-            break;
-        case 9: // 1001
-            func(sub_octet, sub_octet + 3);
-            break;
-        case 10: // 1010
-            func(sub_octet + 1, sub_octet + 3);
-            break;
-        case 11: // 1011
-            func(sub_octet, sub_octet + 1, sub_octet + 3);
-            break;
-        case 12: // 1100
-            func(sub_octet + 2, sub_octet + 3);
-            break;
-        case 13: // 1101
-            func(sub_octet, sub_octet + 2, sub_octet + 3);
-            break;
-        case 14: // 1110
-            func(sub_octet + 1, sub_octet + 2, sub_octet + 3);
-            break;
-        case 15: // 1111
-            func(sub_octet, sub_octet + 1, sub_octet + 2, sub_octet + 3);
-            break;
-        default:
-            BM_ASSERT(0);
-            break;
-        }
-        
-    } // for
-}
-
-
-/*!
-   \brief Templated algorithm to unpacks word into list of ON bit indexes
-   \param w - value
-   \param func - bit functor 
-
-   @ingroup bitfunc
-*/
-template<typename T, typename F> 
-void bit_for_each(T w, F& func)
-{
-    // Note: 4-bit table method works slower than plain check approach
-    for (unsigned octet = 0; w != 0; w >>= 8, octet += 8)
-    {
-        if (w & 1)   func(octet + 0);
-        if (w & 2)   func(octet + 1);
-        if (w & 4)   func(octet + 2);
-        if (w & 8)   func(octet + 3);
-        if (w & 16)  func(octet + 4);
-        if (w & 32)  func(octet + 5);
-        if (w & 64)  func(octet + 6);
-        if (w & 128) func(octet + 7);
-        
-    } // for
-}
-
-/*! @brief Adaptor to copy 1 bits to array
-    @internal
-*/
-template<typename B> class copy_to_array_functor
-{
-public:
-    copy_to_array_functor(B* bits): bp_(bits)
-    {}
-
-    B* ptr() { return bp_; }
-    
-    void operator()(unsigned bit_idx) { *bp_++ = (B)bit_idx; }
-    
-    void operator()(unsigned bit_idx0, 
-                    unsigned bit_idx1) 
-    { 
-        bp_[0] = (B)bit_idx0; bp_[1] = (B)bit_idx1;
-        bp_+=2;
-    }
-    
-    void operator()(unsigned bit_idx0, 
-                    unsigned bit_idx1, 
-                    unsigned bit_idx2) 
-    { 
-        bp_[0] = (B)bit_idx0; bp_[1] = (B)bit_idx1; bp_[2] = (B)bit_idx2;
-        bp_+=3;
-    }
-    
-    void operator()(unsigned bit_idx0, 
-                    unsigned bit_idx1, 
-                    unsigned bit_idx2, 
-                    unsigned bit_idx3) 
-    { 
-        bp_[0] = (B)bit_idx0; bp_[1] = (B)bit_idx1;
-        bp_[2] = (B)bit_idx2; bp_[3] = (B)bit_idx3;
-        bp_+=4;
-    }
-
-private:
-    copy_to_array_functor(const copy_to_array_functor&);
-    copy_to_array_functor& operator=(const copy_to_array_functor&);
-private:
-    B* bp_;
-};
-
-
-/*!
-   \brief Unpacks word into list of ON bit indexes (quad-bit based)
-   \param w - value
-   \param bits - pointer on the result array 
-   \return number of bits in the list
-
-   @ingroup bitfunc
-*/
-template<typename T,typename B> unsigned bit_list_4(T w, B* bits)
-{
-    copy_to_array_functor<B> func(bits);
-    bit_for_each_4(w, func);
-    return (unsigned)(func.ptr() - bits);
-}
-
-/*!
-    \brief Unpacks word into list of ON bit indexes using popcnt method
-    \param w - value
-    \param bits - pointer on the result array
-    \param offset - value to add to bit position (programmed shift)
-    \return number of bits in the list
-
-    @ingroup bitfunc
-    @internal
-*/
-template<typename B>
-unsigned short bitscan_popcnt(bm::id_t w, B* bits, unsigned short offs)
-{
-    unsigned pos = 0;
-    while (w)
-    {
-        bm::id_t t = w & -w;
-        bits[pos++] = (B)(bm::word_bitcount(t - 1) + offs);
-        w &= w - 1;
-    }
-    return (unsigned short)pos;
-}
-
-/*!
-    \brief Unpacks word into list of ON bit indexes using popcnt method
-    \param w - value
-    \param bits - pointer on the result array
-    \return number of bits in the list
- 
-    @ingroup bitfunc
-    @internal
-*/
-template<typename B>
-unsigned short bitscan_popcnt(bm::id_t w, B* bits)
-{
-    unsigned pos = 0;
-    while (w)
-    {
-        bm::id_t t = w & -w;
-        bits[pos++] = (B)(bm::word_bitcount(t - 1));
-        w &= w - 1;
-    }
-    return (unsigned short)pos;
-}
-
-
-/*!
-    \brief Unpacks 64-bit word into list of ON bit indexes using popcnt method
-    \param w - value
-    \param bits - pointer on the result array
-    \param offs - bit address offset to add (0 - default)
-    \return number of bits in the list
-
-    @ingroup bitfunc
-*/
-template<typename B>
-unsigned short bitscan_popcnt64(bm::id64_t w, B* bits)
-{
-    unsigned short pos = 0;
-    while (w)
-    {
-        bm::id64_t t = w & -w;
-        bits[pos++] = (B) bm::word_bitcount64(t - 1);
-        w &= w - 1;
-    }
-    return pos;
-}
-
-template<typename V, typename B>
-unsigned short bitscan(V w, B* bits)
-{
-    if (bm::conditional<sizeof(V) == 8>::test())
-    {
-        return bm::bitscan_popcnt64(w, bits);
-    }
-    else
-    {
-        return bm::bitscan_popcnt((bm::word_t)w, bits);
-    }
-}
-
-
-
-
-/*!
-   \brief Unpacks word into list of ON bit indexes
-   \param w - value
-   \param bits - pointer on the result array 
-   \return number of bits in the list
-
-   @ingroup bitfunc
-*/
-template<typename T,typename B> unsigned bit_list(T w, B* bits)
-{
-    copy_to_array_functor<B> func(bits);
-    bit_for_each(w, func);
-    return (unsigned)(func.ptr() - bits);
-}
 
 
 /*!
@@ -6144,100 +6333,6 @@ unsigned idx_arr_block_lookup(const unsigned* idx, unsigned size, unsigned nb, u
 #endif
 }
 
-// --------------------------------------------------------------
-// Functions for bit-block digest calculation
-// --------------------------------------------------------------
-
-/*!
-   \brief Compute digest mask for word address in block
-
-    @return digest bit-mask
- 
-   @ingroup bitfunc
-   @internal
-*/
-inline
-bm::id64_t  widx_to_digest_mask(unsigned w_idx)
-{
-    bm::id64_t mask(1ull);
-    return mask << (w_idx / bm::set_block_digest_wave_size);
-}
-
-
-/*!
-   \brief Compute digest for 64 non-zero areas
-   \param block - Bit block
- 
-    @return digest bit-mask (0 means all block is empty)
- 
-   @ingroup bitfunc
-   @internal
-*/
-inline
-bm::id64_t calc_block_digest0(const bm::word_t* const block)
-{
-    bm::id64_t digest0 = 0;
-    const bm::id64_t mask(1ull);
-    unsigned   off;
-    
-    for (unsigned i = 0; i < 64; ++i)
-    {
-        off = i * bm::set_block_digest_wave_size;
-        for (unsigned j = 0; j < bm::set_block_digest_wave_size; j+=4)
-        {
-            bm::word_t w =
-                block[off+j+0] | block[off+j+1] | block[off+j+2] | block[off+j+3];
-            if (w)
-            {
-                digest0 |= (mask << i);
-                break;
-            }
-        } // for j
-    } // for i
-    return digest0;
-}
-
-/*!
-   \brief Compute digest for 64 non-zero areas based on existing digest
-          (function revalidates zero areas)
-   \param block - bit block
-   \param digest - start digest
- 
-    @return digest bit-mask (0 means all block is empty)
- 
-   @ingroup bitfunc
-   @internal
-*/
-inline
-bm::id64_t update_block_digest0(const bm::word_t* const block, bm::id64_t digest)
-{
-    unsigned short bits[65];
-    bm::id64_t idigest = ~digest;
-    if (!idigest)
-    {
-        return calc_block_digest0(block);
-    }
-    
-    const bm::id64_t mask(1ull);
-    
-    unsigned bcnt = bm::bitscan_popcnt64(idigest, bits);
-    for (unsigned i = 0; i < bcnt; ++i)
-    {
-        unsigned wave = bits[i];
-        unsigned off = wave * bm::set_block_digest_wave_size;
-        for (unsigned j = 0; j < bm::set_block_digest_wave_size; j+=4)
-        {
-            bm::word_t w =
-                block[off+j+0] | block[off+j+1] | block[off+j+2] | block[off+j+3];
-            if (w)
-            {
-                digest |= (mask << wave);
-                break;
-            }
-        } // for j
-    } // for i
-    return digest;
-}
 
 
 // --------------------------------------------------------------
