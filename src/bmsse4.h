@@ -198,6 +198,103 @@ bool sse4_is_digest_zero(const __m128i* BMRESTRICT block)
 
 
 /*!
+    @brief AND blocks2
+    *dst &= *src
+ 
+    @return 0 if no bits were set
+
+    @ingroup SSE4
+*/
+inline
+unsigned sse4_and_block(__m128i* BMRESTRICT dst,
+                       const __m128i* BMRESTRICT src)
+{
+    __m128i m1A, m1B, m1C, m1D;
+    __m128i accA, accB, accC, accD;
+    
+    const __m128i* BMRESTRICT src_end =
+        (const __m128i*)((bm::word_t*)(src) + bm::set_block_size);
+
+    accA = accB = accC = accD = _mm_setzero_si128();
+
+    do
+    {
+        m1A = _mm_and_si128(_mm_load_si128(src+0), _mm_load_si128(dst+0));
+        m1B = _mm_and_si128(_mm_load_si128(src+1), _mm_load_si128(dst+1));
+        m1C = _mm_and_si128(_mm_load_si128(src+2), _mm_load_si128(dst+2));
+        m1D = _mm_and_si128(_mm_load_si128(src+3), _mm_load_si128(dst+3));
+
+        _mm_store_si128(dst+0, m1A);
+        _mm_store_si128(dst+1, m1B);
+        _mm_store_si128(dst+2, m1C);
+        _mm_store_si128(dst+3, m1D);
+
+        accA = _mm_or_si128(accA, m1A);
+        accB = _mm_or_si128(accB, m1B);
+        accC = _mm_or_si128(accC, m1C);
+        accD = _mm_or_si128(accD, m1D);
+        
+        src += 4; dst += 4;
+    } while (src < src_end);
+    
+    accA = _mm_or_si128(accA, accB); // A = A | B
+    accC = _mm_or_si128(accC, accD); // C = C | D
+    accA = _mm_or_si128(accA, accC); // A = A | C
+    
+    return !_mm_testz_si128(accA, accA);
+}
+
+
+/*!
+    @brief AND block digest stride
+    *dst &= *src
+ 
+    @return true if stide is all zero
+    @ingroup SSE4
+*/
+inline
+bool sse4_and_digest(__m128i* BMRESTRICT dst,
+                     const __m128i* BMRESTRICT src)
+{
+    __m128i m1A, m1B, m1C, m1D;
+
+    m1A = _mm_and_si128(_mm_load_si128(src+0), _mm_load_si128(dst+0));
+    m1B = _mm_and_si128(_mm_load_si128(src+1), _mm_load_si128(dst+1));
+    m1C = _mm_and_si128(_mm_load_si128(src+2), _mm_load_si128(dst+2));
+    m1D = _mm_and_si128(_mm_load_si128(src+3), _mm_load_si128(dst+3));
+
+    _mm_store_si128(dst+0, m1A);
+    _mm_store_si128(dst+1, m1B);
+    _mm_store_si128(dst+2, m1C);
+    _mm_store_si128(dst+3, m1D);
+    
+     m1A = _mm_or_si128(m1A, m1B);
+     m1C = _mm_or_si128(m1C, m1D);
+     m1A = _mm_or_si128(m1A, m1C);
+    
+     bool z1 = _mm_testz_si128(m1A, m1A);
+    
+    m1A = _mm_and_si128(_mm_load_si128(src+4), _mm_load_si128(dst+4));
+    m1B = _mm_and_si128(_mm_load_si128(src+5), _mm_load_si128(dst+5));
+    m1C = _mm_and_si128(_mm_load_si128(src+6), _mm_load_si128(dst+6));
+    m1D = _mm_and_si128(_mm_load_si128(src+7), _mm_load_si128(dst+7));
+
+    _mm_store_si128(dst+4, m1A);
+    _mm_store_si128(dst+5, m1B);
+    _mm_store_si128(dst+6, m1C);
+    _mm_store_si128(dst+7, m1D);
+    
+     m1A = _mm_or_si128(m1A, m1B);
+     m1C = _mm_or_si128(m1C, m1D);
+     m1A = _mm_or_si128(m1A, m1C);
+    
+     bool z2 = _mm_testz_si128(m1A, m1A);
+    
+     return z1 & z2;
+}
+
+
+/*!
     @brief check if block is all zero bits
     @ingroup SSE4
 */
@@ -569,7 +666,10 @@ void sse4_bit_block_gather_scatter(unsigned* BMRESTRICT arr,
     sse2_invert_block((__m128i*)first);
 
 #define VECT_AND_BLOCK(dst, src) \
-    sse2_and_block((__m128i*) dst, (__m128i*) (src))
+    sse4_and_block((__m128i*) dst, (__m128i*) (src))
+
+#define VECT_AND_DIGEST(dst, src) \
+    sse4_and_digest((__m128i*) dst, (const __m128i*) (src))
 
 #define VECT_OR_BLOCK(dst, src) \
     sse2_or_block((__m128i*) dst, (__m128i*) (src))
