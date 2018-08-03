@@ -624,29 +624,27 @@ bm::id64_t update_block_digest0(const bm::word_t* const block, bm::id64_t digest
     }
     
     const bm::id64_t mask(1ull);
-    bool all_zero;
-    
     unsigned bcnt = bm::bitscan_popcnt64(digest, bits);
     for (unsigned i = 0; i < bcnt; ++i)
     {
         unsigned wave = bits[i];
         unsigned off = wave * bm::set_block_digest_wave_size;
         #if defined(VECT_IS_DIGEST_ZERO)
-            all_zero = VECT_IS_DIGEST_ZERO(&block[off]);
+            bool all_zero = VECT_IS_DIGEST_ZERO(&block[off]);
+            digest &= all_zero ? ~(mask << wave) : digest;
         #else
-        all_zero = true;
-        for (unsigned j = 0; j < bm::set_block_digest_wave_size; j+=4)
-        {
-            bm::word_t w =
-                block[off+j+0] | block[off+j+1] | block[off+j+2] | block[off+j+3];
-            if (w)
+            const bm::bit_block_t::bunion_t* BMRESTRICT src_u =
+                            (const bm::bit_block_t::bunion_t*)(&block[off]);
+            bm::id64_t w64 = 0;
+            unsigned j = 0;
+            do
             {
-                all_zero = false;
-                break;
-            }
-        } // for j
+                w64 |=
+                    src_u->w64[j+0] | src_u->w64[j+1] | src_u->w64[j+2] | src_u->w64[j+3];
+                j += 4;
+            } while ((j < bm::set_block_digest_wave_size/2) & !w64);
+            digest &= w64 ? digest : ~(mask << wave);
         #endif
-        digest &= ~((mask & all_zero) << wave);
     } // for i
     BM_ASSERT(digest == calc_block_digest0(block));
     return digest;
@@ -4427,6 +4425,64 @@ bm::id64_t bit_block_and(bm::word_t* BMRESTRICT dst, const bm::word_t* BMRESTRIC
     return acc;
 #endif
 }
+
+/*!
+   \brief digest based bit-block AND
+
+   \param dst - destination block.
+   \param src - source block.
+   \param digest - known digest of dst block
+ 
+   \return new digest
+
+   @ingroup bitfunc
+*/
+inline
+bm::id64_t bit_block_and(bm::word_t* BMRESTRICT dst,
+                         const bm::word_t* BMRESTRICT src,
+                         bm::id64_t digest)
+{
+    BM_ASSERT(dst);
+    BM_ASSERT(src);
+    BM_ASSERT(dst != src);
+    
+    unsigned short bits[65];
+    unsigned bcnt = bm::bitscan_popcnt64(digest, bits);
+
+    const bm::id64_t mask(1ull);
+
+    for (unsigned i = 0; i < bcnt; ++i)
+    {
+        unsigned wave = bits[i];
+        unsigned off = wave * bm::set_block_digest_wave_size;
+        #if defined(VECT_AND_DIGEST)
+            bool all_zero = VECT_AND_DIGEST(&dst[off], &src[off]);
+            if (all_zero)
+                digest &= ~(mask  << wave);
+        #else
+
+        const bm::bit_block_t::bunion_t* BMRESTRICT src_u = (const bm::bit_block_t::bunion_t*)(&src[off]);
+        bm::bit_block_t::bunion_t* BMRESTRICT dst_u = (bm::bit_block_t::bunion_t*)(&dst[off]);
+
+        bm::id64_t acc = 0;
+        unsigned j = 0;
+        do
+        {
+            acc |= dst_u->w64[j+0] &= src_u->w64[j+0];
+            acc |= dst_u->w64[j+1] &= src_u->w64[j+1];
+            acc |= dst_u->w64[j+2] &= src_u->w64[j+2];
+            acc |= dst_u->w64[j+3] &= src_u->w64[j+3];
+            j+=4;
+        } while ( j < bm::set_block_digest_wave_size/2);
+        
+        if (!acc) // all zero
+            digest &= ~(mask  << wave);
+        #endif
+            
+    } // for i
+    return digest;
+}
+
 
 
 /*!
