@@ -4451,6 +4451,7 @@ bm::id64_t bit_block_and(bm::word_t* BMRESTRICT dst,
     // minor optimization, for very dense digest masks it should be faster
     // to do a full mask scan, rather than unpack
     //
+    
     #if defined(VECT_AND_DIGEST)
         unsigned strides = bm::word_bitcount64(digest);
         if (strides > 40)
@@ -4463,8 +4464,11 @@ bm::id64_t bit_block_and(bm::word_t* BMRESTRICT dst,
                 {
                     unsigned off = wave * bm::set_block_digest_wave_size;
                     all_zero = VECT_AND_DIGEST(&dst[off], &src[off]);
-                    digest &= ~((mask & all_zero) << wave++);
+                    digest &= ~((mask & all_zero) << wave);
                 }
+                
+                
+                ++wave;
                 d >>= mask;
                 if (d & mask)
                 {
@@ -4472,14 +4476,15 @@ bm::id64_t bit_block_and(bm::word_t* BMRESTRICT dst,
                     all_zero = VECT_AND_DIGEST(&dst[off], &src[off]);
                     digest &= ~((mask & all_zero) << wave);
                 }
+                
                 d >>= mask;
                 if (!d)
                     return digest;
             } // for wave
             BM_ASSERT(0);
         }
-    
     #endif
+    
     
     unsigned short bits[65];
     unsigned bcnt = bm::bitscan_popcnt64(digest, bits);
@@ -4492,7 +4497,7 @@ bm::id64_t bit_block_and(bm::word_t* BMRESTRICT dst,
         #if defined(VECT_AND_DIGEST)
             bool all_zero = VECT_AND_DIGEST(&dst[off], &src[off]);
             if (all_zero)
-                digest &= ~(mask  << wave);
+                digest &= ~(mask << wave);
         #else
             const bm::bit_block_t::bunion_t* BMRESTRICT src_u = (const bm::bit_block_t::bunion_t*)(&src[off]);
             bm::bit_block_t::bunion_t* BMRESTRICT dst_u = (bm::bit_block_t::bunion_t*)(&dst[off]);
