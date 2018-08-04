@@ -4107,7 +4107,84 @@ void AggregatorTest()
         res = bv_control.compare(bv3);
         assert(res == 0);
     }
+    {
+        bvect bv1, bv2, bv3;
+        bvect bv_empty;
+        bvect bv_control;
+        int res;
 
+        bv1.invert();
+        bv_control.invert();
+        bv_arr[0] = &bv1;
+        agg.combine_and(bv3, bv_arr, 1);
+        res = bv_control.compare(bv3);
+        assert(res == 0);
+        
+        bv2.invert();
+        bv2.set_range(100000, 100100);
+        bv_arr[0] = &bv1;
+        bv_arr[1] = &bv2;
+        bv_control.set_range(100000, 100100);
+        agg.combine_and(bv3, bv_arr, 2);
+        res = bv_control.compare(bv3);
+        assert(res == 0);
+
+    }
+
+    {
+        bvect bv1, bv2, bv3, bv4;
+        bvect bv_empty;
+        bvect bv_control;
+        int res;
+
+        bv1.invert();
+        bv2.set_range(200000, 300000);
+        bv3.set_range(200000, 300000);
+        
+        bv_control.set_range(200000, 300000);
+        
+        bv_arr[0] = &bv1;
+        bv_arr[1] = &bv2;
+        bv_arr[2] = &bv3;
+        
+        agg.combine_and(bv4, bv_arr, 3);
+        res = bv_control.compare(bv4);
+        assert(res == 0);
+    }
+
+    {
+        bvect bv1, bv2, bv3;
+        bvect bv_empty;
+        bvect bv_control;
+        int res;
+        
+        bv_arr[0] = &bv1;
+        agg.combine_and(bv3, bv_arr, 1);
+        assert(bv3.count()==0);
+        
+        bv1[100] = true;
+        bv_arr[0] = &bv1;
+        agg.combine_and(bv3, bv_arr, 1);
+        assert(bv3.count()==1);
+        assert(bv3[100] == true);
+        
+        bv1[100] = true;
+        bv2.invert();
+        bv_arr[0] = &bv1;
+        bv_arr[1] = &bv2;
+        agg.combine_and(bv3, bv_arr, 2);
+        assert(bv3.count()==1);
+        assert(bv3[100] == true);
+        
+        bv1.clear();
+        bv1.invert();
+        bv_control.invert();
+        bv_arr[0] = &bv1;
+        bv_arr[1] = &bv2;
+        agg.combine_and(bv3, bv_arr, 2);
+        res = bv_control.compare(bv3);
+        assert(res == 0);
+    }
   cout << "---------------------------- Aggregator Test OK" << endl;
 }
 
@@ -14677,6 +14754,7 @@ int main(void)
     //LoadVectors("c:/dev/bv_perf", 3, 27);
     exit(1);
 */
+
 
     TestRecomb();
 
