@@ -2642,6 +2642,46 @@ void gap_sub_to_bitset(unsigned* dest, const T*  pcurr)
 }
 
 
+/*!
+   \brief SUB (AND NOT) GAP block to bitblock with digest assist
+   \param dest - bitblock buffer pointer.
+   \param pcurr  - GAP buffer pointer.
+
+   @ingroup gapfunc
+*/
+template<typename T>
+void gap_sub_to_bitset(unsigned* dest, const T*  pcurr, bm::id64_t digest0)
+{
+    BM_ASSERT(dest && pcurr);
+    
+    const T* pend = pcurr + (*pcurr >> 3);
+    if (*pcurr & 1)  // Starts with 1
+    {
+        bool all_zero = bm::check_zero_digest(digest0, 0, pcurr[1]+1);
+        if (!all_zero)
+            bm::sub_bit_block(dest, 0, pcurr[1] + 1); // (not AND) - SUB [0] gaps
+        pcurr += 3;
+    }
+    else
+        pcurr += 2;
+
+    unsigned bc, pos;
+    for (; pcurr <= pend; ) // now we are in GAP "1" again
+    {
+        BM_ASSERT(*pcurr > *(pcurr-1));
+        pos = 1u + pcurr[-1];
+        bc = *pcurr - pcurr[-1];
+
+        bool all_zero = bm::check_zero_digest(digest0, pcurr[-1], *pcurr);
+        
+        pcurr += 2;
+        
+        if (!all_zero)
+            bm::sub_bit_block(dest, pos, bc);
+    }
+}
+
+
 
 /*!
    \brief XOR GAP block to bitblock.
@@ -2738,6 +2778,7 @@ void gap_and_to_bitset(unsigned* dest, const T*  pcurr)
    \brief ANDs GAP block to bitblock with digest assist
    \param dest - bitblock buffer pointer.
    \param pcurr  - GAP buffer pointer.
+   \param digest - digest for the destination 
 
    @ingroup gapfunc
 */
@@ -5275,7 +5316,8 @@ bm::word_t* bit_operation_or(bm::word_t* BMRESTRICT dst,
    @ingroup bitfunc
 */
 inline
-bm::id64_t bit_block_sub(bm::word_t* BMRESTRICT dst, const bm::word_t* BMRESTRICT src)
+bm::id64_t bit_block_sub(bm::word_t* BMRESTRICT dst,
+                         const bm::word_t* BMRESTRICT src)
 {
 #ifdef BMVECTOPT
     bm::id64_t acc = VECT_SUB_BLOCK(dst, src);
@@ -5297,6 +5339,64 @@ bm::id64_t bit_block_sub(bm::word_t* BMRESTRICT dst, const bm::word_t* BMRESTRIC
     return acc;
 #endif
 }
+
+/*!
+   \brief digest based bitblock SUB (AND NOT) operation
+
+   \param dst - destination block.
+   \param src - source block.
+   \param digest - known digest of dst block
+ 
+   \return new digest
+
+   @ingroup bitfunc
+*/
+inline
+bm::id64_t bit_block_sub(bm::word_t* BMRESTRICT dst,
+                         const bm::word_t* BMRESTRICT src,
+                         bm::id64_t digest)
+{
+    BM_ASSERT(dst);
+    BM_ASSERT(src);
+    BM_ASSERT(dst != src);
+
+    const bm::id64_t mask(1ull);
+    
+    unsigned short bits[65];
+    unsigned bcnt = bm::bitscan_popcnt64(digest, bits);
+
+    for (unsigned i = 0; i < bcnt; ++i)
+    {
+        unsigned wave = bits[i];
+        unsigned off = wave * bm::set_block_digest_wave_size;
+        
+        #if defined(VECT_SUB_DIGEST)
+            bool all_zero = VECT_SUB_DIGEST(&dst[off], &src[off]);
+            if (all_zero)
+                digest &= ~(mask << wave);
+        #else
+            const bm::bit_block_t::bunion_t* BMRESTRICT src_u = (const bm::bit_block_t::bunion_t*)(&src[off]);
+            bm::bit_block_t::bunion_t* BMRESTRICT dst_u = (bm::bit_block_t::bunion_t*)(&dst[off]);
+
+            bm::id64_t acc = 0;
+            unsigned j = 0;
+            do
+            {
+                acc |= dst_u->w64[j+0] &= ~src_u->w64[j+0];
+                acc |= dst_u->w64[j+1] &= ~src_u->w64[j+1];
+                acc |= dst_u->w64[j+2] &= ~src_u->w64[j+2];
+                acc |= dst_u->w64[j+3] &= ~src_u->w64[j+3];
+                j+=4;
+            } while (j < bm::set_block_digest_wave_size/2);
+        
+            if (!acc) // all zero
+                digest &= ~(mask  << wave);
+        #endif
+        
+    } // for i
+    return digest;
+}
+
 
 
 

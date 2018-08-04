@@ -963,15 +963,13 @@ unsigned avx2_sub_block(__m256i* BMRESTRICT dst,
     do
     {
         m1A = _mm256_andnot_si256(_mm256_load_si256(src), _mm256_load_si256(dst));
-        _mm256_store_si256(dst, m1A);
-        
         m1B = _mm256_andnot_si256(_mm256_load_si256(src+1), _mm256_load_si256(dst+1));
-        _mm256_store_si256(dst+1, m1B);
-        
         m1C = _mm256_andnot_si256(_mm256_load_si256(src+2), _mm256_load_si256(dst+2));
-        _mm256_store_si256(dst+2, m1C);
-        
         m1D = _mm256_andnot_si256(_mm256_load_si256(src+3), _mm256_load_si256(dst+3));
+
+        _mm256_store_si256(dst+0, m1A);
+        _mm256_store_si256(dst+1, m1B);
+        _mm256_store_si256(dst+2, m1C);
         _mm256_store_si256(dst+3, m1D);
         
         accA = _mm256_or_si256(accA, m1A);
@@ -988,6 +986,36 @@ unsigned avx2_sub_block(__m256i* BMRESTRICT dst,
     accA = _mm256_or_si256(accA, accC); // A = A | C
     
     return !_mm256_testz_si256(accA, accA);
+}
+
+/*!
+    @brief SUB (AND NOT) block digest stride
+    *dst &= *src
+ 
+    @return true if stide is all zero
+    @ingroup AVX2
+*/
+inline
+bool avx2_sub_digest(__m256i* BMRESTRICT dst,
+                     const __m256i* BMRESTRICT src)
+{
+    __m256i m1A, m1B, m1C, m1D;
+
+    m1A = _mm256_andnot_si256(_mm256_load_si256(src+0), _mm256_load_si256(dst+0));
+    m1B = _mm256_andnot_si256(_mm256_load_si256(src+1), _mm256_load_si256(dst+1));
+    m1C = _mm256_andnot_si256(_mm256_load_si256(src+2), _mm256_load_si256(dst+2));
+    m1D = _mm256_andnot_si256(_mm256_load_si256(src+3), _mm256_load_si256(dst+3));
+
+    _mm256_store_si256(dst+0, m1A);
+    _mm256_store_si256(dst+1, m1B);
+    _mm256_store_si256(dst+2, m1C);
+    _mm256_store_si256(dst+3, m1D);
+    
+     m1A = _mm256_or_si256(m1A, m1B);
+     m1C = _mm256_or_si256(m1C, m1D);
+     m1A = _mm256_or_si256(m1A, m1C);
+
+    return _mm256_testz_si256(m1A, m1A);
 }
 
 
@@ -1663,6 +1691,9 @@ void avx2_bit_block_gather_scatter(unsigned* BMRESTRICT arr,
 
 #define VECT_SUB_BLOCK(dst, src) \
     avx2_sub_block((__m256i*) dst, (__m256i*) (src))
+
+#define VECT_SUB_DIGEST(dst, src) \
+    avx2_sub_digest((__m256i*) dst, (const __m256i*) (src))
 
 #define VECT_XOR_ARR(dst, src, src_end) \
     avx2_xor_arr((__m256i*) dst, (__m256i*) (src), (__m256i*) (src_end))
