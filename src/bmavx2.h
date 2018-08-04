@@ -583,6 +583,38 @@ bool avx2_and_digest(__m256i* BMRESTRICT dst,
     return _mm256_testz_si256(m1A, m1A);
 }
 
+/*!
+    @brief AND block digest stride 2 way
+    *dst = *src1 & *src2
+ 
+    @return true if stide is all zero
+    @ingroup AVX2
+*/
+inline
+bool avx2_and_digest_2way(__m256i* BMRESTRICT dst,
+                     const __m256i* BMRESTRICT src1,
+                     const __m256i* BMRESTRICT src2)
+{
+    __m256i m1A, m1B, m1C, m1D;
+
+    m1A = _mm256_and_si256(_mm256_load_si256(src1+0), _mm256_load_si256(src2+0));
+    m1B = _mm256_and_si256(_mm256_load_si256(src1+1), _mm256_load_si256(src2+1));
+    m1C = _mm256_and_si256(_mm256_load_si256(src1+2), _mm256_load_si256(src2+2));
+    m1D = _mm256_and_si256(_mm256_load_si256(src1+3), _mm256_load_si256(src2+3));
+
+    _mm256_store_si256(dst+0, m1A);
+    _mm256_store_si256(dst+1, m1B);
+    _mm256_store_si256(dst+2, m1C);
+    _mm256_store_si256(dst+3, m1D);
+    
+     m1A = _mm256_or_si256(m1A, m1B);
+     m1C = _mm256_or_si256(m1C, m1D);
+     m1A = _mm256_or_si256(m1A, m1C);
+
+    return _mm256_testz_si256(m1A, m1A);
+}
+
+
 
 /*!
     @brief AND array elements against another array (unaligned)
@@ -1616,6 +1648,9 @@ void avx2_bit_block_gather_scatter(unsigned* BMRESTRICT arr,
 
 #define VECT_AND_DIGEST(dst, src) \
     avx2_and_digest((__m256i*) dst, (const __m256i*) (src))
+
+#define VECT_AND_DIGEST_2WAY(dst, src1, src2) \
+    avx2_and_digest_2way((__m256i*) dst, (const __m256i*) (src1), (const __m256i*) (src2))
 
 #define VECT_OR_BLOCK(dst, src) \
     avx2_or_block((__m256i*) dst, (__m256i*) (src))
