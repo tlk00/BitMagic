@@ -839,11 +839,14 @@ unsigned SerializationOperation(bvect*             bv_target,
 
     // check if operation was ok
     {
-        bvect bv_agg;
+        bvect bv_agg, bv_agg2;
         bm::aggregator<bvect> agg;
         bvect* agg_list[10];
+        bvect* agg_list2[10];
         agg_list[0] = &bv1;
         agg_list[1] = &bv2;
+        agg_list2[0] = &bv2;
+
 
         bool agg_check = false;
 
@@ -861,10 +864,29 @@ unsigned SerializationOperation(bvect*             bv_target,
         case bm::set_AND:
             bvt &= bv2;
             agg.combine_and(bv_agg, agg_list, 2);
+            agg.combine_and_sub(bv_agg2, agg_list, 2, 0, 0);
+            {
+                if (bv_agg.compare(bv_agg2) != 0)
+                {
+                    cerr << "Error: Aggregator AND - AND-SUB(0) comparison failed!" << endl;
+                    exit(1);
+                }
+            }
             agg_check = true;
             break;
         case bm::set_SUB:
             bvt -= bv2;
+            agg.combine_and_sub(bv_agg, agg_list, 1, agg_list2, 1);
+            {
+                bvect bv_h;
+                agg.combine_and_sub_horizontal(bv_h, agg_list, 1, agg_list2, 1);
+                if (bv_agg.compare(bv_h) != 0)
+                {
+                    cerr << "Error: Aggregator Horz-AND-SUB comparison failed!" << endl;
+                    exit(1);
+                }
+            }
+            agg_check = true;
             break;
         default:
             goto no_compare;
@@ -4075,6 +4097,8 @@ void AggregatorTest()
   cout << "---------------------------- Aggregator Test" << endl;
 
     bvect* bv_arr[128] = { 0, };
+    bvect* bv_arr2[128] = { 0, };
+
     bm::aggregator<bvect> agg;
     
     {
@@ -4127,6 +4151,8 @@ void AggregatorTest()
         bv_control.set_range(100000, 100100);
         agg.combine_and(bv3, bv_arr, 2);
         res = bv_control.compare(bv3);
+        agg.combine_and_sub(bv3, bv_arr, 2, 0, 0);
+        res = bv_control.compare(bv3);
         assert(res == 0);
 
     }
@@ -4149,6 +4175,9 @@ void AggregatorTest()
         
         agg.combine_and(bv4, bv_arr, 3);
         res = bv_control.compare(bv4);
+        assert(res == 0);
+        agg.combine_and_sub(bv4, bv_arr, 3, 0, 0);
+        res = bv_control.compare(bv3);
         assert(res == 0);
     }
 
@@ -4184,7 +4213,70 @@ void AggregatorTest()
         agg.combine_and(bv3, bv_arr, 2);
         res = bv_control.compare(bv3);
         assert(res == 0);
+        agg.combine_and_sub(bv3, bv_arr, 2, 0, 0);
+        res = bv_control.compare(bv3);
+        assert(res == 0);
     }
+
+
+    //  ---------------------------
+    {
+        bvect bv1, bv2, bv3, bv4;
+        bvect bv_empty;
+        bvect bv_control;
+        
+        bv1[100] = true;
+        bv1[100000] = true;
+        bv2[100] = true;
+        bv2[100000] = true;
+        bv3[100000] = true;
+
+        bv_arr[0] = &bv1;
+        bv_arr[1] = &bv2;
+        bv_arr2[0] = &bv3;
+
+        agg.combine_and_sub(bv4, bv_arr, 2, bv_arr2, 1);
+        assert(bv4.count()==1);
+        assert(bv4.test(100));
+        
+        bv3.optimize();
+        agg.combine_and_sub(bv4, bv_arr, 2, bv_arr2, 1);
+        assert(bv4.count()==1);
+        assert(bv4.test(100));
+        
+        bv1.optimize();
+        agg.combine_and_sub(bv4, bv_arr, 2, bv_arr2, 1);
+        assert(bv4.count()==1);
+        assert(bv4.test(100));
+
+        bv2.optimize();
+        agg.combine_and_sub(bv4, bv_arr, 2, bv_arr2, 1);
+        assert(bv4.count()==1);
+        assert(bv4.test(100));
+    }
+
+    {
+        bvect bv1, bv2, bv3, bv4;
+        bvect bv_empty;
+        bvect bv_control;
+        int res;
+        
+        bv1[100] = true;
+        bv1[100000] = true;
+        bv2[100] = true;
+        bv2[100000] = true;
+        
+        bv3.invert();
+
+        bv_arr[0] = &bv1;
+        bv_arr[1] = &bv2;
+        bv_arr2[0] = &bv3;
+
+        agg.combine_and_sub(bv4, bv_arr, 2, bv_arr2, 1);
+        assert(bv4.count()==0);
+        assert(!bv4.any());
+    }
+
   cout << "---------------------------- Aggregator Test OK" << endl;
 }
 
@@ -4381,11 +4473,14 @@ void StressTestAggregatorAND(unsigned repetitions)
         agg_list[8] = &bv8;
         agg_list[9] = &bv9;
         
-        bvect bv_target1, bv_target2;
+        bvect bv_target1, bv_target2, bv_target3, bv_target4;
+        bvect bv_empty;
         
         unsigned cnt = 10;
         agg.combine_and(bv_target1, agg_list, cnt);
         agg.combine_and_horizontal(bv_target2, agg_list, cnt);
+        agg.combine_and_sub(bv_target3, agg_list, cnt, 0, 0);
+        agg.combine_and_sub(bv_empty, agg_list, cnt, agg_list, cnt);
 
         int res = bv_target1.compare(bv_target2);
         if (res!=0)
@@ -4393,10 +4488,21 @@ void StressTestAggregatorAND(unsigned repetitions)
             cerr << "Error: Aggregator AND check failed!" << endl;
             exit(1);
         }
+        res = bv_target3.compare(bv_target1);
+        if (res!=0)
+        {
+            cerr << "Error: Aggregator AND-SUB(0) check failed!" << endl;
+            exit(1);
+        }
+        assert(!bv_empty.any());
         for (unsigned j = 1; j < cnt; ++j)
         {
             agg.combine_and(bv_target1, agg_list, j);
             agg.combine_and_horizontal(bv_target2, agg_list, j);
+            agg.combine_and_sub(bv_target3, agg_list, cnt, 0, 0);
+            agg.combine_and_sub(bv_empty, agg_list, cnt, agg_list, cnt);
+
+            
             res = bv_target1.compare(bv_target2);
             if (res!=0)
             {
@@ -4404,12 +4510,26 @@ void StressTestAggregatorAND(unsigned repetitions)
                      << j << endl;
                 exit(1);
             }
+            res = bv_target1.compare(bv_target3);
+            if (res!=0)
+            {
+                cerr << "Error: Aggregator AND-SUB(0) check failed! 1.laddder step = "
+                     << j << endl;
+                exit(1);
+            }
+            assert(!bv_empty.any());
         }
         
         for (unsigned j = 0; j < cnt; ++j)
         {
+            if (j == 9)
+                cerr << j << endl;
             agg.combine_and(bv_target1, agg_list+j, cnt-j);
             agg.combine_and_horizontal(bv_target2, agg_list+j, cnt-j);
+            agg.combine_and_sub(bv_target3, agg_list+j, cnt-j, 0, 0);
+            agg.combine_and_sub_horizontal(bv_target4, agg_list+j, cnt-j, 0, 0);
+            agg.combine_and_sub(bv_empty, agg_list+j, cnt-j, agg_list+j, cnt-j);
+
             res = bv_target1.compare(bv_target2);
             if (res!=0)
             {
@@ -4417,6 +4537,27 @@ void StressTestAggregatorAND(unsigned repetitions)
                      << j << endl;
                 exit(1);
             }
+            res = bv_target1.compare(bv_target4);
+            if (res!=0)
+            {
+                cerr << "Error: Aggregator Horz-AND-SUB(0) check failed! 2.laddder step = "
+                     << j << endl;
+                res = bv_target3.compare(bv_target4);
+                if (res == 0)
+                {
+                    cerr << "Warning. Aggregator AND-SUB ok... \n";
+                }
+                exit(1);
+            }
+
+            res = bv_target1.compare(bv_target3);
+            if (res!=0)
+            {
+                cerr << "Error: Aggregator AND-SUB(0) check failed! 2.laddder step = "
+                     << j << endl;
+                exit(1);
+            }
+            assert(!bv_empty.any());
         }
 
 
@@ -4424,6 +4565,8 @@ void StressTestAggregatorAND(unsigned repetitions)
 
   cout << "---------------------------- Aggregator AND Stress Test OK" << endl;
 }
+
+
 
 
 static
@@ -14755,7 +14898,6 @@ int main(void)
     exit(1);
 */
 
-
     TestRecomb();
 
     OptimGAPTest();
@@ -14862,9 +15004,12 @@ int main(void)
  
      StressTestAggregatorAND(100);
 
+//     StressTestAggregatorSUB(100);
+
      StressTest(120, 0); // OR
 
      StressTest(120, 3); // AND
+
      StressTest(120, 1); // SUB
      StressTest(120, 2); // XOR
 

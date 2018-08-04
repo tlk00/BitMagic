@@ -2045,11 +2045,14 @@ void AggregatorTest()
 {
     int res;
     bvect* bv_arr[128] = { 0, };
+    bvect* bv_arr2[128] = { 0, };
     bm::aggregator<bvect> agg;
     
     std::vector<bvect> bv_coll;
     GenerateTestCollection(&bv_coll, 25, 80000000);
-    
+    std::vector<bvect> bv_coll2;
+    GenerateTestCollection(&bv_coll2, 7, 50000000);
+
     if (!bv_coll.size())
         return;
     
@@ -2057,7 +2060,11 @@ void AggregatorTest()
     for (unsigned k = 0; k < bv_coll.size(); ++k)
     {
         bv_arr[k] = &(bvc[k]);
-        //std::cout << k << ":" << bv_arr[k]->count() << std::endl;
+    } // for
+    std::vector<bvect>& bvc2 = bv_coll2;
+    for (unsigned k = 0; k < bv_coll2.size(); ++k)
+    {
+        bv_arr2[k] = &(bvc2[k]);
     } // for
 
     std::unique_ptr<bvect> bv_target1(new bvect);
@@ -2086,6 +2093,8 @@ void AggregatorTest()
         exit(1);
     }
 
+
+    // ------------------------------------------------------------------
     {
     TimeTaker tt("Aggregator AND (ref) test", REPEATS);
     for (unsigned i = 0; i < REPEATS; ++i)
@@ -2101,6 +2110,7 @@ void AggregatorTest()
         agg.combine_and(*bv_target2, bv_arr, unsigned(bv_coll.size()));
     } // for
     }
+    auto and_cnt = bv_target1->count();
 
     res = bv_target1->compare(*bv_target2);
     if (res != 0)
@@ -2108,9 +2118,45 @@ void AggregatorTest()
         std::cerr << "Error: Aggregator AND integrity failed." << std::endl;
         exit(1);
     }
-    
 
-///    std::cout << bv_target1->count() << std::endl;
+    {
+    TimeTaker tt("Aggregator AND-SUB (ref) test", REPEATS);
+    for (unsigned i = 0; i < REPEATS; ++i)
+    {
+        agg.combine_and_sub_horizontal(*bv_target1,
+                                        bv_arr, unsigned(bv_coll.size()),
+                                        bv_arr2, unsigned(bv_coll2.size())
+                                        );
+    } // for
+    }
+    
+    auto and_sub_cnt = bv_target1->count();
+    if (and_sub_cnt > and_cnt)
+    {
+        std::cerr << "Error: Aggregator count AND-SUB integrity failed." << std::endl;
+        exit(1);
+    }
+
+    {
+    TimeTaker tt("Aggregator AND-SUB test", REPEATS);
+    for (unsigned i = 0; i < REPEATS; ++i)
+    {
+        agg.combine_and_sub(*bv_target2,
+                            bv_arr, unsigned(bv_coll.size()),
+                            bv_arr2, unsigned(bv_coll2.size())
+                            );
+    } // for
+    }
+    
+    res = bv_target1->compare(*bv_target2);
+    if (res != 0)
+    {
+        std::cerr << "Error: Aggregator AND-SUB integrity failed." << std::endl;
+        exit(1);
+    }
+
+
+    std::cout << bv_target1->count() << std::endl;
 }
 
 static
