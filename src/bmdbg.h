@@ -23,7 +23,7 @@ For more information please visit:  http://bitmagic.io
 */
 
 
-#include <stdio.h>
+#include <cstdio>
 #include <stdlib.h>
 #include <cassert>
 #include <memory.h>

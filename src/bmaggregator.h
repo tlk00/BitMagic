@@ -40,6 +40,8 @@ namespace bm
     on cases, wehen we need to apply the same logical operation (aggregate)
     more than 2x vectors.
  
+    TARGET = BV1 or BV2 or BV3 or BV4 ...
+ 
     \ingroup setalgo
 */
 template<typename BV>
@@ -48,12 +50,21 @@ class aggregator
 public:
     typedef BV                         bvector_type;
     typedef bvector_type*              bvector_type_ptr;
+
+    /// Maximum aggregation capacity in one pass
+    enum max_size
+    {
+        max_aggregator_cap = 256
+    };
+
     
 public:
     aggregator();
     ~aggregator();
     
-    
+    /*! @name Logical operations (C-style interface) */
+    //@{
+
     /**
         Aggregate group of vectors using logical OR
         \param bv_target - target vector
@@ -71,14 +82,28 @@ public:
     */
     void combine_and(bvector_type& bv_target,
                     const bvector_type_ptr* bv_src, unsigned src_size);
+    //@}
 
 
-    /// Horizontal OR aggregation (potentially slower) method
+    /*! @name Horizontal Logical operations (C-style interface) */
+    //@{
+    /**
+        Horizontal OR aggregation (potentially slower) method.
+        \param bv_target - target vector
+        \param bv_src    - array of pointers on bit-vector aggregate arguments
+        \param src_size  - size of bv_src (how many vectors to aggregate)
+    */
     void combine_or_horizontal(bvector_type& bv_target,
                                const bvector_type_ptr* bv_src, unsigned src_size);
-    /// Horizontal AND aggregation (potentially slower) method
+    /**
+        Horizontal AND aggregation (potentially slower) method.
+        \param bv_target - target vector
+        \param bv_src    - array of pointers on bit-vector aggregate arguments
+        \param src_size  - size of bv_src (how many vectors to aggregate)
+    */
     void combine_and_horizontal(bvector_type& bv_target,
                                 const bvector_type_ptr* bv_src, unsigned src_size);
+    //@}
 
 protected:
     typedef typename bvector_type::blocks_manager_type blocks_manager_type;
@@ -133,8 +158,8 @@ private:
         bm::gap_word_t        gap_res_buf1[bm::gap_equiv_len * 3]; ///< temp 1
         bm::gap_word_t        gap_res_buf2[bm::gap_equiv_len * 3]; ///< temp 2
         bm::gap_word_t        gap_res_buf3[bm::gap_equiv_len * 6]; ///< temp 3
-        const bm::word_t*     v_arg_blk[256];     ///< source blocks list
-        const bm::gap_word_t* v_arg_blk_gap[256]; ///< source GAP blocks list
+        const bm::word_t*     v_arg_blk[max_aggregator_cap];     ///< source blocks list
+        const bm::gap_word_t* v_arg_blk_gap[max_aggregator_cap]; ///< source GAP blocks list
     };
     
     aggregator(const aggregator&) = delete;
@@ -327,6 +352,8 @@ void aggregator<BV>::combine_and(unsigned i, unsigned j,
                                  const bvector_type_ptr* bv_src,
                                  unsigned src_size)
 {
+    BM_ASSERT(src_size);
+    
     typename bvector_type::blocks_manager_type& bman_target = bv_target.get_blocks_manager();
 
     unsigned arg_blk_count = 0;
@@ -354,7 +381,6 @@ void aggregator<BV>::combine_and(unsigned i, unsigned j,
 
             // AND all GAP blocks (if any)
             //
-
             if (arg_blk_gap_count)
             {
                 digest =
@@ -594,6 +620,8 @@ aggregator<BV>::process_bit_blocks_and(unsigned   arg_blk_count,
     
     for (; k < arg_blk_count; ++k)
     {
+        if (ar_->v_arg_blk[k] == FULL_BLOCK_REAL_ADDR)
+            continue;
         digest = bm::bit_block_and(blk, ar_->v_arg_blk[k], digest);
         if (!digest) // all zero
             break;
@@ -705,7 +733,13 @@ bm::word_t* aggregator<BV>::sort_input_blocks_and(const bvector_type_ptr* bv_src
         else // FULL or bit block
         {
             if (IS_FULL_BLOCK(arg_blk))
+            {
+            /*
+                if (src_size > 1) // ignore all 0xFF blocks except if its only one
+                    continue;
+            */
                 arg_blk = FULL_BLOCK_REAL_ADDR;
+            }
             
             ar_->v_arg_blk[*arg_blk_count] = arg_blk;
             (*arg_blk_count)++;
