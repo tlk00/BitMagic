@@ -52,7 +52,7 @@ class aggregator
 {
 public:
     typedef BV                         bvector_type;
-    typedef bvector_type*              bvector_type_ptr;
+    typedef const bvector_type*        bvector_type_const_ptr;
 
     /// Maximum aggregation capacity in one pass
     enum max_size
@@ -75,7 +75,7 @@ public:
         \param src_size  - size of bv_src (how many vectors to aggregate)
     */
     void combine_or(bvector_type& bv_target,
-                    const bvector_type_ptr* bv_src, unsigned src_size);
+                    const bvector_type_const_ptr* bv_src, unsigned src_size);
 
     /**
         Aggregate group of vectors using logical AND
@@ -84,11 +84,11 @@ public:
         \param src_size  - size of bv_src (how many vectors to aggregate)
     */
     void combine_and(bvector_type& bv_target,
-                     const bvector_type_ptr* bv_src, unsigned src_size);
+                     const bvector_type_const_ptr* bv_src, unsigned src_size);
 
     void combine_and_sub(bvector_type& bv_target,
-                     const bvector_type_ptr* bv_src_and, unsigned src_and_size,
-                     const bvector_type_ptr* bv_src_sub, unsigned src_sub_size);
+                     const bvector_type_const_ptr* bv_src_and, unsigned src_and_size,
+                     const bvector_type_const_ptr* bv_src_sub, unsigned src_sub_size);
     //@}
 
 
@@ -101,7 +101,7 @@ public:
         \param src_size  - size of bv_src (how many vectors to aggregate)
     */
     void combine_or_horizontal(bvector_type& bv_target,
-                               const bvector_type_ptr* bv_src, unsigned src_size);
+                               const bvector_type_const_ptr* bv_src, unsigned src_size);
     /**
         Horizontal AND aggregation (potentially slower) method.
         \param bv_target - target vector
@@ -109,7 +109,7 @@ public:
         \param src_size  - size of bv_src (how many vectors to aggregate)
     */
     void combine_and_horizontal(bvector_type& bv_target,
-                                const bvector_type_ptr* bv_src, unsigned src_size);
+                                const bvector_type_const_ptr* bv_src, unsigned src_size);
 
     /**
         Horizontal AND-SUB aggregation (potentially slower) method.
@@ -121,9 +121,9 @@ public:
 
     */
     void combine_and_sub_horizontal(bvector_type& bv_target,
-                                    const bvector_type_ptr* bv_src_and,
+                                    const bvector_type_const_ptr* bv_src_and,
                                     unsigned src_and_size,
-                                    const bvector_type_ptr* bv_src_sub,
+                                    const bvector_type_const_ptr* bv_src_sub,
                                     unsigned src_sub_size);
 
     //@}
@@ -133,30 +133,30 @@ protected:
     
     void combine_or(unsigned i, unsigned j,
                     bvector_type& bv_target,
-                    const bvector_type_ptr* bv_src, unsigned src_size);
+                    const bvector_type_const_ptr* bv_src, unsigned src_size);
 
     void combine_and(unsigned i, unsigned j,
                     bvector_type& bv_target,
-                    const bvector_type_ptr* bv_src, unsigned src_size);
+                    const bvector_type_const_ptr* bv_src, unsigned src_size);
     
     void combine_and_sub(unsigned i, unsigned j,
                          bvector_type& bv_target,
-                         const bvector_type_ptr* bv_src_and, unsigned src_and_size,
-                         const bvector_type_ptr* bv_src_sub, unsigned src_sub_size);
+                         const bvector_type_const_ptr* bv_src_and, unsigned src_and_size,
+                         const bvector_type_const_ptr* bv_src_sub, unsigned src_sub_size);
 
     static
     unsigned resize_target(bvector_type& bv_target,
-                           const bvector_type_ptr* bv_src,
+                           const bvector_type_const_ptr* bv_src,
                            unsigned src_size,
                            bool init_clear = true);
     
-    bm::word_t* sort_input_blocks_or(const bvector_type_ptr* bv_src,
+    bm::word_t* sort_input_blocks_or(const bvector_type_const_ptr* bv_src,
                                      unsigned src_size,
                                      unsigned i, unsigned j,
                                      unsigned* arg_blk_count,
                                      unsigned* arg_blk_gap_count);
     
-    bm::word_t* sort_input_blocks_and(const bvector_type_ptr* bv_src,
+    bm::word_t* sort_input_blocks_and(const bvector_type_const_ptr* bv_src,
                                       unsigned src_size,
                                       unsigned i, unsigned j,
                                       unsigned* arg_blk_count,
@@ -178,7 +178,7 @@ protected:
 
     static
     unsigned find_effective_sub_block_size(unsigned i,
-                                           const bvector_type_ptr* bv_src,
+                                           const bvector_type_const_ptr* bv_src,
                                            unsigned src_size);
     
 private:
@@ -253,10 +253,14 @@ aggregator<BV>::~aggregator()
 
 template<typename BV>
 void aggregator<BV>::combine_or(bvector_type& bv_target,
-                        const bvector_type_ptr* bv_src, unsigned src_size)
+                        const bvector_type_const_ptr* bv_src, unsigned src_size)
 {
-    BM_ASSERT_THROW(src_size, BM_ERR_RANGE);
     BM_ASSERT_THROW(src_size >= max_aggregator_cap, BM_ERR_RANGE);
+    if (!src_size)
+    {
+        bv_target.clear();
+        return;
+    }
 
     unsigned top_blocks = resize_target(bv_target, bv_src, src_size);
     for (unsigned i = 0; i < top_blocks; ++i)
@@ -275,10 +279,15 @@ void aggregator<BV>::combine_or(bvector_type& bv_target,
 
 template<typename BV>
 void aggregator<BV>::combine_and(bvector_type& bv_target,
-                        const bvector_type_ptr* bv_src, unsigned src_size)
+                        const bvector_type_const_ptr* bv_src, unsigned src_size)
 {
-    BM_ASSERT_THROW(src_size, BM_ERR_RANGE);
     BM_ASSERT_THROW(src_size >= max_aggregator_cap, BM_ERR_RANGE);
+
+    if (!src_size)
+    {
+        bv_target.clear();
+        return;
+    }
 
     unsigned top_blocks = resize_target(bv_target, bv_src, src_size);
     
@@ -298,19 +307,17 @@ void aggregator<BV>::combine_and(bvector_type& bv_target,
 
 template<typename BV>
 void aggregator<BV>::combine_and_sub(bvector_type& bv_target,
-                 const bvector_type_ptr* bv_src_and, unsigned src_and_size,
-                 const bvector_type_ptr* bv_src_sub, unsigned src_sub_size)
+                 const bvector_type_const_ptr* bv_src_and, unsigned src_and_size,
+                 const bvector_type_const_ptr* bv_src_sub, unsigned src_sub_size)
 {
-    BM_ASSERT_THROW(src_and_size, BM_ERR_RANGE);
     BM_ASSERT_THROW(src_and_size >= max_aggregator_cap, BM_ERR_RANGE);
-    BM_ASSERT_THROW(src_sub_size, BM_ERR_RANGE);
     BM_ASSERT_THROW(src_sub_size >= max_aggregator_cap, BM_ERR_RANGE);
-/*
-    combine_and(bv_target, bv_src_and, src_and_size);
-    bvector_type bv_or;
-    combine_or(bv_or, bv_src_sub, src_sub_size);
-    bv_target -= bv_or;
-*/
+
+    if (!src_size)
+    {
+        bv_target.clear();
+        return;
+    }
 
     unsigned top_blocks = resize_target(bv_target, bv_src_and, src_and_size);
     unsigned top_blocks2 = resize_target(bv_target, bv_src_sub, src_sub_size, false);
@@ -347,7 +354,7 @@ void aggregator<BV>::combine_and_sub(bvector_type& bv_target,
 template<typename BV>
 unsigned
 aggregator<BV>::find_effective_sub_block_size(unsigned i,
-                                              const bvector_type_ptr* bv_src,
+                                              const bvector_type_const_ptr* bv_src,
                                               unsigned src_size) 
 {
     unsigned max_size = 1;
@@ -380,7 +387,7 @@ aggregator<BV>::find_effective_sub_block_size(unsigned i,
 template<typename BV>
 void aggregator<BV>::combine_or(unsigned i, unsigned j,
                                 bvector_type& bv_target,
-                                const bvector_type_ptr* bv_src,
+                                const bvector_type_const_ptr* bv_src,
                                 unsigned src_size)
 {
     typename bvector_type::blocks_manager_type& bman_target = bv_target.get_blocks_manager();
@@ -431,7 +438,7 @@ void aggregator<BV>::combine_or(unsigned i, unsigned j,
 template<typename BV>
 void aggregator<BV>::combine_and(unsigned i, unsigned j,
                                  bvector_type& bv_target,
-                                 const bvector_type_ptr* bv_src,
+                                 const bvector_type_const_ptr* bv_src,
                                  unsigned src_size)
 {
     BM_ASSERT(src_size);
@@ -487,8 +494,8 @@ void aggregator<BV>::combine_and(unsigned i, unsigned j,
 template<typename BV>
 void aggregator<BV>::combine_and_sub(unsigned i, unsigned j,
                                      bvector_type& bv_target,
-                     const bvector_type_ptr* bv_src_and, unsigned src_and_size,
-                     const bvector_type_ptr* bv_src_sub, unsigned src_sub_size)
+                     const bvector_type_const_ptr* bv_src_and, unsigned src_and_size,
+                     const bvector_type_const_ptr* bv_src_sub, unsigned src_sub_size)
 {
     BM_ASSERT(src_and_size);
 
@@ -855,7 +862,7 @@ aggregator<BV>::process_bit_blocks_sub(unsigned   arg_blk_count,
 
 template<typename BV>
 unsigned aggregator<BV>::resize_target(bvector_type& bv_target,
-                            const bvector_type_ptr* bv_src, unsigned src_size,
+                            const bvector_type_const_ptr* bv_src, unsigned src_size,
                             bool init_clear)
 {
     typename bvector_type::blocks_manager_type& bman_target = bv_target.get_blocks_manager();
@@ -892,7 +899,7 @@ unsigned aggregator<BV>::resize_target(bvector_type& bv_target,
 // ------------------------------------------------------------------------
 
 template<typename BV>
-bm::word_t* aggregator<BV>::sort_input_blocks_or(const bvector_type_ptr* bv_src,
+bm::word_t* aggregator<BV>::sort_input_blocks_or(const bvector_type_const_ptr* bv_src,
                                                  unsigned src_size,
                                                  unsigned i, unsigned j,
                                                  unsigned* arg_blk_count,
@@ -930,7 +937,7 @@ bm::word_t* aggregator<BV>::sort_input_blocks_or(const bvector_type_ptr* bv_src,
 // ------------------------------------------------------------------------
 
 template<typename BV>
-bm::word_t* aggregator<BV>::sort_input_blocks_and(const bvector_type_ptr* bv_src,
+bm::word_t* aggregator<BV>::sort_input_blocks_and(const bvector_type_const_ptr* bv_src,
                                                   unsigned src_size,
                                                   unsigned i, unsigned j,
                                                   unsigned* arg_blk_count,
@@ -978,7 +985,7 @@ bm::word_t* aggregator<BV>::sort_input_blocks_and(const bvector_type_ptr* bv_src
 
 template<typename BV>
 void aggregator<BV>::combine_or_horizontal(bvector_type& bv_target,
-                     const bvector_type_ptr* bv_src, unsigned src_size)
+                     const bvector_type_const_ptr* bv_src, unsigned src_size)
 {
     BM_ASSERT(src_size);
     if (src_size == 0)
@@ -1002,7 +1009,7 @@ void aggregator<BV>::combine_or_horizontal(bvector_type& bv_target,
 
 template<typename BV>
 void aggregator<BV>::combine_and_horizontal(bvector_type& bv_target,
-                     const bvector_type_ptr* bv_src, unsigned src_size)
+                     const bvector_type_const_ptr* bv_src, unsigned src_size)
 {
     BM_ASSERT(src_size);
     
@@ -1026,9 +1033,9 @@ void aggregator<BV>::combine_and_horizontal(bvector_type& bv_target,
 
 template<typename BV>
 void aggregator<BV>::combine_and_sub_horizontal(bvector_type& bv_target,
-                                                const bvector_type_ptr* bv_src_and,
+                                                const bvector_type_const_ptr* bv_src_and,
                                                 unsigned src_and_size,
-                                                const bvector_type_ptr* bv_src_sub,
+                                                const bvector_type_const_ptr* bv_src_sub,
                                                 unsigned src_sub_size)
 {
     BM_ASSERT(src_and_size);
