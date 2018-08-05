@@ -313,7 +313,7 @@ void aggregator<BV>::combine_and_sub(bvector_type& bv_target,
     BM_ASSERT_THROW(src_and_size >= max_aggregator_cap, BM_ERR_RANGE);
     BM_ASSERT_THROW(src_sub_size >= max_aggregator_cap, BM_ERR_RANGE);
 
-    if (!src_size)
+    if (!bv_src_and)
     {
         bv_target.clear();
         return;
