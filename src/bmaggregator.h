@@ -65,6 +65,61 @@ public:
     aggregator();
     ~aggregator();
     
+    // -----------------------------------------------------------------------
+    
+    /*! @name Methods to setup argument groups and run operations on groups */
+    //@{
+    
+    /**
+        Attach source bit-vector to a argument group (0 or 1).
+        Arg group 1 used for fused operations like (AND-SUB)
+        \param bv - input bit-vector pointer to attach
+        \param arg_group - input argument group (0 - default, 1 - fused op)
+     
+        @return current arg group size (0 if vector was not added (empty))
+        @sa reset
+    */
+    unsigned add(const bvector_type* bv, unsigned agr_group = 0);
+    
+    /**
+        Reset aggregate groups, forget all attached vectors
+    */
+    void reset() { arg_group0_size = arg_group1_size = 0; }
+
+    /**
+        Aggregate added group of vectors using logical OR
+        Operation does NOT performm an explicit reset of arg group(s)
+     
+        \param bv_target - target vector (input is arg group 0)
+     
+        @sa add, reset
+    */
+    void combine_or(bvector_type& bv_target);
+
+    /**
+        Aggregate added group of vectors using logical AND
+        Operation does NOT performm an explicit reset of arg group(s)
+
+        \param bv_target - target vector (input is arg group 0)
+     
+        @sa add, reset
+    */
+    void combine_and(bvector_type& bv_target);
+
+    /**
+        Aggregate added group of vectors using fused logical AND-SUB
+        Operation does NOT performm an explicit reset of arg group(s)
+
+        \param bv_target - target vector (input is arg group 0(AND), 1(SUB) )
+     
+        @sa add, reset
+    */
+    void combine_and_sub(bvector_type& bv_target);
+
+    //@}
+    
+    // -----------------------------------------------------------------------
+    
     /*! @name Logical operations (C-style interface) */
     //@{
 
@@ -86,13 +141,22 @@ public:
     void combine_and(bvector_type& bv_target,
                      const bvector_type_const_ptr* bv_src, unsigned src_size);
 
+    /**
+        Fusion aggregate group of vectors using logical AND MINUS another set
+        \param bv_target - target vector
+        \param bv_src_and    - array of pointers on bit-vectors for AND
+        \param src_and_size  - size of AND group
+        \param bv_src_sub    - array of pointers on bit-vectors for SUBstract
+        \param src_and_size  - size of SUB group
+    */
     void combine_and_sub(bvector_type& bv_target,
                      const bvector_type_const_ptr* bv_src_and, unsigned src_and_size,
                      const bvector_type_const_ptr* bv_src_sub, unsigned src_sub_size);
     //@}
 
+    // -----------------------------------------------------------------------
 
-    /*! @name Horizontal Logical operations (C-style interface) */
+    /*! @name Horizontal Logical operations used for tests (C-style interface) */
     //@{
     /**
         Horizontal OR aggregation (potentially slower) method.
@@ -186,12 +250,17 @@ private:
     struct arena
     {
         BM_DECLARE_TEMP_BLOCK(tb1);
-//        BM_DECLARE_TEMP_BLOCK(tb2);
+        // commented out blocks are used in experimental GAP aggregations
+#if 0
         bm::gap_word_t        gap_res_buf1[bm::gap_equiv_len * 3]; ///< temp 1
         bm::gap_word_t        gap_res_buf2[bm::gap_equiv_len * 3]; ///< temp 2
         bm::gap_word_t        gap_res_buf3[bm::gap_equiv_len * 6]; ///< temp 3
+#endif
         const bm::word_t*     v_arg_blk[max_aggregator_cap];     ///< source blocks list
         const bm::gap_word_t* v_arg_blk_gap[max_aggregator_cap]; ///< source GAP blocks list
+        
+        bvector_type_const_ptr arg_bv0[max_aggregator_cap]; ///< arg group 0
+        bvector_type_const_ptr arg_bv1[max_aggregator_cap]; ///< arg group 1
     };
     
     aggregator(const aggregator&) = delete;
@@ -199,6 +268,8 @@ private:
     
 private:
     arena*          ar_; ///< data arena ptr (heap allocated)
+    unsigned        arg_group0_size = 0;
+    unsigned        arg_group1_size = 0;
 };
 
 
@@ -252,10 +323,69 @@ aggregator<BV>::~aggregator()
 // ------------------------------------------------------------------------
 
 template<typename BV>
+unsigned aggregator<BV>::add(const bvector_type* bv, unsigned agr_group)
+{
+    BM_ASSERT_THROW(agr_group <= 1, BM_ERR_RANGE);
+    BM_ASSERT(agr_group <= 1);
+    BM_ASSERT(bv);
+    
+    if (agr_group) // arg group 1
+    {
+        BM_ASSERT(arg_group1_size < max_aggregator_cap);
+        BM_ASSERT_THROW(arg_group1_size < max_aggregator_cap, BM_ERR_RANGE);
+        
+        if (!bv || !bv->get_blocks_manager().is_init())
+            return arg_group1_size;
+        
+        ar_->arg_bv1[arg_group1_size++] = bv;
+        return arg_group1_size;
+    }
+    else // arg group 0
+    {
+        BM_ASSERT(arg_group0_size < max_aggregator_cap);
+        BM_ASSERT_THROW(arg_group0_size < max_aggregator_cap, BM_ERR_RANGE);
+
+        if (!bv || !bv->get_blocks_manager().is_init())
+            return arg_group0_size;
+
+        ar_->arg_bv0[arg_group0_size++] = bv;
+        return arg_group0_size;
+    }
+}
+
+// ------------------------------------------------------------------------
+
+template<typename BV>
+void aggregator<BV>::combine_or(bvector_type& bv_target)
+{
+    combine_or(bv_target, ar_->arg_bv0, arg_group0_size);
+}
+
+// ------------------------------------------------------------------------
+
+template<typename BV>
+void aggregator<BV>::combine_and(bvector_type& bv_target)
+{
+    combine_and(bv_target, ar_->arg_bv0, arg_group0_size);
+}
+
+// ------------------------------------------------------------------------
+
+template<typename BV>
+void aggregator<BV>::combine_and_sub(bvector_type& bv_target)
+{
+    combine_and_sub(bv_target,
+                    ar_->arg_bv0, arg_group0_size,
+                    ar_->arg_bv1, arg_group1_size);
+}
+
+// ------------------------------------------------------------------------
+
+template<typename BV>
 void aggregator<BV>::combine_or(bvector_type& bv_target,
                         const bvector_type_const_ptr* bv_src, unsigned src_size)
 {
-    BM_ASSERT_THROW(src_size >= max_aggregator_cap, BM_ERR_RANGE);
+    BM_ASSERT_THROW(src_size < max_aggregator_cap, BM_ERR_RANGE);
     if (!src_size)
     {
         bv_target.clear();
@@ -281,7 +411,7 @@ template<typename BV>
 void aggregator<BV>::combine_and(bvector_type& bv_target,
                         const bvector_type_const_ptr* bv_src, unsigned src_size)
 {
-    BM_ASSERT_THROW(src_size >= max_aggregator_cap, BM_ERR_RANGE);
+    BM_ASSERT_THROW(src_size < max_aggregator_cap, BM_ERR_RANGE);
 
     if (!src_size)
     {
@@ -310,8 +440,8 @@ void aggregator<BV>::combine_and_sub(bvector_type& bv_target,
                  const bvector_type_const_ptr* bv_src_and, unsigned src_and_size,
                  const bvector_type_const_ptr* bv_src_sub, unsigned src_sub_size)
 {
-    BM_ASSERT_THROW(src_and_size >= max_aggregator_cap, BM_ERR_RANGE);
-    BM_ASSERT_THROW(src_sub_size >= max_aggregator_cap, BM_ERR_RANGE);
+    BM_ASSERT_THROW(src_and_size < max_aggregator_cap, BM_ERR_RANGE);
+    BM_ASSERT_THROW(src_sub_size < max_aggregator_cap, BM_ERR_RANGE);
 
     if (!bv_src_and)
     {
@@ -589,6 +719,7 @@ bool aggregator<BV>::process_gap_blocks_or(blocks_manager_type& bman_target,
     bool all_one;
 
     unsigned k = 0;
+// experimental code, commented out as inefficient
 #if 0
     unsigned unroll_factor = 4;
     unsigned len = arg_blk_gap_count - k;
@@ -963,16 +1094,8 @@ bm::word_t* aggregator<BV>::sort_input_blocks_and(const bvector_type_const_ptr* 
         }
         else // FULL or bit block
         {
-            if (IS_FULL_BLOCK(arg_blk))
-            {
-            /*
-                if (src_size > 1) // ignore all 0xFF blocks except if its only one
-                    continue;
-            */
-                arg_blk = FULL_BLOCK_REAL_ADDR;
-            }
-            
-            ar_->v_arg_blk[*arg_blk_count] = arg_blk;
+            ar_->v_arg_blk[*arg_blk_count] =
+                    IS_FULL_BLOCK(arg_blk) ? FULL_BLOCK_REAL_ADDR: arg_blk;
             (*arg_blk_count)++;
         }
     } // for k
