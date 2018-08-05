@@ -4259,7 +4259,6 @@ void AggregatorTest()
         bvect bv1, bv2, bv3, bv4;
         bvect bv_empty;
         bvect bv_control;
-        int res;
         
         bv1[100] = true;
         bv1[100000] = true;
@@ -12121,8 +12120,7 @@ void TestSparseVectorScan()
             } // for
             cout << endl;
         }
-        
-        
+ 
         cout << "Unique search OK" << endl;
     }
 
