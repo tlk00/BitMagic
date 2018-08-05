@@ -1864,6 +1864,7 @@ void ptest()
 
 
 typedef bm::sparse_vector<unsigned, bvect> svect;
+typedef bm::sparse_vector<unsigned, bvect> sparse_vector_u32;
 
 // create a benchmark svector with a few dufferent distribution patterns
 //
@@ -2354,6 +2355,124 @@ void RankCompressionTest()
     
 }
 
+static
+void generate_scanner_test_set(std::vector<unsigned>& vect,
+                               bvect&               bv_null,
+                               sparse_vector_u32&   sv,
+                               unsigned vector_max = BSIZE)
+{
+    sparse_vector_u32::back_insert_iterator bi(sv.get_back_inserter());
+
+    vect.resize(vector_max);
+    bv_null.reset();
+
+    for (unsigned i = 0; i < vector_max; ++i)
+    {
+        unsigned v = unsigned(rand_dis(gen));
+        vect[i] = v;
+        bv_null[i] = true; // not NULL(assigned) element
+        *bi = v; // push back an element to sparse vector
+        if (i % 64 == 0)
+        {
+            bi.add_null(5);  // add 5 unassigned elements using back inserter
+            i += 5;  // insert a small NULL plate (unassigned values)
+        }
+    } // for
+    sv.optimize();
+}
+
+static
+void vector_search(const std::vector<unsigned>& vect,
+                   const bvect&                 bv_null,
+                   unsigned                     value,
+                   bvect&                       bv_res)
+{
+    for (size_t i = 0; i < vect.size(); ++i)
+    {
+        if (vect[i] == value)
+            bv_res.set_bit_no_check((bm::id_t)i);
+    } // for
+    bv_res &= bv_null; // correct results to only include non-NULL values
+}
+
+
+
+static
+void SparseVectorScannerTest()
+{
+    std::vector<unsigned> vect;
+    bvect bv_null;
+    sparse_vector_u32 sv(bm::use_null);
+    
+    generate_scanner_test_set(vect, bv_null, sv, BSIZE);
+
+    // generate a search vector for benchmarking
+    std::vector<unsigned> search_vect;
+    {
+        bm::bvector<> bv_tmp;
+        search_vect.reserve(REPEATS);
+        for (unsigned i = 0; i < REPEATS;)
+        {
+            bm::id_t idx = bm::id_t(rand_dis(gen));
+            if (!bv_tmp.test(idx)) // check if number is unique
+            {
+                search_vect.push_back(idx);
+                bv_tmp[idx] = 1;
+                ++i;
+            }
+        }
+    }
+
+
+    bm::sparse_vector_scanner<sparse_vector_u32> scanner;
+
+    bvect bv_res1, bv_res2, bv_res3;
+
+    unsigned search_repeats = REPEATS;
+    {
+        TimeTaker tt("std::vector<> scan ", search_repeats);
+        for (unsigned i = 0; i < search_repeats; ++i)
+        {
+            unsigned vs = search_vect[i];
+            vector_search(vect, bv_null, vs, bv_res1);
+        } // for
+    }
+
+    {
+    TimeTaker tt("sparse vector scanner find_eq() (ref)", search_vect.size());
+    for (unsigned i = 0; i < search_vect.size(); ++i)
+    {
+        {
+        bvect bv1;
+        scanner.find_eq_with_nulls_horizontal(sv, search_vect[i], bv1);
+        bv_res2 |= bv1;
+        }
+    } // for
+    scanner.correct_nulls(sv, bv_res2);
+    }
+    
+    {
+    TimeTaker tt("sparse vector scanner find_eq() ", search_repeats);
+    {
+        scanner.find_eq(sv, search_vect.begin(), search_vect.end(), bv_res3);
+    } // for
+    }
+    
+    int res = bv_res3.compare(bv_res1);
+    if (res != 0)
+    {
+        std::cerr << "1. Sparse scanner integrity check failed!" << std::endl;
+        exit(1);
+    }
+
+    res = bv_res2.compare(bv_res1);
+    if (res != 0)
+    {
+        std::cerr << "2. Sparse scanner integrity check failed!" << std::endl;
+        exit(1);
+    }
+
+}
 
 int main(void)
 {
@@ -2401,6 +2520,8 @@ int main(void)
     SerializationTest();
 
     SparseVectorAccessTest();
+
+    SparseVectorScannerTest();
 
     RankCompressionTest();
 
