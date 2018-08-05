@@ -667,41 +667,28 @@ void sparse_vector_scanner<SV>::find_eq_with_nulls(const SV&  sv,
     unsigned char bits[sizeof(value) * 8];
     unsigned short bit_count_v = bm::bitscan(value, bits);
     BM_ASSERT(bit_count_v);
-    
-    bvector_type_const_ptr and_plains[SV::sv_plains];
-    bvector_type_const_ptr sub_plains[SV::sv_plains];
-    unsigned and_cnt, sub_cnt;
-    and_cnt = sub_cnt = 0;
 
     // prep the lists for combined AND-SUB aggregator
     for (unsigned i = 0; i < bit_count_v; ++i)
     {
         const bvector_type* bv = sv.get_plain(bits[i]);
-        if (!bv)
-        {
-            bv_out.clear();
-            return;
-        }
-        const typename bvector_type::blocks_manager_type& bman =
-                                                    bv->get_blocks_manager();
-        if (bman.is_init())
-            and_plains[and_cnt++] = bv;
+        agg_.add(bv);
     }
     unsigned sv_plains = sv.effective_plains();
     for (unsigned i = 0; (i < sv_plains) && value; ++i)
     {
         bvector_type_const_ptr bv = sv.get_plain(i);
+        
         if (bv && !(value & (value_type(1) << i)))
         {
-            const typename bvector_type::blocks_manager_type& bman =
-                                                    bv->get_blocks_manager();
-            if (bman.is_init())
-                sub_plains[sub_cnt++] = bv;
+            agg_.add(bv, 1);
         }
+        
     } // for i
+    agg_.combine_and_sub(bv_out);
+    agg_.reset();
+
     correct_nulls(sv, bv_out);
-    
-    agg_.combine_and_sub(bv_out, and_plains, and_cnt, sub_plains, sub_cnt);
 }
 
 //----------------------------------------------------------------------------
@@ -816,22 +803,12 @@ template<typename SV>
 void sparse_vector_scanner<SV>::find_nonzero(const SV& sv, 
                                              typename SV::bvector_type& bv_out)
 {
-    bvector_type_const_ptr scan_list[SV::sv_plains+1];
-
-    // prep the aggrregation batch
-    unsigned cnt = 0;
     for (unsigned i = 0; i < sv.plains(); ++i)
     {
-        const bvector_type* bv = sv.get_plain(i);
-        if (bv)
-        {
-            const typename bvector_type::blocks_manager_type& bman = bv->get_blocks_manager();
-            if (bman.is_init())
-                scan_list[cnt++] = bv;
-        }
+        agg_.add(sv.get_plain(i));
     }
-    
-    agg_.combine_or(bv_out, scan_list, cnt);
+    agg_.combine_or(bv_out);
+    agg_.reset();
 }
 
 //----------------------------------------------------------------------------
