@@ -150,6 +150,8 @@ class sparse_vector_scanner
 {
 public:
     typedef typename SV::bvector_type       bvector_type;
+    typedef const bvector_type*             bvector_type_const_ptr;
+    typedef bvector_type*                   bvector_type_ptr;
     typedef typename SV::value_type         value_type;
     typedef typename SV::size_type          size_type;
     typedef typename bvector_type::allocator_type::allocator_pool_type allocator_pool_type;
@@ -178,7 +180,9 @@ public:
 
         \param sv - input sparse vector
         \param value - value to search for
-        \param bv_out - output bit-vector (search result masks 1 elements)
+        \param pos - output found sparse vector element index
+     
+        \return true if found
     */
     bool find_eq(const SV&                  sv,
                  typename SV::value_type    value,
@@ -241,18 +245,26 @@ public:
     }
 
     void find_eq_with_nulls(const SV&   sv,
-        typename SV::value_type           value,
-        typename SV::bvector_type&        bv_out);
+        typename SV::value_type         value,
+        typename SV::bvector_type&      bv_out);
 
-    void correct_nulls(const SV&   sv,
-        typename SV::bvector_type& bv_out);
+    /// For testing purposes only
+    ///
+    /// @internal
+    void find_eq_with_nulls_horizontal(const SV&   sv,
+                 typename SV::value_type           value,
+                 typename SV::bvector_type&        bv_out);
+
+    void correct_nulls(const SV&   sv, typename SV::bvector_type& bv_out);
 
 
 protected:
     sparse_vector_scanner(const sparse_vector_scanner&) = delete;
     void operator=(const sparse_vector_scanner&) = delete;
+    
 private:
-    allocator_pool_type  pool_;
+    allocator_pool_type              pool_;
+    bm::aggregator<bvector_type>     agg_;
 };
 
 
@@ -655,18 +667,71 @@ void sparse_vector_scanner<SV>::find_eq_with_nulls(const SV&  sv,
     unsigned char bits[sizeof(value) * 8];
     unsigned short bit_count_v = bm::bitscan(value, bits);
     BM_ASSERT(bit_count_v);
+    
+    bvector_type_const_ptr and_plains[SV::sv_plains];
+    bvector_type_const_ptr sub_plains[SV::sv_plains];
+    unsigned and_cnt, sub_cnt;
+    and_cnt = sub_cnt = 0;
+
+    // prep the lists for combined AND-SUB aggregator
+    for (unsigned i = 0; i < bit_count_v; ++i)
+    {
+        const bvector_type* bv = sv.get_plain(bits[i]);
+        if (!bv)
+        {
+            bv_out.clear();
+            return;
+        }
+        const typename bvector_type::blocks_manager_type& bman =
+                                                    bv->get_blocks_manager();
+        if (bman.is_init())
+            and_plains[and_cnt++] = bv;
+    }
+    unsigned sv_plains = sv.effective_plains();
+    for (unsigned i = 0; (i < sv_plains) && value; ++i)
+    {
+        bvector_type_const_ptr bv = sv.get_plain(i);
+        if (bv && !(value & (value_type(1) << i)))
+        {
+            const typename bvector_type::blocks_manager_type& bman =
+                                                    bv->get_blocks_manager();
+            if (bman.is_init())
+                sub_plains[sub_cnt++] = bv;
+        }
+    } // for i
+    correct_nulls(sv, bv_out);
+    
+    agg_.combine_and_sub(bv_out, and_plains, and_cnt, sub_plains, sub_cnt);
+}
+
+//----------------------------------------------------------------------------
+
+template<typename SV>
+void sparse_vector_scanner<SV>::find_eq_with_nulls_horizontal(const SV&  sv,
+    typename SV::value_type    value,
+    typename SV::bvector_type& bv_out)
+{
+    if (sv.empty())
+        return; // nothing to do
+
+    if (!value)
+    {
+        find_zero(sv, bv_out);
+        return;
+    }
+
+    unsigned char bits[sizeof(value) * 8];
+    unsigned short bit_count_v = bm::bitscan(value, bits);
+    BM_ASSERT(bit_count_v);
 
     // aggregate AND all matching vectors
-    //
     {
         const bvector_type* bv_plain = sv.get_plain(bits[--bit_count_v]);
         if (bv_plain)
-        {
             bv_out = *bv_plain;
-        }
         else // plain not found
         {
-            bv_out.clear(true);
+            bv_out.clear();
             return;
         }
     }
@@ -674,30 +739,24 @@ void sparse_vector_scanner<SV>::find_eq_with_nulls(const SV&  sv,
     {
         const bvector_type* bv_plain = sv.get_plain(bits[i]);
         if (bv_plain)
-        {
             bv_out &= *bv_plain;
-            // TODO: better detect when accumulator is empty to break early
-        }
         else // mandatory plain not found - empty result!
         {
-            bv_out.clear(true);
+            bv_out.clear();
             return;
         }
     } // for i
 
     // SUB all other plains
-    //
     unsigned sv_plains = sv.effective_plains();
     for (unsigned i = 0; (i < sv_plains) && value; ++i)
     {
         const bvector_type* bv_plain = sv.get_plain(i);
         if (bv_plain && !(value & (value_type(1) << i)))
-        {
-            // TODO: better detect when result is empty to break early
             bv_out -= *bv_plain;
-        }
-    } // for i
+    }
 }
+
 
 //----------------------------------------------------------------------------
 
@@ -757,8 +816,9 @@ template<typename SV>
 void sparse_vector_scanner<SV>::find_nonzero(const SV& sv, 
                                              typename SV::bvector_type& bv_out)
 {
-    bvector_type* scan_list[SV::sv_plains];
+    bvector_type_const_ptr scan_list[SV::sv_plains+1];
 
+    // prep the aggrregation batch
     unsigned cnt = 0;
     for (unsigned i = 0; i < sv.plains(); ++i)
     {
@@ -767,18 +827,11 @@ void sparse_vector_scanner<SV>::find_nonzero(const SV& sv,
         {
             const typename bvector_type::blocks_manager_type& bman = bv->get_blocks_manager();
             if (bman.is_init())
-                scan_list[cnt++] = sv.get_plain(i);
+                scan_list[cnt++] = bv;
         }
     }
-    if (cnt)
-    {
-        bm::aggregator<typename SV::bvector_type> agg;
-        agg.combine_or(bv_out, scan_list, cnt);
-    }
-    else
-    {
-        bv_out.clear();
-    }
+    
+    agg_.combine_or(bv_out, scan_list, cnt);
 }
 
 //----------------------------------------------------------------------------
