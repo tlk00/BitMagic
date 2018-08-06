@@ -2423,7 +2423,6 @@ void SparseVectorScannerTest()
         }
     }
 
-
     bm::sparse_vector_scanner<sparse_vector_u32> scanner;
 
     bvect bv_res1, bv_res2, bv_res3;
@@ -2439,8 +2438,8 @@ void SparseVectorScannerTest()
     }
 
     {
-    TimeTaker tt("sparse vector scanner find_eq() (ref)", search_vect.size());
-    for (unsigned i = 0; i < search_vect.size(); ++i)
+    TimeTaker tt("sparse vector scanner find_eq() (ref)", search_repeats);
+    for (unsigned i = 0; i < search_repeats; ++i)
     {
         {
         bvect bv1;
