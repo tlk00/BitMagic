@@ -672,23 +672,26 @@ void sparse_vector_scanner<SV>::find_eq_with_nulls(const SV&  sv,
     for (unsigned i = 0; i < bit_count_v; ++i)
     {
         const bvector_type* bv = sv.get_plain(bits[i]);
-        agg_.add(bv);
-    }
+        if (bv)
+            agg_.add(bv);
+        else
+        {
+            bv_out.clear();
+            return;
+        }
+    } // for i
+    
     unsigned sv_plains = sv.effective_plains();
     for (unsigned i = 0; (i < sv_plains) && value; ++i)
     {
         bvector_type_const_ptr bv = sv.get_plain(i);
-        
         if (bv && !(value & (value_type(1) << i)))
-        {
             agg_.add(bv, 1);
-        }
-        
     } // for i
     agg_.combine_and_sub(bv_out);
     agg_.reset();
 
-    correct_nulls(sv, bv_out);
+    //correct_nulls(sv, bv_out);
 }
 
 //----------------------------------------------------------------------------
@@ -792,6 +795,10 @@ bool sparse_vector_scanner<SV>::find_eq(const SV&                  sv,
             if (bv_null) // correct result to only use not NULL elements
                 found = bv_null->test(pos);
         }
+    }
+    else
+    {
+        BM_ASSERT(!bv_tmp.any());
     }
 
     return found;

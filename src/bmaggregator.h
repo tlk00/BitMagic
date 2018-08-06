@@ -327,14 +327,13 @@ unsigned aggregator<BV>::add(const bvector_type* bv, unsigned agr_group)
 {
     BM_ASSERT_THROW(agr_group <= 1, BM_ERR_RANGE);
     BM_ASSERT(agr_group <= 1);
-    BM_ASSERT(bv);
     
     if (agr_group) // arg group 1
     {
         BM_ASSERT(arg_group1_size < max_aggregator_cap);
         BM_ASSERT_THROW(arg_group1_size < max_aggregator_cap, BM_ERR_RANGE);
         
-        if (!bv || !bv->get_blocks_manager().is_init())
+        if (!bv)
             return arg_group1_size;
         
         ar_->arg_bv1[arg_group1_size++] = bv;
@@ -345,7 +344,7 @@ unsigned aggregator<BV>::add(const bvector_type* bv, unsigned agr_group)
         BM_ASSERT(arg_group0_size < max_aggregator_cap);
         BM_ASSERT_THROW(arg_group0_size < max_aggregator_cap, BM_ERR_RANGE);
 
-        if (!bv || !bv->get_blocks_manager().is_init())
+        if (!bv)
             return arg_group0_size;
 
         ar_->arg_bv0[arg_group0_size++] = bv;
@@ -443,7 +442,7 @@ void aggregator<BV>::combine_and_sub(bvector_type& bv_target,
     BM_ASSERT_THROW(src_and_size < max_aggregator_cap, BM_ERR_RANGE);
     BM_ASSERT_THROW(src_sub_size < max_aggregator_cap, BM_ERR_RANGE);
 
-    if (!bv_src_and)
+    if (!bv_src_and || !src_and_size)
     {
         bv_target.clear();
         return;
@@ -1101,8 +1100,6 @@ bm::word_t* aggregator<BV>::sort_input_blocks_and(const bvector_type_const_ptr* 
     } // for k
     return blk;
 }
-
-
 
 // ------------------------------------------------------------------------
 
