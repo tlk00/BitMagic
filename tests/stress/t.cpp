@@ -12064,7 +12064,7 @@ void TestSparseVectorScan()
         found = bv_control.count();
         assert(!found);
     }
-    
+
     {
         cout << endl << "Unique search check" << endl;
         sparse_vector_u32 sv;
@@ -12073,9 +12073,13 @@ void TestSparseVectorScan()
         bvect::mem_pool_guard(pool, bv_control);
 
         unsigned sv_size = 1256000;
-        for (unsigned j = 0; j < sv_size; ++j)
         {
-            sv.set(j, j);
+            sparse_vector_u32::back_insert_iterator bi(sv.get_back_inserter());
+            for (unsigned j = 0; j < sv_size; ++j)
+            {
+                *bi = j;
+                //sv.set(j, j);
+            }
         }
         
         {
@@ -12124,7 +12128,6 @@ void TestSparseVectorScan()
         cout << "Unique search OK" << endl;
     }
 
-
     {
         cout << "Find EQ test on flat data" << endl;
         bvect::allocator_pool_type pool;
@@ -12137,12 +12140,19 @@ void TestSparseVectorScan()
             bvect::mem_pool_guard(pool, bv_control);
 
             unsigned sv_size = 67000;
-            for (unsigned j = 0; j < 67000; ++j)
+            
             {
-                sv.set(j, value);
-                bm::id64_t v64 = value;
-                v64 <<= 32;
-                sv_64.set(j, v64);
+                sparse_vector_u32::back_insert_iterator bi(sv.get_back_inserter());
+                sparse_vector_u64::back_insert_iterator bi_64(sv_64.get_back_inserter());
+                for (unsigned j = 0; j < 67000; ++j)
+                {
+    //                sv.set(j, value);
+                    *bi = value;
+                    bm::id64_t v64 = value;
+                    v64 <<= 32;
+                    *bi_64 = v64;
+    //                sv_64.set(j, v64);
+                }
             }
             scanner.find_eq(sv, value, bv_control);
             unsigned found = bv_control.count();
