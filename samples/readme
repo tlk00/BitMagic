@@ -14,6 +14,8 @@ BitMagic Library samples
 ./bvsample12 - review and comparison of different methods to set and clear bits 
 ./bvsample14 - serialization of bvector<>, logical operations on compressed BLOBs
 ./bvsample15 - bvector<>::find, search for first and last set bit, dynamic range detection
+./bvsample16 - bm::aggregator<> - utility class for fast logical operations on bvector<> groups
+               Tech.note:
 
 
 ./svsample01 - basic example of sparse_vector<> container
@@ -24,7 +26,7 @@ BitMagic Library samples
                using memory-efficient bit-transposed sparse_vector as a translation function
                Tech.note:http://bitmagic.io/set2set-assoc-remap-opt.html
 ./svsample06 - load data and search for value(s) in sparse_vector. This sample illustrates back insert 
-               iterator, const_iterator and bm::sparse_vector_scanner<> seach class. Benchmark different search/scan methods.
+               iterator, const_iterator and bm::sparse_vector_scanner<> search class. Benchmark different search/scan methods.
  
 
 ./xsample01 - advanced: different methods of handling of super sparse sets. Benchmarks of set operations for each method. 
