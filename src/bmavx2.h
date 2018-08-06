@@ -1111,7 +1111,7 @@ void avx2_invert_block(__m256i* BMRESTRICT dst)
         _mm256_store_si256(dst+0, ymm0);
         _mm256_store_si256(dst+1, ymm1);
 
-        ymm0 = _mm256_xor_si256(_mm256_load_si256(dst+2), maskFF;
+        ymm0 = _mm256_xor_si256(_mm256_load_si256(dst+2), maskFF);
         ymm1 = _mm256_xor_si256(_mm256_load_si256(dst+3), maskFF);
         
         _mm256_store_si256(dst+2, ymm0);
