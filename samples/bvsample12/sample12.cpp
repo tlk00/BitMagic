@@ -61,7 +61,7 @@ template<class T> void PrintContainer(T first, T last)
     else
         for (; first != last; ++first)
             std::cout << *first << ";";
-    std::cout << endl;
+    std::cout << std::endl;
 }
 
 static
