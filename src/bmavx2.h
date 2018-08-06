@@ -1098,28 +1098,24 @@ void avx2_copy_block(__m256i* BMRESTRICT dst,
 inline
 void avx2_invert_block(__m256i* BMRESTRICT dst)
 {
-    __m256i ymm1 = _mm256_set1_epi32(~0u); // braodcast 0xFF
+    __m256i maskFF = _mm256_set1_epi32(~0u); // broadcast 0xFF
     const __m256i* BMRESTRICT dst_end =
         (const __m256i*)((bm::word_t*)(dst) + bm::set_block_size);
 
-    __m256i ymm0;
+    __m256i ymm0, ymm1;
     do
     {
-        ymm0 = _mm256_load_si256(dst+0);
-        ymm0 = _mm256_xor_si256(ymm0, ymm1);
+        ymm0 = _mm256_xor_si256(_mm256_load_si256(dst+0), maskFF);
+        ymm1 = _mm256_xor_si256(_mm256_load_si256(dst+1), maskFF);
+
         _mm256_store_si256(dst+0, ymm0);
+        _mm256_store_si256(dst+1, ymm1);
 
-        ymm0 = _mm256_load_si256(dst+1);
-        ymm0 = _mm256_xor_si256(ymm0, ymm1);
-        _mm256_store_si256(dst+1, ymm0);
-
-        ymm0 = _mm256_load_si256(dst+2);
-        ymm0 = _mm256_xor_si256(ymm0, ymm1);
+        ymm0 = _mm256_xor_si256(_mm256_load_si256(dst+2), maskFF;
+        ymm1 = _mm256_xor_si256(_mm256_load_si256(dst+3), maskFF);
+        
         _mm256_store_si256(dst+2, ymm0);
-
-        ymm0 = _mm256_load_si256(dst+3);
-        ymm0 = _mm256_xor_si256(ymm0, ymm1);
-        _mm256_store_si256(dst+3, ymm0);
+        _mm256_store_si256(dst+3, ymm1);
         
         dst += 4;
         
