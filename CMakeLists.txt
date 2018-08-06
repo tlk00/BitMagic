@@ -28,6 +28,8 @@ if ("${CMAKE_CXX_COMPILER_ID}" STREQUAL "GNU" OR
 
     set(flags "-Wall -Wextra -Wno-ignored-qualifiers -march=core2 -fPIC")
     set(optflags -g0 -O3)
+    SET( CMAKE_EXE_LINKER_FLAGS  "${CMAKE_EXE_LINKER_FLAGS} -Wl,-stack_size,0x100000000")
+
 elseif ("${CMAKE_CXX_COMPILER_ID}" STREQUAL "Intel")
     set(flags, "-tpp7 -march=core2 -restrict -DBM_HASRESTRICT -fno-fnalias -Wall")
     set(optflags, "-g0 -O3 -opt_report_fileopt.txt -opt_report_levelmax")
@@ -67,6 +69,7 @@ add_executable(bvsample11 ${PROJECT_SOURCE_DIR}/samples/bvsample11/sample11.cpp)
 add_executable(bvsample12 ${PROJECT_SOURCE_DIR}/samples/bvsample12/sample12.cpp)
 add_executable(bvsample14 ${PROJECT_SOURCE_DIR}/samples/bvsample14/sample14.cpp)
 add_executable(bvsample15 ${PROJECT_SOURCE_DIR}/samples/bvsample15/sample15.cpp)
+add_executable(bvsample16 ${PROJECT_SOURCE_DIR}/samples/bvsample16/sample16.cpp)
 
 add_executable(xsample01 ${PROJECT_SOURCE_DIR}/samples/xsample01/xsample01.cpp)
 add_executable(xsample02 ${PROJECT_SOURCE_DIR}/samples/xsample02/xsample02.cpp)
