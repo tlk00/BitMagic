@@ -371,7 +371,6 @@ public:
                 if (opt_mode_ < 3) // free_01 optimization
                 {  
                     bm::wordop_t* blk1 = (wordop_t*)block;
-                    bm::wordop_t* blk2 = (wordop_t*)(block + bm::set_block_size);
 
                     bool b = bm::bit_is_all_zero((bm::word_t*)blk1);
                     if (b)
@@ -383,7 +382,7 @@ public:
                     else
                     if (opt_mode_ == 2) // check if it is all 1 block
                     {
-                        b = bm::is_bits_one(blk1, blk2);
+                        b = bm::is_bits_one(blk1);
                         if (b) 
                         {
                             bman.get_allocator().free_bit_block(block);

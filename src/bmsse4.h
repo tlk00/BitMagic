@@ -389,17 +389,22 @@ bool sse4_sub_digest(__m128i* BMRESTRICT dst,
     @ingroup SSE4
 */
 inline
-bool sse4_is_all_one(const __m128i* BMRESTRICT block,
-                     const __m128i* BMRESTRICT block_end)
+bool sse4_is_all_one(const __m128i* BMRESTRICT block)
 {
+    __m128i w;
+    const __m128i* BMRESTRICT block_end =
+        (const __m128i*)((bm::word_t*)(block) + bm::set_block_size);
+
     do
     {
-        __m128i w0 = _mm_load_si128(block);
-        if (!_mm_test_all_ones(w0))
-        {
+        w = _mm_and_si128(_mm_load_si128(block+0), _mm_load_si128(block+1));
+        if (!_mm_test_all_ones(w))
             return false;
-        }
-        ++block;
+        w = _mm_and_si128(_mm_load_si128(block+2), _mm_load_si128(block+3));
+        if (!_mm_test_all_ones(w))
+            return false;
+
+        block+=4;
     } while (block < block_end);
     return true;
 }
@@ -791,8 +796,8 @@ void sse4_bit_block_gather_scatter(unsigned* BMRESTRICT arr,
 #define VECT_IS_ZERO_BLOCK(dst) \
     sse4_is_all_zero((__m128i*) dst)
 
-#define VECT_IS_ONE_BLOCK(dst, dst_end) \
-    sse4_is_all_one((__m128i*) dst, (__m128i*) (dst_end))
+#define VECT_IS_ONE_BLOCK(dst) \
+    sse4_is_all_one((__m128i*) dst)
 
 #define VECT_IS_DIGEST_ZERO(start) \
     sse4_is_digest_zero((__m128i*)start)

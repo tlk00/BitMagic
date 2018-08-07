@@ -790,8 +790,7 @@ bool aggregator<BV>::process_gap_blocks_or(blocks_manager_type& bman_target,
         bm::gap_add_to_bitset(blk, ar_->v_arg_blk_gap[k]);
     }
     
-    all_one = bm::is_bits_one((bm::wordop_t*) blk,
-              (bm::wordop_t*) (blk + bm::set_block_size));
+    all_one = bm::is_bits_one((bm::wordop_t*) blk);
     if (all_one)
     {
         bman_target.set_block(i, j, FULL_BLOCK_FAKE_ADDR, false);
@@ -884,7 +883,7 @@ bool aggregator<BV>::process_bit_blocks_or(blocks_manager_type& bman_target,
         if (all_one)
         {
             BM_ASSERT(blk == ar_->tb1);
-            BM_ASSERT(bm::is_bits_one((bm::wordop_t*) blk, (bm::wordop_t*) (blk + bm::set_block_size)));
+            BM_ASSERT(bm::is_bits_one((bm::wordop_t*) blk));
             bman_target.set_block(i, j, FULL_BLOCK_FAKE_ADDR, false);
             return true;
         }
@@ -899,7 +898,7 @@ bool aggregator<BV>::process_bit_blocks_or(blocks_manager_type& bman_target,
         if (all_one)
         {
             BM_ASSERT(blk == ar_->tb1);
-            BM_ASSERT(bm::is_bits_one((bm::wordop_t*) blk, (bm::wordop_t*) (blk + bm::set_block_size)));
+            BM_ASSERT(bm::is_bits_one((bm::wordop_t*) blk));
             bman_target.set_block(i, j, FULL_BLOCK_FAKE_ADDR, false);
             return true;
         }
@@ -911,7 +910,7 @@ bool aggregator<BV>::process_bit_blocks_or(blocks_manager_type& bman_target,
         if (all_one)
         {
             BM_ASSERT(blk == ar_->tb1);
-            BM_ASSERT(bm::is_bits_one((bm::wordop_t*) blk, (bm::wordop_t*) (blk + bm::set_block_size)));
+            BM_ASSERT(bm::is_bits_one((bm::wordop_t*) blk));
             bman_target.set_block(i, j, FULL_BLOCK_FAKE_ADDR, false);
             return true;
         }

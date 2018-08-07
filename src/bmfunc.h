@@ -4087,12 +4087,13 @@ template<typename T> void bit_invert(T* start)
     @ingroup bitfunc 
 */
 inline
-bool is_bits_one(const bm::wordop_t* start,
-                 const bm::wordop_t* end)
+bool is_bits_one(const bm::wordop_t* start)
 {
 #if defined(BMSSE42OPT) || defined(BMAVX2OPT)
-    return VECT_IS_ONE_BLOCK(start, end);
+    return VECT_IS_ONE_BLOCK(start);
 #else
+    const bm::word_t* BMRESTRICT src_end = (bm::word_t*)start + bm::set_block_size;
+    const bm::wordop_t* end = (const bm::wordop_t*)src_end;
    do
    {
         bm::wordop_t tmp = 
@@ -5973,8 +5974,7 @@ bool check_block_one(const bm::word_t* blk, bool deep_scan)
     if (!deep_scan)
         return false; // block exists - presume it has 0 bits
 
-    return bm::is_bits_one((wordop_t*)blk,
-                           (wordop_t*)(blk + bm::set_block_size));
+    return bm::is_bits_one((wordop_t*)blk);
 }
 
 

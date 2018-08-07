@@ -1173,10 +1173,12 @@ bool avx2_is_digest_zero(const __m256i* BMRESTRICT block)
     @ingroup AVX2
 */
 inline
-bool avx2_is_all_one(const __m256i* BMRESTRICT block,
-                     const __m256i* BMRESTRICT block_end)
+bool avx2_is_all_one(const __m256i* BMRESTRICT block)
 {
     __m256i maskF = _mm256_set1_epi32(~0u); // braodcast 0xFF
+    const __m256i* BMRESTRICT block_end =
+        (const __m256i*)((bm::word_t*)(block) + bm::set_block_size);
+
     do
     {
         __m256i wcmpA= _mm256_cmpeq_epi8(_mm256_load_si256(block), maskF); // (w0 == maskF)
@@ -1705,8 +1707,8 @@ void avx2_bit_block_gather_scatter(unsigned* BMRESTRICT arr,
 #define VECT_IS_ZERO_BLOCK(dst) \
     avx2_is_all_zero((__m256i*) dst)
 
-#define VECT_IS_ONE_BLOCK(dst, dst_end) \
-    avx2_is_all_one((__m256i*) dst, (__m256i*) (dst_end))
+#define VECT_IS_ONE_BLOCK(dst) \
+    avx2_is_all_one((__m256i*) dst)
 
 #define VECT_IS_DIGEST_ZERO(start) \
     avx2_is_digest_zero((__m256i*)start)

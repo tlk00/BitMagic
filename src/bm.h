@@ -3894,7 +3894,7 @@ void bvector<Alloc>::combine_operation_block_or(
     bool all_one = bm::bit_block_or(blk, arg_blk);
     if (all_one)
     {
-        BM_ASSERT(bm::is_bits_one((bm::wordop_t*) blk, (bm::wordop_t*) (blk + bm::set_block_size)));
+        BM_ASSERT(bm::is_bits_one((bm::wordop_t*) blk));
         blockman_.get_allocator().free_bit_block(blk);
         blockman_.set_block_ptr(i, j, FULL_BLOCK_FAKE_ADDR);
     }

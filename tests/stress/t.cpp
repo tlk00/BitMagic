@@ -13062,11 +13062,11 @@ void TestSIMDUtils()
         {
             tb[i] = ~0u;
         }
-        bool all_one = sse4_is_all_one((__m128i*)tb, (__m128i*)(tb + bm::set_block_size));
+        bool all_one = sse4_is_all_one((__m128i*)tb);
         assert(all_one);
         
         tb[256] = 1;
-        all_one = sse4_is_all_one((__m128i*)tb, (__m128i*)(tb + bm::set_block_size));
+        all_one = sse4_is_all_one((__m128i*)tb);
         assert(!all_one);
     }
 
@@ -13302,11 +13302,11 @@ void TestSIMDUtils()
         {
             tb[i] = ~0u;
         }
-        bool all_one = avx2_is_all_one((__m256i*)tb, (__m256i*)(tb + bm::set_block_size));
+        bool all_one = avx2_is_all_one((__m256i*)tb);
         assert(all_one);
         
         tb[256] = 1;
-        all_one = avx2_is_all_one((__m256i*)tb, (__m256i*)(tb + bm::set_block_size));
+        all_one = avx2_is_all_one((__m256i*)tb);
         assert(!all_one);
     }
 #endif
