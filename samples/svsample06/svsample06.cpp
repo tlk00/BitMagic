@@ -107,6 +107,7 @@ void vector_search(const std::vector<unsigned>& vect,
                    unsigned                     value,
                    bm::bvector<>&               bv_res)
 {
+    bv_res.init(); // always use init() if set_bit_no_check()
     for (size_t i = 0; i < vect.size(); ++i)
     {
         if (vect[i] == value)
