@@ -216,6 +216,8 @@ int main(void)
         }
 
         {
+            bv_res3.init(); // always init before calling "set_bit_no_check()"
+            
             bm::chrono_taker tt1("3. sparse_vector<>::const_iterator search ", search_repeats, &timing_map);
 
             // prepare a unique search set
