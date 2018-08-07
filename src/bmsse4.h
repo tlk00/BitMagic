@@ -149,30 +149,22 @@ bm::id_t sse4_bit_count_op(const __m128i* BMRESTRICT block,
     @ingroup SSE4
 */
 inline
-bool sse4_is_all_zero(const __m128i* BMRESTRICT block,
-                      const __m128i* BMRESTRICT block_end)
+bool sse4_is_all_zero(const __m128i* BMRESTRICT block)
 {
-    __m128i w0, w1, w;
+    __m128i w;
     __m128i maskz = _mm_setzero_si128();
+    const __m128i* BMRESTRICT block_end =
+        (const __m128i*)((bm::word_t*)(block) + bm::set_block_size);
 
     do
     {
-        w0 = _mm_load_si128(block+0);
-        w1 = _mm_load_si128(block+1);
-        
-        w = _mm_or_si128(w0, w1);
+        w = _mm_or_si128(_mm_load_si128(block+0), _mm_load_si128(block+1));
         if (!_mm_test_all_ones(_mm_cmpeq_epi8(w, maskz))) // (w0 | w1) != maskz
             return false;
-        
-        w0 = _mm_load_si128(block+2);
-        w1 = _mm_load_si128(block+3);
-        
-        w = _mm_or_si128(w0, w1);
+        w = _mm_or_si128(_mm_load_si128(block+2), _mm_load_si128(block+3));
         if (!_mm_test_all_ones(_mm_cmpeq_epi8(w, maskz))) // (w0 | w1) != maskz
             return false;
-
         block += 4;
-    
     } while (block < block_end);
     return true;
 }
@@ -796,8 +788,8 @@ void sse4_bit_block_gather_scatter(unsigned* BMRESTRICT arr,
 #define VECT_SET_BLOCK(dst, value) \
     sse2_set_block((__m128i*) dst, value)
 
-#define VECT_IS_ZERO_BLOCK(dst, dst_end) \
-    sse4_is_all_zero((__m128i*) dst, (__m128i*) (dst_end))
+#define VECT_IS_ZERO_BLOCK(dst) \
+    sse4_is_all_zero((__m128i*) dst)
 
 #define VECT_IS_ONE_BLOCK(dst, dst_end) \
     sse4_is_all_one((__m128i*) dst, (__m128i*) (dst_end))

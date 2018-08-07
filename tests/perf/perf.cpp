@@ -2072,7 +2072,7 @@ void AggregatorTest()
     std::unique_ptr<bvect> bv_target2(new bvect);
 
     {
-    TimeTaker tt("Aggregator OR (ref) test", REPEATS);
+    TimeTaker tt("Horizontal aggregator OR ", REPEATS);
     for (unsigned i = 0; i < REPEATS; ++i)
     {
         agg.combine_or_horizontal(*bv_target1, bv_arr, unsigned(bv_coll.size()));
@@ -2080,7 +2080,7 @@ void AggregatorTest()
     }
 
     {
-    TimeTaker tt("Aggregator OR test", REPEATS);
+    TimeTaker tt("aggregator OR", REPEATS);
     for (unsigned i = 0; i < REPEATS; ++i)
     {
         agg.combine_or(*bv_target2, bv_arr, unsigned(bv_coll.size()));
@@ -2097,7 +2097,7 @@ void AggregatorTest()
 
     // ------------------------------------------------------------------
     {
-    TimeTaker tt("Aggregator AND (ref) test", REPEATS);
+    TimeTaker tt("Horizontal aggregator AND", REPEATS);
     for (unsigned i = 0; i < REPEATS; ++i)
     {
         agg.combine_and_horizontal(*bv_target1, bv_arr, unsigned(bv_coll.size()));
@@ -2105,7 +2105,7 @@ void AggregatorTest()
     }
 
     {
-    TimeTaker tt("Aggregator AND test", REPEATS);
+    TimeTaker tt("aggregator AND", REPEATS);
     for (unsigned i = 0; i < REPEATS; ++i)
     {
         agg.combine_and(*bv_target2, bv_arr, unsigned(bv_coll.size()));
@@ -2121,7 +2121,7 @@ void AggregatorTest()
     }
 
     {
-    TimeTaker tt("Aggregator AND-SUB (ref) test", REPEATS);
+    TimeTaker tt("Horizontal aggregator AND-SUB", REPEATS);
     for (unsigned i = 0; i < REPEATS; ++i)
     {
         agg.combine_and_sub_horizontal(*bv_target1,
@@ -2139,7 +2139,7 @@ void AggregatorTest()
     }
 
     {
-    TimeTaker tt("Aggregator AND-SUB test", REPEATS);
+    TimeTaker tt("aggregator AND-SUB", REPEATS);
     for (unsigned i = 0; i < REPEATS; ++i)
     {
         agg.combine_and_sub(*bv_target2,
@@ -2157,7 +2157,7 @@ void AggregatorTest()
     }
 
 
-    std::cout << bv_target1->count() << std::endl;
+    //std::cout << bv_target1->count() << std::endl;
 }
 
 static
@@ -2438,7 +2438,7 @@ void SparseVectorScannerTest()
     }
 
     {
-    TimeTaker tt("sparse vector scanner find_eq() (ref)", search_repeats);
+    TimeTaker tt("horizontal sparse vector scanner find_eq()", search_repeats);
     for (unsigned i = 0; i < search_repeats; ++i)
     {
         {

@@ -205,7 +205,7 @@ private:
 
 
 /*!
-    @brief Mini bitvector used in bvector template to keep block type flags
+    @brief Mini bit-vector for auxiliary purposes
     @ingroup mset
     @sa miniset
 */

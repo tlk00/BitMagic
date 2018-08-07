@@ -27,7 +27,11 @@ belong to different ranges.
 */
 
 /*! \file sample16.cpp
-    \brief Example: how to use bm::aggregator for fast operations on multiple vectors
+    \brief Example: how to use bm::aggregator<> for logical operations
+
+    bm::aggregator<> uses cache blocking techniques and bandwidth optimizations
+    to do logical operations (OR, AND, AND-SUB) faster, than if we do it by
+    combining bit-vectors one by one, sequentially.
 */
 
 #include <stdlib.h>

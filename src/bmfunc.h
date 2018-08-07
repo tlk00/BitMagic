@@ -883,7 +883,7 @@ inline
 bool bit_is_all_zero(const bm::word_t* BMRESTRICT start)
 {
 #if defined(BMSSE42OPT) || defined(BMAVX2OPT)
-    return VECT_IS_ZERO_BLOCK(start, start + bm::set_block_size);
+    return VECT_IS_ZERO_BLOCK(start);
 #else
    const bm::wordop_t* BMRESTRICT blk = (bm::wordop_t*) (start);
    const bm::wordop_t* BMRESTRICT blk_end = (bm::wordop_t*)(start + bm::set_block_size);

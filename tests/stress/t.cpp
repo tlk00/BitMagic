@@ -12078,7 +12078,6 @@ void TestSparseVectorScan()
             for (unsigned j = 0; j < sv_size; ++j)
             {
                 *bi = j;
-                //sv.set(j, j);
             }
         }
         
@@ -12146,14 +12145,17 @@ void TestSparseVectorScan()
                 sparse_vector_u64::back_insert_iterator bi_64(sv_64.get_back_inserter());
                 for (unsigned j = 0; j < 67000; ++j)
                 {
-    //                sv.set(j, value);
                     *bi = value;
                     bm::id64_t v64 = value;
                     v64 <<= 32;
                     *bi_64 = v64;
-    //                sv_64.set(j, v64);
                 }
             }
+            if (value == 3)
+            {
+                cout << 3;
+            }
+            
             scanner.find_eq(sv, value, bv_control);
             unsigned found = bv_control.count();
             
@@ -13074,11 +13076,11 @@ void TestSIMDUtils()
         {
             tb[i] = 0u;
         }
-        bool all_z = sse4_is_all_zero((__m128i*)tb, (__m128i*)(tb + bm::set_block_size));
+        bool all_z = sse4_is_all_zero((__m128i*)tb);
         assert(all_z);
         
         tb[256] = 1;
-        all_z = sse4_is_all_zero((__m128i*)tb, (__m128i*)(tb + bm::set_block_size));
+        all_z = sse4_is_all_zero((__m128i*)tb);
         assert(!all_z);
     }
 
@@ -13286,11 +13288,11 @@ void TestSIMDUtils()
         {
             tb[i] = 0;
         }
-        bool all_z = avx2_is_all_zero((__m256i*)tb, (__m256i*)(tb + bm::set_block_size));
+        bool all_z = avx2_is_all_zero((__m256i*)tb);
         assert(all_z);
         
         tb[256] = 1;
-        all_z = avx2_is_all_zero((__m256i*)tb, (__m256i*)(tb + bm::set_block_size));
+        all_z = avx2_is_all_zero((__m256i*)tb);
         assert(!all_z);
     }
 

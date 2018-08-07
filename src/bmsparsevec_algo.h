@@ -663,15 +663,20 @@ void sparse_vector_scanner<SV>::find_eq_with_nulls(const SV&  sv,
         find_zero(sv, bv_out);
         return;
     }
+    agg_.reset();
 
     unsigned char bits[sizeof(value) * 8];
     unsigned short bit_count_v = bm::bitscan(value, bits);
     BM_ASSERT(bit_count_v);
 
     // prep the lists for combined AND-SUB aggregator
-    for (unsigned i = 0; i < bit_count_v; ++i)
+    //   (backward order has better chance for bit reduction on AND)
+    
+    for (unsigned i = bit_count_v; i > 0; --i)
     {
-        const bvector_type* bv = sv.get_plain(bits[i]);
+        unsigned bit_idx = bits[i-1];
+        BM_ASSERT(value & (value_type(1) << bit_idx));
+        const bvector_type* bv = sv.get_plain(bit_idx);
         if (bv)
             agg_.add(bv);
         else
@@ -679,14 +684,14 @@ void sparse_vector_scanner<SV>::find_eq_with_nulls(const SV&  sv,
             bv_out.clear();
             return;
         }
-    } // for i
+    }
     
     unsigned sv_plains = sv.effective_plains();
     for (unsigned i = 0; (i < sv_plains) && value; ++i)
     {
         bvector_type_const_ptr bv = sv.get_plain(i);
         if (bv && !(value & (value_type(1) << i)))
-            agg_.add(bv, 1);
+            agg_.add(bv, 1); // agg to SUB group
     } // for i
     agg_.combine_and_sub(bv_out);
     agg_.reset();
@@ -810,10 +815,9 @@ template<typename SV>
 void sparse_vector_scanner<SV>::find_nonzero(const SV& sv, 
                                              typename SV::bvector_type& bv_out)
 {
+    agg_.reset(); // in case if previous scan was interrupted
     for (unsigned i = 0; i < sv.plains(); ++i)
-    {
         agg_.add(sv.get_plain(i));
-    }
     agg_.combine_or(bv_out);
     agg_.reset();
 }

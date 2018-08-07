@@ -1127,9 +1127,11 @@ void avx2_invert_block(__m256i* BMRESTRICT dst)
     @ingroup AVX2
 */
 inline
-bool avx2_is_all_zero(const __m256i* BMRESTRICT block,
-                      const __m256i* BMRESTRICT block_end)
+bool avx2_is_all_zero(const __m256i* BMRESTRICT block)
 {
+    const __m256i* BMRESTRICT block_end =
+        (const __m256i*)((bm::word_t*)(block) + bm::set_block_size);
+
     do
     {
         __m256i w0 = _mm256_load_si256(block+0);
@@ -1700,8 +1702,8 @@ void avx2_bit_block_gather_scatter(unsigned* BMRESTRICT arr,
 #define VECT_SET_BLOCK(dst, value) \
     avx2_set_block((__m256i*) dst, (value))
 
-#define VECT_IS_ZERO_BLOCK(dst, dst_end) \
-    avx2_is_all_zero((__m256i*) dst, (__m256i*) (dst_end))
+#define VECT_IS_ZERO_BLOCK(dst) \
+    avx2_is_all_zero((__m256i*) dst)
 
 #define VECT_IS_ONE_BLOCK(dst, dst_end) \
     avx2_is_all_one((__m256i*) dst, (__m256i*) (dst_end))
