@@ -16,7 +16,7 @@ limitations under the License.
 For more information please visit:  http://bitmagic.io
 */
 
-/** \example sample15.cpp
+/** \example sample16.cpp
 Example for finding first and last bits in bit-vector (dynamic range).
 
 Ranges of bit-vectors can be used to find probability of intersection.

@@ -74,7 +74,7 @@ public:
         Attach source bit-vector to a argument group (0 or 1).
         Arg group 1 used for fused operations like (AND-SUB)
         \param bv - input bit-vector pointer to attach
-        \param arg_group - input argument group (0 - default, 1 - fused op)
+        \param agr_group - input argument group (0 - default, 1 - fused op)
      
         @return current arg group size (0 if vector was not added (empty))
         @sa reset
@@ -147,7 +147,7 @@ public:
         \param bv_src_and    - array of pointers on bit-vectors for AND
         \param src_and_size  - size of AND group
         \param bv_src_sub    - array of pointers on bit-vectors for SUBstract
-        \param src_and_size  - size of SUB group
+        \param src_sub_size  - size of SUB group
     */
     void combine_and_sub(bvector_type& bv_target,
                      const bvector_type_const_ptr* bv_src_and, unsigned src_and_size,

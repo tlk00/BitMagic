@@ -1664,7 +1664,7 @@ void for_each_bit_blk(const bm::word_t* block, bm::id_t offset,
 /*!
    \brief for-each visitor, calls a special visitor functor for each 1 bit range
  
-   \param block - bit block buffer pointer
+   \param buf - bit block buffer pointer
    \param offset - global block offset (number of bits)
    \param bit_functor - functor must support .add_range(offset, bits_ptr, size)
  

@@ -438,7 +438,7 @@ template<typename T,typename B> unsigned bit_list_4(T w, B* bits)
     \brief Unpacks word into list of ON bit indexes using popcnt method
     \param w - value
     \param bits - pointer on the result array
-    \param offset - value to add to bit position (programmed shift)
+    \param offs - value to add to bit position (programmed shift)
     \return number of bits in the list
 
     @ingroup bitfunc
@@ -1021,7 +1021,7 @@ unsigned gap_find_last(const T* buf, unsigned* last)
     \brief GAP block find the first set bit
 
     \param buf - GAP buffer pointer.
-    \param last - index of the first 1 bit
+    \param first - index of the first 1 bit
  
     \return 0 if 1 bit was NOT found
 
@@ -1532,7 +1532,6 @@ template<typename T> unsigned gap_bit_count(const T* buf, unsigned dsize=0)
 /*!
     \brief Calculates number of bits ON in GAP buffer. Loop unrolled version.
     \param buf - GAP buffer pointer.
-    \param dsize - buffer size
     \return Number of non-zero bits.
     @ingroup gapfunc
 */
@@ -2644,8 +2643,10 @@ void gap_sub_to_bitset(unsigned* dest, const T*  pcurr)
 
 /*!
    \brief SUB (AND NOT) GAP block to bitblock with digest assist
-   \param dest - bitblock buffer pointer.
-   \param pcurr  - GAP buffer pointer.
+
+   \param dest    - bitblock buffer pointer.
+   \param pcurr   - GAP buffer pointer.
+   \param digest0 - digest of 0 strides inside bit block
 
    @ingroup gapfunc
 */
@@ -2778,7 +2779,7 @@ void gap_and_to_bitset(unsigned* dest, const T*  pcurr)
    \brief ANDs GAP block to bitblock with digest assist
    \param dest - bitblock buffer pointer.
    \param pcurr  - GAP buffer pointer.
-   \param digest - digest for the destination 
+   \param digest0 - digest of 0 strides for the destination 
 
    @ingroup gapfunc
 */
@@ -5059,7 +5060,6 @@ bm::id_t bit_operation_sub_any(const bm::word_t* BMRESTRICT src1,
    \brief Performs bitblock OR operation and calculates bitcount of the result. 
 
    \param src1     - first bit block.
-   \param src1_end - first bit block end
    \param src2     - second bit block.
 
    \returns bitcount value 
@@ -5159,8 +5159,9 @@ bool bit_block_or(bm::word_t* BMRESTRICT dst,
    \brief 3 way (target, source1, source2) bitblock OR operation.
    Function does not analyse availability of source and destination blocks.
 
-   \param dst - destination block.
-   \param src - source block.
+   \param dst - destination block
+   \param src1 - source 1 
+   \param src2 - source 2
  
    @return 1 if produced block of ALL ones
 
@@ -5201,7 +5202,7 @@ bool bit_block_or_3way(bm::word_t* BMRESTRICT dst,
    Function does not analyse availability of source and destination blocks.
 
    \param dst - destination block.
-   \param src - source block.
+   \param src1 - source1, etc 
  
    @return 1 if produced block of ALL ones
 

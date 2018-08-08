@@ -443,6 +443,7 @@ public:
     /*!
         \brief clear specified element with bounds checking and automatic resize
         \param idx - element index
+        \param set_null - if true the value receives NULL (unassigned) value
     */
     void clear(size_type idx, bool set_null = false);
 

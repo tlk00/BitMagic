@@ -323,7 +323,7 @@ public:
    
      \param id_from  - input value
      \param sv_brel  - translation table sparse vector
-     \param it_to    - out value
+     \param id_to    - out value
      
      \return - true if value was found and remapped
     */
