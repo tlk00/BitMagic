@@ -2283,10 +2283,6 @@ bvector<Alloc>& bvector<Alloc>::set_range(bm::id_t left,
     }
 
     BM_ASSERT(left <= right);
-    if (left >= size_)
-    {
-        std::cout << "size:" << size_ << " left=" << left << std::endl;
-    }
     BM_ASSERT(left < size_);
 
     if (value)
