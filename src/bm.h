@@ -4606,7 +4606,7 @@ void bvector<Alloc>::throw_bad_alloc()
 #ifndef BM_NO_STL
     throw std::bad_alloc();
 #else
-    BM_THROW(false, BM_ERR_BADALLOC);
+    BM_THROW(BM_ERR_BADALLOC);
 #endif
 }
 
