@@ -1009,7 +1009,7 @@ sparse_vector<Val, BV>::construct_bvector(const bvector_type* bv) const
     void* mem = ::malloc(sizeof(bvector_type));
     if (mem == 0)
     {
-        BM_ASSERT_THROW(false, BM_ERR_BADALLOC);
+        BM_THROW(false, BM_ERR_BADALLOC);
     }
     rbv = bv ? new(mem) bvector_type(*bv)
              : new(mem) bvector_type(ap_.strat, ap_.glevel_len,
