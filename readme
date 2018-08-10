@@ -38,6 +38,18 @@ Entity-Relationship acceleration, graph operations, social analyticsm materializ
 License: Apache 2.0
 
 
+If you want to contribute or support BitMagic library:
+-----------------------------------------------------
+
+1. GitHub master accepts patch requests
+Our branching policy is that master cannot be considered fully stable between the releases.
+(for production stability please use release versions)
+
+2. We need help with real-life cases and benchmarks
+
+3. We need help with mappings to Python and other languages (BitMagic has C bindings)
+
+
 How to build BitMagic C++ library:
 ---------------------------------
 
