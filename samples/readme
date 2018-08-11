@@ -15,7 +15,7 @@ BitMagic Library samples
 ./bvsample14 - serialization of bvector<>, logical operations on compressed BLOBs
 ./bvsample15 - bvector<>::find, search for first and last set bit, dynamic range detection
 ./bvsample16 - bm::aggregator<> - utility class for fast logical operations on bvector<> groups
-               Tech.note:
+               Tech.note: http://bitmagic.io/aggregator.html
 
 
 ./svsample01 - basic example of sparse_vector<> container
