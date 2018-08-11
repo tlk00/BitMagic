@@ -76,7 +76,6 @@ int main(void)
         std::vector<std::unique_ptr<bm::bvector<> > > vect;
         for (unsigned i = 0; i < max_vectors; ++i)
         {
-            //bm::bvector<>* bv = new bm::bvector<>();
             std::unique_ptr<bm::bvector<>> bv(new bm::bvector<>());
             bv->set(i);
             bv->set(i+1);
@@ -156,4 +155,5 @@ int main(void)
 
     return 0;
 }
+
 
