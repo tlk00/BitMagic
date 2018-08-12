@@ -24,7 +24,9 @@ typedef bm::bvector<libbm::standard_allocator>::enumerator TBM_bvector_enumerato
 #define BM_CATCH_ALL \
     CATCH (BM_ERR_BADALLOC) { return BM_ERR_BADALLOC; } \
     CATCH (BM_ERR_BADARG)   { return BM_ERR_BADARG; } \
-    CATCH (BM_ERR_RANGE)    { return BM_ERR_RANGE; }
+    CATCH (BM_ERR_RANGE)    { return BM_ERR_RANGE; } \
+    CATCH (BM_ERR_CPU)      { return BM_ERR_CPU; } \
+    CATCH (BM_ERR_SERIALFORMAT) { return BM_ERR_SERIALFORMAT; }
 
 
 // -------------------------------------------------------------------
@@ -138,6 +140,8 @@ const char* BM_error_msg(int errcode)
         return BM_ERR_RANGE_MSG;
     case BM_ERR_CPU:
         return BM_ERR_CPU_MSG;
+    case BM_ERR_SERIALFORMAT:
+        return BM_ERR_SERIALFORMAT_MSG;
     }
     return BM_UNK_MSG;
 }
