@@ -28,6 +28,7 @@ For more information please visit:  http://bitmagic.io
 #ifndef BM_NO_STL
 # include <iterator>
 # include <initializer_list>
+# include <stdexcept>
 #endif
 
 #include <limits.h>

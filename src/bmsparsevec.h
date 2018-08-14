@@ -19,7 +19,8 @@ For more information please visit:  http://bitmagic.io
 */
 
 /*! \file bmsparsevec.h
-    \brief Sparse constainer sparse_vector<> for integer types using bit-transposition transform
+    \brief Sparse constainer sparse_vector<> for integer types using
+           bit-transposition transform
 */
 
 #include <memory.h>
@@ -526,7 +527,7 @@ public:
     ///@}
 
     // ------------------------------------------------------------
-    /*! @name Export content to C-stype array       */
+    /*! @name Export content to C-stype array                    */
     ///@{
 
     /*!
@@ -741,6 +742,8 @@ public:
     bvector_type_ptr plain(unsigned i) { return plains_[i]; }
     const bvector_type_ptr plain(unsigned i) const { return plains_[i]; }
     
+    void sync(bool force) {}
+    
     /*!
         \brief free memory in bit-plain
     */
@@ -815,6 +818,7 @@ public:
     \brief find position of compressed element by its rank
     */
     bool find_rank(bm::id_t rank, bm::id_t& pos) const;
+    
 
     ///@}
 
@@ -852,11 +856,17 @@ protected:
     bvector_type* construct_bvector(const bvector_type* bv) const;
     void destruct_bvector(bvector_type* bv) const;
     bvector_type* get_null_bvect() { return plains_[this->null_plain()]; }
+    
+    void resize_internal(size_type sz) { resize(sz); }
+    size_type size_internal() const { return size(); }
 
 
     template<class V, class SVect> friend class compressed_sparse_vector;
     template<class SVect> friend class sparse_vector_scanner;
+    template<class SVect> friend class sparse_vector_serializer;
+    template<class SVect> friend class sparse_vector_deserializer;
 
+    
 private:
     size_type                bv_size_;
     allocator_type           alloc_;

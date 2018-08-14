@@ -19,7 +19,7 @@ For more information please visit:  http://bitmagic.io
 */
 
 /*! \file bmsparsevec_compr.h
-    \brief Compressed sparse constainer compressed_sparse_vector<> for integer types
+    \brief Compressed sparse container compressed_sparse_vector<> for integer types
 */
 
 #include <memory.h>
@@ -37,6 +37,10 @@ namespace bm
 
 /*!
    \brief compressed sparse vector for NULL-able sparse vectors
+ 
+   Container uses rank-select method of compression, where
+   all NULL columns gets dropped, effective address of columns is computed
+   using address bit-vector.
  
    \ingroup sv
 */
@@ -183,8 +187,10 @@ public:
 
     /**
         \brief find position of compressed element by its rank
+        \param rank - rank  (virtual index in sparse vector)
+        \param idx  - index (true position)
     */
-    bool find_rank(bm::id_t rank, bm::id_t& pos) const;
+    bool find_rank(bm::id_t rank, bm::id_t& idx) const;
 
     //@}
     
@@ -245,6 +251,9 @@ public:
     
     //@}
 
+    // ------------------------------------------------------------
+    /*! @name Memory optimization                                */
+    ///@{
 
     /*!
         \brief run memory optimization for all vector plains
@@ -259,6 +268,21 @@ public:
     /*! \brief resize to zero, free memory
     */
     void clear() BMNOEXEPT;
+    
+    /*!
+        @brief Calculates memory statistics.
+
+        Function fills statistics structure containing information about how
+        this vector uses memory and estimation of max. amount of memory
+        bvector needs to serialize itself.
+
+        @param st - pointer on statistics structure to be filled in.
+
+        @sa statistics
+    */
+    void calc_stat(struct compressed_sparse_vector<Val, SV>::statistics* st) const;
+
+    ///@}
 
 
     // ------------------------------------------------------------
@@ -268,8 +292,13 @@ public:
         \brief Re-calculate prefix sum table used for rank search
         \param force - force recalculation even if it is already recalculated
     */
-    void sync(bool force = false);
-    
+    void sync(bool force);
+
+    /*!
+        \brief Re-calculate prefix sum table used for rank search (if necessary)
+    */
+    void sync() { sync(false); }
+
     /*!
         \brief returns true if prefix sum table is in sync with the vector
     */
@@ -291,6 +320,8 @@ public:
     */
     const bvector_type_ptr get_plain(unsigned i) const { return sv_.get_plain(i); }
 
+    bvector_type_ptr get_plain(unsigned i)  { return sv_.get_plain(i); }
+    
     /*!
         Number of effective bit-plains in the value type
     */
@@ -300,6 +331,9 @@ public:
         \brief get total number of bit-plains in the vector
     */
     static unsigned plains() { return sparse_vector_type::plains(); }
+
+    /** Number of stored bit-plains (value plains + extra */
+    static unsigned stored_plains() { return sparse_vector_type::stored_plains(); }
 
     /*!
         \brief access dense vector
@@ -318,12 +352,22 @@ protected:
         \return true if id is known and resolved successfully
     */
     bool resolve(bm::id_t idx, bm::id_t* idx_to) const;
+    
+    void resize_internal(size_type sz) { sv_.resize_internal(sz); }
+    size_type size_internal() const { return sv_.size(); }
+
+
+protected:
+    template<class V, class SVect> friend class compressed_sparse_vector;
+    template<class SVect> friend class sparse_vector_scanner;
+    template<class SVect> friend class sparse_vector_serializer;
+    template<class SVect> friend class sparse_vector_deserializer;
 
 private:
     sparse_vector_type            sv_;       ///< transpose-sparse vector for "dense" packing
     bm::id_t                      max_id_;   ///< control variable for sorted load
     bool                          in_sync_;  ///< flag if prefix sum is in-sync with vector
-    bvector_blocks_psum_type      bv_blocks_; ///< prefix sum for rank translation
+    bvector_blocks_psum_type      bv_blocks_;///< prefix sum for rank translation
 };
 
 //---------------------------------------------------------------------
@@ -417,7 +461,8 @@ void compressed_sparse_vector<Val, SV>::push_back(size_type idx, value_type v)
 //---------------------------------------------------------------------
 
 template<class Val, class SV>
-bool compressed_sparse_vector<Val, SV>::equal(const compressed_sparse_vector<Val, SV>& csv) const
+bool compressed_sparse_vector<Val, SV>::equal(
+                    const compressed_sparse_vector<Val, SV>& csv) const
 {
     if (this == &csv)
         return true;
@@ -430,7 +475,8 @@ bool compressed_sparse_vector<Val, SV>::equal(const compressed_sparse_vector<Val
 //---------------------------------------------------------------------
 
 template<class Val, class SV>
-void compressed_sparse_vector<Val, SV>::load_from(const sparse_vector_type& sv_src)
+void compressed_sparse_vector<Val, SV>::load_from(
+                                    const sparse_vector_type& sv_src)
 {
     sv_.clear();
     max_id_ = 0;
@@ -461,15 +507,7 @@ void compressed_sparse_vector<Val, SV>::load_from(const sparse_vector_type& sv_s
     
     unsigned count = bv_null->count(); // set correct sizes
     sv_.resize(count);
-    
-    in_sync_ = false;
-    
-    bool found = bv_null->find_reverse(max_id_);
-    if (!found)
-    {
-        BM_ASSERT(!bv_null->any());
-        max_id_ = 0;
-    }
+    sync(true);
 }
 
 //---------------------------------------------------------------------
@@ -513,8 +551,16 @@ void compressed_sparse_vector<Val, SV>::sync(bool force)
     if (in_sync_ && force == false)
         return;  // nothing to do
     const bvector_type* bv_null = sv_.get_null_bvector();
-    if (bv_null)
-        bv_null->running_count_blocks(&bv_blocks_); // compute popcount prefix list
+    BM_ASSERT(bv_null);
+    bv_null->running_count_blocks(&bv_blocks_); // compute popcount prefix list
+    
+    // sync the max-id
+    bool found = bv_null->find_reverse(max_id_);
+    if (!found)
+    {
+        BM_ASSERT(!bv_null->any());
+        max_id_ = 0;
+    }
     in_sync_ = true;
 }
 
@@ -592,6 +638,10 @@ void compressed_sparse_vector<Val, SV>::optimize(bm::word_t*  temp_block,
                     statistics* stat)
 {
     sv_.optimize(temp_block, opt_mode, (typename sparse_vector_type::statistics*)stat);
+    if (stat)
+    {
+        stat->memory_used += sizeof(bv_blocks_);
+    }
 }
 
 //---------------------------------------------------------------------
@@ -606,6 +656,20 @@ void compressed_sparse_vector<Val, SV>::clear() BMNOEXEPT
 //---------------------------------------------------------------------
 
 template<class Val, class SV>
+void compressed_sparse_vector<Val, SV>::calc_stat(
+            struct compressed_sparse_vector<Val, SV>::statistics* st) const
+{
+    BM_ASSERT(st);
+    sv_.calc_stat((typename sparse_vector_type::statistics*)st);
+    if (st)
+    {
+        st->memory_used += sizeof(bv_blocks_);
+    }
+}
+
+//---------------------------------------------------------------------
+
+template<class Val, class SV>
 const typename compressed_sparse_vector<Val, SV>::bvector_type*
 compressed_sparse_vector<Val, SV>::get_null_bvector() const
 {
@@ -615,12 +679,13 @@ compressed_sparse_vector<Val, SV>::get_null_bvector() const
 //---------------------------------------------------------------------
 
 template<class Val, class SV>
-bool compressed_sparse_vector<Val, SV>::find_rank(bm::id_t rank, bm::id_t& pos) const
+bool
+compressed_sparse_vector<Val, SV>::find_rank(bm::id_t rank, bm::id_t& idx) const
 {
     BM_ASSERT(rank);
 
     const bvector_type* bv_null = get_null_bvector();
-    bool b = bv_null->find_rank(rank, 0, pos);
+    bool b = bv_null->find_rank(rank, 0, idx);
     return b;
 }
 

@@ -36,7 +36,9 @@ namespace bm
 /*! 
    @defgroup setalgo bvector<> algorithms 
  
-   Set algebra algorithms using bit-vectors, arrays. Binary metrics and distances. Random sub-sets.
+   Set algebra algorithms using bit-vectors, arrays.
+   Binary metrics and distances. Random sub-sets.
+ 
    @ingroup bvector
  */
 
