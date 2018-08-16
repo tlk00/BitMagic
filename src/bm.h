@@ -541,6 +541,10 @@ public:
 
             this->invalidate();
         }
+        
+        /// advance iterator forward by one
+        void advance() { this->go_up(); }
+
 
         /*! \brief Advance enumerator to the next available bit */
         enumerator& go_up()
