@@ -59,11 +59,13 @@ public:
     typedef const value_type&                        const_reference;
     typedef bm::id_t                                 size_type;
     typedef SV                                       sparse_vector_type;
+    typedef typename SV::const_iterator              sparse_vector_const_iterator;
     typedef typename SV::bvector_type                bvector_type;
     typedef bvector_type*                            bvector_type_ptr;
     typedef typename bvector_type::allocator_type    allocator_type;
     typedef typename bvector_type::allocation_policy allocation_policy_type;
     typedef typename bvector_type::blocks_count      bvector_blocks_psum_type;
+    typedef typename bvector_type::enumerator        bvector_enumerator_type;
     
 public:
     /*! Statistical information about  memory allocation details. */
@@ -195,6 +197,18 @@ public:
     //@}
     
     // ------------------------------------------------------------
+    /*! @name Export content to C-stype array                    */
+    ///@{
+    
+    size_type decode(value_type* arr,
+                     size_type   idx_from,
+                     size_type   size,
+                     bool        zero_mem = true) const;
+
+    ///@}
+
+    
+    // ------------------------------------------------------------
     /*! @name Various traits                                     */
     //@{
     /**
@@ -286,7 +300,7 @@ public:
 
 
     // ------------------------------------------------------------
-    /*! @name Read-acess fast sync */
+    /*! @name Fast access structues sync                         */
     //@{
     /*!
         \brief Re-calculate prefix sum table used for rank search
@@ -687,6 +701,68 @@ compressed_sparse_vector<Val, SV>::find_rank(bm::id_t rank, bm::id_t& idx) const
     const bvector_type* bv_null = get_null_bvector();
     bool b = bv_null->find_rank(rank, 0, idx);
     return b;
+}
+
+//---------------------------------------------------------------------
+
+
+template<class Val, class SV>
+typename compressed_sparse_vector<Val, SV>::size_type
+compressed_sparse_vector<Val, SV>::decode(value_type* arr,
+                                          size_type   idx_from,
+                                          size_type   size,
+                                          bool        zero_mem) const
+{
+    BM_ASSERT(arr);
+    
+    if (size == 0)
+        return 0;
+    if (idx_from >= this->size())
+        return 0;
+    
+    if (bm::id_max - size <= idx_from)
+    {
+        size = bm::id_max - idx_from;
+    }
+
+    const bvector_type* bv_null = sv_.get_null_bvector();
+
+    bm::id_t rank = bv_null->count_to(idx_from, bv_blocks_);
+    bool b = bv_null->test(idx_from);
+    
+    bvector_enumerator_type en_i = bv_null->get_enumerator(idx_from);
+    size_type i = *en_i;
+    if (idx_from + size <= i)  // empty space (all zeros)
+    {
+        ::memset(arr, 0, sizeof(value_type)*size);
+        return size;
+    }
+    rank -= b;
+    sparse_vector_const_iterator it = sv_.get_const_iterator(rank);
+    i = 0;
+    while (it.valid())
+    {
+        if (!en_i.valid())
+            break;
+        size_type en_idx = *en_i;
+        while (idx_from < en_idx) // zero the empty prefix
+        {
+            arr[i] ^= arr[i];
+            ++i; ++idx_from;
+            if (i == size)
+                return i;
+        }
+        BM_ASSERT(idx_from == en_idx);
+        arr[i] = *it;
+        ++i; ++idx_from;
+        if (i == size)
+            return i;
+        
+        en_i.advance();
+        it.advance();
+    } // while
+    
+    return i;
 }
 
 //---------------------------------------------------------------------
