@@ -1499,8 +1499,6 @@ sparse_vector<Val, BV>::extract(value_type* arr,
 
     if (masked_scan) // use temp vector to decompress the area
     {
-        // for large array extraction use logical opertions
-        // (faster due to vectorization)
         bvector_type bv_mask;
         bv_mask.set_allocator_pool(pool_ptr);
         
@@ -1509,12 +1507,9 @@ sparse_vector<Val, BV>::extract(value_type* arr,
             const bvector_type* bv = plains_[i];
             if (bv)
             {
-                bv_mask.set_range(offset, end - 1);
-                bv_mask.bit_and(*bv); // TODO: make copy-and fusion
-            
+                bv_mask.copy_range(*bv, offset, end - 1);
                 sv_decode_visitor_func func(arr, (value_type(1) << i), offset);
                 bm::for_each_bit(bv_mask, func);
-                bv_mask.set_range(offset, end - 1, false);
             }
         } // for i
     }
