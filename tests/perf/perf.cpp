@@ -2144,7 +2144,8 @@ void AggregatorTest()
     {
         agg.combine_and_sub(*bv_target2,
                             bv_arr, unsigned(bv_coll.size()),
-                            bv_arr2, unsigned(bv_coll2.size())
+                            bv_arr2, unsigned(bv_coll2.size()),
+                            false
                             );
     } // for
     }
