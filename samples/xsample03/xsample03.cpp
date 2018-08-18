@@ -327,7 +327,7 @@ void build_vector_pairs(const sparse_vector_u32& sv, vector_pairs& vp)
     }
 }
 
-// O(N) linear search in vector of pairs (position - rsid)
+// O(N) -- O(N/2) linear search in vector of pairs (position - rsid)
 //
 static
 bool search_vector_pairs(const vector_pairs& vp, unsigned rs_id, unsigned& pos)
@@ -374,8 +374,13 @@ void run_benchmark(const sparse_vector_u32& sv, const rsc_sparse_vector_u32& csv
     if (!sv.empty())
     {
         bm::chrono_taker tt1("09. rs search (sv)", unsigned(rs_vect.size()), &timing_map);
+        
+        // scanner class
+        // it's important to keep scanner class outside the loop to avoid
+        // unnecessary re-allocs and construction costs
+        //
 
-        bm::sparse_vector_scanner<sparse_vector_u32> scanner; // scanner class
+        bm::sparse_vector_scanner<sparse_vector_u32> scanner;
 
         for (unsigned i = 0; i < rs_vect.size(); ++i)
         {
@@ -534,14 +539,14 @@ int main(int argc, char *argv[])
                 std::cout << std::endl
                           << "sparse vector statistics:"
                           << std::endl;
-                bm::print_svector_stat(sv, false);
+                bm::print_svector_stat(sv, true);
             }
             if (!csv.empty())
             {
                 std::cout << std::endl
                           << "RS compressed sparse vector statistics:"
                           << std::endl;
-                bm::print_svector_stat(csv, false);
+                bm::print_svector_stat(csv, true);
             }
         }
 
