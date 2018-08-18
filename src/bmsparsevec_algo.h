@@ -669,7 +669,7 @@ bool sparse_vector_scanner<SV>::find_eq_with_nulls(const SV&    sv,
     if (!value)
     {
         find_zero(sv, bv_out);
-        return false;
+        return bv_out.any();
     }
     agg_.reset();
 
