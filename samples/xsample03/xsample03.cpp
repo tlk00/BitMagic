@@ -31,6 +31,7 @@ For more information please visit:  http://bitmagic.io
 #include <vector>
 #include <chrono>
 #include <map>
+#include <utility>
 
 #include "bm.h"
 #include "bmalgo.h"
@@ -169,10 +170,11 @@ int parse_args(int argc, char *argv[])
 }
 
 
-// Globals
+// Global types
 //
-typedef bm::sparse_vector<unsigned, bm::bvector<> > sparse_vector_u32;
+typedef bm::sparse_vector<unsigned, bm::bvector<> >         sparse_vector_u32;
 typedef bm::rsc_sparse_vector<unsigned, sparse_vector_u32 > rsc_sparse_vector_u32;
+typedef std::vector<std::pair<unsigned, unsigned> >         vector_pairs;
 
 // ----------------------------------------------------------------------------
 
@@ -271,6 +273,40 @@ void generate_random_subset(const sparse_vector_u32&  sv, std::vector<unsigned>&
     }
 }
 
+// build vector of pairs (position to rs)
+//
+static
+void build_vector_pairs(const sparse_vector_u32& sv, vector_pairs& vp)
+{
+    sparse_vector_u32::const_iterator it = sv.begin();
+    sparse_vector_u32::const_iterator it_end = sv.end();
+    
+    for (; it != it_end; ++it)
+    {
+        if (!it.is_null())
+        {
+            std::pair<unsigned, unsigned> pos2rs = std::make_pair(it.pos(), it.value());
+            vp.push_back(pos2rs);
+        }
+    }
+}
+
+// linear search in vector of pairs (position - rsid)
+//
+static
+bool search_vector_pairs(const vector_pairs& vp, unsigned rs_id, unsigned& pos)
+{
+    for (unsigned i = 0; i < vp.size(); ++i)
+    {
+        if (vp[i].second == rs_id)
+        {
+            pos = vp[i].first;
+            return true;
+        }
+    }
+    return false;
+}
+
 static
 void run_benchmark(const sparse_vector_u32& sv, const rsc_sparse_vector_u32& csv)
 {
@@ -284,13 +320,17 @@ void run_benchmark(const sparse_vector_u32& sv, const rsc_sparse_vector_u32& csv
         return;
     }
     
+    // build traditional sparse vector
+    vector_pairs vp;
+    build_vector_pairs(sv, vp);
+    
     // search results
     //
     bm::bvector<> bv_found1;
     bm::bvector<> bv_found2;
-    
-    bv_found1.init(); bv_found2.init(); // pre-initialize vectors
+    bm::bvector<> bv_found3;
 
+    bv_found1.init(); bv_found2.init(); bv_found3.init();// pre-initialize vectors
     
     if (!sv.empty())
     {
@@ -315,7 +355,6 @@ void run_benchmark(const sparse_vector_u32& sv, const rsc_sparse_vector_u32& csv
         } // for
     }
 
-
     if (!csv.empty())
     {
         bm::chrono_taker tt1("10. rs search (rsc_sv)", unsigned(rs_vect.size()), &timing_map);
@@ -339,13 +378,39 @@ void run_benchmark(const sparse_vector_u32& sv, const rsc_sparse_vector_u32& csv
         } // for
     }
     
+    if (vp.size())
+    {
+        bm::chrono_taker tt1("11. rs search (std::vector<>)", unsigned(rs_vect.size()), &timing_map);
+
+        for (unsigned i = 0; i < rs_vect.size(); ++i)
+        {
+            unsigned rs_id = rs_vect[i];
+            unsigned rs_pos;
+            bool found = search_vector_pairs(vp, rs_id, rs_pos);
+
+            if (found)
+            {
+                bv_found3.set_bit_no_check(rs_pos);
+            }
+            else
+            {
+                std::cout << "rs_id = " << rs_id << " not found!" << std::endl;
+            }
+        } // for
+
+    }
+    
     // compare results from various methods (check integrity)
     int res = bv_found1.compare(bv_found2);
     if (res != 0)
     {
-        std::cerr << "Error: search discrepancy detected!" << std::endl;
+        std::cerr << "Error: search discrepancy (sparse search) detected!" << std::endl;
     }
-
+    res = bv_found1.compare(bv_found3);
+    if (res != 0)
+    {
+        std::cerr << "Error: search discrepancy (std::vector<>) detected!" << std::endl;
+    }
 }
 
 
