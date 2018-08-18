@@ -742,7 +742,8 @@ public:
     bvector_type_ptr plain(unsigned i) { return plains_[i]; }
     const bvector_type_ptr plain(unsigned i) const { return plains_[i]; }
     
-    void sync(bool force) {}
+    /*! \brief syncronize internal structures */
+    void sync(bool /*force*/) {}
     
     /*!
         \brief free memory in bit-plain

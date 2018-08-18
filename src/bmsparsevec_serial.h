@@ -223,6 +223,7 @@ void sparse_vector_serialize(
                 sparse_vector_serial_layout<SV>& sv_layout,
                 bm::word_t*                      temp_block = 0)
 {
+    (void)temp_block;
     bm::sparse_vector_serializer<SV> sv_serializer;
     sv_serializer.serialize(sv, sv_layout);
 }
@@ -244,6 +245,7 @@ int sparse_vector_deserialize(SV& sv,
                               const unsigned char* buf,
                               bm::word_t* temp_block=0)
 {
+    (void)temp_block;
     bm::sparse_vector_deserializer<SV> sv_deserializer;
     sv_deserializer.deserialize(sv, buf);
     return 0;
