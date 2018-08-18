@@ -36,11 +36,14 @@ namespace bm
 
 
 /*!
-   \brief compressed sparse vector for NULL-able sparse vectors
+   \brief Rank-Select-Compressed sparse vector
  
-   Container uses rank-select method of compression, where
+   Container uses Rank-Select method of compression, where
    all NULL columns gets dropped, effective address of columns is computed
    using address bit-vector.
+
+   Use for cases, where memory efficiency is preferable over
+   single element access latency.
  
    \ingroup sv
 */

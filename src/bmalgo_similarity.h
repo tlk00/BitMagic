@@ -191,12 +191,12 @@ void build_jaccard_similarity_batch(SIMBATCH& sbatch, const SV& sv)
     //
     for (unsigned i = 0; i < plains; ++i)
     {
-        const typename SV::bvector_type* bv1 = sv.plain(i);
+        const typename SV::bvector_type* bv1 = sv.get_plain(i);
         if (bv1)
         {
             for (unsigned j = i+1; j < plains; ++j)
             {
-                const typename SV::bvector_type* bv2 = sv.plain(j);
+                const typename SV::bvector_type* bv2 = sv.get_plain(j);
                 if (bv2 && bv1 != bv2)
                 {
                     sbatch.push_back(typename SIMBATCH::similaruty_descriptor_type(bv1, i, bv2, j, &dmd[0]));

@@ -634,7 +634,7 @@ void print_svector_stat(const SV& svect, bool print_sim = false)
     typename SV::bvector_type bv_join; // global OR of all plains
     for (unsigned i = 0; i < svect.plains(); ++i)
     {
-        const typename SV::bvector_type* bv_plain = svect.plain(i);
+        const typename SV::bvector_type* bv_plain = svect.get_plain(i);
         std::cout << i << ":";
             if (bv_plain == 0)
             {
@@ -642,7 +642,7 @@ void print_svector_stat(const SV& svect, bool print_sim = false)
                 bool any_else = false;
                 for (unsigned j = i+1; j < svect.plains(); ++j) // look ahead
                 {
-                    if (svect.plain(i))
+                    if (svect.get_plain(i))
                     {
                         any_else = true;
                         break;
