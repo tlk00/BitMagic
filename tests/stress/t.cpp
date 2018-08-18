@@ -864,7 +864,7 @@ unsigned SerializationOperation(bvect*             bv_target,
         case bm::set_AND:
             bvt &= bv2;
             agg.combine_and(bv_agg, agg_list, 2);
-            agg.combine_and_sub(bv_agg2, agg_list, 2, 0, 0);
+            agg.combine_and_sub(bv_agg2, agg_list, 2, 0, 0, false);
             {
                 if (bv_agg.compare(bv_agg2) != 0)
                 {
@@ -876,7 +876,7 @@ unsigned SerializationOperation(bvect*             bv_target,
             break;
         case bm::set_SUB:
             bvt -= bv2;
-            agg.combine_and_sub(bv_agg, agg_list, 1, agg_list2, 1);
+            agg.combine_and_sub(bv_agg, agg_list, 1, agg_list2, 1, false);
             {
                 bvect bv_h;
                 agg.combine_and_sub_horizontal(bv_h, agg_list, 1, agg_list2, 1);
@@ -4151,7 +4151,7 @@ void AggregatorTest()
         bv_control.set_range(100000, 100100);
         agg.combine_and(bv3, bv_arr, 2);
         res = bv_control.compare(bv3);
-        agg.combine_and_sub(bv3, bv_arr, 2, 0, 0);
+        agg.combine_and_sub(bv3, bv_arr, 2, 0, 0, false);
         res = bv_control.compare(bv3);
         assert(res == 0);
 
@@ -4176,7 +4176,7 @@ void AggregatorTest()
         agg.combine_and(bv4, bv_arr, 3);
         res = bv_control.compare(bv4);
         assert(res == 0);
-        agg.combine_and_sub(bv4, bv_arr, 3, 0, 0);
+        agg.combine_and_sub(bv4, bv_arr, 3, 0, 0, false);
         res = bv_control.compare(bv3);
         assert(res == 0);
     }
@@ -4213,7 +4213,7 @@ void AggregatorTest()
         agg.combine_and(bv3, bv_arr, 2);
         res = bv_control.compare(bv3);
         assert(res == 0);
-        agg.combine_and_sub(bv3, bv_arr, 2, 0, 0);
+        agg.combine_and_sub(bv3, bv_arr, 2, 0, 0, false);
         res = bv_control.compare(bv3);
         assert(res == 0);
     }
@@ -4235,22 +4235,22 @@ void AggregatorTest()
         bv_arr[1] = &bv2;
         bv_arr2[0] = &bv3;
 
-        agg.combine_and_sub(bv4, bv_arr, 2, bv_arr2, 1);
+        agg.combine_and_sub(bv4, bv_arr, 2, bv_arr2, 1, false);
         assert(bv4.count()==1);
         assert(bv4.test(100));
         
         bv3.optimize();
-        agg.combine_and_sub(bv4, bv_arr, 2, bv_arr2, 1);
+        agg.combine_and_sub(bv4, bv_arr, 2, bv_arr2, 1, false);
         assert(bv4.count()==1);
         assert(bv4.test(100));
         
         bv1.optimize();
-        agg.combine_and_sub(bv4, bv_arr, 2, bv_arr2, 1);
+        agg.combine_and_sub(bv4, bv_arr, 2, bv_arr2, 1, false);
         assert(bv4.count()==1);
         assert(bv4.test(100));
 
         bv2.optimize();
-        agg.combine_and_sub(bv4, bv_arr, 2, bv_arr2, 1);
+        agg.combine_and_sub(bv4, bv_arr, 2, bv_arr2, 1, false);
         assert(bv4.count()==1);
         assert(bv4.test(100));
     }
@@ -4271,7 +4271,7 @@ void AggregatorTest()
         bv_arr[1] = &bv2;
         bv_arr2[0] = &bv3;
 
-        agg.combine_and_sub(bv4, bv_arr, 2, bv_arr2, 1);
+        agg.combine_and_sub(bv4, bv_arr, 2, bv_arr2, 1, false);
         assert(bv4.count()==0);
         assert(!bv4.any());
     }
@@ -4478,8 +4478,8 @@ void StressTestAggregatorAND(unsigned repetitions)
         unsigned cnt = 10;
         agg.combine_and(bv_target1, agg_list, cnt);
         agg.combine_and_horizontal(bv_target2, agg_list, cnt);
-        agg.combine_and_sub(bv_target3, agg_list, cnt, 0, 0);
-        agg.combine_and_sub(bv_empty, agg_list, cnt, agg_list, cnt);
+        agg.combine_and_sub(bv_target3, agg_list, cnt, 0, 0, false);
+        agg.combine_and_sub(bv_empty, agg_list, cnt, agg_list, cnt, false);
 
         int res = bv_target1.compare(bv_target2);
         if (res!=0)
@@ -4498,8 +4498,8 @@ void StressTestAggregatorAND(unsigned repetitions)
         {
             agg.combine_and(bv_target1, agg_list, j);
             agg.combine_and_horizontal(bv_target2, agg_list, j);
-            agg.combine_and_sub(bv_target3, agg_list, cnt, 0, 0);
-            agg.combine_and_sub(bv_empty, agg_list, cnt, agg_list, cnt);
+            agg.combine_and_sub(bv_target3, agg_list, cnt, 0, 0, false);
+            agg.combine_and_sub(bv_empty, agg_list, cnt, agg_list, cnt, false);
 
             
             res = bv_target1.compare(bv_target2);
@@ -4525,9 +4525,9 @@ void StressTestAggregatorAND(unsigned repetitions)
                 cerr << j << endl;
             agg.combine_and(bv_target1, agg_list+j, cnt-j);
             agg.combine_and_horizontal(bv_target2, agg_list+j, cnt-j);
-            agg.combine_and_sub(bv_target3, agg_list+j, cnt-j, 0, 0);
+            agg.combine_and_sub(bv_target3, agg_list+j, cnt-j, 0, 0, false);
             agg.combine_and_sub_horizontal(bv_target4, agg_list+j, cnt-j, 0, 0);
-            agg.combine_and_sub(bv_empty, agg_list+j, cnt-j, agg_list+j, cnt-j);
+            agg.combine_and_sub(bv_empty, agg_list+j, cnt-j, agg_list+j, cnt-j, false);
 
             res = bv_target1.compare(bv_target2);
             if (res!=0)
