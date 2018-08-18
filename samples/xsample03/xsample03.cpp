@@ -140,7 +140,7 @@ int parse_args(int argc, char *argv[])
 // Globals
 //
 typedef bm::sparse_vector<unsigned, bm::bvector<> > sparse_vector_u32;
-typedef bm::compressed_sparse_vector<unsigned, sparse_vector_u32 > compressed_sparse_vector_u32;
+typedef bm::rsc_sparse_vector<unsigned, sparse_vector_u32 > rsc_sparse_vector_u32;
 
 // ----------------------------------------------------------------------------
 
@@ -240,7 +240,7 @@ void generate_random_subset(const sparse_vector_u32&  sv, std::vector<unsigned>&
 }
 
 static
-void run_benchmark(const sparse_vector_u32& sv, const compressed_sparse_vector_u32& csv)
+void run_benchmark(const sparse_vector_u32& sv, const rsc_sparse_vector_u32& csv)
 {
     const unsigned rs_sample_count = 500;
 
@@ -280,7 +280,7 @@ void run_benchmark(const sparse_vector_u32& sv, const compressed_sparse_vector_u
         bm::chrono_taker tt1("6. rs search (csv)", unsigned(rs_vect.size()), &timing_map);
 
         bm::bvector<> bv_found;  // search results vector
-        bm::sparse_vector_scanner<compressed_sparse_vector_u32> scanner; // scanner class
+        bm::sparse_vector_scanner<rsc_sparse_vector_u32> scanner; // scanner class
 
         for (unsigned i = 0; i < rs_vect.size(); ++i)
         {
@@ -311,7 +311,7 @@ int main(int argc, char *argv[])
     }
 
     sparse_vector_u32  sv(bm::use_null);
-    compressed_sparse_vector_u32 csv;
+    rsc_sparse_vector_u32 csv;
 
     try
     {
