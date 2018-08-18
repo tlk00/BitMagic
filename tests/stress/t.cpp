@@ -345,7 +345,7 @@ typedef bm::bvector_mini<bm::block_allocator> bvect_mini;
 
 typedef bm::sparse_vector<unsigned, bvect > sparse_vector_u32;
 typedef bm::sparse_vector<unsigned long long, bvect > sparse_vector_u64;
-typedef bm::compressed_sparse_vector<unsigned, sparse_vector_u32> compressed_sparse_vector_u32;
+typedef bm::rsc_sparse_vector<unsigned, sparse_vector_u32> rsc_sparse_vector_u32;
 
 //const unsigned BITVECT_SIZE = 100000000 * 8;
 
@@ -10426,8 +10426,6 @@ void TestSparseVector()
         assert(!sv1.is_nullable());
         sv2.clear();
         assert(sv2.is_nullable());
-
-
     }}
     
     {{
@@ -10450,7 +10448,21 @@ void TestSparseVector()
         cerr << "compute_nonzero_bvector test failed" << endl;
         exit(1);
     }
+    }}
     
+    {{
+    bm::sparse_vector<unsigned, bm::bvector<> > sv;
+    sv.push_back(1);
+    sv.push_back(1);
+    sv.push_back(1);
+    unsigned arr[1024];
+    
+    unsigned esize =  sv.extract(&arr[0], 1024, 0);
+    assert(esize == 3);
+    assert(arr[0] = 1);
+    assert(arr[1] = 1);
+    assert(arr[2] = 1);
+
     }}
     
     cout << "Import test..." << endl;
@@ -14510,7 +14522,7 @@ void TestRankCompress()
 static
 void GenerateSV(sparse_vector_u32&   sv, unsigned strategy = 0)
 {
-    unsigned max_idx_value = 40000000;
+    unsigned max_idx_value = 1000000;
     switch (strategy)
     {
     case 0:
@@ -14618,10 +14630,11 @@ void GenerateSV(sparse_vector_u32&   sv, unsigned strategy = 0)
     default:
         break;
     } // switch
+    sv.optimize();
 }
 
 static
-void DetailedCompareSparseVectors(const compressed_sparse_vector_u32& csv,
+void DetailedCompareSparseVectors(const rsc_sparse_vector_u32& csv,
                                   const sparse_vector_u32&            sv)
 {
     sparse_vector_u32   sv_s(bm::use_null);  // sparse vector decompressed
@@ -14724,10 +14737,10 @@ void DetailedCompareSparseVectors(const compressed_sparse_vector_u32& csv,
     
     {
     BM_DECLARE_TEMP_BLOCK(tb)
-    sparse_vector_serial_layout<compressed_sparse_vector_u32> sv_lay;
-    bm::sparse_vector_serialize<compressed_sparse_vector_u32>(csv, sv_lay, tb);
+    sparse_vector_serial_layout<rsc_sparse_vector_u32> sv_lay;
+    bm::sparse_vector_serialize<rsc_sparse_vector_u32>(csv, sv_lay, tb);
 
-    compressed_sparse_vector_u32 csv1;
+    rsc_sparse_vector_u32 csv1;
     const unsigned char* buf = sv_lay.buf();
     bm::sparse_vector_deserialize(csv1, buf, tb);
 
@@ -14740,17 +14753,102 @@ void DetailedCompareSparseVectors(const compressed_sparse_vector_u32& csv,
     
 }
 
+void CheckCompressedDecode(const rsc_sparse_vector_u32& csv,
+                           unsigned from, unsigned size)
+{
+    std::vector<unsigned> vect;
+    vect.resize(size);
+    
+    unsigned sz = csv.decode(&vect[0], from, size);
+    unsigned ex_idx = 0;
+    for (unsigned i = from; i < from + sz; ++i)
+    {
+        unsigned v = csv.get(i);
+        unsigned vx = vect[ex_idx];
+        if (v != vx)
+        {
+            cerr << "compressed vector decode mismatch from="
+                 << from << " idx=" << i
+                 << " v=" << v << " vx=" << vx
+                 << endl;
+            exit(1);
+        }
+        ++ex_idx;
+    }
+}
+
+static
+void DetailedCheckCompressedDecode(const rsc_sparse_vector_u32& csv)
+{
+    auto size = csv.size();
+    cout << endl;
+
+    {
+    unsigned size1 = 100;
+    for (unsigned i = 0; i < size1; )
+    {
+        CheckCompressedDecode(csv, i, size);
+        cout << "\r" << i << "/" << size1 << flush;
+        i++;
+    }
+    }
+    cout << endl;
+
+    {
+    unsigned size1 = 100000;
+    for (unsigned i = 0; i < size1; )
+    {
+        CheckCompressedDecode(csv, i, size1);
+        cout << "\r" << i << "/" << size1 << flush;
+        i+=rand()%3;
+        size1 -= rand()%5;
+    }
+    }
+    cout << endl;
+
+    {
+    unsigned size1 = size;
+    for (unsigned i = size-size/2; i < size1; )
+    {
+        CheckCompressedDecode(csv, i, size1);
+        cout << "\r" << i << "/" << size1 << flush;
+        i+=(1+i);
+    }
+    }
+    cout << endl;
+
+    for (unsigned i = size-size/2; i < size; )
+    {
+        CheckCompressedDecode(csv, i, size);
+        cout << "\r" << i << "/" << size << flush;
+        i += rand() % 25000;
+    }
+    cout << endl;
+    
+    for (unsigned i = size-size/2; i < size; )
+    {
+        if (size <= i)
+            break;
+        CheckCompressedDecode(csv, i, size);
+        cout << "\r" << i << "/" << size << flush;
+        i += rand() % 25000;
+        size -= rand() % 25000;;
+    }
+    cout << endl;
+
+}
+
 static
 void TestCompressSparseVector()
 {
     cout << " ------------------------------ Test Compressed Sparse Vector " << endl;
     
     {
-        compressed_sparse_vector_u32 csv1;
+        rsc_sparse_vector_u32 csv1;
         assert(csv1.equal(csv1));
-        compressed_sparse_vector_u32 csv2;
+        rsc_sparse_vector_u32 csv2;
         assert(csv1.equal(csv2));
-        compressed_sparse_vector_u32 csv3(csv1);
+        rsc_sparse_vector_u32 csv3(csv1);
         assert(csv3.equal(csv2));
     }
     
@@ -14758,7 +14856,7 @@ void TestCompressSparseVector()
     cout << "push_back() test" << endl;
     unsigned v, v1;
     
-        compressed_sparse_vector_u32 csv1;
+        rsc_sparse_vector_u32 csv1;
         sparse_vector_u32 sv1(bm::use_null);
         
         csv1.push_back(10, 100);
@@ -14799,16 +14897,16 @@ void TestCompressSparseVector()
         v = csv1.at(21);
         assert(v == 201);
         
-        compressed_sparse_vector_u32 csv2(csv1);
+        rsc_sparse_vector_u32 csv2(csv1);
         bool same = csv2.equal(csv1);
         assert(same);
         
-        compressed_sparse_vector_u32 csv3;
+        rsc_sparse_vector_u32 csv3;
         csv3 = ::move(csv2);
         same = csv3.equal(csv1);
         assert(same);
         
-        bm::sparse_vector_scanner<compressed_sparse_vector_u32> scanner;
+        bm::sparse_vector_scanner<rsc_sparse_vector_u32> scanner;
         bm::id_t pos;
         bool found = scanner.find_eq(csv1, 201, pos);
         assert(found);
@@ -14817,11 +14915,72 @@ void TestCompressSparseVector()
     }
     
     {
+    cout << "decode() test" << endl;
+    
+        {
+        rsc_sparse_vector_u32 csv1;
+        
+        csv1.push_back(5, 1);
+        csv1.push_back(6, 1);
+        csv1.push_back(8, 2);
+        csv1.push_back(255, 4);
+
+        csv1.sync();
+
+        for (unsigned k = 0; k < 2; ++k)
+        {
+            CheckCompressedDecode(csv1, 0, 1);
+            CheckCompressedDecode(csv1, 0, 2);
+            CheckCompressedDecode(csv1, 1, 1);
+
+            CheckCompressedDecode(csv1, 0, 5);
+            CheckCompressedDecode(csv1, 0, 6);
+
+            CheckCompressedDecode(csv1, 256, 1);
+
+            for (unsigned i = 0; i < csv1.size(); ++i)
+            {
+                CheckCompressedDecode(csv1, i, 1);
+                CheckCompressedDecode(csv1, i, csv1.size());
+            }
+            unsigned j = csv1.size();
+            for (unsigned i = 0; i < csv1.size(); ++i, --j)
+            {
+                unsigned size = j - i;
+                if (!size)
+                    break;
+                CheckCompressedDecode(csv1, i, size);
+            }
+
+            csv1.optimize();
+        }
+        }
+
+        {
+        rsc_sparse_vector_u32 csv1;
+        
+        csv1.push_back(bm::id_max-1, 10);
+
+        for (unsigned k = 0; k < 2; ++k)
+        {
+            for (unsigned i = bm::id_max-20; i < csv1.size(); ++i)
+            {
+                CheckCompressedDecode(csv1, i, 1);
+                CheckCompressedDecode(csv1, i, csv1.size()-i+10);
+            }
+            csv1.optimize();
+        }
+
+        }
+
+    }
+    
+    {
     cout << "load() test" << endl;
     unsigned v;
         sparse_vector_u32 sv1(bm::use_null);
-        compressed_sparse_vector_u32 csv1;
-        compressed_sparse_vector_u32 csv2;
+        rsc_sparse_vector_u32 csv1;
+        rsc_sparse_vector_u32 csv2;
 
         sv1.set(10, 9);
         sv1.set(20, 200);
@@ -14850,19 +15009,19 @@ void TestCompressSparseVector()
         
         DetailedCompareSparseVectors(csv1, sv1);
         
-        compressed_sparse_vector_u32 csv4;
+        rsc_sparse_vector_u32 csv4;
         csv4 = std::move(csv1);
         v = csv4.at(10);
         assert(v == 9);
         DetailedCompareSparseVectors(csv4, sv1);
         
-        compressed_sparse_vector_u32 csv5(std::move(csv4));
+        rsc_sparse_vector_u32 csv5(std::move(csv4));
         v = csv5.at(10);
         assert(v == 9);
         DetailedCompareSparseVectors(csv5, sv1);
 
     }
-    
+
     {
     cout << "------ Compressed load() stress test" << endl;
     BM_DECLARE_TEMP_BLOCK(tb)
@@ -14871,51 +15030,55 @@ void TestCompressSparseVector()
         cout << "\nPass " << i << endl;
         
         sparse_vector_u32 sv(bm::use_null);
+        rsc_sparse_vector_u32 csv1;
+        
         GenerateSV(sv, i);
         
-        compressed_sparse_vector_u32 csv1;
+        
         csv1.load_from(sv);
         csv1.sync();
         
         cout << "cmp 1...";
         DetailedCompareSparseVectors(csv1, sv);
+        DetailedCheckCompressedDecode(csv1);
         cout << "ok" << endl;
         
         cout << "cmp 2...";
         csv1.optimize(tb);
         DetailedCompareSparseVectors(csv1, sv);
+        DetailedCheckCompressedDecode(csv1);
         cout << "ok" << endl;
 
         cout << "cmp 3...";
         csv1.clear();
 
         sv.optimize(tb);
-        compressed_sparse_vector_u32 csv2(sv);
+        rsc_sparse_vector_u32 csv2(sv);
         DetailedCompareSparseVectors(csv2, sv);
+        DetailedCheckCompressedDecode(csv1);
 
         csv2.optimize(tb);
         DetailedCompareSparseVectors(csv2, sv);
+        DetailedCheckCompressedDecode(csv1);
         cout << "ok" << endl;
 
         cout << "cmp 4...";
         {
-        compressed_sparse_vector_u32 csv3(csv2);
+        rsc_sparse_vector_u32 csv3(csv2);
         DetailedCompareSparseVectors(csv3, sv);
         }
         cout << "ok" << endl;
 
         cout << "cmp 5...";
         {
-        compressed_sparse_vector_u32 csv4;
+        rsc_sparse_vector_u32 csv4;
         csv4 = std::move(csv2);
         DetailedCompareSparseVectors(csv4, sv);
-        
-        compressed_sparse_vector_u32 csv5(std::move(csv4));
+
+        rsc_sparse_vector_u32 csv5(std::move(csv4));
         DetailedCompareSparseVectors(csv5, sv);
         }
         cout << "ok" << endl;
-
-
     } // for
     cout << "Compressed load() stress test OK" << endl;
 
@@ -14958,6 +15121,7 @@ int main(void)
     //LoadVectors("c:/dev/bv_perf", 3, 27);
     exit(1);
 */
+
 
     TestRecomb();
 
