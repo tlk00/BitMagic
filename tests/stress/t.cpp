@@ -10459,9 +10459,9 @@ void TestSparseVector()
     
     unsigned esize =  sv.extract(&arr[0], 1024, 0);
     assert(esize == 3);
-    assert(arr[0] = 1);
-    assert(arr[1] = 1);
-    assert(arr[2] = 1);
+    assert(arr[0] == 1);
+    assert(arr[1] == 1);
+    assert(arr[2] == 1);
 
     }}
     
@@ -14753,6 +14753,7 @@ void DetailedCompareSparseVectors(const rsc_sparse_vector_u32& csv,
     
 }
 
+static
 void CheckCompressedDecode(const rsc_sparse_vector_u32& csv,
                            unsigned from, unsigned size)
 {
