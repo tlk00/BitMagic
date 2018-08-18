@@ -714,7 +714,7 @@ typename rsc_sparse_vector<Val, SV>::size_type
 rsc_sparse_vector<Val, SV>::decode(value_type* arr,
                                           size_type   idx_from,
                                           size_type   size,
-                                          bool        zero_mem) const
+                                          bool        /*zero_mem*/) const
 {
     BM_ASSERT(arr);
     
