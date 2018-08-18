@@ -52,11 +52,13 @@ void show_help()
 {
     std::cerr
         << "BitMagic SNP Search Sample Utility (c) 2018" << std::endl
-        << "-isnp   file-name          -- input set file (SNP FASTA) to parse" << std::endl
+        << "-isnp   file-name            -- input set file (SNP FASTA) to parse" << std::endl
         << "-svout  spase vector output  -- sparse vector name to save" << std::endl
-        << "-svin   spase vector input   -- sparse vector file name to load " << std::endl
-        << "-diag                      -- run diagnostics"                       << std::endl
-        << "-timing                    -- collect timings"                       << std::endl
+        << "-rscout rs-compressed spase vector output  -- name to save" << std::endl
+        << "-svin   sparse vector input   -- sparse vector file name to load " << std::endl
+        << "-rscin  rs-compressed sparse vector input   -- file name to load " << std::endl
+        << "-diag                        -- run diagnostics"                  << std::endl
+        << "-timing                      -- collect timings"                  << std::endl
       ;
 }
 
@@ -66,7 +68,9 @@ void show_help()
 // Arguments
 //
 std::string  sv_out_name;
+std::string  rsc_out_name;
 std::string  sv_in_name;
+std::string  rsc_in_name;
 std::string  isnp_name;
 bool         is_diag = false;
 bool         is_timing = false;
@@ -97,6 +101,20 @@ int parse_args(int argc, char *argv[])
             }
             continue;
         }
+        if (arg == "-rscout" || arg == "--rscout")
+        {
+            if (i + 1 < argc)
+            {
+                rsc_out_name = argv[++i];
+            }
+            else
+            {
+                std::cerr << "Error: -rscout requires file name" << std::endl;
+                return 1;
+            }
+            continue;
+        }
+
         if (arg == "-svin" || arg == "--svin")
         {
             if (i + 1 < argc)
@@ -111,7 +129,21 @@ int parse_args(int argc, char *argv[])
             continue;
         }
 
-        if (arg == "-isnp" || arg == "--isnp")
+        if (arg == "-rscin" || arg == "--rscin")
+        {
+            if (i + 1 < argc)
+            {
+                rsc_in_name = argv[++i];
+            }
+            else
+            {
+                std::cerr << "Error: -rscin requires file name" << std::endl;
+                return 1;
+            }
+            continue;
+        }
+
+        if (arg == "-isnp" || arg == "--isnp" || arg == "-snp" || arg == "--snp")
         {
             if (i + 1 < argc)
             {
@@ -251,10 +283,19 @@ void run_benchmark(const sparse_vector_u32& sv, const rsc_sparse_vector_u32& csv
         std::cerr << "Benchmark subset empty!" << std::endl;
         return;
     }
-    {
-        bm::chrono_taker tt1("5. rs search", unsigned(rs_vect.size()), &timing_map);
+    
+    // search results
+    //
+    bm::bvector<> bv_found1;
+    bm::bvector<> bv_found2;
+    
+    bv_found1.init(); bv_found2.init(); // pre-initialize vectors
 
-        bm::bvector<> bv_found;  // search results vector
+    
+    if (!sv.empty())
+    {
+        bm::chrono_taker tt1("09. rs search (sv)", unsigned(rs_vect.size()), &timing_map);
+
         bm::sparse_vector_scanner<sparse_vector_u32> scanner; // scanner class
 
         for (unsigned i = 0; i < rs_vect.size(); ++i)
@@ -262,24 +303,23 @@ void run_benchmark(const sparse_vector_u32& sv, const rsc_sparse_vector_u32& csv
             unsigned rs_id = rs_vect[i];
             unsigned rs_pos;
             bool found = scanner.find_eq(sv, rs_id, rs_pos);
-            //bool found = bv_found.find(rs_pos);
 
             if (found)
             {
-                //std::cout << "rs_id = " << rs_id << " pos=" << rs_pos << std::endl;
+                bv_found1.set_bit_no_check(rs_pos);
             }
             else
             {
-                std::cout << "rs_id = " << rs_id << " not found!" << std::endl;
+                std::cout << "Error: rs_id = " << rs_id << " not found!" << std::endl;
             }
         } // for
     }
 
 
+    if (!csv.empty())
     {
-        bm::chrono_taker tt1("6. rs search (csv)", unsigned(rs_vect.size()), &timing_map);
+        bm::chrono_taker tt1("10. rs search (rsc_sv)", unsigned(rs_vect.size()), &timing_map);
 
-        bm::bvector<> bv_found;  // search results vector
         bm::sparse_vector_scanner<rsc_sparse_vector_u32> scanner; // scanner class
 
         for (unsigned i = 0; i < rs_vect.size(); ++i)
@@ -290,13 +330,20 @@ void run_benchmark(const sparse_vector_u32& sv, const rsc_sparse_vector_u32& csv
 
             if (found)
             {
-                //std::cout << "rs_id = " << rs_id << " pos=" << rs_pos << std::endl;
+                bv_found2.set_bit_no_check(rs_pos);
             }
             else
             {
                 std::cout << "rs_id = " << rs_id << " not found!" << std::endl;
             }
         } // for
+    }
+    
+    // compare results from various methods (check integrity)
+    int res = bv_found1.compare(bv_found2);
+    if (res != 0)
+    {
+        std::cerr << "Error: search discrepancy detected!" << std::endl;
     }
 
 }
@@ -330,40 +377,73 @@ int main(int argc, char *argv[])
         }
         if (!sv_in_name.empty())
         {
-            bm::chrono_taker tt1("2. Load sparse vector", 1, &timing_map);
+            bm::chrono_taker tt1("02. Load sparse vector", 1, &timing_map);
             file_load_svector(sv, sv_in_name);
         }
-
-
-        if (!sv_in_name.empty())
+        
+        // load rs-compressed sparse vector
+        if (!rsc_in_name.empty())
+        {
+            bm::chrono_taker tt1("03. Load rsc sparse vector", 1, &timing_map);
+            file_load_svector(csv, rsc_in_name);
+        }
+        
+        // if rs-compressed vector is not available - build it on the fly
+        if (csv.empty() && !sv.empty())
         {
             sparse_vector_u32  sv2(bm::use_null);
             {
-                bm::chrono_taker tt1("3. compress sparse vector", 1, &timing_map);
+                bm::chrono_taker tt1("04. rs compress sparse vector", 1, &timing_map);
                 csv.load_from(sv);
             }
             {
-                bm::chrono_taker tt1("4. de-compress sparse vector", 1, &timing_map);
+                bm::chrono_taker tt1("05. rs de-compress sparse vector", 1, &timing_map);
                 csv.load_to(sv2);
             }
-            if (!sv.equal(sv2))
+            
+            if (!sv.equal(sv2)) // diagnostics check (just in case)
             {
-                std::cerr << "Error with compressed vector!" << std::endl;
+                std::cerr << "Error:  rs-compressed vector check failed!" << std::endl;
                 return 1;
             }
-            //file_save_svector(csv.get_sv(), sv_in_name + ".zsv");
         }
-
-        if (!sv_out_name.empty())
+        
+        
+        
+        // save SV vector
+        if (!sv_out_name.empty() && !sv.empty())
         {
-            bm::chrono_taker tt1("3. Save sparse vector", 1, &timing_map);
+            bm::chrono_taker tt1("07. Save sparse vector", 1, &timing_map);
             sv.optimize();
             file_save_svector(sv, sv_out_name);
         }
-	
-        if (is_diag && !sv.empty())
+
+        // save RS spase vector
+        if (!rsc_out_name.empty() && !csv.empty())
         {
-            bm::print_svector_stat(sv, false);
+            bm::chrono_taker tt1("08. Save RS sparse vector", 1, &timing_map);
+            csv.optimize();
+            file_save_svector(csv, rsc_out_name);
+        }
+
+	
+        // print memory diagnostics
+        if (is_diag)
+        {
+            if (!sv.empty())
+            {
+                std::cout << std::endl
+                          << "sparse vector statistics:"
+                          << std::endl;
+                bm::print_svector_stat(sv, false);
+            }
+            if (!csv.empty())
+            {
+                std::cout << std::endl
+                          << "RS compressed sparse vector statistics:"
+                          << std::endl;
+                bm::print_svector_stat(csv, false);
+            }
         }
 
         if (is_bench)

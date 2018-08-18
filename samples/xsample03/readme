@@ -1,6 +1,4 @@
-This example is work in progress! (Incomplete).
-The goal here is to compress/search save bioinfromatics data on nucleotide polymorphism using
-BitMagic Library.
+The goal here is to compress/search save bioinfromatics data on nucleotide polymorphism using BitMagic Library.
 
 
 SNP RS columnar sparse vector example:
@@ -16,5 +14,16 @@ ftp://ftp.ncbi.nlm.nih.gov/snp/organisms/human_9606/chr_rpts/chr_1.txt.gz
 unzip chr_1.txt.gz
 
 4. Load/parse data into compressed sparse vector
-./xsample03 -snp chr_1.txt -svout rs_chr1.sv
+./xsample03 -isnp chr_1.txt -svout rs_chr1.sv
+
+(wait, wait, wait, ...) 
+
+5. Build RS compressed sparse vector
+./xsample03 -svin rs_chr1.sv -rscout rs_chr1.rssv  -t
+
+6. Print diagnostics (memory usage, statistics, etc)
+./xsample03 -svin rs_chr1.sv -rscin rs_chr1.rssv  -t -d
+
+7. Search performance benchmark
+./xsample03 -svin rs_chr1.sv -rscin rs_chr1.rssv  -b -t
 
