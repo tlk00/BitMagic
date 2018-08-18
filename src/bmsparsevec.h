@@ -53,7 +53,7 @@ namespace bm
 
 // forward declarations
 //
-template<class Val, class SV> class compressed_sparse_vector;
+template<class Val, class SV> class rsc_sparse_vector;
 
 
 /*!
@@ -862,7 +862,7 @@ protected:
     size_type size_internal() const { return size(); }
 
 
-    template<class V, class SVect> friend class compressed_sparse_vector;
+    template<class V, class SVect> friend class rsc_sparse_vector;
     template<class SVect> friend class sparse_vector_scanner;
     template<class SVect> friend class sparse_vector_serializer;
     template<class SVect> friend class sparse_vector_deserializer;
