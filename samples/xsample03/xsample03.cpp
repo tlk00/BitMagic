@@ -16,6 +16,38 @@ limitations under the License.
 For more information please visit:  http://bitmagic.io
 */
 
+/** \example xsample03.cpp
+   Seach for human mutation (SNP) in within chr1.
+   Benchmark comaprison of different methods
+ 
+  \sa bm::sparse_vector<>
+  \sa bm::rsc_sparse_vector<>
+  \sa bm::sparse_vector_scanner
+*/
+
+/*! \file xsample03.cpp
+    \brief Example: SNP search in human genome
+ 
+   Brief description of used method:
+   1. Parse SNP chromosome report and extract information about SNP number and
+      location in the chromosome
+   2. Use this information to build bit-transposed sparse_vector<>
+      where vector position matches chromosome position and SNP ids (aka rsid)
+      is kept as a bit-transposed matrix
+   3. Build rank-select compressed sparse vector, dropping all NULL columns
+      (this data format is pretty sparse, since number of SNPs is significantly
+       less than number of chromosome bases (1:5 or less)
+       Use memory report to understand memory footprint for each form of storage
+   4. Run benchmarks searching for 500 randomly selected SNPs using
+      - bm::sparse_vector<>
+      - bm::rsc_sparse_vector<>
+      - std::vector<pair<unsigned, unsigned> >
+ 
+   This example should be useful for construction of compressed columnar
+   tables with parallel search capabilities.
+ 
+*/
+
 #include <iostream>
 #include <sstream>
 #include <chrono>
@@ -180,7 +212,11 @@ typedef std::vector<std::pair<unsigned, unsigned> >         vector_pairs;
 
 bm::chrono_taker::duration_map_type  timing_map;
 
-
+// SNP report format parser (extraction and transformation)
+// Parser extracts SNP id (rsid) and positio on genome to build
+// sparse vector where index (position in vector) metches position on the
+// chromosome 1.
+//
 static
 int load_snp_report(const std::string& fname, sparse_vector_u32& sv)
 {
@@ -273,7 +309,7 @@ void generate_random_subset(const sparse_vector_u32&  sv, std::vector<unsigned>&
     }
 }
 
-// build vector of pairs (position to rs)
+// build std::vector of pairs (position to rs)
 //
 static
 void build_vector_pairs(const sparse_vector_u32& sv, vector_pairs& vp)
@@ -291,7 +327,7 @@ void build_vector_pairs(const sparse_vector_u32& sv, vector_pairs& vp)
     }
 }
 
-// linear search in vector of pairs (position - rsid)
+// O(N) linear search in vector of pairs (position - rsid)
 //
 static
 bool search_vector_pairs(const vector_pairs& vp, unsigned rs_id, unsigned& pos)
@@ -307,6 +343,9 @@ bool search_vector_pairs(const vector_pairs& vp, unsigned rs_id, unsigned& pos)
     return false;
 }
 
+// SNP search benchmark
+// Search for SNPs using different data structures (Bitmagic and STL)
+//
 static
 void run_benchmark(const sparse_vector_u32& sv, const rsc_sparse_vector_u32& csv)
 {
@@ -324,7 +363,7 @@ void run_benchmark(const sparse_vector_u32& sv, const rsc_sparse_vector_u32& csv
     vector_pairs vp;
     build_vector_pairs(sv, vp);
     
-    // search results
+    // search result bit-vectors
     //
     bm::bvector<> bv_found1;
     bm::bvector<> bv_found2;
@@ -431,7 +470,6 @@ int main(int argc, char *argv[])
         if (ret != 0)
             return ret;
 
-        
         if (!isnp_name.empty())
         {
             auto res = load_snp_report(isnp_name, sv);
@@ -473,8 +511,6 @@ int main(int argc, char *argv[])
             }
         }
         
-        
-        
         // save SV vector
         if (!sv_out_name.empty() && !sv.empty())
         {
@@ -490,10 +526,8 @@ int main(int argc, char *argv[])
             csv.optimize();
             file_save_svector(csv, rsc_out_name);
         }
-
-	
-        // print memory diagnostics
-        if (is_diag)
+        
+        if (is_diag) // print memory diagnostics
         {
             if (!sv.empty())
             {
@@ -511,11 +545,10 @@ int main(int argc, char *argv[])
             }
         }
 
-        if (is_bench)
+        if (is_bench) // run set of benchmarks
         {
             run_benchmark(sv, csv);
         }
-
 
         if (is_timing)  // print all collected timings
         {
