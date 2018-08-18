@@ -483,7 +483,7 @@ int main(int argc, char *argv[])
             file_save_svector(sv, sv_out_name);
         }
 
-        // save RS spase vector
+        // save RS sparse vector
         if (!rsc_out_name.empty() && !csv.empty())
         {
             bm::chrono_taker tt1("08. Save RS sparse vector", 1, &timing_map);
