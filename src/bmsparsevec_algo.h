@@ -237,16 +237,17 @@ public:
         {
             value_type v = *start;
             any_zero |= (v == 0);
-            find_eq_with_nulls(sv, v, bv1);
-            bv_out.bit_or(bv1);
+            bool found = find_eq_with_nulls(sv, v, bv1);
+            if (found)
+                bv_out.bit_or(bv1);
+            else
+            {
+                BM_ASSERT(!bv1.any());
+            }
         } // for
         if (any_zero)
             correct_nulls(sv, bv_out);
     }
-
-    void find_eq_with_nulls(const SV&   sv,
-        typename SV::value_type         value,
-        typename SV::bvector_type&      bv_out);
 
     /// For testing purposes only
     ///
@@ -256,6 +257,12 @@ public:
                  typename SV::bvector_type&        bv_out);
 
     void correct_nulls(const SV&   sv, typename SV::bvector_type& bv_out);
+protected:
+    /// find value (may include NULL indexes)
+    bool find_eq_with_nulls(const SV&   sv,
+                            typename SV::value_type         value,
+                            typename SV::bvector_type&      bv_out,
+                            typename SV::size_type          search_limit = 0);
 
 
 protected:
@@ -263,6 +270,7 @@ protected:
     void operator=(const sparse_vector_scanner&) = delete;
     
 private:
+    bvector_type                     bv_tmp_;
     allocator_pool_type              pool_;
     bm::aggregator<bvector_type>     agg_;
 };
@@ -596,7 +604,6 @@ void set2set_11_transform<SV>::one_pass_run(const bvector_type&        bv_in,
 
     bv_out.init();
 
-    //const typename SV::bvector_type * bv_non_null = sv_brel.get_null_bvector();
     typename SV::const_iterator it = sv_brel.begin();
     for (; it.valid(); ++it)
     {
@@ -651,17 +658,18 @@ void sparse_vector_scanner<SV>::correct_nulls(const SV&   sv,
 //----------------------------------------------------------------------------
 
 template<typename SV>
-void sparse_vector_scanner<SV>::find_eq_with_nulls(const SV&  sv,
-    typename SV::value_type    value,
-    typename SV::bvector_type& bv_out)
+bool sparse_vector_scanner<SV>::find_eq_with_nulls(const SV&    sv,
+                                    typename SV::value_type     value,
+                                    typename SV::bvector_type&  bv_out,
+                                    typename SV::size_type      search_limit)
 {
     if (sv.empty())
-        return; // nothing to do
+        return false; // nothing to do
 
     if (!value)
     {
         find_zero(sv, bv_out);
-        return;
+        return false;
     }
     agg_.reset();
 
@@ -682,7 +690,7 @@ void sparse_vector_scanner<SV>::find_eq_with_nulls(const SV&  sv,
         else
         {
             bv_out.clear();
-            return;
+            return false;
         }
     }
     
@@ -693,10 +701,10 @@ void sparse_vector_scanner<SV>::find_eq_with_nulls(const SV&  sv,
         if (bv && !(value & (value_type(1) << i)))
             agg_.add(bv, 1); // agg to SUB group
     } // for i
-    agg_.combine_and_sub(bv_out);
+    bool any = (search_limit == 1);
+    bool found = agg_.combine_and_sub(bv_out, any);
     agg_.reset();
-
-    //correct_nulls(sv, bv_out);
+    return found;
 }
 
 //----------------------------------------------------------------------------
@@ -769,7 +777,7 @@ void sparse_vector_scanner<SV>::find_eq(const SV&                  sv,
         return;
     }
 
-    find_eq_with_nulls(sv, value, bv_out);
+    find_eq_with_nulls(sv, value, bv_out, 0);
     correct_nulls(sv, bv_out);
 }
 
@@ -780,15 +788,18 @@ bool sparse_vector_scanner<SV>::find_eq(const SV&                  sv,
                                         typename SV::value_type    value,
                                         typename SV::size_type&    pos)
 {
-    bvector_type bv_tmp;
-    bv_tmp.set_allocator_pool(&pool_);
+    bv_tmp_.set_allocator_pool(&pool_);
     
-    find_eq_with_nulls(sv, value, bv_tmp);
-    bm::id_t found_pos;
-    bool found = bv_tmp.find(found_pos);
-    
+    bool found = find_eq_with_nulls(sv, value, bv_tmp_, 1);
     if (found)
     {
+        bm::id_t found_pos;
+        found = bv_tmp_.find(found_pos);
+        BM_ASSERT(found);
+        
+        if (!found)
+            return found; // internal error
+        
         if (sv.is_compressed()) // if compressed vector - need rank translation
             found = sv.find_rank(found_pos + 1, pos);
         else
@@ -803,7 +814,7 @@ bool sparse_vector_scanner<SV>::find_eq(const SV&                  sv,
     }
     else
     {
-        BM_ASSERT(!bv_tmp.any());
+        BM_ASSERT(!bv_tmp_.any());
     }
 
     return found;
