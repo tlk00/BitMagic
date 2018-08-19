@@ -270,8 +270,8 @@ protected:
     void operator=(const sparse_vector_scanner&) = delete;
     
 private:
-    bvector_type                     bv_tmp_;
     allocator_pool_type              pool_;
+    bvector_type                     bv_tmp_;
     bm::aggregator<bvector_type>     agg_;
 };
 
