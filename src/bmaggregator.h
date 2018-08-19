@@ -1040,7 +1040,7 @@ unsigned aggregator<BV>::resize_target(bvector_type& bv_target,
         if (!bman_target.is_init())
             bman_target.init_tree();
         else
-            bv_target.clear(true);
+            bv_target.clear();
     }
     
     unsigned top_blocks = bman_target.top_block_size();
