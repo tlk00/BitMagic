@@ -2358,7 +2358,7 @@ sparse_vector<Val, BV>::back_insert_iterator::back_insert_iterator(
 
 template<class Val, class BV>
 sparse_vector<Val, BV>::back_insert_iterator::back_insert_iterator(
-    const typename sparse_vector<Val, BV>::back_insert_iterator::back_insert_iterator& bi)
+    const typename sparse_vector<Val, BV>::back_insert_iterator& bi)
 : sv_(bi.sv_), buf_ptr_(0)
 {
     BM_ASSERT(bi.empty());
