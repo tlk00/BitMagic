@@ -731,7 +731,6 @@ public:
             BM_ASSERT(this->block_);
             
             this->block_type_ = (bool)BM_IS_GAP(this->block_);
-            typedef typename iterator_base::block_descr block_descr_type;
 
             block_descr_type* bdescr = &(this->bdescr_);
             unsigned nbit = unsigned(pos & bm::set_block_mask);
@@ -864,8 +863,7 @@ public:
         {
             BM_ASSERT(this->block_type_ == 1);
 
-            typedef typename iterator_base::block_descr block_descr_type;
-            block_descr_type* bdescr = &(this->bdescr_);            
+            block_descr_type* bdescr = &(this->bdescr_);
 
             bdescr->gap_.ptr = BMGAP_PTR(this->block_);
             unsigned bitval = *(bdescr->gap_.ptr) & 1;
