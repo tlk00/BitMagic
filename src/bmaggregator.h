@@ -336,6 +336,9 @@ aggregator<BV>::aggregator()
 template<typename BV>
 aggregator<BV>::~aggregator()
 {
+    BM_ASSERT(ar_);
+    if (!ar_)
+        return;
 #ifdef BM_ALLOC_ALIGN
 # ifdef _MSC_VER
     ::_aligned_free(ar_);
