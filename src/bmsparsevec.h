@@ -359,16 +359,35 @@ public:
     {
         if (this != &sv)
         {
-            clear();
             resize(sv.size());
             bv_size_ = sv.bv_size_;
             alloc_ = sv.alloc_;
             effective_plains_ = sv.effective_plains_;
+            
+            unsigned ni = null_plain();
 
             for (size_type i = 0; i < sv.stored_plains(); ++i)
             {
-                const bvector_type* bv = sv.plains_[i];
-                plains_[i] = bv ? construct_bvector(bv) : 0;
+                bvector_type* bv = plains_[i];
+                const bvector_type* bv_src = sv.plains_[i];
+                
+                if (i == ni) // NULL plain copy
+                {
+                    if (bv && !bv_src) // special case (copy from not NULL)
+                    {
+                        if (size_)
+                            bv->set_range(0, size_-1);
+                        continue;
+                    }
+                }
+
+                if (bv)
+                {
+                    destruct_bvector(bv);
+                    plains_[i] = 0;
+                }
+                BM_ASSERT(plains_[i] == 0);
+                plains_[i] = bv_src ? construct_bvector(bv_src) : 0;
             } // for i
         }
         return *this;
@@ -819,7 +838,11 @@ public:
     \brief find position of compressed element by its rank
     */
     bool find_rank(bm::id_t rank, bm::id_t& pos) const;
-    
+
+    /**
+        \brief size of sparse vector (may be different for RSC)
+    */
+    size_type effective_size() const { return size(); }
 
     ///@}
 
@@ -1859,8 +1882,7 @@ void sparse_vector<Val, BV>::clear() BMNOEXEPT
     bvector_type* bv_null = get_null_bvect();
     if (bv_null)
     {
-        bv_null->clear(true);
-        bv_null->init();
+        bv_null->clear();
     }
 }
 

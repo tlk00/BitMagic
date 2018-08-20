@@ -256,7 +256,12 @@ public:
                  typename SV::value_type           value,
                  typename SV::bvector_type&        bv_out);
 
+    /** Exclude possible NULL values from the result vector
+        \param  sv - input sparse vector
+        \param  bv_out - output bit-bector of non-zero elements
+    */
     void correct_nulls(const SV&   sv, typename SV::bvector_type& bv_out);
+    
 protected:
     /// find value (may include NULL indexes)
     bool find_eq_with_nulls(const SV&   sv,
@@ -273,15 +278,17 @@ protected:
     bool prepare_and_sub_aggregator(const SV&   sv,
                                     typename SV::value_type   value);
 
-
+    /// Rank-Select decompression for RSC vectors
+    void decompress(const SV&   sv, typename SV::bvector_type& bv_out);
 protected:
     sparse_vector_scanner(const sparse_vector_scanner&) = delete;
     void operator=(const sparse_vector_scanner&) = delete;
     
 private:
-    allocator_pool_type              pool_;
-    bvector_type                     bv_tmp_;
-    bm::aggregator<bvector_type>     agg_;
+    allocator_pool_type                pool_;
+    bvector_type                       bv_tmp_;
+    bm::aggregator<bvector_type>       agg_;
+    bm::rank_compressor<bvector_type>  rank_compr_;
 };
 
 
@@ -634,8 +641,24 @@ template<typename SV>
 void sparse_vector_scanner<SV>::find_zero(const SV&                  sv,
                                           typename SV::bvector_type& bv_out)
 {
+    if (sv.size() == 0)
+    {
+        bv_out.clear();
+        return;
+    }
+
     find_nonzero(sv, bv_out);
-    invert(sv, bv_out);
+    if (sv.is_compressed())
+    {
+        bv_out.invert();
+        bv_out.set_range(sv.effective_size(), bm::id_max - 1, false);
+        decompress(sv, bv_out);
+    }
+    else
+    {
+        invert(sv, bv_out);
+    }
+    correct_nulls(sv, bv_out);
 }
 
 //----------------------------------------------------------------------------
@@ -644,7 +667,10 @@ template<typename SV>
 void sparse_vector_scanner<SV>::invert(const SV& sv, typename SV::bvector_type& bv_out)
 {
     if (sv.size() == 0)
+    {
+        bv_out.clear();
         return;
+    }
     bv_out.invert();
     const bvector_type* bv_null = sv.get_null_bvector();
     if (bv_null) // correct result to only use not NULL elements
@@ -817,7 +843,10 @@ void sparse_vector_scanner<SV>::find_eq(const SV&                  sv,
                                         typename SV::bvector_type& bv_out)
 {
     if (sv.empty())
+    {
+        bv_out.clear();
         return; // nothing to do
+    }
 
     if (!value)
     {
@@ -826,6 +855,8 @@ void sparse_vector_scanner<SV>::find_eq(const SV&                  sv,
     }
 
     find_eq_with_nulls(sv, value, bv_out, 0);
+    
+    decompress(sv, bv_out);
     correct_nulls(sv, bv_out);
 }
 
@@ -838,8 +869,9 @@ bool sparse_vector_scanner<SV>::find_eq(const SV&                  sv,
 {
     if (!value) // zero value - special case
     {
-        find_eq(sv, value, bv_tmp_);
-        bool found = bv_tmp_.find(pos);
+        bvector_type bv_zero;
+        find_eq(sv, value, bv_zero);
+        bool found = bv_zero.find(pos);
         return found;
     }
 
@@ -867,6 +899,23 @@ void sparse_vector_scanner<SV>::find_nonzero(const SV& sv,
     agg_.combine_or(bv_out);
     agg_.reset();
 }
+
+//----------------------------------------------------------------------------
+
+template<typename SV>
+void sparse_vector_scanner<SV>::decompress(const SV&   sv,
+                                           typename SV::bvector_type& bv_out)
+{
+    if (!sv.is_compressed())
+        return; // nothing to do
+    const bvector_type* bv_non_null = sv.get_null_bvector();
+    BM_ASSERT(bv_non_null);
+
+    // TODO: implement faster decompressor for small result-sets
+    rank_compr_.decompress(bv_tmp_, *bv_non_null, bv_out);
+    bv_out.swap(bv_tmp_);
+}
+
 
 //----------------------------------------------------------------------------
 //

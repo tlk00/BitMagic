@@ -356,6 +356,11 @@ public:
         \brief access dense vector
     */
     const sparse_vector_type& get_sv() const { return sv_; }
+
+    /*!
+        \brief size of internal dense vector
+    */
+    size_type effective_size() const { return sv_.size(); }
     
     ///@}
     
@@ -495,35 +500,38 @@ template<class Val, class SV>
 void rsc_sparse_vector<Val, SV>::load_from(
                                     const sparse_vector_type& sv_src)
 {
-    sv_.clear();
     max_id_ = 0;
-    
-    const bvector_type* bv_null_src = sv_src.get_null_bvector();
-    if (!bv_null_src)
-    {
-        BM_ASSERT(bv_null_src);
-        return;
-    }
-    
+
     bvector_type* bv_null = sv_.get_null_bvect();
     BM_ASSERT(bv_null);
-    *bv_null = *bv_null_src;
-    
-    bm::rank_compressor<bvector_type> rank_compr; // re-used for plains
-    
-    unsigned src_plains = sv_src.plains();
-    for (unsigned i = 0; i < src_plains; ++i)
+
+    const bvector_type* bv_null_src = sv_src.get_null_bvector();
+    if (!bv_null_src) // dense vector (no NULL columns)
     {
-        const bvector_type* bv_src_plain = sv_src.get_plain(i);
-        if (bv_src_plain)
+        sv_ = sv_src;
+        BM_ASSERT(sv_.get_null_bvect());
+    }
+    else
+    {
+        sv_.clear();
+        *bv_null = *bv_null_src;
+        
+        bm::rank_compressor<bvector_type> rank_compr; // re-used for plains
+        
+        unsigned src_plains = sv_src.plains();
+        for (unsigned i = 0; i < src_plains; ++i)
         {
-            bvector_type* bv_plain = sv_.get_plain(i);
-            rank_compr.compress(*bv_plain, *bv_null, *bv_src_plain);
-        }
-    } // for
+            const bvector_type* bv_src_plain = sv_src.get_plain(i);
+            if (bv_src_plain)
+            {
+                bvector_type* bv_plain = sv_.get_plain(i);
+                rank_compr.compress(*bv_plain, *bv_null, *bv_src_plain);
+            }
+        } // for
+        unsigned count = bv_null->count(); // set correct sizes
+        sv_.resize(count);
+    }
     
-    unsigned count = bv_null->count(); // set correct sizes
-    sv_.resize(count);
     sync(true);
 }
 
