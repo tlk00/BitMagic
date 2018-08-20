@@ -1211,6 +1211,21 @@ public:
         
         return old_block;
     }
+    
+    /**
+        Allocate and copy block.
+        (no checks, no validation, may cause a memory leak if not used carefully)
+    */
+    void copy_bit_block(unsigned i, unsigned j, const bm::word_t* src_block)
+    {
+        BM_ASSERT(src_block);
+        BM_ASSERT(src_block != FULL_BLOCK_FAKE_ADDR);
+        
+        check_alloc_top_subblock(i);
+        BM_ASSERT(top_blocks_[i][j]==0);
+        bm::word_t* blk = top_blocks_[i][j] = alloc_.alloc_bit_block();
+        bm::bit_block_copy(blk, src_block);
+    }
 
 
     /**
