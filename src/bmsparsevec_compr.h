@@ -404,7 +404,6 @@ private:
     sparse_vector_type            sv_;       ///< transpose-sparse vector for "dense" packing
     bm::id_t                      max_id_;   ///< control variable for sorted load
     bool                          in_sync_;  ///< flag if prefix sum is in-sync with vector
-//    bvector_blocks_psum_type      bv_blocks_;///< prefix sum for rank translation
     bvector_blocks_psum_type*     bv_blocks_ptr_ = 0; ///< prefix sum for rank translation
 };
 
@@ -737,8 +736,12 @@ rsc_sparse_vector<Val, SV>::find_rank(bm::id_t rank, bm::id_t& idx) const
 {
     BM_ASSERT(rank);
 
+    bool b;
     const bvector_type* bv_null = get_null_bvector();
-    bool b = bv_null->find_rank(rank, 0, idx);
+    if (in_sync())
+        b = bv_null->find_rank(rank, 0, idx, *bv_blocks_ptr_);
+    else
+        b = bv_null->find_rank(rank, 0, idx);
     return b;
 }
 
@@ -827,6 +830,7 @@ void rsc_sparse_vector<Val, SV>::construct_bv_blocks()
     {
         bvector_type::throw_bad_alloc();
     }
+    bv_blocks_ptr_ = new(bv_blocks_ptr_) bvector_blocks_psum_type(); // placement new
 }
 
 //---------------------------------------------------------------------
