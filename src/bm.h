@@ -1,3 +1,4 @@
+
 #ifndef BM__H__INCLUDED__
 #define BM__H__INCLUDED__
 /*
@@ -3324,20 +3325,10 @@ bool bvector<Alloc>::find_rank(bm::id_t rank, bm::id_t from, bm::id_t& pos) cons
         const bm::word_t* block = blockman_.get_block(nb, &no_more_blocks);
         if (block)
         {
-            if (BM_IS_GAP(block))
-            {
-                const bm::gap_word_t* const gap_block = BMGAP_PTR(block);
-                rank = bm::gap_find_rank(gap_block, rank, nbit, bit_pos);
-            }
-            else
-            {
-                rank = bm::bit_find_rank(block, rank, nbit, bit_pos);
-            }
-            
+            rank = bm::block_find_rank(block, rank, nbit, bit_pos);
             if (!rank) // target found
             {
-                bm::id_t prev_pos = nb * bm::set_block_size * 32;
-                pos = bit_pos + prev_pos;
+                pos = bit_pos + (nb * bm::set_block_size * 32);
                 return true;
             }
         }
@@ -3385,21 +3376,11 @@ bool bvector<Alloc>::find_rank(bm::id_t rank, bm::id_t from, bm::id_t& pos,
                     continue;
                 }
             }
-            
-            if (BM_IS_GAP(block))
-            {
-                const bm::gap_word_t* const gap_block = BMGAP_PTR(block);
-                rank = bm::gap_find_rank(gap_block, rank, nbit, bit_pos);
-            }
-            else
-            {
-                rank = bm::bit_find_rank(block, rank, nbit, bit_pos);
-            }
+            rank = bm::block_find_rank(block, rank, nbit, bit_pos);
             
             if (!rank) // target found
             {
-                bm::id_t prev_pos = nb * bm::set_block_size * 32;
-                pos = bit_pos + prev_pos;
+                pos = bit_pos + (nb * bm::set_block_size * 32);
                 return true;
             }
         }

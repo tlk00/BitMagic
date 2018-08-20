@@ -1648,9 +1648,9 @@ unsigned gap_bit_count_range(const T* const buf, T left, T right)
 */
 template<typename T>
 bm::id_t gap_find_rank(const T* const block,
-                       bm::id_t rank,
-                       bm::gap_word_t  nbit_from,
-                       unsigned&       nbit_pos)
+                       bm::id_t   rank,
+                       unsigned   nbit_from,
+                       unsigned&  nbit_pos)
 {
     BM_ASSERT(block);
     BM_ASSERT(rank);
@@ -5857,7 +5857,36 @@ bm::id_t bit_find_rank(const bm::word_t* const block,
     return rank;
 }
 
+/**
+    \brief Find rank in block (GAP or BIT)
+ 
+    \param block - bit block buffer pointer
+    \param rank - rank to find (must be > 0)
+    \param nbit_from - start bit position in block
+    \param nbit_pos - found position
+ 
+    \return 0 if position with rank was found, or
+              the remaining rank (rank - population count)
 
+    @internal
+*/
+inline
+bm::id_t block_find_rank(const bm::word_t* const block,
+                         bm::id_t          rank,
+                         unsigned          nbit_from,
+                         unsigned&         nbit_pos)
+{
+    if (BM_IS_GAP(block))
+    {
+        const bm::gap_word_t* const gap_block = BMGAP_PTR(block);
+        rank = bm::gap_find_rank(gap_block, rank, nbit_from, nbit_pos);
+    }
+    else
+    {
+        rank = bm::bit_find_rank(block, rank, nbit_from, nbit_pos);
+    }
+    return rank;
+}
 
 
 
