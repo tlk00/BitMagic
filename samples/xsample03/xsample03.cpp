@@ -370,7 +370,7 @@ void run_benchmark(const sparse_vector_u32& sv, const rsc_sparse_vector_u32& csv
     bm::bvector<> bv_found3;
 
     bv_found1.init(); bv_found2.init(); bv_found3.init();// pre-initialize vectors
-    
+
     if (!sv.empty())
     {
         bm::chrono_taker tt1("09. rs search (sv)", unsigned(rs_vect.size()), &timing_map);
@@ -421,7 +421,7 @@ void run_benchmark(const sparse_vector_u32& sv, const rsc_sparse_vector_u32& csv
             }
         } // for
     }
-    
+
     if (vp.size())
     {
         bm::chrono_taker tt1("11. rs search (std::vector<>)", unsigned(rs_vect.size()), &timing_map);
@@ -441,9 +441,8 @@ void run_benchmark(const sparse_vector_u32& sv, const rsc_sparse_vector_u32& csv
                 std::cout << "rs_id = " << rs_id << " not found!" << std::endl;
             }
         } // for
-
     }
-    
+
     // compare results from various methods (check integrity)
     int res = bv_found1.compare(bv_found2);
     if (res != 0)
