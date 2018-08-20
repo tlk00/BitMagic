@@ -3953,14 +3953,6 @@ void bvector<Alloc>::combine_operation_block_and(
         {
             BM_ASSERT(!bm::bit_is_all_zero(new_blk));
         }
-        /*
-        bool empty = bm::bit_is_all_zero(new_blk);
-        if (empty) // operation converged bit-block to empty
-        {
-            blockman_.get_allocator().free_bit_block(new_blk);
-            new_blk = 0;
-        }
-        */
         blockman_.get_allocator().free_gap_block(gap_blk, blockman_.glen());
         blockman_.set_block_ptr(i, j, new_blk);
         
