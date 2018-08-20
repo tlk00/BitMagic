@@ -264,6 +264,15 @@ protected:
                             typename SV::bvector_type&      bv_out,
                             typename SV::size_type          search_limit = 0);
 
+    /// find first value (may include NULL indexes)
+    bool find_first_eq(const SV&   sv,
+                       typename SV::value_type         value,
+                       bm::id_t&                       idx);
+    
+    /// Prepare aggregator for AND-SUB (EQ) search
+    bool prepare_and_sub_aggregator(const SV&   sv,
+                                    typename SV::value_type   value);
+
 
 protected:
     sparse_vector_scanner(const sparse_vector_scanner&) = delete;
@@ -672,7 +681,49 @@ bool sparse_vector_scanner<SV>::find_eq_with_nulls(const SV&    sv,
         return bv_out.any();
     }
     agg_.reset();
+    
+    bool found = prepare_and_sub_aggregator(sv, value);
+    if (!found)
+    {
+        bv_out.clear();
+        return found;
+    }
 
+    bool any = (search_limit == 1);
+    found = agg_.combine_and_sub(bv_out, any);
+    agg_.reset();
+    return found;
+}
+
+//----------------------------------------------------------------------------
+
+template<typename SV>
+bool sparse_vector_scanner<SV>::find_first_eq(const SV&   sv,
+                               typename SV::value_type    value,
+                               bm::id_t&                  idx)
+{
+    if (sv.empty())
+        return false; // nothing to do
+    
+    BM_ASSERT(value); // cannot handle zero values
+    if (!value)
+        return false;
+
+    agg_.reset();
+    bool found = prepare_and_sub_aggregator(sv, value);
+    if (!found)
+        return found;
+    found = agg_.find_first_and_sub(idx);
+    agg_.reset();
+    return found;
+}
+
+//----------------------------------------------------------------------------
+
+template<typename SV>
+bool sparse_vector_scanner<SV>::prepare_and_sub_aggregator(const SV&   sv,
+                                           typename SV::value_type   value)
+{
     unsigned char bits[sizeof(value) * 8];
     unsigned short bit_count_v = bm::bitscan(value, bits);
     BM_ASSERT(bit_count_v);
@@ -689,7 +740,6 @@ bool sparse_vector_scanner<SV>::find_eq_with_nulls(const SV&    sv,
             agg_.add(bv);
         else
         {
-            bv_out.clear();
             return false;
         }
     }
@@ -701,11 +751,9 @@ bool sparse_vector_scanner<SV>::find_eq_with_nulls(const SV&    sv,
         if (bv && !(value & (value_type(1) << i)))
             agg_.add(bv, 1); // agg to SUB group
     } // for i
-    bool any = (search_limit == 1);
-    bool found = agg_.combine_and_sub(bv_out, any);
-    agg_.reset();
-    return found;
+    return true;
 }
+
 
 //----------------------------------------------------------------------------
 
@@ -788,35 +836,22 @@ bool sparse_vector_scanner<SV>::find_eq(const SV&                  sv,
                                         typename SV::value_type    value,
                                         typename SV::size_type&    pos)
 {
-    bv_tmp_.set_allocator_pool(&pool_);
-    
-    bool found = find_eq_with_nulls(sv, value, bv_tmp_, 1);
+    if (!value) // zero value - special case
+    {
+        find_eq(sv, value, bv_tmp_);
+        bool found = bv_tmp_.find(pos);
+        return found;
+    }
+
+    bm::id_t found_pos;
+    bool found = find_first_eq(sv, value, found_pos);
     if (found)
     {
-        bm::id_t found_pos;
-        found = bv_tmp_.find(found_pos);
-        BM_ASSERT(found);
-        
-        if (!found)
-            return found; // internal error
-        
         if (sv.is_compressed()) // if compressed vector - need rank translation
             found = sv.find_rank(found_pos + 1, pos);
         else
             pos = found_pos;
-        
-        if (!value && found)
-        {
-            const bvector_type* bv_null = sv.get_null_bvector();
-            if (bv_null) // correct result to only use not NULL elements
-                found = bv_null->test(pos);
-        }
     }
-    else
-    {
-        BM_ASSERT(!bv_tmp_.any());
-    }
-
     return found;
 }
 
