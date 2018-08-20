@@ -352,7 +352,7 @@ typedef bm::rsc_sparse_vector<unsigned, sparse_vector_u32> rsc_sparse_vector_u32
 // This this setting program will consume around 150M of RAM
 const unsigned BITVECT_SIZE = 100000000 * 2;
 
-const unsigned ITERATIONS = 100000;
+const unsigned ITERATIONS = 180000;
 //const unsigned PROGRESS_PRINT = 2000000;
 
 
@@ -1373,14 +1373,16 @@ template<class T> void CheckCountRange(const T& vect,
         
         if (cnt1) // check if we can reverse the search (rank)
         {
-            unsigned pos;
+            unsigned pos, pos1;
             bool rf = vect.find_rank(cnt1, left, pos);
-            if (!rf)
+            bool rf1 = vect.find_rank(cnt1, left, pos1, bc_arr);
+            if (!rf || !rf1)
             {
                 cerr << "1. find_rank() failed!" << "left=" << left
                      << " right=" << right
                      << " count_range()=" << cnt1
                      << " pos=" << pos
+                     << " pos1=" << pos1
                      << " range=" << range
                      << endl;
                 
@@ -2051,6 +2053,8 @@ void BasicFunctionalityTest()
     bvect_mini     bvect_min(BITVECT_SIZE);
     bvect          bvect_full;
     bvect          bvect_full1;
+    bvect::blocks_count bc_arr;
+    bvect::blocks_count bc_arr1;
 
     printf("\nBasic functionality test.\n");
     
@@ -2062,38 +2066,51 @@ void BasicFunctionalityTest()
         bvect_min.set_bit(i);
         bvect_full.set_bit(i);
         
-        bm::id_t pos1, pos2;
+        bvect_full.running_count_blocks(&bc_arr);
+        
+        bm::id_t pos1, pos2, pos3;
         auto rf1 = FindRank(bvect_full, i+1, 0, pos1);
         auto rf2 = bvect_full.find_rank(i+1, 0, pos2);
+        auto rf3 = bvect_full.find_rank(i+1, 0, pos3);
+
         assert(rf1);
         assert(rf2);
-        if (pos1 != pos2)
+        assert(rf3);
+        if (pos1 != pos2 || pos1 != pos3)
         {
             rf2 = bvect_full.find_rank(i+1, 0, pos2);
             cerr << "1.Rank check error!\n"
                  << " pos1 = " << pos1
                  << " pos2 = " << pos2
+                 << " pos3 = " << pos3
+                 << endl;
                  ;
             exit(1);
         }
     }
     bvect_full1.set_range(0, ITERATIONS-1);
 
+    bvect_full1.running_count_blocks(&bc_arr1);
+
     cout << "Rank check 2" << endl;
 
     for (i = 0; i < ITERATIONS; ++i)
     {
-        bm::id_t pos1, pos2;
+        bm::id_t pos1, pos2, pos3;
         auto rf1 = FindRank(bvect_full1, i+1, 0, pos1);
         auto rf2 = bvect_full1.find_rank(i+1, 0, pos2);
+        auto rf3 = bvect_full1.find_rank(i+1, 0, pos3);
         assert(rf1);
         assert(rf2);
-        if (pos1 != pos2)
+        assert(rf3);
+        if (pos1 != pos2 || pos1 != pos3)
         {
             rf2 = bvect_full1.find_rank(i+1, 0, pos2);
             cerr << "2.Rank check error!\n"
                  << " pos1 = " << pos1
                  << " pos2 = " << pos2
+                 << " pos3 = " << pos3
+                 << endl;
                  ;
             exit(1);
         }
@@ -2237,16 +2254,79 @@ void RankFindTest()
     bvect bv1;
     bv1[30] = true;
     bv1[65534] = true;
-    
-    bool rf1, rf2;
-    bm::id_t pos;
+
+    bvect::blocks_count bc_arr1;
+    bv1.running_count_blocks(&bc_arr1);
+
+    bool rf1, rf2, rf3;
+    bm::id_t pos, pos1;
     rf1 = bv1.find_rank(1, 20, pos);
+    rf3 = bv1.find_rank(1, 20, pos1, bc_arr1);
     assert(rf1);
+    assert(rf3);
     assert(pos == 30);
+    assert(pos1 == 30);
 
     rf2 = bv1.find_rank(2, 30, pos);
+    rf3 = bv1.find_rank(2, 30, pos1, bc_arr1);
     assert(rf2);
+    assert(rf3);
     assert(pos == 65534);
+    assert(pos1 == 65534);
+    }
+    
+    cout << "Find Rank test stress 1\n" << endl;
+    
+    {
+        const unsigned max_size = 2000000;
+        bvect bv1;
+        for (unsigned i = 0; i < max_size;)
+        {
+            bv1.set(i);
+            i += rand()%5;
+        }
+        bvect::blocks_count bc_arr1;
+        bv1.running_count_blocks(&bc_arr1);
+
+        
+        for (unsigned i = 0; i < max_size; ++i)
+        {
+            bool rf1, rf3;
+            bm::id_t pos, pos1;
+            
+            rf1 = bv1.find_rank(0, i, pos);
+            rf3 = bv1.find_rank(0, i, pos1, bc_arr1);
+            assert (rf1 == rf3);
+            if (rf1)
+            {
+                if (pos != pos1)
+                {
+                    cerr << "Rank cmp test failed! i=" << i
+                         << " pos="  << pos
+                         << " pos1=" << pos1
+                         << endl;
+                    exit(1);
+                }
+            }
+            
+            rf1 = bv1.find_rank(i, max_size-i, pos);
+            rf3 = bv1.find_rank(i, max_size-i, pos1, bc_arr1);
+            assert (rf1 == rf3);
+            if (rf1)
+            {
+                if (pos != pos1)
+                {
+                    cerr << "Rank cmp test failed! i=" << i
+                         << " pos="  << pos
+                         << " pos1=" << pos1
+                         << endl;
+                    exit(1);
+                }
+            }
+            if (i % 100 == 0)
+                cout << "\r" << i << "/" << max_size << flush;
+        } // for
+        cout << endl;
     }
     
     cout << "---------------------------- Find Rank test OK" << endl;
@@ -12040,8 +12120,6 @@ void TestSparseVectorTransform()
     }
 
 
-
-
     cout << " --------------- Test set transformation with sparse vector OK" << endl;
 }
 
@@ -12052,6 +12130,7 @@ void TestSparseVectorScan()
     
     bm::sparse_vector_scanner<sparse_vector_u32> scanner;
     bm::sparse_vector_scanner<sparse_vector_u64> scanner_64;
+    bm::sparse_vector_scanner<rsc_sparse_vector_u32> rsc_scanner;
 
     {
         sparse_vector_u32 sv(bm::use_null);
@@ -12080,9 +12159,12 @@ void TestSparseVectorScan()
     {
         cout << endl << "Unique search check" << endl;
         sparse_vector_u32 sv;
-        bvect bv_control;
+        rsc_sparse_vector_u32 csv(bm::use_null);
+
+        bvect bv_control, bv_control2;
         bvect::allocator_pool_type pool;
         bvect::mem_pool_guard(pool, bv_control);
+        bvect::mem_pool_guard(pool, bv_control2);
 
         unsigned sv_size = 1256000;
         {
@@ -12092,6 +12174,7 @@ void TestSparseVectorScan()
                 *bi = j;
             }
         }
+        csv.load_from(sv);
         
         {
         chrono_taker ct("sparse_vector<> search");
@@ -12099,6 +12182,7 @@ void TestSparseVectorScan()
             for (unsigned j = 0; j < sv_size; ++j)
             {
                 scanner.find_eq(sv, j, bv_control);
+                
                 if (bv_control.count()!= 1)
                 {
                     cerr << "1. Unique search discrepancy at value=" << j
@@ -12129,6 +12213,16 @@ void TestSparseVectorScan()
                          << " found = " << pos << endl;
                     exit(1);
                 }
+                
+                rsc_scanner.find_eq(csv, j, bv_control2);
+                int res = bv_control.compare(bv_control2);
+                if (res != 0)
+                {
+                    cerr << "RSC scan comparison failed at value =" << j
+                    << endl;
+                    exit(1);
+                }
+
 
                 if (j % 1000 == 0)
                     cout << "\r" << j << "/" << sv_size << "    " << flush;
@@ -12147,7 +12241,9 @@ void TestSparseVectorScan()
         {
             sparse_vector_u32 sv;
             sparse_vector_u64 sv_64;
-            bvect bv_control;
+            rsc_sparse_vector_u32 csv;
+            
+            bvect bv_control, bv_control2;
             bvect::mem_pool_guard(pool, bv_control);
 
             unsigned sv_size = 67000;
@@ -12163,10 +12259,7 @@ void TestSparseVectorScan()
                     *bi_64 = v64;
                 }
             }
-            if (value == 3)
-            {
-                cout << 3;
-            }
+            csv.load_from(sv);
             
             scanner.find_eq(sv, value, bv_control);
             unsigned found = bv_control.count();
@@ -12177,6 +12270,16 @@ void TestSparseVectorScan()
                      << " count = " << found << endl;
                 exit(1);
             }
+            
+            rsc_scanner.find_eq(csv, value, bv_control2);
+            int res = bv_control.compare(bv_control2);
+            if (res != 0)
+            {
+                cerr << "RSC scan comparison failed at value =" << value
+                << endl;
+                exit(1);
+            }
+
             
             {
                 bm::id64_t v64 = value;
@@ -12199,6 +12302,14 @@ void TestSparseVectorScan()
             {
                 cerr << "1. sparse_vector<>::find_eq() (any) discrepancy for value=" << value+1
                      << " count = " << bv_control.count() << endl;
+                exit(1);
+            }
+            rsc_scanner.find_eq(csv, value+1, bv_control2);
+            res = bv_control.compare(bv_control2);
+            if (res != 0)
+            {
+                cerr << "1. RSC scan comparison failed at value =" << value+1
+                << endl;
                 exit(1);
             }
 
@@ -12228,7 +12339,6 @@ void TestSparseVectorScan()
                 exit(1);
             }
 
-
             
             if (value % 10 == 0)
                 cout << "\r" << value << "/" << max_value << "    " << flush;
@@ -12242,6 +12352,61 @@ void TestSparseVectorScan()
     cout << " \n--------------- Test sparse_vector<> scan algo OK" << endl;
 }
 
+static
+void TestCompressedSparseVectorScan()
+{
+    cout << " --------------- Test rsc_sparse_vector<> scan algo" << endl;
+    
+    bm::sparse_vector_scanner<rsc_sparse_vector_u32> scanner;
+    
+    {
+        rsc_sparse_vector_u32 csv(bm::use_null);
+        bvect bv_control;
+        scanner.find_eq(csv, 25, bv_control);
+        assert(!bv_control.any());
+        scanner.invert(csv, bv_control);
+        assert(!bv_control.any());
+    }
+    
+    {
+        rsc_sparse_vector_u32 csv(bm::use_null);
+        bvect bv_res;
+
+        csv.push_back(10, 10);
+        csv.push_back(11, 10);
+        csv.push_back(200, 0);
+        csv.push_back(300, 0);
+        
+        csv.sync();
+
+        bm::id_t idx;
+        for (unsigned i = 0; i < 2; ++i)
+        {
+            bool found = scanner.find_eq(csv, 10, idx);
+            assert(found);
+            assert(idx = 10);
+            
+            scanner.find_eq(csv, 10, bv_res);
+            assert(bv_res.count()==2);
+            assert(bv_res.test(10));
+            assert(bv_res.test(11));
+            
+            scanner.find_eq(csv, 0, bv_res);
+            assert(bv_res.count()==2);
+            assert(bv_res.test(200));
+            assert(bv_res.test(300));
+
+            found = scanner.find_eq(csv, 0, idx);
+            assert(found);
+            assert(idx = 200);
+            
+            csv.optimize();
+        } // for
+    }
+
+    cout << " --------------- Test rsc_sparse_vector<> scan algo OK" << endl;
+
+}
 
 
 // fill pseudo-random plato pattern into two vectors
@@ -15172,6 +15337,7 @@ int main(void)
 
      RankFindTest();
 
+
      BvectorIncTest();
 
      ClearAllTest();
@@ -15254,6 +15420,8 @@ int main(void)
      TestSparseVectorScan();
 
      TestCompressSparseVector();
+
+     TestCompressedSparseVectorScan();
 
      TestSparseVector_Stress(2);
  
