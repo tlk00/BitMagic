@@ -102,6 +102,8 @@ public:
     rsc_sparse_vector(allocation_policy_type ap = allocation_policy_type(),
                              size_type bv_max_size = bm::id_max,
                              const allocator_type&   alloc  = allocator_type());
+    ~rsc_sparse_vector();
+    
     /*! copy-ctor */
     rsc_sparse_vector(const rsc_sparse_vector<Val, SV>& csv);
     
@@ -112,7 +114,15 @@ public:
     rsc_sparse_vector<Val,SV>& operator = (const rsc_sparse_vector<Val, SV>& csv)
     {
         if (this != &csv)
+        {
             sv_ = csv.sv_;
+            max_id_ = csv.max_id_;
+            in_sync_ = csv.in_sync_;
+            if (in_sync_)
+            {
+                bv_blocks_ptr_->copy_from(*(csv.bv_blocks_ptr_));
+            }
+        }
         return *this;
     }
     
@@ -129,7 +139,9 @@ public:
             sv_.swap(csv.sv_);
             max_id_ = csv.max_id_; in_sync_ = csv.in_sync_;
             if (in_sync_)
-                bv_blocks_.copy_from(csv.bv_blocks_);
+            {
+                bv_blocks_ptr_->copy_from(*(csv.bv_blocks_ptr_));
+            }
         }
         return *this;
     }
@@ -378,6 +390,9 @@ protected:
     void resize_internal(size_type sz) { sv_.resize_internal(sz); }
     size_type size_internal() const { return sv_.size(); }
 
+private:
+    void construct_bv_blocks();
+    void free_bv_blocks();
 
 protected:
     template<class V, class SVect> friend class rsc_sparse_vector;
@@ -389,7 +404,8 @@ private:
     sparse_vector_type            sv_;       ///< transpose-sparse vector for "dense" packing
     bm::id_t                      max_id_;   ///< control variable for sorted load
     bool                          in_sync_;  ///< flag if prefix sum is in-sync with vector
-    bvector_blocks_psum_type      bv_blocks_;///< prefix sum for rank translation
+//    bvector_blocks_psum_type      bv_blocks_;///< prefix sum for rank translation
+    bvector_blocks_psum_type*     bv_blocks_ptr_ = 0; ///< prefix sum for rank translation
 };
 
 //---------------------------------------------------------------------
@@ -397,11 +413,21 @@ private:
 
 template<class Val, class SV>
 rsc_sparse_vector<Val, SV>::rsc_sparse_vector(allocation_policy_type ap,
-                                                            size_type bv_max_size,
-                                                            const allocator_type&   alloc)
+                                              size_type bv_max_size,
+                                              const allocator_type&   alloc)
     : sv_(bm::use_null, ap, bv_max_size, alloc),
       max_id_(0), in_sync_(false)
-{}
+{
+    construct_bv_blocks();
+}
+
+//---------------------------------------------------------------------
+
+template<class Val, class SV>
+rsc_sparse_vector<Val, SV>::~rsc_sparse_vector()
+{
+    free_bv_blocks();
+}
 
 //---------------------------------------------------------------------
 
@@ -412,9 +438,10 @@ rsc_sparse_vector<Val, SV>::rsc_sparse_vector(
   max_id_(csv.max_id_),
   in_sync_(csv.in_sync_)
 {
+    construct_bv_blocks();
     if (in_sync_)
     {
-        bv_blocks_.copy_from(csv.bv_blocks_);
+        bv_blocks_ptr_->copy_from(*(csv.bv_blocks_ptr_));
     }
 }
 
@@ -429,8 +456,8 @@ rsc_sparse_vector<Val, SV>::rsc_sparse_vector(rsc_sparse_vector<Val,SV>&& csv) B
     {
         sv_.swap(csv.sv_);
         max_id_ = csv.max_id_; in_sync_ = csv.in_sync_;
-        if (in_sync_)
-            bv_blocks_.copy_from(csv.bv_blocks_);
+        
+        bv_blocks_ptr_ = csv.bv_blocks_ptr_; csv.bv_blocks_ptr_ = 0;
     }
 }
 
@@ -442,8 +469,9 @@ rsc_sparse_vector<Val, SV>::rsc_sparse_vector(
 : sv_(bm::use_null),
   max_id_(0), in_sync_(false)
 {
+    construct_bv_blocks();
+
     load_from(sv);
-    sync();
 }
 
 
@@ -577,7 +605,7 @@ void rsc_sparse_vector<Val, SV>::sync(bool force)
         return;  // nothing to do
     const bvector_type* bv_null = sv_.get_null_bvector();
     BM_ASSERT(bv_null);
-    bv_null->running_count_blocks(&bv_blocks_); // compute popcount prefix list
+    bv_null->running_count_blocks(bv_blocks_ptr_); // compute popcount prefix list
     
     // sync the max-id
     bool found = bv_null->find_reverse(max_id_);
@@ -599,7 +627,7 @@ bool rsc_sparse_vector<Val, SV>::resolve(bm::id_t idx, bm::id_t* idx_to) const
     const bvector_type* bv_null = sv_.get_null_bvector();
     if (in_sync_)
     {
-        *idx_to = bv_null->count_to_test(idx, bv_blocks_);
+        *idx_to = bv_null->count_to_test(idx, *bv_blocks_ptr_);
     }
     else  // slow access
     {
@@ -665,7 +693,7 @@ void rsc_sparse_vector<Val, SV>::optimize(bm::word_t*  temp_block,
     sv_.optimize(temp_block, opt_mode, (typename sparse_vector_type::statistics*)stat);
     if (stat)
     {
-        stat->memory_used += sizeof(bv_blocks_);
+        stat->memory_used += sizeof(bvector_blocks_psum_type);
     }
 }
 
@@ -688,7 +716,7 @@ void rsc_sparse_vector<Val, SV>::calc_stat(
     sv_.calc_stat((typename sparse_vector_type::statistics*)st);
     if (st)
     {
-        st->memory_used += sizeof(bv_blocks_);
+        st->memory_used += sizeof(bvector_blocks_psum_type);
     }
 }
 
@@ -725,6 +753,9 @@ rsc_sparse_vector<Val, SV>::decode(value_type* arr,
                                           bool        /*zero_mem*/) const
 {
     BM_ASSERT(arr);
+    BM_ASSERT(in_sync_);  // call sync() before decoding
+    BM_ASSERT(bv_blocks_ptr_);
+    
     
     if (size == 0)
         return 0;
@@ -738,7 +769,7 @@ rsc_sparse_vector<Val, SV>::decode(value_type* arr,
 
     const bvector_type* bv_null = sv_.get_null_bvector();
 
-    bm::id_t rank = bv_null->count_to(idx_from, bv_blocks_);
+    bm::id_t rank = bv_null->count_to(idx_from, *bv_blocks_ptr_);
     bool b = bv_null->test(idx_from);
     
     bvector_enumerator_type en_i = bv_null->get_enumerator(idx_from);
@@ -777,6 +808,47 @@ rsc_sparse_vector<Val, SV>::decode(value_type* arr,
 }
 
 //---------------------------------------------------------------------
+
+template<class Val, class SV>
+void rsc_sparse_vector<Val, SV>::construct_bv_blocks()
+{
+    if (bv_blocks_ptr_)
+        return;
+#if defined(BM_ALLOC_ALIGN)
+#ifdef _MSC_VER
+    bv_blocks_ptr_ = (bvector_blocks_psum_type*) ::_aligned_malloc(sizeof(bvector_blocks_psum_type), BM_ALLOC_ALIGN);
+#else
+    bv_blocks_ptr_ = (bvector_blocks_psum_type*) ::_mm_malloc(sizeof(bvector_blocks_psum_type), BM_ALLOC_ALIGN);
+#endif
+#else
+    bv_blocks_ptr_ = (bvector_blocks_psum_type*) ::malloc(sizeof(bvector_blocks_psum_type));
+#endif
+    if (!bv_blocks_ptr_)
+    {
+        bvector_type::throw_bad_alloc();
+    }
+}
+
+//---------------------------------------------------------------------
+
+template<class Val, class SV>
+void rsc_sparse_vector<Val, SV>::free_bv_blocks()
+{
+    if (!bv_blocks_ptr_)
+        return;
+#ifdef BM_ALLOC_ALIGN
+# ifdef _MSC_VER
+    ::_aligned_free(bv_blocks_ptr_);
+#else
+    ::_mm_free(bv_blocks_ptr_);
+# endif
+#else
+    ::free(bv_blocks_ptr_);
+#endif
+}
+
+//---------------------------------------------------------------------
+
 
 } // namespace bm
 
