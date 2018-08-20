@@ -346,10 +346,12 @@ bool search_vector_pairs(const vector_pairs& vp, unsigned rs_id, unsigned& pos)
 // SNP search benchmark
 // Search for SNPs using different data structures (Bitmagic and STL)
 //
+// An extra step is verification, to make sure all methods are consistent
+//
 static
 void run_benchmark(const sparse_vector_u32& sv, const rsc_sparse_vector_u32& csv)
 {
-    const unsigned rs_sample_count = 500;
+    const unsigned rs_sample_count = 2000;
 
     std::vector<unsigned> rs_vect;
     generate_random_subset(sv, rs_vect, rs_sample_count);
@@ -454,6 +456,7 @@ void run_benchmark(const sparse_vector_u32& sv, const rsc_sparse_vector_u32& csv
     {
         std::cerr << "Error: search discrepancy (std::vector<>) detected!" << std::endl;
     }
+
 }
 
 
