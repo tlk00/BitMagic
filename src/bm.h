@@ -1083,9 +1083,16 @@ public:
         {
             copy_from(bc);
         }
+        /// copy block count array
         void copy_from(const blocks_count& bc) BMNOEXEPT
         {
             ::memcpy(this->cnt, bc.cnt, sizeof(this->cnt));
+        }
+        /// return bit-count for specified block
+        unsigned count(unsigned nb) const
+        {
+            return (nb == 0) ? cnt[nb]
+                             : cnt[nb] - cnt[nb-1];
         }
     };
 
@@ -1791,7 +1798,27 @@ public:
     */
     bool find_rank(bm::id_t rank, bm::id_t from, bm::id_t& pos) const;
 
-    
+
+    /*!
+        \brief Find bit-vector position for the specified rank(bitcount)
+     
+        Rank based search, counts number of 1s from specified position until
+        finds the ranked position relative to start from position.
+        In other words: range population count between from and pos == rank.
+     
+        \param rank - rank to find (bitcount)
+        \param from - start positioon for rank search
+        \param pos  - position with speciefied rank (relative to from position)
+        \param blocks_cnt - block count structure to accelerate rank search
+                            should be prepared using running_count_blocks
+
+        \sa running_count_blocks
+
+        \return true if requested rank was found
+    */
+    bool find_rank(bm::id_t rank, bm::id_t from, bm::id_t& pos,
+                   const blocks_count&  blocks_cnt) const;
+
     //@}
 
 
@@ -3309,7 +3336,7 @@ bool bvector<Alloc>::find_rank(bm::id_t rank, bm::id_t from, bm::id_t& pos) cons
             
             if (!rank) // target found
             {
-                bm::id_t prev_pos = nb ? (nb * bm::set_block_size * 32) : 0;
+                bm::id_t prev_pos = nb * bm::set_block_size * 32;
                 pos = bit_pos + prev_pos;
                 return true;
             }
@@ -3319,7 +3346,69 @@ bool bvector<Alloc>::find_rank(bm::id_t rank, bm::id_t from, bm::id_t& pos) cons
             if (no_more_blocks)
                 break;
         }
-        nbit = 0;
+        nbit ^= nbit; // zero start bit after first scanned block
+    } // for nb
+    
+    return ret;
+}
+
+//---------------------------------------------------------------------
+
+template<class Alloc>
+bool bvector<Alloc>::find_rank(bm::id_t rank, bm::id_t from, bm::id_t& pos,
+                               const blocks_count&  blocks_cnt) const
+{
+    BM_ASSERT_THROW(from < bm::id_max, BM_ERR_RANGE);
+
+    bool ret = false;
+    
+    if (!rank || !blockman_.is_init())
+        return ret;
+    
+    unsigned nb  = unsigned(from  >>  bm::set_block_shift);
+    unsigned nb_right  = unsigned((bm::id_max-1)  >>  bm::set_block_shift);
+    bm::gap_word_t nbit = bm::gap_word_t(from & bm::set_block_mask);
+    unsigned bit_pos = 0;
+
+    for (; nb < nb_right; ++nb)
+    {
+        int no_more_blocks;
+        const bm::word_t* block = blockman_.get_block(nb, &no_more_blocks);
+        if (block)
+        {
+            if (!nbit) // check if the whole block can be skipped
+            {
+                unsigned block_bc = blocks_cnt.count(nb);
+                if (rank > block_bc)
+                {
+                    rank -= block_bc;
+                    continue;
+                }
+            }
+            
+            if (BM_IS_GAP(block))
+            {
+                const bm::gap_word_t* const gap_block = BMGAP_PTR(block);
+                rank = bm::gap_find_rank(gap_block, rank, nbit, bit_pos);
+            }
+            else
+            {
+                rank = bm::bit_find_rank(block, rank, nbit, bit_pos);
+            }
+            
+            if (!rank) // target found
+            {
+                bm::id_t prev_pos = nb * bm::set_block_size * 32;
+                pos = bit_pos + prev_pos;
+                return true;
+            }
+        }
+        else
+        {
+            if (no_more_blocks)
+                break;
+        }
+        nbit ^= nbit; // zero start bit after first scanned block
     } // for nb
     
     return ret;
