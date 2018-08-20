@@ -133,6 +133,7 @@ public:
     */
     bool combine_and_sub(bvector_type& bv_target, bool any);
     
+    bool find_first_and_sub(bm::id_t& idx);
 
     //@}
     
@@ -161,18 +162,26 @@ public:
 
     /**
         Fusion aggregate group of vectors using logical AND MINUS another set
-        \param bv_target - target vector
+     
+        \param bv_target     - target vector
         \param bv_src_and    - array of pointers on bit-vectors for AND
         \param src_and_size  - size of AND group
         \param bv_src_sub    - array of pointers on bit-vectors for SUBstract
         \param src_sub_size  - size of SUB group
+        \param any           - flag if caller needs any results asap (incomplete results)
      
-        \return true when anything is found
+        \return true when found
     */
     bool combine_and_sub(bvector_type& bv_target,
                      const bvector_type_const_ptr* bv_src_and, unsigned src_and_size,
                      const bvector_type_const_ptr* bv_src_sub, unsigned src_sub_size,
                      bool any);
+    
+    bool find_first_and_sub(bm::id_t& idx,
+                     const bvector_type_const_ptr* bv_src_and, unsigned src_and_size,
+                     const bvector_type_const_ptr* bv_src_sub, unsigned src_sub_size);
+
+    
     //@}
 
     // -----------------------------------------------------------------------
@@ -224,8 +233,7 @@ protected:
                     bvector_type& bv_target,
                     const bvector_type_const_ptr* bv_src, unsigned src_size);
     
-    bool combine_and_sub(unsigned i, unsigned j,
-                         bvector_type& bv_target,
+    bm::id64_t combine_and_sub(unsigned i, unsigned j,
                          const bvector_type_const_ptr* bv_src_and, unsigned src_and_size,
                          const bvector_type_const_ptr* bv_src_sub, unsigned src_sub_size);
 
@@ -409,6 +417,15 @@ bool aggregator<BV>::combine_and_sub(bvector_type& bv_target, bool any)
                     ar_->arg_bv1, arg_group1_size, any);
 }
 
+// ------------------------------------------------------------------------
+
+template<typename BV>
+bool aggregator<BV>::find_first_and_sub(bm::id_t& idx)
+{
+    return find_first_and_sub(idx,
+                        ar_->arg_bv0, arg_group0_size,
+                        ar_->arg_bv1, arg_group1_size);
+}
 
 // ------------------------------------------------------------------------
 
@@ -499,21 +516,77 @@ bool aggregator<BV>::combine_and_sub(bvector_type& bv_target,
             if (set_array_max2 > set_array_max)
                 set_array_max = set_array_max2;
         }
-        
         unsigned j = 0;
         do
         {
-            bool found = combine_and_sub(i, j,
-                                       bv_target,
-                                       bv_src_and, src_and_size,
-                                       bv_src_sub, src_sub_size);
+            bm::id64_t digest = combine_and_sub(i, j,
+                                                bv_src_and, src_and_size,
+                                                bv_src_sub, src_sub_size);
+            bool found = digest;
+            if (found)
+            {
+                typename bvector_type::blocks_manager_type& bman_target =
+                                                bv_target.get_blocks_manager();
+                bman_target.copy_bit_block(i, j, ar_->tb1);
+                if (any)
+                    return found;
+            }
             global_found |= found;
-            if (any & found)
-                return found;
             ++j;
         } while (j < set_array_max);
     } // for i
     return global_found;
+}
+
+// ------------------------------------------------------------------------
+
+template<typename BV>
+bool aggregator<BV>::find_first_and_sub(bm::id_t& idx,
+                 const bvector_type_const_ptr* bv_src_and, unsigned src_and_size,
+                 const bvector_type_const_ptr* bv_src_sub, unsigned src_sub_size)
+{
+    BM_ASSERT_THROW(src_and_size < max_aggregator_cap, BM_ERR_RANGE);
+    BM_ASSERT_THROW(src_sub_size < max_aggregator_cap, BM_ERR_RANGE);
+    
+    if (!bv_src_and || !src_and_size)
+        return false;
+
+    BV bv_target; // TODO: get rid of it
+    unsigned top_blocks = resize_target(bv_target, bv_src_and, src_and_size);
+    unsigned top_blocks2 = resize_target(bv_target, bv_src_sub, src_sub_size, false);
+    
+    if (top_blocks2 > top_blocks)
+        top_blocks = top_blocks2;
+
+    for (unsigned i = 0; i < top_blocks; ++i)
+    {
+        unsigned set_array_max = find_effective_sub_block_size(i, bv_src_and, src_and_size);
+        if (src_sub_size)
+        {
+            unsigned set_array_max2 =
+                    find_effective_sub_block_size(i, bv_src_sub, src_sub_size);
+            if (set_array_max2 > set_array_max)
+                set_array_max = set_array_max2;
+        }
+        unsigned j = 0;
+        do
+        {
+            bm::id64_t digest = combine_and_sub(i, j,
+                                                bv_src_and, src_and_size,
+                                                bv_src_sub, src_sub_size);
+            if (digest)
+            {
+                bool found = bm::bit_find_first(ar_->tb1, &idx);
+                BM_ASSERT(found);
+                unsigned base_idx = i * bm::set_array_size * bm::gap_max_bits;
+                base_idx += j * bm::gap_max_bits;
+                idx += base_idx;
+                return found;
+            }
+            ++j;
+        } while (j < set_array_max);
+    } // for i
+    return false;
 }
 
 // ------------------------------------------------------------------------
@@ -589,10 +662,7 @@ void aggregator<BV>::combine_or(unsigned i, unsigned j,
                 if (!all_one)
                 {
                     // we have some results, allocate block and copy from temp
-                    bman_target.check_alloc_top_subblock(i);
-                    blk = bman_target.get_allocator().alloc_bit_block();
-                    bman_target.set_block_ptr(i, j, blk);
-                    bm::bit_block_copy(blk, ar_->tb1);
+                    bman_target.copy_bit_block(i, j, ar_->tb1);
                 }
             }
         }
@@ -646,10 +716,7 @@ void aggregator<BV>::combine_and(unsigned i, unsigned j,
             if (digest) // some results
             {
                 // we have some results, allocate block and copy from temp
-                bman_target.check_alloc_top_subblock(i);
-                blk = bman_target.get_allocator().alloc_bit_block();
-                bman_target.set_block_ptr(i, j, blk);
-                bm::bit_block_copy(blk, ar_->tb1);
+                bman_target.copy_bit_block(i, j, ar_->tb1);
             }
 
         }
@@ -659,14 +726,11 @@ void aggregator<BV>::combine_and(unsigned i, unsigned j,
 // ------------------------------------------------------------------------
 
 template<typename BV>
-bool aggregator<BV>::combine_and_sub(unsigned i, unsigned j,
-                                     bvector_type& bv_target,
+bm::id64_t aggregator<BV>::combine_and_sub(unsigned i, unsigned j,
                      const bvector_type_const_ptr* bv_src_and, unsigned src_and_size,
                      const bvector_type_const_ptr* bv_src_sub, unsigned src_sub_size)
 {
     BM_ASSERT(src_and_size);
-
-    typename bvector_type::blocks_manager_type& bman_target = bv_target.get_blocks_manager();
 
     unsigned arg_blk_and_count = 0;
     unsigned arg_blk_and_gap_count = 0;
@@ -680,7 +744,7 @@ bool aggregator<BV>::combine_and_sub(unsigned i, unsigned j,
     BM_ASSERT(blk == 0 || blk == FULL_BLOCK_FAKE_ADDR);
 
     if (!blk) // nothing to do - golden block(!)
-        return false;
+        return 0;
     
     bm::id64_t digest = 0;
 
@@ -690,7 +754,7 @@ bool aggregator<BV>::combine_and_sub(unsigned i, unsigned j,
         //
         digest = process_bit_blocks_and(arg_blk_and_count, digest);
         if (!digest)
-            return false;
+            return digest;
 
         // AND all GAP blocks (if any)
         //
@@ -699,12 +763,12 @@ bool aggregator<BV>::combine_and_sub(unsigned i, unsigned j,
             digest =
                 process_gap_blocks_and(arg_blk_and_gap_count, digest);
             if (!digest)
-                return false;
+                return digest;
         }
     }
     else
     {
-        return false; // nothing to do
+        return 0; // nothing to do
     }
     
     if (src_sub_size)
@@ -715,18 +779,13 @@ bool aggregator<BV>::combine_and_sub(unsigned i, unsigned j,
         
         BM_ASSERT(blk == 0 || blk == FULL_BLOCK_FAKE_ADDR);
         if (blk == FULL_BLOCK_FAKE_ADDR)
-            return false; // nothing to do - golden block(!)
+            return 0; // nothing to do - golden block(!)
         
         if (arg_blk_sub_count || arg_blk_sub_gap_count)
         {
-            // SUBtract bit-blocks
-            //
             digest = process_bit_blocks_sub(arg_blk_sub_count, digest);
             if (!digest)
-                return false;
-            
-            // SUBtract GAP blocks (if any)
-            //
+                return digest;
             if (arg_blk_sub_gap_count)
             {
                 digest =
@@ -734,17 +793,7 @@ bool aggregator<BV>::combine_and_sub(unsigned i, unsigned j,
             }
         }
     }
-    
-    if (digest) // some results
-    {
-        // we have some results, allocate block and copy from temp
-        bman_target.check_alloc_top_subblock(i);
-        blk = bman_target.get_allocator().alloc_bit_block();
-        bman_target.set_block_ptr(i, j, blk);
-        bm::bit_block_copy(blk, ar_->tb1);
-        return true;
-    }
-    return false;
+    return digest;
 }
 
 // ------------------------------------------------------------------------
