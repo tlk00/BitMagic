@@ -527,7 +527,7 @@ public:
 
 
     // ------------------------------------------------------------
-    /*! @name Loading of sparse vector from C-stype array       */
+    /*! @name Loading of sparse vector from C-style array       */
     //@{
     /*!
         \brief Import list of elements from a C-style array
@@ -546,7 +546,7 @@ public:
     ///@}
 
     // ------------------------------------------------------------
-    /*! @name Export content to C-stype array                    */
+    /*! @name Export content to C-style array                    */
     ///@{
 
     /*!
