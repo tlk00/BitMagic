@@ -36,6 +36,7 @@ For more information please visit:  http://bitmagic.io
 #include "bmalgo.h"
 #include "bmserial.h"
 #include "bmsparsevec.h"
+#include "bmsparsevec_compr.h"
 #include "bmsparsevec_algo.h"
 #include "bmsparsevec_serial.h"
 #include "bmalgo_similarity.h"
@@ -50,7 +51,8 @@ void show_help()
     std::cerr
       << "BitMagic Sparse Vector Analysis Utility (c) 2017"            << std::endl
       << "-bvin  bv-file              -- bv file to load"              << std::endl
-      << "-svin  sv-input-file        -- sv dump file to load"         << std::endl
+      << "-svin  sv-input-file        -- 32-bit sparse_vector file to load" << std::endl
+      << "-rsc64in rsc-64-bit-file    -- 64-bit rsc sparse vector to load"  << std::endl
       << "-u32in u32-input-file       -- raw 32-bit unsigned int file" << std::endl
       << "-svout sv-output-file       -- sv output file to produce"    << std::endl
       << "-u32out u32-output-file     -- raw 32-bit output file to produce" << std::endl
@@ -66,6 +68,7 @@ void show_help()
 //
 std::string  bv_in_file;
 std::string  sv_in_file;
+std::string  rsc64_in_file;
 std::string  u32_in_file;
 std::string  sv_out_file;
 std::string  u32_out_file;
@@ -93,6 +96,20 @@ int parse_args(int argc, char *argv[])
             else
             {
                 std::cerr << "Error: -svin requires file name" << std::endl;
+                return 1;
+            }
+            continue;
+        }
+
+        if (arg == "-rsc64in" || arg == "--rsc64in")
+        {
+            if (i + 1 < argc)
+            {
+                rsc64_in_file = argv[++i];
+            }
+            else
+            {
+                std::cerr << "Error: -rsc64in requires file name" << std::endl;
                 return 1;
             }
             continue;
@@ -169,11 +186,18 @@ int parse_args(int argc, char *argv[])
 // Globals
 //
 typedef bm::sparse_vector<unsigned, bm::bvector<> > sparse_vector_u32;
+typedef bm::sparse_vector<unsigned long long, bm::bvector<> > sparse_vector_u64;
+typedef bm::rsc_sparse_vector<unsigned, sparse_vector_u32> rsc_sparse_vector_u32;
+typedef bm::rsc_sparse_vector<bm::id64_t, sparse_vector_u64> rsc_sparse_vector_u64;
+
 
 bm::bvector<>          bv_inp;
 sparse_vector_u32      sv_u32_in;
+sparse_vector_u64      sv_u64_in;
+rsc_sparse_vector_u64  rsc_u64_in(bm::use_null);
 sparse_vector_u32      sv_u32_out;
 bool                   sv_u32_in_flag = false;
+bool                   rsc_u64_in_flag = false;
 std::vector<unsigned>  vect_u32_in;
 std::vector<unsigned>  vect_u32_out;
 
@@ -228,6 +252,53 @@ int load_sv(const std::string& fname, sparse_vector_u32& sv)
     }
     return 0;
 }
+
+// load sparse_vector from a file
+//
+static
+int load_rsc64(const std::string& fname, rsc_sparse_vector_u64& csv)
+{
+    std::vector<unsigned char> buffer;
+
+    // read the input buffer, validate errors
+    bm::chrono_taker tt1("serialized rsc sparse vector BLOB read", 1, &timing_map);
+    auto ret = bm::read_dump_file(fname, buffer);
+    
+    tt1.stop(is_timing);
+    
+    if (ret != 0)
+    {
+        std::cerr << "Failed to read file:" << fname << std::endl;
+        return 2;
+    }
+    if (buffer.size() == 0)
+    {
+        std::cerr << "Empty input file:" << fname << std::endl;
+        return 3;
+    }
+    
+    // deserialize
+    //
+    bm::chrono_taker tt2("rsc sparse vector deserialization", 1, &timing_map);
+    const unsigned char* buf = &buffer[0];
+    BM_DECLARE_TEMP_BLOCK(tb)
+    auto res = bm::sparse_vector_deserialize(csv, buf, tb);
+    tt2.stop(is_timing);
+    if (res != 0)
+    {
+        std::cerr << "rsc sparse vector deserialization failed ("
+                  << fname << ")"
+                  << std::endl;
+        return 4;
+    }
+    /*
+    std::vector<unsigned long long> vect;
+    vect.resize(13107001);
+    csv.decode(vect.data(), 26214000, 13107000);
+    */
+    return 0;
+}
+
 
 // load raw unsigned file
 //
@@ -296,7 +367,17 @@ int main(int argc, char *argv[])
             }
             sv_u32_in_flag = true;
         }
-        
+
+        if (!rsc64_in_file.empty())
+        {
+            auto res = load_rsc64(rsc64_in_file, rsc_u64_in);
+            if (res != 0)
+            {
+                return res;
+            }
+            rsc_u64_in_flag = true;
+        }
+
         if (!u32_in_file.empty())
         {
             auto res = load_u32(u32_in_file, vect_u32_in);
@@ -315,6 +396,13 @@ int main(int argc, char *argv[])
                 std::cout << std::endl;
             }
             
+            if (rsc_u64_in_flag)
+            {
+                std::cout << "Input rsc 64-bit sparse vector statistics:" << std::endl;
+                bm::print_svector_stat(rsc_u64_in, true);
+                std::cout << std::endl;
+            }
+
             if (!vect_u32_in.empty())
             {
                 std::cout << "Input u32 raw vector size = "
