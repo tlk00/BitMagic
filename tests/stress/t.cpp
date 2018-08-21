@@ -15126,6 +15126,7 @@ void TestCompressSparseVector()
         rsc_sparse_vector_u32 csv1;
         
         csv1.push_back(bm::id_max-1, 10);
+        csv1.sync();
 
         for (unsigned k = 0; k < 2; ++k)
         {
@@ -15288,7 +15289,7 @@ int main(void)
     exit(1);
 */
 
-
+/*
     TestRecomb();
 
     OptimGAPTest();
@@ -15418,7 +15419,7 @@ int main(void)
      TestSparseVectorFilter();
 
      TestSparseVectorScan();
-
+*/
      TestCompressSparseVector();
 
      TestCompressedSparseVectorScan();
