@@ -99,16 +99,17 @@ public:
     /*! @name Construction and assignment  */
     //@{
 
-    rsc_sparse_vector(allocation_policy_type ap = allocation_policy_type(),
-                             size_type bv_max_size = bm::id_max,
-                             const allocator_type&   alloc  = allocator_type());
+    rsc_sparse_vector(bm::null_support null_able = bm::use_null,
+                      allocation_policy_type ap = allocation_policy_type(),
+                      size_type bv_max_size = bm::id_max,
+                      const allocator_type&   alloc  = allocator_type());
     ~rsc_sparse_vector();
     
     /*! copy-ctor */
     rsc_sparse_vector(const rsc_sparse_vector<Val, SV>& csv);
     
     /*! Compression constructor, loads data from non-compressed sparse vector */
-    rsc_sparse_vector(const sparse_vector_type& sv);
+    explicit rsc_sparse_vector(const sparse_vector_type& sv);
     
     /*! copy assignmment operator */
     rsc_sparse_vector<Val,SV>& operator = (const rsc_sparse_vector<Val, SV>& csv)
@@ -410,12 +411,16 @@ private:
 //---------------------------------------------------------------------
 
 template<class Val, class SV>
-rsc_sparse_vector<Val, SV>::rsc_sparse_vector(allocation_policy_type ap,
+rsc_sparse_vector<Val, SV>::rsc_sparse_vector(bm::null_support null_able,
+                                              allocation_policy_type ap,
                                               size_type bv_max_size,
                                               const allocator_type&   alloc)
-    : sv_(bm::use_null, ap, bv_max_size, alloc),
+    : sv_(null_able, ap, bv_max_size, alloc),
       max_id_(0), in_sync_(false)
 {
+    BM_ASSERT(null_able == bm::use_null);
+    BM_ASSERT(int(sv_value_plains) == int(SV::sv_value_plains));
+    
     construct_bv_blocks();
 }
 
@@ -436,6 +441,8 @@ rsc_sparse_vector<Val, SV>::rsc_sparse_vector(
   max_id_(csv.max_id_),
   in_sync_(csv.in_sync_)
 {
+    BM_ASSERT(int(sv_value_plains) == int(SV::sv_value_plains));
+    
     construct_bv_blocks();
     if (in_sync_)
     {

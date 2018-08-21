@@ -579,8 +579,9 @@ void sparse_vector_deserializer<SV>::deserialize(SV& sv,
     //unsigned char bv_bo =
         dec.get_8();
     unsigned plains = dec.get_8();
+    unsigned sv_plains = sv.stored_plains();
     
-    if (!plains || plains > sv.stored_plains())
+    if (!plains || plains > sv_plains)
     {
         #ifndef BM_NO_STL
             throw std::logic_error("Invalid serialization target (bit depth)");
