@@ -10500,7 +10500,7 @@ void TestSparseVector()
         
         
         sv3 = sv1;
-        assert(!sv3.is_nullable());
+        assert(sv3.is_nullable());
         
         sv1.clear();
         assert(!sv1.is_nullable());
