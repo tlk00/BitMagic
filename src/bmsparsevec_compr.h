@@ -36,7 +36,7 @@ namespace bm
 
 
 /*!
-   \brief Rank-Select-Compressed sparse vector
+   \brief Rank-Select compressed sparse vector
  
    Container uses Rank-Select method of compression, where
    all NULL columns gets dropped, effective address of columns is computed
@@ -395,7 +395,6 @@ private:
     void free_bv_blocks();
 
 protected:
-    template<class V, class SVect> friend class rsc_sparse_vector;
     template<class SVect> friend class sparse_vector_scanner;
     template<class SVect> friend class sparse_vector_serializer;
     template<class SVect> friend class sparse_vector_deserializer;

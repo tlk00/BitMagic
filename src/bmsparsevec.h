@@ -51,10 +51,6 @@ namespace bm
     @ingroup bmagic
  */
 
-// forward declarations
-//
-template<class Val, class SV> class rsc_sparse_vector;
-
 
 /*!
    \brief sparse vector with runtime compression using bit transposition method
@@ -885,7 +881,7 @@ protected:
     size_type size_internal() const { return size(); }
 
 
-    template<class V, class SVect> friend class rsc_sparse_vector;
+    template<class V, class SV> friend class rsc_sparse_vector;
     template<class SVect> friend class sparse_vector_scanner;
     template<class SVect> friend class sparse_vector_serializer;
     template<class SVect> friend class sparse_vector_deserializer;
