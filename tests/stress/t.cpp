@@ -15289,7 +15289,7 @@ int main(void)
     exit(1);
 */
 
-/*
+
     TestRecomb();
 
     OptimGAPTest();
@@ -15419,7 +15419,7 @@ int main(void)
      TestSparseVectorFilter();
 
      TestSparseVectorScan();
-*/
+
      TestCompressSparseVector();
 
      TestCompressedSparseVectorScan();
