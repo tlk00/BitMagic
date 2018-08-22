@@ -80,7 +80,8 @@ namespace bm
             const bm::word_t* end() const { return (b_.w32 + bm::set_block_size); }
             bm::word_t* end() { return (b_.w32 + bm::set_block_size); }
         };
-
+    
+    
 /**
     Get minimum of 2 values
 */

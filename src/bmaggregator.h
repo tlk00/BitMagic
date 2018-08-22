@@ -53,6 +53,7 @@ class aggregator
 public:
     typedef BV                         bvector_type;
     typedef const bvector_type*        bvector_type_const_ptr;
+    typedef bm::id64_t                 digest_type;
 
     /// Maximum aggregation capacity in one pass
     enum max_size
@@ -188,6 +189,7 @@ public:
 
     /*! @name Horizontal Logical operations used for tests (C-style interface) */
     //@{
+    
     /**
         Horizontal OR aggregation (potentially slower) method.
         \param bv_target - target vector
@@ -233,7 +235,7 @@ protected:
                     bvector_type& bv_target,
                     const bvector_type_const_ptr* bv_src, unsigned src_size);
     
-    bm::id64_t combine_and_sub(unsigned i, unsigned j,
+    digest_type combine_and_sub(unsigned i, unsigned j,
                          const bvector_type_const_ptr* bv_src_and, unsigned src_and_size,
                          const bvector_type_const_ptr* bv_src_sub, unsigned src_sub_size);
 
@@ -261,13 +263,13 @@ protected:
     bool process_gap_blocks_or(blocks_manager_type& bman_target,
                                unsigned i, unsigned j, unsigned block_count);
     
-    bm::id64_t process_bit_blocks_and(unsigned block_count, bm::id64_t digest);
+    digest_type process_bit_blocks_and(unsigned block_count, digest_type digest);
     
-    bm::id64_t process_gap_blocks_and(unsigned block_count, bm::id64_t digest);
+    digest_type process_gap_blocks_and(unsigned block_count, digest_type digest);
 
-    bm::id64_t process_bit_blocks_sub(unsigned block_count, bm::id64_t digest);
+    digest_type process_bit_blocks_sub(unsigned block_count, digest_type digest);
 
-    bm::id64_t process_gap_blocks_sub(unsigned block_count, bm::id64_t digest);
+    digest_type process_gap_blocks_sub(unsigned block_count, digest_type digest);
 
     static
     unsigned find_effective_sub_block_size(unsigned i,
@@ -306,29 +308,11 @@ private:
 //
 // ------------------------------------------------------------------------
 
-#if defined(BMSSE2OPT) || defined(BMSSE42OPT)
-#define BM_ALLOC_ALIGN 16
-#endif
-#if defined(BMAVX2OPT)
-#define BM_ALLOC_ALIGN 32
-#endif
 
 template<typename BV>
 aggregator<BV>::aggregator()
 {
-#if defined(BM_ALLOC_ALIGN)
-#ifdef _MSC_VER
-    ar_ = (arena*) ::_aligned_malloc(sizeof(arena), BM_ALLOC_ALIGN);
-#else
-    ar_ = (arena*) ::_mm_malloc(sizeof(arena), BM_ALLOC_ALIGN);
-#endif
-#else
-    ar_ = (arena*) ::malloc(sizeof(arena));
-#endif
-    if (!ar_)
-    {
-        BV::throw_bad_alloc();
-    }
+    ar_ = (arena*) bm::aligned_new_malloc(sizeof(arena));
 }
 
 // ------------------------------------------------------------------------
@@ -337,20 +321,8 @@ template<typename BV>
 aggregator<BV>::~aggregator()
 {
     BM_ASSERT(ar_);
-    if (!ar_)
-        return;
-#ifdef BM_ALLOC_ALIGN
-# ifdef _MSC_VER
-    ::_aligned_free(ar_);
-#else
-    ::_mm_free(ar_);
-# endif
-#else
-    ::free(ar_);
-#endif
+    bm::aligned_free(ar_);
 }
-
-#undef BM_ALLOC_ALIGN
 
 // ------------------------------------------------------------------------
 
@@ -522,7 +494,7 @@ bool aggregator<BV>::combine_and_sub(bvector_type& bv_target,
         unsigned j = 0;
         do
         {
-            bm::id64_t digest = combine_and_sub(i, j,
+            digest_type digest = combine_and_sub(i, j,
                                                 bv_src_and, src_and_size,
                                                 bv_src_sub, src_sub_size);
             bool found = digest;
@@ -574,7 +546,7 @@ bool aggregator<BV>::find_first_and_sub(bm::id_t& idx,
         unsigned j = 0;
         do
         {
-            bm::id64_t digest = combine_and_sub(i, j,
+            digest_type digest = combine_and_sub(i, j,
                                                 bv_src_and, src_and_size,
                                                 bv_src_sub, src_sub_size);
             if (digest)
@@ -729,7 +701,8 @@ void aggregator<BV>::combine_and(unsigned i, unsigned j,
 // ------------------------------------------------------------------------
 
 template<typename BV>
-bm::id64_t aggregator<BV>::combine_and_sub(unsigned i, unsigned j,
+typename aggregator<BV>::digest_type
+aggregator<BV>::combine_and_sub(unsigned i, unsigned j,
                      const bvector_type_const_ptr* bv_src_and, unsigned src_and_size,
                      const bvector_type_const_ptr* bv_src_sub, unsigned src_sub_size)
 {
@@ -749,7 +722,7 @@ bm::id64_t aggregator<BV>::combine_and_sub(unsigned i, unsigned j,
     if (!blk) // nothing to do - golden block(!)
         return 0;
     
-    bm::id64_t digest = 0;
+    digest_type digest = 0;
 
     if (arg_blk_and_count || arg_blk_and_gap_count)
     {
@@ -895,8 +868,9 @@ bool aggregator<BV>::process_gap_blocks_or(blocks_manager_type& bman_target,
 // ------------------------------------------------------------------------
 
 template<typename BV>
-bm::id64_t aggregator<BV>::process_gap_blocks_and(unsigned   arg_blk_gap_count,
-                                                  bm::id64_t digest)
+typename aggregator<BV>::digest_type
+aggregator<BV>::process_gap_blocks_and(unsigned   arg_blk_gap_count,
+                                                   digest_type digest)
 {
     BM_ASSERT(arg_blk_gap_count);
     BM_ASSERT(digest);
@@ -920,8 +894,9 @@ bm::id64_t aggregator<BV>::process_gap_blocks_and(unsigned   arg_blk_gap_count,
 // ------------------------------------------------------------------------
 
 template<typename BV>
-bm::id64_t aggregator<BV>::process_gap_blocks_sub(unsigned   arg_blk_gap_count,
-                                                  bm::id64_t digest)
+typename aggregator<BV>::digest_type
+aggregator<BV>::process_gap_blocks_sub(unsigned   arg_blk_gap_count,
+                                                   digest_type digest)
 {
     BM_ASSERT(arg_blk_gap_count);
     BM_ASSERT(digest);
@@ -1014,9 +989,9 @@ bool aggregator<BV>::process_bit_blocks_or(blocks_manager_type& bman_target,
 // ------------------------------------------------------------------------
 
 template<typename BV>
-bm::id64_t
+typename aggregator<BV>::digest_type
 aggregator<BV>::process_bit_blocks_and(unsigned   arg_blk_count,
-                                       bm::id64_t digest)
+                                       digest_type digest)
 {
     bm::word_t* blk = ar_->tb1;
 
@@ -1055,9 +1030,9 @@ aggregator<BV>::process_bit_blocks_and(unsigned   arg_blk_count,
 // ------------------------------------------------------------------------
 
 template<typename BV>
-bm::id64_t
+typename aggregator<BV>::digest_type
 aggregator<BV>::process_bit_blocks_sub(unsigned   arg_blk_count,
-                                       bm::id64_t digest)
+                                       digest_type digest)
 {
     bm::word_t* blk = ar_->tb1;
 

@@ -597,6 +597,54 @@ private:
 typedef mem_alloc<block_allocator, ptr_allocator, alloc_pool<block_allocator, ptr_allocator> > standard_allocator;
 
 
+/// Aligned malloc (unlike classic malloc it throws bad_alloc exception)
+///
+/// @internal
+inline
+void* aligned_new_malloc(size_t size)
+{
+    void* ptr;
+
+#ifdef BM_ALLOC_ALIGN
+#ifdef _MSC_VER
+    ptr = ::_aligned_malloc(size, BM_ALLOC_ALIGN);
+#else
+    ptr = ::_mm_malloc(size, BM_ALLOC_ALIGN);
+#endif
+#else
+    ptr = ::malloc(size);
+#endif
+    if (!ptr)
+    {
+#ifndef BM_NO_STL
+    throw std::bad_alloc();
+#else
+    BM_THROW(BM_ERR_BADALLOC);
+#endif
+    }
+    return ptr;
+}
+
+/// Aligned free (safe to pass NULL ptr)
+///
+/// @internal
+inline
+void aligned_free(void* ptr)
+{
+    if (!ptr)
+        return;
+#ifdef BM_ALLOC_ALIGN
+# ifdef _MSC_VER
+    ::_aligned_free(ptr);
+#else
+    ::_mm_free(ptr);
+# endif
+#else
+    ::free(ptr);
+#endif
+}
+
+
 } // namespace libbm
 
 
