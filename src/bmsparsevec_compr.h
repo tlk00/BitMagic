@@ -108,8 +108,6 @@ public:
     /*! copy-ctor */
     rsc_sparse_vector(const rsc_sparse_vector<Val, SV>& csv);
     
-    /*! Compression constructor, loads data from non-compressed sparse vector */
-    explicit rsc_sparse_vector(const sparse_vector_type& sv);
     
     /*! copy assignmment operator */
     rsc_sparse_vector<Val,SV>& operator = (const rsc_sparse_vector<Val, SV>& csv)
@@ -465,20 +463,6 @@ rsc_sparse_vector<Val, SV>::rsc_sparse_vector(rsc_sparse_vector<Val,SV>&& csv) B
         bv_blocks_ptr_ = csv.bv_blocks_ptr_; csv.bv_blocks_ptr_ = 0;
     }
 }
-
-//---------------------------------------------------------------------
-
-template<class Val, class SV>
-rsc_sparse_vector<Val, SV>::rsc_sparse_vector(
-    const typename rsc_sparse_vector<Val, SV>::sparse_vector_type& sv)
-: sv_(bm::use_null),
-  max_id_(0), in_sync_(false)
-{
-    construct_bv_blocks();
-
-    load_from(sv);
-}
-
 
 //---------------------------------------------------------------------
 

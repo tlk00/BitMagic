@@ -15220,7 +15220,8 @@ void TestCompressSparseVector()
         csv1.clear();
 
         sv.optimize(tb);
-        rsc_sparse_vector_u32 csv2(sv);
+        rsc_sparse_vector_u32 csv2;
+        csv2.load_from(sv);
         DetailedCompareSparseVectors(csv2, sv);
         DetailedCheckCompressedDecode(csv1);
 
