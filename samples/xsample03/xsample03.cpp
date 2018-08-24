@@ -22,7 +22,7 @@ For more information please visit:  http://bitmagic.io
  
   \sa bm::sparse_vector<>
   \sa bm::rsc_sparse_vector<>
-  \sa bm::sparse_vector_scanner
+  \sa bm::sparse_vector_scanner<>
 */
 
 /*! \file xsample03.cpp
@@ -271,7 +271,7 @@ int load_snp_report(const std::string& fname, sparse_vector_u32& sv)
         catch (std::exception& /*ex*/)
         {
             continue; // detailed disgnostics commented out
-            // error detected, becuase some columns are sometimes missing 
+            // error detected, because some columns are sometimes missing
             // just ignore it
             //
             /*
