@@ -83,7 +83,8 @@ INPUT                  = ./src/bm.h ./src/bmfunc.h  ./src/bmsimd.h \
 ./samples/svsample03/svsample03.cpp \
 ./samples/svsample04/svsample04.cpp \
 ./samples/svsample05/svsample05.cpp \
-./samples/svsample06/svsample06.cpp
+./samples/svsample06/svsample06.cpp \
+./samples/rscsample01/rscsample01.cpp
  
 
 FILE_PATTERNS          = *.cpp \
@@ -93,7 +94,7 @@ EXCLUDE                =
 EXCLUDE_SYMLINKS       = NO
 EXCLUDE_PATTERNS       = 
 EXAMPLE_PATH           = ./samples/ 
-EXAMPLE_PATTERNS       = samp*.cpp svsamp*.cpp xsamp*.cpp
+EXAMPLE_PATTERNS       = samp*.cpp svsamp*.cpp xsamp*.cpp rscsamp*.cpp
 EXAMPLE_RECURSIVE      = YES
 IMAGE_PATH             = 
 INPUT_FILTER           = 
