@@ -108,8 +108,6 @@ public:
     /*! copy-ctor */
     rsc_sparse_vector(const rsc_sparse_vector<Val, SV>& csv);
     
-    /*! Compression constructor, loads data from non-compressed sparse vector */
-    explicit rsc_sparse_vector(const sparse_vector_type& sv);
     
     /*! copy assignmment operator */
     rsc_sparse_vector<Val,SV>& operator = (const rsc_sparse_vector<Val, SV>& csv)
@@ -469,20 +467,6 @@ rsc_sparse_vector<Val, SV>::rsc_sparse_vector(rsc_sparse_vector<Val,SV>&& csv) B
 //---------------------------------------------------------------------
 
 template<class Val, class SV>
-rsc_sparse_vector<Val, SV>::rsc_sparse_vector(
-    const typename rsc_sparse_vector<Val, SV>::sparse_vector_type& sv)
-: sv_(bm::use_null),
-  max_id_(0), in_sync_(false)
-{
-    construct_bv_blocks();
-
-    load_from(sv);
-}
-
-
-//---------------------------------------------------------------------
-
-template<class Val, class SV>
 typename rsc_sparse_vector<Val, SV>::size_type
 rsc_sparse_vector<Val, SV>::size() const
 {
@@ -823,19 +807,8 @@ void rsc_sparse_vector<Val, SV>::construct_bv_blocks()
 {
     if (bv_blocks_ptr_)
         return;
-#if defined(BM_ALLOC_ALIGN)
-#ifdef _MSC_VER
-    bv_blocks_ptr_ = (bvector_blocks_psum_type*) ::_aligned_malloc(sizeof(bvector_blocks_psum_type), BM_ALLOC_ALIGN);
-#else
-    bv_blocks_ptr_ = (bvector_blocks_psum_type*) ::_mm_malloc(sizeof(bvector_blocks_psum_type), BM_ALLOC_ALIGN);
-#endif
-#else
-    bv_blocks_ptr_ = (bvector_blocks_psum_type*) ::malloc(sizeof(bvector_blocks_psum_type));
-#endif
-    if (!bv_blocks_ptr_)
-    {
-        bvector_type::throw_bad_alloc();
-    }
+    bv_blocks_ptr_ =
+        (bvector_blocks_psum_type*) bm::aligned_new_malloc(sizeof(bvector_blocks_psum_type));
     bv_blocks_ptr_ = new(bv_blocks_ptr_) bvector_blocks_psum_type(); // placement new
 }
 
@@ -844,17 +817,7 @@ void rsc_sparse_vector<Val, SV>::construct_bv_blocks()
 template<class Val, class SV>
 void rsc_sparse_vector<Val, SV>::free_bv_blocks()
 {
-    if (!bv_blocks_ptr_)
-        return;
-#ifdef BM_ALLOC_ALIGN
-# ifdef _MSC_VER
-    ::_aligned_free(bv_blocks_ptr_);
-#else
-    ::_mm_free(bv_blocks_ptr_);
-# endif
-#else
-    ::free(bv_blocks_ptr_);
-#endif
+    bm::aligned_free(bv_blocks_ptr_);
 }
 
 //---------------------------------------------------------------------

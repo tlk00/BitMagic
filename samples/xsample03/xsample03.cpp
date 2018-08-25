@@ -267,7 +267,7 @@ int load_snp_report(const std::string& fname, sparse_vector_u32& sv)
         catch (std::exception& /*ex*/)
         {
             continue; // detailed disgnostics commented out
-            // error detected, becuase some columns are sometimes missing 
+            // error detected, because some columns are sometimes missing
             // just ignore it
             //
             /*
