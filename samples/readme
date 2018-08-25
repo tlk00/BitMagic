@@ -49,5 +49,5 @@ More complex examples to illustrate mixed techniques and use cases
 ./xsample02 - sparse vector based counting sort and histogram construction techniques compared to std::sort()
                Details at: http://bitmagic.io/hist-sort.html
 ./xsample03 - Search in human genome data (bioinformatics) using bm::sparse_vector<>, bm::rsc_sparse_vector<> 
-               Details at: 
+               Details at: http://bitmagic.io/succinct-snp-search.html 
 

@@ -1,5 +1,6 @@
 The goal here is to compress/search save bioinfromatics data on nucleotide polymorphism using BitMagic Library.
-
+Tech.notes:
+http://bitmagic.io/succinct-snp-search.html
 
 SNP RS columnar sparse vector example:
 
