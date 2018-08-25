@@ -29,6 +29,14 @@ For more information please visit:  http://bitmagic.io
 
 /*! \file rscsample01.cpp
     \brief Example: rsc_sparse_vector<> usage
+ 
+    rsc_sparse_vector<> is a sparse vector which uses bit-transposition and
+    rank-select succinct method of compression of NULL (unassigned) values.
+    Unassigned values are dropped (as transposed columns) from the bit-matrix.
+ 
+    rsc_sparse_vector<> is basically a read-only structure, which can be used
+    for compact data storage and search. Random access to elements is possible
+    with a penalty of bit-vector Rank or Select operations.
 */
 
 #include <iostream>
@@ -123,7 +131,7 @@ int main(void)
             return 1;
         }
 
-        // unload rsc to sv, this make a round-trip
+        // unload rsc to sv, this makes a round-trip to an editable form
         sparse_vector_u32 sv3(bm::use_null);
         csv3.load_to(sv3);
         
