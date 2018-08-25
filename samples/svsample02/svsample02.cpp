@@ -75,14 +75,15 @@ int main(void)
         int res = bm::sparse_vector_deserialize(sv2, &tmp_buf[0], tb);
         if (res != 0)
         {
-            cerr << "De-Serialization error in TestEqualSparseVectors()" << endl;
-            exit(1);
+            cerr << "De-Serialization error!" << endl;
+            return 1;
         }
         
         
         if (!sv1.equal(sv2) )
         {
             cerr << "Error! Please report a bug to BitMagic project support." << endl;
+            return 1;
         }
         
         cout << sv2.size() << endl;
