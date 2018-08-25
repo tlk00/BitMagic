@@ -20,8 +20,8 @@ For more information please visit:  http://bitmagic.io
    Seach for human mutation (SNP) in within chr1.
    Benchmark comaprison of different methods
  
-  \sa bm::sparse_vector<>
-  \sa bm::rsc_sparse_vector<>
+  \sa bm::sparse_vector
+  \sa bm::rsc_sparse_vector
   \sa bm::sparse_vector_scanner
 */
 
@@ -55,10 +55,6 @@ For more information please visit:  http://bitmagic.io
 #include <time.h>
 #include <stdio.h>
 
-#ifdef _MSC_VER
-#pragma warning( push )
-#pragma warning( disable : 4996)
-#endif
 
 #include <vector>
 #include <chrono>
@@ -571,11 +567,4 @@ int main(int argc, char *argv[])
 
     return 0;
 }
-
-
-#ifdef _MSC_VER
-#pragma warning( pop )
-#endif
-
-
 
