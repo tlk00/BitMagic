@@ -1,5 +1,7 @@
 BitMagic Library samples
 
+Bit vector
+
 ./bvsample01 - basic operations to set/get bits with bvector<> container, find cardinality (bit count)
 ./bvsample02 - set algebra operations, unions, intersections, equivalence of sets, lexicographical comparison
 ./bvsample03 - use of different in-memory bitset compression options, calculate memory footprint
@@ -18,6 +20,9 @@ BitMagic Library samples
                Tech.note: http://bitmagic.io/aggregator.html
 
 
+Sparse vector (bit-transposed sparse vector)
+
+
 ./svsample01 - basic example of sparse_vector<> container
 ./svsample02 - sparse_vector<> serialization example
 ./svsample03 - sparse_vector<> import, join, extract methods
@@ -26,8 +31,18 @@ BitMagic Library samples
                using memory-efficient bit-transposed sparse_vector as a translation function
                Tech.note:http://bitmagic.io/set2set-assoc-remap-opt.html
 ./svsample06 - load data and search for value(s) in sparse_vector. This sample illustrates back insert 
-               iterator, const_iterator and bm::sparse_vector_scanner<> search class. Benchmark different search/scan methods.
+               iterator, const_iterator and bm::sparse_vector_scanner<> search class. 
+	       Benchmark different search/scan methods.
+	       Tech.note: http://bitmagic.io/sparse-vector-search.html
+
+RSC sparse vector (Succinct vector based on Rank-Select methods)
+
+
+./rscsample01 - basics of rsc_sparse_vector<> container. Load, unload, serialize.
  
+
+
+More complex examples to illustrate mixed techniques and use cases
 
 ./xsample01 - advanced: different methods of handling of super sparse sets. Benchmarks of set operations for each method. 
                Details at: http://bitmagic.io/case-ER-join.html
