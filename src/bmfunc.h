@@ -241,7 +241,7 @@ BMFORCEINLINE
 bm::id_t word_trailing_zeros(bm::id_t w)
 {
     // TODO: find a better variant for MSVC 
-#if (defined(BMSSE42OPT) || defined(BMAVX2OPT)) && defined(__GNUC__)
+#if (defined(BMSSE42OPT) || defined(BMAVX2OPT) || defined(BMAVX512OPT)) && defined(__GNUC__)
         return bm::id_t(__builtin_ctzl(w));
 #else
     // implementation from
@@ -882,7 +882,7 @@ template<bool T> typename globals<T>::bo globals<T>::_bo;
 inline
 bool bit_is_all_zero(const bm::word_t* BMRESTRICT start)
 {
-#if defined(BMSSE42OPT) || defined(BMAVX2OPT)
+#if defined(VECT_IS_ZERO_BLOCK)
     return VECT_IS_ZERO_BLOCK(start);
 #else
    const bm::wordop_t* BMRESTRICT blk = (bm::wordop_t*) (start);
@@ -1550,7 +1550,7 @@ template<typename T> unsigned gap_bit_count_unr(const T* buf)
     }
     ++pcurr;  // set GAP to 1
 
-    #if defined(BMAVX2OPT)
+    #if defined(BMAVX2OPT) || defined(BMAVX512OPT)
     if (dsize > 34)
     {
         const unsigned unr_factor = 32;
@@ -3734,9 +3734,9 @@ bm::id_t bit_block_calc_count_change(const bm::word_t* block,
                                      const bm::word_t* block_end,
                                      unsigned*         bit_count)
 {
-#if defined(BMSSE2OPT) || defined(BMSSE42OPT) || defined (BMAVX2OPT)
+#if defined(BMSSE2OPT) || defined(BMSSE42OPT) || defined (BMAVX2OPT) || defined(BMAVX512OPT)
 
-#ifdef BMAVX2OPT
+#if defined(BMAVX2OPT) || defined(BMAVX512OPT)
     // TODO: debug true avx2 function (stress test failure)
     // temp use SSE4.2 variant
     return sse42_bit_block_calc_count_change(
@@ -3906,7 +3906,7 @@ bm::id_t bit_block_calc_count_to(const bm::word_t*  block,
     unsigned bitcount = right + 1;
 
     // AVX2 or 64-bit loop unroll
-    #if defined(BMAVX2OPT)
+    #if defined(BMAVX2OPT) || defined(BMAVX512OPT)
         BM_AVX2_POPCNT_PROLOG
     
         __m256i cnt = _mm256_setzero_si256();
