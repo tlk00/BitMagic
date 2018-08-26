@@ -1675,7 +1675,7 @@ void avx2_bit_block_gather_scatter(unsigned* BMRESTRICT arr,
     avx512_and_digest((__m512i*) dst, (const __m512i*) (src))
 
 #define VECT_AND_DIGEST_2WAY(dst, src1, src2) \
-    avx512_and_digest_2way((__m512*) dst, (const __m512i*) (src1), (const __m512i*) (src2))
+    avx512_and_digest_2way((__m512i*) dst, (const __m512i*) (src1), (const __m512i*) (src2))
 
 #define VECT_OR_BLOCK(dst, src) \
     avx2_or_block((__m256i*) dst, (__m256i*) (src))
