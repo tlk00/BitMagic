@@ -1666,7 +1666,7 @@ sparse_vector<Val, BV>::get(bm::id_t i) const
             BM_ASSERT(!(plains_[j + 0] || plains_[j + 1] || plains_[j + 2] || plains_[j + 3]));
             continue;
         }
-#elif defined(BM64_AVX2)
+#elif defined(BM64_AVX2) || defined(BM64_AVX512)
         __m256i w0 = _mm256_loadu_si256((__m256i*)(plains_ + j));
         if (_mm256_testz_si256(w0, w0))
         {

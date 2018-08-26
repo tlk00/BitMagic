@@ -186,7 +186,7 @@ BMFORCEINLINE
 unsigned word_bitcount64(bm::id64_t x)
 {
 #if defined(BMSSE42OPT) || defined(BMAVX2OPT)
-#if defined(BM64_SSE4) || defined(BM64_AVX2)
+#if defined(BM64_SSE4) || defined(BM64_AVX2) || defined(BM64_AVX512)
     return unsigned(_mm_popcnt_u64(x));
 #else
     return _mm_popcnt_u32(x >> 32) + _mm_popcnt_u32((unsigned)x);
@@ -1237,7 +1237,7 @@ void for_each_nzblock(T*** root, unsigned size1, F& f)
         unsigned j = 0;
         do
         {
-#ifdef BM64_AVX2
+#if defined(BM64_AVX2) || defined(BM64_AVX512)
             if (!avx2_test_all_zero_wave(blk_blk + j))
             {
                 non_empty_top = 1;
@@ -1355,7 +1355,7 @@ void for_each_nzblock2(T*** root, unsigned size1, F& f)
             }
         }
     }  // for i
-#elif defined(BM64_AVX2)
+#elif defined(BM64_AVX2) || defined(BM64_AVX512)
     for (unsigned i = 0; i < size1; ++i)
     {
         T** blk_blk;
@@ -3861,7 +3861,7 @@ bm::id_t bit_block_calc_count_range(const bm::word_t* block,
     
     // now when we are word aligned, we can count bits the usual way
     //
-    #if defined(BM64_SSE4) || defined(BM64_AVX2)
+    #if defined(BM64_SSE4) || defined(BM64_AVX2) || defined(BM64_AVX512)
         for ( ;bitcount >= 64; bitcount-=64)
         {
             bm::id64_t w64 = *((bm::id64_t*)word); // x86 unaligned(!) read
@@ -6484,7 +6484,7 @@ void bit_block_gather_scatter(TRGW* arr, const bm::word_t* blk,
         sse4_bit_block_gather_scatter(arr, blk, idx, size, start, bit_idx);
         return;
     }
-#elif defined(BM64_AVX2)
+#elif defined(BM64_AVX2) || defined(BM64_AVX512)
     if (bm::conditional<sizeof(TRGW)==4 && sizeof(IDX)==4>::test())
     {
         avx2_bit_block_gather_scatter(arr, blk, idx, size, start, bit_idx);
@@ -6523,7 +6523,7 @@ unsigned idx_arr_block_lookup(const unsigned* idx, unsigned size, unsigned nb, u
     if (nb == unsigned(idx[size-1] >> bm::set_block_shift))
         return size;
     
-#if defined(BMAVX2OPT)
+#if defined(BMAVX2OPT) || defined(BMAVX512OPT) || defined(BM64_AVX512)
     return avx2_idx_arr_block_lookup(idx, size, nb, start);
 #elif defined(BMSSE42OPT)
     return sse4_idx_arr_block_lookup(idx, size, nb, start);

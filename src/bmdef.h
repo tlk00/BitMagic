@@ -207,12 +207,25 @@ For more information please visit:  http://bitmagic.io
 # if defined(BM64OPT) || defined(__x86_64) || defined(_M_AMD64) || defined(_WIN64) || \
     defined(__LP64__) || defined(_LP64)
 #   undef BM64OPT
-#   undef  BM64_SSE4
+#   undef BM64_SSE4
 #   define BM64_AVX2
 # endif
 # undef BMSSE2OPT
 # undef BMSSE42OPT
 #endif
+
+#ifdef BMAVX512OPT
+# if defined(BM64OPT) || defined(__x86_64) || defined(_M_AMD64) || defined(_WIN64) || \
+    defined(__LP64__) || defined(_LP64)
+#   undef BM64OPT
+#   undef BM64_SSE4
+#   undef BM64_AVX2
+#   define BM64_AVX512
+# endif
+# undef BMSSE2OPT
+# undef BMSSE42OPT
+#endif
+
 
 
 # ifndef BM_SET_MMX_GUARD

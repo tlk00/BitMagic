@@ -3595,7 +3595,7 @@ void bvector<Alloc>::combine_operation_or(const bm::bvector<Alloc>& bv)
         const bm::word_t* arg_blk;
         do
         {
-        #if defined(BM64_AVX2)
+        #if defined(BM64_AVX2) || defined(BM64_AVX512)
             BM_OR_OP(0)
             BM_OR_OP(1)
             BM_OR_OP(2)
@@ -3666,7 +3666,7 @@ void bvector<Alloc>::combine_operation_and(const bm::bvector<Alloc>& bv)
         const bm::word_t* arg_blk;
         do
         {
-        #ifdef BM64_AVX2
+        #if defined(BM64_AVX2) || defined(BM64_AVX512)
             if (!avx2_test_all_zero_wave(blk_blk + j))
             {
                 BM_AND_OP(0)
@@ -3730,7 +3730,7 @@ void bvector<Alloc>::combine_operation_sub(const bm::bvector<Alloc>& bv)
         unsigned j = 0;
         do
         {
-        #ifdef BM64_AVX2
+        #if defined(BM64_AVX2) || defined(BM64_AVX512)
             if (!avx2_test_all_zero_wave(blk_blk + j))
             {
                 BM_SUB_OP(0)
