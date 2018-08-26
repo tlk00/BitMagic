@@ -1014,24 +1014,24 @@ bool avx512_sub_digest(__m512i* BMRESTRICT dst,
 
 
 /*!
-    @brief AVX2 block memset
+    @brief AVX512 block memset
     *dst = value
 
-    @ingroup AVX2
+    @ingroup AVX512
 */
 BMFORCEINLINE
-void avx2_set_block(__m256i* BMRESTRICT dst, bm::word_t value)
+void avx512_set_block(__m512i* BMRESTRICT dst, bm::word_t value)
 {
-    __m256i* BMRESTRICT dst_end =
-        (__m256i*)((bm::word_t*)(dst) + bm::set_block_size);
+    __m512i* BMRESTRICT dst_end =
+        (__m512i*)((bm::word_t*)(dst) + bm::set_block_size);
 
-    __m256i ymm0 = _mm256_set1_epi32(int(value));
+    __m512i zmm0 = _mm512_set1_epi32(int(value));
     do
     {
-        _mm256_store_si256(dst,   ymm0);
-        _mm256_store_si256(dst+1, ymm0);
-        _mm256_store_si256(dst+2, ymm0);
-        _mm256_store_si256(dst+3, ymm0);
+        _mm512_store_si512(dst,   zmm0);
+        _mm512_store_si512(dst+1, zmm0);
+        _mm512_store_si512(dst+2, zmm0);
+        _mm512_store_si512(dst+3, zmm0);
         
         dst += 4;
     } while (dst < dst_end);
@@ -1040,43 +1040,33 @@ void avx2_set_block(__m256i* BMRESTRICT dst, bm::word_t value)
 
 
 /*!
-    @brief AVX2 block copy
+    @brief  block copy
     *dst = *src
 
-    @ingroup AVX2
+    @ingroup AVX512
 */
 inline
-void avx2_copy_block(__m256i* BMRESTRICT dst,
-                     const __m256i* BMRESTRICT src)
+void avx512_copy_block(__m512i* BMRESTRICT dst,
+                     const __m512i* BMRESTRICT src)
 {
-    __m256i ymm0, ymm1, ymm2, ymm3;
+    __m512i ymm0, ymm1, ymm2, ymm3;
 
-    const __m256i* BMRESTRICT src_end =
-        (const __m256i*)((bm::word_t*)(src) + bm::set_block_size);
+    const __m512i* BMRESTRICT src_end =
+        (const __m512i*)((bm::word_t*)(src) + bm::set_block_size);
 
     do
     {
-        ymm0 = _mm256_load_si256(src+0);
-        ymm1 = _mm256_load_si256(src+1);
-        ymm2 = _mm256_load_si256(src+2);
-        ymm3 = _mm256_load_si256(src+3);
+        ymm0 = _mm512_load_si512(src+0);
+        ymm1 = _mm512_load_si512(src+1);
+        ymm2 = _mm512_load_si512(src+2);
+        ymm3 = _mm512_load_si512(src+3);
         
-        _mm256_store_si256(dst+0, ymm0);
-        _mm256_store_si256(dst+1, ymm1);
-        _mm256_store_si256(dst+2, ymm2);
-        _mm256_store_si256(dst+3, ymm3);
+        _mm512_store_si512(dst+0, ymm0);
+        _mm512_store_si512(dst+1, ymm1);
+        _mm512_store_si512(dst+2, ymm2);
+        _mm512_store_si512(dst+3, ymm3);
         
-        ymm0 = _mm256_load_si256(src+4);
-        ymm1 = _mm256_load_si256(src+5);
-        ymm2 = _mm256_load_si256(src+6);
-        ymm3 = _mm256_load_si256(src+7);
-        
-        _mm256_store_si256(dst+4, ymm0);
-        _mm256_store_si256(dst+5, ymm1);
-        _mm256_store_si256(dst+6, ymm2);
-        _mm256_store_si256(dst+7, ymm3);
-
-        src += 8; dst += 8;
+        src += 4; dst += 4;
 
     } while (src < src_end);
 }
@@ -1148,16 +1138,16 @@ bool avx2_is_all_zero(const __m256i* BMRESTRICT block)
 
 /*!
     @brief check if digest stride is all zero bits
-    @ingroup AVX2
+    @ingroup AVX512
 */
 inline
-bool avx2_is_digest_zero(const __m256i* BMRESTRICT block)
+bool avx512_is_digest_zero(const __m512i* BMRESTRICT block)
 {
-    __m256i wA = _mm256_or_si256(_mm256_load_si256(block+0), _mm256_load_si256(block+1));
-    __m256i wB = _mm256_or_si256(_mm256_load_si256(block+2), _mm256_load_si256(block+3));
-    wA = _mm256_or_si256(wA, wB);
+    __m512i mA = _mm512_or_si512(_mm512_load_si512(block+0), _mm512_load_si512(block+1));
 
-    return _mm256_testz_si256(wA, wA);
+    __mmask16 and_mask = _mm512_test_epi32_mask(mA, _mm512_set1_epi32(~0u));
+
+    return (and_mask == 0);
 }
 
 
@@ -1693,10 +1683,10 @@ void avx2_bit_block_gather_scatter(unsigned* BMRESTRICT arr,
     avx2_xor_arr((__m256i*) dst, (__m256i*) (src), (__m256i*) (src_end))
 
 #define VECT_COPY_BLOCK(dst, src) \
-    avx2_copy_block((__m256i*) dst, (__m256i*) (src))
+    avx512_copy_block((__m512i*) dst, (__m512i*) (src))
 
 #define VECT_SET_BLOCK(dst, value) \
-    avx2_set_block((__m256i*) dst, (value))
+    avx512_set_block((__m512i*) dst, (value))
 
 #define VECT_IS_ZERO_BLOCK(dst) \
     avx2_is_all_zero((__m256i*) dst)
@@ -1705,7 +1695,7 @@ void avx2_bit_block_gather_scatter(unsigned* BMRESTRICT arr,
     avx2_is_all_one((__m256i*) dst)
 
 #define VECT_IS_DIGEST_ZERO(start) \
-    avx2_is_digest_zero((__m256i*)start)
+    avx512_is_digest_zero((__m512i*)start)
 
 
 
