@@ -1,14 +1,19 @@
 ifeq ($(COMPILER),GNU_CC)
-    ifeq ($(BMOPTFLAGS),-DBMAVX2OPT)
-        CXXARCHFLAGS=-march=native -mavx2
+
+    ifeq ($(BMOPTFLAGS),-DBMAVX512OPT)
+        CXXARCHFLAGS=-march=skylake-avx512 -mtune=skylake-avx512
     else
-        ifeq ($(BMOPTFLAGS),-DBMSSE42OPT)
-            CXXARCHFLAGS=-march=core2 -msse4.2
+        ifeq ($(BMOPTFLAGS),-DBMAVX2OPT)
+            CXXARCHFLAGS=-march=native -mavx2
         else
-            ifeq ($(BMOPTFLAGS),-DBMSSE2OPT)
-                CXXARCHFLAGS=-march=core2 -msse2
+            ifeq ($(BMOPTFLAGS),-DBMSSE42OPT)
+                CXXARCHFLAGS=-march=core2 -msse4.2
             else
-                CXXARCHFLAGS=-march=core2
+                ifeq ($(BMOPTFLAGS),-DBMSSE2OPT)
+                    CXXARCHFLAGS=-march=core2 -msse2
+                else
+                    CXXARCHFLAGS=-march=core2
+                endif
             endif
         endif
     endif
@@ -20,12 +25,12 @@ ifeq ($(COMPILER),GNU_CC)
     OS_VER = -D__$(shell uname -s)_$(shell uname -r | sed -e 's/\./_/g' -e 's/-.*//')
     PLATFORM_CXXFLAGS = -D_REENTRANT $(OS_VER) -D_GNU_SOURCE -std=c++11 -Wall -Wextra -Werror=uninitialized -Wshadow -Wconversion -Wmissing-declarations -Wswitch-default
     PLATFORM_CFLAGS = -D_REENTRANT $(OS_VER)
-    COMMON_LDFLAGS = $(LINKER_DFLAGS) 
+    COMMON_LDFLAGS = $(LINKER_DFLAGS) -Wl,-stack_size,0x100000000
     COMMON_CLDFLAGS = $(COMMON_LDFLAGS)
     EXTERN_LIBS = $(EXTERN_LIBS_BASE)/lib
     CXX = g++ $(CXXARCHFLAGS) -Wall -Wc++11-extensions -std=c++11
-    CC = gcc $(CXXARCHFLAGS)  -Wall
-    LD = g++
+    CC = gcc $(CXXARCHFLAGS) -Wall
+    LD = g++ $(COMMON_LDFLAGS)
     CC_PIC_FLAGS = -fPIC
     CXX_PIC_FLAGS = -fPIC
     OPT_FLAGS = -g0 -O2

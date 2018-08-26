@@ -21,6 +21,14 @@ For more information please visit:  http://bitmagic.io
     \brief SIMD target version definitions
 */
 
+#ifdef BMAVX512OPT
+# undef BMAVX2OPT
+# undef BMSSE42OPT
+# undef BMSSE2OPT
+# define BMVECTOPT
+# include "bmavx512.h"
+#endif
+
 
 #ifdef BMAVX2OPT
 # undef BMSSE42OPT
@@ -52,6 +60,9 @@ namespace bm
 */
 inline int simd_version()
 {
+#ifdef BMAVX512OPT
+    return bm::simd_avx512;
+#endif
 #ifdef BMAVX2OPT
     return bm::simd_avx2;
 #endif

@@ -34,6 +34,9 @@ namespace bm
 #if defined(BMAVX2OPT)
 #define BM_ALLOC_ALIGN 32
 #endif
+#if defined(BMAVX512OPT)
+#define BM_ALLOC_ALIGN 64
+#endif
 
 
 /*! 
