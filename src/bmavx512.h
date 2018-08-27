@@ -719,7 +719,7 @@ bool avx512_or_block(__m512i* BMRESTRICT dst,
     } while (src2 < src_end);
 
     __m512i maskF = _mm512_set1_epi32(~0u);
-    mAccF0 = _mm512_and_si512(mAccF0, mAccF1);
+//    mAccF0 = _mm512_and_si512(mAccF0, mAccF1);
     __mmask64 maskA = _mm512_cmpeq_epi8_mask(mAccF0, maskF);
     return (maskA == ~0ull);
 }
@@ -784,50 +784,49 @@ bool avx2_or_arr_unal(__m256i* BMRESTRICT dst,
     *dst |= *src1 | src2
     @return true if all bits are 1
 
-    @ingroup AVX2
+    @ingroup AVX512
 */
 inline
-bool avx2_or_block_3way(__m256i* BMRESTRICT dst,
-                        const __m256i* BMRESTRICT src1,
-                        const __m256i* BMRESTRICT src2)
+bool avx512_or_block_3way(__m512i* BMRESTRICT dst,
+                        const __m512i* BMRESTRICT src1,
+                        const __m512i* BMRESTRICT src2)
 {
-    __m256i m1A, m1B, m1C, m1D;
-    __m256i mAccF0 = _mm256_set1_epi32(~0u); // broadcast 0xFF
-    __m256i mAccF1 = _mm256_set1_epi32(~0u); // broadcast 0xFF
-    const __m256i* BMRESTRICT src_end1 =
-        (const __m256i*)((bm::word_t*)(src1) + bm::set_block_size);
+    __m512i m1A, m1B, m1C, m1D;
+    __m512i mAccF0, mAccF1;
+    
+    mAccF0 = mAccF1 = _mm512_set1_epi32(~0u); // broadcast 0xFF
+    const __m512i* BMRESTRICT src_end1 =
+        (const __m512i*)((bm::word_t*)(src1) + bm::set_block_size);
 
     do
     {
-        m1A = _mm256_or_si256(_mm256_load_si256(src1+0), _mm256_load_si256(dst+0));
-        m1B = _mm256_or_si256(_mm256_load_si256(src1+1), _mm256_load_si256(dst+1));
-        m1C = _mm256_or_si256(_mm256_load_si256(src1+2), _mm256_load_si256(dst+2));
-        m1D = _mm256_or_si256(_mm256_load_si256(src1+3), _mm256_load_si256(dst+3));
+        m1A = _mm512_or_si512(_mm512_load_si512(src1+0), _mm512_load_si512(dst+0));
+        m1B = _mm512_or_si512(_mm512_load_si512(src1+1), _mm512_load_si512(dst+1));
+        m1C = _mm512_or_si512(_mm512_load_si512(src1+2), _mm512_load_si512(dst+2));
+        m1D = _mm512_or_si512(_mm512_load_si512(src1+3), _mm512_load_si512(dst+3));
 
-        m1A = _mm256_or_si256(m1A, _mm256_load_si256(src2+0));
-        m1B = _mm256_or_si256(m1B, _mm256_load_si256(src2+1));
-        m1C = _mm256_or_si256(m1C, _mm256_load_si256(src2+2));
-        m1D = _mm256_or_si256(m1D, _mm256_load_si256(src2+3));
+        m1A = _mm512_or_si512(m1A, _mm512_load_si512(src2+0));
+        m1B = _mm512_or_si512(m1B, _mm512_load_si512(src2+1));
+        m1C = _mm512_or_si512(m1C, _mm512_load_si512(src2+2));
+        m1D = _mm512_or_si512(m1D, _mm512_load_si512(src2+3));
 
-        _mm256_stream_si256(dst+0, m1A);
-        _mm256_stream_si256(dst+1, m1B);
-        _mm256_stream_si256(dst+2, m1C);
-        _mm256_stream_si256(dst+3, m1D);
+        _mm512_stream_si512(dst+0, m1A);
+        _mm512_stream_si512(dst+1, m1B);
+        _mm512_stream_si512(dst+2, m1C);
+        _mm512_stream_si512(dst+3, m1D);
 
-        mAccF1 = _mm256_and_si256(mAccF1, m1C);
-        mAccF1 = _mm256_and_si256(mAccF1, m1D);
-        mAccF0 = _mm256_and_si256(mAccF0, m1A);
-        mAccF0 = _mm256_and_si256(mAccF0, m1B);
+        mAccF1 = _mm512_and_si512(mAccF1, m1C);
+        mAccF1 = _mm512_and_si512(mAccF1, m1D);
+        mAccF0 = _mm512_and_si512(mAccF0, m1A);
+        mAccF0 = _mm512_and_si512(mAccF0, m1B);
 
         src1 += 4; src2 += 4; dst += 4;
 
     } while (src1 < src_end1);
-    
-    __m256i maskF = _mm256_set1_epi32(~0u);
-     mAccF0 = _mm256_and_si256(mAccF0, mAccF1);
-    __m256i wcmpA= _mm256_cmpeq_epi8(mAccF0, maskF);
-     unsigned maskA = unsigned(_mm256_movemask_epi8(wcmpA));
-     return (maskA == ~0u);    
+
+    __m512i maskF = _mm512_set1_epi32(~0u);
+    __mmask64 maskA = _mm512_cmpeq_epi8_mask(mAccF0, maskF);
+    return (maskA == ~0ull);
 }
 
 
@@ -836,53 +835,53 @@ bool avx2_or_block_3way(__m256i* BMRESTRICT dst,
     *dst |= *src1 | src2
     @return true if all bits are 1
 
-    @ingroup AVX2
+    @ingroup AVX512
 */
 inline
-bool avx2_or_block_5way(__m256i* BMRESTRICT dst,
-                        const __m256i* BMRESTRICT src1,
-                        const __m256i* BMRESTRICT src2,
-                        const __m256i* BMRESTRICT src3,
-                        const __m256i* BMRESTRICT src4)
+bool avx512_or_block_5way(__m512i* BMRESTRICT dst,
+                        const __m512i* BMRESTRICT src1,
+                        const __m512i* BMRESTRICT src2,
+                        const __m512i* BMRESTRICT src3,
+                        const __m512i* BMRESTRICT src4)
 {
-    __m256i m1A, m1B, m1C, m1D;
-    __m256i mAccF0 = _mm256_set1_epi32(~0u); // broadcast 0xFF
-    __m256i mAccF1 = _mm256_set1_epi32(~0u); // broadcast 0xFF
+    __m512i m1A, m1B, m1C, m1D;
+    __m512i mAccF0, mAccF1;
+    mAccF0 = mAccF1 = _mm512_set1_epi32(~0u); // broadcast 0xFF
 
-    const __m256i* BMRESTRICT src_end1 =
-        (const __m256i*)((bm::word_t*)(src1) + bm::set_block_size);
+    const __m512i* BMRESTRICT src_end1 =
+        (const __m512i*)((bm::word_t*)(src1) + bm::set_block_size);
 
     do
     {
-        m1A = _mm256_or_si256(_mm256_load_si256(src1+0), _mm256_load_si256(dst+0));
-        m1B = _mm256_or_si256(_mm256_load_si256(src1+1), _mm256_load_si256(dst+1));
-        m1C = _mm256_or_si256(_mm256_load_si256(src1+2), _mm256_load_si256(dst+2));
-        m1D = _mm256_or_si256(_mm256_load_si256(src1+3), _mm256_load_si256(dst+3));
+        m1A = _mm512_or_si512(_mm512_load_si512(src1+0), _mm512_load_si512(dst+0));
+        m1B = _mm512_or_si512(_mm512_load_si512(src1+1), _mm512_load_si512(dst+1));
+        m1C = _mm512_or_si512(_mm512_load_si512(src1+2), _mm512_load_si512(dst+2));
+        m1D = _mm512_or_si512(_mm512_load_si512(src1+3), _mm512_load_si512(dst+3));
 
-        m1A = _mm256_or_si256(m1A, _mm256_load_si256(src2+0));
-        m1B = _mm256_or_si256(m1B, _mm256_load_si256(src2+1));
-        m1C = _mm256_or_si256(m1C, _mm256_load_si256(src2+2));
-        m1D = _mm256_or_si256(m1D, _mm256_load_si256(src2+3));
+        m1A = _mm512_or_si512(m1A, _mm512_load_si512(src2+0));
+        m1B = _mm512_or_si512(m1B, _mm512_load_si512(src2+1));
+        m1C = _mm512_or_si512(m1C, _mm512_load_si512(src2+2));
+        m1D = _mm512_or_si512(m1D, _mm512_load_si512(src2+3));
 
-        m1A = _mm256_or_si256(m1A, _mm256_load_si256(src3+0));
-        m1B = _mm256_or_si256(m1B, _mm256_load_si256(src3+1));
-        m1C = _mm256_or_si256(m1C, _mm256_load_si256(src3+2));
-        m1D = _mm256_or_si256(m1D, _mm256_load_si256(src3+3));
+        m1A = _mm512_or_si512(m1A, _mm512_load_si512(src3+0));
+        m1B = _mm512_or_si512(m1B, _mm512_load_si512(src3+1));
+        m1C = _mm512_or_si512(m1C, _mm512_load_si512(src3+2));
+        m1D = _mm512_or_si512(m1D, _mm512_load_si512(src3+3));
 
-        m1A = _mm256_or_si256(m1A, _mm256_load_si256(src4+0));
-        m1B = _mm256_or_si256(m1B, _mm256_load_si256(src4+1));
-        m1C = _mm256_or_si256(m1C, _mm256_load_si256(src4+2));
-        m1D = _mm256_or_si256(m1D, _mm256_load_si256(src4+3));
+        m1A = _mm512_or_si512(m1A, _mm512_load_si512(src4+0));
+        m1B = _mm512_or_si512(m1B, _mm512_load_si512(src4+1));
+        m1C = _mm512_or_si512(m1C, _mm512_load_si512(src4+2));
+        m1D = _mm512_or_si512(m1D, _mm512_load_si512(src4+3));
 
-        _mm256_stream_si256(dst+0, m1A);
-        _mm256_stream_si256(dst+1, m1B);
-        _mm256_stream_si256(dst+2, m1C);
-        _mm256_stream_si256(dst+3, m1D);
+        _mm512_stream_si512(dst+0, m1A);
+        _mm512_stream_si512(dst+1, m1B);
+        _mm512_stream_si512(dst+2, m1C);
+        _mm512_stream_si512(dst+3, m1D);
 
-        mAccF1 = _mm256_and_si256(mAccF1, m1C);
-        mAccF1 = _mm256_and_si256(mAccF1, m1D);
-        mAccF0 = _mm256_and_si256(mAccF0, m1A);
-        mAccF0 = _mm256_and_si256(mAccF0, m1B);
+        mAccF1 = _mm512_and_si512(mAccF1, m1C);
+        mAccF1 = _mm512_and_si512(mAccF1, m1D);
+        mAccF0 = _mm512_and_si512(mAccF0, m1A);
+        mAccF0 = _mm512_and_si512(mAccF0, m1B);
 
         src1 += 4; src2 += 4;
         src3 += 4; src4 += 4;
@@ -893,11 +892,9 @@ bool avx2_or_block_5way(__m256i* BMRESTRICT dst,
 
     } while (src1 < src_end1);
     
-    __m256i maskF = _mm256_set1_epi32(~0u);
-     mAccF0 = _mm256_and_si256(mAccF0, mAccF1);
-    __m256i wcmpA= _mm256_cmpeq_epi8(mAccF0, maskF);
-     unsigned maskA = unsigned(_mm256_movemask_epi8(wcmpA));
-     return (maskA == ~0u);
+    __m512i maskF = _mm512_set1_epi32(~0u);
+    __mmask64 maskA = _mm512_cmpeq_epi8_mask(mAccF0, maskF);
+    return (maskA == ~0ull);
 }
 
 
@@ -1670,10 +1667,10 @@ void avx2_bit_block_gather_scatter(unsigned* BMRESTRICT arr,
     avx512_or_block((__m512i*) dst, (__m512i*) (src))
 
 #define VECT_OR_BLOCK_3WAY(dst, src1, src2) \
-    avx2_or_block_3way((__m256i*) dst, (__m256i*) (src1), (__m256i*) (src2))
+    avx512_or_block_3way((__m512i*) dst, (__m512i*) (src1), (__m512i*) (src2))
 
 #define VECT_OR_BLOCK_5WAY(dst, src1, src2, src3, src4) \
-    avx2_or_block_5way((__m256i*) dst, (__m256i*) (src1), (__m256i*) (src2), (__m256i*) (src3), (__m256i*) (src4))
+    avx512_or_block_5way((__m512i*) dst, (__m512i*) (src1), (__m512i*) (src2), (__m512i*) (src3), (__m512i*) (src4))
 
 #define VECT_SUB_BLOCK(dst, src) \
     avx2_sub_block((__m256i*) dst, (__m256i*) (src))
