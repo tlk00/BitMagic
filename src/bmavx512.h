@@ -719,7 +719,7 @@ bool avx512_or_block(__m512i* BMRESTRICT dst,
     } while (src2 < src_end);
 
     __m512i maskF = _mm512_set1_epi32(~0u);
-//    mAccF0 = _mm512_and_si512(mAccF0, mAccF1);
+     mAccF0 = _mm512_and_si512(mAccF0, mAccF1);
     __mmask64 maskA = _mm512_cmpeq_epi8_mask(mAccF0, maskF);
     return (maskA == ~0ull);
 }
@@ -825,6 +825,7 @@ bool avx512_or_block_3way(__m512i* BMRESTRICT dst,
     } while (src1 < src_end1);
 
     __m512i maskF = _mm512_set1_epi32(~0u);
+     mAccF0 = _mm512_and_si512(mAccF0, mAccF1);
     __mmask64 maskA = _mm512_cmpeq_epi8_mask(mAccF0, maskF);
     return (maskA == ~0ull);
 }
@@ -893,6 +894,7 @@ bool avx512_or_block_5way(__m512i* BMRESTRICT dst,
     } while (src1 < src_end1);
     
     __m512i maskF = _mm512_set1_epi32(~0u);
+     mAccF0 = _mm512_and_si512(mAccF0, mAccF1);
     __mmask64 maskA = _mm512_cmpeq_epi8_mask(mAccF0, maskF);
     return (maskA == ~0ull);
 }
