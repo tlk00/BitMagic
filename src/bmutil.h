@@ -54,7 +54,11 @@ namespace bm
             {
                 bm::word_t BM_VECT_ALIGN w32[bm::set_block_size] BM_VECT_ALIGN_ATTR;
                 bm::id64_t BM_VECT_ALIGN w64[bm::set_block_size / 2] BM_VECT_ALIGN_ATTR;
-#ifdef BMAVX2OPT
+                
+#if defined(BMAVX512OPT)
+                __m512i  BM_VECT_ALIGN w512[bm::set_block_size / 16] BM_VECT_ALIGN_ATTR;
+#endif
+#if defined(BMAVX2OPT)
                 __m256i  BM_VECT_ALIGN w256[bm::set_block_size / 8] BM_VECT_ALIGN_ATTR;
 #endif
 #if defined(BMSSE2OPT) || defined(BMSSE42OPT)
@@ -66,6 +70,10 @@ namespace bm
             operator const bm::word_t*() const { return &(b_.w32[0]); }
             explicit operator bm::id64_t*() { return &b_.w64[0]; }
             explicit operator const bm::id64_t*() const { return &b_.w64[0]; }
+#ifdef BMAVX512OPT
+            explicit operator __m512i*() { return &b_.w512[0]; }
+            explicit operator const __m512i*() const { return &b_.w512[0]; }
+#endif
 #ifdef BMAVX2OPT
             explicit operator __m256i*() { return &b_.w256[0]; }
             explicit operator const __m256i*() const { return &b_.w256[0]; }
