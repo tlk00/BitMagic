@@ -984,7 +984,7 @@ unsigned avx512_sub_block(__m512i* BMRESTRICT dst,
     accA = _mm512_or_si512(accA, accC); // A = A | C
 
     __m512i maskFF = _mm512_set1_epi32(~0u);
-    __mmask16 and_mask = _mm512_test_epi32_mask(m1A, maskFF);
+    __mmask16 and_mask = _mm512_test_epi32_mask(accA, maskFF);
     
     return (and_mask == 0);
 }
