@@ -1155,31 +1155,30 @@ bool avx512_is_digest_zero(const __m512i* BMRESTRICT block)
 
     __mmask16 and_mask = _mm512_test_epi32_mask(mA, _mm512_set1_epi32(~0u));
 
-    return (and_mask == 0);
+    return (and_mask == 0ull);
 }
 
 
 /*!
     @brief check if block is all one bits
     @return true if all bits are 1
-    @ingroup AVX2
+    @ingroup AVX512
 */
 inline
-bool avx2_is_all_one(const __m256i* BMRESTRICT block)
+bool avx512_is_all_one(const __m512i* BMRESTRICT block)
 {
-    __m256i maskF = _mm256_set1_epi32(~0u); // braodcast 0xFF
-    const __m256i* BMRESTRICT block_end =
-        (const __m256i*)((bm::word_t*)(block) + bm::set_block_size);
+    __m512i maskF = _mm512_set1_epi32(~0u); // braodcast 0xFF
+    const __m512i* BMRESTRICT block_end =
+        (const __m512i*)((bm::word_t*)(block) + bm::set_block_size);
 
     do
     {
-        __m256i wcmpA= _mm256_cmpeq_epi8(_mm256_load_si256(block), maskF); // (w0 == maskF)
-        __m256i wcmpB= _mm256_cmpeq_epi8(_mm256_load_si256(block+1), maskF); // (w0 == maskF)
-
-        unsigned maskA = unsigned(_mm256_movemask_epi8(wcmpA));
-        unsigned maskB = unsigned(_mm256_movemask_epi8(wcmpB));
-        if (maskA != ~0u || maskB != ~0u)
+        __mmask16 and_mask1 = _mm512_test_epi32_mask(_mm512_load_si512(block), maskF);
+        __mmask16 and_mask2 = _mm512_test_epi32_mask(_mm512_load_si512(block+1), maskF);
+        
+        if ((and_mask1 & and_mask2) != ~0ull)
             return false;
+
         block += 2;
     } while (block < block_end);
     return true;
@@ -1700,7 +1699,7 @@ void avx2_bit_block_gather_scatter(unsigned* BMRESTRICT arr,
     avx512_is_all_zero((__m512i*) dst)
 
 #define VECT_IS_ONE_BLOCK(dst) \
-    avx2_is_all_one((__m256i*) dst)
+    avx512_is_all_one((__m512i*) dst)
 
 #define VECT_IS_DIGEST_ZERO(start) \
     avx512_is_digest_zero((__m512i*)start)
