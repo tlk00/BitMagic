@@ -4474,7 +4474,7 @@ bm::id64_t bit_block_and(bm::word_t* BMRESTRICT dst,
         unsigned wave = bits[i];
         unsigned off = wave * bm::set_block_digest_wave_size;
         
-        #if defined(VECT_AND_DIGEST)
+        #if defined(VECT_AND_DIGEST)        
             bool all_zero = VECT_AND_DIGEST(&dst[off], &src[off]);
             if (all_zero)
                 digest &= ~(mask << wave);
@@ -6453,7 +6453,7 @@ unsigned short bitscan_wave(const bm::word_t* w_ptr, unsigned char* bits)
     w0 = w_ptr[0];
     w1 = w_ptr[1];
     
-#if defined(BMAVX2OPT) || defined(BMSSE42OPT)
+#if defined(BMAVX512OPT) || defined(BMAVX2OPT) || defined(BMSSE42OPT)
     // combine into 64-bit word and scan (when HW popcnt64 is available)
     bm::id64_t w = (bm::id64_t(w1) << 32) | w0;
     cnt0 = (unsigned short) bm::bitscan_popcnt64(w, bits);
