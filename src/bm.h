@@ -2387,11 +2387,9 @@ void bvector<Alloc>::running_count_blocks(blocks_count* blocks_cnt) const
         return;
     
     unsigned nb  = 0;
-    const unsigned nb_right  = unsigned((bm::id_max-1)  >>  bm::set_block_shift);
-    BM_ASSERT(nb_right == bm::set_total_blocks);
     unsigned cnt = 0;
 
-    for (; nb < nb_right; ++nb)
+    for (; nb < bm::set_total_blocks; ++nb)
     {
         int no_more_blocks;
         const bm::word_t* block = blockman_.get_block(nb, &no_more_blocks);
@@ -3369,11 +3367,10 @@ bool bvector<Alloc>::find_rank(bm::id_t rank, bm::id_t from, bm::id_t& pos) cons
         return ret;
     
     unsigned nb  = unsigned(from  >>  bm::set_block_shift);
-    const unsigned nb_right  = unsigned((bm::id_max-1)  >>  bm::set_block_shift);
     bm::gap_word_t nbit = bm::gap_word_t(from & bm::set_block_mask);
     unsigned bit_pos = 0;
 
-    for (; nb < nb_right; ++nb)
+    for (; nb < bm::set_total_blocks; ++nb)
     {
         int no_more_blocks;
         const bm::word_t* block = blockman_.get_block(nb, &no_more_blocks);
@@ -3411,11 +3408,10 @@ bool bvector<Alloc>::find_rank(bm::id_t rank, bm::id_t from, bm::id_t& pos,
         return ret;
     
     unsigned nb  = unsigned(from  >>  bm::set_block_shift);
-    unsigned nb_right  = unsigned((bm::id_max-1)  >>  bm::set_block_shift);
     bm::gap_word_t nbit = bm::gap_word_t(from & bm::set_block_mask);
     unsigned bit_pos = 0;
 
-    for (; nb < nb_right; ++nb)
+    for (; nb < bm::set_total_blocks; ++nb)
     {
         int no_more_blocks;
         const bm::word_t* block = blockman_.get_block(nb, &no_more_blocks);
