@@ -1,4 +1,23 @@
 ifeq ($(COMPILER),GNU_CC)
+
+    ifeq ($(BMOPTFLAGS),-DBMAVX512OPT)
+        CXXARCHFLAGS=-march=skylake-avx512 -mtune=skylake-avx512
+    else
+        ifeq ($(BMOPTFLAGS),-DBMAVX2OPT)
+            CXXARCHFLAGS=-march=native -mavx2
+        else
+            ifeq ($(BMOPTFLAGS),-DBMSSE42OPT)
+                CXXARCHFLAGS=-march=core2 -msse4.2
+            else
+                ifeq ($(BMOPTFLAGS),-DBMSSE2OPT)
+                    CXXARCHFLAGS=-march=core2 -msse2
+                else
+                    CXXARCHFLAGS=-march=core2
+                endif
+            endif
+        endif
+    endif
+
     COMMON_DFLAGS = 
     #-g -D_DEBUG
     LINKER_DFLAGS = 
