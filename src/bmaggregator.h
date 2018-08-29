@@ -1014,12 +1014,13 @@ aggregator<BV>::process_bit_blocks_and(unsigned   arg_blk_count,
         break;
     } // switch
 
+    bit_decode_cache dcache;
     
     for (; k < arg_blk_count; ++k)
     {
         if (ar_->v_arg_blk[k] == FULL_BLOCK_REAL_ADDR)
             continue;
-        digest = bm::bit_block_and(blk, ar_->v_arg_blk[k], digest);
+        digest = bm::bit_block_and(blk, ar_->v_arg_blk[k], digest, dcache);
         if (!digest) // all zero
             break;
     } // for k
@@ -1036,6 +1037,8 @@ aggregator<BV>::process_bit_blocks_sub(unsigned   arg_blk_count,
 {
     bm::word_t* blk = ar_->tb1;
 
+    bit_decode_cache dcache;
+
     unsigned k = 0;
     for (; k < arg_blk_count; ++k)
     {
@@ -1044,7 +1047,8 @@ aggregator<BV>::process_bit_blocks_sub(unsigned   arg_blk_count,
             digest ^= digest;
             break;
         }
-        bm::id64_t digest_n = bm::bit_block_sub(blk, ar_->v_arg_blk[k], digest);
+        bm::id64_t digest_n =
+                    bm::bit_block_sub(blk, ar_->v_arg_blk[k], digest, dcache);
         BM_ASSERT(digest_n == bm::update_block_digest0(blk, digest));
         digest = digest_n;
         if (!digest) // all zero

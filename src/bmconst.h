@@ -82,6 +82,10 @@ const unsigned set_total_blocks = (bm::set_array_size * bm::set_array_size);
 const unsigned bits_in_block = bm::set_block_size * (unsigned)(sizeof(bm::word_t) * 8);
 const unsigned bits_in_array = bm::bits_in_block * bm::set_array_size;
 
+// Rank-Select parameters
+const unsigned rs3_border0 = 21824; // 682 words by 32-bits
+const unsigned rs3_border1 = (rs3_border0 * 2); // 43648
+
 
 #if defined(BM64OPT) || defined(BM64_SSE4)
 

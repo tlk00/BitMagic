@@ -1400,12 +1400,12 @@ public:
         id_t count;
         if (BM_IS_GAP(block))
         {
-            count = gap_bit_count_unr(BMGAP_PTR(block));
+            count = bm::gap_bit_count_unr(BMGAP_PTR(block));
         }
         else // bitset
         {
             count = (IS_FULL_BLOCK(block)) ? bm::bits_in_block
-                                           : bit_block_count(block);
+                                           : bm::bit_block_count(block);
         }
         return count;
     }

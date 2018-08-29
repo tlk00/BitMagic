@@ -95,6 +95,29 @@ struct bv_statistics
 };
 
 /**
+    @brief Pair type
+*/
+template<typename First, typename Second>
+struct pair
+{
+    First   first;
+    Second  second;
+};
+
+/**
+    \brief bit-decode cache structure
+*/
+struct  bit_decode_cache
+{
+    unsigned short bits[65]; //< decoded bits
+    unsigned       bcnt;     //< length of bits array
+    bm::id64_t     cvalue;   //< cache decoded value
+    
+    bit_decode_cache() : bcnt(0), cvalue(0) {}
+};
+
+
+/**
     \brief ad-hoc conditional expressions 
     \internal
 */
@@ -1601,7 +1624,7 @@ template<typename T> unsigned gap_bit_count_unr(const T* buf)
    @ingroup gapfunc
 */
 template<typename T>
-unsigned gap_bit_count_range(const T* const buf, T left, T right)
+unsigned gap_bit_count_range(const T* const buf, unsigned left, unsigned right)
 {
     BM_ASSERT(left <= right);
     
@@ -4458,7 +4481,8 @@ bm::id64_t bit_block_and(bm::word_t* BMRESTRICT dst, const bm::word_t* BMRESTRIC
 inline
 bm::id64_t bit_block_and(bm::word_t* BMRESTRICT dst,
                          const bm::word_t* BMRESTRICT src,
-                         bm::id64_t digest)
+                         bm::id64_t digest,
+                         bit_decode_cache& dcache)
 {
     BM_ASSERT(dst);
     BM_ASSERT(src);
@@ -4466,15 +4490,18 @@ bm::id64_t bit_block_and(bm::word_t* BMRESTRICT dst,
 
     const bm::id64_t mask(1ull);
     
-    unsigned short bits[65];
-    unsigned bcnt = bm::bitscan_popcnt64(digest, bits);
-
-    for (unsigned i = 0; i < bcnt; ++i)
+    if (digest != dcache.cvalue)
     {
-        unsigned wave = bits[i];
+        dcache.bcnt = bm::bitscan_popcnt64(digest, dcache.bits);
+        dcache.cvalue = digest;
+    }
+    
+    for (unsigned i = 0; i < dcache.bcnt; ++i)
+    {
+        unsigned wave = dcache.bits[i];
         unsigned off = wave * bm::set_block_digest_wave_size;
         
-        #if defined(VECT_AND_DIGEST)        
+        #if defined(VECT_AND_DIGEST)
             bool all_zero = VECT_AND_DIGEST(&dst[off], &src[off]);
             if (all_zero)
                 digest &= ~(mask << wave);
@@ -5356,20 +5383,24 @@ bm::id64_t bit_block_sub(bm::word_t* BMRESTRICT dst,
 inline
 bm::id64_t bit_block_sub(bm::word_t* BMRESTRICT dst,
                          const bm::word_t* BMRESTRICT src,
-                         bm::id64_t digest)
+                         bm::id64_t digest,
+                         bit_decode_cache& dcache)
 {
     BM_ASSERT(dst);
     BM_ASSERT(src);
     BM_ASSERT(dst != src);
 
     const bm::id64_t mask(1ull);
-    
-    unsigned short bits[65];
-    unsigned bcnt = bm::bitscan_popcnt64(digest, bits);
 
-    for (unsigned i = 0; i < bcnt; ++i)
+    if (digest != dcache.cvalue)
     {
-        unsigned wave = bits[i];
+        dcache.bcnt = bm::bitscan_popcnt64(digest, dcache.bits);
+        dcache.cvalue = digest;
+    }
+
+    for (unsigned i = 0; i < dcache.bcnt; ++i)
+    {
+        unsigned wave = dcache.bits[i];
         unsigned off = wave * bm::set_block_digest_wave_size;
         
         #if defined(VECT_SUB_DIGEST)

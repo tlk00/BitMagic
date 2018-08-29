@@ -9446,7 +9446,7 @@ void CountRangeTest()
     
     for (unsigned i = 0; i < bm::set_total_blocks; ++i)
     {
-        assert(bc_arr.cnt[i] == 2);
+        assert(bc_arr.bcount[i] == 2);
     } // for
     
     VerifyCountRange(bv1, bc_arr, 200000);
@@ -9457,7 +9457,7 @@ void CountRangeTest()
     
     for (unsigned i = 0; i < bm::set_total_blocks; ++i)
     {
-        assert(bc_arr1.cnt[i] == 2);
+        assert(bc_arr1.bcount[i] == 2);
     } // for
     
     VerifyCountRange(bv1, bc_arr1, 200000);
@@ -9477,12 +9477,12 @@ void CountRangeTest()
     bvect::blocks_count bc_arr;
     bv1.running_count_blocks(&bc_arr);
 
-    assert(bc_arr.cnt[0] == 2);
-    assert(bc_arr.cnt[1] == 5);
+    assert(bc_arr.bcount[0] == 2);
+    assert(bc_arr.bcount[1] == 5);
 
     for (unsigned i = 2; i < bm::set_total_blocks; ++i)
     {
-        assert(bc_arr.cnt[i] == 5);
+        assert(bc_arr.bcount[i] == 5);
     } // for
     
     VerifyCountRange(bv1, bc_arr, 200000);
