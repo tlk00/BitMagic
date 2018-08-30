@@ -3855,6 +3855,7 @@ bm::id_t bit_block_calc_count_range(const bm::word_t* block,
                                     bm::word_t right)
 {
     BM_ASSERT(left <= right);
+    BM_ASSERT(right <= bm::gap_max_bits-1);
     
     unsigned nword, nbit, bitcount, count;
     nbit = left & bm::set_word_mask;
