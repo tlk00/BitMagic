@@ -1,15 +1,19 @@
 ifeq ($(COMPILER),GNU_CC)
 
-    ifeq ($(BMOPTFLAGS),-DBMAVX2OPT)
-        CXXARCHFLAGS=-march=native -mavx2
+    ifeq ($(BMOPTFLAGS),-DBMAVX512OPT)
+        CXXARCHFLAGS=-march=skylake-avx512 -mtune=skylake-avx512
     else
-        ifeq ($(BMOPTFLAGS),-DBMSSE42OPT)
-            CXXARCHFLAGS=-march=core2 -msse4.2
+        ifeq ($(BMOPTFLAGS),-DBMAVX2OPT)
+            CXXARCHFLAGS=-march=native -mavx2
         else
-            ifeq ($(BMOPTFLAGS),-DBMSSE2OPT)
-                CXXARCHFLAGS=-march=core2 -msse2
+            ifeq ($(BMOPTFLAGS),-DBMSSE42OPT)
+                CXXARCHFLAGS=-march=core2 -msse4.2
             else
-                CXXARCHFLAGS=-march=core2
+                ifeq ($(BMOPTFLAGS),-DBMSSE2OPT)
+                    CXXARCHFLAGS=-march=core2 -msse2
+                else
+                    CXXARCHFLAGS=-march=core2
+                endif
             endif
         endif
     endif
@@ -25,8 +29,8 @@ ifeq ($(COMPILER),GNU_CC)
     COMMON_LDFLAGS = $(LINKER_DFLAGS) -export-dynamic
     COMMON_CLDFLAGS = $(COMMON_LDFLAGS)
     EXTERN_LIBS = $(EXTERN_LIBS_BASE)/lib
-    CXX = g++ $(CXXARCHFLAGS) -Wall -std=c++11
-    CC = gcc -Wall
+    CXX = g++ $(CXXARCHFLAGS) -Wall -Wc++11-extensions -std=c++11
+    CC = gcc $(CXXARCHFLAGS) -Wall
     LD = g++
     CC_PIC_FLAGS = -fPIC
     CXX_PIC_FLAGS = -fPIC
