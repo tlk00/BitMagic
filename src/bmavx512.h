@@ -1055,7 +1055,7 @@ bool avx512_is_digest_zero(const __m512i* BMRESTRICT block)
 
     __mmask16 and_mask = _mm512_test_epi32_mask(mA, _mm512_set1_epi32(~0u));
 
-    return (and_mask == 0ull);
+    return (and_mask == 0);
 }
 
 
@@ -1076,7 +1076,7 @@ bool avx512_is_all_one(const __m512i* BMRESTRICT block)
         __mmask16 and_mask1 = _mm512_test_epi32_mask(_mm512_load_si512(block), maskF);
         __mmask16 and_mask2 = _mm512_test_epi32_mask(_mm512_load_si512(block+1), maskF);
         
-        if ((and_mask1 & and_mask2) != ~0ull)
+        if (and_mask1 | and_mask2)
             return false;
 
         block += 2;
