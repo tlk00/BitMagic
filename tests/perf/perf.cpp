@@ -507,12 +507,12 @@ void BitCountSparseTest()
 static
 void BitTestSparseTest()
 {
-    auto_ptr<bvect>  bv0(new bvect());
-    auto_ptr<bvect>  bv1(new bvect());
-    auto_ptr<bvect>  bv2(new bvect());
-    auto_ptr<test_bitset>  bset0(new test_bitset());
-    auto_ptr<test_bitset>  bset1(new test_bitset());
-    auto_ptr<test_bitset>  bset2(new test_bitset());
+    unique_ptr<bvect>  bv0(new bvect());
+    unique_ptr<bvect>  bv1(new bvect());
+    unique_ptr<bvect>  bv2(new bvect());
+    unique_ptr<test_bitset>  bset0(new test_bitset());
+    unique_ptr<test_bitset>  bset1(new test_bitset());
+    unique_ptr<test_bitset>  bset2(new test_bitset());
 
     const unsigned repeats = REPEATS * 300000;
 
@@ -560,12 +560,12 @@ void BitTestSparseTest()
 static
 void EnumeratorGoToTest()
 {
-    auto_ptr<bvect>  bv0(new bvect());
-    auto_ptr<bvect>  bv1(new bvect());
-    auto_ptr<bvect>  bv2(new bvect());
-    auto_ptr<test_bitset>  bset0(new test_bitset());
-    auto_ptr<test_bitset>  bset1(new test_bitset());
-    auto_ptr<test_bitset>  bset2(new test_bitset());
+    unique_ptr<bvect>  bv0(new bvect());
+    unique_ptr<bvect>  bv1(new bvect());
+    unique_ptr<bvect>  bv2(new bvect());
+    unique_ptr<test_bitset>  bset0(new test_bitset());
+    unique_ptr<test_bitset>  bset1(new test_bitset());
+    unique_ptr<test_bitset>  bset2(new test_bitset());
 
     const unsigned repeats = REPEATS * 300000;
 
