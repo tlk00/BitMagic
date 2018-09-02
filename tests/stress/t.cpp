@@ -9793,6 +9793,174 @@ void Log2Test()
     cout << "---------------------------- Log2 Test Ok." << endl;
 }
 
+inline
+unsigned proxy_bmi1_select64_lz(bm::id64_t val, unsigned rank)
+{
+#ifdef BMBMI1OPT
+    return bmi1_select64_lz(val, rank);
+#else
+    return bm::word_select64_linear(val, rank);
+#endif
+}
+
+// Returns the position of the rank'th 1.  (rank = 0 returns the 1st 1)
+// Returns 64 if there are fewer than rank+1 1s.
+/*
+inline
+unsigned select64_pdep_tzcnt(bm::id64_t val, unsigned rank) {
+    uint64_t i = 1ull << rank;
+    asm("pdep %[val], %[mask], %[val]"
+            : [val] "+r" (val)
+            : [mask] "r" (i));
+    asm("tzcnt %[bit], %[index]"
+            : [index] "=r" (i)
+            : [bit] "g" (val)
+            : "cc");
+    return unsigned(i);
+}
+*/
+
+
+
+static
+void SelectTest()
+{
+    cout << "---------------------------- SELECT Test" << endl;
+    
+    {
+        bm::id64_t w64 = 1;
+        unsigned idx = bm::word_select64_linear(w64, 1);
+        unsigned idx0 = word_select64_bitscan(w64, 1);
+        unsigned idx1, idx4;
+        assert(idx == 0);
+        assert(idx0 == idx);
+        idx4 = proxy_bmi1_select64_lz(w64, 1);
+        assert(idx4 == idx);
+//        idx3 = avx2_select64(w64, 1);
+//        assert(idx3 == idx);
+
+//        idx4 = word_select64_part(w64, 1);
+//        assert(idx4 == idx);
+
+/*
+        w64 = 1 | (1 << 2) | (1 << 3) | (1 << 4) | (1 << 7);
+        w64 = (1ull << 63) | 1;
+        idx3 = avx2_select64(w64, 2);
+        w64 = (1ull << 63) | 8 | 2;
+        idx3 = avx2_select64(w64, 2);
+
+        exit(1);
+
+        w64 = ~0u;
+        idx3 = avx2_select64(w64, 1);
+        idx3 = avx2_select64(w64, 2);
+        w64 = 16 | 2 | 1;
+        idx3 = avx2_select64(w64, 1);
+        idx3 = avx2_select64(w64, 2);
+        idx3 = avx2_select64(w64, 3);
+        w64 = w64 << 1;
+        idx3 = avx2_select64(w64, 1);
+        idx3 = avx2_select64(w64, 2);
+        idx3 = avx2_select64(w64, 3);
+        idx3 = avx2_select64(w64, 4);
+        idx3 = avx2_select64(w64, 5);
+        exit(1);
+*/
+
+        for (unsigned sel = 1; sel <= 64; ++sel)
+        {
+            idx = bm::word_select64_linear(~0ull, sel);
+            assert(idx == sel-1);
+            idx0 = word_select64_bitscan(~0ull, sel);
+            assert(idx0 == idx);
+            idx4 = proxy_bmi1_select64_lz(~0ull, sel);
+            assert(idx4 == idx);
+        }
+        
+        for (idx = 0; w64; w64 <<= 1)
+        {
+            idx0 = bm::word_select64_linear(w64, 1);
+            assert(idx0 == idx);
+            idx1 = word_select64_bitscan(w64, 1);
+            assert(idx1 == idx0);
+            idx4 = proxy_bmi1_select64_lz(w64, 1);
+            assert(idx4 == idx);
+
+            ++idx;
+        }
+    }
+
+    {
+        cout << "SELECT stress test." << std::endl;
+        const unsigned test_size = 1000000 * 10;
+        for (unsigned i = 1; i < test_size; ++i)
+        {
+            bm::id64_t w64 = i;
+            bm::id64_t w64_1 = (w64 << 32) | w64;
+
+            unsigned count = bm::word_bitcount64(w64);
+            for (unsigned j = 1; j <= count; ++j)
+            {
+                unsigned idx0 = bm::word_select64_linear(w64, j);
+                unsigned idx1 = word_select64_bitscan(w64, j);
+                assert(idx0 == idx1);
+                unsigned idx4 = proxy_bmi1_select64_lz(w64, j);
+                assert(idx4 == idx1);
+
+            }
+            
+            count = bm::word_bitcount64(w64_1);
+            for (unsigned j = 1; j <= count; ++j)
+            {
+                unsigned idx0 = bm::word_select64_linear(w64_1, j);
+                unsigned idx1 = word_select64_bitscan(w64_1, j);
+                assert(idx0 == idx1);
+                unsigned idx4 = proxy_bmi1_select64_lz(w64_1, j);
+                assert(idx4 == idx1);
+            }
+            
+            if (i % 1000000 == 0)
+                cout << "\r" << i << std::flush;
+        }
+    }
+
+    {
+        cout << "SELECT bit-block test." << std::endl;
+        unsigned cnt;
+        
+        BM_DECLARE_TEMP_BLOCK(tb1);
+        for (unsigned i = 0; i < bm::set_block_size; ++i)
+        {
+            tb1.b_.w32[i] = ~0u;
+        }
+        for (unsigned i = 1; i <= 65535; ++i)
+        {
+            unsigned idx;
+            unsigned rank = bm::bit_find_rank(tb1, i, 0, idx);
+            assert(rank == 0);
+            cnt = bm::bit_block_calc_count_to(tb1, i-1);
+            assert(idx == cnt-1);
+
+            for (unsigned j = 65535; j > i; --j)
+            {
+                cnt = bm::bit_block_calc_count_range(tb1, i, j);
+                if (cnt)
+                {
+                    rank = bm::bit_find_rank(tb1, cnt, i, idx);
+                    assert(rank == 0);
+                    assert(idx == j);
+                }
+            }
+
+            cout << "\r" << i << std::flush;
+        }
+        
+    }
+    
+    
+    cout << "\n---------------------------- SELECT Test OK" << endl;
+}
+
 
 static
 void BitEncoderTest()
@@ -15301,6 +15469,10 @@ int main(void)
     CalcEndMask();
 
     TestSIMDUtils();
+    
+    Log2Test();
+ 
+    SelectTest();
 
      TestBlockZero();
     
@@ -15320,8 +15492,6 @@ int main(void)
      SetTest();
 
      BitCountChangeTest();
-
-     Log2Test();
 
      TestBlockLast();
 
