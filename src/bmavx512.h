@@ -69,7 +69,7 @@ For more information please visit:  http://bitmagic.io
 #include<x86intrin.h>
 
 #include "bmdef.h"
-
+#include "bmbmi1.h"
 
 namespace bm
 {

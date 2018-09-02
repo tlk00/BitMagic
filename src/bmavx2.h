@@ -67,7 +67,7 @@ For more information please visit:  http://bitmagic.io
 #include<immintrin.h>
 
 #include "bmdef.h"
-
+#include "bmbmi1.h"
 
 namespace bm
 {
@@ -1641,6 +1641,42 @@ void avx2_bit_block_gather_scatter(unsigned* BMRESTRICT arr,
     }
 
 }
+
+#if 0
+inline
+unsigned avx2_select64(bm::id64_t val, int rank)
+{
+    std::cerr << "val=" << val << " rank=" << rank << ":  ";
+
+    unsigned pop = _mm_popcnt_u64(val);
+    std::cerr << " POP=" << pop;
+    if (pop == rank)
+    {
+        unsigned lz = _lzcnt_u64(val);
+        lz = 63 - lz;
+        std::cerr << "POS=" << lz << std::endl;
+        return lz;
+    }
+    
+    uint64_t i = 1ull << (rank - 1);
+    std::cerr << " smask=" << i << " ";
+    bm::id64_t d = _pdep_u64(val, i);
+    std::cerr << " PDEP=" << d << " ";
+    i = _tzcnt_u64(d);
+    /*
+    asm("pdep %[val], %[mask], %[val]"
+            : [val] "+r" (val)
+            : [mask] "r" (i));
+    asm("tzcnt %[bit], %[index]"
+            : [index] "=r" (i)
+            : [bit] "g" (val)
+            : "cc");
+    */
+    std::cerr << "TZCNT=" << i << std::endl;
+    
+    return unsigned(i);
+}
+#endif
 
 #ifdef __GNUG__
 #pragma GCC diagnostic pop

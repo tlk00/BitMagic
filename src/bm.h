@@ -2203,6 +2203,15 @@ private:
     */
     void clear_range_no_check(bm::id_t left,
                               bm::id_t right);
+    
+    /**
+        Compute rank in block using rank-select index
+    */
+    static
+    unsigned block_count_to(const bm::word_t* block,
+                            unsigned nb,
+                            unsigned nbit_right,
+                            const blocks_count&  blocks_cnt);
 
 private:
     blocks_manager_type  blockman_;         //!< bitblocks manager
@@ -2437,6 +2446,118 @@ void bvector<Alloc>::running_count_blocks(blocks_count* blocks_cnt) const
 // -----------------------------------------------------------------------
 
 template<typename Alloc>
+unsigned bvector<Alloc>::block_count_to(const bm::word_t*    block,
+                                        unsigned             nb,
+                                        unsigned             nbit_right,
+                                        const blocks_count&  blocks_cnt)
+{
+    unsigned c;
+    
+    unsigned sub_range = blocks_cnt.find_sub_range(nbit_right);
+
+    // evaluate 3 sub-block intervals
+    // |--------[0]-----------[1]----------|
+
+    switch(sub_range)  // sub-range rank calc
+    {
+    case 0:
+        // |--x-----[0]-----------[1]----------|
+        if (nbit_right <= rs3_border0/2)
+        {
+            c = bm::bit_block_calc_count_to(block, nbit_right);
+        }
+        else
+        {
+            // |--------[x]-----------[1]----------|
+            if (nbit_right == rs3_border0)
+            {
+                c = blocks_cnt.subcount[nb].first;
+            }
+            else
+            {
+                // |------x-[0]-----------[1]----------|
+                c = bm::bit_block_calc_count_range(block,
+                                                   nbit_right+1,
+                                                   rs3_border0);
+                c = blocks_cnt.subcount[nb].first - c;
+            }
+        }
+    break;
+    case 1:
+        // |--------[0]-x---------[1]----------|
+        if (nbit_right <= (rs3_border0 + rs3_half_span))
+        {
+            c = bm::bit_block_calc_count_range(block,
+                                               rs3_border0 + 1,
+                                               nbit_right);
+            c += blocks_cnt.subcount[nb].first;
+        }
+        else
+        {
+            unsigned bc_second_range =
+                blocks_cnt.subcount[nb].first +
+                blocks_cnt.subcount[nb].second;
+            // |--------[0]-----------[x]----------|
+            if (nbit_right == rs3_border1)
+            {
+                c = bc_second_range;
+            }
+            else
+            {
+                // |--------[0]--------x--[1]----------|
+                c = bm::bit_block_calc_count_range(block,
+                                                   nbit_right+1,
+                                                   rs3_border1);
+                c = bc_second_range - c;
+            }
+        }
+    break;
+    case 2:
+    {
+        unsigned bc_second_range =
+            blocks_cnt.subcount[nb].first +
+            blocks_cnt.subcount[nb].second;
+
+        // |--------[0]-----------[1]-x--------|
+        if (nbit_right <= (rs3_border1 + rs3_half_span))
+        {
+            c = bm::bit_block_calc_count_range(block,
+                                               rs3_border1 + 1,
+                                               nbit_right);
+            c += bc_second_range;
+        }
+        else
+        {
+            // |--------[0]-----------[1]----------x
+            if (nbit_right == bm::gap_max_bits-1)
+            {
+                c = blocks_cnt.count(nb);
+            }
+            else
+            {
+                // |--------[0]-----------[1]-------x--|
+                c = bm::bit_block_calc_count_range(block,
+                                                   nbit_right+1,
+                                                   bm::gap_max_bits-1);
+                unsigned cnt = nb ? blocks_cnt.bcount[nb-1] : 0;
+                c = blocks_cnt.bcount[nb] - cnt - c;
+            }
+        }
+    }
+    break;
+    default:
+        BM_ASSERT(0);
+        c = 0;
+    }// switch
+    
+    BM_ASSERT(c == bm::bit_block_calc_count_to(block, nbit_right));
+    
+    return c;
+}
+
+// -----------------------------------------------------------------------
+
+template<typename Alloc>
 bm::id_t bvector<Alloc>::count_to(bm::id_t right,
                                   const blocks_count&  blocks_cnt) const
 {
@@ -2454,8 +2575,6 @@ bm::id_t bvector<Alloc>::count_to(bm::id_t right,
     if (!block)
         return cnt;
     
-    unsigned sub_range = blocks_cnt.find_sub_range(nbit_right);
-
     bool gap = BM_IS_GAP(block);
     if (gap)
     {
@@ -2471,101 +2590,8 @@ bm::id_t bvector<Alloc>::count_to(bm::id_t right,
         }
         else // real bit-block
         {
-        
-            // evaluate 3 sub-block intervals
-            // |--------[0]-----------[1]----------|
-        
-            unsigned c;
-            switch(sub_range)  // sub-range rank calc
-            {
-            case 0:
-                // |--x-----[0]-----------[1]----------|
-                if (nbit_right <= rs3_border0/2)
-                {
-                    c = bm::bit_block_calc_count_to(block, nbit_right);
-                }
-                else
-                {
-                    // |--------[x]-----------[1]----------|
-                    if (nbit_right == rs3_border0)
-                    {
-                        c = blocks_cnt.subcount[nblock_right].first;
-                    }
-                    else
-                    {
-                        // |------x-[0]-----------[1]----------|
-                        c = bm::bit_block_calc_count_range(block,
-                                                           nbit_right+1,
-                                                           rs3_border0);
-                        c = blocks_cnt.subcount[nblock_right].first - c;
-                    }
-                }
-            break;
-            case 1:
-                // |--------[0]-x---------[1]----------|
-                if (nbit_right <= rs3_border1/2)
-                {
-                    c = bm::bit_block_calc_count_range(block,
-                                                       rs3_border0 + 1,
-                                                       nbit_right);
-                    c += blocks_cnt.subcount[nblock_right].first;
-                }
-                else
-                {
-                    unsigned bc_second_range =
-                        blocks_cnt.subcount[nblock_right].first +
-                        blocks_cnt.subcount[nblock_right].second;
-                    // |--------[0]-----------[x]----------|
-                    if (nbit_right == rs3_border1)
-                    {
-                        c = bc_second_range;
-                    }
-                    else
-                    {
-                        // |--------[0]--------x--[1]----------|
-                        c = bm::bit_block_calc_count_range(block,
-                                                           nbit_right+1,
-                                                           rs3_border1);
-                        c = bc_second_range - c;
-                    }
-                }
-            break;
-            case 2:
-            {
-                unsigned bc_second_range =
-                    blocks_cnt.subcount[nblock_right].first +
-                    blocks_cnt.subcount[nblock_right].second;
-
-                // |--------[0]-----------[1]-x--------|
-                if (nbit_right <= (rs3_border1 + rs3_border1/2))
-                {
-                    c = bm::bit_block_calc_count_range(block,
-                                                       rs3_border1 + 1,
-                                                       nbit_right);
-                    c += bc_second_range;
-                }
-                else
-                {
-                    // |--------[0]-----------[1]----------x
-                    if (nbit_right == bm::gap_max_bits-1)
-                    {
-                        c = blocks_cnt.count(nblock_right);
-                        //nblock_right ? blocks_cnt.bcount[nblock_right] - cnt
-                        //                 : blocks_cnt.bcount[nblock_right];
-                    }
-                    else
-                    {
-                        // |--------[0]-----------[1]-------x--|
-                        c = bm::bit_block_calc_count_range(block,
-                                                           nbit_right+1,
-                                                           bm::gap_max_bits-1);
-                        c = blocks_cnt.bcount[nblock_right] - cnt - c;
-                    }
-                }
-            }
-            break;
-            }// switch
-            BM_ASSERT(c == bm::bit_block_calc_count_to(block, nbit_right));
+            unsigned c =
+                this->block_count_to(block, nblock_right, nbit_right, blocks_cnt);
             cnt += c;
         }
     }
@@ -2614,7 +2640,10 @@ bm::id_t bvector<Alloc>::count_to_test(bm::id_t right,
             unsigned w = block[nword];
             w &= (1u << (nbit_right & bm::set_word_mask));
             if (w)
-                cnt = bm::bit_block_calc_count_to(block, nbit_right);
+            {
+                cnt = block_count_to(block, nblock_right, nbit_right, blocks_cnt);
+                BM_ASSERT(cnt == bm::bit_block_calc_count_to(block, nbit_right));
+            }
             else
                 return 0;
         }
@@ -3529,6 +3558,19 @@ bool bvector<Alloc>::find_rank(bm::id_t rank, bm::id_t from, bm::id_t& pos,
                 {
                     rank -= block_bc;
                     continue;
+                }
+                else // target block
+                {
+                    if (rank > blocks_cnt.subcount[nb].first)
+                    {
+                        rank -= blocks_cnt.subcount[nb].first;
+                        nbit = rs3_border0 + 1;
+                        if (rank > blocks_cnt.subcount[nb].second)
+                        {
+                            rank -= blocks_cnt.subcount[nb].second;
+                            nbit = rs3_border1 + 1;
+                        }
+                    }
                 }
             }
             rank = bm::block_find_rank(block, rank, nbit, bit_pos);

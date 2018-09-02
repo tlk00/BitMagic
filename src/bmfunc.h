@@ -537,6 +537,62 @@ unsigned short bitscan(V w, B* bits)
         return bm::bitscan_popcnt((bm::word_t)w, bits);
     }
 }
+
+// --------------------------------------------------------------
+// Functions for select
+// --------------------------------------------------------------
+
+/**
+    \brief word find index of the rank-th bit set by bit-testing
+    \param w - 64-bit work to search
+    \param rank - rank to select (should be > 0)
+ 
+    \return selected value (inxed of bit set)
+*/
+inline
+unsigned word_select64_linear(bm::id64_t w, unsigned rank)
+{
+    BM_ASSERT(w);
+    BM_ASSERT(rank);
+    
+    for (unsigned count = 0; w; w >>=1ull, ++count)
+    {
+        rank -= (w & 1ull);
+        if (!rank)
+            return count;
+    }
+    BM_ASSERT(0); // shoud not be here if rank is achievable
+    return ~0u;
+}
+
+/**
+    \brief word find index of the rank-th bit set by bit-testing
+    \param w - 64-bit work to search
+    \param rank - rank to select (should be > 0)
+ 
+    \return selected value (inxed of bit set)
+*/
+inline
+unsigned word_select64_bitscan(bm::id64_t w, unsigned rank)
+{
+    BM_ASSERT(w);
+    BM_ASSERT(rank);
+    
+    unsigned count;
+    for ( ;w; )
+    {
+        bm::id64_t t = w & -w;
+        count = bm::word_bitcount64(t - 1);
+        --rank;
+        if (!rank)
+            return count;
+        
+        w &= w - 1;
+    }
+    BM_ASSERT(0); // shoud not be here if rank is achievable
+    return ~0u;
+}
+
 // --------------------------------------------------------------
 // Functions for bit-block digest calculation
 // --------------------------------------------------------------
@@ -5825,7 +5881,7 @@ unsigned bit_find_first(const bm::word_t* block, unsigned* first)
     \param block - bit block buffer pointer
     \param rank - rank to find (must be > 0)
     \param nbit_from - start bit position in block
-    \param nbit_pos - found position
+    \param nbit_pos - (out)found position
  
     \return 0 if position with rank was found, or
               the remaining rank (rank - population count)
@@ -5842,29 +5898,64 @@ bm::id_t bit_find_rank(const bm::word_t* const block,
     BM_ASSERT(rank);
     
     unsigned nword  = nbit_from >> bm::set_word_shift;
+    
     BM_ASSERT(nword < bm::set_block_size);
 
-    bm::id_t nbit = (nbit_from & bm::set_word_mask);
     unsigned pos = nbit_from;
-
+    bm::id_t nbit = (nbit_from & bm::set_word_mask);
+    
     if (nbit)
     {
         bm::id_t w = block[nword];
         w >>= nbit;
-        for (; w; w >>= 1u)
+        unsigned bc = bm::word_bitcount(w);
+        if (bc < rank) // skip this
         {
-            rank -= (w & 1u);
-            if (!rank)
+            pos += unsigned(32u - nbit);
+            ++nword;
+            rank -= bc;
+        }
+        else // target word
+        {
+
+            unsigned idx = bm::word_select64_bitscan(w, rank);
+            nbit_pos = pos + idx;
+            return 0;
+
+/*
+            for (; w; w >>= 1u)
             {
-                nbit_pos = pos;
-                return rank;
-            }
-            ++nbit; ++pos;
-        } // for
-        pos += unsigned(32u - nbit);
-        ++nword;
+                rank -= (w & 1u);
+                if (!rank)
+                {
+                    nbit_pos = pos;
+                    return rank;
+                }
+                //++nbit;
+                ++pos;
+            } // for
+            BM_ASSERT(0);
+*/
+        }
     }
-    
+
+    for (; nword < bm::set_block_size-1; nword+=2)
+    {
+        bm::id64_t w0 = block[nword];
+        bm::id64_t w1 = block[nword+1];
+        bm::id64_t w = (w1 << 32) | w0;
+        bm::id_t bc = bm::word_bitcount64(w);
+        
+        if (bc >= rank) // target
+        {
+            unsigned idx = bm::word_select64_bitscan(w, rank);
+            nbit_pos = pos + idx;
+            return 0;
+        }
+        rank -= bc;
+        pos += 64u;
+    }
+
     for (; nword < bm::set_block_size; ++nword)
     {
         bm::id_t w = block[nword];
@@ -5875,16 +5966,9 @@ bm::id_t bit_find_rank(const bm::word_t* const block,
             pos += 32u;
             continue;
         }
-        for (; w; w >>= 1u)
-        {
-            rank -= (w & 1u);
-            if (!rank)
-            {
-                nbit_pos = pos;
-                return rank;
-            }
-            ++pos;
-        } // for
+        unsigned idx = bm::word_select64_bitscan(w, rank);
+        nbit_pos = pos + idx;
+        return 0;
     } // for nword
     return rank;
 }
