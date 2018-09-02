@@ -14351,6 +14351,7 @@ void TestBlockAND()
     {
         BM_DECLARE_TEMP_BLOCK(tb2);
         BM_DECLARE_TEMP_BLOCK(tb1);
+        BM_DECLARE_TEMP_BLOCK(tb0);
 
         unsigned pad = 0xDEAD;
         for (unsigned i = 0; i < bm::set_block_size; ++i)
@@ -14388,6 +14389,17 @@ void TestBlockAND()
         }
         any = bm::bit_block_and(tb1, tb2);
         assert(any);
+        {
+            bm::bit_decode_cache dcache;
+            bm::id64_t d1 = ~0ull;
+            d1 = bm::bit_block_and(tb1,
+                                   tb2,
+                                   d1, dcache);
+            bm::id64_t dc = bm::calc_block_digest0(tb1);
+            assert(d1 == dc);
+            unsigned bc = bm::word_bitcount64(d1);
+            assert(bc == 64);
+        }
         for (unsigned i = 0; i < bm::set_block_size; ++i)
         {
             assert(tb1.b_.w32[i] == tb2.b_.w32[i]);
@@ -14418,13 +14430,24 @@ void TestBlockAND()
                     assert(tb1.b_.w32[i] == v);
                     assert((unsigned)(all_zero) != any1);
                     assert(any1);
+                    {
+                        bm::bit_decode_cache dcache;
+                        bm::id64_t d1 = ~0ull;
+                        d1 = bm::bit_block_and(tb1,
+                                               tb2,
+                                               d1, dcache);
+                        bm::id64_t dc = bm::calc_block_digest0(tb1);
+                        assert(d1 == dc);
+                        unsigned bc = bm::word_bitcount64(d1);
+                        assert(bc == 1);
+                    }
                 }
             }
             tb1.b_.w32[i] = tb2.b_.w32[i] = 0;
         }
         cout << tb1.b_.w32[0] << pad << endl;
-        
-        
+
+
         for (i = 0; i < bm::set_block_size; ++i)
         {
             ::memset(tb1, 0, sizeof(tb1));
@@ -14435,7 +14458,28 @@ void TestBlockAND()
             auto any1 = bm::bit_block_and(tb1, tb2);
             assert(tb1.b_.w32[i] == 8u);
             assert(any1);
+
+            ::memset(tb1, 0, sizeof(tb1));
+            ::memset(tb2, 0, sizeof(tb1));
+            
+            tb1.b_.w32[i] = tb2.b_.w32[i] = 8u;
+
+            bm::bit_decode_cache dcache;
+            bm::id64_t d1 = ~0ull;
+            d1 = bm::bit_block_and(tb1,
+                                   tb2,
+                                   d1, dcache);
+            bm::id64_t dc = bm::calc_block_digest0(tb1);
+            assert(d1 == dc);
+            unsigned bc = bm::word_bitcount64(d1);
+            assert(bc == 1);
+            
+            d1 = ~0ull;
+            d1 = bm::bit_block_and_2way(tb0, tb1, tb2, d1);
+            assert(d1 == dc);
         }
+        
+        
 
     }
     cout << " ------------------------------ Test bit-block AND  OK" << endl;
@@ -15460,7 +15504,7 @@ int main(void)
     //LoadVectors("c:/dev/bv_perf", 3, 27);
     exit(1);
 */
-
+/*
     TestRecomb();
 
     OptimGAPTest();
@@ -15477,7 +15521,7 @@ int main(void)
      TestBlockZero();
     
      TestBlockDigest();
-    
+*/
      TestBlockAND();
      TestBlockSUB();
      TestBlockOR();
