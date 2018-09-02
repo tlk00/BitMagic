@@ -446,6 +446,139 @@ void BitForEachTest()
 }
 
 static
+void WordSelectTest()
+{
+    const unsigned test_size = 10000000;
+
+    std::vector<bm::id64_t> vect_v(test_size);
+    std::vector<unsigned> vect_cnt(test_size);
+    std::vector<unsigned> vect_r1(test_size);
+    std::vector<unsigned> vect_r2(test_size);
+
+    for (unsigned i = 0; i < test_size; ++i)
+    {
+        unsigned w;
+        bm::id64_t w64;
+        do
+        {
+            w = unsigned(rand());
+            if (i % 3 == 0)
+                w64 = w << rand()%32;
+            else
+            if (i % 4 == 0)
+                w64 = bm::id64_t(w) | (bm::id64_t(w) << 32);
+            else
+                w64 = w | (1ull << 60);
+        } while (!w64);
+        
+        if (i % 3 == 0)
+            w64 = w << rand()%32;
+        else
+        if (i % 4 == 0)
+            w64 = w | (bm::id64_t(w) << 32);
+        else
+            w64 = w | (1ull << 60);
+        
+        unsigned bc = bm::word_bitcount64(w64);
+//        assert(0);
+        
+        vect_v[i] = w64;
+        vect_cnt[i] = bc;
+    }
+    
+    {
+        TimeTaker tt("select64 linear", 1);
+        for (unsigned i = 0; i < vect_v.size(); ++i)
+        {
+            bm::id64_t w64 = vect_v[i];
+            unsigned bc = vect_cnt[i];
+            if (bc)
+            {
+                for (unsigned j = 1; j <= bc; ++j)
+                {
+                    unsigned idx = bm::word_select64_linear(w64, j);
+                    vect_r1[i] = idx;
+                }
+            }
+            else
+            {
+                vect_r1[i] = 0;
+            }
+        }
+    }
+
+    {
+        TimeTaker tt("select64 bitscan", 1);
+        for (unsigned i = 0; i < vect_v.size(); ++i)
+        {
+            bm::id64_t w64 = vect_v[i];
+            unsigned bc = vect_cnt[i];
+            if (bc)
+            {
+                for (unsigned j = 1; j <= bc; ++j)
+                {
+                    unsigned idx = bm::word_select64_bitscan(w64, j);
+                    vect_r2[i] = idx;
+                }
+            }
+            else
+            {
+                vect_r2[i] = 0;
+            }
+        }
+    }
+
+#ifdef BMBMI1OPT
+    std::vector<unsigned> vect_r3(test_size);
+
+    {
+        TimeTaker tt("select64 BMI1", 1);
+        for (unsigned i = 0; i < vect_v.size(); ++i)
+        {
+            bm::id64_t w64 = vect_v[i];
+            unsigned bc = vect_cnt[i];
+            if (bc)
+            {
+                for (unsigned j = 1; j <= bc; ++j)
+                {
+                    unsigned idx = bm::word_select64_bitscan(w64, j);
+                    vect_r3[i] = idx;
+                }
+            }
+            else
+            {
+                vect_r3[i] = 0;
+            }
+        }
+    }
+#endif
+
+    // validation
+    //
+    for (unsigned i = 0; i < vect_v.size(); ++i)
+    {
+        auto r1 = vect_r1[i];
+        auto r2 = vect_r2[i];
+        
+        if (r1 != r2)
+        {
+            std::cerr << "WordSelect64 error(1) at: " << i << std::endl;
+            exit(1);
+        }
+#ifdef BMBMI1OPT
+        auto r3 = vect_r3[i];
+        
+        if (r1 != r3)
+        {
+            std::cerr << "WordSelect64 BMI1 error(3) at: " << i << std::endl;
+            exit(1);
+        }
+#endif
+    }
+
+}
+
+static
 void BitCountSparseTest()
 {
     bvect*  bv = new bvect();
@@ -2484,10 +2617,12 @@ int main(void)
     MemCpyTest();
 
     BitCountTest();
-
+    
     BitCountSparseTest();
 
     BitForEachTest();
+
+    WordSelectTest();
 
     BitTestSparseTest();
 
