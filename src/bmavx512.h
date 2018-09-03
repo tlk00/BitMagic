@@ -938,7 +938,7 @@ bool avx512_sub_digest(__m512i* BMRESTRICT dst,
     
      m1A = _mm512_or_si512(m1A, m1B);
 
-    return !avx512_test_zero(m1A);
+    return avx512_test_zero(m1A);
 /*
      __mmask16 and_mask = _mm512_test_epi32_mask(m1A, _mm512_set1_epi32(~0u));
 __mmask16 eq_mask = _mm512_cmpeq_epi32_mask (m1A, _mm512_set1_epi32(0));
