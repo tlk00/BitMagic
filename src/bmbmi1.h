@@ -81,7 +81,8 @@ unsigned bmi1_select64_tz(bm::id64_t w, unsigned rank)
         if ((--rank) == 0)
         {
             bm::id64_t t = _blsi_u64(w); //w & -w;
-            unsigned count = unsigned(_mm_tzcnt_64(t));
+            //unsigned count = unsigned(_mm_tzcnt_64(t));
+            unsigned count = unsigned(_mm_popcnt_u64(t-1));
             return count;
         }
         w = _blsr_u64(w);

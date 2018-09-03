@@ -557,7 +557,7 @@ unsigned word_select64_linear(bm::id64_t w, unsigned rank)
     
     for (unsigned count = 0; w; w >>=1ull, ++count)
     {
-        rank -= (w & 1ull);
+        rank -= unsigned(w & 1ull);
         if (!rank)
             return count;
     }
