@@ -9803,6 +9803,17 @@ unsigned proxy_bmi1_select64_lz(bm::id64_t val, unsigned rank)
 #endif
 }
 
+inline
+unsigned proxy_bmi1_select64_tz(bm::id64_t val, unsigned rank)
+{
+#ifdef BMBMI1OPT
+    return bmi1_select64_tz(val, rank);
+#else
+    return bm::word_select64_linear(val, rank);
+#endif
+}
+
+
 // Returns the position of the rank'th 1.  (rank = 0 returns the 1st 1)
 // Returns 64 if there are fewer than rank+1 1s.
 /*
@@ -9831,11 +9842,13 @@ void SelectTest()
         bm::id64_t w64 = 1;
         unsigned idx = bm::word_select64_linear(w64, 1);
         unsigned idx0 = word_select64_bitscan(w64, 1);
-        unsigned idx1, idx4;
+        unsigned idx1, idx4, idx5;
         assert(idx == 0);
         assert(idx0 == idx);
         idx4 = proxy_bmi1_select64_lz(w64, 1);
         assert(idx4 == idx);
+        idx5 = proxy_bmi1_select64_tz(w64, 1);
+        assert(idx5 == idx);
 //        idx3 = avx2_select64(w64, 1);
 //        assert(idx3 == idx);
 
@@ -9875,6 +9888,8 @@ void SelectTest()
             assert(idx0 == idx);
             idx4 = proxy_bmi1_select64_lz(~0ull, sel);
             assert(idx4 == idx);
+            idx5 = proxy_bmi1_select64_tz(~0ull, sel);
+            assert(idx5 == idx);
         }
         
         for (idx = 0; w64; w64 <<= 1)
@@ -9885,6 +9900,8 @@ void SelectTest()
             assert(idx1 == idx0);
             idx4 = proxy_bmi1_select64_lz(w64, 1);
             assert(idx4 == idx);
+            idx5 = proxy_bmi1_select64_tz(w64, 1);
+            assert(idx5 == idx);
 
             ++idx;
         }
@@ -9906,6 +9923,8 @@ void SelectTest()
                 assert(idx0 == idx1);
                 unsigned idx4 = proxy_bmi1_select64_lz(w64, j);
                 assert(idx4 == idx1);
+                unsigned idx5 = proxy_bmi1_select64_tz(w64, j);
+                assert(idx5 == idx1);
 
             }
             
@@ -9917,6 +9936,8 @@ void SelectTest()
                 assert(idx0 == idx1);
                 unsigned idx4 = proxy_bmi1_select64_lz(w64_1, j);
                 assert(idx4 == idx1);
+                unsigned idx5 = proxy_bmi1_select64_tz(w64_1, j);
+                assert(idx5 == idx1);
             }
             
             if (i % 1000000 == 0)
@@ -15504,7 +15525,7 @@ int main(void)
     //LoadVectors("c:/dev/bv_perf", 3, 27);
     exit(1);
 */
-/*
+
     TestRecomb();
 
     OptimGAPTest();
@@ -15521,7 +15542,7 @@ int main(void)
      TestBlockZero();
     
      TestBlockDigest();
-*/
+
      TestBlockAND();
      TestBlockSUB();
      TestBlockOR();
