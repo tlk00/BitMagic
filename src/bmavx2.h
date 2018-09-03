@@ -1098,7 +1098,7 @@ void avx2_copy_block(__m256i* BMRESTRICT dst,
 inline
 void avx2_invert_block(__m256i* BMRESTRICT dst)
 {
-    __m256i maskFF = _mm256_set1_epi32(~0u); // broadcast 0xFF
+    __m256i maskFF = _mm256_set1_epi32(-1); // broadcast 0xFF
     const __m256i* BMRESTRICT dst_end =
         (const __m256i*)((bm::word_t*)(dst) + bm::set_block_size);
 
