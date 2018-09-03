@@ -64,6 +64,31 @@ unsigned bmi1_select64_lz(bm::id64_t val, unsigned rank)
     return lz;
 }
 
+/**
+    \brief word find index of the rank-th bit set by bit-testing
+    \param w - 64-bit work to search
+    \param rank - rank to select (should be > 0)
+ 
+    \return selected value (inxed of bit set)
+*/
+inline
+unsigned bmi1_select64_tz(bm::id64_t w, unsigned rank)
+{
+    BM_ASSERT(w);
+    BM_ASSERT(rank);
+    for ( ;w; )
+    {
+        if ((--rank) == 0)
+        {
+            bm::id64_t t = _blsi_u64(w); //w & -w;
+            unsigned count = unsigned(_mm_tzcnt_64(t));
+            return count;
+        }
+        w = _blsr_u64(w);
+    }
+    BM_ASSERT(0); // shoud not be here if rank is achievable
+    return ~0u;
+}
 
 
 } // bm
