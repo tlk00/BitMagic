@@ -91,6 +91,31 @@ void avx2_print256(const char* prefix, const __m256i & value)
 }
 */
 
+/**
+    @return true if all zero
+    @ingroup AVX512
+*/
+inline
+bool avx512_test_zero(__m512i m)
+{
+     const __mmask16 m16F = ~0u; // 0xFF
+    __mmask16 eq_m = _mm512_cmpeq_epi32_mask(m, _mm512_set1_epi64(0ull));
+    return (eq_m == m16F);
+}
+
+/**
+    @return true if all one
+    @ingroup AVX512
+*/
+inline
+bool avx512_test_one(__m512i m)
+{
+     const __mmask16 m16F = ~0u; // 0xFF
+    __mmask16 eq_m = _mm512_cmpeq_epi32_mask(m, _mm512_set1_epi64(-1));
+    return (eq_m == m16F);
+}
+
+
 #ifdef __GNUG__
 #pragma GCC diagnostic push
 #pragma GCC diagnostic ignored "-Wconversion"
@@ -452,10 +477,7 @@ unsigned avx512_and_block(__m512i* BMRESTRICT dst,
     accC = _mm512_or_si512(accC, accD); // C = C | D
     accA = _mm512_or_si512(accA, accC); // A = A | C
 
-    __m512i maskFF = _mm512_set1_epi32(~0u);
-    __mmask16 and_mask = _mm512_test_epi32_mask(accA, maskFF);
-    
-     return (and_mask != 0);
+    return !avx512_test_zero(accA);
 }
 
 /*!
@@ -479,12 +501,7 @@ bool avx512_and_digest(__m512i* BMRESTRICT dst,
     
      m1A = _mm512_or_si512(m1A, m1B);
     
-     __mmask16 and_mask = _mm512_test_epi32_mask(m1A, _mm512_set1_epi32(~0u));
-
-__mmask16 eq_mask = _mm512_cmpeq_epi32_mask (m1A, _mm512_set1_epi32(0));
-BM_ASSERT(and_mask == ~eq_mask);
-    
-     return (and_mask == 0);
+     return avx512_test_zero(m1A);
 }
 
 /*!
@@ -509,10 +526,7 @@ bool avx512_and_digest_2way(__m512i* BMRESTRICT dst,
     
      m1A = _mm512_or_si512(m1A, m1B);
 
-     __m512i maskFF = _mm512_set1_epi32(~0u);
-     __mmask16 and_mask = _mm512_test_epi32_mask(m1A, maskFF);
-    
-     return (and_mask == 0);
+    return avx512_test_zero(m1A);
 }
 
 
@@ -621,8 +635,8 @@ bool avx512_or_block(__m512i* BMRESTRICT dst,
 
     __m512i maskF = _mm512_set1_epi32(~0u);
      mAccF0 = _mm512_and_si512(mAccF0, mAccF1);
-    __mmask64 maskA = _mm512_cmpeq_epi8_mask(mAccF0, maskF);
-    return (maskA == ~0ull);
+    
+    return avx512_test_one(mAccF1);
 }
 
 
@@ -725,10 +739,14 @@ bool avx512_or_block_3way(__m512i* BMRESTRICT dst,
 
     } while (src1 < src_end1);
 
+     mAccF0 = _mm512_and_si512(mAccF0, mAccF1);
+    return avx512_test_one(mAccF0);
+/*
     __m512i maskF = _mm512_set1_epi32(~0u);
      mAccF0 = _mm512_and_si512(mAccF0, mAccF1);
     __mmask64 maskA = _mm512_cmpeq_epi8_mask(mAccF0, maskF);
     return (maskA == ~0ull);
+*/
 }
 
 
@@ -793,11 +811,15 @@ bool avx512_or_block_5way(__m512i* BMRESTRICT dst,
         dst += 4;
 
     } while (src1 < src_end1);
-    
+
+     mAccF0 = _mm512_and_si512(mAccF0, mAccF1);
+    return avx512_test_one(mAccF0);
+/*
     __m512i maskF = _mm512_set1_epi32(~0u);
      mAccF0 = _mm512_and_si512(mAccF0, mAccF1);
     __mmask64 maskA = _mm512_cmpeq_epi8_mask(mAccF0, maskF);
     return (maskA == ~0ull);
+*/
 }
 
 
@@ -851,6 +873,8 @@ inline
 unsigned avx512_sub_block(__m512i* BMRESTRICT dst,
                           const __m512i* BMRESTRICT src)
 {
+    const __mmask16 m16Z = 0;
+    
     __m512i m1A, m1B,  m1C, m1D;
     __m512i accA, accB, accC, accD;
     
@@ -883,11 +907,14 @@ unsigned avx512_sub_block(__m512i* BMRESTRICT dst,
     accA = _mm512_or_si512(accA, accB); // A = A | B
     accC = _mm512_or_si512(accC, accD); // C = C | D
     accA = _mm512_or_si512(accA, accC); // A = A | C
-
+    
+    return !avx512_test_zero(accA);
+/*
     __m512i maskFF = _mm512_set1_epi32(~0u);
     __mmask16 and_mask = _mm512_test_epi32_mask(accA, maskFF);
     
-    return !(and_mask == 0);
+    return !(and_mask == m16Z);
+*/
 }
 
 /*!
@@ -911,11 +938,14 @@ bool avx512_sub_digest(__m512i* BMRESTRICT dst,
     
      m1A = _mm512_or_si512(m1A, m1B);
 
+    return !avx512_test_zero(m1A);
+/*
      __mmask16 and_mask = _mm512_test_epi32_mask(m1A, _mm512_set1_epi32(~0u));
 __mmask16 eq_mask = _mm512_cmpeq_epi32_mask (m1A, _mm512_set1_epi32(0));
 BM_ASSERT(and_mask == ~eq_mask);
 
      return (and_mask == 0);
+*/
 }
 
 
@@ -988,7 +1018,7 @@ void avx512_copy_block(__m512i* BMRESTRICT dst,
 inline
 void avx512_invert_block(__m512i* BMRESTRICT dst)
 {
-    __m512i maskFF = _mm512_set1_epi32(~0u); // broadcast 0xFF
+    __m512i maskFF = _mm512_set1_epi64(-1); // broadcast 0xFF
     const __m512i* BMRESTRICT dst_end =
         (const __m512i*)((bm::word_t*)(dst) + bm::set_block_size);
 
@@ -1021,7 +1051,7 @@ bool avx512_is_all_zero(const __m512i* BMRESTRICT block)
 {
     const __m512i* BMRESTRICT block_end =
         (const __m512i*)((bm::word_t*)(block) + bm::set_block_size);
-    __m512i maskFF = _mm512_set1_epi32(~0u); // broadcast 0xFF
+    __m512i maskFF = _mm512_set1_epi64(-1); // broadcast 0xFF
 
     do
     {
@@ -1036,9 +1066,8 @@ bool avx512_is_all_zero(const __m512i* BMRESTRICT block)
         __m512i wB = _mm512_or_si512(w2, w3);
         wA = _mm512_or_si512(wA, wB);
         
-        __mmask16 and_mask = _mm512_test_epi32_mask(wA, maskFF);
-
-        if (and_mask)
+        bool z = avx512_test_zero(wA);
+        if (z)
             return false;
 
         block += 4;
@@ -1054,10 +1083,13 @@ inline
 bool avx512_is_digest_zero(const __m512i* BMRESTRICT block)
 {
     __m512i mA = _mm512_or_si512(_mm512_load_si512(block+0), _mm512_load_si512(block+1));
-
+    
+    return avx512_test_zero(mA);
+/*
     __mmask16 and_mask = _mm512_test_epi32_mask(mA, _mm512_set1_epi32(~0u));
 
     return (and_mask == 0);
+*/
 }
 
 
@@ -1069,7 +1101,7 @@ bool avx512_is_digest_zero(const __m512i* BMRESTRICT block)
 inline
 bool avx512_is_all_one(const __m512i* BMRESTRICT block)
 {
-    __m512i maskF = _mm512_set1_epi32(~0u); // braodcast 0xFF
+    __m512i maskF = _mm512_set1_epi64(-1); // braodcast 0xFF
     const __m512i* BMRESTRICT block_end =
         (const __m512i*)((bm::word_t*)(block) + bm::set_block_size);
 
