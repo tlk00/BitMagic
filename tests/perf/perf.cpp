@@ -448,7 +448,7 @@ void BitForEachTest()
 static
 void WordSelectTest()
 {
-    const unsigned test_size = 10000000;
+    const unsigned test_size = 50000000;
 
     std::vector<bm::id64_t> vect_v(test_size);
     std::vector<unsigned> vect_cnt(test_size);
@@ -463,12 +463,12 @@ void WordSelectTest()
         {
             w = unsigned(rand());
             if (i % 3 == 0)
-                w64 = w << rand()%32;
+                w64 = w << rand()%2048;
             else
             if (i % 4 == 0)
                 w64 = bm::id64_t(w) | (bm::id64_t(w) << 32);
             else
-                w64 = w | (1ull << 60);
+                w64 = bm::id64_t(w) | (0xFFAull << 33ull);
         } while (!w64);
         
         if (i % 3 == 0)
@@ -480,7 +480,6 @@ void WordSelectTest()
             w64 = w | (1ull << 60);
         
         unsigned bc = bm::word_bitcount64(w64);
-//        assert(0);
         
         vect_v[i] = w64;
         vect_cnt[i] = bc;
@@ -530,9 +529,10 @@ void WordSelectTest()
 
 #ifdef BMBMI1OPT
     std::vector<unsigned> vect_r3(test_size);
+    std::vector<unsigned> vect_r4(test_size);
 
     {
-        TimeTaker tt("select64 BMI1", 1);
+        TimeTaker tt("select64 BMI1 lead-zero", 1);
         for (unsigned i = 0; i < vect_v.size(); ++i)
         {
             bm::id64_t w64 = vect_v[i];
@@ -541,13 +541,34 @@ void WordSelectTest()
             {
                 for (unsigned j = 1; j <= bc; ++j)
                 {
-                    unsigned idx = bm::word_select64_bitscan(w64, j);
+                    unsigned idx = bm::bmi1_select64_lz(w64, j);
                     vect_r3[i] = idx;
                 }
             }
             else
             {
                 vect_r3[i] = 0;
+            }
+        }
+    }
+    
+    {
+        TimeTaker tt("select64 BMI1 bitscan", 1);
+        for (unsigned i = 0; i < vect_v.size(); ++i)
+        {
+            bm::id64_t w64 = vect_v[i];
+            unsigned bc = vect_cnt[i];
+            if (bc)
+            {
+                for (unsigned j = 1; j <= bc; ++j)
+                {
+                    unsigned idx = bm::bmi1_select64_tz(w64, j);
+                    vect_r4[i] = idx;
+                }
+            }
+            else
+            {
+                vect_r4[i] = 0;
             }
         }
     }
@@ -567,10 +588,16 @@ void WordSelectTest()
         }
 #ifdef BMBMI1OPT
         auto r3 = vect_r3[i];
-        
+        auto r4 = vect_r4[i];
+
         if (r1 != r3)
         {
             std::cerr << "WordSelect64 BMI1 error(3) at: " << i << std::endl;
+            exit(1);
+        }
+        if (r1 != r4)
+        {
+            std::cerr << "WordSelect64 BMI1 error(4) at: " << i << std::endl;
             exit(1);
         }
 #endif
