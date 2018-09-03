@@ -1067,7 +1067,7 @@ bool avx512_is_all_zero(const __m512i* BMRESTRICT block)
         wA = _mm512_or_si512(wA, wB);
         
         bool z = avx512_test_zero(wA);
-        if (z)
+        if (!z)
             return false;
 
         block += 4;
