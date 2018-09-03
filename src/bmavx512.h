@@ -91,6 +91,12 @@ void avx2_print256(const char* prefix, const __m256i & value)
 }
 */
 
+#ifdef __GNUG__
+#pragma GCC diagnostic push
+#pragma GCC diagnostic ignored "-Wconversion"
+#endif
+
+
 /**
     @return true if all zero
     @ingroup AVX512
@@ -115,11 +121,6 @@ bool avx512_test_one(__m512i m)
     return (eq_m == m16F);
 }
 
-
-#ifdef __GNUG__
-#pragma GCC diagnostic push
-#pragma GCC diagnostic ignored "-Wconversion"
-#endif
 
 
 #define BM_CSA256(h, l, a, b, c) \
@@ -860,8 +861,6 @@ inline
 unsigned avx512_sub_block(__m512i* BMRESTRICT dst,
                           const __m512i* BMRESTRICT src)
 {
-    const __mmask16 m16Z = 0;
-    
     __m512i m1A, m1B,  m1C, m1D;
     __m512i accA, accB, accC, accD;
     
@@ -1025,8 +1024,6 @@ bool avx512_is_all_zero(const __m512i* BMRESTRICT block)
 {
     const __m512i* BMRESTRICT block_end =
         (const __m512i*)((bm::word_t*)(block) + bm::set_block_size);
-    __m512i maskFF = _mm512_set1_epi64(-1); // broadcast 0xFF
-
     do
     {
         __m512i w0 = _mm512_load_si512(block+0);

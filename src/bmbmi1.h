@@ -38,28 +38,28 @@ namespace bm
     \return selected value (inxed of bit set)
 */
 inline
-unsigned bmi1_select64_lz(bm::id64_t val, unsigned rank)
+unsigned bmi1_select64_lz(bm::id64_t w, unsigned rank)
 {
     unsigned bc, lz;
-    unsigned val_lo32 = val & 0xFFFFFFFFull;
+    unsigned val_lo32 = w & 0xFFFFFFFFull;
     
     unsigned bc_lo32 = unsigned(_mm_popcnt_u64(val_lo32));
     if (rank <= bc_lo32)
     {
-        unsigned val_lo16 = val & 0xFFFFull;
+        unsigned val_lo16 = w & 0xFFFFull;
         unsigned bc_lo16 = unsigned(_mm_popcnt_u64(val_lo16));
-        val = (rank <= bc_lo16) ? val_lo16 : val_lo32;
+        w = (rank <= bc_lo16) ? val_lo16 : val_lo32;
     }
-    bc = _mm_popcnt_u64(val);
+    bc = unsigned(_mm_popcnt_u64(w));
 
     unsigned diff = bc - rank;
     for (; diff; --diff)
     {
-        lz = unsigned(_lzcnt_u64(val));
-        val &= ~(1ull << (63 - lz));
+        lz = unsigned(_lzcnt_u64(w));
+        w &= ~(1ull << (63 - lz));
     }
-    BM_ASSERT(unsigned(_mm_popcnt_u64(val)) == rank);
-    lz = unsigned(_lzcnt_u64(val));
+    BM_ASSERT(unsigned(_mm_popcnt_u64(w)) == rank);
+    lz = unsigned(_lzcnt_u64(w));
     lz = 63 - lz;
     return lz;
 }
