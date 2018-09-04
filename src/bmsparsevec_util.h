@@ -41,9 +41,10 @@ class bvps_addr_resolver
 public:
     typedef bm::id_t                                 size_type;
     typedef BV                                       bvector_type;
-    typedef typename bvector_type::blocks_count      bvector_blocks_psum_type;
+    typedef typename bvector_type::blocks_count      rs_index_type;
 public:
     bvps_addr_resolver();
+    ~bvps_addr_resolver();
     bvps_addr_resolver(const bvps_addr_resolver& addr_res);
     
     bvps_addr_resolver& operator=(const bvps_addr_resolver& addr_res)
@@ -54,7 +55,7 @@ public:
             in_sync_ = addr_res.in_sync_;
             if (in_sync_)
             {
-                bv_blocks_.copy_from(addr_res.bv_blocks_);
+                rs_index_->copy_from(*addr_res.rs_index_);
             }
         }
         return *this;
@@ -141,12 +142,14 @@ public:
         \brief equality comparison
     */
     bool equal(const bvps_addr_resolver& addr_res) const;
-
+protected:
+    void construct_rs_index();
+    void free_rs_index();
     
 private:
-    bvector_type              addr_bv_;   ///< bit-vector for id translation
-    bvector_blocks_psum_type  bv_blocks_; ///< prefix sum for rank translation
-    bool                      in_sync_;   ///< flag if prefix sum is in-sync with vector
+    bvector_type               addr_bv_;   ///< bit-vector for id translation
+    rs_index_type*             rs_index_;  ///< rank translation index
+    bool                       in_sync_;   ///< flag if prefix sum is in-sync with vector
 };
 
 
@@ -367,9 +370,39 @@ public:
 
 template<class BV>
 bvps_addr_resolver<BV>::bvps_addr_resolver()
-: in_sync_(false)
+: rs_index_(0), in_sync_(false)
 {
     addr_bv_.init();
+    construct_rs_index();
+}
+
+//---------------------------------------------------------------------
+
+template<class BV>
+bvps_addr_resolver<BV>::~bvps_addr_resolver()
+{
+    free_rs_index();
+}
+
+//---------------------------------------------------------------------
+
+template<class BV>
+void bvps_addr_resolver<BV>::construct_rs_index()
+{
+    if (rs_index_)
+        return;
+    rs_index_ =
+        (rs_index_type*) bm::aligned_new_malloc(sizeof(rs_index_type));
+    rs_index_ = new(rs_index_) rs_index_type(); // placement new
+}
+
+//---------------------------------------------------------------------
+
+template<class BV>
+void bvps_addr_resolver<BV>::free_rs_index()
+{
+    bm::aligned_free(rs_index_);
+    rs_index_ = 0;
 }
 
 //---------------------------------------------------------------------
@@ -379,9 +412,11 @@ bvps_addr_resolver<BV>::bvps_addr_resolver(const bvps_addr_resolver& addr_res)
 : addr_bv_(addr_res.addr_bv_),
   in_sync_(addr_res.in_sync_)
 {
+    construct_rs_index();
+
     if (in_sync_)
     {
-        bv_blocks_.copy_from(addr_res.bv_blocks_);
+        rs_index_->copy_from(*addr_res.rs_index_);
     }
     addr_bv_.init();
 }
@@ -398,8 +433,14 @@ void bvps_addr_resolver<BV>::move_from(bvps_addr_resolver& addr_res) BMNOEXEPT
         in_sync_ = addr_res.in_sync_;
         if (in_sync_)
         {
-            bv_blocks_.copy_from(addr_res.bv_blocks_);
+            free_rs_index();
+            rs_index_ = addr_res.rs_index_;
+            addr_res.rs_index_ = 0;
         }
+    }
+    else
+    {
+        rs_index_ = 0; in_sync_ = false;
     }
 }
 
@@ -412,7 +453,7 @@ bool bvps_addr_resolver<BV>::resolve(bm::id_t id_from, bm::id_t* id_to) const
 
     if (in_sync_)
     {
-        *id_to = addr_bv_.count_to_test(id_from, bv_blocks_);
+        *id_to = addr_bv_.count_to_test(id_from, *rs_index_);
     }
     else  // slow access
     {
@@ -437,7 +478,7 @@ bool bvps_addr_resolver<BV>::get(bm::id_t id_from, bm::id_t* id_to) const
     BM_ASSERT(id_to);
     BM_ASSERT(in_sync_);
 
-    *id_to = addr_bv_.count_to_test(id_from, bv_blocks_);
+    *id_to = addr_bv_.count_to_test(id_from, *rs_index_);
     return (bool)*id_to;
 }
 
@@ -462,7 +503,7 @@ void bvps_addr_resolver<BV>::calc_prefix_sum(bool force)
     if (in_sync_ && force == false)
         return;  // nothing to do
     
-    addr_bv_.running_count_blocks(&bv_blocks_); // compute popcount prefix list
+    addr_bv_.running_count_blocks(rs_index_); // compute popcount prefix list
     in_sync_ = true;
 }
 
@@ -483,6 +524,8 @@ bool bvps_addr_resolver<BV>::equal(const bvps_addr_resolver& addr_res) const
     return (cmp == 0);
 }
 
+//---------------------------------------------------------------------
+//
 //---------------------------------------------------------------------
 
 
