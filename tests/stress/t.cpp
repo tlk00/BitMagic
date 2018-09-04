@@ -12817,7 +12817,7 @@ void TestSparseVector_Stress(unsigned count)
     
     
     
-
+    cout << "---------------------------- Bit-plain sparse vector stress OK" << endl;
 }
 
 inline
