@@ -574,6 +574,33 @@ void WordSelectTest()
     }
 #endif
 
+#ifdef BMBMI2OPT
+    std::vector<unsigned> vect_r5(test_size);
+
+    {
+        TimeTaker tt("select64 BMI2 pdep", 1);
+        for (unsigned i = 0; i < vect_v.size(); ++i)
+        {
+            bm::id64_t w64 = vect_v[i];
+            unsigned bc = vect_cnt[i];
+            if (bc)
+            {
+                for (unsigned j = 1; j <= bc; ++j)
+                {
+                    unsigned idx = bm::bmi2_select64_pdep(w64, j);
+                    vect_r5[i] = idx;
+                }
+            }
+            else
+            {
+                vect_r5[i] = 0;
+            }
+        }
+    }
+    
+#endif
+
+
     // validation
     //
     for (unsigned i = 0; i < vect_v.size(); ++i)
@@ -601,6 +628,17 @@ void WordSelectTest()
             exit(1);
         }
 #endif
+
+#ifdef BMBMI2OPT
+        auto r5 = vect_r5[i];
+
+        if (r1 != r5)
+        {
+            std::cerr << "WordSelect64 BMI2 error(5) at: " << i << std::endl;
+            exit(1);
+        }
+#endif
+
     }
 
 }
