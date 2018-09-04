@@ -1643,27 +1643,17 @@ void avx2_bit_block_gather_scatter(unsigned* BMRESTRICT arr,
 }
 
 #if 0
+#ifdef __GNUG__
+#define BMBMI2OPT
 inline
-unsigned avx2_select64(bm::id64_t val, int rank)
+unsigned bmi2_select64_pdep(bm::id64_t val, unsigned rank)
 {
-    std::cerr << "val=" << val << " rank=" << rank << ":  ";
-
-    unsigned pop = _mm_popcnt_u64(val);
-    std::cerr << " POP=" << pop;
-    if (pop == rank)
-    {
-        unsigned lz = _lzcnt_u64(val);
-        lz = 63 - lz;
-        std::cerr << "POS=" << lz << std::endl;
-        return lz;
-    }
-    
-    uint64_t i = 1ull << (rank - 1);
-    std::cerr << " smask=" << i << " ";
-    bm::id64_t d = _pdep_u64(val, i);
-    std::cerr << " PDEP=" << d << " ";
+    bm::id64_t i = 1ull << (rank-1);
+/*
+    bm::id64_t d = _pdep_u64(i, val);
     i = _tzcnt_u64(d);
-    /*
+*/
+    
     asm("pdep %[val], %[mask], %[val]"
             : [val] "+r" (val)
             : [mask] "r" (i));
@@ -1671,11 +1661,40 @@ unsigned avx2_select64(bm::id64_t val, int rank)
             : [index] "=r" (i)
             : [bit] "g" (val)
             : "cc");
-    */
-    std::cerr << "TZCNT=" << i << std::endl;
     
     return unsigned(i);
 }
+#endif  // __GNUG__
+
+#ifdef _MSC_VER
+#if defined(_M_AMD64) || defined(_M_X64) // inline assembly not supported
+
+
+inline
+bm::id64_t asm_pdep64(bm::id64_t val, bm::id64_t mask)
+{
+  __asm  pdep  rax, val, mask
+}
+
+inline
+unsigned asm_tzcnt64(bm::id64_t val)
+{
+  __asm  tzcnt  rax, val
+}
+
+
+inline
+unsigned bmi2_select64_pdep(bm::id64_t val, unsigned rank)
+{
+    uint64_t i = 1ull << (rank-1);
+    bm::id64_t d = asm_pdep64(i, val);
+    i = asm_tzcnt64(d);
+    return unsigned(i);
+}
+
+#endif
+#endif // _MSC_VER
+
 #endif
 
 #ifdef __GNUG__
