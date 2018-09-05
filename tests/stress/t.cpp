@@ -15548,7 +15548,7 @@ int main(void)
     //LoadVectors("c:/dev/bv_perf", 3, 27);
     exit(1);
 */
-/*
+
     TestRecomb();
 
     OptimGAPTest();
@@ -15559,7 +15559,7 @@ int main(void)
     TestSIMDUtils();
     
     Log2Test();
- */
+ 
     SelectTest();
 
      TestBlockZero();
