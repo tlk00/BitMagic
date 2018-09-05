@@ -603,10 +603,14 @@ unsigned word_select64_bitscan(bm::id64_t w, unsigned rank)
 inline
 unsigned word_select64(bm::id64_t w, unsigned rank)
 {
-#if defined(BMBMI1OPT)
-    return bm::bmi1_select64_tz(w, rank);
+#if defined(BMI2_SELECT64)
+    return BMI2_SELECT64(w, rank);
 #else
-    return bm::word_select64_bitscan(w, rank);
+    #if defined(BMI1_SELECT64)
+        return BMI2_SELECT64(w, rank);
+    #else
+        return bm::word_select64_bitscan(w, rank);
+    #endif
 #endif
 }
 

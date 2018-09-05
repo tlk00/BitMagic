@@ -92,6 +92,8 @@ unsigned bmi1_select64_tz(bm::id64_t w, unsigned rank)
 }
 
 
+#define BMI1_SELECT64 bmi1_select64_tz
+
 } // bm
 
 #endif

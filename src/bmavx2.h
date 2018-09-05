@@ -67,7 +67,7 @@ For more information please visit:  http://bitmagic.io
 #include<immintrin.h>
 
 #include "bmdef.h"
-#include "bmbmi1.h"
+#include "bmbmi2.h"
 
 namespace bm
 {
@@ -1642,41 +1642,7 @@ void avx2_bit_block_gather_scatter(unsigned* BMRESTRICT arr,
 
 }
 
-#ifdef __GNUG__
-#define BMBMI2OPT
-inline
-unsigned bmi2_select64_pdep(bm::id64_t val, unsigned rank)
-{
-    bm::id64_t i = 1ull << (rank-1);
-    
-    asm("pdep %[val], %[mask], %[val]"
-            : [val] "+r" (val)
-            : [mask] "r" (i));
-    asm("tzcnt %[bit], %[index]"
-            : [index] "=r" (i)
-            : [bit] "g" (val)
-            : "cc");
-    
-    return unsigned(i);
-}
-#endif  // __GNUG__
 
-#ifdef _MSC_VER
-#if defined(_M_AMD64) || defined(_M_X64) // inline assembly not supported
-#define BMBMI2OPT
-
-inline
-unsigned bmi2_select64_pdep(bm::id64_t val, unsigned rank)
-{
-    bm::id64_t i = 1ull << (rank-1);
-    bm::id64_t d = _pdep_u64(i, val);
-    i = _tzcnt_u64(d);
-
-    return unsigned(i);
-}
-
-#endif
-#endif // _MSC_VER
 
 
 #ifdef __GNUG__

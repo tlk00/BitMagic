@@ -63,7 +63,11 @@ For more information please visit:  http://bitmagic.io
 #undef VECT_IS_ZERO_BLOCK
 #undef VECT_IS_ONE_BLOCK
 
+#undef BMBMI2OPT
+#undef BMBMI1OPT
 
+#undef BMI1_SELECT64
+#undef BMI2_SELECT64
 
 #undef BM_UNALIGNED_ACCESS_OK
 #undef BM_x86
