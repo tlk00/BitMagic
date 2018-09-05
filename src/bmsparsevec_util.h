@@ -412,6 +412,7 @@ bvps_addr_resolver<BV>::bvps_addr_resolver(const bvps_addr_resolver& addr_res)
 : addr_bv_(addr_res.addr_bv_),
   in_sync_(addr_res.in_sync_)
 {
+    rs_index_ = 0;
     construct_rs_index();
 
     if (in_sync_)
