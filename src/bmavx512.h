@@ -104,7 +104,7 @@ void avx2_print256(const char* prefix, const __m256i & value)
 inline
 bool avx512_test_zero(__m512i m)
 {
-     const __mmask16 m16F = ~0u; // 0xFF
+     const __mmask16 m16F = __mmask16(~0u); // 0xFF
     __mmask16 eq_m = _mm512_cmpeq_epi32_mask(m, _mm512_set1_epi64(0ull));
     return (eq_m == m16F);
 }
@@ -116,7 +116,7 @@ bool avx512_test_zero(__m512i m)
 inline
 bool avx512_test_one(__m512i m)
 {
-     const __mmask16 m16F = ~0u; // 0xFF
+     const __mmask16 m16F = __mmask16(~0u); // 0xFF
     __mmask16 eq_m = _mm512_cmpeq_epi32_mask(m, _mm512_set1_epi64(-1));
     return (eq_m == m16F);
 }
@@ -1068,7 +1068,7 @@ bool avx512_is_digest_zero(const __m512i* BMRESTRICT block)
 inline
 bool avx512_is_all_one(const __m512i* BMRESTRICT block)
 {
-     const __mmask16 m16F = ~0u; // 0xFF
+     const __mmask16 m16F = __mmask16(~0u); // 0xFF
 
     __m512i maskF = _mm512_set1_epi64(-1); //  0xFF
     const __m512i* BMRESTRICT block_end =
