@@ -41,7 +41,7 @@ class bvps_addr_resolver
 public:
     typedef bm::id_t                                 size_type;
     typedef BV                                       bvector_type;
-    typedef typename bvector_type::blocks_count      rs_index_type;
+    typedef typename bvector_type::rs_index_type     rs_index_type;
 public:
     bvps_addr_resolver();
     ~bvps_addr_resolver();

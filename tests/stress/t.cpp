@@ -1340,7 +1340,7 @@ template<class T> void CheckCountRange(const T& vect,
     
     CheckRangeCopy(vect, left, right);
     
-    bvect::blocks_count bc_arr;
+    bvect::rs_index_type bc_arr;
     vect.running_count_blocks(&bc_arr);
     
     // run a cycle to check count_to()
@@ -2053,8 +2053,8 @@ void BasicFunctionalityTest()
     bvect_mini     bvect_min(BITVECT_SIZE);
     bvect          bvect_full;
     bvect          bvect_full1;
-    bvect::blocks_count bc_arr;
-    bvect::blocks_count bc_arr1;
+    bvect::rs_index_type bc_arr;
+    bvect::rs_index_type bc_arr1;
 
     printf("\nBasic functionality test.\n");
     
@@ -2255,7 +2255,7 @@ void RankFindTest()
     bv1[30] = true;
     bv1[65534] = true;
 
-    bvect::blocks_count bc_arr1;
+    bvect::rs_index_type bc_arr1;
     bv1.running_count_blocks(&bc_arr1);
 
     bool rf1, rf2, rf3;
@@ -2285,7 +2285,7 @@ void RankFindTest()
             bv1.set(i);
             i += rand()%5;
         }
-        bvect::blocks_count bc_arr1;
+        bvect::rs_index_type bc_arr1;
         bv1.running_count_blocks(&bc_arr1);
 
         
@@ -9403,7 +9403,7 @@ void ResizeTest()
 
 static
 void VerifyCountRange(const bvect& bv,
-                      const bvect::blocks_count& bc_arr,
+                      const bvect::rs_index_type& bc_arr,
                       bm::id_t to)
 {
     for (unsigned i = 0; i < to; ++i)
@@ -9441,7 +9441,7 @@ void CountRangeTest()
     bv1.set(0);
     bv1.set(1);
     
-    bvect::blocks_count bc_arr;
+    bvect::rs_index_type bc_arr;
     bv1.running_count_blocks(&bc_arr);
     
     for (unsigned i = 0; i < bm::set_total_blocks; ++i)
@@ -9452,7 +9452,7 @@ void CountRangeTest()
     VerifyCountRange(bv1, bc_arr, 200000);
     
     bv1.optimize();
-    bvect::blocks_count bc_arr1;
+    bvect::rs_index_type bc_arr1;
     bv1.running_count_blocks(&bc_arr1);
     
     for (unsigned i = 0; i < bm::set_total_blocks; ++i)
@@ -9474,7 +9474,7 @@ void CountRangeTest()
     bv1.set(65535+21);
 
     
-    bvect::blocks_count bc_arr;
+    bvect::rs_index_type bc_arr;
     bv1.running_count_blocks(&bc_arr);
 
     assert(bc_arr.bcount[0] == 2);
@@ -9495,7 +9495,7 @@ void CountRangeTest()
             
             bv1.invert();
 
-            bvect::blocks_count bc_arr;
+            bvect::rs_index_type bc_arr;
             bv1.running_count_blocks(&bc_arr);
 
             VerifyCountRange(bv1, bc_arr, 200000);
@@ -13717,11 +13717,18 @@ void AddressResolverTest()
         assert(!found);
         assert(id_to == 0);
         
+        {
         bvps_addr_resolver<bvect>  ares2(ares);
         
         found = ares2.resolve(10, &id_to);
         assert(!found);
         assert(id_to == 0);
+        }
+        
+        found = ares.resolve(10, &id_to);
+        assert(!found);
+        assert(id_to == 0);
+
     }
 
     {
@@ -14766,7 +14773,7 @@ void TestRankCompress()
         bvect bv_ref { 0, 1, 4 };
         bm::rank_compressor<bvect> rc;
 
-        bvect::blocks_count bc;
+        bvect::rs_index_type bc;
         bv_i.running_count_blocks(&bc);
 
         for (unsigned i = 0; i < 2; ++i)
@@ -14803,7 +14810,7 @@ void TestRankCompress()
 
         bm::rank_compressor<bvect> rc;
 
-        bvect::blocks_count bc;
+        bvect::rs_index_type bc;
         bv_i.running_count_blocks(&bc);
 
         for (unsigned i = 0; i < 2; ++i)
@@ -14854,7 +14861,7 @@ void TestRankCompress()
             
             assert(bv_i.count() >= bv_s.count());
 
-            bvect::blocks_count bc;
+            bvect::rs_index_type bc;
             bv_i.running_count_blocks(&bc);
             
             // quick rank test
@@ -15605,7 +15612,7 @@ int main(void)
      ClearAllTest();
 
      GAPCheck();
-    
+
      AddressResolverTest();
 
      BvectorBitForEachTest();

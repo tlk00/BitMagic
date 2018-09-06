@@ -577,20 +577,19 @@ unsigned word_select64_bitscan(bm::id64_t w, unsigned rank)
 {
     BM_ASSERT(w);
     BM_ASSERT(rank);
-    
-    for ( ;w; )
+    BM_ASSERT(rank <= bm::word_bitcount64(w));
+
+    do
     {
         --rank;
         if (!rank)
-        {
-            bm::id64_t t = w & -w;
-            unsigned count = bm::word_bitcount64(t - 1);
-            return count;
-        }
+            break;
         w &= w - 1;
-    }
-    BM_ASSERT(0); // shoud not be here if rank is achievable
-    return ~0u;
+    } while (1);
+    
+    bm::id64_t t = w & -w;
+    unsigned count = bm::word_bitcount64(t - 1);
+    return count;
 }
 
 /**
@@ -5932,9 +5931,8 @@ bm::id_t bit_find_rank(const bm::word_t* const block,
         unsigned bc = bm::word_bitcount(w);
         if (bc < rank) // skip this
         {
-            pos += unsigned(32u - nbit);
+            rank -= bc; pos += unsigned(32u - nbit);
             ++nword;
-            rank -= bc;
         }
         else // target word
         {
@@ -5943,22 +5941,22 @@ bm::id_t bit_find_rank(const bm::word_t* const block,
             return 0;
         }
     }
-
-    for (; nword < bm::set_block_size-1; nword+=2)
+    
+    if (bm::conditional<sizeof(void*) == 8>::test()) // 64-bit fast scan
     {
-        bm::id64_t w0 = block[nword];
-        bm::id64_t w1 = block[nword+1];
-        bm::id64_t w = (w1 << 32) | w0;
-        bm::id_t bc = bm::word_bitcount64(w);
-        
-        if (bc >= rank) // target
+        for (; nword < bm::set_block_size-1; nword+=2)
         {
-            unsigned idx = bm::word_select64(w, rank);
-            nbit_pos = pos + idx;
-            return 0;
+            bm::id64_t w = (bm::id64_t(block[nword+1]) << 32) | bm::id64_t(block[nword]);
+            bm::id_t bc = bm::word_bitcount64(w);
+            if (bc >= rank) // target
+            {
+                unsigned idx = bm::word_select64(w, rank);
+                nbit_pos = pos + idx;
+                return 0;
+            }
+            rank -= bc;
+            pos += 64u;
         }
-        rank -= bc;
-        pos += 64u;
     }
 
     for (; nword < bm::set_block_size; ++nword)

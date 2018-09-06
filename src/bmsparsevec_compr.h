@@ -67,7 +67,7 @@ public:
     typedef bvector_type*                            bvector_type_ptr;
     typedef typename bvector_type::allocator_type    allocator_type;
     typedef typename bvector_type::allocation_policy allocation_policy_type;
-    typedef typename bvector_type::blocks_count      bvector_blocks_psum_type;
+    typedef typename bvector_type::rs_index_type     rs_index_type;
     typedef typename bvector_type::enumerator        bvector_enumerator_type;
     
 public:
@@ -402,7 +402,7 @@ private:
     sparse_vector_type            sv_;       ///< transpose-sparse vector for "dense" packing
     bm::id_t                      max_id_;   ///< control variable for sorted load
     bool                          in_sync_;  ///< flag if prefix sum is in-sync with vector
-    bvector_blocks_psum_type*     bv_blocks_ptr_ = 0; ///< prefix sum for rank translation
+    rs_index_type*                bv_blocks_ptr_ = 0; ///< prefix sum for rank translation
 };
 
 //---------------------------------------------------------------------
@@ -682,7 +682,7 @@ void rsc_sparse_vector<Val, SV>::optimize(bm::word_t*  temp_block,
     sv_.optimize(temp_block, opt_mode, (typename sparse_vector_type::statistics*)stat);
     if (stat)
     {
-        stat->memory_used += sizeof(bvector_blocks_psum_type);
+        stat->memory_used += sizeof(rs_index_type);
     }
 }
 
@@ -705,7 +705,7 @@ void rsc_sparse_vector<Val, SV>::calc_stat(
     sv_.calc_stat((typename sparse_vector_type::statistics*)st);
     if (st)
     {
-        st->memory_used += sizeof(bvector_blocks_psum_type);
+        st->memory_used += sizeof(rs_index_type);
     }
 }
 
@@ -808,8 +808,8 @@ void rsc_sparse_vector<Val, SV>::construct_bv_blocks()
     if (bv_blocks_ptr_)
         return;
     bv_blocks_ptr_ =
-        (bvector_blocks_psum_type*) bm::aligned_new_malloc(sizeof(bvector_blocks_psum_type));
-    bv_blocks_ptr_ = new(bv_blocks_ptr_) bvector_blocks_psum_type(); // placement new
+        (rs_index_type*) bm::aligned_new_malloc(sizeof(rs_index_type));
+    bv_blocks_ptr_ = new(bv_blocks_ptr_) rs_index_type(); // placement new
 }
 
 //---------------------------------------------------------------------

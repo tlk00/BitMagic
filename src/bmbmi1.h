@@ -41,6 +41,10 @@ namespace bm
 inline
 unsigned bmi1_select64_lz(bm::id64_t w, unsigned rank)
 {
+    BM_ASSERT(w);
+    BM_ASSERT(rank);
+    BM_ASSERT(rank <= _mm_popcnt_u64(w));
+    
     unsigned bc, lz;
     unsigned val_lo32 = w & 0xFFFFFFFFull;
     
@@ -77,19 +81,17 @@ unsigned bmi1_select64_tz(bm::id64_t w, unsigned rank)
 {
     BM_ASSERT(w);
     BM_ASSERT(rank);
-    for ( ;w; )
+    BM_ASSERT(rank <= _mm_popcnt_u64(w));
+
+    do
     {
         if ((--rank) == 0)
-        {
-            bm::id64_t t = _blsi_u64(w); //w & -w;
-            unsigned count = unsigned(_tzcnt_u64(t));
-            //unsigned count = unsigned(_mm_popcnt_u64(t-1));
-            return count;
-        }
-        w = _blsr_u64(w);
-    }
-    BM_ASSERT(0); // shoud not be here if rank is achievable
-    return ~0u;
+            break;
+        w = _blsr_u64(w); // w &= w - 1;
+    } while (1);
+    bm::id64_t t = _blsi_u64(w); //w & -w;
+    unsigned count = unsigned(_tzcnt_u64(t));
+    return count;
 }
 
 

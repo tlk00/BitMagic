@@ -167,7 +167,8 @@ class rank_compressor
 {
 public:
     typedef BV                         bvector_type;
-    typedef typename BV::blocks_count  block_count_type;
+//    typedef typename BV::rs_index_type block_count_type;
+    typedef typename BV::rs_index_type rs_index_type;
     enum buffer_cap
     {
         n_buffer_cap = 1024
@@ -196,7 +197,7 @@ public:
     */
     void compress_by_source(BV& bv_target,
                                 const BV& bv_idx,
-                                const block_count_type& bc_idx,
+                                const rs_index_type& bc_idx,
                                 const BV& bv_src);
 };
 
@@ -360,16 +361,16 @@ void rank_compressor<BV>::decompress(BV& bv_target,
 template<class BV>
 void rank_compressor<BV>::compress_by_source(BV& bv_target,
                                              const BV& bv_idx,
-                                             const block_count_type& bc_idx,
+                                             const rs_index_type& bc_idx,
                                              const BV& bv_src)
 {
     /// Rank compressor visitor (functor)
     /// @internal
     struct visitor_func
     {
-        visitor_func(bvector_type&       bv_out,
-                     const bvector_type& bv_index,
-                     const block_count_type& bc_index)
+        visitor_func(bvector_type&        bv_out,
+                     const bvector_type&  bv_index,
+                     const rs_index_type& bc_index)
         : bv_target_(bv_out),
           bv_index_(bv_index),
           bc_index_(bc_index)
@@ -400,7 +401,7 @@ void rank_compressor<BV>::compress_by_source(BV& bv_target,
         
         bvector_type&           bv_target_;
         const bvector_type&     bv_index_;
-        const block_count_type& bc_index_;
+        const rs_index_type&    bc_index_;
     };
     // ------------------------------------
 

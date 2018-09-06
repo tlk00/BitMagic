@@ -93,7 +93,8 @@ namespace bm
     @brief Rank-Select acceleration index
  
     Index uses two-level acceleration structure:
-    bcount - running total popcount for all possible blocks
+    bcount - running total popcount for all (possible) blocks
+    (missing blocks give duplicate counts as POPCNT(N-1) + 0).
     subcount - sub-count inside blocks
  
     @ingroup bvector
@@ -104,7 +105,7 @@ struct rs_index
     bm::pair<bm::gap_word_t, bm::gap_word_t> BM_VECT_ALIGN subcount[bm::set_total_blocks] BM_VECT_ALIGN_ATTR;
     unsigned  total_blocks;
     
-    rs_index() {}
+    rs_index() { total_blocks = 0; }
     rs_index(const rs_index& rsi) BMNOEXEPT;
     
     /// init arrays to zeros
@@ -1108,7 +1109,7 @@ public:
     
     
     typedef rs_index blocks_count;
-    
+    typedef rs_index rs_index_type;
 public:
     /*! @name Construction, initialization, assignment */
     //@{
@@ -1623,7 +1624,7 @@ public:
         Function will fill full array of running totals
         \sa count_to
     */
-    void running_count_blocks(blocks_count* blocks_cnt) const;
+    void running_count_blocks(rs_index_type* blocks_cnt) const;
     
     /*!
        \brief Returns count of 1 bits (population) in [0..right] range.
@@ -1637,7 +1638,7 @@ public:
        \sa running_count_blocks
        \sa count_to_test
     */
-    bm::id_t count_to(bm::id_t n, const blocks_count&  blocks_cnt) const;
+    bm::id_t count_to(bm::id_t n, const rs_index_type&  blocks_cnt) const;
 
     /*!
         \brief Returns count of 1 bits (population) in [0..right] range if test(right) == true
@@ -1654,7 +1655,7 @@ public:
         \sa running_count_blocks
         \sa count_to
     */
-    bm::id_t count_to_test(bm::id_t n, const blocks_count&  blocks_cnt) const;
+    bm::id_t count_to_test(bm::id_t n, const rs_index_type&  blocks_cnt) const;
 
 
     /*! Recalculate bitcount (deprecated)
@@ -1830,7 +1831,7 @@ public:
         \return true if requested rank was found
     */
     bool find_rank(bm::id_t rank, bm::id_t from, bm::id_t& pos,
-                   const blocks_count&  blocks_cnt) const;
+                   const rs_index_type&  blocks_cnt) const;
 
     //@}
 
@@ -2211,7 +2212,7 @@ private:
     unsigned block_count_to(const bm::word_t* block,
                             unsigned nb,
                             unsigned nbit_right,
-                            const blocks_count&  blocks_cnt);
+                            const rs_index_type&  blocks_cnt);
 
 private:
     blocks_manager_type  blockman_;         //!< bitblocks manager
@@ -2388,7 +2389,7 @@ void bvector<Alloc>::resize(size_type new_size)
 // -----------------------------------------------------------------------
 
 template<typename Alloc>
-void bvector<Alloc>::running_count_blocks(blocks_count* blocks_cnt) const
+void bvector<Alloc>::running_count_blocks(rs_index_type* blocks_cnt) const
 {
     BM_ASSERT(blocks_cnt);
     
@@ -2449,7 +2450,7 @@ template<typename Alloc>
 unsigned bvector<Alloc>::block_count_to(const bm::word_t*    block,
                                         unsigned             nb,
                                         unsigned             nbit_right,
-                                        const blocks_count&  blocks_cnt)
+                                        const rs_index_type& blocks_cnt)
 {
     unsigned c;
     
@@ -2559,7 +2560,7 @@ unsigned bvector<Alloc>::block_count_to(const bm::word_t*    block,
 
 template<typename Alloc>
 bm::id_t bvector<Alloc>::count_to(bm::id_t right,
-                                  const blocks_count&  blocks_cnt) const
+                                  const rs_index_type&  blocks_cnt) const
 {
     if (!blockman_.is_init())
         return 0;
@@ -2603,7 +2604,7 @@ bm::id_t bvector<Alloc>::count_to(bm::id_t right,
 
 template<typename Alloc>
 bm::id_t bvector<Alloc>::count_to_test(bm::id_t right,
-                                       const blocks_count&  blocks_cnt) const
+                                       const rs_index_type&  blocks_cnt) const
 {
     if (!blockman_.is_init())
         return 0;
@@ -3532,7 +3533,7 @@ bool bvector<Alloc>::find_rank(bm::id_t rank, bm::id_t from, bm::id_t& pos) cons
 
 template<class Alloc>
 bool bvector<Alloc>::find_rank(bm::id_t rank, bm::id_t from, bm::id_t& pos,
-                               const blocks_count&  blocks_cnt) const
+                               const rs_index_type&  blocks_cnt) const
 {
     BM_ASSERT_THROW(from < bm::id_max, BM_ERR_RANGE);
 

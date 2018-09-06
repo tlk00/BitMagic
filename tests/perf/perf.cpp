@@ -684,8 +684,8 @@ void BitCountSparseTest()
         }
     }
 
-    bvect::blocks_count bc_arr;
-    bv->running_count_blocks(&bc_arr);
+    std::unique_ptr<bvect::rs_index_type> bc_arr(new bvect::rs_index_type());
+    bv->running_count_blocks(bc_arr.get());
 
     {
         unsigned right = 65535;
@@ -695,7 +695,7 @@ void BitCountSparseTest()
             right = 65525 + (i * 10);
             if (right > BSIZE)
                 right = 0;
-            value += bv->count_to(right, bc_arr);
+            value += bv->count_to(right, *bc_arr);
         }
     }
     delete bv;
@@ -2493,10 +2493,10 @@ void RankCompressionTest()
 
     bm::rank_compressor<bvect> rc;
 
-    bvect::blocks_count bc1;
-    bv_i1.running_count_blocks(&bc1);
-    bvect::blocks_count bc2;
-    bv_i2.running_count_blocks(&bc2);
+    std::unique_ptr<bvect::rs_index_type> bc1(new bvect::rs_index_type());
+    bv_i1.running_count_blocks(bc1.get());
+    std::unique_ptr<bvect::rs_index_type> bc2(new bvect::rs_index_type());
+    bv_i2.running_count_blocks(bc2.get());
 
     {
         TimeTaker tt("Rank compression test", REPEATS * 10);
@@ -2510,8 +2510,8 @@ void RankCompressionTest()
         TimeTaker tt("Rank compression (by source) test", REPEATS * 10);
         for (unsigned i = 0; i < REPEATS * 10; ++i)
         {
-            rc.compress_by_source(bv21, bv_i1, bc1, bv_s1);
-            rc.compress_by_source(bv22, bv_i2, bc2, bv_s2);
+            rc.compress_by_source(bv21, bv_i1, *bc1, bv_s1);
+            rc.compress_by_source(bv22, bv_i2, *bc2, bv_s2);
         } // for
     }
     

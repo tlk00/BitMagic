@@ -182,8 +182,8 @@ void bv_count_to_acc(const bm::bvector<>& bv)
     unsigned cnt = 0;
     
     // build a block population count list, used for count_to() acceleration
-    bm::bvector<>::blocks_count bc;
-    bv.running_count_blocks(&bc);
+    std::unique_ptr<bm::bvector<>::rs_index_type> bc(new bm::bvector<>::rs_index_type());
+    bv.running_count_blocks(bc.get());
 
     {
         bm::chrono_taker tt1("4. bvector<>::count_to() with blocks list", benchmark_count, &timing_map);
@@ -191,7 +191,7 @@ void bv_count_to_acc(const bm::bvector<>& bv)
         for (unsigned i = 0; i < benchmark_count; ++i)
         {
             unsigned to = unsigned(rand_dis(gen));
-            cnt += bv.count_to(to, bc); // use blocks count for acceleration
+            cnt += bv.count_to(to, *bc); // use blocks count for acceleration
         }
     }
     // this is mostly to prevent compiler to optimize loop away
@@ -207,8 +207,8 @@ void bv_count_to_range_acc(const bm::bvector<>& bv)
     unsigned cnt = 0;
     
     // build a block population count list, used for count_to() acceleration
-    bm::bvector<>::blocks_count bc;
-    bv.running_count_blocks(&bc);
+    std::unique_ptr<bm::bvector<>::rs_index_type> bc(new bm::bvector<>::rs_index_type());
+    bv.running_count_blocks(bc.get());
 
     {
         bm::chrono_taker tt1("5. bvector<>::count_to to simulate count_range()", benchmark_count, &timing_map);
@@ -220,8 +220,8 @@ void bv_count_to_range_acc(const bm::bvector<>& bv)
             if (from > to)
                 swap(from, to);
             
-            unsigned cnt_to = bv.count_to(to, bc);
-            unsigned cnt_from = bv.count_to(from - 1, bc);
+            unsigned cnt_to = bv.count_to(to, *bc);
+            unsigned cnt_from = bv.count_to(from - 1, *bc);
             unsigned cnt_r = cnt_to - cnt_from;
             cnt += cnt_r;
         }
