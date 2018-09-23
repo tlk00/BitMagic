@@ -6678,7 +6678,68 @@ unsigned idx_arr_block_lookup(const unsigned* idx, unsigned size, unsigned nb, u
 #endif
 }
 
+// --------------------------------------------------------------
 
+/**
+    Linear lower bound search in unsigned array
+    @internal
+*/
+inline
+unsigned lower_bound_linear(const unsigned* arr,  unsigned target,
+                            unsigned        from, unsigned to)
+{
+    BM_ASSERT(arr);
+    BM_ASSERT(from <= to);
+    
+#if defined(VECT_LOWER_BOUD_SCAN_U32)
+    return VECT_LOWER_BOUD_SCAN_U32(arr, target, from, to);
+#else
+    for (; from <= to; ++from)
+    {
+        if (arr[from] >= target)
+            break;
+    }
+    return from;
+#endif
+}
+
+
+// --------------------------------------------------------------
+
+/**
+    Hybrid, binary-linear lower bound search in unsigned array
+    @internal
+*/
+inline
+unsigned lower_bound(const unsigned* arr,  unsigned target,
+                     unsigned        from, unsigned to)
+{
+    BM_ASSERT(arr);
+    BM_ASSERT(from <= to);
+    const unsigned linear_cutoff = 32;
+    
+    unsigned l = from; unsigned r = to;
+    unsigned dist = r - l;
+    if (dist < linear_cutoff)
+    {
+        return bm::lower_bound_linear(arr, target, l, r);
+    }
+
+    while (l <= r)
+    {
+        unsigned mid = (r-l)/2+l;
+        if (arr[mid] < target)
+            l = mid+1;
+        else
+            r = mid-1;
+        dist = r - l;
+        if (dist < linear_cutoff)
+        {
+            return bm::lower_bound_linear(arr, target, l, r);
+        }
+    }
+    return l;
+}
 
 // --------------------------------------------------------------
 // Functions to work with int values stored in 64-bit pointers

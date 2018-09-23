@@ -3542,7 +3542,22 @@ bool bvector<Alloc>::find_rank(bm::id_t rank, bm::id_t from, bm::id_t& pos,
     if (!rank || !blockman_.is_init())
         return ret;
     
-    unsigned nb  = unsigned(from  >>  bm::set_block_shift);
+    unsigned nb;
+    
+    if (from == 0)
+    {
+        nb = bm::lower_bound(blocks_cnt.bcount, rank, 0, blocks_cnt.total_blocks-1);//bm::set_total_blocks-1);
+        BM_ASSERT(blocks_cnt.bcount[nb] >= rank);
+        if (nb)
+        {
+            rank -= blocks_cnt.bcount[nb-1];
+        }
+    }
+    else
+    {
+        nb  = unsigned(from  >>  bm::set_block_shift);
+    }
+    
     bm::gap_word_t nbit = bm::gap_word_t(from & bm::set_block_mask);
     unsigned bit_pos = 0;
 
