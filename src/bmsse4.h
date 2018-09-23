@@ -611,7 +611,7 @@ int sse42_cmpge_u32(__m128i vect4, unsigned value)
     int mask = _mm_movemask_epi8(cmp_mask_ge);
     if (mask)
     {
-        int bsf = _bit_scan_forward(mask);   // could use lzcnt()
+        int bsf = bm::bsf_asm32(mask);//_bit_scan_forward(mask);   // could use lzcnt()
         return bsf / 4;
     }
     return -1;
@@ -658,7 +658,7 @@ unsigned sse4_lower_bound_scan_u32(const unsigned* BMRESTRICT arr,
         mask = _mm_movemask_epi8(cmp_mask_ge);
         if (mask)
         {
-            int bsf = _bit_scan_forward(mask);
+            int bsf = bm::bsf_asm32(mask); //_bit_scan_forward(mask);
             return from + k + (bsf / 4);
         }
         vect41 = _mm_loadu_si128((__m128i*)(&arr_base[k+4]));
@@ -671,7 +671,7 @@ unsigned sse4_lower_bound_scan_u32(const unsigned* BMRESTRICT arr,
         mask = _mm_movemask_epi8(cmp_mask_ge);
         if (mask)
         {
-            int bsf = _bit_scan_forward(mask);
+            int bsf = bm::bsf_asm32(mask); //_bit_scan_forward(mask);
             return 4 + from + k + (bsf / 4);
         }
     } // for
