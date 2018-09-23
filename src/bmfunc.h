@@ -6691,8 +6691,8 @@ unsigned lower_bound_linear(const unsigned* arr,  unsigned target,
     BM_ASSERT(arr);
     BM_ASSERT(from <= to);
     
-#if defined(VECT_LOWER_BOUD_SCAN_U32)
-    return VECT_LOWER_BOUD_SCAN_U32(arr, target, from, to);
+#if defined(VECT_LOWER_BOUND_SCAN_U32)
+    return VECT_LOWER_BOUND_SCAN_U32(arr, target, from, to);
 #else
     for (; from <= to; ++from)
     {

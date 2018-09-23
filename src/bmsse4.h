@@ -26,6 +26,7 @@ For more information please visit:  http://bitmagic.io
 #include<emmintrin.h>
 #include<smmintrin.h>
 #include<nmmintrin.h>
+#include<immintrin.h>
 
 #include "bmdef.h"
 #include "bmsse_util.h"
@@ -585,6 +586,106 @@ unsigned sse4_gap_find(const bm::gap_word_t* BMRESTRICT pbuf, const bm::gap_word
     return size - bc;
 }
 
+/**
+    Experimental (test) function to do SIMD vector search (lower bound)
+    in sorted, growing array
+ 
+    \internal
+*/
+inline
+int sse42_cmpge_u32(__m128i vect4, unsigned value)
+{
+    // a > b (unsigned, 32-bit) is the same as (a - 0x80000000) > (b - 0x80000000) (signed, 32-bit)
+    // https://fgiesen.wordpress.com/2016/04/03/sse-mind-the-gap/
+    //
+    __m128i mask0x8 = _mm_set1_epi32(0x80000000);
+    __m128i mm_val = _mm_set1_epi32(value);
+    
+    __m128i norm_vect4 = _mm_sub_epi32(vect4, mask0x8); // (signed) vect4 - 0x80000000
+    __m128i norm_val = _mm_sub_epi32(mm_val, mask0x8);  // (signed) mm_val - 0x80000000
+    
+    __m128i cmp_mask_gt = _mm_cmpgt_epi32 (norm_vect4, norm_val);
+    __m128i cmp_mask_eq = _mm_cmpeq_epi32 (mm_val, vect4);
+    
+    __m128i cmp_mask_ge = _mm_or_si128 (cmp_mask_gt, cmp_mask_eq);
+    int mask = _mm_movemask_epi8(cmp_mask_ge);
+    if (mask)
+    {
+        int bsf = _bit_scan_forward(mask);   // could use lzcnt()
+        return bsf / 4;
+    }
+    return -1;
+}
+
+
+/**
+    lower bound (great or equal) linear scan in ascending order sorted array
+    \internal
+*/
+inline
+unsigned sse4_lower_bound_scan_u32(const unsigned* BMRESTRICT arr,
+                                   unsigned target,
+                                   unsigned from,
+                                   unsigned to)
+{
+    // a > b (unsigned, 32-bit) is the same as (a - 0x80000000) > (b - 0x80000000) (signed, 32-bit)
+    // see more at:
+    // https://fgiesen.wordpress.com/2016/04/03/sse-mind-the-gap/
+
+    const unsigned* BMRESTRICT arr_base = &arr[from]; // unrolled search base
+    
+    unsigned unroll_factor = 8;
+    unsigned len = to - from + 1;
+    unsigned len_unr = len - (len % unroll_factor);
+    
+    __m128i mask0x8 = _mm_set1_epi32(0x80000000);
+    __m128i vect_target = _mm_set1_epi32(target);
+    __m128i norm_target = _mm_sub_epi32(vect_target, mask0x8);  // (signed) target - 0x80000000
+
+    int mask;
+    __m128i vect40, vect41, norm_vect40, norm_vect41, cmp_mask_ge;
+
+    unsigned k = 0;
+    for (; k < len_unr; k+=unroll_factor)
+    {
+        vect40 = _mm_loadu_si128((__m128i*)(&arr_base[k])); // 4 u32s
+        norm_vect40 = _mm_sub_epi32(vect40, mask0x8); // (signed) vect4 - 0x80000000
+        
+        cmp_mask_ge = _mm_or_si128(                              // GT | EQ
+                        _mm_cmpgt_epi32 (norm_vect40, norm_target),
+                        _mm_cmpeq_epi32 (vect40, vect_target)
+                        );
+        mask = _mm_movemask_epi8(cmp_mask_ge);
+        if (mask)
+        {
+            int bsf = _bit_scan_forward(mask);
+            return from + k + (bsf / 4);
+        }
+        vect41 = _mm_loadu_si128((__m128i*)(&arr_base[k+4]));
+        norm_vect41 = _mm_sub_epi32(vect41, mask0x8);
+
+        cmp_mask_ge = _mm_or_si128(
+                        _mm_cmpgt_epi32 (norm_vect41, norm_target),
+                        _mm_cmpeq_epi32 (vect41, vect_target)
+                        );
+        mask = _mm_movemask_epi8(cmp_mask_ge);
+        if (mask)
+        {
+            int bsf = _bit_scan_forward(mask);
+            return 4 + from + k + (bsf / 4);
+        }
+    } // for
+    
+    for (; k < len; ++k)
+    {
+        if (arr_base[k] >= target)
+            return from + k;
+    }
+    return to + 1;
+}
+
+
+
 /*!
      SSE4.2 index lookup to check what belongs to the same block (8 elements)
      \internal
@@ -736,6 +837,7 @@ void sse4_bit_block_gather_scatter(unsigned* BMRESTRICT arr,
 }
 
 
+
 #define VECT_XOR_ARR_2_MASK(dst, src, src_end, mask)\
     sse2_xor_arr_2_mask((__m128i*)(dst), (__m128i*)(src), (__m128i*)(src_end), (bm::word_t)mask)
 
@@ -801,6 +903,10 @@ void sse4_bit_block_gather_scatter(unsigned* BMRESTRICT arr,
 
 #define VECT_IS_DIGEST_ZERO(start) \
     sse4_is_digest_zero((__m128i*)start)
+
+#define VECT_LOWER_BOUND_SCAN_U32(arr, target, from, to) \
+    sse4_lower_bound_scan_u32(arr, target, from, to)
+
 
 #ifdef __GNUG__
 #pragma GCC diagnostic pop
