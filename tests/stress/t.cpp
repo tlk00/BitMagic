@@ -12596,7 +12596,7 @@ void TestCompressedSparseVectorScan()
         {
             bool found = scanner.find_eq(csv, 10, idx);
             assert(found);
-            assert(idx = 10);
+            assert(idx == 10);
             
             scanner.find_eq(csv, 10, bv_res);
             assert(bv_res.count()==2);
@@ -12610,7 +12610,7 @@ void TestCompressedSparseVectorScan()
 
             found = scanner.find_eq(csv, 0, idx);
             assert(found);
-            assert(idx = 200);
+            assert(idx == 200);
             
             csv.optimize();
         } // for
