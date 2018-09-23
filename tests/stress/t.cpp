@@ -13665,6 +13665,82 @@ void TestSIMDUtils()
             assert(idx == i || (buf[i - 1] == v - 1));
         }
     }
+    
+    
+    // unsigned vector GE search
+    
+    {
+        __m128i vect4 = _mm_set_epi32(-1, int(0x80000000u), 8, 0);
+        
+        int pos = bm::sse42_cmpge_u32(vect4, 0);
+        assert(pos == 0);
+        
+        pos = bm::sse42_cmpge_u32(vect4, 7);
+        assert(pos == 1);
+
+        pos = bm::sse42_cmpge_u32(vect4, 8);
+        assert(pos == 1);
+
+        pos = bm::sse42_cmpge_u32(vect4, 0x80000000u);
+        assert(pos == 2);
+
+        pos = bm::sse42_cmpge_u32(vect4, ~0u);
+        assert(pos == 3);
+
+        pos = bm::sse42_cmpge_u32(vect4, ~0u - 1u);
+        assert(pos == 3);
+    }
+    
+    {
+        __m128i vect4 = _mm_set_epi32(-1, -1, 8, 8);
+        
+        int pos = bm::sse42_cmpge_u32(vect4, 0);
+        assert(pos == 0);
+        
+        pos = bm::sse42_cmpge_u32(vect4, 5);
+        assert(pos == 0);
+        
+        pos = bm::sse42_cmpge_u32(vect4, 9);
+        assert(pos == 2);
+
+        pos = bm::sse42_cmpge_u32(vect4, ~0u);
+        assert(pos == 2);
+
+        pos = bm::sse42_cmpge_u32(vect4, ~0u - 1u);
+        assert(pos == 2);
+
+    }
+    
+    // lower bound SSE42 scan
+    
+    const unsigned arr_size = 50000;
+    unsigned arr[arr_size + 10] = {0, };
+    
+    for (unsigned i = 0; i < arr_size; ++i)
+    {
+        arr[i] = 10 + i;
+    }
+    
+    {
+        unsigned target, s_idx;
+        for (unsigned i = 0; i < arr_size-1; ++i)
+        {
+            target = arr[i];
+            s_idx = bm::sse4_lower_bound_scan_u32(&arr[0], target, 0, arr_size-1);
+            assert(s_idx == i);
+            s_idx = bm::sse4_lower_bound_scan_u32(&arr[0], target, i, arr_size-1);
+            assert(s_idx == i);
+            
+            target = 1; // not found but lower
+            s_idx = bm::sse4_lower_bound_scan_u32(&arr[0], target, 0, arr_size-1);
+            assert(s_idx == 0);
+            
+            target = arr_size * 2; // not found but higher
+            s_idx = bm::sse4_lower_bound_scan_u32(&arr[0], target, 0, arr_size-1);
+            assert(s_idx == arr_size);
+        }
+
+    }
 
 #endif
 
