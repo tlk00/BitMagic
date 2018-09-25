@@ -68,6 +68,7 @@ For more information please visit:  http://bitmagic.io
 
 #include "bmdef.h"
 #include "bmbmi2.h"
+#include "bmutil.h"
 
 namespace bm
 {
@@ -1537,6 +1538,92 @@ unsigned avx2_idx_arr_block_lookup(const unsigned* idx, unsigned size,
 }
 
 
+/**
+    Experimental (test) function to do SIMD vector search (lower bound)
+    in sorted, growing array
+    @ingroup AVX2
+
+    \internal
+*/
+inline
+int avx2_cmpge_u32(__m256i vect8, unsigned value)
+{
+    // a > b (unsigned, 32-bit) is the same as (a - 0x80000000) > (b - 0x80000000) (signed, 32-bit)
+    // https://fgiesen.wordpress.com/2016/04/03/sse-mind-the-gap/
+    //
+    __m256i mask0x8 = _mm256_set1_epi32(0x80000000);
+    __m256i mm_val  = _mm256_set1_epi32(value);
+
+    __m256i norm_vect8 = _mm256_sub_epi32(vect8, mask0x8); // (signed) vect4 - 0x80000000
+    __m256i norm_val   = _mm256_sub_epi32(mm_val, mask0x8);  // (signed) mm_val - 0x80000000
+
+    __m256i cmp_mask_gt = _mm256_cmpgt_epi32(norm_vect8, norm_val);
+    __m256i cmp_mask_eq = _mm256_cmpeq_epi32(mm_val, vect8);
+
+    __m256i cmp_mask_ge = _mm256_or_si256(cmp_mask_gt, cmp_mask_eq);
+    int mask = _mm256_movemask_epi8(cmp_mask_ge);
+    if (mask)
+    {
+        int bsf = bm::bsf_asm32(mask); // could use lzcnt()
+        return bsf / 4;
+    }
+    return -1;
+}
+
+/**
+    lower bound (great or equal) linear scan in ascending order sorted array
+    @ingroup AVX2
+    \internal
+*/
+inline
+unsigned avx2_lower_bound_scan_u32(const unsigned* BMRESTRICT arr,
+                                   unsigned target,
+                                   unsigned from,
+                                   unsigned to)
+{
+    // a > b (unsigned, 32-bit) is the same as (a - 0x80000000) > (b - 0x80000000) (signed, 32-bit)
+    // see more at:
+    // https://fgiesen.wordpress.com/2016/04/03/sse-mind-the-gap/
+
+    const unsigned* BMRESTRICT arr_base = &arr[from]; // unrolled search base
+
+    unsigned unroll_factor = 8;
+    unsigned len = to - from + 1;
+    unsigned len_unr = len - (len % unroll_factor);
+
+    __m256i mask0x8 = _mm256_set1_epi32(0x80000000);
+    __m256i vect_target = _mm256_set1_epi32(target);
+    __m256i norm_target = _mm256_sub_epi32(vect_target, mask0x8);  // (signed) target - 0x80000000
+
+    int mask;
+    __m256i vect80, norm_vect80, cmp_mask_ge;
+
+    unsigned k = 0;
+    for (; k < len_unr; k += unroll_factor)
+    {
+        vect80 = _mm256_loadu_si256((__m256i*)(&arr_base[k])); // 8 u32s
+        norm_vect80 = _mm256_sub_epi32(vect80, mask0x8); // (signed) vect4 - 0x80000000
+
+        cmp_mask_ge = _mm256_or_si256(                              // GT | EQ
+            _mm256_cmpgt_epi32(norm_vect80, norm_target),
+            _mm256_cmpeq_epi32(vect80, vect_target)
+        );
+        mask = _mm256_movemask_epi8(cmp_mask_ge);
+        if (mask)
+        {
+            int bsf = bm::bsf_asm32(mask); //_bit_scan_forward(mask);
+            return from + k + (bsf / 4);
+        }
+    } // for
+
+    for (; k < len; ++k)
+    {
+        if (arr_base[k] >= target)
+            return from + k;
+    }
+    return to + 1;
+}
+
 
 /*!
      AVX2 bit block gather-scatter
@@ -1716,6 +1803,8 @@ void avx2_bit_block_gather_scatter(unsigned* BMRESTRICT arr,
 #define VECT_IS_DIGEST_ZERO(start) \
     avx2_is_digest_zero((__m256i*)start)
 
+#define VECT_LOWER_BOUND_SCAN_U32(arr, target, from, to) \
+    avx2_lower_bound_scan_u32(arr, target, from, to)
 
 
 } // namespace
