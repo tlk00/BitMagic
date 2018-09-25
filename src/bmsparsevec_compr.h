@@ -729,7 +729,7 @@ rsc_sparse_vector<Val, SV>::find_rank(bm::id_t rank, bm::id_t& idx) const
     bool b;
     const bvector_type* bv_null = get_null_bvector();
     if (in_sync())
-        b = bv_null->find_rank(rank, 0, idx, *bv_blocks_ptr_);
+        b = bv_null->select(rank, idx, *bv_blocks_ptr_);
     else
         b = bv_null->find_rank(rank, 0, idx);
     return b;

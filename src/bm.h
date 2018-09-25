@@ -119,6 +119,9 @@ struct rs_index
     
     /// determine the sub-range within a bit-block
     unsigned find_sub_range(unsigned block_bit_pos) const;
+    
+    /// determine block sub-range for rank search
+    bm::gap_word_t select_sub_range(unsigned nb, unsigned& rank) const;
 };
 
 
@@ -1622,7 +1625,7 @@ public:
     /*! \brief compute running total of all blocks in bit vector
         \param blocks_cnt - out pointer to counting structure, holding the array
         Function will fill full array of running totals
-        \sa count_to
+        \sa count_to, select, find_rank
     */
     void running_count_blocks(rs_index_type* blocks_cnt) const;
     
@@ -1826,12 +1829,31 @@ public:
         \param blocks_cnt - block count structure to accelerate rank search
                             should be prepared using running_count_blocks
 
-        \sa running_count_blocks
+        \sa running_count_blocks, select
 
         \return true if requested rank was found
     */
     bool find_rank(bm::id_t rank, bm::id_t from, bm::id_t& pos,
                    const rs_index_type&  blocks_cnt) const;
+    
+    
+    /*!
+        \brief select bit-vector position for the specified rank(bitcount)
+     
+        Rank based search, counts number of 1s from specified position until
+        finds the ranked position relative to start from position.
+        Uses
+        In other words: range population count between from and pos == rank.
+     
+        \param rank - rank to find (bitcount)
+        \param pos  - position with speciefied rank (relative to from position) [out]
+        \param blocks_cnt - block count structure to accelerate rank search
+
+        \sa running_count_blocks, find_rank
+
+        \return true if requested rank was found
+    */
+    bool select(bm::id_t rank, bm::id_t& pos, const rs_index_type&  blocks_cnt) const;
 
     //@}
 
@@ -3539,29 +3561,26 @@ bool bvector<Alloc>::find_rank(bm::id_t rank, bm::id_t from, bm::id_t& pos,
 
     bool ret = false;
     
-    if (!rank || !blockman_.is_init())
+    if (!rank ||
+        !blockman_.is_init() ||
+        (blocks_cnt.bcount[blocks_cnt.total_blocks-1] < rank))
         return ret;
     
     unsigned nb;
-    
-    if (from == 0)
-    {
-        nb = bm::lower_bound(blocks_cnt.bcount, rank, 0, blocks_cnt.total_blocks-1);//bm::set_total_blocks-1);
-        BM_ASSERT(blocks_cnt.bcount[nb] >= rank);
-        if (nb)
-        {
-            rank -= blocks_cnt.bcount[nb-1];
-        }
-    }
+    if (from)
+        nb = unsigned(from >> bm::set_block_shift);
     else
     {
-        nb  = unsigned(from  >>  bm::set_block_shift);
+        nb = bm::lower_bound(blocks_cnt.bcount, rank, 0, blocks_cnt.total_blocks-1);
+        BM_ASSERT(blocks_cnt.bcount[nb] >= rank);
+        if (nb)
+            rank -= blocks_cnt.bcount[nb-1];
     }
     
     bm::gap_word_t nbit = bm::gap_word_t(from & bm::set_block_mask);
     unsigned bit_pos = 0;
 
-    for (; nb < bm::set_total_blocks; ++nb)
+    for (; nb < blocks_cnt.total_blocks; ++nb)
     {
         int no_more_blocks;
         const bm::word_t* block = blockman_.get_block(nb, &no_more_blocks);
@@ -3570,27 +3589,19 @@ bool bvector<Alloc>::find_rank(bm::id_t rank, bm::id_t from, bm::id_t& pos,
             if (!nbit) // check if the whole block can be skipped
             {
                 unsigned block_bc = blocks_cnt.count(nb);
-                if (rank > block_bc)
+                if (rank <= block_bc) // target block
                 {
-                    rank -= block_bc;
-                    continue;
+                    nbit = blocks_cnt.select_sub_range(nb, rank);
+                    rank = bm::block_find_rank(block, rank, nbit, bit_pos);
+                    BM_ASSERT(rank == 0);
+                    pos = bit_pos + (nb * bm::set_block_size * 32);
+                    return true;
                 }
-                else // target block
-                {
-                    if (rank > blocks_cnt.subcount[nb].first)
-                    {
-                        rank -= blocks_cnt.subcount[nb].first;
-                        nbit = rs3_border0 + 1;
-                        if (rank > blocks_cnt.subcount[nb].second)
-                        {
-                            rank -= blocks_cnt.subcount[nb].second;
-                            nbit = rs3_border1 + 1;
-                        }
-                    }
-                }
+                rank -= block_bc;
+                continue;
             }
+
             rank = bm::block_find_rank(block, rank, nbit, bit_pos);
-            
             if (!rank) // target found
             {
                 pos = bit_pos + (nb * bm::set_block_size * 32);
@@ -3606,6 +3617,40 @@ bool bvector<Alloc>::find_rank(bm::id_t rank, bm::id_t from, bm::id_t& pos,
     } // for nb
     
     return ret;
+}
+
+//---------------------------------------------------------------------
+
+template<class Alloc>
+bool bvector<Alloc>::select(bm::id_t rank, bm::id_t& pos,
+                            const rs_index_type&  blocks_cnt) const
+{
+    bool ret = false;
+    
+    if (!rank ||
+        !blockman_.is_init() ||
+        (blocks_cnt.bcount[bm::set_total_blocks-1] < rank))
+        return ret;
+    
+    unsigned nb;
+    
+    nb = bm::lower_bound(blocks_cnt.bcount, rank, 0, blocks_cnt.total_blocks-1);
+    BM_ASSERT(blocks_cnt.bcount[nb] >= rank);
+    if (nb)
+        rank -= blocks_cnt.bcount[nb-1];
+    
+    const bm::word_t* block = blockman_.get_block_ptr(nb);
+    block = BLOCK_ADDR_SAN(block);
+
+    BM_ASSERT(block);
+    BM_ASSERT(rank <= blocks_cnt.count(nb));
+    
+    bm::gap_word_t nbit = blocks_cnt.select_sub_range(nb, rank);
+    unsigned bit_pos = 0;
+    rank = bm::block_find_rank(block, rank, nbit, bit_pos);
+    BM_ASSERT(rank == 0);
+    pos = bit_pos + (nb * bm::set_block_size * 32);
+    return true;
 }
 
 //---------------------------------------------------------------------
@@ -4940,6 +4985,24 @@ unsigned rs_index::find_sub_range(unsigned block_bit_pos) const
 
 //---------------------------------------------------------------------
 
+inline
+bm::gap_word_t rs_index::select_sub_range(unsigned nb, unsigned& rank) const
+{
+    if (rank > this->subcount[nb].first)
+    {
+        rank -= this->subcount[nb].first;
+        if (rank > this->subcount[nb].second)
+        {
+            rank -= this->subcount[nb].second;
+            return rs3_border1 + 1;
+        }
+        else
+            return rs3_border0 + 1;
+    }
+    return 0;
+}
+
+//---------------------------------------------------------------------
 
 
 } // namespace
