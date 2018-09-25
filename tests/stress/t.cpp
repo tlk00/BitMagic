@@ -33,6 +33,7 @@ For more information please visit:  http://bitmagic.io
 #include <iostream>
 #include <iomanip>
 #include <utility>
+#include <memory>
 
 #include <bm.h>
 #include <bmalgo.h>
@@ -1421,10 +1422,10 @@ template<class T> void CheckCountRange(const T& vect,
             {
                 unsigned pos3;
                 T bv1(vect, left, bm::id_max-1);
-                bvect::rs_index_type bc_arr2;
-                bv1.running_count_blocks(&bc_arr2);
+                std::unique_ptr<bvect::rs_index_type> bc_arr2(new bvect::rs_index_type);
+                bv1.running_count_blocks(bc_arr2.get());
 
-                bool rf3 = bv1.select(cnt1, pos3, bc_arr2);
+                bool rf3 = bv1.select(cnt1, pos3, *bc_arr2);
                 assert(rf3 == rf);
                 assert(pos == pos3);
             }
@@ -15651,6 +15652,7 @@ int main(void)
     exit(1);
 */
 
+ 
     TestRecomb();
 
     OptimGAPTest();
