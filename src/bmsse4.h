@@ -530,6 +530,7 @@ bm::id_t sse4_bit_block_calc_count_change(const __m128i* BMRESTRICT block,
 
 /*!
      SSE4.2 check for one to two (variable len) 128 bit SSE lines for gap search results (8 elements)
+     @ingroup SSE4
      \internal
 */
 inline
@@ -589,7 +590,8 @@ unsigned sse4_gap_find(const bm::gap_word_t* BMRESTRICT pbuf, const bm::gap_word
 /**
     Experimental (test) function to do SIMD vector search (lower bound)
     in sorted, growing array
- 
+    @ingroup SSE4
+
     \internal
 */
 inline
@@ -620,6 +622,7 @@ int sse42_cmpge_u32(__m128i vect4, unsigned value)
 
 /**
     lower bound (great or equal) linear scan in ascending order sorted array
+    @ingroup SSE4
     \internal
 */
 inline
