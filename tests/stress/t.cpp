@@ -13794,6 +13794,74 @@ void TestSIMDUtils()
         all_one = avx2_is_all_one((__m256i*)tb);
         assert(!all_one);
     }
+
+    // AVX2 unsigned vector GE search
+    {
+        __m256i vect8 = _mm256_set_epi32(-1, -1, int(0x80000000u), 8, 5, 5, 4, 0);
+
+        int pos = bm::avx2_cmpge_u32(vect8, 0);
+        assert(pos == 0);
+
+        pos = bm::avx2_cmpge_u32(vect8, 7);
+        assert(pos == 4);
+
+        pos = bm::avx2_cmpge_u32(vect8, 8);
+        assert(pos == 4);
+
+        pos = bm::avx2_cmpge_u32(vect8, 0x80000000u);
+        assert(pos == 5);
+
+        pos = bm::avx2_cmpge_u32(vect8, ~0u);
+        assert(pos == 6);
+
+        pos = bm::avx2_cmpge_u32(vect8, ~0u - 1u);
+        assert(pos == 6);
+    }
+
+    cout << "avx2_cmpge_u32 stress" << endl;
+    {
+        for (unsigned i = 1; i < ~0u; ++i)
+        {
+            __m256i vect8 = _mm256_set_epi32(-1, -1, i, 0, 0, 0, 0, 0);
+            int pos = bm::avx2_cmpge_u32(vect8, i);
+            assert(pos == 5);
+        }
+    }
+    cout << " - ok " << endl;
+
+
+    {
+        // lower bound avx2 scan
+
+        const unsigned arr_size = 50000;
+        unsigned arr[arr_size + 10] = { 0, };
+
+        for (unsigned i = 0; i < arr_size; ++i)
+        {
+            arr[i] = 10 + i;
+        }
+
+        {
+            unsigned target, s_idx;
+            for (unsigned i = 0; i < arr_size - 1; ++i)
+            {
+                target = arr[i];
+                s_idx = bm::avx2_lower_bound_scan_u32(&arr[0], target, 0, arr_size - 1);
+                assert(s_idx == i);
+                s_idx = bm::avx2_lower_bound_scan_u32(&arr[0], target, i, arr_size - 1);
+                assert(s_idx == i);
+
+                target = 1; // not found but lower
+                s_idx = bm::avx2_lower_bound_scan_u32(&arr[0], target, 0, arr_size - 1);
+                assert(s_idx == 0);
+
+                target = arr_size * 2; // not found but higher
+                s_idx = bm::avx2_lower_bound_scan_u32(&arr[0], target, 0, arr_size - 1);
+                assert(s_idx == arr_size);
+            }
+        }
+    }
+
 #endif
 
 
@@ -15651,7 +15719,6 @@ int main(void)
     //LoadVectors("c:/dev/bv_perf", 3, 27);
     exit(1);
 */
-
  
     TestRecomb();
 
