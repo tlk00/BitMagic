@@ -1356,9 +1356,9 @@ template<class T> void CheckCountRange(const T& vect,
                  cnt2 = cnt_to_r - cnt_to_l;
         if (cnt1 != cnt2)
         {
-            cout << "Bitcount range TO failed!" << "left=" << left
+            cout << "Bitcount range TO failed!" << " left=" << left
                  << " right=" << right << endl
-                 << "count_range()=" << cnt1
+                 << " count_range()=" << cnt1
                  << " check=" << cnt2;
             exit(1);
         }
@@ -1374,11 +1374,12 @@ template<class T> void CheckCountRange(const T& vect,
         if (cnt1) // check if we can reverse the search (rank)
         {
             unsigned pos, pos1;
+            pos = pos1 = 0;
             bool rf = vect.find_rank(cnt1, left, pos);
             bool rf1 = vect.find_rank(cnt1, left, pos1, bc_arr);
             if (!rf || !rf1)
             {
-                cerr << "1. find_rank() failed!" << "left=" << left
+                cerr << "1. find_rank() failed!" << " left=" << left
                      << " right=" << right
                      << " count_range()=" << cnt1
                      << " pos=" << pos
@@ -1412,10 +1413,22 @@ template<class T> void CheckCountRange(const T& vect,
                         exit(1);
                     }
                 }
-                
-                
                 exit(1);
             }
+            assert(pos == pos1);
+            
+            if (left > 0)
+            {
+                unsigned pos3;
+                T bv1(vect, left, bm::id_max-1);
+                bvect::rs_index_type bc_arr2;
+                bv1.running_count_blocks(&bc_arr2);
+
+                bool rf3 = bv1.select(cnt1, pos3, bc_arr2);
+                assert(rf3 == rf);
+                assert(pos == pos3);
+            }
+            
             if (right != pos)
             {
                 unsigned pos2;
@@ -2068,21 +2081,24 @@ void BasicFunctionalityTest()
         
         bvect_full.running_count_blocks(&bc_arr);
         
-        bm::id_t pos1, pos2, pos3;
+        bm::id_t pos1, pos2, pos3, pos4;
         auto rf1 = FindRank(bvect_full, i+1, 0, pos1);
         auto rf2 = bvect_full.find_rank(i+1, 0, pos2);
         auto rf3 = bvect_full.find_rank(i+1, 0, pos3);
+        auto rf4 = bvect_full.select(i+1, pos4, bc_arr);
 
         assert(rf1);
         assert(rf2);
         assert(rf3);
-        if (pos1 != pos2 || pos1 != pos3)
+        assert(rf4);
+        if (pos1 != pos2 || pos1 != pos3 || pos1 != pos4)
         {
             rf2 = bvect_full.find_rank(i+1, 0, pos2);
             cerr << "1.Rank check error!\n"
                  << " pos1 = " << pos1
                  << " pos2 = " << pos2
                  << " pos3 = " << pos3
+                 << " pos4 = " << pos4
                  << endl;
                  ;
             exit(1);
@@ -2096,20 +2112,23 @@ void BasicFunctionalityTest()
 
     for (i = 0; i < ITERATIONS; ++i)
     {
-        bm::id_t pos1, pos2, pos3;
+        bm::id_t pos1, pos2, pos3, pos4;
         auto rf1 = FindRank(bvect_full1, i+1, 0, pos1);
         auto rf2 = bvect_full1.find_rank(i+1, 0, pos2);
         auto rf3 = bvect_full1.find_rank(i+1, 0, pos3);
+        auto rf4 = bvect_full1.select(i+1, pos4, bc_arr1);
         assert(rf1);
         assert(rf2);
         assert(rf3);
-        if (pos1 != pos2 || pos1 != pos3)
+        assert(rf4);
+        if (pos1 != pos2 || pos1 != pos3 || pos1 != pos4)
         {
             rf2 = bvect_full1.find_rank(i+1, 0, pos2);
             cerr << "2.Rank check error!\n"
                  << " pos1 = " << pos1
                  << " pos2 = " << pos2
                  << " pos3 = " << pos3
+                 << " pos4 = " << pos4
                  << endl;
                  ;
             exit(1);
@@ -15681,7 +15700,6 @@ int main(void)
      BasicFunctionalityTest();
 
      RankFindTest();
-
 
      BvectorIncTest();
 
