@@ -62,7 +62,7 @@ instructions:
 
 
 ###### Unix:
------
+---
 
 1. Traditional (in-place build)
 
@@ -91,17 +91,17 @@ cmake-supported environment.
 
 
 ###### Windows:
----------
+---
 
 If you use cygwin installation please follow general Unix recommendations.
 MSVC - solution and projects are available via CMAKE generation
 
 ###### MacOS
-----------
+---
 
 XCODE - project files are available via CMAKE generation
 
-=================================================================================
+---
 
 BitMagic library for C and JNI mappings.
 
@@ -125,23 +125,23 @@ Yes, we need it!
 If you are enthusiastic about Python and think you can help please contact:
 anatoliy.kuznetsov @ yahoo dot com
 
-=================================================================================
+---
 
 API documentation and examples:
 [http://www.bitmagic.io/apis.html](http://www.bitmagic.io/apis.html)
 
 
 Fine tuning and optimizations:
-------------------------------
+---
 
 All BM fine tuning parameters are controlled by the preprocessor defines (and 
 compiler keys). 
 
-=================================================================================
+---
 
 BM library supports CXX-11. Move semantics, noexept, initalizer lists.
 
-=================================================================================
+---
 
 BM library includes some code optimized for 64-bit systems. This optimization 
 gets applied automatically.
@@ -185,7 +185,7 @@ OR
 	cmake -DBMOPTFLAGS:STRING=BMAVX2OPT ..
 
 
-=================================================================================
+---
 
 BM library supports "restrict" keyword, some compilers 
 (for example Intel C++) generate better
@@ -195,7 +195,7 @@ To turn it ON please #define BM_HASRESTRICT in your project. Some compilers
 use "__restrict" keyword for this purpose. To correct it define BMRESTRICT macro 
 to correct keyword. 
 
-=================================================================================
+---
 
 
 If you want to use BM library in no STL-free project you need to define
@@ -204,13 +204,17 @@ BM_NO_STL variable.
 This rule only applies to the core bm::bvector<> methods. 
 Auxiliary algorithms may still use STL.
 
-=================================================================================
+---
 
 
 Follow us on twitter: [https://twitter.com/bitmagicio](https://twitter.com/bitmagicio)
 
 
 Thank you for using BitMagic library!
-	e-mail:   info@bitmagic.io
-	WEB site: [http://bitmagic.io](http://bitmagic.io)
-	GitHub:   [https://github.com/tlk00/BitMagic](https://github.com/tlk00/BitMagic)
+
+e-mail:   info@bitmagic.io
+
+WEB site: [http://bitmagic.io](http://bitmagic.io)
+
+GitHub:   [https://github.com/tlk00/BitMagic](https://github.com/tlk00/BitMagic)
+
