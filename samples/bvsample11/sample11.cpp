@@ -32,6 +32,7 @@ For more information please visit:  http://bitmagic.io
 
 #include <iostream>
 #include <random>
+#include <memory>
 
 #include "bm.h"
 #include "bmalgo.h"
