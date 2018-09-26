@@ -70,6 +70,7 @@ add_executable(bvsample12 ${PROJECT_SOURCE_DIR}/samples/bvsample12/sample12.cpp)
 add_executable(bvsample14 ${PROJECT_SOURCE_DIR}/samples/bvsample14/sample14.cpp)
 add_executable(bvsample15 ${PROJECT_SOURCE_DIR}/samples/bvsample15/sample15.cpp)
 add_executable(bvsample16 ${PROJECT_SOURCE_DIR}/samples/bvsample16/sample16.cpp)
+add_executable(bvsample17 ${PROJECT_SOURCE_DIR}/samples/bvsample17/sample17.cpp)
 
 add_executable(xsample01 ${PROJECT_SOURCE_DIR}/samples/xsample01/xsample01.cpp)
 add_executable(xsample02 ${PROJECT_SOURCE_DIR}/samples/xsample02/xsample02.cpp)
