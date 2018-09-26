@@ -1628,7 +1628,17 @@ public:
         \sa count_to, select, find_rank
     */
     void running_count_blocks(rs_index_type* blocks_cnt) const;
-    
+
+    /*! \brief compute running total of all blocks in bit vector (rank-select index)
+        \param rs_idx - [out] pointer to index / count structure
+        Function will fill full array of running totals
+        \sa count_to, select, find_rank
+    */
+    void build_rs_index(rs_index_type* rs_idx) const
+    {
+        running_count_blocks(rs_idx);
+    }
+
     /*!
        \brief Returns count of 1 bits (population) in [0..right] range.
      
@@ -1636,12 +1646,29 @@ public:
      
        \param n - index of bit to rank
        \param blocks_cnt - block count structure to accelerate search
-                           should be prepared using running_count_blocks
-       \return population count in the range
-       \sa running_count_blocks
-       \sa count_to_test
+                           should be prepared using build_rs_index
+       \return population count in the range [0..n]
+       \sa build_rs_index
+       \sa count_to_test, select, rank
     */
     bm::id_t count_to(bm::id_t n, const rs_index_type&  blocks_cnt) const;
+    
+    
+    /*!
+       \brief Returns rank of specified bit position
+     
+       \param n - index of bit to rank
+       \param rs_idx -  rank-select index
+       \return population count in the range [0..n]
+       \sa build_rs_index
+       \sa count_to_test, select, rank
+    */
+    bm::id_t rank(bm::id_t n, const rs_index_type&  rs_idx) const
+    {
+        return count_to(n, rs_idx);
+    }
+    
+    
 
     /*!
         \brief Returns count of 1 bits (population) in [0..right] range if test(right) == true
