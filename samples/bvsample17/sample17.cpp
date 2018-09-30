@@ -32,19 +32,6 @@ Example rank and select operations.
 
 #include "bm.h"
 
-
-// Utility template function used to print container
-template<class T> void PrintContainer(T first, T last)
-{
-    if (first == last)
-        std::cout << "<EMPTY SET>";
-    else
-        for (; first != last; ++first)
-            std::cout << *first << ";";
-    std::cout << std::endl;
-}
-
-
 //const unsigned max_vectors = 10;
 
 int main(void)
