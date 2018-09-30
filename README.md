@@ -1,4 +1,4 @@
-BitMagic Library
+## BitMagic Library
 
 
 Algorithms and tools for integer set algebra operations used for information retrieval, 
@@ -11,7 +11,7 @@ performance via SIMD vectorization (SSE2, SSE4.2, AVX2), CPU cache-friendly algo
 data-parallel thread-safe structures.
 
 
-Main Features:
+### Main Features:
 
 - compressed bit-vector container with mechanisms to iterate integer set it represents
 - set algebraic operations: AND, OR, XOR, MINUS on bit-vectors and integer sets
@@ -28,7 +28,7 @@ efficient store of associations for graphs, etc.
 - algorithms on sparse vectors: dynamic range clipping, search, group theory image (re-mapping).
 Collection of algorithms is increasing, please check our samples and the API lists. 
 
-Features In Progress:
+### Features In Progress:
 
 - compressed binary relational and adjacency matrixes and operations on matrixes for 
 Entity-Relationship acceleration, graph operations, social analyticsm materialized RDBMS joins, etc 
@@ -38,8 +38,8 @@ Entity-Relationship acceleration, graph operations, social analyticsm materializ
 License: Apache 2.0
 
 
-If you want to contribute or support BitMagic library:
------------------------------------------------------
+### If you want to contribute or support BitMagic library:
+---
 
 1. GitHub master accepts patch requests
 Our branching policy is that master cannot be considered fully stable between the releases.
@@ -50,8 +50,8 @@ Our branching policy is that master cannot be considered fully stable between th
 3. We need help with mappings to Python and other languages (BitMagic has C bindings)
 
 
-How to build BitMagic C++ library:
----------------------------------
+### How to build BitMagic C++ library:
+---
 
 BitMagic C++ is a header-only software package and you probably can just take the
 sources and put it into your project directly. All C++ library sources/headers are in src
@@ -61,20 +61,25 @@ However if you want to use our makefiles you need to follow the next simple
 instructions:
 
 
-Unix:
------
+###### Unix:
+---
 
 1. Traditional (in-place build)
-- Apply a few environment variables by runing bmenv.sh in the project root directory:
-$ . ./bmenv.sh
 
-- use GNU make (gmake) to build installation.
+Apply a few environment variables by runing bmenv.sh in the project root directory:
 
-$gmake rebuild
+	$ ./bmenv.sh
+	
+
+use GNU make (gmake) to build installation.
+
+
+	$gmake rebuild
+
 
 or (DEBUG version)
  
-$gmake DEBUG=YES rebuild
+	$gmake DEBUG=YES rebuild
 
 The default compiler on Unix and CygWin is g++.
 If you want to change the default you can do that in makefile.in
@@ -85,18 +90,18 @@ Project now comes with a set of makefiles for cmake, you can just build it or ge
 cmake-supported environment.
 
 
-Windows:
----------
+###### Windows:
+---
 
 If you use cygwin installation please follow general Unix recommendations.
 MSVC - solution and projects are available via CMAKE generation
 
-MacOS
-----------
+###### MacOS
+---
 
 XCODE - project files are available via CMAKE generation
 
-=================================================================================
+---
 
 BitMagic library for C and JNI mappings.
 
@@ -114,29 +119,29 @@ Algorithms and behavior are shared between C and C++.
 Current state of development: 
    - bit-vector functionality is available via C interface
 
-Python support
+#### Python support
 
 Yes, we need it! 
 If you are enthusiastic about Python and think you can help please contact:
 anatoliy.kuznetsov @ yahoo dot com
 
-=================================================================================
+---
 
 API documentation and examples:
-http://www.bitmagic.io/apis.html
+[http://www.bitmagic.io/apis.html](http://www.bitmagic.io/apis.html)
 
 
 Fine tuning and optimizations:
-------------------------------
+---
 
 All BM fine tuning parameters are controlled by the preprocessor defines (and 
 compiler keys). 
 
-=================================================================================
+---
 
 BM library supports CXX-11. Move semantics, noexept, initalizer lists.
 
-=================================================================================
+---
 
 BM library includes some code optimized for 64-bit systems. This optimization 
 gets applied automatically.
@@ -161,25 +166,26 @@ code generation flags for the build environment.
 
 BitMagic examples and tests can be build with GCC using cmd-line settings: 
 
-make BMOPTFLAGS=-DBMAVX2OPT rebuild
+	make BMOPTFLAGS=-DBMAVX2OPT rebuild
 or
-make BMOPTFLAGS=-DBMSSE42OPT rebuild
+
+	make BMOPTFLAGS=-DBMSSE42OPT rebuild
 
 It automatically applies the right set of compiler (GCC) flags for the target 
 build.
 
-CMAKE
-
-cd build
-cmake -DBMOPTFLAGS:STRING=BMSSE42OPT ..
-make
+	CMAKE
+	
+	cd build
+	cmake -DBMOPTFLAGS:STRING=BMSSE42OPT ..
+	make
 
 OR
 
-cmake -DBMOPTFLAGS:STRING=BMAVX2OPT ..
+	cmake -DBMOPTFLAGS:STRING=BMAVX2OPT ..
 
 
-=================================================================================
+---
 
 BM library supports "restrict" keyword, some compilers 
 (for example Intel C++) generate better
@@ -189,7 +195,7 @@ To turn it ON please #define BM_HASRESTRICT in your project. Some compilers
 use "__restrict" keyword for this purpose. To correct it define BMRESTRICT macro 
 to correct keyword. 
 
-=================================================================================
+---
 
 
 If you want to use BM library in no STL-free project you need to define
@@ -198,13 +204,17 @@ BM_NO_STL variable.
 This rule only applies to the core bm::bvector<> methods. 
 Auxiliary algorithms may still use STL.
 
-=================================================================================
+---
 
 
-Follow us on twitter: https://twitter.com/bitmagicio
+Follow us on twitter: [https://twitter.com/bitmagicio](https://twitter.com/bitmagicio)
 
 
 Thank you for using BitMagic library!
-	e-mail:   info@bitmagic.io
-	WEB site: http://bitmagic.io
-	GitHub:   https://github.com/tlk00/BitMagic
+
+e-mail:   info@bitmagic.io
+
+WEB site: [http://bitmagic.io](http://bitmagic.io)
+
+GitHub:   [https://github.com/tlk00/BitMagic](https://github.com/tlk00/BitMagic)
+
