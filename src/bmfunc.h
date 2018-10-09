@@ -4063,7 +4063,8 @@ void bit_block_rotate_left_1(bm::word_t* block)
 }
 
 /*!
-    Unrolled cyclic rotation of bit-block left by 1 bit
+    @brief Unrolled cyclic rotation of bit-block left by 1 bit
+    @param block - bit-block pointer
     @ingroup bitfunc
 */
 inline
@@ -4090,6 +4091,57 @@ void bit_block_rotate_left_1_unr(bm::word_t* block)
     block[i + 1] = (block[i + 1] << 1) | (block[i + 2] >> 31);
     block[i + 2] = (block[i + 2] << 1) | (block[i + 3] >> 31);
     block[set_block_size - 1] = (block[set_block_size - 1] << 1) | co_flag;
+}
+
+
+/*!
+    @brief Right bit-shift of bit-block by 1 bit (reference)
+    @param block - bit-block pointer
+    @param empty_acc - [out] contains 0 if block is empty
+    @param co_flag - carry over from the previous block
+ 
+    @return carry over bit (1 or 0)
+    @ingroup bitfunc
+*/
+inline
+bool bit_block_shift_r1(bm::word_t* block,
+                        bm::word_t* empty_acc, bm::word_t co_flag)
+{
+    BM_ASSERT(block);
+    BM_ASSERT(empty_acc);
+    
+    const bm::word_t co_mask = (1u << 31);
+    bm::word_t acc = 0;
+    for (unsigned i = 0; i < bm::set_block_size; ++i)
+    {
+        bm::word_t co_flag1 = bool(block[i] & co_mask);
+        acc |= block[i] = (block[i] << 1u) | co_flag;
+        co_flag = co_flag1;
+    }
+    *empty_acc = acc;
+    return co_flag;
+}
+
+/*!
+    @brief Right bit-shift of bit-block by 1 bit (loop unrolled)
+    @param block - bit-block pointer
+    @param empty_acc - [out] contains 0 if block is empty
+    @param co_flag - carry over from the previous block
+
+    @return carry over bit (1 or 0)
+    @ingroup bitfunc
+*/
+inline
+bool bit_block_shift_r1_unr(bm::word_t* block,
+                            bm::word_t* empty_acc, bm::word_t co_flag)
+{
+    BM_ASSERT(block);
+    BM_ASSERT(empty_acc);
+    #if defined(VECT_SHIFT_R1)
+        return VECT_SHIFT_R1(block, empty_acc, co_flag);
+    #else
+        return bm::bit_block_shift_r1(block, empty_acc, co_flag);
+    #endif
 }
 
 
