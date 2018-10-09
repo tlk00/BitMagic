@@ -81,7 +81,7 @@ relprep: .DIRS_BLD
 	$(RM) -rf debug release cvsenv.sh
 	cd platforms; dos2unix *.mk; cd -
 	dos2unix canon-system config.guess bmenv.sh
-	dos2unix readme *.txt
+	dos2unix readme.* *.txt
 	cd src; dos2unix *.h
 	chmod -x src/*
 	chmod -x Makefile makefile.in Doxyfile readme
