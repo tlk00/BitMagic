@@ -729,6 +729,40 @@ void FillSetsRandomMethod(bvect_mini* bvect_min,
     }
 }
 
+static
+void print_bv(const bvect& bv)
+{
+    std::cout << bv.count() << ": ";
+    bvect::enumerator en = bv.first();
+    for (; en.valid(); ++en)
+    {
+        std::cout << *en << ", ";
+    }
+    std::cout << std::endl;
+}
+
+
+static
+void ShiftRight(bvect*  bv, unsigned shift)
+{
+    bvect bv_tmp;
+    bvect::insert_iterator bi = bv_tmp.inserter();
+    bvect::enumerator en = bv->first();
+    for (; en.valid(); ++en)
+    {
+        unsigned v = *en;
+        unsigned new_v = v + shift;
+        if (new_v < v || new_v == bm::id_max) // check overflow
+        {}
+        else
+        {
+            bi = new_v;
+        }
+    }
+    bv->swap(bv_tmp);
+}
+
+
 // do logical operation through serialization
 static
 unsigned SerializationOperation(bvect*             bv_target,
@@ -1792,7 +1826,6 @@ void ShiftRotateTest()
         }
     }
 
-
     for (i = 0; i < bm::set_block_size; ++i)
     {
         blk0[i] = blk1[i] = unsigned(rand());
@@ -1807,12 +1840,80 @@ void ShiftRotateTest()
         {
             if (blk0[i] != blk1[i])
             {
-                cerr << "Steress Cyclic rotate check failed" << endl;
+                cerr << "Stress Cyclic rotate check failed" << endl;
                 exit(1);
             }
         }
-
     }
+    
+    // SHIFT-R tests
+    //
+
+    unsigned acc0, acc1;
+
+    for (i = 0; i < bm::set_block_size; ++i)
+    {
+        blk0[i] = blk1[i] = 1;
+    }
+
+    bm::bit_block_shift_r1(blk0, &acc0, 0);
+    bm::bit_block_shift_r1_unr(blk1, &acc1, 0);
+
+    for (i = 0; i < bm::set_block_size; ++i)
+    {
+        if (blk0[i] != blk1[i])
+        {
+            cerr << "1. SHIFT-r check failed" << endl;
+            exit(1);
+        }
+        assert(blk0[i] == 2);
+    }
+
+
+    for (i = 0; i < bm::set_block_size; ++i)
+    {
+        blk0[i] = blk1[i] = (1u << 31);
+    }
+
+    bm::bit_block_shift_r1(blk0, &acc0, 0);
+    bm::bit_block_shift_r1_unr(blk1, &acc1, 0);
+
+    for (i = 0; i < bm::set_block_size; ++i)
+    {
+        if (blk0[i] != blk1[i])
+        {
+            cerr << "2. SHIFT-r check failed" << endl;
+            exit(1);
+        }
+    }
+
+
+
+
+
+    for (i = 0; i < bm::set_block_size; ++i)
+    {
+        blk0[i] = blk1[i] = unsigned(rand());
+    }
+
+    for (unsigned j = 0; j < bm::set_block_size * 32; ++j)
+    {
+        bm::bit_block_shift_r1(blk0, &acc0, 0);
+        bm::bit_block_shift_r1_unr(blk1, &acc1, 0);
+        
+        assert(bool(acc0) == bool(acc1));
+
+        for (i = 0; i < bm::set_block_size; ++i)
+        {
+            if (blk0[i] != blk1[i])
+            {
+                cerr << "Stress SHIFT-r check failed" << endl;
+                exit(1);
+            }
+        }
+    }
+
+    
 
     cout << "---------------------------- ShiftRotate test OK" << endl;
 }
@@ -2056,6 +2157,9 @@ void EmptyBVTest()
     
     
 }
+
+
+
 
 static
 void BasicFunctionalityTest()
@@ -2410,6 +2514,118 @@ void BvectorIncTest()
     }
 
     cout << "---------------------------- Bvector inc test OK" << endl;
+}
+
+static
+void BvectorShiftTest()
+{
+    cout << "---------------------------- Bvector SHIFT test" << endl;
+
+
+    {
+    bvect bv;
+    
+    bv.set(bm::id_max-1);
+    bv.shift_right();
+    print_bv(bv);
+    assert(bv.count()==0);
+    }
+
+    {
+    bvect bv;
+    
+    bv.set(0);
+    bv.set(65535);
+    bv.set(bm::id_max-1);
+    bvect bv1(bv);
+
+    ShiftRight(&bv, 1);
+    assert(bv.count() == 2);
+    assert(bv.test(1));
+    assert(bv.test(65536));
+
+    bv1.shift_right();
+    print_bv(bv1);
+    int cmp = bv.compare(bv1);
+    
+    assert(cmp == 0);
+    }
+    
+    {
+    bvect bv;
+    bv.invert();
+    unsigned cnt = bv.count();
+    bool carry_over = bv.shift_right();
+    assert(carry_over);
+    unsigned cnt1 = bv.count();
+    assert(cnt1 = cnt - 1);
+    assert(bv.test(0)==0);
+    }
+    
+    {
+    bvect bv;
+    
+    bv.set(0);
+    bv.set(65535);
+    bv.set(66000);
+    bv.optimize();
+    bvect bv1(bv);
+    ShiftRight(&bv, 1);
+    bv1.shift_right();
+    int cmp = bv.compare(bv1);
+    
+    assert(cmp == 0);
+    }
+    
+    {
+    std::cout << "Shift-R stress..\n";
+    unsigned start = 0;
+//start = 2000000000;
+    bvect bv;
+    bv.set(start);
+
+   struct bvect::statistics st;
+   bv.calc_stat(&st);
+   auto bcnt = st.bit_blocks + st.gap_blocks;
+   assert(bcnt == 1);
+   
+    std::chrono::time_point<std::chrono::steady_clock> s;
+    std::chrono::time_point<std::chrono::steady_clock> f;
+    
+    s = std::chrono::steady_clock::now();
+
+    while(1)
+    {
+        bool carry_over = bv.shift_right();
+        if (carry_over)
+        {
+            assert(bv.count()==0);
+            break;
+        }
+        
+        if ((start % 1000000) == 0)
+        {
+            f = std::chrono::steady_clock::now();
+            auto diff = f - s;
+            auto d = std::chrono::duration <double, std::milli> (diff).count();
+            cout << "\r" << start << " (" << d << ") " << flush;
+            
+            unsigned idx = bv.get_first();
+            assert(idx-1 == start);
+            
+            bv.calc_stat(&st);
+            bcnt = st.bit_blocks + st.gap_blocks;
+            assert(bcnt == 1);
+
+            s = std::chrono::steady_clock::now();
+        }
+        ++start;
+
+    }
+    cout << "\n";
+    }
+
+    cout << "---------------------------- Bvector SHIFT test OK" << endl;
 }
 
 static
@@ -15719,7 +15935,10 @@ int main(void)
     //LoadVectors("c:/dev/bv_perf", 3, 27);
     exit(1);
 */
- 
+
+//avx2_i32_shift();
+///return 0;
+
     TestRecomb();
 
     OptimGAPTest();
@@ -15740,6 +15959,8 @@ int main(void)
      TestBlockAND();
      TestBlockSUB();
      TestBlockOR();
+
+     ShiftRotateTest();
 
      ExportTest();
      ResizeTest();
@@ -15772,6 +15993,9 @@ int main(void)
 
      BvectorIncTest();
 
+
+     BvectorShiftTest();
+
      ClearAllTest();
 
      GAPCheck();
@@ -15803,8 +16027,6 @@ int main(void)
      RangeCopyTest();
 
      WordCmpTest();
-
-     ShiftRotateTest();
 
      ComparisonTest();
 

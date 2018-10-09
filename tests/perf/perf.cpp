@@ -104,7 +104,6 @@ private:
 
 typedef bm::bvector<> bvect;
 
-
 // generate pseudo-random bit-vector, mix of compressed/non-compressed blocks
 //
 static
@@ -1977,7 +1976,7 @@ void BitBlockRotateTest()
     bm::word_t blk0[bm::set_block_size] = { 0 };
     bm::word_t blk1[bm::set_block_size] = { 0 };
     unsigned i;
-    unsigned repeats = 10000000;
+    unsigned repeats = 20000000;
 
     for (i = 0; i < bm::set_block_size; ++i)
     {
@@ -2009,6 +2008,47 @@ void BitBlockRotateTest()
     }
 
 }
+
+static
+void BitBlockShiftTest()
+{
+    bm::word_t blk0[bm::set_block_size] = { 0 };
+    bm::word_t blk1[bm::set_block_size] = { 0 };
+    unsigned i;
+    unsigned repeats = 20000000;
+    unsigned acc0, acc1;
+
+    for (i = 0; i < bm::set_block_size; ++i)
+    {
+        blk0[i] = blk1[i] = unsigned(rand());
+    }
+
+    {
+        TimeTaker tt("Bit-block shift-r(1)", repeats);
+        for (i = 0; i < repeats; ++i)
+        {
+            bm::bit_block_shift_r1(blk0, &acc0, 0);
+        }
+    }
+    {
+        TimeTaker tt("Bit-block shift-r(1) unrolled", repeats);
+        for (i = 0; i < repeats; ++i)
+        {
+            bm::bit_block_shift_r1_unr(blk1, &acc1, 0);
+        }
+    }
+
+    for (i = 0; i < bm::set_block_size; ++i)
+    {
+        if (blk0[i] != blk1[i])
+        {
+            cerr << "Stress SHIFT-r(1) check failed" << endl;
+            exit(1);
+        }
+    }
+
+}
+
 
 inline
 void ptest()
@@ -2359,6 +2399,34 @@ void AggregatorTest()
     //std::cout << bv_target1->count() << std::endl;
 }
 
+
+static
+void BvectorShiftTest()
+{
+    std::vector<bvect> bv_coll;
+    GenerateTestCollection(&bv_coll, 25, 80000000);
+
+    if (!bv_coll.size())
+        return;
+    
+    {
+    TimeTaker tt("bvector<>::shift_right() ", REPEATS);
+    for (unsigned i = 0; i < REPEATS; ++i)
+    {
+        for (unsigned k = 0; k < bv_coll.size(); ++k)
+        {
+            bv_coll[k].shift_right();
+        } // for
+    } // for
+    }
+
+
+
+    //std::cout << bv_target1->count() << std::endl;
+}
+
+
+
 static
 void Set2SetTransformTest()
 {
@@ -2697,11 +2765,15 @@ int main(void)
 
     BitBlockRotateTest();
 
+    BitBlockShiftTest();
+
     EnumeratorTest();
 
     EnumeratorTestGAP();
 
     EnumeratorGoToTest();
+ 
+    BvectorShiftTest();
 
     RangeCopyTest();
 
