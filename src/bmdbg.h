@@ -390,6 +390,7 @@ void print_bvector_stat(const BV& bvect)
     std::cout << " - Blocks: [ "
               << "B:"     << st.bit_blocks
               << ", G:"   << st.gap_blocks << "] "
+              << " count() = " << bvect.count() 
               << ", mem = " << st.memory_used << " " << (st.memory_used / (1024 * 1024)) << "MB "
               << ", max smem:" << st.max_serialize_mem << " " << (st.max_serialize_mem / (1024 * 1024)) << "MB "
               << std::endl;
