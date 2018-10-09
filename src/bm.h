@@ -3878,7 +3878,7 @@ bool bvector<Alloc>::shift_right()
                                                        &block_type,
                                                        false);
                 BM_ASSERT(block);
-                block[0] |= carry_over;
+                block[0] |= carry_over; // block is brand new (0000)
                 carry_over = 0;
             }
             if (no_more_blocks)
@@ -3904,19 +3904,25 @@ bool bvector<Alloc>::shift_right()
         carry_over = bm::bit_block_shift_r1_unr(block, &acc, carry_over);
         BM_ASSERT(carry_over <= 1);
         
-        if (!acc)
-        {
-            blockman_.zero_block(nblock);
-        }
-        
         if (nblock == bm::set_total_blocks-1) // last possible block
         {
             carry_over = block[bm::set_block_size-1] & (1u<<31);
             block[bm::set_block_size-1] &= ~(1u<<31); // clear the 1-bit tail
+            if (!acc) // block shifted out
+            {
+                blockman_.zero_block(nblock);
+            }
             break;
+        }
+        
+        if (!acc) // block shifted out
+        {
+            blockman_.zero_block(nblock);
         }
 
     } // for
+    
+    
     return carry_over;
 }
 
