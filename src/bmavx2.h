@@ -1205,7 +1205,87 @@ bool avx2_test_all_zero_wave(const void* ptr)
 }
 
 
+/*!
+    @brief block shift right by 1
+    @ingroup AVX2
+*/
+inline
+bool avx2_shift_r1(__m256i* block, bm::word_t* empty_acc, unsigned co_flag)
+{
+    const __m256i* block_end =
+        (const __m256i*)((bm::word_t*)(block) + bm::set_block_size);
+    
+    __m256i mAcc = _mm256_set1_epi32(0);
+    __m256i mCOmask = _mm256_set1_epi32(1u << 31);
+    __m256i mCOidx = _mm256_set_epi32(6, 5, 4, 3, 2, 1, 0, 0);
 
+    for (;block < block_end; block += 2)
+    {
+        __m256i m1A = _mm256_load_si256(block);
+        __m256i m2A = _mm256_load_si256(block+1);
+        
+        __m256i m1CO = _mm256_and_si256(m1A, mCOmask); // (block[i] & co_mask) >> 31
+        __m256i m2CO = _mm256_and_si256(m2A, mCOmask); // (block[i] & co_mask) >> 31
+        m1CO = _mm256_srli_epi32(m1CO, 31);
+        m2CO = _mm256_srli_epi32(m2CO, 31);
+        
+        bm::word_t co_flag1 = _mm256_extract_epi32(m1CO, 7);
+        
+        m1A = _mm256_slli_epi32(m1A, 1); // (block[i] << 1u)
+        
+        // shift CO flags using +1 permute indexes, add CO to v[0]
+        __m256i m1COshft = _mm256_permutevar8x32_epi32(m1CO, mCOidx);
+        m1COshft = _mm256_insert_epi32(m1COshft, co_flag, 0); // v[0] = co_flag
+        m1A = _mm256_or_si256(m1A, m1COshft); // block[i] |= co_flag
+        
+        co_flag = co_flag1;
+        
+        co_flag1 = _mm256_extract_epi32(m2CO, 7);
+        m2A = _mm256_slli_epi32(m2A, 1);
+        m1COshft = _mm256_permutevar8x32_epi32(m2CO, mCOidx);
+        m1COshft = _mm256_insert_epi32(m1COshft, co_flag, 0);
+        m2A = _mm256_or_si256(m2A, m1COshft); // block[i] |= co_flag
+
+        
+        _mm256_store_si256(block, m1A);
+        _mm256_store_si256(block+1, m2A);
+
+        mAcc = _mm256_or_si256(mAcc, m1A);
+        mAcc = _mm256_or_si256(mAcc, m2A);
+
+        co_flag = co_flag1;
+    } // for
+    
+    if (_mm256_testz_si256(mAcc, mAcc))
+    {
+        *empty_acc = 0;
+    }
+    else
+    {
+        *empty_acc = 1;
+    }
+    return co_flag;
+}
+/*
+inline
+void avx2_i32_shift()
+{
+    unsigned shift_in = 80;
+    __m256i mIn = _mm256_set1_epi32(0);
+    mIn = _mm256_insert_epi32 (mIn, shift_in, 0);
+    
+    __m256i mMaskW0 = _mm256_set_epi32(-1, -1, -1, -1, -1, -1, -1, 0);
+
+    __m256i mTest = _mm256_set_epi32(70, 60, 50, 40, 30, 20, 10, 100);
+    __m256i mIdx  = _mm256_set_epi32(6, 5, 4, 3, 2, 1, 0, 0);
+ 
+    __m256i m1shft = _mm256_permutevar8x32_epi32(mTest, mIdx);
+    m1shft = _mm256_and_si256(m1shft, mMaskW0); // clear: v[0] = 0
+    m1shft = _mm256_or_si256(m1shft, mIn); // assign v[0]: v[0] = shift_in
+ 
+    avx2_print256("m1shft=", m1shft);
+}
+*/
 
 // TODO: write better pipelined AVX2 implementation
 /*!
@@ -1805,6 +1885,9 @@ void avx2_bit_block_gather_scatter(unsigned* BMRESTRICT arr,
 
 #define VECT_LOWER_BOUND_SCAN_U32(arr, target, from, to) \
     avx2_lower_bound_scan_u32(arr, target, from, to)
+    
+#define VECT_SHIFT_R1(b, acc, co) \
+    avx2_shift_r1((__m256i*)b, acc, co)
 
 
 } // namespace
