@@ -2012,8 +2012,8 @@ void BitBlockRotateTest()
 static
 void BitBlockShiftTest()
 {
-    bm::word_t blk0[bm::set_block_size] = { 0 };
-    bm::word_t blk1[bm::set_block_size] = { 0 };
+    bm::word_t BM_VECT_ALIGN blk0[bm::set_block_size] BM_VECT_ALIGN_ATTR = { 0 };
+    bm::word_t BM_VECT_ALIGN blk1[bm::set_block_size] BM_VECT_ALIGN_ATTR = { 0 };
     unsigned i;
     unsigned repeats = 20000000;
     unsigned acc0, acc1;
@@ -2030,6 +2030,7 @@ void BitBlockShiftTest()
             bm::bit_block_shift_r1(blk0, &acc0, 0);
         }
     }
+
     {
         TimeTaker tt("Bit-block shift-r(1) unrolled", repeats);
         for (i = 0; i < repeats; ++i)
@@ -2746,7 +2747,7 @@ int main(void)
 //    ptest();
 
     TimeTaker tt("TOTAL", 1);
-
+/*
     MemCpyTest();
 
     BitCountTest();
@@ -2764,7 +2765,7 @@ int main(void)
     FindTest();
 
     BitBlockRotateTest();
-
+*/
     BitBlockShiftTest();
 
     EnumeratorTest();
