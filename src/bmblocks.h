@@ -992,7 +992,7 @@ public:
             {
                 block = alloc_.alloc_bit_block();
                 // initialize block depending on its previous status
-                bit_block_set(block, block_flag ? ~0u : 0u);
+                bm::bit_block_set(block, block_flag ? ~0u : 0u);
                 set_block(nb, block);
             }
             else // gap block requested
@@ -1313,6 +1313,7 @@ public:
 
     /**
         Make sure block turns into true bit-block if it is GAP or a full block
+        @return bit-block pointer
     */
     bm::word_t* deoptimize_block(unsigned nb)
     {
@@ -1369,6 +1370,22 @@ public:
             else
                 if (IS_VALID_ADDR(block))
                     alloc_.free_bit_block(block);
+            
+            if (j == bm::set_array_size-1)
+            {
+                // scan if top block can be also dropped
+                do
+                {
+                    if (blk_blk[--j])
+                        return;
+                    if (!j)
+                    {
+                        alloc_.free_ptr(top_blocks_[i]);
+                        top_blocks_[i] = 0;
+                        return;
+                    }
+                } while (1);
+            }
         }
     }
     
@@ -1621,6 +1638,52 @@ public:
             top_blocks_ = 0;
         }
     }
+    
+    /// find first block
+    unsigned find_first_block() const
+    {
+        BM_ASSERT(top_blocks_);
+        unsigned top_blocks = top_block_size();
+
+        for (unsigned i = 0; i < top_blocks; ++i)
+        {
+            bm::word_t** blk_blk = top_blocks_[i];
+            if (!blk_blk)
+                continue;
+            unsigned j = 0;
+            do
+            {
+            #if defined(BM64_AVX2) || defined(BM64_AVX512)
+                if (!avx2_test_all_zero_wave(blk_blk + j))
+                {
+                    if (blk_blk[j])
+                        return (i * bm::set_array_size) + j;
+                    if (blk_blk[1+j])
+                        return (i * bm::set_array_size) + j + 1;
+                    if (blk_blk[2+j])
+                        return (i * bm::set_array_size) + j + 2;
+                    if (blk_blk[3+j])
+                        return (i * bm::set_array_size) + j + 3;
+                }
+                j += 4;
+            #elif defined(BM64_SSE4)
+                if (!sse42_test_all_zero_wave(blk_blk + j))
+                {
+                    if (blk_blk[j])
+                        return (i * bm::set_array_size) + j;
+                    if (blk_blk[1+j])
+                        return (i * bm::set_array_size) + j + 1;
+                }
+                j += 2;
+            #else
+                if (blk_blk[j])
+                    return (i * bm::set_array_size) + j;
+                ++j;
+            #endif
+            } while (j < bm::set_array_size);
+        }
+        return 0;
+    }
 
 private:
 
@@ -1653,7 +1716,7 @@ private:
             unsigned j = 0; bm::word_t* blk;
             do
             {
-            #ifdef BM64_AVX2
+            #if defined(BM64_AVX2) || defined(BM64_AVX512)
                 if (!avx2_test_all_zero_wave(blk_blk + j))
                 {
                     BM_FREE_OP(0)

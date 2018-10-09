@@ -1690,17 +1690,13 @@ public:
 
     /*! Recalculate bitcount (deprecated)
     */
-    bm::id_t recalc_count()
-    {
-        return count();
-    }
+    bm::id_t recalc_count() { return count(); }
     
     /*!
         Disables count cache. (deprecated).
     */
-    void forget_count()
-    {
-    }
+    void forget_count() {}
+    
     //@}
     
     // --------------------------------------------------------------------
@@ -1723,6 +1719,19 @@ public:
     { 
         return get_bit(n); 
     }
+    //@}
+    
+    
+    // --------------------------------------------------------------------
+    /*! @name Shift operations  */
+    //@{
+    
+    /*!
+        \brief Shift right by 1 bit, fill with zero return carry over
+        \return Carry over bit value (1 or 0)
+    */
+    bool shift_right();
+
     //@}
 
     // --------------------------------------------------------------------
@@ -3689,7 +3698,7 @@ bm::id_t bvector<Alloc>::check_or_next(bm::id_t prev) const
         return 0;
     for (;;)
     {
-        unsigned nblock = unsigned(prev >> bm::set_block_shift); 
+        unsigned nblock = unsigned(prev >> bm::set_block_shift);
         if (nblock >= bm::set_total_blocks) 
             break;
 
@@ -3838,6 +3847,79 @@ bm::id_t bvector<Alloc>::check_or_next_extract(bm::id_t prev)
 
     return 0;
 }
+
+//---------------------------------------------------------------------
+
+template<class Alloc>
+bool bvector<Alloc>::shift_right()
+{
+    if (!blockman_.is_init())
+        return 0;
+    
+    if (size_ < bm::id_max)
+        ++size_;
+
+    bm::word_t carry_over = 0;
+    unsigned nblock = blockman_.find_first_block();
+    for (; true; ++nblock)
+    {
+        int no_more_blocks;
+        bm::word_t* block =
+            blockman_.get_block(nblock, &no_more_blocks);
+
+        if (!block)
+        {
+            if (carry_over)
+            {
+                int block_type;
+                block = blockman_.check_allocate_block(nblock,
+                                                       0,
+                                                       0,
+                                                       &block_type,
+                                                       false);
+                BM_ASSERT(block);
+                block[0] |= carry_over;
+                carry_over = 0;
+            }
+            if (no_more_blocks)
+                break;
+
+            continue;
+        }
+        if (IS_FULL_BLOCK(block))
+        {
+            if (carry_over)
+                continue; // 1 in 1 out, block is still all 0xFFFF..
+            // 0 gets carried over into 0xFF block
+            block = blockman_.deoptimize_block(nblock);
+            block[0] = (block[0] << 1);
+            carry_over = 1;
+            continue;
+        }
+        if (BM_IS_GAP(block)) // TODO: implement true GAP shift
+        {
+            block = blockman_.deoptimize_block(nblock);
+        }
+        bm::word_t acc;
+        carry_over = bm::bit_block_shift_r1_unr(block, &acc, carry_over);
+        BM_ASSERT(carry_over <= 1);
+        
+        if (!acc)
+        {
+            blockman_.zero_block(nblock);
+        }
+        
+        if (nblock == bm::set_total_blocks-1) // last possible block
+        {
+            carry_over = block[bm::set_block_size-1] & (1u<<31);
+            block[bm::set_block_size-1] &= ~(1u<<31); // clear the 1-bit tail
+            break;
+        }
+
+    } // for
+    return carry_over;
+}
+
 
 //---------------------------------------------------------------------
 
