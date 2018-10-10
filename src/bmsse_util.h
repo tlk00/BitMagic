@@ -747,6 +747,7 @@ __m128i sse2_sub(__m128i a, __m128i b)
     @return tail pointer
 
     @internal
+    @ingroup SSE2
 */
 inline
 const bm::gap_word_t* sse2_gap_sum_arr(

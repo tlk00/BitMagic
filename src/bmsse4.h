@@ -412,7 +412,7 @@ bool sse4_is_all_one(const __m128i* BMRESTRICT block)
 
 /*!
     @brief check if wave of pointers is all NULL
-    @ingroup AVX2
+    @ingroup SSE4
 */
 BMFORCEINLINE
 bool sse42_test_all_zero_wave(const void* ptr)
@@ -839,6 +839,58 @@ void sse4_bit_block_gather_scatter(unsigned* BMRESTRICT arr,
 
 }
 
+/*!
+    @brief block shift right by 1
+    @ingroup SSE4
+*/
+inline
+bool sse42_shift_r1(__m128i* block, unsigned* empty_acc, unsigned co1)
+{
+    __m128i* block_end =
+        ( __m128i*)((bm::word_t*)(block) + bm::set_block_size);
+    __m128i m1COshft, m2COshft;
+    __m128i mAcc = _mm_set1_epi32(0);
+
+    unsigned co2;
+
+    for (;block < block_end; block += 2)
+    {
+        __m128i m1A = _mm_load_si128(block);
+        __m128i m2A = _mm_load_si128(block+1);
+
+        __m128i m1CO = _mm_srli_epi32(m1A, 31);
+        __m128i m2CO = _mm_srli_epi32(m2A, 31);
+        
+        co2 = _mm_extract_epi32(m1CO, 3);
+        
+        m1A = _mm_slli_epi32(m1A, 1); // (block[i] << 1u)
+        m2A = _mm_slli_epi32(m2A, 1);
+        
+        m1COshft = _mm_bslli_si128 (m1CO, 4);
+        m1COshft = _mm_insert_epi32 (m1COshft, co1, 0);
+        
+        co1 = co2;
+        
+        co2 = _mm_extract_epi32(m2CO, 3);
+        
+        m2COshft = _mm_bslli_si128 (m2CO, 4);
+        m2COshft = _mm_insert_epi32 (m2COshft, co1, 0);
+        
+        m1A = _mm_or_si128(m1A, m1COshft); // block[i] |= co_flag
+        m2A = _mm_or_si128(m2A, m2COshft);
+
+        _mm_store_si128(block, m1A);
+        _mm_store_si128(block+1, m2A);
+        
+        mAcc = _mm_or_si128(mAcc, m1A);
+        mAcc = _mm_or_si128(mAcc, m2A);
+
+        co1 = co2;
+    }
+    *empty_acc = !_mm_testz_si128(mAcc, mAcc);
+    return co1;
+}
+
 
 
 #define VECT_XOR_ARR_2_MASK(dst, src, src_end, mask)\
@@ -909,6 +961,9 @@ void sse4_bit_block_gather_scatter(unsigned* BMRESTRICT arr,
 
 #define VECT_LOWER_BOUND_SCAN_U32(arr, target, from, to) \
     sse4_lower_bound_scan_u32(arr, target, from, to)
+
+#define VECT_SHIFT_R1(b, acc, co) \
+    sse42_shift_r1((__m128i*)b, acc, co)
 
 
 #ifdef __GNUG__
