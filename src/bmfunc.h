@@ -4110,12 +4110,13 @@ bool bit_block_shift_r1(bm::word_t* block,
     BM_ASSERT(block);
     BM_ASSERT(empty_acc);
     
-    const bm::word_t co_mask = (1u << 31);
     bm::word_t acc = 0;
     for (unsigned i = 0; i < bm::set_block_size; ++i)
     {
-        bm::word_t co_flag1 = bool(block[i] & co_mask);
-        acc |= block[i] = (block[i] << 1u) | co_flag;
+        bm::word_t w = block[i];
+        bm::word_t co_flag1 = w >> 31;
+        acc |= w = (w << 1u) | co_flag;
+        block[i] = w;
         co_flag = co_flag1;
     }
     *empty_acc = acc;
