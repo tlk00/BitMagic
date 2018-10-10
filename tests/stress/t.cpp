@@ -1777,8 +1777,8 @@ void ShiftRotateTest()
 {
     cout << "---------------------------- ShiftRotate test" << endl;
 
-    bm::word_t blk0[bm::set_block_size] = { 0 };
-    bm::word_t blk1[bm::set_block_size] = { 0 };
+    bm::word_t BM_VECT_ALIGN blk0[bm::set_block_size] BM_VECT_ALIGN_ATTR = { 0 };
+    bm::word_t BM_VECT_ALIGN blk1[bm::set_block_size] BM_VECT_ALIGN_ATTR = { 0 };
     unsigned i;
 
     for (i = 0; i < bm::set_block_size; ++i)
