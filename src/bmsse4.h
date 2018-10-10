@@ -866,14 +866,14 @@ bool sse42_shift_r1(__m128i* block, unsigned* empty_acc, unsigned co1)
         m1A = _mm_slli_epi32(m1A, 1); // (block[i] << 1u)
         m2A = _mm_slli_epi32(m2A, 1);
         
-        m1COshft = _mm_bslli_si128 (m1CO, 4);
+        m1COshft = _mm_slli_si128 (m1CO, 4); // byte shift left by 1 int32
         m1COshft = _mm_insert_epi32 (m1COshft, co1, 0);
         
         co1 = co2;
         
         co2 = _mm_extract_epi32(m2CO, 3);
         
-        m2COshft = _mm_bslli_si128 (m2CO, 4);
+        m2COshft = _mm_slli_si128 (m2CO, 4);
         m2COshft = _mm_insert_epi32 (m2COshft, co1, 0);
         
         m1A = _mm_or_si128(m1A, m1COshft); // block[i] |= co_flag
