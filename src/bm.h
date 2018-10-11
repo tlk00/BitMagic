@@ -3858,6 +3858,7 @@ bool bvector<Alloc>::shift_right()
     if (size_ < bm::id_max)
         ++size_;
 
+    int block_type;
     bm::word_t carry_over = 0;
     
     unsigned top_blocks = blockman_.top_block_size();
@@ -3878,28 +3879,24 @@ bool bvector<Alloc>::shift_right()
         
         if (!blk_blk)
         {
-            if (!carry_over)
-            {
-                top_blocks = blockman_.top_block_size();
-                if (i > top_blocks)
-                    break;
-            }
-            else // carry over needs block-list extension and a block
+            if (carry_over) // carry over needs block-list extension and a block
             {
                 unsigned nblock = (i * bm::set_array_size) + 0;
-                int block_type;
                 block =
                 blockman_.check_allocate_block(nblock, 0, 0, &block_type, false);
                 
                 block[0] |= carry_over;   // block is brand new (0000)
                 carry_over ^= carry_over; // = 0;
 
-                // reset all control vars (blocks tree may re-allocated)
+                // reset all control vars (blocks tree may have re-allocated)
                 blk_root = blockman_.top_blocks_root();
                 blk_blk = blk_root[i];
                 top_blocks = blockman_.top_block_size();
+                
+                continue;
             }
-            continue;
+            if (i > blockman_.top_block_size())
+                break;
         }
         
         unsigned j = 0;
@@ -3911,7 +3908,6 @@ bool bvector<Alloc>::shift_right()
             {
                 if (carry_over)
                 {
-                    int block_type;
                     block =
                     blockman_.check_allocate_block(nblock, 0, 0, &block_type, false);
                     blk_blk = blk_root[i];
@@ -3957,83 +3953,6 @@ bool bvector<Alloc>::shift_right()
     return carry_over;
 }
 
-/*
-template<class Alloc>
-bool bvector<Alloc>::shift_right()
-{
-    if (!blockman_.is_init())
-        return 0;
-    
-    if (size_ < bm::id_max)
-        ++size_;
-
-    bm::word_t carry_over = 0;
-    unsigned nblock = blockman_.find_first_block();
-    for (; true; ++nblock)
-    {
-        int no_more_blocks;
-        bm::word_t* block =
-            blockman_.get_block(nblock, &no_more_blocks);
-
-        if (!block)
-        {
-            if (carry_over)
-            {
-                int block_type;
-                block = blockman_.check_allocate_block(nblock,
-                                                       0,
-                                                       0,
-                                                       &block_type,
-                                                       false);
-                BM_ASSERT(block);
-                block[0] |= carry_over; // block is brand new (0000)
-                carry_over = 0;
-            }
-            if (no_more_blocks)
-                break;
-
-            continue;
-        }
-        if (IS_FULL_BLOCK(block))
-        {
-            if (carry_over)
-                continue; // 1 in 1 out, block is still all 0xFFFF..
-            // 0 gets carried over into 0xFF block
-            block = blockman_.deoptimize_block(nblock);
-            block[0] = (block[0] << 1);
-            carry_over = 1;
-            continue;
-        }
-        if (BM_IS_GAP(block)) // TODO: implement true GAP shift
-        {
-            block = blockman_.deoptimize_block(nblock);
-        }
-        bm::word_t acc;
-        carry_over = bm::bit_block_shift_r1_unr(block, &acc, carry_over);
-        BM_ASSERT(carry_over <= 1);
-        
-        if (nblock == bm::set_total_blocks-1) // last possible block
-        {
-            carry_over = block[bm::set_block_size-1] & (1u<<31);
-            block[bm::set_block_size-1] &= ~(1u<<31); // clear the 1-bit tail
-            if (!acc) // block shifted out
-            {
-                blockman_.zero_block(nblock);
-            }
-            break;
-        }
-        
-        if (!acc) // block shifted out
-        {
-            blockman_.zero_block(nblock);
-        }
-
-    } // for
-    
-    
-    return carry_over;
-}
-*/
 
 //---------------------------------------------------------------------
 
