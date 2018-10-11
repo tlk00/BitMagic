@@ -2599,7 +2599,9 @@ void BvectorShiftTest()
         bool carry_over = bv.shift_right();
         if (carry_over)
         {
+            cout << "CO at " << start << endl;
             assert(bv.count()==0);
+            assert(start == bm::id_max-1);
             break;
         }
         
@@ -15959,7 +15961,7 @@ int main(void)
 
 //avx2_i32_shift();
 ///return 0;
-
+/
     TestRecomb();
 
     OptimGAPTest();
