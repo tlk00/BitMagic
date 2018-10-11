@@ -2558,7 +2558,7 @@ void BvectorShiftTest()
     bool carry_over = bv.shift_right();
     assert(carry_over);
     unsigned cnt1 = bv.count();
-    assert(cnt1 = cnt - 1);
+    assert(cnt1 == cnt - 1);
     assert(bv.test(0)==0);
     }
     
