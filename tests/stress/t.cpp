@@ -2577,10 +2577,10 @@ void BvectorShiftTest()
     assert(cmp == 0);
     }
     
+
     {
-    std::cout << "Shift-R stress..\n";
+    std::cout << "Shift-R stress (1 bit shift)..\n";
     unsigned start = 0;
-//start = 2000000000;
     bvect bv;
     bv.set(start);
 
@@ -2620,10 +2620,31 @@ void BvectorShiftTest()
             s = std::chrono::steady_clock::now();
         }
         ++start;
+    }
+    cout << "ok.\n";
+    }
 
+    {
+        std::cout << "Shift-R stress (large vector shift)..\n";
+        bvect bv;
+        generate_bvector(bv);
+        bvect bv_control(bv);
+        
+        unsigned max_shifts = 10000;
+        for (unsigned i = 0; i < max_shifts; ++i)
+        {
+            ShiftRight(&bv_control, 1);
+            bv.shift_right();
+            int cmp = bv.compare(bv_control);
+            assert(cmp==0);
+            if ((i % 10) == 0)
+            {
+                cout << "\r" << i << "/" << max_shifts << flush;
+            }
+        }
     }
-    cout << "\n";
-    }
+    cout << "ok.\n";
+
 
     cout << "---------------------------- Bvector SHIFT test OK" << endl;
 }
