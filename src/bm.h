@@ -3910,9 +3910,19 @@ bool bvector<Alloc>::shift_right()
                     blockman_.check_allocate_block(nblock, 0, 0, &block_type, false);
                     blk_blk = blk_root[i];
                     block[0] |= carry_over;   // block is brand new (0000)
-                    carry_over = 0;
+                    carry_over = 0; block = 0;
                 }
-                continue;
+                // no CO: tight loop scan for the next available block (if any)
+                for (++j; j < bm::set_array_size; ++j)
+                {
+                    if (0 != (block = blk_blk[j]))
+                    {
+                        nblock = (i * bm::set_array_size) + j;
+                        break;
+                    }
+                } // for j
+                if (!block)
+                    continue;
             }
             if (IS_FULL_BLOCK(block))
             {
