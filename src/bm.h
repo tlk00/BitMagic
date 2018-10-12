@@ -3897,6 +3897,7 @@ bool bvector<Alloc>::shift_right()
             }
             if (i > blockman_.top_block_size())
                 break;
+            continue;
         }
         
         unsigned j = 0;
