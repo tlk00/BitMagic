@@ -35,6 +35,8 @@ For more information please visit:  http://bitmagic.io
 #include <iomanip>
 #include <vector>
 
+#include "bmalgo_similarity.h"
+#include "bmsparsevec_serial.h"
 #include "bmdef.h"
 
 
