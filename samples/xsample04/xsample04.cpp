@@ -18,12 +18,10 @@ For more information please visit:  http://bitmagic.io
 
 /** \example xsample04.cpp
  
-  \sa bm::sparse_vector
-  \sa bm::rsc_sparse_vector
 */
 
 /*! \file xsample04.cpp
-    \brief Example: DNA compression
+    \brief Example: DNA substring search
 
 */
 
@@ -40,28 +38,26 @@ For more information please visit:  http://bitmagic.io
 #include <map>
 #include <utility>
 #include <algorithm>
+#include <unordered_map>
 
 #include "bm.h"
 #include "bmalgo.h"
 #include "bmserial.h"
-#include "bmrandom.h"
-#include "bmsparsevec.h"
-#include "bmsparsevec_compr.h"
-#include "bmsparsevec_algo.h"
-#include "bmsparsevec_serial.h"
-#include "bmalgo_similarity.h"
-#include "bmsparsevec_util.h"
-
+#include "bmaggregator.h"
 
 #include "bmdbg.h"
 #include "bmtimer.h"
+
+
+using namespace std;
 
 static
 void show_help()
 {
     std::cerr
-        << "BitMagic DNA Compression Sample (c) 2018" << std::endl
+        << "BitMagic DNA Search Sample (c) 2018" << std::endl
         << "-fa   file-name            -- input FASTA file" << std::endl
+        << "-s hi|lo                   -- run substring search benchmark" << std::endl
         << "-diag                      -- run diagnostics"  << std::endl
         << "-timing                    -- collect timings"  << std::endl
       ;
@@ -76,6 +72,8 @@ std::string  ifa_name;
 bool         is_diag = false;
 bool         is_timing = false;
 bool         is_bench = false;
+bool         is_search = false;
+bool         h_word_set = true;
 
 static
 int parse_args(int argc, char *argv[])
@@ -109,6 +107,28 @@ int parse_args(int argc, char *argv[])
             is_timing = true;
         if (arg == "-bench" || arg == "--bench" || arg == "-b" || arg == "--b")
             is_bench = true;
+        if (arg == "-search" || arg == "--search" || arg == "-s" || arg == "--s")
+        {
+            is_search = true;
+            if (i + 1 < argc)
+            {
+                std::string a = argv[i+1];
+                if (a != "-")
+                {
+                    if (a == "l" || a == "lo")
+                    {
+                        h_word_set = false;
+                        ++i;
+                    }
+                    else
+                    if (a == "h" || a == "hi")
+                    {
+                        h_word_set = true;
+                        ++i;
+                    }
+                }
+            }
+        }
 
     } // for i
     return 0;
@@ -120,9 +140,7 @@ int parse_args(int argc, char *argv[])
 typedef std::map<std::string, unsigned>                     freq_map;
 typedef std::vector<std::pair<unsigned, std::string> >      dict_vect;
 
-typedef bm::sparse_vector<unsigned, bm::bvector<> >         sparse_vector_u32;
-typedef bm::rsc_sparse_vector<unsigned, sparse_vector_u32 > rsc_sparse_vector_u32;
-typedef std::vector<std::pair<unsigned, unsigned> >         vector_pairs;
+typedef bm::aggregator<bm::bvector<> >  aggregator_type;
 
 // ----------------------------------------------------------------------------
 
@@ -132,16 +150,14 @@ bm::chrono_taker::duration_map_type  timing_map;
 static
 int load_FASTA(const std::string& fname, std::vector<char>& seq_vect)
 {
-    bm::chrono_taker tt1("1. parse FASTA", 1, &timing_map);
+    bm::chrono_taker tt1("1. Parse FASTA", 1, &timing_map);
     
     seq_vect.resize(0);
-
     std::ifstream fin(fname.c_str(), std::ios::in);
     if (!fin.good())
         return -1;
     
     std::string line;
-    
     for (unsigned i = 0; std::getline(fin, line); ++i)
     {
         if (line.empty() ||
@@ -149,153 +165,254 @@ int load_FASTA(const std::string& fname, std::vector<char>& seq_vect)
             continue;
         
         for (std::string::iterator it = line.begin(); it != line.end(); ++it)
-        {
             seq_vect.push_back(*it);
-        }
     } // for
-    
-    std::cout << std::endl;
-    std::cout << "FASTA sequence size=" << seq_vect.size() << std::endl;
     return 0;
 }
 
-static
-void build_frequency_map_k2(const std::vector<char>& seq_vect, freq_map& fmap)
-{
-    char c1, c2;
-    std::string k2;
-    for (unsigned i = 0; i < seq_vect.size(); ++i)
-    {
-        c1 = seq_vect[i];
-        ++i;
-        c2 = (i < seq_vect.size()) ? seq_vect[i] : 'A';
-        k2 = c1;
-        k2.push_back(c2);
-        
-        fmap[k2]++;
-    }
-}
-
-static
-void build_frequency_map_k3(const std::vector<char>& seq_vect, freq_map& fmap)
-{
-    char c1, c2, c3;
-    std::string k3;
-    for (unsigned i = 0; i < seq_vect.size(); ++i)
-    {
-        c1 = seq_vect[i];
-        ++i;
-        c2 = (i < seq_vect.size()) ? seq_vect[i] : 'A';
-        ++i;
-        c3 = (i < seq_vect.size()) ? seq_vect[i] : 'G';
-        
-        k3 = c1; k3.push_back(c2); k3.push_back(c3);
-        
-        fmap[k3]++;
-    }
-}
 
 
-static
-void build_dict(const freq_map& fmap, dict_vect& dict)
+
+class CBitSeq
 {
-    dict.resize(0);
+public:
+    enum { eA = 0, eC, eG, eT, eN, eEnd };
     
-    freq_map::const_iterator it = fmap.begin();
-    freq_map::const_iterator it_end = fmap.end();
-    for (; it != it_end; ++it)
-        dict.push_back(std::pair<unsigned, std::string>(it->second, it->first));
-    std::sort(dict.begin(), dict.end(),
-            [](std::pair<unsigned, std::string> a, std::pair<unsigned, std::string> b) {
-        return a > b;
-    });
-}
-
-
-static
-void print_map(const freq_map& fmap, const dict_vect& dict)
-{
-    dict_vect::const_iterator it = dict.begin();
-    dict_vect::const_iterator it_end = dict.end();
+    CBitSeq() {}
     
-    std::cout << "Dictionary size = " << dict.size() << std::endl;
-    for (unsigned i = 0; it != it_end; ++it, ++i)
+    void Build(const vector<char>& sequence)
     {
-        const std::string& key = it->second;
-        unsigned cnt = it->first;
-        std::cout << i << ": " << key << "=" << cnt << std::endl;
-    }
-    std::cout << std::endl;
-}
-
-inline
-unsigned find_id(const dict_vect& dict, const std::string& key)
-{
-    dict_vect::const_iterator it = dict.begin();
-    dict_vect::const_iterator it_end = dict.end();
-    for (unsigned i = 0; it != it_end; ++it, ++i)
-    {
-        const std::string& dkey = it->second;
-        if (key == dkey)
-            return i;
-    }
-    throw std::runtime_error("Item not found!");
-}
-
-
-static
-void build_sv_k2(const std::vector<char>& seq_vect,
-                 const freq_map&          fmap,
-                 const dict_vect&         dict,
-                 sparse_vector_u32&       sv_k2)
-{
-    char c1, c2;
-    std::string k2;
-    unsigned sv_cnt = 0;
-    unsigned prev_id = 0;
-    for (unsigned i = 0; i < seq_vect.size(); ++i, ++sv_cnt)
-    {
-        c1 = seq_vect[i];
-        ++i;
-        c2 = (i < seq_vect.size()) ? seq_vect[i] : 'A';
-
-        k2 = c1;
-        k2.push_back(c2);
-        
-        unsigned dict_id = find_id(dict, k2);
-        if (dict_id)
         {
-            sv_k2.set(sv_cnt, dict_id);
+        bm::bvector<>::insert_iterator iA = m_Data[eA].inserter();
+        bm::bvector<>::insert_iterator iC = m_Data[eC].inserter();
+        bm::bvector<>::insert_iterator iG = m_Data[eG].inserter();
+        bm::bvector<>::insert_iterator iT = m_Data[eT].inserter();
+        bm::bvector<>::insert_iterator iN = m_Data[eN].inserter();
+
+        for (size_t i = 0; i < sequence.size(); ++i)
+        {
+            unsigned pos = unsigned(i);
+            switch (sequence[i])
+            {
+            case 'A':
+                iA = pos;
+                break;
+            case 'C':
+                iC = pos;
+                break;
+            case 'G':
+                iG = pos;
+                break;
+            case 'T':
+                iT = pos;
+                break;
+            case 'N':
+                iN = pos;
+                break;
+            default:
+                break;
+            }
+        }
         }
     }
+    
+    const bm::bvector<>& GetVector(char letter) const
+    {
+        switch (letter)
+        {
+        case 'A':
+            return m_Data[eA];
+        case 'C':
+            return m_Data[eC];
+        case 'G':
+            return m_Data[eG];
+        case 'T':
+            return m_Data[eT];
+        case 'N':
+            return m_Data[eN];
+        default:
+            break;
+        }
+        throw runtime_error("Error. Invalid letter!");
+    }
+    
+    void Find(const string& word, vector<pair<int, int>>& res)
+    {
+        if (word.empty())
+            return;
+        bm::bvector<> bv(GetVector(word[0])); // step 1: copy first vector
+        
+        // run series of shifts + logical ANDs
+        for (size_t i = 1; i < word.size(); ++i)
+        {
+            bv.shift_right();
+            bv &= GetVector(word[i]);
+            auto any = bv.any();
+            if (!any)
+                break;
+        }
+        
+        // translate results from bvector of word ends to result
+        unsigned ws = unsigned(word.size()) - 1;
+        TranslateResults(bv, ws, res);
+    };
+    
+    void FindAgg(const string& word, vector<pair<int, int>>& res)
+    {
+        if (word.empty())
+            return;
+        bm::bvector<> bv(GetVector(word[0])); // step 1: copy first vector
+        
+        // run series of shifts fused with logical ANDs using
+        // re-used bm::aggregator<>
+        //
+        for (size_t i = 1; i < word.size(); ++i)
+        {
+            const bm::bvector<>& bv_mask = GetVector(word[i]);
+            bool any = m_Agg.shift_right_and(bv, bv_mask);
+            if (!any)
+                break;
+        }
+        
+        // translate results from bvector of word ends to result
+        unsigned ws = unsigned(word.size()) - 1;
+        TranslateResults(bv, ws, res);
+    };
+
+
+    void Serialize(const string& file_name)
+    {
+        ofstream os(file_name.c_str());
+        bm::serializer<bm::bvector<> > bvs;
+        BM_DECLARE_TEMP_BLOCK(tb)
+        bm::bvector<>::statistics st;
+        
+        for (size_t i = 0; i < eEnd; ++i)
+        {
+            m_Data[i].optimize(tb, bm::bvector<>::opt_compress, &st);
+            // allocate serialization buffer
+            vector<unsigned char> v_buf(st.max_serialize_mem);
+            unsigned char*  buf = v_buf.data();//new unsigned char[st.max_serialize_mem];
+            // serialize to memory
+            unsigned len = bvs.serialize(m_Data[i], buf, st.max_serialize_mem);
+            os.write((const char*)buf, len);
+        }
+    }
+    
+protected:
+
+    /// Translate search results vector using (word size) left shift
+    ///
+    void TranslateResults(const bm::bvector<>& bv,
+                          unsigned left_shift,
+                          vector<pair<int, int>>& res)
+    {
+        bm::bvector<>::enumerator en = bv.first();
+        for (; en.valid(); ++en)
+        {
+            auto pos = *en;
+            res.emplace_back(pos - left_shift, pos);
+        }
+    }
+    
+private:
+    bm::bvector<>   m_Data[eEnd];
+    aggregator_type m_Agg;
+};
+
+static const size_t WORD_SIZE = 28;
+using THitList = vector<pair<int, int>>;
+
+/// generate the most frequent words of specified length from the input sequence
+///
+static
+void generate_kmers(vector<tuple<string,int>>& top_words,
+                    vector<tuple<string,int>>& lo_words,
+                    const vector<char>& data,
+                    size_t N,
+                    unsigned word_size)
+{
+    cout << "k-mer generation... " << endl;
+    typedef multimap<int,string, greater<int> > dest_map_type;
+    
+    top_words.clear();
+    lo_words.clear();
+    
+    if (data.size() < word_size)
+        return;
+    
+    size_t end_pos = data.size() - word_size;
+    size_t i = 0;
+    unordered_map<string, int> words;
+    while (i < end_pos)
+    {
+        string s(&data[i], word_size);
+        if (s.find("N") == string::npos)
+            words[s] += 1;
+        i += word_size;
+        
+        if (i % 10000 == 0)
+        {
+            cout << "\r" << i << "/" << end_pos << flush;
+        }
+    }
+    cout << endl << "Picking k-mer samples..." << flush;
+    dest_map_type dst;
+    for_each(words.begin(), words.end(), [&](const std::pair<string,int>& p) {
+                 dst.emplace(p.second, p.first);
+             });
+ 
+    {
+    dest_map_type::iterator it = dst.begin();
+    for(size_t count = 0; count < N && it !=dst.end(); ++it,++count)
+        top_words.emplace_back(it->second, it->first);
+    }
+
+    {
+    dest_map_type::reverse_iterator it = dst.rbegin();
+    for(size_t count = 0; count < N && it !=dst.rend(); ++it,++count)
+        lo_words.emplace_back(it->second, it->first);
+    }
+    cout << "OK" << endl;
 }
 
-static
-void build_sv_k3(const std::vector<char>& seq_vect,
-                 const freq_map&          fmap,
-                 const dict_vect&         dict,
-                 sparse_vector_u32&       sv_k3)
+void find_word_strncmp(vector<char>& data,
+                       const char* word, unsigned word_size,
+                       THitList& r)
 {
-    char c1, c2, c3;
-    std::string k3;
-    unsigned sv_cnt = 0;
-    unsigned prev_id = 0;
-    for (unsigned i = 0; i < seq_vect.size(); ++i, ++sv_cnt)
+    r.clear();
+    if (data.size() < word_size)
+        return;
+    
+    size_t i = 0;
+    size_t end_pos = data.size() - word_size;
+    while (i < end_pos)
     {
-        c1 = seq_vect[i];
+        if (strncmp(&data[i], word, word_size) == 0)
+        {
+            r.emplace_back(i, i + word_size - 1);
+        }
         ++i;
-        c2 = (i < seq_vect.size()) ? seq_vect[i] : 'A';
-        ++i;
-        c3 = (i < seq_vect.size()) ? seq_vect[i] : 'G';
-        k3 = c1;
-        k3.push_back(c2);
-        k3.push_back(c3);
-        
-        unsigned dict_id = find_id(dict, k3);
-        if (dict_id)
-            sv_k3.set(sv_cnt, dict_id);
     }
 }
+
+bool hitlist_compare(const THitList& h1, const THitList& h2)
+{
+    if (h1.size() != h2.size())
+    {
+        cerr << "HitList size error! " << h1.size() << " " << h2.size() << endl;
+        return false;
+    }
+    for (size_t i = 0; i < h1.size(); ++i)
+    {
+        if (h1[i].first != h2[i].first)
+            return false;
+        if (h1[i].second != h2[i].second)
+            return false;
+    }
+    return true;
+}
+
 
 
 
@@ -308,16 +425,6 @@ int main(int argc, char *argv[])
     }
     
     std::vector<char> seq_vect;
-    freq_map          fmap_k2;
-    dict_vect         dict_k2;
-    freq_map          fmap_k3;
-    dict_vect         dict_k3;
-    
-    sparse_vector_u32  sv_k2(bm::use_null);
-    rsc_sparse_vector_u32 csv_k2;
-
-    sparse_vector_u32  sv_k3(bm::use_null);
-    rsc_sparse_vector_u32 csv_k3;
 
     try
     {
@@ -329,74 +436,72 @@ int main(int argc, char *argv[])
         {
             auto res = load_FASTA(ifa_name, seq_vect);
             if (res != 0)
-            {
                 return res;
-            }
+            std::cout << "FASTA sequence size=" << seq_vect.size() << std::endl;
         }
-        if (!seq_vect.empty())
+        
+        if (is_search)
         {
-            build_frequency_map_k2(seq_vect, fmap_k2);
-            build_dict(fmap_k2, dict_k2);
-
-            build_frequency_map_k3(seq_vect, fmap_k3);
-            build_dict(fmap_k3, dict_k3);
-
+            vector<tuple<string,int>> h_words;
+            vector<tuple<string,int>> l_words;
             
-            print_map(fmap_k2, dict_k2);
-            print_map(fmap_k3, dict_k3);
+            vector<tuple<string,int>>& words = h_word_set ? h_words : l_words;
+
+            // generate search sets for benchmarking
+            //
+            generate_kmers(h_words, l_words, seq_vect, 20, WORD_SIZE);
             
-            build_sv_k2(seq_vect, fmap_k2, dict_k2, sv_k2);
-            csv_k2.load_from(sv_k2);
+            CBitSeq idx;
+            {
+                bm::chrono_taker tt1("2. Build DNA index", 1, &timing_map);
+
+                idx.Build(seq_vect);
+            }
             
-            sv_k2.optimize();
-            csv_k2.optimize();
-
-            build_sv_k3(seq_vect, fmap_k3, dict_k3, sv_k3);
-            csv_k3.load_from(sv_k3);
-
-            sv_k3.optimize();
-            csv_k3.optimize();
-
-            file_save_svector(csv_k3, "dna_k3.csv");
-        }
-
-        if (is_diag) // run set of benchmarks
-        {
-            if (!sv_k2.empty())
+            for (const auto& w : words)
             {
-                std::cout << std::endl
-                          << "sparse vector K2 statistics:"
-                          << std::endl;
-                bm::print_svector_stat(sv_k2, true);
-            }
-            if (!csv_k2.empty())
-            {
-                std::cout << std::endl
-                          << "RSC sparse vector K2 statistics:"
-                          << std::endl;
-                bm::print_svector_stat(csv_k2, true);
-            }
-            if (!sv_k3.empty())
-            {
-                std::cout << std::endl
-                          << "sparse vector K3 statistics:"
-                          << std::endl;
-                bm::print_svector_stat(sv_k3, true);
-            }
-            if (!csv_k3.empty())
-            {
-                std::cout << std::endl
-                          << "RSC sparse vector K3 statistics:"
-                          << std::endl;
-                bm::print_svector_stat(csv_k3, true);
+                const string& word = get<0>(w);
+                THitList hits1;
+                {
+                    bm::chrono_taker tt1("3. Search with strncmp", 1, &timing_map);
+                    find_word_strncmp(seq_vect,
+                                      word.c_str(), unsigned(word.size()),
+                                      hits1);
+                }
+ 
+                THitList hits2;
+                {
+                    bm::chrono_taker tt1("4. Search with bvector SHIFT+AND", 1, &timing_map);
+                    idx.Find(word, hits2);
+                }
+
+                THitList hits3;
+                {
+                    bm::chrono_taker tt1("5. Search with aggregator SHIFT+AND", 1, &timing_map);
+                    idx.FindAgg(word, hits3);
+                }
+
+                // check correctness
+                if (!hitlist_compare(hits1, hits2) ||
+                    !hitlist_compare(hits1, hits3)
+                   )
+                {
+                    cout << "Mismatch ERROR for: " <<  word << endl;
+                }
+                else
+                {
+                    cout << word << ":" << hits1.size() << " hits " << endl;
+                }
             }
 
 
         }
-
-
-        if (is_bench) // run set of benchmarks
+        else
         {
+            
+            if (is_bench) // run set of benchmarks
+            {
+            }
         }
 
         if (is_timing)  // print all collected timings
@@ -413,4 +518,3 @@ int main(int argc, char *argv[])
 
     return 0;
 }
-
