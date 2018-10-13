@@ -107,7 +107,7 @@ typedef bm::bvector<> bvect;
 // generate pseudo-random bit-vector, mix of compressed/non-compressed blocks
 //
 static
-void generate_bvector(bvect& bv, unsigned vector_max = 40000000)
+void generate_bvector(bvect& bv, unsigned vector_max = 40000000, bool optimize = true)
 {
     unsigned i, j;
     for (i = 0; i < vector_max;)
@@ -129,7 +129,8 @@ void generate_bvector(bvect& bv, unsigned vector_max = 40000000)
                 break;
         }
     }
-    bv.optimize();
+    if (optimize)
+        bv.optimize();
 }
 
 
@@ -2404,23 +2405,48 @@ void AggregatorTest()
 static
 void BvectorShiftTest()
 {
-    std::vector<bvect> bv_coll;
-    GenerateTestCollection(&bv_coll, 25, 80000000);
+    {
+        std::vector<bvect> bv_coll;
+        GenerateTestCollection(&bv_coll, 25, 80000000);
 
-    if (!bv_coll.size())
-        return;
-    
-    {
-    TimeTaker tt("bvector<>::shift_right() ", REPEATS);
-    for (unsigned i = 0; i < REPEATS; ++i)
-    {
-        for (unsigned k = 0; k < bv_coll.size(); ++k)
+        if (!bv_coll.size())
+            return;
+
         {
-            bv_coll[k].shift_right();
-        } // for
-    } // for
+            TimeTaker tt("bvector<>::shift_right() ", REPEATS);
+            for (unsigned i = 0; i < REPEATS; ++i)
+            {
+                for (unsigned k = 0; k < bv_coll.size(); ++k)
+                {
+                    bv_coll[k].shift_right();
+                } // for
+            } // for
+        }
     }
 
+    bvect mask_bv; // mask vector
+    mask_bv.init();
+    generate_bvector(mask_bv, 75000000, false); // mask is shorter on both ends
+
+    {
+        std::vector<bvect> bv_coll;
+        GenerateTestCollection(&bv_coll, 25, 80000000);
+        
+        if (!bv_coll.size())
+            return;
+
+        {
+            TimeTaker tt("bvector<>::shift_right()+AND ", REPEATS);
+            for (unsigned i = 0; i < REPEATS; ++i)
+            {
+                for (unsigned k = 0; k < bv_coll.size(); ++k)
+                {
+                    bv_coll[k].shift_right();
+                    bv_coll[k] &= mask_bv;
+                } // for
+            } // for
+        }
+    }
 
 
     //std::cout << bv_target1->count() << std::endl;
@@ -2765,7 +2791,7 @@ int main(void)
     FindTest();
 
     BitBlockRotateTest();
-*/
+
     BitBlockShiftTest();
 
     EnumeratorTest();
@@ -2773,7 +2799,7 @@ int main(void)
     EnumeratorTestGAP();
 
     EnumeratorGoToTest();
- 
+*/ 
     BvectorShiftTest();
 
     RangeCopyTest();
