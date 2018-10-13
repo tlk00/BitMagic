@@ -95,7 +95,17 @@ public:
         auto diff = finish_ - start_;
         if (dmap_)
         {
-            (*dmap_)[name_] = statistics(diff, repeats_);
+            statistics st(diff, repeats_);
+            duration_map_type::iterator it = dmap_->find(name_);
+            if (it == dmap_->end())
+            {
+                (*dmap_)[name_] = st;
+            }
+            else
+            {
+                it->second.repeats++;
+                it->second.duration += st.duration;
+            }
         }
         else // report the measurements
         {
