@@ -4145,6 +4145,63 @@ bool bit_block_shift_r1_unr(bm::word_t* block,
     #endif
 }
 
+/*!
+    @brief Right bit-shift of bit-block by 1 bit (reference) + AND
+    @param block      - bit-block pointer
+    @param mask_block - mask bit-block pointer
+    @param empty_acc  - [out] contains 0 if block is empty
+    @param co_flag    - carry over from the previous block
+ 
+    @return carry over bit (1 or 0)
+    @ingroup bitfunc
+*/
+inline
+bool bit_block_shift_r1_and(bm::word_t* block,
+                            const bm::word_t* mask_block,
+                            bm::word_t* empty_acc, bm::word_t co_flag)
+{
+    BM_ASSERT(block);
+    BM_ASSERT(mask_block);
+    BM_ASSERT(empty_acc);
+    
+    bm::word_t acc = 0;
+    for (unsigned i = 0; i < bm::set_block_size; ++i)
+    {
+        bm::word_t w = block[i];
+        bm::word_t co_flag1 = w >> 31;
+        acc |= w = (w << 1u) | co_flag;
+        block[i] = w & mask_block[i];
+        co_flag = co_flag1;
+    }
+    *empty_acc = acc;
+    return co_flag;
+}
+
+/*!
+    @brief Right bit-shift of bit-block by 1 bit + AND(loop unrolled)
+    @param block - bit-block pointer
+    @param mask_block - mask bit-block pointer
+    @param empty_acc - [out] contains 0 if block is empty
+    @param co_flag - carry over from the previous block
+
+    @return carry over bit (1 or 0)
+    @ingroup bitfunc
+*/
+inline
+bool bit_block_shift_r1_and_unr(bm::word_t* block,
+                                const bm::word_t* mask_block,
+                                bm::word_t* empty_acc, bm::word_t co_flag)
+{
+    BM_ASSERT(block);
+    BM_ASSERT(mask_block);
+    BM_ASSERT(empty_acc);
+    #if defined(VECT_SHIFT_R1_AND)
+        return VECT_SHIFT_R1_AND(block, mask_block, empty_acc, co_flag);
+    #else
+        return bm::bit_block_shift_r1_and(block, mask_block, empty_acc, co_flag);
+    #endif
+}
+
 
 
 /*!
@@ -6729,6 +6786,40 @@ unsigned idx_arr_block_lookup(const unsigned* idx, unsigned size, unsigned nb, u
     {}
     return start;
 #endif
+}
+
+// --------------------------------------------------------------
+
+/**
+    @brief array range detector
+    @intenal
+*/
+inline
+bool block_ptr_array_range(bm::word_t** arr, unsigned& left, unsigned& right)
+{
+    BM_ASSERT(arr);
+    
+    unsigned i, j;
+    for (i = 0; i < bm::set_array_size; ++i)
+    {
+        if (arr[i])
+        {
+            left = i;
+            break;
+        }
+    }
+    if (i == bm::set_array_size)
+    {
+        left = right = 0;
+        return false; // nothing here
+    }
+    for (j = bm::set_array_size-1; j != i; --j)
+    {
+        if (arr[j])
+            break;
+    }
+    right = j;
+    return true;
 }
 
 // --------------------------------------------------------------
