@@ -56,7 +56,8 @@ public:
     enum format
     {
         ct_time = 0,
-        ct_ops_per_sec = 1
+        ct_ops_per_sec,
+        ct_all
     };
     
     /// test name to duration map
@@ -140,6 +141,7 @@ public:
             switch (f)
             {
             case ct_time:
+            print_time:
                 {
                 auto ms = it->second.duration.count();
                 if (ms > 1000)
@@ -165,6 +167,27 @@ public:
                 }
                 }
                 break;
+            case ct_all:
+                {
+                if (st.repeats <= 1)
+                {
+                    goto print_time;
+                }
+                unsigned iops = (unsigned)((double)st.repeats / (double)it->second.duration.count()) * 1000;
+                if (iops)
+                {
+                    std::cout << it->first << "; " << iops << " ops/sec; "
+                              << std::setprecision(4) << it->second.duration.count() << " ms" << std::endl;
+                }
+                else
+                {
+                    double ops = ((double)st.repeats / (double)it->second.duration.count()) * 1000;
+                    std::cout << it->first << "; " << std::setprecision(4) << ops << " ops/sec; "
+                              << std::setprecision(4) << it->second.duration.count() << " ms" << std::endl;
+                }
+                }
+                break;
+
             default:
                 break;
             }
