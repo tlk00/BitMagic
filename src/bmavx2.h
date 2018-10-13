@@ -1276,11 +1276,18 @@ bool avx2_shift_r1_and(__m256i* block, const __m256i* BMRESTRICT mask_block,
     __m256i mCOidx = _mm256_set_epi32(6, 5, 4, 3, 2, 1, 0, 0);
     unsigned co2;
 
-    for (;block < block_end; block+=2, mask_block+=2)
+    for ( ; block < block_end; block+=2, mask_block+=2)
     {
         __m256i m1A = _mm256_load_si256(block);
         __m256i m2A = _mm256_load_si256(block+1);
-        
+
+        if (!co1) // 0 shited >> into "00000..00"
+        {
+            __m256i mAOR = _mm256_or_si256(m1A, m2A);
+            if (_mm256_testz_si256(mAOR, mAOR)) // empty stride
+                continue; // nothing to do
+        }
+
         __m256i m1CO = _mm256_srli_epi32(m1A, 31);
         __m256i m2CO = _mm256_srli_epi32(m2A, 31);
         
@@ -1303,7 +1310,7 @@ bool avx2_shift_r1_and(__m256i* block, const __m256i* BMRESTRICT mask_block,
         m2A = _mm256_or_si256(m2A, m2COshft);
         
         m1A = _mm256_and_si256(m1A, _mm256_load_si256(mask_block)); // block[i] &= mask_block[i]
-        m2A = _mm256_and_si256(m2A, _mm256_load_si256(mask_block+1)); 
+        m2A = _mm256_and_si256(m2A, _mm256_load_si256(mask_block+1));
 
         _mm256_store_si256(block, m1A);
         _mm256_store_si256(block+1, m2A);

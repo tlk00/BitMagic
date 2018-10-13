@@ -226,7 +226,6 @@ public:
         \param src_and_size  - size of bv_src_and
         \param bv_src_sub    - array of pointers on bit-vector to SUB aggregate
         \param src_sub_size  - size of bv_src_sub
-
     */
     void combine_and_sub_horizontal(bvector_type& bv_target,
                                     const bvector_type_const_ptr* bv_src_and,
