@@ -1326,14 +1326,18 @@ bool aggregator<BV>::shift_right_and(bvector_type& bv_target,
         {
             unsigned nblock = (i * bm::set_array_size) + j;
             block = blk_blk[j];
-            const bm::word_t* arg_blk = bman_arg.get_block_ptr(i, j);
-            arg_blk = BLOCK_ADDR_SAN(arg_blk);
+            const bm::word_t* arg_blk = bman_arg.get_block(i, j);
             
+            bm::word_t acc = 0;
+
             if (!block)
             {
                 if (carry_over)
                 {
-                    bm::word_t w0 = (carry_over & arg_blk[0]);
+                    bm::word_t w0 = carry_over;
+                    if (arg_blk)
+                        w0 &= arg_blk[0];
+                    
                     if (w0)
                     {
                         block =
@@ -1344,45 +1348,60 @@ bool aggregator<BV>::shift_right_and(bvector_type& bv_target,
                     }
                     carry_over = 0; block = 0;
                 }
-                // no CO: tight loop scan for the next available block (if any)
-                for (++j; j < bm::set_array_size; ++j)
+                // no CO - tight loop scan for the next available block
+                // (optimizational only)
                 {
-                    if (0 != (block = blk_blk[j]))
+                    for (++j; j < bm::set_array_size; ++j)
+                    {
+                        if (0 != (block = blk_blk[j]))
+                            break;
+                    } // for j
+                    if (!block)
+                        continue;
+                    else
                     {
                         nblock = (i * bm::set_array_size) + j;
-                        break;
+                        arg_blk = bman_arg.get_block(i, j);
                     }
-                } // for j
-                if (!block)
-                    continue;
-                else
-                {
-                    arg_blk = bman_arg.get_block_ptr(i, j);
-                    arg_blk = BLOCK_ADDR_SAN(arg_blk);
                 }
             }
-            if (IS_FULL_BLOCK(block))
+            if (BM_IS_GAP(block) || IS_FULL_BLOCK(block))
             {
-                 block = bman_target.deoptimize_block(nblock);
-            }
-            if (BM_IS_GAP(block))
                 block = bman_target.deoptimize_block(nblock);
+            }
 
-            bm::word_t acc = 0;
             if (BM_IS_GAP(arg_blk)) // GAP argument
             {
                 carry_over = bm::bit_block_shift_r1_unr(block, &acc, carry_over);
                 if (acc)
                 {
-                    bm::gap_and_to_bitset(block, arg_blk);
+                    bm::gap_and_to_bitset(block, BMGAP_PTR(arg_blk));
                     acc = !bm::bit_is_all_zero(block);
                 }
             }
-            else // 2 bit-blocks: fused SHR-AND operation
+            else // 2 bit-blocks
             {
-                carry_over =
-                    bm::bit_block_shift_r1_and_unr(block, arg_blk,
-                                                    &acc, carry_over);
+                if (arg_blk) // use fast fused SHIFT-AND operation
+                {
+                    carry_over =
+                        bm::bit_block_shift_r1_and_unr(block, arg_blk,
+                                                        &acc, carry_over);
+                }
+                else  // arg is zero - target block may turn zero
+                {
+                    bm::word_t co = block[bm::set_block_size-1] >> 31;
+                    if (carry_over) // not zero, but fast shift is possible
+                    {
+                        bm::bit_block_set(block, 0);
+                        acc = block[0] = carry_over;
+                    }
+                    else
+                    {
+                        bman_target.zero_block(nblock);
+                        block = 0; acc = 0;
+                    }
+                    carry_over = co;
+                }
             }
             any |= acc;
             if (nblock == bm::set_total_blocks-1) // last possible block
@@ -1393,7 +1412,7 @@ bool aggregator<BV>::shift_right_and(bvector_type& bv_target,
                     bman_target.zero_block(nblock);
                 break;
             }
-            if (!acc)
+            if (!acc && block)
             {
                 BM_ASSERT(bm::bit_is_all_zero(block));
                 bman_target.zero_block(nblock);
