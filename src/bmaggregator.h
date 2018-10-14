@@ -1365,6 +1365,7 @@ bool aggregator<BV>::shift_right_and(bvector_type& bv_target,
                     }
                 }
             }
+            
             if (BM_IS_GAP(block) || IS_FULL_BLOCK(block))
             {
                 block = bman_target.deoptimize_block(nblock);
@@ -1387,20 +1388,11 @@ bool aggregator<BV>::shift_right_and(bvector_type& bv_target,
                         bm::bit_block_shift_r1_and_unr(block, arg_blk,
                                                         &acc, carry_over);
                 }
-                else  // arg is zero - target block may turn zero
+                else  // arg is zero - target block turns zero
                 {
-                    bm::word_t co = block[bm::set_block_size-1] >> 31;
-                    if (carry_over) // not zero, but fast shift is possible
-                    {
-                        bm::bit_block_set(block, 0);
-                        acc = block[0] = carry_over;
-                    }
-                    else
-                    {
-                        bman_target.zero_block(nblock);
-                        block = 0; acc = 0;
-                    }
-                    carry_over = co;
+                    carry_over = block[bm::set_block_size-1] >> 31;
+                    bman_target.zero_block(nblock);
+                    block = 0; acc = 0;
                 }
             }
             any |= acc;
