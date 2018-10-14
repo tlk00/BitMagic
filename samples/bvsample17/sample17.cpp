@@ -32,8 +32,6 @@ Example rank and select operations.
 
 #include "bm.h"
 
-//const unsigned max_vectors = 10;
-
 int main(void)
 {
     try
