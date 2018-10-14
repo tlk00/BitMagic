@@ -493,21 +493,12 @@ int main(int argc, char *argv[])
                     cout << word << ":" << hits1.size() << " hits " << endl;
                 }
             }
-
-
-        }
-        else
-        {
-            
-            if (is_bench) // run set of benchmarks
-            {
-            }
         }
 
         if (is_timing)  // print all collected timings
         {
             std::cout << std::endl << "Performance:" << std::endl;
-            bm::chrono_taker::print_duration_map(timing_map, bm::chrono_taker::ct_ops_per_sec);
+            bm::chrono_taker::print_duration_map(timing_map, bm::chrono_taker::ct_all);
         }
     }
     catch (std::exception& ex)
