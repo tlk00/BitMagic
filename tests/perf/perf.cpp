@@ -2405,6 +2405,7 @@ void AggregatorTest()
 static
 void BvectorShiftTest()
 {
+
     {
         std::vector<bvect> bv_coll;
         GenerateTestCollection(&bv_coll, 25, 80000000);
@@ -2428,25 +2429,54 @@ void BvectorShiftTest()
     mask_bv.init();
     generate_bvector(mask_bv, 75000000, false); // mask is shorter on both ends
 
-    {
-        std::vector<bvect> bv_coll;
-        GenerateTestCollection(&bv_coll, 25, 80000000);
-        
-        if (!bv_coll.size())
-            return;
+    std::vector<bvect> bv_coll1;
+    GenerateTestCollection(&bv_coll1, 25, 80000000);
+    
+    std::vector<bvect> bv_coll2;
+    GenerateTestCollection(&bv_coll2, 25, 80000000);
+    
 
+    {
         {
             TimeTaker tt("bvector<>::shift_right()+AND ", REPEATS);
             for (unsigned i = 0; i < REPEATS; ++i)
             {
-                for (unsigned k = 0; k < bv_coll.size(); ++k)
+                for (unsigned k = 0; k < bv_coll1.size(); ++k)
                 {
-                    bv_coll[k].shift_right();
-                    bv_coll[k] &= mask_bv;
+                    bv_coll1[k].shift_right();
+                    bv_coll1[k] &= mask_bv;
                 } // for
             } // for
         }
     }
+
+    {
+        bm::aggregator<bvect> agg;
+        {
+            TimeTaker tt("aggregator::shift_right_and() ", REPEATS);
+            for (unsigned i = 0; i < REPEATS; ++i)
+            {
+                for (unsigned k = 0; k < bv_coll2.size(); ++k)
+                {
+                    agg.shift_right_and(bv_coll2[k], mask_bv);
+                } // for
+            } // for
+        }
+    }
+    
+    // check correcness
+    //
+    for (unsigned k = 0; k < bv_coll1.size(); ++k)
+    {
+        const bvect& bv1 = bv_coll1[k];
+        const bvect& bv2 = bv_coll2[k];
+        auto cmp = bv1.compare(bv2);
+        if (cmp != 0)
+        {
+            cerr << "Mismatch error!" << endl;
+            exit(1);
+        }
+    } // for
 
 
     //std::cout << bv_target1->count() << std::endl;
@@ -2773,7 +2803,7 @@ int main(void)
 //    ptest();
 
     TimeTaker tt("TOTAL", 1);
-/*
+
     MemCpyTest();
 
     BitCountTest();
@@ -2799,7 +2829,7 @@ int main(void)
     EnumeratorTestGAP();
 
     EnumeratorGoToTest();
-*/ 
+
     BvectorShiftTest();
 
     RangeCopyTest();
