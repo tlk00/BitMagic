@@ -4169,8 +4169,8 @@ bool bit_block_shift_r1_and(bm::word_t* block,
     {
         bm::word_t w = block[i];
         bm::word_t co_flag1 = w >> 31;
-        acc |= w = (w << 1u) | co_flag;
-        block[i] = w & mask_block[i];
+        w = (w << 1u) | co_flag;
+        acc |= block[i] = w & mask_block[i];
         co_flag = co_flag1;
     }
     *empty_acc = acc;
