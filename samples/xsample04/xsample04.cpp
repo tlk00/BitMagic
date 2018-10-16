@@ -129,7 +129,6 @@ int parse_args(int argc, char *argv[])
                 }
             }
         }
-
     } // for i
     return 0;
 }
@@ -171,23 +170,27 @@ int load_FASTA(const std::string& fname, std::vector<char>& seq_vect)
 }
 
 
-
-
-class CBitSeq
+/**
+    Utility for keeping all DNA finger print vectors and search
+    using various techniques
+*/
+class DNA_FingerprintScanner
 {
 public:
     enum { eA = 0, eC, eG, eT, eN, eEnd };
     
-    CBitSeq() {}
+    DNA_FingerprintScanner() {}
     
+    /// Build fingerprint bit-vectors from the original sequence
+    ///
     void Build(const vector<char>& sequence)
     {
         {
-        bm::bvector<>::insert_iterator iA = m_Data[eA].inserter();
-        bm::bvector<>::insert_iterator iC = m_Data[eC].inserter();
-        bm::bvector<>::insert_iterator iG = m_Data[eG].inserter();
-        bm::bvector<>::insert_iterator iT = m_Data[eT].inserter();
-        bm::bvector<>::insert_iterator iN = m_Data[eN].inserter();
+        bm::bvector<>::insert_iterator iA = m_FPrintBV[eA].inserter();
+        bm::bvector<>::insert_iterator iC = m_FPrintBV[eC].inserter();
+        bm::bvector<>::insert_iterator iG = m_FPrintBV[eG].inserter();
+        bm::bvector<>::insert_iterator iT = m_FPrintBV[eT].inserter();
+        bm::bvector<>::insert_iterator iN = m_FPrintBV[eN].inserter();
 
         for (size_t i = 0; i < sequence.size(); ++i)
         {
@@ -216,26 +219,29 @@ public:
         }
     }
     
+    /// Return fingerprint bit-vector
     const bm::bvector<>& GetVector(char letter) const
     {
         switch (letter)
         {
         case 'A':
-            return m_Data[eA];
+            return m_FPrintBV[eA];
         case 'C':
-            return m_Data[eC];
+            return m_FPrintBV[eC];
         case 'G':
-            return m_Data[eG];
+            return m_FPrintBV[eG];
         case 'T':
-            return m_Data[eT];
+            return m_FPrintBV[eT];
         case 'N':
-            return m_Data[eN];
+            return m_FPrintBV[eN];
         default:
             break;
         }
         throw runtime_error("Error. Invalid letter!");
     }
     
+    /// Find word strings
+    ///    using oprtations on fingerprint vectors
     void Find(const string& word, vector<pair<int, int>>& res)
     {
         if (word.empty())
@@ -257,7 +263,8 @@ public:
         TranslateResults(bv, ws, res);
     };
     
-    /// This method uses horizontal aggregator with combined SHIFT+AND
+    /// Find word strings.
+    /// This method uses horizontal aggregator with combined SHIFT+AND.
     void FindAgg(const string& word, vector<pair<int, int>>& res)
     {
         if (word.empty())
@@ -314,12 +321,12 @@ public:
         
         for (size_t i = 0; i < eEnd; ++i)
         {
-            m_Data[i].optimize(tb, bm::bvector<>::opt_compress, &st);
+            m_FPrintBV[i].optimize(tb, bm::bvector<>::opt_compress, &st);
             // allocate serialization buffer
             vector<unsigned char> v_buf(st.max_serialize_mem);
             unsigned char*  buf = v_buf.data();//new unsigned char[st.max_serialize_mem];
             // serialize to memory
-            unsigned len = bvs.serialize(m_Data[i], buf, st.max_serialize_mem);
+            unsigned len = bvs.serialize(m_FPrintBV[i], buf, st.max_serialize_mem);
             os.write((const char*)buf, len);
         }
     }
@@ -341,7 +348,7 @@ protected:
     }
     
 private:
-    bm::bvector<>   m_Data[eEnd];
+    bm::bvector<>   m_FPrintBV[eEnd];
     aggregator_type m_Agg;
 };
 
@@ -476,7 +483,7 @@ int main(int argc, char *argv[])
             //
             generate_kmers(h_words, l_words, seq_vect, 20, WORD_SIZE);
             
-            CBitSeq idx;
+            DNA_FingerprintScanner idx;
             {
                 bm::chrono_taker tt1("2. Build DNA index", 1, &timing_map);
 
