@@ -257,6 +257,7 @@ public:
         TranslateResults(bv, ws, res);
     };
     
+    /// This method uses horizontal aggregator with combined SHIFT+AND
     void FindAgg(const string& word, vector<pair<int, int>>& res)
     {
         if (word.empty())
@@ -278,6 +279,30 @@ public:
         unsigned ws = unsigned(word.size()) - 1;
         TranslateResults(bv, ws, res);
     };
+    
+    /// This method uses FUSED cache bloced aggregator with combined SHIFT+AND
+    void FindAggFused(const string& word, vector<pair<int, int>>& res)
+    {
+        if (word.empty())
+            return;
+        // first we setup aggregator, add a group of vectors to be processed
+        m_Agg.reset();
+        for (size_t i = 0; i < word.size(); ++i)
+        {
+            const bm::bvector<>& bv_mask = GetVector(word[i]);
+            m_Agg.add(&bv_mask);
+        }
+        
+        // now run the whole algorithm to get benefits of cache blocking
+        //
+        bm::bvector<> bv;
+        m_Agg.combine_shift_right_and(bv);
+        
+        // translate results from bvector of word ends to result
+        unsigned ws = unsigned(word.size()) - 1;
+        TranslateResults(bv, ws, res);
+    };
+
 
 
     void Serialize(const string& file_name)
@@ -461,6 +486,7 @@ int main(int argc, char *argv[])
             for (const auto& w : words)
             {
                 const string& word = get<0>(w);
+
                 THitList hits1;
                 {
                     bm::chrono_taker tt1("3. Search with strncmp", 1, &timing_map);
@@ -468,7 +494,7 @@ int main(int argc, char *argv[])
                                       word.c_str(), unsigned(word.size()),
                                       hits1);
                 }
- 
+
                 THitList hits2;
                 {
                     bm::chrono_taker tt1("4. Search with bvector SHIFT+AND", 1, &timing_map);
@@ -481,16 +507,23 @@ int main(int argc, char *argv[])
                     idx.FindAgg(word, hits3);
                 }
 
+                THitList hits4;
+                {
+                    bm::chrono_taker tt1("6. Search with aggregator fused SHIFT+AND", 1, &timing_map);
+                    idx.FindAggFused(word, hits4);
+                }
+
                 // check correctness
                 if (!hitlist_compare(hits1, hits2) ||
-                    !hitlist_compare(hits1, hits3)
+                    !hitlist_compare(hits2, hits3) ||
+                    !hitlist_compare(hits2, hits4)
                    )
                 {
                     cout << "Mismatch ERROR for: " <<  word << endl;
                 }
                 else
                 {
-                    cout << word << ":" << hits1.size() << " hits " << endl;
+                    cout << word << ":" << hits4.size() << " hits " << endl;
                 }
             }
         }
