@@ -145,6 +145,8 @@ public:
 
         \param bv_target - target vector (input is arg group 0)
      
+        @return bool if anything was found
+     
         @sa add, reset
     */
     void combine_shift_right_and(bvector_type& bv_target);
@@ -275,7 +277,7 @@ protected:
                          const bvector_type_const_ptr* bv_src_and, unsigned src_and_size,
                          const bvector_type_const_ptr* bv_src_sub, unsigned src_sub_size);
     
-    void combine_shift_right_and(unsigned i, unsigned j,
+    bool combine_shift_right_and(unsigned i, unsigned j,
                                  bvector_type& bv_target,
                                  const bvector_type_const_ptr* bv_src, unsigned src_size);
 
@@ -1495,17 +1497,17 @@ bool aggregator<BV>::shift_right_and(bvector_type& bv_target,
 
 template<typename BV>
 bool aggregator<BV>::combine_shift_right_and(
-                                            bvector_type& bv_target,
+                bvector_type& bv_target,
                 const bvector_type_const_ptr* bv_src_and, unsigned src_and_size,
                 bool any)
 {
     BM_ASSERT_THROW(src_size < max_aggregator_cap, BM_ERR_RANGE);
-    bv_target.init();
     if (!src_and_size)
     {
         bv_target.clear();
         return false;
     }
+    unsigned top_blocks = resize_target(bv_target, bv_src_and, src_and_size);
 
     // set initial carry overs all to 0
     for (unsigned k = 0; k < src_and_size; ++k) // reset co flags
@@ -1513,17 +1515,18 @@ bool aggregator<BV>::combine_shift_right_and(
 
     for (unsigned i = 0; i < bm::set_array_size; ++i)
     {
-/*
-        if (i >= bman_target.top_block_size())
+        if (i > top_blocks)
         {
             if (!this->any_carry_overs(src_and_size))
-                break;
+                break; // quit early if there is nothing to carry on
         }
-*/
+
         unsigned j = 0;
         do
         {
-            combine_shift_right_and(i, j, bv_target, bv_src_and, src_and_size);
+            bool found = combine_shift_right_and(i, j, bv_target, bv_src_and, src_and_size);
+            if (found && any)
+                return found;
         } while (++j < bm::set_array_size);
 
     } // for i
@@ -1534,7 +1537,7 @@ bool aggregator<BV>::combine_shift_right_and(
 // ------------------------------------------------------------------------
 
 template<typename BV>
-void aggregator<BV>::combine_shift_right_and(unsigned i, unsigned j,
+bool aggregator<BV>::combine_shift_right_and(unsigned i, unsigned j,
                                              bvector_type& bv_target,
                                         const bvector_type_const_ptr* bv_src,
                                         unsigned src_size)
@@ -1572,7 +1575,7 @@ void aggregator<BV>::combine_shift_right_and(unsigned i, unsigned j,
     for (unsigned k = 1; k < src_size; ++k)
     {
         unsigned carry_over = carry_overs[k];
-        if (!acc) // target block is empty
+        if (!acc) // target block is already empty
         {
             BM_ASSERT(bm::bit_is_all_zero(blk));
             if (!carry_over)
@@ -1628,11 +1631,9 @@ void aggregator<BV>::combine_shift_right_and(unsigned i, unsigned j,
             bman_target.check_allocate_block(
                               nblock, 0, 0, &block_type, false);
         bm::bit_block_copy(new_block, blk);
+        return true;
     }
-    else
-    {
-        BM_ASSERT(bm::bit_is_all_zero(blk));
-    }
+    return false;
 }
 
 // ------------------------------------------------------------------------
