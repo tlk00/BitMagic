@@ -1257,10 +1257,17 @@ template<typename BV>
 bool aggregator<BV>::shift_right_and(bvector_type& bv_target,
                                      const bvector_type& bv_mask)
 {
+    unsigned any = 0;
+    const blocks_manager_type& bman_arg = bv_mask.get_blocks_manager();
+
+    if (!bman_arg.is_init()) // nothing to do
+    {
+        bv_target.clear();
+        return any;
+    }
+
     typename bvector_type::mem_pool_guard mp_guard;
     mp_guard.assign_if_not_set(pool_, bv_target); // set algorithm-local memory pool to avoid heap contention
-
-    unsigned any = 0;
     
     blocks_manager_type& bman_target = bv_target.get_blocks_manager();
     if (!bman_target.is_init())
@@ -1268,13 +1275,10 @@ bool aggregator<BV>::shift_right_and(bvector_type& bv_target,
     if (bv_target.size_ < bm::id_max)
         ++bv_target.size_;
     
-    const blocks_manager_type& bman_arg = bv_mask.get_blocks_manager();
-
     int block_type;
     bm::word_t carry_over = 0;
     
-    unsigned top_blocks = bman_target.top_block_size();
-    
+    unsigned top_blocks = bman_target.top_block_size();    
     bm::word_t*** blk_root = bman_target.top_blocks_root();
     bm::word_t** blk_blk;
     bm::word_t* block;
@@ -1334,10 +1338,14 @@ bool aggregator<BV>::shift_right_and(bvector_type& bv_target,
             {
                 if (carry_over)
                 {
-                    bm::word_t w0 = carry_over;
+                    bm::word_t w0 = 0;
                     if (arg_blk)
-                        w0 &= arg_blk[0];
-                    
+                    {
+                        unsigned arg0 = BM_IS_GAP(arg_blk) ?
+                                        bm::gap_test(BMGAP_PTR(arg_blk), 0)
+                                        : arg_blk[0];
+                        w0 = (carry_over & arg0);
+                    }
                     if (w0)
                     {
                         block =
@@ -1346,7 +1354,7 @@ bool aggregator<BV>::shift_right_and(bvector_type& bv_target,
                         blk_blk = blk_root[i];
                         any = block[0] = w0;
                     }
-                    carry_over = 0; block = 0;
+                    carry_over = 0;
                 }
                 // no CO - tight loop scan for the next available block
                 // (optimizational only)
@@ -1366,8 +1374,29 @@ bool aggregator<BV>::shift_right_and(bvector_type& bv_target,
                 }
             }
             
-            if (BM_IS_GAP(block) || IS_FULL_BLOCK(block))
+            // check for various cases, when we can avoid de-optimization
+            // and go with predicted result
+            //
+            if (BM_IS_GAP(block))
             {
+                block = bman_target.deoptimize_block(nblock);
+            }
+            else
+            if (IS_FULL_BLOCK(block)) // 0|1 into 11111 => (co==1)
+            {
+                if (carry_over) // 1 into 11111 => (co==1)
+                {
+                    if (IS_FULL_BLOCK(arg_blk)) // result is 1111, nothing to do
+                        continue;
+                }
+                // 0|1 into 111111 => co==1
+                if (!arg_blk) // result is zero, co==1
+                {
+                    bman_target.zero_block(nblock);
+                    carry_over = 1;
+                    continue;
+                }
+                
                 block = bman_target.deoptimize_block(nblock);
             }
 
@@ -1384,7 +1413,11 @@ bool aggregator<BV>::shift_right_and(bvector_type& bv_target,
             {
                 if (arg_blk) // use fast fused SHIFT-AND operation
                 {
-                    carry_over =
+                    if (IS_FULL_BLOCK(arg_blk)) // AND is no-op (do SHIFT-R)
+                        carry_over =
+                        bm::bit_block_shift_r1_unr(block, &acc, carry_over);
+                    else // do fused SHIFT-R-AND
+                        carry_over =
                         bm::bit_block_shift_r1_and_unr(block, arg_blk,
                                                         &acc, carry_over);
                 }
