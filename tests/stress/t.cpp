@@ -1504,6 +1504,31 @@ unsigned BitCountChange(unsigned word)
 }
 
 static
+void DetailedCheckVectors(const bvect      &bv1,
+                          const bvect      &bv2)
+{
+    bvect::enumerator en1 = bv1.first();
+    bvect::enumerator en2 = bv2.first();
+    
+    while (en1.valid())
+    {
+        if (!en2.valid())
+        {
+            cout << "Second vector - invalid enumerator at:" << *en1;
+            return;
+        }
+        if (*en1 != *en2)
+        {
+            cout << "Discrepancy at bit position: " << *en1;
+            cout << " second vector is at:" << *en2;
+            return;
+        }
+        ++en1;
+        ++en2;
+    }
+}
+
+static
 void DetailedCheckVectors(const bvect_mini &bvect_min, 
                           const bvect      &bvect_full,
                           unsigned size)
@@ -2238,7 +2263,12 @@ void BasicFunctionalityTest()
                  ;
             exit(1);
         }
+        if (i % 1000 == 0)
+        {
+            cout << "\r" << i << " / " << ITERATIONS << flush;
+        }
     }
+    cout << endl;
 
     
     CheckCountRange(bvect_full, 0, ITERATIONS);
@@ -2560,6 +2590,13 @@ void BvectorShiftTest()
     unsigned cnt1 = bv.count();
     assert(cnt1 == cnt - 1);
     assert(bv.test(0)==0);
+    assert(bv.test(1)==1);
+
+    struct bvect::statistics st;
+    bv.calc_stat(&st);
+    auto bcnt = st.bit_blocks + st.gap_blocks;
+    assert(bcnt == 2);
+
     }
     
     {
@@ -2604,7 +2641,7 @@ void BvectorShiftTest()
             assert(start == bm::id_max-1);
             break;
         }
-        
+
         if ((start % 1000000) == 0)
         {
             f = std::chrono::steady_clock::now();
@@ -4440,6 +4477,7 @@ void AggregatorTest()
 
     bm::aggregator<bvect> agg;
     
+    cout << "AND-SUB tests..." << endl;
     {
         bvect bv1, bv2, bv3;
         bvect bv_empty;
@@ -4614,6 +4652,170 @@ void AggregatorTest()
         assert(bv4.count()==0);
         assert(!bv4.any());
     }
+    
+    // SHIFT-R_AND
+    
+    cout << "SHIFT-R-AND tests..." << endl;
+    
+    {
+    bvect bv1, bv2;
+    bv1[0] = true;
+    bv1[65535]=true;
+    
+    bv2[1]=true;
+    bv2[65536]=true;
+    
+    bool any = agg.shift_right_and(bv1, bv2);
+    assert(any);
+    assert(bv1.count()==2);
+    assert(bv1.test(1));
+    assert(bv1.test(65536));
+    }
+
+    {
+    bvect bv1, bv2;
+    bv1[0] = true;
+    bv1[65535]=true;
+
+    bv2[0]=true;
+    bv2[65535]=true;
+    
+    bool any = agg.shift_right_and(bv1, bv2);
+    assert(!any);
+    assert(bv1.count()==0);
+    }
+
+
+    {
+    bvect bv1, bv2;
+    bv1[0] = true;
+    bv1[65535]=true;
+    bv1.optimize();
+
+    bv2[1]=true;
+    bv2[65536]=true;
+    bv2.optimize();
+
+    agg.shift_right_and(bv1, bv2);
+    assert(bv1.count()==2);
+    assert(bv1.test(1));
+    assert(bv1.test(65536));
+    }
+
+
+    {
+    bvect bv1, bv2;
+    bv1[65535]=true;
+    
+    bv2[65536]=true;
+    bv2.optimize();
+    
+    bool any = agg.shift_right_and(bv1, bv2);
+    assert(bv1.count()==1);
+    assert(bv1.test(65536));
+    assert(any);
+    struct bvect::statistics st1;
+    bv1.calc_stat(&st1);
+    auto bcnt = st1.bit_blocks + st1.gap_blocks;
+    assert(bcnt == 1);
+    }
+
+    
+    {
+    bvect bv1, bv2;
+    bv1[0] = true;
+    bv1[65535]=true;
+
+    bv2.invert();
+    
+    agg.shift_right_and(bv1, bv2);
+    assert(bv1.count()==2);
+    assert(bv1.test(1));
+    assert(bv1.test(65536));
+    }
+    
+    {
+    bvect bv1, bv2;
+    bvect bv1c, bv2c;
+    bv1.invert();
+    bv2.invert();
+    bv1c.invert();
+    bv2c.invert();
+
+    bv1c.shift_right();
+    bv1c &= bv2c;
+
+    bool any = agg.shift_right_and(bv1, bv2);
+
+    assert(any);
+    assert(!bv1.test(0));
+    assert(!bv1c.test(0));
+
+    struct bvect::statistics st1;
+    bv1.calc_stat(&st1);
+    auto bcnt = st1.bit_blocks + st1.gap_blocks;
+    cout << bcnt << endl;
+    assert(bcnt == 2);
+    
+    assert(bv1.count()==bv1c.count());
+    auto cmp = bv1c.compare(bv1);
+    assert(cmp==0);
+    }
+    
+    {
+    bvect bv1, bv2;
+    bv1.set_range(0, 65536*4);
+    bv2.set_range(0, 65536*4);
+    
+    bool any = agg.shift_right_and(bv1, bv2);
+    
+    assert(any);
+    assert(!bv1.test(0));
+    assert(bv1.count() == 65536*4);
+
+    struct bvect::statistics st1;
+    bv1.calc_stat(&st1);
+    auto bcnt = st1.bit_blocks + st1.gap_blocks;
+    assert(bcnt == 2);
+    }
+
+    {
+    bvect bv1, bv2;
+    bv1.set_range(0, 65536*4);
+    bv2.set_range(0, 65536*2);
+    
+    bool any = agg.shift_right_and(bv1, bv2);
+    
+    assert(any);
+    assert(!bv1.test(0));
+    assert(bv1.count() == 65536*2);
+
+    struct bvect::statistics st1;
+    bv1.calc_stat(&st1);
+    auto bcnt = st1.bit_blocks + st1.gap_blocks;
+    assert(bcnt == 2);
+    }
+
+
+    {
+    bvect bv1, bv2;
+    bv1.set_range(0, 65536*4);
+    bv2.set_range(65536, 65536+10);
+    
+    bool any = agg.shift_right_and(bv1, bv2);
+    
+    assert(any);
+    assert(!bv1.test(0));
+    cout << bv1.count() << endl;
+    assert(bv1.count() == 11);
+
+    struct bvect::statistics st1;
+    bv1.calc_stat(&st1);
+    auto bcnt = st1.bit_blocks + st1.gap_blocks;
+    assert(bcnt == 1);
+    }
+
+
 
   cout << "---------------------------- Aggregator Test OK" << endl;
 }
@@ -4904,6 +5106,93 @@ void StressTestAggregatorAND(unsigned repetitions)
   cout << "---------------------------- Aggregator AND Stress Test OK" << endl;
 }
 
+
+static
+void GenerateTestCollection(std::vector<bvect>* target, unsigned count = 30, unsigned vector_max = 40000000)
+{
+    assert(target);
+    bvect bv_common; // sub-vector common for all collection
+    bvect_mini bvect_min(vector_max);
+    
+    FillSetsRandomMethod(&bvect_min, &bv_common, 0, vector_max, 1);
+    
+    for (unsigned i = 0; i < count; ++i)
+    {
+        std::unique_ptr<bvect> bv (new bvect);
+        FillSetsRandomMethod(&bvect_min, bv.get(), 0, vector_max, 1);
+        *bv |= bv_common;
+        target->push_back(std::move(*bv));
+    } // for
+}
+
+static
+void StressTestAggregatorShiftAND(unsigned repeats)
+{
+   cout << "----------------------------StressTestAggregatorShiftAND " << endl;
+
+    unsigned vector_max = 400000000;
+    unsigned coll_size = 20;
+
+    for (unsigned r = 0; r < repeats; ++r)
+    {
+        bvect mask_bv; // mask vector
+        mask_bv.init();
+        bvect_mini bvect_min(vector_max);
+        FillSetsRandomMethod(&bvect_min, &mask_bv, 0, vector_max - (vector_max / 5), 1);
+
+        std::vector<bvect> bv_coll1;
+        GenerateTestCollection(&bv_coll1, coll_size, vector_max);
+        
+        std::vector<bvect> bv_coll2(bv_coll1);
+        
+        for (unsigned k = 0; k < bv_coll1.size(); ++k)
+        {
+            const bvect& bv1 = bv_coll1[k];
+            const bvect& bv2 = bv_coll2[k];
+            auto cmp = bv1.compare(bv2);
+            if (cmp != 0)
+            {
+                cerr << "Error: Input control mismatch! k=" << k << endl;
+                exit(1);
+            }
+        } // for
+
+
+        bm::aggregator<bvect> agg;
+
+        unsigned shift_repeats = 65536/3;
+        for (unsigned i = 0; i < shift_repeats; ++i)
+        {
+            for (unsigned k = 0; k < bv_coll1.size(); ++k)
+            {
+                bv_coll1[k].shift_right();
+                bv_coll1[k] &= mask_bv;
+            } // for
+            for (unsigned k = 0; k < bv_coll2.size(); ++k)
+            {
+                agg.shift_right_and(bv_coll2[k], mask_bv);
+            } // for
+            
+            for (unsigned k = 0; k < bv_coll1.size(); ++k)
+            {
+                const bvect& bv1 = bv_coll1[k];
+                const bvect& bv2 = bv_coll2[k];
+                auto cmp = bv1.compare(bv2);
+                if (cmp != 0)
+                {
+                    cerr << "Error: Mismatch! " << "STEP=" << i << " k=" << k << endl;
+                    DetailedCheckVectors(bv1, bv2);
+                    exit(1);
+                }
+            } // for
+            cout << "\r" << i << flush;
+        } // for
+        cout << "\n\n ---------- SHIFT-AND step: " << r << endl;
+    } // for
+    
+   cout << "\n----------------------------StressTestAggregatorShiftAND OK" << endl;
+
+}
 
 
 
@@ -15962,6 +16251,7 @@ int main(void)
 //avx2_i32_shift();
 ///return 0;
 
+
     TestRecomb();
 
     OptimGAPTest();
@@ -16072,6 +16362,8 @@ int main(void)
      StressTestAggregatorOR(100);
  
      StressTestAggregatorAND(100);
+
+     StressTestAggregatorShiftAND(5);
 
 //     StressTestAggregatorSUB(100);
 
