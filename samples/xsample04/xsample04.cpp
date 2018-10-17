@@ -17,7 +17,7 @@ For more information please visit:  http://bitmagic.io
 */
 
 /** \example xsample04.cpp
- 
+
 */
 
 /*! \file xsample04.cpp
@@ -86,7 +86,7 @@ int parse_args(int argc, char *argv[])
             show_help();
             return 0;
         }
-        
+
         if (arg == "-fa" || arg == "--fa")
         {
             if (i + 1 < argc)
@@ -129,6 +129,7 @@ int parse_args(int argc, char *argv[])
                 }
             }
         }
+
     } // for i
     return 0;
 }
@@ -150,24 +151,25 @@ static
 int load_FASTA(const std::string& fname, std::vector<char>& seq_vect)
 {
     bm::chrono_taker tt1("1. Parse FASTA", 1, &timing_map);
-    
+
     seq_vect.resize(0);
     std::ifstream fin(fname.c_str(), std::ios::in);
     if (!fin.good())
         return -1;
-    
+
     std::string line;
     for (unsigned i = 0; std::getline(fin, line); ++i)
     {
         if (line.empty() ||
             line.front() == '>')
             continue;
-        
+
         for (std::string::iterator it = line.begin(); it != line.end(); ++it)
             seq_vect.push_back(*it);
     } // for
     return 0;
 }
+
 
 
 /**
@@ -178,14 +180,13 @@ class DNA_FingerprintScanner
 {
 public:
     enum { eA = 0, eC, eG, eT, eN, eEnd };
-    
+
     DNA_FingerprintScanner() {}
-    
+
     /// Build fingerprint bit-vectors from the original sequence
     ///
     void Build(const vector<char>& sequence)
     {
-        {
         bm::bvector<>::insert_iterator iA = m_FPrintBV[eA].inserter();
         bm::bvector<>::insert_iterator iC = m_FPrintBV[eC].inserter();
         bm::bvector<>::insert_iterator iG = m_FPrintBV[eG].inserter();
@@ -216,9 +217,8 @@ public:
                 break;
             }
         }
-        }
     }
-    
+
     /// Return fingerprint bit-vector
     const bm::bvector<>& GetVector(char letter) const
     {
@@ -239,15 +239,15 @@ public:
         }
         throw runtime_error("Error. Invalid letter!");
     }
-    
+
     /// Find word strings
     ///    using oprtations on fingerprint vectors
-    void Find(const string& word, vector<pair<int, int>>& res)
+    void Find(const string& word, vector<unsigned>& res)
     {
         if (word.empty())
             return;
         bm::bvector<> bv(GetVector(word[0])); // step 1: copy first vector
-        
+
         // run series of shifts + logical ANDs
         for (size_t i = 1; i < word.size(); ++i)
         {
@@ -257,20 +257,20 @@ public:
             if (!any)
                 break;
         }
-        
+
         // translate results from bvector of word ends to result
         unsigned ws = unsigned(word.size()) - 1;
         TranslateResults(bv, ws, res);
     };
-    
+
     /// Find word strings.
     /// This method uses horizontal aggregator with combined SHIFT+AND.
-    void FindAgg(const string& word, vector<pair<int, int>>& res)
+    void FindAgg(const string& word, vector<unsigned>& res)
     {
         if (word.empty())
             return;
         bm::bvector<> bv(GetVector(word[0])); // step 1: copy first vector
-        
+
         // run series of shifts fused with logical ANDs using
         // re-used bm::aggregator<>
         //
@@ -281,14 +281,15 @@ public:
             if (!any)
                 break;
         }
-        
+
         // translate results from bvector of word ends to result
         unsigned ws = unsigned(word.size()) - 1;
         TranslateResults(bv, ws, res);
     };
-    
+
+
     /// This method uses FUSED cache bloced aggregator with combined SHIFT+AND
-    void FindAggFused(const string& word, vector<pair<int, int>>& res)
+    void FindAggFused(const string& word, vector<unsigned>& res)
     {
         if (word.empty())
             return;
@@ -299,17 +300,16 @@ public:
             const bm::bvector<>& bv_mask = GetVector(word[i]);
             m_Agg.add(&bv_mask);
         }
-        
+
         // now run the whole algorithm to get benefits of cache blocking
         //
         bm::bvector<> bv;
         m_Agg.combine_shift_right_and(bv);
-        
+
         // translate results from bvector of word ends to result
         unsigned ws = unsigned(word.size()) - 1;
         TranslateResults(bv, ws, res);
     };
-
 
 
     void Serialize(const string& file_name)
@@ -318,7 +318,6 @@ public:
         bm::serializer<bm::bvector<> > bvs;
         BM_DECLARE_TEMP_BLOCK(tb)
         bm::bvector<>::statistics st;
-        
         for (size_t i = 0; i < eEnd; ++i)
         {
             m_FPrintBV[i].optimize(tb, bm::bvector<>::opt_compress, &st);
@@ -330,30 +329,30 @@ public:
             os.write((const char*)buf, len);
         }
     }
-    
+
 protected:
 
     /// Translate search results vector using (word size) left shift
     ///
     void TranslateResults(const bm::bvector<>& bv,
                           unsigned left_shift,
-                          vector<pair<int, int>>& res)
+                          vector<unsigned>& res)
     {
         bm::bvector<>::enumerator en = bv.first();
         for (; en.valid(); ++en)
         {
             auto pos = *en;
-            res.emplace_back(pos - left_shift, pos);
+            res.push_back(pos - left_shift);
         }
     }
-    
+
 private:
     bm::bvector<>   m_FPrintBV[eEnd];
     aggregator_type m_Agg;
 };
 
 static const size_t WORD_SIZE = 28;
-using THitList = vector<pair<int, int>>;
+using THitList = vector<unsigned>;
 
 /// generate the most frequent words of specified length from the input sequence
 ///
@@ -365,46 +364,46 @@ void generate_kmers(vector<tuple<string,int>>& top_words,
                     unsigned word_size)
 {
     cout << "k-mer generation... " << endl;
-    typedef multimap<int,string, greater<int> > dest_map_type;
-    
+
     top_words.clear();
     lo_words.clear();
-    
+
     if (data.size() < word_size)
         return;
-    
+
     size_t end_pos = data.size() - word_size;
     size_t i = 0;
-    unordered_map<string, int> words;
+    map<string, int> words;
     while (i < end_pos)
     {
         string s(&data[i], word_size);
-        if (s.find("N") == string::npos)
+        if (s.find('N') == string::npos)
             words[s] += 1;
         i += word_size;
-        
         if (i % 10000 == 0)
         {
             cout << "\r" << i << "/" << end_pos << flush;
         }
     }
+
     cout << endl << "Picking k-mer samples..." << flush;
-    dest_map_type dst;
+
+    multimap<int,string, greater<int>> dst;
     for_each(words.begin(), words.end(), [&](const std::pair<string,int>& p) {
                  dst.emplace(p.second, p.first);
              });
- 
     {
-    dest_map_type::iterator it = dst.begin();
-    for(size_t count = 0; count < N && it !=dst.end(); ++it,++count)
-        top_words.emplace_back(it->second, it->first);
+        auto it = dst.begin();
+        for(size_t count = 0; count < N && it !=dst.end(); ++it,++count)
+            top_words.emplace_back(it->second, it->first);
     }
 
     {
-    dest_map_type::reverse_iterator it = dst.rbegin();
-    for(size_t count = 0; count < N && it !=dst.rend(); ++it,++count)
-        lo_words.emplace_back(it->second, it->first);
+        auto it = dst.rbegin();
+        for(size_t count = 0; count < N && it !=dst.rend(); ++it, ++count)
+            lo_words.emplace_back(it->second, it->first);
     }
+
     cout << "OK" << endl;
 }
 
@@ -412,34 +411,92 @@ void find_word_strncmp(vector<char>& data,
                        const char* word, unsigned word_size,
                        THitList& r)
 {
-    r.clear();
     if (data.size() < word_size)
         return;
-    
+
     size_t i = 0;
     size_t end_pos = data.size() - word_size;
     while (i < end_pos)
     {
-        if (strncmp(&data[i], word, word_size) == 0)
-        {
-            r.emplace_back(i, i + word_size - 1);
+        bool found = true;
+        for (size_t j = i, k = 0, l = word_size - 1; l > k; ++j, ++k, --l) {
+            if (data[j] != word[k] || data[i + l] != word[l]) {
+                found = false;
+                break;
+            }
+        }
+        if (found)
+            r.push_back(i);
+        ++i;
+    }
+}
+
+void find_words(const vector<char>& data,
+                vector<const char*> words,
+                unsigned word_size,
+                vector<vector<unsigned>>& hits)
+{
+    if (data.size() < word_size)
+        return;
+
+    size_t i = 0;
+    size_t end_pos = data.size() - word_size;
+    size_t words_size = words.size();
+    while (i < end_pos)
+    {
+        for (size_t idx = 0; idx < words_size; ++idx) {
+            auto& word = words[idx];
+            bool found = true;
+            for (size_t j = i, k = 0, l = word_size - 1; l > k; ++j, ++k, --l) {
+                if (data[j] != word[k] || data[i + l] != word[l]) {
+                    found = false;
+                    break;
+                }
+            }
+            if (found) {
+                hits[idx].push_back(i);
+                break;
+            }
+        }
+        ++i;
+    }
+}
+void find_words(const vector<char>& data,
+                vector<const char*> words,
+                unsigned word_size,
+                vector<unsigned>& hits)
+{
+    if (data.size() < word_size)
+        return;
+
+    size_t i = 0;
+    size_t end_pos = data.size() - word_size;
+    while (i < end_pos)
+    {
+        for (auto& word : words) {
+            bool found = true;
+            for (size_t j = i, k = 0, l = word_size - 1; l > k; ++j, ++k, --l) {
+                if (data[j] != word[k] || data[i + l] != word[l]) {
+                    found = false;
+                    break;
+                }
+            }
+            if (found) {
+                hits.push_back(i);
+                break;
+            }
         }
         ++i;
     }
 }
 
+
 bool hitlist_compare(const THitList& h1, const THitList& h2)
 {
     if (h1.size() != h2.size())
-    {
-        cerr << "HitList size error! " << h1.size() << " " << h2.size() << endl;
         return false;
-    }
-    for (size_t i = 0; i < h1.size(); ++i)
-    {
-        if (h1[i].first != h2[i].first)
-            return false;
-        if (h1[i].second != h2[i].second)
+    for (size_t i = 0; i < h1.size(); ++i) {
+        if (h1[i] != h2[i])
             return false;
     }
     return true;
@@ -455,7 +512,7 @@ int main(int argc, char *argv[])
         show_help();
         return 1;
     }
-    
+
     std::vector<char> seq_vect;
 
     try
@@ -471,29 +528,43 @@ int main(int argc, char *argv[])
                 return res;
             std::cout << "FASTA sequence size=" << seq_vect.size() << std::endl;
         }
-        
+
         if (is_search)
         {
             vector<tuple<string,int>> h_words;
             vector<tuple<string,int>> l_words;
-            
+
             vector<tuple<string,int>>& words = h_word_set ? h_words : l_words;
 
             // generate search sets for benchmarking
             //
             generate_kmers(h_words, l_words, seq_vect, 20, WORD_SIZE);
-            
+
             DNA_FingerprintScanner idx;
             {
                 bm::chrono_taker tt1("2. Build DNA index", 1, &timing_map);
 
                 idx.Build(seq_vect);
             }
-            
-            for (const auto& w : words)
+            vector<THitList> word_hits;
+            // search all words in one pass and
+            // store results in list of hits according to the order of words
             {
-                const string& word = get<0>(w);
+                vector<const char*> word_list;
+                for (const auto& w : words) {
+                    word_list.push_back(get<0>(w).c_str());
+                }
+                word_hits.resize(words.size());
+                for_each(word_hits.begin(), word_hits.end(), [](THitList& ht) {
+                        ht.reserve(12000);
+                    });
+                bm::chrono_taker tt1("7. Search all words in one pass", 1, &timing_map);
+                find_words(seq_vect, word_list, unsigned(WORD_SIZE), word_hits);
+            }
 
+            for (size_t word_idx = 0; word_idx < words.size(); ++ word_idx)
+            {
+                auto& word = get<0>(words[word_idx]);
                 THitList hits1;
                 {
                     bm::chrono_taker tt1("3. Search with strncmp", 1, &timing_map);
@@ -501,7 +572,6 @@ int main(int argc, char *argv[])
                                       word.c_str(), unsigned(word.size()),
                                       hits1);
                 }
-
                 THitList hits2;
                 {
                     bm::chrono_taker tt1("4. Search with bvector SHIFT+AND", 1, &timing_map);
@@ -513,7 +583,6 @@ int main(int argc, char *argv[])
                     bm::chrono_taker tt1("5. Search with aggregator SHIFT+AND", 1, &timing_map);
                     idx.FindAgg(word, hits3);
                 }
-
                 THitList hits4;
                 {
                     bm::chrono_taker tt1("6. Search with aggregator fused SHIFT+AND", 1, &timing_map);
@@ -521,16 +590,20 @@ int main(int argc, char *argv[])
                 }
 
                 // check correctness
-                if (!hitlist_compare(hits1, hits2) ||
-                    !hitlist_compare(hits2, hits3) ||
-                    !hitlist_compare(hits2, hits4)
-                   )
+                if (!hitlist_compare(hits1, hits2)
+                   || !hitlist_compare(hits2, hits3)
+                    || !hitlist_compare(hits3, hits4))
+                {
+                    cout << "Mismatch ERROR for: " <<  word << endl;
+                }
+                else
+                if (!hitlist_compare(word_hits[word_idx], hits1))
                 {
                     cout << "Mismatch ERROR for: " <<  word << endl;
                 }
                 else
                 {
-                    cout << word << ":" << hits4.size() << " hits " << endl;
+                    cout << word << ":" << hits1.size() << " hits " << endl;
                 }
             }
         }
