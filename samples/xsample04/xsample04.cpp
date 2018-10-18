@@ -515,7 +515,10 @@ void find_words(const vector<char>& data,
 bool hitlist_compare(const THitList& h1, const THitList& h2)
 {
     if (h1.size() != h2.size())
+    {
+        cerr << "size1 = " << h1.size() << " size2 = " << h2.size() << endl;
         return false;
+    }
     for (size_t i = 0; i < h1.size(); ++i)
     {
         if (h1[i] != h2[i])
@@ -572,6 +575,7 @@ int main(int argc, char *argv[])
             vector<THitList> word_hits;
             // search all words in one pass and
             // store results in list of hits according to the order of words
+
             {
                 vector<const char*> word_list;
                 for (const auto& w : words) {
@@ -591,6 +595,7 @@ int main(int argc, char *argv[])
             {
                 auto& word = get<0>(words[word_idx]);
                 THitList hits1;
+  
                 {
                     bm::chrono_taker tt1("3. String search 2-way", 1, &timing_map);
                     find_word_2way(seq_vect,
