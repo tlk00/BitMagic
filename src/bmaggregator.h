@@ -1547,7 +1547,7 @@ bool aggregator<BV>::combine_shift_right_and(unsigned i, unsigned j,
     bm::word_t* blk = ar_->tb1;
     unsigned char* carry_overs = &(ar_->carry_overs_[0]);
 
-    bm::word_t acc = 1; // by default currrent block has content
+    bm::id64_t digest = ~0ull; // start with a full content digest
 
     // first initial block is just copied over from the first AND
     {
@@ -1557,7 +1557,7 @@ bool aggregator<BV>::combine_shift_right_and(unsigned i, unsigned j,
         if (BM_IS_GAP(arg_blk))
         {
             bm::bit_block_set(blk, 0);
-            bm::gap_and_to_bitset(blk, BMGAP_PTR(arg_blk));
+            bm::gap_add_to_bitset(blk, BMGAP_PTR(arg_blk));
         }
         else
         {
@@ -1566,7 +1566,7 @@ bool aggregator<BV>::combine_shift_right_and(unsigned i, unsigned j,
             else
             {
                 bm::bit_block_set(blk, 0);
-                acc = 0;
+                digest ^= digest;
             }
         }
         carry_overs[0] = 0;
@@ -1575,7 +1575,7 @@ bool aggregator<BV>::combine_shift_right_and(unsigned i, unsigned j,
     for (unsigned k = 1; k < src_size; ++k)
     {
         unsigned carry_over = carry_overs[k];
-        if (!acc && !carry_over) // 0 into "00000" block >> 0
+        if (!digest && !carry_over) // 0 into "00000" block >> 0
         {
             BM_ASSERT(bm::bit_is_all_zero(blk));
             continue;
@@ -1585,31 +1585,31 @@ bool aggregator<BV>::combine_shift_right_and(unsigned i, unsigned j,
         
         if (BM_IS_GAP(arg_blk)) // GAP argument
         {
+            unsigned acc;
             carry_over = bm::bit_block_shift_r1_unr(blk, &acc, carry_over);
             if (acc)
             {
                 bm::gap_and_to_bitset(blk, BMGAP_PTR(arg_blk));
-                acc = !bm::bit_is_all_zero(blk);
             }
+            digest = bm::calc_block_digest0(blk); // TODO: integrate with SHIFT
         }
         else // 2 bit-blocks
         {
             if (arg_blk) // use fast fused SHIFT-AND operation
             {
-                if (FULL_BLOCK_REAL_ADDR == arg_blk) // AND is no-op (do SHIFT-R)
-                    carry_over =
-                        bm::bit_block_shift_r1_unr(blk, &acc, carry_over);
-                else                                   // fused SHIFT-R-AND
-                    carry_over =
-                        bm::bit_block_shift_r1_and_unr(blk, arg_blk,
-                                                       &acc, carry_over);
+                carry_over =
+                    bm::bit_block_shift_r1_and_unr(blk, carry_over, arg_blk,
+                                                   &digest);
+
             }
             else  // arg is zero - target block => zero
             {
                 unsigned co = blk[bm::set_block_size-1] >> 31; // carry out
-                if (acc)
+                if (digest)
+                {
                     bm::bit_block_set(blk, 0);
-                acc = blk[0] |= carry_over;
+                    digest ^= digest;
+                }
                 carry_over = co;
             }
         }
@@ -1617,7 +1617,7 @@ bool aggregator<BV>::combine_shift_right_and(unsigned i, unsigned j,
     } // for k
     
     // block now gets emitted into the target bit-vector
-    if (acc)
+    if (digest)
     {
         BM_ASSERT(!bm::bit_is_all_zero(blk));
         unsigned nblock = (i * bm::set_array_size) + j;

@@ -4178,6 +4178,70 @@ bool bit_block_shift_r1_and(bm::word_t* block,
 }
 
 /*!
+    @brief Right bit-shift of bit-block by 1 bit (reference) + AND
+    @param block      - bit-block pointer
+    @param co_flag    - carry over from the previous block
+    @param mask_block - mask bit-block pointer
+    @param digest     - block digest
+ 
+    @return carry over bit (1 or 0)
+    @ingroup bitfunc
+*/
+inline
+bool bit_block_shift_r1_and(bm::word_t* BMRESTRICT block,
+                            bm::word_t co_flag,
+                            const bm::word_t* BMRESTRICT mask_block,
+                            bm::id64_t* BMRESTRICT digest)
+{
+    BM_ASSERT(block);
+    BM_ASSERT(mask_block);
+    BM_ASSERT(digest);
+    
+    
+    bm::id64_t d = *digest;
+    for (unsigned di = 0; di < 64; ++di)
+    {
+        const unsigned d_base = di * bm::set_block_digest_wave_size;
+        bm::id64_t dmask = (1ull << di);
+        if (d & dmask) // digest stride not empty
+        {
+            bm::word_t acc = 0;
+            for (unsigned i = d_base; i < d_base + bm::set_block_digest_wave_size; ++i)
+            {
+                BM_ASSERT(i < bm::set_block_size);
+                
+                bm::word_t w = block[i];
+                bm::word_t co_flag1 = w >> 31;
+                w = (w << 1u) | co_flag;
+                acc |= block[i] = w & mask_block[i];
+                co_flag = co_flag1;
+            }
+            if (!acc)
+                d &= ~dmask; // update digest: clear stride bit
+        }
+        else // stride is empty
+        {
+            BM_ASSERT(block[d_base + bm::set_block_digest_wave_size -1]==0);
+            
+            if (co_flag) // there is carry-over
+            {
+                BM_ASSERT(co_flag == 1);
+                BM_ASSERT(block[d_base] == 0);
+                
+                block[d_base] = co_flag & mask_block[d_base];
+                if (block[d_base])
+                    d |= dmask; // update digest
+                co_flag = 0;
+            }
+        }
+    } // for di
+    
+    *digest = d;
+    return co_flag;
+}
+
+
+/*!
     @brief Right bit-shift of bit-block by 1 bit + AND(loop unrolled)
     @param block - bit-block pointer
     @param mask_block - mask bit-block pointer
@@ -4202,6 +4266,33 @@ bool bit_block_shift_r1_and_unr(bm::word_t* block,
     #endif
 }
 
+
+/*!
+    @brief Right bit-shift of bit-block by 1 bit (reference) + AND
+    @param block      - bit-block pointer
+    @param co_flag    - carry over from the previous block
+    @param mask_block - mask bit-block pointer
+    @param digest     - block digest
+ 
+    @return carry over bit (1 or 0)
+    @ingroup bitfunc
+*/
+inline
+bool bit_block_shift_r1_and_unr(bm::word_t* BMRESTRICT block,
+                                bm::word_t co_flag,
+                                const bm::word_t* BMRESTRICT mask_block,
+                                bm::id64_t* BMRESTRICT digest)
+{
+    BM_ASSERT(block);
+    BM_ASSERT(mask_block);
+    BM_ASSERT(digest);
+    
+    #if defined(VECT_SHIFT_R1_AND_D)
+        return VECT_SHIFT_R1_AND_D(block, co_flag, mask_block, digest);
+    #else
+        return bm::bit_block_shift_r1_and(block, co_flag, mask_block, digest);
+    #endif
+}
 
 
 /*!
@@ -4660,6 +4751,7 @@ bm::id64_t bit_block_and(bm::word_t* BMRESTRICT dst, const bm::word_t* BMRESTRIC
    \param dst - destination block.
    \param src - source block.
    \param digest - known digest of dst block
+   \param dcache - digest bit-count cache [in, out]
  
    \return new digest
 
