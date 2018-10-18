@@ -181,9 +181,11 @@ public:
                 }
                 else
                 {
+                    double sec = double(it->second.duration.count()) / 1000;
+
                     double ops = ((double)st.repeats / (double)it->second.duration.count()) * 1000;
                     std::cout << it->first << "; " << std::setprecision(4) << ops << " ops/sec; "
-                              << std::setprecision(4) << it->second.duration.count() << " ms" << std::endl;
+                              << std::setprecision(4) << sec << " sec." << std::endl;
                 }
                 }
                 break;
