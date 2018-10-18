@@ -252,7 +252,8 @@ public:
         for (size_t i = 1; i < word.size(); ++i)
         {
             bv.shift_right();
-            bv &= GetVector(word[i]);
+            const bm::bvector<>& bv_mask = GetVector(word[i]);
+            bv &= bv_mask;
             auto any = bv.any();
             if (!any)
                 break;
@@ -408,7 +409,7 @@ void generate_kmers(vector<tuple<string,int>>& top_words,
     cout << "OK" << endl;
 }
 
-/// Search substring using 2-way bi-directional comparison
+/// 2-way string matching
 ///
 void find_word_2way(vector<char>& data,
                        const char* word, unsigned word_size,
@@ -437,6 +438,7 @@ void find_word_2way(vector<char>& data,
 }
 
 /// Find all words in one pass (cache coherent algorithm)
+/// (variation of 2-way string matching for collection search)
 ///
 void find_words(const vector<char>& data,
                 vector<const char*> words,
@@ -580,7 +582,7 @@ int main(int argc, char *argv[])
                         ht.reserve(12000);
                     });
                 
-                bm::chrono_taker tt1("7. Search all words in one pass",
+                bm::chrono_taker tt1("7. String search 2-way single pass",
                                       unsigned(words.size()), &timing_map);
                 find_words(seq_vect, word_list, unsigned(WORD_SIZE), word_hits);
             }
