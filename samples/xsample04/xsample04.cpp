@@ -389,7 +389,8 @@ void generate_kmers(vector<tuple<string,int>>& top_words,
     cout << endl << "Picking k-mer samples..." << flush;
 
     multimap<int,string, greater<int>> dst;
-    for_each(words.begin(), words.end(), [&](const std::pair<string,int>& p) {
+    for_each(words.begin(), words.end(), [&](const std::pair<string,int>& p)
+    {
                  dst.emplace(p.second, p.first);
              });
     {
@@ -407,7 +408,9 @@ void generate_kmers(vector<tuple<string,int>>& top_words,
     cout << "OK" << endl;
 }
 
-void find_word_strncmp(vector<char>& data,
+/// Search substring using 2-way bi-directional comparison
+///
+void find_word_2way(vector<char>& data,
                        const char* word, unsigned word_size,
                        THitList& r)
 {
@@ -419,18 +422,22 @@ void find_word_strncmp(vector<char>& data,
     while (i < end_pos)
     {
         bool found = true;
-        for (size_t j = i, k = 0, l = word_size - 1; l > k; ++j, ++k, --l) {
-            if (data[j] != word[k] || data[i + l] != word[l]) {
+        for (size_t j = i, k = 0, l = word_size - 1; l > k; ++j, ++k, --l)
+        {
+            if (data[j] != word[k] || data[i + l] != word[l])
+            {
                 found = false;
                 break;
             }
         }
         if (found)
-            r.push_back(i);
+            r.push_back(unsigned(i));
         ++i;
     }
 }
 
+/// Find all words in one pass (cache coherent algorithm)
+///
 void find_words(const vector<char>& data,
                 vector<const char*> words,
                 unsigned word_size,
@@ -444,23 +451,29 @@ void find_words(const vector<char>& data,
     size_t words_size = words.size();
     while (i < end_pos)
     {
-        for (size_t idx = 0; idx < words_size; ++idx) {
+        for (size_t idx = 0; idx < words_size; ++idx)
+        {
             auto& word = words[idx];
             bool found = true;
-            for (size_t j = i, k = 0, l = word_size - 1; l > k; ++j, ++k, --l) {
-                if (data[j] != word[k] || data[i + l] != word[l]) {
+            for (size_t j = i, k = 0, l = word_size - 1; l > k; ++j, ++k, --l)
+            {
+                if (data[j] != word[k] || data[i + l] != word[l])
+                {
                     found = false;
                     break;
                 }
-            }
-            if (found) {
-                hits[idx].push_back(i);
+            } // for
+            if (found)
+            {
+                hits[idx].push_back(unsigned(i));
                 break;
             }
-        }
+        } // for
         ++i;
-    }
+    } // while
 }
+
+/*
 void find_words(const vector<char>& data,
                 vector<const char*> words,
                 unsigned word_size,
@@ -473,29 +486,36 @@ void find_words(const vector<char>& data,
     size_t end_pos = data.size() - word_size;
     while (i < end_pos)
     {
-        for (auto& word : words) {
+        for (auto& word : words)
+        {
             bool found = true;
-            for (size_t j = i, k = 0, l = word_size - 1; l > k; ++j, ++k, --l) {
-                if (data[j] != word[k] || data[i + l] != word[l]) {
+            for (size_t j = i, k = 0, l = word_size - 1; l > k; ++j, ++k, --l)
+            {
+                if (data[j] != word[k] || data[i + l] != word[l])
+                {
                     found = false;
                     break;
                 }
             }
-            if (found) {
-                hits.push_back(i);
+            if (found)
+            {
+                hits.push_back(unsigned(i));
                 break;
             }
         }
         ++i;
     }
 }
+*/
 
-
+/// Check search result match
+///
 bool hitlist_compare(const THitList& h1, const THitList& h2)
 {
     if (h1.size() != h2.size())
         return false;
-    for (size_t i = 0; i < h1.size(); ++i) {
+    for (size_t i = 0; i < h1.size(); ++i)
+    {
         if (h1[i] != h2[i])
             return false;
     }
@@ -546,6 +566,7 @@ int main(int argc, char *argv[])
 
                 idx.Build(seq_vect);
             }
+            
             vector<THitList> word_hits;
             // search all words in one pass and
             // store results in list of hits according to the order of words
@@ -558,7 +579,9 @@ int main(int argc, char *argv[])
                 for_each(word_hits.begin(), word_hits.end(), [](THitList& ht) {
                         ht.reserve(12000);
                     });
-                bm::chrono_taker tt1("7. Search all words in one pass", 1, &timing_map);
+                
+                bm::chrono_taker tt1("7. Search all words in one pass",
+                                      unsigned(words.size()), &timing_map);
                 find_words(seq_vect, word_list, unsigned(WORD_SIZE), word_hits);
             }
 
@@ -567,8 +590,8 @@ int main(int argc, char *argv[])
                 auto& word = get<0>(words[word_idx]);
                 THitList hits1;
                 {
-                    bm::chrono_taker tt1("3. Search with strncmp", 1, &timing_map);
-                    find_word_strncmp(seq_vect,
+                    bm::chrono_taker tt1("3. String search 2-way", 1, &timing_map);
+                    find_word_2way(seq_vect,
                                       word.c_str(), unsigned(word.size()),
                                       hits1);
                 }
@@ -591,7 +614,7 @@ int main(int argc, char *argv[])
 
                 // check correctness
                 if (!hitlist_compare(hits1, hits2)
-                   || !hitlist_compare(hits2, hits3)
+                    || !hitlist_compare(hits2, hits3)
                     || !hitlist_compare(hits3, hits4))
                 {
                     cout << "Mismatch ERROR for: " <<  word << endl;
