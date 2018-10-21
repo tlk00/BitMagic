@@ -64,6 +64,8 @@ For more information please visit:  http://bitmagic.io
 #undef VECT_IS_ONE_BLOCK
 
 #undef VECT_LOWER_BOUND_SCAN_U32
+#undef VECT_SHIFT_R1
+#undef VECT_SHIFT_R1_AND
 
 #undef BMI1_SELECT64
 #undef BMI2_SELECT64

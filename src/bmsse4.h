@@ -894,71 +894,15 @@ bool sse42_shift_r1(__m128i* block, unsigned* empty_acc, unsigned co1)
 
 /*!
     @brief block shift right by 1 plus AND
+
+    @return carry over flag
     @ingroup SSE4
 */
 inline
 bool sse42_shift_r1_and(__m128i* block,
+                        bm::word_t co1,
                         const __m128i* BMRESTRICT mask_block,
-                        unsigned* empty_acc, unsigned co1)
-{
-    __m128i* block_end =
-        ( __m128i*)((bm::word_t*)(block) + bm::set_block_size);
-    __m128i m1COshft, m2COshft;
-    __m128i mAcc = _mm_set1_epi32(0);
-
-    unsigned co2;
-
-    for (;block < block_end; block+=2, mask_block+=2)
-    {
-        __m128i m1A = _mm_load_si128(block);
-        __m128i m2A = _mm_load_si128(block+1);
-
-        __m128i m1CO = _mm_srli_epi32(m1A, 31);
-        __m128i m2CO = _mm_srli_epi32(m2A, 31);
-
-        co2 = _mm_extract_epi32(m1CO, 3);
-        
-        m1A = _mm_slli_epi32(m1A, 1); // (block[i] << 1u)
-        m2A = _mm_slli_epi32(m2A, 1);
-        
-        m1COshft = _mm_slli_si128 (m1CO, 4); // byte shift left by 1 int32
-        m1COshft = _mm_insert_epi32 (m1COshft, co1, 0);
-        
-        co1 = co2;
-        
-        co2 = _mm_extract_epi32(m2CO, 3);
-        
-        m2COshft = _mm_slli_si128 (m2CO, 4);
-        m2COshft = _mm_insert_epi32 (m2COshft, co1, 0);
-        
-        m1A = _mm_or_si128(m1A, m1COshft); // block[i] |= co_flag
-        m2A = _mm_or_si128(m2A, m2COshft);
-        
-        m1A = _mm_and_si128(m1A, _mm_load_si128(mask_block)); // block[i] &= mask_block[i]
-        m2A = _mm_and_si128(m2A, _mm_load_si128(mask_block+1)); // block[i] &= mask_block[i]
-
-        mAcc = _mm_or_si128(mAcc, m1A);
-        mAcc = _mm_or_si128(mAcc, m2A);
-
-        _mm_store_si128(block, m1A);
-        _mm_store_si128(block+1, m2A);
-
-        co1 = co2;
-    }
-    mAcc = _mm_or_si128(mAcc, mAcc);
-    *empty_acc = !_mm_testz_si128(mAcc, mAcc);
-    return co1;
-}
-
-/*!
-    @brief block shift right by 1 plus AND
-    @ingroup SSE4
-*/
-inline
-bool sse42_shift_r1_and_digest(__m128i* block,
-                              bm::word_t co1,
-                              const __m128i* BMRESTRICT mask_block,
-                              bm::id64_t* digest)
+                        bm::id64_t* digest)
 {
     bm::word_t* wblock = (bm::word_t*) block;
     const bm::word_t* mblock = (const bm::word_t*) mask_block;
@@ -1028,8 +972,7 @@ bool sse42_shift_r1_and_digest(__m128i* block,
                 BM_ASSERT(wblock[d_base] == 0);
                 
                 unsigned w0 = wblock[d_base] = co1 & mblock[d_base];
-                if (w0)
-                    d |= dmask; // update digest
+                d |= (dmask & (w0 << di)); // update digest (branchless if (w0))
                 co1 = 0;
             }
             if (!wd)  // digest is empty, no CO -> exit
@@ -1114,11 +1057,8 @@ bool sse42_shift_r1_and_digest(__m128i* block,
 #define VECT_SHIFT_R1(b, acc, co) \
     sse42_shift_r1((__m128i*)b, acc, co)
 
-#define VECT_SHIFT_R1_AND(b, m, acc, co) \
-    sse42_shift_r1_and((__m128i*)b, (__m128i*)m, acc, co)
-
-#define VECT_SHIFT_R1_AND_D(b, co, m, digest) \
-    sse42_shift_r1_and_digest((__m128i*)b, co, (__m128i*)m, digest)
+#define VECT_SHIFT_R1_AND(b, co, m, digest) \
+    sse42_shift_r1_and((__m128i*)b, co, (__m128i*)m, digest)
 
 
 #ifdef __GNUG__

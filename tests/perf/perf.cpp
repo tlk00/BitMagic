@@ -2423,6 +2423,7 @@ void BvectorShiftTest()
                 } // for
             } // for
         }
+
     }
 
     bvect mask_bv; // mask vector
@@ -2441,10 +2442,11 @@ void BvectorShiftTest()
             TimeTaker tt("bvector<>::shift_right()+AND ", REPEATS);
             for (unsigned i = 0; i < REPEATS; ++i)
             {
+                bvect bv(mask_bv);
                 for (unsigned k = 0; k < bv_coll1.size(); ++k)
                 {
-                    bv_coll1[k].shift_right();
-                    bv_coll1[k] &= mask_bv;
+                    bv.shift_right();
+                    bv &= bv_coll1[k];
                 } // for
             } // for
         }
@@ -2452,18 +2454,22 @@ void BvectorShiftTest()
 
     {
         bm::aggregator<bvect> agg;
+        
         {
             TimeTaker tt("aggregator::shift_right_and() ", REPEATS);
+            agg.add(&mask_bv);
+            for (unsigned k = 0; k < bv_coll2.size(); ++k)
+            {
+                agg.add(&bv_coll2[k]);
+            }
             for (unsigned i = 0; i < REPEATS; ++i)
             {
-                for (unsigned k = 0; k < bv_coll2.size(); ++k)
-                {
-                    agg.shift_right_and(bv_coll2[k], mask_bv);
-                } // for
-            } // for
+                bvect bv;
+                agg.combine_shift_right_and(bv);
+            }
         }
     }
-    
+/*
     // check correcness
     //
     for (unsigned k = 0; k < bv_coll1.size(); ++k)
@@ -2477,7 +2483,7 @@ void BvectorShiftTest()
             exit(1);
         }
     } // for
-
+*/
 
     //std::cout << bv_target1->count() << std::endl;
 }
@@ -2803,7 +2809,7 @@ int main(void)
 //    ptest();
 
     TimeTaker tt("TOTAL", 1);
-
+/*
     MemCpyTest();
 
     BitCountTest();
@@ -2829,7 +2835,7 @@ int main(void)
     EnumeratorTestGAP();
 
     EnumeratorGoToTest();
-
+*/
     BvectorShiftTest();
 
     RangeCopyTest();

@@ -1264,73 +1264,15 @@ bool avx2_shift_r1(__m256i* block, bm::word_t* empty_acc, unsigned co1)
     @brief fused block shift right by 1 plus AND
     @ingroup AVX2
 */
-inline
-bool avx2_shift_r1_and(__m256i* block, const __m256i* BMRESTRICT mask_block,
-                       bm::word_t* empty_acc, unsigned co1)
-{
-    const __m256i* block_end =
-        (const __m256i*)((bm::word_t*)(block) + bm::set_block_size);
-    
-    __m256i m1COshft, m2COshft;
-    __m256i mAcc = _mm256_set1_epi32(0);
-    __m256i mCOidx = _mm256_set_epi32(6, 5, 4, 3, 2, 1, 0, 0);
-    unsigned co2;
-
-    for ( ; block < block_end; block+=2, mask_block+=2)
-    {
-        __m256i m1A = _mm256_load_si256(block);
-        __m256i m2A = _mm256_load_si256(block+1);
-
-        if (!co1) // 0 shited >> into "00000..00"
-        {
-            __m256i mAOR = _mm256_or_si256(m1A, m2A);
-            if (_mm256_testz_si256(mAOR, mAOR)) // empty stride
-                continue; // nothing to do
-        }
-
-        __m256i m1CO = _mm256_srli_epi32(m1A, 31);
-        __m256i m2CO = _mm256_srli_epi32(m2A, 31);
-        
-        co2 = _mm256_extract_epi32(m1CO, 7);
-        
-        m1A = _mm256_slli_epi32(m1A, 1); // (block[i] << 1u)
-        m2A = _mm256_slli_epi32(m2A, 1);
-
-        // shift CO flags using +1 permute indexes, add CO to v[0]
-        m1COshft = _mm256_permutevar8x32_epi32(m1CO, mCOidx);
-        m1COshft = _mm256_insert_epi32(m1COshft, co1, 0); // v[0] = co_flag
-        
-        co1 = co2;
-        
-        co2 = _mm256_extract_epi32(m2CO, 7);
-        m2COshft = _mm256_permutevar8x32_epi32(m2CO, mCOidx);
-        m2COshft = _mm256_insert_epi32(m2COshft, co1, 0);
-
-        m1A = _mm256_or_si256(m1A, m1COshft); // block[i] |= co_flag
-        m2A = _mm256_or_si256(m2A, m2COshft);
-        
-        m1A = _mm256_and_si256(m1A, _mm256_load_si256(mask_block)); // block[i] &= mask_block[i]
-        m2A = _mm256_and_si256(m2A, _mm256_load_si256(mask_block+1));
-
-        _mm256_store_si256(block, m1A);
-        _mm256_store_si256(block+1, m2A);
-
-        mAcc = _mm256_or_si256(mAcc, m1A);
-        mAcc = _mm256_or_si256(mAcc, m2A);
-
-        co1 = co2;
-    } // for
-    
-    *empty_acc = !_mm256_testz_si256(mAcc, mAcc);
-    return co1;
-}
 
 inline
-bool avx2_shift_r1_and_digest(__m256i* block,
-                              bm::word_t co1,
-                              const __m256i* BMRESTRICT mask_block,
-                              bm::id64_t* digest)
+bool avx2_shift_r1_and(__m256i* block,
+                       bm::word_t co1,
+                       const __m256i* BMRESTRICT mask_block,
+                       bm::id64_t* digest)
 {
+    BM_ASSERT(*digest);
+
     bm::word_t* wblock = (bm::word_t*) block;
     const bm::word_t* mblock = (const bm::word_t*) mask_block;
 
@@ -1341,10 +1283,11 @@ bool avx2_shift_r1_and_digest(__m256i* block,
     
     bm::id64_t d, wd;
     wd = d = *digest;
-    for (unsigned di = 0; di < 64 ; ++di)
+    unsigned di = co1 ? 0 : unsigned(_tzcnt_u64(d)); // get first set bit
+    for (; di < 64 ; ++di)
     {
         const unsigned d_base = di * bm::set_block_digest_wave_size;
-        bm::id64_t dmask = (1ull << di);
+        const bm::id64_t dmask = (1ull << di);
         if (d & dmask) // digest stride NOT empty
         {
             block = (__m256i*) &wblock[d_base];
@@ -1363,14 +1306,15 @@ bool avx2_shift_r1_and_digest(__m256i* block,
                 m2A = _mm256_slli_epi32(m2A, 1);
 
                 // shift CO flags using +1 permute indexes, add CO to v[0]
-                m1COshft = _mm256_permutevar8x32_epi32(m1CO, mCOidx);
-                m1COshft = _mm256_insert_epi32(m1COshft, co1, 0); // v[0] = co_flag
+                m1COshft = _mm256_insert_epi32(
+                              _mm256_permutevar8x32_epi32(m1CO, mCOidx),
+                              co1, 0); // v[0] = co_flag
                 
                 co1 = co2;
-                
                 co2 = _mm256_extract_epi32(m2CO, 7);
-                m2COshft = _mm256_permutevar8x32_epi32(m2CO, mCOidx);
-                m2COshft = _mm256_insert_epi32(m2COshft, co1, 0);
+                m2COshft = _mm256_insert_epi32(
+                                _mm256_permutevar8x32_epi32(m2CO, mCOidx),
+                                co1, 0);
 
                 m1A = _mm256_or_si256(m1A, m1COshft); // block[i] |= co_flag
                 m2A = _mm256_or_si256(m2A, m2COshft);
@@ -1388,12 +1332,10 @@ bool avx2_shift_r1_and_digest(__m256i* block,
                 
             } // for i
             
-            if (_mm256_testz_si256(mAcc, mAcc))
-                d &= ~dmask; // clear digest bit
-//            else
-//                d |= dmask; // set digest bit
+            if (_mm256_testz_si256(mAcc, mAcc)) // test if OR accum is zero
+                d &= ~dmask;                    // clear the digest bit
             
-            wd = _blsr_u64(wd); // wd &= wd - 1;
+            wd = _blsr_u64(wd); // wd &= wd - 1; // reset lowest set bit
         }
         else // stride is empty
         {
@@ -1402,9 +1344,8 @@ bool avx2_shift_r1_and_digest(__m256i* block,
                 BM_ASSERT(co1 == 1);
                 BM_ASSERT(wblock[d_base] == 0);
                 
-                unsigned w0 = wblock[d_base] = co1 & mblock[d_base];
-                if (w0)
-                    d |= dmask; // update digest
+                unsigned w0 = wblock[d_base] = (co1 & mblock[d_base]);
+                d |= (dmask & (w0 << di)); // update digest (branchless if (w0))
                 co1 = 0;
             }
             if (!wd)  // digest is empty, no CO -> exit
@@ -1425,17 +1366,12 @@ inline
 void avx2_i32_shift()
 {
     unsigned shift_in = 80;
-    __m256i mIn = _mm256_set1_epi32(0);
-    mIn = _mm256_insert_epi32 (mIn, shift_in, 0);
-    
-    __m256i mMaskW0 = _mm256_set_epi32(-1, -1, -1, -1, -1, -1, -1, 0);
 
     __m256i mTest = _mm256_set_epi32(70, 60, 50, 40, 30, 20, 10, 100);
     __m256i mIdx  = _mm256_set_epi32(6, 5, 4, 3, 2, 1, 0, 0);
  
     __m256i m1shft = _mm256_permutevar8x32_epi32(mTest, mIdx);
-    m1shft = _mm256_and_si256(m1shft, mMaskW0); // clear: v[0] = 0
-    m1shft = _mm256_or_si256(m1shft, mIn); // assign v[0]: v[0] = shift_in
+     m1shft = _mm256_insert_epi32(m1shft, shift_in, 0);
  
     avx2_print256("m1shft=", m1shft);
 }
@@ -1964,8 +1900,6 @@ void avx2_bit_block_gather_scatter(unsigned* BMRESTRICT arr,
 }
 
 
-
-
 #ifdef __GNUG__
 #pragma GCC diagnostic pop
 #endif
@@ -2039,15 +1973,12 @@ void avx2_bit_block_gather_scatter(unsigned* BMRESTRICT arr,
 
 #define VECT_LOWER_BOUND_SCAN_U32(arr, target, from, to) \
     avx2_lower_bound_scan_u32(arr, target, from, to)
-    
+
 #define VECT_SHIFT_R1(b, acc, co) \
     avx2_shift_r1((__m256i*)b, acc, co)
 
-#define VECT_SHIFT_R1_AND(b, m, acc, co) \
-    avx2_shift_r1_and((__m256i*)b, (__m256i*)m, acc, co)
-
-#define VECT_SHIFT_R1_AND_D(b, co, m, digest) \
-    avx2_shift_r1_and_digest((__m256i*)b, co, (__m256i*)m, digest)
+#define VECT_SHIFT_R1_AND(b, co, m, digest) \
+    avx2_shift_r1_and((__m256i*)b, co, (__m256i*)m, digest)
 
 
 } // namespace

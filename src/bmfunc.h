@@ -4145,37 +4145,6 @@ bool bit_block_shift_r1_unr(bm::word_t* block,
     #endif
 }
 
-/*!
-    @brief Right bit-shift of bit-block by 1 bit (reference) + AND
-    @param block      - bit-block pointer
-    @param mask_block - mask bit-block pointer
-    @param empty_acc  - [out] contains 0 if block is empty
-    @param co_flag    - carry over from the previous block
- 
-    @return carry over bit (1 or 0)
-    @ingroup bitfunc
-*/
-inline
-bool bit_block_shift_r1_and(bm::word_t* block,
-                            const bm::word_t* mask_block,
-                            bm::word_t* empty_acc, bm::word_t co_flag)
-{
-    BM_ASSERT(block);
-    BM_ASSERT(mask_block);
-    BM_ASSERT(empty_acc);
-    
-    bm::word_t acc = 0;
-    for (unsigned i = 0; i < bm::set_block_size; ++i)
-    {
-        bm::word_t w = block[i];
-        bm::word_t co_flag1 = w >> 31;
-        w = (w << 1u) | co_flag;
-        acc |= block[i] = w & mask_block[i];
-        co_flag = co_flag1;
-    }
-    *empty_acc = acc;
-    return co_flag;
-}
 
 /*!
     @brief Right bit-shift of bit-block by 1 bit (reference) + AND
@@ -4195,7 +4164,7 @@ bool bit_block_shift_r1_and(bm::word_t* BMRESTRICT block,
 {
     BM_ASSERT(block);
     BM_ASSERT(mask_block);
-    BM_ASSERT(digest);
+    BM_ASSERT(digest && *digest);
     
     
     bm::id64_t d = *digest;
@@ -4229,8 +4198,7 @@ bool bit_block_shift_r1_and(bm::word_t* BMRESTRICT block,
                 BM_ASSERT(block[d_base] == 0);
                 
                 block[d_base] = co_flag & mask_block[d_base];
-                if (block[d_base])
-                    d |= dmask; // update digest
+                d |= (dmask & (block[d_base] << di)); // update d (branchless)
                 co_flag = 0;
             }
         }
@@ -4239,33 +4207,6 @@ bool bit_block_shift_r1_and(bm::word_t* BMRESTRICT block,
     *digest = d;
     return co_flag;
 }
-
-
-/*!
-    @brief Right bit-shift of bit-block by 1 bit + AND(loop unrolled)
-    @param block - bit-block pointer
-    @param mask_block - mask bit-block pointer
-    @param empty_acc - [out] contains 0 if block is empty
-    @param co_flag - carry over from the previous block
-
-    @return carry over bit (1 or 0)
-    @ingroup bitfunc
-*/
-inline
-bool bit_block_shift_r1_and_unr(bm::word_t* block,
-                                const bm::word_t* mask_block,
-                                bm::word_t* empty_acc, bm::word_t co_flag)
-{
-    BM_ASSERT(block);
-    BM_ASSERT(mask_block);
-    BM_ASSERT(empty_acc);
-    #if defined(VECT_SHIFT_R1_AND)
-        return VECT_SHIFT_R1_AND(block, mask_block, empty_acc, co_flag);
-    #else
-        return bm::bit_block_shift_r1_and(block, mask_block, empty_acc, co_flag);
-    #endif
-}
-
 
 /*!
     @brief Right bit-shift of bit-block by 1 bit (reference) + AND
@@ -4287,8 +4228,8 @@ bool bit_block_shift_r1_and_unr(bm::word_t* BMRESTRICT block,
     BM_ASSERT(mask_block);
     BM_ASSERT(digest);
     
-    #if defined(VECT_SHIFT_R1_AND_D)
-        return VECT_SHIFT_R1_AND_D(block, co_flag, mask_block, digest);
+    #if defined(VECT_SHIFT_R1_AND)
+        return VECT_SHIFT_R1_AND(block, co_flag, mask_block, digest);
     #else
         return bm::bit_block_shift_r1_and(block, co_flag, mask_block, digest);
     #endif

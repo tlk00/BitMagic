@@ -266,6 +266,7 @@ public:
 
     /// Find word strings.
     /// This method uses horizontal aggregator with combined SHIFT+AND.
+    /*
     void FindAgg(const string& word, vector<unsigned>& res)
     {
         if (word.empty())
@@ -287,7 +288,7 @@ public:
         unsigned ws = unsigned(word.size()) - 1;
         TranslateResults(bv, ws, res);
     };
-
+    */
 
     /// This method uses FUSED cache bloced aggregator with combined SHIFT+AND
     void FindAggFused(const string& word, vector<unsigned>& res)
@@ -311,25 +312,6 @@ public:
         unsigned ws = unsigned(word.size()) - 1;
         TranslateResults(bv, ws, res);
     };
-
-
-    void Serialize(const string& file_name)
-    {
-        ofstream os(file_name.c_str());
-        bm::serializer<bm::bvector<> > bvs;
-        BM_DECLARE_TEMP_BLOCK(tb)
-        bm::bvector<>::statistics st;
-        for (size_t i = 0; i < eEnd; ++i)
-        {
-            m_FPrintBV[i].optimize(tb, bm::bvector<>::opt_compress, &st);
-            // allocate serialization buffer
-            vector<unsigned char> v_buf(st.max_serialize_mem);
-            unsigned char*  buf = v_buf.data();//new unsigned char[st.max_serialize_mem];
-            // serialize to memory
-            unsigned len = bvs.serialize(m_FPrintBV[i], buf, st.max_serialize_mem);
-            os.write((const char*)buf, len);
-        }
-    }
 
 protected:
 
@@ -607,12 +589,13 @@ int main(int argc, char *argv[])
                     bm::chrono_taker tt1("4. Search with bvector SHIFT+AND", 1, &timing_map);
                     idx.Find(word, hits2);
                 }
-
+/*
                 THitList hits3;
                 {
                     bm::chrono_taker tt1("5. Search with aggregator SHIFT+AND", 1, &timing_map);
                     idx.FindAgg(word, hits3);
                 }
+*/
                 THitList hits4;
                 {
                     bm::chrono_taker tt1("6. Search with aggregator fused SHIFT+AND", 1, &timing_map);
@@ -621,8 +604,7 @@ int main(int argc, char *argv[])
 
                 // check correctness
                 if (!hitlist_compare(hits1, hits2)
-                    || !hitlist_compare(hits2, hits3)
-                    || !hitlist_compare(hits3, hits4))
+                    || !hitlist_compare(hits2, hits4))
                 {
                     cout << "Mismatch ERROR for: " <<  word << endl;
                 }
