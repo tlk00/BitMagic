@@ -34,6 +34,7 @@ For more information please visit:  http://bitmagic.io
 #include <iomanip>
 #include <utility>
 #include <memory>
+#include <stdarg.h>  
 
 #include <bm.h>
 #include <bmalgo.h>
@@ -4473,6 +4474,7 @@ void DesrializationTest2()
 
 // ------------------------------------------------------------------------
 
+static
 bool agg_shift_right_and(bm::aggregator<bvect>& agg,
                          bvect& bv_target,
                          const bvect* bv, ...)
