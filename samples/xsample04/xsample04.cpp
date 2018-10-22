@@ -264,31 +264,6 @@ public:
         TranslateResults(bv, ws, res);
     };
 
-    /// Find word strings.
-    /// This method uses horizontal aggregator with combined SHIFT+AND.
-    /*
-    void FindAgg(const string& word, vector<unsigned>& res)
-    {
-        if (word.empty())
-            return;
-        bm::bvector<> bv(GetVector(word[0])); // step 1: copy first vector
-
-        // run series of shifts fused with logical ANDs using
-        // re-used bm::aggregator<>
-        //
-        for (size_t i = 1; i < word.size(); ++i)
-        {
-            const bm::bvector<>& bv_mask = GetVector(word[i]);
-            bool any = m_Agg.shift_right_and(bv, bv_mask);
-            if (!any)
-                break;
-        }
-
-        // translate results from bvector of word ends to result
-        unsigned ws = unsigned(word.size()) - 1;
-        TranslateResults(bv, ws, res);
-    };
-    */
 
     /// This method uses FUSED cache bloced aggregator with combined SHIFT+AND
     void FindAggFused(const string& word, vector<unsigned>& res)
@@ -393,6 +368,7 @@ void generate_kmers(vector<tuple<string,int>>& top_words,
 
 /// 2-way string matching
 ///
+static
 void find_word_2way(vector<char>& data,
                        const char* word, unsigned word_size,
                        THitList& r)
@@ -422,6 +398,7 @@ void find_word_2way(vector<char>& data,
 /// Find all words in one pass (cache coherent algorithm)
 /// (variation of 2-way string matching for collection search)
 ///
+static
 void find_words(const vector<char>& data,
                 vector<const char*> words,
                 unsigned word_size,
@@ -457,43 +434,10 @@ void find_words(const vector<char>& data,
     } // while
 }
 
-/*
-void find_words(const vector<char>& data,
-                vector<const char*> words,
-                unsigned word_size,
-                vector<unsigned>& hits)
-{
-    if (data.size() < word_size)
-        return;
-
-    size_t i = 0;
-    size_t end_pos = data.size() - word_size;
-    while (i < end_pos)
-    {
-        for (auto& word : words)
-        {
-            bool found = true;
-            for (size_t j = i, k = 0, l = word_size - 1; l > k; ++j, ++k, --l)
-            {
-                if (data[j] != word[k] || data[i + l] != word[l])
-                {
-                    found = false;
-                    break;
-                }
-            }
-            if (found)
-            {
-                hits.push_back(unsigned(i));
-                break;
-            }
-        }
-        ++i;
-    }
-}
-*/
 
 /// Check search result match
 ///
+static
 bool hitlist_compare(const THitList& h1, const THitList& h2)
 {
     if (h1.size() != h2.size())
