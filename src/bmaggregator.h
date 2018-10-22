@@ -63,10 +63,37 @@ public:
         max_aggregator_cap = 256
     };
 
+    /// Codes for aggregation operations which can be pipelined for efficient execution
+    ///
+    enum operation
+    {
+        BM_NOT_DEFINED = 0,
+        BM_SHIFT_R_AND = 1
+    };
+
+    enum operation_status
+    {
+        op_undefined = 0,
+        op_prepared,
+        op_in_progress,
+        op_done
+    };
     
 public:
     aggregator();
     ~aggregator();
+
+    /** Get current operation code */
+    int get_operation() const { return operation_; }
+
+    /** Set operation code for the aggregator */
+    void set_operation(int op_code) { operation_ = op_code; }
+
+    /**
+        Prepare operation, create internal resources, analyse dependencies.
+        Prerequisites are: that operation is set and all argument vectors are added
+    */
+    void stage();
     
     // -----------------------------------------------------------------------
     
@@ -268,6 +295,9 @@ protected:
                          const bvector_type_const_ptr* bv_src_and, unsigned src_and_size,
                          const bvector_type_const_ptr* bv_src_sub, unsigned src_sub_size);
     
+    void prepare_shift_right_and(bvector_type& bv_target,
+                                 const bvector_type_const_ptr* bv_src, unsigned src_size);
+
     bool combine_shift_right_and(unsigned i, unsigned j,
                                  bvector_type& bv_target,
                                  const bvector_type_const_ptr* bv_src, unsigned src_size);
@@ -321,6 +351,8 @@ protected:
     
     const bm::word_t* get_arg_block(const bvector_type_const_ptr* bv_src,
                                     unsigned k, unsigned i, unsigned j);
+
+    bvector_type* check_create_target();
     
 private:
     /// Memory arena for logical operations
@@ -347,10 +379,15 @@ private:
     aggregator& operator=(const aggregator&) = delete;
     
 private:
-    arena*          ar_; ///< data arena ptr (heap allocated)
-    unsigned        arg_group0_size = 0;
-    unsigned        arg_group1_size = 0;
+    arena*               ar_; ///< data arena ptr (heap allocated)
+    unsigned             arg_group0_size = 0;
+    unsigned             arg_group1_size = 0;
     allocator_pool_type  pool_; ///< pool for operations with cyclic mem.use
+
+    int                  operation_ = 0; ///< operation code (default: not defined)
+    operation_status     operation_status = op_undefined;
+    bvector_type*        bv_target_ = 0; ///< target bit-vector
+    unsigned             top_block_size_ = 0; ///< operation top block (i) size
 };
 
 
@@ -372,6 +409,35 @@ aggregator<BV>::~aggregator()
 {
     BM_ASSERT(ar_);
     bm::aligned_free(ar_);
+    delete bv_target_; 
+}
+
+// ------------------------------------------------------------------------
+
+template<typename BV>
+typename aggregator<BV>::bvector_type* aggregator<BV>::check_create_target()
+{
+    if (!bv_target_)
+        bv_target_ = new bvector_type();
+    return bv_target_;
+}
+
+// ------------------------------------------------------------------------
+
+template<typename BV>
+void aggregator<BV>::stage()
+{
+    check_create_target(); // create target vector
+
+    switch (operation_)
+    {
+    case BM_NOT_DEFINED:
+        break;
+    case BM_SHIFT_R_AND:
+        break;
+    default:
+        BM_ASSERT(0);
+    } // switch
 }
 
 // ------------------------------------------------------------------------
@@ -1297,6 +1363,20 @@ void aggregator<BV>::combine_and_sub_horizontal(bvector_type& bv_target,
 // ------------------------------------------------------------------------
 
 template<typename BV>
+void aggregator<BV>::prepare_shift_right_and(bvector_type& bv_target,
+                                   const bvector_type_const_ptr* bv_src,
+                                   unsigned src_size)
+{
+    top_block_size_ = resize_target(bv_target, bv_src, src_size);
+
+    // set initial carry overs all to 0
+    for (unsigned i = 0; i < src_size; ++i) // reset co flags
+        ar_->carry_overs_[i] = 0;
+}
+
+// ------------------------------------------------------------------------
+
+template<typename BV>
 bool aggregator<BV>::combine_shift_right_and(
                 bvector_type& bv_target,
                 const bvector_type_const_ptr* bv_src_and, unsigned src_and_size,
@@ -1308,7 +1388,7 @@ bool aggregator<BV>::combine_shift_right_and(
         bv_target.clear();
         return false;
     }
-    unsigned top_blocks = resize_target(bv_target, bv_src_and, src_and_size);
+    prepare_shift_right_and(bv_target, bv_src_and, src_and_size);
 
     // set initial carry overs all to 0
     for (unsigned k = 0; k < src_and_size; ++k) // reset co flags
@@ -1316,7 +1396,7 @@ bool aggregator<BV>::combine_shift_right_and(
 
     for (unsigned i = 0; i < bm::set_array_size; ++i)
     {
-        if (i > top_blocks)
+        if (i > top_block_size_)
         {
             if (!this->any_carry_overs(src_and_size))
                 break; // quit early if there is nothing to carry on
