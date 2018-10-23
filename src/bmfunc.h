@@ -4191,14 +4191,16 @@ bool bit_block_shift_r1_and(bm::word_t* BMRESTRICT block,
         else // stride is empty
         {
             BM_ASSERT(block[d_base + bm::set_block_digest_wave_size -1]==0);
-            
+            BM_ASSERT(block[d_base]==0);
+
             if (co_flag) // there is carry-over
             {
                 BM_ASSERT(co_flag == 1);
                 BM_ASSERT(block[d_base] == 0);
                 
                 block[d_base] = co_flag & mask_block[d_base];
-                d |= (dmask & (block[d_base] << di)); // update d (branchless)
+                if (block[d_base])
+                    d |= dmask; // update d
                 co_flag = 0;
             }
         }
