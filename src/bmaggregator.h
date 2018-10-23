@@ -63,10 +63,27 @@ public:
         max_aggregator_cap = 256
     };
 
+    /// Codes for aggregation operations which can be pipelined for efficient execution
+    ///
+    enum operation
+    {
+        BM_NOT_DEFINED = 0,
+        BM_SHIFT_R_AND = 1
+    };
+
+    enum operation_status
+    {
+        op_undefined = 0,
+        op_prepared,
+        op_in_progress,
+        op_done
+    };
     
 public:
     aggregator();
     ~aggregator();
+
+
     
     // -----------------------------------------------------------------------
     
@@ -87,7 +104,7 @@ public:
     /**
         Reset aggregate groups, forget all attached vectors
     */
-    void reset() { arg_group0_size = arg_group1_size = 0; }
+    void reset();
 
     /**
         Aggregate added group of vectors using logical OR
@@ -252,10 +269,40 @@ public:
                                     unsigned src_sub_size);
 
     //@}
+    
+
+    // -----------------------------------------------------------------------
+
+    /*! @name Pipeline opreations */
+    //@{
+
+    /** Get current operation code */
+    int get_operation() const { return operation_; }
+
+    /** Set operation code for the aggregator */
+    void set_operation(int op_code) { operation_ = op_code; }
+
+    /**
+        Prepare operation, create internal resources, analyse dependencies.
+        Prerequisites are: that operation is set and all argument vectors are added
+    */
+    void stage(bm::word_t* temp_block);
+    
+    /**
+        Run a step of current arrgegation operation
+    */
+    operation_status run_step(unsigned i, unsigned j);
+    
+    operation_status get_operation_status() const { return operation_status_; }
+    
+    const bvector_type* get_target() const { return bv_target_; }
+    
+    //@}
 
 protected:
     typedef typename bvector_type::blocks_manager_type blocks_manager_type;
     
+
     void combine_or(unsigned i, unsigned j,
                     bvector_type& bv_target,
                     const bvector_type_const_ptr* bv_src, unsigned src_size);
@@ -268,6 +315,9 @@ protected:
                          const bvector_type_const_ptr* bv_src_and, unsigned src_and_size,
                          const bvector_type_const_ptr* bv_src_sub, unsigned src_sub_size);
     
+    void prepare_shift_right_and(bvector_type& bv_target,
+                                 const bvector_type_const_ptr* bv_src, unsigned src_size);
+
     bool combine_shift_right_and(unsigned i, unsigned j,
                                  bvector_type& bv_target,
                                  const bvector_type_const_ptr* bv_src, unsigned src_size);
@@ -321,6 +371,8 @@ protected:
     
     const bm::word_t* get_arg_block(const bvector_type_const_ptr* bv_src,
                                     unsigned k, unsigned i, unsigned j);
+
+    bvector_type* check_create_target();
     
 private:
     /// Memory arena for logical operations
@@ -347,12 +399,62 @@ private:
     aggregator& operator=(const aggregator&) = delete;
     
 private:
-    arena*          ar_; ///< data arena ptr (heap allocated)
-    unsigned        arg_group0_size = 0;
-    unsigned        arg_group1_size = 0;
+    arena*               ar_; ///< data arena ptr (heap allocated)
+    unsigned             arg_group0_size = 0;
+    unsigned             arg_group1_size = 0;
     allocator_pool_type  pool_; ///< pool for operations with cyclic mem.use
+
+    bm::word_t*          temp_blk_= 0;   ///< external temp block ptr
+    int                  operation_ = 0; ///< operation code (default: not defined)
+    operation_status     operation_status_ = op_undefined;
+    bvector_type*        bv_target_ = 0; ///< target bit-vector
+    unsigned             top_block_size_ = 0; ///< operation top block (i) size
 };
 
+
+
+
+// ------------------------------------------------------------------------
+//
+// ------------------------------------------------------------------------
+
+
+template<typename Agg, typename It>
+void aggregator_pipeline_execute(It  first, It last)
+{
+    BM_DECLARE_TEMP_BLOCK(tb1);
+
+    int pipeline_size = 0;
+    for (It it = first; it != last; ++it, ++pipeline_size)
+    {
+        Agg& agg = *(*it);
+        agg.stage(tb1);
+    }
+    for (unsigned i = 0; i < bm::set_array_size; ++i)
+    {
+        unsigned j = 0;
+        do
+        {
+            // run all aggregators for the [i,j] coordinate
+            for (It it = first; it != last; ++it)
+            {
+                Agg& agg = *(*it);
+                auto op_st = agg.get_operation_status();
+                if (op_st != Agg::op_done)
+                {
+                    op_st = agg.run_step(i, j);
+                    pipeline_size -= (op_st == Agg::op_done);
+                }
+            }
+            if (pipeline_size <= 0)
+            {
+                return;
+            }
+
+        } while (++j < bm::set_array_size);
+
+    } // for i
+}
 
 // ------------------------------------------------------------------------
 //
@@ -372,6 +474,26 @@ aggregator<BV>::~aggregator()
 {
     BM_ASSERT(ar_);
     bm::aligned_free(ar_);
+    delete bv_target_; 
+}
+
+// ------------------------------------------------------------------------
+
+template<typename BV>
+void aggregator<BV>::reset()
+{
+    arg_group0_size = arg_group1_size = operation_ = top_block_size_ = 0;
+    operation_status_ = op_undefined;
+}
+
+// ------------------------------------------------------------------------
+
+template<typename BV>
+typename aggregator<BV>::bvector_type* aggregator<BV>::check_create_target()
+{
+    if (!bv_target_)
+        bv_target_ = new bvector_type();
+    return bv_target_;
 }
 
 // ------------------------------------------------------------------------
@@ -1297,6 +1419,20 @@ void aggregator<BV>::combine_and_sub_horizontal(bvector_type& bv_target,
 // ------------------------------------------------------------------------
 
 template<typename BV>
+void aggregator<BV>::prepare_shift_right_and(bvector_type& bv_target,
+                                   const bvector_type_const_ptr* bv_src,
+                                   unsigned src_size)
+{
+    top_block_size_ = resize_target(bv_target, bv_src, src_size);
+
+    // set initial carry overs all to 0
+    for (unsigned i = 0; i < src_size; ++i) // reset co flags
+        ar_->carry_overs_[i] = 0;
+}
+
+// ------------------------------------------------------------------------
+
+template<typename BV>
 bool aggregator<BV>::combine_shift_right_and(
                 bvector_type& bv_target,
                 const bvector_type_const_ptr* bv_src_and, unsigned src_and_size,
@@ -1308,15 +1444,11 @@ bool aggregator<BV>::combine_shift_right_and(
         bv_target.clear();
         return false;
     }
-    unsigned top_blocks = resize_target(bv_target, bv_src_and, src_and_size);
-
-    // set initial carry overs all to 0
-    for (unsigned k = 0; k < src_and_size; ++k) // reset co flags
-        ar_->carry_overs_[k] = 0;
+    prepare_shift_right_and(bv_target, bv_src_and, src_and_size);
 
     for (unsigned i = 0; i < bm::set_array_size; ++i)
     {
-        if (i > top_blocks)
+        if (i > top_block_size_)
         {
             if (!this->any_carry_overs(src_and_size))
                 break; // quit early if there is nothing to carry on
@@ -1345,7 +1477,8 @@ bool aggregator<BV>::combine_shift_right_and(unsigned i, unsigned j,
 {
     typename bvector_type::blocks_manager_type& bman_target =
                                                 bv_target.get_blocks_manager();
-    bm::word_t* blk = ar_->tb1;
+    bm::word_t* blk = temp_blk_ ? temp_blk_ : ar_->tb1;
+//    bm::word_t* blk = ar_->tb1;
     unsigned char* carry_overs = &(ar_->carry_overs_[0]);
 
     bm::id64_t digest = ~0ull; // start with a full content digest
@@ -1367,7 +1500,7 @@ bool aggregator<BV>::combine_shift_right_and(unsigned i, unsigned j,
             else
             {
                 bm::bit_block_set(blk, 0);
-                digest ^= digest;
+                digest = 0;
             }
         }
         carry_overs[0] = 0;
@@ -1379,10 +1512,18 @@ bool aggregator<BV>::combine_shift_right_and(unsigned i, unsigned j,
         if (!digest && !carry_over) // 0 into "00000" block >> 0
         {
             BM_ASSERT(bm::bit_is_all_zero(blk));
+            for (; k < src_size; ++k)
+            {
+                if (carry_overs[k])
+                {
+                    --k;
+                    break;
+                }
+            }
             continue;
         }
-        const bm::word_t* arg_blk = get_arg_block(bv_src, k, i, j);
         
+        const bm::word_t* arg_blk = get_arg_block(bv_src, k, i, j);
         carry_overs[k] = process_shift_right_and(arg_blk, digest, carry_over);
     } // for k
     
@@ -1411,7 +1552,8 @@ bool aggregator<BV>::process_shift_right_and(const bm::word_t* arg_blk,
                                              digest_type&      digest,
                                              unsigned          carry_over)
 {
-    bm::word_t* blk = ar_->tb1;
+    bm::word_t* blk = temp_blk_ ? temp_blk_ : ar_->tb1;
+//    bm::word_t* blk = ar_->tb1;
     
     if (BM_IS_GAP(arg_blk)) // GAP argument
     {
@@ -1482,6 +1624,68 @@ bool aggregator<BV>::any_carry_overs(unsigned co_size) const
             return true;
     return false;
 }
+
+// ------------------------------------------------------------------------
+
+template<typename BV>
+void aggregator<BV>::stage(bm::word_t* temp_block)
+{
+    bvector_type* bv_target = check_create_target(); // create target vector
+    BM_ASSERT(bv_target);
+    
+    temp_blk_ = temp_block;
+
+    switch (operation_)
+    {
+    case BM_NOT_DEFINED:
+        break;
+    case BM_SHIFT_R_AND:
+        prepare_shift_right_and(*bv_target, ar_->arg_bv0, arg_group0_size);
+        operation_status_ = op_prepared;
+        break;
+    default:
+        BM_ASSERT(0);
+    } // switch
+}
+
+// ------------------------------------------------------------------------
+
+template<typename BV>
+typename aggregator<BV>::operation_status
+aggregator<BV>::run_step(unsigned i, unsigned j)
+{
+    BM_ASSERT(operation_status_ == op_prepared || operation_status_ == op_in_progress);
+    BM_ASSERT(j < bm::set_array_size);
+    
+    switch (operation_)
+    {
+    case BM_NOT_DEFINED:
+        break;
+        
+    case BM_SHIFT_R_AND:
+        {
+        if (i > top_block_size_)
+        {
+            if (!this->any_carry_overs(arg_group0_size))
+            {
+                operation_status_ = op_done;
+                return operation_status_;
+            }
+        }
+        //bool found =
+           this->combine_shift_right_and(i, j, *bv_target_,
+                                        ar_->arg_bv0, arg_group0_size);
+        operation_status_ = op_in_progress;
+        }
+        break;
+    default:
+        BM_ASSERT(0);
+        break;
+    } // switch
+    
+    return operation_status_;
+}
+
 
 // ------------------------------------------------------------------------
 
