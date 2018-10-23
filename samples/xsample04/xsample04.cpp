@@ -287,6 +287,44 @@ public:
         unsigned ws = unsigned(word.size()) - 1;
         TranslateResults(bv, ws, res);
     };
+    
+    void FindCollection(const vector<tuple<string,int> >& words,
+                        vector<vector<unsigned>>& hits)
+    {
+        vector<unique_ptr<aggregator_type> > agg_pipeline;
+        unsigned ws;
+
+        for (const auto& w : words)
+        {
+            unique_ptr<aggregator_type> agg_ptr(new aggregator_type());
+            agg_ptr->set_operation(aggregator_type::BM_SHIFT_R_AND);
+            
+            const string& word = get<0>(w);
+            for (size_t i = 0; i < word.size(); ++i)
+            {
+                const bm::bvector<>& bv_mask = GetVector(word[i]);
+                agg_ptr->add(&bv_mask);
+            }
+            
+            agg_pipeline.emplace_back(agg_ptr.release());
+            ws = unsigned(word.size()) - 1;
+        }
+
+        // run the pipeline
+        bm::aggregator_pipeline_execute<aggregator_type,
+           vector<unique_ptr<aggregator_type> >::iterator>(agg_pipeline.begin(), agg_pipeline.end());
+
+        // convert the results
+        for (size_t i = 0; i < agg_pipeline.size(); ++i)
+        {
+            const aggregator_type* agg_ptr = agg_pipeline[i].get();
+            auto bv = agg_ptr->get_target();
+            vector<unsigned> res;
+            res.reserve(12000);
+            TranslateResults(*bv, ws, res);
+            hits.emplace_back(res);
+        }
+    }
 
 protected:
 
@@ -482,8 +520,8 @@ int main(int argc, char *argv[])
 
         if (is_search)
         {
-            vector<tuple<string,int>> h_words;
-            vector<tuple<string,int>> l_words;
+            vector<tuple<string,int> > h_words;
+            vector<tuple<string,int> > l_words;
 
             vector<tuple<string,int>>& words = h_word_set ? h_words : l_words;
 
@@ -499,12 +537,16 @@ int main(int argc, char *argv[])
             }
             
             vector<THitList> word_hits;
+            vector<THitList> word_hits_agg;
+
             // search all words in one pass and
             // store results in list of hits according to the order of words
-
+            // (this method uses memory proximity
+            //  of searched words to maximize CPU cache hit rate)
             {
                 vector<const char*> word_list;
-                for (const auto& w : words) {
+                for (const auto& w : words)
+                {
                     word_list.push_back(get<0>(w).c_str());
                 }
                 word_hits.resize(words.size());
@@ -516,7 +558,19 @@ int main(int argc, char *argv[])
                                       unsigned(words.size()), &timing_map);
                 find_words(seq_vect, word_list, unsigned(WORD_SIZE), word_hits);
             }
+            
+            // collection search, runs all hits at once
+            //
+            {
+                bm::chrono_taker tt1("8. Aggregated search single pass",
+                                      unsigned(words.size()), &timing_map);
+                
+                idx.FindCollection(words, word_hits_agg);
+            }
 
+            
+            // a few variants of word-by-word searches
+            //
             for (size_t word_idx = 0; word_idx < words.size(); ++ word_idx)
             {
                 auto& word = get<0>(words[word_idx]);
@@ -533,13 +587,6 @@ int main(int argc, char *argv[])
                     bm::chrono_taker tt1("4. Search with bvector SHIFT+AND", 1, &timing_map);
                     idx.Find(word, hits2);
                 }
-/*
-                THitList hits3;
-                {
-                    bm::chrono_taker tt1("5. Search with aggregator SHIFT+AND", 1, &timing_map);
-                    idx.FindAgg(word, hits3);
-                }
-*/
                 THitList hits4;
                 {
                     bm::chrono_taker tt1("6. Search with aggregator fused SHIFT+AND", 1, &timing_map);
@@ -553,15 +600,17 @@ int main(int argc, char *argv[])
                     cout << "Mismatch ERROR for: " <<  word << endl;
                 }
                 else
-                if (!hitlist_compare(word_hits[word_idx], hits1))
+                if (!hitlist_compare(word_hits[word_idx], hits1)
+                    || !hitlist_compare(word_hits_agg[word_idx], hits1))
                 {
-                    cout << "Mismatch ERROR for: " <<  word << endl;
+                    cout << "Sigle pass mismatch ERROR for: " <<  word << endl;
                 }
                 else
                 {
                     cout << word << ":" << hits1.size() << " hits " << endl;
                 }
             }
+            
         }
 
         if (is_timing)  // print all collected timings
