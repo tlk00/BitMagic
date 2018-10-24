@@ -4168,7 +4168,15 @@ bool bit_block_shift_r1_and(bm::word_t* BMRESTRICT block,
     
     
     bm::id64_t d = *digest;
-    for (unsigned di = 0; di < 64; ++di)
+
+    unsigned di = 0;
+    if (!co_flag)
+    {
+        bm::id64_t t = d & -d;
+        di = bm::word_bitcount64(t - 1); // find start bit-index
+    }
+
+    for (; di < 64; ++di)
     {
         const unsigned d_base = di * bm::set_block_digest_wave_size;
         bm::id64_t dmask = (1ull << di);
@@ -4643,6 +4651,24 @@ void bit_block_copy(bm::word_t* BMRESTRICT dst, const bm::word_t* BMRESTRICT src
 {
 #ifdef BMVECTOPT
     VECT_COPY_BLOCK(dst, src);
+#else
+    ::memcpy(dst, src, bm::set_block_size * sizeof(bm::word_t));
+#endif
+}
+
+/*!
+   \brief Bitblock copy/stream operation.
+
+   \param dst - destination block.
+   \param src - source block.
+
+   @ingroup bitfunc
+*/
+inline
+void bit_block_stream(bm::word_t* BMRESTRICT dst, const bm::word_t* BMRESTRICT src)
+{
+#ifdef VECT_STREAM_BLOCK
+    VECT_STREAM_BLOCK(dst, src);
 #else
     ::memcpy(dst, src, bm::set_block_size * sizeof(bm::word_t));
 #endif
