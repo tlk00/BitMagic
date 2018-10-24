@@ -1040,7 +1040,7 @@ public:
         }
         return block;
     }
-
+    
 
     /*! @brief Fills all blocks with 0.
         @param free_mem - if true function frees the resources
@@ -1177,6 +1177,7 @@ public:
         return set_block(i, j, block, gap);
     }
 
+
     /**
         Places new block into descriptors table, returns old block's address.
         Old block is not deleted.
@@ -1221,10 +1222,11 @@ public:
         BM_ASSERT(src_block);
         BM_ASSERT(src_block != FULL_BLOCK_FAKE_ADDR);
         
+        reserve_top_blocks(i + 1);
         check_alloc_top_subblock(i);
         BM_ASSERT(top_blocks_[i][j]==0);
         bm::word_t* blk = top_blocks_[i][j] = alloc_.alloc_bit_block();
-        bm::bit_block_copy(blk, src_block);
+        bm::bit_block_stream(blk, src_block);
     }
 
 
