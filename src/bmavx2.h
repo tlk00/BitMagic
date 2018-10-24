@@ -1089,6 +1089,49 @@ void avx2_copy_block(__m256i* BMRESTRICT dst,
 }
 
 /*!
+    @brief AVX2 block copy
+    *dst = *src
+
+    @ingroup AVX2
+*/
+inline
+void avx2_stream_block(__m256i* BMRESTRICT dst,
+                       const __m256i* BMRESTRICT src)
+{
+    __m256i ymm0, ymm1, ymm2, ymm3;
+
+    const __m256i* BMRESTRICT src_end =
+        (const __m256i*)((bm::word_t*)(src) + bm::set_block_size);
+
+    do
+    {
+        ymm0 = _mm256_load_si256(src+0);
+        ymm1 = _mm256_load_si256(src+1);
+        ymm2 = _mm256_load_si256(src+2);
+        ymm3 = _mm256_load_si256(src+3);
+        
+        _mm256_stream_si256(dst+0, ymm0);
+        _mm256_stream_si256(dst+1, ymm1);
+        _mm256_stream_si256(dst+2, ymm2);
+        _mm256_stream_si256(dst+3, ymm3);
+        
+        ymm0 = _mm256_load_si256(src+4);
+        ymm1 = _mm256_load_si256(src+5);
+        ymm2 = _mm256_load_si256(src+6);
+        ymm3 = _mm256_load_si256(src+7);
+        
+        _mm256_stream_si256(dst+4, ymm0);
+        _mm256_stream_si256(dst+5, ymm1);
+        _mm256_stream_si256(dst+6, ymm2);
+        _mm256_stream_si256(dst+7, ymm3);
+
+        src += 8; dst += 8;
+
+    } while (src < src_end);
+}
+
+
+/*!
     @brief Invert bit-block
     *dst = ~*dst
     or
@@ -1266,10 +1309,10 @@ bool avx2_shift_r1(__m256i* block, bm::word_t* empty_acc, unsigned co1)
 */
 
 inline
-bool avx2_shift_r1_and(__m256i* block,
+bool avx2_shift_r1_and(__m256i* BMRESTRICT block,
                        bm::word_t co1,
                        const __m256i* BMRESTRICT mask_block,
-                       bm::id64_t* digest)
+                       bm::id64_t* BMRESTRICT digest)
 {
     BM_ASSERT(*digest);
 
@@ -1290,8 +1333,11 @@ bool avx2_shift_r1_and(__m256i* block,
         const bm::id64_t dmask = (1ull << di);
         if (d & dmask) // digest stride NOT empty
         {
-            block = (__m256i*) &wblock[d_base];
             mask_block = (__m256i*) &mblock[d_base];
+            _mm_prefetch ((const char*)mask_block, _MM_HINT_NTA);
+
+            block = (__m256i*) &wblock[d_base];
+
             for (unsigned i = 0; i < 2; ++i, block += 2, mask_block += 2)
             {
                 __m256i m1A = _mm256_load_si256(block);
@@ -1304,6 +1350,9 @@ bool avx2_shift_r1_and(__m256i* block,
                 
                 m1A = _mm256_slli_epi32(m1A, 1); // (block[i] << 1u)
                 m2A = _mm256_slli_epi32(m2A, 1);
+                
+                __m256i m1M = _mm256_load_si256(mask_block);
+                __m256i m2M = _mm256_load_si256(mask_block+1);
 
                 // shift CO flags using +1 permute indexes, add CO to v[0]
                 m1COshft = _mm256_insert_epi32(
@@ -1319,8 +1368,11 @@ bool avx2_shift_r1_and(__m256i* block,
                 m1A = _mm256_or_si256(m1A, m1COshft); // block[i] |= co_flag
                 m2A = _mm256_or_si256(m2A, m2COshft);
                 
-                m1A = _mm256_and_si256(m1A, _mm256_load_si256(mask_block)); // block[i] &= mask_block[i]
-                m2A = _mm256_and_si256(m2A, _mm256_load_si256(mask_block+1));
+//                m1A = _mm256_and_si256(m1A, _mm256_load_si256(mask_block)); // block[i] &= mask_block[i]
+//                m2A = _mm256_and_si256(m2A, _mm256_load_si256(mask_block+1));
+
+                m1A = _mm256_and_si256(m1A, m1M); // block[i] &= mask_block[i]
+                m2A = _mm256_and_si256(m2A, m2M);
 
                 _mm256_store_si256(block, m1A);
                 _mm256_store_si256(block+1, m2A);
@@ -1958,6 +2010,9 @@ void avx2_bit_block_gather_scatter(unsigned* BMRESTRICT arr,
 
 #define VECT_COPY_BLOCK(dst, src) \
     avx2_copy_block((__m256i*) dst, (__m256i*) (src))
+
+#define VECT_STREAM_BLOCK(dst, src) \
+    avx2_stream_block((__m256i*) dst, (__m256i*) (src))
 
 #define VECT_SET_BLOCK(dst, value) \
     avx2_set_block((__m256i*) dst, (value))

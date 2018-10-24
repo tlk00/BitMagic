@@ -913,7 +913,15 @@ bool sse42_shift_r1_and(__m128i* block,
 
     bm::id64_t d, wd;
     wd = d = *digest;
-    for (unsigned di = 0; di < 64 ; ++di)
+
+    unsigned di = 0;
+    if (!co1)
+    {
+        bm::id64_t t = d & -d;
+        di = _mm_popcnt_u64(t - 1); // find start bit-index
+    }
+
+    for (; di < 64 ; ++di)
     {
         const unsigned d_base = di * bm::set_block_digest_wave_size;
         bm::id64_t dmask = (1ull << di);
@@ -1038,6 +1046,9 @@ bool sse42_shift_r1_and(__m128i* block,
 
 #define VECT_COPY_BLOCK(dst, src) \
     sse2_copy_block((__m128i*) dst, (__m128i*) (src))
+
+#define VECT_STREAM_BLOCK(dst, src) \
+    sse2_stream_block((__m128i*) dst, (__m128i*) (src))
 
 #define VECT_SET_BLOCK(dst, value) \
     sse2_set_block((__m128i*) dst, value)
