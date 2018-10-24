@@ -665,11 +665,52 @@ void sse2_copy_block(__m128i* BMRESTRICT dst,
         _mm_store_si128(dst+6, xmm2);
         _mm_store_si128(dst+7, xmm3);
         
-        src += 8;
-        dst += 8;
+        src += 8; dst += 8;
         
     } while (src < src_end);    
 }
+
+/*!
+    @brief SSE2 block copy
+    *dst = *src
+
+    @ingroup SSE2
+*/
+BMFORCEINLINE
+void sse2_stream_block(__m128i* BMRESTRICT dst,
+                     const __m128i* BMRESTRICT src)
+{
+    __m128i xmm0, xmm1, xmm2, xmm3;
+    const __m128i* BMRESTRICT src_end =
+        (const __m128i*)((bm::word_t*)(src) + bm::set_block_size);
+
+    do
+    {
+        xmm0 = _mm_load_si128(src+0);
+        xmm1 = _mm_load_si128(src+1);
+        xmm2 = _mm_load_si128(src+2);
+        xmm3 = _mm_load_si128(src+3);
+        
+        _mm_stream_si128(dst+0, xmm0);
+        _mm_stream_si128(dst+1, xmm1);
+        _mm_stream_si128(dst+2, xmm2);
+        _mm_stream_si128(dst+3, xmm3);
+        
+        xmm0 = _mm_load_si128(src+4);
+        xmm1 = _mm_load_si128(src+5);
+        xmm2 = _mm_load_si128(src+6);
+        xmm3 = _mm_load_si128(src+7);
+        
+        _mm_stream_si128(dst+4, xmm0);
+        _mm_stream_si128(dst+5, xmm1);
+        _mm_stream_si128(dst+6, xmm2);
+        _mm_stream_si128(dst+7, xmm3);
+        
+        src += 8; dst += 8;
+        
+    } while (src < src_end);
+}
+
 
 /*! 
     @brief Invert bit block
