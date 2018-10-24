@@ -297,6 +297,8 @@ public:
     
     const bvector_type* get_target() const { return bv_target_; }
     
+    bm::word_t* get_temp_block() { return ar_->tb1; }
+    
     //@}
 
 protected:
@@ -422,13 +424,13 @@ private:
 template<typename Agg, typename It>
 void aggregator_pipeline_execute(It  first, It last)
 {
-    BM_DECLARE_TEMP_BLOCK(tb1);
+    bm::word_t* tb = (*first)->get_temp_block();
 
     int pipeline_size = 0;
     for (It it = first; it != last; ++it, ++pipeline_size)
     {
         Agg& agg = *(*it);
-        agg.stage(tb1);
+        agg.stage(tb);
     }
     for (unsigned i = 0; i < bm::set_array_size; ++i)
     {
@@ -436,7 +438,8 @@ void aggregator_pipeline_execute(It  first, It last)
         do
         {
             // run all aggregators for the [i,j] coordinate
-            for (It it = first; it != last; ++it)
+            unsigned w = 0;
+            for (It it = first; it != last; ++it, ++w)
             {
                 Agg& agg = *(*it);
                 auto op_st = agg.get_operation_status();
@@ -445,7 +448,7 @@ void aggregator_pipeline_execute(It  first, It last)
                     op_st = agg.run_step(i, j);
                     pipeline_size -= (op_st == Agg::op_done);
                 }
-            }
+            } // for it
             if (pipeline_size <= 0)
             {
                 return;
@@ -455,6 +458,7 @@ void aggregator_pipeline_execute(It  first, It last)
 
     } // for i
 }
+
 
 // ------------------------------------------------------------------------
 //
@@ -492,7 +496,10 @@ template<typename BV>
 typename aggregator<BV>::bvector_type* aggregator<BV>::check_create_target()
 {
     if (!bv_target_)
+    {
         bv_target_ = new bvector_type();
+        bv_target_->init();
+    }
     return bv_target_;
 }
 
@@ -1506,40 +1513,37 @@ bool aggregator<BV>::combine_shift_right_and(unsigned i, unsigned j,
         carry_overs[0] = 0;
     }
     
-    for (unsigned k = 1; k < src_size; ++k)
+    unsigned k = 1;
+    for (; k < src_size; )
     {
         unsigned carry_over = carry_overs[k];
         if (!digest && !carry_over) // 0 into "00000" block >> 0
         {
             BM_ASSERT(bm::bit_is_all_zero(blk));
-            for (; k < src_size; ++k)
-            {
-                if (carry_overs[k])
-                {
-                    --k;
-                    break;
-                }
-            }
+//if (!i && !j)
+//    std::cout << "1.k=" << k;
+
+            for (++k; k < src_size && !carry_overs[k]; ++k)
+            {}
+//if (!i && !j)
+//    std::cout << " 2.k=" << k << std::endl;
+
             continue;
         }
         
         const bm::word_t* arg_blk = get_arg_block(bv_src, k, i, j);
         carry_overs[k] = process_shift_right_and(arg_blk, digest, carry_over);
+        ++k;
     } // for k
     
     // block now gets emitted into the target bit-vector
     if (digest)
     {
-        BM_ASSERT(!bm::bit_is_all_zero(blk));
-        unsigned nblock = (i * bm::set_array_size) + j;
-        if (nblock == bm::set_total_blocks-1) // last possible block
-            blk[bm::set_block_size-1] &= ~(1u<<31); // clear the 1-bit tail
+//if (!i && !j)
+//    std::cout << " 3.k=" << k << std::endl;
 
-        int block_type;
-        bm::word_t* new_block =
-            bman_target.check_allocate_block(
-                              nblock, 0, 0, &block_type, false);
-        bm::bit_block_copy(new_block, blk);
+        BM_ASSERT(!bm::bit_is_all_zero(blk));
+        bman_target.copy_bit_block(i, j, blk);
         return true;
     }
     return false;
@@ -1554,7 +1558,7 @@ bool aggregator<BV>::process_shift_right_and(const bm::word_t* arg_blk,
 {
     bm::word_t* blk = temp_blk_ ? temp_blk_ : ar_->tb1;
 //    bm::word_t* blk = ar_->tb1;
-    
+
     if (BM_IS_GAP(arg_blk)) // GAP argument
     {
         if (digest)
