@@ -33,6 +33,7 @@ For more information please visit:  http://bitmagic.io
 #include <stdio.h>
 
 #include <stdexcept>
+#include <memory>
 #include <vector>
 #include <chrono>
 #include <map>
@@ -527,7 +528,7 @@ int main(int argc, char *argv[])
 
             // generate search sets for benchmarking
             //
-            generate_kmers(h_words, l_words, seq_vect, 20, WORD_SIZE);
+            generate_kmers(h_words, l_words, seq_vect, 25, WORD_SIZE);
 
             DNA_FingerprintScanner idx;
             {
@@ -543,6 +544,7 @@ int main(int argc, char *argv[])
             // store results in list of hits according to the order of words
             // (this method uses memory proximity
             //  of searched words to maximize CPU cache hit rate)
+            
             {
                 vector<const char*> word_list;
                 for (const auto& w : words)
@@ -567,7 +569,6 @@ int main(int argc, char *argv[])
                 
                 idx.FindCollection(words, word_hits_agg);
             }
-
             
             // a few variants of word-by-word searches
             //
@@ -607,7 +608,7 @@ int main(int argc, char *argv[])
                 }
                 else
                 {
-                    cout << word << ":" << hits1.size() << " hits " << endl;
+                    cout << word_idx << ": " <<  word << ": " << hits1.size() << " hits " << endl;
                 }
             }
             
