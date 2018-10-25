@@ -293,7 +293,7 @@ public:
                         vector<vector<unsigned>>& hits)
     {
         vector<unique_ptr<aggregator_type> > agg_pipeline;
-        unsigned ws;
+        unsigned ws = 0;
 
         for (const auto& w : words)
         {
