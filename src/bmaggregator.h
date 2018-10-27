@@ -1485,7 +1485,6 @@ bool aggregator<BV>::combine_shift_right_and(unsigned i, unsigned j,
     typename bvector_type::blocks_manager_type& bman_target =
                                                 bv_target.get_blocks_manager();
     bm::word_t* blk = temp_blk_ ? temp_blk_ : ar_->tb1;
-//    bm::word_t* blk = ar_->tb1;
     unsigned char* carry_overs = &(ar_->carry_overs_[0]);
 
     bm::id64_t digest = ~0ull; // start with a full content digest
@@ -1514,34 +1513,22 @@ bool aggregator<BV>::combine_shift_right_and(unsigned i, unsigned j,
     }
     
     unsigned k = 1;
-    for (; k < src_size; )
+    for (; k < src_size; ++k)
     {
         unsigned carry_over = carry_overs[k];
         if (!digest && !carry_over) // 0 into "00000" block >> 0
         {
             BM_ASSERT(bm::bit_is_all_zero(blk));
-//if (!i && !j)
-//    std::cout << "1.k=" << k;
-
-            for (++k; k < src_size && !carry_overs[k]; ++k)
-            {}
-//if (!i && !j)
-//    std::cout << " 2.k=" << k << std::endl;
-
             continue;
         }
         
         const bm::word_t* arg_blk = get_arg_block(bv_src, k, i, j);
         carry_overs[k] = process_shift_right_and(arg_blk, digest, carry_over);
-        ++k;
     } // for k
     
     // block now gets emitted into the target bit-vector
     if (digest)
     {
-//if (!i && !j)
-//    std::cout << " 3.k=" << k << std::endl;
-
         BM_ASSERT(!bm::bit_is_all_zero(blk));
         bman_target.copy_bit_block(i, j, blk);
         return true;
@@ -1557,7 +1544,6 @@ bool aggregator<BV>::process_shift_right_and(const bm::word_t* arg_blk,
                                              unsigned          carry_over)
 {
     bm::word_t* blk = temp_blk_ ? temp_blk_ : ar_->tb1;
-//    bm::word_t* blk = ar_->tb1;
 
     if (BM_IS_GAP(arg_blk)) // GAP argument
     {

@@ -1368,9 +1368,6 @@ bool avx2_shift_r1_and(__m256i* BMRESTRICT block,
                 m1A = _mm256_or_si256(m1A, m1COshft); // block[i] |= co_flag
                 m2A = _mm256_or_si256(m2A, m2COshft);
                 
-//                m1A = _mm256_and_si256(m1A, _mm256_load_si256(mask_block)); // block[i] &= mask_block[i]
-//                m2A = _mm256_and_si256(m2A, _mm256_load_si256(mask_block+1));
-
                 m1A = _mm256_and_si256(m1A, m1M); // block[i] &= mask_block[i]
                 m2A = _mm256_and_si256(m2A, m2M);
 
