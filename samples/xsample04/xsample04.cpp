@@ -242,7 +242,9 @@ public:
     }
 
     /// Find word strings
-    ///    using oprtations on fingerprint vectors
+    ///    using shift + and on fingerprint vectors
+    /// (horizontal, non-fused basic method)
+    ///
     void Find(const string& word, vector<unsigned>& res)
     {
         if (word.empty())
@@ -252,9 +254,11 @@ public:
         // run series of shifts + logical ANDs
         for (size_t i = 1; i < word.size(); ++i)
         {
-            bv.shift_right();
+            bv.shift_right();  // SHIFT the accumulator bit-vector
+            // get and AND the next fingerprint
             const bm::bvector<>& bv_mask = GetVector(word[i]);
             bv &= bv_mask;
+            
             auto any = bv.any();
             if (!any)
                 break;
@@ -266,7 +270,8 @@ public:
     };
 
 
-    /// This method uses FUSED cache bloced aggregator with combined SHIFT+AND
+    /// This method uses cache blocked aggregator with fused SHIFT+AND kernel
+    ///
     void FindAggFused(const string& word, vector<unsigned>& res)
     {
         if (word.empty())
@@ -289,6 +294,9 @@ public:
         TranslateResults(bv, ws, res);
     };
     
+    /// Find a set of words in one pass using pipeline
+    /// of aggregators (this is very experimental)
+    ///
     void FindCollection(const vector<tuple<string,int> >& words,
                         vector<vector<unsigned>>& hits)
     {
@@ -556,7 +564,7 @@ int main(int argc, char *argv[])
                         ht.reserve(12000);
                     });
                 
-                bm::chrono_taker tt1("7. String search 2-way single pass",
+                bm::chrono_taker tt1("6. String search 2-way single pass",
                                       unsigned(words.size()), &timing_map);
                 find_words(seq_vect, word_list, unsigned(WORD_SIZE), word_hits);
             }
@@ -564,7 +572,7 @@ int main(int argc, char *argv[])
             // collection search, runs all hits at once
             //
             {
-                bm::chrono_taker tt1("8. Aggregated search single pass",
+                bm::chrono_taker tt1("7. Aggregated search single pass",
                                       unsigned(words.size()), &timing_map);
                 
                 idx.FindCollection(words, word_hits_agg);
@@ -590,7 +598,7 @@ int main(int argc, char *argv[])
                 }
                 THitList hits4;
                 {
-                    bm::chrono_taker tt1("6. Search with aggregator fused SHIFT+AND", 1, &timing_map);
+                    bm::chrono_taker tt1("5. Search with aggregator fused SHIFT+AND", 1, &timing_map);
                     idx.FindAggFused(word, hits4);
                 }
 
