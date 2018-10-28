@@ -2031,6 +2031,9 @@ void avx2_bit_block_gather_scatter(unsigned* BMRESTRICT arr,
 
 #define VECT_SHIFT_R1_AND(b, co, m, digest) \
     avx2_shift_r1_and((__m256i*)b, co, (__m256i*)m, digest)
+    
+#define VECT_ARR_BLOCK_LOOKUP(idx, size, nb, start) \
+    avx2_idx_arr_block_lookup(idx, size, nb, start)
 
 
 } // namespace

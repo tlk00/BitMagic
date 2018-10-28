@@ -1464,6 +1464,9 @@ void avx2_bit_block_gather_scatter(unsigned* BMRESTRICT arr,
 #define VECT_IS_DIGEST_ZERO(start) \
     avx512_is_digest_zero((__m512i*)start)
 
+#define VECT_ARR_BLOCK_LOOKUP(idx, size, nb, start) \
+    avx2_idx_arr_block_lookup(idx, size, nb, start)
+
 
 
 } // namespace

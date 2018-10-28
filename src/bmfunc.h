@@ -6812,12 +6812,10 @@ unsigned idx_arr_block_lookup(const unsigned* idx, unsigned size, unsigned nb, u
     if (nb == unsigned(idx[size-1] >> bm::set_block_shift))
         return size;
     
-#if defined(BMAVX2OPT) || defined(BMAVX512OPT) || defined(BM64_AVX512)
-    return avx2_idx_arr_block_lookup(idx, size, nb, start);
-#elif defined(BMSSE42OPT)
-    return sse4_idx_arr_block_lookup(idx, size, nb, start);
+#if defined(VECT_ARR_BLOCK_LOOKUP)
+    return VECT_ARR_BLOCK_LOOKUP(idx, size, nb, start);
 #else
-    // use 64-bit variable for parallel compare (SIMD style)
+    // use 64-bit variable for parallel compare (pseudo-SIMD style)
     if (bm::conditional< sizeof(void*)==8 >::test())
     {
         const unsigned len = (size - start);

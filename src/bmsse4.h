@@ -694,7 +694,7 @@ unsigned sse4_lower_bound_scan_u32(const unsigned* BMRESTRICT arr,
      \internal
 */
 inline
-unsigned sse4_idx_arr_block_lookup(const unsigned* idx, unsigned size,
+unsigned sse42_idx_arr_block_lookup(const unsigned* idx, unsigned size,
                                    unsigned nb, unsigned start)
 {
     const unsigned unroll_factor = 8;
@@ -1070,6 +1070,9 @@ bool sse42_shift_r1_and(__m128i* block,
 
 #define VECT_SHIFT_R1_AND(b, co, m, digest) \
     sse42_shift_r1_and((__m128i*)b, co, (__m128i*)m, digest)
+
+#define VECT_ARR_BLOCK_LOOKUP(idx, size, nb, start) \
+    sse42_idx_arr_block_lookup(idx, size, nb, start)
 
 
 #ifdef __GNUG__
