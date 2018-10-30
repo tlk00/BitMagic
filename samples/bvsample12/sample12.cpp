@@ -74,7 +74,7 @@ void generate_test_vectors(std::vector<bm::id_t> &v1,
     {
         v1.push_back(j);
     }
-    for (j = 0; j < vector_max; j += 10)
+    for (j = 0; j < vector_max; j += 5)
     {
         v2.push_back(j);
     }
