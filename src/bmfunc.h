@@ -6801,51 +6801,69 @@ void bit_block_gather_scatter(TRGW* arr, const bm::word_t* blk,
 }
 
 /**
-    block boundaries look ahead
+    @brief block boundaries look ahead
+ 
+    @param idx - array to look into
+    @param size - array size
+    @param nb - block number to look ahead
+    @param start - start offset in idx
+ 
+    @return block boundary offset end (no more match at the returned offset)
+ 
     @internal
 */
 inline
 unsigned idx_arr_block_lookup(const unsigned* idx, unsigned size, unsigned nb, unsigned start)
 {
     BM_ASSERT(idx);
-    
-    if (nb == unsigned(idx[size-1] >> bm::set_block_shift))
-        return size;
+    BM_ASSERT(start < size);
     
 #if defined(VECT_ARR_BLOCK_LOOKUP)
     return VECT_ARR_BLOCK_LOOKUP(idx, size, nb, start);
 #else
-    // use 64-bit variable for parallel compare (pseudo-SIMD style)
-    if (bm::conditional< sizeof(void*)==8 >::test())
-    {
-        const unsigned len = (size - start);
-        const unsigned len_unr = len - (len % 2);
-        
-        idx += start;
-        bm::id64_t nb64 = (nb << 31) | nb;
-        
-        unsigned k;
-        for (k = 0; k < len_unr; k+=2)
-        {
-            bm::id64_t i64 =
-                ((idx[k] >> bm::set_block_shift) << 31) | (idx[k+1] >> bm::set_block_shift);
-            if (nb64 != i64)
-                break;
-        }
-        for (; k < len; ++k)
-        {
-            if (nb != unsigned(idx[k] >> bm::set_block_shift))
-                break;
-        }
-        return start + k;
-    }
-    
     for (;(start < size) &&
           (nb == unsigned(idx[start] >> bm::set_block_shift)); ++start)
     {}
     return start;
 #endif
 }
+
+// --------------------------------------------------------------
+
+/**
+    @brief set bits in a bit-block using global index
+ 
+    @param idx - array to look into
+    @param block - block pointer to set bits
+    @param start - index array start
+    @param stop  - index array stop in a range [start..stop)
+
+    @return block boundary offset end (no more match at the returned offset)
+ 
+    @internal
+    @ingroup bitfunc
+*/
+inline
+void set_block_bits(bm::word_t* BMRESTRICT block,
+                    const unsigned* BMRESTRICT idx,
+                    unsigned start, unsigned stop )
+{
+#if defined(VECT_SET_BLOCK_BITS)
+    VECT_SET_BLOCK_BITS(block, idx, start, stop);
+#else
+    for (unsigned i = start; i < stop; ++i)
+    {
+        unsigned n = idx[i];
+        unsigned nbit = unsigned(n & bm::set_block_mask);
+        unsigned nword  = nbit >> bm::set_word_shift;
+        nbit &= bm::set_word_mask;
+        bm::word_t mask = (1u << nbit);
+        block[nword] |= mask;
+    } // for i
+#endif
+}
+
+
 
 // --------------------------------------------------------------
 

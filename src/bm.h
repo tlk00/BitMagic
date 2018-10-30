@@ -1450,6 +1450,18 @@ public:
     }
     
     /*!
+       \brief Set list of bits in this bitset to 1.
+     
+       Method implements optimized bulk setting of multiple bits at once.
+       The best results are achieved when the imput comes sorted.
+     
+       @param ids  - pointer on array of indexes to set
+       @param size - size of the input (ids)
+     
+    */
+    void set(const bm::id_t* ids, unsigned size);
+    
+    /*!
         \brief Set bit without checking preconditions (size, etc)
      
         Fast set bit method, without safety net.
@@ -3192,6 +3204,47 @@ void bvector<Alloc>::set_bit_no_check(bm::id_t n)
         nbit &= bm::set_word_mask;
         blk[nword] |= (1u << nbit); // set bit
     }
+}
+
+// -----------------------------------------------------------------------
+
+template<class Alloc>
+void bvector<Alloc>::set(const bm::id_t* ids, unsigned size)
+{
+    if (!ids || !size)
+        return; // nothing to do
+    if (!blockman_.is_init())
+        blockman_.init_tree();
+    
+    bm::id_t n, nblock, start, stop;
+    start = 0;
+    
+    do
+    {
+        n = ids[start];
+        nblock = unsigned(n >> bm::set_block_shift);
+        
+        stop = bm::idx_arr_block_lookup(ids, size, nblock, start);
+        BM_ASSERT(start < stop);
+        // get a BIT block
+        int block_type;
+        bm::word_t* blk =
+        blockman_.check_allocate_block(nblock, 0, 0, &block_type, false);
+        if (!IS_FULL_BLOCK(blk))
+        {
+            if (BM_IS_GAP(blk))
+                blk = blockman_.deoptimize_block(nblock);
+
+//            bm::set_block_bits(blk, ids, start, start+1);
+
+            bm::set_block_bits(blk, ids, start, stop);
+            
+            if (nblock == bm::set_total_blocks-1)
+                blk[bm::set_block_size-1] &= ~(1u<<31);
+        }
+        start = stop;
+//        ++start;
+    } while (start < size);
 }
 
 // -----------------------------------------------------------------------
