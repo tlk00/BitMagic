@@ -34,6 +34,8 @@ For more information please visit:  http://bitmagic.io
 #include <iomanip>
 #include <utility>
 #include <memory>
+#include <random>
+#include <algorithm>
 #include <stdarg.h>  
 
 #include <bm.h>
@@ -358,6 +360,32 @@ const unsigned ITERATIONS = 180000;
 //const unsigned PROGRESS_PRINT = 2000000;
 
 
+
+template<class BV>
+void DetailedCompareBVectors(const BV& bv1, const BV& bv2)
+{
+    bvect::counted_enumerator en1 = bv1.first();
+    bvect::counted_enumerator en2 = bv2.first();
+    
+    for (; en1.valid(); ++en1)
+    {
+        assert(en2.valid());
+        
+        bm::id_t i1 = *en1;
+        bm::id_t i2 = *en2;
+        
+        if (i1 != i2)
+        {
+            std::cerr << "Difference detected at: position="
+                      << i1 << " other position = " << i2 << std::endl;
+            std::cerr << " count1=" << en1.count() << " count2=" << en2.count()
+                      << std::endl;
+            exit(1);
+        }
+        ++en2;
+    } // for
+
+}
 
 void CheckVectors(bvect_mini &bvect_min, 
                   bvect      &bvect_full,
@@ -2399,6 +2427,141 @@ void BasicFunctionalityTest()
         assert(bv.size() == 161);
     }
 }
+
+
+static
+void generate_test_vectors(std::vector<bm::id_t> &v1,
+                           std::vector<bm::id_t> &v2,
+                           std::vector<bm::id_t> &v3,
+                           unsigned vector_max)
+{
+    bm::id_t j;
+    for (j = 0; j < vector_max; j += 2)
+        v1.push_back(j);
+    for (j = 0; j < vector_max; j += 5)
+        v2.push_back(j);
+    for (j = 0; j < vector_max; j += 120)
+        v3.push_back(j);
+}
+
+
+static
+void BvectorBulkSetTest()
+{
+    cout << "---------------------------- Bvector BULK set test" << endl;
+
+    {
+    unsigned ids[] = { 0 };
+    
+    bvect bv1, bv2;
+    for (unsigned i = 0; i < sizeof(ids)/sizeof(ids[0]); ++i)
+        bv1.set(ids[i]);
+    bv2.set(&ids[0], sizeof(ids)/sizeof(ids[0]));
+    
+    int cmp = bv1.compare(bv2);
+    assert(cmp==0);
+    }
+
+    {
+    unsigned ids[] = {65535, bm::id_max };
+    unsigned cnt;
+    bvect bv2;
+    bv2.set(&ids[0], sizeof(ids)/sizeof(ids[0]));
+    
+    cnt = bv2.count();
+    cout << cnt << endl;
+
+    assert(cnt == 1);
+    assert(bv2.test(ids[0]));
+    }
+
+    {
+    unsigned ids[] = {65536, 1280000, 65535 };
+    bvect bv1, bv2;
+
+    for (unsigned i = 0; i < sizeof(ids)/sizeof(ids[0]); ++i)
+        bv1.set(ids[i]);
+    bv2.set(&ids[0], sizeof(ids)/sizeof(ids[0]));
+        
+    int cmp = bv1.compare(bv2);
+    assert(cmp==0);
+    }
+
+
+    {
+    unsigned ids[] = { 0, 1, 2, 3, 4, 5, 256, 1024, 1028, 256000 };
+    
+    bvect bv1, bv2;
+    for (unsigned i = 0; i < sizeof(ids)/sizeof(ids[0]); ++i)
+        bv1.set(ids[i]);
+    bv2.set(&ids[0], sizeof(ids)/sizeof(ids[0]));
+    
+    DetailedCompareBVectors(bv1, bv2);
+
+    int cmp = bv1.compare(bv2);
+    assert(cmp==0);
+    
+    bvect bv3, bv4;
+    bv3.invert();
+    bv4.invert();
+    for (unsigned i = 0; i < sizeof(ids)/sizeof(ids[0]); ++i)
+        bv3.set(ids[i]);
+    bv4.set(&ids[0], sizeof(ids)/sizeof(ids[0]));
+    cmp = bv3.compare(bv4);
+    assert(cmp==0);
+    }
+    
+    {
+    unsigned vector_max = 4000000;
+    std::vector<bm::id_t> v1, v2, v3;
+    generate_test_vectors(v1, v2, v3, vector_max);
+
+    for (unsigned k = 0; k < 2; ++ k)
+    {
+        bvect bv1, bv2, bv3;
+        bvect bv1c, bv2c, bv3c;
+
+        for (unsigned i = 0; i < v1.size(); ++i)
+            bv1c.set(v1[i]);
+        for (unsigned i = 0; i < v2.size(); ++i)
+            bv2c.set(v2[i]);
+        for (unsigned i = 0; i < v3.size(); ++i)
+            bv3c.set(v3[i]);
+
+        bv1.set(&v1[0], unsigned(v1.size()));
+        bv2.set(&v2[0], unsigned(v2.size()));
+        bv3.set(&v3[0], unsigned(v3.size()));
+        
+        cout << bv1.count() << " " << bv1c.count() << endl;
+        
+        int cmp;
+        cmp = bv1c.compare(bv1);
+        if (cmp != 0)
+        {
+            DetailedCompareBVectors(bv1, bv1c);
+        }
+        assert(cmp==0);
+        cmp = bv2c.compare(bv2);
+        assert(cmp==0);
+        cmp = bv3c.compare(bv3);
+        assert(cmp==0);
+        
+        {
+            std::random_device rd;
+            std::mt19937 g(rd());
+            
+            std::shuffle(v1.begin(), v1.end(), g);
+            std::shuffle(v2.begin(), v2.end(), g);
+            std::shuffle(v3.begin(), v3.end(), g);
+        }
+    }
+    
+    
+    }
+    
+    cout << "---------------------------- Bvector BULK set test OK" << endl;
+}
+
 
 
 static
@@ -15438,32 +15601,6 @@ void TestBlockSUB()
 }
 
 
-template<class BV>
-void DetailedCompareBVectors(const BV& bv1, const BV& bv2)
-{
-    bvect::counted_enumerator en1 = bv1.first();
-    bvect::counted_enumerator en2 = bv2.first();
-    
-    for (; en1.valid(); ++en1)
-    {
-        assert(en2.valid());
-        
-        bm::id_t i1 = *en1;
-        bm::id_t i2 = *en2;
-        
-        if (i1 != i2)
-        {
-            std::cerr << "Difference detected at: position="
-                      << i1 << " other position = " << i2 << std::endl;
-            std::cerr << " count1=" << en1.count() << " count2=" << en2.count()
-                      << std::endl;
-            exit(1);
-        }
-        ++en2;
-    } // for
-
-}
-
 static
 void TestRankCompress()
 {
@@ -16267,7 +16404,6 @@ int main(void)
 //avx2_i32_shift();
 //return 0;
 
-
     TestRecomb();
 
     OptimGAPTest();
@@ -16317,11 +16453,12 @@ int main(void)
      CountRangeTest();
 
      BasicFunctionalityTest();
-
+    
      RankFindTest();
 
      BvectorIncTest();
 
+     BvectorBulkSetTest();
 
      BvectorShiftTest();
 
