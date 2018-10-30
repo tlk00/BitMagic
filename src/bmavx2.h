@@ -1757,6 +1757,134 @@ unsigned avx2_idx_arr_block_lookup(const unsigned* idx, unsigned size,
 }
 
 
+/*!
+     SSE4.2 bulk bit set
+     \internal
+*/
+inline
+void avx2_set_block_bits(bm::word_t* BMRESTRICT block,
+                          const unsigned* BMRESTRICT idx,
+                          unsigned start, unsigned stop )
+{
+    const unsigned unroll_factor = 8;
+    const unsigned len = (stop - start);
+    const unsigned len_unr = len - (len % unroll_factor);
+
+    idx += start;
+    
+    __m256i sb_mask = _mm256_set1_epi32(bm::set_block_mask);
+    __m256i sw_mask = _mm256_set1_epi32(bm::set_word_mask);
+    __m256i mask1 = _mm256_set1_epi32(1);
+    __m256i mask_tmp;
+
+    unsigned BM_ALIGN32 mask_v[8] BM_ALIGN32ATTR;
+    unsigned BM_ALIGN32 mword_v[8] BM_ALIGN32ATTR;
+
+    unsigned k = 0, mask, w_idx;
+    for (; k < len_unr; k+=unroll_factor)
+    {
+        __m256i idxA = _mm256_loadu_si256((__m256i*)(idx+k));
+        __m256i nbitA = _mm256_and_si256 (idxA, sb_mask); // nbit = idx[k] & bm::set_block_mask
+        __m256i nwordA = _mm256_srli_epi32 (nbitA, bm::set_word_shift); // nword  = nbit >> bm::set_word_shift
+        
+        nbitA = _mm256_and_si256 (nbitA, sw_mask); // nbit &= bm::set_word_mask;
+
+        __m256i maskA = _mm256_sllv_epi32(mask1, nbitA); // (1 << nbit)
+
+        _mm256_store_si256 ((__m256i*)mword_v, nwordA); // store block word idxs
+
+        // shufffle + permute to prepare comparison vector
+        mask_tmp = _mm256_shuffle_epi32 (nwordA, _MM_SHUFFLE(1,1,1,1));
+        mask_tmp = _mm256_permute2x128_si256 (mask_tmp, mask_tmp, 0);
+        mask = _mm256_movemask_epi8(_mm256_cmpeq_epi32(mask_tmp, nwordA));
+        if (mask == ~0u) // all idxs belong the same word
+        {
+            w_idx = mword_v[0];
+            mask_tmp = _mm256_xor_si256 (mask_tmp, mask_tmp); // zero bits
+            mask_tmp = _mm256_or_si256 (mask_tmp, maskA); // set bits
+
+            // horizontal OR via permutation of two 128-bit lanes
+            // then byte-shifts + OR withing lower 128
+            __m256i mtmp0 = _mm256_permute2x128_si256(mask_tmp, mask_tmp, 0);
+            __m256i mtmp1 = _mm256_permute2x128_si256(mask_tmp, mask_tmp, 1);
+            mask_tmp = _mm256_or_si256 (mtmp0, mtmp1);
+            mtmp0 = _mm256_bsrli_epi128(mask_tmp, 4); // shift R by 1 int
+            mask_tmp = _mm256_or_si256 (mtmp0, mask_tmp);
+            mtmp0 = _mm256_bsrli_epi128(mask_tmp, 8); // shift R by 2 ints
+            mask_tmp = _mm256_or_si256 (mtmp0, mask_tmp);
+
+            int u0 = _mm256_extract_epi32(mask_tmp, 0); // final OR
+            block[w_idx] |= u0;
+        }
+        else // whole 256-bit lane does NOT hit the same word...
+        {
+            _mm256_store_si256 ((__m256i*)mask_v, maskA);
+            
+            // compute horizonlal OR of set bit mask over lo-hi 128-bit lanes
+            // it is used later if lo or hi lanes hit the same word
+            // (probabilistic speculation)
+            //
+            int u0, u4;
+            {
+                mask_tmp = _mm256_bsrli_epi128(maskA, 4); // shift R by 1 int
+                mask_tmp = _mm256_or_si256 (mask_tmp, maskA);
+                __m256i m0 = _mm256_bsrli_epi128(mask_tmp, 8); // shift R by 2 ints
+                mask_tmp = _mm256_or_si256 (m0, mask_tmp);
+
+                u0 = _mm256_extract_epi32(mask_tmp, 0); // final OR (128-lo)
+                u4 = _mm256_extract_epi32(mask_tmp, 4); // final OR (128-hi)
+            }
+            
+            // check the lo 128-lane
+            {
+                mask_tmp = _mm256_permute2x128_si256 (nwordA, nwordA, 0); // lo
+                __m256i m0 = _mm256_shuffle_epi32(mask_tmp, 0x0); // copy simd[0]
+                mask = _mm256_movemask_epi8(_mm256_cmpeq_epi32(mask_tmp, m0));
+                if (mask == ~0u) // all idxs belong the same word
+                {
+                    w_idx = mword_v[0];
+                    block[w_idx] |= u0;
+                }
+                else  // different block words: use "shotgun" OR
+                {
+                    block[mword_v[0]] |= mask_v[0];
+                    block[mword_v[1]] |= mask_v[1];
+                    block[mword_v[2]] |= mask_v[2];
+                    block[mword_v[3]] |= mask_v[3];
+                }
+            }
+
+            // check the hi 128-lane
+            {
+                mask_tmp = _mm256_permute2x128_si256 (nwordA, nwordA, 1); // hi
+                __m256i m0 = _mm256_shuffle_epi32(mask_tmp, 0x0);
+                mask = _mm256_movemask_epi8(_mm256_cmpeq_epi32(mask_tmp, m0));
+                if (mask == ~0u) // all idxs belong the same word
+                {
+                    w_idx = mword_v[4];
+                    block[w_idx] |= u4;
+                }
+                else
+                {
+                    block[mword_v[4]] |= mask_v[4];
+                    block[mword_v[5]] |= mask_v[5];
+                    block[mword_v[6]] |= mask_v[6];
+                    block[mword_v[7]] |= mask_v[7];
+                }
+            }
+        }
+    } // for k
+
+    for (; k < len; ++k)
+    {
+        unsigned n = idx[k];
+        unsigned nbit = unsigned(n & bm::set_block_mask);
+        unsigned nword  = nbit >> bm::set_word_shift;
+        nbit &= bm::set_word_mask;
+        block[nword] |= (1u << nbit);
+    } // for k
+}
+
 /**
     Experimental (test) function to do SIMD vector search (lower bound)
     in sorted, growing array
@@ -1903,7 +2031,7 @@ void avx2_bit_block_gather_scatter(unsigned* BMRESTRICT arr,
         mask = _mm256_movemask_epi8(_mm256_cmpeq_epi32(mask_tmp, nwordA));
         _mm256_store_si256((__m256i*)mword_v, nwordA);
 
-        if (mask == ~0u) // all idxs belongs the same word avoid (costly) gather
+        if (mask == ~0u) // all idxs belong the same word avoid (costly) gather
         {
             w_idx = mword_v[0];
             mask_tmp = _mm256_set1_epi32(blk[w_idx]); // use broadcast
@@ -2035,6 +2163,8 @@ void avx2_bit_block_gather_scatter(unsigned* BMRESTRICT arr,
 #define VECT_ARR_BLOCK_LOOKUP(idx, size, nb, start) \
     avx2_idx_arr_block_lookup(idx, size, nb, start)
 
+#define VECT_SET_BLOCK_BITS(block, idx, start, stop) \
+    avx2_set_block_bits(block, idx, start, stop)
 
 } // namespace
 
