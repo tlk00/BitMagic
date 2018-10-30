@@ -161,6 +161,23 @@ void combine_or_test(std::vector<bm::id_t> &v1,
     }
 }
 
+static
+void bvector_bulk_set_test(std::vector<bm::id_t> &v1,
+                           std::vector<bm::id_t> &v2,
+                           std::vector<bm::id_t> &v3)
+{
+    bm::chrono_taker tt1("3. bvector<>::set() array", benchmark_count, &timing_map);
+    bm::bvector<> bv1, bv2, bv3;
+
+    for (unsigned i = 0; i < benchmark_count; ++i)
+    {
+        bv1.set(&v1[0], unsigned(v1.size()));
+        bv2.set(&v2[0], unsigned(v2.size()));
+        bv3.set(&v3[0], unsigned(v3.size()));
+    }
+}
+
+
 
 int main(void)
 {
@@ -291,11 +308,12 @@ int main(void)
         bv_set_bit_test();
         bv_set_bit_no_check_test();
         combine_or_test(v1, v2, v3);
+        bvector_bulk_set_test(v1, v2, v3);
 
         // print all test timing results
         //
         std::cout << std::endl;
-        bm::chrono_taker::print_duration_map(timing_map, bm::chrono_taker::ct_ops_per_sec);
+        bm::chrono_taker::print_duration_map(timing_map, bm::chrono_taker::ct_all);
     }
     catch(std::exception& ex)
     {
