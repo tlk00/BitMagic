@@ -557,7 +557,7 @@ unsigned sse4_gap_find(const bm::gap_word_t* BMRESTRICT pbuf, const bm::gap_word
     m1 = _mm_loadu_si128((__m128i*)(pbuf)); // load first 8 elements
 
     maskF = _mm_cmpeq_epi64(mz, mz); // set all FF
-    maskFL = _mm_slli_si128(maskF, 4 * 2); // byle shift to make [0000 FFFF] 
+    maskFL = _mm_slli_si128(maskF, 4 * 2); // byte shift to make [0000 FFFF]
     int shiftL= (64 - (unroll_factor - size) * 16);
     maskFL = _mm_slli_epi64(maskFL, shiftL); // additional bit shift to  [0000 00FF]
 
@@ -725,6 +725,176 @@ unsigned sse42_idx_arr_block_lookup(const unsigned* idx, unsigned size,
     }
     return start + k;
 }
+
+/*!
+     SSE4.2 bulk bit set
+     \internal
+*/
+inline
+void sse42_set_block_bits(bm::word_t* BMRESTRICT block,
+                          const unsigned* BMRESTRICT idx,
+                          unsigned start, unsigned stop )
+{
+    const unsigned unroll_factor = 4;
+    const unsigned len = (stop - start);
+    const unsigned len_unr = len - (len % unroll_factor);
+
+    idx += start;
+
+    unsigned BM_ALIGN16 mshift_v[4] BM_ALIGN16ATTR;
+    unsigned BM_ALIGN16 mword_v[4] BM_ALIGN16ATTR;
+
+    __m128i sb_mask = _mm_set1_epi32(bm::set_block_mask);
+    __m128i sw_mask = _mm_set1_epi32(bm::set_word_mask);
+    
+    unsigned k = 0;
+    for (; k < len_unr; k+=unroll_factor)
+    {
+        __m128i idxA = _mm_loadu_si128((__m128i*)(idx+k));
+        __m128i nbitA = _mm_and_si128 (idxA, sb_mask); // nbit = idx[k] & bm::set_block_mask
+        __m128i nwordA = _mm_srli_epi32 (nbitA, bm::set_word_shift); // nword  = nbit >> bm::set_word_shift
+ 
+ 
+        nbitA = _mm_and_si128 (nbitA, sw_mask);
+        _mm_store_si128 ((__m128i*)mshift_v, nbitA);
+
+        // check-compare if all 4 bits are in the very same word
+        //
+        __m128i nwordA_0 = _mm_shuffle_epi32(nwordA, 0x0); // copy element 0
+        __m128i cmpA = _mm_cmpeq_epi32(nwordA_0, nwordA);  // compare EQ
+        if (_mm_test_all_ones(cmpA)) // check if all are in one word
+        {
+            unsigned nword = _mm_extract_epi32(nwordA, 0);
+            block[nword] |= (1u << mshift_v[0]) | (1u << mshift_v[1])
+                            |(1u << mshift_v[2]) | (1u << mshift_v[3]);
+        }
+        else // bits are in different words, use scalar scatter
+        {
+            _mm_store_si128 ((__m128i*)mword_v, nwordA);
+            
+            block[mword_v[0]] |= (1u << mshift_v[0]);
+            block[mword_v[1]] |= (1u << mshift_v[1]);
+            block[mword_v[2]] |= (1u << mshift_v[2]);
+            block[mword_v[3]] |= (1u << mshift_v[3]);
+        }
+
+    } // for k
+
+    for (; k < len; ++k)
+    {
+        unsigned n = idx[k];
+        unsigned nbit = unsigned(n & bm::set_block_mask);
+        unsigned nword  = nbit >> bm::set_word_shift;
+        nbit &= bm::set_word_mask;
+        block[nword] |= (1u << nbit);
+    } // for k
+}
+
+
+/*!
+     SSE4.2 bulk bit set
+     \internal
+*/
+/*
+inline
+void sse42_set_block_bits(bm::word_t* BMRESTRICT block,
+                          const unsigned* BMRESTRICT idx,
+                          unsigned start, unsigned stop )
+{
+    const unsigned unroll_factor = 8;
+    const unsigned len = (stop - start);
+    const unsigned len_unr = len - (len % unroll_factor);
+
+    idx += start;
+
+    unsigned BM_ALIGN16 mshift_v[4] BM_ALIGN16ATTR;
+    unsigned BM_ALIGN16 mword_v[4] BM_ALIGN16ATTR;
+
+    __m128i sb_mask = _mm_set1_epi32(bm::set_block_mask);
+    __m128i sw_mask = _mm_set1_epi32(bm::set_word_mask);
+    
+    unsigned k = 0;
+    for (; k < len_unr; k+=unroll_factor)
+    {
+        __m128i idxA = _mm_loadu_si128((__m128i*)(idx+k));
+        __m128i idxB = _mm_loadu_si128((__m128i*)(idx+k+4));
+        
+        __m128i nbitA = _mm_and_si128 (idxA, sb_mask); // nbit = idx[k] & bm::set_block_mask
+        __m128i nbitB = _mm_and_si128 (idxB, sb_mask);
+        
+        __m128i nwordA = _mm_srli_epi32 (nbitA, bm::set_word_shift); // nword  = nbit >> bm::set_word_shift
+        __m128i nwordB = _mm_srli_epi32 (nbitB, bm::set_word_shift);
+        
+        nbitA = _mm_and_si128 (nbitA, sw_mask);
+        nbitB = _mm_and_si128 (nbitB, sw_mask);
+        
+        _mm_store_si128 ((__m128i*)mshift_v, nbitA);
+
+        // check-compare if all bits are in the same word
+        
+        __m128i nw_0 = _mm_shuffle_epi32(nwordA, 0x0); // copy element 0
+        __m128i cmp = _mm_cmpeq_epi32(nw_0, nwordA);
+        if (_mm_test_all_ones(cmp)) // check if all are in one word
+        {
+            unsigned nword = _mm_extract_epi32(nwordA, 0);
+            unsigned mask = (1u << mshift_v[0]) | (1u << mshift_v[1])
+                            |(1u << mshift_v[2]) | (1u << mshift_v[3]);
+ 
+            cmp = _mm_cmpeq_epi32(nw_0, nwordB);
+            if (_mm_test_all_ones(cmp))
+            {
+                _mm_store_si128 ((__m128i*)mshift_v, nbitB);
+                mask |= (1u << mshift_v[0]) | (1u << mshift_v[1])
+                        |(1u << mshift_v[2]) | (1u << mshift_v[3]);
+                block[nword] |= mask;
+                continue;
+            }
+            block[nword] |= mask;
+
+        }
+        else // bits are in different words, use scalar scatter
+        {
+            _mm_store_si128 ((__m128i*)mword_v, nwordA);
+            
+            block[mword_v[0]] |= (1u << mshift_v[0]);
+            block[mword_v[1]] |= (1u << mshift_v[1]);
+            block[mword_v[2]] |= (1u << mshift_v[2]);
+            block[mword_v[3]] |= (1u << mshift_v[3]);
+        }
+        
+        _mm_store_si128 ((__m128i*)mshift_v, nbitB);
+
+        nw_0 = _mm_shuffle_epi32(nwordB, 0x0); // copy element 0
+        cmp = _mm_cmpeq_epi32(nw_0, nwordB);
+        if (_mm_test_all_ones(cmp)) // check if all are in one word
+        {
+            unsigned nword = _mm_extract_epi32(nwordB, 0);
+            block[nword] |= (1u << mshift_v[0]) | (1u << mshift_v[1])
+                            |(1u << mshift_v[2]) | (1u << mshift_v[3]);
+        }
+        else // bits are in different words, use scalar scatter
+        {
+            _mm_store_si128 ((__m128i*)mword_v, nwordB);
+            
+            block[mword_v[0]] |= (1u << mshift_v[0]);
+            block[mword_v[1]] |= (1u << mshift_v[1]);
+            block[mword_v[2]] |= (1u << mshift_v[2]);
+            block[mword_v[3]] |= (1u << mshift_v[3]);
+        }
+
+
+    } // for k
+
+    for (; k < len; ++k)
+    {
+        unsigned n = idx[k];
+        unsigned nbit = unsigned(n & bm::set_block_mask);
+        unsigned nword  = nbit >> bm::set_word_shift;
+        nbit &= bm::set_word_mask;
+        block[nword] |= (1u << nbit);
+    } // for k
+}
+*/
 
 /*!
      SSE4.2 bit block gather-scatter
@@ -1073,6 +1243,10 @@ bool sse42_shift_r1_and(__m128i* block,
 
 #define VECT_ARR_BLOCK_LOOKUP(idx, size, nb, start) \
     sse42_idx_arr_block_lookup(idx, size, nb, start)
+    
+#define VECT_SET_BLOCK_BITS(block, idx, start, stop) \
+    sse42_set_block_bits(block, idx, start, stop)
+    
 
 
 #ifdef __GNUG__
