@@ -3235,8 +3235,6 @@ void bvector<Alloc>::set(const bm::id_t* ids, unsigned size)
             if (BM_IS_GAP(blk))
                 blk = blockman_.deoptimize_block(nblock);
 
-//            bm::set_block_bits(blk, ids, start, start+1);
-
             bm::set_block_bits(blk, ids, start, stop);
             
             if (nblock == bm::set_total_blocks-1)
