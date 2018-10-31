@@ -378,14 +378,18 @@ public:
         instead of explicitly calling set, because iterator may implement
         some performance specific tricks to make sure bulk insert is fast.
 
+        @sa bulk_insert_iterator
+
         @ingroup bvit
     */
     class insert_iterator
     {
+    friend class bulk_insert_iterator;
     public:
 #ifndef BM_NO_STL
         typedef std::output_iterator_tag  iterator_category;
 #endif
+        typedef bm::bvector<Alloc> bvector_type;
         typedef unsigned value_type;
         typedef void difference_type;
         typedef void pointer;
@@ -404,13 +408,12 @@ public:
         : bvect_(iit.bvect_),
           max_bit_(iit.max_bit_)
         {
-            bvect_->init();
+            //bvect_->init();
         }
         
         insert_iterator& operator=(const insert_iterator& ii)
         {
-            bvect_ = ii.bvect_; 
-            max_bit_ = ii.max_bit_;
+            bvect_ = ii.bvect_; max_bit_ = ii.max_bit_;
             return *this;
         }
 
@@ -428,10 +431,11 @@ public:
                     bvect_->resize(new_size);
                 }
             }
-
             bvect_->set_bit_no_check(n);
             return *this;
         }
+        
+        
         
         /*! Returns *this without doing anything (no-op) */
         insert_iterator& operator*() { return *this; }
@@ -440,10 +444,144 @@ public:
         /*! Returns *this. This iterator does not move (no-op)*/
         insert_iterator& operator++(int) { return *this; }
         
+        bvector_type* get_bvector() const { return bvect_; }
+        
     protected:
-        bm::bvector<Alloc>*   bvect_;
+        bvector_type*         bvect_;
         bm::id_t              max_bit_;
     };
+    
+    
+    /*!
+        @brief Output iterator iterator designed to set "ON" bits based on
+        input sequence of integers.
+
+        STL container can be converted to bvector using this iterator
+        Insert iterator guarantees the vector will be dynamically resized
+        (set_bit does not do that).
+     
+        The difference from the canonical insert iterator, is that
+        bulk insert implements internal buffering, which needs
+        to flushed (or flushed automatically when goes out of scope).
+        Buffering creates a delayed effect, which needs to be
+        taken into account.
+     
+        @sa insert_iterator
+
+        @ingroup bvit
+    */
+    class bulk_insert_iterator
+    {
+    public:
+#ifndef BM_NO_STL
+        typedef std::output_iterator_tag  iterator_category;
+#endif
+        typedef bm::bvector<Alloc> bvector_type;
+        typedef unsigned value_type;
+        typedef void difference_type;
+        typedef void pointer;
+        typedef void reference;
+
+        bulk_insert_iterator() : bvect_(0), buf_(0), buf_size_(0) {}
+        
+        ~bulk_insert_iterator()
+        {
+            flush();
+            if (buf_)
+                bvect_->free_tempblock(buf_);
+        }
+
+        bulk_insert_iterator(bvector<Alloc>& bvect)
+            : bvect_(&bvect)
+        {
+            bvect_->init();
+            buf_ = bvect_->allocate_tempblock();
+            buf_size_ = 0;
+        }
+        
+        bulk_insert_iterator(const bulk_insert_iterator& iit)
+        : bvect_(iit.bvect_)
+        {
+            buf_ = bvect_->allocate_tempblock();
+            buf_size_ = iit.buf_size_;
+            ::memcpy(buf_, iit.buf_, buf_size_ * sizeof(*buf_));
+        }
+        
+        bulk_insert_iterator(const insert_iterator& iit)
+        : bvect_(iit.get_bvector())
+        {
+            buf_ = bvect_->allocate_tempblock();
+            buf_size_ = 0;
+        }
+
+        bulk_insert_iterator(bulk_insert_iterator&& iit) BMNOEXEPT
+        : bvect_(iit.bvect_)
+        {
+            buf_ = iit.buf_; iit.buf_ = 0;
+            buf_size_ = iit.buf_size_;
+        }
+        
+        bulk_insert_iterator& operator=(const bulk_insert_iterator& ii)
+        {
+            bvect_ = ii.bvect_;
+            if (!buf_)
+                buf_ = bvect_->allocate_tempblock();
+            buf_size_ = ii.buf_size_;
+            ::memcpy(buf_, ii.buf_, buf_size_ * sizeof(*buf_));
+            return *this;
+        }
+        
+        bulk_insert_iterator& operator=(bulk_insert_iterator&& ii) BMNOEXEPT
+        {
+            bvect_ = ii.bvect_;
+            if (buf_)
+                bvect_->free_tempblock(buf_);
+            buf_ = ii.buf_; ii.buf_ = 0;
+            buf_size_ = ii.buf_size_;
+            return *this;
+        }
+
+        bulk_insert_iterator& operator=(bm::id_t n)
+        {
+            BM_ASSERT(n < bm::id_max);
+            BM_ASSERT_THROW(n < bm::id_max, BM_ERR_RANGE);
+
+            if (buf_size_ == bm::set_block_size)
+            {
+                bvect_->import(buf_, buf_size_);
+                buf_size_ = 0;
+            }
+            buf_[buf_size_++] = n;
+            return *this;
+        }
+        
+        /*! Returns *this without doing anything (no-op) */
+        bulk_insert_iterator& operator*() { return *this; }
+        /*! Returns *this. This iterator does not move (no-op) */
+        bulk_insert_iterator& operator++() { return *this; }
+        /*! Returns *this. This iterator does not move (no-op)*/
+        bulk_insert_iterator& operator++(int) { return *this; }
+        
+        /*! Flush the internal buffer into target bvector */
+        void flush()
+        {
+            BM_ASSERT(bvect_);
+            if (buf_size_)
+            {
+                bvect_->import(buf_, buf_size_);
+                buf_size_ = 0;
+            }
+            bvect_->sync_size();
+        }
+        
+        bvector_type* get_bvector() const { return bvect_; }
+
+    protected:
+        bm::bvector<Alloc>*   bvect_;    ///< target bvector
+        bm::id_t*             buf_;      ///< bulk insert buffer
+        unsigned              buf_size_; ///< current buffer size
+    };
+    
 
 
     /*! @brief Constant iterator designed to enumerate "ON" bits
@@ -910,7 +1048,7 @@ public:
 
             for (;true;)
             {
-                BMREGISTER unsigned val = *(bdescr->gap_.ptr);
+                unsigned val = *(bdescr->gap_.ptr);
 
                 if (bitval)
                 {
@@ -2189,6 +2327,20 @@ public:
     static
     void throw_bad_alloc();
     
+protected:
+    /**
+        Syncronize size if it got extended due to bulk import
+        @internal
+    */
+    void sync_size();
+    
+    /**
+        Import integers (set bits).
+        (Fast, no checks).
+        @internal
+    */
+    void import(const bm::id_t* ids, unsigned size);
+
 private:
 
     bm::id_t check_or_next(bm::id_t prev) const;
@@ -2455,6 +2607,22 @@ void bvector<Alloc>::resize(size_type new_size)
         size_ = new_size;
     }
 }
+
+// -----------------------------------------------------------------------
+
+template<typename Alloc>
+void bvector<Alloc>::sync_size()
+{
+    if (size_ >= bm::id_max)
+        return;
+    bm::id_t last;
+    bool found = find_reverse(last);
+    if (found && last >= size_)
+    {
+        resize(last+1);
+    }
+}
+
 
 // -----------------------------------------------------------------------
 
@@ -3216,9 +3384,18 @@ void bvector<Alloc>::set(const bm::id_t* ids, unsigned size)
     if (!blockman_.is_init())
         blockman_.init_tree();
     
+    import(ids, size);
+    
+    sync_size();
+}
+
+// -----------------------------------------------------------------------
+
+template<class Alloc>
+void bvector<Alloc>::import(const bm::id_t* ids, unsigned size)
+{
     bm::id_t n, nblock, start, stop;
     start = 0;
-    
     do
     {
         n = ids[start];
@@ -3241,7 +3418,6 @@ void bvector<Alloc>::set(const bm::id_t* ids, unsigned size)
                 blk[bm::set_block_size-1] &= ~(1u<<31);
         }
         start = stop;
-//        ++start;
     } while (start < size);
 }
 
