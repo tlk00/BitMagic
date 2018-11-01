@@ -1898,8 +1898,8 @@ __m256i avx2_setbit_256(__m256i target, __m256i source)
 
     __m256i acc1, acc2;
     {
-    __m256i v0 = _mm256_permutevar8x32_ps(source, _mm256_set1_epi32(0));
-    __m256i v1 = _mm256_permutevar8x32_ps(source, _mm256_set1_epi32(1));
+    __m256i v0 = _mm256_permutevar8x32_epi32(source, _mm256_set1_epi32(0));
+    __m256i v1 = _mm256_permutevar8x32_epi32(source, _mm256_set1_epi32(1));
     __m256i s0 = _mm256_sub_epi32(v0, stride_idx);
     __m256i s1 = _mm256_sub_epi32(v1, stride_idx);
     __m256i k0   = _mm256_sllv_epi32(mask1, s0);
@@ -1907,8 +1907,8 @@ __m256i avx2_setbit_256(__m256i target, __m256i source)
     acc1 = _mm256_or_si256(k1, k0);
     }
     {
-    __m256i v0 = _mm256_permutevar8x32_ps(source, _mm256_set1_epi32(2));
-    __m256i v1 = _mm256_permutevar8x32_ps(source, _mm256_set1_epi32(3));
+    __m256i v0 = _mm256_permutevar8x32_epi32(source, _mm256_set1_epi32(2));
+    __m256i v1 = _mm256_permutevar8x32_epi32(source, _mm256_set1_epi32(3));
     __m256i s0 = _mm256_sub_epi32(v0, stride_idx);
     __m256i s1 = _mm256_sub_epi32(v1, stride_idx);
     __m256i k0   = _mm256_sllv_epi32(mask1, s0);
@@ -1917,8 +1917,8 @@ __m256i avx2_setbit_256(__m256i target, __m256i source)
     }
     target = _mm256_or_si256(target, acc1);
     {
-    __m256i v0 = _mm256_permutevar8x32_ps(source, _mm256_set1_epi32(4));
-    __m256i v1 = _mm256_permutevar8x32_ps(source, _mm256_set1_epi32(5));
+    __m256i v0 = _mm256_permutevar8x32_epi32(source, _mm256_set1_epi32(4));
+    __m256i v1 = _mm256_permutevar8x32_epi32(source, _mm256_set1_epi32(5));
     __m256i s0 = _mm256_sub_epi32(v0, stride_idx);
     __m256i s1 = _mm256_sub_epi32(v1, stride_idx);
     __m256i k0   = _mm256_sllv_epi32(mask1, s0);
@@ -1927,8 +1927,8 @@ __m256i avx2_setbit_256(__m256i target, __m256i source)
     }
     target = _mm256_or_si256(target, acc2);
     {
-    __m256i v0 = _mm256_permutevar8x32_ps(source, _mm256_set1_epi32(6));
-    __m256i v1 = _mm256_permutevar8x32_ps(source, _mm256_set1_epi32(7));
+    __m256i v0 = _mm256_permutevar8x32_epi32(source, _mm256_set1_epi32(6));
+    __m256i v1 = _mm256_permutevar8x32_epi32(source, _mm256_set1_epi32(7));
     __m256i s0 = _mm256_sub_epi32(v0, stride_idx);
     __m256i s1 = _mm256_sub_epi32(v1, stride_idx);
     __m256i k0   = _mm256_sllv_epi32(mask1, s0);
