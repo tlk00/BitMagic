@@ -1130,7 +1130,7 @@ void sparse_vector<Val, BV>::import(const value_type* arr,
             {
                 bvector_type* bv = get_plain(p);
                 const bm::id_t* r = tm.row(p);
-                bm::combine_or(*bv, r, r + rl);
+                bv->set(r, rl, BM_SORTED);
                 row_len[p] = 0;
                 tm.row(p)[0] = 0;
             }
@@ -1146,7 +1146,7 @@ void sparse_vector<Val, BV>::import(const value_type* arr,
         {
             bvector_type* bv = get_plain(k);
             const bm::id_t* r = tm.row(k);
-            bm::combine_or(*bv, r, r + rl);
+            bv->set(r, rl, BM_SORTED);
         }
     } // for k
     
