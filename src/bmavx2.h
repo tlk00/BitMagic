@@ -1851,6 +1851,7 @@ void avx2_set_block_bits(bm::word_t* BMRESTRICT block,
                     block[mword_v[1]] |= mask_v[1];
                     block[mword_v[2]] |= mask_v[2];
                     block[mword_v[3]] |= mask_v[3];
+
                 }
             }
 
@@ -1884,6 +1885,194 @@ void avx2_set_block_bits(bm::word_t* BMRESTRICT block,
         block[nword] |= (1u << nbit);
     } // for k
 }
+
+
+/** Set a bits in an AVX target, by indexes (int4) from the source
+    @internal
+*/
+inline
+__m256i avx2_setbit_256(__m256i target, __m256i source)
+{
+    __m256i stride_idx = _mm256_set_epi32(224, 192, 160, 128, 96, 64, 32, 0);
+    __m256i mask1 = _mm256_set1_epi32(1);
+
+    __m256i acc1, acc2;
+    {
+    __m256i v0 = _mm256_permutevar8x32_ps(source, _mm256_set1_epi32(0));
+    __m256i v1 = _mm256_permutevar8x32_ps(source, _mm256_set1_epi32(1));
+    __m256i s0 = _mm256_sub_epi32(v0, stride_idx);
+    __m256i s1 = _mm256_sub_epi32(v1, stride_idx);
+    __m256i k0   = _mm256_sllv_epi32(mask1, s0);
+    __m256i k1   = _mm256_sllv_epi32(mask1, s1);
+    acc1 = _mm256_or_si256(k1, k0);
+    }
+    {
+    __m256i v0 = _mm256_permutevar8x32_ps(source, _mm256_set1_epi32(2));
+    __m256i v1 = _mm256_permutevar8x32_ps(source, _mm256_set1_epi32(3));
+    __m256i s0 = _mm256_sub_epi32(v0, stride_idx);
+    __m256i s1 = _mm256_sub_epi32(v1, stride_idx);
+    __m256i k0   = _mm256_sllv_epi32(mask1, s0);
+    __m256i k1   = _mm256_sllv_epi32(mask1, s1);
+    acc2 = _mm256_or_si256(k1, k0);
+    }
+    target = _mm256_or_si256(target, acc1);
+    {
+    __m256i v0 = _mm256_permutevar8x32_ps(source, _mm256_set1_epi32(4));
+    __m256i v1 = _mm256_permutevar8x32_ps(source, _mm256_set1_epi32(5));
+    __m256i s0 = _mm256_sub_epi32(v0, stride_idx);
+    __m256i s1 = _mm256_sub_epi32(v1, stride_idx);
+    __m256i k0   = _mm256_sllv_epi32(mask1, s0);
+    __m256i k1   = _mm256_sllv_epi32(mask1, s1);
+    acc1 = _mm256_or_si256(k1, k0);
+    }
+    target = _mm256_or_si256(target, acc2);
+    {
+    __m256i v0 = _mm256_permutevar8x32_ps(source, _mm256_set1_epi32(6));
+    __m256i v1 = _mm256_permutevar8x32_ps(source, _mm256_set1_epi32(7));
+    __m256i s0 = _mm256_sub_epi32(v0, stride_idx);
+    __m256i s1 = _mm256_sub_epi32(v1, stride_idx);
+    __m256i k0   = _mm256_sllv_epi32(mask1, s0);
+    __m256i k1   = _mm256_sllv_epi32(mask1, s1);
+    acc2 = _mm256_or_si256(k1, k0);
+    }
+    target = _mm256_or_si256(target, acc1);
+    target = _mm256_or_si256(target, acc2);
+    return target;
+}
+
+
+/** Experimental code to set bits via AVX strides
+    @internal
+*/
+inline
+void avx2_set_block_bits2(bm::word_t* BMRESTRICT block,
+                          const unsigned* BMRESTRICT idx,
+                          unsigned start, unsigned stop )
+{
+    __m256i stride_idx = _mm256_set_epi32(224, 192, 160, 128, 96, 64, 32, 0);
+    __m256i mask1 = _mm256_set1_epi32(1);
+    __m256i* block_avx = (__m256i*)block;
+    
+    unsigned stride = 0;
+    __m256i* avx_stride_p = block_avx + stride;
+    __m256i blkA = _mm256_load_si256(avx_stride_p);
+    
+    for (unsigned i = start; i < stop; ++i)
+    {
+        unsigned n = idx[i];
+        unsigned nbit = unsigned(n & bm::set_block_mask);
+        unsigned new_stride = nbit >> 8;   // (nbit / 256)
+        unsigned stride_bit = nbit & 0xFF; // (nbit % 256)
+        if (new_stride != stride)
+        {
+            _mm256_store_si256(avx_stride_p, blkA); // flush the avx2 accum
+            stride = new_stride;
+            avx_stride_p = block_avx + stride;
+            blkA = _mm256_load_si256(avx_stride_p); // re-load the accum
+        }
+        // set avx2 stride bit
+        __m256i v0 = _mm256_set1_epi32(stride_bit);
+        __m256i s0 = _mm256_sub_epi32(v0, stride_idx);
+        __m256i k0   = _mm256_sllv_epi32(mask1, s0);
+        blkA = _mm256_or_si256(blkA, k0);
+    } // for i
+    
+   _mm256_store_si256(avx_stride_p, blkA);
+}
+
+/** Experimental code to set bits via AVX strides
+    @internal
+*/
+inline
+void avx2_set_block_bits3(bm::word_t* BMRESTRICT block,
+                          const unsigned* BMRESTRICT idx,
+                          unsigned start, unsigned stop )
+{
+    const unsigned unroll_factor = 8;
+    const unsigned len = (stop - start);
+    const unsigned len_unr = len - (len % unroll_factor);
+
+    idx += start;
+
+    __m256i stride_idx = _mm256_set_epi32(224, 192, 160, 128, 96, 64, 32, 0);
+    __m256i mask1 = _mm256_set1_epi32(1);
+
+    __m256i sb_mask = _mm256_set1_epi32(bm::set_block_mask);
+    __m256i stride_bit_mask = _mm256_set1_epi32(0xFF);
+
+    unsigned BM_ALIGN32 mstride_v[8] BM_ALIGN32ATTR;
+    int BM_ALIGN32 mstride_bit_v[8] BM_ALIGN32ATTR;
+
+    // define the very first block stride based on index 0
+    unsigned stride = unsigned(idx[0] & bm::set_block_mask) >> 8;
+    
+    __m256i* block_avx = (__m256i*)block;
+    __m256i* avx_stride_p = block_avx + stride;
+    
+    __m256i blkA = _mm256_load_si256(avx_stride_p); // load the first accum
+
+    unsigned k = 0, mask;
+    for (; k < len_unr; k+=unroll_factor)
+    {
+        __m256i idxA = _mm256_loadu_si256((__m256i*)(idx+k));
+        __m256i nbitA = _mm256_and_si256 (idxA, sb_mask); // nbit = idx[k] & bm::set_block_mask
+        __m256i strideA = _mm256_srli_epi32 (nbitA, 8); // new_stride = nbit >> 8
+        __m256i strideBitA = _mm256_and_si256 (nbitA, stride_bit_mask); // stride_bit = nbit & 0xFF;
+
+        // construct a cmp vector from broadcasted v[0]
+        __m256i mask_tmp = _mm256_shuffle_epi32 (strideA, 0x0);
+        mask_tmp = _mm256_permute2x128_si256 (mask_tmp, mask_tmp, 0);
+        mask = _mm256_movemask_epi8(_mm256_cmpeq_epi32(mask_tmp, strideA));
+        if (mask == ~0u) // all idxs belong the same avx2 stride
+        {
+            unsigned new_stride = (unsigned)_mm256_extract_epi32(strideA, 0);
+            if (new_stride != stride)
+            {
+                _mm256_store_si256(avx_stride_p, blkA); // flush avx2 accum
+                stride = new_stride;
+                avx_stride_p = block_avx + stride;
+                blkA = _mm256_load_si256(avx_stride_p); // re-load accum
+            }
+            
+            blkA = bm::avx2_setbit_256(blkA, strideBitA); // set 8 bits
+        }
+        else // stride mix here, process one by one
+        {
+            _mm256_store_si256 ((__m256i*)mstride_bit_v, strideBitA); // store block stride-bit idxs
+            _mm256_store_si256 ((__m256i*)mstride_v, strideA);
+            for (unsigned j = 0; j < 8; ++j)
+            {
+                unsigned new_stride = mstride_v[j];
+                if (new_stride != stride)
+                {
+                    _mm256_store_si256(avx_stride_p, blkA); // flush avx2 accum
+                    stride = new_stride;
+                    avx_stride_p = block_avx + stride;
+                    blkA = _mm256_load_si256(avx_stride_p); // re-load accum
+                }
+                // set avx2 bit
+                mask_tmp = _mm256_set1_epi32(mstride_bit_v[j]);
+                mask_tmp = _mm256_sub_epi32(mask_tmp, stride_idx);
+                mask_tmp   = _mm256_sllv_epi32(mask1, mask_tmp);
+                blkA = _mm256_or_si256(blkA, mask_tmp);
+            } // for j
+        }
+    } // for k
+   _mm256_store_si256(avx_stride_p, blkA);
+
+    // set the tail bits conventionally
+    for (; k < len; ++k)
+    {
+        unsigned n = idx[k];
+        unsigned nbit = unsigned(n & bm::set_block_mask);
+        unsigned nword  = nbit >> bm::set_word_shift;
+        nbit &= bm::set_word_mask;
+        block[nword] |= (1u << nbit);
+    } // for k
+}
+
+
+
 
 /**
     Experimental (test) function to do SIMD vector search (lower bound)
@@ -2164,7 +2353,7 @@ void avx2_bit_block_gather_scatter(unsigned* BMRESTRICT arr,
     avx2_idx_arr_block_lookup(idx, size, nb, start)
 
 #define VECT_SET_BLOCK_BITS(block, idx, start, stop) \
-    avx2_set_block_bits(block, idx, start, stop)
+    avx2_set_block_bits3(block, idx, start, stop)
 
 } // namespace
 
