@@ -6,15 +6,14 @@ indexing of databases, scientific algorithms, ranking, clustering and signal pro
 
 BitMagic library uses compressed bit-vectors as a main vehicle for implementing set algebraic operations, 
 because of high efficiency and bit-level parallelism of this representation. 
-To compress memory it uses delta / prefix sum coding. One of our goals is constant improvement of 
-performance via SIMD vectorization (SSE2, SSE4.2, AVX2), CPU cache-friendly algorithms and 
-data-parallel thread-safe structures.
 
 
 ### Main Features:
 
 - compressed bit-vector container with mechanisms to iterate integer set it represents
 - set algebraic operations: AND, OR, XOR, MINUS on bit-vectors and integer sets
+- fast bit-vctor ierator (enumerator) for bit-vector traversal
+- fast import (compression) of integer lists (C++ style bulk_insert_iterator or using C array)
 - aggregator: fast logical AND, OR, AND-MINUS operations on groups of bit-vectors
 - serialization/hybernation of bit-vector containers into compressed BLOBs for persistence (or in-RAM compression)
 - set algebraic operations on compressed BLOBs (on the fly deserialization with set-algebraic function)
@@ -26,7 +25,8 @@ with support of NULL values (unassigned) for construction of in-memory columnar 
 sparse vectors can be used for on-the fly compression of astronomical, molecular biology or other data,
 efficient store of associations for graphs, etc.
 - algorithms on sparse vectors: dynamic range clipping, search, group theory image (re-mapping).
-Collection of algorithms is increasing, please check our samples and the API lists. 
+Collection of algorithms is increasing, please check our samples and the API lists.
+
 
 ### Features In Progress:
 
@@ -35,7 +35,24 @@ Entity-Relationship acceleration, graph operations, social analyticsm materializ
 
 - portable C-library layer working as a bridge to high level languages like Python, Java, Scala, .Net 
 
-License: Apache 2.0
+### License: 
+
+Apache 2.0. 
+We ask you to explicitly mention BitMagic project in any work using it or derived from our code 
+or published materials.
+
+
+### SIMD support:
+
+BitMagic provides fast algorithms optimized for various SIMD sets, exploit super-scalar features of modern CPUs, 
+cache-friendly algorithms and thread-safe and data-parallel structures.
+
+- SSE2    - Intel SSE2 command set is supported, but gets gradually phased out, no new algorithms and compute kernels
+- SSE4.2  - Supported
+- AVX2    - Supported and recommended as fastest for high-performance systems
+- AVX-512 - Work in progress. Some algorithms are ready(and stable), but we cannot get performance right (yet).
+            AVX-512 projects using BitMagic for now should just use AVX2 mode (it is compatible).
+
 
 
 ### If you want to contribute or support BitMagic library:
@@ -68,13 +85,14 @@ instructions:
 
 Apply a few environment variables by runing bmenv.sh in the project root directory:
 
-	$ ./bmenv.sh
+	$ . ./bmenv.sh
 	
+(please use "." "./bmenv.sh" to apply root environment variable)
 
 use GNU make (gmake) to build installation.
 
 
-	$gmake rebuild
+	$make rebuild
 
 
 or (DEBUG version)
@@ -143,11 +161,6 @@ BM library supports CXX-11. Move semantics, noexept, initalizer lists.
 
 ---
 
-BM library includes some code optimized for 64-bit systems. This optimization 
-gets applied automatically.
-
-BM library contains code using intrinsics for SIMD extensions SSE2, SSE4.2, AVX2.
-
 To turn on SSE2 optimization #define BMSSE2OPT in your build environment.
 To use SSE4.2  #define BMSSE42OPT
 SSE42 optimization automatically assumes SSE2 as a subset of SSE4.2. 
@@ -198,11 +211,11 @@ to correct keyword.
 ---
 
 
-If you want to use BM library in no STL-free project you need to define
-BM_NO_STL variable.
+If you want to use BM library in a "no-STL project" (like embedded systems) 
+define BM_NO_STL.
 
 This rule only applies to the core bm::bvector<> methods. 
-Auxiliary algorithms may still use STL.
+Auxiliary algorithms, examples, etc would still use STL.
 
 ---
 
