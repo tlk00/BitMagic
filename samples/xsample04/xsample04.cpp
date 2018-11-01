@@ -188,11 +188,13 @@ public:
     ///
     void Build(const vector<char>& sequence)
     {
-        bm::bvector<>::insert_iterator iA = m_FPrintBV[eA].inserter();
-        bm::bvector<>::insert_iterator iC = m_FPrintBV[eC].inserter();
-        bm::bvector<>::insert_iterator iG = m_FPrintBV[eG].inserter();
-        bm::bvector<>::insert_iterator iT = m_FPrintBV[eT].inserter();
-        bm::bvector<>::insert_iterator iN = m_FPrintBV[eN].inserter();
+        // use bulk insert iterator (faster way to construct a bit-index)
+        //
+        bm::bvector<>::bulk_insert_iterator iA(m_FPrintBV[eA], bm::BM_SORTED);
+        bm::bvector<>::bulk_insert_iterator iC(m_FPrintBV[eC], bm::BM_SORTED);
+        bm::bvector<>::bulk_insert_iterator iG(m_FPrintBV[eG], bm::BM_SORTED);
+        bm::bvector<>::bulk_insert_iterator iT(m_FPrintBV[eT], bm::BM_SORTED);
+        bm::bvector<>::bulk_insert_iterator iN(m_FPrintBV[eN], bm::BM_SORTED);
 
         for (size_t i = 0; i < sequence.size(); ++i)
         {
@@ -519,13 +521,21 @@ int main(int argc, char *argv[])
         if (ret != 0)
             return ret;
 
+        DNA_FingerprintScanner idx;
+
         if (!ifa_name.empty())
         {
             auto res = load_FASTA(ifa_name, seq_vect);
             if (res != 0)
                 return res;
             std::cout << "FASTA sequence size=" << seq_vect.size() << std::endl;
+            
+            {
+                bm::chrono_taker tt1("2. Build DNA index", 1, &timing_map);
+                idx.Build(seq_vect);
+            }
         }
+        
 
         if (is_search)
         {
@@ -538,12 +548,6 @@ int main(int argc, char *argv[])
             //
             generate_kmers(h_words, l_words, seq_vect, 25, WORD_SIZE);
 
-            DNA_FingerprintScanner idx;
-            {
-                bm::chrono_taker tt1("2. Build DNA index", 1, &timing_map);
-
-                idx.Build(seq_vect);
-            }
             
             vector<THitList> word_hits;
             vector<THitList> word_hits_agg;
