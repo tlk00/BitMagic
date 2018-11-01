@@ -482,7 +482,8 @@ public:
         typedef void pointer;
         typedef void reference;
 
-        bulk_insert_iterator() : bvect_(0), buf_(0), buf_size_(0) {}
+        bulk_insert_iterator()
+         : bvect_(0), buf_(0), buf_size_(0), sorted_(BM_UNKNOWN) {}
         
         ~bulk_insert_iterator()
         {
@@ -491,8 +492,8 @@ public:
                 bvect_->free_tempblock(buf_);
         }
 
-        bulk_insert_iterator(bvector<Alloc>& bvect)
-            : bvect_(&bvect)
+        bulk_insert_iterator(bvector<Alloc>& bvect, bm::sort_order so = BM_UNKNOWN)
+            : bvect_(&bvect), sorted_(so)
         {
             bvect_->init();
             buf_ = bvect_->allocate_tempblock();
@@ -504,6 +505,7 @@ public:
         {
             buf_ = bvect_->allocate_tempblock();
             buf_size_ = iit.buf_size_;
+            sorted_ = iit.sorted_;
             ::memcpy(buf_, iit.buf_, buf_size_ * sizeof(*buf_));
         }
         
@@ -512,6 +514,7 @@ public:
         {
             buf_ = bvect_->allocate_tempblock();
             buf_size_ = 0;
+            sorted_ = BM_UNKNOWN;
         }
 
         bulk_insert_iterator(bulk_insert_iterator&& iit) BMNOEXEPT
@@ -519,6 +522,7 @@ public:
         {
             buf_ = iit.buf_; iit.buf_ = 0;
             buf_size_ = iit.buf_size_;
+            sorted_ = iit.sorted_;
         }
         
         bulk_insert_iterator& operator=(const bulk_insert_iterator& ii)
@@ -528,6 +532,7 @@ public:
                 buf_ = bvect_->allocate_tempblock();
             buf_size_ = ii.buf_size_;
             ::memcpy(buf_, ii.buf_, buf_size_ * sizeof(*buf_));
+            sorted_ = ii.sorted_;
             return *this;
         }
         
@@ -538,6 +543,7 @@ public:
                 bvect_->free_tempblock(buf_);
             buf_ = ii.buf_; ii.buf_ = 0;
             buf_size_ = ii.buf_size_;
+            sorted_ = ii.sorted_;
             return *this;
         }
 
@@ -548,7 +554,7 @@ public:
 
             if (buf_size_ == bm::set_block_size)
             {
-                bvect_->import(buf_, buf_size_);
+                bvect_->import(buf_, buf_size_, sorted_);
                 buf_size_ = 0;
             }
             buf_[buf_size_++] = n;
@@ -568,7 +574,7 @@ public:
             BM_ASSERT(bvect_);
             if (buf_size_)
             {
-                bvect_->import(buf_, buf_size_);
+                bvect_->import(buf_, buf_size_, sorted_);
                 buf_size_ = 0;
             }
             bvect_->sync_size();
@@ -580,6 +586,7 @@ public:
         bm::bvector<Alloc>*   bvect_;    ///< target bvector
         bm::id_t*             buf_;      ///< bulk insert buffer
         unsigned              buf_size_; ///< current buffer size
+        bm::sort_order        sorted_;   ///< sort order hint
     };
     
 
@@ -1595,9 +1602,10 @@ public:
      
        @param ids  - pointer on array of indexes to set
        @param size - size of the input (ids)
+       @param so   - sort order (use BM_SORTED for faster load)
      
     */
-    void set(const bm::id_t* ids, unsigned size);
+    void set(const bm::id_t* ids, unsigned size, bm::sort_order so=bm::BM_UNKNOWN);
     
     /*!
         \brief Set bit without checking preconditions (size, etc)
@@ -2339,7 +2347,11 @@ protected:
         (Fast, no checks).
         @internal
     */
-    void import(const bm::id_t* ids, unsigned size);
+    void import(const bm::id_t* ids, unsigned size,
+                bm::sort_order sorted_idx);
+
+    void import_block(const bm::id_t* ids, 
+                      bm::id_t nblock, bm::id_t start, bm::id_t stop);
 
 private:
 
@@ -3377,14 +3389,14 @@ void bvector<Alloc>::set_bit_no_check(bm::id_t n)
 // -----------------------------------------------------------------------
 
 template<class Alloc>
-void bvector<Alloc>::set(const bm::id_t* ids, unsigned size)
+void bvector<Alloc>::set(const bm::id_t* ids, unsigned size, bm::sort_order so)
 {
     if (!ids || !size)
         return; // nothing to do
     if (!blockman_.is_init())
         blockman_.init_tree();
     
-    import(ids, size);
+    import(ids, size, so);
     
     sync_size();
 }
@@ -3392,10 +3404,30 @@ void bvector<Alloc>::set(const bm::id_t* ids, unsigned size)
 // -----------------------------------------------------------------------
 
 template<class Alloc>
-void bvector<Alloc>::import(const bm::id_t* ids, unsigned size)
+void bvector<Alloc>::import(const bm::id_t* ids, unsigned size,
+                            bm::sort_order    sorted_idx)
 {
-    bm::id_t n, nblock, start, stop;
+    bm::id_t n, nblock, start, stop = size;
     start = 0;
+
+    n = ids[start];
+    nblock = unsigned(n >> bm::set_block_shift);
+
+    switch(sorted_idx)
+    {
+    case BM_SORTED:
+    {
+        bm::id_t nblock_end = unsigned(ids[size-1] >> bm::set_block_shift);
+        if (nblock == nblock_end) // special case: one block import
+        {
+            import_block(ids, nblock, 0, stop);
+            return;
+        }
+    }
+    default:
+        break;
+    } // switch
+
     do
     {
         n = ids[start];
@@ -3403,23 +3435,32 @@ void bvector<Alloc>::import(const bm::id_t* ids, unsigned size)
         
         stop = bm::idx_arr_block_lookup(ids, size, nblock, start);
         BM_ASSERT(start < stop);
-        // get a BIT block
-        int block_type;
-        bm::word_t* blk =
-        blockman_.check_allocate_block(nblock, 0, 0, &block_type, false);
-        if (!IS_FULL_BLOCK(blk))
-        {
-            if (BM_IS_GAP(blk))
-                blk = blockman_.deoptimize_block(nblock);
-
-            bm::set_block_bits(blk, ids, start, stop);
-            
-            if (nblock == bm::set_total_blocks-1)
-                blk[bm::set_block_size-1] &= ~(1u<<31);
-        }
+        import_block(ids, nblock, start, stop);
         start = stop;
     } while (start < size);
 }
+
+// -----------------------------------------------------------------------
+
+template<class Alloc>
+void bvector<Alloc>::import_block(const bm::id_t* ids,
+                                  bm::id_t nblock, bm::id_t start, bm::id_t stop)
+{
+    int block_type;
+    bm::word_t* blk =
+    blockman_.check_allocate_block(nblock, 0, 0, &block_type, false);
+    if (!IS_FULL_BLOCK(blk))
+    {
+        if (BM_IS_GAP(blk))
+            blk = blockman_.deoptimize_block(nblock);
+
+        bm::set_block_bits(blk, ids, start, stop);
+        
+        if (nblock == bm::set_total_blocks-1)
+            blk[bm::set_block_size-1] &= ~(1u<<31);
+    }
+}
+
 
 // -----------------------------------------------------------------------
 
