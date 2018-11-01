@@ -141,6 +141,7 @@ int main(void)
         }
         catch(std::exception& ex)
         {
+            std::cerr << ex.what() << std::endl;
             agg.reset();  // reset
             throw;
         }
