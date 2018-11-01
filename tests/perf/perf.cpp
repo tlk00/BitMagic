@@ -2809,7 +2809,7 @@ int main(void)
 //    ptest();
 
     TimeTaker tt("TOTAL", 1);
-/*
+
     MemCpyTest();
 
     BitCountTest();
@@ -2835,7 +2835,7 @@ int main(void)
     EnumeratorTestGAP();
 
     EnumeratorGoToTest();
-*/
+
     BvectorShiftTest();
 
     RangeCopyTest();
