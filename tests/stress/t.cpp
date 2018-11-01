@@ -2453,13 +2453,22 @@ void BvectorBulkSetTest()
     {
     unsigned ids[] = { 0 };
     
-    bvect bv1, bv2;
+    bvect bv1, bv2, bv3;
+    {
+    bvect::bulk_insert_iterator iit = bv3.inserter();
     for (unsigned i = 0; i < sizeof(ids)/sizeof(ids[0]); ++i)
+    {
         bv1.set(ids[i]);
+        iit = ids[i];
+    }
+    }
     bv2.set(&ids[0], sizeof(ids)/sizeof(ids[0]));
     
     int cmp = bv1.compare(bv2);
     assert(cmp==0);
+    cmp = bv1.compare(bv3);
+    assert(cmp==0);
+    
     }
 
     {
@@ -2474,6 +2483,16 @@ void BvectorBulkSetTest()
     assert(cnt == 1);
     assert(bv2.test(ids[0]));
     }
+
+    {
+    unsigned ids[] = {65536 };
+    bvect bv1;
+    bv1.resize(10);
+
+    bv1.set(&ids[0], sizeof(ids)/sizeof(ids[0]));
+    assert(bv1.size()==65536+1);
+    }
+
 
     {
     unsigned ids[] = {65536, 1280000, 65535 };
@@ -2501,13 +2520,23 @@ void BvectorBulkSetTest()
     int cmp = bv1.compare(bv2);
     assert(cmp==0);
     
-    bvect bv3, bv4;
+    bvect bv3, bv4, bv5;
     bv3.invert();
     bv4.invert();
+    bv5.invert();
+
+    {
+    bvect::bulk_insert_iterator iit = bv5.inserter();
     for (unsigned i = 0; i < sizeof(ids)/sizeof(ids[0]); ++i)
+    {
         bv3.set(ids[i]);
+        iit = ids[i];
+    }
+    }
     bv4.set(&ids[0], sizeof(ids)/sizeof(ids[0]));
     cmp = bv3.compare(bv4);
+    assert(cmp==0);
+    cmp = bv3.compare(bv5);
     assert(cmp==0);
     }
     
@@ -2518,20 +2547,39 @@ void BvectorBulkSetTest()
 
     for (unsigned k = 0; k < 2; ++ k)
     {
-        bvect bv1, bv2, bv3;
+        bvect bvu, bvuc;
+        bvect bv1, bv2, bv3, bv11;
         bvect bv1c, bv2c, bv3c;
-
+        
+        {
+        bvect::bulk_insert_iterator iit(bv11);
         for (unsigned i = 0; i < v1.size(); ++i)
+        {
             bv1c.set(v1[i]);
+            iit = v1[i];
+        }
+        iit.flush();
+        }
+        
         for (unsigned i = 0; i < v2.size(); ++i)
             bv2c.set(v2[i]);
         for (unsigned i = 0; i < v3.size(); ++i)
             bv3c.set(v3[i]);
+        
+        // union of 3 vectors
+        bvuc = bv1c;
+        bvuc |= bv2c;
+        bvuc |= bv3c;
 
         bv1.set(&v1[0], unsigned(v1.size()));
         bv2.set(&v2[0], unsigned(v2.size()));
         bv3.set(&v3[0], unsigned(v3.size()));
-        
+
+        // imported union of 3 vectors
+        bvu.set(&v1[0], unsigned(v1.size()));
+        bvu.set(&v2[0], unsigned(v2.size()));
+        bvu.set(&v3[0], unsigned(v3.size()));
+
         cout << bv1.count() << " " << bv1c.count() << endl;
         
         int cmp;
@@ -2545,6 +2593,11 @@ void BvectorBulkSetTest()
         assert(cmp==0);
         cmp = bv3c.compare(bv3);
         assert(cmp==0);
+        cmp = bv1.compare(bv11);
+        assert(cmp==0);
+
+        cmp = bvuc.compare(bvu);
+        assert(cmp == 0);
         
         {
             std::random_device rd;
@@ -2558,6 +2611,55 @@ void BvectorBulkSetTest()
     
     
     }
+    
+    cout << "Bulk bvector<>::set() stress.." << endl;
+    {
+        unsigned vector_max =40000000;
+        unsigned delta_max = 65537;
+
+        bvect bv1, bv2;
+        bvect bv1c;
+        std::vector<bm::id_t> v1;
+
+        for (unsigned delta = 1; delta < delta_max; ++delta)
+        {
+            v1.resize(0);
+            bvect::bulk_insert_iterator iit(bv2);
+            for (unsigned i = 0; i < vector_max; i+=delta)
+            {
+                v1.push_back(i);
+                iit = i;
+            }
+            iit.flush();
+            
+            bv1.set(&v1[0], unsigned(v1.size()));
+            bm::combine_or(bv1c, v1.begin(), v1.end());
+            
+            int cmp = bv1.compare(bv1c);
+            if (cmp!=0)
+            {
+                cerr << "1.Failed bulk set test at delta=" << delta << endl;
+                exit(1);
+            }
+            cmp = bv1.compare(bv2);
+            if (cmp!=0)
+            {
+                cerr << "2.Failed bulk set test at delta=" << delta << endl;
+                exit(1);
+            }
+            bv1.clear();
+            bv1c.clear();
+            bv2.clear();
+            
+            if (delta % 500 == 0)
+            {
+                cout << "\r" << delta << "/" << delta_max << flush;
+            }
+            
+        } // for delta
+        cout << endl;
+    }
+    
     
     cout << "---------------------------- Bvector BULK set test OK" << endl;
 }
