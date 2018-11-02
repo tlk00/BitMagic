@@ -582,8 +582,6 @@ void set2set_11_transform<SV>::remap(const bvector_type&        bv_in,
             {
                 sv_ptr_->gather(&gb_->buffer_[0], &gb_->gather_idx_[0], buf_cnt, BM_SORTED_UNIFORM);
                 bv_out.set(&gb_->buffer_[0], buf_cnt, BM_SORTED);
-                
-                //bm::combine_or(bv_out, &gb_->buffer_[0], &gb_->buffer_[buf_cnt]);
                 buf_cnt ^= buf_cnt;
             }
             nb_old = nb;
@@ -598,7 +596,6 @@ void set2set_11_transform<SV>::remap(const bvector_type&        bv_in,
         {
             sv_ptr_->gather(&gb_->buffer_[0], &gb_->gather_idx_[0], buf_cnt, BM_SORTED_UNIFORM);
             bv_out.set(&gb_->buffer_[0], buf_cnt, bm::BM_SORTED);
-            //bm::combine_or(bv_out, &gb_->buffer_[0], &gb_->buffer_[buf_cnt]);
             buf_cnt ^= buf_cnt;
         }
     } // for en
@@ -606,9 +603,7 @@ void set2set_11_transform<SV>::remap(const bvector_type&        bv_in,
     {
         sv_ptr_->gather(&gb_->buffer_[0], &gb_->gather_idx_[0], buf_cnt, BM_SORTED_UNIFORM);
         bv_out.set(&gb_->buffer_[0], buf_cnt, bm::BM_SORTED);
-        //bm::combine_or(bv_out, &gb_->buffer_[0], &gb_->buffer_[buf_cnt]);
     }
-
 }
 
 

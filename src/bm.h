@@ -284,19 +284,13 @@ public:
            \brief Checks if iterator is still valid. Analog of != 0 comparison for pointers.
            \returns true if iterator is valid.
         */
-        bool valid() const
-        {
-            return position_ != bm::id_max;
-        }
+        bool valid() const { return position_ != bm::id_max; }
 
         /**
            \fn bool bm::bvector::iterator_base::invalidate() 
            \brief Turns iterator into an invalid state.
         */
-        void invalidate()
-        {
-            position_ = bm::id_max;
-        }
+        void invalidate() { position_ = bm::id_max; }
         
         /** \brief Compare FSMs for testing purposes
             \internal
@@ -408,7 +402,6 @@ public:
         : bvect_(iit.bvect_),
           max_bit_(iit.max_bit_)
         {
-            //bvect_->init();
         }
         
         insert_iterator& operator=(const insert_iterator& ii)
@@ -434,9 +427,6 @@ public:
             bvect_->set_bit_no_check(n);
             return *this;
         }
-        
-        
-        
         /*! Returns *this without doing anything (no-op) */
         insert_iterator& operator*() { return *this; }
         /*! Returns *this. This iterator does not move (no-op) */
@@ -633,21 +623,13 @@ public:
         }
 
         /*! \brief Get current position (value) */
-        bm::id_t operator*() const
-        { 
-            return this->position_; 
-        }
+        bm::id_t operator*() const { return this->position_; }
 
         /*! \brief Get current position (value) */
-        bm::id_t value() const
-        {
-            return this->position_;
-        }
+        bm::id_t value() const { return this->position_; }
+        
         /*! \brief Advance enumerator forward to the next available bit */
-        enumerator& operator++()
-        {
-            return this->go_up();
-        }
+        enumerator& operator++() { return this->go_up(); }
 
         /*! \brief Advance enumerator forward to the next available bit.
              Possibly do NOT use this operator it is slower than the pre-fix increment.
@@ -979,7 +961,6 @@ public:
 
     private:
         typedef typename iterator_base::block_descr block_descr_type;
-        
         
         bool decode_wave(block_descr_type* bdescr)
         {
@@ -2350,7 +2331,7 @@ protected:
     void import(const bm::id_t* ids, unsigned size,
                 bm::sort_order sorted_idx);
 
-    void import_block(const bm::id_t* ids, 
+    void import_block(const bm::id_t* ids,
                       bm::id_t nblock, bm::id_t start, bm::id_t stop);
 
 private:

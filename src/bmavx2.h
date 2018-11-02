@@ -1890,51 +1890,44 @@ void avx2_set_block_bits(bm::word_t* BMRESTRICT block,
 /** Set a bits in an AVX target, by indexes (int4) from the source
     @internal
 */
-inline
+BMFORCEINLINE
 __m256i avx2_setbit_256(__m256i target, __m256i source)
 {
     __m256i stride_idx = _mm256_set_epi32(224, 192, 160, 128, 96, 64, 32, 0);
     __m256i mask1 = _mm256_set1_epi32(1);
 
-    __m256i acc1, acc2;
-    {
-    __m256i v0 = _mm256_permutevar8x32_epi32(source, _mm256_set1_epi32(0));
-    __m256i v1 = _mm256_permutevar8x32_epi32(source, _mm256_set1_epi32(1));
-    __m256i s0 = _mm256_sub_epi32(v0, stride_idx);
-    __m256i s1 = _mm256_sub_epi32(v1, stride_idx);
-    __m256i k0   = _mm256_sllv_epi32(mask1, s0);
-    __m256i k1   = _mm256_sllv_epi32(mask1, s1);
-    acc1 = _mm256_or_si256(k1, k0);
-    }
-    {
-    __m256i v0 = _mm256_permutevar8x32_epi32(source, _mm256_set1_epi32(2));
-    __m256i v1 = _mm256_permutevar8x32_epi32(source, _mm256_set1_epi32(3));
-    __m256i s0 = _mm256_sub_epi32(v0, stride_idx);
-    __m256i s1 = _mm256_sub_epi32(v1, stride_idx);
-    __m256i k0   = _mm256_sllv_epi32(mask1, s0);
-    __m256i k1   = _mm256_sllv_epi32(mask1, s1);
-    acc2 = _mm256_or_si256(k1, k0);
-    }
+    __m256i v0, v1, acc1, acc2;
+    v0 = _mm256_permutevar8x32_epi32(source, _mm256_set1_epi32(0));
+    v1 = _mm256_permutevar8x32_epi32(source, _mm256_set1_epi32(1));
+    v0 = _mm256_sub_epi32(v0, stride_idx);
+    v1 = _mm256_sub_epi32(v1, stride_idx);
+    v0   = _mm256_sllv_epi32(mask1, v0);
+    v1   = _mm256_sllv_epi32(mask1, v1);
+    acc1 = _mm256_or_si256(v1, v0);
+    v0 = _mm256_permutevar8x32_epi32(source, _mm256_set1_epi32(2));
+    v1 = _mm256_permutevar8x32_epi32(source, _mm256_set1_epi32(3));
+    v0 = _mm256_sub_epi32(v0, stride_idx);
+    v1 = _mm256_sub_epi32(v1, stride_idx);
+    v0   = _mm256_sllv_epi32(mask1, v0);
+    v1   = _mm256_sllv_epi32(mask1, v1);
+    acc2 = _mm256_or_si256(v1, v0);
     target = _mm256_or_si256(target, acc1);
-    {
-    __m256i v0 = _mm256_permutevar8x32_epi32(source, _mm256_set1_epi32(4));
-    __m256i v1 = _mm256_permutevar8x32_epi32(source, _mm256_set1_epi32(5));
-    __m256i s0 = _mm256_sub_epi32(v0, stride_idx);
-    __m256i s1 = _mm256_sub_epi32(v1, stride_idx);
-    __m256i k0   = _mm256_sllv_epi32(mask1, s0);
-    __m256i k1   = _mm256_sllv_epi32(mask1, s1);
-    acc1 = _mm256_or_si256(k1, k0);
-    }
+    v0 = _mm256_permutevar8x32_epi32(source, _mm256_set1_epi32(4));
+    v1 = _mm256_permutevar8x32_epi32(source, _mm256_set1_epi32(5));
+    v0 = _mm256_sub_epi32(v0, stride_idx);
+    v1 = _mm256_sub_epi32(v1, stride_idx);
+    v0   = _mm256_sllv_epi32(mask1, v0);
+    v1   = _mm256_sllv_epi32(mask1, v1);
+    acc1 = _mm256_or_si256(v1, v0);
     target = _mm256_or_si256(target, acc2);
-    {
-    __m256i v0 = _mm256_permutevar8x32_epi32(source, _mm256_set1_epi32(6));
-    __m256i v1 = _mm256_permutevar8x32_epi32(source, _mm256_set1_epi32(7));
-    __m256i s0 = _mm256_sub_epi32(v0, stride_idx);
-    __m256i s1 = _mm256_sub_epi32(v1, stride_idx);
-    __m256i k0   = _mm256_sllv_epi32(mask1, s0);
-    __m256i k1   = _mm256_sllv_epi32(mask1, s1);
-    acc2 = _mm256_or_si256(k1, k0);
-    }
+    v0 = _mm256_permutevar8x32_epi32(source, _mm256_set1_epi32(6));
+    v1 = _mm256_permutevar8x32_epi32(source, _mm256_set1_epi32(7));
+    v0 = _mm256_sub_epi32(v0, stride_idx);
+    v1 = _mm256_sub_epi32(v1, stride_idx);
+    v0   = _mm256_sllv_epi32(mask1, v0);
+    v1   = _mm256_sllv_epi32(mask1, v1);
+    acc2 = _mm256_or_si256(v1, v0);
+    
     target = _mm256_or_si256(target, acc1);
     target = _mm256_or_si256(target, acc2);
     return target;
@@ -2033,16 +2026,43 @@ void avx2_set_block_bits3(bm::word_t* BMRESTRICT block,
                 avx_stride_p = block_avx + stride;
                 blkA = _mm256_load_si256(avx_stride_p); // re-load accum
             }
-            
-            blkA = bm::avx2_setbit_256(blkA, strideBitA); // set 8 bits
+            // set 8 bits all at once
+            blkA = bm::avx2_setbit_256(blkA, strideBitA);
         }
         else // stride mix here, process one by one
         {
             _mm256_store_si256 ((__m256i*)mstride_bit_v, strideBitA); // store block stride-bit idxs
             _mm256_store_si256 ((__m256i*)mstride_v, strideA);
-            for (unsigned j = 0; j < 8; ++j)
+
+            unsigned bc = _mm_popcnt_u32(mask);
+            unsigned j = 0;
+            unsigned new_stride = mstride_v[j];
+            if (new_stride == stride && bc >= 16) // still in the same stride
+            {                   // 4 * 4 due to _mm256_movemask_epi8 properties
+                // we have 4 bits to set without any checking here
+                __m256i v0, v1, acc1, acc2;
+                v0 = _mm256_set1_epi32(mstride_bit_v[0]);
+                v1 = _mm256_set1_epi32(mstride_bit_v[1]);
+                v0 = _mm256_sub_epi32(v0, stride_idx);
+                v1 = _mm256_sub_epi32(v1, stride_idx);
+                v0   = _mm256_sllv_epi32(mask1, v0);
+                v1   = _mm256_sllv_epi32(mask1, v1);
+                acc1 = _mm256_or_si256(v1, v0);
+                v0 = _mm256_set1_epi32(mstride_bit_v[2]);
+                v1 = _mm256_set1_epi32(mstride_bit_v[3]);
+                v0 = _mm256_sub_epi32(v0, stride_idx);
+                v1 = _mm256_sub_epi32(v1, stride_idx);
+                v0   = _mm256_sllv_epi32(mask1, v0);
+                v1   = _mm256_sllv_epi32(mask1, v1);
+                acc2 = _mm256_or_si256(v1, v0);
+                blkA = _mm256_or_si256(blkA, acc1);
+                blkA = _mm256_or_si256(blkA, acc2);
+                j = 4;
+            }
+            
+            for (; j < 8; ++j)
             {
-                unsigned new_stride = mstride_v[j];
+                new_stride = mstride_v[j];
                 if (new_stride != stride)
                 {
                     _mm256_store_si256(avx_stride_p, blkA); // flush avx2 accum
@@ -2050,7 +2070,7 @@ void avx2_set_block_bits3(bm::word_t* BMRESTRICT block,
                     avx_stride_p = block_avx + stride;
                     blkA = _mm256_load_si256(avx_stride_p); // re-load accum
                 }
-                // set avx2 bit
+                // set avx2 bits one by one
                 mask_tmp = _mm256_set1_epi32(mstride_bit_v[j]);
                 mask_tmp = _mm256_sub_epi32(mask_tmp, stride_idx);
                 mask_tmp   = _mm256_sllv_epi32(mask1, mask_tmp);
