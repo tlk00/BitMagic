@@ -1408,8 +1408,6 @@ bool avx2_shift_r1_and(__m256i* BMRESTRICT block,
 
 
 
-
-
 /*
 inline
 void avx2_i32_shift()
@@ -1426,152 +1424,6 @@ void avx2_i32_shift()
 }
 */
 
-// TODO: write better pipelined AVX2 implementation
-/*!
-    @brief AVX2 optimized bitcounting and number of GAPs
-    @ingroup AVX2
-*/
-/*
-inline
-bm::id_t avx2_bit_block_calc_count_change(const __m256i* BMRESTRICT block,
-                                          const __m256i* BMRESTRICT block_end,
-                                               unsigned* BMRESTRICT bit_count)
-{
-   int count = (unsigned)(block_end - block)*8;
-
-   bm::word_t  w0, w_prev;
-   const int w_shift = sizeof(w0) * 8 - 1;
-   bool first_word = true;
-   *bit_count = 0;
- 
-   // first word
-   {
-       bm::word_t  w;
-       const bm::word_t* blk = (const bm::word_t*) block;
-       w = w0 = blk[0];
-       *bit_count += _mm_popcnt_u32(w);
-       w ^= (w >> 1);
-       count += _mm_popcnt_u32(w);
-       count -= (w_prev = (w0 >> w_shift));
-   }
-
-   do
-   {
-       __m256i b = _mm256_load_si256(block);
-       __m256i tmp2 = _mm256_xor_si256(b, _mm256_srli_epi32(b, 1)); // tmp2=(b >> 1) ^ b;
-       __m256i tmp3 = _mm256_srli_epi32(b, w_shift); // tmp3 = w0 >> w_shift
-
-       // ---------------------------------------------------------------------
-       {
-           if (first_word)
-           {
-               first_word = false;
-           }
-           else
-           {
-               w0 = _mm256_extract_epi32(b, 0);
-               if (w0)
-               {
-                   *bit_count += _mm_popcnt_u32(w0);
-                   count += _mm_popcnt_u32(_mm256_extract_epi32(tmp2, 0));
-                   count -= !(w_prev ^ (w0 & 1));
-                   count -= w_prev = _mm256_extract_epi32(tmp3, 0);
-               }
-               else
-               {
-                   count -= !w_prev; w_prev ^= w_prev;
-               }
-           }
-           w0 = _mm256_extract_epi32(b, 1);
-           if (w0)
-           {
-               *bit_count += _mm_popcnt_u32(w0);
-               count += _mm_popcnt_u32(_mm256_extract_epi32(tmp2, 1));
-               count -= !(w_prev ^ (w0 & 1));
-               count -= w_prev = _mm256_extract_epi32(tmp3, 1);
-           }
-           else
-           {
-               count -= !w_prev; w_prev ^= w_prev;
-           }
-           w0 = _mm256_extract_epi32(b, 2);
-           if (w0)
-           {
-               *bit_count += _mm_popcnt_u32(w0);
-               count += _mm_popcnt_u32(_mm256_extract_epi32(tmp2, 2));
-               count -= !(w_prev ^ (w0 & 1));
-               count -= w_prev = _mm256_extract_epi32(tmp3, 2);
-           }
-           else
-           {
-               count -= !w_prev; w_prev ^= w_prev;
-           }
-           w0 = _mm256_extract_epi32(b, 3);
-           if (w0)
-           {
-               *bit_count += _mm_popcnt_u32(w0);
-               count += _mm_popcnt_u32(_mm256_extract_epi32(tmp2, 3));
-               count -= !(w_prev ^ (w0 & 1));
-               count -= w_prev = _mm256_extract_epi32(tmp3, 3);
-           }
-           else
-           {
-               count -= !w_prev; w_prev ^= w_prev;
-           }
-           w0 = _mm256_extract_epi32(b, 4);
-           if (w0)
-           {
-               *bit_count += _mm_popcnt_u32(w0);
-               count += _mm_popcnt_u32(_mm256_extract_epi32(tmp2, 4));
-               count -= !(w_prev ^ (w0 & 1));
-               count -= w_prev = _mm256_extract_epi32(tmp3, 4);
-           }
-           else
-           {
-               count -= !w_prev; w_prev ^= w_prev;
-           }
-           w0 = _mm256_extract_epi32(b, 5);
-           if (w0)
-           {
-               *bit_count += _mm_popcnt_u32(w0);
-               count += _mm_popcnt_u32(_mm256_extract_epi32(tmp2, 5));
-               count -= !(w_prev ^ (w0 & 1));
-               count -= w_prev = _mm256_extract_epi32(tmp3, 5);
-           }
-           else
-           {
-               count -= !w_prev; w_prev ^= w_prev;
-           }
-           w0 = _mm256_extract_epi32(b, 6);
-           if (w0)
-           {
-               *bit_count += _mm_popcnt_u32(w0);
-               count += _mm_popcnt_u32(_mm256_extract_epi32(tmp2, 6));
-               count -= !(w_prev ^ (w0 & 1));
-               count -= w_prev = _mm256_extract_epi32(tmp3, 6);
-           }
-           else
-           {
-               count -= !w_prev; w_prev ^= w_prev;
-           }
-           w0 = _mm256_extract_epi32(b, 7);
-           if (w0)
-           {
-               *bit_count += _mm_popcnt_u32(w0);
-               count += _mm_popcnt_u32(_mm256_extract_epi32(tmp2, 7));
-               count -= !(w_prev ^ (w0 & 1));
-               count -= w_prev = _mm256_extract_epi32(tmp3, 7);
-           }
-           else
-           {
-               count -= !w_prev; w_prev ^= w_prev;
-           }
-       }
-   } while (++block < block_end);
-
-   return count;
-}
-*/
 
 /*!
     SSE4.2 optimized bitcounting and number of GAPs
@@ -2033,36 +1885,9 @@ void avx2_set_block_bits3(bm::word_t* BMRESTRICT block,
         {
             _mm256_store_si256 ((__m256i*)mstride_bit_v, strideBitA); // store block stride-bit idxs
             _mm256_store_si256 ((__m256i*)mstride_v, strideA);
-
-            unsigned bc = _mm_popcnt_u32(mask);
-            unsigned j = 0;
-            unsigned new_stride = mstride_v[j];
-            if (new_stride == stride && bc >= 16) // still in the same stride
-            {                   // 4 * 4 due to _mm256_movemask_epi8 properties
-                // we have 4 bits to set without any checking here
-                __m256i v0, v1, acc1, acc2;
-                v0 = _mm256_set1_epi32(mstride_bit_v[0]);
-                v1 = _mm256_set1_epi32(mstride_bit_v[1]);
-                v0 = _mm256_sub_epi32(v0, stride_idx);
-                v1 = _mm256_sub_epi32(v1, stride_idx);
-                v0   = _mm256_sllv_epi32(mask1, v0);
-                v1   = _mm256_sllv_epi32(mask1, v1);
-                acc1 = _mm256_or_si256(v1, v0);
-                v0 = _mm256_set1_epi32(mstride_bit_v[2]);
-                v1 = _mm256_set1_epi32(mstride_bit_v[3]);
-                v0 = _mm256_sub_epi32(v0, stride_idx);
-                v1 = _mm256_sub_epi32(v1, stride_idx);
-                v0   = _mm256_sllv_epi32(mask1, v0);
-                v1   = _mm256_sllv_epi32(mask1, v1);
-                acc2 = _mm256_or_si256(v1, v0);
-                blkA = _mm256_or_si256(blkA, acc1);
-                blkA = _mm256_or_si256(blkA, acc2);
-                j = 4;
-            }
-            
-            for (; j < 8; ++j)
+            for (unsigned j = 0; j < 8; ++j)
             {
-                new_stride = mstride_v[j];
+                unsigned new_stride = mstride_v[j];
                 if (new_stride != stride)
                 {
                     _mm256_store_si256(avx_stride_p, blkA); // flush avx2 accum
