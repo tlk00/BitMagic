@@ -19,6 +19,8 @@ Bit vector
 ./bvsample16 - bm::aggregator<> - utility class for fast logical operations on bvector<> groups
                Tech.note: http://bitmagic.io/aggregator.html
 ./bvsample17 - rank-select operations on bvector<> using rs_index
+./bvsample18 - bvector<>::bulk_insert_iterator (efficient bit-vector construction)
+
 
 
 Sparse vector (bit-transposed sparse vector)
