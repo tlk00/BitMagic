@@ -1379,7 +1379,19 @@ public:
     /*! \brief Exchanges content of bv and this bvector.
     */
     void swap(bvector<Alloc>& bvect) BMNOEXEPT;
+
+    /*! \brief Merge/move content from another vector
     
+        Merge performs a logical OR operation, but the source vector
+        is not immutable. Source content gets destroyed (memory moved)
+        to create a union of two vectors.
+        Merge operation can be more efficient than OR if argument is
+        a temporary vector.
+    
+        @param bvect - [in, out] - source vector (NOT immutable)
+    */
+    void merge(bm::bvector<Alloc>& bvect);
+
     //@}
 
 
@@ -4206,6 +4218,58 @@ bool bvector<Alloc>::shift_right()
     } // for i
     return carry_over;
 }
+
+//---------------------------------------------------------------------
+
+template<class Alloc>
+void bvector<Alloc>::merge(bm::bvector<Alloc>& bv)
+{
+    if (!bv.blockman_.is_init())
+        return;
+
+    unsigned top_blocks = blockman_.top_block_size();
+    if (size_ < bv.size_) // this vect shorter than the arg.
+    {
+        size_ = bv.size_;
+    }
+    unsigned arg_top_blocks = bv.blockman_.top_block_size();
+    top_blocks = blockman_.reserve_top_blocks(arg_top_blocks);
+
+    
+    bm::word_t*** blk_root = blockman_.top_blocks_root();
+    bm::word_t*** blk_root_arg = bv.blockman_.top_blocks_root();
+
+    for (unsigned i = 0; i < top_blocks; ++i)
+    {
+        bm::word_t** blk_blk = blk_root[i];
+        bm::word_t** blk_blk_arg = (i < arg_top_blocks) ? blk_root_arg[i] : 0;
+        if (blk_blk == blk_blk_arg || !blk_blk_arg) // nothing to do (0 OR 0 == 0)
+            continue;
+        if (!blk_blk)
+            blk_blk = blockman_.alloc_top_subblock(i);
+
+        unsigned j = 0;
+        bm::word_t* blk;
+        bm::word_t* arg_blk;
+        do
+        {
+            blk = blk_blk[j]; arg_blk = blk_blk_arg[j];
+            if (blk != arg_blk)
+            {
+                if (!blk && arg_blk) // block transfer
+                {
+                    blockman_.set_block_ptr(i, j, arg_blk);
+                    bv.blockman_.set_block_ptr(i, j, 0);
+                }
+                else // need full OR
+                {
+                    combine_operation_block_or(i, j, blk, arg_blk);
+                }
+            }
+        } while (++j < bm::set_array_size);
+    } // for i
+}
+
 
 
 //---------------------------------------------------------------------
