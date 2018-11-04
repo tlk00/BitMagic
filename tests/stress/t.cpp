@@ -918,6 +918,19 @@ unsigned SerializationOperation(bvect*             bv_target,
         switch(op)
         {
         case bm::set_OR:
+            {
+                bvect bvc(bv1);
+                bvc |= bv2;
+                bvect bv_merge1(bv1);
+                bvect bv_merge2(bv2);
+                bv_merge1.merge(bv_merge2);
+                
+                if (bv_merge1 != bvc)
+                {
+                    cerr << "Merge check error!" << endl;
+                    exit(1);
+                }
+            }
             bvt |= bv2;
             agg.combine_or(bv_agg, agg_list, 2);
             agg_check = true;
@@ -3776,6 +3789,25 @@ void OrOperationsTest()
     CheckVectors(bvect_min1, bvect_full1, BITVECT_SIZE);    
     }
     
+    {
+    bvect        bv1 { 0, 36500 };
+    bvect        bv2 { 128000 };
+    
+    bvect        bvc(bv1);
+    bvc |= bv2;
+
+    bv1.merge(bv2);
+    int cmp = bv1.compare(bvc);
+    assert(cmp==0);
+
+    struct bvect::statistics st2;
+    bv2.calc_stat(&st2);
+    auto bcnt = st2.bit_blocks + st2.gap_blocks;
+    assert(bcnt == 0);
+    }
+
+    
+    cout << "----------------------------------- OrOperationTest OK" << endl;
 
 }
 
