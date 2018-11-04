@@ -3790,8 +3790,9 @@ void OrOperationsTest()
     }
     
     {
+    bvect        bv0;
     bvect        bv1 { 0, 36500 };
-    bvect        bv2 { 128000 };
+    bvect        bv2 { 128000, bm::id_max-1 };
     
     bvect        bvc(bv1);
     bvc |= bv2;
@@ -3804,6 +3805,14 @@ void OrOperationsTest()
     bv2.calc_stat(&st2);
     auto bcnt = st2.bit_blocks + st2.gap_blocks;
     assert(bcnt == 0);
+    
+    
+    bv0.merge(bv1);
+    struct bvect::statistics st1;
+    bv1.calc_stat(&st1);
+    bcnt = st1.bit_blocks + st1.gap_blocks;
+    assert(bcnt == 0);
+
     }
 
     
