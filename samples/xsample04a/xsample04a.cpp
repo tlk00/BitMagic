@@ -300,31 +300,31 @@ public:
         case 'A':
         {
             std::lock_guard<std::mutex> guard(mtx_A);
-            m_FPrintBV[eA] |= bv;
+            m_FPrintBV[eA].merge(bv);
         }
         break;
         case 'C':
         {
             std::lock_guard<std::mutex> guard(mtx_C);
-            m_FPrintBV[eC] |= bv;
+            m_FPrintBV[eC].merge(bv);
         }
         break;
         case 'G':
         {
             std::lock_guard<std::mutex> guard(mtx_G);
-            m_FPrintBV[eG] |= bv;
+            m_FPrintBV[eG].merge(bv);
         }
         break;
         case 'T':
         {
             std::lock_guard<std::mutex> guard(mtx_T);
-            m_FPrintBV[eT] |= bv;
+            m_FPrintBV[eT].merge(bv);
         }
         break;
         case 'N':
         {
             std::lock_guard<std::mutex> guard(mtx_N);
-            m_FPrintBV[eN] |= bv;
+            m_FPrintBV[eN].merge(bv);
         }
         break;
         default:
