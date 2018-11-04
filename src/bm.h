@@ -4225,7 +4225,10 @@ template<class Alloc>
 void bvector<Alloc>::merge(bm::bvector<Alloc>& bv)
 {
     if (!bv.blockman_.is_init())
+    {
+        this->move_from(bv);
         return;
+    }
 
     unsigned top_blocks = blockman_.top_block_size();
     if (size_ < bv.size_) // this vect shorter than the arg.
@@ -4245,8 +4248,14 @@ void bvector<Alloc>::merge(bm::bvector<Alloc>& bv)
         bm::word_t** blk_blk_arg = (i < arg_top_blocks) ? blk_root_arg[i] : 0;
         if (blk_blk == blk_blk_arg || !blk_blk_arg) // nothing to do (0 OR 0 == 0)
             continue;
-        if (!blk_blk)
-            blk_blk = blockman_.alloc_top_subblock(i);
+        if (!blk_blk && blk_blk_arg) // top block transfer
+        {
+            BM_ASSERT(i < arg_top_blocks);
+            
+            blk_root[i] = blk_root_arg[i];
+            blk_root_arg[i] = 0;
+            continue;
+        }
 
         unsigned j = 0;
         bm::word_t* blk;
