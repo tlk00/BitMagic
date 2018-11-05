@@ -27,7 +27,6 @@ For more information please visit:  http://bitmagic.io
 
 #include <iostream>
 #include <sstream>
-#include <chrono>
 #include <regex>
 #include <time.h>
 #include <stdio.h>
@@ -35,20 +34,12 @@ For more information please visit:  http://bitmagic.io
 #include <stdexcept>
 #include <memory>
 #include <vector>
-#include <chrono>
-#include <map>
-#include <utility>
-#include <algorithm>
-#include <unordered_map>
 
 #include <future>
 #include <thread>
 #include <mutex>
 
 #include "bm.h"
-#include "bmalgo.h"
-#include "bmserial.h"
-#include "bmaggregator.h"
 
 #include "bmdbg.h"
 #include "bmtimer.h"
