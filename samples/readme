@@ -20,6 +20,7 @@ Bit vector
                Tech.note: http://bitmagic.io/aggregator.html
 ./bvsample17 - rank-select operations on bvector<> using rs_index
 ./bvsample18 - bvector<>::bulk_insert_iterator (efficient bit-vector construction)
+./bvsample19 - bvector<>::merge - merge of bit-vectors (can be used for partiotioned processing)
 
 
 
@@ -55,5 +56,7 @@ More complex examples to illustrate mixed techniques and use cases
               Details at: http://bitmagic.io/succinct-snp-search.html 
 ./xsample04 - Fingerprint pattern matching, SHIFT-AND Bitap algorithm. Search for DNA substrings.
               Details at: http://bitmagic.io/dna-search.html 
+./xsample04a - Fast construction of bit-indexes using bulk insert interator, multi-threaded partitioning and merge.
+              Details at: 
 
 
