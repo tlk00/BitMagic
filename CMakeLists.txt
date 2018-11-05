@@ -72,11 +72,13 @@ add_executable(bvsample15 ${PROJECT_SOURCE_DIR}/samples/bvsample15/sample15.cpp)
 add_executable(bvsample16 ${PROJECT_SOURCE_DIR}/samples/bvsample16/sample16.cpp)
 add_executable(bvsample17 ${PROJECT_SOURCE_DIR}/samples/bvsample17/sample17.cpp)
 add_executable(bvsample18 ${PROJECT_SOURCE_DIR}/samples/bvsample18/sample18.cpp)
+add_executable(bvsample19 ${PROJECT_SOURCE_DIR}/samples/bvsample19/sample19.cpp)
 
 add_executable(xsample01 ${PROJECT_SOURCE_DIR}/samples/xsample01/xsample01.cpp)
 add_executable(xsample02 ${PROJECT_SOURCE_DIR}/samples/xsample02/xsample02.cpp)
 add_executable(xsample03 ${PROJECT_SOURCE_DIR}/samples/xsample03/xsample03.cpp)
 add_executable(xsample04 ${PROJECT_SOURCE_DIR}/samples/xsample04/xsample04.cpp)
+add_executable(xsample04a ${PROJECT_SOURCE_DIR}/samples/xsample04a/xsample04a.cpp)
 
 add_executable(svsample01 ${PROJECT_SOURCE_DIR}/samples/svsample01/svsample01.cpp)
 add_executable(svsample02 ${PROJECT_SOURCE_DIR}/samples/svsample02/svsample02.cpp)
