@@ -456,7 +456,8 @@ void FillSets(bvect_mini* bvect_min,
                 end = max;
             }
 
-            
+            bvect::bulk_insert_iterator iit = bvect_full->inserter();
+
             if (fill_factor > 1)
             {
                 for(; start < end;)
@@ -473,7 +474,7 @@ void FillSets(bvect_mini* bvect_min,
                         while (start < end2)
                         {
                             bvect_min->set_bit(start);
-                            bvect_full->set_bit(start);  
+                            iit = start;
                             start += inc;
                         }
                         continue;
@@ -482,17 +483,16 @@ void FillSets(bvect_mini* bvect_min,
                     if (r)
                     {
                         bvect_min->set_bit(start);
-                        bvect_full->set_bit(start);
+                        iit = start;
                         ++start;
                     }
                     else
                     {
                         start+=r;
                         bvect_min->set_bit(start);
-                        bvect_full->set_bit(start);
+                        iit = start;
                     }
                 }
-
             }
             else
             {
@@ -502,7 +502,7 @@ void FillSets(bvect_mini* bvect_min,
                 for(; start < end; ++start)
                 {
                     bvect_min->set_bit(start);
-                    bvect_full->set_bit(start);
+                    iit = start;
                     if (start % c)
                     {
                         start += c;
@@ -635,6 +635,8 @@ void FillSetsRandom(bvect_mini* bvect_min,
               unsigned max,
               unsigned fill_factor)
 {
+    bvect_full->init();
+    
     unsigned diap = max - min;
 
     unsigned count;
@@ -664,7 +666,7 @@ void FillSetsRandom(bvect_mini* bvect_min,
             bn = max;
         }
         bvect_min->set_bit(bn);
-        bvect_full->set_bit(bn);   
+        bvect_full->set_bit_no_check(bn);
     }
     cout << "Ok" << endl;
 
@@ -677,13 +679,15 @@ void FillSetsRegular(bvect_mini* bvect_min,
               unsigned max,
               unsigned /*fill_factor*/)
 {
-    bvect_full->init();
+    bvect::bulk_insert_iterator iit = bvect_full->inserter();
+
     unsigned step = rand() % 4;
     if (step < 2) ++step;
     for (unsigned i = 0; i < max; i+=step)
     {
         bvect_min->set_bit(i);
-        bvect_full->set_bit_no_check(i);
+        iit = i;
+        //bvect_full->set_bit_no_check(i);
     }
     cout << "Ok" << endl;
 }
@@ -12136,7 +12140,6 @@ void TestSparseVector()
         bm::sparse_vector<unsigned, bm::bvector<> > sv1;
         bm::sparse_vector<unsigned, bm::bvector<> > sv2;
         
-        
         sv1.set(0, 0);
         sv1.set(1, 1);
         sv1.set(2, 2);
@@ -12163,7 +12166,40 @@ void TestSparseVector()
             }
         }
     }
-    
+
+    cout << "Test Sparse vector merge" << endl;
+    {
+        bm::sparse_vector<unsigned, bm::bvector<> > sv1;
+        bm::sparse_vector<unsigned, bm::bvector<> > sv2;
+        
+        sv1.set(0, 0);
+        sv1.set(1, 1);
+        sv1.set(2, 2);
+
+        sv2.set(3, 3);
+        sv2.set(4, 4);
+        sv2.set(5, 5);
+
+        sv1.merge(sv2);
+        
+        if (sv1.size()!=6)
+        {
+            cerr << "Sparse merge size failed:" << sv1.size() << endl;
+            exit(1);
+        
+        }
+        for (unsigned i = 0; i < sv1.size(); ++i)
+        {
+            unsigned v1 = sv1[i];
+            if (v1 != i)
+            {
+                cerr << "Sparse join cmp failed:" << sv1.size() << endl;
+                exit(1);
+            }
+        }
+    }
+
+
     cout << "Test Sparse vector join with NULL-able" << endl;
     {
         bm::sparse_vector<unsigned, bm::bvector<> > sv1;
