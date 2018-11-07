@@ -191,6 +191,43 @@ public:
         }
     }
 
+    /// Build index using bulk insert iterator
+    ///
+    void BuildBulk(const vector<char>& sequence)
+    {
+        bm::bvector<>::bulk_insert_iterator iA(m_FPrintBV[eA], bm::BM_SORTED);
+        bm::bvector<>::bulk_insert_iterator iC(m_FPrintBV[eC], bm::BM_SORTED);
+        bm::bvector<>::bulk_insert_iterator iG(m_FPrintBV[eG], bm::BM_SORTED);
+        bm::bvector<>::bulk_insert_iterator iT(m_FPrintBV[eT], bm::BM_SORTED);
+        bm::bvector<>::bulk_insert_iterator iN(m_FPrintBV[eN], bm::BM_SORTED);
+
+        for (size_t i = 0; i < sequence.size(); ++i)
+        {
+            unsigned pos = unsigned(i);
+            switch (sequence[i])
+            {
+            case 'A':
+                iA = pos;
+                break;
+            case 'C':
+                iC = pos;
+                break;
+            case 'G':
+                iG = pos;
+                break;
+            case 'T':
+                iT = pos;
+                break;
+            case 'N':
+                iN = pos;
+                break;
+            default:
+                break;
+            }
+        }
+    }
+
+
     /// Build fingerprint bit-vectors using bulk insert iterator and parallel
     /// processing
     ///
@@ -256,6 +293,12 @@ public:
                 target_idx->MergeVector('N', bvN);
             }
         };
+        
+        if (threads <= 1)
+        {
+            BuildBulk(sequence);
+            return;
+        }
 
         // Create parallel async tasks running on a range of source sequence
         //
