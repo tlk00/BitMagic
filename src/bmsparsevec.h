@@ -701,8 +701,22 @@ public:
         \brief join all with another sparse vector using OR operation
         \param sv - argument vector to join with
         \return slf reference
+        @sa merge
     */
     sparse_vector<Val, BV>& join(const sparse_vector<Val, BV>& sv);
+
+    /*!
+        \brief merge with another sparse vector using OR operation
+        Merge is different from join(), because it borrows data from the source
+        vector, so it gets modified.
+     
+        \param sv - [in, out]argument vector to join with (vector mutates)
+     
+        \return slf reference
+        @sa join
+    */
+    sparse_vector<Val, BV>& merge(sparse_vector<Val, BV>& sv);
+
 
     /**
         @brief copy range of values from another sparse vector
@@ -2080,10 +2094,47 @@ sparse_vector<Val, BV>::join(const sparse_vector<Val, BV>& sv)
         {
             bvector_type* bv = this->plains_[j];
             if (!bv)
-            {
                 bv = get_plain(j);
-            }
             *bv |= *arg_bv;
+        }
+    } // for j
+    
+    // our vector is NULL-able but argument is not (assumed all values are real)
+    if (bv_null && !sv.is_nullable())
+    {
+        bv_null->set_range(0, arg_size-1);
+    }
+    
+    return *this;
+}
+
+//---------------------------------------------------------------------
+
+template<class Val, class BV>
+sparse_vector<Val, BV>&
+sparse_vector<Val, BV>::merge(sparse_vector<Val, BV>& sv)
+{
+    size_type arg_size = sv.size();
+    if (size_ < arg_size)
+    {
+        resize(arg_size);
+    }
+    bvector_type* bv_null = this->get_null_bvect();
+    unsigned plains;
+    if (bv_null)
+        plains = this->stored_plains();
+    else
+        plains = this->plains();
+    
+    for (unsigned j = 0; j < plains; ++j)
+    {
+        bvector_type* arg_bv = sv.plains_[j];
+        if (arg_bv)
+        {
+            bvector_type* bv = this->plains_[j];
+            if (!bv)
+                bv = get_plain(j);
+            bv->merge(*arg_bv);
         }
     } // for j
     
