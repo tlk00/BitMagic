@@ -156,7 +156,12 @@ void counting_sort_parallel(sparse_vector_u32& sv_out, const std::vector<unsigne
             sv_out.inc(v);
     }
     f1.wait();
-    sv_out.join(sv_out2);
+    
+    // merge effectively performs logical OR on all plains, only it
+    // borrows memory blocks from the argument vector, so it gets changed
+    // (which is ok here, since sv_out2 is a temporary)
+    //
+    sv_out.merge(sv_out2);
 }
 
 // Test utility. It also illustrates histogram access method
