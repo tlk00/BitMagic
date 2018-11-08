@@ -333,6 +333,23 @@ int BM_bvector_set_bit(BM_BVHANDLE h, unsigned int i, int val)
 
 // -----------------------------------------------------------------
 
+int BM_bvector_set_bits(BM_BVHANDLE h, unsigned int* idx, unsigned int idx_size)
+{
+    if (!h || !idx)
+        return BM_ERR_BADARG;
+    BM_TRY
+    {
+        TBM_bvector* bv = (TBM_bvector*)h;
+        bv->set(idx, idx_size);
+    }
+    BM_CATCH_ALL
+    ETRY;
+    return BM_OK;
+}
+
+
+// -----------------------------------------------------------------
+
 int BM_bvector_flip_bit(BM_BVHANDLE h, unsigned int i)
 {
     if (!h)
@@ -754,6 +771,42 @@ int BM_bvector_calc_stat(BM_BVHANDLE h,
         pstat->gap_blocks = stat.gap_blocks;
         pstat->max_serialize_mem = stat.max_serialize_mem;
         pstat->memory_used = stat.memory_used;
+    }
+    BM_CATCH_ALL
+    ETRY;
+    return BM_OK;
+}
+
+// -----------------------------------------------------------------
+
+int BM_bvector_merge(BM_BVHANDLE hdst, BM_BVHANDLE hsrc)
+{
+    if (!hdst || !hsrc)
+        return BM_ERR_BADARG;
+
+    BM_TRY
+    {
+        TBM_bvector* bv1 = (TBM_bvector*)hdst;
+        TBM_bvector* bv2 = (TBM_bvector*)hsrc;
+
+        bv1->merge(*bv2);
+    }
+    BM_CATCH_ALL
+    ETRY;
+    return BM_OK;
+}
+
+// -----------------------------------------------------------------
+
+int BM_bvector_rshift1(BM_BVHANDLE hdst)
+{
+    if (!hdst)
+        return BM_ERR_BADARG;
+
+    BM_TRY
+    {
+        TBM_bvector* bv = (TBM_bvector*)hdst;
+        bv->shift_right();
     }
     BM_CATCH_ALL
     ETRY;
