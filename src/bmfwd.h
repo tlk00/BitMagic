@@ -46,6 +46,7 @@ template<class A = bm::standard_allocator> class bvector;
 template<typename BV> class aggregator;
 
 template<typename BV> class rank_compressor;
+template<typename BV> class basic_bmatrix;
 
 template<class Val, class BV> class sparse_vector;
 template<class Val, class SV> class rsc_sparse_vector;
