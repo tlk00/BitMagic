@@ -499,7 +499,7 @@ void sparse_vector_serializer<SV>::serialize(const SV&  sv,
     unsigned i;
     for (i = 0; i < plains; ++i)
     {
-        const typename SV::bvector_type_ptr bv = sv.get_plain(i);
+        typename SV::bvector_type_const_ptr bv = sv.get_plain(i);
         if (!bv)  // empty plain
         {
             sv_layout.set_plain(i, 0, 0);

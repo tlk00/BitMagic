@@ -31,7 +31,6 @@ For more information please visit:  http://bitmagic.io
 
 #include "bm.h"
 #include "bmtrans.h"
-#include "bmalgo.h"
 #include "bmdef.h"
 
 

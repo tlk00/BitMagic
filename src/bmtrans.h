@@ -240,50 +240,6 @@ struct bit_trans_grabber
     }
 };
 
-/*
-template<>
-struct bit_trans_grabber<unsigned, 32, bm::set_block_plain_size>
-{
-    static
-    unsigned get(const unsigned tmatrix[32][bm::set_block_plain_size], unsigned i, unsigned j)
-    {
-        return
-                (((tmatrix[0][i] >> j) & 1) << 0) |
-                (((tmatrix[1][i] >> j) & 1) << 1) |
-                (((tmatrix[2][i] >> j) & 1) << 2) |
-                (((tmatrix[3][i] >> j) & 1) << 3) |
-                (((tmatrix[4][i] >> j) & 1) << 4) |
-                (((tmatrix[5][i] >> j) & 1) << 5) |
-                (((tmatrix[6][i] >> j) & 1) << 6) |
-                (((tmatrix[7][i] >> j) & 1) << 7) |
-                (((tmatrix[8][i] >> j) & 1) << 8) |
-                (((tmatrix[9][i] >> j) & 1) << 9) |
-                (((tmatrix[10][i] >> j) & 1) << 10) |
-                (((tmatrix[11][i] >> j) & 1) << 11) |
-                (((tmatrix[12][i] >> j) & 1) << 12) |
-                (((tmatrix[13][i] >> j) & 1) << 13) |
-                (((tmatrix[14][i] >> j) & 1) << 14) |
-                (((tmatrix[15][i] >> j) & 1) << 15) |
-                (((tmatrix[16][i] >> j) & 1) << 16) |
-                (((tmatrix[17][i] >> j) & 1) << 17) |
-                (((tmatrix[18][i] >> j) & 1) << 18) |
-                (((tmatrix[19][i] >> j) & 1) << 19) |
-                (((tmatrix[20][i] >> j) & 1) << 20) |
-                (((tmatrix[21][i] >> j) & 1) << 21) |
-                (((tmatrix[22][i] >> j) & 1) << 22) |
-                (((tmatrix[23][i] >> j) & 1) << 23) |
-                (((tmatrix[24][i] >> j) & 1) << 24) |
-                (((tmatrix[25][i] >> j) & 1) << 25) |
-                (((tmatrix[26][i] >> j) & 1) << 26) |
-                (((tmatrix[27][i] >> j) & 1) << 27) |
-                (((tmatrix[28][i] >> j) & 1) << 28) |
-                (((tmatrix[29][i] >> j) & 1) << 29) |
-                (((tmatrix[30][i] >> j) & 1) << 30) |
-                (((tmatrix[31][i] >> j) & 1) << 31);    
-    }
-};
-*/
-
 
 
 /**

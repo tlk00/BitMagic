@@ -65,6 +65,7 @@ public:
     typedef typename SV::const_iterator              sparse_vector_const_iterator;
     typedef typename SV::bvector_type                bvector_type;
     typedef bvector_type*                            bvector_type_ptr;
+    typedef const bvector_type*                      bvector_type_const_ptr;
     typedef typename bvector_type::allocator_type    allocator_type;
     typedef typename bvector_type::allocation_policy allocation_policy_type;
     typedef typename bvector_type::rs_index_type     rs_index_type;
@@ -346,7 +347,7 @@ public:
         \brief get access to bit-plain, function checks and creates a plain
         \return bit-vector for the bit plain
     */
-    const bvector_type_ptr get_plain(unsigned i) const { return sv_.get_plain(i); }
+    bvector_type_const_ptr get_plain(unsigned i) const { return sv_.get_plain(i); }
 
     bvector_type_ptr get_plain(unsigned i)  { return sv_.get_plain(i); }
     
