@@ -195,6 +195,13 @@ BM_API_EXPORT int BM_bvector_swap(BM_BVHANDLE h1, BM_BVHANDLE h2);
 */
 BM_API_EXPORT int BM_bvector_set_bit(BM_BVHANDLE h, unsigned int i, int val);
 
+/* set list of bits to 1
+   idx - index of bits to set
+   idx_size - size of the array to set
+*/ 
+BM_API_EXPORT int BM_bvector_set_bits(BM_BVHANDLE h, unsigned int* idx, unsigned int idx_size);
+
+
 /* set bit to 1 without extra checks (faster).
    Use of this function requires full initialization by BM_bvector_init(); 
    i - index of a bit to set
@@ -404,6 +411,17 @@ BM_API_EXPORT int BM_bvector_combine_SUB(BM_BVHANDLE hdst, BM_BVHANDLE hsrc);
 */
 BM_API_EXPORT int BM_bvector_combine_XOR(BM_BVHANDLE hdst, BM_BVHANDLE hsrc);
 
+/* perform logical OR operation on two bit vectors
+   hdst = hdst OR hsrc
+   merge operation is faster than just OR, but it destroys the
+   source vector (by borrowing its memory)
+*/
+BM_API_EXPORT int BM_bvector_merge(BM_BVHANDLE hdst, BM_BVHANDLE hsrc);
+
+
+/* Logical shift right by 1
+*/
+BM_API_EXPORT int BM_bvector_rshift1(BM_BVHANDLE hdst);
 
 /* -------------------------------------------- */
 /* bvector operations with arrays               */
