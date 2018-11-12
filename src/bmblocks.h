@@ -180,8 +180,7 @@ public:
                 }
                 else // bitset
                 {
-                    unsigned bit_count;
-                    cnt = bit_block_calc_count_change(block, block + bm::set_block_size, &bit_count);
+                    cnt = bm::bit_block_calc_change(block);
                     if (idx)
                     {
                         first_bit = block[0] & 1;
@@ -401,13 +400,20 @@ public:
             
                 gap_word_t* tmp_gap_blk = (gap_word_t*)temp_block_;
                 *tmp_gap_blk = bm::gap_max_level << 1;
+                
+                unsigned gap_count = bm::bit_block_calc_change(block);
+                unsigned threashold = bman.glen(bm::gap_max_level)-2;
+                unsigned len = 0;
 
-                unsigned threashold = bman.glen(bm::gap_max_level)-4;
-
-                unsigned len = bit_convert_to_gap(tmp_gap_blk, 
-                                                    block, 
-                                                    bm::gap_max_bits, 
-                                                    threashold);
+                if (gap_count <= threashold)
+                {
+                    len = bm::bit_convert_to_gap(tmp_gap_blk,
+                                                 block,
+                                                 bm::gap_max_bits,
+                                                 threashold);
+                    BM_ASSERT(len);
+                }
+                
                 if (len)    // compression successful                
                 {                
                     bman.get_allocator().free_bit_block(block);

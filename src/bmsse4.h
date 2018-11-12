@@ -46,7 +46,23 @@ namespace bm
 #pragma GCC diagnostic ignored "-Wconversion"
 #endif
 
-
+/*
+inline
+void sse2_print128(const char* prefix, const __m128i & value)
+{
+    const size_t n = sizeof(__m128i) / sizeof(unsigned);
+    unsigned buffer[n];
+    _mm_storeu_si128((__m128i*)buffer, value);
+    std::cout << prefix << " [ ";
+    for (int i = n-1; 1; --i)
+    {
+        std::cout << buffer[i] << " ";
+        if (i == 0)
+            break;
+    }
+    std::cout << "]" << std::endl;
+}
+*/
 
 /*!
     SSE4.2 optimized bitcounting .
@@ -421,12 +437,70 @@ bool sse42_test_all_zero_wave(const void* ptr)
     return _mm_testz_si128(w0, w0);
 }
 
+/*!
+    SSE4.2 calculate number of bit changes from 0 to 1
+    @ingroup SSE4
+*/
+inline
+unsigned sse42_bit_block_calc_change(const __m128i* BMRESTRICT block)
+{
+    const __m128i* block_end =
+        ( __m128i*)((bm::word_t*)(block) + bm::set_block_size);
+    __m128i m1COshft, m2COshft;
+    
+    unsigned w0 = *((bm::word_t*)(block));
+    unsigned count = 1;
 
+    unsigned co2, co1 = 0;
+    for (;block < block_end; block += 2)
+    {
+        __m128i m1A = _mm_load_si128(block);
+        __m128i m2A = _mm_load_si128(block+1);
+
+        __m128i m1CO = _mm_srli_epi32(m1A, 31);
+        __m128i m2CO = _mm_srli_epi32(m2A, 31);
+        
+        co2 = _mm_extract_epi32(m1CO, 3);
+        
+        __m128i m1As = _mm_slli_epi32(m1A, 1); // (block[i] << 1u)
+        __m128i m2As = _mm_slli_epi32(m2A, 1);
+        
+        m1COshft = _mm_slli_si128 (m1CO, 4); // byte shift left by 1 int32
+        m1COshft = _mm_insert_epi32 (m1COshft, co1, 0);
+        
+        co1 = co2;
+        
+        co2 = _mm_extract_epi32(m2CO, 3);
+        
+        m2COshft = _mm_slli_si128 (m2CO, 4);
+        m2COshft = _mm_insert_epi32 (m2COshft, co1, 0);
+        
+        m1As = _mm_or_si128(m1As, m1COshft); // block[i] |= co_flag
+        m2As = _mm_or_si128(m2As, m2COshft);
+        
+        co1 = co2;
+        
+        // we now have two shifted SSE4 regs with carry-over
+        m1A = _mm_xor_si128(m1A, m1As); // w ^= (w >> 1);
+        m2A = _mm_xor_si128(m2A, m2As);
+        
+        bm::id64_t m0 = _mm_extract_epi64(m1A, 0);
+        bm::id64_t m1 = _mm_extract_epi64(m1A, 1);
+        count += _mm_popcnt_u64(m0) + _mm_popcnt_u64(m1);
+
+        m0 = _mm_extract_epi64(m2A, 0);
+        m1 = _mm_extract_epi64(m2A, 1);
+        count += _mm_popcnt_u64(m0) + _mm_popcnt_u64(m1);
+    }
+    count -= (w0 & 1u); // correct initial carry-in error
+    return count;
+}
 
 /*!
     SSE4.2 optimized bitcounting and number of GAPs
     @ingroup SSE4
 */
+/*
 inline
 bm::id_t sse4_bit_block_calc_count_change(const __m128i* BMRESTRICT block,
                                           const __m128i* BMRESTRICT block_end,
@@ -519,7 +593,7 @@ bm::id_t sse4_bit_block_calc_count_change(const __m128i* BMRESTRICT block,
 
    return count;
 }
-
+*/
 
 
 #ifdef __GNUG__
@@ -1246,7 +1320,9 @@ bool sse42_shift_r1_and(__m128i* block,
     
 #define VECT_SET_BLOCK_BITS(block, idx, start, stop) \
     sse42_set_block_bits(block, idx, start, stop)
-    
+
+#define VECT_BLOCK_CHANGE(block) \
+    sse42_bit_block_calc_change((__m128i*)block)
 
 
 #ifdef __GNUG__

@@ -3762,9 +3762,53 @@ bm::id_t bit_count_change(bm::word_t w)
 
 
 /*!
+    Function calculates number of times when bit value changed
+    @internal
+*/
+inline
+unsigned bit_block_change32(const bm::word_t* block)
+{
+    unsigned gap_count = 1;
+
+    bm::word_t  w, w0, w_prev, w_l;
+    w = w0 = *block;
+    
+    const int w_shift = int(sizeof(w) * 8 - 1);
+    w ^= (w >> 1);
+    BM_INCWORD_BITCOUNT(gap_count, w);
+    gap_count -= (w_prev = (w0 >> w_shift)); // negative value correction
+
+    const bm::word_t* block_end = block + bm::set_block_size;
+    for (++block ;block < block_end; ++block)
+    {
+        w = w0 = *block;
+        ++gap_count;
+        if (!w)
+        {
+            gap_count -= !w_prev;
+            w_prev = 0;
+        }
+        else
+        {
+            w ^= (w >> 1);
+            BM_INCWORD_BITCOUNT(gap_count, w);
+            
+            w_l = w0 & 1;
+            gap_count -= (w0 >> w_shift);  // negative value correction
+            gap_count -= !(w_prev ^ w_l);  // word border correction
+            
+            w_prev = (w0 >> w_shift);
+        }
+    } // for
+    return gap_count;
+}
+
+
+/*!
     Function calculates number of times when bit value changed 
     @internal
 */
+/*
 inline
 void bit_count_change32(const bm::word_t* block, 
                         const bm::word_t* block_end,
@@ -3813,6 +3857,25 @@ void bit_count_change32(const bm::word_t* block,
         }
     } // for
 }
+*/
+/*!
+    Function calculates number of times when bit value changed
+    (1-0 or 0-1) in the bit block.
+ 
+    @param block - bit-block start pointer
+    @return number of 1-0, 0-1 transitions
+ 
+    @ingroup bitfunc
+*/
+inline
+unsigned bit_block_calc_change(const bm::word_t* block)
+{
+#if defined(VECT_BLOCK_CHANGE)
+    return VECT_BLOCK_CHANGE(block);
+#else
+    return bm::bit_block_change32(block);
+#endif
+}
 
 
 /*!
@@ -3828,6 +3891,7 @@ void bit_count_change32(const bm::word_t* block,
         
     @ingroup bitfunc 
 */
+/*
 inline 
 bm::id_t bit_block_calc_count_change(const bm::word_t* block, 
                                      const bm::word_t* block_end,
@@ -3840,10 +3904,6 @@ bm::id_t bit_block_calc_count_change(const bm::word_t* block,
     // temp use SSE4.2 variant
     return sse42_bit_block_calc_count_change(
         (const __m128i*)block, (const __m128i*)block_end, bit_count);
-/*
-    return avx2_bit_block_calc_count_change(
-        (const __m256i*)block, (const __m256i*)block_end, bit_count);
-*/
 #else
 #ifdef BMSSE42OPT
     return sse4_bit_block_calc_count_change(
@@ -3916,7 +3976,7 @@ bm::id_t bit_block_calc_count_change(const bm::word_t* block,
 
 #endif
 }
-
+*/
 
 /*!
     Function calculates number of 1 bits in the given array of words in

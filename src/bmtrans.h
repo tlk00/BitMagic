@@ -651,6 +651,7 @@ void gap_2_bitblock(const GT* BMRESTRICT gap_buf,
 
     @internal
 */
+#if 0
 template<class TMatrix>
 void compute_tmatrix_rstat(const TMatrix& tmatrix, 
                            const unsigned char* pc_vector,
@@ -702,7 +703,7 @@ void compute_tmatrix_rstat(const TMatrix& tmatrix,
 
     } // for 
 }
-
+#endif
 
 
 /**
@@ -817,7 +818,7 @@ public:
     void reduce()
     {
         tmatrix_reduce(tmatrix_, pc_vector_, eff_cols_);
-        compute_tmatrix_rstat(tmatrix_, pc_vector_, rstat_vector_, eff_cols_);
+        //compute_tmatrix_rstat(tmatrix_, pc_vector_, rstat_vector_, eff_cols_);
     }
 
     void restore()

@@ -1011,9 +1011,13 @@ unsigned serializer<BV>::serialize(const BV& bv,
         }
 
         // compute bit-block statistics: bit-count and number of GAPS
+        unsigned block_bc = bm::bit_block_count(blk);
+        unsigned bit_gaps = bm::bit_block_calc_change(blk);
+        /*
         unsigned block_bc = 0;
         bm::id_t bit_gaps = 
             bm::bit_block_calc_count_change(blk, blk + bm::set_block_size, &block_bc);
+        */
         unsigned block_bc_inv = bm::gap_max_bits - block_bc;
         switch (block_bc)
         {

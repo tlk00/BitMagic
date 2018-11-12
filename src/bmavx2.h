@@ -1425,10 +1425,83 @@ void avx2_i32_shift()
 */
 
 
+
+/*!
+    AVX2 calculate number of bit changes from 0 to 1
+    @ingroup AVX2
+*/
+inline
+unsigned avx2_bit_block_calc_change(const __m256i* BMRESTRICT block)
+{
+    BM_AVX2_POPCNT_PROLOG;
+
+    const __m256i* block_end =
+        (const __m256i*)((bm::word_t*)(block) + bm::set_block_size);
+    
+    __m256i m1COshft, m2COshft;
+    __m256i mCOidx = _mm256_set_epi32(6, 5, 4, 3, 2, 1, 0, 0);
+    __m256i cntAcc = _mm256_setzero_si256();
+
+    unsigned w0 = *((bm::word_t*)(block));
+    unsigned count = 1;
+
+    bm::id64_t BM_ALIGN32 cnt_v[4] BM_ALIGN32ATTR;
+
+    unsigned co2, co1 = 0;
+    for (;block < block_end; block+=2)
+    {
+        __m256i m1A = _mm256_load_si256(block);
+        __m256i m2A = _mm256_load_si256(block+1);
+        
+        __m256i m1CO = _mm256_srli_epi32(m1A, 31);
+        __m256i m2CO = _mm256_srli_epi32(m2A, 31);
+        
+        co2 = _mm256_extract_epi32(m1CO, 7);
+        
+        __m256i m1As = _mm256_slli_epi32(m1A, 1); // (block[i] << 1u)
+        __m256i m2As = _mm256_slli_epi32(m2A, 1);
+
+        // shift CO flags using +1 permute indexes, add CO to v[0]
+        m1COshft = _mm256_permutevar8x32_epi32(m1CO, mCOidx);
+        m1COshft = _mm256_insert_epi32(m1COshft, co1, 0); // v[0] = co_flag
+        
+        co1 = co2;
+        
+        co2 = _mm256_extract_epi32(m2CO, 7);
+        m2COshft = _mm256_permutevar8x32_epi32(m2CO, mCOidx);
+        m2COshft = _mm256_insert_epi32(m2COshft, co1, 0);
+
+        m1As = _mm256_or_si256(m1As, m1COshft); // block[i] |= co_flag
+        m2As = _mm256_or_si256(m2As, m2COshft);
+        
+        co1 = co2;
+        
+        // we now have two shifted AVX2 regs with carry-over
+        m1A = _mm256_xor_si256(m1A, m1As); // w ^= (w >> 1);
+        m2A = _mm256_xor_si256(m2A, m2As);
+        
+        {
+            BM_AVX2_BIT_COUNT(bc, m1A)
+            cntAcc = _mm256_add_epi64(cntAcc, bc);
+            BM_AVX2_BIT_COUNT(bc, m2A)
+            cntAcc = _mm256_add_epi64(cntAcc, bc);
+        }
+    } // for
+    
+    // horizontal count sum
+    _mm256_store_si256 ((__m256i*)cnt_v, cntAcc);
+    count += (unsigned)(cnt_v[0] + cnt_v[1] + cnt_v[2] + cnt_v[3]);
+
+    count -= (w0 & 1u); // correct initial carry-in error
+    return count;
+}
+
+
 /*!
     SSE4.2 optimized bitcounting and number of GAPs
     @ingroup SSE4
 */
+/*
 inline
 bm::id_t sse42_bit_block_calc_count_change(const __m128i* BMRESTRICT block,
                                           const __m128i* BMRESTRICT block_end,
@@ -1522,7 +1595,7 @@ bm::id_t sse42_bit_block_calc_count_change(const __m128i* BMRESTRICT block,
 
    return count;
 }
-
+*/
 
 
 /* @brief Gap block population count (array sum) utility
@@ -2199,6 +2272,10 @@ void avx2_bit_block_gather_scatter(unsigned* BMRESTRICT arr,
 
 #define VECT_SET_BLOCK_BITS(block, idx, start, stop) \
     avx2_set_block_bits3(block, idx, start, stop)
+    
+#define VECT_BLOCK_CHANGE(block) \
+    avx2_bit_block_calc_change((__m256i*)block)
+
 
 } // namespace
 
