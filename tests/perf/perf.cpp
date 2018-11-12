@@ -113,9 +113,13 @@ void generate_bvector(bvect& bv, unsigned vector_max = 40000000, bool optimize =
     for (i = 0; i < vector_max;)
     {
         // generate bit-blocks
-        for (j = 0; j < 65535 * 10; i += 10, j++)
         {
-            bv.set(i);
+            bvect::bulk_insert_iterator iit(bv);
+            for (j = 0; j < 65535 * 10; i += 10, j++)
+            {
+                //bv.set(i);
+                iit = i;
+            }
         }
         if (i > vector_max)
             break;
@@ -227,19 +231,25 @@ void generate_sparse_bvector(bvect& bv,
                              unsigned max = BSIZE,
                              unsigned fill_factor = 65536)
 {
+    bvect::bulk_insert_iterator iit(bv);
     unsigned ff = fill_factor / 10;
     for (unsigned i = min; i < max; i+= ff)
     {
-        bv.set(i);
+        //bv.set(i);
+        iit = i;
         ff += ff / 2;
         if (ff > fill_factor)
             ff = fill_factor / 10;
     }
+    iit.flush();
 }
 
 
 static
-void GenerateTestCollection(std::vector<bvect>* target, unsigned count = 30, unsigned vector_max = 40000000)
+void GenerateTestCollection(std::vector<bvect>* target,
+                            unsigned count = 30,
+                            unsigned vector_max = 40000000,
+                            bool optimize = true)
 {
     assert(target);
     bvect bv_common; // sub-vector common for all collection
@@ -252,9 +262,10 @@ void GenerateTestCollection(std::vector<bvect>* target, unsigned count = 30, uns
     for (i = 0; i < cnt1; ++i)
     {
         std::unique_ptr<bvect> bv (new bvect);
-        generate_bvector(*bv, vector_max);
+        generate_bvector(*bv, vector_max, optimize);
         *bv |= bv_common;
-        bv->optimize();
+        if (optimize)
+            bv->optimize();
         target->push_back(std::move(*bv));
     } // for
     
@@ -2282,6 +2293,22 @@ void SparseVectorAccessTest()
 }
 
 static
+void OptimizeTest()
+{
+    std::vector<bvect> bv_coll;
+    GenerateTestCollection(&bv_coll, 100, 80000000, false);
+    
+    BM_DECLARE_TEMP_BLOCK(tb)
+    {
+    TimeTaker tt("bvector<>::optimize() ", 1);
+        for (unsigned k = 0; k < bv_coll.size(); ++k)
+        {
+            bv_coll[k].optimize(tb);
+        }
+    }
+}
+
+static
 void AggregatorTest()
 {
     int res;
@@ -2824,6 +2851,8 @@ int main(void)
 
     BitCompareTest();
 
+    OptimizeTest();
+    
     FindTest();
 
     BitBlockRotateTest();

@@ -45,6 +45,7 @@ For more information please visit:  http://bitmagic.io
 #include <bmserial.h>
 #include <bmrandom.h>
 #include <bmvmin.h>
+#include <bmbmatrix.h>
 #include <bmsparsevec.h>
 #include <bmsparsevec_algo.h>
 #include <bmsparsevec_serial.h>
@@ -1843,6 +1844,115 @@ void WordCmpTest()
     cout << "Ok." << endl;
 }
 
+
+static
+void TestBlockCountChange()
+{
+    cout << "---------------------------- CountChange test" << endl;
+
+#ifdef VECT_BLOCK_CHANGE
+
+    unsigned i, c, cc;
+    bm::word_t BM_VECT_ALIGN blk[bm::set_block_size] BM_VECT_ALIGN_ATTR = { 0 };
+
+    for (i = 0; i < bm::set_block_size; ++i)
+        blk[i] = 0;
+    
+    c = VECT_BLOCK_CHANGE(blk);
+    cc = bm::bit_block_change32(blk);
+    assert(c == 1);
+    assert(c == cc);
+
+    blk[0] = 1;
+    c = VECT_BLOCK_CHANGE(blk);
+    cc = bm::bit_block_change32(blk);
+    assert(c == 2);
+    assert(c == cc);
+
+    blk[0] = 0xFF;
+    c = VECT_BLOCK_CHANGE(blk);
+    cc = bm::bit_block_change32(blk);
+    assert(c == 2);
+    assert(c == cc);
+
+    blk[0] = ~0u;
+    c = VECT_BLOCK_CHANGE(blk);
+    cc = bm::bit_block_change32(blk);
+    assert(c == 2);
+    assert(c == cc);
+
+    blk[0] = blk[1] = blk[2] = blk[3] = 2;
+    c = VECT_BLOCK_CHANGE(blk);
+    cc = bm::bit_block_change32(blk);
+    assert(c == cc);
+    
+    blk[4] = blk[5] = blk[6] = blk[7] = 2;
+    c = VECT_BLOCK_CHANGE(blk);
+    cc = bm::bit_block_change32(blk);
+    assert(c == cc);
+
+    {
+    for (i = 0; i < bm::set_block_size; ++i)
+        blk[i] = 2;
+
+    c = VECT_BLOCK_CHANGE(blk);
+    cc = bm::bit_block_change32(blk);
+    assert(c == cc);
+    }
+    
+    {
+    for (i = 0; i < bm::set_block_size; ++i)
+        blk[i] = 1u << 31;
+
+    c = VECT_BLOCK_CHANGE(blk);
+    cc = bm::bit_block_change32(blk);
+    assert(c == cc);
+    }
+
+    {
+    for (i = 0; i < bm::set_block_size; ++i)
+        blk[i] = ~0u << 30;
+
+    c = VECT_BLOCK_CHANGE(blk);
+    cc = bm::bit_block_change32(blk);
+    assert(c == cc);
+    }
+
+    cout << "Block change stress..." << endl;
+    {
+    std::chrono::time_point<std::chrono::steady_clock> s;
+    std::chrono::time_point<std::chrono::steady_clock> f;
+    s = std::chrono::steady_clock::now();
+
+    
+        unsigned k_max = (1u << 31) / 4;
+        for (unsigned k = 0; k <= k_max; ++k)
+        {
+            for (i = 0; i < bm::set_block_size; ++i)
+                blk[i] = k;
+            c = VECT_BLOCK_CHANGE(blk);
+            cc = bm::bit_block_change32(blk);
+            assert(c == cc);
+            
+            if (k % 100000 == 0)
+            {
+                f = std::chrono::steady_clock::now();
+                auto diff = f - s;
+                auto d = std::chrono::duration <double, std::milli> (diff).count();
+
+                cout << "\r" << k << " / " << k_max << " (" << d << "ms)" << flush;
+                
+                s = std::chrono::steady_clock::now();
+            }
+        } // for k
+    }
+    cout << endl;
+
+#endif
+
+    
+    cout << "---------------------------- CountChange test OK" << endl;
+}
 
 static
 void ShiftRotateTest()
@@ -11460,6 +11570,74 @@ bool TestEqualSparseVectors(const SV& sv1, const SV& sv2, bool detailed = true)
 }
 
 static
+void TestBasicMatrix()
+{
+    cout << "---------------------------- Basic bit-matrix test" << endl;
+    
+    // construction-destruction
+    {
+        bm::basic_bmatrix<bvect> bmtr(10);
+        bvect* bv = bmtr.construct_row(0);
+        assert(bv);
+        
+        bv->set(10);
+        
+        // copy content
+        //
+        bm::basic_bmatrix<bvect> bmtr2(bmtr);
+        bvect* bv2 = bmtr2.construct_row(0);
+        assert(bv2);
+        
+        bool b = bv2->test(10);
+        assert(b);
+
+
+        bm::basic_bmatrix<bvect> bmtr4(10);
+        {
+            bm::basic_bmatrix<bvect> bmtr3(10);
+            bmtr3.construct_row(0)->set(110);
+            bmtr4 = bmtr3;
+            bv = bmtr4.construct_row(0);
+            b = bv->test(10);
+            assert(!b);
+            b = bv->test(110);
+            assert(b);
+        }
+        bmtr4 = bmtr2;
+        bv = bmtr4.construct_row(0);
+        b = bv->test(10);
+        assert(b);
+        b = bv->test(110);
+        assert(!b);
+        
+        bm::basic_bmatrix<bvect> bmtr5(2);
+        bmtr5 = bmtr2;
+        assert(bmtr5.rows()==10);
+        
+        bm::basic_bmatrix<bvect> bmtr6(11);
+        bmtr6.construct_row(0)->set(210);
+        bmtr6.swap(bmtr5);
+        assert(bmtr6.rows()==10);
+        assert(bmtr5.rows()==11);
+
+        bv = bmtr6.construct_row(0);
+        b = bv->test(210);
+        assert(!b);
+        bv = bmtr5.construct_row(0);
+        b = bv->test(210);
+        assert(b);
+
+        
+    }
+    
+    
+    
+    cout << "---------------------------- Basic bit-matrix test OK" << endl;
+}
+
+
+
+static
 void TestSparseVector()
 {
     cout << "---------------------------- Bit-plain sparse vector test" << endl;
@@ -11631,7 +11809,7 @@ void TestSparseVector()
 
     }}
     
-    cout << "Import test..." << endl;
+    cout << "svector Import test..." << endl;
     
     {{
         std::vector<unsigned> vect;
@@ -11645,7 +11823,7 @@ void TestSparseVector()
         bool res = CompareSparseVector(sv, vect);
         if (!res)
         {
-            cerr << "Bit Plain import test failed" << endl;
+            cerr << "0.Bit Plain import test failed" << endl;
             exit(1);
         }
         sv.optimize();
@@ -11735,7 +11913,7 @@ void TestSparseVector()
         bool res = CompareSparseVector(sv, vect);
         if (!res)
         {
-            cerr << "Bit Plain import test failed" << endl;
+            cerr << "0.Bit Plain import test failed" << endl;
             exit(1);
         }
         sv.optimize();
@@ -16604,6 +16782,8 @@ int main(void)
      TestBlockSUB();
      TestBlockOR();
 
+     TestBlockCountChange();
+
      ShiftRotateTest();
 
      ExportTest();
@@ -16705,6 +16885,8 @@ int main(void)
 
      StressTest(120, 1); // SUB
      StressTest(120, 2); // XOR
+
+     TestBasicMatrix();
 
      TestSparseVector();
 
