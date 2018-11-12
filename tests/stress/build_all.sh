@@ -15,17 +15,29 @@ mv ./test ./stress_debug
 make rebuild
 mv ./test ./stress_release
 
+make BMOPTFLAGS=-DBMSSE2OPT DEBUG=YES rebuild
+mv ./test ./stress_debug_sse2
+
 make BMOPTFLAGS=-DBMSSE2OPT rebuild
 mv ./test ./stress_release_sse2
 
 make BMOPTFLAGS=-DBMSSE42OPT rebuild
 mv ./test ./stress_release_sse42
 
+make BMOPTFLAGS=-DBMSSE42OPT DEBUG=YES rebuild
+mv ./test ./stress_debug_sse42
+
 make BMOPTFLAGS=-DBMAVX2OPT rebuild
 mv ./test ./stress_release_avx2
 
+make BMOPTFLAGS=-DBMAVX2OPT DEBUG=YES rebuild
+mv ./test ./stress_debug_avx2
+
 make BMOPTFLAGS=-DBMAVX512OPT rebuild
 mv ./test ./stress_release_avx512
+
+make BMOPTFLAGS=-DBMAVX512OPT DEBUG=YES rebuild
+mv ./test ./stress_debug_avx512
 
 
 make BMOPTFLAGS=-DBM64OPT rebuild
