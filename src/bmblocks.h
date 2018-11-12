@@ -402,7 +402,8 @@ public:
                 *tmp_gap_blk = bm::gap_max_level << 1;
                 
                 unsigned gap_count = bm::bit_block_calc_change(block);
-                unsigned threashold = bman.glen(bm::gap_max_level)-2;
+                unsigned threashold = bman.glen(bm::gap_max_level)-4;
+                
                 unsigned len = 0;
 
                 if (gap_count <= threashold)
