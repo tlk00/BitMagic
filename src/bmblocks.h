@@ -406,7 +406,7 @@ public:
                 
                 unsigned len = 0;
 
-                if (gap_count <= threashold)
+                if (gap_count < threashold)
                 {
                     len = bm::bit_convert_to_gap(tmp_gap_blk,
                                                  block,
