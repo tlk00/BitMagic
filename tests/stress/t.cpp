@@ -10791,18 +10791,26 @@ void LZCNTTest()
     unsigned bsr;
     unsigned l = bm::count_leading_zeros(0);
     assert(l == 32);
+
+    unsigned t = bm::count_trailing_zeros(0);
+    assert(t == 32);
+
     l = bm::count_leading_zeros(2);
     unsigned bsf = bm::bit_scan_fwd(2);
     assert(bsf == 1);
+    t = bm::count_trailing_zeros(2);
+    assert(t == 1);
 
     unsigned mask = ~0u;
     for (unsigned i = 1; i; i <<= 1)
     {
         l = bm::count_leading_zeros(i);
+        t = bm::count_trailing_zeros(i);
         bsr = bm::bit_scan_reverse32(i);
         bsf = bm::bit_scan_fwd(i);
         assert(bsf == bsr);
         assert(l == 31 - bsf);
+        assert(t == bsf);
 
         l = bm::count_leading_zeros(mask);
         bsf = bm::bit_scan_fwd(mask);
