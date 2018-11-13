@@ -145,6 +145,21 @@ private:
 };
 
 /**
+    Portable LZCNT with (uses minimal LUT)
+    @internal
+*/
+inline 
+unsigned count_leading_zeros(unsigned x) 
+{
+    unsigned n =
+        (x >= (1U << 16)) ?
+        ((x >= (1U << 24)) ? ((x >= (1 << 28)) ? 28u : 24u) : ((x >= (1U << 20)) ? 20u : 16u))
+        :
+        ((x >= (1U << 8)) ? ((x >= (1U << 12)) ? 12u : 8u) : ((x >= (1U << 4)) ? 4u : 0u));
+    return unsigned(bm::lzcnt_table<true>::_lut[x >> n]) - n;
+}
+
+/**
     Lookup table based integer LOG2
 */
 template<typename T>

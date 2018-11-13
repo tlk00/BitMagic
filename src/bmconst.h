@@ -258,6 +258,22 @@ const unsigned char bit_count_table<T>::_count[256] = {
 
 //---------------------------------------------------------------------
 
+/** Structure for LZCNT constants (4-bit)
+    @ingroup bitfunc
+*/
+template<bool T> struct lzcnt_table
+{
+    static unsigned char const _lut[16];
+};
+
+template<bool T>
+const unsigned char lzcnt_table<T>::_lut[16] = 
+{
+    32U, 31U, 30U, 30U, 29U, 29U, 29U, 29U,
+    28U, 28U, 28U, 28U, 28U, 28U, 28U, 28U
+};
+
+
 /** Structure keeps all-left/right ON bits masks. 
     @ingroup bitfunc 
 */
