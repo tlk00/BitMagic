@@ -188,15 +188,16 @@ template<bool T> const char _copyright<T>::_p[] =
 template<bool T> const unsigned _copyright<T>::_v[3] = {3, 16, 0};
 
 
-template<bool T> struct DeBruijn_bit_position
-{
-    static const unsigned _multiply[32];
-};
 
 /**
     DeBruijn majic table
     @internal
 */
+template<bool T> struct DeBruijn_bit_position
+{
+    static const unsigned _multiply[32];
+};
+
 template<bool T>
 const unsigned DeBruijn_bit_position<T>::_multiply[32] = { 
   0, 1, 28, 2, 29, 14, 24, 3, 30, 22, 20, 15, 25, 17, 4, 8, 
@@ -272,6 +273,23 @@ const unsigned char lzcnt_table<T>::_lut[16] =
     32U, 31U, 30U, 30U, 29U, 29U, 29U, 29U,
     28U, 28U, 28U, 28U, 28U, 28U, 28U, 28U
 };
+
+/** Structure for TZCNT constants 
+    @ingroup bitfunc
+*/
+template<bool T> struct tzcnt_table
+{
+    static unsigned char const _lut[37];
+};
+
+template<bool T>
+const unsigned char tzcnt_table<T>::_lut[37] =
+{ 
+    32, 0, 1, 26, 2, 23, 27, 0, 3, 16, 24, 30, 28, 11,
+    0, 13, 4, 7, 17, 0, 25, 22, 31, 15, 29, 10, 12, 6, 0, 
+    21, 14, 9, 5, 20, 8, 19, 18 
+};
+
 
 
 /** Structure keeps all-left/right ON bits masks. 
@@ -354,8 +372,8 @@ enum simd_codes
     simd_none  = 0,   ///!< No SIMD or any other optimization
     simd_sse2  = 1,   ///!< Intel SSE2
     simd_sse42 = 2,   ///!< Intel SSE4.2
-    simd_avx2  = 5,    ///!< Intel AVX2
-    simd_avx512  = 6    ///!< Intel AVX512
+    simd_avx2  = 5,   ///!< Intel AVX2
+    simd_avx512  = 6  ///!< Intel AVX512
 };
 
 

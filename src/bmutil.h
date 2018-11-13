@@ -146,6 +146,7 @@ private:
 
 /**
     Portable LZCNT with (uses minimal LUT)
+    @ingroup bitfunc
     @internal
 */
 inline 
@@ -157,6 +158,18 @@ unsigned count_leading_zeros(unsigned x)
         :
         ((x >= (1U << 8)) ? ((x >= (1U << 12)) ? 12u : 8u) : ((x >= (1U << 4)) ? 4u : 0u));
     return unsigned(bm::lzcnt_table<true>::_lut[x >> n]) - n;
+}
+
+/**
+    Portable TZCNT with (uses 37-LUT)
+    @ingroup bitfunc
+    @internal
+*/
+inline
+unsigned count_trailing_zeros(unsigned x)
+{
+    // (x & -x) isolates the last set bit 
+    return unsigned(bm::tzcnt_table<true>::_lut[(-x & x) % 37]);
 }
 
 /**
