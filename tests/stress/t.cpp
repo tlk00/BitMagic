@@ -7126,10 +7126,15 @@ void SimpleGapFillSets(bvect&   bv0,
                        unsigned max,
                        unsigned fill_factor)
 {
+    bvect::bulk_insert_iterator bii0(bv0);
+    bvect::bulk_insert_iterator bii1(bv1);
+
     for (unsigned i = min; i < max; i += fill_factor)
     {
-        bv0.set(i);
-        bv1.set(i);
+        bii0 = i;
+        bii1 = i;
+//        bv0.set(i);
+//        bv1.set(i);
     } // for i
 }
 
@@ -10775,6 +10780,39 @@ void Log2Test()
         v <<= 1;
     }
     cout << "---------------------------- Log2 Test Ok." << endl;
+}
+
+
+static
+void LZCNTTest()
+{
+    cout << "---------------------------- LZCNT Test..." << endl;
+
+    unsigned bsr;
+    unsigned l = bm::count_leading_zeros(0);
+    assert(l == 32);
+    l = bm::count_leading_zeros(2);
+    unsigned bsf = bm::bit_scan_fwd(2);
+    assert(bsf == 1);
+
+    unsigned mask = ~0u;
+    for (unsigned i = 1; i; i <<= 1)
+    {
+        l = bm::count_leading_zeros(i);
+        bsr = bm::bit_scan_reverse32(i);
+        bsf = bm::bit_scan_fwd(i);
+        assert(bsf == bsr);
+        assert(l == 31 - bsf);
+
+        l = bm::count_leading_zeros(mask);
+        bsf = bm::bit_scan_fwd(mask);
+        bsr = bm::bit_scan_reverse32(mask);
+        assert(l == 31 - bsr);
+        mask >>= 1;
+    }
+
+
+    cout << "---------------------------- LZCNT Test..." << endl;
 }
 
 inline
@@ -16771,7 +16809,9 @@ int main(void)
     TestSIMDUtils();
     
     Log2Test();
- 
+
+    LZCNTTest();
+
     SelectTest();
 
      TestBlockZero();
