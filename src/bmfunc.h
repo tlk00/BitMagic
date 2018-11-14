@@ -3543,6 +3543,98 @@ complete:
 
 
 /*!
+   \brief Converts bit block to GAP.
+   \param dest - Destinatio GAP buffer.
+   \param block - Source bitblock buffer.
+   \param dest_len - length of the dest. buffer.
+   \return  New length of GAP block or 0 if conversion failed
+   (insufficicent space).
+
+   @ingroup gapfunc
+*/
+inline
+unsigned bit_to_gap(gap_word_t* BMRESTRICT dest,
+                    const unsigned* BMRESTRICT block,
+                    unsigned dest_len)
+{
+    const unsigned* BMRESTRICT block_end = block + bm::set_block_size;
+    gap_word_t* BMRESTRICT pcurr = dest;
+    gap_word_t* BMRESTRICT end = dest + dest_len;
+
+    unsigned bitval = (*block) & 1u;
+    *pcurr++ = bm::gap_word_t(bitval);
+    *pcurr = 0;
+    unsigned bit_idx = 0;
+
+    do
+    {
+        unsigned val = *block;
+        while (!val || val == ~0u)
+        {
+           if (bitval != bool(val))
+           {
+               *pcurr++ = (gap_word_t)(bit_idx-1);
+               BM_ASSERT((pcurr-1) == (dest+1) || *(pcurr-1) > *(pcurr-2));
+               if (pcurr >= end)
+                   return 0; // OUT of target memory
+               bitval ^= 1u;
+           }
+           bit_idx += unsigned(sizeof(*block) * 8);
+           if (++block >= block_end)
+                goto complete;
+           val = *block;
+        } // while
+
+        // process "0100011" word
+        //
+        unsigned bits_consumed = 0;
+        do
+        {
+            unsigned lz = 1u;
+            if (bitval != (val & 1u))
+            {
+                *pcurr++ = (gap_word_t)(bit_idx-1);
+                BM_ASSERT((pcurr-1) == (dest+1) || *(pcurr-1) > *(pcurr-2));
+                if (pcurr >= end)
+                    return 0; // OUT of target memory
+                bitval ^= 1u;
+            }
+            else // match, find the next idx
+            {
+                lz = bm::count_trailing_zeros(bitval ? ~val : val);
+            }
+            
+            bits_consumed += lz;
+            bit_idx += lz;
+            val >>= lz;
+            
+            if (!val)
+            {
+                if (bits_consumed < 32u)
+                {
+                    *pcurr++ = (gap_word_t)(bit_idx-1);
+                    BM_ASSERT((pcurr-1) == (dest+1) || *(pcurr-1) > *(pcurr-2));
+                    if (pcurr >= end)
+                        return 0; // OUT of target memory
+                    bitval ^= 1u;
+                    bit_idx += 32u - bits_consumed;
+                }
+                break;
+            }
+        } while (1);
+
+    } while(++block < block_end);
+
+complete:
+    *pcurr = (gap_word_t)(bit_idx-1);
+    unsigned len = (unsigned)(pcurr - dest);
+    *dest = (gap_word_t)((*dest & 7) + (len << 3));
+    return len;
+}
+
+
+
+/*!
    \brief Iterate gap block as delta-bits with a functor 
    @ingroup gapfunc
 */
