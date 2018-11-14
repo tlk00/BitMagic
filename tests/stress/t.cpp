@@ -1955,6 +1955,141 @@ void TestBlockCountChange()
 }
 
 static
+void TestBlockToGAP()
+{
+    cout << "---------------------------- TestBlockToGAP" << endl;
+    
+    unsigned i;
+    bm::word_t BM_VECT_ALIGN blk[bm::set_block_size] BM_VECT_ALIGN_ATTR = { 0 };
+
+    for (i = 0; i < bm::set_block_size; ++i)
+        blk[i] = 0;
+    
+    {
+       gap_vector gapv1(0);
+       gap_vector gapv2(0);
+       gap_word_t* gap_buf1 = gapv1.get_buf();
+       *gap_buf1 = 0;
+       unsigned len1 = bm::bit_convert_to_gap(gap_buf1, blk, bm::gap_max_bits, bm::gap_max_buff_len);
+       gap_word_t* gap_buf2 = gapv2.get_buf();
+       unsigned len2 = bm::bit_to_gap(gap_buf2, blk, bm::gap_max_buff_len);
+       assert(len1 == len2);
+       int cmp = bm::gapcmp(gap_buf1, gap_buf2);
+       assert(cmp == 0);
+    }
+
+    unsigned test_arr[] = { 1, 2, 3, (~0u << 4), ~0u, (~0u >> 1), (~0u >> 2) };
+    unsigned arr_size = sizeof(test_arr)/sizeof(test_arr[0]);
+    for (unsigned k = 0; k < bm::set_block_size; ++k)
+    {
+        for (i = 0; i < bm::set_block_size; ++i)
+            blk[i] = 0;
+        for (i = 0; i < arr_size; ++i)
+        {
+            blk[k] = test_arr[i];
+            
+           gap_vector gapv1(0);
+           gap_vector gapv2(0);
+           gap_word_t* gap_buf1 = gapv1.get_buf();
+           *gap_buf1 = 0;
+           unsigned len1 = bm::bit_convert_to_gap(gap_buf1, blk, bm::gap_max_bits, bm::gap_max_buff_len);
+           print_gap(gapv1, 100);
+           gap_word_t* gap_buf2 = gapv2.get_buf();
+           unsigned len2 = bm::bit_to_gap(gap_buf2, blk, bm::gap_max_buff_len);
+           assert(len1 == len2);
+           assert(len1);
+           print_gap(gapv2, 100);
+           int cmp = bm::gapcmp(gap_buf1, gap_buf2);
+           assert(cmp == 0);
+        }
+    } // for k
+    
+    cout << "Test arr - ok" << endl;
+    
+    {
+       gap_vector gapv1(0);
+       gap_vector gapv2(0);
+       gap_word_t* gap_buf1 = gapv1.get_buf();
+       *gap_buf1 = 0;
+       gap_word_t* gap_buf2 = gapv2.get_buf();
+       *gap_buf2 = 0;
+
+        unsigned mask = 1u;
+        for (unsigned k = 0; k < bm::set_block_size; ++k)
+        {
+            for (i = 0; i < bm::set_block_size; ++i)
+                blk[i] = 0;
+            
+            blk[k] = mask;
+            mask <<= 1;
+            if (!mask)
+                mask = 1u;
+            
+            *gap_buf1 = 0;
+            *gap_buf2 = 0;
+            unsigned len1 = bm::bit_convert_to_gap(gap_buf1, blk, bm::gap_max_bits, bm::gap_max_buff_len);
+            unsigned len2 = bm::bit_to_gap(gap_buf2, blk, bm::gap_max_buff_len);
+            assert(len1);
+            assert(len1 == len2);
+            if (len1)
+            {
+               int cmp = bm::gapcmp(gap_buf1, gap_buf2);
+               assert(cmp == 0);
+            }
+        }
+    }
+    
+    cout << "mask shift - ok" << endl;
+
+    {
+       gap_vector gapv1(0);
+       gap_vector gapv2(0);
+       gap_word_t* gap_buf1 = gapv1.get_buf();
+       *gap_buf1 = 0;
+       gap_word_t* gap_buf2 = gapv2.get_buf();
+       *gap_buf2 = 0;
+
+        unsigned max_try = 1000000;
+        for (unsigned k = 0; k < max_try; ++k)
+        {
+            for (i = 0; i < bm::set_block_size; ++i)
+                blk[i] = 0;
+            
+            unsigned idx = rand() % bm::set_block_size;
+            blk[idx] |= rand();
+            idx = rand() % bm::set_block_size;
+            blk[idx] |= rand();
+            idx = rand() % bm::set_block_size;
+            blk[idx] |= rand();
+            idx = rand() % bm::set_block_size;
+            blk[idx] |= rand();
+
+            idx = rand() % bm::set_block_size;
+            blk[idx] |= ~0;
+            idx = rand() % bm::set_block_size;
+            blk[idx] |= (~0 << (rand()%31));
+
+            *gap_buf1 = 0;
+            *gap_buf2 = 0;
+            unsigned len1 = bm::bit_convert_to_gap(gap_buf1, blk, bm::gap_max_bits, bm::gap_max_buff_len);
+            unsigned len2 = bm::bit_to_gap(gap_buf2, blk, bm::gap_max_buff_len);
+            assert(len1);
+            assert(len1 == len2);
+            if (len1)
+            {
+               int cmp = bm::gapcmp(gap_buf1, gap_buf2);
+               assert(cmp == 0);
+            }
+        }
+    }
+
+
+    cout << "---------------------------- TestBlockToGAP  OK" << endl;
+
+}
+
+
+static
 void ShiftRotateTest()
 {
     cout << "---------------------------- ShiftRotate test" << endl;
@@ -16831,6 +16966,8 @@ int main(void)
      TestBlockOR();
 
      TestBlockCountChange();
+
+     TestBlockToGAP();
 
      ShiftRotateTest();
 
