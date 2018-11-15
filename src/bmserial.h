@@ -768,7 +768,7 @@ void serializer<BV>::gamma_gap_array(const bm::gap_word_t* gap_array,
         unsigned gamma_size = (unsigned)(enc_pos1 - enc_pos0);            
         if (gamma_size > (arr_len)*sizeof(gap_word_t))
         {
-            enc.set_pos(enc_pos0);
+            enc.set_pos(enc_pos0); // re-wind the bit stream
         }
         else
         {
@@ -1013,11 +1013,7 @@ unsigned serializer<BV>::serialize(const BV& bv,
         // compute bit-block statistics: bit-count and number of GAPS
         unsigned block_bc = bm::bit_block_count(blk);
         unsigned bit_gaps = bm::bit_block_calc_change(blk);
-        /*
-        unsigned block_bc = 0;
-        bm::id_t bit_gaps = 
-            bm::bit_block_calc_count_change(blk, blk + bm::set_block_size, &block_bc);
-        */
+
         unsigned block_bc_inv = bm::gap_max_bits - block_bc;
         switch (block_bc)
         {
@@ -1059,10 +1055,9 @@ unsigned serializer<BV>::serialize(const BV& bv,
             if (gap_block_size < (bm::gap_equiv_len-64) &&
                 gap_block_size < arr_block_size)
             {
-                unsigned len = bit_convert_to_gap(gap_temp_block, 
-                                                  blk, 
-                                                  bm::gap_max_bits, 
-                                                  bm::gap_equiv_len-64);
+                unsigned len = bm::bit_to_gap(gap_temp_block,
+                                              blk,
+                                              bm::gap_equiv_len-64);
                 if (len) // save as GAP
                 {
                     gamma_gap_block(gap_temp_block, enc);
@@ -1111,17 +1106,14 @@ unsigned serializer<BV>::serialize(const BV& bv,
         if (gap_block_size < bm::gap_equiv_len &&
             gap_block_size < arr_block_size)
         {
-            unsigned len = bit_convert_to_gap(gap_temp_block, 
-                                              blk, 
-                                              bm::gap_max_bits, 
-                                              bm::gap_equiv_len-64);
+            unsigned len =
+                bm::bit_to_gap(gap_temp_block, blk, bm::gap_equiv_len-64);
             if (len) // save as GAP
             {
                 gamma_gap_block(gap_temp_block, enc);
                 continue;
             }
         }
-        
          
         // if array is best
         if (arr_block_size < bm::gap_equiv_len-64)

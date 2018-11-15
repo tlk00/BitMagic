@@ -1497,105 +1497,6 @@ unsigned avx2_bit_block_calc_change(const __m256i* BMRESTRICT block)
 }
 
 
-/*!
-    SSE4.2 optimized bitcounting and number of GAPs
-    @ingroup SSE4
-*/
-/*
-inline
-bm::id_t sse42_bit_block_calc_count_change(const __m128i* BMRESTRICT block,
-                                          const __m128i* BMRESTRICT block_end,
-                                               unsigned* BMRESTRICT bit_count)
-{
-//   __m128i mask1 = _mm_set_epi32(0x1, 0x1, 0x1, 0x1);
-   unsigned count = (unsigned)(block_end - block)*4;
-
-   bm::word_t  w0, w_prev;
-   const int w_shift = sizeof(w0) * 8 - 1;
-   bool first_word = true;
-   *bit_count = 0;
- 
-   // first word
-   {
-       bm::word_t  w;
-       const bm::word_t* blk = (const bm::word_t*) block;
-       w = w0 = blk[0];
-       *bit_count += unsigned(_mm_popcnt_u32(w));
-       w ^= (w >> 1);
-       count += unsigned(_mm_popcnt_u32(w));
-       count -= (w_prev = (w0 >> w_shift));
-   }
-
-   do
-   {
-       __m128i b = _mm_load_si128(block);
-       __m128i tmp2 = _mm_xor_si128(b, _mm_srli_epi32(b, 1)); // tmp2=(b >> 1) ^ b;
-       __m128i tmp3 = _mm_srli_epi32(b, w_shift); // tmp3 = w0 >> w_shift
-//       __m128i tmp4 = _mm_and_si128(b, mask1);    // tmp4 = w0 & 1
-
-       // ---------------------------------------------------------------------
-       {
-           if (first_word)
-           {
-               first_word = false;
-           }
-           else
-           {
-               w0 = unsigned(_mm_extract_epi32(b, 0));
-               if (w0)
-               {
-                   *bit_count += unsigned(_mm_popcnt_u32(w0));
-                   count += unsigned(_mm_popcnt_u32((unsigned)_mm_extract_epi32(tmp2, 0)));
-                   count -= !(w_prev ^ (w0 & 1));
-                   count -= w_prev = unsigned(_mm_extract_epi32(tmp3, 0));
-               }
-               else
-               {
-                   count -= !w_prev; w_prev ^= w_prev;
-               }
-           }
-           w0 = unsigned(_mm_extract_epi32(b, 1));
-           if (w0)
-           {
-               *bit_count += unsigned(_mm_popcnt_u32(w0));
-               count += unsigned(_mm_popcnt_u32((unsigned)_mm_extract_epi32(tmp2, 1)));
-               count -= !(w_prev ^ (w0 & 1));
-               count -= w_prev = unsigned(_mm_extract_epi32(tmp3, 1));
-           }
-           else
-           {
-               count -= !w_prev; w_prev ^= w_prev;
-           }
-           w0 = unsigned(_mm_extract_epi32(b, 2));
-           if (w0)
-           {
-               *bit_count += unsigned(_mm_popcnt_u32(w0));
-               count += unsigned(_mm_popcnt_u32((unsigned)_mm_extract_epi32(tmp2, 2)));
-               count -= !(w_prev ^ (w0 & 1));
-               count -= w_prev = unsigned(_mm_extract_epi32(tmp3, 2));
-           }
-           else
-           {
-               count -= !w_prev; w_prev ^= w_prev;
-           }
-           w0 = unsigned(_mm_extract_epi32(b, 3));
-           if (w0)
-           {
-               *bit_count += unsigned(_mm_popcnt_u32(w0));
-               count += unsigned(_mm_popcnt_u32((unsigned)_mm_extract_epi32(tmp2, 3)));
-               count -= !(w_prev ^ (w0 & 1));
-               count -= w_prev = unsigned(_mm_extract_epi32(tmp3, 3));
-           }
-           else
-           {
-               count -= !w_prev; w_prev ^= w_prev;
-           }
-       }
-   } while (++block < block_end);
-
-   return count;
-}
-*/
 
 
 /* @brief Gap block population count (array sum) utility
@@ -2183,6 +2084,113 @@ void avx2_bit_block_gather_scatter(unsigned* BMRESTRICT arr,
 
 }
 
+/**
+    Convert bit block to GAP block
+    @ingroup AVX2
+    \internal
+*/
+inline
+unsigned avx2_bit_to_gap(gap_word_t* BMRESTRICT dest,
+                          const unsigned* BMRESTRICT block,
+                          unsigned dest_len)
+{
+    const unsigned* BMRESTRICT block_end = block + bm::set_block_size;
+    gap_word_t* BMRESTRICT pcurr = dest;
+    gap_word_t* BMRESTRICT end = dest + dest_len;
+
+    unsigned bitval = (*block) & 1u;
+    *pcurr++ = bm::gap_word_t(bitval);
+    *pcurr = 0;
+    unsigned bit_idx = 0;
+    
+    const unsigned vCAP = 64; // 64-bit system
+    __m256i maskZ = _mm256_set1_epi32(0);
+
+    for (; block < block_end; block += 8)
+    {
+        unsigned k = 0;
+        if (!bitval)
+        {
+            // check number of trailing 64-bit words using AVC compare
+            __m256i accA = _mm256_load_si256((__m256i*)block); // 4x u64s
+            __m256i cmpA = _mm256_cmpeq_epi8(accA, maskZ);
+            unsigned  mask = ~_mm256_movemask_epi8(cmpA);
+            if (!mask)
+            {
+                bit_idx += 256;
+                continue;
+            }
+            unsigned w64_idx = _tzcnt_u32(mask);
+            k = w64_idx / 8; // 8 byte word offset
+            bit_idx += k * vCAP;
+        }
+
+        for (; k < 4; ++k)
+        {
+            bm::id64_t val = (((bm::id64_t*)block)[k]);
+            
+            if (!val || val == ~0ull)
+            {
+               if (bitval != bool(val))
+               {
+                   *pcurr++ = (gap_word_t)(bit_idx-1);
+                   BM_ASSERT((pcurr-1) == (dest+1) || *(pcurr-1) > *(pcurr-2));
+                   if (pcurr == end)
+                       return 0; // OUT of target memory
+                   bitval ^= 1u;
+               }
+               bit_idx += vCAP;
+               continue;
+            } // while
+            
+
+            // process "0100011" word
+            //
+            unsigned bits_consumed = 0;
+            do
+            {
+                unsigned tz = 1u;
+                if (bitval != (val & 1u))
+                {
+                    *pcurr++ = (gap_word_t)(bit_idx-1);
+                    BM_ASSERT((pcurr-1) == (dest+1) || *(pcurr-1) > *(pcurr-2));
+                    if (pcurr == end)
+                        return 0; // OUT of target memory
+                    bitval ^= 1u;
+                }
+                else // match, find the next idx
+                {
+                    tz = _tzcnt_u64(bitval ? ~val : val);
+                }
+                
+                bits_consumed += tz;
+                bit_idx += tz;
+                val >>= tz;
+                
+                if (!val)
+                {
+                    if (bits_consumed < vCAP)
+                    {
+                        *pcurr++ = (gap_word_t)(bit_idx-1);
+                        BM_ASSERT((pcurr-1) == (dest+1) || *(pcurr-1) > *(pcurr-2));
+                        if (pcurr == end)
+                            return 0; // OUT of target memory
+                        bitval ^= 1u;
+                        bit_idx += vCAP - bits_consumed;
+                    }
+                    break;
+                }
+            }  while (1);
+        } // for k
+
+    } // for block < end
+
+    *pcurr = (gap_word_t)(bit_idx-1);
+    unsigned len = (unsigned)(pcurr - dest);
+    *dest = (gap_word_t)((*dest & 7) + (len << 3));
+    return len;
+}
+
 
 #ifdef __GNUG__
 #pragma GCC diagnostic pop
@@ -2275,6 +2283,9 @@ void avx2_bit_block_gather_scatter(unsigned* BMRESTRICT arr,
     
 #define VECT_BLOCK_CHANGE(block) \
     avx2_bit_block_calc_change((__m256i*)block)
+    
+#define VECT_BIT_TO_GAP(dest, src, dest_len) \
+    avx2_bit_to_gap(dest, src, dest_len)
 
 
 } // namespace

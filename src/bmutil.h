@@ -166,10 +166,10 @@ unsigned count_leading_zeros(unsigned x)
     @internal
 */
 inline
-unsigned count_trailing_zeros(unsigned x)
+unsigned count_trailing_zeros(unsigned v)
 {
-    // (x & -x) isolates the last set bit 
-    return unsigned(bm::tzcnt_table<true>::_lut[(-x & x) % 37]);
+    // (v & -v) isolates the last set bit
+    return unsigned(bm::tzcnt_table<true>::_lut[(-v & v) % 37]);
 }
 
 /**
@@ -291,6 +291,18 @@ unsigned bit_scan_reverse32(unsigned value)
     return bm::ilog2_LUT<unsigned int>(value);
 #endif
 }
+
+inline
+unsigned bit_scan_forward32(unsigned value)
+{
+    BM_ASSERT(value);
+#if defined(BM_x86) && (defined(__GNUG__) || defined(_MSC_VER))
+    return bm::bsf_asm32(value);
+#else
+    return bit_scan_fwd(value);
+#endif
+}
+
 
 #ifdef __GNUG__
 #pragma GCC diagnostic pop

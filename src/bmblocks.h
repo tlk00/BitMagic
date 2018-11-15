@@ -408,10 +408,18 @@ public:
 
                 if (gap_count < threashold)
                 {
+                    /*
                     len = bm::bit_convert_to_gap(tmp_gap_blk,
                                                  block,
                                                  bm::gap_max_bits,
                                                  threashold);
+                    */
+
+                    len = bm::bit_to_gap(tmp_gap_blk,
+                                         block,
+                                         threashold);
+
+                    
                     BM_ASSERT(len);
                 }
                 

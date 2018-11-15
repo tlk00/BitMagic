@@ -3453,93 +3453,6 @@ int bitcmp(const T* buf1, const T* buf2, unsigned len)
 }
 
 
-/*! 
-   \brief Converts bit block to GAP. 
-   \param dest - Destinatio GAP buffer.
-   \param src - Source bitblock buffer.
-   \param bits - Number of bits to convert.
-   \param dest_len - length of the dest. buffer.
-   \return  New length of GAP block or 0 if conversion failed 
-   (insufficicent space).
-
-   @ingroup gapfunc
-*/
-template<typename T>
-unsigned bit_convert_to_gap(T* BMRESTRICT dest,
-                            const unsigned* BMRESTRICT src,
-                            bm::id_t bits,
-                            unsigned dest_len)
-{
-    T* BMRESTRICT pcurr = dest;
-    T* BMRESTRICT end = dest + dest_len; 
-    unsigned bitval = (*src) & 1u;
-    *pcurr = (T)bitval;
-
-    ++pcurr;
-    *pcurr = 0;
-    unsigned bit_idx = 0;
-    unsigned bitval_next;
-
-    unsigned val = *src;
-
-    do
-    {
-        // We can fast pace if *src == 0 or *src = 0xffffffff
-
-        while (val == 0 || val == 0xffffffff)
-        {
-           bitval_next = val ? 1 : 0;
-           if (bitval != bitval_next)
-           {
-               *pcurr++ = (T)(bit_idx-1); 
-               BM_ASSERT((pcurr-1) == (dest+1) || *(pcurr-1) > *(pcurr-2));
-               if (pcurr >= end)
-               {
-                   return 0; // OUT of memory
-               }
-               bitval = bitval_next;
-           }
-           bit_idx += unsigned(sizeof(*src) * 8);
-           if (bit_idx >= bits)
-           {
-               goto complete;
-           }
-           ++src;
-           val = *src;
-        }
-
-        unsigned mask = 1;
-        while (mask)
-        {
-            // Now plain bitshifting. TODO: Optimization wanted.
-
-            bitval_next = val & mask ? 1 : 0;
-            if (bitval != bitval_next)
-            {
-                *pcurr++ = (T)(bit_idx-1);
-                BM_ASSERT((pcurr-1) == (dest+1) || *(pcurr-1) > *(pcurr-2));
-                bitval = bitval_next;
-                if (pcurr >= end)
-                    return 0; // OUT of memory
-            }
-            mask <<= 1;
-            ++bit_idx;
-        } // while mask
-
-        if (bit_idx >= bits)
-            goto complete;
-
-        ++src;
-        val = *src;
-
-    } while(1);
-
-complete:
-    *pcurr = (T)(bit_idx-1);
-    unsigned len = (unsigned)(pcurr - dest);
-    *dest = (T)((*dest & 7) + (len << 3));
-    return len;
-}
 
 
 /*!
@@ -3553,9 +3466,9 @@ complete:
    @ingroup gapfunc
 */
 inline
-unsigned bit_to_gap(gap_word_t* BMRESTRICT dest,
-                    const unsigned* BMRESTRICT block,
-                    unsigned dest_len)
+unsigned bit_block_to_gap(gap_word_t* BMRESTRICT dest,
+                          const unsigned* BMRESTRICT block,
+                          unsigned dest_len)
 {
     const unsigned* BMRESTRICT block_end = block + bm::set_block_size;
     gap_word_t* BMRESTRICT pcurr = dest;
@@ -3575,7 +3488,7 @@ unsigned bit_to_gap(gap_word_t* BMRESTRICT dest,
            {
                *pcurr++ = (gap_word_t)(bit_idx-1);
                BM_ASSERT((pcurr-1) == (dest+1) || *(pcurr-1) > *(pcurr-2));
-               if (pcurr >= end)
+               if (pcurr == end)
                    return 0; // OUT of target memory
                bitval ^= 1u;
            }
@@ -3590,23 +3503,25 @@ unsigned bit_to_gap(gap_word_t* BMRESTRICT dest,
         unsigned bits_consumed = 0;
         do
         {
-            unsigned lz = 1u;
+            unsigned tz = 1u;
             if (bitval != (val & 1u))
             {
                 *pcurr++ = (gap_word_t)(bit_idx-1);
                 BM_ASSERT((pcurr-1) == (dest+1) || *(pcurr-1) > *(pcurr-2));
-                if (pcurr >= end)
+                if (pcurr == end)
                     return 0; // OUT of target memory
                 bitval ^= 1u;
             }
             else // match, find the next idx
             {
-                lz = bm::count_trailing_zeros(bitval ? ~val : val);
+                tz = bm::bit_scan_forward32(bitval ? ~val : val);
+                // alternative:
+                //   tz = bm::count_trailing_zeros(bitval ? ~val : val);
             }
             
-            bits_consumed += lz;
-            bit_idx += lz;
-            val >>= lz;
+            bits_consumed += tz;
+            bit_idx += tz;
+            val >>= tz;
             
             if (!val)
             {
@@ -3614,7 +3529,7 @@ unsigned bit_to_gap(gap_word_t* BMRESTRICT dest,
                 {
                     *pcurr++ = (gap_word_t)(bit_idx-1);
                     BM_ASSERT((pcurr-1) == (dest+1) || *(pcurr-1) > *(pcurr-2));
-                    if (pcurr >= end)
+                    if (pcurr == end)
                         return 0; // OUT of target memory
                     bitval ^= 1u;
                     bit_idx += 32u - bits_consumed;
@@ -3631,6 +3546,20 @@ complete:
     *dest = (gap_word_t)((*dest & 7) + (len << 3));
     return len;
 }
+
+inline
+unsigned bit_to_gap(gap_word_t* BMRESTRICT dest,
+                    const unsigned* BMRESTRICT block,
+                    unsigned dest_len)
+{
+#if defined(VECT_BIT_TO_GAP)
+    return VECT_BIT_TO_GAP(dest, block, dest_len);
+#else
+    return bm::bit_block_to_gap(dest, block, dest_len);
+#endif
+}
+
+
 
 
 
@@ -6371,30 +6300,36 @@ bm::set_representation best_representation(unsigned bit_count,
     @brief Convert bit block into an array of ints corresponding to 1 bits
     @ingroup bitfunc 
 */
-template<typename T> T bit_convert_to_arr(T* BMRESTRICT dest, 
-                                          const unsigned* BMRESTRICT src, 
-                                          bm::id_t bits, 
-                                          unsigned dest_len,
-                                          unsigned mask = 0)
+template<typename T>
+T bit_convert_to_arr(T* BMRESTRICT dest,
+                     const unsigned* BMRESTRICT src,
+                     bm::id_t bits,
+                     unsigned dest_len,
+                     unsigned mask = 0)
 {
     T* BMRESTRICT pcurr = dest;
     for (unsigned bit_idx=0; bit_idx < bits; ++src,bit_idx += unsigned(sizeof(*src) * 8))
     {
-        unsigned val = *src ^ mask; // possible to invert value by XOR 0xFF..
+        unsigned val = *src ^ mask; // invert value by XOR 0xFF..
         if (val == 0) 
-        {
             continue;
-        }
         if (pcurr + sizeof(val)*8 >= dest + dest_len) // insufficient space
-        {
             return 0;
+        // popscan loop to decode bits in a word
+        while (val)
+        {
+            bm::id_t t = val & -val;
+            *pcurr++ = (T)(bm::word_bitcount(t - 1) + bit_idx);
+            val &= val - 1;
         }
+/*
         unsigned char b_list[64];
         unsigned word_bit_cnt  = bm::bitscan_popcnt(val, b_list);
         for (unsigned j = 0; j < word_bit_cnt; ++j)
         {
             *pcurr++ = (T)(b_list[j] + bit_idx);
         }
+*/
     } // for
     return (T)(pcurr - dest);
 }
