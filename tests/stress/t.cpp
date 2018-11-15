@@ -1954,6 +1954,96 @@ void TestBlockCountChange()
     cout << "---------------------------- CountChange test OK" << endl;
 }
 
+
+/*!
+   \brief Converts bit block to GAP.
+   \param dest - Destinatio GAP buffer.
+   \param src - Source bitblock buffer.
+   \param bits - Number of bits to convert.
+   \param dest_len - length of the dest. buffer.
+   \return  New length of GAP block or 0 if conversion failed
+   (insufficicent space).
+
+   @ingroup gapfunc
+*/
+template<typename T>
+unsigned bit_convert_to_gap(T*  dest,
+                            const unsigned*  src,
+                            bm::id_t bits,
+                            unsigned dest_len)
+{
+    T*  pcurr = dest;
+    T*  end = dest + dest_len;
+    unsigned bitval = (*src) & 1u;
+    *pcurr = (T)bitval;
+
+    ++pcurr;
+    *pcurr = 0;
+    unsigned bit_idx = 0;
+    unsigned bitval_next;
+
+    unsigned val = *src;
+
+    do
+    {
+        // We can fast pace if *src == 0 or *src = 0xffffffff
+
+        while (val == 0 || val == 0xffffffff)
+        {
+           bitval_next = val ? 1 : 0;
+           if (bitval != bitval_next)
+           {
+               *pcurr++ = (T)(bit_idx-1);
+               assert((pcurr-1) == (dest+1) || *(pcurr-1) > *(pcurr-2));
+               if (pcurr >= end)
+               {
+                   return 0; // OUT of memory
+               }
+               bitval = bitval_next;
+           }
+           bit_idx += unsigned(sizeof(*src) * 8);
+           if (bit_idx >= bits)
+           {
+               goto complete;
+           }
+           ++src;
+           val = *src;
+        }
+
+        unsigned mask = 1;
+        while (mask)
+        {
+            // Now plain bitshifting. TODO: Optimization wanted.
+
+            bitval_next = val & mask ? 1 : 0;
+            if (bitval != bitval_next)
+            {
+                *pcurr++ = (T)(bit_idx-1);
+                assert((pcurr-1) == (dest+1) || *(pcurr-1) > *(pcurr-2));
+                bitval = bitval_next;
+                if (pcurr >= end)
+                    return 0; // OUT of memory
+            }
+            mask <<= 1;
+            ++bit_idx;
+        } // while mask
+
+        if (bit_idx >= bits)
+            goto complete;
+
+        ++src;
+        val = *src;
+
+    } while(1);
+
+complete:
+    *pcurr = (T)(bit_idx-1);
+    unsigned len = (unsigned)(pcurr - dest);
+    *dest = (T)((*dest & 7) + (len << 3));
+    return len;
+}
+
+
 static
 void TestBlockToGAP()
 {
@@ -1970,9 +2060,10 @@ void TestBlockToGAP()
        gap_vector gapv2(0);
        gap_word_t* gap_buf1 = gapv1.get_buf();
        *gap_buf1 = 0;
-       unsigned len1 = bm::bit_convert_to_gap(gap_buf1, blk, bm::gap_max_bits, bm::gap_max_buff_len);
+       unsigned len1 = bit_convert_to_gap(gap_buf1, blk, bm::gap_max_bits, bm::gap_max_buff_len);
        gap_word_t* gap_buf2 = gapv2.get_buf();
        unsigned len2 = bm::bit_to_gap(gap_buf2, blk, bm::gap_max_buff_len);
+       print_gap(gapv2, 100);
        assert(len1 == len2);
        int cmp = bm::gapcmp(gap_buf1, gap_buf2);
        assert(cmp == 0);
@@ -1992,7 +2083,7 @@ void TestBlockToGAP()
            gap_vector gapv2(0);
            gap_word_t* gap_buf1 = gapv1.get_buf();
            *gap_buf1 = 0;
-           unsigned len1 = bm::bit_convert_to_gap(gap_buf1, blk, bm::gap_max_bits, bm::gap_max_buff_len);
+           unsigned len1 = bit_convert_to_gap(gap_buf1, blk, bm::gap_max_bits, bm::gap_max_buff_len);
            print_gap(gapv1, 100);
            gap_word_t* gap_buf2 = gapv2.get_buf();
            unsigned len2 = bm::bit_to_gap(gap_buf2, blk, bm::gap_max_buff_len);
@@ -2027,7 +2118,7 @@ void TestBlockToGAP()
             
             *gap_buf1 = 0;
             *gap_buf2 = 0;
-            unsigned len1 = bm::bit_convert_to_gap(gap_buf1, blk, bm::gap_max_bits, bm::gap_max_buff_len);
+            unsigned len1 = bit_convert_to_gap(gap_buf1, blk, bm::gap_max_bits, bm::gap_max_buff_len);
             unsigned len2 = bm::bit_to_gap(gap_buf2, blk, bm::gap_max_buff_len);
             assert(len1);
             assert(len1 == len2);
@@ -2055,23 +2146,23 @@ void TestBlockToGAP()
             for (i = 0; i < bm::set_block_size; ++i)
                 blk[i] = 0;
             
-            unsigned idx = rand() % bm::set_block_size;
-            blk[idx] |= rand();
-            idx = rand() % bm::set_block_size;
-            blk[idx] |= rand();
-            idx = rand() % bm::set_block_size;
-            blk[idx] |= rand();
-            idx = rand() % bm::set_block_size;
-            blk[idx] |= rand();
+            unsigned idx = (unsigned)rand() % bm::set_block_size;
+            blk[idx] |= (unsigned)rand();
+            idx = (unsigned)rand() % bm::set_block_size;
+            blk[idx] |= (unsigned)rand();
+            idx = (unsigned)rand() % bm::set_block_size;
+            blk[idx] |= (unsigned)rand();
+            idx = (unsigned)rand() % bm::set_block_size;
+            blk[idx] |= (unsigned)rand();
 
-            idx = rand() % bm::set_block_size;
-            blk[idx] |= ~0;
-            idx = rand() % bm::set_block_size;
-            blk[idx] |= (~0 << (rand()%31));
+            idx = (unsigned)rand() % bm::set_block_size;
+            blk[idx] |= ~0u;
+            idx = (unsigned)rand() % bm::set_block_size;
+            blk[idx] |= (~0u << (rand()%31));
 
             *gap_buf1 = 0;
             *gap_buf2 = 0;
-            unsigned len1 = bm::bit_convert_to_gap(gap_buf1, blk, bm::gap_max_bits, bm::gap_max_buff_len);
+            unsigned len1 = bit_convert_to_gap(gap_buf1, blk, bm::gap_max_bits, bm::gap_max_buff_len);
             unsigned len2 = bm::bit_to_gap(gap_buf2, blk, bm::gap_max_buff_len);
             assert(len1);
             assert(len1 == len2);
@@ -10931,7 +11022,7 @@ void LZCNTTest()
     assert(t == 32);
 
     l = bm::count_leading_zeros(2);
-    unsigned bsf = bm::bit_scan_fwd(2);
+    unsigned bsf = bm::bit_scan_forward32(2);
     assert(bsf == 1);
     t = bm::count_trailing_zeros(2);
     assert(t == 1);
@@ -10942,13 +11033,13 @@ void LZCNTTest()
         l = bm::count_leading_zeros(i);
         t = bm::count_trailing_zeros(i);
         bsr = bm::bit_scan_reverse32(i);
-        bsf = bm::bit_scan_fwd(i);
+        bsf = bm::bit_scan_forward32(i);
         assert(bsf == bsr);
         assert(l == 31 - bsf);
         assert(t == bsf);
 
         l = bm::count_leading_zeros(mask);
-        bsf = bm::bit_scan_fwd(mask);
+        bsf = bm::bit_scan_forward32(mask);
         bsr = bm::bit_scan_reverse32(mask);
         assert(l == 31 - bsr);
         mask >>= 1;
@@ -16905,12 +16996,11 @@ void TestCompressSparseVector()
     cout << " ------------------------------ Test Compressed Sparse Vector OK" << endl;
 }
 
-
-
 int main(void)
 {
     time_t      start_time = time(0);
     time_t      finish_time;
+    
 
 /*
     LoadBVDump("C:/dev/group-by-sets/sets/geo_organization.bvdump", 
@@ -16941,6 +17031,8 @@ int main(void)
 
 //avx2_i32_shift();
 //return 0;
+
+
 
     TestRecomb();
 

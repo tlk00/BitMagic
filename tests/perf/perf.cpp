@@ -2296,7 +2296,10 @@ static
 void OptimizeTest()
 {
     std::vector<bvect> bv_coll;
+    std::vector<bvect> bv_coll_control;
+
     GenerateTestCollection(&bv_coll, 100, 80000000, false);
+    bv_coll_control = bv_coll;
     
     BM_DECLARE_TEMP_BLOCK(tb)
     {
@@ -2306,6 +2309,19 @@ void OptimizeTest()
             bv_coll[k].optimize(tb);
         }
     }
+    for (unsigned k = 0; k < bv_coll.size(); ++k)
+    {
+        const bvect& bv1 = bv_coll[k];
+        const bvect& bv2 = bv_coll_control[k];
+        int cmp = bv1.compare(bv2);
+        if (cmp != 0)
+        {
+            std::cerr << "Optimization error!" << endl;
+            exit(1);
+        }
+    }
+
+    
 }
 
 static
@@ -2852,7 +2868,7 @@ int main(void)
     BitCompareTest();
 
     OptimizeTest();
-    
+
     FindTest();
 
     BitBlockRotateTest();
