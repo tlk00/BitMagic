@@ -6322,14 +6322,6 @@ T bit_convert_to_arr(T* BMRESTRICT dest,
             *pcurr++ = (T)(bm::word_bitcount(t - 1) + bit_idx);
             val &= val - 1;
         }
-/*
-        unsigned char b_list[64];
-        unsigned word_bit_cnt  = bm::bitscan_popcnt(val, b_list);
-        for (unsigned j = 0; j < word_bit_cnt; ++j)
-        {
-            *pcurr++ = (T)(b_list[j] + bit_idx);
-        }
-*/
     } // for
     return (T)(pcurr - dest);
 }
