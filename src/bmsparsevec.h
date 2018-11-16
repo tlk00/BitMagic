@@ -859,7 +859,6 @@ public:
     ///
     void set_allocator_pool(allocator_pool_type* pool_ptr);
 
-
 private:
 
     /*! \brief free all internal vectors
@@ -883,9 +882,7 @@ protected:
     void push_back_no_null(value_type v);
 
 
-    const bm::word_t* get_block(unsigned p, unsigned i, unsigned j) const;
-
-    bvector_type* get_null_bvect() { return bmatr_.get_row(this->null_plain());/*plains_[this->null_plain()];*/ }
+    bvector_type* get_null_bvect() { return bmatr_.get_row(this->null_plain());}
     
     void resize_internal(size_type sz) { resize(sz); }
     size_type size_internal() const { return size(); }
@@ -1202,7 +1199,7 @@ sparse_vector<Val, BV>::gather(value_type*       arr,
         unsigned eff_plains = effective_plains();
         for (unsigned j = 0; j < eff_plains; ++j)
         {
-            const bm::word_t* blk = get_block(j, i0, j0);
+            const bm::word_t* blk = bmatr_.get_block(j, i0, j0);
             if (!blk)
                 continue;
             value_type vm;
@@ -1301,7 +1298,7 @@ sparse_vector<Val, BV>::extract_range(value_type* arr,
     
     for (unsigned j = 0; j < sizeof(Val)*8; ++j)
     {
-        blk = get_block(j, i0, j0);
+        blk = bmatr_.get_block(j, i0, j0);
         bool is_gap = BM_IS_GAP(blk);
         
         for (unsigned k = start; k < end; ++k)
@@ -1312,7 +1309,7 @@ sparse_vector<Val, BV>::extract_range(value_type* arr,
                 nb = nb1;
                 i0 = nb >> bm::set_array_shift;
                 j0 = nb &  bm::set_array_mask;
-                blk = get_block(j, i0, j0);
+                blk = bmatr_.get_block(j, i0, j0);
                 is_gap = BM_IS_GAP(blk);
             }
         
@@ -1535,11 +1532,6 @@ typename sparse_vector<Val, BV>::bvector_type_ptr
     bvector_type_ptr bv = bmatr_.get_row(i);//plains_[i];
     if (!bv)
     {
-    /*
-        bv = construct_bvector(0);
-        bv->init();
-        plains_[i] = bv;
-*/
         bv = bmatr_.construct_row(i);
         bv->init();
         if (i > effective_plains_ && i < value_bits())
@@ -1562,93 +1554,22 @@ sparse_vector<Val, BV>::at(typename sparse_vector<Val, BV>::size_type idx) const
 //---------------------------------------------------------------------
 
 template<class Val, class BV>
-const bm::word_t* sparse_vector<Val, BV>::get_block(unsigned p, unsigned i, unsigned j) const
-{
-    bvector_type_const_ptr bv = bmatr_.row(p);
-    if (bv)
-    {
-        const typename bvector_type::blocks_manager_type& bman = bv->get_blocks_manager();
-        return bman.get_block_ptr(i, j);
-    }
-    return 0;
-}
-
-//---------------------------------------------------------------------
-
-template<class Val, class BV>
 typename sparse_vector<Val, BV>::value_type
 sparse_vector<Val, BV>::get(bm::id_t i) const
 {
     BM_ASSERT(i < size_);
     
     value_type v = 0;
-    
-    // calculate logical block coordinates and masks
-    //
-    unsigned nb = unsigned(i >>  bm::set_block_shift);
-    unsigned i0 = nb >> bm::set_array_shift; // top block address
-    unsigned j0 = nb &  bm::set_array_mask;  // address in sub-block
-    unsigned nbit = unsigned(i & bm::set_block_mask);
-    unsigned nword  = unsigned(nbit >> bm::set_word_shift);
-    unsigned mask0 = 1u << (nbit & bm::set_word_mask);
-    const bm::word_t* blk;
-    const bm::word_t* blka[4];
-    
     unsigned eff_plains = effective_plains();
     for (unsigned j = 0; j < eff_plains; j+=4)
     {
         bool b = bmatr_.test_4rows(j);
-        if (!b)
-            continue;
-
-        blka[0] = get_block(j+0, i0, j0);
-        blka[1] = get_block(j+1, i0, j0);
-        blka[2] = get_block(j+2, i0, j0);
-        blka[3] = get_block(j+3, i0, j0);
-        unsigned is_set;
-
-        if ((blk = blka[0+0])!=0)
+        if (b)
         {
-            if (blk == FULL_BLOCK_FAKE_ADDR)
-                is_set = 1;
-            else
-                is_set = (BM_IS_GAP(blk)) ? bm::gap_test_unr(BMGAP_PTR(blk), nbit) : (blk[nword] & mask0);
-            value_type vm = (bool) is_set;
-            vm <<= (j+0);
-            v |= vm;
-        }
-        if ((blk = blka[0+1])!=0)
-        {
-            if (blk == FULL_BLOCK_FAKE_ADDR)
-                is_set = 1;
-            else
-                is_set = (BM_IS_GAP(blk)) ? bm::gap_test_unr(BMGAP_PTR(blk), nbit) : (blk[nword] & mask0);
-            value_type vm = (bool) is_set;
-            vm <<= (j+1);
-            v |= vm;
-        }
-        if ((blk = blka[0+2])!=0)
-        {
-            if (blk == FULL_BLOCK_FAKE_ADDR)
-                is_set = 1;
-            else
-                is_set = (BM_IS_GAP(blk)) ? bm::gap_test_unr(BMGAP_PTR(blk), nbit) : (blk[nword] & mask0);
-            value_type vm = (bool) is_set;
-            vm <<= (j+2);
-            v |= vm;
-        }
-        if ((blk = blka[0+3])!=0)
-        {
-            if (blk == FULL_BLOCK_FAKE_ADDR)
-                is_set = 1;
-            else
-                is_set = (BM_IS_GAP(blk)) ? bm::gap_test_unr(BMGAP_PTR(blk), nbit) : (blk[nword] & mask0);
-            value_type vm = (bool) is_set;
-            vm <<= (j+3);
-            v |= vm;
+            value_type vm = bmatr_.get_half_octet(i, j);
+            v |= vm << j;
         }
     } // for j
-    
     return v;
 }
 
@@ -1728,11 +1649,12 @@ void sparse_vector<Val, BV>::set_value_no_null(size_type idx, value_type v)
         
     for (unsigned i = bsr; i < eff_plains; ++i)
     {
-        const bm::word_t* blk = get_block(i, i0, j0);
+        const bm::word_t* blk = bmatr_.get_block(i, i0, j0);
         if (blk)
         {
-            bvector_type* bv = bmatr_.get_row(i);//plains_[i];
-            bv->clear_bit_no_check(idx);
+            bvector_type* bv = bmatr_.get_row(i);
+            if (bv)
+                bv->clear_bit_no_check(idx);
         }
     }
     if (v)
@@ -1747,10 +1669,10 @@ void sparse_vector<Val, BV>::set_value_no_null(size_type idx, value_type v)
             }
             else
             {
-                const bm::word_t* blk = get_block(j, i0, j0);
+                const bm::word_t* blk = bmatr_.get_block(j, i0, j0);
                 if (blk)
                 {
-                    bvector_type* bv = bmatr_.get_row(j);//plains_[j];
+                    bvector_type* bv = bmatr_.get_row(j);
                     bv->clear_bit_no_check(idx);
                 }
             }
