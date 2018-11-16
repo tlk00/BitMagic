@@ -565,7 +565,7 @@ basic_bmatrix<BV>::get_octet(size_type pos, size_type octet_idx) const
     unsigned v1 = get_half_octet(pos, row+4);
 
     v0 |= v1 << 4;
-    return v0;
+    return (unsigned char)v0;
 }
 
 //---------------------------------------------------------------------
@@ -606,7 +606,7 @@ basic_bmatrix<BV>::get_half_octet(size_type pos, size_type row_idx) const
             is_set = 1;
         else
             is_set = (BM_IS_GAP(blk)) ? bm::gap_test_unr(BMGAP_PTR(blk), nbit) : (blk[nword] & mask0);
-        v |= (bool(is_set) << 1);
+        v |= unsigned(bool(is_set)) << 1u;
     }
     if ((blk = blka[2])!=0)
     {
@@ -614,7 +614,7 @@ basic_bmatrix<BV>::get_half_octet(size_type pos, size_type row_idx) const
             is_set = 1;
         else
             is_set = (BM_IS_GAP(blk)) ? bm::gap_test_unr(BMGAP_PTR(blk), nbit) : (blk[nword] & mask0);
-        v |= bool(is_set) << 2;
+        v |= unsigned(bool(is_set)) << 2u;
     }
     if ((blk = blka[3])!=0)
     {
@@ -622,7 +622,7 @@ basic_bmatrix<BV>::get_half_octet(size_type pos, size_type row_idx) const
             is_set = 1;
         else
             is_set = (BM_IS_GAP(blk)) ? bm::gap_test_unr(BMGAP_PTR(blk), nbit) : (blk[nword] & mask0);
-        v |= bool(is_set) << 3;
+        v |= unsigned(bool(is_set)) << 3u;
     }
     return v;
 }
