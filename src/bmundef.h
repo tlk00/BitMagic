@@ -69,6 +69,8 @@ For more information please visit:  http://bitmagic.io
 
 #undef VECT_ARR_BLOCK_LOOKUP
 #undef VECT_SET_BLOCK_BITS
+#undef VECT_BLOCK_CHANGE
+#undef VECT_BIT_TO_GAP
 
 #undef BMI1_SELECT64
 #undef BMI2_SELECT64
