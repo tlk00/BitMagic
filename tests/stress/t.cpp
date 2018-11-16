@@ -11898,10 +11898,28 @@ void TestBasicMatrix()
         bv = bmtr5.construct_row(0);
         b = bv->test(210);
         assert(b);
-
-        
     }
     
+    
+    // octet assignment logic
+    {
+        bm::basic_bmatrix<bvect> bmtr(32);
+        bmtr.set_octet(0, 0, 'A');
+        bmtr.set_octet(0, 1, 'T');
+        bmtr.set_octet(0, 2, 'G');
+        bmtr.set_octet(0, 3, 'C');
+        unsigned char ch;
+        ch = bmtr.get_octet(0, 0);
+        assert(ch == 'A');
+        ch = bmtr.get_octet(0, 1);
+        assert(ch == 'T');
+        ch = bmtr.get_octet(0, 2);
+        assert(ch == 'G');
+        ch = bmtr.get_octet(0, 3);
+        assert(ch == 'C');
+        ch = bmtr.get_octet(0, 0);
+        assert(ch == 'A');
+    }
     
     
     cout << "---------------------------- Basic bit-matrix test OK" << endl;
@@ -17031,7 +17049,6 @@ int main(void)
 
 //avx2_i32_shift();
 //return 0;
-
 
 
     TestRecomb();
