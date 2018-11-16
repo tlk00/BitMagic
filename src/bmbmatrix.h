@@ -18,8 +18,8 @@ limitations under the License.
 For more information please visit:  http://bitmagic.io
 */
 
-/*! \file bmbmatirx.h
-    \brief basic bit-matrix classes
+/*! \file bmbmatrix.h
+    \brief basic bit-matrix class and utilities
 */
 
 #include <stddef.h>
@@ -101,7 +101,7 @@ public:
     ///@}
     
     // ------------------------------------------------------------
-    /*! @name content manipulatio                                */
+    /*! @name content manipulation                                */
     ///@{
 
     /*! Swap content */
@@ -135,14 +135,46 @@ public:
 
     void destruct_row(size_type row);
     ///@}
+    
+    
+    // ------------------------------------------------------------
+    /*! @name octet access and transposition                     */
+    ///@{
+
+    /*!
+        Bit-transpose an octet and assign it to a bot-matrix
+     
+        @param pos - column position in the matrix
+        @param octet_idx - octet based row position (1 octet - 8 rows)
+        @param octet - value to assign
+    */
+    void set_octet(size_type pos, size_type octet_idx, unsigned char octet);
+    
+    /*!
+        return octet from the matrix
+     
+        @param pos - column position in the matrix
+        @param octet_idx - octet based row position (1 octet - 8 rows)
+    */
+    unsigned char get_octet(size_type pos, size_type octet_idx) const;
+    
+    
+    ///@}
 
 public:
+
     // ------------------------------------------------------------
     /*! @name Utility function                                   */
     ///@{
     
     /// Test if 4 rows from i are not NULL
     bool test_4rows(unsigned i) const;
+
+    /// Get low level internal access to
+    const bm::word_t* get_block(unsigned p, unsigned i, unsigned j) const;
+    
+    unsigned get_half_octet(size_type pos, size_type row_idx) const;
+
     ///@}
 
 
@@ -461,6 +493,138 @@ void basic_bmatrix<BV>::destruct_bvector(bvector_type* bv) const
 #else
     delete bv;
 #endif
+}
+
+//---------------------------------------------------------------------
+
+template<typename BV>
+const bm::word_t*
+basic_bmatrix<BV>::get_block(unsigned p, unsigned i, unsigned j) const
+{
+    bvector_type_const_ptr bv = this->row(p);
+    if (bv)
+    {
+        const typename bvector_type::blocks_manager_type& bman = bv->get_blocks_manager();
+        return bman.get_block_ptr(i, j);
+    }
+    return 0;
+}
+
+
+//---------------------------------------------------------------------
+
+template<typename BV>
+void basic_bmatrix<BV>::set_octet(size_type pos,
+                                  size_type octet_idx,
+                                  unsigned char octet)
+{
+    BM_ASSERT(octet_idx * 8u < rsize_);
+    
+    unsigned row = octet_idx * 8;
+    unsigned row_end = row + 8;
+    for (; row < row_end; ++row)
+    {
+        bvector_type* bv = this->get_row(row);
+        if (octet & 1u)
+        {
+            if (!bv)
+            {
+                bv = this->construct_row(row);
+                bv->init();
+                bv->set_bit_no_check(pos);
+            }
+        }
+        else
+        {
+            if (bv)
+                bv->clear_bit_no_check(pos);
+        }
+        octet >>= 1;
+        if (!octet)
+            break;
+    } // for
+    
+    // clear the tail
+    for (++row; row < row_end; ++row)
+    {
+        bvector_type* bv = this->get_row(row);
+        if (bv)
+            bv->clear_bit_no_check(pos);
+    } // for
+}
+
+
+//---------------------------------------------------------------------
+
+template<typename BV>
+unsigned char
+basic_bmatrix<BV>::get_octet(size_type pos, size_type octet_idx) const
+{
+    unsigned row = octet_idx * 8;
+    unsigned v0 = get_half_octet(pos, row);
+    unsigned v1 = get_half_octet(pos, row+4);
+
+    v0 |= v1 << 4;
+    return v0;
+}
+
+//---------------------------------------------------------------------
+
+template<typename BV>
+unsigned
+basic_bmatrix<BV>::get_half_octet(size_type pos, size_type row_idx) const
+{
+    unsigned v = 0;
+
+    unsigned nb = unsigned(pos >>  bm::set_block_shift);
+    unsigned i0 = nb >> bm::set_array_shift; // top block address
+    unsigned j0 = nb &  bm::set_array_mask;  // address in sub-block
+
+    const bm::word_t* blk;
+    const bm::word_t* blka[4];
+    unsigned nbit = unsigned(pos & bm::set_block_mask);
+    unsigned nword  = unsigned(nbit >> bm::set_word_shift);
+    unsigned mask0 = 1u << (nbit & bm::set_word_mask);
+
+    blka[0] = get_block(row_idx+0, i0, j0);
+    blka[1] = get_block(row_idx+1, i0, j0);
+    blka[2] = get_block(row_idx+2, i0, j0);
+    blka[3] = get_block(row_idx+3, i0, j0);
+    unsigned is_set;
+    
+    if ((blk = blka[0])!=0)
+    {
+        if (blk == FULL_BLOCK_FAKE_ADDR)
+            is_set = 1;
+        else
+            is_set = (BM_IS_GAP(blk)) ? bm::gap_test_unr(BMGAP_PTR(blk), nbit) : (blk[nword] & mask0);
+        v |= bool(is_set);
+    }
+    if ((blk = blka[1])!=0)
+    {
+        if (blk == FULL_BLOCK_FAKE_ADDR)
+            is_set = 1;
+        else
+            is_set = (BM_IS_GAP(blk)) ? bm::gap_test_unr(BMGAP_PTR(blk), nbit) : (blk[nword] & mask0);
+        v |= (bool(is_set) << 1);
+    }
+    if ((blk = blka[2])!=0)
+    {
+        if (blk == FULL_BLOCK_FAKE_ADDR)
+            is_set = 1;
+        else
+            is_set = (BM_IS_GAP(blk)) ? bm::gap_test_unr(BMGAP_PTR(blk), nbit) : (blk[nword] & mask0);
+        v |= bool(is_set) << 2;
+    }
+    if ((blk = blka[3])!=0)
+    {
+        if (blk == FULL_BLOCK_FAKE_ADDR)
+            is_set = 1;
+        else
+            is_set = (BM_IS_GAP(blk)) ? bm::gap_test_unr(BMGAP_PTR(blk), nbit) : (blk[nword] & mask0);
+        v |= bool(is_set) << 3;
+    }
+    return v;
 }
 
 //---------------------------------------------------------------------
