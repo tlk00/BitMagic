@@ -60,6 +60,7 @@ public:
     typedef typename bvector_type::allocation_policy allocation_policy_type;
     typedef typename allocator_type::allocator_pool_type allocator_pool_type;
     typedef bm::id_t                                 size_type;
+    typedef unsigned char                            octet_type;
 
 public:
     // ------------------------------------------------------------
@@ -175,6 +176,16 @@ public:
     
     unsigned get_half_octet(size_type pos, size_type row_idx) const;
 
+    /*!
+        \brief run memory optimization for all bit-vector rows
+        \param temp_block - pre-allocated memory block to avoid unnecessary re-allocs
+        \param opt_mode - requested compression depth
+        \param stat - memory allocation statistics after optimization
+    */
+    void optimize(bm::word_t* temp_block = 0,
+                  typename bvector_type::optmode opt_mode = bvector_type::opt_compress,
+                  typename bvector_type::statistics* stat = 0);
+
     ///@}
 
 
@@ -198,6 +209,164 @@ protected:
     size_type                rsize_;
 };
 
+/**
+    Base class for bit-transposed sparse vector construction
+ 
+    @ingroup bmagic
+    @internal
+*/
+template<typename Val, typename BV, unsigned MAX_SIZE>
+class base_sparse_vector
+{
+public:
+    enum bit_plains
+    {
+        sv_plains = (sizeof(Val) * 8 * MAX_SIZE + 1),
+        sv_value_plains = (sizeof(Val) * 8 * MAX_SIZE)
+    };
+    
+    typedef Val                                      value_type;
+    typedef bm::id_t                                 size_type;
+    typedef BV                                       bvector_type;
+    typedef bvector_type*                            bvector_type_ptr;
+    typedef const bvector_type*                      bvector_type_const_ptr;
+    typedef const value_type&                        const_reference;
+    typedef typename BV::allocator_type              allocator_type;
+    typedef typename bvector_type::allocation_policy allocation_policy_type;
+    typedef typename bvector_type::enumerator        bvector_enumerator_type;
+    typedef typename allocator_type::allocator_pool_type allocator_pool_type;
+    typedef bm::basic_bmatrix<BV>                        bmatrix_type;
+    
+public:
+    base_sparse_vector();
+
+    base_sparse_vector(bm::null_support        null_able,
+                       allocation_policy_type  ap,
+                       size_type               bv_max_size,
+                       const allocator_type&   alloc);
+    
+    base_sparse_vector(const base_sparse_vector<Val, BV, MAX_SIZE>& bsv);
+
+#ifndef BM_NO_CXX11
+    /*! move-ctor */
+    base_sparse_vector(base_sparse_vector<Val, BV, MAX_SIZE>&& bsv) BMNOEXEPT
+    {
+        bmatr_.swap(bsv.bmatr_);
+        size_ = bsv.size_;
+        effective_plains_ = bsv.effective_plains_;
+        bsv.size_ = 0;
+    }
+#endif
+
+    void swap(base_sparse_vector<Val, BV, MAX_SIZE>& bsv) BMNOEXEPT;
+
+    size_type size() const { return size_; }
+    
+    void resize(size_type new_size);
+    
+    void clear_range(size_type left, size_type right, bool set_null);
+
+    /*! \brief resize to zero, free memory */
+    void clear() BMNOEXEPT;
+
+public:
+
+    // ------------------------------------------------------------
+    /*! @name Various traits                                     */
+    //@{
+    /**
+        \brief check if container supports NULL(unassigned) values
+    */
+    bool is_nullable() const { return bmatr_.get_row(this->null_plain()) != 0; }
+
+    /**
+        \brief Get bit-vector of assigned values or NULL
+        (if not constructed that way)
+    */
+    const bvector_type* get_null_bvector() const
+        { return bmatr_.get_row(this->null_plain()); }
+    
+    /** \brief test if specified element is NULL
+        \param idx - element index
+        \return true if it is NULL false if it was assigned or container
+        is not configured to support assignment flags
+    */
+    bool is_null(size_type idx) const;
+    
+
+    ///@}
+
+
+    // ------------------------------------------------------------
+    /*! @name Access to internals                                */
+    ///@{
+
+    /*!
+        \brief get access to bit-plain, function checks and creates a plain
+        \return bit-vector for the bit plain
+    */
+    bvector_type_ptr get_plain(unsigned i);
+
+    /*!
+        \brief get read-only access to bit-plain
+        \return bit-vector for the bit plain or NULL
+    */
+    bvector_type_const_ptr
+    get_plain(unsigned i) const { return bmatr_.row(i); }
+
+    /*!
+        \brief get total number of bit-plains in the vector
+    */
+    static unsigned plains() { return value_bits(); }
+
+    /** Number of stored bit-plains (value plains + extra */
+    static unsigned stored_plains() { return value_bits()+1; }
+
+
+    /** Number of effective bit-plains in the value type */
+    unsigned effective_plains() const { return effective_plains_ + 1; }
+
+    /*!
+        \brief get access to bit-plain as is (can return NULL)
+    */
+    bvector_type_ptr plain(unsigned i) { return bmatr_.get_row(i); }
+    const bvector_type_ptr plain(unsigned i) const { return bmatr_.get_row(i); }
+
+    bvector_type* get_null_bvect() { return bmatr_.get_row(this->null_plain());}
+
+    /*!
+        \brief free memory in bit-plain
+    */
+    void free_plain(unsigned i) { bmatr_.destruct_row(i); }
+
+    ///@}
+    
+    /*!
+        \brief run memory optimization for all bit-vector rows
+        \param temp_block - pre-allocated memory block to avoid unnecessary re-allocs
+        \param opt_mode - requested compression depth
+        \param stat - memory allocation statistics after optimization
+    */
+    void optimize(bm::word_t* temp_block = 0,
+                  typename bvector_type::optmode opt_mode = bvector_type::opt_compress,
+                  typename bvector_type::statistics* stat = 0);
+
+    
+protected:
+    void copy_from(const base_sparse_vector<Val, BV, MAX_SIZE>& bsv);
+    
+protected:
+    /** Number of total bit-plains in the value type*/
+    static unsigned value_bits() { return sv_value_plains; }
+    
+    /** plain index for the "NOT NULL" flags plain */
+    static unsigned null_plain() { return value_bits(); }
+protected:
+    bmatrix_type             bmatr_;              ///< bit-transposed matrix
+    size_type                size_;               ///<
+    unsigned                 effective_plains_;
+
+};
 
 //---------------------------------------------------------------------
 //
@@ -531,8 +700,8 @@ void basic_bmatrix<BV>::set_octet(size_type pos,
             {
                 bv = this->construct_row(row);
                 bv->init();
-                bv->set_bit_no_check(pos);
             }
+            bv->set_bit_no_check(pos);
         }
         else
         {
@@ -560,12 +729,99 @@ template<typename BV>
 unsigned char
 basic_bmatrix<BV>::get_octet(size_type pos, size_type octet_idx) const
 {
-    unsigned row = octet_idx * 8;
-    unsigned v0 = get_half_octet(pos, row);
-    unsigned v1 = get_half_octet(pos, row+4);
+    unsigned v = 0;
 
-    v0 |= v1 << 4;
-    return (unsigned char)v0;
+    unsigned nb = unsigned(pos >>  bm::set_block_shift);
+    unsigned i0 = nb >> bm::set_array_shift; // top block address
+    unsigned j0 = nb &  bm::set_array_mask;  // address in sub-block
+
+    const bm::word_t* blk;
+    const bm::word_t* blka[8];
+    unsigned nbit = unsigned(pos & bm::set_block_mask);
+    unsigned nword  = unsigned(nbit >> bm::set_word_shift);
+    unsigned mask0 = 1u << (nbit & bm::set_word_mask);
+    
+    unsigned row_idx = (octet_idx * 8);
+
+    blka[0] = get_block(row_idx+0, i0, j0);
+    blka[1] = get_block(row_idx+1, i0, j0);
+    blka[2] = get_block(row_idx+2, i0, j0);
+    blka[3] = get_block(row_idx+3, i0, j0);
+    blka[4] = get_block(row_idx+4, i0, j0);
+    blka[5] = get_block(row_idx+5, i0, j0);
+    blka[6] = get_block(row_idx+6, i0, j0);
+    blka[7] = get_block(row_idx+7, i0, j0);
+    unsigned is_set;
+    
+    if ((blk = blka[0])!=0)
+    {
+        if (blk == FULL_BLOCK_FAKE_ADDR)
+            is_set = 1;
+        else
+            is_set = (BM_IS_GAP(blk)) ? bm::gap_test_unr(BMGAP_PTR(blk), nbit) : (blk[nword] & mask0);
+        v |= bool(is_set);
+    }
+    if ((blk = blka[1])!=0)
+    {
+        if (blk == FULL_BLOCK_FAKE_ADDR)
+            is_set = 1;
+        else
+            is_set = (BM_IS_GAP(blk)) ? bm::gap_test_unr(BMGAP_PTR(blk), nbit) : (blk[nword] & mask0);
+        v |= unsigned(bool(is_set)) << 1u;
+    }
+    if ((blk = blka[2])!=0)
+    {
+        if (blk == FULL_BLOCK_FAKE_ADDR)
+            is_set = 1;
+        else
+            is_set = (BM_IS_GAP(blk)) ? bm::gap_test_unr(BMGAP_PTR(blk), nbit) : (blk[nword] & mask0);
+        v |= unsigned(bool(is_set)) << 2u;
+    }
+    if ((blk = blka[3])!=0)
+    {
+        if (blk == FULL_BLOCK_FAKE_ADDR)
+            is_set = 1;
+        else
+            is_set = (BM_IS_GAP(blk)) ? bm::gap_test_unr(BMGAP_PTR(blk), nbit) : (blk[nword] & mask0);
+        v |= unsigned(bool(is_set)) << 3u;
+    }
+    
+    
+    if ((blk = blka[4])!=0)
+    {
+        if (blk == FULL_BLOCK_FAKE_ADDR)
+            is_set = 1;
+        else
+            is_set = (BM_IS_GAP(blk)) ? bm::gap_test_unr(BMGAP_PTR(blk), nbit) : (blk[nword] & mask0);
+        v |= unsigned(bool(is_set)) << 4u;
+    }
+    if ((blk = blka[5])!=0)
+    {
+        if (blk == FULL_BLOCK_FAKE_ADDR)
+            is_set = 1;
+        else
+            is_set = (BM_IS_GAP(blk)) ? bm::gap_test_unr(BMGAP_PTR(blk), nbit) : (blk[nword] & mask0);
+        v |= unsigned(bool(is_set)) << 5u;
+    }
+    if ((blk = blka[6])!=0)
+    {
+        if (blk == FULL_BLOCK_FAKE_ADDR)
+            is_set = 1;
+        else
+            is_set = (BM_IS_GAP(blk)) ? bm::gap_test_unr(BMGAP_PTR(blk), nbit) : (blk[nword] & mask0);
+        v |= unsigned(bool(is_set)) << 6u;
+    }
+    if ((blk = blka[7])!=0)
+    {
+        if (blk == FULL_BLOCK_FAKE_ADDR)
+            is_set = 1;
+        else
+            is_set = (BM_IS_GAP(blk)) ? bm::gap_test_unr(BMGAP_PTR(blk), nbit) : (blk[nword] & mask0);
+        v |= unsigned(bool(is_set)) << 7u;
+    }
+
+    
+    return v;
 }
 
 //---------------------------------------------------------------------
@@ -629,6 +885,236 @@ basic_bmatrix<BV>::get_half_octet(size_type pos, size_type row_idx) const
 
 //---------------------------------------------------------------------
 
+template<typename BV>
+void basic_bmatrix<BV>::optimize(bm::word_t* temp_block,
+                  typename bvector_type::optmode opt_mode,
+                  typename bvector_type::statistics* st)
+{
+    if (st)
+    {
+        st->bit_blocks = st->gap_blocks = 0;
+        st->max_serialize_mem = st->memory_used = 0;
+    }
+    for (unsigned j = 0; j < rsize_; ++j)
+    {
+        bvector_type* bv = get_row(j);
+        if (bv)
+        {
+            typename bvector_type::statistics stbv;
+            bv->optimize(temp_block, opt_mode, &stbv);
+            if (st)
+            {
+                st->bit_blocks += stbv.bit_blocks;
+                st->gap_blocks += stbv.gap_blocks;
+                st->max_serialize_mem += stbv.max_serialize_mem + 8;
+                st->memory_used += stbv.memory_used;
+            }
+        }
+    } // for j
+}
+
+//---------------------------------------------------------------------
+//---------------------------------------------------------------------
+
+template<class Val, class BV, unsigned MAX_SIZE>
+base_sparse_vector<Val, BV, MAX_SIZE>::base_sparse_vector()
+: bmatr_(sv_plains, allocation_policy_type(), bm::id_max, allocator_type()),
+  size_(0),
+  effective_plains_(0)
+{
+}
+
+//---------------------------------------------------------------------
+
+template<class Val, class BV, unsigned MAX_SIZE>
+base_sparse_vector<Val, BV, MAX_SIZE>::base_sparse_vector(
+        bm::null_support        null_able,
+        allocation_policy_type  ap,
+        size_type               bv_max_size,
+        const allocator_type&       alloc)
+: bmatr_(sv_plains, ap, bv_max_size, alloc),
+  size_(0),
+  effective_plains_(0)
+{
+    if (null_able == bm::use_null)
+    {
+        unsigned i = null_plain();
+        bmatr_.construct_row(i)->init();
+    }
+}
+
+//---------------------------------------------------------------------
+
+template<class Val, class BV, unsigned MAX_SIZE>
+base_sparse_vector<Val, BV, MAX_SIZE>::base_sparse_vector(
+                        const base_sparse_vector<Val, BV, MAX_SIZE>& bsv)
+: bmatr_(bsv.bmatr_),
+  size_(bsv.size_),
+  effective_plains_(bsv.effective_plains_)
+{
+}
+
+//---------------------------------------------------------------------
+
+template<class Val, class BV, unsigned MAX_SIZE>
+void base_sparse_vector<Val, BV, MAX_SIZE>::copy_from(
+                const base_sparse_vector<Val, BV, MAX_SIZE>& bsv)
+{
+    resize(bsv.size());
+    effective_plains_ = bsv.effective_plains_;
+
+    unsigned ni = this->null_plain();
+    for (size_type i = 0; i < bsv.stored_plains(); ++i)
+    {
+        bvector_type* bv = bmatr_.get_row(i);
+        const bvector_type* bv_src = bsv.bmatr_.row(i);
+        
+        if (i == ni) // NULL plain copy
+        {
+            if (bv && !bv_src) // special case (copy from not NULL)
+            {
+                if (size_)
+                    bv->set_range(0, size_-1);
+                continue;
+            }
+        }
+
+        if (bv)
+            bmatr_.destruct_row(i);
+        if (bv_src)
+            bmatr_.construct_row(i, *bv_src);
+    } // for i
+}
+
+//---------------------------------------------------------------------
+
+template<class Val, class BV, unsigned MAX_SIZE>
+void base_sparse_vector<Val, BV, MAX_SIZE>::swap(
+                 base_sparse_vector<Val, BV, MAX_SIZE>& bsv) BMNOEXEPT
+{
+    if (this != &bsv)
+    {
+        bmatr_.swap(bsv.bmatr_);
+
+        bm::xor_swap(size_, bsv.size_);
+        bm::xor_swap(effective_plains_, bsv.effective_plains_);
+    }
+}
+
+//---------------------------------------------------------------------
+
+template<class Val, class BV, unsigned MAX_SIZE>
+void base_sparse_vector<Val, BV, MAX_SIZE>::clear() BMNOEXEPT
+{
+    for (size_type i = 0; i < value_bits(); ++i)
+    {
+        bmatr_.destruct_row(i);
+    }
+    size_ = 0;
+    bvector_type* bv_null = get_null_bvect();
+    if (bv_null)
+        bv_null->clear();
+}
+
+//---------------------------------------------------------------------
+
+template<class Val, class BV, unsigned MAX_SIZE>
+void base_sparse_vector<Val, BV, MAX_SIZE>::clear_range(
+        typename base_sparse_vector<Val, BV, MAX_SIZE>::size_type left,
+        typename base_sparse_vector<Val, BV, MAX_SIZE>::size_type right,
+        bool set_null)
+{
+    if (right < left)
+    {
+        return clear_range(right, left, set_null);
+    }
+    unsigned eff_plains = effective_plains();
+    for (unsigned i = 0; i < eff_plains; ++i)
+    {
+        bvector_type* bv = this->bmatr_.get_row(i);
+        if (bv)
+            bv->set_range(left, right, false);
+    } // for i
+    
+    if (set_null)
+    {
+        bvector_type* bv_null = this->get_null_bvect();
+        if (bv_null)
+            bv_null->set_range(left, right, false);
+    }
+}
+
+//---------------------------------------------------------------------
+
+template<class Val, class BV, unsigned MAX_SIZE>
+void base_sparse_vector<Val, BV, MAX_SIZE>::resize(size_type sz)
+{
+    if (sz == size())  // nothing to do
+        return;
+    if (!sz) // resize to zero is an equivalent of non-destructive deallocation
+    {
+        clear();
+        return;
+    }
+    if (sz < size()) // vector shrink
+        clear_range(sz, this->size_-1, true);   // clear the tails and NULL vect
+    size_ = sz;
+}
+
+
+//---------------------------------------------------------------------
+
+template<class Val, class BV, unsigned MAX_SIZE>
+bool base_sparse_vector<Val, BV, MAX_SIZE>::is_null(size_type idx) const
+{
+    const bvector_type* bv_null = get_null_bvector();
+    return (bv_null) ? (!bv_null->test(idx)) : false;
+}
+
+//---------------------------------------------------------------------
+
+template<class Val, class BV, unsigned MAX_SIZE>
+typename base_sparse_vector<Val, BV, MAX_SIZE>::bvector_type_ptr
+                base_sparse_vector<Val, BV, MAX_SIZE>::get_plain(unsigned i)
+{
+    bvector_type_ptr bv = bmatr_.get_row(i);
+    if (!bv)
+    {
+        bv = bmatr_.construct_row(i);
+        bv->init();
+        if (i > effective_plains_ && i < value_bits())
+            effective_plains_ = i;
+    }
+    return bv;
+}
+
+//---------------------------------------------------------------------
+
+template<class Val, class BV, unsigned MAX_SIZE>
+void base_sparse_vector<Val, BV, MAX_SIZE>::optimize(bm::word_t* temp_block,
+                                    typename bvector_type::optmode opt_mode,
+                                    typename bvector_type::statistics* stat)
+{
+    bmatr_.optimize(temp_block, opt_mode, stat);
+    
+    bvector_type* bv_null = this->get_null_bvect();
+    
+    unsigned stored_plains = this->stored_plains();
+    for (unsigned j = 0; j < stored_plains; ++j)
+    {
+        bvector_type* bv = this->bmatr_.get_row(j);
+        if (bv && (bv != bv_null)) // protect the NULL vector from de-allocation
+        {
+            if (!bv->any())  // empty vector?
+            {
+                this->bmatr_.destruct_row(j);
+                continue;
+            }
+        }
+    } // for j
+}
+
+//---------------------------------------------------------------------
 
 } // namespace
 
