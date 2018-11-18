@@ -1616,7 +1616,7 @@ void sparse_vector<Val, BV>::optimize_gap_size()
     unsigned stored_plains = this->stored_plains();
     for (unsigned j = 0; j < stored_plains; ++j)
     {
-        bvector_type* bv = bmatr_.get_row(j);
+        bvector_type* bv = this->bmatr_.get_row(j);
         if (bv)
         {
             bv->optimize_gap_size();
