@@ -52,6 +52,7 @@ For more information please visit:  http://bitmagic.io
 #include <bmalgo_similarity.h>
 #include <bmsparsevec_util.h>
 #include <bmsparsevec_compr.h>
+#include <bmstrsparsevec.h>
 #include <bmtimer.h>
 
 using namespace bm;
@@ -11904,21 +11905,49 @@ void TestBasicMatrix()
     // octet assignment logic
     {
         bm::basic_bmatrix<bvect> bmtr(32);
-        bmtr.set_octet(0, 0, 'A');
-        bmtr.set_octet(0, 1, 'T');
+        bmtr.set_octet(0, 0, '3');
+        bmtr.set_octet(1, 0, 1);
+        unsigned char ch;
+        ch = bmtr.get_octet(0, 0);
+        assert(ch == '3');
+        ch = bmtr.get_octet(1, 0);
+        assert(ch == 1);
+        
+        bmtr.optimize();
+        
+        ch = bmtr.get_octet(0, 0);
+        assert(ch == '3');
+        ch = bmtr.get_octet(1, 0);
+        assert(ch == 1);
+
+    }
+    {
+        bm::basic_bmatrix<bvect> bmtr(32);
+        bmtr.set_octet(0, 0, 1);
+        bmtr.set_octet(0, 1, 2);
         bmtr.set_octet(0, 2, 'G');
         bmtr.set_octet(0, 3, 'C');
         unsigned char ch;
         ch = bmtr.get_octet(0, 0);
-        assert(ch == 'A');
+        assert(ch == 1);
         ch = bmtr.get_octet(0, 1);
-        assert(ch == 'T');
+        assert(ch == 2);
         ch = bmtr.get_octet(0, 2);
         assert(ch == 'G');
         ch = bmtr.get_octet(0, 3);
         assert(ch == 'C');
         ch = bmtr.get_octet(0, 0);
-        assert(ch == 'A');
+        assert(ch == 1);
+        
+        bmtr.optimize();
+        ch = bmtr.get_octet(0, 0);
+        assert(ch == 1);
+        ch = bmtr.get_octet(0, 1);
+        assert(ch == 2);
+        ch = bmtr.get_octet(0, 2);
+        assert(ch == 'G');
+        ch = bmtr.get_octet(0, 3);
+        assert(ch == 'C');
     }
     
     
@@ -14216,6 +14245,59 @@ void TestSparseVector_Stress(unsigned count)
     
     cout << "---------------------------- Bit-plain sparse vector stress OK" << endl;
 }
+
+void TestStrSparseVector()
+{
+   cout << "---------------------------- Bit-plain STR sparse vector test" << endl;
+   
+   {
+   str_sparse_vector<char, bvect, 32> str_sv0;
+   str_sparse_vector<char, bvect, 32> str_sv1(str_sv0);
+   str_sparse_vector<char, bvect, 32> str_sv2;
+   str_sv2 = str_sv1;
+   
+   assert(str_sv1.size() == 0);
+   str_sparse_vector<char, bvect, 32> str_sv3(std::move(str_sv0));
+   }
+   
+   {
+   const char* s0 = "AbC";
+   const char* s1 = "jKl";
+   char str[256];
+   str_sparse_vector<char, bvect, 32> str_sv0;
+   int cmp;
+
+   str_sv0.set(0, s0);
+   str_sv0.get(0, str, sizeof(str));
+   cmp = ::strcmp(str, s0);
+   assert(cmp == 0);
+
+   str_sv0.set(1, s1);
+   str_sv0.get(0, str, sizeof(str));
+   cmp = ::strcmp(str, s0);
+   assert(cmp == 0);
+   
+   str_sv0.get(1, str, sizeof(str));
+   cmp = ::strcmp(str, s1);
+   assert(cmp == 0);
+   
+   str_sv0.optimize();
+
+   str_sv0.get(0, str, sizeof(str));
+   cmp = ::strcmp(str, s0);
+   assert(cmp == 0);
+   
+   str_sv0.get(1, str, sizeof(str));
+   cmp = ::strcmp(str, s1);
+   assert(cmp == 0);
+
+   }
+   
+   
+   cout << "---------------------------- Bit-plain STR sparse vector test OK" << endl;
+}
+
+
 
 inline
 void LoadBVDump(const char* filename, const char* filename_out=0, bool validate=false)
@@ -17203,6 +17285,8 @@ int main(void)
      TestSparseVector_Stress(2);
  
      TestCompressedCollection();
+
+     TestStrSparseVector();
 
      StressTest(300);
 
