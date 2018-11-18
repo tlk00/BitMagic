@@ -16,13 +16,13 @@ limitations under the License.
 For more information please visit:  http://bitmagic.io
 */
 
-/** \example sample18.cpp
+/** \example sample19.cpp
   Example of bit-vector merge
   \sa bm::bvector::merge
 
 */
 
-/*! \file sample18.cpp
+/*! \file sample19.cpp
     \brief Example: bit-vector merge
 
     Merge operation is an equivalent of logical OR, except 
