@@ -759,7 +759,7 @@ basic_bmatrix<BV>::get_octet(size_type pos, size_type octet_idx) const
             is_set = 1;
         else
             is_set = (BM_IS_GAP(blk)) ? bm::gap_test_unr(BMGAP_PTR(blk), nbit) : (blk[nword] & mask0);
-        v |= bool(is_set);
+        v |= (unsigned)bool(is_set);
     }
     if ((blk = blka[1])!=0)
     {
@@ -819,9 +819,8 @@ basic_bmatrix<BV>::get_octet(size_type pos, size_type octet_idx) const
             is_set = (BM_IS_GAP(blk)) ? bm::gap_test_unr(BMGAP_PTR(blk), nbit) : (blk[nword] & mask0);
         v |= unsigned(bool(is_set)) << 7u;
     }
-
-    
-    return v;
+   
+    return (unsigned char)v;
 }
 
 //---------------------------------------------------------------------
@@ -854,7 +853,7 @@ basic_bmatrix<BV>::get_half_octet(size_type pos, size_type row_idx) const
             is_set = 1;
         else
             is_set = (BM_IS_GAP(blk)) ? bm::gap_test_unr(BMGAP_PTR(blk), nbit) : (blk[nword] & mask0);
-        v |= bool(is_set);
+        v |= unsigned(bool(is_set));
     }
     if ((blk = blka[1])!=0)
     {

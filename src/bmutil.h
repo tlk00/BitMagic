@@ -39,6 +39,11 @@ For more information please visit:  http://bitmagic.io
 #pragma GCC diagnostic ignored "-Wconversion"
 #endif
 
+#ifdef _MSC_VER
+#pragma warning( push )
+#pragma warning( disable : 4146)
+#endif
+
 
 namespace bm
 {
@@ -306,6 +311,9 @@ unsigned bit_scan_forward32(unsigned value)
 
 #ifdef __GNUG__
 #pragma GCC diagnostic pop
+#endif
+#ifdef _MSC_VER
+#pragma warning( pop )
 #endif
 
 

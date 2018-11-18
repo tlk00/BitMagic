@@ -3484,7 +3484,7 @@ unsigned bit_block_to_gap(gap_word_t* BMRESTRICT dest,
         unsigned val = *block;
         while (!val || val == ~0u)
         {
-           if (bitval != bool(val))
+           if (bitval != unsigned(bool(val)))
            {
                *pcurr++ = (gap_word_t)(bit_idx-1);
                BM_ASSERT((pcurr-1) == (dest+1) || *(pcurr-1) > *(pcurr-2));
