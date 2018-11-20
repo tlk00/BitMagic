@@ -3826,60 +3826,6 @@ unsigned bit_block_change32(const bm::word_t* block)
 
 
 /*!
-    Function calculates number of times when bit value changed 
-    @internal
-*/
-/*
-inline
-void bit_count_change32(const bm::word_t* block, 
-                        const bm::word_t* block_end,
-                        unsigned*         bit_count,
-                        unsigned*         gap_count)
-{
-    BM_ASSERT(block < block_end);
-    BM_ASSERT(bit_count);
-    BM_ASSERT(gap_count);
-    
-    *gap_count = 1;
-    *bit_count = 0;
-
-    bm::word_t  w, w0, w_prev, w_l;     
-    w = w0 = *block;
-    
-    BM_INCWORD_BITCOUNT(*bit_count, w);
-    
-    const int w_shift = int(sizeof(w) * 8 - 1);
-    w ^= (w >> 1);
-    BM_INCWORD_BITCOUNT(*gap_count, w);
-    *gap_count -= (w_prev = (w0 >> w_shift)); // negative value correction
-
-    for (++block ;block < block_end; ++block)
-    {
-        w = w0 = *block;
-        ++(*gap_count);
-
-        if (!w)
-        {       
-            *gap_count -= !w_prev;
-            w_prev = 0;
-        }
-        else
-        {
-            BM_INCWORD_BITCOUNT(*bit_count, w);
-        
-            w ^= (w >> 1);
-            BM_INCWORD_BITCOUNT(*gap_count, w);
-            
-            w_l = w0 & 1;
-            *gap_count -= (w0 >> w_shift);  // negative value correction
-            *gap_count -= !(w_prev ^ w_l);  // word border correction
-            
-            w_prev = (w0 >> w_shift);
-        }
-    } // for
-}
-*/
-/*!
     Function calculates number of times when bit value changed
     (1-0 or 0-1) in the bit block.
  
