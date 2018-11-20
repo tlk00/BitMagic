@@ -14261,35 +14261,84 @@ void TestStrSparseVector()
    }
    
    {
-   const char* s0 = "AbC";
-   const char* s1 = "jKl";
-   char str[256];
-   str_sparse_vector<char, bvect, 32> str_sv0;
-   int cmp;
+       const char* s0 = "AbC";
+       const char* s1 = "jKl";
+       char str[256];
+       str_sparse_vector<char, bvect, 32> str_sv0;
+       int cmp;
 
-   str_sv0.set(0, s0);
-   str_sv0.get(0, str, sizeof(str));
-   cmp = ::strcmp(str, s0);
-   assert(cmp == 0);
+        assert(str_sv0.size()==0);
+        str_sv0.set(0, s0);
+        str_sv0.get(0, str, sizeof(str));
+        cmp = ::strcmp(str, s0);
+        assert(cmp == 0);
+        assert(str_sv0.size()==1);
 
-   str_sv0.set(1, s1);
-   str_sv0.get(0, str, sizeof(str));
-   cmp = ::strcmp(str, s0);
-   assert(cmp == 0);
-   
-   str_sv0.get(1, str, sizeof(str));
-   cmp = ::strcmp(str, s1);
-   assert(cmp == 0);
-   
-   str_sv0.optimize();
+       str_sv0.set(1, s1);
+       str_sv0.get(0, str, sizeof(str));
+       cmp = ::strcmp(str, s0);
+       assert(cmp == 0);
+       
+       str_sv0.get(1, str, sizeof(str));
+       cmp = ::strcmp(str, s1);
+       assert(cmp == 0);
+       
+       str_sv0.optimize();
 
-   str_sv0.get(0, str, sizeof(str));
-   cmp = ::strcmp(str, s0);
-   assert(cmp == 0);
-   
-   str_sv0.get(1, str, sizeof(str));
-   cmp = ::strcmp(str, s1);
-   assert(cmp == 0);
+       str_sv0.get(0, str, sizeof(str));
+       cmp = ::strcmp(str, s0);
+       assert(cmp == 0);
+       
+       str_sv0.get(1, str, sizeof(str));
+       cmp = ::strcmp(str, s1);
+       assert(cmp == 0);
+       
+       string str0 = "AtGc";
+       str_sv0.assign(3, str0);
+       str_sv0.get(3, str, sizeof(str));
+       cmp = ::strcmp(str, str0.c_str());
+       assert(cmp == 0);
+       //auto sz=str_sv0.size();
+       assert(str_sv0.size()==4);
+
+       string str1;
+       str_sv0.get(3, str1);
+       assert(str0 == str1);
+       {
+           str0 = "TTF";
+           str_sv0.assign(3, str0);
+           str_sv0.get(3, str, sizeof(str));
+           cmp = ::strcmp(str, str0.c_str());
+           assert(cmp==0);
+
+           str0.clear();
+           str_sv0.assign(3, str0);
+           str_sv0.get(3, str, sizeof(str));
+           cmp = ::strcmp(str, str0.c_str());
+           assert(cmp==0);
+       }
+
+       // reference tests
+       {
+       const char* s = str_sv0[3];
+       cmp = ::strcmp(s, str0.c_str());
+       assert(cmp == 0);
+       str_sv0[3] = "333";
+       str_sv0.get(3, str, sizeof(str));
+
+       s = str_sv0[3];
+       cmp = ::strcmp(s, "333");
+       assert(cmp == 0);
+       
+       {
+       const str_sparse_vector<char, bvect, 32>& ssv = str_sv0;
+       str_sparse_vector<char, bvect, 32>::const_reference ref3 = ssv[3];
+       s = ref3;
+       cmp = ::strcmp(s, "333");
+       assert(cmp == 0);
+       }
+
+       }
 
    }
    
