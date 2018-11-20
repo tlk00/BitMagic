@@ -314,7 +314,7 @@ public:
                 if (bd.bit_.pos != ib_db.bit_.pos) return false;
                 for (unsigned i = 0; i < bd.bit_.cnt; ++i)
                 {
-                    if (bd.bit_.bits[i] != bd.bit_.bits[i]) return false;
+                    if (bd.bit_.bits[i] != ib_db.bit_.bits[i]) return false;
                 }
             }
             else // GAP block
