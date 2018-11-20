@@ -338,7 +338,7 @@ public:
         \brief free memory in bit-plain
     */
     void free_plain(unsigned i) { bmatr_.destruct_row(i); }
-
+    
     ///@}
     
     /*!
@@ -354,7 +354,14 @@ public:
     
 protected:
     void copy_from(const base_sparse_vector<Val, BV, MAX_SIZE>& bsv);
-    
+
+    /*!
+        clear column in all value plains
+        \param plain_idx - row (plain index to start from)
+        \param idx       - bit (column) to clear
+    */
+    void clear_value_plains_from(unsigned plain_idx, size_type idx);
+
 protected:
     /** Number of total bit-plains in the value type*/
     static unsigned value_bits() { return sv_value_plains; }
@@ -1111,6 +1118,19 @@ void base_sparse_vector<Val, BV, MAX_SIZE>::optimize(bm::word_t* temp_block,
             }
         }
     } // for j
+}
+//---------------------------------------------------------------------
+
+template<class Val, class BV, unsigned MAX_SIZE>
+void base_sparse_vector<Val, BV, MAX_SIZE>::clear_value_plains_from(
+                                    unsigned plain_idx, size_type idx)
+{
+    for (unsigned i = plain_idx; i < sv_value_plains; ++i)
+    {
+        bvector_type* bv = this->bmatr_.get_row(i);
+        if (bv)
+            bv->clear_bit_no_check(idx);
+    }
 }
 
 //---------------------------------------------------------------------

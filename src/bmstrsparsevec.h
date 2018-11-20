@@ -48,7 +48,7 @@ public:
     typedef BV                                       bvector_type;
     typedef bvector_type*                            bvector_type_ptr;
     typedef const bvector_type*                      bvector_type_const_ptr;
-    typedef const value_type&                        const_reference;
+//    typedef const value_type&                        const_reference;
     typedef typename BV::allocator_type              allocator_type;
     typedef typename bvector_type::allocation_policy allocation_policy_type;
     typedef typename bvector_type::enumerator        bvector_enumerator_type;
@@ -59,6 +59,74 @@ public:
     /*! Statistical information about  memory allocation details. */
     struct statistics : public bv_statistics
     {};
+
+
+    /**
+         Reference class to access elements via common [] operator
+         @ingroup sv
+    */
+    class const_reference
+    {
+    public:
+        const_reference(const str_sparse_vector<CharType, BV, MAX_STR_SIZE>& str_sv,
+                  size_type idx) BMNOEXEPT
+        : str_sv_(str_sv), idx_(idx)
+        {}
+        
+        operator const value_type*() const
+        {
+            str_sv_.get(idx_, buf_, MAX_STR_SIZE);
+            return &(buf_[0]);
+        }
+
+        bool operator==(const const_reference& ref) const
+                                { return bool(*this) == bool(ref); }
+        bool is_null() const { return str_sv_.is_null(idx_); }
+    private:
+        const str_sparse_vector<CharType, BV, MAX_STR_SIZE>& str_sv_;
+        size_type                                            idx_;
+        mutable CharType                                    buf_[MAX_STR_SIZE];
+    };
+
+    /**
+         Reference class to access elements via common [] operator
+         @ingroup sv
+    */
+    class reference
+    {
+    public:
+        reference(str_sparse_vector<CharType, BV, MAX_STR_SIZE>& str_sv,
+                  size_type idx) BMNOEXEPT
+        : str_sv_(str_sv), idx_(idx)
+        {}
+        
+        operator const value_type*() const
+        {
+            str_sv_.get(idx_, buf_, MAX_STR_SIZE);
+            return &(buf_[0]);
+        }
+
+        reference& operator=(const reference& ref)
+        {
+            // TO DO: implement element copy bit by bit
+            str_sv_.set(idx_, (const value_type*)ref);
+            return *this;
+        }
+
+        reference& operator=(const value_type* str)
+        {
+            str_sv_.set(idx_, str);
+            return *this;
+        }
+        bool operator==(const reference& ref) const
+                                { return bool(*this) == bool(ref); }
+        bool is_null() const { return str_sv_.is_null(idx_); }
+    private:
+        str_sparse_vector<CharType, BV, MAX_STR_SIZE>& str_sv_;
+        size_type                                      idx_;
+        mutable CharType                               buf_[MAX_STR_SIZE];
+    };
+
 
 public:
 
@@ -116,22 +184,84 @@ public:
 public:
 
     // ------------------------------------------------------------
-    /*! @name Element access */
+    /*! @name String element access */
     ///@{
+
+    /** \brief Operator to get write access to an element  */
+    reference operator[](size_type idx) { return reference(*this, idx); }
+
+    /** \brief Operator to get read access to an element  */
+    const_reference operator[](size_type idx) const
+                                    { return const_reference(*this, idx); }
 
     /*!
         \brief set specified element with bounds checking and automatic resize
-        \param idx  - element index
+        \param idx  - element index (vector auto-resized if needs to)
         \param str  - string to set (zero terminated)
     */
     void set(size_type idx, const value_type* str);
 
+    /*!
+        \brief get specified element
+     
+        \param idx  - element index (vector auto-resized if needs to)
+        \param str  - string buffer
+        \param buf_size - string buffer size
+    */
     void get(size_type idx, value_type* str, size_type buf_size) const;
     
+    /*!
+        \brief set specified element with bounds checking and automatic resize
+        \param idx  - element index (vector auto-resized if needs to)
+        \param str  - string to set
+                    (STL class with size() support, like basic_string)
+    */
+    template<typename StrType>
+    void assign(size_type idx, const StrType& str)
+    {
+        if (idx >= this->size())
+            this->size_ = idx+1;
+
+        size_type sz = (str.size() < MAX_STR_SIZE) ? str.size() : MAX_STR_SIZE;
+        if(!sz)
+        {
+            this->clear_value_plains_from(0, idx);
+            return;
+        }
+        unsigned i = 0;
+        for (; i < sz; ++i)
+        {
+            CharType ch = str[i];
+            this->bmatr_.set_octet(idx, i, ch);
+        } // for i
+        this->bmatr_.set_octet(idx, sz, 0);
+        this->clear_value_plains_from(sz*8+1, idx);
+    }
+
+    /*!
+        \brief get specified string element
+     
+        \param idx  - element index (vector auto-resized if needs to)
+        \param str  - string to get [out]
+    */
+    template<typename StrType>
+    void get(size_type idx, StrType& str) const
+    {
+        str.clear();
+        for (unsigned i = 0; i < MAX_STR_SIZE; ++i)
+        {
+            CharType ch = CharType(this->bmatr_.get_octet(idx, i));
+            if (ch == 0)
+                break;
+            str.push_back(ch);
+        } // for i
+    }
+
+
     ///@}
 
     // ------------------------------------------------------------
-    /*! @name Memory optimization                                */
+    /*! @name Memory optimization/compression                    */
     ///@{
 
     /*!
@@ -186,9 +316,7 @@ void str_sparse_vector<CharType, BV, MAX_STR_SIZE>::set(
                                 size_type idx, const value_type* str)
 {
     if (idx >= this->size())
-    {
         this->size_ = idx+1;
-    }
     set_value(idx, str);
 }
 
@@ -210,25 +338,17 @@ template<class CharType, class BV, unsigned MAX_STR_SIZE>
 void str_sparse_vector<CharType, BV, MAX_STR_SIZE>::set_value_no_null(
                                 size_type idx, const value_type* str)
 {
-    // calculate logical block coordinates and masks
-    //
     unsigned i = 0;
     for (; i < MAX_STR_SIZE; ++i)
     {
         CharType ch = str[i];
         if (!ch)
-            break;
+        {
+            this->clear_value_plains_from(i*8, idx);
+            return;
+        }
         this->bmatr_.set_octet(idx, i, ch);
     } // for i
-    
-    // clear all the extra plains above string size
-    i = i * 8 + 1;
-    for (; i < parent_type::sv_value_plains; ++i)
-    {
-        bvector_type* bv = this->bmatr_.get_row(i);
-        if (bv)
-            bv->clear_bit_no_check(idx);
-    }
 }
 
 //---------------------------------------------------------------------
@@ -237,8 +357,7 @@ template<class CharType, class BV, unsigned MAX_STR_SIZE>
 void str_sparse_vector<CharType, BV, MAX_STR_SIZE>::get(
             size_type idx, value_type* str, size_type buf_size) const
 {
-    unsigned i = 0;
-    for (; i < MAX_STR_SIZE; ++i)
+    for (unsigned i = 0; i < MAX_STR_SIZE; ++i)
     {
         if (i < buf_size)
             str[i] = 0;
