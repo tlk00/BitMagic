@@ -257,8 +257,28 @@ public:
         } // for i
     }
 
-
     ///@}
+    
+    // ------------------------------------------------------------
+    /*! @name Size, etc       */
+    ///@{
+
+    /*! \brief return size of the vector
+        \return size of sparse vector
+    */
+    size_type size() const { return this->size_; }
+    
+    /*! \brief return true if vector is empty
+        \return true if empty
+    */
+    bool empty() const { return (size() == 0); }
+    
+    /*! \brief resize vector
+        \param sz - new size
+    */
+    void resize(size_type sz) { parent_type::resize(sz); }
+    ///@}
+
 
     // ------------------------------------------------------------
     /*! @name Memory optimization/compression                    */
@@ -274,7 +294,51 @@ public:
                   typename bvector_type::optmode opt_mode = bvector_type::opt_compress,
                   typename str_sparse_vector<CharType, BV, MAX_STR_SIZE>::statistics* stat = 0);
 
+    /*!
+        @brief Calculates memory statistics.
+
+        Function fills statistics structure containing information about how
+        this vector uses memory and estimation of max. amount of memory
+        bvector needs to serialize itself.
+
+        @param st - pointer on statistics structure to be filled in.
+
+        @sa statistics
+    */
+    void calc_stat(struct str_sparse_vector<CharType, BV, MAX_STR_SIZE>::statistics* st) const;
+    
     ///@}
+
+
+    // ------------------------------------------------------------
+    /*! @name Various traits                                     */
+    //@{
+    
+    /** \brief trait if sparse vector is "compressed" (false)
+    */
+    static
+    bool is_compressed() { return false; }
+
+    ///@}
+
+    /*! \brief syncronize internal structures */
+    void sync(bool /*force*/) {}
+
+    /*!
+        \brief check if another sparse vector has the same content and size
+     
+        \param sv        - sparse vector for comparison
+        \param null_able - flag to consider NULL vector in comparison (default)
+                           or compare only value content plains
+     
+        \return true, if it is the same
+    */
+    bool equal(const str_sparse_vector<CharType, BV, MAX_STR_SIZE>& sv,
+               bm::null_support null_able = bm::use_null) const
+    {
+        return parent_type::equal(sv, null_able);
+    }
+
 
 protected:
 
@@ -284,6 +348,12 @@ protected:
     /*! \brief set value without checking boundaries or support of NULL */
     void set_value_no_null(size_type idx, const value_type* str);
 
+    size_type size_internal() const { return size(); }
+    void resize_internal(size_type sz) { resize(sz); }
+
+protected:
+    template<class SVect> friend class sparse_vector_serializer;
+    template<class SVect> friend class sparse_vector_deserializer;
 };
 
 //---------------------------------------------------------------------
@@ -389,6 +459,25 @@ void str_sparse_vector<CharType, BV, MAX_STR_SIZE>::optimize(
         st->memory_used += stbv.memory_used;
     }
 }
+
+//---------------------------------------------------------------------
+
+template<class CharType, class BV, unsigned MAX_STR_SIZE>
+void str_sparse_vector<CharType, BV, MAX_STR_SIZE>::calc_stat(
+    struct str_sparse_vector<CharType, BV, MAX_STR_SIZE>::statistics* st) const
+{
+    BM_ASSERT(st);
+    typename bvector_type::statistics stbv;
+    parent_type::calc_stat(&stbv);
+    
+    st->reset();
+    
+    st->bit_blocks += stbv.bit_blocks;
+    st->gap_blocks += stbv.gap_blocks;
+    st->max_serialize_mem += stbv.max_serialize_mem + 8;
+    st->memory_used += stbv.memory_used;
+}
+
 
 //---------------------------------------------------------------------
 

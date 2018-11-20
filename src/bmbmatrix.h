@@ -351,7 +351,31 @@ public:
                   typename bvector_type::optmode opt_mode = bvector_type::opt_compress,
                   typename bvector_type::statistics* stat = 0);
 
-    
+    /*!
+        @brief Calculates memory statistics.
+
+        Function fills statistics structure containing information about how
+        this vector uses memory and estimation of max. amount of memory
+        bvector needs to serialize itself.
+
+        @param st - pointer on statistics structure to be filled in.
+
+        @sa statistics
+    */
+    void calc_stat(typename bvector_type::statistics* st) const;
+
+    /*!
+        \brief check if another sparse vector has the same content and size
+     
+        \param sv        - sparse vector for comparison
+        \param null_able - flag to consider NULL vector in comparison (default)
+                           or compare only value content plains
+     
+        \return true, if it is the same
+    */
+    bool equal(const base_sparse_vector<Val, BV, MAX_SIZE>& sv,
+               bm::null_support null_able = bm::use_null) const;
+
 protected:
     void copy_from(const base_sparse_vector<Val, BV, MAX_SIZE>& bsv);
 
@@ -364,7 +388,10 @@ protected:
 
 protected:
     /** Number of total bit-plains in the value type*/
-    static unsigned value_bits() { return sv_value_plains; }
+    static unsigned value_bits()
+    {
+        return base_sparse_vector<Val, BV, MAX_SIZE>::sv_value_plains;
+    }
     
     /** plain index for the "NOT NULL" flags plain */
     static unsigned null_plain() { return value_bits(); }
@@ -919,8 +946,12 @@ void basic_bmatrix<BV>::optimize(bm::word_t* temp_block,
     } // for j
 }
 
+
+
 //---------------------------------------------------------------------
 //---------------------------------------------------------------------
+
+
 
 template<class Val, class BV, unsigned MAX_SIZE>
 base_sparse_vector<Val, BV, MAX_SIZE>::base_sparse_vector()
@@ -970,7 +1001,8 @@ void base_sparse_vector<Val, BV, MAX_SIZE>::copy_from(
     effective_plains_ = bsv.effective_plains_;
 
     unsigned ni = this->null_plain();
-    for (size_type i = 0; i < bsv.stored_plains(); ++i)
+    unsigned plains = bsv.stored_plains();
+    for (size_type i = 0; i < plains; ++i)
     {
         bvector_type* bv = bmatr_.get_row(i);
         const bvector_type* bv_src = bsv.bmatr_.row(i);
@@ -1119,6 +1151,42 @@ void base_sparse_vector<Val, BV, MAX_SIZE>::optimize(bm::word_t* temp_block,
         }
     } // for j
 }
+
+//---------------------------------------------------------------------
+
+template<class Val, class BV, unsigned MAX_SIZE>
+void base_sparse_vector<Val, BV, MAX_SIZE>::calc_stat(
+                    typename bvector_type::statistics* st) const
+{
+    BM_ASSERT(st);
+    
+    st->reset();
+
+    unsigned stored_plains = this->stored_plains();
+    for (unsigned j = 0; j < stored_plains; ++j)
+    {
+        const bvector_type* bv = this->bmatr_.row(j);
+        if (bv)
+        {
+            typename bvector_type::statistics stbv;
+            bv->calc_stat(&stbv);
+            
+            st->bit_blocks += stbv.bit_blocks;
+            st->gap_blocks += stbv.gap_blocks;
+            st->max_serialize_mem += stbv.max_serialize_mem + 8;
+            st->memory_used += stbv.memory_used;
+        }
+        else
+        {
+            st->max_serialize_mem += 8;
+        }
+    } // for j
+    
+    // header accounting
+    st->max_serialize_mem += 1 + 1 + 1 + 1 + 8 + (8 * this->stored_plains());
+    st->max_serialize_mem += 1 + 8; // extra header fields for large bit-matrixes
+}
+
 //---------------------------------------------------------------------
 
 template<class Val, class BV, unsigned MAX_SIZE>
@@ -1134,6 +1202,64 @@ void base_sparse_vector<Val, BV, MAX_SIZE>::clear_value_plains_from(
 }
 
 //---------------------------------------------------------------------
+
+template<class Val, class BV, unsigned MAX_SIZE>
+bool base_sparse_vector<Val, BV, MAX_SIZE>::equal(
+            const base_sparse_vector<Val, BV, MAX_SIZE>& sv,
+             bm::null_support null_able) const
+{
+    size_type arg_size = sv.size();
+    if (this->size_ != arg_size)
+    {
+        return false;
+    }
+    unsigned plains = this->plains();
+    for (unsigned j = 0; j < plains; ++j)
+    {
+        const bvector_type* bv = this->bmatr_.get_row(j);
+        const bvector_type* arg_bv = sv.bmatr_.get_row(j);
+        if (bv == arg_bv) // same NULL
+            continue;
+        // check if any not NULL and not empty
+        if (!bv && arg_bv)
+        {
+            if (arg_bv->any())
+                return false;
+            continue;
+        }
+        if (bv && !arg_bv)
+        {
+            if (bv->any())
+                return false;
+            continue;
+        }
+        // both not NULL
+        int cmp = bv->compare(*arg_bv);
+        if (cmp != 0)
+            return false;
+    } // for j
+    
+    if (null_able == bm::use_null)
+    {
+        const bvector_type* bv_null = this->get_null_bvector();
+        const bvector_type* bv_null_arg = sv.get_null_bvector();
+        
+        // check the NULL vectors
+        if (bv_null == bv_null_arg)
+            return true;
+        if (!bv_null || !bv_null_arg)
+            return false;
+        BM_ASSERT(bv_null);
+        BM_ASSERT(bv_null_arg);
+        int cmp = bv_null->compare(*bv_null);
+        if (cmp != 0)
+            return false;
+    }
+    return true;
+}
+
+//---------------------------------------------------------------------
+
 
 } // namespace
 
