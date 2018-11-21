@@ -237,6 +237,17 @@ public:
         this->bmatr_.set_octet(idx, sz, 0);
         this->clear_value_plains_from(sz*8+1, idx);
     }
+    
+    /*!
+        \brief push back a string
+        \param str  - string to set
+                    (STL class with size() support, like basic_string)
+    */
+    template<typename StrType>
+    void push_back(const StrType& str)
+    {
+        assign(this->size_, str);
+    }
 
     /*!
         \brief get specified string element
