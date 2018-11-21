@@ -14249,7 +14249,9 @@ void TestSparseVector_Stress(unsigned count)
 void TestStrSparseVector()
 {
    cout << "---------------------------- Bit-plain STR sparse vector test" << endl;
-   
+
+   typedef str_sparse_vector<char, bvect, 32> str_svect_type;
+
    {
    str_sparse_vector<char, bvect, 32> str_sv0;
    str_sparse_vector<char, bvect, 32> str_sv1(str_sv0);
@@ -14331,21 +14333,127 @@ void TestStrSparseVector()
        assert(cmp == 0);
        
        {
-       const str_sparse_vector<char, bvect, 32>& ssv = str_sv0;
-       str_sparse_vector<char, bvect, 32>::const_reference ref3 = ssv[3];
-       s = ref3;
-       cmp = ::strcmp(s, "333");
-       assert(cmp == 0);
+           const str_sparse_vector<char, bvect, 32>& ssv = str_sv0;
+           str_sparse_vector<char, bvect, 32>::const_reference ref3 = ssv[3];
+           s = ref3;
+           cmp = ::strcmp(s, "333");
+           assert(cmp == 0);
        }
+       
+        BM_DECLARE_TEMP_BLOCK(tb)
+        sparse_vector_serial_layout<str_svect_type> sv_lay;
+        bm::sparse_vector_serialize<str_svect_type>(str_sv0, sv_lay, tb);
+
+        str_sparse_vector<char, bvect, 32> str_sv2;
+        const unsigned char* buf = sv_lay.buf();
+        int res = bm::sparse_vector_deserialize(str_sv2, buf, tb);
+        if (res != 0)
+        {
+            cerr << "De-Serialization error" << endl;
+            exit(1);
+        }
+        
+        bool eq = str_sv0.equal(str_sv2);
+        assert(eq);
 
        }
 
    }
    
-   
    cout << "---------------------------- Bit-plain STR sparse vector test OK" << endl;
 }
 
+
+typedef str_sparse_vector<char, bvect, 32> str_svect_type;
+
+static
+void CompareStrSparseVector(const str_svect_type& str_sv,
+                            const vector<string>& str_coll)
+{
+    assert(str_sv.size() == str_coll.size());
+    
+    string str;
+    for (unsigned i = 0; i < str_sv.size(); ++i)
+    {
+        str_sv.get(i, str);
+        const string& str_control = str_coll[i];
+        if (str != str_control)
+        {
+            std::cerr << "String comparison failed at:" << i << std::endl;
+            exit(1);
+        }
+    } // for
+}
+
+static
+void StressTestStrSparseVector()
+{
+   cout << "---------------------------- Bit-plain STR sparse vector stress test" << endl;
+   
+   const unsigned max_coll = 2000000;
+   std::vector<string> str_coll;
+   str_svect_type str_sv;
+   
+   // generate test string collection
+   {
+       string prefix = "az";
+       string str;
+       for (unsigned i = 0; i < max_coll; ++i)
+       {
+           str = prefix;
+           str.append(to_string(i));
+           str_coll.emplace_back(str);
+           if (i % 10 == 0)
+           {
+                char cch1 = 'a' + rand()%26;
+                char cch2 = 'a' + rand()%26;
+                prefix = cch1;
+                prefix.push_back(cch2);
+           }
+       } // for
+   }
+
+    cout << "Loading test sparse vector..." << endl;
+   for (auto str : str_coll)
+   {
+       str_sv.push_back(str);
+   }
+   
+   print_svector_stat(str_sv);
+   
+    cout << "ok. \n Verification..." << endl;
+
+    CompareStrSparseVector(str_sv, str_coll);
+    
+    cout << "Memory optimization" << endl;
+    
+    str_sv.optimize();
+
+   print_svector_stat(str_sv, true);
+
+    cout << "ok. \n Verification..." << endl;
+
+    CompareStrSparseVector(str_sv, str_coll);
+
+    {
+        BM_DECLARE_TEMP_BLOCK(tb)
+        sparse_vector_serial_layout<str_svect_type> sv_lay;
+        bm::sparse_vector_serialize<str_svect_type>(str_sv, sv_lay, tb);
+
+        str_sparse_vector<char, bvect, 32> str_sv2;
+        const unsigned char* buf = sv_lay.buf();
+        int res = bm::sparse_vector_deserialize(str_sv2, buf, tb);
+        if (res != 0)
+        {
+            cerr << "De-Serialization error" << endl;
+            exit(1);
+        }
+        CompareStrSparseVector(str_sv2, str_coll);
+   }
+   
+   cout << "---------------------------- Bit-plain STR sparse vector stress test OK" << endl;
+   cout << endl;
+}
 
 
 inline
@@ -17336,6 +17444,8 @@ int main(void)
      TestCompressedCollection();
 
      TestStrSparseVector();
+
+     StressTestStrSparseVector();
 
      StressTest(300);
 
