@@ -14360,6 +14360,34 @@ void TestStrSparseVector()
 
    }
    
+   {
+       str_sparse_vector<char, bvect, 32> str_sv0;
+       str_sv0[0] = "1";
+       str_sv0[1] = "11";
+       str_sv0[2] = "123";
+       
+       unsigned pos;
+       bm::sparse_vector_scanner<bm::str_sparse_vector<char, bvect, 32> > scanner;
+       
+       bool found = scanner.find_eq_str(str_sv0, "1", pos);
+       assert(found);
+       assert(pos == 0);
+
+       found = scanner.find_eq_str(str_sv0, "11", pos);
+       assert(found);
+       assert(pos == 1);
+
+       found = scanner.find_eq_str(str_sv0, "123", pos);
+       assert(found);
+       assert(pos == 2);
+
+       found = scanner.find_eq_str(str_sv0, "1234", pos);
+       assert(!found);
+
+       found = scanner.find_eq_str(str_sv0, "", pos);
+       assert(!found);
+   }
+   
    cout << "---------------------------- Bit-plain STR sparse vector test OK" << endl;
 }
 
@@ -14372,6 +14400,11 @@ void CompareStrSparseVector(const str_svect_type& str_sv,
 {
     assert(str_sv.size() == str_coll.size());
     
+    string str_h = "z";
+    string str_l = "A";
+
+    bm::sparse_vector_scanner<bm::str_sparse_vector<char, bvect, 32> > scanner;
+
     string str;
     for (unsigned i = 0; i < str_sv.size(); ++i)
     {
@@ -14379,10 +14412,51 @@ void CompareStrSparseVector(const str_svect_type& str_sv,
         const string& str_control = str_coll[i];
         if (str != str_control)
         {
-            std::cerr << "String comparison failed at:" << i << std::endl;
+            std::cerr << "String mis-match at:" << i << std::endl;
             exit(1);
         }
+        int cmp = str_sv.compare(i, str_control.c_str());
+        if (cmp != 0)
+        {
+            std::cerr << "String comparison failure at:" << i << std::endl;
+            exit(1);
+        }
+        
+        cmp = str_sv.compare(i, str_h.c_str());
+        if (cmp < 0)
+        {
+            assert(str < str_h);
+        }
+        if (cmp > 0)
+        {
+            assert(str > str_h);
+        }
+
+        cmp = str_sv.compare(i, str_l.c_str());
+        if (cmp < 0)
+        {
+            assert(str < str_l);
+        }
+        if (cmp > 0)
+        {
+            assert(str > str_l);
+        }
+       unsigned pos;
+       bool found = scanner.find_eq_str(str_sv, str_control.c_str(), pos);
+       if (!found)
+       {
+            cerr << "Scanner search failed! " << str_control << endl;
+            exit(1);
+       }
+       assert(pos == i);
+
+        if (i % 100000 == 0)
+        {
+            cout << "\r" << i << " / " << str_sv.size() << flush;
+        }
+
     } // for
+    cout << endl;
 }
 
 static
