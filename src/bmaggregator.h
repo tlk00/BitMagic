@@ -60,7 +60,7 @@ public:
     /// Maximum aggregation capacity in one pass
     enum max_size
     {
-        max_aggregator_cap = 256
+        max_aggregator_cap = 512
     };
 
     /// Codes for aggregation operations which can be pipelined for efficient execution
@@ -1059,7 +1059,6 @@ aggregator<BV>::process_gap_blocks_and(unsigned   arg_blk_gap_count,
     BM_ASSERT(digest);
 
     bm::word_t* blk = ar_->tb1;
-    
     unsigned k = 0;
     for (; k < arg_blk_gap_count; ++k)
     {
@@ -1205,7 +1204,9 @@ aggregator<BV>::process_bit_blocks_and(unsigned   arg_blk_count,
             continue;
         digest = bm::bit_block_and(blk, ar_->v_arg_blk[k], digest, dcache);
         if (!digest) // all zero
+        {
             break;
+        }
     } // for k
 
     return digest;
