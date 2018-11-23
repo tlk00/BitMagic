@@ -792,15 +792,21 @@ template<typename SV>
 bool sparse_vector_scanner<SV>::prepare_and_sub_aggregator(const SV&  sv,
                                       const typename SV::value_type*  str)
 {
-    unsigned char bits[sizeof(typename SV::value_type) * 8];
+    typedef typename SV::value_type value_type;
+    unsigned char bits[64];
 
-    unsigned len = 0; // str len
-    for (unsigned octet_idx = 0; true; ++octet_idx)
+    unsigned len = 0;
+    for (; str[len] != 0; ++len)
+    {}
+    BM_ASSERT(len);
+
+    // use reverse order (faster for sorted arrays) 
+    for (int octet_idx = len-1; octet_idx > 0; --octet_idx)
     {
-        typename SV::value_type value = str[octet_idx];
+        value_type value = str[octet_idx];
+        BM_ASSERT(value != 0);
         if (value)
         {
-            ++len;
             unsigned short bit_count_v = bm::bitscan(value, bits);
             // prep the lists for combined AND-SUB aggregator
             //
@@ -816,24 +822,33 @@ bool sparse_vector_scanner<SV>::prepare_and_sub_aggregator(const SV&  sv,
                     return false;
             } // for i
             
-            unsigned sv_plains = sizeof(value) * 8;
-            for (unsigned i = 0; (i < sv_plains) && value; ++i)
+            unsigned vinv = unsigned(value);
+            if (bm::conditional<sizeof(value_type) == 1>::test())
             {
-                unsigned plain_idx = (octet_idx * 8) + i;
-                bvector_type_const_ptr bv = sv.get_plain(plain_idx);
-                if (bv && !(value & (value_type(1) << i)))
+                vinv ^= 0xFF;
+            }
+            else // 2-byte char
+            {
+                BM_ASSERT(sizeof(value_type) == 2); 
+                vinv ^= 0xFFFF;
+            }
+
+            bit_count_v = bm::bitscan(vinv, bits);
+            BM_ASSERT(bit_count_v <= sizeof(value_type) * 8);
+            for (unsigned i = 0; i < bit_count_v; ++i)
+            {
+                unsigned bit_idx = bits[i];
+                unsigned plain_idx = (octet_idx * 8) + bit_idx;
+                BM_ASSERT(!(value & (value_type(1) << bit_idx)));
+                const bvector_type* bv = sv.get_plain(plain_idx);
+                if (bv)
                     agg_.add(bv, 1); // agg to SUB group
-            } // for i
+            }            
         }
-        else
-        {
-            break;
-        }
-    } // for octet_idx
+     } // for octet_idx
     
     // add all vectors above string len to the SUB operation group
     //
-    BM_ASSERT(len);
     typename SV::size_type plain_idx = (len * 8) + 1;
     typename SV::size_type plains = sv.plains();
     for (; plain_idx < plains; ++plain_idx)
