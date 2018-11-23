@@ -57,7 +57,7 @@ namespace bm
    \brief sparse vector with runtime compression using bit transposition method
  
    Sparse vector implements variable bit-depth storage model.
-   Initial data is bit-transposed into bit-planes so initial each element
+   Initial data is bit-transposed into bit-planes so each element
    may use less memory than the original native data type prescribes.
    For example, 32-bit integer may only use 20 bits.
  
@@ -767,7 +767,8 @@ public:
     /**
     \brief find position of compressed element by its rank
     */
-    bool find_rank(bm::id_t rank, bm::id_t& pos) const;
+    static
+    bool find_rank(bm::id_t rank, bm::id_t& pos);
 
     /**
         \brief size of sparse vector (may be different for RSC)
@@ -1512,7 +1513,7 @@ void sparse_vector<Val, BV>::clear() BMNOEXEPT
 //---------------------------------------------------------------------
 
 template<class Val, class BV>
-bool sparse_vector<Val, BV>::find_rank(bm::id_t rank, bm::id_t& pos) const
+bool sparse_vector<Val, BV>::find_rank(bm::id_t rank, bm::id_t& pos)
 {
     BM_ASSERT(rank);
     pos = rank - 1; 

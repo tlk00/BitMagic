@@ -187,6 +187,14 @@ public:
     bool find_eq(const SV&                  sv,
                  typename SV::value_type    value,
                  typename SV::size_type&    pos);
+    
+    /**
+        \brief find first sparse vector element (string)
+
+    */
+    bool find_eq_str(const SV&                      sv,
+                     const typename SV::value_type* str,
+                     typename SV::size_type&        pos);
 
 
     /**
@@ -274,9 +282,19 @@ protected:
                        typename SV::value_type         value,
                        bm::id_t&                       idx);
     
+    /// find first string value (may include NULL indexes)
+    bool find_first_eq(const SV&                       sv,
+                       const typename SV::value_type*  str,
+                       bm::id_t&                       idx);
+
+    
     /// Prepare aggregator for AND-SUB (EQ) search
     bool prepare_and_sub_aggregator(const SV&   sv,
                                     typename SV::value_type   value);
+
+    /// Prepare aggregator for AND-SUB (EQ) search (string)
+    bool prepare_and_sub_aggregator(const SV&  sv,
+                                    const typename SV::value_type*  str);
 
     /// Rank-Select decompression for RSC vectors
     void decompress(const SV&   sv, typename SV::bvector_type& bv_out);
@@ -743,6 +761,90 @@ bool sparse_vector_scanner<SV>::find_first_eq(const SV&   sv,
     return found;
 }
 
+
+//----------------------------------------------------------------------------
+
+template<typename SV>
+bool sparse_vector_scanner<SV>::find_first_eq(const SV&                   sv,
+                                          const typename SV::value_type*  str,
+                                          bm::id_t&                       idx)
+{
+    if (sv.empty())
+        return false; // nothing to do
+    BM_ASSERT(*str);
+
+    if (!*str)
+        return false;
+
+    agg_.reset();
+    bool found = prepare_and_sub_aggregator(sv, str);
+    if (!found)
+        return found;
+    
+    found = agg_.find_first_and_sub(idx);
+    agg_.reset();
+    return found;
+}
+
+//----------------------------------------------------------------------------
+
+template<typename SV>
+bool sparse_vector_scanner<SV>::prepare_and_sub_aggregator(const SV&  sv,
+                                      const typename SV::value_type*  str)
+{
+    unsigned char bits[sizeof(typename SV::value_type) * 8];
+
+    unsigned len = 0; // str len
+    for (unsigned octet_idx = 0; true; ++octet_idx)
+    {
+        typename SV::value_type value = str[octet_idx];
+        if (value)
+        {
+            ++len;
+            unsigned short bit_count_v = bm::bitscan(value, bits);
+            // prep the lists for combined AND-SUB aggregator
+            //
+            for (unsigned i = 0; i < bit_count_v; ++i)
+            {
+                unsigned bit_idx = bits[i];
+                BM_ASSERT(value & (value_type(1) << bit_idx));
+                unsigned plain_idx = (octet_idx * 8) + bit_idx;
+                const bvector_type* bv = sv.get_plain(plain_idx);
+                if (bv)
+                    agg_.add(bv);
+                else
+                    return false;
+            } // for i
+            
+            unsigned sv_plains = sizeof(value) * 8;
+            for (unsigned i = 0; (i < sv_plains) && value; ++i)
+            {
+                unsigned plain_idx = (octet_idx * 8) + i;
+                bvector_type_const_ptr bv = sv.get_plain(plain_idx);
+                if (bv && !(value & (value_type(1) << i)))
+                    agg_.add(bv, 1); // agg to SUB group
+            } // for i
+        }
+        else
+        {
+            break;
+        }
+    } // for octet_idx
+    
+    // add all vectors above string len to the SUB operation group
+    //
+    BM_ASSERT(len);
+    typename SV::size_type plain_idx = (len * 8) + 1;
+    typename SV::size_type plains = sv.plains();
+    for (; plain_idx < plains; ++plain_idx)
+    {
+        bvector_type_const_ptr bv = sv.get_plain(plain_idx);
+        if (bv)
+            agg_.add(bv, 1); // agg to SUB group
+    } // for
+    return true;
+}
+
 //----------------------------------------------------------------------------
 
 template<typename SV>
@@ -755,7 +857,7 @@ bool sparse_vector_scanner<SV>::prepare_and_sub_aggregator(const SV&   sv,
 
     // prep the lists for combined AND-SUB aggregator
     //   (backward order has better chance for bit reduction on AND)
-    
+    //
     for (unsigned i = bit_count_v; i > 0; --i)
     {
         unsigned bit_idx = bits[i-1];
@@ -764,9 +866,7 @@ bool sparse_vector_scanner<SV>::prepare_and_sub_aggregator(const SV&   sv,
         if (bv)
             agg_.add(bv);
         else
-        {
             return false;
-        }
     }
     
     unsigned sv_plains = sv.effective_plains();
@@ -831,6 +931,44 @@ void sparse_vector_scanner<SV>::find_eq_with_nulls_horizontal(const SV&  sv,
         if (bv_plain && !(value & (value_type(1) << i)))
             bv_out -= *bv_plain;
     }
+}
+
+//----------------------------------------------------------------------------
+
+template<typename SV>
+bool sparse_vector_scanner<SV>::find_eq_str(const SV&                      sv,
+                                            const typename SV::value_type* str,
+                                            typename SV::size_type&        pos)
+{
+    bool found = false;
+    if (sv.empty())
+    {
+        return found;
+    }
+    if (*str)
+    {
+        bm::id_t found_pos;
+        found = find_first_eq(sv, str, found_pos);
+        if (found)
+        {
+            if (sv.is_compressed()) // if compressed vector - need rank translation
+            {
+                found = sv.find_rank(found_pos + 1, pos);
+            }
+            else
+                pos = found_pos;
+        
+        }
+    }
+    else // search for zero value
+    {
+        // TODO: implement optimized version which would work witout temp vector
+        typename SV::bvector_type bv_zero;
+        find_zero(sv, bv_zero);
+        found = bv_zero.find(pos);
+    }
+    
+    return found;
 }
 
 

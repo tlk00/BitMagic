@@ -39,6 +39,14 @@ For more information please visit:  http://bitmagic.io
 namespace bm
 {
 
+/*!
+   \brief sparse vector for strings with compression using bit transposition method
+ 
+   Initial string is bit-transposed into bit-planes so collection may use less
+   memory due to prefix sum compression in bit-plains.
+ 
+   @ingroup sv
+*/
 template<typename CharType, typename BV, unsigned MAX_STR_SIZE>
 class str_sparse_vector : public base_sparse_vector<CharType, BV, MAX_STR_SIZE>
 {
@@ -48,7 +56,6 @@ public:
     typedef BV                                       bvector_type;
     typedef bvector_type*                            bvector_type_ptr;
     typedef const bvector_type*                      bvector_type_const_ptr;
-//    typedef const value_type&                        const_reference;
     typedef typename BV::allocator_type              allocator_type;
     typedef typename bvector_type::allocation_policy allocation_policy_type;
     typedef typename bvector_type::enumerator        bvector_enumerator_type;
@@ -267,8 +274,18 @@ public:
             str.push_back(ch);
         } // for i
     }
+    
+    ///@}
+    
+    // ------------------------------------------------------------
+    /*! @name Element comparison functions       */
+    ///@{
+
+    int compare(size_type idx, const value_type* str) const;
 
     ///@}
+
+    
     
     // ------------------------------------------------------------
     /*! @name Size, etc       */
@@ -350,6 +367,17 @@ public:
         return parent_type::equal(sv, null_able);
     }
 
+    /**
+        \brief find position of compressed element by its rank
+    */
+    static
+    bool find_rank(bm::id_t rank, bm::id_t& pos);
+    
+    /**
+        \brief size of sparse vector (may be different for RSC)
+    */
+    size_type effective_size() const { return size(); }
+
 
 protected:
 
@@ -419,8 +447,7 @@ template<class CharType, class BV, unsigned MAX_STR_SIZE>
 void str_sparse_vector<CharType, BV, MAX_STR_SIZE>::set_value_no_null(
                                 size_type idx, const value_type* str)
 {
-    unsigned i = 0;
-    for (; i < MAX_STR_SIZE; ++i)
+    for (unsigned i = 0; i < MAX_STR_SIZE; ++i)
     {
         CharType ch = str[i];
         if (!ch)
@@ -492,6 +519,36 @@ void str_sparse_vector<CharType, BV, MAX_STR_SIZE>::calc_stat(
 
 //---------------------------------------------------------------------
 
+template<class CharType, class BV, unsigned MAX_STR_SIZE>
+int str_sparse_vector<CharType, BV, MAX_STR_SIZE>::compare(
+                     size_type idx,
+                     const value_type* str) const
+{
+    BM_ASSERT(str);
+    int res = 0;
+    
+    for (unsigned i = 0; i < MAX_STR_SIZE; ++i)
+    {
+        CharType ch = str[i];
+        res = this->bmatr_.compare_octet(idx, i, ch);
+        if (res || !ch)
+            return res;
+    } // for
+    return res;
+}
+
+//---------------------------------------------------------------------
+
+template<class CharType, class BV, unsigned MAX_STR_SIZE>
+bool str_sparse_vector<CharType, BV, MAX_STR_SIZE>::find_rank(bm::id_t rank,
+                                                              bm::id_t& pos)
+{
+    BM_ASSERT(rank);
+    pos = rank - 1;
+    return true;
+}
+
+//---------------------------------------------------------------------
 
 } // namespace
 

@@ -126,6 +126,7 @@ public:
     /*! Get row bit-vector */
     bvector_type* get_row(size_type i);
     
+    /*! get number of value rows */
     size_type rows() const { return rsize_; }
     
     /*! Make sure row is constructed, return bit-vector */
@@ -159,6 +160,17 @@ public:
     */
     unsigned char get_octet(size_type pos, size_type octet_idx) const;
     
+    /*!
+        Compare vector[pos] with octet
+     
+        @param pos - column position in the matrix
+        @param octet_idx - octet based row position (1 octet - 8 rows)
+        @param octet - octet value to compare
+     
+        @return 0 - equal, -1 - less(vect[pos] < octet), 1 - greater
+    */
+    int compare_octet(size_type pos,
+                      size_type octet_idx, unsigned char octet) const;
     
     ///@}
 
@@ -855,6 +867,17 @@ basic_bmatrix<BV>::get_octet(size_type pos, size_type octet_idx) const
     }
    
     return (unsigned char)v;
+}
+
+//---------------------------------------------------------------------
+
+template<typename BV>
+int basic_bmatrix<BV>::compare_octet(size_type pos,
+                                     size_type octet_idx,
+                                     unsigned char octet) const
+{
+    unsigned char value = get_octet(pos, octet_idx);
+    return (value > octet) - (value < octet);
 }
 
 //---------------------------------------------------------------------
