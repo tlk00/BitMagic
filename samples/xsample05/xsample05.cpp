@@ -64,6 +64,7 @@ void show_help()
         << "-svout  spase vector output  -- sparse vector name to save" << std::endl
         << "-svin   sparse vector input  -- sparse vector file name to load " << std::endl
         << "-diag                        -- run diagnostics"                  << std::endl
+        << "-bench                       -- run benchmarks"                   << std::endl
         << "-timing                      -- collect timings"                  << std::endl
       ;
 }
@@ -244,8 +245,7 @@ void run_benchmark(const str_sparse_vect& str_sv, const string_vector& str_vec)
     string_vector bench_vec;
     pick_benchmark_set(bench_vec, str_vec);
     
-    bm::bvector<> bv1;
-    bm::bvector<> bv2;
+    bm::bvector<> bv1, bv2, bv3;
 
     cout << "Picked " << bench_vec.size() << " samples. Running benchmarks." << endl;
     
@@ -288,13 +288,30 @@ void run_benchmark(const str_sparse_vect& str_sv, const string_vector& str_vec)
             }
         } // for
     }
+
+    {
+        bm::sparse_vector_scanner<str_sparse_vect> scanner;
+        bm::chrono_taker tt1("5. bm::sparse_vector_scanner<> search", bench_size, &timing_map);
+        for (const string& term : bench_vec)
+        {
+            unsigned pos;
+            bool found = scanner.find_eq_str(str_sv, term.c_str(), pos);
+            if (found)
+            {
+                bv3.set(pos);
+            }
+        } // for
+    }
     
     // various integrity checks
     //
     int cmp = bv1.compare(bv2);
     if (cmp != 0)
         throw runtime_error("Error. RB-search mismatch!");
-    
+    cmp = bv1.compare(bv3);
+    if (cmp != 0)
+        throw runtime_error("Error. scanner mismatch!");
+
     if (bv1.count() != bench_size)
         throw runtime_error("Error. Search result missing elements!");
 
