@@ -229,7 +229,7 @@ public:
         if (idx >= this->size())
             this->size_ = idx+1;
 
-        size_type sz = (str.size() < MAX_STR_SIZE) ? str.size() : MAX_STR_SIZE;
+        size_type sz = size_type((str.size() < MAX_STR_SIZE) ? str.size() : MAX_STR_SIZE);
         if(!sz)
         {
             this->clear_value_plains_from(0, idx);
