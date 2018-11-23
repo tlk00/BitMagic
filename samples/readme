@@ -57,6 +57,6 @@ More complex examples to illustrate mixed techniques and use cases
 ./xsample04 - Fingerprint pattern matching, SHIFT-AND Bitap algorithm. Search for DNA substrings.
               Details at: http://bitmagic.io/dna-search.html 
 ./xsample04a - Fast construction of bit-indexes using bulk insert interator, multi-threaded partitioning and merge.
-              Details at: 
+              Details at: http://bitmagic.io/dna-search-idx.html
 
 

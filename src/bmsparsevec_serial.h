@@ -482,6 +482,7 @@ template<typename SV>
 void sparse_vector_serializer<SV>::serialize(const SV&  sv,
                       sparse_vector_serial_layout<SV>&  sv_layout)
 {
+    const unsigned max_v_plains = 255;
     typename SV::statistics sv_stat;
     sv.calc_stat(&sv_stat);
     
@@ -490,8 +491,18 @@ void sparse_vector_serializer<SV>::serialize(const SV&  sv,
     bm::encoder enc(buf, (unsigned)sv_layout.capacity());
     unsigned plains = sv.stored_plains();
 
-    // calculate header size in bytes
-    unsigned h_size = 1 + 1 + 1 + 1 + 8 + (8 * plains) + 4;
+    // header size in bytes
+    unsigned h_size = 1 + 1 +        // "BM" or "BC" (magic header)
+                      1 +            // byte-order
+                      1 +            // number of bit-plains (for vector)
+                      8 +            // size (internal 64-bit)
+                      (8 * plains) + // offsets of all plains
+                      4;             //  reserve
+    if (plains > max_v_plains) // for large plain matrixes
+    {
+        h_size += 1 + // version number
+                  8;  // number of plains (64-bit)
+    }
 
     // ptr where bit-plains start
     unsigned char* buf_ptr = buf + h_size;
@@ -518,7 +529,7 @@ void sparse_vector_serializer<SV>::serialize(const SV&  sv,
 
     // save the header
     //
-    ByteOrder bo = globals<true>::byte_order();
+    ByteOrder bo = bm::globals<true>::byte_order();
     
     enc.put_8('B');  // magic header 'BM' - bit matrix 'BC' - bit compressed
     if (sv.is_compressed())
@@ -527,7 +538,18 @@ void sparse_vector_serializer<SV>::serialize(const SV&  sv,
         enc.put_8('M');
     
     enc.put_8((unsigned char)bo);  // byte order
-    enc.put_8((unsigned char)plains); // number of plains
+    if (plains < 255) // simple (int vector) serialization
+    {
+        enc.put_8((unsigned char)plains); // number of plains
+    }
+    else  // bit-matrix with large number of plains
+    {
+        enc.put_8(0); // number of plains == 0 (magic number)
+        
+        enc.put_8(0);       // matrix serialization version
+        enc.put_64(plains); // number of rows in the bit-matrix
+    }
+    
     enc.put_64(sv.size_internal());
     
     for (i = 0; i < plains; ++i)
@@ -579,6 +601,14 @@ void sparse_vector_deserializer<SV>::deserialize(SV& sv,
     //unsigned char bv_bo =
         dec.get_8();
     unsigned plains = dec.get_8();
+    
+    if (plains == 0)  // bit-matrix
+    {
+        //unsigned char matr_s_ser =
+            dec.get_8(); // matrix serialization version (reserved)
+        plains = (unsigned) dec.get_64(); // number of rows in the bit-matrix
+    }
+    
     unsigned sv_plains = sv.stored_plains();
     
     if (!plains || plains > sv_plains)

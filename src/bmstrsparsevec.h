@@ -39,6 +39,14 @@ For more information please visit:  http://bitmagic.io
 namespace bm
 {
 
+/*!
+   \brief sparse vector for strings with compression using bit transposition method
+ 
+   Initial string is bit-transposed into bit-planes so collection may use less
+   memory due to prefix sum compression in bit-plains.
+ 
+   @ingroup sv
+*/
 template<typename CharType, typename BV, unsigned MAX_STR_SIZE>
 class str_sparse_vector : public base_sparse_vector<CharType, BV, MAX_STR_SIZE>
 {
@@ -48,7 +56,6 @@ public:
     typedef BV                                       bvector_type;
     typedef bvector_type*                            bvector_type_ptr;
     typedef const bvector_type*                      bvector_type_const_ptr;
-//    typedef const value_type&                        const_reference;
     typedef typename BV::allocator_type              allocator_type;
     typedef typename bvector_type::allocation_policy allocation_policy_type;
     typedef typename bvector_type::enumerator        bvector_enumerator_type;
@@ -237,6 +244,17 @@ public:
         this->bmatr_.set_octet(idx, sz, 0);
         this->clear_value_plains_from(sz*8+1, idx);
     }
+    
+    /*!
+        \brief push back a string
+        \param str  - string to set
+                    (STL class with size() support, like basic_string)
+    */
+    template<typename StrType>
+    void push_back(const StrType& str)
+    {
+        assign(this->size_, str);
+    }
 
     /*!
         \brief get specified string element
@@ -256,9 +274,39 @@ public:
             str.push_back(ch);
         } // for i
     }
+    
+    ///@}
+    
+    // ------------------------------------------------------------
+    /*! @name Element comparison functions       */
+    ///@{
 
+    int compare(size_type idx, const value_type* str) const;
 
     ///@}
+
+    
+    
+    // ------------------------------------------------------------
+    /*! @name Size, etc       */
+    ///@{
+
+    /*! \brief return size of the vector
+        \return size of sparse vector
+    */
+    size_type size() const { return this->size_; }
+    
+    /*! \brief return true if vector is empty
+        \return true if empty
+    */
+    bool empty() const { return (size() == 0); }
+    
+    /*! \brief resize vector
+        \param sz - new size
+    */
+    void resize(size_type sz) { parent_type::resize(sz); }
+    ///@}
+
 
     // ------------------------------------------------------------
     /*! @name Memory optimization/compression                    */
@@ -274,7 +322,62 @@ public:
                   typename bvector_type::optmode opt_mode = bvector_type::opt_compress,
                   typename str_sparse_vector<CharType, BV, MAX_STR_SIZE>::statistics* stat = 0);
 
+    /*!
+        @brief Calculates memory statistics.
+
+        Function fills statistics structure containing information about how
+        this vector uses memory and estimation of max. amount of memory
+        bvector needs to serialize itself.
+
+        @param st - pointer on statistics structure to be filled in.
+
+        @sa statistics
+    */
+    void calc_stat(struct str_sparse_vector<CharType, BV, MAX_STR_SIZE>::statistics* st) const;
+    
     ///@}
+
+
+    // ------------------------------------------------------------
+    /*! @name Various traits                                     */
+    //@{
+    
+    /** \brief trait if sparse vector is "compressed" (false)
+    */
+    static
+    bool is_compressed() { return false; }
+
+    ///@}
+
+    /*! \brief syncronize internal structures */
+    void sync(bool /*force*/) {}
+
+    /*!
+        \brief check if another sparse vector has the same content and size
+     
+        \param sv        - sparse vector for comparison
+        \param null_able - flag to consider NULL vector in comparison (default)
+                           or compare only value content plains
+     
+        \return true, if it is the same
+    */
+    bool equal(const str_sparse_vector<CharType, BV, MAX_STR_SIZE>& sv,
+               bm::null_support null_able = bm::use_null) const
+    {
+        return parent_type::equal(sv, null_able);
+    }
+
+    /**
+        \brief find position of compressed element by its rank
+    */
+    static
+    bool find_rank(bm::id_t rank, bm::id_t& pos);
+    
+    /**
+        \brief size of sparse vector (may be different for RSC)
+    */
+    size_type effective_size() const { return size(); }
+
 
 protected:
 
@@ -284,6 +387,12 @@ protected:
     /*! \brief set value without checking boundaries or support of NULL */
     void set_value_no_null(size_type idx, const value_type* str);
 
+    size_type size_internal() const { return size(); }
+    void resize_internal(size_type sz) { resize(sz); }
+
+protected:
+    template<class SVect> friend class sparse_vector_serializer;
+    template<class SVect> friend class sparse_vector_deserializer;
 };
 
 //---------------------------------------------------------------------
@@ -338,8 +447,7 @@ template<class CharType, class BV, unsigned MAX_STR_SIZE>
 void str_sparse_vector<CharType, BV, MAX_STR_SIZE>::set_value_no_null(
                                 size_type idx, const value_type* str)
 {
-    unsigned i = 0;
-    for (; i < MAX_STR_SIZE; ++i)
+    for (unsigned i = 0; i < MAX_STR_SIZE; ++i)
     {
         CharType ch = str[i];
         if (!ch)
@@ -392,6 +500,55 @@ void str_sparse_vector<CharType, BV, MAX_STR_SIZE>::optimize(
 
 //---------------------------------------------------------------------
 
+template<class CharType, class BV, unsigned MAX_STR_SIZE>
+void str_sparse_vector<CharType, BV, MAX_STR_SIZE>::calc_stat(
+    struct str_sparse_vector<CharType, BV, MAX_STR_SIZE>::statistics* st) const
+{
+    BM_ASSERT(st);
+    typename bvector_type::statistics stbv;
+    parent_type::calc_stat(&stbv);
+    
+    st->reset();
+    
+    st->bit_blocks += stbv.bit_blocks;
+    st->gap_blocks += stbv.gap_blocks;
+    st->max_serialize_mem += stbv.max_serialize_mem + 8;
+    st->memory_used += stbv.memory_used;
+}
+
+
+//---------------------------------------------------------------------
+
+template<class CharType, class BV, unsigned MAX_STR_SIZE>
+int str_sparse_vector<CharType, BV, MAX_STR_SIZE>::compare(
+                     size_type idx,
+                     const value_type* str) const
+{
+    BM_ASSERT(str);
+    int res = 0;
+    
+    for (unsigned i = 0; i < MAX_STR_SIZE; ++i)
+    {
+        CharType ch = str[i];
+        res = this->bmatr_.compare_octet(idx, i, ch);
+        if (res || !ch)
+            return res;
+    } // for
+    return res;
+}
+
+//---------------------------------------------------------------------
+
+template<class CharType, class BV, unsigned MAX_STR_SIZE>
+bool str_sparse_vector<CharType, BV, MAX_STR_SIZE>::find_rank(bm::id_t rank,
+                                                              bm::id_t& pos)
+{
+    BM_ASSERT(rank);
+    pos = rank - 1;
+    return true;
+}
+
+//---------------------------------------------------------------------
 
 } // namespace
 

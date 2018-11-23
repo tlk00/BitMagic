@@ -57,7 +57,7 @@ namespace bm
    \brief sparse vector with runtime compression using bit transposition method
  
    Sparse vector implements variable bit-depth storage model.
-   Initial data is bit-transposed into bit-planes so initial each element
+   Initial data is bit-transposed into bit-planes so each element
    may use less memory than the original native data type prescribes.
    For example, 32-bit integer may only use 20 bits.
  
@@ -579,17 +579,17 @@ public:
     /*! \brief return size of the vector
         \return size of sparse vector
     */
-    size_type size() const;
+    size_type size() const { return this->size_; }
     
     /*! \brief return true if vector is empty
         \return true if empty
     */
-    bool empty() const;
+    bool empty() const { return (size() == 0); }
     
     /*! \brief resize vector
         \param sz - new size
     */
-    void resize(size_type sz);
+    void resize(size_type sz) { parent_type::resize(sz); }
     ///@}
         
     // ------------------------------------------------------------
@@ -767,7 +767,8 @@ public:
     /**
     \brief find position of compressed element by its rank
     */
-    bool find_rank(bm::id_t rank, bm::id_t& pos) const;
+    static
+    bool find_rank(bm::id_t rank, bm::id_t& pos);
 
     /**
         \brief size of sparse vector (may be different for RSC)
@@ -1343,32 +1344,6 @@ sparse_vector<Val, BV>::extract(value_type* arr,
 //---------------------------------------------------------------------
 
 template<class Val, class BV>
-typename sparse_vector<Val, BV>::size_type
-sparse_vector<Val, BV>::size() const
-{
-    return this->size_;
-}
-
-//---------------------------------------------------------------------
-
-template<class Val, class BV>
-bool sparse_vector<Val, BV>::empty() const
-{
-    return (size() == 0);
-}
-
-
-//---------------------------------------------------------------------
-
-template<class Val, class BV>
-void sparse_vector<Val, BV>::resize(typename sparse_vector<Val, BV>::size_type sz)
-{
-    parent_type::resize(sz);
-}
-
-//---------------------------------------------------------------------
-
-template<class Val, class BV>
 typename sparse_vector<Val, BV>::value_type
 sparse_vector<Val, BV>::at(typename sparse_vector<Val, BV>::size_type idx) const
 {
@@ -1538,7 +1513,7 @@ void sparse_vector<Val, BV>::clear() BMNOEXEPT
 //---------------------------------------------------------------------
 
 template<class Val, class BV>
-bool sparse_vector<Val, BV>::find_rank(bm::id_t rank, bm::id_t& pos) const
+bool sparse_vector<Val, BV>::find_rank(bm::id_t rank, bm::id_t& pos)
 {
     BM_ASSERT(rank);
     pos = rank - 1; 
@@ -1565,27 +1540,15 @@ void sparse_vector<Val, BV>::calc_stat(
      struct sparse_vector<Val, BV>::statistics* st) const
 {
     BM_ASSERT(st);
+    typename bvector_type::statistics stbv;
+    parent_type::calc_stat(&stbv);
     
     st->reset();
-
-    unsigned stored_plains = this->stored_plains();
-    for (unsigned j = 0; j < stored_plains; ++j)
-    {
-        const bvector_type* bv = this->bmatr_.row(j);
-        if (bv)
-        {
-            typename bvector_type::statistics stbv;
-            bv->calc_stat(&stbv);
-            
-            st->bit_blocks += stbv.bit_blocks;
-            st->gap_blocks += stbv.gap_blocks;
-            st->max_serialize_mem += stbv.max_serialize_mem + 8;
-            st->memory_used += stbv.memory_used;
-        }
-    } // for j
-    // header accounting
-    st->max_serialize_mem += 1 + 1 + 1 + 1 + 8 + (8 * this->stored_plains());
-
+    
+    st->bit_blocks += stbv.bit_blocks;
+    st->gap_blocks += stbv.gap_blocks;
+    st->max_serialize_mem += stbv.max_serialize_mem + 8;
+    st->memory_used += stbv.memory_used;
 }
 
 //---------------------------------------------------------------------
@@ -1768,47 +1731,7 @@ template<class Val, class BV>
 bool sparse_vector<Val, BV>::equal(const sparse_vector<Val, BV>& sv,
                                    bm::null_support null_able) const
 {
-    size_type arg_size = sv.size();
-    if (this->size_ != arg_size)
-    {
-        return false;
-    }
-    unsigned plains = this->plains();
-    for (unsigned j = 0; j < plains; ++j)
-    {
-        const bvector_type* bv = this->bmatr_.get_row(j);
-        const bvector_type* arg_bv = sv.bmatr_.get_row(j);
-        if (bv == arg_bv) // same NULL
-            continue;
-        // check if any not NULL and not empty
-        if (!bv && arg_bv)
-            return !arg_bv->any();
-        if (bv && !arg_bv)
-            return !bv->any();
-        // both not NULL
-        int cmp = bv->compare(*arg_bv);
-        if (cmp != 0)
-            return false;
-    } // for j
-    
-    if (null_able == bm::use_null)
-    {
-        const bvector_type* bv_null = this->get_null_bvector();
-        const bvector_type* bv_null_arg = sv.get_null_bvector();
-        
-        // check the NULL vectors
-        if (bv_null == bv_null_arg)
-            return true;
-        if (!bv_null || !bv_null_arg)
-            return false;
-        BM_ASSERT(bv_null);
-        BM_ASSERT(bv_null_arg);
-        int cmp = bv_null->compare(*bv_null);
-        if (cmp != 0)
-            return false;
-    }
-
-    return true;
+    return parent_type::equal(sv, null_able);
 }
 
 //---------------------------------------------------------------------
