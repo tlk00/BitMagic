@@ -735,12 +735,13 @@ void basic_bmatrix<BV>::set_octet(size_type pos,
 {
     BM_ASSERT(octet_idx * 8u < rsize_);
     
+    unsigned oct = octet;
     unsigned row = octet_idx * 8;
     unsigned row_end = row + 8;
     for (; row < row_end; ++row)
     {
         bvector_type* bv = this->get_row(row);
-        if (octet & 1u)
+        if (oct & 1u)
         {
             if (!bv)
             {
@@ -754,8 +755,8 @@ void basic_bmatrix<BV>::set_octet(size_type pos,
             if (bv)
                 bv->clear_bit_no_check(pos);
         }
-        octet >>= 1;
-        if (!octet)
+        oct >>= 1;
+        if (!oct)
             break;
     } // for
     
