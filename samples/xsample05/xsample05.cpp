@@ -258,7 +258,7 @@ void run_benchmark(const str_sparse_vect& str_sv, const string_vector& str_vec)
             if (it != str_vec.end())
             {
                 string_vector::size_type idx =
-                        string_vector::size_type(std::distance(str_vec.begin(), it));
+                  string_vector::size_type(std::distance(str_vec.begin(), it));
                 /*
                 const string& value = str_vec[idx];
                 if (value != term)
