@@ -55,6 +55,7 @@ using namespace std;
 #include "bmdbg.h"
 #include "bmtimer.h"
 
+/// Print help
 static
 void show_help()
 {
@@ -79,6 +80,7 @@ bool         is_diag = false;
 bool         is_timing = false;
 bool         is_bench = false;
 
+// Parse command line arguments
 static
 int parse_args(int argc, char *argv[])
 {
@@ -154,6 +156,8 @@ typedef vector<string>  string_vector;
 
 bm::chrono_taker::duration_map_type  timing_map;
 
+/// Parse the input file and extract dictionary values.
+/// 
 static
 int load_dict_report(const std::string& fname, string_vector& str_vec)
 {
@@ -202,6 +206,8 @@ int load_dict_report(const std::string& fname, string_vector& str_vec)
     return 0;
 }
 
+/// Compare STL vector with bit-transposed container to check correcness
+///
 static
 void check_sparse(const str_sparse_vect& str_sv, const string_vector& str_vec)
 {
@@ -217,8 +223,9 @@ void check_sparse(const str_sparse_vect& str_sv, const string_vector& str_vec)
     } // for
 }
 
-const unsigned benchmark_max = 1500;
+const unsigned benchmark_max = 1500;  // benchmark sampling size
 
+/// Sample a few random terms out of collection
 static
 void pick_benchmark_set(string_vector& bench_vec, const string_vector& str_vec)
 {
@@ -227,7 +234,7 @@ void pick_benchmark_set(string_vector& bench_vec, const string_vector& str_vec)
     bench_vec.resize(0);
     for (unsigned i = 0; i < benchmark_max;)
     {
-        unsigned idx = unsigned(rand()) % str_vec.size();
+        unsigned idx = unsigned(rand() % str_vec.size());
         if (bv.test(idx))  // make sure benchmark example is not repeated
             continue;
         if (idx < str_vec.size())
@@ -264,7 +271,7 @@ void run_benchmark(const str_sparse_vect& str_sv, const string_vector& str_vec)
                 if (value != term)
                     throw runtime_error("Error. Incorrect search!");
                 */
-                bv1.set(idx);
+                bv1.set(unsigned(idx));
             }
         } // for
     }
@@ -275,7 +282,7 @@ void run_benchmark(const str_sparse_vect& str_sv, const string_vector& str_vec)
         for (string_vector::size_type i = 0; i < str_vec.size(); ++i)
         {
             const string& s = str_vec[i];
-            str_map[s] = i;
+            str_map[s] = unsigned(i);
         } // for
         
         bm::chrono_taker tt1("4. std::map<> search", bench_size, &timing_map);
@@ -359,7 +366,7 @@ int main(int argc, char *argv[])
             str_sv.optimize(tb); // memory optimization after load
         }
         
-        // save SV vector
+        // save SV vector to file
         if (!sv_out_name.empty() && !str_sv.empty())
         {
             bm::chrono_taker tt1("7. Save sparse vector", 1, &timing_map);
