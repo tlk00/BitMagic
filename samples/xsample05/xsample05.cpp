@@ -223,7 +223,7 @@ void check_sparse(const str_sparse_vect& str_sv, const string_vector& str_vec)
     } // for
 }
 
-const unsigned benchmark_max = 1500;  // benchmark sampling size
+const unsigned benchmark_max = 15000;  // benchmark sampling size
 
 /// Sample a few random terms out of collection
 static
@@ -234,7 +234,7 @@ void pick_benchmark_set(string_vector& bench_vec, const string_vector& str_vec)
     bench_vec.resize(0);
     for (unsigned i = 0; i < benchmark_max;)
     {
-        unsigned idx = unsigned(rand() % str_vec.size());
+        unsigned idx = unsigned(rand()) % str_vec.size();
         if (bv.test(idx))  // make sure benchmark example is not repeated
             continue;
         if (idx < str_vec.size())
@@ -252,13 +252,13 @@ void run_benchmark(const str_sparse_vect& str_sv, const string_vector& str_vec)
     string_vector bench_vec;
     pick_benchmark_set(bench_vec, str_vec);
     
-    bm::bvector<> bv1, bv2, bv3;
+    bm::bvector<> bv1, bv2, bv3, bv4;
 
     cout << "Picked " << bench_vec.size() << " samples. Running benchmarks." << endl;
     
     unsigned bench_size = unsigned(bench_vec.size());
     {
-        bm::chrono_taker tt1("3. lower_bound search", bench_size, &timing_map);
+        bm::chrono_taker tt1("3. std::lower_bound() search", bench_size, &timing_map);
         for (const string& term : bench_vec)
         {
             auto it = std::lower_bound(str_vec.begin(), str_vec.end(), term);
@@ -266,11 +266,6 @@ void run_benchmark(const str_sparse_vect& str_sv, const string_vector& str_vec)
             {
                 string_vector::size_type idx =
                   string_vector::size_type(std::distance(str_vec.begin(), it));
-                /*
-                const string& value = str_vec[idx];
-                if (value != term)
-                    throw runtime_error("Error. Incorrect search!");
-                */
                 bv1.set(unsigned(idx));
             }
         } // for
@@ -309,15 +304,34 @@ void run_benchmark(const str_sparse_vect& str_sv, const string_vector& str_vec)
             }
         } // for
     }
-    
+
+    {
+        bm::sparse_vector_scanner<str_sparse_vect> scanner;
+        bm::chrono_taker tt1("6. bm::sparse_vector_scanner<> binary search", bench_size, &timing_map);
+        for (const string& term : bench_vec)
+        {
+            unsigned pos;
+            bool found = scanner.bfind_eq_str(str_sv, term.c_str(), pos);
+            if (found)
+            {
+                bv4.set(pos);
+            }
+        } // for
+    }
+
     // various integrity checks
     //
+
     int cmp = bv1.compare(bv2);
     if (cmp != 0)
         throw runtime_error("Error. RB-search mismatch!");
     cmp = bv1.compare(bv3);
     if (cmp != 0)
         throw runtime_error("Error. scanner mismatch!");
+
+    cmp = bv1.compare(bv4);
+    if (cmp != 0)
+        throw runtime_error("Error. binary scanner mismatch!");
 
     if (bv1.count() != bench_size)
         throw runtime_error("Error. Search result missing elements!");
