@@ -163,6 +163,9 @@ public:
     /*!
         Compare vector[pos] with octet
      
+        It uses regulat comparison of chars to comply with the (signed)
+        char sort order.
+     
         @param pos - column position in the matrix
         @param octet_idx - octet based row position (1 octet - 8 rows)
         @param octet - octet value to compare
@@ -170,7 +173,7 @@ public:
         @return 0 - equal, -1 - less(vect[pos] < octet), 1 - greater
     */
     int compare_octet(size_type pos,
-                      size_type octet_idx, unsigned char octet) const;
+                      size_type octet_idx, char octet) const;
     
     ///@}
 
@@ -875,9 +878,9 @@ basic_bmatrix<BV>::get_octet(size_type pos, size_type octet_idx) const
 template<typename BV>
 int basic_bmatrix<BV>::compare_octet(size_type pos,
                                      size_type octet_idx,
-                                     unsigned char octet) const
+                                     char      octet) const
 {
-    unsigned char value = get_octet(pos, octet_idx);
+    char value = char(get_octet(pos, octet_idx));
     return (value > octet) - (value < octet);
 }
 

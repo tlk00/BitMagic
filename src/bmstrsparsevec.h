@@ -66,7 +66,11 @@ public:
     /*! Statistical information about  memory allocation details. */
     struct statistics : public bv_statistics
     {};
-
+    
+    enum octet_plains
+    {
+        sv_octet_plains = MAX_STR_SIZE
+    };
 
     /**
          Reference class to access elements via common [] operator
@@ -239,7 +243,7 @@ public:
         for (; i < sz; ++i)
         {
             CharType ch = str[i];
-            this->bmatr_.set_octet(idx, i, ch);
+            this->bmatr_.set_octet(idx, i, (unsigned char)ch);
         } // for i
         this->bmatr_.set_octet(idx, sz, 0);
         this->clear_value_plains_from(sz*8+1, idx);
@@ -281,7 +285,20 @@ public:
     /*! @name Element comparison functions       */
     ///@{
 
+    /**
+        \brief Compare vector element with argument lexicographically
+        \param idx - vactor element index
+        \param str - argument to comapre with
+        \return 0 - equal, < 0 - vect[i] < str, >0 otherwise
+    */
     int compare(size_type idx, const value_type* str) const;
+    
+    
+    /**
+        \brief Find size of common prefix between two vector elements in octets
+        \return size of common prefix
+    */
+    unsigned common_prefix_length(size_type idx1, size_type idx2) const;
 
     ///@}
 
@@ -526,15 +543,31 @@ int str_sparse_vector<CharType, BV, MAX_STR_SIZE>::compare(
 {
     BM_ASSERT(str);
     int res = 0;
-    
     for (unsigned i = 0; i < MAX_STR_SIZE; ++i)
     {
         CharType ch = str[i];
         res = this->bmatr_.compare_octet(idx, i, ch);
         if (res || !ch)
-            return res;
+            break;
     } // for
     return res;
+}
+
+//---------------------------------------------------------------------
+
+template<class CharType, class BV, unsigned MAX_STR_SIZE>
+unsigned str_sparse_vector<CharType, BV, MAX_STR_SIZE>::common_prefix_length(
+                                          size_type idx1, size_type idx2) const
+{
+    unsigned i = 0;
+    for (; i < MAX_STR_SIZE; ++i)
+    {
+        CharType ch1 = CharType(this->bmatr_.get_octet(idx1, i));
+        CharType ch2 = CharType(this->bmatr_.get_octet(idx2, i));
+        if (ch1 != ch2 || !ch1)
+            break;
+    } // for
+    return i;
 }
 
 //---------------------------------------------------------------------

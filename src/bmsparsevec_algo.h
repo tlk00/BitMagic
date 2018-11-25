@@ -157,7 +157,7 @@ public:
     typedef typename bvector_type::allocator_type::allocator_pool_type allocator_pool_type;
     
 public:
-    sparse_vector_scanner() {}
+    sparse_vector_scanner();
 
     /**
         \brief find all sparse vector elements EQ to search value
@@ -193,6 +193,16 @@ public:
 
     */
     bool find_eq_str(const SV&                      sv,
+                     const typename SV::value_type* str,
+                     typename SV::size_type&        pos);
+
+    /**
+        \brief binary find first sparse vector element (string)
+     
+        Sparse vector must be sorted.
+
+    */
+    bool bfind_eq_str(const SV&                      sv,
                      const typename SV::value_type* str,
                      typename SV::size_type&        pos);
 
@@ -271,6 +281,13 @@ public:
     void correct_nulls(const SV&   sv, typename SV::bvector_type& bv_out);
     
 protected:
+
+    /// set search boundaries
+    void set_search_range(size_type from, size_type to);
+    
+    /// reset (disable) search range
+    void reset_search_range();
+
     /// find value (may include NULL indexes)
     bool find_eq_with_nulls(const SV&   sv,
                             typename SV::value_type         value,
@@ -294,7 +311,8 @@ protected:
 
     /// Prepare aggregator for AND-SUB (EQ) search (string)
     bool prepare_and_sub_aggregator(const SV&  sv,
-                                    const typename SV::value_type*  str);
+                                    const typename SV::value_type*  str,
+                                    unsigned octet_start);
 
     /// Rank-Select decompression for RSC vectors
     void decompress(const SV&   sv, typename SV::bvector_type& bv_out);
@@ -307,6 +325,12 @@ private:
     bvector_type                       bv_tmp_;
     bm::aggregator<bvector_type>       agg_;
     bm::rank_compressor<bvector_type>  rank_compr_;
+    
+    bvector_type                       bv_mask_;  ///< AND mask vector
+    size_type                          mask_from_;
+    size_type                          mask_to_;
+    bool                               mask_set_;
+    
 };
 
 
@@ -655,6 +679,16 @@ void set2set_11_transform<SV>::one_pass_run(const bvector_type&        bv_in,
 //----------------------------------------------------------------------------
 
 template<typename SV>
+sparse_vector_scanner<SV>::sparse_vector_scanner()
+{
+    bv_mask_.set_allocator_pool(&pool_);
+    mask_set_ = false;
+    mask_from_ = mask_to_ = bm::id_max;
+}
+
+//----------------------------------------------------------------------------
+
+template<typename SV>
 void sparse_vector_scanner<SV>::find_zero(const SV&                  sv,
                                           typename SV::bvector_type& bv_out)
 {
@@ -777,7 +811,20 @@ bool sparse_vector_scanner<SV>::find_first_eq(const SV&                   sv,
         return false;
 
     agg_.reset();
-    bool found = prepare_and_sub_aggregator(sv, str);
+    unsigned common_prefix_len = 0;
+    
+    // if search mask is set - add it as first(!) AND operation to reduce
+    // the search space
+    // TODO: add flags and checks that mask represents a sorted case
+    if (mask_set_)
+    {
+        agg_.set_range_hint(mask_from_, mask_to_);
+        agg_.add(&bv_mask_);
+        
+        common_prefix_len = sv.common_prefix_length(mask_from_, mask_to_);
+    }
+    
+    bool found = prepare_and_sub_aggregator(sv, str, common_prefix_len);
     if (!found)
         return found;
     
@@ -790,66 +837,66 @@ bool sparse_vector_scanner<SV>::find_first_eq(const SV&                   sv,
 
 template<typename SV>
 bool sparse_vector_scanner<SV>::prepare_and_sub_aggregator(const SV&  sv,
-                                      const typename SV::value_type*  str)
+                                      const typename SV::value_type*  str,
+                                      unsigned octet_start)
 {
-    typedef typename SV::value_type value_type;
     unsigned char bits[64];
 
-    unsigned len = 0;
+    int len = 0;
     for (; str[len] != 0; ++len)
     {}
     BM_ASSERT(len);
 
     // use reverse order (faster for sorted arrays) 
-    for (int octet_idx = len-1; octet_idx > 0; --octet_idx)
+    for (int octet_idx = len-1; octet_idx >= 0; --octet_idx)
     {
-        value_type value = str[octet_idx];
-        BM_ASSERT(value != 0);
-        if (value)
+        if (unsigned(octet_idx) < octet_start)
         {
-            unsigned short bit_count_v = bm::bitscan(value, bits);
-            // prep the lists for combined AND-SUB aggregator
-            //
-            for (unsigned i = 0; i < bit_count_v; ++i)
-            {
-                unsigned bit_idx = bits[i];
-                BM_ASSERT(value & (value_type(1) << bit_idx));
-                unsigned plain_idx = (octet_idx * 8) + bit_idx;
-                const bvector_type* bv = sv.get_plain(plain_idx);
-                if (bv)
-                    agg_.add(bv);
-                else
-                    return false;
-            } // for i
-            
-            unsigned vinv = unsigned(value);
-            if (bm::conditional<sizeof(value_type) == 1>::test())
-            {
-                vinv ^= 0xFF;
-            }
-            else // 2-byte char
-            {
-                BM_ASSERT(sizeof(value_type) == 2); 
-                vinv ^= 0xFFFF;
-            }
+            break;
+        }
+        unsigned value = unsigned(str[octet_idx]) & 0xFF;
+        BM_ASSERT(value != 0);
+        unsigned short bit_count_v = bm::bitscan(value, bits);
+        // prep the lists for combined AND-SUB aggregator
+        //
+        for (unsigned i = 0; i < bit_count_v; ++i)
+        {
+            unsigned bit_idx = bits[i];
+            BM_ASSERT(value & (value_type(1) << bit_idx));
+            unsigned plain_idx = (unsigned(octet_idx) * 8) + bit_idx;
+            const bvector_type* bv = sv.get_plain(plain_idx);
+            if (bv)
+                agg_.add(bv);
+            else
+                return false;
+        } // for i
+        
+        unsigned vinv = unsigned(value);
+        if (bm::conditional<sizeof(value_type) == 1>::test())
+        {
+            vinv ^= 0xFF;
+        }
+        else // 2-byte char
+        {
+            BM_ASSERT(sizeof(value_type) == 2);
+            vinv ^= 0xFFFF;
+        }
 
-            bit_count_v = bm::bitscan(vinv, bits);
-            BM_ASSERT(bit_count_v <= sizeof(value_type) * 8);
-            for (unsigned i = 0; i < bit_count_v; ++i)
-            {
-                unsigned bit_idx = bits[i];
-                unsigned plain_idx = (octet_idx * 8) + bit_idx;
-                BM_ASSERT(!(value & (value_type(1) << bit_idx)));
-                const bvector_type* bv = sv.get_plain(plain_idx);
-                if (bv)
-                    agg_.add(bv, 1); // agg to SUB group
-            }            
+        bit_count_v = bm::bitscan(vinv, bits);
+        BM_ASSERT(bit_count_v <= sizeof(value_type) * 8);
+        for (unsigned i = 0; i < bit_count_v; ++i)
+        {
+            unsigned bit_idx = bits[i];
+            unsigned plain_idx = (unsigned(octet_idx) * 8) + bit_idx;
+            BM_ASSERT(!(value & (value_type(1) << bit_idx)));
+            const bvector_type* bv = sv.get_plain(plain_idx);
+            if (bv)
+                agg_.add(bv, 1); // agg to SUB group
         }
      } // for octet_idx
-    
     // add all vectors above string len to the SUB operation group
     //
-    typename SV::size_type plain_idx = (len * 8) + 1;
+    typename SV::size_type plain_idx = unsigned(len * 8) + 1;
     typename SV::size_type plains = sv.plains();
     for (; plain_idx < plains; ++plain_idx)
     {
@@ -857,6 +904,7 @@ bool sparse_vector_scanner<SV>::prepare_and_sub_aggregator(const SV&  sv,
         if (bv)
             agg_.add(bv, 1); // agg to SUB group
     } // for
+
     return true;
 }
 
@@ -957,9 +1005,7 @@ bool sparse_vector_scanner<SV>::find_eq_str(const SV&                      sv,
 {
     bool found = false;
     if (sv.empty())
-    {
         return found;
-    }
     if (*str)
     {
         bm::id_t found_pos;
@@ -972,7 +1018,6 @@ bool sparse_vector_scanner<SV>::find_eq_str(const SV&                      sv,
             }
             else
                 pos = found_pos;
-        
         }
     }
     else // search for zero value
@@ -982,7 +1027,78 @@ bool sparse_vector_scanner<SV>::find_eq_str(const SV&                      sv,
         find_zero(sv, bv_zero);
         found = bv_zero.find(pos);
     }
-    
+    return found;
+}
+
+//----------------------------------------------------------------------------
+
+template<typename SV>
+bool sparse_vector_scanner<SV>::bfind_eq_str(const SV&                      sv,
+                                             const typename SV::value_type* str,
+                                          typename SV::size_type&        pos)
+{
+    bool found = false;
+    if (sv.empty())
+        return found;
+
+    if (*str)
+    {
+        reset_search_range();
+        
+        // narrow down the search
+        const unsigned min_distance_cutoff = 65535/2;
+        size_type l, r, dist;
+        l = 0; r = sv.size()-1;
+        dist = r - l;
+        if (dist < min_distance_cutoff)
+        {
+            return find_eq_str(sv, str, pos);
+        }
+        bm::id_t found_pos;
+        // binary search to narrow down the search window
+        while (l <= r)
+        {
+            typename SV::size_type mid = (r-l)/2+l;
+            
+            int cmp = sv.compare(mid, str);
+            if (cmp == 0)
+            {
+                found_pos = mid;
+                found = true;
+                break;
+            }
+            if (cmp < 0)
+                l = mid+1;
+            else
+                r = mid-1;
+            dist = r - l;
+            if (dist < min_distance_cutoff)
+            {
+                set_search_range(l, r);
+                break;
+            }
+        } // while
+
+        // use linear search (range is set)
+        found = find_first_eq(sv, str, found_pos);
+        if (found)
+        {
+            if (sv.is_compressed()) // if compressed vector - need rank translation
+            {
+                found = sv.find_rank(found_pos + 1, pos);
+            }
+            else
+                pos = found_pos;
+        }
+        reset_search_range();
+    }
+    else // search for zero value
+    {
+        // TODO: implement optimized version which would work witout temp vector
+        typename SV::bvector_type bv_zero;
+        find_zero(sv, bv_zero);
+        found = bv_zero.find(pos);
+    }
     return found;
 }
 
@@ -1066,6 +1182,32 @@ void sparse_vector_scanner<SV>::decompress(const SV&   sv,
     // TODO: implement faster decompressor for small result-sets
     rank_compr_.decompress(bv_tmp_, *bv_non_null, bv_out);
     bv_out.swap(bv_tmp_);
+}
+
+//----------------------------------------------------------------------------
+
+template<typename SV>
+void sparse_vector_scanner<SV>::set_search_range(size_type from, size_type to)
+{
+    BM_ASSERT(from < to);
+    
+    bv_mask_.clear(true);
+    bv_mask_.set(from);
+    bv_mask_.set(to);
+    bv_mask_.set_range(from, to, true);
+    
+    mask_from_ = from;
+    mask_to_ = to;
+    mask_set_ = true;
+}
+
+//----------------------------------------------------------------------------
+
+template<typename SV>
+void sparse_vector_scanner<SV>::reset_search_range()
+{
+    mask_set_ = false;
+    mask_from_ = mask_to_ = bm::id_max;
 }
 
 
