@@ -14246,6 +14246,7 @@ void TestSparseVector_Stress(unsigned count)
     cout << "---------------------------- Bit-plain sparse vector stress OK" << endl;
 }
 
+static
 void TestStrSparseVector()
 {
    cout << "---------------------------- Bit-plain STR sparse vector test" << endl;
