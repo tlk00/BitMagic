@@ -14400,6 +14400,7 @@ void CompareStrSparseVector(const str_svect_type& str_sv,
 {
     assert(str_sv.size() == str_coll.size());
     
+    
     string str_h = "z";
     string str_l = "A";
 
@@ -14477,22 +14478,39 @@ void StressTestStrSparseVector()
            str = prefix;
            str.append(to_string(i));
            str_coll.emplace_back(str);
-           if (i % 10 == 0)
+           if (i % 5000 == 0) // generate new prefix
            {
-                char cch1 = 'a' + rand()%26;
-                char cch2 = 'a' + rand()%26;
-                prefix = cch1;
-                prefix.push_back(cch2);
+                prefix.clear();
+                unsigned prefix_len = rand() % 5;
+                for (unsigned j = 0; j < prefix_len; ++j)
+                {
+                    char cch = 'a' + rand()%26;
+                    prefix.push_back(cch);
+                } // for j
            }
-       } // for
+       } // for i
    }
-
-    cout << "Loading test sparse vector..." << endl;
+   
+   cout << "Loading test sparse vector..." << endl;
    for (auto str : str_coll)
    {
        str_sv.push_back(str);
    }
-   
+
+    // -----------------------------------------------------------
+    // create sorted collections
+    cout << "Sorting str sparse vectors..." << endl;
+    vector<string>   str_coll_sorted(str_coll);
+    str_svect_type   str_sv_sorted;
+    
+    std::sort(str_coll_sorted.begin(), str_coll_sorted.end());
+    for (const string& s : str_coll_sorted)
+    {
+        str_sv_sorted.push_back(s);
+    }
+    
+    // -----------------------------------------------------------
+
    print_svector_stat(str_sv);
    
     cout << "ok. \n Verification..." << endl;
@@ -14524,6 +14542,103 @@ void StressTestStrSparseVector()
         }
         CompareStrSparseVector(str_sv2, str_coll);
    }
+
+   // ----------------------------------------------
+   
+   cout << "Test common prefix..." << endl;
+
+    {
+    const unsigned str_size = 64;
+    char str1[str_size];
+    char str2[str_size];
+    
+    unsigned test_size = unsigned(str_coll_sorted.size());
+    if (test_size > 20000)
+        test_size = 20000;
+
+    for (unsigned i = 0; i < test_size; ++i)
+    {
+        str_sv_sorted.get(i, &str1[0], str_size);
+        for (unsigned j = 0; j < test_size; ++j)
+        {
+            str_sv_sorted.get(j, &str2[0], str_size);
+            unsigned octet_idx = 0;
+            for (;true; ++octet_idx)
+            {
+                if (str1[octet_idx] != str2[octet_idx] || !str1[octet_idx])
+                    break;
+            }
+            unsigned common_prefix = str_sv_sorted.common_prefix_length(i, j);
+            if (common_prefix != octet_idx)
+            {
+                cerr << "Common prefix length mismatch!" <<
+                     common_prefix << " != " << octet_idx <<
+                     " [" << str1 << "]-[" << str2 << "]" << endl;
+                exit(1);
+            }
+            if (i == j)
+            {
+                assert(common_prefix == ::strlen(str1));
+            }
+        } // for j
+        
+        if (i % 512 == 0)
+        {
+            cout << "\r" << i << " / " << test_size << flush;
+        }
+    } // for i
+    
+    }
+   cout << "\nTest common prefix...ok." << endl;
+
+   // ----------------------------------------------
+   
+   cout << "Test sorted search..." << endl;
+   
+   for (unsigned k = 0; k < 2; ++k)
+   {
+        bm::sparse_vector_scanner<str_svect_type> scanner;
+        for (unsigned i = 0; i < unsigned(str_coll_sorted.size()); ++i)
+        {
+            const string& s = str_coll_sorted[i];
+            unsigned pos1, pos2;
+            bool found1 = scanner.find_eq_str(str_sv_sorted, s.c_str(), pos1);
+            if (!found1)
+            {
+                cerr << "Sorted scan failed at: " << i << " " << s << endl;
+                exit(1);
+            }
+            if (pos1 != i)
+            {
+                cerr << "Sorted scan position failed at: " << i << "!=" << pos1
+                     << " " << s << endl;
+                exit(1);
+            }
+            bool found2 = scanner.bfind_eq_str(str_sv_sorted, s.c_str(), pos2);
+            if (!found2)
+            {
+                cerr << "Sorted binary search failed at: " << i << " " << s << endl;
+                exit(1);
+            }
+            if (pos2 != i)
+            {
+                cerr << "Sorted binary search position failed at: " << i << "!=" << pos2
+                     << " " << s << endl;
+                exit(1);
+            }
+            if (i % 65535 == 0)
+            {
+                cout << "\r" << i << " / " << str_sv_sorted.size() << flush;
+            }
+
+        } // for
+
+       str_sv_sorted.optimize();
+       cout << "\nPass 2." << endl;
+   } // for k
+   
+   cout << "\nTest sorted search...OK" << endl;
+
    
    cout << "---------------------------- Bit-plain STR sparse vector stress test OK" << endl;
    cout << endl;
@@ -17362,7 +17477,6 @@ int main(void)
 
 //avx2_i32_shift();
 //return 0;
-
 
     TestRecomb();
 
