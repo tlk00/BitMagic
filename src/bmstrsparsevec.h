@@ -472,7 +472,7 @@ void str_sparse_vector<CharType, BV, MAX_STR_SIZE>::set_value_no_null(
             this->clear_value_plains_from(i*8, idx);
             return;
         }
-        this->bmatr_.set_octet(idx, i, ch);
+        this->bmatr_.set_octet(idx, i, (unsigned char)ch);
     } // for i
 }
 
