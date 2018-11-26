@@ -7,7 +7,7 @@ cd ../../
 . ./bmenv.sh
 cd -
 
-rm  ./xsample05* ./xsample05
+rm  ./xsample05_release ./xsample05 ./xsample05_sse42 ./xsample05_avx2
 make clean
 
 make BMOPTFLAGS=-DBMSSE42OPT rebuild
