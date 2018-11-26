@@ -348,6 +348,7 @@ protected:
                                       unsigned* arg_blk_count,
                                       unsigned* arg_blk_gap_count);
 
+
     bool process_bit_blocks_or(blocks_manager_type& bman_target,
                                unsigned i, unsigned j, unsigned block_count);
 
@@ -357,6 +358,8 @@ protected:
     digest_type process_bit_blocks_and(unsigned block_count, digest_type digest);
     
     digest_type process_gap_blocks_and(unsigned block_count, digest_type digest);
+
+    bool test_gap_blocks_and(unsigned block_count, unsigned bit_idx);
 
     digest_type process_bit_blocks_sub(unsigned block_count, digest_type digest);
 
@@ -756,11 +759,16 @@ bool aggregator<BV>::find_first_and_sub(bm::id_t& idx,
                                                  bv_src_sub, src_sub_size);
             if (digest)
             {
-                bool found = bm::bit_find_first(ar_->tb1, &idx);
+                // TODO: optimize search using digest
+                unsigned block_bit_idx;
+                bool found = bm::bit_find_first(ar_->tb1, &block_bit_idx);
                 BM_ASSERT(found);
+                idx = bm::block_to_global_index(i, j, block_bit_idx);
+/*
                 unsigned base_idx = i * bm::set_array_size * bm::gap_max_bits;
                 base_idx += j * bm::gap_max_bits;
                 idx += base_idx;
+*/
                 return found;
             }
             return false;
@@ -808,11 +816,16 @@ bool aggregator<BV>::find_first_and_sub(bm::id_t& idx,
                                                 bv_src_sub, src_sub_size);
             if (digest)
             {
-                bool found = bm::bit_find_first(ar_->tb1, &idx);
+                // TODO: optimize search using digest
+                unsigned block_bit_idx;
+                bool found = bm::bit_find_first(ar_->tb1, &block_bit_idx);
                 BM_ASSERT(found);
+                idx = bm::block_to_global_index(i, j, block_bit_idx);
+                /*
                 unsigned base_idx = i * bm::set_array_size * bm::gap_max_bits;
                 base_idx += j * bm::gap_max_bits;
                 idx += base_idx;
+                */
                 return found;
             }
         } while (++j < set_array_max);
@@ -984,7 +997,11 @@ aggregator<BV>::combine_and_sub(unsigned i, unsigned j,
     {
         return 0;
     }
+    
+    unsigned single_bit_idx;
+    unsigned bc;
     digest_type digest = 0;
+    
     if (arg_blk_and_count || arg_blk_and_gap_count)
     {
         // AND bit-blocks
@@ -992,27 +1009,42 @@ aggregator<BV>::combine_and_sub(unsigned i, unsigned j,
         digest = process_bit_blocks_and(arg_blk_and_count, digest);
         if (!digest)
             return digest;
-/*
-{
-    unsigned bc = bm::word_bitcount64(digest);
-    if (bc == 1)
-    {
-        bc = bm::bit_block_count(ar_->tb1);
-    }
-    if (bc == 1)
-        std::cout << "*";
-    else
-        std::cout << "-";
-}
-*/
+        
+        // check if bit-block reduced to one single bit
+        // TODO: optimizations to correctly process "digested" blocks
+        {
+            bc = bm::word_bitcount64(digest);
+            if (bc == 1)
+            {
+                bc = bm::bit_block_count(ar_->tb1); // TODO: optimizations
+                if (bc == 1)
+                {
+                    unsigned found = bm::bit_find_first(ar_->tb1, &single_bit_idx);
+                    BM_ASSERT(found);
+                    (void) found; // to silence unused variable warning
+                }
+            }
+        }
+        
         // AND all GAP blocks (if any)
         //
         if (arg_blk_and_gap_count)
         {
-            digest =
-                process_gap_blocks_and(arg_blk_and_gap_count, digest);
+            if (bc == 1) // use logical check in GAP blocks
+            {
+                bool found = test_gap_blocks_and(arg_blk_and_gap_count, single_bit_idx);
+                if (!found)
+                    return 0;
+            }
+            else
+            {
+                digest =
+                    process_gap_blocks_and(arg_blk_and_gap_count, digest);
+            }
             if (!digest)
                 return digest;
+            // TODO: optimize check if result reduced to just one bit
+
         }
     }
     else
@@ -1022,6 +1054,23 @@ aggregator<BV>::combine_and_sub(unsigned i, unsigned j,
 
     if (src_sub_size)
     {
+//std::cout << src_sub_size << " ";
+        if (bc == 1) // result reduced to one single bit
+        {
+            bm::id_t bit_idx = bm::block_to_global_index(i, j, single_bit_idx);
+            for (unsigned k = 0; k < src_sub_size; ++k)
+            {
+                bvector_type_const_ptr bv = bv_src_sub[k];
+                if (bv->test(bit_idx))
+                {
+                    // TODO: clear the block
+                    digest = 0;
+                    break;
+                }
+            } // for k
+            return digest;
+        }
+        
         blk = sort_input_blocks_or(bv_src_sub, src_sub_size,
                                    i, j,
                                    &arg_blk_sub_count, &arg_blk_sub_gap_count);
@@ -1042,6 +1091,7 @@ aggregator<BV>::combine_and_sub(unsigned i, unsigned j,
                     process_gap_blocks_sub(arg_blk_sub_gap_count, digest);
             }
         }
+        
     }
 
     return digest;
@@ -1144,8 +1194,8 @@ bool aggregator<BV>::process_gap_blocks_or(blocks_manager_type& bman_target,
 
 template<typename BV>
 typename aggregator<BV>::digest_type
-aggregator<BV>::process_gap_blocks_and(unsigned   arg_blk_gap_count,
-                                                   digest_type digest)
+aggregator<BV>::process_gap_blocks_and(unsigned    arg_blk_gap_count,
+                                       digest_type digest)
 {
     BM_ASSERT(arg_blk_gap_count);
     BM_ASSERT(digest);
@@ -1163,6 +1213,28 @@ aggregator<BV>::process_gap_blocks_and(unsigned   arg_blk_gap_count,
         }
     }
     return digest;
+}
+
+// ------------------------------------------------------------------------
+
+template<typename BV>
+bool aggregator<BV>::test_gap_blocks_and(unsigned arg_blk_gap_count,
+                                         unsigned bit_idx)
+{
+    unsigned b = 1;
+    for (unsigned i = 0; i < arg_blk_gap_count; ++i)
+    {
+        b = bm::gap_test_unr(BMGAP_PTR(ar_->v_arg_blk_gap[i]), bit_idx);
+        if (!b)
+        {
+            bm::word_t* block = ar_->tb1;
+            unsigned nword  = unsigned(bit_idx >> bm::set_word_shift);
+            block[nword] = 0;
+            BM_ASSERT(bm::bit_is_all_zero(block));
+            break;
+        }
+    }
+    return b;
 }
 
 // ------------------------------------------------------------------------
