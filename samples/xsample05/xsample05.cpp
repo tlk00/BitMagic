@@ -20,7 +20,10 @@ For more information please visit:  http://bitmagic.io
 */
 
 /*! \file xsample05.cpp
-    \brief Example:
+    \brief Example: Example on how to use bit-transposed string sparse vector
+
+    Illustrates how to build a sparse vector, serialize it to disk,
+    load back and do search or binary hybrid search.
  
 */
 
@@ -227,12 +230,12 @@ const unsigned benchmark_max = 15000;  // benchmark sampling size
 
 /// Sample a few random terms out of collection
 static
-void pick_benchmark_set(string_vector& bench_vec, const string_vector& str_vec)
+void pick_benchmark_set(string_vector& bench_vec, string_vector& bench_vec_not_found, const string_vector& str_vec)
 {
     bm::bvector<> bv;
     
     bench_vec.resize(0);
-    for (unsigned i = 0; i < benchmark_max;)
+    for (unsigned i = 0; i < benchmark_max; ++i)
     {
         unsigned idx = unsigned(rand()) % str_vec.size();
         if (bv.test(idx))  // make sure benchmark example is not repeated
@@ -242,81 +245,153 @@ void pick_benchmark_set(string_vector& bench_vec, const string_vector& str_vec)
         else
             continue;
         bv.set(idx); // mark as set
-        ++i;
+        
+        {
+            string str_nf = str_vec[idx];
+            string::reverse_iterator rit = str_nf.rbegin();
+            string::reverse_iterator rit_end = str_nf.rend();
+            for (; rit != rit_end; ++rit)
+            {
+                char ch = *rit;
+                ch = 'A' + rand() % 26;
+                *rit = ch;
+                auto it = std::lower_bound(str_vec.begin(), str_vec.end(), str_nf);
+                if (it == str_vec.end() || *it != str_nf)
+                {
+                    bench_vec_not_found.push_back(str_nf);
+                    break;
+                }
+            } // for rit
+        }
+         
     } // for
+    cout << endl;
 }
 
 static
 void run_benchmark(const str_sparse_vect& str_sv, const string_vector& str_vec)
 {
     string_vector bench_vec;
-    pick_benchmark_set(bench_vec, str_vec);
+    string_vector bench_vec_not_found; // vector for impossible dictionary items
+
+    pick_benchmark_set(bench_vec, bench_vec_not_found, str_vec);
     
     bm::bvector<> bv1, bv2, bv3, bv4;
 
-    cout << "Picked " << bench_vec.size() << " samples. Running benchmarks." << endl;
+    cout << "Picked " << bench_vec.size() << " / " 
+         << bench_vec_not_found.size() << " samples. Running benchmarks." 
+         << endl;
     
     unsigned bench_size = unsigned(bench_vec.size());
     {
-        bm::chrono_taker tt1("3. std::lower_bound() search", bench_size, &timing_map);
-        for (const string& term : bench_vec)
         {
-            auto it = std::lower_bound(str_vec.begin(), str_vec.end(), term);
-            if (it != str_vec.end())
+            bm::chrono_taker tt1("3.  std::lower_bound() search", bench_size, &timing_map);
+            for (const string& term : bench_vec)
             {
-                string_vector::size_type idx =
-                  string_vector::size_type(std::distance(str_vec.begin(), it));
-                bv1.set(unsigned(idx));
-            }
-        } // for
+                auto it = std::lower_bound(str_vec.begin(), str_vec.end(), term);
+                if (it != str_vec.end())
+                {
+                    string_vector::size_type idx =
+                        string_vector::size_type(std::distance(str_vec.begin(), it));
+                    bv1.set(unsigned(idx));
+                }
+            } // for
+        }
+        {
+            bm::chrono_taker tt2("3a. std::lower_bound() search (empty)", bench_size, &timing_map);
+            for (const string& term : bench_vec_not_found)
+            {
+                std::lower_bound(str_vec.begin(), str_vec.end(), term);
+            } // for
+        }
     }
     
     {
-        // construct std::map<>  (which is most likely an RB-tree)
+        // construct std::map<>  (RB-tree)
         std::map<string, unsigned> str_map;
         for (string_vector::size_type i = 0; i < str_vec.size(); ++i)
         {
             const string& s = str_vec[i];
             str_map[s] = unsigned(i);
         } // for
-        
-        bm::chrono_taker tt1("4. std::map<> search", bench_size, &timing_map);
-        for (const string& term : bench_vec)
         {
-            auto it = str_map.find(term);
-            if (it != str_map.end())
+            bm::chrono_taker tt1("4.  std::map<> search", bench_size, &timing_map);
+            for (const string& term : bench_vec)
             {
-                bv2.set(unsigned(it->second));
-            }
-        } // for
+                auto it = str_map.find(term);
+                if (it != str_map.end())
+                {
+                    bv2.set(unsigned(it->second));
+                }
+            } // for
+        }
+        {
+            bm::chrono_taker tt2("4a. std::map<> search (empty)", bench_size, &timing_map);
+            for (const string& term : bench_vec_not_found)
+            {
+                auto it = str_map.find(term);
+                if (it != str_map.end())
+                {
+                    cerr << "empty search returned value..." << endl;
+                }
+            } // for
+        }
     }
 
     {
         bm::sparse_vector_scanner<str_sparse_vect> scanner;
-        bm::chrono_taker tt1("5. bm::sparse_vector_scanner<> search", bench_size, &timing_map);
-        for (const string& term : bench_vec)
         {
-            unsigned pos;
-            bool found = scanner.find_eq_str(str_sv, term.c_str(), pos);
-            if (found)
+            bm::chrono_taker tt1("5.  bm::sparse_vector_scanner<> search", bench_size, &timing_map);
+            for (const string& term : bench_vec)
             {
-                bv3.set(pos);
-            }
-        } // for
+                unsigned pos;
+                bool found = scanner.find_eq_str(str_sv, term.c_str(), pos);
+                if (found)
+                {
+                    bv3.set(pos);
+                }
+            } // for
+        }
+        {
+            bm::chrono_taker tt1("5a. bm::sparse_vector_scanner<> search (empty)", bench_size, &timing_map);
+            for (const string& term : bench_vec_not_found)
+            {
+                unsigned pos;
+                bool found = scanner.find_eq_str(str_sv, term.c_str(), pos);
+                if (found)
+                {
+                    cerr << "scanner empty search returned value..." << endl;
+                }
+            } // for
+        }
     }
 
     {
         bm::sparse_vector_scanner<str_sparse_vect> scanner;
-        bm::chrono_taker tt1("6. bm::sparse_vector_scanner<> binary search", bench_size, &timing_map);
-        for (const string& term : bench_vec)
         {
-            unsigned pos;
-            bool found = scanner.bfind_eq_str(str_sv, term.c_str(), pos);
-            if (found)
+            bm::chrono_taker tt1("6.  bm::sparse_vector_scanner<> binary search", bench_size, &timing_map);
+            for (const string& term : bench_vec)
             {
-                bv4.set(pos);
-            }
-        } // for
+                unsigned pos;
+                bool found = scanner.bfind_eq_str(str_sv, term.c_str(), pos);
+                if (found)
+                {
+                    bv4.set(pos);
+                }
+            } // for
+        }
+        {
+            bm::chrono_taker tt2("6a. bm::sparse_vector_scanner<> binary search (empty)", bench_size, &timing_map);
+            for (const string& term : bench_vec_not_found)
+            {
+                unsigned pos;
+                bool found = scanner.bfind_eq_str(str_sv, term.c_str(), pos);
+                if (found)
+                {
+                    cerr << "scanner empty search returned value..." << endl;
+                }
+            } // for
+        }
     }
 
     // various integrity checks
@@ -438,7 +513,7 @@ int main(int argc, char *argv[])
         if (is_timing)  // print all collected timings
         {
             std::cout << std::endl << "Performance:" << std::endl;
-            bm::chrono_taker::print_duration_map(timing_map, bm::chrono_taker::ct_all);
+            bm::chrono_taker::print_duration_map(timing_map, bm::chrono_taker::ct_time);
         }
     }
     catch (std::exception& ex)
