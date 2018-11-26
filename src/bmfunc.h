@@ -6987,6 +6987,19 @@ unsigned lower_bound(const unsigned* arr,  unsigned target,
     return l;
 }
 
+/**
+    calculate bvector<> global bit-index from block-local coords
+    @return bit index in linear bit-vector coordinates
+    @internal
+*/
+inline
+bm::id_t block_to_global_index(unsigned i, unsigned j, unsigned block_idx)
+{
+    unsigned base_idx = i * bm::set_array_size * bm::gap_max_bits;
+    base_idx += j * bm::gap_max_bits;
+    return block_idx + base_idx;
+}
+
 // --------------------------------------------------------------
 // Functions to work with int values stored in 64-bit pointers
 // --------------------------------------------------------------

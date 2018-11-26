@@ -902,9 +902,10 @@ bool sparse_vector_scanner<SV>::prepare_and_sub_aggregator(const SV&  sv,
     {
         bvector_type_const_ptr bv = sv.get_plain(plain_idx);
         if (bv)
+        {
             agg_.add(bv, 1); // agg to SUB group
+        }
     } // for
-
     return true;
 }
 
@@ -1035,7 +1036,7 @@ bool sparse_vector_scanner<SV>::find_eq_str(const SV&                      sv,
 template<typename SV>
 bool sparse_vector_scanner<SV>::bfind_eq_str(const SV&                      sv,
                                              const typename SV::value_type* str,
-                                          typename SV::size_type&        pos)
+                                             typename SV::size_type&        pos)
 {
     bool found = false;
     if (sv.empty())
@@ -1046,7 +1047,7 @@ bool sparse_vector_scanner<SV>::bfind_eq_str(const SV&                      sv,
         reset_search_range();
         
         // narrow down the search
-        const unsigned min_distance_cutoff = 65535/2;
+        const unsigned min_distance_cutoff = 65536/2;
         size_type l, r, dist;
         l = 0; r = sv.size()-1;
         dist = r - l;
@@ -1094,7 +1095,7 @@ bool sparse_vector_scanner<SV>::bfind_eq_str(const SV&                      sv,
     }
     else // search for zero value
     {
-        // TODO: implement optimized version which would work witout temp vector
+        // TODO: implement optimized version which would work without temp vector
         typename SV::bvector_type bv_zero;
         find_zero(sv, bv_zero);
         found = bv_zero.find(pos);
