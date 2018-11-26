@@ -1,1 +1,61 @@
+This is example to build a sorted, bit-transposed dictionary vector of names of 
+celestial objects from NED objects directory.
+
+
+The 
+
+
+1. Download the fragment of catalog from NED using ADQL query language.
+
+curl -o out.txt "https://ned.ipac.caltech.edu/tap/sync?query=SELECT+*+FROM+ned_objdir&LANG=ADQL&REQUEST=doQuery&FORMAT=text"
+
+It will produce a columnar report similar to:
+
+      bhextin      |         dec          |       gallat       |      gallon       |n_assoc|n_crosref|n_ddf|n_gphot|n_notes|n_posd|n_zdf| objid |pos_refid|            prefname            |pretype |   
+-------------------|----------------------|--------------------|-------------------|-------|---------|-----|-------|-------|------|-----|-------|---------|--------------------------------|--------|
+0.0                |61.090161208000005    |55.6336642907128    |129.592988077481   |0      |12       |10   |54     |0      |5     |3    |2879482|82991    |"2MASX J12201807+6105248       "|"G     "|
+0.0                |56.1873074943         |60.7497277891121    |128.223612727992   |0      |13       |10   |54     |0      |5     |3    |2879483|82991    |"2MASX J12325147+5611139       "|"G     "|
+0.0                |58.25105334925        |58.794082336604     |126.228935296354   |0      |0        |0    |10     |0      |2     |0    |2879484|42867    |"2MASS J12382714+5815046       "|"G     "|             
+0.0                |57.223830104799994    |59.8791937528706    |124.806822462432   |0      |0        |4    |11     |0      |2     |0    |2879485|82991    |"2MASS J12442918+5713259       "|"*     "|
+
+
+OVERFLOW (more rows were available but have been truncated by the TAP service)
+
+
+NOTE: Out of this columnar report we need only "prefname" - names of objects in the NED catalog
+
+
+
+2. Run xsampl05 to load the report and build index
+
+./xsample05 -idict out.txt -svout astra.bm -t
+
+Expected output:
+
+Reading input file: 1000000
+Loaded 380132 dictionary names.
+
+Performance:
+1. parse input data ; 53.74 sec
+2. build sparse vector; 1.276 sec
+7. Save sparse vector; 4.726 ms
+
+
+
+3. Run search benchmarks using the compressed sparse vector of "prefname"
+
+./xsample05  -svin astra.bm -t -b
+
+
+Expected output:
+
+
+Picked 15000 samples. Running benchmarks.
+
+Performance:
+3. std::lower_bound() search; 427000 ops/sec; 35.08 ms
+4. std::map<> search; 285000 ops/sec; 52.47 ms
+5. bm::sparse_vector_scanner<> search; 21000 ops/sec; 685.2 ms
+6. bm::sparse_vector_scanner<> binary search; 42000 ops/sec; 351 ms
+8. Load sparse vector; 3.951 ms
 
