@@ -760,7 +760,7 @@ bool aggregator<BV>::find_first_and_sub(bm::id_t& idx,
             if (digest)
             {
                 // TODO: optimize search using digest
-                unsigned block_bit_idx;
+                unsigned block_bit_idx = 0;
                 bool found = bm::bit_find_first(ar_->tb1, &block_bit_idx);
                 BM_ASSERT(found);
                 idx = bm::block_to_global_index(i, j, block_bit_idx);
@@ -817,7 +817,7 @@ bool aggregator<BV>::find_first_and_sub(bm::id_t& idx,
             if (digest)
             {
                 // TODO: optimize search using digest
-                unsigned block_bit_idx;
+                unsigned block_bit_idx = 0;
                 bool found = bm::bit_find_first(ar_->tb1, &block_bit_idx);
                 BM_ASSERT(found);
                 idx = bm::block_to_global_index(i, j, block_bit_idx);
@@ -998,7 +998,7 @@ aggregator<BV>::combine_and_sub(unsigned i, unsigned j,
         return 0;
     }
     
-    unsigned single_bit_idx;
+    unsigned single_bit_idx = 0;
     unsigned bc;
     digest_type digest = 0;
     
