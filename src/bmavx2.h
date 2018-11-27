@@ -2031,7 +2031,7 @@ unsigned avx2_bit_to_gap(gap_word_t* BMRESTRICT dest,
             
             if (!val || val == ~0ull)
             {
-               if (bitval != bool(val))
+               if (bool(bitval) != bool(val))
                {
                    *pcurr++ = (gap_word_t)(bit_idx-1);
                    BM_ASSERT((pcurr-1) == (dest+1) || *(pcurr-1) > *(pcurr-2));
@@ -2060,7 +2060,7 @@ unsigned avx2_bit_to_gap(gap_word_t* BMRESTRICT dest,
                 }
                 else // match, find the next idx
                 {
-                    tz = _tzcnt_u64(bitval ? ~val : val);
+                    tz = (unsigned)_tzcnt_u64(bitval ? ~val : val);
                 }
                 
                 bits_consumed += tz;
