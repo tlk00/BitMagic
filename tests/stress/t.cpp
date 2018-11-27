@@ -16388,11 +16388,11 @@ void TestBlockAND()
         any = bm::bit_block_and(tb1, tb2);
         assert(any);
         {
-            bm::bit_decode_cache dcache;
+//            bm::bit_decode_cache dcache;
             bm::id64_t d1 = ~0ull;
             d1 = bm::bit_block_and(tb1,
                                    tb2,
-                                   d1, dcache);
+                                   d1);
             bm::id64_t dc = bm::calc_block_digest0(tb1);
             assert(d1 == dc);
             unsigned bc = bm::word_bitcount64(d1);
@@ -16429,11 +16429,10 @@ void TestBlockAND()
                     assert((unsigned)(all_zero) != any1);
                     assert(any1);
                     {
-                        bm::bit_decode_cache dcache;
                         bm::id64_t d1 = ~0ull;
                         d1 = bm::bit_block_and(tb1,
                                                tb2,
-                                               d1, dcache);
+                                               d1);
                         bm::id64_t dc = bm::calc_block_digest0(tb1);
                         assert(d1 == dc);
                         unsigned bc = bm::word_bitcount64(d1);
@@ -16462,11 +16461,10 @@ void TestBlockAND()
             
             tb1.b_.w32[i] = tb2.b_.w32[i] = 8u;
 
-            bm::bit_decode_cache dcache;
             bm::id64_t d1 = ~0ull;
             d1 = bm::bit_block_and(tb1,
                                    tb2,
-                                   d1, dcache);
+                                   d1);
             bm::id64_t dc = bm::calc_block_digest0(tb1);
             assert(d1 == dc);
             unsigned bc = bm::word_bitcount64(d1);
