@@ -3645,7 +3645,7 @@ D gap_convert_to_arr(D* BMRESTRICT       dest,
 
 
 /*! 
-    @brief Bitcount for bit string
+    @brief Bitcount for bit block
     
     Function calculates number of 1 bits in the given array of words.
     Make sure the addresses are aligned.
@@ -3653,7 +3653,7 @@ D gap_convert_to_arr(D* BMRESTRICT       dest,
     @ingroup bitfunc 
 */
 inline 
-bm::id_t bit_block_count(const bm::word_t* block)
+bm::id_t bit_block_count(const bm::word_t* const block)
 {
     const bm::word_t* block_end = block + bm::set_block_size;
     bm::id_t count = 0;
@@ -3696,6 +3696,45 @@ bm::id_t bit_block_count(const bm::word_t* block)
 #endif	
     return count;
 }
+
+/*!
+    @brief Bitcount for bit block
+ 
+    Function calculates number of 1 bits in the given array of words.
+    uses digest to understand zero areas
+ 
+    @ingroup bitfunc
+*/
+inline
+bm::id_t bit_block_count(const bm::word_t* const block, bm::id64_t digest)
+{
+    bm::id_t count = 0;
+    bm::id64_t d = digest;
+    while (d)
+    {
+        bm::id64_t t = bm::bmi_blsi_u64(d); // d & -d;
+        
+        unsigned wave = bm::word_bitcount64(t - 1);
+        unsigned off = wave * bm::set_block_digest_wave_size;
+
+            const bm::bit_block_t::bunion_t* BMRESTRICT src_u =
+                            (const bm::bit_block_t::bunion_t*)(&block[off]);
+            unsigned j = 0;
+            do
+            {
+                count += bm::word_bitcount64(src_u->w64[j+0]) +
+                         bm::word_bitcount64(src_u->w64[j+1]) +
+                         bm::word_bitcount64(src_u->w64[j+2]) +
+                         bm::word_bitcount64(src_u->w64[j+3]);
+                j += 4;
+            } while (j < bm::set_block_digest_wave_size/2);
+        
+        d = bm::bmi_bslr_u64(d); // d &= d - 1;
+    } // while
+    return count;
+}
+
+
 
 /*!
     @brief Bitcount for bit string
