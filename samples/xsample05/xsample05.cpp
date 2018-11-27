@@ -246,6 +246,7 @@ void pick_benchmark_set(string_vector& bench_vec, string_vector& bench_vec_not_f
             continue;
         bv.set(idx); // mark as set
         
+        // generate not-found case by modifying a letter in an existing sample
         {
             string str_nf = str_vec[idx];
             string::reverse_iterator rit = str_nf.rbegin();
@@ -253,10 +254,11 @@ void pick_benchmark_set(string_vector& bench_vec, string_vector& bench_vec_not_f
             for (; rit != rit_end; ++rit)
             {
                 char ch = *rit;
-                ch = 'A' + rand() % 26;
+                int a = rand() % 26 + int('A'); // generate random letter
+                ch = char(a);
                 *rit = ch;
                 auto it = std::lower_bound(str_vec.begin(), str_vec.end(), str_nf);
-                if (it == str_vec.end() || *it != str_nf)
+                if (it == str_vec.end() || *it != str_nf) // check if not found
                 {
                     bench_vec_not_found.push_back(str_nf);
                     break;
