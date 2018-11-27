@@ -309,6 +309,27 @@ unsigned bit_scan_forward32(unsigned value)
 }
 
 
+BMFORCEINLINE
+unsigned long long bmi_bslr_u64(unsigned long long w)
+{
+#if defined(BMAVX2OPT) || defined (BMAVX512OPT)
+    return _blsr_u64(w);
+#else
+    return w & (w - 1);
+#endif
+}
+
+BMFORCEINLINE
+unsigned long long bmi_blsi_u64(unsigned long long w)
+{
+#if defined(BMAVX2OPT) || defined (BMAVX512OPT)
+    return _blsi_u64(w);
+#else
+    return w & (-w);
+#endif
+}
+
+
 #ifdef __GNUG__
 #pragma GCC diagnostic pop
 #endif
