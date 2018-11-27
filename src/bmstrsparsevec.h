@@ -288,7 +288,7 @@ public:
     /**
         \brief Compare vector element with argument lexicographically
         \param idx - vactor element index
-        \param str - argument to comapre with
+        \param str - argument to compare with
         \return 0 - equal, < 0 - vect[i] < str, >0 otherwise
     */
     int compare(size_type idx, const value_type* str) const;
