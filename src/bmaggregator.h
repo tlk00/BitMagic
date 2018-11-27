@@ -764,11 +764,6 @@ bool aggregator<BV>::find_first_and_sub(bm::id_t& idx,
                 bool found = bm::bit_find_first(ar_->tb1, &block_bit_idx);
                 BM_ASSERT(found);
                 idx = bm::block_to_global_index(i, j, block_bit_idx);
-/*
-                unsigned base_idx = i * bm::set_array_size * bm::gap_max_bits;
-                base_idx += j * bm::gap_max_bits;
-                idx += base_idx;
-*/
                 return found;
             }
             return false;
@@ -821,11 +816,6 @@ bool aggregator<BV>::find_first_and_sub(bm::id_t& idx,
                 bool found = bm::bit_find_first(ar_->tb1, &block_bit_idx);
                 BM_ASSERT(found);
                 idx = bm::block_to_global_index(i, j, block_bit_idx);
-                /*
-                unsigned base_idx = i * bm::set_array_size * bm::gap_max_bits;
-                base_idx += j * bm::gap_max_bits;
-                idx += base_idx;
-                */
                 return found;
             }
         } while (++j < set_array_max);
@@ -1016,7 +1006,8 @@ aggregator<BV>::combine_and_sub(unsigned i, unsigned j,
             bc = bm::word_bitcount64(digest);
             if (bc == 1)
             {
-                bc = bm::bit_block_count(ar_->tb1); // TODO: optimizations
+                bc = bm::bit_block_count(ar_->tb1, digest);
+                BM_ASSERT(bc == bm::bit_block_count(ar_->tb1));
                 if (bc == 1)
                 {
                     unsigned found = bm::bit_find_first(ar_->tb1, &single_bit_idx);
@@ -1054,7 +1045,6 @@ aggregator<BV>::combine_and_sub(unsigned i, unsigned j,
 
     if (src_sub_size)
     {
-//std::cout << src_sub_size << " ";
         if (bc == 1) // result reduced to one single bit
         {
             bm::id_t bit_idx = bm::block_to_global_index(i, j, single_bit_idx);
