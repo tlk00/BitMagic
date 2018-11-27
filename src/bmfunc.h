@@ -255,31 +255,6 @@ unsigned bitcount64_4way(bm::id64_t x, bm::id64_t y,
 }
 
 
-
-/*!
-    Returns number of trailing zeros
-    @ingroup bitfunc 
-*/
-BMFORCEINLINE
-bm::id_t word_trailing_zeros(bm::id_t w)
-{
-    // TODO: find a better variant for MSVC 
-#if (defined(BMSSE42OPT) || defined(BMAVX2OPT) || defined(BMAVX512OPT)) && defined(__GNUC__)
-        return bm::id_t(__builtin_ctzl(w));
-#else
-    // implementation from
-    // https://gist.github.com/andrewrk/1883543
-    static const int mod37_pos[] =
-    {
-        -1, 0, 1, 26, 2, 23, 27, 0, 3, 16, 24, 30, 28, 11, 0, 13, 4,
-        7, 17, 0, 25, 22, 31, 15, 29, 10, 12, 6, 0, 21, 14, 9, 5,
-        20, 8, 19, 18
-    };
-    return unsigned(mod37_pos[(-w & w) % 37]);
-#endif
-}
-
-
 // --------------------------------------------------------------
 // Functions for bit-scanning
 // --------------------------------------------------------------
@@ -715,18 +690,13 @@ bm::id64_t calc_block_digest0(const bm::word_t* const block)
 inline
 bm::id64_t update_block_digest0(const bm::word_t* const block, bm::id64_t digest)
 {
-    unsigned short bits[65];
-    if (!digest)
-    {
-        BM_ASSERT(!calc_block_digest0(block));
-        return digest;
-    }
-    
     const bm::id64_t mask(1ull);
-    unsigned bcnt = bm::bitscan_popcnt64(digest, bits);
-    for (unsigned i = 0; i < bcnt; ++i)
+    bm::id64_t d = digest;
+    while (d)
     {
-        unsigned wave = bits[i];
+        bm::id64_t t = bm::bmi_blsi_u64(d); // d & -d;
+        
+        unsigned wave = bm::word_bitcount64(t - 1);
         unsigned off = wave * bm::set_block_digest_wave_size;
         #if defined(VECT_IS_DIGEST_ZERO)
             bool all_zero = VECT_IS_DIGEST_ZERO(&block[off]);
@@ -744,8 +714,9 @@ bm::id64_t update_block_digest0(const bm::word_t* const block, bm::id64_t digest
             } while ((j < bm::set_block_digest_wave_size/2) & !w64);
             digest &= w64 ? digest : ~(mask << wave);
         #endif
-    } // for i
-    BM_ASSERT(digest == calc_block_digest0(block));
+        
+        d = bm::bmi_bslr_u64(d); // d &= d - 1;
+    } // while
     return digest;
 }
 
@@ -4756,24 +4727,19 @@ bm::id64_t bit_block_and(bm::word_t* BMRESTRICT dst, const bm::word_t* BMRESTRIC
 inline
 bm::id64_t bit_block_and(bm::word_t* BMRESTRICT dst,
                          const bm::word_t* BMRESTRICT src,
-                         bm::id64_t digest,
-                         bit_decode_cache& dcache)
+                         bm::id64_t digest)
 {
     BM_ASSERT(dst);
     BM_ASSERT(src);
     BM_ASSERT(dst != src);
 
     const bm::id64_t mask(1ull);
-    
-    if (digest != dcache.cvalue)
+    bm::id64_t d = digest;
+    while (d)
     {
-        dcache.bcnt = bm::bitscan_popcnt64(digest, dcache.bits);
-        dcache.cvalue = digest;
-    }
-    
-    for (unsigned i = 0; i < dcache.bcnt; ++i)
-    {
-        unsigned wave = dcache.bits[i];
+        bm::id64_t t = bm::bmi_blsi_u64(d); // d & -d;
+        
+        unsigned wave = bm::word_bitcount64(t - 1);
         unsigned off = wave * bm::set_block_digest_wave_size;
         
         #if defined(VECT_AND_DIGEST)
@@ -4798,8 +4764,10 @@ bm::id64_t bit_block_and(bm::word_t* BMRESTRICT dst,
             if (!acc) // all zero
                 digest &= ~(mask  << wave);
         #endif
-        
-    } // for i
+
+        d = bm::bmi_bslr_u64(d); // d &= d - 1;
+    } // while
+    
     return digest;
 }
 
@@ -6015,13 +5983,8 @@ int bit_find_in_block(const bm::word_t* data,
         bm::word_t val = data[nword] >> (p & bm::set_word_mask);
         if (val)
         {
-            unsigned trail_z = bm::word_trailing_zeros(val);
-            if (trail_z)
-            {
-                val >>= trail_z;
-                p += trail_z;
-                BM_ASSERT(val & 1);
-            }
+            unsigned trail_z = bm::bit_scan_forward32(val);
+            p += trail_z;
             ++found;
             break;
         }
@@ -6085,7 +6048,7 @@ unsigned bit_find_first(const bm::word_t* block, unsigned* first)
         bm::word_t w = block[i];
         if (w)
         {
-            unsigned idx = bm::word_trailing_zeros(w);
+            unsigned idx = bit_scan_forward32(w); // trailing zeros
             *first = unsigned(idx + (i * 8u * sizeof(bm::word_t)));
             return w;
         }

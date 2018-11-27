@@ -1360,13 +1360,11 @@ aggregator<BV>::process_bit_blocks_and(unsigned   arg_blk_count,
         break;
     } // switch
 
-    bit_decode_cache dcache;
-    
     for (; k < arg_blk_count; ++k)
     {
         if (ar_->v_arg_blk[k] == FULL_BLOCK_REAL_ADDR)
             continue;
-        digest = bm::bit_block_and(blk, ar_->v_arg_blk[k], digest, dcache);
+        digest = bm::bit_block_and(blk, ar_->v_arg_blk[k], digest);
         if (!digest) // all zero
         {
             break;
