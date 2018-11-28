@@ -4757,7 +4757,6 @@ bm::id64_t bit_block_and(bm::word_t* BMRESTRICT dst, const bm::word_t* BMRESTRIC
    \param dst - destination block.
    \param src - source block.
    \param digest - known digest of dst block
-   \param dcache - digest bit-count cache [in, out]
  
    \return new digest
 
@@ -5665,8 +5664,7 @@ bm::id64_t bit_block_sub(bm::word_t* BMRESTRICT dst,
 inline
 bm::id64_t bit_block_sub(bm::word_t* BMRESTRICT dst,
                          const bm::word_t* BMRESTRICT src,
-                         bm::id64_t digest,
-                         bit_decode_cache& dcache)
+                         bm::id64_t digest)
 {
     BM_ASSERT(dst);
     BM_ASSERT(src);
@@ -5674,17 +5672,14 @@ bm::id64_t bit_block_sub(bm::word_t* BMRESTRICT dst,
 
     const bm::id64_t mask(1ull);
 
-    if (digest != dcache.cvalue)
+    bm::id64_t d = digest;
+    while (d)
     {
-        dcache.bcnt = bm::bitscan_popcnt64(digest, dcache.bits);
-        dcache.cvalue = digest;
-    }
+        bm::id64_t t = bm::bmi_blsi_u64(d); // d & -d;
 
-    for (unsigned i = 0; i < dcache.bcnt; ++i)
-    {
-        unsigned wave = dcache.bits[i];
+        unsigned wave = bm::word_bitcount64(t - 1);
         unsigned off = wave * bm::set_block_digest_wave_size;
-        
+
         #if defined(VECT_SUB_DIGEST)
             bool all_zero = VECT_SUB_DIGEST(&dst[off], &src[off]);
             if (all_zero)
@@ -5707,8 +5702,10 @@ bm::id64_t bit_block_sub(bm::word_t* BMRESTRICT dst,
             if (!acc) // all zero
                 digest &= ~(mask  << wave);
         #endif
-        
-    } // for i
+
+        d = bm::bmi_bslr_u64(d); // d &= d - 1;
+    } // while
+    
     return digest;
 }
 
@@ -6072,7 +6069,7 @@ unsigned bit_find_last(const bm::word_t* block, unsigned* last)
 
     \param block - bit block buffer pointer
     \param first - index of the first 1 bit (out)
-    \return 0 if not foud
+    \return 0 if not found
 
     @ingroup bitfunc
 */
@@ -6083,6 +6080,43 @@ unsigned bit_find_first(const bm::word_t* block, unsigned* first)
     BM_ASSERT(first);
 
     for (unsigned i = 0; i < bm::set_block_size; ++i)
+    {
+        bm::word_t w = block[i];
+        if (w)
+        {
+            unsigned idx = bit_scan_forward32(w); // trailing zeros
+            *first = unsigned(idx + (i * 8u * sizeof(bm::word_t)));
+            return w;
+        }
+    } // for i
+    return 0u;
+}
+
+/*!
+    \brief BIT block find the first set bit
+
+    \param block - bit block buffer pointer
+    \param first - index of the first 1 bit (out)
+   \param digest - known digest of dst block
+
+    \return 0 if not found
+
+    @ingroup bitfunc
+*/
+inline
+unsigned bit_find_first(const bm::word_t* block,
+                        unsigned*         first,
+                        bm::id64_t        digest)
+{
+    BM_ASSERT(block);
+    BM_ASSERT(first);
+    BM_ASSERT(digest);
+    
+    bm::id64_t t = bm::bmi_blsi_u64(digest); // d & -d;
+
+    unsigned wave = bm::word_bitcount64(t - 1);
+    unsigned off = wave * bm::set_block_digest_wave_size;
+    for (unsigned i = off; i < bm::set_block_size; ++i)
     {
         bm::word_t w = block[i];
         if (w)
