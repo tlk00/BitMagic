@@ -16296,10 +16296,37 @@ void TestBlockDigest()
         assert(mask1);
         unsigned bc = bm::word_bitcount64(mask1);
         assert(bc == 1);
-        
+
+        unsigned first_bit, ffbc;
+        bool single_bit_found = bm::bit_find_first_if_1(tb1, &first_bit, mask1);
+        assert(single_bit_found);
+        unsigned found = bm::bit_find_first(tb1, &ffbc);
+        assert(found);
+        assert(first_bit == ffbc);
+
         bm::bit_block_set(tb1, 0);
         mask3 = bm::update_block_digest0(tb1, mask1);
         assert(!mask3);
+
+        single_bit_found = bm::bit_find_first_if_1(tb1, &first_bit, mask1);
+        assert(!single_bit_found);
+
+        single_bit_found = bm::bit_find_first_if_1(tb1, &first_bit, mask3);
+        assert(!single_bit_found);
+
+        tb1.b_.w32[k] = 3;
+        mask3 = bm::calc_block_digest0(tb1); 
+
+        single_bit_found = bm::bit_find_first_if_1(tb1, &first_bit, mask3);
+        assert(!single_bit_found);
+
+        tb1.b_.w32[0] = 1;
+        tb1.b_.w32[bm::set_block_size/2] = 2;
+
+        mask3 = bm::calc_block_digest0(tb1);
+
+        single_bit_found = bm::bit_find_first_if_1(tb1, &first_bit, mask3);
+        assert(!single_bit_found);
     }
 
     unsigned start = 0;
