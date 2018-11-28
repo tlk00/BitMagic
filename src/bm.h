@@ -1,4 +1,3 @@
-
 #ifndef BM__H__INCLUDED__
 #define BM__H__INCLUDED__
 /*
