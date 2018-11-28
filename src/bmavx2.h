@@ -515,6 +515,51 @@ bool avx2_and_digest_2way(__m256i* BMRESTRICT dst,
     return _mm256_testz_si256(m1A, m1A);
 }
 
+/*!
+    @brief AND block digest stride
+    @ingroup AVX2
+*/
+inline
+bool avx2_and_digest_5way(__m256i* BMRESTRICT dst,
+                          const __m256i* BMRESTRICT src1,
+                          const __m256i* BMRESTRICT src2,
+                          const __m256i* BMRESTRICT src3,
+                          const __m256i* BMRESTRICT src4)
+{
+    __m256i m1A, m1B, m1C, m1D;
+    __m256i m1E, m1F, m1G, m1H;
+
+    m1A = _mm256_and_si256(_mm256_load_si256(src1 + 0), _mm256_load_si256(src2 + 0));
+    m1B = _mm256_and_si256(_mm256_load_si256(src1 + 1), _mm256_load_si256(src2 + 1));
+    m1C = _mm256_and_si256(_mm256_load_si256(src1 + 2), _mm256_load_si256(src2 + 2));
+    m1D = _mm256_and_si256(_mm256_load_si256(src1 + 3), _mm256_load_si256(src2 + 3));
+
+    m1E = _mm256_and_si256(_mm256_load_si256(src3 + 0), _mm256_load_si256(src4 + 0));
+    m1F = _mm256_and_si256(_mm256_load_si256(src3 + 1), _mm256_load_si256(src4 + 1));
+    m1G = _mm256_and_si256(_mm256_load_si256(src3 + 2), _mm256_load_si256(src4 + 2));
+    m1H = _mm256_and_si256(_mm256_load_si256(src3 + 3), _mm256_load_si256(src4 + 3));
+
+    m1A = _mm256_and_si256(m1A, m1E);
+    m1B = _mm256_and_si256(m1B, m1F);
+    m1C = _mm256_and_si256(m1C, m1G);
+    m1D = _mm256_and_si256(m1D, m1H);
+
+    m1A = _mm256_and_si256(m1A, _mm256_load_si256(dst + 0));
+    m1B = _mm256_and_si256(m1B, _mm256_load_si256(dst + 1));
+    m1C = _mm256_and_si256(m1C, _mm256_load_si256(dst + 2));
+    m1D = _mm256_and_si256(m1D, _mm256_load_si256(dst + 3));
+
+    _mm256_store_si256(dst + 0, m1A);
+    _mm256_store_si256(dst + 1, m1B);
+    _mm256_store_si256(dst + 2, m1C);
+    _mm256_store_si256(dst + 3, m1D);
+
+    m1A = _mm256_or_si256(m1A, m1B);
+    m1C = _mm256_or_si256(m1C, m1D);
+    m1A = _mm256_or_si256(m1A, m1C);
+
+    return _mm256_testz_si256(m1A, m1A);
+}
 
 
 /*!
@@ -2129,6 +2174,9 @@ unsigned avx2_bit_to_gap(gap_word_t* BMRESTRICT dest,
 
 #define VECT_AND_DIGEST_2WAY(dst, src1, src2) \
     avx2_and_digest_2way((__m256i*) dst, (const __m256i*) (src1), (const __m256i*) (src2))
+
+#define VECT_AND_DIGEST_5WAY(dst, src1, src2, src3, src4) \
+    avx2_and_digest_5way((__m256i*) dst, (const __m256i*) (src1), (const __m256i*) (src2), (const __m256i*) (src3), (const __m256i*) (src4))
 
 #define VECT_OR_BLOCK(dst, src) \
     avx2_or_block((__m256i*) dst, (__m256i*) (src))

@@ -4811,6 +4811,66 @@ bm::id64_t bit_block_and(bm::word_t* BMRESTRICT dst,
 
 
 /*!
+   \brief digest based bit-block AND 5-way
+
+   \return new digest
+
+   @ingroup bitfunc
+*/
+inline
+bm::id64_t bit_block_and_5way(bm::word_t* BMRESTRICT dst,
+                              const bm::word_t* BMRESTRICT src0,
+                              const bm::word_t* BMRESTRICT src1,
+                              const bm::word_t* BMRESTRICT src2,
+                              const bm::word_t* BMRESTRICT src3,
+                              bm::id64_t digest)
+{
+    BM_ASSERT(dst);
+    BM_ASSERT(src0 && src1 && src2 && src3);
+
+    const bm::id64_t mask(1ull);
+    bm::id64_t d = digest;
+    while (d)
+    {
+        bm::id64_t t = bm::bmi_blsi_u64(d); // d & -d;
+
+        unsigned wave = bm::word_bitcount64(t - 1);
+        unsigned off = wave * bm::set_block_digest_wave_size;
+
+#if defined(VECT_AND_DIGEST_5WAY)
+        bool all_zero = VECT_AND_DIGEST_5WAY(&dst[off], &src0[off], &src1[off], &src2[off], &src3[off]);
+        if (all_zero)
+            digest &= ~(mask << wave);
+#else
+        const bm::bit_block_t::bunion_t* BMRESTRICT src_u0 = (const bm::bit_block_t::bunion_t*)(&src0[off]);
+        const bm::bit_block_t::bunion_t* BMRESTRICT src_u1 = (const bm::bit_block_t::bunion_t*)(&src1[off]);
+        const bm::bit_block_t::bunion_t* BMRESTRICT src_u2 = (const bm::bit_block_t::bunion_t*)(&src2[off]);
+        const bm::bit_block_t::bunion_t* BMRESTRICT src_u3 = (const bm::bit_block_t::bunion_t*)(&src3[off]);
+        bm::bit_block_t::bunion_t* BMRESTRICT dst_u = (bm::bit_block_t::bunion_t*)(&dst[off]);
+
+        bm::id64_t acc = 0;
+        unsigned j = 0;
+        do
+        {
+            acc |= dst_u->w64[j + 0] &= src_u0->w64[j + 0] & src_u1->w64[j + 0] & src_u2->w64[j + 0] & src_u3->w64[j + 0];
+            acc |= dst_u->w64[j + 1] &= src_u0->w64[j + 1] & src_u1->w64[j + 1] & src_u2->w64[j + 1] & src_u3->w64[j + 1];
+            acc |= dst_u->w64[j + 2] &= src_u0->w64[j + 2] & src_u1->w64[j + 2] & src_u2->w64[j + 2] & src_u3->w64[j + 2];
+            acc |= dst_u->w64[j + 3] &= src_u0->w64[j + 3] & src_u1->w64[j + 3] & src_u2->w64[j + 3] & src_u3->w64[j + 3];
+            j += 4;
+        } while (j < bm::set_block_digest_wave_size / 2);
+
+        if (!acc) // all zero
+            digest &= ~(mask << wave);
+#endif
+
+        d = bm::bmi_bslr_u64(d); // d &= d - 1;
+    } // while
+
+    return digest;
+}
+
+
+/*!
    \brief digest based bit-block AND
  
    dst = src1 AND src2
@@ -6128,6 +6188,62 @@ unsigned bit_find_first(const bm::word_t* block,
     } // for i
     return 0u;
 }
+
+
+/*!
+    \brief BIT block find the first set bit if only 1 bit is set
+
+    \param block - bit block buffer pointer
+    \param first - index of the first 1 bit (out)
+    \param digest - known digest of dst block
+
+    \return 0 if not found
+
+    @ingroup bitfunc
+*/
+inline
+bool bit_find_first_if_1(const bm::word_t* block,
+                         unsigned*         first,
+                         bm::id64_t        digest)
+{
+    BM_ASSERT(block);
+    BM_ASSERT(first);
+
+    unsigned bc = bm::word_bitcount64(digest);
+    if (bc != 1)
+        return false;
+
+    bool found = false;
+    bm::id64_t t = bm::bmi_blsi_u64(digest); // d & -d;
+
+    unsigned wave = bm::word_bitcount64(t - 1);
+    unsigned off = wave * bm::set_block_digest_wave_size;
+    unsigned i;
+    for (i = off; i < off + bm::set_block_digest_wave_size; ++i)
+    {
+        bm::word_t w = block[i];
+        if (w)
+        {
+            bc = bm::word_bitcount(w);
+            if (bc != 1)
+                return false;
+
+            unsigned idx = bit_scan_forward32(w); // trailing zeros
+            *first = unsigned(idx + (i * 8u * sizeof(bm::word_t)));
+            found = true;
+            break;
+        }
+    } // for i
+    
+    // check if all other bits are zero
+    for (++i; i < off + bm::set_block_digest_wave_size; ++i)
+    {
+        if (block[i])
+            return false;
+    }
+    return found;
+}
+
 
 /*!
     \brief BIT block find position for the rank
