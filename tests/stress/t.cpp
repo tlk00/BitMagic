@@ -14485,7 +14485,7 @@ void StressTestStrSparseVector()
                 unsigned prefix_len = rand() % 5;
                 for (unsigned j = 0; j < prefix_len; ++j)
                 {
-                    char cch = 'a' + rand()%26;
+                    char cch = char('a' + rand()%26);
                     prefix.push_back(cch);
                 } // for j
            }
