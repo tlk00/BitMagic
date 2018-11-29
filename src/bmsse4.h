@@ -352,6 +352,87 @@ bool sse4_and_digest_2way(__m128i* BMRESTRICT dst,
 }
 
 /*!
+    @brief AND block digest stride
+    @return true if stide is all zero
+    @ingroup SSE4
+*/
+inline
+bool sse4_and_digest_5way(__m128i* BMRESTRICT dst,
+                          const __m128i* BMRESTRICT src1,
+                          const __m128i* BMRESTRICT src2,
+                          const __m128i* BMRESTRICT src3,
+                          const __m128i* BMRESTRICT src4)
+{
+    __m128i m1A, m1B, m1C, m1D;
+    __m128i m1E, m1F, m1G, m1H;
+
+    m1A = _mm_and_si128(_mm_load_si128(src1+0), _mm_load_si128(src2+0));
+    m1B = _mm_and_si128(_mm_load_si128(src1+1), _mm_load_si128(src2+1));
+    m1C = _mm_and_si128(_mm_load_si128(src1+2), _mm_load_si128(src2+2));
+    m1D = _mm_and_si128(_mm_load_si128(src1+3), _mm_load_si128(src2+3));
+
+    m1E = _mm_and_si128(_mm_load_si128(src3+0), _mm_load_si128(src4+0));
+    m1F = _mm_and_si128(_mm_load_si128(src3+1), _mm_load_si128(src4+1));
+    m1G = _mm_and_si128(_mm_load_si128(src3+2), _mm_load_si128(src4+2));
+    m1H = _mm_and_si128(_mm_load_si128(src3+3), _mm_load_si128(src4+3));
+
+    m1A = _mm_and_si128(m1A, m1E);
+    m1B = _mm_and_si128(m1B, m1F);
+    m1C = _mm_and_si128(m1C, m1G);
+    m1D = _mm_and_si128(m1D, m1H);
+
+    m1A = _mm_and_si128(m1A, _mm_load_si128(dst+0));
+    m1B = _mm_and_si128(m1B, _mm_load_si128(dst+1));
+    m1C = _mm_and_si128(m1C, _mm_load_si128(dst+2));
+    m1D = _mm_and_si128(m1D, _mm_load_si128(dst+3));
+
+    _mm_store_si128(dst+0, m1A);
+    _mm_store_si128(dst+1, m1B);
+    _mm_store_si128(dst+2, m1C);
+    _mm_store_si128(dst+3, m1D);
+    
+     m1A = _mm_or_si128(m1A, m1B);
+     m1C = _mm_or_si128(m1C, m1D);
+     m1A = _mm_or_si128(m1A, m1C);
+    
+     bool z1 = _mm_testz_si128(m1A, m1A);
+    
+    m1A = _mm_and_si128(_mm_load_si128(src1+4), _mm_load_si128(src2+4));
+    m1B = _mm_and_si128(_mm_load_si128(src1+5), _mm_load_si128(src2+5));
+    m1C = _mm_and_si128(_mm_load_si128(src1+6), _mm_load_si128(src2+6));
+    m1D = _mm_and_si128(_mm_load_si128(src1+7), _mm_load_si128(src2+7));
+
+    m1E = _mm_and_si128(_mm_load_si128(src3+4), _mm_load_si128(src4+4));
+    m1F = _mm_and_si128(_mm_load_si128(src3+5), _mm_load_si128(src4+5));
+    m1G = _mm_and_si128(_mm_load_si128(src3+6), _mm_load_si128(src4+6));
+    m1H = _mm_and_si128(_mm_load_si128(src3+7), _mm_load_si128(src4+7));
+
+    m1A = _mm_and_si128(m1A, m1E);
+    m1B = _mm_and_si128(m1B, m1F);
+    m1C = _mm_and_si128(m1C, m1G);
+    m1D = _mm_and_si128(m1D, m1H);
+
+    m1A = _mm_and_si128(m1A, _mm_load_si128(dst+4));
+    m1B = _mm_and_si128(m1B, _mm_load_si128(dst+5));
+    m1C = _mm_and_si128(m1C, _mm_load_si128(dst+6));
+    m1D = _mm_and_si128(m1D, _mm_load_si128(dst+7));
+
+    _mm_store_si128(dst+4, m1A);
+    _mm_store_si128(dst+5, m1B);
+    _mm_store_si128(dst+6, m1C);
+    _mm_store_si128(dst+7, m1D);
+    
+     m1A = _mm_or_si128(m1A, m1B);
+     m1C = _mm_or_si128(m1C, m1D);
+     m1A = _mm_or_si128(m1A, m1C);
+    
+     bool z2 = _mm_testz_si128(m1A, m1A);
+    
+     return z1 & z2;
+}
+
+
+/*!
     @brief SUB (AND NOT) block digest stride
     *dst &= ~*src
  
@@ -1062,6 +1143,9 @@ bool sse42_shift_r1_and(__m128i* block,
 
 #define VECT_AND_DIGEST(dst, src) \
     sse4_and_digest((__m128i*) dst, (const __m128i*) (src))
+
+#define VECT_AND_DIGEST_5WAY(dst, src1, src2, src3, src4) \
+    sse4_and_digest_5way((__m128i*) dst, (const __m128i*) (src1), (const __m128i*) (src2), (const __m128i*) (src3), (const __m128i*) (src4))
 
 #define VECT_AND_DIGEST_2WAY(dst, src1, src2) \
     sse4_and_digest_2way((__m128i*) dst, (const __m128i*) (src1), (const __m128i*) (src2))
