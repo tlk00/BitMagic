@@ -24,12 +24,12 @@ ifeq ($(COMPILER),GNU_CC)
     #-g
 
     OS_VER = -D__$(shell uname -s)_$(shell uname -r | sed -e 's/\./_/g' -e 's/-.*//')
-    PLATFORM_CXXFLAGS = -D_REENTRANT $(OS_VER) -D_GNU_SOURCE
+    PLATFORM_CXXFLAGS = -D_REENTRANT $(OS_VER) -D_GNU_SOURCE -std=c++11 -Wall
     PLATFORM_CFLAGS = -D_REENTRANT $(OS_VER)
     COMMON_LDFLAGS = $(LINKER_DFLAGS) -export-dynamic
     COMMON_CLDFLAGS = $(COMMON_LDFLAGS)
     EXTERN_LIBS = $(EXTERN_LIBS_BASE)/lib
-    CXX = g++ $(CXXARCHFLAGS) -Wall -std=c++11
+    CXX = g++ $(CXXARCHFLAGS)  
     CC = gcc $(CXXARCHFLAGS) -Wall
     LD = g++
     CC_PIC_FLAGS = -fPIC

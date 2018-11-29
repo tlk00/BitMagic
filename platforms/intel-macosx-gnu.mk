@@ -28,7 +28,7 @@ ifeq ($(COMPILER),GNU_CC)
     COMMON_LDFLAGS = $(LINKER_DFLAGS) -Wl,-stack_size,0x100000000
     COMMON_CLDFLAGS = $(COMMON_LDFLAGS)
     EXTERN_LIBS = $(EXTERN_LIBS_BASE)/lib
-    CXX = g++ $(CXXARCHFLAGS) -Wall -Wc++11-extensions -std=c++11
+    CXX = g++ $(CXXARCHFLAGS) -Wall -Wc++11-extensions 
     CC = gcc $(CXXARCHFLAGS) -Wall
     LD = g++ $(COMMON_LDFLAGS)
     CC_PIC_FLAGS = -fPIC

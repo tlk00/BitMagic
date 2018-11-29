@@ -25,12 +25,12 @@ LINKER_DFLAGS =
 
 #	OS_VER = -D__$(shell uname -s)_$(shell uname -r | sed -e 's/\./_/g' -e 's/-.*//')
 OS_VER = -DCYGWIN_NT
-PLATFORM_CXXFLAGS = -D_REENTRANT $(OS_VER) -D_GNU_SOURCE -Wconversion -Wno-deprecated -Wshadow -Werror=maybe-uninitialized -Wlogical-op -Wmissing-declarations -Wswitch-default -std=c++11
+PLATFORM_CXXFLAGS = -D_REENTRANT $(OS_VER) -D_GNU_SOURCE -std=c++11 -Wall -Wconversion -Wno-deprecated -Wshadow -Werror=maybe-uninitialized -Wlogical-op -Wmissing-declarations -Wswitch-default -std=c++11
 PLATFORM_CFLAGS = -D_REENTRANT $(OS_VER) -std=c++11
 COMMON_LDFLAGS = $(LINKER_DFLAGS)  -L/usr/local/lib
 COMMON_CLDFLAGS = $(COMMON_LDFLAGS)
 EXTERN_LIBS = $(EXTERN_LIBS_BASE)/lib
-CXX = g++ $(CXXARCHFLAGS) -Wall -std=c++11
+CXX = g++ $(CXXARCHFLAGS) 
 CC = gcc  -Wall
 LD = g++
 CC_PIC_FLAGS = -fPIC
