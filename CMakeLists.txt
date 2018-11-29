@@ -79,6 +79,7 @@ add_executable(xsample02 ${PROJECT_SOURCE_DIR}/samples/xsample02/xsample02.cpp)
 add_executable(xsample03 ${PROJECT_SOURCE_DIR}/samples/xsample03/xsample03.cpp)
 add_executable(xsample04 ${PROJECT_SOURCE_DIR}/samples/xsample04/xsample04.cpp)
 add_executable(xsample04a ${PROJECT_SOURCE_DIR}/samples/xsample04a/xsample04a.cpp)
+add_executable(xsample05 ${PROJECT_SOURCE_DIR}/samples/xsample05/xsample05.cpp)
 
 add_executable(svsample01 ${PROJECT_SOURCE_DIR}/samples/svsample01/svsample01.cpp)
 add_executable(svsample02 ${PROJECT_SOURCE_DIR}/samples/svsample02/svsample02.cpp)
