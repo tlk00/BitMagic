@@ -356,7 +356,6 @@ public:
             idx2 = bvect.get_next(idx2);
         }
 
-        //BM_ASSERT(idx1==0 || idx2==0);
 
         if (idx1 != idx2)
         {
@@ -476,7 +475,6 @@ public:
 
     void swap(bvector_mini& bvm)
     {
-        BM_ASSERT(m_size == bvm.m_size);
         bm::word_t* buftmp = m_buf;
         m_buf = bvm.m_buf;
         bvm.m_buf = buftmp;
