@@ -26,11 +26,11 @@ For more information please visit:  http://bitmagic.io
 #include <cstdio>
 #include <stdlib.h>
 #include <cassert>
-#include <memory.h>
+#include <memory>
 #include <time.h>
 
 #include <iostream>
-#include <strstream>
+#include <sstream>
 #include <fstream>
 #include <iomanip>
 #include <vector>
@@ -221,10 +221,11 @@ inline
 void SaveBlob(const char* name_prefix, unsigned num, const char* ext,
               const unsigned char* blob, unsigned blob_size)
 {
-    std::strstream fname_str;
+    std::stringstream fname_str;
     fname_str << name_prefix << "-" << num << ext;
     
-    char* fname = fname_str.str();
+	std::string s = fname_str.str();
+    const char* fname = s.c_str();
     std::ofstream bfile (fname, std::ios::out | std::ios::binary);
     if (!bfile.good())
     {

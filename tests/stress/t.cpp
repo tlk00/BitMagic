@@ -26,7 +26,6 @@ For more information please visit:  http://bitmagic.io
 #include <stdlib.h>
 #undef NDEBUG
 #include <cassert>
-#include <memory.h>
 #include <time.h>
 #include <math.h>
 
@@ -14912,9 +14911,10 @@ void LoadVectors(const char* dir_name, unsigned from, unsigned to)
 
     for(; from <= to; ++from)
     {
-        std::strstream fname_str;
+        std::stringstream fname_str;
         fname_str << dir_name << "/" << from;
-        char* fname = fname_str.str();
+		std::string s = fname_str.str();
+        const char* fname = s.c_str();
         
         bvect* bv = new bvect;
 
