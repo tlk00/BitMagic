@@ -59,7 +59,7 @@ INPUT                  = ./src/bm.h ./src/bmfunc.h  ./src/bmsimd.h \
                          ./src/bmdef.h ./src/bmtrans.h ./src/bmutil.h ./src/bmaggregator.h \
                          ./src/bmundef.h ./src/bmserial.h ./src/bmalloc.h ./src/bmrandom.h \                        
                          ./src/bmsparsevec.h ./src/bmsparsevec_algo.h ./src/bmsparsevec_serial.h \
-                         ./src/bmsparsevec_compr.h ./src/bmsparsevec_util.h ./src/bmtimer.h \ 
+                         ./src/bmsparsevec_compr.h ./src/bmstrsparsevec.h ./src/bmsparsevec_util.h ./src/bmtimer.h \ 
 ./samples/bvsample01/sample1.cpp \
 ./samples/bvsample02/sample2.cpp \
 ./samples/bvsample03/sample3.cpp \
@@ -83,6 +83,7 @@ INPUT                  = ./src/bm.h ./src/bmfunc.h  ./src/bmsimd.h \
 ./samples/xsample03/xsample03.cpp \
 ./samples/xsample04/xsample04.cpp \
 ./samples/xsample04a/xsample04a.cpp \
+./samples/xsample05/xsample05.cpp \
 ./samples/svsample01/svsample01.cpp \
 ./samples/svsample02/svsample02.cpp \
 ./samples/svsample03/svsample03.cpp \

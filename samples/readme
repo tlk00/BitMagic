@@ -58,5 +58,8 @@ More complex examples to illustrate mixed techniques and use cases
               Details at: http://bitmagic.io/dna-search.html 
 ./xsample04a - Fast construction of bit-indexes using bulk insert interator, multi-threaded partitioning and merge.
               Details at: http://bitmagic.io/dna-search-idx.html
+./xsample05 - Example how to build a memory compressed dictionary, benchmark how fast BitMagic can search in it.
+              As a sample data we use a part of NED catalog of celestial objects.
+              Details at: http://bitmagic.io/star-search.html
 
 
