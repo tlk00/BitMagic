@@ -1159,7 +1159,6 @@ template<typename T> unsigned gap_test(const T* buf, unsigned pos)
 
     unsigned start = 1;
     unsigned end = 1 + ((*buf) >> 3);
-
     if (end - start < 10)
     {
         unsigned sv = *buf & 1;
@@ -1280,10 +1279,13 @@ unsigned gap_test_unr(const T* buf, const unsigned pos)
     unsigned res = ((*buf) & 1) ^ ((--start) & 1);
 
     BM_ASSERT(res == bm::gap_test(buf, pos));
-    return res;
+#elif defined(BMAVX2OPT)
+    unsigned res = bm::avx2_gap_test(buf, pos);
+    BM_ASSERT(res == bm::gap_test(buf, pos));
 #else
-    return bm::gap_test(buf, pos);
+    unsigned res = bm::gap_test(buf, pos);
 #endif
+    return res;
 }
 
 

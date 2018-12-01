@@ -72,9 +72,11 @@ For more information please visit:  http://bitmagic.io
 
 namespace bm
 {
-/*
+
+// debugging utils
+#if 1
 inline
-void avx2_print256(const char* prefix, const __m256i & value)
+void avx2_print256_u32(const char* prefix, const __m256i & value)
 {
     const size_t n = sizeof(__m256i) / sizeof(unsigned);
     unsigned buffer[n];
@@ -88,7 +90,23 @@ void avx2_print256(const char* prefix, const __m256i & value)
     }
     std::cout << "]" << std::endl;
 }
-*/
+
+inline
+void avx2_print256_u16(const char* prefix, const __m256i & value)
+{
+    const size_t n = sizeof(__m256i) / sizeof(unsigned short);
+    unsigned short buffer[n];
+    _mm256_storeu_si256((__m256i*)buffer, value);
+    std::cout << prefix << " [ ";
+    for (int i = n-1; 1; --i)
+    {
+        std::cout << buffer[i] << " ";
+        if (i == 0)
+            break;
+    }
+    std::cout << "]" << std::endl;
+}
+#endif
 
 #ifdef __GNUG__
 #pragma GCC diagnostic push
@@ -1868,6 +1886,132 @@ int avx2_cmpge_u32(__m256i vect8, unsigned value)
         return bsf / 4;
     }
     return -1;
+}
+
+/**
+    Experimental (test) function to do SIMD vector search
+    in sorted, growing array
+    @ingroup AVX2
+
+    \internal
+*/
+inline
+int avx2_cmpge_u16(__m256i vect16, unsigned short value)
+{
+    __m256i mZ = _mm256_setzero_si256();
+    __m256i mVal  = _mm256_set1_epi16(value);
+
+    // subs_epu16 - unsigned substration with saturation, gives 0u if (a - b) < 0
+    __m256i mSub = _mm256_subs_epu16(mVal, vect16);
+    __m256i mge_mask = _mm256_cmpeq_epi16(mSub, mZ);
+    unsigned mask = _mm256_movemask_epi8(mge_mask);
+    if (mask)
+    {
+        int lz = _tzcnt_u32(mask);
+        return lz / 2;
+    }
+    return -1;
+}
+
+/*
+inline
+unsigned avx2_linear_scan_gap(const unsigned short* buf, unsigned pos,
+                              unsigned from, unsigned to)
+{
+    const unsigned unroll_factor = 16;
+    unsigned len = to - from + 1;
+    unsigned len_unr = len - (len % unroll_factor);
+
+    __m256i mZ = _mm256_setzero_si256();
+    __m256i mPos  = _mm256_set1_epi16(pos);
+    
+    int mask;
+    __m256i vect16;
+    
+    unsigned k = from;
+    for (; k < len_unr; k += unroll_factor)
+    {
+        vect16 = _mm256_loadu_si256((__m256i*)(&buf[k])); // 16x u16s
+        __m256i mSub = _mm256_subs_epu16(mPos, vect16);
+        __m256i mge_mask = _mm256_cmpeq_epi16(mSub, mZ);
+        mask = _mm256_movemask_epi8(mge_mask);
+        if (mask)
+        {
+            int lz = _tzcnt_u32(mask) / 2;
+            lz += k;
+            return lz;
+        }
+    } // for k
+
+    for (; k < from + len; ++k)
+    {
+        if (buf[k] >= pos)
+            return k;
+    }
+    return to + 1;
+}
+*/
+
+/**
+    hybrid binary search, starts as binary, then switches to scan
+ 
+    NOTE: AVX code uses _mm256_subs_epu16 - saturated substraction
+    which gives 0 if A-B=0 if A < B (not negative a value).
+ 
+    @ingroup AVX2
+*/
+inline
+unsigned avx2_gap_test(const unsigned short* buf, unsigned pos)
+{
+    BM_ASSERT(pos < bm::gap_max_bits);
+    unsigned start = 1;
+    unsigned end = 1 + ((*buf) >> 3);
+    
+    const unsigned linear_cutoff = 48;
+    unsigned res;
+    
+    while (start != end)
+    {
+        unsigned dsize = end - start;
+        if (dsize < linear_cutoff)
+        {
+            __m256i mZ = _mm256_setzero_si256();
+            __m256i mPos  = _mm256_set1_epi16(pos);
+            
+            const unsigned unroll_factor = 16;
+            unsigned len_unr = dsize - (dsize % unroll_factor);
+            for (; start < len_unr; start += unroll_factor)
+            {
+                __m256i vect16 = _mm256_loadu_si256((__m256i*)(&buf[start])); // 16x u16s
+                __m256i mSub = _mm256_subs_epu16(mPos, vect16);
+                __m256i mge_mask = _mm256_cmpeq_epi16(mSub, mZ);
+                int mask = _mm256_movemask_epi8(mge_mask);
+                if (mask)
+                {
+                    int lz = _tzcnt_u32(mask) / 2;
+                    start += lz;
+                    res = ((*buf) & 1) ^ ((--start) & 1);
+                    return res;
+                }
+            } // for k
+            
+            for (; start < end; ++start)
+            {
+                if (buf[start] >= pos)
+                    break;
+            }
+
+            //start = avx2_linear_scan_gap(buf, pos, start, end-1);
+            break;
+        }
+        unsigned curr = (start + end) >> 1;
+        if (buf[curr] < pos)
+            start = curr + 1;
+        else
+            end = curr;
+    } // while
+    res = ((*buf) & 1) ^ ((--start) & 1);
+    return res;
 }
 
 /**
