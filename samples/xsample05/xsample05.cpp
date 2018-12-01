@@ -25,6 +25,8 @@ For more information please visit:  http://bitmagic.io
     Illustrates how to build a sparse vector, serialize it to disk,
     load back and do search or binary hybrid search.
  
+  \sa bm::str_sparse_vector<>
+   
 */
 
 #include <iostream>
