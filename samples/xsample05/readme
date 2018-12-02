@@ -1,6 +1,6 @@
 This is example to build a sorted, bit-transposed dictionary vector of names of 
 celestial objects from NED objects directory. 
-Example shows how to do sorted search, runs benchmarks, checks self correcness. 
+Example shows how to do sorted search, runs benchmarks, checks self correctness. 
 
 
 
@@ -27,7 +27,9 @@ It will produce a columnar report similar to this:
 OVERFLOW (more rows were available but have been truncated by the TAP service)
 
 
-NOTE: Out of this columnar report we need only "prefname" - names of objects in the NED catalog
+NOTE: Out of this columnar report we need only "prefname" - names of objects in the NED catalog.
+Example will parse out the column and create a sorted STL vector, STL map (R-B tree) and
+bit transposed sparse vector (BitMagic) to compare memory footprint and search performance.
 
 
 
