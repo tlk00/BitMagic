@@ -74,7 +74,7 @@ namespace bm
 {
 
 // debugging utils
-#if 1
+#if 0
 inline
 void avx2_print256_u32(const char* prefix, const __m256i & value)
 {
