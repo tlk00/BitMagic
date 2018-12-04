@@ -692,7 +692,7 @@ void print_svector_stat(const SV& svect, bool print_sim = false)
         std::cout << "Non-zero elements: " << bv_join_cnt << " "
                   << "ratio=" << fr
                   << std::endl;
-        size_t non_zero_mem = bv_join_cnt * sizeof(typename SV::value_type);
+        size_t non_zero_mem = size_t(bv_join_cnt) * sizeof(typename SV::value_type);
         std::cout << "Projected mem usage for non-zero elements: " << non_zero_mem << " "
                   << non_zero_mem / (1024*1024) << " MB"
                   << std::endl;

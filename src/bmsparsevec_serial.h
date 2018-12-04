@@ -439,7 +439,9 @@ int compressed_collection_deserializer<CBC>::deserialize(
         return -2; // buffer size collection does not match address vector
     }
     
-    std::vector<unsigned> buf_size_vec(coll_size);
+	typedef std::vector<unsigned>::size_type vect_size_type;
+	std::vector<unsigned> buf_size_vec;
+	buf_size_vec.resize(vect_size_type(coll_size));
     {
         for (unsigned i = 0; i < coll_size; ++i)
         {
@@ -450,7 +452,7 @@ int compressed_collection_deserializer<CBC>::deserialize(
 
     {
         container_type& buf_vect = buffer_coll.container();
-        buf_vect.resize(coll_size);
+        buf_vect.resize(vect_size_type(coll_size));
         for (unsigned i = 0; i < coll_size; ++i)
         {
             unsigned sz = buf_size_vec[i];

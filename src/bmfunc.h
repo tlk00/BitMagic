@@ -3655,7 +3655,7 @@ D gap_convert_to_arr(D* BMRESTRICT       dest,
     @ingroup bitfunc 
 */
 inline 
-bm::id_t bit_block_count(const bm::word_t* const block)
+bm::id_t bit_block_count(const bm::word_t* block)
 {
     const bm::word_t* block_end = block + bm::set_block_size;
     bm::id_t count = 0;
