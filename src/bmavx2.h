@@ -1913,45 +1913,6 @@ int avx2_cmpge_u16(__m256i vect16, unsigned short value)
     return -1;
 }
 
-/*
-inline
-unsigned avx2_linear_scan_gap(const unsigned short* buf, unsigned pos,
-                              unsigned from, unsigned to)
-{
-    const unsigned unroll_factor = 16;
-    unsigned len = to - from + 1;
-    unsigned len_unr = len - (len % unroll_factor);
-
-    __m256i mZ = _mm256_setzero_si256();
-    __m256i mPos  = _mm256_set1_epi16(pos);
-    
-    int mask;
-    __m256i vect16;
-    
-    unsigned k = from;
-    for (; k < len_unr; k += unroll_factor)
-    {
-        vect16 = _mm256_loadu_si256((__m256i*)(&buf[k])); // 16x u16s
-        __m256i mSub = _mm256_subs_epu16(mPos, vect16);
-        __m256i mge_mask = _mm256_cmpeq_epi16(mSub, mZ);
-        mask = _mm256_movemask_epi8(mge_mask);
-        if (mask)
-        {
-            int lz = _tzcnt_u32(mask) / 2;
-            lz += k;
-            return lz;
-        }
-    } // for k
-
-    for (; k < from + len; ++k)
-    {
-        if (buf[k] >= pos)
-            return k;
-    }
-    return to + 1;
-}
-*/
-
 /**
     hybrid binary search, starts as binary, then switches to scan
  
@@ -1963,28 +1924,49 @@ unsigned avx2_linear_scan_gap(const unsigned short* buf, unsigned pos,
 inline
 unsigned avx2_gap_test(const unsigned short* buf, unsigned pos)
 {
+    const unsigned linear_cutoff = 48;
+    const unsigned unroll_factor = 16;
+
     BM_ASSERT(pos < bm::gap_max_bits);
+
+    unsigned res;
     unsigned start = 1;
     unsigned end = 1 + ((*buf) >> 3);
-    
-    const unsigned linear_cutoff = 48;
-    unsigned res;
-    
+    unsigned arr_end = end;
+
+    if (end - start < unroll_factor) // too small for a full AVX stride
+    {
+        for (; start < end; ++start)
+        {
+            if (buf[start] >= pos)
+            {
+                res = ((*buf) & 1) ^ ((--start) & 1);
+                return res;
+            }
+        } // for
+        BM_ASSERT(0);
+    }
+
     while (start != end)
     {
         unsigned dsize = end - start;
         if (dsize < linear_cutoff)
         {
+            // set wider scan window to possibly over-read the range,
+            // but stay within allocated block memory
+            //
+            dsize = arr_end - start;
+            
             __m256i mZ = _mm256_setzero_si256();
             __m256i mPos  = _mm256_set1_epi16(pos);
-            
-            const unsigned unroll_factor = 16;
-            unsigned len_unr = dsize - (dsize % unroll_factor);
+            __m256i vect16, mSub, mge_mask;
+
+            unsigned len_unr = start + (dsize - (dsize % unroll_factor));
             for (; start < len_unr; start += unroll_factor)
             {
-                __m256i vect16 = _mm256_loadu_si256((__m256i*)(&buf[start])); // 16x u16s
-                __m256i mSub = _mm256_subs_epu16(mPos, vect16);
-                __m256i mge_mask = _mm256_cmpeq_epi16(mSub, mZ);
+                vect16 = _mm256_loadu_si256((__m256i*)(&buf[start])); // 16x u16s
+                mSub = _mm256_subs_epu16(mPos, vect16);
+                mge_mask = _mm256_cmpeq_epi16(mSub, mZ);
                 int mask = _mm256_movemask_epi8(mge_mask);
                 if (mask)
                 {
@@ -1994,14 +1976,30 @@ unsigned avx2_gap_test(const unsigned short* buf, unsigned pos)
                     return res;
                 }
             } // for k
-            
+            unsigned tail = unroll_factor - (end - start);
+            if (start > tail+1)
+            {
+                start -= tail; // rewind back, but stay within block
+                vect16 = _mm256_loadu_si256((__m256i*)(&buf[start])); // 16x u16s
+                mSub = _mm256_subs_epu16(mPos, vect16);
+                mge_mask = _mm256_cmpeq_epi16(mSub, mZ);
+                int mask = _mm256_movemask_epi8(mge_mask);
+                BM_ASSERT(mask);
+                // TODO: if should be not needed, cleanup
+                if (mask)
+                {
+                    int lz = _tzcnt_u32(mask) / 2;
+                    start += lz;
+                    res = ((*buf) & 1) ^ ((--start) & 1);
+                    return res;
+                }
+                start += unroll_factor; // remove with if when sure
+            }
             for (; start < end; ++start)
             {
                 if (buf[start] >= pos)
                     break;
             }
-
-            //start = avx2_linear_scan_gap(buf, pos, start, end-1);
             break;
         }
         unsigned curr = (start + end) >> 1;
