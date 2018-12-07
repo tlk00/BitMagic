@@ -1199,6 +1199,11 @@ template<typename T>
 unsigned gap_test_unr(const T* buf, const unsigned pos)
 {
     BM_ASSERT(pos < bm::gap_max_bits);
+
+    if (pos == 0) // quick answer possible
+    {
+        return (*buf) & 1;
+    }
 #if defined(BMSSE2OPT)
     unsigned start = 1;
     unsigned end = 1 + ((*buf) >> 3);
