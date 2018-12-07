@@ -1047,37 +1047,42 @@ bool sparse_vector_scanner<SV>::bfind_eq_str(const SV&                      sv,
         reset_search_range();
         
         // narrow down the search
-        const unsigned min_distance_cutoff = 65536/2;
+        const unsigned min_distance_cutoff = 65536;
         size_type l, r, dist;
         l = 0; r = sv.size()-1;
-        dist = r - l;
-        if (dist < min_distance_cutoff)
-        {
-            return find_eq_str(sv, str, pos);
-        }
         bm::id_t found_pos;
         // binary search to narrow down the search window
         while (l <= r)
         {
-            typename SV::size_type mid = (r-l)/2+l;
-            
-            int cmp = sv.compare(mid, str);
-            if (cmp == 0)
-            {
-                found_pos = mid;
-                found = true;
-                break;
-            }
-            if (cmp < 0)
-                l = mid+1;
-            else
-                r = mid-1;
             dist = r - l;
             if (dist < min_distance_cutoff)
             {
                 set_search_range(l, r);
                 break;
             }
+
+            typename SV::size_type mid = dist/2+l;
+            
+            unsigned nb = unsigned(mid >> bm::set_block_shift);
+            mid = nb * bm::gap_max_bits;
+            if (mid <= l)
+                mid = dist / 2 + l;             
+            
+            BM_ASSERT(mid > l);
+
+            int cmp = sv.compare(mid, str);
+            if (cmp == 0)
+            {
+                found_pos = mid;
+                found = true;
+                set_search_range(l, mid);
+                break;
+            }
+            if (cmp < 0)
+                l = mid+1;
+            else
+                r = mid-1;
+            
         } // while
 
         // use linear search (range is set)
