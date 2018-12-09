@@ -84,7 +84,7 @@ void avx2_print256_u32(const char* prefix, const __m256i & value)
     std::cout << prefix << " [ ";
     for (int i = n-1; 1; --i)
     {
-        std::cout << buffer[i] << " ";
+        std::cout << std::hex << buffer[i] << " ";
         if (i == 0)
             break;
     }
@@ -1853,6 +1853,35 @@ void avx2_set_block_bits3(bm::word_t* BMRESTRICT block,
     } // for k
 }
 
+
+/**
+    Experiemntal. Set number of bits in AVX register from 0 to i
+    [ 000000 00000 0000000 00011 11111 ] - i = 7
+*/
+inline
+__m256i avx2_setbit_to256(unsigned i)
+{
+    __m256i stride_idx1 = _mm256_set_epi32(224, 192, 160, 128, 96, 64, 32, 0);
+    __m256i stride_idx2 = _mm256_add_epi32(stride_idx1, _mm256_set1_epi32(32));
+    __m256i maskFF = _mm256_set1_epi32(-1);
+    __m256i maskZ = _mm256_setzero_si256();
+    
+    __m256i v0 = _mm256_set1_epi32(i);
+    __m256i s0 = _mm256_sub_epi32(v0, stride_idx1);
+    __m256i k1   = _mm256_sllv_epi32(maskFF, s0);
+
+    {
+        __m256i cmp_eq = _mm256_cmpeq_epi32(k1, maskZ);
+        cmp_eq = _mm256_xor_si256(maskFF, cmp_eq); // invert: != 0  mask
+        k1 = _mm256_xor_si256(k1, cmp_eq);  // [ 0 0 0 0 0 0 3 0 ]
+    }
+
+    __m256i cmp_gt = _mm256_cmpgt_epi32 (stride_idx2, v0);
+    cmp_gt = _mm256_xor_si256(maskFF, cmp_gt); // invert as GT == LT|EQ (LE)
+    __m256i r = _mm256_xor_si256(k1, cmp_gt); // invert all full words (right)
+
+    return r;
+}
 
 
 
