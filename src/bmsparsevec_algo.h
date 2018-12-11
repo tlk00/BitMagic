@@ -1104,7 +1104,7 @@ bool sparse_vector_scanner<SV>::bfind_eq_str(const SV&                      sv,
         reset_search_range();
         
         // narrow down the search
-        const unsigned min_distance_cutoff = 65536;
+        const unsigned min_distance_cutoff = bm::gap_max_bits + bm::gap_max_bits / 2;
         size_type l, r, dist;
         l = 0; r = sv.size()-1;
         bm::id_t found_pos;
@@ -1114,6 +1114,30 @@ bool sparse_vector_scanner<SV>::bfind_eq_str(const SV&                      sv,
             dist = r - l;
             if (dist < min_distance_cutoff)
             {
+                // we are in an narrow window, but still may be in two 
+                // different neighboring blocks, lets try to narrow even more
+                
+                unsigned nb_l = unsigned(l >> bm::set_block_shift);
+                unsigned nb_r = unsigned(r >> bm::set_block_shift);
+                if (nb_l != nb_r)
+                {
+                    typename SV::size_type mid = nb_r * bm::gap_max_bits;
+                    if (mid < r)
+                    {
+                        int cmp = this->compare_str(sv, mid, str);
+                        if (cmp == 0)
+                        {
+                            r = mid;
+                            break;
+                        }
+                        if (cmp < 0)
+                            l = mid + 1;
+                        else
+                            r = mid - 1;
+                        BM_ASSERT(l < r);
+                    }
+                }
+                
                 set_search_range(l, r);
                 break;
             }
