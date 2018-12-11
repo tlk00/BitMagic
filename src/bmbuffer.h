@@ -273,7 +273,84 @@ private:
     size_t         alloc_factor_; ///< number of blocks allocated for buffer
 };
 
+/**
+    Heap allocated scalar-type matrix
 
+    This class can be seen as a matrix (row-column)
+    access adaptor on top of the heap allocated buffer.
+
+    @internal
+*/
+template<typename Val, unsigned ROWS, unsigned COLS, typename BVAlloc>
+class heap_matrix
+{
+public:
+    typedef BVAlloc                                          bv_allocator_type;
+    typedef bm::byte_buffer<bv_allocator_type>               buffer_type;
+    typedef Val                                              value_type;
+
+    enum params
+    {
+        n_rows = ROWS,
+        n_columns = COLS,
+        size_in_bytes = sizeof(value_type) * COLS * ROWS,
+        row_size_in_bytes = sizeof(value_type) * COLS
+    };
+
+    static unsigned rows() { return ROWS; }
+    static unsigned cols() { return COLS; }
+
+    /**
+        By default object is constructed NOT allocated.
+    */
+    heap_matrix()
+        : buffer_()
+    {}
+
+    heap_matrix(bool init)
+        : buffer_(init ? size_in_bytes : 0)
+    {
+        if (init)
+            buffer_.resize(size_in_bytes);
+    }
+
+    /**
+        Post construction allocation, initialization
+    */
+    void init()
+    {
+        buffer_.resize(size_in_bytes);
+    }
+
+    const value_type* row(unsigned row_idx) const
+    {
+        BM_ASSERT(row_idx < ROWS);
+        BM_ASSERT(buffer_.size());
+        const unsigned char* buf = buffer_.buf() + row_idx * row_size_in_bytes;
+        return (const value_type*) buf;
+    }
+
+    value_type* row(unsigned row_idx)
+    {
+        BM_ASSERT(row_idx < ROWS);
+        BM_ASSERT(buffer_.size());
+
+        unsigned char* buf = buffer_.data() + row_idx * row_size_in_bytes;
+        return (value_type*)buf;
+    }
+
+    /** memset all buffer to all zeroes */
+    void set_zero()
+    {
+        ::memset(buffer_.data(), 0, size_in_bytes);
+    }
+
+    /** Get low-level buffer access */
+    buffer_type& get_buffer();
+
+protected:
+    buffer_type     buffer_;
+};
 
 } // namespace bm
 
