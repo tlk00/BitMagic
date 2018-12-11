@@ -17214,6 +17214,73 @@ void DetailedCheckCompressedDecode(const rsc_sparse_vector_u32& csv)
 }
 
 static
+void TestArraysAndBuffers()
+{
+    cout << " ------------------------------ Test buffers " << endl;
+    
+    typedef bm::heap_matrix<unsigned, 10, 20, bvect::allocator_type> hmatrix;
+    typedef bm::heap_matrix<char, 10, 256, bvect::allocator_type> hmatrix_str;
+
+    {
+        hmatrix hm;
+        hm.init();
+        hm.set_zero();
+
+        for (unsigned i = 0; i < hm.rows(); ++i)
+        {
+            const unsigned* r = hm.row(i);
+            for (unsigned j = 0; j < hm.cols(); ++j)
+            {
+                assert(r[j] == 0);
+            }
+        }
+    }
+
+    {
+        hmatrix hm(true);
+
+        for (unsigned i = 0; i < hm.rows(); ++i)
+        {
+            unsigned* r = hm.row(i);
+            for (unsigned j = 0; j < hm.cols(); ++j)
+            {
+                r[j] = i;
+            }
+        }
+
+        for (unsigned i = 0; i < hm.rows(); ++i)
+        {
+            const unsigned* r = hm.row(i);
+            for (unsigned j = 0; j < hm.cols(); ++j)
+            {
+                assert(r[j] == i);
+            }
+        }
+    }
+
+    {
+        hmatrix_str hm(true);
+        hm.set_zero();
+
+        for (unsigned i = 0; i < hm.rows(); ++i)
+        {
+            char* r = hm.row(i);
+            ::strcpy(r, "abcd");
+        }
+        for (unsigned i = 0; i < hm.rows(); ++i)
+        {
+            const char* r = hm.row(i);
+            int c = ::strcmp(r, "abcd");
+            assert(c == 0);
+        }
+
+    }
+
+
+    cout << " ------------------------------ Test buffers OK" << endl;
+}
+
+static
 void TestCompressSparseVector()
 {
     cout << " ------------------------------ Test Compressed Sparse Vector " << endl;
@@ -17512,7 +17579,9 @@ int main(void)
     CalcEndMask();
 
     TestSIMDUtils();
-    
+
+    TestArraysAndBuffers();
+ 
     Log2Test();
 
     LZCNTTest();
