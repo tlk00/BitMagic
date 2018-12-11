@@ -372,12 +372,14 @@ void run_benchmark(const str_sparse_vect& str_sv, const string_vector& str_vec)
 
     {
         bm::sparse_vector_scanner<str_sparse_vect> scanner;
+        scanner.bind(str_sv, true); // attach SV as permanent search parameter to share cached values
+
         {
             bm::chrono_taker tt1("6.  bm::sparse_vector_scanner<> binary search", bench_size, &timing_map);
             for (const string& term : bench_vec)
             {
                 unsigned pos;
-                bool found = scanner.bfind_eq_str(str_sv, term.c_str(), pos);
+                bool found = scanner.bfind_eq_str(term.c_str(), pos);
                 if (found)
                 {
                     bv4.set(pos);
@@ -389,7 +391,7 @@ void run_benchmark(const str_sparse_vect& str_sv, const string_vector& str_vec)
             for (const string& term : bench_vec_not_found)
             {
                 unsigned pos;
-                bool found = scanner.bfind_eq_str(str_sv, term.c_str(), pos);
+                bool found = scanner.bfind_eq_str(term.c_str(), pos);
                 if (found)
                 {
                     cerr << "scanner empty search returned value..." << endl;
