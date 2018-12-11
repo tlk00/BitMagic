@@ -329,12 +329,14 @@ protected:
                                  bvector_type& bv_target,
                                  const bvector_type_const_ptr* bv_src, unsigned src_size);
 
-
     static
     unsigned resize_target(bvector_type& bv_target,
                            const bvector_type_const_ptr* bv_src,
                            unsigned src_size,
                            bool init_clear = true);
+
+    static
+    unsigned max_top_blocks(const bvector_type_const_ptr* bv_src, unsigned src_size);
     
     bm::word_t* sort_input_blocks_or(const bvector_type_const_ptr* bv_src,
                                      unsigned src_size,
@@ -735,9 +737,8 @@ bool aggregator<BV>::find_first_and_sub(bm::id_t& idx,
     if (!bv_src_and || !src_and_size)
         return false;
 
-    BV bv_target; // TODO: get rid of it
-    unsigned top_blocks = resize_target(bv_target, bv_src_and, src_and_size);
-    unsigned top_blocks2 = resize_target(bv_target, bv_src_sub, src_sub_size, false);
+    unsigned top_blocks = max_top_blocks(bv_src_sub, src_sub_size);
+    unsigned top_blocks2 = max_top_blocks(bv_src_sub, src_sub_size);
     
     if (top_blocks2 > top_blocks)
         top_blocks = top_blocks2;
@@ -760,7 +761,6 @@ bool aggregator<BV>::find_first_and_sub(bm::id_t& idx,
                                                  bv_src_sub, src_sub_size);
             if (digest)
             {
-                // TODO: optimize search using digest
                 unsigned block_bit_idx = 0;
                 bool found = bm::bit_find_first(ar_->tb1, &block_bit_idx, digest);
                 BM_ASSERT(found);
@@ -812,7 +812,6 @@ bool aggregator<BV>::find_first_and_sub(bm::id_t& idx,
                                                 bv_src_sub, src_sub_size);
             if (digest)
             {
-                // TODO: optimize search using digest
                 unsigned block_bit_idx = 0;
                 bool found = bm::bit_find_first(ar_->tb1, &block_bit_idx, digest);
                 BM_ASSERT(found);
@@ -1461,6 +1460,26 @@ unsigned aggregator<BV>::resize_target(bvector_type& bv_target,
             bv_target.resize(arg_size);
             size = arg_size;
         }
+    } // for i
+    return top_blocks;
+}
+
+// ------------------------------------------------------------------------
+
+template<typename BV>
+unsigned aggregator<BV>::max_top_blocks(const bvector_type_const_ptr* bv_src, unsigned src_size)
+{
+    unsigned top_blocks = 0;
+
+    // pre-scan to do target size harmonization
+    for (unsigned i = 0; i < src_size; ++i)
+    {
+        const bvector_type* bv = bv_src[i];
+        BM_ASSERT(bv);
+        const typename bvector_type::blocks_manager_type& bman_arg = bv->get_blocks_manager();
+        unsigned arg_top_blocks = bman_arg.top_block_size();
+        if (arg_top_blocks > top_blocks)
+            top_blocks = arg_top_blocks;
     } // for i
     return top_blocks;
 }
