@@ -43,8 +43,11 @@ For more information please visit:  http://bitmagic.io
 #include <map>
 #include <utility>
 #include <algorithm>
+#include <random>
 
 using namespace std;
+
+//#define BMAVX2OPT
 
 #include "bm.h"
 #include "bmalgo.h"
@@ -234,12 +237,16 @@ const unsigned benchmark_max = 15000;  // benchmark sampling size
 static
 void pick_benchmark_set(string_vector& bench_vec, string_vector& bench_vec_not_found, const string_vector& str_vec)
 {
+    std::random_device rand_dev;
+    std::mt19937 gen(rand_dev()); // mersenne_twister_engine 
+    std::uniform_int_distribution<> rand_dis(0, unsigned(str_vec.size())-1); // generate uniform numebrs for [1, vector_max]
+
     bm::bvector<> bv;
     
     bench_vec.resize(0);
     for (unsigned i = 0; i < benchmark_max; ++i)
     {
-        unsigned idx = unsigned(rand()) % str_vec.size();
+        unsigned idx = unsigned(rand_dis(gen));
         if (bv.test(idx))  // make sure benchmark example is not repeated
             continue;
         if (idx < str_vec.size())
@@ -402,7 +409,6 @@ void run_benchmark(const str_sparse_vect& str_sv, const string_vector& str_vec)
 
     // various integrity checks
     //
-
     int cmp = bv1.compare(bv2);
     if (cmp != 0)
         throw runtime_error("Error. RB-search mismatch!");
@@ -416,6 +422,7 @@ void run_benchmark(const str_sparse_vect& str_sv, const string_vector& str_vec)
 
     if (bv1.count() != bench_size)
         throw runtime_error("Error. Search result missing elements!");
+
 
 }
 
