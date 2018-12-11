@@ -70,7 +70,13 @@ public:
     typedef typename bvector_type::allocation_policy allocation_policy_type;
     typedef typename bvector_type::rs_index_type     rs_index_type;
     typedef typename bvector_type::enumerator        bvector_enumerator_type;
-    
+
+    enum vector_capacity
+    {
+        max_vector_size = 1
+    };
+
+
 public:
     /*! Statistical information about  memory allocation details. */
     struct statistics : public bv_statistics

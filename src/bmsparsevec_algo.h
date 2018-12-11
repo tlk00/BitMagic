@@ -24,6 +24,7 @@ For more information please visit:  http://bitmagic.io
 #include "bmdef.h"
 #include "bmsparsevec.h"
 #include "bmaggregator.h"
+#include "bmbuffer.h"
 #include "bmdef.h"
 
 
@@ -160,6 +161,19 @@ public:
     sparse_vector_scanner();
 
     /**
+        \brief bind sparse vector for all searches
+        
+        \param sv - input sparse vector to bind for searches
+        \param sorted - source index is sorted, build index for binary search
+    */
+    void bind(const SV& sv, bool sorted);
+
+    /**
+        \brief reset sparse vector binding
+    */
+    void reset_binding();
+
+    /**
         \brief find all sparse vector elements EQ to search value
 
         Find all sparse vector elements equivalent to specified value
@@ -190,22 +204,25 @@ public:
     
     /**
         \brief find first sparse vector element (string)
-
     */
     bool find_eq_str(const SV&                      sv,
                      const typename SV::value_type* str,
                      typename SV::size_type&        pos);
 
     /**
-        \brief binary find first sparse vector element (string)
-     
+        \brief binary find first sparse vector element (string)     
         Sparse vector must be sorted.
-
     */
     bool bfind_eq_str(const SV&                      sv,
                      const typename SV::value_type* str,
                      typename SV::size_type&        pos);
 
+    /**
+        \brief binary find first sparse vector element (string)
+        Sparse vector must be sorted and attached
+    */
+    bool bfind_eq_str(const typename SV::value_type* str,
+                      typename SV::size_type&        pos);
 
     /**
         \brief find all sparse vector elements EQ to 0
@@ -316,10 +333,25 @@ protected:
 
     /// Rank-Select decompression for RSC vectors
     void decompress(const SV&   sv, typename SV::bvector_type& bv_out);
+
+    int compare_str(const SV& sv, size_type idx, const value_type* str);
+
 protected:
     sparse_vector_scanner(const sparse_vector_scanner&) = delete;
     void operator=(const sparse_vector_scanner&) = delete;
-    
+
+protected:
+
+    enum vector_capacity
+    {
+        max_columns = SV::max_vector_size
+    };
+    typedef bm::heap_matrix<value_type,
+        bm::set_total_blocks,
+        max_columns,
+        typename bvector_type::allocator_type>  heap_matrix_type;
+
+
 private:
     allocator_pool_type                pool_;
     bvector_type                       bv_tmp_;
@@ -331,6 +363,8 @@ private:
     size_type                          mask_to_;
     bool                               mask_set_;
     
+    const SV*                          bound_sv_;
+    heap_matrix_type                   block0_elements_cache_; ///< cache for elements[0] of each block
 };
 
 
@@ -684,6 +718,29 @@ sparse_vector_scanner<SV>::sparse_vector_scanner()
     bv_mask_.set_allocator_pool(&pool_);
     mask_set_ = false;
     mask_from_ = mask_to_ = bm::id_max;
+
+    bound_sv_ = 0;
+}
+
+//----------------------------------------------------------------------------
+
+template<typename SV>
+void sparse_vector_scanner<SV>::bind(const SV&  sv, bool sorted)
+{
+    bound_sv_ = &sv;
+    if (sorted)
+    {
+        block0_elements_cache_.init();
+        block0_elements_cache_.set_zero();
+    }
+}
+
+//----------------------------------------------------------------------------
+
+template<typename SV>
+void sparse_vector_scanner<SV>::reset_binding()
+{
+    bound_sv_ = 0;
 }
 
 //----------------------------------------------------------------------------
@@ -1070,7 +1127,7 @@ bool sparse_vector_scanner<SV>::bfind_eq_str(const SV&                      sv,
             
             BM_ASSERT(mid > l);
 
-            int cmp = sv.compare(mid, str);
+            int cmp = this->compare_str(sv, mid, str);
             if (cmp == 0)
             {
                 found_pos = mid;
@@ -1108,6 +1165,48 @@ bool sparse_vector_scanner<SV>::bfind_eq_str(const SV&                      sv,
     return found;
 }
 
+//----------------------------------------------------------------------------
+
+template<typename SV>
+bool sparse_vector_scanner<SV>::bfind_eq_str(const typename SV::value_type* str,
+                                             typename SV::size_type&        pos)
+{
+    BM_ASSERT(bound_sv_);
+    return bfind_eq_str(*bound_sv_, str, pos);
+}
+
+//----------------------------------------------------------------------------
+
+template<typename SV>
+int sparse_vector_scanner<SV>::compare_str(const SV& sv,
+                                           size_type idx,
+                                           const value_type* str)
+{
+    if (bound_sv_ == &sv)
+    {
+        unsigned nb = unsigned(idx >> bm::set_block_shift);
+        unsigned nbit = unsigned(idx & bm::set_block_mask);
+        if (nbit == 0) // access to sentinel, first block element
+        {
+            value_type* s0 = block0_elements_cache_.row(nb);
+            if (*s0 == 0) // uninitialized element
+            {
+                sv.get(idx, s0, block0_elements_cache_.cols());
+            }
+            int res = 0;
+            for (unsigned i = 0; i < block0_elements_cache_.cols(); ++i)
+            {
+                char octet = str[i];
+                char value = s0[i];
+                res = (value > octet) - (value < octet);
+                if (res || !octet)
+                    break;
+            }
+            return res;
+        }
+    }
+    return sv.compare(idx, str);
+}
 
 //----------------------------------------------------------------------------
 
