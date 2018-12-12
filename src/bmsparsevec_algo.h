@@ -1108,14 +1108,16 @@ bool sparse_vector_scanner<SV>::bfind_eq_str(const SV&                      sv,
         size_type l, r, dist;
         l = 0; r = sv.size()-1;
         bm::id_t found_pos;
+        
         // binary search to narrow down the search window
         while (l <= r)
         {
             dist = r - l;
             if (dist < min_distance_cutoff)
             {
-                // we are in an narrow window, but still may be in two 
-                // different neighboring blocks, lets try to narrow even more
+                // we are in an narrow <2 blocks window, but still may be in two
+                // different neighboring blocks, lets try to narrow
+                // to exactly one block
                 
                 unsigned nb_l = unsigned(l >> bm::set_block_shift);
                 unsigned nb_r = unsigned(r >> bm::set_block_shift);
@@ -1125,19 +1127,13 @@ bool sparse_vector_scanner<SV>::bfind_eq_str(const SV&                      sv,
                     if (mid < r)
                     {
                         int cmp = this->compare_str(sv, mid, str);
-                        if (cmp == 0)
-                        {
-                            r = mid;
-                            break;
-                        }
                         if (cmp < 0)
-                            l = mid + 1;
+                            l = mid;
                         else
-                            r = mid - 1;
+                            r = mid-(cmp!=0); // branchless if (cmp==0) r=mid;
                         BM_ASSERT(l < r);
                     }
                 }
-                
                 set_search_range(l, r);
                 break;
             }
