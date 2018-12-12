@@ -608,11 +608,12 @@ bm::id64_t widx_to_digest_mask(unsigned w_idx)
 }
 
 /*!
-    \brief check if all digest bits for the range are 0
+    \brief check if all digest bits for the range [from..to] are 0
  
     \param digest - current digest
-    \param bitpos_from - range from
-    \param bitpos_to - range to
+    \param bitpos_from - range from (in bit-block coordinates)
+    \param bitpos_to - range to (in bit-block coordinates)
+ 
     @return true if all range is zero
  
    @ingroup bitfunc
@@ -623,17 +624,12 @@ bool check_zero_digest(bm::id64_t digest, unsigned bitpos_from, unsigned bitpos_
 {
     BM_ASSERT(bitpos_from <= bitpos_to);
     
-    unsigned digest_from = bitpos_from / (bm::set_block_digest_wave_size * 32);
-    unsigned digest_to = bitpos_to / (bm::set_block_digest_wave_size * 32);
-    
-    
-    const bm::id64_t mask(1ull);
-    for (; digest_from <= digest_to; ++digest_from)
-    {
-        if (digest & (mask << digest_from))
-            return false;
-    }
-    return true;
+    bm::id64_t digest_from = bitpos_from / (bm::set_block_digest_wave_size * 32);
+    bm::id64_t digest_to = bitpos_to / (bm::set_block_digest_wave_size * 32);
+    const bm::id64_t maskFF(~0ull);
+    bm::id64_t mask =
+        ((maskFF) >> (63 - (digest_to - digest_from))) << digest_from;
+    return !(digest & mask);
 }
 
 
@@ -2830,7 +2826,7 @@ template<typename T>
 void gap_and_to_bitset(unsigned* dest, const T*  pcurr)
 {
     BM_ASSERT(dest && pcurr);
-    
+
     const T* pend = pcurr + (*pcurr >> 3);
     if (!(*pcurr & 1) )  // Starts with 0
     {
