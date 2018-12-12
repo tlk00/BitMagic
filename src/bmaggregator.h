@@ -1183,8 +1183,8 @@ aggregator<BV>::process_gap_blocks_and(unsigned    arg_blk_gap_count,
 
 template<typename BV>
 typename aggregator<BV>::digest_type
-aggregator<BV>::process_gap_blocks_sub(unsigned   arg_blk_gap_count,
-                                                   digest_type digest)
+aggregator<BV>::process_gap_blocks_sub(unsigned     arg_blk_gap_count,
+                                       digest_type  digest)
 {
     BM_ASSERT(arg_blk_gap_count);
     BM_ASSERT(digest);
@@ -1469,7 +1469,7 @@ unsigned aggregator<BV>::resize_target(bvector_type& bv_target,
 template<typename BV>
 unsigned aggregator<BV>::max_top_blocks(const bvector_type_const_ptr* bv_src, unsigned src_size)
 {
-    unsigned top_blocks = 0;
+    unsigned top_blocks = 1;
 
     // pre-scan to do target size harmonization
     for (unsigned i = 0; i < src_size; ++i)
