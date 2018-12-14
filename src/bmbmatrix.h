@@ -416,7 +416,7 @@ protected:
     static unsigned null_plain() { return value_bits(); }
 protected:
     bmatrix_type             bmatr_;              ///< bit-transposed matrix
-    size_type                size_;               ///<
+    size_type                size_;               ///< array size
     unsigned                 effective_plains_;
 
 };
