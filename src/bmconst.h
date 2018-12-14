@@ -53,6 +53,7 @@ const unsigned set_block_plain_size = bm::set_block_size / 32u;
 const unsigned set_block_plain_cnt = (unsigned)(sizeof(bm::word_t) * 8u);
 
 const unsigned set_block_digest_wave_size = bm::set_block_size / 64;
+const unsigned set_block_digest_pos_shift = 10;
 
 // Word parameters
 
