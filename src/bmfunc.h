@@ -624,8 +624,8 @@ bool check_zero_digest(bm::id64_t digest, unsigned bitpos_from, unsigned bitpos_
 {
     BM_ASSERT(bitpos_from <= bitpos_to);
     
-    bm::id64_t digest_from = bitpos_from / (bm::set_block_digest_wave_size * 32);
-    bm::id64_t digest_to = bitpos_to / (bm::set_block_digest_wave_size * 32);
+    bm::id64_t digest_from = bitpos_from >> bm::set_block_digest_pos_shift;
+    bm::id64_t digest_to = bitpos_to >> bm::set_block_digest_pos_shift;;
     const bm::id64_t maskFF(~0ull);
     bm::id64_t mask =
         ((maskFF) >> (63 - (digest_to - digest_from))) << digest_from;
@@ -2599,13 +2599,13 @@ void sub_bit_block(unsigned* dest, unsigned bitpos, unsigned bitcount)
     
     dest += unsigned(bitpos >> bm::set_word_shift); // nword
     bitpos &= bm::set_word_mask;
-
+/*
     if (bitcount == 1u)  // special case (only 1 bit to set)
     {
         *dest &= ~(1u << bitpos);
         return;
     }
-
+*/
     if (bitpos) // starting pos is not aligned
     {
         unsigned mask_r = maskFF << bitpos;
@@ -2740,18 +2740,26 @@ void gap_sub_to_bitset(unsigned* dest, const T*  pcurr, bm::id64_t digest0)
         pcurr += 2;
 
     unsigned bc, pos;
-    for (; pcurr <= pend; ) // now we are in GAP "1" again
+    T prev;
+    for (; pcurr <= pend; pcurr += 2) // now we are in GAP "1" again
     {
         BM_ASSERT(*pcurr > *(pcurr-1));
-        pos = 1u + pcurr[-1];
-        bc = *pcurr - pcurr[-1];
-
-        bool all_zero = bm::check_zero_digest(digest0, pcurr[-1], *pcurr);
+        prev = pcurr[-1];
+        bc = *pcurr - prev;
+        pos = 1u + prev;
         
-        pcurr += 2;
-        
-        if (!all_zero)
-            bm::sub_bit_block(dest, pos, bc);
+        if (bc == 1)
+        {
+            unsigned nword = unsigned(pos >> bm::set_word_shift);
+            unsigned bitpos = pos & bm::set_word_mask;
+            dest[nword] &= ~(1u << bitpos);
+        }
+        else
+        {
+            bool all_zero = bm::check_zero_digest(digest0, prev, *pcurr);
+            if (!all_zero)
+                bm::sub_bit_block(dest, pos, bc);
+        }
     }
 }
 
@@ -2873,18 +2881,26 @@ void gap_and_to_bitset(unsigned* dest, const T*  pcurr, bm::id64_t digest0)
         pcurr += 2;
     
     unsigned bc, pos;
-    for (; pcurr <= pend; ) // now we are in GAP "0" again
+    T prev;
+    for (; pcurr <= pend; pcurr += 2) // now we are in GAP "0" again
     {
         BM_ASSERT(*pcurr > *(pcurr-1));
-        pos = 1u + pcurr[-1];
-        bc = *pcurr - pcurr[-1];
+        prev = pcurr[-1];
+        bc = *pcurr - prev;
+        pos = 1u + prev;
 
-        bool all_zero = bm::check_zero_digest(digest0, pcurr[-1], *pcurr);
-        
-        pcurr += 2;
-        
-        if (!all_zero)
-            bm::sub_bit_block(dest, pos, bc);
+        if (bc == 1)
+        {
+            unsigned nword = unsigned(pos >> bm::set_word_shift);
+            unsigned bitpos = pos & bm::set_word_mask;
+            dest[nword] &= ~(1u << bitpos);
+        }
+        else
+        {
+            bool all_zero = bm::check_zero_digest(digest0, prev, *pcurr);
+            if (!all_zero)
+                bm::sub_bit_block(dest, pos, bc);
+        }
     }
 }
 
