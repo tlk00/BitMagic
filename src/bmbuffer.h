@@ -115,16 +115,7 @@ public:
     /// Move assignment operator
     byte_buffer& operator=(byte_buffer&& lhs) BMNOEXEPT
     {
-        if (this == &lhs)
-            return *this;
-
-        free_buffer();
-        
-        this->byte_buf_ = lhs.byte_buf_;
-        lhs.byte_buf_ = 0;
-        this->size_ = lhs.size_;
-        capacity_ = lhs.capacity_;
-        alloc_factor_ = lhs.alloc_factor_;
+        move_from(lhs);
         return *this;
     }
 #endif
@@ -156,6 +147,19 @@ public:
         bm::xor_swap(capacity_, other.capacity_);
         bm::xor_swap(alloc_factor_, other.alloc_factor_);
     }
+    
+    /// take/move content from another buffer
+    void move_from(byte_buffer& other) BMNOEXEPT
+    {
+        if (this == &other)
+            return;
+        free_buffer();
+        this->byte_buf_ = other.byte_buf_; other.byte_buf_ = 0;
+        this->size_ = other.size_;
+        this->capacity_ = other.capacity_;
+        this->alloc_factor_ = other.alloc_factor_;
+    }
+
 
     /// Free underlying memory
     void release()
@@ -233,6 +237,13 @@ public:
         }
     }
     
+    /// return memory consumtion
+    size_t mem_usage() const
+    {
+        return sizeof(capacity_) + sizeof(alloc_factor_) +
+               capacity();
+    }
+    
 private:
     /// Override from the base class
     void set_buf(unsigned char* buf, size_t size);
@@ -288,6 +299,7 @@ public:
     typedef BVAlloc                                          bv_allocator_type;
     typedef bm::byte_buffer<bv_allocator_type>               buffer_type;
     typedef Val                                              value_type;
+    typedef unsigned                                         size_type;
 
     enum params
     {
@@ -321,6 +333,15 @@ public:
     {
         buffer_.resize(size_in_bytes);
     }
+    
+    value_type get(unsigned row_idx, unsigned col_idx) const
+    {
+        BM_ASSERT(row_idx < ROWS);
+        BM_ASSERT(col_idx < COLS);
+        BM_ASSERT(buffer_.size());
+        const unsigned char* buf = buffer_.buf() + row_idx * row_size_in_bytes;
+        return ((const value_type*)buf)[col_idx];
+    }
 
     const value_type* row(unsigned row_idx) const
     {
@@ -344,9 +365,42 @@ public:
     {
         ::memset(buffer_.data(), 0, size_in_bytes);
     }
+    
+    /*!  swap content
+    */
+    void swap(heap_matrix& other) BMNOEXEPT
+    {
+        buffer_.swap(other.buffer_);
+    }
+    
+    /*!  move content from another matrix
+    */
+    void move_from(heap_matrix& other) BMNOEXEPT
+    {
+        buffer_.move_from(other.buffer_);
+    }
 
     /** Get low-level buffer access */
-    buffer_type& get_buffer();
+    buffer_type& get_buffer() { return buffer_; }
+    /** Get low-level buffer access */
+    const buffer_type& get_buffer() const { return buffer_; }
+
+    /*! remapping: vect[idx] = matrix[idx, vect[idx] ]
+    */
+    template<typename VECT_TYPE>
+    void remap(VECT_TYPE* vect, size_type size) const
+    {
+        BM_ASSERT(size < ROWS);
+        const unsigned char* buf = buffer_.buf();
+        for (size_type i = 0; i < size; ++i)
+        {
+            const value_type* row = buf + i * row_size_in_bytes;
+            VECT_TYPE v0 = vect[i];
+            BM_ASSERT(size_type(v0) < COLS);
+            value_type remap_v = row[unsigned(v0)];
+            vect[i] = VECT_TYPE(remap_v);
+        } // for i
+    }
 
 protected:
     buffer_type     buffer_;
