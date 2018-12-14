@@ -537,6 +537,7 @@ unsigned compute_serialization_size(const BV& bv)
 }
 
 
+
 template<class SV>
 void print_svector_stat(const SV& svect, bool print_sim = false)
 {
@@ -629,11 +630,13 @@ void print_svector_stat(const SV& svect, bool print_sim = false)
     std::cout << "Memory used:      " << st.memory_used << " "
               << (st.memory_used / (1024 * 1024))       << "MB" << std::endl;
     
+    unsigned eff_max_element = svect.effective_vector_max();
+    size_t std_vect_size = sizeof(typename SV::value_type) * svect.size() * eff_max_element;
     std::cout << "Projected mem usage for vector<value_type>:"
-              << sizeof(typename SV::value_type) * svect.size() << " "
-              << (sizeof(typename SV::value_type) * svect.size()) / (1024 * 1024) << "MB"
+              << std_vect_size << " "
+              << std_vect_size / (1024 * 1024) << "MB"
               << std::endl;
-    if (sizeof(typename SV::value_type) > 4)
+    if (sizeof(typename SV::value_type) > 4 && (eff_max_element == 1))
     {
         std::cout << "Projected mem usage for vector<long long>:"
                   << sizeof(long long) * svect.size() << std::endl;
@@ -700,6 +703,54 @@ void print_svector_stat(const SV& svect, bool print_sim = false)
         
     }
 }
+
+
+template<class SV>
+void print_str_svector_stat(const SV& str_svect)
+{
+    typename SV::plain_octet_matrix_type octet_stat_matr;
+    
+    str_svect.calc_octet_stat(octet_stat_matr);
+    
+    for (unsigned i = 0; i < octet_stat_matr.rows(); ++i)
+    {
+        const typename SV::plain_octet_matrix_type::value_type* row
+                                                = octet_stat_matr.row(i);
+        bool any = false;
+        for (unsigned j = 0; j < octet_stat_matr.cols(); ++j)
+        {
+            if (row[j]) // letter is present
+            {
+                any = true;
+                break;
+            }
+        }
+        if (!any)
+            continue;
+    
+        std::cout << i << " : ";
+        unsigned cnt = 0;
+        for (unsigned j = 0; j < octet_stat_matr.cols(); ++j)
+        {
+            if (row[j]) // letter is present
+            {
+                std::cout << char(j);
+                ++cnt;
+            }
+        } // for j
+        if (cnt)
+        {
+            std::cout << "\t total= " << cnt;
+        }
+        else
+        {
+            std::cout << " (empty) ";
+        }
+        std::cout << std::endl;
+    } // for i
+}
+
+
 
 // save compressed collection to disk
 //
