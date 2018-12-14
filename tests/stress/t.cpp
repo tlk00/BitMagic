@@ -14260,6 +14260,7 @@ void TestStrSparseVector()
    
    assert(str_sv1.size() == 0);
    str_sparse_vector<char, bvect, 32> str_sv3(std::move(str_sv0));
+   assert(!str_sv3.is_remap());
    }
    
    {
@@ -14359,6 +14360,21 @@ void TestStrSparseVector()
        }
 
    }
+    
+   {
+       str_sparse_vector<char, bvect, 32> str_sv0;
+       unsigned str_max = str_sv0.effective_max_str();
+       assert(str_max == 0);
+       str_sv0[0] = "1";
+       str_max = str_sv0.effective_max_str();
+       assert(str_max == 1);
+       str_sv0[1] = "11";
+       str_max = str_sv0.effective_max_str();
+       assert(str_max == 2);
+       str_sv0[2] = "123";
+       str_max = str_sv0.effective_max_str();
+       assert(str_max == 3);
+   }
    
    {
        str_sparse_vector<char, bvect, 32> str_sv0;
@@ -14387,6 +14403,156 @@ void TestStrSparseVector()
        found = scanner.find_eq_str(str_sv0, "", pos);
        assert(!found);
    }
+
+   // test basic remappings functions
+   {
+       str_sparse_vector<char, bvect, 32> str_sv0;
+       str_sv0[0] = "1";
+       str_sv0[1] = "11";
+       str_sv0[2] = "123";
+       
+       str_sparse_vector<char, bvect, 32>::plain_octet_matrix_type occ_matrix;
+       str_sparse_vector<char, bvect, 32>::plain_octet_matrix_type remap_matrix1;
+       str_sparse_vector<char, bvect, 32>::plain_octet_matrix_type remap_matrix2;
+
+       str_sv0.calc_octet_stat(occ_matrix);
+       str_sv0.build_octet_remap(remap_matrix1, remap_matrix2, occ_matrix);
+       
+       bool res;
+       int cmp;
+       char str0[64];
+       char str1[64];
+       
+       res = str_sv0.remap_tosv(&str0[0], 64, "1", remap_matrix2);
+       assert(res);
+       
+       res = str_sv0.remap_fromsv(&str1[0], 64, &str0[0], remap_matrix1);
+       assert(res);
+       cmp = str_sv0.compare(0, &str1[0]);
+       assert(cmp == 0);
+
+       res = str_sv0.remap_tosv(&str0[0], 64, "2", remap_matrix2); // impossible case
+       assert(!res);
+       
+       
+       res = str_sv0.remap_tosv(&str0[0], 64, "11", remap_matrix2);
+       assert(res);
+       
+       res = str_sv0.remap_fromsv(&str1[0], 64, &str0[0], remap_matrix1);
+       assert(res);
+       cmp = str_sv0.compare(1, &str1[0]);
+       assert(cmp == 0);
+
+       res = str_sv0.remap_tosv(&str0[0], 64, "123", remap_matrix2);
+       assert(res);
+       
+       res = str_sv0.remap_fromsv(&str1[0], 64, &str0[0], remap_matrix1);
+       assert(res);
+       cout << str1 << endl;
+       cmp = str_sv0.compare(2, &str1[0]);
+       assert(cmp == 0);
+
+
+       res = str_sv0.remap_tosv(&str0[0], 64, "133", remap_matrix2); // impossible case
+       assert(!res);
+       res = str_sv0.remap_tosv(&str0[0], 64, "1231", remap_matrix2); // impossible case
+       assert(!res);
+   }
+   
+   // build-vefify remapped sparse-vector
+   {
+       str_sparse_vector<char, bvect, 32> str_sv0;
+       str_sparse_vector<char, bvect, 32> str_sv1;
+       str_sv0[0] = "1";
+       str_sv0[1] = "11";
+       str_sv0[2] = "123";
+
+       assert(!str_sv1.is_remap());
+
+       str_sv1.remap_from(str_sv0);
+       
+       assert(str_sv1.is_remap());
+       assert(str_sv1.size() == str_sv0.size());
+
+       char str[256];
+       int cmp;
+
+        str_sv1.get(0, str, sizeof(str));
+        cmp = ::strcmp(str, "1");
+        assert(cmp==0);
+        cmp = str_sv1.compare(0, "1");
+        assert(cmp==0);
+       
+        str_sv1.get(1, str, sizeof(str));
+        cmp = ::strcmp(str, "11");
+        assert(cmp==0);
+        cmp = str_sv1.compare(1, "11");
+        assert(cmp==0);
+
+        str_sv1.get(2, str, sizeof(str));
+        cmp = ::strcmp(str, "123");
+        assert(cmp==0);
+       
+        string s;
+        str_sv1.get(2, s);
+        cmp = ::strcmp(s.c_str(), "123");
+        assert(cmp==0);
+       
+        {
+           string s0 = "113";
+           str_sv1.assign(4, s0);
+           str_sv1.get(4, s);
+           assert(s == s0);
+           cout << s << endl;
+           cmp = str_sv1.compare(4, "113");
+           assert(cmp==0);
+        }
+
+   }
+
+   // scanner search on remapped str vector
+   {
+       str_sparse_vector<char, bvect, 32> str_sv0;
+       str_sparse_vector<char, bvect, 32> str_sv1;
+       str_sv0[0] = "1";
+       str_sv0[1] = "11";
+       str_sv0[2] = "123";
+
+       str_sv1.remap_from(str_sv0);
+       
+       unsigned pos;
+       bm::sparse_vector_scanner<bm::str_sparse_vector<char, bvect, 32> > scanner;
+       scanner.bind(str_sv1, true);
+
+       
+       bool found = scanner.find_eq_str("1", pos);
+       assert(found);
+       assert(pos == 0);
+
+       found = scanner.find_eq_str("11", pos);
+       assert(found);
+       assert(pos == 1);
+       found = scanner.bfind_eq_str("11", pos);
+       assert(found);
+       assert(pos == 1);
+
+       found = scanner.find_eq_str("123", pos);
+       assert(found);
+       assert(pos == 2);
+       found = scanner.bfind_eq_str("123", pos);
+       assert(found);
+       assert(pos == 2);
+
+       found = scanner.find_eq_str("1234", pos);
+       assert(!found);
+       found = scanner.bfind_eq_str("1234", pos);
+       assert(!found);
+
+       found = scanner.find_eq_str("", pos);
+       assert(!found);
+   }
+
+   
    
    cout << "---------------------------- Bit-plain STR sparse vector test OK" << endl;
 }
@@ -14422,26 +14588,29 @@ void CompareStrSparseVector(const str_svect_type& str_sv,
             std::cerr << "String comparison failure at:" << i << std::endl;
             exit(1);
         }
-        
-        cmp = str_sv.compare(i, str_h.c_str());
-        if (cmp < 0)
+        if (!str_sv.is_remap()) // re-mapped vectors can give incorrect compare
         {
-            assert(str < str_h);
-        }
-        if (cmp > 0)
-        {
-            assert(str > str_h);
-        }
+            cmp = str_sv.compare(i, str_h.c_str());
+            if (cmp < 0)
+            {
+                assert(str < str_h);
+            }
+            if (cmp > 0)
+            {
+                assert(str > str_h);
+            }
 
-        cmp = str_sv.compare(i, str_l.c_str());
-        if (cmp < 0)
-        {
-            assert(str < str_l);
+            cmp = str_sv.compare(i, str_l.c_str());
+            if (cmp < 0)
+            {
+                assert(str < str_l);
+            }
+            if (cmp > 0)
+            {
+                assert(str > str_l);
+            }
         }
-        if (cmp > 0)
-        {
-            assert(str > str_l);
-        }
+        
        unsigned pos;
        bool found = scanner.find_eq_str(str_sv, str_control.c_str(), pos);
        if (!found)
@@ -14468,7 +14637,7 @@ void StressTestStrSparseVector()
    const unsigned max_coll = 2000000;
    std::vector<string> str_coll;
    str_svect_type str_sv;
-   
+
    // generate test string collection
    {
        string prefix = "az";
@@ -14508,11 +14677,17 @@ void StressTestStrSparseVector()
     {
         str_sv_sorted.push_back(s);
     }
+
+    cout << "Build re-mapped vector..." << endl;
+    str_svect_type str_sv_remap;
+    str_sv_remap.remap_from(str_sv_sorted);
+    cout << "Build re-mapped vector... OK" << endl;
+
     
     // -----------------------------------------------------------
 
-   print_svector_stat(str_sv);
-   
+   //print_svector_stat(str_sv);
+
     cout << "ok. \n Verification..." << endl;
 
     CompareStrSparseVector(str_sv, str_coll);
@@ -14526,6 +14701,20 @@ void StressTestStrSparseVector()
     cout << "ok. \n Verification..." << endl;
 
     CompareStrSparseVector(str_sv, str_coll);
+
+    cout << "ok. \n Verification of remap vector..." << endl;
+    
+    CompareStrSparseVector(str_sv_remap, str_coll_sorted);
+    
+    cout << "Memory optimization" << endl;
+    
+    str_sv_remap.optimize();
+
+    cout << "ok. \n Verification of remap vector..." << endl;
+    
+    CompareStrSparseVector(str_sv_remap, str_coll_sorted);
+
+
 
     {
         BM_DECLARE_TEMP_BLOCK(tb)
@@ -14598,10 +14787,13 @@ void StressTestStrSparseVector()
    for (unsigned k = 0; k < 2; ++k)
    {
         bm::sparse_vector_scanner<str_svect_type> scanner;
+        bm::sparse_vector_scanner<str_svect_type> scanner2;
+        scanner2.bind(str_sv_remap, true); // bind sorted vector
+
         for (unsigned i = 0; i < unsigned(str_coll_sorted.size()); ++i)
         {
             const string& s = str_coll_sorted[i];
-            unsigned pos1, pos2;
+            unsigned pos1, pos2, pos3;
             bool found1 = scanner.find_eq_str(str_sv_sorted, s.c_str(), pos1);
             if (!found1)
             {
@@ -14626,6 +14818,22 @@ void StressTestStrSparseVector()
                      << " " << s << endl;
                 exit(1);
             }
+            bool found3 = scanner2.bfind_eq_str(s.c_str(), pos3);
+            if (!found3)
+            {
+                cerr << "Sorted-remap binary search failed at: " << i << " " << s << endl;
+                exit(1);
+            }
+            if (pos3 != i)
+            {
+                cerr << "Sorted-remap binary search position failed at: " << i << "!=" << pos2
+                     << " " << s << endl;
+                exit(1);
+            }
+
+            
+            
+            
             if (i % 65535 == 0)
             {
                 cout << "\r" << i << " / " << str_sv_sorted.size() << flush;
