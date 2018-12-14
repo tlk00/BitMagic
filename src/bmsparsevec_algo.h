@@ -210,6 +210,14 @@ public:
                      typename SV::size_type&        pos);
 
     /**
+        \brief binary find first sparse vector element (string)
+        Sparse vector must be attached (bind())
+        @sa bind
+    */
+    bool find_eq_str(const typename SV::value_type* str,
+                     typename SV::size_type&        pos);
+
+    /**
         \brief binary find first sparse vector element (string)     
         Sparse vector must be sorted.
     */
@@ -220,6 +228,7 @@ public:
     /**
         \brief binary find first sparse vector element (string)
         Sparse vector must be sorted and attached
+        @sa bind
     */
     bool bfind_eq_str(const typename SV::value_type* str,
                       typename SV::size_type&        pos);
@@ -346,6 +355,7 @@ protected:
     {
         max_columns = SV::max_vector_size
     };
+    
     typedef bm::heap_matrix<value_type,
         bm::set_total_blocks,
         max_columns,
@@ -365,6 +375,9 @@ private:
     
     const SV*                          bound_sv_;
     heap_matrix_type                   block0_elements_cache_; ///< cache for elements[0] of each block
+    size_type                          effective_str_max_;
+    
+    value_type                         remap_value_vect_[SV::max_vector_size];
 };
 
 
@@ -720,6 +733,7 @@ sparse_vector_scanner<SV>::sparse_vector_scanner()
     mask_from_ = mask_to_ = bm::id_max;
 
     bound_sv_ = 0;
+    effective_str_max_ = 0;
 }
 
 //----------------------------------------------------------------------------
@@ -732,6 +746,7 @@ void sparse_vector_scanner<SV>::bind(const SV&  sv, bool sorted)
     {
         block0_elements_cache_.init();
         block0_elements_cache_.set_zero();
+        effective_str_max_ = sv.effective_vector_max();
     }
 }
 
@@ -741,6 +756,7 @@ template<typename SV>
 void sparse_vector_scanner<SV>::reset_binding()
 {
     bound_sv_ = 0;
+    effective_str_max_ = 0;
 }
 
 //----------------------------------------------------------------------------
@@ -881,6 +897,14 @@ bool sparse_vector_scanner<SV>::find_first_eq(const SV&                   sv,
         common_prefix_len = sv.common_prefix_length(mask_from_, mask_to_);
     }
     
+    if (sv.is_remap() && str != remap_value_vect_)
+    {
+        bool r = sv.remap_tosv(remap_value_vect_, SV::max_vector_size, str);
+        if (!r)
+            return r;
+        str = remap_value_vect_;
+    }
+    
     bool found = prepare_and_sub_aggregator(sv, str, common_prefix_len);
     if (!found)
         return found;
@@ -954,14 +978,17 @@ bool sparse_vector_scanner<SV>::prepare_and_sub_aggregator(const SV&  sv,
     // add all vectors above string len to the SUB operation group
     //
     typename SV::size_type plain_idx = unsigned(len * 8) + 1;
-    typename SV::size_type plains = sv.plains();
+    typename SV::size_type plains;
+    if (&sv == bound_sv_)
+        plains = effective_str_max_ * sizeof(value_type) * 8;
+    else
+        plains = sv.plains();
+    
     for (; plain_idx < plains; ++plain_idx)
     {
         bvector_type_const_ptr bv = sv.get_plain(plain_idx);
         if (bv)
-        {
             agg_.add(bv, 1); // agg to SUB group
-        }
     } // for
     return true;
 }
@@ -1057,6 +1084,16 @@ void sparse_vector_scanner<SV>::find_eq_with_nulls_horizontal(const SV&  sv,
 //----------------------------------------------------------------------------
 
 template<typename SV>
+bool sparse_vector_scanner<SV>::find_eq_str(const typename SV::value_type* str,
+                                            typename SV::size_type&        pos)
+{
+    BM_ASSERT(bound_sv_);
+    return find_eq_str(*bound_sv_, str, pos);
+}
+
+//----------------------------------------------------------------------------
+
+template<typename SV>
 bool sparse_vector_scanner<SV>::find_eq_str(const SV&                      sv,
                                             const typename SV::value_type* str,
                                             typename SV::size_type&        pos)
@@ -1066,14 +1103,21 @@ bool sparse_vector_scanner<SV>::find_eq_str(const SV&                      sv,
         return found;
     if (*str)
     {
+        if (sv.is_remap() && str != remap_value_vect_)
+        {
+            bool r =
+                sv.remap_tosv(remap_value_vect_, SV::max_vector_size, str);
+            if (!r)
+                return r;
+            str = remap_value_vect_;
+        }
+    
         bm::id_t found_pos;
         found = find_first_eq(sv, str, found_pos);
         if (found)
         {
             if (sv.is_compressed()) // if compressed vector - need rank translation
-            {
                 found = sv.find_rank(found_pos + 1, pos);
-            }
             else
                 pos = found_pos;
         }

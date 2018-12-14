@@ -775,6 +775,11 @@ public:
     */
     size_type effective_size() const { return size(); }
 
+    /**
+        \brief Always 1 (non-matrix type)
+    */
+    size_type effective_vector_max() const { return 1; }
+
     ///@}
 
     /// Set allocator pool for local (non-threaded)

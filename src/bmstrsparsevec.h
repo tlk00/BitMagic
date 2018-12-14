@@ -62,7 +62,7 @@ public:
     typedef typename allocator_type::allocator_pool_type allocator_pool_type;
     typedef bm::basic_bmatrix<BV>                    bmatrix_type;
     typedef base_sparse_vector<CharType, BV, MAX_STR_SIZE> parent_type;
-
+    
     /*! Statistical information about  memory allocation details. */
     struct statistics : public bv_statistics
     {};
@@ -71,6 +71,13 @@ public:
     {
         sv_octet_plains = MAX_STR_SIZE
     };
+    
+    typedef
+    bm::heap_matrix<unsigned char,
+                    MAX_STR_SIZE, // ROWS
+                    256,          // COLS
+                    typename bvector_type::allocator_type>
+                                    plain_octet_matrix_type;
 
     /**
          Reference class to access elements via common [] operator
@@ -171,6 +178,9 @@ public:
     {
         if (this != &str_sv)
             parent_type::copy_from(str_sv);
+        remap_flags_ = str_sv.remap_flags_;
+        remap_matrix1_ = str_sv.remap_matrix1_;
+        remap_matrix2_ = str_sv.remap_matrix2_;
         return *this;
     }
 #ifndef BM_NO_CXX11
@@ -178,6 +188,9 @@ public:
     str_sparse_vector(str_sparse_vector<CharType, BV, MAX_STR_SIZE>&& str_sv) BMNOEXEPT
     {
         parent_type::swap(str_sv);
+        remap_flags_ = str_sv.remap_flags_;
+        remap_matrix1_.swap(str_sv.remap_matrix1_);
+        remap_matrix2_.swap(str_sv.remap_matrix2_);
     }
 
     /*! move assignmment operator */
@@ -186,7 +199,7 @@ public:
     {
         if (this != &str_sv)
         {
-            swap(str_sv);
+            this->swap(str_sv);
         }
         return *this;
     }
@@ -215,11 +228,13 @@ public:
     /*!
         \brief get specified element
      
-        \param idx  - element index (vector auto-resized if needs to)
+        \param idx  - element index
         \param str  - string buffer
         \param buf_size - string buffer size
+     
+        @return string length
     */
-    void get(size_type idx, value_type* str, size_type buf_size) const;
+    size_type get(size_type idx, value_type* str, size_type buf_size) const;
     
     /*!
         \brief set specified element with bounds checking and automatic resize
@@ -243,7 +258,15 @@ public:
         for (; i < sz; ++i)
         {
             CharType ch = str[i];
+            if (remap_flags_) // compressional re-mapping is in effect
+            {
+                unsigned char remap_value = remap_matrix2_.get(i, unsigned(ch));
+                BM_ASSERT(remap_value);
+                ch = CharType(remap_value);
+            }
             this->bmatr_.set_octet(idx, i, (unsigned char)ch);
+            if (!ch)
+                break;
         } // for i
         this->bmatr_.set_octet(idx, sz, 0);
         this->clear_value_plains_from(sz*8+1, idx);
@@ -275,10 +298,25 @@ public:
             CharType ch = CharType(this->bmatr_.get_octet(idx, i));
             if (ch == 0)
                 break;
+            if (remap_flags_)
+            {
+                const unsigned char* remap_row = remap_matrix1_.row(i);
+                unsigned char remap_value = remap_row[unsigned(ch)];
+                BM_ASSERT(remap_value);
+                if (!remap_value) // unknown dictionary element
+                {
+                    // TODO: add an exception throw here
+                    break;
+                }
+                ch = CharType(remap_value);
+            }
             str.push_back(ch);
         } // for i
     }
-    
+
+    /*! Swap content */
+    void swap(str_sparse_vector& str_sv) BMNOEXEPT;
+
     ///@}
     
     // ------------------------------------------------------------
@@ -287,8 +325,15 @@ public:
 
     /**
         \brief Compare vector element with argument lexicographically
+     
+        NOTE: for a re-mapped container, input string may have no correct
+        remapping, in this case we have an ambiguity
+        (we know it is not equal (0) but LT or GT?).
+        Behavior is undefined.
+     
         \param idx - vactor element index
         \param str - argument to compare with
+     
         \return 0 - equal, < 0 - vect[i] < str, >0 otherwise
     */
     int compare(size_type idx, const value_type* str) const;
@@ -322,6 +367,25 @@ public:
         \param sz - new size
     */
     void resize(size_type sz) { parent_type::resize(sz); }
+    
+    /*! \brief get maximum string length capacity
+        \return maximum string length sparse vector can take
+    */
+    static size_type max_str() { return sv_octet_plains; }
+    
+    /*! \brief get effective string length used in vector
+    
+        Method returns efficiency, how close are we
+        to reserved maximum.
+    
+        \return current string length maximum
+    */
+    size_type effective_max_str() const;
+    
+    /*! \brief get effective string length used in vector
+        \return current string length maximum
+    */
+    size_type effective_vector_max() const { return effective_max_str(); }
     ///@}
 
 
@@ -352,12 +416,13 @@ public:
     */
     void calc_stat(struct str_sparse_vector<CharType, BV, MAX_STR_SIZE>::statistics* st) const;
     
+    
     ///@}
 
 
     // ------------------------------------------------------------
     /*! @name Various traits                                     */
-    //@{
+    ///@{
     
     /** \brief trait if sparse vector is "compressed" (false)
     */
@@ -365,6 +430,71 @@ public:
     bool is_compressed() { return false; }
 
     ///@}
+
+    // ------------------------------------------------------------
+    /*! @name remapping, succinct utilities                      */
+    ///@{
+    
+    /**
+        Get remapping status (true|false)
+    */
+    bool is_remap() const { return remap_flags_ != 0; }
+    
+    /**
+        Build remapping profile and load content from another sparse vector
+    */
+    void remap_from(const str_sparse_vector& str_sv);
+
+    /*!
+        Calculate flags which octets are present on each byte-plain.
+        @internal
+    */
+    void calc_octet_stat(plain_octet_matrix_type& octet_matrix) const;
+
+    static
+    void build_octet_remap(
+                plain_octet_matrix_type& octet_remap_matrix1,
+                plain_octet_matrix_type& octet_remap_matrix2,
+                const plain_octet_matrix_type& octet_occupancy_matrix);
+    /*!
+        remap string from external (ASCII) system to matrix internal code
+        @return true if remapping was ok, false if found incorrect value
+                for the plain
+        @internal
+    */
+    static
+    bool remap_tosv(value_type*       sv_str,
+                    size_type         buf_size,
+                    const value_type* str,
+                    const plain_octet_matrix_type& octet_remap_matrix2);
+    
+    /*!
+        remap string from external (ASCII) system to matrix internal code
+        @internal
+    */
+    bool remap_tosv(value_type*       sv_str,
+                    size_type         buf_size,
+                    const value_type* str) const
+    {
+        return remap_tosv(sv_str, buf_size, str, remap_matrix2_);
+    }
+    /*!
+        remap string from internal code to external (ASCII) system
+        @return true if remapping was ok, false if found incorrect value
+                for the plain
+        @internal
+    */
+    static
+    bool remap_fromsv(value_type*       str,
+                      size_type         buf_size,
+                      const value_type* sv_str,
+                      const plain_octet_matrix_type& octet_remap_matrix1);
+
+    ///@}
+
+
+
+    // ------------------------------------------------------------
 
     /*! \brief syncronize internal structures */
     void sync(bool /*force*/) {}
@@ -395,7 +525,6 @@ public:
     */
     size_type effective_size() const { return size(); }
 
-
 protected:
 
     /*! \brief set value without checking boundaries */
@@ -410,6 +539,11 @@ protected:
 protected:
     template<class SVect> friend class sparse_vector_serializer;
     template<class SVect> friend class sparse_vector_deserializer;
+    
+protected:
+    unsigned                 remap_flags_;   ///< remapping status
+    plain_octet_matrix_type  remap_matrix1_; ///< octet remap table 1
+    plain_octet_matrix_type  remap_matrix2_; ///< octet remap table 2
 };
 
 //---------------------------------------------------------------------
@@ -422,7 +556,8 @@ str_sparse_vector<CharType, BV, MAX_STR_SIZE>::str_sparse_vector(
         allocation_policy_type  ap,
         size_type               bv_max_size,
         const allocator_type&   alloc)
-: parent_type(null_able, ap, bv_max_size, alloc)
+: parent_type(null_able, ap, bv_max_size, alloc),
+  remap_flags_(0)
 {}
 
 
@@ -431,8 +566,22 @@ str_sparse_vector<CharType, BV, MAX_STR_SIZE>::str_sparse_vector(
 template<class CharType, class BV, unsigned MAX_STR_SIZE>
 str_sparse_vector<CharType, BV, MAX_STR_SIZE>::str_sparse_vector(
                                         const str_sparse_vector& str_sv)
-: parent_type(str_sv)
+: parent_type(str_sv),
+  remap_flags_(str_sv.remap_flags_),
+  remap_matrix1_(str_sv.remap_matrix1_),
+  remap_matrix2_(str_sv.remap_matrix2_)
 {}
+
+//---------------------------------------------------------------------
+
+template<class CharType, class BV, unsigned MAX_STR_SIZE>
+void str_sparse_vector<CharType, BV, MAX_STR_SIZE>::swap(str_sparse_vector& str_sv) BMNOEXEPT
+{
+    parent_type::swap(str_sv);
+    bm::xor_swap(remap_flags_, str_sv.remap_flags_);
+    remap_matrix1_.swap(str_sv.remap_matrix1_);
+    remap_matrix2_.swap(str_sv.remap_matrix2_);
+}
 
 //---------------------------------------------------------------------
 
@@ -472,6 +621,18 @@ void str_sparse_vector<CharType, BV, MAX_STR_SIZE>::set_value_no_null(
             this->clear_value_plains_from(i*8, idx);
             return;
         }
+        
+        if (remap_flags_) // compressional re-mapping is in effect
+        {
+            unsigned char remap_value = remap_matrix2_.get(i, unsigned(ch));
+            BM_ASSERT(remap_value);
+            if (!remap_value) // unknown dictionary element
+            {
+                this->clear_value_plains_from(i*8, idx);
+                return;
+            }
+            ch = CharType(remap_value);
+        }
         this->bmatr_.set_octet(idx, i, (unsigned char)ch);
     } // for i
 }
@@ -479,10 +640,12 @@ void str_sparse_vector<CharType, BV, MAX_STR_SIZE>::set_value_no_null(
 //---------------------------------------------------------------------
 
 template<class CharType, class BV, unsigned MAX_STR_SIZE>
-void str_sparse_vector<CharType, BV, MAX_STR_SIZE>::get(
+typename str_sparse_vector<CharType, BV, MAX_STR_SIZE>::size_type
+str_sparse_vector<CharType, BV, MAX_STR_SIZE>::get(
             size_type idx, value_type* str, size_type buf_size) const
 {
-    for (unsigned i = 0; i < MAX_STR_SIZE; ++i)
+    size_type i = 0;
+    for (; i < MAX_STR_SIZE; ++i)
     {
         if (i < buf_size)
             str[i] = 0;
@@ -490,9 +653,17 @@ void str_sparse_vector<CharType, BV, MAX_STR_SIZE>::get(
             break;
         CharType ch = CharType(this->bmatr_.get_octet(idx, i));
         if (ch == 0)
+        {
+            str[i] = 0;
             break;
+        }
         str[i] = ch;
     } // for i
+    if (remap_flags_)
+    {
+        remap_matrix1_.remap(str, i);
+    }
+    return i;
 }
 
 //---------------------------------------------------------------------
@@ -531,8 +702,17 @@ void str_sparse_vector<CharType, BV, MAX_STR_SIZE>::calc_stat(
     st->gap_blocks += stbv.gap_blocks;
     st->max_serialize_mem += stbv.max_serialize_mem + 8;
     st->memory_used += stbv.memory_used;
-}
+    
+    size_t remap_mem_usage = sizeof(remap_flags_);
+    remap_mem_usage += remap_matrix1_.get_buffer().mem_usage();
+    remap_mem_usage += remap_matrix2_.get_buffer().mem_usage();
 
+    st->memory_used += remap_mem_usage;
+    if (remap_flags_) // use of remapping requires some extra storage
+    {
+        st->max_serialize_mem += remap_mem_usage;
+    }
+}
 
 //---------------------------------------------------------------------
 
@@ -546,6 +726,16 @@ int str_sparse_vector<CharType, BV, MAX_STR_SIZE>::compare(
     for (unsigned i = 0; i < MAX_STR_SIZE; ++i)
     {
         CharType ch = str[i];
+        if (remap_flags_ && ch)
+        {
+            unsigned char remap_value = remap_matrix2_.get(i, unsigned(ch));
+            if (!remap_value) // unknown dictionary element
+            {
+                return -1; // TODO: what would be the best return value here...
+            }
+            ch = CharType(remap_value);
+        }
+
         res = this->bmatr_.compare_octet(idx, i, ch);
         if (res || !ch)
             break;
@@ -582,6 +772,168 @@ bool str_sparse_vector<CharType, BV, MAX_STR_SIZE>::find_rank(bm::id_t rank,
 }
 
 //---------------------------------------------------------------------
+
+template<class CharType, class BV, unsigned MAX_STR_SIZE>
+typename str_sparse_vector<CharType, BV, MAX_STR_SIZE>::size_type
+str_sparse_vector<CharType, BV, MAX_STR_SIZE>::effective_max_str() const
+{
+    for (int i = MAX_STR_SIZE-1; i >= 0; --i)
+    {
+        unsigned octet_plain = unsigned(i) * sizeof(CharType) * 8;
+        for (unsigned j = 0; j < sizeof(CharType) * 8; ++j)
+        {
+            if (this->bmatr_.row(octet_plain+j))
+                return unsigned(i)+1;
+        } // for j
+    } // for i
+    return 0;
+}
+
+//---------------------------------------------------------------------
+
+template<class CharType, class BV, unsigned MAX_STR_SIZE>
+void str_sparse_vector<CharType, BV, MAX_STR_SIZE>::calc_octet_stat(
+                    plain_octet_matrix_type& octet_matrix) const
+{
+    octet_matrix.init();
+    octet_matrix.set_zero();
+    
+    size_type size = this->size();
+    
+    for (unsigned i = 0; i < MAX_STR_SIZE; ++i)
+    {
+        unsigned char* row = octet_matrix.row(i);
+        
+        // TODO: optimize partial transposition
+        for (size_type j = 0; j < size; ++j)
+        {
+            unsigned char ch = this->bmatr_.get_octet(j, i);
+            unsigned k = ch;
+            if (k)
+                row[k] = 1;
+        } // for j
+    } // for i
+}
+
+//---------------------------------------------------------------------
+
+template<class CharType, class BV, unsigned MAX_STR_SIZE>
+void str_sparse_vector<CharType, BV, MAX_STR_SIZE>::build_octet_remap(
+            plain_octet_matrix_type& octet_remap_matrix1,
+            plain_octet_matrix_type& octet_remap_matrix2,
+            const plain_octet_matrix_type& octet_occupancy_matrix)
+{
+    octet_remap_matrix1.init();
+    octet_remap_matrix1.set_zero();
+    octet_remap_matrix2.init();
+    octet_remap_matrix2.set_zero();
+
+    for (unsigned i = 0; i < octet_occupancy_matrix.rows(); ++i)
+    {
+        const unsigned char* row = octet_occupancy_matrix.row(i);
+        unsigned char* remap_row1 = octet_remap_matrix1.row(i);
+        unsigned char* remap_row2 = octet_remap_matrix2.row(i);
+        unsigned count = 1;
+        for (unsigned j = 1; j < octet_occupancy_matrix.cols(); ++j)
+        {
+            if (row[j]) // octet is present
+            {
+                // set two remapping table values
+                remap_row1[count] = (unsigned char)j;
+                remap_row2[j] = (unsigned char)count;
+                ++count;
+                BM_ASSERT(count < 256);
+            }
+        } // for j
+    } // for i
+}
+
+//---------------------------------------------------------------------
+
+template<class CharType, class BV, unsigned MAX_STR_SIZE>
+bool str_sparse_vector<CharType, BV, MAX_STR_SIZE>::remap_tosv(
+                   value_type*       sv_str,
+                   size_type         buf_size,
+                   const value_type* str,
+                   const plain_octet_matrix_type& octet_remap_matrix2)
+{
+    for (unsigned i = 0; i < buf_size; ++i)
+    {
+        CharType ch = str[i];
+        if (ch == 0)
+        {
+            sv_str[i] = ch;
+            break;
+        }
+        const unsigned char* remap_row = octet_remap_matrix2.row(i);
+        unsigned char remap_value = remap_row[unsigned(ch)];
+        if (!remap_value) // unknown dictionary element
+        {
+            return false;
+        }
+        sv_str[i] = CharType(remap_value);
+    } // for i
+    return true;
+}
+
+//---------------------------------------------------------------------
+
+template<class CharType, class BV, unsigned MAX_STR_SIZE>
+bool str_sparse_vector<CharType, BV, MAX_STR_SIZE>::remap_fromsv(
+                         value_type* str,
+                         size_type         buf_size,
+                         const value_type* sv_str,
+                         const plain_octet_matrix_type& octet_remap_matrix1)
+{
+    for (unsigned i = 0; i < buf_size; ++i)
+    {
+        CharType ch = sv_str[i];
+        if (ch == 0)
+        {
+            str[i] = ch;
+            break;
+        }
+        const unsigned char* remap_row = octet_remap_matrix1.row(i);
+        unsigned char remap_value = remap_row[unsigned(ch)];
+        if (!remap_value) // unknown dictionary element
+        {
+            return false;
+        }
+        str[i] = CharType(remap_value);
+    } // for i
+    return true;
+}
+
+//---------------------------------------------------------------------
+
+template<class CharType, class BV, unsigned MAX_STR_SIZE>
+void str_sparse_vector<CharType, BV, MAX_STR_SIZE>::remap_from(const str_sparse_vector& str_sv)
+{
+    if (str_sv.is_remap())
+    {
+        *this = str_sv;
+        return;
+    }
+    this->clear();
+    
+    plain_octet_matrix_type omatrix; // occupancy map
+    str_sv.calc_octet_stat(omatrix);
+    
+    str_sv.build_octet_remap(remap_matrix1_, remap_matrix2_, omatrix);
+    remap_flags_ = 1; // turn ON remapped mode
+    
+    // load content
+    // TODO: optimization (current implementation is a naive "get-set")
+    value_type temp_str[MAX_STR_SIZE+1];
+    for (size_type i = 0; i < str_sv.size(); ++i)
+    {
+        str_sv.get(i, &temp_str[0], MAX_STR_SIZE);
+        this->set(i, &temp_str[0]);
+    } // for i
+}
+
+//---------------------------------------------------------------------
+
 
 } // namespace
 

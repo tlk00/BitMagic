@@ -379,7 +379,12 @@ public:
         \brief size of internal dense vector
     */
     size_type effective_size() const { return sv_.size(); }
-    
+
+    /**
+        \brief Always 1 (non-matrix type)
+    */
+    size_type effective_vector_max() const { return 1; }
+
     ///@}
     
 protected:
