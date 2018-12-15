@@ -76,6 +76,8 @@ public:
         max_vector_size = 1
     };
 
+    struct is_remap_support { enum trait { value = false }; };
+    struct is_rsc_support { enum trait { value = true }; };
 
 public:
     /*! Statistical information about  memory allocation details. */

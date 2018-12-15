@@ -79,6 +79,9 @@ public:
                     typename bvector_type::allocator_type>
                                     plain_octet_matrix_type;
 
+    struct is_remap_support { enum trait { value = true }; };
+    struct is_rsc_support { enum trait { value = false }; };
+
     /**
          Reference class to access elements via common [] operator
          @ingroup sv
@@ -779,7 +782,7 @@ str_sparse_vector<CharType, BV, MAX_STR_SIZE>::effective_max_str() const
 {
     for (int i = MAX_STR_SIZE-1; i >= 0; --i)
     {
-        unsigned octet_plain = unsigned(i) * sizeof(CharType) * 8;
+        unsigned octet_plain = unsigned(i) * unsigned(sizeof(CharType)) * 8;
         for (unsigned j = 0; j < sizeof(CharType) * 8; ++j)
         {
             if (this->bmatr_.row(octet_plain+j))

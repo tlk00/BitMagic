@@ -93,6 +93,12 @@ public:
     struct statistics : public bv_statistics
     {};
 
+    /*! Traits and features used in algorithms to correctly run 
+        on a particular type of sparse vector
+    */
+    struct is_remap_support { enum trait { value = false }; };
+    struct is_rsc_support { enum trait { value = false }; };
+ 
     /**
          Reference class to access elements via common [] operator
          @ingroup sv
