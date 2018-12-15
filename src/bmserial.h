@@ -43,12 +43,12 @@ For more information please visit:  http://bitmagic.io
 
 
 #include "encoding.h"
-#include "bmdef.h"
 #include "bmfunc.h"
 #include "bmtrans.h"
 #include "bmalgo_impl.h"
 #include "bmutil.h"
 #include "bmbuffer.h"
+#include "bmdef.h"
 
 //#include "bmgamma.h"
 
