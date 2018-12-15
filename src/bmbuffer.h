@@ -18,6 +18,7 @@ limitations under the License.
 For more information please visit:  http://bitmagic.io
 */
 
+#include "bmdef.h"
 
 namespace bm
 {
@@ -408,5 +409,6 @@ protected:
 
 } // namespace bm
 
+#include "bmundef.h"
 
 #endif
