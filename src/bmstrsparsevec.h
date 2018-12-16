@@ -492,15 +492,19 @@ public:
                       size_type         buf_size,
                       const value_type* sv_str,
                       const plain_octet_matrix_type& octet_remap_matrix1);
+    /*!
+        re-calculate remap matrix2 based on matrix1
+        @internal
+    */
+    void recalc_remap_matrix2();
 
     ///@}
-
 
 
     // ------------------------------------------------------------
 
     /*! \brief syncronize internal structures */
-    void sync(bool /*force*/) {}
+    void sync(bool force);
 
     /*!
         \brief check if another sparse vector has the same content and size
@@ -512,10 +516,7 @@ public:
         \return true, if it is the same
     */
     bool equal(const str_sparse_vector<CharType, BV, MAX_STR_SIZE>& sv,
-               bm::null_support null_able = bm::use_null) const
-    {
-        return parent_type::equal(sv, null_able);
-    }
+               bm::null_support null_able = bm::use_null) const;
 
     /**
         \brief find position of compressed element by its rank
@@ -539,6 +540,16 @@ protected:
     size_type size_internal() const { return size(); }
     void resize_internal(size_type sz) { resize(sz); }
 
+    size_t remap_size() const { return remap_matrix1_.get_buffer().size(); }
+    const unsigned char* get_remap_buffer() const
+                { return remap_matrix1_.get_buffer().buf(); }
+    unsigned char* init_remap_buffer()
+    {
+        remap_matrix1_.init();
+        return remap_matrix1_.get_buffer().data();
+    }
+    void set_remap() { remap_flags_ = 1; }
+    
 protected:
     template<class SVect> friend class sparse_vector_serializer;
     template<class SVect> friend class sparse_vector_deserializer;
@@ -854,6 +865,32 @@ void str_sparse_vector<CharType, BV, MAX_STR_SIZE>::build_octet_remap(
 //---------------------------------------------------------------------
 
 template<class CharType, class BV, unsigned MAX_STR_SIZE>
+void str_sparse_vector<CharType, BV, MAX_STR_SIZE>::recalc_remap_matrix2()
+{
+    BM_ASSERT(remap_flags_);
+    
+    remap_matrix2_.init();
+    remap_matrix2_.set_zero();
+    
+    for (unsigned i = 0; i < remap_matrix1_.rows(); ++i)
+    {
+        const unsigned char* remap_row1 = remap_matrix1_.row(i);
+              unsigned char* remap_row2 = remap_matrix2_.row(i);
+        for (unsigned j = 1; j < remap_matrix1_.cols(); ++j)
+        {
+            if (remap_row1[j])
+            {
+                unsigned count = remap_row1[j];
+                remap_row2[count] = (unsigned char)j;
+                BM_ASSERT(count < 256);
+            }
+        } // for j
+    } // for i
+}
+
+//---------------------------------------------------------------------
+
+template<class CharType, class BV, unsigned MAX_STR_SIZE>
 bool str_sparse_vector<CharType, BV, MAX_STR_SIZE>::remap_tosv(
                    value_type*       sv_str,
                    size_type         buf_size,
@@ -918,6 +955,10 @@ void str_sparse_vector<CharType, BV, MAX_STR_SIZE>::remap_from(const str_sparse_
         return;
     }
     this->clear();
+    if (str_sv.empty()) // no content to remap
+    {
+        return;
+    }
     
     plain_octet_matrix_type omatrix; // occupancy map
     str_sv.calc_octet_stat(omatrix);
@@ -937,6 +978,43 @@ void str_sparse_vector<CharType, BV, MAX_STR_SIZE>::remap_from(const str_sparse_
 
 //---------------------------------------------------------------------
 
+template<class CharType, class BV, unsigned MAX_STR_SIZE>
+void str_sparse_vector<CharType, BV, MAX_STR_SIZE>::sync(bool /*force*/)
+{
+    if (remap_flags_)
+    {
+        recalc_remap_matrix2();
+    }
+}
+
+//---------------------------------------------------------------------
+
+template<class CharType, class BV, unsigned MAX_STR_SIZE>
+bool str_sparse_vector<CharType, BV, MAX_STR_SIZE>::equal(
+                const str_sparse_vector<CharType, BV, MAX_STR_SIZE>& sv,
+                bm::null_support null_able) const
+{
+    // at this point both vectors should have the same remap settings
+    // to be considered "equal".
+    // Strictly speaking this is incorrect, because re-map and non-remap
+    // vectors may have the same content
+
+    if (remap_flags_ != sv.remap_flags_)
+        return false;
+    if (remap_flags_)
+    {
+        bool b;
+        b = remap_matrix1_.get_buffer().equal(sv.remap_matrix1_.get_buffer());
+        if (!b)
+            return b;
+        b = remap_matrix2_.get_buffer().equal(sv.remap_matrix2_.get_buffer());
+        if (!b)
+            return b;
+    }
+    return parent_type::equal(sv, null_able);
+}
+
+//---------------------------------------------------------------------
 
 } // namespace
 

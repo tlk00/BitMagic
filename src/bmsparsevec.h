@@ -808,7 +808,13 @@ protected:
     void resize_internal(size_type sz) { resize(sz); }
     size_type size_internal() const { return size(); }
 
+    bool is_remap() const { return false; }
+    size_t remap_size() const { return 0; }
+    const unsigned char* get_remap_buffer() const { return 0; }
+    unsigned char* init_remap_buffer() { return 0; }
+    void set_remap() { }
 
+protected:
     template<class V, class SV> friend class rsc_sparse_vector;
     template<class SVect> friend class sparse_vector_scanner;
     template<class SVect> friend class sparse_vector_serializer;

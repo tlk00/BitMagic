@@ -403,6 +403,13 @@ protected:
     void resize_internal(size_type sz) { sv_.resize_internal(sz); }
     size_type size_internal() const { return sv_.size(); }
 
+    bool is_remap() const { return false; }
+    size_t remap_size() const { return 0; }
+    const unsigned char* get_remap_buffer() const { return 0; }
+    unsigned char* init_remap_buffer() { return 0; }
+    void set_remap() { }
+
+
 private:
     void construct_bv_blocks();
     void free_bv_blocks();

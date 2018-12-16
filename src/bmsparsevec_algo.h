@@ -344,7 +344,7 @@ protected:
     void decompress(const SV&   sv, typename SV::bvector_type& bv_out);
 
     int compare_str(const SV& sv, size_type idx, const value_type* str);
-
+    
 protected:
     sparse_vector_scanner(const sparse_vector_scanner&) = delete;
     void operator=(const sparse_vector_scanner&) = delete;
@@ -360,7 +360,6 @@ protected:
         bm::set_total_blocks,
         max_columns,
         typename bvector_type::allocator_type>  heap_matrix_type;
-
 
 private:
     allocator_pool_type                pool_;
@@ -378,6 +377,8 @@ private:
     size_type                          effective_str_max_;
     
     value_type                         remap_value_vect_[SV::max_vector_size];
+    /// masks of allocated bit-plains (1 - means there is a bit-plain)
+    bm::id64_t                         vector_plain_masks_[SV::max_vector_size];
 };
 
 
@@ -748,6 +749,12 @@ void sparse_vector_scanner<SV>::bind(const SV&  sv, bool sorted)
         block0_elements_cache_.set_zero();
         effective_str_max_ = sv.effective_vector_max();
     }
+    // pre-calculate vector plain masks
+    //
+    for (unsigned i = 0; i < SV::max_vector_size; ++i)
+    {
+        vector_plain_masks_[i] = sv.get_plains_mask(i);
+    } // for i
 }
 
 //----------------------------------------------------------------------------
@@ -928,28 +935,34 @@ bool sparse_vector_scanner<SV>::prepare_and_sub_aggregator(const SV&  sv,
     {}
     BM_ASSERT(len);
 
-    // use reverse order (faster for sorted arrays) 
+    // use reverse order (faster for sorted arrays)
     for (int octet_idx = len-1; octet_idx >= 0; --octet_idx)
     {
-        if (unsigned(octet_idx) < octet_start)
-        {
+        if (unsigned(octet_idx) < octet_start) // common prefix
             break;
-        }
+
         unsigned value = unsigned(str[octet_idx]) & 0xFF;
         BM_ASSERT(value != 0);
-        unsigned short bit_count_v = bm::bitscan(value, bits);
+        
+        bm::id64_t plains_mask;
+        if (&sv == bound_sv_)
+            plains_mask = vector_plain_masks_[octet_idx];
+        else
+            plains_mask = sv.get_plains_mask(unsigned(octet_idx));
+
+        if ((value & plains_mask) != value) // pre-screen for impossible values
+            return false; // found non-existing plain
+
         // prep the lists for combined AND-SUB aggregator
         //
+        unsigned short bit_count_v = bm::bitscan(value, bits);
         for (unsigned i = 0; i < bit_count_v; ++i)
         {
             unsigned bit_idx = bits[i];
             BM_ASSERT(value & (value_type(1) << bit_idx));
             unsigned plain_idx = (unsigned(octet_idx) * 8) + bit_idx;
             const bvector_type* bv = sv.get_plain(plain_idx);
-            if (bv)
-                agg_.add(bv);
-            else
-                return false;
+            agg_.add(bv);
         } // for i
         
         unsigned vinv = unsigned(value);
@@ -962,19 +975,19 @@ bool sparse_vector_scanner<SV>::prepare_and_sub_aggregator(const SV&  sv,
             BM_ASSERT(sizeof(value_type) == 2);
             vinv ^= 0xFFFF;
         }
-
-        bit_count_v = bm::bitscan(vinv, bits);
-        BM_ASSERT(bit_count_v <= sizeof(value_type) * 8);
-        for (unsigned i = 0; i < bit_count_v; ++i)
+        // exclude the octet bits which are all not set (no vectors)
+        vinv &= plains_mask;
+        for (unsigned octet_plain = (unsigned(octet_idx) * 8); vinv; vinv &= vinv-1)
         {
-            unsigned bit_idx = bits[i];
-            unsigned plain_idx = (unsigned(octet_idx) * 8) + bit_idx;
-            BM_ASSERT(!(value & (value_type(1) << bit_idx)));
+            bm::id_t t = vinv & -vinv;
+            unsigned bit_idx = bm::word_bitcount(t - 1);
+            unsigned plain_idx = octet_plain + bit_idx;
             const bvector_type* bv = sv.get_plain(plain_idx);
-            if (bv)
-                agg_.add(bv, 1); // agg to SUB group
-        }
+            BM_ASSERT(bv);
+            agg_.add(bv, 1); // agg to SUB group
+        } // for
      } // for octet_idx
+    
     // add all vectors above string len to the SUB operation group
     //
     typename SV::size_type plain_idx = unsigned(len * 8) + 1;
@@ -983,7 +996,6 @@ bool sparse_vector_scanner<SV>::prepare_and_sub_aggregator(const SV&  sv,
         plains = effective_str_max_ * unsigned(sizeof(value_type)) * 8;
     else
         plains = sv.plains();
-    
     for (; plain_idx < plains; ++plain_idx)
     {
         bvector_type_const_ptr bv = sv.get_plain(plain_idx);
@@ -1107,8 +1119,7 @@ bool sparse_vector_scanner<SV>::find_eq_str(const SV&                      sv,
         {
             if (sv.is_remap() && str != remap_value_vect_)
             {
-                bool r =
-                    sv.remap_tosv(remap_value_vect_, SV::max_vector_size, str);
+                bool r = sv.remap_tosv(remap_value_vect_, SV::max_vector_size, str);
                 if (!r)
                     return r;
                 str = remap_value_vect_;
@@ -1150,6 +1161,18 @@ bool sparse_vector_scanner<SV>::bfind_eq_str(const SV&                      sv,
 
     if (*str)
     {
+        // test search pre-condition based on remap tables
+        if (bm::conditional<SV::is_remap_support::value>::test())
+        {
+            if (sv.is_remap() && str != remap_value_vect_)
+            {
+                bool r =
+                    sv.remap_tosv(remap_value_vect_, SV::max_vector_size, str);
+                if (!r)
+                    return r;
+            }
+        }
+        
         reset_search_range();
         
         // narrow down the search
@@ -1188,12 +1211,10 @@ bool sparse_vector_scanner<SV>::bfind_eq_str(const SV&                      sv,
             }
 
             typename SV::size_type mid = dist/2+l;
-            
             unsigned nb = unsigned(mid >> bm::set_block_shift);
             mid = nb * bm::gap_max_bits;
             if (mid <= l)
                 mid = dist / 2 + l;             
-            
             BM_ASSERT(mid > l);
 
             int cmp = this->compare_str(sv, mid, str);
@@ -1208,7 +1229,6 @@ bool sparse_vector_scanner<SV>::bfind_eq_str(const SV&                      sv,
                 l = mid+1;
             else
                 r = mid-1;
-            
         } // while
 
         // use linear search (range is set)
@@ -1221,13 +1241,6 @@ bool sparse_vector_scanner<SV>::bfind_eq_str(const SV&                      sv,
                 if (sv.is_compressed()) // if compressed vector - need rank translation
                     found = sv.find_rank(found_pos + 1, pos);
             }
-/*
-            if (sv.is_compressed()) // if compressed vector - need rank translation
-            {
-                found = sv.find_rank(found_pos + 1, pos);
-            }
-            else
-                pos = found_pos; */
         }
         reset_search_range();
     }
@@ -1334,11 +1347,6 @@ bool sparse_vector_scanner<SV>::find_eq(const SV&                  sv,
             if (sv.is_compressed()) // if compressed vector - need rank translation
                 found = sv.find_rank(found_pos + 1, pos);
         }
-/*
-        if (sv.is_compressed()) // if compressed vector - need rank translation
-            found = sv.find_rank(found_pos + 1, pos);
-        else
-            pos = found_pos; */
     }
     return found;
 }

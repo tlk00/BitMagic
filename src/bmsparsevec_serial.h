@@ -125,21 +125,36 @@ protected:
     \brief Serialize sparse vector into a memory buffer(s) structure
  
  Serialization format:
- <pre>
 
- | HEADER | BIT-VECTORS ... |
+ | HEADER | BIT-VECTORS ... | REMAP_MATRIX
 
  Header structure:
-   BYTE+BYTE: Magic-signature 'BM'
+ -----------------
+   BYTE+BYTE: Magic-signature 'BM' or 'BC' (c-compressed)
    BYTE : Byte order ( 0 - Big Endian, 1 - Little Endian)
-   BYTE : Number of Bit-vector plains (total)
+   {
+        BYTE : Number of Bit-vector plains (total) (non-zero when < 255 plains)
+        |
+        BYTE: zero - flag of large plain matrix
+        INT64: Nnmber of bit-vector plains
+   }
    INT64: Vector size
    INT64: Offset of plain 0 from the header start (value 0 means plain is empty)
    INT64: Offset of plain 1 from
    ...
    INT32: reserved
+ 
+Bit-vectors:
+------------
+   Based on current bit-vector serialization
 
- </pre>
+Remap Matrix:
+   SubHeader | Matrix BLOB
+ 
+   sub-header:
+     BYTE:  'R' (remapping) or 'N' (no remapping)
+             N - means no other info is saved on the stream
+     INT64:  remap matrix size
  
     \ingroup svserial
 */
@@ -484,10 +499,10 @@ template<typename SV>
 void sparse_vector_serializer<SV>::serialize(const SV&  sv,
                       sparse_vector_serial_layout<SV>&  sv_layout)
 {
-    const unsigned max_v_plains = 255;
+//    const unsigned max_v_plains = 255; // legacy...
+    
     typename SV::statistics sv_stat;
     sv.calc_stat(&sv_stat);
-    
     unsigned char* buf = sv_layout.reserve(sv_stat.max_serialize_mem);
     
     bm::encoder enc(buf, (unsigned)sv_layout.capacity());
@@ -500,14 +515,17 @@ void sparse_vector_serializer<SV>::serialize(const SV&  sv,
                       8 +            // size (internal 64-bit)
                       (8 * plains) + // offsets of all plains
                       4;             //  reserve
-    if (plains > max_v_plains) // for large plain matrixes
+//    if (plains > max_v_plains) // for large plain matrixes
     {
         h_size += 1 + // version number
                   8;  // number of plains (64-bit)
     }
 
-    // ptr where bit-plains start
-    unsigned char* buf_ptr = buf + h_size;
+    // -----------------------------------------------------
+    // Serialize all bvector plains
+    //
+    
+    unsigned char* buf_ptr = buf + h_size; // ptr where plains start (start+hdr)
 
     unsigned i;
     for (i = 0; i < plains; ++i)
@@ -527,8 +545,37 @@ void sparse_vector_serializer<SV>::serialize(const SV&  sv,
         sv_stat.max_serialize_mem -= buf_size;
     } // for i
     
-    sv_layout.resize(size_t(buf_ptr - buf));
+    size_t current_size = size_t(buf_ptr - buf);
+    size_t remaining_size = sv_stat.max_serialize_mem - current_size;
+    
+    // -----------------------------------------------------
+    // serialize the re-map matrix
+    //
+    if (bm::conditional<SV::is_remap_support::value>::test()) // test remapping trait
+    {
+        bm::encoder enc_m(buf_ptr, remaining_size);
+        if (sv.is_remap())
+        {
+            bm::id64_t remap_size = sv.remap_size();
+            const unsigned char* matrix_buf = sv.get_remap_buffer();
+            BM_ASSERT(matrix_buf);
+            BM_ASSERT(remap_size);
 
+            enc_m.put_8('R');
+            enc_m.put_64(remap_size);
+            enc_m.memcpy(matrix_buf, remap_size);
+            enc_m.put_8('E'); // end of matrix (integrity check token)
+        }
+        else
+        {
+            enc_m.put_8('N');
+        }
+        buf_ptr += enc_m.size(); // add mattrix encoded data size
+    }
+    
+    sv_layout.resize(size_t(buf_ptr - buf)); // set the true occupied size
+
+    // -----------------------------------------------------
     // save the header
     //
     ByteOrder bo = bm::globals<true>::byte_order();
@@ -540,20 +587,24 @@ void sparse_vector_serializer<SV>::serialize(const SV&  sv,
         enc.put_8('M');
     
     enc.put_8((unsigned char)bo);  // byte order
+    
+/*
     if (plains < 255) // simple (int vector) serialization
     {
         enc.put_8((unsigned char)plains); // number of plains
     }
-    else  // bit-matrix with large number of plains
+    else  // bit-matrix with large number of plains */
     {
-        enc.put_8(0); // number of plains == 0 (magic number)
+        enc.put_8(0); // number of plains == 0 (legacy magic number)
         
-        enc.put_8(0);       // matrix serialization version
+        enc.put_8(1);       // matrix serialization version
         enc.put_64(plains); // number of rows in the bit-matrix
     }
     
     enc.put_64(sv.size_internal());
     
+    // save the offset table (part of the header)
+    //
     for (i = 0; i < plains; ++i)
     {
         const unsigned char* p = sv_layout.get_plain(i);
@@ -564,7 +615,8 @@ void sparse_vector_serializer<SV>::serialize(const SV&  sv,
         }
         size_t offset = size_t(p - buf);
         enc.put_64(offset);
-    }
+    } // for
+    
 }
 
 // -------------------------------------------------------------------------
@@ -599,20 +651,17 @@ void sparse_vector_deserializer<SV>::deserialize(SV& sv,
             BM_THROW(BM_ERR_SERIALFORMAT);
         #endif
     }
-    
+    unsigned char matr_s_ser = 0;
     //unsigned char bv_bo =
         dec.get_8();
     unsigned plains = dec.get_8();
-    
     if (plains == 0)  // bit-matrix
     {
-        //unsigned char matr_s_ser =
-            dec.get_8(); // matrix serialization version (reserved)
+        matr_s_ser = dec.get_8(); // matrix serialization version
         plains = (unsigned) dec.get_64(); // number of rows in the bit-matrix
     }
     
     unsigned sv_plains = sv.stored_plains();
-    
     if (!plains || plains > sv_plains)
     {
         #ifndef BM_NO_STL
@@ -631,6 +680,8 @@ void sparse_vector_deserializer<SV>::deserialize(SV& sv,
     sv.resize_internal((unsigned)sv_size);
     bm::word_t*          temp_block = 0;
     
+    const unsigned char* remap_buf_ptr = 0;
+    
     unsigned i = 0;
     for (i = 0; i < plains; ++i)
     {
@@ -639,7 +690,7 @@ void sparse_vector_deserializer<SV>::deserialize(SV& sv,
         {
             continue;
         }
-        const unsigned char* bv_buf_ptr = buf + offset;
+        const unsigned char* bv_buf_ptr = buf + offset; // seek to position
         bvector_type*  bv = sv.get_plain(i);
         BM_ASSERT(bv);
         if (!temp_block)
@@ -648,10 +699,65 @@ void sparse_vector_deserializer<SV>::deserialize(SV& sv,
                                                 bv->get_blocks_manager();
             temp_block = bv_bm.check_allocate_tempblock();
         }
-        deserial_.deserialize(*bv, bv_buf_ptr, temp_block);
+        unsigned read_bytes = deserial_.deserialize(*bv, bv_buf_ptr, temp_block);
+        remap_buf_ptr = bv_buf_ptr + read_bytes;
     } // for i
     
-    sv.sync(true); // force sync
+    // ----------------------------
+    // load the remap matrix
+    //
+    if (bm::conditional<SV::is_remap_support::value>::test()) // test remapping trait
+    {
+        if (matr_s_ser > 0)
+        {
+            if (remap_buf_ptr)
+            {
+                bm::decoder dec_m(remap_buf_ptr);
+                unsigned char rh = dec_m.get_8();
+                if (rh == 'N') // no remap matrix here
+                {
+                }
+                else
+                if (rh == 'R')
+                {
+                    size_t remap_size = (size_t) dec_m.get_64();
+                    unsigned char* remap_buf = sv.init_remap_buffer();
+                    BM_ASSERT(remap_buf);
+                    size_t target_remap_size = sv.remap_size();
+                    if (!remap_size || !remap_buf || remap_size != target_remap_size)
+                    {
+                        #ifndef BM_NO_STL
+                            throw std::logic_error("Invalid serialization format (remap size)");
+                        #else
+                            BM_THROW(BM_ERR_SERIALFORMAT);
+                        #endif
+                    }
+                    dec_m.memcpy(remap_buf, remap_size);
+                    unsigned char end_tok = dec_m.get_8();
+                    if (end_tok != 'E')
+                    {
+                        #ifndef BM_NO_STL
+                            throw std::logic_error("Invalid serialization format");
+                        #else
+                            BM_THROW(BM_ERR_SERIALFORMAT);
+                        #endif
+                    }
+                    sv.set_remap();
+                }
+                else // unknown serialization token
+                {
+                #ifndef BM_NO_STL
+                    throw std::logic_error("Invalid serialization format (remap error)");
+                #else
+                    BM_THROW(BM_ERR_SERIALFORMAT);
+                #endif
+                }
+
+            }
+        }
+    } // if remap traits
+    
+    sv.sync(true); // force sync, recalculate RS index, remap tables, etc
 }
 
 // -------------------------------------------------------------------------

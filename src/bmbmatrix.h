@@ -287,6 +287,9 @@ public:
 
     /*! \brief resize to zero, free memory */
     void clear() BMNOEXEPT;
+    
+    /*! return true if empty */
+    bool empty() const { return size() == 0; }
 
 public:
 
@@ -358,6 +361,18 @@ public:
     */
     void free_plain(unsigned i) { bmatr_.destruct_row(i); }
     
+    /*!
+        return mask of allocated bit-plains
+        1 in the mask - means bit-plain N is present
+        returns 64-bit unsigned mask for sub 64-bit types (like int)
+        unallocated mask bits will be zero extended
+     
+        @return 64-bit mask
+        @internal
+    */
+    bm::id64_t get_plains_mask(unsigned element_idx) const;
+
+    
     ///@}
     
     /*!
@@ -404,7 +419,7 @@ protected:
         \param idx       - bit (column) to clear
     */
     void clear_value_plains_from(unsigned plain_idx, size_type idx);
-
+    
 protected:
     /** Number of total bit-plains in the value type*/
     static unsigned value_bits()
@@ -412,7 +427,7 @@ protected:
         return base_sparse_vector<Val, BV, MAX_SIZE>::sv_value_plains;
     }
     
-    /** plain index for the "NOT NULL" flags plain */
+    /** plain index for the "NOT NULL" flag1s plain */
     static unsigned null_plain() { return value_bits(); }
 protected:
     bmatrix_type             bmatr_;              ///< bit-transposed matrix
@@ -1155,6 +1170,28 @@ typename base_sparse_vector<Val, BV, MAX_SIZE>::bvector_type_ptr
             effective_plains_ = i;
     }
     return bv;
+}
+
+//---------------------------------------------------------------------
+
+template<class Val, class BV, unsigned MAX_SIZE>
+bm::id64_t base_sparse_vector<Val, BV, MAX_SIZE>::get_plains_mask(
+                                                 unsigned element_idx) const
+{
+    BM_ASSERT(element_idx < MAX_SIZE);
+    bm::id64_t mask = 0;
+    bm::id64_t mask1 = 1;
+    const unsigned plains = sizeof(value_type) * 8;
+    unsigned bidx = 0;
+    for (unsigned i = element_idx * plains; i < (element_idx+1) * plains; i+=4)
+    {
+        mask |= get_plain(i+0) ? (mask1 << (bidx+0)) : 0ull;
+        mask |= get_plain(i+1) ? (mask1 << (bidx+1)) : 0ull;
+        mask |= get_plain(i+2) ? (mask1 << (bidx+2)) : 0ull;
+        mask |= get_plain(i+3) ? (mask1 << (bidx+3)) : 0ull;
+        bidx += 4;
+    } // for i
+    return mask;
 }
 
 //---------------------------------------------------------------------

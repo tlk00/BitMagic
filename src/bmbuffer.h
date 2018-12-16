@@ -55,7 +55,10 @@ public:
     /// Get write access to buffer memory
     unsigned char* data() { return byte_buf_; }
 
-    bool operator==(const byte_buffer_ptr& lhs) const
+    bool operator==(const byte_buffer_ptr& lhs) const { return equal(lhs); }
+    
+    /// return true if content and size is the same
+    bool equal(const byte_buffer_ptr& lhs) const
     {
         if (this == &lhs)
             return true;
@@ -280,6 +283,7 @@ private:
             this->byte_buf_ = 0;
         }
     }
+    
 private:
     size_t         capacity_;     ///< current capacity
     size_t         alloc_factor_; ///< number of blocks allocated for buffer
@@ -334,7 +338,7 @@ public:
     {
         buffer_.resize(size_in_bytes);
     }
-    
+
     value_type get(unsigned row_idx, unsigned col_idx) const
     {
         BM_ASSERT(row_idx < ROWS);
