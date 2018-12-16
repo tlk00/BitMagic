@@ -144,11 +144,24 @@ int parse_args(int argc, char *argv[])
         }
 
         if (arg == "-diag" || arg == "--diag" || arg == "-d" || arg == "--d")
+        {
             is_diag = true;
+            continue;
+        }
         if (arg == "-timing" || arg == "--timing" || arg == "-t" || arg == "--t")
+        {
             is_timing = true;
+            continue;
+        }
         if (arg == "-bench" || arg == "--bench" || arg == "-b" || arg == "--b")
+        {
             is_bench = true;
+            continue;
+        }
+        
+        std::cerr << "Error: unknown argument: " << arg << std::endl;
+        return 1;
+
 
     } // for i
     return 0;
@@ -197,7 +210,7 @@ int load_dict_report(const std::string& fname, string_vector& str_vec)
             string& col13 = line_vec.at(13);
             col13.erase(0, col13.find_first_not_of(trim_chars));
             col13.erase(col13.find_last_not_of(trim_chars) + 1);
-            
+
             if (!col13.empty())
                 str_vec.emplace_back(col13);
         }
@@ -221,14 +234,15 @@ void check_sparse(const str_sparse_vect& str_sv, const string_vector& str_vec)
 {
     if (str_vec.size() != str_sv.size())
         throw runtime_error("Error. size() comparison failed!");
+    string s;
     for (str_sparse_vect::size_type i = 0; i < str_sv.size(); ++i)
     {
-        string s;
         str_sv.get(i, s);
         const string& s_control = str_vec[i];
         if (s != s_control)
             throw runtime_error("Error. element comparison failed!");
     } // for
+    std::cout << "Check ok. Dictionary size = " << str_sv.size() << std:: endl;
 }
 
 const unsigned benchmark_max = 15000;  // benchmark sampling size
@@ -239,20 +253,23 @@ void pick_benchmark_set(string_vector& bench_vec, string_vector& bench_vec_not_f
 {
     std::random_device rand_dev;
     std::mt19937 gen(rand_dev()); // mersenne_twister_engine 
-    std::uniform_int_distribution<> rand_dis(0, unsigned(str_vec.size())-1); // generate uniform numebrs for [1, vector_max]
+    std::uniform_int_distribution<unsigned> rand_dis(0, unsigned(str_vec.size()-1)); // generate uniform numebrs for [1, vector_max]
 
     bm::bvector<> bv;
     
     bench_vec.resize(0);
     for (unsigned i = 0; i < benchmark_max; ++i)
     {
-        unsigned idx = unsigned(rand_dis(gen));
-        if (bv.test(idx))  // make sure benchmark example is not repeated
-            continue;
-        if (idx < str_vec.size())
-            bench_vec.push_back(str_vec[idx]);
-        else
-            continue;
+        unsigned idx;
+        while (true)
+        {
+            idx = unsigned(rand_dis(gen));
+            if (bv.test(idx))  // make sure benchmark example is not repeated
+                continue;
+            if (idx < str_vec.size())
+                bench_vec.push_back(str_vec[idx]);
+            break;
+        }
         bv.set(idx); // mark as set
         
         // generate not-found case by modifying a letter in an existing sample
@@ -453,6 +470,7 @@ int main(int argc, char *argv[])
                 return res;
             }
             cout << "Loaded " << str_vec.size() << " dictionary names." << endl;
+            
             std::sort(str_vec.begin(), str_vec.end());
         }
         
@@ -461,9 +479,16 @@ int main(int argc, char *argv[])
             bm::chrono_taker tt1("2. build sparse vector", 1, &timing_map);
 
             for (const string& term : str_vec)
-            {
                 str_sv.push_back(term);
+            
+            // build remapped (dense) sparse vector
+            // (this should be final), no more edits in this form
+            {
+                str_sparse_vect    str_sv_remap;
+                str_sv_remap.remap_from(str_sv);
+                str_sv.swap(str_sv_remap);
             }
+            
             BM_DECLARE_TEMP_BLOCK(tb)
             str_sv.optimize(tb); // memory optimization after load
         }
@@ -495,8 +520,10 @@ int main(int argc, char *argv[])
         
         if (is_diag)
         {
-            if (str_sv.size())
+            if (!str_sv.empty())
+            {
                 print_svector_stat(str_sv, true);
+            }
             
             if (str_vec.size())
             {
