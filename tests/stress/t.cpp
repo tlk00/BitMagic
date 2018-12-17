@@ -19,7 +19,7 @@ For more information please visit:  http://bitmagic.io
 
 //#define BMSSE2OPT
 //#define BMSSE42OPT
-//#define BMAVX2OPT
+#define BMAVX2OPT
 //#define BM_USE_EXPLICIT_TEMP
 
 #include <stdio.h>
@@ -11027,6 +11027,12 @@ void LZCNTTest()
     t = bm::count_trailing_zeros(2);
     assert(t == 1);
 
+    l = bm::count_leading_zeros(~0);
+    assert(l == 0);
+    l = bm::count_leading_zeros(~0u >> 1u);
+    assert(l == 1);
+
+
     unsigned mask = ~0u;
     for (unsigned i = 1; i; i <<= 1)
     {
@@ -11045,6 +11051,15 @@ void LZCNTTest()
         mask >>= 1;
     }
 
+    {
+        bm::id64_t w = ~0ull;
+        for (unsigned i = 0; i < 63; ++i)
+        {
+            unsigned lz = bm::count_leading_zeros_u64(w);
+            assert(lz == i);
+            w >>= 1;
+        }
+    }
 
     cout << "---------------------------- LZCNT Test..." << endl;
 }
@@ -17778,7 +17793,7 @@ int main(void)
 
 //avx2_i32_shift();
 //return 0;
-
+/*
     TestRecomb();
 
     OptimGAPTest();
@@ -17791,7 +17806,7 @@ int main(void)
     TestArraysAndBuffers();
  
     Log2Test();
-
+*/
     LZCNTTest();
 
     SelectTest();
