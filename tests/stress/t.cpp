@@ -14463,13 +14463,18 @@ void TestStrSparseVector()
    {
        str_sparse_vector<char, bvect, 32> str_sv0;
        str_sparse_vector<char, bvect, 32> str_sv1;
+       
+       str_sv1.remap_from(str_sv0);
+       assert(!str_sv1.is_remap());
+       
        str_sv0[0] = "1";
        str_sv0[1] = "11";
        str_sv0[2] = "123";
 
        assert(!str_sv1.is_remap());
-
+       
        str_sv1.remap_from(str_sv0);
+       str_sv1.recalc_remap_matrix2();
        
        assert(str_sv1.is_remap());
        assert(str_sv1.size() == str_sv0.size());
@@ -14507,7 +14512,21 @@ void TestStrSparseVector()
            cmp = str_sv1.compare(4, "113");
            assert(cmp==0);
         }
-
+       
+       {
+            bool equal = str_sv1.equal(str_sv0);
+            assert(!equal);
+           
+            str_sparse_vector<char, bvect, 32> str_sv2(str_sv1);
+            equal = str_sv1.equal(str_sv2);
+            assert(equal);
+       }
+       {
+            str_sparse_vector<char, bvect, 32> str_sv2(str_sv0);
+            str_sv2 = str_sv1;
+            bool equal = str_sv1.equal(str_sv2);
+            assert(equal);
+       }
    }
 
    // scanner search on remapped str vector
@@ -14550,6 +14569,33 @@ void TestStrSparseVector()
 
        found = scanner.find_eq_str("", pos);
        assert(!found);
+   }
+
+    // serialization of remap string vector
+    {
+       str_sparse_vector<char, bvect, 32> str_sv0;
+       str_sparse_vector<char, bvect, 32> str_sv1;
+       str_sparse_vector<char, bvect, 32> str_sv2;
+       str_sv0[0] = "1";
+       str_sv0[1] = "11";
+       str_sv0[2] = "123";
+
+       str_sv1.remap_from(str_sv0);
+
+        BM_DECLARE_TEMP_BLOCK(tb)
+        sparse_vector_serial_layout<str_svect_type> sv_lay;
+        bm::sparse_vector_serialize<str_svect_type>(str_sv1, sv_lay, tb);
+
+        const unsigned char* buf = sv_lay.buf();
+        int res = bm::sparse_vector_deserialize(str_sv2, buf, tb);
+        if (res != 0)
+        {
+            cerr << "De-Serialization error!" << endl;
+            exit(1);
+        }
+        
+        bool equal = str_sv1.equal(str_sv2);
+        assert(equal);
    }
 
    
@@ -14715,7 +14761,9 @@ void StressTestStrSparseVector()
     CompareStrSparseVector(str_sv_remap, str_coll_sorted);
 
 
-
+    // serialization check
+    //
+    cout << "Validate serialization of str-sparse vector..." << endl;
     {
         BM_DECLARE_TEMP_BLOCK(tb)
         sparse_vector_serial_layout<str_svect_type> sv_lay;
@@ -14730,7 +14778,30 @@ void StressTestStrSparseVector()
             exit(1);
         }
         CompareStrSparseVector(str_sv2, str_coll);
+        bool equal = str_sv.equal(str_sv2);
+        assert(equal);
    }
+   cout << "Validate serialization of str-sparse vector... OK" << endl;
+
+   cout << "Validate serialization of REMAP str-sparse vector..." << endl;
+   {
+        BM_DECLARE_TEMP_BLOCK(tb)
+        sparse_vector_serial_layout<str_svect_type> sv_lay;
+        bm::sparse_vector_serialize<str_svect_type>(str_sv_remap, sv_lay, tb);
+
+        str_sparse_vector<char, bvect, 32> str_sv2;
+        const unsigned char* buf = sv_lay.buf();
+        int res = bm::sparse_vector_deserialize(str_sv2, buf, tb);
+        if (res != 0)
+        {
+            cerr << "De-Serialization error" << endl;
+            exit(1);
+        }
+        CompareStrSparseVector(str_sv2, str_coll_sorted);
+        bool equal = str_sv_remap.equal(str_sv2);
+        assert(equal);
+   }
+   cout << "Validate serialization of REMAP str-sparse vector...OK" << endl;
 
    // ----------------------------------------------
    
