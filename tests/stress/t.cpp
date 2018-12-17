@@ -19,7 +19,7 @@ For more information please visit:  http://bitmagic.io
 
 //#define BMSSE2OPT
 //#define BMSSE42OPT
-#define BMAVX2OPT
+//#define BMAVX2OPT
 //#define BM_USE_EXPLICIT_TEMP
 
 #include <stdio.h>
