@@ -899,7 +899,7 @@ bool sparse_vector_scanner<SV>::find_first_eq(const SV&                   sv,
     if (mask_set_)
     {
         agg_.set_range_hint(mask_from_, mask_to_);
-        agg_.add(&bv_mask_);
+        //agg_.add(&bv_mask_);
         
         common_prefix_len = sv.common_prefix_length(mask_from_, mask_to_);
     }
@@ -1386,12 +1386,12 @@ template<typename SV>
 void sparse_vector_scanner<SV>::set_search_range(size_type from, size_type to)
 {
     BM_ASSERT(from < to);
-    
+/*
     bv_mask_.clear(true);
     bv_mask_.set(from);
     bv_mask_.set(to);
     bv_mask_.set_range(from, to, true);
-    
+*/    
     mask_from_ = from;
     mask_to_ = to;
     mask_set_ = true;
