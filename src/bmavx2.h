@@ -547,31 +547,87 @@ bool avx2_and_digest_5way(__m256i* BMRESTRICT dst,
     __m256i m1A, m1B, m1C, m1D;
     __m256i m1E, m1F, m1G, m1H;
 
-    m1A = _mm256_and_si256(_mm256_load_si256(src1 + 0), _mm256_load_si256(src2 + 0));
-    m1B = _mm256_and_si256(_mm256_load_si256(src1 + 1), _mm256_load_si256(src2 + 1));
-    m1C = _mm256_and_si256(_mm256_load_si256(src1 + 2), _mm256_load_si256(src2 + 2));
-    m1D = _mm256_and_si256(_mm256_load_si256(src1 + 3), _mm256_load_si256(src2 + 3));
+    {
+        _mm_prefetch((const char*)src3, _MM_HINT_NTA);
+        _mm_prefetch((const char*)src4, _MM_HINT_NTA);
 
-    m1E = _mm256_and_si256(_mm256_load_si256(src3 + 0), _mm256_load_si256(src4 + 0));
-    m1F = _mm256_and_si256(_mm256_load_si256(src3 + 1), _mm256_load_si256(src4 + 1));
-    m1G = _mm256_and_si256(_mm256_load_si256(src3 + 2), _mm256_load_si256(src4 + 2));
-    m1H = _mm256_and_si256(_mm256_load_si256(src3 + 3), _mm256_load_si256(src4 + 3));
+        __m256i s1_0, s2_0, s1_1, s2_1;
 
-    m1A = _mm256_and_si256(m1A, m1E);
-    m1B = _mm256_and_si256(m1B, m1F);
-    m1C = _mm256_and_si256(m1C, m1G);
-    m1D = _mm256_and_si256(m1D, m1H);
+        s1_0 = _mm256_load_si256(src1 + 0); s2_0 = _mm256_load_si256(src2 + 0);
+        s1_1 = _mm256_load_si256(src1 + 1); s2_1 = _mm256_load_si256(src2 + 1);
+        m1A = _mm256_and_si256(s1_0, s2_0);
+        m1B = _mm256_and_si256(s1_1, s2_1);
+        s1_0 = _mm256_load_si256(src1 + 2); s2_0 = _mm256_load_si256(src2 + 2);
+        s1_1 = _mm256_load_si256(src1 + 3); s2_1 = _mm256_load_si256(src2 + 3);
+        m1C = _mm256_and_si256(s1_0, s2_0);
+        m1D = _mm256_and_si256(s1_1, s2_1);
 
-    m1A = _mm256_and_si256(m1A, _mm256_load_si256(dst + 0));
-    m1B = _mm256_and_si256(m1B, _mm256_load_si256(dst + 1));
-    m1C = _mm256_and_si256(m1C, _mm256_load_si256(dst + 2));
-    m1D = _mm256_and_si256(m1D, _mm256_load_si256(dst + 3));
+        /*
+        m1A = _mm256_and_si256(_mm256_load_si256(src1 + 0), _mm256_load_si256(src2 + 0));
+        m1B = _mm256_and_si256(_mm256_load_si256(src1 + 1), _mm256_load_si256(src2 + 1));
+        m1C = _mm256_and_si256(_mm256_load_si256(src1 + 2), _mm256_load_si256(src2 + 2));
+        m1D = _mm256_and_si256(_mm256_load_si256(src1 + 3), _mm256_load_si256(src2 + 3));
+        */
+    }
+    {
+        __m256i s3_0, s4_0, s3_1, s4_1;
 
+        s3_0 = _mm256_load_si256(src3 + 0); s4_0 = _mm256_load_si256(src4 + 0);
+        s3_1 = _mm256_load_si256(src3 + 1); s4_1 = _mm256_load_si256(src4 + 1);
+        m1E = _mm256_and_si256(s3_0, s4_0);
+        m1F = _mm256_and_si256(s3_1, s4_1);
+
+        m1A = _mm256_and_si256(m1A, m1E);
+        m1B = _mm256_and_si256(m1B, m1F);
+
+        s3_0 = _mm256_load_si256(src3 + 2); s4_0 = _mm256_load_si256(src4 + 2);
+        s3_1 = _mm256_load_si256(src3 + 3); s4_1 = _mm256_load_si256(src4 + 3);
+        m1G = _mm256_and_si256(s3_0, s4_0);
+        m1H = _mm256_and_si256(s3_1, s4_1);
+/*
+        m1E = _mm256_and_si256(_mm256_load_si256(src3 + 0), _mm256_load_si256(src4 + 0));
+        m1F = _mm256_and_si256(_mm256_load_si256(src3 + 1), _mm256_load_si256(src4 + 1));
+        m1G = _mm256_and_si256(_mm256_load_si256(src3 + 2), _mm256_load_si256(src4 + 2));
+        m1H = _mm256_and_si256(_mm256_load_si256(src3 + 3), _mm256_load_si256(src4 + 3));
+*/
+    }
+//    m1A = _mm256_and_si256(m1A, m1E);
+//    m1B = _mm256_and_si256(m1B, m1F);
+
+    {
+        __m256i dst0 = _mm256_load_si256(dst + 0);
+        __m256i dst1 = _mm256_load_si256(dst + 1);
+
+        m1C = _mm256_and_si256(m1C, m1G);
+        m1D = _mm256_and_si256(m1D, m1H);
+
+        m1A = _mm256_and_si256(m1A, dst0);
+        m1B = _mm256_and_si256(m1B, dst1);
+        /*
+         m1A = _mm256_and_si256(m1A, _mm256_load_si256(dst + 0));
+         m1B = _mm256_and_si256(m1B, _mm256_load_si256(dst + 1));
+         */
+        _mm256_store_si256(dst + 0, m1A);
+        _mm256_store_si256(dst + 1, m1B);
+
+        dst0 = _mm256_load_si256(dst + 2);
+        dst1 = _mm256_load_si256(dst + 3);
+        m1C = _mm256_and_si256(m1C, dst0);
+        m1D = _mm256_and_si256(m1D, dst1);
+
+        _mm256_store_si256(dst + 2, m1C);
+        _mm256_store_si256(dst + 3, m1D);
+        /*
+        m1C = _mm256_and_si256(m1C, _mm256_load_si256(dst + 2));
+        m1D = _mm256_and_si256(m1D, _mm256_load_si256(dst + 3));
+        */
+    }
+/*
     _mm256_store_si256(dst + 0, m1A);
     _mm256_store_si256(dst + 1, m1B);
     _mm256_store_si256(dst + 2, m1C);
     _mm256_store_si256(dst + 3, m1D);
-
+*/
     m1A = _mm256_or_si256(m1A, m1B);
     m1C = _mm256_or_si256(m1C, m1D);
     m1A = _mm256_or_si256(m1A, m1C);
