@@ -2739,6 +2739,9 @@ void gap_sub_to_bitset(unsigned* dest, const T*  pcurr, bm::id64_t digest0)
     else
         pcurr += 2;
 
+    unsigned lz = bm::count_leading_zeros_u64(digest0);
+    unsigned stop_pos = (64u - lz) << set_block_digest_pos_shift;
+
     unsigned bc, pos;
     T prev;
     for (; pcurr <= pend; pcurr += 2) // now we are in GAP "1" again
@@ -2748,19 +2751,14 @@ void gap_sub_to_bitset(unsigned* dest, const T*  pcurr, bm::id64_t digest0)
         bc = *pcurr - prev;
         pos = 1u + prev;
         
-        if (bc == 1)
-        {
-            unsigned nword = unsigned(pos >> bm::set_word_shift);
-            unsigned bitpos = pos & bm::set_word_mask;
-            dest[nword] &= ~(1u << bitpos);
-        }
-        else
-        {
-            bool all_zero = bm::check_zero_digest(digest0, prev, *pcurr);
-            if (!all_zero)
-                bm::sub_bit_block(dest, pos, bc);
-        }
-    }
+        bool all_zero = bm::check_zero_digest(digest0, prev, *pcurr);
+        if (!all_zero)
+            bm::sub_bit_block(dest, pos, bc);
+        
+        if (pos > stop_pos)
+            break; // early break is possible based on digest tail
+
+    } // for
 }
 
 
@@ -2880,28 +2878,27 @@ void gap_and_to_bitset(unsigned* dest, const T*  pcurr, bm::id64_t digest0)
     else
         pcurr += 2;
     
+    unsigned lz = bm::count_leading_zeros_u64(digest0);
+    unsigned stop_pos = (64u - lz) << set_block_digest_pos_shift;
+    
     unsigned bc, pos;
     T prev;
     for (; pcurr <= pend; pcurr += 2) // now we are in GAP "0" again
     {
         BM_ASSERT(*pcurr > *(pcurr-1));
+
         prev = pcurr[-1];
         bc = *pcurr - prev;
         pos = 1u + prev;
+        
+        bool all_zero = bm::check_zero_digest(digest0, prev, *pcurr);
+        if (!all_zero)
+            bm::sub_bit_block(dest, pos, bc);
+        
+        if (pos > stop_pos)
+            break; // early break is possible based on digest tail
 
-        if (bc == 1)
-        {
-            unsigned nword = unsigned(pos >> bm::set_word_shift);
-            unsigned bitpos = pos & bm::set_word_mask;
-            dest[nword] &= ~(1u << bitpos);
-        }
-        else
-        {
-            bool all_zero = bm::check_zero_digest(digest0, prev, *pcurr);
-            if (!all_zero)
-                bm::sub_bit_block(dest, pos, bc);
-        }
-    }
+    } // for
 }
 
 
