@@ -515,7 +515,7 @@ void sparse_vector_serializer<SV>::serialize(const SV&  sv,
                       8 +            // size (internal 64-bit)
                       (8 * plains) + // offsets of all plains
                       4;             //  reserve
-//    if (plains > max_v_plains) // for large plain matrixes
+    // for large plain matrixes
     {
         h_size += 1 + // version number
                   8;  // number of plains (64-bit)
@@ -588,18 +588,9 @@ void sparse_vector_serializer<SV>::serialize(const SV&  sv,
     
     enc.put_8((unsigned char)bo);  // byte order
     
-/*
-    if (plains < 255) // simple (int vector) serialization
-    {
-        enc.put_8((unsigned char)plains); // number of plains
-    }
-    else  // bit-matrix with large number of plains */
-    {
-        enc.put_8(0); // number of plains == 0 (legacy magic number)
-        
-        enc.put_8(1);       // matrix serialization version
-        enc.put_64(plains); // number of rows in the bit-matrix
-    }
+    enc.put_8(0);       // number of plains == 0 (legacy magic number)
+    enc.put_8(1);       // matrix serialization version
+    enc.put_64(plains); // number of rows in the bit-matrix
     
     enc.put_64(sv.size_internal());
     
@@ -616,7 +607,6 @@ void sparse_vector_serializer<SV>::serialize(const SV&  sv,
         size_t offset = size_t(p - buf);
         enc.put_64(offset);
     } // for
-    
 }
 
 // -------------------------------------------------------------------------

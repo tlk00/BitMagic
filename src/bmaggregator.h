@@ -1000,7 +1000,6 @@ aggregator<BV>::combine_and_sub(unsigned i, unsigned j,
     digest = process_bit_blocks_sub(arg_blk_sub_count, digest);
     if (!digest)
         return digest;
-
     
     // AND all GAP block
     //

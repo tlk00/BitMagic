@@ -329,7 +329,7 @@ unsigned long long bmi_blsi_u64(unsigned long long w)
 #endif
 }
 
-
+/// 64-bit bit-scan reverse
 inline
 unsigned count_leading_zeros_u64(bm::id64_t w)
 {
@@ -353,6 +353,32 @@ unsigned count_leading_zeros_u64(bm::id64_t w)
     return z;
 #endif
 }
+
+inline
+unsigned count_trailing_zeros_u64(bm::id64_t w)
+{
+    BM_ASSERT(w);
+
+#if defined(BMAVX2OPT) || defined (BMAVX512OPT)
+    return _tzcnt_u64(w);
+#else
+    unsigned z;
+    unsigned w1 = unsigned(w);
+    if (!w1)
+    {
+        z = 32;
+        w1 = unsigned(w >> 32);
+        z += bm::bit_scan_forward32(w1);
+    }
+    else
+    {
+        z = bm::bit_scan_forward32(w1);
+    }
+    return z;
+#endif
+}
+
+
 
 #ifdef __GNUG__
 #pragma GCC diagnostic pop

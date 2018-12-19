@@ -308,7 +308,7 @@ public:
     
 protected:
 
-    /// set search boundaries
+    /// set search boundaries (hint for the aggregator)
     void set_search_range(size_type from, size_type to);
     
     /// reset (disable) search range
@@ -328,7 +328,8 @@ protected:
     /// find first string value (may include NULL indexes)
     bool find_first_eq(const SV&                       sv,
                        const typename SV::value_type*  str,
-                       bm::id_t&                       idx);
+                       bm::id_t&                       idx,
+                       bool                            remaped);
 
     
     /// Prepare aggregator for AND-SUB (EQ) search
@@ -367,7 +368,6 @@ private:
     bm::aggregator<bvector_type>       agg_;
     bm::rank_compressor<bvector_type>  rank_compr_;
     
-    bvector_type                       bv_mask_;  ///< AND mask vector
     size_type                          mask_from_;
     size_type                          mask_to_;
     bool                               mask_set_;
@@ -729,7 +729,6 @@ void set2set_11_transform<SV>::one_pass_run(const bvector_type&        bv_in,
 template<typename SV>
 sparse_vector_scanner<SV>::sparse_vector_scanner()
 {
-    bv_mask_.set_allocator_pool(&pool_);
     mask_set_ = false;
     mask_from_ = mask_to_ = bm::id_max;
 
@@ -881,7 +880,8 @@ bool sparse_vector_scanner<SV>::find_first_eq(const SV&   sv,
 template<typename SV>
 bool sparse_vector_scanner<SV>::find_first_eq(const SV&                   sv,
                                           const typename SV::value_type*  str,
-                                          bm::id_t&                       idx)
+                                          bm::id_t&                       idx,
+                                          bool                            remaped)
 {
     if (sv.empty())
         return false; // nothing to do
@@ -893,23 +893,25 @@ bool sparse_vector_scanner<SV>::find_first_eq(const SV&                   sv,
     agg_.reset();
     unsigned common_prefix_len = 0;
     
-    // if search mask is set - add it as first(!) AND operation to reduce
-    // the search space
-    // TODO: add flags and checks that mask represents a sorted case
     if (mask_set_)
     {
         agg_.set_range_hint(mask_from_, mask_to_);
-        //agg_.add(&bv_mask_);
-        
-        common_prefix_len = sv.common_prefix_length(mask_from_, mask_to_);
+        common_prefix_len = 0; // sv.common_prefix_length(mask_from_, mask_to_);
     }
     
-    if (sv.is_remap() && str != remap_value_vect_)
+    if (remaped)
     {
-        bool r = sv.remap_tosv(remap_value_vect_, SV::max_vector_size, str);
-        if (!r)
-            return r;
         str = remap_value_vect_;
+    }
+    else
+    {
+        if (sv.is_remap() && str != remap_value_vect_)
+        {
+            bool r = sv.remap_tosv(remap_value_vect_, SV::max_vector_size, str);
+            if (!r)
+                return r;
+            str = remap_value_vect_;
+        }
     }
     
     bool found = prepare_and_sub_aggregator(sv, str, common_prefix_len);
@@ -1115,19 +1117,20 @@ bool sparse_vector_scanner<SV>::find_eq_str(const SV&                      sv,
         return found;
     if (*str)
     {
+        bool remaped = false;
         if (bm::conditional<SV::is_remap_support::value>::test()) // test remapping trait
         {
             if (sv.is_remap() && str != remap_value_vect_)
             {
-                bool r = sv.remap_tosv(remap_value_vect_, SV::max_vector_size, str);
-                if (!r)
-                    return r;
+                remaped = sv.remap_tosv(remap_value_vect_, SV::max_vector_size, str);
+                if (!remaped)
+                    return remaped;
                 str = remap_value_vect_;
             }
         }
     
         bm::id_t found_pos;
-        found = find_first_eq(sv, str, found_pos);
+        found = find_first_eq(sv, str, found_pos, remaped);
         if (found)
         {
             pos = found_pos;
@@ -1159,17 +1162,20 @@ bool sparse_vector_scanner<SV>::bfind_eq_str(const SV&                      sv,
     if (sv.empty())
         return found;
 
+
     if (*str)
     {
+        bool remaped = false;
         // test search pre-condition based on remap tables
         if (bm::conditional<SV::is_remap_support::value>::test())
         {
             if (sv.is_remap() && str != remap_value_vect_)
             {
-                bool r =
-                    sv.remap_tosv(remap_value_vect_, SV::max_vector_size, str);
-                if (!r)
-                    return r;
+                remaped = sv.remap_tosv(
+                                remap_value_vect_, SV::max_vector_size, str);
+                if (!remaped)
+                    return remaped;
+                
             }
         }
         
@@ -1232,7 +1238,7 @@ bool sparse_vector_scanner<SV>::bfind_eq_str(const SV&                      sv,
         } // while
 
         // use linear search (range is set)
-        found = find_first_eq(sv, str, found_pos);
+        found = find_first_eq(sv, str, found_pos, remaped);
         if (found)
         {
             pos = found_pos;
@@ -1386,12 +1392,6 @@ template<typename SV>
 void sparse_vector_scanner<SV>::set_search_range(size_type from, size_type to)
 {
     BM_ASSERT(from < to);
-/*
-    bv_mask_.clear(true);
-    bv_mask_.set(from);
-    bv_mask_.set(to);
-    bv_mask_.set_range(from, to, true);
-*/    
     mask_from_ = from;
     mask_to_ = to;
     mask_set_ = true;

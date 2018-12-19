@@ -2599,13 +2599,13 @@ void sub_bit_block(unsigned* dest, unsigned bitpos, unsigned bitcount)
     
     dest += unsigned(bitpos >> bm::set_word_shift); // nword
     bitpos &= bm::set_word_mask;
-/*
+
     if (bitcount == 1u)  // special case (only 1 bit to set)
     {
         *dest &= ~(1u << bitpos);
         return;
     }
-*/
+
     if (bitpos) // starting pos is not aligned
     {
         unsigned mask_r = maskFF << bitpos;
@@ -2739,6 +2739,17 @@ void gap_sub_to_bitset(unsigned* dest, const T*  pcurr, bm::id64_t digest0)
     else
         pcurr += 2;
 
+    // wind forward to digest start
+    {
+        unsigned tz = bm::count_trailing_zeros_u64(digest0);
+        unsigned start_pos = tz << set_block_digest_pos_shift;
+        for (; pcurr <= pend; pcurr += 2) // now we are in GAP "0"
+        {
+            if (*pcurr >= start_pos)
+                break;
+        }
+    }
+
     unsigned lz = bm::count_leading_zeros_u64(digest0);
     unsigned stop_pos = (64u - lz) << set_block_digest_pos_shift;
 
@@ -2866,6 +2877,8 @@ template<typename T>
 void gap_and_to_bitset(unsigned* dest, const T*  pcurr, bm::id64_t digest0)
 {
     BM_ASSERT(dest && pcurr);
+    if (!digest0)
+        return;
     
     const T* pend = pcurr + (*pcurr >> 3);
     if (!(*pcurr & 1) )  // Starts with 0
@@ -2877,7 +2890,18 @@ void gap_and_to_bitset(unsigned* dest, const T*  pcurr, bm::id64_t digest0)
     }
     else
         pcurr += 2;
-    
+
+    // wind forward to digest start
+    {
+        unsigned tz = bm::count_trailing_zeros_u64(digest0);
+        unsigned start_pos = tz << set_block_digest_pos_shift;
+        for (; pcurr <= pend; pcurr += 2) // now we are in GAP "0"
+        {
+            if (*pcurr >= start_pos)
+                break;
+        }
+    }
+
     unsigned lz = bm::count_leading_zeros_u64(digest0);
     unsigned stop_pos = (64u - lz) << set_block_digest_pos_shift;
     
@@ -2895,8 +2919,8 @@ void gap_and_to_bitset(unsigned* dest, const T*  pcurr, bm::id64_t digest0)
         if (!all_zero)
             bm::sub_bit_block(dest, pos, bc);
         
-        if (pos > stop_pos)
-            break; // early break is possible based on digest tail
+        if (pos > stop_pos) // early break is possible based on digest tail
+            break;
 
     } // for
 }
