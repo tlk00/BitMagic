@@ -360,7 +360,11 @@ protected:
     typedef bm::heap_matrix<value_type,
         bm::set_total_blocks,
         max_columns,
-        typename bvector_type::allocator_type>  heap_matrix_type;
+        typename bvector_type::allocator_type>  heap_matrix_type0;
+    typedef bm::heap_matrix<value_type,
+        bm::set_total_blocks*3,
+        max_columns,
+        typename bvector_type::allocator_type>  heap_matrix_type3;
 
 private:
     allocator_pool_type                pool_;
@@ -373,7 +377,8 @@ private:
     bool                               mask_set_;
     
     const SV*                          bound_sv_;
-    heap_matrix_type                   block0_elements_cache_; ///< cache for elements[0] of each block
+    heap_matrix_type0                  block0_elements_cache_; ///< cache for elements[0] of each block
+    heap_matrix_type3                  block3_elements_cache_; ///< cache for elements[16384x] of each block
     size_type                          effective_str_max_;
     
     value_type                         remap_value_vect_[SV::max_vector_size];
@@ -746,7 +751,25 @@ void sparse_vector_scanner<SV>::bind(const SV&  sv, bool sorted)
     {
         block0_elements_cache_.init();
         block0_elements_cache_.set_zero();
+        block3_elements_cache_.init();
+        block3_elements_cache_.set_zero();
+        
         effective_str_max_ = sv.effective_vector_max();
+        // fill in elements cache
+        for (size_type i = 0; i < sv.size(); i+= bm::gap_max_bits)
+        {
+            unsigned nb = unsigned(i >> bm::set_block_shift);
+            value_type* s0 = block0_elements_cache_.row(nb);
+            sv.get(i, s0, block0_elements_cache_.cols());
+            
+            const unsigned sub_block3_size = bm::gap_max_bits / 4;
+            for (size_type k = 0; k < 3; ++k)
+            {
+                value_type* s1 = block3_elements_cache_.row(nb * 3 + k);
+                size_type idx = i + (k+1) * sub_block3_size;
+                sv.get(idx, s1, block3_elements_cache_.cols());
+            } // for k
+        } // for i
     }
     // pre-calculate vector plain masks
     //
@@ -754,6 +777,7 @@ void sparse_vector_scanner<SV>::bind(const SV&  sv, bool sorted)
     {
         vector_plain_masks_[i] = sv.get_plains_mask(i);
     } // for i
+    
 }
 
 //----------------------------------------------------------------------------
@@ -1162,7 +1186,6 @@ bool sparse_vector_scanner<SV>::bfind_eq_str(const SV&                      sv,
     if (sv.empty())
         return found;
 
-
     if (*str)
     {
         bool remaped = false;
@@ -1175,7 +1198,6 @@ bool sparse_vector_scanner<SV>::bfind_eq_str(const SV&                      sv,
                                 remap_value_vect_, SV::max_vector_size, str);
                 if (!remaped)
                     return remaped;
-                
             }
         }
         
@@ -1201,17 +1223,56 @@ bool sparse_vector_scanner<SV>::bfind_eq_str(const SV&                      sv,
                 unsigned nb_r = unsigned(r >> bm::set_block_shift);
                 if (nb_l != nb_r)
                 {
-                    typename SV::size_type mid = nb_r * bm::gap_max_bits;
+                    size_type mid = nb_r * bm::gap_max_bits;
                     if (mid < r)
                     {
                         int cmp = this->compare_str(sv, mid, str);
-                        if (cmp < 0)
+                        if (cmp < 0) // mid < str
                             l = mid;
                         else
                             r = mid-(cmp!=0); // branchless if (cmp==0) r=mid;
                         BM_ASSERT(l < r);
                     }
+                    nb_l = unsigned(l >> bm::set_block_shift);
+                    nb_r = unsigned(r >> bm::set_block_shift);
                 }
+                
+                if (nb_l == nb_r)
+                {
+                    unsigned max_nb = sv.size() >> bm::set_block_shift;
+                    if (nb_l != max_nb)
+                    {
+                        // linear in-place fixed depth scan to identify the sub-range
+                        const unsigned sub_block3_size = bm::gap_max_bits / 4;
+                        size_type mid = nb_r * bm::gap_max_bits + sub_block3_size;
+                        int cmp = this->compare_str(sv, mid, str);
+                        if (cmp < 0)
+                        {
+                            l = mid;
+                            mid = nb_r * bm::gap_max_bits + sub_block3_size * 2;
+                            cmp = this->compare_str(sv, mid, str);
+                            if (cmp < 0)
+                            {
+                                l = mid;
+                                mid = nb_r * bm::gap_max_bits + sub_block3_size * 3;
+                                cmp = this->compare_str(sv, mid, str);
+                                if (cmp < 0)
+                                    l = mid;
+                                else
+                                    r = mid;
+                            }
+                            else
+                            {
+                                r = mid;
+                            }
+                        }
+                        else
+                        {
+                            r = mid;
+                        }
+                    }
+                }
+                
                 set_search_range(l, r);
                 break;
             }
@@ -1220,7 +1281,19 @@ bool sparse_vector_scanner<SV>::bfind_eq_str(const SV&                      sv,
             unsigned nb = unsigned(mid >> bm::set_block_shift);
             mid = nb * bm::gap_max_bits;
             if (mid <= l)
-                mid = dist / 2 + l;             
+            {
+                if (nb == 0 && r > bm::gap_max_bits)
+                    mid = bm::gap_max_bits;
+                else
+                    mid = dist / 2 + l;
+/*
+            std::cout << "mid=" << mid << " l=" << l << " r=" << r << std::endl;
+                if (mid % bm::gap_max_bits)
+                {
+    std::cout << "@ ";
+                }
+*/
+            }
             BM_ASSERT(mid > l);
 
             int cmp = this->compare_str(sv, mid, str);
@@ -1291,13 +1364,32 @@ int sparse_vector_scanner<SV>::compare_str(const SV& sv,
             int res = 0;
             for (unsigned i = 0; i < block0_elements_cache_.cols(); ++i)
             {
-                char octet = str[i];
-                char value = s0[i];
+                char octet = str[i]; char value = s0[i];
                 res = (value > octet) - (value < octet);
                 if (res || !octet)
                     break;
-            }
+            } // for i
+            BM_ASSERT(res == sv.compare(idx, str));
             return res;
+        }
+        else
+        {
+            const unsigned sub_block3_size = bm::gap_max_bits / 4;
+            if (nbit % sub_block3_size == 0)
+            {
+                size_type k = nbit / sub_block3_size - 1;
+                value_type* s1 = block3_elements_cache_.row(nb * 3 + k);
+                int res = 0;
+                for (unsigned i = 0; i < block3_elements_cache_.cols(); ++i)
+                {
+                    char octet = str[i]; char value = s1[i];
+                    res = (value > octet) - (value < octet);
+                    if (res || !octet)
+                        break;
+                } // for i
+                BM_ASSERT(res == sv.compare(idx, str));
+                return res;
+            }
         }
     }
     return sv.compare(idx, str);

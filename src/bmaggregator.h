@@ -939,7 +939,7 @@ void aggregator<BV>::combine_and(unsigned i, unsigned j,
     {
         // AND bit-blocks
         //
-        bm::id64_t digest = 0;
+        bm::id64_t digest = ~0ull;
         digest = process_bit_blocks_and(arg_blk_count, digest);
         if (!digest)
             return;
@@ -1287,22 +1287,38 @@ aggregator<BV>::process_bit_blocks_and(unsigned   arg_blk_count,
 {
     bm::word_t* blk = ar_->tb1;
     unsigned k = 0;
-    switch (arg_blk_count)
+    
+    unsigned nb_from = unsigned(range_from_ >> bm::set_block_shift);
+    unsigned nb_to = unsigned(range_to_ >> bm::set_block_shift);
+    if (range_set_ && (nb_from == nb_to))
     {
-    case 0:
-        bm::bit_block_set(ar_->tb1, ~0u); // set buffer to 0xFF...
-        return ~0ull;
-    case 1:
-        bm::bit_block_copy(blk, ar_->v_arg_and_blk[k]);
-        return bm::calc_block_digest0(blk);
-    default:
-        digest = bm::bit_block_and_2way(blk,
-                                        ar_->v_arg_and_blk[k],
-                                        ar_->v_arg_and_blk[k+1],
-                                        ~0ull);
-        k += 2;
-        break;
-    } // switch
+        unsigned nbit_from = unsigned(range_from_ & bm::set_block_mask);
+        unsigned nbit_to = unsigned(range_to_ & bm::set_block_mask);
+        digest_type digest0 = bm::digest_mask(nbit_from, nbit_to);
+        digest &= digest0;
+        bm::block_init_digest0(blk, digest);
+    }
+    else
+    {
+        switch (arg_blk_count)
+        {
+        case 0:
+            bm::block_init_digest0(blk, digest); // 0xFF... by default
+            return digest;
+//            bm::bit_block_set(blk, ~0u); // set buffer to 0xFF...
+//            return ~0ull;
+        case 1:
+            bm::bit_block_copy(blk, ar_->v_arg_and_blk[k]);
+            return bm::calc_block_digest0(blk);
+        default:
+            digest = bm::bit_block_and_2way(blk,
+                                            ar_->v_arg_and_blk[k],
+                                            ar_->v_arg_and_blk[k+1],
+                                            ~0ull);
+            k += 2;
+            break;
+        } // switch
+    }
 
     unsigned unroll_factor, len, len_unr;
     unsigned single_bit_idx;

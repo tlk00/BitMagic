@@ -607,6 +607,25 @@ bm::id64_t widx_to_digest_mask(unsigned w_idx)
     return mask << (w_idx / bm::set_block_digest_wave_size);
 }
 
+/**
+   \brief Compute digest mask for [from..to] positions
+    \param from - range from (in bit-block coordinates)
+    \param to - range to (in bit-block coordinates)
+
+   @ingroup bitfunc
+   @internal
+*/
+BMFORCEINLINE
+bm::id64_t digest_mask(unsigned from, unsigned to)
+{
+    BM_ASSERT(from <= to);
+    
+    bm::id64_t digest_from = from >> bm::set_block_digest_pos_shift;
+    bm::id64_t digest_to = to >> bm::set_block_digest_pos_shift;;
+    const bm::id64_t maskFF(~0ull);
+    return ((maskFF) >> (63 - (digest_to - digest_from))) << digest_from;
+}
+
 /*!
     \brief check if all digest bits for the range [from..to] are 0
  
@@ -622,6 +641,7 @@ bm::id64_t widx_to_digest_mask(unsigned w_idx)
 inline
 bool check_zero_digest(bm::id64_t digest, unsigned bitpos_from, unsigned bitpos_to)
 {
+/*
     BM_ASSERT(bitpos_from <= bitpos_to);
     
     bm::id64_t digest_from = bitpos_from >> bm::set_block_digest_pos_shift;
@@ -629,9 +649,35 @@ bool check_zero_digest(bm::id64_t digest, unsigned bitpos_from, unsigned bitpos_
     const bm::id64_t maskFF(~0ull);
     bm::id64_t mask =
         ((maskFF) >> (63 - (digest_to - digest_from))) << digest_from;
+*/
+    bm::id64_t mask = bm::digest_mask(bitpos_from, bitpos_to);
     return !(digest & mask);
 }
 
+/*!
+   \brief Init block with 000111000 pattren based on digest
+   \param block  - Bit block [out]
+   \param digest - digest (used for block initialization)
+ 
+   @ingroup bitfunc
+   @internal
+*/
+inline
+void block_init_digest0(bm::word_t* const block, bm::id64_t digest)
+{
+    unsigned   off;
+    for (unsigned i = 0; i < 64; ++i)
+    {
+        off = i * bm::set_block_digest_wave_size;
+        bm::word_t mask = (digest & 1) ? ~0u : 0u;
+        for (unsigned j = 0; j < bm::set_block_digest_wave_size; j+=4)
+        {
+            block[off+j+0] = block[off+j+1] =
+            block[off+j+2] = block[off+j+3] = mask;
+        } // for j
+        digest >>= 1ull;
+    } // for
+}
 
 /*!
    \brief Compute digest for 64 non-zero areas
