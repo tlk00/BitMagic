@@ -542,18 +542,25 @@ void sparse_vector_serializer<SV>::serialize(const SV&  sv,
         
         sv_layout.set_plain(i, buf_ptr, buf_size);
         buf_ptr += buf_size;
-        sv_stat.max_serialize_mem -= buf_size;
+        if (sv_stat.max_serialize_mem > buf_size)
+        {
+            sv_stat.max_serialize_mem -= buf_size;
+        }
+        else
+        {
+            BM_ASSERT(0); // TODO: throw an exception here
+        }
     } // for i
     
-    size_t current_size = size_t(buf_ptr - buf);
-    size_t remaining_size = sv_stat.max_serialize_mem - current_size;
+//    size_t current_size = size_t(buf_ptr - buf);
+//    size_t remaining_size = sv_stat.max_serialize_mem - current_size;
     
     // -----------------------------------------------------
     // serialize the re-map matrix
     //
     if (bm::conditional<SV::is_remap_support::value>::test()) // test remapping trait
     {
-        bm::encoder enc_m(buf_ptr, remaining_size);
+        bm::encoder enc_m(buf_ptr, sv_stat.max_serialize_mem);
         if (sv.is_remap())
         {
             bm::id64_t remap_size = sv.remap_size();
