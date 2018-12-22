@@ -251,7 +251,7 @@ public:
         if (idx >= this->size())
             this->size_ = idx+1;
 
-        size_type sz = size_type((str.size() < MAX_STR_SIZE) ? str.size() : MAX_STR_SIZE);
+        size_type sz = size_type((str.size() < MAX_STR_SIZE) ? str.size() : MAX_STR_SIZE-1);
         if(!sz)
         {
             this->clear_value_plains_from(0, idx);
@@ -271,6 +271,8 @@ public:
             if (!ch)
                 break;
         } // for i
+        if (idx > sz)
+            return;
         this->bmatr_.set_octet(idx, sz, 0);
         this->clear_value_plains_from(sz*8+1, idx);
     }
