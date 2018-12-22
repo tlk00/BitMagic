@@ -670,11 +670,15 @@ void block_init_digest0(bm::word_t* const block, bm::id64_t digest)
     {
         off = i * bm::set_block_digest_wave_size;
         bm::word_t mask = (digest & 1) ? ~0u : 0u;
+#if defined(VECT_BLOCK_SET_DIGEST)
+        VECT_BLOCK_SET_DIGEST(&block[off], mask);
+#else
         for (unsigned j = 0; j < bm::set_block_digest_wave_size; j+=4)
         {
             block[off+j+0] = block[off+j+1] =
             block[off+j+2] = block[off+j+3] = mask;
         } // for j
+#endif
         digest >>= 1ull;
     } // for
 }

@@ -205,13 +205,26 @@ bool sse4_is_digest_zero(const __m128i* BMRESTRICT block)
     return z1 & z2;
 }
 
+/*!
+    @brief set digest stride to 0xFF.. or 0x0 value
+    @ingroup SSE4
+*/
+inline
+void sse4_block_set_digest(__m128i* dst, unsigned value)
+{
+    __m128i mV = _mm_set1_epi32(int(value));
+    _mm_store_si128(dst, mV);     _mm_store_si128(dst + 1, mV); 
+    _mm_store_si128(dst + 2, mV); _mm_store_si128(dst + 3, mV); 
+    _mm_store_si128(dst + 4, mV); _mm_store_si128(dst + 5, mV); 
+    _mm_store_si128(dst + 6, mV); _mm_store_si128(dst + 7, mV);
+}
+
 
 /*!
     @brief AND blocks2
     *dst &= *src
  
     @return 0 if no bits were set
-
     @ingroup SSE4
 */
 inline
@@ -1185,6 +1198,9 @@ bool sse42_shift_r1_and(__m128i* block,
 
 #define VECT_IS_DIGEST_ZERO(start) \
     sse4_is_digest_zero((__m128i*)start)
+
+#define VECT_BLOCK_SET_DIGEST(dst, val) \
+    sse4_block_set_digest((__m128i*)dst, val)
 
 #define VECT_LOWER_BOUND_SCAN_U32(arr, target, from, to) \
     sse4_lower_bound_scan_u32(arr, target, from, to)

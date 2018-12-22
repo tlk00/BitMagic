@@ -1200,6 +1200,19 @@ bool avx2_is_digest_zero(const __m256i* BMRESTRICT block)
     return _mm256_testz_si256(wA, wA);
 }
 
+/*!
+    @brief set digest stride to 0xFF.. or 0x0 value
+    @ingroup AVX2
+*/
+inline 
+void avx2_block_set_digest(__m256i* dst, unsigned value)
+{
+    __m256i mV = _mm256_set1_epi32(int(value));
+    _mm256_store_si256(dst, mV);
+    _mm256_store_si256(dst + 1, mV);
+    _mm256_store_si256(dst + 2, mV);
+    _mm256_store_si256(dst + 3, mV);
+}
 
 /*!
     @brief check if block is all one bits
@@ -2411,6 +2424,9 @@ unsigned avx2_bit_to_gap(gap_word_t* BMRESTRICT dest,
 
 #define VECT_IS_DIGEST_ZERO(start) \
     avx2_is_digest_zero((__m256i*)start)
+
+#define VECT_BLOCK_SET_DIGEST(dst, val) \
+    avx2_block_set_digest((__m256i*)dst, val)
 
 #define VECT_LOWER_BOUND_SCAN_U32(arr, target, from, to) \
     avx2_lower_bound_scan_u32(arr, target, from, to)
