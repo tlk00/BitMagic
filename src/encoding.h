@@ -458,7 +458,7 @@ public:
         if (used_bits_ == (sizeof(accum_) * 8))
         {
             accum_ = src_.get_32();
-            used_bits_ ^= used_bits_;
+            used_bits_ = 0;
             goto take_accum;
         }
         value = accum_;
