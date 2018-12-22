@@ -75,6 +75,7 @@ For more information please visit:  http://bitmagic.io
 #undef VECT_AND_DIGEST
 #undef VECT_AND_DIGEST_2WAY
 #undef VECT_AND_DIGEST_5WAY
+#undef VECT_BLOCK_SET_DIGEST
 
 #undef BMI1_SELECT64
 #undef BMI2_SELECT64
