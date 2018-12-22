@@ -27,6 +27,10 @@ For more information please visit:  http://bitmagic.io
 #include "bmbuffer.h"
 #include "bmdef.h"
 
+#ifdef _MSC_VER
+# pragma warning( disable: 4146 )
+#endif
+
 
 /** \defgroup svalgo Sparse vector algorithms
     Sparse vector algorithms
@@ -920,7 +924,7 @@ bool sparse_vector_scanner<SV>::find_first_eq(const SV&                   sv,
     if (mask_set_)
     {
         agg_.set_range_hint(mask_from_, mask_to_);
-        common_prefix_len = 0; // sv.common_prefix_length(mask_from_, mask_to_);
+        common_prefix_len = sv.common_prefix_length(mask_from_, mask_to_);
     }
     
     if (remaped)
@@ -1002,7 +1006,7 @@ bool sparse_vector_scanner<SV>::prepare_and_sub_aggregator(const SV&  sv,
             vinv ^= 0xFFFF;
         }
         // exclude the octet bits which are all not set (no vectors)
-        vinv &= plains_mask;
+        vinv &= unsigned(plains_mask);
         for (unsigned octet_plain = (unsigned(octet_idx) * 8); vinv; vinv &= vinv-1)
         {
             bm::id_t t = vinv & -vinv;
