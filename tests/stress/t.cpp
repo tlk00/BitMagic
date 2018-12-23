@@ -11027,7 +11027,7 @@ void LZCNTTest()
     t = bm::count_trailing_zeros(2);
     assert(t == 1);
 
-    l = bm::count_leading_zeros(~0);
+    l = bm::count_leading_zeros(~0u);
     assert(l == 0);
     l = bm::count_leading_zeros(~0u >> 1u);
     assert(l == 1);
@@ -14335,8 +14335,19 @@ void TestStrSparseVector()
            cmp = ::strcmp(str, str0.c_str());
            assert(cmp==0);
        }
+       
+       // test truncation of input string
+       {
+          str_sparse_vector<char, bvect, 3> str_sv10;
+          const char* s10 = "12345";
+          const char* s10c = "123";
+           str_sv10.set(1, s10);
+           str_sv10.get(1, str, sizeof(str));
+           cmp = ::strcmp(str, s10c);
+           assert(cmp == 0);
+       }
 
-       // reference tests
+       // reference test / serialization test
        {
        const char* s = str_sv0[3];
        cmp = ::strcmp(s, str0.c_str());
@@ -14361,6 +14372,7 @@ void TestStrSparseVector()
         bm::sparse_vector_serialize<str_svect_type>(str_sv0, sv_lay, tb);
 
         str_sparse_vector<char, bvect, 32> str_sv2;
+        
         const unsigned char* buf = sv_lay.buf();
         int res = bm::sparse_vector_deserialize(str_sv2, buf, tb);
         if (res != 0)
@@ -14371,6 +14383,16 @@ void TestStrSparseVector()
         
         bool eq = str_sv0.equal(str_sv2);
         assert(eq);
+        
+        str_sparse_vector<char, bvect, 64> str_sv3;   // size increase test
+        buf = sv_lay.buf();
+        res = bm::sparse_vector_deserialize(str_sv3, buf, tb);
+        if (res != 0)
+        {
+            cerr << "De-Serialization error" << endl;
+            exit(1);
+        }
+
 
        }
 
@@ -17864,7 +17886,7 @@ int main(void)
 
 //avx2_i32_shift();
 //return 0;
-/*
+
     TestRecomb();
 
     OptimGAPTest();
@@ -17877,7 +17899,7 @@ int main(void)
     TestArraysAndBuffers();
  
     Log2Test();
-*/
+
     LZCNTTest();
 
     SelectTest();
