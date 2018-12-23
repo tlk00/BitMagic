@@ -43,7 +43,7 @@ namespace bm
    \brief sparse vector for strings with compression using bit transposition method
  
    Initial string is bit-transposed into bit-planes so collection may use less
-   memory due to prefix sum compression in bit-plains.
+   memory due to prefix sum (GAP) compression in bit-plains.
  
    @ingroup sv
 */
@@ -437,7 +437,11 @@ public:
     ///@}
 
     // ------------------------------------------------------------
-    /*! @name remapping, succinct utilities                      */
+    /*! @name remapping, succinct utilities
+        Remapping implements reduction of dit-depth thus improves
+        search performance. Remapping limits farther modifications
+        of sparse vector.
+    */
     ///@{
     
     /**
@@ -447,6 +451,7 @@ public:
     
     /**
         Build remapping profile and load content from another sparse vector
+        \param str_sv - source sparse vector (assumed it is not remapped)
     */
     void remap_from(const str_sparse_vector& str_sv);
 

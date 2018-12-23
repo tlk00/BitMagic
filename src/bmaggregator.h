@@ -1305,8 +1305,6 @@ aggregator<BV>::process_bit_blocks_and(unsigned   arg_blk_count,
         case 0:
             bm::block_init_digest0(blk, digest); // 0xFF... by default
             return digest;
-//            bm::bit_block_set(blk, ~0u); // set buffer to 0xFF...
-//            return ~0ull;
         case 1:
             bm::bit_block_copy(blk, ar_->v_arg_and_blk[k]);
             return bm::calc_block_digest0(blk);

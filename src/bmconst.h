@@ -88,6 +88,9 @@ const unsigned rs3_border0 = 21824; // 682 words by 32-bits
 const unsigned rs3_border1 = (rs3_border0 * 2); // 43648
 const unsigned rs3_half_span = rs3_border0 / 2;
 
+// misc parameters for sparse vec algorithms
+const unsigned sub_block3_size = bm::gap_max_bits / 4;
+
 
 #if defined(BM64OPT) || defined(BM64_SSE4)
 
@@ -185,8 +188,8 @@ template<bool T> struct _copyright
 };
 
 template<bool T> const char _copyright<T>::_p[] = 
-    "BitMagic C++ Library. v.3.17.0 (c) 2002-2018 Anatoliy Kuznetsov.";
-template<bool T> const unsigned _copyright<T>::_v[3] = {3, 17, 0};
+    "BitMagic C++ Library. v.3.18.0 (c) 2002-2018 Anatoliy Kuznetsov.";
+template<bool T> const unsigned _copyright<T>::_v[3] = {3, 18, 0};
 
 
 

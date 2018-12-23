@@ -641,15 +641,6 @@ bm::id64_t digest_mask(unsigned from, unsigned to)
 inline
 bool check_zero_digest(bm::id64_t digest, unsigned bitpos_from, unsigned bitpos_to)
 {
-/*
-    BM_ASSERT(bitpos_from <= bitpos_to);
-    
-    bm::id64_t digest_from = bitpos_from >> bm::set_block_digest_pos_shift;
-    bm::id64_t digest_to = bitpos_to >> bm::set_block_digest_pos_shift;;
-    const bm::id64_t maskFF(~0ull);
-    bm::id64_t mask =
-        ((maskFF) >> (63 - (digest_to - digest_from))) << digest_from;
-*/
     bm::id64_t mask = bm::digest_mask(bitpos_from, bitpos_to);
     return !(digest & mask);
 }
@@ -3869,7 +3860,6 @@ bm::id_t bit_block_calc_count(const bm::word_t* block,
     
     @ingroup bitfunc 
 */
-
 inline 
 bm::id_t bit_count_change(bm::word_t w)
 {
@@ -3944,106 +3934,6 @@ unsigned bit_block_calc_change(const bm::word_t* block)
 #endif
 }
 
-
-/*!
-    Function calculates number of times when bit value changed 
-    (1-0 or 0-1) in the bit block.
-    Also calulates number of bits ON.
-    
-    @param bit_count - OUT total number of bits ON
-    @param block - bit-block start pointer
-    @param block_end - bit-block end pointer
-    
-    @return number of 1-0, 0-1 transitions
-        
-    @ingroup bitfunc 
-*/
-/*
-inline 
-bm::id_t bit_block_calc_count_change(const bm::word_t* block, 
-                                     const bm::word_t* block_end,
-                                     unsigned*         bit_count)
-{
-#if defined(BMSSE2OPT) || defined(BMSSE42OPT) || defined (BMAVX2OPT) || defined(BMAVX512OPT)
-
-#if defined(BMAVX2OPT) || defined(BMAVX512OPT)
-    // TODO: debug true avx2 function (stress test failure)
-    // temp use SSE4.2 variant
-    return sse42_bit_block_calc_count_change(
-        (const __m128i*)block, (const __m128i*)block_end, bit_count);
-#else
-#ifdef BMSSE42OPT
-    return sse4_bit_block_calc_count_change(
-        (const __m128i*)block, (const __m128i*)block_end, bit_count);
-#else
-# ifdef BMSSE2OPT
-    return sse2_bit_block_calc_count_change(
-        (const __m128i*)block, (const __m128i*)block_end, bit_count);
-# endif
-#endif
-#endif
-
-#else // non-SIMD code
-
-    BM_ASSERT(block < block_end);
-    BM_ASSERT(bit_count);
-    
-    
-#ifdef BM64OPT
-    bm::id64_t count = 1;
-    *bit_count = 0;
-
-    // 64-bit optimized algorithm.
-
-    const bm::id64_t* b1 = (bm::id64_t*) block;
-    const bm::id64_t* b2 = (bm::id64_t*) block_end;
-
-    bm::id64_t w, w0, w_prev, w_l;
-    w = w0 = *b1;
-    
-    *bit_count = word_bitcount64(w);
-    
-    const int w_shift = sizeof(w) * 8 - 1;
-    w ^= (w >> 1);
-    count += word_bitcount64(w);
-    count -= (w_prev = (w0 >> w_shift)); // negative value correction
-
-    
-    for (++b1 ;b1 < b2; ++b1)
-    {
-        w = w0 = *b1;
-        
-        ++count;
-        
-        if (!w)
-        {
-            count -= !w_prev;
-            w_prev = 0;
-        }
-        else
-        {
-            *bit_count += word_bitcount64(w);
-            w ^= (w >> 1);
-            count += word_bitcount64(w);
-            
-            w_l = w0 & 1;
-            count -= (w0 >> w_shift);  // negative value correction
-            count -= !(w_prev ^ w_l);  // word border correction
-            
-            w_prev = (w0 >> w_shift);
-        }
-    } // for
-    return (bm::id_t) count;
-
-#else
-    unsigned gap_count;
-    bit_count_change32(block, block_end, bit_count, &gap_count);
-    return gap_count;
-#endif
-
-#endif
-}
-*/
 
 /*!
     Function calculates number of 1 bits in the given array of words in
@@ -5182,9 +5072,6 @@ unsigned bit_block_xor_any(const bm::word_t* BMRESTRICT src1,
     return count;
 }
 
-
-
-
 /*!
    \brief Function SUBs two bitblocks and computes the bitcount. 
    Function does not analyse availability of source blocks.
@@ -5260,7 +5147,6 @@ unsigned bit_block_sub_any(const bm::word_t* BMRESTRICT src1,
     } while ((src1 < src1_end) && (count == 0));
     return count;
 }
-
 
 
 /*!
@@ -5574,8 +5460,6 @@ bm::id_t bit_operation_or_any(const bm::word_t* BMRESTRICT src1,
     return bit_block_or_any(src1, src2);
 }
 
-
-
 /*!
    \brief Plain bitblock OR operation. 
    Function does not analyse availability of source and destination blocks.
@@ -5858,8 +5742,6 @@ bm::id64_t bit_block_sub(bm::word_t* BMRESTRICT dst,
     
     return digest;
 }
-
-
 
 
 /*!

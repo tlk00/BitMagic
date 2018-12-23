@@ -766,11 +766,10 @@ void sparse_vector_scanner<SV>::bind(const SV&  sv, bool sorted)
             value_type* s0 = block0_elements_cache_.row(nb);
             sv.get(i, s0, block0_elements_cache_.cols());
             
-            const unsigned sub_block3_size = bm::gap_max_bits / 4;
             for (size_type k = 0; k < 3; ++k)
             {
                 value_type* s1 = block3_elements_cache_.row(nb * 3 + k);
-                size_type idx = i + (k+1) * sub_block3_size;
+                size_type idx = i + (k+1) * bm::sub_block3_size;
                 sv.get(idx, s1, block3_elements_cache_.cols());
             } // for k
         } // for i
@@ -1247,18 +1246,17 @@ bool sparse_vector_scanner<SV>::bfind_eq_str(const SV&                      sv,
                     if (nb_l != max_nb)
                     {
                         // linear in-place fixed depth scan to identify the sub-range
-                        const unsigned sub_block3_size = bm::gap_max_bits / 4;
-                        size_type mid = nb_r * bm::gap_max_bits + sub_block3_size;
+                        size_type mid = nb_r * bm::gap_max_bits + bm::sub_block3_size;
                         int cmp = this->compare_str(sv, mid, str);
                         if (cmp < 0)
                         {
                             l = mid;
-                            mid = nb_r * bm::gap_max_bits + sub_block3_size * 2;
+                            mid = nb_r * bm::gap_max_bits + bm::sub_block3_size * 2;
                             cmp = this->compare_str(sv, mid, str);
                             if (cmp < 0)
                             {
                                 l = mid;
-                                mid = nb_r * bm::gap_max_bits + sub_block3_size * 3;
+                                mid = nb_r * bm::gap_max_bits + bm::sub_block3_size * 3;
                                 cmp = this->compare_str(sv, mid, str);
                                 if (cmp < 0)
                                     l = mid;
@@ -1290,13 +1288,6 @@ bool sparse_vector_scanner<SV>::bfind_eq_str(const SV&                      sv,
                     mid = bm::gap_max_bits;
                 else
                     mid = dist / 2 + l;
-/*
-            std::cout << "mid=" << mid << " l=" << l << " r=" << r << std::endl;
-                if (mid % bm::gap_max_bits)
-                {
-    std::cout << "@ ";
-                }
-*/
             }
             BM_ASSERT(mid > l);
 
@@ -1378,10 +1369,9 @@ int sparse_vector_scanner<SV>::compare_str(const SV& sv,
         }
         else
         {
-            const unsigned sub_block3_size = bm::gap_max_bits / 4;
-            if (nbit % sub_block3_size == 0)
+            if (nbit % bm::sub_block3_size == 0) // TODO: use AND mask here
             {
-                size_type k = nbit / sub_block3_size - 1;
+                size_type k = nbit / bm::sub_block3_size - 1;
                 value_type* s1 = block3_elements_cache_.row(nb * 3 + k);
                 int res = 0;
                 for (unsigned i = 0; i < block3_elements_cache_.cols(); ++i)
@@ -1411,7 +1401,6 @@ void sparse_vector_scanner<SV>::find_eq(const SV&                  sv,
         bv_out.clear();
         return; // nothing to do
     }
-
     if (!value)
     {
         find_zero(sv, bv_out);
