@@ -242,8 +242,9 @@ public:
     /*!
         \brief set specified element with bounds checking and automatic resize
         \param idx  - element index (vector auto-resized if needs to)
-        \param str  - string to set
-                    (STL class with size() support, like basic_string)
+        \param str  - input string
+                      expected an STL class with size() support,
+                      like basic_string<> or vector<char>
     */
     template<typename StrType>
     void assign(size_type idx, const StrType& str)
@@ -290,6 +291,8 @@ public:
 
     /*!
         \brief get specified string element
+     
+        Template method expects an STL-compatible type basic_string<>
      
         \param idx  - element index (vector auto-resized if needs to)
         \param str  - string to get [out]
