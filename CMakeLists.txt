@@ -5,7 +5,7 @@ project(bm)
 
 set( CMAKE_VERBOSE_MAKEFILE on )
 
-SET(BMOPTFLAGS "BMSSE42OPT" CACHE STRING "User-specified optimization flag")
+# SET(BMOPTFLAGS "BMSSE42OPT" CACHE STRING "User-specified optimization flag")
 
 set(CMAKE_BINARY_DIR ${CMAKE_SOURCE_DIR}/build/bin)
 set(EXECUTABLE_OUTPUT_PATH ${CMAKE_BINARY_DIR})
