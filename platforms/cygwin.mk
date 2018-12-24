@@ -4,7 +4,7 @@ COMPILER = GNU_CC
         CXXARCHFLAGS=-march=skylake-avx512 -mtune=skylake-avx512
     else
         ifeq ($(BMOPTFLAGS),-DBMAVX2OPT)
-            CXXARCHFLAGS=-march=native -mavx2
+            CXXARCHFLAGS=-march=skylake -mavx2
         else
             ifeq ($(BMOPTFLAGS),-DBMSSE42OPT)
                 CXXARCHFLAGS=-march=core2 -msse4.2
