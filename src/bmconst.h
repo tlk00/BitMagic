@@ -19,7 +19,8 @@ For more information please visit:  http://bitmagic.io
 */
 
 /*! \file bmconst.h
-    \brief Various constants and tables
+    \brief Constants, tables and typedefs
+    @internal
 */
 
 namespace bm
@@ -117,6 +118,7 @@ enum strategy
     BM_GAP = 1  //!< GAP compression is ON.
 };
 
+
 /**
     Codes of set operations
     @ingroup bvector
@@ -138,6 +140,18 @@ enum set_operation
     set_COUNT_B     = 12,
 
     set_END
+};
+
+/**
+    Bit operations
+    @ingroup bvector
+*/
+enum operation
+{
+    BM_AND = set_AND,
+    BM_OR  = set_OR,
+    BM_SUB = set_SUB,
+    BM_XOR = set_XOR
 };
 
 
@@ -380,6 +394,52 @@ enum simd_codes
     simd_avx512  = 6  ///!< Intel AVX512
 };
 
+
+/*!
+   \brief Byte orders recognized by the library.
+   @internal
+*/
+enum ByteOrder
+{
+    BigEndian    = 0,
+    LittleEndian = 1
+};
+
+/**
+    Internal structure. Different global settings.
+    @internal
+*/
+template<bool T> struct globals
+{
+    struct bo
+    {
+        ByteOrder  _byte_order;
+
+        bo()
+        {
+            unsigned x;
+            unsigned char *s = (unsigned char *)&x;
+            s[0] = 1; s[1] = 2; s[2] = 3; s[3] = 4;
+            if(x == 0x04030201)
+            {
+                _byte_order = LittleEndian;
+                return;
+            }
+            if(x == 0x01020304)
+            {
+                _byte_order = BigEndian;
+                return;
+            }
+
+            BM_ASSERT(0); // "Invalid Byte Order\n"
+            _byte_order = LittleEndian;
+        }
+    };
+
+    static bo  _bo;
+    static ByteOrder byte_order() { return _bo._byte_order; }
+};
+template<bool T> typename globals<T>::bo globals<T>::_bo;
 
 
 } // namespace

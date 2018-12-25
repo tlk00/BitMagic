@@ -770,17 +770,6 @@ bool is_const_set_operation(set_operation op)
 }
 
 /**
-    Bit operations enumeration.
-*/
-enum operation
-{
-    BM_AND = set_AND,
-    BM_OR  = set_OR,
-    BM_SUB = set_SUB,
-    BM_XOR = set_XOR
-};
-
-/**
     Convert set operation to operation
 */
 inline
@@ -921,63 +910,6 @@ template<typename T> int wordcmp(T a, T b)
 
 // Low bit extraction
 // x & (x ^ (x-1))
-
-
-
-/*! 
-   \brief Byte orders recognized by the library.
-*/
-enum ByteOrder
-{
-    BigEndian    = 0,
-    LittleEndian = 1
-};
-
-
-/**
-    Internal structure. Different global settings.
-*/
-template<bool T> struct globals
-{
-    struct bo
-    {
-        ByteOrder  _byte_order;
-
-        bo()
-        {
-            unsigned x;
-            unsigned char *s = (unsigned char *)&x;
-            s[0] = 1;
-            s[1] = 2;
-            s[2] = 3;
-            s[3] = 4;
-
-            if(x == 0x04030201) 
-            {
-                _byte_order = LittleEndian;
-                return;
-            }
-
-            if(x == 0x01020304) 
-            {
-                _byte_order = BigEndian;
-                return;
-            }
-
-            BM_ASSERT(0); // "Invalid Byte Order\n"
-            _byte_order = LittleEndian;
-        }
-    };
-
-    static bo  _bo;
-
-    static ByteOrder byte_order() { return _bo._byte_order; }
-
-};
-
-template<bool T> typename globals<T>::bo globals<T>::_bo;
-
-
 
 
 // ----------------------------------------------------------------------
