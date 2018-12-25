@@ -370,7 +370,6 @@ public:
                 if (opt_mode_ < 3) // free_01 optimization
                 {  
                     bm::wordop_t* blk1 = (wordop_t*)block;
-
                     bool b = bm::bit_is_all_zero((bm::word_t*)blk1);
                     if (b)
                     {
@@ -389,7 +388,6 @@ public:
                             ++empty_;
                         }
                     }
-
                     if (!b && stat_)
                         stat_->add_bit_block();
 
@@ -405,14 +403,9 @@ public:
                 unsigned threashold = bman.glen(bm::gap_max_level)-4;
                 
                 unsigned len = 0;
-
                 if (gap_count < threashold)
                 {
-                    len = bm::bit_to_gap(tmp_gap_blk,
-                                         block,
-                                         threashold);
-
-                    
+                    len = bm::bit_to_gap(tmp_gap_blk, block, threashold);
                     BM_ASSERT(len);
                 }
                 
@@ -503,7 +496,9 @@ public:
         void operator()(bm::word_t* block, unsigned idx)
         {
             if (BM_IS_GAP(block))
+            {
                 bm::gap_set_all(BMGAP_PTR(block), bm::gap_max_bits, 0);
+            }
             else  // BIT block
             {
                 if (IS_FULL_BLOCK(block))
@@ -1236,6 +1231,64 @@ public:
         bm::word_t* blk = top_blocks_[i][j] = alloc_.alloc_bit_block();
         bm::bit_block_stream(blk, src_block);
     }
+    
+    /**
+        Optimize and copy bit-block
+    */
+    void opt_copy_bit_block(unsigned i, unsigned j,
+                            const bm::word_t* src_block,
+                            int               opt_mode,
+                            bm::word_t*       tmp_block)
+    {
+        if (!opt_mode)
+        {
+            copy_bit_block(i, j, src_block);
+            return;
+        }
+        
+        reserve_top_blocks(i + 1);
+        check_alloc_top_subblock(i);
+
+        unsigned gap_count = bm::bit_block_calc_change(src_block);
+        if (gap_count == 1) // solid block
+        {
+            if (*src_block) // 0xFFF...
+            {
+                BM_ASSERT(bm::is_bits_one((bm::wordop_t*)src_block));
+                top_blocks_[i][j] = FULL_BLOCK_FAKE_ADDR;
+            }
+            else
+            {
+                BM_ASSERT(bm::bit_is_all_zero(src_block));
+                top_blocks_[i][j] = 0;
+            }
+            return;
+        }
+        // try to compress
+        //
+        unsigned threashold = this->glen(bm::gap_max_level)-4;
+        if (gap_count < threashold) // compressable
+        {
+            BM_ASSERT(tmp_block);
+            bm::gap_word_t* tmp_gap_blk = (gap_word_t*)tmp_block;
+            *tmp_gap_blk = bm::gap_max_level << 1;
+            
+            unsigned len = bm::bit_to_gap(tmp_gap_blk, src_block, threashold);
+            BM_ASSERT(len);
+            if (len)  // compression successful
+            {
+                int level = bm::gap_calc_level(len, this->glen());
+                BM_ASSERT(level >= 0);
+                bm::gap_word_t* gap_blk =
+                            allocate_gap_block(unsigned(level), tmp_gap_blk);
+                BM_ASSERT(top_blocks_[i][j]==0);
+                top_blocks_[i][j] = (bm::word_t*)BMPTR_SETBIT0(gap_blk);
+                return;
+            }
+        }
+        // non-compressable bit-block
+        copy_bit_block(i, j, src_block);
+    }
 
 
     /**
@@ -1298,10 +1351,6 @@ public:
         if (!top_blocks_[i])
         {
             alloc_top_subblock(i);
-            /*
-            top_blocks_[i] = (bm::word_t**)alloc_.alloc_ptr();
-            ::memset(top_blocks_[i], 0, bm::set_array_size * sizeof(void*));
-            */
         }
         bm::word_t* block = top_blocks_[i][j];
         gap_block = gap_block ? gap_block : BMGAP_PTR(block);
@@ -1456,7 +1505,6 @@ public:
         {
             bm::gap_word_t* new_gap_blk = allocate_gap_block(++level, blk);
             bm::word_t* new_blk = (bm::word_t*)new_gap_blk;
-
             BMSET_PTRGAP(new_blk);
 
             set_block_ptr(nb, new_blk);
@@ -1598,7 +1646,6 @@ public:
     unsigned reserve_top_blocks(unsigned top_blocks)
     {
         BM_ASSERT(top_blocks <= bm::set_array_size);
-        //BM_ASSERT(is_init());
 
         if (top_blocks_ && top_blocks <= top_block_size_)
             return top_block_size_; // nothing to do
@@ -1695,10 +1742,6 @@ public:
         return 0;
     }
 
-private:
-
-    void operator =(const blocks_manager&);
-    
     // ----------------------------------------------------------------
     #define BM_FREE_OP(x) blk = blk_blk[j + x]; \
         if (IS_VALID_ADDR(blk)) \
@@ -1707,21 +1750,21 @@ private:
                 alloc_.free_gap_block(BMGAP_PTR(blk), glen()); \
             else \
                 alloc_.free_bit_block(blk); \
-        } 
+        }
 
     /** destroy tree, free memory in all blocks and control structures
         Note: pointers are NOT assigned to zero(!)
     */
     void destroy_tree() BMNOEXEPT
     {
-        if (!top_blocks_) 
+        if (!top_blocks_)
             return;
 
         unsigned top_blocks = top_block_size();
         for (unsigned i = 0; i < top_blocks; ++i)
         {
             bm::word_t** blk_blk = top_blocks_[i];
-            if (!blk_blk) 
+            if (!blk_blk)
                 continue;
             unsigned j = 0; bm::word_t* blk;
             do
@@ -1753,7 +1796,7 @@ private:
 
         alloc_.free_ptr(top_blocks_, top_block_size_); // free the top
     }
-    #undef BM_FREE_OP 
+    #undef BM_FREE_OP
 
     void deinit_tree() BMNOEXEPT
     {
@@ -1762,6 +1805,11 @@ private:
     }
     
     // ----------------------------------------------------------------
+
+private:
+
+    void operator =(const blocks_manager&);
+    
     
     void copy(const blocks_manager& blockman,
               unsigned block_from = 0, unsigned block_to = 65535)
