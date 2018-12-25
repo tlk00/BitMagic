@@ -1651,7 +1651,6 @@ public:
     void clear_bit_no_check(bm::id_t n) { set_bit_no_check(n, false); }
 
     
-    
     /*!
        \brief Clears every bit in the bitvector.
 
@@ -2188,9 +2187,10 @@ public:
     */
     enum optmode
     {
+        opt_none      = 0, ///< no optimization
         opt_free_0    = 1, ///< Free unused 0 blocks
         opt_free_01   = 2, ///< Free unused 0 and 1 blocks
-        opt_compress  = 3  ///< compress blocks when possible
+        opt_compress  = 3  ///< compress blocks when possible (GAP/prefix sum)
     };
 
     /*!
