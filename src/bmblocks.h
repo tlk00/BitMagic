@@ -926,6 +926,63 @@ public:
         return new_block;
     }
     
+    /**
+    Attach the result of a GAP logical operation
+    */
+    void assign_gap(unsigned              nb,
+                    const bm::gap_word_t* res,
+                    unsigned              res_len,
+                    bm::word_t*           blk,
+                    gap_word_t*           tmp_buf)
+    {
+        unsigned i, j;
+        get_block_coord(nb, i, j);
+        assign_gap(i, j, res, res_len, blk, tmp_buf);
+    }
+    
+    /** Attach the result of a GAP logical operation
+    */
+    void assign_gap(unsigned              i,
+                    unsigned              j,
+                    const bm::gap_word_t* res,
+                    unsigned              res_len,
+                    bm::word_t*           blk,
+                    gap_word_t*           tmp_buf)
+    {
+        int level = bm::gap_level(BMGAP_PTR(blk));
+        BM_ASSERT(level >= 0);
+        unsigned threshold = unsigned(this->glen(unsigned(level)) - 4u);
+        int new_level = bm::gap_calc_level(res_len, this->glen());
+        if (new_level < 0)
+        {
+            convert_gap2bitset(i, j, res);
+            return;
+        }
+        if (res_len > threshold) // GAP block needs next level up extension
+        {
+            BM_ASSERT(new_level >= 0);
+            gap_word_t* new_blk = allocate_gap_block(unsigned(new_level), res);
+            bm::set_gap_level(new_blk, new_level);
+            bm::word_t* p = (bm::word_t*)new_blk;
+            BMSET_PTRGAP(p);
+            if (blk)
+            {
+                set_block_ptr(i, j, p);
+                alloc_.free_gap_block(BMGAP_PTR(blk), this->glen());
+            }
+            else
+            {
+                set_block(i, j, p, true); // set GAP block
+            }
+            return;
+        }
+        // gap operation result is in the temporary buffer
+        // we copy it back to the gap_block (target size/level - fits)
+        BM_ASSERT(blk);
+        bm::set_gap_level(tmp_buf, level);
+        ::memcpy(BMGAP_PTR(blk), tmp_buf, res_len * sizeof(gap_word_t));
+    }
+
     
     /**
         Copy block from another vector.

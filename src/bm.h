@@ -2391,19 +2391,6 @@ private:
                                      unsigned j,
                                      bm::word_t* blk,
                                      const bm::word_t* arg_blk);
-
-    void assign_gap_result(unsigned              nb,
-                           const bm::gap_word_t* res,
-                           unsigned              res_len,
-                           bm::word_t*           blk,
-                           gap_word_t*           tmp_buf);
-
-    void assign_gap_result(unsigned              i,
-                           unsigned              j,
-                           const bm::gap_word_t* res,
-                           unsigned              res_len,
-                           bm::word_t*           blk,
-                           gap_word_t*           tmp_buf);
     
     void copy_range_no_check(const bvector<Alloc>& bvect,
                              bm::id_t left,
@@ -4644,7 +4631,7 @@ void bvector<Alloc>::combine_operation_block_or(
             }
             else
             {
-                assign_gap_result(i, j, res, ++res_len, blk, tmp_buf);
+                blockman_.assign_gap(i, j, res, ++res_len, blk, tmp_buf);
             }
             return;
         }
@@ -4727,7 +4714,7 @@ void bvector<Alloc>::combine_operation_block_and(
             if (bm::gap_is_all_zero(res))
                 blockman_.zero_gap_block_ptr(i, j);
             else
-                assign_gap_result(i, j, res, ++res_len, blk, tmp_buf);
+                blockman_.assign_gap(i, j, res, ++res_len, blk, tmp_buf);
             return;
         }
         // GAP & BIT
@@ -4839,7 +4826,7 @@ void bvector<Alloc>::combine_operation_block_sub(
             if (bm::gap_is_all_zero(res))
                 blockman_.zero_gap_block_ptr(i, j);
             else
-                assign_gap_result(i, j, res, ++res_len, blk, tmp_buf);
+                blockman_.assign_gap(i, j, res, ++res_len, blk, tmp_buf);
             return;
         }
         // else: argument is BITSET-type (own block is GAP)
@@ -4931,10 +4918,10 @@ bvector<Alloc>::combine_operation_with_block(unsigned          nb,
 
             // if as a result of the operation gap block turned to zero
             // we can now replace it with NULL
-            if (gap_is_all_zero(res))
+            if (bm::gap_is_all_zero(res))
                 blockman_.zero_block(nb);
             else
-                assign_gap_result(nb, res, ++res_len,  blk, tmp_buf);
+                blockman_.assign_gap(nb, res, ++res_len,  blk, tmp_buf);
             return;
         }
         else // argument is BITSET-type (own block is GAP)
@@ -4956,7 +4943,6 @@ bvector<Alloc>::combine_operation_with_block(unsigned          nb,
                 }
             }
             gap_word_t* gap_blk = BMGAP_PTR(blk);
-
             blk = blockman_.convert_gap2bitset(nb, gap_blk);
         }
     }
@@ -4990,7 +4976,6 @@ bvector<Alloc>::combine_operation_with_block(unsigned          nb,
                 gap_convert_to_bitset_smart((bm::word_t*)temp_blk,
                                             BMGAP_PTR(arg_blk),
                                             bm::gap_max_bits);
-        
         }
     }
 
@@ -5044,8 +5029,8 @@ bvector<Alloc>::combine_operation_with_block(unsigned          nb,
     copy_block:
         if (ret && (ret == arg_blk) && !IS_FULL_BLOCK(ret))
         {
-        ret = blockman_.get_allocator().alloc_bit_block();
-        bit_block_copy(ret, arg_blk);
+            ret = blockman_.get_allocator().alloc_bit_block();
+            bm::bit_block_copy(ret, arg_blk);
         }
         break;
 
@@ -5071,116 +5056,6 @@ bvector<Alloc>::combine_operation_with_block(unsigned          nb,
         }
     }
 }
-
-//---------------------------------------------------------------------
-
-template<class Alloc>
-void bvector<Alloc>::assign_gap_result(
-                       unsigned              nb,
-                       const bm::gap_word_t* res,
-                       unsigned              res_len,
-                       bm::word_t*           blk,
-                       gap_word_t*           tmp_buf)
-{
-    int level = bm::gap_level(BMGAP_PTR(blk));
-    BM_ASSERT(level >= 0);
-    unsigned threshold = unsigned(blockman_.glen(unsigned(level)) - 4u);
-
-
-    int new_level = bm::gap_calc_level(res_len, blockman_.glen());
-    if (new_level < 0)
-    {
-        blockman_.convert_gap2bitset(nb, res);
-        return;
-    }
-
-    if (res_len > threshold)
-    {
-        BM_ASSERT(new_level >= 0);
-        gap_word_t* new_blk =
-            blockman_.allocate_gap_block(unsigned(new_level), res);
-        bm::set_gap_level(new_blk, new_level);
-
-        bm::word_t* p = (bm::word_t*)new_blk;
-        BMSET_PTRGAP(p);
-
-        if (blk)
-        {
-            blockman_.set_block_ptr(nb, p);
-            blockman_.get_allocator().free_gap_block(BMGAP_PTR(blk),
-                                                     blockman_.glen());
-        }
-        else
-        {
-            blockman_.set_block(nb, p, true); // set GAP block
-        }
-        return;
-    }
-
-    // gap operation result is in the temporary buffer
-    // we copy it back to the gap_block
-
-    BM_ASSERT(blk);
-
-    bm::set_gap_level(tmp_buf, level);
-    ::memcpy(BMGAP_PTR(blk), tmp_buf, res_len * sizeof(gap_word_t));
-}
-
-
-//---------------------------------------------------------------------
-
-template<class Alloc>
-void bvector<Alloc>::assign_gap_result(
-                       unsigned              i,
-                       unsigned              j,
-                       const bm::gap_word_t* res,
-                       unsigned              res_len,
-                       bm::word_t*           blk,
-                       gap_word_t*           tmp_buf)
-{
-    int level = bm::gap_level(BMGAP_PTR(blk));
-    BM_ASSERT(level >= 0);
-    unsigned threshold = unsigned(blockman_.glen(unsigned(level)) - 4u);
-
-    int new_level = bm::gap_calc_level(res_len, blockman_.glen());
-    if (new_level < 0)
-    {
-        blockman_.convert_gap2bitset(i, j, res);
-        return;
-    }
-
-    if (res_len > threshold)
-    {
-        BM_ASSERT(new_level >= 0);
-        gap_word_t* new_blk =
-            blockman_.allocate_gap_block(unsigned(new_level), res);
-        bm::set_gap_level(new_blk, new_level);
-
-        bm::word_t* p = (bm::word_t*)new_blk;
-        BMSET_PTRGAP(p);
-
-        if (blk)
-        {
-            blockman_.set_block_ptr(i, j, p);
-            blockman_.get_allocator().free_gap_block(BMGAP_PTR(blk),
-                                                     blockman_.glen());
-        }
-        else
-        {
-            blockman_.set_block(i, j, p, true); // set GAP block
-        }
-        return;
-    }
-
-    // gap operation result is in the temporary buffer
-    // we copy it back to the gap_block
-
-    BM_ASSERT(blk);
-
-    bm::set_gap_level(tmp_buf, level);
-    ::memcpy(BMGAP_PTR(blk), tmp_buf, res_len * sizeof(gap_word_t));
-}
-
 
 //---------------------------------------------------------------------
 
