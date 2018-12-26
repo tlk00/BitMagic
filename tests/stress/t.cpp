@@ -379,8 +379,9 @@ void DetailedCompareBVectors(const BV& bv1, const BV& bv2)
         {
             std::cerr << "Difference detected at: position="
                       << i1 << " other position = " << i2 << std::endl;
-            std::cerr << " count1=" << en1.count() << " count2=" << en2.count()
+            std::cerr << " en1.count()=" << en1.count() << " en2.count()=" << en2.count()
                       << std::endl;
+            
             exit(1);
         }
         ++en2;
@@ -909,7 +910,10 @@ unsigned SerializationOperation(bvect*             bv_target,
     // check if operation was ok
     {
         bvect bv_agg, bv_agg2;
+        
         bm::aggregator<bvect> agg;
+        agg.set_optimization();
+        
         bvect* agg_list[10];
         bvect* agg_list2[10];
         agg_list[0] = &bv1;
@@ -5152,32 +5156,120 @@ void AggregatorTest()
     bvect* bv_arr[128] = { 0, };
     bvect* bv_arr2[128] = { 0, };
 
+    cout << "OR tests..." << endl;
+    {
+        bm::aggregator<bvect> agg;
+        agg.set_optimization();
+
+        {
+            bvect bv_target;
+            bvect bv1 { 1, 2, 3};
+            bvect bv2 { 0, 4, 5};
+            
+            agg.add(&bv1);
+            agg.add(&bv2);
+            
+            agg.combine_or(bv_target);
+            agg.reset();
+            
+            struct bvect::statistics st;
+            bv_target.calc_stat(&st);
+            assert (st.gap_blocks == 1);
+            assert (st.bit_blocks == 0);
+            
+            unsigned bc = bv_target.count();
+            assert(bc == 6);
+        }
+        
+        // FULL block optimization test
+        {
+            bvect bv_target;
+            bvect bv1;
+            bvect bv2;
+            bv1.set_range(0, 256);
+            bv2.set_range(256, 65535);
+
+            agg.reset();
+            agg.add(&bv1);
+            agg.add(&bv2);
+            
+            agg.combine_or(bv_target);
+            
+            struct bvect::statistics st;
+            bv_target.calc_stat(&st);
+            assert (st.gap_blocks == 0);
+            assert (st.bit_blocks == 0);
+            
+            unsigned bc = bv_target.count();
+            assert(bc == 65536);
+
+            bv_target.set(1);
+            agg.reset();
+            agg.add(&bv1);
+            agg.add(&bv2);
+            
+            agg.combine_and(bv_target);
+            bv_target.calc_stat(&st);
+            assert (st.gap_blocks == 1);
+            assert (st.bit_blocks == 0);
+            bc = bv_target.count();
+            assert(bc == 1);
+        }
+
+        // 0-block optimization test
+        {
+            bvect bv_target;
+            bvect bv1 { 1 };
+            bvect bv2 { 5 };
+            
+            bv1.clear(1); bv2.clear(5);
+            
+            agg.reset();
+            agg.add(&bv1);
+            agg.add(&bv2);
+            
+            agg.combine_or(bv_target);
+            agg.reset();
+            
+            struct bvect::statistics st;
+            bv_target.calc_stat(&st);
+            assert (st.gap_blocks == 0);
+            assert (st.bit_blocks == 0);
+            
+            unsigned bc = bv_target.count();
+            assert(bc == 0);
+        }
+    }
+
     bm::aggregator<bvect> agg;
-    
+    agg.set_optimization();
+
     cout << "AND-SUB tests..." << endl;
     {
         bvect bv1, bv2, bv3;
         bvect bv_empty;
         bvect bv_control;
-        
+
         bv_arr[0] = &bv1;
         agg.combine_or(bv3, bv_arr, 1);
         assert(bv3.count()==0);
-        
+
         bv3[100] = true;
         bv1.invert();
         bv_control.invert();
         bv_arr[0] = &bv1;
         agg.combine_or(bv3, bv_arr, 1);
+
         int res = bv_control.compare(bv3);
         assert(res == 0);
-        
+
         bv_arr[0] = &bv1;
         bv_arr[1] = &bv2;
         agg.combine_or(bv3, bv_arr, 2);
+
         res = bv_control.compare(bv3);
         assert(res == 0);
-        
+
         bv2[1000000] = true;
         bv_arr[0] = &bv1;
         bv_arr[1] = &bv2;
@@ -5185,6 +5277,7 @@ void AggregatorTest()
         res = bv_control.compare(bv3);
         assert(res == 0);
     }
+    
     {
         bvect bv1, bv2, bv3;
         bvect bv_empty;
@@ -5438,7 +5531,7 @@ void AggregatorTest()
     bv0.calc_stat(&st1);
     auto bcnt = st1.bit_blocks + st1.gap_blocks;
     cout << bcnt << endl;
-    //assert(bcnt == 2); // TODO: not critical but needs a fix eventually
+    assert(bcnt == 2);
     
     assert(bv0.count()==bv1c.count());
     auto cmp = bv1c.compare(bv0);
@@ -5458,8 +5551,8 @@ void AggregatorTest()
 
     struct bvect::statistics st1;
     bv0.calc_stat(&st1);
-    //auto bcnt = st1.bit_blocks + st1.gap_blocks;
-    //assert(bcnt == 2); // TODO: not critical (optimization) needs a fix
+    auto bcnt = st1.bit_blocks + st1.gap_blocks;
+    assert(bcnt == 2); // TODO: not critical (optimization) needs a fix
     }
 
     {
@@ -5475,8 +5568,8 @@ void AggregatorTest()
 
     struct bvect::statistics st1;
     bv0.calc_stat(&st1);
-    ///auto bcnt = st1.bit_blocks + st1.gap_blocks;
-    // assert(bcnt == 2); // TODO: optimization fix needed
+    auto bcnt = st1.bit_blocks + st1.gap_blocks;
+    assert(bcnt == 2);
     }
 
 
@@ -5508,6 +5601,7 @@ void StressTestAggregatorOR(unsigned repetitions)
 {
   cout << "---------------------------- Aggregator OR Stress Test" << endl;
    unsigned size = BITVECT_SIZE - 10;
+   bvect bv_target1, bv_target2;
 
 
     unsigned i;
@@ -5563,6 +5657,7 @@ void StressTestAggregatorOR(unsigned repetitions)
         FillSetsRandomMethod(&bvect_min1, &bv9, start2, size, opt);
         
         bm::aggregator<bvect> agg;
+        agg.set_optimization();
         
         bvect* agg_list[32] = {0, };
         
@@ -5577,8 +5672,6 @@ void StressTestAggregatorOR(unsigned repetitions)
         agg_list[8] = &bv8;
         agg_list[9] = &bv9;
         
-        bvect bv_target1, bv_target2;
-        
         unsigned cnt = 10;
         agg.combine_or(bv_target1, agg_list, cnt);
         agg.combine_or_horizontal(bv_target2, agg_list, cnt);
@@ -5587,6 +5680,7 @@ void StressTestAggregatorOR(unsigned repetitions)
         if (res!=0)
         {
             cerr << "Error: Aggregator OR check failed!" << endl;
+            DetailedCompareBVectors(bv_target1, bv_target2);
             exit(1);
         }
         for (unsigned j = 1; j < cnt; ++j)
@@ -5681,6 +5775,7 @@ void StressTestAggregatorAND(unsigned repetitions)
         FillSetsRandomMethod(&bvect_min1, &bv9, start2, size, opt);
         
         bm::aggregator<bvect> agg;
+        agg.set_optimization();
         
         bvect* agg_list[32] = {0, };
         
@@ -5827,6 +5922,7 @@ void StressTestAggregatorShiftAND(unsigned repeats)
 
 
         bm::aggregator<bvect> agg;
+        agg.set_optimization();
 
         unsigned shift_repeats = 65536/3;
         for (unsigned i = 0; i < shift_repeats; ++i)
@@ -5854,7 +5950,8 @@ void StressTestAggregatorShiftAND(unsigned repeats)
                 DetailedCheckVectors(bv_target0, bv_target1);
                 exit(1);
             }
-            cout << "\r" << i << flush;
+            if (i % 250 == 0)
+                cout << "\r" << i << flush;
         } // for
         cout << "\n\n ---------- SHIFT-AND step: " << r << endl;
     } // for
@@ -9452,44 +9549,23 @@ void BitCountChangeTest()
         cout << "0.count_change() failed " << cnt << endl;
         exit(1);
     }
-#if 0
-    bm::id_t bc, bc1;
-    cnt = bm::bit_block_calc_count_change(arr0, arr0 + 8, &bc);
-    cout << "*" << endl;
-    bc1 = bit_block_calc_count(arr0, arr0 + 8);
-    cout << "@" << endl;
-    if (bc != bc1)
+    
+    // check solid block
     {
-        cout << "1. bitcount comparison failed " << endl;
+        BM_DECLARE_TEMP_BLOCK(tb1);
+        for (i = 0; i < bm::set_block_size; ++i)
+        {
+            tb1.b_.w32[i] = 0;
+        }
+        unsigned gap_count = bm::bit_block_calc_change(tb1);
+        assert(gap_count == 1);
+        for (i = 0; i < bm::set_block_size; ++i)
+        {
+            tb1.b_.w32[i] = ~0u;
+        }
+        gap_count = bm::bit_block_calc_change(tb1);
+        assert(gap_count == 1);
     }
-
-    if (cnt != 3)
-    {
-        cout << "1. count_intervals() failed " << cnt << endl;
-        exit(1);
-    }
-
-    ::memset(arr0, 0, sizeof(arr0));
-
-    arr0[0] = arr0[1] = arr0[2] = 0xFFFFFFFF;
-    arr0[3] = (bm::word_t)(0xFFFFFFFF >> 1);
-
-    cnt = bm::bit_block_calc_count_change(arr0, arr0 + 4, &bc);
-    cout << cnt << endl;
-
-    bc1 = bit_block_calc_count(arr0, arr0 + 4);
-    if (bc != bc1)
-    {
-        cout << "1.1 bitcount comparison failed " << endl;
-    }
-
-    // this test is not correct for both 32 and 64 bit mode because of loop unroll
-    if (cnt != 2 && cnt != 3)
-    {
-        cout << "1.1 count_intervals() failed " << cnt << endl;
-        exit(1);
-    }
-#endif    
 
     cout << "---------------------------- STEP 4 " << endl;
     
@@ -11267,11 +11343,10 @@ void SelectTest()
                 }
             }
 
-            cout << "\r" << i << std::flush;
+            if (i % 128 == 0)
+                cout << "\r" << i << std::flush;
         }
-        
     }
-    
     
     cout << "\n---------------------------- SELECT Test OK" << endl;
 }
