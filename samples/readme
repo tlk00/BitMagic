@@ -22,6 +22,7 @@ Bit vector
 ./bvsample18 - bvector<>::bulk_insert_iterator (efficient bit-vector construction)
 ./bvsample19 - bvector<>::merge - merge of bit-vectors (can be used for partiotioned processing)
 
+./bvsetalgebra - Tutorial for Algebra of Sets operations
 
 
 Sparse vector (bit-transposed sparse vector)
