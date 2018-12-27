@@ -161,10 +161,10 @@ enum operation
 */
 enum sort_order
 {
-    BM_UNSORTED = 0,      //!< input set is NOT sorted
-    BM_SORTED = 1,        //!< input set is sorted (ascending order)
-    BM_SORTED_UNIFORM = 2,//!< input set is sorted and belongs to one address block
-    BM_UNKNOWN = 3        //!< sort order unknown
+    BM_UNSORTED       = 0,  //!< input set is NOT sorted
+    BM_SORTED         = 1,  //!< input set is sorted (ascending order)
+    BM_SORTED_UNIFORM = 2,  //!< sorted and in one block (internal!)
+    BM_UNKNOWN        = 3   //!< sort order unknown
 };
 
 
