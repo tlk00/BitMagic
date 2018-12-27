@@ -1496,20 +1496,7 @@ public:
        \param val - new bit value
        \return  TRUE if bit was changed
     */
-    bool set_bit(bm::id_t n, bool val = true)
-    {
-        BM_ASSERT_THROW(n < bm::id_max, BM_ERR_RANGE);
-
-        if (!blockman_.is_init())
-            blockman_.init_tree();
-        if (n >= size_)
-        {
-            bm::id_t new_size = (n == bm::id_max) ? bm::id_max : n + 1;
-            resize(new_size);
-        }
-        
-        return set_bit_no_check(n, val);
-    }
+    bool set_bit(bm::id_t n, bool val = true);
 
     /*!
        \brief Sets bit n using bit AND with the provided value.
@@ -1517,17 +1504,7 @@ public:
        \param val - new bit value
        \return  TRUE if bit was changed
     */
-    bool set_bit_and(bm::id_t n, bool val = true)
-    {
-        BM_ASSERT(n < size_);
-        BM_ASSERT_THROW(n < size_, BM_ERR_RANGE);
-        
-        if (!blockman_.is_init())
-        {
-            blockman_.init_tree();
-        }
-        return and_bit_no_check(n, val);
-    }
+    bool set_bit_and(bm::id_t n, bool val = true);
     
     /*!
        \brief Increment the specified element
@@ -1549,19 +1526,7 @@ public:
        \param condition - expected current value
        \return TRUE if bit was changed
     */
-    bool set_bit_conditional(bm::id_t n, bool val, bool condition)
-    {
-        if (val == condition) return false;
-        if (!blockman_.is_init())
-            blockman_.init_tree();
-        if (n >= size_)
-        {
-            bm::id_t new_size = (n == bm::id_max) ? bm::id_max : n + 1;
-            resize(new_size);
-        }
-
-        return set_bit_conditional_impl(n, val, condition);
-    }
+    bool set_bit_conditional(bm::id_t n, bool val, bool condition);
 
 
     /*!
@@ -1570,21 +1535,13 @@ public:
         \param val - new bit value
         \return *this
     */
-    bvector<Alloc>& set(bm::id_t n, bool val = true)
-    {
-        set_bit(n, val);
-        return *this;
-    }
+    bvector<Alloc>& set(bm::id_t n, bool val = true);
 
     /*!
        \brief Sets every bit in this bitset to 1.
        \return *this
     */
-    bvector<Alloc>& set()
-    {
-        set_range(0, size_ - 1, true);
-        return *this;
-    }
+    bvector<Alloc>& set();
     
     /*!
        \brief Set list of bits in this bitset to 1.
@@ -1649,7 +1606,6 @@ public:
        \param n - bit's index to be cleaned.
     */
     void clear_bit_no_check(bm::id_t n) { set_bit_no_check(n, false); }
-
     
     /*!
        \brief Clears every bit in the bitvector.
@@ -1676,22 +1632,14 @@ public:
        \brief Flips bit n
        \return *this
     */
-    bvector<Alloc>& flip(bm::id_t n)
-    {
-        //set(n, !get_bit(n));
-        this->inc(n);
-        return *this;
-    }
+    bvector<Alloc>& flip(bm::id_t n) { this->inc(n); return *this; }
 
     /*!
        \brief Flips all bits
        \return *this
        @sa invert
     */
-    bvector<Alloc>& flip()
-    {
-        return invert();
-    }
+    bvector<Alloc>& flip() { return invert(); }
 
     //@}
     // --------------------------------------------------------------------
@@ -1784,9 +1732,7 @@ public:
         \sa count_to, select, find_rank
     */
     void build_rs_index(rs_index_type* rs_idx) const
-    {
-        running_count_blocks(rs_idx);
-    }
+                                            { running_count_blocks(rs_idx); }
 
     /*!
        \brief Returns count of 1 bits (population) in [0..right] range.
@@ -1813,10 +1759,7 @@ public:
        \sa count_to_test, select, rank
     */
     bm::id_t rank(bm::id_t n, const rs_index_type&  rs_idx) const
-    {
-        return count_to(n, rs_idx);
-    }
-    
+                                            {  return count_to(n, rs_idx); }
     
 
     /*!
@@ -1864,12 +1807,9 @@ public:
        \param n - Index of the bit to check.
        \return Bit value (1 or 0)
     */
-    bool test(bm::id_t n) const 
-    { 
-        return get_bit(n); 
-    }
-    //@}
+    bool test(bm::id_t n) const { return get_bit(n); }
     
+    //@}
     
     // --------------------------------------------------------------------
     /*! @name bit-shift operations  */
@@ -1891,25 +1831,15 @@ public:
        \brief Returns true if any bits in this bitset are set, and otherwise returns false.
        \return true if any bit is set
     */
-    bool any() const
-    {
-        word_t*** blk_root = blockman_.top_blocks_root();
-        if (!blk_root) 
-            return false;
-        typename blocks_manager_type::block_any_func func(blockman_);
-        return for_each_nzblock_if(blk_root, blockman_.top_block_size(), func);
-    }
+    bool any() const;
 
     /*!
         \brief Returns true if no bits are set, otherwise returns false.
     */
-    bool none() const
-    {
-        return !any();
-    }
+    bool none() const { return !any(); }
+    
     //@}
     // --------------------------------------------------------------------
-
 
     /*! @name Scan and find bits and indexes */
     //@{
@@ -2088,7 +2018,9 @@ public:
     }
     
     /*!
-        \brief Inverts all bits.
+        \brief Inverts all bits
+        It should be noted, invert is affected by size()
+        if size is set - it only inverts [0..size-1] bits
     */
     bvector<Alloc>& invert();
     
@@ -2576,6 +2508,17 @@ bm::id_t bvector<Alloc>::count() const
     for_each_nzblock2(blk_root, blockman_.top_block_size(), func);
 
     return func.count();
+}
+// -----------------------------------------------------------------------
+
+template<typename Alloc>
+bool bvector<Alloc>::any() const
+{
+    word_t*** blk_root = blockman_.top_blocks_root();
+    if (!blk_root)
+        return false;
+    typename blocks_manager_type::block_any_func func(blockman_);
+    return for_each_nzblock_if(blk_root, blockman_.top_block_size(), func);
 }
 
 // -----------------------------------------------------------------------
@@ -3378,6 +3321,71 @@ void bvector<Alloc>::set(const bm::id_t* ids, unsigned size, bm::sort_order so)
     import(ids, size, so);
     
     sync_size();
+}
+
+// -----------------------------------------------------------------------
+
+template<class Alloc>
+bvector<Alloc>& bvector<Alloc>::set()
+{
+    set_range(0, size_ - 1, true);
+    return *this;
+}
+
+// -----------------------------------------------------------------------
+
+template<class Alloc>
+bvector<Alloc>& bvector<Alloc>::set(bm::id_t n, bool val)
+{
+    set_bit(n, val);
+    return *this;
+}
+
+// -----------------------------------------------------------------------
+
+template<class Alloc>
+bool bvector<Alloc>::set_bit_conditional(bm::id_t n, bool val, bool condition)
+{
+    if (val == condition) return false;
+    if (!blockman_.is_init())
+        blockman_.init_tree();
+    if (n >= size_)
+    {
+        bm::id_t new_size = (n == bm::id_max) ? bm::id_max : n + 1;
+        resize(new_size);
+    }
+
+    return set_bit_conditional_impl(n, val, condition);
+}
+
+// -----------------------------------------------------------------------
+
+template<class Alloc>
+bool bvector<Alloc>::set_bit_and(bm::id_t n, bool val)
+{
+    BM_ASSERT(n < size_);
+    BM_ASSERT_THROW(n < size_, BM_ERR_RANGE);
+    
+    if (!blockman_.is_init())
+        blockman_.init_tree();
+    return and_bit_no_check(n, val);
+}
+
+// -----------------------------------------------------------------------
+
+template<class Alloc>
+bool bvector<Alloc>::set_bit(bm::id_t n, bool val)
+{
+    BM_ASSERT_THROW(n < bm::id_max, BM_ERR_RANGE);
+
+    if (!blockman_.is_init())
+        blockman_.init_tree();
+    if (n >= size_)
+    {
+        bm::id_t new_size = (n == bm::id_max) ? bm::id_max : n + 1;
+        resize(new_size);
+    }
+    return set_bit_no_check(n, val);
 }
 
 // -----------------------------------------------------------------------
