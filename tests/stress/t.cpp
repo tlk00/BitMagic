@@ -2826,6 +2826,10 @@ void BvectorBulkSetTest()
     cmp = bv1.compare(bv3);
     assert(cmp==0);
     
+    bv2.set(0);
+    bv2.keep(&ids[0], sizeof(ids)/sizeof(ids[0]));
+    assert(bv2.count()==1);
+    assert(bv2.test(0));
     }
 
     {
@@ -2841,13 +2845,17 @@ void BvectorBulkSetTest()
     assert(bv2.test(ids[0]));
     }
 
+    // test correct sizing
     {
-    unsigned ids[] = {65536 };
-    bvect bv1;
-    bv1.resize(10);
+        unsigned ids[] = {65536 };
+        bvect bv1;
+        bv1.resize(10);
 
-    bv1.set(&ids[0], sizeof(ids)/sizeof(ids[0]));
-    assert(bv1.size()==65536+1);
+        bv1.set(&ids[0], sizeof(ids)/sizeof(ids[0]));
+        assert(bv1.size()==65536+1);
+        bv1.keep(&ids[0], sizeof(ids)/sizeof(ids[0]));
+        cout << bv1.size() << endl;
+        assert(bv1.size()==65536+1);
     }
 
 
@@ -2857,9 +2865,13 @@ void BvectorBulkSetTest()
 
     for (unsigned i = 0; i < sizeof(ids)/sizeof(ids[0]); ++i)
         bv1.set(ids[i]);
-    bv2.set(&ids[0], sizeof(ids)/sizeof(ids[0]));
         
+    bv2.set(&ids[0], sizeof(ids)/sizeof(ids[0]));
     int cmp = bv1.compare(bv2);
+    assert(cmp==0);
+    
+    bv2.keep(&ids[0], sizeof(ids)/sizeof(ids[0]));
+    cmp = bv1.compare(bv2);
     assert(cmp==0);
     }
 
@@ -2876,6 +2888,19 @@ void BvectorBulkSetTest()
 
     int cmp = bv1.compare(bv2);
     assert(cmp==0);
+    
+    {
+        bvect bv_inv;
+        bv_inv.flip();
+        unsigned keep_cnt = sizeof(ids)/sizeof(ids[0]);
+        bv_inv.keep(&ids[0], keep_cnt, bm::BM_SORTED);
+        unsigned cnt_inv2 = bv_inv.count();
+        assert(cnt_inv2 == keep_cnt);
+        for (unsigned i = 0; i < sizeof(ids)/sizeof(ids[0]); ++i)
+        {
+            assert(bv_inv.test(ids[i]));
+        }
+    }
     
     bvect bv3, bv4, bv5;
     bv3.invert();
@@ -3004,11 +3029,32 @@ void BvectorBulkSetTest()
                 cerr << "2.Failed bulk set test at delta=" << delta << endl;
                 exit(1);
             }
+            
+            // test AND/keep
+            {
+                bvect bv3(bv1);
+                bvect bv4;
+                bv3.keep(&v1[0], unsigned(v1.size()));
+                bv4.set(&v1[0], unsigned(v1.size()));
+                cmp = bv3.compare(bv4);
+                if (cmp!=0)
+                {
+                    cerr << "3.Failed keep() test at delta=" << delta << endl;
+                    exit(1);
+                }
+                if (v1.size())
+                {
+                    bv3.keep(&v1[0], 1);
+                    assert(bv3.count()==1);
+                    assert(bv3.test(v1[0]));
+                }
+            }
+
             bv1.clear();
             bv1c.clear();
             bv2.clear();
-            
-            if (delta % 500 == 0)
+
+            if (delta % 256 == 0)
             {
                 cout << "\r" << delta << "/" << delta_max << flush;
             }
@@ -6916,7 +6962,7 @@ void GAPCheck()
    //bvect_a.clear();
 
 
-   unsigned* buf = (unsigned*) bvect_a.get_block(0);
+   unsigned* buf = (unsigned*) bvect_a.get_blocks_manager().get_block(0);
 
    bm::or_bit_block(buf, 0, 4);
    unsigned cnt = bm::bit_block_calc_count_range(buf, 0, 3);
@@ -6961,7 +7007,7 @@ void GAPCheck()
    bvect_u.set_bit(0, false);
 //   bvect_u.clear();
 
-   unsigned* buf = (unsigned*) bvect_u.get_block(0);
+   unsigned* buf = (unsigned*) bvect_u.get_blocks_manager().get_block(0);
 
    bm::or_bit_block(buf, 5, 32);
    bool bit = (bvect_u.get_bit(4) != 0);
@@ -6996,7 +7042,7 @@ void GAPCheck()
 
    for (int i = 0; i < 5000; ++i)
    {
-        unsigned* buf = (unsigned*) bvect_r.get_block(0);
+        unsigned* buf = (unsigned*) bvect_r.get_blocks_manager().get_block(0);
         assert(buf);
         unsigned start = rand() % 65535;
         unsigned end = rand() % 65535;
@@ -7078,7 +7124,7 @@ void GAPCheck()
    bvect_a.set_bit(0, false);
    //bvect_a.clear();
 
-   unsigned* buf = (unsigned*) bvect_a.get_block(0);
+   unsigned* buf = (unsigned*) bvect_a.get_blocks_manager().get_block(0);
 
 
    gapv.convert_to_bitset(buf);
