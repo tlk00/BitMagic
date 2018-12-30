@@ -45,7 +45,7 @@ namespace bm
  
     TARGET = BV1 or BV2 or BV3 or BV4 ...
  
-    \ingroup setalgo
+    @ingroup setalgo
 */
 template<typename BV>
 class aggregator
@@ -408,13 +408,7 @@ private:
     struct arena
     {
         BM_DECLARE_TEMP_BLOCK(tb1);
-        BM_DECLARE_TEMP_BLOCK(tb_opt);  // temp block for results optimization
-        // commented out blocks are used in experimental GAP aggregations
-#if 0
-        bm::gap_word_t        gap_res_buf1[bm::gap_equiv_len * 3]; ///< temp 1
-        bm::gap_word_t        gap_res_buf2[bm::gap_equiv_len * 3]; ///< temp 2
-        bm::gap_word_t        gap_res_buf3[bm::gap_equiv_len * 6]; ///< temp 3
-#endif
+        BM_DECLARE_TEMP_BLOCK(tb_opt);  ///< temp block for results optimization
         const bm::word_t*     v_arg_or_blk[max_aggregator_cap];     ///< source blocks list (OR)
         const bm::gap_word_t* v_arg_or_blk_gap[max_aggregator_cap]; ///< source GAP blocks list (OR)
         const bm::word_t*     v_arg_and_blk[max_aggregator_cap];     ///< source blocks list (AND)
@@ -456,7 +450,16 @@ private:
 //
 // ------------------------------------------------------------------------
 
-
+/**
+    Experimental method ro run multiple aggregators in sync
+ 
+    Pipeleine algorithm walts the sequence of iterators (pointers on aggregators)
+    and run them all via aggregator<>::run_step() method
+ 
+    @param first - iterator (pointer on aggregator)
+    @param last - iterator (pointer on aggregator)
+    @ingroup setalgo
+*/
 template<typename Agg, typename It>
 void aggregator_pipeline_execute(It  first, It last)
 {
@@ -486,9 +489,7 @@ void aggregator_pipeline_execute(It  first, It last)
                 }
             } // for it
             if (pipeline_size <= 0)
-            {
                 return;
-            }
 
         } while (++j < bm::set_array_size);
 

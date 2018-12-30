@@ -183,64 +183,6 @@ bm::id_t sse2_bit_count_op(const __m128i* BMRESTRICT block,
 }
 
 
-
-
-#define VECT_XOR_ARR_2_MASK(dst, src, src_end, mask)\
-    sse2_xor_arr_2_mask((__m128i*)(dst), (__m128i*)(src), (__m128i*)(src_end), (bm::word_t)mask)
-
-#define VECT_ANDNOT_ARR_2_MASK(dst, src, src_end, mask)\
-    sse2_andnot_arr_2_mask((__m128i*)(dst), (__m128i*)(src), (__m128i*)(src_end), (bm::word_t)mask)
-
-#define VECT_BITCOUNT(first, last) \
-    sse2_bit_count((__m128i*) (first), (__m128i*) (last)) 
-
-#define VECT_BITCOUNT_AND(first, last, mask) \
-    sse2_bit_count_op((__m128i*) (first), (__m128i*) (last), (__m128i*) (mask), sse2_and) 
-
-#define VECT_BITCOUNT_OR(first, last, mask) \
-    sse2_bit_count_op((__m128i*) (first), (__m128i*) (last), (__m128i*) (mask), sse2_or) 
-
-#define VECT_BITCOUNT_XOR(first, last, mask) \
-    sse2_bit_count_op((__m128i*) (first), (__m128i*) (last), (__m128i*) (mask), sse2_xor) 
-
-#define VECT_BITCOUNT_SUB(first, last, mask) \
-    sse2_bit_count_op((__m128i*) (first), (__m128i*) (last), (__m128i*) (mask), sse2_sub) 
-
-#define VECT_INVERT_BLOCK(first) \
-    sse2_invert_block((__m128i*)first);
-
-#define VECT_AND_BLOCK(dst, src) \
-    sse2_and_block((__m128i*) dst, (__m128i*) (src))
-
-#define VECT_OR_BLOCK(dst, src) \
-    sse2_or_block((__m128i*) dst, (__m128i*) (src))
-
-#define VECT_OR_BLOCK_3WAY(dst, src1, src2) \
-    sse2_or_block_3way((__m128i*) (dst), (__m128i*) (src1), (__m128i*) (src2))
-
-#define VECT_OR_BLOCK_5WAY(dst, src1, src2, src3, src4) \
-    sse2_or_block_5way((__m128i*) (dst), (__m128i*) (src1), (__m128i*) (src2), (__m128i*) (src3), (__m128i*) (src4))
-
-#define VECT_SUB_BLOCK(dst, src) \
-    sse2_sub_block((__m128i*) dst, (__m128i*) (src))
-
-#define VECT_XOR_ARR(dst, src, src_end) \
-    sse2_xor_arr((__m128i*) dst, (__m128i*) (src), (__m128i*) (src_end))
-
-#define VECT_COPY_BLOCK(dst, src) \
-    sse2_copy_block((__m128i*) dst, (__m128i*) (src))
-
-#define VECT_STREAM_BLOCK(dst, src) \
-    sse2_stream_block((__m128i*) dst, (__m128i*) (src))
-
-
-#define VECT_SET_BLOCK(dst, value) \
-    sse2_set_block((__m128i*) dst, value)
-
-
-
-
-
 inline
 bm::id_t sse2_bit_block_calc_count_change(const __m128i* BMRESTRICT block,
                                           const __m128i* BMRESTRICT block_end,
@@ -459,6 +401,62 @@ unsigned sse2_gap_find(const bm::gap_word_t* BMRESTRICT pbuf, const bm::gap_word
 #ifdef __GNUG__
 #pragma GCC diagnostic pop
 #endif
+
+
+#define VECT_XOR_ARR_2_MASK(dst, src, src_end, mask)\
+    sse2_xor_arr_2_mask((__m128i*)(dst), (__m128i*)(src), (__m128i*)(src_end), (bm::word_t)mask)
+
+#define VECT_ANDNOT_ARR_2_MASK(dst, src, src_end, mask)\
+    sse2_andnot_arr_2_mask((__m128i*)(dst), (__m128i*)(src), (__m128i*)(src_end), (bm::word_t)mask)
+
+#define VECT_BITCOUNT(first, last) \
+    sse2_bit_count((__m128i*) (first), (__m128i*) (last))
+
+#define VECT_BITCOUNT_AND(first, last, mask) \
+    sse2_bit_count_op((__m128i*) (first), (__m128i*) (last), (__m128i*) (mask), sse2_and)
+
+#define VECT_BITCOUNT_OR(first, last, mask) \
+    sse2_bit_count_op((__m128i*) (first), (__m128i*) (last), (__m128i*) (mask), sse2_or)
+
+#define VECT_BITCOUNT_XOR(first, last, mask) \
+    sse2_bit_count_op((__m128i*) (first), (__m128i*) (last), (__m128i*) (mask), sse2_xor)
+
+#define VECT_BITCOUNT_SUB(first, last, mask) \
+    sse2_bit_count_op((__m128i*) (first), (__m128i*) (last), (__m128i*) (mask), sse2_sub)
+
+#define VECT_INVERT_BLOCK(first) \
+    sse2_invert_block((__m128i*)first);
+
+#define VECT_AND_BLOCK(dst, src) \
+    sse2_and_block((__m128i*) dst, (__m128i*) (src))
+
+#define VECT_OR_BLOCK(dst, src) \
+    sse2_or_block((__m128i*) dst, (__m128i*) (src))
+
+#define VECT_OR_BLOCK_2WAY(dst, src1, src2) \
+    sse2_or_block_2way((__m128i*) (dst), (__m128i*) (src1), (__m128i*) (src2))
+
+#define VECT_OR_BLOCK_3WAY(dst, src1, src2) \
+    sse2_or_block_3way((__m128i*) (dst), (__m128i*) (src1), (__m128i*) (src2))
+
+#define VECT_OR_BLOCK_5WAY(dst, src1, src2, src3, src4) \
+    sse2_or_block_5way((__m128i*) (dst), (__m128i*) (src1), (__m128i*) (src2), (__m128i*) (src3), (__m128i*) (src4))
+
+#define VECT_SUB_BLOCK(dst, src) \
+    sse2_sub_block((__m128i*) dst, (__m128i*) (src))
+
+#define VECT_XOR_BLOCK(dst, src) \
+    sse2_xor_block((__m128i*) dst, (__m128i*) (src))
+
+#define VECT_COPY_BLOCK(dst, src) \
+    sse2_copy_block((__m128i*) dst, (__m128i*) (src))
+
+#define VECT_STREAM_BLOCK(dst, src) \
+    sse2_stream_block((__m128i*) dst, (__m128i*) (src))
+
+#define VECT_SET_BLOCK(dst, value) \
+    sse2_set_block((__m128i*) dst, value)
+
 
 
 } // namespace

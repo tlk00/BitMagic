@@ -693,6 +693,50 @@ bool avx2_or_arr_unal(__m256i* BMRESTRICT dst,
     return (maskA == ~0u);
 }
 
+/*!
+    @brief OR 2 blocks, copy to destination
+    *dst = *src1 | src2
+    @return true if all bits are 1
+
+    @ingroup AVX512
+*/
+inline
+bool avx512_or_block_2way(__m512i* BMRESTRICT dst,
+                        const __m512i* BMRESTRICT src1,
+                        const __m512i* BMRESTRICT src2)
+{
+    __m512i m1A, m1B, m1C, m1D;
+    __m512i mAccF0, mAccF1;
+    
+    mAccF0 = mAccF1 = _mm512_set1_epi32(~0u); // broadcast 0xFF
+    const __m512i* BMRESTRICT src_end1 =
+        (const __m512i*)((bm::word_t*)(src1) + bm::set_block_size);
+
+    do
+    {
+        m1A = _mm512_or_si512(_mm512_load_si512(src1+0), _mm512_load_si512(src2+0));
+        m1B = _mm512_or_si512(_mm512_load_si512(src1+1), _mm512_load_si512(src2+1));
+        m1C = _mm512_or_si512(_mm512_load_si512(src1+2), _mm512_load_si512(src2+2));
+        m1D = _mm512_or_si512(_mm512_load_si512(src1+3), _mm512_load_si512(src2+3));
+
+        _mm512_store_si512(dst+0, m1A);
+        _mm512_store_si512(dst+1, m1B);
+        _mm512_store_si512(dst+2, m1C);
+        _mm512_store_si512(dst+3, m1D);
+
+        mAccF1 = _mm512_and_si512(mAccF1, m1C);
+        mAccF1 = _mm512_and_si512(mAccF1, m1D);
+        mAccF0 = _mm512_and_si512(mAccF0, m1A);
+        mAccF0 = _mm512_and_si512(mAccF0, m1B);
+
+        src1 += 4; src2 += 4; dst += 4;
+
+    } while (src1 < src_end1);
+
+     mAccF0 = _mm512_and_si512(mAccF0, mAccF1);
+    return avx512_test_one(mAccF0);
+}
+
 
 /*!
     @brief OR array elements against another 2 arrays
@@ -725,10 +769,10 @@ bool avx512_or_block_3way(__m512i* BMRESTRICT dst,
         m1C = _mm512_or_si512(m1C, _mm512_load_si512(src2+2));
         m1D = _mm512_or_si512(m1D, _mm512_load_si512(src2+3));
 
-        _mm512_stream_si512(dst+0, m1A);
-        _mm512_stream_si512(dst+1, m1B);
-        _mm512_stream_si512(dst+2, m1C);
-        _mm512_stream_si512(dst+3, m1D);
+        _mm512_store_si512(dst+0, m1A);
+        _mm512_store_si512(dst+1, m1B);
+        _mm512_store_si512(dst+2, m1C);
+        _mm512_store_si512(dst+3, m1D);
 
         mAccF1 = _mm512_and_si512(mAccF1, m1C);
         mAccF1 = _mm512_and_si512(mAccF1, m1D);
@@ -787,10 +831,10 @@ bool avx512_or_block_5way(__m512i* BMRESTRICT dst,
         m1C = _mm512_or_si512(m1C, _mm512_load_si512(src4+2));
         m1D = _mm512_or_si512(m1D, _mm512_load_si512(src4+3));
 
-        _mm512_stream_si512(dst+0, m1A);
-        _mm512_stream_si512(dst+1, m1B);
-        _mm512_stream_si512(dst+2, m1C);
-        _mm512_stream_si512(dst+3, m1D);
+        _mm512_store_si512(dst+0, m1A);
+        _mm512_store_si512(dst+1, m1B);
+        _mm512_store_si512(dst+2, m1C);
+        _mm512_store_si512(dst+3, m1D);
 
         mAccF1 = _mm512_and_si512(mAccF1, m1C);
         mAccF1 = _mm512_and_si512(mAccF1, m1D);
@@ -812,39 +856,49 @@ bool avx512_or_block_5way(__m512i* BMRESTRICT dst,
 
 
 /*!
-    @brief OR array elements against another array
+    @brief XOR array elements against another array
     *dst ^= *src
-
+    @return 0 if destination does not have any bits
     @ingroup AVX2
 */
 inline
-void avx2_xor_arr(__m256i* BMRESTRICT dst,
-                  const __m256i* BMRESTRICT src,
-                  const __m256i* BMRESTRICT src_end)
+unsigned avx512_xor_block(__m512i* BMRESTRICT dst,
+                          const __m512i* BMRESTRICT src)
 {
-    __m256i ymm1, ymm2;
+    __m512i m1A, m1B, m1C, m1D;
+    __m512i accA, accB, accC, accD;
+
+    const __m512i* BMRESTRICT src_end =
+        (const __m512i*)((bm::word_t*)(src) + bm::set_block_size);
+
+    accA = accB = accC = accD = _mm512_setzero_si512();
+
     do
     {
-        ymm1 = _mm256_load_si256(src++);
-        ymm2 = _mm256_load_si256(dst);
-        ymm1 = _mm256_xor_si256(ymm1, ymm2);
-        _mm256_store_si256(dst++, ymm1);
+        m1A = _mm512_xor_si512(_mm512_load_si512(src+0), _mm512_load_si512(dst+0));
+        m1B = _mm512_xor_si512(_mm512_load_si512(src+1), _mm512_load_si512(dst+1));
+        m1C = _mm512_xor_si512(_mm512_load_si512(src+2), _mm512_load_si512(dst+2));
+        m1D = _mm512_xor_si512(_mm512_load_si512(src+3), _mm512_load_si512(dst+3));
 
-        ymm1 = _mm256_load_si256(src++);
-        ymm2 = _mm256_load_si256(dst);
-        ymm1 = _mm256_xor_si256(ymm1, ymm2);
-        _mm256_store_si256(dst++, ymm1);
+        _mm512_store_si512(dst+0, m1A);
+        _mm512_store_si512(dst+1, m1B);
+        _mm512_store_si512(dst+2, m1C);
+        _mm512_store_si512(dst+3, m1D);
+        
+        accA = _mm512_or_si512(accA, m1A);
+        accB = _mm512_or_si512(accB, m1B);
+        accC = _mm512_or_si512(accC, m1C);
+        accD = _mm512_or_si512(accD, m1D);
+        
+        src += 4; dst += 4;
 
-        ymm1 = _mm256_load_si256(src++);
-        ymm2 = _mm256_load_si256(dst);
-        ymm1 = _mm256_xor_si256(ymm1, ymm2);
-        _mm256_store_si256(dst++, ymm1);
-
-        ymm1 = _mm256_load_si256(src++);
-        ymm2 = _mm256_load_si256(dst);
-        ymm1 = _mm256_xor_si256(ymm1, ymm2);
-        _mm256_store_si256(dst++, ymm1);
     } while (src < src_end);
+    
+    accA = _mm512_or_si512(accA, accB); // A = A | B
+    accC = _mm512_or_si512(accC, accD); // C = C | D
+    accA = _mm512_or_si512(accA, accC); // A = A | C
+
+    return !avx512_test_zero(accA);
 }
 
 
@@ -1101,6 +1155,31 @@ bool avx2_test_all_zero_wave(const void* ptr)
 }
 
 
+/*!
+    @brief check if 2 wave of pointers are all NULL
+    @ingroup AVX2
+*/
+BMFORCEINLINE
+bool avx2_test_all_zero_wave2(const void* ptr0, const void* ptr1)
+{
+    __m256i w0 = _mm256_loadu_si256((__m256i*)ptr0);
+    __m256i w1 = _mm256_loadu_si256((__m256i*)ptr1);
+    w0 = _mm256_or_si256(w0, w1);
+    return _mm256_testz_si256(w0, w0);
+}
+
+/*!
+    @brief check if 2 wave of pointers are all the same (NULL or FULL)
+    @ingroup AVX2
+*/
+BMFORCEINLINE
+bool avx2_test_all_eq_wave2(const void* ptr0, const void* ptr1)
+{
+    __m256i w0 = _mm256_loadu_si256((__m256i*)ptr0);
+    __m256i w1 = _mm256_loadu_si256((__m256i*)ptr1);
+    w0 = _mm256_xor_si256(w0, w1);
+    return _mm256_testz_si256(w0, w0);
+}
 
 
 
@@ -1434,6 +1513,9 @@ void avx2_bit_block_gather_scatter(unsigned* BMRESTRICT arr,
 #define VECT_OR_BLOCK(dst, src) \
     avx512_or_block((__m512i*) dst, (__m512i*) (src))
 
+#define VECT_OR_BLOCK_2WAY(dst, src1, src2) \
+    avx512_or_block_2way((__m512i*) dst, (__m512i*) (src1), (__m512i*) (src2))
+
 #define VECT_OR_BLOCK_3WAY(dst, src1, src2) \
     avx512_or_block_3way((__m512i*) dst, (__m512i*) (src1), (__m512i*) (src2))
 
@@ -1446,8 +1528,8 @@ void avx2_bit_block_gather_scatter(unsigned* BMRESTRICT arr,
 #define VECT_SUB_DIGEST(dst, src) \
     avx512_sub_digest((__m512i*) dst, (const __m512i*) (src))
 
-#define VECT_XOR_ARR(dst, src, src_end) \
-    avx2_xor_arr((__m256i*) dst, (__m256i*) (src), (__m256i*) (src_end))
+#define VECT_XOR_BLOCK(dst, src) \
+    avx512_xor_block((__m512i*) dst, (__m512i*) (src))
 
 #define VECT_COPY_BLOCK(dst, src) \
     avx512_copy_block((__m512i*) dst, (__m512i*) (src))

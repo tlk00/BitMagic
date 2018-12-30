@@ -53,10 +53,11 @@ For more information please visit:  http://bitmagic.io
 #undef VECT_INVERT_ARR
 #undef VECT_AND_ARR
 #undef VECT_OR_ARR
-#undef VECT_OR_ARR_3WAY
-#undef VECT_OR_ARR_5WAY
+#undef VECT_OR_BLOCK_2WAY
+#undef VECT_OR_BLOCK_3WAY
+#undef VECT_OR_BLOCK_5WAY
 #undef VECT_SUB_ARR
-#undef VECT_XOR_ARR
+#undef VECT_XOR_BLOCK
 
 #undef VECT_COPY_BLOCK
 #undef VECT_SET_BLOCK

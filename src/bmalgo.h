@@ -167,7 +167,6 @@ class rank_compressor
 {
 public:
     typedef BV                         bvector_type;
-//    typedef typename BV::rs_index_type block_count_type;
     typedef typename BV::rs_index_type rs_index_type;
     enum buffer_cap
     {
@@ -404,7 +403,6 @@ void rank_compressor<BV>::compress_by_source(BV& bv_target,
         const rs_index_type&    bc_index_;
     };
     // ------------------------------------
-
 
     bv_target.clear();
     bv_target.init();

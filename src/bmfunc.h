@@ -53,10 +53,9 @@ bm::id_t bit_block_any_range(const bm::word_t* block,
 */
 struct bv_statistics
 {
-    /// Number of bit blocks.
-    unsigned bit_blocks; 
-    /// Number of GAP blocks.
-    unsigned gap_blocks;  
+    unsigned bit_blocks;        ///< Number of bit blocks
+    unsigned gap_blocks;        ///< Number of GAP blocks
+    unsigned ptr_sub_blocks;    ///< Number of sub-blocks
     /// Estimated maximum of memory required for serialization.
     size_t  max_serialize_mem;
     /// Memory used by bitvector including temp and service blocks
@@ -89,7 +88,7 @@ struct bv_statistics
     /// Reset statisctics
     void reset()
     {
-        bit_blocks = gap_blocks = 0;
+        bit_blocks = gap_blocks = ptr_sub_blocks = 0;
         max_serialize_mem = memory_used = 0;
     }
 };
@@ -949,10 +948,8 @@ BMFORCEINLINE
 bool gap_is_all_zero(const bm::gap_word_t* buf)
 {
     // (almost) branchless variant:
-    return (!(*buf & 1u)) & (!(gap_max_bits - 1 - buf[1]));
-    //return ((*buf & 1u) == 0) && (buf[1] == bm::gap_max_bits - 1);
+    return (!(*buf & 1u)) & (!(bm::gap_max_bits - 1 - buf[1]));
 }
-
 
 /*!
    \brief Checks if GAP block is all-one.
@@ -962,11 +959,10 @@ bool gap_is_all_zero(const bm::gap_word_t* buf)
 
    @ingroup gapfunc
 */
-template<typename T>
 BMFORCEINLINE
-bool gap_is_all_one(const T* buf, unsigned set_max)
+bool gap_is_all_one(const bm::gap_word_t* buf)
 {
-    return ((*buf & 1u) && (buf[1] == set_max - 1));
+    return ((*buf & 1u) && (buf[1] == bm::gap_max_bits - 1));
 }
 
 /*!
@@ -976,9 +972,10 @@ bool gap_is_all_one(const T* buf, unsigned set_max)
 
    @ingroup gapfunc
 */
-template<typename T> T gap_length(const T* buf)
+BMFORCEINLINE
+bm::gap_word_t gap_length(const bm::gap_word_t* buf)
 {
-    return (T)((*buf >> 3) + 1);
+    return (bm::gap_word_t)((*buf >> 3) + 1);
 }
 
 
@@ -4268,6 +4265,7 @@ bm::id_t bit_block_any_range(const bm::word_t* block,
 */
 template<typename T> void bit_invert(T* start)
 {
+    BM_ASSERT(IS_VALID_ADDR((bm::word_t*)start));
 #ifdef BMVECTOPT
     VECT_INVERT_BLOCK(start);
 #else
@@ -4644,7 +4642,6 @@ bm::id64_t bit_block_and(bm::word_t* BMRESTRICT dst, const bm::word_t* BMRESTRIC
 
 #ifdef BMVECTOPT
     bm::id64_t acc = VECT_AND_BLOCK(dst, src);
-    return acc;
 #else
     unsigned arr_sz = bm::set_block_size / 2;
 
@@ -4659,8 +4656,8 @@ bm::id64_t bit_block_and(bm::word_t* BMRESTRICT dst, const bm::word_t* BMRESTRIC
         acc |= dst_u->w64[i+2] &= src_u->w64[i+2];
         acc |= dst_u->w64[i+3] &= src_u->w64[i+3];
     }
-    return acc;
 #endif
+    return acc;
 }
 
 /*!
@@ -5430,10 +5427,51 @@ bool bit_block_or(bm::word_t* BMRESTRICT dst,
 }
 
 /*!
-   \brief 3 way (target, source1, source2) bitblock OR operation.
+   \brief 2 way (target := source1 | source2) bitblock OR operation.
+
+   \param dst  - dest block [out]
+   \param src1 - source 1
+   \param src2 - source 2
+ 
+   @return 1 if produced block of ALL ones
+
+   @ingroup bitfunc
+*/
+inline
+bool bit_block_or_2way(bm::word_t* BMRESTRICT dst,
+                        const bm::word_t* BMRESTRICT src1,
+                        const bm::word_t* BMRESTRICT src2)
+{
+#ifdef BMVECTOPT
+    return VECT_OR_BLOCK_2WAY(dst, src1, src2);
+#else
+    const bm::wordop_t* BMRESTRICT wrd_ptr1 = (wordop_t*)src1;
+    const bm::wordop_t* BMRESTRICT wrd_end1 = (wordop_t*)(src1 + set_block_size);
+    const bm::wordop_t* BMRESTRICT wrd_ptr2 = (wordop_t*)src2;
+    bm::wordop_t* BMRESTRICT dst_ptr = (wordop_t*)dst;
+
+    bm::wordop_t acc = 0;
+    const bm::wordop_t not_acc = acc = ~acc;
+    do
+    {
+        acc &= (dst_ptr[0] = wrd_ptr1[0] | wrd_ptr2[0]);
+        acc &= (dst_ptr[1] = wrd_ptr1[1] | wrd_ptr2[1]);
+        acc &= (dst_ptr[2] = wrd_ptr1[2] | wrd_ptr2[2]);
+        acc &= (dst_ptr[3] = wrd_ptr1[3] | wrd_ptr2[3]);
+        
+        dst_ptr+=4; wrd_ptr1+=4;wrd_ptr2+=4;
+        
+    } while (wrd_ptr1 < wrd_end1);
+    return acc == not_acc;
+#endif
+}
+
+
+/*!
+   \brief 3 way (target | source1 | source2) bitblock OR operation.
    Function does not analyse availability of source and destination blocks.
 
-   \param dst - destination block
+   \param dst  - sst-dest block [in,out]
    \param src1 - source 1 
    \param src2 - source 2
  
@@ -5747,29 +5785,31 @@ bm::word_t* bit_operation_sub(bm::word_t* BMRESTRICT dst,
    @ingroup bitfunc
 */
 inline 
-void bit_block_xor(bm::word_t* BMRESTRICT dst, 
-                   const bm::word_t* BMRESTRICT src)
+bm::id64_t bit_block_xor(bm::word_t* BMRESTRICT dst,
+                         const bm::word_t* BMRESTRICT src)
 {
+    BM_ASSERT(dst);
+    BM_ASSERT(src);
+    BM_ASSERT(dst != src);
+
 #ifdef BMVECTOPT
-    VECT_XOR_ARR(dst, src, src + bm::set_block_size);
+    bm::id64_t acc = VECT_XOR_BLOCK(dst, src);
 #else
-    const bm::wordop_t* BMRESTRICT wrd_ptr = (wordop_t*) src;
-    const bm::wordop_t* BMRESTRICT wrd_end = 
-                            (wordop_t*) (src + bm::set_block_size);
-    bm::wordop_t* BMRESTRICT dst_ptr = (wordop_t*)dst;
+    unsigned arr_sz = bm::set_block_size / 2;
 
-    // Regular XOR operation on the whole block.
-    do
+    const bm::bit_block_t::bunion_t* BMRESTRICT src_u = (const bm::bit_block_t::bunion_t*)src;
+    bm::bit_block_t::bunion_t* BMRESTRICT dst_u = (bm::bit_block_t::bunion_t*)dst;
+
+    bm::id64_t acc = 0;
+    for (unsigned i = 0; i < arr_sz; i+=4)
     {
-        dst_ptr[0] ^= wrd_ptr[0];
-        dst_ptr[1] ^= wrd_ptr[1];
-        dst_ptr[2] ^= wrd_ptr[2];
-        dst_ptr[3] ^= wrd_ptr[3];
-
-        dst_ptr+=4;
-        wrd_ptr+=4;
-    } while (wrd_ptr < wrd_end);
+        acc |= dst_u->w64[i]   ^= src_u->w64[i];
+        acc |= dst_u->w64[i+1] ^= src_u->w64[i+1];
+        acc |= dst_u->w64[i+2] ^= src_u->w64[i+2];
+        acc |= dst_u->w64[i+3] ^= src_u->w64[i+3];
+    }
 #endif
+    return acc;
 }
 
 /*!
@@ -6366,7 +6406,7 @@ bool check_block_one(const bm::word_t* blk, bool deep_scan)
     if (blk == 0) return false;
 
     if (BM_IS_GAP(blk))
-        return bm::gap_is_all_one(BMGAP_PTR(blk), bm::gap_max_bits);
+        return bm::gap_is_all_one(BMGAP_PTR(blk));
 
     if (IS_FULL_BLOCK(blk))
         return true;

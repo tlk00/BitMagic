@@ -532,6 +532,33 @@ bool sse42_test_all_zero_wave(const void* ptr)
 }
 
 /*!
+    @brief check if 2 waves of pointers are all NULL
+    @ingroup SSE4
+*/
+BMFORCEINLINE
+bool sse42_test_all_zero_wave2(const void* ptr0, const void* ptr1)
+{
+    __m128i w0 = _mm_loadu_si128((__m128i*)ptr0);
+    __m128i w1 = _mm_loadu_si128((__m128i*)ptr1);
+    w0 = _mm_or_si128(w0, w1);
+    return _mm_testz_si128(w0, w0);
+}
+
+/*!
+    @brief check if wave of 2 pointers are the same (null or FULL)
+    @ingroup SSE4
+*/
+BMFORCEINLINE
+bool sse42_test_all_eq_wave2(const void* ptr0, const void* ptr1)
+{
+    __m128i w0 = _mm_loadu_si128((__m128i*)ptr0);
+    __m128i w1 = _mm_loadu_si128((__m128i*)ptr1);
+    w0 = _mm_xor_si128(w0, w1);
+    return _mm_testz_si128(w0, w0);
+}
+
+
+/*!
     SSE4.2 calculate number of bit changes from 0 to 1
     @ingroup SSE4
 */
@@ -1166,6 +1193,9 @@ bool sse42_shift_r1_and(__m128i* block,
 #define VECT_OR_BLOCK(dst, src) \
     sse2_or_block((__m128i*) dst, (__m128i*) (src))
 
+#define VECT_OR_BLOCK_2WAY(dst, src1, src2) \
+    sse2_or_block_2way((__m128i*) (dst), (const __m128i*) (src1), (const __m128i*) (src2))
+
 #define VECT_OR_BLOCK_3WAY(dst, src1, src2) \
     sse2_or_block_3way((__m128i*) (dst), (const __m128i*) (src1), (const __m128i*) (src2))
 
@@ -1178,8 +1208,8 @@ bool sse42_shift_r1_and(__m128i* block,
 #define VECT_SUB_DIGEST(dst, src) \
     sse4_sub_digest((__m128i*) dst, (const __m128i*) (src))
 
-#define VECT_XOR_ARR(dst, src, src_end) \
-    sse2_xor_arr((__m128i*) dst, (__m128i*) (src), (__m128i*) (src_end))
+#define VECT_XOR_BLOCK(dst, src) \
+    sse2_xor_block((__m128i*) dst, (__m128i*) (src))
 
 #define VECT_COPY_BLOCK(dst, src) \
     sse2_copy_block((__m128i*) dst, (__m128i*) (src))
