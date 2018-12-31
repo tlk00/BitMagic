@@ -936,8 +936,25 @@ unsigned SerializationOperation(bvect*             bv_target,
                 
                 if (bv_merge1 != bvc)
                 {
-                    cerr << "Merge check error!" << endl;
+                    cerr << "Merge(OR) check error!" << endl;
                     exit(1);
+                }
+                // 2-way
+                {
+                    bvect bvt1;
+                    bvt1.bit_or(bv1, bv2, bvect::opt_none);
+                    if (bvt1 != bvc)
+                    {
+                        cerr << "1. OR 2-way check error!" << endl;
+                        exit(1);
+                    }
+                    bvect bvt2;
+                    bvt2.bit_or(bv2, bv1, bvect::opt_compress);
+                    if (bvt2 != bvc)
+                    {
+                        cerr << "2. OR 2-way check error!" << endl;
+                        exit(1);
+                    }
                 }
             }
             bvt |= bv2;
@@ -3938,7 +3955,7 @@ void OrOperationsTest()
     assert(ITERATIONS < BITVECT_SIZE);
 
     cout << "----------------------------------- OrOperationTest" << endl;
-
+    
     {
 
     bvect_mini   bvect_min1(256);
@@ -4052,6 +4069,20 @@ void OrOperationsTest()
     CheckVectors(bvect_min1, bvect_full1, BITVECT_SIZE/10+10);
     CheckCountRange(bvect_full1, 0, BITVECT_SIZE/10+10);
 
+    }
+    
+    {
+        bvect bv1;
+        bvect bv2;
+        bv1.flip(); bv2.flip();
+        unsigned cnt1 = bv1.count();
+        bv1.bit_or(bv2);
+        unsigned cnt2 = bv1.count();
+        assert(cnt1 == cnt2);
+        struct bvect::statistics st;
+        bv1.calc_stat(&st);
+        auto bcnt = st.bit_blocks + st.gap_blocks;
+        assert(bcnt == 1);
     }
 
     {
@@ -4205,7 +4236,100 @@ void OrOperationsTest()
 
     }
 
+    // ------------------------------------------
+    // 2-way OR
+    //
+    {
+        bvect        bv1 { 0, 1 };
+        bvect        bv2;
+        bv2.bit_or(bv1, bv2, bvect::opt_compress);
+        int cmp = bv1.compare(bv2);
+        assert(cmp == 0);
+    }
+
+    {
+        bvect        bv1 { 0, 1 };
+        bvect        bv2 { 2, 3 };
+        bvect bv1c(bv1);
+        bv1c.bit_or(bv2);
+
+        bvect bv;
+        bv.bit_or(bv1, bv2, bvect::opt_compress);
+        int cmp = bv.compare(bv1c);
+        assert(cmp == 0);
+        struct bvect::statistics st1;
+        bv.calc_stat(&st1);
+        assert(!st1.bit_blocks);
+        assert(st1.gap_blocks == 1);
+    }
     
+    {
+        bvect        bv1 { 0, 1 };
+        bvect        bv2;
+        for (unsigned i = 2; i < 65536; ++i)
+            bv2.set(i);
+        
+        bvect bv1c(bv1);
+        bv1c.bit_or(bv2);
+
+        bvect bv;
+        bv.bit_or(bv1, bv2, bvect::opt_none); // should detect FULL automatically
+        int cmp = bv.compare(bv1c);
+        assert(cmp == 0);
+        struct bvect::statistics st1;
+        bv.calc_stat(&st1);
+        assert(!st1.bit_blocks);
+        assert(!st1.gap_blocks);
+    }
+    
+    {
+        bvect        bv1 { 0, 1 };
+        bvect        bv2 { 1 };
+        bv1.clear(0); bv1.clear(1);
+        bv2.clear(1);
+        
+        bvect bv;
+        bv.bit_or(bv1, bv2, bvect::opt_none); // should detect FULL automatically
+
+        struct bvect::statistics st1;
+        bv.calc_stat(&st1);
+        assert(!st1.bit_blocks);
+        assert(!st1.gap_blocks);
+        assert(!st1.ptr_sub_blocks);
+    }
+
+
+    
+    {
+        bvect        bv1 { 0, 1 };
+        bvect        bv2 { 2, 3 };
+        bv2.optimize();
+        bvect bv1c(bv1);
+        bv1c.bit_or(bv2);
+
+        {
+            bvect bv;
+            bv.bit_or(bv1, bv2, bvect::opt_compress);
+            int cmp = bv.compare(bv1c);
+            assert(cmp == 0);
+        }
+        bv1.optimize();
+        {
+            bvect bv;
+            bv.bit_or(bv1, bv2, bvect::opt_compress);
+            int cmp = bv.compare(bv1c);
+            assert(cmp == 0);
+        }
+        bv2.clear();
+        bv2.invert();
+        {
+            bvect bv;
+            bv.bit_or(bv1, bv2, bvect::opt_compress);
+            int cmp = bv.compare(bv2);
+            assert(cmp == 0);
+        }
+    }
+
     cout << "----------------------------------- OrOperationTest OK" << endl;
 
 }
@@ -4505,6 +4629,19 @@ void XorOperationsTest()
         CheckVectors(bvect_min1, bvect1, BITVECT_SIZE, true);
         CheckVectors(bvect_min1, bv_target_s, BITVECT_SIZE, true);
         CheckCountRange(bvect1, 0, BITVECT_SIZE);
+    }
+    
+    {
+        bvect bv1;
+        bvect bv2;
+        bv1.flip(); bv2.flip();
+        bv1.bit_xor(bv2);
+        unsigned cnt2 = bv1.count();
+        assert(0 == cnt2);
+        struct bvect::statistics st;
+        bv1.calc_stat(&st);
+        auto bcnt = st.bit_blocks + st.gap_blocks;
+        assert(bcnt == 0);
     }
 
 
