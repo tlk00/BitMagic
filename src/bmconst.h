@@ -430,8 +430,6 @@ template<bool T> struct globals
                 _byte_order = BigEndian;
                 return;
             }
-
-            BM_ASSERT(0); // "Invalid Byte Order\n"
             _byte_order = LittleEndian;
         }
     };
