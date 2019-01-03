@@ -1577,6 +1577,9 @@ void avx2_bit_block_gather_scatter(unsigned* BMRESTRICT arr,
 #define VECT_XOR_BLOCK(dst, src) \
     avx512_xor_block((__m512i*) dst, (__m512i*) (src))
 
+#define VECT_XOR_BLOCK_2WAY(dst, src1, src2) \
+    avx512_xor_block_2way((__m512i*) dst, (__m512i*) (src1), (__m512i*) (src2))
+
 #define VECT_COPY_BLOCK(dst, src) \
     avx512_copy_block((__m512i*) dst, (__m512i*) (src))
 

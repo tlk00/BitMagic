@@ -58,6 +58,7 @@ For more information please visit:  http://bitmagic.io
 #undef VECT_OR_BLOCK_5WAY
 #undef VECT_SUB_ARR
 #undef VECT_XOR_BLOCK
+#undef VECT_XOR_BLOCK_2WAY
 
 #undef VECT_COPY_BLOCK
 #undef VECT_SET_BLOCK

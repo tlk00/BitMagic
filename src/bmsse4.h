@@ -1211,6 +1211,9 @@ bool sse42_shift_r1_and(__m128i* block,
 #define VECT_XOR_BLOCK(dst, src) \
     sse2_xor_block((__m128i*) dst, (__m128i*) (src))
 
+#define VECT_XOR_BLOCK_2WAY(dst, src1, src2) \
+    sse2_xor_block_2way((__m128i*) (dst), (const __m128i*) (src1), (const __m128i*) (src2))
+
 #define VECT_COPY_BLOCK(dst, src) \
     sse2_copy_block((__m128i*) dst, (__m128i*) (src))
 

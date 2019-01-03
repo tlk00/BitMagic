@@ -2535,6 +2535,9 @@ unsigned avx2_bit_to_gap(gap_word_t* BMRESTRICT dest,
 #define VECT_XOR_BLOCK(dst, src) \
     avx2_xor_block((__m256i*) dst, (__m256i*) (src))
 
+#define VECT_XOR_BLOCK_2WAY(dst, src1, src2) \
+    avx2_xor_block_2way((__m256i*) dst, (__m256i*) (src1), (__m256i*) (src2))
+
 #define VECT_COPY_BLOCK(dst, src) \
     avx2_copy_block((__m256i*) dst, (__m256i*) (src))
 
