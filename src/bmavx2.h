@@ -933,7 +933,7 @@ bool avx2_or_block_5way(__m256i* BMRESTRICT dst,
 
 
 /*!
-    @brief XOR array elements against another array
+    @brief XOR block against another
     *dst ^= *src
     @return 0 if destination does not have any bits
     @ingroup AVX2
@@ -978,6 +978,52 @@ unsigned avx2_xor_block(__m256i* BMRESTRICT dst,
     return !_mm256_testz_si256(accA, accA);
 }
 
+/*!
+    @brief 3 operand XOR 
+    *dst = *src1 ^ src2
+    @return 0 if destination does not have any bits
+    @ingroup AVX2
+*/
+inline
+unsigned avx2_xor_block_2way(__m256i* BMRESTRICT dst,
+                             const __m256i* BMRESTRICT src1,
+                             const __m256i* BMRESTRICT src2)
+{
+    __m256i m1A, m1B, m1C, m1D;
+    __m256i accA, accB, accC, accD;
+
+    const __m256i* BMRESTRICT src1_end =
+        (const __m256i*)((bm::word_t*)(src1) + bm::set_block_size);
+
+    accA = accB = accC = accD = _mm256_setzero_si256();
+
+    do
+    {
+        m1A = _mm256_xor_si256(_mm256_load_si256(src1 + 0), _mm256_load_si256(src2 + 0));
+        m1B = _mm256_xor_si256(_mm256_load_si256(src1 + 1), _mm256_load_si256(src2 + 1));
+        m1C = _mm256_xor_si256(_mm256_load_si256(src1 + 2), _mm256_load_si256(src2 + 2));
+        m1D = _mm256_xor_si256(_mm256_load_si256(src1 + 3), _mm256_load_si256(src2 + 3));
+
+        _mm256_store_si256(dst + 0, m1A);
+        _mm256_store_si256(dst + 1, m1B);
+        _mm256_store_si256(dst + 2, m1C);
+        _mm256_store_si256(dst + 3, m1D);
+
+        accA = _mm256_or_si256(accA, m1A);
+        accB = _mm256_or_si256(accB, m1B);
+        accC = _mm256_or_si256(accC, m1C);
+        accD = _mm256_or_si256(accD, m1D);
+
+        src1 += 4; src2 += 4;  dst += 4;
+
+    } while (src1 < src1_end);
+
+    accA = _mm256_or_si256(accA, accB); // A = A | B
+    accC = _mm256_or_si256(accC, accD); // C = C | D
+    accA = _mm256_or_si256(accA, accC); // A = A | C
+
+    return !_mm256_testz_si256(accA, accA);
+}
 
 
 /*!

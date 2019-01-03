@@ -856,10 +856,10 @@ bool avx512_or_block_5way(__m512i* BMRESTRICT dst,
 
 
 /*!
-    @brief XOR array elements against another array
+    @brief XOR block against another
     *dst ^= *src
     @return 0 if destination does not have any bits
-    @ingroup AVX2
+    @ingroup AVX512
 */
 inline
 unsigned avx512_xor_block(__m512i* BMRESTRICT dst,
@@ -901,6 +901,52 @@ unsigned avx512_xor_block(__m512i* BMRESTRICT dst,
     return !avx512_test_zero(accA);
 }
 
+/*!
+    @brief 3-operand XOR     
+    *dst = *src1 ^ *src2
+    @return 0 if destination does not have any bits
+    @ingroup AVX512
+*/
+inline
+unsigned avx512_xor_block_2way(__m512i* BMRESTRICT dst,
+                               const __m512i* BMRESTRICT src1,
+                               const __m512i* BMRESTRICT src2)
+{
+    __m512i m1A, m1B, m1C, m1D;
+    __m512i accA, accB, accC, accD;
+
+    const __m512i* BMRESTRICT src1_end =
+        (const __m512i*)((bm::word_t*)(src1) + bm::set_block_size);
+
+    accA = accB = accC = accD = _mm512_setzero_si512();
+
+    do
+    {
+        m1A = _mm512_xor_si512(_mm512_load_si512(src1 + 0), _mm512_load_si512(src2 + 0));
+        m1B = _mm512_xor_si512(_mm512_load_si512(src1 + 1), _mm512_load_si512(src2 + 1));
+        m1C = _mm512_xor_si512(_mm512_load_si512(src1 + 2), _mm512_load_si512(src2 + 2));
+        m1D = _mm512_xor_si512(_mm512_load_si512(src1 + 3), _mm512_load_si512(src2 + 3));
+
+        _mm512_store_si512(dst + 0, m1A);
+        _mm512_store_si512(dst + 1, m1B);
+        _mm512_store_si512(dst + 2, m1C);
+        _mm512_store_si512(dst + 3, m1D);
+
+        accA = _mm512_or_si512(accA, m1A);
+        accB = _mm512_or_si512(accB, m1B);
+        accC = _mm512_or_si512(accC, m1C);
+        accD = _mm512_or_si512(accD, m1D);
+
+        src1 += 4; src2 += 4; dst += 4;
+
+    } while (src1 < src1_end);
+
+    accA = _mm512_or_si512(accA, accB); // A = A | B
+    accC = _mm512_or_si512(accC, accD); // C = C | D
+    accA = _mm512_or_si512(accA, accC); // A = A | C
+
+    return !avx512_test_zero(accA);
+}
 
 
 /*!
