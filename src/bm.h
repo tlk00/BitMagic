@@ -4875,11 +4875,10 @@ bool bvector<Alloc>::combine_operation_block_or(unsigned i,
     {
         if (is_gap1 & is_gap2) // both GAPS
         {
-            const bm::gap_word_t* res; unsigned res_len;
-            res = bm::gap_operation_or(BMGAP_PTR(arg_blk1),
-                                       BMGAP_PTR(arg_blk2),
-                                       tmp_buf, res_len);
-            BM_ASSERT(res == tmp_buf);
+            unsigned res_len;
+            bm::gap_operation_or(BMGAP_PTR(arg_blk1),
+                                 BMGAP_PTR(arg_blk2),
+                                 tmp_buf, res_len);
             blockman_.clone_gap_block(i, j, tmp_buf, res_len);
             return 0;
         }
@@ -4958,11 +4957,10 @@ bool bvector<Alloc>::combine_operation_block_xor(unsigned i,
     {
         if (is_gap1 & is_gap2) // both GAPS
         {
-            const bm::gap_word_t* res; unsigned res_len;
-            res = bm::gap_operation_xor(BMGAP_PTR(arg_blk1),
-                                        BMGAP_PTR(arg_blk2),
-                                        tmp_buf, res_len);
-            BM_ASSERT(res == tmp_buf);
+            unsigned res_len;
+            bm::gap_operation_xor(BMGAP_PTR(arg_blk1),
+                                  BMGAP_PTR(arg_blk2),
+                                 tmp_buf, res_len);
             blockman_.clone_gap_block(i, j, tmp_buf, res_len);
             return 0;
         }
