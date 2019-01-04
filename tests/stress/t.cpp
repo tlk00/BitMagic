@@ -963,6 +963,26 @@ unsigned SerializationOperation(bvect*             bv_target,
             break;
         case bm::set_XOR:
             bvt ^= bv2;
+            // 2-way
+            {
+                bvect bvc(bv1);
+                bvc ^= bv2;
+                
+                bvect bvt1;
+                bvt1.bit_xor(bv1, bv2, bvect::opt_none);
+                if (bvt1 != bvc)
+                {
+                    cerr << "1. XOR 2-way check error!" << endl;
+                    exit(1);
+                }
+                bvect bvt2;
+                bvt2.bit_xor(bv2, bv1, bvect::opt_compress);
+                if (bvt2 != bvc)
+                {
+                    cerr << "2. XOR 2-way check error!" << endl;
+                    exit(1);
+                }
+            }
             break;
         case bm::set_AND:
             bvt &= bv2;
@@ -4993,6 +5013,110 @@ void XorOperationsTest()
         exit(1);
     }
     }
+    
+    
+    // ------------------------------------------
+    // 2-way XOR
+    //
+    {
+        bvect        bv1 { 0, 1 };
+        bvect        bv2;
+        bv2.bit_xor(bv1, bv2, bvect::opt_compress);
+        int cmp = bv1.compare(bv2);
+        assert(cmp == 0);
+    }
+
+    {
+        bvect        bv1 { 0, 1 };
+        bvect        bv2 { 2, 3 };
+        bvect bv1c(bv1);
+        bv1c.bit_xor(bv2);
+
+        bvect bv;
+        bv.bit_xor(bv1, bv2, bvect::opt_compress);
+        int cmp = bv.compare(bv1c);
+        assert(cmp == 0);
+        struct bvect::statistics st1;
+        bv.calc_stat(&st1);
+        assert(!st1.bit_blocks);
+        assert(st1.gap_blocks == 1);
+    }
+    
+    {
+        bvect        bv1;
+        bvect        bv2;
+        for (unsigned i = 2; i < 65536; ++i)
+        {
+            bv1.set(i);
+            bv2.set(i);
+        }
+        
+        bvect bv1c(bv1);
+        bv1c.bit_xor(bv2);
+
+        bvect bv;
+        bv.bit_xor(bv1, bv2, bvect::opt_none); // should detect 0 automatically
+        int cmp = bv.compare(bv1c);
+        assert(cmp == 0);
+        struct bvect::statistics st1;
+        bv.calc_stat(&st1);
+        assert(!st1.bit_blocks);
+        assert(!st1.gap_blocks);
+    }
+    
+    {
+        bvect        bv1 { 0, 1 };
+        bvect        bv2 { 1 };
+        bv1.clear(0); bv1.clear(1);
+        bv2.clear(1);
+        
+        bvect bv;
+        bv.bit_xor(bv1, bv2, bvect::opt_none); // should detect FULL automatically
+
+        struct bvect::statistics st1;
+        bv.calc_stat(&st1);
+        assert(!st1.bit_blocks);
+        assert(!st1.gap_blocks);
+        assert(!st1.ptr_sub_blocks);
+    }
+
+
+    
+    {
+        bvect        bv1 { 0, 1 };
+        bvect        bv2 { 2, 3 };
+        bv2.optimize();
+        bvect bv1c(bv1);
+        bv1c.bit_xor(bv2);
+
+        {
+            bvect bv;
+            bv.bit_xor(bv1, bv2, bvect::opt_compress);
+            int cmp = bv.compare(bv1c);
+            if (cmp != 0)
+            {
+                DetailedCompareBVectors(bv, bv1c);
+            }
+            assert(cmp == 0);
+        }
+        bv1.optimize();
+        {
+            bvect bv;
+            bv.bit_xor(bv1, bv2, bvect::opt_compress);
+            int cmp = bv.compare(bv1c);
+            assert(cmp == 0);
+        }
+        bv1.clear();
+        bv2.clear();
+        bv2.invert();
+        {
+            bvect bv;
+            bv.bit_xor(bv1, bv2, bvect::opt_compress);
+            int cmp = bv.compare(bv2);
+            assert(cmp == 0);
+        }
+    }
+
 
 }
 
@@ -18274,6 +18398,7 @@ int main(void)
      StressTest(120, 3); // AND
 
      StressTest(120, 1); // SUB
+
      StressTest(120, 2); // XOR
 
      TestBasicMatrix();
