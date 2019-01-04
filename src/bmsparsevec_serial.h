@@ -108,7 +108,7 @@ struct sparse_vector_serial_layout
     }
     
     /// Return serialization buffer pointer
-    const unsigned char* buf() const { return buf_.buf(); /*return buffer_;*/ }
+    const unsigned char* buf() const { return buf_.buf();  }
     
 private:
     sparse_vector_serial_layout(const sparse_vector_serial_layout&);
@@ -551,10 +551,7 @@ void sparse_vector_serializer<SV>::serialize(const SV&  sv,
             BM_ASSERT(0); // TODO: throw an exception here
         }
     } // for i
-    
-//    size_t current_size = size_t(buf_ptr - buf);
-//    size_t remaining_size = sv_stat.max_serialize_mem - current_size;
-    
+        
     // -----------------------------------------------------
     // serialize the re-map matrix
     //
