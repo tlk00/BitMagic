@@ -949,7 +949,8 @@ public:
         @return new block address
     */
     bm::word_t* clone_assign_block(unsigned i, unsigned j,
-                                   const bm::word_t* src_block)
+                                   const bm::word_t* src_block,
+                                   bool invert = false)
     {
         BM_ASSERT(src_block);
         bm::word_t* block = 0;
@@ -957,23 +958,32 @@ public:
         {
             const bm::gap_word_t* gap_block = BMGAP_PTR(src_block);
             if (bm::gap_is_all_zero(gap_block))
-                return 0;
+                block = invert ? FULL_BLOCK_FAKE_ADDR : 0;
+            else
             if (bm::gap_is_all_one(gap_block))
-                block = FULL_BLOCK_FAKE_ADDR;
+                block = invert ? 0 : FULL_BLOCK_FAKE_ADDR;
             else
             {
                 bool is_gap;
                 block = clone_gap_block(gap_block, is_gap);
                 if (is_gap)
+                {
+                    if (invert)
+                        bm::gap_invert(block);
                     BMSET_PTRGAP(block);
+                }
             }
         }
         else // bit-block
         {
             if (src_block == FULL_BLOCK_FAKE_ADDR /*IS_FULL_BLOCK(blk_arg)*/)
-                block = FULL_BLOCK_FAKE_ADDR;
+                block = invert ? 0 : FULL_BLOCK_FAKE_ADDR;
             else
+            {
                 bm::bit_block_copy(block = alloc_.alloc_bit_block(), src_block);
+                if (invert) // TODO: implement inverted copy
+                    bm::bit_invert((wordop_t*) block);
+            }
         }
         BM_ASSERT(top_blocks_[i][j] == 0);
         top_blocks_[i][j] = block;

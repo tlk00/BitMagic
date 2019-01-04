@@ -5428,13 +5428,11 @@ bool bit_block_or(bm::word_t* BMRESTRICT dst,
 
 /*!
    \brief 2 way (target := source1 | source2) bitblock OR operation.
-
    \param dst  - dest block [out]
    \param src1 - source 1
    \param src2 - source 2
  
    @return 1 if produced block of ALL ones
-
    @ingroup bitfunc
 */
 inline
@@ -5459,10 +5457,48 @@ bool bit_block_or_2way(bm::word_t* BMRESTRICT dst,
         acc &= (dst_ptr[2] = wrd_ptr1[2] | wrd_ptr2[2]);
         acc &= (dst_ptr[3] = wrd_ptr1[3] | wrd_ptr2[3]);
         
-        dst_ptr+=4; wrd_ptr1+=4;wrd_ptr2+=4;
+        dst_ptr+=4; wrd_ptr1+=4; wrd_ptr2+=4;
         
     } while (wrd_ptr1 < wrd_end1);
     return acc == not_acc;
+#endif
+}
+
+
+/*!
+   \brief 2 way (target := source1 ^ source2) bitblock XOR operation.
+   \param dst  - dest block [out]
+   \param src1 - source 1
+   \param src2 - source 2
+ 
+   @return OR accumulator
+   @ingroup bitfunc
+*/
+inline
+bm::id64_t bit_block_xor_2way(bm::word_t* BMRESTRICT dst,
+                              const bm::word_t* BMRESTRICT src1,
+                              const bm::word_t* BMRESTRICT src2)
+{
+#ifdef BMVECTOPT
+    return VECT_XOR_BLOCK_2WAY(dst, src1, src2);
+#else
+    const bm::wordop_t* BMRESTRICT wrd_ptr1 = (wordop_t*)src1;
+    const bm::wordop_t* BMRESTRICT wrd_end1 = (wordop_t*)(src1 + set_block_size);
+    const bm::wordop_t* BMRESTRICT wrd_ptr2 = (wordop_t*)src2;
+    bm::wordop_t* BMRESTRICT dst_ptr = (wordop_t*)dst;
+
+    bm::wordop_t acc = 0;
+    do
+    {
+        acc |= (dst_ptr[0] = wrd_ptr1[0] ^ wrd_ptr2[0]);
+        acc |= (dst_ptr[1] = wrd_ptr1[1] ^ wrd_ptr2[1]);
+        acc |= (dst_ptr[2] = wrd_ptr1[2] ^ wrd_ptr2[2]);
+        acc |= (dst_ptr[3] = wrd_ptr1[3] ^ wrd_ptr2[3]);
+        
+        dst_ptr+=4; wrd_ptr1+=4; wrd_ptr2+=4;
+        
+    } while (wrd_ptr1 < wrd_end1);
+    return acc;
 #endif
 }
 

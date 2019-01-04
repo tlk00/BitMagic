@@ -1965,6 +1965,19 @@ public:
                                bm::bvector<Alloc>::optmode  opt_mode);
 
     /*!
+       \brief 3-operand XOR : this := bv1 XOR bv2
+       \param bv1 - Argument vector 1
+       \param bv2 - Argument vector 2
+       \param opt_mode - optimization compression
+         (when it is performed on the fly it is faster than a separate
+         call to optimize()
+       @sa optimize, bit_xor
+    */
+    bm::bvector<Alloc>& bit_xor(const bm::bvector<Alloc>& bv1,
+                                const bm::bvector<Alloc>& bv2,
+                                bm::bvector<Alloc>::optmode  opt_mode);
+
+    /*!
        \brief 2 operand logical OR
        \param bv - Argument vector.
     */
@@ -2230,6 +2243,11 @@ private:
                                     unsigned j,
                                     const bm::word_t* arg_blk1,
                                     const bm::word_t* arg_blk2);
+    bool combine_operation_block_xor(unsigned i,
+                                     unsigned j,
+                                     const bm::word_t* arg_blk1,
+                                     const bm::word_t* arg_blk2);
+
 
     void combine_operation_block_or(unsigned i,
                                     unsigned j,
@@ -4320,15 +4338,12 @@ bvector<Alloc>::bit_or(const bm::bvector<Alloc>& bv1,
         {
             const bm::word_t* arg_blk1 = blk_blk_arg1 ? blk_blk_arg1[j] : 0;
             const bm::word_t* arg_blk2 = blk_blk_arg2 ? blk_blk_arg2[j] : 0;
-            
             if (arg_blk1 == arg_blk2 && !arg_blk1)
                 continue;
-            
             bool need_opt = combine_operation_block_or(i, j, arg_blk1, arg_blk2);
             if (need_opt && opt_mode == opt_compress)
                 blockman_.optimize_bit_block(i, j);
             any_blocks |= bool(blk_blk[j]);
-            
         } while (++j < bm::set_array_size);
         
         if (!any_blocks)
@@ -4341,6 +4356,96 @@ bvector<Alloc>::bit_or(const bm::bvector<Alloc>& bv1,
     
     return *this;
 }
+
+//---------------------------------------------------------------------
+
+template<class Alloc>
+bm::bvector<Alloc>&
+bvector<Alloc>::bit_xor(const bm::bvector<Alloc>& bv1,
+                        const bm::bvector<Alloc>& bv2,
+                        bm::bvector<Alloc>::optmode opt_mode)
+{
+    if (blockman_.is_init())
+        blockman_.deinit_tree();
+
+    if (&bv1 == &bv2)
+    {
+        return *this; // nothing to do empty result
+    }
+    if (this == &bv1)
+    {
+        this->bit_xor(bv2);
+        return *this;
+    }
+    if (this == &bv2)
+    {
+        this->bit_xor(bv1);
+        return *this;
+    }
+    
+    const blocks_manager_type& bman1 = bv1.get_blocks_manager();
+    if (!bman1.is_init())
+    {
+        *this = bv2;
+        return *this;
+    }
+    const blocks_manager_type& bman2 = bv2.get_blocks_manager();
+    if (!bman2.is_init())
+    {
+        *this = bv1;
+        return *this;
+    }
+
+    unsigned top_blocks1 = bman1.top_block_size();
+    unsigned top_blocks2 = bman2.top_block_size();
+    unsigned top_blocks = (top_blocks2 > top_blocks1) ? top_blocks2 : top_blocks1;
+    top_blocks = blockman_.reserve_top_blocks(top_blocks);
+
+    size_ = bv1.size_;
+    if (size_ < bv2.size_)
+        size_ = bv2.size_;
+    
+    bm::word_t*** blk_root_arg1 = bv1.blockman_.top_blocks_root();
+    bm::word_t*** blk_root_arg2 = bv2.blockman_.top_blocks_root();
+
+    for (unsigned i = 0; i < top_blocks; ++i)
+    {
+        bm::word_t** blk_blk_arg1 = (i < top_blocks1) ? blk_root_arg1[i] : 0;
+        bm::word_t** blk_blk_arg2 = (i < top_blocks2) ? blk_root_arg2[i] : 0;
+        
+        if (blk_blk_arg1 == blk_blk_arg2)
+        {
+            BM_ASSERT(!blk_blk_arg1);
+            continue;
+        }
+        bm::word_t** blk_blk = blockman_.alloc_top_subblock(i);
+        bool any_blocks = false;
+        unsigned j = 0;
+        do
+        {
+            const bm::word_t* arg_blk1 = blk_blk_arg1 ? blk_blk_arg1[j] : 0;
+            const bm::word_t* arg_blk2 = blk_blk_arg2 ? blk_blk_arg2[j] : 0;
+            if ((arg_blk1 == arg_blk2) &&
+                (!arg_blk1 || arg_blk1 == FULL_BLOCK_FAKE_ADDR))
+                continue; // 0 ^ 0 == 0 , 1 ^ 1 == 0  (nothing to do)
+            
+            bool need_opt = combine_operation_block_xor(i, j, arg_blk1, arg_blk2);
+            if (need_opt && opt_mode == opt_compress)
+                blockman_.optimize_bit_block(i, j);
+            any_blocks |= bool(blk_blk[j]);
+        } while (++j < bm::set_array_size);
+        
+        if (!any_blocks)
+            blockman_.free_top_subblock(i);
+
+    } // for i
+    
+    if (opt_mode != opt_none)
+        blockman_.free_temp_block();
+    
+    return *this;
+}
+
 
 //---------------------------------------------------------------------
 
@@ -4747,7 +4852,6 @@ bool bvector<Alloc>::combine_operation_block_or(unsigned i,
                                                 const bm::word_t* arg_blk2)
 {
     bm::gap_word_t tmp_buf[bm::gap_equiv_len * 3]; // temporary result
-    
     if (!arg_blk1)
     {
         blockman_.clone_assign_block(i, j, arg_blk2);
@@ -4812,6 +4916,91 @@ bool bvector<Alloc>::combine_operation_block_or(unsigned i,
     }
     return true;
 }
+
+
+//---------------------------------------------------------------------
+
+template<class Alloc>
+bool bvector<Alloc>::combine_operation_block_xor(unsigned i,
+                                                 unsigned j,
+                                                 const bm::word_t* arg_blk1,
+                                                 const bm::word_t* arg_blk2)
+{
+    bm::gap_word_t tmp_buf[bm::gap_equiv_len * 3]; // temporary result
+
+    if (!arg_blk1)
+    {
+        blockman_.clone_assign_block(i, j, arg_blk2);
+        return 0;
+    }
+    if (!arg_blk2)
+    {
+        blockman_.clone_assign_block(i, j, arg_blk1);
+        return 0;
+    }
+    if (IS_FULL_BLOCK(arg_blk1))
+    {
+        BM_ASSERT(!IS_FULL_BLOCK(arg_blk2));
+        blockman_.clone_assign_block(i, j, arg_blk2, true); // invert
+        return 0;
+    }
+    if (IS_FULL_BLOCK(arg_blk2))
+    {
+        BM_ASSERT(!IS_FULL_BLOCK(arg_blk1));
+        blockman_.clone_assign_block(i, j, arg_blk1, true); // invert
+        return 0;
+    }
+
+    bool is_gap1 = BM_IS_GAP(arg_blk1);
+    bool is_gap2 = BM_IS_GAP(arg_blk2);
+    
+    if (is_gap1 | is_gap2) // at least one GAP
+    {
+        if (is_gap1 & is_gap2) // both GAPS
+        {
+            const bm::gap_word_t* res; unsigned res_len;
+            res = bm::gap_operation_xor(BMGAP_PTR(arg_blk1),
+                                        BMGAP_PTR(arg_blk2),
+                                        tmp_buf, res_len);
+            BM_ASSERT(res == tmp_buf);
+            blockman_.clone_gap_block(i, j, tmp_buf, res_len);
+            return 0;
+        }
+        // one GAP one bit block
+        const bm::word_t* arg_block;
+        const bm::gap_word_t* arg_gap;
+        if (is_gap1) // arg1 is GAP -> clone arg2(bit)
+        {
+            arg_block = arg_blk2;
+            arg_gap = BMGAP_PTR(arg_blk1);
+        }
+        else // arg2 is GAP
+        {
+            arg_block = arg_blk1;
+            arg_gap = BMGAP_PTR(arg_blk2);
+        }
+        bm::word_t* block = blockman_.clone_assign_block(i, j, arg_block);
+        bm::gap_xor_to_bitset(block, arg_gap);
+
+        return true; // optimization may be needed
+    }
+    
+    // 2 bit-blocks
+    //
+    bm::word_t* block = blockman_.borrow_tempblock();
+    blockman_.set_block_ptr(i, j, block);
+    
+    bm::id64_t or_mask = bm::bit_block_xor_2way(block, arg_blk1, arg_blk2);
+    if (!or_mask)
+    {
+        blockman_.set_block_ptr(i, j, 0);
+        blockman_.return_tempblock(block);
+        return 0;
+    }
+
+    return true;
+}
+
 
 //---------------------------------------------------------------------
 
