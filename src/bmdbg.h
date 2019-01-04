@@ -147,22 +147,20 @@ int read_dump_file(const std::string& fname, VT& data)
     fin.seekg(0, std::ios::end);
     fsize = fin.tellg();
     
-    data.resize(unsigned(fsize)/sizeof(value_type));
+    data.resize(fsize/sizeof(value_type));
 
     if (!fsize)
     {
         return 0; // empty input
     }
     fin.seekg(0, std::ios::beg);
-    
     fin.read((char*) &data[0], fsize);
     if (!fin.good())
     {
         data.resize(0);
         return -2;
     }
-    return 0;
-    
+    return 0;    
 }
 
 template<class TBV>
@@ -829,7 +827,7 @@ int file_save_svector(const SV& sv, const std::string& fname, size_t* sv_blob_si
         return -1;
     }
     const char* buf = (char*)sv_lay.buf();
-    fout.write(buf, unsigned(sv_lay.size()));
+    fout.write(buf, sv_lay.size());
     if (!fout.good())
     {
         return -1;
