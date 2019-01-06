@@ -91,6 +91,18 @@ void DemoOR()
         
         print_bvector(bv_A); // 1, 2, 3, 4 (size = 10)
     }
+    // 3-operand OR: bv_T = bv_A | bv_B
+    {
+        bm::bvector<>   bv_T;
+        bm::bvector<>   bv_A { 1, 2, 3 };
+        bm::bvector<>   bv_B { 1, 2, 4 };
+
+        bv_T.bit_or(bv_A, bv_B, bm::bvector<>::opt_compress);
+        
+        print_bvector(bv_T); // 1, 2, 3, 4 (size = 10)
+    }
+    
+    
     // merge operation is a logical equivalent of OR
     // except it can destroy the source vector to borrow memory blocks from it
     // (this is faster, especially in multi-threaded cases)
@@ -205,6 +217,15 @@ void DemoAND()
         
         print_bvector(bv_A); // 1, 2 (size = 10)
     }
+    // 3-operand AND: bv_T = bv_A & bv_B
+    {
+        bm::bvector<>   bv_T;
+        bm::bvector<>   bv_A { 1, 2, 3 };
+        bm::bvector<>   bv_B { 1, 2, 4 };
+        bv_T.bit_and(bv_A, bv_B, bm::bvector<>::opt_compress);
+        
+        print_bvector(bv_T); // 1, 2
+    }
 
     // bit-vector set union operation (opcode interpeter mode)
     // maybe useful for building query interpetors
@@ -306,6 +327,15 @@ void DemoXOR()
         
         print_bvector(bv_A); // 3, 4 (size = 10)
     }
+    // 3-operand XOR: bv_T = bv_A ^ bv_B
+    {
+        bm::bvector<>   bv_T;
+        bm::bvector<>   bv_A { 1, 2, 3 };
+        bm::bvector<>   bv_B { 1, 2, 4 };
+        bv_T.bit_xor(bv_A, bv_B, bm::bvector<>::opt_compress);
+        
+        print_bvector(bv_T); // 3, 4
+    }
 
     // bit-vector xor operation (opcode interpeter mode)
     // maybe useful for building query interpetors
@@ -369,6 +399,16 @@ void DemoSUB()
         bv_A.bit_sub(bv_B);
         
         print_bvector(bv_A); // 3 (size = 10)
+    }
+    
+    // 3-operand SUB: bv_T = bv_A - bv_B
+    {
+        bm::bvector<>   bv_T;
+        bm::bvector<>   bv_A { 1, 2, 3 };
+        bm::bvector<>   bv_B { 1, 2, 4 };
+        bv_T.bit_sub(bv_A, bv_B, bm::bvector<>::opt_compress);
+        
+        print_bvector(bv_T); // 3
     }
 
     // bit-vector minus operation (opcode interpeter mode)
