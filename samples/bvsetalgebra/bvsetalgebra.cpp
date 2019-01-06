@@ -176,6 +176,7 @@ void DemoOR()
         
         print_bvector(bv_T); // 1, 2, 3, 4
     }
+    
 }
 
 
