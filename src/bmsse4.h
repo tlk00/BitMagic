@@ -494,6 +494,56 @@ bool sse4_sub_digest(__m128i* BMRESTRICT dst,
 }
 
 
+/*!
+    @brief 2-operand SUB (AND NOT) block digest stride
+    *dst = src1 & ~*src2
+ 
+    @return true if stide is all zero
+    @ingroup SSE4
+*/
+inline
+bool sse4_sub_digest_2way(__m128i* BMRESTRICT dst,
+                          const __m128i* BMRESTRICT src1,
+                          const __m128i* BMRESTRICT src2)
+{
+    __m128i m1A, m1B, m1C, m1D;
+
+    m1A = _mm_andnot_si128(_mm_load_si128(src2+0), _mm_load_si128(src1+0));
+    m1B = _mm_andnot_si128(_mm_load_si128(src2+1), _mm_load_si128(src1+1));
+    m1C = _mm_andnot_si128(_mm_load_si128(src2+2), _mm_load_si128(src1+2));
+    m1D = _mm_andnot_si128(_mm_load_si128(src2+3), _mm_load_si128(src1+3));
+
+    _mm_store_si128(dst+0, m1A);
+    _mm_store_si128(dst+1, m1B);
+    _mm_store_si128(dst+2, m1C);
+    _mm_store_si128(dst+3, m1D);
+    
+     m1A = _mm_or_si128(m1A, m1B);
+     m1C = _mm_or_si128(m1C, m1D);
+     m1A = _mm_or_si128(m1A, m1C);
+    
+     bool z1 = _mm_testz_si128(m1A, m1A);
+    
+    m1A = _mm_andnot_si128(_mm_load_si128(src2+4), _mm_load_si128(src1+4));
+    m1B = _mm_andnot_si128(_mm_load_si128(src2+5), _mm_load_si128(src1+5));
+    m1C = _mm_andnot_si128(_mm_load_si128(src2+6), _mm_load_si128(src1+6));
+    m1D = _mm_andnot_si128(_mm_load_si128(src2+7), _mm_load_si128(src1+7));
+
+    _mm_store_si128(dst+4, m1A);
+    _mm_store_si128(dst+5, m1B);
+    _mm_store_si128(dst+6, m1C);
+    _mm_store_si128(dst+7, m1D);
+    
+     m1A = _mm_or_si128(m1A, m1B);
+     m1C = _mm_or_si128(m1C, m1D);
+     m1A = _mm_or_si128(m1A, m1C);
+    
+     bool z2 = _mm_testz_si128(m1A, m1A);
+    
+     return z1 & z2;
+}
+
+
 
 /*!
     @brief check if block is all zero bits
@@ -1207,6 +1257,9 @@ bool sse42_shift_r1_and(__m128i* block,
 
 #define VECT_SUB_DIGEST(dst, src) \
     sse4_sub_digest((__m128i*) dst, (const __m128i*) (src))
+
+#define VECT_SUB_DIGEST_2WAY(dst, src1, src2) \
+    sse4_sub_digest_2way((__m128i*) dst, (const __m128i*) (src1), (const __m128i*) (src2))
 
 #define VECT_XOR_BLOCK(dst, src) \
     sse2_xor_block((__m128i*) dst, (__m128i*) (src))

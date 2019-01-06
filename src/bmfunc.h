@@ -5749,6 +5749,72 @@ bm::id64_t bit_block_sub(bm::word_t* BMRESTRICT dst,
     return digest;
 }
 
+/*!
+   \brief digest based bitblock SUB (AND NOT) operation (3 operand)
+
+   \param dst - destination block.
+   \param src1 - source block.
+   \param src1 - source block.
+   \param digest - known digest of dst block
+ 
+   \return new digest
+
+   @ingroup bitfunc
+*/
+inline
+bm::id64_t bit_block_sub_2way(bm::word_t* BMRESTRICT dst,
+                         const bm::word_t* BMRESTRICT src1,
+                         const bm::word_t* BMRESTRICT src2,
+                         bm::id64_t digest)
+{
+    BM_ASSERT(dst);
+    BM_ASSERT(src1 && src2);
+    BM_ASSERT(dst != src1 && dst != src2);
+
+    const bm::id64_t mask(1ull);
+
+    bm::id64_t d = digest;
+    while (d)
+    {
+        bm::id64_t t = bm::bmi_blsi_u64(d); // d & -d;
+
+        unsigned wave = bm::word_bitcount64(t - 1);
+        unsigned off = wave * bm::set_block_digest_wave_size;
+
+        #if defined(VECT_SUB_DIGEST_2WAY)
+            bool all_zero = VECT_SUB_DIGEST_2WAY(&dst[off], &src1[off], &src2[off]);
+            if (all_zero)
+                digest &= ~(mask << wave);
+        #else
+            const bm::bit_block_t::bunion_t* BMRESTRICT src_u1 =
+                            (const bm::bit_block_t::bunion_t*)(&src1[off]);
+            const bm::bit_block_t::bunion_t* BMRESTRICT src_u2 =
+                            (const bm::bit_block_t::bunion_t*)(&src2[off]);
+            bm::bit_block_t::bunion_t* BMRESTRICT dst_u =
+                            (bm::bit_block_t::bunion_t*)(&dst[off]);
+
+            bm::id64_t acc = 0;
+            unsigned j = 0;
+            do
+            {
+                acc |= dst_u->w64[j+0] = src_u1->w64[j+0] & ~src_u2->w64[j+0];
+                acc |= dst_u->w64[j+1] = src_u1->w64[j+1] & ~src_u2->w64[j+1];
+                acc |= dst_u->w64[j+2] = src_u1->w64[j+2] & ~src_u2->w64[j+2];
+                acc |= dst_u->w64[j+3] = src_u1->w64[j+3] & ~src_u2->w64[j+3];
+                j+=4;
+            } while (j < bm::set_block_digest_wave_size/2);
+        
+            if (!acc) // all zero
+                digest &= ~(mask  << wave);
+        #endif
+
+        d = bm::bmi_bslr_u64(d); // d &= d - 1;
+    } // while
+    
+    return digest;
+}
+
+
 
 /*!
    \brief bitblock SUB operation. 
