@@ -377,8 +377,20 @@ void DetailedCompareBVectors(const BV& bv1, const BV& bv2)
         
         if (i1 != i2)
         {
+            unsigned nb1 = unsigned(i1 >>  bm::set_block_shift);
+            unsigned nb2 = unsigned(i2 >>  bm::set_block_shift);
+            unsigned ii1 = nb1 >> bm::set_array_shift;
+            unsigned jj1 = nb1 &  bm::set_array_mask;
+            unsigned ii2 = nb2 >> bm::set_array_shift;
+            unsigned jj2 = nb2 &  bm::set_array_mask;
+
             std::cerr << "Difference detected at: position="
-                      << i1 << " other position = " << i2 << std::endl;
+                      << i1 << i1 << " nb=" << nb1
+                      << "[" << ii1 << ", " << jj1 << "]"
+                      " other position = " << i2 <<
+                      " nb=" << nb2
+                      << "[" << ii2 << ", " << jj2 << "]"
+                      << std::endl;
             std::cerr << " en1.count()=" << en1.count() << " en2.count()=" << en2.count()
                       << std::endl;
             
@@ -996,6 +1008,27 @@ unsigned SerializationOperation(bvect*             bv_target,
                 }
             }
             agg_check = true;
+            
+            // 2-way
+            {
+                bvect bvc(bv1);
+                bvc &= bv2;
+                
+                bvect bvt1;
+                bvt1.bit_and(bv1, bv2, bvect::opt_none);
+                if (bvt1 != bvc)
+                {
+                    cerr << "1. AND 2-way check error!" << endl;
+                    exit(1);
+                }
+                bvect bvt2;
+                bvt2.bit_and(bv2, bv1, bvect::opt_compress);
+                if (bvt2 != bvc)
+                {
+                    cerr << "2. AND 2-way check error!" << endl;
+                    exit(1);
+                }
+            }
             break;
         case bm::set_SUB:
             bvt -= bv2;
@@ -1010,6 +1043,30 @@ unsigned SerializationOperation(bvect*             bv_target,
                 }
             }
             agg_check = true;
+            // 2-way
+            {
+                bvect bvc1(bv1);
+                bvect bvc2(bv2);
+                bvc1 -= bv2;
+                bvc2 -= bv1;
+                
+                bvect bvt1;
+                bvt1.bit_sub(bv1, bv2, bvect::opt_compress);
+                if (bvt1 != bvc1)
+                {
+                    DetailedCompareBVectors(bvt1, bvc1);
+                    cerr << "1. SUB 2-way check error!" << endl;
+                    exit(1);
+                }
+                bvect bvt2;
+                bvt2.bit_sub(bv2, bv1, bvect::opt_compress);
+                if (bvt2 != bvc2)
+                {
+                    cerr << "2. SUB 2-way check error!" << endl;
+                    exit(1);
+                }
+            }
+
             break;
         default:
             goto no_compare;
@@ -3965,6 +4022,101 @@ void AndOperationsTest()
     }
     }
     
+    
+    // ------------------------------------------
+    // 2-way AND
+    //
+    {
+        bvect        bv1 { 0, 1 };
+        bvect        bv2 ;
+        bv2.bit_and(bv1, bv2, bvect::opt_compress);
+        int cmp = bv2.any();
+        assert(cmp == 0);
+    }
+
+    {
+        bvect        bv1 { 0, 1 };
+        bvect        bv2 { 1, 3 };
+        bvect bv1c(bv1);
+        bv1c.bit_and(bv2);
+
+        bvect bv;
+        bv.bit_and(bv1, bv2, bvect::opt_compress);
+        int cmp = bv.compare(bv1c);
+        assert(cmp == 0);
+        struct bvect::statistics st1;
+        bv.calc_stat(&st1);
+        assert(!st1.bit_blocks);
+        assert(st1.gap_blocks == 1);
+    }
+    
+    {
+        bvect        bv1 { 0, 1 };
+        bvect        bv2;
+        for (unsigned i = 1; 2 < 65536; ++i)
+            bv2.set(i);
+        
+        bvect bv1c(bv1);
+        bv1c.bit_and(bv2);
+
+        bvect bv;
+        bv.bit_and(bv1, bv2, bvect::opt_none); // should detect 0 automatically
+        int cmp = bv.compare(bv1c);
+        assert(cmp == 0);
+        struct bvect::statistics st1;
+        bv.calc_stat(&st1);
+        assert(!st1.bit_blocks);
+        assert(!st1.gap_blocks);
+    }
+    
+    {
+        bvect        bv1 { 0, 1 };
+        bvect        bv2 { 1 };
+        bv1.clear(0); bv1.clear(1);
+        bv2.clear(1);
+        
+        bvect bv;
+        bv.bit_and(bv1, bv2, bvect::opt_none); // should detect empty automatically
+
+        struct bvect::statistics st1;
+        bv.calc_stat(&st1);
+        assert(!st1.bit_blocks);
+        assert(!st1.gap_blocks);
+        assert(!st1.ptr_sub_blocks);
+    }
+
+
+    
+    {
+        bvect        bv1 { 0, 1 };
+        bvect        bv2 { 1, 3 };
+        bv2.optimize();
+        bvect bv1c(bv1);
+        bv1c.bit_or(bv2);
+
+        {
+            bvect bv;
+            bv.bit_and(bv1, bv2, bvect::opt_compress);
+            int cmp = bv.compare(bv1c);
+            assert(cmp == 0);
+        }
+        bv1.optimize();
+        {
+            bvect bv;
+            bv.bit_and(bv1, bv2, bvect::opt_compress);
+            int cmp = bv.compare(bv1c);
+            assert(cmp == 0);
+        }
+        bv2.clear();
+        bv2.invert();
+        {
+            bvect bv;
+            bv.bit_and(bv1, bv2, bvect::opt_compress);
+            int cmp = bv.compare(bv2);
+            assert(cmp == 0);
+        }
+    }
+    
     cout << "------------------------------" << endl;
 
 }
@@ -4531,6 +4683,94 @@ void SubOperationsTest()
     CheckCountRange(bvect_full1, 0, BITVECT_SIZE);
 
     }
+    
+    
+    // ------------------------------------------
+    // 2-way SUB
+    //
+
+    {
+        bvect        bv1 { 0, 1 };
+        bvect        bv2 { 1, 3 };
+        bvect bv1c(bv1);
+        bv1c.bit_sub(bv2);
+
+        bvect bv;
+        bv.bit_sub(bv1, bv2, bvect::opt_compress);
+        int cmp = bv.compare(bv1c);
+        assert(cmp == 0);
+        struct bvect::statistics st1;
+        bv.calc_stat(&st1);
+        assert(!st1.bit_blocks);
+        assert(st1.gap_blocks == 1);
+    }
+    
+    {
+        bvect        bv1 { 0, 1 };
+        bvect        bv2;
+        for (unsigned i = 0; i < 65536; ++i)
+            bv2.set(i);
+        
+        bvect bv1c(bv1);
+        bv1c.bit_sub(bv2);
+
+        bvect bv;
+        bv.bit_sub(bv1, bv2, bvect::opt_none); // should detect 0 automatically
+        int cmp = bv.compare(bv1c);
+        assert(cmp == 0);
+        struct bvect::statistics st1;
+        bv.calc_stat(&st1);
+        assert(!st1.bit_blocks);
+        assert(!st1.gap_blocks);
+    }
+    
+    {
+        bvect        bv1 { 0, 1 };
+        bvect        bv2 { 1 };
+        bv1.clear(0); bv1.clear(1);
+        bv2.clear(1);
+        
+        bvect bv;
+        bv.bit_or(bv1, bv2, bvect::opt_none); // should detect 0 automatically
+
+        struct bvect::statistics st1;
+        bv.calc_stat(&st1);
+        assert(!st1.bit_blocks);
+        assert(!st1.gap_blocks);
+        assert(!st1.ptr_sub_blocks);
+    }
+
+
+    
+    {
+        bvect        bv1 { 0, 1 };
+        bvect        bv2 { 1, 3 };
+        bv1.optimize();
+        bvect bv1c(bv1);
+        bv1c.bit_sub(bv2);
+
+        {
+            bvect bv;
+            bv.bit_sub(bv1, bv2, bvect::opt_compress);
+            int cmp = bv.compare(bv1c);
+            assert(cmp == 0);
+        }
+        bv2.optimize();
+        {
+            bvect bv;
+            bv.bit_sub(bv1, bv2, bvect::opt_compress);
+            int cmp = bv.compare(bv1c);
+            assert(cmp == 0);
+        }
+        bv2.clear();
+        bv2.invert();
+        {
+            bvect bv;
+            bv.bit_sub(bv1, bv2, bvect::opt_compress);
+            assert(!bv.any());
+        }
+    }
+
 
 }
 
