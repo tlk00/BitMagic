@@ -117,7 +117,6 @@ void generate_bvector(bvect& bv, unsigned vector_max = 40000000, bool optimize =
             bvect::bulk_insert_iterator iit(bv);
             for (j = 0; j < 65535 * 10; i += 10, j++)
             {
-                //bv.set(i);
                 iit = i;
             }
         }
@@ -1328,6 +1327,40 @@ void InvertTest()
 }
 
 static
+void OrTest()
+{
+    bvect bv1, bv2;
+    bvect bvt1, bvt2;
+    generate_bvector(bv1, 40000000, false);
+    generate_bvector(bv2, 40000000, false);
+    
+    {
+    TimeTaker tt("OR-optimize (2 operand) bvector test", REPEATS*4);
+    for (unsigned i = 0; i < REPEATS*4; ++i)
+    {
+        bvt1 = bv1;
+        bvt1 |= bv2;
+        bvt1.optimize();
+    }
+    }
+    
+    {
+    TimeTaker tt("OR-optimize (3 operand) bvector test", REPEATS*4);
+    for (unsigned i = 0; i < REPEATS*4; ++i)
+    {
+        bvt2.bit_or(bv1, bv2, bvect::opt_compress);
+    }
+    }
+
+    int cmp = bvt1.compare(bvt2);
+    if (cmp)
+    {
+        cerr << "Error: OR mismatch!" << endl;
+        exit(1);
+    }
+}
+
+static
 void AndTest()
 {
     bvect*  bv1 = new bvect();
@@ -1340,7 +1373,7 @@ void AndTest()
     SimpleFillSets(*bset1, *bv1, 0, BSIZE, 100);
     SimpleFillSets(*bset1, *bv2, 0, BSIZE, 100);
     {
-    TimeTaker tt("AND bvector test", REPEATS*10);
+    TimeTaker tt("AND bvector test", REPEATS*4);
     for (i = 0; i < REPEATS*4; ++i)
     {
         *bv1 &= *bv2;
@@ -1349,7 +1382,7 @@ void AndTest()
 
     if (!platform_test)
     {
-    TimeTaker tt("AND bvector test(STL)", REPEATS*10);
+    TimeTaker tt("AND bvector test(STL)", REPEATS*4);
     for (i = 0; i < REPEATS*4; ++i)
     {
         *bset1 &= *bset2;
@@ -1402,25 +1435,56 @@ void XorTest()
 static
 void SubTest()
 {
-    bvect*  bv1 = new bvect();
-    test_bitset*  bset1 = new test_bitset();
-    bvect*  bv2 = new bvect();
-    unsigned i;
-
-    SimpleFillSets(*bset1, *bv1, 0, BSIZE, 100);
-    SimpleFillSets(*bset1, *bv2, 0, BSIZE, 100);
-    delete bset1;
-
+    bvect bv1, bv2;
+    bvect bvt0, bvt1, bvt2;
+    generate_bvector(bv1, 40000000, false);
+    generate_bvector(bv2, 40000000, false);
+    
     {
-    TimeTaker tt("SUB bvector test", REPEATS*10);
-    for (i = 0; i < REPEATS*4; ++i)
+    TimeTaker tt("AND-NOT bvector test", REPEATS*4);
+    for (unsigned i = 0; i < REPEATS*4; ++i)
     {
-        *bv1 -= *bv2;
-    }
-    }
+        bvect bv_tmp(bv2);
+        bv_tmp.invert();
         
-    delete bv1;
-    delete bv2;
+        bvt0 = bv1;
+        bvt0 &= bv_tmp;
+        bvt0.optimize();
+    }
+
+    }
+    
+    {
+    TimeTaker tt("SUB-optimize (2 operand) bvector test", REPEATS*4);
+    for (unsigned i = 0; i < REPEATS*4; ++i)
+    {
+        bvt1 = bv1;
+        bvt1 -= bv2;
+        bvt1.optimize();
+    }
+    }
+    
+    {
+    TimeTaker tt("SUB-optimize (3 operand) bvector test", REPEATS*4);
+    for (unsigned i = 0; i < REPEATS*4; ++i)
+    {
+        bvt2.bit_sub(bv1, bv2, bvect::opt_compress);
+    }
+    }
+
+    int cmp = bvt1.compare(bvt2);
+    if (cmp)
+    {
+        cerr << "Error: (1)SUB mismatch!" << endl;
+        exit(1);
+    }
+    cmp = bvt0.compare(bvt2);
+    if (cmp)
+    {
+        cerr << "Error: (2)SUB mismatch!" << endl;
+        exit(1);
+    }
+
 }
 
 static
@@ -2887,8 +2951,11 @@ int main(void)
 
     AggregatorTest();
 
+    OrTest();
+
     AndTest();
     XorTest();
+
     SubTest();  
 
     InvertTest();  
