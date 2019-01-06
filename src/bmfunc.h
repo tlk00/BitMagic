@@ -4804,13 +4804,12 @@ bm::id64_t bit_block_and_2way(bm::word_t* BMRESTRICT dst,
     BM_ASSERT(dst != src1 && dst != src2);
 
     const bm::id64_t mask(1ull);
-    
-    unsigned short bits[65];
-    unsigned bcnt = bm::bitscan_popcnt64(digest, bits);
-
-    for (unsigned i = 0; i < bcnt; ++i)
+    bm::id64_t d = digest;
+    while (d)
     {
-        unsigned wave = bits[i];
+        bm::id64_t t = bm::bmi_blsi_u64(d); // d & -d;
+
+        unsigned wave = bm::word_bitcount64(t - 1);
         unsigned off = wave * bm::set_block_digest_wave_size;
         
         #if defined(VECT_AND_DIGEST_2WAY)
@@ -4839,8 +4838,10 @@ bm::id64_t bit_block_and_2way(bm::word_t* BMRESTRICT dst,
             if (!acc) // all zero
                 digest &= ~(mask  << wave);
         #endif
-        
-    } // for i
+
+        d = bm::bmi_bslr_u64(d); // d &= d - 1;
+    } // while
+    
     return digest;
 }
 
