@@ -20,11 +20,13 @@ For more information please visit:  http://bitmagic.io
 
   Example how to use logical operations between arrays and bit-vectors
  
-  \sa bm::combine_and()
-  \sa bm::combine_and_sorted()
-  \sa bm::combine_sub()
-  \sa bm::combine_or()
-  \sa bm::combine_xor()
+  \sa bm::combine_and
+  \sa bm::combine_and_sorted
+  \sa bm::combine_sub
+  \sa bm::combine_or
+  \sa bm::combine_xor
+
+  \sa bvsetalgebra.cpp
 */
 
 /*! \file sample7.cpp

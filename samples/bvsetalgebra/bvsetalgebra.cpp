@@ -18,6 +18,25 @@ For more information please visit:  http://bitmagic.io
 
 /** \example bvsetalgebra.cpp
      Example demonstrates variety of algebra of sets operations.
+
+  \sa bvector
+
+  \sa bvector<>::bit_or
+  \sa bvector<>::bit_and
+  \sa bvector<>::bit_xor
+  \sa bvector<>::bit_sub
+
+  \sa bm::aggregator
+  \sa bm::operation_deserializer
+
+  \sa bm::combine_and
+  \sa bm::combine_and_sorted
+  \sa bm::combine_sub
+  \sa bm::combine_or
+  \sa bm::combine_xor
+
+  \sa sample7.cpp
+
 */
 
 /*! \file bvsetalgebra.cpp

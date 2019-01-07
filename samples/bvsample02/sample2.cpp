@@ -18,6 +18,7 @@ For more information please visit:  http://bitmagic.io
 
 /** \example sample2.cpp
   Example demonstrates using set operations AND, OR, XOR, etc.
+  \sa bvsetalgebra.cpp
 */
 
 /*! \file sample2.cpp
