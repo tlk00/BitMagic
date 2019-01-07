@@ -395,6 +395,7 @@ typedef bm::mem_alloc<block_allocator, ptr_allocator, standard_alloc_pool> stand
 
 /// Aligned malloc (unlike classic malloc it throws bad_alloc exception)
 ///
+/// To allocate temp bit-block use: bm::aligned_new_malloc(bm::set_block_alloc_size);
 /// @internal
 inline
 void* aligned_new_malloc(size_t size)
