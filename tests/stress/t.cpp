@@ -4053,7 +4053,7 @@ void AndOperationsTest()
     {
         bvect        bv1 { 0, 1 };
         bvect        bv2;
-        for (unsigned i = 1; 2 < 65536; ++i)
+        for (unsigned i = 2; i < 65536; ++i)
             bv2.set(i);
         
         bvect bv1c(bv1);
@@ -4092,7 +4092,7 @@ void AndOperationsTest()
         bvect        bv2 { 1, 3 };
         bv2.optimize();
         bvect bv1c(bv1);
-        bv1c.bit_or(bv2);
+        bv1c.bit_and(bv2);
 
         {
             bvect bv;
@@ -4112,7 +4112,7 @@ void AndOperationsTest()
         {
             bvect bv;
             bv.bit_and(bv1, bv2, bvect::opt_compress);
-            int cmp = bv.compare(bv2);
+            int cmp = bv.compare(bv1);
             assert(cmp == 0);
         }
     }
