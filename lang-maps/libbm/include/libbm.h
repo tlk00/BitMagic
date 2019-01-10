@@ -396,20 +396,45 @@ BM_API_EXPORT int BM_bvector_combine_operation(BM_BVHANDLE hdst, BM_BVHANDLE hsr
 */
 BM_API_EXPORT int BM_bvector_combine_AND(BM_BVHANDLE hdst, BM_BVHANDLE hsrc);
 
+/* perform 3-operand logical AND (set intersect) on two source bit vectors
+   hdst = hsrc1 AND hsrc2
+   compress - 0 (do not compress, 1 - compress)
+*/
+BM_API_EXPORT int BM_bvector_combine_AND_2sc(BM_BVHANDLE hdst, BM_BVHANDLE hsrc1, BM_BVHANDLE hsrc2, int compress);
+
 /* perform logical OR operation on two bit vectors
    hdst = hdst OR hsrc
 */
 BM_API_EXPORT int BM_bvector_combine_OR(BM_BVHANDLE hdst, BM_BVHANDLE hsrc);
+
+/* perform 3-operand logical OR (set union) on two source bit vectors
+   hdst = hsrc1 AND hsrc2
+   compress - 0 (do not compress, 1 - compress)
+*/
+BM_API_EXPORT int BM_bvector_combine_OR_2sc(BM_BVHANDLE hdst, BM_BVHANDLE hsrc1, BM_BVHANDLE hsrc2, int compress);
 
 /* perform logical SUB operation on two bit vectors
    hdst = hdst SUB hsrc
 */
 BM_API_EXPORT int BM_bvector_combine_SUB(BM_BVHANDLE hdst, BM_BVHANDLE hsrc);
 
+/* perform 3-operand logical AND NOT (set subtraction) between two source bit vectors
+   hdst = hsrc1 SUB hsrc2
+   compress - 0 (do not compress, 1 - compress)
+*/
+BM_API_EXPORT int BM_bvector_combine_SUB_2sc(BM_BVHANDLE hdst, BM_BVHANDLE hsrc1, BM_BVHANDLE hsrc2, int compress);
+
 /* perform logical XOR operation on two bit vectors
    hdst = hdst XOR hsrc
 */
 BM_API_EXPORT int BM_bvector_combine_XOR(BM_BVHANDLE hdst, BM_BVHANDLE hsrc);
+
+/* perform 3-operand logical XOR (exclusive OR) between two source bit vectors
+   hdst = hsrc1 XOR hsrc2
+   compress - 0 (do not compress, 1 - compress)
+*/
+BM_API_EXPORT int BM_bvector_combine_XOR_2sc(BM_BVHANDLE hdst, BM_BVHANDLE hsrc1, BM_BVHANDLE hsrc2, int compress);
+
 
 /* perform logical OR operation on two bit vectors
    hdst = hdst OR hsrc

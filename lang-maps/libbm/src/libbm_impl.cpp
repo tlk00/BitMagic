@@ -847,22 +847,162 @@ int BM_bvector_combine_operation(BM_BVHANDLE hdst, BM_BVHANDLE hsrc, int opcode)
 
 int BM_bvector_combine_AND(BM_BVHANDLE hdst, BM_BVHANDLE hsrc)
 {
-    return BM_bvector_combine_operation(hdst, hsrc, 0);
+    if (!hdst || !hsrc)
+        return BM_ERR_BADARG;
+
+    BM_TRY
+    {
+        TBM_bvector* bvt = (TBM_bvector*)hdst;
+        const TBM_bvector* bv1 = (TBM_bvector*)hsrc;
+
+        bvt->bit_and(*bv1);
+    }
+    BM_CATCH_ALL
+    ETRY;
+
+    return BM_OK;
 }
+
+int BM_bvector_combine_AND_2sc(BM_BVHANDLE hdst, BM_BVHANDLE hsrc1, BM_BVHANDLE hsrc2, int compress)
+{
+    if (!hdst || !hsrc1 || !hsrc2)
+        return BM_ERR_BADARG;
+
+    TBM_bvector::optmode opt_mode = compress ? TBM_bvector::opt_compress : TBM_bvector::opt_none;
+
+    BM_TRY
+    {
+        TBM_bvector* bvt = (TBM_bvector*)hdst;
+        const TBM_bvector* bv1 = (TBM_bvector*)hsrc1;
+        const TBM_bvector* bv2 = (TBM_bvector*)hsrc2;
+
+        bvt->bit_and(*bv1, *bv2, opt_mode);
+    }
+    BM_CATCH_ALL
+    ETRY;
+
+    return BM_OK;
+}
+
 
 int BM_bvector_combine_OR(BM_BVHANDLE hdst, BM_BVHANDLE hsrc)
 {
-    return BM_bvector_combine_operation(hdst, hsrc, 1);
+    if (!hdst || !hsrc)
+        return BM_ERR_BADARG;
+
+    BM_TRY
+    {
+        TBM_bvector* bvt = (TBM_bvector*)hdst;
+        const TBM_bvector* bv1 = (TBM_bvector*)hsrc;
+
+        bvt->bit_or(*bv1);
+    }
+    BM_CATCH_ALL
+    ETRY;
+
+    return BM_OK;
 }
+
+int BM_bvector_combine_OR_2sc(BM_BVHANDLE hdst, BM_BVHANDLE hsrc1, BM_BVHANDLE hsrc2, int compress)
+{
+    if (!hdst || !hsrc1 || !hsrc2)
+        return BM_ERR_BADARG;
+
+    TBM_bvector::optmode opt_mode = compress ? TBM_bvector::opt_compress : TBM_bvector::opt_none;
+
+    BM_TRY
+    {
+        TBM_bvector* bvt = (TBM_bvector*)hdst;
+        const TBM_bvector* bv1 = (TBM_bvector*)hsrc1;
+        const TBM_bvector* bv2 = (TBM_bvector*)hsrc2;
+
+        bvt->bit_or(*bv1, *bv2, opt_mode);
+    }
+    BM_CATCH_ALL
+    ETRY;
+
+    return BM_OK;
+}
+
 
 int BM_bvector_combine_SUB(BM_BVHANDLE hdst, BM_BVHANDLE hsrc)
 {
-    return BM_bvector_combine_operation(hdst, hsrc, 2);
+    if (!hdst || !hsrc)
+        return BM_ERR_BADARG;
+
+    BM_TRY
+    {
+        TBM_bvector* bvt = (TBM_bvector*)hdst;
+        const TBM_bvector* bv1 = (TBM_bvector*)hsrc;
+
+        bvt->bit_sub(*bv1);
+    }
+    BM_CATCH_ALL
+    ETRY;
+
+    return BM_OK;
 }
+
+
+int BM_bvector_combine_SUB_2sc(BM_BVHANDLE hdst, BM_BVHANDLE hsrc1, BM_BVHANDLE hsrc2, int compress)
+{
+    if (!hdst || !hsrc1 || !hsrc2)
+        return BM_ERR_BADARG;
+
+    TBM_bvector::optmode opt_mode = compress ? TBM_bvector::opt_compress : TBM_bvector::opt_none;
+
+    BM_TRY
+    {
+        TBM_bvector* bvt = (TBM_bvector*)hdst;
+        const TBM_bvector* bv1 = (TBM_bvector*)hsrc1;
+        const TBM_bvector* bv2 = (TBM_bvector*)hsrc2;
+
+        bvt->bit_sub(*bv1, *bv2, opt_mode);
+    }
+    BM_CATCH_ALL
+    ETRY;
+
+    return BM_OK;
+}
+
 
 int BM_bvector_combine_XOR(BM_BVHANDLE hdst, BM_BVHANDLE hsrc)
 {
-    return BM_bvector_combine_operation(hdst, hsrc, 3);
+    if (!hdst || !hsrc)
+        return BM_ERR_BADARG;
+
+    BM_TRY
+    {
+        TBM_bvector* bvt = (TBM_bvector*)hdst;
+        const TBM_bvector* bv1 = (TBM_bvector*)hsrc;
+
+        bvt->bit_xor(*bv1);
+    }
+    BM_CATCH_ALL
+    ETRY;
+
+    return BM_OK;
+}
+
+int BM_bvector_combine_XOR_2sc(BM_BVHANDLE hdst, BM_BVHANDLE hsrc1, BM_BVHANDLE hsrc2, int compress)
+{
+    if (!hdst || !hsrc1 || !hsrc2)
+        return BM_ERR_BADARG;
+
+    TBM_bvector::optmode opt_mode = compress ? TBM_bvector::opt_compress : TBM_bvector::opt_none;
+
+    BM_TRY
+    {
+        TBM_bvector* bvt = (TBM_bvector*)hdst;
+        const TBM_bvector* bv1 = (TBM_bvector*)hsrc1;
+        const TBM_bvector* bv2 = (TBM_bvector*)hsrc2;
+
+        bvt->bit_xor(*bv1, *bv2, opt_mode);
+    }
+    BM_CATCH_ALL
+    ETRY;
+
+    return BM_OK;
 }
 
 // -----------------------------------------------------------------
@@ -918,7 +1058,7 @@ int BM_bvector_combine_OR_arr(BM_BVHANDLE hdst,
     BM_TRY
     {
         TBM_bvector* bv = (TBM_bvector*)hdst;
-        bm::combine_or(*bv, arr_begin, arr_end);
+        bv->set(arr_begin, arr_end - arr_begin);
     }
     BM_CATCH_ALL
     ETRY;
@@ -957,7 +1097,7 @@ int BM_bvector_combine_SUB_arr(BM_BVHANDLE hdst,
     BM_TRY
     {
         TBM_bvector* bv = (TBM_bvector*)hdst;
-        bm::combine_sub(*bv, arr_begin, arr_end);
+        bv->clear(arr_begin, arr_end - arr_begin);
     }
     BM_CATCH_ALL
     ETRY;

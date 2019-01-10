@@ -715,14 +715,18 @@ free_mem:
 }
 
 
-int OperationsTest()
+int OperationsTest_AND()
 {
     int res = 0;
+    BM_BVHANDLE bmh0 = 0;
     BM_BVHANDLE bmh1 = 0;
     BM_BVHANDLE bmh2 = 0;
     unsigned int i;
     unsigned int count1, count2;
+    int cmp;
 
+    res = BM_bvector_construct(&bmh0, 0);
+    BMERR_CHECK(res, "BM_bvector_construct()");
     res = BM_bvector_construct(&bmh1, 0);
     BMERR_CHECK(res, "BM_bvector_construct()");
     res = BM_bvector_construct(&bmh2, 0);
@@ -745,10 +749,20 @@ int OperationsTest()
     PrintVector(bmh2, 10);
     printf("AND\n");
 
+    res = BM_bvector_combine_AND_2sc(bmh0, bmh1, bmh2, 1);
+    BMERR_CHECK_GOTO(res, "BM_bvector_combine_AND_2sc()", free_mem);
+
     res = BM_bvector_combine_AND(bmh1, bmh2);
     BMERR_CHECK_GOTO(res, "BM_bvector_combine_AND()", free_mem);
 
-    
+    res = BM_bvector_compare(bmh1, bmh0, &cmp);
+    BMERR_CHECK_GOTO(res, "BM_bvector_compare()", free_mem);
+    if (cmp != 0)
+    {
+        printf("0. incorrrect compare result %i \n", cmp);
+        res = 1; goto free_mem;
+    }
+
     res = BM_bvector_count(bmh1, &count1);
     BMERR_CHECK_GOTO(res, "BM_bvector_count()", free_mem);
     if (count1 != 2)
@@ -765,10 +779,10 @@ int OperationsTest()
     }
 
     PrintVector(bmh1, 10);
-
-
-
+    printf("\n");
     free_mem:
+        res = BM_bvector_free(bmh0);
+        BMERR_CHECK(res, "bvector free failed");
         res = BM_bvector_free(bmh1);
         BMERR_CHECK(res, "bvector free failed");
         res = BM_bvector_free(bmh2);
@@ -776,6 +790,193 @@ int OperationsTest()
 
     return res;
 }
+
+int OperationsTest_OR()
+{
+    int res = 0;
+    BM_BVHANDLE bmh0 = 0;
+    BM_BVHANDLE bmh1 = 0;
+    BM_BVHANDLE bmh2 = 0;
+    unsigned int i;
+    unsigned int count1, count2;
+    int cmp;
+
+    res = BM_bvector_construct(&bmh0, 0);
+    BMERR_CHECK(res, "BM_bvector_construct()");
+    res = BM_bvector_construct(&bmh1, 0);
+    BMERR_CHECK(res, "BM_bvector_construct()");
+    res = BM_bvector_construct(&bmh2, 0);
+    BMERR_CHECK_GOTO(res, "BM_bvector_construct()", free_mem);
+
+
+    for (i = 1; i < 4; ++i)
+    {
+        res = BM_bvector_set_bit(bmh1, i, BM_TRUE);
+        BMERR_CHECK_GOTO(res, "BM_bvector_set_bit()", free_mem);
+    } // for
+
+    for (i = 0; i < 3; ++i)
+    {
+        res = BM_bvector_set_bit(bmh2, i, BM_TRUE);
+        BMERR_CHECK_GOTO(res, "BM_bvector_set_bit()", free_mem);
+    } // for
+
+    PrintVector(bmh1, 10);
+    PrintVector(bmh2, 10);
+    printf("OR\n");
+
+    res = BM_bvector_combine_OR_2sc(bmh0, bmh1, bmh2, 1);
+    BMERR_CHECK_GOTO(res, "BM_bvector_combine_OR_2sc()", free_mem);
+
+    res = BM_bvector_combine_OR(bmh1, bmh2);
+    BMERR_CHECK_GOTO(res, "BM_bvector_combine_OR()", free_mem);
+
+    res = BM_bvector_compare(bmh1, bmh0, &cmp);
+    BMERR_CHECK_GOTO(res, "BM_bvector_compare()", free_mem);
+    if (cmp != 0)
+    {
+        printf("0. incorrrect compare result %i \n", cmp);
+        res = 1; goto free_mem;
+    }
+
+    PrintVector(bmh1, 10);
+    printf("\n");
+
+free_mem:
+    res = BM_bvector_free(bmh0);
+    BMERR_CHECK(res, "bvector free failed");
+    res = BM_bvector_free(bmh1);
+    BMERR_CHECK(res, "bvector free failed");
+    res = BM_bvector_free(bmh2);
+    BMERR_CHECK(res, "bvector free failed");
+
+    return res;
+}
+
+int OperationsTest_XOR()
+{
+    int res = 0;
+    BM_BVHANDLE bmh0 = 0;
+    BM_BVHANDLE bmh1 = 0;
+    BM_BVHANDLE bmh2 = 0;
+    unsigned int i;
+    unsigned int count1, count2;
+    int cmp;
+
+    res = BM_bvector_construct(&bmh0, 0);
+    BMERR_CHECK(res, "BM_bvector_construct()");
+    res = BM_bvector_construct(&bmh1, 0);
+    BMERR_CHECK(res, "BM_bvector_construct()");
+    res = BM_bvector_construct(&bmh2, 0);
+    BMERR_CHECK_GOTO(res, "BM_bvector_construct()", free_mem);
+
+
+    for (i = 1; i < 4; ++i)
+    {
+        res = BM_bvector_set_bit(bmh1, i, BM_TRUE);
+        BMERR_CHECK_GOTO(res, "BM_bvector_set_bit()", free_mem);
+    } // for
+
+    for (i = 0; i < 3; ++i)
+    {
+        res = BM_bvector_set_bit(bmh2, i, BM_TRUE);
+        BMERR_CHECK_GOTO(res, "BM_bvector_set_bit()", free_mem);
+    } // for
+
+    PrintVector(bmh1, 10);
+    PrintVector(bmh2, 10);
+    printf("XOR\n");
+
+    res = BM_bvector_combine_XOR_2sc(bmh0, bmh1, bmh2, 1);
+    BMERR_CHECK_GOTO(res, "BM_bvector_combine_OR_2sc()", free_mem);
+
+    res = BM_bvector_combine_XOR(bmh1, bmh2);
+    BMERR_CHECK_GOTO(res, "BM_bvector_combine_OR()", free_mem);
+
+    res = BM_bvector_compare(bmh1, bmh0, &cmp);
+    BMERR_CHECK_GOTO(res, "BM_bvector_compare()", free_mem);
+    if (cmp != 0)
+    {
+        printf("0. incorrrect compare result %i \n", cmp);
+        res = 1; goto free_mem;
+    }
+
+    PrintVector(bmh1, 10);
+    printf("\n");
+
+free_mem:
+    res = BM_bvector_free(bmh0);
+    BMERR_CHECK(res, "bvector free failed");
+    res = BM_bvector_free(bmh1);
+    BMERR_CHECK(res, "bvector free failed");
+    res = BM_bvector_free(bmh2);
+    BMERR_CHECK(res, "bvector free failed");
+
+    return res;
+}
+
+int OperationsTest_SUB()
+{
+    int res = 0;
+    BM_BVHANDLE bmh0 = 0;
+    BM_BVHANDLE bmh1 = 0;
+    BM_BVHANDLE bmh2 = 0;
+    unsigned int i;
+    unsigned int count1, count2;
+    int cmp;
+
+    res = BM_bvector_construct(&bmh0, 0);
+    BMERR_CHECK(res, "BM_bvector_construct()");
+    res = BM_bvector_construct(&bmh1, 0);
+    BMERR_CHECK(res, "BM_bvector_construct()");
+    res = BM_bvector_construct(&bmh2, 0);
+    BMERR_CHECK_GOTO(res, "BM_bvector_construct()", free_mem);
+
+
+    for (i = 1; i < 4; ++i)
+    {
+        res = BM_bvector_set_bit(bmh1, i, BM_TRUE);
+        BMERR_CHECK_GOTO(res, "BM_bvector_set_bit()", free_mem);
+    } // for
+
+    for (i = 0; i < 3; ++i)
+    {
+        res = BM_bvector_set_bit(bmh2, i, BM_TRUE);
+        BMERR_CHECK_GOTO(res, "BM_bvector_set_bit()", free_mem);
+    } // for
+
+    PrintVector(bmh1, 10);
+    PrintVector(bmh2, 10);
+    printf("SUB\n");
+
+    res = BM_bvector_combine_SUB_2sc(bmh0, bmh1, bmh2, 1);
+    BMERR_CHECK_GOTO(res, "BM_bvector_combine_SUB_2sc()", free_mem);
+
+    res = BM_bvector_combine_SUB(bmh1, bmh2);
+    BMERR_CHECK_GOTO(res, "BM_bvector_combine_SUB()", free_mem);
+
+    res = BM_bvector_compare(bmh1, bmh0, &cmp);
+    BMERR_CHECK_GOTO(res, "BM_bvector_compare()", free_mem);
+    if (cmp != 0)
+    {
+        printf("0. incorrrect compare result %i \n", cmp);
+        res = 1; goto free_mem;
+    }
+
+    PrintVector(bmh1, 10);
+    printf("\n");
+
+free_mem:
+    res = BM_bvector_free(bmh0);
+    BMERR_CHECK(res, "bvector free failed");
+    res = BM_bvector_free(bmh1);
+    BMERR_CHECK(res, "bvector free failed");
+    res = BM_bvector_free(bmh2);
+    BMERR_CHECK(res, "bvector free failed");
+
+    return res;
+}
+
 
 int OperationsArrTest()
 {
@@ -1121,12 +1322,34 @@ int main(void)
     printf("\n---------------------------------- GetNextTest OK\n");
 
 
-    res = OperationsTest();
+    res = OperationsTest_AND();
     if (res != 0)
     {
-        printf("\nOperationsTest failed!\n");
+        printf("\nOperationsTest AND failed!\n");
         return res;
     }
+
+    res = OperationsTest_OR();
+    if (res != 0)
+    {
+        printf("\nOperationsTest OR failed!\n");
+        return res;
+    }
+
+    res = OperationsTest_XOR();
+    if (res != 0)
+    {
+        printf("\nOperationsTest XOR failed!\n");
+        return res;
+    }
+
+    res = OperationsTest_SUB();
+    if (res != 0)
+    {
+        printf("\nOperationsTest SUB failed!\n");
+        return res;
+    }
+
     printf("\n---------------------------------- OperationsTest OK\n");
 
     res = OperationsArrTest();
