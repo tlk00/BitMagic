@@ -2181,7 +2181,7 @@ unsigned avx2_gap_test(const unsigned short* buf, unsigned pos)
             dsize = arr_end - start;
             
             __m256i mZ = _mm256_setzero_si256();
-            __m256i mPos  = _mm256_set1_epi16(pos);
+            __m256i mPos  = _mm256_set1_epi16((unsigned short)pos);
             __m256i vect16, mSub, mge_mask;
 
             unsigned len_unr = start + (dsize - (dsize % unroll_factor));

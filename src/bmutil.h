@@ -336,7 +336,7 @@ unsigned count_leading_zeros_u64(bm::id64_t w)
     BM_ASSERT(w);
 
 #if defined(BMAVX2OPT) || defined (BMAVX512OPT)
-    return _lzcnt_u64(w);
+    return (unsigned)_lzcnt_u64(w);
 #else
     unsigned z;
     unsigned w1 = unsigned(w >> 32);
@@ -360,7 +360,7 @@ unsigned count_trailing_zeros_u64(bm::id64_t w)
     BM_ASSERT(w);
 
 #if defined(BMAVX2OPT) || defined (BMAVX512OPT)
-    return _tzcnt_u64(w);
+    return (unsigned)_tzcnt_u64(w);
 #else
     unsigned z;
     unsigned w1 = unsigned(w);
