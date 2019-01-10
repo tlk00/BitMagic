@@ -46,6 +46,12 @@ namespace bm
 #pragma GCC diagnostic ignored "-Wconversion"
 #endif
 
+#ifdef _MSC_VER
+#pragma warning( push )
+#pragma warning( disable : 4146)
+#endif
+
+
 /*
 inline
 void sse2_print128(const char* prefix, const __m128i & value)
@@ -657,11 +663,11 @@ unsigned sse42_bit_block_calc_change(const __m128i* BMRESTRICT block)
         
         bm::id64_t m0 = _mm_extract_epi64(m1A, 0);
         bm::id64_t m1 = _mm_extract_epi64(m1A, 1);
-        count += _mm_popcnt_u64(m0) + _mm_popcnt_u64(m1);
+        count += unsigned(_mm_popcnt_u64(m0) + _mm_popcnt_u64(m1));
 
         m0 = _mm_extract_epi64(m2A, 0);
         m1 = _mm_extract_epi64(m2A, 1);
-        count += _mm_popcnt_u64(m0) + _mm_popcnt_u64(m1);
+        count += unsigned(_mm_popcnt_u64(m0) + _mm_popcnt_u64(m1));
     }
     count -= (w0 & 1u); // correct initial carry-in error
     return count;
@@ -1129,7 +1135,7 @@ bool sse42_shift_r1_and(__m128i* block,
     if (!co1)
     {
         bm::id64_t t = d & -d;
-        di = _mm_popcnt_u64(t - 1); // find start bit-index
+        di = unsigned(_mm_popcnt_u64(t - 1)); // find start bit-index
     }
 
     for (; di < 64 ; ++di)
@@ -1311,11 +1317,9 @@ bool sse42_shift_r1_and(__m128i* block,
 #pragma GCC diagnostic pop
 #endif
 
-
-#ifdef __GNUG__
-#pragma GCC diagnostic pop
+#ifdef _MSC_VER
+#pragma warning( pop )
 #endif
-
 
 } // namespace
 
