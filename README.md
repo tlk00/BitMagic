@@ -13,7 +13,8 @@ because of high efficiency and bit-level parallelism friendly for parallel proce
 
 - compressed bit-vector container with mechanisms to iterate integer set it represents
 - set algebraic operations: AND, OR, XOR, MINUS, NOT on bit-vectors and integer sets
-- fast bit-vctor ierator (enumerator) for bit-vector traversal
+- fast bit-vector ierator (enumerator) for bit-vector traversal, algorithms for functor-based
+  traversals (similar to for_each)
 - fast import (compression) of integer lists (C++ style bulk_insert_iterator or using C array)
 - aggregator: fast logical AND, OR, AND-MINUS operations on groups of bit-vectors
 - serialization/hybernation of bit-vector containers into compressed BLOBs for persistence (or in-RAM compression)
