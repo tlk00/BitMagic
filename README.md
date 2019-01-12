@@ -1,17 +1,18 @@
-## BitMagic Library
+## BitMagic C++ Library
 
 
-Algorithms and tools for integer set algebra operations used for information retrieval, 
-indexing of databases, scientific algorithms, ranking, clustering and signal processing.
+Algorithms and tools for Algebra od Sets for information retrieval, 
+indexing of databases, scientific algorithms, ranking, clustering, unsupervised machine learning 
+and signal processing.
 
 BitMagic library uses compressed bit-vectors as a main vehicle for implementing set algebraic operations, 
-because of high efficiency and bit-level parallelism of this representation. 
+because of high efficiency and bit-level parallelism friendly for parallel processing with SIMD. 
 
 
 ### Main Features:
 
 - compressed bit-vector container with mechanisms to iterate integer set it represents
-- set algebraic operations: AND, OR, XOR, MINUS on bit-vectors and integer sets
+- set algebraic operations: AND, OR, XOR, MINUS, NOT on bit-vectors and integer sets
 - fast bit-vctor ierator (enumerator) for bit-vector traversal
 - fast import (compression) of integer lists (C++ style bulk_insert_iterator or using C array)
 - aggregator: fast logical AND, OR, AND-MINUS operations on groups of bit-vectors
@@ -19,7 +20,8 @@ because of high efficiency and bit-level parallelism of this representation.
 - set algebraic operations on compressed BLOBs (on the fly deserialization with set-algebraic function)
 - statistical algorithms to efficiently construct similarity and distance metrics, measure similarity between bit-vectors, 
 integer sets and compressed BLOBs
-- operations with rank: population count distances on bit-vector
+- operations with rank: population count distances on bit-vector. Rank-Select operations are often 
+used in succinct data structures.
 - sparse vector(s) for native int types using bit transposition and separate compression of bit-plains, 
 with support of NULL values (unassigned) for construction of in-memory columnar structures. Bit-transposed
 sparse vectors can be used for on-the fly compression of astronomical, molecular biology or other data,
@@ -27,32 +29,85 @@ efficient store of associations for graphs, etc.
 - algorithms on sparse vectors: dynamic range clipping, search, group theory image (re-mapping).
 Collection of algorithms is increasing, please check our samples and the API lists.
 
+### C-library interface:
+
+- BitMagic library provides C-library wrapper, which builds as a "true C" library.
+For redistribution it does NOT require C++ Runtime, because it compiles without use of
+STL, C++ memory allocation (operator new) or exceptions. Our goal here is to eventually
+provide a bridge to other languiages of data science (Python) and languages of enterprise 
+scale development (Java, Scala) via JNI. 
 
 ### Features In Progress:
 
 - compressed binary relational and adjacency matrixes and operations on matrixes for 
 Entity-Relationship acceleration, graph operations, social analyticsm materialized RDBMS joins, etc 
 
-- portable C-library layer working as a bridge to high level languages like Python, Java, Scala, .Net 
+- succinct data structures and containers based on bit-transposed data representation and 
+rank-select compression
+
+- memory efficient dictionaries of strings
+
+### How to start with BitMagic?
+---
+
+BitMagic C++ is a header only library (easy to build and use in your project) and it comes 
+with a set of examples. 
+
+API documentation and examples:
+[http://www.bitmagic.io/apis.html](http://www.bitmagic.io/apis.html)
+
+Tutorial for Algebra of Sets:
+[http://bitmagic.io/set-algebra.html](http://bitmagic.io/set-algebra.html)
+
+Use Cases and Application notes:
+[http://bitmagic.io/use-case.html](http://bitmagic.io/use-case.html)
+
+Technical notes on performance optmization:
+[http://bitmagic.io/articles.html](http://bitmagic.io/articles.html)
+
+Doxygen:
+[http://bitmagic.io/doxygen/html/modules.html](http://bitmagic.io/doxygen/html/modules.html)
+
+
 
 ### License: 
 
 Apache 2.0. 
-We ask you to explicitly mention BitMagic project in any work using it or derived from our code 
-or published materials.
+
+**Important!** We ask you to explicitly mention BitMagic project in any derived work or our published 
+materials. Proper citation on your product/project page is a REQUIREMENT 
+for using BitMagic Library.
+
+
+
+### Quality Assurance:
+
+BitMagic library pays serious attention to code quality and test coverage.  
+As a low level library BitMagic needs to be stable and conformant to be useful.
+
+We do not rely on unit tests alone, our tests often use _"chaos testing"_ where stress tests
+are based on randomized, generated sets and randomized operations. We regularly build
+and run test suits for Release and Debug mode for various combinations of SIMD 
+optimizations. 
+
+All variants of test builds take days to run, so the working master branch is 
+not guaranteed to be perfect.
+
+All of the above does not guarantee it is bug free project.
 
 
 ### SIMD support:
 
-BitMagic provides fast algorithms optimized for various SIMD sets, exploit super-scalar features of modern CPUs, 
-cache-friendly algorithms and thread-safe and data-parallel structures.
+BitMagic provides fast algorithms optimized for various SIMD sets, exploit super-scalar 
+features of modern CPUs, cache-friendly algorithms and thread-safe and 
+data-parallel structures. High-performance is a priority!
 
-- SSE2    - Intel SSE2 command set is supported, but gets gradually phased out, no new algorithms and compute kernels
+- SSE2    - Intel SSE2 command set is supported, but gets gradually phased out, 
+                 no new algorithms and compute kernels
 - SSE4.2  - Supported
-- AVX2    - Supported and recommended as fastest for high-performance systems
+- AVX2     - Supported and recommended as fastest for high-performance systems
 - AVX-512 - Work in progress. Some algorithms are ready(and stable), but we cannot get performance right (yet).
             AVX-512 projects using BitMagic for now should just use AVX2 mode (it is compatible).
-
 
 
 ### If you want to contribute or support BitMagic library:
@@ -62,9 +117,7 @@ cache-friendly algorithms and thread-safe and data-parallel structures.
 Our branching policy is that master cannot be considered fully stable between the releases.
 (for production stability please use release versions)
 
-2. We need help with real-life cases and benchmarks
-
-3. We need help with mappings to Python and other languages (BitMagic has C bindings)
+2. Need help with mappings to Python and other languages (BitMagic has C bindings)
 
 
 ### How to build BitMagic C++ library:
@@ -143,10 +196,6 @@ Yes, we need it!
 If you are enthusiastic about Python and think you can help please contact:
 anatoliy.kuznetsov @ yahoo dot com
 
----
-
-API documentation and examples:
-[http://www.bitmagic.io/apis.html](http://www.bitmagic.io/apis.html)
 
 
 Fine tuning and optimizations:
