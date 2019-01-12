@@ -2636,8 +2636,8 @@ inline void xor_bit_block(unsigned* dest,
         if (right_margin < 32) 
         {
             unsigned mask = 
-                block_set_table<true>::_right[nbit] & 
-                block_set_table<true>::_left[right_margin-1];
+                bm::block_set_table<true>::_right[nbit] &
+                bm::block_set_table<true>::_left[right_margin-1];
             *word ^= mask;
             return;
         }
@@ -4039,6 +4039,52 @@ void bit_block_rotate_left_1_unr(bm::word_t* block)
     block[set_block_size - 1] = (block[set_block_size - 1] << 1) | co_flag;
 }
 
+/*!
+    @brief insert bit into position and shift the rest right with carryover
+ 
+    @param block - bit-block pointer
+    @param bitpos   - bit position to insert
+    @param value - bit value (0|1) to insert
+ 
+    @return carry over value
+    @ingroup bitfunc
+*/
+inline
+bm::word_t bit_block_insert(bm::word_t* block, unsigned bitpos, bool value)
+{
+    BM_ASSERT(block);
+    BM_ASSERT(bitpos < 65536);
+    
+    unsigned nbit  = unsigned(bitpos & bm::set_block_mask);
+    unsigned nword = unsigned(nbit >> bm::set_word_shift);
+    nbit &= bm::set_word_mask;
+
+    bm::word_t co_flag = 0;
+    if (nbit)
+    {
+        unsigned r_mask = bm::block_set_table<true>::_right[nbit];
+        bm::word_t w = block[nword] & r_mask;
+        bm::word_t wl = block[nword] & ~r_mask;
+        co_flag = w >> 31;
+        w <<= 1u;
+        block[nword] = w | (unsigned(value) << nbit) | wl;
+        ++nword;
+    }
+    else
+    {
+        co_flag = value;
+    }
+    
+    for (unsigned i = nword; i < bm::set_block_size; ++i)
+    {
+        bm::word_t w = block[i];
+        bm::word_t co_flag1 = w >> 31;
+        w = (w << 1u) | co_flag;
+        block[i] = w;
+        co_flag = co_flag1;
+    } // for i
+    return co_flag;
+}
 
 /*!
     @brief Right bit-shift of bit-block by 1 bit (reference)

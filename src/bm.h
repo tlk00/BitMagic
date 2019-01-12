@@ -1790,7 +1790,7 @@ public:
     //@}
     
     // --------------------------------------------------------------------
-    /*! @name bit-shift operations  */
+    /*! @name bit-shift and insert operations  */
     //@{
     
     /*!
@@ -1798,6 +1798,17 @@ public:
         \return Carry over bit value (1 or 0)
     */
     bool shift_right();
+    
+    /*!
+        \brief Insert bit into specified position
+        All the vector content after position is shifted right.
+     
+        \param n - index of the bit to insert
+        \param value - insert value
+     
+        \return Carry over bit value (1 or 0)
+    */
+    bool insert(bm::id_t n, bool value);
 
     //@}
 
@@ -3466,9 +3477,7 @@ void bvector<Alloc>::import_block(const bm::id_t* ids,
     }
 }
 
-
 // -----------------------------------------------------------------------
-
 
 template<class Alloc> 
 bool bvector<Alloc>::set_bit_no_check(bm::id_t n, bool val)
@@ -4126,20 +4135,68 @@ bm::id_t bvector<Alloc>::check_or_next_extract(bm::id_t prev)
 template<class Alloc>
 bool bvector<Alloc>::shift_right()
 {
-    if (!blockman_.is_init())
-        return 0;
+    return insert(0, false);
+}
+
+//---------------------------------------------------------------------
+
+template<class Alloc>
+bool bvector<Alloc>::insert(bm::id_t n, bool value)
+{
+    BM_ASSERT_THROW(n < bm::id_max, BM_ERR_RANGE);
+
     if (size_ < bm::id_max)
         ++size_;
+    if (!blockman_.is_init())
+    {
+        if (value)
+            set(n);
+        return 0;
+    }
+    
+    // calculate logical block number
+    unsigned nb = unsigned(n >>  bm::set_block_shift);
 
     int block_type;
     bm::word_t carry_over = 0;
     
-    unsigned top_blocks = blockman_.top_block_size();
+    // process target block insertion
+    {
+        bm::word_t* block = blockman_.get_block_ptr(nb);
+        if (!block && !value) // nothing to do
+        {}
+        else
+        {
+            if (!block)
+                block = blockman_.check_allocate_block(nb, BM_BIT);
+            if (BM_IS_GAP(block) || IS_FULL_BLOCK(block))
+                block = blockman_.deoptimize_block(nb);
+            BM_ASSERT(IS_VALID_ADDR(block));
+
+            if (!n && !value)
+            {
+                bm::word_t acc;
+                carry_over = bm::bit_block_shift_r1_unr(block, &acc, carry_over);
+                if (!acc)
+                    blockman_.zero_block(nb);
+            }
+            else
+            {
+                unsigned nbit  = unsigned(n & bm::set_block_mask);
+                carry_over = bm::bit_block_insert(block, nbit, value);
+            }
+        }
+    }
     
+    unsigned i0, j0;
+    blockman_.get_block_coord(nb, i0, j0);
+
+    unsigned top_blocks = blockman_.top_block_size();
     bm::word_t*** blk_root = blockman_.top_blocks_root();
-    bm::word_t** blk_blk;
-    bm::word_t* block;
-    for (unsigned i = 0; i < bm::set_array_size; ++i)
+    bm::word_t**  blk_blk;
+    bm::word_t*   block;
+    
+    for (unsigned i = i0; i < bm::set_array_size; ++i)
     {
         if (i >= top_blocks)
         {
@@ -4156,16 +4213,19 @@ bool bvector<Alloc>::shift_right()
             {
                 // carry over: needs block-list extension and a block
                 unsigned nblock = (i * bm::set_array_size) + 0;
-                block =
-                blockman_.check_allocate_block(nblock, 0, 0, &block_type, false);
-                block[0] |= carry_over;   // block is brand new (0000)
+                if (nblock > nb)
+                {
+                    block =
+                    blockman_.check_allocate_block(nblock, 0, 0, &block_type, false);
+                    block[0] |= carry_over;   // block is brand new (0000)
 
-                // reset all control vars (blocks tree may have re-allocated)
-                blk_root = blockman_.top_blocks_root();
-                blk_blk = blk_root[i];
-                top_blocks = blockman_.top_block_size();
-                
-                carry_over = 0;
+                    // reset all control vars (blocks tree may have re-allocated)
+                    blk_root = blockman_.top_blocks_root();
+                    blk_blk = blk_root[i];
+                    top_blocks = blockman_.top_block_size();
+                    
+                    carry_over = 0;
+                }
             }
             continue;
         }
@@ -4174,6 +4234,11 @@ bool bvector<Alloc>::shift_right()
         do
         {
             unsigned nblock = (i * bm::set_array_size) + j;
+            if (nblock <= nb) // quickly skip to block next to target, shift
+            {
+                j = j0;
+                continue;
+            }
             block = blk_blk[j];
             if (!block)
             {
@@ -4229,6 +4294,7 @@ bool bvector<Alloc>::shift_right()
         } while (++j < bm::set_array_size);
     } // for i
     return carry_over;
+
 }
 
 //---------------------------------------------------------------------
