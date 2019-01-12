@@ -18,6 +18,9 @@ For more information please visit:  http://bitmagic.io
 
 /** \example bvsetalgebra.cpp
      Example demonstrates variety of algebra of sets operations.
+     http://bitmagic.io/set-algebra.html
+ 
+     <a href="http://bitmagic.io/set-algebra.html">Algebra Of Sets</a>
 
   \sa bvector
 

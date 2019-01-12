@@ -24,6 +24,7 @@ Bit-vector operations
 ./bvsample20 - bvector<>::shift_right() and vector<>::insert() - bit-shifting / insertion sample
 
 ./bvsetalgebra - Tutorial for Algebra of Sets operations
+Tutorial: http://bitmagic.io/set-algebra.html
 
 
 Sparse vector (bit-transposed sparse vector)
