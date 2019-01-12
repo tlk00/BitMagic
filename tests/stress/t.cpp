@@ -788,25 +788,56 @@ void print_bv(const bvect& bv)
     std::cout << std::endl;
 }
 
-
+// reference SHIFT right
 static
 void ShiftRight(bvect*  bv, unsigned shift)
 {
     bvect bv_tmp;
-    bvect::insert_iterator bi = bv_tmp.inserter();
-    bvect::enumerator en = bv->first();
-    for (; en.valid(); ++en)
     {
-        unsigned v = *en;
-        unsigned new_v = v + shift;
-        if (new_v < v || new_v == bm::id_max) // check overflow
-        {}
-        else
+        bvect::bulk_insert_iterator bi = bv_tmp.inserter();
+        bvect::enumerator en = bv->first();
+        for (; en.valid(); ++en)
         {
-            bi = new_v;
+            unsigned v = *en;
+            unsigned new_v = v + shift;
+            if (new_v < v || new_v == bm::id_max) // check overflow
+            {}
+            else
+            {
+                bi = new_v;
+            }
         }
     }
     bv->swap(bv_tmp);
+}
+
+// Reference bit insert
+static
+void BVectorInsert(bvect*  bv, unsigned pos, bool value)
+{
+    bvect bv_tmp;
+    if (pos)
+        bv_tmp.copy_range(*bv, 0, pos-1);
+    
+    {
+        bvect::bulk_insert_iterator bi = bv_tmp.inserter();
+        bvect::enumerator en = bv->first();
+        for (; en.valid(); ++en)
+        {
+            unsigned v = *en;
+            if (v < pos)
+                continue;
+            unsigned new_v = v + 1;
+            if (new_v < v || new_v == bm::id_max) // check overflow
+            {}
+            else
+            {
+                bi = new_v;
+            }
+        }
+    }
+    bv->swap(bv_tmp);
+    bv->set(pos, value);
 }
 
 
@@ -2393,10 +2424,6 @@ void ShiftRotateTest()
         }
     }
 
-
-
-
-
     for (i = 0; i < bm::set_block_size; ++i)
     {
         blk0[i] = blk1[i] = unsigned(rand());
@@ -2419,9 +2446,126 @@ void ShiftRotateTest()
         }
     }
 
-    
-
     cout << "---------------------------- ShiftRotate test OK" << endl;
+}
+
+static
+void BlockBitInsertTest()
+{
+    cout << "---------------------------- BlockBitInsertTest test" << endl;
+    
+    bm::word_t BM_VECT_ALIGN blk0[bm::set_block_size] BM_VECT_ALIGN_ATTR = { 0 };
+    bm::word_t BM_VECT_ALIGN blk1[bm::set_block_size] BM_VECT_ALIGN_ATTR = { 0 };
+    
+    unsigned i;
+    for (i = 0; i < bm::set_block_size; ++i)
+        blk0[i] = blk1[i] = 0;
+    
+    {
+        bm::word_t co = bm::bit_block_insert(blk0, 0, 1);
+        assert(co == 0);
+        assert(blk0[0]==1u);
+        co = bm::bit_block_insert(blk0, 0, 1);
+        assert(co == 0);
+        assert(blk0[0]==3u);
+        
+        blk0[bm::set_block_size-1] = ~0u;
+        co = bm::bit_block_insert(blk0, 0, 0);
+        assert(co == 1);
+        assert(blk0[0]==(3u << 1));
+        assert(blk0[bm::set_block_size-1] == (~0u << 1));
+        
+        blk0[0] = ~0u;
+        co = bm::bit_block_insert(blk0, 1, 0);
+        assert(co == 1);
+        assert(blk0[0]==(~0u & ~(1u << 1)));
+        assert(blk0[bm::set_block_size-1] == (~0u << 2));
+        
+        blk0[0] = ~0u;
+        co = bm::bit_block_insert(blk0, 31, 0);
+        assert(co == 1);
+        assert(blk0[0]==(~0u >> 1));
+        assert(blk0[1]==3);
+        assert(blk0[bm::set_block_size-1] == (~0u << 3));
+
+        blk0[0] = 0u;
+        co = bm::bit_block_insert(blk0, 31, 1);
+        assert(co == 1);
+        assert(blk0[0]==(1u << 31));
+        assert(blk0[1]==(3u << 1));
+        assert(blk0[bm::set_block_size-1] == (~0u << 4));
+    }
+    
+    cout << "bit-insert stress 0..." << endl;
+    {
+        for (i = 0; i < bm::set_block_size; ++i)
+            blk0[i] = blk1[i] = 0;
+        
+        blk0[0] = 1;
+        for (i = 0; i < 65536; ++i)
+        {
+            bm::word_t co = bm::bit_block_insert(blk0, i, 0);
+            assert(co == 0 || i == 65535);
+            if (i < 65535)
+            {
+                unsigned t = bm::test_bit(blk0, i+1);
+                assert(t);
+            }
+            for (unsigned k = 0; k < 65536; ++k)
+            {
+                if (k != i+1)
+                {
+                    unsigned t = bm::test_bit(blk0, k);
+                    assert(!t);
+                }
+            } // for k
+        } // for i
+        for (i = 0; i < bm::set_block_size; ++i)
+        {
+            if (blk0[i] != blk1[i])
+            {
+                cerr << "Stress insert(0) failed" << endl;
+                exit(1);
+            }
+        }
+    }
+    cout << "OK" << endl;
+
+    cout << "bit-insert stress 1..." << endl;
+    {
+        for (i = 0; i < bm::set_block_size; ++i)
+            blk0[i] = ~0u;
+        
+        for (i = 0; i < 65536; ++i)
+        {
+            bm::word_t co = bm::bit_block_insert(blk0, i, 0);
+            assert(co == 1 || i == 65535);
+            for (unsigned k = 0; k < 65536; ++k)
+            {
+                unsigned t = bm::test_bit(blk0, k);
+                if (k <= i)
+                {
+                    assert(!t);
+                }
+                else
+                {
+                    assert(t);
+                }
+            } // for k
+        } // for i
+        for (i = 0; i < bm::set_block_size; ++i)
+        {
+            if (blk0[i] != blk1[i])
+            {
+                cerr << "Stress insert(1) failed" << endl;
+                exit(1);
+            }
+        }
+    }
+    cout << "OK" << endl;
+
+    
+    cout << "---------------------------- BlockBitInsertTest test OK" << endl;
 }
 
 static
@@ -3440,7 +3584,7 @@ void BvectorShiftTest()
             bv.shift_right();
             int cmp = bv.compare(bv_control);
             assert(cmp==0);
-            if ((i % 10) == 0)
+            if ((i % 16) == 0)
             {
                 cout << "\r" << i << "/" << max_shifts << flush;
             }
@@ -3450,6 +3594,113 @@ void BvectorShiftTest()
 
 
     cout << "---------------------------- Bvector SHIFT test OK" << endl;
+}
+
+static
+void BvectorInsertTest()
+{
+    cout << "---------------------------- Bvector INSERT test" << endl;
+    
+    {
+        bvect bv { 1, 2, 3 };
+        bvect bv_c { 2, 3, 4 };
+        bvect bv1(bv);
+        BVectorInsert(&bv, 0, false);
+        int cmp = bv.compare(bv_c);
+        assert(cmp == 0);
+        
+        bv1.insert(0, false);
+        cmp = bv1.compare(bv_c);
+        assert(cmp == 0);
+    }
+    
+    {
+        bvect bv { 1, 2, 3 };
+        bvect bv_c { 0, 2, 3, 4 };
+        bvect bv1(bv);
+        BVectorInsert(&bv, 0, true);
+        int cmp = bv.compare(bv_c);
+        assert(cmp == 0);
+
+        bv1.insert(0, true);
+        cmp = bv1.compare(bv_c);
+        assert(cmp == 0);
+    }
+    
+    {
+        bvect bv { 1, 20, 65535 };
+        bvect bv_c { 1, 20, 65535, 65536 };
+        bvect bv1(bv);
+        BVectorInsert(&bv, 65535, true);
+        int cmp = bv.compare(bv_c);
+        assert(cmp == 0);
+
+        bv1.insert(65535, true);
+        cmp = bv1.compare(bv_c);
+        assert(cmp == 0);
+    }
+    
+    // bit-vector insert checks
+    {
+        bvect bv;
+        bv.resize(10);
+        bv.insert(120303030, true);
+        assert(bv.test(120303030));
+        assert(bv.count()==1);
+        assert(bv.size() == 120303030+1);
+    }
+    
+    {
+        bvect bv { 120303030u, 120303031u };
+        bvect bv1(bv);
+        BVectorInsert(&bv, 120303031u, true);
+        bv1.insert(120303031u, true);
+        int cmp = bv1.compare(bv);
+        assert(cmp==0);
+        bv.optimize();
+        bv1.optimize();
+        BVectorInsert(&bv, 120303031u, true);
+        bv1.insert(120303031u, true);
+        cmp = bv1.compare(bv);
+        assert(cmp==0);
+    }
+    
+    {
+        bvect bv, bv1;
+        bv.set(10);
+        bv.set_range(1203030u, 1203030u+65535u*10u);
+        bv1 = bv;
+        BVectorInsert(&bv, 1203030u+10, false);
+        bv1.insert(1203030u+10, false);
+        int cmp = bv1.compare(bv);
+        assert(cmp==0);
+    }
+    
+    {
+        std::cout << "INSERT stress (large vector insert)..\n";
+        bvect bv;
+        generate_bvector(bv, 40000000);
+        bvect bv_control(bv);
+        
+        unsigned max_shifts = 10000;
+        for (unsigned i = 0; i < max_shifts; ++i)
+        {
+            unsigned i_pos = rand()%40000000;
+            
+            BVectorInsert(&bv_control, i_pos, i & 1u);
+            bv.insert(i_pos, i & 1u);
+            int cmp = bv.compare(bv_control);
+            assert(cmp==0);
+            if ((i % 16) == 0)
+            {
+                cout << "\r" << i << "/" << max_shifts << flush;
+            }
+        } // for i
+    }
+    cout << "ok.\n";
+
+
+    cout << "---------------------------- Bvector INSERT test OK" << endl;
 }
 
 static
@@ -18540,6 +18791,8 @@ int main(void)
 
      ShiftRotateTest();
 
+     BlockBitInsertTest();
+
      ExportTest();
      ResizeTest();
 
@@ -18574,6 +18827,8 @@ int main(void)
      BvectorBulkSetTest();
 
      BvectorShiftTest();
+
+     BvectorInsertTest();
 
      ClearAllTest();
 
