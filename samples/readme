@@ -12,7 +12,7 @@ Bit-vector operations
 ./bvsample08 - STL interoperability and set operations with iterators
 ./bvsample09 - simple binary distance functions and pipeline for complex binary distance formulas
 ./bvsample10 - extraction of a random subset for Monte Carlo simulations
-./bvsample11 - how to compute population counts for ranges in bit-vector (cout_range(), count_to(), count_and())
+./bvsample11 - how to compute population counts for ranges in bit-vector (count_range(), count_to(), count_and())
 ./bvsample12 - review and comparison of different methods to set and clear bits 
 ./bvsample14 - serialization of bvector<>, logical operations on compressed BLOBs
 ./bvsample15 - bvector<>::find, search for first and last set bit, dynamic range detection
@@ -20,7 +20,8 @@ Bit-vector operations
                Tech.note: http://bitmagic.io/aggregator.html
 ./bvsample17 - rank-select operations on bvector<> using rs_index
 ./bvsample18 - bvector<>::bulk_insert_iterator (efficient bit-vector construction)
-./bvsample19 - bvector<>::merge - merge of bit-vectors (can be used for partiotioned processing)
+./bvsample19 - bvector<>::merge - merge of bit-vectors (can be used for partitioned processing)
+./bvsample20 - bvector<>::shift_right() and vector<>::insert() - bit-shifting / insertion sample
 
 ./bvsetalgebra - Tutorial for Algebra of Sets operations
 

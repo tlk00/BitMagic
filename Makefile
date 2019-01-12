@@ -43,6 +43,7 @@ TARGETS_BLD =  \
               samples/bvsample17 \
               samples/bvsample18 \
               samples/bvsample19 \
+              samples/bvsample20 \
               samples/bvsetalgebra \
               samples/xsample01 \
               samples/xsample02 \
