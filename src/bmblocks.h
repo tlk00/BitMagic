@@ -972,6 +972,11 @@ public:
                         bm::gap_invert(block);
                     BMSET_PTRGAP(block);
                 }
+                else
+                {
+                    if (invert)
+                        bm::bit_invert((wordop_t*)block);
+                }
             }
         }
         else // bit-block
