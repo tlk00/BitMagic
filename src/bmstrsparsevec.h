@@ -780,9 +780,18 @@ unsigned str_sparse_vector<CharType, BV, MAX_STR_SIZE>::common_prefix_length(
     {
         CharType ch1 = CharType(this->bmatr_.get_octet(idx1, i));
         CharType ch2 = CharType(this->bmatr_.get_octet(idx2, i));
-        if (ch1 != ch2 || !ch1)
+        if (!ch1 || !ch2)
+        {
+            if (i) 
+                --i;
             break;
+        }
+        if (ch1 != ch2)
+        {
+            break;
+        }
     } // for
+
     return i;
 }
 
