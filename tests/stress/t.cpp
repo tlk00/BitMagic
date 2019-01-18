@@ -385,7 +385,7 @@ void DetailedCompareBVectors(const BV& bv1, const BV& bv2)
             unsigned jj2 = nb2 &  bm::set_array_mask;
 
             std::cerr << "Difference detected at: position="
-                      << i1 << i1 << " nb=" << nb1
+                      << i1 << " nb=" << nb1
                       << "[" << ii1 << ", " << jj1 << "]"
                       " other position = " << i2 <<
                       " nb=" << nb2
@@ -395,10 +395,23 @@ void DetailedCompareBVectors(const BV& bv1, const BV& bv2)
                       << std::endl;
             
             exit(1);
+            return;
         }
         ++en2;
     } // for
 
+    int cmp = bv1.compare(bv2);
+    if (cmp != 0)
+    {
+        cerr << "Compare (1-2) discrepancy! " << cmp << endl;
+    }
+    cmp = bv2.compare(bv1);
+    if (cmp != 0)
+    {
+        cerr << "Compare (2-1) discrepancy! " << cmp << endl;
+    }
+
+    cout << "Detailed compare OK (no difference)." << endl;
 }
 
 void CheckVectors(bvect_mini &bvect_min, 
@@ -1016,6 +1029,19 @@ unsigned SerializationOperation(bvect*             bv_target,
                 if (bvt1 != bvc)
                 {
                     cerr << "1. XOR 2-way check error!" << endl;
+                    cerr << "Run detailed check (1)..." << endl;
+                    DetailedCompareBVectors(bvt1, bvc);
+
+                    bvect bvt2;
+                    bvt2.bit_xor(bv2, bv1, bvect::opt_compress);
+                    if (bvt2 != bvc)
+                    {
+                        cerr << "Reverse XOR 2-way check failed too!" << endl;
+                    }
+
+                    cerr << "Run detailed check (2)..." << endl;
+                    DetailedCompareBVectors(bvt2, bvc);
+
                     exit(1);
                 }
                 bvect bvt2;
@@ -1816,7 +1842,6 @@ void CheckVectors(bvect_mini &bvect_min,
     }
     
     // get_next comparison
-
     cout << "Positive bits comparison..." << flush;
     unsigned nb_min = bvect_min.get_first();
     unsigned nb_ful = bvect_full.get_first();
@@ -14196,7 +14221,8 @@ void TestSparseVectorRange()
             CheckSparseVectorRange(sv, i, i);
             CheckSparseVectorRange(sv, 0, i);
             CheckSparseVectorRange(sv, i, sv_max+10);
-            cout << "\r" << i << "/" << sv_max << flush;
+            if (i % 256 == 0)
+                cout << "\r" << i << "/" << sv_max << flush;
         }
         
         cout << "\nPhase 2-2.." << endl;
@@ -14340,7 +14366,8 @@ void TestSparseVectorFilter()
         for (unsigned i = 2; i < max_factor; ++i)
         {
             CheckSparseVectorFilter(sv, i);
-            cout << "\r" << i << "/" << max_factor << flush;
+            if (i % 256 == 0)
+                cout << "\r" << i << "/" << max_factor << flush;
         }
         cout << endl;
     }
@@ -14842,7 +14869,7 @@ void TestSparseVectorScan()
             }
 
             
-            if (value % 10 == 0)
+            if (value % 256 == 0)
                 cout << "\r" << value << "/" << max_value << "    " << flush;
         }
         
@@ -15509,7 +15536,6 @@ void TestStrSparseVector()
    }
 
    
-   
    cout << "---------------------------- Bit-plain STR sparse vector test OK" << endl;
 }
 
@@ -15585,6 +15611,31 @@ void CompareStrSparseVector(const str_svect_type& str_sv,
     cout << endl;
 }
 
+static 
+void GenerateTestStrCollection(std::vector<string>& str_coll, unsigned max_coll)
+{
+    string prefix = "az";
+    string str;
+    for (unsigned i = 0; i < max_coll; ++i)
+    {
+        str = prefix;
+        str.append(to_string(i));
+        str_coll.emplace_back(str);
+        
+//        if (i % 1024 == 0) // generate new prefix
+        {
+            prefix.clear();
+            unsigned prefix_len = rand() % 5;
+            for (unsigned j = 0; j < prefix_len; ++j)
+            {
+                char cch = char('a' + rand() % 26);
+                prefix.push_back(cch);
+            } // for j
+        }
+        
+    } // for i
+}
+
 static
 void StressTestStrSparseVector()
 {
@@ -15594,28 +15645,8 @@ void StressTestStrSparseVector()
    std::vector<string> str_coll;
    str_svect_type str_sv;
 
-   // generate test string collection
-   {
-       string prefix = "az";
-       string str;
-       for (unsigned i = 0; i < max_coll; ++i)
-       {
-           str = prefix;
-           str.append(to_string(i));
-           str_coll.emplace_back(str);
-           if (i % 5000 == 0) // generate new prefix
-           {
-                prefix.clear();
-                unsigned prefix_len = rand() % 5;
-                for (unsigned j = 0; j < prefix_len; ++j)
-                {
-                    char cch = char('a' + rand()%26);
-                    prefix.push_back(cch);
-                } // for j
-           }
-       } // for i
-   }
-   
+   GenerateTestStrCollection(str_coll, max_coll);
+
    cout << "Loading test sparse vector..." << endl;
    for (auto str : str_coll)
    {
@@ -15629,9 +15660,12 @@ void StressTestStrSparseVector()
     str_svect_type   str_sv_sorted;
     
     std::sort(str_coll_sorted.begin(), str_coll_sorted.end());
+    string str_prev;
     for (const string& s : str_coll_sorted)
     {
-        str_sv_sorted.push_back(s);
+        if (s != str_prev)
+            str_sv_sorted.push_back(s);
+        str_prev = s;
     }
 
     cout << "Build re-mapped vector..." << endl;
@@ -15714,9 +15748,8 @@ void StressTestStrSparseVector()
    cout << "Validate serialization of REMAP str-sparse vector...OK" << endl;
 
    // ----------------------------------------------
-   
-   cout << "Test common prefix..." << endl;
 
+   cout << "Test common prefix..." << endl;
     {
     const unsigned str_size = 64;
     char str1[str_size];
@@ -15735,7 +15768,19 @@ void StressTestStrSparseVector()
             unsigned octet_idx = 0;
             for (;true; ++octet_idx)
             {
-                if (str1[octet_idx] != str2[octet_idx] || !str1[octet_idx])
+                if (!str1[octet_idx])
+                {
+                    if (octet_idx)
+                        --octet_idx;
+                    break;
+                }
+                if (!str2[octet_idx])
+                {
+                    if (octet_idx)
+                        --octet_idx;
+                    break;
+                }
+                if (str1[octet_idx] != str2[octet_idx])
                     break;
             }
             unsigned common_prefix = str_sv_sorted.common_prefix_length(i, j);
@@ -15745,10 +15790,6 @@ void StressTestStrSparseVector()
                      common_prefix << " != " << octet_idx <<
                      " [" << str1 << "]-[" << str2 << "]" << endl;
                 exit(1);
-            }
-            if (i == j)
-            {
-                assert(common_prefix == ::strlen(str1));
             }
         } // for j
         
@@ -15790,31 +15831,30 @@ void StressTestStrSparseVector()
             bool found2 = scanner.bfind_eq_str(str_sv_sorted, s.c_str(), pos2);
             if (!found2)
             {
-                cerr << "Sorted binary search failed at: " << i << " " << s << endl;
+                cerr << "Error! Sorted binary search failed at: " << i << " value='" << s << "'" << endl;
+                //cerr << "Dump file test.sv created." << endl;
+                //file_save_svector(str_sv_sorted, "test.sv");
                 exit(1);
             }
             if (pos2 != i)
             {
-                cerr << "Sorted binary search position failed at: " << i << "!=" << pos2
+                cerr << "Error! Sorted binary search position mismatch at: " << i << "!=" << pos2
                      << " " << s << endl;
                 exit(1);
             }
             bool found3 = scanner2.bfind_eq_str(s.c_str(), pos3);
             if (!found3)
             {
-                cerr << "Sorted-remap binary search failed at: " << i << " " << s << endl;
+                cerr << "Error! Sorted-remap binary search failed at: " << i << " value='" << s << "'" << endl;
                 exit(1);
             }
             if (pos3 != i)
             {
-                cerr << "Sorted-remap binary search position failed at: " << i << "!=" << pos2
-                     << " " << s << endl;
+                cerr << "Error! Sorted-remap binary search position mismatch at: " << i << "!=" << pos2
+                     << " value='" << s << "'" << endl;
                 exit(1);
             }
-
-            
-            
-            
+           
             if (i % 65535 == 0)
             {
                 cout << "\r" << i << " / " << str_sv_sorted.size() << flush;
@@ -18352,7 +18392,8 @@ void DetailedCheckCompressedDecode(const rsc_sparse_vector_u32& csv)
     for (unsigned i = 0; i < size1; )
     {
         CheckCompressedDecode(csv, i, size);
-        cout << "\r" << i << "/" << size1 << flush;
+        if (i % 128 ==0)
+            cout << "\r" << i << "/" << size1 << flush;
         i++;
     }
     }
@@ -18758,8 +18799,7 @@ int main(void)
 */
 
 //avx2_i32_shift();
-//return 0;
-
+//return 0; 
     TestRecomb();
 
     OptimGAPTest();
@@ -18924,7 +18964,7 @@ int main(void)
 
      StressTestStrSparseVector();
 
-     StressTest(300);
+    StressTest(300);
 
     finish_time = time(0);
 
