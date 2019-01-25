@@ -18765,6 +18765,66 @@ void TestCompressSparseVector()
     cout << " ------------------------------ Test Compressed Sparse Vector OK" << endl;
 }
 
+static
+void TestHeapVector()
+{
+    {
+        bm::heap_vector<bm::id64_t, bvect::allocator_type> hv;
+        hv.add() = ~10ull;
+        hv.push_back(~0ull);
+        assert(hv[0] == ~10ull);
+        assert(hv[1] == ~0ull);
+    }
+    {
+        bm::heap_vector<bm::id64_t, bvect::allocator_type> hv;
+        for (unsigned i = 0; i < 65535; ++i)
+            hv.push_back(i);
+        for (unsigned i = 0; i < 65535; ++i)
+        {
+            assert(hv[i] == i);
+        }
+    }
+
+    {
+        bm::heap_vector<bvect, bvect::allocator_type> hv;
+
+        bvect& bv0 = hv.add();
+        bv0.set(1);
+        bvect& bv1 = hv.add();
+        bv1.set(2);
+        assert(hv.size() == 2);
+        assert(hv[1].test(2));
+        
+        hv.resize(1);
+        assert(hv.size() == 1);
+        assert(hv[0].test(1));
+
+        hv.resize(2);
+        assert(hv.size() == 2);
+        assert(!hv[1].any());
+
+        bm::heap_vector<bvect, bvect::allocator_type> hv2(hv);
+        assert(hv2.size() == 2);
+        assert(hv2[0].test(1));
+        assert(!hv2[1].any());
+
+        bm::heap_vector<bvect, bvect::allocator_type> hv3;
+        hv3.reserve(10);
+        hv3 = hv;
+        hv3[1].set(0);
+        assert(hv3.size() == 2);
+        assert(hv3.at(0).test(1));
+        assert(hv3.at(1).any());
+
+        bm::heap_vector<bvect, bvect::allocator_type> hv4;
+        hv4.swap(hv3);
+        assert(hv3.size() == 0);
+
+    }
+
+}
+
+
 int main(void)
 {
     time_t      start_time = time(0);
@@ -18800,6 +18860,7 @@ int main(void)
 
 //avx2_i32_shift();
 //return 0; 
+
     TestRecomb();
 
     OptimGAPTest();
@@ -18835,6 +18896,8 @@ int main(void)
 
      ExportTest();
      ResizeTest();
+
+     TestHeapVector();
 
      MiniSetTest();
 
