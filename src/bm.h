@@ -1973,7 +1973,7 @@ public:
     */
     bm::bvector<Alloc>& bit_or(const bm::bvector<Alloc>& bv1,
                                const bm::bvector<Alloc>& bv2,
-                               bm::bvector<Alloc>::optmode  opt_mode);
+                               typename bm::bvector<Alloc>::optmode opt_mode);
 
     /*!
        \brief 3-operand XOR : this := bv1 XOR bv2
@@ -1986,7 +1986,7 @@ public:
     */
     bm::bvector<Alloc>& bit_xor(const bm::bvector<Alloc>& bv1,
                                 const bm::bvector<Alloc>& bv2,
-                                bm::bvector<Alloc>::optmode  opt_mode);
+                                typename bm::bvector<Alloc>::optmode opt_mode);
 
     /*!
        \brief 3-operand AND : this := bv1 AND bv2
@@ -1999,7 +1999,7 @@ public:
     */
     bm::bvector<Alloc>& bit_and(const bm::bvector<Alloc>& bv1,
                                 const bm::bvector<Alloc>& bv2,
-                                bm::bvector<Alloc>::optmode  opt_mode);
+                                typename bm::bvector<Alloc>::optmode opt_mode);
     
     
     /*!
@@ -2014,7 +2014,7 @@ public:
     */
     bm::bvector<Alloc>& bit_sub(const bm::bvector<Alloc>& bv1,
                                 const bm::bvector<Alloc>& bv2,
-                                bm::bvector<Alloc>::optmode  opt_mode);
+                                typename bm::bvector<Alloc>::optmode opt_mode);
 
 
     /*!
@@ -4376,7 +4376,7 @@ template<class Alloc>
 bm::bvector<Alloc>&
 bvector<Alloc>::bit_or(const bm::bvector<Alloc>& bv1,
                        const bm::bvector<Alloc>& bv2,
-                       bm::bvector<Alloc>::optmode opt_mode)
+                       typename bm::bvector<Alloc>::optmode opt_mode)
 {
     if (blockman_.is_init())
         blockman_.deinit_tree();
@@ -4454,7 +4454,7 @@ template<class Alloc>
 bm::bvector<Alloc>&
 bvector<Alloc>::bit_xor(const bm::bvector<Alloc>& bv1,
                         const bm::bvector<Alloc>& bv2,
-                        bm::bvector<Alloc>::optmode opt_mode)
+                        typename bm::bvector<Alloc>::optmode opt_mode)
 {
     if (blockman_.is_init())
         blockman_.deinit_tree();
@@ -4542,7 +4542,7 @@ template<class Alloc>
 bm::bvector<Alloc>&
 bvector<Alloc>::bit_and(const bm::bvector<Alloc>& bv1,
                         const bm::bvector<Alloc>& bv2,
-                        bm::bvector<Alloc>::optmode opt_mode)
+                        typename bm::bvector<Alloc>::optmode opt_mode)
 {
     if (blockman_.is_init())
         blockman_.deinit_tree();
@@ -4627,7 +4627,7 @@ template<class Alloc>
 bm::bvector<Alloc>&
 bvector<Alloc>::bit_sub(const bm::bvector<Alloc>& bv1,
                         const bm::bvector<Alloc>& bv2,
-                        bm::bvector<Alloc>::optmode opt_mode)
+                        typename bm::bvector<Alloc>::optmode opt_mode)
 {
     if (blockman_.is_init())
         blockman_.deinit_tree();
