@@ -728,12 +728,14 @@ bm::id64_t update_block_digest0(const bm::word_t* const block, bm::id64_t digest
 {
     const bm::id64_t mask(1ull);
     bm::id64_t d = digest;
+
     while (d)
     {
         bm::id64_t t = bm::bmi_blsi_u64(d); // d & -d;
-        
+
         unsigned wave = bm::word_bitcount64(t - 1);
         unsigned off = wave * bm::set_block_digest_wave_size;
+
         #if defined(VECT_IS_DIGEST_ZERO)
             bool all_zero = VECT_IS_DIGEST_ZERO(&block[off]);
             digest &= all_zero ? ~(mask << wave) : digest;
@@ -753,12 +755,12 @@ bm::id64_t update_block_digest0(const bm::word_t* const block, bm::id64_t digest
         
         d = bm::bmi_bslr_u64(d); // d &= d - 1;
     } // while
+
+    BM_ASSERT(bm::calc_block_digest0(block) == digest);
     return digest;
 }
 
 // --------------------------------------------------------------
-
-
 
 
 /// Returns true if set operation is constant (bitcount)
