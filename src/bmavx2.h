@@ -1490,7 +1490,7 @@ bool avx2_shift_r1_and(__m256i* BMRESTRICT block,
         const bm::id64_t dmask = (1ull << di);
         if (d & dmask) // digest stride NOT empty
         {
-            mAcc = _mm256_xor_si128(mAcc, mAcc); // mAcc = 0
+            mAcc = _mm256_xor_si256(mAcc, mAcc); // mAcc = 0
 
             mask_block = (__m256i*) &mblock[d_base];
             _mm_prefetch ((const char*)mask_block, _MM_HINT_NTA);
