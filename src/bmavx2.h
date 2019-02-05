@@ -1490,6 +1490,8 @@ bool avx2_shift_r1_and(__m256i* BMRESTRICT block,
         const bm::id64_t dmask = (1ull << di);
         if (d & dmask) // digest stride NOT empty
         {
+            mAcc = _mm256_xor_si128(mAcc, mAcc); // mAcc = 0
+
             mask_block = (__m256i*) &mblock[d_base];
             _mm_prefetch ((const char*)mask_block, _MM_HINT_NTA);
 
@@ -1550,7 +1552,7 @@ bool avx2_shift_r1_and(__m256i* BMRESTRICT block,
                 BM_ASSERT(co1 == 1);
                 BM_ASSERT(wblock[d_base] == 0);
                 
-                unsigned w0 = wblock[d_base] = (co1 & mblock[d_base]);
+                bm::id64_t w0 = wblock[d_base] = (co1 & mblock[d_base]);
                 d |= (dmask & (w0 << di)); // update digest (branchless if (w0))
                 co1 = 0;
             }

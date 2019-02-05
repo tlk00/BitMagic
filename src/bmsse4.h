@@ -1109,6 +1109,7 @@ bool sse42_shift_r1(__m128i* block, unsigned* empty_acc, unsigned co1)
 }
 
 
+
 /*!
     @brief block shift right by 1 plus AND
 
@@ -1146,6 +1147,7 @@ bool sse42_shift_r1_and(__m128i* block,
         {
             block = (__m128i*) &wblock[d_base];
             mask_block = (__m128i*) &mblock[d_base];
+            mAcc = _mm_xor_si128(mAcc, mAcc); // mAcc = 0
             for (unsigned i = 0; i < 4; ++i, block += 2, mask_block += 2)
             {
                 __m128i m1A = _mm_load_si128(block);
@@ -1186,7 +1188,7 @@ bool sse42_shift_r1_and(__m128i* block,
             } // for i
             
             if (_mm_testz_si128(mAcc, mAcc))
-                d &= ~dmask; // clear digest bit            
+                d &= ~dmask; // clear digest bit 
             wd &= wd - 1;
         }
         else
@@ -1196,7 +1198,7 @@ bool sse42_shift_r1_and(__m128i* block,
                 BM_ASSERT(co1 == 1);
                 BM_ASSERT(wblock[d_base] == 0);
                 
-                unsigned w0 = wblock[d_base] = co1 & mblock[d_base];
+                bm::id64_t w0 = wblock[d_base] = co1 & mblock[d_base];
                 d |= (dmask & (w0 << di)); // update digest (branchless if (w0))
                 co1 = 0;
             }
