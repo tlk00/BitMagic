@@ -1636,7 +1636,7 @@ bool aggregator<BV>::combine_shift_right_and(unsigned i, unsigned j,
         }
         carry_overs[0] = 0;
     }
-    
+
     unsigned k = 1;
     for (; k < src_size; ++k)
     {
@@ -1646,7 +1646,6 @@ bool aggregator<BV>::combine_shift_right_and(unsigned i, unsigned j,
             BM_ASSERT(bm::bit_is_all_zero(blk));
             continue;
         }
-        
         const bm::word_t* arg_blk = get_arg_block(bv_src, k, i, j);
         carry_overs[k] = process_shift_right_and(arg_blk, digest, carry_over);
     } // for k
@@ -1685,6 +1684,8 @@ bool aggregator<BV>::process_shift_right_and(const bm::word_t* arg_blk,
             carry_over = 0;
             digest = blk[0]; // NOTE: this does NOT account for AND (yet)
         }
+        BM_ASSERT(bm::calc_block_digest0(blk) == digest);
+
         bm::gap_and_to_bitset(blk, BMGAP_PTR(arg_blk), digest);
         digest = bm::update_block_digest0(blk, digest);
     }
@@ -1704,6 +1705,7 @@ bool aggregator<BV>::process_shift_right_and(const bm::word_t* arg_blk,
                 carry_over = 0;
                 digest = blk[0];
             }
+            BM_ASSERT(bm::calc_block_digest0(blk) == digest);
         }
         else  // arg is zero - target block => zero
         {
