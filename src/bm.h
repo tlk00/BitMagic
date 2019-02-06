@@ -100,8 +100,8 @@ namespace bm
 */
 struct rs_index
 {
-    unsigned  BM_VECT_ALIGN bcount[bm::set_total_blocks] BM_VECT_ALIGN_ATTR;
-    bm::pair<bm::gap_word_t, bm::gap_word_t> BM_VECT_ALIGN subcount[bm::set_total_blocks] BM_VECT_ALIGN_ATTR;
+    unsigned  bcount[bm::set_total_blocks];
+    bm::pair<bm::gap_word_t, bm::gap_word_t> subcount[bm::set_total_blocks];
     unsigned  total_blocks;
     
     rs_index() { total_blocks = 0; }
