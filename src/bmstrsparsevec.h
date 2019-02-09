@@ -227,6 +227,13 @@ public:
         \param str  - string to set (zero terminated)
     */
     void set(size_type idx, const value_type* str);
+    
+    /*!
+        \brief insert the specified element
+        \param idx  - element index (vector auto-resized if needs to)
+        \param str  - string to set (zero terminated)
+    */
+    void insert(size_type idx, const value_type* str);
 
     /*!
         \brief get specified element
@@ -241,6 +248,10 @@ public:
     
     /*!
         \brief set specified element with bounds checking and automatic resize
+     
+        This is an equivalent of set() method, but templetized to be
+        more compatible with the STL std::string and the likes
+     
         \param idx  - element index (vector auto-resized if needs to)
         \param str  - input string
                       expected an STL class with size() support,
@@ -252,8 +263,9 @@ public:
         if (idx >= this->size())
             this->size_ = idx+1;
 
-        size_type sz = size_type((str.size() < MAX_STR_SIZE) ? str.size() : MAX_STR_SIZE-1);
-        if(!sz)
+        size_type str_size = str.size();
+        size_type sz = size_type((str_size < MAX_STR_SIZE) ? str_size : MAX_STR_SIZE-1);
+        if (!sz)
         {
             this->clear_value_plains_from(0, idx);
             return;
@@ -288,6 +300,13 @@ public:
     {
         assign(this->size_, str);
     }
+    
+    /*!
+        \brief push back a string (zero terminated)
+        \param str  - string to set
+    */
+    void push_back(const value_type* str) { set(this->size_, str); }
+
 
     /*!
         \brief get specified string element
@@ -547,6 +566,13 @@ protected:
     /*! \brief set value without checking boundaries or support of NULL */
     void set_value_no_null(size_type idx, const value_type* str);
 
+    /*! \brief insert value without checking boundaries */
+    void insert_value(size_type idx, const value_type* str);
+
+    /*! \brief insert value without checking boundaries or support of NULL */
+    void insert_value_no_null(size_type idx, const value_type* str);
+
+
     size_type size_internal() const { return size(); }
     void resize_internal(size_type sz) { resize(sz); }
 
@@ -609,7 +635,6 @@ void str_sparse_vector<CharType, BV, MAX_STR_SIZE>::swap(str_sparse_vector& str_
 
 //---------------------------------------------------------------------
 
-
 template<class CharType, class BV, unsigned MAX_STR_SIZE>
 void str_sparse_vector<CharType, BV, MAX_STR_SIZE>::set(
                                 size_type idx, const value_type* str)
@@ -617,6 +642,21 @@ void str_sparse_vector<CharType, BV, MAX_STR_SIZE>::set(
     if (idx >= this->size())
         this->size_ = idx+1;
     set_value(idx, str);
+}
+
+//---------------------------------------------------------------------
+
+template<class CharType, class BV, unsigned MAX_STR_SIZE>
+void str_sparse_vector<CharType, BV, MAX_STR_SIZE>::insert(
+                                size_type idx, const value_type* str)
+{
+    if (idx >= this->size())
+    {
+        this->size_ = idx+1;
+        set_value(idx, str);
+        return;
+    }
+    insert_value(idx, str);
 }
 
 //---------------------------------------------------------------------
@@ -660,6 +700,49 @@ void str_sparse_vector<CharType, BV, MAX_STR_SIZE>::set_value_no_null(
         this->bmatr_.set_octet(idx, i, (unsigned char)ch);
     } // for i
 }
+
+//---------------------------------------------------------------------
+
+template<class CharType, class BV, unsigned MAX_STR_SIZE>
+void str_sparse_vector<CharType, BV, MAX_STR_SIZE>::insert_value(
+                                    size_type idx, const value_type* str)
+{
+    insert_value_no_null(idx, str);
+    bvector_type* bv_null = this->get_null_bvect();
+    if (bv_null)
+        bv_null->insert(idx, true);
+}
+
+//---------------------------------------------------------------------
+
+template<class CharType, class BV, unsigned MAX_STR_SIZE>
+void str_sparse_vector<CharType, BV, MAX_STR_SIZE>::insert_value_no_null(
+                                        size_type idx, const value_type* str)
+{
+    for (unsigned i = 0; i < MAX_STR_SIZE; ++i)
+    {
+        CharType ch = str[i];
+        if (!ch)
+        {
+            this->insert_clear_value_plains_from(i*8, idx);
+            return;
+        }
+        
+        if (remap_flags_) // compressional re-mapping is in effect
+        {
+            unsigned char remap_value = remap_matrix2_.get(i, unsigned(ch));
+            BM_ASSERT(remap_value);
+            if (!remap_value) // unknown dictionary element
+            {
+                this->insert_clear_value_plains_from(i*8, idx);
+                return;
+            }
+            ch = CharType(remap_value);
+        }
+        this->bmatr_.insert_octet(idx, i, (unsigned char)ch);
+    } // for i
+}
+
 
 //---------------------------------------------------------------------
 

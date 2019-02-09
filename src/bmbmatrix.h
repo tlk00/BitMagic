@@ -144,14 +144,23 @@ public:
     ///@{
 
     /*!
-        Bit-transpose an octet and assign it to a bot-matrix
+        Bit-transpose an octet and assign it to a bit-matrix
      
         @param pos - column position in the matrix
         @param octet_idx - octet based row position (1 octet - 8 rows)
         @param octet - value to assign
     */
     void set_octet(size_type pos, size_type octet_idx, unsigned char octet);
-    
+
+    /*!
+        Bit-transpose and insert an octet and assign it to a bit-matrix
+     
+        @param pos - column position in the matrix
+        @param octet_idx - octet based row position (1 octet - 8 rows)
+        @param octet - value to assign
+    */
+    void insert_octet(size_type pos, size_type octet_idx, unsigned char octet);
+
     /*!
         return octet from the matrix
      
@@ -419,7 +428,14 @@ protected:
         \param idx       - bit (column) to clear
     */
     void clear_value_plains_from(unsigned plain_idx, size_type idx);
-    
+
+    /*!
+        insert false (clear) column in all value plains
+        \param plain_idx - row (plain index to start from)
+        \param idx       - bit (column) to clear insert
+    */
+    void insert_clear_value_plains_from(unsigned plain_idx, size_type idx);
+
 protected:
     /** Number of total bit-plains in the value type*/
     static unsigned value_bits()
@@ -788,6 +804,53 @@ void basic_bmatrix<BV>::set_octet(size_type pos,
         bvector_type* bv = this->get_row(row);
         if (bv)
             bv->clear_bit_no_check(pos);
+    } // for
+}
+
+//---------------------------------------------------------------------
+
+template<typename BV>
+void basic_bmatrix<BV>::insert_octet(size_type pos,
+                                     size_type octet_idx,
+                                     unsigned char octet)
+{
+    BM_ASSERT(octet_idx * 8u < rsize_);
+    
+    unsigned oct = octet;
+    unsigned row = octet_idx * 8;
+    unsigned row_end = row + 8;
+    for (; row < row_end; ++row)
+    {
+        bvector_type* bv = this->get_row(row);
+        if (oct & 1u)
+        {
+            if (!bv)
+            {
+                bv = this->construct_row(row);
+                bv->init();
+                bv->set_bit_no_check(pos);
+            }
+            else
+            {
+                bv->insert(pos, true);
+            }
+        }
+        else
+        {
+            if (bv)
+                bv->insert(pos, false);
+        }
+        oct >>= 1;
+        if (!oct)
+            break;
+    } // for
+    
+    // clear the tail
+    for (++row; row < row_end; ++row)
+    {
+        bvector_type* bv = this->get_row(row);
+        if (bv)
+            bv->insert(pos, false);
     } // for
 }
 
@@ -1266,6 +1329,20 @@ void base_sparse_vector<Val, BV, MAX_SIZE>::clear_value_plains_from(
         bvector_type* bv = this->bmatr_.get_row(i);
         if (bv)
             bv->clear_bit_no_check(idx);
+    }
+}
+
+//---------------------------------------------------------------------
+
+template<class Val, class BV, unsigned MAX_SIZE>
+void base_sparse_vector<Val, BV, MAX_SIZE>::insert_clear_value_plains_from(
+                                            unsigned plain_idx, size_type idx)
+{
+    for (unsigned i = plain_idx; i < sv_value_plains; ++i)
+    {
+        bvector_type* bv = this->bmatr_.get_row(i);
+        if (bv)
+            bv->insert(idx, false);
     }
 }
 
