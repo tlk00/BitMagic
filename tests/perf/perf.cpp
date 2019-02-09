@@ -104,38 +104,6 @@ private:
 
 typedef bm::bvector<> bvect;
 
-// generate pseudo-random bit-vector, mix of compressed/non-compressed blocks
-//
-static
-void generate_bvector(bvect& bv, unsigned vector_max = 40000000, bool optimize = true)
-{
-    unsigned i, j;
-    for (i = 0; i < vector_max;)
-    {
-        // generate bit-blocks
-        {
-            bvect::bulk_insert_iterator iit(bv);
-            for (j = 0; j < 65535 * 10; i += 10, j++)
-            {
-                iit = i;
-            }
-        }
-        if (i > vector_max)
-            break;
-        // generate GAP (compressed) blocks
-        for (j = 0; j < 65535; i += 120, j++)
-        {
-            unsigned len = rand() % 64;
-            bv.set_range(i, i + len);
-            i += len;
-            if (i > vector_max)
-                break;
-        }
-    }
-    if (optimize)
-        bv.optimize();
-}
-
 
 static
 void SimpleFillSets(test_bitset& bset, 
