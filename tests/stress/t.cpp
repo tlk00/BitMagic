@@ -419,7 +419,7 @@ void CheckVectors(bvect_mini &bvect_min,
                   unsigned size,
                   bool     detailed = false);
 
-void generate_bvector(bvect& bv, unsigned vector_max = 40000000);
+void generate_bvector(bvect& bv, unsigned vector_max = 40000000, bool optimize=true);
 
 static
 unsigned random_minmax(unsigned min, unsigned max)
@@ -549,7 +549,7 @@ void FillSets(bvect_mini* bvect_min,
 
 static
 void FillSetsIntervals(bvect_mini* bvect_min, 
-              bvect* bvect_full,
+              bvect& bvect_full,
               unsigned min, 
               unsigned max,
               unsigned fill_factor,
@@ -560,7 +560,7 @@ void FillSetsIntervals(bvect_mini* bvect_min,
     {
         fill_factor=rand()%10;
     }
-    bvect_full->init();
+    bvect_full.init();
 
     cout << "Intervals filling. Factor=" 
          <<  fill_factor << endl << endl;
@@ -579,20 +579,22 @@ void FillSetsIntervals(bvect_mini* bvect_min,
         } while (end >= max);
         if (i < end)
         {
-            bvect_full->set_range(i, end-1, set_flag);
+            bvect_full.set_range(i, end-1, set_flag);
         }
        
         for (j = i; j < end; ++j)
         {
             if (set_flag)
             {
-                bvect_min->set_bit(j);
-                //bvect_full->set_bit(j);
+                if (bvect_min)
+                    bvect_min->set_bit(j);
+                //bvect_full.set_bit(j);
             }
             else
             {
-                bvect_min->clear_bit(j);
-                //bvect_full->clear_bit(j);
+                if (bvect_min)
+                    bvect_min->clear_bit(j);
+                //bvect_full.clear_bit(j);
             }
 
                            
@@ -616,15 +618,16 @@ void FillSetsIntervals(bvect_mini* bvect_min,
             {
                 if (set_flag)
                 {
-                    bvect_min->set_bit(i);
-                    bvect_full->set_bit_no_check(i);
+                    if (bvect_min)
+                        bvect_min->set_bit(i);
+                    bvect_full.set_bit_no_check(i);
                 }
                 else
                 {
-                    bvect_min->clear_bit(j);
-                    bvect_full->clear_bit(j);
+                    if (bvect_min)
+                        bvect_min->clear_bit(j);
+                    bvect_full.clear_bit(j);
                 }
-
             }
         }
     } // for i
@@ -638,8 +641,8 @@ void FillSetClearIntervals(bvect_mini* bvect_min,
               unsigned max,
               unsigned fill_factor)
 {
-    FillSetsIntervals(bvect_min, bvect_full, min, max, fill_factor, true);
-    FillSetsIntervals(bvect_min, bvect_full, min, max, fill_factor, false);
+    FillSetsIntervals(bvect_min, *bvect_full, min, max, fill_factor, true);
+    FillSetsIntervals(bvect_min, *bvect_full, min, max, fill_factor, false);
 }
 
 static
@@ -775,7 +778,7 @@ void FillSetsRandomMethod(bvect_mini* bvect_min,
     default:
         cout << "Random filling: method - Set Intervals - factor(random)" << endl;
         factor = rand()%10;
-        FillSetsIntervals(bvect_min, bvect_full, min, max, factor);
+        FillSetsIntervals(bvect_min, *bvect_full, min, max, factor);
         break;
 
     } // switch
@@ -3479,6 +3482,66 @@ void BvectorIncTest()
     cout << "---------------------------- Bvector inc test OK" << endl;
 }
 
+// -----------------------------------------------------------------------
+
+static
+void generate_sparse_bvector(bvect& bv,
+                             unsigned min = 0,
+                             unsigned max = 40000000,
+                             unsigned fill_factor = 65536)
+{
+    bvect::bulk_insert_iterator iit(bv);
+    unsigned ff = fill_factor / 10;
+    for (unsigned i = min; i < max; i+= ff)
+    {
+        //bv.set(i);
+        iit = i;
+        ff += ff / 2;
+        if (ff > fill_factor)
+            ff = fill_factor / 10;
+    }
+    iit.flush();
+}
+
+
+static
+void GenerateShiftTestCollection(std::vector<bvect>* target,
+                            unsigned count = 30,
+                            unsigned vector_max = 40000000,
+                            bool optimize = true)
+{
+    assert(target);
+    bvect bv_common; // sub-vector common for all collection
+    generate_sparse_bvector(bv_common, vector_max/10, vector_max, 250000);
+    
+    unsigned cnt1 = (count / 2);
+    
+    unsigned i = 0;
+    
+    for (i = 0; i < cnt1; ++i)
+    {
+        std::unique_ptr<bvect> bv (new bvect);
+        generate_bvector(*bv, vector_max, optimize);
+        *bv |= bv_common;
+        if (optimize)
+            bv->optimize();
+        target->push_back(std::move(*bv));
+    } // for
+    
+    unsigned fill_factor = 10;
+    for (; i < count; ++i)
+    {
+        std::unique_ptr<bvect> bv (new bvect);
+        
+        FillSetsIntervals(0, *bv, vector_max/ 10, vector_max, fill_factor);
+        *bv |= bv_common;
+
+        target->push_back(std::move(*bv));
+    } // for
+}
+
+
+
 static
 void BvectorShiftTest()
 {
@@ -3547,7 +3610,6 @@ void BvectorShiftTest()
     assert(cmp == 0);
     }
     
-
     {
     std::cout << "Shift-R stress (1 bit shift)..\n";
     unsigned start = 0;
@@ -3616,6 +3678,49 @@ void BvectorShiftTest()
         }
     }
     cout << "ok.\n";
+
+
+    // stress test for shifting aggregator
+    //
+    cout << "Aggregator based SHIT-R tests..." << endl;
+    {
+        const unsigned int REPEATS = 300;
+
+        bvect mask_bv; // mask vector
+        mask_bv.init();
+        generate_bvector(mask_bv, 75000000, false); // mask is shorter on both ends
+
+        std::vector<bvect> bv_coll1;
+        GenerateShiftTestCollection(&bv_coll1, 25, 80000000);
+        
+        {
+            bm::aggregator<bvect> agg;
+            agg.add(&mask_bv);
+            for (unsigned k = 0; k < bv_coll1.size(); ++k)
+            {
+                agg.add(&bv_coll1[k]);
+            }
+
+            for (unsigned i = 0; i < REPEATS; ++i)
+            {
+                bvect bv1(mask_bv);
+                for (unsigned k = 0; k < bv_coll1.size(); ++k)
+                {
+                    bv1.shift_right();
+                    bv1 &= bv_coll1[k];
+                } // for
+                
+                bvect bv2;
+                agg.combine_shift_right_and(bv2);
+                int cmp = bv1.compare(bv2);
+                if (cmp != 0)
+                {
+                    cerr << "Shift-R compare failure!" << endl;
+                    exit(1);
+                }
+            } // for
+        }
+    }
 
 
     cout << "---------------------------- Bvector SHIFT test OK" << endl;
@@ -3727,6 +3832,9 @@ void BvectorInsertTest()
 
     cout << "---------------------------- Bvector INSERT test OK" << endl;
 }
+
+
+// -----------------------------------------------------------------------
 
 static
 void TestRandomSubset(const bvect& bv, bm::random_subset<bvect>& rsub)
@@ -3924,7 +4032,7 @@ void RangeRandomFillTest()
     if (max > BITVECT_SIZE) 
         max = BITVECT_SIZE - 1;
 
-    FillSetsIntervals(&bvect_min, &bvect_full, min, max, 4);
+    FillSetsIntervals(&bvect_min, bvect_full, min, max, 4);
 
     CheckVectors(bvect_min, bvect_full, BITVECT_SIZE);
     CheckCountRange(bvect_full, min, max);
@@ -15246,6 +15354,31 @@ void TestStrSparseVector()
            cmp = ::strcmp(str, s10c);
            assert(cmp == 0);
        }
+       
+       // test string insert
+       {
+          str_sparse_vector<char, bvect, 3> str_sv10;
+          const char* s0 = "10";
+          const char* s2 = "30";
+          const char* s1 = "200";
+          
+          str_sv10.push_back(s0);
+          str_sv10.push_back(s1);
+          str_sv10.insert(1, s2);
+
+           str_sv10.get(0, str, sizeof(str));
+           cmp = ::strcmp(str, s0);
+           assert(cmp == 0);
+           
+           str_sv10.get(1, str, sizeof(str));
+           cmp = ::strcmp(str, s2);
+           assert(cmp == 0);
+
+           str_sv10.get(2, str, sizeof(str));
+           cmp = ::strcmp(str, s1);
+           assert(cmp == 0);
+       }
+
 
        // reference test / serialization test
        {
@@ -16986,7 +17119,7 @@ void AddressResolverTest()
 
 // generate pseudo-random bit-vector, mix of blocks
 //
-void generate_bvector(bvect& bv, unsigned vector_max)
+void generate_bvector(bvect& bv, unsigned vector_max, bool optimize)
 {
     unsigned i, j;
     for (i = 0; i < vector_max;)
@@ -17008,6 +17141,8 @@ void generate_bvector(bvect& bv, unsigned vector_max)
                 break;
         }
     }
+    if (optimize)
+        bv.optimize();
 }
 
 extern "C" {
@@ -18930,9 +19065,9 @@ int main(void)
      BvectorBulkSetTest();
 
      BvectorShiftTest();
-
+ 
      BvectorInsertTest();
-
+    
      ClearAllTest();
 
      GAPCheck();
