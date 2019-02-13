@@ -226,8 +226,23 @@ public:
         Sparse vector must be sorted.
     */
     bool bfind_eq_str(const SV&                      sv,
-                     const typename SV::value_type* str,
-                     typename SV::size_type&        pos);
+                      const typename SV::value_type* str,
+                      typename SV::size_type&        pos);
+    
+    /**
+        \brief lower bound search for an array position
+     
+        Method assumes the sparse array is sorted
+     
+        \param sv - input sparse vector
+        \param value - value to search for
+        \param pos - output sparse vector element index
+
+        \return true if value found
+    */
+    bool lower_bound_str(const SV&                      sv,
+                         const typename SV::value_type* str,
+                         typename SV::size_type&        pos);
 
     /**
         \brief binary find first sparse vector element (string)
@@ -1337,6 +1352,128 @@ bool sparse_vector_scanner<SV>::bfind_eq_str(const typename SV::value_type* str,
     BM_ASSERT(bound_sv_);
     return bfind_eq_str(*bound_sv_, str, pos);
 }
+
+//----------------------------------------------------------------------------
+
+template<typename SV>
+bool sparse_vector_scanner<SV>::lower_bound_str(const SV&  sv,
+                                                const typename SV::value_type* str,
+                                                typename SV::size_type&        pos)
+{
+    int cmp;
+    size_type l = 0, r = sv.size();
+    
+    if (l == r) // empty vector
+    {
+        pos = 0;
+        return false;
+    }
+    --r;
+    
+    // check initial boundary conditions if insert point is at tail/head
+    cmp = this->compare_str(sv, l, str); // left (0) boundary check
+    if (cmp > 0) // vect[x] > str
+    {
+        pos = 0;
+        return false;
+    }
+    if (cmp == 0)
+    {
+        pos = 0;
+        return true;
+    }
+    cmp = this->compare_str(sv, r, str); // right(size-1) boundary check
+    if (cmp == 0)
+    {
+        pos = r;
+        // back-scan to rewind all duplicates
+        for (; r >= 0; --r)
+        {
+            cmp = this->compare_str(sv, r, str);
+            if (cmp != 0)
+                return true;
+            pos = r;
+        } // for i
+        return true;
+    }
+    if (cmp < 0) // vect[x] < str
+    {
+        pos = r+1;
+        return false;
+    }
+    
+    const unsigned linear_cutoff = 16;
+
+    size_type dist = r - l;
+    if (dist < linear_cutoff)
+    {
+        for (; l <= r; ++l)
+        {
+            cmp = this->compare_str(sv, l, str);
+            if (cmp == 0)
+            {
+                pos = l;
+                return true;
+            }
+            if (cmp > 0)
+            {
+                pos = l;
+                return false;
+            }
+        } // for
+    }
+    while (l <= r)
+    {
+        unsigned mid = (r-l)/2+l;
+        cmp = this->compare_str(sv, mid, str);
+        if (cmp == 0)
+        {
+            pos = mid;
+            // back-scan to rewind all duplicates
+            for (size_type i = mid-1; i >= 0; --i)
+            {
+                cmp = this->compare_str(sv, i, str);
+                if (cmp != 0)
+                    return true;
+                pos = i;
+            } // for i
+            pos = 0;
+            return true;
+        }
+        if (cmp < 0)
+            l = mid+1;
+        else
+            r = mid-1;
+
+        dist = r - l;
+        if (dist < linear_cutoff)
+        {
+            for (; l <= r; ++l)
+            {
+                cmp = this->compare_str(sv, l, str);
+                pos = l;
+                if (cmp == 0)
+                    return true;
+                if (cmp > 0) // vect[x] > str
+                    return false;
+            } // for
+            
+            cmp = this->compare_str(sv, l, str);
+            if (cmp > 0) // vect[x] > str
+            {
+                pos = l;
+                return false;
+            }
+
+            BM_ASSERT(0);
+            return false;
+        }
+    } // while
+    
+    BM_ASSERT(0);
+    return false;
+}
+
 
 //----------------------------------------------------------------------------
 

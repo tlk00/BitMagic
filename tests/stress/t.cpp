@@ -15609,14 +15609,18 @@ void TestStrSparseVector()
 
        str_sv1.remap_from(str_sv0);
        
-       unsigned pos;
+       unsigned pos, pos1;
        bm::sparse_vector_scanner<bm::str_sparse_vector<char, bvect, 32> > scanner;
+       bm::sparse_vector_scanner<bm::str_sparse_vector<char, bvect, 32> > scanner1;
        scanner.bind(str_sv1, true);
 
        
        bool found = scanner.find_eq_str("1", pos);
        assert(found);
        assert(pos == 0);
+       found = scanner1.lower_bound_str(str_sv1,"1", pos1);
+       assert(found);
+       assert(pos == pos1);
 
        found = scanner.find_eq_str("11", pos);
        assert(found);
@@ -15624,6 +15628,9 @@ void TestStrSparseVector()
        found = scanner.bfind_eq_str("11", pos);
        assert(found);
        assert(pos == 1);
+       found = scanner1.lower_bound_str(str_sv1, "11", pos1);
+       assert(found);
+       assert(pos == pos1);
 
        found = scanner.find_eq_str("123", pos);
        assert(found);
@@ -15631,11 +15638,18 @@ void TestStrSparseVector()
        found = scanner.bfind_eq_str("123", pos);
        assert(found);
        assert(pos == 2);
+       found = scanner1.lower_bound_str(str_sv1, "123", pos1);
+       assert(found);
+       assert(pos == pos1);
+
 
        found = scanner.find_eq_str("1234", pos);
        assert(!found);
        found = scanner.bfind_eq_str("1234", pos);
        assert(!found);
+       found = scanner1.lower_bound_str(str_sv1,"1234", pos1);
+       assert(!found);
+       assert(pos1 == str_sv1.size());
 
        found = scanner.find_eq_str("", pos);
        assert(!found);
@@ -15765,7 +15779,6 @@ void GenerateTestStrCollection(std::vector<string>& str_coll, unsigned max_coll)
                 prefix.push_back(cch);
             } // for j
         }
-        
     } // for i
 }
 
@@ -15948,7 +15961,7 @@ void StressTestStrSparseVector()
         for (unsigned i = 0; i < unsigned(str_coll_sorted.size()); ++i)
         {
             const string& s = str_coll_sorted[i];
-            unsigned pos1, pos2, pos3;
+            unsigned pos1, pos2, pos3, pos4;
             bool found1 = scanner.find_eq_str(str_sv_sorted, s.c_str(), pos1);
             if (!found1)
             {
@@ -15975,6 +15988,10 @@ void StressTestStrSparseVector()
                      << " " << s << endl;
                 exit(1);
             }
+            bool found4 = scanner.lower_bound_str(str_sv_sorted, s.c_str(), pos4);
+            assert(found4);
+            assert(pos2 == pos4);
+            
             bool found3 = scanner2.bfind_eq_str(s.c_str(), pos3);
             if (!found3)
             {
@@ -15987,7 +16004,6 @@ void StressTestStrSparseVector()
                      << " value='" << s << "'" << endl;
                 exit(1);
             }
-           
             if (i % 65535 == 0)
             {
                 cout << "\r" << i << " / " << str_sv_sorted.size() << flush;
@@ -16004,6 +16020,74 @@ void StressTestStrSparseVector()
    
    cout << "---------------------------- Bit-plain STR sparse vector stress test OK" << endl;
    cout << endl;
+}
+
+
+static
+void TestStrSparseSort()
+{
+   cout << "---------------------------- Bit-plain STR sparse vector SORT test" << endl;
+   const unsigned max_coll = 2000000;
+   
+   std::vector<string> str_coll;
+   str_svect_type      str_sv_sorted;
+
+    // generate sorted vector
+    string str;
+    for (unsigned i = 10; i < max_coll; i+=10)
+    {
+        str = to_string(i);
+        str_coll.emplace_back(str);
+    } // for i
+    std::sort(str_coll.begin(), str_coll.end());
+    for (const string& s : str_coll)
+    {
+        str_sv_sorted.push_back(s);
+    } // for s
+    str_sv_sorted.optimize();
+    
+    // run lower bound tests
+    bm::sparse_vector_scanner<str_svect_type> scanner;
+
+    for (unsigned i = 0; i < max_coll; ++i)
+    {
+        str = to_string(i);
+
+        unsigned pos;
+        bool found = scanner.lower_bound_str(str_sv_sorted, str.c_str(), pos);
+        string s1;
+        if (found)
+        {
+            str_sv_sorted.get(pos, s1);
+            assert(s1 == str);
+        }
+        
+        auto it = std::lower_bound(str_coll.begin(), str_coll.end(), str);
+        if (it != str_coll.end())
+        {
+            unsigned idx = it - str_coll.begin();
+            const string& s0 = str_coll[idx];
+            
+            if (s0 == str)
+            {
+                assert(found);
+                assert(pos == idx);
+            }
+            else
+            {
+                assert(!found);
+                str_sv_sorted.get(pos, s1);
+                
+                assert(pos == idx);
+            }
+        }
+        if (i % 2048 == 0)
+            cout << "\r" << i << "/" << max_coll << flush;
+
+    } // for
+    cout << "\n";
+   cout << "---------------------------- Bit-plain STR sparse vector SORT test OK" << endl;
+
 }
 
 
@@ -19159,6 +19243,8 @@ int main(void)
      TestCompressedCollection();
 
      TestStrSparseVector();
+
+     TestStrSparseSort();
 
      StressTestStrSparseVector();
 
