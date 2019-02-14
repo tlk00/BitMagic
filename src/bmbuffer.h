@@ -545,10 +545,10 @@ public:
         : buffer_()
     {}
 
-    heap_matrix(bool init)
-        : buffer_(init ? size_in_bytes : 0)
+    heap_matrix(bool init_in)
+        : buffer_(init_in ? size_in_bytes : 0)
     {
-        if (init)
+        if (init_in)
             buffer_.resize(size_in_bytes);
     }
 
@@ -620,10 +620,10 @@ public:
         const unsigned char* buf = buffer_.buf();
         for (size_type i = 0; i < size; ++i)
         {
-            const value_type* row = buf + i * row_size_in_bytes;
+            const value_type* this_row = buf + i * row_size_in_bytes;
             VECT_TYPE v0 = vect[i];
             BM_ASSERT(size_type(v0) < COLS);
-            value_type remap_v = row[unsigned(v0)];
+            value_type remap_v = this_row[unsigned(v0)];
             vect[i] = VECT_TYPE(remap_v);
         } // for i
     }
