@@ -545,10 +545,13 @@ public:
         : buffer_()
     {}
 
-    heap_matrix(bool init_in)
-        : buffer_(init_in ? size_in_bytes : 0)
+    /**
+        @param init_buf - when true - perform heap buffer allocation
+    */
+    heap_matrix(bool init_buf)
+        : buffer_(init_buf ? size_in_bytes : 0)
     {
-        if (init_in)
+        if (init_buf)
             buffer_.resize(size_in_bytes);
     }
 

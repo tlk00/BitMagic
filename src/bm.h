@@ -1517,12 +1517,12 @@ public:
        This is equivalent of OR (Set Union), argument set as an array.
      
        @param ids  - pointer on array of indexes to set
-       @param size - size of the input (ids)
+       @param ids_size - size of the input (ids)
        @param so   - sort order (use BM_SORTED for faster load)
      
        @sa keep, clear
     */
-    void set(const bm::id_t* ids, unsigned size, bm::sort_order so=bm::BM_UNKNOWN);
+    void set(const bm::id_t* ids, unsigned ids_size, bm::sort_order so=bm::BM_UNKNOWN);
     
     /*!
        \brief Keep list of bits in this bitset, others are cleared
@@ -1530,12 +1530,12 @@ public:
        This is equivalent of AND (Set Intersect), argument set as an array.
      
        @param ids  - pointer on array of indexes to set
-       @param size - size of the input (ids)
+       @param ids_size - size of the input (ids)
        @param so   - sort order (use BM_SORTED for faster load)
      
        @sa set, clear
     */
-    void keep(const bm::id_t* ids, unsigned size, bm::sort_order so=bm::BM_UNKNOWN);
+    void keep(const bm::id_t* ids, unsigned ids_size, bm::sort_order so=bm::BM_UNKNOWN);
 
     /*!
        \brief clear list of bits in this bitset
@@ -1543,12 +1543,12 @@ public:
        This is equivalent of AND NOT (Set Substract), argument set as an array.
      
        @param ids  - pointer on array of indexes to set
-       @param size - size of the input (ids)
+       @param ids_size - size of the input (ids)
        @param so   - sort order (use BM_SORTED for faster load)
      
        @sa set, keep
     */
-    void clear(const bm::id_t* ids, unsigned size, bm::sort_order so=bm::BM_UNKNOWN);
+    void clear(const bm::id_t* ids, unsigned ids_size, bm::sort_order so=bm::BM_UNKNOWN);
 
     
     /*!
@@ -2237,7 +2237,7 @@ protected:
         (Fast, no checks).
         @internal
     */
-    void import(const bm::id_t* ids, unsigned size,
+    void import(const bm::id_t* ids, unsigned ids_size,
                 bm::sort_order sorted_idx);
 
     void import_block(const bm::id_t* ids,
@@ -3287,14 +3287,14 @@ void bvector<Alloc>::set_bit_no_check(bm::id_t n)
 // -----------------------------------------------------------------------
 
 template<class Alloc>
-void bvector<Alloc>::set(const bm::id_t* ids, unsigned size_in, bm::sort_order so)
+void bvector<Alloc>::set(const bm::id_t* ids, unsigned ids_size, bm::sort_order so)
 {
-    if (!ids || !size_in)
+    if (!ids || !ids_size)
         return; // nothing to do
     if (!blockman_.is_init())
         blockman_.init_tree();
     
-    import(ids, size_in, so);
+    import(ids, ids_size, so);
     
     sync_size();
 }
@@ -3302,15 +3302,15 @@ void bvector<Alloc>::set(const bm::id_t* ids, unsigned size_in, bm::sort_order s
 // -----------------------------------------------------------------------
 
 template<class Alloc>
-void bvector<Alloc>::keep(const bm::id_t* ids, unsigned size_in, bm::sort_order so)
+void bvector<Alloc>::keep(const bm::id_t* ids, unsigned ids_size, bm::sort_order so)
 {
-    if (!ids || !size_in || !blockman_.is_init())
+    if (!ids || !ids_size || !blockman_.is_init())
     {
         clear();
         return;
     }
     bvector<Alloc> bv_tmp; // TODO: better optimize for SORTED case (avoid temp)
-    bv_tmp.import(ids, size_in, so);
+    bv_tmp.import(ids, ids_size, so);
 
     bm::id_t last;
     bool found = bv_tmp.find_reverse(last);
@@ -3329,14 +3329,14 @@ void bvector<Alloc>::keep(const bm::id_t* ids, unsigned size_in, bm::sort_order 
 // -----------------------------------------------------------------------
 
 template<class Alloc>
-void bvector<Alloc>::clear(const bm::id_t* ids, unsigned size_in, bm::sort_order so)
+void bvector<Alloc>::clear(const bm::id_t* ids, unsigned ids_size, bm::sort_order so)
 {
-    if (!ids || !size_in || !blockman_.is_init())
+    if (!ids || !ids_size || !blockman_.is_init())
     {
         return;
     }
     bvector<Alloc> bv_tmp; // TODO: better optimize for SORTED case (avoid temp)
-    bv_tmp.import(ids, size_in, so);
+    bv_tmp.import(ids, ids_size, so);
 
     bm::id_t last;
     bool found = bv_tmp.find_reverse(last);
