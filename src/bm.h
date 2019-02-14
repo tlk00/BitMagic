@@ -3287,14 +3287,14 @@ void bvector<Alloc>::set_bit_no_check(bm::id_t n)
 // -----------------------------------------------------------------------
 
 template<class Alloc>
-void bvector<Alloc>::set(const bm::id_t* ids, unsigned size, bm::sort_order so)
+void bvector<Alloc>::set(const bm::id_t* ids, unsigned size_in, bm::sort_order so)
 {
-    if (!ids || !size)
+    if (!ids || !size_in)
         return; // nothing to do
     if (!blockman_.is_init())
         blockman_.init_tree();
     
-    import(ids, size, so);
+    import(ids, size_in, so);
     
     sync_size();
 }
@@ -3302,15 +3302,15 @@ void bvector<Alloc>::set(const bm::id_t* ids, unsigned size, bm::sort_order so)
 // -----------------------------------------------------------------------
 
 template<class Alloc>
-void bvector<Alloc>::keep(const bm::id_t* ids, unsigned size, bm::sort_order so)
+void bvector<Alloc>::keep(const bm::id_t* ids, unsigned size_in, bm::sort_order so)
 {
-    if (!ids || !size || !blockman_.is_init())
+    if (!ids || !size_in || !blockman_.is_init())
     {
         clear();
         return;
     }
     bvector<Alloc> bv_tmp; // TODO: better optimize for SORTED case (avoid temp)
-    bv_tmp.import(ids, size, so);
+    bv_tmp.import(ids, size_in, so);
 
     bm::id_t last;
     bool found = bv_tmp.find_reverse(last);
@@ -3329,14 +3329,14 @@ void bvector<Alloc>::keep(const bm::id_t* ids, unsigned size, bm::sort_order so)
 // -----------------------------------------------------------------------
 
 template<class Alloc>
-void bvector<Alloc>::clear(const bm::id_t* ids, unsigned size, bm::sort_order so)
+void bvector<Alloc>::clear(const bm::id_t* ids, unsigned size_in, bm::sort_order so)
 {
-    if (!ids || !size || !blockman_.is_init())
+    if (!ids || !size_in || !blockman_.is_init())
     {
         return;
     }
     bvector<Alloc> bv_tmp; // TODO: better optimize for SORTED case (avoid temp)
-    bv_tmp.import(ids, size, so);
+    bv_tmp.import(ids, size_in, so);
 
     bm::id_t last;
     bool found = bv_tmp.find_reverse(last);
@@ -3420,10 +3420,10 @@ bool bvector<Alloc>::set_bit(bm::id_t n, bool val)
 // -----------------------------------------------------------------------
 
 template<class Alloc>
-void bvector<Alloc>::import(const bm::id_t* ids, unsigned size,
+void bvector<Alloc>::import(const bm::id_t* ids, unsigned size_in,
                             bm::sort_order    sorted_idx)
 {
-    bm::id_t n, nblock, start, stop = size;
+    bm::id_t n, nblock, start, stop = size_in;
     start = 0;
 
     n = ids[start];
@@ -3433,7 +3433,7 @@ void bvector<Alloc>::import(const bm::id_t* ids, unsigned size,
     {
     case BM_SORTED:
     {
-        bm::id_t nblock_end = unsigned(ids[size-1] >> bm::set_block_shift);
+        bm::id_t nblock_end = unsigned(ids[size_in-1] >> bm::set_block_shift);
         if (nblock == nblock_end) // special case: one block import
         {
             import_block(ids, nblock, 0, stop);
@@ -3449,11 +3449,11 @@ void bvector<Alloc>::import(const bm::id_t* ids, unsigned size,
         n = ids[start];
         nblock = unsigned(n >> bm::set_block_shift);
         
-        stop = bm::idx_arr_block_lookup(ids, size, nblock, start);
+        stop = bm::idx_arr_block_lookup(ids, size_in, nblock, start);
         BM_ASSERT(start < stop);
         import_block(ids, nblock, start, stop);
         start = stop;
-    } while (start < size);
+    } while (start < size_in);
 }
 
 // -----------------------------------------------------------------------
@@ -3832,13 +3832,13 @@ bool bvector<Alloc>::find_range(bm::id_t& in_first, bm::id_t& in_last) const
 //---------------------------------------------------------------------
 
 template<class Alloc>
-bool bvector<Alloc>::find_rank(bm::id_t rank, bm::id_t from, bm::id_t& pos) const
+bool bvector<Alloc>::find_rank(bm::id_t rank_in, bm::id_t from, bm::id_t& pos) const
 {
     BM_ASSERT_THROW(from < bm::id_max, BM_ERR_RANGE);
 
     bool ret = false;
     
-    if (!rank || !blockman_.is_init())
+    if (!rank_in || !blockman_.is_init())
         return ret;
     
     unsigned nb  = unsigned(from  >>  bm::set_block_shift);
@@ -3851,8 +3851,8 @@ bool bvector<Alloc>::find_rank(bm::id_t rank, bm::id_t from, bm::id_t& pos) cons
         const bm::word_t* block = blockman_.get_block(nb, &no_more_blocks);
         if (block)
         {
-            rank = bm::block_find_rank(block, rank, nbit, bit_pos);
-            if (!rank) // target found
+            rank_in = bm::block_find_rank(block, rank_in, nbit, bit_pos);
+            if (!rank_in) // target found
             {
                 pos = bit_pos + (nb * bm::set_block_size * 32);
                 return true;
@@ -3872,16 +3872,16 @@ bool bvector<Alloc>::find_rank(bm::id_t rank, bm::id_t from, bm::id_t& pos) cons
 //---------------------------------------------------------------------
 
 template<class Alloc>
-bool bvector<Alloc>::find_rank(bm::id_t rank, bm::id_t from, bm::id_t& pos,
+bool bvector<Alloc>::find_rank(bm::id_t rank_in, bm::id_t from, bm::id_t& pos,
                                const rs_index_type&  blocks_cnt) const
 {
     BM_ASSERT_THROW(from < bm::id_max, BM_ERR_RANGE);
 
     bool ret = false;
     
-    if (!rank ||
+    if (!rank_in ||
         !blockman_.is_init() ||
-        (blocks_cnt.bcount[blocks_cnt.total_blocks-1] < rank))
+        (blocks_cnt.bcount[blocks_cnt.total_blocks-1] < rank_in))
         return ret;
     
     unsigned nb;
@@ -3889,10 +3889,10 @@ bool bvector<Alloc>::find_rank(bm::id_t rank, bm::id_t from, bm::id_t& pos,
         nb = unsigned(from >> bm::set_block_shift);
     else
     {
-        nb = bm::lower_bound(blocks_cnt.bcount, rank, 0, blocks_cnt.total_blocks-1);
-        BM_ASSERT(blocks_cnt.bcount[nb] >= rank);
+        nb = bm::lower_bound(blocks_cnt.bcount, rank_in, 0, blocks_cnt.total_blocks-1);
+        BM_ASSERT(blocks_cnt.bcount[nb] >= rank_in);
         if (nb)
-            rank -= blocks_cnt.bcount[nb-1];
+            rank_in -= blocks_cnt.bcount[nb-1];
     }
     
     bm::gap_word_t nbit = bm::gap_word_t(from & bm::set_block_mask);
@@ -3907,20 +3907,20 @@ bool bvector<Alloc>::find_rank(bm::id_t rank, bm::id_t from, bm::id_t& pos,
             if (!nbit) // check if the whole block can be skipped
             {
                 unsigned block_bc = blocks_cnt.count(nb);
-                if (rank <= block_bc) // target block
+                if (rank_in <= block_bc) // target block
                 {
-                    nbit = blocks_cnt.select_sub_range(nb, rank);
-                    rank = bm::block_find_rank(block, rank, nbit, bit_pos);
-                    BM_ASSERT(rank == 0);
+                    nbit = blocks_cnt.select_sub_range(nb, rank_in);
+                    rank_in = bm::block_find_rank(block, rank_in, nbit, bit_pos);
+                    BM_ASSERT(rank_in == 0);
                     pos = bit_pos + (nb * bm::set_block_size * 32);
                     return true;
                 }
-                rank -= block_bc;
+                rank_in -= block_bc;
                 continue;
             }
 
-            rank = bm::block_find_rank(block, rank, nbit, bit_pos);
-            if (!rank) // target found
+            rank_in = bm::block_find_rank(block, rank_in, nbit, bit_pos);
+            if (!rank_in) // target found
             {
                 pos = bit_pos + (nb * bm::set_block_size * 32);
                 return true;
@@ -3940,33 +3940,33 @@ bool bvector<Alloc>::find_rank(bm::id_t rank, bm::id_t from, bm::id_t& pos,
 //---------------------------------------------------------------------
 
 template<class Alloc>
-bool bvector<Alloc>::select(bm::id_t rank, bm::id_t& pos,
+bool bvector<Alloc>::select(bm::id_t rank_in, bm::id_t& pos,
                             const rs_index_type&  blocks_cnt) const
 {
     bool ret = false;
     
-    if (!rank ||
+    if (!rank_in ||
         !blockman_.is_init() ||
-        (blocks_cnt.bcount[bm::set_total_blocks-1] < rank))
+        (blocks_cnt.bcount[bm::set_total_blocks-1] < rank_in))
         return ret;
     
     unsigned nb;
     
-    nb = bm::lower_bound(blocks_cnt.bcount, rank, 0, blocks_cnt.total_blocks-1);
-    BM_ASSERT(blocks_cnt.bcount[nb] >= rank);
+    nb = bm::lower_bound(blocks_cnt.bcount, rank_in, 0, blocks_cnt.total_blocks-1);
+    BM_ASSERT(blocks_cnt.bcount[nb] >= rank_in);
     if (nb)
-        rank -= blocks_cnt.bcount[nb-1];
+        rank_in -= blocks_cnt.bcount[nb-1];
     
     const bm::word_t* block = blockman_.get_block_ptr(nb);
     block = BLOCK_ADDR_SAN(block);
 
     BM_ASSERT(block);
-    BM_ASSERT(rank <= blocks_cnt.count(nb));
+    BM_ASSERT(rank_in <= blocks_cnt.count(nb));
     
-    bm::gap_word_t nbit = blocks_cnt.select_sub_range(nb, rank);
+    bm::gap_word_t nbit = blocks_cnt.select_sub_range(nb, rank_in);
     unsigned bit_pos = 0;
-    rank = bm::block_find_rank(block, rank, nbit, bit_pos);
-    BM_ASSERT(rank == 0);
+    rank_in = bm::block_find_rank(block, rank_in, nbit, bit_pos);
+    BM_ASSERT(rank_in == 0);
     pos = bit_pos + (nb * bm::set_block_size * 32);
     return true;
 }
