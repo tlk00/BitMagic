@@ -15358,24 +15358,24 @@ void TestStrSparseVector()
        // test string insert
        {
           str_sparse_vector<char, bvect, 3> str_sv10;
-          const char* s0 = "10";
-          const char* s2 = "30";
-          const char* s1 = "200";
+          const char* cs0 = "10";
+          const char* cs2 = "30";
+          const char* cs1 = "200";
           
-          str_sv10.push_back(s0);
-          str_sv10.push_back(s1);
-          str_sv10.insert(1, s2);
+          str_sv10.push_back(cs0);
+          str_sv10.push_back(cs1);
+          str_sv10.insert(1, cs2);
 
            str_sv10.get(0, str, sizeof(str));
-           cmp = ::strcmp(str, s0);
+           cmp = ::strcmp(str, cs0);
            assert(cmp == 0);
            
            str_sv10.get(1, str, sizeof(str));
-           cmp = ::strcmp(str, s2);
+           cmp = ::strcmp(str, cs2);
            assert(cmp == 0);
 
            str_sv10.get(2, str, sizeof(str));
-           cmp = ::strcmp(str, s1);
+           cmp = ::strcmp(str, cs1);
            assert(cmp == 0);
        }
 
@@ -16065,7 +16065,7 @@ void TestStrSparseSort()
         auto it = std::lower_bound(str_coll.begin(), str_coll.end(), str);
         if (it != str_coll.end())
         {
-            unsigned idx = it - str_coll.begin();
+            unsigned idx = unsigned(it - str_coll.begin());
             const string& s0 = str_coll[idx];
             
             if (s0 == str)

@@ -263,7 +263,7 @@ public:
         if (idx >= this->size())
             this->size_ = idx+1;
 
-        size_type str_size = str.size();
+        size_type str_size = size_type(str.size());
         size_type sz = size_type((str_size < MAX_STR_SIZE) ? str_size : MAX_STR_SIZE-1);
         if (!sz)
         {
