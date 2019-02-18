@@ -2189,10 +2189,11 @@ unsigned gap_buff_count_op(const T*  vect1, const T*  vect2, F f)
 
    @ingroup gapfunc
 */
-template<typename T> unsigned gap_set_value(unsigned val, 
-                                            T* BMRESTRICT buf, 
-                                            unsigned pos, 
-                                            unsigned* BMRESTRICT is_set)
+template<typename T>
+unsigned gap_set_value(unsigned val,
+                       T* BMRESTRICT buf,
+                       unsigned pos,
+                       unsigned* BMRESTRICT is_set)
 {
     BM_ASSERT(pos < bm::gap_max_bits);
     unsigned curr = gap_bfind(buf, pos, is_set);
@@ -2352,6 +2353,59 @@ unsigned gap_add_value(T* buf, unsigned pos)
 
     buf[end] = bm::gap_max_bits - 1;
     return end;
+}
+
+/*!
+    @brief Right shift GAP block by 1 bit
+    @param buf - block pointer
+    @param co_falg - carry over from the previous block
+ 
+    @return carry over bit (1 or 0)
+    @ingroup gapfunc
+*/
+template<typename T>
+bool gap_shift_r1(T* buf, unsigned co_flag, unsigned* new_len)
+{
+    BM_ASSERT(new_len);
+    bool co;
+    // 1: increment all GAP values by 1
+    {
+        unsigned bitval = *buf & 1;
+        if (buf[1] == bm::gap_max_bits-1) // full GAP block
+        {
+            co = bitval;
+        }
+        else
+        {
+            unsigned len = (*buf >> 3);
+            unsigned i = 1;
+            for (; i < len; ++i)
+            {
+                buf[i] += 1;
+                bitval ^= 1;
+            } // for i
+            BM_ASSERT(buf[i] == bm::gap_max_bits-1);
+            if (buf[i-1] == bm::gap_max_bits-1) // last element shifts out
+            {
+                // Set correct length word
+                --len;
+                *buf = (T)((*buf & 7) + (len << 3));
+            }
+            co = bitval;
+        }
+    }
+/*
+    unsigned start_bitval = *buf & 1;
+    if (co == start_bitval) // nothing to do
+    {
+        *new_len = (*buf >> 3);
+    }
+    else */// set bit position 0 with carry-in flag
+    {
+        unsigned is_set;
+        *new_len = bm::gap_set_value(co_flag, buf, 0, &is_set);
+    }
+    return co;
 }
 
 /*!
@@ -4089,7 +4143,7 @@ bm::word_t bit_block_insert(bm::word_t* block, unsigned bitpos, bool value)
 }
 
 /*!
-    @brief Right bit-shift of bit-block by 1 bit (reference)
+    @brief Right bit-shift bitblock by 1 bit (reference)
     @param block - bit-block pointer
     @param empty_acc - [out] contains 0 if block is empty
     @param co_flag - carry over from the previous block
@@ -4213,7 +4267,7 @@ bool bit_block_shift_r1_and(bm::word_t* BMRESTRICT block,
 }
 
 /*!
-    @brief Right bit-shift of bit-block by 1 bit (reference) + AND
+    @brief Right bit-shift bitblock by 1 bit (reference) + AND
     @param block      - bit-block pointer
     @param co_flag    - carry over from the previous block
     @param mask_block - mask bit-block pointer

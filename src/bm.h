@@ -4160,7 +4160,9 @@ bool bvector<Alloc>::insert(bm::id_t n, bool value)
     int block_type;
     bm::word_t carry_over = 0;
     
-    // process target block insertion
+    if (!n && !value) // regular shift-right by 1 bit
+    {}
+    else // process target block insertion
     {
         bm::word_t* block = blockman_.get_block_ptr(nb);
         if (!block && !value) // nothing to do
@@ -4172,20 +4174,12 @@ bool bvector<Alloc>::insert(bm::id_t n, bool value)
             if (BM_IS_GAP(block) || IS_FULL_BLOCK(block))
                 block = blockman_.deoptimize_block(nb);
             BM_ASSERT(IS_VALID_ADDR(block));
-
-            if (!n && !value)
-            {
-                bm::word_t acc;
-                carry_over = bm::bit_block_shift_r1_unr(block, &acc, carry_over);
-                if (!acc)
-                    blockman_.zero_block(nb);
-            }
-            else
             {
                 unsigned nbit  = unsigned(n & bm::set_block_mask);
                 carry_over = bm::bit_block_insert(block, nbit, value);
             }
         }
+        ++nb;
     }
     
     unsigned i0, j0;
@@ -4230,24 +4224,17 @@ bool bvector<Alloc>::insert(bm::id_t n, bool value)
             continue;
         }
         
-        unsigned j = 0;
+        unsigned j = j0;
         do
         {
             unsigned nblock = (i * bm::set_array_size) + j;
-            if (nblock <= nb) // quickly skip to block next to target, shift
-            {
-                j = j0;
-                continue;
-            }
             block = blk_blk[j];
             if (!block)
             {
                 if (carry_over)
                 {
-                    block =
-                    blockman_.check_allocate_block(nblock, 0, 0, &block_type, false);
-                    blk_blk = blk_root[i];
-                    block[0] |= carry_over;   // block is brand new (0000)
+                    bm::id_t nbit = nblock * bm::gap_max_bits;
+                    set_bit_no_check(nbit);
                     carry_over = 0; block = 0;
                 }
                 // no CO: tight loop scan for the next available block (if any)
@@ -4273,25 +4260,47 @@ bool bvector<Alloc>::insert(bm::id_t n, bool value)
                 }
                 continue;
             }
-            if (BM_IS_GAP(block)) // TODO: implement true GAP shift
-                block = blockman_.deoptimize_block(nblock);
-            
-            bm::word_t acc;
-            carry_over = bm::bit_block_shift_r1_unr(block, &acc, carry_over);
-            BM_ASSERT(carry_over <= 1);
-            
-            if (nblock == bm::set_total_blocks-1) // last possible block
+            if (BM_IS_GAP(block))
             {
-                carry_over = block[bm::set_block_size-1] & (1u<<31);
-                block[bm::set_block_size-1] &= ~(1u<<31); // clear the 1-bit tail
-                if (!acc) // block shifted out: release memory
-                    blockman_.zero_block(nblock);
-                break;
+                if (nblock == bm::set_total_blocks-1) // last block
+                {
+                    // process as a bit-block (for simplicity)
+                    block = blockman_.deoptimize_block(nblock);
+                }
+                else // use gap-block shift here
+                {
+                    unsigned new_block_len;
+                    bm::gap_word_t* gap_blk = BMGAP_PTR(block);
+
+                    carry_over = bm::gap_shift_r1(gap_blk, carry_over, &new_block_len);
+                    unsigned threshold =  bm::gap_limit(gap_blk, blockman_.glen());
+                    if (new_block_len > threshold)
+                    {
+                        extend_gap_block(nblock, gap_blk);
+                    }
+                    continue;
+                }
             }
-            if (!acc)
-                blockman_.zero_block(nblock);
+            // bit-block
+            {
+                bm::word_t acc;
+                carry_over = bm::bit_block_shift_r1_unr(block, &acc, carry_over);
+                BM_ASSERT(carry_over <= 1);
+                
+                if (nblock == bm::set_total_blocks-1) // last possible block
+                {
+                    carry_over = block[bm::set_block_size-1] & (1u<<31);
+                    block[bm::set_block_size-1] &= ~(1u<<31); // clear the 1-bit tail
+                    if (!acc) // block shifted out: release memory
+                        blockman_.zero_block(nblock);
+                    break;
+                }
+                if (!acc)
+                    blockman_.zero_block(nblock);
+            }
             
         } while (++j < bm::set_array_size);
+        j0 = 0;
     } // for i
     return carry_over;
 
