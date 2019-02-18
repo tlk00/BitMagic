@@ -657,6 +657,7 @@ void str_sparse_vector<CharType, BV, MAX_STR_SIZE>::insert(
         return;
     }
     insert_value(idx, str);
+    this->size_++;
 }
 
 //---------------------------------------------------------------------
