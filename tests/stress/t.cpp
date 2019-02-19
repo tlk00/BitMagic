@@ -3556,14 +3556,27 @@ void BvectorShiftTest()
     print_bv(bv);
     assert(bv.count()==0);
     }
+    
+    {
+    bvect bv(BM_GAP);
+    
+    bv.set(bm::id_max-1);
+    bv.optimize();
+    bv.shift_right();
+    assert(bv.count()==0);
+    }
 
     {
     bvect bv;
-    
+
     bv.set(0);
     bv.set(65535);
     bv.set(bm::id_max-1);
     bvect bv1(bv);
+    
+    bvect bv2(bm::BM_GAP);
+    bv2 = bv;
+    bv2.optimize();
 
     ShiftRight(&bv, 1);
     assert(bv.count() == 2);
@@ -3573,10 +3586,45 @@ void BvectorShiftTest()
     bv1.shift_right();
     print_bv(bv1);
     int cmp = bv.compare(bv1);
-    
     assert(cmp == 0);
+    
+    bv2.shift_right();
+    print_bv(bv2);
+    cmp = bv.compare(bv2);
+    assert(cmp == 0);
+    struct bvect::statistics st;
+    bv2.calc_stat(&st);
+    assert(st.gap_blocks >= 2);
+
     }
     
+    {
+    bvect bv(BM_GAP);
+    struct bvect::statistics st;
+    
+    for (unsigned i = 0; i < 65536; ++i)
+    {
+        bv.set(i);
+    }
+    bv.calc_stat(&st);
+    assert(st.gap_blocks == 1);
+    
+    auto cnt = bv.count();
+    bv.shift_right();
+    assert(bv.test(0)==0);
+    assert(bv.count() == cnt);
+    
+    bv.calc_stat(&st);
+    auto bcnt = st.bit_blocks + st.gap_blocks;
+    assert(bcnt == 2);
+    assert(st.gap_blocks);
+    for (unsigned i = 0+1; i < 65536+1; ++i)
+    {
+        assert(bv.test(i));
+    }
+    }
+
+
     {
     bvect bv;
     bv.invert();
@@ -3766,6 +3814,7 @@ void BvectorInsertTest()
         assert(cmp == 0);
 
         bv1.insert(65535, true);
+        print_bv(bv1);
         cmp = bv1.compare(bv_c);
         assert(cmp == 0);
     }
@@ -3815,12 +3864,25 @@ void BvectorInsertTest()
         unsigned max_shifts = 10000;
         for (unsigned i = 0; i < max_shifts; ++i)
         {
+            bvect bv2(bm::BM_GAP);
+            bv2 = bv_control;
+            bv2.optimize();
+            
             unsigned i_pos = rand()%40000000;
             
             BVectorInsert(&bv_control, i_pos, i & 1u);
             bv.insert(i_pos, i & 1u);
             int cmp = bv.compare(bv_control);
+            if (cmp != 0)
+            {
+                DetailedCompareBVectors(bv, bv_control);
+            }
             assert(cmp==0);
+            
+            bv2.insert(i_pos, i & 1u);
+            cmp = bv2.compare(bv_control);
+            assert(cmp==0);
+            
             if ((i % 16) == 0)
             {
                 cout << "\r" << i << "/" << max_shifts << flush;
@@ -16027,65 +16089,193 @@ static
 void TestStrSparseSort()
 {
    cout << "---------------------------- Bit-plain STR sparse vector SORT test" << endl;
-   const unsigned max_coll = 2000000;
-   
-   std::vector<string> str_coll;
-   str_svect_type      str_sv_sorted;
+   const unsigned max_coll = 260000;
 
-    // generate sorted vector
-    string str;
-    for (unsigned i = 10; i < max_coll; i+=10)
-    {
-        str = to_string(i);
-        str_coll.emplace_back(str);
-    } // for i
-    std::sort(str_coll.begin(), str_coll.end());
-    for (const string& s : str_coll)
-    {
-        str_sv_sorted.push_back(s);
-    } // for s
-    str_sv_sorted.optimize();
-    
-    // run lower bound tests
-    bm::sparse_vector_scanner<str_svect_type> scanner;
+   {
+       std::vector<string> str_coll;
+       str_svect_type      str_sv_sorted;
 
-    for (unsigned i = 0; i < max_coll; ++i)
-    {
-        str = to_string(i);
-
-        unsigned pos;
-        bool found = scanner.lower_bound_str(str_sv_sorted, str.c_str(), pos);
-        string s1;
-        if (found)
+        // generate sorted vector
+        string str;
+        for (unsigned i = 10; i < max_coll; i+=10)
         {
-            str_sv_sorted.get(pos, s1);
-            assert(s1 == str);
-        }
-        
-        auto it = std::lower_bound(str_coll.begin(), str_coll.end(), str);
-        if (it != str_coll.end())
+            str = to_string(i);
+            str_coll.emplace_back(str);
+        } // for i
+        std::sort(str_coll.begin(), str_coll.end());
+        for (const string& s : str_coll)
         {
-            unsigned idx = unsigned(it - str_coll.begin());
-            const string& s0 = str_coll[idx];
-            
-            if (s0 == str)
+            str_sv_sorted.push_back(s);
+        } // for s
+        str_sv_sorted.optimize();
+       
+        // run lower bound tests
+        bm::sparse_vector_scanner<str_svect_type> scanner;
+
+        for (unsigned i = 0; i < max_coll; ++i)
+        {
+            str = to_string(i);
+
+            unsigned pos;
+            bool found = scanner.lower_bound_str(str_sv_sorted, str.c_str(), pos);
+            string s1;
+            if (found)
             {
-                assert(found);
-                assert(pos == idx);
-            }
-            else
-            {
-                assert(!found);
                 str_sv_sorted.get(pos, s1);
-                
-                assert(pos == idx);
+                assert(s1 == str);
             }
-        }
-        if (i % 2048 == 0)
-            cout << "\r" << i << "/" << max_coll << flush;
+            
+            auto it = std::lower_bound(str_coll.begin(), str_coll.end(), str);
+            if (it != str_coll.end())
+            {
+                unsigned idx = unsigned(it - str_coll.begin());
+                const string& s0 = str_coll[idx];
+                
+                if (s0 == str)
+                {
+                    assert(found);
+                    assert(pos == idx);
+                }
+                else
+                {
+                    assert(!found);
+                    str_sv_sorted.get(pos, s1);
+                    
+                    assert(pos == idx);
+                }
+            }
+            if (i % 4096 == 0)
+                cout << "\r" << i << "/" << max_coll << flush;
 
-    } // for
-    cout << "\n";
+        } // for
+        cout << "\n";
+    }
+
+    cout << "insertion sort test data generation.." << endl;
+    // insertion sort stress test
+    {
+       std::vector<string> str_coll;
+        // generate test values vector
+        string str;
+        for (unsigned i = 0; i < max_coll; )
+        {
+            str = to_string(i);
+            str_coll.emplace_back(str);
+            i += rand() % 3;
+        } // for i
+        
+        // shuffle the data set
+        {
+            std::random_device rd;
+            std::mt19937       g(rd());
+            std::shuffle(str_coll.begin(), str_coll.end(), g);
+        }
+
+        // insertion sort
+        str_svect_type      str_sv_sorted;
+        
+        cout << "\ninsertion sort..." << endl;
+        {
+        unsigned i = 0;
+        bm::sparse_vector_scanner<str_svect_type> scanner;
+        for (const string& s : str_coll)
+        {
+            unsigned pos;
+            bool found = scanner.lower_bound_str(str_sv_sorted, s.c_str(), pos);
+
+            auto sz1 = str_sv_sorted.size();
+            
+            str_sv_sorted.insert(pos, s.c_str());
+            
+            auto sz2 = str_sv_sorted.size();
+            assert(sz1 + 1 == sz2);
+
+            {
+                string str_sv;
+                str_sv_sorted.get(pos, str_sv);
+                assert(s == str_sv);
+            }
+            
+            if (pos)
+            {
+                string str_prev;
+                str_sv_sorted.get(pos-1, str_prev);
+                if (str_prev >= s)
+                {
+                    cerr << "insertion sort sort order check failed! "
+                         << " i = " << i
+                         << "s=" << s << " prev=" << str_prev
+                         << endl;
+                    
+                    exit(1);
+                }
+            }
+            
+            {
+                unsigned pos2;
+                found = scanner.lower_bound_str(str_sv_sorted, s.c_str(), pos2);
+                if (!found)
+                {
+                    cerr << "control loss at " << i << " " << s << endl;
+                    exit(1);
+                }
+                assert(pos == pos2);
+            }
+
+            
+            if (i % 4096 == 0)
+                cout << "\r" << i << "/" << max_coll << flush;
+            ++i;
+        } // for s
+        }
+        cout << endl;
+        
+        cout << "sort validation.." << endl;
+        std::sort(str_coll.begin(), str_coll.end());
+        unsigned i = 0;
+        string str_prev;
+        for (const string& s : str_coll)
+        {
+            string sv_str;
+            str_sv_sorted.get(i, sv_str);
+            if (i)
+            {
+                if (str_prev > sv_str)
+                {
+                    cerr << "Sort order violation!" << endl;
+                    exit(1);
+                }
+            }
+            //cout << s << " = " << sv_str << endl;
+            if (s != sv_str)
+            {
+                cerr << "Sort comparison failed at i=" << i << " s=" << s
+                     << " sv_str = " << sv_str << endl;
+                
+                bm::sparse_vector_scanner<str_svect_type> scanner;
+                unsigned pos;
+                bool found = scanner.lower_bound_str(str_sv_sorted, s.c_str(), pos);
+                
+                if (!found)
+                {
+                    cerr << s << " not found in target." << endl;
+                }
+                else
+                {
+                    cerr << s << " is at idx=" << pos << endl;
+                }
+
+                exit(1);
+            }
+            str_prev = sv_str;
+            ++i;
+        } // for s
+
+
+    }
+    
+    
+    
    cout << "---------------------------- Bit-plain STR sparse vector SORT test OK" << endl;
 
 }
@@ -19149,7 +19339,7 @@ int main(void)
      BvectorBulkSetTest();
 
      BvectorShiftTest();
- 
+
      BvectorInsertTest();
     
      ClearAllTest();
