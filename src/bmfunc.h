@@ -2381,7 +2381,7 @@ bool gap_shift_r1(T* buf, unsigned co_flag, unsigned* new_len)
             unsigned i = 1;
             for (; i < len; ++i)
             {
-                buf[i] += 1;
+                buf[i]++;
                 bitval ^= 1;
             } // for i
             BM_ASSERT(buf[i] == bm::gap_max_bits-1);
@@ -2394,13 +2394,7 @@ bool gap_shift_r1(T* buf, unsigned co_flag, unsigned* new_len)
             co = bitval;
         }
     }
-/*
-    unsigned start_bitval = *buf & 1;
-    if (co == start_bitval) // nothing to do
-    {
-        *new_len = (*buf >> 3);
-    }
-    else */// set bit position 0 with carry-in flag
+    // set bit position 0 with carry-in flag
     {
         unsigned is_set;
         *new_len = bm::gap_set_value(co_flag, buf, 0, &is_set);
