@@ -16090,7 +16090,7 @@ void TestStrSparseSort()
 {
    cout << "---------------------------- Bit-plain STR sparse vector SORT test" << endl;
    const unsigned max_coll = 560000;
-/*
+
    {
        std::vector<string> str_coll;
        str_svect_type      str_sv_sorted;
@@ -16150,7 +16150,7 @@ void TestStrSparseSort()
         } // for
         cout << "\n";
     }
-*/
+
     cout << "insertion sort test data generation.." << endl;
     // insertion sort stress test
     {
