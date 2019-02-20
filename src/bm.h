@@ -4246,7 +4246,7 @@ bool bvector<Alloc>::insert(bm::id_t n, bool value)
                         break;
                     }
                 } // for j
-                if (!block)
+                if (!block) // no more blocks in this j-dimention
                     continue;
             }
             if (IS_FULL_BLOCK(block))
