@@ -16089,8 +16089,8 @@ static
 void TestStrSparseSort()
 {
    cout << "---------------------------- Bit-plain STR sparse vector SORT test" << endl;
-   const unsigned max_coll = 260000;
-
+   const unsigned max_coll = 560000;
+/*
    {
        std::vector<string> str_coll;
        str_svect_type      str_sv_sorted;
@@ -16150,7 +16150,7 @@ void TestStrSparseSort()
         } // for
         cout << "\n";
     }
-
+*/
     cout << "insertion sort test data generation.." << endl;
     // insertion sort stress test
     {
@@ -16176,57 +16176,70 @@ void TestStrSparseSort()
         
         cout << "\ninsertion sort..." << endl;
         {
-        unsigned i = 0;
-        bm::sparse_vector_scanner<str_svect_type> scanner;
-        for (const string& s : str_coll)
-        {
-            unsigned pos;
-            bool found = scanner.lower_bound_str(str_sv_sorted, s.c_str(), pos);
+        std::chrono::time_point<std::chrono::steady_clock> st;
+        st = std::chrono::steady_clock::now();
 
-            auto sz1 = str_sv_sorted.size();
-            
-            str_sv_sorted.insert(pos, s.c_str());
-            
-            auto sz2 = str_sv_sorted.size();
-            assert(sz1 + 1 == sz2);
+            unsigned i = 0;
+            bm::sparse_vector_scanner<str_svect_type> scanner;
+            for (const string& s : str_coll)
+            {
+                unsigned pos;
+                bool found = scanner.lower_bound_str(str_sv_sorted, s.c_str(), pos);
 
-            {
-                string str_sv;
-                str_sv_sorted.get(pos, str_sv);
-                assert(s == str_sv);
-            }
-            
-            if (pos)
-            {
-                string str_prev;
-                str_sv_sorted.get(pos-1, str_prev);
-                if (str_prev >= s)
+                auto sz1 = str_sv_sorted.size();
+                
+                str_sv_sorted.insert(pos, s.c_str());
+                
+                auto sz2 = str_sv_sorted.size();
+                assert(sz1 + 1 == sz2);
+
                 {
-                    cerr << "insertion sort sort order check failed! "
-                         << " i = " << i
-                         << "s=" << s << " prev=" << str_prev
-                         << endl;
+                    string str_sv;
+                    str_sv_sorted.get(pos, str_sv);
+                    assert(s == str_sv);
+                }
+                
+                if (pos)
+                {
+                    string str_prev;
+                    str_sv_sorted.get(pos-1, str_prev);
+                    if (str_prev >= s)
+                    {
+                        cerr << "insertion sort sort order check failed! "
+                             << " i = " << i
+                             << "s=" << s << " prev=" << str_prev
+                             << endl;
+                        
+                        exit(1);
+                    }
+                }
+                
+                {
+                    unsigned pos2;
+                    found = scanner.lower_bound_str(str_sv_sorted, s.c_str(), pos2);
+                    if (!found)
+                    {
+                        cerr << "control loss at " << i << " " << s << endl;
+                        exit(1);
+                    }
+                    assert(pos == pos2);
+                }
+
+                
+                if (i % 8096 == 0)
+                {
+                    std::chrono::time_point<std::chrono::steady_clock> f = std::chrono::steady_clock::now();
+                    auto diff = f - st;
+                    auto d = std::chrono::duration <double, std::milli> (diff).count();
+
+                    cout << "\r" << i << "/" << max_coll << " (" << d << "ms)" << flush;
                     
-                    exit(1);
+                    str_sv_sorted.optimize();
+                    
+                    st = std::chrono::steady_clock::now();
                 }
-            }
-            
-            {
-                unsigned pos2;
-                found = scanner.lower_bound_str(str_sv_sorted, s.c_str(), pos2);
-                if (!found)
-                {
-                    cerr << "control loss at " << i << " " << s << endl;
-                    exit(1);
-                }
-                assert(pos == pos2);
-            }
-
-            
-            if (i % 4096 == 0)
-                cout << "\r" << i << "/" << max_coll << flush;
-            ++i;
-        } // for s
+                ++i;
+            } // for s
         }
         cout << endl;
         
