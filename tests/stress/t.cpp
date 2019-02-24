@@ -15440,6 +15440,68 @@ void TestStrSparseVector()
            cmp = ::strcmp(str, cs1);
            assert(cmp == 0);
        }
+       
+       // test decode
+       {
+          str_sparse_vector<char, bvect, 3> str_sv10;
+          const char* cs0 = "10";
+          const char* cs1 = "200";
+          const char* cs2 = "30";
+          str_sv10.push_back(cs0);
+          str_sv10.push_back(cs1);
+          str_sv10.push_back(cs2);
+          
+          bm::heap_matrix<char, 1024, 64, bvect::allocator_type> hmatr(true);
+          
+          unsigned d = 0;
+          char *s;
+          
+          d = str_sv10.decode(hmatr, 0, 1);
+          s = hmatr.row(0);
+          cmp = ::strcmp(s, cs0);
+          assert(cmp == 0);
+          assert(d == 1);
+
+          d = str_sv10.decode(hmatr, 1, 1);
+          s = hmatr.row(0);
+          cmp = ::strcmp(s, cs1);
+          assert(cmp == 0);
+          assert(d == 1);
+
+          d = str_sv10.decode(hmatr, 2, 1);
+          s = hmatr.row(0);
+          cmp = ::strcmp(s, cs2);
+          assert(cmp == 0);
+          assert(d == 1);
+          
+          // decode beyond limit
+          d = str_sv10.decode(hmatr, 3, 1);
+          s = hmatr.row(0);
+          assert(*s == 0);
+          assert(d == 0);
+          
+          d = str_sv10.decode(hmatr, 0, 100000);
+          assert(d == str_sv10.size());
+          s = hmatr.row(0);
+          cmp = ::strcmp(s, cs0);
+          assert(cmp == 0);
+          s = hmatr.row(1);
+          cmp = ::strcmp(s, cs1);
+          assert(cmp == 0);
+          s = hmatr.row(2);
+          cmp = ::strcmp(s, cs2);
+          assert(cmp == 0);
+
+          d = str_sv10.decode(hmatr, 1, 100000);
+          assert(d == str_sv10.size()-1);
+          s = hmatr.row(0);
+          cmp = ::strcmp(s, cs1);
+          assert(cmp == 0);
+          s = hmatr.row(1);
+          cmp = ::strcmp(s, cs2);
+          assert(cmp == 0);
+
+       }
 
 
        // reference test / serialization test
@@ -15620,6 +15682,20 @@ void TestStrSparseVector()
         cmp = str_sv1.compare(0, "1");
         assert(cmp==0);
        
+        bm::heap_matrix<char, 1024, 64, bvect::allocator_type> hmatr(true);
+
+        // test remap decoder
+        {
+          unsigned d = 0;
+          char *s;
+          
+          d = str_sv1.decode(hmatr, 0, 1);
+          s = hmatr.row(0);
+          cmp = ::strcmp(s, "1");
+          assert(cmp == 0);
+          assert(d == 1);
+        }
+       
         str_sv1.get(1, str, sizeof(str));
         cmp = ::strcmp(str, "11");
         assert(cmp==0);
@@ -15629,7 +15705,19 @@ void TestStrSparseVector()
         str_sv1.get(2, str, sizeof(str));
         cmp = ::strcmp(str, "123");
         assert(cmp==0);
-       
+
+        // test remap decoder
+        {
+          unsigned d = 0;
+          char *s;
+          
+          d = str_sv1.decode(hmatr, 2, 1);
+          s = hmatr.row(0);
+          cmp = ::strcmp(s, "123");
+          assert(cmp == 0);
+          assert(d == 1);
+        }
+
         string s;
         str_sv1.get(2, s);
         cmp = ::strcmp(s.c_str(), "123");
@@ -16115,7 +16203,7 @@ void TestStrSparseSort()
         for (unsigned i = 0; i < max_coll; ++i)
         {
             str = to_string(i);
-
+            
             unsigned pos;
             bool found = scanner.lower_bound_str(str_sv_sorted, str.c_str(), pos);
             string s1;
@@ -19281,7 +19369,8 @@ int main(void)
 */
 
 //avx2_i32_shift();
-//return 0; 
+//return 0;
+
 
     TestRecomb();
 
