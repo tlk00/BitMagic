@@ -528,7 +528,77 @@ public:
     void recalc_remap_matrix2();
 
     ///@}
+    
+    // ------------------------------------------------------------
+    /*! @name Export content to C-style                          */
+    ///@{
+    
+    /**
+        \brief Bulk export strings to a C-style matrix of chars
+     
+        \param cmatr  - dest matrix (bm::heap_matrix)
+        \param idx_from - index in the sparse vector to export from
+        \param dec_size - decoding size (matrix column allocation should match)
+        \param zero_mem - set to false if target array is pre-initialized
+                          with 0s to avoid performance penalty
+     
+        \return number of actually exported elements (can be less than requested)
+    */
+    template<typename CharMatrix>
+    size_type decode(CharMatrix& cmatr,
+                     size_type   idx_from,
+                     size_type   dec_size,
+                     bool        zero_mem = true) const
+    {
+        BM_ASSERT(cmatr.is_init());
+        if (zero_mem)
+            cmatr.set_zero();
+        
+        size_type rows = cmatr.rows();
+        BM_ASSERT(cmatr.cols() >= MAX_STR_SIZE);
+        size_type max_sz = this->size() - idx_from;
+        if (max_sz < dec_size)
+            dec_size = max_sz;
+        if (rows < dec_size)
+            dec_size = rows;
+        if (!dec_size)
+            return dec_size;
+        
+        for (unsigned i = 0; i < MAX_STR_SIZE; ++i)
+        {
+            unsigned bi = 0;
+            for (unsigned k = i * 8; k < (i * 8) + 8; ++k, ++bi)
+            {
+                const bvector_type* bv = this->bmatr_.get_row(k);
+                if (!bv)
+                    continue;
+                value_type mask = value_type(1u << bi);
+                typename bvector_type::enumerator en(bv, idx_from);
+                for ( ;en.valid(); ++en )
+                {
+                    size_type idx = *en - idx_from;
+                    if (idx >= dec_size)
+                        break;
+                    typename CharMatrix::value_type* str = cmatr.row(idx);
+                    str[i] |= mask;
+                } // for en
+            } // for k
+        } // for i
+        
+        if (remap_flags_)
+        {
+            for (unsigned i = 0; i < dec_size; ++i)
+            {
+                typename CharMatrix::value_type* str = cmatr.row(i);
+                remap_matrix1_.remapz(str);
+            } // for i
+        }
+        
+        return dec_size;
+    }
 
+
+    ///@}
 
     // ------------------------------------------------------------
 

@@ -51,7 +51,6 @@ template<class Val, class SV>
 class rsc_sparse_vector
 {
 public:
-
     enum bit_plains
     {
         sv_plains = (sizeof(Val) * 8 + 1),
@@ -390,6 +389,11 @@ public:
     ///@}
     
 protected:
+    enum octet_plains
+    {
+        sv_octet_plains = sizeof(value_type)
+    };
+
     /*!
         \brief Resolve logical address to access via rank compressed address
      

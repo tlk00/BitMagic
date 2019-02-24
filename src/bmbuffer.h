@@ -562,6 +562,11 @@ public:
     {
         buffer_.resize(size_in_bytes);
     }
+    
+    bool is_init() const
+    {
+        return buffer_.size();
+    }
 
     value_type get(unsigned row_idx, unsigned col_idx) const
     {
@@ -619,12 +624,30 @@ public:
     template<typename VECT_TYPE>
     void remap(VECT_TYPE* vect, size_type size) const
     {
-        BM_ASSERT(size < ROWS);
+        BM_ASSERT(size <= ROWS);
         const unsigned char* buf = buffer_.buf();
         for (size_type i = 0; i < size; ++i)
         {
             const value_type* this_row = buf + i * row_size_in_bytes;
             VECT_TYPE v0 = vect[i];
+            BM_ASSERT(size_type(v0) < COLS);
+            value_type remap_v = this_row[unsigned(v0)];
+            vect[i] = VECT_TYPE(remap_v);
+        } // for i
+    }
+    
+    /*! zero-terminated remap: vect[idx] = matrix[idx, vect[idx] ]
+    */
+    template<typename VECT_TYPE>
+    void remapz(VECT_TYPE* vect) const
+    {
+        const unsigned char* buf = buffer_.buf();
+        for (size_type i = 0; i < ROWS; ++i)
+        {
+            const value_type* this_row = buf + i * row_size_in_bytes;
+            VECT_TYPE v0 = vect[i];
+            if (!v0)
+                break;
             BM_ASSERT(size_type(v0) < COLS);
             value_type remap_v = this_row[unsigned(v0)];
             vect[i] = VECT_TYPE(remap_v);

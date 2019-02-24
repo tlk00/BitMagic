@@ -159,7 +159,9 @@ public:
     typedef bvector_type*                   bvector_type_ptr;
     typedef typename SV::value_type         value_type;
     typedef typename SV::size_type          size_type;
-    typedef typename bvector_type::allocator_type::allocator_pool_type allocator_pool_type;
+    
+    typedef typename bvector_type::allocator_type        allocator_type;
+    typedef typename allocator_type::allocator_pool_type allocator_pool_type;
     
 public:
     sparse_vector_scanner();
@@ -376,14 +378,26 @@ protected:
         max_columns = SV::max_vector_size
     };
     
+    enum search_algo_params
+    {
+        linear_cutoff1 = 16,
+        linear_cutoff2 = 128
+    };
+    
     typedef bm::heap_matrix<value_type,
         bm::set_total_blocks,
         max_columns,
-        typename bvector_type::allocator_type>  heap_matrix_type0;
+        allocator_type>  heap_matrix_type0;
     typedef bm::heap_matrix<value_type,
         bm::set_total_blocks*3,
         max_columns,
-        typename bvector_type::allocator_type>  heap_matrix_type3;
+        allocator_type>  heap_matrix_type3;
+    
+    typedef bm::heap_matrix<typename SV::value_type,
+                           linear_cutoff2,
+                           SV::sv_octet_plains,
+                           allocator_type> matrix_search_buf_type;
+
 
 private:
     allocator_pool_type                pool_;
@@ -403,6 +417,7 @@ private:
     value_type                         remap_value_vect_[SV::max_vector_size];
     /// masks of allocated bit-plains (1 - means there is a bit-plain)
     bm::id64_t                         vector_plain_masks_[SV::max_vector_size];
+    matrix_search_buf_type             hmatr_; ///< heap matrix for string search linear stage
 };
 
 
@@ -1356,9 +1371,10 @@ bool sparse_vector_scanner<SV>::bfind_eq_str(const typename SV::value_type* str,
 //----------------------------------------------------------------------------
 
 template<typename SV>
-bool sparse_vector_scanner<SV>::lower_bound_str(const SV&  sv,
-                                                const typename SV::value_type* str,
-                                                typename SV::size_type&        pos)
+bool sparse_vector_scanner<SV>::lower_bound_str(
+                                        const SV&  sv,
+                                        const typename SV::value_type* str,
+                                        typename SV::size_type&        pos)
 {
     int cmp;
     size_type l = 0, r = sv.size();
@@ -1402,10 +1418,8 @@ bool sparse_vector_scanner<SV>::lower_bound_str(const SV&  sv,
         return false;
     }
     
-    const unsigned linear_cutoff = 16;
-
     size_type dist = r - l;
-    if (dist < linear_cutoff)
+    if (dist < linear_cutoff1)
     {
         for (; l <= r; ++l)
         {
@@ -1446,18 +1460,21 @@ bool sparse_vector_scanner<SV>::lower_bound_str(const SV&  sv,
             r = mid-1;
 
         dist = r - l;
-        if (dist < linear_cutoff)
+        if (dist < linear_cutoff2) // do linear scan here
         {
-            for (; l <= r; ++l)
+            hmatr_.init();
+            
+            dist = sv.decode(hmatr_, l, dist+1);
+            for (unsigned i = 0; i < dist; ++i, ++l)
             {
-                cmp = this->compare_str(sv, l, str);
+                const typename SV::value_type* hm_str = hmatr_.row(i);
+                cmp = ::strcmp(hm_str, str);
                 pos = l;
                 if (cmp == 0)
                     return true;
                 if (cmp > 0) // vect[x] > str
                     return false;
-            } // for
-            
+            }
             cmp = this->compare_str(sv, l, str);
             if (cmp > 0) // vect[x] > str
             {

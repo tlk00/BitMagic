@@ -248,6 +248,7 @@ public:
         sv_plains = (sizeof(Val) * 8 * MAX_SIZE + 1),
         sv_value_plains = (sizeof(Val) * 8 * MAX_SIZE)
     };
+    
     enum vector_capacity
     {
         max_vector_size = MAX_SIZE

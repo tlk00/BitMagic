@@ -314,6 +314,7 @@ public:
         {
             n_buf_size = 1024 * 8
         };
+
     private:
         bm::sparse_vector<Val, BV>* sv_;      ///!< pointer on the parent vector
         bvector_type*               bv_null_; ///!< not NULL vector pointer
@@ -510,7 +511,7 @@ public:
      
         \param arr  - dest array
         \param idx_from - index in the sparse vector to export from
-        \param size - decoding size (array allocation should match)
+        \param dec_size - decoding size (array allocation should match)
         \param zero_mem - set to false if target array is pre-initialized
                           with 0s to avoid performance penalty
      
@@ -520,7 +521,7 @@ public:
     */
     size_type decode(value_type* arr,
                      size_type   idx_from,
-                     size_type   size,
+                     size_type   dec_size,
                      bool        zero_mem = true) const;
     
     
@@ -793,8 +794,13 @@ public:
     ///
     void set_allocator_pool(allocator_pool_type* pool_ptr);
     
-
 protected:
+    enum octet_plains
+    {
+        sv_octet_plains = sizeof(value_type)
+    };
+
+
     /*! \brief set value without checking boundaries */
     void set_value(size_type idx, value_type v);
     
@@ -985,18 +991,18 @@ template<class Val, class BV>
 typename sparse_vector<Val, BV>::size_type
 sparse_vector<Val, BV>::decode(value_type* arr,
                                size_type   idx_from,
-                               size_type   size,
+                               size_type   dec_size,
                                bool        zero_mem) const
 {
-    if (size < 32)
+    if (dec_size < 32)
     {
-        return extract_range(arr, size, idx_from, zero_mem);
+        return extract_range(arr, dec_size, idx_from, zero_mem);
     }
-    if (size < 1024)
+    if (dec_size < 1024)
     {
-        return extract_plains(arr, size, idx_from, zero_mem);
+        return extract_plains(arr, dec_size, idx_from, zero_mem);
     }
-    return extract(arr, size, idx_from, zero_mem);
+    return extract(arr, dec_size, idx_from, zero_mem);
 }
 
 //---------------------------------------------------------------------
