@@ -165,10 +165,9 @@ public:
     public:
         const_iterator();
         const_iterator(const sparse_vector_type* sv);
-        const_iterator(const sparse_vector_type* sv, bm::id_t pos);
+        const_iterator(const sparse_vector_type* sv, size_type pos);
         const_iterator(const const_iterator& it);
         
-
         bool operator==(const const_iterator& it) const
                                 { return (pos_ == it.pos_) && (sv_ == it.sv_); }
         bool operator!=(const const_iterator& it) const
@@ -182,22 +181,22 @@ public:
         bool operator >= (const const_iterator& it) const
                                 { return pos_ >= it.pos_; }
 
-        /*! \brief Get current position (value) */
+        /// \brief Get current position (value)
         value_type operator*() const { return this->value(); }
         
         
-        /*! \brief Advance to the next available value */
+        /// \brief Advance to the next available value
         const_iterator& operator++() { this->advance(); return *this; }
 
-        /*! \brief Advance to the next available value */
+        /// \brief Advance to the next available value
         const_iterator& operator++(int)
             { const_iterator tmp(*this);this->advance(); return tmp; }
 
 
-        /*! \brief Get current position (value) */
+        /// \brief Get current position (value)
         value_type value() const;
         
-        /*! \brief Get NULL status */
+        /// \brief Get NULL status
         bool is_null() const;
         
         /// Returns true if iterator is at a valid position
@@ -210,7 +209,7 @@ public:
         bm::id_t pos() const { return pos_; }
         
         /// re-position to a specified position
-        void go_to(bm::id_t pos);
+        void go_to(size_type pos);
         
         /// advance iterator forward by one
         void advance();
@@ -220,12 +219,11 @@ public:
         enum buf_size_e
         {
             n_buf_size = 1024 * 8
-            //n_buf_size = 65535 * 10
         };
         
     private:
-        const bm::sparse_vector<Val, BV>* sv_;
-        bm::id_t                          pos_;     ///!< Position
+        const sparse_vector_type*         sv_;      ///!< ptr to parent
+        size_type                         pos_;     ///!< Position
         mutable buffer_type               buffer_;  ///!< value buffer
         mutable value_type*               buf_ptr_; ///!< position in the buffer
         mutable allocator_pool_type       pool_;
@@ -1813,7 +1811,7 @@ sparse_vector<Val, BV>::const_iterator::const_iterator(
 template<class Val, class BV>
 sparse_vector<Val, BV>::const_iterator::const_iterator(
  const typename sparse_vector<Val, BV>::const_iterator::sparse_vector_type* sv,
- bm::id_t pos)
+ typename sparse_vector<Val, BV>::size_type pos)
 : sv_(sv), buf_ptr_(0)
 {
     BM_ASSERT(sv_);
@@ -1838,7 +1836,7 @@ void sparse_vector<Val, BV>::const_iterator::advance()
         return;
     ++pos_;
     if (pos_ >= sv_->size())
-        pos_ = bm::id_max;
+        this->invalidate();
     else
     {
         if (buf_ptr_)
