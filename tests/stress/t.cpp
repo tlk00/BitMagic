@@ -15831,7 +15831,48 @@ void TestStrSparseVector()
         bool equal = str_sv1.equal(str_sv2);
         assert(equal);
    }
+   
+    // const_iterator
+    //
+    {
+       str_sparse_vector<char, bvect, 32> str_sv0;
+       {
+        str_sparse_vector<char, bvect, 32>::const_iterator it2(&str_sv0);
+        assert(!it2.valid());
+        str_sparse_vector<char, bvect, 32>::const_iterator it2c(it2);
+        assert(!it2c.valid());
+       }
+       str_sv0[0] = "1";
+       str_sv0[1] = "11";
+       str_sv0[2] = "123";
+    
+        {
+        str_sparse_vector<char, bvect, 32>::const_iterator it_end;
+        assert(!it_end.valid());
+        str_sparse_vector<char, bvect, 32>::const_iterator it2(&str_sv0);
+        assert(it2.valid());
+        const char* s = it2.value();
+        int cmp = ::strcmp(s, "1");
+        assert(cmp == 0);
+        assert(!it2.is_null());
 
+        str_sparse_vector<char, bvect, 32>::const_iterator it3(&str_sv0, 1);
+        assert(it3.valid());
+        s = it3.value();
+        cmp = ::strcmp(s, "11");
+        assert(cmp == 0);
+        
+        str_sparse_vector<char, bvect, 32>::const_iterator it4(&str_sv0, 3);
+        assert(!it4.valid());
+        it4.go_to(2);
+        assert(it4.valid());
+        s = it4.value();
+        cmp = ::strcmp(s, "123");
+        assert(cmp == 0);
+
+        }
+
+    }
    
    cout << "---------------------------- Bit-plain STR sparse vector test OK" << endl;
 }
@@ -15851,15 +15892,39 @@ void CompareStrSparseVector(const str_svect_type& str_sv,
 
     bm::sparse_vector_scanner<bm::str_sparse_vector<char, bvect, 32> > scanner;
 
+    str_svect_type::const_iterator it = str_sv.begin();
     string str;
-    for (unsigned i = 0; i < str_sv.size(); ++i)
+    for (unsigned i = 0; i < str_sv.size(); ++i, ++it)
     {
+        assert (it.valid());
+        assert (it != str_sv.end());
+        
         str_sv.get(i, str);
         const string& str_control = str_coll[i];
         if (str != str_control)
         {
             std::cerr << "String mis-match at:" << i << std::endl;
             exit(1);
+        }
+        {
+            const char* s = *it;
+            int cmp = ::strcmp(s, str_control.c_str());
+            if (cmp != 0)
+            {
+                cerr << "Iterator comparison failed! " << s << " != " << str_control
+                     << endl;
+                exit(1);
+            }
+            str_svect_type::const_iterator it2 = str_sv.get_const_iterator(i);
+            assert(it == it2);
+            s = *it2;
+            cmp = ::strcmp(s, str_control.c_str());
+            if (cmp != 0)
+            {
+                cerr << "2. Iterator comparison failed! " << s << " != " << str_control
+                     << endl;
+                exit(1);
+            }
         }
         int cmp = str_sv.compare(i, str_control.c_str());
         if (cmp != 0)
@@ -19370,7 +19435,6 @@ int main(void)
 
 //avx2_i32_shift();
 //return 0;
-
 
     TestRecomb();
 
