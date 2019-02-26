@@ -147,6 +147,99 @@ public:
         size_type                                      idx_;
         mutable CharType                               buf_[MAX_STR_SIZE];
     };
+    
+    /**
+        Const iterator to do quick traverse of the sparse vector.
+     
+        Implementation uses buffer for decoding so, competing changes
+        to the original vector may not match the iterator returned values.
+     
+        This iterator keeps an operational buffer of transposed elements,
+        so memory footprint is not negligable.
+     
+        @ingroup sv
+    */
+    class const_iterator
+    {
+    public:
+    friend class str_sparse_vector;
+#ifndef BM_NO_STL
+        typedef std::input_iterator_tag  iterator_category;
+#endif
+        typedef str_sparse_vector<CharType, BV, MAX_STR_SIZE> str_sparse_vector_type;
+        typedef str_sparse_vector_type*                       str_sparse_vector_type_ptr;
+        typedef typename str_sparse_vector_type::value_type   value_type;
+        typedef typename str_sparse_vector_type::size_type    size_type;
+        typedef typename str_sparse_vector_type::bvector_type bvector_type;
+        typedef typename bvector_type::allocator_type         allocator_type;
+        typedef typename bvector_type::allocator_type::allocator_pool_type allocator_pool_type;
+        
+        typedef unsigned                    difference_type;
+        typedef CharType*                   pointer;
+    public:
+        const_iterator();
+        const_iterator(const str_sparse_vector_type* sv);
+        const_iterator(const str_sparse_vector_type* sv, size_type pos);
+        const_iterator(const const_iterator& it);
+        
+        bool operator==(const const_iterator& it) const
+                                { return (pos_ == it.pos_) && (sv_ == it.sv_); }
+        bool operator!=(const const_iterator& it) const
+                                { return ! operator==(it); }
+        bool operator < (const const_iterator& it) const
+                                { return pos_ < it.pos_; }
+        bool operator <= (const const_iterator& it) const
+                                { return pos_ <= it.pos_; }
+        bool operator > (const const_iterator& it) const
+                                { return pos_ > it.pos_; }
+        bool operator >= (const const_iterator& it) const
+                                { return pos_ >= it.pos_; }
+
+        /// \brief Get current position (value)
+        const value_type* operator*() const { return this->value(); }
+
+        /// \brief Advance to the next available value
+        const_iterator& operator++() { this->advance(); return *this; }
+
+        /// \brief Advance to the next available value
+        const_iterator& operator++(int)
+            { const_iterator tmp(*this);this->advance(); return tmp; }
+
+
+        /// \brief Get current position (value)
+        const value_type* value() const;
+
+        /// \brief Get NULL status
+        bool is_null() const { return sv_->is_null(this->pos_); }
+
+        /// Returns true if iterator is at a valid position
+        bool valid() const { return pos_ != bm::id_max; }
+
+        /// Invalidate current iterator
+        void invalidate() { pos_ = bm::id_max; }
+
+        /// Current position (index) in the vector
+        size_type pos() const { return pos_; }
+
+        /// re-position to a specified position
+        void go_to(size_type pos);
+
+        /// advance iterator forward by one
+        void advance();
+
+
+    protected:
+        typedef bm::heap_matrix<CharType,
+                        256,          // ROWS: number of strings in one batch
+                        MAX_STR_SIZE, // COLS
+                        allocator_type> buffer_matrix_type;
+
+    private:
+        const str_sparse_vector_type*     sv_;      ///!< ptr to parent
+        mutable size_type                 pos_;     ///!< Position
+        mutable buffer_matrix_type        buf_matrix_; ///!< decode value buffer
+        mutable size_type                 pos_in_buf_; ///!< buffer position
+    };
 
 
 public:
@@ -296,10 +389,7 @@ public:
                     (STL class with size() support, like basic_string)
     */
     template<typename StrType>
-    void push_back(const StrType& str)
-    {
-        assign(this->size_, str);
-    }
+    void push_back(const StrType& str) { assign(this->size_, str); }
     
     /*!
         \brief push back a string (zero terminated)
@@ -445,6 +535,24 @@ public:
     
     
     ///@}
+
+    // ------------------------------------------------------------
+    /*! @name Iterator access */
+    //@{
+
+    /** Provide const iterator access to container content  */
+    const_iterator begin() const;
+
+    /** Provide const iterator access to the end    */
+    const_iterator end() const { return const_iterator(this, bm::id_max); }
+
+    /** Get const_itertor re-positioned to specific element
+    @param idx - position in the sparse vector
+    */
+    const_iterator get_const_iterator(size_type idx) const { return const_iterator(this, idx); }
+ 
+    ///@}
+
 
 
     // ------------------------------------------------------------
@@ -1190,6 +1298,110 @@ bool str_sparse_vector<CharType, BV, MAX_STR_SIZE>::equal(
 }
 
 //---------------------------------------------------------------------
+
+template<class CharType, class BV, unsigned MAX_STR_SIZE>
+typename str_sparse_vector<CharType, BV, MAX_STR_SIZE>::const_iterator
+str_sparse_vector<CharType, BV, MAX_STR_SIZE>::begin() const
+{
+    typedef typename
+        str_sparse_vector<CharType, BV, MAX_STR_SIZE>::const_iterator it_type;
+    return it_type(this);
+}
+
+
+//---------------------------------------------------------------------
+//
+//---------------------------------------------------------------------
+
+
+template<class CharType, class BV, unsigned MAX_STR_SIZE>
+str_sparse_vector<CharType, BV, MAX_STR_SIZE>::const_iterator::const_iterator()
+: sv_(0), pos_(bm::id_max), pos_in_buf_(~size_type(0))
+{}
+
+//---------------------------------------------------------------------
+
+template<class CharType, class BV, unsigned MAX_STR_SIZE>
+str_sparse_vector<CharType, BV, MAX_STR_SIZE>::const_iterator::const_iterator(
+   const str_sparse_vector<CharType, BV, MAX_STR_SIZE>::const_iterator& it)
+: sv_(it.sv_), pos_(it.pos_), pos_in_buf_(~size_type(0))
+{}
+
+//---------------------------------------------------------------------
+
+template<class CharType, class BV, unsigned MAX_STR_SIZE>
+str_sparse_vector<CharType, BV, MAX_STR_SIZE>::const_iterator::const_iterator(
+    const str_sparse_vector<CharType, BV, MAX_STR_SIZE>* sv)
+: sv_(sv), pos_(sv->empty() ? bm::id_max : 0), pos_in_buf_(~size_type(0))
+{}
+
+//---------------------------------------------------------------------
+
+template<class CharType, class BV, unsigned MAX_STR_SIZE>
+str_sparse_vector<CharType, BV, MAX_STR_SIZE>::const_iterator::const_iterator(
+    const str_sparse_vector<CharType, BV, MAX_STR_SIZE>* sv,
+    typename str_sparse_vector<CharType, BV, MAX_STR_SIZE>::size_type pos)
+: sv_(sv), pos_(pos >= sv->size() ? bm::id_max : pos), pos_in_buf_(~size_type(0))
+{}
+
+//---------------------------------------------------------------------
+
+template<class CharType, class BV, unsigned MAX_STR_SIZE>
+const typename str_sparse_vector<CharType, BV, MAX_STR_SIZE>::value_type*
+str_sparse_vector<CharType, BV, MAX_STR_SIZE>::const_iterator::value() const
+{
+    BM_ASSERT(sv_);
+    BM_ASSERT(this->valid());
+    if (pos_in_buf_ == ~size_type(0))
+    {
+        if (!buf_matrix_.is_init())
+            buf_matrix_.init();
+        pos_in_buf_ = 0;
+        unsigned d = sv_->decode(buf_matrix_, pos_, buffer_matrix_type::n_rows);
+        if (!d)
+        {
+            pos_ = bm::id_max;
+            return 0;
+        }
+    }
+    return buf_matrix_.row(pos_in_buf_);
+}
+
+//---------------------------------------------------------------------
+
+template<class CharType, class BV, unsigned MAX_STR_SIZE>
+void str_sparse_vector<CharType, BV, MAX_STR_SIZE>::const_iterator::go_to(
+    typename str_sparse_vector<CharType, BV, MAX_STR_SIZE>::size_type pos)
+{
+    pos_ = (!sv_ || pos >= sv_->size()) ? bm::id_max : pos;
+    pos_in_buf_ = ~size_type(0);
+}
+
+//---------------------------------------------------------------------
+
+template<class CharType, class BV, unsigned MAX_STR_SIZE>
+void str_sparse_vector<CharType, BV, MAX_STR_SIZE>::const_iterator::advance()
+{
+    if (pos_ == bm::id_max) // nothing to do, we are at the end
+        return;
+    ++pos_;
+    
+    if (pos_ >= sv_->size())
+        this->invalidate();
+    else
+    {
+        if (pos_in_buf_ != ~size_type(0))
+        {
+            ++pos_in_buf_;
+            if (pos_in_buf_ >= buffer_matrix_type::n_rows)
+                pos_in_buf_ = ~size_type(0);
+        }
+    }
+}
+
+//---------------------------------------------------------------------
+
+
 
 } // namespace
 
