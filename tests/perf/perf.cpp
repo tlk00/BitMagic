@@ -43,6 +43,7 @@ For more information please visit:  http://bitmagic.io
 #include "bmsparsevec.h"
 #include "bmsparsevec_algo.h"
 #include "bmsparsevec_serial.h"
+#include "bmstrsparsevec.h"
 #include "bmrandom.h"
 
 //#include "bmdbg.h"
@@ -2909,8 +2910,90 @@ void SparseVectorScannerTest()
         std::cerr << "2. Sparse scanner integrity check failed!" << std::endl;
         exit(1);
     }
+}
+
+typedef bm::str_sparse_vector<char, bvect, 32> str_svect_type;
+
+static
+void GenerateTestStrCollection(std::vector<string>& str_coll, unsigned max_coll)
+{
+    string prefix = "az";
+    string str;
+    for (unsigned i = 0; i < max_coll; ++i)
+    {
+        str = prefix;
+        str.append(to_string(i));
+        str_coll.emplace_back(str);
+        
+        {
+            prefix.clear();
+            unsigned prefix_len = rand() % 5;
+            for (unsigned j = 0; j < prefix_len; ++j)
+            {
+                char cch = char('a' + rand() % 26);
+                prefix.push_back(cch);
+            } // for j
+        }
+    } // for i
+    
+}
+
+
+static
+void StrSparseVectorTest()
+{
+    const unsigned max_coll = 20000000;
+    
+   std::vector<string> str_coll;
+   str_svect_type str_sv;
+
+   GenerateTestStrCollection(str_coll, max_coll);
+   
+    {
+        TimeTaker tt("bm::str_sparse_vector<>::push_back() ", 1);
+       for (auto str : str_coll)
+       {
+           str_sv.push_back(str);
+       }
+    }
+    str_sv.optimize();
+    
+    {
+    string str;
+
+        TimeTaker tt("bm::str_sparse_vector<> - random access ", 1);
+        for (unsigned i = 0; i < str_sv.size(); ++i)
+        {
+            str_sv.get(i, str);
+            const std::string& sc = str_coll[i];
+            if (str != sc)
+            {
+                cerr << "String random access check failure!" << endl;
+                exit(1);
+            }
+        }
+    }
+
+    {
+        TimeTaker tt("bm::str_sparse_vector<>::const_iterator ", 1);
+        str_svect_type::const_iterator it = str_sv.begin();
+        str_svect_type::const_iterator it_end = str_sv.end();
+
+        for (unsigned i=0; it < it_end; ++it, ++i)
+        {
+            const char* s = *it;
+            const std::string& sc = str_coll[i];
+            int cmp = ::strcmp(s, sc.c_str());
+            if (cmp != 0)
+            {
+                cerr << "String random access check failure!" << endl;
+                exit(1);
+            }
+        }
+    }
 
 }
+
 
 int main(void)
 {
@@ -2975,6 +3058,8 @@ int main(void)
     RankCompressionTest();
 
     Set2SetTransformTest();
+
+    StrSparseVectorTest();
 
     return 0;
 }
