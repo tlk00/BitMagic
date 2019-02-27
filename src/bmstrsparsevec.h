@@ -230,7 +230,7 @@ public:
 
     protected:
         typedef bm::heap_matrix<CharType,
-                        256,          // ROWS: number of strings in one batch
+                        1024,         // ROWS: number of strings in one batch
                         MAX_STR_SIZE, // COLS
                         allocator_type> buffer_matrix_type;
 
