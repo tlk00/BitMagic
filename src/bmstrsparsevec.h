@@ -174,8 +174,9 @@ public:
         typedef typename bvector_type::allocator_type         allocator_type;
         typedef typename bvector_type::allocator_type::allocator_pool_type allocator_pool_type;
         
-        typedef unsigned                    difference_type;
+        typedef long long                   difference_type;
         typedef CharType*                   pointer;
+        typedef CharType*&                  reference;
     public:
         const_iterator();
         const_iterator(const str_sparse_vector_type* sv);
@@ -226,7 +227,6 @@ public:
 
         /// advance iterator forward by one
         void advance();
-
 
     protected:
         typedef bm::heap_matrix<CharType,
@@ -422,7 +422,7 @@ public:
                 BM_ASSERT(remap_value);
                 if (!remap_value) // unknown dictionary element
                 {
-                    // TODO: add an exception throw here
+                    throw_bad_value("Unknown dictionary character");
                     break;
                 }
                 ch = CharType(remap_value);
@@ -464,7 +464,30 @@ public:
 
     ///@}
 
-    
+
+    // ------------------------------------------------------------
+    /*! @name Clear                                              */
+    ///@{
+
+    /*! \brief resize to zero, free memory */
+    void clear() BMNOEXEPT;
+
+    /*!
+        \brief clear range (assign bit 0 for all plains)
+        \param left  - interval start
+        \param right - interval end (closed interval)
+        \param set_null - set cleared values to unassigned (NULL)
+    */
+    str_sparse_vector<CharType, BV, MAX_STR_SIZE>&
+        clear_range(size_type left, size_type right, bool set_null = false)
+    {
+        parent_type::clear_range(left, right, set_null);
+        return *this;
+    }
+
+
+    ///@}
+
     
     // ------------------------------------------------------------
     /*! @name Size, etc       */
@@ -701,10 +724,30 @@ public:
                 remap_matrix1_.remapz(str);
             } // for i
         }
-        
         return dec_size;
     }
 
+    /**
+        \brief Bulk import of strings from a C-style matrix of chars
+
+        \param cmatr  - source matrix (bm::heap_matrix)
+        \param idx_from - destination index in the sparse vector
+        \param imp_size - import size (matrix column allocation should match)
+    */
+    template<typename CharMatrix>
+    void import(const CharMatrix& cmatr,
+                size_type   idx_from,
+                size_type   imp_size)
+    {
+        if (idx_from < this->size_) // in case it touches existing elements
+        {
+            // clear all plains in the range to provide corrrect import of 0 values
+            this->clear_range(idx_from, idx_from + imp_size - 1);
+        }
+        
+        BM_ASSERT (cmatr.is_init());
+
+    }
 
     ///@}
 
@@ -737,6 +780,25 @@ public:
     size_type effective_size() const { return size(); }
 
 protected:
+    // ------------------------------------------------------------
+    /*! @name Errors and exceptions                              */
+    ///@{
+
+    /**
+        \brief throw range error
+        \internal
+    */
+    static
+    void throw_range_error(const char* err_msg);
+
+    /**
+        \brief throw domain error
+        \internal
+    */
+    static
+    void throw_bad_value(const char* err_msg);
+
+    ///@}
 
     /*! \brief set value without checking boundaries */
     void set_value(size_type idx, const value_type* str);
@@ -1019,7 +1081,8 @@ int str_sparse_vector<CharType, BV, MAX_STR_SIZE>::compare(
             unsigned char remap_value = remap_matrix2_.get(i, unsigned(ch));
             if (!remap_value) // unknown dictionary element
             {
-                return -1; // TODO: what would be the best return value here...
+                throw_bad_value("Unknown/incomparable dictionary character");
+                return -1;
             }
             ch = CharType(remap_value);
         }
@@ -1306,6 +1369,40 @@ str_sparse_vector<CharType, BV, MAX_STR_SIZE>::begin() const
     typedef typename
         str_sparse_vector<CharType, BV, MAX_STR_SIZE>::const_iterator it_type;
     return it_type(this);
+}
+
+//---------------------------------------------------------------------
+
+template<class CharType, class BV, unsigned MAX_STR_SIZE>
+void str_sparse_vector<CharType, BV, MAX_STR_SIZE>::clear() BMNOEXEPT
+{
+    parent_type::clear();
+}
+
+//---------------------------------------------------------------------
+
+template<class CharType, class BV, unsigned MAX_STR_SIZE>
+void str_sparse_vector<CharType, BV, MAX_STR_SIZE>::throw_range_error(
+                                                           const char* err_msg)
+{
+#ifndef BM_NO_STL
+    throw std::range_error(err_msg);
+#else
+    BM_ASSERT_THROW(false, BM_ERR_RANGE);
+#endif
+}
+
+//---------------------------------------------------------------------
+
+template<class CharType, class BV, unsigned MAX_STR_SIZE>
+void str_sparse_vector<CharType, BV, MAX_STR_SIZE>::throw_bad_value(
+                                                           const char* err_msg)
+{
+#ifndef BM_NO_STL
+    throw std::domain_error(err_msg);
+#else
+    BM_ASSERT_THROW(false, BM_BAD_VALUE);
+#endif
 }
 
 

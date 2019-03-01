@@ -1154,7 +1154,8 @@ void base_sparse_vector<Val, BV, MAX_SIZE>::swap(
 template<class Val, class BV, unsigned MAX_SIZE>
 void base_sparse_vector<Val, BV, MAX_SIZE>::clear() BMNOEXEPT
 {
-    for (size_type i = 0; i < value_bits(); ++i)
+    unsigned plains = value_bits();
+    for (size_type i = 0; i < plains; ++i)
     {
         bmatr_.destruct_row(i);
     }
@@ -1176,8 +1177,8 @@ void base_sparse_vector<Val, BV, MAX_SIZE>::clear_range(
     {
         return clear_range(right, left, set_null);
     }
-    unsigned eff_plains = effective_plains();
-    for (unsigned i = 0; i < eff_plains; ++i)
+    unsigned plains = value_bits();
+    for (unsigned i = 0; i < plains; ++i)
     {
         bvector_type* bv = this->bmatr_.get_row(i);
         if (bv)
