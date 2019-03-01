@@ -479,13 +479,14 @@ public:
     // ------------------------------------------------------------
     /*! @name Loading of sparse vector from C-style array       */
     //@{
+    
     /*!
         \brief Import list of elements from a C-style array
         \param arr  - source array
-        \param size - source size
+        \param arr_size - source size
         \param offset - target index in the sparse vector
     */
-    void import(const value_type* arr, size_type size, size_type offset = 0);
+    void import(const value_type* arr, size_type arr_size, size_type offset = 0);
     
     /*!
         \brief Import list of elements from a C-style array (pushed back)
@@ -905,7 +906,7 @@ void sparse_vector<Val, BV>::set_null(size_type idx)
 
 template<class Val, class BV>
 void sparse_vector<Val, BV>::import(const value_type* arr,
-                                    size_type         size,
+                                    size_type         arr_size,
                                     size_type         offset)
 {
     unsigned char b_list[sizeof(Val)*8];
@@ -914,11 +915,14 @@ void sparse_vector<Val, BV>::import(const value_type* arr,
     const unsigned transpose_window = 256;
     bm::tmatrix<bm::id_t, sizeof(Val)*8, transpose_window> tm; // matrix accumulator
     
-    if (size == 0)
+    if (arr_size == 0)
         throw_range_error("sparse_vector range error (import size 0)");
     
-    // clear all plains in the range to provide corrrect import of 0 values
-    this->clear_range(offset, offset + size - 1);
+    if (offset < this->size_) // in case it touches existing elements
+    {
+        // clear all plains in the range to provide corrrect import of 0 values
+        this->clear_range(offset, offset + arr_size - 1);
+    }
     
     // transposition algorithm uses bitscan to find index bits and store it
     // in temporary matrix (list for each bit plain), matrix here works
@@ -927,7 +931,7 @@ void sparse_vector<Val, BV>::import(const value_type* arr,
     //
     
     size_type i;
-    for (i = 0; i < size; ++i)
+    for (i = 0; i < arr_size; ++i)
     {
         unsigned bcnt = bm::bitscan(arr[i], b_list);
         const unsigned bit_idx = i + offset;
@@ -970,7 +974,7 @@ void sparse_vector<Val, BV>::import(const value_type* arr,
     bvector_type* bv_null = this->get_null_bvect();
     if (bv_null) // configured to support NULL assignments
     {
-        bv_null->set_range(offset, offset + size - 1);
+        bv_null->set_range(offset, offset + arr_size - 1);
     }
 }
 
