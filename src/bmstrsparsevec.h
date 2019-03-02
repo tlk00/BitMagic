@@ -422,7 +422,7 @@ public:
                 BM_ASSERT(remap_value);
                 if (!remap_value) // unknown dictionary element
                 {
-                    throw_bad_value("Unknown dictionary character");
+                    throw_bad_value(0);
                     break;
                 }
                 ch = CharType(remap_value);
@@ -677,8 +677,7 @@ public:
     */
     template<typename CharMatrix>
     size_type decode(CharMatrix& cmatr,
-                     size_type   idx_from,
-                     size_type   dec_size,
+                     size_type   idx_from, size_type  dec_size,
                      bool        zero_mem = true) const
     {
         BM_ASSERT(cmatr.is_init());
@@ -735,9 +734,7 @@ public:
         \param imp_size - import size (matrix column allocation should match)
     */
     template<typename CharMatrix>
-    void import(const CharMatrix& cmatr,
-                size_type   idx_from,
-                size_type   imp_size)
+    void import(CharMatrix& cmatr, size_type idx_from, size_type imp_size)
     {
         if (idx_from < this->size_) // in case it touches existing elements
         {
@@ -746,6 +743,74 @@ public:
         }
         
         BM_ASSERT (cmatr.is_init());
+        
+        unsigned max_str_size = 0;
+        {
+            for (unsigned j = 0; j < imp_size; ++j)
+            {
+                typename CharMatrix::value_type* str = cmatr.row(j);
+                unsigned i;
+                for (i = 0; i < MAX_STR_SIZE; ++i)
+                {
+                    value_type ch = str[i];
+                    if (!ch)
+                    {
+                        max_str_size = (i > max_str_size) ? i : max_str_size;
+                        break;
+                    }
+                    if (remap_flags_) // re-mapping is in effect
+                    {
+                        unsigned char remap_value = remap_matrix2_.get(i, unsigned(ch));
+                        BM_ASSERT(remap_value);
+                        if (!remap_value) // unknown dictionary element
+                            throw_bad_value(0);
+                        str[i] = CharType(remap_value);
+                    }
+                } // for i
+                if (i == MAX_STR_SIZE)
+                    max_str_size = i;
+            } // for j
+        }
+        
+        bm::id_t bit_list[CharMatrix::n_rows];
+        for (unsigned i = 0; i < max_str_size; ++i)
+        {
+            for (unsigned bi = 0; bi < 8; ++bi)
+            {
+                unsigned n_bits = 0;
+                value_type mask = value_type(1u << bi);
+                for (size_type j = 0; j < imp_size; ++j)
+                {
+                    typename CharMatrix::value_type* str = cmatr.row(j);
+                    value_type ch = str[i];
+                    if (!ch)
+                        continue;
+                    if (ch & mask)
+                    {
+                        bit_list[n_bits++] = idx_from + j;
+                        str[i] ^= mask;
+                    }
+                } // for j
+                if (n_bits) // set transposed bits to the target plain
+                {
+                    unsigned plain = i*8 + bi;
+                    bvector_type* bv = this->bmatr_.get_row(plain);
+                    if (!bv)
+                    {
+                        bv = this->bmatr_.construct_row(plain);
+                        bv->init();
+                    }
+                    bv->set(&bit_list[0], n_bits, BM_SORTED);
+                }
+            } // for k
+        } // for i
+        
+        size_type idx_to = idx_from + imp_size - 1;
+        bvector_type* bv_null = this->get_null_bvect();
+        if (bv_null)
+            bv_null->set_range(idx_from, idx_to);
+        if (idx_to >= this->size())
+            this->size_ = idx_to+1;
 
     }
 
@@ -1081,7 +1146,7 @@ int str_sparse_vector<CharType, BV, MAX_STR_SIZE>::compare(
             unsigned char remap_value = remap_matrix2_.get(i, unsigned(ch));
             if (!remap_value) // unknown dictionary element
             {
-                throw_bad_value("Unknown/incomparable dictionary character");
+                throw_bad_value(0);
                 return -1;
             }
             ch = CharType(remap_value);
@@ -1399,6 +1464,8 @@ void str_sparse_vector<CharType, BV, MAX_STR_SIZE>::throw_bad_value(
                                                            const char* err_msg)
 {
 #ifndef BM_NO_STL
+    if (!err_msg)
+        err_msg = "Unknown/incomparable dictionary character";
     throw std::domain_error(err_msg);
 #else
     BM_ASSERT_THROW(false, BM_BAD_VALUE);
