@@ -730,6 +730,8 @@ public:
         \brief Bulk import of strings from a C-style matrix of chars
 
         \param cmatr  - source matrix (bm::heap_matrix)
+                        [in/out] parameter gets modified(corrupted)
+                        in the process
         \param idx_from - destination index in the sparse vector
         \param imp_size - import size (matrix column allocation should match)
     */
@@ -1377,13 +1379,21 @@ void str_sparse_vector<CharType, BV, MAX_STR_SIZE>::remap_from(const str_sparse_
     str_sv.build_octet_remap(remap_matrix1_, remap_matrix2_, omatrix);
     remap_flags_ = 1; // turn ON remapped mode
     
-    // load content
-    // TODO: optimization (current implementation is a naive "get-set")
-    value_type temp_str[MAX_STR_SIZE+1];
-    for (size_type i = 0; i < str_sv.size(); ++i)
+    const unsigned buffer_size = 1024 * 8;
+    
+    typedef bm::heap_matrix<CharType,
+                    buffer_size,         // ROWS: number of strings in one batch
+                    MAX_STR_SIZE,        // COLS
+                    allocator_type> remap_buffer_type;
+    
+    remap_buffer_type cmatr(true);
+    for (size_type i = 0; true; )
     {
-        str_sv.get(i, &temp_str[0], MAX_STR_SIZE);
-        this->set(i, &temp_str[0]);
+        size_type dsize = str_sv.decode(cmatr, i, buffer_size, true);
+        if (!dsize)
+            break;
+        this->import(cmatr, i, dsize);
+        i += dsize;
     } // for i
 }
 
