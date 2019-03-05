@@ -27,7 +27,7 @@ Bit-vector operations
 Tutorial: http://bitmagic.io/set-algebra.html
 
 
-Sparse vector (bit-transposed sparse vector)
+Sparse vector (bit-transposed sparse vector) for scalar integer types
 
 
 ./svsample01 - basic example of sparse_vector<> container
@@ -42,11 +42,18 @@ Sparse vector (bit-transposed sparse vector)
 	       Benchmark different search/scan methods.
 	       Tech.note: http://bitmagic.io/sparse-vector-search.html
 
-RSC sparse vector (Succinct vector based on Rank-Select methods)
+RSC sparse vector (Succinct vector based on Rank-Select methods) for scalar integer types
 
 
 ./rscsample01 - basics of rsc_sparse_vector<> container. Load, unload, serialize.
  
+
+String sparse vector (bit-transposed sparse vector) for ASCII(z) strings
+
+./strsvsample01 - basic example of str_sparse_vector<> container, add values, optimize, iterate
+./strsvsample02 - insertion sort using str_sparse_vector<> and sparse_vector_scanner<>
+
+
 
 
 More complex examples to illustrate mixed techniques and use cases
