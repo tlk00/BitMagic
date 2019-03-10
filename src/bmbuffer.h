@@ -438,12 +438,6 @@ public:
 
     value_type& add()
     {
-/*
-        size_type old_size = buffer_.size();
-        size_type v_size = value_size();
-        
-        buffer_.resize(old_size + v_size);
-*/
         size_type v_size = value_size();
         size_type sz = size();
         resize_internal(sz + 1);
@@ -454,11 +448,6 @@ public:
 
     void push_back(const value_type& v)
     {
-        /*
-        size_type old_size = buffer_.size();
-        size_type v_size = value_size();
-        buffer_.resize(old_size + v_size);
-        */
         size_type v_size = value_size();
         size_type sz = size();
         resize_internal(sz + 1);
@@ -480,20 +469,6 @@ protected:
     static size_type value_size()
     {
         size_type size_of = sizeof(value_type);
-        /*
-        #if defined(BM_ALLOC_ALIGN)
-        size_type align = BM_ALLOC_ALIGN;
-        #else
-        size_type align = 4;
-        #endif
-
-        size_type size_of = sizeof(value_type);
-        if (size_of % align)
-        {
-            size_of += size_of % align;
-        }
-        BM_ASSERT(size_of % align == 0);
-        */
         return size_of;
     }
 
