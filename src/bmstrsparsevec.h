@@ -172,7 +172,7 @@ public:
         typedef typename str_sparse_vector_type::size_type    size_type;
         typedef typename str_sparse_vector_type::bvector_type bvector_type;
         typedef typename bvector_type::allocator_type         allocator_type;
-        typedef typename bvector_type::allocator_type::allocator_pool_type allocator_pool_type;
+        typedef typename allocator_type::allocator_pool_type  allocator_pool_type;
         
         typedef long long                   difference_type;
         typedef CharType*                   pointer;
@@ -239,6 +239,101 @@ public:
         mutable size_type                 pos_;     ///!< Position
         mutable buffer_matrix_type        buf_matrix_; ///!< decode value buffer
         mutable size_type                 pos_in_buf_; ///!< buffer position
+    };
+
+
+    /**
+        Back insert iterator implements buffered insert, faster than generic
+        access assignment.
+     
+        Limitations for buffered inserter:
+        1. Do not use more than one inserter (into one vector) at the same time
+        2. Use method flush() at the end to send the rest of accumulated buffer
+        flush is happening automatically on destruction, but if flush produces an
+        exception (for whatever reason) it will be an exception in destructor.
+        As such, explicit flush() is safer way to finilize the sparse vector load.
+
+        @ingroup sv
+    */
+    class back_insert_iterator
+    {
+    public:
+#ifndef BM_NO_STL
+        typedef std::output_iterator_tag  iterator_category;
+#endif
+        typedef str_sparse_vector<CharType, BV, MAX_STR_SIZE>  str_sparse_vector_type;
+        typedef str_sparse_vector_type*                        str_sparse_vector_type_ptr;
+        typedef typename str_sparse_vector_type::value_type    value_type;
+        typedef typename str_sparse_vector_type::size_type     size_type;
+        typedef typename str_sparse_vector_type::bvector_type  bvector_type;
+        typedef typename bvector_type::allocator_type          allocator_type;
+        typedef typename allocator_type::allocator_pool_type   allocator_pool_type;
+
+        typedef void difference_type;
+        typedef void pointer;
+        typedef void reference;
+        
+    public:
+        back_insert_iterator();
+        back_insert_iterator(str_sparse_vector_type* sv);
+        back_insert_iterator(const back_insert_iterator& bi);
+        
+        back_insert_iterator& operator=(const back_insert_iterator& bi)
+        {
+            BM_ASSERT(bi.empty());
+            this->flush(); sv_ = bi.sv_;
+            return *this;
+        }
+
+        ~back_insert_iterator();
+        
+        /** push value to the vector */
+        back_insert_iterator& operator=(const value_type* v) { this->add(v); return *this; }
+        /** noop */
+        back_insert_iterator& operator*() { return *this; }
+        /** noop */
+        back_insert_iterator& operator++() { return *this; }
+        /** noop */
+        back_insert_iterator& operator++( int ) { return *this; }
+        
+        /** add value to the container*/
+        void add(const value_type* v);
+        
+        /** add NULL (no-value) to the container */
+        void add_null();
+        
+        /** add a series of consequitve NULLs (no-value) to the container */
+        void add_null(size_type count);
+
+        /** return true if insertion buffer is empty */
+        bool empty() const;
+        
+        /** flush the accumulated buffer */
+        void flush();
+    protected:
+    
+        /** add value to the buffer without changing the NULL vector
+            @param v - value to push back
+            @return index of added value in the internal buffer
+            @internal
+        */
+        size_type add_value(const value_type* v);
+
+    private:
+        enum buf_size_e
+        {
+            n_buf_size = 1024 * 8
+        };
+        typedef bm::heap_matrix<CharType,
+                        n_buf_size,   // ROWS: number of strings in one batch
+                        MAX_STR_SIZE, // COLS
+                        allocator_type> buffer_matrix_type;
+
+    private:
+        str_sparse_vector_type*  sv_;          ///!< pointer on the parent vector
+        bvector_type*            bv_null_;     ///!< not NULL vector pointer
+        buffer_matrix_type       buf_matrix_;  ///!< value buffer
+        size_type                pos_in_buf_;  ///!< buffer position
     };
 
 
@@ -573,7 +668,13 @@ public:
     @param idx - position in the sparse vector
     */
     const_iterator get_const_iterator(size_type idx) const { return const_iterator(this, idx); }
- 
+    
+     /** Provide back insert iterator
+    Back insert iterator implements buffered insertion, which is faster, than random access
+    or push_back
+    */
+    back_insert_iterator get_back_inserter() { return back_insert_iterator(this); }
+
     ///@}
 
 
@@ -733,17 +834,75 @@ public:
                         [in/out] parameter gets modified(corrupted)
                         in the process
         \param idx_from - destination index in the sparse vector
-        \param imp_size - import size (matrix column allocation should match)
+        \param imp_size - import size (number or rows to import)
     */
     template<typename CharMatrix>
     void import(CharMatrix& cmatr, size_type idx_from, size_type imp_size)
     {
+        if (!imp_size)
+            return;
         if (idx_from < this->size_) // in case it touches existing elements
         {
             // clear all plains in the range to provide corrrect import of 0 values
             this->clear_range(idx_from, idx_from + imp_size - 1);
         }
-        
+        import_no_check(cmatr, idx_from, imp_size);
+    }
+
+    /**
+        \brief Bulk push-back import of strings from a C-style matrix of chars
+
+        \param cmatr  - source matrix (bm::heap_matrix)
+                        [in/out] parameter gets modified(corrupted)
+                        in the process
+        \param imp_size - import size (number or rows to import)
+    */
+    template<typename CharMatrix>
+    void import_back(CharMatrix& cmatr, size_type imp_size)
+    {
+        if (!imp_size)
+            return;
+        import_no_check(cmatr, this->size(), imp_size);
+    }
+
+
+    ///@}
+
+    // ------------------------------------------------------------
+
+    /*! \brief syncronize internal structures */
+    void sync(bool force);
+
+    /*!
+        \brief check if another sparse vector has the same content and size
+     
+        \param sv        - sparse vector for comparison
+        \param null_able - flag to consider NULL vector in comparison (default)
+                           or compare only value content plains
+     
+        \return true, if it is the same
+    */
+    bool equal(const str_sparse_vector<CharType, BV, MAX_STR_SIZE>& sv,
+               bm::null_support null_able = bm::use_null) const;
+
+    /**
+        \brief find position of compressed element by its rank
+    */
+    static
+    bool find_rank(bm::id_t rank, bm::id_t& pos);
+    
+    /**
+        \brief size of sparse vector (may be different for RSC)
+    */
+    size_type effective_size() const { return size(); }
+
+protected:
+
+    /// @internal
+    template<typename CharMatrix>
+    void import_no_check(CharMatrix& cmatr,
+                         size_type idx_from, size_type imp_size)
+    {
         BM_ASSERT (cmatr.is_init());
         
         unsigned max_str_size = 0;
@@ -816,37 +975,6 @@ public:
 
     }
 
-    ///@}
-
-    // ------------------------------------------------------------
-
-    /*! \brief syncronize internal structures */
-    void sync(bool force);
-
-    /*!
-        \brief check if another sparse vector has the same content and size
-     
-        \param sv        - sparse vector for comparison
-        \param null_able - flag to consider NULL vector in comparison (default)
-                           or compare only value content plains
-     
-        \return true, if it is the same
-    */
-    bool equal(const str_sparse_vector<CharType, BV, MAX_STR_SIZE>& sv,
-               bm::null_support null_able = bm::use_null) const;
-
-    /**
-        \brief find position of compressed element by its rank
-    */
-    static
-    bool find_rank(bm::id_t rank, bm::id_t& pos);
-    
-    /**
-        \brief size of sparse vector (may be different for RSC)
-    */
-    size_type effective_size() const { return size(); }
-
-protected:
     // ------------------------------------------------------------
     /*! @name Errors and exceptions                              */
     ///@{
@@ -1574,7 +1702,130 @@ void str_sparse_vector<CharType, BV, MAX_STR_SIZE>::const_iterator::advance()
 }
 
 //---------------------------------------------------------------------
+//
+//---------------------------------------------------------------------
 
+template<class CharType, class BV, unsigned MAX_STR_SIZE>
+str_sparse_vector<CharType, BV, MAX_STR_SIZE>::back_insert_iterator::back_insert_iterator()
+: sv_(0), bv_null_(0), pos_in_buf_(~size_type(0))
+{}
+
+//---------------------------------------------------------------------
+
+template<class CharType, class BV, unsigned MAX_STR_SIZE>
+str_sparse_vector<CharType, BV, MAX_STR_SIZE>::back_insert_iterator::back_insert_iterator(
+           str_sparse_vector<CharType, BV, MAX_STR_SIZE>* sv)
+: sv_(sv), pos_in_buf_(~size_type(0))
+{
+    bv_null_ = sv_? sv_->get_null_bvect() : 0;
+}
+
+//---------------------------------------------------------------------
+
+template<class CharType, class BV, unsigned MAX_STR_SIZE>
+str_sparse_vector<CharType, BV, MAX_STR_SIZE>::back_insert_iterator::back_insert_iterator(
+const str_sparse_vector<CharType, BV, MAX_STR_SIZE>::back_insert_iterator& bi)
+: sv_(bi.sv_), bv_null_(bi.bv_null_), pos_in_buf_(~size_type(0))
+{
+    BM_ASSERT(bi.empty());
+}
+
+//---------------------------------------------------------------------
+
+template<class CharType, class BV, unsigned MAX_STR_SIZE>
+str_sparse_vector<CharType, BV, MAX_STR_SIZE>::back_insert_iterator::~back_insert_iterator()
+{
+    this->flush();
+}
+
+//---------------------------------------------------------------------
+
+template<class CharType, class BV, unsigned MAX_STR_SIZE>
+bool str_sparse_vector<CharType, BV, MAX_STR_SIZE>::back_insert_iterator::empty() const
+{
+    return (pos_in_buf_ == ~size_type(0) || !sv_);
+}
+
+//---------------------------------------------------------------------
+
+template<class CharType, class BV, unsigned MAX_STR_SIZE>
+void str_sparse_vector<CharType, BV, MAX_STR_SIZE>::back_insert_iterator::flush()
+{
+    if (this->empty())
+        return;
+    
+    sv_->import_back(buf_matrix_, pos_in_buf_+1);
+    pos_in_buf_ = ~size_type(0);
+}
+
+//---------------------------------------------------------------------
+
+template<class CharType, class BV, unsigned MAX_STR_SIZE>
+void str_sparse_vector<CharType, BV, MAX_STR_SIZE>::back_insert_iterator::add(
+const typename str_sparse_vector<CharType, BV, MAX_STR_SIZE>::back_insert_iterator::value_type* v)
+{
+    size_type buf_idx = this->add_value(v);
+    if (bv_null_)
+    {
+        size_type sz = sv_->size();
+        bv_null_->set_bit_no_check(sz + buf_idx);
+    }
+}
+
+//---------------------------------------------------------------------
+
+template<class CharType, class BV, unsigned MAX_STR_SIZE>
+void str_sparse_vector<CharType, BV, MAX_STR_SIZE>::back_insert_iterator::add_null()
+{
+    this->add(""); // TODO: optimization
+}
+
+//---------------------------------------------------------------------
+
+template<class CharType, class BV, unsigned MAX_STR_SIZE>
+void str_sparse_vector<CharType, BV, MAX_STR_SIZE>::back_insert_iterator::add_null(
+typename str_sparse_vector<CharType, BV, MAX_STR_SIZE>::back_insert_iterator::size_type count)
+{
+    for (size_type i = 0; i < count; ++i) // TODO: optimization
+        this->add("");
+}
+
+
+//---------------------------------------------------------------------
+
+template<class CharType, class BV, unsigned MAX_STR_SIZE>
+typename str_sparse_vector<CharType, BV, MAX_STR_SIZE>::back_insert_iterator::size_type
+str_sparse_vector<CharType, BV, MAX_STR_SIZE>::back_insert_iterator::add_value(
+const str_sparse_vector<CharType, BV, MAX_STR_SIZE>::back_insert_iterator::value_type* v)
+{
+    BM_ASSERT(sv_);
+    if (pos_in_buf_ == ~size_type(0))
+    {
+        if (!buf_matrix_.is_init())
+            buf_matrix_.init();
+        pos_in_buf_ = 0;
+    }
+    else
+    if (pos_in_buf_ >= buffer_matrix_type::n_rows-1)
+    {
+        this->flush();
+        pos_in_buf_ = 0;
+    }
+    else
+    {
+        ++pos_in_buf_;
+    }
+    value_type* r = buf_matrix_.row(pos_in_buf_);
+    for (unsigned i = 0; i < buffer_matrix_type::n_columns; ++i)
+    {
+        r[i] = v[i];
+        if (!r[i])
+            break;
+    } // for i
+    return pos_in_buf_;
+}
+
+//---------------------------------------------------------------------
 
 
 } // namespace
