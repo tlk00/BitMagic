@@ -233,8 +233,8 @@ public:
         Back insert iterator implements buffered insert, faster than generic
         access assignment.
      
-        Limitations for bufferen inserter:
-        1. Do not use more than one inserter competitively
+        Limitations for buffered inserter:
+        1. Do not use more than one inserter (into one vector) at the same time
         2. Use method flush() at the end to send the rest of accumulated buffer
         flush is happening automatically on destruction, but if flush produces an
         exception (for whatever reason) it will be an exception in destructor.
@@ -300,7 +300,7 @@ public:
         void flush();
     protected:
     
-        /** add value to the buffer without touyching the NULL vector
+        /** add value to the buffer without changing the NULL vector
             @param v - value to push back
             @return index of added value in the internal buffer
             @internal
@@ -452,8 +452,8 @@ public:
     const_iterator get_const_iterator(size_type idx) const { return const_iterator(this, idx); }
  
     /** Provide back insert iterator
-    Back insert iterator implements buffered insertion, which is faster, than random access
-    or push_back
+        Back insert iterator implements buffered insertion,
+        which is faster, than random access or push_back
     */
     back_insert_iterator get_back_inserter() { return back_insert_iterator(this); }
     ///@}
@@ -491,9 +491,9 @@ public:
     /*!
         \brief Import list of elements from a C-style array (pushed back)
         \param arr  - source array
-        \param size - source size
+        \param srr_size - source size
     */
-    void import_back(const value_type* arr, size_type size);
+    void import_back(const value_type* arr, size_type arr_size);
     ///@}
 
     // ------------------------------------------------------------
@@ -982,9 +982,9 @@ void sparse_vector<Val, BV>::import(const value_type* arr,
 
 template<class Val, class BV>
 void sparse_vector<Val, BV>::import_back(const value_type* arr,
-                                         size_type         size)
+                                         size_type         arr_size)
 {
-    this->import(arr, size, this->size());
+    this->import(arr, arr_size, this->size());
 }
 
 //---------------------------------------------------------------------
@@ -1933,7 +1933,7 @@ sparse_vector<Val, BV>::back_insert_iterator::back_insert_iterator(
 template<class Val, class BV>
 sparse_vector<Val, BV>::back_insert_iterator::back_insert_iterator(
     const typename sparse_vector<Val, BV>::back_insert_iterator& bi)
-: sv_(bi.sv_), buf_ptr_(0)
+: sv_(bi.sv_), bv_null_(bi.bv_null_), buf_ptr_(0)
 {
     BM_ASSERT(bi.empty());
 }
@@ -1992,7 +1992,7 @@ unsigned sparse_vector<Val, BV>::back_insert_iterator::add_value(
 template<class Val, class BV>
 void sparse_vector<Val, BV>::back_insert_iterator::add_null()
 {
-    this->add_value(value_type(0));
+    this->add(value_type(0));
 }
 
 //---------------------------------------------------------------------
@@ -2002,7 +2002,7 @@ void sparse_vector<Val, BV>::back_insert_iterator::add_null(
     typename sparse_vector<Val, BV>::back_insert_iterator::size_type count)
 {
     for (size_type i = 0; i < count; ++i) // TODO: optimization
-        this->add_value(value_type(0));
+        this->add(value_type(0));
 }
 
 //---------------------------------------------------------------------
