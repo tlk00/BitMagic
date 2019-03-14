@@ -31,6 +31,7 @@ For more information please visit:  http://bitmagic.io
 #define BM_ERR_RANGE (3)
 #define BM_ERR_CPU   (4)
 #define BM_ERR_SERIALFORMAT (5)
+#define BM_ERR_BAD_VALUE (6)
 
 /* Error codes for Java/JNI incapsulation */
 #define BM_ERR_DETACHED (101)
@@ -46,6 +47,8 @@ For more information please visit:  http://bitmagic.io
 #define BM_ERR_RANGE_MSG    "BM-03: Incorrect range or index"
 #define BM_ERR_CPU_MSG      "BM-04: Incorrect CPU vectorization (SIMD) version"
 #define BM_ERR_SERIALFORMAT_MSG "BM-05: Serialization format error"
+#define BM_ERR_BAD_VALUE "BM-06: Bad value"
+
 
 
 #define BM_ERR_DETACHED_MSG    "BM-101: Current thread no attached to JVM"
