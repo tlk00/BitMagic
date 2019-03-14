@@ -15881,7 +15881,18 @@ void TestStrSparseVector()
         assert(equal);
    }
    
-    // const_iterator
+   
+    // back insert iterator
+    //
+    {
+       str_sparse_vector<char, bvect, 32> str_sv0;
+       str_sparse_vector<char, bvect, 32>::back_insert_iterator bit;
+       str_sparse_vector<char, bvect, 32>::back_insert_iterator bit2(&str_sv0);
+       str_sparse_vector<char, bvect, 32>::back_insert_iterator bit3(bit);
+       bit = bit3;
+    }
+
+    // const_iterator / back_inserter
     //
     {
        str_sparse_vector<char, bvect, 32> str_sv0;
@@ -15891,9 +15902,14 @@ void TestStrSparseVector()
         str_sparse_vector<char, bvect, 32>::const_iterator it2c(it2);
         assert(!it2c.valid());
        }
-       str_sv0[0] = "1";
-       str_sv0[1] = "11";
-       str_sv0[2] = "123";
+       {
+           str_sparse_vector<char, bvect, 32>::back_insert_iterator bi = str_sv0.get_back_inserter();
+           bi = "1";
+           bi = "11";
+           bi = "123";
+           
+           bi.flush();
+       }
     
         {
         str_sparse_vector<char, bvect, 32>::const_iterator it_end;
@@ -15920,9 +15936,9 @@ void TestStrSparseVector()
         assert(cmp == 0);
 
         }
-
     }
-   
+    
+    
    cout << "---------------------------- Bit-plain STR sparse vector test OK" << endl;
 }
 
@@ -16058,9 +16074,13 @@ void StressTestStrSparseVector()
    GenerateTestStrCollection(str_coll, max_coll);
 
    cout << "Loading test sparse vector..." << endl;
+   {
+   str_svect_type::back_insert_iterator bi = str_sv.get_back_inserter();
    for (auto str : str_coll)
    {
-       str_sv.push_back(str);
+       bi = str;
+//       str_sv.push_back(str);
+   }
    }
 
     // -----------------------------------------------------------
@@ -19648,7 +19668,7 @@ int main(void)
      TestCompressedCollection();
 
      TestStrSparseVector();
-    
+
      TestStrSparseSort();
 
      StressTestStrSparseVector();
