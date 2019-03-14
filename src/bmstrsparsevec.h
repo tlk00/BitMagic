@@ -288,7 +288,16 @@ public:
         ~back_insert_iterator();
         
         /** push value to the vector */
-        back_insert_iterator& operator=(const value_type* v) { this->add(v); return *this; }
+        back_insert_iterator& operator=(const value_type* v)
+            { this->add(v); return *this; }
+        
+        /** push value to the vector */
+        template<typename StrType>
+        back_insert_iterator& operator=(const StrType& v)
+        {
+            this->add(v.c_str()); return *this; // TODO: avoid c_str()
+        }
+
         /** noop */
         back_insert_iterator& operator*() { return *this; }
         /** noop */
