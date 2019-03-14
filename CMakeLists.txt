@@ -95,5 +95,6 @@ add_executable(rscsample01 ${PROJECT_SOURCE_DIR}/samples/rscsample01/rscsample01
 
 add_executable(strsvsample01 ${PROJECT_SOURCE_DIR}/samples/strsvsample01/strsvsample01.cpp)
 add_executable(strsvsample02 ${PROJECT_SOURCE_DIR}/samples/strsvsample02/strsvsample02.cpp)
+add_executable(strsvsample03 ${PROJECT_SOURCE_DIR}/samples/strsvsample03/strsvsample03.cpp)
 
 

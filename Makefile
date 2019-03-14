@@ -53,6 +53,7 @@ TARGETS_BLD =  \
               samples/xsample05 \
               samples/strsvsample01 \
               samples/strsvsample02 \
+              samples/strsvsample03 \
               samples/svsample01 \
               samples/svsample02 \
               samples/svsample03 \
