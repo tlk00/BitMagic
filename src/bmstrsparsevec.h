@@ -1286,7 +1286,6 @@ int str_sparse_vector<CharType, BV, MAX_STR_SIZE>::compare(
             if (!remap_value) // unknown dictionary element
             {
                 throw_bad_value(0);
-                return -1;
             }
             ch = CharType(remap_value);
         }
