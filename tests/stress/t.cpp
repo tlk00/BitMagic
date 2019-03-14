@@ -28,6 +28,7 @@ For more information please visit:  http://bitmagic.io
 #include <cassert>
 #include <time.h>
 #include <math.h>
+#include <string.h>
 
 #include <iostream>
 #include <iomanip>
@@ -6215,7 +6216,7 @@ void AggregatorTest()
             bvect bv1 { 1 };
             bvect bv2 { 5 };
             
-            bv1.clear(1); bv2.clear(5);
+            bv1.set(1, false); bv2.set(5, false);
             
             agg.reset();
             agg.add(&bv1);
@@ -15515,9 +15516,9 @@ void TestStrSparseVector()
           const char* cs2 = "034";
           
           bm::heap_matrix<char, 1024, 64, bvect::allocator_type> hmatr(true);
-          ::strcpy(hmatr.row(0), cs0);
-          ::strcpy(hmatr.row(1), cs1);
-          ::strcpy(hmatr.row(2), cs2);
+          ::strncpy(hmatr.row(0), cs0, hmatr.cols());
+          ::strncpy(hmatr.row(1), cs1, hmatr.cols());
+          ::strncpy(hmatr.row(2), cs2, hmatr.cols());
           
           for (unsigned i = 0; i < 3; ++i)
           {
@@ -19139,7 +19140,7 @@ void TestArraysAndBuffers()
         for (unsigned i = 0; i < hm.rows(); ++i)
         {
             char* r = hm.row(i);
-            ::strcpy(r, "abcd");
+            ::strncpy(r, "abcd", hm.cols());
         }
         for (unsigned i = 0; i < hm.rows(); ++i)
         {
