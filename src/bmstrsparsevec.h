@@ -1812,12 +1812,14 @@ const str_sparse_vector<CharType, BV, MAX_STR_SIZE>::back_insert_iterator::value
         if (!buf_matrix_.is_init())
             buf_matrix_.init();
         pos_in_buf_ = 0;
+        buf_matrix_.set_zero();
     }
     else
     if (pos_in_buf_ >= buffer_matrix_type::n_rows-1)
     {
         this->flush();
         pos_in_buf_ = 0;
+        buf_matrix_.set_zero();
     }
     else
     {
