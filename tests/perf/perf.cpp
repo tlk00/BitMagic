@@ -2950,13 +2950,24 @@ void StrSparseVectorTest()
    GenerateTestStrCollection(str_coll, max_coll);
    
     {
-        TimeTaker tt("bm::str_sparse_vector<>::push_back() ", 1);
+       TimeTaker tt("bm::str_sparse_vector<>::push_back() ", 1);
        for (auto str : str_coll)
        {
            str_sv.push_back(str);
        }
     }
     str_sv.optimize();
+    
+    {
+       str_svect_type str_sv0;
+       TimeTaker tt("bm::str_sparse_vector<>::back_insert_iterator ", 1);
+       str_svect_type::back_insert_iterator bi = str_sv0.get_back_inserter();
+       for (auto str : str_coll)
+       {
+           bi = str;
+       }
+
+    }
     
     {
     string str;
