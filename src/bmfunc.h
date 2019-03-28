@@ -4137,6 +4137,53 @@ bm::word_t bit_block_insert(bm::word_t* block, unsigned bitpos, bool value)
 }
 
 /*!
+    @brief erase bit from position and shift the rest right with carryover
+ 
+    @param block - bit-block pointer
+    @param bitpos   - bit position to insert
+    @param carry_over - bit value to add to the end (0|1)
+ 
+    @ingroup bitfunc
+*/
+inline
+void bit_block_erase(bm::word_t* block, unsigned bitpos, bool carry_over)
+{
+    BM_ASSERT(block);
+    BM_ASSERT(bitpos < 65536);
+    
+    unsigned nbit  = unsigned(bitpos & bm::set_block_mask);
+    unsigned nword = unsigned(nbit >> bm::set_word_shift);
+    nbit &= bm::set_word_mask;
+    
+    bm::word_t co_flag = carry_over;
+    for (unsigned i = bm::set_block_size-1; i > nword; --i)
+    {
+        bm::word_t w = block[i];
+        bm::word_t co_flag1 = w & 1u;
+        w = (w >> 1u) | (co_flag << 31u);
+        block[i] = w;
+        co_flag = co_flag1;
+    }
+    
+    if (nbit)
+    {
+        unsigned r_mask = bm::block_set_table<true>::_right[nbit];
+        bm::word_t w = block[nword] & r_mask;
+        bm::word_t wl = block[nword] & ~r_mask;
+        w &= ~(1 << nbit); // clear the removed bit
+        w >>= 1u;
+        w |= wl | (co_flag << 31u);
+        block[nword] = w;
+    }
+    else
+    {
+        block[nword] = (block[nword] >> 1u) | (co_flag << 31u);
+    }
+}
+
+
+
+/*!
     @brief Right bit-shift bitblock by 1 bit (reference)
     @param block - bit-block pointer
     @param empty_acc - [out] contains 0 if block is empty
