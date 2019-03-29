@@ -2597,6 +2597,132 @@ void BlockBitInsertTest()
     cout << "---------------------------- BlockBitInsertTest test OK" << endl;
 }
 
+
+static
+void BlockBitEraseTest()
+{
+    cout << "---------------------------- BlockBitEraseTest test" << endl;
+    bm::word_t BM_VECT_ALIGN blk0[bm::set_block_size] BM_VECT_ALIGN_ATTR = { 0 };
+    bm::word_t BM_VECT_ALIGN blk1[bm::set_block_size] BM_VECT_ALIGN_ATTR = { 0 };
+
+    bm::bit_block_set(blk0, 0);
+    bm::bit_block_set(blk1, 0);
+    
+    {
+        blk0[0] = 1;
+        bm::bit_block_erase(blk0, 0, true);
+        assert(blk0[0] == 0);
+        assert(blk0[bm::set_block_size-1] == (1u << 31u));
+        
+        blk0[0] = ~0u;
+        blk0[1] = 1u;
+        blk0[bm::set_block_size-1] = (1u << 31u);
+        bm::bit_block_erase(blk0, 0, false);
+        assert(blk0[0] == ~0u);
+        assert(blk0[1] == 0);
+        assert(blk0[bm::set_block_size-1] == (1u << 30u));
+        
+        bm::bit_block_set(blk0, 0);
+        blk0[1] = 15u; // ..01111
+        bm::bit_block_erase(blk0, 31, false);
+        assert(blk0[1] == 7u); // ..0111
+        assert(blk0[0] == 1u << 31u);
+
+        bm::bit_block_erase(blk0, 32, false);
+        assert(blk0[1] == 3u); // ..011
+
+        blk0[1] = 15u; // ..01111
+        bm::bit_block_erase(blk0, 33, false);
+        assert(blk0[1] == 0b111);
+
+
+    }
+
+    cout << "bit-insert-erase stress 0..." << endl;
+
+    {
+    bm::bit_block_set(blk0, 0);
+    bm::bit_block_set(blk1, 0);
+    
+    blk0[bm::set_block_size-1] = (1 << 31);
+    for (unsigned i = 65535; i != 0; --i)
+    {
+        unsigned t = bm::test_bit(blk0, i);
+        assert(t);
+        bm::bit_block_erase(blk0, 0, false);
+        auto cnt = bm::bit_block_count(blk0);
+        assert(cnt == 1);
+    } // for i
+    bm::bit_block_set(blk0, 0);
+
+    {
+    blk0[bm::set_block_size-1] = (1 << 31);
+    unsigned j = 0;
+    for (unsigned i = 65535; i != 0; --i, ++j)
+    {
+        unsigned t = bm::test_bit(blk0, i);
+        assert(t);
+        bm::bit_block_erase(blk0, j, false);
+        if (i <= j)
+        {
+            t = bm::test_bit(blk0, j);
+            assert(!t);
+            t = bm::test_bit(blk0, i);
+            assert(t);
+
+            auto cnt = bm::bit_block_count(blk0);
+            assert(cnt);
+            
+            bm::bit_block_erase(blk0, i, false);
+            t = bm::test_bit(blk0, i);
+            assert(!t);
+            cnt = bm::bit_block_count(blk0);
+            assert(!cnt);
+            break;
+        }
+        auto cnt = bm::bit_block_count(blk0);
+        assert(cnt == 1);
+    } // for i
+    }
+    
+    {
+        bm::bit_block_set(blk0, 0);
+        for (unsigned i = 0; i < 65535; ++i)
+        {
+            for(unsigned j = i; j < 65535; ++j)
+            {
+                bm::bit_block_set(blk0, 0);
+                unsigned bitcount = j - i + 1;
+                assert(i + bitcount < 65536);
+                bm::or_bit_block(blk0, i, bitcount);
+                if (bitcount == 1)
+                {
+                    break;
+                }
+                unsigned bc = bm::bit_block_count(blk0);
+                for (unsigned k = i + bitcount/2; k < i+bitcount; ++k)
+                {
+                    auto t = bm::test_bit(blk0, k);
+                    assert(t);
+
+                    bm::bit_block_erase(blk0, k, false);
+                    
+                    unsigned bc2 = bm::bit_block_count(blk0);
+                    assert(bc2 == bc-1);
+                    --bc;
+                } // for k
+                
+            } // for j
+        } // for i
+    }
+
+
+    }
+    cout << "ok" << endl;
+
+    cout << "---------------------------- BlockBitEraseTest test OK" << endl;
+}
+
 static
 void EmptyBVTest()
 {
@@ -19538,6 +19664,9 @@ int main(void)
      ShiftRotateTest();
 
      BlockBitInsertTest();
+
+     BlockBitEraseTest();
+
 
      ExportTest();
      ResizeTest();
