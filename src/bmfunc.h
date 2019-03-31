@@ -2403,6 +2403,60 @@ bool gap_shift_r1(T* buf, unsigned co_flag, unsigned* new_len)
 }
 
 /*!
+    @brief Left shift GAP block by 1 bit
+    @param buf - block pointer
+    @param co_falg - carry over from the previous block
+ 
+    @return carry over bit (1 or 0)
+    @ingroup gapfunc
+*/
+template<typename T>
+bool gap_shift_l1(T* buf, unsigned co_flag, unsigned* new_len)
+{
+    BM_ASSERT(new_len);
+    unsigned is_set;
+
+    // 1: decrement all GAP values by 1
+    //
+    unsigned bitval = *buf & 1;
+    bool co0 = bitval;
+
+    if (!buf[1]) // cannot decrement (corner case)
+    {
+        bitval ^= 1;
+        *new_len = bm::gap_set_value(bitval, buf, 0, &is_set);
+        
+        BM_ASSERT(is_set);
+        BM_ASSERT(buf[1]);
+        BM_ASSERT(bitval == (*buf & 1));
+        
+        if (*new_len == 1)
+        {
+            *new_len = bm::gap_set_value(co_flag, buf,
+                                         bm::gap_max_bits-1, &is_set);
+            return co0;
+        }
+    }
+    if (buf[1] != bm::gap_max_bits-1) // full GAP block
+    {
+        BM_ASSERT(buf[1]);
+        unsigned len = (*buf >> 3);
+        unsigned i = 1;
+        for (; i < len; ++i)
+        {
+            buf[i]--;
+            bitval ^= 1;
+        } // for i
+        BM_ASSERT(buf[i] == bm::gap_max_bits-1);
+    }
+    // 2: set last bit position with carry-in flag
+    //
+    *new_len = bm::gap_set_value(co_flag, buf, bm::gap_max_bits-1, &is_set);
+    return co0;
+}
+
+
+/*!
    \brief Convert array to GAP buffer.
 
    \param buf - GAP buffer.
@@ -4231,6 +4285,61 @@ bool bit_block_shift_r1_unr(bm::word_t* block,
         return VECT_SHIFT_R1(block, empty_acc, co_flag);
     #else
         return bm::bit_block_shift_r1(block, empty_acc, co_flag);
+    #endif
+}
+
+
+/*!
+    @brief Left bit-shift bitblock by 1 bit (reference)
+    @param block - bit-block pointer
+    @param empty_acc - [out] contains 0 if block is empty
+    @param co_flag - carry over from the prev/next block
+ 
+    @return carry over bit (1 or 0)
+
+    @ingroup bitfunc
+*/
+inline
+bool bit_block_shift_l1(bm::word_t* block,
+                        bm::word_t* empty_acc, bm::word_t co_flag)
+{
+    BM_ASSERT(block);
+    BM_ASSERT(empty_acc);
+    
+    bm::word_t acc = 0;
+    for (int i = bm::set_block_size-1; i >= 0; --i)
+    {
+        bm::word_t w = block[i];
+        bm::word_t co_flag1 = w & 1u;
+        acc |= w = (w >> 1u) | (co_flag << 31u);
+        block[i] = w;
+        co_flag = co_flag1;
+    }
+
+    *empty_acc = acc;
+    return co_flag;
+}
+
+/*!
+    @brief Left bit-shift of bit-block by 1 bit (loop unrolled)
+    @param block - bit-block pointer
+    @param empty_acc - [out] contains 0 if block is empty
+    @param co_flag - carry over from the prev/next block
+
+    @return carry over bit (1 or 0)
+    @ingroup bitfunc
+*/
+inline
+bool bit_block_shift_l1_unr(bm::word_t* block,
+                            bm::word_t* empty_acc, bm::word_t co_flag)
+{
+    BM_ASSERT(block);
+    BM_ASSERT(empty_acc);
+    // TODO: SIMD
+    #if defined(VECT_SHIFT_L1)
+        return VECT_SHIFT_L1(block, empty_acc, co_flag);
+    #else
+        return bm::bit_block_shift_l1(block, empty_acc, co_flag);
     #endif
 }
 

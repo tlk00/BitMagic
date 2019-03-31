@@ -1801,7 +1801,7 @@ public:
     
     /*!
         \brief Insert bit into specified position
-        All the vector content after position is shifted right.
+        All the vector content after insert position is shifted right.
      
         \param n - index of the bit to insert
         \param value - insert value
@@ -1809,6 +1809,14 @@ public:
         \return Carry over bit value (1 or 0)
     */
     bool insert(bm::id_t n, bool value);
+
+    /*!
+        \brief Erase bit in the specified position
+        All the vector content after erase position is shifted left.
+     
+        \param n - index of the bit to insert
+    */
+    void erase(bm::id_t n);
 
     //@}
 
@@ -2348,6 +2356,11 @@ private:
                             unsigned nb,
                             unsigned nbit_right,
                             const rs_index_type&  blocks_cnt);
+
+    /**
+        Return value of first bit in the block
+    */
+    bool test_first_block_bit(unsigned nb) const;
 
 private:
     blocks_manager_type  blockman_;         //!< bitblocks manager
@@ -4172,7 +4185,7 @@ bool bvector<Alloc>::insert(bm::id_t n, bool value)
             if (!block)
                 block = blockman_.check_allocate_block(nb, BM_BIT);
             if (BM_IS_GAP(block) || IS_FULL_BLOCK(block))
-                block = blockman_.deoptimize_block(nb);
+                block = blockman_.deoptimize_block(nb); // TODO: optimize GAP block insert
             BM_ASSERT(IS_VALID_ADDR(block));
             {
                 unsigned nbit  = unsigned(n & bm::set_block_mask);
@@ -4305,6 +4318,153 @@ bool bvector<Alloc>::insert(bm::id_t n, bool value)
     return carry_over;
 
 }
+
+//---------------------------------------------------------------------
+
+template<class Alloc>
+void bvector<Alloc>::erase(bm::id_t n)
+{
+    BM_ASSERT_THROW(n < bm::id_max, BM_ERR_RANGE);
+
+    if (!blockman_.is_init())
+        return ;
+    
+    // calculate logical block number
+    unsigned nb = unsigned(n >>  bm::set_block_shift);
+    
+    int block_type;
+    
+    if (!n ) // regular shift-left by 1 bit
+    {}
+    else // process target block bit erase
+    {
+        bm::word_t* block = blockman_.get_block_ptr(nb);
+        bool carry_over = test_first_block_bit(nb+1);
+        
+        if (!block)
+        {
+            if (carry_over)
+            {
+                block = blockman_.check_allocate_block(nb, BM_BIT);
+                block[bm::set_block_size-1] = (1u << 31u);
+            }
+        }
+        else
+        {
+            if (BM_IS_GAP(block) || IS_FULL_BLOCK(block))
+                block = blockman_.deoptimize_block(nb);
+            BM_ASSERT(IS_VALID_ADDR(block));
+            unsigned nbit  = unsigned(n & bm::set_block_mask);
+            bm::bit_block_erase(block, nbit, carry_over);
+        }
+        ++nb;
+    }
+    // left shifting of all other blocks
+    //
+    unsigned i0, j0;
+    blockman_.get_block_coord(nb, i0, j0);
+
+    unsigned top_blocks = blockman_.top_block_size();
+    bm::word_t*** blk_root = blockman_.top_blocks_root();
+    bm::word_t**  blk_blk;
+    bm::word_t*   block;
+
+    for (unsigned i = i0; i < bm::set_array_size; ++i)
+    {
+        if (i >= top_blocks)
+            break;
+        else
+            blk_blk = blk_root[i];
+        
+        if (!blk_blk) // top level group of blocks missing
+        {
+            unsigned nblock = (i * bm::set_array_size) + 0;
+            bool carry_over = test_first_block_bit(nblock+1); // look ahead for CO
+            if (carry_over)
+            {
+                // carry over: needs block-list extension and a block
+                if (nblock > nb)
+                {
+                    block =
+                    blockman_.check_allocate_block(nblock, 0, 0, &block_type, false);
+                    block[bm::set_block_size-1] = (unsigned(carry_over) << 31u);
+
+                    // reset all control vars (blocks tree may have re-allocated)
+                    blk_root = blockman_.top_blocks_root();
+                    blk_blk = blk_root[i];
+                    top_blocks = blockman_.top_block_size();
+                }
+            }
+            continue;
+        }
+        
+        unsigned j = j0;
+        do
+        {
+            unsigned nblock = (i * bm::set_array_size) + j;
+            bool carry_over = test_first_block_bit(nblock+1); // look ahead for CO
+            block = blk_blk[j];
+            if (!block)
+            {
+                if (carry_over)
+                {
+                    bm::id_t nbit =
+                        (nblock * bm::gap_max_bits) + bm::gap_max_bits - 1;
+                    set_bit_no_check(nbit);
+                }
+                continue;
+            }
+            if (IS_FULL_BLOCK(block))
+            {
+                // 1 in 1 out, block is still all 0xFFFF..
+                // 0 into 1 -> carry in 0, carry out 1
+                if (!carry_over)
+                {
+                    block = blockman_.deoptimize_block(nblock);
+                    block[bm::set_block_size-1] >>= 1;
+                }
+                continue;
+            }
+            if (BM_IS_GAP(block))
+            {
+                unsigned new_block_len;
+                bm::gap_word_t* gap_blk = BMGAP_PTR(block);
+
+                carry_over = bm::gap_shift_l1(gap_blk, carry_over, &new_block_len);
+                unsigned threshold =  bm::gap_limit(gap_blk, blockman_.glen());
+                if (new_block_len > threshold)
+                    extend_gap_block(nblock, gap_blk);
+                else
+                {
+                    if (bm::gap_is_all_zero(gap_blk))
+                        blockman_.zero_block(i, j);
+                }
+                continue;
+            }
+            // bit-block
+            {
+                bm::word_t acc;
+                bm::bit_block_shift_l1_unr(block, &acc, carry_over);
+                if (!acc)
+                    blockman_.zero_block(nblock);
+            }
+            
+        } while (++j < bm::set_array_size);
+        j0 = 0;
+    } // for i
+
+}
+
+//---------------------------------------------------------------------
+
+template<class Alloc>
+bool bvector<Alloc>::test_first_block_bit(unsigned nb) const
+{
+    if (nb >= bm::set_total_blocks) // last possible block
+        return false;
+    return test(nb * bm::gap_max_bits);
+}
+
 
 //---------------------------------------------------------------------
 
