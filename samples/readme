@@ -21,7 +21,8 @@ Bit-vector operations
 ./bvsample17 - rank-select operations on bvector<> using rs_index
 ./bvsample18 - bvector<>::bulk_insert_iterator (efficient bit-vector construction)
 ./bvsample19 - bvector<>::merge - merge of bit-vectors (can be used for partitioned processing)
-./bvsample20 - bvector<>::shift_right() and vector<>::insert() - bit-shifting / insertion sample
+./bvsample20 - bvector<>::shift_right() and bvector<>::insert() - bit-shifting / insertion sample
+./bvsample21 - bvector<>::shift_left() and bvector<>::erase() - bit-shifting / bit delete sample
 
 ./bvsetalgebra - Tutorial for Algebra of Sets operations
 Tutorial: http://bitmagic.io/set-algebra.html
