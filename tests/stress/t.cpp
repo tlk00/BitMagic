@@ -857,6 +857,29 @@ void BVectorInsert(bvect*  bv, unsigned pos, bool value)
     bv->set(pos, value);
 }
 
+// Reference bit erase
+static
+void BVectorErase(bvect*  bv, unsigned pos)
+{
+    bvect bv_tmp;
+    if (pos)
+        bv_tmp.copy_range(*bv, 0, pos-1);
+    
+    {
+        bvect::bulk_insert_iterator bi = bv_tmp.inserter();
+        bvect::enumerator en = bv->first();
+        en.go_to(pos+1);
+        for (; en.valid(); ++en)
+        {
+            unsigned v = *en;
+            assert(v > pos);
+            bi = v -1;
+        }
+    }
+    bv->swap(bv_tmp);
+}
+
+
 
 // do logical operation through serialization
 static
@@ -2644,7 +2667,7 @@ void BlockBitEraseTest()
     bm::bit_block_set(blk0, 0);
     bm::bit_block_set(blk1, 0);
     
-    blk0[bm::set_block_size-1] = (1 << 31);
+    blk0[bm::set_block_size-1] = (1u << 31);
     for (unsigned i = 65535; i != 0; --i)
     {
         unsigned t = bm::test_bit(blk0, i);
@@ -2656,7 +2679,7 @@ void BlockBitEraseTest()
     bm::bit_block_set(blk0, 0);
 
     {
-    blk0[bm::set_block_size-1] = (1 << 31);
+    blk0[bm::set_block_size-1] = (1u << 31);
     unsigned j = 0;
     for (unsigned i = 65535; i != 0; --i, ++j)
     {
@@ -4020,6 +4043,168 @@ void BvectorInsertTest()
 
 
     cout << "---------------------------- Bvector INSERT test OK" << endl;
+}
+
+static
+void BvectorEraseTest()
+{
+    cout << "---------------------------- Bvector ERASE test" << endl;
+    
+    {
+        bvect bv;
+        bv.erase(100);
+        assert(!bv.any());
+    }
+    
+    {
+        bvect bv { 1, 2, 3 };
+        bvect bv_c { 1, 2 };
+        bv.erase(1);
+        print_bv(bv);
+        int cmp = bv.compare(bv_c);
+        assert(cmp == 0);
+    }
+
+    {
+        bvect bv {100, 65536 };
+        bvect bv_c(bv);
+        bv.optimize();
+        bv.erase(99);
+        print_bv(bv);
+        BVectorErase(&bv_c, 99);
+        
+        assert(bv.test(99));
+        assert(bv.test(65535));
+        assert(bv.count()==2);
+        int cmp = bv.compare(bv_c);
+        assert(!cmp);
+    }
+    
+    {
+        bvect bv;
+        bv.set_range(65536, 65536 + 65536);
+        bvect bv_c(bv);
+
+        unsigned cnt1 = bv.count();
+        bv.optimize();
+        bv.erase(0);
+        BVectorErase(&bv_c, 0);
+        
+        unsigned cnt2 = bv.count();
+        assert(cnt1 == cnt2);
+        unsigned cnt3 = bv.count_range(65535, 65535 + 65536);
+        assert(cnt3 == cnt1);
+        
+        struct bvect::statistics st;
+        bv.calc_stat(&st);
+        assert(st.bit_blocks == 1);
+        int cmp = bv.compare(bv_c);
+        assert(!cmp);
+    }
+    
+    {
+        bvect bv;
+        bv.set_range(65536, 65536 + 65535);
+        unsigned cnt1 = bv.count();
+        bv.optimize();
+        bv.erase(0);
+        unsigned cnt2 = bv.count();
+        assert(cnt1 == cnt2);
+        unsigned cnt3 = bv.count_range(65535, 65535 + 65535);
+        assert(cnt3 == cnt1);
+    }
+    
+    {
+        bvect bv;
+        bv.invert();
+        unsigned cnt1 = bv.count();
+        bv.erase(65536);
+        unsigned cnt2 = bv.count();
+        assert(cnt1 == (cnt2 + 1));
+        assert(!bv.test(bm::id_max-1));
+        
+        struct bvect::statistics st;
+        bv.calc_stat(&st);
+        assert(st.bit_blocks == 2);
+
+    }
+    
+    // test how emty blocks get deallocated on left shift
+    {
+        unsigned start = 1000000;
+        bvect bv;
+        bv.set(start);
+        unsigned finish = 10;
+        for(;true;)
+        {
+            bv.erase(finish);
+            --start;
+            if (start == finish)
+            {
+                assert(bv.test(start));
+                bv.erase(finish);
+                assert(!bv.test(start));
+
+                struct bvect::statistics st;
+                bv.calc_stat(&st);
+                assert(st.bit_blocks == 1);
+
+                break;
+            }
+            assert(bv.test(start));
+            unsigned cnt = bv.count();
+            assert(cnt == 1);
+            
+            struct bvect::statistics st;
+            bv.calc_stat(&st);
+            assert(st.bit_blocks == 1);
+        } // for
+    }
+    
+    cout << "bit erase stress test" << endl;
+    {
+        std::random_device rd;
+
+        bvect bv;
+        bv.invert();
+        bvect bv_c(bv);
+        
+        unsigned max_erase = 64;
+        
+        for(unsigned k = 0; k < max_erase; ++k)
+        {
+            bm::id_t pos;
+            unsigned from = rd();
+            bool b = bv.find(from, pos);
+            if (!b)
+            {
+                bool any = bv.any();
+                if (!any)
+                    break;
+                pos = 0;
+            }
+            
+            bv.erase(pos);
+            BVectorErase(&bv_c, pos);
+            
+            int cmp = bv.compare(bv_c);
+            if (cmp != 0)
+            {
+                cerr << "Erase test failed! at pos=" << pos << endl;
+                exit(1);
+            }
+            
+//            if ((k % 64) == 0)
+            {
+                cout << "\r" << k << "/" << max_erase << flush;
+                bv.optimize();
+            }
+
+        } // for
+    }
+    cout << "\nOK" << endl;
+
+    cout << "---------------------------- Bvector ERASE test OK" << endl;
 }
 
 
@@ -19706,7 +19891,9 @@ int main(void)
      BvectorShiftTest();
 
      BvectorInsertTest();
-    
+
+     BvectorEraseTest();
+
      ClearAllTest();
 
      GAPCheck();
