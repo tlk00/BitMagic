@@ -1794,11 +1794,17 @@ public:
     //@{
     
     /*!
-        \brief Shift right by 1 bit, fill with zero return carry over
+        \brief Shift right by 1 bit, fill with zero return carry out
         \return Carry over bit value (1 or 0)
     */
     bool shift_right();
-    
+
+    /*!
+        \brief Shift left by 1 bit, fill with zero return carry out
+        \return Carry over bit value (1 or 0)
+    */
+    bool shift_left();
+
     /*!
         \brief Insert bit into specified position
         All the vector content after insert position is shifted right.
@@ -4149,6 +4155,16 @@ template<class Alloc>
 bool bvector<Alloc>::shift_right()
 {
     return insert(0, false);
+}
+
+//---------------------------------------------------------------------
+
+template<class Alloc>
+bool bvector<Alloc>::shift_left()
+{
+    bool b = this->test(0);
+    this->erase(0);
+    return b;
 }
 
 //---------------------------------------------------------------------
