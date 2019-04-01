@@ -1074,6 +1074,56 @@ void sse4_bit_block_gather_scatter(unsigned* BMRESTRICT arr,
 }
 
 /*!
+    @brief block shift left by 1
+    @ingroup SSE4
+*/
+inline
+bool sse42_shift_l1(__m128i* block, unsigned* empty_acc, unsigned co1)
+{
+    __m128i* block_end =
+        ( __m128i*)((bm::word_t*)(block) + bm::set_block_size);
+    __m128i mAcc = _mm_set1_epi32(0);
+    __m128i mMask1 = _mm_set1_epi32(1);
+
+    unsigned co2;
+    for (--block_end; block_end >= block; block_end -= 2)
+    {
+        __m128i m1A = _mm_load_si128(block_end);
+        __m128i m2A = _mm_load_si128(block_end-1);
+
+        __m128i m1CO = _mm_and_si128(m1A, mMask1);
+        __m128i m2CO = _mm_and_si128(m2A, mMask1);
+        
+        co2 = _mm_extract_epi32(m1CO, 0);
+        
+        m1A = _mm_srli_epi32(m1A, 1); // (block[i] >> 1u)
+        m2A = _mm_srli_epi32(m2A, 1);
+        
+        __m128i m1COshft = _mm_srli_si128 (m1CO, 4); // byte shift-r by 1 int32
+        __m128i m2COshft = _mm_srli_si128 (m2CO, 4);
+        m1COshft = _mm_insert_epi32 (m1COshft, co1, 3);
+        m2COshft = _mm_insert_epi32 (m2COshft, co2, 3);
+        m1COshft = _mm_slli_epi32(m1COshft, 31);
+        m2COshft = _mm_slli_epi32(m2COshft, 31);
+
+        m1A = _mm_or_si128(m1A, m1COshft); // block[i] |= co_flag
+        m2A = _mm_or_si128(m2A, m2COshft);
+        
+        co1 = _mm_extract_epi32(m2CO, 0);
+
+        _mm_store_si128(block_end, m1A);
+        _mm_store_si128(block_end-1, m2A);
+        
+        mAcc = _mm_or_si128(mAcc, m1A);
+        mAcc = _mm_or_si128(mAcc, m2A);
+    } // for
+    
+    *empty_acc = !_mm_testz_si128(mAcc, mAcc);
+    return co1;
+}
+
+
+/*!
     @brief block shift right by 1
     @ingroup SSE4
 */
@@ -1086,7 +1136,6 @@ bool sse42_shift_r1(__m128i* block, unsigned* empty_acc, unsigned co1)
     __m128i mAcc = _mm_set1_epi32(0);
 
     unsigned co2;
-
     for (;block < block_end; block += 2)
     {
         __m128i m1A = _mm_load_si128(block);
@@ -1100,26 +1149,21 @@ bool sse42_shift_r1(__m128i* block, unsigned* empty_acc, unsigned co1)
         m1A = _mm_slli_epi32(m1A, 1); // (block[i] << 1u)
         m2A = _mm_slli_epi32(m2A, 1);
         
-        m1COshft = _mm_slli_si128 (m1CO, 4); // byte shift left by 1 int32
-        m1COshft = _mm_insert_epi32 (m1COshft, co1, 0);
-        
-        co1 = co2;
-        
-        co2 = _mm_extract_epi32(m2CO, 3);
-        
+        m1COshft = _mm_slli_si128 (m1CO, 4); // byte shift-l by 1 int32
         m2COshft = _mm_slli_si128 (m2CO, 4);
-        m2COshft = _mm_insert_epi32 (m2COshft, co1, 0);
+        m1COshft = _mm_insert_epi32 (m1COshft, co1, 0);
+        m2COshft = _mm_insert_epi32 (m2COshft, co2, 0);
         
         m1A = _mm_or_si128(m1A, m1COshft); // block[i] |= co_flag
         m2A = _mm_or_si128(m2A, m2COshft);
+
+        co1 = _mm_extract_epi32(m2CO, 3);
 
         _mm_store_si128(block, m1A);
         _mm_store_si128(block+1, m2A);
         
         mAcc = _mm_or_si128(mAcc, m1A);
         mAcc = _mm_or_si128(mAcc, m2A);
-
-        co1 = co2;
     }
     *empty_acc = !_mm_testz_si128(mAcc, mAcc);
     return co1;
@@ -1324,6 +1368,9 @@ bool sse42_shift_r1_and(__m128i* block,
 
 #define VECT_LOWER_BOUND_SCAN_U32(arr, target, from, to) \
     sse4_lower_bound_scan_u32(arr, target, from, to)
+
+#define VECT_SHIFT_L1(b, acc, co) \
+    sse42_shift_l1((__m128i*)b, acc, co)
 
 #define VECT_SHIFT_R1(b, acc, co) \
     sse42_shift_r1((__m128i*)b, acc, co)
