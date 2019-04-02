@@ -1614,13 +1614,16 @@ public:
         if (blk_blk)
         {
             bm::word_t* block = blk_blk[j];
-            blk_blk[j] = 0;
+            if (block)
+            {
+                blk_blk[j] = 0;
 
-            if (BM_IS_GAP(block))
-                alloc_.free_gap_block(BMGAP_PTR(block), glen());
-            else
-                if (IS_VALID_ADDR(block))
-                    alloc_.free_bit_block(block);
+                if (BM_IS_GAP(block))
+                    alloc_.free_gap_block(BMGAP_PTR(block), glen());
+                else
+                    if (IS_VALID_ADDR(block))
+                        alloc_.free_bit_block(block);
+            }
             
             if (j == bm::set_array_size-1)
             {
