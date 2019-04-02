@@ -4348,8 +4348,6 @@ void bvector<Alloc>::erase(bm::id_t n)
     // calculate logical block number
     unsigned nb = unsigned(n >>  bm::set_block_shift);
     
-    int block_type;
-    
     if (!n ) // regular shift-left by 1 bit
     {}
     else // process target block bit erase
@@ -4394,23 +4392,6 @@ void bvector<Alloc>::erase(bm::id_t n)
         
         if (!blk_blk) // top level group of blocks missing
         {
-            unsigned nblock = (i * bm::set_array_size) + 0;
-            bool carry_over = test_first_block_bit(nblock+1); // look ahead for CO
-            if (carry_over)
-            {
-                // carry over: needs block-list extension and a block
-                if (nblock > nb)
-                {
-                    block =
-                    blockman_.check_allocate_block(nblock, 0, 0, &block_type, false);
-                    block[bm::set_block_size-1] = (unsigned(carry_over) << 31u);
-
-                    // reset all control vars (blocks tree may have re-allocated)
-                    blk_root = blockman_.top_blocks_root();
-                    blk_blk = blk_root[i];
-                    top_blocks = blockman_.top_block_size();
-                }
-            }
             continue;
         }
         
@@ -4418,17 +4399,21 @@ void bvector<Alloc>::erase(bm::id_t n)
         do
         {
             unsigned nblock = (i * bm::set_array_size) + j;
-            bool carry_over = test_first_block_bit(nblock+1); // look ahead for CO
+            bool carry_over = 0; // test_first_block_bit(nblock+1); // look ahead for CO
             block = blk_blk[j];
             if (!block)
             {
-                if (carry_over)
+                // no CO: tight loop scan for the next available block (if any)
+                for (++j; j < bm::set_array_size; ++j)
                 {
-                    bm::id_t nbit =
-                        (nblock * bm::gap_max_bits) + bm::gap_max_bits - 1;
-                    set_bit_no_check(nbit);
-                }
-                continue;
+                    if (0 != (block = blk_blk[j]))
+                    {
+                        nblock = (i * bm::set_array_size) + j;
+                        break;
+                    }
+                } // for j
+                if (!block) // no more blocks in this j-dimention
+                    continue;
             }
             if (IS_FULL_BLOCK(block))
             {
@@ -4439,8 +4424,9 @@ void bvector<Alloc>::erase(bm::id_t n)
                     block = blockman_.deoptimize_block(nblock);
                     block[bm::set_block_size-1] >>= 1;
                 }
-                continue;
+                carry_over = 1;
             }
+            else
             if (BM_IS_GAP(block))
             {
                 unsigned new_block_len;
@@ -4455,16 +4441,20 @@ void bvector<Alloc>::erase(bm::id_t n)
                     if (bm::gap_is_all_zero(gap_blk))
                         blockman_.zero_block(i, j);
                 }
-                continue;
             }
-            // bit-block
+            else // bit-block
             {
                 bm::word_t acc;
-                bm::bit_block_shift_l1_unr(block, &acc, carry_over);
+                carry_over = bm::bit_block_shift_l1_unr(block, &acc, carry_over);
                 if (!acc)
                     blockman_.zero_block(nblock);
             }
             
+            if (carry_over && nblock)
+            {
+                set_bit_no_check((nblock-1) * bm::gap_max_bits + bm::gap_max_bits-1);
+            }
+
         } while (++j < bm::set_array_size);
         j0 = 0;
     } // for i
