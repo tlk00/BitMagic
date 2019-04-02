@@ -2657,8 +2657,36 @@ void BlockBitEraseTest()
         blk0[1] = 15u; // ..01111
         bm::bit_block_erase(blk0, 33, false);
         assert(blk0[1] == 0b111);
+    }
+    
+    {
+        bm::bit_block_set(blk0, ~0u);
+        bm::word_t acc;
+        bm::bit_block_shift_l1_unr(blk0, &acc, true);
+        for (unsigned i = 0; i < bm::set_block_size; ++i)
+        {
+            assert(blk0[i] == ~0u);
+        }
+        bm::bit_block_erase(blk0, 0, false);
+        for (unsigned i = 0; i < bm::set_block_size-1; ++i)
+        {
+            assert(blk0[i] == ~0u);
+        }
+        assert(blk0[bm::set_block_size-1] == ((~0u) >> 1) );
 
-
+        bm::bit_block_shift_l1_unr(blk0, &acc, false);
+        for (unsigned i = 0; i < bm::set_block_size-1; ++i)
+        {
+            assert(blk0[i] == ~0u);
+        }
+        assert(blk0[bm::set_block_size-1] == ((~0u) >> 2) );
+        
+        bm::bit_block_erase(blk0, 0, true);
+        for (unsigned i = 0; i < bm::set_block_size-1; ++i)
+        {
+            assert(blk0[i] == ~0u);
+        }
+        assert(blk0[bm::set_block_size-1] == ((~0u >> 3) |  (1u << 31)));
     }
 
     cout << "bit-insert-erase stress 0..." << endl;
@@ -3807,7 +3835,7 @@ void BvectorShiftTest()
     
     assert(cmp == 0);
     }
-    
+
     {
     std::cout << "Shift-R stress (1 bit shift)..\n";
     unsigned start = 0;
@@ -3835,7 +3863,7 @@ void BvectorShiftTest()
             break;
         }
 
-        if ((start % 1000000) == 0)
+        if ((start % (1024 * 1024)) == 0)
         {
             f = std::chrono::steady_clock::now();
             auto diff = f - s;
@@ -3848,13 +3876,105 @@ void BvectorShiftTest()
             bv.calc_stat(&st);
             bcnt = st.bit_blocks + st.gap_blocks;
             assert(bcnt == 1);
-
+ 
             s = std::chrono::steady_clock::now();
         }
         ++start;
     }
     cout << "ok.\n";
     }
+
+    {
+    bvect bv { 1 };
+    bool carry_over = bv.shift_left();
+    assert(!carry_over);
+    unsigned idx = bv.get_first();
+    assert(idx == 0);
+    carry_over = bv.shift_left();
+    assert(carry_over);
+    idx = bv.get_first();
+    std::cout << idx << endl;
+    assert(idx == 0);
+    assert(bv.count()==0);
+    }
+    
+    {
+    bvect bv { 4278190080 };
+    bv.shift_left();
+    unsigned idx = bv.get_first();
+    assert(idx == 4278190080-1);
+    bv.shift_left();
+    idx = bv.get_first();
+    assert(idx == 4278190080-2);
+    }
+    
+    {
+    bvect bv { 4278190080 };
+    bv.optimize();
+    bv.shift_left();
+    unsigned idx = bv.get_first();
+    assert(idx == 4278190080-1);
+    bv.shift_left();
+    idx = bv.get_first();
+    assert(idx == 4278190080-2);
+    }
+
+    {
+    std::cout << "Shift-L stress (1 bit shift)..\n";
+    unsigned start = bm::id_max-1;
+    bvect bv;
+    bv.set(start);
+
+   struct bvect::statistics st;
+   bv.calc_stat(&st);
+   auto bcnt = st.bit_blocks + st.gap_blocks;
+   assert(bcnt == 1);
+   
+    std::chrono::time_point<std::chrono::steady_clock> s;
+    std::chrono::time_point<std::chrono::steady_clock> f;
+    
+    s = std::chrono::steady_clock::now();
+
+    for( ; start; --start)
+    {
+        bool carry_over = bv.shift_left();
+        if (carry_over)
+        {
+            cout << "CO at " << start << endl;
+            assert(bv.count()==0);
+            assert(start == bm::id_max-1);
+            break;
+        }
+        /*
+        unsigned idx = bv.get_first();
+        if(idx != start-1)
+        {
+            cerr << bv.count() << endl;
+            cerr << "Shift-L Failed at idx=" << idx << " != " << start << endl;
+            exit(1);
+        }
+        */
+
+        if ((start % (1024 * 1024)) == 0)
+        {
+            f = std::chrono::steady_clock::now();
+            auto diff = f - s;
+            auto d = std::chrono::duration <double, std::milli> (diff).count();
+            cout << "\r" << start << " (" << d << ") " << flush;
+
+            unsigned idx = bv.get_first();
+            assert(idx == start-1);
+
+            bv.calc_stat(&st);
+            bcnt = st.bit_blocks + st.gap_blocks;
+            assert(bcnt == 1);
+            
+            s = std::chrono::steady_clock::now();
+        }
+    }
+    cout << "ok.\n";
+    }
+
 
     {
         std::cout << "Shift-R stress (large vector shift)..\n";
@@ -4120,6 +4240,7 @@ void BvectorEraseTest()
         unsigned cnt1 = bv.count();
         bv.erase(65536);
         unsigned cnt2 = bv.count();
+        cout << cnt1 << " " << cnt2 << endl;
         assert(cnt1 == (cnt2 + 1));
         assert(!bv.test(bm::id_max-1));
         
@@ -4166,10 +4287,12 @@ void BvectorEraseTest()
         std::random_device rd;
 
         bvect bv;
-        bv.invert();
+        generate_bvector(bv, 750000000, false);
+        bvect bv2(bv);
+        
         bvect bv_c(bv);
         
-        unsigned max_erase = 64;
+        unsigned max_erase = 256;
         
         for(unsigned k = 0; k < max_erase; ++k)
         {
@@ -4183,8 +4306,8 @@ void BvectorEraseTest()
                     break;
                 pos = 0;
             }
-            
             bv.erase(pos);
+            bv2.erase(pos);
             BVectorErase(&bv_c, pos);
             
             int cmp = bv.compare(bv_c);
@@ -4193,8 +4316,15 @@ void BvectorEraseTest()
                 cerr << "Erase test failed! at pos=" << pos << endl;
                 exit(1);
             }
+            cmp = bv2.compare(bv_c);
+            if (cmp != 0)
+            {
+                cerr << "2. Erase test failed! at pos=" << pos << endl;
+                exit(1);
+            }
+
             
-//            if ((k % 64) == 0)
+            if ((k % 4) == 0)
             {
                 cout << "\r" << k << "/" << max_erase << flush;
                 bv.optimize();
@@ -19851,7 +19981,6 @@ int main(void)
      BlockBitInsertTest();
 
      BlockBitEraseTest();
-
 
      ExportTest();
      ResizeTest();
