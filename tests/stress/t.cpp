@@ -2690,7 +2690,7 @@ void BlockBitEraseTest()
     }
 
     cout << "bit-insert-erase stress 0..." << endl;
-
+    unsigned c = 0;
     {
     bm::bit_block_set(blk0, 0);
     bm::bit_block_set(blk1, 0);
@@ -2701,9 +2701,29 @@ void BlockBitEraseTest()
         unsigned t = bm::test_bit(blk0, i);
         assert(t);
         bm::bit_block_erase(blk0, 0, false);
-        auto cnt = bm::bit_block_count(blk0);
-        assert(cnt == 1);
+        unsigned cnt = bm::bit_block_count(blk0);
+        c += cnt;
+        if (cnt != 1)
+        {
+            unsigned control = 0;
+            for (unsigned k = 0; k < 65536; ++k)
+            {
+                t = bm::test_bit(blk0, k);
+                control += t;
+            }
+
+            t = bm::test_bit(blk0, i-1);
+            assert(t);
+            cerr << t << " " << control << endl;
+            cerr << "i=" << i << " cnt=" << cnt;
+            cerr << " CNT==1 failed!" << endl;
+            assert(cnt == 1);
+            exit(1);
+        }
     } // for i
+
+    std::cout << c << endl;
+
     bm::bit_block_set(blk0, 0);
 
     {
@@ -19981,7 +20001,7 @@ int main(void)
      BlockBitInsertTest();
 
      BlockBitEraseTest();
-
+ 
      ExportTest();
      ResizeTest();
 
