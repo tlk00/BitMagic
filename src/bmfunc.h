@@ -3788,7 +3788,7 @@ bm::id_t bit_block_count(const bm::word_t* block)
         bm::id64_t u = b1[2];
         bm::id64_t v = b1[3];
 
-        //if (x | y | u | v)
+        if (x | y | u | v)
         {
             unsigned c = bitcount64_4way(x, y, u, v);
             BM_ASSERT(c);
