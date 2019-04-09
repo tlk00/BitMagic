@@ -228,10 +228,10 @@ inline
 unsigned bitcount64_4way(bm::id64_t x, bm::id64_t y, 
                     bm::id64_t u, bm::id64_t v)
 {
-    const bm::id64_t m1 = 0x5555555555555555;
-    const bm::id64_t m2 = 0x3333333333333333; 
-    const bm::id64_t m3 = 0x0F0F0F0F0F0F0F0F; 
-    const bm::id64_t m4 = 0x000000FF000000FF;
+    const bm::id64_t m1 = 0x5555555555555555U;
+    const bm::id64_t m2 = 0x3333333333333333U; 
+    const bm::id64_t m3 = 0x0F0F0F0F0F0F0F0FU; 
+    const bm::id64_t m4 = 0x000000FF000000FFU;
 
     x = x - ((x >> 1) & m1);
     y = y - ((y >> 1) & m1);
@@ -250,7 +250,7 @@ unsigned bitcount64_4way(bm::id64_t x, bm::id64_t y,
     x = x + (x >> 16);
     x = x & m4; 
     x = x + (x >> 32);
-    return x & 0x000001FF;
+    return x & 0x000001FFU;
 }
 
 
@@ -2428,7 +2428,7 @@ bool gap_shift_l1(T* buf, unsigned co_flag, unsigned* new_len)
         
         BM_ASSERT(is_set);
         BM_ASSERT(buf[1]);
-        BM_ASSERT(bitval == (*buf & 1));
+        BM_ASSERT(bitval == unsigned(*buf & 1u));
         
         if (*new_len == 1)
         {
@@ -3772,7 +3772,7 @@ bm::id_t bit_block_count(const bm::word_t* block)
     const bm::word_t* block_end = block + bm::set_block_size;
     bm::id_t count = 0;
 
-#ifdef BMVECTOPT
+#ifdef BMVECTOPT 
     count = VECT_BITCOUNT(block, block_end);
 #else  
 #ifdef BM64OPT
@@ -3783,7 +3783,17 @@ bm::id_t bit_block_count(const bm::word_t* block)
     const bm::id64_t* b2 = (bm::id64_t*) block_end;
     do 
     {
-        count += bitcount64_4way(b1[0], b1[1], b1[2], b1[3]);
+        bm::id64_t x = b1[0];
+        bm::id64_t y = b1[1];
+        bm::id64_t u = b1[2];
+        bm::id64_t v = b1[3];
+
+        //if (x | y | u | v)
+        {
+            unsigned c = bitcount64_4way(x, y, u, v);
+            BM_ASSERT(c);
+            count += c;
+        }
         b1 += 4;
     } while (b1 < b2);
 #else
@@ -4311,14 +4321,14 @@ void bit_block_erase(bm::word_t* block, unsigned bitpos, bool carry_over)
 {
     BM_ASSERT(block);
     BM_ASSERT(bitpos < 65536);
-    
+/*
     if (!bitpos)
     {
         bm::word_t acc;
         bit_block_shift_l1_unr(block, &acc, carry_over);
         return;
     }
-    
+*/    
     unsigned nbit  = unsigned(bitpos & bm::set_block_mask);
     unsigned nword = unsigned(nbit >> bm::set_word_shift);
     nbit &= bm::set_word_mask;
