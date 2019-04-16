@@ -4300,7 +4300,7 @@ bool bit_block_shift_l1_unr(bm::word_t* block,
 {
     BM_ASSERT(block);
     BM_ASSERT(empty_acc);
-    #if defined(VECT_SHIFT_L1)
+    #if defined(VECT_SHIFT_L1)    
         return VECT_SHIFT_L1(block, empty_acc, co_flag);
     #else
         return bm::bit_block_shift_l1(block, empty_acc, co_flag);
@@ -4321,14 +4321,14 @@ void bit_block_erase(bm::word_t* block, unsigned bitpos, bool carry_over)
 {
     BM_ASSERT(block);
     BM_ASSERT(bitpos < 65536);
-/*
+
     if (!bitpos)
     {
         bm::word_t acc;
         bit_block_shift_l1_unr(block, &acc, carry_over);
         return;
     }
-*/    
+    
     unsigned nbit  = unsigned(bitpos & bm::set_block_mask);
     unsigned nword = unsigned(nbit >> bm::set_word_shift);
     nbit &= bm::set_word_mask;
