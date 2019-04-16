@@ -1404,6 +1404,66 @@ bool avx2_test_all_eq_wave2(const void* ptr0, const void* ptr1)
     return _mm256_testz_si256(w0, w0);
 }
 
+/*!
+    @brief block shift left by 1
+    @ingroup AVX2
+*/
+inline
+bool avx2_shift_l1(__m256i* block, bm::word_t* empty_acc, unsigned co1)
+{
+    __m256i* block_end =
+        (__m256i*)((bm::word_t*)(block) + bm::set_block_size);
+    
+    __m256i m1COshft, m2COshft;
+    __m256i mAcc = _mm256_set1_epi32(0);
+    __m256i mMask1 = _mm256_set1_epi32(1);
+    __m256i mCOidx = _mm256_set_epi32(0, 7, 6, 5, 4, 3, 2, 1);
+    unsigned co2;
+
+    for (--block_end; block_end >= block; block_end -= 2)
+    {
+        __m256i m1A = _mm256_load_si256(block_end);
+        __m256i m2A = _mm256_load_si256(block_end-1);
+
+        __m256i m1CO = _mm256_and_si256(m1A, mMask1);
+        __m256i m2CO = _mm256_and_si256(m2A, mMask1);
+
+        co2 = _mm256_extract_epi32(m1CO, 0);
+
+        m1A = _mm256_srli_epi32(m1A, 1); // (block[i] >> 1u)
+        m2A = _mm256_srli_epi32(m2A, 1);
+
+        // shift CO flags using -1 permute indexes, add CO to v[0]
+        m1COshft = _mm256_permutevar8x32_epi32(m1CO, mCOidx);
+        m1COshft = _mm256_insert_epi32(m1COshft, co1, 7); // v[7] = co_flag
+
+        co1 = co2;
+        
+        co2 = _mm256_extract_epi32(m2CO, 0);
+        
+        m2COshft = _mm256_permutevar8x32_epi32(m2CO, mCOidx);
+        m2COshft = _mm256_insert_epi32(m2COshft, co1, 7);
+
+        m1COshft = _mm256_slli_epi32(m1COshft, 31);
+        m2COshft = _mm256_slli_epi32(m2COshft, 31);
+
+        m1A = _mm256_or_si256(m1A, m1COshft); // block[i] |= co_flag
+        m2A = _mm256_or_si256(m2A, m2COshft);
+
+        _mm256_store_si256(block_end,   m1A);
+        _mm256_store_si256(block_end-1, m2A);
+
+        mAcc = _mm256_or_si256(mAcc, m1A);
+        mAcc = _mm256_or_si256(mAcc, m2A);
+        
+        co1 = co2;
+
+    } // for
+    
+    *empty_acc = !_mm256_testz_si256(mAcc, mAcc);
+    return co1;
+}
+
 
 /*!
     @brief block shift right by 1
@@ -2598,6 +2658,9 @@ unsigned avx2_bit_to_gap(gap_word_t* BMRESTRICT dest,
 
 #define VECT_LOWER_BOUND_SCAN_U32(arr, target, from, to) \
     avx2_lower_bound_scan_u32(arr, target, from, to)
+
+#define VECT_SHIFT_L1(b, acc, co) \
+    avx2_shift_l1((__m256i*)b, acc, co)
 
 #define VECT_SHIFT_R1(b, acc, co) \
     avx2_shift_r1((__m256i*)b, acc, co)
