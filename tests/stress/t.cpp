@@ -3856,53 +3856,6 @@ void BvectorShiftTest()
     assert(cmp == 0);
     }
 
-    {
-    std::cout << "Shift-R stress (1 bit shift)..\n";
-    unsigned start = 0;
-    bvect bv;
-    bv.set(start);
-
-   struct bvect::statistics st;
-   bv.calc_stat(&st);
-   auto bcnt = st.bit_blocks + st.gap_blocks;
-   assert(bcnt == 1);
-   
-    std::chrono::time_point<std::chrono::steady_clock> s;
-    std::chrono::time_point<std::chrono::steady_clock> f;
-    
-    s = std::chrono::steady_clock::now();
-
-    while(1)
-    {
-        bool carry_over = bv.shift_right();
-        if (carry_over)
-        {
-            cout << "CO at " << start << endl;
-            assert(bv.count()==0);
-            assert(start == bm::id_max-1);
-            break;
-        }
-
-        if ((start % (1024 * 1024)) == 0)
-        {
-            f = std::chrono::steady_clock::now();
-            auto diff = f - s;
-            auto d = std::chrono::duration <double, std::milli> (diff).count();
-            cout << "\r" << start << " (" << d << ") " << flush;
-            
-            unsigned idx = bv.get_first();
-            assert(idx-1 == start);
-            
-            bv.calc_stat(&st);
-            bcnt = st.bit_blocks + st.gap_blocks;
-            assert(bcnt == 1);
- 
-            s = std::chrono::steady_clock::now();
-        }
-        ++start;
-    }
-    cout << "ok.\n";
-    }
 
     {
     bvect bv { 1 };
@@ -3995,6 +3948,53 @@ void BvectorShiftTest()
     cout << "ok.\n";
     }
 
+    {
+    std::cout << "Shift-R stress (1 bit shift)..\n";
+    unsigned start = 0;
+    bvect bv;
+    bv.set(start);
+
+   struct bvect::statistics st;
+   bv.calc_stat(&st);
+   auto bcnt = st.bit_blocks + st.gap_blocks;
+   assert(bcnt == 1);
+   
+    std::chrono::time_point<std::chrono::steady_clock> s;
+    std::chrono::time_point<std::chrono::steady_clock> f;
+    
+    s = std::chrono::steady_clock::now();
+
+    while(1)
+    {
+        bool carry_over = bv.shift_right();
+        if (carry_over)
+        {
+            cout << "CO at " << start << endl;
+            assert(bv.count()==0);
+            assert(start == bm::id_max-1);
+            break;
+        }
+
+        if ((start % (1024 * 1024)) == 0)
+        {
+            f = std::chrono::steady_clock::now();
+            auto diff = f - s;
+            auto d = std::chrono::duration <double, std::milli> (diff).count();
+            cout << "\r" << start << " (" << d << ") " << flush;
+            
+            unsigned idx = bv.get_first();
+            assert(idx-1 == start);
+            
+            bv.calc_stat(&st);
+            bcnt = st.bit_blocks + st.gap_blocks;
+            assert(bcnt == 1);
+ 
+            s = std::chrono::steady_clock::now();
+        }
+        ++start;
+    }
+    cout << "ok.\n";
+    }
 
     {
         std::cout << "Shift-R stress (large vector shift)..\n";
@@ -20001,7 +20001,7 @@ int main(void)
      BlockBitInsertTest();
 
      BlockBitEraseTest();
- 
+
      ExportTest();
      ResizeTest();
 
