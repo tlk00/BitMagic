@@ -436,6 +436,12 @@ protected:
         \param idx       - bit (column) to clear insert
     */
     void insert_clear_value_plains_from(unsigned plain_idx, size_type idx);
+    
+    /*!
+        erase bit (column) from all plains
+        \param idx - bit (column) to erase
+    */
+    void erase_column(size_type idx);
 
 protected:
     /** Number of total bit-plains in the value type*/
@@ -1345,6 +1351,19 @@ void base_sparse_vector<Val, BV, MAX_SIZE>::insert_clear_value_plains_from(
         bvector_type* bv = this->bmatr_.get_row(i);
         if (bv)
             bv->insert(idx, false);
+    }
+}
+
+//---------------------------------------------------------------------
+
+template<class Val, class BV, unsigned MAX_SIZE>
+void base_sparse_vector<Val, BV, MAX_SIZE>::erase_column(size_type idx)
+{
+    for (unsigned i = 0; i < sv_value_plains; ++i)
+    {
+        bvector_type* bv = this->bmatr_.get_row(i);
+        if (bv)
+            bv->erase(idx);
     }
 }
 

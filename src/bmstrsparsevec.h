@@ -433,6 +433,12 @@ public:
     void insert(size_type idx, const value_type* str);
 
     /*!
+        \brief erase the specified element
+        \param idx  - element index
+    */
+    void erase(size_type idx);
+
+    /*!
         \brief get specified element
      
         \param idx  - element index
@@ -1102,6 +1108,18 @@ void str_sparse_vector<CharType, BV, MAX_STR_SIZE>::insert(
     }
     insert_value(idx, str);
     this->size_++;
+}
+
+//---------------------------------------------------------------------
+
+template<class CharType, class BV, unsigned MAX_STR_SIZE>
+void str_sparse_vector<CharType, BV, MAX_STR_SIZE>::erase(size_type idx)
+{
+    BM_ASSERT(idx < this->size_);
+    if (idx >= this->size_)
+        return;
+    this->erase_column(idx);
+    this->size_--;
 }
 
 //---------------------------------------------------------------------
