@@ -15906,6 +15906,31 @@ void TestStrSparseVector()
            assert(str_sv10.size() == 0);
        }
        
+       // test erase
+       {
+          str_sparse_vector<char, bvect, 3> str_sv10;
+          const char* cs0 = "10";
+          const char* cs1 = "200";
+          const char* cs2 = "30";
+          
+          str_sv10.push_back(cs0);
+          str_sv10.push_back(cs1);
+          str_sv10.push_back(cs2);
+          
+          str_sv10.erase(1);
+          assert(str_sv10.size() == 2);
+
+           str_sv10.get(0, str, sizeof(str));
+           cmp = ::strcmp(str, cs0);
+           assert(cmp == 0);
+           str_sv10.get(1, str, sizeof(str));
+           cmp = ::strcmp(str, cs2);
+           assert(cmp == 0);
+
+          str_sv10.erase(0);
+          assert(str_sv10.size() == 1);
+       }
+       
        // test decode
        {
           str_sparse_vector<char, bvect, 3> str_sv10;
@@ -16525,6 +16550,30 @@ void GenerateTestStrCollection(std::vector<string>& str_coll, unsigned max_coll)
 }
 
 static
+void EraseStrCollection(str_svect_type& str_sv)
+{
+    std::string s_next, s_curr;
+    while (str_sv.size())
+    {
+        unsigned idx = str_sv.size() / 2;
+        unsigned sz = str_sv.size();
+        
+        if (idx+1 < sz)
+        {
+            str_sv.get(idx+1, s_next);
+        }
+        str_sv.erase(idx);
+        assert(str_sv.size() == sz-1);
+        if (idx+1 < sz)
+        {
+            str_sv.get(idx, s_curr);
+            assert(s_next == s_curr);
+        }
+
+    }
+}
+
+static
 void StressTestStrSparseVector()
 {
    cout << "---------------------------- Bit-plain STR sparse vector stress test" << endl;
@@ -16537,12 +16586,11 @@ void StressTestStrSparseVector()
 
    cout << "Loading test sparse vector..." << endl;
    {
-   str_svect_type::back_insert_iterator bi = str_sv.get_back_inserter();
-   for (auto str : str_coll)
-   {
-       bi = str;
-//       str_sv.push_back(str);
-   }
+       str_svect_type::back_insert_iterator bi = str_sv.get_back_inserter();
+       for (auto str : str_coll)
+       {
+           bi = str;
+       }
    }
 
     // -----------------------------------------------------------
@@ -16763,6 +16811,8 @@ void StressTestStrSparseVector()
    
    cout << "\nTest sorted search...OK" << endl;
 
+   EraseStrCollection(str_sv_sorted);
+   EraseStrCollection(str_sv_remap);
    
    cout << "---------------------------- Bit-plain STR sparse vector stress test OK" << endl;
    cout << endl;
@@ -16968,6 +17018,7 @@ void TestStrSparseSort()
             ++i;
         } // for s
 
+        EraseStrCollection(str_sv_sorted);
 
     }
     
