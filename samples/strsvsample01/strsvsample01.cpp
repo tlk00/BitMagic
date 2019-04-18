@@ -53,6 +53,7 @@ int main(void)
         const char* s0 = "asz1234";
         std::string str1 = "aqw1234";
         std::string str3 = "54z";
+        std::string str00 = "00";
         
         str_sv.set(0, s0);       // set a C-string
         str_sv.push_back(str1);  // add from an STL string
@@ -61,6 +62,8 @@ int main(void)
         
         // please note that container automatically resizes
         std::cout << "sv size()=" << str_sv.size() << endl; // 4
+        
+        str_sv.insert(0, str00); // insert element
 
         // optimize runs compression in all bit-plains
         {
