@@ -432,6 +432,18 @@ public:
     */
     void insert(size_type idx, const value_type* str);
 
+
+    /*!
+        \brief insert STL string
+        \param idx  - element index (vector auto-resized if needs to)
+        \param str  - STL string to set
+    */
+    template<typename StrType>
+    void insert(size_type idx, const StrType& str)
+    {
+        this->insert(idx, str.c_str()); // TODO: avoid c_str()
+    }
+
     /*!
         \brief erase the specified element
         \param idx  - element index
