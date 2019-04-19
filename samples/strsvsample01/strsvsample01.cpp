@@ -65,6 +65,9 @@ int main(void)
         
         str_sv.insert(0, str00); // insert element
 
+        str_sv.erase(0);         // erase element 0
+
+
         // optimize runs compression in all bit-plains
         {
             BM_DECLARE_TEMP_BLOCK(tb)
@@ -78,7 +81,7 @@ int main(void)
             const char* s = str_sv[i];
             cout << i << ":" << s << endl;
         } // for i
-        cout << endl;
+        cout << "----" << endl;
         
         // print content using const_iterator
         //
