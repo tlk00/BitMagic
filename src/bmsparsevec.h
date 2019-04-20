@@ -435,6 +435,12 @@ public:
     void insert(size_type idx, value_type v);
 
     /*!
+        \brief erase specified element from container
+        \param idx - element index
+    */
+    void erase(size_type idx);
+
+    /*!
         \brief clear specified element with bounds checking and automatic resize
         \param idx - element index
         \param set_null - if true the value receives NULL (unassigned) value
@@ -1496,6 +1502,19 @@ void sparse_vector<Val, BV>::insert_value_no_null(size_type idx, value_type v)
         mask <<=  1;
     } // for j
 }
+
+//---------------------------------------------------------------------
+
+template<class Val, class BV>
+void sparse_vector<Val, BV>::erase(size_type idx)
+{
+    BM_ASSERT(idx < this->size_);
+    if (idx >= this->size_)
+        return;
+    this->erase_column(idx);
+    this->size_--;
+}
+
 
 //---------------------------------------------------------------------
 
