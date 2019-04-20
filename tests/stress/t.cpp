@@ -16378,6 +16378,33 @@ void TestStrSparseVector()
        str_sparse_vector<char, bvect, 32>::back_insert_iterator bit3(bit);
        bit = bit3;
     }
+    
+    {
+       str_sparse_vector<char, bvect, 32> str_sv0(bm::use_null);
+       auto bi = str_sv0.get_back_inserter();
+       bi = (const char*)0;
+       bool b = str_sv0.is_null(0);
+       assert(b);
+       bi = (const char*)nullptr;
+       bi = "123";
+       bi.add_null();
+       bi.flush();
+       
+       
+       assert(str_sv0.size() == 4);
+       b = str_sv0.is_null(0);
+       assert(b);
+       assert(str_sv0[0].is_null());
+       assert(str_sv0.is_null(1));
+       assert(!str_sv0.is_null(2));
+       
+       auto sz = str_sv0.size();
+       str_sv0.set_null(sz);
+       assert(sz + 1 == str_sv0.size() );
+       assert(str_sv0.is_null(sz));
+       
+    }
+    
 
     // const_iterator / back_inserter
     //
