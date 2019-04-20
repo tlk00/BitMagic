@@ -1157,7 +1157,7 @@ void str_sparse_vector<CharType, BV, MAX_STR_SIZE>::set_null(size_type idx)
 {
     bvector_type* bv_null = this->get_null_bvect();
     if (bv_null)
-        bv_null->set(idx, false);
+        bv_null->clear_bit_no_check(idx);
     if (idx >= this->size_)
     {
         this->size_ = idx + 1;
@@ -1213,9 +1213,7 @@ void str_sparse_vector<CharType, BV, MAX_STR_SIZE>::insert_value(
                                     size_type idx, const value_type* str)
 {
     insert_value_no_null(idx, str);
-    bvector_type* bv_null = this->get_null_bvect();
-    if (bv_null)
-        bv_null->insert(idx, true);
+    this->insert_null(idx, true);
 }
 
 //---------------------------------------------------------------------

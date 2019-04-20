@@ -426,6 +426,13 @@ public:
         \param v   - element value
     */
     void push_back(value_type v);
+    
+    /*!
+        \brief insert specified element into container
+        \param idx - element index
+        \param v   - element value
+    */
+    void insert(size_type idx, value_type v);
 
     /*!
         \brief clear specified element with bounds checking and automatic resize
@@ -808,7 +815,11 @@ protected:
 
     /*! \brief push value back into vector without NULL semantics */
     void push_back_no_null(value_type v);
-
+    
+    /*! \brief insert value without checking boundaries */
+    void insert_value(size_type idx, value_type v);
+    /*! \brief insert value without checking boundaries or support of NULL */
+    void insert_value_no_null(size_type idx, value_type v);
 
     void resize_internal(size_type sz) { resize(sz); }
     size_type size_internal() const { return size(); }
@@ -1436,6 +1447,54 @@ void sparse_vector<Val, BV>::push_back(value_type v)
 {
     set_value(this->size_, v);
     ++(this->size_);
+}
+
+//---------------------------------------------------------------------
+
+template<class Val, class BV>
+void sparse_vector<Val, BV>::insert(size_type idx, value_type v)
+{
+    if (idx >= size())
+    {
+        this->size_ = idx+1;
+        set_value(idx, v);
+        return;
+    }
+    insert_value(idx, v);
+    this->size_++;
+}
+
+//---------------------------------------------------------------------
+
+template<class Val, class BV>
+void sparse_vector<Val, BV>::insert_value(size_type idx, value_type v)
+{
+    insert_value_no_null(idx, v);
+    this->insert_null(idx, true);
+}
+
+//---------------------------------------------------------------------
+
+template<class Val, class BV>
+void sparse_vector<Val, BV>::insert_value_no_null(size_type idx, value_type v)
+{
+    unsigned bsr = v ? bm::bit_scan_reverse(v) : 0u;
+    value_type mask = 1u;
+    for (unsigned j = 0; j <= bsr; ++j)
+    {
+        if (v & mask)
+        {
+            bvector_type* bv = this->get_plain(j);
+            bv->insert(idx, true);
+        }
+        else
+        {
+            bvector_type_ptr bv = this->bmatr_.get_row(j);
+            if (bv)
+                bv->insert(idx, false);
+        }
+        mask <<=  1;
+    } // for j
 }
 
 //---------------------------------------------------------------------

@@ -442,6 +442,11 @@ protected:
         \param idx - bit (column) to erase
     */
     void erase_column(size_type idx);
+    
+    /*!
+        insert (NOT) NULL value
+    */
+    void insert_null(size_type idx, bool not_null);
 
 protected:
     /** Number of total bit-plains in the value type*/
@@ -1226,6 +1231,16 @@ bool base_sparse_vector<Val, BV, MAX_SIZE>::is_null(size_type idx) const
     return (bv_null) ? (!bv_null->test(idx)) : false;
 }
 
+//---------------------------------------------------------------------
+
+template<class Val, class BV, unsigned MAX_SIZE>
+void base_sparse_vector<Val, BV, MAX_SIZE>::insert_null(size_type idx,
+                                                        bool      not_null)
+{
+    bvector_type* bv_null = this->get_null_bvect();
+    if (bv_null)
+        bv_null->insert(idx, not_null);
+}
 
 //---------------------------------------------------------------------
 
