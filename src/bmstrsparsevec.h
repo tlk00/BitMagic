@@ -290,7 +290,8 @@ public:
         /** push value to the vector */
         back_insert_iterator& operator=(const value_type* v)
             { this->add(v); return *this; }
-        
+
+
         /** push value to the vector */
         template<typename StrType>
         back_insert_iterator& operator=(const StrType& v)
@@ -424,6 +425,9 @@ public:
         \param str  - string to set (zero terminated)
     */
     void set(size_type idx, const value_type* str);
+
+    void set_null(size_type idx);
+
     
     /*!
         \brief insert the specified element
@@ -928,7 +932,8 @@ protected:
     /// @internal
     template<typename CharMatrix>
     void import_no_check(CharMatrix& cmatr,
-                         size_type idx_from, size_type imp_size)
+                         size_type idx_from, size_type imp_size,
+                         bool set_not_null = true)
     {
         BM_ASSERT (cmatr.is_init());
         
@@ -994,9 +999,12 @@ protected:
         } // for i
         
         size_type idx_to = idx_from + imp_size - 1;
-        bvector_type* bv_null = this->get_null_bvect();
-        if (bv_null)
-            bv_null->set_range(idx_from, idx_to);
+        if (set_not_null)
+        {
+            bvector_type* bv_null = this->get_null_bvect();
+            if (bv_null)
+                bv_null->set_range(idx_from, idx_to);
+        }
         if (idx_to >= this->size())
             this->size_ = idx_to+1;
 
@@ -1132,6 +1140,20 @@ void str_sparse_vector<CharType, BV, MAX_STR_SIZE>::erase(size_type idx)
         return;
     this->erase_column(idx);
     this->size_--;
+}
+
+//---------------------------------------------------------------------
+
+template<class CharType, class BV, unsigned MAX_STR_SIZE>
+void str_sparse_vector<CharType, BV, MAX_STR_SIZE>::set_null(size_type idx)
+{
+    bvector_type* bv_null = this->get_null_bvect();
+    if (bv_null)
+        bv_null->set(idx, false);
+    if (idx >= this->size_)
+    {
+        this->size_ = idx + 1;
+    }
 }
 
 //---------------------------------------------------------------------
@@ -1792,7 +1814,7 @@ void str_sparse_vector<CharType, BV, MAX_STR_SIZE>::back_insert_iterator::flush(
     if (this->empty())
         return;
     
-    sv_->import_back(buf_matrix_, pos_in_buf_+1);
+    sv_->import_no_check(buf_matrix_, sv_->size(), pos_in_buf_+1, false);
     pos_in_buf_ = ~size_type(0);
 }
 
@@ -1802,6 +1824,11 @@ template<class CharType, class BV, unsigned MAX_STR_SIZE>
 void str_sparse_vector<CharType, BV, MAX_STR_SIZE>::back_insert_iterator::add(
 const typename str_sparse_vector<CharType, BV, MAX_STR_SIZE>::back_insert_iterator::value_type* v)
 {
+    if (!v)
+    {
+        this->add_null();
+        return;
+    }
     size_type buf_idx = this->add_value(v);
     if (bv_null_)
     {
@@ -1815,7 +1842,7 @@ const typename str_sparse_vector<CharType, BV, MAX_STR_SIZE>::back_insert_iterat
 template<class CharType, class BV, unsigned MAX_STR_SIZE>
 void str_sparse_vector<CharType, BV, MAX_STR_SIZE>::back_insert_iterator::add_null()
 {
-    this->add(""); // TODO: optimization
+    /*size_type buf_idx = */this->add_value("");
 }
 
 //---------------------------------------------------------------------
@@ -1825,7 +1852,7 @@ void str_sparse_vector<CharType, BV, MAX_STR_SIZE>::back_insert_iterator::add_nu
 typename str_sparse_vector<CharType, BV, MAX_STR_SIZE>::back_insert_iterator::size_type count)
 {
     for (size_type i = 0; i < count; ++i) // TODO: optimization
-        this->add("");
+        this->add_value("");
 }
 
 
@@ -1837,6 +1864,7 @@ str_sparse_vector<CharType, BV, MAX_STR_SIZE>::back_insert_iterator::add_value(
 const str_sparse_vector<CharType, BV, MAX_STR_SIZE>::back_insert_iterator::value_type* v)
 {
     BM_ASSERT(sv_);
+    BM_ASSERT(v);
     if (pos_in_buf_ == ~size_type(0))
     {
         if (!buf_matrix_.is_init())
