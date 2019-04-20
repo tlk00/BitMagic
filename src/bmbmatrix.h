@@ -1227,7 +1227,6 @@ bool base_sparse_vector<Val, BV, MAX_SIZE>::is_null(size_type idx) const
 }
 
 
-
 //---------------------------------------------------------------------
 
 template<class Val, class BV, unsigned MAX_SIZE>

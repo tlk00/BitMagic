@@ -426,6 +426,11 @@ public:
     */
     void set(size_type idx, const value_type* str);
 
+    /*!
+        \brief set NULL status for the specified element
+        Vector is resized automatically
+        \param idx  - element index (vector auto-resized if needs to)
+    */
     void set_null(size_type idx);
 
     
@@ -665,9 +670,10 @@ public:
         \param opt_mode - requested compression depth
         \param stat - memory allocation statistics after optimization
     */
-    void optimize(bm::word_t* temp_block = 0,
-                  typename bvector_type::optmode opt_mode = bvector_type::opt_compress,
-                  typename str_sparse_vector<CharType, BV, MAX_STR_SIZE>::statistics* stat = 0);
+    void optimize(
+       bm::word_t* temp_block = 0,
+       typename bvector_type::optmode opt_mode = bvector_type::opt_compress,
+       typename str_sparse_vector<CharType, BV, MAX_STR_SIZE>::statistics* stat = 0);
 
     /*!
         @brief Calculates memory statistics.
@@ -698,13 +704,15 @@ public:
     /** Get const_itertor re-positioned to specific element
     @param idx - position in the sparse vector
     */
-    const_iterator get_const_iterator(size_type idx) const { return const_iterator(this, idx); }
+    const_iterator get_const_iterator(size_type idx) const
+        { return const_iterator(this, idx); }
     
      /** Provide back insert iterator
     Back insert iterator implements buffered insertion, which is faster, than random access
     or push_back
     */
-    back_insert_iterator get_back_inserter() { return back_insert_iterator(this); }
+    back_insert_iterator get_back_inserter()
+        { return back_insert_iterator(this); }
 
     ///@}
 
