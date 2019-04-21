@@ -13925,10 +13925,31 @@ void TestSparseVector()
             exit(1);
         }
     } // for
-    
-    
 
     }}
+    
+    // test insert() / erase()
+    {
+        bm::sparse_vector<unsigned, bm::bvector<> > sv1;
+        sv1.push_back(1);
+        sv1.push_back(2);
+        sv1.insert(0, 17);
+        sv1.insert(4, 18);
+
+        assert(sv1.size() == 5);
+        assert(sv1[0] == 17);
+        assert(sv1[1] == 1);
+        assert(sv1[2] == 2);
+        assert(sv1[4] == 18);
+        
+        sv1.erase(1);
+        
+        assert(sv1.size() == 4);
+        assert(sv1[0] == 17);
+        assert(sv1[1] == 2);
+        assert(sv1[3] == 18);
+    }
+
     
     
     {{
@@ -14364,8 +14385,7 @@ void TestSparseVector()
         sv.optimize();
         assert(sv.is_nullable());
     }
-
-
+    
 
     {
         bm::sparse_vector<unsigned, bm::bvector<> > sv1;
@@ -19767,8 +19787,28 @@ void TestCompressSparseVector()
         bool found = scanner.find_eq(csv1, 201, pos);
         assert(found);
         assert(pos == 21);
-        
     }
+    
+    {
+        rsc_sparse_vector_u32 csv;
+        csv.set(1, 1);
+        assert(csv.is_null(0));
+        assert(!csv.is_null(1));
+        assert(csv.get(1) == 1);
+        
+        csv.push_back(10, 11);
+        csv.set(11, 12);
+        assert(csv.get(11) == 12);
+        csv.set(5, 55);
+        csv.set(5, 56);
+
+        assert(csv.size() == 12);
+        assert(csv.get(1) == 1);
+        assert(csv.get(10) == 11);
+        assert(csv.get(11) == 12);
+        assert(csv.get(5) == 56);
+    }
+    
     
     {
     cout << "decode() test" << endl;
