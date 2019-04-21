@@ -1460,6 +1460,7 @@ void sparse_vector<Val, BV>::push_back(value_type v)
 template<class Val, class BV>
 void sparse_vector<Val, BV>::insert(size_type idx, value_type v)
 {
+
     if (idx >= size())
     {
         this->size_ = idx+1;
@@ -1467,7 +1468,6 @@ void sparse_vector<Val, BV>::insert(size_type idx, value_type v)
         return;
     }
     insert_value(idx, v);
-    this->size_++;
 }
 
 //---------------------------------------------------------------------
@@ -1501,6 +1501,7 @@ void sparse_vector<Val, BV>::insert_value_no_null(size_type idx, value_type v)
         }
         mask <<=  1;
     } // for j
+    this->size_++;
 }
 
 //---------------------------------------------------------------------
