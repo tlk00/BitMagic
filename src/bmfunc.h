@@ -56,7 +56,7 @@ struct bv_statistics
     unsigned bit_blocks;        ///< Number of bit blocks
     unsigned gap_blocks;        ///< Number of GAP blocks
     unsigned ptr_sub_blocks;    ///< Number of sub-blocks
-    /// Estimated maximum of memory required for serialization.
+    /// Estimated maximum of memory required for serialization
     size_t  max_serialize_mem;
     /// Memory used by bitvector including temp and service blocks
     size_t  memory_used;
@@ -4300,7 +4300,7 @@ bool bit_block_shift_l1_unr(bm::word_t* block,
 {
     BM_ASSERT(block);
     BM_ASSERT(empty_acc);
-    #if defined(VECT_SHIFT_L1)    
+    #if defined(VECT_SHIFT_L1)
         return VECT_SHIFT_L1(block, empty_acc, co_flag);
     #else
         return bm::bit_block_shift_l1(block, empty_acc, co_flag);

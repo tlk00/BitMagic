@@ -55,6 +55,7 @@ String sparse vector (bit-transposed sparse vector) for ASCII(z) strings
 ./strsvsample02 - insertion sort using str_sparse_vector<> and sparse_vector_scanner<>
 ./strsvsample03 - str_sparse_vector<>::back_insert_iterator is used, then sparse vector
                   remap compressed and saved to disk using serialization API.
+./strsvsample04 - Use str_sparse_vector<> container with NULL (unassigned) values
 
 
 
@@ -69,7 +70,7 @@ More complex examples to illustrate mixed techniques and use cases
               Details at: http://bitmagic.io/succinct-snp-search.html 
 ./xsample04 - Fingerprint pattern matching, SHIFT-AND Bitap algorithm. Search for DNA substrings.
               Details at: http://bitmagic.io/dna-search.html 
-./xsample04a - Fast construction of bit-indexes using bulk insert interator, multi-threaded partitioning and merge.
+./xsample04a - Fast construction of bit-indexes using bulk insert iterator, multi-threaded partitioning and merge.
               Details at: http://bitmagic.io/dna-search-idx.html
 ./xsample05 - Example how to build a memory compressed dictionary, benchmark how fast BitMagic can search in it.
               As a sample data we use a part of NED catalog of celestial objects.

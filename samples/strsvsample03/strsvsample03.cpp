@@ -26,7 +26,9 @@ For more information please visit:  http://bitmagic.io
 /*! \file strsvsample02.cpp
     \brief Example: str_sparse_vector<> back insert iterator example
  
-    This example loads sparse vector from an STL container
+    This example loads sparse vector from an STL container uses re-mapping
+    to compress, serialize and save container to disk.
+    Example also illustrates how to check memory footprint.
 */
 
 #include <iostream>
@@ -86,9 +88,11 @@ int main(void)
         generate_string_set(str_vec);
         std::sort(str_vec.begin(), str_vec.end()); // sort the input vector
 
+
         // load sparse vector from an STL container
         //
         {
+            size_t vect_size = 0;   // approx std::vector<string> memory usage
             str_sv_type str_sv_tmp; // temp vector
             {
                 str_sv_type::back_insert_iterator bi =
@@ -96,24 +100,48 @@ int main(void)
                 for (auto str : str_vec)
                 {
                     bi = str;
+                    
+                    // some approximate estimate of std::string element cost
+                    //
+                    size_t str_size = str.size() + sizeof(str);
+                    vect_size += str_size;
                 }
+                
                 // it is important to use flush, because back inserter is
                 // buffering data. Of cause it flashes automatically on
                 // destruction but explicit flush is somewhat better
                 // because of possible exception is thrown here and not from
-                // destructor
+                // destructor.
                 //
                 
                 bi.flush();
+                
+                cout << "STL vector<string> approx.memory consumption:"
+                     << vect_size << endl;
             }
             
+            // calculate memory footprint
+            //
+            str_sv_type::statistics st;
+            str_sv_tmp.calc_stat(&st);
+            
+            cout << "Used memory: " << st.memory_used << std::endl;
+            
+            
             // final step is re-mapping, which increses chances for
-            // good memory compression
+            // good memory compression.
+            // A side-effect here is that remapping makes container
+            // effectively read-only.
             //
             str_sv.remap_from(str_sv_tmp);
 
             BM_DECLARE_TEMP_BLOCK(tb)
             str_sv.optimize(tb); // optimize the vector
+            
+            str_sv.calc_stat(&st);
+            cout << "Used memory after remap and optimization: "
+                 << st.memory_used
+                 << std::endl;
         }
         
         // serialize and save
@@ -137,6 +165,8 @@ int main(void)
                 return -1;
             }
             fout.close();
+            
+            cout << "Saved size: " << sv_lay.size() << endl;
         }
 
     }

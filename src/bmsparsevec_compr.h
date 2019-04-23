@@ -174,7 +174,7 @@ public:
     // ------------------------------------------------------------
     /*! @name Element access */
     //@{
-    
+
     /*!
         \brief get specified element without bounds checking
         \param idx - element index
@@ -195,6 +195,25 @@ public:
         \return value of the element
     */
     value_type get(bm::id_t idx) const;
+    
+    /*!
+        \brief set specified element with bounds checking and automatic resize
+     
+        Method cannot insert elements, so every new idx has to be greater or equal
+        than what it used before. Elements must be loaded in a sorted order.
+     
+        \param idx - element index
+        \param v   - element value
+    */
+    void push_back(size_type idx, value_type v);
+    
+    /*!
+        \brief set specified element with bounds checking and automatic resize
+        \param idx - element index
+        \param v   - element value
+    */
+    void set(size_type idx, value_type v);
+
 
     
     /** \brief test if specified element is NULL
@@ -257,21 +276,12 @@ public:
     bool equal(const rsc_sparse_vector<Val, SV>& csv) const;
     //@}
 
+
     // ------------------------------------------------------------
     /*! @name Load-Export compressed vector with data */
     
     //@{
 
-    /*!
-        \brief set specified element with bounds checking and automatic resize
-     
-        Method cannot insert elements, so every new idx has to be greater or equal
-        than what it used before. Elements must be loaded in a sorted order.
-     
-        \param idx - element index
-        \param v   - element value
-    */
-    void push_back(size_type idx, value_type v);
     
     /*!
         \brief Load compressed vector from a sparse vector (with NULLs)
@@ -412,6 +422,8 @@ protected:
     const unsigned char* get_remap_buffer() const { return 0; }
     unsigned char* init_remap_buffer() { return 0; }
     void set_remap() { }
+    
+    void push_back_no_check(size_type idx, value_type v);
 
 
 private:
@@ -438,8 +450,8 @@ rsc_sparse_vector<Val, SV>::rsc_sparse_vector(bm::null_support null_able,
                                               allocation_policy_type ap,
                                               size_type bv_max_size,
                                               const allocator_type&   alloc)
-    : sv_(null_able, ap, bv_max_size, alloc),
-      max_id_(0), in_sync_(false)
+: sv_(null_able, ap, bv_max_size, alloc),
+  max_id_(0), in_sync_(false)
 {
     BM_ASSERT(null_able == bm::use_null);
     BM_ASSERT(int(sv_value_plains) == int(SV::sv_value_plains));
@@ -504,22 +516,55 @@ template<class Val, class SV>
 void rsc_sparse_vector<Val, SV>::push_back(size_type idx, value_type v)
 {
     if (sv_.empty())
-    {
-    }
+    {}
     else
     if (idx <= max_id_)
     {
         sv_.throw_range_error("compressed sparse vector push_back() range error");
     }
-    
+    push_back_no_check(idx, v);
+}
+
+//---------------------------------------------------------------------
+
+template<class Val, class SV>
+void rsc_sparse_vector<Val, SV>::push_back_no_check(size_type idx, value_type v)
+{
     bvector_type* bv_null = sv_.get_null_bvect();
     BM_ASSERT(bv_null);
     
-    bv_null->set(idx);
+    bv_null->set_bit_no_check(idx);
     sv_.push_back_no_null(v);
     
     max_id_ = idx;
     in_sync_ = false;
+}
+
+
+//---------------------------------------------------------------------
+
+template<class Val, class SV>
+void rsc_sparse_vector<Val, SV>::set(size_type idx, value_type v)
+{
+    bvector_type* bv_null = sv_.get_null_bvect();
+    BM_ASSERT(bv_null);
+    
+    bool found = bv_null->test(idx);
+    size_type sv_idx = bv_null->count_range(0, idx); // TODO: make test'n'count
+    
+    if (found)
+    {
+        sv_.set(--sv_idx, v);
+    }
+    else
+    {
+        sv_.insert_value_no_null(sv_idx, v);
+        bv_null->set_bit_no_check(idx);
+
+        if (idx > max_id_)
+            max_id_ = idx;
+        in_sync_ = false;
+    }
 }
 
 //---------------------------------------------------------------------
