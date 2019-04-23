@@ -19789,6 +19789,7 @@ void TestCompressSparseVector()
         assert(pos == 21);
     }
     
+    // set test
     {
         rsc_sparse_vector_u32 csv;
         csv.set(1, 1);
@@ -19807,6 +19808,90 @@ void TestCompressSparseVector()
         assert(csv.get(10) == 11);
         assert(csv.get(11) == 12);
         assert(csv.get(5) == 56);
+        
+        csv.set_null(5);
+        assert(csv.is_null(5));
+        assert(csv.get(1) == 1);
+        assert(csv.get(10) == 11);
+        assert(csv.get(11) == 12);
+        assert(csv.get(5) == 0);
+        
+
+        
+    }
+    
+    // set stress test
+    {
+        cout << "RSC set stress..." << endl;
+        std::vector<std::pair<unsigned, unsigned> > vect;
+        rsc_sparse_vector_u32 csv;
+        
+        const unsigned max_size = 2000000;
+        
+        cout << "Test set generation." << endl;
+        for (unsigned i = 0; i < max_size; i+=2)
+        {
+            std::pair<unsigned, unsigned> pr(i, i+10);
+            vect.push_back(pr);
+        } // for
+        
+        {
+            std::random_device rd;
+            std::mt19937 g(rd());
+            std::shuffle(vect.begin(), vect.end(), g);
+        }
+        
+        cout << "RSC set() " << endl;
+        unsigned i = 0;
+        for (auto rit = vect.rbegin(); rit != vect.rend(); ++rit)
+        {
+            std::pair<unsigned, unsigned> pr = *rit;
+            csv.set(pr.first, pr.second);
+            unsigned v = csv[pr.first];
+            assert(v == pr.second);
+
+            if (i % 4096 == 0)
+            {
+                cout << "\r" << pr.first << "/" << max_size << flush;
+                csv.optimize();
+            }
+
+            ++i;
+        } // for
+        
+        cout << "\nRSC verification..." << endl;
+        
+        csv.optimize();
+        csv.sync();
+        i = 0;
+        for (i = 0; i < vect.size(); ++i)
+        {
+            const std::pair<unsigned, unsigned>& pr = vect[i];
+            unsigned v = csv[pr.first];
+            assert(v == pr.second);
+            if (i % 4096 == 0)
+                cout << "\r" << pr.first << "/" << max_size << flush;
+        } // for
+        
+        cout << "\nRSC set null..." << endl;
+
+        i = 0;
+        for (auto rit = vect.rbegin(); rit != vect.rend(); ++rit)
+        {
+            std::pair<unsigned, unsigned> pr = *rit;
+            csv.set_null(pr.first);
+            assert(csv.is_null(pr.first));
+            if (i % 4096 == 0)
+            {
+                cout << "\r" << i << "/" << max_size << flush;
+                csv.optimize();
+            }
+            ++i;
+        } // for
+
+
+        
+        cout << "\nOK" << endl;
     }
     
     
@@ -20084,6 +20169,7 @@ int main(void)
 
 //avx2_i32_shift();
 //return 0;
+
 
     TestRecomb();
 
