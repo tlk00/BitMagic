@@ -1486,21 +1486,31 @@ void sparse_vector<Val, BV>::insert_value_no_null(size_type idx, value_type v)
 {
     unsigned bsr = v ? bm::bit_scan_reverse(v) : 0u;
     value_type mask = 1u;
-    for (unsigned j = 0; j <= bsr; ++j)
+    unsigned i = 0;
+    for (; i <= bsr; ++i)
     {
         if (v & mask)
         {
-            bvector_type* bv = this->get_plain(j);
+            bvector_type* bv = this->get_plain(i);
             bv->insert(idx, true);
         }
         else
         {
-            bvector_type_ptr bv = this->bmatr_.get_row(j);
+            bvector_type_ptr bv = this->bmatr_.get_row(i);
             if (bv)
                 bv->insert(idx, false);
         }
         mask <<=  1;
-    } // for j
+    } // for i
+    // insert 0 into all other existing plains
+    unsigned eff_plains = this->effective_plains();
+    for (; i < eff_plains; ++i)
+    {
+        bvector_type* bv = this->bmatr_.get_row(i);
+        if (bv)
+            bv->insert(idx, false);
+    } // for i
+    
     this->size_++;
 }
 
