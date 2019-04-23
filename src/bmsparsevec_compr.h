@@ -213,6 +213,13 @@ public:
         \param v   - element value
     */
     void set(size_type idx, value_type v);
+    
+    /*!
+        \brief set specified element to NULL
+        RSC vector actually erases element when it is set to NULL (expensive).
+        \param idx - element index
+    */
+    void set_null(size_type idx);
 
 
     
@@ -540,6 +547,22 @@ void rsc_sparse_vector<Val, SV>::push_back_no_check(size_type idx, value_type v)
     in_sync_ = false;
 }
 
+//---------------------------------------------------------------------
+
+template<class Val, class SV>
+void rsc_sparse_vector<Val, SV>::set_null(size_type idx)
+{
+    bvector_type* bv_null = sv_.get_null_bvect();
+    BM_ASSERT(bv_null);
+    
+    bool found = bv_null->test(idx);
+    if (found)
+    {
+        size_type sv_idx = bv_null->count_range(0, idx);
+        bv_null->clear_bit_no_check(idx);
+        sv_.erase(--sv_idx);
+    }
+}
 
 //---------------------------------------------------------------------
 
