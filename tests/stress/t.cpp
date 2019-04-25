@@ -8371,7 +8371,7 @@ void GAPCheck()
    //bvect_a.clear();
 
 
-   unsigned* buf = (unsigned*) bvect_a.get_blocks_manager().get_block(0);
+   unsigned* buf = (unsigned*) bvect_a.get_blocks_manager().get_block_ptr(0, 0);
 
    bm::or_bit_block(buf, 0, 4);
    unsigned cnt = bm::bit_block_calc_count_range(buf, 0, 3);
@@ -8416,7 +8416,7 @@ void GAPCheck()
    bvect_u.set_bit(0, false);
 //   bvect_u.clear();
 
-   unsigned* buf = (unsigned*) bvect_u.get_blocks_manager().get_block(0);
+   unsigned* buf = (unsigned*) bvect_u.get_blocks_manager().get_block_ptr(0, 0);
 
    bm::or_bit_block(buf, 5, 32);
    bool bit = (bvect_u.get_bit(4) != 0);
@@ -8451,7 +8451,7 @@ void GAPCheck()
 
    for (int i = 0; i < 5000; ++i)
    {
-        unsigned* buf = (unsigned*) bvect_r.get_blocks_manager().get_block(0);
+        unsigned* buf = (unsigned*) bvect_r.get_blocks_manager().get_block_ptr(0, 0);
         assert(buf);
         unsigned start = rand() % 65535;
         unsigned end = rand() % 65535;
@@ -8533,8 +8533,7 @@ void GAPCheck()
    bvect_a.set_bit(0, false);
    //bvect_a.clear();
 
-   unsigned* buf = (unsigned*) bvect_a.get_blocks_manager().get_block(0);
-
+   unsigned* buf = (unsigned*) bvect_a.get_blocks_manager().get_block_ptr(0, 0);
 
    gapv.convert_to_bitset(buf);
 
@@ -20170,6 +20169,9 @@ int main(void)
 //avx2_i32_shift();
 //return 0;
 
+//unsigned long long a = 9223372036854775807ULL;
+unsigned long long a = 281474976710655ULL;
+a = a / (65536 * 256);
 
     TestRecomb();
 
@@ -20295,6 +20297,13 @@ int main(void)
 
      BlockLevelTest();
 
+     StressTest(120, 0); // OR
+     StressTest(120, 3); // AND
+     StressTest(120, 1); // SUB
+
+     StressTest(120, 2); // XOR
+
+
      AggregatorTest();
 
      StressTestAggregatorOR(100);
@@ -20305,13 +20314,6 @@ int main(void)
 
 //     StressTestAggregatorSUB(100);
 
-     StressTest(120, 0); // OR
-
-     StressTest(120, 3); // AND
-
-     StressTest(120, 1); // SUB
-
-     StressTest(120, 2); // XOR
 
      TestBasicMatrix();
 
