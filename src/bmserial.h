@@ -927,7 +927,11 @@ unsigned serializer<BV>::serialize(const BV& bv,
     // save blocks.
     for (i = 0; i < bm::set_total_blocks; ++i)
     {
-        bm::word_t* blk = bman.get_block(i);
+        unsigned i0, j0;
+        bman.get_block_coord(i, i0, j0);
+        const bm::word_t* blk = bman.get_block(i0, j0);
+
+//        bm::word_t* blk = bman.get_block(i);
         // -----------------------------------------
         // Empty or ONE block serialization
 
@@ -968,7 +972,10 @@ unsigned serializer<BV>::serialize(const BV& bv,
                 // Look ahead for similar blocks
                 for(j = i+1; j < bm::set_total_blocks; ++j)
                 {
-                   bm::word_t* blk_next = bman.get_block(j);
+                    bman.get_block_coord(j, i0, j0);
+                    const bm::word_t* blk_next = bman.get_block(i0, j0);
+
+//                   bm::word_t* blk_next = bman.get_block(j);
                    if (flag != bm::check_block_one(blk_next, false))
                        break;
                 }
@@ -1596,12 +1603,16 @@ unsigned deserializer<BV, DEC>::deserialize(bvector_type&        bv,
     }
 
     unsigned char btype;
-    unsigned nb;
+    unsigned nb, i0, j0;
 
     for (i = 0; i < bm::set_total_blocks; ++i)
     {
         btype = dec.get_8();
-        bm::word_t* blk = bman.get_block(i);
+        
+        bman.get_block_coord(i, i0, j0);
+        bm::word_t* blk = bman.get_block_ptr(i0, j0);
+
+//        bm::word_t* blk = bman.get_block(i);
         
         // pre-check if we have short zero-run packaging here
         //
@@ -3478,7 +3489,11 @@ iterator_deserializer<BV, SerialIterator>::deserialize(
         case serial_iterator_type::e_bit_block:
             {
             BM_ASSERT(sit.block_idx() == bv_block_idx);
-            bm::word_t* blk = bman.get_block(bv_block_idx);
+            unsigned i0, j0;
+            bman.get_block_coord(bv_block_idx, i0, j0);
+            bm::word_t* blk = bman.get_block_ptr(i0, j0);
+
+//            bm::word_t* blk = bman.get_block(bv_block_idx);
 
             if (!blk) 
             {
@@ -3513,6 +3528,7 @@ iterator_deserializer<BV, SerialIterator>::deserialize(
                 {
                     if (IS_FULL_BLOCK(blk) && is_const_set_operation(op))
                     {
+                        blk = FULL_BLOCK_REAL_ADDR;
                     }
                     else
                     {
@@ -3535,7 +3551,11 @@ iterator_deserializer<BV, SerialIterator>::deserialize(
         case serial_iterator_type::e_zero_blocks:
             {
             BM_ASSERT(bv_block_idx == sit.block_idx());
-            bm::word_t* blk = bman.get_block(bv_block_idx);
+            unsigned i0, j0;
+            bman.get_block_coord(bv_block_idx, i0, j0);
+            bm::word_t* blk = bman.get_block_ptr(i0, j0);
+
+//            bm::word_t* blk = bman.get_block(bv_block_idx);
             sit.next();
 
             if (blk)
@@ -3575,7 +3595,11 @@ iterator_deserializer<BV, SerialIterator>::deserialize(
         case serial_iterator_type::e_one_blocks:
             {
             BM_ASSERT(bv_block_idx == sit.block_idx());
-            bm::word_t* blk = bman.get_block(bv_block_idx);
+            unsigned i0, j0;
+            bman.get_block_coord(bv_block_idx, i0, j0);
+            bm::word_t* blk = bman.get_block_ptr(i0, j0);
+
+//            bm::word_t* blk = bman.get_block(bv_block_idx);
             sit.next();
 
             switch (op)
@@ -3604,7 +3628,7 @@ iterator_deserializer<BV, SerialIterator>::deserialize(
                     {
                     case set_XOR:
                         blk = bman.deoptimize_block(bv_block_idx);
-                        bit_block_xor(blk, FULL_BLOCK_REAL_ADDR);
+                        bm::bit_block_xor(blk, FULL_BLOCK_REAL_ADDR);
                         break;
                     case set_COUNT_XOR:
                         {
@@ -3657,7 +3681,11 @@ iterator_deserializer<BV, SerialIterator>::deserialize(
         case serial_iterator_type::e_gap_block:
             {
             BM_ASSERT(bv_block_idx == sit.block_idx());
-            bm::word_t* blk = bman.get_block(bv_block_idx);
+            unsigned i0, j0;
+            bman.get_block_coord(bv_block_idx, i0, j0);
+            const bm::word_t* blk = bman.get_block(i0, j0);
+
+//            bm::word_t* blk = bman.get_block(bv_block_idx);
 
             sit.get_gap_block(gap_temp_block);
 
@@ -3727,7 +3755,10 @@ iterator_deserializer<BV, SerialIterator>::deserialize(
                 }
                 if (exit_on_one) 
                 {
-                    blk = bman.get_block(bv_block_idx);
+                    bman.get_block_coord(bv_block_idx, i0, j0);
+                    blk = bman.get_block_ptr(i0, j0);
+
+                    //blk = bman.get_block(bv_block_idx);
                     if (blk) 
                     {
                         bool z = bm::check_block_zero(blk, true/*deep check*/);

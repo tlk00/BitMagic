@@ -5506,6 +5506,11 @@ bm::id_t bit_operation_and_count(const bm::word_t* BMRESTRICT src1,
 {
     if (IS_EMPTY_BLOCK(src1) || IS_EMPTY_BLOCK(src2))
         return 0;
+    if (src1 == FULL_BLOCK_FAKE_ADDR)
+        src1 = FULL_BLOCK_REAL_ADDR;
+    if (src2 == FULL_BLOCK_FAKE_ADDR)
+        src2 = FULL_BLOCK_REAL_ADDR;
+
     return bit_block_and_count(src1, src2);
 }
 
@@ -5525,6 +5530,10 @@ bm::id_t bit_operation_and_any(const bm::word_t* BMRESTRICT src1,
 {
     if (IS_EMPTY_BLOCK(src1) || IS_EMPTY_BLOCK(src2))
         return 0;
+    if (src1 == FULL_BLOCK_FAKE_ADDR)
+        src1 = FULL_BLOCK_REAL_ADDR;
+    if (src2 == FULL_BLOCK_FAKE_ADDR)
+        src2 = FULL_BLOCK_REAL_ADDR;
     return bit_block_and_any(src1, src2);
 }
 
@@ -5551,6 +5560,11 @@ bm::id_t bit_operation_sub_count(const bm::word_t* BMRESTRICT src1,
     {
         return bit_block_count(src1);
     }
+    if (src1 == FULL_BLOCK_FAKE_ADDR)
+        src1 = FULL_BLOCK_REAL_ADDR;
+    if (src2 == FULL_BLOCK_FAKE_ADDR)
+        src2 = FULL_BLOCK_REAL_ADDR;
+
     return bit_block_sub_count(src1, src2);
 }
 
@@ -5593,6 +5607,11 @@ bm::id_t bit_operation_sub_any(const bm::word_t* BMRESTRICT src1,
     
     if (IS_EMPTY_BLOCK(src2)) // nothing to diff
         return !bit_is_all_zero(src1);
+    if (src1 == FULL_BLOCK_FAKE_ADDR)
+        src1 = FULL_BLOCK_REAL_ADDR;
+    if (src2 == FULL_BLOCK_FAKE_ADDR)
+        src2 = FULL_BLOCK_REAL_ADDR;
+
     return bit_block_sub_any(src1, src2);
 }
 
@@ -5624,6 +5643,10 @@ bm::id_t bit_operation_or_count(const bm::word_t* BMRESTRICT src1,
         if (IS_EMPTY_BLOCK(src2))
             return bit_block_count(src1);
     }
+    if (src1 == FULL_BLOCK_FAKE_ADDR)
+        src1 = FULL_BLOCK_REAL_ADDR;
+    if (src2 == FULL_BLOCK_FAKE_ADDR)
+        src2 = FULL_BLOCK_REAL_ADDR;
 
     return bit_block_or_count(src1, src2);
 }
@@ -5654,6 +5677,10 @@ bm::id_t bit_operation_or_any(const bm::word_t* BMRESTRICT src1,
         if (IS_EMPTY_BLOCK(src2))
             return !bit_is_all_zero(src1);
     }
+    if (src1 == FULL_BLOCK_FAKE_ADDR)
+        src1 = FULL_BLOCK_REAL_ADDR;
+    if (src2 == FULL_BLOCK_FAKE_ADDR)
+        src2 = FULL_BLOCK_REAL_ADDR;
 
     return bit_block_or_any(src1, src2);
 }
@@ -6276,6 +6303,11 @@ bm::id_t bit_operation_xor_count(const bm::word_t* BMRESTRICT src1,
         const bm::word_t* block = IS_EMPTY_BLOCK(src1) ? src2 : src1;
         return bit_block_count(block);
     }
+    if (src1 == FULL_BLOCK_FAKE_ADDR)
+        src1 = FULL_BLOCK_REAL_ADDR;
+    if (src2 == FULL_BLOCK_FAKE_ADDR)
+        src2 = FULL_BLOCK_REAL_ADDR;
+
     return bit_block_xor_count(src1, src2);
 }
 
@@ -6752,6 +6784,7 @@ inline
 bool check_block_zero(const bm::word_t* blk, bool  deep_scan)
 {
     if (!blk) return true;
+    if (IS_FULL_BLOCK(blk)) return false;
 
     bool ret;
     if (BM_IS_GAP(blk))

@@ -557,11 +557,8 @@ public:
         : max_bits_(blockman.max_bits_),
           top_blocks_(0),
           top_block_size_(blockman.top_block_size_),
-        #ifdef BM_DISBALE_BIT_IN_PTR
-            gap_flags_(blockman.gap_flags_),
-        #endif
-            temp_block_(0),
-            alloc_(blockman.alloc_)
+          temp_block_(0),
+          alloc_(blockman.alloc_)
     {
         ::memcpy(glevel_len_, blockman.glevel_len_, sizeof(glevel_len_));
 
@@ -660,40 +657,6 @@ public:
             top_block_size_ * bm::set_array_size * bm::bits_in_block;
     }
 
-    /**
-        \brief Finds block in 2-level blocks array  
-        \param nb - Index of block (logical linear number)
-        \return block adress or NULL if not yet allocated
-    */
-    bm::word_t* get_block(unsigned nb) const
-    {
-        if (!top_blocks_)
-            return 0;
-        unsigned block_idx = nb >> bm::set_array_shift;
-        if (block_idx >= top_block_size_)
-        {
-            return 0;
-        }
-        bm::word_t** blk_blk = top_blocks_[block_idx];
-        bm::word_t* ret = blk_blk ? blk_blk[nb & bm::set_array_mask] : 0;
-        if (ret == FULL_BLOCK_FAKE_ADDR)
-            ret = FULL_BLOCK_REAL_ADDR;
-        return ret;
-    }
-
-    /**
-    \brief Finds const block in 2-level blocks array (returns unsanitized address!)
-    \param nb - Index of block (logical linear number)
-    \return block adress or NULL if not yet allocated or FULL_BLOCK_FAKE_ADDR
-    */
-    bm::word_t* get_block_ptr(unsigned nb) const
-    {
-        unsigned block_idx = nb >> bm::set_array_shift;
-        if (!top_blocks_ || (block_idx >= top_block_size_))
-            return 0;
-        bm::word_t** blk_blk = top_blocks_[block_idx];
-        return blk_blk ? blk_blk[nb & bm::set_array_mask] : 0;
-    }
 
     /**
         \brief Finds block in 2-level blocks array  
@@ -832,9 +795,10 @@ public:
 
     void set_block_all_set(unsigned nb)
     {
-        bm::word_t* block = this->get_block(nb);
+        unsigned i, j;
+        get_block_coord(nb, i, j);
+        bm::word_t* block = this->get_block_ptr(i, j);
         set_block(nb, const_cast<bm::word_t*>(FULL_BLOCK_FAKE_ADDR));
-
         if (BM_IS_GAP(block))
             alloc_.free_gap_block(BMGAP_PTR(block), glevel_len_);
         else
@@ -1129,7 +1093,11 @@ public:
                                      int*     actual_block_type,
                                      bool     allow_null_ret=true)
     {
-        bm::word_t* block = this->get_block_ptr(nb);
+        unsigned i, j;
+        this->get_block_coord(nb, i, j);
+        bm::word_t*  block = this->get_block_ptr(i, j);
+
+        //bm::word_t* block = this->get_block_ptr(nb);
 
         if (!IS_VALID_ADDR(block)) // NULL block or ALLSET
         {
@@ -1168,7 +1136,11 @@ public:
     */
     bm::word_t* check_allocate_block(unsigned nb, int initial_block_type)
     {
-        bm::word_t* block = this->get_block_ptr(nb);
+        unsigned i, j;
+        this->get_block_coord(nb, i, j);
+        bm::word_t* block = this->get_block_ptr(i, j);
+
+//        bm::word_t* block = this->get_block_ptr(nb);
 
         if (!IS_VALID_ADDR(block)) // NULL block or ALLSET
         {
@@ -1569,7 +1541,9 @@ public:
     */
     bm::word_t* deoptimize_block(unsigned nb)
     {
-        bm::word_t* block = this->get_block(nb);
+        unsigned i, j;
+        get_block_coord(nb, i, j);
+        bm::word_t* block = this->get_block_ptr(i, j);
         if (BM_IS_GAP(block))
         {
             gap_word_t* gap_block = BMGAP_PTR(block);

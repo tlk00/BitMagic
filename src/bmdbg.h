@@ -417,7 +417,11 @@ void print_stat(const BV& bv, unsigned blocks = 0)
     unsigned nb_prev = 0;
     for (nb = 0; nb < blocks; ++nb)
     {
-        const bm::word_t* blk = bman.get_block(nb);
+        unsigned i0, j0;
+        bman.get_block_coord(nb, i0, j0);
+        const bm::word_t* blk = bman.get_block(i0, j0);
+
+//        const bm::word_t* blk = bman.get_block(nb);
         if (blk == 0)
         {
            continue;
@@ -434,7 +438,10 @@ void print_stat(const BV& bv, unsigned blocks = 0)
            unsigned start = nb; 
            for(unsigned i = nb+1; i < bm::set_total_blocks; ++i, ++nb)
            {
-               blk = bman.get_block(nb);
+               bman.get_block_coord(nb, i0, j0);
+               blk = bman.get_block(i0, j0);
+               
+//               blk = bman.get_block(nb);
                if (IS_FULL_BLOCK(blk))
                {
                  if (BM_IS_GAP(blk)) // gap block

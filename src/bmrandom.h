@@ -197,8 +197,6 @@ void random_subset<BV>::get_subset(BV&       bv_out,
             else
             if (block_bits_take_[i] > block_counts_[i])
                 block_bits_take_[i] = (gap_word_t)block_counts_[i];
-
-            BM_ASSERT(bman_in.get_block(i));
         }
         else
         {
@@ -214,11 +212,17 @@ void random_subset<BV>::get_subset(BV&       bv_out,
             take_count = count;
         if (take_count == 0)
             continue;
-        const bm::word_t* blk_src = bman_in.get_block(i);
+    
+        unsigned i0, j0;
+        bman_in.get_block_coord(i, i0, j0);
+        const bm::word_t* blk_src = bman_in.get_block(i0, j0);
+
+//        const bm::word_t* blk_src = bman_in.get_block(i);
         BM_ASSERT(blk_src);
 
         // allocate target block
-        bm::word_t* blk_out = bman_out.get_block(i);
+        bm::word_t* blk_out = bman_out.get_block_ptr(i0, j0);
+//        bm::word_t* blk_out = bman_out.get_block(i);
         if (blk_out != 0)
         {
             blk_out = bman_out.deoptimize_block(i);
