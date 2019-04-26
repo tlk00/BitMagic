@@ -2125,6 +2125,38 @@ void BitBlockShiftTest()
             exit(1);
         }
     }
+    
+    
+    for (i = 0; i < bm::set_block_size; ++i)
+    {
+        blk0[i] = blk1[i] = unsigned(rand());
+    }
+
+    {
+        TimeTaker tt("Bit-block shift-l(1)", repeats);
+        for (i = 0; i < repeats; ++i)
+        {
+            bm::bit_block_shift_l1(blk0, &acc0, 0);
+        }
+    }
+
+    {
+        TimeTaker tt("Bit-block shift-l(1) unrolled", repeats);
+        for (i = 0; i < repeats; ++i)
+        {
+            bm::bit_block_shift_l1_unr(blk1, &acc1, 0);
+        }
+    }
+
+    for (i = 0; i < bm::set_block_size; ++i)
+    {
+        if (blk0[i] != blk1[i])
+        {
+            cerr << "Stress SHIFT-l(1) check failed" << endl;
+            exit(1);
+        }
+    }
+
 
 }
 
@@ -2532,8 +2564,27 @@ void BvectorShiftTest()
                 } // for
             } // for
         }
-
     }
+
+    {
+        std::vector<bvect> bv_coll;
+        GenerateTestCollection(&bv_coll, 25, 80000000);
+
+        if (!bv_coll.size())
+            return;
+
+        {
+            TimeTaker tt("bvector<>::shift_left() ", REPEATS);
+            for (unsigned i = 0; i < REPEATS; ++i)
+            {
+                for (unsigned k = 0; k < bv_coll.size(); ++k)
+                {
+                    bv_coll[k].shift_left();
+                } // for
+            } // for
+        }
+    }
+
 
     bvect mask_bv; // mask vector
     mask_bv.init();
