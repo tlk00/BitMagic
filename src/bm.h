@@ -39,7 +39,7 @@ For more information please visit:  http://bitmagic.io
 #endif
 
 
-#include "bmdef.h"
+//#include "bmdef.h"
 #include "bmconst.h"
 #include "bmsimd.h"
 #include "bmfwd.h"
@@ -50,6 +50,8 @@ For more information please visit:  http://bitmagic.io
 #include "encoding.h"
 #include "bmalloc.h"
 #include "bmblocks.h"
+#include "bmbuffer.h"
+#include "bmdef.h"
 
 
 extern "C"
@@ -98,29 +100,66 @@ namespace bm
  
     @ingroup bvector
 */
-struct rs_index
+template<typename BVAlloc>
+class rs_index
 {
-    unsigned  bcount[bm::set_total_blocks];
-    bm::pair<bm::gap_word_t, bm::gap_word_t> subcount[bm::set_total_blocks];
-    unsigned  total_blocks;
-    
-    rs_index() { total_blocks = 0; }
+public:
+    typedef BVAlloc        bv_allocator_type;
+    typedef unsigned       size_type;
+    typedef bm::pair<bm::gap_word_t, bm::gap_word_t> sb_pair_type;
+
+public:
+    rs_index() : total_blocks_(0) {}
     rs_index(const rs_index& rsi) BMNOEXEPT;
     
     /// init arrays to zeros
     void init() BMNOEXEPT;
     
+    /// reserve the capacity for block count
+    void resize(unsigned new_size);
+    
     /// copy rs index
     void copy_from(const rs_index& rsi) BMNOEXEPT;
+    
+    /// set total blocks
+    void set_total(size_type t) { total_blocks_ = t; }
+    
+    /// get total blocks
+    size_type get_total() const { return total_blocks_; }
     
     /// return bit-count for specified block
     unsigned count(unsigned nb) const;
     
+    /// return total bit-count for the index
+    unsigned count() const;
+
+    /// return running bit-count for specified block
+    unsigned bcount(unsigned nb) const;
+    
+    const sb_pair_type& sub_count(unsigned nb) const;
+
+    void set_sub_count(unsigned nb,
+                       bm::gap_word_t first, bm::gap_word_t second);
+
     /// determine the sub-range within a bit-block
     unsigned find_sub_range(unsigned block_bit_pos) const;
     
     /// determine block sub-range for rank search
     bm::gap_word_t select_sub_range(unsigned nb, unsigned& rank) const;
+    
+    /// assign bcount value for block nb
+    void set_bcount(unsigned nb, unsigned v);
+
+    /// C-style direct accessor to top-level blocks vector
+    const unsigned* bcount_begin() const { return block_count_.begin(); }
+    
+private:
+    typedef bm::heap_vector<size_type, bv_allocator_type>     uvector_type;
+    typedef bm::heap_vector<sb_pair_type, bv_allocator_type>  sbvector_type;
+
+    uvector_type   block_count_;  ///< top level accumulated blocks count
+    sbvector_type  sub_count_;    ///< second level (subblock) counts
+    size_type      total_blocks_; ///< total bit-blocks in the index
 };
 
 
@@ -900,7 +939,7 @@ public:
             }
             
             this->position_ = pos;
-            unsigned nb = this->block_idx_ = unsigned(pos >>  bm::set_block_shift);
+            unsigned nb = this->block_idx_ = unsigned(pos >> bm::set_block_shift);
             bm::bvector<Alloc>::blocks_manager_type& bman =
                                                  this->bv_->get_blocks_manager();
             unsigned i0 = nb >> bm::set_array_shift; // top block address
@@ -1250,8 +1289,8 @@ public:
     
     
     
-    typedef rs_index blocks_count;
-    typedef rs_index rs_index_type;
+    typedef rs_index<allocator_type> blocks_count;
+    typedef rs_index<allocator_type> rs_index_type;
 public:
     /*! @name Construction, initialization, assignment */
     //@{
@@ -2365,6 +2404,8 @@ private:
         Return value of first bit in the block
     */
     bool test_first_block_bit(unsigned nb) const;
+    
+    unsigned find_max_effective_blocks() const;
 
 private:
     blocks_manager_type  blockman_;         //!< bitblocks manager
@@ -2554,51 +2595,62 @@ void bvector<Alloc>::running_count_blocks(rs_index_type* blocks_cnt) const
     
     if (!blockman_.is_init())
         return;
-    
-    unsigned nb  = 0;
-    unsigned cnt = 0;
 
-    for (; nb < bm::set_total_blocks; ++nb)
+    
+    unsigned total_blocks = find_max_effective_blocks();
+    blocks_cnt->resize(total_blocks+1);
+    
+    
+    unsigned nb = 0;
+    for (; nb < total_blocks; ++nb)
     {
         int no_more_blocks;
         const bm::word_t* block = blockman_.get_block(nb, &no_more_blocks);
         if (block)
         {
-            cnt = blockman_.block_bitcount(block);
-            blocks_cnt->bcount[nb] = cnt;
+            BM_ASSERT(nb < total_blocks);
             
+            unsigned cnt = blockman_.block_bitcount(block);
+            blocks_cnt->set_bcount(nb, cnt);
+
+            bm::gap_word_t first, second;
             if (BM_IS_GAP(block))
             {
                 const bm::gap_word_t* const gap_block = BMGAP_PTR(block);
-                blocks_cnt->subcount[nb].first = (bm::gap_word_t)
+                first = (bm::gap_word_t)
                     bm::gap_bit_count_range(gap_block, 0, bm::rs3_border0);
-                blocks_cnt->subcount[nb].second = (bm::gap_word_t)
+                second = (bm::gap_word_t)
                     bm::gap_bit_count_range(gap_block,
                                             bm::gap_word_t(bm::rs3_border0+1),
                                             bm::rs3_border1);
+                blocks_cnt->set_sub_count(nb, first, second);
             }
             else
             {
-                blocks_cnt->subcount[nb].first = (bm::gap_word_t)
+                first = (bm::gap_word_t)
                     bm::bit_block_calc_count_range(block, 0, bm::rs3_border0);
-                blocks_cnt->subcount[nb].second = (bm::gap_word_t)
+                second = (bm::gap_word_t)
                     bm::bit_block_calc_count_range(block,
                                                    bm::rs3_border0+1,
                                                    bm::rs3_border1);
             }
+            blocks_cnt->set_sub_count(nb, first, second);
         }
         if (no_more_blocks)
         {
-            blocks_cnt->total_blocks = nb;
+            BM_ASSERT(nb == total_blocks);
             break;
         }
-
+        
     } // for nb
+    blocks_cnt->set_total(nb);
     
     // compute running count
-    for (unsigned i = 1; i < bm::set_total_blocks; ++i)
+    for (unsigned i = 1; i < nb; ++i)
     {
-        blocks_cnt->bcount[i] += blocks_cnt->bcount[i-1];
+        unsigned bc_prev = blocks_cnt->bcount(i-1);
+        unsigned bc = blocks_cnt->bcount(i);
+        blocks_cnt->set_bcount(i, bc_prev + bc);
     }
 }
 
@@ -2624,7 +2676,6 @@ unsigned bvector<Alloc>::block_count_to(const bm::word_t*    block,
                                         const rs_index_type& blocks_cnt)
 {
     unsigned c;
-    
     unsigned sub_range = blocks_cnt.find_sub_range(nbit_right);
 
     // evaluate 3 sub-block intervals
@@ -2643,7 +2694,7 @@ unsigned bvector<Alloc>::block_count_to(const bm::word_t*    block,
             // |--------[x]-----------[1]----------|
             if (nbit_right == rs3_border0)
             {
-                c = blocks_cnt.subcount[nb].first;
+                c = blocks_cnt.sub_count(nb).first;
             }
             else
             {
@@ -2651,7 +2702,7 @@ unsigned bvector<Alloc>::block_count_to(const bm::word_t*    block,
                 c = bm::bit_block_calc_count_range(block,
                                                    nbit_right+1,
                                                    rs3_border0);
-                c = blocks_cnt.subcount[nb].first - c;
+                c = blocks_cnt.sub_count(nb).first - c;
             }
         }
     break;
@@ -2662,13 +2713,13 @@ unsigned bvector<Alloc>::block_count_to(const bm::word_t*    block,
             c = bm::bit_block_calc_count_range(block,
                                                rs3_border0 + 1,
                                                nbit_right);
-            c += blocks_cnt.subcount[nb].first;
+            c += blocks_cnt.sub_count(nb).first;
         }
         else
         {
-            unsigned bc_second_range =
-                blocks_cnt.subcount[nb].first +
-                blocks_cnt.subcount[nb].second;
+            const typename rs_index_type::sb_pair_type& sbp =
+                                            blocks_cnt.sub_count(nb);
+            unsigned bc_second_range = sbp.first + sbp.second;
             // |--------[0]-----------[x]----------|
             if (nbit_right == rs3_border1)
             {
@@ -2686,9 +2737,9 @@ unsigned bvector<Alloc>::block_count_to(const bm::word_t*    block,
     break;
     case 2:
     {
-        unsigned bc_second_range =
-            blocks_cnt.subcount[nb].first +
-            blocks_cnt.subcount[nb].second;
+        const typename rs_index_type::sb_pair_type& sbp =
+                                        blocks_cnt.sub_count(nb);
+        unsigned bc_second_range = sbp.first + sbp.second;
 
         // |--------[0]-----------[1]-x--------|
         if (nbit_right <= (rs3_border1 + rs3_half_span))
@@ -2711,8 +2762,8 @@ unsigned bvector<Alloc>::block_count_to(const bm::word_t*    block,
                 c = bm::bit_block_calc_count_range(block,
                                                    nbit_right+1,
                                                    bm::gap_max_bits-1);
-                unsigned cnt = nb ? blocks_cnt.bcount[nb-1] : 0;
-                c = blocks_cnt.bcount[nb] - cnt - c;
+                unsigned cnt = nb ? blocks_cnt.bcount(nb-1) : 0;
+                c = blocks_cnt.bcount(nb) - cnt - c;
             }
         }
     }
@@ -2720,10 +2771,9 @@ unsigned bvector<Alloc>::block_count_to(const bm::word_t*    block,
     default:
         BM_ASSERT(0);
         c = 0;
-    }// switch
+    } // switch
     
     BM_ASSERT(c == bm::bit_block_calc_count_to(block, nbit_right));
-    
     return c;
 }
 
@@ -2741,13 +2791,18 @@ bm::id_t bvector<Alloc>::count_to(bm::id_t right,
     
     // running count of all blocks before target
     //
-    bm::id_t cnt = nblock_right ? blocks_cnt.bcount[nblock_right-1] : 0;
+    size_type cnt;
+    if (nblock_right >= blocks_cnt.get_total())
+    {
+        cnt = blocks_cnt.count();
+        return cnt;
+    }
+    cnt = nblock_right ? blocks_cnt.bcount(nblock_right-1) : 0;
 
     unsigned i, j;
     blockman_.get_block_coord(nblock_right, i, j);
     const bm::word_t* block = blockman_.get_block_ptr(i, j);
 
-    //const bm::word_t* block = blockman_.get_block_ptr(nblock_right);
     if (!block)
         return cnt;
     
@@ -2826,7 +2881,7 @@ bm::id_t bvector<Alloc>::count_to_test(bm::id_t right,
                 return 0;
         }
     }
-    cnt += nblock_right ? blocks_cnt.bcount[nblock_right - 1] : 0;
+    cnt += nblock_right ? blocks_cnt.bcount(nblock_right - 1) : 0;
     return cnt;
 }
 
@@ -3912,7 +3967,7 @@ bool bvector<Alloc>::find_rank(bm::id_t rank_in, bm::id_t from, bm::id_t& pos,
     
     if (!rank_in ||
         !blockman_.is_init() ||
-        (blocks_cnt.bcount[blocks_cnt.total_blocks-1] < rank_in))
+        (blocks_cnt.count() < rank_in))
         return ret;
     
     unsigned nb;
@@ -3920,16 +3975,17 @@ bool bvector<Alloc>::find_rank(bm::id_t rank_in, bm::id_t from, bm::id_t& pos,
         nb = unsigned(from >> bm::set_block_shift);
     else
     {
-        nb = bm::lower_bound(blocks_cnt.bcount, rank_in, 0, blocks_cnt.total_blocks-1);
-        BM_ASSERT(blocks_cnt.bcount[nb] >= rank_in);
+        const unsigned* bcount_arr = blocks_cnt.bcount_begin();
+        nb = bm::lower_bound(bcount_arr, rank_in, 0, blocks_cnt.get_total()-1);
+        BM_ASSERT(blocks_cnt.bcount(nb) >= rank_in);
         if (nb)
-            rank_in -= blocks_cnt.bcount[nb-1];
+            rank_in -= blocks_cnt.bcount(nb-1);
     }
     
     bm::gap_word_t nbit = bm::gap_word_t(from & bm::set_block_mask);
     unsigned bit_pos = 0;
 
-    for (; nb < blocks_cnt.total_blocks; ++nb)
+    for (; nb < blocks_cnt.get_total(); ++nb)
     {
         int no_more_blocks;
         const bm::word_t* block = blockman_.get_block(nb, &no_more_blocks);
@@ -3978,15 +4034,16 @@ bool bvector<Alloc>::select(bm::id_t rank_in, bm::id_t& pos,
     
     if (!rank_in ||
         !blockman_.is_init() ||
-        (blocks_cnt.bcount[bm::set_total_blocks-1] < rank_in))
+        (blocks_cnt.count() < rank_in))
         return ret;
     
     unsigned nb;
     
-    nb = bm::lower_bound(blocks_cnt.bcount, rank_in, 0, blocks_cnt.total_blocks-1);
-    BM_ASSERT(blocks_cnt.bcount[nb] >= rank_in);
+    const unsigned* bcount_arr = blocks_cnt.bcount_begin();
+    nb = bm::lower_bound(bcount_arr, rank_in, 0, blocks_cnt.get_total()-1);
+    BM_ASSERT(blocks_cnt.bcount(nb) >= rank_in);
     if (nb)
-        rank_in -= blocks_cnt.bcount[nb-1];
+        rank_in -= blocks_cnt.bcount(nb-1);
 
     unsigned i, j;
     blockman_.get_block_coord(nb, i, j);
@@ -6379,6 +6436,20 @@ void bvector<Alloc>::copy_range_no_check(const bvector<Alloc>& bvect,
 //---------------------------------------------------------------------
 
 template<class Alloc>
+unsigned bvector<Alloc>::find_max_effective_blocks() const
+{
+    size_type last;
+    bool found = this->find_reverse(last);
+    if (!found)
+        return 0;
+    unsigned nb = (last >> bm::set_block_shift);
+    return nb+1;
+}
+
+
+//---------------------------------------------------------------------
+
+template<class Alloc>
 void bvector<Alloc>::throw_bad_alloc()
 {
 #ifndef BM_NO_STL
@@ -6392,69 +6463,131 @@ void bvector<Alloc>::throw_bad_alloc()
 //
 //---------------------------------------------------------------------
 
-inline
-rs_index::rs_index(const rs_index& rsi) BMNOEXEPT
+template<typename BVAlloc>
+rs_index<BVAlloc>::rs_index(const rs_index<BVAlloc>& rsi) BMNOEXEPT
 {
     copy_from(rsi);
 }
 
 //---------------------------------------------------------------------
 
-inline
-void rs_index::init() BMNOEXEPT
-{
-    ::memset(this->bcount, 0, sizeof(this->bcount));
-    ::memset(this->subcount, 0, sizeof(this->subcount));
 
-    this->total_blocks = 0;
+template<typename BVAlloc>
+void rs_index<BVAlloc>::init() BMNOEXEPT
+{
+    block_count_.resize(0);
+    sub_count_.resize(0);
+    total_blocks_ = 0;
 }
 
 //---------------------------------------------------------------------
 
-inline
-void rs_index::copy_from(const rs_index& rsi) BMNOEXEPT
+template<typename BVAlloc>
+void rs_index<BVAlloc>::resize(unsigned new_size)
 {
-    ::memcpy(this->bcount, rsi.bcount, sizeof(this->bcount));
-    ::memcpy(this->subcount, rsi.subcount, sizeof(this->subcount));
-    this->total_blocks = rsi.total_blocks;
+    block_count_.resize(new_size);
+    sub_count_.resize(new_size);
 }
 
 //---------------------------------------------------------------------
 
-inline
-unsigned rs_index::count(unsigned nb) const
+template<typename BVAlloc>
+void rs_index<BVAlloc>::copy_from(const rs_index& rsi) BMNOEXEPT
 {
-    return (nb == 0) ? bcount[nb]
-                     : bcount[nb] - bcount[nb-1];
+    block_count_ = rsi.block_count_;
+    sub_count_ = rsi.sub_count_;
+    this->total_blocks_ = rsi.total_blocks_;
 }
 
 //---------------------------------------------------------------------
 
-inline
-unsigned rs_index::find_sub_range(unsigned block_bit_pos) const
+template<typename BVAlloc>
+unsigned rs_index<BVAlloc>::count(unsigned nb) const
+{
+    if (nb >= total_blocks_)
+        return count();
+    return (nb == 0) ? block_count_[nb]
+                     : block_count_[nb] - block_count_[nb-1];
+}
+
+//---------------------------------------------------------------------
+
+template<typename BVAlloc>
+unsigned rs_index<BVAlloc>::count() const
+{
+    if (!total_blocks_)
+        return 0;
+    return block_count_[total_blocks_ - 1];
+}
+
+//---------------------------------------------------------------------
+
+template<typename BVAlloc>
+unsigned rs_index<BVAlloc>::bcount(unsigned nb) const
+{
+    if (nb >= total_blocks_)
+        return count();
+    return block_count_[nb];
+}
+
+//---------------------------------------------------------------------
+
+template<typename BVAlloc>
+const typename rs_index<BVAlloc>::sb_pair_type&
+rs_index<BVAlloc>::sub_count(unsigned nb) const
+{
+    BM_ASSERT(nb < total_blocks_);
+    const sb_pair_type& sbp = sub_count_[nb];
+    return sbp;
+}
+
+//---------------------------------------------------------------------
+
+template<typename BVAlloc>
+void rs_index<BVAlloc>::set_sub_count(unsigned nb,
+                                      bm::gap_word_t first,
+                                      bm::gap_word_t second)
+{
+    sb_pair_type& sbp = sub_count_[nb];
+    sbp.first = first;
+    sbp.second = second;
+}
+
+//---------------------------------------------------------------------
+
+template<typename BVAlloc>
+unsigned rs_index<BVAlloc>::find_sub_range(unsigned block_bit_pos) const
 {
     return (block_bit_pos <= rs3_border0) ? 0 :
             (block_bit_pos > rs3_border1) ? 2 : 1;
 }
 
-
 //---------------------------------------------------------------------
 
-inline
-bm::gap_word_t rs_index::select_sub_range(unsigned nb, unsigned& rank) const
+template<typename BVAlloc>
+bm::gap_word_t rs_index<BVAlloc>::select_sub_range(unsigned nb,
+                                                   unsigned& rank) const
 {
-    if (rank > this->subcount[nb].first)
+    const sb_pair_type& sbp = sub_count(nb);
+    if (rank > sbp.first)
     {
-        rank -= this->subcount[nb].first;
-        if (rank > this->subcount[nb].second)
+        rank -= sbp.first;
+        if (rank > sbp.second)
         {
-            rank -= this->subcount[nb].second;
+            rank -= sbp.second;
             return rs3_border1 + 1;
         }
         else
             return rs3_border0 + 1;
     }
     return 0;
+}
+//---------------------------------------------------------------------
+
+template<typename BVAlloc>
+void rs_index<BVAlloc>::set_bcount(unsigned nb, unsigned v)
+{
+    block_count_[nb] = v;
 }
 
 //---------------------------------------------------------------------

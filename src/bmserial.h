@@ -931,7 +931,6 @@ unsigned serializer<BV>::serialize(const BV& bv,
         bman.get_block_coord(i, i0, j0);
         const bm::word_t* blk = bman.get_block(i0, j0);
 
-//        bm::word_t* blk = bman.get_block(i);
         // -----------------------------------------
         // Empty or ONE block serialization
 
