@@ -3054,6 +3054,7 @@ void BasicFunctionalityTest()
     
     // filling vectors with regular values
 
+
     unsigned i;
     for (i = 0; i < ITERATIONS; ++i)
     {
@@ -12188,10 +12189,11 @@ void CountRangeTest()
     
     bvect::rs_index_type bc_arr;
     bv1.running_count_blocks(&bc_arr);
+    assert(bc_arr.count() == 2);
     
     for (unsigned i = 0; i < bm::set_total_blocks; ++i)
     {
-        assert(bc_arr.bcount[i] == 2);
+        assert(bc_arr.count(i) == 2);
     } // for
     
     VerifyCountRange(bv1, bc_arr, 200000);
@@ -12202,7 +12204,7 @@ void CountRangeTest()
     
     for (unsigned i = 0; i < bm::set_total_blocks; ++i)
     {
-        assert(bc_arr1.bcount[i] == 2);
+        assert(bc_arr1.count(i) == 2);
     } // for
     
     VerifyCountRange(bv1, bc_arr1, 200000);
@@ -12222,12 +12224,12 @@ void CountRangeTest()
     bvect::rs_index_type bc_arr;
     bv1.running_count_blocks(&bc_arr);
 
-    assert(bc_arr.bcount[0] == 2);
-    assert(bc_arr.bcount[1] == 5);
+    assert(bc_arr.bcount(0) == 2);
+    assert(bc_arr.bcount(1) == 5);
 
     for (unsigned i = 2; i < bm::set_total_blocks; ++i)
     {
-        assert(bc_arr.bcount[i] == 5);
+        assert(bc_arr.bcount(i) == 5);
     } // for
     
     VerifyCountRange(bv1, bc_arr, 200000);
@@ -20170,8 +20172,9 @@ int main(void)
 //return 0;
 
 //unsigned long long a = 9223372036854775807ULL;
-unsigned long long a = 281474976710655ULL;
-a = a / (65536 * 256);
+//unsigned long long a = 281474976710655ULL;
+//a = a / (65536 * 256);
+
 
     TestRecomb();
 
@@ -20232,7 +20235,7 @@ a = a / (65536 * 256);
      EmptyBVTest();
 
      EnumeratorTest();
-    
+
      CountRangeTest();
 
      BasicFunctionalityTest();
