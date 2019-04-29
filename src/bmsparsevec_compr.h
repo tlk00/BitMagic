@@ -770,12 +770,15 @@ bool rsc_sparse_vector<Val, SV>::is_null(size_type idx) const
 template<class Val, class SV>
 void rsc_sparse_vector<Val, SV>::optimize(bm::word_t*  temp_block,
                     typename bvector_type::optmode opt_mode,
-                    statistics* stat)
+                    statistics* st)
 {
-    sv_.optimize(temp_block, opt_mode, (typename sparse_vector_type::statistics*)stat);
-    if (stat)
+    sv_.optimize(temp_block, opt_mode, (typename sparse_vector_type::statistics*)st);
+    if (st)
     {
-        stat->memory_used += sizeof(rs_index_type);
+        st->memory_used += sizeof(rs_index_type);
+        st->memory_used += bv_blocks_ptr_->get_total() *
+             (sizeof(typename rs_index_type::size_type)
+             + sizeof(typename rs_index_type::sb_pair_type));
     }
 }
 
@@ -799,6 +802,9 @@ void rsc_sparse_vector<Val, SV>::calc_stat(
     if (st)
     {
         st->memory_used += sizeof(rs_index_type);
+        st->memory_used += bv_blocks_ptr_->get_total() *
+                   (sizeof(typename rs_index_type::size_type)
+                   + sizeof(typename rs_index_type::sb_pair_type));
     }
 }
 
