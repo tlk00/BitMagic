@@ -336,10 +336,8 @@ public:
             unsigned char *p = data + (i * v_size);
             new(p) value_type(hv[i]);
         }
-
         return *this;
     }
-
    
     ~heap_vector()
     {
@@ -360,6 +358,7 @@ public:
 
     const value_type& operator[](std::size_t pos) const
     {
+        BM_ASSERT(pos < size());
         size_type v_size = value_size();
         const unsigned char *p = buffer_.buf() + (pos * v_size);
         return *reinterpret_cast<const value_type*>(p);
@@ -367,6 +366,7 @@ public:
 
     value_type& operator[](std::size_t pos)
     {
+        BM_ASSERT(pos < size());
         size_type v_size = value_size();
         unsigned char *p = buffer_.data() + (pos * v_size);
         return *reinterpret_cast<value_type*>(p);
@@ -382,7 +382,11 @@ public:
         unsigned char *p = buffer_.data() + (pos * v_size);
         return *reinterpret_cast<value_type*>(p);
     }
-
+    
+    const value_type* begin() const
+    {
+        return (const value_type*) buffer_.buf();
+    }
 
     size_type size() const
     {
