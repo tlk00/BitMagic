@@ -1217,7 +1217,7 @@ public:
             Method returns number of ON bits fromn the bit 0 to the current bit 
             For the first bit in bitvector it is 1, for the second 2 
         */
-        bm::id_t count() const { return bit_count_; }
+        size_type count() const { return bit_count_; }
     private:
         /*! Function closed for usage */
         counted_enumerator& go_to(bm::id_t pos);
@@ -1500,7 +1500,7 @@ public:
        \param val - new bit value
        \return  TRUE if bit was changed
     */
-    bool set_bit(bm::id_t n, bool val = true);
+    bool set_bit(size_type n, bool val = true);
 
     /*!
        \brief Sets bit n using bit AND with the provided value.
@@ -1508,7 +1508,7 @@ public:
        \param val - new bit value
        \return  TRUE if bit was changed
     */
-    bool set_bit_and(bm::id_t n, bool val = true);
+    bool set_bit_and(size_type n, bool val = true);
     
     /*!
        \brief Increment the specified element
@@ -1520,7 +1520,7 @@ public:
        \param n - index of the bit to be set
        \return  TRUE if carry over created (1+1)
     */
-    bool inc(bm::id_t n);
+    bool inc(size_type n);
     
 
     /*!
@@ -1530,7 +1530,7 @@ public:
        \param condition - expected current value
        \return TRUE if bit was changed
     */
-    bool set_bit_conditional(bm::id_t n, bool val, bool condition);
+    bool set_bit_conditional(size_type n, bool val, bool condition);
 
     /*!
         \brief Sets bit n if val is true, clears bit n if val is false
@@ -1538,7 +1538,7 @@ public:
         \param val - new bit value
         \return *this
     */
-    bvector<Alloc>& set(bm::id_t n, bool val = true);
+    bvector<Alloc>& set(size_type, bool val = true);
 
     /*!
        \brief Sets every bit in this bitset to 1.
@@ -1597,7 +1597,7 @@ public:
      
         \param n - bit number
     */
-    void set_bit_no_check(bm::id_t n);
+    void set_bit_no_check(size_type n);
 
 
     /*!
@@ -1611,8 +1611,8 @@ public:
         
         \return *this
     */
-    bvector<Alloc>& set_range(bm::id_t left,
-                              bm::id_t right,
+    bvector<Alloc>& set_range(size_type left,
+                              size_type right,
                               bool     value = true);
     
     /*!
@@ -1623,21 +1623,21 @@ public:
         \param right - interval end (closed interval)
     */
     void copy_range(const bvector<Alloc>& bvect,
-                    bm::id_t left,
-                    bm::id_t right);
+                    size_type left,
+                    size_type right);
 
     /*!
        \brief Clears bit n.
        \param n - bit's index to be cleaned.
        \return true if bit was cleared
     */
-    bool clear_bit(bm::id_t n) { return set_bit(n, false); }
+    bool clear_bit(size_type n) { return set_bit(n, false); }
     
     /*!
        \brief Clears bit n without precondiion checks
        \param n - bit's index to be cleaned.
     */
-    void clear_bit_no_check(bm::id_t n) { set_bit_no_check(n, false); }
+    void clear_bit_no_check(size_type n) { set_bit_no_check(n, false); }
     
     /*!
        \brief Clears every bit in the bitvector.
@@ -1710,7 +1710,7 @@ public:
        \brief population cout (count of ON bits)
        \return Total number of bits ON.
     */
-    bm::id_t count() const;
+    size_type count() const;
 
     /*! \brief Computes bitcount values for all bvector blocks
         \param arr - pointer on array of block bit counts
@@ -1730,9 +1730,9 @@ public:
               wide range searches
        \return population count in the diapason
     */
-    bm::id_t count_range(bm::id_t left, 
-                         bm::id_t right, 
-                         const unsigned* block_count_arr=0) const;
+    size_type count_range(size_type left, 
+                          size_type right, 
+                          const unsigned* block_count_arr=0) const;
     
     /*! \brief compute running total of all blocks in bit vector
         \param blocks_cnt - out pointer to counting structure, holding the array
@@ -1761,7 +1761,7 @@ public:
        \sa build_rs_index
        \sa count_to_test, select, rank
     */
-    bm::id_t count_to(bm::id_t n, const rs_index_type&  blocks_cnt) const;
+    bm::id_t count_to(size_type n, const rs_index_type&  blocks_cnt) const;
     
     
     /*!
@@ -1773,7 +1773,7 @@ public:
        \sa build_rs_index
        \sa count_to_test, select, rank
     */
-    bm::id_t rank(bm::id_t n, const rs_index_type&  rs_idx) const
+    bm::id_t rank(size_type n, const rs_index_type&  rs_idx) const
                                             {  return count_to(n, rs_idx); }
     
 
@@ -1792,7 +1792,7 @@ public:
         \sa running_count_blocks
         \sa count_to
     */
-    bm::id_t count_to_test(bm::id_t n, const rs_index_type&  blocks_cnt) const;
+    bm::id_t count_to_test(size_type n, const rs_index_type&  blocks_cnt) const;
 
 
     /*! Recalculate bitcount (deprecated)
@@ -1815,14 +1815,14 @@ public:
        \param n - Index of the bit to check.
        \return Bit value (1 or 0)
     */
-    bool get_bit(bm::id_t n) const;
+    bool get_bit(size_type n) const;
 
     /*!
        \brief returns true if bit n is set and false is bit n is 0. 
        \param n - Index of the bit to check.
        \return Bit value (1 or 0)
     */
-    bool test(bm::id_t n) const { return get_bit(n); }
+    bool test(size_type n) const { return get_bit(n); }
     
     //@}
     
@@ -1851,7 +1851,7 @@ public:
      
         \return Carry over bit value (1 or 0)
     */
-    bool insert(bm::id_t n, bool value);
+    bool insert(size_type n, bool value);
 
     /*!
         \brief Erase bit in the specified position
@@ -1859,7 +1859,7 @@ public:
      
         \param n - index of the bit to insert
     */
-    void erase(bm::id_t n);
+    void erase(size_type n);
 
     //@}
 
@@ -1891,7 +1891,7 @@ public:
        \return true if search returned result
        \sa get_first, get_next, extract_next, find_reverse
     */
-    bool find(bm::id_t& pos) const;
+    bool find(size_type& pos) const;
 
     /*!
        \fn bool bvector::find(bm::id_t from, bm::id_t& pos) const
@@ -1901,7 +1901,7 @@ public:
        \return true if search returned result
        \sa get_first, get_next, extract_next, find_reverse
     */
-    bool find(bm::id_t from, bm::id_t& pos) const;
+    bool find(size_type from, size_type& pos) const;
 
     /*!
        \fn bm::id_t bvector::get_first() const
@@ -1912,7 +1912,7 @@ public:
        \return Index of the first 1 bit, may return 0
        \sa get_next, find, extract_next, find_reverse
     */
-    bm::id_t get_first() const { return check_or_next(0); }
+    size_type get_first() const { return check_or_next(0); }
 
     /*!
        \fn bm::id_t bvector::get_next(bm::id_t prev) const
@@ -1921,7 +1921,7 @@ public:
        \return Index of the next bit which is ON or 0 if not found.
        \sa get_first, find, extract_next, find_reverse
     */
-    bm::id_t get_next(bm::id_t prev) const
+    size_type get_next(size_type prev) const
                 { return (++prev == bm::id_max) ? 0 : check_or_next(prev); }
 
     /*!
@@ -1931,7 +1931,7 @@ public:
        \return Index of the next bit which is ON or 0 if not found.
        \sa get_first, get_next, find_reverse
     */
-    bm::id_t extract_next(bm::id_t prev)
+    size_type extract_next(size_type prev)
     {
         return (++prev == bm::id_max) ? 0 : check_or_next_extract(prev);
     }
@@ -1942,7 +1942,7 @@ public:
        \return true if search returned result
        \sa get_first, get_next, extract_next, find
     */
-    bool find_reverse(bm::id_t& pos) const;
+    bool find_reverse(size_type& pos) const;
     
     /*!
        \brief Finds dynamic range of bit-vector [first, last]
@@ -1951,7 +1951,7 @@ public:
        \return true if search returned result
        \sa get_first, get_next, extract_next, find, find_reverse
     */
-    bool find_range(bm::id_t& first, bm::id_t& last) const;
+    bool find_range(size_type& first, size_type& last) const;
     
     /*!
         \brief Find bit-vector position for the specified rank(bitcount)
@@ -1966,7 +1966,7 @@ public:
      
         \return true if requested rank was found
     */
-    bool find_rank(bm::id_t rank, bm::id_t from, bm::id_t& pos) const;
+    bool find_rank(size_type rank, size_type from, size_type& pos) const;
 
     /*!
         \brief Find bit-vector position for the specified rank(bitcount)
@@ -1985,7 +1985,7 @@ public:
 
         \return true if requested rank was found
     */
-    bool find_rank(bm::id_t rank, bm::id_t from, bm::id_t& pos,
+    bool find_rank(size_type rank, size_type from, size_type& pos,
                    const rs_index_type&  blocks_cnt) const;
     
     /*!
@@ -2004,7 +2004,7 @@ public:
 
         \return true if requested rank was found
     */
-    bool select(bm::id_t rank, bm::id_t& pos, const rs_index_type&  blocks_cnt) const;
+    bool select(size_type rank, size_type& pos, const rs_index_type&  blocks_cnt) const;
 
     //@}
 
@@ -2292,11 +2292,11 @@ protected:
                 bm::sort_order sorted_idx);
 
     void import_block(const bm::id_t* ids,
-                      bm::id_t nblock, bm::id_t start, bm::id_t stop);
+                      bm::id_t nblock, size_type start, size_type stop);
 
 private:
 
-    bm::id_t check_or_next(bm::id_t prev) const;
+    size_type check_or_next(size_type prev) const;
     
     /// set bit in GAP block withlength extension control
     bool gap_block_set(bm::gap_word_t* gap_blk,
@@ -2305,19 +2305,19 @@ private:
     /// check if specified bit is 1, and set it to 0
     /// if specified bit is 0, scan for the next 1 and returns it
     /// if no 1 found returns 0
-    bm::id_t check_or_next_extract(bm::id_t prev);
+    size_type check_or_next_extract(size_type prev);
 
     /**
         \brief Set specified bit without checking preconditions (size, etc)
     */
-    bool set_bit_no_check(bm::id_t n, bool val);
+    bool set_bit_no_check(size_type n, bool val);
 
     /**
         \brief AND specified bit without checking preconditions (size, etc)
     */
-    bool and_bit_no_check(bm::id_t n, bool val);
+    bool and_bit_no_check(size_type n, bool val);
 
-    bool set_bit_conditional_impl(bm::id_t n, bool val, bool condition);
+    bool set_bit_conditional_impl(size_type n, bool val, bool condition);
 
 
     void combine_operation_with_block(unsigned nb,
@@ -2383,13 +2383,13 @@ private:
     /**
        \brief Set range without validity/bouds checking
     */
-    void set_range_no_check(bm::id_t left,
-                            bm::id_t right);
+    void set_range_no_check(size_type left,
+                            size_type right);
     /**
         \brief Clear range without validity/bouds checking
     */
-    void clear_range_no_check(bm::id_t left,
-                              bm::id_t right);
+    void clear_range_no_check(size_type left,
+                              size_type right);
     
     /**
         Compute rank in block using rank-select index
@@ -2486,8 +2486,8 @@ void bvector<Alloc>::move_from(bvector<Alloc>& bvect) BMNOEXEPT
 // -----------------------------------------------------------------------
 
 template<typename Alloc> 
-bvector<Alloc>& bvector<Alloc>::set_range(bm::id_t left,
-                                          bm::id_t right,
+bvector<Alloc>& bvector<Alloc>::set_range(size_type left,
+                                          size_type right,
                                           bool     value)
 {
     if (!blockman_.is_init())
@@ -2505,7 +2505,7 @@ bvector<Alloc>& bvector<Alloc>::set_range(bm::id_t left,
     BM_ASSERT_THROW(right < bm::id_max, BM_ERR_RANGE);
     if (right >= size_) // this vect shorter than the arg.
     {
-        bm::id_t new_size = (right == bm::id_max) ? bm::id_max : right + 1;
+        size_type new_size = (right == bm::id_max) ? bm::id_max : right + 1;
         resize(new_size);
     }
 
@@ -2523,7 +2523,7 @@ bvector<Alloc>& bvector<Alloc>::set_range(bm::id_t left,
 // -----------------------------------------------------------------------
 
 template<typename Alloc> 
-bm::id_t bvector<Alloc>::count() const
+typename bvector<Alloc>::size_type bvector<Alloc>::count() const
 {
     if (!blockman_.is_init())
         return 0;
@@ -2578,7 +2578,7 @@ void bvector<Alloc>::sync_size()
 {
     if (size_ >= bm::id_max)
         return;
-    bm::id_t last;
+    bvector<Alloc>::size_type last;
     bool found = find_reverse(last);
     if (found && last >= size_)
         resize(last+1);
@@ -2780,8 +2780,9 @@ unsigned bvector<Alloc>::block_count_to(const bm::word_t*    block,
 // -----------------------------------------------------------------------
 
 template<typename Alloc>
-bm::id_t bvector<Alloc>::count_to(bm::id_t right,
-                                  const rs_index_type&  blocks_cnt) const
+typename bvector<Alloc>::size_type 
+bvector<Alloc>::count_to(size_type right,
+                         const rs_index_type&  blocks_cnt) const
 {
     if (!blockman_.is_init())
         return 0;
@@ -2826,15 +2827,15 @@ bm::id_t bvector<Alloc>::count_to(bm::id_t right,
             cnt += c;
         }
     }
-
     return cnt;
 }
 
 // -----------------------------------------------------------------------
 
 template<typename Alloc>
-bm::id_t bvector<Alloc>::count_to_test(bm::id_t right,
-                                       const rs_index_type&  blocks_cnt) const
+typename bvector<Alloc>::size_type 
+bvector<Alloc>::count_to_test(size_type right,
+                              const rs_index_type&  blocks_cnt) const
 {
     if (!blockman_.is_init())
         return 0;
@@ -2844,7 +2845,7 @@ bm::id_t bvector<Alloc>::count_to_test(bm::id_t right,
 
     // running count of all blocks before target
     //
-    bm::id_t cnt = 0;
+    size_type cnt = 0;
     unsigned i, j;
     blockman_.get_block_coord(nblock_right, i, j);
     const bm::word_t* block = blockman_.get_block_ptr(i, j);
@@ -2889,9 +2890,9 @@ bm::id_t bvector<Alloc>::count_to_test(bm::id_t right,
 // -----------------------------------------------------------------------
 
 template<typename Alloc> 
-bm::id_t bvector<Alloc>::count_range(bm::id_t left, 
-                                     bm::id_t right,
-                                     const unsigned* block_count_arr) const
+typename bvector<Alloc>::size_type 
+bvector<Alloc>::count_range(size_type left, size_type right,
+                                 const unsigned* block_count_arr) const
 {
     BM_ASSERT(left <= right);
 
@@ -3013,7 +3014,7 @@ bvector<Alloc>& bvector<Alloc>::invert()
 // -----------------------------------------------------------------------
 
 template<typename Alloc> 
-bool bvector<Alloc>::get_bit(bm::id_t n) const
+bool bvector<Alloc>::get_bit(size_type n) const
 {    
     BM_ASSERT(n < size_);
     BM_ASSERT_THROW((n < size_), BM_ERR_RANGE);
@@ -3253,7 +3254,6 @@ int bvector<Alloc>::compare(const bvector<Alloc>& bv) const
                 return res;
             }
         
-
         } // for j
 
     } // for i
@@ -3337,7 +3337,7 @@ void bvector<Alloc>::calc_stat(struct bvector<Alloc>::statistics* st) const
 // -----------------------------------------------------------------------
 
 template<class Alloc>
-void bvector<Alloc>::set_bit_no_check(bm::id_t n)
+void bvector<Alloc>::set_bit_no_check(size_type n)
 {
     BM_ASSERT(blockman_.is_init());
     BM_ASSERT_THROW(n < bm::id_max, BM_ERR_RANGE);
@@ -3373,15 +3373,14 @@ void bvector<Alloc>::set_bit_no_check(bm::id_t n)
 // -----------------------------------------------------------------------
 
 template<class Alloc>
-void bvector<Alloc>::set(const bm::id_t* ids, unsigned ids_size, bm::sort_order so)
+void bvector<Alloc>::set(const size_type* ids, unsigned ids_size, bm::sort_order so)
 {
     if (!ids || !ids_size)
         return; // nothing to do
     if (!blockman_.is_init())
         blockman_.init_tree();
-    
-    import(ids, ids_size, so);
-    
+
+    import(ids, ids_size, so);    
     sync_size();
 }
 
@@ -3398,7 +3397,7 @@ void bvector<Alloc>::keep(const bm::id_t* ids, unsigned ids_size, bm::sort_order
     bvector<Alloc> bv_tmp; // TODO: better optimize for SORTED case (avoid temp)
     bv_tmp.import(ids, ids_size, so);
 
-    bm::id_t last;
+    size_type last;
     bool found = bv_tmp.find_reverse(last);
     if (found)
     {
@@ -3424,7 +3423,7 @@ void bvector<Alloc>::clear(const bm::id_t* ids, unsigned ids_size, bm::sort_orde
     bvector<Alloc> bv_tmp; // TODO: better optimize for SORTED case (avoid temp)
     bv_tmp.import(ids, ids_size, so);
 
-    bm::id_t last;
+    size_type last;
     bool found = bv_tmp.find_reverse(last);
     if (found)
     {
@@ -3450,7 +3449,7 @@ bvector<Alloc>& bvector<Alloc>::set()
 // -----------------------------------------------------------------------
 
 template<class Alloc>
-bvector<Alloc>& bvector<Alloc>::set(bm::id_t n, bool val)
+bvector<Alloc>& bvector<Alloc>::set(size_type n, bool val)
 {
     set_bit(n, val);
     return *this;
@@ -3459,14 +3458,14 @@ bvector<Alloc>& bvector<Alloc>::set(bm::id_t n, bool val)
 // -----------------------------------------------------------------------
 
 template<class Alloc>
-bool bvector<Alloc>::set_bit_conditional(bm::id_t n, bool val, bool condition)
+bool bvector<Alloc>::set_bit_conditional(size_type n, bool val, bool condition)
 {
     if (val == condition) return false;
     if (!blockman_.is_init())
         blockman_.init_tree();
     if (n >= size_)
     {
-        bm::id_t new_size = (n == bm::id_max) ? bm::id_max : n + 1;
+        size_type new_size = (n == bm::id_max) ? bm::id_max : n + 1;
         resize(new_size);
     }
 
@@ -3476,7 +3475,7 @@ bool bvector<Alloc>::set_bit_conditional(bm::id_t n, bool val, bool condition)
 // -----------------------------------------------------------------------
 
 template<class Alloc>
-bool bvector<Alloc>::set_bit_and(bm::id_t n, bool val)
+bool bvector<Alloc>::set_bit_and(size_type n, bool val)
 {
     BM_ASSERT(n < size_);
     BM_ASSERT_THROW(n < size_, BM_ERR_RANGE);
@@ -3489,7 +3488,7 @@ bool bvector<Alloc>::set_bit_and(bm::id_t n, bool val)
 // -----------------------------------------------------------------------
 
 template<class Alloc>
-bool bvector<Alloc>::set_bit(bm::id_t n, bool val)
+bool bvector<Alloc>::set_bit(size_type n, bool val)
 {
     BM_ASSERT_THROW(n < bm::id_max, BM_ERR_RANGE);
 
@@ -3497,7 +3496,7 @@ bool bvector<Alloc>::set_bit(bm::id_t n, bool val)
         blockman_.init_tree();
     if (n >= size_)
     {
-        bm::id_t new_size = (n == bm::id_max) ? bm::id_max : n + 1;
+        size_type new_size = (n == bm::id_max) ? bm::id_max : n + 1;
         resize(new_size);
     }
     return set_bit_no_check(n, val);
@@ -3566,7 +3565,7 @@ void bvector<Alloc>::import_block(const bm::id_t* ids,
 // -----------------------------------------------------------------------
 
 template<class Alloc> 
-bool bvector<Alloc>::set_bit_no_check(bm::id_t n, bool val)
+bool bvector<Alloc>::set_bit_no_check(size_type n, bool val)
 {
     // calculate logical block number
     unsigned nblock = unsigned(n >>  bm::set_block_shift); 
@@ -3640,7 +3639,7 @@ bool bvector<Alloc>::gap_block_set(bm::gap_word_t* gap_blk,
 // -----------------------------------------------------------------------
 
 template<class Alloc>
-bool bvector<Alloc>::inc(bm::id_t n)
+bool bvector<Alloc>::inc(size_type n)
 {
     // calculate logical block number
     unsigned nblock = unsigned(n >>  bm::set_block_shift);
@@ -3675,7 +3674,7 @@ bool bvector<Alloc>::inc(bm::id_t n)
 // -----------------------------------------------------------------------
 
 template<class Alloc> 
-bool bvector<Alloc>::set_bit_conditional_impl(bm::id_t n, 
+bool bvector<Alloc>::set_bit_conditional_impl(size_type n, 
                                               bool     val, 
                                               bool     condition)
 {
@@ -3745,7 +3744,7 @@ bool bvector<Alloc>::set_bit_conditional_impl(bm::id_t n,
 
 
 template<class Alloc> 
-bool bvector<Alloc>::and_bit_no_check(bm::id_t n, bool val)
+bool bvector<Alloc>::and_bit_no_check(size_type n, bool val)
 {
     // calculate logical block number
     unsigned nblock = unsigned(n >>  bm::set_block_shift); 
@@ -3803,7 +3802,7 @@ bool bvector<Alloc>::and_bit_no_check(bm::id_t n, bool val)
 //---------------------------------------------------------------------
 
 template<class Alloc>
-bool bvector<Alloc>::find(bm::id_t from, bm::id_t& pos) const
+bool bvector<Alloc>::find(size_type from, size_type& pos) const
 {
     BM_ASSERT_THROW(from < bm::id_max, BM_ERR_RANGE);
 
@@ -3818,7 +3817,7 @@ bool bvector<Alloc>::find(bm::id_t from, bm::id_t& pos) const
 //---------------------------------------------------------------------
 
 template<class Alloc>
-bool bvector<Alloc>::find_reverse(bm::id_t& pos) const
+bool bvector<Alloc>::find_reverse(size_type& pos) const
 {
     bool found;
     
@@ -3862,7 +3861,7 @@ bool bvector<Alloc>::find_reverse(bm::id_t& pos) const
 //---------------------------------------------------------------------
 
 template<class Alloc>
-bool bvector<Alloc>::find(bm::id_t& pos) const
+bool bvector<Alloc>::find(size_type& pos) const
 {
     bool found;
     
@@ -3904,7 +3903,7 @@ bool bvector<Alloc>::find(bm::id_t& pos) const
 //---------------------------------------------------------------------
 
 template<class Alloc>
-bool bvector<Alloc>::find_range(bm::id_t& in_first, bm::id_t& in_last) const
+bool bvector<Alloc>::find_range(size_type& in_first, size_type& in_last) const
 {
     bool found = find(in_first);
     if (found)
@@ -3918,7 +3917,9 @@ bool bvector<Alloc>::find_range(bm::id_t& in_first, bm::id_t& in_last) const
 //---------------------------------------------------------------------
 
 template<class Alloc>
-bool bvector<Alloc>::find_rank(bm::id_t rank_in, bm::id_t from, bm::id_t& pos) const
+bool bvector<Alloc>::find_rank(size_type  rank_in, 
+                               size_type  from, 
+                               size_type& pos) const
 {
     BM_ASSERT_THROW(from < bm::id_max, BM_ERR_RANGE);
 
@@ -3958,7 +3959,9 @@ bool bvector<Alloc>::find_rank(bm::id_t rank_in, bm::id_t from, bm::id_t& pos) c
 //---------------------------------------------------------------------
 
 template<class Alloc>
-bool bvector<Alloc>::find_rank(bm::id_t rank_in, bm::id_t from, bm::id_t& pos,
+bool bvector<Alloc>::find_rank(size_type             rank_in, 
+                               size_type             from, 
+                               size_type&            pos,
                                const rs_index_type&  blocks_cnt) const
 {
     BM_ASSERT_THROW(from < bm::id_max, BM_ERR_RANGE);
@@ -4027,7 +4030,7 @@ bool bvector<Alloc>::find_rank(bm::id_t rank_in, bm::id_t from, bm::id_t& pos,
 //---------------------------------------------------------------------
 
 template<class Alloc>
-bool bvector<Alloc>::select(bm::id_t rank_in, bm::id_t& pos,
+bool bvector<Alloc>::select(size_type rank_in, size_type& pos,
                             const rs_index_type&  blocks_cnt) const
 {
     bool ret = false;
@@ -4065,7 +4068,8 @@ bool bvector<Alloc>::select(bm::id_t rank_in, bm::id_t& pos,
 //---------------------------------------------------------------------
 
 template<class Alloc> 
-bm::id_t bvector<Alloc>::check_or_next(bm::id_t prev) const
+typename bvector<Alloc>::size_type 
+bvector<Alloc>::check_or_next(size_type prev) const
 {
     if (!blockman_.is_init())
         return 0;
@@ -4124,11 +4128,11 @@ bm::id_t bvector<Alloc>::check_or_next(bm::id_t prev) const
     return 0;
 }
 
-
 //---------------------------------------------------------------------
 
 template<class Alloc> 
-bm::id_t bvector<Alloc>::check_or_next_extract(bm::id_t prev)
+typename bvector<Alloc>::size_type
+bvector<Alloc>::check_or_next_extract(size_type prev)
 {
     if (!blockman_.is_init())
         return 0;
@@ -4239,7 +4243,7 @@ bool bvector<Alloc>::shift_left()
 //---------------------------------------------------------------------
 
 template<class Alloc>
-bool bvector<Alloc>::insert(bm::id_t n, bool value)
+bool bvector<Alloc>::insert(size_type n, bool value)
 {
     BM_ASSERT_THROW(n < bm::id_max, BM_ERR_RANGE);
 
@@ -4266,7 +4270,6 @@ bool bvector<Alloc>::insert(bm::id_t n, bool value)
         blockman_.get_block_coord(nb, i, j);
         bm::word_t* block = blockman_.get_block_ptr(i, j);
 
-        //bm::word_t* block = blockman_.get_block_ptr(nb);
         if (!block && !value) // nothing to do
         {}
         else
@@ -4335,7 +4338,7 @@ bool bvector<Alloc>::insert(bm::id_t n, bool value)
             {
                 if (carry_over)
                 {
-                    bm::id_t nbit = nblock * bm::gap_max_bits;
+                    size_type nbit = nblock * bm::gap_max_bits;
                     set_bit_no_check(nbit);
                     carry_over = 0; block = 0;
                 }
@@ -4411,7 +4414,7 @@ bool bvector<Alloc>::insert(bm::id_t n, bool value)
 //---------------------------------------------------------------------
 
 template<class Alloc>
-void bvector<Alloc>::erase(bm::id_t n)
+void bvector<Alloc>::erase(size_type n)
 {
     BM_ASSERT_THROW(n < bm::id_max, BM_ERR_RANGE);
 
@@ -6224,8 +6227,8 @@ bvector<Alloc>::combine_operation_with_block(unsigned          nb,
 //---------------------------------------------------------------------
 
 template<class Alloc> 
-void bvector<Alloc>::set_range_no_check(bm::id_t left,
-                                        bm::id_t right)
+void bvector<Alloc>::set_range_no_check(size_type left,
+                                        size_type right)
 {
     unsigned nblock_left  = unsigned(left  >>  bm::set_block_shift);
     unsigned nblock_right = unsigned(right >>  bm::set_block_shift);
@@ -6299,8 +6302,8 @@ void bvector<Alloc>::set_range_no_check(bm::id_t left,
 //---------------------------------------------------------------------
 
 template<class Alloc>
-void bvector<Alloc>::clear_range_no_check(bm::id_t left,
-                                          bm::id_t right)
+void bvector<Alloc>::clear_range_no_check(size_type left,
+                                          size_type right)
 {
     unsigned nb, i, j;
 
@@ -6383,8 +6386,8 @@ void bvector<Alloc>::clear_range_no_check(bm::id_t left,
 
 template<class Alloc>
 void bvector<Alloc>::copy_range(const bvector<Alloc>& bvect,
-                                bm::id_t left,
-                                bm::id_t right)
+                                size_type left,
+                                size_type right)
 {
     if (!bvect.blockman_.is_init())
     {
@@ -6407,8 +6410,8 @@ void bvector<Alloc>::copy_range(const bvector<Alloc>& bvect,
 
 template<class Alloc>
 void bvector<Alloc>::copy_range_no_check(const bvector<Alloc>& bvect,
-                                         bm::id_t left,
-                                         bm::id_t right)
+                                         size_type left,
+                                         size_type right)
 {
     BM_ASSERT(left <= right);
     BM_ASSERT_THROW(right < bm::id_max, BM_ERR_RANGE);
