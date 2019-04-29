@@ -401,8 +401,12 @@ void bvps_addr_resolver<BV>::construct_rs_index()
 template<class BV>
 void bvps_addr_resolver<BV>::free_rs_index()
 {
-    bm::aligned_free(rs_index_);
-    rs_index_ = 0;
+    if (rs_index_)
+    {
+        rs_index_->~rs_index();
+        bm::aligned_free(rs_index_);
+        rs_index_ = 0;
+    }
 }
 
 //---------------------------------------------------------------------
