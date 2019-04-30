@@ -311,7 +311,7 @@ public:
             bm::word_t** blk_blk = blk_root[i];
             if (blk_blk) 
             {
-                this->bm_.get_allocator().free_ptr(blk_blk);
+                this->bm_.get_allocator().free_ptr(blk_blk, bm::set_sub_array_size);
                 blk_root[i] = 0;
             }
             if (stat_)
@@ -638,25 +638,26 @@ public:
     unsigned compute_top_block_size(bm::id_t bits_to_store)
     {
         if (bits_to_store == bm::id_max)  // working in full-range mode
-            return bm::set_array_size;
+            return bm::set_top_array_size;
 
         unsigned top_block_sz = (unsigned)
             (bits_to_store / (bm::set_block_size * sizeof(bm::word_t) *
-                                                bm::set_array_size * 8));
-        if (top_block_sz < bm::set_array_size) ++top_block_sz;
+                                                bm::set_sub_array_size * 8));
+        if (top_block_sz < bm::set_sub_array_size) ++top_block_sz;
         return top_block_sz;
     }
 
     /**
         Returns current capacity (bits)
     */
+    /*
     bm::id_t capacity() const
     {
         // arithmetic overflow protection...
         return top_block_size_ == bm::set_array_size ? bm::id_max :
             top_block_size_ * bm::set_array_size * bm::bits_in_block;
     }
-
+    */
 
     /**
         \brief Finds block in 2-level blocks array  
@@ -712,10 +713,10 @@ public:
                 bm::word_t** blk_blk = top_blocks_[i];
                 if (!blk_blk)
                 { 
-                    nb += bm::set_array_size - j;
+                    nb += bm::set_sub_array_size - j;
                 }
                 else
-                   for (;j < bm::set_array_size; ++j, ++nb)
+                   for (;j < bm::set_sub_array_size; ++j, ++nb)
                    {
                        bm::word_t* blk = blk_blk[j];
                        if (blk && !bm::check_block_zero(blk, deep_scan))
@@ -1193,13 +1194,13 @@ public:
             init_tree();
         block_one_func func(*this);
         for_each_block(top_blocks_, top_block_size_,
-                                bm::set_array_size, func);
+                                bm::set_sub_array_size, func);
     }
     
     void free_top_subblock(unsigned nblk_blk)
     {
         BM_ASSERT(top_blocks_[nblk_blk]);
-        alloc_.free_ptr(top_blocks_[nblk_blk]);
+        alloc_.free_ptr(top_blocks_[nblk_blk], bm::set_sub_array_size);
         top_blocks_[nblk_blk] = 0;
     }
     
@@ -1207,9 +1208,9 @@ public:
     {
         BM_ASSERT(top_blocks_[nblk_blk] == 0);
 
-        bm::word_t** p = (bm::word_t**)alloc_.alloc_ptr();
+        bm::word_t** p = (bm::word_t**)alloc_.alloc_ptr(bm::set_sub_array_size);
         ::memset(top_blocks_[nblk_blk] = p, 0,
-                 bm::set_array_size * sizeof(bm::word_t*));
+                 bm::set_sub_array_size * sizeof(bm::word_t*));
         return p;
     }
     
@@ -1323,8 +1324,8 @@ public:
         // assign block to it
         if (!top_blocks_[i])
         {
-            top_blocks_[i] = (bm::word_t**)alloc_.alloc_ptr();
-            ::memset(top_blocks_[i], 0, bm::set_array_size * sizeof(void*));
+            top_blocks_[i] = (bm::word_t**)alloc_.alloc_ptr(bm::set_sub_array_size);
+            ::memset(top_blocks_[i], 0, bm::set_sub_array_size * sizeof(void*));
             old_block = 0;
         }
         else
@@ -1599,7 +1600,7 @@ public:
                         alloc_.free_bit_block(block);
             }
             
-            if (j == bm::set_array_size-1)
+            if (j == bm::set_sub_array_size-1)
             {
                 // scan if top sub-block can also be dropped
                 do
@@ -1608,7 +1609,7 @@ public:
                         return;
                     if (!j)
                     {
-                        alloc_.free_ptr(top_blocks_[i]);
+                        alloc_.free_ptr(top_blocks_[i], bm::set_sub_array_size);
                         top_blocks_[i] = 0;
                         return;
                     }
@@ -1777,7 +1778,7 @@ public:
             for (unsigned i = 0; i < top_block_size_; ++i)
             {
                 m_used += (unsigned)
-                    (top_blocks_[i] ? sizeof(void*) * bm::set_array_size : 0);
+                    (top_blocks_[i] ? sizeof(void*) * bm::set_sub_array_size : 0);
             }
         }
         return m_used;
@@ -1837,7 +1838,7 @@ public:
     */
     unsigned reserve_top_blocks(unsigned top_blocks)
     {
-        BM_ASSERT(top_blocks <= bm::set_array_size);
+        BM_ASSERT(top_blocks <= bm::set_sub_array_size);
 
         if (top_blocks_ && top_blocks <= top_block_size_)
             return top_block_size_; // nothing to do
@@ -1906,30 +1907,30 @@ public:
                 if (!avx2_test_all_zero_wave(blk_blk + j))
                 {
                     if (blk_blk[j])
-                        return (i * bm::set_array_size) + j;
+                        return (i * bm::set_sub_array_size) + j;
                     if (blk_blk[1+j])
-                        return (i * bm::set_array_size) + j + 1;
+                        return (i * bm::set_sub_array_size) + j + 1;
                     if (blk_blk[2+j])
-                        return (i * bm::set_array_size) + j + 2;
+                        return (i * bm::set_sub_array_size) + j + 2;
                     if (blk_blk[3+j])
-                        return (i * bm::set_array_size) + j + 3;
+                        return (i * bm::set_sub_array_size) + j + 3;
                 }
                 j += 4;
             #elif defined(BM64_SSE4)
                 if (!sse42_test_all_zero_wave(blk_blk + j))
                 {
                     if (blk_blk[j])
-                        return (i * bm::set_array_size) + j;
+                        return (i * bm::set_sub_array_size) + j;
                     if (blk_blk[1+j])
-                        return (i * bm::set_array_size) + j + 1;
+                        return (i * bm::set_sub_array_size) + j + 1;
                 }
                 j += 2;
             #else
                 if (blk_blk[j])
-                    return (i * bm::set_array_size) + j;
+                    return (i * bm::set_sub_array_size) + j;
                 ++j;
             #endif
-            } while (j < bm::set_array_size);
+            } while (j < bm::set_sub_array_size);
         }
         return 0;
     }
@@ -1981,9 +1982,9 @@ public:
                 BM_FREE_OP(0)
                 ++j;
             #endif
-            } while (j < bm::set_array_size);
+            } while (j < bm::set_sub_array_size);
 
-            alloc_.free_ptr(top_blocks_[i]); // free second level
+            alloc_.free_ptr(top_blocks_[i], bm::set_sub_array_size); // free second level
         } // for i
 
         alloc_.free_ptr(top_blocks_, top_block_size_); // free the top
@@ -2022,7 +2023,7 @@ private:
         if (i_to >= arg_top_blocks-1)
         {
             i_to = arg_top_blocks-1;
-            j_to = bm::set_array_size-1;
+            j_to = bm::set_sub_array_size-1;
         }
 
         for (unsigned i = i_from; i <= i_to; ++i)
@@ -2033,11 +2034,11 @@ private:
             
             BM_ASSERT(blk_root[i] == 0);
 
-            bm::word_t** blk_blk = blk_root[i] = (bm::word_t**)alloc_.alloc_ptr();
-            ::memset(blk_blk, 0, bm::set_array_size * sizeof(bm::word_t*));
+            bm::word_t** blk_blk = blk_root[i] = (bm::word_t**)alloc_.alloc_ptr(bm::set_sub_array_size);
+            ::memset(blk_blk, 0, bm::set_sub_array_size * sizeof(bm::word_t*));
             
             unsigned j = (i == i_from) ? j_from : 0;
-            unsigned j_limit = (i == i_to) ? j_to+1 : bm::set_array_size;
+            unsigned j_limit = (i == i_to) ? j_to+1 : bm::set_sub_array_size;
             bm::word_t* blk;
             const bm::word_t* blk_arg;
             do
@@ -2054,7 +2055,7 @@ private:
                     }
                     else
                     {
-                        if (blk_arg == FULL_BLOCK_FAKE_ADDR /*IS_FULL_BLOCK(blk_arg)*/)
+                        if (blk_arg == FULL_BLOCK_FAKE_ADDR)
                             blk = FULL_BLOCK_FAKE_ADDR;
                         else
                         {

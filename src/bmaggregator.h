@@ -471,7 +471,7 @@ void aggregator_pipeline_execute(It  first, It last)
         Agg& agg = *(*it);
         agg.stage(tb);
     }
-    for (unsigned i = 0; i < bm::set_array_size; ++i)
+    for (unsigned i = 0; i < bm::set_sub_array_size; ++i)
     {
         unsigned j = 0;
         do
@@ -491,7 +491,7 @@ void aggregator_pipeline_execute(It  first, It last)
             if (pipeline_size <= 0)
                 return;
 
-        } while (++j < bm::set_array_size);
+        } while (++j < bm::set_sub_array_size);
 
     } // for i
 }
@@ -802,7 +802,7 @@ bool aggregator<BV>::find_first_and_sub(bm::id_t& idx,
     
     for (unsigned i = top_from; i < top_blocks; ++i)
     {
-        unsigned set_array_max = bm::set_array_size;
+        unsigned set_array_max = bm::set_sub_array_size;
         unsigned j = 0;
         
         if (range_set_)
@@ -856,7 +856,7 @@ aggregator<BV>::find_effective_sub_block_size(unsigned i,
     // quick hack to avoid scanning large, arrays, where such scan can be quite
     // expensive by itself (this makes this function approximate)
     if (src_size > 32)
-        return bm::set_array_size;
+        return bm::set_sub_array_size;
 
     unsigned max_size = 1;
     for (unsigned k = 0; k < src_size; ++k)
@@ -869,7 +869,7 @@ aggregator<BV>::find_effective_sub_block_size(unsigned i,
         if (!blk_blk_arg)
             continue;
 
-        for (unsigned j = bm::set_array_size - 1; j > max_size; --j)
+        for (unsigned j = bm::set_sub_array_size - 1; j > max_size; --j)
         {
             if (blk_blk_arg[j])
             {
@@ -879,7 +879,7 @@ aggregator<BV>::find_effective_sub_block_size(unsigned i,
         }
     } // for k
     ++max_size;
-    BM_ASSERT(max_size <= bm::set_array_size);
+    BM_ASSERT(max_size <= bm::set_sub_array_size);
     
     return max_size;
 }
@@ -1578,7 +1578,7 @@ bool aggregator<BV>::combine_shift_right_and(
     }
     prepare_shift_right_and(bv_target, bv_src_and, src_and_size);
 
-    for (unsigned i = 0; i < bm::set_array_size; ++i)
+    for (unsigned i = 0; i < bm::set_top_array_size; ++i)
     {
         if (i > top_block_size_)
         {
@@ -1592,7 +1592,7 @@ bool aggregator<BV>::combine_shift_right_and(
             bool found = combine_shift_right_and(i, j, bv_target, bv_src_and, src_and_size);
             if (found && any)
                 return found;
-        } while (++j < bm::set_array_size);
+        } while (++j < bm::set_sub_array_size);
 
     } // for i
 
@@ -1773,7 +1773,7 @@ typename aggregator<BV>::operation_status
 aggregator<BV>::run_step(unsigned i, unsigned j)
 {
     BM_ASSERT(operation_status_ == op_prepared || operation_status_ == op_in_progress);
-    BM_ASSERT(j < bm::set_array_size);
+    BM_ASSERT(j < bm::set_sub_array_size);
     
     switch (operation_)
     {

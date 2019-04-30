@@ -76,7 +76,7 @@ void for_each_bit(const BV&    bv,
             continue;
         }
         const bm::word_t* block;
-        unsigned r = i * bm::set_array_size;
+        unsigned r = i * bm::set_sub_array_size;
         unsigned j = 0;
         do
         {
@@ -101,7 +101,7 @@ void for_each_bit(const BV&    bv,
             ++j;
         #endif
         
-        } while (j < bm::set_array_size);
+        } while (j < bm::set_sub_array_size);
         
     }  // for i
 }

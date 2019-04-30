@@ -41,7 +41,8 @@ typedef unsigned short short_t;
 #endif
 
 
-const unsigned id_max = 0xFFFFFFFF;
+const unsigned id_max32 = 0xFFFFFFFFu;
+const unsigned long long id_max48 = 0xFFFFFFFFFFFFull;
 
 // Data Block parameters
 
@@ -79,13 +80,26 @@ const unsigned gap_max_level = bm::gap_levels - 1;
 
 // Block Array parameters
 
-const unsigned set_array_size = 256u;
+
+const unsigned set_array_size32 = 256u;
+const unsigned set_sub_array_size = set_array_size32;
 const unsigned set_array_shift = 8u;
 const unsigned set_array_mask  = 0xFFu;
-const unsigned set_total_blocks = (bm::set_array_size * bm::set_array_size);
+
+const unsigned set_total_blocks48 = bm::id_max48 / bm::gap_max_bits;
+const unsigned set_total_blocks32 = (bm::set_array_size32 * bm::set_array_size32);
 
 const unsigned bits_in_block = bm::set_block_size * (unsigned)(sizeof(bm::word_t) * 8);
-const unsigned bits_in_array = bm::bits_in_block * bm::set_array_size;
+const unsigned bits_in_array = bm::bits_in_block * bm::set_array_size32;
+
+#ifdef BM64ADDR
+const unsigned long long id_max = bm::id_max48;
+const unsigned set_top_array_size = bm::set_array_size48;
+#else
+const unsigned id_max = bm::id_max32;
+const unsigned set_top_array_size = set_array_size32;
+const unsigned set_total_blocks = bm::set_total_blocks32;
+#endif
 
 // Rank-Select parameters
 const unsigned rs3_border0 = 21824; // 682 words by 32-bits

@@ -1278,7 +1278,7 @@ void for_each_nzblock(T*** root, unsigned size1, F& f)
         }
 
         unsigned non_empty_top = 0;
-        unsigned r = i * bm::set_array_size;
+        unsigned r = i * bm::set_sub_array_size;
         unsigned j = 0;
         do
         {
@@ -1353,7 +1353,7 @@ void for_each_nzblock(T*** root, unsigned size1, F& f)
                 f.on_empty_block(r + j);
             ++j;
 #endif
-        } while (j < bm::set_array_size);
+        } while (j < bm::set_sub_array_size);
 
         if (non_empty_top == 0)
             f.on_empty_top(i);
@@ -1450,7 +1450,7 @@ void for_each_nzblock2(T*** root, unsigned size1, F& f)
                 if (blk_blk[j+3])
                     f(blk_blk[j+3]);
                 j += 4;
-            } while (j < bm::set_array_size);
+            } while (j < bm::set_sub_array_size);
         }
     }  // for i
 #endif
@@ -1469,11 +1469,11 @@ bool for_each_nzblock_if(T*** root, unsigned size1, F& f)
         T** blk_blk = root[i];
         if (!blk_blk) 
         {
-            block_idx += bm::set_array_size;
+            block_idx += bm::set_sub_array_size;
             continue;
         }
 
-        for (unsigned j = 0;j < bm::set_array_size; ++j, ++block_idx)
+        for (unsigned j = 0;j < bm::set_sub_array_size; ++j, ++block_idx)
         {
             if (blk_blk[j]) 
                 if (f(blk_blk[j], block_idx)) return true;
@@ -1495,14 +1495,14 @@ void for_each_block(T*** root, unsigned size1, F& f)
 
         if (blk_blk)
         {
-            for (unsigned j = 0;j < bm::set_array_size; ++j, ++block_idx)
+            for (unsigned j = 0;j < bm::set_sub_array_size; ++j, ++block_idx)
             {
                 f(blk_blk[j], block_idx);
             }
         }
         else
         {
-            for (unsigned j = 0;j < bm::set_array_size; ++j, ++block_idx)
+            for (unsigned j = 0;j < bm::set_sub_array_size; ++j, ++block_idx)
             {
                 f(0, block_idx);
             }
@@ -7402,7 +7402,7 @@ bool block_ptr_array_range(bm::word_t** arr, unsigned& left, unsigned& right)
     BM_ASSERT(arr);
     
     unsigned i, j;
-    for (i = 0; i < bm::set_array_size; ++i)
+    for (i = 0; i < bm::set_sub_array_size; ++i)
     {
         if (arr[i])
         {
@@ -7410,12 +7410,12 @@ bool block_ptr_array_range(bm::word_t** arr, unsigned& left, unsigned& right)
             break;
         }
     }
-    if (i == bm::set_array_size)
+    if (i == bm::set_sub_array_size)
     {
         left = right = 0;
         return false; // nothing here
     }
-    for (j = bm::set_array_size-1; j != i; --j)
+    for (j = bm::set_sub_array_size-1; j != i; --j)
     {
         if (arr[j])
             break;
@@ -7492,13 +7492,23 @@ unsigned lower_bound(const unsigned* arr,  unsigned target,
     @return bit index in linear bit-vector coordinates
     @internal
 */
+#ifdef BM64ADDR
 inline
-bm::id_t block_to_global_index(unsigned i, unsigned j, unsigned block_idx)
+bm::id64_t block_to_global_index(unsigned i, unsigned j, unsigned block_idx)
 {
-    unsigned base_idx = i * bm::set_array_size * bm::gap_max_bits;
+    bm::id64_t base_idx = i * bm::set_sub_array_size * bm::gap_max_bits;
     base_idx += j * bm::gap_max_bits;
     return block_idx + base_idx;
 }
+#else
+inline
+bm::id_t block_to_global_index(unsigned i, unsigned j, unsigned block_idx)
+{
+    unsigned base_idx = i * bm::set_sub_array_size * bm::gap_max_bits;
+    base_idx += j * bm::gap_max_bits;
+    return block_idx + base_idx;
+}
+#endif
 
 // --------------------------------------------------------------
 // Functions to work with int values stored in 64-bit pointers

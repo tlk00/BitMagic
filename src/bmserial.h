@@ -3057,11 +3057,11 @@ iterator_deserializer<BV, SerialIterator>::finalize_target_vector(
                 bm::word_t** blk_blk = blk_root[i];
                 if (blk_blk == 0) 
                 {
-                    bv_block_idx+=bm::set_array_size-j;
+                    bv_block_idx+=bm::set_sub_array_size-j;
                     j = 0;
                     continue;
                 }
-                for (;j < bm::set_array_size; ++j, ++bv_block_idx)
+                for (;j < bm::set_sub_array_size; ++j, ++bv_block_idx)
                 {
                     //if (blk_blk[j])
                         bman.zero_block(bv_block_idx);
@@ -3084,11 +3084,11 @@ iterator_deserializer<BV, SerialIterator>::finalize_target_vector(
                 bm::word_t** blk_blk = blk_root[i];
                 if (blk_blk == 0) 
                 {
-                    bv_block_idx+=bm::set_array_size-j;
+                    bv_block_idx+=bm::set_sub_array_size-j;
                     j = 0;
                     continue;
                 }
-                for (;j < bm::set_array_size; ++j, ++bv_block_idx)
+                for (; j < bm::set_sub_array_size; ++j, ++bv_block_idx)
                 {
                     if (blk_blk[j])
                         count += bman.block_bitcount(blk_blk[j]);

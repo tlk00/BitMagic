@@ -725,18 +725,18 @@ void distance_operation(const BV& bv1,
             // AND operation requested - we can skip this portion here 
             if (is_all_and)
             {
-                block_idx += bm::set_array_size;
+                block_idx += bm::set_sub_array_size;
                 continue;
             }
             const bm::word_t* const* bvbb = bman2.get_topblock(i);
             if (bvbb == 0) 
             {
-                block_idx += bm::set_array_size;
+                block_idx += bm::set_sub_array_size;
                 continue;
             }
 
             blk = 0;
-            for (j = 0; j < bm::set_array_size; ++j,++block_idx)
+            for (j = 0; j < bm::set_sub_array_size; ++j,++block_idx)
             {                
                 arg_blk = bman2.get_block(i, j);
                 if (!arg_blk) 
@@ -748,7 +748,7 @@ void distance_operation(const BV& bv1,
             continue;
         }
 
-        for (j = 0; j < bm::set_array_size; ++j, ++block_idx)
+        for (j = 0; j < bm::set_sub_array_size; ++j, ++block_idx)
         {
             blk = bman1.get_block(i, j);
             if (blk == 0 && is_all_and)
@@ -802,7 +802,7 @@ unsigned distance_and_operation(const BV& bv1,
         {
             continue;
         }
-        for (unsigned j = 0; j < bm::set_array_size; j+=4)
+        for (unsigned j = 0; j < bm::set_sub_array_size; j+=4)
         {
             (blk_blk[j] && blk_blk_arg[j]) ? 
                 count += combine_count_and_operation_with_block(BLOCK_ADDR_SAN(blk_blk[j]), BLOCK_ADDR_SAN(blk_blk_arg[j]))
@@ -879,21 +879,21 @@ void distance_operation_any(const BV& bv1,
             // AND operation requested - we can skip this portion here 
             if (is_all_and)
             {
-                block_idx += bm::set_array_size;
+                block_idx += bm::set_sub_array_size;
                 continue;
             }
 
             const bm::word_t* const* bvbb = bman2.get_topblock(i);
             if (bvbb == 0) 
             {
-                block_idx += bm::set_array_size;
+                block_idx += bm::set_sub_array_size;
                 continue;
             }
 
             blk = 0;
             blk_gap = false;
 
-            for (j = 0; j < bm::set_array_size; ++j,++block_idx)
+            for (j = 0; j < bm::set_sub_array_size; ++j,++block_idx)
             {                
                 arg_blk = bman2.get_block(i, j);
                 if (!arg_blk) 
@@ -923,10 +923,9 @@ void distance_operation_any(const BV& bv1,
             continue;
         }
 
-        for (j = 0; j < bm::set_array_size; ++j, ++block_idx)
+        for (j = 0; j < bm::set_sub_array_size; ++j, ++block_idx)
         {
             blk = bman1.get_block(i, j);
-            //BLOCK_ADDR_SAN(blk_blk[j]);
             if (blk == 0 && is_all_and)
                 continue;
 
