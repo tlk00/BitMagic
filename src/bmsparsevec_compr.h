@@ -916,7 +916,11 @@ void rsc_sparse_vector<Val, SV>::construct_bv_blocks()
 template<class Val, class SV>
 void rsc_sparse_vector<Val, SV>::free_bv_blocks()
 {
-    bm::aligned_free(bv_blocks_ptr_);
+    if (bv_blocks_ptr_)
+    {
+        bv_blocks_ptr_->~rs_index_type();
+        bm::aligned_free(bv_blocks_ptr_);
+    }
 }
 
 //---------------------------------------------------------------------
