@@ -52,6 +52,7 @@ set(CMAKE_CXX_FLAGS "${CMAKE_CXX_FLAGS} ${flags} ${bmoptf}")
 add_executable(bmsvutil ${PROJECT_SOURCE_DIR}/utils/svutil/svutil.cpp)
 
 add_executable(bmtest ${PROJECT_SOURCE_DIR}/tests/stress/t.cpp)
+add_executable(bmtest64 ${PROJECT_SOURCE_DIR}/tests/stress64/t64.cpp)
 add_executable(bmperf ${PROJECT_SOURCE_DIR}/tests/perf/perf.cpp)
 add_executable(bmlnkutil ${PROJECT_SOURCE_DIR}/utils/lnkutil/lnkutil.cpp)
 
