@@ -1595,7 +1595,7 @@ template<class T> void CheckCountRange(const T& vect,
     }
     if (cnt1 != cnt2)
     {
-        cout << "Bitcount range failed!" << "left=" << left 
+        cout << "2. Bitcount range failed!" << "left=" << left
              << " right=" << right << endl
              << "count_range()=" << cnt1 
              << " check=" << cnt2;
@@ -3052,10 +3052,18 @@ void BasicFunctionalityTest()
 
     printf("\nBasic functionality test.\n");
     
+    {
+        bvect::rs_index_type rs_idx;
+        for (unsigned i = 0; i < ITERATIONS; ++i)
+        {
+            rs_idx.resize(i);
+        }
+    }
+
     // filling vectors with regular values
 
-
     unsigned i;
+
     for (i = 0; i < ITERATIONS; ++i)
     {
         bvect_min.set_bit(i);
@@ -3086,6 +3094,7 @@ void BasicFunctionalityTest()
             exit(1);
         }
     }
+
     bvect_full1.set_range(0, ITERATIONS-1);
 
     bvect_full1.running_count_blocks(&bc_arr1);
@@ -3121,13 +3130,12 @@ void BasicFunctionalityTest()
         }
     }
     cout << endl;
-
-    
+ 
     CheckCountRange(bvect_full, 0, ITERATIONS);
     CheckCountRange(bvect_full, 10, ITERATIONS+10);
     CheckCountRange(bvect_full1, 0, ITERATIONS);
+    CheckCountRange(bvect_full1, ITERATIONS-10, ITERATIONS+10);
     CheckCountRange(bvect_full1, 10, ITERATIONS+10);
-
 
     if (bvect_full1 != bvect_full)
     {
@@ -10066,6 +10074,11 @@ void EnumeratorTest()
     bvect bvect1;
 
     bvect1.set_bit(100);
+    
+    {
+        unsigned n = bvect1.get_next(101);
+        assert(!n);
+    }
 
     bvect::enumerator en = bvect1.first();
     unsigned n = bvect1.get_next(0);
@@ -10073,7 +10086,7 @@ void EnumeratorTest()
     bvect::enumerator en1 = bvect1.get_enumerator(n);
     if (*en != 100 || n != 100 || *en1 != 100)
     {
-        cout << "Enumerator error !" << endl;
+        cout << "1.Enumerator error !" << endl;
         exit(1);
     }
     CompareEnumerators(en, en1);
@@ -10086,10 +10099,23 @@ void EnumeratorTest()
     en1.go_to(n);
     if (*en != 2000000000 || n != *en || *en1 != *en)
     {
-        cout << "Enumerator error !" << endl;
+        cout << "2. Enumerator error !" << endl;
         exit(1);
     }
     CompareEnumerators(en, en1);
+    
+    bvect1.optimize();
+    en = bvect1.first();
+    n = bvect1.get_next(0);
+    en1 = bvect1.first();
+    en1.go_to(n);
+    if (*en != 2000000000 || n != *en || *en1 != *en)
+    {
+        cout << "2. Enumerator error !" << endl;
+        exit(1);
+    }
+    CompareEnumerators(en, en1);
+
     }
 
     {
@@ -10104,11 +10130,12 @@ void EnumeratorTest()
 
         bvect::enumerator en = bvect1.first();
 
-        unsigned num = bvect1.get_first();
+        auto num = bvect1.get_first();
 
         bvect::enumerator end = bvect1.end();
         while (en < end)
         {
+            cout << num << endl;
             bvect::enumerator en1 = bvect1.get_enumerator(num ? num-1 : num);
             if (*en != num || *en != *en1)
             {
@@ -10125,6 +10152,18 @@ void EnumeratorTest()
             num = bvect1.get_next(num);
             ++en1;
             CompareEnumerators(en, en1);
+            {
+                auto num2 = num / 2;
+                if (num2 < num)
+                {
+                    if (num2 == 2147483647)
+                        cout << "!" << endl;
+                    auto idx0 = bvect1.get_next(num2);
+                    bvect::enumerator en3 = bvect1.get_enumerator(num2);
+                    assert(idx0 == *en3);
+                }
+            }
+            
         }
         if (num != 0)
         {
@@ -10214,7 +10253,7 @@ void EnumeratorTest()
     bvect1.set_bit(100);
 
     bvect::enumerator en = bvect1.first();
-    bvect::enumerator en1 = bvect1.get_enumerator(*en - 1);
+    bvect::enumerator en1 = bvect1.get_enumerator(99);
     if (*en != 100 || *en != *en1)
     {
         cout << "Enumerator error !" << endl;
@@ -18088,7 +18127,7 @@ void AddressResolverTest()
 {
     bm::id_t id_to;
     bool found;
-    
+
     {
         bvps_addr_resolver<bvect>  ares;
         
@@ -18116,7 +18155,7 @@ void AddressResolverTest()
         ares.set(1000);
         ares.set(10000);
         ares.set(100000);
-        
+
         found = ares.resolve(10, &id_to);
         assert(!found);
         assert(id_to == 0);
@@ -18129,14 +18168,14 @@ void AddressResolverTest()
         
         ares.optimize();
         assert(ares.in_sync() == false);
-        
+
         ares.sync();
         assert(ares.in_sync());
 
         found = ares.resolve(100000, &id_to);
         assert(found);
         assert(id_to == 3);
-        
+
         bvps_addr_resolver<bvect>  ares2(ares);
         bool same = ares.equal(ares2);
         assert(same);
@@ -18147,7 +18186,7 @@ void AddressResolverTest()
         assert(same);
 
     }
-    
+
     {
         sv_addr_resolver<sparse_vector<bm::id_t, bvect> > ares;
         
@@ -20239,7 +20278,7 @@ int main(void)
      CountRangeTest();
 
      BasicFunctionalityTest();
-    
+ 
      RankFindTest();
 
      BvectorIncTest();
@@ -20316,7 +20355,6 @@ int main(void)
      StressTestAggregatorShiftAND(5);
 
 //     StressTestAggregatorSUB(100);
-
 
      TestBasicMatrix();
 
