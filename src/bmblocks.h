@@ -37,7 +37,6 @@ namespace bm
    @ingroup bvector
    @internal
 */
-
 template<class Alloc>
 class blocks_manager
 {
@@ -45,6 +44,12 @@ public:
     template<typename TAlloc> friend class bvector;
 
     typedef Alloc allocator_type;
+#ifdef BM64ADDR
+    typedef bm::id64_t   id_type;
+#else
+    typedef bm::id_t     id_type;
+#endif
+
 
     /** Base functor class (block visitor)*/
     class bm_func_base
@@ -542,8 +547,8 @@ public:
     }
 
     blocks_manager(const gap_word_t* glevel_len, 
-                    bm::id_t          max_bits,
-                    const Alloc&      alloc = Alloc())
+                   id_type          max_bits,
+                   const Alloc&      alloc = Alloc())
         : max_bits_(max_bits),
           top_blocks_(0),
           temp_block_(0),
@@ -635,9 +640,9 @@ public:
         \param bits_to_store - supposed capacity (number of bits)
         \return size of the top level block
     */
-    unsigned compute_top_block_size(bm::id_t bits_to_store)
+    unsigned compute_top_block_size(id_type bits_to_store)
     {
-        if (bits_to_store == bm::id_max)  // working in full-range mode
+        if (bits_to_store >= bm::id_max)  // working in full-range mode
             return bm::set_top_array_size;
 
         unsigned top_block_sz = (unsigned)
@@ -1824,12 +1829,12 @@ public:
     /**
         \brief reserve capacity for specified number of bits
     */
-    void reserve(unsigned max_bits)
+    void reserve(id_type max_bits)
     {
         if (max_bits) 
         {
-            unsigned b = compute_top_block_size(max_bits);
-            reserve_top_blocks(b);
+            unsigned bc = compute_top_block_size(max_bits);
+            reserve_top_blocks(bc);
         }
     }
 
@@ -1838,8 +1843,6 @@ public:
     */
     unsigned reserve_top_blocks(unsigned top_blocks)
     {
-        BM_ASSERT(top_blocks <= bm::set_sub_array_size);
-
         if (top_blocks_ && top_blocks <= top_block_size_)
             return top_block_size_; // nothing to do
         
@@ -2074,7 +2077,7 @@ private:
 
 private:
     /// maximum addresable bits
-    bm::id_t                               max_bits_;
+    id_type                                max_bits_;
     /// Tree of blocks.
     bm::word_t***                          top_blocks_;
     /// Size of the top level block array in blocks_ tree

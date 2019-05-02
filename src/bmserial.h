@@ -1026,7 +1026,7 @@ unsigned serializer<BV>::serialize(const BV& bv,
         case 1: // corner case: only 1 bit on
             {
                 bm::id_t bit_idx = 0;
-                bm::bit_find_in_block(blk, bit_idx, &bit_idx);
+                bm::bit_block_find(blk, bit_idx, &bit_idx);
                 enc.put_8(set_block_bit_1bit); enc.put_16(bm::short_t(bit_idx));
                 continue;
             }

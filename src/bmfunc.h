@@ -901,7 +901,6 @@ template<typename T> int wordcmp(T w1, T w2)
 
    @ingroup bitfunc 
 */
-
 template<typename T> int wordcmp(T a, T b)
 {
     T diff = a ^ b;
@@ -1373,7 +1372,7 @@ void for_each_nzblock2(T*** root, unsigned size1, F& f)
         {
             {
                 __m128i w0;
-                for (unsigned j = 0; j < bm::set_array_size; j+=4)
+                for (unsigned j = 0; j < bm::set_sub_array_size; j+=4)
                 {
                     w0 = _mm_loadu_si128((__m128i*)(blk_blk + j));
                     if (!_mm_testz_si128(w0, w0))
@@ -1407,7 +1406,7 @@ void for_each_nzblock2(T*** root, unsigned size1, F& f)
         if ((blk_blk = root[i]) != 0)
         {
             {
-                for (unsigned j = 0; j < bm::set_array_size; j += 4)
+                for (unsigned j = 0; j < bm::set_sub_array_size; j += 4)
                 {
                     __m256i w0 = _mm256_loadu_si256((__m256i*)(blk_blk + j));
                     if (!_mm256_testz_si256(w0, w0))
@@ -2562,9 +2561,9 @@ unsigned bit_array_compute_gaps(const T* arr,
     @ingroup gapfunc
 */
 template<typename T>
-unsigned gap_find_in_block(const T* buf,
-                           unsigned nbit,
-                           bm::id_t* prev)
+unsigned gap_block_find(const T* buf,
+                        unsigned nbit,
+                        bm::id_t* prev)
 {
     BM_ASSERT(nbit < bm::gap_max_bits);
 
@@ -2573,11 +2572,12 @@ unsigned gap_find_in_block(const T* buf,
 
     if (bitval) // positive block.
     {
+       *prev = nbit;
        return 1u;
     }
 
     unsigned val = buf[gap_idx] + 1;
-    *prev += val - nbit;
+    *prev = val;
  
     return (val != bm::gap_max_bits);  // no bug here.
 }
@@ -6403,43 +6403,53 @@ unsigned bit_count_nonzero_size(const T*     blk,
 
 /**
     \brief Searches for the next 1 bit in the BIT block
-    \param data - BIT buffer
+    \param block - BIT buffer
     \param nbit - bit index to start checking from
-    \param prev - returns previously checked value
+    \param pos - [out] found value
+
+    \return 0 if not found
 
     @ingroup bitfunc
 */
-inline 
-int bit_find_in_block(const bm::word_t* data, 
-                      unsigned          nbit, 
-                      bm::id_t*         prev)
+
+inline
+unsigned bit_block_find(const bm::word_t* block, unsigned nbit, unsigned* pos)
 {
-    bm::id_t p = *prev;
-    int found = 0;
-
-    for(;;)
+    BM_ASSERT(block);
+    BM_ASSERT(pos);
+    
+    unsigned nword  = unsigned(nbit >> bm::set_word_shift);
+    unsigned bit_pos = (nbit & bm::set_word_mask);
+    
+    bm::word_t w = block[nword];
+    w &= (1u << bit_pos);
+    if (w)
     {
-        unsigned nword  = nbit >> bm::set_word_shift;
-        if (nword >= bm::set_block_size)
-            break;
-
-        bm::word_t val = data[nword] >> (p & bm::set_word_mask);
-        if (val)
-        {
-            unsigned trail_z = bm::bit_scan_forward32(val);
-            p += trail_z;
-            ++found;
-            break;
-        }
-        else
-        {
-           p    += (bm::set_word_mask + 1) - (nbit & bm::set_word_mask);
-           nbit += (bm::set_word_mask + 1) - (nbit & bm::set_word_mask);
-        }
+        *pos = nbit;
+        return 1;
     }
-    *prev = p;
-    return found;
+    w = block[nword] >> bit_pos;
+    w <<= bit_pos; // clear the trailing bits
+    if (w)
+    {
+        bit_pos = bm::bit_scan_forward32(w); // trailing zeros
+        *pos = unsigned(bit_pos + (nword * 8u * sizeof(bm::word_t)));
+        return 1;
+    }
+    
+    for (unsigned i = nword+1; i < bm::set_block_size; ++i)
+    {
+        w = block[i];
+        if (w)
+        {
+            bit_pos = bm::bit_scan_forward32(w); // trailing zeros
+            *pos = unsigned(bit_pos + (i * 8u * sizeof(bm::word_t)));
+            return w;
+        }
+    } // for i
+    return 0u;
 }
+
 
 /*!
     \brief BIT block find the last set bit (backward search)

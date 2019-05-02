@@ -177,7 +177,11 @@ public:
     typedef Alloc                                        allocator_type;
     typedef typename allocator_type::allocator_pool_type allocator_pool_type;
     typedef blocks_manager<Alloc>                        blocks_manager_type;
-    typedef bm::id_t                                     size_type; 
+#ifdef BM64ADDR
+    typedef bm::id64_t                                   size_type;
+#else
+    typedef bm::id_t                                     size_type;
+#endif
 
     /** Statistical information about bitset's memory allocation details. */
     struct statistics : public bv_statistics
@@ -931,12 +935,15 @@ public:
                 return *this;
             }
 
-            pos = this->bv_->check_or_next(pos); // find the true pos
-            if (pos == 0) // no bits available
+            size_type new_pos = this->bv_->check_or_next(pos); // find the true pos
+            if (new_pos == 0) // no bits available
             {
                 this->invalidate();
                 return *this;
             }
+            BM_ASSERT(new_pos >= pos);
+            pos = new_pos;
+            
             
             this->position_ = pos;
             unsigned nb = this->block_idx_ = unsigned(pos >> bm::set_block_shift);
@@ -1448,7 +1455,7 @@ public:
     {
         if (n >= size_)
         {
-            bm::id_t new_size = (n == bm::id_max) ? bm::id_max : n + 1;
+            size_type new_size = (n == bm::id_max) ? bm::id_max : n + 1;
             resize(new_size);
         }
         return reference(*this, n);
@@ -1538,7 +1545,7 @@ public:
         \param val - new bit value
         \return *this
     */
-    bvector<Alloc>& set(size_type, bool val = true);
+    bvector<Alloc>& set(size_type n, bool val = true);
 
     /*!
        \brief Sets every bit in this bitset to 1.
@@ -1761,7 +1768,7 @@ public:
        \sa build_rs_index
        \sa count_to_test, select, rank
     */
-    bm::id_t count_to(size_type n, const rs_index_type&  blocks_cnt) const;
+    size_type count_to(size_type n, const rs_index_type&  blocks_cnt) const;
     
     
     /*!
@@ -1792,7 +1799,7 @@ public:
         \sa running_count_blocks
         \sa count_to
     */
-    bm::id_t count_to_test(size_type n, const rs_index_type&  blocks_cnt) const;
+    size_type count_to_test(size_type n, const rs_index_type&  blocks_cnt) const;
 
 
     /*! Recalculate bitcount (deprecated)
@@ -2292,7 +2299,7 @@ protected:
                 bm::sort_order sorted_idx);
 
     void import_block(const bm::id_t* ids,
-                      bm::id_t nblock, size_type start, size_type stop);
+                      bm::id_t nblock, bm::id_t start, bm::id_t stop);
 
 private:
 
@@ -2368,8 +2375,8 @@ private:
                                      const bm::word_t* arg_blk);
     
     void copy_range_no_check(const bvector<Alloc>& bvect,
-                             bm::id_t left,
-                             bm::id_t right);
+                             size_type left,
+                             size_type right);
 
 private:
     /**
@@ -3373,7 +3380,7 @@ void bvector<Alloc>::set_bit_no_check(size_type n)
 // -----------------------------------------------------------------------
 
 template<class Alloc>
-void bvector<Alloc>::set(const size_type* ids, unsigned ids_size, bm::sort_order so)
+void bvector<Alloc>::set(const bm::id_t* ids, unsigned ids_size, bm::sort_order so)
 {
     if (!ids || !ids_size)
         return; // nothing to do
@@ -3832,17 +3839,23 @@ bool bvector<Alloc>::find_reverse(size_type& pos) const
                 const bm::word_t* blk = blk_blk[j];
                 if (blk)
                 {
+                    unsigned block_pos;
                     if (blk == FULL_BLOCK_FAKE_ADDR)
-                        blk = FULL_BLOCK_REAL_ADDR;
-                    
-                    bool is_gap = BM_IS_GAP(blk);
-                    found = is_gap ? bm::gap_find_last(BMGAP_PTR(blk), &pos)
-                                   : bm::bit_find_last(blk, &pos);
+                    {
+                        block_pos = bm::gap_max_bits-1;
+                        found = true;
+                    }
+                    else
+                    {
+                        bool is_gap = BM_IS_GAP(blk);
+                        found = is_gap ? bm::gap_find_last(BMGAP_PTR(blk), &block_pos)
+                                       : bm::bit_find_last(blk, &block_pos);
+                    }
                     if (found)
                     {
                         unsigned base_idx = i * bm::set_sub_array_size * bm::gap_max_bits;
                         base_idx += j * bm::gap_max_bits;
-                        pos += base_idx;
+                        pos = base_idx + block_pos;
                         return found;
                     }
                 }
@@ -3866,31 +3879,32 @@ bool bvector<Alloc>::find(size_type& pos) const
     bool found;
     
     unsigned top_blocks = blockman_.top_block_size();
-    for (unsigned short i = 0; i < top_blocks; ++i)
+    for (unsigned i = 0; i < top_blocks; ++i)
     {
         const bm::word_t* const* blk_blk = blockman_.get_topblock(i);
         if (blk_blk)
         {
-            for (unsigned short j = 0; j < bm::set_sub_array_size; ++j)
+            for (unsigned j = 0; j < bm::set_sub_array_size; ++j)
             {
                 const bm::word_t* blk = blk_blk[j];
                 if (blk)
                 {
+                    unsigned block_pos;
                     if (blk == FULL_BLOCK_FAKE_ADDR)
                     {
-                        found = true; pos = 0;
+                        found = true; block_pos = 0;
                     }
                     else
                     {
                         bool is_gap = BM_IS_GAP(blk);
-                        found = (is_gap) ? bm::gap_find_first(BMGAP_PTR(blk), &pos)
-                                         : bm::bit_find_first(blk, &pos);
+                        found = (is_gap) ? bm::gap_find_first(BMGAP_PTR(blk), &block_pos)
+                                         : bm::bit_find_first(blk, &block_pos);
                     }
                     if (found)
                     {
-                        unsigned base_idx = i * bm::set_sub_array_size * bm::gap_max_bits;
+                        size_type base_idx = i * bm::set_sub_array_size * bm::gap_max_bits;
                         base_idx += j * bm::gap_max_bits;
-                        pos += base_idx;
+                        pos = base_idx + block_pos;
                         return found;
                     }
                 }
@@ -4073,58 +4087,76 @@ bvector<Alloc>::check_or_next(size_type prev) const
 {
     if (!blockman_.is_init())
         return 0;
-    for (;;)
-    {
-        unsigned nblock = unsigned(prev >> bm::set_block_shift);
-        if (nblock >= bm::set_total_blocks) 
-            break;
+    
+    // calculate logical block number
+    unsigned nb = unsigned(prev >>  bm::set_block_shift);
+    unsigned i, j;
+    blockman_.get_block_coord(nb, i, j);
+    const bm::word_t* block = blockman_.get_block_ptr(i, j); // get unsanitized block ptr
 
-        if (blockman_.is_subblock_null(nblock >> bm::set_array_shift))
+    if (block)
+    {
+        unsigned block_pos;
+        bool found = false;
+        // calculate word number in block and bit
+        unsigned nbit = unsigned(prev & bm::set_block_mask);
+        if (BM_IS_GAP(block))
         {
-            prev += (bm::set_blkblk_mask + 1) - (prev & bm::set_blkblk_mask);
+            if (bm::gap_block_find(BMGAP_PTR(block), nbit, &block_pos))
+            {
+                prev = (size_type(nb) * bm::gap_max_bits) + block_pos;
+                return prev;
+            }
         }
         else
         {
-            unsigned nbit = unsigned(prev & bm::set_block_mask);
-            int no_more_blocks;
-            const bm::word_t* block = 
-                blockman_.get_block(nblock, &no_more_blocks);
-
-            if (no_more_blocks) 
+            if (block == FULL_BLOCK_FAKE_ADDR)
+                return prev;
+            found = bm::bit_block_find(block, nbit, &block_pos);
+            if (found)
             {
-                BM_ASSERT(block == 0);
-                break;
+                prev = (size_type(nb) * bm::gap_max_bits) + block_pos;
+                return prev;
             }
-
-            if (block)
-            {
-                if (BM_IS_GAP(block))
-                {
-                    if (bm::gap_find_in_block(BMGAP_PTR(block),
-                                                nbit,
-                                                &prev))
-                    {
-                        return prev;
-                    }
-                }
-                else
-                {
-                    if (IS_FULL_BLOCK(block)) return prev;
-                    if (bm::bit_find_in_block(block, nbit, &prev))
-                    {
-                        return prev;
-                    }
-                }
-            }
-            else
-            {
-                prev += (bm::set_block_mask + 1) - (prev & bm::set_block_mask);
-            }
-
         }
-        if (!prev) break;
     }
-
+    ++j;
+    unsigned top_blocks = blockman_.top_block_size();
+    for (; i < top_blocks; ++i)
+    {
+        const bm::word_t* const* blk_blk = blockman_.get_topblock(i);
+        if (blk_blk)
+        {
+            for (; j < bm::set_sub_array_size; ++j)
+            {
+                const bm::word_t* blk = blk_blk[j];
+                if (blk)
+                {
+                    bool found;
+                    unsigned block_pos;
+                    if (blk == FULL_BLOCK_FAKE_ADDR)
+                    {
+                        found = true; block_pos = 0;
+                    }
+                    else
+                    {
+                        bool is_gap = BM_IS_GAP(blk);
+                        found = (is_gap) ? bm::gap_find_first(BMGAP_PTR(blk), &block_pos)
+                                         : bm::bit_find_first(blk, &block_pos);
+                    }
+                    if (found)
+                    {
+                        size_type base_idx = size_type(i) * bm::bits_in_array;
+                        base_idx += j * bm::gap_max_bits;
+                        prev = base_idx + block_pos;
+                        return prev;
+                    }
+                }
+            } // for j
+        }
+        j = 0;
+    } // for i
+    
     return 0;
 }
 
@@ -4136,90 +4168,11 @@ bvector<Alloc>::check_or_next_extract(size_type prev)
 {
     if (!blockman_.is_init())
         return 0;
-
-    for (;;)
-    {
-        unsigned nblock = unsigned(prev >> bm::set_block_shift); 
-        if (nblock >= bm::set_total_blocks) break;
-
-        if (blockman_.is_subblock_null(nblock >> bm::set_array_shift))
-        {
-            prev += (bm::set_blkblk_mask + 1) -
-                            (prev & bm::set_blkblk_mask);
-        }
-        else
-        {
-            unsigned nbit = unsigned(prev & bm::set_block_mask);
-            int no_more_blocks;
-            bm::word_t* block = 
-                blockman_.get_block(nblock, &no_more_blocks);
-
-            if (no_more_blocks) 
-            {
-                BM_ASSERT(block == 0);
-                break;
-            }
-
-            if (block)
-            {
-                if (IS_FULL_BLOCK(block))
-                {
-                    set(prev, false);
-                    return prev;
-                }
-                if (BM_IS_GAP(block))
-                {
-                    unsigned is_set;
-                    unsigned new_block_len = 
-                        gap_set_value(0, BMGAP_PTR(block), nbit, &is_set);
-                    if (is_set)
-                    {
-                        unsigned threshold =
-                            bm::gap_limit(BMGAP_PTR(block), blockman_.glen());
-                        if (new_block_len > threshold) 
-                        {
-                            extend_gap_block(nblock, BMGAP_PTR(block));
-                        }
-                        return prev;
-                    }
-                    else
-                    {
-                        if (bm::gap_find_in_block(BMGAP_PTR(block),
-                                                    nbit,
-                                                    &prev))
-                        {
-                            set(prev, false);
-                            return prev;
-                        }
-                    }
-                }
-                else // bit block
-                {
-                    if (bm::bit_find_in_block(block, nbit, &prev)) 
-                    {
-                        unsigned nbit1 =
-                            unsigned(prev & bm::set_block_mask); 
-                        unsigned nword = 
-                            unsigned(nbit1 >> bm::set_word_shift);
-                        nbit1 &= bm::set_word_mask;
-                        bm::word_t* word = block + nword;
-                        bm::word_t  mask = ((bm::word_t)1) << nbit1;
-                        *word &= ~mask;
-
-                        return prev;
-                    }
-                }
-            }
-            else
-            {
-                prev += (bm::set_block_mask + 1) - 
-                            (prev & bm::set_block_mask);
-            }
-
-        }
-        if (!prev) break;
-    }
-    return 0;
+    // TODO: optimization
+    size_type pos = this->check_or_next(prev);
+    if (pos >= prev)
+        this->clear_bit_no_check(pos);
+    return pos;
 }
 
 //---------------------------------------------------------------------
