@@ -3110,6 +3110,7 @@ void bvector<Alloc>::optimize(bm::word_t* temp_block,
 template<typename Alloc> 
 void bvector<Alloc>::optimize_gap_size()
 {
+#if 0
     if (!blockman_.is_init())
         return;
 
@@ -3127,6 +3128,7 @@ void bvector<Alloc>::optimize_gap_size()
                             opt_glen);
     
     set_gap_levels(opt_glen);
+#endif
 }
 
 // -----------------------------------------------------------------------
