@@ -6413,7 +6413,6 @@ unsigned bit_count_nonzero_size(const T*     blk,
 
     @ingroup bitfunc
 */
-
 inline
 unsigned bit_block_find(const bm::word_t* block, unsigned nbit, unsigned* pos)
 {
