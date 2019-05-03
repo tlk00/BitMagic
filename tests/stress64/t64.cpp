@@ -42,7 +42,7 @@ For more information please visit:  http://bitmagic.io
 
 
 #include <bm.h>
-//#include <bmdbg.h>
+#include <bmdbg.h>
 
 using namespace bm;
 using namespace std;
@@ -341,13 +341,30 @@ void GenericBVectorTest()
 {
     cout << "------------------------------------ GenericBVectorTest()" << endl;
     
-    bvect64 bv0;
-    ref_vect vect;
-    generate_vect_simpl0(vect);
-    
-    load_BV_set_ref(bv0, vect);
-    compare_BV_set_ref(bv0, vect);
-    
+    {
+        bvect64 bv0;
+        ref_vect vect;
+        generate_vect_simpl0(vect);
+        
+        load_BV_set_ref(bv0, vect);
+        compare_BV_set_ref(bv0, vect);
+
+        bvect64 bv1(bm::BM_GAP);
+        load_BV_set_ref(bv1, vect);
+        compare_BV_set_ref(bv1, vect);
+        
+        
+        bvect64::statistics st1, st2, st3;
+        bv0.calc_stat(&st1);
+        bv0.optimize(0, bvect64::opt_compress, &st2);
+        assert(st1.ptr_sub_blocks == st2.ptr_sub_blocks);
+        bv1.calc_stat(&st3);
+        assert(st1.ptr_sub_blocks == st3.ptr_sub_blocks);
+        assert(st2.gap_blocks == st3.gap_blocks);
+
+        
+    }
+
     cout << "------------------------------------ GenericBVectorTest() OK" << endl;
 }
 
