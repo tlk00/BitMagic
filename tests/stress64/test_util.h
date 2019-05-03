@@ -27,6 +27,8 @@ void load_BV_set_ref(BV& bv, const VT& vect)
         auto v = *it;
         bv[v] = true;
     }
+    assert(bv.count() == vect.size());
+    print_bvector_stat(bv);
 }
 
 
