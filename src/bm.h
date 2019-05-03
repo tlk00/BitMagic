@@ -3083,7 +3083,7 @@ void bvector<Alloc>::optimize(bm::word_t* temp_block,
         stat->max_serialize_mem = (unsigned)sizeof(id_t) * 4;
     }
 
-    for_each_nzblock(blk_root, blockman_.top_block_size(), opt_func);
+    bm::for_each_nzblock(blk_root, blockman_.top_block_size(), opt_func);
 
     if (stat)
     {
@@ -3091,7 +3091,13 @@ void bvector<Alloc>::optimize(bm::word_t* temp_block,
         if (!safe_inc) safe_inc = 256;
         stat->max_serialize_mem += safe_inc;
         stat->memory_used += (unsigned)(sizeof(*this) - sizeof(blockman_));
-        stat->memory_used += blockman_.mem_used();
+        //stat->memory_used += blockman_.mem_used();
+        
+        unsigned top_size = blockman_.top_block_size();
+        size_t blocks_mem = sizeof(blockman_);
+        blocks_mem += sizeof(bm::word_t**) * top_size;
+        blocks_mem += stat->ptr_sub_blocks * (sizeof(void*) * bm::set_sub_array_size);
+        stat->memory_used += blocks_mem;
     }
     
     // the expectation is that we don't need to keep temp block if we
@@ -3294,8 +3300,13 @@ void bvector<Alloc>::calc_stat(struct bvector<Alloc>::statistics* st) const
     unsigned empty_blocks = 0;
 
     st->max_serialize_mem = unsigned(sizeof(id_t) * 4);
-
     unsigned top_size = blockman_.top_block_size();
+
+    size_t blocks_mem = sizeof(blockman_);
+    blocks_mem +=
+        (blockman_.temp_block_ ? sizeof(word_t) * bm::set_block_size : 0);
+    blocks_mem += sizeof(bm::word_t**) * top_size;
+
     for (unsigned i = 0; i < top_size; ++i)
     {
         const bm::word_t* const* blk_blk = blockman_.get_topblock(i);
@@ -3338,7 +3349,9 @@ void bvector<Alloc>::calc_stat(struct bvector<Alloc>::statistics* st) const
 
     // Calc size of different odd and temporary things.
     st->memory_used += unsigned(sizeof(*this) - sizeof(blockman_));
-    st->memory_used += blockman_.mem_used();
+    blocks_mem += st->ptr_sub_blocks * (sizeof(void*) * bm::set_sub_array_size);
+    st->memory_used += blocks_mem;
+    //st->memory_used += blockman_.mem_used();
 }
 
 // -----------------------------------------------------------------------

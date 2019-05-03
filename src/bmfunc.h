@@ -1275,6 +1275,8 @@ void for_each_nzblock(T*** root, unsigned size1, F& f)
             f.on_empty_top(i);
             continue;
         }
+        f.on_non_empty_top(i);
+        
 
         unsigned non_empty_top = 0;
         unsigned r = i * bm::set_sub_array_size;

@@ -137,6 +137,7 @@ public:
         }
 
         unsigned last_block() const { return last_idx_; }
+        void on_non_empty_top(unsigned) {}
 
     private:
         unsigned*  arr_;
@@ -286,6 +287,7 @@ public:
             }
             bman.get_allocator().free_gap_block(gap_blk, bman.glen());
         }
+        void on_non_empty_top(unsigned) {}
 
     private:
         const gap_word_t* glevel_len_;
@@ -320,10 +322,15 @@ public:
                 blk_root[i] = 0;
             }
             if (stat_)
-            {
                 stat_->max_serialize_mem += (unsigned)(sizeof(unsigned) + 1);
-            }
         }
+        
+        void on_non_empty_top(unsigned)
+        {
+            if (stat_)
+                stat_->ptr_sub_blocks++;
+        }
+        
         void on_empty_block(unsigned /* block_idx*/ ) { ++empty_; }
 
         void operator()(bm::word_t* block, unsigned idx)
@@ -518,6 +525,9 @@ public:
                 }
             }
         }
+        
+        void on_non_empty_top(unsigned) {}
+
     private:
         allocator_type& alloc_;
     };
@@ -1771,24 +1781,7 @@ public:
         }
         return ptr;
     }
-
-    unsigned mem_used() const
-    {
-        unsigned m_used = (unsigned)sizeof(*this);
-        m_used += (unsigned)(temp_block_ ? sizeof(word_t) * bm::set_block_size : 0);
-        m_used += (unsigned)(sizeof(bm::word_t**) * top_block_size_);
-
-        if (is_init())
-        {
-            for (unsigned i = 0; i < top_block_size_; ++i)
-            {
-                m_used += (unsigned)
-                    (top_blocks_[i] ? sizeof(void*) * bm::set_sub_array_size : 0);
-            }
-        }
-        return m_used;
-    }
-
+    
     /** Returns true if second level block pointer is 0.
     */
     bool is_subblock_null(unsigned nsub) const
