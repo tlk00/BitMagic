@@ -61,7 +61,7 @@ struct bv_statistics
     /// Memory used by bitvector including temp and service blocks
     size_t  memory_used;
     /// Array of all GAP block lengths in the bvector.
-    gap_word_t   gap_length[bm::set_total_blocks];
+    //gap_word_t   gap_length[bm::set_total_blocks];
     /// GAP lengths used by bvector
     gap_word_t  gap_levels[bm::gap_levels];
 
@@ -78,8 +78,8 @@ struct bv_statistics
     /// count gap block
     void add_gap_block(unsigned capacity, unsigned length)
     {
-        (gap_blocks < bm::set_total_blocks) ? gap_length[gap_blocks] = (gap_word_t)length : 0;
-        ++gap_blocks;
+//        (gap_blocks < bm::set_total_blocks) ? gap_length[gap_blocks] = (gap_word_t)length : 0;
+//        ++gap_blocks;
         unsigned mem_used = (unsigned)(capacity * sizeof(gap_word_t));
         memory_used += mem_used;
         max_serialize_mem += (unsigned)(length * sizeof(gap_word_t));
