@@ -20173,12 +20173,108 @@ void TestHeapVector()
 
 }
 
+static
+void show_help()
+{
+    std::cerr
+        << "BitMagic C++ stress test." << endl
+        << "-h                - help" << endl
+        << "-llevel (or -ll)  - low level tests" << endl
+        << "-support (or -s)  - support containers " << endl
+        << "-bvbasic (or -bvb - bit-vector basic " << endl
+        << "-bvops (-bvo, -bvl)  - bit-vector logical operations" << endl
+        << "-bvshift (or -bvs)- bit-vector shifts " << endl
+        << "-rankc (or -rc)   - rank-compress " << endl
+        << "-agg (or -aggregator) - bm::aggregator " << endl
+        << "-sv                   - test sparse vectors" << endl
+      ;
+}
 
-int main(void)
+bool         is_all = true;
+bool         is_low_level = false;
+bool         is_support = false;
+bool         is_bvbasic = false;
+bool         is_bvops = false;
+bool         is_bvshift = false;
+bool         is_rankc = false;
+bool         is_agg = false;
+bool         is_sv = false;
+
+static
+int parse_args(int argc, char *argv[])
+{
+    for (int i = 1; i < argc; ++i)
+    {
+        std::string arg = argv[i];
+        if ((arg == "-h"))
+        {
+            show_help();
+            return 1;
+        }
+        if (arg == "-ll" || arg == "-llevel")
+        {
+            is_all = false;
+            is_low_level = true;
+            continue;
+        }
+        if (arg == "-s" || arg == "-support")
+        {
+            is_all = false;
+            is_support = true;
+            continue;
+        }
+        if (arg == "-bvb" || arg == "-bvbasic")
+        {
+            is_all = false;
+            is_bvbasic = true;
+            continue;
+        }
+        if (arg == "-bvo" || arg == "-bvops" || arg == "-bvl")
+        {
+            is_all = false;
+            is_bvops = true;
+            continue;
+        }
+        if (arg == "-bvs" || arg == "-bvshift")
+        {
+            is_all = false;
+            is_bvshift = true;
+            continue;
+        }
+        if (arg == "-rc" || arg == "-rankc")
+        {
+            is_all = false;
+            is_rankc = true;
+            continue;
+        }
+        if (arg == "-agg" || arg == "-aggregator")
+        {
+            is_all = false;
+            is_agg = true;
+            continue;
+        }
+        if (arg == "-sv")
+        {
+            is_all = false;
+            is_sv = true;
+            continue;
+        }
+
+    } // for i
+    return 0;
+}
+
+
+int main(int argc, char *argv[])
 {
     time_t      start_time = time(0);
     time_t      finish_time;
-    
+
+    {
+    auto ret = parse_args(argc, argv);
+    if (ret != 0)
+        return ret;
+    }
 
 /*
     LoadBVDump("C:/dev/group-by-sets/sets/geo_organization.bvdump", 
@@ -20214,179 +20310,186 @@ int main(void)
 //unsigned long long a = 281474976710655ULL;
 //a = a / (65536 * 256);
 
+    if (is_all || is_low_level)
+    {
+        TestRecomb();
 
-    TestRecomb();
+        OptimGAPTest();
 
-    OptimGAPTest();
+        CalcBeginMask();
+        CalcEndMask();
 
-    CalcBeginMask();
-    CalcEndMask();
+        TestSIMDUtils();
 
-    TestSIMDUtils();
+        TestArraysAndBuffers();
+     
+        Log2Test();
 
-    TestArraysAndBuffers();
- 
-    Log2Test();
+        LZCNTTest();
 
-    LZCNTTest();
+        SelectTest();
 
-    SelectTest();
+         TestBlockZero();
+        
+         TestBlockDigest();
 
-     TestBlockZero();
+         TestBlockAND();
+         TestBlockSUB();
+         TestBlockOR();
+
+         TestBlockCountChange();
+
+         TestBlockToGAP();
+
+         ShiftRotateTest();
+
+         BlockBitInsertTest();
+
+         BlockBitEraseTest();
+         TestBlockLast();
+         BitForEachTest();
+        
+         BitCountChangeTest();
+         WordCmpTest();
+    }
     
-     TestBlockDigest();
+    if (is_all || is_support)
+    {
+        TestHeapVector();
+        MiniSetTest();
+        BitEncoderTest();
+        GammaEncoderTest();
+        GAPCheck();
+        SerializationBufferTest();
+        TestBasicMatrix();
+    }
 
-     TestBlockAND();
-     TestBlockSUB();
-     TestBlockOR();
+    if (is_all || is_bvbasic)
+    {
+         ExportTest();
+         ResizeTest();
 
-     TestBlockCountChange();
+         SyntaxTest();
 
-     TestBlockToGAP();
+         SetTest();
 
-     ShiftRotateTest();
+         EmptyBVTest();
+         ClearAllTest();
 
-     BlockBitInsertTest();
+         EnumeratorTest();
 
-     BlockBitEraseTest();
+         CountRangeTest();
 
-     ExportTest();
-     ResizeTest();
+         BasicFunctionalityTest();
+     
+         RankFindTest();
+        
+         BvectorBitForEachTest();
 
-     TestHeapVector();
+         GetNextTest();
 
-     MiniSetTest();
+         BvectorIncTest();
 
-     SyntaxTest();
+         BvectorBulkSetTest();
 
-     SetTest();
+        GAPTestStress();
+        
+        MaxSTest();
 
-     BitCountChangeTest();
+        SimpleRandomFillTest();
 
-     TestBlockLast();
+        RangeRandomFillTest();
+        RangeCopyTest();
 
-     BitForEachTest();
+        ComparisonTest();
+        
+        MutationTest();
+        MutationOperationsTest();
+        
+        BlockLevelTest();
+        
+        SerializationTest();
 
-     BitEncoderTest();
+        DesrializationTest2();
 
-     GammaEncoderTest();
+     }
 
-     EmptyBVTest();
+    if (is_all || is_bvshift)
+    {
+         BvectorShiftTest();
+         BvectorInsertTest();
+         BvectorEraseTest();
+    }
 
-     EnumeratorTest();
 
-     CountRangeTest();
+    if (is_all || is_rankc)
+    {
+         AddressResolverTest();
+         TestRankCompress();
+    }
 
-     BasicFunctionalityTest();
- 
-     RankFindTest();
+    if (is_all || is_bvops)
+    {
+        AndOperationsTest();
+        OrOperationsTest();
+        XorOperationsTest();
+        SubOperationsTest();
 
-     BvectorIncTest();
+        //BitBlockTransposeTest();
 
-     BvectorBulkSetTest();
+        StressTest(120, 0); // OR
+        StressTest(120, 3); // AND
+        StressTest(120, 1); // SUB
+        StressTest(120, 2); // XOR
+    }
 
-     BvectorShiftTest();
 
-     BvectorInsertTest();
 
-     BvectorEraseTest();
+    if (is_all || is_agg)
+    {
+         AggregatorTest();
+         StressTestAggregatorOR(100);
+         StressTestAggregatorAND(100);
+         StressTestAggregatorShiftAND(5);
 
-     ClearAllTest();
+    //     StressTestAggregatorSUB(100);
+    }
 
-     GAPCheck();
+    if (is_all || is_sv)
+    {
+         TestSparseVector();
 
-     AddressResolverTest();
+         TestSparseVectorInserter();
 
-     BvectorBitForEachTest();
+         TestSparseVectorGatherDecode();
 
-     TestRankCompress();
+         TestSparseVectorTransform();
 
-     GAPTestStress();
+         TestSparseVectorRange();
 
-     MaxSTest();
+         TestSparseVectorFilter();
 
-     GetNextTest();
+         TestSparseVectorScan();
 
-     SimpleRandomFillTest();
+         TestCompressSparseVector();
 
-     RangeRandomFillTest();
+         TestCompressedSparseVectorScan();
 
-     AndOperationsTest();   
+         TestSparseVector_Stress(2);
+     
+         TestCompressedCollection();
 
-     OrOperationsTest();
+         TestStrSparseVector();
 
-     XorOperationsTest();
+         TestStrSparseSort();
 
-     SubOperationsTest();
+         StressTestStrSparseVector();
+    }
 
-     RangeCopyTest();
-
-     WordCmpTest();
-
-     ComparisonTest();
-
-     //BitBlockTransposeTest();
-
-     MutationTest();
-
-     MutationOperationsTest();
-
-     SerializationBufferTest();
-
-     SerializationTest();
-
-     DesrializationTest2();
-
-     BlockLevelTest();
-
-     StressTest(120, 0); // OR
-     StressTest(120, 3); // AND
-     StressTest(120, 1); // SUB
-
-     StressTest(120, 2); // XOR
-
-
-     AggregatorTest();
-
-     StressTestAggregatorOR(100);
- 
-     StressTestAggregatorAND(100);
-
-     StressTestAggregatorShiftAND(5);
-
-//     StressTestAggregatorSUB(100);
-
-     TestBasicMatrix();
-
-     TestSparseVector();
-
-     TestSparseVectorInserter();
-
-     TestSparseVectorGatherDecode();
-
-     TestSparseVectorTransform();
-
-     TestSparseVectorRange();
-
-     TestSparseVectorFilter();
-
-     TestSparseVectorScan();
-
-     TestCompressSparseVector();
-
-     TestCompressedSparseVectorScan();
-
-     TestSparseVector_Stress(2);
- 
-     TestCompressedCollection();
-
-     TestStrSparseVector();
-
-     TestStrSparseSort();
-
-     StressTestStrSparseVector();
-
-    StressTest(300);
+    if (is_all || is_bvops)
+    {
+        StressTest(300);
+    }
 
     finish_time = time(0);
 
