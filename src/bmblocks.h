@@ -314,6 +314,7 @@ public:
         void on_empty_top(unsigned i)
         {
             BM_ASSERT(this->bm_.is_init());
+            // TODO: make a special call to free the subblock
             bm::word_t*** blk_root = this->bm_.top_blocks_root();
             bm::word_t** blk_blk = blk_root[i];
             if (blk_blk) 
@@ -322,7 +323,7 @@ public:
                 blk_root[i] = 0;
             }
             if (stat_)
-                stat_->max_serialize_mem += (unsigned)(sizeof(unsigned) + 1);
+                stat_->max_serialize_mem += sizeof(unsigned) + 1;
         }
         
         void on_non_empty_top(unsigned)
@@ -576,12 +577,8 @@ public:
           alloc_(blockman.alloc_)
     {
         ::memcpy(glevel_len_, blockman.glevel_len_, sizeof(glevel_len_));
-
         if (blockman.is_init())
-        {
-            reserve_top_blocks(blockman.top_block_size());
             this->copy(blockman);
-        }
     }
     
 #ifndef BM_NO_CXX11
@@ -1849,9 +1846,16 @@ public:
                 new_blocks[i] = top_blocks_[i];
             alloc_.free_ptr(top_blocks_, top_block_size_);
         }
+        if (i < top_blocks)
+        {
+            ::memset(&new_blocks[i], 0, sizeof(void*) * (top_blocks-i));
+        }
+        /*
         for (; i < top_blocks; ++i)
-            new_blocks[i] = 0;
-        
+        {
+            BM_ASSERT(new_blocks[i] == 0);
+        }
+        */
         top_blocks_ = new_blocks;
         top_block_size_ = top_blocks;
         return top_block_size_;
@@ -2001,7 +2005,7 @@ private:
     
     
     void copy(const blocks_manager& blockman,
-              unsigned block_from = 0, unsigned block_to = 65535)
+              unsigned block_from = 0, unsigned block_to = bm::set_total_blocks)
     {
         unsigned arg_top_blocks = blockman.top_block_size();
         this->reserve_top_blocks(arg_top_blocks);

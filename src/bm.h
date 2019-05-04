@@ -390,7 +390,7 @@ public:
             unsigned char       bits[set_bitscan_wave_size*32]; //!< bit list
             unsigned short      idx;      //!< Current position in the bit list
             unsigned short      cnt;      //!< Number of ON bits
-            unsigned            pos;      //!< Last bit position decode before
+            size_type           pos;      //!< Last bit position decode before
         };
 
         /** Information about current DGAP block. */
@@ -476,7 +476,7 @@ public:
                 max_bit_ = n;
                 if (n >= bvect_->size()) 
                 {
-                    bm::id_t new_size = (n == bm::id_max) ? bm::id_max : n + 1;
+                    size_type new_size = (n == bm::id_max) ? bm::id_max : n + 1;
                     bvect_->resize(new_size);
                 }
             }
@@ -680,10 +680,10 @@ public:
         }
 
         /*! \brief Get current position (value) */
-        bm::id_t operator*() const { return this->position_; }
+        size_type operator*() const { return this->position_; }
 
         /*! \brief Get current position (value) */
-        bm::id_t value() const { return this->position_; }
+        size_type value() const { return this->position_; }
         
         /*! \brief Advance enumerator forward to the next available bit */
         enumerator& operator++() { return this->go_up(); }
@@ -1405,14 +1405,14 @@ public:
     /*!
         \brief Brace constructor
     */
-    bvector(std::initializer_list<bm::id_t> il)
+    bvector(std::initializer_list<size_type> il)
         : blockman_(bm::gap_len_table<true>::_len, bm::id_max, Alloc()),
           new_blocks_strat_(BM_BIT),
           size_(bm::id_max)
     {
         init();
-        std::initializer_list<bm::id_t>::const_iterator it_start = il.begin();
-        std::initializer_list<bm::id_t>::const_iterator it_end = il.end();
+        std::initializer_list<size_type>::const_iterator it_start = il.begin();
+        std::initializer_list<size_type>::const_iterator it_end = il.end();
         for (; it_start < it_end; ++it_start)
         {
             this->set_bit_no_check(*it_start);
@@ -1671,7 +1671,7 @@ public:
        \brief Flips bit n
        \return *this
     */
-    bvector<Alloc>& flip(bm::id_t n) { this->inc(n); return *this; }
+    bvector<Alloc>& flip(size_type n) { this->inc(n); return *this; }
 
     /*!
        \brief Flips all bits
@@ -2545,6 +2545,7 @@ typename bvector<Alloc>::size_type bvector<Alloc>::count() const
 
     return func.count();
 }
+
 // -----------------------------------------------------------------------
 
 template<typename Alloc>
@@ -2905,7 +2906,6 @@ bvector<Alloc>::count_range(size_type left, size_type right,
 
     BM_ASSERT_THROW(right < bm::id_max, BM_ERR_RANGE);
     BM_ASSERT_THROW(left <= right, BM_ERR_RANGE);
-
     
     if (!blockman_.is_init())
         return 0;
@@ -2940,20 +2940,20 @@ bvector<Alloc>::count_range(size_type left, size_type right,
             }
             else
             {
-                func(block);//, nblock_left);
+                func(block);
             }
         }
         else
         {
             if (left_gap)
             {
-                cnt += gap_bit_count_range(BMGAP_PTR(block),
-                                            (gap_word_t)nbit_left,
-                                            (gap_word_t)r);
+                cnt += bm::gap_bit_count_range(BMGAP_PTR(block),
+                                               (gap_word_t)nbit_left,
+                                               (gap_word_t)r);
             }
             else
             {
-                cnt += bit_block_calc_count_range(block, nbit_left, r);
+                cnt += bm:::bit_block_calc_count_range(block, nbit_left, r);
             }
         }
     }
@@ -2962,7 +2962,7 @@ bvector<Alloc>::count_range(size_type left, size_type right,
     {
         return cnt + func.count();
     }
-
+    
     for (unsigned nb = nblock_left+1; nb < nblock_right; ++nb)
     {
         blockman_.get_block_coord(nb, i0, j0);
@@ -2975,7 +2975,7 @@ bvector<Alloc>::count_range(size_type left, size_type right,
         else 
         {
             if (block)
-                func(block);//, nb);
+                func(block);
         }
     }
     cnt += func.count();
@@ -3153,8 +3153,6 @@ template<typename Alloc>
 int bvector<Alloc>::compare(const bvector<Alloc>& bv) const
 {
     int res;
-    unsigned bn = 0;
-    
     unsigned top_blocks = blockman_.top_block_size();
     unsigned bvect_top_blocks = bv.blockman_.top_block_size();
 
@@ -3166,12 +3164,9 @@ int bvector<Alloc>::compare(const bvector<Alloc>& bv) const
         const bm::word_t* const* arg_blk_blk = bv.blockman_.get_topblock(i);
 
         if (blk_blk == arg_blk_blk) 
-        {
-            bn += bm::set_sub_array_size;
             continue;
-        }
 
-        for (unsigned j = 0; j < bm::set_sub_array_size; ++j, ++bn)
+        for (unsigned j = 0; j < bm::set_sub_array_size; ++j)
         {
             const bm::word_t* arg_blk = arg_blk_blk ? arg_blk_blk[j] : 0;
             const bm::word_t* blk = blk_blk ? blk_blk[j] : 0;
@@ -3211,64 +3206,55 @@ int bvector<Alloc>::compare(const bvector<Alloc>& bv) const
                 }
                 else
                 {
-                    if (!bit_is_all_zero(pblk))
+                    if (!bm::bit_is_all_zero(pblk))
                     {
                         return res;
                     }
                 }
-
                 continue;
             }
-
             bool arg_gap = BM_IS_GAP(arg_blk);
             bool gap = BM_IS_GAP(blk);
-
+            
             if (arg_gap != gap)
             {
                 BM_DECLARE_TEMP_BLOCK(temp_blk);
-                
                 bm::wordop_t* blk1;
                 bm::wordop_t* blk2;
 
                 if (gap)
                 {
-                    gap_convert_to_bitset((bm::word_t*)temp_blk, 
+                    bm::gap_convert_to_bitset((bm::word_t*)temp_blk,
                                             BMGAP_PTR(blk));
-
                     blk1 = (bm::wordop_t*)temp_blk;
                     blk2 = (bm::wordop_t*)arg_blk;
                 }
                 else
                 {
-                    gap_convert_to_bitset((bm::word_t*)temp_blk, 
+                    bm::gap_convert_to_bitset((bm::word_t*)temp_blk,
                                             BMGAP_PTR(arg_blk));
-
                     blk1 = (bm::wordop_t*)blk;
                     blk2 = (bm::wordop_t*)temp_blk;
-
-                }                        
-                res = bitcmp(blk1, blk2, bm::set_block_size_op);  
-
+                }
+                res = bm::bitcmp(blk1, blk2, bm::set_block_size_op);
             }
             else
             {
                 if (gap)
                 {
-                    res = gapcmp(BMGAP_PTR(blk), BMGAP_PTR(arg_blk));
+                    res = bm::gapcmp(BMGAP_PTR(blk), BMGAP_PTR(arg_blk));
                 }
                 else
                 {
-                    res = bitcmp((bm::wordop_t*)blk, 
+                    res = bm::bitcmp((bm::wordop_t*)blk,
                                     (bm::wordop_t*)arg_blk, 
                                     bm::set_block_size_op);
                 }
             }
-
             if (res != 0)
             {
                 return res;
             }
-        
         } // for j
 
     } // for i

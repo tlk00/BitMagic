@@ -79,7 +79,7 @@ struct bv_statistics
     void add_gap_block(unsigned capacity, unsigned length)
     {
 //        (gap_blocks < bm::set_total_blocks) ? gap_length[gap_blocks] = (gap_word_t)length : 0;
-//        ++gap_blocks;
+        ++gap_blocks;
         unsigned mem_used = (unsigned)(capacity * sizeof(gap_word_t));
         memory_used += mem_used;
         max_serialize_mem += (unsigned)(length * sizeof(gap_word_t));

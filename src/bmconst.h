@@ -96,7 +96,8 @@ const unsigned bits_in_array = bm::bits_in_block * bm::set_array_size32;
 const unsigned long long id_max = bm::id_max48;
 const unsigned long long set_array_size48 = bm::id_max48 / (bm::set_array_size32 * bm::gap_max_bits);
 const unsigned set_top_array_size = bm::set_array_size48;
-const unsigned set_total_blocks = bm::id_max / (bm::gap_max_bits * bm::set_sub_array_size);
+const unsigned set_total_blocks = bm::set_top_array_size * set_sub_array_size;
+//bm::id_max / (bm::gap_max_bits * bm::set_sub_array_size);
 #else
 const unsigned id_max = bm::id_max32;
 const unsigned set_top_array_size = bm::set_array_size32;
