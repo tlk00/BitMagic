@@ -2953,7 +2953,7 @@ bvector<Alloc>::count_range(size_type left, size_type right,
             }
             else
             {
-                cnt += bm:::bit_block_calc_count_range(block, nbit_left, r);
+                cnt += bm::bit_block_calc_count_range(block, nbit_left, r);
             }
         }
     }
