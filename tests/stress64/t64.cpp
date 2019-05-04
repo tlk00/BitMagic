@@ -337,6 +337,122 @@ typedef bm::bvector<> bvect64;
 typedef std::vector<bm::id64_t> ref_vect;
 
 static
+void SyntaxTest()
+{
+    cout << "------------------------------------ SyntaxTest()" << endl;
+    ref_vect vect;
+    generate_vect_simpl0(vect);
+    {
+        bvect64 bv0;
+
+        load_BV_set_ref(bv0, vect);
+        compare_BV_set_ref(bv0, vect);
+
+        
+        auto idx = vect.size()-1;
+        auto v = vect[idx];
+        assert(bv0.test(v));
+        
+        bvect64 bv1(bv0);
+        compare_BV_set_ref(bv1, vect);
+        
+        bvect64 bv2;
+        bv2 = bv0;
+        compare_BV_set_ref(bv1, vect);
+        
+        bvect64 bv3(std::move(bv2));
+        assert(bv2.none());
+        compare_BV_set_ref(bv3, vect);
+        
+        bvect64 bv4;
+        bv4.move_from(bv3);
+        assert(bv3.none());
+        compare_BV_set_ref(bv4, vect);
+        
+        bv0 &= bv4;
+        compare_BV_set_ref(bv0, vect);
+        bv0 |= bv4;
+        compare_BV_set_ref(bv0, vect);
+        bv0 -= bv4;
+        assert(bv0.none());
+        bv1 ^= bv4;
+        assert(bv1.none());
+    }
+    
+    {
+        bvect64 bv0, bv1, bv2;
+
+        load_BV_set_ref(bv0, vect);
+        bv1 = bv2 = bv0;
+        bool b = (bv1 == bv0);
+        assert(b);
+        b = (bv1 == bv2);
+        assert(b);
+     
+        {
+            bvect64 bv3;
+            bv3 = bv1 | bv2;
+            b = (bv1 == bv3);
+            assert(b);
+            compare_BV_set_ref(bv3, vect);
+        }
+        {
+            bvect64 bv3;
+            bv3 = bv1 & bv2;
+            b = (bv1 == bv3);
+            assert(b);
+            compare_BV_set_ref(bv3, vect);
+        }
+        {
+            bvect64 bv3;
+            bv3 = bv1 - bv2;
+            assert(bv3.none());
+        }
+        {
+            bvect64 bv3;
+            bv3 = bv1 ^ bv2;
+            assert(bv3.count() == 0ULL);
+        }
+    }
+    
+    {
+        bvect64 bv1;
+        bvect64::reference ref = bv1[10];
+        bool bn = !ref;
+        assert(bn);
+        bool bn2 = ~ref;
+        assert(bn2);
+        bv1[10] = bn2;
+        bv1[10] = bn;
+        bn = bn2 = false;
+        ref.flip();
+        assert(!bv1.test(10));
+        bv1[bm::id_max-1] = 1;
+        assert(bv1[bm::id_max-1]);
+        auto ref1 = bv1[bm::id_max-1];
+        ref1.flip();
+        assert(!ref1);
+        assert(!bv1.test(bm::id_max-1));
+    }
+    {
+        bvect64 bv1;
+        auto ii = bv1.inserter();
+        ii = bm::id_max / 2;
+        assert(bv1.test(bm::id_max / 2));
+    }
+    
+    {
+        bvect64 bv1 {0, 10, 31, 32, 62, 63,
+             (5 * bm::bits_in_array), (5 * bm::bits_in_array)+1,
+             bm::id_max32-1, bm::id_max32, bm::id64_t(bm::id_max32)+1,
+             bm::id_max48-1
+            };
+        compare_BV(bv1, vect);
+    }
+    cout << "------------------------------------ SyntaxTest() OK" << endl;
+}
+
+static
 void GenericBVectorTest()
 {
     cout << "------------------------------------ GenericBVectorTest()" << endl;
@@ -353,16 +469,17 @@ void GenericBVectorTest()
         load_BV_set_ref(bv1, vect);
         compare_BV_set_ref(bv1, vect);
         
+        int cmp = bv0.compare(bv1);
+        assert(cmp == 0);
         
         bvect64::statistics st1, st2, st3;
         bv0.calc_stat(&st1);
+        assert(st1.ptr_sub_blocks == 5);
         bv0.optimize(0, bvect64::opt_compress, &st2);
         assert(st1.ptr_sub_blocks == st2.ptr_sub_blocks);
         bv1.calc_stat(&st3);
         assert(st1.ptr_sub_blocks == st3.ptr_sub_blocks);
         assert(st2.gap_blocks == st3.gap_blocks);
-
-        
     }
 
     cout << "------------------------------------ GenericBVectorTest() OK" << endl;
@@ -376,6 +493,7 @@ int main(void)
     
     // -----------------------------------------------------------------
     
+    SyntaxTest();
     GenericBVectorTest();
     
     // -----------------------------------------------------------------

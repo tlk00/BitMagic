@@ -32,7 +32,7 @@ void load_BV_set_ref(BV& bv, const VT& vect)
 }
 
 
-/// Load bit-vector using ref syntax
+/// CMP bit-vector using ref syntax
 ///
 template<typename BV, typename VT>
 void compare_BV_set_ref(const BV& bv, const VT& vect)
@@ -53,6 +53,53 @@ void compare_BV_set_ref(const BV& bv, const VT& vect)
     if (count != vect.size())
     {
         cerr << "Error! Vector(ref) size cmp failed. vect.size()=" << vect.size()
+             << " bv.count()=" << count << endl;
+        assert(0);
+        exit(1);
+    }
+}
+
+/// CMP bit-vector using enumerator
+///
+template<typename BV, typename VT>
+void compare_BV(const BV& bv, const VT& vect)
+{
+    typename BV::enumerator en = bv.first();
+    auto prev_id = 0ULL;
+    for (auto it = vect.begin(); it != vect.end(); ++it, ++en)
+    {
+        auto v0 = *it;
+        if (!en.valid())
+        {
+            cerr << "Error! Vector(en) comparison failed. enumerator invalid at value=" << v0
+                 << endl;
+            assert(0); exit(1);
+        }
+        auto v1 = *en;
+        if (v1 != v0)
+        {
+            cerr << "Error! Vector(en) comparison failed. v0=" << v0
+                 << " v1=" << v1
+                 << endl;
+            assert(0); exit(1);
+        }
+        if ((v1 != prev_id))
+        {
+            auto r = bv.count_range(prev_id, v1);
+            if (r != 2ULL)
+            {
+                cerr << "Error! Vector(en) comparison failed. count_range() = " << r
+                     << " [" << prev_id << ", " << v1 << "]"
+                     << endl;
+                assert(0); exit(1);
+            }
+        }
+        prev_id = v1;
+    }
+    auto count = bv.count();
+    if (count != vect.size())
+    {
+        cerr << "Error! Vector(en) size cmp failed. vect.size()=" << vect.size()
              << " bv.count()=" << count << endl;
         assert(0);
         exit(1);
