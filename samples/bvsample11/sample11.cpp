@@ -153,14 +153,11 @@ void bv_count_range_acc(const bm::bvector<>& bv)
 {
     unsigned cnt = 0;
     
-    // build a block population count list, used for count_range() acceleration
-    // for this test it is intentionally excluded from the timing measurements
-    
-    unsigned  blocks_cnt[bm::set_total_blocks];
-    bv.count_blocks(blocks_cnt);
+    std::unique_ptr<bm::bvector<>::rs_index_type> rs(new bm::bvector<>::rs_index_type());
+    bv.build_rs_index(rs.get());
 
     {
-        bm::chrono_taker tt1("3. bvector<>::count_range() with blocks list", benchmark_count, &timing_map);
+        bm::chrono_taker tt1("3. bvector<>::count_range() with rs_index", benchmark_count, &timing_map);
         cnt = 0;
         for (unsigned i = 0; i < benchmark_count; ++i)
         {
@@ -168,8 +165,8 @@ void bv_count_range_acc(const bm::bvector<>& bv)
             unsigned to = unsigned(rand_dis(gen));
             if (from > to)
                 swap(from, to);
-            cnt += bv.count_range(from, to, blocks_cnt); // use blocks count for acceleration
-        }
+            cnt += bv.count_range(from, to, *rs); // use rs index for acceleration
+        } // for i
     }
     // this is mostly to prevent compiler to optimize loop away
     std::cout << "Count range with blocks test finished." << cnt << "\r";
