@@ -10366,9 +10366,40 @@ __int64 CalcBitCount64(__int64 b)
 
 */
 
+static
+void FindNotNullPtrTest()
+{
+    cout << "----------------------------- FindNotNullPtrTest()" << endl;
+    bm::word_t*** arr = 0;
+    unsigned arr_size = 895;
+    arr = (bm::word_t***)::malloc(sizeof(void*) * arr_size);
+
+    for (unsigned i = 0; i < arr_size; ++i)
+    {
+        arr[i] = 0;
+    }
+    bool found;
+    unsigned pos;
+    found = bm::find_not_null_ptr(arr, 0u, arr_size, &pos);
+    assert(!found);
+    
+    for (unsigned i = arr_size-1; i > 0; --i)
+    {
+        arr[i] = (bm::word_t**)~0;
+        for (unsigned j = 0; j < i; ++j)
+        {
+            found = bm::find_not_null_ptr(arr, j, arr_size, &pos);
+            assert(found);
+            assert(pos == i);
+        }
+    } // for i
+
+    ::free(arr);
+    cout << "----------------------------- FindNotNullPtrTest() OK" << endl;
+}
+
 // function to return bvector by value to test move semantics
 //
-
 static
 bvect bvect_test_return()
 {
@@ -20322,7 +20353,8 @@ int main(int argc, char *argv[])
 
         TestArraysAndBuffers();
      
-        Log2Test();
+        Log2Test(); 
+        FindNotNullPtrTest();
 
         LZCNTTest();
 
@@ -20343,7 +20375,7 @@ int main(int argc, char *argv[])
          ShiftRotateTest();
 
          BlockBitInsertTest();
-
+        
          BlockBitEraseTest();
          TestBlockLast();
          BitForEachTest();
