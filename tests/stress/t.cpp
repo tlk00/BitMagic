@@ -1580,10 +1580,9 @@ void CheckRangeCopy(const bvect& bv, unsigned from, unsigned to)
 
 template<class T> void CheckCountRange(const T& vect, 
                                        unsigned left, 
-                                       unsigned right,
-                                       unsigned* block_count_arr=0)
+                                       unsigned right)
 {
-    unsigned cnt1 = vect.count_range(left, right, block_count_arr);
+    unsigned cnt1 = vect.count_range(left, right);
     unsigned cnt2 = 0;
 
     typename T::enumerator en = vect.get_enumerator(left);
@@ -1614,8 +1613,8 @@ template<class T> void CheckCountRange(const T& vect,
         if (left > right)
             swap(left, right);
 
-        cnt1 = vect.count_range(left, right, block_count_arr);
         unsigned cnt_to_r = vect.count_to(right, bc_arr);
+        cnt1 = vect.count_range(left, right, bc_arr);
         unsigned cnt_to_l = left ? vect.count_to(left - 1, bc_arr) : 0;
                  cnt2 = cnt_to_r - cnt_to_l;
         if (cnt1 != cnt2)
@@ -3096,7 +3095,7 @@ void BasicFunctionalityTest()
     }
 
     bvect_full1.set_range(0, ITERATIONS-1);
-
+/*
     bvect_full1.running_count_blocks(&bc_arr1);
 
     cout << "Rank check 2" << endl;
@@ -3130,7 +3129,7 @@ void BasicFunctionalityTest()
         }
     }
     cout << endl;
- 
+ */
     CheckCountRange(bvect_full, 0, ITERATIONS);
     CheckCountRange(bvect_full, 10, ITERATIONS+10);
     CheckCountRange(bvect_full1, 0, ITERATIONS);
@@ -7537,13 +7536,13 @@ void StressTest(unsigned repetitions, int set_operation = -1)
             exit(1);
         }
 
-        CheckCountRange(*bvect_full1, start1, BITVECT_SIZE, arr);
+        CheckCountRange(*bvect_full1, start1, BITVECT_SIZE);
         CheckIntervals(*bvect_full1, BITVECT_SIZE);
 
 
         CheckCountRange(*bvect_full2, start2, BITVECT_SIZE);
 
-        CheckCountRange(*bvect_full1, 0, start1, arr);
+        CheckCountRange(*bvect_full1, 0, start1);
         CheckCountRange(*bvect_full2, 0, start2);
 
 
