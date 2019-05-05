@@ -868,7 +868,7 @@ template<typename N>
 bool find_not_null_ptr(bm::word_t*** arr, N start, N size, N* pos)
 {
     BM_ASSERT(pos);
-    BM_ASSERT(start < size);
+//    BM_ASSERT(start < size);
 //#if defined(BM64_AVX2) || defined(BM64_AVX512)
 // TODO: optimization for SIMD based next ptr scan
 #if 0
