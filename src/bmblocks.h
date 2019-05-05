@@ -104,15 +104,16 @@ public:
         block_count_func(const blocks_manager& bm) 
             : block_count_base(bm), count_(0) {}
 
-        bm::id_t count() const { return count_; }
+        id_type count() const { return count_; }
 
         void operator()(const bm::word_t* block)
         {
             count_ += this->block_count(block);
         }
+        void reset() { count_ = 0; }
 
     private:
-        bm::id_t count_;
+        id_type count_;
     };
 
 
@@ -1846,16 +1847,17 @@ public:
                 new_blocks[i] = top_blocks_[i];
             alloc_.free_ptr(top_blocks_, top_block_size_);
         }
+        /*
         if (i < top_blocks)
         {
             ::memset(&new_blocks[i], 0, sizeof(void*) * (top_blocks-i));
-        }
-        /*
+        }*/
+        
         for (; i < top_blocks; ++i)
         {
-            BM_ASSERT(new_blocks[i] == 0);
+            new_blocks[i] = 0;
         }
-        */
+        
         top_blocks_ = new_blocks;
         top_block_size_ = top_blocks;
         return top_block_size_;

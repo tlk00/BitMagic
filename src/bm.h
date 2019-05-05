@@ -1726,20 +1726,33 @@ public:
         function call.
     */
     unsigned count_blocks(unsigned* arr) const;
-
+    
     /*!
-       \brief Returns count of 1 bits in the given range
-     
-       \param left - index of first bit start counting from
-       \param right - index of last bit 
-       \param block_count_arr - optional parameter (bitcount by bvector blocks)
-              calculated by count_blocks method. Used to improve performance of
-              wide range searches
+       \brief Returns count of 1 bits in the given range [left..right]
+       Uses rank-select index to accelerate the search
+
+       \param left   - index of first bit start counting from
+       \param right  - index of last bit
+       \param rs_idx - block count structure to accelerate search
+       \sa build_rs_index
+
        \return population count in the diapason
     */
-    size_type count_range(size_type left, 
-                          size_type right, 
-                          const unsigned* block_count_arr=0) const;
+    size_type count_range(size_type left,
+                          size_type right,
+                          const rs_index_type&  rs_idx) const;
+    
+    /*!
+       \brief Returns count of 1 bits in the given range [left..right]
+     
+       \param left - index of first bit start counting from
+       \param right - index of last bit
+
+       \return population count in the diapason
+    */
+    size_type count_range(size_type left,
+                          size_type right) const;
+
     
     /*! \brief compute running total of all blocks in bit vector
         \param blocks_cnt - out pointer to counting structure, holding the array
@@ -2894,13 +2907,11 @@ bvector<Alloc>::count_to_test(size_type right,
     return cnt;
 }
 
-
 // -----------------------------------------------------------------------
 
-template<typename Alloc> 
-typename bvector<Alloc>::size_type 
-bvector<Alloc>::count_range(size_type left, size_type right,
-                                 const unsigned* block_count_arr) const
+template<typename Alloc>
+typename bvector<Alloc>::size_type
+bvector<Alloc>::count_range(size_type left, size_type right) const
 {
     BM_ASSERT(left <= right);
 
@@ -2910,11 +2921,11 @@ bvector<Alloc>::count_range(size_type left, size_type right,
     if (!blockman_.is_init())
         return 0;
 
-    unsigned cnt = 0;
+    size_type cnt = 0;
 
     // calculate logical number of start and destination blocks
-    unsigned nblock_left  = unsigned(left  >>  bm::set_block_shift);
-    unsigned nblock_right = unsigned(right >>  bm::set_block_shift);
+    size_type nblock_left  = left  >>  bm::set_block_shift;
+    size_type nblock_right = right >>  bm::set_block_shift;
 
     unsigned i0, j0;
     blockman_.get_block_coord(nblock_left, i0, j0);
@@ -2922,10 +2933,10 @@ bvector<Alloc>::count_range(size_type left, size_type right,
 
     bool left_gap = BM_IS_GAP(block);
 
-    unsigned nbit_left  = unsigned(left  & bm::set_block_mask); 
-    unsigned nbit_right = unsigned(right & bm::set_block_mask); 
+    unsigned nbit_left  = unsigned(left  & bm::set_block_mask);
+    unsigned nbit_right = unsigned(right & bm::set_block_mask);
 
-    unsigned r = 
+    unsigned r =
         (nblock_left == nblock_right) ? nbit_right : (bm::bits_in_block-1);
 
     typename blocks_manager_type::block_count_func func(blockman_);
@@ -2934,14 +2945,7 @@ bvector<Alloc>::count_range(size_type left, size_type right,
     {
         if ((nbit_left == 0) && (r == (bm::bits_in_block-1))) // whole block
         {
-            if (block_count_arr)
-            {
-                cnt += block_count_arr[nblock_left];
-            }
-            else
-            {
-                func(block);
-            }
+            func(block);
         }
         else
         {
@@ -2958,28 +2962,21 @@ bvector<Alloc>::count_range(size_type left, size_type right,
         }
     }
 
+    cnt += func.count();
     if (nblock_left == nblock_right)  // in one block
     {
-        return cnt + func.count();
+        return cnt;
     }
     
-    for (unsigned nb = nblock_left+1; nb < nblock_right; ++nb)
     {
-        blockman_.get_block_coord(nb, i0, j0);
-        block = blockman_.get_block(i0, j0);
-
-        if (block_count_arr)
-        {
-            cnt += block_count_arr[nb];
-        }
-        else 
-        {
-            if (block)
-                func(block);
-        }
+        func.reset();
+        word_t*** blk_root = blockman_.top_blocks_root();
+        unsigned top_blocks_size = blockman_.top_block_size();
+        
+        bm::for_each_nzblock_range(blk_root, top_blocks_size, nblock_left+1, nblock_right-1, func);
+        cnt += func.count();
     }
-    cnt += func.count();
-
+    
     blockman_.get_block_coord(nblock_right, i0, j0);
     block = blockman_.get_block(i0, j0);
     bool right_gap = BM_IS_GAP(block);
@@ -2998,6 +2995,34 @@ bvector<Alloc>::count_range(size_type left, size_type right,
         }
     }
     return cnt;
+}
+
+
+// -----------------------------------------------------------------------
+
+template<typename Alloc>
+typename bvector<Alloc>::size_type
+bvector<Alloc>::count_range(size_type left,
+                            size_type right,
+                            const rs_index_type&  rs_idx) const
+{
+    BM_ASSERT(left <= right);
+
+    BM_ASSERT_THROW(right < bm::id_max, BM_ERR_RANGE);
+    BM_ASSERT_THROW(left <= right, BM_ERR_RANGE);
+
+    if (left == right)
+        return this->test(left);
+
+    size_type cnt_l, cnt_r;
+    if (left)
+        cnt_l = this->count_to(left-1, rs_idx);
+    else
+        cnt_l = 0;
+    
+    cnt_r = this->count_to(right, rs_idx);
+    
+    return cnt_r - cnt_l;
 }
 
 // -----------------------------------------------------------------------

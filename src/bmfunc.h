@@ -1260,6 +1260,48 @@ unsigned gap_test_unr(const T* buf, const unsigned pos)
     return res;
 }
 
+/*! For each non-zero block in [from, to] executes supplied functor
+    \internal
+*/
+template<typename T, typename N, typename F>
+void for_each_nzblock_range(T*** root, N top_size, N nb_from, N nb_to, F& f)
+{
+    BM_ASSERT(top_size);
+    if (nb_from > nb_to)
+        return;
+    unsigned i_from = nb_from >> bm::set_array_shift;
+    unsigned j_from = nb_from &  bm::set_array_mask;
+    unsigned i_to = nb_to >> bm::set_array_shift;
+    unsigned j_to = nb_to &  bm::set_array_mask;
+    
+    if (i_from >= top_size)
+        return;
+    if (i_to >= top_size)
+    {
+        i_to = top_size-1;
+        j_to = bm::set_sub_array_size-1;
+    }
+    
+    for (unsigned i = i_from; i <= i_to; ++i)
+    {
+        T** blk_blk = root[i];
+        if (!blk_blk)
+        {
+            continue;
+        }
+        unsigned j = (i == i_from) ? j_from : 0;
+        do
+        {
+            if (blk_blk[j])
+            {
+                f(blk_blk[j]);
+            }
+            if ((i == i_to) && (j == j_to))
+                return;
+            ++j;
+        } while (j < bm::set_sub_array_size);
+    } // for i
+}
 
 /*! For each non-zero block executes supplied function.
     \internal
