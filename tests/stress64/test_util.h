@@ -20,7 +20,7 @@ For more information please visit:  http://bitmagic.io
 /// Load bit-vector using ref syntax
 ///
 template<typename BV, typename VT>
-void load_BV_set_ref(BV& bv, const VT& vect)
+void load_BV_set_ref(BV& bv, const VT& vect, bool print_stat = true)
 {
     for (auto it = vect.begin(); it != vect.end(); ++it)
     {
@@ -28,7 +28,8 @@ void load_BV_set_ref(BV& bv, const VT& vect)
         bv[v] = true;
     }
     assert(bv.count() == vect.size());
-    print_bvector_stat(bv);
+    if (print_stat)
+        print_bvector_stat(bv);
 }
 
 

@@ -425,6 +425,7 @@ void SyntaxTest()
         bv1[10] = bn2;
         bv1[10] = bn;
         bn = bn2 = false;
+        assert(!bn);
         ref.flip();
         assert(!bv1.test(10));
         bv1[bm::id_max-1] = 1;
