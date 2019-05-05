@@ -2924,8 +2924,8 @@ bvector<Alloc>::count_range(size_type left, size_type right) const
     size_type cnt = 0;
 
     // calculate logical number of start and destination blocks
-    size_type nblock_left  = left  >>  bm::set_block_shift;
-    size_type nblock_right = right >>  bm::set_block_shift;
+    unsigned nblock_left  = left  >>  bm::set_block_shift;
+    unsigned nblock_right = right >>  bm::set_block_shift;
 
     unsigned i0, j0;
     blockman_.get_block_coord(nblock_left, i0, j0);

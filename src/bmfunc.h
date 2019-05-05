@@ -814,7 +814,6 @@ template<bool T> struct all_set
 
     // version with minimal branching, super-scalar friendly
     //
-
     inline
     static bm::id64_t block_type(const bm::word_t* bp)
     {
@@ -859,6 +858,75 @@ void xor_swap(W& x, W& y)
     y ^= x;
     x ^= y;
 }
+
+/*!
+    Fini not NULL position
+    @return index of not NULL pointer
+    @internal
+*/
+template<typename N>
+bool find_not_null_ptr(bm::word_t*** arr, N start, N size, N* pos)
+{
+    BM_ASSERT(pos);
+    BM_ASSERT(start < size);
+//#if defined(BM64_AVX2) || defined(BM64_AVX512)
+// TODO: optimization for SIMD based next ptr scan
+#if 0
+    const unsigned unroll_factor = 4;
+    const unsigned len = (size - start);
+    const unsigned len_unr = len - (len % unroll_factor);
+    unsigned k;
+    
+    arr += start;
+    for (k = 0; k < len_unr; k+=unroll_factor)
+    {
+        if (!avx2_test_all_zero_wave(arr+k))
+        {
+            if (arr[k])
+            {
+                *pos = k + start;
+                return true;
+            }
+            if (arr[k+1])
+            {
+                *pos = k + start + 1;
+                return true;
+            }
+            if (arr[k+2])
+            {
+                *pos = k + start + 2;
+                return true;
+            }
+            if (arr[k+3])
+            {
+                *pos = k + start + 3;
+                return true;
+            }
+        }
+    } // for k
+    
+    for (; k < len; ++k)
+    {
+        if (arr[k])
+        {
+            *pos = k + start;
+            return true;
+        }
+    } // for k
+#else
+    for (; start < size; ++start)
+    {
+        if (arr[start])
+        {
+            *pos = start;
+            return true;
+        }
+    } // for i
+#endif
+    return false;
+}
+
+
 
 
 //---------------------------------------------------------------------

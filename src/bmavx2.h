@@ -1797,7 +1797,7 @@ unsigned avx2_idx_arr_block_lookup(const unsigned* idx, unsigned size,
     {
         if (nb != unsigned(idx[k] >> bm::set_block_shift))
             break;
-    }
+    } // for k
     return start + k;
 }
 

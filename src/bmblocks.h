@@ -1847,16 +1847,16 @@ public:
                 new_blocks[i] = top_blocks_[i];
             alloc_.free_ptr(top_blocks_, top_block_size_);
         }
-        /*
+        
         if (i < top_blocks)
         {
             ::memset(&new_blocks[i], 0, sizeof(void*) * (top_blocks-i));
-        }*/
-        
+        }
+        /*
         for (; i < top_blocks; ++i)
         {
             new_blocks[i] = 0;
-        }
+        }*/
         
         top_blocks_ = new_blocks;
         top_block_size_ = top_blocks;
@@ -1956,11 +1956,17 @@ public:
             return;
 
         unsigned top_blocks = top_block_size();
-        for (unsigned i = 0; i < top_blocks; ++i)
+        for (unsigned i = 0; i < top_blocks; )
         {
             bm::word_t** blk_blk = top_blocks_[i];
             if (!blk_blk)
-                continue;
+            {
+                ++i;
+                bool found = bm::find_not_null_ptr(top_blocks_, i, top_blocks, &i);
+                if (!found)
+                    break;
+                blk_blk = top_blocks_[i];
+            }
             unsigned j = 0; bm::word_t* blk;
             do
             {
@@ -1987,6 +1993,7 @@ public:
             } while (j < bm::set_sub_array_size);
 
             alloc_.free_ptr(top_blocks_[i], bm::set_sub_array_size); // free second level
+            ++i;
         } // for i
 
         alloc_.free_ptr(top_blocks_, top_block_size_); // free the top
