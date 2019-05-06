@@ -811,8 +811,15 @@ public:
     {
         unsigned i, j;
         get_block_coord(nb, i, j);
+        set_block_all_set(i, j);
+    }
+    
+    void set_block_all_set(unsigned i, unsigned j)
+    {
         bm::word_t* block = this->get_block_ptr(i, j);
-        set_block(nb, const_cast<bm::word_t*>(FULL_BLOCK_FAKE_ADDR));
+        reserve_top_blocks(i+1);
+
+        set_block(i, j, FULL_BLOCK_FAKE_ADDR, false/*not gap*/);
         if (BM_IS_GAP(block))
             alloc_.free_gap_block(BMGAP_PTR(block), glevel_len_);
         else
@@ -1110,8 +1117,6 @@ public:
         unsigned i, j;
         this->get_block_coord(nb, i, j);
         bm::word_t*  block = this->get_block_ptr(i, j);
-
-        //bm::word_t* block = this->get_block_ptr(nb);
 
         if (!IS_VALID_ADDR(block)) // NULL block or ALLSET
         {

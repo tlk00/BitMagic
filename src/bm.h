@@ -2514,7 +2514,7 @@ bvector<Alloc>& bvector<Alloc>::set_range(size_type left,
     {
         if (!value)
             return *this; // nothing to do
-        blockman_.init_tree();
+        //blockman_.init_tree();
     }
 
     if (right < left)
@@ -6223,7 +6223,7 @@ void bvector<Alloc>::set_range_no_check(size_type left,
     // Set bits in the starting block
     //
     unsigned nb, i, j;
-    bm::word_t* block; //= blockman_.get_block(nblock_left);
+    bm::word_t* block;
     unsigned nbit_left  = unsigned(left  & bm::set_block_mask);
     if ((nbit_left == 0) && (r == bm::bits_in_block - 1)) // full block
     {
@@ -6251,6 +6251,49 @@ void bvector<Alloc>::set_range_no_check(size_type left,
     // Set all full blocks between left and right
     //
     unsigned nb_to = nblock_right + (nbit_right ==(bm::bits_in_block-1));
+    if (nb < nb_to)
+    {
+        BM_ASSERT(nb_to);
+        unsigned i_from, j_from, i_to, j_to;
+        blockman_.get_block_coord(nb, i_from, j_from);
+        blockman_.get_block_coord(nb_to-1, i_to, j_to);
+        
+        unsigned top_blocks = blockman_.reserve_top_blocks(i_to+1);
+        if (i_from >= top_blocks)
+            return;
+        BM_ASSERT(i_to < top_blocks);
+        bm::word_t*** blk_root = blockman_.top_blocks_root();
+        for (i = i_from; i <= i_to; ++i)
+        {
+            bm::word_t** blk_blk = blk_root[i];
+            j = (i == i_from) ? j_from : 0;
+            if (!blk_blk) // special case - all zero - set to all set
+            {
+                blk_blk = blockman_.alloc_top_subblock(i);
+                do
+                {
+                    blk_blk[j] = FULL_BLOCK_FAKE_ADDR;
+                    if ((i == i_to) && (j == j_to))
+                        break;
+                } while (++j < bm::set_sub_array_size);
+            }
+            else
+                do
+                {
+                    block = blk_blk[j];
+                    if (block != FULL_BLOCK_FAKE_ADDR)
+                    {
+                        if (!block)
+                            blk_blk[j] = FULL_BLOCK_FAKE_ADDR;
+                        else
+                            blockman_.set_block_all_set(i, j);
+                    }
+                    if ((i == i_to) && (j == j_to))
+                        break;
+                } while (++j < bm::set_sub_array_size);
+        } // for i
+    }
+    /*
     for (; nb < nb_to; ++nb)
     {
         blockman_.get_block_coord(nb, i, j);
@@ -6259,6 +6302,7 @@ void bvector<Alloc>::set_range_no_check(size_type left,
             continue;
         blockman_.set_block_all_set(nb);            
     } // for
+    */
 
     if (nb_to > nblock_right)
         return;
