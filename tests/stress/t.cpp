@@ -4577,8 +4577,11 @@ void RangeCopyTest()
     cout << "----------------------------------- RangeCopyTest" << endl;
     
     {
-        cout << "Basic test" << endl;
-        bvect     bvect1 { 10, 20, 21, 100, 65535, 65536, 100000 };
+        const unsigned to_max = 65536 * bm::set_sub_array_size + 10;
+        cout << "Basic range-copy test" << endl;
+        bvect     bvect1
+        { 10, 20, 21, 100, 65535, 65536, 100000, to_max/2, to_max-1, to_max };
+        
 
         CheckRangeCopy(bvect1, 0, 0);
         CheckRangeCopy(bvect1, 10, 10);
@@ -4589,21 +4592,25 @@ void RangeCopyTest()
 
         for (unsigned k = 0; k < 2; ++k)
         {
-            unsigned to = 128000;
-            for (unsigned i = 0; i < to; ++i)
+            cout << "Pass " << k << "-0" << endl;
+            for (unsigned i = 0; i < to_max; ++i)
             {
-                CheckRangeCopy(bvect1, i, to);
+                CheckRangeCopy(bvect1, i, to_max);
             }
-            for (unsigned i = 128000; i > 0; --i)
+            cout << "Pass " << k << "-1" << endl;
+            for (unsigned i = to_max-1; i > 0; --i)
             {
                 CheckRangeCopy(bvect1, 0, i);
             }
-            for (unsigned i = 0; i != to; ++i, --to)
+            cout << "Pass " << k << "-2" << endl;
+            auto to = to_max;
+            for (unsigned i = 0; i != to_max; ++i, --to)
             {
-                CheckRangeCopy(bvect1, i, to);
+                CheckRangeCopy(bvect1, i, to_max);
             }
             bvect1.optimize();
         } // for k
+        cout << "OK" << endl;
     }
     
     {
@@ -4745,7 +4752,6 @@ void AndOperationsTest()
 
         bvect_min2.set_bit(i);
         bvect_full2.set_bit(i);
-
     }
 
     CheckVectors(bvect_min1, bvect_full1, BITVECT_SIZE/10+10);
@@ -5033,7 +5039,7 @@ void AndOperationsTest()
         }
     }
     
-    cout << "------------------------------" << endl;
+    cout << "----------------------------------- AndOperationTest OK" << endl;
 
 }
 
@@ -10509,70 +10515,87 @@ void SetTest()
         }
     }
     {
-    unsigned cnt;
-    bvect bv;
+        unsigned cnt;
+        bvect bv;
+        bv.set();
 
-    bv.set();
+        cnt = bv.count();
+        if (cnt != bm::id_max)
+        {
+            cout << "Set test failed!." << endl;
+            exit(1);
+        }
 
-    cnt = bv.count();
-    if (cnt != bm::id_max)
+        bv.invert();
+        cnt = bv.count();
+        if (cnt != 0)
+        {
+            cout << "Set invert test failed!." << endl;
+            exit(1);
+        }
+
+        bv.set(0);
+        bv.set(bm::id_max - 1);
+        cnt = bv.count();
+
+        assert(cnt == 2);
+
+        bv.invert();
+        print_stat(bv);
+        cnt = bv.count();
+
+        if (cnt != bm::id_max - 2)
+        {
+            cout << "Set invert test failed!." << endl;
+            exit(1);
+        }
+
+        bv.clear();
+        bv[1] &= true;
+        bool v = bv[1];
+        if (v)
+        {
+            cout << "Set &= test failed!" << endl;
+            exit(1);
+        }
+
+
+        bv[1] = true;
+        bv[1] &= true;
+        v = bv[1];
+        if (!v)
+        {
+            cout << "Set &= test failed (2)!" << endl;
+            exit(1);
+        }
+        bv.clear(true);
+        bv.invert();
+        bv[1] &= true;
+        v = bv[1];
+        if (!v)
+        {
+            cout << "Set &= test failed (2)!" << endl;
+            exit(1);
+        }
+    }
+    
     {
-        cout << "Set test failed!." << endl;
-        exit(1);
+        bvect bv1, bv2(BM_GAP);
+        bvect::size_type cnt;
+        bv1.set(0); bv2.set(0);
+        bv1.set(bm::id_max-1);bv2.set(bm::id_max-1);
+        bv1.set((bm::id_max-1)/2);bv2.set((bm::id_max-1)/2);
+        for (unsigned i = 0; i < 2; ++i)
+        {
+            bv1.set();
+            bv2.set();
+            cnt = bv1.count();
+            assert (cnt == bm::id_max);
+            cnt = bv2.count();
+            assert (cnt == bm::id_max);
+        }
     }
-
-    bv.invert();
-    cnt = bv.count();
-    if (cnt != 0)
-    {
-        cout << "Set invert test failed!." << endl;
-        exit(1);
-    }
-
-    bv.set(0);
-    bv.set(bm::id_max - 1);
-    cnt = bv.count();
-
-    assert(cnt == 2);
-
-    bv.invert();
-    print_stat(bv);
-    cnt = bv.count();
-
-    if (cnt != bm::id_max - 2)
-    {
-        cout << "Set invert test failed!." << endl;
-        exit(1);
-    }
-
-    bv.clear();
-    bv[1] &= true;
-    bool v = bv[1];
-    if (v)
-    {
-        cout << "Set &= test failed!" << endl;
-        exit(1);
-    }
-
-
-    bv[1] = true;
-    bv[1] &= true;
-    v = bv[1];
-    if (!v)
-    {
-        cout << "Set &= test failed (2)!" << endl;
-        exit(1);
-    }
-    bv.clear(true);
-    bv.invert();
-    bv[1] &= true;
-    v = bv[1];
-    if (!v)
-    {
-        cout << "Set &= test failed (2)!" << endl;
-        exit(1);
-    }
-    }
+    
 
     bvect bv2;
     bv2[1] = true;
@@ -20353,7 +20376,7 @@ int main(int argc, char *argv[])
 
         TestArraysAndBuffers();
      
-        Log2Test(); 
+        Log2Test();
         FindNotNullPtrTest();
 
         LZCNTTest();
@@ -20430,6 +20453,7 @@ int main(int argc, char *argv[])
         SimpleRandomFillTest();
 
         RangeRandomFillTest();
+
         RangeCopyTest();
 
         ComparisonTest();

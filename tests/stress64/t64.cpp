@@ -486,6 +486,22 @@ void GenericBVectorTest()
     cout << "------------------------------------ GenericBVectorTest() OK" << endl;
 }
 
+static
+void SetTest()
+{
+    {
+        bvect64::size_type cnt;
+        bvect64 bv;
+        bv.set();
+        cnt = bv.count();
+        if (cnt != bm::id_max)
+        {
+            cout << "bvector<>::set() test failed!." << endl;
+            exit(1);
+        }
+    }
+}
+
 
 int main(void)
 {
@@ -496,6 +512,7 @@ int main(void)
     
     SyntaxTest();
     GenericBVectorTest();
+    SetTest();
     
     // -----------------------------------------------------------------
 
