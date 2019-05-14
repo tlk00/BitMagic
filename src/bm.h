@@ -1,7 +1,7 @@
 #ifndef BM__H__INCLUDED__
 #define BM__H__INCLUDED__
 /*
-Copyright(c) 2002-2017 Anatoliy Kuznetsov(anatoliy_kuznetsov at yahoo.com)
+Copyright(c) 2002-2019 Anatoliy Kuznetsov(anatoliy_kuznetsov at yahoo.com)
 
 Licensed under the Apache License, Version 2.0 (the "License");
 you may not use this file except in compliance with the License.
@@ -726,6 +726,9 @@ public:
                     this->position_ += bm::bits_in_array;
                     continue;
                 }
+                
+                if ((bm::word_t*)blk_blk == FULL_BLOCK_FAKE_ADDR)
+                    blk_blk = FULL_SUB_BLOCK_REAL_ADDR;
 
                 for (j = 0; j < bm::set_sub_array_size; ++j,++(this->block_idx_))
                 {
@@ -1138,6 +1141,8 @@ public:
                     this->position_ += bm::bits_in_array;
                     continue;
                 }
+                if ((bm::word_t*)blk_blk == FULL_BLOCK_FAKE_ADDR)
+                    blk_blk = FULL_SUB_BLOCK_REAL_ADDR;
 
                 unsigned j = this->block_idx_ & bm::set_array_mask;
 
@@ -2514,7 +2519,6 @@ bvector<Alloc>& bvector<Alloc>::set_range(size_type left,
     {
         if (!value)
             return *this; // nothing to do
-        //blockman_.init_tree();
     }
 
     if (right < left)
@@ -3030,11 +3034,47 @@ bvector<Alloc>::count_range(size_type left,
 template<typename Alloc>
 bvector<Alloc>& bvector<Alloc>::invert()
 {
-    blockman_.reserve_top_blocks(bm::set_top_array_size);
+    unsigned top_blocks = blockman_.reserve_top_blocks(bm::set_top_array_size);
+    bm::word_t*** blk_root = blockman_.top_blocks_root();
+    for (unsigned i = 0; i < top_blocks; ++i)
+    {
+        bm::word_t** blk_blk = blk_root[i];
+        if (!blk_blk)
+        {
+            blk_root[i] = (bm::word_t**)FULL_BLOCK_FAKE_ADDR;
+            continue;
+        }
+        if (blk_blk == (bm::word_t**)FULL_BLOCK_FAKE_ADDR)
+        {
+            blk_root[i] = 0;
+            continue;
+        }
+        unsigned j = 0; bm::word_t* blk;
+        do
+        {
+            blk = blk_blk[j];
+            if (!blk)
+                blockman_.set_block_ptr(i, j, FULL_BLOCK_FAKE_ADDR);
+            else
+            if (IS_FULL_BLOCK(blk))
+                blockman_.set_block_ptr(i, j, 0);
+            else
+            {
+                if (BM_IS_GAP(blk))
+                    bm::gap_invert(BMGAP_PTR(blk));
+                else
+                    bm::bit_invert((wordop_t*)blk);
+            }
+        } while (++j < bm::set_sub_array_size);
+    } // for i
 
+/*
     bm::word_t*** blk_root = blockman_.top_blocks_root();
     typename blocks_manager_type::block_invert_func func(blockman_);    
     bm::for_each_block(blk_root, blockman_.top_block_size(), func);
+*/
+    
+    
     if (size_ == bm::id_max) 
         set_bit_no_check(bm::id_max, false);
     else
@@ -3090,33 +3130,26 @@ void bvector<Alloc>::optimize(bm::word_t* temp_block,
             calc_stat(stat);
         return;
     }
-    word_t*** blk_root = blockman_.top_blocks_root();
-
     if (!temp_block)
         temp_block = blockman_.check_allocate_tempblock();
 
-    typename 
-        blocks_manager_type::block_opt_func  opt_func(blockman_, 
-                                                temp_block, 
-                                                (int)opt_mode,
-                                                stat);
     if (stat)
     {
         stat->reset();
         ::memcpy(stat->gap_levels,
                 blockman_.glen(), sizeof(gap_word_t) * bm::gap_levels);
-        stat->max_serialize_mem = (unsigned)sizeof(id_t) * 4;
+        stat->max_serialize_mem = (unsigned)sizeof(bm::id_t) * 4;
     }
-
-    bm::for_each_nzblock(blk_root, blockman_.top_block_size(), opt_func);
-
+    
+    blockman_.optimize_tree(temp_block, opt_mode, stat);
+    
     if (stat)
     {
         size_t safe_inc = stat->max_serialize_mem / 10; // 10% increment
         if (!safe_inc) safe_inc = 256;
         stat->max_serialize_mem += safe_inc;
+        
         stat->memory_used += (unsigned)(sizeof(*this) - sizeof(blockman_));
-        //stat->memory_used += blockman_.mem_used();
         
         unsigned top_size = blockman_.top_block_size();
         size_t blocks_mem = sizeof(blockman_);
@@ -3193,12 +3226,23 @@ int bvector<Alloc>::compare(const bvector<Alloc>& bv) const
 
         for (unsigned j = 0; j < bm::set_sub_array_size; ++j)
         {
-            const bm::word_t* arg_blk = arg_blk_blk ? arg_blk_blk[j] : 0;
-            const bm::word_t* blk = blk_blk ? blk_blk[j] : 0;
-            if (arg_blk == FULL_BLOCK_FAKE_ADDR)
+            const bm::word_t* arg_blk; const bm::word_t* blk;
+            if ((bm::word_t*)arg_blk_blk == FULL_BLOCK_FAKE_ADDR)
                 arg_blk = FULL_BLOCK_REAL_ADDR;
-            if (blk == FULL_BLOCK_FAKE_ADDR)
+            else
+            {
+                arg_blk = arg_blk_blk ? arg_blk_blk[j] : 0;
+                if (arg_blk == FULL_BLOCK_FAKE_ADDR)
+                    arg_blk = FULL_BLOCK_REAL_ADDR;
+            }
+            if ((bm::word_t*)blk_blk == FULL_BLOCK_FAKE_ADDR)
                 blk = FULL_BLOCK_REAL_ADDR;
+            else
+            {
+                blk = blk_blk ? blk_blk[j] : 0;
+                if (blk == FULL_BLOCK_FAKE_ADDR)
+                    blk = FULL_BLOCK_REAL_ADDR;
+            }
             if (blk == arg_blk) continue;
 
             // If one block is zero we check if the other one has at least 
@@ -3225,16 +3269,12 @@ int bvector<Alloc>::compare(const bvector<Alloc>& bv) const
                 if (is_gap)
                 {
                     if (!bm::gap_is_all_zero(BMGAP_PTR(pblk)))
-                    {
                         return res;
-                    }
                 }
                 else
                 {
                     if (!bm::bit_is_all_zero(pblk))
-                    {
                         return res;
-                    }
                 }
                 continue;
             }
@@ -3277,9 +3317,7 @@ int bvector<Alloc>::compare(const bvector<Alloc>& bv) const
                 }
             }
             if (res != 0)
-            {
                 return res;
-            }
         } // for j
 
     } // for i
@@ -3312,7 +3350,7 @@ void bvector<Alloc>::calc_stat(struct bvector<Alloc>::statistics* st) const
 
     unsigned empty_blocks = 0;
 
-    st->max_serialize_mem = unsigned(sizeof(id_t) * 4);
+    st->max_serialize_mem = unsigned(sizeof(bm::id_t) * 4);
     unsigned top_size = blockman_.top_block_size();
 
     size_t blocks_mem = sizeof(blockman_);
@@ -3323,13 +3361,13 @@ void bvector<Alloc>::calc_stat(struct bvector<Alloc>::statistics* st) const
     for (unsigned i = 0; i < top_size; ++i)
     {
         const bm::word_t* const* blk_blk = blockman_.get_topblock(i);
-        if (!blk_blk) 
+        if (!blk_blk || (bm::word_t*)blk_blk == FULL_BLOCK_FAKE_ADDR)
         {
             st->max_serialize_mem += unsigned(sizeof(unsigned) + 1);
             continue;
         }
+        
         st->ptr_sub_blocks++;
-
         for (unsigned j = 0; j < bm::set_sub_array_size; ++j)
         {
             const bm::word_t* blk = blk_blk[j];
@@ -3344,10 +3382,9 @@ void bvector<Alloc>::calc_stat(struct bvector<Alloc>::statistics* st) const
                     unsigned cap = bm::gap_capacity(gap_blk, blockman_.glen());
                     unsigned len = gap_length(gap_blk);
                     st->add_gap_block(cap, len);
-                    continue;
                 }
-                // bit block
-                st->add_bit_block();
+                else // bit block
+                    st->add_bit_block();
             }
             else
             {
@@ -3364,7 +3401,6 @@ void bvector<Alloc>::calc_stat(struct bvector<Alloc>::statistics* st) const
     st->memory_used += unsigned(sizeof(*this) - sizeof(blockman_));
     blocks_mem += st->ptr_sub_blocks * (sizeof(void*) * bm::set_sub_array_size);
     st->memory_used += blocks_mem;
-    //st->memory_used += blockman_.mem_used();
 }
 
 // -----------------------------------------------------------------------
@@ -3388,7 +3424,8 @@ void bvector<Alloc>::set_bit_no_check(size_type n)
                                        val,
                                        get_new_blocks_strat(),
                                        &block_type);
-    if (!blk) return; // nothing to do
+    if (!IS_VALID_ADDR(blk))
+        return;
 
     if (block_type) // gap block
     {
@@ -3582,7 +3619,7 @@ void bvector<Alloc>::import_block(const bm::id_t* ids,
 {
     int block_type;
     bm::word_t* blk =
-    blockman_.check_allocate_block(nblock, 0, 0, &block_type, false);
+        blockman_.check_allocate_block(nblock, 1, 0, &block_type, true/*allow NULL ret*/);
     if (!IS_FULL_BLOCK(blk))
     {
         if (BM_IS_GAP(blk))
@@ -3610,7 +3647,8 @@ bool bvector<Alloc>::set_bit_no_check(size_type n, bool val)
                                         get_new_blocks_strat(), 
                                         &block_type);
 
-    if (!blk) return false;
+    if (!IS_VALID_ADDR(blk))
+        return false;
 
     // calculate word number in block and bit
     unsigned nbit   = unsigned(n & bm::set_block_mask); 
@@ -3679,7 +3717,7 @@ bool bvector<Alloc>::inc(size_type n)
     bm::word_t* blk =
         blockman_.check_allocate_block(nblock,
                                        get_new_blocks_strat());
-    BM_ASSERT(blk);
+    BM_ASSERT(IS_VALID_ADDR(blk));
 
     unsigned nbit   = unsigned(n & bm::set_block_mask);
 
@@ -3712,15 +3750,14 @@ bool bvector<Alloc>::set_bit_conditional_impl(size_type n,
                                               bool     condition)
 {
     // calculate logical block number
-    unsigned nblock = unsigned(n >>  bm::set_block_shift); 
-
+    unsigned nblock = unsigned(n >>  bm::set_block_shift);
     int block_type;
     bm::word_t* blk =
         blockman_.check_allocate_block(nblock, 
                                        val,
                                        get_new_blocks_strat(), 
                                        &block_type);
-    if (!blk) 
+    if (!IS_VALID_ADDR(blk))
         return false;
 
     // calculate word number in block and bit
@@ -3788,7 +3825,8 @@ bool bvector<Alloc>::and_bit_no_check(size_type n, bool val)
                                        val,
                                        get_new_blocks_strat(), 
                                        &block_type);
-    if (!blk) return false;
+    if (!IS_VALID_ADDR(blk))
+        return false;
 
     // calculate word number in block and bit
     unsigned nbit   = unsigned(n & bm::set_block_mask); 
@@ -3910,6 +3948,9 @@ bool bvector<Alloc>::find(size_type& pos) const
         const bm::word_t* const* blk_blk = blockman_.get_topblock(i);
         if (blk_blk)
         {
+            if ((bm::word_t*)blk_blk == FULL_BLOCK_FAKE_ADDR)
+                blk_blk = FULL_SUB_BLOCK_REAL_ADDR;
+
             for (unsigned j = 0; j < bm::set_sub_array_size; ++j)
             {
                 const bm::word_t* blk = blk_blk[j];
@@ -4153,6 +4194,9 @@ bvector<Alloc>::check_or_next(size_type prev) const
         const bm::word_t* const* blk_blk = blockman_.get_topblock(i);
         if (blk_blk)
         {
+            if ((bm::word_t*)blk_blk == FULL_BLOCK_FAKE_ADDR)
+                blk_blk = FULL_SUB_BLOCK_REAL_ADDR;
+
             for (; j < bm::set_sub_array_size; ++j)
             {
                 const bm::word_t* blk = blk_blk[j];
@@ -4307,6 +4351,12 @@ bool bvector<Alloc>::insert(size_type n, bool value)
             }
             continue;
         }
+        if ((bm::word_t*)blk_blk == FULL_BLOCK_FAKE_ADDR)
+        {
+            if (carry_over)
+                continue;
+            blk_blk = blockman_.check_alloc_top_subblock(i);
+        }
         
         unsigned j = j0;
         do
@@ -4447,8 +4497,23 @@ void bvector<Alloc>::erase(size_type n)
             blk_blk = blk_root[i];
         
         if (!blk_blk) // top level group of blocks missing
-        {
             continue;
+        if ((bm::word_t*)blk_blk == FULL_BLOCK_FAKE_ADDR)
+        {
+            bool carry_over = 0;
+            if (i + 1 < bm::set_top_array_size)
+            {
+                size_type co_idx = (i+1) * bm::gap_max_bits * bm::set_sub_array_size;
+                carry_over = this->test(co_idx);
+                if (carry_over)
+                    continue; // nothing to do (1 in)
+                else
+                    blk_blk = blockman_.check_alloc_top_subblock(i);
+            }
+            else
+            {
+                blk_blk = blockman_.check_alloc_top_subblock(i);
+            }
         }
         
         unsigned j = j0;
@@ -4575,6 +4640,14 @@ void bvector<Alloc>::merge(bm::bvector<Alloc>& bv)
             blk_root_arg[i] = 0;
             continue;
         }
+        if ((bm::word_t*)blk_blk == FULL_BLOCK_FAKE_ADDR)
+            continue;
+        if ((bm::word_t*)blk_blk_arg == FULL_BLOCK_FAKE_ADDR)
+        {
+            blockman_.deallocate_top_subblock(i);
+            blk_root[i] = (bm::word_t**)FULL_BLOCK_FAKE_ADDR;
+            continue;
+        }
 
         unsigned j = 0;
         bm::word_t* blk;
@@ -4663,7 +4736,16 @@ bvector<Alloc>::bit_or(const bm::bvector<Alloc>& bv1,
         
         if (blk_blk_arg1 == blk_blk_arg2)
         {
-            BM_ASSERT(!blk_blk_arg1);
+            BM_ASSERT(!blk_blk_arg1 || (bm::word_t*)blk_blk_arg1 == FULL_BLOCK_FAKE_ADDR);
+            bm::word_t*** blk_root = blockman_.top_blocks_root();
+            blk_root[i] = blk_blk_arg1;
+            continue;
+        }
+        if ((bm::word_t*)blk_blk_arg1 == FULL_BLOCK_FAKE_ADDR ||
+            (bm::word_t*)blk_blk_arg2 == FULL_BLOCK_FAKE_ADDR)
+        {
+            bm::word_t*** blk_root = blockman_.top_blocks_root();
+            blk_root[i] = (bm::word_t**)FULL_BLOCK_FAKE_ADDR;
             continue;
         }
         bm::word_t** blk_blk = blockman_.alloc_top_subblock(i);
@@ -4749,16 +4831,26 @@ bvector<Alloc>::bit_xor(const bm::bvector<Alloc>& bv1,
         
         if (blk_blk_arg1 == blk_blk_arg2)
         {
-            BM_ASSERT(!blk_blk_arg1);
+            if (!blk_blk_arg1)
+                continue;
+            BM_ASSERT((bm::word_t*)blk_blk_arg1 == FULL_BLOCK_FAKE_ADDR);
+            blockman_.deallocate_top_subblock(i);
             continue;
         }
+        if ((bm::word_t*)blk_blk_arg1 == FULL_BLOCK_FAKE_ADDR)
+            blk_blk_arg1 = FULL_SUB_BLOCK_REAL_ADDR;
+        if ((bm::word_t*)blk_blk_arg2 == FULL_BLOCK_FAKE_ADDR)
+            blk_blk_arg2 = FULL_SUB_BLOCK_REAL_ADDR;
+
         bm::word_t** blk_blk = blockman_.alloc_top_subblock(i);
         bool any_blocks = false;
         unsigned j = 0;
         do
         {
-            const bm::word_t* arg_blk1 = blk_blk_arg1 ? blk_blk_arg1[j] : 0;
-            const bm::word_t* arg_blk2 = blk_blk_arg2 ? blk_blk_arg2[j] : 0;
+            const bm::word_t* arg_blk1; const bm::word_t* arg_blk2;
+            arg_blk1 = blk_blk_arg1 ? blk_blk_arg1[j] : 0;
+            arg_blk2 = blk_blk_arg2 ? blk_blk_arg2[j] : 0;
+            
             if ((arg_blk1 == arg_blk2) &&
                 (!arg_blk1 || arg_blk1 == FULL_BLOCK_FAKE_ADDR))
                 continue; // 0 ^ 0 == 0 , 1 ^ 1 == 0  (nothing to do)
@@ -4788,15 +4880,11 @@ bvector<Alloc>::bit_and(const bm::bvector<Alloc>& bv1,
                         const bm::bvector<Alloc>& bv2,
                         typename bm::bvector<Alloc>::optmode opt_mode)
 {
-    if (blockman_.is_init())
-        blockman_.deinit_tree();
-
     if (&bv1 == &bv2)
     {
         this->bit_or(bv1);
         return *this;
     }
-
     if (this == &bv1)
     {
         this->bit_and(bv2);
@@ -4807,13 +4895,13 @@ bvector<Alloc>::bit_and(const bm::bvector<Alloc>& bv1,
         this->bit_and(bv1);
         return *this;
     }
-    
+    if (blockman_.is_init())
+        blockman_.deinit_tree();
+
     const blocks_manager_type& bman1 = bv1.get_blocks_manager();
     const blocks_manager_type& bman2 = bv2.get_blocks_manager();
     if (!bman1.is_init() || !bman2.is_init())
-    {
         return *this;
-    }
 
     unsigned top_blocks1 = bman1.top_block_size();
     unsigned top_blocks2 = bman2.top_block_size();
@@ -4834,19 +4922,32 @@ bvector<Alloc>::bit_and(const bm::bvector<Alloc>& bv1,
         
         if (blk_blk_arg1 == blk_blk_arg2)
         {
-            BM_ASSERT(!blk_blk_arg1);
-            continue; // 0 & 0 == 0
+            if (!blk_blk_arg1)
+                continue; // 0 & 0 == 0
+            if ((bm::word_t*)blk_blk_arg1 == FULL_BLOCK_FAKE_ADDR)
+            {
+                bm::word_t*** blk_root = blockman_.top_blocks_root();
+                blk_root[i] = (bm::word_t**)FULL_BLOCK_FAKE_ADDR;
+                continue;
+            }
         }
+        if ((bm::word_t*)blk_blk_arg1 == FULL_BLOCK_FAKE_ADDR)
+            blk_blk_arg1 = FULL_SUB_BLOCK_REAL_ADDR;
+        if ((bm::word_t*)blk_blk_arg2 == FULL_BLOCK_FAKE_ADDR)
+            blk_blk_arg2 = FULL_SUB_BLOCK_REAL_ADDR;
+
         bm::word_t** blk_blk = blockman_.alloc_top_subblock(i);
         bool any_blocks = false;
         unsigned j = 0;
         do
         {
-            const bm::word_t* arg_blk1 = blk_blk_arg1 ? blk_blk_arg1[j] : 0;
-            const bm::word_t* arg_blk2 = blk_blk_arg2 ? blk_blk_arg2[j] : 0;
+            const bm::word_t* arg_blk1; const bm::word_t* arg_blk2;
+            arg_blk1 = blk_blk_arg1 ? blk_blk_arg1[j] : 0;
+            arg_blk2 = blk_blk_arg2 ? blk_blk_arg2[j] : 0;
+
             if ((arg_blk1 == arg_blk2) && !arg_blk1)
                 continue; // 0 & 0 == 0
-            
+
             bool need_opt = combine_operation_block_and(i, j, arg_blk1, arg_blk2);
             if (need_opt && opt_mode == opt_compress)
                 blockman_.optimize_bit_block(i, j);
@@ -4920,10 +5021,12 @@ bvector<Alloc>::bit_sub(const bm::bvector<Alloc>& bv1,
         bm::word_t** blk_blk_arg2 = (i < top_blocks2) ? blk_root_arg2[i] : 0;
         
         if (blk_blk_arg1 == blk_blk_arg2)
-        {
-            BM_ASSERT(!blk_blk_arg1);
             continue; // 0 AND NOT 0 == 0
-        }
+        if ((bm::word_t*)blk_blk_arg2 == FULL_BLOCK_FAKE_ADDR)
+            continue;
+        if ((bm::word_t*)blk_blk_arg1 == FULL_BLOCK_FAKE_ADDR)
+            blk_blk_arg1 = FULL_SUB_BLOCK_REAL_ADDR;
+        
         bm::word_t** blk_blk = blockman_.alloc_top_subblock(i);
         bool any_blocks = false;
         unsigned j = 0;
@@ -4983,6 +5086,14 @@ void bvector<Alloc>::combine_operation_or(const bm::bvector<Alloc>& bv)
         bm::word_t** blk_blk_arg = (i < arg_top_blocks) ? blk_root_arg[i] : 0;
         if (blk_blk == blk_blk_arg || !blk_blk_arg) // nothing to do (0 OR 0 == 0)
             continue;
+        if ((bm::word_t*)blk_blk == FULL_BLOCK_FAKE_ADDR)
+            continue;
+        if ((bm::word_t*)blk_blk_arg == FULL_BLOCK_FAKE_ADDR)
+        {
+            blockman_.deallocate_top_subblock(i);
+            blk_root[i] = (bm::word_t**)FULL_BLOCK_FAKE_ADDR;
+            continue;
+        }
         if (!blk_blk)
             blk_blk = blockman_.alloc_top_subblock(i);
 
@@ -5030,6 +5141,11 @@ void bvector<Alloc>::combine_operation_xor(const bm::bvector<Alloc>& bv)
 {
     if (!bv.blockman_.is_init())
         return;
+    if (!blockman_.is_init())
+    {
+        *this = bv;
+        return;
+    }
 
     unsigned top_blocks = blockman_.top_block_size();
     if (size_ < bv.size_) // this vect shorter than the arg.
@@ -5044,10 +5160,31 @@ void bvector<Alloc>::combine_operation_xor(const bm::bvector<Alloc>& bv)
 
     for (unsigned i = 0; i < top_blocks; ++i)
     {
-        bm::word_t** blk_blk = blk_root[i];
         bm::word_t** blk_blk_arg = (i < arg_top_blocks) ? blk_root_arg[i] : 0;
-        if (blk_blk == blk_blk_arg || !blk_blk_arg) // nothing to do (any XOR 0 == 0)
+        if (!blk_blk_arg)
             continue;
+        bm::word_t** blk_blk = blk_root[i];
+        if (blk_blk == blk_blk_arg) // nothing to do (any XOR 0 == 0)
+        {
+            if ((bm::word_t*)blk_blk == FULL_BLOCK_FAKE_ADDR)
+                blk_root[i] = 0;
+            continue;
+        }
+        if ((bm::word_t*)blk_blk == FULL_BLOCK_FAKE_ADDR)
+        {
+            if (!blk_blk_arg)
+                continue;
+            blk_blk = blockman_.check_alloc_top_subblock(i);
+        }
+        if ((bm::word_t*)blk_blk_arg == FULL_BLOCK_FAKE_ADDR)
+        {
+            if (!blk_blk)
+            {
+                blk_root[i] = (bm::word_t**) FULL_BLOCK_FAKE_ADDR;
+                continue;
+            }
+            blk_blk_arg = FULL_SUB_BLOCK_REAL_ADDR;
+        }
 
         if (!blk_blk)
             blk_blk = blockman_.alloc_top_subblock(i);
@@ -5107,9 +5244,8 @@ void bvector<Alloc>::combine_operation_and(const bm::bvector<Alloc>& bv)
 
     unsigned top_blocks = blockman_.top_block_size();
     if (size_ < bv.size_) // this vect shorter than the arg.
-    {
         size_ = bv.size_;
-    }
+    
     unsigned arg_top_blocks = bv.blockman_.top_block_size();
     top_blocks = blockman_.reserve_top_blocks(arg_top_blocks);
 
@@ -5127,8 +5263,15 @@ void bvector<Alloc>::combine_operation_and(const bm::bvector<Alloc>& bv)
         {
             for (unsigned j = 0; j < bm::set_sub_array_size; ++j)
                 blockman_.zero_block(i, j);
+            blockman_.deallocate_top_subblock(i);
             continue;
         }
+        if ((bm::word_t*)blk_blk_arg == FULL_BLOCK_FAKE_ADDR)
+            continue; // any & 1 == any
+        
+        if ((bm::word_t*)blk_blk == FULL_BLOCK_FAKE_ADDR)
+            blk_blk = blockman_.check_alloc_top_subblock(i);
+
         unsigned j = 0;
         bm::word_t* blk;
         const bm::word_t* arg_blk;
@@ -5171,16 +5314,13 @@ void bvector<Alloc>::combine_operation_and(const bm::bvector<Alloc>& bv)
 template<class Alloc>
 void bvector<Alloc>::combine_operation_sub(const bm::bvector<Alloc>& bv)
 {
-    if (!blockman_.is_init())
+    if (!blockman_.is_init() || !bv.blockman_.is_init())
         return;  
-    if (!bv.blockman_.is_init())
-        return;
 
     unsigned top_blocks = blockman_.top_block_size();
     if (size_ < bv.size_) // this vect shorter than the arg.
-    {
         size_ = bv.size_;
-    }
+
     unsigned arg_top_blocks = bv.blockman_.top_block_size();
     top_blocks = blockman_.reserve_top_blocks(arg_top_blocks);
 
@@ -5193,6 +5333,15 @@ void bvector<Alloc>::combine_operation_sub(const bm::bvector<Alloc>& bv)
         bm::word_t** blk_blk_arg = (i < arg_top_blocks) ? blk_root_arg[i] : 0;
         if (!blk_blk || !blk_blk_arg) // nothing to do (0 AND NOT 1 == 0)
             continue;
+
+        if ((bm::word_t*)blk_blk_arg == FULL_BLOCK_FAKE_ADDR) // zero result
+        {
+            blockman_.deallocate_top_subblock(i);
+            continue;
+        }
+        if ((bm::word_t*)blk_blk == FULL_BLOCK_FAKE_ADDR)
+            blk_blk = blockman_.check_alloc_top_subblock(i);
+
         bm::word_t* blk;
         const bm::word_t* arg_blk;
         unsigned j = 0;
@@ -6254,55 +6403,8 @@ void bvector<Alloc>::set_range_no_check(size_type left,
     if (nb < nb_to)
     {
         BM_ASSERT(nb_to);
-        unsigned i_from, j_from, i_to, j_to;
-        blockman_.get_block_coord(nb, i_from, j_from);
-        blockman_.get_block_coord(nb_to-1, i_to, j_to);
-        
-        unsigned top_blocks = blockman_.reserve_top_blocks(i_to+1);
-        if (i_from >= top_blocks)
-            return;
-        BM_ASSERT(i_to < top_blocks);
-        bm::word_t*** blk_root = blockman_.top_blocks_root();
-        for (i = i_from; i <= i_to; ++i)
-        {
-            bm::word_t** blk_blk = blk_root[i];
-            j = (i == i_from) ? j_from : 0;
-            if (!blk_blk) // special case - all zero - set to all set
-            {
-                blk_blk = blockman_.alloc_top_subblock(i);
-                do
-                {
-                    blk_blk[j] = FULL_BLOCK_FAKE_ADDR;
-                    if ((i == i_to) && (j == j_to))
-                        break;
-                } while (++j < bm::set_sub_array_size);
-            }
-            else
-                do
-                {
-                    block = blk_blk[j];
-                    if (block != FULL_BLOCK_FAKE_ADDR)
-                    {
-                        if (!block)
-                            blk_blk[j] = FULL_BLOCK_FAKE_ADDR;
-                        else
-                            blockman_.set_block_all_set(i, j);
-                    }
-                    if ((i == i_to) && (j == j_to))
-                        break;
-                } while (++j < bm::set_sub_array_size);
-        } // for i
+        blockman_.set_all_set(nb, nb_to-1);
     }
-    /*
-    for (; nb < nb_to; ++nb)
-    {
-        blockman_.get_block_coord(nb, i, j);
-        block = blockman_.get_block_ptr(i, j);
-        if (IS_FULL_BLOCK(block))
-            continue;
-        blockman_.set_block_all_set(nb);            
-    } // for
-    */
 
     if (nb_to > nblock_right)
         return;

@@ -799,9 +799,13 @@ unsigned distance_and_operation(const BV& bv1,
         bm::word_t** blk_blk;
         bm::word_t** blk_blk_arg;
         if ((blk_blk = blk_root[i]) == 0 || (blk_blk_arg= blk_root_arg[i]) == 0)
-        {
             continue;
-        }
+
+        if ((bm::word_t*)blk_blk == FULL_BLOCK_FAKE_ADDR)
+            blk_blk = FULL_SUB_BLOCK_REAL_ADDR;
+        if ((bm::word_t*)blk_blk_arg == FULL_BLOCK_FAKE_ADDR)
+            blk_blk_arg = FULL_SUB_BLOCK_REAL_ADDR;
+
         for (unsigned j = 0; j < bm::set_sub_array_size; j+=4)
         {
             (blk_blk[j] && blk_blk_arg[j]) ? 
@@ -1484,9 +1488,8 @@ void export_array(BV& bv, It first, It last)
 
     if (bit_cnt >= bv.size())
         bv.resize((bm::id_t)bit_cnt + 1);
-    else 
-        bv.set_range((bm::id_t)bit_cnt, bv.size() - 1, false);
-    
+    else
+        bv.set_range((typename BV::size_type)bit_cnt, bv.size() - 1, false);
     switch (inp_word_size)
     {
     case 1:

@@ -72,9 +72,11 @@ void for_each_bit(const BV&    bv,
     {
         bm::word_t** blk_blk = blk_root[i];
         if (!blk_blk)
-        {
             continue;
-        }
+
+        if ((bm::word_t*)blk_blk == FULL_BLOCK_FAKE_ADDR)
+            blk_blk = FULL_SUB_BLOCK_REAL_ADDR;
+        
         const bm::word_t* block;
         unsigned r = i * bm::set_sub_array_size;
         unsigned j = 0;

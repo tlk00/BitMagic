@@ -134,6 +134,7 @@ For more information please visit:  http://bitmagic.io
 
 #define FULL_BLOCK_REAL_ADDR bm::all_set<true>::_block._p
 #define FULL_BLOCK_FAKE_ADDR bm::all_set<true>::_block._p_fullp
+#define FULL_SUB_BLOCK_REAL_ADDR bm::all_set<true>::_block._s
 #define BLOCK_ADDR_SAN(addr) (addr == FULL_BLOCK_FAKE_ADDR) ? FULL_BLOCK_REAL_ADDR : addr
 #define IS_VALID_ADDR(addr) bm::all_set<true>::is_valid_block_addr(addr)
 #define IS_FULL_BLOCK(addr) bm::all_set<true>::is_full_block(addr)

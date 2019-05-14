@@ -868,6 +868,8 @@ aggregator<BV>::find_effective_sub_block_size(unsigned i,
         const bm::word_t* const* blk_blk_arg = bman_arg.get_topblock(i);
         if (!blk_blk_arg)
             continue;
+        if ((bm::word_t*)blk_blk_arg == FULL_BLOCK_FAKE_ADDR)
+            return bm::set_sub_array_size;
 
         for (unsigned j = bm::set_sub_array_size - 1; j > max_size; --j)
         {
@@ -877,6 +879,8 @@ aggregator<BV>::find_effective_sub_block_size(unsigned i,
                 break;
             }
         }
+        if (max_size == bm::set_sub_array_size - 1)
+            break;
     } // for k
     ++max_size;
     BM_ASSERT(max_size <= bm::set_sub_array_size);
