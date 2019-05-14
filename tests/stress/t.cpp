@@ -918,17 +918,18 @@ unsigned SerializationOperation(bvect*             bv_target,
 
    if (st1.max_serialize_mem > st1_op->max_serialize_mem)
    {
-       cout << "Optimize failed to compute max_serialize_mem" << endl;
+       cout << "Error: Optimize failed to compute max_serialize_mem" << endl;
        cout << "calc_stat=" << st1.max_serialize_mem << endl;
        cout << "optimize=" << st1_op->max_serialize_mem << endl;
+       assert(0);
        exit(1);
    }
    if (st2.max_serialize_mem > st2_op->max_serialize_mem)
    {
-       cout << "Optimize failed to compute max_serialize_mem" << endl;
+       cout << "Error:Optimize failed to compute max_serialize_mem" << endl;
        cout << "calc_stat=" << st2.max_serialize_mem << endl;
        cout << "optimize=" << st2_op->max_serialize_mem << endl;
-       exit(1);
+       assert(0); exit(1);
    }
 
    delete st1_op;
@@ -1103,6 +1104,10 @@ unsigned SerializationOperation(bvect*             bv_target,
                 if (bvt1 != bvc)
                 {
                     cerr << "1. AND 2-way check error!" << endl;
+                    //print_bv(bvt1);
+                    //cout << "control:" << endl;
+                    //print_bv(bvc);
+                    assert(0);
                     exit(1);
                 }
                 bvect bvt2;
@@ -3095,7 +3100,7 @@ void BasicFunctionalityTest()
     }
 
     bvect_full1.set_range(0, ITERATIONS-1);
-/*
+
     bvect_full1.running_count_blocks(&bc_arr1);
 
     cout << "Rank check 2" << endl;
@@ -3129,7 +3134,7 @@ void BasicFunctionalityTest()
         }
     }
     cout << endl;
- */
+ 
     CheckCountRange(bvect_full, 0, ITERATIONS);
     CheckCountRange(bvect_full, 10, ITERATIONS+10);
     CheckCountRange(bvect_full1, 0, ITERATIONS);
@@ -3279,42 +3284,64 @@ void BvectorBulkSetTest()
 {
     cout << "---------------------------- Bvector BULK set test" << endl;
 
-    {
-    unsigned ids[] = { 0 };
     
-    bvect bv1, bv2, bv3;
     {
-    bvect::bulk_insert_iterator iit = bv3.inserter();
-    for (unsigned i = 0; i < sizeof(ids)/sizeof(ids[0]); ++i)
-    {
-        bv1.set(ids[i]);
-        iit = ids[i];
-    }
-    }
-    bv2.set(&ids[0], sizeof(ids)/sizeof(ids[0]));
-    
-    int cmp = bv1.compare(bv2);
-    assert(cmp==0);
-    cmp = bv1.compare(bv3);
-    assert(cmp==0);
-    
-    bv2.set(0);
-    bv2.keep(&ids[0], sizeof(ids)/sizeof(ids[0]));
-    assert(bv2.count()==1);
-    assert(bv2.test(0));
+        unsigned ids[] = { 0 };
+        
+        bvect bv1, bv2, bv3;
+        {
+        bvect::bulk_insert_iterator iit = bv3.inserter();
+        for (unsigned i = 0; i < sizeof(ids)/sizeof(ids[0]); ++i)
+        {
+            bv1.set(ids[i]);
+            iit = ids[i];
+        }
+        }
+        bv2.set(&ids[0], sizeof(ids)/sizeof(ids[0]));
+        
+        int cmp = bv1.compare(bv2);
+        assert(cmp==0);
+        cmp = bv1.compare(bv3);
+        assert(cmp==0);
+        
+        bv2.set(0);
+        bv2.keep(&ids[0], sizeof(ids)/sizeof(ids[0]));
+        assert(bv2.count()==1);
+        assert(bv2.test(0));
     }
 
     {
-    unsigned ids[] = {65535, bm::id_max };
-    unsigned cnt;
-    bvect bv2;
-    bv2.set(&ids[0], sizeof(ids)/sizeof(ids[0]));
-    
-    cnt = bv2.count();
-    cout << cnt << endl;
+        unsigned ids[] = {65535, bm::id_max };
+        unsigned cnt;
+        bvect bv2;
+        bv2.set(&ids[0], sizeof(ids)/sizeof(ids[0]));
+        
+        cnt = bv2.count();
+        cout << cnt << endl;
 
-    assert(cnt == 1);
-    assert(bv2.test(ids[0]));
+        assert(cnt == 1);
+        assert(bv2.test(ids[0]));
+    }
+
+    // set bits in FULL vector
+    {
+        unsigned ids[] = {0, 10, 65535, bm::id_max-1, bm::id_max };
+        unsigned cnt;
+        bvect bv2;
+        bv2.invert();
+        struct bvect::statistics st1, st2;
+        bv2.calc_stat(&st1);
+
+        bv2.set(&ids[0], sizeof(ids)/sizeof(ids[0]));
+
+        bv2.calc_stat(&st2);
+        assert(st1.bit_blocks == st2.bit_blocks);
+        assert(st1.gap_blocks == st2.gap_blocks);
+
+        cnt = bv2.count();
+        cout << cnt << endl;
+
+        assert(cnt == bm::id_max);
     }
 
     // test correct sizing
@@ -3330,21 +3357,20 @@ void BvectorBulkSetTest()
         assert(bv1.size()==65536+1);
     }
 
-
     {
-    unsigned ids[] = {65536, 1280000, 65535 };
-    bvect bv1, bv2;
+        unsigned ids[] = {65536, 1280000, 65535 };
+        bvect bv1, bv2;
 
-    for (unsigned i = 0; i < sizeof(ids)/sizeof(ids[0]); ++i)
-        bv1.set(ids[i]);
+        for (unsigned i = 0; i < sizeof(ids)/sizeof(ids[0]); ++i)
+            bv1.set(ids[i]);
         
-    bv2.set(&ids[0], sizeof(ids)/sizeof(ids[0]));
-    int cmp = bv1.compare(bv2);
-    assert(cmp==0);
-    
-    bv2.keep(&ids[0], sizeof(ids)/sizeof(ids[0]));
-    cmp = bv1.compare(bv2);
-    assert(cmp==0);
+        bv2.set(&ids[0], sizeof(ids)/sizeof(ids[0]));
+        int cmp = bv1.compare(bv2);
+        assert(cmp==0);
+        
+        bv2.keep(&ids[0], sizeof(ids)/sizeof(ids[0]));
+        cmp = bv1.compare(bv2);
+        assert(cmp==0);
     }
 
 
@@ -3380,16 +3406,19 @@ void BvectorBulkSetTest()
     bv5.invert();
 
     {
-    bvect::bulk_insert_iterator iit = bv5.inserter();
-    for (unsigned i = 0; i < sizeof(ids)/sizeof(ids[0]); ++i)
-    {
-        bv3.set(ids[i]);
-        iit = ids[i];
-    }
+        bvect::bulk_insert_iterator iit = bv5.inserter();
+        for (unsigned i = 0; i < sizeof(ids)/sizeof(ids[0]); ++i)
+        {
+            bv3.set(ids[i]);
+            iit = ids[i];
+        }
     }
     bv4.set(&ids[0], sizeof(ids)/sizeof(ids[0]));
     cmp = bv3.compare(bv4);
     assert(cmp==0);
+    cmp = bv4.compare(bv3);
+    assert(cmp==0);
+
     cmp = bv3.compare(bv5);
     assert(cmp==0);
     }
@@ -3691,6 +3720,146 @@ void BvectorIncTest()
 // -----------------------------------------------------------------------
 
 static
+void optimize_fill(bvect& bv, unsigned base, unsigned inc,
+                   unsigned max_bits = bm::gap_max_bits,
+                   bool value = true)
+{
+    for (unsigned i = 0; i < bm::set_sub_array_size; ++i)
+    {
+        bvect::size_type base_idx = i * bm::gap_max_bits;
+        for (unsigned j = base; j < max_bits; j += inc)
+        {
+            bv.set(base_idx + j, value);
+        } // for j
+    } // for i
+}
+
+static
+void OptimizeTest()
+{
+    cout << "---------------------------- Bvector Optimize test" << endl;
+    BM_DECLARE_TEMP_BLOCK(tb)
+
+    {
+        bvect bv;
+        optimize_fill(bv, 0, 1, bm::gap_max_bits, true);
+        
+        bvect::statistics st1;
+        bv.calc_stat(&st1);
+        
+        assert(st1.bit_blocks == bm::set_sub_array_size);
+        assert(st1.gap_blocks == 0);
+        assert(st1.ptr_sub_blocks == 1);
+        
+        bv.optimize(tb, bvect::opt_compress, &st1);
+
+        assert(st1.bit_blocks == 0);
+        assert(st1.gap_blocks == 0);
+        assert(st1.ptr_sub_blocks == 0);
+        
+        bv.calc_stat(&st1);
+        
+        assert(st1.bit_blocks == 0);
+        assert(st1.gap_blocks == 0);
+        assert(st1.ptr_sub_blocks == 0);
+    }
+    
+    {
+        bvect bv;
+        optimize_fill(bv, 0, 100, bm::gap_max_bits, true);
+        optimize_fill(bv, 0, 100, bm::gap_max_bits, false);
+
+        bvect::statistics st1;
+        bv.calc_stat(&st1);
+        
+        assert(st1.bit_blocks == bm::set_sub_array_size);
+        assert(st1.gap_blocks == 0);
+        assert(st1.ptr_sub_blocks == 1);
+        
+        bv.optimize(tb, bvect::opt_compress, &st1);
+
+        assert(st1.bit_blocks == 0);
+        assert(st1.gap_blocks == 0);
+        assert(st1.ptr_sub_blocks == 0);
+    }
+
+
+    {
+        bvect bv(BM_GAP);
+        optimize_fill(bv, 0, 1, bm::gap_max_bits, true);
+        
+        bvect::statistics st1;
+        bv.calc_stat(&st1);
+        
+        assert(st1.bit_blocks == 0);
+        assert(st1.gap_blocks == bm::set_sub_array_size);
+        assert(st1.ptr_sub_blocks == 1);
+        
+        bv.optimize(tb, bvect::opt_compress, &st1);
+
+        assert(st1.bit_blocks == 0);
+        assert(st1.gap_blocks == 0);
+        assert(st1.ptr_sub_blocks == 0);
+        
+        bv.calc_stat(&st1);
+        
+        assert(st1.bit_blocks == 0);
+        assert(st1.gap_blocks == 0);
+        assert(st1.ptr_sub_blocks == 0);
+    }
+    
+    {
+        bvect bv(BM_GAP);
+        optimize_fill(bv, 0, 1000, bm::gap_max_bits, true);
+        optimize_fill(bv, 0, 1000, bm::gap_max_bits, false);
+
+        bvect::statistics st1;
+        bv.calc_stat(&st1);
+        
+        assert(st1.bit_blocks == 0);
+        assert(st1.gap_blocks == bm::set_sub_array_size);
+        assert(st1.gaps_by_level[0] == 0);
+        assert(st1.gaps_by_level[1] == bm::set_sub_array_size);
+        assert(st1.ptr_sub_blocks == 1);
+        
+        bv.optimize(tb, bvect::opt_compress, &st1);
+
+        assert(st1.bit_blocks == 0);
+        assert(st1.gap_blocks == 0);
+        assert(st1.ptr_sub_blocks == 0);
+    }
+    
+    {
+        bvect bv(BM_GAP);
+        optimize_fill(bv, 0, 1000, bm::gap_max_bits, true);
+        optimize_fill(bv, 1, 1, bm::gap_max_bits, false);
+
+        bvect::statistics st1;
+        bv.calc_stat(&st1);
+        
+        assert(st1.bit_blocks == 0);
+        assert(st1.gap_blocks == bm::set_sub_array_size);
+        assert(st1.gaps_by_level[0] == 0);
+        assert(st1.gaps_by_level[1] == bm::set_sub_array_size);
+        assert(st1.ptr_sub_blocks == 1);
+        
+        bv.optimize(tb, bvect::opt_compress, &st1);
+
+        assert(st1.bit_blocks == 0);
+        assert(st1.gap_blocks == bm::set_sub_array_size);
+        assert(st1.ptr_sub_blocks == 1);
+        assert(st1.gaps_by_level[0] == bm::set_sub_array_size);
+        assert(st1.gaps_by_level[1] == 0);
+    }
+
+
+    cout << "---------------------------- Bvector Optimize test OK" << endl;
+}
+
+
+// -----------------------------------------------------------------------
+
+static
 void generate_sparse_bvector(bvect& bv,
                              unsigned min = 0,
                              unsigned max = 40000000,
@@ -3771,6 +3940,50 @@ void BvectorShiftTest()
     bv.shift_right();
     assert(bv.count()==0);
     }
+    
+    {
+        bvect bv;
+        
+        bv.set();
+        auto cnt1 = bv.count();
+        bv.shift_right();
+        auto cnt2 = bv.count();
+        assert(cnt1-1 == cnt2);
+        bool b = bv.test(0);
+        assert(!b);
+    }
+    {
+        bvect bv;
+        bv.set();
+        bv.set(bm::gap_max_bits * bm::set_sub_array_size, false);
+        
+        auto cnt1 = bv.count();
+        bv.shift_left();
+        auto cnt2 = bv.count();
+        assert(cnt1-1 == cnt2);
+        bool b = bv.test(bm::id_max-1);
+        assert(!b);
+        b = bv.test(bm::id_max-2);
+        assert(b);
+        b = bv.test(bm::gap_max_bits * bm::set_sub_array_size);
+        assert(b);
+        b = bv.test(bm::gap_max_bits * bm::set_sub_array_size - 1);
+        assert(!b);
+    }
+    
+    {
+        bvect bv;
+        
+        bv.set();
+        auto cnt1 = bv.count();
+        bv.shift_left();
+        auto cnt2 = bv.count();
+        assert(cnt1-1 == cnt2);
+        bool b = bv.test(bm::id_max-1);
+        assert(!b);
+    }
+
+
 
     {
     bvect bv;
@@ -4255,6 +4468,7 @@ void BvectorEraseTest()
         bv.set_range(65536, 65536 + 65535);
         unsigned cnt1 = bv.count();
         bv.optimize();
+        assert(cnt1 == bv.count());
         bv.erase(0);
         unsigned cnt2 = bv.count();
         assert(cnt1 == cnt2);
@@ -5008,7 +5222,43 @@ void AndOperationsTest()
     }
 
 
-    
+    {
+        bvect        bvect_full1;
+        bvect        bvect_full2;
+        bvect_full1.invert();
+        bvect_full2.set();
+        
+        {
+        bvect    bv_target_s;
+        bv_target_s.bit_and(bvect_full1, bvect_full2, bvect::opt_none);
+        int cmp = bv_target_s.compare(bvect_full1);
+        assert(cmp == 0);
+        }
+    }
+    {
+        bvect        bv1;
+        bvect        bv2;
+        bv1.invert();
+        bv2.set();
+        bv2.set(bm::id_max/2, false);
+        
+        {
+            bvect    bv_s;
+            bv_s.bit_and(bv1, bv2, bvect::opt_none);
+            int cmp = bv_s.compare(bv2);
+            assert(cmp == 0);
+        }
+        {
+            bvect    bv_s;
+            bv_s.bit_and(bv2, bv1, bvect::opt_none);
+            int cmp = bv_s.compare(bv2);
+            assert(cmp == 0);
+        }
+        bv1 &= bv2;
+        int cmp = bv1.compare(bv2);
+        assert(cmp == 0);
+    }
+
     {
         bvect        bv1 { 0, 1 };
         bvect        bv2 { 1, 3 };
@@ -5392,7 +5642,49 @@ void OrOperationsTest()
         assert(!st1.ptr_sub_blocks);
     }
 
-
+    {
+        bvect        bv1;
+        bvect        bv2;
+        bv1.invert(); bv2.set();
+        bv1 |= bv2;
+        bvect bv;
+        bv.bit_or(bv1, bv2, bvect::opt_compress);
+        int cmp = bv.compare(bv2);
+        assert(cmp == 0);
+        cmp = bv.compare(bv1);
+        assert(cmp == 0);
+        bvect        bv3 { 10, bm::id_max - 1 };
+        bv1 |= bv3;
+        cmp = bv.compare(bv1);
+        assert(cmp == 0);
+    }
+    {
+        bvect        bv1;
+        bvect        bv2;
+        bv1.invert();
+        bv2.set();
+        bv2.set(bm::id_max/2, false);
+        
+        {
+            bvect    bv_s;
+            bv_s.bit_or(bv1, bv2, bvect::opt_none);
+            int cmp = bv_s.compare(bv1);
+            assert(cmp == 0);
+        }
+        {
+            bvect    bv_s;
+            bv_s.bit_or(bv2, bv1, bvect::opt_none);
+            auto cnt = bv_s.count();
+            assert(cnt == bm::id_max);
+            bool b = bv_s.test(bm::id_max/2);
+            assert(b);
+            int cmp = bv_s.compare(bv1);
+            assert(cmp == 0);
+        }
+        bv2 |= bv1;
+        int cmp = bv1.compare(bv2);
+        assert(cmp == 0);
+    }
     
     {
         bvect        bv1 { 0, 1 };
@@ -5418,12 +5710,17 @@ void OrOperationsTest()
         bv2.invert();
         {
             bvect bv;
-            bv.bit_or(bv1, bv2, bvect::opt_compress);
+            bv |= bv2;
             int cmp = bv.compare(bv2);
+            assert(cmp == 0);
+            bv.bit_or(bv1, bv2, bvect::opt_compress);
+            cmp = bv.compare(bv2);
             assert(cmp == 0);
         }
     }
-
+    
+    
+    
     cout << "----------------------------------- OrOperationTest OK" << endl;
 
 }
@@ -5692,8 +5989,48 @@ void SubOperationsTest()
             assert(!bv.any());
         }
     }
+    
+    {
+        bvect        bvect_full1;
+        bvect        bvect_full2;
+        bvect_full1.invert();
+        bvect_full2.set();
+        
+        {
+        bvect    bv_target_s;
+        bv_target_s.bit_sub(bvect_full1, bvect_full2, bvect::opt_none);
+        auto b = bv_target_s.none();
+        assert(b);
+        }
+    }
 
+    {
+        bvect        bv1;
+        bvect        bv2;
+        bv1.invert();
+        bv2.set();
+        bv2.set(0, false);
+        
+        {
+            bvect    bv_s;
+            bv_s.bit_sub(bv1, bv2, bvect::opt_none);
+            auto cnt = bv_s.count();
+            assert(cnt == 1);
+            assert(bv1.test(bm::id_max/2));
+        }
+        {
+            bvect    bv_s;
+            bv_s.bit_sub(bv2, bv1, bvect::opt_none);
+            auto cnt = bv_s.count();
+            assert(cnt == 0);
+        }
+        bv1 -= bv2;
+        auto cnt = bv1.count();
+        assert(cnt == 1);
+        assert(bv1.test(0));
+    }
 
+    cout << "----------------------------------- SubOperationTest OK" << endl;
 }
 
 
@@ -5816,7 +6153,8 @@ void XorOperationsTest()
     {
         bvect bv1;
         bvect bv2;
-        bv1.flip(); bv2.flip();
+        bv1.flip();
+        bv2.flip();
         bv1.bit_xor(bv2);
         unsigned cnt2 = bv1.count();
         assert(0 == cnt2);
@@ -6278,6 +6616,48 @@ void XorOperationsTest()
             assert(cmp == 0);
         }
     }
+
+    {
+        bvect        bvect_full1;
+        bvect        bvect_full2;
+        bvect_full1.invert();
+        bvect_full2.set();
+        
+        {
+        bvect    bv_target_s;
+        bv_target_s.bit_xor(bvect_full1, bvect_full2, bvect::opt_none);
+        auto b = bv_target_s.none();
+        assert(b);
+        }
+    }
+
+    {
+        bvect        bv1;
+        bvect        bv2;
+        bv1.invert();
+        bv2.set();
+        bv2.set(bm::id_max/2, false);
+        
+        {
+            bvect    bv_s;
+            bv_s.bit_xor(bv1, bv2, bvect::opt_none);
+            auto cnt = bv_s.count();
+            assert(cnt == 1);
+            assert(bv_s.test(bm::id_max/2));
+        }
+        {
+            bvect    bv_s;
+            bv_s.bit_xor(bv2, bv1, bvect::opt_none);
+            auto cnt = bv_s.count();
+            assert(cnt == 1);
+            assert(bv_s.test(bm::id_max/2));
+        }
+        bv1.bit_xor(bv2);
+        auto cnt = bv1.count();
+        assert(cnt == 1);
+        assert(bv1.test(bm::id_max/2));
+    }
+
 
 
 }
@@ -9668,6 +10048,35 @@ void GetNextTest()
    cout << "-------------------------------------------- GetNextTest" << endl;
    
    cout << "testing bvector<>::find() in bit-mode" << endl;
+   
+   {
+        bvect bv;
+        bv.set();
+        bvect::size_type pos=1;
+        bool b;
+        b = bv.find(pos);
+        assert(pos == 0);
+        assert(b);
+       
+        b = bv.find(bm::id_max/2, pos);
+        assert(b);
+        assert(pos == bm::id_max/2);
+       
+        bv.set(bm::id_max/2, false);
+        b = bv.find(bm::id_max/2, pos);
+        assert(b);
+        assert(pos == bm::id_max/2 + 1);
+
+        b = bv.find_reverse(pos);
+        assert(b);
+        assert(pos == bm::id_max-1);
+       
+        bvect::size_type f, l;
+        b = bv.find_range(f, l);
+        assert(b);
+        assert(f == 0);
+        assert(l == bm::id_max-1);
+   }
 
    {
        bvect  bv;
@@ -9737,8 +10146,6 @@ void GetNextTest()
        bv[100001] = false;
        found = bv.find_reverse(pos);
        assert(found && pos == 100000);
-
-
    }
 
    cout << "testing bvector<>::find() in GAP-mode" << endl;
@@ -10105,10 +10512,11 @@ void EnumeratorTest()
     if (*en != 2000000000 || n != *en || *en1 != *en)
     {
         cout << "2. Enumerator error !" << endl;
+        assert(0);
         exit(1);
     }
     CompareEnumerators(en, en1);
-    
+
     bvect1.optimize();
     en = bvect1.first();
     n = bvect1.get_next(0);
@@ -10117,6 +10525,7 @@ void EnumeratorTest()
     if (*en != 2000000000 || n != *en || *en1 != *en)
     {
         cout << "2. Enumerator error !" << endl;
+        assert(0);
         exit(1);
     }
     CompareEnumerators(en, en1);
@@ -10168,7 +10577,6 @@ void EnumeratorTest()
                     assert(idx0 == *en3);
                 }
             }
-            
         }
         if (num != 0)
         {
@@ -10176,35 +10584,44 @@ void EnumeratorTest()
             exit(1);
         }
     }
-/*
+
+    cout << "FULL bvector enumerator stress test ..." << endl;
     {
         bvect bvect1;
         bvect1.set();
 
         bvect::enumerator en = bvect1.first();
-
         unsigned num = bvect1.get_first();
-
-        while (en < bvect1.end())
+        while (en.valid())
         {
             if (*en != num)
             {
                 cout << "Enumeration comparison failed !" << 
                         " enumerator = " << *en <<
-                        " get_next() = " << num << endl; 
+                        " get_next() = " << num << endl;
+                assert(0);
                 exit(1);
             }
 
             ++en;
             num = bvect1.get_next(num);
-        }
-        if (num != 0)
-        {
-            cout << "Enumeration error!" << endl;
-            exit(1);
-        }
+            {
+                bvect::enumerator en2(&bvect1, num);
+                if (*en2 != num)
+                {
+                    cout << "Enumeration comparison failed !" <<
+                            " enumerator = " << *en <<
+                            " get_next() = " << num << endl;
+                    assert(0);
+                    exit(1);
+                }
+                CompareEnumerators(en, en2);
+            }
+            if (num > (bm::set_sub_array_size * bm::gap_max_bits * 2))
+                break;
+        } // while
     }
-*/
+    cout << "FULL bvector enumerator stress test ... OK" << endl;
 
     {
         bvect bvect1;
@@ -10577,6 +10994,12 @@ void SetTest()
             cout << "Set &= test failed (2)!" << endl;
             exit(1);
         }
+    }
+    
+    {
+        bvect bv_full;
+        bv_full.invert();
+        assert(bv_full.test(10));
     }
     
     {
@@ -12072,6 +12495,14 @@ void ResizeTest()
     }}
 
     {{
+        bvect bv;
+        bv.invert();
+        bvect::size_type cnt = bv.count();
+        assert(cnt == bm::id_max);
+        assert(bv.test(bm::id_max-1));
+    }}
+
+    {{
     bvect bv(10);
     assert(bv.any() == false);
     assert(bv.count() == 0);
@@ -12359,7 +12790,8 @@ void ExportTest()
     bvect bv1;
     export_array(bv1, buf + 0, buf + 20);
 
-    assert(bv1.count() == 3);
+    auto cnt = bv1.count();
+    assert(cnt == 3);
     assert(bv1.test(0));
     assert(bv1.test(8));
     assert(bv1.test(17));
@@ -18315,6 +18747,18 @@ extern "C" {
         vp->push_back(bit_idx);
         return 0;
     }
+    
+    static
+    int bit_decode_func2(void* handle_ptr, bm::id_t bit_idx)
+    {
+        if (bit_idx > (65536 * 256))
+        {
+            throw 1;
+        }
+        std::vector<bm::id_t>* vp = (std::vector<bm::id_t>*)handle_ptr;
+        vp->push_back(bit_idx);
+        return 0;
+    }
 } // extern C
 
 
@@ -18466,6 +18910,20 @@ void BvectorBitForEachTest()
             std::cerr << "Bit for each failed comparison test. " << endl;
             exit(1);
         }
+    }
+    
+    {
+        bvect bv;
+        bv.set();
+        
+        std::vector<unsigned> v1;
+        try
+        {
+            bm::visit_each_bit(bv, (void*)&v1, bit_decode_func2);
+        } catch (...)
+        {
+        }
+
     }
     
     
@@ -20405,6 +20863,8 @@ int main(int argc, char *argv[])
         
          BitCountChangeTest();
          WordCmpTest();
+        
+        //BitBlockTransposeTest();
     }
     
     if (is_all || is_support)
@@ -20435,9 +20895,11 @@ int main(int argc, char *argv[])
          CountRangeTest();
 
          BasicFunctionalityTest();
-     
+
+         OptimizeTest();
+  
          RankFindTest();
-        
+
          BvectorBitForEachTest();
 
          GetNextTest();
@@ -20462,11 +20924,10 @@ int main(int argc, char *argv[])
         MutationOperationsTest();
         
         BlockLevelTest();
-        
+
         SerializationTest();
 
         DesrializationTest2();
-
      }
 
     if (is_all || is_bvshift)
@@ -20489,8 +20950,6 @@ int main(int argc, char *argv[])
         OrOperationsTest();
         XorOperationsTest();
         SubOperationsTest();
-
-        //BitBlockTransposeTest();
 
         StressTest(120, 0); // OR
         StressTest(120, 3); // AND
