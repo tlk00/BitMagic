@@ -314,6 +314,7 @@ size_t dbg_ptr_allocator::nf_ = 0;
 typedef mem_alloc<dbg_block_allocator, dbg_ptr_allocator, alloc_pool<dbg_block_allocator, dbg_ptr_allocator> > dbg_alloc;
 
 typedef bm::bvector<dbg_alloc> bvect64;
+typedef bm::bvector<dbg_alloc> bvect;
 //typedef bm::bvector_mini<dbg_block_allocator> bvect_mini;
 
 #else
@@ -322,12 +323,14 @@ typedef bm::bvector<dbg_alloc> bvect64;
 
 typedef mem_alloc<pool_block_allocator, pool_ptr_allocator> pool_alloc;
 typedef bm::bvector<pool_alloc> bvect64;
+typedef bm::bvector<pool_alloc> bvect;
 //typedef bm::bvector_mini<bm::block_allocator> bvect_mini;
 
 
 #else
 
 typedef bm::bvector<> bvect64;
+typedef bm::bvector<> bvect;
 //typedef bm::bvector_mini<bm::block_allocator> bvect_mini;
 
 #endif
@@ -354,6 +357,8 @@ void SyntaxTest()
         assert(bv0.test(v));
         
         bvect64 bv1(bv0);
+        cout << bv0.count() << endl;
+        cout << bv1.count() << endl;        
         compare_BV_set_ref(bv1, vect);
         
         bvect64 bv2;
@@ -489,18 +494,540 @@ void GenericBVectorTest()
 static
 void SetTest()
 {
+    cout << "------------------------------------ SetTest()" << endl;
     {
-        bvect64::size_type cnt;
-        bvect64 bv;
+        bvect bv;
         bv.set();
-        cnt = bv.count();
-        if (cnt != bm::id_max)
+        auto cnt = bv.count();
+        assert (cnt == bm::id_max);
+    }
+    
+    {
+        bvect bv;
+        bv.set();
+        bv.set_range(10, bm::id_max, false);
+        auto cnt = bv.count();
+        assert(cnt == 10);
+    }
+    {
+        bvect bv;
+        bv.set_range(bm::id_max-65535, bm::id_max, true);
+        auto cnt = bv.count();
+        assert(cnt == 65536);
+    }
+
+    {
+        bvect bv{ 0, 10, 65536, 10000, bm::id_max-1 };
+        auto cnt = bv.count();
+        assert (cnt == 5);
+
+        bvect bv2;
+        bv2.set(0).set(10).set(65536).set(10000).set(bm::id_max-1);
+
+        if (bv != bv2)
         {
-            cout << "bvector<>::set() test failed!." << endl;
+            cout << "Brace initialization comparison test failed!." << endl;
+            assert(0);exit(1);
+        }
+    }
+    {
+        bvect bv;
+        bv.set();
+
+        auto cnt = bv.count();
+        assert (cnt == bm::id_max);
+
+        bv.invert();
+        cnt = bv.count();
+        assert (cnt == 0);
+
+        bv.set(0);
+        bv.set(bm::id_max - 1);
+        cnt = bv.count();
+        assert(cnt == 2);
+
+        bv.invert();
+        //print_stat(bv);
+        cnt = bv.count();
+        assert (cnt == bm::id_max - 2);
+
+        bv.clear();
+        bv[1] &= true;
+        bool v = bv[1];
+        assert (!v);
+
+        bv[1] = true;
+        bv[1] &= true;
+        v = bv[1];
+        assert(v);
+
+        bv.clear(true);
+        bv.invert();
+        bv[1] &= true;
+        v = bv[1];
+        assert (v);
+    }
+    {
+        bvect bv_full;
+        bv_full.invert();
+        assert(bv_full.test(bm::id_max/2));
+    }
+    {
+        bvect bv1, bv2(BM_GAP);
+        bvect::size_type cnt;
+        bv1.set(0); bv2.set(0);
+        bv1.set(bm::id_max-1);bv2.set(bm::id_max-1);
+        bv1.set((bm::id_max-1)/2);bv2.set((bm::id_max-1)/2);
+        for (unsigned i = 0; i < 2; ++i)
+        {
+            bv1.set();
+            bv2.set();
+            cnt = bv1.count();
+            assert (cnt == bm::id_max);
+            cnt = bv2.count();
+            assert (cnt == bm::id_max);
+        }
+    }
+
+    {
+        bvect bv2;
+        bv2[bm::id_max-1] = true;
+        bv2[bm::id_max-1] = false;
+        bvect::statistics stat1;
+        bv2.calc_stat(&stat1);
+        
+        bv2.optimize();
+
+        bvect::statistics stat2;
+        bv2.calc_stat(&stat2);
+
+        if (stat2.bit_blocks != 0 ||
+            stat2.gap_blocks != 0 ||
+            stat1.memory_used <= stat2.memory_used)
+        {
+            cout << "Optimization memory free test failed (2)!" << endl;
+            assert(0);exit(1);
+        }
+    }
+    
+    {
+        bvect bv3;
+        bool changed;
+        changed = bv3.set_bit_conditional(bm::id_max-10, true, true);
+        bool v = bv3[10];
+        if (v || changed) {
+            cout << "Conditional bit set failed." << endl;
+            assert(0);exit(1);
+        }
+        changed = bv3.set_bit_conditional(bm::id_max-10, true, false);
+        v = bv3[bm::id_max-10];
+        if (!v || !changed) {
+            cout << "Conditional bit set failed." << endl;
+            assert(0);exit(1);
+        }
+        changed = bv3.set_bit_conditional(bm::id_max-10, false, false);
+        v = bv3[bm::id_max-10];
+        if (!v || changed) {
+            cout << "Conditional bit set failed." << endl;
+            assert(0);exit(1);
+        }
+        changed = bv3.set_bit_conditional(bm::id_max-10, false, true);
+        v = bv3[bm::id_max-10];
+        if (v || !changed) {
+            cout << "Conditional bit set failed." << endl;
+            assert(0);exit(1);
+        }
+    }
+    {
+        bvect bv3(bm::BM_GAP);
+        bool changed;
+        changed = bv3.set_bit_conditional(10, true, true);
+        bool v = bv3[10];
+        if (v || changed) {
+            cout << "Conditional bit set failed." << endl;
+            exit(1);
+        }
+        changed = bv3.set_bit_conditional(10, true, false);
+        v = bv3[10];
+        if (!v || !changed) {
+            cout << "Conditional bit set failed." << endl;
+            exit(1);
+        }
+        changed = bv3.set_bit_conditional(10, false, false);
+        v = bv3[10];
+        if (!v || changed) {
+            cout << "Conditional bit set failed." << endl;
+            exit(1);
+        }
+        changed = bv3.set_bit_conditional(10, false, true);
+        v = bv3[10];
+        if (v || !changed) {
+            cout << "Conditional bit set failed." << endl;
             exit(1);
         }
     }
+    
+    {
+        bvect bv3(bm::BM_GAP);
+        bv3.invert();
+        bv3.optimize();
+        bool changed;
+        changed = bv3.set_bit_conditional(10, true, true);
+        bool v = bv3[10];
+        if (!v || changed) {
+            cout << "Conditional bit set failed." << endl;
+            exit(1);
+        }
+        changed = bv3.set_bit_conditional(10, true, false);
+        v = bv3[10];
+        if (!v || changed) {
+            cout << "Conditional bit set failed." << endl;
+            exit(1);
+        }
+        changed = bv3.set_bit_conditional(10, false, false);
+        v = bv3[10];
+        if (!v || changed) {
+            cout << "Conditional bit set failed." << endl;
+            exit(1);
+        }
+        changed = bv3.set_bit_conditional(10, false, true);
+        v = bv3[10];
+        if (v || !changed) {
+            cout << "Conditional bit set failed." << endl;
+            exit(1);
+        }
+        changed = bv3.set_bit_conditional(10, true, false);
+        v = bv3[10];
+        if (!v || !changed) {
+            cout << "Conditional bit set failed." << endl;
+            exit(1);
+        }
+    }
+
+    {
+        bvect::size_type new_size(1000001);
+        bvect bv(0);
+        bv.resize(new_size);
+        bv[10] = true;
+        bv.resize(new_size);
+        bv[new_size-1] = 1;
+
+        if (bv.size() != new_size)
+        {
+            cout << "Resize failed" << endl;
+            exit(1);
+        }
+        if (bv.count() != 2ull)
+        {
+            cout << "Resize count failed" << endl;
+            exit(1);
+        }
+
+        bv.resize(100);
+        if (bv.size() != 100)
+        {
+            cout << "Resize failed" << endl;
+            exit(1);
+        }
+        if (bv.count() != 1)
+        {
+            cout << "Resize count failed" << endl;
+            exit(1);
+        }
+        
+        bv.resize(60000100);
+        bv.invert();
+        bv.clear(true);
+
+
+        if (bv.size() != 60000100)
+        {
+            cout << "Resize failed" << endl;
+            exit(1);
+        }
+        if (bv.count() != 0)
+        {
+            cout << "Resize count failed" << endl;
+            exit(1);
+        }
+    }
+    
+    {
+        bvect bv(100);
+        assert(bv.size()==100);
+        bv[bm::id_max-1] = true;
+        assert(bv.size() == bm::id_max);
+        bv.set_bit(bm::id_max-1);
+        assert(bv.size() == bm::id_max);
+    }
+
+    cout << "------------------------------------ SetTest() OK" << endl;
 }
+
+static
+void ExportTest()
+{
+    cout << "---------------------------- ExportTest..." << endl;
+
+    {
+        char buf[20] = {0,};
+
+        buf[0] = 1;
+        buf[1] = 1;
+        buf[2]= (char)(1 << 1);
+
+        bvect bv1;
+        bm::export_array(bv1, buf + 0, buf + 20);
+
+        auto cnt = bv1.count();
+        assert(cnt == 3);
+        assert(bv1.test(0));
+        assert(bv1.test(8));
+        assert(bv1.test(17));
+    }
+
+    {
+        char buf[65536*10] = {0,};
+
+        buf[0] = 1;
+        buf[1] = 1;
+        buf[2]= (char)(1 << 1);
+
+        bvect bv1;
+        export_array(bv1, buf + 0, buf + 65536*10);
+
+        assert(bv1.count() == 3);
+        assert(bv1.test(0));
+        assert(bv1.test(8));
+        assert(bv1.test(17));
+    }
+
+    {
+        short buf[20] = {0,};
+
+        buf[0] = 1;
+        buf[1] = 1;
+        buf[2]= (char)(1 << 1);
+
+        bvect bv1;
+        export_array(bv1, buf + 0, buf + 20);
+
+        assert(bv1.count() == 3);
+        assert(bv1.test(0));
+        assert(bv1.test(16));
+        assert(bv1.test(33));
+    }
+
+    {
+        unsigned buf[20] = {0,};
+
+        buf[0] = 1;
+        buf[1] = 1;
+        buf[2]= (char)(1 << 1);
+
+        bvect bv1;
+        export_array(bv1, buf + 0, buf + 20);
+
+        assert(bv1.count() == 3);
+        assert(bv1.test(0));
+        assert(bv1.test(32));
+        assert(bv1.test(65));
+    }
+
+
+    cout << "---------------------------- ExportTest Ok." << endl;
+}
+
+static
+void ResizeTest()
+{
+    cout << "---------------------------- ResizeTest()" << endl;
+    {{
+        bvect bv(0);
+        assert(bv.any() == false);
+        assert(bv.count() == 0);
+    }}
+
+    {{
+        bvect bv1(10);
+        bvect bv2(bv1);
+        assert(bv1.size() == bv2.size());
+    }}
+
+    {{
+        bvect bv;
+        bv.invert();
+        bvect::size_type cnt = bv.count();
+        assert(cnt == bm::id_max);
+        assert(bv.test(bm::id_max-1));
+    }}
+
+    {{
+        bvect bv(10);
+        assert(bv.any() == false);
+        assert(bv.count() == 0);
+        bv.invert();
+        auto cnt = bv.count();
+        assert(cnt == 10);
+    }}
+
+    {{
+        bvect bv1(10);
+        bv1.set(1);
+        bvect bv2(0);
+
+        assert(bv1.size() == 10);
+        assert(bv2.size() == 0);
+        assert(bv1.count() == 1);
+        assert(bv2.count() == 0);
+        
+        bv1.swap(bv2);
+
+        assert(bv2.size() == 10);
+        assert(bv2.count() == 1);
+        assert(bv1.size() == 0);
+        assert(bv1.count() == 0);
+    }}
+
+    {{
+        bvect bv1;
+        bv1.set(65536);
+        bv1.set(100);
+        assert(bv1.size() == bm::id_max);
+        assert(bv1.count() == 2);
+        bv1.resize(101);
+        assert(bv1.size() == 101);
+        assert(bv1.count() == 1);
+        {{
+            auto f = bv1.get_first();
+            assert(f == 100);
+            f = bv1.get_next(f);
+            assert(f == 0);
+        }}
+
+        bv1.resize(10);
+        assert(bv1.size() == 10);
+        assert(bv1.count() == 0);
+        auto f = bv1.get_first();
+        assert(f == 0);
+    }}
+
+    {{
+        bvect bv;
+        print_stat(bv);
+        bv.set(100);
+        bv.set(65536 + 10);
+        print_stat(bv);
+        bv.set_range(0, 65536*10, false);
+        print_stat(bv);
+    }}
+
+    // test logical operations
+
+    {{
+        bvect bv1(65536 * 10);
+        bvect bv2(65536 * 100);
+        bv1.set(5);
+        bv2.set(5);
+        bv2.set(65536 * 2);
+        bv2 &= bv1;
+        assert(bv2.size() == 65536 * 100);
+        assert(bv2.count() == 1);
+        assert(bv2.get_first() == 5);
+    }}
+
+    {{
+        bvect bv1(10);
+        bvect bv2;
+        bv1.set(5);
+        bv2.set(5);
+        bv2.set(65536 * 2);
+        bv1 &= bv2;
+        assert(bv1.size() == bv2.size());
+        assert(bv1.count() == 1);
+        assert(bv1.get_first() == 5);
+    }}
+
+    {{
+        bvect bv1(10);
+        bvect bv2;
+        bv1.set(5);
+        bv2.set(6);
+        bv2.set(65536 * 2);
+        bv1 |= bv2;
+        assert(bv1.size() == bv2.size());
+        assert(bv1.count() == 3);
+    }}
+
+    // comparison test
+
+    {{
+        int cmp;
+        bvect bv1(10);
+        bvect bv2;
+        bv2.set(65536 * 2);
+
+        cmp = bv1.compare(bv2);
+        assert(cmp < 0);
+
+        bv1.set(5);
+        assert(cmp < 0);
+        cmp = bv1.compare(bv2);
+        assert(cmp > 0);
+        cmp = bv2.compare(bv1);
+        assert(cmp < 0);
+    }}
+
+    // inserter
+
+    {{
+        bvect bv1(10);
+        {
+            bvect::insert_iterator it(bv1);
+            *it = 100 * 65536;
+        }
+        assert(bv1.size() ==  100 * 65536 + 1);
+    }}
+
+    // serialization
+
+    {{
+        bvect bv1(10);
+        bv1.set(5);
+        struct bvect::statistics st1;
+        bv1.calc_stat(&st1);
+
+        unsigned char* sermem = new unsigned char[st1.max_serialize_mem];
+        unsigned slen2 = bm::serialize(bv1, sermem);
+        cout << slen2 << endl;
+
+        bvect bv2(0);
+        bm::deserialize(bv2, sermem);
+        delete [] sermem;
+
+        assert(bv2.size() == 10);
+        assert(bv2.count() == 1);
+        assert(bv2.get_first() == 5);
+    }}
+
+    {{
+        bvect bv1(10);
+        bv1.set(5);
+        unsigned int arg[] = { 10, 65536, 65537, 65538 * 10000 };
+        unsigned* it1 = arg;
+        unsigned* it2 = arg + 4;
+        combine_or(bv1, it1, it2);
+        assert(bv1.size() == 65538 * 10000 + 1);
+        bvect::enumerator en = bv1.first();
+        while (en.valid())
+        {
+            cout << *en << " ";
+            ++en;
+        }
+    }}
+    cout << "---------------------------- ResizeTest() OK" << endl;
+}
+
 
 
 int main(void)
@@ -509,10 +1036,13 @@ int main(void)
     time_t      finish_time;
     
     // -----------------------------------------------------------------
-    
+
     SyntaxTest();
     GenericBVectorTest();
     SetTest();
+    ExportTest();
+
+    ResizeTest();
     
     // -----------------------------------------------------------------
 

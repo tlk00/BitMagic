@@ -1532,6 +1532,9 @@ void CheckRangeCopy(const bvect& bv, unsigned from, unsigned to)
 
     bvect bv_control;
     bv_control.set_range(from, to);
+    auto cnt_c = bv_control.count_range(from, to);
+    auto cnt_cp = bv_cp.count_range(from, to);
+
     bv_control &= bv;
     
     int res = bv_control.compare(bv_cp);
@@ -1539,6 +1542,9 @@ void CheckRangeCopy(const bvect& bv, unsigned from, unsigned to)
     {
         bool found1 =  bv_cp.find_range(f1, l1);
         bool found2 =  bv_control.find_range(f2, l2);
+        
+        bvect bv_cp3(bv, from, to);
+
         
         cerr << "Error: bvector<>::range_copy() failed. from=" << from << " to=" << to << endl;
         if (found1)
@@ -4789,7 +4795,6 @@ static
 void RangeCopyTest()
 {
     cout << "----------------------------------- RangeCopyTest" << endl;
-    
     {
         const unsigned to_max = 65536 * bm::set_sub_array_size + 10;
         cout << "Basic range-copy test" << endl;
@@ -4826,24 +4831,62 @@ void RangeCopyTest()
         } // for k
         cout << "OK" << endl;
     }
-    
+
     {
-        cout << "Inverted vector test" << endl;
+        cout << "Inverted vector stress test" << endl;
         bvect     bvect1;
         bvect1.invert();
-        
-        unsigned to = 128000;
-        for (unsigned i = 0; i < to; ++i)
+
         {
-            CheckRangeCopy(bvect1, i, to);
-        }
-        for (unsigned i = 128000; i > 0; --i)
-        {
-            CheckRangeCopy(bvect1, 0, i);
-        }
-        for (unsigned i = 0; i != to; ++i, --to)
-        {
-            CheckRangeCopy(bvect1, i, to);
+            const bvect::size_type to_max = bm::gap_max_bits * bm::set_sub_array_size;
+
+            cout << "T1" << endl;
+            auto to = to_max;
+
+            for (unsigned i = 0; i < to; ++i)
+            {
+                CheckRangeCopy(bvect1, i, to);
+            }
+            
+            cout << "T2" << endl;
+            to = to_max;
+            for (unsigned i = to; i > 0; --i)
+            {
+                CheckRangeCopy(bvect1, 0, i);
+            }
+            
+            cout << "T3" << endl;
+            to = to_max;
+            for (unsigned i = 0; i != to; ++i, --to)
+            {
+                CheckRangeCopy(bvect1, i, to);
+            }
+            cout << "T4" << endl;
+            to = bm::id_max-1 - to_max - 100;
+            for (unsigned i = to; i < bm::id_max; ++i)
+            {
+                CheckRangeCopy(bvect1, i, bm::id_max);
+                if ((i & 0xFF) == 0)
+                    cout << "\r" << i << flush;
+            }
+            cout << endl;
+            to = bm::id_max-1 - to_max - 100;
+            for (unsigned i = to; i < bm::id_max-(65536 * 3); i+=65536 * 2)
+            {
+                bvect1.set(i, false);
+            }
+            for (unsigned k = 0; k < 2; ++k)
+            {
+                cout << "T5 pass=" << k << endl;
+                to = bm::id_max-1 - to_max - (bm::gap_max_bits/2);
+                for (unsigned i = to; i < bm::id_max; ++i)
+                {
+                    CheckRangeCopy(bvect1, i, bm::id_max);
+                    if ((i & 0xFF) == 0)
+                        cout << "\r" << i << flush;
+                }
+                bvect1.optimize();
+            }
         }
     }
     
@@ -10915,15 +10958,15 @@ static
 void SetTest()
 {
     {
-        bvect bv{ 0, 10, 65536, 10000 };
+        bvect bv{ 0, 10, 65536, 10000, bm::id_max-1 };
         unsigned cnt = bv.count();
-        if (cnt != 4)
+        if (cnt != 5)
         {
             cout << "Brace initialization test failed!." << endl;
             exit(1);
         }
         bvect bv2;
-        bv2.set(0).set(10).set(65536).set(10000);
+        bv2.set(0).set(10).set(65536).set(10000).set(bm::id_max-1);
 
         if (bv != bv2)
         {
@@ -10940,6 +10983,7 @@ void SetTest()
         if (cnt != bm::id_max)
         {
             cout << "Set test failed!." << endl;
+            assert(0);
             exit(1);
         }
 
@@ -10999,12 +11043,19 @@ void SetTest()
     {
         bvect bv_full;
         bv_full.invert();
-        assert(bv_full.test(10));
+        assert(bv_full.test(bm::id_max/2));
+    }
+    
+    {
+        bvect bv1;
+        bv1.set(0);
+        bv1.set();
+        auto cnt1 = bv1.count();
+        assert (cnt1 == bm::id_max);
     }
     
     {
         bvect bv1, bv2(BM_GAP);
-        bvect::size_type cnt;
         bv1.set(0); bv2.set(0);
         bv1.set(bm::id_max-1);bv2.set(bm::id_max-1);
         bv1.set((bm::id_max-1)/2);bv2.set((bm::id_max-1)/2);
@@ -11012,10 +11063,10 @@ void SetTest()
         {
             bv1.set();
             bv2.set();
-            cnt = bv1.count();
-            assert (cnt == bm::id_max);
-            cnt = bv2.count();
-            assert (cnt == bm::id_max);
+            auto cnt1 = bv1.count();
+            auto cnt2 = bv2.count();
+            assert (cnt1 == bm::id_max);
+            assert (cnt2 == bm::id_max);
         }
     }
     
@@ -12483,15 +12534,15 @@ static
 void ResizeTest()
 {
     {{
-    bvect bv(0);
-    assert(bv.any() == false);
-    assert(bv.count() == 0);
+        bvect bv(0);
+        assert(bv.any() == false);
+        assert(bv.count() == 0);
     }}
 
     {{
-    bvect bv1(10);
-    bvect bv2(bv1);
-    assert(bv1.size() == bv2.size());
+        bvect bv1(10);
+        bvect bv2(bv1);
+        assert(bv1.size() == bv2.size());
     }}
 
     {{
@@ -12503,170 +12554,167 @@ void ResizeTest()
     }}
 
     {{
-    bvect bv(10);
-    assert(bv.any() == false);
-    assert(bv.count() == 0);
-    bv.invert();
-    unsigned cnt = bv.count();
-    assert(cnt == 10);
+        bvect bv(10);
+        assert(bv.any() == false);
+        assert(bv.count() == 0);
+        bv.invert();
+        unsigned cnt = bv.count();
+        assert(cnt == 10);
     }}
 
     {{
-    bvect bv1(10);
-    bv1.set(1);
-    bvect bv2(0);
+        bvect bv1(10);
+        bv1.set(1);
+        bvect bv2(0);
 
-    assert(bv1.size() == 10);
-    assert(bv2.size() == 0);
-    assert(bv1.count() == 1);
-    assert(bv2.count() == 0);
-    
-    bv1.swap(bv2);
+        assert(bv1.size() == 10);
+        assert(bv2.size() == 0);
+        assert(bv1.count() == 1);
+        assert(bv2.count() == 0);
+        
+        bv1.swap(bv2);
 
-    assert(bv2.size() == 10);
-    assert(bv2.count() == 1);
-    assert(bv1.size() == 0);
-    assert(bv1.count() == 0);
-
+        assert(bv2.size() == 10);
+        assert(bv2.count() == 1);
+        assert(bv1.size() == 0);
+        assert(bv1.count() == 0);
     }}
 
     {{
-    bvect bv1;
-    bv1.set(65536);
-    bv1.set(100);
-    assert(bv1.size() == bm::id_max);
-    assert(bv1.count() == 2);
-    bv1.resize(101);
-    assert(bv1.size() == 101);
-    assert(bv1.count() == 1);
-    {{
-    bm::id_t f = bv1.get_first();
-    assert(f == 100);
-    f = bv1.get_next(f);
-    assert(f == 0);
+        bvect bv1;
+        bv1.set(65536);
+        bv1.set(100);
+        assert(bv1.size() == bm::id_max);
+        assert(bv1.count() == 2);
+        bv1.resize(101);
+        assert(bv1.size() == 101);
+        assert(bv1.count() == 1);
+        {{
+            auto f = bv1.get_first();
+            assert(f == 100);
+            f = bv1.get_next(f);
+            assert(f == 0);
+        }}
+
+        bv1.resize(10);
+        assert(bv1.size() == 10);
+        assert(bv1.count() == 0);
+        auto f = bv1.get_first();
+        assert(f == 0);
     }}
 
-    bv1.resize(10);
-    assert(bv1.size() == 10);
-    assert(bv1.count() == 0);
-    bm::id_t f = bv1.get_first();
-    assert(f == 0);
-    }}
-
     {{
-    bvect bv;
-    print_stat(bv);
-    bv.set(100);
-    bv.set(65536 + 10);
-    print_stat(bv);
-    bv.set_range(0, 65536*10, false);
-    print_stat(bv);
+        bvect bv;
+        print_stat(bv);
+        bv.set(100);
+        bv.set(65536 + 10);
+        print_stat(bv);
+        bv.set_range(0, 65536*10, false);
+        print_stat(bv);
     }}
 
     // test logical operations
 
     {{
-    bvect bv1(65536 * 10);
-    bvect bv2(65536 * 100);
-    bv1.set(5);
-    bv2.set(5);
-    bv2.set(65536 * 2);
-    bv2 &= bv1;
-    assert(bv2.size() == 65536 * 100);
-    assert(bv2.count() == 1);
-    assert(bv2.get_first() == 5);
+        bvect bv1(65536 * 10);
+        bvect bv2(65536 * 100);
+        bv1.set(5);
+        bv2.set(5);
+        bv2.set(65536 * 2);
+        bv2 &= bv1;
+        assert(bv2.size() == 65536 * 100);
+        assert(bv2.count() == 1);
+        assert(bv2.get_first() == 5);
     }}
 
     {{
-    bvect bv1(10);
-    bvect bv2;
-    bv1.set(5);
-    bv2.set(5);
-    bv2.set(65536 * 2);
-    bv1 &= bv2;
-    assert(bv1.size() == bv2.size());
-    assert(bv1.count() == 1);
-    assert(bv1.get_first() == 5);
+        bvect bv1(10);
+        bvect bv2;
+        bv1.set(5);
+        bv2.set(5);
+        bv2.set(65536 * 2);
+        bv1 &= bv2;
+        assert(bv1.size() == bv2.size());
+        assert(bv1.count() == 1);
+        assert(bv1.get_first() == 5);
     }}
 
     {{
-    bvect bv1(10);
-    bvect bv2;
-    bv1.set(5);
-    bv2.set(6);
-    bv2.set(65536 * 2);
-    bv1 |= bv2;
-    assert(bv1.size() == bv2.size());
-    assert(bv1.count() == 3);
+        bvect bv1(10);
+        bvect bv2;
+        bv1.set(5);
+        bv2.set(6);
+        bv2.set(65536 * 2);
+        bv1 |= bv2;
+        assert(bv1.size() == bv2.size());
+        assert(bv1.count() == 3);
     }}
 
     // comparison test
 
     {{
-    int cmp;
-    bvect bv1(10);
-    bvect bv2;
-    bv2.set(65536 * 2);
+        int cmp;
+        bvect bv1(10);
+        bvect bv2;
+        bv2.set(65536 * 2);
 
-    cmp = bv1.compare(bv2);
-    assert(cmp < 0);
+        cmp = bv1.compare(bv2);
+        assert(cmp < 0);
 
-    bv1.set(5);
-    assert(cmp < 0);
-    cmp = bv1.compare(bv2);
-    assert(cmp > 0);
-    cmp = bv2.compare(bv1);
-    assert(cmp < 0);
-
+        bv1.set(5);
+        assert(cmp < 0);
+        cmp = bv1.compare(bv2);
+        assert(cmp > 0);
+        cmp = bv2.compare(bv1);
+        assert(cmp < 0);
     }}
 
     // inserter
 
     {{
-    bvect bv1(10);
-    {
-        bvect::insert_iterator it(bv1);
-        *it = 100 * 65536;
-    }
-    assert(bv1.size() ==  100 * 65536 + 1);
+        bvect bv1(10);
+        {
+            bvect::insert_iterator it(bv1);
+            *it = 100 * 65536;
+        }
+        assert(bv1.size() ==  100 * 65536 + 1);
     }}
 
     // serialization
 
     {{
-    bvect bv1(10);
-    bv1.set(5);
-    struct bvect::statistics st1;
-    bv1.calc_stat(&st1);
+        bvect bv1(10);
+        bv1.set(5);
+        struct bvect::statistics st1;
+        bv1.calc_stat(&st1);
 
-    unsigned char* sermem = new unsigned char[st1.max_serialize_mem];
-    unsigned slen2 = bm::serialize(bv1, sermem);
-    cout << slen2 << endl;
+        unsigned char* sermem = new unsigned char[st1.max_serialize_mem];
+        unsigned slen2 = bm::serialize(bv1, sermem);
+        cout << slen2 << endl;
 
-    bvect bv2(0);
-    bm::deserialize(bv2, sermem);
-    delete [] sermem;
+        bvect bv2(0);
+        bm::deserialize(bv2, sermem);
+        delete [] sermem;
 
-    assert(bv2.size() == 10);
-    assert(bv2.count() == 1);
-    assert(bv2.get_first() == 5);
-    
+        assert(bv2.size() == 10);
+        assert(bv2.count() == 1);
+        assert(bv2.get_first() == 5);
     }}
 
     {{
-    bvect bv1(10);
-    bv1.set(5);
-    unsigned int arg[] = { 10, 65536, 65537, 65538 * 10000 };
-    unsigned* it1 = arg;
-    unsigned* it2 = arg + 4;
-    combine_or(bv1, it1, it2);
-    assert(bv1.size() == 65538 * 10000 + 1);
-    bvect::enumerator en = bv1.first();
-    while (en.valid())
-    {
-        cout << *en << " ";
-        ++en;
-    }
+        bvect bv1(10);
+        bv1.set(5);
+        unsigned int arg[] = { 10, 65536, 65537, 65538 * 10000 };
+        unsigned* it1 = arg;
+        unsigned* it2 = arg + 4;
+        combine_or(bv1, it1, it2);
+        assert(bv1.size() == 65538 * 10000 + 1);
+        bvect::enumerator en = bv1.first();
+        while (en.valid())
+        {
+            cout << *en << " ";
+            ++en;
+        }
     }}
 }
 
@@ -12781,68 +12829,68 @@ void ExportTest()
     cout << "---------------------------- ExportTest..." << endl;
 
     {
-    char buf[20] = {0,};
+        char buf[20] = {0,};
 
-    buf[0] = 1;
-    buf[1] = 1;
-    buf[2]= (char)(1 << 1);
+        buf[0] = 1;
+        buf[1] = 1;
+        buf[2]= (char)(1 << 1);
 
-    bvect bv1;
-    export_array(bv1, buf + 0, buf + 20);
+        bvect bv1;
+        export_array(bv1, buf + 0, buf + 20);
 
-    auto cnt = bv1.count();
-    assert(cnt == 3);
-    assert(bv1.test(0));
-    assert(bv1.test(8));
-    assert(bv1.test(17));
+        auto cnt = bv1.count();
+        assert(cnt == 3);
+        assert(bv1.test(0));
+        assert(bv1.test(8));
+        assert(bv1.test(17));
     }
 
     {
-    char buf[65536*10] = {0,};
+        char buf[65536*10] = {0,};
 
-    buf[0] = 1;
-    buf[1] = 1;
-    buf[2]= (char)(1 << 1);
+        buf[0] = 1;
+        buf[1] = 1;
+        buf[2]= (char)(1 << 1);
 
-    bvect bv1;
-    export_array(bv1, buf + 0, buf + 65536*10);
+        bvect bv1;
+        export_array(bv1, buf + 0, buf + 65536*10);
 
-    assert(bv1.count() == 3);
-    assert(bv1.test(0));
-    assert(bv1.test(8));
-    assert(bv1.test(17));
+        assert(bv1.count() == 3);
+        assert(bv1.test(0));
+        assert(bv1.test(8));
+        assert(bv1.test(17));
     }
 
     {
-    short buf[20] = {0,};
+        short buf[20] = {0,};
 
-    buf[0] = 1;
-    buf[1] = 1;
-    buf[2]= (char)(1 << 1);
+        buf[0] = 1;
+        buf[1] = 1;
+        buf[2]= (char)(1 << 1);
 
-    bvect bv1;
-    export_array(bv1, buf + 0, buf + 20);
+        bvect bv1;
+        export_array(bv1, buf + 0, buf + 20);
 
-    assert(bv1.count() == 3);
-    assert(bv1.test(0));
-    assert(bv1.test(16));
-    assert(bv1.test(33));
+        assert(bv1.count() == 3);
+        assert(bv1.test(0));
+        assert(bv1.test(16));
+        assert(bv1.test(33));
     }
 
     {
-    int buf[20] = {0,};
+        int buf[20] = {0,};
 
-    buf[0] = 1;
-    buf[1] = 1;
-    buf[2]= (char)(1 << 1);
+        buf[0] = 1;
+        buf[1] = 1;
+        buf[2]= (char)(1 << 1);
 
-    bvect bv1;
-    export_array(bv1, buf + 0, buf + 20);
+        bvect bv1;
+        export_array(bv1, buf + 0, buf + 20);
 
-    assert(bv1.count() == 3);
-    assert(bv1.test(0));
-    assert(bv1.test(32));
-    assert(bv1.test(65));
+        assert(bv1.count() == 3);
+        assert(bv1.test(0));
+        assert(bv1.test(32));
+        assert(bv1.test(65));
     }
 
 
@@ -14030,28 +14078,28 @@ void TestSparseVector()
 {
     cout << "---------------------------- Bit-plain sparse vector test" << endl;
 
-    typedef bm::sparse_vector<unsigned, bm::bvector<> > svector;
-    typedef bm::sparse_vector<unsigned long long, bm::bvector<> > svector64;
+    typedef bm::sparse_vector<unsigned,bvect> svector;
+    typedef bm::sparse_vector<unsigned long long, bvect> svector64;
 
     // basic construction (NULL-able vector)
     {{
-        bm::sparse_vector<unsigned, bm::bvector<> > sv1;
+        bm::sparse_vector<unsigned, bvect> sv1;
         bool n = sv1.is_nullable();
         assert(!n);
-        const bm::bvector<>* bvp = sv1.get_null_bvector();
+        const bvect* bvp = sv1.get_null_bvector();
         assert(bvp==0);
         
-        bm::sparse_vector<unsigned, bm::bvector<> > sv2(bm::use_null);
+        bm::sparse_vector<unsigned, bvect> sv2(bm::use_null);
         n = sv2.is_nullable();
         assert(n);
         
         sv1 = sv2;
         assert(sv1.is_nullable());
         
-        bm::sparse_vector<unsigned, bm::bvector<> > sv3(sv1);
+        bm::sparse_vector<unsigned, bvect> sv3(sv1);
         assert(sv3.is_nullable());
         
-        bm::sparse_vector<unsigned, bm::bvector<> > sv4;
+        bm::sparse_vector<unsigned, bvect> sv4;
         sv3.swap(sv4);
         assert(sv4.is_nullable());
         assert(!sv3.is_nullable());
@@ -14061,7 +14109,7 @@ void TestSparseVector()
     
     // basic const_iterator construction
     {{
-        bm::sparse_vector<unsigned, bm::bvector<> > sv1;
+        bm::sparse_vector<unsigned, bvect> sv1;
         svector::const_iterator it_end;
         svector::const_iterator it = sv1.begin();
         
@@ -14082,8 +14130,8 @@ void TestSparseVector()
     {{
         int res;
 
-        bm::sparse_vector<unsigned, bm::bvector<> > sv1;
-        bm::sparse_vector<unsigned, bm::bvector<> > sv2;
+        bm::sparse_vector<unsigned, bvect> sv1;
+        bm::sparse_vector<unsigned, bvect> sv2;
         bm::sparse_vector_serial_layout<svector> sv_layout;
         bm::sparse_vector_serialize(sv1, sv_layout);
 
@@ -14111,8 +14159,8 @@ void TestSparseVector()
     
     // test NULL operations
     {{
-        bm::sparse_vector<unsigned, bm::bvector<> > sv1;
-        bm::sparse_vector<unsigned, bm::bvector<> > sv2(bm::use_null);
+        bm::sparse_vector<unsigned, bvect> sv1;
+        bm::sparse_vector<unsigned, bvect> sv2(bm::use_null);
         sv1.resize(10);
         sv2.resize(10);
         for (unsigned i = 0; i < sv1.size(); ++i)
@@ -14138,7 +14186,7 @@ void TestSparseVector()
         assert(sv2[5].is_null());
 
         
-        bm::sparse_vector<unsigned, bm::bvector<> > sv3(sv2);
+        bm::sparse_vector<unsigned, bvect> sv3(sv2);
         assert(sv3.is_nullable());
         
         assert(!sv3.is_null(0));
@@ -14161,7 +14209,7 @@ void TestSparseVector()
     }}
     
     {{
-    bm::sparse_vector<unsigned, bm::bvector<> > sv;
+    bm::sparse_vector<unsigned, bvect> sv;
     unsigned arr[3] = {1,2,3};
     sv.import(arr, 3);
     cout << "sv.size() = " << sv.size() << endl;
@@ -14172,8 +14220,8 @@ void TestSparseVector()
     }
     cout << endl;
 
-    bm::sparse_vector_scanner<bm::sparse_vector<unsigned, bm::bvector<> > > scanner;
-    bm::bvector<> bv;
+    bm::sparse_vector_scanner<bm::sparse_vector<unsigned, bvect> > scanner;
+    bvect bv;
     scanner.find_nonzero(sv, bv);
     if (bv.count() != sv.size())
     {
@@ -14183,18 +14231,17 @@ void TestSparseVector()
     }}
     
     {{
-    bm::sparse_vector<unsigned, bm::bvector<> > sv;
-    sv.push_back(1);
-    sv.push_back(1);
-    sv.push_back(1);
-    unsigned arr[1024];
-    
-    unsigned esize =  sv.extract(&arr[0], 1024, 0);
-    assert(esize == 3);
-    assert(arr[0] == 1);
-    assert(arr[1] == 1);
-    assert(arr[2] == 1);
-
+        bm::sparse_vector<unsigned, bvect> sv;
+        sv.push_back(1);
+        sv.push_back(1);
+        sv.push_back(1);
+        unsigned arr[1024];
+        
+        unsigned esize =  sv.extract(&arr[0], 1024, 0);
+        assert(esize == 3);
+        assert(arr[0] == 1);
+        assert(arr[1] == 1);
+        assert(arr[2] == 1);
     }}
     
     cout << "svector Import test..." << endl;
@@ -14233,10 +14280,10 @@ void TestSparseVector()
         }
 
         
-        bm::sparse_vector<unsigned, bm::bvector<> >::statistics st;
+        bm::sparse_vector<unsigned, bvect>::statistics st;
         sv.calc_stat(&st);
         
-        bm::sparse_vector<unsigned, bm::bvector<> > sv2(sv);
+        bm::sparse_vector<unsigned, bvect> sv2(sv);
         res = CompareSparseVector(sv2, vect);
         if (!res)
         {
@@ -14253,7 +14300,7 @@ void TestSparseVector()
             exit(1);
         }
 
-        bm::sparse_vector<unsigned, bm::bvector<> > sv3;
+        bm::sparse_vector<unsigned, bvect> sv3;
         sv3.set(65536, 10); // set some bit to initiate it
         sv3 = sv;
         res = CompareSparseVector(sv3, vect);
@@ -14362,18 +14409,44 @@ void TestSparseVector()
             exit(1);
         }
     }}
+    
+    cout << "Same value assignment test.." << endl;
 
-
+    {
+        bm::sparse_vector<unsigned, bvect > sv;
+        const unsigned max_assign =
+                            100 + bm::gap_max_bits * bm::set_sub_array_size;
+        {
+            bm::sparse_vector<unsigned, bvect>::back_insert_iterator
+                                                    bi(sv.get_back_inserter());
+            for (unsigned i = 0; i < max_assign; ++i)
+            {
+                *bi = 1;
+            } // for
+            bi.flush();
+        }
+        bm::sparse_vector<unsigned, bvect>::statistics st;
+        sv.optimize(0, bvect::opt_compress, &st);
+        assert(st.gap_blocks == 1);
+        assert(st.bit_blocks == 0);
+        for (unsigned i = 0; i < max_assign; ++i)
+        {
+            auto v = sv[i];
+            assert(v == 1);
+        } // for
+        sv[65536] = 0;
+    }
+    
+    
     cout << "Linear assignment test" << endl;
-
     {{
     std::vector<unsigned> vect(128000);
-    bm::sparse_vector<unsigned, bm::bvector<> > sv;
-    bm::sparse_vector<unsigned, bm::bvector<> > sv1(bm::use_null);
-    bm::sparse_vector<unsigned, bm::bvector<> > sv2;
+    bm::sparse_vector<unsigned, bvect > sv;
+    bm::sparse_vector<unsigned, bvect > sv1(bm::use_null);
+    bm::sparse_vector<unsigned, bvect > sv2;
     
     {
-    bm::sparse_vector<unsigned, bm::bvector<> >::back_insert_iterator bi(sv2.get_back_inserter());
+    bm::sparse_vector<unsigned, bvect>::back_insert_iterator bi(sv2.get_back_inserter());
         for (unsigned i = 0; i < 128000; ++i)
         {
             vect[i] = i;
@@ -14479,7 +14552,7 @@ void TestSparseVector()
     
     {{
     cout << "sparse vector inc test" << endl;
-    bm::sparse_vector<unsigned, bm::bvector<> > sv;
+    bm::sparse_vector<unsigned, bvect > sv;
     
     for (unsigned i = 1; i < 65536; ++i)
     {
@@ -14500,7 +14573,7 @@ void TestSparseVector()
 
     {{
     cout << "Dynamic range clipping test 1" << endl;
-    bm::sparse_vector<unsigned, bm::bvector<> > sv;
+    bm::sparse_vector<unsigned, bvect > sv;
 
     unsigned i;
     for (i = 0; i < 16; ++i)
@@ -14526,8 +14599,8 @@ void TestSparseVector()
     
     {{
         cout << "Resize test" << endl;
-        bm::sparse_vector<unsigned, bm::bvector<> > sv;
-        bm::sparse_vector<unsigned, bm::bvector<> > sv1(bm::use_null);
+        bm::sparse_vector<unsigned, bvect > sv;
+        bm::sparse_vector<unsigned, bvect > sv1(bm::use_null);
         unsigned i;
         for (i = 0; i < 16; ++i)
         {
@@ -14541,7 +14614,7 @@ void TestSparseVector()
         }
         
         
-        const bm::bvector<>* bv_null1 = sv1.get_null_bvector();
+        const bvect* bv_null1 = sv1.get_null_bvector();
         assert(bv_null1);
         if (bv_null1->count() != sv1.size())
         {
@@ -14656,7 +14729,7 @@ void TestSparseVector()
     
     {{
     cout << "Dynamic range clipping test 2" << endl;
-    bm::sparse_vector<unsigned, bm::bvector<> > sv;
+    bm::sparse_vector<unsigned, bvect > sv;
 
     unsigned i;
     for (i = 128000; i < 128000 * 3; ++i)
@@ -14693,7 +14766,7 @@ void TestSparseVector()
     
     {{
     cout << "Dynamic range clipping test 3" << endl;
-    bm::sparse_vector<unsigned, bm::bvector<> > sv;
+    bm::sparse_vector<unsigned, bvect > sv;
 
     unsigned i;
     for (i = 0; i <= 16; ++i)
@@ -14724,8 +14797,8 @@ void TestSparseVector()
 
     cout << "Test Sparse vector join" << endl;
     {
-        bm::sparse_vector<unsigned, bm::bvector<> > sv1;
-        bm::sparse_vector<unsigned, bm::bvector<> > sv2;
+        bm::sparse_vector<unsigned, bvect> sv1;
+        bm::sparse_vector<unsigned, bvect> sv2;
         
         sv1.set(0, 0);
         sv1.set(1, 1);
@@ -14756,8 +14829,8 @@ void TestSparseVector()
 
     cout << "Test Sparse vector merge" << endl;
     {
-        bm::sparse_vector<unsigned, bm::bvector<> > sv1;
-        bm::sparse_vector<unsigned, bm::bvector<> > sv2;
+        bm::sparse_vector<unsigned, bvect> sv1;
+        bm::sparse_vector<unsigned, bvect> sv2;
         
         sv1.set(0, 0);
         sv1.set(1, 1);
@@ -14789,8 +14862,8 @@ void TestSparseVector()
 
     cout << "Test Sparse vector join with NULL-able" << endl;
     {
-        bm::sparse_vector<unsigned, bm::bvector<> > sv1;
-        bm::sparse_vector<unsigned, bm::bvector<> > sv2(bm::use_null);
+        bm::sparse_vector<unsigned, bvect> sv1;
+        bm::sparse_vector<unsigned, bvect> sv2(bm::use_null);
 
         assert(!sv1.is_nullable());
         
@@ -14825,8 +14898,8 @@ void TestSparseVector()
 
     cout << "Test Sparse vector join NULL-able with not NULL-able" << endl;
     {
-        bm::sparse_vector<unsigned, bm::bvector<> > sv1(bm::use_null);
-        bm::sparse_vector<unsigned, bm::bvector<> > sv2;
+        bm::sparse_vector<unsigned, bvect> sv1(bm::use_null);
+        bm::sparse_vector<unsigned, bvect> sv2;
 
         assert(sv1.is_nullable());
         
@@ -14860,8 +14933,8 @@ void TestSparseVector()
 
     cout << "Test Sparse vector join NULL-able with NULL-able" << endl;
     {
-        bm::sparse_vector<unsigned, bm::bvector<> > sv1(bm::use_null);
-        bm::sparse_vector<unsigned, bm::bvector<> > sv2(bm::use_null);
+        bm::sparse_vector<unsigned, bvect> sv1(bm::use_null);
+        bm::sparse_vector<unsigned, bvect> sv2(bm::use_null);
 
         assert(sv1.is_nullable());
         assert(sv2.is_nullable());
@@ -14905,7 +14978,7 @@ void TestSparseVector()
     
     cout << "check if optimize keeps the NULL vector" << std::endl;
     {
-        bm::sparse_vector<unsigned, bm::bvector<> > sv(bm::use_null);
+        bm::sparse_vector<unsigned, bvect> sv(bm::use_null);
         assert(sv.is_nullable());
         sv.optimize();
         assert(sv.is_nullable());
@@ -14913,9 +14986,9 @@ void TestSparseVector()
     
 
     {
-        bm::sparse_vector<unsigned, bm::bvector<> > sv1;
-        bm::sparse_vector<unsigned, bm::bvector<> > sv2;
-        bm::sparse_vector<unsigned, bm::bvector<> > sv3;
+        bm::sparse_vector<unsigned, bvect> sv1;
+        bm::sparse_vector<unsigned, bvect> sv2;
+        bm::sparse_vector<unsigned, bvect> sv3;
         
         unsigned i;
         for (i = 65536; i < 256000; ++i)
@@ -14950,9 +15023,6 @@ void TestSparseVector()
         } // for i
     }
     cout << "Sparse vector join ok" << endl;
-    
-    
-
     
     cout << "---------------------------- Bit-plain sparse vector test OK" << endl;
 }
@@ -20998,6 +21068,7 @@ int main(int argc, char *argv[])
          TestStrSparseSort();
 
          StressTestStrSparseVector();
+
     }
 
     if (is_all || is_bvops)
