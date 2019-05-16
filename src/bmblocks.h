@@ -604,20 +604,21 @@ public:
             else
                 alloc_.free_bit_block(block);
         }
-        if (block)
-            set_block_ptr(i, j, FULL_BLOCK_FAKE_ADDR);
-        else
-            set_block(i, j, FULL_BLOCK_FAKE_ADDR, false/*not gap*/);
-/*
-        if (BM_IS_GAP(block))
-            alloc_.free_gap_block(BMGAP_PTR(block), glevel_len_);
-        else
-        {
-            if (IS_VALID_ADDR(block))
-                alloc_.free_bit_block(block);
-        }
-*/
+        set_block_all_set_ptr(i, j);
     }
+    
+    /**
+        Places new block into blocks table.
+    */
+    void set_block_all_set_ptr(unsigned i, unsigned j)
+    {
+        if (top_blocks_[i] == (bm::word_t**)FULL_BLOCK_FAKE_ADDR)
+            return;
+        if (!top_blocks_[i])
+            alloc_top_subblock(i, 0);
+        top_blocks_[i][j] = FULL_BLOCK_FAKE_ADDR;
+    }
+
 
     /**
         set all-set block pointers for [start..end]
@@ -879,7 +880,7 @@ public:
                 }
                 else
                 {
-                    if (invert)
+                    if (invert) // TODO: implement inverted copy
                         bm::bit_invert((wordop_t*)block);
                 }
             }
@@ -1435,6 +1436,8 @@ public:
         unsigned i = unsigned(nb >> bm::set_array_shift);
         if (top_blocks_[i] == (bm::word_t**)FULL_BLOCK_FAKE_ADDR)
         {
+            if (block == FULL_BLOCK_FAKE_ADDR)
+                return;
             alloc_top_subblock(i, FULL_BLOCK_FAKE_ADDR);
         }
 
@@ -1451,10 +1454,11 @@ public:
         BM_ASSERT(is_init());
         BM_ASSERT(i < top_block_size_);
         BM_ASSERT(top_blocks_[i]);
-        
+
         top_blocks_[i][j] =
             (block == FULL_BLOCK_REAL_ADDR) ? FULL_BLOCK_FAKE_ADDR : block;
     }
+
 
     /** 
         \brief Converts block from type gap to conventional bitset block.
