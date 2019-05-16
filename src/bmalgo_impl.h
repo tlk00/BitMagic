@@ -1495,7 +1495,7 @@ void export_array(BV& bv, It first, It last)
     case 1:
         {
             size_t word_cnt = array_size / 4;
-            for (unsigned i = 0; i < bm::set_total_blocks; ++i)
+            for (typename BV::block_idx_type i = 0; i < bm::set_total_blocks; ++i)
             {
                 bm::word_t* blk =
                     bman.check_allocate_block(i, 
@@ -1549,7 +1549,7 @@ void export_array(BV& bv, It first, It last)
     case 2:
         {
             size_t word_cnt = array_size / 2;
-            for (unsigned i = 0; i < bm::set_total_blocks; ++i)
+            for (typename BV::block_idx_type i = 0; i < bm::set_total_blocks; ++i)
             {
                 bm::word_t* blk =
                     bman.check_allocate_block(i, 
@@ -1595,7 +1595,7 @@ void export_array(BV& bv, It first, It last)
     case 4:
         {
             size_t word_cnt = array_size;
-            for (unsigned i = 0; i < bm::set_total_blocks; ++i)
+            for (typename BV::block_idx_type i = 0; i < bm::set_total_blocks; ++i)
             {
                 bm::word_t* blk =
                     bman.check_allocate_block(i, 

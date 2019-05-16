@@ -973,9 +973,7 @@ unsigned serializer<BV>::serialize(const BV& bv,
                 {
                     bman.get_block_coord(j, i0, j0);
                     const bm::word_t* blk_next = bman.get_block(i0, j0);
-
-//                   bm::word_t* blk_next = bman.get_block(j);
-                   if (flag != bm::check_block_one(blk_next, false))
+                    if (flag != bm::check_block_one(blk_next, false))
                        break;
                 }
                 if (j == bm::set_total_blocks)

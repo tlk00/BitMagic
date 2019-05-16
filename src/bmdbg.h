@@ -413,40 +413,35 @@ void print_stat(const BV& bv, unsigned blocks = 0)
         blocks = bm::set_total_blocks;
     }
 
-    unsigned nb;
-    unsigned nb_prev = 0;
+    typename BV::block_idx_type nb;
+    typename BV::block_idx_type nb_prev = 0;
     for (nb = 0; nb < blocks; ++nb)
     {
         unsigned i0, j0;
         bman.get_block_coord(nb, i0, j0);
         const bm::word_t* blk = bman.get_block(i0, j0);
 
-//        const bm::word_t* blk = bman.get_block(nb);
-        if (blk == 0)
-        {
+        if (!blk)
            continue;
-        }
 
         if (IS_FULL_BLOCK(blk))
         {
            if (BM_IS_GAP(blk)) // gap block
            {
-               printf("[Alert!%i]", nb);
+               std::cout << "[Alert!" << nb << "]";
                assert(0);
            }
            
-           unsigned start = nb; 
-           for(unsigned i = nb+1; i < bm::set_total_blocks; ++i, ++nb)
+           typename BV::block_idx_type start = nb;
+           for(auto i = nb+1; i < bm::set_total_blocks; ++i, ++nb)
            {
                bman.get_block_coord(nb, i0, j0);
                blk = bman.get_block(i0, j0);
-               
-//               blk = bman.get_block(nb);
                if (IS_FULL_BLOCK(blk))
                {
                  if (BM_IS_GAP(blk)) // gap block
                  {
-                     printf("[Alert!%i]", nb);
+                     std::cout << "[Alert!" << nb << "]";
                      assert(0);
                      --nb;
                      break;
@@ -460,14 +455,14 @@ void print_stat(const BV& bv, unsigned blocks = 0)
                }
            }
 
-           printf("{F.%i:%i}",start, nb);
+           std::cout << "{F." << start << ":" << nb << "}";
            ++printed;
         }
         else
         {
             if ((nb-1) != nb_prev)
             {
-                printf("..%zd..", (size_t)nb-nb_prev);
+                std::cout << ".." << (size_t)nb-nb_prev << "..";
             }
 
             if (BM_IS_GAP(blk))
@@ -484,7 +479,8 @@ void print_stat(const BV& bv, unsigned blocks = 0)
                
                unsigned i,j;
                bman.get_block_coord(nb, i, j);
-                printf(" [GAP %i(%i,%i)=%i:%i-L%i(%zd)] ", nb, i, j, bc, level, len, mem_eff);
+               std::cout << " [GAP " << nb << "(" << i << "," << j << ")"
+                         << "=" << bc << ":" << level << "-L" << len << "(" << mem_eff << ")]";
                 ++printed;
             }
             else // bitset
@@ -498,8 +494,8 @@ void print_stat(const BV& bv, unsigned blocks = 0)
                 }
 
                 count += bc;
-                printf(" (BIT %i=%i[%i]) ", nb, bc, zw);
-                ++printed;                
+                std::cout << " (BIT " << nb << "=" << bc << "[" << zw << "])";
+                ++printed;
             }
         }
         if (printed == 10)
@@ -509,8 +505,7 @@ void print_stat(const BV& bv, unsigned blocks = 0)
         }
         nb_prev = nb;
     } // for nb
-    printf("\n");
-    printf("gap_efficiency=%i\n", total_gap_eff); 
+    std::cout << std::endl << "gap_efficiency=" << total_gap_eff << std::endl;
 
 }
 

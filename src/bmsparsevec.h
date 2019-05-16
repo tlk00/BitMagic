@@ -76,9 +76,9 @@ class sparse_vector : public base_sparse_vector<Val, BV, 1>
 {
 public:
     typedef Val                                      value_type;
-    typedef bm::id_t                                 size_type;
     typedef BV                                       bvector_type;
     typedef bvector_type*                            bvector_type_ptr;
+    typedef typename bvector_type::size_type         size_type;
     typedef const bvector_type*                      bvector_type_const_ptr;
 	typedef const value_type&                        const_reference;
     typedef typename BV::allocator_type              allocator_type;
@@ -1229,6 +1229,7 @@ sparse_vector<Val, BV>::extract_range(value_type* arr,
                 }
                 else
                 {
+                    BM_ASSERT(!IS_FULL_BLOCK(blk));
                     nword  = unsigned(nbit >> bm::set_word_shift);
                     mask0 = 1u << (nbit & bm::set_word_mask);
                     is_set = (blk[nword] & mask0);
@@ -1680,6 +1681,8 @@ void sparse_vector<Val, BV>::optimize(
     
     if (st)
     {
+        st->reset();
+        
         st->bit_blocks += stbv.bit_blocks;
         st->gap_blocks += stbv.gap_blocks;
         st->max_serialize_mem += stbv.max_serialize_mem + 8;
@@ -1914,7 +1917,7 @@ sparse_vector<Val, BV>::const_iterator::const_iterator(
 //---------------------------------------------------------------------
 
 template<class Val, class BV>
-void sparse_vector<Val, BV>::const_iterator::go_to(bm::id_t pos)
+void sparse_vector<Val, BV>::const_iterator::go_to(size_type pos)
 {
     pos_ = (!sv_ || pos >= sv_->size()) ? bm::id_max : pos;
     buf_ptr_ = 0;

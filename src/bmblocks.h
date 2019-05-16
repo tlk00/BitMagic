@@ -46,8 +46,10 @@ public:
     typedef Alloc allocator_type;
 #ifdef BM64ADDR
     typedef bm::id64_t   id_type;
+    typedef bm::id64_t   block_idx_type;
 #else
     typedef bm::id_t     id_type;
+    typedef bm::id_t     block_idx_type;
 #endif
 
 
@@ -115,7 +117,7 @@ public:
     private:
         id_type count_;
     };
-
+    
 
     /** Bitcounting functor filling the block counts array*/
     class block_count_arr_func : public block_count_base
@@ -471,10 +473,10 @@ public:
     */
     static
     BMFORCEINLINE
-    void get_block_coord(unsigned nb, unsigned& i, unsigned& j)
+    void get_block_coord(block_idx_type nb, unsigned& i, unsigned& j)
     {
-        i = nb >> bm::set_array_shift; // top block address
-        j = nb &  bm::set_array_mask;  // address in sub-block
+        i = unsigned(nb >> bm::set_array_shift); // top block address
+        j = unsigned(nb &  bm::set_array_mask);  // address in sub-block
     }
 
     /**
@@ -483,7 +485,8 @@ public:
     \param deep_scan - flag to perform detailed bit-block analysis
     @return bm::set_total_blocks - no more blocks
     */
-    unsigned find_next_nz_block(unsigned nb, bool deep_scan = true) const
+    block_idx_type
+    find_next_nz_block(block_idx_type nb, bool deep_scan = true) const
     {
         if (is_init())
         {
@@ -506,7 +509,6 @@ public:
                 j = 0;
             } // for i
         } // is_init()
-
         return bm::set_total_blocks;
     }
 
@@ -588,10 +590,25 @@ public:
     
     void set_block_all_set(unsigned i, unsigned j)
     {
-        bm::word_t* block = this->get_block_ptr(i, j);
         reserve_top_blocks(i+1);
+        set_block_all_set_no_check(i, j);
+    }
 
-        set_block(i, j, FULL_BLOCK_FAKE_ADDR, false/*not gap*/);
+    void set_block_all_set_no_check(unsigned i, unsigned j)
+    {
+        bm::word_t* block = this->get_block_ptr(i, j);
+        if (IS_VALID_ADDR(block))
+        {
+            if (BM_IS_GAP(block))
+                alloc_.free_gap_block(BMGAP_PTR(block), glevel_len_);
+            else
+                alloc_.free_bit_block(block);
+        }
+        if (block)
+            set_block_ptr(i, j, FULL_BLOCK_FAKE_ADDR);
+        else
+            set_block(i, j, FULL_BLOCK_FAKE_ADDR, false/*not gap*/);
+/*
         if (BM_IS_GAP(block))
             alloc_.free_gap_block(BMGAP_PTR(block), glevel_len_);
         else
@@ -599,13 +616,81 @@ public:
             if (IS_VALID_ADDR(block))
                 alloc_.free_bit_block(block);
         }
+*/
     }
-    
+
     /**
         set all-set block pointers for [start..end]
     */
     void set_all_set(unsigned nb, unsigned nb_to)
     {
+        BM_ASSERT(nb <= nb_to);
+        
+        unsigned i, j, i_from, j_from, i_to, j_to;
+        get_block_coord(nb, i_from, j_from);
+        get_block_coord(nb_to, i_to, j_to);
+        
+        reserve_top_blocks(i_to+1);
+        
+        bm::word_t*** blk_root = top_blocks_root();
+
+        if (i_from == i_to)  // same subblock
+        {
+            bm::word_t** blk_blk = blk_root[i_from];
+            if (blk_blk != (bm::word_t**)FULL_BLOCK_FAKE_ADDR)
+            {
+                for (j = j_from; j <= j_to; ++j)
+                    set_block_all_set_no_check(i_from, j);
+            }
+            return;
+        }
+        if (j_from > 0) // process first sub
+        {
+            bm::word_t** blk_blk = blk_root[i_from];
+            if (blk_blk != (bm::word_t**)FULL_BLOCK_FAKE_ADDR)
+            {
+                for (j = j_from; j < bm::set_sub_array_size; ++j)
+                    set_block_all_set_no_check(i_from, j); // TODO: optimize
+            }
+            ++i_from;
+        }
+        if (j_to < bm::set_sub_array_size-1) // process last sub
+        {
+            bm::word_t** blk_blk = blk_root[i_to];
+            if (blk_blk != (bm::word_t**)FULL_BLOCK_FAKE_ADDR)
+            {
+                for (j = 0; j <= j_to; ++j)
+                    set_block_all_set_no_check(i_to, j);
+            }
+            --i_to; // safe because (i_from == i_to) case is covered
+        }
+
+        // process all full sub-lanes
+        //
+        for (i = i_from; i <= i_to; ++i)
+        {
+            bm::word_t** blk_blk = blk_root[i];
+            if (!blk_blk || blk_blk == (bm::word_t**)FULL_BLOCK_FAKE_ADDR)
+            {
+                blk_root[i] = (bm::word_t**)FULL_BLOCK_FAKE_ADDR;
+                continue;
+            }
+            j = 0;
+            do
+            {
+                if (blk_blk[j] != FULL_BLOCK_FAKE_ADDR)
+                    set_block_all_set_no_check(i, j);
+            } while (++j < bm::set_sub_array_size);
+        } // for i
+    }
+
+    /**
+        set all-Zero block pointers for [start..end]
+    */
+    void set_all_zero(block_idx_type nb, unsigned nb_to)
+    {
+        BM_ASSERT(nb <= nb_to);
+        
         unsigned i, j, i_from, j_from, i_to, j_to;
         get_block_coord(nb, i_from, j_from);
         get_block_coord(nb_to, i_to, j_to);
@@ -614,51 +699,60 @@ public:
         
         bm::word_t*** blk_root = top_blocks_root();
         
+        if (i_from == i_to)  // same subblock
+        {
+            bm::word_t** blk_blk = blk_root[i_from];
+            if (blk_blk)
+            {
+                for (j = j_from; j <= j_to; ++j)
+                    zero_block(i_from, j);
+            }
+            return;
+        }
+        if (j_from > 0) // process first sub
+        {
+            bm::word_t** blk_blk = blk_root[i_from];
+            if (blk_blk)
+            {
+                for (j = j_from; j < bm::set_sub_array_size; ++j)
+                    zero_block(i_from, j); // TODO: optimize (zero_block is slo)
+            }
+            ++i_from;
+        }
+        if (j_to < bm::set_sub_array_size-1) // process last sub
+        {
+            bm::word_t** blk_blk = blk_root[i_to];
+            if (blk_blk)
+            {
+                for (j = 0; j <= j_to; ++j)
+                    zero_block(i_to, j);
+            }
+            --i_to; // safe because (i_from == i_to) case is covered
+        }
+        // process all full sub-lanes
+        //
         for (i = i_from; i <= i_to; ++i)
         {
             bm::word_t** blk_blk = blk_root[i];
-            j = (i == i_from) ? j_from : 0;
-            if (!blk_blk) // special case - all zero - set to all set
+            if (!blk_blk || blk_blk == (bm::word_t**)FULL_BLOCK_FAKE_ADDR)
             {
-                if (i != i_to)
-                {
-                    blk_root[i] = (bm::word_t**)FULL_BLOCK_FAKE_ADDR;
-                    continue;
-                }
-                blk_blk = alloc_top_subblock(i);
-                do
-                {
-                    blk_blk[j] = FULL_BLOCK_FAKE_ADDR;
-                    if ((i == i_to) && (j == j_to))
-                        break;
-                } while (++j < bm::set_sub_array_size);
+                blk_root[i] = 0;
+                continue;
             }
-            else
+            j = 0;
+            do
             {
-                if (blk_blk == (bm::word_t**)FULL_BLOCK_FAKE_ADDR)
-                    continue; // whole subblock is 0xFF..
-                do
-                {
-                    bm::word_t* block = blk_blk[j];
-                    if (block != FULL_BLOCK_FAKE_ADDR)
-                    {
-                        if (!block)
-                            blk_blk[j] = FULL_BLOCK_FAKE_ADDR;
-                        else
-                            set_block_all_set(i, j);
-                    }
-                    if ((i == i_to) && (j == j_to))
-                        break;
-                } while (++j < bm::set_sub_array_size);
-            }
+                if (blk_blk[j])
+                    zero_block(i, j);
+            } while (++j < bm::set_sub_array_size);
         } // for i
     }
-    
+
 
     /**
         Create(allocate) bit block. Old block (if exists) gets deleted.
     */
-    bm::word_t* alloc_bit_block(unsigned nb)
+    bm::word_t* alloc_bit_block(block_idx_type nb)
     {
         bm::word_t* block = this->get_allocator().alloc_bit_block();
         bm::word_t* old_block = set_block(nb, block);
@@ -675,7 +769,7 @@ public:
     /**
         Create all-zeros bit block. Old block (if exists) gets deleted.
     */
-    bm::word_t* make_bit_block(unsigned nb)
+    bm::word_t* make_bit_block(block_idx_type nb)
     {
         bm::word_t* block = this->alloc_bit_block(nb);
         bit_block_set(block, 0);
@@ -686,7 +780,7 @@ public:
         Create bit block as a copy of source block (bit or gap).
         Old block (if exists) gets deleted.
     */
-    bm::word_t* copy_bit_block(unsigned          nb, 
+    bm::word_t* copy_bit_block(block_idx_type nb,
                                const bm::word_t* block_src, int is_src_gap)
     {
         if (block_src == 0)
@@ -809,7 +903,7 @@ public:
     /**
     Attach the result of a GAP logical operation
     */
-    void assign_gap(unsigned              nb,
+    void assign_gap(block_idx_type        nb,
                     const bm::gap_word_t* res,
                     unsigned              res_len,
                     bm::word_t*           blk,
@@ -892,7 +986,7 @@ public:
         Copy block from another vector.
         Note:Target block is always replaced through re-allocation.
     */
-    bm::word_t* copy_block(unsigned idx, const blocks_manager& bm_src)
+    bm::word_t* copy_block(block_idx_type idx, const blocks_manager& bm_src)
     {
         const bm::word_t* block = bm_src.get_block(idx);
         if (block == 0)
@@ -934,7 +1028,7 @@ public:
 
         initial_block_type and actual_block_type : 0 - bitset, 1 - gap
     */
-    bm::word_t* check_allocate_block(unsigned nb,
+    bm::word_t* check_allocate_block(block_idx_type nb,
                                      unsigned content_flag,
                                      int      initial_block_type,
                                      int*     actual_block_type,
@@ -982,7 +1076,7 @@ public:
     /**
         Function checks if block is not yet allocated, allocates and returns
     */
-    bm::word_t* check_allocate_block(unsigned nb, int initial_block_type)
+    bm::word_t* check_allocate_block(block_idx_type nb, int initial_block_type)
     {
         unsigned i, j;
         this->get_block_coord(nb, i, j);
@@ -1079,7 +1173,7 @@ public:
         Places new block into descriptors table, returns old block's address.
         Old block is NOT deleted.
     */
-    bm::word_t* set_block(unsigned nb, bm::word_t* block)
+    bm::word_t* set_block(block_idx_type nb, bm::word_t* block)
     {
         bm::word_t* old_block;
         
@@ -1091,7 +1185,7 @@ public:
         if (block == FULL_BLOCK_REAL_ADDR)
             block = FULL_BLOCK_FAKE_ADDR;
 
-        unsigned nblk_blk = nb >> bm::set_array_shift;
+        unsigned nblk_blk = unsigned(nb >> bm::set_array_shift);
         reserve_top_blocks(nblk_blk+1);
         
         if (!top_blocks_[nblk_blk])
@@ -1115,11 +1209,10 @@ public:
     /**
     Allocate an place new GAP block (copy of provided block)
     */
-    bm::word_t* set_gap_block(unsigned      nb,
+    bm::word_t* set_gap_block(block_idx_type      nb,
                           const gap_word_t* gap_block_src,
                           int               level)
     {
-//        BM_ASSERT(top_blocks_);
         if (level < 0)
         {
             bm::word_t* blk = alloc_.alloc_bit_block();
@@ -1144,7 +1237,7 @@ public:
         Places new block into descriptors table, returns old block's address.
         Old block is not deleted.
     */
-    bm::word_t* set_block(unsigned nb, bm::word_t* block, bool gap)
+    bm::word_t* set_block(block_idx_type nb, bm::word_t* block, bool gap)
     {
         unsigned i, j;
         get_block_coord(nb, i, j);
@@ -1333,13 +1426,13 @@ public:
         Places new block into blocks table.
     */
     inline
-    void set_block_ptr(unsigned nb, bm::word_t* block)
+    void set_block_ptr(block_idx_type nb, bm::word_t* block)
     {
         BM_ASSERT((nb >> bm::set_array_shift) < top_block_size_);
         BM_ASSERT(is_init());
         BM_ASSERT(top_blocks_[nb >> bm::set_array_shift]);
         
-        unsigned i = (nb >> bm::set_array_shift);
+        unsigned i = unsigned(nb >> bm::set_array_shift);
         if (top_blocks_[i] == (bm::word_t**)FULL_BLOCK_FAKE_ADDR)
         {
             alloc_top_subblock(i, FULL_BLOCK_FAKE_ADDR);
@@ -1369,7 +1462,7 @@ public:
         \param gap_block - Pointer to the gap block, if NULL block nb is taken
         \return new bit block's memory
     */
-    bm::word_t* convert_gap2bitset(unsigned nb, const gap_word_t* gap_block=0)
+    bm::word_t* convert_gap2bitset(block_idx_type nb, const gap_word_t* gap_block=0)
     {
         BM_ASSERT(is_init());
         
@@ -1416,7 +1509,7 @@ public:
         Make sure block turns into true bit-block if it is GAP or a full block
         @return bit-block pointer
     */
-    bm::word_t* deoptimize_block(unsigned nb)
+    bm::word_t* deoptimize_block(block_idx_type nb)
     {
         unsigned i, j;
         get_block_coord(nb, i, j);
@@ -1445,7 +1538,7 @@ public:
     /**
         Free block, make it zero pointer in the tree
     */
-    void zero_block(unsigned nb)
+    void zero_block(block_idx_type nb)
     {
         unsigned i, j;
         get_block_coord(nb, i, j);
@@ -1453,6 +1546,7 @@ public:
             return;
         zero_block(i, j);
     }
+    
 
     /**
     Free block, make it zero pointer in the tree
@@ -1468,6 +1562,15 @@ public:
                 blk_blk = alloc_top_subblock(i, FULL_BLOCK_FAKE_ADDR);
             
             bm::word_t* block = blk_blk[j];
+            if (IS_VALID_ADDR(block))
+            {
+                if (BM_IS_GAP(block))
+                    alloc_.free_gap_block(BMGAP_PTR(block), glen());
+                else
+                    alloc_.free_bit_block(block);
+            }
+            blk_blk[j] = 0;
+/*
             if (block)
             {
                 blk_blk[j] = 0;
@@ -1478,12 +1581,11 @@ public:
                     if (IS_VALID_ADDR(block))
                         alloc_.free_bit_block(block);
             }
-            
+*/
             if (j == bm::set_sub_array_size-1)
             {
-                // scan if top sub-block can also be dropped
-                do
-                {
+                // back scan if top sub-block can also be dropped
+                do {
                     if (blk_blk[--j])
                         return;
                     if (!j)
@@ -1542,7 +1644,7 @@ public:
 
         \return new GAP block pointer or NULL if block type mutated
     */
-    bm::gap_word_t* extend_gap_block(unsigned nb, gap_word_t* blk)
+    bm::gap_word_t* extend_gap_block(block_idx_type nb, gap_word_t* blk)
     {
         unsigned level = bm::gap_level(blk);
         unsigned len = bm::gap_length(blk);
@@ -1566,7 +1668,7 @@ public:
     /**
         Mark pointer as GAP and assign to the blocks tree
     */
-    void set_block_gap_ptr(unsigned nb, gap_word_t* gap_blk)
+    void set_block_gap_ptr(block_idx_type nb, gap_word_t* gap_blk)
     {
         bm::word_t* block = (bm::word_t*)BMPTR_SETBIT0(gap_blk);
         set_block_ptr(nb, block);
@@ -2082,7 +2184,8 @@ private:
     
     
     void copy(const blocks_manager& blockman,
-              unsigned block_from = 0, unsigned block_to = bm::set_total_blocks)
+              block_idx_type block_from = 0,
+              block_idx_type block_to = bm::set_total_blocks)
     {
         unsigned arg_top_blocks = blockman.top_block_size();
         this->reserve_top_blocks(arg_top_blocks);
@@ -2111,8 +2214,16 @@ private:
             if ((bm::word_t*)blk_blk_arg == FULL_BLOCK_FAKE_ADDR)
             {
                 BM_ASSERT(!blk_root[i]);
-                blk_root[i] = blk_blk_arg;
-                continue;
+                if (i < i_to)
+                {
+                    unsigned j = (i == i_from) ? j_from : 0;
+                    if (!j)
+                    {
+                        blk_root[i] = blk_blk_arg;
+                        continue;
+                    }
+                }
+                blk_blk_arg = FULL_SUB_BLOCK_REAL_ADDR;
             }
             
             BM_ASSERT(blk_root[i] == 0);

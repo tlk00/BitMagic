@@ -59,7 +59,7 @@ public:
     typedef typename BV::allocator_type              allocator_type;
     typedef typename bvector_type::allocation_policy allocation_policy_type;
     typedef typename allocator_type::allocator_pool_type allocator_pool_type;
-    typedef bm::id_t                                 size_type;
+    typedef typename bvector_type::size_type         size_type;
     typedef unsigned char                            octet_type;
 
 public:
@@ -1045,10 +1045,7 @@ void basic_bmatrix<BV>::optimize(bm::word_t* temp_block,
                   typename bvector_type::statistics* st)
 {
     if (st)
-    {
-        st->bit_blocks = st->gap_blocks = 0;
-        st->max_serialize_mem = st->memory_used = 0;
-    }
+        st->reset();
     for (unsigned j = 0; j < rsize_; ++j)
     {
         bvector_type* bv = get_row(j);
