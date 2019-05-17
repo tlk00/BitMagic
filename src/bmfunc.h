@@ -1628,11 +1628,11 @@ void for_each_nzblock2(T*** root, unsigned size1, F& f)
 /*! For each non-zero block executes supplied function-predicate.
     Function returns if function-predicate returns true
 */
-template<class T, class F> 
-bool for_each_nzblock_if(T*** root, unsigned size1, F& f)
+template<typename T, typename BI, typename F>
+bool for_each_nzblock_if(T*** root, BI size1, F& f)
 {
-    unsigned block_idx = 0;
-    for (unsigned i = 0; i < size1; ++i)
+    BI block_idx = 0;
+    for (BI i = 0; i < size1; ++i)
     {
         T** blk_blk = root[i];
         if (!blk_blk) 
@@ -1652,7 +1652,8 @@ bool for_each_nzblock_if(T*** root, unsigned size1, F& f)
         for (unsigned j = 0;j < bm::set_sub_array_size; ++j, ++block_idx)
         {
             if (blk_blk[j]) 
-                if (f(blk_blk[j], block_idx)) return true;
+                if (f(blk_blk[j], block_idx))
+                    return true;
         } // for j
     } // for i
     return false;

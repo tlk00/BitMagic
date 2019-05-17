@@ -58,75 +58,80 @@ namespace bm
 
 
 // Serialization stream markup constants
+//
 
-
-const unsigned char set_block_end               = 0;   //!< End of serialization
-const unsigned char set_block_1zero             = 1;   //!< One all-zero block
-const unsigned char set_block_1one              = 2;   //!< One block all-set (1111...)
-const unsigned char set_block_8zero             = 3;   //!< Up to 256 zero blocks
-const unsigned char set_block_8one              = 4;   //!< Up to 256 all-set blocks
-const unsigned char set_block_16zero            = 5;   //!< Up to 65536 zero blocks
-const unsigned char set_block_16one             = 6;   //!< UP to 65536 all-set blocks
-const unsigned char set_block_32zero            = 7;   //!< Up to 4G zero blocks
-const unsigned char set_block_32one             = 8;   //!< UP to 4G all-set blocks
-const unsigned char set_block_azero             = 9;   //!< All other blocks zero
-const unsigned char set_block_aone              = 10;  //!< All other blocks one
-const unsigned char set_block_bit               = 11;  //!< Plain bit block
-const unsigned char set_block_sgapbit           = 12;  //!< SGAP compressed bitblock
-const unsigned char set_block_sgapgap           = 13;  //!< SGAP compressed GAP block
-const unsigned char set_block_gap               = 14;  //!< Plain GAP block
-const unsigned char set_block_gapbit            = 15;  //!< GAP compressed bitblock 
-const unsigned char set_block_arrbit            = 16;  //!< List of bits ON
+const unsigned char set_block_end               = 0;  //!< End of serialization
+const unsigned char set_block_1zero             = 1;  //!< One all-zero block
+const unsigned char set_block_1one              = 2;  //!< One block all-set (1111...)
+const unsigned char set_block_8zero             = 3;  //!< Up to 256 zero blocks
+const unsigned char set_block_8one              = 4;  //!< Up to 256 all-set blocks
+const unsigned char set_block_16zero            = 5;  //!< Up to 65536 zero blocks
+const unsigned char set_block_16one             = 6;  //!< UP to 65536 all-set blocks
+const unsigned char set_block_32zero            = 7;  //!< Up to 4G zero blocks
+const unsigned char set_block_32one             = 8;  //!< UP to 4G all-set blocks
+const unsigned char set_block_azero             = 9;  //!< All other blocks zero
+const unsigned char set_block_aone              = 10; //!< All other blocks one
+const unsigned char set_block_bit               = 11; //!< Plain bit block
+const unsigned char set_block_sgapbit           = 12; //!< SGAP compressed bitblock
+const unsigned char set_block_sgapgap           = 13; //!< SGAP compressed GAP block
+const unsigned char set_block_gap               = 14; //!< Plain GAP block
+const unsigned char set_block_gapbit            = 15; //!< GAP compressed bitblock
+const unsigned char set_block_arrbit            = 16; //!< List of bits ON
 const unsigned char set_block_bit_interval      = 17; //!< Interval block
-const unsigned char set_block_arrgap            = 18;  //!< List of bits ON (GAP block)
+const unsigned char set_block_arrgap            = 18; //!< List of bits ON (GAP block)
 const unsigned char set_block_bit_1bit          = 19; //!< Bit block with 1 bit ON
 const unsigned char set_block_gap_egamma        = 20; //!< Gamma compressed GAP block
 const unsigned char set_block_arrgap_egamma     = 21; //!< Gamma compressed delta GAP array
 const unsigned char set_block_bit_0runs         = 22; //!< Bit block with encoded zero intervals
 const unsigned char set_block_arrgap_egamma_inv = 23; //!< Gamma compressed inverted delta GAP array
-const unsigned char set_block_arrgap_inv        = 24;  //!< List of bits OFF (GAP block)
+const unsigned char set_block_arrgap_inv        = 24; //!< List of bits OFF (GAP block)
+const unsigned char set_block_64zero            = 25; //!< lots of zero blocks
+const unsigned char set_block_64one             = 26; //!< lots of all-set blocks
 
 
 /// \internal
 /// \ingroup bvserial 
 enum serialization_header_mask {
     BM_HM_DEFAULT = 1,
-    BM_HM_RESIZE  = (1 << 1), ///< resized vector
-    BM_HM_ID_LIST = (1 << 2), ///< id list stored
-    BM_HM_NO_BO   = (1 << 3), ///< no byte-order
-    BM_HM_NO_GAPL = (1 << 4)  ///< no GAP levels
+    BM_HM_RESIZE  = (1 << 1),  ///< resized vector
+    BM_HM_ID_LIST = (1 << 2),  ///< id list stored
+    BM_HM_NO_BO   = (1 << 3),  ///< no byte-order
+    BM_HM_NO_GAPL = (1 << 4),  ///< no GAP levels
+    BM_HM_64_BIT  = (1 << 5)   ///< 64-bit vector
 };
 
 
-
-#define SER_NEXT_GRP(enc, nb, B_1ZERO, B_8ZERO, B_16ZERO, B_32ZERO) \
-   if (nb == 1) \
+#define SER_NEXT_GRP(enc, nb, B_1ZERO, B_8ZERO, B_16ZERO, B_32ZERO, B_64ZERO) \
+   if (nb == 1u) \
       enc.put_8(B_1ZERO); \
-   else if (nb < 256) \
+   else if (nb < 256u) \
    { \
       enc.put_8(B_8ZERO); \
       enc.put_8((unsigned char)nb); \
    } \
-   else if (nb < 65536) \
+   else if (nb < 65536u) \
    { \
       enc.put_8(B_16ZERO); \
       enc.put_16((unsigned short)nb); \
    } \
+   else if (nb < bm::id_max32) \
+   { \
+      enc.put_8(B_32ZERO); \
+      enc.put_32(unsigned(nb)); \
+   } \
    else \
    {\
-      enc.put_8(B_32ZERO); \
-      enc.put_32(nb); \
+      enc.put_8(B_64ZERO); \
+      enc.put_64(nb); \
    }
-
 
 #define BM_SET_ONE_BLOCKS(x) \
     {\
-         unsigned end_block = i + x; \
+         block_idx_type end_block = i + x; \
          for (;i < end_block; ++i) \
             bman.set_block_all_set(i); \
     } \
     --i
-
 
 
 
@@ -149,6 +154,7 @@ public:
     typedef typename bvector_type::allocator_type             allocator_type;
     typedef typename bvector_type::blocks_manager_type        blocks_manager_type;
     typedef typename bvector_type::statistics                 statistics_type;
+    typedef typename bvector_type::block_idx_type             block_idx_type;
 
     typedef byte_buffer<allocator_type> buffer;
 public:
@@ -276,8 +282,7 @@ private:
     Base deserialization class
     \ingroup bvserial
 */
-template<class DEC>
-class deseriaizer_base
+template<class DEC> class deseriaizer_base
 {
 public:
     typedef DEC decoder_type;
@@ -309,8 +314,12 @@ template<class BV, class DEC>
 class deserializer : protected deseriaizer_base<DEC>
 {
 public:
-    typedef BV bvector_type;
-    typedef typename deseriaizer_base<DEC>::decoder_type decoder_type;
+
+    typedef BV                                             bvector_type;
+    typedef typename BV::size_type                         size_type;
+    typedef typename bvector_type::block_idx_type          block_idx_type;
+    typedef typename deseriaizer_base<DEC>::decoder_type   decoder_type;
+    
 public:
     deserializer() : temp_block_(0) {}
     
@@ -324,7 +333,7 @@ protected:
 protected:
    void deserialize_gap(unsigned char btype, decoder_type& dec, 
                         bvector_type&  bv, blocks_manager_type& bman,
-                        unsigned i,
+                        block_idx_type nb,
                         bm::word_t* blk);
 protected:
     bm::gap_word_t   gap_temp_block_[bm::gap_equiv_len * 4];
@@ -398,11 +407,17 @@ class serial_stream_iterator : protected deseriaizer_base<DEC>
 {
 public:
     typedef typename deseriaizer_base<DEC>::decoder_type decoder_type;
+    #ifdef BM64ADDR
+        typedef bm::id64_t   block_idx_type;
+    #else
+        typedef bm::id_t     block_idx_type;
+    #endif
+
 public:
     serial_stream_iterator(const unsigned char* buf);
 
     /// serialized bitvector size
-    unsigned bv_size() const { return bv_size_; }
+    block_idx_type bv_size() const { return bv_size_; }
 
     /// Returns true if end of bit-stream reached 
     bool is_eof() const { return end_of_stream_; }
@@ -509,7 +524,7 @@ protected:
 
     decoder_type       decoder_;
     bool               end_of_stream_;
-    unsigned           bv_size_;
+    block_idx_type     bv_size_;
     iterator_state     state_;
     unsigned           id_cnt_;  ///< Id counter for id list
     bm::id_t           last_id_; ///< Last id from the id list
@@ -676,6 +691,10 @@ void serializer<BV>::encode_header(const BV& bv, bm::encoder& enc)
     if (!gap_serial_) 
         header_flag |= BM_HM_NO_GAPL;
 
+    #ifdef BM64ADDR
+        header_flag |= BM_HM_64_BIT;
+    #endif
+
     enc.put_8(header_flag);
 
     if (byte_order_serial_)
@@ -683,7 +702,6 @@ void serializer<BV>::encode_header(const BV& bv, bm::encoder& enc)
         ByteOrder bo = globals<true>::byte_order();
         enc.put_8((unsigned char)bo);
     }
-
     // keep GAP levels information
     if (gap_serial_)
     {
@@ -693,7 +711,11 @@ void serializer<BV>::encode_header(const BV& bv, bm::encoder& enc)
     // save size (only if bvector has been down-sized)
     if (header_flag & BM_HM_RESIZE) 
     {
+    #ifdef BM64ADDR
+        enc.put_64(bv.size());
+    #else
         enc.put_32(bv.size());
+    #endif
     }
     
 }
@@ -921,8 +943,7 @@ unsigned serializer<BV>::serialize(const BV& bv,
     bm::encoder enc(buf, buf_size);  // create the encoder
     encode_header(bv, enc);
 
-    unsigned i,j;
-
+    block_idx_type i, j;
 
     // save blocks.
     for (i = 0; i < bm::set_total_blocks; ++i)
@@ -939,13 +960,13 @@ unsigned serializer<BV>::serialize(const BV& bv,
         if (flag)
         {
         zero_block:
-            unsigned next_nb = bman.find_next_nz_block(i+1, false);
+            block_idx_type next_nb = bman.find_next_nz_block(i+1, false);
             if (next_nb == bm::set_total_blocks) // no more blocks
             {
                 enc.put_8(set_block_azero);
                 return enc.size();
             }
-            unsigned nb = next_nb - i;
+            block_idx_type nb = next_nb - i;
             
             if (nb > 1 && nb < 128)
             {
@@ -958,7 +979,8 @@ unsigned serializer<BV>::serialize(const BV& bv,
                 SER_NEXT_GRP(enc, nb, set_block_1zero, 
                                       set_block_8zero, 
                                       set_block_16zero, 
-                                      set_block_32zero) 
+                                      set_block_32zero,
+                                      set_block_64zero)
             }
             i = next_nb - 1;
             continue;
@@ -969,6 +991,7 @@ unsigned serializer<BV>::serialize(const BV& bv,
             if (flag)
             {
                 // Look ahead for similar blocks
+                // TODO: optimize search for next 0xFFFF block
                 for(j = i+1; j < bm::set_total_blocks; ++j)
                 {
                     bman.get_block_coord(j, i0, j0);
@@ -983,11 +1006,12 @@ unsigned serializer<BV>::serialize(const BV& bv,
                 }
                 else
                 {
-                   unsigned nb = j - i;
+                   block_idx_type nb = j - i;
                    SER_NEXT_GRP(enc, nb, set_block_1one, 
                                          set_block_8one, 
                                          set_block_16one, 
-                                         set_block_32one) 
+                                         set_block_32one,
+                                         set_block_64one)
                 }
                 i = j - 1;
                 continue;
@@ -1023,7 +1047,7 @@ unsigned serializer<BV>::serialize(const BV& bv,
         {
         case 1: // corner case: only 1 bit on
             {
-                bm::id_t bit_idx = 0;
+                unsigned bit_idx = 0;
                 bm::bit_block_find(blk, bit_idx, &bit_idx);
                 enc.put_8(set_block_bit_1bit); enc.put_16(bm::short_t(bit_idx));
                 continue;
@@ -1032,8 +1056,7 @@ unsigned serializer<BV>::serialize(const BV& bv,
         default:
             break;
         }
-       
-       
+            
         // compute alternative representation sizes
         //
         unsigned arr_block_size = unsigned(sizeof(gap_word_t) + (block_bc * sizeof(gap_word_t)));
@@ -1419,7 +1442,7 @@ template<class BV, class DEC>
 void 
 deserializer<BV, DEC>::deserialize_gap(unsigned char btype, decoder_type& dec, 
                                        bvector_type&  bv, blocks_manager_type& bman,
-                                       unsigned i,
+                                       block_idx_type nb,
                                        bm::word_t* blk)
 {
     //typedef bit_in<DEC> bit_in_type;
@@ -1445,14 +1468,14 @@ deserializer<BV, DEC>::deserialize_gap(unsigned char btype, decoder_type& dec,
             if (blk == 0)  // block does not exist yet
             {
                 blk = bman.get_allocator().alloc_bit_block();
-                bman.set_block(i, blk);
+                bman.set_block(nb, blk);
                 gap_convert_to_bitset(blk, gap_temp_block_);                
             }
             else  // We have some data already here. Apply OR operation.
             {
                 gap_convert_to_bitset(temp_block_, 
                                       gap_temp_block_);
-                bv.combine_operation_with_block(i, 
+                bv.combine_operation_with_block(nb,
                                                 temp_block_, 
                                                 0, 
                                                 BM_OR);
@@ -1470,7 +1493,7 @@ deserializer<BV, DEC>::deserialize_gap(unsigned char btype, decoder_type& dec,
             gap_word_t* gap_blk_ptr = BMGAP_PTR(gap_blk);
             *gap_blk_ptr = gap_head;
             bm::set_gap_level(gap_blk_ptr, level);
-            blk = bman.set_block(i, (bm::word_t*)BMPTR_SETBIT0(gap_blk));
+            blk = bman.set_block(nb, (bm::word_t*)BMPTR_SETBIT0(gap_blk));
             BM_ASSERT(blk == 0);
             
             dec.get_16(gap_blk + 1, len - 1);
@@ -1498,7 +1521,7 @@ deserializer<BV, DEC>::deserialize_gap(unsigned char btype, decoder_type& dec,
               if (level == -1)  // Too big to be GAP: convert to BIT block
               {
                   gap_convert_to_bitset(temp_block_, gap_temp_block_);
-                  bv.combine_operation_with_block(i,
+                  bv.combine_operation_with_block(nb,
                                                   temp_block_,
                                                   0,
                                                   BM_OR);
@@ -1518,7 +1541,7 @@ deserializer<BV, DEC>::deserialize_gap(unsigned char btype, decoder_type& dec,
         BM_ASSERT(0);
     }
 
-    bv.combine_operation_with_block(i, 
+    bv.combine_operation_with_block(nb,
                                    (bm::word_t*)gap_temp_block_, 
                                     1, 
                                     BM_OR);
@@ -1533,9 +1556,7 @@ unsigned deserializer<BV, DEC>::deserialize(bvector_type&        bv,
 {
     blocks_manager_type& bman = bv.get_blocks_manager();
     if (!bman.is_init())
-    {
         bman.init_tree();
-    }
 
     bm::wordop_t* tmp_buf = 
         temp_block ? (bm::wordop_t*) temp_block 
@@ -1562,15 +1583,19 @@ unsigned deserializer<BV, DEC>::deserialize(bvector_type&        bv,
         // special case: the next comes plain list of integers
         if (header_flag & BM_HM_RESIZE)
         {
-            unsigned bv_size = dec.get_32();
-            if (bv_size > bv.size())
+            block_idx_type bv_size;
+            if (header_flag & BM_HM_64_BIT)
             {
-                bv.resize(bv_size);
+                BM_ASSERT(sizeof(block_idx_type)==8);
+                bv_size = (block_idx_type)dec.get_64();
             }
+            else
+                bv_size = dec.get_32();
+            if (bv_size > bv.size())
+                bv.resize(bv_size);
         }
-        
-
-        for (unsigned cnt = dec.get_32(); cnt; --cnt) {
+        for (unsigned cnt = dec.get_32(); cnt; --cnt)
+        {
             bm::id_t id = dec.get_32();
             bv.set(id);
         } // for
@@ -1578,7 +1603,7 @@ unsigned deserializer<BV, DEC>::deserialize(bvector_type&        bv,
         return dec.size()-1;
     }
 
-    unsigned i;
+    block_idx_type i;
 
     if (!(header_flag & BM_HM_NO_GAPL)) 
     {
@@ -1589,18 +1614,23 @@ unsigned deserializer<BV, DEC>::deserialize(bvector_type&        bv,
             /*glevels[i] =*/ dec.get_16();
         }
     }
-
-    if (header_flag & (1 << 1))
+    if (header_flag & BM_HM_RESIZE)
     {
-        unsigned bv_size = dec.get_32();
-        if (bv_size > bv.size())
+        block_idx_type bv_size;
+        if (header_flag & BM_HM_64_BIT)
         {
-            bv.resize(bv_size);
+            BM_ASSERT(sizeof(block_idx_type)==8);
+            bv_size = (block_idx_type)dec.get_64();
         }
+        else
+            bv_size = dec.get_32();
+        if (bv_size > bv.size())
+            bv.resize(bv_size);
     }
 
     unsigned char btype;
-    unsigned nb, i0, j0;
+    block_idx_type nb;
+    unsigned i0, j0;
 
     for (i = 0; i < bm::set_total_blocks; ++i)
     {
@@ -1609,8 +1639,6 @@ unsigned deserializer<BV, DEC>::deserialize(bvector_type&        bv,
         bman.get_block_coord(i, i0, j0);
         bm::word_t* blk = bman.get_block_ptr(i0, j0);
 
-//        bm::word_t* blk = bman.get_block(i);
-        
         // pre-check if we have short zero-run packaging here
         //
         if (btype & (1 << 7))
@@ -1640,11 +1668,18 @@ unsigned deserializer<BV, DEC>::deserialize(bvector_type&        bv,
             nb = dec.get_32();
             i += nb-1;
             continue;
+        case set_block_64zero:
+            #ifdef BM64ADDR
+                nb = dec.get_64();
+                i += nb-1;
+            #else
+                BM_ASSERT(0); // attempt to read 64-bit vector in 32-bit mode
+                i = bm::set_total_blocks;
+            #endif
+            continue;
         case set_block_aone:
-            for (;i < bm::set_total_blocks; ++i)
-            {
-                bman.set_block_all_set(i);
-            }
+            bman.set_all_set(i, bm::set_total_blocks-1);
+            i = bm::set_total_blocks;
             break;
         case set_block_1one:
             bman.set_block_all_set(i);
@@ -1657,6 +1692,9 @@ unsigned deserializer<BV, DEC>::deserialize(bvector_type&        bv,
             continue;
         case set_block_32one:
             BM_SET_ONE_BLOCKS(dec.get_32());
+            continue;
+        case set_block_64one:
+            BM_SET_ONE_BLOCKS(dec.get_64());
             continue;
         case set_block_bit: 
         {
@@ -1677,9 +1715,9 @@ unsigned deserializer<BV, DEC>::deserialize(bvector_type&        bv,
         }
         case set_block_bit_1bit:
         {
-            unsigned bit_idx = dec.get_16();
+            size_type bit_idx = dec.get_16();
             bit_idx += i * bm::bits_in_block; 
-            bv.set_bit(bit_idx);
+            bv.set_bit_no_check(bit_idx);
             continue;
         }
         case set_block_bit_0runs:
@@ -1844,7 +1882,13 @@ serial_stream_iterator<DEC>::serial_stream_iterator(const unsigned char* buf)
         // special case: the next comes plain list of unsigned integers
         if (header_flag & BM_HM_RESIZE)
         {
-            bv_size_ = decoder_.get_32();
+            if (header_flag & BM_HM_64_BIT)
+            {
+                BM_ASSERT(sizeof(block_idx_type)==8);
+                bv_size_ = (block_idx_type)decoder_.get_64();
+            }
+            else
+                bv_size_ = decoder_.get_32();
         }
 
         state_ = e_list_ids;
@@ -1853,20 +1897,13 @@ serial_stream_iterator<DEC>::serial_stream_iterator(const unsigned char* buf)
     }
     else
     {
-        if (!(header_flag & BM_HM_NO_GAPL)) 
+        if (!(header_flag & BM_HM_NO_GAPL))
         {
-            unsigned i;
-            // keep GAP levels info
-            for (i = 0; i < bm::gap_levels; ++i)
-            {
+            for (unsigned i = 0; i < bm::gap_levels; ++i) // load the GAP levels
                 glevels_[i] = decoder_.get_16();
-            }
         }
-
         if (header_flag & (1 << 1))
-        {
             bv_size_ = decoder_.get_32();
-        }
         state_ = e_blocks;
     }
 }

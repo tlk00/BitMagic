@@ -406,7 +406,7 @@ public:
         size_type               position_;   //!< Bit position (bit idx)
         const bm::word_t*       block_;      //!< Block pointer.(NULL-invalid)
         unsigned                block_type_; //!< Type of block. 0-Bit, 1-GAP
-        unsigned                block_idx_;  //!< Block index
+        block_idx_type          block_idx_;  //!< Block index
 
         /*! Block type dependent information for current block. */
         union block_descr
@@ -1131,8 +1131,8 @@ public:
         bool search_in_blocks()
         {
             ++(this->block_idx_);
-            unsigned i = this->block_idx_ >> bm::set_array_shift;
-            unsigned top_block_size = this->bv_->blockman_.top_block_size();
+            block_idx_type i = this->block_idx_ >> bm::set_array_shift;
+            block_idx_type top_block_size = this->bv_->blockman_.top_block_size();
             for (; i < top_block_size; ++i)
             {
                 bm::word_t** blk_blk = this->bv_->blockman_.top_blocks_root()[i];
@@ -1145,7 +1145,7 @@ public:
                 if ((bm::word_t*)blk_blk == FULL_BLOCK_FAKE_ADDR)
                     blk_blk = FULL_SUB_BLOCK_REAL_ADDR;
 
-                unsigned j = this->block_idx_ & bm::set_array_mask;
+                block_idx_type j = this->block_idx_ & bm::set_array_mask;
 
                 for(; j < bm::set_sub_array_size; ++j, ++(this->block_idx_))
                 {
@@ -3436,7 +3436,6 @@ void bvector<Alloc>::calc_stat(struct bvector<Alloc>::statistics* st) const
 template<class Alloc>
 void bvector<Alloc>::set_bit_no_check(size_type n)
 {
-    BM_ASSERT(blockman_.is_init());
     BM_ASSERT_THROW(n < bm::id_max, BM_ERR_RANGE);
     
     bool val = true; // set bit
@@ -4216,7 +4215,7 @@ bvector<Alloc>::check_or_next(size_type prev) const
         }
     }
     ++j;
-    unsigned top_blocks = blockman_.top_block_size();
+    block_idx_type top_blocks = blockman_.top_block_size();
     for (; i < top_blocks; ++i)
     {
         const bm::word_t* const* blk_blk = blockman_.get_topblock(i);
@@ -6505,7 +6504,7 @@ void bvector<Alloc>::clear_range_no_check(size_type left,
     if (nb < nb_to)
     {
         BM_ASSERT(nb_to);
-        blockman_.set_all_zero(nb, nb_to-1);
+        blockman_.set_all_zero(nb, nb_to - 1u);
     }
 
     if (nb_to > nblock_right)

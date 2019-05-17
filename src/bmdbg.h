@@ -399,7 +399,7 @@ void print_bvector_stat(const BV& bvect)
 
 
 template<class BV>
-void print_stat(const BV& bv, unsigned blocks = 0)
+void print_stat(const BV& bv, typename BV::block_idx_type blocks = 0)
 {
     const typename BV::blocks_manager_type& bman = bv.get_blocks_manager();
 

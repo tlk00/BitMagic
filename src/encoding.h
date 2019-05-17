@@ -140,6 +140,7 @@ public:
     decoder_little_endian(const unsigned char* buf);
     bm::short_t get_16();
     bm::word_t get_32();
+    bm::id64_t get_64();
     void get_32(bm::word_t* w, unsigned count);
     bool get_32_OR(bm::word_t* w, unsigned count);
     void get_32_AND(bm::word_t* w, unsigned count);
@@ -822,7 +823,8 @@ BMFORCEINLINE bm::word_t decoder::get_32()
    \fn bm::word_t decoder::get_64()
    \brief Reads 64-bit word from the decoding buffer.
 */
-inline bm::id64_t decoder::get_64()
+inline
+bm::id64_t decoder::get_64()
 {
 #if (BM_UNALIGNED_ACCESS_OK == 1)
 	bm::id64_t a = *((bm::id64_t*)buf_);
@@ -994,7 +996,7 @@ inline decoder_little_endian::decoder_little_endian(const unsigned char* buf)
 {
 }
 
-BMFORCEINLINE
+inline
 bm::short_t decoder_little_endian::get_16()
 {
     bm::short_t v1 = bm::short_t(buf_[0]);
@@ -1004,11 +1006,26 @@ bm::short_t decoder_little_endian::get_16()
     return a;
 }
 
-BMFORCEINLINE
+inline
 bm::word_t decoder_little_endian::get_32()
 {
     bm::word_t a = ((unsigned)buf_[0] << 24)+ ((unsigned)buf_[1] << 16) +
                    ((unsigned)buf_[2] << 8) + ((unsigned)buf_[3]);
+    buf_+=sizeof(a);
+    return a;
+}
+
+inline
+bm::id64_t decoder_little_endian::get_64()
+{
+    bm::id64_t a = buf_[0]+
+                   ((bm::id64_t)buf_[1] << 56) +
+                   ((bm::id64_t)buf_[2] << 48) +
+                   ((bm::id64_t)buf_[3] << 40) +
+                   ((bm::id64_t)buf_[4] << 32) +
+                   ((bm::id64_t)buf_[5] << 24) +
+                   ((bm::id64_t)buf_[6] << 16) +
+                   ((bm::id64_t)buf_[7] << 8);
     buf_+=sizeof(a);
     return a;
 }
