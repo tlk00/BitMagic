@@ -157,7 +157,7 @@ public:
                 prev_block_border_bit_(0)
         {}
 
-        bm::id_t block_count(const bm::word_t* block, unsigned idx)
+        bm::id_t block_count(const bm::word_t* block, block_idx_type idx)
         {
             bm::id_t cnt = 0;
             bm::id_t first_bit;
@@ -203,15 +203,15 @@ public:
             return cnt;
         }
         
-        bm::id_t count() const { return count_; }
+        id_type count() const { return count_; }
 
-        void operator()(const bm::word_t* block, unsigned idx)
+        void operator()(const bm::word_t* block, block_idx_type idx)
         {
             count_ += block_count(block, idx);
         }
 
     private:
-        bm::id_t   count_;
+        id_type   count_;
         bm::id_t   prev_block_border_bit_;
     };
 
@@ -224,7 +224,7 @@ public:
             : bm_func_base_const(bm) 
         {}
 
-        bool operator()(const bm::word_t* block, unsigned /*idx*/)
+        bool operator()(const bm::word_t* block, block_idx_type /*idx*/)
         {
             if (BM_IS_GAP(block)) // gap block
                 return (!gap_is_all_zero(BMGAP_PTR(block)));
@@ -245,7 +245,7 @@ public:
             BM_ASSERT(glevel_len);
         }
 
-        void operator()(bm::word_t* block, unsigned idx)
+        void operator()(bm::word_t* block, block_idx_type idx)
         {
             blocks_manager& bman = this->bm_;
             
@@ -302,7 +302,7 @@ public:
     public:
         block_one_func(blocks_manager& bm) : bm_func_base(bm) {}
 
-        void operator()(bm::word_t* block, unsigned idx)
+        void operator()(bm::word_t* block, block_idx_type idx)
         {
             if (!IS_FULL_BLOCK(block))
                 this->bm_.set_block_all_set(idx);
@@ -581,7 +581,7 @@ public:
         return bm->top_blocks_root();
     }
 
-    void set_block_all_set(unsigned nb)
+    void set_block_all_set(block_idx_type nb)
     {
         unsigned i, j;
         get_block_coord(nb, i, j);
@@ -623,7 +623,7 @@ public:
     /**
         set all-set block pointers for [start..end]
     */
-    void set_all_set(unsigned nb, unsigned nb_to)
+    void set_all_set(block_idx_type nb, block_idx_type nb_to)
     {
         BM_ASSERT(nb <= nb_to);
         
@@ -688,7 +688,7 @@ public:
     /**
         set all-Zero block pointers for [start..end]
     */
-    void set_all_zero(block_idx_type nb, unsigned nb_to)
+    void set_all_zero(block_idx_type nb, block_idx_type nb_to)
     {
         BM_ASSERT(nb <= nb_to);
         
@@ -1998,7 +1998,7 @@ public:
         if (!top_blocks_)
             return;
         
-        unsigned empty_blocks = 0;
+        block_idx_type empty_blocks = 0;
         unsigned top_blocks = top_block_size();
         for (unsigned i = 0; i < top_blocks; ++i)
         {
@@ -2010,7 +2010,7 @@ public:
                 continue;
             }
             
-            unsigned full_blocks = 0;
+            block_idx_type full_blocks = 0;
             bool any_valid = false;
             for (unsigned j = 0; j < bm::set_sub_array_size; ++j)
             {
@@ -2269,14 +2269,13 @@ private:
         } // for i
     }
 
-
 private:
     /// maximum addresable bits
     id_type                                max_bits_;
     /// Tree of blocks.
     bm::word_t***                          top_blocks_;
     /// Size of the top level block array in blocks_ tree
-    unsigned                               top_block_size_;
+    unsigned                         top_block_size_;
     /// Temp block.
     bm::word_t*                            temp_block_; 
     /// vector defines gap block lengths for different levels 
