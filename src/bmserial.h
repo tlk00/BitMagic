@@ -1694,9 +1694,14 @@ unsigned deserializer<BV, DEC>::deserialize(bvector_type&        bv,
             BM_SET_ONE_BLOCKS(dec.get_32());
             continue;
         case set_block_64one:
+    #ifdef BM64ADDR
             BM_SET_ONE_BLOCKS(dec.get_64());
+    #else
+            BM_ASSERT(0); // 32-bit vector cannot read 64-bit 
+            dec.get_64();
+    #endif
             continue;
-        case set_block_bit: 
+        case set_block_bit:
         {
             if (blk == 0)
             {
