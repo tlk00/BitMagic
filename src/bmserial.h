@@ -1902,8 +1902,20 @@ serial_stream_iterator<DEC>::serial_stream_iterator(const unsigned char* buf)
             for (unsigned i = 0; i < bm::gap_levels; ++i) // load the GAP levels
                 glevels_[i] = decoder_.get_16();
         }
+        if (header_flag & BM_HM_RESIZE)
+        {
+            if (header_flag & BM_HM_64_BIT)
+            {
+                BM_ASSERT(sizeof(block_idx_type)==8);
+                bv_size_ = (block_idx_type)decoder_.get_64();
+            }
+            else
+                bv_size_ = decoder_.get_32();
+        }
+/*
         if (header_flag & (1 << 1))
             bv_size_ = decoder_.get_32();
+*/
         state_ = e_blocks;
     }
 }

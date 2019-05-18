@@ -2184,7 +2184,7 @@ public:
     /**
        \brief Returns enumerator pointing on specified or the next available bit.
     */
-    enumerator get_enumerator(bm::id_t pos) const
+    enumerator get_enumerator(size_type pos) const
                 {  return typename bvector<Alloc>::enumerator(this, pos); }
     
     //@}
