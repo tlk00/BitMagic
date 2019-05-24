@@ -540,7 +540,7 @@ public:
 
         const bm::word_t* const* blk_blk = top_blocks_[i];
         if ((bm::word_t*)blk_blk == FULL_BLOCK_FAKE_ADDR)
-            return FULL_BLOCK_REAL_ADDR;
+            return FULL_BLOCK_FAKE_ADDR;
         const bm::word_t* ret = (blk_blk == 0) ? 0 : blk_blk[j];
         return ret;
     }
@@ -1989,7 +1989,24 @@ public:
         destroy_tree();
         top_blocks_ = 0; top_block_size_ = 0;
     }
+
+    // ----------------------------------------------------------------
     
+    /// calculate top blocks which are not NULL and not FULL
+    unsigned find_real_top_blocks() const
+    {
+        unsigned cnt = 0;
+        unsigned top_blocks = top_block_size();
+        for (unsigned i = 0; i < top_blocks; ++i)
+        {
+            bm::word_t** blk_blk = top_blocks_[i];
+            if (!blk_blk || ((bm::word_t*)blk_blk == FULL_BLOCK_FAKE_ADDR))
+                continue;
+            ++cnt;
+        } // for i
+        return cnt;
+    }
+
     // ----------------------------------------------------------------
     
     void optimize_tree(bm::word_t*  temp_block, int opt_mode,

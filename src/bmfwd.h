@@ -42,6 +42,7 @@ template<size_t N> class bvmini;
 typedef bm::mem_alloc<block_allocator, ptr_allocator, standard_alloc_pool> standard_allocator;
 
 template<class A = bm::standard_allocator> class bvector;
+template<class A = bm::standard_allocator> class rs_index;
 
 template<typename BV> class aggregator;
 

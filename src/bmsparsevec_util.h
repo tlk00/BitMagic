@@ -508,7 +508,7 @@ void bvps_addr_resolver<BV>::calc_prefix_sum(bool force)
     if (in_sync_ && force == false)
         return;  // nothing to do
     
-    addr_bv_.running_count_blocks(rs_index_); // compute popcount prefix list
+    addr_bv_.build_rs_index(rs_index_); // compute popcount prefix list
     in_sync_ = true;
 }
 

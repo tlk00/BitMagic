@@ -637,6 +637,118 @@ protected:
     buffer_type     buffer_;
 };
 
+
+
+/**
+    Heap allocated dynamic resizable scalar-type matrix
+
+    @internal
+*/
+template<typename Val, typename BVAlloc>
+class dynamic_heap_matrix
+{
+public:
+    typedef BVAlloc                                          bv_allocator_type;
+    typedef bm::byte_buffer<bv_allocator_type>               buffer_type;
+    typedef Val                                              value_type;
+    typedef size_t                                           size_type;
+
+public:
+
+    /**
+        By default object is constructed but NOT allocated.
+    */
+    dynamic_heap_matrix(size_type rows=0, size_type cols=0)
+        : rows_(rows), cols_(cols),
+        buffer_()
+    {}
+
+
+    /**
+        Post construction allocation, initialization
+    */
+    void init()
+    {
+        buffer_.resize(size_in_bytes());
+    }
+
+    unsigned rows() const { return rows_; }
+    unsigned cols() const { return cols_; }
+
+    void resize(size_type rows, size_type cols)
+    {
+        rows_ = rows; cols_ = cols;
+        buffer_.resize(size_in_bytes());
+    }
+    
+    bool is_init() const
+    {
+        return buffer_.size();
+    }
+
+    const value_type* row(size_type row_idx) const
+    {
+        BM_ASSERT(row_idx < rows_);
+        BM_ASSERT(buffer_.size());
+        const unsigned char* buf = buffer_.buf() + row_idx * row_size_in_bytes();
+        return (const value_type*) buf;
+    }
+
+    value_type* row(unsigned row_idx)
+    {
+        BM_ASSERT(row_idx < rows_);
+        BM_ASSERT(buffer_.size());
+
+        unsigned char* buf = buffer_.data() + row_idx * row_size_in_bytes();
+        return (value_type*)buf;
+    }
+
+    /** memset all buffer to all zeroes */
+    void set_zero()
+    {
+        ::memset(buffer_.data(), 0, size_in_bytes());
+    }
+    
+    /*!  swap content
+    */
+    void swap(dynamic_heap_matrix& other) BMNOEXEPT
+    {
+        bm::xor_swap(rows_, other.rows_);
+        bm::xor_swap(cols_, other.cols_);
+        buffer_.swap(other.buffer_);
+    }
+    
+    /*!  move content from another matrix
+    */
+    void move_from(dynamic_heap_matrix& other) BMNOEXEPT
+    {
+        rows_ = other.rows_;
+        cols_ = other.cols_;
+        buffer_.move_from(other.buffer_);
+    }
+
+    /** Get low-level buffer access */
+    buffer_type& get_buffer() { return buffer_; }
+    /** Get low-level buffer access */
+    const buffer_type& get_buffer() const { return buffer_; }
+
+protected:
+    size_type size_in_bytes() const
+    {
+        return sizeof(value_type) * cols_ * rows_;
+    }
+    size_type row_size_in_bytes() const
+    {
+        return sizeof(value_type) * cols_;
+    }
+
+protected:
+    size_type       rows_;
+    size_type       cols_;
+    buffer_type     buffer_;
+};
+
+
 } // namespace bm
 
 #include "bmundef.h"

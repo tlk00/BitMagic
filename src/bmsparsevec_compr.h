@@ -687,7 +687,7 @@ void rsc_sparse_vector<Val, SV>::sync(bool force)
         return;  // nothing to do
     const bvector_type* bv_null = sv_.get_null_bvector();
     BM_ASSERT(bv_null);
-    bv_null->running_count_blocks(bv_blocks_ptr_); // compute popcount prefix list
+    bv_null->build_rs_index(bv_blocks_ptr_); // compute popcount prefix list
     
     // sync the max-id
     bool found = bv_null->find_reverse(max_id_);
