@@ -914,7 +914,7 @@ void ResizeTest()
 
     {{
         bvect bv;
-        print_stat(bv);
+        //print_stat(bv);
         bv.set(100);
         bv.set(65536 + 10);
         print_stat(bv);
@@ -979,21 +979,25 @@ void ResizeTest()
     }}
 
     // inserter
-
+    //
     {{
         bvect bv1(10);
+        bm::id64_t maxs= bm::id_max - 100;
         {
             bvect::insert_iterator it(bv1);
             *it = 100 * 65536;
+            *it = maxs;
         }
-        assert(bv1.size() ==  100 * 65536 + 1);
+        auto sz = bv1.size();
+        assert(sz == maxs+1);
     }}
 
     // serialization
-
+    //
     {{
-        bvect bv1(10);
-        bv1.set(5);
+        const bvect::size_type test_size = bm::id_max - 100;
+        bvect bv1(test_size);
+        bv1.set(test_size - 1005);
         struct bvect::statistics st1;
         bv1.calc_stat(&st1);
 
@@ -1005,9 +1009,10 @@ void ResizeTest()
         bm::deserialize(bv2, sermem);
         delete [] sermem;
 
-        assert(bv2.size() == 10);
+        assert(bv2.size() == test_size);
         assert(bv2.count() == 1);
-        assert(bv2.get_first() == 5);
+        auto first = bv2.get_first();
+        assert(first == test_size - 1005);
     }}
 
     {{
@@ -1028,6 +1033,696 @@ void ResizeTest()
     cout << "---------------------------- ResizeTest() OK" << endl;
 }
 
+static
+void CompareEnumerators(const bvect::enumerator& en1, const bvect::enumerator& en2)
+{
+    if (!en1.valid() && !en2.valid())
+        return;
+    bool fsm_equal = en1.compare_state(en2);
+    if (!fsm_equal)
+    {
+        cerr << "Enumerators FSM comparison failed" << endl;
+        assert(0);
+        exit(1);
+    }
+}
+
+static
+void EmptyBVTest()
+{
+    cout << "---------------------------- Empty bvector test" << endl;
+
+    {
+        bvect bv1;
+        bvect bv2;
+        
+        bvect bv3(bv1 & bv2);
+        bvect bv4 = (bv1 & bv2);
+        
+        std::vector< bvect > v;
+        v.push_back(bvect());
+    }
+
+    {
+        bvect  bv1;
+        auto cnt = bv1.count_range(0, 10);
+        if (cnt)
+        {
+            cerr << "Failed count_range()" << endl;
+            exit(1);
+        }
+        bool b = bv1.test(0);
+        if (b)
+        {
+            cerr << "Failed test" << endl;
+            exit(1);
+        }
+        
+        b = bv1.any();
+        if (b)
+        {
+            cerr << "Failed any" << endl;
+            exit(1);
+        }
+        
+        bv1.set_bit(0);
+        if (!bv1.any())
+        {
+            cerr << "Failed set_bit" << endl;
+            exit(1);
+        }
+    }
+    {
+        bvect  bv1;
+        bool b = bv1.set_bit_and(0, false);
+        if (bv1.any() || b)
+        {
+            cerr << "Failed set_bit" << endl;
+            exit(1);
+        }
+    }
+    {
+        bvect  bv1;
+        bv1.set_range(0, 1, false);
+        if (bv1.any())
+        {
+            cerr << "Failed set_range" << endl;
+            exit(1);
+        }
+        bv1.set_range(0, 1, true);
+        if (bv1.count()!=2)
+        {
+            cerr << "Failed set_range(0,1)" << endl;
+            exit(1);
+        }
+    }
+    {
+        bvect  bv1;
+        bv1.clear_bit(0);
+        if (bv1.any())
+        {
+            cerr << "Failed clear_bit" << endl;
+            exit(1);
+        }
+    }
+    {
+        bvect  bv1;
+        bv1.clear();
+        if (bv1.any())
+        {
+            cerr << "Failed clear()" << endl;
+            exit(1);
+        }
+    }
+    {
+        bvect  bv1;
+        bv1.invert();
+        if (!bv1.any())
+        {
+            cerr << "Failed invert()" << endl;
+            exit(1);
+        }
+    }
+    {
+        bvect  bv1;
+        bvect  bv2;
+        bv1.swap(bv2);
+        if (bv1.any() || bv2.any())
+        {
+            cerr << "Failed swap()" << endl;
+            exit(1);
+        }
+    }
+    {
+        bvect  bv1;
+        if (bv1.get_first() != 0)
+        {
+            cerr << "Failed get_first()" << endl;
+            exit(1);
+        }
+    }
+    {
+        bvect  bv1;
+        if (bv1.extract_next(0) != 0)
+        {
+            cerr << "Failed extract_next()" << endl;
+            exit(1);
+        }
+    }
+    {
+        bvect  bv1;
+        bvect::statistics st;
+        bv1.calc_stat(&st);
+        if (st.memory_used == 0)
+        {
+            cerr << "Failed calc_stat()" << endl;
+            exit(1);
+        }
+    }
+    {
+        bvect  bv1;
+        bvect  bv2;
+        bvect  bv3;
+        bv1.bit_or(bv2);
+        if (bv1.any())
+        {
+            cerr << "Failed bit_or()" << endl;
+            exit(1);
+        }
+        bv2.set_bit(bm::id_max-100);
+        bv1.bit_or(bv2);
+        if (!bv1.any())
+        {
+            cerr << "Failed bit_or()" << endl;
+            exit(1);
+        }
+        bv1.bit_or(bv3);
+        if (bv1.count()!=1)
+        {
+            cerr << "Failed bit_or()" << endl;
+            exit(1);
+        }
+    }
+    
+    {
+        bvect  bv1;
+        bvect  bv2;
+        bv1.bit_and(bv2);
+        if (bv1.any())
+        {
+            cerr << "Failed bit_and()" << endl;
+            exit(1);
+        }
+        bv2.set_bit(100000000);
+        bv1.bit_and(bv2);
+        if (bv1.any())
+        {
+            cerr << "Failed bit_and()" << endl;
+            exit(1);
+        }
+        bv2.bit_and(bv1);
+        if (bv2.count()!=0)
+        {
+            cerr << "Failed bit_and()" << endl;
+            exit(1);
+        }
+    }
+    
+    {
+        bvect  bv1;
+        bvect::statistics st1;
+        bv1.optimize(0, bvect::opt_compress, &st1);
+        if (st1.memory_used == 0)
+        {
+            cerr << "Failed calc_stat()" << endl;
+            exit(1);
+        }
+        bv1.optimize_gap_size();
+    }
+    
+    {
+        bvect  bv1;
+        bvect  bv2;
+        
+        int r = bv1.compare(bv2);
+        if (r != 0)
+        {
+            cerr << "Failed compare()" << endl;
+            assert(0);
+            exit(1);
+            
+        }
+        bv2.set_bit(bm::id_max-1000);
+        r = bv1.compare(bv2);
+        if (r == 0)
+        {
+            cerr << "Failed compare()" << endl;
+            exit(1);
+            
+        }
+        r = bv2.compare(bv1);
+        if (r == 0)
+        {
+            cerr << "Failed compare()" << endl;
+            exit(1);
+        }
+    }
+    
+    {
+        bvect  bv1;
+        bvect::enumerator en1 = bv1.first();
+        bvect::enumerator en2 = bv1.get_enumerator(0ULL);
+        CompareEnumerators(en1, en2);
+        if (en1.valid() || en2.valid())
+        {
+            cerr << "failed first enumerator" << endl;
+            exit(1);
+        }
+    }
+    
+    cout << "---------------------------- Empty bvector test OK" << endl;
+    
+}
+
+static
+void EnumeratorTest()
+{
+    cout << "-------------------------------------------- EnumeratorTest" << endl;
+
+    {
+    bvect bvect1;
+
+    bvect1.set_bit(100);
+    
+    {
+        auto n = bvect1.get_next(101);
+        assert(!n);
+    }
+
+    bvect::enumerator en = bvect1.first();
+    auto n = bvect1.get_next(0);
+    
+    bvect::enumerator en1 = bvect1.get_enumerator(n);
+    if (*en != 100 || n != 100 || *en1 != 100)
+    {
+        cout << "1.Enumerator error !" << endl;
+        exit(1);
+    }
+    CompareEnumerators(en, en1);
+
+    bvect1.clear_bit(100);
+
+    bvect1.set_bit(bm::id_max - 100);
+    en.go_first();
+    n = bvect1.get_next(0);
+    en1.go_to(n);
+    if (*en != bm::id_max - 100 || n != *en || *en1 != *en)
+    {
+        cout << "2. Enumerator error !" << endl;
+        assert(0);
+        exit(1);
+    }
+    CompareEnumerators(en, en1);
+
+    bvect1.optimize();
+    en = bvect1.first();
+    n = bvect1.get_next(0);
+    en1 = bvect1.first();
+    en1.go_to(n);
+    if (*en != bm::id_max - 100 || n != *en || *en1 != *en)
+    {
+        cout << "2. Enumerator error !" << endl;
+        assert(0);
+        exit(1);
+    }
+    CompareEnumerators(en, en1);
+
+    }
+
+    {
+        bvect bvect1;
+        bvect1.set_bit(0);
+        bvect1.set_bit(10);
+        bvect1.set_bit(35);
+        bvect1.set_bit(1000);
+        bvect1.set_bit(2016519);
+        bvect1.set_bit(2034779);
+        bvect1.set_bit(bm::id_max-1);
+
+        bvect::enumerator en = bvect1.first();
+
+        auto num = bvect1.get_first();
+
+        bvect::enumerator end = bvect1.end();
+        while (en < end)
+        {
+            cout << num << endl;
+            bvect::enumerator en1 = bvect1.get_enumerator(num ? num-1 : num);
+            if (*en != num || *en != *en1)
+            {
+                cout << "Enumeration comparison failed !" <<
+                        " enumerator = " << *en <<
+                        " get_next() = " << num <<
+                        " goto enumerator = " << *en1 <<
+                        endl;
+                exit(1);
+            }
+            CompareEnumerators(en, en1);
+            
+            ++en;
+            num = bvect1.get_next(num);
+            ++en1;
+            CompareEnumerators(en, en1);
+            {
+                auto num2 = num / 2;
+                if (num2 < num)
+                {
+                    auto idx0 = bvect1.get_next(num2);
+                    bvect::enumerator en3 = bvect1.get_enumerator(num2);
+                    assert(idx0 == *en3);
+                }
+            }
+        }
+        if (num != 0)
+        {
+            cout << "Enumeration error!" << endl;
+            exit(1);
+        }
+    }
+
+    cout << "FULL bvector enumerator stress test (0)..." << endl;
+    {
+        bvect bvect1;
+        bvect1.set();
+        
+        {
+            bvect::enumerator en2(&bvect1, bm::id_max-1);
+            ++en2;
+            bool b = en2.valid();
+            assert(!b);
+        }
+
+        bvect::enumerator en = bvect1.first();
+        auto num = bvect1.get_first();
+        while (en.valid())
+        {
+            if (*en != num)
+            {
+                cout << "Enumeration comparison failed !" <<
+                        " enumerator = " << *en <<
+                        " get_next() = " << num << endl;
+                assert(0);
+                exit(1);
+            }
+
+            ++en;
+            num = bvect1.get_next(num);
+            {
+                bvect::enumerator en2(&bvect1, num);
+                if (*en2 != num)
+                {
+                    cout << "Enumeration comparison failed !" <<
+                            " enumerator = " << *en <<
+                            " get_next() = " << num << endl;
+                    assert(0);
+                    exit(1);
+                }
+                CompareEnumerators(en, en2);
+            }
+            if (num > (bm::set_sub_array_size * bm::gap_max_bits * 2))
+                break;
+        } // while
+    }
+    cout << "FULL bvector enumerator stress test (0) ... OK" << endl;
+
+    
+    cout << "FULL bvector enumerator stress test (1)..." << endl;
+    {
+        bvect bvect1;
+        bvect1.set();
+        
+        bvect::size_type start_idx = bm::id_max - (bm::set_sub_array_size * bm::gap_max_bits * 2);
+
+        bvect::enumerator en(&bvect1, start_idx);
+        while (en.valid())
+        {
+            bvect::size_type pos;
+            bool b = bvect1.find(start_idx, pos);
+            if (*en != pos || !b)
+            {
+                cout << "2. Enumeration comparison failed !" <<
+                        " enumerator = " << *en <<
+                        " find() = " << pos << endl;
+                assert(0);
+                exit(1);
+            }
+
+            ++en;
+            pos = bvect1.get_next(pos);
+            if (pos)
+            {
+                bvect::enumerator en2(&bvect1, pos);
+                if (*en2 != pos)
+                {
+                    cout << "2. Enumeration comparison failed !" <<
+                            " enumerator = " << *en <<
+                            " get_next() = " << pos << endl;
+                    assert(0);
+                    exit(1);
+                }
+                CompareEnumerators(en, en2);
+            }
+            else
+            {
+                assert(start_idx == bm::id_max-1);
+            }
+            start_idx = pos;
+        } // while
+    }
+    cout << "FULL bvector enumerator stress test (1) ... OK" << endl;
+    
+    {
+        bvect bvect1;
+
+        unsigned i;
+        for(i = 0; i < 65536; ++i)
+        {
+            bvect1.set_bit(i);
+        }
+        for(i = 65536*10; i < 65536*20; i+=3)
+        {
+            bvect1.set_bit(i);
+        }
+
+        bvect::enumerator en = bvect1.first();
+        bvect::size_type num = bvect1.get_first();
+        while (en < bvect1.end())
+        {
+            bvect::enumerator en1 = bvect1.get_enumerator(num);
+            if (*en != num || *en != *en1)
+            {
+                cout << "Enumeration comparison failed !" <<
+                        " enumerator = " << *en <<
+                        " get_next() = " << num <<
+                        " goto enumerator = " << *en1
+                        << endl;
+                exit(1);
+            }
+            ++en;
+            num = bvect1.get_next(num);
+            if (num == 31)
+            {
+                num = num + 0;
+            }
+            ++en1;
+            CompareEnumerators(en, en1);
+        }
+        if (num != 0)
+        {
+            cout << "Enumeration error!" << endl;
+            exit(1);
+        }
+    }
+
+
+    {
+        bvect bvect1;
+        bvect1.set_new_blocks_strat(bm::BM_GAP);
+        bvect1.set_bit(100);
+
+        bvect::enumerator en = bvect1.first();
+        bvect::enumerator en1 = bvect1.get_enumerator(99);
+        if (*en != 100 || *en != *en1)
+        {
+            cout << "Enumerator error !" << endl;
+            exit(1);
+        }
+        CompareEnumerators(en, en1);
+
+        bvect1.clear_bit(100);
+
+        bvect1.set_bit(bm::id_max - 100);
+        en.go_first();
+        en1.go_to(10);
+
+        if ((*en != bm::id_max - 100) || *en != *en1)
+        {
+            cout << "Enumerator error !" << endl;
+            exit(1);
+        }
+        CompareEnumerators(en, en1);
+        print_stat(bvect1);
+    }
+
+    {
+        bvect bvect1;
+        bvect1.set_new_blocks_strat(bm::BM_GAP);
+        bvect1.set_bit(0);
+        bvect1.set_bit(1);
+        bvect1.set_bit(10);
+        bvect1.set_bit(100);
+        bvect1.set_bit(1000);
+
+        bvect::enumerator en = bvect1.first();
+
+        auto num = bvect1.get_first();
+
+        while (en < bvect1.end())
+        {
+            bvect::enumerator en1 = bvect1.get_enumerator(num);
+            if (*en != num || *en != *en1)
+            {
+                cout << "Enumeration comparison failed !" <<
+                        " enumerator = " << *en <<
+                        " get_next() = " << num <<
+                        " goto enumerator = " << *en1 << endl;
+                exit(1);
+            }
+            CompareEnumerators(en, en1);
+            ++en;
+            num = bvect1.get_next(num);
+            ++en1;
+            CompareEnumerators(en, en1);
+        }
+        if (num != 0)
+        {
+            cout << "Enumeration error!" << endl;
+            exit(1);
+        }
+    }
+}
+
+static
+void VerifyCountRange(const bvect& bv,
+                      const bvect::rs_index_type& bc_arr,
+                      bvect::size_type from,
+                      bvect::size_type to)
+{
+    for (bvect::size_type i = from; i < to; ++i)
+    {
+        bvect::size_type cnt1 = bv.count_range(0, i);
+        bvect::size_type cnt2 = bv.count_to(i, bc_arr);
+        auto cnt3 = bv.count_to_test(i, bc_arr);
+        
+        assert(cnt1 == cnt2);
+        if (cnt1 != cnt2)
+        {
+            cerr << "VerifyCountRange failed!" << " count_range()=" << cnt1
+                << " count_to()=" << cnt2 << endl;
+        }
+        if (cnt3 != cnt1)
+        {
+            bool b = bv.test(i);
+            if (b)
+            {
+                cerr << "VerifyCountRange failed! count_to_test()" << cnt3 << " count_range()=" << cnt1
+                     << endl;
+            }
+        }
+        
+        bvect::size_type cnt4 = bv.count_range(i, to);
+        bvect::size_type cnt5 = bv.count_range(i, to, bc_arr);
+        if (cnt4 != cnt5)
+        {
+            cnt5 = bv.count_range(i, to, bc_arr);
+            assert(cnt4 == cnt5);
+            exit(1);
+        }
+    } // for
+}
+
+static
+void CountRangeTest()
+{
+    cout << "---------------------------- CountRangeTest..." << endl;
+/*
+    {{
+        bvect bv1;
+        bv1.set(0);
+        bv1.set(1);
+        
+        bvect::rs_index_type bc_arr;
+        bv1.running_count_blocks(&bc_arr);
+        assert(bc_arr.count() == 2);
+        
+        for (bvect::size_type i = 0; i < bm::set_total_blocks; ++i)
+        {
+            assert(bc_arr.count(i) == 2);
+        } // for
+        
+        VerifyCountRange(bv1, bc_arr, 0, 200000);
+        
+        bv1.optimize();
+        bvect::rs_index_type bc_arr1;
+        bv1.running_count_blocks(&bc_arr1);
+        
+        for (bvect::size_type i = 0; i < bm::set_total_blocks; ++i)
+        {
+            assert(bc_arr1.count(i) == 2);
+        } // for
+        
+        VerifyCountRange(bv1, bc_arr1, 0, 200000);
+    }}
+
+    {{
+        bvect bv1;
+        bv1.set(0);
+        bv1.set(1);
+        
+        bv1.set(65535+10);
+        bv1.set(65535+20);
+        bv1.set(65535+21);
+        
+        bv1.set(bm::id_max-100);
+
+        
+        bvect::rs_index_type bc_arr;
+        bv1.running_count_blocks(&bc_arr);
+
+        assert(bc_arr.bcount(0) == 2);
+        assert(bc_arr.bcount(1) == 5);
+
+        for (bvect::size_type i = 2; i < bm::set_total_blocks; ++i)
+        {
+            assert(bc_arr.bcount(i) == 5);
+        } // for
+        
+        VerifyCountRange(bv1, bc_arr, bm::id_max-1, bm::id_max);
+        for (unsigned i = 0; i < 2; ++i)
+        {
+            VerifyCountRange(bv1, bc_arr, 0, 200000);
+            VerifyCountRange(bv1, bc_arr, bm::id_max-200000, bm::id_max);
+
+            // check within empty region
+            VerifyCountRange(bv1, bc_arr, bm::id_max/2-200000, bm::id_max/2+200000);
+
+            bv1.optimize();
+        }
+    }}
+*/
+    cout << "check inverted bvector" << endl;
+    {{
+            bvect bv1;
+        
+            bv1.invert();
+
+            bvect::rs_index_type bc_arr;
+            bv1.running_count_blocks(&bc_arr);
+            auto cnt1 = bv1.count();
+            auto cnt2 = bc_arr.count();
+            assert(cnt1 == cnt2);
+
+            VerifyCountRange(bv1, bc_arr, bm::id_max-1, bm::id_max-1);
+
+//            VerifyCountRange(bv1, bc_arr, 0, 200000);
+            VerifyCountRange(bv1, bc_arr, bm::id_max-200000, bm::id_max-1);
+            VerifyCountRange(bv1, bc_arr, bm::id_max/2-200000, bm::id_max/2+200000);
+    }}
+    
+    cout << "---------------------------- CountRangeTest OK" << endl;
+}
+
+
 
 
 int main(void)
@@ -1036,13 +1731,17 @@ int main(void)
     time_t      finish_time;
     
     // -----------------------------------------------------------------
-
+/*
     SyntaxTest();
     GenericBVectorTest();
     SetTest();
     ExportTest();
 
     ResizeTest();
+    EmptyBVTest();
+    EnumeratorTest();
+*/
+    CountRangeTest();
     
     // -----------------------------------------------------------------
 
