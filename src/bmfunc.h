@@ -7613,8 +7613,8 @@ bool block_ptr_array_range(bm::word_t** arr, unsigned& left, unsigned& right)
     @internal
 */
 inline
-unsigned lower_bound_linear(const unsigned* arr,  unsigned target,
-                            unsigned        from, unsigned to)
+unsigned lower_bound_linear_u32(const unsigned* arr,  unsigned target,
+                                unsigned        from, unsigned to)
 {
     BM_ASSERT(arr);
     BM_ASSERT(from <= to);
@@ -7631,6 +7631,27 @@ unsigned lower_bound_linear(const unsigned* arr,  unsigned target,
 #endif
 }
 
+/**
+    Linear lower bound search in unsigned LONG array
+    @internal
+*/
+inline
+unsigned lower_bound_linear_u64(const unsigned long long* arr, unsigned long long target,
+                                unsigned        from, unsigned to)
+{
+    BM_ASSERT(arr);
+    BM_ASSERT(from <= to);
+
+    // TODO: implement vectorized scan on u64 ints
+    for (; from <= to; ++from)
+    {
+        if (arr[from] >= target)
+            break;
+    }
+    return from;
+}
+
+
 
 // --------------------------------------------------------------
 
@@ -7639,8 +7660,8 @@ unsigned lower_bound_linear(const unsigned* arr,  unsigned target,
     @internal
 */
 inline
-unsigned lower_bound(const unsigned* arr,  unsigned target,
-                     unsigned        from, unsigned to)
+unsigned lower_bound_u32(const unsigned* arr,  unsigned target,
+                         unsigned        from, unsigned to)
 {
     BM_ASSERT(arr);
     BM_ASSERT(from <= to);
@@ -7650,7 +7671,7 @@ unsigned lower_bound(const unsigned* arr,  unsigned target,
     unsigned dist = r - l;
     if (dist < linear_cutoff)
     {
-        return bm::lower_bound_linear(arr, target, l, r);
+        return bm::lower_bound_linear_u32(arr, target, l, r);
     }
 
     while (l <= r)
@@ -7663,11 +7684,47 @@ unsigned lower_bound(const unsigned* arr,  unsigned target,
         dist = r - l;
         if (dist < linear_cutoff)
         {
-            return bm::lower_bound_linear(arr, target, l, r);
+            return bm::lower_bound_linear_u32(arr, target, l, r);
         }
     }
     return l;
 }
+
+/**
+    Hybrid, binary-linear lower bound search in unsigned LONG array
+    @internal
+*/
+inline
+unsigned lower_bound_u64(const unsigned long long* arr, unsigned long long target,
+                         unsigned        from, unsigned to)
+{
+    BM_ASSERT(arr);
+    BM_ASSERT(from <= to);
+    const unsigned linear_cutoff = 32;
+
+    unsigned l = from; unsigned r = to;
+    unsigned dist = r - l;
+    if (dist < linear_cutoff)
+    {
+        return bm::lower_bound_linear_u64(arr, target, l, r);
+    }
+
+    while (l <= r)
+    {
+        unsigned mid = (r - l) / 2 + l;
+        if (arr[mid] < target)
+            l = mid + 1;
+        else
+            r = mid - 1;
+        dist = r - l;
+        if (dist < linear_cutoff)
+        {
+            return bm::lower_bound_linear_u64(arr, target, l, r);
+        }
+    }
+    return l;
+}
+
 
 /**
     calculate bvector<> global bit-index from block-local coords

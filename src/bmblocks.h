@@ -2006,6 +2006,21 @@ public:
         } // for i
         return cnt;
     }
+    /// calculate max top blocks size whithout NULL-tail
+    unsigned find_max_top_blocks() const
+    {
+        unsigned top_blocks = top_block_size();
+        if (!top_blocks)
+            return 0;
+        unsigned i = top_blocks - 1;
+        for (; i > 0; --i)
+        {
+            bm::word_t** blk_blk = top_blocks_[i];
+            if (blk_blk)
+                break;
+        } // for i
+        return i+1;
+    }
 
     // ----------------------------------------------------------------
     

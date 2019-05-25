@@ -672,8 +672,8 @@ public:
         buffer_.resize(size_in_bytes());
     }
 
-    unsigned rows() const { return rows_; }
-    unsigned cols() const { return cols_; }
+    size_type rows() const { return rows_; }
+    size_type cols() const { return cols_; }
 
     void resize(size_type rows, size_type cols)
     {
