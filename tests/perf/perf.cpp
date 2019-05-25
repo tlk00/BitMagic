@@ -697,7 +697,7 @@ void BitCountSparseTest()
     }
 
     std::unique_ptr<bvect::rs_index_type> bc_arr(new bvect::rs_index_type());
-    bv->running_count_blocks(bc_arr.get());
+    bv->build_rs_index(bc_arr.get());
 
     {
         unsigned right = 65535;
@@ -2785,9 +2785,9 @@ void RankCompressionTest()
     bm::rank_compressor<bvect> rc;
 
     std::unique_ptr<bvect::rs_index_type> bc1(new bvect::rs_index_type());
-    bv_i1.running_count_blocks(bc1.get());
+    bv_i1.build_rs_index(bc1.get());
     std::unique_ptr<bvect::rs_index_type> bc2(new bvect::rs_index_type());
-    bv_i2.running_count_blocks(bc2.get());
+    bv_i2.build_rs_index(bc2.get());
 
     {
         TimeTaker tt("Rank compression test", REPEATS * 10);

@@ -2023,14 +2023,17 @@ void RSIndexTest()
         rsi.set_full_super_block(4);
 
         auto sb_size = rsi.super_block_size();
-        assert(sb_size == 6);
+        assert(sb_size == 5);
         
-        auto rc = rsi.get_super_block_bcount(0);
+        auto rc = rsi.get_super_block_count(0);
         assert(rc == 1);
-        rc = rsi.get_super_block_bcount(1);
+        rc = rsi.get_super_block_count(1);
         assert(rc == 2);
-        rc = rsi.get_super_block_bcount(2);
+        rc = rsi.get_super_block_count(2);
         assert(rc == 3);
+        rc = rsi.get_super_block_count(256);
+        assert(rc == 0);
+
 
         auto bc = rsi.get_super_block_rcount(0);
         assert(bc == 1);
@@ -2080,10 +2083,16 @@ void RSIndexTest()
         
         
         rsi.set_null_super_block(0);
-        rsi.register_super_block(1, &bcount[0], &sub_count1[0]);
-        rsi.register_super_block(2, &bcount[0], &sub_count2[0]);
-        rsi.set_full_super_block(3);
         auto tcnt = rsi.count();
+        assert(tcnt == 0);
+        rsi.register_super_block(1, &bcount[0], &sub_count1[0]);
+        tcnt = rsi.count();
+        assert(tcnt == 3);
+        rsi.register_super_block(2, &bcount[0], &sub_count2[0]);
+        tcnt = rsi.count();
+        assert(tcnt == 6);
+        rsi.set_full_super_block(3);
+        tcnt = rsi.count();
         assert(tcnt == 6 + bm::set_sub_array_size * 65536);
 
         unsigned i = rsi.find_super_block(1);
@@ -2103,29 +2112,29 @@ void RSIndexTest()
         {
             bc = rsi.count(nb);
             assert(bc == 0);
-            rbc = rsi.bcount(nb);
+            rbc = rsi.rcount(nb);
             assert(!rbc);
         }
         bc = rsi.count(bm::set_sub_array_size);
         assert(bc == 1);
-        rbc = rsi.bcount(bm::set_sub_array_size);
+        rbc = rsi.rcount(bm::set_sub_array_size);
         assert(rbc == 1);
         
         bc = rsi.count(bm::set_sub_array_size+1);
         assert(bc == 0);
-        rbc = rsi.bcount(bm::set_sub_array_size+1);
+        rbc = rsi.rcount(bm::set_sub_array_size+1);
         assert(rbc == 1);
 
         bc = rsi.count(bm::set_sub_array_size + 255);
         assert(bc == 2);
-        rbc = rsi.bcount(bm::set_sub_array_size + 255);
+        rbc = rsi.rcount(bm::set_sub_array_size + 255);
         assert(rbc == 3);
 
         bc = rsi.count(bm::set_sub_array_size*3);
         assert(bc == 65536);
-        rbc = rsi.bcount(bm::set_sub_array_size*3);
+        rbc = rsi.rcount(bm::set_sub_array_size*3);
         assert(rbc == 65536+6);
-        rbc = rsi.bcount(bm::set_sub_array_size*3 + 1);
+        rbc = rsi.rcount(bm::set_sub_array_size*3 + 1);
         assert(rbc == 65536+6 + 65536);
         
         
@@ -2214,7 +2223,6 @@ void RSIndexTest()
             assert(rank == 1);
 
             rank = bm::id_max;
-            i = rsi.find_super_block(bm::id_max);
             b = rsi.find(&rank, &nb, &sub_range);
             assert(!b);
 
@@ -13068,13 +13076,19 @@ void CountRangeTest()
  
         bvect::rs_index_type bc_arr;
         bv1.build_rs_index(&bc_arr);
+        {
+            auto cnt1 = bv1.count();
+            auto cnt2 = bc_arr.count();
+            assert(cnt1 == cnt2);
+        }
 
-        assert(bc_arr.bcount(0) == 2);
-        assert(bc_arr.bcount(1) == 5);
-
+        assert(bc_arr.rcount(0) == 2);
+        assert(bc_arr.rcount(1) == 5);
+        auto cnt = bc_arr.rcount(768);
+        assert(cnt == 5);
         for (bvect::size_type i = 2; i < bm::set_total_blocks; ++i)
         {
-            assert(bc_arr.bcount(i) == 5 || (bc_arr.bcount(i) == 6 && i == bm::set_total_blocks-1));
+            assert(bc_arr.rcount(i) == 5 || (bc_arr.rcount(i) == 6 && i == bm::set_total_blocks-1));
         } // for
  
         VerifyCountRange(bv1, bc_arr, bm::id_max-1, bm::id_max-1);
