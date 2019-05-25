@@ -2681,9 +2681,9 @@ unsigned bvector<Alloc>::count_blocks(unsigned* arr) const
 template<typename Alloc>
 typename bvector<Alloc>::size_type
 bvector<Alloc>::block_count_to(const bm::word_t*    block,
-                                        block_idx_type       nb,
-                                        unsigned             nbit_right,
-                                        const rs_index_type& rs_idx)
+                               block_idx_type       nb,
+                               unsigned             nbit_right,
+                               const rs_index_type& rs_idx)
 {
     size_type c;
     unsigned sub_range = rs_idx.find_sub_range(nbit_right);
@@ -3145,8 +3145,7 @@ void bvector<Alloc>::optimize(bm::word_t* temp_block,
         stat->memory_used += blocks_mem;
     }
     
-    // the expectation is that we don't need to keep temp block if we
-    // optimizing memory usage
+    // don't need to keep temp block if we optimizing memory usage
     blockman_.free_temp_block();
 }
 
@@ -3517,14 +3516,11 @@ template<class Alloc>
 bool bvector<Alloc>::set_bit_conditional(size_type n, bool val, bool condition)
 {
     if (val == condition) return false;
-//    if (!blockman_.is_init())
-//        blockman_.init_tree();
     if (n >= size_)
     {
         size_type new_size = (n == bm::id_max) ? bm::id_max : n + 1;
         resize(new_size);
     }
-
     return set_bit_conditional_impl(n, val, condition);
 }
 
@@ -3906,7 +3902,7 @@ bool bvector<Alloc>::find_reverse(size_type& pos) const
                     }
                     if (found)
                     {
-                        block_idx_type base_idx = i * bm::set_sub_array_size * bm::gap_max_bits;
+                        block_idx_type base_idx = block_idx_type(i) * bm::set_sub_array_size * bm::gap_max_bits;
                         base_idx += j * bm::gap_max_bits;
                         pos = base_idx + block_pos;
                         return found;
@@ -3958,7 +3954,7 @@ bool bvector<Alloc>::find(size_type& pos) const
                     }
                     if (found)
                     {
-                        size_type base_idx = i * bm::set_sub_array_size * bm::gap_max_bits;
+                        size_type base_idx = block_idx_type(i) * bm::bits_in_array;
                         base_idx += j * bm::gap_max_bits;
                         pos = base_idx + block_pos;
                         return found;

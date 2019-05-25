@@ -89,9 +89,6 @@ const unsigned set_array_mask  = 0xFFu;
 const unsigned set_total_blocks48 = bm::id_max48 / bm::gap_max_bits;
 const unsigned set_total_blocks32 = (bm::set_array_size32 * bm::set_array_size32);
 
-const unsigned bits_in_block = bm::set_block_size * (unsigned)(sizeof(bm::word_t) * 8);
-const unsigned bits_in_array = bm::bits_in_block * bm::set_array_size32;
-
 #ifdef BM64ADDR
 const unsigned long long id_max = bm::id_max48;
 const unsigned long long set_array_size48 = 1 + (bm::id_max48 / (bm::set_sub_array_size * bm::gap_max_bits));
@@ -103,6 +100,10 @@ const unsigned id_max = bm::id_max32;
 const unsigned set_top_array_size = bm::set_array_size32;
 const unsigned set_total_blocks = bm::set_total_blocks32;
 #endif
+
+const unsigned bits_in_block = bm::set_block_size * unsigned((sizeof(bm::word_t) * 8));
+const unsigned bits_in_array = bm::bits_in_block * bm::set_array_size32;
+
 
 // Rank-Select parameters
 const unsigned rs3_border0 = 21824; // 682 words by 32-bits

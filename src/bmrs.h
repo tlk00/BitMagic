@@ -526,7 +526,7 @@ typename rs_index<BVAlloc>::size_type
 rs_index<BVAlloc>::get_super_block_rcount(unsigned i) const
 {
     if (i > max_sblock_)
-        return i = max_sblock_;
+        i = max_sblock_;
     return sblock_count_[i+1];
 }
 
@@ -536,9 +536,7 @@ template<typename BVAlloc>
 unsigned rs_index<BVAlloc>::find_super_block(size_type rank) const
 {
     const sblock_count_type* bcount_arr = sblock_count_.begin();
-//    unsigned total_sblocks = unsigned(sblock_count_.size()-1);
-//    BM_ASSERT(total_sblocks);
-    unsigned i; 
+    unsigned i;
 
     #ifdef BM64ADDR
         i = bm::lower_bound_u64(bcount_arr, rank, 1, max_sblock_+1);
@@ -557,11 +555,7 @@ rs_index<BVAlloc>::super_block_size() const
 
     size_type total_sblocks = (size_type)sblock_count_.size();
     if (total_sblocks)
-    {
         return max_sblock_ + 1;
-//        BM_ASSERT(total_sblocks >= 2);
-//        return total_sblocks-1;
-    }
     return 0;
 }
 
