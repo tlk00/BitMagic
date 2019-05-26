@@ -3996,14 +3996,14 @@ void BvectorIncTest()
 // -----------------------------------------------------------------------
 
 static
-void optimize_fill(bvect& bv, unsigned base, unsigned inc,
-                   unsigned max_bits = bm::gap_max_bits,
+void optimize_fill(bvect& bv, bvect::size_type base, unsigned inc,
+                   bvect::size_type max_bits = bm::gap_max_bits,
                    bool value = true)
 {
-    for (unsigned i = 0; i < bm::set_sub_array_size; ++i)
+    for (bvect::size_type i = 0; i < bm::set_sub_array_size; ++i)
     {
         bvect::size_type base_idx = i * bm::gap_max_bits;
-        for (unsigned j = base; j < max_bits; j += inc)
+        for (bvect::size_type j = base; j < max_bits; j += inc)
         {
             bv.set(base_idx + j, value);
         } // for j
@@ -19325,9 +19325,23 @@ void BvectorBitForEachTest()
     
     {
         bvect bv;
+        bv.set_range(65536, 65536+65536);
+        std::vector<bvect::size_type> v1;
+        bm::visit_each_bit(bv, (void*)&v1, bit_decode_func);
+        assert(v1.size() == bv.count());
+        bvect::size_type prev = 65535;
+        for (size_t i = 0; i < v1.size(); ++i)
+        {
+            auto v = v1[i];
+            assert(prev+1 == v);
+        }
+    }
+    
+    {
+        bvect bv;
         bv.set();
         
-        std::vector<unsigned> v1;
+        std::vector<bvect::size_type> v1;
         try
         {
             bm::visit_each_bit(bv, (void*)&v1, bit_decode_func2);

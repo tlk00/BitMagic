@@ -30,3 +30,33 @@ void generate_vect_simpl0(VT& vect)
             };
     std::swap(vect, v_tmp);
 }
+
+
+// generate pseudo-random bit-vector, mix of blocks
+//
+template<typename BV>
+void generate_bvector(BV& bv, typename BV::size_type vector_max, bool optimize)
+{
+    typename BV::size_type i, j;
+    for (i = 0; i < vector_max;)
+    {
+        // generate bit-blocks
+        for (j = 0; j < 65535*8; i += 10, j++)
+        {
+            bv.set(i);
+        }
+        if (i > vector_max)
+            break;
+        // generate GAP (compressed) blocks
+        for (j = 0; j < 65535; i += 120, j++)
+        {
+            unsigned len = rand() % 64;
+            bv.set_range(i, i + len);
+            i += len;
+            if (i > vector_max)
+                break;
+        }
+    }
+    if (optimize)
+        bv.optimize();
+}

@@ -1870,7 +1870,7 @@ static
 void CountRangeTest()
 {
     cout << "---------------------------- CountRangeTest..." << endl;
-/*
+
     cout << "Stage 0" << endl;
     {{
         bvect bv1 { 0, 1 };
@@ -1928,7 +1928,7 @@ void CountRangeTest()
         VerifyCountRange(bv1, bc_arr1, 0, 200000);
         VerifyCountRange(bv1, bc_arr, bm::id_max-200000, bm::id_max-1);
     }}
-*/
+
     cout << "Stage 2" << endl;
     {{
         bvect bv1 { 0, 1, 65535+10, 65535+20, 65535+21, bm::id_max-100};
@@ -1981,6 +1981,479 @@ void CountRangeTest()
 }
 
 
+// -----------------------------------------------------------------------
+
+static
+void optimize_fill(bvect& bv, bvect::size_type base, unsigned inc,
+                   bvect::size_type max_bits = bm::gap_max_bits,
+                   bool value = true)
+{
+    for (bvect::size_type i = 0; i < bm::set_sub_array_size; ++i)
+    {
+        bvect::size_type base_idx = i * bm::gap_max_bits;
+        for (bvect::size_type j = base; j < max_bits; j += inc)
+        {
+            bv.set(base_idx + j, value);
+        } // for j
+    } // for i
+}
+
+static
+void OptimizeTest()
+{
+    cout << "---------------------------- Bvector Optimize test" << endl;
+    BM_DECLARE_TEMP_BLOCK(tb)
+
+    bvect::size_type base_idx = bm::id_max32+1;
+    {
+        bvect bv;
+        optimize_fill(bv, base_idx, 1, bm::gap_max_bits, true);
+        
+        bvect::statistics st1;
+        bv.calc_stat(&st1);
+        
+        assert(st1.bit_blocks == bm::set_sub_array_size);
+        assert(st1.gap_blocks == 0);
+        assert(st1.ptr_sub_blocks == 1);
+        
+        bv.optimize(tb, bvect::opt_compress, &st1);
+
+        assert(st1.bit_blocks == 0);
+        assert(st1.gap_blocks == 0);
+        assert(st1.ptr_sub_blocks == 0);
+        
+        bv.calc_stat(&st1);
+        
+        assert(st1.bit_blocks == 0);
+        assert(st1.gap_blocks == 0);
+        assert(st1.ptr_sub_blocks == 0);
+    }
+    
+    {
+        bvect bv;
+        optimize_fill(bv, base_idx, 100, bm::gap_max_bits, true);
+        optimize_fill(bv, base_idx, 100, bm::gap_max_bits, false);
+
+        bvect::statistics st1;
+        bv.calc_stat(&st1);
+        
+        assert(st1.bit_blocks == bm::set_sub_array_size);
+        assert(st1.gap_blocks == 0);
+        assert(st1.ptr_sub_blocks == 1);
+        
+        bv.optimize(tb, bvect::opt_compress, &st1);
+
+        assert(st1.bit_blocks == 0);
+        assert(st1.gap_blocks == 0);
+        assert(st1.ptr_sub_blocks == 0);
+    }
+
+
+    {
+        bvect bv(BM_GAP);
+        optimize_fill(bv, base_idx, 1, bm::gap_max_bits, true);
+        
+        bvect::statistics st1;
+        bv.calc_stat(&st1);
+        
+        assert(st1.bit_blocks == 0);
+        assert(st1.gap_blocks == bm::set_sub_array_size);
+        assert(st1.ptr_sub_blocks == 1);
+        
+        bv.optimize(tb, bvect::opt_compress, &st1);
+
+        assert(st1.bit_blocks == 0);
+        assert(st1.gap_blocks == 0);
+        assert(st1.ptr_sub_blocks == 0);
+        
+        bv.calc_stat(&st1);
+        
+        assert(st1.bit_blocks == 0);
+        assert(st1.gap_blocks == 0);
+        assert(st1.ptr_sub_blocks == 0);
+    }
+    
+    {
+        bvect bv(BM_GAP);
+        optimize_fill(bv, base_idx, 1000, bm::gap_max_bits, true);
+        optimize_fill(bv, base_idx, 1000, bm::gap_max_bits, false);
+
+        bvect::statistics st1;
+        bv.calc_stat(&st1);
+        
+        assert(st1.bit_blocks == 0);
+        assert(st1.gap_blocks == bm::set_sub_array_size);
+        assert(st1.gaps_by_level[0] == 0);
+        assert(st1.gaps_by_level[1] == bm::set_sub_array_size);
+        assert(st1.ptr_sub_blocks == 1);
+        
+        bv.optimize(tb, bvect::opt_compress, &st1);
+
+        assert(st1.bit_blocks == 0);
+        assert(st1.gap_blocks == 0);
+        assert(st1.ptr_sub_blocks == 0);
+    }
+    
+    {
+        bvect bv(BM_GAP);
+        optimize_fill(bv, base_idx+0, 1000, bm::gap_max_bits, true);
+        optimize_fill(bv, base_idx+1, 1, bm::gap_max_bits, false);
+
+        bvect::statistics st1;
+        bv.calc_stat(&st1);
+        
+        assert(st1.bit_blocks == 0);
+        assert(st1.gap_blocks == bm::set_sub_array_size);
+        assert(st1.gaps_by_level[0] == 0);
+        assert(st1.gaps_by_level[1] == bm::set_sub_array_size);
+        assert(st1.ptr_sub_blocks == 1);
+        
+        bv.optimize(tb, bvect::opt_compress, &st1);
+
+        assert(st1.bit_blocks == 0);
+        assert(st1.gap_blocks == bm::set_sub_array_size);
+        assert(st1.ptr_sub_blocks == 1);
+        assert(st1.gaps_by_level[0] == bm::set_sub_array_size);
+        assert(st1.gaps_by_level[1] == 0);
+    }
+
+
+    cout << "---------------------------- Bvector Optimize test OK" << endl;
+}
+
+static
+void RankFindTest()
+{
+    cout << "---------------------------- Find Rank test" << endl;
+
+    bvect::size_type base_idx = bm::id_max32+1;
+
+    {
+        bvect bv1;
+        bv1[base_idx+30] = true;
+        bv1[base_idx+65534] = true;
+
+        for (unsigned i = 0; i < 2; ++i)
+        {
+            bvect::rs_index_type bc_arr1;
+            bv1.build_rs_index(&bc_arr1);
+
+            bool rf1, rf2, rf3;
+            bvect::size_type pos, pos1;
+            rf1 = bv1.find_rank(1, 20, pos);
+            rf3 = bv1.find_rank(1, 20, pos1, bc_arr1);
+            assert(rf1);
+            assert(rf3);
+            assert(pos == base_idx+30);
+            assert(pos1 == base_idx+30);
+
+            rf2 = bv1.find_rank(2, base_idx+30, pos);
+            rf3 = bv1.find_rank(2, base_idx+30, pos1, bc_arr1);
+            assert(rf2);
+            assert(rf3);
+            assert(pos == base_idx+65534);
+            assert(pos1 == base_idx+65534);
+            bv1.optimize();
+        }
+    }
+    
+    cout << "Find Rank test stress 1\n" << endl;
+    
+    {
+        const bvect::size_type max_size = base_idx+2000000;
+        bvect bv1;
+        for (bvect::size_type i = base_idx; i < max_size;)
+        {
+            bv1.set(i);
+            i += rand()%5;
+        }
+        bvect::rs_index_type bc_arr1;
+        bv1.build_rs_index(&bc_arr1);
+
+        
+        for (bvect::size_type i = 0; i < max_size; ++i)
+        {
+            bool rf1, rf3;
+            bvect::size_type pos, pos1;
+            
+            rf1 = bv1.find_rank(0, i, pos);
+            rf3 = bv1.find_rank(0, i, pos1, bc_arr1);
+            assert (rf1 == rf3);
+            if (rf1)
+            {
+                if (pos != pos1)
+                {
+                    cerr << "Rank cmp test failed! i=" << i
+                         << " pos="  << pos
+                         << " pos1=" << pos1
+                         << endl;
+                    exit(1);
+                }
+            }
+            
+            rf1 = bv1.find_rank(i, max_size-i, pos);
+            rf3 = bv1.find_rank(i, max_size-i, pos1, bc_arr1);
+            assert (rf1 == rf3);
+            if (rf1)
+            {
+                if (pos != pos1)
+                {
+                    cerr << "Rank cmp test failed! i=" << i
+                         << " pos="  << pos
+                         << " pos1=" << pos1
+                         << endl;
+                    exit(1);
+                }
+            }
+            if ((i & 0xFFFFULL) == 0)
+                cout << "\r" << i << "/" << max_size << flush;
+        } // for
+        cout << endl;
+    }
+    
+    cout << "---------------------------- Find Rank test OK" << endl;
+}
+
+extern "C" {
+    static
+    int bit_decode_func(void* handle_ptr, bm::id64_t bit_idx)
+    {
+        std::vector<bvect::size_type>* vp = (std::vector<bvect::size_type>*)handle_ptr;
+        vp->push_back(bit_idx);
+        return 0;
+    }
+    
+    static
+    int bit_decode_func2(void* /*handle_ptr*/, bm::id64_t bit_idx)
+    {
+        static bm::id64_t prev = 0;
+        if (bit_idx <= prev)
+        {
+            if (prev)
+            {
+                cerr << "Incorrect loading sequence prev=" << prev <<
+                         " next=" << bit_idx << endl;
+                assert(0); exit(1);
+            }
+        }
+        else
+        {
+            assert(prev+1 == bit_idx);
+        }
+        
+        const id64_t limit = 65536ULL * 256 * 2ULL;
+        if (bit_idx > limit)
+        {
+            throw 1;
+        }
+        /*
+        std::vector<bvect::size_type>* vp = (std::vector<bvect::size_type>*)handle_ptr;
+        vp->push_back(bit_idx);
+        */
+        prev = bit_idx;
+        return 0;
+    }
+} // extern C
+
+
+static
+void RangeForEachTest(bvect::size_type from, bvect::size_type to)
+{
+    bvect bv;
+    bv.set_range(from, to);
+    std::vector<bvect::size_type> v;
+    bm::visit_each_bit(bv, (void*)&v, bit_decode_func);
+    
+    assert(v.size() == bv.count());
+    assert(v[0] == from);
+    
+    for (size_t i = 1; i < v.size(); ++i)
+    {
+        bvect::size_type prev = v[i-1];
+        bvect::size_type curr = v[i];
+        assert(prev+1 == curr);
+    }
+    bvect bv_control;
+    bm::combine_or(bv_control, v.begin(), v.end());
+    int res = bv.compare(bv_control);
+    assert(res == 0);
+}
+
+static
+void BvectorBitForEachTest()
+{
+    cout << "------------------------ bvector BitForEach Test" << endl;
+    int res;
+
+    {
+        cout << "test empty vector" << endl;
+        bvect bv1;
+        std::vector<bvect::size_type> v1;
+        
+        bm::visit_each_bit(bv1, (void*)&v1, bit_decode_func);
+        if (v1.size())
+        {
+            cerr << "1. Failed empty vector decode " << v1.size() << endl;
+            exit(1);
+        }
+        bv1.init();
+        bm::visit_each_bit(bv1, (void*)&v1, bit_decode_func);
+        if (v1.size())
+        {
+            cerr << "2. Failed empty vector decode " << v1.size() << endl;
+            exit(1);
+        }
+        
+        bv1.set(bm::id_max-1, true);
+        bv1.set(bm::id_max-1, false);
+        
+        bm::visit_each_bit(bv1, (void*)&v1, bit_decode_func);
+        if (v1.size())
+        {
+            cerr << "3. Failed empty vector decode " << v1.size() << endl;
+            exit(1);
+        }
+
+        bv1.optimize();
+        bm::visit_each_bit(bv1, (void*)&v1, bit_decode_func);
+        if (v1.size())
+        {
+            cerr << "3. Failed empty vector decode " << v1.size() << endl;
+            exit(1);
+        }
+    }
+    
+    {
+        bvect bv1 { 0,1,2, 10, 32, 100, 65535,
+                            65535+1, 65535+2, 65535+10, 65535+11, 65535+31,
+                            20000000, bm::id_max-1 };
+        bvect bv2;
+        std::vector<bvect::size_type> v1;
+        
+        bm::visit_each_bit(bv1, (void*)&v1, bit_decode_func);
+
+        {
+            for (size_t i = 0; i < v1.size(); ++i)
+                cout << v1[i] << ", ";
+            cout << endl;
+        }
+
+        if (v1.size() != bv1.count())
+        {
+            std::cerr << "0. Bit for each failed size test. " << v1.size()
+                      << " should be " << bv1.count() << std::endl;
+            exit(1);
+        }
+        bm::combine_or(bv2, v1.begin(), v1.end());
+        
+        res = bv2.compare(bv1);
+        if (res != 0)
+        {
+            std::cerr << "0. Bit for each failed comparison test. " << endl;
+            exit(1);
+        }
+        
+        bv1.optimize();
+        bv2.reset();
+        v1.resize(0);
+        bm::visit_each_bit(bv1, (void*)&v1, bit_decode_func);
+        
+        {
+            for (size_t i = 0; i < v1.size(); ++i)
+                cout << v1[i] << ", ";
+            cout << endl;
+        }
+
+        if (v1.size() != bv1.count())
+        {
+            std::cerr << "1. Bit for each failed size test. " << v1.size()
+                      << " should be " << bv1.count() << std::endl;
+            exit(1);
+        }
+        bm::combine_or(bv2, v1.begin(), v1.end());
+        
+        res = bv2.compare(bv1);
+        if (res != 0)
+        {
+            std::cerr << "1. Bit for each failed comparison test. " << endl;
+            exit(1);
+        }
+    }
+
+
+
+    {
+        bvect bv1, bv2;
+        std::vector<bvect::size_type> v1;
+        
+        generate_bvector(bv1, bm::id_max32/4, false);
+        v1.reserve(bv1.count());
+        
+        bm::visit_each_bit(bv1, (void*)&v1, bit_decode_func);
+
+        if (v1.size() != bv1.count())
+        {
+            std::cerr << "Bit for each failed size test. " << v1.size()
+                      << " should be " << bv1.count() << std::endl;
+            exit(1);
+        }
+        bm::combine_or(bv2, v1.begin(), v1.end());
+        
+        res = bv2.compare(bv1);
+        if (res != 0)
+        {
+            std::cerr << "Bit for each failed comparison test. " << endl;
+            exit(1);
+        }
+
+        cout << "for each bit in optimized bit-vector..." << endl;
+        
+        v1.resize(0);
+        bv2.clear(true);
+        bv1.optimize();
+
+        bm::visit_each_bit(bv1, (void*)&v1, bit_decode_func);
+
+        if (v1.size() != bv1.count())
+        {
+            std::cerr << "Bit for each failed size test. " << v1.size()
+                      << " should be " << bv1.count() << std::endl;
+            exit(1);
+        }
+        bm::combine_or(bv2, v1.begin(), v1.end());
+        
+        res = bv2.compare(bv1);
+        if (res != 0)
+        {
+            std::cerr << "Bit for each failed comparison test. " << endl;
+            exit(1);
+        }
+    }
+
+    {
+        RangeForEachTest(0, 65536);
+        RangeForEachTest(65536, 65536+65536);
+        RangeForEachTest(bm::id_max/2, bm::id_max/2 + (65536*256));
+    }
+
+    {
+        bvect bv;
+        bv.set();
+        
+        std::vector<bvect::size_type> v1;
+        try
+        {
+            bm::visit_each_bit(bv, (void*)&v1, bit_decode_func2);
+        } catch (...)
+        {
+        }
+    }
+    
+    
+    cout << "------------------------ bvector BitForEach Test OK" << endl;
+}
+
+
 
 
 int main(void)
@@ -1989,7 +2462,7 @@ int main(void)
     time_t      finish_time;
     
     // -----------------------------------------------------------------
-/*
+
     SyntaxTest();
     GenericBVectorTest();
     SetTest();
@@ -1998,11 +2471,16 @@ int main(void)
     ResizeTest();
     EmptyBVTest();
     EnumeratorTest();
-*/
     RSIndexTest();
 
     CountRangeTest();
+
+    OptimizeTest();
     
+    RankFindTest();
+
+    BvectorBitForEachTest();
+
     // -----------------------------------------------------------------
 
     finish_time = time(0);
