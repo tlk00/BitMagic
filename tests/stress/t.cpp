@@ -19174,6 +19174,29 @@ extern "C" {
 
 
 static
+void RangeForEachTest(bvect::size_type from, bvect::size_type to)
+{
+    bvect bv;
+    bv.set_range(from, to);
+    std::vector<bvect::size_type> v;
+    bm::visit_each_bit(bv, (void*)&v, bit_decode_func);
+    
+    assert(v.size() == bv.count());
+    assert(v[0] == from);
+    
+    for (size_t i = 1; i < v.size(); ++i)
+    {
+        bvect::size_type prev = v[i-1];
+        bvect::size_type curr = v[i];
+        assert(prev+1 == curr);
+    }
+    bvect bv_control;
+    bm::combine_or(bv_control, v.begin(), v.end());
+    int res = bv.compare(bv_control);
+    assert(res == 0);
+}
+
+static
 void BvectorBitForEachTest()
 {
     cout << "------------------------ bvector BitForEach Test" << endl;
@@ -19324,19 +19347,11 @@ void BvectorBitForEachTest()
     }
     
     {
-        bvect bv;
-        bv.set_range(65536, 65536+65536);
-        std::vector<bvect::size_type> v1;
-        bm::visit_each_bit(bv, (void*)&v1, bit_decode_func);
-        assert(v1.size() == bv.count());
-        bvect::size_type prev = 65535;
-        for (size_t i = 0; i < v1.size(); ++i)
-        {
-            auto v = v1[i];
-            assert(prev+1 == v);
-        }
+        RangeForEachTest(0, 65536);
+        RangeForEachTest(65536, 65536+65536);
+        RangeForEachTest(bm::id_max/2, bm::id_max/2 + (65536*256));
     }
-    
+
     {
         bvect bv;
         bv.set();
@@ -21284,6 +21299,7 @@ int main(int argc, char *argv[])
         
          BlockBitEraseTest();
          TestBlockLast();
+
          BitForEachTest();
         
          BitCountChangeTest();
