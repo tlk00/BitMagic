@@ -1661,11 +1661,10 @@ bool for_each_nzblock_if(T*** root, BI size1, F& f)
 
 /*! For each block executes supplied function.
 */
-template<class T, class F> 
-void for_each_block(T*** root, unsigned size1, F& f)
+template<class T, class F, typename BLOCK_IDX>
+void for_each_block(T*** root, unsigned size1, F& f, BLOCK_IDX start)
 {
-    unsigned block_idx = 0;
-
+    BLOCK_IDX block_idx = start;
     for (unsigned i = 0; i < size1; ++i)
     {
         T** blk_blk = root[i];

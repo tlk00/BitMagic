@@ -57,6 +57,9 @@ For more information please visit:  http://bitmagic.io
 
 extern "C"
 {
+#ifdef BM64ADDR
+    typedef int (*bit_visitor_callback_type)(void* handle_ptr, bm::id64_t bit_idx);
+#else
     /**
     Callback type to visit (callback style) bits in bit-vector(s)
     
@@ -66,6 +69,7 @@ extern "C"
     @ingroup bvector
     */
     typedef int (*bit_visitor_callback_type)(void* handle_ptr, bm::id_t bit_idx);
+#endif
 }
 
 
@@ -1688,12 +1692,6 @@ public:
                           size_type right) const;
 
     
-    /*! \brief compute running total of all blocks in bit vector
-        \param blocks_cnt - out pointer to counting structure, holding the array
-        Function will fill full array of running totals
-        \sa count_to, select, find_rank
-    */
-//    void running_count_blocks(rs_index_type* blocks_cnt) const;
 
     /*! \brief compute running total of all blocks in bit vector (rank-select index)
         \param rs_idx - [out] pointer to index / count structure

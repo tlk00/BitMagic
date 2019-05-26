@@ -129,7 +129,7 @@ public:
     unsigned find_sub_range(unsigned block_bit_pos);
     
     /// determine block sub-range for rank search
-    bm::gap_word_t select_sub_range(block_idx_type nb, unsigned& rank) const;
+    bm::gap_word_t select_sub_range(block_idx_type nb, size_type& rank) const;
     
     /// find block position for the specified rank
     block_idx_type find(size_type rank) const;
@@ -284,7 +284,7 @@ unsigned rs_index<BVAlloc>::find_sub_range(unsigned block_bit_pos)
 
 template<typename BVAlloc>
 bm::gap_word_t rs_index<BVAlloc>::select_sub_range(block_idx_type nb,
-                                                   unsigned& rank) const
+                                                   size_type& rank) const
 {
     unsigned sub_cnt = sub_count(nb);
     unsigned first = sub_cnt & 0xFFFF;

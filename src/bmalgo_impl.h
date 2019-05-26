@@ -1103,20 +1103,22 @@ bm::id_t any_or(const BV& bv1, const BV& bv2)
     \brief Internal algorithms scans the input for the block range limit
     \internal
 */
-template<class It>
-It block_range_scan(It  first, It last, unsigned nblock, unsigned* max_id)
+template<typename It, typename SIZE_TYPE>
+It block_range_scan(It  first, It last, SIZE_TYPE nblock, SIZE_TYPE* max_id)
 {
+    SIZE_TYPE m = *max_id;
     It right;
     for (right = first; right != last; ++right)
     {
-        unsigned v = unsigned(*right);
+        SIZE_TYPE v = SIZE_TYPE(*right);
         BM_ASSERT(v < bm::id_max);
-        if (v >= *max_id)
-            *max_id = v;
-        unsigned nb = v >> bm::set_block_shift;
+        if (v >= m)
+            m = v;
+        SIZE_TYPE nb = v >> bm::set_block_shift;
         if (nb != nblock)
             break;
     }
+    *max_id = m;
     return right;
 }
 
@@ -1136,17 +1138,17 @@ It block_range_scan(It  first, It last, unsigned nblock, unsigned* max_id)
 template<class BV, class It>
 void combine_or(BV& bv, It  first, It last)
 {
+    typedef typename BV::size_type size_type;
     typename BV::blocks_manager_type& bman = bv.get_blocks_manager();
     if (!bman.is_init())
         bman.init_tree();
     
-    unsigned max_id = 0;
+    size_type max_id = 0;
 
     while (first < last)
     {
-        unsigned nblock = unsigned((*first) >> bm::set_block_shift);     
+        size_type nblock = (*first) >> bm::set_block_shift;
         It right = bm::block_range_scan(first, last, nblock, &max_id);
-
         if (max_id >= bv.size())
         {
             BM_ASSERT(max_id < bm::id_max);
@@ -1190,15 +1192,14 @@ void combine_or(BV& bv, It  first, It last)
         {
             for (; first < right; ++first)
             {
-                unsigned nbit   = unsigned(*first & bm::set_block_mask); 
+                size_type pos = *first;
+                unsigned nbit   = unsigned(pos & bm::set_block_mask);
                 unsigned nword  = unsigned(nbit >> bm::set_word_shift); 
                 nbit &= bm::set_word_mask;
                 blk[nword] |= (1u << nbit);
             } // for
         }
     } // while
-    
-    bv.forget_count();
 }
 
 
@@ -1453,7 +1454,8 @@ bm::id_t count_intervals(const BV& bv)
 
     bm::word_t*** blk_root = bman.top_blocks_root();
     typename BV::blocks_manager_type::block_count_change_func func(bman);
-    for_each_block(blk_root, bman.top_block_size(), func);
+    typename BV::blocks_manager_type::block_idx_type st = 0;
+    bm::for_each_block(blk_root, bman.top_block_size(), func, st);
 
     return func.count();        
 }
@@ -1645,13 +1647,18 @@ void export_array(BV& bv, It first, It last)
    @ingroup bitfunc
    @internal
 */
-template<class Func>
-void for_each_bit_blk(const bm::word_t* block, bm::id_t offset,
+template<typename Func, typename SIZE_TYPE>
+void for_each_bit_blk(const bm::word_t* block, SIZE_TYPE offset,
                       Func&  bit_functor)
 {
+    if (IS_FULL_BLOCK(block))
+    {
+        bit_functor.add_range(offset, bm::gap_max_bits);
+        return;
+    }
     unsigned char bits[bm::set_bitscan_wave_size*32];
 
-    unsigned offs = offset;
+    SIZE_TYPE offs = offset;
     unsigned cnt;
     const word_t* block_end = block + bm::set_block_size;
     do
@@ -1675,8 +1682,8 @@ void for_each_bit_blk(const bm::word_t* block, bm::id_t offset,
    @ingroup gapfunc
    @internal
 */
-template<typename T, typename Func>
-void for_each_gap_blk(const T* buf, bm::id_t offset,
+template<typename T, typename Func, typename SIZE_TYPE>
+void for_each_gap_blk(const T* buf, SIZE_TYPE offset,
                       Func&  bit_functor)
 {
     const T* pcurr = buf + 1;

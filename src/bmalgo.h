@@ -43,7 +43,6 @@ namespace bm
         } \
         else \
         { \
-            block = BLOCK_ADDR_SAN(block);\
             bm::for_each_bit_blk(block, (r+j+x)*bm::bits_in_block,bit_functor); \
         } \
     }
@@ -61,6 +60,8 @@ template<class BV, class Func>
 void for_each_bit(const BV&    bv,
                   Func&        bit_functor)
 {
+    typedef typename BV::size_type size_type;
+
     const typename BV::blocks_manager_type& bman = bv.get_blocks_manager();
     bm::word_t*** blk_root = bman.top_blocks_root();
     
@@ -78,7 +79,7 @@ void for_each_bit(const BV&    bv,
             blk_blk = FULL_SUB_BLOCK_REAL_ADDR;
         
         const bm::word_t* block;
-        unsigned r = i * bm::set_sub_array_size;
+        size_type r = size_type(i) * bm::set_sub_array_size;
         unsigned j = 0;
         do
         {
@@ -126,6 +127,7 @@ void visit_each_bit(const BV&                 bv,
                     void*                     handle_ptr,
                     bit_visitor_callback_type callback_ptr)
 {
+    typedef typename BV::size_type size_type;
     // private adaptor for C-style callbacks
     struct callback_adaptor
     {
@@ -133,12 +135,12 @@ void visit_each_bit(const BV&                 bv,
         : handle_(h), func_(cb_func)
         {}
         
-        void add_bits(bm::id_t offset, const unsigned char* bits, unsigned size)
+        void add_bits(size_type offset, const unsigned char* bits, unsigned size)
         {
             for (unsigned i = 0; i < size; ++i)
                 func_(handle_, offset + bits[i]);
         }
-        void add_range(bm::id_t offset, unsigned size)
+        void add_range(size_type offset, unsigned size)
         {
             for (unsigned i = 0; i < size; ++i)
                 func_(handle_, offset + i);
