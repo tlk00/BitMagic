@@ -443,17 +443,17 @@ public:
         \param no_more_blocks - 1 if there are no more blocks at all
         \return block adress or NULL if not yet allocated
     */
-    bm::word_t* get_block(unsigned nb, int* no_more_blocks) const
+    bm::word_t* get_block(block_idx_type nb, int* no_more_blocks) const
     {
         BM_ASSERT(top_blocks_);
-        unsigned block_idx = nb >> bm::set_array_shift;
-        if (block_idx >= top_block_size_)
+        unsigned i = unsigned(nb >> bm::set_array_shift);
+        if (i >= top_block_size_)
         {
             *no_more_blocks = 1;
             return 0;
         }
         *no_more_blocks = 0;
-        bm::word_t** blk_blk = top_blocks_[block_idx];
+        bm::word_t** blk_blk = top_blocks_[i];
         bm::word_t* ret;
         if ((bm::word_t*)blk_blk == FULL_BLOCK_FAKE_ADDR)
         {

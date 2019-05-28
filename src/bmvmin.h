@@ -35,10 +35,8 @@ namespace bm
 #define BM_MINISET_GAPLEN (bm::gap_len_table<true>::_len[0])
 #define BM_MINISET_ARRSIZE(x) ((x / 32) + ( (x % 32) && 1 ))
 
-/*! @defgroup mset Small sets functionality
- *  Templates in this group are used to keep block types in BM library.
- *  Classes of this group can tune bvector template (MS parameter)
- *  for best performance or minimal memory usage.
+/*! @defgroup mset Small sets functionality (intrenal)
+ *  @internal
  *  @ingroup bmagic
  *  @{
  */
@@ -48,6 +46,7 @@ namespace bm
     @brief Template class implements memory saving set functionality
     @ingroup mset
     @sa bvmini
+    @internal
 */
 template <class A, size_t N> class miniset
 {
@@ -208,6 +207,7 @@ private:
     @brief Mini bit-vector for auxiliary purposes
     @ingroup mset
     @sa miniset
+    @internal
 */
 template<size_t N> class bvmini
 {
@@ -264,23 +264,31 @@ private:
     @brief Bitvector class with very limited functionality.
 
     Class implements simple bitset and used for internal 
-    and testing purposes. 
+    and testing purposes.
+    @internal
 */
 template<class A> class bvector_mini
 {
 public:
-    bvector_mini(unsigned size) 
+#ifdef BM64ADDR
+    typedef bm::id64_t                                   size_type;
+#else
+    typedef bm::id_t                                     size_type;
+#endif
+
+public:
+    bvector_mini(size_type size)
       : m_buf(0),
         m_size(size)
     {
-        unsigned arr_size = (size / 32) + 1; 
+        size_type arr_size = (size / 32) + 1;
         m_buf = A::allocate(arr_size, 0);
         ::memset(m_buf, 0, arr_size * sizeof(unsigned));
     }
     bvector_mini(const bvector_mini& bvect)
        : m_size(bvect.m_size)
     {
-        unsigned arr_size = (m_size / 32) + 1;
+        size_type arr_size = (m_size / 32) + 1;
         m_buf = A::allocate(arr_size, 0);
         ::memcpy(m_buf, bvect.m_buf, arr_size * sizeof(unsigned));        
     }
@@ -291,38 +299,34 @@ public:
     }
 
     /// Checks if bit pos 1 or 0. Returns 0 if 0 and non zero otherwise.
-    int is_bit_true(unsigned pos) const
+    int is_bit_true(size_type pos) const
     {
         unsigned char  mask = (unsigned char)((char)0x1 << (pos & 7));
-        unsigned char* offs = (unsigned char*)m_buf + (pos >> 3); // m_buf + (pos/8)
-
+        unsigned char* offs = (unsigned char*)m_buf + (pos >> 3);
         return (*offs) & mask;
     }
 
     /// Sets bit number pos to 1
-    void set_bit(unsigned pos)
+    void set_bit(size_type pos)
     {
         unsigned char  mask = (unsigned char)(0x1 << (pos & 7));
         unsigned char* offs = (unsigned char*)m_buf + (pos >> 3); 
         *offs |= mask;
     }
 
-
     /// Sets bit number pos to 0
-    void clear_bit(unsigned pos)
+    void clear_bit(size_type pos)
     {
         unsigned char  mask = (unsigned char)(0x1 << (pos & 7));
-        unsigned char* offs = (unsigned char*)m_buf + (pos >> 3); 
-
+        unsigned char* offs = (unsigned char*)m_buf + (pos >> 3);
         *offs &= (unsigned char)~mask;
     }
 
     /// Counts number of bits ON 
-    unsigned bit_count() const
+    size_type bit_count() const
     {
-        unsigned count = 0;
-        const unsigned* end = m_buf + (m_size / 32)+1;    
-
+        size_type count = 0;
+        const unsigned* end = m_buf + (m_size / 32)+1;
         for (unsigned* start = m_buf; start < end; ++start)
         {
             unsigned value = *start;
@@ -334,19 +338,16 @@ public:
     /// Comparison.
     int compare(const bvector_mini& bvect)
     {
-        unsigned cnt1 = bit_count();
-        unsigned cnt2 = bvect.bit_count();
-
+        size_type cnt1 = bit_count();
+        size_type cnt2 = bvect.bit_count();
         if (!cnt1 && !cnt2) return 0;
-
-        unsigned cnt_min = cnt1 < cnt2 ? cnt1 : cnt2;
-
+        size_type cnt_min = cnt1 < cnt2 ? cnt1 : cnt2;
         if (!cnt_min) return cnt1 ? 1 : -1;
 
-        unsigned idx1 = get_first();
-        unsigned idx2 = bvect.get_first();
+        size_type idx1 = get_first();
+        size_type idx2 = bvect.get_first();
 
-        for (unsigned i = 0; i < cnt_min; ++i)
+        for (size_type i = 0; i < cnt_min; ++i)
         {
             if (idx1 != idx2)
             {
@@ -355,25 +356,21 @@ public:
             idx1 = get_next(idx1);
             idx2 = bvect.get_next(idx2);
         }
-
-
         if (idx1 != idx2)
         {
             if (!idx1) return -1;
             if (!idx2) return  1;
             return idx1 < idx2 ? 1 : -1;
         }
-
         return 0;
     }
 
 
     /// Returns index of the first ON bit
-    unsigned get_first() const
+    size_type get_first() const
     {
-        unsigned pos = 0;
+        size_type pos = 0;
         const unsigned char* ptr = (unsigned char*) m_buf;
-
         for (unsigned i = 0; i < ((m_size/8)+1); ++i)
         {
             unsigned char w = ptr[i];
@@ -386,24 +383,22 @@ public:
                 }
                 return pos;
             }
-            pos = unsigned(pos + sizeof(unsigned char) * 8u);
+            pos = size_type(pos + sizeof(unsigned char) * 8u);
         }
         return 0;
     }
 
 
     /// Returns index of next bit, which is ON
-    unsigned get_next(unsigned idx) const
+    size_type get_next(size_type idx) const
     {
-        unsigned i;
-
+        size_type i;
         for (i = idx+1; i < m_size; ++i)
         {
             unsigned char* offs = (unsigned char*)m_buf + (i >> 3); 
             if (*offs)
             {
                 unsigned char mask = (unsigned char)((char)0x1 << (i & 7));
-
                 if (*offs & mask)
                 {
                     return i;
@@ -417,13 +412,10 @@ public:
         return 0;
     }
 
-
     void combine_and(const bvector_mini& bvect)
     {
         const unsigned* end = m_buf + (m_size / 32)+1;
-    
         const unsigned* src = bvect.get_buf();
-
         for (unsigned* start = m_buf; start < end; ++start)
         {
             *start &= *src++;
@@ -433,22 +425,17 @@ public:
     void combine_xor(const bvector_mini& bvect)
     {
         const unsigned* end = m_buf + (m_size / 32)+1;
-    
         const unsigned* src = bvect.get_buf();
-
         for (unsigned* start = m_buf; start < end; ++start)
         {
             *start ^= *src++;
         }
     }
 
-
     void combine_or(const bvector_mini& bvect)
     {
         const unsigned* end = m_buf + (m_size / 32)+1;
-    
         const unsigned* src = bvect.get_buf();
-
         for (unsigned* start = m_buf; start < end; ++start)
         {
             *start |= *src++;
@@ -458,9 +445,7 @@ public:
     void combine_sub(const bvector_mini& bvect)
     {
         const unsigned* end = m_buf + (m_size / 32)+1;
-    
         const unsigned* src = bvect.get_buf();
-
         for (unsigned* start = m_buf; start < end; ++start)
         {
             *start &= ~(*src++);
@@ -482,7 +467,7 @@ public:
 
 private:
     bm::word_t*   m_buf;
-    unsigned      m_size;
+    size_type     m_size;
 };
 
 

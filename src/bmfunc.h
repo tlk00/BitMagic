@@ -1874,11 +1874,11 @@ unsigned gap_bit_count_range(const T* const buf, unsigned left, unsigned right)
 
     @ingroup gapfunc
 */
-template<typename T>
-bm::id_t gap_find_rank(const T* const block,
-                       bm::id_t   rank,
-                       unsigned   nbit_from,
-                       unsigned&  nbit_pos)
+template<typename T, typename SIZE_TYPE>
+SIZE_TYPE gap_find_rank(const T* const block,
+                        SIZE_TYPE   rank,
+                        unsigned   nbit_from,
+                        unsigned&  nbit_pos)
 {
     BM_ASSERT(block);
     BM_ASSERT(rank);
@@ -1895,7 +1895,7 @@ bm::id_t gap_find_rank(const T* const block,
     bits_counter += unsigned(*pcurr - nbit_from + 1u) & is_set;
     if (bits_counter >= rank) // found!
     {
-        nbit_pos = nbit_from + rank - 1u;
+        nbit_pos = nbit_from + unsigned(rank) - 1u;
         return 0;
     }
     rank -= bits_counter;
@@ -1905,7 +1905,7 @@ bm::id_t gap_find_rank(const T* const block,
         bits_counter = (*pcurr - prev_gap) & is_set;
         if (bits_counter >= rank) // found!
         {
-            nbit_pos = prev_gap + rank;
+            nbit_pos = prev_gap + unsigned(rank);
             return 0;
         }
         rank -= bits_counter;
@@ -6786,17 +6786,16 @@ bool bit_find_first_if_1(const bm::word_t* block,
 
     @ingroup bitfunc
 */
-inline
-bm::id_t bit_find_rank(const bm::word_t* const block,
-                       bm::id_t          rank,
-                       unsigned          nbit_from,
-                       unsigned&         nbit_pos)
+template<typename SIZE_TYPE>
+SIZE_TYPE bit_find_rank(const bm::word_t* const block,
+                        SIZE_TYPE               rank,
+                        unsigned                nbit_from,
+                        unsigned&               nbit_pos)
 {
     BM_ASSERT(block);
     BM_ASSERT(rank);
     
     unsigned nword  = nbit_from >> bm::set_word_shift;
-    
     BM_ASSERT(nword < bm::set_block_size);
 
     unsigned pos = nbit_from;
@@ -6814,7 +6813,7 @@ bm::id_t bit_find_rank(const bm::word_t* const block,
         }
         else // target word
         {
-            unsigned idx = bm::word_select64(w, rank);
+            unsigned idx = bm::word_select64(w, unsigned(rank));
             nbit_pos = pos + idx;
             return 0;
         }
@@ -6828,7 +6827,7 @@ bm::id_t bit_find_rank(const bm::word_t* const block,
             bm::id_t bc = bm::word_bitcount64(w);
             if (bc >= rank) // target
             {
-                unsigned idx = bm::word_select64(w, rank);
+                unsigned idx = bm::word_select64(w, unsigned(rank));
                 nbit_pos = pos + idx;
                 return 0;
             }
@@ -6846,7 +6845,7 @@ bm::id_t bit_find_rank(const bm::word_t* const block,
             rank -= bc; pos += 32u;
             continue;
         }
-        unsigned idx = bm::word_select64(w, rank);
+        unsigned idx = bm::word_select64(w, unsigned(rank));
         nbit_pos = pos + idx;
         return 0;
     } // for nword
@@ -6866,11 +6865,11 @@ bm::id_t bit_find_rank(const bm::word_t* const block,
 
     @internal
 */
-inline
-bm::id_t block_find_rank(const bm::word_t* const block,
-                         bm::id_t          rank,
-                         unsigned          nbit_from,
-                         unsigned&         nbit_pos)
+template<typename SIZE_TYPE>
+SIZE_TYPE block_find_rank(const bm::word_t* const block,
+                          SIZE_TYPE               rank,
+                          unsigned                nbit_from,
+                          unsigned&               nbit_pos)
 {
     if (BM_IS_GAP(block))
     {
@@ -7507,7 +7506,7 @@ void bit_block_gather_scatter(TRGW* arr, const bm::word_t* blk,
 }
 
 /**
-    @brief block boundaries look ahead
+    @brief block boundaries look ahead U32
  
     @param idx - array to look into
     @param size - array size
@@ -7519,7 +7518,32 @@ void bit_block_gather_scatter(TRGW* arr, const bm::word_t* blk,
     @internal
 */
 inline
-unsigned idx_arr_block_lookup(const unsigned* idx, unsigned size, unsigned nb, unsigned start)
+bm::id64_t idx_arr_block_lookup_u64(const bm::id64_t* idx, bm::id64_t size, bm::id64_t nb, bm::id64_t start)
+{
+    BM_ASSERT(idx);
+    BM_ASSERT(start < size);
+
+    // TODO: SIMD for 64-bit index vector
+    for (;(start < size) &&
+          (nb == (idx[start] >> bm::set_block_shift)); ++start)
+    {}
+    return start;
+}
+
+/**
+    @brief block boundaries look ahead U32
+ 
+    @param idx - array to look into
+    @param size - array size
+    @param nb - block number to look ahead
+    @param start - start offset in idx
+ 
+    @return block boundary offset end (no more match at the returned offset)
+ 
+    @internal
+*/
+inline
+unsigned idx_arr_block_lookup_u32(const unsigned* idx, unsigned size, unsigned nb, unsigned start)
 {
     BM_ASSERT(idx);
     BM_ASSERT(start < size);
@@ -7536,6 +7560,7 @@ unsigned idx_arr_block_lookup(const unsigned* idx, unsigned size, unsigned nb, u
 
 // --------------------------------------------------------------
 
+
 /**
     @brief set bits in a bit-block using global index
  
@@ -7550,9 +7575,40 @@ unsigned idx_arr_block_lookup(const unsigned* idx, unsigned size, unsigned nb, u
     @ingroup bitfunc
 */
 inline
-void set_block_bits(bm::word_t* BMRESTRICT block,
-                    const unsigned* BMRESTRICT idx,
-                    unsigned start, unsigned stop )
+void set_block_bits_u64(bm::word_t* BMRESTRICT block,
+                        const bm::id64_t* BMRESTRICT idx,
+                        bm::id64_t start, bm::id64_t stop)
+{
+    // TODO: SIMD for 64-bit mode
+    for (bm::id64_t i = start; i < stop; ++i)
+    {
+        bm::id64_t n = idx[i];
+        unsigned nbit = unsigned(n & bm::set_block_mask);
+        unsigned nword  = nbit >> bm::set_word_shift;
+        nbit &= bm::set_word_mask;
+        bm::word_t mask = (1u << nbit);
+        block[nword] |= mask;
+    } // for i
+}
+
+
+/**
+    @brief set bits in a bit-block using global index
+ 
+    @param idx - array to look into
+    @param block - block pointer to set bits
+    @param start - index array start
+    @param stop  - index array stop in a range [start..stop)
+
+    @return block boundary offset end (no more match at the returned offset)
+ 
+    @internal
+    @ingroup bitfunc
+*/
+inline
+void set_block_bits_u32(bm::word_t* BMRESTRICT block,
+                        const unsigned* BMRESTRICT idx,
+                        unsigned start, unsigned stop )
 {
 #if defined(VECT_SET_BLOCK_BITS)
     VECT_SET_BLOCK_BITS(block, idx, start, stop);

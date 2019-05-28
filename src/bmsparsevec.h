@@ -1075,7 +1075,7 @@ sparse_vector<Val, BV>::gather(value_type*       arr,
             break;            
             // no break(!) intentional fall through
         case BM_SORTED:
-            r = bm::idx_arr_block_lookup(idx, size, nb, r);
+            r = bm::idx_arr_block_lookup_u32(idx, size, nb, r);
             break;
         case BM_SORTED_UNIFORM:
             r = size;
