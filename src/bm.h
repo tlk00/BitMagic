@@ -4025,11 +4025,21 @@ bool bvector<Alloc>::find_rank(size_type  rank_in,
         const bm::word_t* block = blockman_.get_block(nb, &no_more_blocks);
         if (block)
         {
-            rank_in = bm::block_find_rank(block, rank_in, nbit, bit_pos);
-            if (!rank_in) // target found
+            if (!nbit && (rank_in > bm::gap_max_bits)) // requested rank cannot be in this block
             {
-                pos = bit_pos + (nb * bm::set_block_size * 32);
-                return true;
+                unsigned cnt = blockman_.block_bitcount(block);
+                BM_ASSERT(cnt < rank_in);
+                rank_in -= cnt;
+                continue;
+            }
+            else
+            {
+                rank_in = bm::block_find_rank(block, rank_in, nbit, bit_pos);
+                if (!rank_in) // target found
+                {
+                    pos = bit_pos + (nb * bm::set_block_size * 32);
+                    return true;
+                }
             }
         }
         else
@@ -5266,9 +5276,16 @@ void bvector<Alloc>::combine_operation_and(const bm::bvector<Alloc>& bv)
         bm::word_t** blk_blk_arg = (i < arg_top_blocks) ? blk_root_arg[i] : 0;
         if (!blk_blk_arg) // free a whole group of blocks
         {
-            for (unsigned j = 0; j < bm::set_sub_array_size; ++j)
-                blockman_.zero_block(i, j);
-            blockman_.deallocate_top_subblock(i);
+            if ((bm::word_t*)blk_blk == FULL_BLOCK_FAKE_ADDR)
+            {
+                blk_root[i] = 0;
+            }
+            else
+            {
+                for (unsigned j = 0; j < bm::set_sub_array_size; ++j)
+                    blockman_.zero_block(i, j);
+                blockman_.deallocate_top_subblock(i);
+            }
             continue;
         }
         if ((bm::word_t*)blk_blk_arg == FULL_BLOCK_FAKE_ADDR)
