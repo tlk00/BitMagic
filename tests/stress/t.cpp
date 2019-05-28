@@ -9617,8 +9617,6 @@ void SimpleGapFillSets(bvect&   bv0,
     {
         bii0 = i;
         bii1 = i;
-//        bv0.set(i);
-//        bv1.set(i);
     } // for i
 }
 

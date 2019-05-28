@@ -42,6 +42,7 @@ For more information please visit:  http://bitmagic.io
 
 
 #include <bm.h>
+#include <bmvmin.h>
 #include <bmdbg.h>
 
 using namespace bm;
@@ -315,7 +316,7 @@ typedef mem_alloc<dbg_block_allocator, dbg_ptr_allocator, alloc_pool<dbg_block_a
 
 typedef bm::bvector<dbg_alloc> bvect64;
 typedef bm::bvector<dbg_alloc> bvect;
-//typedef bm::bvector_mini<dbg_block_allocator> bvect_mini;
+typedef bm::bvector_mini<dbg_block_allocator> bvect_mini;
 typedef bm::rs_index<dbg_alloc> rs_ind;
 
 #else
@@ -325,7 +326,7 @@ typedef bm::rs_index<dbg_alloc> rs_ind;
 typedef mem_alloc<pool_block_allocator, pool_ptr_allocator> pool_alloc;
 typedef bm::bvector<pool_alloc> bvect64;
 typedef bm::bvector<pool_alloc> bvect;
-//typedef bm::bvector_mini<bm::block_allocator> bvect_mini;
+typedef bm::bvector_mini<bm::block_allocator> bvect_mini;
 typedef bm::rs_index<pool_block_allocator> rs_ind;
 
 
@@ -333,7 +334,7 @@ typedef bm::rs_index<pool_block_allocator> rs_ind;
 
 typedef bm::bvector<> bvect64;
 typedef bm::bvector<> bvect;
-//typedef bm::bvector_mini<bm::block_allocator> bvect_mini;
+typedef bm::bvector_mini<bm::block_allocator> bvect_mini;
 typedef bm::rs_index<> rs_ind;
 
 #endif
@@ -2126,7 +2127,8 @@ void RankFindTest()
 {
     cout << "---------------------------- Find Rank test" << endl;
 
-    bvect::size_type base_idx = bm::id_max32+1;
+    bvect::size_type base_idx = bvect::size_type(bm::id_max32)+1;
+    assert(base_idx > bm::id_max32);
 
     {
         bvect bv1;
@@ -2155,6 +2157,22 @@ void RankFindTest()
             assert(pos1 == base_idx+65534);
             bv1.optimize();
         }
+    }
+    
+    {
+        bvect bv1;
+        bv1.set_range(base_idx, bm::id_max-1);
+        bvect::rs_index_type rsi;
+        bv1.build_rs_index(&rsi);
+        
+        bool rf1, rf3;
+        bvect::size_type pos, pos1;
+        rf1 = bv1.find_rank(1, 20, pos);
+        rf3 = bv1.find_rank(1, 20, pos1, rsi);
+        assert(rf1);
+        assert(rf3);
+        assert(pos == base_idx);
+        assert(pos1 == base_idx);
     }
     
     cout << "Find Rank test stress 1\n" << endl;
@@ -2449,10 +2467,761 @@ void BvectorBitForEachTest()
         }
     }
     
-    
     cout << "------------------------ bvector BitForEach Test OK" << endl;
 }
 
+static
+void GetNextTest()
+{
+   cout << "-------------------------------------------- GetNextTest()" << endl;
+   
+   cout << "testing bvector<>::find() in bit-mode" << endl;
+   
+   {
+        bvect bv;
+        bv.set();
+        bvect::size_type pos=1;
+        bool b;
+        b = bv.find(pos);
+        assert(pos == 0);
+        assert(b);
+       
+        b = bv.find(bm::id_max/2, pos);
+        assert(b);
+        assert(pos == bm::id_max/2);
+       
+        bv.set(bm::id_max/2, false);
+        b = bv.find(bm::id_max/2, pos);
+        assert(b);
+        assert(pos == bm::id_max/2 + 1);
+
+        b = bv.find_reverse(pos);
+        assert(b);
+        assert(pos == bm::id_max-1);
+       
+        bvect::size_type f, l;
+        b = bv.find_range(f, l);
+        assert(b);
+        assert(f == 0);
+        assert(l == bm::id_max-1);
+   }
+
+   {
+       bvect  bv;
+       bool found;
+       bvect::size_type pos;
+       found = bv.find(0, pos);
+       
+       if (found)
+       {
+           cout << "1. find() failed" << endl;
+           exit(1);
+       }
+       found = bv.find_reverse(pos);
+       assert(!found);
+       
+       bv[0] = true;
+       found = bv.find(0, pos);
+       if (!found || pos != 0)
+       {
+           cout << "2. find() failed " << pos << endl;
+           exit(1);
+       }
+       found = bv.find_reverse(pos);
+       assert(found && pos == 0);
+       
+       bv[0] = false;
+       found = bv.find_reverse(pos);
+       assert(!found);
+       bv[0] = true;
+
+       found = bv.find(1, pos);
+       if (found)
+       {
+           cout << "3. find() failed" << endl;
+           exit(1);
+       }
+       
+       bv[100000] = true;
+       bv[100001] = true;
+       found = bv.find(1, pos);
+       if (!found || pos != 100000)
+       {
+           cout << "4. find() failed " << pos << " " << found << endl;
+           exit(1);
+       }
+       found = bv.find_reverse(pos);
+       assert(found && pos == 100001);
+
+       found = bv.find(100000, pos);
+       if (!found || pos != 100000)
+       {
+           cout << "5. find() failed " << pos << " " << found << endl;
+           exit(1);
+       }
+       found = bv.find(100001, pos);
+       if (!found || pos != 100001)
+       {
+           cout << "6. find() failed " << pos << " " << found << endl;
+           exit(1);
+       }
+       found = bv.find(100002, pos);
+       if (found)
+       {
+           cout << "7. find() failed "<< endl;
+           exit(1);
+       }
+       bv[100001] = false;
+       found = bv.find_reverse(pos);
+       assert(found && pos == 100000);
+   }
+
+   cout << "testing bvector<>::find() in GAP-mode" << endl;
+
+   {
+       bvect  bv(BM_GAP);
+       bool found;
+       bvect::size_type pos;
+       bvect::size_type from;
+       from = bm::id_max / 2;
+       
+       found = bv.find(0, pos);
+       if (found)
+       {
+           cout << "1. find() failed" << endl;
+           exit(1);
+       }
+       found = bv.find_reverse(pos);
+       assert(!found);
+
+       bv[0] = true;
+       found = bv.find(0, pos);
+       if (!found || pos != 0)
+       {
+           cout << "2. find() failed " << pos << endl;
+           exit(1);
+       }
+       found = bv.find_reverse(pos);
+       assert(found && pos == 0);
+
+       found = bv.find(1, pos);
+       if (found)
+       {
+           cout << "3. find() failed" << endl;
+           exit(1);
+       }
+       bv[from] = true;
+       bv[from+1] = true;
+       found = bv.find(1, pos);
+       if (!found || pos != from)
+       {
+           cout << "4. find() failed " << pos << " " << found << endl;
+           exit(1);
+       }
+       found = bv.find(from, pos);
+       if (!found || pos != from)
+       {
+           cout << "5. find() failed " << pos << " " << found << endl;
+           exit(1);
+       }
+       found = bv.find(from+1, pos);
+       if (!found || pos != from+1)
+       {
+           cout << "6. find() failed " << pos << " " << found << endl;
+           exit(1);
+       }
+       found = bv.find_reverse(pos);
+       assert(found && pos == from+1);
+
+       found = bv.find(from+2, pos);
+       if (found)
+       {
+           cout << "7. find() failed "<< endl;
+           exit(1);
+       }
+       bv[from+1] = false;
+       found = bv.find_reverse(pos);
+       assert(found && pos == from);
+
+
+   }
+
+   {
+       bvect  bv;
+       bool found;
+       bvect::size_type from, to;
+       from = bm::id_max / 2;
+       to = from + 20000000;
+       
+       bv.set_range(from, to);
+       bvect::size_type pos;
+       found = bv.find_reverse(pos);
+       assert(found && pos == to);
+
+       bv.optimize();
+       found = bv.find_reverse(pos);
+       assert(found && pos == to);
+       
+       bv[bm::id_max-1] = true;
+       found = bv.find_reverse(pos);
+       assert(found && pos == bm::id_max-1);
+       
+       bv[bm::id_max-1] = false;
+       found = bv.find_reverse(pos);
+       assert(found && pos == to);
+
+       bv.set_range(from, to, false);
+       found = bv.find_reverse(pos);
+       assert(!found);
+
+       found = bv.find(0, pos);
+       assert(!found);
+   }
+   
+   {
+       bvect  bv;
+       bool found;
+       bvect::size_type pos;
+       bv.invert();
+       
+       found = bv.find_reverse(pos);
+       assert(found && pos == bm::id_max-1);
+
+       bv.optimize();
+       found = bv.find_reverse(pos);
+       assert(found && pos == bm::id_max-1);
+       
+       bv.invert();
+       found = bv.find_reverse(pos);
+       assert(!found);
+       found = bv.find(0, pos);
+       assert(!found);
+   }
+
+   const bvect::size_type BITVECT_SIZE = bvect::size_type(bm::id_max32)+100; //100000000 * 2;
+
+   int i;
+   for(i = 0; i < 2; ++i)
+   {
+      cout << "Strategy " << i << endl;
+
+       {
+          bvect       bvect_full1;
+          bvect_mini  bvect_min1(BITVECT_SIZE);
+
+          bvect_full1.set_new_blocks_strat(i ? bm::BM_GAP : bm::BM_BIT);
+
+          bvect_full1.set_bit(0);
+          bvect_min1.set_bit(0);
+
+
+          bvect_full1.set_bit(BITVECT_SIZE-1);
+          bvect_min1.set_bit(BITVECT_SIZE-1);
+
+          auto nbit1 = bvect_full1.get_first();
+          auto nbit2 = bvect_min1.get_first();
+
+          if (nbit1 != nbit2)
+          {
+             cout << "1. get_first failed() " <<  nbit1 << " " << nbit2 << endl;
+             exit(1);
+          }
+          nbit1 = bvect_full1.get_next(nbit1);
+          nbit2 = bvect_min1.get_next(nbit2);
+          if ((nbit1 != nbit2) || (nbit1 != BITVECT_SIZE-1))
+          {
+             cout << "2. get_next failed() " <<  nbit1 << " " << nbit2 << endl;
+             exit(1);
+          }
+       }
+
+
+       {
+           bvect       bvect_full1;
+           bvect_mini  bvect_min1(BITVECT_SIZE);
+
+           bvect_full1.set_new_blocks_strat(i ? bm::BM_GAP : bm::BM_BIT);
+
+           bvect_full1.set_bit(256);
+           bvect_min1.set_bit(256);
+
+           bvect_full1.set_bit(BITVECT_SIZE-65536);
+           bvect_min1.set_bit(BITVECT_SIZE-65536);
+
+           bvect::size_type nbit1 = bvect_full1.get_first();
+           bvect::size_type nbit2 = bvect_min1.get_first();
+
+           if (nbit1 != nbit2)
+           {
+              cout << "get_first failed " <<  nbit1 << " " << nbit2 << endl;
+              exit(1);
+           }
+
+           bvect::size_type last_found = 0;
+           while (nbit1)
+           {
+              cout << nbit1 << endl;
+              nbit1 = bvect_full1.get_next(nbit1);
+              nbit2 = bvect_min1.get_next(nbit2);
+              if (nbit1 != nbit2)
+              {
+                 cout << "get_next failed " <<  nbit1 << " " << nbit2 << endl;
+                 exit(1);
+              }
+             if (nbit1)
+                last_found = nbit1;
+           } // while
+         
+           bvect::size_type pos = 0;
+           bool found = bvect_full1.find_reverse(pos);
+           assert(found && pos == last_found);
+       }
+
+   }// for
+
+   cout << "-------------------------------------------- GetNextTest()" << endl;
+
+}
+
+static
+void BvectorIncTest()
+{
+    cout << "---------------------------- Bvector inc test" << endl;
+    bvect::size_type pos1 = bvect::size_type(bm::id_max32)+1;
+    bvect::size_type pos2 = bvect::size_type(bm::id_max)-1;
+
+    
+    
+    {
+        bvect bv1;
+        bool b;
+        
+        b = bv1.inc(pos1);
+        assert(!b);
+        assert(bv1.count()==1);
+        b = bv1.inc(pos1);
+        assert(b);
+        assert(bv1.count()==0);
+
+        b = bv1.inc(pos2);
+        assert(!b);
+        assert(bv1.count()==1);
+        b = bv1.inc(pos2);
+        assert(b);
+        assert(bv1.count()==0);
+    }
+    
+    {
+        bvect bv1(BM_GAP);
+        bool b;
+        
+        assert(bv1.count()==0);
+        
+        b = bv1.inc(pos1);
+        assert(!b);
+        cout << bv1.count() << endl;
+        assert(bv1.count()==1);
+        b = bv1.inc(pos1);
+        assert(b);
+        assert(bv1.count()==0);
+
+        b = bv1.inc(pos2);
+        assert(!b);
+        b = bv1.inc(pos2);
+        assert(b);
+    }
+
+    {
+        bvect bv1(BM_GAP);
+        bool b;
+
+        bv1.flip();
+        
+        b = bv1.inc(pos1);
+        assert(b);
+        b = bv1.inc(pos1);
+        assert(!b);
+        
+        b = bv1.inc(pos2);
+        assert(b);
+        b = bv1.inc(pos2);
+        assert(!b);
+    }
+
+    cout << "---------------------------- Bvector inc test OK" << endl;
+}
+
+template<class BV>
+void DetailedCompareBVectors(const BV& bv1, const BV& bv2)
+{
+    bvect::counted_enumerator en1 = bv1.first();
+    bvect::counted_enumerator en2 = bv2.first();
+    
+    for (; en1.valid(); ++en1)
+    {
+        assert(en2.valid());
+        
+        auto i1 = *en1;
+        auto i2 = *en2;
+        
+        if (i1 != i2)
+        {
+            auto nb1 = (i1 >>  bm::set_block_shift);
+            auto nb2 = (i2 >>  bm::set_block_shift);
+            auto ii1 = nb1 >> bm::set_array_shift;
+            auto jj1 = nb1 &  bm::set_array_mask;
+            auto ii2 = nb2 >> bm::set_array_shift;
+            auto jj2 = nb2 &  bm::set_array_mask;
+
+            std::cerr << "Difference detected at: position="
+                      << i1 << " nb=" << nb1
+                      << "[" << ii1 << ", " << jj1 << "]"
+                      " other position = " << i2 <<
+                      " nb=" << nb2
+                      << "[" << ii2 << ", " << jj2 << "]"
+                      << std::endl;
+            std::cerr << " en1.count()=" << en1.count() << " en2.count()=" << en2.count()
+                      << std::endl;
+            
+            exit(1);
+            return;
+        }
+        ++en2;
+    } // for
+
+    int cmp = bv1.compare(bv2);
+    if (cmp != 0)
+    {
+        cerr << "Compare (1-2) discrepancy! " << cmp << endl;
+    }
+    cmp = bv2.compare(bv1);
+    if (cmp != 0)
+    {
+        cerr << "Compare (2-1) discrepancy! " << cmp << endl;
+    }
+
+    cout << "Detailed compare OK (no difference)." << endl;
+}
+
+
+
+static
+void BvectorBulkSetTest()
+{
+    cout << "---------------------------- Bvector BULK set test" << endl;
+    {
+        bvect::size_type ids[] = { 0 };
+        bvect bv1, bv2, bv3;
+        {
+            bvect::bulk_insert_iterator iit = bv3.inserter();
+            for (unsigned i = 0; i < sizeof(ids)/sizeof(ids[0]); ++i)
+            {
+                bv1.set(ids[i]);
+                iit = ids[i];
+            }
+        }
+        bv2.set(&ids[0], sizeof(ids)/sizeof(ids[0]));
+        
+        int cmp = bv1.compare(bv2);
+        assert(cmp==0);
+        cmp = bv1.compare(bv3);
+        assert(cmp==0);
+        
+        bv2.set(0);
+        bv2.keep(&ids[0], sizeof(ids)/sizeof(ids[0]));
+        assert(bv2.count()==1);
+        assert(bv2.test(0));
+    }
+    {
+        bvect::size_type ids[] = {65535, bm::id_max-1 };
+        bvect::size_type cnt;
+        bvect bv2;
+        bv2.set(&ids[0], sizeof(ids)/sizeof(ids[0]));
+ 
+        cnt = bv2.count();
+        cout << cnt << endl;
+
+        assert(cnt == sizeof(ids)/sizeof(ids[0]));
+        assert(bv2.test(ids[0]));
+        assert(bv2.test(ids[1]));
+    }
+
+    // set bits in FULL vector
+    {
+        bvect::size_type ids[] = {0, 10, 65535, bm::id_max-1, bm::id_max-2 };
+        bvect::size_type cnt;
+        bvect bv2;
+        bv2.invert();
+        struct bvect::statistics st1, st2;
+        bv2.calc_stat(&st1);
+
+        bv2.set(&ids[0], sizeof(ids)/sizeof(ids[0]));
+
+        bv2.calc_stat(&st2);
+        assert(st1.bit_blocks == st2.bit_blocks);
+        assert(st1.gap_blocks == st2.gap_blocks);
+
+        cnt = bv2.count();
+
+        assert(cnt == bm::id_max);
+    }
+
+    // test correct sizing
+    {
+        bvect::size_type ids[] = {bm::id_max32+100 };
+        bvect bv1;
+        bv1.resize(10);
+
+        bv1.set(&ids[0], sizeof(ids)/sizeof(ids[0]));
+        assert(bv1.size()==bm::id_max32+100+1);
+        bv1.keep(&ids[0], sizeof(ids)/sizeof(ids[0]));
+        cout << bv1.size() << endl;
+        assert(bv1.size()==bm::id_max32+100+1);
+        assert(bv1.count()==sizeof(ids)/sizeof(ids[0]));
+    }
+
+    {
+        bvect::size_type ids[] = {65536, bm::id_max-1, 65535 };
+        bvect bv1, bv2;
+
+        for (size_t i = 0; i < sizeof(ids)/sizeof(ids[0]); ++i)
+            bv1.set(ids[i]);
+ 
+        bv2.set(&ids[0], sizeof(ids)/sizeof(ids[0]));
+        int cmp = bv1.compare(bv2);
+        assert(cmp==0);
+ 
+        bv2.keep(&ids[0], sizeof(ids)/sizeof(ids[0]));
+        cmp = bv1.compare(bv2);
+        assert(cmp==0);
+    }
+
+    {
+        bvect::size_type ids[] =
+            { 0, 1, 2, 3, 4, 5, 256, 1024, 1028, 256000, bm::id_max-100 };
+     
+        bvect bv1, bv2;
+        for (unsigned i = 0; i < sizeof(ids)/sizeof(ids[0]); ++i)
+            bv1.set(ids[i]);
+        bv2.set(&ids[0], sizeof(ids)/sizeof(ids[0]));
+     
+        DetailedCompareBVectors(bv1, bv2);
+
+        int cmp = bv1.compare(bv2);
+        assert(cmp==0);
+     
+        {
+            bvect bv_inv;
+            bv_inv.flip();
+            bvect::size_type keep_cnt = sizeof(ids)/sizeof(ids[0]);
+            bv_inv.keep(&ids[0], keep_cnt, bm::BM_SORTED);
+            auto cnt_inv2 = bv_inv.count();
+            assert(cnt_inv2 == keep_cnt);
+            for (unsigned i = 0; i < sizeof(ids)/sizeof(ids[0]); ++i)
+            {
+                assert(bv_inv.test(ids[i]));
+            }
+        }
+     
+        bvect bv3, bv4, bv5;
+        bv3.invert();
+        bv4.invert();
+        bv5.invert();
+
+        {
+            bvect::bulk_insert_iterator iit = bv5.inserter();
+            for (unsigned i = 0; i < sizeof(ids)/sizeof(ids[0]); ++i)
+            {
+                bv3.set(ids[i]);
+                iit = ids[i];
+            }
+        }
+        bv4.set(&ids[0], sizeof(ids)/sizeof(ids[0]));
+        cmp = bv3.compare(bv4);
+        assert(cmp==0);
+        cmp = bv4.compare(bv3);
+        assert(cmp==0);
+
+        cmp = bv3.compare(bv5);
+        assert(cmp==0);
+    }
+
+    bvect::size_type vector_from = bvect::size_type(bm::id_max32) - 18*65536;
+    bvect::size_type vector_to = bvect::size_type(bm::id_max32) + 128*65536;
+
+    cout << "bvector-set volume test 1" << endl;
+    {
+        std::vector<bvect::size_type> v1, v2, v3;
+        generate_test_vectors(v1, v2, v3, vector_from, vector_to);
+
+        for (unsigned k = 0; k < 2; ++ k)
+        {
+            bvect bvu, bvuc;
+            bvect bv1, bv2, bv3, bv11;
+            bvect bv1c, bv2c, bv3c;
+     
+            {
+                bvect::bulk_insert_iterator iit(bv11);
+                for (bvect::size_type i = 0; i < v1.size(); ++i)
+                {
+                    bv1c.set(v1[i]);
+                    iit = v1[i];
+                }
+                iit.flush();
+            }
+     
+            for (bvect::size_type i = 0; i < v2.size(); ++i)
+                bv2c.set(v2[i]);
+            for (bvect::size_type i = 0; i < v3.size(); ++i)
+                bv3c.set(v3[i]);
+     
+            // union of 3 vectors
+            bvuc = bv1c;
+            bvuc |= bv2c;
+            bvuc |= bv3c;
+
+            bv1.set(&v1[0], bvect::size_type(v1.size()));
+            bv2.set(&v2[0], bvect::size_type(v2.size()));
+            bv3.set(&v3[0], bvect::size_type(v3.size()));
+
+            // imported union of 3 vectors
+            bvu.set(&v1[0], bvect::size_type(v1.size()));
+            bvu.set(&v2[0], bvect::size_type(v2.size()));
+            bvu.set(&v3[0], bvect::size_type(v3.size()));
+
+            cout << bv1.count() << " " << bv1c.count() << endl;
+     
+            int cmp;
+            cmp = bv1c.compare(bv1);
+            if (cmp != 0)
+            {
+                DetailedCompareBVectors(bv1, bv1c);
+            }
+            assert(cmp==0);
+            cmp = bv2c.compare(bv2);
+            assert(cmp==0);
+            cmp = bv3c.compare(bv3);
+            assert(cmp==0);
+            cmp = bv1.compare(bv11);
+            assert(cmp==0);
+
+            cmp = bvuc.compare(bvu);
+            assert(cmp == 0);
+     
+            {
+                std::random_device rd;
+                std::mt19937 g(rd());
+     
+                std::shuffle(v1.begin(), v1.end(), g);
+                std::shuffle(v2.begin(), v2.end(), g);
+                std::shuffle(v3.begin(), v3.end(), g);
+            }
+        }
+ 
+    }
+ 
+    cout << "Bulk bvector<>::set() stress.." << endl;
+    {
+        assert(vector_from < vector_to);
+        unsigned delta_max = 65537;
+
+        bvect bv1, bv2;
+        bvect bv1c;
+        std::vector<bvect::size_type> v1;
+
+        for (unsigned delta = 1; delta < delta_max; ++delta)
+        {
+            v1.resize(0);
+            bvect::bulk_insert_iterator iit(bv2);
+            for (bvect::size_type i = vector_from; i < vector_to; i+=delta)
+            {
+                v1.push_back(i);
+                iit = i;
+            }
+            iit.flush();
+ 
+            bv1.set(&v1[0], bvect::size_type(v1.size()));
+            bm::combine_or(bv1c, v1.begin(), v1.end());
+ 
+            int cmp = bv1.compare(bv1c);
+            if (cmp!=0)
+            {
+                cerr << "1.Failed bulk set test at delta=" << delta << endl;
+                exit(1);
+            }
+            cmp = bv1.compare(bv2);
+            if (cmp!=0)
+            {
+                cerr << "2.Failed bulk set test at delta=" << delta << endl;
+                exit(1);
+            }
+ 
+            // test AND/keep
+            {
+                bvect bv3(bv1);
+                bvect bv4;
+                bv3.keep(&v1[0], bvect::size_type(v1.size()));
+                bv4.set(&v1[0], bvect::size_type(v1.size()));
+                cmp = bv3.compare(bv4);
+                if (cmp!=0)
+                {
+                    cerr << "3.Failed keep() test at delta=" << delta << endl;
+                    exit(1);
+                }
+                if (v1.size())
+                {
+                    bv3.keep(&v1[0], 1);
+                    assert(bv3.count()==1);
+                    assert(bv3.test(v1[0]));
+                }
+            }
+            bv1.clear();
+            bv1c.clear();
+            bv2.clear();
+
+            if ((delta & 0xFF) == 0)
+                cout << "\r" << delta << "/" << delta_max << flush;
+        } // for delta
+        cout << endl;
+    }
+
+    
+    cout << "---------------------------- Bvector BULK set test OK" << endl;
+}
+
+static
+void GAPTestStress()
+{
+    cout << "----------------------------------- GAP test stress " << endl;
+    const bvect::size_type from = bvect::size_type(bm::id_max32)-65536;
+    const bvect::size_type to = bvect::size_type(bm::id_max32)+65536*256;
+    assert(from < to);
+
+    unsigned ff_to = 65536*256;
+    for (unsigned ff = 64; ff < ff_to; ff++)
+    {
+        bvect bv0, bv1;
+        SimpleGapFillSets(bv0, bv1, from, to, ff);
+        bv1.optimize();
+        for (bvect::size_type i = from; i < to+1; ++i)
+        {
+            bool b0 = bv0.test(i);
+            bool b1 = bv1.test(i);
+            if (b0 != b1)
+            {
+                cerr << "GAP Test Stress failure!" << " FillFactor=" << ff << " bit=" << i << endl;
+                assert(0);
+                exit(1);
+            }
+        } // for i
+        if ((ff & 0xFF) == 0)
+        {
+            cout << "\r" << ff << "/" << ff_to << flush;
+        }
+    } // for j
+
+    cout << "\n----------------------------------- GAP test stress " << endl;
+}
 
 
 
@@ -2462,7 +3231,7 @@ int main(void)
     time_t      finish_time;
     
     // -----------------------------------------------------------------
-
+/*
     SyntaxTest();
     GenericBVectorTest();
     SetTest();
@@ -2476,11 +3245,19 @@ int main(void)
     CountRangeTest();
 
     OptimizeTest();
-    
+
     RankFindTest();
 
     BvectorBitForEachTest();
 
+    GetNextTest();
+
+    BvectorIncTest();
+
+    BvectorBulkSetTest();
+*/
+    GAPTestStress();
+    
     // -----------------------------------------------------------------
 
     finish_time = time(0);

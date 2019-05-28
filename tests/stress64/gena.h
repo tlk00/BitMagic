@@ -60,3 +60,35 @@ void generate_bvector(BV& bv, typename BV::size_type vector_max, bool optimize)
     if (optimize)
         bv.optimize();
 }
+
+template<typename VT, typename SIZE_TYPE>
+void generate_test_vectors(VT &v1,
+                           VT &v2,
+                           VT &v3,
+                           SIZE_TYPE from,
+                           SIZE_TYPE to)
+{
+    SIZE_TYPE j;
+    for (j = from; j < to; j += 2)
+        v1.push_back(j);
+    for (j = from; j < to; j += 5)
+        v2.push_back(j);
+    for (j = from; j < to; j += 120)
+        v3.push_back(j);
+}
+
+
+template<typename BV>
+void SimpleGapFillSets(BV&   bv0,
+                       BV&   bv1,
+                       typename BV::size_type min,
+                       typename BV::size_type max,
+                       unsigned fill_factor)
+{
+    typename BV::bulk_insert_iterator bii1(bv1);
+    for (typename BV::size_type i = min; i < max; i += fill_factor)
+    {
+        bv0.set(i);
+        bii1 = i;
+    } // for i
+}
