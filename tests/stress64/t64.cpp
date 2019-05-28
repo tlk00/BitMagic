@@ -3179,8 +3179,13 @@ void BvectorBulkSetTest()
             bv1c.clear();
             bv2.clear();
 
-            if ((delta & 0xFF) == 0)
+            //if ((delta & 0xFF) == 0)
                 cout << "\r" << delta << "/" << delta_max << flush;
+            if (delta < 128)
+                delta++;
+            else
+                delta += delta / 2;
+
         } // for delta
         cout << endl;
     }
@@ -3198,7 +3203,7 @@ void GAPTestStress()
     assert(from < to);
 
     unsigned ff_to = 65536*256;
-    for (unsigned ff = 64; ff < ff_to; ff++)
+    for (unsigned ff = 64; ff < ff_to; )
     {
         bvect bv0, bv1;
         SimpleGapFillSets(bv0, bv1, from, to, ff);
@@ -3214,10 +3219,14 @@ void GAPTestStress()
                 exit(1);
             }
         } // for i
-        if ((ff & 0xFF) == 0)
+        //if ((ff & 0xFF) == 0)
         {
             cout << "\r" << ff << "/" << ff_to << flush;
         }
+        if (ff <= 64)
+            ++ff;
+        else
+            ff += (ff / 2); 
     } // for j
 
     cout << "\n----------------------------------- GAP test stress " << endl;
@@ -3245,7 +3254,7 @@ int main(void)
     CountRangeTest();
 
     OptimizeTest();
-
+*/
     RankFindTest();
 
     BvectorBitForEachTest();
@@ -3255,8 +3264,8 @@ int main(void)
     BvectorIncTest();
 
     BvectorBulkSetTest();
-*/
-    GAPTestStress();
+
+ //   GAPTestStress();
     
     // -----------------------------------------------------------------
 
