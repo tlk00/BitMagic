@@ -2186,18 +2186,18 @@ void RankFindTest()
     cout << "Find Rank test stress 1\n" << endl;
     
     {
-        const bvect::size_type max_size = base_idx+2000000;
+        const bvect::size_type max_size = base_idx+200000;
+        const bvect::size_type min_size = base_idx-20000;
         bvect bv1;
-        for (bvect::size_type i = base_idx; i < max_size;)
+        for (bvect::size_type i = base_idx; i < max_size; i += rand()%5)
         {
             bv1.set(i);
-            i += rand()%5;
         }
         bvect::rs_index_type bc_arr1;
         bv1.build_rs_index(&bc_arr1);
 
         
-        for (bvect::size_type i = 0; i < max_size; ++i)
+        for (bvect::size_type i = max_size; i > min_size; --i)
         {
             bool rf1, rf3;
             bvect::size_type pos, pos1;
@@ -3258,11 +3258,11 @@ int main(void)
     EmptyBVTest();
     EnumeratorTest();
     RSIndexTest();
-*/
+
     CountRangeTest();
 
     OptimizeTest();
-
+*/
     RankFindTest();
 
     BvectorBitForEachTest();
