@@ -1927,7 +1927,7 @@ void CountRangeTest()
         } // for
         
         VerifyCountRange(bv1, bc_arr1, 0, 200000);
-        VerifyCountRange(bv1, bc_arr, bm::id_max-200000, bm::id_max-1);
+        VerifyCountRange(bv1, bc_arr, bm::id_max-2000, bm::id_max-1);
     }}
 
     cout << "Stage 2" << endl;
@@ -1949,11 +1949,14 @@ void CountRangeTest()
         VerifyCountRange(bv1, bc_arr, bm::id_max-1, bm::id_max-1);
         for (unsigned i = 0; i < 2; ++i)
         {
+            cout << "Pass " << i << endl;
+            cout << "1 ..." << endl;
             VerifyCountRange(bv1, bc_arr, 0, 200000);
-            VerifyCountRange(bv1, bc_arr, bm::id_max-200000, bm::id_max-1);
-
+            cout << "2 ..." << endl;
+            VerifyCountRange(bv1, bc_arr, bm::id_max-2000, bm::id_max-1);
             // check within empty region
-            VerifyCountRange(bv1, bc_arr, bm::id_max/2-200000, bm::id_max/2+200000);
+            cout << "3 ..." << endl;
+            VerifyCountRange(bv1, bc_arr, bm::id_max/2-2000, bm::id_max/2+2000);
 
             bv1.optimize();
         }
@@ -1971,11 +1974,16 @@ void CountRangeTest()
             auto cnt2 = bc_arr.count();
             assert(cnt1 == cnt2);
 
+            cout << "1 ..." << endl;
             VerifyCountRange(bv1, bc_arr, bm::id_max-1, bm::id_max-1);
-
+            cout << "2 ..." << endl;
             VerifyCountRange(bv1, bc_arr, 0, 200000);
-            VerifyCountRange(bv1, bc_arr, bm::id_max-200000, bm::id_max-1);
-            VerifyCountRange(bv1, bc_arr, bm::id_max/2-200000, bm::id_max/2+200000);
+            cout << "3 ..." << endl;
+            VerifyCountRange(bv1, bc_arr, bm::id_max-2000, bm::id_max-1);
+            cout << "4 ..." << endl;
+            VerifyCountRange(bv1, bc_arr, bm::id_max/2-2000, bm::id_max/2+2000);
+            cout << "Done!" << endl;
+
     }}
     
     cout << "---------------------------- CountRangeTest OK" << endl;
@@ -3250,11 +3258,11 @@ int main(void)
     EmptyBVTest();
     EnumeratorTest();
     RSIndexTest();
-
+*/
     CountRangeTest();
 
     OptimizeTest();
-*/
+
     RankFindTest();
 
     BvectorBitForEachTest();
