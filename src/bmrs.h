@@ -233,13 +233,7 @@ rs_index<BVAlloc>::count() const
 {
     if (!total_blocks_)
         return 0;
-
     return sblock_count_[max_sblock_ + 1];
-    /*
-    unsigned i = unsigned((total_blocks_ - 1) >> bm::set_array_shift);
-    size_type sb_rcount = get_super_block_rcount(i);
-    return sb_rcount;
-    */
 }
 
 //---------------------------------------------------------------------

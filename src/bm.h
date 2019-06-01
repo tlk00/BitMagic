@@ -1707,10 +1707,11 @@ public:
 
     /*! \brief compute running total of all blocks in bit vector (rank-select index)
         \param rs_idx - [out] pointer to index / count structure
+        \param bv_blocks - [out] list of block ids in the vector (internal, optional)
         Function will fill full array of running totals
         \sa count_to, select, find_rank
     */
-    void build_rs_index(rs_index_type* rs_idx) const;
+    void build_rs_index(rs_index_type* rs_idx, bvector<Alloc>* bv_blocks=0) const;
 
     /*!
        \brief Returns count of 1 bits (population) in [0..right] range.
@@ -2580,9 +2581,15 @@ void bvector<Alloc>::sync_size()
 // -----------------------------------------------------------------------
 
 template<typename Alloc>
-void bvector<Alloc>::build_rs_index(rs_index_type* rs_idx) const
+void bvector<Alloc>::build_rs_index(rs_index_type* rs_idx,
+                                    bvector<Alloc>* bv_blocks) const
 {
     BM_ASSERT(rs_idx);
+    if (bv_blocks)
+    {
+        bv_blocks->clear();
+        bv_blocks->init();
+    }
     
     unsigned bcount[bm::set_sub_array_size];
     unsigned sub_count[bm::set_sub_array_size];
@@ -2622,6 +2629,12 @@ void bvector<Alloc>::build_rs_index(rs_index_type* rs_idx) const
         if ((bm::word_t*)blk_blk == FULL_BLOCK_FAKE_ADDR)
         {
             rs_idx->set_full_super_block(i);
+            if (bv_blocks)
+            {
+                size_type nb_from = i * bm::set_sub_array_size;
+                size_type nb_to = nb_from + bm::set_sub_array_size - 1;
+                bv_blocks->set_range_no_check(nb_from, nb_to);
+            }
             continue;
         }
         
@@ -2637,6 +2650,11 @@ void bvector<Alloc>::build_rs_index(rs_index_type* rs_idx) const
             
             unsigned cnt = blockman_.block_bitcount(block);
             bcount[j] = cnt;
+            if (bv_blocks && cnt)
+            {
+                bv_blocks->set(i * bm::set_sub_array_size + j);
+            }
+
             
             // TODO: optimize sub-index compute
             unsigned first, second;

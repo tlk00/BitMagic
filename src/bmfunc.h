@@ -6637,6 +6637,8 @@ unsigned bit_find_last(const bm::word_t* block, unsigned* last)
     BM_ASSERT(block);
     BM_ASSERT(last);
 
+    // TODO: SIMD version
+
     for (unsigned i = bm::set_block_size-1; true; --i)
     {
         bm::word_t w = block[i];
@@ -6667,6 +6669,8 @@ unsigned bit_find_first(const bm::word_t* block, unsigned* first)
     BM_ASSERT(block);
     BM_ASSERT(first);
 
+    // TODO: SIMD version
+    
     for (unsigned i = 0; i < bm::set_block_size; ++i)
     {
         bm::word_t w = block[i];

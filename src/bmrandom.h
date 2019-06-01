@@ -1,7 +1,7 @@
 #ifndef BMRANDOM__H__INCLUDED__
 #define BMRANDOM__H__INCLUDED__
 /*
-Copyright(c) 2002-2017 Anatoliy Kuznetsov(anatoliy_kuznetsov at yahoo.com)
+Copyright(c) 2002-2019 Anatoliy Kuznetsov(anatoliy_kuznetsov at yahoo.com)
 
 Licensed under the Apache License, Version 2.0 (the "License");
 you may not use this file except in compliance with the License.
@@ -27,17 +27,18 @@ For more information please visit:  http://bitmagic.io
 #include "bmdef.h"
 
 #include <stdlib.h>
+#include <random>
 #include <algorithm>
-
 
 namespace bm
 {
+
 
 /*!
     Class implements algorithm for random subset generation.
 
     Implemented method tries to be fair, but doesn't guarantee
-    true randomeness.
+    true randomeness or absense of bias.
 
     Performace note: 
     Class holds temporary buffers and variables, so it is recommended to
@@ -49,6 +50,9 @@ template<class BV>
 class random_subset
 {
 public:
+    typedef BV                      bvector_type;
+    typedef typename BV::size_type  size_type;
+public:
     random_subset();
     ~random_subset();
 
@@ -56,9 +60,9 @@ public:
     ///
     /// @param bv_out - destination vector
     /// @param bv_in  - input vector
-    /// @param count  - number of bits to pick
+    /// @param sample_count  - number of bits to pick
     ///
-    void sample(BV& bv_out, const BV& bv_in, unsigned count);
+    void sample(BV& bv_out, const BV& bv_in, size_type sample_count);
     
 
 private:
@@ -66,40 +70,47 @@ private:
         typename BV::blocks_manager_type  blocks_manager_type;
 
 private:
-    void get_subset(BV& bv_out, 
-                    const BV& bv_in, 
-                    unsigned  bv_in_count,
-                    unsigned count);
+    /// simple picking algorithm for small number of items
+    /// in [first,last] range
+    ///
+    void simple_pick(BV& bv_out,
+                      const BV&  bv_in,
+                      size_type sample_count,
+                      size_type first,
+                      size_type last);
 
-    unsigned find_max_block();
-    
-    void get_random_subset(bm::word_t*       blk_out, 
-                           const bm::word_t* blk_src,
-                           unsigned          count);
+    void get_subset(BV& bv_out, 
+                    const BV&  bv_in,
+                    size_type  in_count,
+                    size_type  sample_count);
+
+    void get_block_subset(bm::word_t*       blk_out,
+                          const bm::word_t* blk_src,
+                          unsigned          count);
     static 
     unsigned process_word(bm::word_t*       blk_out, 
                           const bm::word_t* blk_src,
-                          unsigned          i,
-                          unsigned          count);
+                          unsigned          nword,
+                          unsigned          take_count);
 
     static
     void get_random_array(bm::word_t*       blk_out, 
                           bm::gap_word_t*   bit_list,
                           unsigned          bit_list_size,
                           unsigned          count);
+    static
+    unsigned compute_take_count(unsigned bc,
+                        size_type in_count, size_type sample_count);
 
 
 private:
     random_subset(const random_subset&);
     random_subset& operator=(const random_subset&);
 private:
-    unsigned*         block_counts_; 
-    unsigned short*   block_bits_take_;
-    unsigned          blocks_;
-    bm::gap_word_t    bit_list_[bm::gap_max_bits];
-    unsigned*         block_candidates_;
-    unsigned          candidates_count_;
-    bm::word_t*       sub_block_;
+    typename bvector_type::rs_index_type   rsi_; ///< RS index (block counts)
+    bvector_type                           bv_nb_; ///< blocks vector
+    bm::gap_word_t                         bit_list_[bm::gap_max_bits];
+    bm::word_t*                            sub_block_;
 };
 
 
@@ -109,61 +120,114 @@ private:
 
 template<class BV>
 random_subset<BV>::random_subset()
-: block_counts_(new unsigned[bm::set_total_blocks]),
-  block_bits_take_(new bm::gap_word_t[bm::set_total_blocks]),
-  block_candidates_(new unsigned[bm::set_total_blocks]),
-  candidates_count_(0),
-  sub_block_(new bm::word_t[bm::set_block_size])
 {
+    sub_block_ = new bm::word_t[bm::set_block_size];
 }
 
 template<class BV>
 random_subset<BV>::~random_subset()
 {
-    delete [] block_counts_;
-    delete [] block_bits_take_;
-    delete [] block_candidates_;
     delete [] sub_block_;
 }
 
 template<class BV>
 void random_subset<BV>::sample(BV&       bv_out, 
                                const BV& bv_in, 
-                               unsigned  count)
+                               size_type sample_count)
 {
-    if (count == 0)
+    if (sample_count == 0)
     {
         bv_out.clear(true);
         return;
     }
-
-    unsigned bcnt = bv_in.count();
-    if (count >= bcnt)
+    
+    rsi_.init();
+    bv_in.build_rs_index(&rsi_, &bv_nb_);
+    
+    size_type in_count = rsi_.count();
+    if (in_count <= sample_count)
     {
         bv_out = bv_in;
         return;
     }
-    if (count > bcnt/2) 
+    
+    float pick_ratio = float(sample_count) / float(in_count);
+    if (pick_ratio < 0.054f)
+    {
+        size_type first, last;
+        bool b = bv_in.find_range(first, last);
+        if (!b)
+            return;
+
+        simple_pick(bv_out, bv_in, sample_count, first, last);
+        return;
+    }
+
+    if (sample_count > in_count/2)
     {
         // build the complement vector and subtract it
         BV tmp_bv;
-        unsigned delta_count = bcnt - count;
+        size_type delta_count = in_count - sample_count;
 
-        get_subset(tmp_bv, bv_in, bcnt, delta_count);
+        get_subset(tmp_bv, bv_in, in_count, delta_count);
         bv_out = bv_in;
         bv_out -= tmp_bv;
         return;
     }
-
-    get_subset(bv_out, bv_in, bcnt, count);
-    bv_out.forget_count();
+    get_subset(bv_out, bv_in, in_count, sample_count);
 }
 
 template<class BV>
-void random_subset<BV>::get_subset(BV&       bv_out, 
-                                   const BV& bv_in, 
-                                   unsigned  bcnt,
-                                   unsigned  count)
+void random_subset<BV>::simple_pick(BV&        bv_out,
+                                    const BV&  bv_in,
+                                    size_type sample_count,
+                                    size_type first,
+                                    size_type last)
+{
+    bv_out.clear(true);
+
+    std::random_device rd;
+    std::mt19937 mt_rand(rd());
+    
+    //std::mt19937_64 mt_rand(rd());
+    
+    std::uniform_int_distribution<size_type> dist(first, last);
+
+    while (sample_count)
+    {
+        size_type fidx;
+        size_type ridx = dist(mt_rand); // generate random position
+        
+        BM_ASSERT(ridx >= first && ridx <= last);
+        
+        bool b = bv_in.find(ridx, fidx); // find next valid bit after random
+        BM_ASSERT(b);
+        if (b)
+        {
+            // set true if was false
+            bool is_set = bv_out.set_bit_conditional(fidx, true, false);
+            sample_count -= is_set;
+            while (!is_set) // find next valid (and not set) bit
+            {
+                // searching always left to right may create a bias...
+                b = bv_in.find(fidx, fidx);
+                if (!b)
+                    break;
+                if (fidx > last)
+                    break;
+                is_set = bv_out.set_bit_conditional(fidx, true, false);
+                sample_count -= is_set;
+            } // while
+        }
+    } // while
+}
+
+
+template<class BV>
+void random_subset<BV>::get_subset(BV&        bv_out,
+                                   const BV&  bv_in,
+                                   size_type  in_count,
+                                   size_type  sample_count)
 {
     bv_out.clear(true);
     bv_out.resize(bv_in.size());
@@ -172,122 +236,133 @@ void random_subset<BV>::get_subset(BV&       bv_out,
     blocks_manager_type& bman_out = bv_out.get_blocks_manager();
 
     bm::word_t* tmp_block = bman_out.check_allocate_tempblock();
-    candidates_count_ = 0;
 
+    size_type first_nb, last_nb;
+    bool b = bv_nb_.find_range(first_nb, last_nb);
+    BM_ASSERT(b);
+    if (!b)
+        return;
 
-    // compute bit-counts in all blocks
-    //
-    unsigned block_count = blocks_ = bv_in.count_blocks(block_counts_);
-    for (unsigned i = 0; i <= block_count; ++i)
+    std::random_device rd;
+    std::mt19937 mt_rand(rd());
+    //std::mt19937_64 mt_rand(rd());
+    std::uniform_int_distribution<size_type> dist_nb(first_nb, last_nb);
+
+    size_type block_idx = 0;
+    size_type curr_sample_count = sample_count;
+    for (size_type take_count = 0; curr_sample_count; curr_sample_count -= take_count, ++block_idx)
     {
-        if (block_counts_[i])
-        {
-            float block_percent = 
-                ((float)(block_counts_[i]+1)) / (float)bcnt;
-            float bits_to_take = ((float)count) * block_percent; 
-            bits_to_take += 0.99f;
-
-            unsigned t = (unsigned)bits_to_take;
-            block_bits_take_[i] = (bm::gap_word_t)t;
-            
-            if (block_bits_take_[i] == 0)
-            {
-                block_bits_take_[i] = 1;
-            }
-            else
-            if (block_bits_take_[i] > block_counts_[i])
-                block_bits_take_[i] = (gap_word_t)block_counts_[i];
-        }
-        else
-        {
-            block_bits_take_[i] = 0;
-        }
-    } // for i
-
-    for (unsigned take_count = 0; count; count -= take_count) 
-    {
-        unsigned i = find_max_block();
-        take_count = block_bits_take_[i];
-        if (take_count > count)
-            take_count = count;
-        if (take_count == 0)
-            continue;
-    
-        unsigned i0, j0;
-        bman_in.get_block_coord(i, i0, j0);
-        const bm::word_t* blk_src = bman_in.get_block(i0, j0);
-
-//        const bm::word_t* blk_src = bman_in.get_block(i);
-        BM_ASSERT(blk_src);
-
-        // allocate target block
-        bm::word_t* blk_out = bman_out.get_block_ptr(i0, j0);
-//        bm::word_t* blk_out = bman_out.get_block(i);
-        if (blk_out != 0)
-        {
-            blk_out = bman_out.deoptimize_block(i);
-        } 
-        else
-        {            
-            blk_out = bman_out.get_allocator().alloc_bit_block();
-            bman_out.set_block(i, blk_out);
-        }
-        if (take_count == block_counts_[i])
-        {
-            // copy the whole src block
-            if (BM_IS_GAP(blk_src))
-            {
-                gap_convert_to_bitset(blk_out, BMGAP_PTR(blk_src));
-            }
-            else
-            {
-                bm::bit_block_copy(blk_out, blk_src);                
-            }
-            block_bits_take_[i] = 0; // exclude block from any farther picking
-            continue;
-        }
-        bit_block_set(blk_out, 0);
-
-        if (block_counts_[i] < 4096) // use array shuffle
-        {
-            unsigned arr_len;
-            // convert source block to bit-block
-            if (BM_IS_GAP(blk_src))
-            {
-                arr_len = gap_convert_to_arr(bit_list_,
-                                             BMGAP_PTR(blk_src),
-                                             bm::gap_max_bits);
-            }
-            else // bit-block
-            {
-                arr_len = bit_convert_to_arr(bit_list_, 
-                                             blk_src, 
-                                             bm::gap_max_bits, 
-                                             bm::gap_max_bits,
-                                             0);
-            }
-            BM_ASSERT(arr_len);
-            get_random_array(blk_out, bit_list_, arr_len, take_count);
-        }
-        else // dense block
-        {
-            // convert source block to bit-block
-            if (BM_IS_GAP(blk_src))
-            {
-                gap_convert_to_bitset(tmp_block, BMGAP_PTR(blk_src));
-                blk_src = tmp_block;
-            }
-
-            // pick random bits source block to target
-            get_random_subset(blk_out, blk_src, take_count);
-        }
+        // pick block at random
+        //
+        size_type nb;
+        size_type ridx = dist_nb(mt_rand); // generate random block idx
+        BM_ASSERT(ridx >= first_nb && ridx <= last_nb);
         
-        block_bits_take_[i] = 0; // exclude block from any farther picking
-    }
+        b = bv_nb_.find(ridx, nb); // find next valid nb
+        if (!b)
+        {
+            b = bv_nb_.find(first_nb, nb);
+            if (!b)
+            {
+                b = bv_nb_.find(first_nb, nb);
+                BM_ASSERT(!bv_nb_.any());
+                BM_ASSERT(b);
+                return; // cannot find block
+            }
+        }
+        bv_nb_.clear_bit_no_check(nb); // remove from blocks list
+
+        // calculate proportinal sample count
+        //
+        size_type bc = rsi_.count(nb);
+        BM_ASSERT(bc);
+        take_count = compute_take_count(bc, in_count, sample_count);
+        if (take_count > curr_sample_count)
+            take_count = curr_sample_count;
+        BM_ASSERT(take_count);
+        if (!take_count)
+            continue;
+        {
+            unsigned i0, j0;
+            bman_in.get_block_coord(nb, i0, j0);
+            const bm::word_t* blk_src = bman_in.get_block(i0, j0);
+            BM_ASSERT(blk_src);
+
+            // allocate target block
+            bm::word_t* blk_out = bman_out.get_block_ptr(i0, j0);
+            BM_ASSERT(!blk_out);
+            if (blk_out)
+            {
+                blk_out = bman_out.deoptimize_block(nb);
+            }
+            else
+            {
+                blk_out = bman_out.get_allocator().alloc_bit_block();
+                bman_out.set_block(nb, blk_out);
+            }
+            if (take_count == bc) // whole block take (strange)
+            {
+                // copy the whole src block
+                if (BM_IS_GAP(blk_src))
+                    bm::gap_convert_to_bitset(blk_out, BMGAP_PTR(blk_src));
+                else
+                    bm::bit_block_copy(blk_out, blk_src);
+                continue;
+            }
+            bm::bit_block_set(blk_out, 0);
+            if (bc < 4096) // use array shuffle
+            {
+                unsigned arr_len;
+                // convert source block to bit-block
+                if (BM_IS_GAP(blk_src))
+                {
+                    arr_len = bm::gap_convert_to_arr(bit_list_,
+                                                 BMGAP_PTR(blk_src),
+                                                 bm::gap_max_bits);
+                }
+                else // bit-block
+                {
+                    arr_len = bm::bit_convert_to_arr(bit_list_,
+                                                     blk_src,
+                                                     bm::gap_max_bits,
+                                                     bm::gap_max_bits,
+                                                     0);
+                }
+                BM_ASSERT(arr_len);
+                get_random_array(blk_out, bit_list_, arr_len, take_count);
+            }
+            else // dense block
+            {
+                // convert source block to bit-block
+                if (BM_IS_GAP(blk_src))
+                {
+                    bm::gap_convert_to_bitset(tmp_block, BMGAP_PTR(blk_src));
+                    blk_src = tmp_block;
+                }
+                // pick random bits source block to target
+                get_block_subset(blk_out, blk_src, take_count);
+            }
+        }
+    } // for
 }
 
 template<class BV>
-void random_subset<BV>::get_random_subset(bm::word_t*       blk_out, 
+unsigned random_subset<BV>::compute_take_count(unsigned bc,
+                                               size_type in_count,
+                                               size_type sample_count)
+{
+    float block_percent = float(bc) / float(in_count);
+    float bits_to_take = float(sample_count) * block_percent;
+    bits_to_take += 0.99f;
+    unsigned to_take = unsigned(bits_to_take);
+    if (to_take > bc)
+        to_take = bc;
+    return to_take;
+}
+
+
+template<class BV>
+void random_subset<BV>::get_block_subset(bm::word_t*       blk_out,
                                           const bm::word_t* blk_src,
                                           unsigned          take_count)
 {
@@ -302,8 +377,8 @@ void random_subset<BV>::get_random_subset(bm::word_t*       blk_out,
         {
             if (blk_src[i] && (blk_out[i] != blk_src[i]))
             {
-                take_count -= new_count = 
-                    process_word(blk_out, blk_src, i, take_count);
+                new_count = process_word(blk_out, blk_src, i, take_count);
+                take_count -= new_count;
             }
         } // for i
 
@@ -332,50 +407,46 @@ void random_subset<BV>::get_random_subset(bm::word_t*       blk_out,
 template<class BV>
 unsigned random_subset<BV>::process_word(bm::word_t*       blk_out, 
                                          const bm::word_t* blk_src,
-                                         unsigned          i,
-                                         unsigned          count)
+                                         unsigned          nword,
+                                         unsigned          take_count)
 {
     unsigned new_bits, mask;
-
     do 
     {    
         mask = unsigned(rand());
         mask ^= mask << 16;
     } while (mask == 0);
 
-    unsigned src_rand = blk_src[i] & mask;    
-    new_bits = src_rand & ~blk_out[i];
-
+    unsigned src_rand = blk_src[nword] & mask;
+    new_bits = src_rand & ~blk_out[nword];
     if (new_bits)
     {
         unsigned new_count = bm::word_bitcount(new_bits);
 
         // check if we accidentally picked more bits than needed
-        if (new_count > count)
+        if (new_count > take_count)
         {
-            BM_ASSERT(count);
+            BM_ASSERT(take_count);
 
             unsigned char blist[64];
             unsigned arr_size = bm::bitscan_popcnt(new_bits, blist);
-                                //bm::bit_list_4(new_bits, blist);
             BM_ASSERT(arr_size == new_count);
             std::random_shuffle(blist, blist + arr_size);
             unsigned value = 0;
-            for (unsigned j = 0; j < count; ++j)
+            for (unsigned j = 0; j < take_count; ++j)
             {
-                value |= (1 << blist[j]);
+                value |= (1u << blist[j]);
             }
             new_bits = value;
-            new_count = count;
+            new_count = take_count;
 
-            BM_ASSERT(bm::word_bitcount(new_bits) == count);
-            BM_ASSERT((new_bits & ~blk_src[i]) == 0);
+            BM_ASSERT(bm::word_bitcount(new_bits) == take_count);
+            BM_ASSERT((new_bits & ~blk_src[nword]) == 0);
         }
 
-        blk_out[i] |= new_bits;
+        blk_out[nword] |= new_bits;
         return new_count;
     }
-
     return 0;    
 }
 
@@ -392,52 +463,6 @@ void random_subset<BV>::get_random_array(bm::word_t*       blk_out,
         bm::set_bit(blk_out, bit_list[i]);
     }
 }
-
-template<class BV>
-unsigned random_subset<BV>::find_max_block() 
-{
-    if (candidates_count_)
-    {
-        return block_candidates_[--candidates_count_];
-    }
-
-    unsigned candidate = 0;
-    unsigned max_i = 0;
-    for (unsigned i = 0; i <= blocks_; ++i)
-    {
-        if (block_bits_take_[i] == 0) continue;
-        if (block_bits_take_[i] == candidate)
-        {
-            block_candidates_[candidates_count_++] = i;
-        }
-        else
-        {
-            int diff = ::abs((int)block_bits_take_[i] - (int)candidate);
-            double d = double(diff) / double(candidate);
-
-            if (d < 0.20f) // delta is statistically insignificant
-            {
-                block_candidates_[candidates_count_++] = i;
-            }
-            else
-            if (block_bits_take_[i] > candidate)
-            {
-                 candidate = block_bits_take_[i];
-                 max_i = i;
-                 candidates_count_ = 0;
-                 block_candidates_[candidates_count_++] = i;
-            }
-        }
-    }
-
-    if (candidates_count_ > 1)
-    {
-        std::random_shuffle(block_candidates_, block_candidates_ + candidates_count_);
-        return find_max_block();
-    }
-    return max_i;
-}
-
 
 } // namespace
 
