@@ -187,10 +187,11 @@ void random_subset<BV>::simple_pick(BV&        bv_out,
     bv_out.clear(true);
 
     std::random_device rd;
-    std::mt19937 mt_rand(rd());
-    
-    //std::mt19937_64 mt_rand(rd());
-    
+    #ifdef BM64ADDR
+        std::mt19937_64 mt_rand(rd());
+    #else
+        std::mt19937 mt_rand(rd());
+    #endif
     std::uniform_int_distribution<size_type> dist(first, last);
 
     while (sample_count)
@@ -209,6 +210,7 @@ void random_subset<BV>::simple_pick(BV&        bv_out,
             sample_count -= is_set;
             while (!is_set) // find next valid (and not set) bit
             {
+                ++fidx;
                 // searching always left to right may create a bias...
                 b = bv_in.find(fidx, fidx);
                 if (!b)
@@ -244,13 +246,15 @@ void random_subset<BV>::get_subset(BV&        bv_out,
         return;
 
     std::random_device rd;
-    std::mt19937 mt_rand(rd());
-    //std::mt19937_64 mt_rand(rd());
+    #ifdef BM64ADDR
+        std::mt19937_64 mt_rand(rd());
+    #else
+        std::mt19937 mt_rand(rd());
+    #endif
     std::uniform_int_distribution<size_type> dist_nb(first_nb, last_nb);
 
-    size_type block_idx = 0;
     size_type curr_sample_count = sample_count;
-    for (size_type take_count = 0; curr_sample_count; curr_sample_count -= take_count, ++block_idx)
+    for (unsigned take_count = 0; curr_sample_count; curr_sample_count -= take_count)
     {
         // pick block at random
         //
@@ -274,11 +278,11 @@ void random_subset<BV>::get_subset(BV&        bv_out,
 
         // calculate proportinal sample count
         //
-        size_type bc = rsi_.count(nb);
-        BM_ASSERT(bc);
+        unsigned bc = rsi_.count(nb);
+        BM_ASSERT(bc && (bc <= 65536));
         take_count = compute_take_count(bc, in_count, sample_count);
         if (take_count > curr_sample_count)
-            take_count = curr_sample_count;
+            take_count = unsigned(curr_sample_count);
         BM_ASSERT(take_count);
         if (!take_count)
             continue;

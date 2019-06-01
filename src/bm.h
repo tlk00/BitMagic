@@ -1761,7 +1761,7 @@ public:
 
     /*! Recalculate bitcount (deprecated)
     */
-    bm::id_t recalc_count() { return count(); }
+    size_type recalc_count() { return count(); }
     
     /*!
         Disables count cache. (deprecated).
