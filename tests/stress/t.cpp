@@ -5030,8 +5030,8 @@ void RangeRandomFillTest()
 
     printf("Range Random fill test\n");
 
-    unsigned min = BITVECT_SIZE / 2;
-    unsigned max = BITVECT_SIZE / 2 + ITERATIONS;
+    bvect::size_type min = BITVECT_SIZE / 2;
+    bvect::size_type max = BITVECT_SIZE / 2 + ITERATIONS;
     if (max > BITVECT_SIZE) 
         max = BITVECT_SIZE - 1;
 
@@ -5049,8 +5049,8 @@ void RangeRandomFillTest()
 
     printf("Range Random fill test\n");
 
-    unsigned min = BITVECT_SIZE / 2;
-    unsigned max = BITVECT_SIZE / 2 + ITERATIONS;
+    bvect::size_type min = BITVECT_SIZE / 2;
+    bvect::size_type max = BITVECT_SIZE / 2 + ITERATIONS;
     if (max > BITVECT_SIZE) 
         max = BITVECT_SIZE - 1;
 

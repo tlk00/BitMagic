@@ -3570,6 +3570,52 @@ void SimpleRandomFillTest()
 }
 
 
+static
+void RangeRandomFillTest()
+{
+    bvect::size_type BITVECT_SIZE = bvect::size_type(bm::id_max32) * 2;
+    bvect::size_type BITVECT_FROM = bvect::size_type(bm::id_max32) - 65535;
+
+    assert(ITERATIONS < BITVECT_SIZE);
+
+    cout << "----------------------------------- RangeRandomFillTest" << endl;
+
+    {
+        bvect_mini   bvect_min(BITVECT_SIZE);
+        bvect     bvect_full;
+
+        printf("Range Random fill test\n");
+
+        bvect::size_type min = BITVECT_SIZE / 2;
+        bvect::size_type max = BITVECT_SIZE / 2 + ITERATIONS;
+        if (max > BITVECT_SIZE)
+            max = BITVECT_SIZE - 1;
+
+        FillSets(&bvect_min, &bvect_full, min, max, 0ULL);
+
+        CheckVectors(bvect_min, bvect_full, BITVECT_SIZE, false);
+        //CheckCountRange(bvect_full, min, max);
+
+    }
+
+
+    {
+        bvect_mini   bvect_min(BITVECT_SIZE);
+        bvect     bvect_full;
+
+        printf("Range Random fill test\n");
+
+        bvect::size_type min = BITVECT_SIZE / 2;
+        bvect::size_type max = BITVECT_SIZE / 2 + ITERATIONS;
+        if (max > BITVECT_SIZE)
+            max = BITVECT_SIZE - 1;
+
+        FillSetsIntervals(&bvect_min, bvect_full, min, max, 4ULL);
+
+        CheckVectors(bvect_min, bvect_full, BITVECT_SIZE, false);
+        //CheckCountRange(bvect_full, min, max);
+    }
+}
 
 
 int main(void)
@@ -3604,10 +3650,11 @@ int main(void)
     BvectorBulkSetTest();
 
     GAPTestStress();
-*/
  
     SimpleRandomFillTest();
-    
+ */
+    RangeRandomFillTest();
+
     // -----------------------------------------------------------------
 
     finish_time = time(0);

@@ -92,3 +92,216 @@ void SimpleGapFillSets(BV&   bv0,
         bii1 = i;
     } // for i
 }
+
+//
+// Interval filling.
+// 111........111111........111111..........11111111.......1111111...
+//
+
+template<typename BVMINI, typename BV, typename SZT>
+void FillSetsIntervals(BVMINI* bvect_min,
+    BV& bvect_full,
+    SZT min,
+    SZT max,
+    SZT fill_factor,
+    bool set_flag = true)
+{
+
+    while (fill_factor == 0)
+    {
+        fill_factor = rand() % 10;
+    }
+    bvect_full.init();
+
+    cout << "Intervals filling. Factor="
+        << fill_factor << endl << endl;
+
+    SZT i, j;
+    SZT factor = 70 * fill_factor;
+    for (i = min; i < max; ++i)
+    {
+        unsigned len, end;
+
+        do
+        {
+            len = unsigned(rand()) % factor;
+            end = i + len;
+
+        } while (end >= max);
+        if (i < end)
+        {
+            bvect_full.set_range(i, end - 1, set_flag);
+        }
+
+        for (j = i; j < end; ++j)
+        {
+            if (set_flag)
+            {
+                if (bvect_min)
+                    bvect_min->set_bit(j);
+            }
+            else
+            {
+                if (bvect_min)
+                    bvect_min->clear_bit(j);
+            }
+
+
+        } // j
+
+
+        i = end;
+
+
+        len = unsigned(rand()) % (factor * 10 * bm::gap_max_bits);
+        if (len % 2)
+        {
+            len *= unsigned(rand()) % (factor * 10);
+        }
+
+        i += len;
+
+        if ((len % 6) == 0)
+        {
+            for (unsigned k = 0; k < 1000 && i < max; k += 3, i += 3)
+            {
+                if (set_flag)
+                {
+                    if (bvect_min)
+                        bvect_min->set_bit(i);
+                    bvect_full.set_bit_no_check(i);
+                }
+                else
+                {
+                    if (bvect_min)
+                        bvect_min->clear_bit(j);
+                    bvect_full.clear_bit(j);
+                }
+            }
+        }
+    } // for i
+}
+
+template<typename SZT>
+SZT random_minmax(SZT min, SZT max)
+{
+    SZT r = (unsigned(rand()) << 16u) | unsigned(rand());
+    if (sizeof(SZT) == 8)
+    {
+        SZT r2 = (unsigned(rand()) << 16u) | unsigned(rand());
+        r |= (r2 << 32);
+    }
+    return r % (max - min) + min;
+}
+
+template <typename BVMINI, typename BV, typename SZT>
+void FillSets(BVMINI* bvect_min,
+              BV*     bvect_full,
+              SZT     min,
+              SZT     max,
+              SZT     fill_factor)
+{
+    SZT i;
+    SZT id;
+
+    //Random filling
+    if (fill_factor == 0)
+    {
+        SZT n_id = (max - min) / 100;
+        printf("random filling : %i\n", n_id);
+        for (i = 0; i < n_id; i++)
+        {
+            id = random_minmax(min, max);
+            bvect_min->set_bit(id);
+            bvect_full->set_bit(id);
+        }
+        cout << endl;
+    }
+    else
+    {
+        printf("fill_factor random filling : factor = %i\n", fill_factor);
+
+        for (i = 0; i < fill_factor; i++)
+        {
+            unsigned k = unsigned(rand()) % 10;
+            if (k == 0)
+                k += 2;
+
+            //Calculate start
+            unsigned start = min + (max - min) / (fill_factor * k);
+
+            //Randomize start
+            start += random_minmax(1ULL, (max - min) / (fill_factor * 10));
+
+            if (start > max)
+            {
+                start = min;
+            }
+
+            //Calculate end 
+            unsigned end = start + (max - start) / (fill_factor * 2);
+
+            //Randomize end
+            end -= random_minmax(1ULL, (max - start) / (fill_factor * 10));
+
+            if (end > max)
+            {
+                end = max;
+            }
+
+            typename BV::bulk_insert_iterator iit = bvect_full->inserter();
+            if (fill_factor > 1)
+            {
+                for (; start < end;)
+                {
+                    unsigned r = unsigned(rand()) % 8;
+
+                    if (r > 7)
+                    {
+                        unsigned inc = unsigned(rand()) % 3;
+                        ++inc;
+                        unsigned end2 = start + rand() % 1000;
+                        if (end2 > end)
+                            end2 = end;
+                        while (start < end2)
+                        {
+                            bvect_min->set_bit(start);
+                            iit = start;
+                            start += inc;
+                        }
+                        continue;
+                    }
+
+                    if (r)
+                    {
+                        bvect_min->set_bit(start);
+                        iit = start;
+                        ++start;
+                    }
+                    else
+                    {
+                        start += r;
+                        bvect_min->set_bit(start);
+                        iit = start;
+                    }
+                }
+            }
+            else
+            {
+                unsigned c = unsigned(rand()) % 15;
+                if (c == 0)
+                    ++c;
+                for (; start < end; ++start)
+                {
+                    bvect_min->set_bit(start);
+                    iit = start;
+                    if (start % c)
+                    {
+                        start += c;
+                    }
+                }
+            }
+            cout << endl;
+        }
+    }
+}
