@@ -4862,11 +4862,11 @@ static
 void TestRandomSubset(const bvect& bv, bm::random_subset<bvect>& rsub)
 {
     bvect bv_subset;
-    unsigned bcnt = bv.count();
+    bvect::size_type bcnt = bv.count();
 
-    unsigned samples[] = 
+    bvect::size_type samples[] =
       { 0, 1, 2, 5, 6, 7, 8, 9, 10, 11, 12, 13, 14, 15, bcnt / 5, bcnt / 4, bcnt / 3, bcnt / 2, (bcnt * 2)/3, bcnt };
-    unsigned samples_size = sizeof(samples)/sizeof(*samples);
+    bvect::size_type samples_size = sizeof(samples)/sizeof(*samples);
 
     printf("Taking random sub-sets: ");
     

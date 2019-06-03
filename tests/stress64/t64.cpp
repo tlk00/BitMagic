@@ -42,6 +42,7 @@ For more information please visit:  http://bitmagic.io
 
 
 #include <bm.h>
+#include <bmrandom.h>
 #include <bmvmin.h>
 #include <bmdbg.h>
 
@@ -3241,6 +3242,335 @@ void GAPTestStress()
 }
 
 
+// -----------------------------------------------------------------------
+
+static
+void TestRandomSubset(const bvect& bv, bm::random_subset<bvect>& rsub, bvect::size_type limit = 0)
+{
+    bvect bv_subset;
+    bvect::size_type bcnt = bv.count();
+    if (limit)
+        bcnt = limit;
+
+    bvect::size_type samples[] =
+      { 0, 1, 2, 5, 6, 7, 8, 9, 10, 11, 12, 13, 14, 15, bcnt / 5, bcnt / 4, bcnt / 3, bcnt / 2, (bcnt * 2)/3, bcnt };
+    bvect::size_type samples_size = sizeof(samples)/sizeof(*samples);
+
+    cout << "Taking random sub-sets: " << samples_size << endl;
+    
+    for (bvect::size_type i = 0; i < samples_size; ++i)
+    {
+        bvect::size_type sample_count = samples[i];
+        
+        cout << "\r" << i << " / " << samples_size << " take = " << sample_count << flush;
+        
+        rsub.sample(bv_subset, bv, sample_count);
+        if (sample_count > bcnt)
+            sample_count = bcnt;
+
+        if (sample_count != bv_subset.count())
+        {
+            cout << "\nRandom subset failed! sample_count = %u result_count=%u\n"
+                 << sample_count
+                 << ", " << bv_subset.count()
+                 << endl;
+            
+            exit(1);
+        }
+        {
+            bvect bv_subset_copy(bv_subset);
+            bvect bv_set_copy(bv);
+            bv_set_copy.invert();
+            bv_subset_copy -= bv_set_copy;
+            int res = bv_subset_copy.compare(bv_subset);
+            if (res != 0)
+            {
+                printf("\nRandom subset failed! inverted set MINUS error! \n");
+                exit(1);
+            }
+        }
+
+        bv_subset -= bv;
+        if (bv_subset.count() != 0)
+        {
+            printf("\nRandom subset failed! Extra bits set! \n");
+            exit(1);
+        }
+        
+    } // for
+    cout << endl;
+}
+
+// find last set bit by scan (not optimal)
+//
+static
+bool FindLastBit(const bvect& bv, bvect::size_type& last_pos)
+{
+    bvect::enumerator en = bv.first();
+    if (!en.valid())
+        return false;
+    for (; en.valid(); ++en)
+    {
+        last_pos = *en;
+    }
+    return true;
+}
+
+
+// vectors comparison check
+
+void CheckVectors(bvect_mini &bvect_min,
+                  bvect      &bvect_full,
+                  bvect::size_type size,
+                  bool     /*detailed*/)
+{
+    cout << "\nVectors checking...bits to compare = " << size << endl;
+
+    cout << "Bitcount summary : " << endl;
+    bvect::size_type min_count = bvect_min.bit_count();
+    cout << "minvector count = " << min_count << endl;
+    bvect::size_type count = bvect_full.count();
+    bvect::size_type full_count = bvect_full.recalc_count();
+    cout << "fullvector re-count = " << full_count << endl;
+    
+    if (min_count != full_count)
+    {
+        cout << "fullvector count = " << count << endl;
+        cout << "Count comparison failed !!!!" << endl;
+        print_stat(bvect_full);
+//        DetailedCheckVectors(bvect_min, bvect_full, size);
+
+        exit(1);
+    }
+
+    if (full_count)
+    {
+        bool any = bvect_full.any();
+        if (!any)
+        {
+            cout << "Anycheck failed!" << endl;
+            exit(1);
+        }
+    }
+
+    // find_last check
+    {
+        bvect::size_type pos1 = 0;
+        bvect::size_type pos2 = 0;
+        bool last_found1 = FindLastBit(bvect_full, pos1);
+        bool last_found2 = bvect_full.find_reverse(pos2);
+        
+        assert(last_found1 == last_found2);
+        if (last_found1)
+        {
+            assert(pos1 == pos2);
+        }
+    }
+    
+    // get_next comparison
+    cout << "Positive bits comparison..." << flush;
+    bvect::size_type nb_min = bvect_min.get_first();
+    bvect::size_type nb_ful = bvect_full.get_first();
+
+    bvect::counted_enumerator en = bvect_full.first();
+    bvect::size_type nb_en = *en;
+    bvect::enumerator en1 = bvect_full.get_enumerator(*en);
+    if (nb_min != nb_ful)
+    {
+         cout << "!!!! First bit comparison failed. Full id = "
+              << nb_ful << " Min id = " << nb_min
+              << endl;
+
+         bool bit_f = bvect_full.get_bit(nb_ful);
+         cout << "Full vector'd bit #" << nb_ful << "is:"
+              << bit_f << endl;
+
+         bool bit_m = (bvect_min.is_bit_true(nb_min) == 1);
+         cout << "Min vector'd bit #" << nb_min << "is:"
+              << bit_m << endl;
+
+
+         print_stat(bvect_full);
+
+//         DetailedCheckVectors(bvect_min, bvect_full, size);
+
+         exit(1);
+    }
+    CompareEnumerators(en, en1);
+
+    if (full_count)
+    {
+       bvect::size_type bit_count = 1;
+       bvect::size_type en_prev = nb_en;
+
+       do
+       {
+           nb_min = bvect_min.get_next(nb_min);
+           if (nb_min == 0)
+           {
+               break;
+           }
+
+           en_prev = nb_en;
+           ++en;
+           ++en1;
+           CompareEnumerators(en, en1);
+
+           if ((bit_count % 10 == 0) || (bit_count % 128 == 0))
+           {
+                bvect::enumerator en2 = bvect_full.get_enumerator(*en);
+                CompareEnumerators(en, en2);
+           }
+
+           nb_en = *en;
+           ++bit_count;
+
+           if (nb_en != nb_min)
+           {
+               nb_ful = bvect_full.get_next(en_prev);
+               cout << "!!!!! next bit comparison failed. Full id = "
+                    << nb_ful << " Min id = " << nb_min
+                    << " Enumerator = " << nb_en
+                    << endl;
+
+     //          bvect_full.stat();
+
+     //          DetailedCheckVectors(bvect_min, bvect_full, size);
+
+               exit(1);
+           }
+       } while (en.valid());
+       if (bit_count != min_count)
+       {
+           cout << " Bit count failed."
+                << " min = " << min_count
+                << " bit = " << bit_count
+                << endl;
+           exit(1);
+       }
+    }
+
+    cout << "OK" << endl;
+
+    return;
+}
+
+
+
+
+const unsigned ITERATIONS = 180000;
+
+
+static
+void SimpleRandomFillTest()
+{
+    bvect::size_type BITVECT_SIZE = bvect::size_type(bm::id_max32) * 2;
+    bvect::size_type BITVECT_FROM = bvect::size_type(bm::id_max32) - 65535;
+    
+    assert(ITERATIONS < BITVECT_SIZE);
+
+    bm::random_subset<bvect> rsub;
+
+    cout << "-------------------------- SimpleRandomFillTest" << endl;
+
+    printf("Test for Random inverted subset.");
+
+    {
+        bvect bv;
+        bv.invert();
+        TestRandomSubset(bv, rsub, 256);
+    }
+
+
+    {
+        printf("Simple random fill test 1.");
+        bvect_mini   bvect_min(BITVECT_SIZE);
+        bvect        bvect_full;
+        bvect_full.set_new_blocks_strat(bm::BM_BIT);
+
+
+        bvect::size_type iter = ITERATIONS / 5;
+
+        cout << "\nSimple Random fill test ITERATIONS = " <<  iter << endl;;
+
+        bvect_min.set_bit(0);
+        bvect_full.set_bit(0);
+
+        bvect::size_type i;
+        for (i = 0; i < iter; ++i)
+        {
+            unsigned num = unsigned(::rand()) % iter;
+            bvect_min.set_bit(BITVECT_FROM + num);
+            bvect_full.set_bit(BITVECT_FROM + num);
+            if ((i % 1000) == 0) cout << "." << flush;
+//            CheckCountRange(bvect_full, 0, num);
+//            CheckCountRange(bvect_full, num, num+iter);
+        }
+
+        CheckVectors(bvect_min, bvect_full, iter, false);
+//        CheckCountRange(bvect_full, 0, iter);
+
+        TestRandomSubset(bvect_full, rsub);
+
+        printf("Simple random fill test 2.");
+
+        for(i = 0; i < iter; ++i)
+        {
+            unsigned num = unsigned(::rand()) % iter;
+            bvect_min.clear_bit(BITVECT_FROM + num);
+            bvect_full.clear_bit(BITVECT_FROM + num);
+        }
+
+        CheckVectors(bvect_min, bvect_full, iter, false);
+    }
+
+
+    {
+    printf("\nSimple random fill test 3.\n");
+    bvect_mini   bvect_min(BITVECT_SIZE);
+    bvect      bvect_full(bm::BM_GAP);
+
+
+    bvect::size_type iter = ITERATIONS;
+
+    cout << "Simple Random fill test ITERATIONS = " << iter << endl;
+
+    bvect::size_type i;
+    for(i = 0; i < iter; ++i)
+    {
+        unsigned num = unsigned(::rand()) % iter;
+        bvect_min.set_bit(BITVECT_FROM + num);
+        bvect_full.set_bit(BITVECT_FROM + num);
+//        CheckCountRange(bvect_full, 0, 65535);
+//        CheckCountRange(bvect_full, 0, num);
+//        CheckCountRange(bvect_full, num, num+iter);
+    }
+
+    CheckVectors(bvect_min, bvect_full, iter, false);
+
+    TestRandomSubset(bvect_full, rsub);
+
+    printf("Simple random fill test 4.");
+
+    for(i = 0; i < iter; ++i)
+    {
+        unsigned num = unsigned(rand()) % iter;
+        bvect_min.clear_bit(BITVECT_FROM + num);
+        bvect_full.clear_bit(BITVECT_FROM + num);
+//        CheckCountRange(bvect_full, 0, num);
+//        CheckCountRange(bvect_full, num, num+iter);
+    }
+
+    CheckVectors(bvect_min, bvect_full, iter, false);
+//    CheckCountRange(bvect_full, 0, iter);
+
+    TestRandomSubset(bvect_full, rsub);
+    }
+
+}
+
+
+
 
 int main(void)
 {
@@ -3262,7 +3592,7 @@ int main(void)
     CountRangeTest();
 
     OptimizeTest();
-*/
+
     RankFindTest();
 
     BvectorBitForEachTest();
@@ -3273,7 +3603,10 @@ int main(void)
 
     BvectorBulkSetTest();
 
- //   GAPTestStress();
+    GAPTestStress();
+*/
+ 
+    SimpleRandomFillTest();
     
     // -----------------------------------------------------------------
 
