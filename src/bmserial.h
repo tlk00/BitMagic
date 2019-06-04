@@ -471,7 +471,7 @@ public:
     bm::id_t get_id() const { return this->last_id_; }
 
     /// Get current block index 
-    unsigned block_idx() const { return this->block_idx_; }
+    block_idx_type block_idx() const { return this->block_idx_; }
 
 public:
     /// member function pointer for bitset-bitset get operations

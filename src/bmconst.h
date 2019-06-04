@@ -40,9 +40,12 @@ typedef unsigned short short_t;
 # define BM_DEFAULT_POOL_SIZE 4096
 #endif
 
-
-const unsigned id_max32 = 0xFFFFFFFFu;
+#ifdef BM64ADDR
+const unsigned long long id_max32 = 0xFFFFFFFFull;
 const unsigned long long id_max48 = 0xFFFFFFFFFFFFull;
+#else
+const unsigned id_max32 = 0xFFFFFFFFu;
+#endif
 
 // Data Block parameters
 
@@ -86,10 +89,10 @@ const unsigned set_sub_array_size = set_array_size32;
 const unsigned set_array_shift = 8u;
 const unsigned set_array_mask  = 0xFFu;
 
-const unsigned set_total_blocks48 = bm::id_max48 / bm::gap_max_bits;
 const unsigned set_total_blocks32 = (bm::set_array_size32 * bm::set_array_size32);
 
 #ifdef BM64ADDR
+const unsigned set_total_blocks48 = bm::id_max48 / bm::gap_max_bits;
 const unsigned long long id_max = bm::id_max48;
 const unsigned long long set_array_size48 = 1 + (bm::id_max48 / (bm::set_sub_array_size * bm::gap_max_bits));
 const unsigned  set_top_array_size = bm::set_array_size48;
