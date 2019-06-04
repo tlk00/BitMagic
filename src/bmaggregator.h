@@ -52,6 +52,7 @@ class aggregator
 {
 public:
     typedef BV                         bvector_type;
+    typedef typename BV::size_type     size_type;
     typedef const bvector_type*        bvector_type_const_ptr;
     typedef bm::id64_t                 digest_type;
     
@@ -168,7 +169,7 @@ public:
     */
     bool combine_and_sub(bvector_type& bv_target, bool any);
     
-    bool find_first_and_sub(bm::id_t& idx);
+    bool find_first_and_sub(size_type& idx);
 
 
     /**
@@ -187,7 +188,7 @@ public:
         Set search hint for the range, where results needs to be searched
         (experimental for internal use).
     */
-    void set_range_hint(bm::id_t from, bm::id_t to);
+    void set_range_hint(size_type from, size_type to);
     
     //@}
     
@@ -231,7 +232,7 @@ public:
                      const bvector_type_const_ptr* bv_src_sub, unsigned src_sub_size,
                      bool any);
     
-    bool find_first_and_sub(bm::id_t& idx,
+    bool find_first_and_sub(size_type& idx,
                      const bvector_type_const_ptr* bv_src_and, unsigned src_and_size,
                      const bvector_type_const_ptr* bv_src_sub, unsigned src_sub_size);
 
@@ -323,7 +324,8 @@ public:
 
 protected:
     typedef typename bvector_type::blocks_manager_type blocks_manager_type;
-    
+    typedef typename BV::block_idx_type                block_idx_type;
+
 
     void combine_or(unsigned i, unsigned j,
                     bvector_type& bv_target,
@@ -436,8 +438,8 @@ private:
     
     // search range setting (hint) [from, to]
     bool                 range_set_ = false; ///< range flag
-    bm::id_t             range_from_ = bm::id_max; ///< search from
-    bm::id_t             range_to_   = bm::id_max; ///< search to
+    size_type            range_from_ = bm::id_max; ///< search from
+    size_type            range_to_   = bm::id_max; ///< search to
     
     typename bvector_type::optmode opt_mode_;
 
@@ -533,7 +535,7 @@ void aggregator<BV>::reset()
 // ------------------------------------------------------------------------
 
 template<typename BV>
-void aggregator<BV>::set_range_hint(bm::id_t from, bm::id_t to)
+void aggregator<BV>::set_range_hint(size_type from, size_type to)
 {
     range_from_ = from; range_to_ = to;
     range_set_ = true;
@@ -623,7 +625,7 @@ bool aggregator<BV>::combine_and_sub(bvector_type& bv_target, bool any)
 // ------------------------------------------------------------------------
 
 template<typename BV>
-bool aggregator<BV>::find_first_and_sub(bm::id_t& idx)
+bool aggregator<BV>::find_first_and_sub(size_type& idx)
 {
     return find_first_and_sub(idx,
                         ar_->arg_bv0, arg_group0_size,
@@ -681,6 +683,7 @@ void aggregator<BV>::combine_and(bvector_type& bv_target,
     
     for (unsigned i = 0; i < top_blocks; ++i)
     {
+        // TODO: find range, not just size
         unsigned set_array_max = find_effective_sub_block_size(i, bv_src, src_size);
         unsigned j = 0;
         do
@@ -749,7 +752,7 @@ bool aggregator<BV>::combine_and_sub(bvector_type& bv_target,
 // ------------------------------------------------------------------------
 
 template<typename BV>
-bool aggregator<BV>::find_first_and_sub(bm::id_t& idx,
+bool aggregator<BV>::find_first_and_sub(size_type& idx,
                  const bvector_type_const_ptr* bv_src_and, unsigned src_and_size,
                  const bvector_type_const_ptr* bv_src_sub, unsigned src_sub_size)
 {
@@ -767,17 +770,17 @@ bool aggregator<BV>::find_first_and_sub(bm::id_t& idx,
     
     // compute range blocks coordinates
     //
-    unsigned nblock_from = unsigned(range_from_ >> bm::set_block_shift);
-    unsigned nblock_to = unsigned(range_to_ >> bm::set_block_shift);
-    unsigned top_from = nblock_from >> bm::set_array_shift;
-    unsigned top_to = nblock_to >> bm::set_array_shift;
+    block_idx_type nblock_from = (range_from_ >> bm::set_block_shift);
+    block_idx_type nblock_to = (range_to_ >> bm::set_block_shift);
+    unsigned top_from = unsigned(nblock_from >> bm::set_array_shift);
+    unsigned top_to = unsigned(nblock_to >> bm::set_array_shift);
     
     if (range_set_)
     {
         if (nblock_from == nblock_to) // one block search
         {
             unsigned i = top_from;
-            unsigned j = nblock_from & bm::set_array_mask;
+            unsigned j = unsigned(nblock_from & bm::set_array_mask);
             digest_type digest = combine_and_sub(i, j,
                                                  bv_src_and, src_and_size,
                                                  bv_src_sub, src_sub_size);
@@ -813,7 +816,7 @@ bool aggregator<BV>::find_first_and_sub(bm::id_t& idx,
             }
             if (i == top_to)
             {
-                set_array_max = 1 + (nblock_to & bm::set_array_mask);
+                set_array_max = 1 + unsigned(nblock_to & bm::set_array_mask);
             }
         }
         else
@@ -1355,7 +1358,7 @@ unsigned aggregator<BV>::resize_target(bvector_type& bv_target,
     }
     
     unsigned top_blocks = bman_target.top_block_size();
-    bm::id_t size = bv_target.size();
+    size_type size = bv_target.size();
     bool need_realloc = false;
 
     // pre-scan to do target size harmonization
@@ -1371,7 +1374,7 @@ unsigned aggregator<BV>::resize_target(bvector_type& bv_target,
             need_realloc = true;
             top_blocks = arg_top_blocks;
         }
-        bm::id_t arg_size = bv->size();
+        size_type arg_size = bv->size();
         if (arg_size > size)
             size = arg_size;
     } // for i
@@ -1460,7 +1463,7 @@ bm::word_t* aggregator<BV>::sort_input_blocks_and(const bvector_type_const_ptr* 
     {
         const bvector_type* bv = bv_src[k];
         BM_ASSERT(bv);
-        const typename bvector_type::blocks_manager_type& bman_arg = bv->get_blocks_manager();
+        const blocks_manager_type& bman_arg = bv->get_blocks_manager();
         const bm::word_t* arg_blk = bman_arg.get_block_ptr(i, j);
         if (!arg_blk)
         {
@@ -1611,8 +1614,7 @@ bool aggregator<BV>::combine_shift_right_and(unsigned i, unsigned j,
                                         const bvector_type_const_ptr* bv_src,
                                         unsigned src_size)
 {
-    typename bvector_type::blocks_manager_type& bman_target =
-                                                bv_target.get_blocks_manager();
+    blocks_manager_type& bman_target = bv_target.get_blocks_manager();
     bm::word_t* blk = temp_blk_ ? temp_blk_ : ar_->tb1;
     unsigned char* carry_overs = &(ar_->carry_overs_[0]);
 

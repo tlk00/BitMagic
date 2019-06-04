@@ -155,6 +155,7 @@ public:
     typedef typename bvector_type::blocks_manager_type        blocks_manager_type;
     typedef typename bvector_type::statistics                 statistics_type;
     typedef typename bvector_type::block_idx_type             block_idx_type;
+    typedef typename bvector_type::size_type                  size_type;
 
     typedef byte_buffer<allocator_type> buffer;
 public:
@@ -202,8 +203,8 @@ public:
        @return Size of serialization block.
        @sa calc_stat     
     */
-    unsigned serialize(const BV& bv, 
-                       unsigned char* buf, size_t buf_size);
+    size_type serialize(const BV& bv,
+                        unsigned char* buf, size_t buf_size);
     
     /**
         Bitvector serilization into buffer object (it gets resized automatically)
@@ -351,15 +352,16 @@ template<class BV, class SerialIterator>
 class iterator_deserializer
 {
 public:
-    typedef BV              bvector_type;
-    typedef SerialIterator  serial_iterator_type;
+    typedef BV                               bvector_type;
+    typedef typename bvector_type::size_type size_type;
+    typedef SerialIterator                   serial_iterator_type;
 public:
     static
-    unsigned deserialize(bvector_type&         bv, 
-                         serial_iterator_type& sit, 
-                         bm::word_t*           temp_block,
-                         set_operation         op = bm::set_OR,
-                         bool                  exit_on_one = false);
+    size_type deserialize(bvector_type&         bv,
+                          serial_iterator_type& sit,
+                          bm::word_t*           temp_block,
+                          set_operation         op = bm::set_OR,
+                          bool                  exit_on_one = false);
 
     /// experimental 3 way deserialization 
     /// target = mask %OPERATION% BLOB
@@ -383,15 +385,15 @@ private:
 
     /// Finalize the deserialization (zero target vector tail or bit-count tail)
     static
-    unsigned finalize_target_vector(blocks_manager_type& bman,
-                                    set_operation        op,
-                                    unsigned             bv_block_idx);
+    size_type finalize_target_vector(blocks_manager_type& bman,
+                                     set_operation        op,
+                                     size_type            bv_block_idx);
 
     /// Process (obsolete) id-list serialization format
     static
-    unsigned process_id_list(bvector_type&         bv, 
-                             serial_iterator_type& sit,
-                             set_operation         op);
+    size_type process_id_list(bvector_type&         bv,
+                              serial_iterator_type& sit,
+                              set_operation         op);
 
 
 };
@@ -531,8 +533,8 @@ protected:
     gap_word_t         glevels_[bm::gap_levels]; ///< GAP levels
 
     unsigned           block_type_;     ///< current block type
-    unsigned           block_idx_;      ///< current block index
-    unsigned           mono_block_cnt_; ///< number of 0 or 1 blocks
+    block_idx_type     block_idx_;      ///< current block index
+    block_idx_type     mono_block_cnt_; ///< number of 0 or 1 blocks
 
     gap_word_t         gap_head_;
 };
@@ -550,6 +552,7 @@ class operation_deserializer
 {
 public:
     typedef BV bvector_type;
+    typedef typename bvector_type::size_type size_type;
 public:
     /**
     \brief Deserialize bvector using buffer as set operation argument
@@ -563,7 +566,7 @@ public:
     \return bitcount
     */
     static
-    unsigned deserialize(bvector_type&        bv, 
+    size_type deserialize(bvector_type&        bv,
                          const unsigned char* buf, 
                          bm::word_t*          temp_block,
                          set_operation        op = bm::set_OR,
@@ -922,7 +925,7 @@ void serializer<BV>::serialize(const BV& bv,
     
     buf.resize(bv_stat->max_serialize_mem);
     
-    unsigned slen = this->serialize(bv, buf.data(), buf.size());
+    size_type slen = this->serialize(bv, buf.data(), buf.size());
     BM_ASSERT(slen <= buf.size()); // or we have a BIG problem with prediction
     BM_ASSERT(slen);
     
@@ -931,7 +934,8 @@ void serializer<BV>::serialize(const BV& bv,
 
 
 template<class BV>
-unsigned serializer<BV>::serialize(const BV& bv, 
+typename serializer<BV>::size_type
+serializer<BV>::serialize(const BV& bv,
                                    unsigned char* buf, size_t buf_size)
 {
     BM_ASSERT(temp_block_);
@@ -964,7 +968,7 @@ unsigned serializer<BV>::serialize(const BV& bv,
             if (next_nb == bm::set_total_blocks) // no more blocks
             {
                 enc.put_8(set_block_azero);
-                return enc.size();
+                return (size_type)enc.size();
             }
             block_idx_type nb = next_nb - i;
             
@@ -1152,12 +1156,8 @@ unsigned serializer<BV>::serialize(const BV& bv,
         continue;            
         }
     }
-
     enc.put_8(set_block_end);
-
-    unsigned encoded_size = enc.size();
-    return encoded_size;
-
+    return (size_type)enc.size();
 }
 
 
@@ -1212,7 +1212,7 @@ enum serialization_flags {
  </pre>
 */
 template<class BV>
-unsigned serialize(const BV& bv, 
+size_t serialize(const BV& bv,
                    unsigned char* buf, 
                    bm::word_t*    temp_block = 0,
                    unsigned       serialization_flags = 0)
@@ -1247,9 +1247,9 @@ unsigned serialize(const BV& bv,
    \ingroup bvserial
 */
 template<class BV>
-unsigned serialize(BV& bv, 
-                   unsigned char* buf, 
-                   unsigned  serialization_flags=0)
+size_t serialize(BV& bv,
+                 unsigned char* buf,
+                 unsigned  serialization_flags=0)
 {
     return bm::serialize(bv, buf, 0, serialization_flags);
 }
@@ -2933,16 +2933,14 @@ serial_stream_iterator<DEC>::get_bit_block(bm::word_t*    dst_block,
 
 
 template<class BV>
-unsigned operation_deserializer<BV>::deserialize(
-                                        bvector_type&        bv, 
+typename operation_deserializer<BV>::size_type
+operation_deserializer<BV>::deserialize(bvector_type&        bv,
                                         const unsigned char* buf, 
                                         bm::word_t*          temp_block,
                                         set_operation        op,
-                                        bool                 exit_on_one
-                                        )
+                                        bool                 exit_on_one)
 {
     ByteOrder bo_current = globals<true>::byte_order();
-
     bm::decoder dec(buf);
     unsigned char header_flag = dec.get_8();
     ByteOrder bo = bo_current;
@@ -2950,7 +2948,6 @@ unsigned operation_deserializer<BV>::deserialize(
     {
         bo = (bm::ByteOrder) dec.get_8();
     }
-
     blocks_manager_type& bman = bv.get_blocks_manager();
     bit_block_guard<blocks_manager_type> bg(bman);
     if (temp_block == 0)
@@ -3083,13 +3080,13 @@ void iterator_deserializer<BV, SerialIterator>::load_id_list(
 }
 
 template<class BV, class SerialIterator>
-unsigned 
+typename iterator_deserializer<BV, SerialIterator>::size_type
 iterator_deserializer<BV, SerialIterator>::finalize_target_vector(
-                                                blocks_manager_type& bman,
-                                                set_operation        op,
-                                                unsigned             bv_block_idx)
+                                        blocks_manager_type& bman,
+                                        set_operation        op,
+                                        size_type            bv_block_idx)
 {
-    unsigned count = 0;
+    size_type count = 0;
     switch (op)
     {
     case set_OR:    case set_SUB:     case set_XOR:
@@ -3115,8 +3112,7 @@ iterator_deserializer<BV, SerialIterator>::finalize_target_vector(
                 }
                 for (;j < bm::set_sub_array_size; ++j, ++bv_block_idx)
                 {
-                    //if (blk_blk[j])
-                        bman.zero_block(bv_block_idx);
+                    bman.zero_block(bv_block_idx);
                 } // for j
                 j = 0;
             } // for i
@@ -3158,13 +3154,13 @@ iterator_deserializer<BV, SerialIterator>::finalize_target_vector(
 }
 
 template<class BV, class SerialIterator>
-unsigned 
+typename iterator_deserializer<BV, SerialIterator>::size_type
 iterator_deserializer<BV, SerialIterator>::process_id_list(
                                     bvector_type&         bv, 
                                     serial_iterator_type& sit,
                                     set_operation         op)
 {
-    unsigned count = 0;
+    size_type count = 0;
     unsigned id_count = sit.get_id_count();
     bool set_clear = true;
     switch (op)
@@ -3205,7 +3201,7 @@ iterator_deserializer<BV, SerialIterator>::process_id_list(
     case set_COUNT_A:
         return bv.count();
     case set_COUNT_AND:
-        for (unsigned i = 0; i < id_count; ++i)
+        for (size_type i = 0; i < id_count; ++i)
         {
             bm::id_t id = sit.get_id();
             count += bv.get_bit(id);
@@ -3484,7 +3480,7 @@ void iterator_deserializer<BV, SerialIterator>::deserialize(
 
 
 template<class BV, class SerialIterator>
-unsigned 
+typename iterator_deserializer<BV, SerialIterator>::size_type
 iterator_deserializer<BV, SerialIterator>::deserialize(
                                        bvector_type&         bv, 
                                        serial_iterator_type& sit, 
@@ -3494,7 +3490,7 @@ iterator_deserializer<BV, SerialIterator>::deserialize(
 {
     BM_ASSERT(temp_block);
 
-    unsigned count = 0;
+    size_type count = 0;
     gap_word_t   gap_temp_block[bm::gap_equiv_len*3];
     gap_temp_block[0] = 0;
 
@@ -3544,9 +3540,7 @@ iterator_deserializer<BV, SerialIterator>::deserialize(
             bman.get_block_coord(bv_block_idx, i0, j0);
             bm::word_t* blk = bman.get_block_ptr(i0, j0);
 
-//            bm::word_t* blk = bman.get_block(bv_block_idx);
-
-            if (!blk) 
+            if (!blk)
             {
                 switch (op)
                 {
@@ -3606,7 +3600,6 @@ iterator_deserializer<BV, SerialIterator>::deserialize(
             bman.get_block_coord(bv_block_idx, i0, j0);
             bm::word_t* blk = bman.get_block_ptr(i0, j0);
 
-//            bm::word_t* blk = bman.get_block(bv_block_idx);
             sit.next();
 
             if (blk)
@@ -3650,7 +3643,6 @@ iterator_deserializer<BV, SerialIterator>::deserialize(
             bman.get_block_coord(bv_block_idx, i0, j0);
             bm::word_t* blk = bman.get_block_ptr(i0, j0);
 
-//            bm::word_t* blk = bman.get_block(bv_block_idx);
             sit.next();
 
             switch (op)
@@ -3725,7 +3717,6 @@ iterator_deserializer<BV, SerialIterator>::deserialize(
             } // switch
             if (exit_on_one && count) // early exit
 				   return count;
-
             }
             break;
 
@@ -3735,8 +3726,6 @@ iterator_deserializer<BV, SerialIterator>::deserialize(
             unsigned i0, j0;
             bman.get_block_coord(bv_block_idx, i0, j0);
             const bm::word_t* blk = bman.get_block(i0, j0);
-
-//            bm::word_t* blk = bman.get_block(bv_block_idx);
 
             sit.get_gap_block(gap_temp_block);
 

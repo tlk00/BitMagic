@@ -2264,7 +2264,7 @@ private:
     
     /// set bit in GAP block withlength extension control
     bool gap_block_set(bm::gap_word_t* gap_blk,
-                       bool val, unsigned nblock, unsigned nbit);
+                       bool val, block_idx_type nblock, unsigned nbit);
     
     /// check if specified bit is 1, and set it to 0
     /// if specified bit is 0, scan for the next 1 and returns it
@@ -2341,8 +2341,9 @@ private:
        \param nb - Block's linear index.
        \param blk - Blocks's pointer 
     */
-    void extend_gap_block(unsigned nb, gap_word_t* blk)
-                                    { blockman_.extend_gap_block(nb, blk); }
+    /*
+    void extend_gap_block(block_idx_type nb, gap_word_t* blk)
+                                    { blockman_.extend_gap_block(nb, blk); } */
 
     /**
        \brief Set range without validity/bouds checking
@@ -2354,7 +2355,6 @@ private:
     */
     void clear_range_no_check(size_type left,
                               size_type right);
-    
     /**
         Compute rank in block using rank-select index
     */
@@ -2363,16 +2363,11 @@ private:
                             block_idx_type nb,
                             unsigned nbit_right,
                             const rs_index_type&  blocks_cnt);
-
     /**
         Return value of first bit in the block
     */
     bool test_first_block_bit(block_idx_type nb) const;
     
-    /*
-    block_idx_type find_max_effective_blocks() const;
-    */
-
 private:
     blocks_manager_type  blockman_;         //!< bitblocks manager
     strategy             new_blocks_strat_; //!< block allocation strategy
@@ -3264,8 +3259,7 @@ int bvector<Alloc>::compare(const bvector<Alloc>& bv) const
 
             if (!blk || !arg_blk)  
             {
-                const bm::word_t*  pblk;
-                bool is_gap;
+                const bm::word_t*  pblk; bool is_gap;
 
                 if (blk)
                 {
@@ -3298,8 +3292,7 @@ int bvector<Alloc>::compare(const bvector<Alloc>& bv) const
             if (arg_gap != gap)
             {
                 BM_DECLARE_TEMP_BLOCK(temp_blk);
-                bm::wordop_t* blk1;
-                bm::wordop_t* blk2;
+                bm::wordop_t* blk1; bm::wordop_t* blk2;
 
                 if (gap)
                 {
@@ -3712,17 +3705,17 @@ bool bvector<Alloc>::set_bit_no_check(size_type n, bool val)
 
 template<class Alloc>
 bool bvector<Alloc>::gap_block_set(bm::gap_word_t* gap_blk,
-                                   bool val, unsigned nblock, unsigned nbit)
+                                   bool val, block_idx_type nblock, unsigned nbit)
 {
     unsigned is_set, new_block_len;
     new_block_len =
         bm::gap_set_value(val, gap_blk, nbit, &is_set);
     if (is_set)
     {
-        unsigned threshold =  bm::gap_limit(gap_blk, blockman_.glen());
+        unsigned threshold = bm::gap_limit(gap_blk, blockman_.glen());
         if (new_block_len > threshold)
         {
-            extend_gap_block(nblock, gap_blk);
+            blockman_.extend_gap_block(nblock, gap_blk);
         }
     }
     return is_set;
@@ -4313,7 +4306,7 @@ bool bvector<Alloc>::insert(size_type n, bool value)
     }
     
     // calculate logical block number
-    unsigned nb = unsigned(n >>  bm::set_block_shift);
+    block_idx_type nb = (n >>  bm::set_block_shift);
 
     int block_type;
     bm::word_t carry_over = 0;
@@ -4367,7 +4360,7 @@ bool bvector<Alloc>::insert(size_type n, bool value)
             if (carry_over)
             {
                 // carry over: needs block-list extension and a block
-                unsigned nblock = (i * bm::set_sub_array_size) + 0;
+                block_idx_type nblock = (block_idx_type(i) * bm::set_sub_array_size) + 0;
                 if (nblock > nb)
                 {
                     block =
@@ -4394,7 +4387,7 @@ bool bvector<Alloc>::insert(size_type n, bool value)
         unsigned j = j0;
         do
         {
-            unsigned nblock = (i * bm::set_sub_array_size) + j;
+            block_idx_type nblock = (block_idx_type(i) * bm::set_sub_array_size) + j;
             block = blk_blk[j];
             if (!block)
             {
@@ -4443,7 +4436,7 @@ bool bvector<Alloc>::insert(size_type n, bool value)
                     unsigned threshold =  bm::gap_limit(gap_blk, blockman_.glen());
                     if (new_block_len > threshold)
                     {
-                        extend_gap_block(nblock, gap_blk);
+                        blockman_.extend_gap_block(nblock, gap_blk);
                     }
                     continue;
                 }
@@ -4484,7 +4477,7 @@ void bvector<Alloc>::erase(size_type n)
         return ;
     
     // calculate logical block number
-    unsigned nb = unsigned(n >>  bm::set_block_shift);
+    block_idx_type nb = (n >>  bm::set_block_shift);
     
     if (!n ) // regular shift-left by 1 bit
     {}
@@ -4530,13 +4523,19 @@ void bvector<Alloc>::erase(size_type n)
             blk_blk = blk_root[i];
         
         if (!blk_blk) // top level group of blocks missing
+        {
+            bool found = bm::find_not_null_ptr(blk_root, i+1, top_blocks, &i);
+            if (!found)
+                break;
+            --i;
             continue;
+        }
         if ((bm::word_t*)blk_blk == FULL_BLOCK_FAKE_ADDR)
         {
             bool carry_over = 0;
             if (i + 1 < bm::set_top_array_size)
             {
-                size_type co_idx = (i+1) * bm::gap_max_bits * bm::set_sub_array_size;
+                size_type co_idx = (block_idx_type(i)+1) * bm::gap_max_bits * bm::set_sub_array_size;
                 carry_over = this->test(co_idx);
                 if (carry_over)
                     continue; // nothing to do (1 in)
@@ -4552,7 +4551,7 @@ void bvector<Alloc>::erase(size_type n)
         unsigned j = j0;
         do
         {
-            unsigned nblock = (i * bm::set_sub_array_size) + j;
+            block_idx_type nblock = (block_idx_type(i) * bm::set_sub_array_size) + j;
             bool carry_over = 0; // test_first_block_bit(nblock+1); // look ahead for CO
             block = blk_blk[j];
             if (!block)
@@ -4563,7 +4562,7 @@ void bvector<Alloc>::erase(size_type n)
                 {
                     if (0 != (block = blk_blk[j]))
                     {
-                        nblock = (i * bm::set_sub_array_size) + j;
+                        nblock = (block_idx_type(i) * bm::set_sub_array_size) + j;
                         break;
                     }
                 } // for j
@@ -4599,7 +4598,7 @@ void bvector<Alloc>::erase(size_type n)
                 carry_over = bm::gap_shift_l1(gap_blk, carry_over, &new_block_len);
                 unsigned threshold =  bm::gap_limit(gap_blk, blockman_.glen());
                 if (new_block_len > threshold)
-                    extend_gap_block(nblock, gap_blk);
+                    blockman_.extend_gap_block(nblock, gap_blk);
                 else
                 {
                     if (bm::gap_is_all_zero(gap_blk))

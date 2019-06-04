@@ -1166,7 +1166,7 @@ public:
         if (!top_blocks_[nblk_blk])
             return alloc_top_subblock(nblk_blk);
         if (top_blocks_[nblk_blk] == (bm::word_t**)FULL_BLOCK_FAKE_ADDR)
-            alloc_top_subblock(nblk_blk, FULL_BLOCK_FAKE_ADDR);
+            return alloc_top_subblock(nblk_blk, FULL_BLOCK_FAKE_ADDR);
         return top_blocks_[nblk_blk];
     }
 
@@ -1997,6 +1997,7 @@ public:
     {
         unsigned cnt = 0;
         unsigned top_blocks = top_block_size();
+        // TODO: SIMD
         for (unsigned i = 0; i < top_blocks; ++i)
         {
             bm::word_t** blk_blk = top_blocks_[i];

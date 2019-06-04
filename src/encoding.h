@@ -57,7 +57,7 @@ public:
                                const bm::short_t* s, unsigned count,
                                bool encode_count);
     void memcpy(const unsigned char* src, size_t count);
-    unsigned size() const;
+    size_t size() const;
     unsigned char* get_pos() const;
     void set_pos(unsigned char* buf_pos);
 private:
@@ -664,9 +664,9 @@ void encoder::memcpy(const unsigned char* src, size_t count)
    \fn unsigned encoder::size() const
    \brief Returns size of the current encoding stream.
 */
-inline unsigned encoder::size() const
+inline size_t encoder::size() const
 {
-    return (unsigned)(buf_ - start_);
+    return size_t(buf_ - start_);
 }
 
 /**
