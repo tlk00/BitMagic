@@ -39,7 +39,7 @@ For more information please visit:  http://bitmagic.io
 #include <algorithm>
 #include <stdarg.h>
 #include <vector>
-
+#include <chrono>
 
 #include <bm.h>
 #include <bmrandom.h>
@@ -2015,7 +2015,7 @@ void OptimizeTest()
     cout << "---------------------------- Bvector Optimize test" << endl;
     BM_DECLARE_TEMP_BLOCK(tb)
 
-    bvect::size_type base_idx = bm::id_max32+1;
+    bvect::size_type base_idx = bvect::size_type(bm::id_max32)+1;
     {
         bvect bv;
         optimize_fill(bv, base_idx, 1, bm::gap_max_bits, true);
