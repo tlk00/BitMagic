@@ -2002,7 +2002,7 @@ void optimize_fill(bvect& bv, bvect::size_type base, unsigned inc,
     for (bvect::size_type i = 0; i < bm::set_sub_array_size; ++i)
     {
         bvect::size_type base_idx = i * bm::gap_max_bits;
-        for (bvect::size_type j = base; j < max_bits; j += inc)
+        for (bvect::size_type j = base; j < base+max_bits; j += inc)
         {
             bv.set(base_idx + j, value);
         } // for j
@@ -2122,9 +2122,9 @@ void OptimizeTest()
         bv.optimize(tb, bvect::opt_compress, &st1);
 
         assert(st1.bit_blocks == 0);
-        assert(st1.gap_blocks == bm::set_sub_array_size);
+        assert(st1.gap_blocks == 1);
         assert(st1.ptr_sub_blocks == 1);
-        assert(st1.gaps_by_level[0] == bm::set_sub_array_size);
+        assert(st1.gaps_by_level[0] == 1);
         assert(st1.gaps_by_level[1] == 0);
     }
 
@@ -5336,7 +5336,7 @@ int main(int argc, char *argv[])
     // -----------------------------------------------------------------
     
     if (is_all || is_bvbasic)
-    {    
+    {
         SyntaxTest();
         GenericBVectorTest();
         SetTest();
