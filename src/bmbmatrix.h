@@ -196,7 +196,7 @@ public:
     bool test_4rows(unsigned i) const;
 
     /// Get low level internal access to
-    const bm::word_t* get_block(unsigned p, unsigned i, unsigned j) const;
+    const bm::word_t* get_block(size_type p, unsigned i, unsigned j) const;
     
     unsigned get_half_octet(size_type pos, size_type row_idx) const;
 
@@ -255,8 +255,8 @@ public:
     };
     
     typedef Val                                      value_type;
-    typedef bm::id_t                                 size_type;
     typedef BV                                       bvector_type;
+    typedef typename BV::size_type                   size_type;
     typedef bvector_type*                            bvector_type_ptr;
     typedef const bvector_type*                      bvector_type_const_ptr;
     typedef const value_type&                        const_reference;
@@ -764,7 +764,7 @@ void basic_bmatrix<BV>::destruct_bvector(bvector_type* bv) const
 
 template<typename BV>
 const bm::word_t*
-basic_bmatrix<BV>::get_block(unsigned p, unsigned i, unsigned j) const
+basic_bmatrix<BV>::get_block(size_type p, unsigned i, unsigned j) const
 {
     bvector_type_const_ptr bv = this->row(p);
     if (bv)

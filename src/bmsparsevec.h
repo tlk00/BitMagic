@@ -406,7 +406,7 @@ public:
         \param idx - element index
         \return value of the element
     */
-    value_type get(bm::id_t idx) const;
+    value_type get(size_type idx) const;
 
     /*!
         \brief set specified element with bounds checking and automatic resize
@@ -1399,7 +1399,7 @@ sparse_vector<Val, BV>::at(typename sparse_vector<Val, BV>::size_type idx) const
 
 template<class Val, class BV>
 typename sparse_vector<Val, BV>::value_type
-sparse_vector<Val, BV>::get(bm::id_t i) const
+sparse_vector<Val, BV>::get(typename sparse_vector<Val, BV>::size_type i) const
 {
     BM_ASSERT(i < size());
     
