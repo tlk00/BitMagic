@@ -46,6 +46,7 @@ For more information please visit:  http://bitmagic.io
 #include <bmaggregator.h>
 #include <bmvmin.h>
 #include <bmdbg.h>
+#include <bmsparsevec_util.h>
 
 using namespace bm;
 using namespace std;
@@ -5230,6 +5231,114 @@ void BvectorEraseTest()
 
 
 static
+void AddressResolverTest()
+{
+    cout << "---------------------------- AddressResolverTest()" << endl;
+    bvect::size_type id_to;
+    bool found;
+
+    {
+        bm::bvps_addr_resolver<bvect>  ares;
+        
+        found = ares.resolve(10, &id_to);
+        assert(!found);
+        assert(id_to == 0);
+        
+        {
+            bvps_addr_resolver<bvect>  ares2(ares);
+            found = ares2.resolve(10, &id_to);
+            assert(!found);
+            assert(id_to == 0);
+        }
+        
+        found = ares.resolve(10, &id_to);
+        assert(!found);
+        assert(id_to == 0);
+    }
+
+    {
+        bm::bvps_addr_resolver<bvect>  ares;
+        
+        ares.set(1000);
+        ares.set(10000);
+        ares.set(bm::id_max-1);
+
+        found = ares.resolve(10, &id_to);
+        assert(!found);
+        assert(id_to == 0);
+
+        found = ares.resolve(bm::id_max-1, &id_to);
+        assert(found);
+        assert(id_to == 3);
+        
+        assert(ares.in_sync() == false);
+        
+        ares.optimize();
+        assert(ares.in_sync() == false);
+
+        ares.sync();
+        assert(ares.in_sync());
+
+        found = ares.resolve(bm::id_max-1, &id_to);
+        assert(found);
+        assert(id_to == 3);
+
+        bvps_addr_resolver<bvect>  ares2(ares);
+        bool same = ares.equal(ares2);
+        assert(same);
+        
+        bvps_addr_resolver<bvect>  ares3;
+        ares3.move_from(ares2);
+        same = ares.equal(ares3);
+        assert(same);
+    }
+
+    {
+        bm::sv_addr_resolver<sparse_vector<bm::id_t, bvect> > ares;
+        
+        found = ares.resolve(10, &id_to);
+        assert(!found);
+        assert(id_to == 0);
+    }
+
+    {
+        sv_addr_resolver<sparse_vector<bm::id64_t, bvect> > ares;
+        
+        ares.set(1000);   // 1
+        ares.set(10000);  // 2
+        ares.set(bm::id_max-1); // 3
+        ares.set(5);      // 4
+        
+        found = ares.resolve(10, &id_to);
+        assert(!found);
+        assert(id_to == 0);
+        
+        found = ares.resolve(1000, &id_to);
+        assert(found);
+        assert(id_to == 1);
+
+        found = ares.resolve(bm::id_max-1, &id_to);
+        assert(found);
+        assert(id_to == 3);
+        
+        ares.optimize();
+        
+        found = ares.resolve(5, &id_to);
+        assert(found);
+        assert(id_to == 4);
+    }
+
+    cout << "---------------------------- AddressResolverTest() OK" << endl;
+
+}
+
+
+
+
+
+
+
+static
 void show_help()
 {
     std::cerr
@@ -5381,6 +5490,12 @@ int main(int argc, char *argv[])
          BvectorShiftTest();
          BvectorInsertTest();
          BvectorEraseTest();
+    }
+
+    if (is_all || is_rankc)
+    {
+         AddressResolverTest();
+         //TestRankCompress();
     }
 
     // -----------------------------------------------------------------

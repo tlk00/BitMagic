@@ -19073,7 +19073,7 @@ void AddressResolverTest()
         
         ares.set(1000);  // 1
         ares.set(10000); // 2
-        ares.set(100000); // 3
+        ares.set(bm::id_max32-1); // 3
         ares.set(5);      // 4
         
         found = ares.resolve(10, &id_to);
@@ -19084,16 +19084,15 @@ void AddressResolverTest()
         assert(found);
         assert(id_to == 1);
 
-        found = ares.resolve(10000, &id_to);
+        found = ares.resolve(bm::id_max32-1, &id_to);
         assert(found);
-        assert(id_to == 2);
+        assert(id_to == 3);
         
         ares.optimize();
         
         found = ares.resolve(5, &id_to);
         assert(found);
         assert(id_to == 4);
-
     }
 
     
