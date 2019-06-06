@@ -31,7 +31,6 @@ For more information please visit:  http://bitmagic.io
     \brief Example: bvector<>::enumerator use
 */
 
-
 #include <iostream>
 #include <algorithm>
 #include "bm.h"
@@ -39,7 +38,7 @@ For more information please visit:  http://bitmagic.io
 using namespace std;
 
 inline
-void Print(unsigned n)
+void Print(bm::bvector<>::size_type n)
 {
     cout << n << endl;;
 }
@@ -93,6 +92,5 @@ int main(void)
         std::cerr << ex.what() << std::endl;
         return 1;
     }
-
     return 0;
 }

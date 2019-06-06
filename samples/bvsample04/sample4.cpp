@@ -28,7 +28,6 @@ For more information please visit:  http://bmagic.sourceforge.net
 /*! \file sample4.cpp
     \brief Example: bvector<> serialization/deserialization.
 */
-
 #include <stdlib.h>
 #include <iostream>
 #include "bm.h"
@@ -92,7 +91,7 @@ unsigned char* serialize_bvector(bm::serializer<bm::bvector<> >& bvs,
     unsigned char*  buf = new unsigned char[st.max_serialize_mem];
 
     // Serialization to memory.
-    unsigned len = bvs.serialize(bv, buf, st.max_serialize_mem);
+    size_t len = bvs.serialize(bv, buf, st.max_serialize_mem);
 
 
     cout << "Serialized size:" << len << endl << endl;

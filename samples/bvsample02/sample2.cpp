@@ -25,7 +25,6 @@ For more information please visit:  http://bitmagic.io
     \brief Example: bvector<> set algebra operations AND, OR, XOR, etc.
 */
 
-
 #include <iostream>
 #include "bm.h"
 
@@ -34,7 +33,7 @@ using namespace std;
 static
 void print_bvector(const bm::bvector<>& bv)
 {
-    unsigned value = bv.get_first();
+    bm::bvector<>::size_type value = bv.get_first();
     do
     {
         cout << value;

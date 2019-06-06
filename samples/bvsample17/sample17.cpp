@@ -57,7 +57,7 @@ int main(void)
 
         // now perform a search for a position for a rank
         //
-        bm::id_t pos;
+        bm::bvector<>::size_type pos;
         bool found = bv.select(2, pos, *rs_idx);
         if (found)
             std::cout << pos << std::endl;  // 20

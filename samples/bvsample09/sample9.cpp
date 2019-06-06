@@ -62,7 +62,7 @@ int main(void)
         
         // Hamming distance:
         
-        unsigned hamming = bm::count_xor(bv1, bv2);
+        auto hamming = bm::count_xor(bv1, bv2);
         
         cout << "Hamming distance = " << hamming << endl;
 

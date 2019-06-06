@@ -39,8 +39,6 @@ For more information please visit:  http://bitmagic.io
 using namespace std;
 
 
-
-
 const unsigned MAX_VALUE = 1000000;
 
 static
@@ -155,7 +153,7 @@ int main(void)
         // use of COUNT operations does not materialize a target vector
         //
         // POPCNT((bv1 OR bv2) MINUS bv1)
-        unsigned cnt_sub =
+        auto cnt_sub =
         bm::operation_deserializer<bm::bvector<> >::deserialize(bv3,
                                                                sbuf1.buf(),
                                                                tb,
@@ -170,7 +168,7 @@ int main(void)
                                                                sbuf1.buf(),
                                                                tb,
                                                                bm::set_SUB);
-        unsigned bv5_cnt = bv5.count();
+        auto bv5_cnt = bv5.count();
         cout << "bv5 count = " << bv5_cnt << endl;
 
         if (cnt_sub != bv5_cnt)

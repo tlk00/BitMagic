@@ -24,7 +24,6 @@ For more information please visit:  http://bitmagic.io
 /*! \file sample6.cpp
     \brief Example: bvector<> custom memory allocator
 */
-
 #include <iostream>
 #include <cassert>
 #include "bm.h"

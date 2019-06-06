@@ -71,7 +71,7 @@ int main(void)
         cout << "bv2 count = " << bv2.count() << endl;
 
         bool found;
-        unsigned first, last;
+        bm::bvector<>::size_type first, last;
         
         found = bv1.find(first);
         if (found)

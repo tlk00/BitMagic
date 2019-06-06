@@ -56,7 +56,7 @@ std::uniform_int_distribution<> rand_dis(1, int(vector_max)); // generate unifor
 static
 void generate_bvector(bm::bvector<>& bv)
 {
-    unsigned i, j;
+    bm::bvector<>::size_type i, j;
     for (i = 0; i < vector_max;)
     {
         // generate bit-blocks
@@ -93,10 +93,10 @@ void generate_bvector(bm::bvector<>& bv)
 /// "pre-heat" CPU to minimize dynamic overclocking effects
 ///
 static
-unsigned pre_heat(const bm::bvector<>& bv)
+bm::bvector<>::size_type pre_heat(const bm::bvector<>& bv)
 {
-    unsigned cnt = 0;
-    unsigned m = 1;
+    bm::bvector<>::size_type cnt = 0;
+    bm::bvector<>::size_type m = 1;
     for (unsigned i = 0; i < benchmark_count; ++i)
     {
         cnt += bv.count();
@@ -112,7 +112,7 @@ unsigned pre_heat(const bm::bvector<>& bv)
 static
 void bv_count_test(const bm::bvector<>& bv)
 {
-    unsigned cnt = 0;
+    bm::bvector<>::size_type cnt = 0;
 
     {
         bm::chrono_taker tt1("1. bvector<>::count()", benchmark_count / 2, &timing_map);
@@ -130,7 +130,7 @@ void bv_count_test(const bm::bvector<>& bv)
 static
 void bv_count_range(const bm::bvector<>& bv)
 {
-    unsigned cnt = 0;
+    bm::bvector<>::size_type cnt = 0;
     {
         bm::chrono_taker tt1("2. bvector<>::count_range()", benchmark_count, &timing_map);
         for (unsigned i = 0; i < benchmark_count; ++i)
@@ -151,7 +151,7 @@ void bv_count_range(const bm::bvector<>& bv)
 static
 void bv_count_range_acc(const bm::bvector<>& bv)
 {
-    unsigned cnt = 0;
+    bm::bvector<>::size_type cnt = 0;
     
     std::unique_ptr<bm::bvector<>::rs_index_type> rs(new bm::bvector<>::rs_index_type());
     bv.build_rs_index(rs.get());
@@ -177,7 +177,7 @@ void bv_count_range_acc(const bm::bvector<>& bv)
 static
 void bv_count_to_acc(const bm::bvector<>& bv)
 {
-    unsigned cnt = 0;
+    bm::bvector<>::size_type cnt = 0;
     
     // build a block population count list, used for count_to() acceleration
     std::unique_ptr<bm::bvector<>::rs_index_type> rs(new bm::bvector<>::rs_index_type());
@@ -203,7 +203,7 @@ void bv_count_to_acc(const bm::bvector<>& bv)
 static
 void bv_count_to_range_acc(const bm::bvector<>& bv)
 {
-    unsigned cnt = 0;
+    bm::bvector<>::size_type cnt = 0;
     
     // build a block population count list, used for count_to() acceleration
     std::unique_ptr<bm::bvector<>::rs_index_type> rs(new bm::bvector<>::rs_index_type());
@@ -219,9 +219,9 @@ void bv_count_to_range_acc(const bm::bvector<>& bv)
             if (from > to)
                 swap(from, to);
             
-            unsigned cnt_to = bv.count_to(to, *rs);
-            unsigned cnt_from = bv.count_to(from - 1, *rs);
-            unsigned cnt_r = cnt_to - cnt_from;
+            bm::bvector<>::size_type cnt_to = bv.count_to(to, *rs);
+            bm::bvector<>::size_type cnt_from = bv.count_to(from - 1, *rs);
+            bm::bvector<>::size_type cnt_r = cnt_to - cnt_from;
             cnt += cnt_r;
         }
     }
@@ -236,7 +236,7 @@ void bv_count_to_range_acc(const bm::bvector<>& bv)
 static
 void bv_count_and(const bm::bvector<>& bv)
 {
-    unsigned cnt = 0;
+    bm::bvector<>::size_type cnt = 0;
     {
         bm::chrono_taker tt1("6. bm::count_and with mask vector", benchmark_count, &timing_map);
 
@@ -266,7 +266,7 @@ void bv_count_and(const bm::bvector<>& bv)
 static
 void bv_counted_enumerator(const bm::bvector<>& bv)
 {
-    unsigned cnt = 0;
+    bm::bvector<>::size_type cnt = 0;
     {
         // This is a slow method so we use less iterators
         bm::chrono_taker tt1("7. bm::bvector<>::counted_enumerator", benchmark_count/20, &timing_map);

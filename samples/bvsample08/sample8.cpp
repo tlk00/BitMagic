@@ -46,7 +46,7 @@ using std::list;
 using namespace std;
 
 inline
-void Print(unsigned n)
+void Print(bm::bvector<>::size_type n)
 {
     cout << n << endl;;
 }
@@ -64,6 +64,7 @@ template<class T> void PrintContainer(T first, T last)
 
 int main(void)
 {
+    typedef bm::bvector<>::size_type bm_size_type;
     try
     {
         bm::bvector<>   bv;
@@ -77,7 +78,7 @@ int main(void)
         
         // copy all bitset information into STL vector using copy algorithm
         {
-            vector<unsigned> vect;
+            vector<bm_size_type> vect;
             vect.resize(bv.count());
             std::copy(bv.first(), bv.end(), vect.begin());
             cout << "Vector:";
@@ -87,15 +88,15 @@ int main(void)
         // doing the same with the help of back_inserter
 
         {
-            list<unsigned> lst;
+            list<bm_size_type> lst;
             std::copy(bv.first(), bv.end(), std::back_inserter(lst));
             cout << "List:";
             PrintContainer(lst.begin(), lst.end());
         }
 
         {
-            vector<unsigned>   vect;
-            vector<unsigned>   res1, res2, res3;
+            vector<bm_size_type>   vect;
+            vector<bm_size_type>   res1, res2, res3;
             
             vect.push_back(100);
             vect.push_back(15);
@@ -120,8 +121,8 @@ int main(void)
             cout << "Set intersection:" << endl;
             PrintContainer(res2.begin(), res2.end());
 
-            vector<unsigned>::const_iterator it1 = vect.begin();
-            vector<unsigned>::const_iterator it2 = vect.end();
+            vector<bm_size_type>::const_iterator it1 = vect.begin();
+            vector<bm_size_type>::const_iterator it2 = vect.end();
             bm::bvector<>::enumerator en = bv.first();
             bm::bvector<>::enumerator en2= bv.end();
             
@@ -137,7 +138,7 @@ int main(void)
         // Using bvector<>::insert_iterator to set bits
         {
             bm::bvector<> bv1;
-            std::vector<unsigned> vect;
+            std::vector<bm_size_type> vect;
             
             vect.push_back(300);
             vect.push_back(200);

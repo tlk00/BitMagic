@@ -46,7 +46,6 @@ using std::list;
 #ifdef BM_NO_STL
 # undef BM_NO_STL
 #endif
-
 #include "bm.h"
 #include "bmalgo.h"
 
@@ -81,7 +80,7 @@ int main(void)
         // initialize unsorted, fairly random array for an experiment
         // it even allowes duplicates (see 12)
         //
-        unsigned int arr[] = {2, 10000, 5, 12, 255, 12, 300};
+        bm::bvector<>::size_type arr[] = {2, 10000, 5, 12, 255, 12, 300};
 
         
         cout << "Source set 1:";

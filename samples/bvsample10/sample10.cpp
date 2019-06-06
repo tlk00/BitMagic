@@ -52,7 +52,7 @@ int main(void)
         // -----------------------------------------------
         // set some bits
         //
-        unsigned i;
+        bm::bvector<>::size_type i;
         for (i = 0; i < 30000; i+=10)
         {
             bv.set(i);

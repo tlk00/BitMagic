@@ -31,7 +31,6 @@ For more information please visit:  http://bitmagic.io
 /*! \file sample3.cpp
     \brief Example: bvector<> with different allocation/compression strategies
 */
-
 #include <stdlib.h>
 #include <iostream>
 #include "bm.h"

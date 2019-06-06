@@ -39,7 +39,7 @@ For more information please visit:  http://bitmagic.io
 
 #include <iostream>
 #include <vector>
-
+#define BM64ADDR
 #include "bm.h"
 #include "bmalgo.h"
 #include "bmtimer.h"
@@ -49,8 +49,11 @@ using namespace std;
 // timing storage for benchmarking
 bm::chrono_taker::duration_map_type  timing_map;
 
+// depending of the build it may be "unsigned int" or 64-bit "unsigned long long"
+typedef bm::bvector<>::size_type bm_size_type;
+
 const unsigned benchmark_count = 1000;
-unsigned       vector_max = 4000000;
+bm_size_type       vector_max = 4000000;
 
 
 // Utility template function used to print container
@@ -64,12 +67,13 @@ template<class T> void PrintContainer(T first, T last)
     std::cout << std::endl;
 }
 
+
 static
-void generate_test_vectors(std::vector<bm::id_t> &v1,
-                           std::vector<bm::id_t> &v2,
-                           std::vector<bm::id_t> &v3)
+void generate_test_vectors(std::vector<bm_size_type> &v1,
+                           std::vector<bm_size_type> &v2,
+                           std::vector<bm_size_type> &v3)
 {
-    bm::id_t j;
+    bm_size_type j;
     for (j = 0; j < vector_max; j += 2)
     {
         v1.push_back(j);
@@ -95,7 +99,7 @@ void bv_set_bit_test()
 
     for (unsigned i = 0; i < benchmark_count; ++i)
     {
-        bm::id_t j;
+        bm_size_type j;
         for (j = 0; j < vector_max; j += 2)
         {
             bv1.set_bit(j, true);
@@ -146,9 +150,9 @@ void bv_set_bit_no_check_test()
 }
 
 static
-void combine_or_test(std::vector<bm::id_t> &v1,
-                     std::vector<bm::id_t> &v2,
-                     std::vector<bm::id_t> &v3)
+void combine_or_test(std::vector<bm_size_type> &v1,
+                     std::vector<bm_size_type> &v2,
+                     std::vector<bm_size_type> &v3)
 {
     bm::chrono_taker tt1("3. combine_or()", benchmark_count, &timing_map);
     bm::bvector<> bv1, bv2, bv3;
@@ -162,18 +166,18 @@ void combine_or_test(std::vector<bm::id_t> &v1,
 }
 
 static
-void bvector_bulk_set_test(std::vector<bm::id_t> &v1,
-                           std::vector<bm::id_t> &v2,
-                           std::vector<bm::id_t> &v3)
+void bvector_bulk_set_test(std::vector<bm_size_type> &v1,
+                           std::vector<bm_size_type> &v2,
+                           std::vector<bm_size_type> &v3)
 {
     bm::chrono_taker tt1("3. bvector<>::set() array", benchmark_count, &timing_map);
     bm::bvector<> bv1, bv2, bv3;
 
     for (unsigned i = 0; i < benchmark_count; ++i)
     {
-        bv1.set(&v1[0], unsigned(v1.size()));
-        bv2.set(&v2[0], unsigned(v2.size()));
-        bv3.set(&v3[0], unsigned(v3.size()));
+        bv1.set(&v1[0], bm_size_type(v1.size()));
+        bv2.set(&v2[0], bm_size_type(v2.size()));
+        bv3.set(&v3[0], bm_size_type(v3.size()));
     }
 }
 
@@ -269,7 +273,7 @@ int main(void)
         // 10. use bvector<>::extract_next() to find ON bit and turn it to 0
         // this function is useful for building FIFO queues on bvector
         //
-        bm::id_t p = 1;
+        bm_size_type p = 1;
         for (p = bv2.extract_next(p); p != 0; p = bv2.extract_next(p))
         {
             std::cout << "Extracted p = " << p << std::endl;
@@ -288,14 +292,14 @@ int main(void)
         PrintContainer(bv3.first(), bv3.end()); // 10, 100, 1000
 
 
-        std::vector<bm::id_t> v1, v2, v3;
+        std::vector<bm_size_type> v1, v2, v3;
         generate_test_vectors(v1, v2, v3);
 
         for (unsigned k = 0; k < 1000; ++k)
         {
             // run a few CPU "pre-heat" loops to get consistent results
-            unsigned s = 0;
-            unsigned i;
+            bm_size_type s = 0;
+            bm_size_type i;
             for (i = 0; i < v1.size(); ++i)
                 s = s + s* v1[i] + i;
             for (i = 0; i < v2.size(); ++i)

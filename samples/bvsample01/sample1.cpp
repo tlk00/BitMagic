@@ -30,7 +30,6 @@ For more information please visit:  http://bitmagic.io
 /*! \file sample1.cpp
     \brief Example: bvector<> set bits and then retrieve indexes of ON bits
 */
-
 #include <iostream>
 #include "bm.h"
 
@@ -57,7 +56,7 @@ int main(void)
 
         // Print the bitvector.
 
-        unsigned value = bv.get_first();
+        auto value = bv.get_first();
         do
         {
             cout << value;
