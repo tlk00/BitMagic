@@ -1737,7 +1737,7 @@ public:
        \sa build_rs_index
        \sa count_to_test, select, rank
     */
-    bm::id_t rank(size_type n, const rs_index_type&  rs_idx) const
+    size_type rank(size_type n, const rs_index_type&  rs_idx) const
                                             {  return count_to(n, rs_idx); }
     
 

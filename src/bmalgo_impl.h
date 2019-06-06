@@ -86,8 +86,14 @@ distance_metric operation2metric(set_operation op)
 
 struct distance_metric_descriptor
 {
+#ifdef BM64ADDR
+    typedef bm::id64_t   size_type;
+#else
+    typedef bm::id_t     size_type;
+#endif
+
      distance_metric   metric;
-     bm::id_t          result;
+     size_type          result;
      
      distance_metric_descriptor(distance_metric m)
      : metric(m),
@@ -619,15 +625,16 @@ void combine_any_operation_with_block(const bm::word_t* blk,
     \ingroup  distance
 */
 inline
-unsigned combine_count_operation_with_block(const bm::word_t* blk,
-                                            const bm::word_t* arg_blk,
-                                            distance_metric metric)
+unsigned
+combine_count_operation_with_block(const bm::word_t* blk,
+                                   const bm::word_t* arg_blk,
+                                   distance_metric metric)
 {
     distance_metric_descriptor dmd(metric);
     combine_count_operation_with_block(blk, //gap, 
                                        arg_blk, //arg_gap, 
                                        &dmd, &dmd+1);
-    return dmd.result;
+    return unsigned(dmd.result);
 }
 
 
@@ -637,7 +644,8 @@ unsigned combine_count_operation_with_block(const bm::word_t* blk,
     \ingroup  distance
 */
 inline
-unsigned combine_any_operation_with_block(const bm::word_t* blk,
+bm::distance_metric_descriptor::size_type
+combine_any_operation_with_block(const bm::word_t* blk,
                                           unsigned gap,
                                           const bm::word_t* arg_blk,
                                           unsigned arg_gap,
@@ -1006,7 +1014,8 @@ bm::id_t any_and(const BV& bv1, const BV& bv2)
    \ingroup  distance
 */
 template<class BV>
-bm::id_t count_xor(const BV& bv1, const BV& bv2)
+bm::distance_metric_descriptor::size_type
+count_xor(const BV& bv1, const BV& bv2)
 {
     distance_metric_descriptor dmd(bm::COUNT_XOR);
     
@@ -1040,7 +1049,7 @@ bm::id_t any_xor(const BV& bv1, const BV& bv2)
    \ingroup  distance
 */
 template<class BV>
-bm::id_t count_sub(const BV& bv1, const BV& bv2)
+typename BV::size_type count_sub(const BV& bv1, const BV& bv2)
 {
     distance_metric_descriptor dmd(bm::COUNT_SUB_AB);
     
@@ -1074,7 +1083,7 @@ bm::id_t any_sub(const BV& bv1, const BV& bv2)
    \ingroup  distance
 */
 template<class BV>
-bm::id_t count_or(const BV& bv1, const BV& bv2)
+typename BV::size_type count_or(const BV& bv1, const BV& bv2)
 {
     distance_metric_descriptor dmd(bm::COUNT_OR);
     
@@ -1310,12 +1319,12 @@ void combine_sub(BV& bv, It  first, It last)
     if (!bman.is_init())
         bman.init_tree();
     
-    unsigned max_id = 0;
+    typename BV::size_type max_id = 0;
 
     while (first < last)
     {
-        unsigned nblock = unsigned((*first) >> bm::set_block_shift);     
-        It right = block_range_scan(first, last, nblock, &max_id);
+        typename BV::block_idx_type nblock = (*first) >> bm::set_block_shift;     
+        It right = bm::block_range_scan(first, last, nblock, &max_id);
 
         if (max_id >= bv.size())
         {
@@ -1391,10 +1400,10 @@ void combine_sub(BV& bv, It  first, It last)
 template<class BV, class It>
 void combine_and_sorted(BV& bv, It  first, It last)
 {
-    bm::id_t prev = 0;
+    typename BV::size_type prev = 0;
     for ( ;first < last; ++first)
     {
-        bm::id_t id = *first;
+        typename BV::size_type id = *first;
         BM_ASSERT(id >= prev); // make sure it's sorted
         bv.set_bit_and(id, true);
         if (++prev < id) 

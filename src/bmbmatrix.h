@@ -611,7 +611,7 @@ void basic_bmatrix<BV>::allocate_rows(size_type rsize)
     
     if (rsize)
     {
-        bv_rows_ = (bvector_type_ptr*)alloc_.alloc_ptr(rsize);
+        bv_rows_ = (bvector_type_ptr*)alloc_.alloc_ptr(unsigned(rsize));
         if (!bv_rows_)
             throw_bad_alloc();
         else
@@ -638,7 +638,9 @@ void basic_bmatrix<BV>::free_rows() BMNOEXEPT
         }
     } // for i
     if (bv_rows_)
-        alloc_.free_ptr(bv_rows_, rsize_);
+    {
+        alloc_.free_ptr(bv_rows_, unsigned(rsize_));
+    }
     bv_rows_ = 0;
 }
 
