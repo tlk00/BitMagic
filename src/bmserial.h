@@ -551,7 +551,7 @@ template<class BV>
 class operation_deserializer
 {
 public:
-    typedef BV bvector_type;
+    typedef BV                               bvector_type;
     typedef typename bvector_type::size_type size_type;
 public:
     /**

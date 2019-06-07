@@ -157,10 +157,10 @@ public:
                 prev_block_border_bit_(0)
         {}
 
-        bm::id_t block_count(const bm::word_t* block, block_idx_type idx)
+        block_idx_type block_count(const bm::word_t* block, block_idx_type idx)
         {
-            bm::id_t cnt = 0;
-            bm::id_t first_bit;
+            block_idx_type cnt = 0;
+            id_type first_bit;
             
             if (IS_FULL_BLOCK(block) || (block == 0))
             {

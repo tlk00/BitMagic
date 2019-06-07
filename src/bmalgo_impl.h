@@ -786,8 +786,8 @@ void distance_operation(const BV& bv1,
 
 */
 template<class BV>
-unsigned distance_and_operation(const BV& bv1, 
-                                const BV& bv2)
+typename BV::size_type distance_and_operation(const BV& bv1,
+                                              const BV& bv2)
 {
     const typename BV::blocks_manager_type& bman1 = bv1.get_blocks_manager();
     const typename BV::blocks_manager_type& bman2 = bv2.get_blocks_manager();
@@ -797,7 +797,7 @@ unsigned distance_and_operation(const BV& bv1,
 
     bm::word_t*** blk_root     = bman1.top_blocks_root();
     bm::word_t*** blk_root_arg = bman2.top_blocks_root();
-    unsigned count = 0;
+    typename BV::size_type count = 0;
 
     unsigned top_block_size =
         bm::min_value(bman1.top_block_size(),bman2.top_block_size());
@@ -833,8 +833,6 @@ unsigned distance_and_operation(const BV& bv1,
     } // for i
     return count;
 }
-
-
 
 
 /*!
@@ -983,7 +981,7 @@ void distance_operation_any(const BV& bv1,
    \ingroup  distance
 */
 template<class BV>
-bm::id_t count_and(const BV& bv1, const BV& bv2)
+typename BV::size_type count_and(const BV& bv1, const BV& bv2)
 {
     return distance_and_operation(bv1, bv2);
 }
@@ -996,7 +994,7 @@ bm::id_t count_and(const BV& bv1, const BV& bv2)
    \ingroup  distance
 */
 template<class BV>
-bm::id_t any_and(const BV& bv1, const BV& bv2)
+typename BV::size_type any_and(const BV& bv1, const BV& bv2)
 {
     distance_metric_descriptor dmd(bm::COUNT_AND);
     
@@ -1031,7 +1029,7 @@ count_xor(const BV& bv1, const BV& bv2)
    \ingroup  distance
 */
 template<class BV>
-bm::id_t any_xor(const BV& bv1, const BV& bv2)
+typename BV::size_type any_xor(const BV& bv1, const BV& bv2)
 {
     distance_metric_descriptor dmd(bm::COUNT_XOR);
     
@@ -1066,7 +1064,7 @@ typename BV::size_type count_sub(const BV& bv1, const BV& bv2)
    \ingroup  distance
 */
 template<class BV>
-bm::id_t any_sub(const BV& bv1, const BV& bv2)
+typename BV::size_type any_sub(const BV& bv1, const BV& bv2)
 {
     distance_metric_descriptor dmd(bm::COUNT_SUB_AB);
     
@@ -1099,7 +1097,7 @@ typename BV::size_type count_or(const BV& bv1, const BV& bv2)
    \ingroup  distance
 */
 template<class BV>
-bm::id_t any_or(const BV& bv1, const BV& bv2)
+typename BV::size_type any_or(const BV& bv1, const BV& bv2)
 {
     distance_metric_descriptor dmd(bm::COUNT_OR);
     
@@ -1454,7 +1452,7 @@ void combine_and(BV& bv, It  first, It last)
     \ingroup setalgo
 */
 template<class BV>
-bm::id_t count_intervals(const BV& bv)
+typename BV::size_type count_intervals(const BV& bv)
 {
     const typename BV::blocks_manager_type& bman = bv.get_blocks_manager();
     

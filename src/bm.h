@@ -995,7 +995,7 @@ public:
             return false;
         }
         
-        bool decode_bit_group(block_descr_type* bdescr, bm::id_t& rank)
+        bool decode_bit_group(block_descr_type* bdescr, size_type& rank)
         {
             const word_t* block_end = this->block_ + bm::set_block_size;
             
@@ -1034,7 +1034,6 @@ public:
             BM_ASSERT(this->block_type_ == 1);
 
             block_descr_type* bdescr = &(this->bdescr_);
-
             bdescr->gap_.ptr = BMGAP_PTR(this->block_);
             unsigned bitval = *(bdescr->gap_.ptr) & 1;
 
@@ -1043,7 +1042,6 @@ public:
             for (;true;)
             {
                 unsigned val = *(bdescr->gap_.ptr);
-
                 if (bitval)
                 {
                     gap_word_t* first = BMGAP_PTR(this->block_) + 1;
@@ -1056,14 +1054,11 @@ public:
                         bdescr->gap_.gap_len = 
                              (gap_word_t)(val - *(bdescr->gap_.ptr-1));
                     }
-           
                     return true;
                 }
                 this->position_ += val + 1;
                 if (val == bm::gap_max_bits - 1)
-                {
                     break;
-                }
                 bitval ^= 1;
                 ++(bdescr->gap_.ptr);
             }
