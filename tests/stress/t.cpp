@@ -1175,7 +1175,7 @@ unsigned SerializationOperation(bvect*             bv_target,
         ;
 
     }
-/*    
+/*
     if (op == bm::set_AND || op == bm::set_OR || op == bm::set_XOR || op == bm::set_SUB)
     {
         cout << "3 way operation check... " << op << endl;
