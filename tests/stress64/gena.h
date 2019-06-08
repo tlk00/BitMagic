@@ -31,6 +31,68 @@ void generate_vect_simpl0(VT& vect)
     std::swap(vect, v_tmp);
 }
 
+/// sub-tange vector generator
+///
+/// @internal
+template<typename VT, typename DISTR, typename MT_RAND>
+void generate_vect48_range(VT& vect, unsigned long long range_base,
+                           DISTR& dist, MT_RAND& mt_rand)
+{
+    for (unsigned i = 0; i < 256; ++i)
+    {
+        bm::id64_t sub_base = range_base + (i * 65536);
+        if (i & 1) // alternate block patterns
+        {
+            for (unsigned j = 0; j < 65536/3; ++j)
+            {
+                bm::id64_t idx = (bm::id64_t)dist(mt_rand);
+                vect.push_back(sub_base + idx);
+            }
+        }
+        else
+        {
+            for (unsigned j = 0; j < 65536;)
+            {
+                unsigned to = j + (rand() % 256);
+                for (unsigned k = j; k < to && k < 65536; ++k, ++j)
+                    vect.push_back(sub_base + k);
+            }
+        }
+    } // for
+}
+
+/// generate test random vector in 48-bit range
+///
+template<typename VT>
+void generate_vect48(VT& vect)
+{
+    std::random_device rd;
+    std::mt19937_64 mt_rand(rd());
+    std::uniform_int_distribution<int> dist(0, 65535);
+    
+
+    // Range 0
+    //
+    bm::id64_t range_base = (bm::id64_t)dist(mt_rand);
+    generate_vect48_range(vect, range_base, dist, mt_rand);
+    
+    // Range 32-bit max
+    range_base = bm::id_max32-65536;
+    generate_vect48_range(vect, range_base, dist, mt_rand);
+
+    // Range 48-bit / 2
+    range_base = bm::id_max48 / 2;
+    generate_vect48_range(vect, range_base, dist, mt_rand);
+    
+    // Range near 48-bit
+    range_base = bm::id_max48 - (65536 * 257);
+    generate_vect48_range(vect, range_base, dist, mt_rand);
+
+    std::sort(vect.begin(), vect.end());
+    vect.erase(std::unique(vect.begin(), vect.end() ), vect.end());
+}
+
+
 
 // generate pseudo-random bit-vector, mix of blocks
 //

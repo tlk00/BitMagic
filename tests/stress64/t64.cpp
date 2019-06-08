@@ -37,6 +37,7 @@ For more information please visit:  http://bitmagic.io
 #include <memory>
 #include <random>
 #include <algorithm>
+#include <iterator>
 #include <stdarg.h>
 #include <vector>
 #include <chrono>
@@ -6001,8 +6002,47 @@ void AndOperationsTest()
             bv0.optimize();
             bv1.optimize();
         } // for
+    }
+    
+    {
+        cout << "\n48-bit large set intersect test" << endl;
+        cout << "generation..." << endl;
+        ref_vect vect0;
+        generate_vect48(vect0);
+        bvect bv0;
+        load_BV_set_ref(bv0, vect0);
+        compare_BV_set_ref(bv0, vect0);
 
+        ref_vect vect1;
+        generate_vect48(vect1);
+        bvect bv1;
+        load_BV_set_ref(bv1, vect1);
+        compare_BV_set_ref(bv1, vect1);
+        cout << "ok\n" << endl;
 
+        ref_vect vect_i;
+        std::set_intersection(vect0.begin(), vect0.end(),
+                              vect1.begin(), vect1.end(),
+                              std::back_inserter(vect_i));
+        {
+            bvect bv_i(bv0);
+            bv_i.bit_and(bv1);
+            compare_BV_set_ref(bv_i, vect_i);
+        }
+        bv0.optimize();
+        print_bvector_stat(bv0);
+        {
+            bvect bv_i(bv0);
+            bv_i.bit_and(bv1);
+            compare_BV_set_ref(bv_i, vect_i);
+        }
+        bv1.optimize();
+        print_bvector_stat(bv1);
+        {
+            bvect bv_i(bv0);
+            bv_i.bit_and(bv1);
+            compare_BV_set_ref(bv_i, vect_i);
+        }
     }
 
     {
@@ -6262,7 +6302,7 @@ void AndOperationsTest()
     printf("AND test stage 4. combine_and_sorted\n");
     {
     bvect::size_type ids[] = {0, 1, 2, 3, 10, 65535, 65536, 65535*2, 65535*3};
-    size_t to_add = sizeof(ids)/sizeof(unsigned);
+    size_t to_add = sizeof(ids)/sizeof(bvect::size_type);
     bvect        bvect_full1;
     bvect        bvect_full2;
     bvect_mini   bvect_min1(BITVECT_SIZE);
