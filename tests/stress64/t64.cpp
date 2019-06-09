@@ -5526,7 +5526,7 @@ void TestRankCompress()
 
 // do logical operation through serialization
 static
-bvect::size_type SerializationOperation(bvect*             bv_target,
+bvect::size_type SerializationOperation(bvect*     bv_target,
                                 /*const*/ bvect&   bv1,
                                 /*const*/ bvect&   bv2,
                                 set_operation      op,
@@ -5611,7 +5611,7 @@ bvect::size_type SerializationOperation(bvect*             bv_target,
        bv_target->bit_xor(bv1);
        cout << "First diff=" << bv_target->get_first() << endl;
        cout << "set_ASSIGN 1 failed!" << endl;
-       exit (1);
+       assert(0); exit (1);
    }
    cout << "Deserialization ASSIGN into bv1 OK" << endl;
 
@@ -5621,7 +5621,7 @@ bvect::size_type SerializationOperation(bvect*             bv_target,
        if (*bv_tmp2 != bv1)
        {
            cout << "Deserialize NOT equal to Operation deserialize!" << endl;
-           exit(1);
+           assert(0);exit(1);
        }
        delete bv_tmp2;
    }
@@ -5683,7 +5683,7 @@ bvect::size_type SerializationOperation(bvect*             bv_target,
                     if (bvt2 != bvc)
                     {
                         cerr << "2. OR 2-way check error!" << endl;
-                        exit(1);
+                        assert(0);exit(1);
                     }
                 }
             }
@@ -5736,7 +5736,7 @@ bvect::size_type SerializationOperation(bvect*             bv_target,
                 if (bv_agg.compare(bv_agg2) != 0)
                 {
                     cerr << "Error: Aggregator AND - AND-SUB(0) comparison failed!" << endl;
-                    exit(1);
+                    assert(0); exit(1);
                 }
             }
             agg_check = true;
@@ -5762,7 +5762,7 @@ bvect::size_type SerializationOperation(bvect*             bv_target,
                 if (bvt2 != bvc)
                 {
                     cerr << "2. AND 2-way check error!" << endl;
-                    exit(1);
+                    assert(0); exit(1);
                 }
             }
             break;
@@ -5792,14 +5792,14 @@ bvect::size_type SerializationOperation(bvect*             bv_target,
                 {
                     DetailedCompareBVectors(bvt1, bvc1);
                     cerr << "1. SUB 2-way check error!" << endl;
-                    exit(1);
+                    assert(0);exit(1);
                 }
                 bvect bvt2;
                 bvt2.bit_sub(bv2, bv1, bvect::opt_compress);
                 if (bvt2 != bvc2)
                 {
                     cerr << "2. SUB 2-way check error!" << endl;
-                    exit(1);
+                    assert(0);exit(1);
                 }
             }
 
@@ -5810,12 +5810,12 @@ bvect::size_type SerializationOperation(bvect*             bv_target,
         if (bvt.compare(*bv_target) != 0)
         {
             cout << "Direct Serial operation comparison failed!" << endl;
-            exit(1);
+            assert(0);exit(1);
         }
         if (agg_check && bvt.compare(bv_agg) != 0)
         {
             cerr << "Error: Aggregator operation comparison failed!" << endl;
-            exit(1);
+            assert(0);exit(1);
         }
 
         no_compare:
@@ -5835,7 +5835,7 @@ bvect::size_type SerializationOperation(bvect*             bv_target,
         if (res != 0)
         {
             cout << "set_ASSIGN failed 2! " << endl;
-            exit(1);
+            assert(0);exit(1);
         }
         cout << "Deserialization assign to bv_tmp2 OK" << endl;
         auto count_rev =
@@ -5892,19 +5892,22 @@ void SerializationOperation2Test(bvect*        bv_target,
     bv_target->clear(true);
     cout << "Serialization operation count..." << endl;
 
-    bvect::size_type scount1 = SerializationOperation(0,
-                                              bv1,
-                                              bv2,
-                                              op_count,
-                                              true //reverse check
-                                            );
+    bvect::size_type scount1;
+
+    scount1 = SerializationOperation(0,
+                                      bv1,
+                                      bv2,
+                                      op_count,
+                                      true //reverse check
+                                    );
     cout << "Serialization operation count OK." << endl;
+
 
     cout << "Serialization operation. " << endl;
     auto scount2 = SerializationOperation(bv_target,
-        bv1,
-        bv2,
-        op_combine);
+                                          bv1,
+                                          bv2,
+                                          op_combine);
     scount2 = bv_target->count();
     if (predicted_count != scount2 || scount1 != scount2)
     {
@@ -5915,7 +5918,6 @@ void SerializationOperation2Test(bvect*        bv_target,
             << endl;
 
         cout << endl << "target:" << endl;
-        print_stat(*bv_target);
         cout << endl << endl << "Reference" << endl;
         if (op_combine == set_OR)
         {
@@ -5925,13 +5927,11 @@ void SerializationOperation2Test(bvect*        bv_target,
                 cout << "Comparison OR error!" << endl;
             }
             cout << "OR operation count=" << bv1.count() << endl;
-            print_stat(bv1);
         }
         else
             if (op_combine == set_AND)
             {
                 bv1 &= bv2;
-                print_stat(bv1);
             }
         assert(0);
         exit(1);
@@ -6043,10 +6043,16 @@ void AndOperationsTest()
             bv_i.bit_and(bv1);
             compare_BV_set_ref(bv_i, vect_i);
         }
+        bvect bvt;
+        SerializationOperation2Test(&bvt,
+                                    bv0,
+                                    bv1,
+                                    vect_i.size(),
+                                    set_COUNT_AND,
+                                    set_AND);
     }
 
     {
-
         bvect_mini   bvect_min1(BITVECT_SIZE);
         bvect_mini   bvect_min2(BITVECT_SIZE);
         bvect        bvect_full1;
@@ -6289,58 +6295,54 @@ void AndOperationsTest()
 
     CheckVectors(bvect_min1, bvect_full1, BITVECT_SIZE, true);
     CheckVectors(bvect_min1, bv_target_s, BITVECT_SIZE, true);
-//    CheckCountRange(bvect_full1, 0, BITVECT_SIZE);
 
     BM_DECLARE_TEMP_BLOCK(tb)
     bvect_full1.optimize(tb);
     CheckVectors(bvect_min1, bvect_full1, BITVECT_SIZE, true);
-//    CheckCountRange(bvect_full1, 0, BITVECT_SIZE, true);
-//    CheckCountRange(bvect_full1, BITVECT_SIZE/2, BITVECT_SIZE);
-
     }
 
     printf("AND test stage 4. combine_and_sorted\n");
     {
-    bvect::size_type ids[] = {0, 1, 2, 3, 10, 65535, 65536, 65535*2, 65535*3};
-    size_t to_add = sizeof(ids)/sizeof(bvect::size_type);
-    bvect        bvect_full1;
-    bvect        bvect_full2;
-    bvect_mini   bvect_min1(BITVECT_SIZE);
-    bvect_mini   bvect_min2(BITVECT_SIZE);
+        bvect::size_type ids[] = {0, 1, 2, 3, 10, 65535, 65536, 65535*2, 65535*3};
+        size_t to_add = sizeof(ids)/sizeof(bvect::size_type);
+        bvect        bvect_full1;
+        bvect        bvect_full2;
+        bvect_mini   bvect_min1(BITVECT_SIZE);
+        bvect_mini   bvect_min2(BITVECT_SIZE);
 
-    bvect_full1.set_new_blocks_strat(bm::BM_GAP);
-    bvect_full2.set_new_blocks_strat(bm::BM_GAP);
- 
-    for (unsigned i = 2; i < to_add; ++i)
-    {
-        bvect_full1.set(ids[i]);
-        bvect_min1.set_bit(ids[i]);
-        bvect_full2.set(ids[i]);
-        bvect_min2.set_bit(ids[i]);
-    }
- 
-    bvect::size_type* first = ids;
-    bvect::size_type* last = ids + to_add;
- 
-    bvect_min1.combine_and(bvect_min2);
+        bvect_full1.set_new_blocks_strat(bm::BM_GAP);
+        bvect_full2.set_new_blocks_strat(bm::BM_GAP);
+     
+        for (unsigned i = 2; i < to_add; ++i)
+        {
+            bvect_full1.set(ids[i]);
+            bvect_min1.set_bit(ids[i]);
+            bvect_full2.set(ids[i]);
+            bvect_min2.set_bit(ids[i]);
+        }
+     
+        bvect::size_type* first = ids;
+        bvect::size_type* last = ids + to_add;
+     
+        bvect_min1.combine_and(bvect_min2);
 
-    bm::combine_and_sorted(bvect_full1, first, last);
-    CheckVectors(bvect_min1, bvect_full1, BITVECT_SIZE, true);
+        bm::combine_and_sorted(bvect_full1, first, last);
+        CheckVectors(bvect_min1, bvect_full1, BITVECT_SIZE, true);
     }
  
     {
-    bvect        bvect1 { 1, 10, 12, bm::id_max32 + 256};
-    bvect        bvect2 { 2, 15, 165535, bm::id_max32 + 250 };
- 
-    bvect1 &= bvect2;
- 
-    bvect::statistics st;
-    bvect1.calc_stat(&st);
-    if (st.bit_blocks != 0 || st.gap_blocks != 0)
-    {
-        cerr << "Error: AND-optimization reduction failed!" << endl;
-        exit(1);
-    }
+        bvect        bvect1 { 1, 10, 12, bm::id_max32 + 256};
+        bvect        bvect2 { 2, 15, 165535, bm::id_max32 + 250 };
+     
+        bvect1 &= bvect2;
+     
+        bvect::statistics st;
+        bvect1.calc_stat(&st);
+        if (st.bit_blocks != 0 || st.gap_blocks != 0)
+        {
+            cerr << "Error: AND-optimization reduction failed!" << endl;
+            exit(1);
+        }
     }
  
  
@@ -6478,6 +6480,1674 @@ void AndOperationsTest()
 
 }
 
+
+
+static
+void OrOperationsTest()
+{
+    const bvect::size_type BITVECT_SIZE = bm::id_max32 * 2;
+    assert(ITERATIONS < BITVECT_SIZE);
+
+    cout << "----------------------------------- OrOperationTest" << endl;
+    
+    {
+        ref_vect vect;
+        generate_vect_simpl0(vect);
+
+        bvect bv0;
+        load_BV_set_ref(bv0, vect);
+        bvect bv1(bv0);
+        
+        bvect bv_i;
+        bv_i.invert();
+        auto full_cnt = bm::id_max;
+        
+        for (unsigned i = 0; i < 2; ++i)
+        {
+            bvect::size_type predicted_count = bm::count_or(bv0, bv1);
+            assert(predicted_count = vect.size());
+            auto predicted_any = bm::any_or(bv1, bv0);
+            if (predicted_any == 0 && predicted_count != 0)
+            {
+                cout << "Predicted any error!" << endl;
+                assert(0);
+                exit(1);
+            }
+            predicted_count = bm::count_or(bv0, bv_i);
+            assert(predicted_count == full_cnt);
+            
+            bv1.bit_or(bv_i);
+            {
+                int cmp = bv1.compare(bv_i);
+                assert(cmp == 0);
+            }
+            {
+                bvect bv_i_c;
+                bv_i_c.invert();
+                predicted_count = bm::count_or(bv0, bv_i_c);
+                assert(predicted_count == full_cnt);
+                bv_i_c.bit_or(bv0);
+                int cmp = bv_i_c.compare(bv_i);
+                assert(cmp == 0);
+            }
+            
+            bv0.optimize();
+            bv1.optimize();
+        } // for
+    }
+    
+    {
+        cout << "\n48-bit large set union test" << endl;
+        cout << "generation..." << endl;
+        ref_vect vect0;
+        generate_vect48(vect0);
+        bvect bv0;
+        load_BV_set_ref(bv0, vect0);
+        compare_BV_set_ref(bv0, vect0);
+
+        ref_vect vect1;
+        generate_vect48(vect1);
+        bvect bv1;
+        load_BV_set_ref(bv1, vect1);
+        compare_BV_set_ref(bv1, vect1);
+        cout << "ok\n" << endl;
+
+        ref_vect vect_i;
+        std::set_union(vect0.begin(), vect0.end(),
+                       vect1.begin(), vect1.end(),
+                       std::back_inserter(vect_i));
+        {
+            bvect bv_i(bv0);
+            bv_i.bit_or(bv1);
+            compare_BV_set_ref(bv_i, vect_i);
+        }
+        bv0.optimize();
+        print_bvector_stat(bv0);
+        {
+            bvect bv_i(bv0);
+            bv_i.bit_or(bv1);
+            compare_BV_set_ref(bv_i, vect_i);
+        }
+        bv1.optimize();
+        print_bvector_stat(bv1);
+        {
+            bvect bv_i(bv0);
+            bv_i.bit_or(bv1);
+            compare_BV_set_ref(bv_i, vect_i);
+        }
+        bvect bvt;
+        SerializationOperation2Test(&bvt,
+                                    bv0,
+                                    bv1,
+                                    vect_i.size(),
+                                    set_COUNT_OR,
+                                    set_OR);
+    }
+
+    
+    {
+        bvect_mini   bvect_min1(BITVECT_SIZE);
+        bvect_mini   bvect_min2(BITVECT_SIZE);
+        bvect        bvect_full1;
+        bvect        bvect_full2;
+
+        bvect_full1.set_new_blocks_strat(bm::BM_GAP);
+        bvect_full2.set_new_blocks_strat(bm::BM_GAP);
+
+        printf("OR test\n");
+
+        bvect_min1.set_bit(1);
+        bvect_min1.set_bit(12);
+        bvect_min1.set_bit(bm::id_max32 + 256);
+
+        bvect_min2.set_bit(12);
+        bvect_min2.set_bit(bm::id_max32 + 256);
+
+        bvect_min1.combine_or(bvect_min2);
+
+        bvect_full1.set_bit(1);
+        bvect_full1.set_bit(12);
+        bvect_full1.set_bit(bm::id_max32 + 256);
+
+        bvect_full2.set_bit(12);
+        bvect_full2.set_bit(bm::id_max32 + 256);
+        
+        bvect::size_type predicted_count = bm::count_or(bvect_full1, bvect_full2);
+        auto predicted_any = bm::any_or(bvect_full1, bvect_full2);
+        if (predicted_any == 0 && predicted_count != 0)
+        {
+            cout << "Predicted any error!" << endl;
+            exit(1);
+        }
+
+        bvect    bv_target_s;
+        SerializationOperation2Test(&bv_target_s,
+                                    bvect_full1,
+                                    bvect_full2,
+                                    predicted_count,
+                                    set_COUNT_OR,
+                                    set_OR);
+
+
+        bvect_full1.bit_or(bvect_full2);
+
+        auto count = bvect_full1.count();
+        if (count != predicted_count)
+        {
+            cout << "Predicted count error!" << endl;
+            cout << predicted_count << " " << count << endl;
+            print_stat(bvect_full1);
+            exit(1);
+        }
+
+
+        CheckVectors(bvect_min1, bvect_full1, 256, true);
+        CheckVectors(bvect_min1, bv_target_s, 256, true);
+//        CheckCountRange(bvect_full1, 0, 256);
+//        CheckCountRange(bvect_full1, 128, 256);
+    }
+
+    {
+        bvect_mini   bvect_min1(BITVECT_SIZE);
+        bvect_mini   bvect_min2(BITVECT_SIZE);
+        bvect        bvect_full1;
+        bvect        bvect_full2;
+
+        bvect_full1.set_new_blocks_strat(bm::BM_GAP);
+        bvect_full2.set_new_blocks_strat(bm::BM_GAP);
+
+        printf("OR test stage 2.\n");
+
+
+        FillSets(&bvect_min1, &bvect_full1, 1ull, BITVECT_SIZE/7, 0ull);
+        FillSets(&bvect_min2, &bvect_full2, 1ull, BITVECT_SIZE/7, 0ull);
+
+        bvect_min1.combine_or(bvect_min2);
+
+        auto predicted_count = bm::count_or(bvect_full1, bvect_full2);
+        bvect::size_type predicted_any = bm::any_or(bvect_full1, bvect_full2);
+        if (predicted_any == 0 && predicted_count != 0)
+        {
+            cout << "Predicted any error!" << endl;
+            assert(0); exit(1);
+        }
+
+        bvect    bv_target_s;
+        SerializationOperation2Test(&bv_target_s,
+                                    bvect_full1,
+                                    bvect_full2,
+                                    predicted_count,
+                                    set_COUNT_OR,
+                                    set_OR);
+
+
+        bvect_full1.bit_or(bvect_full2);
+
+        auto count = bvect_full1.count();
+        if (count != predicted_count)
+        {
+            cout << "Predicted count error!" << endl;
+            exit(1);
+        }
+
+        CheckVectors(bvect_min1, bvect_full1, BITVECT_SIZE/10+10, true);
+        CheckVectors(bvect_min1, bvect_full1, BITVECT_SIZE/10+10, true);
+//        CheckCountRange(bvect_full1, 0, BITVECT_SIZE/10+10);
+    }
+    
+    {
+        bvect bv1;
+        bvect bv2;
+        bv1.flip(); bv2.flip();
+        auto cnt1 = bv1.count();
+        bv1.bit_or(bv2);
+        bvect::size_type cnt2 = bv1.count();
+        assert(cnt1 == cnt2);
+        struct bvect::statistics st;
+        bv1.calc_stat(&st);
+        auto bcnt = st.bit_blocks + st.gap_blocks;
+        assert(bcnt == 1);
+    }
+
+    {
+        bvect_mini   bvect_min1(BITVECT_SIZE);
+        bvect_mini   bvect_min2(BITVECT_SIZE);
+        bvect        bvect_full1;
+        bvect        bvect_full2;
+
+        bvect_full1.set_new_blocks_strat(bm::BM_BIT);
+        bvect_full2.set_new_blocks_strat(bm::BM_BIT);
+
+        cout << "------------------------------" << endl;
+        printf("OR test stage 3.\n");
+
+
+        FillSets(&bvect_min1, &bvect_full1, 1ull, BITVECT_SIZE/5, 2ull);
+        FillSets(&bvect_min2, &bvect_full2, 1ull, BITVECT_SIZE/5, 2ull);
+
+        bvect_min1.combine_or(bvect_min2);
+        auto mcnt = bvect_min1.bit_count();
+
+        cout << mcnt << endl;
+        
+        auto predicted_count = bm::count_or(bvect_full1, bvect_full2);
+        cout << predicted_count << endl;
+        auto predicted_any = bm::any_or(bvect_full1, bvect_full2);
+        if (predicted_any == 0 && predicted_count != 0)
+        {
+            cout << "Predicted any error!" << endl;
+            exit(1);
+        }
+
+        bvect    bv_target_s;
+        SerializationOperation2Test(&bv_target_s,
+                                    bvect_full1,
+                                    bvect_full2,
+                                    predicted_count,
+                                    set_COUNT_OR,
+                                    set_OR);
+
+        bvect_full1.bit_or(bvect_full2);
+
+        auto count = bvect_full1.count();
+        if (count != predicted_count)
+        {
+            cout << "Predicted count error!" << endl;
+            exit(1);
+        }
+
+        CheckVectors(bvect_min1, bvect_full1, BITVECT_SIZE, true);
+
+        BM_DECLARE_TEMP_BLOCK(tb)
+        bvect_full1.optimize(tb);
+
+        CheckVectors(bvect_min1, bvect_full1, BITVECT_SIZE, true);
+        CheckVectors(bvect_min1, bv_target_s, BITVECT_SIZE, true);
+//        CheckCountRange(bvect_full1, 0, BITVECT_SIZE);
+    }
+    
+    cout << "Testing combine_or" << endl;
+    
+    {
+        bvect        bvect_full1;
+        bvect        bvect_full2;
+        bvect_mini   bvect_min1(BITVECT_SIZE);
+        
+        bvect_full1.set_new_blocks_strat(bm::BM_GAP);
+        bvect_full2.set_new_blocks_strat(bm::BM_GAP);
+
+        bvect::size_type ids[10000];
+        unsigned to_add = 10000;
+        
+        unsigned bn = bm::id_max32;
+        for (unsigned i = 0; i < to_add; ++i)
+        {
+            ids[i] = bn;
+            bvect_full2.set(bn);
+            bvect_min1.set_bit(bn);
+            bn += 15;
+        }
+        
+        bvect::size_type* first = ids;
+        bvect::size_type* last = ids + to_add;
+        
+        bm::combine_or(bvect_full1, first, last);
+
+        CheckVectors(bvect_min1, bvect_full1, BITVECT_SIZE, true);
+        
+        bm::combine_or(bvect_full1, first, last);
+        CheckVectors(bvect_min1, bvect_full1, BITVECT_SIZE, true);
+    }
+    
+    
+    {
+        bvect::size_type ids[] = {0, 65536, 65535, 65535*3, 65535*2, 10};
+        size_t to_add = sizeof(ids)/sizeof(bvect::size_type);
+        bvect        bvect_full1;
+        bvect        bvect_full2;
+        bvect_mini   bvect_min1(BITVECT_SIZE);
+
+        bvect_full1.set_new_blocks_strat(bm::BM_GAP);
+        bvect_full2.set_new_blocks_strat(bm::BM_GAP);
+        
+        unsigned bn = 0;
+        for (unsigned i = 0; i < to_add; ++i)
+        {
+            ids[i] = bn;
+            bvect_full2.set(bn);
+            bvect_min1.set_bit(bn);
+            bn += 15;
+        }
+        
+        bvect::size_type* first = ids;
+        bvect::size_type* last = ids + to_add;
+        
+        bm::combine_or(bvect_full1, first, last);
+        CheckVectors(bvect_min1, bvect_full1, BITVECT_SIZE, true);
+
+        bm::combine_or(bvect_full1, first, last);
+        CheckVectors(bvect_min1, bvect_full1, BITVECT_SIZE, true);
+    }
+    
+    {
+        bvect        bv0;
+        bvect        bv1 { 0, 36500 };
+        bvect        bv2 { 128000, bm::id_max-1 };
+        
+        bvect        bvc(bv1);
+        bvc |= bv2;
+
+        bv1.merge(bv2);
+        int cmp = bv1.compare(bvc);
+        assert(cmp==0);
+
+        struct bvect::statistics st2;
+        bv2.calc_stat(&st2);
+        auto bcnt = st2.bit_blocks + st2.gap_blocks;
+        assert(bcnt == 0);
+        
+        
+        bv0.merge(bv1);
+        struct bvect::statistics st1;
+        bv1.calc_stat(&st1);
+        bcnt = st1.bit_blocks + st1.gap_blocks;
+        assert(bcnt == 0);
+    }
+
+    // ------------------------------------------
+    // 2-way OR
+    //
+    {
+        bvect        bv1 { 0, 1 };
+        bvect        bv2;
+        bv2.bit_or(bv1, bv2, bvect::opt_compress);
+        int cmp = bv1.compare(bv2);
+        assert(cmp == 0);
+    }
+
+    {
+        bvect        bv1 { 0, 1 };
+        bvect        bv2 { 2, 3 };
+        bvect bv1c(bv1);
+        bv1c.bit_or(bv2);
+
+        bvect bv;
+        bv.bit_or(bv1, bv2, bvect::opt_compress);
+        int cmp = bv.compare(bv1c);
+        assert(cmp == 0);
+        struct bvect::statistics st1;
+        bv.calc_stat(&st1);
+        assert(!st1.bit_blocks);
+        assert(st1.gap_blocks == 1);
+    }
+    
+    {
+        bvect        bv1 { 0, 1 };
+        bvect        bv2;
+        for (unsigned i = 2; i < 65536; ++i)
+            bv2.set(i);
+        
+        bvect bv1c(bv1);
+        bv1c.bit_or(bv2);
+
+        bvect bv;
+        bv.bit_or(bv1, bv2, bvect::opt_none); // should detect FULL automatically
+        int cmp = bv.compare(bv1c);
+        assert(cmp == 0);
+        struct bvect::statistics st1;
+        bv.calc_stat(&st1);
+        assert(!st1.bit_blocks);
+        assert(!st1.gap_blocks);
+    }
+    
+    {
+        bvect        bv1 { 0, 1 };
+        bvect        bv2 { 1 };
+        bv1.clear(0); bv1.clear(1);
+        bv2.clear(1);
+        
+        bvect bv;
+        bv.bit_or(bv1, bv2, bvect::opt_none); // should detect FULL automatically
+
+        struct bvect::statistics st1;
+        bv.calc_stat(&st1);
+        assert(!st1.bit_blocks);
+        assert(!st1.gap_blocks);
+        assert(!st1.ptr_sub_blocks);
+    }
+
+    {
+        bvect        bv1;
+        bvect        bv2;
+        bv1.invert(); bv2.set();
+        bv1 |= bv2;
+        bvect bv;
+        bv.bit_or(bv1, bv2, bvect::opt_compress);
+        int cmp = bv.compare(bv2);
+        assert(cmp == 0);
+        cmp = bv.compare(bv1);
+        assert(cmp == 0);
+        bvect        bv3 { 10, bm::id_max - 1 };
+        bv1 |= bv3;
+        cmp = bv.compare(bv1);
+        assert(cmp == 0);
+    }
+    {
+        bvect        bv1;
+        bvect        bv2;
+        bv1.invert();
+        bv2.set();
+        bv2.set(bm::id_max/2, false);
+        
+        {
+            bvect    bv_s;
+            bv_s.bit_or(bv1, bv2, bvect::opt_none);
+            int cmp = bv_s.compare(bv1);
+            assert(cmp == 0);
+        }
+        {
+            bvect    bv_s;
+            bv_s.bit_or(bv2, bv1, bvect::opt_none);
+            auto cnt = bv_s.count();
+            assert(cnt == bm::id_max);
+            bool b = bv_s.test(bm::id_max/2);
+            assert(b);
+            int cmp = bv_s.compare(bv1);
+            assert(cmp == 0);
+        }
+        bv2 |= bv1;
+        int cmp = bv1.compare(bv2);
+        assert(cmp == 0);
+    }
+    
+    {
+        bvect        bv1 { 0, 1 };
+        bvect        bv2 { 2, 3 };
+        bv2.optimize();
+        bvect bv1c(bv1);
+        bv1c.bit_or(bv2);
+
+        {
+            bvect bv;
+            bv.bit_or(bv1, bv2, bvect::opt_compress);
+            int cmp = bv.compare(bv1c);
+            assert(cmp == 0);
+        }
+        bv1.optimize();
+        {
+            bvect bv;
+            bv.bit_or(bv1, bv2, bvect::opt_compress);
+            int cmp = bv.compare(bv1c);
+            assert(cmp == 0);
+        }
+        bv2.clear();
+        bv2.invert();
+        {
+            bvect bv;
+            bv |= bv2;
+            int cmp = bv.compare(bv2);
+            assert(cmp == 0);
+            bv.bit_or(bv1, bv2, bvect::opt_compress);
+            cmp = bv.compare(bv2);
+            assert(cmp == 0);
+        }
+    }
+    
+    
+    
+    cout << "----------------------------------- OrOperationTest OK" << endl;
+
+}
+
+static
+void XorOperationsTest()
+{
+    const bvect::size_type BITVECT_SIZE = bm::id_max32 * 2;
+    assert(ITERATIONS < BITVECT_SIZE);
+
+    cout << "----------------------------------- XorOperationTest" << endl;
+    
+
+    {
+        bvect bv_i0;
+        bv_i0.invert();
+        bvect bv_i1;
+        bv_i1.invert();
+        auto cnt = bm::count_xor(bv_i0, bv_i1);
+        assert(!cnt);
+        auto predicted_any = bm::any_xor(bv_i0, bv_i1);
+        assert(!predicted_any);
+    }
+    
+    {
+        ref_vect vect;
+        generate_vect_simpl0(vect);
+
+        bvect bv0;
+        load_BV_set_ref(bv0, vect);
+        bvect bv1(bv0);
+        
+        {
+            bvect bv3;
+            bv3.bit_xor(bv0, bv1, bvect::opt_compress);
+            assert(!bv3.count());
+            assert(!bv3.any());
+            
+            bvect bv4;
+            int cmp = bv4.compare(bv3);
+            assert(cmp == 0);
+            
+            bv3 = bv0;
+            bv3 ^= bv1;
+            assert(!bv3.count());
+            assert(!bv3.any());
+            cmp = bv4.compare(bv3);
+            assert(cmp == 0);
+        }
+        
+        bvect bv_i;
+        bv_i.invert();
+        auto full_cnt = bm::id_max - vect.size();
+        
+        for (unsigned i = 0; i < 2; ++i)
+        {
+            bvect::size_type predicted_count = bm::count_xor(bv0, bv1);
+            assert(predicted_count == 0);
+            auto predicted_any = bm::any_xor(bv1, bv0);
+            assert(!predicted_any);
+
+            predicted_count = bm::count_xor(bv0, bv_i);
+            assert(predicted_count == full_cnt);
+            
+            {
+                bvect bv3(bv_i);
+                clear_BV_set_ref(bv3, vect);
+                predicted_count = bm::count_xor(bv0, bv3);
+                assert(predicted_count == bm::id_max);
+                auto cnt = bv3.count();
+                assert(cnt == bm::id_max - vect.size());
+                bv3 ^= bv0;
+                cnt = bv3.count();
+                assert(cnt == bm::id_max);
+            }
+            
+            
+            bv0.optimize();
+            bv1.optimize();
+        } // for
+        
+    }
+
+    {
+        cout << "\n48-bit large set difference test" << endl;
+        cout << "generation..." << endl;
+        ref_vect vect0;
+        generate_vect48(vect0);
+        bvect bv0;
+        load_BV_set_ref(bv0, vect0);
+        compare_BV_set_ref(bv0, vect0);
+
+        ref_vect vect1;
+        generate_vect48(vect1);
+        bvect bv1;
+        load_BV_set_ref(bv1, vect1);
+        compare_BV_set_ref(bv1, vect1);
+        cout << "ok\n" << endl;
+
+        ref_vect vect_i;
+        std::set_symmetric_difference(vect0.begin(), vect0.end(),
+                            vect1.begin(), vect1.end(),
+                            std::back_inserter(vect_i));
+        {
+            bvect bv_i(bv0);
+            bv_i.bit_xor(bv1);
+            compare_BV_set_ref(bv_i, vect_i);
+        }
+        bv0.optimize();
+        print_bvector_stat(bv0);
+        {
+            bvect bv_i(bv0);
+            bv_i.bit_xor(bv1);
+            compare_BV_set_ref(bv_i, vect_i);
+        }
+        bv1.optimize();
+        print_bvector_stat(bv1);
+        {
+            bvect bv_i(bv0);
+            bv_i.bit_xor(bv1);
+            compare_BV_set_ref(bv_i, vect_i);
+        }
+        bvect bvt;
+        SerializationOperation2Test(&bvt,
+                                    bv0,
+                                    bv1,
+                                    vect_i.size(),
+                                    set_COUNT_XOR,
+                                    set_XOR);
+    }
+
+    
+
+    {
+        bvect_mini   bvect_min1(BITVECT_SIZE);
+        bvect_mini   bvect_min2(BITVECT_SIZE);
+        bvect        bvect_full1;
+        bvect        bvect_full2;
+
+        bvect_full1.set_new_blocks_strat(bm::BM_GAP);
+        bvect_full2.set_new_blocks_strat(bm::BM_GAP);
+
+
+
+        printf("XOR test\n");
+
+        bvect_min1.set_bit(1);
+        bvect_min1.set_bit(12);
+        bvect_min1.set_bit(bm::id_max32 + 256);
+
+        bvect_min2.set_bit(12);
+        bvect_min2.set_bit(bm::id_max32 + 256);
+
+        bvect_min1.combine_xor(bvect_min2);
+
+        bvect_full1.set_bit(1);
+        bvect_full1.set_bit(12);
+        bvect_full1.set_bit(bm::id_max32 + 256);
+
+        bvect_full2.set_bit(12);
+        bvect_full2.set_bit(bm::id_max32 + 256);
+
+        bvect::size_type predicted_count = bm::count_xor(bvect_full1, bvect_full2);
+        auto predicted_any = bm::any_xor(bvect_full1, bvect_full2);
+        if (predicted_any == 0 && predicted_count != 0)
+        {
+            cout << "Predicted any error!" << endl;
+            assert(0); exit(1);
+        }
+
+        bvect    bv_target_s;
+        SerializationOperation2Test(&bv_target_s,
+                                    bvect_full1,
+                                    bvect_full2,
+                                    predicted_count,
+                                    set_COUNT_XOR,
+                                    set_XOR);
+
+
+        bvect_full1.bit_xor(bvect_full2);
+
+        bvect::size_type count = bvect_full1.count();
+        if (count != predicted_count)
+        {
+            cout << "1.Predicted count error!" << endl;
+            exit(1);
+        }
+
+        CheckVectors(bvect_min1, bvect_full1, 256, true);
+        CheckVectors(bvect_min1, bv_target_s, 256, true);
+    }
+    {
+        bvect  bvect1;
+        bvect_mini  bvect_min1(BITVECT_SIZE);
+
+        bvect  bvect2;
+        bvect_mini  bvect_min2(BITVECT_SIZE);
+
+
+        for (unsigned i = 0; i < 150000; ++i)
+        {
+            bvect2.set_bit(i);
+            bvect_min2.set_bit(i);
+        }
+
+        BM_DECLARE_TEMP_BLOCK(tb)
+        bvect2.optimize(tb);
+
+        bvect::size_type predicted_count = bm::count_xor(bvect1, bvect2);
+        auto predicted_any = bm::any_xor(bvect1, bvect2);
+        if (predicted_any == 0 && predicted_count != 0)
+        {
+            cout << "Predicted any error!" << endl;
+            assert(0); exit(1);
+        }
+
+        bvect    bv_target_s;
+        SerializationOperation2Test(&bv_target_s,
+                                    bvect1,
+                                    bvect2,
+                                    predicted_count,
+                                    set_COUNT_XOR,
+                                    set_XOR);
+
+        bvect1.bit_xor(bvect2);
+        
+        bvect::size_type count = bvect1.count();
+        if (count != predicted_count)
+        {
+            cout << "2.Predicted count error!" << endl;
+            exit(1);
+        }
+        
+        bvect_min1.combine_xor(bvect_min2);
+        CheckVectors(bvect_min1, bvect1, BITVECT_SIZE, true);
+        CheckVectors(bvect_min1, bv_target_s, BITVECT_SIZE, true);
+    }
+    
+    {
+        bvect bv1;
+        bvect bv2;
+        bv1.flip();
+        bv2.flip();
+        bv1.bit_xor(bv2);
+        auto cnt2 = bv1.count();
+        assert(0 == cnt2);
+        struct bvect::statistics st;
+        bv1.calc_stat(&st);
+        auto bcnt = st.bit_blocks + st.gap_blocks;
+        assert(bcnt == 0);
+    }
+
+
+    {
+        bvect  bvect1;
+        bvect_mini  bvect_min1(BITVECT_SIZE);
+
+        bvect  bvect2;
+        bvect_mini  bvect_min2(BITVECT_SIZE);
+
+
+        for (unsigned i = 0; i < 150000; ++i)
+        {
+            bvect1.set_bit(i);
+            bvect_min1.set_bit(i);
+        }
+
+        BM_DECLARE_TEMP_BLOCK(tb)
+        bvect1.optimize(tb);
+        
+        bvect::size_type predicted_count = bm::count_xor(bvect1, bvect2);
+        auto predicted_any = bm::any_xor(bvect1, bvect2);
+        if (predicted_any == 0 && predicted_count != 0)
+        {
+            cout << "Predicted any error!" << endl;
+            assert(0); exit(1);
+        }
+
+        bvect    bv_target_s;
+        SerializationOperation2Test(&bv_target_s,
+                                    bvect1,
+                                    bvect2,
+                                    predicted_count,
+                                    set_COUNT_XOR,
+                                    set_XOR);
+
+        bvect1.bit_xor(bvect2);
+
+        auto count = bvect1.count();
+        if (count != predicted_count)
+        {
+            cout << "3.Predicted count error!" << endl;
+            exit(1);
+        }
+        
+        bvect_min1.combine_xor(bvect_min2);
+        CheckVectors(bvect_min1, bvect1, BITVECT_SIZE, true);
+        CheckVectors(bvect_min1, bv_target_s, BITVECT_SIZE, true);
+    }
+
+
+    {
+        bvect  bvect1;
+        bvect_mini  bvect_min1(BITVECT_SIZE);
+
+        bvect  bvect2;
+        bvect_mini  bvect_min2(BITVECT_SIZE);
+
+
+        for (unsigned i = 0; i < 150000; ++i)
+        {
+            bvect1.set_bit(i);
+            bvect_min1.set_bit(i);
+            bvect2.set_bit(i);
+            bvect_min2.set_bit(i);
+        }
+
+        BM_DECLARE_TEMP_BLOCK(tb)
+        bvect1.optimize(tb);
+        
+        bvect::size_type predicted_count = bm::count_xor(bvect1, bvect2);
+        auto predicted_any = bm::any_xor(bvect1, bvect2);
+        if (predicted_any == 0 && predicted_count != 0)
+        {
+            cout << "Predicted any error!" << endl;
+            exit(1);
+        }
+
+        bvect    bv_target_s;
+        SerializationOperation2Test(&bv_target_s,
+                                    bvect1,
+                                    bvect2,
+                                    predicted_count,
+                                    set_COUNT_XOR,
+                                    set_XOR);
+
+        bvect1.bit_xor(bvect2);
+
+        bvect::size_type count = bvect1.count();
+        if (count != predicted_count)
+        {
+            cout << "4.Predicted count error!" << endl;
+            cout << count << " " << predicted_count << endl;
+            assert(0);
+            exit(1);
+        }
+        
+        bvect_min1.combine_xor(bvect_min2);
+        CheckVectors(bvect_min1, bvect1, BITVECT_SIZE, true);
+    }
+
+
+
+    {
+        bvect_mini   bvect_min1(BITVECT_SIZE);
+        bvect_mini   bvect_min2(BITVECT_SIZE);
+        bvect        bvect_full1;
+        bvect        bvect_full2;
+
+        bvect_full1.set_new_blocks_strat(bm::BM_GAP);
+        bvect_full2.set_new_blocks_strat(bm::BM_GAP);
+
+        printf("XOR test stage 2.\n");
+
+        FillSets(&bvect_min1, &bvect_full1, 1ull, BITVECT_SIZE/7, 0ull);
+        FillSets(&bvect_min2, &bvect_full2, 1ull, BITVECT_SIZE/7, 0ull);
+
+        bvect_min1.combine_xor(bvect_min2);
+        
+        bvect::size_type predicted_count = bm::count_xor(bvect_full1, bvect_full2);
+        auto predicted_any = bm::any_xor(bvect_full1, bvect_full2);
+        if (predicted_any == 0 && predicted_count != 0)
+        {
+            cout << "Predicted any error!" << endl;
+            exit(1);
+        }
+
+        bvect    bv_target_s;
+        SerializationOperation2Test(&bv_target_s,
+                                    bvect_full1,
+                                    bvect_full2,
+                                    predicted_count,
+                                    set_COUNT_XOR,
+                                    set_XOR);
+
+
+        bvect_full1.bit_xor(bvect_full2);
+        
+        bvect::size_type count = bvect_full1.count();
+        if (count != predicted_count)
+        {
+            cout << "5.Predicted count error!" << endl;
+            cout << count << " " << predicted_count << endl;
+            print_stat(bvect_full1);
+            exit(1);
+        }
+
+        CheckVectors(bvect_min1, bvect_full1, BITVECT_SIZE/10+10, true);
+        CheckVectors(bvect_min1, bv_target_s, BITVECT_SIZE/10+10, true);
+
+    }
+
+    {
+        bvect_mini   bvect_min1(BITVECT_SIZE);
+        bvect_mini   bvect_min2(BITVECT_SIZE);
+        bvect        bvect_full1;
+        bvect        bvect_full2;
+
+        bvect_full1.set_new_blocks_strat(bm::BM_BIT);
+        bvect_full2.set_new_blocks_strat(bm::BM_BIT);
+
+        cout << "------------------------------" << endl;
+        printf("XOR test stage 3.\n");
+
+
+        FillSets(&bvect_min1, &bvect_full1, 1ull, BITVECT_SIZE, 2ull);
+        FillSets(&bvect_min2, &bvect_full2, 1ull, BITVECT_SIZE, 2ull);
+
+        bvect::size_type predicted_count = bm::count_xor(bvect_full1, bvect_full2);
+        auto predicted_any = bm::any_xor(bvect_full1, bvect_full2);
+        if (predicted_any == 0 && predicted_count != 0)
+        {
+            cout << "Predicted any error!" << endl;
+            assert(0);
+            exit(1);
+        }
+
+        bvect    bv_target_s;
+        SerializationOperation2Test(&bv_target_s,
+                                    bvect_full1,
+                                    bvect_full2,
+                                    predicted_count,
+                                    set_COUNT_XOR,
+                                    set_XOR);
+
+        bvect_min1.combine_xor(bvect_min2);
+
+        bvect_full1.bit_xor(bvect_full2);
+
+        bvect::size_type count = bvect_full1.count();
+        if (count != predicted_count)
+        {
+            cout << "6.Predicted count error!" << endl;
+            exit(1);
+        }
+
+        CheckVectors(bvect_min1, bvect_full1, BITVECT_SIZE, true);
+
+        BM_DECLARE_TEMP_BLOCK(tb)
+        bvect_full1.optimize(tb);
+        CheckVectors(bvect_min1, bvect_full1, BITVECT_SIZE, true);
+        CheckVectors(bvect_min1, bv_target_s, BITVECT_SIZE, true);
+    }
+
+
+    cout << "Testing combine_xor" << endl;
+    
+    {
+        bvect        bvect_full1;
+        bvect        bvect_full2;
+        bvect_mini   bvect_min1(BITVECT_SIZE);
+        
+        bvect_full1.set_new_blocks_strat(bm::BM_GAP);
+        bvect_full2.set_new_blocks_strat(bm::BM_GAP);
+
+        bvect::size_type ids[10000];
+        unsigned to_add = 10000;
+        
+        bvect::size_type bn = bm::id_max32;
+        for (unsigned i = 0; i < to_add; ++i)
+        {
+            ids[i] = bn;
+            bvect_full2.set(bn);
+            bvect_min1.set_bit(bn);
+            bn += 15;
+        }
+        
+        bvect::size_type* first = ids;
+        bvect::size_type* last = ids + to_add;
+        
+        bm::combine_xor(bvect_full1, first, last);
+
+        CheckVectors(bvect_min1, bvect_full1, BITVECT_SIZE, true);
+        
+        bm::combine_xor(bvect_full1, first, last);
+        if (bvect_full1.count())
+        {
+            cout << "combine_xor count failed!" << endl;
+            assert(0);
+            exit(1);
+        }
+    }
+
+    {
+        bvect        bvect_full1;
+        bvect        bvect_full2;
+        bvect_mini   bvect_min1(BITVECT_SIZE);
+        
+        bvect_full1.set_new_blocks_strat(bm::BM_GAP);
+        bvect_full2.set_new_blocks_strat(bm::BM_GAP);
+
+        bvect::size_type ids[10000]={0,};
+        bvect::size_type to_add = 10000;
+        for (bvect::size_type i = 0; i < to_add; i+=100)
+        {
+            ids[i] = bm::id_max32 + i;
+            bvect_full2.set(bm::id_max32 + i);
+            bvect_min1.set_bit(bm::id_max32 + i);
+        }
+        bvect::size_type* first = ids;
+        bvect::size_type* last = ids + to_add;
+        
+        bm::combine_xor(bvect_full1, first, last);
+
+        CheckVectors(bvect_min1, bvect_full1, BITVECT_SIZE, true);
+        
+        bm::combine_xor(bvect_full1, first, last);
+        if (bvect_full1.count())
+        {
+            cout << "combine_xor count failed!" << endl;
+            exit(1);
+        }
+    }
+
+    
+    {
+        bvect::size_type ids[] = {0, 65536, 65535, 65535*3, 65535*2, 10};
+        unsigned to_add = sizeof(ids)/sizeof(bvect::size_type);
+        bvect        bvect_full1;
+        bvect        bvect_full2;
+        bvect_mini   bvect_min1(BITVECT_SIZE);
+
+        bvect_full1.set_new_blocks_strat(bm::BM_BIT);
+        bvect_full2.set_new_blocks_strat(bm::BM_BIT);
+        
+        bvect::size_type bn = 0;
+        for (unsigned i = 0; i < to_add; ++i)
+        {
+            ids[i] = bn;
+            bvect_full2.set(bn);
+            bvect_min1.set_bit(bn);
+            bn += 15;
+        }
+        
+        bvect::size_type* first = ids;
+        bvect::size_type* last = ids + to_add;
+        
+        bm::combine_xor(bvect_full1, first, last);
+        CheckVectors(bvect_min1, bvect_full1, BITVECT_SIZE, true);
+
+        bm::combine_xor(bvect_full1, first, last);
+        if (bvect_full1.count())
+        {
+            cout << "combine_xor count failed!" << endl;
+            assert(0); exit(1);
+        }
+    }
+    
+    
+    {
+        bvect::size_type ids[] = {0, 65536, 65535, 65535*3, 65535*2, 10};
+        unsigned to_add = sizeof(ids)/sizeof(bvect::size_type);
+        bvect        bvect_full1;
+        bvect        bvect_full2;
+        bvect_mini   bvect_min1(BITVECT_SIZE);
+
+        bvect_full1.set_new_blocks_strat(bm::BM_GAP);
+        bvect_full2.set_new_blocks_strat(bm::BM_GAP);
+        
+        bvect::size_type bn = bm::id_max32;
+        for (unsigned i = 0; i < to_add; ++i)
+        {
+            ids[i] = bn;
+            bvect_full2.set(bn);
+            bvect_min1.set_bit(bn);
+            bn += 15;
+        }
+        
+        bvect::size_type* first = ids;
+        bvect::size_type* last = ids + to_add;
+        
+        bm::combine_xor(bvect_full1, first, last);
+        CheckVectors(bvect_min1, bvect_full1, BITVECT_SIZE, true);
+
+        bm::combine_xor(bvect_full1, first, last);
+        if (bvect_full1.count())
+        {
+            cout << "combine_xor count failed!" << endl;
+            exit(1);
+        }
+    }
+    
+    
+    // ------------------------------------------
+    // 2-way XOR
+    //
+    {
+        bvect        bv1 { 0, 1 };
+        bvect        bv2;
+        bv2.bit_xor(bv1, bv2, bvect::opt_compress);
+        int cmp = bv1.compare(bv2);
+        assert(cmp == 0);
+    }
+
+    {
+        bvect        bv1 { 0, 1 };
+        bvect        bv2 { 2, 3 };
+        bvect bv1c(bv1);
+        bv1c.bit_xor(bv2);
+
+        bvect bv;
+        bv.bit_xor(bv1, bv2, bvect::opt_compress);
+        int cmp = bv.compare(bv1c);
+        assert(cmp == 0);
+        struct bvect::statistics st1;
+        bv.calc_stat(&st1);
+        assert(!st1.bit_blocks);
+        assert(st1.gap_blocks == 1);
+    }
+    
+    {
+        bvect        bv1;
+        bvect        bv2;
+        for (unsigned i = 2; i < 65536; ++i)
+        {
+            bv1.set(i);
+            bv2.set(i);
+        }
+        
+        bvect bv1c(bv1);
+        bv1c.bit_xor(bv2);
+
+        bvect bv;
+        bv.bit_xor(bv1, bv2, bvect::opt_none); // should detect 0 automatically
+        int cmp = bv.compare(bv1c);
+        assert(cmp == 0);
+        struct bvect::statistics st1;
+        bv.calc_stat(&st1);
+        assert(!st1.bit_blocks);
+        assert(!st1.gap_blocks);
+    }
+    
+    {
+        bvect        bv1 { 0, 1 };
+        bvect        bv2 { 1 };
+        bv1.clear(0); bv1.clear(1);
+        bv2.clear(1);
+        
+        bvect bv;
+        bv.bit_xor(bv1, bv2, bvect::opt_none); // should detect FULL automatically
+
+        struct bvect::statistics st1;
+        bv.calc_stat(&st1);
+        assert(!st1.bit_blocks);
+        assert(!st1.gap_blocks);
+        assert(!st1.ptr_sub_blocks);
+    }
+
+
+    
+    {
+        bvect        bv1 { 0, 1 };
+        bvect        bv2 { 2, 3 };
+        bv2.optimize();
+        bvect bv1c(bv1);
+        bv1c.bit_xor(bv2);
+
+        {
+            bvect bv;
+            bv.bit_xor(bv1, bv2, bvect::opt_compress);
+            int cmp = bv.compare(bv1c);
+            if (cmp != 0)
+            {
+                DetailedCompareBVectors(bv, bv1c);
+            }
+            assert(cmp == 0);
+        }
+        bv1.optimize();
+        {
+            bvect bv;
+            bv.bit_xor(bv1, bv2, bvect::opt_compress);
+            int cmp = bv.compare(bv1c);
+            assert(cmp == 0);
+        }
+        bv1.clear();
+        bv2.clear();
+        bv2.invert();
+        {
+            bvect bv;
+            bv.bit_xor(bv1, bv2, bvect::opt_compress);
+            int cmp = bv.compare(bv2);
+            assert(cmp == 0);
+        }
+    }
+
+    {
+        bvect        bvect_full1;
+        bvect        bvect_full2;
+        bvect_full1.invert();
+        bvect_full2.set();
+        
+        {
+        bvect    bv_target_s;
+        bv_target_s.bit_xor(bvect_full1, bvect_full2, bvect::opt_none);
+        auto b = bv_target_s.none();
+        assert(b);
+        }
+    }
+
+    {
+        bvect        bv1;
+        bvect        bv2;
+        bv1.invert();
+        bv2.set();
+        bv2.set(bm::id_max/2, false);
+        
+        {
+            bvect    bv_s;
+            bv_s.bit_xor(bv1, bv2, bvect::opt_none);
+            auto cnt = bv_s.count();
+            assert(cnt == 1);
+            assert(bv_s.test(bm::id_max/2));
+        }
+        {
+            bvect    bv_s;
+            bv_s.bit_xor(bv2, bv1, bvect::opt_none);
+            auto cnt = bv_s.count();
+            assert(cnt == 1);
+            assert(bv_s.test(bm::id_max/2));
+        }
+        bv1.bit_xor(bv2);
+        auto cnt = bv1.count();
+        assert(cnt == 1);
+        assert(bv1.test(bm::id_max/2));
+    }
+}
+
+
+static
+void SubOperationsTest()
+{
+    const bvect::size_type BITVECT_SIZE = bm::id_max32 * 2;
+    assert(ITERATIONS < BITVECT_SIZE);
+
+    cout << "----------------------------------- SubOperationTest" << endl;
+
+    {
+        bvect bv_i0;
+        bv_i0.invert();
+        bvect bv_i1;
+        bv_i1.invert();
+        auto cnt = bm::count_sub(bv_i0, bv_i1);
+        assert(!cnt);
+        auto predicted_any = bm::any_sub(bv_i0, bv_i1);
+        assert(!predicted_any);
+    }
+
+    {
+        ref_vect vect;
+        generate_vect_simpl0(vect);
+
+        bvect bv0;
+        load_BV_set_ref(bv0, vect);
+        bvect bv1(bv0);
+        
+        {
+            bvect bv3;
+            bv3.bit_sub(bv0, bv1, bvect::opt_compress);
+            assert(!bv3.count());
+            assert(!bv3.any());
+            
+            bvect bv4;
+            int cmp = bv4.compare(bv3);
+            assert(cmp == 0);
+            
+            bv3 = bv0;
+            bv3 -= bv1;
+            assert(!bv3.count());
+            assert(!bv3.any());
+            cmp = bv4.compare(bv3);
+            assert(cmp == 0);
+        }
+        
+        bvect bv_i;
+        bv_i.invert();
+ 
+        for (unsigned i = 0; i < 2; ++i)
+        {
+            bvect::size_type predicted_count = bm::count_sub(bv0, bv1);
+            assert(predicted_count == 0);
+            auto predicted_any = bm::any_sub(bv1, bv0);
+            assert(!predicted_any);
+
+            predicted_count = bm::count_sub(bv0, bv_i);
+            assert(predicted_count == 0);
+            
+            {
+                bvect bv3(bv_i);
+                clear_BV_set_ref(bv3, vect);
+                bvect bv4(bv_i);
+                bv4 -= bv0;
+                
+                int cmp = bv3.compare(bv4);
+                assert(cmp == 0);
+                
+                predicted_count = bm::count_sub(bv4, bv3);
+                assert(!predicted_count);
+                
+                auto pany = bm::any_sub(bv4, bv3);
+                assert(!pany);
+            }
+            
+            bv0.optimize();
+            bv1.optimize();
+        } // for
+        
+    }
+
+    {
+        cout << "\n48-bit large set difference test" << endl;
+        cout << "generation..." << endl;
+        ref_vect vect0;
+        generate_vect48(vect0);
+        bvect bv0;
+        load_BV_set_ref(bv0, vect0);
+        compare_BV_set_ref(bv0, vect0);
+
+        ref_vect vect1;
+        generate_vect48(vect1);
+        bvect bv1;
+        load_BV_set_ref(bv1, vect1);
+        compare_BV_set_ref(bv1, vect1);
+        cout << "ok\n" << endl;
+
+        ref_vect vect_i;
+        std::set_difference(vect0.begin(), vect0.end(),
+                            vect1.begin(), vect1.end(),
+                            std::back_inserter(vect_i));
+        {
+            bvect bv_i(bv0);
+            bv_i.bit_sub(bv1);
+            compare_BV_set_ref(bv_i, vect_i);
+        }
+        bv0.optimize();
+        {
+            bvect bv_i(bv0);
+            bv_i.bit_sub(bv1);
+            compare_BV_set_ref(bv_i, vect_i);
+        }
+        bv1.optimize();
+        {
+            bvect bv_i(bv0);
+            bv_i.bit_sub(bv1);
+            compare_BV_set_ref(bv_i, vect_i);
+        }
+        bvect bvt;
+        SerializationOperation2Test(&bvt,
+                                    bv0,
+                                    bv1,
+                                    vect_i.size(),
+                                    set_COUNT_SUB_AB,
+                                    set_SUB);
+    }
+
+
+
+    {
+        bvect_mini   bvect_min1(BITVECT_SIZE);
+        bvect_mini   bvect_min2(BITVECT_SIZE);
+        bvect        bvect_full1;
+        bvect        bvect_full2;
+
+        bvect_full1.set_new_blocks_strat(bm::BM_GAP);
+        bvect_full2.set_new_blocks_strat(bm::BM_GAP);
+
+
+        printf("SUB test\n");
+
+        bvect_min1.set_bit(1);
+        bvect_min1.set_bit(12);
+        bvect_min1.set_bit(bm::id_max32+13);
+
+        bvect_min2.set_bit(12);
+        bvect_min2.set_bit(bm::id_max32+13);
+
+        bvect_min1.combine_sub(bvect_min2);
+
+        bvect_full1.set_bit(1);
+        bvect_full1.set_bit(12);
+        bvect_full1.set_bit(bm::id_max32+13);
+
+        bvect_full2.set_bit(12);
+        bvect_full2.set_bit(bm::id_max32+13);
+
+        auto predicted_count = bm::count_sub(bvect_full1, bvect_full2);
+        auto predicted_any = bm::any_sub(bvect_full1, bvect_full2);
+        if (predicted_any == 0 && predicted_count != 0)
+        {
+            cout << "Predicted any error!" << endl;
+            assert(0);
+            exit(1);
+        }
+
+        bvect    bv_target_s;
+        SerializationOperation2Test(&bv_target_s,
+                                    bvect_full1,
+                                    bvect_full2,
+                                    predicted_count,
+                                    set_COUNT_SUB_AB,
+                                    set_SUB);
+
+
+        bvect_full1.bit_sub(bvect_full2);
+        
+        auto count = bvect_full1.count();
+        if (count != predicted_count)
+        {
+            cout << "Predicted count error!" << endl;
+            assert(0);exit(1);
+        }
+
+        CheckVectors(bvect_min1, bvect_full1, 256, true);
+        CheckVectors(bvect_min1, bv_target_s, 256, true);
+    }
+
+    {
+        bvect_mini   bvect_min1(BITVECT_SIZE);
+        bvect_mini   bvect_min2(BITVECT_SIZE);
+        bvect        bvect_full1;
+        bvect        bvect_full2;
+
+        bvect_full1.set_new_blocks_strat(bm::BM_GAP);
+        bvect_full2.set_new_blocks_strat(bm::BM_GAP);
+
+        printf("SUB test stage 2.\n");
+
+        FillSets(&bvect_min1, &bvect_full1, 1ull, BITVECT_SIZE/7, 0ull);
+        FillSets(&bvect_min2, &bvect_full2, 1ull, BITVECT_SIZE/7, 0ull);
+
+        bvect_min1.combine_sub(bvect_min2);
+
+        auto predicted_count = bm::count_sub(bvect_full1, bvect_full2);
+        auto predicted_any = bm::any_sub(bvect_full1, bvect_full2);
+        if (predicted_any == 0 && predicted_count != 0)
+        {
+            cout << "Predicted any error!" << endl;
+            assert(0);exit(1);
+        }
+
+        bvect    bv_target_s;
+        SerializationOperation2Test(&bv_target_s,
+                                    bvect_full1,
+                                    bvect_full2,
+                                    predicted_count,
+                                    set_COUNT_SUB_AB,
+                                    set_SUB);
+
+        bvect_full1.bit_sub(bvect_full2);
+        
+        auto count = bvect_full1.count();
+        if (count != predicted_count)
+        {
+            cout << "Predicted count error!" << endl;
+            cout << predicted_count << " " << count << endl;
+            print_stat(bvect_full1);
+            assert(0);
+            exit(1);
+        }
+        CheckVectors(bvect_min1, bvect_full1, BITVECT_SIZE/10+10, true);
+        CheckVectors(bvect_min1, bv_target_s, BITVECT_SIZE/10+10, true);
+
+    }
+
+    {
+
+        bvect_mini   bvect_min1(BITVECT_SIZE);
+        bvect_mini   bvect_min2(BITVECT_SIZE);
+        bvect        bvect_full1;
+        bvect        bvect_full2;
+
+        bvect_full1.set_new_blocks_strat(bm::BM_BIT);
+        bvect_full2.set_new_blocks_strat(bm::BM_BIT);
+
+        cout << "------------------------------" << endl;
+        printf("SUB test stage 3.\n");
+
+
+        FillSets(&bvect_min1, &bvect_full1, 1ull, BITVECT_SIZE/5, 2ull);
+        FillSets(&bvect_min2, &bvect_full2, 1ull, BITVECT_SIZE/5, 2ull);
+
+        bvect_min1.combine_sub(bvect_min2);
+        
+        auto predicted_count = bm::count_sub(bvect_full1, bvect_full2);
+        auto predicted_any = bm::any_sub(bvect_full1, bvect_full2);
+        if (predicted_any == 0 && predicted_count != 0)
+        {
+            cout << "Predicted any error!" << endl;
+            assert(0);exit(1);
+        }
+
+        bvect    bv_target_s;
+        SerializationOperation2Test(&bv_target_s,
+                                    bvect_full1,
+                                    bvect_full2,
+                                    predicted_count,
+                                    set_COUNT_SUB_AB,
+                                    set_SUB);
+
+        bvect_full1.bit_sub(bvect_full2);
+
+        auto count = bvect_full1.count();
+        if (count != predicted_count)
+        {
+            cout << "Predicted count error!" << endl;
+            exit(1);
+        }
+
+
+        CheckVectors(bvect_min1, bvect_full1, BITVECT_SIZE, true);
+
+        BM_DECLARE_TEMP_BLOCK(tb)
+        bvect_full1.optimize(tb);
+        CheckVectors(bvect_min1, bvect_full1, BITVECT_SIZE, true);
+        CheckVectors(bvect_min1, bv_target_s, BITVECT_SIZE, true);
+    }
+    
+    
+    // ------------------------------------------
+    // 2-way SUB
+    //
+
+    {
+        bvect        bv1 { 0, 1 };
+        bvect        bv2 { 1, 3 };
+        bvect bv1c(bv1);
+        bv1c.bit_sub(bv2);
+
+        bvect bv;
+        bv.bit_sub(bv1, bv2, bvect::opt_compress);
+        int cmp = bv.compare(bv1c);
+        assert(cmp == 0);
+        struct bvect::statistics st1;
+        bv.calc_stat(&st1);
+        assert(!st1.bit_blocks);
+        assert(st1.gap_blocks == 1);
+    }
+    
+    {
+        bvect        bv1 { 0, 1 };
+        bvect        bv2;
+        for (unsigned i = 0; i < 65536; ++i)
+            bv2.set(i);
+        
+        bvect bv1c(bv1);
+        bv1c.bit_sub(bv2);
+
+        bvect bv;
+        bv.bit_sub(bv1, bv2, bvect::opt_none); // should detect 0 automatically
+        int cmp = bv.compare(bv1c);
+        assert(cmp == 0);
+        struct bvect::statistics st1;
+        bv.calc_stat(&st1);
+        assert(!st1.bit_blocks);
+        assert(!st1.gap_blocks);
+    }
+    
+    {
+        bvect        bv1 { 0, 1 };
+        bvect        bv2 { 1 };
+        bv1.clear(0); bv1.clear(1);
+        bv2.clear(1);
+        
+        bvect bv;
+        bv.bit_or(bv1, bv2, bvect::opt_none); // should detect 0 automatically
+
+        struct bvect::statistics st1;
+        bv.calc_stat(&st1);
+        assert(!st1.bit_blocks);
+        assert(!st1.gap_blocks);
+        assert(!st1.ptr_sub_blocks);
+    }
+    
+    {
+        bvect        bv1 { 0, 1 };
+        bvect        bv2 { 1, 3 };
+        bv1.optimize();
+        bvect bv1c(bv1);
+        bv1c.bit_sub(bv2);
+
+        {
+            bvect bv;
+            bv.bit_sub(bv1, bv2, bvect::opt_compress);
+            int cmp = bv.compare(bv1c);
+            assert(cmp == 0);
+        }
+        bv2.optimize();
+        {
+            bvect bv;
+            bv.bit_sub(bv1, bv2, bvect::opt_compress);
+            int cmp = bv.compare(bv1c);
+            assert(cmp == 0);
+        }
+        bv2.clear();
+        bv2.invert();
+        {
+            bvect bv;
+            bv.bit_sub(bv1, bv2, bvect::opt_compress);
+            assert(!bv.any());
+        }
+    }
+    
+    {
+        bvect        bvect_full1;
+        bvect        bvect_full2;
+        bvect_full1.invert();
+        bvect_full2.set();
+        
+        {
+        bvect    bv_target_s;
+        bv_target_s.bit_sub(bvect_full1, bvect_full2, bvect::opt_none);
+        auto b = bv_target_s.none();
+        assert(b);
+        }
+    }
+
+    {
+        bvect        bv1;
+        bvect        bv2;
+        bv1.invert();
+        bv2.set();
+        bv2.set(0, false);
+        
+        {
+            bvect    bv_s;
+            bv_s.bit_sub(bv1, bv2, bvect::opt_none);
+            auto cnt = bv_s.count();
+            assert(cnt == 1);
+            assert(bv1.test(bm::id_max/2));
+        }
+        {
+            bvect    bv_s;
+            bv_s.bit_sub(bv2, bv1, bvect::opt_none);
+            auto cnt = bv_s.count();
+            assert(cnt == 0);
+        }
+        bv1 -= bv2;
+        auto cnt = bv1.count();
+        assert(cnt == 1);
+        assert(bv1.test(0));
+    }
+
+    cout << "----------------------------------- SubOperationTest OK" << endl;
+}
 
 
 
@@ -6644,12 +8314,11 @@ int main(int argc, char *argv[])
     }
     if (is_all || is_bvops)
     {
-
         AndOperationsTest();
-/*        OrOperationsTest();
+        OrOperationsTest();
         XorOperationsTest();
         SubOperationsTest();
-
+/*
         StressTest(120, 0); // OR
         StressTest(120, 3); // AND
         StressTest(120, 1); // SUB

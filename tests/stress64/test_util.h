@@ -32,6 +32,21 @@ void load_BV_set_ref(BV& bv, const VT& vect, bool print_stat = true)
         print_bvector_stat(bv);
 }
 
+/// Load bit-vector using ref syntax
+///
+template<typename BV, typename VT>
+void clear_BV_set_ref(BV& bv, const VT& vect, bool print_stat = true)
+{
+    for (auto it = vect.begin(); it != vect.end(); ++it)
+    {
+        auto v = *it;
+        bv[v] = false;
+    }
+    if (print_stat)
+        print_bvector_stat(bv);
+}
+
+
 
 /// CMP bit-vector using ref syntax
 ///
