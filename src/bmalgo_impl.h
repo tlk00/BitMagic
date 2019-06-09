@@ -711,7 +711,7 @@ void distance_operation(const BV& bv1,
     distance_stage(dmit, dmit_end, &is_all_and);
 
     bm::word_t*** blk_root = bman1.top_blocks_root();
-    unsigned block_idx = 0;
+    typename BV::size_type block_idx = 0;
     unsigned i, j;
     
     const bm::word_t* blk;
@@ -952,7 +952,7 @@ void distance_operation_any(const BV& bv1,
                                              dmit, dmit_end);
             
             // check if all distance requests alredy resolved
-            bool all_resolved = false;
+            bool all_resolved = true;
             distance_metric_descriptor* it=dmit;
             do
             {
@@ -1154,7 +1154,7 @@ void combine_or(BV& bv, It  first, It last)
 
     while (first < last)
     {
-        size_type nblock = (*first) >> bm::set_block_shift;
+        typename BV::block_idx_type nblock = (*first) >> bm::set_block_shift;
         It right = bm::block_range_scan(first, last, nblock, &max_id);
         if (max_id >= bv.size())
         {
@@ -1230,11 +1230,11 @@ void combine_xor(BV& bv, It  first, It last)
     if (!bman.is_init())
         bman.init_tree();
     
-    unsigned max_id = 0;
+    typename BV::size_type max_id = 0;
 
     while (first < last)
     {
-        unsigned nblock = unsigned((*first) >> bm::set_block_shift);     
+        typename BV::block_idx_type nblock = ((*first) >> bm::set_block_shift);
         It right = block_range_scan(first, last, nblock, &max_id);
 
         if (max_id >= bv.size())

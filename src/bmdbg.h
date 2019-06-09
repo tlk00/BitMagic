@@ -541,6 +541,7 @@ unsigned compute_serialization_size(const BV& bv)
 template<class SV>
 void print_svector_stat(const SV& svect, bool print_sim = false)
 {
+    typedef typename SV::bvector_type bvector_type;
     /// Functor to compute jaccard similarity
     /// \internal
     struct Jaccard_Func
@@ -550,10 +551,10 @@ void print_svector_stat(const SV& svect, bool print_sim = false)
         {
             double d;
             BM_ASSERT(dmit->metric == COUNT_AND);
-            unsigned cnt_and = dmit->result;
+            typename bvector_type::size_type cnt_and = dmit->result;
             ++dmit;
             BM_ASSERT(dmit->metric == COUNT_OR);
-            unsigned cnt_or = dmit->result;
+            typename bvector_type::size_type cnt_or = dmit->result;
             if (cnt_and == 0 || cnt_or == 0)
             {
                 d = 0.0;
@@ -568,7 +569,6 @@ void print_svector_stat(const SV& svect, bool print_sim = false)
         }
     };
 
-    typedef typename SV::bvector_type bvector_type;
     typedef  bm::similarity_descriptor<bvector_type, 2, unsigned, unsigned, Jaccard_Func> similarity_descriptor_type;
     typedef bm::similarity_batch<similarity_descriptor_type> similarity_batch_type;
     

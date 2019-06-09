@@ -2331,14 +2331,6 @@ private:
                              size_type right);
 
 private:
-    /**
-       \brief Extends GAP block to the next level or converts it to bit block.
-       \param nb - Block's linear index.
-       \param blk - Blocks's pointer 
-    */
-    /*
-    void extend_gap_block(block_idx_type nb, gap_word_t* blk)
-                                    { blockman_.extend_gap_block(nb, blk); } */
 
     /**
        \brief Set range without validity/bouds checking

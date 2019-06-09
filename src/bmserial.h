@@ -1825,7 +1825,7 @@ unsigned deserializer<BV, DEC>::deserialize(bvector_type&        bv,
         } // switch
     } // for i
 
-    bv.forget_count();
+//    bv.forget_count();
     bv.set_new_blocks_strat(strat);
 
     return dec.size();
@@ -3500,7 +3500,7 @@ iterator_deserializer<BV, SerialIterator>::deserialize(
         bman.init_tree();
     }
 
-    bv.forget_count();
+//    bv.forget_count();
     if (sit.bv_size() && (sit.bv_size() > bv.size())) 
     {
         bv.resize(sit.bv_size());
@@ -3516,7 +3516,7 @@ iterator_deserializer<BV, SerialIterator>::deserialize(
         return count;
     }
 
-    unsigned bv_block_idx = 0;
+    size_type bv_block_idx = 0;
 
     for (;1;)
     {
@@ -3797,9 +3797,7 @@ iterator_deserializer<BV, SerialIterator>::deserialize(
                 {
                     bman.get_block_coord(bv_block_idx, i0, j0);
                     blk = bman.get_block_ptr(i0, j0);
-
-                    //blk = bman.get_block(bv_block_idx);
-                    if (blk) 
+                    if (blk)
                     {
                         bool z = bm::check_block_zero(blk, true/*deep check*/);
                         if (!z) 
@@ -3816,6 +3814,7 @@ iterator_deserializer<BV, SerialIterator>::deserialize(
         } // switch
 
         ++bv_block_idx;
+        BM_ASSERT(bv_block_idx);
 
     } // for (deserialization)
 
