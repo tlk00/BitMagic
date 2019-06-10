@@ -62,7 +62,7 @@ int main(void)
         // 
         {
             bm::bvector<>::bulk_insert_iterator bulk_iit(bv);
-            for (unsigned i = 5; i != 0; --i)
+            for (bm::bvector<>::size_type i = 5; i != 0; --i)
             {
                 bulk_iit = i;
                 cout << bv.count() << ", ";  // note that bits are NOT added immediately
@@ -78,7 +78,7 @@ int main(void)
         // 
         {
             bm::bvector<>::bulk_insert_iterator bulk_iit(bv);
-            for (unsigned i = 0; i < 5; ++i)
+            for (bm::bvector<>::size_type i = 0; i < 5; ++i)
                 bulk_iit = i;
             cout << bv.count() << endl; // not added yet
             bulk_iit.flush();           // force bulk iterator to submit the data
@@ -91,7 +91,6 @@ int main(void)
         std::cerr << ex.what() << std::endl;
         return 1;
     }
-    
 
     return 0;
 }

@@ -50,6 +50,7 @@ For more information please visit:  http://bitmagic.io
 #include <iostream>
 #include <vector>
 
+
 #include "bm.h"
 #include "bmalgo.h"
 #include "bmserial.h"
@@ -62,7 +63,7 @@ using namespace std;
 static
 void print_bvector(const bm::bvector<>& bv)
 {
-    bm::id_t cnt = 0;
+    bm::bvector<>::size_type cnt = 0;
     bm::bvector<>::enumerator en = bv.first();
     for (; en.valid() && cnt < 10; ++en, ++cnt)
         cout << *en << ", ";
@@ -94,6 +95,8 @@ void make_BLOB(vector<unsigned char>& target_buf, bm::bvector<>& bv)
 static
 void DemoOR()
 {
+    typedef bm::bvector<>::size_type size_type;
+
     // bit-vector set union operation: bv_A |= bv_B
     {
         bm::bvector<>   bv_A { 1, 2, 3 };
@@ -149,7 +152,7 @@ void DemoOR()
     // Set union between bit-vector and STL container
     {
         bm::bvector<>      bv_A { 1, 2, 3 };
-        vector<unsigned>   vect_B { 1, 2, 4 };
+        vector<size_type>   vect_B { 1, 2, 4 };
         
         bm::combine_or(bv_A, vect_B.begin(), vect_B.end());
         print_bvector(bv_A); // 1, 2, 3, 4
@@ -160,9 +163,9 @@ void DemoOR()
     // and in SIMD enabled configurations
     {
         bm::bvector<>      bv_A { 1, 2, 3 };
-        vector<unsigned>   vect_B { 1, 2, 4 };
+        vector<size_type>   vect_B { 1, 2, 4 };
         
-        const unsigned* arr = &vect_B[0];
+        const size_type* arr = &vect_B[0];
         bv_A.set(arr, unsigned(vect_B.size()), bm::BM_SORTED); // sorted - fastest
         print_bvector(bv_A); // 1, 2, 3, 4
     }
@@ -220,6 +223,8 @@ void DemoOR()
 static
 void DemoAND()
 {
+    typedef bm::bvector<>::size_type size_type;
+    
     // bit-vector set intersect operation: bv_A &= bv_B
     {
         bm::bvector<>   bv_A { 1, 2, 3 };
@@ -272,10 +277,10 @@ void DemoAND()
     // This may be faster then "combine_and()" especially on sorted vectors
     {
         bm::bvector<>      bv_A { 1, 2, 3 };
-        vector<unsigned>   vect_B { 1, 2, 4 };
+        vector<size_type>   vect_B { 1, 2, 4 };
         
-        const unsigned* arr = &vect_B[0];
-        bv_A.keep(arr, unsigned(vect_B.size()), bm::BM_SORTED); // sorted - fastest
+        const size_type* arr = &vect_B[0];
+        bv_A.keep(arr, size_type(vect_B.size()), bm::BM_SORTED); // sorted - fastest
         print_bvector(bv_A); // 1, 2
     }
 
@@ -403,6 +408,8 @@ void DemoXOR()
 static
 void DemoSUB()
 {
+    typedef bm::bvector<>::size_type size_type;
+
     // bit-vector set union operation: bv_A -= bv_B
     {
         bm::bvector<>   bv_A { 1, 2, 3 };
@@ -446,7 +453,7 @@ void DemoSUB()
     // and not between bit-vector and STL container
     {
         bm::bvector<>      bv_A { 1, 2, 3 };
-        vector<unsigned>   vect_B { 1, 2, 4 };
+        vector<size_type>   vect_B { 1, 2, 4 };
         
         bm::combine_sub(bv_A, vect_B.begin(), vect_B.end());
         print_bvector(bv_A); // 3
@@ -456,9 +463,9 @@ void DemoSUB()
     // This may be faster then "combine_and()" especially on sorted vectors
     {
         bm::bvector<>      bv_A { 1, 2, 3 };
-        vector<unsigned>   vect_B { 1, 2, 4 };
+        vector<size_type>   vect_B { 1, 2, 4 };
         
-        const unsigned* arr = &vect_B[0];
+        const size_type* arr = &vect_B[0];
         bv_A.clear(arr, unsigned(vect_B.size()), bm::BM_SORTED); // sorted - fastest
         print_bvector(bv_A); // 3
     }

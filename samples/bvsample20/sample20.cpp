@@ -30,16 +30,9 @@ For more information please visit:  http://bitmagic.io
 
 #include <iostream>
 
-
 #include "bm.h"
 
 using namespace std;
-
-inline
-void Print(unsigned n)
-{
-    cout << n << endl;;
-}
 
 // Utility template function used to print container
 template<class T> void PrintContainer(T first, T last)
