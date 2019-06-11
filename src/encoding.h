@@ -80,7 +80,7 @@ public:
     unsigned char get_8() { return *buf_++; }
     
     /// Returns size of the current decoding stream.
-    unsigned size() const { return (unsigned)(buf_ - start_); }
+    size_t size() const { return size_t(buf_ - start_); }
     
     /// change current position
     void seek(int delta) { buf_ += delta; }

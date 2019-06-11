@@ -116,7 +116,7 @@ private:
 protected:
     buffer_type    buf_;                       ///< serialization buffer
     unsigned char* plain_ptrs_[SV::sv_plains]; ///< pointers on serialized bit-plains
-    unsigned plane_size_[SV::sv_plains];       ///< serialized plain size
+    size_t         plane_size_[SV::sv_plains]; ///< serialized plain size
 };
 
 // -------------------------------------------------------------------------
@@ -671,7 +671,7 @@ void sparse_vector_deserializer<SV>::deserialize(SV& sv,
     if (sv_size == 0)
         return;  // empty vector
         
-    sv.resize_internal((unsigned)sv_size);
+    sv.resize_internal(size_type(sv_size));
     bm::word_t*          temp_block = 0;
     
     const unsigned char* remap_buf_ptr = 0;
@@ -693,7 +693,7 @@ void sparse_vector_deserializer<SV>::deserialize(SV& sv,
                                                 bv->get_blocks_manager();
             temp_block = bv_bm.check_allocate_tempblock();
         }
-        unsigned read_bytes = deserial_.deserialize(*bv, bv_buf_ptr, temp_block);
+        size_t read_bytes = deserial_.deserialize(*bv, bv_buf_ptr, temp_block);
         remap_buf_ptr = bv_buf_ptr + read_bytes;
     } // for i
     

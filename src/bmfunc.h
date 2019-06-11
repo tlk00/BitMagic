@@ -1371,12 +1371,19 @@ void for_each_nzblock_range(T*** root, N top_size, N nb_from, N nb_to, F& f)
         if ((bm::word_t*)blk_blk == FULL_BLOCK_FAKE_ADDR)
         {
             unsigned j = (i == i_from) ? j_from : 0;
-            do
+            if (!j && (i != i_to)) // full sub-block
             {
-                f(FULL_BLOCK_FAKE_ADDR);
-                if ((i == i_to) && (j == j_to))
-                    return;
-            } while (++j < bm::set_sub_array_size);
+                f.add_full(bm::set_sub_array_size * bm::gap_max_bits);
+            }
+            else
+            {
+                do
+                {
+                    f.add_full(bm::gap_max_bits);
+                    if ((i == i_to) && (j == j_to))
+                        return;
+                } while (++j < bm::set_sub_array_size);
+            }
         }
         else
         {
@@ -1401,6 +1408,7 @@ void for_each_nzblock_range(T*** root, N top_size, N nb_from, N nb_to, F& f)
 template<class T, class F> 
 void for_each_nzblock(T*** root, unsigned size1, F& f)
 {
+    typedef typename F::size_type size_type;
     for (unsigned i = 0; i < size1; ++i)
     {
         T** blk_blk = root[i];
@@ -1412,7 +1420,7 @@ void for_each_nzblock(T*** root, unsigned size1, F& f)
         f.on_non_empty_top(i);
         if ((bm::word_t*)blk_blk == FULL_BLOCK_FAKE_ADDR)
         {
-            unsigned r = i * bm::set_sub_array_size;
+            size_type r = i * bm::set_sub_array_size;
             unsigned j = 0;
             do
             {
@@ -1422,7 +1430,7 @@ void for_each_nzblock(T*** root, unsigned size1, F& f)
         }
 
         unsigned non_empty_top = 0;
-        unsigned r = i * bm::set_sub_array_size;
+        size_type r = i * bm::set_sub_array_size;
         unsigned j = 0;
         do
         {
@@ -1468,8 +1476,8 @@ void for_each_nzblock(T*** root, unsigned size1, F& f)
                 non_empty_top = 1;
                 T* blk0 = blk_blk[j + 0];
                 T* blk1 = blk_blk[j + 1];
-
-                unsigned block_idx = r + j + 0;
+                
+                size_type block_idx = r + j + 0;
                 if (blk0)
                     f(blk0, block_idx);
                 else
@@ -1709,9 +1717,10 @@ template<class T, class F> F bmfor_each(T first, T last, F f)
 
 /*! Computes SUM of all elements of the sequence
 */
-template<class T> T sum_arr(T* first, T* last)
+template<typename T>
+bm::id64_t sum_arr(T* first, T* last)
 {
-    T sum = 0;
+    bm::id64_t sum = 0;
     while (first < last)
     {
         sum += *first;
@@ -1719,7 +1728,6 @@ template<class T> T sum_arr(T* first, T* last)
     }
     return sum;
 }
-
 
 
 

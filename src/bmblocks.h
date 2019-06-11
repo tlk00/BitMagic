@@ -57,10 +57,12 @@ public:
     class bm_func_base
     {
     public:
+        typedef id_type size_type;
+        
         bm_func_base(blocks_manager& bman) : bm_(bman) {}
 
         void on_empty_top(unsigned /* top_block_idx*/ ) {}
-        void on_empty_block(unsigned /* block_idx*/ ) {}
+        void on_empty_block(block_idx_type /* block_idx*/ ) {}
     private:
         bm_func_base(const bm_func_base&);
         bm_func_base& operator=(const bm_func_base&);
@@ -73,10 +75,11 @@ public:
     class bm_func_base_const
     {
     public:
+        typedef id_type size_type;
         bm_func_base_const(const blocks_manager& bman) : bm_(bman) {}
 
         void on_empty_top(unsigned /* top_block_idx*/ ) {}
-        void on_empty_block(unsigned /* block_idx*/ ) {}
+        void on_empty_block(block_idx_type /* block_idx*/ ) {}
     private:
         bm_func_base_const(const bm_func_base_const&);
         bm_func_base_const& operator=(const bm_func_base_const&);
@@ -103,6 +106,8 @@ public:
     class block_count_func : public block_count_base
     {
     public:
+        typedef id_type size_type;
+
         block_count_func(const blocks_manager& bm) 
             : block_count_base(bm), count_(0) {}
 
@@ -112,6 +117,7 @@ public:
         {
             count_ += this->block_count(block);
         }
+        void add_full(id_type c) { count_ += c; }
         void reset() { count_ = 0; }
 
     private:
@@ -123,13 +129,15 @@ public:
     class block_count_arr_func : public block_count_base
     {
     public:
+        typedef id_type size_type;
+
         block_count_arr_func(const blocks_manager& bm, unsigned* arr) 
             : block_count_base(bm), arr_(arr), last_idx_(0) 
         {
             arr_[0] = 0;
         }
 
-        void operator()(const bm::word_t* block, unsigned idx)
+        void operator()(const bm::word_t* block, id_type idx)
         {
             while (++last_idx_ < idx)
             {
@@ -139,18 +147,20 @@ public:
             last_idx_ = idx;
         }
 
-        unsigned last_block() const { return last_idx_; }
+        id_type last_block() const { return last_idx_; }
         void on_non_empty_top(unsigned) {}
 
     private:
         unsigned*  arr_;
-        unsigned   last_idx_;
+        id_type   last_idx_;
     };
 
     /** bit value change counting functor */
     class block_count_change_func : public bm_func_base_const
     {
     public:
+        typedef id_type size_type;
+
         block_count_change_func(const blocks_manager& bm) 
             : bm_func_base_const(bm),
                 count_(0),
@@ -220,6 +230,8 @@ public:
     class block_any_func : public bm_func_base_const
     {
     public:
+        typedef id_type size_type;
+
         block_any_func(const blocks_manager& bm) 
             : bm_func_base_const(bm) 
         {}

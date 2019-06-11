@@ -1670,7 +1670,7 @@ public:
         This number +1 gives you number of arr elements initialized during the
         function call.
     */
-    unsigned count_blocks(unsigned* arr) const;
+    block_idx_type count_blocks(unsigned* arr) const;
     
     /*!
        \brief Returns count of 1 bits in the given range [left..right]
@@ -2676,13 +2676,14 @@ void bvector<Alloc>::build_rs_index(rs_index_type* rs_idx,
 // -----------------------------------------------------------------------
 
 template<typename Alloc>
-unsigned bvector<Alloc>::count_blocks(unsigned* arr) const
+typename bvector<Alloc>::block_idx_type
+bvector<Alloc>::count_blocks(unsigned* arr) const
 {
     bm::word_t*** blk_root = blockman_.top_blocks_root();
     if (blk_root == 0)
         return 0;
     typename blocks_manager_type::block_count_arr_func func(blockman_, &(arr[0]));
-    for_each_nzblock(blk_root, blockman_.top_block_size(), func);
+    bm::for_each_nzblock(blk_root, blockman_.top_block_size(), func);
     return func.last_block();
 }
 
