@@ -717,18 +717,18 @@ void distance_operation(const BV& bv1,
     const bm::word_t* blk;
     const bm::word_t* arg_blk;
 
-    BM_SET_MMX_GUARD
-
     unsigned top_block_size = bman1.top_block_size();
     unsigned ebs2 = bman2.top_block_size();
+    unsigned top_size;
     if (ebs2 > top_block_size)
-        top_block_size = ebs2;
+        top_size = ebs2;
+    else
+        top_size = top_block_size;
 
-    for (i = 0; i < top_block_size; ++i)
+    for (i = 0; i < top_size; ++i)
     {
-        bm::word_t** blk_blk = blk_root ? blk_root[i] : 0;
-
-        if (blk_blk == 0) // not allocated
+        bm::word_t** blk_blk = (blk_root && (i < top_block_size)) ? blk_root[i] : 0;
+        if (!blk_blk) 
         {
             // AND operation requested - we can skip this portion here 
             if (is_all_and)
@@ -877,13 +877,15 @@ void distance_operation_any(const BV& bv1,
 
     unsigned top_block_size = bman1.top_block_size();
     unsigned ebs2 = bman2.top_block_size();
+    unsigned top_size;
     if (ebs2 > top_block_size)
-        top_block_size = ebs2;
+        top_size = ebs2;
+    else
+        top_size = top_block_size;
 
-    for (i = 0; i < top_block_size; ++i)
+    for (i = 0; i < top_size; ++i)
     {
-        bm::word_t** blk_blk = blk_root ? blk_root[i] : 0;
-
+        bm::word_t** blk_blk = (blk_root && (i < top_block_size)) ? blk_root[i] : 0;
         if (blk_blk == 0) // not allocated
         {
             // AND operation requested - we can skip this portion here 
