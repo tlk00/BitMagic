@@ -1959,10 +1959,10 @@ void CountRangeTest()
             cout << "1 ..." << endl;
             VerifyCountRange(bv1, bc_arr, 0, 200000);
             cout << "2 ..." << endl;
-            VerifyCountRange(bv1, bc_arr, bm::id_max-2000, bm::id_max-1);
+            VerifyCountRange(bv1, bc_arr, bm::id_max-200, bm::id_max-1);
             // check within empty region
             cout << "3 ..." << endl;
-            VerifyCountRange(bv1, bc_arr, bm::id_max/2-2000, bm::id_max/2+2000);
+            VerifyCountRange(bv1, bc_arr, bm::id_max/2-200, bm::id_max/2+2000);
 
             bv1.optimize();
         }
@@ -3438,10 +3438,7 @@ void CheckVectors(bvect_mini &bvect_min,
                     << nb_ful << " Min id = " << nb_min
                     << " Enumerator = " << nb_en
                     << endl;
-
-     //          bvect_full.stat();
-
-     //          DetailedCheckVectors(bvect_min, bvect_full, size);
+                // DetailedCheckVectors(bvect_min, bvect_full, size);
                assert(0);
                exit(1);
            }
@@ -5958,6 +5955,16 @@ void AndOperationsTest()
         load_BV_set_ref(bv0, vect);
         bvect bv1(bv0);
         
+        {
+            bvect bvt;
+            SerializationOperation2Test(&bvt,
+                                        bv0,
+                                        bv1,
+                                        vect.size(),
+                                        set_COUNT_AND,
+                                        set_AND);
+        }
+        
         bvect bv_i;
         bv_i.invert();
         
@@ -6003,7 +6010,7 @@ void AndOperationsTest()
             bv1.optimize();
         } // for
     }
-    
+
     {
         cout << "\n48-bit large set intersect test" << endl;
         cout << "generation..." << endl;
@@ -6497,7 +6504,17 @@ void OrOperationsTest()
         bvect bv0;
         load_BV_set_ref(bv0, vect);
         bvect bv1(bv0);
-        
+
+        {
+            bvect bvt;
+            SerializationOperation2Test(&bvt,
+                                        bv0,
+                                        bv1,
+                                        vect.size(),
+                                        set_COUNT_OR,
+                                        set_OR);
+        }
+
         bvect bv_i;
         bv_i.invert();
         auto full_cnt = bm::id_max;
@@ -8150,6 +8167,537 @@ void SubOperationsTest()
 }
 
 
+static
+void StressTest(unsigned repetitions, int set_operation = -1)
+{
+    const bvect::size_type BITVECT_SIZE = bm::id_max32 * 2;
+
+   bvect::size_type RatioSum = 0;
+   bvect::size_type SRatioSum = 0;
+   bvect::size_type DeltaSum = 0;
+   bvect::size_type SDeltaSum = 0;
+
+   bvect::size_type clear_count = 0;
+
+   bvect  bvtotal;
+   bvtotal.set_new_blocks_strat(bm::BM_GAP);
+
+   bm::random_subset<bvect> rsub;
+
+   cout << "----------------------------StressTest" << endl;
+
+   bvect::size_type size = BITVECT_SIZE - 10;
+   unsigned i;
+   for (i = 0; i < repetitions; ++i)
+   {
+        cout << endl << " - - - - - - - - - - - - STRESS STEP " << i;
+        switch (set_operation)
+        {
+        case 0: cout << " [OR]"; break;
+        case 1: cout << " [SUB]";break;
+        case 2: cout << " [XOR]";break;
+        case 3: cout << " [AND]";break;
+        default:
+            cout << " [RANDOM]";
+        }
+        cout << endl;
+
+        switch (rand() % 3)
+        {
+        case 0:
+            size = BITVECT_SIZE / 10;
+            break;
+        case 1:
+            size = BITVECT_SIZE / 2;
+            break;
+        default:
+            size = BITVECT_SIZE - 10;
+            break;
+        } // switch
+
+
+        bvect_mini*   bvect_min1= new bvect_mini(size);
+        bvect_mini*   bvect_min2= new bvect_mini(size);
+        bvect*        bvect_full1= new bvect();
+        bvect*        bvect_full2= new bvect();
+
+        bvect_full1->set_new_blocks_strat(i&1 ? bm::BM_GAP : bm::BM_BIT);
+        bvect_full2->set_new_blocks_strat(i&1 ? bm::BM_GAP : bm::BM_BIT);
+
+        int opt = rand() % 2;
+
+        bvect::size_type start1 = 0;
+        switch (rand() % 3)
+        {
+        case 1:
+            start1 += size / 5;
+            break;
+        default:
+            break;
+        }
+
+        bvect::size_type start2 = 0;
+        switch (rand() % 3)
+        {
+        case 1:
+            start2 += size / 5;
+            break;
+        default:
+            break;
+        }
+
+        FillSetsRandomMethod(bvect_min1, bvect_full1, start1, size, opt);
+        FillSetsRandomMethod(bvect_min2, bvect_full2, start2, size, opt);
+       
+        // commented out because it crashes Apple CLang compiler ...
+/*
+        unsigned arr[bm::set_total_blocks]={0,};
+        bvect::size_type cnt = bvect_full1->count();
+        bvect::size_type last_block = bvect_full1->count_blocks(arr);
+
+        bvect::size_type sum = bm::sum_arr(&arr[0], &arr[last_block+1]);
+        if (sum != cnt)
+        {
+            cout << "Error in function count_blocks." << endl;
+            cout << "Array sum = " << sum << endl;
+            cout << "BitCount = " << cnt << endl;
+            cnt = bvect_full1->count();
+            for ( i = 0; i <= last_block; ++i)
+            {
+                if (arr[i])
+                {
+                    cout << "[" << i << ":" << arr[i] << "]";
+                }
+            }
+            cout << endl;
+            cout << "================" << endl;
+            print_stat(*bvect_full1);
+
+            assert(0);
+            exit(1);
+        }
+*/
+        //CheckCountRange(*bvect_full1, start1, BITVECT_SIZE);
+        //CheckIntervals(*bvect_full1, BITVECT_SIZE);
+
+
+        //CheckCountRange(*bvect_full2, start2, BITVECT_SIZE);
+
+        //CheckCountRange(*bvect_full1, 0, start1);
+        //CheckCountRange(*bvect_full2, 0, start2);
+
+
+        TestRandomSubset(*bvect_full1, rsub);
+        TestRandomSubset(*bvect_full2, rsub);
+
+        int operation = rand()%5;
+        if (set_operation != -1)
+            operation = set_operation;
+
+        switch(operation)
+        {
+        case 0:
+            cout << "Operation OR" << endl;
+            bvect_min1->combine_or(*bvect_min2);
+            break;
+
+        case 1:
+            cout << "Operation SUB" << endl;
+            bvect_min1->combine_sub(*bvect_min2);
+            break;
+
+        case 2:
+            cout << "Operation XOR" << endl;
+            bvect_min1->combine_xor(*bvect_min2);
+            break;
+
+        default:
+            cout << "Operation AND" << endl;
+            bvect_min1->combine_and(*bvect_min2);
+            break;
+        }
+
+        int cres1 = bvect_min1->compare(*bvect_min2);
+
+        delete bvect_min2;
+
+        switch(operation)
+        {
+        case 0:
+            {
+            cout << "Operation OR" << endl;
+
+            auto predicted_count = bm::count_or(*bvect_full1, *bvect_full2);
+            auto predicted_any = bm::any_or(*bvect_full1, *bvect_full2);
+            if (predicted_any == 0 && predicted_count != 0)
+            {
+                cout << "Predicted any error!" << endl;
+                exit(1);
+            }
+            
+            bvect    bv_target_s;
+            SerializationOperation2Test(&bv_target_s,
+                                        *bvect_full1,
+                                        *bvect_full2,
+                                        predicted_count,
+                                        set_COUNT_OR,
+                                        set_OR);
+
+            bvect_full1->bit_or(*bvect_full2);
+            
+            auto count = bvect_full1->count();
+            if (count != predicted_count)
+            {
+                cout << "Predicted count error!" << endl;
+                cout << "Count = " << count << "Predicted count = " << predicted_count << endl;
+                assert(0);
+                exit(1);
+            }
+            int res = bvect_full1->compare(bv_target_s);
+            if (res != 0)
+            {
+                cout << "Serialization operation failed!" << endl;
+                assert(0);exit(1);
+            }
+            
+            }
+            break;
+
+        case 1:
+            {
+            cout << "Operation SUB" << endl;
+            
+            auto predicted_count = bm::count_sub(*bvect_full1, *bvect_full2);
+            auto predicted_any = bm::any_sub(*bvect_full1, *bvect_full2);
+            if (predicted_any == 0 && predicted_count != 0)
+            {
+                cout << "Predicted any error!" << endl;
+                assert(0); exit(1);
+            }
+            
+            bvect    bv_target_s;
+            SerializationOperation2Test(&bv_target_s,
+                                        *bvect_full1,
+                                        *bvect_full2,
+                                        predicted_count,
+                                        set_COUNT_SUB_AB,
+                                        set_SUB);
+
+            bvect_full1->bit_sub(*bvect_full2);
+            auto count = bvect_full1->count();
+            if (count != predicted_count)
+            {
+                cout << "Predicted count error!" << endl;
+                cout << "Count = " << count << "Predicted count = " << predicted_count << endl;
+                assert(0); exit(1);
+            }
+            int res = bvect_full1->compare(bv_target_s);
+            if (res != 0)
+            {
+                cout << "Serialization operation failed!" << endl;
+                assert(0); exit(1);
+            }
+            
+            
+            }
+            break;
+
+        case 2:
+            {
+            cout << "Operation XOR <<<" << endl;
+           
+            auto predicted_count = bm::count_xor(*bvect_full1, *bvect_full2);
+            auto predicted_any = bm::any_xor(*bvect_full1, *bvect_full2);
+            if (predicted_any == 0 && predicted_count != 0)
+            {
+                cout << "Predicted any error!" << endl;
+                assert(0); exit(1);
+            }
+
+            bvect    bv_target_s;
+            SerializationOperation2Test(&bv_target_s,
+                                        *bvect_full1,
+                                        *bvect_full2,
+                                        predicted_count,
+                                        set_COUNT_XOR,
+                                        set_XOR);
+            
+            bvect_full1->bit_xor(*bvect_full2);
+            
+            auto count = bvect_full1->count();
+            if (count != predicted_count)
+            {
+                cout << "Predicted count error!" << endl;
+                cout << "Count = " << count << "Predicted count = " << predicted_count << endl;
+                assert(0); exit(1);
+            }
+            int res = bvect_full1->compare(bv_target_s);
+            if (res != 0)
+            {
+                cout << "Serialization operation failed!" << endl;
+                exit(1);
+            }
+            
+            }
+            
+            break;
+
+        default:
+            {
+            cout << "Operation AND" << endl;
+
+            auto predicted_count = bm::count_and(*bvect_full1, *bvect_full2);
+            auto predicted_any = bm::any_and(*bvect_full1, *bvect_full2);
+            if (predicted_any == 0 && predicted_count != 0)
+            {
+                cout << "Predicted any error!" << endl;
+                assert(0); exit(1);
+            }
+
+            bvect    bv_target_s;
+            SerializationOperation2Test(&bv_target_s,
+                                        *bvect_full1,
+                                        *bvect_full2,
+                                        predicted_count,
+                                        set_COUNT_AND,
+                                        set_AND);
+
+            TestRandomSubset(bv_target_s, rsub);
+
+
+            bvect bv1(*bvect_full1);
+
+
+            bvect_full1->bit_and(*bvect_full2);
+            auto count = bvect_full1->count();
+
+            int res = bvect_full1->compare(bv_target_s);
+            if (res != 0)
+            {
+                //SaveBVector("bv1.bv", bv1);
+                //SaveBVector("bv2.bv", *bvect_full2);
+                cout << "Serialization operation failed!" << endl;
+                assert(0); exit(1);
+            }
+
+            if (count != predicted_count)
+            {
+                cout << "Predicted count error!" << endl;
+                cout << "Count = " << count << "Predicted count = " << predicted_count << endl;
+                exit(1);
+            }
+
+            }
+            break;
+        }
+
+
+
+        cout << "Operation comparison" << endl;
+        CheckVectors(*bvect_min1, *bvect_full1, size, true);
+
+        int cres2 = bvect_full1->compare(*bvect_full2);
+
+        //CheckIntervals(*bvect_full1, BITVECT_SIZE);
+
+        if (cres1 != cres2)
+        {
+            cout << cres1 << " " << cres2 << endl;
+            cout << bvect_full1->get_first() << " " << bvect_full1->count() << endl;
+            cout << bvect_full2->get_first() << " " << bvect_full2->count() << endl;
+
+           // bvect_full1->stat(1000);
+            cout << endl;
+           // bvect_full2->stat(1000);
+            printf("Bitset comparison operation failed.\n");
+            exit(1);
+        }
+
+        {
+            bvect bv1(*bvect_full1);
+            bvect::size_type idx = bvect::size_type(rand()) % size;
+            bool b = bv1[idx];
+            bool changed;
+            if (b)
+            {
+                changed = bv1.set_bit_conditional(idx, true, false);
+                if (changed)
+                {
+                    cout << "Set bit conditional failed!" << endl;
+                    assert(0); exit(1);
+                }
+                b = bv1[idx];
+                if (!b)
+                {
+                    cout << "Set bit conditional failed!" << endl;
+                    assert(0); exit(1);
+                }
+
+                changed = bv1.set_bit_conditional(idx, false, false);
+                if (changed)
+                {
+                    cout << "Set bit conditional failed!" << endl;
+                    assert(0); exit(1);
+                }
+                changed = bv1.set_bit_conditional(idx, true, true);
+                if (changed)
+                {
+                    cout << "Set bit conditional failed!" << endl;
+                    assert(0); exit(1);
+                }
+                changed = bv1.set_bit_conditional(idx, false, true);
+                if (!changed)
+                {
+                    cout << "Set bit conditional failed!" << endl;
+                    assert(0);exit(1);
+                }
+                b = bv1[idx];
+                if (b)
+                {
+                    cout << "Set bit conditional failed!" << endl;
+                    assert(0); exit(1);
+                }
+            }
+            else
+            {
+                changed = bv1.set_bit_conditional(idx, false, true);
+                if (changed)
+                {
+                    cout << "Set bit conditional failed!" << endl;
+                    assert(0);exit(1);
+                }
+                changed = bv1.set_bit_conditional(idx, true, false);
+                if (!changed)
+                {
+                    cout << "Set bit conditional failed!" << endl;
+                    assert(0);exit(1);
+                }
+                b = bv1[idx];
+                if (!b)
+                {
+                    cout << "Set bit conditional failed!" << endl;
+                    assert(0);exit(1);
+                }
+            }
+
+
+        }
+
+        delete bvect_full2;
+
+
+        struct bvect::statistics st1;
+        bvect_full1->calc_stat(&st1);
+        bvect_full1->optimize();
+        bvect_full1->optimize_gap_size();
+        struct bvect::statistics st2;
+        bvect_full1->calc_stat(&st2);
+
+        bvect::size_type Ratio = bvect::size_type((st2.memory_used * 100)/st1.memory_used);
+        RatioSum+=Ratio;
+        DeltaSum+=unsigned(st1.memory_used - st2.memory_used);
+
+        cout << "Optimization statistics: " << endl
+             << "   MemUsedBefore=" << st1.memory_used
+             << "   MemUsed=" << st2.memory_used
+             << "   Ratio=" << Ratio << "%"
+             << "   Delta=" << st1.memory_used - st2.memory_used
+             << endl;
+       
+        cout << "Optimization comparison" << endl;
+
+        CheckVectors(*bvect_min1, *bvect_full1, size, true);
+
+        bvect_full1->set_gap_levels(gap_len_table_min<true>::_len);
+        CheckVectors(*bvect_min1, *bvect_full1, size, true);
+        //CheckIntervals(*bvect_full1, BITVECT_SIZE);
+
+        //CheckCountRange(*bvect_full1, 0, size);
+
+
+        // Serialization
+       
+        bm::serializer<bvect> bv_ser;
+        bv_ser.gap_length_serialization(false);
+        bv_ser.byte_order_serialization(false);
+       
+        bm::serializer<bvect>::buffer sermem_buf;
+       
+        bv_ser.serialize(*bvect_full1, sermem_buf, 0);
+        unsigned slen = (unsigned)sermem_buf.size();
+       
+        delete bvect_full1;
+
+        unsigned SRatio = unsigned((slen*100)/st2.memory_used);
+        SRatioSum+=SRatio;
+        SDeltaSum+=unsigned(st2.memory_used) - slen;
+
+
+        cout << "Serialized mem_max = " << st2.max_serialize_mem
+             << " size= " << slen
+             << " Ratio=" << SRatio << "%"
+             << " Delta=" << st2.memory_used - slen
+             << endl;
+
+        bvect*        bvect_full3= new bvect();
+       
+        bm::serializer<bvect>::buffer new_sermem_buf;
+        new_sermem_buf = sermem_buf;
+        cout << "Deserialization...";
+
+        bm::deserialize(*bvect_full3, new_sermem_buf.buf());
+
+        bm::deserialize(bvtotal, new_sermem_buf.buf());
+
+        bvect* bv_target_s=new bvect();
+        operation_deserializer<bvect>::deserialize(*bv_target_s,
+                                            new_sermem_buf.buf(),
+                                            0,
+                                            set_OR);
+
+        cout << "Ok." << endl;
+//        delete [] new_sermem;
+
+        cout << "Optimization...";
+        bvtotal.optimize();
+        cout << "Ok." << endl;
+
+        ++clear_count;
+
+        if (clear_count == 4)
+        {
+           bvtotal.clear();
+           clear_count = 0;
+        }
+
+        cout << "Serialization comparison" << endl;
+
+        CheckVectors(*bvect_min1, *bvect_full3, size, true);
+        int res = bv_target_s->compare(*bvect_full3);
+        if (res != 0)
+        {
+            CheckVectors(*bvect_min1, *bv_target_s, size, true);
+        }
+
+        delete bv_target_s;
+        delete bvect_min1;
+        delete bvect_full3;
+
+    }
+
+    --i;
+    cout << "Repetitions:" << i <<
+            " AVG optimization ratio:" << RatioSum/i
+         << " AVG Delta:" << DeltaSum/i
+         << endl
+         << " AVG serialization Ratio:"<< SRatioSum/i
+         << " Delta:" << SDeltaSum/i
+         << endl;
+}
+
+
+
+
 
 
 
@@ -8318,12 +8866,13 @@ int main(int argc, char *argv[])
         OrOperationsTest();
         XorOperationsTest();
         SubOperationsTest();
-/*
-        StressTest(120, 0); // OR
-        StressTest(120, 3); // AND
-        StressTest(120, 1); // SUB
-        StressTest(120, 2); // XOR
-*/
+
+        const unsigned repeats = 20;
+        StressTest(repeats, 0); // OR
+        StressTest(repeats, 3); // AND
+        StressTest(repeats, 1); // SUB
+        StressTest(repeats, 2); // XOR
+
     }
 
     // -----------------------------------------------------------------
