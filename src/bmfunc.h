@@ -799,7 +799,7 @@ template<bool T> struct all_set
 {
     struct BM_VECT_ALIGN all_set_block
     {
-        bm::word_t* BM_VECT_ALIGN _s[bm::set_sub_array_size] BM_VECT_ALIGN_ATTR;
+        bm::word_t BM_VECT_ALIGN* _s[bm::set_sub_array_size] BM_VECT_ALIGN_ATTR;
         bm::word_t BM_VECT_ALIGN  _p[bm::set_block_size] BM_VECT_ALIGN_ATTR;
         bm::word_t* _p_fullp;
 
