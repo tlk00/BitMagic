@@ -2587,15 +2587,17 @@ void bvector<Alloc>::build_rs_index(rs_index_type* rs_idx,
     if (!found)
         return;
     block_idx_type nb = (last_bit >> bm::set_block_shift);
+    unsigned i0, j0;
+    blockman_.get_block_coord(nb, i0, j0);
 
     unsigned real_top_blocks = blockman_.find_real_top_blocks();
     unsigned max_top_blocks = blockman_.find_max_top_blocks();
-    
-    rs_idx->resize(nb+1);
+    if (nb < (max_top_blocks * bm::set_sub_array_size))
+        nb = (max_top_blocks * bm::set_sub_array_size);
+    rs_idx->set_total(nb + 1);
+    rs_idx->resize(nb + 1);
     rs_idx->resize_effective_super_blocks(real_top_blocks);
-    rs_idx->set_total(nb+1);
-    
-
+ 
     // index construction
     //
     BM_ASSERT(max_top_blocks <= blockman_.top_block_size());
@@ -2636,7 +2638,6 @@ void bvector<Alloc>::build_rs_index(rs_index_type* rs_idx,
             {
                 bv_blocks->set(i * bm::set_sub_array_size + j);
             }
-
             
             // TODO: optimize sub-index compute
             unsigned first, second;
