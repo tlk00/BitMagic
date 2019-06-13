@@ -1353,11 +1353,16 @@ public:
             {
                 BM_ASSERT(bm::is_bits_one((bm::wordop_t*)src_block));
                 top_blocks_[i][j] = FULL_BLOCK_FAKE_ADDR;
+                if (++j == bm::set_sub_array_size)
+                {
+                    validate_top_full(i);
+                }
             }
             else
             {
                 BM_ASSERT(bm::bit_is_all_zero(src_block));
                 top_blocks_[i][j] = 0;
+                validate_top_zero(i);
             }
             return;
         }
@@ -1586,18 +1591,6 @@ public:
                     alloc_.free_bit_block(block);
             }
             blk_blk[j] = 0;
-/*
-            if (block)
-            {
-                blk_blk[j] = 0;
-
-                if (BM_IS_GAP(block))
-                    alloc_.free_gap_block(BMGAP_PTR(block), glen());
-                else
-                    if (IS_VALID_ADDR(block))
-                        alloc_.free_bit_block(block);
-            }
-*/
             if (j == bm::set_sub_array_size-1)
             {
                 // back scan if top sub-block can also be dropped
@@ -2019,6 +2012,9 @@ public:
         } // for i
         return cnt;
     }
+
+    // ----------------------------------------------------------------
+
     /// calculate max top blocks size whithout NULL-tail
     unsigned find_max_top_blocks() const
     {
@@ -2033,6 +2029,38 @@ public:
                 break;
         } // for i
         return i+1;
+    }
+
+    // ----------------------------------------------------------------
+
+    void validate_top_zero(unsigned i)
+    {
+        BM_ASSERT(i < top_block_size());
+        bm::word_t** blk_blk = top_blocks_[i];
+        // TODO: SIMD
+        for (unsigned j = 0; j < bm::set_sub_array_size; ++j)
+        {
+            if (blk_blk[j])
+                return;
+        } // for j
+        alloc_.free_ptr(blk_blk, bm::set_sub_array_size);
+        top_blocks_[i] = 0;
+    }
+
+    // ----------------------------------------------------------------
+
+    void validate_top_full(unsigned i)
+    {
+        BM_ASSERT(i < top_block_size());
+        bm::word_t** blk_blk = top_blocks_[i];
+        // TODO: SIMD
+        for (unsigned j = 0; j < bm::set_sub_array_size; ++j)
+        {
+            if (blk_blk[j] != FULL_BLOCK_FAKE_ADDR)
+                return;
+        } // for j
+        alloc_.free_ptr(blk_blk, bm::set_sub_array_size);
+        top_blocks_[i] = (bm::word_t**)FULL_BLOCK_FAKE_ADDR;
     }
 
     // ----------------------------------------------------------------
