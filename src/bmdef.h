@@ -234,61 +234,113 @@ For more information please visit:  http://bitmagic.io
 # endif
 
 
+#if (defined(BMSSE2OPT) || defined(BMSSE42OPT) || defined(BMAVX2OPT) || defined(BMAVX512OPT))
+
+    # ifndef BM_SET_MMX_GUARD
+    #  define BM_SET_MMX_GUARD  sse_empty_guard  bm_mmx_guard_;
+    # endif
+
+    #ifdef _MSC_VER
+
+    #ifndef BM_ALIGN16
+    #  define BM_ALIGN16 __declspec(align(16))
+    #  define BM_ALIGN16ATTR
+    #endif
+
+    #ifndef BM_ALIGN32
+    #  define BM_ALIGN32 __declspec(align(32))
+    #  define BM_ALIGN32ATTR
+    #endif
+
+    #ifndef BM_ALIGN64
+    #  define BM_ALIGN64 __declspec(align(64))
+    #  define BM_ALIGN64ATTR
+    #endif
+
+    # else // GCC
+
+    #ifndef BM_ALIGN16
+    #  define BM_ALIGN16
+    #  define BM_ALIGN16ATTR __attribute__((aligned(16)))
+    #endif
+
+    #ifndef BM_ALIGN32
+    #  define BM_ALIGN32
+    #  define BM_ALIGN32ATTR __attribute__((aligned(32)))
+    #endif
+
+    #ifndef BM_ALIGN64
+    #  define BM_ALIGN64
+    #  define BM_ALIGN64ATTR __attribute__((aligned(64)))
+    #endif
+    #endif
+
+#else 
+
+    #define BM_ALIGN16 
+    #define BM_ALIGN16ATTR
+    #define BM_ALIGN32
+    #define BM_ALIGN32ATTR
+    #define BM_ALIGN64
+    #define BM_ALIGN64ATTR
+
+#endif
+
+
+/*
 #if !(defined(BMSSE2OPT) || defined(BMSSE42OPT) || defined(BMAVX2OPT) || defined(BMAVX512OPT))
 
-
-#define BM_ALIGN16 
-#define BM_ALIGN16ATTR
-#define BM_ALIGN32
-#define BM_ALIGN32ATTR
-#define BM_ALIGN64
-#define BM_ALIGN64ATTR
+    #define BM_ALIGN16 
+    #define BM_ALIGN16ATTR
+    #define BM_ALIGN32
+    #define BM_ALIGN32ATTR
+    #define BM_ALIGN64
+    #define BM_ALIGN64ATTR
 
 #else  
 
-# ifndef BM_SET_MMX_GUARD
-#  define BM_SET_MMX_GUARD  sse_empty_guard  bm_mmx_guard_;
-# endif
+    # ifndef BM_SET_MMX_GUARD
+    #  define BM_SET_MMX_GUARD  sse_empty_guard  bm_mmx_guard_;
+    # endif
 
-#ifdef _MSC_VER
+    #ifdef _MSC_VER
 
-#ifndef BM_ALIGN16
-#  define BM_ALIGN16 __declspec(align(16))
-#  define BM_ALIGN16ATTR
-#endif
+        #ifndef BM_ALIGN16
+        #  define BM_ALIGN16 __declspec(align(16))
+        #  define BM_ALIGN16ATTR
+        #endif
 
-#ifndef BM_ALIGN32
-#  define BM_ALIGN32 __declspec(align(32))
-#  define BM_ALIGN32ATTR
-#endif
+        #ifndef BM_ALIGN32
+        #  define BM_ALIGN32 __declspec(align(32))
+        #  define BM_ALIGN32ATTR
+        #endif
 
-#ifndef BM_ALIGN64
-#  define BM_ALIGN64 __declspec(align(64))
-#  define BM_ALIGN64ATTR
-#endif
+        #ifndef BM_ALIGN64
+        #  define BM_ALIGN64 __declspec(align(64))
+        #  define BM_ALIGN64ATTR
+        #endif
 
+    # else // GCC
 
-# else // GCC
+        #ifndef BM_ALIGN16
+        #  define BM_ALIGN16
+        #  define BM_ALIGN16ATTR __attribute__((aligned(16)))
+        #endif
 
-#ifndef BM_ALIGN16
-#  define BM_ALIGN16
-#  define BM_ALIGN16ATTR __attribute__((aligned(16)))
-#endif
+        #ifndef BM_ALIGN32
+        #  define BM_ALIGN32
+        #  define BM_ALIGN32ATTR __attribute__((aligned(32)))
+        #endif
 
-#ifndef BM_ALIGN32
-#  define BM_ALIGN32
-#  define BM_ALIGN32ATTR __attribute__((aligned(32)))
-#endif
-
-#ifndef BM_ALIGN64
-#  define BM_ALIGN64
-#  define BM_ALIGN64ATTR __attribute__((aligned(64)))
-#endif
-
-
-#endif
+        #ifndef BM_ALIGN64
+        #  define BM_ALIGN64
+        #  define BM_ALIGN64ATTR __attribute__((aligned(64)))
+        #endif
+    #endif
 
 #endif
+*/
+
 
 #if (defined(BMSSE2OPT) || defined(BMSSE42OPT))
 #   define BM_VECT_ALIGN BM_ALIGN16
