@@ -8696,6 +8696,485 @@ void StressTest(unsigned repetitions, int set_operation = -1)
 }
 
 
+// ------------------------------------------------------------------------
+
+static
+bool agg_shift_right_and(bm::aggregator<bvect>& agg,
+                         bvect& bv_target,
+                         const bvect* bv, ...)
+{
+    va_list args;
+    va_start(args, bv);
+    agg.add(bv);
+    
+    for (int i = 0; true; ++i)
+    {
+        const bvect* bv_arg = (const bvect*)va_arg(args, void*);
+        if (!bv_arg)
+            break;
+        agg.add(bv_arg);
+    }
+    va_end(args);
+    
+    agg.combine_shift_right_and(bv_target);
+    agg.reset();
+    return bv_target.any();
+}
+
+static
+void AggregatorTest()
+{
+  cout << "---------------------------- Aggregator Test" << endl;
+
+    bvect* bv_arr[128] = { 0, };
+    bvect* bv_arr2[128] = { 0, };
+
+    cout << "OR tests..." << endl;
+    {
+        bm::aggregator<bvect> agg;
+        agg.set_optimization();
+
+        {
+            bvect bv_target;
+            bvect bv1 { 1, 2, 3};
+            bvect bv2 { 0, 4, 5};
+            
+            agg.add(&bv1);
+            agg.add(&bv2);
+            
+            agg.combine_or(bv_target);
+            agg.reset();
+            
+            struct bvect::statistics st;
+            bv_target.calc_stat(&st);
+            assert (st.gap_blocks == 1);
+            assert (st.bit_blocks == 0);
+            
+            auto bc = bv_target.count();
+            assert(bc == 6);
+        }
+        
+        // FULL block optimization test
+        {
+            bvect bv_target;
+            bvect bv1;
+            bvect bv2;
+            bv1.set_range(0, 256);
+            bv2.set_range(256, 65535);
+
+            agg.reset();
+            agg.add(&bv1);
+            agg.add(&bv2);
+            
+            agg.combine_or(bv_target);
+            
+            struct bvect::statistics st;
+            bv_target.calc_stat(&st);
+            assert (st.gap_blocks == 0);
+            assert (st.bit_blocks == 0);
+            
+            auto bc = bv_target.count();
+            assert(bc == 65536);
+
+            bv_target.set(1);
+            agg.reset();
+            agg.add(&bv1);
+            agg.add(&bv2);
+            
+            agg.combine_and(bv_target);
+            bv_target.calc_stat(&st);
+            assert (st.gap_blocks == 1);
+            assert (st.bit_blocks == 0);
+            bc = bv_target.count();
+            assert(bc == 1);
+        }
+
+        // 0-block optimization test
+        {
+            bvect bv_target;
+            bvect bv1 { 1 };
+            bvect bv2 { 5 };
+            
+            bv1.set(1, false); bv2.set(5, false);
+            
+            agg.reset();
+            agg.add(&bv1);
+            agg.add(&bv2);
+            
+            agg.combine_or(bv_target);
+            agg.reset();
+            
+            struct bvect::statistics st;
+            bv_target.calc_stat(&st);
+            assert (st.gap_blocks == 0);
+            assert (st.bit_blocks == 0);
+            
+            auto bc = bv_target.count();
+            assert(bc == 0);
+        }
+    }
+
+    bm::aggregator<bvect> agg;
+    agg.set_optimization();
+/*
+    cout << "AND-SUB tests..." << endl;
+    {
+        bvect bv1, bv2, bv3;
+        bvect bv_empty;
+        bvect bv_control;
+
+        bv_arr[0] = &bv1;
+        agg.combine_or(bv3, bv_arr, 1);
+        assert(bv3.count()==0);
+
+        bv3[100] = true;
+        bv1.invert();
+        bv_control.invert();
+        bv_arr[0] = &bv1;
+        agg.combine_or(bv3, bv_arr, 1);
+
+        int res = bv_control.compare(bv3);
+        assert(res == 0);
+
+        bv_arr[0] = &bv1;
+        bv_arr[1] = &bv2;
+        agg.combine_or(bv3, bv_arr, 2);
+
+        res = bv_control.compare(bv3);
+        assert(res == 0);
+
+        bv2[1000000] = true;
+        bv_arr[0] = &bv1;
+        bv_arr[1] = &bv2;
+        agg.combine_or(bv3, bv_arr, 2);
+        res = bv_control.compare(bv3);
+        assert(res == 0);
+    }
+
+    cout << "AND tests..." << endl;
+    {
+        bvect bv1, bv2, bv3;
+        bvect bv_empty;
+        bvect bv_control;
+        int res;
+
+        bv1.invert();
+        bv_control.invert();
+        bv_arr[0] = &bv1;
+        agg.combine_and(bv3, bv_arr, 1);
+        res = bv_control.compare(bv3);
+        assert(res == 0);
+        
+        bv2.invert();
+        bv2.set_range(100000, 100100);
+        bv_arr[0] = &bv1;
+        bv_arr[1] = &bv2;
+        bv_control.set_range(100000, 100100);
+        agg.combine_and(bv3, bv_arr, 2);
+        res = bv_control.compare(bv3);
+        agg.combine_and_sub(bv3, bv_arr, 2, 0, 0, false);
+        res = bv_control.compare(bv3);
+        assert(res == 0);
+
+    }
+    cout << "AND with range tests..." << endl;
+    {
+        bvect bv1, bv2, bv3, bv4;
+        bvect bv_empty;
+        bvect bv_control;
+        int res;
+
+        bv1.invert();
+        bvect::size_type from = bm::id_max32-200000;
+        bvect::size_type to = bm::id_max32+300000;
+        bv2.set_range(from, to);
+        bv3.set_range(from, to);
+        
+        bv_control.set_range(from, to);
+        
+        bv_arr[0] = &bv1;
+        bv_arr[1] = &bv2;
+        bv_arr[2] = &bv3;
+        
+        agg.combine_and(bv4, bv_arr, 3);
+        res = bv_control.compare(bv4);
+        assert(res == 0);
+        agg.combine_and_sub(bv4, bv_arr, 3, 0, 0, false);
+        res = bv_control.compare(bv3);
+        assert(res == 0);
+    }
+
+    {
+        bvect bv1, bv2, bv3;
+        bvect bv_empty;
+        bvect bv_control;
+        int res;
+        
+        bv_arr[0] = &bv1;
+        agg.combine_and(bv3, bv_arr, 1);
+        assert(bv3.count()==0);
+        
+        bv1[100] = true;
+        bv_arr[0] = &bv1;
+        agg.combine_and(bv3, bv_arr, 1);
+        assert(bv3.count()==1);
+        assert(bv3[100] == true);
+        
+        bv1[100] = true;
+        bv2.invert();
+        bv_arr[0] = &bv1;
+        bv_arr[1] = &bv2;
+        agg.combine_and(bv3, bv_arr, 2);
+        assert(bv3.count()==1);
+        assert(bv3[100] == true);
+        
+        bv1.clear();
+        bv1.invert();
+        bv_control.invert();
+        bv_arr[0] = &bv1;
+        bv_arr[1] = &bv2;
+        agg.combine_and(bv3, bv_arr, 2);
+        res = bv_control.compare(bv3);
+        assert(res == 0);
+        agg.combine_and_sub(bv3, bv_arr, 2, 0, 0, false);
+        res = bv_control.compare(bv3);
+        assert(res == 0);
+    }
+
+
+    //  ---------------------------
+    cout << "AND-SUB tests..." << endl;
+    {
+        bvect bv1, bv2, bv3, bv4;
+        bvect bv_empty;
+        bvect bv_control;
+        
+        bv1[100] = true;
+        bv1[bm::id_max32+100000] = true;
+        bv2[100] = true;
+        bv2[bm::id_max32+100000] = true;
+        bv3[bm::id_max32+100000] = true;
+
+        bv_arr[0] = &bv1;
+        bv_arr[1] = &bv2;
+        bv_arr2[0] = &bv3;
+
+        agg.combine_and_sub(bv4, bv_arr, 2, bv_arr2, 1, false);
+        assert(bv4.count()==1);
+        assert(bv4.test(100));
+        
+        bv3.optimize();
+        agg.combine_and_sub(bv4, bv_arr, 2, bv_arr2, 1, false);
+        assert(bv4.count()==1);
+        assert(bv4.test(100));
+        
+        bv1.optimize();
+        agg.combine_and_sub(bv4, bv_arr, 2, bv_arr2, 1, false);
+        assert(bv4.count()==1);
+        assert(bv4.test(100));
+
+        bv2.optimize();
+        agg.combine_and_sub(bv4, bv_arr, 2, bv_arr2, 1, false);
+        assert(bv4.count()==1);
+        assert(bv4.test(100));
+    }
+
+    {
+        bvect bv1, bv2, bv3, bv4;
+        bvect bv_empty;
+        bvect bv_control;
+        
+        bv1[100] = true;
+        bv1[bm::id_max32+100000] = true;
+        bv2[100] = true;
+        bv2[bm::id_max32+100000] = true;
+        
+        bv3.invert();
+
+        bv_arr[0] = &bv1;
+        bv_arr[1] = &bv2;
+        bv_arr2[0] = &bv3;
+
+        agg.combine_and_sub(bv4, bv_arr, 2, bv_arr2, 1, false);
+        assert(bv4.count()==0);
+        assert(!bv4.any());
+    }
+*/
+    // SHIFT-R_AND
+    
+    cout << "SHIFT-R-AND tests..." << endl;
+    
+    {
+        bvect bv0, bv1, bv2;
+        bv1[0] = true;
+        bv1[65535]=true;
+        
+        bv2[1]=true;
+        bv2[65536]=true;
+        
+        agg.add(&bv1); agg.add(&bv2);
+        
+        agg.combine_shift_right_and(bv0);
+        agg.reset();
+        bool any = bv0.any();
+        
+    ///    bool any = agg.shift_right_and(bv1, bv2);
+        assert(any);
+        assert(bv0.count()==2);
+        assert(bv0.test(1));
+        assert(bv0.test(65536));
+    }
+
+    {
+        bvect bv0, bv1, bv2;
+        bv1[0] = true;
+        bv1[bm::id_max32+65535]=true;
+
+        bv2[0]=true;
+        bv2[bm::id_max32+65535]=true;
+        
+        bool any = agg_shift_right_and(agg, bv0, &bv1, &bv2, 0);
+        assert(!any);
+        assert(bv0.count()==0);
+    }
+
+
+    {
+        bvect bv0, bv1, bv2;
+        bv1[0] = true;
+        bv1[bm::id_max32+65535]=true;
+        bv1.optimize();
+
+        bv2[1]=true;
+        bv2[bm::id_max32+65536]=true;
+        bv2.optimize();
+
+        agg_shift_right_and(agg, bv0, &bv1, &bv2, 0);
+        assert(bv0.count()==2);
+        assert(bv0.test(1));
+        assert(bv0.test(bm::id_max32+65536));
+    }
+
+
+    {
+        bvect bv0, bv1, bv2;
+        bv1[bm::id_max32+65535]=true;
+        
+        bv2[bm::id_max32+65536]=true;
+        bv2.optimize();
+        
+        bool any = agg_shift_right_and(agg, bv0, &bv1, &bv2, 0);
+        assert(bv0.count()==1);
+        assert(bv0.test(bm::id_max32+65536));
+        assert(any);
+        struct bvect::statistics st1;
+        bv0.calc_stat(&st1);
+        auto bcnt = st1.bit_blocks + st1.gap_blocks;
+        assert(bcnt == 1);
+    }
+
+    
+    {
+        bvect bv0, bv1, bv2;
+        bv1[0] = true;
+        bv1[bm::id_max32+65535]=true;
+
+        bv2.invert();
+        
+        agg_shift_right_and(agg, bv0, &bv1, &bv2, 0);
+        assert(bv0.count()==2);
+        assert(bv0.test(1));
+        assert(bv0.test(bm::id_max32+65536));
+    }
+    
+    /*
+    // TODO: optimize this case
+    {
+        bvect bv0, bv1, bv2;
+        bvect bv1c, bv2c;
+        bv1.invert();
+        bv2.invert();
+        bv1c.invert();
+        bv2c.invert();
+
+        bv1c.shift_right();
+        bv1c &= bv2c;
+
+        bool any = agg_shift_right_and(agg, bv0, &bv1, &bv2, 0);
+
+        assert(any);
+        assert(!bv0.test(0));
+        assert(!bv1c.test(0));
+
+        struct bvect::statistics st1;
+        bv0.calc_stat(&st1);
+        auto bcnt = st1.bit_blocks + st1.gap_blocks;
+        cout << bcnt << endl;
+        assert(bcnt == 2);
+        
+        assert(bv0.count()==bv1c.count());
+        auto cmp = bv1c.compare(bv0);
+        assert(cmp==0);
+    }
+    */
+    
+    {
+        bvect bv0, bv1, bv2;
+        bv1.set_range(0, 65536*4);
+        bv2.set_range(0, 65536*4);
+        
+        bool any = agg_shift_right_and(agg, bv0, &bv1, &bv2, 0);
+        
+        assert(any);
+        assert(!bv0.test(0));
+        assert(bv0.count() == 65536*4);
+
+        struct bvect::statistics st1;
+        bv0.calc_stat(&st1);
+        auto bcnt = st1.bit_blocks + st1.gap_blocks;
+        assert(bcnt == 2); // TODO: not critical (optimization) needs a fix
+    }
+
+    {
+        bvect bv0, bv1, bv2;
+        bv1.set_range(0, 65536*4);
+        bv2.set_range(0, 65536*2);
+        
+        bool any = agg_shift_right_and(agg, bv0, &bv1, &bv2, 0);
+        
+        assert(any);
+        assert(!bv0.test(0));
+        assert(bv0.count() == 65536*2);
+
+        struct bvect::statistics st1;
+        bv0.calc_stat(&st1);
+        auto bcnt = st1.bit_blocks + st1.gap_blocks;
+        assert(bcnt == 2);
+    }
+
+
+    {
+        bvect bv0, bv1, bv2;
+        bv1.set_range(0, 65536*4);
+        bv2.set_range(65536, 65536+10);
+        
+        bool any = agg_shift_right_and(agg, bv0, &bv1, &bv2, 0);
+        
+        assert(any);
+        assert(!bv0.test(0));
+        cout << bv0.count() << endl;
+        assert(bv0.count() == 11);
+
+        struct bvect::statistics st1;
+        bv0.calc_stat(&st1);
+        auto bcnt = st1.bit_blocks + st1.gap_blocks;
+        assert(bcnt == 1);
+    }
+
+
+  cout << "---------------------------- Aggregator Test OK" << endl;
+}
+
 
 
 
@@ -8874,6 +9353,18 @@ int main(int argc, char *argv[])
         StressTest(repeats, 2); // XOR
 
     }
+    
+    if (is_all || is_agg)
+    {
+         AggregatorTest();
+/*
+         StressTestAggregatorOR(100);
+         StressTestAggregatorAND(100);
+         StressTestAggregatorShiftAND(5);
+*/
+    //     StressTestAggregatorSUB(100);
+    }
+
 
     // -----------------------------------------------------------------
 
