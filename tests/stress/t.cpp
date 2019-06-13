@@ -7935,22 +7935,23 @@ void StressTestAggregatorAND(unsigned repetitions)
         bvect bv_empty;
         
         unsigned cnt = 10;
+        agg.combine_and_sub(bv_target3, agg_list, cnt, 0, 0, false);
         agg.combine_and(bv_target1, agg_list, cnt);
         agg.combine_and_horizontal(bv_target2, agg_list, cnt);
-        agg.combine_and_sub(bv_target3, agg_list, cnt, 0, 0, false);
         agg.combine_and_sub(bv_empty, agg_list, cnt, agg_list, cnt, false);
 
         int res = bv_target1.compare(bv_target2);
         if (res!=0)
         {
             cerr << "Error: Aggregator AND check failed!" << endl;
+            assert(0);
             exit(1);
         }
         res = bv_target3.compare(bv_target1);
         if (res!=0)
         {
             cerr << "Error: Aggregator AND-SUB(0) check failed!" << endl;
-            exit(1);
+            assert(0);exit(1);
         }
         assert(!bv_empty.any());
         for (unsigned j = 1; j < cnt; ++j)
@@ -7966,6 +7967,7 @@ void StressTestAggregatorAND(unsigned repetitions)
             {
                 cerr << "Error: Aggregator AND check failed! 1.laddder step = "
                      << j << endl;
+                assert(0);
                 exit(1);
             }
             res = bv_target1.compare(bv_target3);
@@ -7973,6 +7975,7 @@ void StressTestAggregatorAND(unsigned repetitions)
             {
                 cerr << "Error: Aggregator AND-SUB(0) check failed! 1.laddder step = "
                      << j << endl;
+                assert(0);
                 exit(1);
             }
             assert(!bv_empty.any());
@@ -8191,7 +8194,7 @@ void StressTest(unsigned repetitions, int set_operation = -1)
         unsigned arr[bm::set_total_blocks]={0,};
         bm::id_t cnt = bvect_full1->count();
         unsigned last_block = bvect_full1->count_blocks(arr);
-        unsigned sum = bm::sum_arr(&arr[0], &arr[last_block+1]);
+        unsigned sum = (unsigned)bm::sum_arr(&arr[0], &arr[last_block+1]);
 
         if (sum != cnt)
         {
