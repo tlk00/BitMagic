@@ -187,7 +187,7 @@ void FillSetsIntervals(BVMINI* bvect_min,
 
         do
         {
-            len = unsigned(rand()) % factor;
+            len = unsigned(rand() % factor);
             end = i + len;
 
         } while (end >= max);
@@ -210,10 +210,10 @@ void FillSetsIntervals(BVMINI* bvect_min,
             }
         } // j
         i = end;
-        len = unsigned(rand()) % (factor * 10 * bm::gap_max_bits);
+        len = unsigned(rand() % (factor * 10 * bm::gap_max_bits));
         if (len % 2)
         {
-            len *= unsigned(rand()) % (factor * 10);
+            len *= unsigned(rand() % (factor * 10));
         }
 
         i += len;
@@ -264,7 +264,7 @@ void FillSetsIntervals(
 
         do
         {
-            len = unsigned(rand()) % factor;
+            len = unsigned(rand() % factor);
             end = i + len;
 
         } while (end >= max);
@@ -275,10 +275,10 @@ void FillSetsIntervals(
 
         i = end;
 
-        len = unsigned(rand()) % (factor * 10 * bm::gap_max_bits);
+        len = unsigned(rand() % (factor * 10 * bm::gap_max_bits));
         if (len % 2)
         {
-            len *= unsigned(rand()) % (factor * 10);
+            len *= unsigned(rand() % (factor * 10));
         }
 
         i += len;
