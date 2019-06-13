@@ -18020,7 +18020,7 @@ void LoadBVDump(const char* filename, const char* filename_out=0, bool validate=
 
     unsigned count = 0;
     clock_t start = clock();
-    unsigned total_out_size = 0;
+    size_t total_out_size = 0;
 
     for (;1; ++count)
     {
@@ -18253,8 +18253,8 @@ void LoadVectors(const char* dir_name, unsigned from, unsigned to)
     vector<bvect*>   bv_list;
     vector<unsigned> sz_list;
 
-    unsigned total_size = 0;
-    unsigned total_new_size = 0;
+    size_t total_size = 0;
+    size_t total_new_size = 0;
 
     for(; from <= to; ++from)
     {
