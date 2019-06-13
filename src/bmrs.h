@@ -180,7 +180,8 @@ void rs_index<BVAlloc>::resize(block_idx_type new_size)
 {
     sblock_rows_ = 0;
     
-    block_idx_type sblock_count = (new_size >> bm::set_array_shift) + 2;
+    block_idx_type sblock_count = (new_size >> bm::set_array_shift) + 3;
+    BM_ASSERT(sblock_count == (new_size / 256) + 3);
     sblock_count_.resize(sblock_count);
     sblock_row_idx_.resize(sblock_count);
 }
@@ -574,6 +575,7 @@ void rs_index<BVAlloc>::register_super_block(unsigned i,
 
     if (i > max_sblock_)
         max_sblock_ = i;
+
     
     sblock_row_idx_[i+1] = sblock_rows_;
     unsigned* row = block_matr_.row(sblock_rows_);
