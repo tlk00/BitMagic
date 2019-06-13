@@ -3323,7 +3323,7 @@ bool FindLastBit(const bvect& bv, bvect::size_type& last_pos)
 
 
 // vectors comparison check
-
+inline
 void CheckVectors(bvect_mini &bvect_min,
                   bvect      &bvect_full,
                   bvect::size_type size,
@@ -3395,9 +3395,7 @@ void CheckVectors(bvect_mini &bvect_min,
          cout << "Min vector'd bit #" << nb_min << "is:"
               << bit_m << endl;
 
-
 //         print_stat(bvect_full);
-
 //         DetailedCheckVectors(bvect_min, bvect_full, size);
          assert(0);
          exit(1);
@@ -3503,7 +3501,7 @@ void SimpleRandomFillTest()
         bvect::size_type i;
         for (i = 0; i < iter; ++i)
         {
-            unsigned num = unsigned(::rand()) % iter;
+            unsigned num = unsigned(::rand() % iter);
             bvect_min.set_bit(BITVECT_FROM + num);
             bvect_full.set_bit(BITVECT_FROM + num);
             if ((i % 1000) == 0) cout << "." << flush;
@@ -3520,7 +3518,7 @@ void SimpleRandomFillTest()
 
         for(i = 0; i < iter; ++i)
         {
-            unsigned num = unsigned(::rand()) % iter;
+            unsigned num = unsigned(::rand() % iter);
             bvect_min.clear_bit(BITVECT_FROM + num);
             bvect_full.clear_bit(BITVECT_FROM + num);
         }
@@ -3542,7 +3540,7 @@ void SimpleRandomFillTest()
     bvect::size_type i;
     for(i = 0; i < iter; ++i)
     {
-        unsigned num = unsigned(::rand()) % iter;
+        unsigned num = unsigned(::rand() % iter);
         bvect_min.set_bit(BITVECT_FROM + num);
         bvect_full.set_bit(BITVECT_FROM + num);
 //        CheckCountRange(bvect_full, 0, 65535);
@@ -3558,7 +3556,7 @@ void SimpleRandomFillTest()
 
     for(i = 0; i < iter; ++i)
     {
-        unsigned num = unsigned(rand()) % iter;
+        unsigned num = unsigned(rand() % iter);
         bvect_min.clear_bit(BITVECT_FROM + num);
         bvect_full.clear_bit(BITVECT_FROM + num);
 //        CheckCountRange(bvect_full, 0, num);
@@ -4077,7 +4075,7 @@ void SerializationTest()
     unsigned i;
     for (i = 0; i < 10000; ++i)
     {
-        unsigned bit = unsigned(rand()) % BITVECT_SIZE;
+        unsigned bit = unsigned(rand() % BITVECT_SIZE);
         bvect_full1.set_bit(bit);
         bvect_min1.set_bit(bit);
     }
@@ -8816,7 +8814,7 @@ void AggregatorTest()
 
     bm::aggregator<bvect> agg;
     agg.set_optimization();
-/*
+
     cout << "AND-SUB tests..." << endl;
     {
         bvect bv1, bv2, bv3;
@@ -8999,7 +8997,7 @@ void AggregatorTest()
         assert(bv4.count()==0);
         assert(!bv4.any());
     }
-*/
+
     // SHIFT-R_AND
     
     cout << "SHIFT-R-AND tests..." << endl;
