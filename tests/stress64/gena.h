@@ -168,6 +168,8 @@ void FillSetsIntervals(BVMINI* bvect_min,
     SZT fill_factor,
     bool set_flag = true)
 {
+    std::random_device rd;
+    std::mt19937_64 mt_rand(rd());
 
     while (fill_factor == 0)
     {
@@ -180,6 +182,10 @@ void FillSetsIntervals(BVMINI* bvect_min,
 
     SZT i, j;
     SZT factor = 70 * fill_factor;
+    std::uniform_int_distribution<unsigned> dist_f(1, unsigned(factor));
+    std::uniform_int_distribution<unsigned> dist_f10(1, unsigned(factor) * 10);
+    std::uniform_int_distribution<unsigned> dist_f10_max(1, unsigned(factor) * 10 * bm::gap_max_bits);
+
     for (i = min; i < max; ++i)
     {
         unsigned len;
@@ -187,7 +193,7 @@ void FillSetsIntervals(BVMINI* bvect_min,
 
         do
         {
-            len = unsigned(rand() % factor);
+            len = dist_f(mt_rand);//unsigned(rand() % factor);
             end = i + len;
 
         } while (end >= max);
@@ -210,10 +216,10 @@ void FillSetsIntervals(BVMINI* bvect_min,
             }
         } // j
         i = end;
-        len = unsigned(rand() % (factor * 10 * bm::gap_max_bits));
+        len = dist_f10_max(mt_rand);//unsigned(rand() % (factor * 10 * bm::gap_max_bits));
         if (len % 2)
         {
-            len *= unsigned(rand() % (factor * 10));
+            len *= dist_f10(mt_rand);//unsigned(rand() % (factor * 10));
         }
 
         i += len;
@@ -246,9 +252,14 @@ void FillSetsIntervals(
     SZT fill_factor,
     bool set_flag = true)
 {
+    std::random_device rd;
+    std::mt19937_64 mt_rand(rd());
+
+    std::uniform_int_distribution<unsigned> dist10(1, 10);
+    
     while (fill_factor == 0)
     {
-        fill_factor = rand() % 10;
+        fill_factor = dist10(mt_rand);//rand() % 10;
     }
     bvect_full.init();
 
@@ -257,6 +268,11 @@ void FillSetsIntervals(
 
     SZT i;
     SZT factor = 70 * fill_factor;
+
+    std::uniform_int_distribution<unsigned> dist_f(1, unsigned(factor));
+    std::uniform_int_distribution<unsigned> dist_f10(1, unsigned(factor) * 10);
+    std::uniform_int_distribution<unsigned> dist_f10_max(1, unsigned(factor) * 10 * bm::gap_max_bits);
+
     for (i = min; i < max; ++i)
     {
         unsigned len;
@@ -264,7 +280,7 @@ void FillSetsIntervals(
 
         do
         {
-            len = unsigned(rand() % factor);
+            len = dist_f(mt_rand); //unsigned(rand() % factor);
             end = i + len;
 
         } while (end >= max);
@@ -275,10 +291,10 @@ void FillSetsIntervals(
 
         i = end;
 
-        len = unsigned(rand() % (factor * 10 * bm::gap_max_bits));
+        len = dist_f10_max(mt_rand);//unsigned(rand() % (factor * 10 * bm::gap_max_bits));
         if (len % 2)
         {
-            len *= unsigned(rand() % (factor * 10));
+            len *= dist_f10(mt_rand);//unsigned(rand() % (factor * 10));
         }
 
         i += len;

@@ -3501,7 +3501,7 @@ void SimpleRandomFillTest()
         bvect::size_type i;
         for (i = 0; i < iter; ++i)
         {
-            unsigned num = unsigned(::rand() % iter);
+            unsigned num = unsigned(::rand()) % iter;
             bvect_min.set_bit(BITVECT_FROM + num);
             bvect_full.set_bit(BITVECT_FROM + num);
             if ((i % 1000) == 0) cout << "." << flush;
@@ -3518,7 +3518,7 @@ void SimpleRandomFillTest()
 
         for(i = 0; i < iter; ++i)
         {
-            unsigned num = unsigned(::rand() % iter);
+            unsigned num = unsigned(::rand()) % iter;
             bvect_min.clear_bit(BITVECT_FROM + num);
             bvect_full.clear_bit(BITVECT_FROM + num);
         }
@@ -3540,7 +3540,7 @@ void SimpleRandomFillTest()
     bvect::size_type i;
     for(i = 0; i < iter; ++i)
     {
-        unsigned num = unsigned(::rand() % iter);
+        unsigned num = unsigned(::rand()) % iter;
         bvect_min.set_bit(BITVECT_FROM + num);
         bvect_full.set_bit(BITVECT_FROM + num);
 //        CheckCountRange(bvect_full, 0, 65535);
@@ -3556,7 +3556,7 @@ void SimpleRandomFillTest()
 
     for(i = 0; i < iter; ++i)
     {
-        unsigned num = unsigned(rand() % iter);
+        unsigned num = unsigned(rand()) % iter;
         bvect_min.clear_bit(BITVECT_FROM + num);
         bvect_full.clear_bit(BITVECT_FROM + num);
 //        CheckCountRange(bvect_full, 0, num);
@@ -4075,7 +4075,7 @@ void SerializationTest()
     unsigned i;
     for (i = 0; i < 10000; ++i)
     {
-        unsigned bit = unsigned(rand() % BITVECT_SIZE);
+        unsigned bit = unsigned(rand()) % BITVECT_SIZE;
         bvect_full1.set_bit(bit);
         bvect_min1.set_bit(bit);
     }
@@ -9174,7 +9174,391 @@ void AggregatorTest()
 }
 
 
+static
+void StressTestAggregatorOR(unsigned repetitions)
+{
+  bvect::size_type BITVECT_SIZE = bvect::size_type(bm::id_max32) * 2;
 
+  cout << "---------------------------- Aggregator OR Stress Test" << endl;
+   bvect::size_type size = BITVECT_SIZE - 10;
+   bvect bv_target1, bv_target2;
+
+
+    unsigned i;
+    for (i = 0; i < repetitions; ++i)
+    {
+        int opt = 1;//rand() % 2;
+        cout << endl << " - - - - - - - - - - - - AGG OR STRESS STEP " << i << endl;;
+        
+        switch (rand() % 3)
+        {
+        case 0:
+            size = BITVECT_SIZE / 10;
+            break;
+        case 1:
+            size = BITVECT_SIZE / 2;
+            break;
+        default:
+            size = BITVECT_SIZE - 10;
+            break;
+        } // switch
+        
+        bvect::size_type start1 = 0;
+        switch (rand() % 3)
+        {
+        case 1:
+            start1 += size / 5;
+            break;
+        default:
+            break;
+        }
+
+        bvect::size_type start2 = 0;
+        switch (rand() % 3)
+        {
+        case 1:
+            start2 += size / 5;
+            break;
+        default:
+            break;
+        }
+        bvect bv0, bv1, bv2, bv3, bv4, bv5, bv6, bv7, bv8, bv9;
+
+        {
+            bvect_mini   bvect_min1(BITVECT_SIZE);
+
+            // 0 skipped
+            FillSetsRandomMethod(&bvect_min1, &bv1, start1, size, opt);
+            FillSetsRandomMethod(&bvect_min1, &bv2, start2, size, opt);
+            // 3 skipped
+            FillSetsRandomMethod(&bvect_min1, &bv5, start1, size, opt);
+            FillSetsRandomMethod(&bvect_min1, &bv6, start2, size, opt);
+            FillSetsRandomMethod(&bvect_min1, &bv7, start1, size, opt);
+        }
+        // bv8 and bv9 loaded as wide range vectors
+        {
+            ref_vect vect0;
+            generate_vect48(vect0);
+            load_BV_set_ref(bv8, vect0);
+            bv8.optimize();
+        }
+        {
+            ref_vect vect0;
+            generate_vect48(vect0);
+            load_BV_set_ref(bv9, vect0);
+            bv9.optimize();
+        }
+        bm::aggregator<bvect> agg;
+        agg.set_optimization();
+        
+        bvect* agg_list[32] = {0, };
+        
+        agg_list[0] = &bv0;
+        agg_list[1] = &bv1;
+        agg_list[2] = &bv2;
+        agg_list[3] = &bv3;
+        agg_list[4] = &bv4;
+        agg_list[5] = &bv5;
+        agg_list[6] = &bv6;
+        agg_list[7] = &bv7;
+        agg_list[8] = &bv8;
+        agg_list[9] = &bv9;
+        
+        unsigned cnt = 10;
+        agg.combine_or(bv_target1, agg_list, cnt);
+        agg.combine_or_horizontal(bv_target2, agg_list, cnt);
+
+        int res = bv_target1.compare(bv_target2);
+        if (res!=0)
+        {
+            cerr << "Error: Aggregator OR check failed!" << endl;
+            DetailedCompareBVectors(bv_target1, bv_target2);
+            assert(0);exit(1);
+        }
+        for (unsigned j = 1; j < cnt; ++j)
+        {
+            agg.combine_or(bv_target1, agg_list, j);
+            agg.combine_or_horizontal(bv_target2, agg_list, j);
+            res = bv_target1.compare(bv_target2);
+            if (res!=0)
+            {
+                cerr << "Error: Aggregator OR check failed! 1.laddder step = "
+                     << j << endl;
+                assert(0); exit(1);
+            }
+        }
+        
+        for (unsigned j = 0; j < cnt; ++j)
+        {
+            agg.combine_or(bv_target1, agg_list+j, cnt-j);
+            agg.combine_or_horizontal(bv_target2, agg_list+j, cnt-j);
+            res = bv_target1.compare(bv_target2);
+            if (res!=0)
+            {
+                cerr << "Error: Aggregator OR check failed! 2.laddder step = "
+                     << j << endl;
+                assert(0); exit(1);
+            }
+        }
+
+
+    } // for i
+
+  cout << "---------------------------- Aggregator OR Stress Test OK" << endl;
+}
+
+
+static
+void StressTestAggregatorAND(unsigned repetitions)
+{
+  bvect::size_type BITVECT_SIZE = bvect::size_type(bm::id_max32) * 2;
+
+  cout << "---------------------------- Aggregator AND Stress Test" << endl;
+   bvect::size_type size = BITVECT_SIZE - 10;
+
+
+    unsigned i;
+    for (i = 0; i < repetitions; ++i)
+    {
+        int opt = rand() % 2;
+        cout << endl << " - - - - - - - - - - - - AGG AND STRESS STEP " << i << endl;;
+        
+        switch (rand() % 3)
+        {
+        case 0:
+            size = BITVECT_SIZE / 10;
+            break;
+        case 1:
+            size = BITVECT_SIZE / 2;
+            break;
+        default:
+            size = BITVECT_SIZE - 10;
+            break;
+        } // switch
+        
+        bvect::size_type start1 = 0;
+        switch (rand() % 3)
+        {
+        case 1:
+            start1 += size / 5;
+            break;
+        default:
+            break;
+        }
+
+        bvect::size_type start2 = 0;
+        switch (rand() % 3)
+        {
+        case 1:
+            start2 += size / 5;
+            break;
+        default:
+            break;
+        }
+
+        bvect bv0, bv1, bv2, bv3, bv4, bv5, bv6, bv7, bv8, bv9;
+        {
+        bvect_mini   bvect_min1(size);
+
+        // 0 skipped
+        FillSetsRandomMethod(&bvect_min1, &bv1, start1, size, opt);
+        FillSetsRandomMethod(&bvect_min1, &bv2, start2, size, opt);
+        // 3 skipped
+        FillSetsRandomMethod(&bvect_min1, &bv5, start1, size, opt);
+        FillSetsRandomMethod(&bvect_min1, &bv6, start2, size, opt);
+        FillSetsRandomMethod(&bvect_min1, &bv7, start1, size, opt);
+        FillSetsRandomMethod(&bvect_min1, &bv8, start2, size, opt);
+        FillSetsRandomMethod(&bvect_min1, &bv9, start2, size, opt);
+        }
+        
+        bm::aggregator<bvect> agg;
+        agg.set_optimization();
+        
+        bvect* agg_list[32] = {0, };
+        
+        agg_list[0] = &bv0;
+        agg_list[1] = &bv1;
+        agg_list[2] = &bv2;
+        agg_list[3] = &bv3;
+        agg_list[4] = &bv4;
+        agg_list[5] = &bv5;
+        agg_list[6] = &bv6;
+        agg_list[7] = &bv7;
+        agg_list[8] = &bv8;
+        agg_list[9] = &bv9;
+        
+        bvect bv_target1, bv_target2, bv_target3, bv_target4;
+        bvect bv_empty;
+        
+        unsigned cnt = 10;
+        agg.combine_and_sub(bv_target3, agg_list, cnt, 0, 0, false);
+        agg.combine_and(bv_target1, agg_list, cnt);
+        agg.combine_and_horizontal(bv_target2, agg_list, cnt);
+        agg.combine_and_sub(bv_empty, agg_list, cnt, agg_list, cnt, false);
+
+        int res = bv_target1.compare(bv_target2);
+        if (res!=0)
+        {
+            cerr << "Error: Aggregator AND check failed!" << endl;
+            assert(0);exit(1);
+        }
+        res = bv_target3.compare(bv_target1);
+        if (res!=0)
+        {
+            cerr << "Error: Aggregator AND-SUB(0) check failed!" << endl;
+            assert(0);exit(1);
+        }
+        assert(!bv_empty.any());
+        for (unsigned j = 1; j < cnt; ++j)
+        {
+            agg.combine_and(bv_target1, agg_list, j);
+            agg.combine_and_horizontal(bv_target2, agg_list, j);
+            agg.combine_and_sub(bv_target3, agg_list, cnt, 0, 0, false);
+            agg.combine_and_sub(bv_empty, agg_list, cnt, agg_list, cnt, false);
+
+            
+            res = bv_target1.compare(bv_target2);
+            if (res!=0)
+            {
+                cerr << "Error: Aggregator AND check failed! 1.laddder step = "
+                     << j << endl;
+                assert(0);
+                exit(1);
+            }
+            res = bv_target1.compare(bv_target3);
+            if (res!=0)
+            {
+                cerr << "Error: Aggregator AND-SUB(0) check failed! 1.laddder step = "
+                     << j << endl;
+                assert(0);
+                exit(1);
+            }
+            assert(!bv_empty.any());
+        }
+        
+        for (unsigned j = 0; j < cnt; ++j)
+        {
+            agg.combine_and(bv_target1, agg_list+j, cnt-j);
+            agg.combine_and_horizontal(bv_target2, agg_list+j, cnt-j);
+            agg.combine_and_sub(bv_target3, agg_list+j, cnt-j, 0, 0, false);
+            agg.combine_and_sub_horizontal(bv_target4, agg_list+j, cnt-j, 0, 0);
+            agg.combine_and_sub(bv_empty, agg_list+j, cnt-j, agg_list+j, cnt-j, false);
+
+            res = bv_target1.compare(bv_target2);
+            if (res!=0)
+            {
+                cerr << "Error: Aggregator AND check failed! 2.laddder step = "
+                     << j << endl;
+                exit(1);
+            }
+            res = bv_target1.compare(bv_target4);
+            if (res!=0)
+            {
+                cerr << "Error: Aggregator Horz-AND-SUB(0) check failed! 2.laddder step = "
+                     << j << endl;
+                res = bv_target3.compare(bv_target4);
+                if (res == 0)
+                {
+                    cerr << "Warning. Aggregator AND-SUB ok... \n";
+                }
+                assert(0);exit(1);
+            }
+
+            res = bv_target1.compare(bv_target3);
+            if (res!=0)
+            {
+                cerr << "Error: Aggregator AND-SUB(0) check failed! 2.laddder step = "
+                     << j << endl;
+                assert(0);exit(1);
+            }
+            assert(!bv_empty.any());
+        }
+
+
+    } // for i
+
+  cout << "---------------------------- Aggregator AND Stress Test OK" << endl;
+}
+
+static
+void GenerateTestCollection(std::vector<bvect>* target,
+                          unsigned count, bvect::size_type vector_max)
+{
+    assert(target);
+    bvect bv_common; // sub-vector common for all collection
+    bvect_mini bvect_min(vector_max);
+    
+    FillSetsRandomMethod(&bvect_min, &bv_common, 0ull, vector_max, 1);
+    
+    for (unsigned i = 0; i < count; ++i)
+    {
+        std::unique_ptr<bvect> bv (new bvect);
+        FillSetsRandomMethod(&bvect_min, bv.get(), 0ull, vector_max, 1);
+        *bv |= bv_common;
+        target->push_back(std::move(*bv));
+    } // for
+}
+
+
+static
+void StressTestAggregatorShiftAND(unsigned repeats)
+{
+  bvect::size_type BITVECT_SIZE = bvect::size_type(bm::id_max32) * 2;
+
+   cout << "----------------------------StressTestAggregatorShiftAND " << endl;
+
+    bvect::size_type vector_max = BITVECT_SIZE;
+    unsigned coll_size = 20;
+
+    for (unsigned r = 0; r < repeats; ++r)
+    {
+        bvect mask_bv0;
+        {
+        bvect_mini bvect_min(vector_max);
+        FillSetsRandomMethod(&bvect_min, &mask_bv0, 0ull, vector_max - (vector_max / 5), 1);
+        }
+        
+        std::vector<bvect> bv_coll1;
+        GenerateTestCollection(&bv_coll1, coll_size, vector_max);
+
+        bm::aggregator<bvect> agg;
+        agg.set_optimization();
+
+        unsigned shift_repeats = 65536/3;
+        for (unsigned i = 0; i < shift_repeats; ++i)
+        {
+            bvect bv_target0(mask_bv0);
+            for (unsigned k = 0; k < bv_coll1.size(); ++k)
+            {
+                bv_target0.shift_right();
+                bv_target0 &= bv_coll1[k];
+            } // for
+            
+            agg.reset();
+            agg.add(&mask_bv0);
+            for (unsigned k = 0; k < bv_coll1.size(); ++k)
+            {
+                agg.add(&bv_coll1[k]);
+            } // for
+            
+            bvect bv_target1;
+            agg.combine_shift_right_and(bv_target1);
+            auto cmp = bv_target1.compare(bv_target0);
+            if (cmp != 0)
+            {
+                cerr << "Error: Mismatch! " << "STEP=" << i << endl;
+                //DetailedCheckVectors(bv_target0, bv_target1);
+                assert(0); exit(1);
+            }
+            if (i % 250 == 0)
+                cout << "\r" << i << flush;
+        } // for
+        cout << "\n\n ---------- SHIFT-AND step: " << r << endl;
+    } // for
+    
+   cout << "\n----------------------------StressTestAggregatorShiftAND OK" << endl;
+
+}
 
 
 
@@ -9355,12 +9739,11 @@ int main(int argc, char *argv[])
     if (is_all || is_agg)
     {
          AggregatorTest();
-/*
-         StressTestAggregatorOR(100);
-         StressTestAggregatorAND(100);
+
+         StressTestAggregatorOR(5);
+         StressTestAggregatorAND(10);
          StressTestAggregatorShiftAND(5);
-*/
-    //     StressTestAggregatorSUB(100);
+
     }
 
 
