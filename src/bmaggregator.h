@@ -1733,10 +1733,7 @@ bool aggregator<BV>::combine_shift_right_and(unsigned i, unsigned j,
     {
         unsigned carry_over = carry_overs[k];
         if (!digest && !carry_over) // 0 into "00000" block >> 0
-        {
-            BM_ASSERT(blk_zero);
             continue;
-        }
         if (blk_zero) // delayed temp block 0-init requested
         {
             bm::bit_block_set(blk, 0);
