@@ -3306,11 +3306,7 @@ void EmptyBVTest()
         }
     }
     
-    
-    
-    
     cout << "---------------------------- Empty bvector test OK" << endl;
-    
     
 }
 
@@ -3341,14 +3337,14 @@ void BasicFunctionalityTest()
     }
 
     // filling vectors with regular values
-
+    
+    cout << "test data generation... " << endl;
     unsigned i;
-
     for (i = 0; i < ITERATIONS; ++i)
     {
         bvect_min.set_bit(i);
         bvect_full.set_bit(i);
-        
+
         bvect_full.build_rs_index(&bc_arr);
         
         bm::id_t pos1, pos2, pos3, pos4;
@@ -3373,6 +3369,7 @@ void BasicFunctionalityTest()
                  ;
             exit(1);
         }
+
     }
 
     bvect_full1.set_range(0, ITERATIONS-1);
@@ -3410,7 +3407,7 @@ void BasicFunctionalityTest()
         }
     }
     cout << endl;
- 
+
     CheckCountRange(bvect_full, 0, ITERATIONS);
     CheckCountRange(bvect_full, 10, ITERATIONS+10);
     CheckCountRange(bvect_full1, 0, ITERATIONS);
@@ -3429,6 +3426,7 @@ void BasicFunctionalityTest()
 
     // checking the results
     unsigned count_min = 0;
+
     for (i = 0; i < ITERATIONS; ++i)
     {
         if (bvect_min.is_bit_true(i))

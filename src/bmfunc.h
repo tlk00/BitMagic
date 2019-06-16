@@ -1443,7 +1443,7 @@ void for_each_nzblock(T*** root, unsigned size1, F& f)
                 T* blk2 = blk_blk[j + 2];
                 T* blk3 = blk_blk[j + 3];
 
-                unsigned block_idx = r + j + 0;
+                size_type block_idx = r + j + 0;
                 if (blk0)
                     f(blk0, block_idx);
                 else

@@ -95,7 +95,7 @@ struct sparse_vector_serial_layout
     }
     
     /// Set plain output pointer and size
-    void set_plain(unsigned i, unsigned char* ptr, unsigned buf_size)
+    void set_plain(unsigned i, unsigned char* ptr, size_t buf_size)
     {
         plain_ptrs_[i] = ptr;
         plane_size_[i] = buf_size;
@@ -388,8 +388,8 @@ void compressed_collection_serializer<CBC>::serialize(const CBC&    buffer_coll,
         for (unsigned i = 0; i < buffer_coll.size(); ++i)
         {
             const buffer_type& cbuf = buffer_coll.get(i);
-            unsigned sz = (unsigned)cbuf.size();
-            enc.put_32(sz);
+            size_t sz = cbuf.size();
+            enc.put_64(sz);
         } // for i
     }
     // pass 2 (save buffers)
@@ -397,12 +397,11 @@ void compressed_collection_serializer<CBC>::serialize(const CBC&    buffer_coll,
         for (unsigned i = 0; i < buffer_coll.size(); ++i)
         {
             const buffer_type& cbuf = buffer_coll.get(i);
-            unsigned sz = (unsigned)cbuf.size();
+            size_t sz = cbuf.size();
             enc.memcpy(cbuf.buf(), sz);
         } // for i
     }
     buf.resize(enc.size());
-    
 }
 
 // -------------------------------------------------------------------------
@@ -441,8 +440,7 @@ int compressed_collection_deserializer<CBC>::deserialize(
     bm::deserialize(bv, bv_buf_ptr, temp_block);
     addr_res.sync();
     
-    unsigned addr_cnt = bv.count();
-    
+    typename bvector_type::size_type addr_cnt = bv.count();
     dec.seek((int)addr_bv_size);
     
     // -----------------------------------------
@@ -455,12 +453,12 @@ int compressed_collection_deserializer<CBC>::deserialize(
     }
     
 	typedef std::vector<unsigned>::size_type vect_size_type;
-	std::vector<unsigned> buf_size_vec;
+	std::vector<bm::id64_t> buf_size_vec;
 	buf_size_vec.resize(vect_size_type(coll_size));
     {
         for (unsigned i = 0; i < coll_size; ++i)
         {
-            unsigned sz = dec.get_32();
+            bm::id64_t sz = dec.get_64();
             buf_size_vec[i] = sz;
         } // for i
     }
@@ -470,15 +468,13 @@ int compressed_collection_deserializer<CBC>::deserialize(
         buf_vect.resize(vect_size_type(coll_size));
         for (unsigned i = 0; i < coll_size; ++i)
         {
-            unsigned sz = buf_size_vec[i];
+            bm::id64_t sz = buf_size_vec[i];
             buffer_type& b = buf_vect.at(i);
             b.resize(sz);
             dec.memcpy(b.data(), sz);
         } // for i
     }
-    
     buffer_coll.sync();
-    
     return 0;
 }
 
@@ -499,8 +495,6 @@ template<typename SV>
 void sparse_vector_serializer<SV>::serialize(const SV&  sv,
                       sparse_vector_serial_layout<SV>&  sv_layout)
 {
-//    const unsigned max_v_plains = 255; // legacy...
-    
     typename SV::statistics sv_stat;
     sv.calc_stat(&sv_stat);
     unsigned char* buf = sv_layout.reserve(sv_stat.max_serialize_mem);
@@ -537,7 +531,7 @@ void sparse_vector_serializer<SV>::serialize(const SV&  sv,
             continue;
         }
         
-        unsigned buf_size =
+        size_t buf_size =
             bvs_.serialize(*bv, buf_ptr, sv_stat.max_serialize_mem);
         
         sv_layout.set_plain(i, buf_ptr, buf_size);
@@ -592,10 +586,14 @@ void sparse_vector_serializer<SV>::serialize(const SV&  sv,
     
     enc.put_8((unsigned char)bo);  // byte order
     
-    enc.put_8(0);       // number of plains == 0 (legacy magic number)
-    enc.put_8(1);       // matrix serialization version
-    enc.put_64(plains); // number of rows in the bit-matrix
+    unsigned char matr_s_ser = 1;
+#ifdef BM64ADDR
+    matr_s_ser = 2;
+#endif
     
+    enc.put_8(0);              // number of plains == 0 (legacy magic number)
+    enc.put_8(matr_s_ser);     // matrix serialization version
+    enc.put_64(plains);        // number of rows in the bit-matrix
     enc.put_64(sv.size_internal());
     
     // save the offset table (part of the header)
@@ -654,6 +652,18 @@ void sparse_vector_deserializer<SV>::deserialize(SV& sv,
         matr_s_ser = dec.get_8(); // matrix serialization version
         plains = (unsigned) dec.get_64(); // number of rows in the bit-matrix
     }
+    #ifdef BM64ADDR
+    #else
+        if (matr_s_ser == 2) // 64-bit matrix
+        {
+        #ifndef BM_NO_STL
+            throw std::logic_error("Invalid serialization target (64-bit BLOB)");
+        #else
+            BM_THROW(BM_ERR_SERIALFORMAT);
+        #endif
+        }
+    #endif
+
     
     unsigned sv_plains = sv.stored_plains();
     if (!plains || plains > sv_plains)

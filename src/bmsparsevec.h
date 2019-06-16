@@ -79,6 +79,7 @@ public:
     typedef BV                                       bvector_type;
     typedef bvector_type*                            bvector_type_ptr;
     typedef typename bvector_type::size_type         size_type;
+    typedef typename bvector_type::block_idx_type    block_idx_type;
     typedef const bvector_type*                      bvector_type_const_ptr;
 	typedef const value_type&                        const_reference;
     typedef typename BV::allocator_type              allocator_type;
@@ -206,7 +207,7 @@ public:
         void invalidate() { pos_ = bm::id_max; }
         
         /// Current position (index) in the vector
-        bm::id_t pos() const { return pos_; }
+        size_type pos() const { return pos_; }
         
         /// re-position to a specified position
         void go_to(size_type pos);
@@ -305,7 +306,7 @@ public:
             @return index of added value in the internal buffer
             @internal
         */
-        unsigned add_value(value_type v);
+        size_type add_value(value_type v);
         
     private:
         enum buf_size_e
@@ -787,7 +788,7 @@ public:
     \brief find position of compressed element by its rank
     */
     static
-    bool find_rank(bm::id_t rank, bm::id_t& pos);
+    bool find_rank(size_type rank, size_type& pos);
 
     /**
         \brief size of sparse vector (may be different for RSC)
@@ -930,7 +931,7 @@ void sparse_vector<Val, BV>::import(const value_type* arr,
     unsigned row_len[sizeof(Val)*8] = {0, };
     
     const unsigned transpose_window = 256;
-    bm::tmatrix<bm::id_t, sizeof(Val)*8, transpose_window> tm; // matrix accumulator
+    bm::tmatrix<size_type, sizeof(Val)*8, transpose_window> tm; // matrix accumulator
     
     if (arr_size == 0)
         throw_range_error("sparse_vector range error (import size 0)");
@@ -951,7 +952,7 @@ void sparse_vector<Val, BV>::import(const value_type* arr,
     for (i = 0; i < arr_size; ++i)
     {
         unsigned bcnt = bm::bitscan(arr[i], b_list);
-        const unsigned bit_idx = i + offset;
+        const size_type bit_idx = i + offset;
         
         for (unsigned j = 0; j < bcnt; ++j)
         {
@@ -963,7 +964,7 @@ void sparse_vector<Val, BV>::import(const value_type* arr,
             if (rl == transpose_window)
             {
                 bvector_type* bv = this->get_plain(p);
-                const bm::id_t* r = tm.row(p);
+                const size_type* r = tm.row(p);
                 bv->set(r, rl, BM_SORTED);
                 row_len[p] = 0;
                 tm.row(p)[0] = 0;
@@ -979,7 +980,7 @@ void sparse_vector<Val, BV>::import(const value_type* arr,
         if (rl)
         {
             bvector_type* bv = this->get_plain(k);
-            const bm::id_t* r = tm.row(k);
+            const size_type* r = tm.row(k);
             bv->set(r, rl, BM_SORTED);
         }
     } // for k
@@ -1044,22 +1045,22 @@ sparse_vector<Val, BV>::gather(value_type*       arr,
     }
     ::memset(arr, 0, sizeof(value_type)*size);
     
-    for (unsigned i = 0; i < size;)
+    for (size_type i = 0; i < size;)
     {
         bool sorted_block = true;
         
         // look ahead for the depth of the same block
         //          (speculate more than one index lookup per block)
         //
-        unsigned nb = unsigned(idx[i] >> bm::set_block_shift);
-        unsigned r = i;
+        block_idx_type nb = (idx[i] >> bm::set_block_shift);
+        size_type r = i;
         
         switch (sorted_idx)
         {
         case BM_UNKNOWN:
             {
                 size_type idx_prev = idx[r];
-                for (; (r < size) && (nb == unsigned(idx[r] >> bm::set_block_shift)); ++r)
+                for (; (r < size) && (nb == (idx[r] >> bm::set_block_shift)); ++r)
                 {
                     sorted_block = !(idx[r] < idx_prev); // sorted check
                     idx_prev = idx[r];
@@ -1068,7 +1069,6 @@ sparse_vector<Val, BV>::gather(value_type*       arr,
             break;
         case BM_UNSORTED:
             sorted_block = false;
-            
             for (; r < size; ++r)
                 if (nb != unsigned(idx[r] >> bm::set_block_shift))
                     break;
@@ -1094,8 +1094,8 @@ sparse_vector<Val, BV>::gather(value_type*       arr,
 
         // process block co-located elements at ones for best (CPU cache opt)
         //
-        unsigned i0 = nb >> bm::set_array_shift; // top block address
-        unsigned j0 = nb &  bm::set_array_mask;  // address in sub-block
+        unsigned i0 = unsigned(nb >> bm::set_array_shift); // top block address
+        unsigned j0 = unsigned(nb &  bm::set_array_mask);  // address in sub-block
         
         unsigned eff_plains = this->effective_plains();
         for (unsigned j = 0; j < eff_plains; ++j)
@@ -1188,9 +1188,9 @@ sparse_vector<Val, BV>::extract_range(value_type* arr,
     
     // calculate logical block coordinates and masks
     //
-    unsigned nb = unsigned(start >>  bm::set_block_shift);
-    unsigned i0 = nb >> bm::set_array_shift; // top block address
-    unsigned j0 = nb &  bm::set_array_mask;  // address in sub-block
+    block_idx_type nb = (start >>  bm::set_block_shift);
+    unsigned i0 = unsigned(nb >> bm::set_array_shift); // top block address
+    unsigned j0 = unsigned(nb &  bm::set_array_mask);  // address in sub-block
     unsigned nbit = unsigned(start & bm::set_block_mask);
     unsigned nword  = unsigned(nbit >> bm::set_word_shift);
     unsigned mask0 = 1u << (nbit & bm::set_word_mask);
@@ -1202,18 +1202,17 @@ sparse_vector<Val, BV>::extract_range(value_type* arr,
         blk = this->bmatr_.get_block(j, i0, j0);
         bool is_gap = BM_IS_GAP(blk);
         
-        for (unsigned k = start; k < end; ++k)
+        for (size_type k = start; k < end; ++k)
         {
-            unsigned nb1 = unsigned(k >>  bm::set_block_shift);
+            block_idx_type nb1 = (k >>  bm::set_block_shift);
             if (nb1 != nb) // block switch boundaries
             {
                 nb = nb1;
-                i0 = nb >> bm::set_array_shift;
-                j0 = nb &  bm::set_array_mask;
+                i0 = unsigned(nb >> bm::set_array_shift);
+                j0 = unsigned(nb &  bm::set_array_mask);
                 blk = this->bmatr_.get_block(j, i0, j0);
                 is_gap = BM_IS_GAP(blk);
             }
-        
             if (!blk)
                 continue;
             nbit = unsigned(k & bm::set_block_mask);
@@ -1312,19 +1311,16 @@ sparse_vector<Val, BV>::extract(value_type* arr,
         : arr_(varr), mask_(mask), off_(off)
         {}
         
-        void add_bits(bm::id_t arr_offset, const unsigned char* bits, unsigned bits_size)
+        void add_bits(size_type arr_offset, const unsigned char* bits, unsigned bits_size)
         {
             size_type idx_base = arr_offset - off_;
-            
             const value_type m = mask_;
             unsigned i = 0;
             for (; i < bits_size; ++i)
-            {
                 arr_[idx_base + bits[i]] |= m;
-            }
         }
         
-        void add_range(bm::id_t arr_offset, unsigned sz)
+        void add_range(size_type arr_offset, unsigned sz)
         {
             size_type idx_base = arr_offset - off_;
             const value_type m = mask_;
@@ -1351,7 +1347,6 @@ sparse_vector<Val, BV>::extract(value_type* arr,
     }
     
 	bool masked_scan = !(offset == 0 && size == this->size());
-
     if (masked_scan) // use temp vector to decompress the area
     {
         bvector_type bv_mask;
@@ -1628,7 +1623,7 @@ void sparse_vector<Val, BV>::clear() BMNOEXEPT
 //---------------------------------------------------------------------
 
 template<class Val, class BV>
-bool sparse_vector<Val, BV>::find_rank(bm::id_t rank, bm::id_t& pos)
+bool sparse_vector<Val, BV>::find_rank(size_type rank, size_type& pos)
 {
     BM_ASSERT(rank);
     pos = rank - 1; 
@@ -2044,7 +2039,7 @@ template<class Val, class BV>
 void sparse_vector<Val, BV>::back_insert_iterator::add(
          typename sparse_vector<Val, BV>::back_insert_iterator::value_type v)
 {
-    unsigned buf_idx = this->add_value(v);
+    size_type buf_idx = this->add_value(v);
     if (bv_null_)
     {
         typename sparse_vector<Val, BV>::size_type sz = sv_->size();
@@ -2055,7 +2050,8 @@ void sparse_vector<Val, BV>::back_insert_iterator::add(
 //---------------------------------------------------------------------
 
 template<class Val, class BV>
-unsigned sparse_vector<Val, BV>::back_insert_iterator::add_value(
+typename sparse_vector<Val, BV>::size_type
+sparse_vector<Val, BV>::back_insert_iterator::add_value(
          typename sparse_vector<Val, BV>::back_insert_iterator::value_type v)
 {
     BM_ASSERT(sv_);

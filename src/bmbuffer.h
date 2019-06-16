@@ -497,14 +497,14 @@ protected:
 
     @internal
 */
-template<typename Val, unsigned ROWS, unsigned COLS, typename BVAlloc>
+template<typename Val, size_t ROWS, size_t COLS, typename BVAlloc>
 class heap_matrix
 {
 public:
     typedef BVAlloc                                          bv_allocator_type;
     typedef bm::byte_buffer<bv_allocator_type>               buffer_type;
     typedef Val                                              value_type;
-    typedef unsigned                                         size_type;
+    typedef size_t                                           size_type;
 
     enum params
     {
@@ -514,8 +514,8 @@ public:
         row_size_in_bytes = sizeof(value_type) * COLS
     };
 
-    static unsigned rows() { return ROWS; }
-    static unsigned cols() { return COLS; }
+    static size_t rows() { return ROWS; }
+    static size_t cols() { return COLS; }
 
     /**
         By default object is constructed NOT allocated.
@@ -547,7 +547,7 @@ public:
         return buffer_.size();
     }
 
-    value_type get(unsigned row_idx, unsigned col_idx) const
+    value_type get(size_t row_idx, size_t col_idx) const
     {
         BM_ASSERT(row_idx < ROWS);
         BM_ASSERT(col_idx < COLS);
@@ -556,7 +556,7 @@ public:
         return ((const value_type*)buf)[col_idx];
     }
 
-    const value_type* row(unsigned row_idx) const
+    const value_type* row(size_t row_idx) const
     {
         BM_ASSERT(row_idx < ROWS);
         BM_ASSERT(buffer_.size());
@@ -564,7 +564,7 @@ public:
         return (const value_type*) buf;
     }
 
-    value_type* row(unsigned row_idx)
+    value_type* row(size_t row_idx)
     {
         BM_ASSERT(row_idx < ROWS);
         BM_ASSERT(buffer_.size());
