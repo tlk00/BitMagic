@@ -60,6 +60,7 @@ public:
     typedef typename bvector_type::allocation_policy allocation_policy_type;
     typedef typename allocator_type::allocator_pool_type allocator_pool_type;
     typedef typename bvector_type::size_type         size_type;
+    typedef typename bvector_type::block_idx_type    block_idx_type;
     typedef unsigned char                            octet_type;
 
 public:
@@ -877,9 +878,9 @@ basic_bmatrix<BV>::get_octet(size_type pos, size_type octet_idx) const
 {
     unsigned v = 0;
 
-    unsigned nb = unsigned(pos >>  bm::set_block_shift);
-    unsigned i0 = nb >> bm::set_array_shift; // top block address
-    unsigned j0 = nb &  bm::set_array_mask;  // address in sub-block
+    block_idx_type nb = (pos >>  bm::set_block_shift);
+    unsigned i0 = unsigned(nb >> bm::set_array_shift); // top block address
+    unsigned j0 = unsigned(nb &  bm::set_array_mask);  // address in sub-block
 
     const bm::word_t* blk;
     const bm::word_t* blka[8];
@@ -988,9 +989,9 @@ basic_bmatrix<BV>::get_half_octet(size_type pos, size_type row_idx) const
 {
     unsigned v = 0;
 
-    unsigned nb = unsigned(pos >>  bm::set_block_shift);
-    unsigned i0 = nb >> bm::set_array_shift; // top block address
-    unsigned j0 = nb &  bm::set_array_mask;  // address in sub-block
+    block_idx_type nb = (pos >>  bm::set_block_shift);
+    unsigned i0 = unsigned(nb >> bm::set_array_shift); // top block address
+    unsigned j0 = unsigned(nb &  bm::set_array_mask);  // address in sub-block
 
     const bm::word_t* blk;
     const bm::word_t* blka[4];
