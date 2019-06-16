@@ -51,11 +51,11 @@ template<typename CharType, typename BV, unsigned MAX_STR_SIZE>
 class str_sparse_vector : public base_sparse_vector<CharType, BV, MAX_STR_SIZE>
 {
 public:
-    typedef CharType                                 value_type;
-    typedef bm::id_t                                 size_type;
     typedef BV                                       bvector_type;
     typedef bvector_type*                            bvector_type_ptr;
     typedef const bvector_type*                      bvector_type_const_ptr;
+    typedef CharType                                 value_type;
+    typedef typename bvector_type::size_type         size_type;
     typedef typename BV::allocator_type              allocator_type;
     typedef typename bvector_type::allocation_policy allocation_policy_type;
     typedef typename bvector_type::enumerator        bvector_enumerator_type;
@@ -824,7 +824,7 @@ public:
         if (zero_mem)
             cmatr.set_zero();
         
-        size_type rows = cmatr.rows();
+        size_type rows = size_type(cmatr.rows());
         BM_ASSERT(cmatr.cols() >= MAX_STR_SIZE);
         size_type max_sz = this->size() - idx_from;
         if (max_sz < dec_size)

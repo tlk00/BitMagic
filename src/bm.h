@@ -6471,7 +6471,7 @@ void bvector<Alloc>::clear_range_no_check(size_type left,
     tmp_gap_blk[0] = 0; // just to silence GCC warning on uninit var
   
     // Set bits in the starting block
-    bm::word_t* block;// = blockman_.get_block(nblock_left);
+    bm::word_t* block;
     
     unsigned nbit_left = unsigned(left  & bm::set_block_mask);
     if ((nbit_left == 0) && (r == bm::bits_in_block - 1)) // full block
@@ -6576,7 +6576,12 @@ void bvector<Alloc>::copy_range_no_check(const bvector<Alloc>& bvect,
     }
     if (right < bm::id_max-1)
     {
-        clear_range_no_check(right+1, bm::id_max-1);
+        size_type last;
+        bool found = find_reverse(last);
+        BM_ASSERT(found);
+        (void)found;
+        if (last > right)
+            clear_range_no_check(right+1, last);
     }
 }
 

@@ -630,7 +630,7 @@ void print_svector_stat(const SV& svect, bool print_sim = false)
     std::cout << "Memory used:      " << st.memory_used << " "
               << (st.memory_used / (1024 * 1024))       << "MB" << std::endl;
     
-    unsigned eff_max_element = svect.effective_vector_max();
+    auto eff_max_element = svect.effective_vector_max();
     size_t std_vect_size = sizeof(typename SV::value_type) * svect.size() * eff_max_element;
     std::cout << "Projected mem usage for vector<value_type>:"
               << std_vect_size << " "
@@ -679,7 +679,7 @@ void print_svector_stat(const SV& svect, bool print_sim = false)
     {
         std::cout << "(not) NULL plain:\n";
         print_bvector_stat(*bv_null);
-        unsigned not_null_cnt = bv_null->count();
+        typename SV::size_type not_null_cnt = bv_null->count();
         std::cout << " - Bitcount: " << not_null_cnt << std::endl;
 
         std::cout << "Projected mem usage for std::vector<pair<unsigned, value_type> >:"
@@ -698,9 +698,7 @@ void print_svector_stat(const SV& svect, bool print_sim = false)
         size_t non_zero_mem = size_t(bv_join_cnt) * sizeof(typename SV::value_type);
         std::cout << "Projected mem usage for non-zero elements: " << non_zero_mem << " "
                   << non_zero_mem / (1024*1024) << " MB"
-                  << std::endl;
-
-        
+                  << std::endl;        
     }
 }
 

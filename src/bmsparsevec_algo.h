@@ -344,12 +344,12 @@ protected:
     /// find first value (may include NULL indexes)
     bool find_first_eq(const SV&   sv,
                        typename SV::value_type         value,
-                       bm::id_t&                       idx);
+                       size_type&                      idx);
     
     /// find first string value (may include NULL indexes)
     bool find_first_eq(const SV&                       sv,
                        const typename SV::value_type*  str,
-                       bm::id_t&                       idx,
+                       size_type&                      idx,
                        bool                            remaped);
 
     
@@ -388,6 +388,7 @@ protected:
         bm::set_total_blocks,
         max_columns,
         allocator_type>  heap_matrix_type0;
+    
     typedef bm::heap_matrix<value_type,
         bm::set_total_blocks*3,
         max_columns,
@@ -792,15 +793,15 @@ void sparse_vector_scanner<SV>::bind(const SV&  sv, bool sorted)
         // fill in elements cache
         for (size_type i = 0; i < sv.size(); i+= bm::gap_max_bits)
         {
-            unsigned nb = unsigned(i >> bm::set_block_shift);
+            size_type nb = (i >> bm::set_block_shift);
             value_type* s0 = block0_elements_cache_.row(nb);
-            sv.get(i, s0, block0_elements_cache_.cols());
+            sv.get(i, s0, size_type(block0_elements_cache_.cols()));
             
             for (size_type k = 0; k < 3; ++k)
             {
                 value_type* s1 = block3_elements_cache_.row(nb * 3 + k);
                 size_type idx = i + (k+1) * bm::sub_block3_size;
-                sv.get(idx, s1, block3_elements_cache_.cols());
+                sv.get(idx, s1, size_type(block3_elements_cache_.cols()));
             } // for k
         } // for i
     }
@@ -833,7 +834,6 @@ void sparse_vector_scanner<SV>::find_zero(const SV&                  sv,
         bv_out.clear();
         return;
     }
-
     find_nonzero(sv, bv_out);
     if (sv.is_compressed())
     {
@@ -858,12 +858,16 @@ void sparse_vector_scanner<SV>::invert(const SV& sv, typename SV::bvector_type& 
         bv_out.clear();
         return;
     }
+    // TODO: find a better algorithm (NAND?)
     bv_out.invert();
     const bvector_type* bv_null = sv.get_null_bvector();
     if (bv_null) // correct result to only use not NULL elements
         bv_out &= *bv_null;
     else
+    {
+        // TODO: use the shorter range to clear the tail
         bv_out.set_range(sv.size(), bm::id_max - 1, false);
+    }
 }
 
 //----------------------------------------------------------------------------
@@ -913,7 +917,7 @@ bool sparse_vector_scanner<SV>::find_eq_with_nulls(const SV&    sv,
 template<typename SV>
 bool sparse_vector_scanner<SV>::find_first_eq(const SV&   sv,
                                typename SV::value_type    value,
-                               bm::id_t&                  idx)
+                               size_type&                 idx)
 {
     if (sv.empty())
         return false; // nothing to do
@@ -937,7 +941,7 @@ bool sparse_vector_scanner<SV>::find_first_eq(const SV&   sv,
 template<typename SV>
 bool sparse_vector_scanner<SV>::find_first_eq(const SV&                   sv,
                                           const typename SV::value_type*  str,
-                                          bm::id_t&                       idx,
+                                          size_type&                      idx,
                                           bool                            remaped)
 {
     if (sv.empty())
@@ -1240,7 +1244,7 @@ bool sparse_vector_scanner<SV>::bfind_eq_str(const SV&                      sv,
         const unsigned min_distance_cutoff = bm::gap_max_bits + bm::gap_max_bits / 2;
         size_type l, r, dist;
         l = 0; r = sv.size()-1;
-        bm::id_t found_pos;
+        size_type found_pos;
         
         // binary search to narrow down the search window
         while (l <= r)
@@ -1252,8 +1256,8 @@ bool sparse_vector_scanner<SV>::bfind_eq_str(const SV&                      sv,
                 // different neighboring blocks, lets try to narrow
                 // to exactly one block
                 
-                unsigned nb_l = unsigned(l >> bm::set_block_shift);
-                unsigned nb_r = unsigned(r >> bm::set_block_shift);
+                size_type nb_l = (l >> bm::set_block_shift);
+                size_type nb_r = (r >> bm::set_block_shift);
                 if (nb_l != nb_r)
                 {
                     size_type mid = nb_r * bm::gap_max_bits;
@@ -1272,7 +1276,7 @@ bool sparse_vector_scanner<SV>::bfind_eq_str(const SV&                      sv,
                 
                 if (nb_l == nb_r)
                 {
-                    unsigned max_nb = sv.size() >> bm::set_block_shift;
+                    size_type max_nb = sv.size() >> bm::set_block_shift;
                     if (nb_l != max_nb)
                     {
                         // linear in-place fixed depth scan to identify the sub-range
@@ -1310,7 +1314,7 @@ bool sparse_vector_scanner<SV>::bfind_eq_str(const SV&                      sv,
             }
 
             typename SV::size_type mid = dist/2+l;
-            unsigned nb = unsigned(mid >> bm::set_block_shift);
+            size_type nb = (mid >> bm::set_block_shift);
             mid = nb * bm::gap_max_bits;
             if (mid <= l)
             {
@@ -1438,7 +1442,7 @@ bool sparse_vector_scanner<SV>::lower_bound_str(
     }
     while (l <= r)
     {
-        unsigned mid = (r-l)/2+l;
+        size_type mid = (r-l)/2+l;
         cmp = this->compare_str(sv, mid, str);
         if (cmp == 0)
         {
@@ -1501,14 +1505,14 @@ int sparse_vector_scanner<SV>::compare_str(const SV& sv,
 {
     if (bound_sv_ == &sv)
     {
-        unsigned nb = unsigned(idx >> bm::set_block_shift);
-        unsigned nbit = unsigned(idx & bm::set_block_mask);
+        size_type nb = (idx >> bm::set_block_shift);
+        size_type nbit = (idx & bm::set_block_mask);
         if (nbit == 0) // access to sentinel, first block element
         {
             value_type* s0 = block0_elements_cache_.row(nb);
             if (*s0 == 0) // uninitialized element
             {
-                sv.get(idx, s0, block0_elements_cache_.cols());
+                sv.get(idx, s0, size_type(block0_elements_cache_.cols()));
             }
             int res = 0;
             for (unsigned i = 0; i < block0_elements_cache_.cols(); ++i)
@@ -1582,7 +1586,7 @@ bool sparse_vector_scanner<SV>::find_eq(const SV&                  sv,
         return found;
     }
 
-    bm::id_t found_pos;
+    size_type found_pos;
     bool found = find_first_eq(sv, value, found_pos);
     if (found)
     {
