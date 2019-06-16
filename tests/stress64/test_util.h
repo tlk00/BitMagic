@@ -121,3 +121,150 @@ void compare_BV(const BV& bv, const VT& vect)
         exit(1);
     }
 }
+
+
+template<class SV, class Vect>
+bool CompareSparseVector(const SV& sv, const Vect& vect, bool interval_filled = false)
+{
+    if (vect.size() != sv.size())
+    {
+        cerr << "Sparse vector size test failed!" << vect.size() << "!=" << sv.size() << endl;
+        return false;
+    }
+    
+    if (sv.is_nullable())
+    {
+        const typename SV::bvector_type* bv_null = sv.get_null_bvector();
+        assert(bv_null);
+        auto non_null_cnt = bv_null->count();
+        if (vect.size() != non_null_cnt)
+        {
+            if (!interval_filled)
+            {
+                cerr << "NULL vector count failed." << non_null_cnt << " size=" << vect.size() << endl;
+                assert(0); exit(1);
+            }
+        }
+    }
+    
+    {
+        typename SV::const_iterator it = sv.begin();
+        typename SV::const_iterator it_end = sv.end();
+
+        for (unsigned i = 0; i < vect.size(); ++i)
+        {
+            typename Vect::value_type v1 = vect[i];
+            typename SV::value_type v2 = sv[i];
+            typename SV::value_type v3 = *it;
+
+            if (v1 != v2)
+            {
+                cerr << "SV discrepancy:" << "sv[" << i << "]=" << v2
+                     <<  " vect[" << i << "]=" << v1
+                     << endl;
+                return false;
+            }
+            if (v1 != v3)
+            {
+                cerr << "SV discrepancy:" << "sv[" << i << "]=" << v2
+                     <<  " *it" << v3
+                     << endl;
+                return false;
+            }
+            assert(it < it_end);
+            ++it;
+        } // for
+        if (it != it_end)
+        {
+            cerr << "sv const_iterator discrepancy!" << endl;
+            return false;
+        }
+    }
+    
+    // extraction comparison
+    {
+        std::vector<typename SV::value_type> v1(sv.size());
+        std::vector<typename SV::value_type> v1r(sv.size());
+        sv.extract(&v1[0], sv.size(), 0);
+        sv.extract_range(&v1r[0], sv.size(), 0);
+        for (unsigned i = 0; i < sv.size(); ++i)
+        {
+            if (v1r[i] != v1[i] || v1[i] != vect[i])
+            {
+                cerr << "TestEqualSparseVectors Extract 1 failed at:" << i
+                     << " v1[i]=" << v1[i] << " v1r[i]=" << v1r[i]
+                     << endl;
+                assert(0);exit(1);
+            }
+        } // for
+    }
+    
+    // serialization comparison
+    BM_DECLARE_TEMP_BLOCK(tb)
+    sparse_vector_serial_layout<SV> sv_lay;
+    bm::sparse_vector_serialize<SV>(sv, sv_lay, tb);
+    SV sv2;
+    const unsigned char* buf = sv_lay.buf();
+    int res = bm::sparse_vector_deserialize(sv2, buf, tb);
+    if (res != 0)
+    {
+        cerr << "De-Serialization error" << endl;
+        assert(0);exit(1);
+    }
+    if (sv.is_nullable() != sv2.is_nullable())
+    {
+        cerr << "Serialization comparison of two svectors failed (NULL vector)" << endl;
+        assert(0);exit(1);
+    }
+    const typename SV::bvector_type* bv_null = sv.get_null_bvector();
+    const typename SV::bvector_type* bv_null2 = sv.get_null_bvector();
+    
+    if (bv_null != bv_null2 && (bv_null == 0 || bv_null2 == 0))
+    {
+        cerr << "Serialization comparison (NUUL vector missing)!" << endl;
+        assert(0);exit(1);
+    }
+    if (bv_null)
+    {
+        if (bv_null->compare(*bv_null2) != 0)
+        {
+            cerr << "Serialization comparison of two svectors (NUUL vectors unmatch)!" << endl;
+            assert(0);exit(1);
+        }
+    }
+    if (!sv.equal(sv2) )
+    {
+        cerr << "Serialization comparison of two svectors failed" << endl;
+        assert(0); exit(1);
+    }
+    return true;
+}
+
+
+template<typename SV, typename VT>
+void load_SV_set_ref(SV* sv, const VT& vect)
+{
+    for (auto it = vect.begin(); it != vect.end(); ++it)
+    {
+        auto v = *it;
+        sv->set(v, v);
+    }
+}
+
+
+template<typename SV, typename VT>
+void compare_SV_set_ref(const SV& sv, const VT& vect)
+{
+    for (auto it = vect.begin(); it != vect.end(); ++it)
+    {
+        auto v = *it;
+        auto vv = sv[v];
+        if (v != vv)
+        {
+            std::cerr << "SV compare failed at:" << it - vect.begin()
+                      << " v=" << v << " sv[]=" << vv << std::endl;
+            assert(v == vv);
+            exit(1);
+        }
+    }
+}
