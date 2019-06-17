@@ -1049,22 +1049,28 @@ void basic_bmatrix<BV>::optimize(bm::word_t* temp_block,
 {
     if (st)
         st->reset();
-    for (unsigned j = 0; j < rsize_; ++j)
+
+    BM_DECLARE_TEMP_BLOCK(tb);
+    if (!temp_block)
+        temp_block = tb;
+
+    for (unsigned k = 0; k < rsize_; ++k)
     {
-        bvector_type* bv = get_row(j);
+        bvector_type* bv = get_row(k);
         if (bv)
         {
             typename bvector_type::statistics stbv;
-            bv->optimize(temp_block, opt_mode, &stbv);
+            bv->optimize(temp_block, opt_mode, st ? &stbv : 0);
             if (st)
             {
                 st->bit_blocks += stbv.bit_blocks;
                 st->gap_blocks += stbv.gap_blocks;
+                st->ptr_sub_blocks += stbv.ptr_sub_blocks;
                 st->max_serialize_mem += stbv.max_serialize_mem + 8;
                 st->memory_used += stbv.memory_used;
             }
         }
-    } // for j
+    } // for k
 }
 
 
@@ -1298,6 +1304,7 @@ void base_sparse_vector<Val, BV, MAX_SIZE>::optimize(bm::word_t* temp_block,
         bvector_type* bv = this->bmatr_.get_row(j);
         if (bv && (bv != bv_null)) // protect the NULL vector from de-allocation
         {
+            // TODO: check if this can be done within optimize loop
             if (!bv->any())  // empty vector?
             {
                 this->bmatr_.destruct_row(j);
