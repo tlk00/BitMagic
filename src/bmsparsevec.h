@@ -1672,7 +1672,7 @@ void sparse_vector<Val, BV>::optimize(
     typename sparse_vector<Val, BV>::statistics* st)
 {
     typename bvector_type::statistics stbv;
-    parent_type::optimize(temp_block, opt_mode, &stbv);
+    parent_type::optimize(temp_block, opt_mode, st ? &stbv : 0);
     
     if (st)
     {
