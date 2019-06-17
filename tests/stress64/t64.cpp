@@ -9739,7 +9739,7 @@ void TestSparseVector()
     }}
 
     cout << "svector Import test..." << endl;
-    
+
     {{
         std::vector<unsigned> vect;
         for (unsigned i = 0; i < 128000; ++i)
@@ -9911,7 +9911,9 @@ void TestSparseVector()
         generate_vect_simpl0(vect);
         load_SV_set_ref(&sv, vect);
         compare_SV_set_ref(sv, vect);
+        cout << "optimization...";
         sv.optimize();
+        cout << "ok" << endl;
         compare_SV_set_ref(sv, vect);
     }}
 
@@ -9922,7 +9924,9 @@ void TestSparseVector()
         generate_vect48(vect);
         load_SV_set_ref(&sv, vect);
         compare_SV_set_ref(sv, vect);
+        cout << "optimization...";
         sv.optimize();
+        cout << "ok" << endl;
         compare_SV_set_ref(sv, vect);
     }}
 
