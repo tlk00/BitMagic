@@ -5975,7 +5975,7 @@ void AndOperationsTest()
         for (unsigned i = 0; i < 2; ++i)
         {
             bvect::size_type predicted_count = bm::count_and(bv0, bv1);
-            assert(predicted_count = vect.size());
+            assert(predicted_count == vect.size());
             auto predicted_any = bm::any_and(bv1, bv0);
             if (predicted_any == 0 && predicted_count != 0)
             {
@@ -6526,7 +6526,7 @@ void OrOperationsTest()
         for (unsigned i = 0; i < 2; ++i)
         {
             bvect::size_type predicted_count = bm::count_or(bv0, bv1);
-            assert(predicted_count = vect.size());
+            assert(predicted_count == vect.size());
             auto predicted_any = bm::any_or(bv1, bv0);
             if (predicted_any == 0 && predicted_count != 0)
             {
@@ -9914,6 +9914,7 @@ void TestSparseVector()
         sv.optimize();
         compare_SV_set_ref(sv, vect);
     }}
+
     cout << "64-bit sparse assignment test (2)" << endl;
     {{
         bm::sparse_vector<unsigned long long, bvect > sv(bm::use_null);
