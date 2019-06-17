@@ -1862,12 +1862,13 @@ public:
     }
     
     /// find first block
-    unsigned find_first_block() const
+    /*
+    block_idx_type find_first_block() const
     {
         BM_ASSERT(top_blocks_);
         unsigned top_blocks = top_block_size();
 
-        for (unsigned i = 0; i < top_blocks; ++i)
+        for (block_idx_type i = 0; i < top_blocks; ++i)
         {
             bm::word_t** blk_blk = top_blocks_[i];
             if (!blk_blk)
@@ -1906,6 +1907,7 @@ public:
         }
         return 0;
     }
+    */
 
     // ----------------------------------------------------------------
     #define BM_FREE_OP(x) blk = blk_blk[j + x]; \
@@ -2146,6 +2148,7 @@ public:
                                 get_allocator().free_bit_block(block);
                                 block = FULL_BLOCK_FAKE_ADDR;
                                 ++full_blocks;
+                                any_valid = true;
                             }
                             else // empty block
                             {
