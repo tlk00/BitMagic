@@ -1652,7 +1652,8 @@ bool for_each_nzblock_if(T*** root, BI size1, F& f)
         {
             for (unsigned j = 0; j < bm::set_sub_array_size; ++j, ++block_idx)
             {
-                f(FULL_BLOCK_FAKE_ADDR, block_idx);
+                if (f(FULL_BLOCK_FAKE_ADDR, block_idx))
+                    return true;
             } // for j
             continue;
         }
