@@ -1550,9 +1550,9 @@ void sparse_vector<Val, BV>::set_value_no_null(size_type idx, value_type v)
 {
     // calculate logical block coordinates and masks
     //
-    unsigned nb = unsigned(idx >>  bm::set_block_shift);
-    unsigned i0 = nb >> bm::set_array_shift; // top block address
-    unsigned j0 = nb &  bm::set_array_mask;  // address in sub-block
+    block_idx_type nb = (idx >>  bm::set_block_shift);
+    unsigned i0 = unsigned(nb >> bm::set_array_shift); // top block address
+    unsigned j0 = unsigned(nb &  bm::set_array_mask);  // address in sub-block
 
     // clear the plains where needed
     unsigned eff_plains = this->effective_plains();
