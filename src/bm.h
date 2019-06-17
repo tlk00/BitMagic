@@ -3641,14 +3641,14 @@ template<class Alloc>
 bool bvector<Alloc>::set_bit_no_check(size_type n, bool val)
 {
     // calculate logical block number
-    unsigned nblock = unsigned(n >>  bm::set_block_shift); 
+    block_idx_type nblock = (n >>  bm::set_block_shift);
 
     int block_type;
     bm::word_t* blk = 
         blockman_.check_allocate_block(nblock, 
-                                        val,
-                                        get_new_blocks_strat(), 
-                                        &block_type);
+                                       val,
+                                       get_new_blocks_strat(),
+                                       &block_type);
 
     if (!IS_VALID_ADDR(blk))
         return false;
@@ -3716,7 +3716,7 @@ template<class Alloc>
 bool bvector<Alloc>::inc(size_type n)
 {
     // calculate logical block number
-    unsigned nblock = unsigned(n >>  bm::set_block_shift);
+    block_idx_type nblock = (n >>  bm::set_block_shift);
     bm::word_t* blk =
         blockman_.check_allocate_block(nblock,
                                        get_new_blocks_strat());
@@ -3753,7 +3753,7 @@ bool bvector<Alloc>::set_bit_conditional_impl(size_type n,
                                               bool     condition)
 {
     // calculate logical block number
-    unsigned nblock = unsigned(n >>  bm::set_block_shift);
+    block_idx_type nblock = (n >>  bm::set_block_shift);
     int block_type;
     bm::word_t* blk =
         blockman_.check_allocate_block(nblock, 
@@ -3820,7 +3820,7 @@ template<class Alloc>
 bool bvector<Alloc>::and_bit_no_check(size_type n, bool val)
 {
     // calculate logical block number
-    unsigned nblock = unsigned(n >>  bm::set_block_shift); 
+    block_idx_type nblock = (n >>  bm::set_block_shift);
 
     int block_type;
     bm::word_t* blk =
