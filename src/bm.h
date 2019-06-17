@@ -6578,9 +6578,7 @@ void bvector<Alloc>::copy_range_no_check(const bvector<Alloc>& bvect,
     {
         size_type last;
         bool found = find_reverse(last);
-        BM_ASSERT(found);
-        (void)found;
-        if (last > right)
+        if (found && (last > right))
             clear_range_no_check(right+1, last);
     }
 }
