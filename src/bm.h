@@ -1068,15 +1068,31 @@ public:
         bool search_in_blocks()
         {
             ++(this->block_idx_);
+            const blocks_manager_type& bman = this->bv_->blockman_;
             block_idx_type i = this->block_idx_ >> bm::set_array_shift;
-            block_idx_type top_block_size = this->bv_->blockman_.top_block_size();
+            block_idx_type top_block_size = bman.top_block_size();
+            bm::word_t*** blk_root = bman.top_blocks_root();
             for (; i < top_block_size; ++i)
             {
-                bm::word_t** blk_blk = this->bv_->blockman_.top_blocks_root()[i];
+                bm::word_t** blk_blk = blk_root[i];
                 if (blk_blk == 0)
                 {
-                    this->block_idx_ += bm::set_sub_array_size;
-                    this->position_ += bm::bits_in_array;
+                    // fast scan fwd in top level 
+                    size_type bn = this->block_idx_ + bm::set_sub_array_size;
+                    size_type pos = this->position_ + bm::bits_in_array;
+                    for (++i; i < top_block_size; ++i)
+                    {
+                        if (blk_root[i])
+                            break;
+                        bn += bm::set_sub_array_size;
+                        pos += bm::bits_in_array;
+                    }
+                    if (blk_root[i])
+                        --i;
+                    this->block_idx_ = bn;
+                    this->position_ = pos;
+                    //this->block_idx_ += bm::set_sub_array_size;
+                    //this->position_ += bm::bits_in_array;
                     continue;
                 }
                 if ((bm::word_t*)blk_blk == FULL_BLOCK_FAKE_ADDR)
