@@ -51,7 +51,7 @@ void clear_BV_set_ref(BV& bv, const VT& vect, bool print_stat = true)
 /// CMP bit-vector using ref syntax
 ///
 template<typename BV, typename VT>
-void compare_BV_set_ref(const BV& bv, const VT& vect)
+void compare_BV_set_ref(const BV& bv, const VT& vect, bool compare_count=true)
 {
     for (auto it = vect.begin(); it != vect.end(); ++it)
     {
@@ -65,20 +65,23 @@ void compare_BV_set_ref(const BV& bv, const VT& vect)
             exit(1);
         }
     }
-    auto count = bv.count();
-    if (count != vect.size())
+    if (compare_count)
     {
-        cerr << "Error! Vector(ref) size cmp failed. vect.size()=" << vect.size()
-             << " bv.count()=" << count << endl;
-        assert(0);
-        exit(1);
+        auto count = bv.count();
+        if (count != vect.size())
+        {
+            cerr << "Error! Vector(ref) size cmp failed. vect.size()=" << vect.size()
+                << " bv.count()=" << count << endl;
+            assert(0);
+            exit(1);
+        }
     }
 }
 
 /// CMP bit-vector using enumerator
 ///
 template<typename BV, typename VT>
-void compare_BV(const BV& bv, const VT& vect)
+void compare_BV(const BV& bv, const VT& vect, bool compare_count = true)
 {
     typename BV::enumerator en = bv.first();
     auto prev_id = 0ULL;
@@ -99,7 +102,7 @@ void compare_BV(const BV& bv, const VT& vect)
                  << endl;
             assert(0); exit(1);
         }
-        if ((v1 != prev_id))
+        if ((v1 != prev_id) && compare_count)
         {
             auto r = bv.count_range(prev_id, v1);
             if (r != 2ULL)
@@ -112,13 +115,16 @@ void compare_BV(const BV& bv, const VT& vect)
         }
         prev_id = v1;
     }
-    auto count = bv.count();
-    if (count != vect.size())
+    if (compare_count)
     {
-        cerr << "Error! Vector(en) size cmp failed. vect.size()=" << vect.size()
-             << " bv.count()=" << count << endl;
-        assert(0);
-        exit(1);
+        auto count = bv.count();
+        if (count != vect.size())
+        {
+            cerr << "Error! Vector(en) size cmp failed. vect.size()=" << vect.size()
+                << " bv.count()=" << count << endl;
+            assert(0);
+            exit(1);
+        }
     }
 }
 
@@ -201,7 +207,7 @@ bool CompareSparseVector(const SV& sv, const Vect& vect, bool interval_filled = 
     
     // serialization comparison
     BM_DECLARE_TEMP_BLOCK(tb)
-    sparse_vector_serial_layout<SV> sv_lay;
+    bm::sparse_vector_serial_layout<SV> sv_lay;
     bm::sparse_vector_serialize<SV>(sv, sv_lay, tb);
     SV sv2;
     const unsigned char* buf = sv_lay.buf();
