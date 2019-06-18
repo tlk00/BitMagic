@@ -2229,6 +2229,26 @@ public:
             
             // optimize the top level
             //
+            if (blk_blk[0] == FULL_BLOCK_FAKE_ADDR)
+            {
+                validate_top_full(i);
+                if (bv_stat)
+                    bv_stat->max_serialize_mem += unsigned(sizeof(unsigned) + 1);
+            }
+            else
+            if (!blk_blk[0])
+            {
+                validate_top_zero(i);
+                if (bv_stat)
+                    bv_stat->max_serialize_mem += unsigned(sizeof(unsigned) + 1);
+            }
+            else
+            {
+                if (bv_stat)
+                    bv_stat->ptr_sub_blocks++;
+            }
+
+/*
             if (full_blocks == bm::set_sub_array_size)
             {
                 alloc_.free_ptr(top_blocks_[i], bm::set_sub_array_size);
@@ -2252,6 +2272,7 @@ public:
                 if (bv_stat)
                     bv_stat->max_serialize_mem += unsigned(sizeof(unsigned) + 1);
             }
+*/
         } // for i
         
     }
