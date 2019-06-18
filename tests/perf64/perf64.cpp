@@ -38,6 +38,9 @@ For more information please visit:  http://bitmagic.io
 
 #define BM64ADDR
 #include "bm.h"
+#include <bmsparsevec.h>
+#include <bmsparsevec_algo.h>
+#include <bmsparsevec_serial.h>
 #include "bmtimer.h"
 #include "bmdbg.h"
 
@@ -85,14 +88,49 @@ void bvector64_VerySparse_SetDestroyCycle()
                 cout << "\r" << i << "/" << max_try << flush;
         }
     }
-    cout << "\r                       " << flush;
+    cout << "\r                       " << endl;
 }
 
+static
+void bvector64_VerySparse_RefAccessCycle()
+{
+    {
+        bvect64 bv0;
+        ref_vect vect;
+        generate_vect_simpl0(vect);
+        load_BV_set_ref(bv0, vect, false);
 
+        cout << "bvector64_VerySparse_RefAccessCycle..." << endl;
+        {
+            bm::chrono_taker tt("bvector64_VerySparse_RefAccessCycle", 1, &timing_map);
+            const unsigned max_try = REPEATS;
+            for (unsigned i = 0; i < max_try; ++i)
+            {
+                compare_BV_set_ref(bv0, vect, false);
+                if ((i & 0xF) == 0)
+                    cout << "\r" << i << "/" << max_try << flush;
+            }
+        }
+        cout << "\r                       " << endl;
+        cout << "bvector64_VerySparse_EnumAccessCycle..." << endl;
+        {
+            bm::chrono_taker tt("bvector64_VerySparse_EnumAccessCycle", 1, &timing_map);
+            const unsigned max_try = REPEATS;
+            for (unsigned i = 0; i < max_try; ++i)
+            {
+                compare_BV(bv0, vect, false);
+                if ((i & 0xF) == 0)
+                    cout << "\r" << i << "/" << max_try << flush;
+            }
+        }
+        cout << "\r                       " << flush;
+    }
+}
 int main(void)
 {
     bvector64_VerySparse_SetDestroyCycle();
-    
+    bvector64_VerySparse_RefAccessCycle();
+
     std::cout << std::endl << "Performance:" << std::endl;
     bm::chrono_taker::print_duration_map(timing_map, bm::chrono_taker::ct_all);
 
