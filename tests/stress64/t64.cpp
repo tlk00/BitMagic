@@ -488,11 +488,11 @@ void GenericBVectorTest()
         
         bvect64::statistics st1, st2, st3;
         bv0.calc_stat(&st1);
-        assert(st1.ptr_sub_blocks == 5);
+        assert(st1.ptr_sub_blocks == 6);
         bv0.optimize(0, bvect64::opt_compress, &st2);
-        assert(st1.ptr_sub_blocks == st2.ptr_sub_blocks);
+        assert(st1.ptr_sub_blocks >= st2.ptr_sub_blocks);
         bv1.calc_stat(&st3);
-        assert(st1.ptr_sub_blocks == st3.ptr_sub_blocks);
+        assert(st1.ptr_sub_blocks >= st3.ptr_sub_blocks);
         assert(st2.gap_blocks == st3.gap_blocks);
     }
 
