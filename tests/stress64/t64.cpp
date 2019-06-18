@@ -6525,6 +6525,7 @@ void OrOperationsTest()
         
         for (unsigned i = 0; i < 2; ++i)
         {
+            cout << "Pass " << i << endl;
             bvect::size_type predicted_count = bm::count_or(bv0, bv1);
             assert(predicted_count == vect.size());
             auto predicted_any = bm::any_or(bv1, bv0);
@@ -6534,14 +6535,17 @@ void OrOperationsTest()
                 assert(0);
                 exit(1);
             }
+
             predicted_count = bm::count_or(bv0, bv_i);
             assert(predicted_count == full_cnt);
-            
+
             bv1.bit_or(bv_i);
             {
                 int cmp = bv1.compare(bv_i);
                 assert(cmp == 0);
             }
+            bv1 = bv0;
+
             {
                 bvect bv_i_c;
                 bv_i_c.invert();
@@ -6551,7 +6555,7 @@ void OrOperationsTest()
                 int cmp = bv_i_c.compare(bv_i);
                 assert(cmp == 0);
             }
-            
+
             bv0.optimize();
             bv1.optimize();
         } // for
