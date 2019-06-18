@@ -7492,16 +7492,19 @@ unsigned short bitscan_wave(const bm::word_t* w_ptr, unsigned char* bits)
     return cnt0;
 }
 
-
+#if defined (BM64_SSE4) || defined(BM64_AVX2) || defined(BM64_AVX512)
 /**
-    bit index to word gather-scatter algorithm
+    bit index to word gather-scatter algorithm (SIMD)
     @ingroup bitfunc
     @internal
 */
-template<typename TRGW, typename IDX, typename SZ>
-void bit_block_gather_scatter(TRGW* arr, const bm::word_t* blk,
-                              const IDX* idx, SZ size, SZ start, unsigned bit_idx)
+inline
+void bit_block_gather_scatter(unsigned* arr, const bm::word_t* blk,
+                              const unsigned* idx, unsigned size, unsigned start,
+                              unsigned bit_idx)
 {
+typedef unsigned TRGW;
+typedef unsigned IDX;
 #if defined(BM64_SSE4)
     // optimized for unsigned
     if (bm::conditional<sizeof(TRGW)==4 && sizeof(IDX)==4>::test())
@@ -7515,8 +7518,22 @@ void bit_block_gather_scatter(TRGW* arr, const bm::word_t* blk,
         avx2_bit_block_gather_scatter(arr, blk, idx, size, start, bit_idx);
         return;
     }
+#else
+    BM_ASSERT(0);
 #endif
-    // TODO: SIMD for 64-bit index sizes
+}
+#endif
+
+/**
+    bit index to word gather-scatter algorithm
+    @ingroup bitfunc
+    @internal
+*/
+template<typename TRGW, typename IDX, typename SZ>
+void bit_block_gather_scatter(TRGW* arr, const bm::word_t* blk,
+                              const IDX* idx, SZ size, SZ start, unsigned bit_idx)
+{
+    // TODO: SIMD for 64-bit index sizes and 64-bit target value size
     //
     TRGW mask1 = 1;
     const SZ len = (size - start);
