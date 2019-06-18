@@ -9737,6 +9737,30 @@ void TestSparseVector()
         assert(arr[1] == 2);
         assert(arr[2] == 9);
     }}
+    
+    cout << "sv::push_back_null()" << endl;
+    {{
+        bm::sparse_vector<unsigned, bvect> sv(bm::use_null);
+        sv.push_back_null(10);
+        auto sz = sv.size();
+        assert(sz==10);
+        sv.push_back(1);
+        sz = sv.size();
+        assert(sz==11);
+        assert(sv[10] == 1);
+        for (bvect::size_type i = 0; i < 10; ++i)
+        {
+            auto v = sv[i];
+            assert(v == 0);
+        }
+        sv.optimize();
+        assert(sv[10] == 1);
+        for (bvect::size_type i = 0; i < 10; ++i)
+        {
+            auto v = sv[i];
+            assert(v == 0);
+        }
+    }}
 
     cout << "svector Import test..." << endl;
 
@@ -10554,6 +10578,403 @@ void TestSparseVector()
 
 
 
+// ---------------------------------------------------------------------
+
+typedef bm::sparse_vector<unsigned, bvect > sparse_vector_u32;
+typedef bm::sparse_vector<unsigned long long, bvect > sparse_vector_u64;
+typedef bm::rsc_sparse_vector<unsigned, sparse_vector_u32> rsc_sparse_vector_u32;
+
+static
+void TestSparseVectorInserter()
+{
+    cout << "---------------------------- Test sparse vector inserter" << endl;
+    
+    {
+        sparse_vector_u32 sv1(bm::use_null);
+        sparse_vector_u32 sv2(bm::use_null);
+        sparse_vector_u32::back_insert_iterator bi2(sv2.get_back_inserter());
+        sparse_vector_u32::back_insert_iterator bi3(bi2);
+        sparse_vector_u32::back_insert_iterator bi4;
+
+        assert(bi2.empty());
+        assert(bi3.empty());
+        
+        bi4 = bi2;
+        assert(bi4.empty());
+
+        for (unsigned i = 0; i < 1280000; ++i)
+        {
+            if (i % 100 == 0)
+            {
+                sv1.set_null(i);
+                bi2.add_null();
+            }
+            else
+            {
+                sv1.set(i, i);
+                *bi2 = i;
+            }
+            assert(!bi2.empty());
+        }
+        bi2.flush();
+        
+        if (!sv1.equal(sv2))
+        {
+            cout << "ERROR! sparse_vector back_insert_iterator mismatch." << endl;
+            exit(1);
+        }
+    }
+
+    {
+        sparse_vector_u32 sv1(bm::use_null);
+        sparse_vector_u32 sv2(bm::use_null);
+        sparse_vector_u32::back_insert_iterator bi2(sv2.get_back_inserter());
+        
+        for (unsigned i = 0; i < 1280000; ++i)
+        {
+            if (i % 100 == 0)
+            {
+                sv1.set_null(i);
+                ++i;
+                sv1.set_null(i);
+                bi2.add_null(2);
+            }
+            else
+            {
+                sv1.set(i, i);
+                *bi2 = i;
+            }
+            if (i % 10000 == 0)
+            {
+                bi2.flush();
+            }
+
+        }
+        bi2.flush();
+        
+        if (!sv1.equal(sv2))
+        {
+            cout << "ERROR! (2)sparse_vector back_insert_iterator mismatch." << endl;
+            exit(1);
+        }
+    }
+
+    cout << "64-bit sparse bulk inserter test (1)" << endl;
+    {{
+        bm::sparse_vector<unsigned long long, bvect > sv(bm::use_null);
+        ref_vect vect;
+        generate_vect_simpl0(vect);
+        bulk_load_SV_set_ref(&sv, vect);
+        compare_SV_set_ref(sv, vect);
+        sv.optimize();
+        cout << "ok" << endl;
+        compare_SV_set_ref(sv, vect);
+    }}
+    
+    cout << "64-bit sparse bulk inserter test (2)" << endl;
+    {{
+        bm::sparse_vector<unsigned long long, bvect > sv(bm::use_null);
+        ref_vect vect;
+        generate_vect48(vect);
+        bulk_load_SV_set_ref(&sv, vect);
+        compare_SV_set_ref(sv, vect);
+        sv.optimize();
+        cout << "ok" << endl;
+        compare_SV_set_ref(sv, vect);
+    }}
+
+    cout << "---------------------------- Bit-plain sparse vector inserter OK" << endl;
+}
+
+
+
+// ------------------------------------------------------------------------
+
+static
+void CheckSparseVectorGather(const sparse_vector_u32& sv,
+                             sparse_vector_u32::size_type from,
+                             sparse_vector_u32::size_type to,
+                             unsigned control_value = 0)
+{
+    assert(sv.size());
+    assert (to >= from);
+    
+    sparse_vector_u32::size_type gather_size = to - from + 1;
+    std::vector<unsigned> target_v;
+    std::vector<unsigned> target_v_control;
+    std::vector<sparse_vector_u32::size_type> idx_v;
+    target_v.resize(gather_size);
+    target_v_control.resize(gather_size);
+    idx_v.reserve(gather_size);
+    
+    for (sparse_vector_u32::size_type i = from; i <= to; ++i)
+    {
+        idx_v.push_back(i);
+    }
+    sv.decode(target_v_control.data(), from, gather_size);
+
+
+    sv.gather(target_v.data(), idx_v.data(), gather_size, BM_SORTED);
+    for (unsigned i = 0; i < gather_size; ++i)
+    {
+        unsigned vg = target_v[i];
+        unsigned vc = target_v_control[i];
+        if (vg != vc)
+        {
+            cerr << "Error! gather/decode control mismatch " << vc << " " << vg
+                 << " at=" << i << endl;
+            cerr << control_value << endl;
+            exit(1);
+        }
+    }
+    
+    sv.gather(target_v.data(), idx_v.data(), gather_size, BM_UNSORTED);
+    for (unsigned i = 0; i < gather_size; ++i)
+    {
+        unsigned vg = target_v[i];
+        unsigned vc = target_v_control[i];
+        if (vg != vc)
+        {
+            cerr << "Error! gather/decode control mismatch " << vc << " " << vg
+                 << " at=" << i << endl;
+            cerr << control_value << endl;
+            exit(1);
+        }
+    }
+
+    sv.gather(target_v.data(), idx_v.data(), gather_size, BM_UNKNOWN);
+    for (unsigned i = 0; i < gather_size; ++i)
+    {
+        unsigned vg = target_v[i];
+        unsigned vc = target_v_control[i];
+        if (vg != vc)
+        {
+            cerr << "Error! gather/decode control mismatch " << vc << " " << vg
+                 << " at=" << i << endl;
+            cerr << control_value << endl;
+            exit(1);
+        }
+    }
+
+
+#if 0
+    // detailed check (very slow)
+    unsigned k = 0;
+    for (unsigned i = from; i <= to; ++i, ++k)
+    {
+        unsigned v1 = i;
+        unsigned v2 = target_v[k];
+        if (v1 != v2)
+        {
+            if (control_value)
+            {
+                if (v2 != control_value)
+                {
+                    cerr << "Error! gather control mismatch " << control_value << " " << v2
+                         << " at=" << i << endl;
+                    assert(0);exit(1);
+                }
+            }
+            else
+            {
+                v1 = sv.get(i);
+                if (v1 != v2)
+                {
+                    cerr << "Error! gather mismatch " << v1 << " " << v2
+                         << " at=" << i << endl;
+                    assert(0);exit(1);
+                }
+            }
+        }
+    } // for
+#endif
+}
+
+static
+void CheckSparseVectorGatherRandom(const sparse_vector_u32& sv,
+                                   sparse_vector_u32::size_type gather_size)
+{
+    assert(sv.size());
+ 
+    std::random_device rd;
+    std::mt19937_64 mt_rand(rd());
+
+    if (gather_size == 0)
+        gather_size = 1;
+    
+    std::vector<unsigned> target_v;
+    std::vector<sparse_vector_u32::size_type> idx_v;
+    target_v.resize(gather_size);
+    idx_v.reserve(gather_size);
+    
+    for (sparse_vector_u32::size_type i = 0; i < gather_size; ++i)
+    {
+        sparse_vector_u32::size_type r_idx = mt_rand() % (sv.size()-1);
+        idx_v.push_back(r_idx);
+    }
+    
+    sv.gather(target_v.data(), idx_v.data(), gather_size, BM_UNSORTED);
+
+    unsigned k = 0;
+    for (sparse_vector_u32::size_type i = 0; i < gather_size; ++i, ++k)
+    {
+        unsigned v1 = sv.get(idx_v[k]);
+        unsigned v2 = target_v[k];
+        if (v1 != v2)
+        {
+            {
+                cerr << "Error! random gather mismatch " << v1 << " " << v2
+                     << " at=" << i << endl;
+                assert(0);
+                exit(1);
+            }
+        }
+    } // for
+}
+
+
+
+
+static
+void TestSparseVectorGatherDecode()
+{
+    cout << "---------------------------- Test sparse vector gather decode" << endl;
+    
+    
+    cout << "64-bit sparse gather test (1)" << endl;
+    {{
+        bm::sparse_vector<unsigned long long, bvect > sv(bm::use_null);
+        ref_vect vect;
+        generate_vect_simpl0(vect);
+        load_SV_set_ref(&sv, vect);
+        compare_SV_set_ref(sv, vect);
+
+        for (unsigned p = 0; p < 3; ++p)
+        {
+            cout << "Pass " << p << endl;
+            {
+                ref_vect vect_d; vect_d.resize(vect.size());
+                for (size_t k = 0; k < vect.size(); ++k)
+                {
+                    auto sz = sv.gather(&vect_d[0], &vect[k], 1, BM_UNSORTED);
+                    assert(sz == 1);
+                    bvect::size_type idx = vect[k];
+                    unsigned long long v = sv[idx];
+                    assert(vect_d[0] == v);
+                    vect_d[0] = 0;
+                    sz = sv.gather(&vect_d[0], &vect[k], 1, BM_SORTED);
+                    assert(sz == 1);
+                    idx = vect[k];
+                    v = sv[idx];
+                    assert(vect_d[0] == v);
+                    vect_d[0] = 0;
+                }
+            }
+            {
+                ref_vect vect_d; vect_d.resize(vect.size());
+                auto sz = sv.gather(&vect_d[0], &vect[0], vect.size(), BM_UNSORTED);
+                assert(sz == vect.size());
+                compare_SV_set_ref(sv, vect_d);
+            }
+            {
+                ref_vect vect_d; vect_d.resize(vect.size());
+                auto sz = sv.gather(&vect_d[0], &vect[0], vect.size(), BM_UNKNOWN);
+                assert(sz == vect.size());
+                compare_SV_set_ref(sv, vect_d);
+            }
+            {
+                ref_vect vect_d; vect_d.resize(vect.size());
+                auto sz = sv.gather(&vect_d[0], &vect[0], vect.size(), BM_SORTED);
+                assert(sz == vect.size());
+                compare_SV_set_ref(sv, vect_d);
+            }
+            sv.optimize();
+        } // for k
+        cout << "ok" << endl;
+    }}
+
+    sparse_vector_u32 sv;
+    sparse_vector_u32 sv2;
+    sparse_vector_u32 sv3;
+    const unsigned control_value = 9;
+    {
+        cout << " Filling..." << flush;
+        sparse_vector_u32::back_insert_iterator bi(sv.get_back_inserter());
+        sparse_vector_u32::back_insert_iterator bi2(sv2.get_back_inserter());
+
+        unsigned max_size = 1280000;
+        for (unsigned i = 0; i < max_size; ++i)
+        {
+            *bi = i;
+            *bi2 = control_value;
+        }
+        bi.flush(); bi2.flush();
+        sv2.optimize();
+        
+        for (unsigned i = 0; i < max_size; i+=200)
+        {
+            sv3[i] = i;
+        }
+        sv3.optimize();
+
+        cout << "ok" << endl;
+    }
+    
+    
+    
+    {
+        cout << "Test 1 (regular pattern)" << endl;
+        unsigned probe_to = 100000;
+        time_t      start_time = time(0);
+        time_t      finish_time;
+
+        for (unsigned i = 0; i < probe_to; ++i)
+        {
+            CheckSparseVectorGather(sv, i, i);
+            CheckSparseVectorGather(sv2, i, i, control_value);
+            CheckSparseVectorGather(sv3, i, i);
+            unsigned depth = rand() % 30000;
+            CheckSparseVectorGather(sv, i, i+depth);
+            CheckSparseVectorGather(sv2, i, i+depth, control_value);
+            CheckSparseVectorGather(sv3, i, i+depth);
+            if (i % 500 == 0)
+            {
+                finish_time = time(0);
+                cout << "\r" << i << "/" << probe_to
+                     << " [" << (finish_time - start_time) << "]" << flush;
+                start_time = time(0);
+            }
+        }
+        cout << endl;
+    }
+
+    {
+        cout << "Test 2 (random pattern)" << endl;
+        unsigned probe_to = 100000;
+        time_t      start_time = time(0);
+        time_t      finish_time;
+
+        for (unsigned i = 0; i < probe_to; ++i)
+        {
+            unsigned gsize = rand()%2024;
+            CheckSparseVectorGatherRandom(sv, gsize);
+            CheckSparseVectorGatherRandom(sv2, gsize);
+            CheckSparseVectorGatherRandom(sv3, gsize);
+            if (i % 500 == 0)
+            {
+                finish_time = time(0);
+                cout << "\r" << i << "/" << probe_to
+                     << " [" << (finish_time - start_time) << "]" << flush;
+                start_time = time(0);
+            }
+        }
+        cout << endl;
+    }
+
+
+    cout << "---------------------------- Test sparse vector gather decode OK" << endl;
+}
+
 
 static
 void show_help()
@@ -10743,11 +11164,11 @@ int main(int argc, char *argv[])
     {
 
          TestSparseVector();
-/*
+
          TestSparseVectorInserter();
 
          TestSparseVectorGatherDecode();
-
+/*
          TestSparseVectorTransform();
 
          TestSparseVectorRange();

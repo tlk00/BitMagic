@@ -228,7 +228,7 @@ bool CompareSparseVector(const SV& sv, const Vect& vect, bool interval_filled = 
     {
         if (bv_null->compare(*bv_null2) != 0)
         {
-            cerr << "Serialization comparison of two svectors (NUUL vectors unmatch)!" << endl;
+            cerr << "Serialization comparison of two svectors (NULL vectors unmatch)!" << endl;
             assert(0);exit(1);
         }
     }
@@ -255,16 +255,45 @@ void load_SV_set_ref(SV* sv, const VT& vect)
 template<typename SV, typename VT>
 void compare_SV_set_ref(const SV& sv, const VT& vect)
 {
-    for (auto it = vect.begin(); it != vect.end(); ++it)
+    for (size_t i = 0; i != vect.size(); ++i)
     {
-        auto v = *it;
+        auto v = vect[i];
         auto vv = sv[v];
         if (v != vv)
         {
-            std::cerr << "SV compare failed at:" << it - vect.begin()
+            std::cerr << "SV compare failed at:" << i
                       << " v=" << v << " sv[]=" << vv << std::endl;
+            vv = sv[v];
             assert(v == vv);
             exit(1);
         }
     }
 }
+
+
+template<typename SV, typename VT>
+void bulk_load_SV_set_ref(SV* sv, const VT& vect)
+{
+    assert(vect.size());
+    typename SV::back_insert_iterator bi(sv->get_back_inserter());
+    auto v_prev = vect[0];
+    if (v_prev)
+        bi.add_null(v_prev);
+    *bi = v_prev;
+    for (auto it = vect.begin(); it != vect.end(); ++it)
+    {
+        auto v = *it;
+        if (v == v_prev)
+            continue;
+        assert(v > v_prev);
+        typename SV::size_type diff = v - v_prev;
+        if (diff > 1)
+        {
+            bi.add_null(diff-1);
+        }
+        *bi = v;
+        v_prev = v;
+    }
+    bi.flush();
+}
+

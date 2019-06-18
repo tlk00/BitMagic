@@ -23,11 +23,14 @@ For more information please visit:  http://bitmagic.io
 template<typename VT>
 void generate_vect_simpl0(VT& vect)
 {
+
     VT v_tmp {0, 10, 31, 32, 62, 63,
              (5 * bm::bits_in_array), (5 * bm::bits_in_array)+1,
              bm::id_max32-1, bm::id_max32, bm::id64_t(bm::id_max32)+1,
+             bm::id_max48/2 + 10, bm::id_max48/2 + 16,
              bm::id_max48-1
             };
+
     std::swap(vect, v_tmp);
 }
 
