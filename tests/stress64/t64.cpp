@@ -463,14 +463,6 @@ void SyntaxTest()
         assert(bv1.test(bm::id_max / 2));
     }
     
-    {
-        bvect64 bv1 {0, 10, 31, 32, 62, 63,
-             (5 * bm::bits_in_array), (5 * bm::bits_in_array)+1,
-             bm::id_max32-1, bm::id_max32, bm::id64_t(bm::id_max32)+1,
-             bm::id_max48-1
-            };
-        compare_BV(bv1, vect);
-    }
     cout << "------------------------------------ SyntaxTest() OK" << endl;
 }
 
