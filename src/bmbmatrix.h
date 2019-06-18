@@ -1060,6 +1060,7 @@ void basic_bmatrix<BV>::optimize(bm::word_t* temp_block,
         if (bv)
         {
             typename bvector_type::statistics stbv;
+            stbv.reset();
             bv->optimize(temp_block, opt_mode, st ? &stbv : 0);
             if (st)
             {
