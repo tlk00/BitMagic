@@ -7500,7 +7500,7 @@ unsigned short bitscan_wave(const bm::word_t* w_ptr, unsigned char* bits)
 */
 template<typename TRGW, typename IDX, typename SZ>
 void bit_block_gather_scatter(TRGW* arr, const bm::word_t* blk,
-                              const IDX* idx, SZ size, unsigned start, unsigned bit_idx)
+                              const IDX* idx, SZ size, SZ start, unsigned bit_idx)
 {
 #if defined(BM64_SSE4)
     // optimized for unsigned
@@ -7516,24 +7516,26 @@ void bit_block_gather_scatter(TRGW* arr, const bm::word_t* blk,
         return;
     }
 #endif
-
-    const unsigned len = (size - start);
-    const unsigned len_unr = len - (len % 2);
-    unsigned k;
-    for (k = 0; k < len_unr; k+=2)
+    // TODO: SIMD for 64-bit index sizes
+    //
+    TRGW mask1 = 1;
+    const SZ len = (size - start);
+    const SZ len_unr = len - (len % 2);
+    SZ k = 0;
+    for (; k < len_unr; k+=2)
     {
-        const unsigned base = start + k;
-
+        const SZ base = start + k;
         const unsigned nbitA = unsigned(idx[base] & bm::set_block_mask);
-        arr[base]   |= TRGW(bool(blk[nbitA >> bm::set_word_shift] & (1u << (nbitA & bm::set_word_mask))) << bit_idx); 
+        arr[base]   |= (TRGW(bool(blk[nbitA >> bm::set_word_shift] & (mask1 << (nbitA & bm::set_word_mask)))) << bit_idx);
         const unsigned nbitB = unsigned(idx[base + 1] & bm::set_block_mask);
-        arr[base+1] |= TRGW(bool(blk[nbitB >> bm::set_word_shift] & (1u << (nbitB & bm::set_word_mask))) << bit_idx);
-    }
+        arr[base+1] |= (TRGW(bool(blk[nbitB >> bm::set_word_shift] & (mask1 << (nbitB & bm::set_word_mask)))) << bit_idx);
+    } // for k
+
     for (; k < len; ++k)
     {
         unsigned nbit = unsigned(idx[start + k] & bm::set_block_mask);
-        arr[start + k] |= TRGW(bool(blk[nbit >> bm::set_word_shift] & (1u << (nbit & bm::set_word_mask))) << bit_idx);
-    }
+        arr[start + k] |= (TRGW(bool(blk[nbit >> bm::set_word_shift] & (mask1 << (nbit & bm::set_word_mask)))) << bit_idx);
+    } // for k
 }
 
 /**

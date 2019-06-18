@@ -429,6 +429,12 @@ public:
     void push_back(value_type v);
     
     /*!
+        \brief push back specified amount of NULL values
+        \param count   - number of NULLs to push back
+    */
+    void push_back_null(size_type count);
+    
+    /*!
         \brief insert specified element into container
         \param idx - element index
         \param v   - element value
@@ -1070,12 +1076,19 @@ sparse_vector<Val, BV>::gather(value_type*       arr,
         case BM_UNSORTED:
             sorted_block = false;
             for (; r < size; ++r)
-                if (nb != unsigned(idx[r] >> bm::set_block_shift))
+            {
+                block_idx_type nb_next = (idx[r] >> bm::set_block_shift);
+                if (nb != nb_next)
                     break;
+            } // for r
             break;            
             // no break(!) intentional fall through
         case BM_SORTED:
-            r = bm::idx_arr_block_lookup_u32(idx, size, nb, r);
+            #ifdef BM64ADDR
+                r = bm::idx_arr_block_lookup_u64(idx, size, nb, r);
+            #else
+                r = bm::idx_arr_block_lookup_u32(idx, size, nb, r);
+            #endif
             break;
         case BM_SORTED_UNIFORM:
             r = size;
@@ -1097,17 +1110,19 @@ sparse_vector<Val, BV>::gather(value_type*       arr,
         unsigned i0 = unsigned(nb >> bm::set_array_shift); // top block address
         unsigned j0 = unsigned(nb &  bm::set_array_mask);  // address in sub-block
         
-        unsigned eff_plains = this->effective_plains();
+        unsigned eff_plains = this->effective_plains(); // TODO: get real effective plains for [i,j]
         for (unsigned j = 0; j < eff_plains; ++j)
         {
             const bm::word_t* blk = this->bmatr_.get_block(j, i0, j0);
             if (!blk)
                 continue;
             value_type vm;
+            const value_type mask1 = 1;
+            
             if (blk == FULL_BLOCK_FAKE_ADDR)
             {
-                vm = (1u << j);
-                for (unsigned k = i; k < r; ++k)
+                vm = (mask1 << j);
+                for (size_type k = i; k < r; ++k)
                     arr[k] |= vm;
                 continue;
             }
@@ -1118,7 +1133,7 @@ sparse_vector<Val, BV>::gather(value_type*       arr,
                 
                 if (sorted_block) // b-search hybrid with scan lookup
                 {
-                    for (unsigned k = i; k < r; )
+                    for (size_type k = i; k < r; )
                     {
                         unsigned nbit = unsigned(idx[k] & bm::set_block_mask);
                         
@@ -1126,7 +1141,7 @@ sparse_vector<Val, BV>::gather(value_type*       arr,
                         unsigned gap_value = gap_blk[gidx];
                         if (is_set)
                         {
-                            arr[k] |= vm = (1u << j);
+                            arr[k] |= vm = (mask1 << j);
                             for (++k; k < r; ++k) // speculative look-up
                             {
                                 if (unsigned(idx[k] & bm::set_block_mask) <= gap_value)
@@ -1146,11 +1161,11 @@ sparse_vector<Val, BV>::gather(value_type*       arr,
                 }
                 else // unsorted block gather request: b-search lookup
                 {
-                    for (unsigned k = i; k < r; ++k)
+                    for (size_type k = i; k < r; ++k)
                     {
                         unsigned nbit = unsigned(idx[k] & bm::set_block_mask);
                         is_set = bm::gap_test_unr(gap_blk, nbit);
-                        arr[k] |= value_type(bool(is_set) << j);
+                        arr[k] |= (value_type(bool(is_set)) << j);
                     } // for k
                 }
                 continue;
@@ -1324,7 +1339,7 @@ sparse_vector<Val, BV>::extract(value_type* arr,
         {
             size_type idx_base = arr_offset - off_;
             const value_type m = mask_;
-            for (unsigned i = 0;i < sz; ++i)
+            for (unsigned i = 0; i < sz; ++i)
                 arr_[i + idx_base] |= m;
         }
         value_type*  arr_;
@@ -1396,6 +1411,7 @@ template<class Val, class BV>
 typename sparse_vector<Val, BV>::value_type
 sparse_vector<Val, BV>::get(typename sparse_vector<Val, BV>::size_type i) const
 {
+    BM_ASSERT(i < bm::id_max);
     BM_ASSERT(i < size());
     
     value_type v = 0;
@@ -1454,9 +1470,21 @@ void sparse_vector<Val, BV>::push_back(value_type v)
 //---------------------------------------------------------------------
 
 template<class Val, class BV>
+void sparse_vector<Val, BV>::push_back_null(size_type count)
+{
+    BM_ASSERT(count);
+    BM_ASSERT(bm::id_max - count > this->size_);
+    BM_ASSERT(this->is_nullable());
+    
+    this->size_ += count;
+}
+
+
+//---------------------------------------------------------------------
+
+template<class Val, class BV>
 void sparse_vector<Val, BV>::insert(size_type idx, value_type v)
 {
-
     if (idx >= size())
     {
         this->size_ = idx+1;
@@ -1496,7 +1524,7 @@ void sparse_vector<Val, BV>::insert_value_no_null(size_type idx, value_type v)
             if (bv)
                 bv->insert(idx, false);
         }
-        mask <<=  1;
+        mask <<= 1;
     } // for i
     // insert 0 into all other existing plains
     unsigned eff_plains = this->effective_plains();
@@ -2089,8 +2117,16 @@ template<class Val, class BV>
 void sparse_vector<Val, BV>::back_insert_iterator::add_null(
     typename sparse_vector<Val, BV>::back_insert_iterator::size_type count)
 {
-    for (size_type i = 0; i < count; ++i) // TODO: optimization
-        this->add(value_type(0));
+    if (count < 32)
+    {
+        for (size_type i = 0; i < count; ++i)
+            this->add(value_type(0));
+    }
+    else
+    {
+        this->flush();
+        sv_->push_back_null(count);
+    }
 }
 
 //---------------------------------------------------------------------
