@@ -14563,6 +14563,30 @@ void TestSparseVector()
         assert(arr[2] == 1);
     }}
     
+    cout << "sv::push_back_null()" << endl;
+    {{
+        bm::sparse_vector<unsigned, bvect> sv(bm::use_null);
+        sv.push_back_null(10);
+        auto sz = sv.size();
+        assert(sz==10);
+        sv.push_back(1);
+        sz = sv.size();
+        assert(sz==11);
+        assert(sv[10] == 1);
+        for (bvect::size_type i = 0; i < 10; ++i)
+        {
+            auto v = sv[i];
+            assert(v == 0);
+        }
+        sv.optimize();
+        assert(sv[10] == 1);
+        for (bvect::size_type i = 0; i < 10; ++i)
+        {
+            auto v = sv[i];
+            assert(v == 0);
+        }
+    }}
+
     cout << "svector Import test..." << endl;
     
     {{
