@@ -6589,8 +6589,8 @@ void bvector<Alloc>::copy_range_no_check(const bvector<Alloc>& bvect,
     //
     if (left)
     {
-        size_type from =
-            (left + bm::gap_max_bits >= left) ? 0u : left - bm::gap_max_bits;
+        size_type from = 
+            (left < bm::gap_max_bits) ? 0 : (left - bm::gap_max_bits);
         clear_range_no_check(from, left-1); // TODO: optimize clear from
     }
     if (right < bm::id_max-1)
