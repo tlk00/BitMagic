@@ -10893,6 +10893,40 @@ void TestSparseVectorGatherDecode()
         } // for k
         cout << "ok" << endl;
     }}
+    
+    cout << "64-bit sparse decode test" << endl;
+    {{
+            bm::sparse_vector<unsigned long long, bvect > sv(bm::use_null);
+            bvect::size_type from = bm::id_max - 2048;
+            bvect::size_type to = bm::id_max - 1;
+            for (auto i = from; i < to; ++i)
+            {
+                sv[i] = i;
+            } // for
+
+            std::vector<unsigned long long> vect;
+            vect.resize(to - from + 1);
+            bvect::size_type target_sz = 1280;
+            for (unsigned pass = 0; pass < 2; ++pass)
+            {
+                cout << "Pass " << pass << endl;
+                for (bvect::size_type k = 1; k < target_sz; ++k)
+                {
+                    cout << "\r" << k << "/" << target_sz << flush;
+                    sv.decode(vect.data(), from, k, true);
+                    bvect::size_type fr = from;
+                    for (bvect::size_type i = 0; i < k; ++i, ++fr)
+                    {
+                        auto v = vect[i];
+                        assert(v == fr);
+                    }
+                } // for
+                sv.optimize();
+                cout << endl;
+            } // for pass
+    }}
+
+
 
     sparse_vector_u32 sv;
     sparse_vector_u32 sv2;
