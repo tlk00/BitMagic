@@ -488,12 +488,16 @@ void GenericBVectorTest()
         
         bvect64::statistics st1, st2, st3;
         bv0.calc_stat(&st1);
+        cout << "st1.max_serialize_mem = " << st1.max_serialize_mem << endl;
+        assert(st1.max_serialize_mem < 2*(sizeof(bm::word_t)*st1.bit_blocks * 2048));
         assert(st1.ptr_sub_blocks == 6);
         bv0.optimize(0, bvect64::opt_compress, &st2);
         assert(st1.ptr_sub_blocks >= st2.ptr_sub_blocks);
+        assert(st2.max_serialize_mem <= st1.max_serialize_mem);
         bv1.calc_stat(&st3);
         assert(st1.ptr_sub_blocks >= st3.ptr_sub_blocks);
         assert(st2.gap_blocks == st3.gap_blocks);
+        assert(st3.max_serialize_mem <= st1.max_serialize_mem);
     }
 
     cout << "------------------------------------ GenericBVectorTest() OK" << endl;
@@ -1184,7 +1188,7 @@ void EmptyBVTest()
         if (st.memory_used == 0)
         {
             cerr << "Failed calc_stat()" << endl;
-            exit(1);
+            assert(0);exit(1);
         }
     }
     {
@@ -3418,7 +3422,7 @@ void CheckVectors(bvect_mini &bvect_min,
            ++en1;
            CompareEnumerators(en, en1);
 
-           if ((bit_count % 10 == 0) || (bit_count % 128 == 0))
+           if (!(bit_count & 0xFF))
            {
                 bvect::enumerator en2 = bvect_full.get_enumerator(*en);
                 CompareEnumerators(en, en2);
@@ -9516,8 +9520,9 @@ void StressTestAggregatorShiftAND(unsigned repeats)
     {
         bvect mask_bv0;
         {
-        bvect_mini bvect_min(vector_max);
-        FillSetsRandomMethod(&bvect_min, &mask_bv0, 0ull, vector_max - (vector_max / 5), 1);
+            bvect_mini bvect_min(vector_max);
+            FillSetsRandomMethod(&bvect_min, &mask_bv0, 0ull,
+                                 vector_max - (vector_max / 5), 1);
         }
         
         std::vector<bvect> bv_coll1;
@@ -9526,7 +9531,7 @@ void StressTestAggregatorShiftAND(unsigned repeats)
         bm::aggregator<bvect> agg;
         agg.set_optimization();
 
-        unsigned shift_repeats = 65536/3;
+        unsigned shift_repeats = 65536/15;
         for (unsigned i = 0; i < shift_repeats; ++i)
         {
             bvect bv_target0(mask_bv0);
