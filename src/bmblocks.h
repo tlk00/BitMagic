@@ -708,8 +708,7 @@ public:
         get_block_coord(nb, i_from, j_from);
         get_block_coord(nb_to, i_to, j_to);
         
-        reserve_top_blocks(i_to+1);
-        
+        reserve_top_blocks(i_to+1); // TODO: why do it if it is zero anyway?        
         bm::word_t*** blk_root = top_blocks_root();
         
         if (i_from == i_to)  // same subblock
@@ -1126,18 +1125,6 @@ public:
     {
         if (!is_init()) return;
         deinit_tree(); // TODO: optimization of top-level realloc
-/*
-        unsigned top_size = this->top_block_size();
-        if (free_mem)
-        {
-            deinit_tree(); // TODO: optimization of top-level realloc
-        }
-        else
-        {
-            block_zero_func zero_func(*this);
-            for_each_nzblock(top_blocks_, top_size,  zero_func);
-        }
-*/
     }
 
     /*! Replaces all blocks with ALL_ONE block.
