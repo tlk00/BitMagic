@@ -1024,11 +1024,15 @@ sparse_vector<Val, BV>::decode(value_type* arr,
     {
         return extract_range(arr, dec_size, idx_from, zero_mem);
     }
+    return extract_plains(arr, dec_size, idx_from, zero_mem);
+    // TODO: write proper extract() based on for_each_range() and a visitor
+    /*
     if (dec_size < 1024)
     {
         return extract_plains(arr, dec_size, idx_from, zero_mem);
     }
     return extract(arr, dec_size, idx_from, zero_mem);
+    */
 }
 
 //---------------------------------------------------------------------
