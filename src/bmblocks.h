@@ -2065,6 +2065,73 @@ public:
         top_blocks_[i] = (bm::word_t**)FULL_BLOCK_FAKE_ADDR;
     }
 
+    /**
+        Calculate approximate memory needed to serialize big runs
+        of 0000s and 111s (as blocks)
+    */
+    size_t calc_serialization_null_full() const
+    {
+        size_t s_size = sizeof(unsigned);
+        if (!top_blocks_)
+            return s_size;
+        block_idx_type nb_empty = 0;
+        block_idx_type nb_full = 0;
+        unsigned top_blocks = top_block_size();
+        for (unsigned i = 0; i < top_blocks; )
+        {
+            bm::word_t** blk_blk = top_blocks_[i];
+            if (!blk_blk)
+            {
+                s_size += nb_full ? 1+sizeof(block_idx_type) : 0; nb_full = 0;
+                nb_empty += bm::set_sub_array_size;
+
+                unsigned nb_prev = i++;
+                bool found = bm::find_not_null_ptr(top_blocks_, i, top_blocks, &i);
+                BM_ASSERT(i >= nb_prev);
+                if (!found)
+                {
+                    nb_empty = 0;
+                    break;
+                }
+                nb_empty += (i - nb_prev) * bm::set_sub_array_size;
+                blk_blk = top_blocks_[i];
+            }
+            if ((bm::word_t*)blk_blk == FULL_BLOCK_FAKE_ADDR)
+            {
+                s_size += nb_empty ? 1+sizeof(block_idx_type) : 0; nb_empty = 0;
+                nb_full += bm::set_sub_array_size;
+                ++i;
+                continue;
+            }
+            unsigned j = 0; bm::word_t* blk;
+            do
+            {
+                blk = blk_blk[j];
+                if (!blk)
+                {
+                    s_size += nb_full ? 1+sizeof(block_idx_type) : 0; nb_full = 0;
+                    ++nb_empty;
+                }
+                else
+                if (blk == FULL_BLOCK_FAKE_ADDR)
+                {
+                    s_size += nb_empty ? 1+sizeof(block_idx_type) : 0; nb_empty = 0;
+                    ++nb_full;
+                }
+                else // real block (not 000 and not 0xFFF)
+                {
+                    s_size += nb_empty ? 1+sizeof(block_idx_type) : 0; nb_empty = 0;
+                    s_size += nb_full  ? 1+sizeof(block_idx_type) : 0; nb_full = 0;
+                }
+            } while (++j < bm::set_sub_array_size);
+
+            ++i;
+        } // for i
+        s_size += nb_empty ? 1+sizeof(block_idx_type) : 0;
+        s_size += nb_full  ? 1+sizeof(block_idx_type) : 0;
+        return s_size;
+    }
+
     // ----------------------------------------------------------------
     
     void optimize_tree(bm::word_t*  temp_block, int opt_mode,
@@ -2073,20 +2140,21 @@ public:
         if (!top_blocks_)
             return;
         
-        block_idx_type empty_blocks = 0;
         unsigned top_blocks = top_block_size();
         for (unsigned i = 0; i < top_blocks; ++i)
         {
             bm::word_t** blk_blk = top_blocks_[i];
-            if (!blk_blk || (bm::word_t*)blk_blk == FULL_BLOCK_FAKE_ADDR)
+            if (!blk_blk)
             {
-                if (bv_stat)
-                    bv_stat->max_serialize_mem += unsigned(sizeof(unsigned) + 1);
-                continue;
+                ++i;
+                bool found = bm::find_not_null_ptr(top_blocks_, i, top_blocks, &i);
+                if (!found)
+                    break;
+                blk_blk = top_blocks_[i];
             }
+            if ((bm::word_t*)blk_blk == FULL_BLOCK_FAKE_ADDR)
+                continue;
             
-            //block_idx_type full_blocks = 0;
-            //bool any_valid = false;
             for (unsigned j = 0; j < bm::set_sub_array_size; ++j)
             {
                 bm::word_t* block = blk_blk[j];
@@ -2099,14 +2167,12 @@ public:
                         {
                             set_block_ptr(i, j, 0);
                             alloc_.free_gap_block(gap_blk, glen());
-                            ++empty_blocks;
                         }
                         else
                         if (bm::gap_is_all_one(gap_blk))
                         {
                             set_block_ptr(i, j, FULL_BLOCK_FAKE_ADDR);
                             alloc_.free_gap_block(gap_blk, glen());
-                            ++empty_blocks; //++full_blocks;
                         }
                         else
                         {
@@ -2130,10 +2196,7 @@ public:
                                 bv_stat->add_gap_block(
                                         bm::gap_capacity(gap_blk, glen()),
                                         len);
-                                bv_stat->max_serialize_mem += (empty_blocks << 2);
-                                empty_blocks ^= empty_blocks;
                             }
-//                            any_valid = true;
                         }
                     }
                     else // bit-block
@@ -2147,8 +2210,6 @@ public:
                                 BM_ASSERT(bm::is_bits_one((wordop_t*)block));
                                 get_allocator().free_bit_block(block);
                                 block = FULL_BLOCK_FAKE_ADDR;
- //                               ++full_blocks;
- //                               any_valid = true;
                             }
                             else // empty block
                             {
@@ -2156,19 +2217,13 @@ public:
                                 get_allocator().free_bit_block(block);
                                 block = 0;
                             }
-                            ++empty_blocks;
                             set_block_ptr(i, j, block);
                             continue;
                         }
                         if (opt_mode < 3) // free_01 optimization
                         {
-//                            any_valid = true;
                             if (bv_stat)
-                            {
                                 bv_stat->add_bit_block();
-                                bv_stat->max_serialize_mem += (empty_blocks << 2);
-                                empty_blocks ^= empty_blocks;
-                            }
                             continue;
                         }
                         // try to compress
@@ -2195,86 +2250,46 @@ public:
                                 allocate_gap_block(unsigned(level), tmp_gap_blk);
                             bm::word_t* blk = (bm::word_t*)BMPTR_SETBIT0(gap_blk);
                             set_block_ptr(i, j, blk);
-//                            any_valid = true;
                             if (bv_stat)
                             {
                                 bv_stat->add_gap_block(
                                         bm::gap_capacity(gap_blk, glen()),
                                         bm::gap_length(gap_blk));
-                                bv_stat->max_serialize_mem += (empty_blocks << 2);
-                                empty_blocks ^= empty_blocks;
                             }
                         }
                         else  // non-compressable bit-block
                         {
-//                            any_valid = true;
                             if (bv_stat)
-                            {
                                 bv_stat->add_bit_block();
-                                bv_stat->max_serialize_mem += (empty_blocks << 2);
-                                empty_blocks ^= empty_blocks;
-                            }
                         }
                     } // bit-block
-                }
-                else // NOT VALID(block)
-                {
-                    if (block == FULL_BLOCK_FAKE_ADDR)
-                    {
-//                        any_valid = true; ++full_blocks;
-                    }
-                    ++empty_blocks;
                 }
             } // for j
             
             // optimize the top level
             //
             if (blk_blk[0] == FULL_BLOCK_FAKE_ADDR)
-            {
                 validate_top_full(i);
-                if (bv_stat)
-                    bv_stat->max_serialize_mem += unsigned(sizeof(unsigned) + 1);
-            }
             else
-            if (!blk_blk[0])
-            {
-                validate_top_zero(i);
-                if (bv_stat)
-                    bv_stat->max_serialize_mem += unsigned(sizeof(unsigned) + 1);
-            }
+                if (!blk_blk[0])
+                    validate_top_zero(i);
+            
+            blk_blk = top_blocks_[i];
+            if (!blk_blk || (bm::word_t*)blk_blk == FULL_BLOCK_FAKE_ADDR)
+            {}
             else
             {
                 if (bv_stat)
                     bv_stat->ptr_sub_blocks++;
             }
 
-/*
-            if (full_blocks == bm::set_sub_array_size)
-            {
-                alloc_.free_ptr(top_blocks_[i], bm::set_sub_array_size);
-                top_blocks_[i] = (bm::word_t**)FULL_BLOCK_FAKE_ADDR;
-            }
-            else
-            {
-                if (any_valid)
-                {
-                    if (bv_stat)
-                        bv_stat->ptr_sub_blocks++;
-                    continue;
-                }
-                else
-                {
-                    alloc_.free_ptr(top_blocks_[i], bm::set_sub_array_size);
-                    top_blocks_[i] = 0;
-                }
-                BM_ASSERT(!top_blocks_[i] ||
-                        (bm::word_t*)top_blocks_[i] == FULL_BLOCK_FAKE_ADDR);
-                if (bv_stat)
-                    bv_stat->max_serialize_mem += unsigned(sizeof(unsigned) + 1);
-            }
-*/
         } // for i
         
+        if (bv_stat)
+        {
+            size_t full_null_size = calc_serialization_null_full();
+            bv_stat->max_serialize_mem += full_null_size;
+        }
     }
 
     // ----------------------------------------------------------------

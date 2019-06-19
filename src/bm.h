@@ -3360,51 +3360,54 @@ void bvector<Alloc>::calc_stat(struct bvector<Alloc>::statistics* st) const
     ::memcpy(st->gap_levels, 
              blockman_.glen(), sizeof(gap_word_t) * bm::gap_levels);
 
-    unsigned empty_blocks = 0;
-
     st->max_serialize_mem = unsigned(sizeof(bm::id_t) * 4);
     unsigned top_size = blockman_.top_block_size();
 
     size_t blocks_mem = sizeof(blockman_);
     blocks_mem +=
-        (blockman_.temp_block_ ? sizeof(word_t) * bm::set_block_size : 0);
+        (blockman_.temp_block_ ? sizeof(bm::word_t) * bm::set_block_size : 0);
     blocks_mem += sizeof(bm::word_t**) * top_size;
-
-    for (unsigned i = 0; i < top_size; ++i)
+    bm::word_t*** blk_root = blockman_.top_blocks_root();
+    
+    if (blk_root)
     {
-        const bm::word_t* const* blk_blk = blockman_.get_topblock(i);
-        if (!blk_blk || (bm::word_t*)blk_blk == FULL_BLOCK_FAKE_ADDR)
+        for (unsigned i = 0; i < top_size; ++i)
         {
-            st->max_serialize_mem += unsigned(sizeof(unsigned) + 1);
-            continue;
-        }
-        
-        st->ptr_sub_blocks++;
-        for (unsigned j = 0; j < bm::set_sub_array_size; ++j)
-        {
-            const bm::word_t* blk = blk_blk[j];
-            if (IS_VALID_ADDR(blk))
+            const bm::word_t* const* blk_blk = blk_root[i];
+            if (!blk_blk)
             {
-                st->max_serialize_mem += unsigned(empty_blocks << 2);
-                empty_blocks = 0;
-
-                if (BM_IS_GAP(blk))
+                ++i;
+                bool found = bm::find_not_null_ptr(blk_root, i, top_size, &i);
+                if (!found)
+                    break;
+                blk_blk = blk_root[i];
+            }
+            if ((bm::word_t*)blk_blk == FULL_BLOCK_FAKE_ADDR)
+                continue;
+            st->ptr_sub_blocks++;
+            for (unsigned j = 0; j < bm::set_sub_array_size; ++j)
+            {
+                const bm::word_t* blk = blk_blk[j];
+                if (IS_VALID_ADDR(blk))
                 {
-                    bm::gap_word_t* gap_blk = BMGAP_PTR(blk);
-                    unsigned cap = bm::gap_capacity(gap_blk, blockman_.glen());
-                    unsigned len = gap_length(gap_blk);
-                    st->add_gap_block(cap, len);
+                    if (BM_IS_GAP(blk))
+                    {
+                        bm::gap_word_t* gap_blk = BMGAP_PTR(blk);
+                        unsigned cap = bm::gap_capacity(gap_blk, blockman_.glen());
+                        unsigned len = gap_length(gap_blk);
+                        st->add_gap_block(cap, len);
+                    }
+                    else // bit block
+                        st->add_bit_block();
                 }
-                else // bit block
-                    st->add_bit_block();
             }
-            else
-            {
-                ++empty_blocks;
-            }
-        }
-    } // for i
-
+        } // for i
+        
+        size_t full_null_size = blockman_.calc_serialization_null_full();
+        st->max_serialize_mem += full_null_size;
+        
+    } // if blk_root
+    
     size_t safe_inc = st->max_serialize_mem / 10; // 10% increment
     if (!safe_inc) safe_inc = 256;
     st->max_serialize_mem += safe_inc;
