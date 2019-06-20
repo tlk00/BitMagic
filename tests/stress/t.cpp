@@ -14562,7 +14562,6 @@ void TestSparseVector()
         assert(arr[1] == 1);
         assert(arr[2] == 1);
     }}
-    
     cout << "sv::push_back_null()" << endl;
     {{
         bm::sparse_vector<unsigned, bvect> sv(bm::use_null);
