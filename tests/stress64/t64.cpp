@@ -54,7 +54,7 @@ For more information please visit:  http://bitmagic.io
 #include <bmsparsevec.h>
 #include <bmsparsevec_algo.h>
 #include <bmsparsevec_serial.h>
-//#include <bmsparsevec_compr.h>
+#include <bmsparsevec_compr.h>
 //#include <bmstrsparsevec.h>
 
 using namespace bm;
@@ -3468,6 +3468,9 @@ const unsigned ITERATIONS = 180000;
 static
 void SimpleRandomFillTest()
 {
+    std::random_device rd;
+    std::mt19937_64 mt_rand(rd());
+
     bvect::size_type BITVECT_SIZE = bvect::size_type(bm::id_max32) * 2;
     bvect::size_type BITVECT_FROM = bvect::size_type(bm::id_max32) - 65535;
     
@@ -3503,7 +3506,7 @@ void SimpleRandomFillTest()
         bvect::size_type i;
         for (i = 0; i < iter; ++i)
         {
-            unsigned num = unsigned(::rand()) % iter;
+            bvect::size_type num = mt_rand() % iter;
             bvect_min.set_bit(BITVECT_FROM + num);
             bvect_full.set_bit(BITVECT_FROM + num);
             if ((i % 1000) == 0) cout << "." << flush;
@@ -3520,7 +3523,7 @@ void SimpleRandomFillTest()
 
         for(i = 0; i < iter; ++i)
         {
-            unsigned num = unsigned(::rand()) % iter;
+            bvect::size_type num = mt_rand() % iter;
             bvect_min.clear_bit(BITVECT_FROM + num);
             bvect_full.clear_bit(BITVECT_FROM + num);
         }
@@ -3542,7 +3545,7 @@ void SimpleRandomFillTest()
     bvect::size_type i;
     for(i = 0; i < iter; ++i)
     {
-        unsigned num = unsigned(::rand()) % iter;
+        bvect::size_type num = mt_rand() % iter;
         bvect_min.set_bit(BITVECT_FROM + num);
         bvect_full.set_bit(BITVECT_FROM + num);
 //        CheckCountRange(bvect_full, 0, 65535);
@@ -3558,7 +3561,7 @@ void SimpleRandomFillTest()
 
     for(i = 0; i < iter; ++i)
     {
-        unsigned num = unsigned(rand()) % iter;
+        bvect::size_type num = mt_rand() % iter;
         bvect_min.clear_bit(BITVECT_FROM + num);
         bvect_full.clear_bit(BITVECT_FROM + num);
 //        CheckCountRange(bvect_full, 0, num);
@@ -3686,7 +3689,6 @@ void RangeCopyTest()
     cout << "----------------------------------- RangeCopyTest" << endl;
 
     {
-//        const bvect::size_type from = bvect::size_type(bm::id_max-1)-(65536*256);
         const bvect::size_type to_max = bvect::size_type(bm::id_max32) + 65536 * bm::set_sub_array_size + 10;
         cout << "Basic range-copy test" << endl;
         bvect     bvect1
@@ -3810,8 +3812,6 @@ void RangeCopyTest()
             }
         }
     }
-    
-    
 
     cout << "----------------------------------- RangeCopyTest OK" << endl;
 }
@@ -3946,7 +3946,9 @@ void ComparisonTest()
 static
 void SerializationTest()
 {
-   bvect::size_type BITVECT_SIZE = bvect::size_type(bm::id_max32) * 3;
+    std::random_device rd;
+    std::mt19937_64 mt_rand(rd());
+    bvect::size_type BITVECT_SIZE = bvect::size_type(bm::id_max32) * 3;
 
    cout << " ----------------------------------- SerializationTest" << endl;
 
@@ -4074,10 +4076,10 @@ void SerializationTest()
 
     // shot some random bits
 
-    unsigned i;
+    bvect::size_type i;
     for (i = 0; i < 10000; ++i)
     {
-        unsigned bit = unsigned(rand()) % BITVECT_SIZE;
+        bvect::size_type bit = mt_rand() % BITVECT_SIZE;
         bvect_full1.set_bit(bit);
         bvect_min1.set_bit(bit);
     }
@@ -4187,7 +4189,7 @@ void SerializationTest()
         //print_stat(bvt);
         //print_stat(*bvect_full1);
         cout << "Error!" << endl;
-        exit(1);
+        assert(0); exit(1);
     }
 
     CheckVectors(*bvect_min1, *bvect_full1, BITVECT_SIZE, true);
@@ -10584,6 +10586,7 @@ void TestSparseVector()
 typedef bm::sparse_vector<unsigned, bvect > sparse_vector_u32;
 typedef bm::sparse_vector<unsigned long long, bvect > sparse_vector_u64;
 typedef bm::rsc_sparse_vector<unsigned, sparse_vector_u32> rsc_sparse_vector_u32;
+typedef bm::rsc_sparse_vector<unsigned, sparse_vector_u64> rsc_sparse_vector_u64;
 
 static
 void TestSparseVectorInserter()
@@ -11600,6 +11603,234 @@ void TestSparseVectorFilter()
 }
 
 
+static
+void TestSparseVectorScan()
+{
+    cout << " --------------- Test sparse_vector<> scan algo" << endl;
+
+    bm::sparse_vector_scanner<sparse_vector_u32> scanner;
+    bm::sparse_vector_scanner<sparse_vector_u64> scanner_64;
+    bm::sparse_vector_scanner<rsc_sparse_vector_u32> rsc_scanner;
+
+    {
+        sparse_vector_u32 sv(bm::use_null);
+        bvect bv_control;
+        scanner.find_eq(sv, 25, bv_control);
+        assert(!bv_control.any());
+        scanner.invert(sv, bv_control);
+        assert(!bv_control.any());
+    }
+
+    {
+        sparse_vector_u32 sv;
+        bvect bv_control;
+        for (unsigned i = 0; i < 20; ++i)
+        {
+            sv.set(i, 0);
+        }
+        scanner.find_eq(sv, 0, bv_control);
+        auto found = bv_control.count();
+        assert(found == 20);
+        scanner.invert(sv, bv_control);
+        found = bv_control.count();
+        assert(!found);
+    }
+
+    {
+        cout << endl << "Unique search check" << endl;
+        sparse_vector_u32 sv;
+        rsc_sparse_vector_u32 csv(bm::use_null);
+
+        bvect bv_control, bv_control2;
+        bvect::allocator_pool_type pool;
+        bvect::mem_pool_guard(pool, bv_control);
+        bvect::mem_pool_guard(pool, bv_control2);
+
+        unsigned sv_size = 1256000;
+        {
+            sparse_vector_u32::back_insert_iterator bi(sv.get_back_inserter());
+            for (unsigned j = 0; j < sv_size; ++j)
+            {
+                *bi = j;
+            }
+        }
+        csv.load_from(sv);
+
+        {
+            chrono_taker ct("sparse_vector<> search");
+
+            for (unsigned j = 0; j < sv_size; ++j)
+            {
+                scanner.find_eq(sv, j, bv_control);
+
+                if (bv_control.count() != 1)
+                {
+                    cerr << "1. Unique search discrepancy at value=" << j
+                        << " count = " << bv_control.count() << endl;
+                    assert(0);  exit(1);
+                }
+                bvect::size_type v1, v2;
+                bool b = bv_control.find_range(v1, v2);
+                assert(b);
+                if (v1 != v2)
+                {
+                    cerr << "2. Unique search discrepancy at value=" << j
+                        << " count = " << bv_control.count() << endl;
+                    assert(0); exit(1);
+                }
+
+                bvect::size_type pos;
+                bool found = scanner.find_eq(sv, j, pos);
+                if (!found)
+                {
+                    cerr << "3. Unique search failure at value=" << j
+                        << endl;
+                    assert(0);  exit(1);
+                }
+                if (v1 != pos)
+                {
+                    cerr << "4. Unique search discrepancy at value=" << j
+                        << " found = " << pos << endl;
+                    exit(1);
+                }
+
+                rsc_scanner.find_eq(csv, j, bv_control2);
+                int res = bv_control.compare(bv_control2);
+                if (res != 0)
+                {
+                    cerr << "RSC scan comparison failed at value =" << j
+                        << endl;
+                    assert(0);  exit(1);
+                }
+
+
+                if (j % 1000 == 0)
+                    cout << "\r" << j << "/" << sv_size << "    " << flush;
+            } // for
+            cout << endl;
+        }
+
+        cout << "Unique search OK" << endl;
+    }
+
+    {
+        cout << "Find EQ test on flat data" << endl;
+        bvect::allocator_pool_type pool;
+        unsigned max_value = 128000;
+        for (unsigned value = 0; value < max_value; ++value)
+        {
+            sparse_vector_u32 sv;
+            sparse_vector_u64 sv_64;
+            rsc_sparse_vector_u32 csv;
+
+            bvect bv_control, bv_control2;
+            bvect::mem_pool_guard(pool, bv_control);
+
+            unsigned sv_size = 67000;
+
+            {
+                sparse_vector_u32::back_insert_iterator bi(sv.get_back_inserter());
+                sparse_vector_u64::back_insert_iterator bi_64(sv_64.get_back_inserter());
+                for (unsigned j = 0; j < 67000; ++j)
+                {
+                    *bi = value;
+                    bm::id64_t v64 = value;
+                    v64 <<= 32;
+                    *bi_64 = v64;
+                }
+            }
+            csv.load_from(sv);
+
+            scanner.find_eq(sv, value, bv_control);
+            auto found = bv_control.count();
+
+            if (found != sv_size)
+            {
+                cerr << "1. sparse_vector<>::find_eq() discrepancy for value=" << value
+                    << " count = " << found << endl;
+                assert(0); exit(1);
+            }
+
+            rsc_scanner.find_eq(csv, value, bv_control2);
+            int res = bv_control.compare(bv_control2);
+            if (res != 0)
+            {
+                cerr << "RSC scan comparison failed at value =" << value
+                    << endl;
+                exit(1);
+            }
+
+
+            {
+                bm::id64_t v64 = value;
+                v64 <<= 32;
+
+                scanner_64.find_eq(sv_64, v64, bv_control);
+                found = bv_control.count();
+
+                if (found != sv_size)
+                {
+                    cerr << "1. (64) sparse_vector<>::find_eq() discrepancy for value=" << value
+                        << " count = " << found << endl;
+                    assert(0); exit(1);
+                }
+            }
+
+            // not found check
+            scanner.find_eq(sv, value + 1, bv_control);
+            if (bv_control.any())
+            {
+                cerr << "1. sparse_vector<>::find_eq() (any) discrepancy for value=" << value + 1
+                    << " count = " << bv_control.count() << endl;
+                assert(0); exit(1);
+            }
+            rsc_scanner.find_eq(csv, value + 1, bv_control2);
+            res = bv_control.compare(bv_control2);
+            if (res != 0)
+            {
+                cerr << "1. RSC scan comparison failed at value =" << value + 1
+                    << endl;
+                assert(0); exit(1);
+            }
+
+            {
+                BM_DECLARE_TEMP_BLOCK(tb)
+                    sv.optimize(tb);
+            }
+
+            bv_control.clear();
+
+            scanner.find_eq(sv, value, bv_control);
+            found = bv_control.count();
+
+            if (found != sv_size)
+            {
+                cerr << "2. sparse_vector<>::find_eq() discrepancy for value=" << value
+                    << " count = " << found << endl;
+                assert(0); exit(1);
+            }
+
+            // not found check
+            scanner.find_eq(sv, value + 1, bv_control);
+            if (bv_control.any())
+            {
+                cerr << "2. sparse_vector<>::find_eq() (any) discrepancy for value=" << value + 1
+                    << " count = " << bv_control.count() << endl;
+                assert(0); exit(1);
+            }
+
+
+            if (value % 256 == 0)
+                cout << "\r" << value << "/" << max_value << "    " << flush;
+        }
+
+        cout << endl << "Flat EQ ok" << endl;
+    }
+
+
+
+    cout << " \n--------------- Test sparse_vector<> scan algo OK" << endl;
+}
 
 
 
@@ -11790,7 +12021,7 @@ int main(int argc, char *argv[])
 
     if (is_all || is_sv)
     {
-
+/*
          TestSparseVector();
 
          TestSparseVectorInserter();
@@ -11802,9 +12033,9 @@ int main(int argc, char *argv[])
          TestSparseVectorRange();
 
          TestSparseVectorFilter();
-/*
+*/
          TestSparseVectorScan();
-
+/*
          TestCompressSparseVector();
 
          TestCompressedSparseVectorScan();
