@@ -681,9 +681,9 @@ void set2set_11_transform<SV>::remap(const bvector_type&        bv_in,
         if (have_stats_) // pre-attached translation statistics
         {
             bv_product_ = bv_in;
-            unsigned cnt1 = bv_product_.count();
+            size_type cnt1 = bv_product_.count();
             bv_product_.bit_sub(bv_zero_);
-            unsigned cnt2 = bv_product_.count();
+            size_type cnt2 = bv_product_.count();
             
             BM_ASSERT(cnt2 <= cnt1);
             
@@ -696,7 +696,7 @@ void set2set_11_transform<SV>::remap(const bvector_type&        bv_in,
 
     
 
-    unsigned buf_cnt, nb_old, nb;
+    size_type buf_cnt, nb_old, nb;
     buf_cnt = nb_old = 0;
     
     typename bvector_type::enumerator en(enum_bv->first());
@@ -753,7 +753,7 @@ void set2set_11_transform<SV>::one_pass_run(const bvector_type&        bv_in,
     for (; it.valid(); ++it)
     {
         typename SV::value_type t_id = *it;
-        bm::id_t idx = it.pos();
+        size_type idx = it.pos();
         if (bv_in.test(idx))
         {
             bv_out.set_bit_no_check(t_id);
