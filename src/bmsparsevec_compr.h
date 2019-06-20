@@ -59,7 +59,7 @@ public:
 
     typedef Val                                      value_type;
     typedef const value_type&                        const_reference;
-    typedef bm::id_t                                 size_type;
+    typedef typename SV::size_type                   size_type;
     typedef SV                                       sparse_vector_type;
     typedef typename SV::const_iterator              sparse_vector_const_iterator;
     typedef typename SV::bvector_type                bvector_type;
@@ -187,14 +187,14 @@ public:
         \param idx - element index
         \return value of the element
     */
-    value_type at(bm::id_t idx) const;
+    value_type at(size_type idx) const;
     
     /*!
         \brief get specified element without bounds checking
         \param idx - element index
         \return value of the element
     */
-    value_type get(bm::id_t idx) const;
+    value_type get(size_type idx) const;
     
     /*!
         \brief set specified element with bounds checking and automatic resize
@@ -240,7 +240,7 @@ public:
         \param rank - rank  (virtual index in sparse vector)
         \param idx  - index (true position)
     */
-    bool find_rank(bm::id_t rank, bm::id_t& idx) const;
+    bool find_rank(size_type rank, size_type& idx) const;
 
     //@}
     
@@ -419,7 +419,7 @@ protected:
      
         \return true if id is known and resolved successfully
     */
-    bool resolve(bm::id_t idx, bm::id_t* idx_to) const;
+    bool resolve(size_type idx, size_type* idx_to) const;
     
     void resize_internal(size_type sz) { sv_.resize_internal(sz); }
     size_type size_internal() const { return sv_.size(); }
@@ -444,7 +444,7 @@ protected:
 
 private:
     sparse_vector_type            sv_;       ///< transpose-sparse vector for "dense" packing
-    bm::id_t                      max_id_;   ///< control variable for sorted load
+    size_type                     max_id_;   ///< control variable for sorted load
     bool                          in_sync_;  ///< flag if prefix sum is in-sync with vector
     rs_index_type*                bv_blocks_ptr_ = 0; ///< prefix sum for rank translation
 };
@@ -638,7 +638,7 @@ void rsc_sparse_vector<Val, SV>::load_from(
                 rank_compr.compress(*bv_plain, *bv_null, *bv_src_plain);
             }
         } // for
-        unsigned count = bv_null->count(); // set correct sizes
+        size_type count = bv_null->count(); // set correct sizes
         sv_.resize(count);
     }
     
@@ -702,7 +702,7 @@ void rsc_sparse_vector<Val, SV>::sync(bool force)
 //---------------------------------------------------------------------
 
 template<class Val, class SV>
-bool rsc_sparse_vector<Val, SV>::resolve(bm::id_t idx, bm::id_t* idx_to) const
+bool rsc_sparse_vector<Val, SV>::resolve(size_type idx, size_type* idx_to) const
 {
     BM_ASSERT(idx_to);
     
@@ -730,7 +730,7 @@ bool rsc_sparse_vector<Val, SV>::resolve(bm::id_t idx, bm::id_t* idx_to) const
 
 template<class Val, class SV>
 typename rsc_sparse_vector<Val, SV>::value_type
-rsc_sparse_vector<Val, SV>::at(bm::id_t idx) const
+rsc_sparse_vector<Val, SV>::at(size_type idx) const
 {
     bm::id_t sv_idx;
     bool found = resolve(idx, &sv_idx);
@@ -745,9 +745,9 @@ rsc_sparse_vector<Val, SV>::at(bm::id_t idx) const
 
 template<class Val, class SV>
 typename rsc_sparse_vector<Val, SV>::value_type
-rsc_sparse_vector<Val, SV>::get(bm::id_t idx) const
+rsc_sparse_vector<Val, SV>::get(size_type idx) const
 {
-    bm::id_t sv_idx;
+    size_type sv_idx;
     bool found = resolve(idx, &sv_idx);
     if (!found)
         return value_type();
@@ -821,10 +821,9 @@ rsc_sparse_vector<Val, SV>::get_null_bvector() const
 
 template<class Val, class SV>
 bool
-rsc_sparse_vector<Val, SV>::find_rank(bm::id_t rank, bm::id_t& idx) const
+rsc_sparse_vector<Val, SV>::find_rank(size_type rank, size_type& idx) const
 {
     BM_ASSERT(rank);
-
     bool b;
     const bvector_type* bv_null = get_null_bvector();
     if (in_sync())
@@ -840,28 +839,25 @@ rsc_sparse_vector<Val, SV>::find_rank(bm::id_t rank, bm::id_t& idx) const
 template<class Val, class SV>
 typename rsc_sparse_vector<Val, SV>::size_type
 rsc_sparse_vector<Val, SV>::decode(value_type* arr,
-                                          size_type   idx_from,
-                                          size_type   size,
-                                          bool        /*zero_mem*/) const
+                                   size_type   idx_from,
+                                   size_type   size,
+                                   bool        /*zero_mem*/) const
 {
     BM_ASSERT(arr);
     BM_ASSERT(in_sync_);  // call sync() before decoding
     BM_ASSERT(bv_blocks_ptr_);
-    
     
     if (size == 0)
         return 0;
     if (idx_from >= this->size())
         return 0;
     
-    if (bm::id_max - size <= idx_from)
-    {
+    if ((bm::id_max - size) <= idx_from)
         size = bm::id_max - idx_from;
-    }
 
     const bvector_type* bv_null = sv_.get_null_bvector();
 
-    bm::id_t rank = bv_null->count_to(idx_from, *bv_blocks_ptr_);
+    size_type rank = bv_null->count_to(idx_from, *bv_blocks_ptr_);
     bool b = bv_null->test(idx_from);
     
     bvector_enumerator_type en_i = bv_null->get_enumerator(idx_from);
