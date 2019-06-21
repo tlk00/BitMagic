@@ -303,3 +303,211 @@ void bulk_load_SV_set_ref(SV* sv, const VT& vect)
     bi.flush();
 }
 
+template<typename CSV, typename SV>
+void DetailedCompareSparseVectors(const CSV& csv,
+    const SV&            sv)
+{
+    SV   sv_s(bm::use_null);  // sparse vector decompressed
+
+    // de-compression test
+    csv.load_to(sv_s);
+    /*
+    if (!sv.equal(sv_s))
+    {
+        cerr << "compressed vector load_to (decompression) failed!" << endl;
+        exit(1);
+    }
+    */
+
+
+    size_t csv_size = csv.size();
+    size_t sv_size = sv.size();
+    size_t sv_s_size = sv_s.size();
+
+    const typename SV::bvector_type* bv_null_sv = sv.get_null_bvector();
+    const typename SV::bvector_type* bv_null_sv_s = sv_s.get_null_bvector();
+    const typename SV::bvector_type* bv_null_csv = csv.get_null_bvector();
+
+    if (csv_size != sv_size || sv_s_size != sv_size)
+    {
+        assert(bv_null_sv != bv_null_csv);
+
+        auto cnt_sv = bv_null_sv->count();
+        auto cnt_sv_s = bv_null_sv_s->count();
+        auto cnt_csv = bv_null_csv->count();
+
+        if (cnt_sv != cnt_csv)
+        {
+            cerr << "Sparse compressed vector comparison failed (size check):"
+                << "csv.size()=" << csv_size
+                << "sv.size()=" << sv_size
+                << "cnt sv = " << cnt_sv
+                << "cnt csv = " << cnt_csv
+                << endl;
+            assert(0); exit(1);
+        }
+        if (cnt_sv_s != cnt_csv)
+        {
+            cerr << "Restored Sparse vector comparison failed (size check):"
+                << "csv.size()=" << csv_size
+                << "sv_s.size()=" << sv_s_size
+                << "cnt sv = " << cnt_sv
+                << "cnt csv = " << cnt_csv
+                << endl;
+            assert(0); exit(1);
+        }
+    }
+
+    for (typename SV::size_type i = 0; i < sv_size; ++i)
+    {
+        bool is_null_sv = sv.is_null(i);
+        bool is_null_sv_s = sv_s.is_null(i);
+        bool is_null_csv = csv.is_null(i);
+        if (is_null_sv != is_null_csv || is_null_sv != is_null_sv_s)
+        {
+            cerr << "Detailed csv check failed (null mismatch) at i=" << i
+                << " sv=" << is_null_sv
+                << " sv_s=" << is_null_sv_s
+                << " csv=" << is_null_csv
+                << endl;
+            int cmp = bv_null_sv->compare(*bv_null_csv);
+            if (cmp != 0)
+            {
+                cerr << "1. cmp=" << cmp << endl;
+                exit(1);
+            }
+            cmp = bv_null_sv->compare(*bv_null_sv_s);
+            if (cmp != 0)
+            {
+                cerr << "2. cmp=" << cmp << endl;
+                exit(1);
+            }
+
+            assert(0); exit(1);
+        }
+
+
+        if (!is_null_sv)
+        {
+            auto v1 = sv[i];
+            auto v1_s = sv_s[i];
+            auto v2 = csv[i];
+
+            if (v1 != v2 || v1_s != v1)
+            {
+                cerr << "Detailed csv check failed (value mismatch) at i=" << i
+                    << " v1=" << v1
+                    << " v1_s=" << v1_s
+                    << " v2=" << v2
+                    << endl;
+                assert(0);  exit(1);
+            }
+        }
+    }
+
+    {
+        BM_DECLARE_TEMP_BLOCK(tb)
+        bm::sparse_vector_serial_layout<CSV> sv_lay;
+        bm::sparse_vector_serialize<CSV>(csv, sv_lay, tb);
+
+        CSV csv1;
+        const unsigned char* buf = sv_lay.buf();
+        bm::sparse_vector_deserialize(csv1, buf, tb);
+
+        if (!csv.equal(csv1))
+        {
+            cerr << "Conpressed sparse vector serialization comparison failed!" << endl;
+            assert(0); exit(1);
+        }
+    }
+
+}
+
+
+
+template<typename CSV>
+void CheckCompressedDecode(const CSV& csv,
+    typename CSV::size_type from, typename CSV::size_type size)
+{
+    std::vector<typename CSV::value_type> vect;
+    vect.resize(size);
+
+    typename CSV::size_type sz = csv.decode(&vect[0], from, size);
+    typename CSV::size_type ex_idx = 0;
+    for (typename CSV::size_type i = from; i < from + sz; ++i)
+    {
+        auto v = csv.get(i);
+        auto vx = vect[ex_idx];
+        if (v != vx)
+        {
+            cerr << "compressed vector decode mismatch from="
+                << from << " idx=" << i
+                << " v=" << v << " vx=" << vx
+                << endl;
+            assert(0);  exit(1);
+        }
+        ++ex_idx;
+    }
+}
+
+template<typename CSV>
+void DetailedCheckCompressedDecode(const CSV& csv)
+{
+    auto size = csv.size();
+    cout << endl;
+
+    {
+        typename CSV::size_type size1 = 100;
+        for (typename CSV::size_type i = 0; i < size1; )
+        {
+            CheckCompressedDecode(csv, i, size);
+            if (i % 128 == 0)
+                cout << "\r" << i << "/" << size1 << flush;
+            i++;
+        }
+    }
+    cout << endl;
+
+    {
+        typename CSV::size_type size1 = 100000;
+        for (typename CSV::size_type i = 0; i < size1; )
+        {
+            CheckCompressedDecode(csv, i, size1);
+            cout << "\r" << i << "/" << size1 << flush;
+            i += rand() % 3;
+            size1 -= rand() % 5;
+        }
+    }
+    cout << endl;
+
+    {
+        typename CSV::size_type size1 = size;
+        for (typename CSV::size_type i = size - size / 2; i < size1; )
+        {
+            CheckCompressedDecode(csv, i, size1);
+            cout << "\r" << i << "/" << size1 << flush;
+            i += (1 + i);
+        }
+    }
+    cout << endl;
+
+    for (typename CSV::size_type i = size - size / 2; i < size; )
+    {
+        CheckCompressedDecode(csv, i, size);
+        cout << "\r" << i << "/" << size << flush;
+        i += rand() % 25000;
+    }
+    cout << endl;
+
+    for (typename CSV::size_type i = size - size / 2; i < size; )
+    {
+        if (size <= i)
+            break;
+        CheckCompressedDecode(csv, i, size);
+        cout << "\r" << i << "/" << size << flush;
+        i += rand() % 25000;
+        size -= rand() % 25000;;
+    }
+    cout << endl;
+
+}
