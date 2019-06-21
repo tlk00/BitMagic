@@ -21138,6 +21138,7 @@ void show_help()
         << "-rankc (or -rc)   - rank-compress " << endl
         << "-agg (or -aggregator) - bm::aggregator " << endl
         << "-sv                   - test sparse vectors" << endl
+        << "-strsv                - test sparse vectors" << endl
       ;
 }
 
@@ -21150,6 +21151,7 @@ bool         is_bvshift = false;
 bool         is_rankc = false;
 bool         is_agg = false;
 bool         is_sv = false;
+bool         is_str_sv = false;
 
 static
 int parse_args(int argc, char *argv[])
@@ -21208,6 +21210,12 @@ int parse_args(int argc, char *argv[])
         {
             is_all = false;
             is_sv = true;
+            continue;
+        }
+        if (arg == "-strsv")
+        {
+            is_all = false;
+            is_str_sv = true;
             continue;
         }
 

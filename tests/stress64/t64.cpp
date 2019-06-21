@@ -12363,7 +12363,7 @@ void TestStrSparseVector()
 
             bm::heap_matrix<char, 1024, 64, bvect::allocator_type> hmatr(true);
 
-            unsigned d = 0;
+            bvect::size_type d = 0;
             char *s;
 
             d = str_sv10.decode(hmatr, 0, 1);
@@ -12502,7 +12502,7 @@ void TestStrSparseVector()
 
     {
         str_sparse_vector<char, bvect, 32> str_sv0;
-        unsigned str_max = str_sv0.effective_max_str();
+        bvect::size_type str_max = str_sv0.effective_max_str();
         assert(str_max == 0);
         str_sv0[0] = "1";
         str_max = str_sv0.effective_max_str();
@@ -12885,7 +12885,7 @@ static
 void show_help()
 {
     std::cerr
-        << "BitMagic C++ stress test." << endl
+        << "BitMagic C++ stress test (64-bit vectors)." << endl
         << "-h                - help" << endl
         << "-llevel (or -ll)  - low level tests" << endl
         << "-support (or -s)  - support containers " << endl
@@ -12895,7 +12895,8 @@ void show_help()
         << "-rankc (or -rc)   - rank-compress " << endl
         << "-agg (or -aggregator) - bm::aggregator " << endl
         << "-sv                   - test sparse vectors" << endl
-      ;
+        << "-strsv                - test string sparse vectors" << endl
+        ;
 }
 
 bool         is_all = true;
@@ -13099,7 +13100,7 @@ int main(int argc, char *argv[])
         */
     }
 
-    if (is_str_sv)
+    if (is_all || is_str_sv)
     {
          TestStrSparseVector();
 
