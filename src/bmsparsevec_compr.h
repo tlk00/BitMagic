@@ -732,7 +732,7 @@ template<class Val, class SV>
 typename rsc_sparse_vector<Val, SV>::value_type
 rsc_sparse_vector<Val, SV>::at(size_type idx) const
 {
-    bm::id_t sv_idx;
+    size_type sv_idx;
     bool found = resolve(idx, &sv_idx);
     if (!found)
     {

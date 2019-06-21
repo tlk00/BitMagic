@@ -1192,7 +1192,7 @@ bool sparse_vector_scanner<SV>::find_eq_str(const SV&                      sv,
             }
         }
     
-        bm::id_t found_pos;
+        bvect::size_type found_pos;
         found = find_first_eq(sv, str, found_pos, remaped);
         if (found)
         {
