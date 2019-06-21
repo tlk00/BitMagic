@@ -928,7 +928,7 @@ public:
         \brief find position of compressed element by its rank
     */
     static
-    bool find_rank(bm::id_t rank, bm::id_t& pos);
+    bool find_rank(size_type rank, size_type& pos);
     
     /**
         \brief size of sparse vector (may be different for RSC)
@@ -973,7 +973,7 @@ protected:
             } // for j
         }
         
-        bm::id_t bit_list[CharMatrix::n_rows];
+        size_type bit_list[CharMatrix::n_rows];
         for (unsigned i = 0; i < max_str_size; ++i)
         {
             for (unsigned bi = 0; bi < 8; ++bi)
@@ -1384,8 +1384,9 @@ unsigned str_sparse_vector<CharType, BV, MAX_STR_SIZE>::common_prefix_length(
 //---------------------------------------------------------------------
 
 template<class CharType, class BV, unsigned MAX_STR_SIZE>
-bool str_sparse_vector<CharType, BV, MAX_STR_SIZE>::find_rank(bm::id_t rank,
-                                                              bm::id_t& pos)
+bool 
+str_sparse_vector<CharType, BV, MAX_STR_SIZE>::find_rank(size_type rank,
+                                                         size_type& pos)
 {
     BM_ASSERT(rank);
     pos = rank - 1;
