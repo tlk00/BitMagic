@@ -11635,10 +11635,23 @@ void TestSparseVectorScan()
         found = bv_control.count();
         assert(!found);
     }
+    
+    {
+        sparse_vector_u32 sv(bm::use_null);
+        sv[bm::id_max-1] = 1;
+        for(unsigned k = 0; k < 2; ++k)
+        {
+            bvect::size_type pos;
+            bool found = scanner.find_eq(sv, 1, pos);
+            assert(found);
+            assert(pos == bm::id_max-1);
+            sv.optimize();
+        }
+    }
 
     {
         cout << endl << "Unique search check" << endl;
-        sparse_vector_u32 sv;
+        sparse_vector_u32 sv(bm::use_null);
         rsc_sparse_vector_u32 csv(bm::use_null);
 
         bvect bv_control, bv_control2;
@@ -11646,23 +11659,25 @@ void TestSparseVectorScan()
         bvect::mem_pool_guard(pool, bv_control);
         bvect::mem_pool_guard(pool, bv_control2);
 
-        unsigned sv_size = 1256000;
+        cout << "Loading sparse vectors..." << flush;
+        unsigned sv_size = 1256;
+        bvect::size_type bv_from = bm::id_max - sv_size - 1;
         {
             sparse_vector_u32::back_insert_iterator bi(sv.get_back_inserter());
+            bi.add_null(bv_from);
             for (unsigned j = 0; j < sv_size; ++j)
             {
                 *bi = j;
             }
         }
         csv.load_from(sv);
+        cout << "ok." << endl;
 
         {
             chrono_taker ct("sparse_vector<> search");
-
             for (unsigned j = 0; j < sv_size; ++j)
             {
                 scanner.find_eq(sv, j, bv_control);
-
                 if (bv_control.count() != 1)
                 {
                     cerr << "1. Unique search discrepancy at value=" << j
@@ -11691,8 +11706,10 @@ void TestSparseVectorScan()
                 {
                     cerr << "4. Unique search discrepancy at value=" << j
                         << " found = " << pos << endl;
-                    exit(1);
+                    assert(0); exit(1);
                 }
+                assert(pos == bv_from + j);
+ 
 
                 rsc_scanner.find_eq(csv, j, bv_control2);
                 int res = bv_control.compare(bv_control2);
@@ -11703,34 +11720,34 @@ void TestSparseVectorScan()
                     assert(0);  exit(1);
                 }
 
-
-                if (j % 1000 == 0)
-                    cout << "\r" << j << "/" << sv_size << "    " << flush;
+                cout << "\r" << j << "/" << sv_size << "    " << flush;
             } // for
             cout << endl;
         }
-
         cout << "Unique search OK" << endl;
     }
 
     {
         cout << "Find EQ test on flat data" << endl;
         bvect::allocator_pool_type pool;
-        unsigned max_value = 128000;
+        unsigned max_value = 1280;
         for (unsigned value = 0; value < max_value; ++value)
         {
-            sparse_vector_u32 sv;
-            sparse_vector_u64 sv_64;
+            sparse_vector_u32 sv(bm::use_null);
+            sparse_vector_u64 sv_64(bm::use_null);
             rsc_sparse_vector_u32 csv;
 
             bvect bv_control, bv_control2;
             bvect::mem_pool_guard(pool, bv_control);
 
             unsigned sv_size = 67000;
+            bvect::size_type sv_from = bm::id_max - sv_size - 10;
 
             {
                 sparse_vector_u32::back_insert_iterator bi(sv.get_back_inserter());
                 sparse_vector_u64::back_insert_iterator bi_64(sv_64.get_back_inserter());
+                bi.add_null(sv_from);
+                bi_64.add_null(sv_from);
                 for (unsigned j = 0; j < 67000; ++j)
                 {
                     *bi = value;
@@ -11743,13 +11760,14 @@ void TestSparseVectorScan()
 
             scanner.find_eq(sv, value, bv_control);
             auto found = bv_control.count();
-
             if (found != sv_size)
             {
                 cerr << "1. sparse_vector<>::find_eq() discrepancy for value=" << value
                     << " count = " << found << endl;
                 assert(0); exit(1);
             }
+            auto first = bv_control.get_first();
+            assert(first == sv_from);
 
             rsc_scanner.find_eq(csv, value, bv_control2);
             int res = bv_control.compare(bv_control2);
@@ -11759,7 +11777,6 @@ void TestSparseVectorScan()
                     << endl;
                 exit(1);
             }
-
 
             {
                 bm::id64_t v64 = value;
@@ -11774,6 +11791,8 @@ void TestSparseVectorScan()
                         << " count = " << found << endl;
                     assert(0); exit(1);
                 }
+                first = bv_control.get_first();
+                assert(first == sv_from);
             }
 
             // not found check
@@ -11795,7 +11814,7 @@ void TestSparseVectorScan()
 
             {
                 BM_DECLARE_TEMP_BLOCK(tb)
-                    sv.optimize(tb);
+                sv.optimize(tb);
             }
 
             bv_control.clear();
@@ -11809,6 +11828,9 @@ void TestSparseVectorScan()
                     << " count = " << found << endl;
                 assert(0); exit(1);
             }
+            first = bv_control.get_first();
+            assert(first == sv_from);
+
 
             // not found check
             scanner.find_eq(sv, value + 1, bv_control);
@@ -11819,9 +11841,7 @@ void TestSparseVectorScan()
                 assert(0); exit(1);
             }
 
-
-            if (value % 256 == 0)
-                cout << "\r" << value << "/" << max_value << "    " << flush;
+            cout << "\r" << value << "/" << max_value << "    " << flush;
         }
 
         cout << endl << "Flat EQ ok" << endl;
@@ -12021,7 +12041,6 @@ int main(int argc, char *argv[])
 
     if (is_all || is_sv)
     {
-/*
          TestSparseVector();
 
          TestSparseVectorInserter();
@@ -12033,7 +12052,7 @@ int main(int argc, char *argv[])
          TestSparseVectorRange();
 
          TestSparseVectorFilter();
-*/
+
          TestSparseVectorScan();
 /*
          TestCompressSparseVector();
