@@ -788,9 +788,9 @@ void basic_bmatrix<BV>::set_octet(size_type pos,
 {
     BM_ASSERT(octet_idx * 8u < rsize_);
     
-    unsigned oct = octet;
-    unsigned row = octet_idx * 8;
-    unsigned row_end = row + 8;
+    size_type oct = octet;
+    size_type row = octet_idx * 8;
+    size_type row_end = row + 8;
     for (; row < row_end; ++row)
     {
         bvector_type* bv = this->get_row(row);
@@ -831,9 +831,9 @@ void basic_bmatrix<BV>::insert_octet(size_type pos,
 {
     BM_ASSERT(octet_idx * 8u < rsize_);
     
-    unsigned oct = octet;
-    unsigned row = octet_idx * 8;
-    unsigned row_end = row + 8;
+    size_type oct = octet;
+    size_type row = octet_idx * 8;
+    size_type row_end = row + 8;
     for (; row < row_end; ++row)
     {
         bvector_type* bv = this->get_row(row);

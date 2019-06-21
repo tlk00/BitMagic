@@ -1726,7 +1726,7 @@ str_sparse_vector<CharType, BV, MAX_STR_SIZE>::const_iterator::value() const
         if (!buf_matrix_.is_init())
             buf_matrix_.init();
         pos_in_buf_ = 0;
-        unsigned d = sv_->decode(buf_matrix_, pos_, buffer_matrix_type::n_rows);
+        size_type d = sv_->decode(buf_matrix_, pos_, buffer_matrix_type::n_rows);
         if (!d)
         {
             pos_ = bm::id_max;
