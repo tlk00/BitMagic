@@ -7840,7 +7840,7 @@ unsigned lower_bound_u64(const unsigned long long* arr, unsigned long long targe
 inline
 bm::id64_t block_to_global_index(unsigned i, unsigned j, unsigned block_idx)
 {
-    bm::id64_t base_idx = i * bm::set_sub_array_size * bm::gap_max_bits;
+    bm::id64_t base_idx = bm::id64_t(i) * bm::set_sub_array_size * bm::gap_max_bits;
     base_idx += j * bm::gap_max_bits;
     return block_idx + base_idx;
 }
