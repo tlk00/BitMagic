@@ -659,11 +659,10 @@ void aggregator<BV>::combine_or(bvector_type& bv_target,
     {
         unsigned set_array_max = 
             find_effective_sub_block_size(i, bv_src, src_size, false);
-        unsigned j = 0;
-        do
+        for (unsigned j = 0; j < set_array_max; ++j)
         {
             combine_or(i, j, bv_target, bv_src, src_size);
-        } while (++j < set_array_max);
+        } // for j
     } // for i
 }
 
@@ -730,11 +729,13 @@ bool aggregator<BV>::combine_and_sub(bvector_type& bv_target,
     for (unsigned i = 0; i < top_blocks; ++i)
     {
         unsigned set_array_max = find_effective_sub_block_size(i, bv_src_and, src_and_size, true);
+        if (!set_array_max)
+            continue;
         if (src_sub_size)
         {
             unsigned set_array_max2 =
                     find_effective_sub_block_size(i, bv_src_sub, src_sub_size, false);
-            if (set_array_max2 > set_array_max)
+            if (set_array_max2 > set_array_max) // TODO: use range intersect
                 set_array_max = set_array_max2;
         }
         for (unsigned j = 0; j < set_array_max; ++j)
@@ -785,7 +786,7 @@ bool aggregator<BV>::find_first_and_sub(size_type& idx,
     if (!bv_src_and || !src_and_size)
         return false;
 
-    unsigned top_blocks = max_top_blocks(bv_src_sub, src_sub_size);
+    unsigned top_blocks = max_top_blocks(bv_src_and, src_and_size);
     unsigned top_blocks2 = max_top_blocks(bv_src_sub, src_sub_size);
     
     if (top_blocks2 > top_blocks)
@@ -833,7 +834,6 @@ bool aggregator<BV>::find_first_and_sub(size_type& idx,
     {
         unsigned set_array_max = bm::set_sub_array_size;
         unsigned j = 0;
-        
         if (range_set_)
         {
             if (i == top_from)
@@ -848,6 +848,8 @@ bool aggregator<BV>::find_first_and_sub(size_type& idx,
         else
         {
             set_array_max = find_effective_sub_block_size(i, bv_src_and, src_and_size, true);
+            if (!set_array_max)
+                continue;
             if (src_sub_size)
             {
                 unsigned set_array_max2 =
@@ -856,7 +858,7 @@ bool aggregator<BV>::find_first_and_sub(size_type& idx,
                     set_array_max = set_array_max2;
             }
         }
-        do
+        for (; j < set_array_max; ++j)
         {
             int is_res_full;
             digest_type digest = combine_and_sub(i, j,
@@ -871,7 +873,8 @@ bool aggregator<BV>::find_first_and_sub(size_type& idx,
                 idx = bm::block_to_global_index(i, j, block_bit_idx);
                 return found;
             }
-        } while (++j < set_array_max);
+        } // for j
+        //while (++j < set_array_max);
     } // for i
     return false;
 }
@@ -1460,7 +1463,8 @@ unsigned aggregator<BV>::resize_target(bvector_type& bv_target,
 // ------------------------------------------------------------------------
 
 template<typename BV>
-unsigned aggregator<BV>::max_top_blocks(const bvector_type_const_ptr* bv_src, unsigned src_size)
+unsigned
+aggregator<BV>::max_top_blocks(const bvector_type_const_ptr* bv_src, unsigned src_size)
 {
     unsigned top_blocks = 1;
 
