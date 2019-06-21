@@ -1077,6 +1077,7 @@ bool sparse_vector_scanner<SV>::prepare_and_sub_aggregator(const SV&   sv,
     unsigned char bits[sizeof(value) * 8];
     unsigned short bit_count_v = bm::bitscan(value, bits);
     BM_ASSERT(bit_count_v);
+    const value_type mask1 = 1;
 
     // prep the lists for combined AND-SUB aggregator
     //   (backward order has better chance for bit reduction on AND)
@@ -1084,7 +1085,7 @@ bool sparse_vector_scanner<SV>::prepare_and_sub_aggregator(const SV&   sv,
     for (unsigned i = bit_count_v; i > 0; --i)
     {
         unsigned bit_idx = bits[i-1];
-        BM_ASSERT(value & (value_type(1) << bit_idx));
+        BM_ASSERT(value & (mask1 << bit_idx));
         const bvector_type* bv = sv.get_plain(bit_idx);
         if (bv)
             agg_.add(bv);
@@ -1093,10 +1094,11 @@ bool sparse_vector_scanner<SV>::prepare_and_sub_aggregator(const SV&   sv,
     }
     
     unsigned sv_plains = sv.effective_plains();
-    for (unsigned i = 0; (i < sv_plains) && value; ++i)
+    for (unsigned i = 0; i < sv_plains; ++i)
     {
         bvector_type_const_ptr bv = sv.get_plain(i);
-        if (bv && !(value & (value_type(1) << i)))
+        value_type mask = mask1 << i;
+        if (bv && !(value & mask))
             agg_.add(bv, 1); // agg to SUB group
     } // for i
     return true;
