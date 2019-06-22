@@ -1086,13 +1086,11 @@ public:
                             break;
                         bn += bm::set_sub_array_size;
                         pos += bm::bits_in_array;
-                    }
-                    if (blk_root[i])
-                        --i;
+                    } // for i
                     this->block_idx_ = bn;
                     this->position_ = pos;
-                    //this->block_idx_ += bm::set_sub_array_size;
-                    //this->position_ += bm::bits_in_array;
+                    if ((i < top_block_size) && blk_root[i])
+                        --i;
                     continue;
                 }
                 if ((bm::word_t*)blk_blk == FULL_BLOCK_FAKE_ADDR)
