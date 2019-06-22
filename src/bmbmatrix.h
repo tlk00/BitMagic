@@ -888,7 +888,7 @@ basic_bmatrix<BV>::get_octet(size_type pos, size_type octet_idx) const
     unsigned nword  = unsigned(nbit >> bm::set_word_shift);
     unsigned mask0 = 1u << (nbit & bm::set_word_mask);
     
-    unsigned row_idx = (octet_idx * 8);
+    unsigned row_idx = unsigned(octet_idx * 8);
 
     blka[0] = get_block(row_idx+0, i0, j0);
     blka[1] = get_block(row_idx+1, i0, j0);
