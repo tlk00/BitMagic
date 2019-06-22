@@ -21212,7 +21212,7 @@ int parse_args(int argc, char *argv[])
             is_sv = true;
             continue;
         }
-        if (arg == "-strsv")
+        if (arg == "-strsv" || arg == "-svstr")
         {
             is_all = false;
             is_str_sv = true;
@@ -21446,13 +21446,15 @@ int main(int argc, char *argv[])
          TestSparseVector_Stress(2);
      
          TestCompressedCollection();
-
+    }
+    
+    if (is_all || is_str_sv)
+    {
          TestStrSparseVector();
 
          TestStrSparseSort();
 
          StressTestStrSparseVector();
-
     }
 
     if (is_all || is_bvops)
