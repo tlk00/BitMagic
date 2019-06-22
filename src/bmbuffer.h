@@ -694,7 +694,7 @@ public:
         return (const value_type*) buf;
     }
 
-    value_type* row(unsigned row_idx)
+    value_type* row(size_type row_idx)
     {
         BM_ASSERT(row_idx < rows_);
         BM_ASSERT(buffer_.size());
