@@ -304,8 +304,7 @@ void bulk_load_SV_set_ref(SV* sv, const VT& vect)
 }
 
 template<typename CSV, typename SV>
-void DetailedCompareSparseVectors(const CSV& csv,
-    const SV&            sv)
+void DetailedCompareSparseVectors(const CSV& csv, const SV& sv)
 {
     SV   sv_s(bm::use_null);  // sparse vector decompressed
 
@@ -357,8 +356,21 @@ void DetailedCompareSparseVectors(const CSV& csv,
             assert(0); exit(1);
         }
     }
+    if (!sv_size)
+        return;
+    
+    typename SV::size_type sv_first, sv_last;
+    typename SV::size_type sv_s_first, sv_s_last;
+    typename SV::size_type csv_first, csv_last;
 
-    for (typename SV::size_type i = 0; i < sv_size; ++i)
+    bv_null_sv->find_range(sv_first, sv_last);
+    bv_null_sv_s->find_range(sv_s_first, sv_s_last);
+    bv_null_csv->find_range(csv_first, csv_last);
+    
+    assert(sv_first == sv_s_first && sv_first == csv_first);
+    assert(sv_last == sv_s_last && sv_last == csv_last);
+    cout << "detailed compare from=" << sv_first << " to=" << sv_size << "..." << flush;
+    for (typename SV::size_type i = sv_first; i < sv_size; ++i)
     {
         bool is_null_sv = sv.is_null(i);
         bool is_null_sv_s = sv_s.is_null(i);
@@ -385,8 +397,6 @@ void DetailedCompareSparseVectors(const CSV& csv,
 
             assert(0); exit(1);
         }
-
-
         if (!is_null_sv)
         {
             auto v1 = sv[i];
@@ -403,7 +413,9 @@ void DetailedCompareSparseVectors(const CSV& csv,
                 assert(0);  exit(1);
             }
         }
-    }
+    } // for
+    cout << "OK" << endl;
+
 
     {
         BM_DECLARE_TEMP_BLOCK(tb)
@@ -510,4 +522,309 @@ void DetailedCheckCompressedDecode(const CSV& csv)
     }
     cout << endl;
 
+}
+
+template<class SV>
+bool TestEqualSparseVectors(const SV& sv1, const SV& sv2, bool detailed = true)
+{
+    if (sv1.size() != sv2.size())
+    {
+        cerr << "TestEqualSparseVectors failed incorrect size" << endl;
+        exit(1);
+    }
+    
+    if (sv1.is_nullable() == sv2.is_nullable())
+    {
+        bool b = sv1.equal(sv2);
+        if (!b)
+        {
+            cerr << "sv1.equal(sv2) failed" << endl;
+            return b;
+        }
+        const typename SV::bvector_type* bv_null1 = sv1.get_null_bvector();
+        const typename SV::bvector_type* bv_null2 = sv2.get_null_bvector();
+        
+        if (bv_null1 != bv_null2)
+        {
+            int r = bv_null1->compare(*bv_null2);
+            if (r != 0)
+            {
+                cerr << "sparse NULL-vectors comparison failed" << endl;
+                exit(1);
+            }
+        }
+    }
+    else  // NULLable does not match
+    {
+        detailed = true; // simple check not possible, use slow, detailed
+    }
+    
+
+    // test non-offset extraction
+    //
+    {
+        std::vector<unsigned> v1(sv1.size());
+        std::vector<unsigned> v1r(sv1.size());
+        std::vector<unsigned> v1p(sv1.size());
+        
+        sv1.extract(&v1[0], sv1.size(), 0);
+        sv1.extract_range(&v1r[0], sv1.size(), 0);
+        sv1.extract_plains(&v1p[0], sv1.size(), 0);
+        
+        for (typename SV::size_type i = 0; i < sv1.size(); ++i)
+        {
+            if (v1r[i] != v1[i] || v1p[i] != v1[i])
+            {
+                cerr << "TestEqualSparseVectors Extract 1 failed at:" << i
+                     << " v1[i]=" << v1[i] << " v1r[i]=" << v1r[i] << " v1p[i]=" << v1p[i]
+                     << endl;
+                exit(1);
+            }
+        } // for
+    }
+
+    // test offset extraction
+    //
+    {
+        std::vector<unsigned> v1(sv1.size());
+        std::vector<unsigned> v1r(sv1.size());
+        std::vector<unsigned> v1p(sv1.size());
+        
+        typename SV::size_type pos = sv1.size() / 2;
+        
+        sv1.extract(&v1[0], sv1.size(), pos);
+        sv1.extract_range(&v1r[0], sv1.size(), pos);
+        sv1.extract_plains(&v1p[0], sv1.size(), pos);
+        
+        for (typename SV::size_type i = 0; i < sv1.size(); ++i)
+        {
+            if (v1r[i] != v1[i] || v1p[i] != v1[i])
+            {
+                cerr << "TestEqualSparseVectors Extract 1 failed at:" << i
+                     << " v1[i]=" << v1[i] << " v1r[i]=" << v1r[i] << " v1p[i]=" << v1p[i]
+                     << endl;
+                exit(1);
+            }
+        } // for
+    }
+
+    {
+        SV svv1(sv1);
+        SV svv2(sv2);
+        
+        bm::null_support is_null = (sv1.is_nullable() == sv2.is_nullable()) ? bm::use_null : bm::no_null;
+        
+        bool b = svv1.equal(svv2, is_null);
+        if (!b)
+        {
+            cerr << "Equal, copyctor comparison failed" << endl;
+            return b;
+        }
+
+        svv1.swap(svv2);
+        b = svv1.equal(svv2, is_null);
+        if (!b)
+        {
+            cerr << "Equal, copyctor-swap comparison failed" << endl;
+            return b;
+        }
+    }
+
+    // comparison using elements assignment via reference
+    if (detailed)
+    {
+        SV sv3;
+        sv3.resize(sv1.size());
+        for (typename SV::size_type i = 0; i < sv1.size(); ++i)
+        {
+            sv3[i] = sv1[i];
+            unsigned v1 = sv1[i];
+            unsigned v2 = sv3[i];
+            if (v1 != v2)
+            {
+                cerr << "1. sparse_vector reference assignment validation failed" << endl;
+                return false;
+            }
+        }
+        bm::null_support is_null = (sv1.is_nullable() == sv3.is_nullable()) ? bm::use_null : bm::no_null;
+        bool b = sv1.equal(sv3, is_null);
+        if (!b)
+        {
+            cerr << "2. sparse_vector reference assignment validation failed" << endl;
+            return b;
+        }
+    }
+    
+    // comparison via const_iterators
+    //
+    {{
+        typename SV::const_iterator it1 = sv1.begin();
+        typename SV::const_iterator it2 = sv2.begin();
+        typename SV::const_iterator it1_end = sv1.end();
+        
+        for (; it1 < it1_end; ++it1, ++it2)
+        {
+            if (*it1 != *it2)
+            {
+                cerr << "1. sparse_vector::const_iterator validation failed" << endl;
+                return false;
+            }
+        }
+    }}
+
+    // comparison through serialization
+    //
+    {{
+        int res;
+        bm::sparse_vector_serial_layout<SV> sv_lay;
+        bm::sparse_vector_serialize(sv1, sv_lay);
+        
+        // copy buffer to check if serialization size is actually correct
+        const unsigned char* buf = sv_lay.buf();
+        size_t buf_size = sv_lay.size();
+        
+        vector<unsigned char> tmp_buf(buf_size);
+        ::memcpy(&tmp_buf[0], buf, buf_size);
+        
+        SV sv3;
+        res = bm::sparse_vector_deserialize(sv3, &tmp_buf[0]);
+        if (res != 0)
+        {
+            cerr << "De-Serialization error in TestEqualSparseVectors()" << endl;
+            exit(1);
+        }
+        
+        const typename SV::bvector_type* bv_null1 = sv1.get_null_bvector();
+        const typename SV::bvector_type* bv_null2 = sv2.get_null_bvector();
+        const typename SV::bvector_type* bv_null3 = sv3.get_null_bvector();
+        
+        if (bv_null1 && bv_null3)
+        {
+            int r = bv_null1->compare(*bv_null3);
+            if (r != 0)
+            {
+                cerr << "2. NULL bvectors comparison failed" << endl;
+                exit(1);
+            }
+        }
+        if (bv_null1 && bv_null2)
+        {
+            int r = bv_null1->compare(*bv_null2);
+            if (r != 0)
+            {
+                cerr << "3. NULL bvectors comparison failed" << endl;
+                exit(1);
+            }
+        }
+
+        bm::null_support is_null = (sv1.is_nullable() == sv3.is_nullable()) ? bm::use_null : bm::no_null;
+        if (!sv1.equal(sv3, is_null) )
+        {
+            cerr << "Serialization comparison of two svectors failed (1)" << endl;
+            exit(1);
+        }
+        is_null = (sv2.is_nullable() == sv3.is_nullable()) ? bm::use_null : bm::no_null;
+        if (!sv2.equal(sv3, is_null))
+        {
+            cerr << "Serialization comparison of two svectors failed (2)" << endl;
+            exit(1);
+        }
+        
+    
+    }}
+    return true;
+}
+
+
+
+template<typename SSV>
+void CompareStrSparseVector(const SSV& str_sv,
+                            const std::vector<string>& str_coll)
+{
+    assert(str_sv.size() == str_coll.size());
+    
+    string str_h = "z";
+    string str_l = "A";
+    
+    typedef typename SSV::bvector_type bvect;
+
+    bm::sparse_vector_scanner<bm::str_sparse_vector<char, bvect, 32> > scanner;
+
+    typename SSV::const_iterator it = str_sv.begin();
+    string str;
+    for (typename SSV::size_type i = 0; i < str_sv.size(); ++i, ++it)
+    {
+        assert (it.valid());
+        assert (it != str_sv.end());
+        
+        str_sv.get(i, str);
+        const string& str_control = str_coll[i];
+        if (str != str_control)
+        {
+            std::cerr << "String mis-match at:" << i << std::endl;
+            exit(1);
+        }
+        {
+            const char* s = *it;
+            int cmp = ::strcmp(s, str_control.c_str());
+            if (cmp != 0)
+            {
+                cerr << "Iterator comparison failed! " << s << " != " << str_control
+                     << endl;
+                exit(1);
+            }
+            typename SSV::const_iterator it2 = str_sv.get_const_iterator(i);
+            assert(it == it2);
+            s = *it2;
+            cmp = ::strcmp(s, str_control.c_str());
+            if (cmp != 0)
+            {
+                cerr << "2. Iterator comparison failed! " << s << " != " << str_control
+                     << endl;
+                exit(1);
+            }
+        }
+        int cmp = str_sv.compare(i, str_control.c_str());
+        if (cmp != 0)
+        {
+            std::cerr << "String comparison failure at:" << i << std::endl;
+            exit(1);
+        }
+        if (!str_sv.is_remap()) // re-mapped vectors can give incorrect compare
+        {
+            cmp = str_sv.compare(i, str_h.c_str());
+            if (cmp < 0)
+            {
+                assert(str < str_h);
+            }
+            if (cmp > 0)
+            {
+                assert(str > str_h);
+            }
+
+            cmp = str_sv.compare(i, str_l.c_str());
+            if (cmp < 0)
+            {
+                assert(str < str_l);
+            }
+            if (cmp > 0)
+            {
+                assert(str > str_l);
+            }
+        }
+        
+       typename SSV::size_type pos;
+       bool found = scanner.find_eq_str(str_sv, str_control.c_str(), pos);
+       if (!found)
+       {
+            cerr << "Scanner search failed! " << str_control << endl;
+            exit(1);
+       }
+       assert(pos == i);
+        if (i % 100000 == 0)
+        {
+            cout << "\r" << i << " / " << str_sv.size() << flush;
+        }
+    } // for
+    cout << endl;
 }

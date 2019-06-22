@@ -677,7 +677,7 @@ void GenerateSV(SV&   sv, unsigned strategy = 0)
             unsigned v = (rand() * rand()) % 650000;
             for (typename SV::size_type j = 0; i < max_idx_value; ++i, ++j)
             {
-                sv[i] = v + j;
+                sv[i] = typename SV::value_type(v + j);
                 if (j > 256)
                     break;
             }
@@ -699,7 +699,7 @@ void GenerateSV(SV&   sv, unsigned strategy = 0)
             v = unsigned(rand() * rand()) % 650000;
             for (typename SV::size_type j = 0; i < max_idx_value; ++i, ++j)
             {
-                sv[i] = v + i;
+                sv[i] = typename SV::value_type(v + i);
                 if (j > 256)
                     break;
             }
@@ -753,21 +753,23 @@ void GenerateSV(SV&   sv, unsigned strategy = 0)
     break;
     case 7:
     {
-        cout << "SV liner growth value generation" << endl;
+        cout << "SV linear growth value generation..." << flush;
         for (unsigned i = 0; i < max_idx_value; ++i)
         {
             sv[i] = i;
         }
+        cout << "ok" << endl;
     }
     break;
     case 8:
     {
-        cout << "SV liner growth value generation (in 64-bit space)" << endl;
+        cout << "SV linear growth value generation (in 64-bit space)..." << flush;
         typename SV::size_type from = bm::id_max - max_idx_value - 1;
         for (unsigned i = 0; i < max_idx_value; ++i)
         {
             sv[from + i] = i;
         }
+        cout << "ok effective size=" << (sv.size() - from) << endl;
     }
 
     default:
@@ -776,3 +778,129 @@ void GenerateSV(SV&   sv, unsigned strategy = 0)
     sv.optimize();
 }
 
+
+// fill pseudo-random plato pattern into two vectors
+//
+template<class SV>
+void FillSparseIntervals(std::vector<unsigned>&   vect,
+                         SV& svect,
+                         typename SV::size_type min,
+                         typename SV::size_type max,
+                         unsigned      fill_factor)
+{
+    typename SV::size_type diap = max - min;
+    typename SV::size_type count;
+
+    switch (fill_factor)
+    {
+    case 0:
+        count = diap / 1000;
+        break;
+    case 1:
+        count = diap / 100;
+        break;
+    default:
+        count = diap / 10;
+        break;
+
+    }
+    
+    if (vect.size() < max)
+        vect.resize(max + 1);
+    if (svect.size() < max)
+        svect.resize(max + 1);
+    
+    unsigned val = 0;
+    for ( ;min < max; )
+    {
+        // hi-band interval
+        val = rand() % (65535 * 2);
+        unsigned i;
+        for (i = 0; i < count; ++i)
+        {
+            vect[min] = val;
+            svect.set(min, val);
+            ++min;
+            if (min > max)
+                break;
+        } // for i
+        
+        // gap with all zeroes
+        unsigned inc = rand() % 2048;
+        min += inc;
+        if (min > max)
+            break;
+
+        // low band plato
+        val = rand() % 8;
+        for (i = 0; i < count; ++i)
+        {
+            vect[min] = val;
+            svect.set(min, val);
+            ++min;
+            if (min > max)
+                break;
+        } // for i
+        
+    } // for min
+}
+
+template<typename SSV>
+void GenerateTestStrCollection(SSV& str_coll, typename SSV::size_type max_coll)
+{
+    string prefix = "az";
+    string str;
+    for (unsigned i = 0; i < max_coll; ++i)
+    {
+        str = prefix;
+        str.append(to_string(i));
+        str_coll.emplace_back(str);
+        // generate new prefix
+        {
+            prefix.clear();
+            unsigned prefix_len = rand() % 5;
+            for (unsigned j = 0; j < prefix_len; ++j)
+            {
+                char cch = char('a' + rand() % 26);
+                prefix.push_back(cch);
+            } // for j
+        }
+    } // for i
+}
+
+
+
+template<typename CBCBuf>
+void FillTestBuffer(CBCBuf& buf)
+{
+    unsigned sz_factor = rand() % 10;
+    if (!sz_factor)
+        sz_factor = 1;
+    unsigned size = 65000 + (128000 / sz_factor);    
+    buf.resize(size);
+    unsigned char* data = buf.data();
+    for (unsigned i = 0; i < size; ++i)
+    {
+        data[i] = (unsigned char)i;
+    }
+}
+
+template<typename CBC>
+void GenerateCompressedBufferCollection(CBC& cbc)
+{
+    unsigned sz = rand() % 10000;
+    unsigned key = 0;
+    unsigned key_factor = rand() % 128;
+    if (!key_factor)
+        key_factor = 1;
+    for (unsigned i = 0; i < sz; ++i)
+    {
+        {
+            typename CBC::buffer_type buf;
+            FillTestBuffer(buf);
+            cbc.move_buffer(key, buf);
+        }
+        key += key_factor;
+    } // for
+    cbc.sync();
+}
