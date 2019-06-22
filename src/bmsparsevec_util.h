@@ -95,7 +95,6 @@ public:
     */
     void set(size_type id_from);
     
-    
     /*!
         \brief Re-calculate prefix sum table
         \param force - force recalculation even if it is already recalculated
@@ -142,6 +141,7 @@ public:
         \brief equality comparison
     */
     bool equal(const bvps_addr_resolver& addr_res) const;
+    
 protected:
     void construct_rs_index();
     void free_rs_index();
@@ -220,11 +220,12 @@ template<class Value, class BV>
 class compressed_collection
 {
 public:
-    typedef bm::id_t                             key_type;
-    typedef bm::id_t                             address_type;
+    typedef BV                                   bvector_type;
+    typedef typename BV::size_type               size_type;
+    typedef size_type                            key_type;
+    typedef size_type                            address_type;
     typedef Value                                value_type;
     typedef Value                                mapped_type;
-    typedef BV                                   bvector_type;
     typedef std::vector<value_type>              container_type;
     typedef bm::bvps_addr_resolver<bvector_type> address_resolver_type;
     

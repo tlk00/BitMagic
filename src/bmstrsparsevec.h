@@ -511,7 +511,7 @@ public:
         if (idx > sz)
             return;
         this->bmatr_.set_octet(idx, sz, 0);
-        this->clear_value_plains_from(sz*8+1, idx);
+        this->clear_value_plains_from(unsigned(sz*8+1), idx);
     }
     
     /*!

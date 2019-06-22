@@ -32,6 +32,7 @@ For more information please visit:  http://bitmagic.io
 #endif
 
 
+
 /** \defgroup svalgo Sparse vector algorithms
     Sparse vector algorithms
     \ingroup svector
@@ -383,17 +384,8 @@ protected:
         linear_cutoff1 = 16,
         linear_cutoff2 = 128
     };
-    
-    typedef bm::heap_matrix<value_type,
-        bm::set_total_blocks,
-        max_columns,
-        allocator_type>  heap_matrix_type0;
-    
-    typedef bm::heap_matrix<value_type,
-        bm::set_total_blocks*3,
-        max_columns,
-        allocator_type>  heap_matrix_type3;
-    
+
+    typedef bm::dynamic_heap_matrix<value_type, allocator_type> heap_matrix_type;
     typedef bm::heap_matrix<typename SV::value_type,
                            linear_cutoff2,
                            SV::sv_octet_plains,
@@ -411,8 +403,8 @@ private:
     bool                               mask_set_;
     
     const SV*                          bound_sv_;
-    heap_matrix_type0                  block0_elements_cache_; ///< cache for elements[0] of each block
-    heap_matrix_type3                  block3_elements_cache_; ///< cache for elements[16384x] of each block
+    heap_matrix_type                   block0_elements_cache_; ///< cache for elements[0] of each block
+    heap_matrix_type                   block3_elements_cache_; ///< cache for elements[16384x] of each block
     size_type                          effective_str_max_;
     
     value_type                         remap_value_vect_[SV::max_vector_size];
@@ -784,14 +776,19 @@ void sparse_vector_scanner<SV>::bind(const SV&  sv, bool sorted)
     bound_sv_ = &sv;
     if (sorted)
     {
-        block0_elements_cache_.init();
+        size_type sv_sz = sv.size();
+        BM_ASSERT(sv_sz);
+        size_type total_nb = sv_sz / bm::gap_max_bits + 1;
+        effective_str_max_ = sv.effective_vector_max();
+
+        block0_elements_cache_.resize(total_nb, effective_str_max_+1);
         block0_elements_cache_.set_zero();
-        block3_elements_cache_.init();
+
+        block3_elements_cache_.resize(total_nb * 3, effective_str_max_+1);
         block3_elements_cache_.set_zero();
         
-        effective_str_max_ = sv.effective_vector_max();
         // fill in elements cache
-        for (size_type i = 0; i < sv.size(); i+= bm::gap_max_bits)
+        for (size_type i = 0; i < sv_sz; i+= bm::gap_max_bits)
         {
             size_type nb = (i >> bm::set_block_shift);
             value_type* s0 = block0_elements_cache_.row(nb);
@@ -1053,7 +1050,7 @@ bool sparse_vector_scanner<SV>::prepare_and_sub_aggregator(const SV&  sv,
     
     // add all vectors above string len to the SUB operation group
     //
-    typename SV::size_type plain_idx = unsigned(len * 8) + 1;
+    unsigned plain_idx = unsigned(len * 8) + 1;
     typename SV::size_type plains;
     if (&sv == bound_sv_)
         plains = effective_str_max_ * unsigned(sizeof(value_type)) * 8;
@@ -1165,7 +1162,7 @@ bool sparse_vector_scanner<SV>::find_eq_str(const typename SV::value_type* str,
                                             typename SV::size_type&        pos)
 {
     BM_ASSERT(bound_sv_);
-    return find_eq_str(*bound_sv_, str, pos);
+    return this->find_eq_str(*bound_sv_, str, pos);
 }
 
 //----------------------------------------------------------------------------
@@ -1192,7 +1189,7 @@ bool sparse_vector_scanner<SV>::find_eq_str(const SV&                      sv,
             }
         }
     
-        bvect::size_type found_pos;
+        size_type found_pos;
         found = find_first_eq(sv, str, found_pos, remaped);
         if (found)
         {
