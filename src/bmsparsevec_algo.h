@@ -21,6 +21,12 @@ For more information please visit:  http://bitmagic.io
     \brief Algorithms for sparse_vector<>
 */
 
+#ifndef BM__H__INCLUDED__
+// BitMagic utility headers do not include main "bm.h" declaration 
+// #include "bm.h" or "bm64.h" explicitly 
+# error missing include (bm.h or bm64.h)
+#endif
+
 #include "bmdef.h"
 #include "bmsparsevec.h"
 #include "bmaggregator.h"

@@ -1,3 +1,5 @@
+#ifndef BMGAMMAENC__H__INCLUDED__
+#define BMGAMMAENC__H__INCLUDED__
 /*
 Copyright(c) 2002-2017 Anatoliy Kuznetsov(anatoliy_kuznetsov at yahoo.com)
 
@@ -19,10 +21,6 @@ For more information please visit:  http://bitmagic.io
 /*! \file bmgamma.h
     \brief Elias Gamma Utils used for compact serialization (internal)
 */
-
-
-#ifndef BMGAMMAENC__H__INCLUDED__
-#define BMGAMMAENC__H__INCLUDED__
 
 
 namespace bm

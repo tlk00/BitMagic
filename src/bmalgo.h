@@ -22,7 +22,12 @@ For more information please visit:  http://bitmagic.io
     \brief Algorithms for bvector<> (main include)
 */
 
-#include "bm.h"
+#ifndef BM__H__INCLUDED__
+// BitMagic utility headers do not include main "bm.h" declaration 
+// #include "bm.h" or "bm64.h" explicitly 
+# error missing include (bm.h or bm64.h)
+#endif
+
 #include "bmfunc.h"
 #include "bmdef.h"
 
