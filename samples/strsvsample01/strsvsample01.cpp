@@ -30,6 +30,8 @@ For more information please visit:  http://bitmagic.io
 #include <iostream>
 #include <string>
 #include <vector>
+
+#include "bm.h"
 #include "bmstrsparsevec.h"
 
 using namespace std;

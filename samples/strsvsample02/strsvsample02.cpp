@@ -34,6 +34,7 @@ For more information please visit:  http://bitmagic.io
 #include <random>
 #include <algorithm>
 
+#include "bm.h"
 #include "bmstrsparsevec.h"
 #include "bmsparsevec_algo.h"
 

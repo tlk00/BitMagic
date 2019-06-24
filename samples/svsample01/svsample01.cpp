@@ -31,6 +31,8 @@ For more information please visit:  http://bitmagic.io
 
 
 #include <iostream>
+
+#include "bm.h"
 #include "bmsparsevec.h"
 
 using namespace std;

@@ -38,6 +38,7 @@ For more information please visit:  http://bitmagic.io
 #include <algorithm>
 #include <fstream>
 
+#include "bm.h"
 #include "bmstrsparsevec.h"
 #include "bmsparsevec_serial.h"
 
