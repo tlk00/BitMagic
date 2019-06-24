@@ -358,17 +358,60 @@ void DetailedCompareSparseVectors(const CSV& csv, const SV& sv)
     }
     if (!sv_size)
         return;
-    
+ 
+    {
+        int cmp;
+        cmp = bv_null_sv->compare(*bv_null_sv_s);
+        assert(cmp == 0);
+        cmp = bv_null_sv->compare(*bv_null_csv);
+        assert(cmp == 0);
+    }
+
     typename SV::size_type sv_first, sv_last;
     typename SV::size_type sv_s_first, sv_s_last;
     typename SV::size_type csv_first, csv_last;
 
-    bv_null_sv->find_range(sv_first, sv_last);
-    bv_null_sv_s->find_range(sv_s_first, sv_s_last);
-    bv_null_csv->find_range(csv_first, csv_last);
-    
+    bool found_sv = bv_null_sv->find_range(sv_first, sv_last);
+    bool found_sv_s = bv_null_sv_s->find_range(sv_s_first, sv_s_last);
+    bool found_csv = bv_null_csv->find_range(csv_first, csv_last);
+
+    if (found_sv)
+    {
+        assert(found_sv_s && found_csv);
+    }
+    else
+    {
+        assert(!found_sv_s);
+        assert(!found_csv);
+        sv_first = sv_last = sv_s_first = sv_s_last = csv_first = csv_last = 0;
+    }
+
+    if (csv_first != sv_first)
+    {
+        cerr << csv_first << "!=" << sv_first << endl;
+        assert(0); exit(1);
+    }
+    if (csv_last != sv_last)
+    {
+        cerr << sv_s_last << "!=" << sv_last << endl;
+        assert(0); exit(1);
+    }
+
+    if (sv_s_first != sv_first)
+    {
+        cerr << sv_s_first << "!=" << sv_first << endl;
+        assert(0); exit(1);
+    }
+    if (sv_s_last != sv_last)
+    {
+        cerr << sv_s_last << "!=" << sv_last << endl;
+        assert(0); exit(1);
+    }
+
     assert(sv_first == sv_s_first && sv_first == csv_first);
     assert(sv_last == sv_s_last && sv_last == csv_last);
+
+
     cout << "detailed compare from=" << sv_first << " to=" << sv_size << "..." << flush;
     for (typename SV::size_type i = sv_first; i < sv_size; ++i)
     {
