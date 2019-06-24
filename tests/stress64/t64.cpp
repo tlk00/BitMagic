@@ -11861,6 +11861,7 @@ static
 void TestCompressSparseVector()
 {
     cout << " ------------------------------ Test Compressed Sparse Vector " << endl;
+
     {
         rsc_sparse_vector_u32 csv1;
         assert(csv1.equal(csv1));
@@ -12208,8 +12209,6 @@ void TestCompressSparseVector()
             cout << "ok" << endl;
         } // for
         cout << "Compressed load() stress test OK" << endl;
-
-
     }
 
     cout << " ------------------------------ Test Compressed Sparse Vector OK" << endl;
@@ -13912,6 +13911,7 @@ int main(int argc, char *argv[])
 
     if (is_all || is_sv)
     {
+
          TestSparseVector();
 
          TestSparseVectorInserter();
@@ -13927,7 +13927,7 @@ int main(int argc, char *argv[])
          TestSparseVectorScan();
 
         TestCompressSparseVector();
-        
+
         TestCompressedSparseVectorScan();
         
         TestSparseVector_Stress(2);
