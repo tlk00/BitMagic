@@ -3913,6 +3913,8 @@ bool bvector<Alloc>::find_reverse(size_type& pos) const
     bool found;
     
     unsigned top_blocks = blockman_.top_block_size();
+    if (!top_blocks)
+        return false;
     for (unsigned i = top_blocks-1; true; --i)
     {
         const bm::word_t* const* blk_blk = blockman_.get_topblock(i);
@@ -4014,6 +4016,11 @@ bool bvector<Alloc>::find_range(size_type& in_first, size_type& in_last) const
     {
         found = find_reverse(in_last);
         BM_ASSERT(found);
+        BM_ASSERT(in_first <= in_last);
+    }
+    else
+    {
+        in_first = in_last = 0; // zero the output just in case
     }
     return found;
 }
