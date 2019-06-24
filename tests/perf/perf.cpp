@@ -1257,7 +1257,7 @@ void SerializationTest()
     bv_sparse.calc_stat(&st);
     unsigned char*  buf = new unsigned char[st.max_serialize_mem];
 
-    unsigned len, id_size;
+    size_t len, id_size;
     len = id_size = 0;
     {
     TimeTaker tt("Small bvector serialization", REPEATS*70000);
@@ -1290,7 +1290,8 @@ void SerializationTest()
     }
     
     char cbuf[256];
-    sprintf(cbuf, "%i %i %i", id_size, len, value);
+    cout << cbuf << " " << id_size << " " << len << " " << value << endl;
+    
     
     
     delete bv;
