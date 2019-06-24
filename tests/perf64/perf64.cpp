@@ -36,15 +36,16 @@ For more information please visit:  http://bitmagic.io
 #include <random>
 #include <memory>
 
-#define BM64ADDR
-#include "bm.h"
+#include "bm64.h"
 #include <bmsparsevec.h>
+#include <bmstrsparsevec.h>
 #include <bmsparsevec_algo.h>
 #include <bmsparsevec_serial.h>
 #include "bmtimer.h"
 #include "bmdbg.h"
 
 using namespace std;
+using namespace bm;
 
 #include "../stress64/gena.h"
 #include "../stress64/test_util.h"

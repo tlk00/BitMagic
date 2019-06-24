@@ -21,7 +21,6 @@ For more information please visit:  http://bitmagic.io
 //#define BMSSE42OPT
 //#define BMAVX2OPT
 
-#define BM64ADDR
 
 #include <stdio.h>
 #include <stdlib.h>
@@ -42,7 +41,7 @@ For more information please visit:  http://bitmagic.io
 #include <vector>
 #include <chrono>
 
-#include <bm.h>
+#include <bm64.h>
 #include <bmrandom.h>
 #include <bmaggregator.h>
 #include <bmvmin.h>
