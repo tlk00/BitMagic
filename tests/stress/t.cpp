@@ -19508,7 +19508,7 @@ void TestCompressedCollection()
     
     {
         cout << "Compressed buffer collection stress." << endl;
-        const unsigned test_count = 160;
+        const unsigned test_count = 60;
         for (unsigned i = 0; i < test_count; ++i)
         {
             bm::compressed_buffer_collection<bvect> cbc1;
