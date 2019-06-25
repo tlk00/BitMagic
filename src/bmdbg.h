@@ -138,14 +138,14 @@ int read_dump_file(const std::string& fname, VT& data)
 {
     typedef typename VT::value_type  value_type;
 
-    std::streampos fsize;
+    size_t fsize;
     std::ifstream fin(fname.c_str(), std::ios::in | std::ios::binary);
     if (!fin.good())
     {
         return -1;
     }
     fin.seekg(0, std::ios::end);
-    fsize = fin.tellg();
+    fsize = (size_t)fin.tellg();
     
     data.resize(fsize/sizeof(value_type));
 
@@ -154,7 +154,7 @@ int read_dump_file(const std::string& fname, VT& data)
         return 0; // empty input
     }
     fin.seekg(0, std::ios::beg);
-    fin.read((char*) &data[0], fsize);
+    fin.read((char*) &data[0], std::streamsize(fsize));
     if (!fin.good())
     {
         data.resize(0);
@@ -827,7 +827,7 @@ int file_save_svector(const SV& sv, const std::string& fname, size_t* sv_blob_si
         return -1;
     }
     const char* buf = (char*)sv_lay.buf();
-    fout.write(buf, sv_lay.size());
+    fout.write(buf, std::streamsize(sv_lay.size()));
     if (!fout.good())
     {
         return -1;
