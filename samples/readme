@@ -27,6 +27,10 @@ Bit-vector operations
 ./bvsetalgebra - Tutorial for Algebra of Sets operations
 Tutorial: http://bitmagic.io/set-algebra.html
 
+./bvsample01_64 - basic operations with 64-bit bit-vectors
+
+
+
 
 Sparse vector (bit-transposed sparse vector) for scalar integer types
 

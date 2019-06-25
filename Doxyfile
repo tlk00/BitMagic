@@ -61,6 +61,7 @@ INPUT                  = ./src/bm.h ./src/bmfunc.h  ./src/bmsimd.h \
                          ./src/bmsparsevec.h ./src/bmsparsevec_algo.h ./src/bmsparsevec_serial.h \
                          ./src/bmsparsevec_compr.h ./src/bmstrsparsevec.h ./src/bmsparsevec_util.h ./src/bmtimer.h \ 
 ./samples/bvsample01/sample1.cpp \
+./samples/bvsample01_64/bvsample01_64.cpp \
 ./samples/bvsample02/sample2.cpp \
 ./samples/bvsample03/sample3.cpp \
 ./samples/bvsample04/sample4.cpp \
