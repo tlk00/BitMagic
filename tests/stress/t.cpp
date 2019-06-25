@@ -19376,7 +19376,7 @@ void FillTestBuffer(bm::compressed_buffer_collection<bvect>::buffer_type& buf)
     unsigned sz_factor = rand() % 10;
     if (!sz_factor)
         sz_factor = 1;
-    unsigned size = 65000 + (128000 / sz_factor);
+    unsigned size = 65000 + rand() % 65;// (128000 / sz_factor);
     
     buf.resize(size);
     unsigned char* data = buf.data();
