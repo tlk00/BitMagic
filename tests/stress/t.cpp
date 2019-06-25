@@ -21139,6 +21139,7 @@ void show_help()
         << "-agg (or -aggregator) - bm::aggregator " << endl
         << "-sv                   - test sparse vectors" << endl
         << "-strsv                - test sparse vectors" << endl
+        << "-cc                   - test compresses collections" << endl
       ;
 }
 
@@ -21152,6 +21153,7 @@ bool         is_rankc = false;
 bool         is_agg = false;
 bool         is_sv = false;
 bool         is_str_sv = false;
+bool         is_c_coll = false;
 
 static
 int parse_args(int argc, char *argv[])
@@ -21216,6 +21218,12 @@ int parse_args(int argc, char *argv[])
         {
             is_all = false;
             is_str_sv = true;
+            continue;
+        }
+        if (arg == "-cc")
+        {
+            is_all = false;
+            is_c_coll = true;
             continue;
         }
 
@@ -21425,26 +21433,29 @@ int main(int argc, char *argv[])
 
     if (is_all || is_sv)
     {
-         TestSparseVector();
+        TestSparseVector();
 
-         TestSparseVectorInserter();
+        TestSparseVectorInserter();
 
-         TestSparseVectorGatherDecode();
+        TestSparseVectorGatherDecode();
 
-         TestSparseVectorTransform();
+        TestSparseVectorTransform();
 
-         TestSparseVectorRange();
+        TestSparseVectorRange();
 
-         TestSparseVectorFilter();
+        TestSparseVectorFilter();
 
-         TestSparseVectorScan();
+        TestSparseVectorScan();
 
-         TestCompressSparseVector();
+        TestCompressSparseVector();
 
-         TestCompressedSparseVectorScan();
+        TestCompressedSparseVectorScan();
 
-         TestSparseVector_Stress(2);
-     
+        TestSparseVector_Stress(2);
+    }
+
+    if (is_all || is_c_coll)
+    {
          TestCompressedCollection();
     }
     
