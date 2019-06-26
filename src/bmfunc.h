@@ -2168,43 +2168,38 @@ void gap_buff_op(T*         BMRESTRICT dest,
     *res = bitval;
     ++res;
 
+    T c1 = *cur1; T c2 = *cur2;
     while (1)
     {
         bitval = (T) f(bitval1, bitval2);
 
         // Check if GAP value changes and we need to 
-        // start the next one.
-        if (bitval != bitval_prev)
+        // start the next one
+        //
+        res += (bitval != bitval_prev);
+        bitval_prev = bitval;
+        if (c1 < c2) // (*cur1 < *cur2)
         {
-            ++res;
-            bitval_prev = bitval;
-        }
-
-        if (*cur1 < *cur2)
-        {
-            *res = *cur1;
-            ++cur1;
+            *res = c1;
+            ++cur1; c1 = *cur1;
             bitval1 ^= 1;
         }
         else // >=
         {
-            *res = *cur2;
-            if (*cur2 < *cur1)
+            *res = c2;
+            if (c2 < c1) // (*cur2 < *cur1)
             {
-                bitval2 ^= 1;                
+                bitval2 ^= 1;
             }
             else  // equal
             {
-                if (*cur2 == (bm::gap_max_bits - 1))
-                {
+                if (c2 == (bm::gap_max_bits - 1))
                     break;
-                }
 
-                ++cur1;
-                bitval1 ^= 1;
-                bitval2 ^= 1;
+                ++cur1; c1 = *cur1;
+                bitval1 ^= 1; bitval2 ^= 1;
             }
-            ++cur2;
+            ++cur2; c2 = *cur2;
         }
 
     } // while
@@ -4808,7 +4803,7 @@ gap_word_t* gap_operation_and(const gap_word_t* BMRESTRICT vect1,
                               gap_word_t*       BMRESTRICT tmp_buf,
                               unsigned&         dsize)
 {
-    gap_buff_op(tmp_buf, vect1, 0, vect2, 0, and_op, dsize);
+    bm::gap_buff_op(tmp_buf, vect1, 0, vect2, 0, bm::and_op, dsize);
     return tmp_buf;
 }
 
