@@ -23,12 +23,27 @@ because of high efficiency and bit-level parallelism friendly for parallel proce
 integer sets and compressed BLOBs
 - operations with rank: population count distances on bit-vector. Rank-Select operations are often 
 used in succinct data structures.
+
+### Succinct vectors 
+
+BitMagic supports succinct (memory compact) vectors based on bit-transposition and bit-vectors.
+Compression on bit-planes offers both superior memory performance and fast search. 
+
 - sparse vector(s) for native int types using bit transposition and separate compression of bit-plains, 
 with support of NULL values (unassigned) for construction of in-memory columnar structures. Bit-transposed
 sparse vectors can be used for on-the fly compression of astronomical, molecular biology or other data,
 efficient store of associations for graphs, etc.
+- search algorithms for sorted and unsorted succinct vectors (vectors of ints or strings)
 - algorithms on sparse vectors: dynamic range clipping, search, group theory image (re-mapping).
-Collection of algorithms is increasing, please check our samples and the API lists.
+- all containers are serializable
+
+### 64-bit
+
+Yes!
+BitMagic supports 64-bit, can be used with 32-bit address space (less overhead) or 64-bit address space.
+32-bit address space is the default mode 2^31-1 elements should be a good fit for short to medium range
+search systems. 64-bit address mode is available using #define BM64ADDR or #include "bm64.h".
+Current 64-bit implementation now allows 2^48-1 elements for large scale systems.
 
 ### C-library interface:
 
@@ -38,6 +53,7 @@ STL, C++ memory allocation (operator new) or exceptions. Our goal here is to eve
 provide a bridge to other languiages of data science (Python) and languages of enterprise 
 scale development (Java, Scala) via JNI. 
 
+
 ### Features In Progress:
 
 - compressed binary relational and adjacency matrixes and operations on matrixes for 
@@ -46,7 +62,7 @@ Entity-Relationship acceleration, graph operations, social analyticsm materializ
 - succinct data structures and containers based on bit-transposed data representation and 
 rank-select compression
 
-- memory efficient dictionaries of strings
+- memory efficient dictionaries of strings as an alternative to suffix trees
 
 ### How to start with BitMagic?
 ---
@@ -76,7 +92,7 @@ Doxygen:
 Apache 2.0. 
 
 **Important!** We ask you to explicitly mention BitMagic project in any derived work or our published 
-materials. Proper citation on your product/project page is a REQUIREMENT 
+materials. Proper reference on your product/project page is a REQUIREMENT 
 for using BitMagic Library.
 
 
