@@ -13780,7 +13780,6 @@ void BitEncoderTest()
 
         } // for
         
-
     }
 
     
@@ -13789,6 +13788,27 @@ void BitEncoderTest()
     cout << "---------------------------- BitEncoderTest" << endl;
 }
 
+
+static
+void InterpolativeCodingTest()
+{
+    cout << "---------------------------- InterpolativeCodingTest() " << endl;
+    
+    unsigned char buf[1024 * 200] = {0, };
+
+    {
+        bm::encoder enc(buf, sizeof(buf));
+        bm::bit_out<bm::encoder> bout(enc);
+        
+        unsigned arr[] = { 3, 4, 7, 13, 14, 15, 21, 25, 36, 38, 54, 62 };
+        bout.bic_encode(arr, (sizeof(arr)/sizeof(arr[0]))-1, 0, 62);
+        
+        bout.flush();
+    }
+
+
+    cout << "---------------------------- InterpolativeCodingTest() OK " << endl;
+}
 
 static
 void GammaEncoderTest()
@@ -21326,10 +21346,12 @@ int main(int argc, char *argv[])
     
     if (is_all || is_support)
     {
-
         TestHeapVector();
         MiniSetTest();
         BitEncoderTest();
+
+        InterpolativeCodingTest();
+        return 0;
         GammaEncoderTest();
         GAPCheck();
         SerializationBufferTest();
