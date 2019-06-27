@@ -167,157 +167,29 @@ public:
         if (used_bits_)
             dest_.put_32(accum_);
     }
+    
+    /// issue single bit into encode bit-stream
+    void put_bit(unsigned value);
 
-    void put_bit(unsigned value)
-    {
-        BM_ASSERT(value <= 1);
-        accum_ |= (value << used_bits_);
-        if (++used_bits_ == (sizeof(accum_) * 8))
-            flush_accum();
-    }
+    /// issue count bits out of value
+    void put_bits(unsigned value, unsigned count);
 
-    void put_bits(unsigned value, unsigned count)
-    {
-        unsigned used = used_bits_;
-        unsigned acc = accum_;
+    /// issue 0 into output stream
+    void put_zero_bit();
 
-        {
-            unsigned mask = ~0u;
-            mask >>= (sizeof(accum_) * 8) - count;
-            value &= mask;
-        }
-        for (;count;)
-        {  
-            unsigned free_bits = unsigned(sizeof(accum_) * 8) - used;
-            BM_ASSERT(free_bits);
-            acc |= value << used;
+    /// issue specified number of 0s
+    void put_zero_bits(unsigned count);
 
-            if (count <= free_bits)
-            {
-                used += count;
-                break;
-            }
-            else
-            {
-                value >>= free_bits;
-                count -= free_bits;
-                dest_.put_32(acc);
-                acc = used = 0;
-                continue;
-            }
-        }
-        if (used == (sizeof(accum_) * 8))
-        {
-            dest_.put_32(acc);
-            acc = used = 0;
-        }
-        used_bits_ = used;
-        accum_ = acc;
-    }
-
-    void put_zero_bit()
-    {
-        if (++used_bits_ == (sizeof(accum_) * 8))
-            flush_accum();        
-    }
-
-    void put_zero_bits(unsigned count)
-    {
-        unsigned used = used_bits_;
-        unsigned free_bits = (sizeof(accum_) * 8) - used;
-        if (count >= free_bits)
-        {
-            flush_accum();
-            count -= free_bits;
-            used = 0;
-
-            for ( ;count >= sizeof(accum_) * 8; count -= sizeof(accum_) * 8)
-            {
-                dest_.put_32(0);
-            }
-            used += count; 
-        }
-        else
-        {
-            used += count;
-        }
-        accum_ |= (1 << used);
-        if (++used == (sizeof(accum_) * 8))
-            flush_accum();
-        else
-            used_bits_ = used;
-    }
-
-
-    void gamma(unsigned value)
-    {
-        BM_ASSERT(value);
-
-        unsigned logv = bm::bit_scan_reverse32(value);
-
-        // Put zeroes + 1 bit
-
-        unsigned used = used_bits_;
-        unsigned acc = accum_;
-        const unsigned acc_bits = (sizeof(acc) * 8);
-        unsigned free_bits = acc_bits - used;
-
-        {
-            unsigned count = logv;
-            if (count >= free_bits)
-            {
-                dest_.put_32(acc);
-                acc = used ^= used;
-                count -= free_bits;
-
-                for ( ;count >= acc_bits; count -= acc_bits)
-                {
-                    dest_.put_32(0);
-                }
-                used += count;
-            }
-            else
-            {
-                used += count;
-            }
-            acc |= (1 << used);
-            if (++used == acc_bits)
-            {
-                dest_.put_32(acc);
-                acc = used ^= used;
-            }
-        }
-
-        // Put the value bits
-        //
-        {
-            unsigned mask = (~0u);
-            mask >>= acc_bits - logv;
-            value &= mask;
-        }
-        for (;logv;)
-        {  
-            acc |= value << used;
-            free_bits = acc_bits - used;
-            if (logv <= free_bits)
-            {
-                used += logv;
-                break;
-            }
-            else
-            {
-                value >>= free_bits;
-                logv -= free_bits;
-                dest_.put_32(acc);
-                acc = used ^= used;
-                continue;
-            }
-        } // for
-
-        used_bits_ = used;
-        accum_ = acc;
-    }
-
+    /// Elias Gamma encode the specified value
+    void gamma(unsigned value);
+    
+    
+    /// Binary Interpolative encoding (array)
+    void bic_encode(const unsigned* arr, unsigned sz, unsigned lo, unsigned hi);
+    
+    /// Binary Interpolative Coding write
+    void bic_write(unsigned value, unsigned len);
+    
 
     void flush()
     {
@@ -356,121 +228,13 @@ public:
         : src_(decoder),
           used_bits_(unsigned(sizeof(accum_) * 8)),
           accum_(0)
-    {
-    }
+    {}
 
-    unsigned gamma()
-    {
-        unsigned acc = accum_;
-        unsigned used = used_bits_;
-
-        if (used == (sizeof(acc) * 8))
-        {
-            acc = src_.get_32();
-            used ^= used;
-        }
-        unsigned zero_bits = 0;
-        while (true)
-        {
-            if (acc == 0)
-            {
-                zero_bits = unsigned(zero_bits +(sizeof(acc) * 8) - used);
-                used = 0;
-                acc = src_.get_32();
-                continue;
-            }
-            unsigned first_bit_idx = 
-                #if defined(BM_x86) && (defined(__GNUG__) || defined(_MSC_VER))
-                    bm::bsf_asm32(acc);
-                #else
-                    bm::bit_scan_fwd(acc);
-                #endif
-            acc >>= first_bit_idx;
-            zero_bits += first_bit_idx;
-            used += first_bit_idx;
-            break;
-        } // while
-
-        // eat the border bit
-        //
-        if (used == (sizeof(acc) * 8))
-        {
-            acc = src_.get_32();
-            used = 1;
-        }
-        else
-        {
-            ++used;
-        }
-        acc >>= 1;
-
-        // get the value
-        unsigned current;
-        
-        unsigned free_bits = unsigned((sizeof(acc) * 8) - used);
-        if (zero_bits <= free_bits)
-        {
-        take_accum:
-            current = 
-                (acc & block_set_table<true>::_left[zero_bits]) | (1 << zero_bits);
-            acc >>= zero_bits;
-            used += zero_bits;
-            goto ret;
-        }
-
-        if (used == (sizeof(acc) * 8))
-        {
-            acc = src_.get_32();
-            used ^= used;
-            goto take_accum;
-        }
-
-        // take the part
-        current = acc;
-        // read the next word
-        acc = src_.get_32();
-        used = zero_bits - free_bits;
-        current |= 
-            ((acc & block_set_table<true>::_left[used]) << free_bits) | 
-            (1 << zero_bits);
-
-        acc >>= used;
-    ret:
-        accum_ = acc;
-        used_bits_ = used;
-        return current;
-    }
+    /// decode unsigned value using Elias Gamma coding
+    unsigned gamma();
     
-    unsigned get_bits(unsigned count)
-    {
-        BM_ASSERT(count);
-        
-        unsigned value = 0;
-        unsigned free_bits = unsigned((sizeof(accum_) * 8) - used_bits_);
-        if (count <= free_bits)
-        {
-        take_accum:
-            value =
-                (accum_ & block_set_table<true>::_left[count-1]);
-            accum_ >>= count;
-            used_bits_ += count;
-            return value;
-        }
-        if (used_bits_ == (sizeof(accum_) * 8))
-        {
-            accum_ = src_.get_32();
-            used_bits_ = 0;
-            goto take_accum;
-        }
-        value = accum_;
-        accum_ = src_.get_32();
-        used_bits_ = count - free_bits;
-        value |=
-            ((accum_ & block_set_table<true>::_left[used_bits_-1]) << free_bits);
-        accum_ >>= used_bits_;
-        return value;
-    }
-
+    /// read number of bits out of the stream
+    unsigned get_bits(unsigned count);
 
 private:
     bit_in(const bit_in&);
@@ -493,14 +257,8 @@ public:
     gamma_encoder(TBitIO& bout) : bout_(bout) 
     {}
         
-    /**
-        Encode word
-    */
-    BMFORCEINLINE
-    void operator()(T value)
-    {
-        bout_.gamma(value);
-    }
+    /** Encode word */
+    void operator()(T value) { bout_.gamma(value); }
 private:
     gamma_encoder(const gamma_encoder&);
     gamma_encoder& operator=(const gamma_encoder&);
@@ -517,28 +275,22 @@ template<typename T, typename TBitIO>
 class gamma_decoder
 {
 public:
-    gamma_decoder(TBitIO& bin) : bin_(bin) 
-    {}
+    gamma_decoder(TBitIO& bin) : bin_(bin) {}
     
     /**
         Start encoding sequence
     */
-    void start()
-    {}
+    void start() {}
     
     /**
         Stop decoding sequence
     */
-    void stop()
-    {}
+    void stop() {}
     
     /**
         Decode word
     */
-    T operator()(void)
-    {
-        return (T)bin_.gamma();
-    }
+    T operator()(void) { return (T)bin_.gamma(); }
 private:
     gamma_decoder(const gamma_decoder&);
     gamma_decoder& operator=(const gamma_decoder&);
@@ -1108,6 +860,327 @@ void decoder_little_endian::get_16(bm::short_t* s, unsigned count)
     buf_ = (unsigned char*)buf;
 }
 
+// ----------------------------------------------------------------------
+//
+
+template<typename TEncoder>
+void bit_out<TEncoder>::put_bit(unsigned value)
+{
+    BM_ASSERT(value <= 1);
+    accum_ |= (value << used_bits_);
+    if (++used_bits_ == (sizeof(accum_) * 8))
+        flush_accum();
+}
+
+// ----------------------------------------------------------------------
+
+template<typename TEncoder>
+void bit_out<TEncoder>::put_bits(unsigned value, unsigned count)
+{
+    unsigned used = used_bits_;
+    unsigned acc = accum_;
+
+    {
+        unsigned mask = ~0u;
+        mask >>= (sizeof(accum_) * 8) - count;
+        value &= mask;
+    }
+    for (;count;)
+    {
+        unsigned free_bits = unsigned(sizeof(accum_) * 8) - used;
+        BM_ASSERT(free_bits);
+        acc |= value << used;
+
+        if (count <= free_bits)
+        {
+            used += count;
+            break;
+        }
+        else
+        {
+            value >>= free_bits;
+            count -= free_bits;
+            dest_.put_32(acc);
+            acc = used = 0;
+            continue;
+        }
+    }
+    if (used == (sizeof(accum_) * 8))
+    {
+        dest_.put_32(acc);
+        acc = used = 0;
+    }
+    used_bits_ = used;
+    accum_ = acc;
+}
+
+// ----------------------------------------------------------------------
+
+template<typename TEncoder>
+void bit_out<TEncoder>::put_zero_bit()
+{
+    if (++used_bits_ == (sizeof(accum_) * 8))
+        flush_accum();
+}
+
+// ----------------------------------------------------------------------
+
+template<typename TEncoder>
+void bit_out<TEncoder>::put_zero_bits(unsigned count)
+{
+    unsigned used = used_bits_;
+    unsigned free_bits = (sizeof(accum_) * 8) - used;
+    if (count >= free_bits)
+    {
+        flush_accum();
+        count -= free_bits;
+        used = 0;
+
+        for ( ;count >= sizeof(accum_) * 8; count -= sizeof(accum_) * 8)
+        {
+            dest_.put_32(0);
+        }
+        used += count;
+    }
+    else
+    {
+        used += count;
+    }
+    accum_ |= (1 << used);
+    if (++used == (sizeof(accum_) * 8))
+        flush_accum();
+    else
+        used_bits_ = used;
+}
+
+// ----------------------------------------------------------------------
+
+template<typename TEncoder>
+void bit_out<TEncoder>::gamma(unsigned value)
+{
+    BM_ASSERT(value);
+
+    unsigned logv = bm::bit_scan_reverse32(value);
+
+    // Put zeroes + 1 bit
+
+    unsigned used = used_bits_;
+    unsigned acc = accum_;
+    const unsigned acc_bits = (sizeof(acc) * 8);
+    unsigned free_bits = acc_bits - used;
+
+    {
+        unsigned count = logv;
+        if (count >= free_bits)
+        {
+            dest_.put_32(acc);
+            acc = used ^= used;
+            count -= free_bits;
+
+            for ( ;count >= acc_bits; count -= acc_bits)
+            {
+                dest_.put_32(0);
+            }
+            used += count;
+        }
+        else
+        {
+            used += count;
+        }
+        acc |= (1 << used);
+        if (++used == acc_bits)
+        {
+            dest_.put_32(acc);
+            acc = used ^= used;
+        }
+    }
+
+    // Put the value bits
+    //
+    {
+        unsigned mask = (~0u);
+        mask >>= acc_bits - logv;
+        value &= mask;
+    }
+    for (;logv;)
+    {
+        acc |= value << used;
+        free_bits = acc_bits - used;
+        if (logv <= free_bits)
+        {
+            used += logv;
+            break;
+        }
+        else
+        {
+            value >>= free_bits;
+            logv -= free_bits;
+            dest_.put_32(acc);
+            acc = used ^= used;
+            continue;
+        }
+    } // for
+
+    used_bits_ = used;
+    accum_ = acc;
+}
+
+// ----------------------------------------------------------------------
+
+template<typename TEncoder>
+void bit_out<TEncoder>::bic_write(unsigned value, unsigned len)
+{
+    BM_ASSERT(value <= len);
+    if (len)
+    {
+        unsigned logv = bm::bit_scan_reverse32(len);
+        #ifdef __GNUG__
+            BM_ASSERT(logv == 31 - __builtin_clz(len));
+        #endif
+        put_bits(value, logv+1);
+        //std::cout << "v=" << value << " x=" << logv+1 << std::endl;
+    }
+}
+
+// ----------------------------------------------------------------------
+
+template<typename TEncoder>
+void bit_out<TEncoder>::bic_encode(const unsigned* arr,
+                                   unsigned sz,
+                                   unsigned lo, unsigned hi)
+{
+    if (!sz)
+        return;
+    BM_ASSERT(lo <= hi);
+    unsigned mid_idx = sz / 2;
+    unsigned val = arr[mid_idx];
+        
+    bic_write(val - lo - mid_idx, hi - lo - sz + 1);
+    
+    bic_encode(arr, mid_idx, lo, val-1);
+    bic_encode(arr + mid_idx + 1, sz - mid_idx - 1, val+1, hi);
+}
+
+// ----------------------------------------------------------------------
+//
+
+template<class TDecoder>
+unsigned bit_in<TDecoder>::gamma()
+{
+    unsigned acc = accum_;
+    unsigned used = used_bits_;
+
+    if (used == (sizeof(acc) * 8))
+    {
+        acc = src_.get_32();
+        used ^= used;
+    }
+    unsigned zero_bits = 0;
+    while (true)
+    {
+        if (acc == 0)
+        {
+            zero_bits = unsigned(zero_bits +(sizeof(acc) * 8) - used);
+            used = 0;
+            acc = src_.get_32();
+            continue;
+        }
+        unsigned first_bit_idx =
+            #if defined(BM_x86) && (defined(__GNUG__) || defined(_MSC_VER))
+                bm::bsf_asm32(acc);
+            #else
+                bm::bit_scan_fwd(acc);
+            #endif
+        acc >>= first_bit_idx;
+        zero_bits += first_bit_idx;
+        used += first_bit_idx;
+        break;
+    } // while
+
+    // eat the border bit
+    //
+    if (used == (sizeof(acc) * 8))
+    {
+        acc = src_.get_32();
+        used = 1;
+    }
+    else
+    {
+        ++used;
+    }
+    acc >>= 1;
+
+    // get the value
+    unsigned current;
+    
+    unsigned free_bits = unsigned((sizeof(acc) * 8) - used);
+    if (zero_bits <= free_bits)
+    {
+    take_accum:
+        current =
+            (acc & block_set_table<true>::_left[zero_bits]) | (1 << zero_bits);
+        acc >>= zero_bits;
+        used += zero_bits;
+        goto ret;
+    }
+
+    if (used == (sizeof(acc) * 8))
+    {
+        acc = src_.get_32();
+        used ^= used;
+        goto take_accum;
+    }
+
+    // take the part
+    current = acc;
+    // read the next word
+    acc = src_.get_32();
+    used = zero_bits - free_bits;
+    current |=
+        ((acc & block_set_table<true>::_left[used]) << free_bits) |
+        (1 << zero_bits);
+
+    acc >>= used;
+ret:
+    accum_ = acc;
+    used_bits_ = used;
+    return current;
+}
+
+// ----------------------------------------------------------------------
+
+template<class TDecoder>
+unsigned bit_in<TDecoder>::get_bits(unsigned count)
+{
+    BM_ASSERT(count);
+    
+    unsigned value = 0;
+    unsigned free_bits = unsigned((sizeof(accum_) * 8) - used_bits_);
+    if (count <= free_bits)
+    {
+    take_accum:
+        value =
+            (accum_ & block_set_table<true>::_left[count-1]);
+        accum_ >>= count;
+        used_bits_ += count;
+        return value;
+    }
+    if (used_bits_ == (sizeof(accum_) * 8))
+    {
+        accum_ = src_.get_32();
+        used_bits_ = 0;
+        goto take_accum;
+    }
+    value = accum_;
+    accum_ = src_.get_32();
+    used_bits_ = count - free_bits;
+    value |=
+        ((accum_ & block_set_table<true>::_left[used_bits_-1]) << free_bits);
+    accum_ >>= used_bits_;
+    return value;
+}
+
+// ----------------------------------------------------------------------
 
 } // namespace bm
 
