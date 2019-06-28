@@ -13788,6 +13788,29 @@ void BitEncoderTest()
     cout << "---------------------------- BitEncoderTest" << endl;
 }
 
+static
+unsigned generate_inter_test(bm::gap_word_t* arr)
+{
+    unsigned start = rand() % 256;
+    if (!start)
+        start = 1;
+    unsigned sz = 0;
+    while (true)
+    {
+        arr[sz++] = bm::gap_word_t(start);
+        unsigned inc = rand() % 65535;
+        if (!inc)
+            inc = 1;
+        if (inc + start >= 65535)
+        {
+            arr[sz++] = 65535;
+            break;
+        }
+        start += inc;
+    } // while
+    return sz;
+}
+
 
 static
 void InterpolativeCodingTest()
@@ -13795,15 +13818,65 @@ void InterpolativeCodingTest()
     cout << "---------------------------- InterpolativeCodingTest() " << endl;
     
     unsigned char buf[1024 * 200] = {0, };
+    const gap_word_t arr1[] = { 3, 4, 7, 13, 14, 15, 21, 25, 36, 38, 54, 62 };
 
+    unsigned sz;
     {
         bm::encoder enc(buf, sizeof(buf));
         bm::bit_out<bm::encoder> bout(enc);
         
-        unsigned arr[] = { 3, 4, 7, 13, 14, 15, 21, 25, 36, 38, 54, 62 };
-        bout.bic_encode(arr, (sizeof(arr)/sizeof(arr[0]))-1, 0, 62);
+        sz = sizeof(arr1)/sizeof(arr1[0])-1;
+        bout.bic_encode(arr1, sz, 0, 62);
         
         bout.flush();
+    }
+    
+    {
+        decoder dec(buf);
+        bm::bit_in<decoder> bin(dec);
+        
+        bm::gap_word_t arr2[256] = {0, };
+        bin.bic_decode(&arr2[0], sz, 0, 62);
+        for (unsigned i = 0; i < sz; ++i)
+        {
+            assert(arr1[i] == arr2[i]);
+        }
+    }
+
+    cout << "Stress..." << endl;
+    {
+        const unsigned code_repeats = 100000000;
+        bm::gap_word_t src_arr[65536*2];
+        bm::gap_word_t dst_arr[65536*2];
+
+
+        for (unsigned k = 0; k < code_repeats; ++k)
+        {
+            sz = generate_inter_test(src_arr);
+            assert(sz);
+            assert(src_arr[0]);
+            assert(src_arr[sz-1]==65535);
+            {
+                bm::encoder enc(buf, sizeof(buf));
+                bm::bit_out<bm::encoder> bout(enc);
+                
+                bout.bic_encode(src_arr, sz-1, 0, 65535);
+                bout.flush();
+            }
+            {
+                decoder dec(buf);
+                bm::bit_in<decoder> bin(dec);
+                
+                bin.bic_decode(&dst_arr[0], sz-1, 0, 65535);
+                dst_arr[sz-1]=65535;
+                for (unsigned i = 0; i < sz; ++i)
+                {
+                    assert(src_arr[i] == dst_arr[i]);
+                }
+            }
+
+        } // for k
+        
     }
 
 
@@ -21349,9 +21422,7 @@ int main(int argc, char *argv[])
         TestHeapVector();
         MiniSetTest();
         BitEncoderTest();
-
         InterpolativeCodingTest();
-        return 0;
         GammaEncoderTest();
         GAPCheck();
         SerializationBufferTest();
