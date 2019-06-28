@@ -185,10 +185,11 @@ public:
     
     
     /// Binary Interpolative encoding (array)
-    void bic_encode(const unsigned* arr, unsigned sz, unsigned lo, unsigned hi);
+    void bic_encode(const bm::gap_word_t* arr, unsigned sz,
+                    bm::gap_word_t lo, bm::gap_word_t hi);
     
     /// Binary Interpolative Coding write
-    void bic_write(unsigned value, unsigned len);
+    void bic_write(unsigned value, unsigned r);
     
 
     void flush()
@@ -235,6 +236,13 @@ public:
     
     /// read number of bits out of the stream
     unsigned get_bits(unsigned count);
+    
+    /// Binary Interpolative array decode
+    void bic_decode(bm::gap_word_t* arr, unsigned sz,
+                    bm::gap_word_t lo, bm::gap_word_t hi);
+
+    /// read interpolated value
+    unsigned bic_read(unsigned r);
 
 private:
     bit_in(const bit_in&);
@@ -1028,41 +1036,78 @@ void bit_out<TEncoder>::gamma(unsigned value)
 // ----------------------------------------------------------------------
 
 template<typename TEncoder>
-void bit_out<TEncoder>::bic_write(unsigned value, unsigned len)
+void bit_out<TEncoder>::bic_write(unsigned value, unsigned r)
 {
-    BM_ASSERT(value <= len);
-    if (len)
+    BM_ASSERT(value <= r);
+    if (r)
     {
-        unsigned logv = bm::bit_scan_reverse32(len);
+        unsigned logv = bm::bit_scan_reverse32(r);
         #ifdef __GNUG__
-            BM_ASSERT(logv == 31 - __builtin_clz(len));
+            BM_ASSERT(logv == 31 - __builtin_clz(r));
         #endif
         put_bits(value, logv+1);
-        //std::cout << "v=" << value << " x=" << logv+1 << std::endl;
     }
 }
 
 // ----------------------------------------------------------------------
 
 template<typename TEncoder>
-void bit_out<TEncoder>::bic_encode(const unsigned* arr,
+void bit_out<TEncoder>::bic_encode(const bm::gap_word_t* arr,
                                    unsigned sz,
-                                   unsigned lo, unsigned hi)
+                                   bm::gap_word_t lo, bm::gap_word_t hi)
 {
     if (!sz)
         return;
     BM_ASSERT(lo <= hi);
     unsigned mid_idx = sz / 2;
-    unsigned val = arr[mid_idx];
-        
+    bm::gap_word_t val = arr[mid_idx];
+    
     bic_write(val - lo - mid_idx, hi - lo - sz + 1);
     
     bic_encode(arr, mid_idx, lo, val-1);
     bic_encode(arr + mid_idx + 1, sz - mid_idx - 1, val+1, hi);
 }
 
+
 // ----------------------------------------------------------------------
 //
+// ----------------------------------------------------------------------
+
+
+template<class TDecoder>
+void bit_in<TDecoder>::bic_decode(bm::gap_word_t* arr, unsigned sz,
+                                  bm::gap_word_t lo, bm::gap_word_t hi)
+{
+    if (!sz)
+        return;
+    BM_ASSERT(lo <= hi);
+    
+    unsigned mid_idx = sz / 2;
+    unsigned val = bic_read(hi - lo - sz + 1) + lo + mid_idx;
+    BM_ASSERT(val < 65536);
+    arr[mid_idx] = bm::gap_word_t(val);
+    if (sz == 1)
+        return;
+    bic_decode(arr, mid_idx, lo, bm::gap_word_t(val - 1));
+    bic_decode(arr + mid_idx + 1, sz - mid_idx - 1, bm::gap_word_t(val + 1), hi);
+}
+
+// ----------------------------------------------------------------------
+
+template<class TDecoder>
+unsigned bit_in<TDecoder>::bic_read(unsigned r)
+{
+    if (!r) return 0;
+    unsigned logv = bm::bit_scan_reverse32(r);
+    #ifdef __GNUG__
+        BM_ASSERT(logv == 31 - __builtin_clz(r));
+    #endif
+    unsigned val = get_bits(logv+1);
+    BM_ASSERT(val <= r);
+    return val;
+}
+
+// ----------------------------------------------------------------------
 
 template<class TDecoder>
 unsigned bit_in<TDecoder>::gamma()
