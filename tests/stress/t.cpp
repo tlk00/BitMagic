@@ -9964,6 +9964,244 @@ void SerializationTest()
 
    cout << " ----------------------------------- SerializationTest" << endl;
 
+   cout << "Compression level test (GAP blocks)" << endl;
+
+   {
+        BM_DECLARE_TEMP_BLOCK(tb)
+
+        bvect bv(bm::BM_GAP);
+        bv.set_range(0, 2);
+        bv.set_range(10, 20);
+        bv.set_range(100, 200);
+        bv.optimize();
+       
+        bm::serializer<bvect> bv_ser(tb);
+        bv_ser.set_compression_level(4); // use elias gamma
+       
+        bm::serializer<bvect>::buffer sermem_buf;
+
+        bv_ser.serialize(bv, sermem_buf, 0);
+       
+        const bvect::size_type* cstat = bv_ser.get_compression_stat();
+        assert(cstat[bm::set_block_gap_egamma] == 1);
+       
+        bvect bv2;
+        bm::deserialize(bv2, sermem_buf.buf());
+
+        int cmp = bv.compare(bv2);
+        assert(cmp == 0);
+       
+        bvect bv3;
+        operation_deserializer<bvect>::deserialize(bv3,
+                                               sermem_buf.buf(),
+                                               tb,
+                                               set_OR);
+
+        cmp = bv.compare(bv2);
+        assert(cmp == 0);
+   }
+
+   {
+        BM_DECLARE_TEMP_BLOCK(tb)
+
+        bvect bv(bm::BM_GAP);
+        bv.set_range(0, 2);
+        bv.set_range(10, 20);
+        bv.set_range(100, 200);
+        bv.optimize();
+       
+        bm::serializer<bvect> bv_ser(tb);
+        bv_ser.set_compression_level(5); // use interpolative encoder
+       
+        bm::serializer<bvect>::buffer sermem_buf;
+
+        bv_ser.serialize(bv, sermem_buf, 0);
+       
+        const bvect::size_type* cstat = bv_ser.get_compression_stat();
+        assert(cstat[bm::set_block_gap_bienc] == 1);
+       
+        bvect bv2;
+        bm::deserialize(bv2, sermem_buf.buf());
+
+        int cmp = bv.compare(bv2);
+        assert(cmp == 0);
+       
+        bvect bv3;
+        operation_deserializer<bvect>::deserialize(bv3,
+                                               sermem_buf.buf(),
+                                               tb,
+                                               set_OR);
+
+        cmp = bv.compare(bv2);
+        assert(cmp == 0);
+   }
+   
+   {
+        BM_DECLARE_TEMP_BLOCK(tb)
+        bvect bv { 0, 1, 2, 10, 100, 200 };
+        bv.optimize();
+       
+        bm::serializer<bvect> bv_ser(tb);
+        bv_ser.set_compression_level(4); // use elias gamma
+       
+        bm::serializer<bvect>::buffer sermem_buf;
+
+        bv_ser.serialize(bv, sermem_buf, 0);
+       
+        const bvect::size_type* cstat = bv_ser.get_compression_stat();
+        assert(cstat[bm::set_block_arrgap_egamma] == 1);
+       
+        bvect bv2;
+        bm::deserialize(bv2, sermem_buf.buf());
+
+        int cmp = bv.compare(bv2);
+        assert(cmp == 0);
+        bvect bv3;
+        operation_deserializer<bvect>::deserialize(bv3,
+                                               sermem_buf.buf(),
+                                               tb,
+                                               set_OR);
+        cmp = bv.compare(bv2);
+        assert(cmp == 0);
+   }
+
+   {
+        BM_DECLARE_TEMP_BLOCK(tb)
+        bvect bv { 0, 1, 2, 10, 100, 200 };
+        bv.optimize();
+       
+        bm::serializer<bvect> bv_ser(tb);
+        bv_ser.set_compression_level(5); // binary interplated coding
+       
+        bm::serializer<bvect>::buffer sermem_buf;
+
+        bv_ser.serialize(bv, sermem_buf, 0);
+       
+        const bvect::size_type* cstat = bv_ser.get_compression_stat();
+        assert(cstat[bm::set_block_arrgap_bienc] == 1);
+       
+        bvect bv2;
+        bm::deserialize(bv2, sermem_buf.buf());
+
+        int cmp = bv.compare(bv2);
+        assert(cmp == 0);
+        bvect bv3;
+        operation_deserializer<bvect>::deserialize(bv3,
+                                               sermem_buf.buf(),
+                                               tb,
+                                               set_OR);
+        cmp = bv.compare(bv2);
+        assert(cmp == 0);
+   }
+   
+   {
+        BM_DECLARE_TEMP_BLOCK(tb)
+        bvect bv;
+        bv.set_range(0, 65535);
+        bv.clear_bit(1);
+        bv.clear_bit(5);
+        bv.clear_bit(10);
+        bv.clear_bit(100);
+        bv.clear_bit(200);
+        bv.clear_bit(250);
+
+        bv.optimize();
+       
+        bm::serializer<bvect> bv_ser(tb);
+        bv_ser.set_compression_level(5); // binary interplated coding
+       
+        bm::serializer<bvect>::buffer sermem_buf;
+
+        bv_ser.serialize(bv, sermem_buf, 0);
+       
+        const bvect::size_type* cstat = bv_ser.get_compression_stat();
+        assert(cstat[bm::set_block_arrgap_bienc_inv] == 1);
+       
+        bvect bv2;
+        bm::deserialize(bv2, sermem_buf.buf());
+
+        int cmp = bv.compare(bv2);
+        assert(cmp == 0);
+        bvect bv3;
+        operation_deserializer<bvect>::deserialize(bv3,
+                                               sermem_buf.buf(),
+                                               tb,
+                                               set_OR);
+        cmp = bv.compare(bv2);
+        assert(cmp == 0);
+   }
+
+
+   {
+        BM_DECLARE_TEMP_BLOCK(tb)
+       
+        bvect bv(bm::BM_GAP);
+        bv.set_range(0, bm::gap_max_bits-1);
+        bv.clear_bit(1);
+        bv.clear_bit(10);
+        bv.clear_bit(100);
+        bv.clear_bit(200);
+       
+        bv.optimize();
+       
+        bm::serializer<bvect> bv_ser(tb);
+        bv_ser.set_compression_level(4); // use elias gamma
+       
+        bm::serializer<bvect>::buffer sermem_buf;
+
+        bv_ser.serialize(bv, sermem_buf, 0);
+       
+        const bvect::size_type* cstat = bv_ser.get_compression_stat();
+        assert(cstat[bm::set_block_arrgap_egamma_inv] == 1);
+       
+        bvect bv2;
+        bm::deserialize(bv2, sermem_buf.buf());
+
+        int cmp = bv.compare(bv2);
+        assert(cmp == 0);
+        bvect bv3;
+        operation_deserializer<bvect>::deserialize(bv3,
+                                               sermem_buf.buf(),
+                                               tb,
+                                               set_OR);
+        cmp = bv.compare(bv2);
+        assert(cmp == 0);
+   }
+   
+   {
+        BM_DECLARE_TEMP_BLOCK(tb)
+       
+        bvect bv(bm::BM_GAP);
+        bv.set(100);
+       
+        bm::serializer<bvect> bv_ser(tb);
+        bv_ser.set_compression_level(4); // use elias gamma
+       
+        bm::serializer<bvect>::buffer sermem_buf;
+
+        bv_ser.serialize(bv, sermem_buf, 0);
+       
+        const bvect::size_type* cstat = bv_ser.get_compression_stat();
+        assert(cstat[bm::set_block_bit_1bit] == 1);
+       
+        bvect bv2;
+        bm::deserialize(bv2, sermem_buf.buf());
+
+        int cmp = bv.compare(bv2);
+        assert(cmp == 0);
+        bvect bv3;
+        operation_deserializer<bvect>::deserialize(bv3,
+                                               sermem_buf.buf(),
+                                               tb,
+                                               set_OR);
+        cmp = bv.compare(bv2);
+        assert(cmp == 0);
+   }
+
+
+
+   // ------------------------------------------------------------
+
    cout << "Serialization STEP 0" << endl;
 
    {
@@ -13788,9 +14026,36 @@ void BitEncoderTest()
     cout << "---------------------------- BitEncoderTest" << endl;
 }
 
+/// Random numbers test
 static
-unsigned generate_inter_test(bm::gap_word_t* arr)
+unsigned generate_inter_test_linear(bm::gap_word_t* arr, unsigned inc)
 {
+    if (inc < 2 || inc > 65535)
+        inc = 1;
+    
+    unsigned start = 1;
+    unsigned sz = 0;
+    while (true)
+    {
+        arr[sz++] = bm::gap_word_t(start);
+        if (inc + start >= 65535)
+        {
+            arr[sz++] = 65535;
+            break;
+        }
+        start += inc;
+    } // while
+    return sz;
+}
+
+
+/// Random numbers test
+static
+unsigned generate_inter_test(bm::gap_word_t* arr, unsigned inc_factor)
+{
+    if (inc_factor < 2 || inc_factor > 65535)
+        inc_factor = 65535;
+    
     unsigned start = rand() % 256;
     if (!start)
         start = 1;
@@ -13798,7 +14063,7 @@ unsigned generate_inter_test(bm::gap_word_t* arr)
     while (true)
     {
         arr[sz++] = bm::gap_word_t(start);
-        unsigned inc = rand() % 65535;
+        unsigned inc = unsigned(rand()) % inc_factor;
         if (!inc)
             inc = 1;
         if (inc + start >= 65535)
@@ -13845,14 +14110,21 @@ void InterpolativeCodingTest()
 
     cout << "Stress..." << endl;
     {
-        const unsigned code_repeats = 100000000;
+        const unsigned code_repeats = 1000000;
         bm::gap_word_t src_arr[65536*2];
         bm::gap_word_t dst_arr[65536*2];
 
+        std::chrono::time_point<std::chrono::steady_clock> s;
+        std::chrono::time_point<std::chrono::steady_clock> f;
+        s = std::chrono::steady_clock::now();
 
+        cout << "  linear pattern" << endl;
+//        unsigned inc = rand()%128;
+//        sz = generate_inter_test_linear(src_arr, inc);
         for (unsigned k = 0; k < code_repeats; ++k)
         {
-            sz = generate_inter_test(src_arr);
+            unsigned inc = rand()%128;
+            sz = generate_inter_test_linear(src_arr, inc);
             assert(sz);
             assert(src_arr[0]);
             assert(src_arr[sz-1]==65535);
@@ -13874,7 +14146,44 @@ void InterpolativeCodingTest()
                     assert(src_arr[i] == dst_arr[i]);
                 }
             }
+            if ((k & 0xFFFF) == 0)
+            {
+                f = std::chrono::steady_clock::now();
+                auto diff = f - s;
+                auto d = std::chrono::duration <double, std::milli> (diff).count();
 
+                cout << "\r" << k << "-" << code_repeats << " (" << d << "ms)" << flush;
+                s = std::chrono::steady_clock::now();
+            }
+        }
+        cout << "  random pattern" << endl;
+
+        for (unsigned k = 0; k < code_repeats; ++k)
+        {
+            sz = generate_inter_test(src_arr, k);
+            assert(sz);
+            assert(src_arr[0]);
+            assert(src_arr[sz-1]==65535);
+            {
+                bm::encoder enc(buf, sizeof(buf));
+                bm::bit_out<bm::encoder> bout(enc);
+                
+                bout.bic_encode(src_arr, sz-1, 0, 65535);
+                bout.flush();
+            }
+            {
+                decoder dec(buf);
+                bm::bit_in<decoder> bin(dec);
+                
+                bin.bic_decode(&dst_arr[0], sz-1, 0, 65535);
+                dst_arr[sz-1]=65535;
+                for (unsigned i = 0; i < sz; ++i)
+                {
+                    assert(src_arr[i] == dst_arr[i]);
+                }
+            }
+            if ((k & 0xFFFF) == 0)
+                cout << "\r" << k << "-" << code_repeats << flush;
         } // for k
         
     }
@@ -21430,7 +21739,6 @@ int main(int argc, char *argv[])
 
         DynamicMatrixTest();
         RSIndexTest();
-
     }
 
     if (is_all || is_bvbasic)
