@@ -1605,7 +1605,6 @@ deserializer<BV, DEC>::deserialize_gap(unsigned char btype, decoder_type& dec,
                                        block_idx_type nb,
                                        bm::word_t* blk)
 {
-    //typedef bit_in<DEC> bit_in_type;
     gap_word_t gap_head; 
 
     switch (btype)
@@ -1708,9 +1707,8 @@ deserializer<BV, DEC>::deserialize_gap(unsigned char btype, decoder_type& dec,
 
     bv.combine_operation_with_block(nb,
                                    (bm::word_t*)gap_temp_block_, 
-                                    1, 
-                                    BM_OR);
-
+                                   1, 
+                                   BM_OR);
 }
 
 
@@ -1733,10 +1731,8 @@ size_t deserializer<BV, DEC>::deserialize(bvector_type&        bv,
 
     decoder_type dec(buf);
 
-    BM_SET_MMX_GUARD
-
-    // Reading header
-
+    // Reading th serialization header
+    //
     unsigned char header_flag =  dec.get_8();
     if (!(header_flag & BM_HM_NO_BO))
     {
@@ -1761,8 +1757,8 @@ size_t deserializer<BV, DEC>::deserialize(bvector_type&        bv,
         }
         for (unsigned cnt = dec.get_32(); cnt; --cnt)
         {
-            bm::id_t id = dec.get_32();
-            bv.set(id);
+            bm::id_t idx = dec.get_32();
+            bv.set(idx);
         } // for
         // -1 for compatibility with other deserialization branches
         return dec.size()-1;
@@ -1774,7 +1770,7 @@ size_t deserializer<BV, DEC>::deserialize(bvector_type&        bv,
     {
         //gap_word_t glevels[bm::gap_levels];
         // read GAP levels information
-        for (i = 0; i < bm::gap_levels; ++i)
+        for (unsigned k = 0; k < bm::gap_levels; ++k)
         {
             /*glevels[i] =*/ dec.get_16();
         }
@@ -1893,10 +1889,10 @@ size_t deserializer<BV, DEC>::deserialize(bvector_type&        bv,
         case set_block_bit_0runs:
         {
             //TODO: optimization if block exists
-            bit_block_set(temp_block, 0);
+            bm::bit_block_set(temp_block, 0);
 
             unsigned char run_type = dec.get_8();
-            for (unsigned j = 0; j < bm::set_block_size;run_type = !run_type)
+            for (unsigned j = 0; j < bm::set_block_size; run_type = !run_type)
             {
                 unsigned run_length = dec.get_16();
                 if (run_type)
@@ -1940,7 +1936,7 @@ size_t deserializer<BV, DEC>::deserialize(bvector_type&        bv,
                 }
                 continue;
             }
-            bit_block_set(temp_block, 0);
+            bm::bit_block_set(temp_block, 0);
             dec.get_32(temp_block + head_idx, tail_idx - head_idx + 1);
 
             bv.combine_operation_with_block(i, 
@@ -2190,7 +2186,7 @@ void serial_stream_iterator<DEC>::next()
         case set_block_arrgap_inv:
 		case set_block_bit_1bit:
         case set_block_arrgap_bienc:
-        case bm::set_block_arrgap_bienc_inv:
+        case set_block_arrgap_bienc_inv:
             state_ = e_gap_block;
             break;        
         case set_block_gapbit:
@@ -2199,7 +2195,7 @@ void serial_stream_iterator<DEC>::next()
         
         default:
             BM_ASSERT(0);
-        }// switch
+        } // switch
 
         break;
 
