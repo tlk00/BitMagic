@@ -29,7 +29,7 @@ For more information please visit:  http://bitmagic.io
 #undef BMPTR_CLEARBIT0
 #undef BMPTR_TESTBIT0
 #undef BM_SET_MMX_GUARD
-#undef SER_NEXT_GRP
+#undef BM_SER_NEXT_GRP
 #undef BM_SET_ONE_BLOCKS
 #undef DECLARE_TEMP_BLOCK
 #undef BM_MM_EMPTY
