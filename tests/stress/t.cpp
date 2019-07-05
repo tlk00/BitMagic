@@ -7179,6 +7179,7 @@ void DesrializationTest2()
     if (res != 0)
     {
         cout << "Operation deserialization error 2" << endl;
+        assert(0);
         exit(1);
     }
 
@@ -7221,13 +7222,15 @@ void DesrializationTest2()
        bvect_full1->calc_stat(&st);
 
        std::vector<unsigned char> sermemv1(st.max_serialize_mem);
-
+//if (i == 16)
+//    cout << "+";
        slen = bm::serialize(*bvect_full1, sermemv1.data(), tb);
 
        std::vector<unsigned char> smemv(slen);
        ::memcpy(smemv.data(), sermemv1.data(), slen);
 
         bm::deserialize(bvtotal, smemv.data());
+              
         operation_deserializer<bvect>::deserialize(bv_target_s,
                                                    smemv.data(),
                                                    0,
@@ -7237,9 +7240,10 @@ void DesrializationTest2()
         {
             unsigned bit_idx = bv_target_s.get_first();
             cout << bit_idx << " " << bv_target_s.get_next(bit_idx) << endl;;
+            print_stat(*bvect_full1);
             print_stat(bv_target_s);
             cout << "Operation deserialization error 2" << endl;
-            exit(1);
+            assert(0); exit(1);
         }
 
        bvtotal.optimize(tb);
@@ -9951,21 +9955,17 @@ void SerializationBufferTest()
         
         buf3.reinit(1000000);
         assert(buf3.size() == 0);
-
     }
    
 
    cout << " ----------------------------------- Serialization Buffer test OK" << endl;
 }
 
+
 static
-void SerializationTest()
+void SerializationCompressionLevelsTest()
 {
-
-   cout << " ----------------------------------- SerializationTest" << endl;
-
-   cout << "Compression level test (GAP blocks)" << endl;
-
+   cout << " ----------------------------------- SerializationCompressionLevelsTest()" << endl;
    {
         BM_DECLARE_TEMP_BLOCK(tb)
 
@@ -10071,7 +10071,7 @@ void SerializationTest()
         bv.optimize();
        
         bm::serializer<bvect> bv_ser(tb);
-        bv_ser.set_compression_level(5); // binary interplated coding
+        bv_ser.set_compression_level(5); // binary interpolated coding
        
         bm::serializer<bvect>::buffer sermem_buf;
 
@@ -10197,6 +10197,245 @@ void SerializationTest()
         cmp = bv.compare(bv2);
         assert(cmp == 0);
    }
+
+   // --------------------------------------------------------------
+   // bit-block tests
+   //
+
+   {
+        bvect bv { 100 };
+       
+        bm::serializer<bvect> bv_ser;
+        bv_ser.set_compression_level(4);
+       
+        bm::serializer<bvect>::buffer sermem_buf;
+
+        bv_ser.serialize(bv, sermem_buf, 0);
+       
+        const bvect::size_type* cstat = bv_ser.get_compression_stat();
+        assert(cstat[bm::set_block_bit_1bit] == 1);
+       
+        bvect bv2;
+        bm::deserialize(bv2, sermem_buf.buf());
+        int cmp = bv.compare(bv2);
+        assert(cmp == 0);
+        bvect bv3;
+        operation_deserializer<bvect>::deserialize(bv3,
+                                               sermem_buf.buf(),
+                                               0, set_OR);
+        cmp = bv.compare(bv2);
+        assert(cmp == 0);
+   }
+
+   {
+        bvect bv;
+        for (bvect::size_type i = 0; i < 65536; ++i)
+            bv.set(i);
+        bv.set(100, false);
+       
+        bm::serializer<bvect> bv_ser;
+        bv_ser.set_compression_level(4);
+       
+        bm::serializer<bvect>::buffer sermem_buf;
+
+        bv_ser.serialize(bv, sermem_buf, 0);
+       
+        const bvect::size_type* cstat = bv_ser.get_compression_stat();
+        assert(cstat[set_block_arrbit_inv] == 1);
+       
+        bvect bv2;
+        bm::deserialize(bv2, sermem_buf.buf());
+        int cmp = bv.compare(bv2);
+        assert(cmp == 0);
+        bvect bv3;
+        operation_deserializer<bvect>::deserialize(bv3,
+                                               sermem_buf.buf(),
+                                               0, set_OR);
+        cmp = bv.compare(bv2);
+        assert(cmp == 0);
+   }
+
+   {
+        bvect bv;
+        for (bvect::size_type i = 0; i < 22345; i+=2)
+            bv.set(1000+i);
+       
+        bm::serializer<bvect> bv_ser;
+        bv_ser.set_compression_level(4);
+       
+        bm::serializer<bvect>::buffer sermem_buf;
+
+        bv_ser.serialize(bv, sermem_buf, 0);
+       
+        const bvect::size_type* cstat = bv_ser.get_compression_stat();
+        assert(cstat[bm::set_block_bit_0runs] == 1);
+       
+        bvect bv2;
+        bm::deserialize(bv2, sermem_buf.buf());
+        int cmp = bv.compare(bv2);
+        assert(cmp == 0);
+        bvect bv3;
+        operation_deserializer<bvect>::deserialize(bv3,
+                                               sermem_buf.buf(),
+                                               0, set_OR);
+        cmp = bv.compare(bv2);
+        assert(cmp == 0);
+   }
+
+
+   {
+        bvect bv;
+        for (bvect::size_type i = 0; i < 22345; i+=2)
+            bv.set(1000+i);
+       
+        bm::serializer<bvect> bv_ser;
+        bv_ser.set_compression_level(4);
+       
+        bm::serializer<bvect>::buffer sermem_buf;
+
+        bv_ser.serialize(bv, sermem_buf, 0);
+       
+        const bvect::size_type* cstat = bv_ser.get_compression_stat();
+        assert(cstat[bm::set_block_bit_0runs] == 1);
+       
+        bvect bv2;
+        bm::deserialize(bv2, sermem_buf.buf());
+        int cmp = bv.compare(bv2);
+        assert(cmp == 0);
+        bvect bv3;
+        operation_deserializer<bvect>::deserialize(bv3,
+                                               sermem_buf.buf(),
+                                               0, set_OR);
+        cmp = bv.compare(bv2);
+        assert(cmp == 0);
+   }
+
+   {
+        bvect bv;
+        for (bvect::size_type i = 0; i < 145; i+=64)
+            bv.set(1000+i);
+       
+        bm::serializer<bvect> bv_ser;
+        bv_ser.set_compression_level(3);
+       
+        bm::serializer<bvect>::buffer sermem_buf;
+
+        bv_ser.serialize(bv, sermem_buf, 0);
+       
+        const bvect::size_type* cstat = bv_ser.get_compression_stat();
+        assert(cstat[bm::set_block_arrbit] == 1);
+       
+        bvect bv2;
+        bm::deserialize(bv2, sermem_buf.buf());
+        int cmp = bv.compare(bv2);
+        assert(cmp == 0);
+        bvect bv3;
+        operation_deserializer<bvect>::deserialize(bv3,
+                                               sermem_buf.buf(),
+                                               0, set_OR);
+        cmp = bv.compare(bv2);
+        assert(cmp == 0);
+   }
+
+
+   {
+        bvect bv;
+        for (bvect::size_type i = 0; i < 1045; i+=64)
+            bv.set(1000+i);
+       
+        bm::serializer<bvect> bv_ser;
+        bv_ser.set_compression_level(4);
+       
+        bm::serializer<bvect>::buffer sermem_buf;
+
+        bv_ser.serialize(bv, sermem_buf, 0);
+       
+        const bvect::size_type* cstat = bv_ser.get_compression_stat();
+        assert(cstat[set_block_arrgap_egamma] == 1);
+       
+        bvect bv2;
+        bm::deserialize(bv2, sermem_buf.buf());
+        int cmp = bv.compare(bv2);
+        assert(cmp == 0);
+        bvect bv3;
+        operation_deserializer<bvect>::deserialize(bv3,
+                                               sermem_buf.buf(),
+                                               0, set_OR);
+        cmp = bv.compare(bv2);
+        assert(cmp == 0);
+   }
+
+   {
+        bvect bv;
+        for (bvect::size_type i = 0; i < 1045; i+=64)
+        {
+            auto target = i + 25;
+            for ( ;i < target; ++i)
+                bv.set(i);
+        }
+       
+        bm::serializer<bvect> bv_ser;
+        bv_ser.set_compression_level(4);
+       
+        bm::serializer<bvect>::buffer sermem_buf;
+
+        bv_ser.serialize(bv, sermem_buf, 0);
+       
+        const bvect::size_type* cstat = bv_ser.get_compression_stat();
+        assert(cstat[set_block_gap_egamma] == 1);
+       
+        bvect bv2;
+        bm::deserialize(bv2, sermem_buf.buf());
+        int cmp = bv.compare(bv2);
+        assert(cmp == 0);
+        bvect bv3;
+        operation_deserializer<bvect>::deserialize(bv3,
+                                               sermem_buf.buf(),
+                                               0, set_OR);
+        cmp = bv.compare(bv2);
+        assert(cmp == 0);
+   }
+
+
+   {
+        bvect bv;
+        for (bvect::size_type i = 0; i < 65536; ++i)
+            bv.set(i);
+        for (bvect::size_type i = 0; i < 1045; i+=64)
+            bv.set(1000+i, false);
+
+        bm::serializer<bvect> bv_ser;
+        bv_ser.set_compression_level(4);
+       
+        bm::serializer<bvect>::buffer sermem_buf;
+
+        bv_ser.serialize(bv, sermem_buf, 0);
+       
+        const bvect::size_type* cstat = bv_ser.get_compression_stat();
+        assert(cstat[set_block_arrgap_egamma_inv] == 1);
+       
+        bvect bv2;
+        bm::deserialize(bv2, sermem_buf.buf());
+        int cmp = bv.compare(bv2);
+        assert(cmp == 0);
+        bvect bv3;
+        operation_deserializer<bvect>::deserialize(bv3,
+                                               sermem_buf.buf(),
+                                               0, set_OR);
+        cmp = bv.compare(bv2);
+        assert(cmp == 0);
+   }
+
+   cout << " ----------------------------------- SerializationCompressionLevelsTest() OK" << endl;
+}
+
+static
+void SerializationTest()
+{
+
+   cout << " ----------------------------------- SerializationTest" << endl;
+
+   cout << "Compression level test (GAP blocks)" << endl;
 
 
 
@@ -21743,6 +21982,7 @@ int main(int argc, char *argv[])
 
     if (is_all || is_bvbasic)
     {
+    /*
          ExportTest();
          ResizeTest();
 
@@ -21787,7 +22027,9 @@ int main(int argc, char *argv[])
         MutationOperationsTest();
         
         BlockLevelTest();
-
+*/
+        SerializationCompressionLevelsTest();
+        
         SerializationTest();
 
         DesrializationTest2();
