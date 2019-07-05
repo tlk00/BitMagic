@@ -2772,7 +2772,6 @@ unsigned gap_block_find(const T* buf,
 
 /*! 
     \brief Set 1 bit in a block
-    
     @ingroup bitfunc
 */
 BMFORCEINLINE
@@ -2782,6 +2781,19 @@ void set_bit(unsigned* dest, unsigned  bitpos)
     unsigned nword = unsigned(nbit >> bm::set_word_shift); 
     nbit &= bm::set_word_mask;
     dest[nword] |= unsigned(1u << nbit);
+}
+
+/*!
+    \brief Set 1 bit in a block
+    @ingroup bitfunc
+*/
+BMFORCEINLINE
+void clear_bit(unsigned* dest, unsigned  bitpos)
+{
+    unsigned nbit  = unsigned(bitpos & bm::set_block_mask);
+    unsigned nword = unsigned(nbit >> bm::set_word_shift);
+    nbit &= bm::set_word_mask;
+    dest[nword] &= ~(unsigned(1u << nbit));
 }
 
 /*! 
@@ -6541,15 +6553,12 @@ bm::id_t bit_operation_xor_any(const bm::word_t* BMRESTRICT src1,
 
     @ingroup bitfunc
 */
-
 template<class T>
-unsigned bit_count_nonzero_size(const T*     blk, 
-                                unsigned     data_size)
+unsigned bit_count_nonzero_size(const T*  blk, unsigned  data_size)
 {
     BM_ASSERT(blk && data_size);
     unsigned count = 0;
     const T* blk_end = blk + data_size - 2;
-
     do
     {
         if (*blk == 0) 
@@ -6589,8 +6598,7 @@ unsigned bit_count_nonzero_size(const T*     blk,
         }
         ++blk;
     }
-    while(blk < blk_end); 
-
+    while(blk < blk_end);
     return count + unsigned(2 * sizeof(T));
 }
 
@@ -6949,6 +6957,7 @@ bm::set_representation best_representation(unsigned bit_count,
 
 /*!
     @brief Convert bit block into an array of ints corresponding to 1 bits
+    @return destination size as a result of block decoding
     @ingroup bitfunc 
 */
 template<typename T>

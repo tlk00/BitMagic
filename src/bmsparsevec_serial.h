@@ -60,13 +60,9 @@ struct sparse_vector_serial_layout
     typedef typename SV::bvector_type bvector_type;
     typedef typename serializer<bvector_type>::buffer buffer_type;
 
-    sparse_vector_serial_layout()
-    {
-    }
+    sparse_vector_serial_layout() {}
     
-    ~sparse_vector_serial_layout()
-    {
-    }
+    ~sparse_vector_serial_layout() {}
     
     /*!
         \brief resize capacity
@@ -94,10 +90,7 @@ struct sparse_vector_serial_layout
     size_t  capacity() const { return buf_.capacity(); }
     
     /// free memory
-    void freemem()
-    {
-        buf_.release();
-    }
+    void freemem() { buf_.release(); }
     
     /// Set plain output pointer and size
     void set_plain(unsigned i, unsigned char* ptr, size_t buf_size)
@@ -107,10 +100,7 @@ struct sparse_vector_serial_layout
     }
     
     /// Get plain pointer
-    const unsigned char* get_plain(unsigned i) const
-    {
-        return plain_ptrs_[i];
-    }
+    const unsigned char* get_plain(unsigned i) const { return plain_ptrs_[i]; }
     
     /// Return serialization buffer pointer
     const unsigned char* buf() const { return buf_.buf();  }
@@ -375,7 +365,7 @@ void compressed_collection_serializer<CBC>::serialize(const CBC&    buffer_coll,
     {
         bm::serializer<bvector_type > bvs(temp_block);
         bvs.gap_length_serialization(false);
-        bvs.set_compression_level(4);
+        //bvs.set_compression_level(4);
 
         size_t addr_bv_size = bvs.serialize(bv, buf_ptr, buf.size());
         buf_ptr += addr_bv_size;
@@ -491,7 +481,7 @@ template<typename SV>
 sparse_vector_serializer<SV>::sparse_vector_serializer()
 {
     bvs_.gap_length_serialization(false);
-    bvs_.set_compression_level(4);
+    //bvs_.set_compression_level(4);
 }
 
 // -------------------------------------------------------------------------

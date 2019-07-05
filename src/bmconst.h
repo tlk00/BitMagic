@@ -76,7 +76,8 @@ typedef unsigned short gap_word_t;
 const unsigned gap_max_buff_len = 1280;
 const unsigned gap_max_bits = 65536;
 const unsigned gap_equiv_len = (unsigned)
-   ((sizeof(bm::word_t) * bm::set_block_size) / sizeof(gap_word_t));
+   ((sizeof(bm::word_t) * bm::set_block_size) / sizeof(bm::gap_word_t));
+const unsigned gap_max_bits_cmrz = bm::gap_max_bits / 2;
 const unsigned gap_levels = 4;
 const unsigned gap_max_level = bm::gap_levels - 1;
 
