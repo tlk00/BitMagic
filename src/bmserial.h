@@ -3754,8 +3754,9 @@ iterator_deserializer<BV, SerialIterator>::finalize_target_vector(
         break;
     case set_AND: case set_ASSIGN:
         {
-        block_idx_type nblock_last = (bm::id_max >> bm::set_block_shift);
-        bman.set_all_zero(bv_block_idx, nblock_last); // clear the target tail
+        block_idx_type nblock_last = ((bm::id_max-1) >> bm::set_block_shift);
+        if (bv_block_idx < nblock_last)
+            bman.set_all_zero(bv_block_idx, nblock_last); // clear the target tail
         }
         break;
     case set_COUNT_A: case set_COUNT_OR: case set_COUNT_XOR:
@@ -3775,6 +3776,7 @@ iterator_deserializer<BV, SerialIterator>::finalize_target_vector(
                     j = 0;
                     continue;
                 }
+                // TODO: optimize for FULL top level
                 for (; j < bm::set_sub_array_size; ++j, ++bv_block_idx)
                 {
                     if (blk_blk[j])
@@ -3782,7 +3784,6 @@ iterator_deserializer<BV, SerialIterator>::finalize_target_vector(
                 } // for j
                 j = 0;
             } // for i
-
         }
         break;
     case set_END:
