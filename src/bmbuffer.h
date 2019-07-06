@@ -350,6 +350,8 @@ public:
             reinterpret_cast<value_type*>(p)->~Val();
         }
     }
+    
+    value_type* data() { return (value_type*) buffer_.data(); }
 
     void swap(heap_vector<Val, BVAlloc>& other) BMNOEXEPT
     {
