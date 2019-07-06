@@ -1184,10 +1184,8 @@ void bit_in<TDecoder>::bic_decode_bitset(bm::word_t* block, unsigned sz,
 
     // set bit in the target block
     {
-//        unsigned nbit  = val; //unsigned(val & bm::set_block_mask);
-        unsigned nword = unsigned(val >> bm::set_word_shift);
-//        nbit &= bm::set_word_mask;
-        block[nword] |= unsigned(1u << (val & bm::set_word_mask));
+        unsigned nword = (val >> bm::set_word_shift);
+        block[nword] |= (1u << (val & bm::set_word_mask));
     }
     
     if (sz == 1)
