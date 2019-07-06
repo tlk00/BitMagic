@@ -239,9 +239,13 @@ public:
     void bic_decode(bm::gap_word_t* arr, unsigned sz,
                     bm::gap_word_t lo, bm::gap_word_t hi);
 
-    /// Binary Interpolative array decode into bitset (32-bit)
+    /// Binary Interpolative array decode into bitset (32-bit based)
     void bic_decode_bitset(bm::word_t* block, unsigned sz,
                            bm::gap_word_t lo, bm::gap_word_t hi);
+
+    /// Binary Interpolative array decode into /dev/null
+    void bic_decode_dry(unsigned sz,
+                        bm::gap_word_t lo, bm::gap_word_t hi);
 
 private:
     bit_in(const bit_in&);
@@ -1114,7 +1118,10 @@ void bit_in<TDecoder>::bic_decode(bm::gap_word_t* arr, unsigned sz,
     }
     unsigned mid_idx = sz >> 1;
     val += lo + mid_idx;
+    
     BM_ASSERT(val < 65536);
+    BM_ASSERT(mid_idx < 65536);
+    
     arr[mid_idx] = bm::gap_word_t(val);
     if (sz == 1)
         return;
@@ -1173,13 +1180,14 @@ void bit_in<TDecoder>::bic_decode_bitset(bm::word_t* block, unsigned sz,
     unsigned mid_idx = sz >> 1;
     val += lo + mid_idx;
     BM_ASSERT(val < 65536);
-    
+    BM_ASSERT(mid_idx < 65536);
+
     // set bit in the target block
     {
-        unsigned nbit  = unsigned(val & bm::set_block_mask);
-        unsigned nword = unsigned(nbit >> bm::set_word_shift);
-        nbit &= bm::set_word_mask;
-        block[nword] |= unsigned(1u << nbit);
+//        unsigned nbit  = val; //unsigned(val & bm::set_block_mask);
+        unsigned nword = unsigned(val >> bm::set_word_shift);
+//        nbit &= bm::set_word_mask;
+        block[nword] |= unsigned(1u << (val & bm::set_word_mask));
     }
     
     if (sz == 1)
@@ -1187,6 +1195,66 @@ void bit_in<TDecoder>::bic_decode_bitset(bm::word_t* block, unsigned sz,
     bic_decode_bitset(block, mid_idx, lo, bm::gap_word_t(val - 1));
     bic_decode_bitset(block, sz - mid_idx - 1, bm::gap_word_t(val + 1), hi);
 }
+
+// ----------------------------------------------------------------------
+
+template<class TDecoder>
+void bit_in<TDecoder>::bic_decode_dry(unsigned sz,
+                                      bm::gap_word_t lo, bm::gap_word_t hi)
+{
+    const unsigned maskFF = ~0u;
+
+    if (!sz)
+        return;
+    BM_ASSERT(lo <= hi);
+    
+    unsigned val = 0;
+    // read the value
+    {
+        unsigned r = hi - lo - sz + 1;
+        if (r)
+        {
+            unsigned count = bm::bit_scan_reverse32(r) + 1;
+            unsigned free_bits = unsigned((sizeof(accum_) * 8) - used_bits_);
+            if (count <= free_bits)
+            {
+            take_accum:
+                unsigned mask = maskFF >> (32 - count); // block_set_table<true>::_left[count-1];
+                val = (accum_ & mask);
+                accum_ >>= count;
+                used_bits_ += count;
+                goto ready;
+            }
+            if (used_bits_ == (sizeof(accum_) * 8))
+            {
+                accum_ = src_.get_32();
+                used_bits_ = 0;
+                goto take_accum;
+            }
+            val = accum_;
+            accum_ = src_.get_32();
+            used_bits_ = count - free_bits;
+            val |= ((accum_ & (maskFF >> (32 - used_bits_))) << free_bits);
+            accum_ >>= used_bits_;
+        ready:
+            BM_ASSERT(val <= r);
+        }
+        else
+        {
+            val = 0;
+        }
+    }
+    unsigned mid_idx = sz >> 1;
+    val += lo + mid_idx;
+    BM_ASSERT(val < 65536);
+    BM_ASSERT(mid_idx < 65536);
+
+    if (sz == 1)
+        return;
+    bic_decode_dry(mid_idx, lo, bm::gap_word_t(val - 1));
+    bic_decode_dry(sz - mid_idx - 1, bm::gap_word_t(val + 1), hi);
+}
+
 
 
 // ----------------------------------------------------------------------
