@@ -2699,10 +2699,11 @@ unsigned gap_set_array(T* buf, const T* arr, unsigned len)
         *pcurr = bm::gap_max_bits - 1;
     }
 
-    unsigned end = unsigned(pcurr - buf);
+    unsigned gap_len = unsigned(pcurr - buf);
+    BM_ASSERT(gap_len == ((gap_len << 3) >> 3));
 
-    *buf = (T)((*buf & 7) + (end << 3));
-    return end+1;
+    *buf = (T)((*buf & 7) + (gap_len << 3));
+    return gap_len+1;
 }
 
 

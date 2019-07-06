@@ -567,7 +567,7 @@ public:
         if (!top_blocks_ || i >= top_block_size_) return 0;
         bm::word_t* const* blk_blk = top_blocks_[i];
         if ((bm::word_t*)blk_blk == FULL_BLOCK_FAKE_ADDR)
-            return FULL_BLOCK_REAL_ADDR;
+            return FULL_BLOCK_FAKE_ADDR;
         bm::word_t* ret = (!blk_blk) ? 0 : blk_blk[j];
         return ret;
     }
