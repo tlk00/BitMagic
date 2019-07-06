@@ -365,7 +365,6 @@ void compressed_collection_serializer<CBC>::serialize(const CBC&    buffer_coll,
     {
         bm::serializer<bvector_type > bvs(temp_block);
         bvs.gap_length_serialization(false);
-        //bvs.set_compression_level(4);
 
         size_t addr_bv_size = bvs.serialize(bv, buf_ptr, buf.size());
         buf_ptr += addr_bv_size;
@@ -481,7 +480,6 @@ template<typename SV>
 sparse_vector_serializer<SV>::sparse_vector_serializer()
 {
     bvs_.gap_length_serialization(false);
-    //bvs_.set_compression_level(4);
 }
 
 // -------------------------------------------------------------------------
