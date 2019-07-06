@@ -60,7 +60,7 @@ namespace bm
 
 
 const unsigned set_compression_max = 5;     ///< Maximum supported compression level
-const unsigned set_compression_default = 4; ///< Default compression level
+const unsigned set_compression_default = 5; ///< Default compression level
 
 /**
     Bit-vector serialization class.
@@ -200,6 +200,9 @@ protected:
     
     void interpolated_arr_bit_block(const bm::word_t* block,
                             bm::encoder& enc, bool inverted);
+    /// encode bit-block as interpolated gap block
+    void interpolated_gap_bit_block(const bm::word_t* block,
+                                    bm::encoder&      enc);
 
     /**
         Encode GAP block as an array with binary interpolated coder
@@ -254,12 +257,12 @@ private:
 
     typedef bm::bit_out<bm::encoder>  bit_out_type;
     typedef bm::gamma_encoder<bm::gap_word_t, bit_out_type> gamma_encoder_func;
-
+    typedef bm::heap_vector<bm::gap_word_t, allocator_type> block_arridx_type;
 private:
-    bm::gap_word_t  bit_idx_arr_[bm::gap_max_bits_cmrz];
-    unsigned        scores_[64];
-    unsigned char   models_[64];
-    unsigned        mod_size_;
+    block_arridx_type  bit_idx_arr_;
+    unsigned           scores_[64];
+    unsigned char      models_[64];
+    unsigned           mod_size_;
     
     allocator_type  alloc_;
     size_type*      compression_stat_;
@@ -276,11 +279,12 @@ private:
 */
 template<class DEC> class deseriaizer_base
 {
-public:
-    typedef DEC decoder_type;
 protected:
-    deseriaizer_base(){}
-
+    typedef DEC decoder_type;
+    
+protected:
+    deseriaizer_base() : id_array_(0) {}
+    
     /// Read GAP block from the stream
     void read_gap_block(decoder_type&   decoder, 
                         unsigned        block_type, 
@@ -297,8 +301,11 @@ protected:
     /// Read binary interpolated list into a bit-set
     void read_bic_arr(decoder_type&   decoder, bm::word_t* blk);
 
+    /// Read inverted binary interpolated list into a bit-set
+    void read_bic_arr_inv(decoder_type&   decoder, bm::word_t* blk);
+
 protected:
-    bm::gap_word_t   id_array_[bm::gap_equiv_len * 2];
+    bm::gap_word_t*   id_array_; ///< ptr to idx array for temp decode use
 };
 
 /**
@@ -309,7 +316,7 @@ template<class BV, class DEC>
 class deserializer : protected deseriaizer_base<DEC>
 {
 public:
-
+    typedef deseriaizer_base<DEC>                          parent_type;
     typedef BV                                             bvector_type;
     typedef typename bvector_type::allocator_type          allocator_type;
     typedef typename BV::size_type                         size_type;
@@ -336,9 +343,13 @@ protected:
                          block_idx_type nb,
                          bm::word_t* blk);
 protected:
-    bm::word_t*      temp_block_;
-    allocator_type   alloc_;
-    bm::gap_word_t   gap_temp_block_[bm::gap_equiv_len * 6];
+    typedef bm::heap_vector<bm::gap_word_t, allocator_type> block_arridx_type;
+
+protected:
+    block_arridx_type  bit_idx_arr_;
+    block_arridx_type  gap_temp_block_;
+    bm::word_t*        temp_block_;
+    allocator_type     alloc_;
 };
 
 
@@ -364,7 +375,8 @@ public:
                           bool                  exit_on_one = false);
 
 private:
-    typedef typename BV::blocks_manager_type blocks_manager_type;
+    typedef typename BV::blocks_manager_type            blocks_manager_type;
+    typedef typename bvector_type::block_idx_type       block_idx_type;
 
     /// load data from the iterator of type "id list"
     static
@@ -406,6 +418,7 @@ public:
 
 public:
     serial_stream_iterator(const unsigned char* buf);
+    ~serial_stream_iterator();
 
     /// serialized bitvector size
     block_idx_type bv_size() const { return bv_size_; }
@@ -528,6 +541,7 @@ protected:
     block_idx_type     mono_block_cnt_; ///< number of 0 or 1 blocks
 
     gap_word_t         gap_head_;
+    gap_word_t*        block_idx_arr_;
 };
 
 /**
@@ -572,6 +586,7 @@ private:
         serial_stream_iterator<bm::decoder_big_endian> serial_stream_be;
     typedef 
         serial_stream_iterator<bm::decoder_little_endian> serial_stream_le;
+    typedef typename bvector_type::block_idx_type             block_idx_type;
 
 };
 
@@ -628,7 +643,8 @@ const unsigned char set_block_gap_bienc         = 27; //!< Interpolated GAP bloc
 const unsigned char set_block_arrgap_bienc      = 28; //!< Interpolated GAP array
 const unsigned char set_block_arrgap_bienc_inv  = 29; //!< Interpolated GAP array (inverted)
 const unsigned char set_block_arrbit_inv        = 30; //!< List of bits OFF
-const unsigned char set_block_arr_bienc         = 31; //!< Interpolated int array
+const unsigned char set_block_arr_bienc         = 31; //!< Interpolated block as int array
+const unsigned char set_block_arr_bienc_inv     = 32; //!< Interpolated inverted block int array
 
 
 
@@ -642,6 +658,7 @@ serializer<BV>::serializer(const allocator_type&   alloc,
   byte_order_serial_(true),
   compression_level_(bm::set_compression_default)
 {
+    bit_idx_arr_.resize(65536);
     if (temp_block == 0)
     {
         temp_block_ = alloc_.alloc_bit_block();
@@ -663,6 +680,7 @@ serializer<BV>::serializer(bm::word_t*    temp_block)
   byte_order_serial_(true),
   compression_level_(bm::set_compression_default)
 {
+    bit_idx_arr_.resize(bm::gap_max_bits);
     if (temp_block == 0)
     {
         temp_block_ = alloc_.alloc_bit_block();
@@ -930,6 +948,7 @@ unsigned char serializer<BV>::find_bit_best_encoding(const bm::word_t* block)
         return bm::set_block_bit;
 
     // check if it is a very sparse block with some areas of dense areas
+    if (compression_level_ < 5)
     {
         unsigned interval_block_size = bm::bit_count_nonzero_size(block, bm::set_block_size);
         add_model(bm::set_block_bit_0runs, interval_block_size * 8);
@@ -967,49 +986,36 @@ unsigned char serializer<BV>::find_bit_best_encoding(const bm::word_t* block)
             
             if (compression_level_ >= 4)
             {
+                const unsigned gamma_bits_per_int = 6;
                 unsigned bit_gaps = bm::bit_block_calc_change(block);
-                unsigned gap_block_size =
-                unsigned(sizeof(gap_word_t) + ((bit_gaps+1) * sizeof(gap_word_t)));
 
                 if (bit_gaps > 3 && bit_gaps < bm::gap_equiv_len)
-                    add_model(bm::set_block_gap_egamma, 16 + bit_gaps * 5);
-                if (arr_size < gap_block_size && bc > 5 && bc < bm::gap_equiv_len)
-                    add_model(bm::set_block_arrgap_egamma, 32 + arr_size * 5);
-                if (arr_size_inv < gap_block_size && inverted_bc > 5 && inverted_bc < bm::gap_equiv_len)
-                    add_model(bm::set_block_arrgap_egamma_inv, 32 + arr_size_inv * 5);
+                    add_model(bm::set_block_gap_egamma, 16 + (bit_gaps-1) * gamma_bits_per_int);
+                if (bc < bit_gaps && bc > 5 && bc < bm::gap_equiv_len)
+                    add_model(bm::set_block_arrgap_egamma, 16 + bc * gamma_bits_per_int);
+                if (inverted_bc < bit_gaps && inverted_bc > 5 && inverted_bc < bm::gap_equiv_len)
+                    add_model(bm::set_block_arrgap_egamma_inv, 16 + inverted_bc * gamma_bits_per_int);
 
                 if (compression_level_ >= 5)
                 {
-                    /*
-                    if (bit_gaps < (bm::gap_equiv_len-64))
-                    {
-                        add_model(bm::set_block_gap_bienc, 32 + (bit_gaps-1) * 4);
-                    }*/
-                    if (bc < (bm::gap_equiv_len-64))
-                    {
-                        add_model(bm::set_block_arrgap_bienc, 16*3 + bc*4);
-                    }
-                    else
-                    if (inverted_bc < (bm::gap_equiv_len-64))
-                    {
-                        add_model(bm::set_block_arrgap_bienc_inv, 16*3 + inverted_bc*4);
-                    }
-                    else
-                    if (bc < 16000)
-                    {
-                        add_model(bm::set_block_arr_bienc, 16*3 + bc * 4);
-                    }
-                    
-                    
-                    
-                    /*
-                    add_model(bm::set_block_gap_bienc, 32 + bit_gaps * 4);
+                    const unsigned bie_bits_per_int = 4;
+                    const unsigned bie_cut_off = 16384;
 
-                    if (arr_size < gap_block_size)
-                        add_model(bm::set_block_arrgap_bienc, 16*3 + arr_size*4);
-                    if (arr_size_inv < gap_block_size)
-                        add_model(bm::set_block_arrgap_bienc_inv, 16*3 + arr_size_inv*4);
-                    */
+                    if (bit_gaps > 3 && bit_gaps < bm::gap_equiv_len)
+                        add_model(bm::set_block_gap_bienc, 32 + (bit_gaps-1) * bie_bits_per_int);
+                    if (bc < bit_gaps && bc < (bm::gap_equiv_len-64))
+                        add_model(bm::set_block_arrgap_bienc, 16*3 + bc*bie_bits_per_int);
+                    else
+                    if (inverted_bc < bit_gaps && inverted_bc < (bm::gap_equiv_len-64))
+                        add_model(bm::set_block_arrgap_bienc_inv, 16*3 + inverted_bc*bie_bits_per_int);
+                    else
+                    if (bc < bie_cut_off)
+                        add_model(bm::set_block_arr_bienc, 16*3 + bc * bie_bits_per_int);
+                    
+                    if (inverted_bc < bie_cut_off)
+                        add_model(bm::set_block_arr_bienc_inv, 16*3 + inverted_bc * bie_bits_per_int);
+                    
+
                 } // level >= 5
 
             } // level >= 3
@@ -1022,8 +1028,11 @@ unsigned char serializer<BV>::find_bit_best_encoding(const bm::word_t* block)
     unsigned char model = bm::set_block_bit;
     for (unsigned i = 0; i < mod_size_; ++i)
     {
-        if (scores_[i] <= min_score)
+        if (scores_[i] < min_score)
+        {
+            min_score = scores_[i];
             model = models_[i];
+        }
     }
     return model;
 }
@@ -1203,16 +1212,16 @@ void serializer<BV>::encode_bit_array(const bm::word_t* block,
     unsigned arr_len;
     unsigned mask = inverted ? ~0u : 0u;
     // TODO: get rid of max bits
-    arr_len = bit_convert_to_arr(bit_idx_arr_,
+    arr_len = bit_convert_to_arr(bit_idx_arr_.data(),
                                  block,
                                  bm::gap_max_bits,
-                                 bm::gap_max_bits_cmrz-64,
+                                 bm::gap_max_bits_cmrz,
                                  mask);
     if (arr_len)
     {
         unsigned char scode =
                     inverted ? bm::set_block_arrbit_inv : bm::set_block_arrbit;
-        enc.put_prefixed_array_16(scode, bit_idx_arr_, arr_len, true);
+        enc.put_prefixed_array_16(scode, bit_idx_arr_.data(), arr_len, true);
         compression_stat_[scode]++;
         return;
     }
@@ -1224,10 +1233,10 @@ template<class BV>
 void serializer<BV>::gamma_gap_bit_block(const bm::word_t* block,
                                          bm::encoder&      enc)
 {
-    unsigned len = bm::bit_to_gap(bit_idx_arr_, block, bm::gap_equiv_len);
+    unsigned len = bm::bit_to_gap(bit_idx_arr_.data(), block, bm::gap_equiv_len);
     if (len) // save as GAP
     {
-        gamma_gap_block(bit_idx_arr_, enc);
+        gamma_gap_block(bit_idx_arr_.data(), enc);
         return;
     }
     enc.put_prefixed_array_32(bm::set_block_bit, block, bm::set_block_size);
@@ -1239,14 +1248,14 @@ void serializer<BV>::gamma_arr_bit_block(const bm::word_t* block,
                                          bm::encoder& enc, bool inverted)
 {
     unsigned mask = inverted ? ~0u : 0u;
-    unsigned arr_len = bit_convert_to_arr(bit_idx_arr_,
+    unsigned arr_len = bit_convert_to_arr(bit_idx_arr_.data(),
                                           block,
                                           bm::gap_max_bits,
                                           bm::gap_equiv_len,
                                           mask);
     if (arr_len)
     {
-        gamma_gap_array(bit_idx_arr_, arr_len, enc, inverted);
+        gamma_gap_array(bit_idx_arr_.data(), arr_len, enc, inverted);
         return;
     }
     enc.put_prefixed_array_32(bm::set_block_bit, block, bm::set_block_size);
@@ -1258,14 +1267,28 @@ void serializer<BV>::bienc_arr_bit_block(const bm::word_t* block,
                                         bm::encoder& enc, bool inverted)
 {
     unsigned mask = inverted ? ~0u : 0u;
-    unsigned arr_len = bit_convert_to_arr(bit_idx_arr_,
+    unsigned arr_len = bit_convert_to_arr(bit_idx_arr_.data(),
                                           block,
                                           bm::gap_max_bits,
                                           bm::gap_equiv_len,
                                           mask);
     if (arr_len)
     {
-        interpolated_gap_array(bit_idx_arr_, arr_len, enc, inverted);
+        interpolated_gap_array(bit_idx_arr_.data(), arr_len, enc, inverted);
+        return;
+    }
+    enc.put_prefixed_array_32(bm::set_block_bit, block, bm::set_block_size);
+    compression_stat_[bm::set_block_bit]++;
+}
+
+template<class BV>
+void serializer<BV>::interpolated_gap_bit_block(const bm::word_t* block,
+                                                bm::encoder&      enc)
+{
+    unsigned len = bm::bit_to_gap(bit_idx_arr_.data(), block, bm::gap_equiv_len);
+    if (len) // save as GAP
+    {
+        interpolated_encode_gap_block(bit_idx_arr_.data(), enc);
         return;
     }
     enc.put_prefixed_array_32(bm::set_block_bit, block, bm::set_block_size);
@@ -1277,15 +1300,16 @@ void serializer<BV>::interpolated_arr_bit_block(const bm::word_t* block,
                                                 bm::encoder& enc, bool inverted)
 {
     unsigned mask = inverted ? ~0u : 0u;
-    unsigned arr_len = bit_convert_to_arr(bit_idx_arr_,
+    unsigned arr_len = bit_convert_to_arr(bit_idx_arr_.data(),
                                           block,
                                           bm::gap_max_bits,
-                                          bm::gap_max_bits_cmrz-64,
+                                          bm::gap_max_bits_cmrz,
                                           mask);
     if (arr_len)
     {
-        unsigned char scode = bm::set_block_arr_bienc; //inverted ? bm::set_block_arrgap_bienc_inv
-                                       //: bm::set_block_arrgap_bienc;
+        unsigned char scode =
+            inverted ? bm::set_block_arr_bienc_inv : bm::set_block_arr_bienc;
+        
         encoder::position_type enc_pos0 = enc.get_pos();
         {
             bit_out_type bout(enc);
@@ -1356,7 +1380,7 @@ void serializer<BV>::interpolated_arr_bit_block(const bm::word_t* block,
 template<class BV>
 typename serializer<BV>::size_type
 serializer<BV>::serialize(const BV& bv,
-                                   unsigned char* buf, size_t buf_size)
+                          unsigned char* buf, size_t buf_size)
 {
     BM_ASSERT(temp_block_);
     
@@ -1364,8 +1388,6 @@ serializer<BV>::serialize(const BV& bv,
     
     const blocks_manager_type& bman = bv.get_blocks_manager();
 
-//    gap_word_t*  gap_temp_block = (gap_word_t*) temp_block_;
-    
     bm::encoder enc(buf, buf_size);  // create the encoder
     encode_header(bv, enc);
 
@@ -1508,133 +1530,17 @@ serializer<BV>::serialize(const BV& bv,
             case bm::set_block_arr_bienc:
                 interpolated_arr_bit_block(blk, enc, false);
                 break;
+            case bm::set_block_arr_bienc_inv:
+                interpolated_arr_bit_block(blk, enc, true); // inverted
+                break;
+            case bm::set_block_gap_bienc:
+                interpolated_gap_bit_block(blk, enc);
+                break;
             default:
                 BM_ASSERT(0); // predictor returned an unknown model
                 enc.put_prefixed_array_32(set_block_bit, blk, bm::set_block_size);
             }
-        continue;
-
-
-/*
-        if (compression_level_ <= 1)
-        {
-            enc.put_prefixed_array_32(set_block_bit, blk, bm::set_block_size);
-            continue;            
-        }
-
-        // compute bit-block statistics: bit-count and number of GAPS
-        unsigned block_bc = bm::bit_block_count(blk);
-        unsigned bit_gaps = bm::bit_block_calc_change(blk);
-
-        unsigned block_bc_inv = bm::gap_max_bits - block_bc;
-        switch (block_bc)
-        {
-        case 1: // corner case: only 1 bit on
-            {
-                unsigned bit_idx = 0;
-                bm::bit_block_find(blk, bit_idx, &bit_idx);
-                enc.put_8(set_block_bit_1bit); enc.put_16(bm::short_t(bit_idx));
-                continue;
-            }
-        case 0: goto zero_block; // empty block
-        default:
-            break;
-        }
-            
-        // compute alternative representation sizes
-        //
-        unsigned arr_block_size = unsigned(sizeof(gap_word_t) + (block_bc * sizeof(gap_word_t)));
-        unsigned arr_block_size_inv = unsigned(sizeof(gap_word_t) + (block_bc_inv * sizeof(gap_word_t)));
-        unsigned gap_block_size = unsigned(sizeof(gap_word_t) + ((bit_gaps+1) * sizeof(gap_word_t)));
-        unsigned interval_block_size;
-        interval_block_size = bit_count_nonzero_size(blk, bm::set_block_size);
-        
-        bool inverted = false;
-
-        if (arr_block_size_inv < arr_block_size &&
-            arr_block_size_inv < gap_block_size &&
-            arr_block_size_inv < interval_block_size)
-        {
-            inverted = true;
-            goto bit_as_array;
-        }
-
-        // if interval representation is not a good alternative
-        if ((interval_block_size > arr_block_size) || 
-            (interval_block_size > gap_block_size))
-        {
-            if (gap_block_size < (bm::gap_equiv_len-64) &&
-                gap_block_size < arr_block_size)
-            {
-                unsigned len = bm::bit_to_gap(gap_temp_block,
-                                              blk,
-                                              bm::gap_equiv_len-64);
-                if (len) // save as GAP
-                {
-                    gamma_gap_block(gap_temp_block, enc);
-                    continue;
-                }
-            }
-            
-            if (arr_block_size < ((bm::gap_equiv_len-64) * sizeof(gap_word_t)))
-            {
-            bit_as_array:
-                gap_word_t arr_len;
-                unsigned mask = inverted ? ~0u : 0u;
-                arr_len = bit_convert_to_arr(gap_temp_block, 
-                                             blk, 
-                                             bm::gap_max_bits, 
-                                             bm::gap_equiv_len-64,
-                                             mask);
-                if (arr_len)
-                {
-                    gamma_gap_array(gap_temp_block, arr_len, enc, inverted);
-                    continue;
-                }
-                
-            }
-            // full bit-block
-            enc.put_prefixed_array_32(set_block_bit, blk, bm::set_block_size);
-            continue;            
-        }
-        
-        // if interval block is a winner
-        // it needs to have a compelling advantage of 25% over bit block
-        //
-        unsigned threashold_block_size =
-            bm::set_block_size * sizeof(bm::word_t);
-        threashold_block_size -= threashold_block_size / 4;
-            
-        if (interval_block_size < arr_block_size &&
-            interval_block_size < gap_block_size &&
-            interval_block_size < (bm::set_block_size * sizeof(bm::word_t))
-            )
-        {
-            encode_bit_interval(blk, enc, interval_block_size);
             continue;
-        }
-        
-        if (gap_block_size < bm::gap_equiv_len &&
-            gap_block_size < arr_block_size)
-        {
-            unsigned len =
-                bm::bit_to_gap(gap_temp_block, blk, bm::gap_equiv_len-64);
-            if (len) // save as GAP
-            {
-                gamma_gap_block(gap_temp_block, enc);
-                continue;
-            }
-        }
-         
-        // if array is best
-        if (arr_block_size < bm::gap_equiv_len-64)
-        {
-            goto bit_as_array;
-        }
-        // full bit-block
-        enc.put_prefixed_array_32(set_block_bit, blk, bm::set_block_size);
-        continue;
-*/
         }
  
     }
@@ -1849,36 +1755,33 @@ unsigned deseriaizer_base<DEC>::read_id_list(decoder_type&   decoder,
 template<class DEC>
 void deseriaizer_base<DEC>::read_bic_arr(decoder_type& dec, bm::word_t* blk)
 {
-//    BM_ASSERT(blk);
-//    BM_ASSERT(!IS_FULL_BLOCK(blk));
-    
-    bm::gap_word_t arr[17000];
+    BM_ASSERT(!BM_IS_GAP(blk));
     
     typedef bit_in<DEC> bit_in_type;
     bm::gap_word_t min_v = dec.get_16();
     bm::gap_word_t max_v = dec.get_16();
     unsigned arr_len = dec.get_16();
-BM_ASSERT(arr_len < 16000);
     
-    
-//    bm::set_bit(blk, min_v);
-//    bm::set_bit(blk, max_v);
-    arr[0] = min_v;
-    arr[arr_len-1] = max_v;
-
     bit_in_type bin(dec);
-    
-    bin.bic_decode(&arr[1], arr_len-2, min_v, max_v);
-    if (IS_FULL_BLOCK(blk))
-        return;
-    for (unsigned i = 0; i < arr_len; ++i)
+
+    if (!IS_VALID_ADDR(blk))
     {
-        BM_ASSERT(arr[i] < 65536);
-        set_bit(blk, arr[i]);
+        bin.bic_decode_dry(arr_len-2, min_v, max_v);
+        return;
     }
-    //bin.bic_decode_bitset(blk, arr_len-2, min_v, max_v);
+    bm::set_bit(blk, min_v);
+    bm::set_bit(blk, max_v);
+    bin.bic_decode_bitset(blk, arr_len-2, min_v, max_v);
 }
 
+template<class DEC>
+void deseriaizer_base<DEC>::read_bic_arr_inv(decoder_type&   decoder, bm::word_t* blk)
+{
+    // TODO: optimization
+    bm::bit_block_set(blk, 0);
+    this->read_bic_arr(decoder, blk);
+    bm::bit_invert(blk);
+}
 
 template<class DEC>
 void deseriaizer_base<DEC>::read_gap_block(decoder_type&   decoder, 
@@ -1928,6 +1831,7 @@ void deseriaizer_base<DEC>::read_gap_block(decoder_type&   decoder,
             unsigned gap_len =
                 gap_set_array(dst_block, id_array_, arr_len);
             BM_ASSERT(gap_len == bm::gap_length(dst_block));
+            (void)(gap_len);
         }
         break;
     case set_block_gap_egamma:
@@ -1984,6 +1888,9 @@ template<class BV, class DEC>
 deserializer<BV, DEC>::deserializer()
 {
     temp_block_ = alloc_.alloc_bit_block();
+    bit_idx_arr_.resize(bm::gap_max_bits);
+    this->id_array_ = bit_idx_arr_.data();
+    gap_temp_block_.resize(bm::gap_max_bits);
 }
 
 template<class BV, class DEC>
@@ -2001,7 +1908,8 @@ deserializer<BV, DEC>::deserialize_gap(unsigned char btype, decoder_type& dec,
                                        bm::word_t* blk)
 {
     gap_word_t gap_head; 
-
+    bm::gap_word_t* gap_temp_block = gap_temp_block_.data();
+    
     switch (btype)
     {
     case set_block_gap: 
@@ -2015,20 +1923,20 @@ deserializer<BV, DEC>::deserialize_gap(unsigned char btype, decoder_type& dec,
         --len;
         if (level == -1)  // Too big to be GAP: convert to BIT block
         {
-            *gap_temp_block_ = gap_head;
-            dec.get_16(gap_temp_block_+1, len - 1);
-            gap_temp_block_[len] = gap_max_bits - 1;
+            *gap_temp_block = gap_head;
+            dec.get_16(gap_temp_block+1, len - 1);
+            gap_temp_block[len] = gap_max_bits - 1;
 
             if (blk == 0)  // block does not exist yet
             {
                 blk = bman.get_allocator().alloc_bit_block();
                 bman.set_block(nb, blk);
-                gap_convert_to_bitset(blk, gap_temp_block_);                
+                gap_convert_to_bitset(blk, gap_temp_block);
             }
             else  // We have some data already here. Apply OR operation.
             {
                 gap_convert_to_bitset(temp_block_, 
-                                      gap_temp_block_);
+                                      gap_temp_block);
                 bv.combine_operation_with_block(nb,
                                                 temp_block_, 
                                                 0, 
@@ -2056,9 +1964,9 @@ deserializer<BV, DEC>::deserialize_gap(unsigned char btype, decoder_type& dec,
         else // target block exists
         {
             // read GAP block into a temp memory and perform OR
-            *gap_temp_block_ = gap_head;
-            dec.get_16(gap_temp_block_ + 1, len - 1);
-            gap_temp_block_[len] = bm::gap_max_bits - 1;
+            *gap_temp_block = gap_head;
+            dec.get_16(gap_temp_block + 1, len - 1);
+            gap_temp_block[len] = bm::gap_max_bits - 1;
             break;
         }
         return;
@@ -2068,15 +1976,15 @@ deserializer<BV, DEC>::deserialize_gap(unsigned char btype, decoder_type& dec,
     case set_block_arrgap_bienc:
         {
         	unsigned arr_len = this->read_id_list(dec, btype, this->id_array_);
-            gap_temp_block_[0] = 0; // reset unused bits in gap header
+            gap_temp_block[0] = 0; // reset unused bits in gap header
             unsigned gap_len =
-              gap_set_array(gap_temp_block_, this->id_array_, arr_len);
+              gap_set_array(gap_temp_block, this->id_array_, arr_len);
             
-            BM_ASSERT(gap_len == bm::gap_length(gap_temp_block_));
+            BM_ASSERT(gap_len == bm::gap_length(gap_temp_block));
             int level = gap_calc_level(gap_len, bman.glen());
             if (level == -1)  // Too big to be GAP: convert to BIT block
             {
-                gap_convert_to_bitset(temp_block_, gap_temp_block_);
+                gap_convert_to_bitset(temp_block_, gap_temp_block);
                 bv.combine_operation_with_block(nb,
                                                 temp_block_,
                                                 0,
@@ -2091,18 +1999,18 @@ deserializer<BV, DEC>::deserialize_gap(unsigned char btype, decoder_type& dec,
     case set_block_arrgap_egamma_inv:
     case set_block_arrgap_inv:
     case set_block_arrgap_bienc_inv:
-        this->read_gap_block(dec, btype, gap_temp_block_, gap_head);
+        this->read_gap_block(dec, btype, gap_temp_block, gap_head);
         break;
     case bm::set_block_gap_bienc:
         gap_head = dec.get_16();
-        this->read_gap_block(dec, btype, gap_temp_block_, gap_head);
+        this->read_gap_block(dec, btype, gap_temp_block, gap_head);
         break;
     default:
         BM_ASSERT(0);
     }
 
     bv.combine_operation_with_block(nb,
-                                   (bm::word_t*)gap_temp_block_, 
+                                   (bm::word_t*)gap_temp_block,
                                    1, 
                                    BM_OR);
 }
@@ -2114,25 +2022,30 @@ void deserializer<BV, DEC>::decode_bit_block(unsigned char btype,
                               block_idx_type       nb,
                               bm::word_t*          blk)
 {
+    if (!blk)
+    {
+        blk = bman.get_allocator().alloc_bit_block();
+        bman.set_block(nb, blk);
+        bm::bit_block_set(blk, 0);
+    }
+    else
+    if (BM_IS_GAP(blk))
+        blk = bman.deoptimize_block(nb);
+    BM_ASSERT(blk != temp_block_);
+    
     switch (btype)
     {
     case bm::set_block_arr_bienc:
-        {
-            if (!blk)
-            {
-                blk = bman.get_allocator().alloc_bit_block();
-                bman.set_block(nb, blk);
-                bm::bit_block_set(blk, 0);
-            }
-/*
-            else
-            if (IS_FULL_BLOCK(blk))
-            {
-                blk = temp_block_; // TODO: implement a dry read
-                return;
-            } */
-            this->read_bic_arr(dec, blk);
-        }
+        this->read_bic_arr(dec, blk);
+        break;
+    case bm::set_block_arr_bienc_inv:
+        if (IS_FULL_BLOCK(blk))
+            blk = bman.deoptimize_block(nb);
+        // TODO: optimization
+        bm::bit_block_set(temp_block_, 0);
+        this->read_bic_arr(dec, temp_block_);
+        bm::bit_invert(temp_block_);
+        bm::bit_block_or(blk, temp_block_);
         break;
     default:
         BM_ASSERT(0);
@@ -2444,6 +2357,9 @@ size_t deserializer<BV, DEC>::deserialize(bvector_type&        bv,
         case bm::set_block_arr_bienc:
             decode_bit_block(btype, dec, bman, i, blk);
             continue;
+        case bm::set_block_arr_bienc_inv:
+            decode_bit_block(btype, dec, bman, i, blk);
+            continue;
         default:
             BM_ASSERT(0); // unknown block type
         } // switch
@@ -2454,7 +2370,7 @@ size_t deserializer<BV, DEC>::deserialize(bvector_type&        bv,
     return dec.size();
 }
 
-
+// ---------------------------------------------------------------------------
 
 template<class DEC>
 serial_stream_iterator<DEC>::serial_stream_iterator(const unsigned char* buf)
@@ -2464,7 +2380,8 @@ serial_stream_iterator<DEC>::serial_stream_iterator(const unsigned char* buf)
     state_(e_unknown),
     id_cnt_(0),
     block_idx_(0),
-    mono_block_cnt_(0)
+    mono_block_cnt_(0),
+    block_idx_arr_(0)
 {
     ::memset(bit_func_table_, 0, sizeof(bit_func_table_));
 
@@ -2542,7 +2459,17 @@ serial_stream_iterator<DEC>::serial_stream_iterator(const unsigned char* buf)
         }
         state_ = e_blocks;
     }
+    block_idx_arr_ = (gap_word_t*) ::malloc(sizeof(gap_word_t) * bm::gap_max_bits);
+    this->id_array_ = block_idx_arr_;
 }
+
+template<class DEC>
+serial_stream_iterator<DEC>::~serial_stream_iterator()
+{
+    if (block_idx_arr_)
+        ::free(block_idx_arr_);
+}
+
 
 template<class DEC>
 void serial_stream_iterator<DEC>::next()
@@ -2635,6 +2562,7 @@ void serial_stream_iterator<DEC>::next()
         case set_block_arrbit:
         case set_block_arrbit_inv:
         case bm::set_block_arr_bienc:
+        case bm::set_block_arr_bienc_inv:
             state_ = e_bit_block;
             break;
 
@@ -2713,7 +2641,7 @@ template<class DEC>
 unsigned 
 serial_stream_iterator<DEC>::get_bit_block_ASSIGN(
                                             bm::word_t*  dst_block,
-                                            bm::word_t*  /*tmp_block*/)
+                                            bm::word_t*  tmp_block)
 {
     BM_ASSERT(this->state_ == e_bit_block);
     unsigned count = 0;
@@ -2768,12 +2696,16 @@ serial_stream_iterator<DEC>::get_bit_block_ASSIGN(
         BM_ASSERT(0);
         break;
     case set_block_arrbit_inv:
-        BM_ASSERT(dst_block);
         get_inv_arr(dst_block);
         break;
     case bm::set_block_arr_bienc:
-        bm::bit_block_set(dst_block, 0);
+        if (dst_block)
+            bm::bit_block_set(dst_block, 0);
         this->read_bic_arr(decoder_, dst_block);
+        break;
+    case bm::set_block_arr_bienc_inv:
+        this->read_bic_arr_inv(decoder_, tmp_block);
+        bm::bit_block_copy(dst_block, tmp_block);
         break;
     default:
         BM_ASSERT(0);
@@ -2833,6 +2765,10 @@ serial_stream_iterator<DEC>::get_bit_block_OR(bm::word_t*  dst_block,
         break;
     case bm::set_block_arr_bienc:
         this->read_bic_arr(decoder_, dst_block);
+        break;
+    case bm::set_block_arr_bienc_inv:
+        this->read_bic_arr_inv(decoder_, tmp_block);
+        bm::bit_block_or(dst_block, tmp_block);
         break;
     default:
         BM_ASSERT(0);
@@ -2910,6 +2846,11 @@ serial_stream_iterator<DEC>::get_bit_block_AND(bm::word_t* BMRESTRICT dst_block,
         if (dst_block)
             bm::bit_block_and(dst_block, tmp_block);
         break;
+    case bm::set_block_arr_bienc_inv:
+        this->read_bic_arr_inv(decoder_, tmp_block);
+        if (dst_block)
+            bm::bit_block_and(dst_block, tmp_block);
+        break;
     default:
         BM_ASSERT(0);
     } // switch
@@ -2976,6 +2917,11 @@ serial_stream_iterator<DEC>::get_bit_block_XOR(bm::word_t*  dst_block,
     case set_block_arr_bienc:
         bm::bit_block_set(tmp_block, 0);
         this->read_bic_arr(decoder_, tmp_block);
+        if (dst_block)
+            bm::bit_block_xor(dst_block, tmp_block);
+        break;
+    case bm::set_block_arr_bienc_inv:
+        this->read_bic_arr_inv(decoder_, tmp_block);
         if (dst_block)
             bm::bit_block_xor(dst_block, tmp_block);
         break;
@@ -3048,6 +2994,11 @@ serial_stream_iterator<DEC>::get_bit_block_SUB(bm::word_t*  dst_block,
         if (dst_block)
             bm::bit_block_sub(dst_block, tmp_block);
         break;
+    case bm::set_block_arr_bienc_inv:
+        this->read_bic_arr_inv(decoder_, tmp_block);
+        if (dst_block)
+            bm::bit_block_sub(dst_block, tmp_block);
+        break;
     default:
         BM_ASSERT(0);
     } // switch
@@ -3113,6 +3064,10 @@ serial_stream_iterator<DEC>::get_bit_block_COUNT(bm::word_t*  /*dst_block*/,
     case set_block_arr_bienc:
         bm::bit_block_set(tmp_block, 0); // TODO: just add a counted read
         this->read_bic_arr(decoder_, tmp_block);
+        count += bm::bit_block_count(tmp_block);
+        break;
+    case bm::set_block_arr_bienc_inv:
+        this->read_bic_arr_inv(decoder_, tmp_block);
         count += bm::bit_block_count(tmp_block);
         break;
     default:
@@ -3181,6 +3136,9 @@ serial_stream_iterator<DEC>::get_bit_block_COUNT_A(bm::word_t*  dst_block,
     case set_block_arr_bienc:
         this->read_bic_arr(decoder_, tmp_block); // TODO: add dry read
         break;
+    case bm::set_block_arr_bienc_inv:
+        this->read_bic_arr_inv(decoder_, tmp_block); // TODO: add dry read
+        break;
     default:
         BM_ASSERT(0);
     } // switch
@@ -3246,6 +3204,10 @@ serial_stream_iterator<DEC>::get_bit_block_COUNT_AND(bm::word_t*  dst_block,
     case set_block_arr_bienc:
         bm::bit_block_set(tmp_block, 0);
         this->read_bic_arr(decoder_, tmp_block);
+        count += bm::bit_operation_and_count(dst_block, tmp_block);
+        break;
+    case bm::set_block_arr_bienc_inv:
+        this->read_bic_arr_inv(decoder_, tmp_block);
         count += bm::bit_operation_and_count(dst_block, tmp_block);
         break;
     default:
@@ -3332,6 +3294,10 @@ serial_stream_iterator<DEC>::get_bit_block_COUNT_OR(bm::word_t*  dst_block,
         this->read_bic_arr(decoder_, tmp_block);
         return bm::bit_operation_or_count(dst_block, tmp_block);
         break;
+    case bm::set_block_arr_bienc_inv:
+        this->read_bic_arr_inv(decoder_, tmp_block);
+        return bm::bit_operation_or_count(dst_block, tmp_block);
+        break;
     default:
         BM_ASSERT(0);
     } // switch
@@ -3414,6 +3380,10 @@ serial_stream_iterator<DEC>::get_bit_block_COUNT_XOR(bm::word_t*  dst_block,
     case set_block_arr_bienc:
         bm::bit_block_set(tmp_block, 0);
         this->read_bic_arr(decoder_, tmp_block);
+        return bm::bit_operation_xor_count(dst_block, tmp_block);
+        break;
+    case bm::set_block_arr_bienc_inv:
+        this->read_bic_arr_inv(decoder_, tmp_block);
         return bm::bit_operation_xor_count(dst_block, tmp_block);
         break;
     default:
@@ -3500,6 +3470,10 @@ serial_stream_iterator<DEC>::get_bit_block_COUNT_SUB_AB(bm::word_t*  dst_block,
         this->read_bic_arr(decoder_, tmp_block);
         return bm::bit_operation_sub_count(dst_block, tmp_block);
         break;
+    case bm::set_block_arr_bienc_inv:
+        this->read_bic_arr_inv(decoder_, tmp_block);
+        return bm::bit_operation_sub_count(dst_block, tmp_block);
+        break;
     default:
         BM_ASSERT(0);
     } // switch
@@ -3575,7 +3549,11 @@ serial_stream_iterator<DEC>::get_bit_block_COUNT_SUB_BA(bm::word_t*  dst_block,
     case set_block_arr_bienc:
         bm::bit_block_set(tmp_block, 0);
         this->read_bic_arr(decoder_, tmp_block);
-        return bm::bit_operation_or_count(tmp_block, dst_block);
+        return bm::bit_operation_sub_count(tmp_block, dst_block);
+        break;
+    case bm::set_block_arr_bienc_inv:
+        this->read_bic_arr_inv(decoder_, tmp_block);
+        return bm::bit_operation_sub_count(tmp_block, dst_block);
         break;
     default:
         BM_ASSERT(0);
@@ -3775,28 +3753,9 @@ iterator_deserializer<BV, SerialIterator>::finalize_target_vector(
         // nothing to do
         break;
     case set_AND: case set_ASSIGN:
-        // clear the rest of the target vector
         {
-            unsigned i, j;
-            bman.get_block_coord(bv_block_idx, i, j);
-            bm::word_t*** blk_root = bman.top_blocks_root();
-            unsigned top_size = bman.top_block_size();
-            for (; i < top_size; ++i)
-            {
-                bm::word_t** blk_blk = blk_root[i];
-                if (blk_blk == 0) 
-                {
-                    bv_block_idx+=bm::set_sub_array_size-j;
-                    j = 0;
-                    continue;
-                }
-                for (;j < bm::set_sub_array_size; ++j, ++bv_block_idx)
-                {
-                    bman.zero_block(bv_block_idx);
-                } // for j
-                j = 0;
-            } // for i
-
+        block_idx_type nblock_last = (bm::id_max >> bm::set_block_shift);
+        bman.set_all_zero(bv_block_idx, nblock_last); // clear the target tail
         }
         break;
     case set_COUNT_A: case set_COUNT_OR: case set_COUNT_XOR:
