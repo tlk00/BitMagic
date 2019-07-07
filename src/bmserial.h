@@ -2047,10 +2047,25 @@ void deserializer<BV, DEC>::decode_bit_block(unsigned char btype,
     else
     if (BM_IS_GAP(blk))
         blk = bman.deoptimize_block(nb);
+    
     BM_ASSERT(blk != temp_block_);
     
     switch (btype)
     {
+    case set_block_arrbit_inv:
+        if (IS_FULL_BLOCK(blk))
+            blk = bman.deoptimize_block(nb);
+        bm::bit_block_set(temp_block_, ~0u);
+        {
+            gap_word_t len = dec.get_16();
+            for (unsigned k = 0; k < len; ++k)
+            {
+                gap_word_t bit_idx = dec.get_16();
+                bm::clear_bit(temp_block_, bit_idx);
+            } // for
+        }
+        bm::bit_block_or(blk, temp_block_);
+        break;
     case bm::set_block_arr_bienc:
         this->read_bic_arr(dec, blk);
         break;
@@ -2168,7 +2183,10 @@ size_t deserializer<BV, DEC>::deserialize(bvector_type&        bv,
         
         bman.get_block_coord(i, i0, j0);
         bm::word_t* blk = bman.get_block_ptr(i0, j0);
-
+if (i0 == 255 && j0 == 255)
+{
+    bman.get_block_coord(i, i0, j0);
+}
         // pre-check if we have short zero-run packaging here
         //
         if (btype & (1 << 7))
@@ -2361,6 +2379,7 @@ size_t deserializer<BV, DEC>::deserialize(bvector_type&        bv,
             }
             continue;
         }
+        /*
         case set_block_arrbit_inv:
         {
             gap_word_t len = dec.get_16();
@@ -2387,9 +2406,13 @@ size_t deserializer<BV, DEC>::deserialize(bvector_type&        bv,
             }
             continue;
         }
+        
         case bm::set_block_arr_bienc:
             decode_bit_block(btype, dec, bman, i, blk);
             continue;
+        */
+        case bm::set_block_arr_bienc:
+        case bm::set_block_arrbit_inv:
         case bm::set_block_arr_bienc_inv:
             decode_bit_block(btype, dec, bman, i, blk);
             continue;
@@ -2673,14 +2696,20 @@ serial_stream_iterator<DEC>::skip_mono_blocks()
 template<class DEC>
 void serial_stream_iterator<DEC>::get_inv_arr(bm::word_t* block)
 {
-    BM_ASSERT(block);
-    
     gap_word_t len = decoder_.get_16();
-    bm::bit_block_set(block, ~0u);
-    for (unsigned k = 0; k < len; ++k)
+    if (block)
     {
-        gap_word_t bit_idx = decoder_.get_16();
-        bm::clear_bit(block, bit_idx);
+        bm::bit_block_set(block, ~0u);
+        for (unsigned k = 0; k < len; ++k)
+        {
+            gap_word_t bit_idx = decoder_.get_16();
+            bm::clear_bit(block, bit_idx);
+        }
+    }
+    else // dry read
+    {
+        for (unsigned k = 0; k < len; ++k)
+            decoder_.get_16();
     }
 }
 
@@ -3881,8 +3910,8 @@ iterator_deserializer<BV, SerialIterator>::finalize_target_vector(
         break;
     case set_AND: case set_ASSIGN:
         {
-        block_idx_type nblock_last = ((bm::id_max-1) >> bm::set_block_shift);
-        if (bv_block_idx < nblock_last)
+        block_idx_type nblock_last = (bm::id_max >> bm::set_block_shift);
+        if (bv_block_idx <= nblock_last)
             bman.set_all_zero(bv_block_idx, nblock_last); // clear the target tail
         }
         break;
