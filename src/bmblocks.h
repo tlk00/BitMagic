@@ -1848,54 +1848,6 @@ public:
         }
     }
     
-    /// find first block
-    /*
-    block_idx_type find_first_block() const
-    {
-        BM_ASSERT(top_blocks_);
-        unsigned top_blocks = top_block_size();
-
-        for (block_idx_type i = 0; i < top_blocks; ++i)
-        {
-            bm::word_t** blk_blk = top_blocks_[i];
-            if (!blk_blk)
-                continue;
-            unsigned j = 0;
-            do
-            {
-            #if defined(BM64_AVX2) || defined(BM64_AVX512)
-                if (!avx2_test_all_zero_wave(blk_blk + j))
-                {
-                    if (blk_blk[j])
-                        return (i * bm::set_sub_array_size) + j;
-                    if (blk_blk[1+j])
-                        return (i * bm::set_sub_array_size) + j + 1;
-                    if (blk_blk[2+j])
-                        return (i * bm::set_sub_array_size) + j + 2;
-                    if (blk_blk[3+j])
-                        return (i * bm::set_sub_array_size) + j + 3;
-                }
-                j += 4;
-            #elif defined(BM64_SSE4)
-                if (!sse42_test_all_zero_wave(blk_blk + j))
-                {
-                    if (blk_blk[j])
-                        return (i * bm::set_sub_array_size) + j;
-                    if (blk_blk[1+j])
-                        return (i * bm::set_sub_array_size) + j + 1;
-                }
-                j += 2;
-            #else
-                if (blk_blk[j])
-                    return (i * bm::set_sub_array_size) + j;
-                ++j;
-            #endif
-            } while (j < bm::set_sub_array_size);
-        }
-        return 0;
-    }
-    */
-
     // ----------------------------------------------------------------
     #define BM_FREE_OP(x) blk = blk_blk[j + x]; \
         if (IS_VALID_ADDR(blk)) \
