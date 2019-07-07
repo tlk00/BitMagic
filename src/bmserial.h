@@ -2084,13 +2084,7 @@ size_t deserializer<BV, DEC>::deserialize(bvector_type&        bv,
     blocks_manager_type& bman = bv.get_blocks_manager();
     if (!bman.is_init())
         bman.init_tree();
-/*
-    bm::wordop_t* tmp_buf = 
-        temp_block ? (bm::wordop_t*) temp_block 
-                   : (bm::wordop_t*)bman.check_allocate_tempblock();
-
-    temp_block_ = temp_block = (word_t*)tmp_buf;
-*/
+    
     bm::word_t* temp_block = temp_block_;
 
     bm::strategy  strat = bv.get_new_blocks_strat();
@@ -2147,7 +2141,15 @@ size_t deserializer<BV, DEC>::deserialize(bvector_type&        bv,
         block_idx_type bv_size;
         if (header_flag & BM_HM_64_BIT)
         {
+            // 64-bit vector cannot be deserialized into 32-bit
             BM_ASSERT(sizeof(block_idx_type)==8);
+            #ifndef BM64ADDR
+                #ifndef BM_NO_STL
+                    throw std::logic_error(bm_serialization_msg);
+                #else
+                    BM_THROW(BM_ERR_SERIALFORMAT);
+                #endif
+            #endif
             bv_size = (block_idx_type)dec.get_64();
         }
         else
