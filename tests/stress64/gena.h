@@ -78,7 +78,7 @@ void generate_vect48(VT& vect)
     //
     bm::id64_t range_base = (bm::id64_t)dist(mt_rand);
     generate_vect48_range(vect, range_base, dist, mt_rand);
-    
+
     // Range 32-bit max
     range_base = bm::id_max32-65536;
     generate_vect48_range(vect, range_base, dist, mt_rand);
@@ -86,7 +86,7 @@ void generate_vect48(VT& vect)
     // Range 48-bit / 2
     range_base = bm::id_max48 / 2;
     generate_vect48_range(vect, range_base, dist, mt_rand);
-    
+
     // Range near 48-bit
     range_base = bm::id_max48 - (65536 * 257);
     generate_vect48_range(vect, range_base, dist, mt_rand);
@@ -526,15 +526,23 @@ void FillSetsRegular(BVMINI* bvect_min,
     }
     cout << "Ok" << endl;
 }
-
-
-
+/*
+template<typename BVMINI, typename BV, typename VECT>
+void FillSetsVect(BVMINI* bv_min, BV* bv, const VECT& vect)
+{
+    for (auto it = vect.begin(); it != vect.end(); ++it)
+    {
+        auto v = *it;
+        bv->set(v);
+    }
+}
+*/
 //
 //  Quasi random filling with choosing randomizing method.
 //
 //
 template <typename BVMINI, typename BV, typename SZT>
-void FillSetsRandomMethod(BVMINI* bvect_min,
+int FillSetsRandomMethod(BVMINI* bvect_min,
                           BV* bvect_full,
                           SZT min,
                           SZT max,
@@ -579,6 +587,24 @@ void FillSetsRandomMethod(BVMINI* bvect_min,
         cout << "Regular pattern filling" << endl;
         FillSetsRegular(bvect_min, bvect_full, min, max, 2ull);
         break;
+/*
+    case 6:
+        {
+            cout << "Simple 48-bit wide vector" << endl;
+            std::vector<typename BV::size_type> vect0;
+            generate_vect_simpl0(vect0);
+            FillSetsVect(bvect_min,  bvect_full, vect0);
+        }
+        break;
+    case 7:
+        {
+            cout << "Complex 48-bit wide vector" << endl;
+            std::vector<typename BV::size_type> vect0;
+            generate_vect48(vect0);
+            FillSetsVect(bvect_min,  bvect_full, vect0);
+        }
+        break;
+*/
     default:
         cout << "Random filling: method - Set Intervals - factor(random)" << endl;
         factor = rand()%10;
@@ -587,13 +613,14 @@ void FillSetsRandomMethod(BVMINI* bvect_min,
 
     } // switch
 
-    if (optimize && (method <= 1))
+    if (optimize)
     {
         cout << "Vector optimization..." << flush;
         BM_DECLARE_TEMP_BLOCK(tb)
         bvect_full->optimize(tb);
         cout << "OK" << endl;
     }
+    return method;
 }
 
 

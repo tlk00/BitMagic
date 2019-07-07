@@ -3335,9 +3335,9 @@ void CheckVectors(bvect_mini &bvect_min,
 
     cout << "Bitcount summary : " << endl;
     bvect::size_type min_count = bvect_min.bit_count();
-    cout << "minvector count = " << min_count << endl;
+    cout << "minvector count = " << min_count;
     bvect::size_type count = bvect_full.count();
-    bvect::size_type full_count = bvect_full.recalc_count();
+    bvect::size_type full_count = count;
     cout << "fullvector re-count = " << full_count << endl;
     
     if (min_count != full_count)
@@ -3455,7 +3455,6 @@ void CheckVectors(bvect_mini &bvect_min,
     }
 
     cout << "OK" << endl;
-
     return;
 }
 
@@ -4326,16 +4325,18 @@ void SerializationTest()
 static
 void DesrializationTest2()
 {
+   cout << "\n-------------------------------------- DesrializationTest2()" << endl;
    bvect::size_type BITVECT_SIZE = bvect::size_type(bm::id_max32) * 3;
 
+
+   bvect  bv1, bv2;
    bvect  bvtotal;
    bvect::size_type size = BITVECT_SIZE - 10;
    BM_DECLARE_TEMP_BLOCK(tb)
-
-
-   bvect  bv1;
-   bvect  bv2;
+   unsigned repetitions = 10;
    bvect::size_type i;
+
+
    for (i = bm::id_max32; i < (bm::id_max32+165536); i+=2)
    {
       bv1.set_bit(i);
@@ -4426,7 +4427,6 @@ void DesrializationTest2()
 
    int clcnt = 0;
 
-   unsigned repetitions = 5;
    for (i = 0; i < repetitions; ++i)
    {
         cout << endl << endl << "Deserialization STEP " << i << endl;
@@ -4479,6 +4479,174 @@ void DesrializationTest2()
 
    } // for i
 
+    cout << "de-serialization test 64-bit wide vectors mix.." << endl;
+    {
+        for (i = 0; i < repetitions; ++i)
+        {
+            bvect64 bv0;
+            bv1.clear();
+            {
+                ref_vect vect0, vect1;
+                
+                generate_vect_simpl0(vect0);
+                generate_vect48(vect1);
+                
+                load_BV_set_ref(bv0, vect0, false);
+                load_BV_set_ref(bv1, vect1, false);
+            }
+
+            bm::serializer<bvect64> bv_ser;
+            bm::serializer<bvect64>::buffer sbuf0, sbuf1;
+            bv_ser.serialize(bv0, sbuf0, 0);
+            bv_ser.serialize(bv1, sbuf1, 0);
+
+            bvect64 bv_tc;
+            bv_tc.bit_or(bv0, bv1, bvect64::opt_none);
+            {
+                bvect64 bv_tc1(bv0);
+                bv_tc1 |= bv1;
+                int cmp = bv_tc.compare(bv_tc1);
+                assert(cmp==0);
+            }
+            
+            bvect64 bv_tc_and;
+            bv_tc_and.bit_and(bv0, bv1, bvect64::opt_none);
+
+            // integrity check
+            {
+                bvect64 bv_t0;
+                bm::deserialize(bv_t0, sbuf0.buf());
+                res = bv0.compare(bv_t0);
+                assert(res==0);
+                // pass 2 to make sure deserialization into the same is ok
+                bm::deserialize(bv_t0, sbuf0.buf());
+                res = bv0.compare(bv_t0);
+                assert(res==0);
+
+                
+                bvect64 bv_t1;
+                bm::deserialize(bv_t1, sbuf1.buf());
+                res = bv1.compare(bv_t1);
+                assert(res==0);
+                bm::deserialize(bv_t1, sbuf1.buf());
+                res = bv1.compare(bv_t1);
+                assert(res==0);
+            }
+
+            {
+                bvect64 bv_t0, bv_t1;
+                operation_deserializer<bvect64>::deserialize(bv_t0, sbuf0.buf(), 0, set_OR);
+                int cmp = bv0.compare(bv_t0);
+                assert(cmp == 0);
+                operation_deserializer<bvect64>::deserialize(bv_t1, sbuf1.buf(), 0, set_OR);
+                cmp = bv1.compare(bv_t1);
+                assert(!cmp);
+            }
+
+            {
+                bvect64 bv_t;
+                operation_deserializer<bvect64>::deserialize(bv_t, sbuf1.buf(), 0, set_OR);
+                operation_deserializer<bvect64>::deserialize(bv_t, sbuf0.buf(), 0, set_OR);
+                int cmp = bv_tc.compare(bv_t);
+                if (cmp)
+                {
+                    std::cerr << "Serialization intergity check failed!" << std::endl;
+                    assert(0); exit(1);
+                }
+            }
+            {
+                bvect64 bv_t;
+                operation_deserializer<bvect64>::deserialize(bv_t, sbuf0.buf(), 0, set_OR);
+                operation_deserializer<bvect64>::deserialize(bv_t, sbuf0.buf(), 0, set_AND);
+                int cmp = bv0.compare(bv_t);
+                if (cmp)
+                {
+                    std::cerr << "AND Serialization intergity check failed!" << std::endl;
+                    assert(0); exit(1);
+                }
+            }
+            {
+                bvect64 bv_t;
+                operation_deserializer<bvect64>::deserialize(bv_t, sbuf1.buf(), 0, set_OR);
+                operation_deserializer<bvect64>::deserialize(bv_t, sbuf1.buf(), 0, set_AND);
+                int cmp = bv1.compare(bv_t);
+                if (cmp)
+                {
+                    std::cerr << "AND Serialization intergity check failed!" << std::endl;
+                    assert(0); exit(1);
+                }
+            }
+
+            {
+                bvect64 bv_t;
+                operation_deserializer<bvect64>::deserialize(bv_t, sbuf0.buf(), 0, set_OR);
+                operation_deserializer<bvect64>::deserialize(bv_t, sbuf1.buf(), 0, set_AND);
+                int cmp = bv_tc_and.compare(bv_t);
+                if (cmp)
+                {
+                    std::cerr << "AND Serialization intergity check failed!" << std::endl;
+                    assert(0); exit(1);
+                }
+            }
+
+            
+            // TODO: add detection that blocks are actually getting freed as a result
+            //
+            {
+                bvect64 bv_t;
+                operation_deserializer<bvect64>::deserialize(bv_t, sbuf0.buf(), 0, set_OR);
+                operation_deserializer<bvect64>::deserialize(bv_t, sbuf0.buf(), 0, set_XOR);
+                auto cnt = bv_t.count();
+                if (cnt)
+                {
+                    std::cerr << "XOR Serialization intergity check failed!" << std::endl;
+                    assert(0); exit(1);
+                }
+            }
+            {
+                bvect64 bv_t;
+                operation_deserializer<bvect64>::deserialize(bv_t, sbuf1.buf(), 0, set_OR);
+                operation_deserializer<bvect64>::deserialize(bv_t, sbuf1.buf(), 0, set_XOR);
+                auto cnt = bv_t.count();
+                if (cnt)
+                {
+                    std::cerr << "XOR Serialization intergity check failed!" << std::endl;
+                    assert(0); exit(1);
+                }
+            }
+            {
+                bvect64 bv_t;
+                operation_deserializer<bvect64>::deserialize(bv_t, sbuf1.buf(), 0, set_OR);
+                operation_deserializer<bvect64>::deserialize(bv_t, sbuf1.buf(), 0, set_SUB);
+                auto cnt = bv_t.count();
+                if (cnt)
+                {
+                    std::cerr << "SUB Serialization intergity check failed!" << std::endl;
+                    assert(0); exit(1);
+                }
+            }
+            {
+                bvect64 bv_t;
+                bm::deserialize(bv_t, sbuf0.buf());
+                res = bv0.compare(bv_t);
+                assert(res==0);
+                
+                bvect64 bv_t_c(bv_t);
+                
+                bm::deserialize(bv_t, sbuf1.buf());
+                int cmp = bv_tc.compare(bv_t);
+                if (cmp)
+                {
+                    std::cerr << "Serialization intergity check failed!" << std::endl;
+                    assert(0); exit(1);
+                }
+            }
+            cout << "\r" << i << "/" << repetitions << flush;
+        } // for i
+        cout << endl << "OK" << endl;;
+    }
+
+   cout << "\n-------------------------------------- DesrializationTest2() OK" << endl;
 }
 
 static
@@ -5596,7 +5764,7 @@ bvect::size_type SerializationOperation(bvect*     bv_target,
                                                   smem1,
                                                   0,
                                                   set_ASSIGN);
-   cout << slen1 << " " << slen2 << endl;
+   //cout << slen1 << " " << slen2 << endl;
    int res = bv1.compare(*bv_target);
    if (res != 0)
    {
@@ -5612,7 +5780,6 @@ bvect::size_type SerializationOperation(bvect*     bv_target,
        cout << "set_ASSIGN 1 failed!" << endl;
        assert(0); exit (1);
    }
-   cout << "Deserialization ASSIGN into bv1 OK" << endl;
 
    {
        bvect* bv_tmp2 = new bvect();
@@ -5625,14 +5792,12 @@ bvect::size_type SerializationOperation(bvect*     bv_target,
        delete bv_tmp2;
    }
 
-
    cout << "Operation deserialization... " << op << endl;
     count=
        operation_deserializer<bvect>::deserialize(*bv_target,
                                                   smem2,
                                                   0,
                                                   op);
-    cout << "OK" << endl;
 
     // check if operation was ok
     {
@@ -8190,6 +8355,19 @@ void StressTest(unsigned repetitions, int set_operation = -1)
 
    bm::random_subset<bvect> rsub;
 
+    bvect bv_p0, bv_p1;
+    {
+        ref_vect vect;
+        generate_vect_simpl0(vect);
+        load_BV_set_ref(bv_p0, vect);
+    }
+    {
+        ref_vect vect;
+        generate_vect48(vect);
+        load_BV_set_ref(bv_p1, vect);
+    }
+
+
    cout << "----------------------------StressTest" << endl;
 
    bvect::size_type size = BITVECT_SIZE - 10;
@@ -8254,6 +8432,7 @@ void StressTest(unsigned repetitions, int set_operation = -1)
 
         FillSetsRandomMethod(bvect_min1, bvect_full1, start1, size, opt);
         FillSetsRandomMethod(bvect_min2, bvect_full2, start2, size, opt);
+
        
         // commented out because it crashes Apple CLang compiler ...
 /*
@@ -8331,41 +8510,59 @@ void StressTest(unsigned repetitions, int set_operation = -1)
         {
         case 0:
             {
-            cout << "Operation OR" << endl;
+                cout << "Operation OR" << endl;
+                auto predicted_count = bm::count_or(*bvect_full1, *bvect_full2);
+                auto predicted_any = bm::any_or(*bvect_full1, *bvect_full2);
+                if (predicted_any == 0 && predicted_count != 0)
+                {
+                    cout << "Predicted any error!" << endl;
+                    exit(1);
+                }
+                
+                bvect    bv_target_s;
+                SerializationOperation2Test(&bv_target_s,
+                                            *bvect_full1,
+                                            *bvect_full2,
+                                            predicted_count,
+                                            set_COUNT_OR,
+                                            set_OR);
 
-            auto predicted_count = bm::count_or(*bvect_full1, *bvect_full2);
-            auto predicted_any = bm::any_or(*bvect_full1, *bvect_full2);
-            if (predicted_any == 0 && predicted_count != 0)
-            {
-                cout << "Predicted any error!" << endl;
-                exit(1);
-            }
-            
-            bvect    bv_target_s;
-            SerializationOperation2Test(&bv_target_s,
-                                        *bvect_full1,
-                                        *bvect_full2,
-                                        predicted_count,
-                                        set_COUNT_OR,
-                                        set_OR);
-
-            bvect_full1->bit_or(*bvect_full2);
-            
-            auto count = bvect_full1->count();
-            if (count != predicted_count)
-            {
-                cout << "Predicted count error!" << endl;
-                cout << "Count = " << count << "Predicted count = " << predicted_count << endl;
-                assert(0);
-                exit(1);
-            }
-            int res = bvect_full1->compare(bv_target_s);
-            if (res != 0)
-            {
-                cout << "Serialization operation failed!" << endl;
-                assert(0);exit(1);
-            }
-            
+                bvect_full1->bit_or(*bvect_full2);
+                auto count = bvect_full1->count();
+                if (count != predicted_count)
+                {
+                    cout << "Predicted count error!" << endl;
+                    cout << "Count = " << count << "Predicted count = " << predicted_count << endl;
+                    assert(0);
+                    exit(1);
+                }
+                int res = bvect_full1->compare(bv_target_s);
+                if (res != 0)
+                {
+                    cout << "Serialization operation failed!" << endl;
+                    assert(0);exit(1);
+                }
+                
+                // run cross checks with wide-band vectors
+                //
+                cout << "48-wide vectors checks.." << endl;
+                bv_target_s.clear();
+                SerializationOperation(&bv_target_s, *bvect_full1, bv_p0, set_OR, true);
+                bv_target_s.clear();
+                SerializationOperation(&bv_target_s, *bvect_full2, bv_p0, set_OR, true);
+                bv_target_s.clear();
+                SerializationOperation(&bv_target_s, *bvect_full1, bv_p0, set_OR, true);
+                bv_target_s.clear();
+                SerializationOperation(&bv_target_s, *bvect_full2, bv_p0, set_OR, true);
+                
+                bv_target_s.clear();
+                SerializationOperation(&bv_target_s, *bvect_full1, bv_p1, set_OR, true);
+                bv_target_s.clear();
+                SerializationOperation(&bv_target_s, *bvect_full2, bv_p1, set_OR, true);
+                bv_target_s.clear();
+                SerializationOperation(&bv_target_s, *bvect_full1, bv_p1, set_OR, true);
+                bv_target_s.clear();
+                SerializationOperation(&bv_target_s, *bvect_full2, bv_p1, set_OR, true);
             }
             break;
 
@@ -8403,8 +8600,26 @@ void StressTest(unsigned repetitions, int set_operation = -1)
                 cout << "Serialization operation failed!" << endl;
                 assert(0); exit(1);
             }
-            
-            
+                // run cross checks with wide-band vectors
+                //
+                cout << "48-wide vectors checks.." << endl;
+                bv_target_s.clear();
+                SerializationOperation(&bv_target_s, *bvect_full1, bv_p0, set_SUB, true);
+                bv_target_s.clear();
+                SerializationOperation(&bv_target_s, *bvect_full2, bv_p0, set_SUB, true);
+                bv_target_s.clear();
+                SerializationOperation(&bv_target_s, *bvect_full1, bv_p0, set_SUB, true);
+                bv_target_s.clear();
+                SerializationOperation(&bv_target_s, *bvect_full2, bv_p0, set_SUB, true);
+                
+                bv_target_s.clear();
+                SerializationOperation(&bv_target_s, *bvect_full1, bv_p1, set_SUB, true);
+                bv_target_s.clear();
+                SerializationOperation(&bv_target_s, *bvect_full2, bv_p1, set_SUB, true);
+                bv_target_s.clear();
+                SerializationOperation(&bv_target_s, *bvect_full1, bv_p1, set_SUB, true);
+                bv_target_s.clear();
+                SerializationOperation(&bv_target_s, *bvect_full2, bv_p1, set_SUB, true);
             }
             break;
 
@@ -8443,7 +8658,26 @@ void StressTest(unsigned repetitions, int set_operation = -1)
                 cout << "Serialization operation failed!" << endl;
                 exit(1);
             }
-            
+                // run cross checks with wide-band vectors
+                //
+                cout << "48-wide vectors checks.." << endl;
+                bv_target_s.clear();
+                SerializationOperation(&bv_target_s, *bvect_full1, bv_p0, set_XOR, true);
+                bv_target_s.clear();
+                SerializationOperation(&bv_target_s, *bvect_full2, bv_p0, set_XOR, true);
+                bv_target_s.clear();
+                SerializationOperation(&bv_target_s, *bvect_full1, bv_p0, set_XOR, true);
+                bv_target_s.clear();
+                SerializationOperation(&bv_target_s, *bvect_full2, bv_p0, set_XOR, true);
+                
+                bv_target_s.clear();
+                SerializationOperation(&bv_target_s, *bvect_full1, bv_p1, set_XOR, true);
+                bv_target_s.clear();
+                SerializationOperation(&bv_target_s, *bvect_full2, bv_p1, set_XOR, true);
+                bv_target_s.clear();
+                SerializationOperation(&bv_target_s, *bvect_full1, bv_p1, set_XOR, true);
+                bv_target_s.clear();
+                SerializationOperation(&bv_target_s, *bvect_full2, bv_p1, set_XOR, true);
             }
             
             break;
@@ -8492,7 +8726,26 @@ void StressTest(unsigned repetitions, int set_operation = -1)
                 cout << "Count = " << count << "Predicted count = " << predicted_count << endl;
                 exit(1);
             }
-
+                // run cross checks with wide-band vectors
+                //
+                cout << "48-wide vectors checks.." << endl;
+                bv_target_s.clear();
+                SerializationOperation(&bv_target_s, *bvect_full1, bv_p0, set_AND, true);
+                bv_target_s.clear();
+                SerializationOperation(&bv_target_s, *bvect_full2, bv_p0, set_AND, true);
+                bv_target_s.clear();
+                SerializationOperation(&bv_target_s, *bvect_full1, bv_p0, set_AND, true);
+                bv_target_s.clear();
+                SerializationOperation(&bv_target_s, *bvect_full2, bv_p0, set_AND, true);
+                
+                bv_target_s.clear();
+                SerializationOperation(&bv_target_s, *bvect_full1, bv_p1, set_AND, true);
+                bv_target_s.clear();
+                SerializationOperation(&bv_target_s, *bvect_full2, bv_p1, set_AND, true);
+                bv_target_s.clear();
+                SerializationOperation(&bv_target_s, *bvect_full1, bv_p1, set_AND, true);
+                bv_target_s.clear();
+                SerializationOperation(&bv_target_s, *bvect_full2, bv_p1, set_AND, true);
             }
             break;
         }
@@ -13719,12 +13972,13 @@ void TestCompressedCollection()
 static
 void show_help()
 {
-    std::cerr
+    std::cout
         << "BitMagic C++ stress test (64-bit vectors)." << endl
         << "-h                - help" << endl
         << "-llevel (or -ll)  - low level tests" << endl
         << "-support (or -s)  - support containers " << endl
         << "-bvbasic (or -bvb - bit-vector basic " << endl
+        << "-bvser                - bit-vector serialization " << endl
         << "-bvops (-bvo, -bvl)  - bit-vector logical operations" << endl
         << "-bvshift (or -bvs)- bit-vector shifts " << endl
         << "-rankc (or -rc)   - rank-compress " << endl
@@ -13732,6 +13986,9 @@ void show_help()
         << "-sv                   - test sparse vectors" << endl
         << "-strsv                - test string sparse vectors" << endl
         << "-cc                   - test compresses collections" << endl
+        << endl
+        << "-onlystress    - run ONLY stress tests " << endl
+        << "-nostress      - do NOT run stress tests " << endl
         ;
 }
 
@@ -13739,6 +13996,7 @@ bool         is_all = true;
 bool         is_low_level = false;
 bool         is_support = false;
 bool         is_bvbasic = false;
+bool         is_bvser = false;
 bool         is_bvops = false;
 bool         is_bvshift = false;
 bool         is_rankc = false;
@@ -13746,6 +14004,8 @@ bool         is_agg = false;
 bool         is_sv = false;
 bool         is_str_sv = false;
 bool         is_c_coll = false;
+bool         is_only_stress = false;
+bool         is_nostress = false;
 
 static
 int parse_args(int argc, char *argv[])
@@ -13774,6 +14034,12 @@ int parse_args(int argc, char *argv[])
         {
             is_all = false;
             is_bvbasic = true;
+            continue;
+        }
+        if (arg == "-bvser")
+        {
+            is_all = false;
+            is_bvser = true;
             continue;
         }
         if (arg == "-bvo" || arg == "-bvops" || arg == "-bvl")
@@ -13816,6 +14082,16 @@ int parse_args(int argc, char *argv[])
         {
             is_all = false;
             is_c_coll = true;
+            continue;
+        }
+        if (arg == "-onlystress")
+        {
+            is_only_stress = true;
+            continue;
+        }
+        if (arg == "-nostress")
+        {
+            is_nostress = true;
             continue;
         }
 
@@ -13873,12 +14149,15 @@ int main(int argc, char *argv[])
         RangeCopyTest();
 
         ComparisonTest();
-
-        SerializationTest();
-    
-        DesrializationTest2();
     }
     
+    if (is_all || is_bvser || is_bvbasic)
+    {
+        //SerializationCompressionLevelsTest();
+        SerializationTest();
+        DesrializationTest2();
+    }
+
     if (is_all || is_bvshift)
     {
          BvectorShiftTest();
@@ -13893,19 +14172,25 @@ int main(int argc, char *argv[])
     }
     if (is_all || is_bvops)
     {
-        AndOperationsTest();
-        OrOperationsTest();
-        XorOperationsTest();
-        SubOperationsTest();
+        if (!is_only_stress)
+        {
+            AndOperationsTest();
+            OrOperationsTest();
+            XorOperationsTest();
+            SubOperationsTest();
+        }
 
-        const unsigned repeats = 20;
-        StressTest(repeats, 0); // OR
-        StressTest(repeats, 3); // AND
-        StressTest(repeats, 1); // SUB
-        StressTest(repeats, 2); // XOR
-
+        if (!is_nostress)
+        {
+            const unsigned repeats = 20;
+            StressTest(repeats, 0); // OR
+            StressTest(repeats, 3); // AND
+            StressTest(repeats, 1); // SUB
+            StressTest(repeats, 2); // XOR
+        }
     }
-    
+
+
     if (is_all || is_agg)
     {
          AggregatorTest();
