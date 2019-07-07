@@ -2705,7 +2705,8 @@ serial_stream_iterator<DEC>::get_bit_block_ASSIGN(
         break;
     case bm::set_block_arr_bienc_inv:
         this->read_bic_arr_inv(decoder_, tmp_block);
-        bm::bit_block_copy(dst_block, tmp_block);
+        if (dst_block)
+            bm::bit_block_copy(dst_block, tmp_block);
         break;
     default:
         BM_ASSERT(0);
