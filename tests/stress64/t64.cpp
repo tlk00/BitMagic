@@ -14203,7 +14203,6 @@ int main(int argc, char *argv[])
 
     if (is_all || is_sv)
     {
-
          TestSparseVector();
 
          TestSparseVectorInserter();
@@ -14218,11 +14217,14 @@ int main(int argc, char *argv[])
 
          TestSparseVectorScan();
 
-        TestCompressSparseVector();
+         TestCompressSparseVector();
 
-        TestCompressedSparseVectorScan();
+         TestCompressedSparseVectorScan();
         
-        TestSparseVector_Stress(2);
+        if (!is_nostress)
+        {
+            TestSparseVector_Stress(2);
+        }
     }
     if (is_all || is_c_coll)
     {
@@ -14235,8 +14237,10 @@ int main(int argc, char *argv[])
         
          TestStrSparseSort();
 
-         StressTestStrSparseVector();
-        
+        if (!is_nostress)
+        {
+            StressTestStrSparseVector();
+        }
     }
 
 

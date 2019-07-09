@@ -10036,6 +10036,7 @@ void SerializationCompressionLevelsTest()
         bv.set_range(0, 2);
         bv.set_range(10, 20);
         bv.set_range(100, 200);
+        bv.set_range(250, 300);
         bv.optimize();
        
         bm::serializer<bvect> bv_ser(tb);
@@ -21912,12 +21913,13 @@ void show_help()
     std::cerr
         << "BitMagic C++ stress test." << endl
         << "-h                - help" << endl
-        << "-llevel (or -ll)  - low level tests" << endl
-        << "-support (or -s)  - support containers " << endl
-        << "-bvbasic (or -bvb - bit-vector basic " << endl
-        << "-bvops (-bvo, -bvl)  - bit-vector logical operations" << endl
-        << "-bvshift (or -bvs)- bit-vector shifts " << endl
-        << "-rankc (or -rc)   - rank-compress " << endl
+        << "-llevel (or -ll)      - low level tests" << endl
+        << "-support (or -s)      - support containers " << endl
+        << "-bvbasic (or -bvb     - bit-vector basic " << endl
+        << "-bvser                - bit-vector serialization " << endl
+        << "-bvops (-bvo, -bvl)   - bit-vector logical operations" << endl
+        << "-bvshift (or -bvs)    - bit-vector shifts " << endl
+        << "-rankc (or -rc)       - rank-compress " << endl
         << "-agg (or -aggregator) - bm::aggregator " << endl
         << "-sv                   - test sparse vectors" << endl
         << "-strsv                - test sparse vectors" << endl
@@ -21929,6 +21931,7 @@ bool         is_all = true;
 bool         is_low_level = false;
 bool         is_support = false;
 bool         is_bvbasic = false;
+bool         is_bvser = false;
 bool         is_bvops = false;
 bool         is_bvshift = false;
 bool         is_rankc = false;
@@ -21964,6 +21967,12 @@ int parse_args(int argc, char *argv[])
         {
             is_all = false;
             is_bvbasic = true;
+            continue;
+        }
+        if (arg == "-bvser" || arg == "-ser")
+        {
+            is_all = false;
+            is_bvser = true;
             continue;
         }
         if (arg == "-bvo" || arg == "-bvops" || arg == "-bvl")
@@ -22123,7 +22132,6 @@ int main(int argc, char *argv[])
 
     if (is_all || is_bvbasic)
     {
-    /*
          ExportTest();
          ResizeTest();
 
@@ -22168,14 +22176,15 @@ int main(int argc, char *argv[])
         MutationOperationsTest();
         
         BlockLevelTest();
-*/
-        SerializationCompressionLevelsTest();
-        
-        SerializationTest();
-
-        DesrializationTest2();
      }
-
+    
+    if (is_all || is_bvser || is_bvbasic)
+    {
+        SerializationCompressionLevelsTest();
+        SerializationTest();
+        DesrializationTest2();
+    }
+    
     if (is_all || is_bvshift)
     {
          BvectorShiftTest();
