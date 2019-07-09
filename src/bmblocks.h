@@ -1360,20 +1360,20 @@ public:
         {
             BM_ASSERT(tmp_block);
             bm::gap_word_t* tmp_gap_blk = (gap_word_t*)tmp_block;
-            *tmp_gap_blk = bm::gap_max_level << 1;
+            //*tmp_gap_blk = (bm::gap_max_level << 1);
             
             unsigned len = bm::bit_to_gap(tmp_gap_blk, src_block, threashold);
             BM_ASSERT(len);
-            if (len)  // compression successful
-            {
-                int level = bm::gap_calc_level(len, this->glen());
-                BM_ASSERT(level >= 0);
-                bm::gap_word_t* gap_blk =
-                            allocate_gap_block(unsigned(level), tmp_gap_blk);
-                BM_ASSERT(top_blocks_[i][j]==0);
-                top_blocks_[i][j] = (bm::word_t*)BMPTR_SETBIT0(gap_blk);
-                return;
-            }
+            //if (len)  // compression successful
+            //{
+            int level = bm::gap_calc_level(len, this->glen());
+            BM_ASSERT(level >= 0);
+            bm::gap_word_t* gap_blk =
+                        allocate_gap_block(unsigned(level), tmp_gap_blk);
+            BM_ASSERT(top_blocks_[i][j]==0);
+            top_blocks_[i][j] = (bm::word_t*)BMPTR_SETBIT0(gap_blk);
+            return;
+            //}
         }
         // non-compressable bit-block
         copy_bit_block(i, j, src_block);
@@ -1391,6 +1391,8 @@ public:
             unsigned gap_count = bm::bit_block_calc_change(block);
             if (gap_count == 1) // solid block
             {
+                top_blocks_[i][j] = (*block) ? FULL_BLOCK_FAKE_ADDR : 0;
+                /*
                 if (*block) // 0xFFF...
                 {
                     BM_ASSERT(bm::is_bits_one((bm::wordop_t*)block));
@@ -1401,6 +1403,7 @@ public:
                     BM_ASSERT(bm::bit_is_all_zero(block));
                     top_blocks_[i][j] = 0;
                 }
+                */
                 return_tempblock(block);
                 return;
             }
@@ -1408,19 +1411,19 @@ public:
             if (gap_count < threashold) // compressable
             {
                 unsigned len;
-                bm::gap_word_t tmp_buf[bm::gap_equiv_len * 3];
+                bm::gap_word_t tmp_gap_buf[bm::gap_equiv_len * 2];
                 
-                len = bm::bit_to_gap(tmp_buf, block, threashold);
+                len = bm::bit_to_gap(tmp_gap_buf, block, threashold);
                 BM_ASSERT(len);
-                if (len)
-                {
-                    int level = bm::gap_calc_level(len, this->glen());
-                    BM_ASSERT(level >= 0);
-                    bm::gap_word_t* gap_blk =
-                                allocate_gap_block(unsigned(level), tmp_buf);
-                    top_blocks_[i][j] = (bm::word_t*)BMPTR_SETBIT0(gap_blk);
-                    return_tempblock(block);
-                }
+                //if (len)
+                //{
+                int level = bm::gap_calc_level(len, this->glen());
+                BM_ASSERT(level >= 0);
+                bm::gap_word_t* gap_blk =
+                         allocate_gap_block(unsigned(level), tmp_gap_buf);
+                top_blocks_[i][j] = (bm::word_t*)BMPTR_SETBIT0(gap_blk);
+                return_tempblock(block);
+                //}
             }
         }
     }

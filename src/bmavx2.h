@@ -2468,7 +2468,7 @@ unsigned avx2_bit_to_gap(gap_word_t* BMRESTRICT dest,
 {
     const unsigned* BMRESTRICT block_end = block + bm::set_block_size;
     gap_word_t* BMRESTRICT pcurr = dest;
-    gap_word_t* BMRESTRICT end = dest + dest_len;
+    gap_word_t* BMRESTRICT end = dest + dest_len; (void)end;
 
     unsigned bitval = (*block) & 1u;
     *pcurr++ = bm::gap_word_t(bitval);
@@ -2506,10 +2506,9 @@ unsigned avx2_bit_to_gap(gap_word_t* BMRESTRICT dest,
                if (bool(bitval) != bool(val))
                {
                    *pcurr++ = (gap_word_t)(bit_idx-1);
-                   BM_ASSERT((pcurr-1) == (dest+1) || *(pcurr-1) > *(pcurr-2));
-                   if (pcurr == end)
-                       return 0; // OUT of target memory
                    bitval ^= 1u;
+                   BM_ASSERT((pcurr-1) == (dest+1) || *(pcurr-1) > *(pcurr-2));
+                   BM_ASSERT(pcurr != end);
                }
                bit_idx += vCAP;
                continue;
@@ -2521,34 +2520,33 @@ unsigned avx2_bit_to_gap(gap_word_t* BMRESTRICT dest,
             unsigned bits_consumed = 0;
             do
             {
-                unsigned tz = 1u;
+                unsigned tz;
                 if (bitval != (val & 1u))
                 {
-                    *pcurr++ = (gap_word_t)(bit_idx-1);
+                    bitval ^= tz = 1u;
+                    *pcurr++ = (gap_word_t)(bit_idx-tz);
+                    
                     BM_ASSERT((pcurr-1) == (dest+1) || *(pcurr-1) > *(pcurr-2));
-                    if (pcurr == end)
-                        return 0; // OUT of target memory
-                    bitval ^= 1u;
+                    BM_ASSERT(pcurr != end);
                 }
                 else // match, find the next idx
                 {
                     tz = (unsigned)_tzcnt_u64(bitval ? ~val : val);
                 }
                 
-                bits_consumed += tz;
-                bit_idx += tz;
+                bits_consumed += tz; bit_idx += tz;
                 val >>= tz;
                 
                 if (!val)
                 {
-                    if (bits_consumed < vCAP)
+                    if ((tz = (bits_consumed < vCAP)))
                     {
-                        *pcurr++ = (gap_word_t)(bit_idx-1);
-                        BM_ASSERT((pcurr-1) == (dest+1) || *(pcurr-1) > *(pcurr-2));
-                        if (pcurr == end)
-                            return 0; // OUT of target memory
-                        bitval ^= 1u;
+                        *pcurr++ = (gap_word_t)(bit_idx-tz);
+                        bitval ^= tz;
                         bit_idx += vCAP - bits_consumed;
+
+                        BM_ASSERT((pcurr-1) == (dest+1) || *(pcurr-1) > *(pcurr-2));
+                        BM_ASSERT(pcurr != end);
                     }
                     break;
                 }

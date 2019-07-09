@@ -782,20 +782,41 @@ template<class BV>
 void serializer<BV>::interpolated_encode_gap_block(
             const bm::gap_word_t* gap_block, bm::encoder& enc)
 {
-    unsigned len = gap_length(gap_block);
-    BM_ASSERT(len > 3);
-    bm::gap_word_t min_v = gap_block[1];
+    unsigned len = bm::gap_length(gap_block);
+    if (len > 3) // Use Elias Gamma encoding
+    {
+        encoder::position_type enc_pos0 = enc.get_pos();
+        
+        bm::gap_word_t min_v = gap_block[1];
+        
+        enc.put_8(bm::set_block_gap_bienc);
+        enc.put_16(gap_block[0]); // gap header word
+        enc.put_16(min_v);        // first word
+        
+        bit_out_type bout(enc);
+        BM_ASSERT(gap_block[len-1] == 65535);
+        bout.bic_encode(&gap_block[2], len-3, min_v, 65535);
+        bout.flush();
+        
+        // re-evaluate coding efficiency
+        //
+        encoder::position_type enc_pos1 = enc.get_pos();
+        unsigned gamma_size = (unsigned)(enc_pos1 - enc_pos0);
+        if (gamma_size > (len-1)*sizeof(gap_word_t))
+        {
+            enc.set_pos(enc_pos0);
+        }
+        else
+        {
+            compression_stat_[bm::set_block_gap_bienc]++;
+            return;
+        }
+    }
+    // save as plain GAP block
+    enc.put_8(bm::set_block_gap);
+    enc.put_16(gap_block, len-1);
     
-    enc.put_8(bm::set_block_gap_bienc);
-    enc.put_16(gap_block[0]); // gap header word
-    enc.put_16(min_v);        // first word
-    
-    bit_out_type bout(enc);
-    BM_ASSERT(gap_block[len-1] == 65535);
-    bout.bic_encode(&gap_block[2], len-3, min_v, 65535);
-    bout.flush();
-    
-    compression_stat_[bm::set_block_gap_bienc]++;
+    compression_stat_[bm::set_block_gap]++;
 }
 
 
@@ -803,9 +824,7 @@ template<class BV>
 void serializer<BV>::gamma_gap_block(const bm::gap_word_t* gap_block, bm::encoder& enc)
 {
     unsigned len = gap_length(gap_block);
-
-    // Use Elias Gamma encoding 
-    if (len > 6 && (compression_level_ > 3)) 
+    if (len > 3 && (compression_level_ > 3)) // Use Elias Gamma encoding
     {
         encoder::position_type enc_pos0 = enc.get_pos();
         {
@@ -817,8 +836,8 @@ void serializer<BV>::gamma_gap_block(const bm::gap_word_t* gap_block, bm::encode
 
             for_each_dgap(gap_block, gamma);        
         }
-
-        // evaluate gamma coding efficiency
+        // re-evaluate coding efficiency
+        //
         encoder::position_type enc_pos1 = enc.get_pos();
         unsigned gamma_size = (unsigned)(enc_pos1 - enc_pos0);        
         if (gamma_size > (len-1)*sizeof(gap_word_t))
@@ -990,30 +1009,37 @@ unsigned char serializer<BV>::find_bit_best_encoding(const bm::word_t* block)
                 const unsigned gamma_bits_per_int = 6;
                 unsigned bit_gaps = bm::bit_block_calc_change(block);
 
-                if (bit_gaps > 3 && bit_gaps < bm::gap_equiv_len)
-                    add_model(bm::set_block_gap_egamma, 16 + (bit_gaps-1) * gamma_bits_per_int);
-                if (bc < bit_gaps && bc > 5 && bc < bm::gap_equiv_len)
-                    add_model(bm::set_block_arrgap_egamma, 16 + bc * gamma_bits_per_int);
-                if (inverted_bc < bit_gaps && inverted_bc > 5 && inverted_bc < bm::gap_equiv_len)
-                    add_model(bm::set_block_arrgap_egamma_inv, 16 + inverted_bc * gamma_bits_per_int);
+                if (compression_level_ == 4)
+                {
+                    if (bit_gaps < bm::gap_max_buff_len)
+                        add_model(bm::set_block_gap_egamma,
+                                  16 + (bit_gaps-1) * gamma_bits_per_int);
+                    if (bc < bit_gaps && bc < bm::gap_equiv_len)
+                        add_model(bm::set_block_arrgap_egamma,
+                                  16 + bc * gamma_bits_per_int);
+                    if (inverted_bc < bit_gaps && inverted_bc < bm::gap_equiv_len)
+                        add_model(bm::set_block_arrgap_egamma_inv,
+                                  16 + inverted_bc * gamma_bits_per_int);
+                }
 
                 if (compression_level_ >= 5)
                 {
                     const unsigned bie_bits_per_int = 4;
                     const unsigned bie_cut_off = 16384;
 
-                    if (bit_gaps > 3 && bit_gaps < bm::gap_equiv_len)
-                        add_model(bm::set_block_gap_bienc, 32 + (bit_gaps-1) * bie_bits_per_int);
-                    if (bc < bit_gaps && bc < (bm::gap_equiv_len-64))
+                    if (bit_gaps < bm::gap_max_buff_len)
+                        add_model(bm::set_block_gap_bienc,
+                                  32 + (bit_gaps-1) * bie_bits_per_int);
+                    if (bc < bit_gaps && bc < bm::gap_equiv_len)
                         add_model(bm::set_block_arrgap_bienc, 16*3 + bc*bie_bits_per_int);
                     else
-                    if (inverted_bc < bit_gaps && inverted_bc < (bm::gap_equiv_len-64))
+                    if (inverted_bc < bit_gaps && inverted_bc < bm::gap_equiv_len)
                         add_model(bm::set_block_arrgap_bienc_inv, 16*3 + inverted_bc*bie_bits_per_int);
                     else
-                    if (bc < bie_cut_off)
+                    if (bc >= bm::gap_equiv_len && bc < bie_cut_off)
                         add_model(bm::set_block_arr_bienc, 16*3 + bc * bie_bits_per_int);
-                    
-                    if (inverted_bc < bie_cut_off)
+                    else
+                    if (inverted_bc >= bm::gap_equiv_len && inverted_bc < bie_cut_off)
                         add_model(bm::set_block_arr_bienc_inv, 16*3 + inverted_bc * bie_bits_per_int);
                     
 
@@ -1143,7 +1169,7 @@ void serializer<BV>::encode_bit_interval(const bm::word_t* blk,
     enc.put_8(bm::set_block_bit_0runs);
     enc.put_8((blk[0]==0) ? 0 : 1); // encode start
     
-    unsigned i,j;
+    unsigned i, j;
     for (i = 0; i < bm::set_block_size; ++i)
     {
         if (blk[i] == 0)
@@ -1235,13 +1261,8 @@ void serializer<BV>::gamma_gap_bit_block(const bm::word_t* block,
                                          bm::encoder&      enc)
 {
     unsigned len = bm::bit_to_gap(bit_idx_arr_.data(), block, bm::gap_equiv_len);
-    if (len) // save as GAP
-    {
-        gamma_gap_block(bit_idx_arr_.data(), enc);
-        return;
-    }
-    enc.put_prefixed_array_32(bm::set_block_bit, block, bm::set_block_size);
-    compression_stat_[bm::set_block_bit]++;
+    BM_ASSERT(len); (void)len;
+    gamma_gap_block(bit_idx_arr_.data(), enc);
 }
 
 template<class BV>
@@ -1287,13 +1308,16 @@ void serializer<BV>::interpolated_gap_bit_block(const bm::word_t* block,
                                                 bm::encoder&      enc)
 {
     unsigned len = bm::bit_to_gap(bit_idx_arr_.data(), block, bm::gap_equiv_len);
-    if (len) // save as GAP
-    {
+    BM_ASSERT(len); (void)len;
+    //if (len) // save as GAP
+//    {
         interpolated_encode_gap_block(bit_idx_arr_.data(), enc);
-        return;
-    }
+//        return;
+//    }
+    /*
     enc.put_prefixed_array_32(bm::set_block_bit, block, bm::set_block_size);
     compression_stat_[bm::set_block_bit]++;
+    */
 }
 
 template<class BV>
@@ -2183,10 +2207,6 @@ size_t deserializer<BV, DEC>::deserialize(bvector_type&        bv,
         
         bman.get_block_coord(i, i0, j0);
         bm::word_t* blk = bman.get_block_ptr(i0, j0);
-if (i0 == 255 && j0 == 255)
-{
-    bman.get_block_coord(i, i0, j0);
-}
         // pre-check if we have short zero-run packaging here
         //
         if (btype & (1 << 7))
@@ -2366,11 +2386,20 @@ if (i0 == 255 && j0 == 255)
                 if (!blk)  // block does not exists yet
                 {
                     blk = bman.get_allocator().alloc_bit_block();
-                    bm::bit_block_set(blk, 0);
                     bman.set_block(i, blk);
+                    bm::bit_block_set(blk, 0);
+                }
+                else
+                if (IS_FULL_BLOCK(blk)) // nothing to do
+                {
+                    for (unsigned k = 0; k < len; ++k) // dry read
+                    {
+                        dec.get_16();
+                    }
+                    continue;
                 }
             }
-
+            
             // Get the array one by one and set the bits.
             for (unsigned k = 0; k < len; ++k)
             {
@@ -2379,38 +2408,6 @@ if (i0 == 255 && j0 == 255)
             }
             continue;
         }
-        /*
-        case set_block_arrbit_inv:
-        {
-            gap_word_t len = dec.get_16();
-            if (BM_IS_GAP(blk))
-            {
-                // convert from GAP cause generic bitblock is faster
-                blk = bman.deoptimize_block(i);
-            }
-            else
-            {
-                if (!blk)  // block does not exists yet
-                {
-                    blk = bman.get_allocator().alloc_bit_block();
-                    bman.set_block(i, blk);
-                }
-            }
-            bm::bit_block_set(blk, ~0u);
-
-            // Get the array one by one and set the bits.
-            for (unsigned k = 0; k < len; ++k)
-            {
-                gap_word_t bit_idx = dec.get_16();
-                bm::clear_bit(blk, bit_idx);
-            }
-            continue;
-        }
-        
-        case bm::set_block_arr_bienc:
-            decode_bit_block(btype, dec, bman, i, blk);
-            continue;
-        */
         case bm::set_block_arr_bienc:
         case bm::set_block_arrbit_inv:
         case bm::set_block_arr_bienc_inv:

@@ -3732,6 +3732,8 @@ int bitcmp(const T* buf1, const T* buf2, unsigned len)
     return 0;
 }
 
+#ifndef BMAVX2OPT
+
 /*!
    \brief Converts bit block to GAP.
    \param dest - Destinatio GAP buffer.
@@ -3749,7 +3751,7 @@ unsigned bit_block_to_gap(gap_word_t* BMRESTRICT dest,
 {
     const unsigned* BMRESTRICT block_end = block + bm::set_block_size;
     gap_word_t* BMRESTRICT pcurr = dest;
-    gap_word_t* BMRESTRICT end = dest + dest_len;
+    gap_word_t* BMRESTRICT end = dest + dest_len; (void)end;
 
     unsigned bitval = (*block) & 1u;
     *pcurr++ = bm::gap_word_t(bitval);
@@ -3764,10 +3766,9 @@ unsigned bit_block_to_gap(gap_word_t* BMRESTRICT dest,
            if (bitval != unsigned(bool(val)))
            {
                *pcurr++ = (gap_word_t)(bit_idx-1);
-               BM_ASSERT((pcurr-1) == (dest+1) || *(pcurr-1) > *(pcurr-2));
-               if (pcurr == end)
-                   return 0; // OUT of target memory
                bitval ^= 1u;
+               BM_ASSERT((pcurr-1) == (dest+1) || *(pcurr-1) > *(pcurr-2));
+               BM_ASSERT(pcurr != end);
            }
            bit_idx += unsigned(sizeof(*block) * 8);
            if (++block >= block_end)
@@ -3784,15 +3785,14 @@ unsigned bit_block_to_gap(gap_word_t* BMRESTRICT dest,
             if (bitval != (val & 1u))
             {
                 *pcurr++ = (gap_word_t)(bit_idx-1);
-                BM_ASSERT((pcurr-1) == (dest+1) || *(pcurr-1) > *(pcurr-2));
-                if (pcurr == end)
-                    return 0; // OUT of target memory
                 bitval ^= 1u;
+                BM_ASSERT((pcurr-1) == (dest+1) || *(pcurr-1) > *(pcurr-2));
+                BM_ASSERT(pcurr != end);
             }
             else // match, find the next idx
             {
                 tz = bm::bit_scan_forward32(bitval ? ~val : val);
-                // alternative:
+                // possible alternative:
                 //   tz = bm::count_trailing_zeros(bitval ? ~val : val);
             }
             
@@ -3805,11 +3805,10 @@ unsigned bit_block_to_gap(gap_word_t* BMRESTRICT dest,
                 if (bits_consumed < 32u)
                 {
                     *pcurr++ = (gap_word_t)(bit_idx-1);
-                    BM_ASSERT((pcurr-1) == (dest+1) || *(pcurr-1) > *(pcurr-2));
-                    if (pcurr == end)
-                        return 0; // OUT of target memory
                     bitval ^= 1u;
                     bit_idx += 32u - bits_consumed;
+                    BM_ASSERT((pcurr-1) == (dest+1) || *(pcurr-1) > *(pcurr-2));
+                    BM_ASSERT(pcurr != end);
                 }
                 break;
             }
@@ -3823,6 +3822,7 @@ complete:
     *dest = (gap_word_t)((*dest & 7) + (len << 3));
     return len;
 }
+#endif
 
 inline
 unsigned bit_to_gap(gap_word_t* BMRESTRICT dest,
