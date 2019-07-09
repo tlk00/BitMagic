@@ -90,7 +90,6 @@ For more information please visit:  http://bitmagic.io
 // Enable MSVC 8.0 (2005) specific optimization options
 //
 #if(_MSC_VER >= 1400)
-
 #  define BM_HASFORCEINLINE
 #  ifndef BMRESTRICT
 #    define BMRESTRICT __restrict
@@ -98,7 +97,6 @@ For more information please visit:  http://bitmagic.io
 #endif 
 
 #ifdef __GNUG__
-
 #  ifndef BMRESTRICT
 #    define BMRESTRICT __restrict__
 #  endif
@@ -108,9 +106,12 @@ For more information please visit:  http://bitmagic.io
 #  endif
 #endif
 
+# ifdef NDEBUG
+#    define BM_NOASSERT
+# endif
+
 
 #ifndef BM_ASSERT
-
 # ifndef BM_NOASSERT
 #  include <cassert>
 #  define BM_ASSERT assert
@@ -119,7 +120,6 @@ For more information please visit:  http://bitmagic.io
 #    define BM_ASSERT(x)
 #  endif
 # endif
-
 #endif
 
 
