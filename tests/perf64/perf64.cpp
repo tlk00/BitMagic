@@ -37,10 +37,10 @@ For more information please visit:  http://bitmagic.io
 #include <memory>
 
 #include "bm64.h"
-#include <bmsparsevec.h>
-#include <bmstrsparsevec.h>
-#include <bmsparsevec_algo.h>
-#include <bmsparsevec_serial.h>
+#include "bmsparsevec.h"
+#include "bmstrsparsevec.h"
+#include "bmsparsevec_algo.h"
+#include "bmsparsevec_serial.h"
 #include "bmtimer.h"
 #include "bmdbg.h"
 
@@ -127,11 +127,100 @@ void bvector64_VerySparse_RefAccessCycle()
         cout << "\r                       " << flush;
     }
 }
+
+static
+void bvector64_Serialization()
+{
+    {
+        bvect64 bv0, bv1;
+        {
+            ref_vect vect0, vect1;
+            
+            generate_vect_simpl0(vect0);
+            generate_vect48(vect1);
+            
+            load_BV_set_ref(bv0, vect0, false);
+            load_BV_set_ref(bv1, vect1, false);
+        }
+
+        bm::serializer<bvect64> bv_ser;
+        bm::serializer<bvect64>::buffer sbuf0, sbuf1;
+        bv_ser.serialize(bv0, sbuf0, 0);
+        bv_ser.serialize(bv1, sbuf1, 0);
+
+        bvect64 bv_tc;
+        bv_tc.bit_or(bv0, bv1, bvect64::opt_none);
+
+        // interity check
+        {
+            bvect64 bv_t0;
+            bm::deserialize(bv_t0, sbuf0.buf());
+            int res = bv0.compare(bv_t0);
+            assert(res==0);
+            bvect64 bv_t1;
+            bm::deserialize(bv_t1, sbuf1.buf());
+            res = bv1.compare(bv_t1);
+            assert(res==0);
+        }
+        {
+            bvect64 bv_t;
+            operation_deserializer<bvect64>::deserialize(bv_t,
+                                                         sbuf0.buf(),
+                                                         0,
+                                                         set_OR);
+            operation_deserializer<bvect64>::deserialize(bv_t,
+                                                         sbuf1.buf(),
+                                                         0,
+                                                         set_OR);
+            int cmp = bv_tc.compare(bv_t);
+            if (cmp)
+            {
+                std::cerr << "Serialization intergity check failed!" << std::endl;
+                assert(0); exit(1);
+            }
+        }
+        {
+            bvect64 bv_t;
+            bm::deserialize(bv_t, sbuf0.buf());
+            int res = bv0.compare(bv_t);
+            assert(res==0);
+            
+            bvect64 bv_t_c(bv_t);
+            
+            bm::deserialize(bv_t, sbuf1.buf());
+            int cmp = bv_tc.compare(bv_t);
+            if (cmp)
+            {
+                cmp = bv_tc.compare(bv_t);
+                bm::deserialize(bv_t_c, sbuf1.buf());
+
+                std::cerr << "Serialization intergity check failed!" << std::endl;
+                assert(0); exit(1);
+            }
+        }
+        cout << "bvector64_DeserializationCycle..." << endl;
+        {
+            bm::chrono_taker tt("bvector64_DeserializationCycle", 1, &timing_map);
+            const unsigned max_try = REPEATS;
+            for (unsigned i = 0; i < max_try; ++i)
+            {
+                bvect64 bv_t;
+                bm::deserialize(bv_t, sbuf0.buf());
+                bm::deserialize(bv_t, sbuf1.buf());
+                if ((i & 0xF) == 0)
+                    cout << "\r" << i << "/" << max_try << flush;
+            }
+        }
+        cout << "\r                       " << endl;
+    }
+}
+
 int main(void)
 {
-    bvector64_VerySparse_SetDestroyCycle();
-    bvector64_VerySparse_RefAccessCycle();
-
+//    bvector64_VerySparse_SetDestroyCycle();
+//    bvector64_VerySparse_RefAccessCycle();
+    bvector64_Serialization();
+    
     std::cout << std::endl << "Performance:" << std::endl;
     bm::chrono_taker::print_duration_map(timing_map, bm::chrono_taker::ct_all);
 
