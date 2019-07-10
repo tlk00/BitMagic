@@ -1360,12 +1360,9 @@ public:
         {
             BM_ASSERT(tmp_block);
             bm::gap_word_t* tmp_gap_blk = (gap_word_t*)tmp_block;
-            //*tmp_gap_blk = (bm::gap_max_level << 1);
             
             unsigned len = bm::bit_to_gap(tmp_gap_blk, src_block, threashold);
             BM_ASSERT(len);
-            //if (len)  // compression successful
-            //{
             int level = bm::gap_calc_level(len, this->glen());
             BM_ASSERT(level >= 0);
             bm::gap_word_t* gap_blk =
@@ -1373,7 +1370,6 @@ public:
             BM_ASSERT(top_blocks_[i][j]==0);
             top_blocks_[i][j] = (bm::word_t*)BMPTR_SETBIT0(gap_blk);
             return;
-            //}
         }
         // non-compressable bit-block
         copy_bit_block(i, j, src_block);
@@ -1392,18 +1388,6 @@ public:
             if (gap_count == 1) // solid block
             {
                 top_blocks_[i][j] = (*block) ? FULL_BLOCK_FAKE_ADDR : 0;
-                /*
-                if (*block) // 0xFFF...
-                {
-                    BM_ASSERT(bm::is_bits_one((bm::wordop_t*)block));
-                    top_blocks_[i][j] = FULL_BLOCK_FAKE_ADDR;
-                }
-                else
-                {
-                    BM_ASSERT(bm::bit_is_all_zero(block));
-                    top_blocks_[i][j] = 0;
-                }
-                */
                 return_tempblock(block);
                 return;
             }
@@ -1415,15 +1399,12 @@ public:
                 
                 len = bm::bit_to_gap(tmp_gap_buf, block, threashold);
                 BM_ASSERT(len);
-                //if (len)
-                //{
                 int level = bm::gap_calc_level(len, this->glen());
                 BM_ASSERT(level >= 0);
                 bm::gap_word_t* gap_blk =
                          allocate_gap_block(unsigned(level), tmp_gap_buf);
                 top_blocks_[i][j] = (bm::word_t*)BMPTR_SETBIT0(gap_blk);
                 return_tempblock(block);
-                //}
             }
         }
     }
