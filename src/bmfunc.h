@@ -3079,15 +3079,16 @@ void gap_xor_to_bitset(unsigned* dest, const T*  pcurr)
    \brief Adds(OR) GAP block to bitblock.
    \param dest - bitblock buffer pointer.
    \param pcurr  - GAP buffer pointer.
+   \param len - gap length
 
    @ingroup gapfunc
 */
 template<typename T>
-void gap_add_to_bitset(unsigned* dest, const T*  pcurr)
+void gap_add_to_bitset(unsigned* dest, const T*  pcurr, unsigned len)
 {
     BM_ASSERT(dest && pcurr);
     
-    const T* pend = pcurr + (*pcurr >> 3);
+    const T* pend = pcurr + len;
     if (*pcurr & 1)  // Starts with 1
     {
         bm::or_bit_block(dest, 0, 1 + pcurr[1]);
@@ -3106,6 +3107,22 @@ void gap_add_to_bitset(unsigned* dest, const T*  pcurr)
         bm::or_bit_block(dest, pos, bc);
     }
 }
+
+
+/*!
+   \brief Adds(OR) GAP block to bitblock.
+   \param dest - bitblock buffer pointer.
+   \param pcurr  - GAP buffer pointer.
+
+   @ingroup gapfunc
+*/
+template<typename T>
+void gap_add_to_bitset(unsigned* dest, const T*  pcurr)
+{
+    unsigned len = (*pcurr >> 3);
+    gap_add_to_bitset(dest, pcurr, len);
+}
+
 
 /*!
    \brief ANDs GAP block to bitblock.
@@ -3485,21 +3502,6 @@ void gap_convert_to_bitset(unsigned* dest, const T*  buf)
     bm::gap_add_to_bitset(dest, buf);
 }
 
-
-/*!
-   \brief GAP block to bitblock conversion.
-   \param dest - bitblock buffer pointer.
-   \param buf  - GAP buffer pointer.
-   \param dest_len - length/size of the destination buffer.
-
-   @ingroup gapfunc
-*/
-template<typename T> 
-void gap_convert_to_bitset(unsigned* dest, const T*  buf,  unsigned  dest_len)
-{
-   ::memset(dest, 0, dest_len * sizeof(unsigned));
-    bm::gap_add_to_bitset(dest, buf);
-}
 
 
 /*!
