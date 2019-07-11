@@ -116,8 +116,12 @@ public:
     */
     unsigned get_compression_level() const { return compression_level_; }
     
+    // --------------------------------------------------------------------
+    /*! @name Serialization Methods                                      */
+    //@{
+
     /**
-        Bitvector serilization into memory block
+        Bitvector serialization into memory block
         
         @param bv - input bitvector
         @param buf - out buffer (pre-allocated)
@@ -134,7 +138,7 @@ public:
                         unsigned char* buf, size_t buf_size);
     
     /**
-        Bitvector serilization into buffer object (it gets resized automatically)
+        Bitvector serialization into buffer object (resized automatically)
      
         @param bv       - input bitvector
         @param buf      - output buffer object
@@ -143,7 +147,26 @@ public:
     */
     void serialize(const BV& bv,
                    typename serializer<BV>::buffer& buf,
-                   const statistics_type* bv_stat);
+                   const statistics_type* bv_stat = 0);
+    
+    /**
+        Bitvector serialization into buffer object (resized automatically)
+        Input bit-vector gets optimized and then destroyed, content is
+        NOT guaranteed after this operation.
+        Effectively it moves data into the buffer.
+
+        The reason this operation exsists is because it is faster to do
+        all three operations in one single pass.
+        This is a destructive serialization!
+
+        @param bv       - input/output bitvector
+        @param buf      - output buffer object
+    */
+    void optimize_serialize_destroy(BV& bv,
+                                    typename serializer<BV>::buffer& buf);
+
+    //@}
+    // --------------------------------------------------------------------
 
     /**
         Return serialization counter vector
@@ -254,12 +277,12 @@ protected:
 private:
     serializer(const serializer&);
     serializer& operator=(const serializer&);
-
+    
 private:
-
     typedef bm::bit_out<bm::encoder>  bit_out_type;
     typedef bm::gamma_encoder<bm::gap_word_t, bit_out_type> gamma_encoder_func;
     typedef bm::heap_vector<bm::gap_word_t, allocator_type> block_arridx_type;
+    
 private:
     block_arridx_type  bit_idx_arr_;
     unsigned           scores_[64];
@@ -273,6 +296,9 @@ private:
     bm::word_t*     temp_block_;
     unsigned        compression_level_;
     bool            own_temp_block_;
+    
+    bool            optimize_; ///< flag to optimize the input vector
+    bool            free_;     ///< flag to free the input vector
 };
 
 /**
@@ -681,6 +707,7 @@ serializer<BV>::serializer(const allocator_type&   alloc,
         own_temp_block_ = false;
     }
     compression_stat_ = (size_type*) alloc_.alloc_bit_block();
+    optimize_ = free_ = false;
 }
 
 template<class BV>
@@ -703,6 +730,7 @@ serializer<BV>::serializer(bm::word_t*    temp_block)
         own_temp_block_ = false;
     }
     compression_stat_ = (size_type*) alloc_.alloc_bit_block();
+    optimize_ = free_ = false;
 }
 
 template<class BV>
@@ -1235,12 +1263,26 @@ void serializer<BV>::serialize(const BV& bv,
     }
     
     buf.resize(bv_stat->max_serialize_mem);
-    
+    optimize_ = free_ = false;
+
     size_type slen = this->serialize(bv, buf.data(), buf.size());
     BM_ASSERT(slen <= buf.size()); // or we have a BIG problem with prediction
     BM_ASSERT(slen);
     
     buf.resize(slen);
+}
+
+template<class BV>
+void serializer<BV>::optimize_serialize_destroy(BV& bv,
+                                        typename serializer<BV>::buffer& buf)
+{
+    optimize_ = free_ = true; // set the destructive mode
+    
+    statistics_type st;
+    bv.optimize(temp_block_, BV::opt_compress, &st);
+    serialize(bv, buf, &st);
+    
+    optimize_ = free_ = false; // restore the default mode
 }
 
 template<class BV>
@@ -1340,10 +1382,9 @@ void serializer<BV>::bienc_gap_bit_block(const bm::word_t* block,
         
         bm::gap_word_t head = (bit_idx_arr_[0] & 1); // isolate start flag
         bm::gap_word_t min_v = bit_idx_arr_[1];
-        bm::gap_word_t max_v = bit_idx_arr_[len];
 
-        BM_ASSERT(max_v == 65535);
-        BM_ASSERT(max_v > min_v);
+        BM_ASSERT(bit_idx_arr_[len] == 65535);
+        BM_ASSERT(bit_idx_arr_[len] > min_v);
 
         enc.put_8(scode);
         
@@ -1460,26 +1501,23 @@ serializer<BV>::serialize(const BV& bv,
     BM_ASSERT(temp_block_);
     
     reset_compression_stats();
-    
     const blocks_manager_type& bman = bv.get_blocks_manager();
 
     bm::encoder enc(buf, buf_size);  // create the encoder
     encode_header(bv, enc);
 
     block_idx_type i, j;
-
-    // save blocks.
     for (i = 0; i < bm::set_total_blocks; ++i)
     {
         unsigned i0, j0;
         bman.get_block_coord(i, i0, j0);
         const bm::word_t* blk = bman.get_block(i0, j0);
 
-        // -----------------------------------------
+        // ----------------------------------------------------
         // Empty or ONE block serialization
-
-
+        //
         // TODO: make a function to check this in ONE pass
+        //
         bool flag;
         flag = bm::check_block_zero(blk, false/*shallow check*/);
         if (flag)
@@ -1546,18 +1584,18 @@ serializer<BV>::serialize(const BV& bv,
             }
         }
 
-        // ------------------------------
+        // ---------------------------------------------
         // GAP serialization
+        //
         if (BM_IS_GAP(blk))
         {
-            gap_word_t* gblk = BMGAP_PTR(blk);
-            encode_gap_block(gblk, enc);
-            continue;
+            encode_gap_block(BMGAP_PTR(blk), enc);
         }
-                
-        // ----------------------------------------------
-        // BIT BLOCK serialization
+        else
         {
+            // ----------------------------------------------
+            // BIT BLOCK serialization
+            //
             unsigned char model = find_bit_best_encoding(blk);
             switch (model)
             {
@@ -1618,10 +1656,17 @@ serializer<BV>::serialize(const BV& bv,
                 BM_ASSERT(0); // predictor returned an unknown model
                 enc.put_prefixed_array_32(set_block_bit, blk, bm::set_block_size);
             }
-            continue;
+        } // bit-block processing
+        
+        // destructive serialization mode
+        //
+        if (free_)
+        {
+            // const cast is ok, because it is a requested mode
+            const_cast<blocks_manager_type&>(bman).zero_block(i);
         }
  
-    }
+    } // for i
     enc.put_8(set_block_end);
     return (size_type)enc.size();
 }
@@ -1730,7 +1775,7 @@ size_t serialize(BV& bv,
             if NULL bvector allocates own.
     @return Number of bytes consumed by deserializer.
 
-    Function desrializes bitvector from memory block containig results
+    Function deserializes bitvector from memory block containig results
     of previous serialization. Function does not remove bits 
     which are currently set. Effectively it means OR logical operation 
     between current bitset and previously serialized one.

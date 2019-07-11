@@ -1293,12 +1293,7 @@ void str_sparse_vector<CharType, BV, MAX_STR_SIZE>::optimize(
     parent_type::optimize(temp_block, opt_mode, &stbv);
     
     if (st)
-    {
-        st->bit_blocks += stbv.bit_blocks;
-        st->gap_blocks += stbv.gap_blocks;
-        st->max_serialize_mem += stbv.max_serialize_mem + 8;
-        st->memory_used += stbv.memory_used;
-    }
+        st->add(stbv);
 }
 
 //---------------------------------------------------------------------
@@ -1316,7 +1311,7 @@ void str_sparse_vector<CharType, BV, MAX_STR_SIZE>::calc_stat(
     st->bit_blocks += stbv.bit_blocks;
     st->gap_blocks += stbv.gap_blocks;
     st->ptr_sub_blocks += stbv.ptr_sub_blocks;
-    
+    st->bv_count += stbv.bv_count;
     st->max_serialize_mem += stbv.max_serialize_mem + 8;
     st->memory_used += stbv.memory_used;
     

@@ -2503,6 +2503,15 @@ unsigned avx2_bit_to_gap(gap_word_t* BMRESTRICT dest,
             
             if (!val || val == ~0ull)
             {
+                // branchless if
+                bool cmp = (bool(bitval) != bool(val));
+                unsigned mask = ~(cmp - 1u);
+                *pcurr = mask & (gap_word_t)(bit_idx-cmp);
+                bitval ^= cmp;
+                unsigned long long pcu = reinterpret_cast<unsigned long long>(pcurr);
+                pcu += mask & sizeof(gap_word_t);
+                pcurr = reinterpret_cast<gap_word_t*>(pcu);
+/*
                if (bool(bitval) != bool(val))
                {
                    *pcurr++ = (gap_word_t)(bit_idx-1);
@@ -2510,6 +2519,7 @@ unsigned avx2_bit_to_gap(gap_word_t* BMRESTRICT dest,
                    BM_ASSERT((pcurr-1) == (dest+1) || *(pcurr-1) > *(pcurr-2));
                    BM_ASSERT(pcurr != end);
                }
+*/
                bit_idx += vCAP;
                continue;
             } // while
@@ -2520,10 +2530,10 @@ unsigned avx2_bit_to_gap(gap_word_t* BMRESTRICT dest,
             unsigned bits_consumed = 0;
             do
             {
-                unsigned tz;
-                if (bitval != (val & 1u))
+                unsigned tz = 1u;
+                if (bitval != (val & tz))
                 {
-                    bitval ^= tz = 1u;
+                    bitval ^= tz;
                     *pcurr++ = (gap_word_t)(bit_idx-tz);
                     
                     BM_ASSERT((pcurr-1) == (dest+1) || *(pcurr-1) > *(pcurr-2));
@@ -2534,11 +2544,25 @@ unsigned avx2_bit_to_gap(gap_word_t* BMRESTRICT dest,
                     tz = (unsigned)_tzcnt_u64(bitval ? ~val : val);
                 }
                 
-                bits_consumed += tz; bit_idx += tz;
+//                bits_consumed += tz;
+                bool cmp = ((bits_consumed+=tz) < vCAP);
+                bit_idx += tz;
                 val >>= tz;
                 
                 if (!val)
                 {
+//                    bool cmp = (bits_consumed < vCAP);
+                    tz = ~(cmp - 1u); // generate 0xFFFF or 0x0000 mask
+                    *pcurr = tz & (gap_word_t)(bit_idx-cmp);
+                    bitval ^= cmp;
+                    bit_idx += tz & (vCAP - bits_consumed);
+                    unsigned long long pcu = reinterpret_cast<unsigned long long>(pcurr);
+                    pcu += tz & sizeof(gap_word_t);
+                    pcurr = reinterpret_cast<gap_word_t*>(pcu);
+
+                    BM_ASSERT((pcurr-1) == (dest+1) || *(pcurr-1) > *(pcurr-2));
+                    BM_ASSERT(pcurr != end);
+/*
                     if ((tz = (bits_consumed < vCAP)))
                     {
                         *pcurr++ = (gap_word_t)(bit_idx-tz);
@@ -2548,6 +2572,7 @@ unsigned avx2_bit_to_gap(gap_word_t* BMRESTRICT dest,
                         BM_ASSERT((pcurr-1) == (dest+1) || *(pcurr-1) > *(pcurr-2));
                         BM_ASSERT(pcurr != end);
                     }
+*/
                     break;
                 }
             }  while (1);

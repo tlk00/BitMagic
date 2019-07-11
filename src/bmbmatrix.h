@@ -1064,11 +1064,7 @@ void basic_bmatrix<BV>::optimize(bm::word_t* temp_block,
             bv->optimize(temp_block, opt_mode, st ? &stbv : 0);
             if (st)
             {
-                st->bit_blocks += stbv.bit_blocks;
-                st->gap_blocks += stbv.gap_blocks;
-                st->ptr_sub_blocks += stbv.ptr_sub_blocks;
-                st->max_serialize_mem += stbv.max_serialize_mem + 8;
-                st->memory_used += stbv.memory_used;
+                st->add(stbv);
             }
         }
     } // for k
@@ -1293,9 +1289,12 @@ bm::id64_t base_sparse_vector<Val, BV, MAX_SIZE>::get_plains_mask(
 template<class Val, class BV, unsigned MAX_SIZE>
 void base_sparse_vector<Val, BV, MAX_SIZE>::optimize(bm::word_t* temp_block,
                                     typename bvector_type::optmode opt_mode,
-                                    typename bvector_type::statistics* stat)
+                                    typename bvector_type::statistics* st)
 {
-    bmatr_.optimize(temp_block, opt_mode, stat);
+    typename bvector_type::statistics stbv;
+    bmatr_.optimize(temp_block, opt_mode, &stbv);
+    if (st)
+        st->add(stbv);
     
     bvector_type* bv_null = this->get_null_bvect();
     
@@ -1333,11 +1332,7 @@ void base_sparse_vector<Val, BV, MAX_SIZE>::calc_stat(
         {
             typename bvector_type::statistics stbv;
             bv->calc_stat(&stbv);
-            
-            st->bit_blocks += stbv.bit_blocks;
-            st->gap_blocks += stbv.gap_blocks;
-            st->max_serialize_mem += stbv.max_serialize_mem + 8;
-            st->memory_used += stbv.memory_used;
+            st->add(stbv);
         }
         else
         {

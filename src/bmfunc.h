@@ -47,15 +47,16 @@ bm::id_t bit_block_any_range(const bm::word_t* block,
                              bm::word_t right);
 
 /*!
-    @brief Structure with statistical information about bitset's memory 
-            allocation details. 
+    @brief Structure with statistical information about memory
+            allocation footprint, serialization projection, number of vectors
     @ingroup bvector
 */
 struct bv_statistics
 {
-    unsigned bit_blocks;        ///< Number of bit blocks
-    unsigned gap_blocks;        ///< Number of GAP blocks
-    unsigned ptr_sub_blocks;    ///< Number of sub-blocks
+    size_t bit_blocks;        ///< Number of bit blocks
+    size_t gap_blocks;        ///< Number of GAP blocks
+    size_t ptr_sub_blocks;    ///< Number of sub-blocks
+    size_t bv_count;          ///< Number of bit-vectors
     size_t  max_serialize_mem; ///< estimated maximum memory for serialization
     size_t  memory_used; ///< memory usage for all blocks and service tables
     gap_word_t  gap_levels[bm::gap_levels]; ///< GAP block lengths in the bvect
@@ -65,7 +66,7 @@ struct bv_statistics
     void add_bit_block()
     {
         ++bit_blocks;
-        unsigned mem_used = (unsigned)(sizeof(bm::word_t) * bm::set_block_size);
+        size_t mem_used = sizeof(bm::word_t) * bm::set_block_size;
         memory_used += mem_used;
         max_serialize_mem += mem_used;
     }
@@ -74,7 +75,7 @@ struct bv_statistics
     void add_gap_block(unsigned capacity, unsigned length)
     {
         ++gap_blocks;
-        unsigned mem_used = (unsigned)(capacity * sizeof(gap_word_t));
+        size_t mem_used = (capacity * sizeof(gap_word_t));
         memory_used += mem_used;
         max_serialize_mem += (unsigned)(length * sizeof(gap_word_t));
         for (unsigned i = 0; i < bm::gap_levels; ++i)
@@ -91,10 +92,20 @@ struct bv_statistics
     /// Reset statisctics
     void reset()
     {
-        bit_blocks = gap_blocks = ptr_sub_blocks = 0;
+        bit_blocks = gap_blocks = ptr_sub_blocks = bv_count = 0;
         max_serialize_mem = memory_used = 0;
         for (unsigned i = 0; i < bm::gap_levels; ++i)
             gaps_by_level[i] = 0ull;
+    }
+    
+    /// Sum data from another sttructure
+    void add(const bv_statistics& st)
+    {
+        bit_blocks += st.bit_blocks;
+        gap_blocks += st.gap_blocks;
+        bv_count += st.bv_count;
+        max_serialize_mem += st.max_serialize_mem + 8;
+        memory_used += st.memory_used;
     }
 };
 

@@ -166,8 +166,7 @@ public:
 
         typedef unsigned                    difference_type;
         typedef unsigned*                   pointer;
-        typedef value_type&                 reference;
-        
+        typedef value_type&                 reference;        
 
     public:
         const_iterator();
@@ -1690,15 +1689,11 @@ void sparse_vector<Val, BV>::calc_stat(
     BM_ASSERT(st);
     typename bvector_type::statistics stbv;
     parent_type::calc_stat(&stbv);
-    
-    st->reset();
-    
-    st->bit_blocks += stbv.bit_blocks;
-    st->gap_blocks += stbv.gap_blocks;
-    st->ptr_sub_blocks += stbv.ptr_sub_blocks;
-
-    st->max_serialize_mem += stbv.max_serialize_mem + 8;
-    st->memory_used += stbv.memory_used;
+    if (st)
+    {
+        st->reset();
+        st->add(stbv);
+    }
 }
 
 //---------------------------------------------------------------------
@@ -1716,11 +1711,7 @@ void sparse_vector<Val, BV>::optimize(
     if (st)
     {
         st->reset();
-        
-        st->bit_blocks += stbv.bit_blocks;
-        st->gap_blocks += stbv.gap_blocks;
-        st->max_serialize_mem += stbv.max_serialize_mem + 8;
-        st->memory_used += stbv.memory_used;
+        st->add(stbv);
     }
 }
 

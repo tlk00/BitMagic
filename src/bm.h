@@ -3169,6 +3169,7 @@ void bvector<Alloc>::optimize(bm::word_t* temp_block,
         blocks_mem += sizeof(bm::word_t**) * top_size;
         blocks_mem += stat->ptr_sub_blocks * (sizeof(void*) * bm::set_sub_array_size);
         stat->memory_used += blocks_mem;
+        stat->bv_count = 1;
     }
     
     // don't need to keep temp block if we optimizing memory usage
@@ -3414,6 +3415,8 @@ void bvector<Alloc>::calc_stat(struct bvector<Alloc>::statistics* st) const
     st->memory_used += unsigned(sizeof(*this) - sizeof(blockman_));
     blocks_mem += st->ptr_sub_blocks * (sizeof(void*) * bm::set_sub_array_size);
     st->memory_used += blocks_mem;
+    st->bv_count = 1;
+
 }
 
 // -----------------------------------------------------------------------
@@ -6574,7 +6577,6 @@ void bvector<Alloc>::copy_range(const bvector<Alloc>& bvect,
     copy_range_no_check(bvect, left, right);
 }
 
-
 //---------------------------------------------------------------------
 
 template<class Alloc>
@@ -6607,7 +6609,6 @@ void bvector<Alloc>::copy_range_no_check(const bvector<Alloc>& bvect,
     }
 }
 
-
 //---------------------------------------------------------------------
 
 template<class Alloc>
@@ -6620,6 +6621,7 @@ void bvector<Alloc>::throw_bad_alloc()
 #endif
 }
 
+//---------------------------------------------------------------------
 
 
 
