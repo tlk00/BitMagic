@@ -39,7 +39,6 @@ using namespace std;
 // This exmaple demonstrates bitvector serialization/deserialization.
 
 
-
 const unsigned MAX_VALUE = 1000000;
 
 // This procedure creates very dense bitvector.
@@ -71,6 +70,8 @@ void print_statistics(const bm::bvector<>& bv)
     cout << "Max.serialize mem.:" << st.max_serialize_mem << endl << endl;;
 }
 
+// This is fairly low level serialization method, saves into a buffer
+//
 static
 unsigned char* serialize_bvector(bm::serializer<bm::bvector<> >& bvs, 
                                  bm::bvector<>& bv)
@@ -78,7 +79,6 @@ unsigned char* serialize_bvector(bm::serializer<bm::bvector<> >& bvs,
     // It is reccomended to optimize vector before serialization.
     BM_DECLARE_TEMP_BLOCK(tb)
     bm::bvector<>::statistics st;
-
     bv.optimize(tb, bm::bvector<>::opt_compress, &st);
 
     cout << "Bits count:" << bv.count() << endl;
@@ -93,11 +93,10 @@ unsigned char* serialize_bvector(bm::serializer<bm::bvector<> >& bvs,
     // Serialization to memory.
     size_t len = bvs.serialize(bv, buf, st.max_serialize_mem);
 
-
     cout << "Serialized size:" << len << endl << endl;
-
     return buf;
 }
+
 
 
 int main(void)
@@ -117,18 +116,25 @@ int main(void)
 
         // Prepare a serializer class
         //  for best performance it is best to create serilizer once and reuse it
-        //  (saves a lot of memory allocations)
+        //  (saves a memory allocations). Do NOT use it concurrently.
         //
         bm::serializer<bm::bvector<> > bvs;
 
         // next settings provide lowest size
         bvs.byte_order_serialization(false);
         bvs.gap_length_serialization(false);
-        bvs.set_compression_level(4);
 
-
+        // 1: serializes into a new allocated buffer (needs to be deallocated)
         buf1 = serialize_bvector(bvs, bv1);
-        buf2 = serialize_bvector(bvs, bv2);
+        
+        // 2: use serialization buffer class (automatic RAI, freed on destruction)
+        bm::serializer<bm::bvector<> >::buffer sbuf;
+        {
+            bvs.serialize(bv2, sbuf);
+            buf2 = sbuf.data();
+            auto sz = sbuf.size();
+            cout << "BV2 Serialized size:" << sz << endl;
+        }
 
         // Serialized bvectors (buf1 and buf2) now ready to be
         // saved to a database, file or send over a network.
@@ -153,17 +159,33 @@ int main(void)
         bv3.optimize();
 
         print_statistics(bv3);
+        
+        // control check using OR on the original vectors
+        {
+            bm::bvector<> bv_c;
+            bv_c.bit_or(bv1, bv2, bm::bvector<>::opt_compress);
+            int cmp = bv_c.compare(bv3);
+            if (cmp != 0)
+            {
+                std::cerr << "Error: bug in serialization" << std::endl;
+            }
+            bm::serializer<bm::bvector<> >::buffer sbuf2;
+            
+            // destructive serialization, "bv_c" should not be used after
+            bvs.optimize_serialize_destroy(bv_c, sbuf2);
+            
+            cout << "BV_C Serialized size:" << sbuf2.size() << endl;
+        }
+        
     }
     catch(std::exception& ex)
     {
         std::cerr << ex.what() << std::endl;
         delete [] buf1;
-        delete [] buf2;
         return 1;
     }
     
     delete [] buf1;
-    delete [] buf2;
 
     return 0;
 }
