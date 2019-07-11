@@ -10230,7 +10230,7 @@ void SerializationCompressionLevelsTest()
    // --------------------------------------------------------------
    // bit-block tests
    //
-/*
+
    {
         bvect bv { 100 };
        
@@ -10537,7 +10537,7 @@ void SerializationCompressionLevelsTest()
         cmp = bv.compare(bv2);
         assert(cmp == 0);
    }
-*/
+
    {
         bvect bv;
         for (bvect::size_type i = 0; i < 65536; ++i)
@@ -10555,6 +10555,38 @@ void SerializationCompressionLevelsTest()
         const bvect::size_type* cstat = bv_ser.get_compression_stat();
         assert(cstat[bm::set_block_arr_bienc_inv] == 1);
        
+        bvect bv2;
+        bm::deserialize(bv2, sermem_buf.buf());
+        int cmp = bv.compare(bv2);
+        assert(cmp == 0);
+        bvect bv3;
+        operation_deserializer<bvect>::deserialize(bv3,
+                                               sermem_buf.buf(),
+                                               0, set_OR);
+        cmp = bv.compare(bv2);
+        assert(cmp == 0);
+   }
+
+   {
+        bvect bv;
+        bv.set(100);
+        bvect::size_type from = 0;
+        for (bvect::size_type i = 0; i < 3000; ++i)
+        {
+            auto to = from + rand()%15;
+            bv.set_range(from, to);
+            from = to + rand()%15;
+        }
+
+        bm::serializer<bvect> bv_ser;
+        bv_ser.set_compression_level(5);
+ 
+        bm::serializer<bvect>::buffer sermem_buf;
+        bv_ser.serialize(bv, sermem_buf, 0);
+ 
+        const bvect::size_type* cstat = bv_ser.get_compression_stat();
+        assert(cstat[set_block_bitgap_bienc] == 1);
+ 
         bvect bv2;
         bm::deserialize(bv2, sermem_buf.buf());
         int cmp = bv.compare(bv2);
@@ -10613,8 +10645,9 @@ void SerializationTest()
     BM_DECLARE_TEMP_BLOCK(tb)
     
     bm::serializer<bvect> bv_ser(tb);
+    
     bm::serializer<bvect>::buffer sermem_buf;
-    bv_ser.serialize(*bvect_full1, sermem_buf, &st);
+    bv_ser.optimize_serialize_destroy(*bvect_full1, sermem_buf);
     unsigned slen = (unsigned)sermem_buf.size();
 
     cout << "Serialized mem_max = " << st.max_serialize_mem
@@ -10914,7 +10947,6 @@ void SerializationTest()
     bvect_full1->optimize();
 
     print_stat(*bvect_full1);
-
 
     bvect::statistics st;
     bvect_full1->calc_stat(&st);
