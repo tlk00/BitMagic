@@ -4043,17 +4043,17 @@ bm::id_t bit_block_count(const bm::word_t* const block, bm::id64_t digest)
         unsigned wave = bm::word_bitcount64(t - 1);
         unsigned off = wave * bm::set_block_digest_wave_size;
 
-            const bm::bit_block_t::bunion_t* BMRESTRICT src_u =
-                            (const bm::bit_block_t::bunion_t*)(&block[off]);
-            unsigned j = 0;
-            do
-            {
-                count += bm::word_bitcount64(src_u->w64[j+0]) +
-                         bm::word_bitcount64(src_u->w64[j+1]) +
-                         bm::word_bitcount64(src_u->w64[j+2]) +
-                         bm::word_bitcount64(src_u->w64[j+3]);
-                j += 4;
-            } while (j < bm::set_block_digest_wave_size/2);
+        const bm::bit_block_t::bunion_t* BMRESTRICT src_u =
+                        (const bm::bit_block_t::bunion_t*)(&block[off]);
+        unsigned j = 0;
+        do
+        {
+            count += bm::word_bitcount64(src_u->w64[j+0]) +
+                     bm::word_bitcount64(src_u->w64[j+1]) +
+                     bm::word_bitcount64(src_u->w64[j+2]) +
+                     bm::word_bitcount64(src_u->w64[j+3]);
+            j += 4;
+        } while (j < bm::set_block_digest_wave_size/2);
         
         d = bm::bmi_bslr_u64(d); // d &= d - 1;
     } // while

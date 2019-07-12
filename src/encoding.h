@@ -244,8 +244,7 @@ public:
                            bm::gap_word_t lo, bm::gap_word_t hi);
 
     /// Binary Interpolative array decode into /dev/null
-    void bic_decode_dry(unsigned sz,
-                        bm::gap_word_t lo, bm::gap_word_t hi);
+    void bic_decode_dry(unsigned sz, bm::gap_word_t lo, bm::gap_word_t hi);
 
 private:
     bit_in(const bit_in&);
