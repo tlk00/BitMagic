@@ -1059,8 +1059,8 @@ void bit_out<TEncoder>::bic_encode(const bm::gap_word_t* arr,
         }
     }
     
-    bic_encode(arr, mid_idx, lo, val-1);
-    bic_encode(arr + mid_idx + 1, sz - mid_idx - 1, val+1, hi);
+    bic_encode(arr, mid_idx, lo, gap_word_t(val-1));
+    bic_encode(arr + mid_idx + 1, sz - mid_idx - 1, gap_word_t(val+1), hi);
 }
 
 

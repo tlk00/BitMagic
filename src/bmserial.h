@@ -934,7 +934,7 @@ void serializer<BV>::gamma_gap_array(const bm::gap_word_t* gap_array,
         }
         encoder::position_type enc_pos1 = enc.get_pos();
         unsigned gamma_size = (unsigned)(enc_pos1 - enc_pos0);
-        unsigned plain_size = sizeof(gap_word_t)+arr_len*sizeof(gap_word_t);
+        unsigned plain_size = (unsigned)(sizeof(gap_word_t)+arr_len*sizeof(gap_word_t));
         if (gamma_size >= plain_size)
         {
             enc.set_pos(enc_pos0); // rollback the bit stream
@@ -980,7 +980,7 @@ void serializer<BV>::interpolated_gap_array(const bm::gap_word_t* gap_block,
         }
         encoder::position_type enc_pos1 = enc.get_pos();
         unsigned enc_size = (unsigned)(enc_pos1 - enc_pos0);
-        unsigned raw_size = sizeof(gap_word_t)+arr_len*sizeof(gap_word_t);
+        unsigned raw_size = (unsigned)(sizeof(gap_word_t)+arr_len*sizeof(gap_word_t));
         if (enc_size >= raw_size)
         {
             enc.set_pos(enc_pos0); // rollback the bit stream
