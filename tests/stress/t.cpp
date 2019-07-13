@@ -14872,13 +14872,21 @@ bool CompareSparseVector(const SV& sv, const Vect& vect, bool interval_filled = 
         typename Vect::value_type v1 = vect[i];
         typename SV::value_type v2 = sv[i];
         typename SV::value_type v3 = *it;
+        
+        int cmp = sv.compare(i, v1);
+        assert(cmp == 0);
+        if (v1 > 0)
+        {
+            cmp = sv.compare(i, v1-1);
+            assert(cmp > 0);
+        }
 
         if (v1 != v2)
         {
             cerr << "SV discrepancy:" << "sv[" << i << "]=" << v2
                  <<  " vect[" << i << "]=" << v1
                  << endl;
-            return false;
+            assert(0);return false;
         }
         if (v1 != v3)
         {
@@ -15782,7 +15790,44 @@ void TestSparseVector()
         assert(sv1[1] == 2);
         assert(sv1[3] == 18);
     }
+    
+    // test lower bound search
+    cout << "sparse vector (unsigned) lower_bound()" << endl;
+    
+    {
+        bm::sparse_vector<unsigned, bm::bvector<> > sv1;
+        sv1.push_back(1);
+        sv1.push_back(2);
+        sv1.push_back(2);
+        sv1.push_back(2);
+        sv1.push_back(20);
+        sv1.push_back(2000);
 
+        bvect::size_type pos;
+        bool found;
+        
+        bm::sparse_vector_scanner<bm::sparse_vector<unsigned, bm::bvector<> > > scanner;
+        found = scanner.lower_bound(sv1, 0u, pos);
+        assert(!found);
+
+        found = scanner.lower_bound(sv1, 1u, pos);
+        assert(found);
+        assert(pos == 0);
+
+        found = scanner.lower_bound(sv1, 2u, pos);
+        assert(found);
+        assert(pos == 1);
+
+        found = scanner.lower_bound(sv1, 3u, pos);
+        assert(!found);
+
+        found = scanner.lower_bound(sv1, 20u, pos);
+        assert(found);
+
+        found = scanner.lower_bound(sv1, 2000u, pos);
+        assert(found);
+    }
+    
     
     
     {{
@@ -18450,6 +18495,30 @@ void EraseStrCollection(str_svect_type& str_sv)
     }
 }
 
+template<typename SV>
+void EraseSVCollection(SV& sv)
+{
+    typename SV::value_type v_next, v_curr;
+    while (sv.size())
+    {
+        auto idx = sv.size() / 2;
+        auto sz = sv.size();
+        
+        if (idx+1 < sz)
+        {
+            v_next = sv.get(idx+1);
+        }
+        sv.erase(idx);
+        assert(sv.size() == sz-1);
+        if (idx+1 < sz)
+        {
+            v_curr = sv.get(idx);
+            assert(v_next == v_curr);
+        }
+    }
+}
+
+
 static
 void StressTestStrSparseVector()
 {
@@ -18904,6 +18973,210 @@ void TestStrSparseSort()
    cout << "---------------------------- Bit-plain STR sparse vector SORT test OK" << endl;
 
 }
+
+static
+void TestSparseSort()
+{
+   std::cout << "---------------------------- sparse vector SORT test" << endl;
+   const unsigned max_coll = 560000;
+   typedef bm::sparse_vector<unsigned, bvect > u_svect_type;
+
+   {
+       std::vector<unsigned> u_coll;
+       u_svect_type          u_sv_sorted;
+
+        // generate sorted vector
+        string str;
+        for (unsigned i = 10; i < max_coll; i+=10)
+        {
+            u_coll.emplace_back(i);
+        } // for i
+        std::sort(u_coll.begin(), u_coll.end());
+        for (const unsigned u : u_coll)
+        {
+            u_sv_sorted.push_back(u);
+        } // for s
+        u_sv_sorted.optimize();
+       
+        // run lower bound tests
+        bm::sparse_vector_scanner<u_svect_type> scanner;
+
+        for (unsigned i = 0; i < max_coll; ++i)
+        {
+            bvect::size_type pos;
+            bool found = scanner.lower_bound(u_sv_sorted, i, pos);
+            unsigned u1;
+            if (found)
+            {
+                u1 = u_sv_sorted[pos];
+                assert(u1 == i);
+            }
+            
+            auto it = std::lower_bound(u_coll.begin(), u_coll.end(), i);
+            if (it != u_coll.end())
+            {
+                unsigned idx = unsigned(it - u_coll.begin());
+                unsigned u0 = u_coll[idx];
+                
+                if (u0 == i)
+                {
+                    assert(found);
+                    assert(pos == idx);
+                }
+                else
+                {
+                    assert(!found);
+                    u1 = u_sv_sorted[pos];
+                    
+                    assert(pos == idx);
+                }
+            }
+            if (i % 4096 == 0)
+                cout << "\r" << i << "/" << max_coll << flush;
+
+        } // for
+        cout << "\n";
+       
+    }
+    
+
+    cout << "insertion sort test data generation.." << endl;
+    // insertion sort stress test
+    {
+       std::vector<unsigned> u_coll;
+        // generate test values vector
+        for (unsigned i = 0; i < max_coll; )
+        {
+            u_coll.emplace_back(i);
+            i += rand() % 3;
+        } // for i
+        
+        // shuffle the data set
+        {
+            std::random_device rd;
+            std::mt19937       g(rd());
+            std::shuffle(u_coll.begin(), u_coll.end(), g);
+        }
+
+        // insertion sort
+        u_svect_type      u_sv_sorted;
+        
+        cout << "\ninsertion sort..." << endl;
+        {
+        std::chrono::time_point<std::chrono::steady_clock> st;
+        st = std::chrono::steady_clock::now();
+
+            unsigned i = 0;
+            bm::sparse_vector_scanner<u_svect_type> scanner;
+            for (const unsigned u : u_coll)
+            {
+                bvect::size_type pos;
+                bool found = scanner.lower_bound(u_sv_sorted, u, pos);
+
+                auto sz1 = u_sv_sorted.size();
+                
+                u_sv_sorted.insert(pos, u);
+                
+                auto sz2 = u_sv_sorted.size();
+                assert(sz1 + 1 == sz2);
+
+                {
+                    unsigned u_sv = u_sv_sorted.get(pos);
+                    assert(u == u_sv);
+                }
+                
+                if (pos)
+                {
+                    unsigned u_prev;
+                    u_prev = u_sv_sorted.get(pos-1);
+                    if (u_prev >= u)
+                    {
+                        cerr << "insertion sort sort order check failed! "
+                             << " i = " << i
+                             << "s=" << u << " prev=" << u_prev
+                             << endl;
+                        assert(0); exit(1);
+                    }
+                }
+                
+                {
+                    bvect::size_type pos2;
+                    found = scanner.lower_bound(u_sv_sorted, u, pos2);
+                    if (!found)
+                    {
+                        cerr << "control loss at " << i << " " << u << endl;
+                        assert(0); exit(1);
+                    }
+                    assert(pos == pos2);
+                }
+
+                
+                if (i % 8096 == 0)
+                {
+                    std::chrono::time_point<std::chrono::steady_clock> f = std::chrono::steady_clock::now();
+                    auto diff = f - st;
+                    auto d = std::chrono::duration <double, std::milli> (diff).count();
+                    cout << "\r" << i << "/" << max_coll << " (" << d << "ms)" << flush;
+                    
+                    u_sv_sorted.optimize();
+                    
+                    st = std::chrono::steady_clock::now();
+                }
+                ++i;
+            } // for s
+        }
+        cout << endl;
+        
+        cout << "sort validation.." << endl;
+        std::sort(u_coll.begin(), u_coll.end());
+        unsigned i = 0;
+        unsigned u_prev;
+        for (unsigned u : u_coll)
+        {
+            unsigned sv_u;
+            sv_u = u_sv_sorted.get(i);
+            if (i)
+            {
+                if (u_prev > sv_u)
+                {
+                    cerr << "Sort order violation!" << endl;
+                    assert(0);exit(1);
+                }
+            }
+            //cout << s << " = " << sv_str << endl;
+            if (u != sv_u)
+            {
+                cerr << "Sort comparison failed at i=" << i << " u=" << u
+                     << " sv_u = " << sv_u << endl;
+                
+                bm::sparse_vector_scanner<u_svect_type> scanner;
+                bvect::size_type pos;
+                bool found = scanner.lower_bound(u_sv_sorted, u, pos);
+                
+                if (!found)
+                {
+                    cerr << u << " not found in target." << endl;
+                }
+                else
+                {
+                    cerr << u << " is at idx=" << pos << endl;
+                }
+
+                exit(1);
+            }
+            u_prev = sv_u;
+            ++i;
+        } // for u
+
+        EraseSVCollection(u_sv_sorted);
+    }
+
+    
+    
+   cout << "---------------------------- sparse vector SORT test OK" << endl;
+
+}
+
 
 
 inline
@@ -22350,6 +22623,8 @@ int main(int argc, char *argv[])
         TestSparseVectorFilter();
 
         TestSparseVectorScan();
+
+        TestSparseSort();
 
         TestCompressSparseVector();
 

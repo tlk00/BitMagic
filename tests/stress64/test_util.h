@@ -162,6 +162,14 @@ bool CompareSparseVector(const SV& sv, const Vect& vect, bool interval_filled = 
             typename Vect::value_type v1 = vect[i];
             typename SV::value_type v2 = sv[i];
             typename SV::value_type v3 = *it;
+            
+            int cmp = sv.compare(i, v1);
+            assert(cmp == 0);
+            if (v1 > 0)
+            {
+                cmp = sv.compare(i, v1-1);
+                assert(cmp > 0);
+            }
 
             if (v1 != v2)
             {
@@ -183,7 +191,7 @@ bool CompareSparseVector(const SV& sv, const Vect& vect, bool interval_filled = 
         if (it != it_end)
         {
             cerr << "sv const_iterator discrepancy!" << endl;
-            return false;
+            assert(0);return false;
         }
     }
     
