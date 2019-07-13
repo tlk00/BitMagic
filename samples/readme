@@ -46,6 +46,7 @@ Sparse vector (bit-transposed sparse vector) for scalar integer types
                iterator, const_iterator and bm::sparse_vector_scanner<> search class. 
 	       Benchmark different search/scan methods.
 	       Tech.note: http://bitmagic.io/sparse-vector-search.html
+./svsample07 - insertion sort using bm::sparse_vector_scanner<>::lower_bound()
 
 RSC sparse vector (Succinct vector based on Rank-Select methods) for scalar integer types
 
@@ -56,7 +57,7 @@ RSC sparse vector (Succinct vector based on Rank-Select methods) for scalar inte
 String sparse vector (bit-transposed sparse vector) for ASCII(z) strings
 
 ./strsvsample01 - basic example of str_sparse_vector<> container, add values, optimize, iterate
-./strsvsample02 - insertion sort using str_sparse_vector<> and sparse_vector_scanner<>
+./strsvsample02 - insertion sort using str_sparse_vector<> and sparse_vector_scanner<>::lower_bound_str()
 ./strsvsample03 - str_sparse_vector<>::back_insert_iterator is used, then sparse vector
                   remap compressed and saved to disk using serialization API.
 ./strsvsample04 - Use str_sparse_vector<> container with NULL (unassigned) values

@@ -87,9 +87,9 @@ void insertion_sort(str_sv_type& str_sv, const vector<string>& str_vec)
     for (const string& s : str_vec)
     {
         const char* cs = s.c_str();
-        unsigned pos;
+        str_sv_type::size_type pos;
         bool found = scanner.lower_bound_str(str_sv, cs, pos);
-        (void)found; // just to silence the unused variable .warning
+        (void)found; // just to silence the unused variable warning
         
         str_sv.insert(pos, cs);
         
