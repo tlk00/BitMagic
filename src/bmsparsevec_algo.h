@@ -237,14 +237,28 @@ public:
     bool bfind_eq_str(const SV&                      sv,
                       const typename SV::value_type* str,
                       typename SV::size_type&        pos);
-    
+
     /**
         \brief lower bound search for an array position
      
         Method assumes the sparse array is sorted
      
         \param sv - input sparse vector
-        \param value - value to search for
+        \param val - value to search for
+        \param pos - output sparse vector element index
+
+        \return true if value found
+    */
+    bool lower_bound(const SV&                      sv,
+                     const typename SV::value_type  val,
+                     typename SV::size_type&        pos);
+    /**
+        \brief lower bound search for an array position
+     
+        Method assumes the sparse array is sorted
+     
+        \param sv - input sparse vector
+        \param str - value to search for
         \param pos - output sparse vector element index
 
         \return true if value found
@@ -372,8 +386,12 @@ protected:
     /// Rank-Select decompression for RSC vectors
     void decompress(const SV&   sv, typename SV::bvector_type& bv_out);
 
+    /// compare sv[idx] with input str
     int compare_str(const SV& sv, size_type idx, const value_type* str);
-    
+
+    /// compare sv[idx] with input value
+    int compare(const SV& sv, size_type idx, const value_type val);
+
 protected:
     sparse_vector_scanner(const sparse_vector_scanner&) = delete;
     void operator=(const sparse_vector_scanner&) = delete;
@@ -1380,6 +1398,126 @@ bool sparse_vector_scanner<SV>::bfind_eq_str(const typename SV::value_type* str,
 //----------------------------------------------------------------------------
 
 template<typename SV>
+bool sparse_vector_scanner<SV>::lower_bound(const SV&                      sv,
+                                            const typename SV::value_type  val,
+                                            typename SV::size_type&        pos)
+{
+    int cmp;
+    size_type l = 0, r = sv.size();
+    if (l == r) // empty vector
+    {
+        pos = 0;
+        return false;
+    }
+    --r;
+    
+    // check initial boundary conditions if insert point is at tail/head
+    cmp = this->compare(sv, l, val); // left (0) boundary check
+    if (cmp > 0) // vect[x] > str
+    {
+        pos = 0;
+        return false;
+    }
+    if (cmp == 0)
+    {
+        pos = 0;
+        return true;
+    }
+    cmp = this->compare(sv, r, val); // right(size-1) boundary check
+    if (cmp == 0)
+    {
+        pos = r;
+        // back-scan to rewind all duplicates
+        // TODO: adapt one-sided binary search to traverse large platos
+        for (; r >= 0; --r)
+        {
+            cmp = this->compare(sv, r, val);
+            if (cmp != 0)
+                return true;
+            pos = r;
+        } // for i
+        return true;
+    }
+    if (cmp < 0) // vect[x] < str
+    {
+        pos = r+1;
+        return false;
+    }
+    
+    size_type dist = r - l;
+    if (dist < linear_cutoff1)
+    {
+        for (; l <= r; ++l)
+        {
+            cmp = this->compare(sv, l, val);
+            if (cmp == 0)
+            {
+                pos = l;
+                return true;
+            }
+            if (cmp > 0)
+            {
+                pos = l;
+                return false;
+            }
+        } // for
+    }
+    
+    while (l <= r)
+    {
+        size_type mid = (r-l)/2+l;
+        cmp = this->compare(sv, mid, val);
+        if (cmp == 0)
+        {
+            pos = mid;
+            // back-scan to rewind all duplicates
+            for (size_type i = mid-1; i >= 0; --i)
+            {
+                cmp = this->compare(sv, i, val);
+                if (cmp != 0)
+                    return true;
+                pos = i;
+            } // for i
+            pos = 0;
+            return true;
+        }
+        if (cmp < 0)
+            l = mid+1;
+        else
+            r = mid-1;
+
+        dist = r - l;
+        if (dist < linear_cutoff2) // do linear scan here
+        {
+            typename SV::const_iterator it(&sv, l);
+            for (; it.valid(); ++it, ++l)
+            {
+                typename SV::value_type sv_value = it.value();
+                if (sv_value == val)
+                {
+                    pos = l;
+                    return true;
+                }
+                if (sv_value > val) // vect[x] > val
+                {
+                    pos = l;
+                    return false;
+                }
+            } // for it
+            BM_ASSERT(0);
+            pos = l;
+            return false;
+        }
+    } // while
+    
+    BM_ASSERT(0);
+    return false;
+}
+
+
+//----------------------------------------------------------------------------
+
+template<typename SV>
 bool sparse_vector_scanner<SV>::lower_bound_str(
                                         const SV&  sv,
                                         const typename SV::value_type* str,
@@ -1412,6 +1550,7 @@ bool sparse_vector_scanner<SV>::lower_bound_str(
     {
         pos = r;
         // back-scan to rewind all duplicates
+        // TODO: adapt one-sided binary search to traverse large platos
         for (; r >= 0; --r)
         {
             cmp = this->compare_str(sv, r, str);
@@ -1478,11 +1617,16 @@ bool sparse_vector_scanner<SV>::lower_bound_str(
             {
                 const typename SV::value_type* hm_str = hmatr_.row(i);
                 cmp = ::strcmp(hm_str, str);
-                pos = l;
                 if (cmp == 0)
+                {
+                    pos = l;
                     return true;
+                }
                 if (cmp > 0) // vect[x] > str
+                {
+                    pos = l;
                     return false;
+                }
             }
             cmp = this->compare_str(sv, l, str);
             if (cmp > 0) // vect[x] > str
@@ -1490,8 +1634,8 @@ bool sparse_vector_scanner<SV>::lower_bound_str(
                 pos = l;
                 return false;
             }
-
             BM_ASSERT(0);
+            pos = l;
             return false;
         }
     } // while
@@ -1550,6 +1694,17 @@ int sparse_vector_scanner<SV>::compare_str(const SV& sv,
         }
     }
     return sv.compare(idx, str);
+}
+
+//----------------------------------------------------------------------------
+
+template<typename SV>
+int sparse_vector_scanner<SV>::compare(const SV& sv,
+                                       size_type idx,
+                                       const value_type val)
+{
+    // TODO: implement sentinel elements cache (similar to compare_str())
+    return sv.compare(idx, val);
 }
 
 //----------------------------------------------------------------------------

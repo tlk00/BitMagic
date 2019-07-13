@@ -87,7 +87,7 @@ public:
     typedef byte_buffer<allocator_type> buffer;
 public:
     /**
-        Construct serializer
+        Constructor
         
         \param alloc - memory allocator
         \param temp_block - temporary block for various operations
@@ -112,7 +112,15 @@ public:
     void set_compression_level(unsigned clevel);
 
     /**
-        Get compression level
+        Get compression level (0-5), Default 5 (recommended)
+        0 - take as is
+        1, 2 - apply light weight RLE/GAP encodings, limited depth hierarchical
+               compression, intervals encoding
+        3 - variant of 2 with different cut-offs
+        4 - delta transforms plus Elias Gamma encoding where possible legacy)
+        5 - binary interpolated encoding (Moffat, et al)
+     
+        Recommended: use 3 or 5
     */
     unsigned get_compression_level() const { return compression_level_; }
     
@@ -291,8 +299,8 @@ private:
     
 private:
     bm::id64_t         digest0_;
-    unsigned           bit_model_d0_size_; ///< memory consumption by d0 method (bytes)
-    unsigned           bit_model_0run_size_; ///< memory consumption by run-0 method (bytes)
+    unsigned           bit_model_d0_size_; ///< memory (bytes) by d0 method (bytes)
+    unsigned           bit_model_0run_size_; ///< memory (bytes) by run-0 method (bytes)
     block_arridx_type  bit_idx_arr_;
     unsigned           scores_[64];
     unsigned char      models_[64];

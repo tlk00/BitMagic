@@ -166,7 +166,7 @@ public:
 
         typedef unsigned                    difference_type;
         typedef unsigned*                   pointer;
-        typedef value_type&                 reference;        
+        typedef value_type&                 reference;
 
     public:
         const_iterator();
@@ -638,6 +638,22 @@ public:
     */
     bool equal(const sparse_vector<Val, BV>& sv,
                bm::null_support null_able = bm::use_null) const;
+    ///@}
+
+    // ------------------------------------------------------------
+    /*! @name Element comparison        */
+    ///@{
+
+    /**
+        \brief Compare vector element with argument
+     
+        \param idx - vactor element index
+        \param val - argument to compare with
+     
+        \return 0 - equal, < 0 - vect[i] < str, >0 otherwise
+    */
+    int compare(size_type idx, const value_type val) const;
+    
     ///@}
 
     // ------------------------------------------------------------
@@ -1868,6 +1884,15 @@ void sparse_vector<Val, BV>::filter(
     }
 }
 
+//---------------------------------------------------------------------
+
+template<class Val, class BV>
+int sparse_vector<Val, BV>::compare(size_type idx, const value_type val) const
+{
+    // TODO: consider bit-by-bit comparison to minimize CPU hit miss in plans get()
+    value_type sv_value = get(idx);
+    return (sv_value > val) - (sv_value < val);
+}
 
 //---------------------------------------------------------------------
 
