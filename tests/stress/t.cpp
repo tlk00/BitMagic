@@ -10456,54 +10456,132 @@ void SerializationCompressionLevelsTest()
    }
 
    {
-        bvect bv;
-        for (bvect::size_type i = 5; true; )
+        for (bvect::size_type k = 0; k < 4; ++k)
         {
-            bv.set(i);
-            i += rand() % 10;
-            if (bv.count() > 13000)
-                break;
-        }
-        auto bc = bv.count();
-       
-        size_t l4size = 0;
-        bvect bv_l4;
-        {
+            bvect bv;
+            for (bvect::size_type i = 5; true; )
+            {
+                auto idx = (k * 1024) + i;
+                if (idx >= 65536)
+                    break;
+                bv.set(idx);
+                i += (rand() % 9);
+                if (bv.count() > 13000)
+                    break;
+            }
+            auto bc = bv.count();
+           
+            size_t l4size = 0;
+            bvect bv_l4;
+            {
+                bm::serializer<bvect> bv_ser;
+                bv_ser.set_compression_level(4);
+                bm::serializer<bvect>::buffer sermem_buf;
+                bv_ser.serialize(bv, sermem_buf, 0);
+                const bvect::size_type* cstat = bv_ser.get_compression_stat();
+                assert(cstat[bm::set_block_bit_0runs] == 1);
+                l4size= sermem_buf.size();
+            }
+
             bm::serializer<bvect> bv_ser;
-            bv_ser.set_compression_level(4);
+            bv_ser.set_compression_level(5); // interpolated binary
             bm::serializer<bvect>::buffer sermem_buf;
             bv_ser.serialize(bv, sermem_buf, 0);
+            size_t l5size = sermem_buf.size();
+            size_t raw_int = bc * sizeof(bm::word_t);
+            assert(raw_int > l5size);
+            assert(l5size < l4size);
+            cout << " offset = " << k * 1024 << endl;
+            cout << "raw = " << raw_int << " l4 = " << l4size << " l5 = " << l5size << "  Diff(5-4)="
+                 << l4size - l5size
+                 << endl;
+           
             const bvect::size_type* cstat = bv_ser.get_compression_stat();
-            assert(cstat[bm::set_block_bit_0runs] == 1);
-            l4size= sermem_buf.size();
+            assert(cstat[bm::set_block_arr_bienc] == 1);
+           
+            bvect bv2;
+            bm::deserialize(bv2, sermem_buf.buf());
+            int cmp = bv.compare(bv2);
+            assert(cmp == 0);
+            bvect bv3;
+            operation_deserializer<bvect>::deserialize(bv3,
+                                                   sermem_buf.buf(),
+                                                   0, set_OR);
+            cmp = bv.compare(bv2);
+            assert(cmp == 0);
         }
-
-        bm::serializer<bvect> bv_ser;
-        bv_ser.set_compression_level(5); // interpolated binary
-        bm::serializer<bvect>::buffer sermem_buf;
-        bv_ser.serialize(bv, sermem_buf, 0);
-        size_t l5size = sermem_buf.size();
-        size_t raw_int = bc * sizeof(bm::word_t);
-        assert(raw_int > l5size);
-        assert(l5size < l4size);
-        cout << "raw = " << raw_int << " l4 = " << l4size << " l5 = " << l5size << "  Diff(5-4)="
-             << l4size - l5size
-             << endl;
-       
-        const bvect::size_type* cstat = bv_ser.get_compression_stat();
-        assert(cstat[bm::set_block_arr_bienc] == 1);
-       
-        bvect bv2;
-        bm::deserialize(bv2, sermem_buf.buf());
-        int cmp = bv.compare(bv2);
-        assert(cmp == 0);
-        bvect bv3;
-        operation_deserializer<bvect>::deserialize(bv3,
-                                               sermem_buf.buf(),
-                                               0, set_OR);
-        cmp = bv.compare(bv2);
-        assert(cmp == 0);
    }
+
+
+   {
+        cout << "Generate large split in the mid-block" << endl;
+        for (bvect::size_type k = 0; k < 4; ++k)
+        {
+            bvect bv;
+            for (bvect::size_type i = 5; true; )
+            {
+                auto idx = i;
+                if (idx >= 65536)
+                    break;
+                bv.set(idx);
+                i += (rand() % 9);
+                if (bv.count() > 3000)
+                    break;
+            }
+            bvect bv_shift(bv);
+            for (bvect::size_type i = 0; i < 10000 * 3; ++i)
+            {
+                bv_shift.shift_right();
+            }
+            bv |= bv_shift;
+
+
+            auto bc = bv.count();
+           
+            size_t l4size = 0;
+            bvect bv_l4;
+            {
+                bm::serializer<bvect> bv_ser;
+                bv_ser.set_compression_level(4);
+                bm::serializer<bvect>::buffer sermem_buf;
+                bv_ser.serialize(bv, sermem_buf, 0);
+                const bvect::size_type* cstat = bv_ser.get_compression_stat();
+                assert(cstat[bm::set_block_bit_0runs] == 1 || cstat[bm::set_block_bit_digest0]);
+                l4size= sermem_buf.size();
+            }
+
+            bm::serializer<bvect> bv_ser;
+            bv_ser.set_compression_level(5); // interpolated binary
+            bm::serializer<bvect>::buffer sermem_buf;
+            bv_ser.serialize(bv, sermem_buf, 0);
+            size_t l5size = sermem_buf.size();
+            size_t raw_int = bc * sizeof(bm::word_t);
+            assert(raw_int >= l5size);
+            assert(l5size <= l4size);
+            cout << " offset = " << k * 1024 << endl;
+            cout << "raw = " << raw_int << " l4 = " << l4size << " l5 = " << l5size << "  Diff(5-4)="
+                 << l4size - l5size
+                 << endl;
+           
+            const bvect::size_type* cstat = bv_ser.get_compression_stat();
+            assert(cstat[bm::set_block_arr_bienc]==1 ||
+                   cstat[bm::set_block_bit_digest0]==1 ||
+                   cstat[bm::set_block_bit_0runs]== 1);
+           
+            bvect bv2;
+            bm::deserialize(bv2, sermem_buf.buf());
+            int cmp = bv.compare(bv2);
+            assert(cmp == 0);
+            bvect bv3;
+            operation_deserializer<bvect>::deserialize(bv3,
+                                                   sermem_buf.buf(),
+                                                   0, set_OR);
+            cmp = bv.compare(bv2);
+            assert(cmp == 0);
+        }
+   }
+
+
 
    {
         bvect bv;
