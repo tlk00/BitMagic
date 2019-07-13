@@ -26,6 +26,12 @@ For more information please visit:  http://bitmagic.io
 #include <memory.h>
 #include "bmutil.h"
 
+
+#ifdef _MSVC_VER
+#pragma warning (push)
+#pragma warning (disable : 4702)
+#endif 
+
 namespace bm
 {
 
@@ -590,6 +596,8 @@ bm::id64_t decoder::get_64()
 {
 #if (BM_UNALIGNED_ACCESS_OK == 1)
 	bm::id64_t a = *((bm::id64_t*)buf_);
+    buf_ += sizeof(a);
+    return a;
 #else
 	bm::id64_t a = buf_[0]+
                    ((bm::id64_t)buf_[1] << 8)  +
@@ -599,9 +607,9 @@ bm::id64_t decoder::get_64()
                    ((bm::id64_t)buf_[5] << 40) +
                    ((bm::id64_t)buf_[6] << 48) +
                    ((bm::id64_t)buf_[7] << 56);
-#endif
-    buf_+=sizeof(a);
+    buf_ += sizeof(a);
     return a;
+#endif
 }
 
 
@@ -1375,5 +1383,9 @@ unsigned bit_in<TDecoder>::get_bits(unsigned count)
 // ----------------------------------------------------------------------
 
 } // namespace bm
+
+#ifdef _MSVC_VER
+#pragma warning(pop)
+#endif 
 
 #endif

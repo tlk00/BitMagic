@@ -13618,6 +13618,7 @@ template<typename SV>
 void EraseSVCollection(SV& sv)
 {
     typename SV::value_type v_next, v_curr;
+    v_next = v_curr = 0;
     while (sv.size())
     {
         auto idx = sv.size() / 2;

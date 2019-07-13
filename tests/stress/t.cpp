@@ -18499,6 +18499,7 @@ template<typename SV>
 void EraseSVCollection(SV& sv)
 {
     typename SV::value_type v_next, v_curr;
+    v_next = 0;
     while (sv.size())
     {
         auto idx = sv.size() / 2;
@@ -19130,7 +19131,7 @@ void TestSparseSort()
         cout << "sort validation.." << endl;
         std::sort(u_coll.begin(), u_coll.end());
         unsigned i = 0;
-        unsigned u_prev;
+        unsigned u_prev = 0;
         for (unsigned u : u_coll)
         {
             unsigned sv_u;

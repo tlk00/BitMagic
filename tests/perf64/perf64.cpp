@@ -183,7 +183,7 @@ void bvector64_Serialization()
             bvect64 bv_t;
             bm::deserialize(bv_t, sbuf0.buf());
             int res = bv0.compare(bv_t);
-            assert(res==0);
+            assert(res == 0); (void)res;
             
             bvect64 bv_t_c(bv_t);
             
