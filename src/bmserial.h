@@ -291,6 +291,8 @@ private:
     
 private:
     bm::id64_t         digest0_;
+    unsigned           bit_model_d0_size_; ///< memory consumption by d0 method (bytes)
+    unsigned           bit_model_0run_size_; ///< memory consumption by run-0 method (bytes)
     block_arridx_type  bit_idx_arr_;
     unsigned           scores_[64];
     unsigned char      models_[64];
@@ -1017,11 +1019,9 @@ unsigned char serializer<BV>::find_bit_best_encoding(const bm::word_t* block)
         return bm::set_block_bit;
 
     // check if it is a very sparse block with some areas of dense areas
-    if (compression_level_ < 5)
-    {
-        unsigned interval_block_size = bm::bit_count_nonzero_size(block, bm::set_block_size);
-        add_model(bm::set_block_bit_0runs, interval_block_size * 8);
-    }
+    bit_model_0run_size_ = bm::bit_count_nonzero_size(block, bm::set_block_size);
+    if (compression_level_ <= 5)
+        add_model(bm::set_block_bit_0runs, bit_model_0run_size_ * 8);
     
     if (compression_level_ >= 2)
     {
@@ -1031,18 +1031,14 @@ unsigned char serializer<BV>::find_bit_best_encoding(const bm::word_t* block)
             add_model(bm::set_block_azero, 0);
             return bm::set_block_azero;
         }
+        unsigned d0_bc = word_bitcount64(d0);
+        bit_model_d0_size_ = unsigned(8 + (32 * d0_bc * sizeof(bm::word_t)));
         if (d0 != ~0ull)
-        {
-            unsigned d0_bc = word_bitcount64(d0);
-            add_model(bm::set_block_bit_digest0, 64 + d0_bc * 1024);
-        }
+            add_model(bm::set_block_bit_digest0, bit_model_d0_size_ * 8);
 
         unsigned bc = bm::bit_block_count(block);
-        if (!bc)
-        {
-            add_model(bm::set_block_azero, 0);
-            return bm::set_block_azero;
-        }
+        BM_ASSERT(bc);
+
         if (bc == 1)
         {
             add_model(bm::set_block_bit_1bit, 16);
@@ -1279,8 +1275,18 @@ void serializer<BV>::encode_bit_digest(const bm::word_t* block,
                                        bm::encoder&     enc,
                                        bm::id64_t       d0)
 {
+    // evaluate a few "sure" models here and pick the best
+    //
     if (d0 != ~0ull)
     {
+        if (bit_model_0run_size_ < bit_model_d0_size_)
+        {
+            encode_bit_interval(block, enc, 0); // TODO: get rid of param 3 (0)
+            return;
+        }
+        
+        // encode using digest0 method
+        //
         enc.put_8(bm::set_block_bit_digest0);
         enc.put_64(d0);
 
@@ -1308,6 +1314,12 @@ void serializer<BV>::encode_bit_digest(const bm::word_t* block,
     }
     else
     {
+        if (bit_model_0run_size_ < unsigned(bm::set_block_size*sizeof(bm::word_t)))
+        {
+            encode_bit_interval(block, enc, 0); // TODO: get rid of param 3 (0)
+            return;
+        }
+
         enc.put_prefixed_array_32(bm::set_block_bit, block, bm::set_block_size);
         compression_stat_[bm::set_block_bit]++;
     }
@@ -1372,8 +1384,6 @@ void serializer<BV>::encode_bit_array(const bm::word_t* block,
         return;
     }
     encode_bit_digest(block, enc, digest0_);
-//    enc.put_prefixed_array_32(bm::set_block_bit, block, bm::set_block_size);
-//    compression_stat_[bm::set_block_bit]++;
 }
 
 template<class BV>
@@ -1420,10 +1430,6 @@ void serializer<BV>::bienc_arr_bit_block(const bm::word_t* block,
         return;
     }
     encode_bit_digest(block, enc, digest0_);
-/*
-    enc.put_prefixed_array_32(bm::set_block_bit, block, bm::set_block_size);
-    compression_stat_[bm::set_block_bit]++;
-*/
 }
 
 template<class BV>
@@ -1476,10 +1482,6 @@ void serializer<BV>::bienc_gap_bit_block(const bm::word_t* block,
         return;
     }
     encode_bit_digest(block, enc, digest0_);
-/*
-    enc.put_prefixed_array_32(bm::set_block_bit, block, bm::set_block_size);
-    compression_stat_[bm::set_block_bit]++;
-*/
 }
 
 template<class BV>
@@ -1521,15 +1523,18 @@ void serializer<BV>::interpolated_arr_bit_block(const bm::word_t* block,
         }
         else
         {
-            compression_stat_[scode]++;
-            return;
+            if (digest0_ != ~0ull && enc_size > bit_model_d0_size_)
+            {
+                enc.set_pos(enc_pos0); // rollback the bit stream
+            }
+            else
+            {
+                compression_stat_[scode]++;
+                return;
+            }
         }
     }
     encode_bit_digest(block, enc, digest0_);
-/*
-    enc.put_prefixed_array_32(bm::set_block_bit, block, bm::set_block_size);
-    compression_stat_[bm::set_block_bit]++;
-*/
 }
 
 
