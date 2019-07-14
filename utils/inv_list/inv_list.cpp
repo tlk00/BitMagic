@@ -54,8 +54,7 @@ void show_help()
       << "BitMagic Inverted List Compression Test (c) 2019"            << std::endl
       << "-u32in u32-input-file       -- raw 32-bit unsigned int file" << std::endl
       << "-bvout bvect-output-file    -- bit-vector compressed out file" << std::endl
-      << "-bvin bvect-input-file    -- bit-vector compressed in file" << std::endl
-
+      << "-bvin bvect-input-file      -- bit-vector compressed in file" << std::endl
       << std::endl
       << "-check                      -- check/validate input list" << std::endl
       << "-verify                     -- verify compressed version " << std::endl
@@ -81,6 +80,9 @@ bool         is_diag = false;
 bool         is_timing = false;
 bool         is_check = false;
 bool         is_verify = false;
+
+
+
 
 static
 int parse_args(int argc, char *argv[])
@@ -152,20 +154,6 @@ int parse_args(int argc, char *argv[])
             continue;
         }
 
-        if (arg == "-bvin" || arg == "--bvin")
-        {
-            if (i + 1 < argc)
-            {
-                bv_in_file = argv[++i];
-            }
-            else
-            {
-                return 1;
-                std::cerr << "Error: -bvin requires file name" << std::endl;
-            }
-            continue;
-        }
-
         if (arg == "-u32in" || arg == "--u32in")
         {
             if (i + 1 < argc)
@@ -194,20 +182,6 @@ int parse_args(int argc, char *argv[])
             continue;
         }
 
-        if (arg == "-u32out" || arg == "--u32out")
-        {
-            if (i + 1 < argc)
-            {
-                u32_out_file = argv[++i];
-            }
-            else
-            {
-                std::cerr << "Error: -u32out requires file name" << std::endl;
-                return 1;
-            }
-            continue;
-        }
-
 
         if (arg == "-diag" || arg == "--diag" || arg == "-d" || arg == "--d")
             is_diag = true;
@@ -229,22 +203,6 @@ typedef bm::rsc_sparse_vector<unsigned, sparse_vector_u32> rsc_sparse_vector_u32
 
 bm::chrono_taker::duration_map_type  timing_map;
 
-
-
-// convert unsigned vector to sparse format
-//
-/*
-static
-int convert_u32(const std::vector<unsigned>& u32, sparse_vector_u32& sv)
-{
-    BM_DECLARE_TEMP_BLOCK(tb)
-    bm::chrono_taker tt("u32 array to sparse vector transposition conversion", 1, &timing_map);
-    
-    sv.import(&u32[0], (unsigned)u32.size());
-    sv.optimize(tb);
-    return 0;
-}
-*/
 
 /// Read 32-bit vector size-prefix format (length:0, 1, 2, 3, ....)
 ///
@@ -308,6 +266,8 @@ int compare_vect(const VT& vec, const BV& bv)
     return 0;
 }
 
+
+
 ///  convert vector into bit-vector and append to file
 ///
 template<typename VT>
@@ -366,6 +326,8 @@ void compress_inv_dump_file(const std::string& fname,
     cout << "Reading input collection: " << fname << endl;
     if (!bv_out_fname.empty())
         cout << "Writing to BV collection: " << bv_out_fname << endl;
+    else
+        cout << "NO BV collection specified" << endl;
 
     vector<unsigned> vec;
     std::ifstream fin(fname.c_str(), std::ios::in | std::ios::binary);
@@ -456,6 +418,9 @@ void verify_inv_dump_file(const std::string& fname,
     cout << "Reading input collection: " << fname << endl;
     if (!bv_in_fname.empty())
         cout << "Reading BV collection: " << bv_in_fname << endl;
+    else
+        cout << "NO BV collection specified" << endl;
+
 
     vector<unsigned> vec;
     std::ifstream fin(fname.c_str(), std::ios::in | std::ios::binary);
@@ -546,12 +511,14 @@ int main(int argc, char *argv[])
         
         if (!u32_in_file.empty())
         {
-            if (is_verify)
+            if (!is_verify)
             {
+            cout << "compression" << endl;
                 compress_inv_dump_file(u32_in_file, bv_out_file, is_check);
             }
             else
             {
+                cout << "Verification." << endl;
                 verify_inv_dump_file(u32_in_file, bv_in_file, is_check);
             }
         }
