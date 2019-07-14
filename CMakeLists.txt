@@ -56,6 +56,7 @@ add_executable(bmtest64 ${PROJECT_SOURCE_DIR}/tests/stress64/t64.cpp)
 add_executable(bmperf ${PROJECT_SOURCE_DIR}/tests/perf/perf.cpp)
 add_executable(bmperf64 ${PROJECT_SOURCE_DIR}/tests/perf64/perf64.cpp)
 add_executable(bmlnkutil ${PROJECT_SOURCE_DIR}/utils/lnkutil/lnkutil.cpp)
+add_executable(bminv ${PROJECT_SOURCE_DIR}/utils/inv_list/inv_list.cpp)
 
 add_executable(bvsample01 ${PROJECT_SOURCE_DIR}/samples/bvsample01/sample1.cpp)
 add_executable(bvsample02 ${PROJECT_SOURCE_DIR}/samples/bvsample02/sample2.cpp)
