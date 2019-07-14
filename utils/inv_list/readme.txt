@@ -40,10 +40,10 @@ To run this test you need to download or prepare benchmark files (integer sets)
 
 2.1 Read the input set, create the output (bit-vector compressed format):
 
-./bminv -u32in /gov2.sorted -bvout /gov2.sorted.bv -c
+./bminv -c -u32in /gov2.sorted -bvout /gov2.sorted.bv 
 
 2.2 Run validation comparison to make sure there are no errors
-./bminv -u32in /gov2.sorted -bvin /gov2.sorted.bv -verify
+./bminv -verify -u32in /gov2.sorted -bvin /gov2.sorted.bv 
 
 
 Help:
