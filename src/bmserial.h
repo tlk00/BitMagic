@@ -854,7 +854,7 @@ void serializer<BV>::interpolated_encode_gap_block(
         
         bit_out_type bout(enc);
         BM_ASSERT(gap_block[len-1] == 65535);
-        bout.bic_encode(&gap_block[2], len-3, min_v, 65535);
+        bout.bic_encode_u16(&gap_block[2], len-3, min_v, 65535);
         bout.flush();
         
         // re-evaluate coding efficiency
@@ -985,7 +985,7 @@ void serializer<BV>::interpolated_gap_array(const bm::gap_word_t* gap_block,
             enc.put_16(max_v);
 
             bout.gamma(arr_len-4);
-            bout.bic_encode(&gap_block[1], arr_len-2, min_v, max_v);
+            bout.bic_encode_u16(&gap_block[1], arr_len-2, min_v, max_v);
             bout.flush();
         }
         encoder::position_type enc_pos1 = enc.get_pos();
@@ -1474,7 +1474,7 @@ void serializer<BV>::bienc_gap_bit_block(const bm::word_t* block,
         enc.put_8((unsigned char)head);
         enc.put_16(bm::gap_word_t(len));
         enc.put_16(min_v);
-        bout.bic_encode(&bit_idx_arr_[2], len-2, min_v, 65535);
+        bout.bic_encode_u16(&bit_idx_arr_[2], len-2, min_v, 65535);
         bout.flush();
     }
     encoder::position_type enc_pos1 = enc.get_pos();
@@ -1519,7 +1519,7 @@ void serializer<BV>::interpolated_arr_bit_block(const bm::word_t* block,
             enc.put_16(min_v);
             enc.put_16(max_v);
             enc.put_16(bm::gap_word_t(arr_len));
-            bout.bic_encode(&bit_idx_arr_[1], arr_len-2, min_v, max_v);
+            bout.bic_encode_u16(&bit_idx_arr_[1], arr_len-2, min_v, max_v);
             bout.flush();
         }
         encoder::position_type enc_pos1 = enc.get_pos();
@@ -1956,7 +1956,7 @@ unsigned deseriaizer_base<DEC>::read_id_list(decoder_type&   decoder,
             len = bm::gap_word_t(bin.gamma() + 4);
             dst_arr[0] = min_v;
             dst_arr[len-1] = max_v;
-            bin.bic_decode(&dst_arr[1], len-2, min_v, max_v);
+            bin.bic_decode_u16(&dst_arr[1], len-2, min_v, max_v);
         }
         break;
     default:
@@ -1984,12 +1984,12 @@ void deseriaizer_base<DEC>::read_bic_arr(decoder_type& dec, bm::word_t* blk)
 
     if (!IS_VALID_ADDR(blk))
     {
-        bin.bic_decode_dry(arr_len-2, min_v, max_v);
+        bin.bic_decode_u16_dry(arr_len-2, min_v, max_v);
         return;
     }
     bm::set_bit(blk, min_v);
     bm::set_bit(blk, max_v);
-    bin.bic_decode_bitset(blk, arr_len-2, min_v, max_v);
+    bin.bic_decode_u16_bitset(blk, arr_len-2, min_v, max_v);
 }
 
 template<class DEC>
@@ -2020,7 +2020,7 @@ void deseriaizer_base<DEC>::read_bic_gap(decoder_type& dec, bm::word_t* blk)
     id_array_[arr_len] = 65535;
     
     bit_in_type bin(dec);
-    bin.bic_decode(&id_array_[2], arr_len-2, min_v, 65535);
+    bin.bic_decode_u16(&id_array_[2], arr_len-2, min_v, 65535);
 
     if (!IS_VALID_ADDR(blk))
     {
@@ -2151,7 +2151,7 @@ void deseriaizer_base<DEC>::read_gap_block(decoder_type&   decoder,
             bm::gap_word_t min_v = decoder.get_16();
             dst_block[1] = min_v;
             bit_in_type bin(decoder);
-            bin.bic_decode(&dst_block[2], len-2, min_v, 65535);
+            bin.bic_decode_u16(&dst_block[2], len-2, min_v, 65535);
             dst_block[len] = bm::gap_max_bits - 1;
         }
         break;
@@ -2399,6 +2399,17 @@ size_t deserializer<BV, DEC>::deserialize(bvector_type&        bv,
     if (!(header_flag & BM_HM_NO_BO))
     {
         /*ByteOrder bo = (bm::ByteOrder)*/dec.get_8();
+    }
+    if (header_flag & BM_HM_64_BIT)
+    {
+    #ifndef BM64ADDR
+        BM_ASSERT(0); // 64-bit address vector cannot read on 32
+        #ifndef BM_NO_STL
+            throw std::logic_error(bm_serialization_msg);
+        #else
+            BM_THROW(BM_ERR_SERIALFORMAT);
+        #endif
+    #endif
     }
 
     if (header_flag & BM_HM_ID_LIST)
@@ -2711,6 +2722,7 @@ serial_stream_iterator<DEC>::serial_stream_iterator(const unsigned char* buf)
 
     bit_func_table_[bm::set_AND] = 
         &serial_stream_iterator<DEC>::get_bit_block_AND;
+
     bit_func_table_[bm::set_ASSIGN] = 
         &serial_stream_iterator<DEC>::get_bit_block_ASSIGN;
     bit_func_table_[bm::set_OR]     = 
@@ -4222,6 +4234,12 @@ operation_deserializer<BV>::deserialize(bvector_type&        bv,
         temp_block = bg.allocate();
     }
 
+    if (op == bm::set_ASSIGN)
+    {
+        bv.clear(true);
+        op = bm::set_OR;
+    }
+
     if (bo_current == bo)
     {
         serial_stream_current ss(buf);
@@ -4309,11 +4327,11 @@ iterator_deserializer<BV, SerialIterator>::finalize_target_vector(
     case set_COUNT_SUB_BA:
         // nothing to do
         break;
-    case set_AND: case set_ASSIGN:
+    case set_ASSIGN: case set_AND:
         {
-        block_idx_type nblock_last = (bm::id_max >> bm::set_block_shift);
-        if (bv_block_idx <= nblock_last)
-            bman.set_all_zero(bv_block_idx, nblock_last); // clear the target tail
+            block_idx_type nblock_last = (bm::id_max >> bm::set_block_shift);
+            if (bv_block_idx <= nblock_last)
+                bman.set_all_zero(bv_block_idx, nblock_last); // clear the tail
         }
         break;
     case set_COUNT_A: case set_COUNT_OR: case set_COUNT_XOR:
@@ -4376,7 +4394,8 @@ iterator_deserializer<BV, SerialIterator>::process_id_list(
         }
         break;
     case set_ASSIGN:
-        bv.clear(true);
+        BM_ASSERT(0);
+        //bv.clear(true);
         // intentional case fall through here (not a bug)
     case set_OR:
         set_clear = true;
@@ -4748,7 +4767,6 @@ iterator_deserializer<BV, SerialIterator>::deserialize(
             {
                 if ((sop == set_ASSIGN) && blk) // target block override
                 {
-                    //blk =
                     bman.zero_block(bv_block_idx);
                     sop = set_OR;
                 }
