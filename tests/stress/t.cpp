@@ -14582,7 +14582,7 @@ void InterpolativeCodingTest()
         bm::bit_out<bm::encoder> bout(enc);
         
         sz = sizeof(arr1)/sizeof(arr1[0])-1;
-        bout.bic_encode(arr1, sz, 0, 62);
+        bout.bic_encode_u16(arr1, sz, 0, 62);
         
         bout.flush();
     }
@@ -14592,7 +14592,7 @@ void InterpolativeCodingTest()
         bm::bit_in<decoder> bin(dec);
         
         bm::gap_word_t arr2[256] = {0, };
-        bin.bic_decode(&arr2[0], sz, 0, 62);
+        bin.bic_decode_u16(&arr2[0], sz, 0, 62);
         for (unsigned i = 0; i < sz; ++i)
         {
             assert(arr1[i] == arr2[i]);
@@ -14623,14 +14623,14 @@ void InterpolativeCodingTest()
                 bm::encoder enc(buf, sizeof(buf));
                 bm::bit_out<bm::encoder> bout(enc);
                 
-                bout.bic_encode(src_arr, sz-1, 0, 65535);
+                bout.bic_encode_u16(src_arr, sz-1, 0, 65535);
                 bout.flush();
             }
             {
                 decoder dec(buf);
                 bm::bit_in<decoder> bin(dec);
                 
-                bin.bic_decode(&dst_arr[0], sz-1, 0, 65535);
+                bin.bic_decode_u16(&dst_arr[0], sz-1, 0, 65535);
                 dst_arr[sz-1]=65535;
                 for (unsigned i = 0; i < sz; ++i)
                 {
@@ -14659,14 +14659,14 @@ void InterpolativeCodingTest()
                 bm::encoder enc(buf, sizeof(buf));
                 bm::bit_out<bm::encoder> bout(enc);
                 
-                bout.bic_encode(src_arr, sz-1, 0, 65535);
+                bout.bic_encode_u16(src_arr, sz-1, 0, 65535);
                 bout.flush();
             }
             {
                 decoder dec(buf);
                 bm::bit_in<decoder> bin(dec);
                 
-                bin.bic_decode(&dst_arr[0], sz-1, 0, 65535);
+                bin.bic_decode_u16(&dst_arr[0], sz-1, 0, 65535);
                 dst_arr[sz-1]=65535;
                 for (unsigned i = 0; i < sz; ++i)
                 {
