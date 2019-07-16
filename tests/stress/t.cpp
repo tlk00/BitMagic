@@ -22554,6 +22554,33 @@ int parse_args(int argc, char *argv[])
     return 0;
 }
 
+void BrennerTest(const char* i_fname, const char* bv_fname, const char* bv_fname_new)
+{
+    ifstream input_file(i_fname);
+    vector<unsigned> uid_vec((istream_iterator<unsigned>(input_file)), istream_iterator<unsigned>());
+    unsigned* uids = &(uid_vec[0]);
+    size_t len = uid_vec.size();
+    unsigned slen = len;
+
+    bvect bv_i;
+    bv_i.set(uids, slen);
+    
+    bvect bv_b;
+    LoadBVector(bv_fname, bv_b);
+    
+    int cmp = bv_b.compare(bv_i);
+    assert(cmp == 0);
+    
+    bvect bv_b2;
+    SaveBVector(bv_fname_new, bv_i);
+    LoadBVector(bv_fname, bv_b2);
+
+    cmp = bv_b2.compare(bv_i);
+    assert(cmp == 0);
+
+    cout << "Test OK" << endl;
+}
+
 
 int main(int argc, char *argv[])
 {
@@ -22565,6 +22592,12 @@ int main(int argc, char *argv[])
     if (ret != 0)
         return ret;
     }
+/*
+    BrennerTest("/Users/anatoliykuznetsov/Desktop/dev/git/BitMagic/tests/stress/1.i",
+                "/Users/anatoliykuznetsov/Desktop/dev/git/BitMagic/tests/stress/1.bv",
+                "/Users/anatoliykuznetsov/Desktop/dev/git/BitMagic/tests/stress/new.bv");
+    return 0;
+*/
 
 /*
     LoadBVDump("C:/dev/group-by-sets/sets/geo_organization.bvdump", 
