@@ -23,6 +23,8 @@ For more information please visit:  http://bitmagic.io
     @internal
 */
 
+#include <cstdint>
+
 namespace bm
 {
 

@@ -10478,8 +10478,8 @@ void SerializationCompressionLevelsTest()
                 bv_ser.set_compression_level(4);
                 bm::serializer<bvect>::buffer sermem_buf;
                 bv_ser.serialize(bv, sermem_buf, 0);
-                const bvect::size_type* cstat = bv_ser.get_compression_stat();
-                assert(cstat[bm::set_block_bit_0runs] == 1);
+                //const bvect::size_type* cstat = bv_ser.get_compression_stat();
+                //assert(cstat[bm::set_block_bit_0runs] == 1);
                 l4size= sermem_buf.size();
             }
 
@@ -14518,52 +14518,66 @@ void BitEncoderTest()
 }
 
 /// Random numbers test
-static
-unsigned generate_inter_test_linear(bm::gap_word_t* arr, unsigned inc)
+template<typename V>
+unsigned generate_inter_test_linear(V* arr, unsigned inc, unsigned target_size)
 {
+    V maskFF = 0;
+    maskFF = ~maskFF;
+    
     if (inc < 2 || inc > 65535)
         inc = 1;
     
     unsigned start = 1;
     unsigned sz = 0;
-    while (true)
+    while (sz < target_size)
     {
-        arr[sz++] = bm::gap_word_t(start);
-        if (inc + start >= 65535)
+        arr[sz++] = V(start);
+        if (inc + start >= maskFF)
         {
-            arr[sz++] = 65535;
+            arr[sz++] = maskFF;
             break;
         }
         start += inc;
+        if (start < arr[sz-1])
+            break;
+        
     } // while
     return sz;
 }
 
 
 /// Random numbers test
-static
-unsigned generate_inter_test(bm::gap_word_t* arr, unsigned inc_factor)
+template<typename V>
+unsigned generate_inter_test(V* arr, unsigned inc_factor, unsigned target_size)
 {
-    if (inc_factor < 2 || inc_factor > 65535)
+    V maskFF = 0; maskFF = ~maskFF;
+
+    if (inc_factor < 2)
         inc_factor = 65535;
     
     unsigned start = rand() % 256;
     if (!start)
         start = 1;
     unsigned sz = 0;
-    while (true)
+    while (sz < target_size)
     {
-        arr[sz++] = bm::gap_word_t(start);
+        arr[sz++] = V(start);
+        
         unsigned inc = unsigned(rand()) % inc_factor;
         if (!inc)
             inc = 1;
-        if (inc + start >= 65535)
-        {
-            arr[sz++] = 65535;
-            break;
-        }
         start += inc;
+        if (start >= maskFF)
+            break;
     } // while
+
+    for(unsigned i = 1; i < sz; ++i)
+    {
+        if (arr[i-1] >= arr[i])
+        {
+            return i;
+        }
+    }
     return sz;
 }
 
@@ -14574,9 +14588,11 @@ void InterpolativeCodingTest()
     cout << "---------------------------- InterpolativeCodingTest() " << endl;
     
     unsigned char buf[1024 * 200] = {0, };
-    const gap_word_t arr1[] = { 3, 4, 7, 13, 14, 15, 21, 25, 36, 38, 54, 62 };
+    unsigned char buf2[1024 * 200] = {0, };
+    const bm::gap_word_t arr1[] = { 3, 4, 7, 13, 14, 15, 21, 25, 36, 38, 54, 62 };
+    const bm::word_t arr2[] = { 30, 44, 78, 130, 140, 150, 210, 250, 3600, 3800, 540001, 620000258 };
 
-    unsigned sz;
+    unsigned sz, sz2;
     {
         bm::encoder enc(buf, sizeof(buf));
         bm::bit_out<bm::encoder> bout(enc);
@@ -14586,24 +14602,150 @@ void InterpolativeCodingTest()
         
         bout.flush();
     }
-    
+    {
+        bm::encoder enc(buf2, sizeof(buf2));
+        bm::bit_out<bm::encoder> bout(enc);
+        
+        sz2 = sizeof(arr2)/sizeof(arr2[0])-1;
+        bout.bic_encode_u32_cw(arr2, sz2, 0, 620000258);
+        bout.flush();
+    }
+
     {
         decoder dec(buf);
         bm::bit_in<decoder> bin(dec);
         
-        bm::gap_word_t arr2[256] = {0, };
-        bin.bic_decode_u16(&arr2[0], sz, 0, 62);
+        bm::gap_word_t arr2c[256] = {0, };
+        bin.bic_decode_u16(&arr2c[0], sz, 0, 62);
         for (unsigned i = 0; i < sz; ++i)
         {
-            assert(arr1[i] == arr2[i]);
+            assert(arr1[i] == arr2c[i]);
+        }
+    }
+    {
+        decoder dec(buf2);
+        bm::bit_in<decoder> bin(dec);
+        
+        bm::word_t arr2c[256] = {0, };
+        bin.bic_decode_u32_cw(&arr2c[0], sz2, 0, 620000258);
+        for (unsigned i = 0; i < sz2; ++i)
+        {
+            assert(arr2[i] == arr2c[i]);
         }
     }
 
-    cout << "Stress..." << endl;
+
+    cout << "\nu32 interpolated cw encoding Stress..." << endl;
     {
         const unsigned code_repeats = 1000000;
-        bm::gap_word_t src_arr[65536*2];
-        bm::gap_word_t dst_arr[65536*2];
+        const unsigned test_size = 12000;
+        vector<unsigned> sa; sa.resize(test_size);
+        vector<unsigned> da; da.resize(test_size);
+
+        bm::word_t* src_arr=&sa[0];
+        bm::word_t* dst_arr = &da[0];
+
+        std::chrono::time_point<std::chrono::steady_clock> s;
+        std::chrono::time_point<std::chrono::steady_clock> f;
+        s = std::chrono::steady_clock::now();
+
+        cout << "  linear pattern" << endl;
+        for (unsigned k = 0; k < code_repeats; ++k)
+        {
+            unsigned inc = rand()%(65536*256);
+            if (k == 0)
+                inc = 1;
+            sz = generate_inter_test_linear(src_arr, inc, test_size);
+            assert(sz);
+            assert(src_arr[0]);
+            {
+                bm::encoder enc(buf, sizeof(buf));
+                bm::bit_out<bm::encoder> bout(enc);
+                
+                bout.bic_encode_u32_cw(src_arr, sz-1, 0, src_arr[sz-1]);
+                bout.flush();
+                auto ssz = enc.size();
+                assert(ssz < sizeof(buf));
+            }
+            {
+                decoder dec(buf);
+                bm::bit_in<decoder> bin(dec);
+                
+                bin.bic_decode_u32_cw(&dst_arr[0], sz-1, 0, src_arr[sz-1]);
+                dst_arr[sz-1]=src_arr[sz-1];
+                for (unsigned i = 0; i < sz; ++i)
+                {
+                    assert(src_arr[i] == dst_arr[i]);
+                    if (i)
+                    {
+                        assert(src_arr[i-1] < src_arr[i]);
+                    }
+                }
+            }
+            if ((k & 0xFFFF) == 0)
+            {
+                f = std::chrono::steady_clock::now();
+                auto diff = f - s;
+                auto d = std::chrono::duration <double, std::milli> (diff).count();
+
+                cout << "\r" << k << "-" << code_repeats << " (" << d << "ms)" << flush;
+                s = std::chrono::steady_clock::now();
+            }
+        }
+
+        cout << "\n  random pattern" << endl;
+        for (unsigned k = 0; k < code_repeats; ++k)
+        {
+            sz = generate_inter_test(src_arr, k, test_size);
+            if (sz < 3)
+                continue;
+
+            assert(sz);
+            assert(src_arr[0]);
+            {
+                bm::encoder enc(buf, sizeof(buf));
+                bm::bit_out<bm::encoder> bout(enc);
+                
+                bout.bic_encode_u32_cw(src_arr, sz, 0, src_arr[sz-1]);
+                bout.flush();
+            }
+            {
+                decoder dec(buf);
+                bm::bit_in<decoder> bin(dec);
+                
+                bin.bic_decode_u32_cw(&dst_arr[0], sz, 0, src_arr[sz-1]);
+                //dst_arr[sz-1]=src_arr[sz-1];
+                for (unsigned i = 0; i < sz; ++i)
+                {
+                    if (i)
+                    {
+                        assert(src_arr[i-1] < src_arr[i]);
+                    }
+                    assert(src_arr[i] == dst_arr[i]);
+                }
+            }
+            if ((k & 0xFFF) == 0)
+            {
+                f = std::chrono::steady_clock::now();
+                auto diff = f - s;
+                auto d = std::chrono::duration <double, std::milli> (diff).count();
+
+                cout << "\r" << k << "-" << code_repeats << " (" << d << "ms)" << flush;
+                s = std::chrono::steady_clock::now();
+            }
+        } // for k
+
+    }
+
+    cout << "\nu16 interpolated encoding Stress..." << endl;
+    {
+        const unsigned code_repeats = 1000000;
+        const unsigned test_size = 65536;
+        vector<bm::gap_word_t> sa; sa.resize(test_size);
+        vector<bm::gap_word_t> da; da.resize(test_size);
+
+        bm::gap_word_t* src_arr= &sa[0];
+        bm::gap_word_t* dst_arr= &da[0];
 
         std::chrono::time_point<std::chrono::steady_clock> s;
         std::chrono::time_point<std::chrono::steady_clock> f;
@@ -14615,23 +14757,27 @@ void InterpolativeCodingTest()
         for (unsigned k = 0; k < code_repeats; ++k)
         {
             unsigned inc = rand()%128;
-            sz = generate_inter_test_linear(src_arr, inc);
+            if (k == 0)
+                inc = 1;
+
+            sz = generate_inter_test_linear(src_arr, inc, 65536);
             assert(sz);
             assert(src_arr[0]);
-            assert(src_arr[sz-1]==65535);
+            if(src_arr[sz-1]<65535)
+               src_arr[sz-1]=65535;
             {
                 bm::encoder enc(buf, sizeof(buf));
                 bm::bit_out<bm::encoder> bout(enc);
                 
-                bout.bic_encode_u16(src_arr, sz-1, 0, 65535);
+                bout.bic_encode_u16(src_arr, sz, 0, 65535);
                 bout.flush();
             }
             {
                 decoder dec(buf);
                 bm::bit_in<decoder> bin(dec);
                 
-                bin.bic_decode_u16(&dst_arr[0], sz-1, 0, 65535);
-                dst_arr[sz-1]=65535;
+                bin.bic_decode_u16(&dst_arr[0], sz, 0, 65535);
+                //dst_arr[sz-1]=65535;
                 for (unsigned i = 0; i < sz; ++i)
                 {
                     assert(src_arr[i] == dst_arr[i]);
@@ -14651,23 +14797,25 @@ void InterpolativeCodingTest()
 
         for (unsigned k = 0; k < code_repeats; ++k)
         {
-            sz = generate_inter_test(src_arr, k);
+            sz = generate_inter_test(src_arr, k, 65536);
+            if (sz < 3)
+                continue;
             assert(sz);
             assert(src_arr[0]);
-            assert(src_arr[sz-1]==65535);
+            assert(src_arr[sz-1]<=65535);
             {
                 bm::encoder enc(buf, sizeof(buf));
                 bm::bit_out<bm::encoder> bout(enc);
                 
-                bout.bic_encode_u16(src_arr, sz-1, 0, 65535);
+                bout.bic_encode_u16(src_arr, sz, 0, 65535);
                 bout.flush();
             }
             {
                 decoder dec(buf);
                 bm::bit_in<decoder> bin(dec);
                 
-                bin.bic_decode_u16(&dst_arr[0], sz-1, 0, 65535);
-                dst_arr[sz-1]=65535;
+                bin.bic_decode_u16(&dst_arr[0], sz, 0, 65535);
+                //dst_arr[sz-1]=65535;
                 for (unsigned i = 0; i < sz; ++i)
                 {
                     assert(src_arr[i] == dst_arr[i]);
@@ -22504,6 +22652,7 @@ int main(int argc, char *argv[])
         TestHeapVector();
         MiniSetTest();
         BitEncoderTest();
+        
         InterpolativeCodingTest();
         GammaEncoderTest();
         GAPCheck();
