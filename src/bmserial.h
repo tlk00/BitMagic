@@ -285,7 +285,7 @@ protected:
     /// Reset all accumulated compression statistics
     void reset_compression_stats();
     
-    void reset_models() { mod_size_ = 0; }
+    void reset_models() { for (unsigned i = 0; i < mod_size_; ++i) scores_[i] = 0; mod_size_ = 0; }
     void add_model(unsigned char mod, unsigned score);
 
 private:
@@ -354,6 +354,10 @@ protected:
     
     /// Read digest0-type bit-block
     void read_digest0_block(decoder_type& decoder, bm::word_t* blk);
+    
+    static
+    const char* err_msg() { return "BM::Invalid serialization format"; }
+
 
 protected:
     bm::gap_word_t*   id_array_; ///< ptr to idx array for temp decode use
@@ -447,6 +451,9 @@ private:
     size_type process_id_list(bvector_type&         bv,
                               serial_iterator_type& sit,
                               set_operation         op);
+    static
+    const char* err_msg() { return "BM::de-serialization format error"; }
+
 };
 
 /*!
@@ -648,7 +655,6 @@ private:
 //
 //----------------------------------------------------------------------------
 
-const char* bm_serialization_msg = "BM::Invalid serialization format";
 
 /// \internal
 /// \ingroup bvserial
@@ -1247,6 +1253,7 @@ void serializer<BV>::encode_bit_interval(const bm::word_t* blk,
                 if (blk[j] != 0)
                     break;
             }
+            BM_ASSERT(j-i);
             enc.put_16((gap_word_t)(j-i)); 
             i = j - 1;
         }
@@ -1267,10 +1274,10 @@ void serializer<BV>::encode_bit_interval(const bm::word_t* blk,
                     break;
                 }
             }
-            enc.put_16((gap_word_t)(j-i)); 
-            // stream all bit-words now
-            BM_ASSERT(i < j);
-            enc.put_32(blk + i, j - i);
+            BM_ASSERT(j-i);
+            enc.put_16((gap_word_t)(j-i));
+            enc.put_32(blk + i, j - i); // stream all bit-words now
+
             i = j - 1;
         }
     }
@@ -1962,7 +1969,7 @@ unsigned deseriaizer_base<DEC>::read_id_list(decoder_type&   decoder,
     default:
         BM_ASSERT(0);
         #ifndef BM_NO_STL
-            throw std::logic_error(bm_serialization_msg);
+            throw std::logic_error(err_msg());
         #else
             BM_THROW(BM_ERR_SERIALFORMAT);
         #endif
@@ -2158,7 +2165,7 @@ void deseriaizer_base<DEC>::read_gap_block(decoder_type&   decoder,
     default:
         BM_ASSERT(0);
         #ifndef BM_NO_STL
-            throw std::logic_error(bm_serialization_msg);
+            throw std::logic_error(err_msg());
         #else
             BM_THROW(BM_ERR_SERIALFORMAT);
         #endif
@@ -2298,7 +2305,7 @@ deserializer<BV, DEC>::deserialize_gap(unsigned char btype, decoder_type& dec,
     default:
         BM_ASSERT(0);
         #ifndef BM_NO_STL
-            throw std::logic_error(bm_serialization_msg);
+            throw std::logic_error(this->err_msg());
         #else
             BM_THROW(BM_ERR_SERIALFORMAT);
         #endif
@@ -2367,7 +2374,7 @@ void deserializer<BV, DEC>::decode_bit_block(unsigned char btype,
     default:
         BM_ASSERT(0);
         #ifndef BM_NO_STL
-            throw std::logic_error(bm_serialization_msg);
+            throw std::logic_error(this->err_msg());
         #else
             BM_THROW(BM_ERR_SERIALFORMAT);
         #endif
@@ -2405,7 +2412,7 @@ size_t deserializer<BV, DEC>::deserialize(bvector_type&        bv,
     #ifndef BM64ADDR
         BM_ASSERT(0); // 64-bit address vector cannot read on 32
         #ifndef BM_NO_STL
-            throw std::logic_error(bm_serialization_msg);
+            throw std::logic_error(this->err_msg());
         #else
             BM_THROW(BM_ERR_SERIALFORMAT);
         #endif
@@ -2457,7 +2464,7 @@ size_t deserializer<BV, DEC>::deserialize(bvector_type&        bv,
             BM_ASSERT(sizeof(block_idx_type)==8);
             #ifndef BM64ADDR
                 #ifndef BM_NO_STL
-                    throw std::logic_error(bm_serialization_msg);
+                    throw std::logic_error(this->err_msg());
                 #else
                     BM_THROW(BM_ERR_SERIALFORMAT);
                 #endif
@@ -2516,7 +2523,7 @@ size_t deserializer<BV, DEC>::deserialize(bvector_type&        bv,
             #else
                 BM_ASSERT(0); // attempt to read 64-bit vector in 32-bit mode
                 #ifndef BM_NO_STL
-                    throw std::logic_error(bm_serialization_msg);
+                    throw std::logic_error(this->err_msg());
                 #else
                     BM_THROW(BM_ERR_SERIALFORMAT);
                 #endif
@@ -2545,7 +2552,7 @@ size_t deserializer<BV, DEC>::deserialize(bvector_type&        bv,
     #else
             BM_ASSERT(0); // 32-bit vector cannot read 64-bit
             #ifndef BM_NO_STL
-                throw std::logic_error(bm_serialization_msg);
+                throw std::logic_error(this->err_msg());
             #else
                 BM_THROW(BM_ERR_SERIALFORMAT);
             #endif
@@ -2693,7 +2700,7 @@ size_t deserializer<BV, DEC>::deserialize(bvector_type&        bv,
         default:
             BM_ASSERT(0); // unknown block type
             #ifndef BM_NO_STL
-                throw std::logic_error(bm_serialization_msg);
+                throw std::logic_error(this->err_msg());
             #else
                 BM_THROW(BM_ERR_SERIALFORMAT);
             #endif
@@ -2923,7 +2930,7 @@ void serial_stream_iterator<DEC>::next()
         default:
             BM_ASSERT(0);
             #ifndef BM_NO_STL
-                throw std::logic_error(bm_serialization_msg);
+                throw std::logic_error(this->err_msg());
             #else
                 BM_THROW(BM_ERR_SERIALFORMAT);
             #endif
@@ -2946,7 +2953,7 @@ void serial_stream_iterator<DEC>::next()
     default:
         BM_ASSERT(0);
         #ifndef BM_NO_STL
-            throw std::logic_error(bm_serialization_msg);
+            throw std::logic_error(this->err_msg());
         #else
             BM_THROW(BM_ERR_SERIALFORMAT);
         #endif
@@ -3050,7 +3057,7 @@ serial_stream_iterator<DEC>::get_bit_block_ASSIGN(
     case set_block_gapbit:
         BM_ASSERT(0);
         #ifndef BM_NO_STL
-            throw std::logic_error(bm_serialization_msg);
+            throw std::logic_error(this->err_msg());
         #else
             BM_THROW(BM_ERR_SERIALFORMAT);
         #endif
@@ -3081,7 +3088,7 @@ serial_stream_iterator<DEC>::get_bit_block_ASSIGN(
     default:
         BM_ASSERT(0);
         #ifndef BM_NO_STL
-            throw std::logic_error(bm_serialization_msg);
+            throw std::logic_error(this->err_msg());
         #else
             BM_THROW(BM_ERR_SERIALFORMAT);
         #endif
@@ -3155,7 +3162,7 @@ serial_stream_iterator<DEC>::get_bit_block_OR(bm::word_t*  dst_block,
     default:
         BM_ASSERT(0);
         #ifndef BM_NO_STL
-            throw std::logic_error(bm_serialization_msg);
+            throw std::logic_error(this->err_msg());
         #else
             BM_THROW(BM_ERR_SERIALFORMAT);
         #endif
@@ -3267,7 +3274,7 @@ serial_stream_iterator<DEC>::get_bit_block_AND(bm::word_t* BMRESTRICT dst_block,
     default:
         BM_ASSERT(0);
         #ifndef BM_NO_STL
-            throw std::logic_error(bm_serialization_msg);
+            throw std::logic_error(this->err_msg());
         #else
             BM_THROW(BM_ERR_SERIALFORMAT);
         #endif
@@ -3371,7 +3378,7 @@ serial_stream_iterator<DEC>::get_bit_block_XOR(bm::word_t*  dst_block,
     default:
         BM_ASSERT(0);
         #ifndef BM_NO_STL
-            throw std::logic_error(bm_serialization_msg);
+            throw std::logic_error(this->err_msg());
         #else
             BM_THROW(BM_ERR_SERIALFORMAT);
         #endif
@@ -3472,7 +3479,7 @@ serial_stream_iterator<DEC>::get_bit_block_SUB(bm::word_t*  dst_block,
     default:
         BM_ASSERT(0);
         #ifndef BM_NO_STL
-            throw std::logic_error(bm_serialization_msg);
+            throw std::logic_error(this->err_msg());
         #else
             BM_THROW(BM_ERR_SERIALFORMAT);
         #endif
@@ -3555,7 +3562,7 @@ serial_stream_iterator<DEC>::get_bit_block_COUNT(bm::word_t*  /*dst_block*/,
     default:
         BM_ASSERT(0);
         #ifndef BM_NO_STL
-            throw std::logic_error(bm_serialization_msg);
+            throw std::logic_error(this->err_msg());
         #else
             BM_THROW(BM_ERR_SERIALFORMAT);
         #endif
@@ -3636,7 +3643,7 @@ serial_stream_iterator<DEC>::get_bit_block_COUNT_A(bm::word_t*  dst_block,
     default:
         BM_ASSERT(0);
         #ifndef BM_NO_STL
-            throw std::logic_error(bm_serialization_msg);
+            throw std::logic_error(this->err_msg());
         #else
             BM_THROW(BM_ERR_SERIALFORMAT);
         #endif
@@ -3721,7 +3728,7 @@ serial_stream_iterator<DEC>::get_bit_block_COUNT_AND(bm::word_t*  dst_block,
     default:
         BM_ASSERT(0);
         #ifndef BM_NO_STL
-            throw std::logic_error(bm_serialization_msg);
+            throw std::logic_error(this->err_msg());
         #else
             BM_THROW(BM_ERR_SERIALFORMAT);
         #endif
@@ -3821,7 +3828,7 @@ serial_stream_iterator<DEC>::get_bit_block_COUNT_OR(bm::word_t*  dst_block,
     default:
         BM_ASSERT(0);
         #ifndef BM_NO_STL
-            throw std::logic_error(bm_serialization_msg);
+            throw std::logic_error(this->err_msg());
         #else
             BM_THROW(BM_ERR_SERIALFORMAT);
         #endif
@@ -3922,7 +3929,7 @@ serial_stream_iterator<DEC>::get_bit_block_COUNT_XOR(bm::word_t*  dst_block,
     default:
         BM_ASSERT(0);
         #ifndef BM_NO_STL
-            throw std::logic_error(bm_serialization_msg);
+            throw std::logic_error(this->err_msg());
         #else
             BM_THROW(BM_ERR_SERIALFORMAT);
         #endif
@@ -4023,7 +4030,7 @@ serial_stream_iterator<DEC>::get_bit_block_COUNT_SUB_AB(bm::word_t*  dst_block,
     default:
         BM_ASSERT(0);
         #ifndef BM_NO_STL
-            throw std::logic_error(bm_serialization_msg);
+            throw std::logic_error(this->err_msg());
         #else
             BM_THROW(BM_ERR_SERIALFORMAT);
         #endif
@@ -4117,7 +4124,7 @@ serial_stream_iterator<DEC>::get_bit_block_COUNT_SUB_BA(bm::word_t*  dst_block,
     default:
         BM_ASSERT(0);
         #ifndef BM_NO_STL
-            throw std::logic_error(bm_serialization_msg);
+            throw std::logic_error(this->err_msg());
         #else
             BM_THROW(BM_ERR_SERIALFORMAT);
         #endif
@@ -4266,7 +4273,7 @@ operation_deserializer<BV>::deserialize(bvector_type&        bv,
     default:
         BM_ASSERT(0);
         #ifndef BM_NO_STL
-            throw std::logic_error(bm_serialization_msg);
+            throw std::logic_error("BM::Platform error unknown endian");
         #else
             BM_THROW(BM_ERR_SERIALFORMAT);
         #endif
@@ -4365,7 +4372,7 @@ iterator_deserializer<BV, SerialIterator>::finalize_target_vector(
     default:
         BM_ASSERT(0);
         #ifndef BM_NO_STL
-            throw std::logic_error(bm_serialization_msg);
+            throw std::logic_error(err_msg());
         #else
             BM_THROW(BM_ERR_SERIALFORMAT);
         #endif
@@ -4464,7 +4471,7 @@ iterator_deserializer<BV, SerialIterator>::process_id_list(
     default:
         BM_ASSERT(0);
         #ifndef BM_NO_STL
-            throw std::logic_error(bm_serialization_msg);
+            throw std::logic_error(err_msg());
         #else
             BM_THROW(BM_ERR_SERIALFORMAT);
         #endif
@@ -4552,7 +4559,7 @@ iterator_deserializer<BV, SerialIterator>::deserialize(
                 default:
                     BM_ASSERT(0);
                     #ifndef BM_NO_STL
-                        throw std::logic_error(bm_serialization_msg);
+                        throw std::logic_error(err_msg());
                     #else
                         BM_THROW(BM_ERR_SERIALFORMAT);
                     #endif
@@ -4825,7 +4832,7 @@ iterator_deserializer<BV, SerialIterator>::deserialize(
         default:
             BM_ASSERT(0);
             #ifndef BM_NO_STL
-                throw std::logic_error(bm_serialization_msg);
+                throw std::logic_error(err_msg());
             #else
                 BM_THROW(BM_ERR_SERIALFORMAT);
             #endif
