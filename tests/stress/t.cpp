@@ -14521,8 +14521,8 @@ void BitEncoderTest()
 template<typename V>
 unsigned generate_inter_test_linear(V* arr, unsigned inc, unsigned target_size)
 {
-    V maskFF = 0;
-    maskFF = ~maskFF;
+    V maskFF = ~V(0);
+    
     
     if (inc < 2 || inc > 65535)
         inc = 1;
@@ -14550,7 +14550,7 @@ unsigned generate_inter_test_linear(V* arr, unsigned inc, unsigned target_size)
 template<typename V>
 unsigned generate_inter_test(V* arr, unsigned inc_factor, unsigned target_size)
 {
-    V maskFF = 0; maskFF = ~maskFF;
+    V maskFF = ~V(0);
 
     if (inc_factor < 2)
         inc_factor = 65535;
