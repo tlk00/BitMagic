@@ -206,10 +206,10 @@ void SaveBVector(const char* fname, const TBV& bvector)
     bvector.calc_stat(&st1);
 
     unsigned char* blob = new unsigned char[st1.max_serialize_mem];
-    unsigned blob_size = bm::serialize(bvector, blob);
+    size_t blob_size = bm::serialize(bvector, blob);
 
 
-    bfile.write((char*)blob, blob_size);
+    bfile.write((char*)blob, std::streamsize(blob_size));
     bfile.close();
 
     delete [] blob;
@@ -217,7 +217,7 @@ void SaveBVector(const char* fname, const TBV& bvector)
 
 inline
 void SaveBlob(const char* name_prefix, unsigned num, const char* ext,
-              const unsigned char* blob, unsigned blob_size)
+              const unsigned char* blob, size_t blob_size)
 {
     std::stringstream fname_str;
     fname_str << name_prefix << "-" << num << ext;
@@ -230,7 +230,7 @@ void SaveBlob(const char* name_prefix, unsigned num, const char* ext,
         std::cout << "Cannot open file: " << fname << std::endl;
         exit(1);
     }
-    bfile.write((char*)blob, blob_size);
+    bfile.write((char*)blob, std::streamsize(blob_size));
     bfile.close();
 }
 
