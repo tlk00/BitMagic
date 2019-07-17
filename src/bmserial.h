@@ -355,6 +355,11 @@ protected:
     /// Read digest0-type bit-block
     void read_digest0_block(decoder_type& decoder, bm::word_t* blk);
     
+    
+    /// read bit-block encoded as runs
+    static
+    void read_0runs_block(decoder_type& decoder, bm::word_t* blk);
+    
     static
     const char* err_msg() { return "BM::Invalid serialization format"; }
 
@@ -2076,6 +2081,34 @@ void deseriaizer_base<DEC>::read_digest0_block(decoder_type& dec,
 }
 
 template<class DEC>
+void deseriaizer_base<DEC>::read_0runs_block(decoder_type& dec, bm::word_t* blk)
+{
+    //TODO: optimization if block exists and it is OR-ed read
+    bm::bit_block_set(blk, 0);
+
+    unsigned char run_type = dec.get_8();
+    for (unsigned j = 0; j < bm::set_block_size; run_type = !run_type)
+    {
+        unsigned run_length = dec.get_16();
+        if (run_type)
+        {
+            unsigned run_end = j + run_length;
+            BM_ASSERT(run_end <= bm::set_block_size);
+            for (;j < run_end; ++j)
+            {
+                unsigned w = dec.get_32();
+                blk[j] = w;
+            }
+        }
+        else
+        {
+            j += run_length;
+        }
+    } // for j
+}
+
+
+template<class DEC>
 void deseriaizer_base<DEC>::read_gap_block(decoder_type&   decoder, 
                                            unsigned        block_type, 
                                            bm::gap_word_t* dst_block,
@@ -2586,28 +2619,8 @@ size_t deserializer<BV, DEC>::deserialize(bvector_type&        bv,
         case set_block_bit_0runs:
         {
             //TODO: optimization if block exists
-            bm::bit_block_set(temp_block, 0);
-
-            unsigned char run_type = dec.get_8();
-            for (unsigned j = 0; j < bm::set_block_size; run_type = !run_type)
-            {
-                unsigned run_length = dec.get_16();
-                if (run_type)
-                {
-                    unsigned run_end = j + run_length;
-                    for (;j < run_end; ++j)
-                    {
-                        BM_ASSERT(j < bm::set_block_size);
-                        temp_block[j] = dec.get_32();
-                    }
-                }
-                else
-                {
-                    j += run_length;
-                }
-            } // for
-
-            bv.combine_operation_with_block(i, 
+            this->read_0runs_block(dec, temp_block);
+            bv.combine_operation_with_block(i,
                                             temp_block,
                                             0, BM_OR);            
             continue;
