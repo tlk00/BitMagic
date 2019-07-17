@@ -285,7 +285,7 @@ protected:
     /// Reset all accumulated compression statistics
     void reset_compression_stats();
     
-    void reset_models() { for (unsigned i = 0; i < mod_size_; ++i) scores_[i] = 0; mod_size_ = 0; }
+    void reset_models() { mod_size_ = 0; }
     void add_model(unsigned char mod, unsigned score);
 
 private:
