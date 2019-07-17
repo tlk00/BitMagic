@@ -376,8 +376,9 @@ BMFORCEINLINE void encoder::put_8(unsigned char c)
 BMFORCEINLINE void encoder::put_16(bm::short_t s)
 {
 #if (BM_UNALIGNED_ACCESS_OK == 1)
-	*((bm::short_t*)buf_) = s;
-	buf_ += sizeof(s);
+    ::memcpy(buf_, &s, sizeof(bm::short_t)); // optimizer takes care of it
+	//*((bm::short_t*)buf_) = s;
+	buf_ += sizeof(bm::short_t);
 #else
     *buf_++ = (unsigned char) s;
     s >>= 8;
@@ -391,14 +392,17 @@ BMFORCEINLINE void encoder::put_16(bm::short_t s)
 inline void encoder::put_16(const bm::short_t* s, unsigned count)
 {
 #if (BM_UNALIGNED_ACCESS_OK == 1)
+    ::memcpy(buf_, s, sizeof(bm::short_t)*count);
+    buf_ += sizeof(bm::short_t) * count;
+    /*
     unsigned short* buf = (unsigned short*)buf_;
     const bm::short_t* s_end = s + count;
     do 
     {
 		*buf++ = *s++;
     } while (s < s_end);
-		
-	buf_ = (unsigned char*)buf;
+    
+	buf_ = (unsigned char*)buf;*/
 #else
     unsigned char* buf = buf_;
     const bm::short_t* s_end = s + count;
@@ -464,8 +468,11 @@ inline void encoder::set_pos(encoder::position_type buf_pos)
 inline void encoder::put_32(bm::word_t w)
 {
 #if (BM_UNALIGNED_ACCESS_OK == 1)
+    ::memcpy(buf_, &w, sizeof(bm::word_t));
+    buf_ += sizeof(bm::word_t);
+/*
 	*((bm::word_t*) buf_) = w;
-	buf_ += sizeof(w);
+	buf_ += sizeof(w); */
 #else
     *buf_++ = (unsigned char) w;
     *buf_++ = (unsigned char) (w >> 8);
@@ -482,8 +489,10 @@ inline void encoder::put_32(bm::word_t w)
 inline void encoder::put_64(bm::id64_t w)
 {
 #if (BM_UNALIGNED_ACCESS_OK == 1)
-	*((bm::id64_t*) buf_) = w;
-	buf_ += sizeof(w);
+    ::memcpy(buf_, &w, sizeof(bm::id64_t));
+    buf_ += sizeof(bm::id64_t);
+//    ::memcpy(buf_, w, sizeof(bm::id64_t));
+//    buf_ += sizeof(bm::id64_t);
 #else
     *buf_++ = (unsigned char) w;
     *buf_++ = (unsigned char) (w >> 8);
@@ -504,6 +513,9 @@ inline
 void encoder::put_32(const bm::word_t* w, unsigned count)
 {
 #if (BM_UNALIGNED_ACCESS_OK == 1)
+    ::memcpy(buf_, w, sizeof(bm::word_t) * count);
+    buf_ += sizeof(bm::word_t) * count;
+/*
 	bm::word_t* buf = (bm::word_t*)buf_;
     const bm::word_t* w_end = w + count;
     do 
@@ -511,7 +523,7 @@ void encoder::put_32(const bm::word_t* w, unsigned count)
 		*buf++ = *w++;
     } while (w < w_end);
     
-    buf_ = (unsigned char*)buf;
+    buf_ = (unsigned char*)buf; */
 #else
     unsigned char* buf = buf_;
     const bm::word_t* w_end = w + count;
@@ -565,7 +577,9 @@ inline decoder::decoder(const unsigned char* buf)
 BMFORCEINLINE bm::short_t decoder::get_16() 
 {
 #if (BM_UNALIGNED_ACCESS_OK == 1)
-	bm::short_t a = *((bm::short_t*)buf_);
+	//bm::short_t a = *((bm::short_t*)buf_);
+    bm::short_t a;
+    ::memcpy(&a, buf_, sizeof(bm::short_t));
 #else
     bm::short_t a = (bm::short_t)(buf_[0] + ((bm::short_t)buf_[1] << 8));
 #endif
@@ -580,7 +594,9 @@ BMFORCEINLINE bm::short_t decoder::get_16()
 BMFORCEINLINE bm::word_t decoder::get_32() 
 {
 #if (BM_UNALIGNED_ACCESS_OK == 1)
-	bm::word_t a = *((bm::word_t*)buf_);
+	//bm::word_t a = *((bm::word_t*)buf_);
+    bm::word_t a;
+    ::memcpy(&a, buf_, sizeof(bm::word_t));
 #else
 	bm::word_t a = buf_[0]+ ((unsigned)buf_[1] << 8) +
                    ((unsigned)buf_[2] << 16) + ((unsigned)buf_[3] << 24);
@@ -597,9 +613,9 @@ inline
 bm::id64_t decoder::get_64()
 {
 #if (BM_UNALIGNED_ACCESS_OK == 1)
-	bm::id64_t a = *((bm::id64_t*)buf_);
-    buf_ += sizeof(a);
-    return a;
+//	bm::id64_t a = *((bm::id64_t*)buf_);
+    bm::id64_t a;
+    ::memcpy(&a, buf_, sizeof(bm::id64_t));
 #else
 	bm::id64_t a = buf_[0]+
                    ((bm::id64_t)buf_[1] << 8)  +
@@ -609,9 +625,9 @@ bm::id64_t decoder::get_64()
                    ((bm::id64_t)buf_[5] << 40) +
                    ((bm::id64_t)buf_[6] << 48) +
                    ((bm::id64_t)buf_[7] << 56);
+#endif
     buf_ += sizeof(a);
     return a;
-#endif
 }
 
 
@@ -740,12 +756,16 @@ inline void decoder::get_16(bm::short_t* s, unsigned count)
         return;
     }
 #if (BM_UNALIGNED_ACCESS_OK == 1)
+    ::memcpy(s, buf_, sizeof(bm::short_t) * count);
+    buf_ += sizeof(bm::short_t) * count;
+    /*
 	const bm::short_t* buf = (bm::short_t*)buf_;
     const bm::short_t* s_end = s + count;
     do 
     {
         *s++ = *buf++;
     } while (s < s_end);
+    */
 #else
     const unsigned char* buf = buf_;
     const bm::short_t* s_end = s + count;
@@ -755,8 +775,9 @@ inline void decoder::get_16(bm::short_t* s, unsigned count)
         *s++ = a;
         buf += sizeof(a);
     } while (s < s_end);
-#endif
     buf_ = (unsigned char*)buf;
+#endif
+    
 }
 
 
