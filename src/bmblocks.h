@@ -1383,7 +1383,9 @@ public:
         bm::word_t* block = get_block_ptr(i, j);
         if (IS_VALID_ADDR(block))
         {
-            BM_ASSERT(!BM_IS_GAP(block));
+            if (BM_IS_GAP(block))
+                return;
+            
             unsigned gap_count = bm::bit_block_calc_change(block);
             if (gap_count == 1) // solid block
             {

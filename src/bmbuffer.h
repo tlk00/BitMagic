@@ -190,7 +190,7 @@ public:
     size_t capacity() const { return capacity_; }
 
     /// adjust current size (buffer content preserved)
-    void resize(size_t new_size)
+    void resize(size_t new_size, bool copy_content = true)
     {
         if (new_size <= capacity_)
         {
@@ -198,7 +198,8 @@ public:
             return;
         }
         byte_buffer tmp_buffer(new_size); // temp with new capacity
-        tmp_buffer = *this;
+        if (copy_content)
+            tmp_buffer = *this;
         this->swap(tmp_buffer);
         
         this->size_ = new_size;

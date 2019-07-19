@@ -186,14 +186,27 @@ public:
     /// Elias Gamma encode the specified value
     void gamma(unsigned value);
     
-    /// Binary Interpolative encoding (array of 16-bit ints)
+    /// Binary Interpolative array decode
     void bic_encode_u16(const bm::gap_word_t* arr, unsigned sz,
-                        bm::gap_word_t lo,
-                        bm::gap_word_t hi);
+                        bm::gap_word_t lo, bm::gap_word_t hi)
+    {
+        bic_encode_u16_cm(arr, sz, lo, hi);
+    }
+
+    /// Binary Interpolative encoding (array of 16-bit ints)
+    void bic_encode_u16_rg(const bm::gap_word_t* arr, unsigned sz,
+                           bm::gap_word_t lo,
+                           bm::gap_word_t hi);
     
+    /// Binary Interpolative encoding (array of 16-bit ints)
+    /// cm - "center-minimal"
+    void bic_encode_u16_cm(const bm::gap_word_t* arr, unsigned sz,
+                           bm::gap_word_t lo,
+                           bm::gap_word_t hi);
+
     /// Binary Interpolative encoding (array of 32-bit ints)
-    /// cw - "center-weight"
-    void bic_encode_u32_cw(const bm::word_t* arr, unsigned sz,
+    /// cm - "center-minimal"
+    void bic_encode_u32_cm(const bm::word_t* arr, unsigned sz,
                            bm::word_t lo, bm::word_t hi);
 
     /// Flush the incomplete 32-bit accumulator word
@@ -237,22 +250,50 @@ public:
     
     /// read number of bits out of the stream
     unsigned get_bits(unsigned count);
-    
+
     /// Binary Interpolative array decode
     void bic_decode_u16(bm::gap_word_t* arr, unsigned sz,
-                        bm::gap_word_t lo, bm::gap_word_t hi);
+                        bm::gap_word_t lo, bm::gap_word_t hi)
+    {
+        bic_decode_u16_cm(arr, sz, lo, hi);
+    }
+    
+    void bic_decode_u16_bitset(bm::word_t* block, unsigned sz,
+                               bm::gap_word_t lo, bm::gap_word_t hi)
+    {
+        bic_decode_u16_cm_bitset(block, sz, lo, hi);
+    }
+    void bic_decode_u16_dry(unsigned sz, bm::gap_word_t lo, bm::gap_word_t hi)
+    {
+        bic_decode_u16_cm_dry(sz, lo, hi);
+    }
+
+
+    /// Binary Interpolative array decode
+    void bic_decode_u16_rg(bm::gap_word_t* arr, unsigned sz,
+                           bm::gap_word_t lo, bm::gap_word_t hi);
+    /// Binary Interpolative array decode
+    void bic_decode_u16_cm(bm::gap_word_t* arr, unsigned sz,
+                           bm::gap_word_t lo, bm::gap_word_t hi);
 
     /// Binary Interpolative array decode (32-bit)
-    void bic_decode_u32_cw(bm::word_t* arr, unsigned sz,
+    void bic_decode_u32_cm(bm::word_t* arr, unsigned sz,
                            bm::word_t lo, bm::word_t hi);
 
 
     /// Binary Interpolative array decode into bitset (32-bit based)
-    void bic_decode_u16_bitset(bm::word_t* block, unsigned sz,
-                           bm::gap_word_t lo, bm::gap_word_t hi);
+    void bic_decode_u16_rg_bitset(bm::word_t* block, unsigned sz,
+                                  bm::gap_word_t lo, bm::gap_word_t hi);
 
     /// Binary Interpolative array decode into /dev/null
-    void bic_decode_u16_dry(unsigned sz, bm::gap_word_t lo, bm::gap_word_t hi);
+    void bic_decode_u16_rg_dry(unsigned sz, bm::gap_word_t lo, bm::gap_word_t hi);
+
+    /// Binary Interpolative array decode into bitset (32-bit based)
+    void bic_decode_u16_cm_bitset(bm::word_t* block, unsigned sz,
+                                  bm::gap_word_t lo, bm::gap_word_t hi);
+
+    /// Binary Interpolative array decode into /dev/null
+    void bic_decode_u16_cm_dry(unsigned sz, bm::gap_word_t lo, bm::gap_word_t hi);
 
 private:
     bit_in(const bit_in&);
@@ -377,7 +418,6 @@ BMFORCEINLINE void encoder::put_16(bm::short_t s)
 {
 #if (BM_UNALIGNED_ACCESS_OK == 1)
     ::memcpy(buf_, &s, sizeof(bm::short_t)); // optimizer takes care of it
-	//*((bm::short_t*)buf_) = s;
 	buf_ += sizeof(bm::short_t);
 #else
     *buf_++ = (unsigned char) s;
@@ -394,15 +434,6 @@ inline void encoder::put_16(const bm::short_t* s, unsigned count)
 #if (BM_UNALIGNED_ACCESS_OK == 1)
     ::memcpy(buf_, s, sizeof(bm::short_t)*count);
     buf_ += sizeof(bm::short_t) * count;
-    /*
-    unsigned short* buf = (unsigned short*)buf_;
-    const bm::short_t* s_end = s + count;
-    do 
-    {
-		*buf++ = *s++;
-    } while (s < s_end);
-    
-	buf_ = (unsigned char*)buf;*/
 #else
     unsigned char* buf = buf_;
     const bm::short_t* s_end = s + count;
@@ -470,9 +501,6 @@ inline void encoder::put_32(bm::word_t w)
 #if (BM_UNALIGNED_ACCESS_OK == 1)
     ::memcpy(buf_, &w, sizeof(bm::word_t));
     buf_ += sizeof(bm::word_t);
-/*
-	*((bm::word_t*) buf_) = w;
-	buf_ += sizeof(w); */
 #else
     *buf_++ = (unsigned char) w;
     *buf_++ = (unsigned char) (w >> 8);
@@ -491,8 +519,6 @@ inline void encoder::put_64(bm::id64_t w)
 #if (BM_UNALIGNED_ACCESS_OK == 1)
     ::memcpy(buf_, &w, sizeof(bm::id64_t));
     buf_ += sizeof(bm::id64_t);
-//    ::memcpy(buf_, w, sizeof(bm::id64_t));
-//    buf_ += sizeof(bm::id64_t);
 #else
     *buf_++ = (unsigned char) w;
     *buf_++ = (unsigned char) (w >> 8);
@@ -515,15 +541,6 @@ void encoder::put_32(const bm::word_t* w, unsigned count)
 #if (BM_UNALIGNED_ACCESS_OK == 1)
     ::memcpy(buf_, w, sizeof(bm::word_t) * count);
     buf_ += sizeof(bm::word_t) * count;
-/*
-	bm::word_t* buf = (bm::word_t*)buf_;
-    const bm::word_t* w_end = w + count;
-    do 
-    {
-		*buf++ = *w++;
-    } while (w < w_end);
-    
-    buf_ = (unsigned char*)buf; */
 #else
     unsigned char* buf = buf_;
     const bm::word_t* w_end = w + count;
@@ -577,7 +594,6 @@ inline decoder::decoder(const unsigned char* buf)
 BMFORCEINLINE bm::short_t decoder::get_16() 
 {
 #if (BM_UNALIGNED_ACCESS_OK == 1)
-	//bm::short_t a = *((bm::short_t*)buf_);
     bm::short_t a;
     ::memcpy(&a, buf_, sizeof(bm::short_t));
 #else
@@ -594,7 +610,6 @@ BMFORCEINLINE bm::short_t decoder::get_16()
 BMFORCEINLINE bm::word_t decoder::get_32() 
 {
 #if (BM_UNALIGNED_ACCESS_OK == 1)
-	//bm::word_t a = *((bm::word_t*)buf_);
     bm::word_t a;
     ::memcpy(&a, buf_, sizeof(bm::word_t));
 #else
@@ -613,7 +628,6 @@ inline
 bm::id64_t decoder::get_64()
 {
 #if (BM_UNALIGNED_ACCESS_OK == 1)
-//	bm::id64_t a = *((bm::id64_t*)buf_);
     bm::id64_t a;
     ::memcpy(&a, buf_, sizeof(bm::id64_t));
 #else
@@ -758,14 +772,6 @@ inline void decoder::get_16(bm::short_t* s, unsigned count)
 #if (BM_UNALIGNED_ACCESS_OK == 1)
     ::memcpy(s, buf_, sizeof(bm::short_t) * count);
     buf_ += sizeof(bm::short_t) * count;
-    /*
-	const bm::short_t* buf = (bm::short_t*)buf_;
-    const bm::short_t* s_end = s + count;
-    do 
-    {
-        *s++ = *buf++;
-    } while (s < s_end);
-    */
 #else
     const unsigned char* buf = buf_;
     const bm::short_t* s_end = s + count;
@@ -1069,9 +1075,9 @@ void bit_out<TEncoder>::gamma(unsigned value)
 // ----------------------------------------------------------------------
 
 template<typename TEncoder>
-void bit_out<TEncoder>::bic_encode_u16(const bm::gap_word_t* arr,
-                                       unsigned sz,
-                                       bm::gap_word_t lo, bm::gap_word_t hi)
+void bit_out<TEncoder>::bic_encode_u16_rg(const bm::gap_word_t* arr,
+                                          unsigned sz,
+                                          bm::gap_word_t lo, bm::gap_word_t hi)
 {
     for (;sz;)
     {
@@ -1091,7 +1097,7 @@ void bit_out<TEncoder>::bic_encode_u16(const bm::gap_word_t* arr,
             }
         }
         
-        bic_encode_u16(arr, mid_idx, lo, gap_word_t(val-1));
+        bic_encode_u16_rg(arr, mid_idx, lo, gap_word_t(val-1));
         // tail recursion
         //   bic_encode_u16(arr + mid_idx + 1, sz - mid_idx - 1, gap_word_t(val+1), hi);
         arr += mid_idx + 1;
@@ -1103,7 +1109,7 @@ void bit_out<TEncoder>::bic_encode_u16(const bm::gap_word_t* arr,
 // ----------------------------------------------------------------------
 
 template<typename TEncoder>
-void bit_out<TEncoder>::bic_encode_u32_cw(const bm::word_t* arr,
+void bit_out<TEncoder>::bic_encode_u32_cm(const bm::word_t* arr,
                                           unsigned sz,
                                           bm::word_t lo, bm::word_t hi)
 {
@@ -1135,14 +1141,59 @@ void bit_out<TEncoder>::bic_encode_u32_cw(const bm::word_t* arr,
             }
         }
         
-        bic_encode_u32_cw(arr, mid_idx, lo, val-1);
+        bic_encode_u32_cm(arr, mid_idx, lo, val-1);
         // tail recursive call:
-        // bic_encode_u32_cw(arr + mid_idx + 1, sz - mid_idx - 1, val+1, hi);
+        // bic_encode_u32_cm(arr + mid_idx + 1, sz - mid_idx - 1, val+1, hi);
         arr += mid_idx + 1;
         sz  -= mid_idx + 1;
         lo = val + 1;
     } // for sz
 }
+
+// ----------------------------------------------------------------------
+
+template<typename TEncoder>
+void bit_out<TEncoder>::bic_encode_u16_cm(const bm::gap_word_t* arr,
+                                          unsigned sz,
+                                          bm::gap_word_t lo, bm::gap_word_t hi)
+{
+    for (;sz;)
+    {
+        BM_ASSERT(lo <= hi);
+        unsigned mid_idx = sz >> 1;
+        bm::gap_word_t val = arr[mid_idx];
+        
+        // write the interpolated value
+        // write(x, r) where x=(arr[mid] - lo - mid) r=(hi - lo - sz + 1);
+        {
+            unsigned r = hi - lo - sz + 1;
+            if (r)
+            {
+                unsigned value = val - lo - mid_idx;
+                
+                unsigned n = r + 1;
+                unsigned logv = bm::bit_scan_reverse32(n);
+                unsigned c = (unsigned)(1ull << (logv + 1)) - n;
+                int64_t half_c = c >> 1; // c / 2;
+                int64_t half_r = r >> 1; // r / 2;
+                int64_t lo1 = half_r - half_c;
+                int64_t hi1 = half_r + half_c + 1;
+                lo1 -= (n & 1);
+                logv += (value <= lo1 || value >= hi1);
+
+                put_bits(value, logv);
+            }
+        }
+        
+        bic_encode_u16_cm(arr, mid_idx, lo, val-1);
+        // tail recursive call:
+        // bic_encode_u32_cm(arr + mid_idx + 1, sz - mid_idx - 1, val+1, hi);
+        arr += mid_idx + 1;
+        sz  -= mid_idx + 1;
+        lo = val + 1;
+    } // for sz
+}
+
 
 
 // ----------------------------------------------------------------------
@@ -1151,8 +1202,8 @@ void bit_out<TEncoder>::bic_encode_u32_cw(const bm::word_t* arr,
 
 
 template<class TDecoder>
-void bit_in<TDecoder>::bic_decode_u16(bm::gap_word_t* arr, unsigned sz,
-                                      bm::gap_word_t lo, bm::gap_word_t hi)
+void bit_in<TDecoder>::bic_decode_u16_rg(bm::gap_word_t* arr, unsigned sz,
+                                         bm::gap_word_t lo, bm::gap_word_t hi)
 {
     for (;sz;)
     {
@@ -1182,7 +1233,7 @@ void bit_in<TDecoder>::bic_decode_u16(bm::gap_word_t* arr, unsigned sz,
         arr[mid_idx] = bm::gap_word_t(val);
         if (sz == 1)
             return;
-        bic_decode_u16(arr, mid_idx, lo, bm::gap_word_t(val - 1));
+        bic_decode_u16_rg(arr, mid_idx, lo, bm::gap_word_t(val - 1));
         //bic_decode_u16(arr + mid_idx + 1, sz - mid_idx - 1, bm::gap_word_t(val + 1), hi);
         arr += mid_idx + 1;
         sz  -= mid_idx + 1;
@@ -1193,7 +1244,7 @@ void bit_in<TDecoder>::bic_decode_u16(bm::gap_word_t* arr, unsigned sz,
 // ----------------------------------------------------------------------
 
 template<class TDecoder>
-void bit_in<TDecoder>::bic_decode_u32_cw(bm::word_t* arr, unsigned sz,
+void bit_in<TDecoder>::bic_decode_u32_cm(bm::word_t* arr, unsigned sz,
                                          bm::word_t lo, bm::word_t hi)
 {
     for (;sz;)
@@ -1232,12 +1283,169 @@ void bit_in<TDecoder>::bic_decode_u32_cw(bm::word_t* arr, unsigned sz,
         if (sz == 1)
             return;
         
-        bic_decode_u32_cw(arr, mid_idx, lo, val-1);
+        bic_decode_u32_cm(arr, mid_idx, lo, val-1);
         // tail recursive call:
-        //  bic_decode_u32_cw(arr + mid_idx + 1, sz - mid_idx - 1, val + 1, hi);
+        //  bic_decode_u32_cm(arr + mid_idx + 1, sz - mid_idx - 1, val + 1, hi);
         arr += mid_idx + 1;
         sz  -= mid_idx + 1;
         lo = val + 1;
+    } // for sz
+}
+
+// ----------------------------------------------------------------------
+
+template<class TDecoder>
+void bit_in<TDecoder>::bic_decode_u16_cm(bm::gap_word_t* arr, unsigned sz,
+                                         bm::gap_word_t lo, bm::gap_word_t hi)
+{
+    for (;sz;)
+    {
+        BM_ASSERT(lo <= hi);
+        
+        unsigned val;
+        
+        // read the interpolated value
+        // x = read(r)+ lo + mid,  where r = (hi - lo - sz + 1);
+        {
+            unsigned r = hi - lo - sz + 1;
+            if (r)
+            {
+                unsigned logv = bm::bit_scan_reverse32(r+1);
+                
+                unsigned c = unsigned((1ull << (logv + 1)) - r - 1);
+                int64_t half_c = c >> 1; // c / 2;
+                int64_t half_r = r >> 1; // r / 2;
+                int64_t lo1 = half_r - half_c - ((r + 1) & 1);
+                int64_t hi1 = half_r + half_c + 1;
+                val = get_bits(logv);
+                if (val <= lo1 || val >= hi1)
+                    val += (get_bits(1) << logv);
+                BM_ASSERT(val <= r);
+            }
+            else
+            {
+                val = 0;
+            }
+        }
+        
+        unsigned mid_idx = sz >> 1;
+        val += lo + mid_idx;
+        arr[mid_idx] = bm::gap_word_t(val);
+        if (sz == 1)
+            return;
+        
+        bic_decode_u16_cm(arr, mid_idx, lo, bm::gap_word_t(val-1));
+        // tail recursive call:
+        //  bic_decode_u32_cm(arr + mid_idx + 1, sz - mid_idx - 1, val + 1, hi);
+        arr += mid_idx + 1;
+        sz  -= mid_idx + 1;
+        lo = bm::gap_word_t(val + 1);
+    } // for sz
+}
+
+// ----------------------------------------------------------------------
+
+template<class TDecoder>
+void bit_in<TDecoder>::bic_decode_u16_cm_bitset(bm::word_t* block, unsigned sz,
+                              bm::gap_word_t lo, bm::gap_word_t hi)
+{
+    for (;sz;)
+    {
+        BM_ASSERT(lo <= hi);
+        
+        unsigned val;
+        
+        // read the interpolated value
+        // x = read(r)+ lo + mid,  where r = (hi - lo - sz + 1);
+        {
+            unsigned r = hi - lo - sz + 1;
+            if (r)
+            {
+                unsigned logv = bm::bit_scan_reverse32(r+1);
+                
+                unsigned c = unsigned((1ull << (logv + 1)) - r - 1);
+                int64_t half_c = c >> 1; // c / 2;
+                int64_t half_r = r >> 1; // r / 2;
+                int64_t lo1 = half_r - half_c - ((r + 1) & 1);
+                int64_t hi1 = half_r + half_c + 1;
+                val = get_bits(logv);
+                if (val <= lo1 || val >= hi1)
+                    val += (get_bits(1) << logv);
+                BM_ASSERT(val <= r);
+            }
+            else
+            {
+                val = 0;
+            }
+        }
+        
+        unsigned mid_idx = sz >> 1;
+        val += lo + mid_idx;
+        
+        // set bit in the target block
+        {
+            unsigned nword = (val >> bm::set_word_shift);
+            block[nword] |= (1u << (val & bm::set_word_mask));
+        }
+        
+        if (sz == 1)
+            return;
+        
+        bic_decode_u16_cm_bitset(block, mid_idx, lo, bm::gap_word_t(val-1));
+        // tail recursive call:
+        //  bic_decode_u32_cm(block, sz - mid_idx - 1, val + 1, hi);
+        sz  -= mid_idx + 1;
+        lo = bm::gap_word_t(val + 1);
+    } // for sz
+}
+
+// ----------------------------------------------------------------------
+
+template<class TDecoder>
+void bit_in<TDecoder>::bic_decode_u16_cm_dry(unsigned sz,
+                              bm::gap_word_t lo, bm::gap_word_t hi)
+{
+    for (;sz;)
+    {
+        BM_ASSERT(lo <= hi);
+        
+        unsigned val;
+        
+        // read the interpolated value
+        // x = read(r)+ lo + mid,  where r = (hi - lo - sz + 1);
+        {
+            unsigned r = hi - lo - sz + 1;
+            if (r)
+            {
+                unsigned logv = bm::bit_scan_reverse32(r+1);
+                
+                unsigned c = unsigned((1ull << (logv + 1)) - r - 1);
+                int64_t half_c = c >> 1; // c / 2;
+                int64_t half_r = r >> 1; // r / 2;
+                int64_t lo1 = half_r - half_c - ((r + 1) & 1);
+                int64_t hi1 = half_r + half_c + 1;
+                val = get_bits(logv);
+                if (val <= lo1 || val >= hi1)
+                    val += (get_bits(1) << logv);
+                BM_ASSERT(val <= r);
+            }
+            else
+            {
+                val = 0;
+            }
+        }
+        
+        unsigned mid_idx = sz >> 1;
+        val += lo + mid_idx;
+        
+        if (sz == 1)
+            return;
+        
+        bic_decode_u16_cm_dry(mid_idx, lo, bm::gap_word_t(val-1));
+        // tail recursive call:
+        //  bic_decode_u32_cm_dry(sz - mid_idx - 1, val + 1, hi);
+        sz  -= mid_idx + 1;
+        lo = bm::gap_word_t(val + 1);
     } // for sz
 }
 
@@ -1245,8 +1453,8 @@ void bit_in<TDecoder>::bic_decode_u32_cw(bm::word_t* arr, unsigned sz,
 // ----------------------------------------------------------------------
 
 template<class TDecoder>
-void bit_in<TDecoder>::bic_decode_u16_bitset(bm::word_t* block, unsigned sz,
-                                             bm::gap_word_t lo, bm::gap_word_t hi)
+void bit_in<TDecoder>::bic_decode_u16_rg_bitset(bm::word_t* block, unsigned sz,
+                                                bm::gap_word_t lo, bm::gap_word_t hi)
 {
     for (;sz;)
     {
@@ -1280,7 +1488,7 @@ void bit_in<TDecoder>::bic_decode_u16_bitset(bm::word_t* block, unsigned sz,
         
         if (sz == 1)
             return;
-        bic_decode_u16_bitset(block, mid_idx, lo, bm::gap_word_t(val - 1));
+        bic_decode_u16_rg_bitset(block, mid_idx, lo, bm::gap_word_t(val - 1));
         // tail recursion:
         //bic_decode_u16_bitset(block, sz - mid_idx - 1, bm::gap_word_t(val + 1), hi);
         sz  -= mid_idx + 1;
@@ -1291,8 +1499,8 @@ void bit_in<TDecoder>::bic_decode_u16_bitset(bm::word_t* block, unsigned sz,
 // ----------------------------------------------------------------------
 
 template<class TDecoder>
-void bit_in<TDecoder>::bic_decode_u16_dry(unsigned sz,
-                                          bm::gap_word_t lo, bm::gap_word_t hi)
+void bit_in<TDecoder>::bic_decode_u16_rg_dry(unsigned sz,
+                                   bm::gap_word_t lo, bm::gap_word_t hi)
 {
     for (;sz;)
     {
@@ -1320,7 +1528,7 @@ void bit_in<TDecoder>::bic_decode_u16_dry(unsigned sz,
 
         if (sz == 1)
             return;
-        bic_decode_u16_dry(mid_idx, lo, bm::gap_word_t(val - 1));
+        bic_decode_u16_rg_dry(mid_idx, lo, bm::gap_word_t(val - 1));
         //bic_decode_u16_dry(sz - mid_idx - 1, bm::gap_word_t(val + 1), hi);
         sz  -= mid_idx + 1;
         lo = bm::gap_word_t(val + 1);

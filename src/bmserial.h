@@ -293,10 +293,11 @@ private:
     serializer& operator=(const serializer&);
     
 private:
-    typedef bm::bit_out<bm::encoder>  bit_out_type;
+    typedef bm::bit_out<bm::encoder>                        bit_out_type;
     typedef bm::gamma_encoder<bm::gap_word_t, bit_out_type> gamma_encoder_func;
     typedef bm::heap_vector<bm::gap_word_t, allocator_type> block_arridx_type;
-    
+    typedef typename allocator_type::allocator_pool_type    allocator_pool_type;
+
 private:
     bm::id64_t         digest0_;
     unsigned           bit_model_d0_size_; ///< memory (bytes) by d0 method (bytes)
@@ -316,6 +317,8 @@ private:
     
     bool            optimize_; ///< flag to optimize the input vector
     bool            free_;     ///< flag to free the input vector
+    allocator_pool_type pool_;
+
 };
 
 /**
@@ -1012,8 +1015,10 @@ void serializer<BV>::interpolated_gap_array(const bm::gap_word_t* gap_block,
             return;
         }
     }
-    // try Elias gamma coding
-    gamma_gap_array(gap_block, arr_len, enc, inverted);
+    // save as a plain array
+    scode = inverted ? bm::set_block_arrgap_inv : bm::set_block_arrgap;
+    enc.put_prefixed_array_16(scode, gap_block, arr_len, true);
+    compression_stat_[scode]++;
 }
 
 template<class BV>
@@ -1359,7 +1364,7 @@ void serializer<BV>::serialize(const BV& bv,
         bv_stat = &stat;
     }
     
-    buf.resize(bv_stat->max_serialize_mem);
+    buf.resize(bv_stat->max_serialize_mem, false); // no-copy resize
     optimize_ = free_ = false;
 
     size_type slen = this->serialize(bv, buf.data(), buf.size());
@@ -1373,9 +1378,12 @@ template<class BV>
 void serializer<BV>::optimize_serialize_destroy(BV& bv,
                                         typename serializer<BV>::buffer& buf)
 {
-    optimize_ = free_ = true; // set the destructive mode
-    
     statistics_type st;
+    optimize_ = free_ = true; // set the destructive mode
+
+    typename bvector_type::mem_pool_guard mp_g_z;
+    mp_g_z.assign_if_not_set(pool_, bv);
+
     bv.optimize(temp_block_, BV::opt_compress, &st);
     serialize(bv, buf, &st);
     
@@ -1610,6 +1618,7 @@ serializer<BV>::serialize(const BV& bv,
     {
         unsigned i0, j0;
         bman.get_block_coord(i, i0, j0);
+        
         const bm::word_t* blk = bman.get_block(i0, j0);
 
         // ----------------------------------------------------
