@@ -1157,8 +1157,6 @@ serializer<BV>::find_gap_best_encoding(const bm::gap_word_t* gap_block)
     if (compression_level_ <= 2)
         return bm::set_block_gap;
     unsigned len = bm::gap_length(gap_block);
-    if (len <= 3)
-        return bm::set_block_gap;
     unsigned bc = bm::gap_bit_count_unr(gap_block);
     if (bc == 1)
         return bm::set_block_bit_1bit;
@@ -1179,6 +1177,11 @@ serializer<BV>::find_gap_best_encoding(const bm::gap_word_t* gap_block)
             return bm::set_block_arrgap_egamma_inv;
         return bm::set_block_arrgap_bienc_inv;
     }
+    if (len < 6)
+    {
+        return bm::set_block_gap;
+    }
+
     if (compression_level_ == 4)
         return bm::set_block_gap_egamma;
     return bm::set_block_gap_bienc;
