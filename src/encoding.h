@@ -1185,12 +1185,12 @@ void bit_out<TEncoder>::bic_encode_u16_cm(const bm::gap_word_t* arr,
             }
         }
         
-        bic_encode_u16_cm(arr, mid_idx, lo, val-1);
+        bic_encode_u16_cm(arr, mid_idx, lo, bm::gap_word_t(val-1));
         // tail recursive call:
         // bic_encode_u32_cm(arr + mid_idx + 1, sz - mid_idx - 1, val+1, hi);
         arr += mid_idx + 1;
         sz  -= mid_idx + 1;
-        lo = val + 1;
+        lo = bm::gap_word_t(val + 1);
     } // for sz
 }
 
