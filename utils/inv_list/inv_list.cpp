@@ -21,6 +21,7 @@ For more information please visit:  http://bitmagic.io
 #include <thread>
 #include <time.h>
 #include <stdio.h>
+#include <cstdlib>
 
 
 #ifdef _MSC_VER
@@ -51,14 +52,15 @@ static
 void show_help()
 {
     std::cout
-      << "BitMagic Inverted List Compression Test (c) 2019"            << std::endl
-      << "-u32in u32-input-file       -- raw 32-bit unsigned int file" << std::endl
+      << "BitMagic Inverted List Compression Test (c) 2019"              << std::endl
+      << "-u32in u32-input-file       -- raw 32-bit unsigned int file"   << std::endl
       << "-bvout bvect-output-file    -- bit-vector compressed out file" << std::endl
-      << "-bvin bvect-input-file      -- bit-vector compressed in file" << std::endl
+      << "-bvin bvect-input-file      -- bit-vector compressed in file"  << std::endl
       << std::endl
-      << "-check                      -- check/validate input list" << std::endl
-      << "-verify                     -- verify compressed version " << std::endl
-      << "-diag (-d)                  -- print statistics/diagnostics info" << std::endl
+      << "-level N                    -- compression level to use (up to 5)" << std::endl
+      << "-silent (-s)                -- no progress print or messages"          << std::endl
+      << "-verify                     -- verify compressed version "             << std::endl
+      << "-diag (-d)                  -- print statistics/diagnostics info"      << std::endl
       << "-timing (-t)                -- evaluate timing/duration of operations" << std::endl
       ;
 }
@@ -78,10 +80,10 @@ std::string  u32_out_file;
 
 bool         is_diag = false;
 bool         is_timing = false;
-bool         is_check = false;
 bool         is_verify = false;
+bool         is_silent = false;
 
-
+unsigned     c_level = bm::set_compression_default;
 
 
 static
@@ -96,19 +98,32 @@ int parse_args(int argc, char *argv[])
             return 0;
         }
         
-        if (arg == "-c" || arg == "-check")
-        {
-            if (i + 1 < argc)
-            {
-                is_check = true;
-            }
-            continue;
-        }
         if (arg == "-v" || arg == "-verify")
         {
             if (i + 1 < argc)
             {
                 is_verify = true;
+            }
+            continue;
+        }
+        if (arg == "-l" || arg == "-level")
+        {
+            if (i + 1 < argc)
+            {
+                const char* lvl = argv[++i];
+                char *end;
+                c_level = (unsigned) std::strtoul(lvl, &end, 10);
+                if (errno == ERANGE)
+                {
+                    std::cerr << "Error parsing -level: range error for "
+                              << lvl<< std::endl;
+                    return 1;
+                }
+            }
+            else
+            {
+                std::cerr << "Error: -level requires compression level number" << std::endl;
+                return 1;
             }
             continue;
         }
@@ -183,6 +198,8 @@ int parse_args(int argc, char *argv[])
         }
 
 
+        if (arg == "-silent" || arg == "--silent" || arg == "-s" || arg == "--s")
+            is_silent = true;
         if (arg == "-diag" || arg == "--diag" || arg == "-d" || arg == "--d")
             is_diag = true;
         if (arg == "-timing" || arg == "--timing" || arg == "-t" || arg == "--t")
@@ -229,24 +246,40 @@ int io_read_u32_coll(std::ifstream& fin, VT& vec)
 }
 
 /// Check if input vector is monotonously sorted (true inverted list)
+/// along the way in computes a minimal delta between values
 ///
 template<typename VT>
-int validate_inp_vec(const VT& vec)
+int validate_inp_vec(const VT& vec,
+                     typename VT::value_type& min_delta,
+                     typename VT::value_type& min_delta_cnt
+                     )
 {
+    typename VT::value_type md_cnt = min_delta_cnt = 0;
     auto sz = vec.size();
     if (!sz)
         return -1;
     auto i_prev = vec[0];
+    typename VT::value_type md = ~(typename VT::value_type(0)); // max possible uint
     for (typename VT::size_type i = 1; i < sz; ++i)
     {
         auto val = vec[i];
         if (val <= i_prev)
             return -2;
+        typename VT::value_type d1 = val - i_prev;
+        if (d1 < md)
+        {
+            md_cnt = 0; md = d1;
+        }
+        md_cnt += (d1 == md);
         i_prev = val;
     }
+    min_delta = md;
+    min_delta_cnt = md_cnt;
     return 0;
 }
 
+/// Verification check if integer vector is equivalent to a bit-vector
+///
 template<typename VT, typename BV>
 int compare_vect(const VT& vec, const BV& bv)
 {
@@ -259,25 +292,41 @@ int compare_vect(const VT& vec, const BV& bv)
     for (; en.valid(); ++en, ++it)
     {
         if (*en != *it)
-        {
             return -1;
-        }
     }
     return 0;
 }
 
+/// Debug utility to detect super sparse bit-vectors
+/// which probably get bad compression rate
+///
+template<typename BV>
+bool is_super_sparse(const BV& bv)
+{
+    typename BV::statistics st;
+    bv.calc_stat(&st);
+    auto bc = bv.count();
+    auto blocks_count = st.gap_blocks + st.bit_blocks;
+    if (bc <= blocks_count)
+        return true;
+    auto bc_parity = blocks_count * 6;
+    return (bc <= bc_parity);
+}
 
 
 ///  convert vector into bit-vector and append to file
 ///
+/// @return true if vector was detected as very low cardinality
+///
 template<typename VT>
-void write_as_bvector(std::ofstream& bv_file,
+bool write_as_bvector(std::ofstream& bv_file,
                      const VT& vec,
                      bm::serializer<bm::bvector<> >& bvs,
                      bm::serializer<bm::bvector<> >::buffer& sbuf)
 {
     bm::bvector<> bv;
     bv.set(&vec[0], bm::bvector<>::size_type(vec.size()), bm::BM_SORTED);
+    bool low_card = false; //is_super_sparse(bv);
 
     bvs.optimize_serialize_destroy(bv, sbuf);
 
@@ -286,48 +335,32 @@ void write_as_bvector(std::ofstream& bv_file,
     bv_file.write((char*)sbuf.data(), (std::streamsize)sbuf.size());
     if (!bv_file.good())
         throw std::runtime_error("Error write to bvect out file");
+    return low_card;
 }
 
-/// read and desrialize bit-bector from the dump file
-///
-static
-int read_bvector(std::ifstream& bv_file,
-                  bm::bvector<>& bv,
-                  bm::serializer<bm::bvector<> >::buffer& sbuf)
-{
-    if (!bv_file.good())
-        return -1;
-    unsigned len;
-    bv_file.read((char*) &len, std::streamsize(sizeof(len)));
-    if (!bv_file.good())
-        return -1;
-    if (!len)
-        return -2; // 0-len detected (broken file)
-    
-    sbuf.resize(len);
-    bv_file.read((char*) sbuf.data(), std::streamsize(len));
-    if (!bv_file.good())
-        return -1;
-    
-    bm::deserialize(bv, sbuf.data());
-
-    return 0;
-}
 
 /// read the input collection sequence, write using various compression schemes
 ///
 static
 void compress_inv_dump_file(const std::string& fname,
-                            const std::string& bv_out_fname,
-                            bool  check)
+                            const std::string& bv_out_fname)
 {
     bm::id64_t total_ints = 0;
+    bm::id64_t total_low_card = 0;
+    bm::id64_t total_low_card_size = 0;
+    bm::id64_t min_delta_ints = 0;
+    bm::id64_t sv_size = 0;
+    bm::id64_t rsc_diff_size = 0;
+    bm::id64_t sv_cnt = 0;
 
     cout << "Reading input collection: " << fname << endl;
     if (!bv_out_fname.empty())
         cout << "Writing to BV collection: " << bv_out_fname << endl;
     else
         cout << "NO BV collection specified" << endl;
+    cout << "Compression level: " << c_level << endl;
+
+    bm::chrono_taker tt1("1. Convert collection", 1, &timing_map);
 
     vector<unsigned> vec;
     std::ifstream fin(fname.c_str(), std::ios::in | std::ios::binary);
@@ -355,45 +388,112 @@ void compress_inv_dump_file(const std::string& fname,
     bm::serializer<bm::bvector<> > bvs;
     bvs.byte_order_serialization(false);
     bvs.gap_length_serialization(false);
+    bvs.set_compression_level(c_level);
     
     bm::serializer<bm::bvector<> >::buffer sbuf; // resizable memory buffer
 
     // main loop to read sample vectors
     //
-    size_t i;
+    bm::id64_t i;
     for (i = 0; true; ++i)
     {
         int ret = io_read_u32_coll(fin, vec);
         if (ret != 0)
             throw std::runtime_error("Error reading input file");
-        if (check)
+        unsigned min_delta, min_delta_cnt;
+
         {
-            ret = validate_inp_vec(vec); // check if we have sorted unique set
+            ret = validate_inp_vec(vec, min_delta, min_delta_cnt); // check if we have sorted unique set
             if (ret != 0)
                 throw std::runtime_error("Input vector validation failed");
+            if (!min_delta || !min_delta_cnt)
+                throw std::runtime_error("Input vector validation delta error");
+            
+            min_delta_ints += min_delta_cnt;
         }
         total_ints += vec.size(); // remember the total size of the collection
         
         // serialize and save as a bit-vector size0:<BLOB0>, size1:<BLOB1>...N
         //
+        bool is_low_card = false;
         if (!bv_out_fname.empty())
         {
-            write_as_bvector(bv_file, vec, bvs, sbuf);
+            is_low_card = write_as_bvector(bv_file, vec, bvs, sbuf);
+            if (is_low_card)
+            {
+                total_low_card_size += sbuf.size();
+                ++total_low_card;
+            }
         }
+        
+        // commented out experimental (and very slow code) to evaluate rank-select compression
+        #if 0
+        size_t rsc_diff = 0;
+        // try delta-coded sparse vector (experimental)
+        {
+            sparse_vector_u32 sv(bm::use_null);
+            bm::id_t prev = vec[0];
+            sv.push_back(min_delta);
+            sv.push_back(prev);
+
+            for (unsigned k = 1; k < vec.size(); ++k)
+            {
+                bm::id_t curr = vec[k];
+                bm::id_t delta = curr - prev;
+                if (delta < min_delta)
+                    throw std::runtime_error("Input vector validation delta error");
+                delta -= min_delta;
+                if (delta)
+                    sv[2+k] = delta;
+                prev = curr;
+            } // for i
+            
+            rsc_sparse_vector_u32 csv; // compressed sparse vector
+            csv.load_from(sv); // load rank-select-compacted (rsc) sparse vector
+            
+            BM_DECLARE_TEMP_BLOCK(tb)
+            csv.optimize(tb);
+            bm::sparse_vector_serial_layout<rsc_sparse_vector_u32> sv_lay;
+            bm::sparse_vector_serialize(csv, sv_lay, tb);
+            if (sv_lay.size() < sbuf.size())
+            {
+                rsc_diff = sbuf.size() - sv_lay.size();
+                rsc_diff_size += rsc_diff;
+                sv_size += sv_lay.size();
+                sv_cnt++;
+            }
+        }
+        #endif
         
         std::streamsize fpos_curr = fin.tellg();
         if (fpos_curr == fsize)
             break;
         
-        cout << "\r" << fpos_curr << "/" << fsize
-             << " ( size=" << vec.size() << " )              "
-             << flush;
+        if (!is_silent)
+        {
+            cout << "\r" << i << "   " << fpos_curr << " / " << fsize
+                 << " ( size=" << vec.size() << " ) " << (is_low_card ? " * " : "    ")
+                 << " sv=" << sv_cnt << " rsc_diff=" << rsc_diff_size
+                 << flush;
+        }
+
     } // for i
+    
+    // print statistics about test set
     
     cout << endl;
     cout << "Total vectors=" << i << endl;
+    cout << "  lo-card=" << total_low_card << endl;
+    cout << "  lo-card size = " << total_low_card_size << endl;
+    cout << "  SV cnt = " << sv_cnt << endl;
+    cout << "  SV size = " << sv_size << endl;
+    cout << "  RSC diff = " << rsc_diff_size << endl;
     cout << "Total ints=" << total_ints << endl;
-    
+    cout << "  min-deltas = " << min_delta_ints << endl;
+    {
+        double min_delta_ratio = double(min_delta_ints) / double(total_ints);
+        cout << "  min delta ratio = " << std::setprecision(3) << min_delta_ratio << endl;
+    }
     if (!bv_out_fname.empty())
     {
         bm::id64_t bv_size = (bm::id64_t)bv_file.tellp();
@@ -406,14 +506,46 @@ void compress_inv_dump_file(const std::string& fname,
     }
 }
 
+// ------------------------------------------------------------------------
+
+/// read and desrialize bit-bector from the dump file
+///
+static
+int read_bvector(std::ifstream& bv_file,
+                  bm::bvector<>& bv,
+                  bm::serializer<bm::bvector<> >::buffer& sbuf)
+{
+    if (!bv_file.good())
+        return -1;
+    unsigned len;
+    bv_file.read((char*) &len, std::streamsize(sizeof(len)));
+    if (!bv_file.good())
+        return -1;
+    if (!len)
+        return -2; // 0-len detected (broken file)
+    
+    sbuf.resize(len, false); // resize without content preservation
+    bv_file.read((char*) sbuf.data(), std::streamsize(len));
+    if (!bv_file.good())
+        return -1;
+    
+    bm::deserialize(bv, sbuf.data());
+
+    return 0;
+}
+
+
 /// read the input collection sequence, write using various compression schemes
 ///
 static
 void verify_inv_dump_file(const std::string& fname,
-                          const std::string& bv_in_fname,
-                          bool  check)
+                          const std::string& bv_in_fname)
 {
     bm::id64_t total_ints = 0;
+
+
+    bm::chrono_taker tt1("2. Verify collection", 1, &timing_map);
+
 
     cout << "Reading input collection: " << fname << endl;
     if (!bv_in_fname.empty())
@@ -430,18 +562,17 @@ void verify_inv_dump_file(const std::string& fname,
     }
     
     std::ifstream bv_file;
+    std::streamsize fsize;
     if (!bv_in_fname.empty())
     {
         bv_file.open(bv_in_fname, std::ios::in | std::ios::binary);
         if (!bv_file.good())
             throw std::runtime_error("Cannot open bvect dump file");
+        fin.seekg(0, std::ios::end);
+        fsize = fin.tellg();
+        fin.seekg(0, std::ios::beg);
     }
     
-    
-    fin.seekg(0, std::ios::end);
-    std::streamsize fsize = fin.tellg();
-
-    fin.seekg(0, std::ios::beg);
     
     // initialize serializer
     //
@@ -450,18 +581,13 @@ void verify_inv_dump_file(const std::string& fname,
 
     // main loop to read sample vectors
     //
-    size_t i;
+    bm::id64_t i;
     for (i = 0; true; ++i)
     {
         int ret = io_read_u32_coll(fin, vec);
         if (ret != 0)
             throw std::runtime_error("Error reading input file");
-        if (check)
-        {
-            ret = validate_inp_vec(vec); // check if we have sorted unique set
-            if (ret != 0)
-                throw std::runtime_error("Input vector validation failed");
-        }
+
         total_ints += vec.size(); // remember the total size of the collection
         
         // serialize and save as a bit-vector size0:<BLOB0>, size1:<BLOB1>...N
@@ -481,9 +607,12 @@ void verify_inv_dump_file(const std::string& fname,
         if (fpos_curr == fsize)
             break;
         
-        cout << "\r" << fpos_curr << "/" << fsize
-             << " ( size=" << vec.size() << " )              "
-             << flush;
+        if (!is_silent)
+        {
+            cout << "\r" << fpos_curr << "/" << fsize
+                 << " ( size=" << vec.size() << " )              "
+                 << flush;
+        }
     } // for i
     
     cout << endl;
@@ -513,13 +642,13 @@ int main(int argc, char *argv[])
         {
             if (!is_verify)
             {
-            cout << "compression" << endl;
-                compress_inv_dump_file(u32_in_file, bv_out_file, is_check);
+                cout << "Compression" << endl;
+                compress_inv_dump_file(u32_in_file, bv_out_file);
             }
             else
             {
                 cout << "Verification." << endl;
-                verify_inv_dump_file(u32_in_file, bv_in_file, is_check);
+                verify_inv_dump_file(u32_in_file, bv_in_file);
             }
         }
         
