@@ -13644,7 +13644,7 @@ void TestSparseSort()
    std::cout << "---------------------------- sparse vector SORT test" << endl;
    const unsigned max_coll = 560000;
    typedef bm::sparse_vector<unsigned, bvect > u_svect_type;
-
+ 
    {
        std::vector<unsigned> u_coll;
        u_svect_type          u_sv_sorted;
