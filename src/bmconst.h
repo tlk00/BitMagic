@@ -83,6 +83,8 @@ const unsigned gap_max_bits_cmrz = bm::gap_max_bits / 2;
 const unsigned gap_levels = 4;
 const unsigned gap_max_level = bm::gap_levels - 1;
 
+const unsigned bie_cut_off = 16384; // binary interpolative encode size cut-off
+
 
 // Block Array parameters
 

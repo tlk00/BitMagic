@@ -2059,6 +2059,173 @@ public:
 
     // ----------------------------------------------------------------
     
+    /// Find key bit-block
+    ///
+    bool find_kbb(const bm::word_t* block,
+                  unsigned i, unsigned j,
+                  unsigned bc, unsigned gc,
+                  unsigned* kb_i, unsigned* kb_j) const
+    {
+        if (!top_blocks_ || !j)
+            return false;
+        BM_ASSERT(i < top_block_size());
+        BM_ASSERT(i < bm::set_sub_array_size);
+        
+        if (BM_IS_GAP(block))
+            return false;
+        
+        unsigned best_metric;
+        best_metric = gc < bc ? gc : bc;
+        
+        // TODO get rid of the temp block here
+        BM_DECLARE_TEMP_BLOCK(tb)
+        const bm::word_t* const* blk_blk = top_blocks_[i];
+
+        bool kb_found = false;
+        for (unsigned j0 = 0; j0 < j; ++j0)
+        {
+            const bm::word_t* kb_block = blk_blk[j0];
+            if (!IS_VALID_ADDR(kb_block))
+                continue;
+            if (BM_IS_GAP(kb_block))
+                continue;
+            
+            bm::bit_block_xor_2way(tb, block, kb_block);
+            unsigned kb_bc, kb_gc;
+            bm::bit_block_change_bc32(tb, &kb_gc, &kb_bc);
+            if (kb_gc < best_metric && kb_gc < bm::bie_cut_off)
+            {
+                best_metric = kb_gc;
+                kb_found = true;
+                *kb_j = j0;
+            }
+            if (kb_bc < best_metric && kb_bc < bm::bie_cut_off)
+            {
+                best_metric = kb_bc;
+                kb_found = true;
+                *kb_j = j0;
+            }
+
+        } // for j
+        *kb_i = i;
+        return kb_found;
+    }
+
+    // ----------------------------------------------------------------
+    
+    /// Find key gap-block
+    ///
+    bool find_kgb(const bm::word_t* block,
+                  unsigned i, unsigned j,
+                  bm::gap_word_t* tmp_buf,
+                  unsigned* kb_i, unsigned* kb_j) const
+    {
+        if (!top_blocks_)
+            return false;
+        BM_ASSERT(i < top_block_size());
+        BM_ASSERT(i < bm::set_sub_array_size);
+        BM_ASSERT(BM_IS_GAP(block));
+        
+        if (!BM_IS_GAP(block))
+            return false;
+        
+        const bm::gap_word_t* gap_block = BMGAP_PTR(block);
+        unsigned gap_len = bm::gap_length(gap_block);
+        if (gap_len <= 3)
+            return false;
+        
+        const bm::word_t* const* blk_blk = top_blocks_[i];
+
+        unsigned grid_limit = 2;
+        bool kb_found = false;
+        
+        if (j)
+        {
+            *kb_i = i;
+
+            for (int j0 = int(j-1); j0 >= 0; --j0) // scan back (be greedy)
+            {
+                const bm::word_t* kb_block = blk_blk[j0];
+                if (!IS_VALID_ADDR(kb_block))
+                    continue;
+                if (!BM_IS_GAP(kb_block))
+                    continue;
+                unsigned res_len;
+                bm::gap_operation_xor(gap_block,
+                                      BMGAP_PTR(kb_block),
+                                      tmp_buf, res_len);
+                if (res_len < gap_len)
+                {
+                    if (res_len == 1) // perfect match!
+                    {
+                        kb_found = true;
+                        *kb_j = unsigned(j0);
+                        return kb_found;
+                    }
+                    unsigned d = gap_len - res_len;
+                    if (d > 1) // minmal gain: 2
+                    {
+                        gap_len = res_len;
+                        kb_found = true;
+                        *kb_j = unsigned(j0);
+                        --grid_limit;
+                        if (!grid_limit)
+                            return kb_found;
+                    }
+                }
+            } // for j0
+        } // if j
+
+        
+        if (i) // search in the previous super-block (if available)
+        {
+            --i;
+            *kb_i = i;
+            j = bm::set_sub_array_size; // TODO: fixme
+            blk_blk = top_blocks_[i];
+            if (blk_blk && ((bm::word_t*)blk_blk != FULL_BLOCK_FAKE_ADDR))
+            {
+                for (int j0 = int(j-1); j0 >= 0; --j0) // scan back (greedy)
+                {
+                    const bm::word_t* kb_block = blk_blk[j0];
+                    if (!IS_VALID_ADDR(kb_block))
+                        continue;
+                    if (!BM_IS_GAP(kb_block))
+                        continue;
+                    unsigned res_len;
+                    bm::gap_operation_xor(gap_block,
+                                          BMGAP_PTR(kb_block),
+                                          tmp_buf, res_len);
+                    if (res_len < gap_len)
+                    {
+                        if (res_len == 1) // perfect match!
+                        {
+                            kb_found = true;
+                            *kb_j = unsigned(j0);
+                            return kb_found;
+                        }
+                        unsigned d = gap_len - res_len;
+                        if (d > 1) // minmal gain: 2
+                        {
+                            gap_len = res_len;
+                            kb_found = true;
+                            *kb_j = unsigned(j0);
+                            
+                            --grid_limit;
+                            if (!grid_limit)
+                                return kb_found;
+                        }
+                    }
+                } // for j0
+            }
+        } // if i
+
+        return kb_found;
+    }
+
+
+    // ----------------------------------------------------------------
+    
     void optimize_tree(bm::word_t*  temp_block, int opt_mode,
                        bv_statistics* bv_stat)
     {

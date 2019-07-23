@@ -52,8 +52,6 @@ For more information please visit:  http://bitmagic.io
 #include "bmbuffer.h"
 #include "bmdef.h"
 
-//#include "bmgamma.h"
-
 
 namespace bm
 {
@@ -105,6 +103,10 @@ public:
 
     ~serializer();
 
+    /*! @name Compression level settings                               */
+    //@{
+
+    // --------------------------------------------------------------------
     /**
         Set compression level. Higher compression takes more time to process.
         @param clevel - compression level (0-4)
@@ -123,6 +125,9 @@ public:
         Recommended: use 3 or 5
     */
     unsigned get_compression_level() const { return compression_level_; }
+    
+    //@}
+
     
     // --------------------------------------------------------------------
     /*! @name Serialization Methods                                      */
@@ -277,11 +282,12 @@ protected:
     */
     unsigned char find_gap_best_encoding(const bm::gap_word_t* gap_block);
     
-    /**
-        Determine best representation for a bit-block
-    */
+    /// Determine best representation for a bit-block
     unsigned char find_bit_best_encoding(const bm::word_t* block);
-    
+
+    /// Determine best representation for a bit-block (level 5)
+    unsigned char find_bit_best_encoding_l5(const bm::word_t* block);
+
     /// Reset all accumulated compression statistics
     void reset_compression_stats();
     
@@ -675,7 +681,6 @@ enum serialization_header_mask {
     BM_HM_64_BIT  = (1 << 5)   ///< 64-bit vector
 };
 
-const unsigned bie_cut_off = 16384; // binary interpolative encode size cut-off
 
 
 // Serialization stream block type constants
@@ -1030,9 +1035,95 @@ void serializer<BV>::add_model(unsigned char mod, unsigned score)
 }
 
 template<class BV>
+unsigned char serializer<BV>::find_bit_best_encoding_l5(const bm::word_t* block)
+{
+    unsigned bc, bit_gaps;
+    
+    add_model(bm::set_block_bit, bm::gap_max_bits); // default model (bit-block)
+    
+    bit_model_0run_size_ = bm::bit_count_nonzero_size(block, bm::set_block_size);
+    add_model(bm::set_block_bit_0runs, bit_model_0run_size_ * 8);
+
+    bm::id64_t d0 = digest0_ = bm::calc_block_digest0(block);
+    if (!d0)
+    {
+        add_model(bm::set_block_azero, 0);
+        return bm::set_block_azero;
+    }
+    unsigned d0_bc = word_bitcount64(d0);
+    bit_model_d0_size_ = unsigned(8 + (32 * d0_bc * sizeof(bm::word_t)));
+    if (d0 != ~0ull)
+        add_model(bm::set_block_bit_digest0, bit_model_d0_size_ * 8);
+
+
+    bm::bit_block_change_bc32(block, &bit_gaps, &bc);
+    BM_ASSERT(bm::bit_block_count(block) == bc);
+    BM_ASSERT(bm::bit_block_calc_change(block) == bit_gaps);
+
+    if (bc == 1)
+    {
+        add_model(bm::set_block_bit_1bit, 16);
+        return bm::set_block_bit_1bit;
+    }
+    unsigned inverted_bc = bm::gap_max_bits - bc;
+    if (!inverted_bc)
+    {
+        add_model(bm::set_block_aone, 0);
+        return bm::set_block_aone;
+    }
+    unsigned arr_size =
+        unsigned(sizeof(gap_word_t) + (bc * sizeof(gap_word_t)));
+    unsigned arr_size_inv =
+        unsigned(sizeof(gap_word_t) + (inverted_bc * sizeof(gap_word_t)));
+
+    add_model(bm::set_block_arrbit, arr_size*8);
+    add_model(bm::set_block_arrbit_inv, arr_size_inv*8);
+    const unsigned bie_bits_per_int = 4;
+
+    if (bit_gaps > 3 && bit_gaps < bm::gap_max_buff_len)
+        add_model(bm::set_block_gap_bienc,
+                  32 + (bit_gaps-1) * bie_bits_per_int);
+    if (bc < bit_gaps && bc < bm::gap_equiv_len)
+        add_model(bm::set_block_arrgap_bienc, 16*3 + bc*bie_bits_per_int);
+    else
+    if (inverted_bc < bit_gaps && inverted_bc < bm::gap_equiv_len)
+        add_model(bm::set_block_arrgap_bienc_inv, 16*3 + inverted_bc*bie_bits_per_int);
+    else
+    if (bc >= bm::gap_equiv_len && bc < bie_cut_off)
+        add_model(bm::set_block_arr_bienc, 16*3 + bc * bie_bits_per_int);
+    else
+    if (inverted_bc > 3 && inverted_bc >= bm::gap_equiv_len && inverted_bc < bie_cut_off)
+        add_model(bm::set_block_arr_bienc_inv, 16*3 + inverted_bc * bie_bits_per_int);
+
+    if (bit_gaps >= bm::gap_max_buff_len && bit_gaps < bie_cut_off)
+        add_model(bm::set_block_bitgap_bienc, 16*4 + (bit_gaps-2) * bie_bits_per_int);
+
+    // find the best representation based on computed approx.models
+    //
+    unsigned min_score = bm::gap_max_bits;
+    unsigned char model = bm::set_block_bit;
+    for (unsigned i = 0; i < mod_size_; ++i)
+    {
+        if (scores_[i] < min_score)
+        {
+            min_score = scores_[i];
+            model = models_[i];
+        }
+    }
+    return model;
+
+
+}
+
+template<class BV>
 unsigned char serializer<BV>::find_bit_best_encoding(const bm::word_t* block)
 {
     reset_models();
+    
+    if (compression_level_ >= 5)
+        return find_bit_best_encoding_l5(block);
+    
+    unsigned bc, bit_gaps;
     
     // heuristics and hard-coded rules to determine
     // the best representation for bit-block
@@ -1060,7 +1151,14 @@ unsigned char serializer<BV>::find_bit_best_encoding(const bm::word_t* block)
         if (d0 != ~0ull)
             add_model(bm::set_block_bit_digest0, bit_model_d0_size_ * 8);
 
-        unsigned bc = bm::bit_block_count(block);
+        if (compression_level_ >= 4)
+        {
+            bm::bit_block_change_bc32(block, &bit_gaps, &bc);
+        }
+        else
+        {
+            bc = bm::bit_block_count(block);
+        }
         BM_ASSERT(bc);
 
         if (bc == 1)
@@ -1088,7 +1186,7 @@ unsigned char serializer<BV>::find_bit_best_encoding(const bm::word_t* block)
             if (compression_level_ >= 4)
             {
                 const unsigned gamma_bits_per_int = 6;
-                unsigned bit_gaps = bm::bit_block_calc_change(block);
+                //unsigned bit_gaps = bm::bit_block_calc_change(block);
 
                 if (compression_level_ == 4)
                 {
@@ -1102,32 +1200,6 @@ unsigned char serializer<BV>::find_bit_best_encoding(const bm::word_t* block)
                         add_model(bm::set_block_arrgap_egamma_inv,
                                   16 + inverted_bc * gamma_bits_per_int);
                 }
-
-                if (compression_level_ >= 5)
-                {
-                    const unsigned bie_bits_per_int = 4;
-                    
-                    if (bit_gaps > 3 && bit_gaps < bm::gap_max_buff_len)
-                        add_model(bm::set_block_gap_bienc,
-                                  32 + (bit_gaps-1) * bie_bits_per_int);
-                    if (bc < bit_gaps && bc < bm::gap_equiv_len)
-                        add_model(bm::set_block_arrgap_bienc, 16*3 + bc*bie_bits_per_int);
-                    else
-                    if (inverted_bc < bit_gaps && inverted_bc < bm::gap_equiv_len)
-                        add_model(bm::set_block_arrgap_bienc_inv, 16*3 + inverted_bc*bie_bits_per_int);
-                    else
-                    if (bc >= bm::gap_equiv_len && bc < bie_cut_off)
-                        add_model(bm::set_block_arr_bienc, 16*3 + bc * bie_bits_per_int);
-                    else
-                    if (inverted_bc > 3 && inverted_bc >= bm::gap_equiv_len && inverted_bc < bie_cut_off)
-                        add_model(bm::set_block_arr_bienc_inv, 16*3 + inverted_bc * bie_bits_per_int);
-                    
-                    if (bit_gaps >= bm::gap_max_buff_len && bit_gaps < bie_cut_off)
-                        add_model(bm::set_block_bitgap_bienc, 16*4 + (bit_gaps-2) * bie_bits_per_int);
-                    
-
-                } // level >= 5
-
             } // level >= 3
         } // level >= 3
     } // level >= 2
@@ -1695,11 +1767,27 @@ serializer<BV>::serialize(const BV& bv,
             }
         }
 
-        // ---------------------------------------------
+        // --------------------------------------------------
         // GAP serialization
         //
         if (BM_IS_GAP(blk))
         {
+            // experimental, disabled
+            #if 0
+            {
+                bm::gap_word_t tmp_buf[bm::gap_equiv_len * 3]; // temporary result
+
+                unsigned kb_i, kb_j;
+                bool kb_found =
+                    bman.find_kgb(blk, i0, j0, &tmp_buf[0], &kb_i, &kb_j);
+                if (kb_found) // key-block!
+                {
+                    BM_ASSERT(bm::gap_length(BMGAP_PTR(blk)) > bm::gap_length(&tmp_buf[0]));
+                    encode_gap_block(tmp_buf, enc);
+                    continue;
+                }
+            }
+            #endif
             encode_gap_block(BMGAP_PTR(blk), enc);
         }
         else
@@ -1707,6 +1795,7 @@ serializer<BV>::serialize(const BV& bv,
             // ----------------------------------------------
             // BIT BLOCK serialization
             //
+        
             unsigned char model = find_bit_best_encoding(blk);
             switch (model)
             {

@@ -1152,6 +1152,87 @@ void bit_out<TEncoder>::bic_encode_u32_cm(const bm::word_t* arr,
 
 // ----------------------------------------------------------------------
 
+#if 0
+/**
+    Shuffle structure for BIC
+    @internal
+*/
+template<unsigned N>
+struct bic_encode_stack_u16
+{
+    bm::gap_word_t  val_[N];
+    bm::gap_word_t  mid_[N];
+    bm::gap_word_t  lo_[N];
+    bm::gap_word_t  r_[N];
+
+    unsigned stack_size_ = 0;
+    
+    void bic_shuffle(const bm::gap_word_t* arr,
+                     bm::gap_word_t sz, bm::gap_word_t lo, bm::gap_word_t hi)
+    {
+        for (;sz;)
+        {
+            BM_ASSERT(lo <= hi);
+            bm::gap_word_t mid_idx = sz >> 1;
+            bm::gap_word_t val = arr[mid_idx];
+            unsigned r = hi - lo - sz + 1;
+            if (r)
+            {
+                unsigned s = stack_size_++;
+                r_[s] = (bm::gap_word_t)r;
+                val_[s] = val;
+                mid_[s] = mid_idx;
+                lo_[s] = lo;
+            }
+            
+            bic_shuffle(arr, mid_idx, lo, bm::gap_word_t(val-1));
+            // tail recursive call:
+            // bic_shuffle(arr + mid_idx + 1, sz - mid_idx - 1, val+1, hi);
+            arr += mid_idx + 1;
+            sz  -= mid_idx + 1;
+            lo = bm::gap_word_t(val + 1);
+        } // for sz
+    }
+};
+
+template<typename TEncoder>
+void bit_out<TEncoder>::bic_encode_u16_cm(const bm::gap_word_t* arr,
+                                          unsigned sz_i,
+                                          bm::gap_word_t lo_i,
+                                          bm::gap_word_t hi_i)
+{
+    BM_ASSERT(sz_i <= 65535);
+
+    bic_encode_stack_u16<bm::bie_cut_off> u16_stack;
+    // BIC re-ordering
+    u16_stack.bic_shuffle(arr, bm::gap_word_t(sz_i), lo_i, hi_i);
+    
+    BM_ASSERT(sz_i == u16_stack.stack_size_);
+    for (unsigned i = 0; i < sz_i; ++i)
+    {
+        bm::gap_word_t val = u16_stack.val_[i];
+        bm::gap_word_t mid_idx = u16_stack.mid_[i];
+        bm::gap_word_t lo = u16_stack.lo_[i];
+        unsigned r = u16_stack.r_[i];
+
+        unsigned value = val - lo - mid_idx;
+        unsigned n = r + 1;
+        unsigned logv = bm::bit_scan_reverse32(n);
+        unsigned c = (unsigned)(1ull << (logv + 1)) - n;
+        
+        int64_t half_c = c >> 1; // c / 2;
+        int64_t half_r = r >> 1; // r / 2;
+        int64_t lo1 = half_r - half_c;
+        int64_t hi1 = half_r + half_c + 1;
+        lo1 -= (n & 1);
+        logv += (value <= lo1 || value >= hi1);
+
+        put_bits(value, logv);
+    } // for i
+}
+#endif
+
+
 template<typename TEncoder>
 void bit_out<TEncoder>::bic_encode_u16_cm(const bm::gap_word_t* arr,
                                           unsigned sz,
@@ -1162,7 +1243,7 @@ void bit_out<TEncoder>::bic_encode_u16_cm(const bm::gap_word_t* arr,
         BM_ASSERT(lo <= hi);
         unsigned mid_idx = sz >> 1;
         bm::gap_word_t val = arr[mid_idx];
-        
+
         // write the interpolated value
         // write(x, r) where x=(arr[mid] - lo - mid) r=(hi - lo - sz + 1);
         {
@@ -1174,12 +1255,11 @@ void bit_out<TEncoder>::bic_encode_u16_cm(const bm::gap_word_t* arr,
                 unsigned n = r + 1;
                 unsigned logv = bm::bit_scan_reverse32(n);
                 unsigned c = (unsigned)(1ull << (logv + 1)) - n;
-                int64_t half_c = c >> 1; // c / 2;
-                int64_t half_r = r >> 1; // r / 2;
-                int64_t lo1 = half_r - half_c;
-                int64_t hi1 = half_r + half_c + 1;
-                lo1 -= (n & 1);
-                logv += (value <= lo1 || value >= hi1);
+                unsigned half_c = c >> 1; // c / 2;
+                unsigned half_r = r >> 1; // r / 2;
+                int64_t  lo1 = (int64_t(half_r) - half_c - (n & 1u));
+                unsigned hi1 = (half_r + half_c);
+                logv += (value <= lo1 || value > hi1);
 
                 put_bits(value, logv);
             }
@@ -1188,11 +1268,14 @@ void bit_out<TEncoder>::bic_encode_u16_cm(const bm::gap_word_t* arr,
         bic_encode_u16_cm(arr, mid_idx, lo, bm::gap_word_t(val-1));
         // tail recursive call:
         // bic_encode_u32_cm(arr + mid_idx + 1, sz - mid_idx - 1, val+1, hi);
-        arr += mid_idx + 1;
-        sz  -= mid_idx + 1;
+        arr += ++mid_idx;
+        sz  -= mid_idx;
         lo = bm::gap_word_t(val + 1);
     } // for sz
 }
+
+
+
 
 
 

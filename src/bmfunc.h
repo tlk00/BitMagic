@@ -4159,6 +4159,32 @@ unsigned bit_block_change32(const bm::word_t* block)
     return gap_count;
 }
 
+/*!
+    Function calculates basic bit-block statistics
+     number of times when bit value changed (GAPS)
+     and population count
+    @param block - bit-block pointer
+    @param gc - [output] gap_count
+    @param bc - [output] bit count
+    @internal
+*/
+inline
+void bit_block_change_bc32(const bm::word_t* block,
+                           unsigned* gc,
+                           unsigned* bc)
+{
+    BM_ASSERT(gc);
+    BM_ASSERT(bc);
+    
+    #ifdef VECT_BLOCK_CHANGE_BC
+        VECT_BLOCK_CHANGE_BC(block, gc, bc);
+    #else
+        *gc = bm::bit_block_change32(block);
+        *bc = bm::bit_block_count(block);
+    #endif
+}
+
+
 
 /*!
     Function calculates number of times when bit value changed
