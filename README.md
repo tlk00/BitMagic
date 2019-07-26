@@ -9,9 +9,10 @@ BitMagic library uses compressed bit-vectors as a main vehicle for implementing 
 because of high efficiency and bit-level parallelism friendly for parallel processing with SIMD. 
 
 
-### Main Features:
+### Main Features (bm::bvector<>):
 
-- compressed bit-vector container with mechanisms to iterate integer set it represents
+- compressed bit-vector container 
+- iterator (bm::bvector<>::enumerator to decode the bitset to integers
 - set algebraic operations: AND, OR, XOR, MINUS, NOT on bit-vectors and integer sets
 - fast bit-vector ierator (enumerator) for bit-vector traversal, algorithms for functor-based
   traversals (similar to for_each)
@@ -22,12 +23,31 @@ because of high efficiency and bit-level parallelism friendly for parallel proce
 - statistical algorithms to efficiently construct similarity and distance metrics, measure similarity between bit-vectors, 
 integer sets and compressed BLOBs
 - operations with rank: population count distances on bit-vector. Rank-Select operations are often 
-used in succinct data structures.
+used in succinct data structures
+
+### Serialization with Compression
+
+BitMagic can serialize-compress bit-vector for efficient storage and transfer.
+BitMagic uses integer compression schemes: GAP-RLE-Delta plus Elias Gamma coding and Interpolated Binary Coding. 
+ 
+Over all compression is hybrid model, where bit-vector is partitioned in order to adaptively set the best 
+representation. An important difference is that BitMagic compression is adaptive and it remains efficient 
+for both sparse and dense distributions of bits. Dense blocks are coded using complementary compressed integer lists.
+
+BitMagic is tested on Gov2 benchmark set of inverted lists.
+[http://bitmagic.io/bm5-cmpr.html](http://bitmagic.io/bm5-cmpr.html)
+
 
 ### Succinct vectors 
 
-BitMagic supports succinct (memory compact) vectors based on bit-transposition and bit-vectors.
-Compression on bit-planes offers both superior memory performance and fast search. 
+BitMagic supports succinct (memory compact) vectors based on bit-transposition transform.
+Bit transposition solves two purposes: free unused bit plains and isolate regularity and enthrothy into
+separately compressed bit-vectors. Compression on bit-planes offers both superior memory performance and fast search.
+
+Succinct bit-transposed implementation works well for both integer vectors and string vectors and 
+it rivals other succinct schemes like prefix trees. Succinct vectors can be both sorted and unsorted.   
+
+#### Main features
 
 - sparse vector(s) for native int types using bit transposition and separate compression of bit-plains, 
 with support of NULL values (unassigned) for construction of in-memory columnar structures. Bit-transposed
@@ -35,7 +55,15 @@ sparse vectors can be used for on-the fly compression of astronomical, molecular
 efficient store of associations for graphs, etc.
 - search algorithms for sorted and unsorted succinct vectors (vectors of ints or strings)
 - algorithms on sparse vectors: dynamic range clipping, search, group theory image (re-mapping).
-- all containers are serializable
+- all containers are serializable with compression
+
+### Memory profiling/monitoring
+
+BitMagic implements memory profiling calls for all vectors. Any vector can be sampled for memory footprint so the 
+top level system can adapt memory managemet based on exact footprint your vectors. 
+BitMagic memory managemnt is industry grade and ready for integration into large scale systems 
+(Now try to evaluate the footprint of an STL map<>, for example).
+
 
 ### 64-bit
 
@@ -120,9 +148,9 @@ features of modern CPUs, cache-friendly algorithms and thread-safe and
 data-parallel structures. High-performance is a priority!
 
 - SSE2    - Intel SSE2 command set is supported, but gets gradually phased out, 
-                 no new algorithms and compute kernels
-- SSE4.2  - Supported
-- AVX2     - Supported and recommended as fastest for high-performance systems
+            no new algorithms and compute kernels
+- SSE4.2  - Supported and also adds use of x86 POPCNT  
+- AVX2    - Supported plus POPCNT plus BMI1/BMI2 (best performance!)
 - AVX-512 - Work in progress. Some algorithms are ready(and stable), but we cannot get performance right (yet).
             AVX-512 projects using BitMagic for now should just use AVX2 mode (it is compatible).
 
