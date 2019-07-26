@@ -25,14 +25,15 @@ integer sets and compressed BLOBs
 - operations with rank: population count distances on bit-vector. Rank-Select operations are often 
 used in succinct data structures
 
-### Serialization with Compression
+### Serialization with compression
 
 BitMagic can serialize-compress bit-vector for efficient storage and transfer.
-BitMagic uses integer compression schemes: GAP-RLE-Delta plus Elias Gamma coding and Interpolated Binary Coding. 
+Naturally BitMagic uses integer compression schemes: GAP-RLE-Delta combined with Elias Gamma coding or 
+Interpolated Binary Coding. 
  
-Over all compression is hybrid model, where bit-vector is partitioned in order to adaptively set the best 
-representation. An important difference is that BitMagic compression is adaptive and it remains efficient 
-for both sparse and dense distributions of bits. Dense blocks are coded using complementary compressed integer lists.
+BitMagic serialization-compression is a hybrid model, where bit-vectors are partitioned in order to adaptively set the best 
+representation. BitMagic compression is adaptive and it remains efficient for both sparse and dense 
+distributions of bits. Dense blocks are coded using complementary compressed integer lists.
 
 BitMagic is tested on Gov2 benchmark set of inverted lists.
 [http://bitmagic.io/bm5-cmpr.html](http://bitmagic.io/bm5-cmpr.html)
@@ -81,7 +82,6 @@ STL, C++ memory allocation (operator new) or exceptions. Our goal here is to eve
 provide a bridge to other languiages of data science (Python) and languages of enterprise 
 scale development (Java, Scala) via JNI. 
 
-
 ### Features In Progress:
 
 - compressed binary relational and adjacency matrixes and operations on matrixes for 
@@ -124,7 +124,6 @@ materials. Proper reference on your product/project page is a REQUIREMENT
 for using BitMagic Library.
 
 
-
 ### Quality Assurance:
 
 BitMagic library pays serious attention to code quality and test coverage.  
@@ -141,16 +140,14 @@ not guaranteed to be perfect.
 All of the above does not guarantee it is bug free project.
 
 
-### SIMD support:
+### HPC and SIMD:
 
 BitMagic provides fast algorithms optimized for various SIMD sets, exploit super-scalar 
-features of modern CPUs, cache-friendly algorithms and thread-safe and 
-data-parallel structures. High-performance is a priority!
+features of modern CPUs, cache-friendly algorithms, thread-safe and data-parallel structures. 
 
-- SSE2    - Intel SSE2 command set is supported, but gets gradually phased out, 
-            no new algorithms and compute kernels
-- SSE4.2  - Supported and also adds use of x86 POPCNT  
-- AVX2    - Supported plus POPCNT plus BMI1/BMI2 (best performance!)
+- SSE2    - Intel SSE2 but gets gradually phased out, no new algorithms and compute kernels
+- SSE4.2  - Supported and adds x86 POPCNT  
+- AVX2    - Supported adds POPCNT and BMI1/BMI2 (best performance!)
 - AVX-512 - Work in progress. Some algorithms are ready(and stable), but we cannot get performance right (yet).
             AVX-512 projects using BitMagic for now should just use AVX2 mode (it is compatible).
 
