@@ -109,6 +109,85 @@ public:
         size_type                          idx_;
     };
 
+
+    /**
+        Back insert iterator implements buffered insert, faster than generic
+        access assignment.
+     
+        Limitations for buffered inserter:
+        1. Do not use more than one inserter per vector at a time
+        2. Use method flush() at the end to send the rest of accumulated buffer
+        flush is happening automatically on destruction, but if flush produces an
+        exception (for whatever reason) it will be an exception in destructor.
+        As such, explicit flush() is safer way to finilize the sparse vector load.
+
+        @ingroup sv
+    */
+    class back_insert_iterator
+    {
+    public:
+#ifndef BM_NO_STL
+        typedef std::output_iterator_tag  iterator_category;
+#endif
+        typedef rsc_sparse_vector<Val, SV>       rsc_sparse_vector_type;
+        typedef rsc_sparse_vector_type*          rsc_sparse_vector_type_ptr;
+        typedef typename rsc_sparse_vector_type::value_type    value_type;
+        typedef typename rsc_sparse_vector_type::size_type     size_type;
+        typedef typename rsc_sparse_vector_type::bvector_type  bvector_type;
+
+        typedef void difference_type;
+        typedef void pointer;
+        typedef void reference;
+        
+    public:
+        back_insert_iterator();
+        back_insert_iterator(rsc_sparse_vector_type* csv);
+        
+        back_insert_iterator& operator=(const back_insert_iterator& bi)
+        {
+            BM_ASSERT(bi.empty());
+            this->flush(); sv_bi_ = bi.sv_bi_;
+            return *this;
+        }
+
+        ~back_insert_iterator();
+        
+        /** push value to the vector */
+        back_insert_iterator& operator=(value_type v) { this->add(v); return *this; }
+        /** noop */
+        back_insert_iterator& operator*() { return *this; }
+        /** noop */
+        back_insert_iterator& operator++() { return *this; }
+        /** noop */
+        back_insert_iterator& operator++( int ) { return *this; }
+        
+        /** add value to the container*/
+        void add(value_type v);
+        
+        /** add NULL (no-value) to the container */
+        void add_null();
+        
+        /** add a series of consequitve NULLs (no-value) to the container */
+        void add_null(size_type count);
+        
+        /** flush the accumulated buffer */
+        void flush();
+    protected:
+    
+        /** add value to the buffer without changing the NULL vector
+            @param v - value to push back
+            @return index of added value in the internal buffer
+            @internal
+        */
+        ///size_type add_value(value_type v);
+        
+        typedef rsc_sparse_vector_type::sparse_vector_type sparse_vector_type;
+        typedef typename sparse_vector_type::back_insert_iterator   sparse_vector_bi;
+    private:
+        rsc_sparse_vector_type* csv_;      ///!< pointer on the parent vector
+        sparse_vector_bi        sv_bi_;
+    };
+
 public:
     // ------------------------------------------------------------
     /*! @name Construction and assignment  */
@@ -130,7 +209,7 @@ public:
         if (this != &csv)
         {
             sv_ = csv.sv_;
-            max_id_ = csv.max_id_;
+            size_ = csv.size_; max_id_ = csv.max_id_;
             in_sync_ = csv.in_sync_;
             if (in_sync_)
             {
@@ -151,7 +230,7 @@ public:
         {
             clear();
             sv_.swap(csv.sv_);
-            max_id_ = csv.max_id_; in_sync_ = csv.in_sync_;
+            size_ = csv.size_; max_id_ = csv.max_id_; in_sync_ = csv.in_sync_;
             if (in_sync_)
             {
                 bv_blocks_ptr_->copy_from(*(csv.bv_blocks_ptr_));
@@ -310,6 +389,13 @@ public:
     void load_to(sparse_vector_type& sv) const;
     
     //@}
+    
+    // ------------------------------------------------------------
+    /*! @name Iterator access */
+    //@{
+
+    back_insert_iterator get_back_inserter() { return back_insert_iterator(this); }
+    ///@}
 
     // ------------------------------------------------------------
     /*! @name Memory optimization                                */
@@ -451,12 +537,14 @@ protected:
 
 private:
     sparse_vector_type            sv_;       ///< transpose-sparse vector for "dense" packing
+    size_type                     size_;     ///< vector size (logical)
     size_type                     max_id_;   ///< control variable for sorted load
     bool                          in_sync_;  ///< flag if prefix sum is in-sync with vector
     rs_index_type*                bv_blocks_ptr_ = 0; ///< prefix sum for rank translation
 };
 
 //---------------------------------------------------------------------
+//
 //---------------------------------------------------------------------
 
 template<class Val, class SV>
@@ -487,6 +575,7 @@ template<class Val, class SV>
 rsc_sparse_vector<Val, SV>::rsc_sparse_vector(
                           const rsc_sparse_vector<Val, SV>& csv)
 : sv_(csv.sv_),
+  size_(csv.size_),
   max_id_(csv.max_id_),
   in_sync_(csv.in_sync_)
 {
@@ -504,13 +593,13 @@ rsc_sparse_vector<Val, SV>::rsc_sparse_vector(
 template<class Val, class SV>
 rsc_sparse_vector<Val, SV>::rsc_sparse_vector(rsc_sparse_vector<Val,SV>&& csv) BMNOEXEPT
 : sv_(bm::use_null),
+  size_(0),
   max_id_(0), in_sync_(false)
 {
     if (this != &csv)
     {
         sv_.swap(csv.sv_);
-        max_id_ = csv.max_id_; in_sync_ = csv.in_sync_;
-        
+        size_ = csv.size_; max_id_ = csv.max_id_; in_sync_ = csv.in_sync_;
         bv_blocks_ptr_ = csv.bv_blocks_ptr_; csv.bv_blocks_ptr_ = 0;
     }
 }
@@ -521,7 +610,7 @@ template<class Val, class SV>
 typename rsc_sparse_vector<Val, SV>::size_type
 rsc_sparse_vector<Val, SV>::size() const
 {
-    return max_id_+1;
+    return size_;
 }
 
 //---------------------------------------------------------------------
@@ -532,7 +621,7 @@ void rsc_sparse_vector<Val, SV>::push_back(size_type idx, value_type v)
     if (sv_.empty())
     {}
     else
-    if (idx <= max_id_)
+    if (idx <= max_id_ && size_)
     {
         sv_.throw_range_error("compressed sparse vector push_back() range error");
     }
@@ -551,6 +640,7 @@ void rsc_sparse_vector<Val, SV>::push_back_no_check(size_type idx, value_type v)
     sv_.push_back_no_null(v);
     
     max_id_ = idx;
+    size_ = idx + 1;
     in_sync_ = false;
 }
 
@@ -592,7 +682,10 @@ void rsc_sparse_vector<Val, SV>::set(size_type idx, value_type v)
         bv_null->set_bit_no_check(idx);
 
         if (idx > max_id_)
+        {
             max_id_ = idx;
+            size_ = max_id_ + 1;
+        }
         in_sync_ = false;
     }
 }
@@ -605,7 +698,7 @@ bool rsc_sparse_vector<Val, SV>::equal(
 {
     if (this == &csv)
         return true;
-    if (max_id_ != csv.max_id_)
+    if (max_id_ != csv.max_id_ || size_ != csv.size_)
         return false;
     bool same_sv = sv_.equal(csv.sv_);
     return same_sv;
@@ -617,7 +710,7 @@ template<class Val, class SV>
 void rsc_sparse_vector<Val, SV>::load_from(
                                     const sparse_vector_type& sv_src)
 {
-    max_id_ = 0;
+    max_id_ = size_ = 0;
 
     bvector_type* bv_null = sv_.get_null_bvect();
     BM_ASSERT(bv_null);
@@ -701,7 +794,11 @@ void rsc_sparse_vector<Val, SV>::sync(bool force)
     if (!found)
     {
         BM_ASSERT(!bv_null->any());
-        max_id_ = 0;
+        max_id_ = size_ = 0;
+    }
+    else
+    {
+        size_ = max_id_ + 1;
     }
     in_sync_ = true;
 }
@@ -740,6 +837,9 @@ typename rsc_sparse_vector<Val, SV>::value_type
 rsc_sparse_vector<Val, SV>::at(size_type idx) const
 {
     size_type sv_idx;
+    if (idx >= size())
+        sv_.throw_range_error("compressed collection access error");
+
     bool found = resolve(idx, &sv_idx);
     if (!found)
     {
@@ -757,7 +857,7 @@ rsc_sparse_vector<Val, SV>::get(size_type idx) const
     size_type sv_idx;
     bool found = resolve(idx, &sv_idx);
     if (!found)
-        return value_type();
+        return value_type(0);
     
     return sv_.get(--sv_idx);
 }
@@ -795,7 +895,7 @@ template<class Val, class SV>
 void rsc_sparse_vector<Val, SV>::clear() BMNOEXEPT
 {
     sv_.clear();
-    in_sync_ = false;  max_id_ = 0;
+    in_sync_ = false;  max_id_ = size_ = 0;
 }
 
 //---------------------------------------------------------------------
@@ -850,12 +950,13 @@ rsc_sparse_vector<Val, SV>::decode(value_type* arr,
                                    size_type   size,
                                    bool        /*zero_mem*/) const
 {
+    if (size == 0)
+        return 0;
+        
     BM_ASSERT(arr);
     BM_ASSERT(in_sync_);  // call sync() before decoding
     BM_ASSERT(bv_blocks_ptr_);
     
-    if (size == 0)
-        return 0;
     if (idx_from >= this->size())
         return 0;
     
@@ -927,6 +1028,72 @@ void rsc_sparse_vector<Val, SV>::free_bv_blocks()
 }
 
 //---------------------------------------------------------------------
+//
+//---------------------------------------------------------------------
+
+
+template<class Val, class SV>
+rsc_sparse_vector<Val, SV>::back_insert_iterator::back_insert_iterator()
+: csv_(0)
+{}
+
+
+//---------------------------------------------------------------------
+
+template<class Val, class SV>
+rsc_sparse_vector<Val, SV>::back_insert_iterator::back_insert_iterator
+                                                 (rsc_sparse_vector_type* csv)
+{
+    csv_ = csv;
+    sv_bi_ = csv->sv_.get_back_inserter();
+    sv_bi_.disable_set_null(); // NULL is handled outside
+}
+
+//---------------------------------------------------------------------
+
+template<class Val, class SV>
+rsc_sparse_vector<Val, SV>::back_insert_iterator::~back_insert_iterator()
+{
+    this->flush();
+}
+
+//---------------------------------------------------------------------
+
+template<class Val, class SV>
+void rsc_sparse_vector<Val, SV>::back_insert_iterator::add(
+    typename rsc_sparse_vector<Val, SV>::back_insert_iterator::value_type v)
+{
+    BM_ASSERT(csv_);
+    sv_bi_.add_value_no_null(v);
+    bvector_type* bv_null = sv_bi_.get_null_bvect();
+    BM_ASSERT(bv_null);
+    bv_null->set_bit_no_check(csv_->size_);
+    
+    csv_->max_id_++;
+    csv_->size_++;
+}
+
+//---------------------------------------------------------------------
+
+template<class Val, class SV>
+void rsc_sparse_vector<Val, SV>::back_insert_iterator::add_null()
+{
+    BM_ASSERT(csv_);
+    csv_->max_id_++;
+    csv_->size_++;
+}
+
+//---------------------------------------------------------------------
+
+template<class Val, class SV>
+void rsc_sparse_vector<Val, SV>::back_insert_iterator::flush()
+{
+    sv_bi_.flush();
+    csv_->in_sync_ = false;
+}
+
+//---------------------------------------------------------------------
+
 
 
 } // namespace bm

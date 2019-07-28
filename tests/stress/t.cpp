@@ -14635,7 +14635,7 @@ void InterpolativeCodingTest()
     }
 
     // -------------------------------------------------------
-    
+    cout << "BIC encode-decode U16 unit test" << endl;
     {
         bm::encoder enc(buf, sizeof(buf));
         bm::bit_out<bm::encoder> bout(enc);
@@ -14656,6 +14656,7 @@ void InterpolativeCodingTest()
             assert(arr1[i] == arr2c[i]);
         }
     }
+
     // -------------------------------------------------------
 
     cout << "\nu16 interpolated cm encoding Stress..." << endl;
@@ -22154,6 +22155,7 @@ void TestCompressSparseVector()
     
     {
         rsc_sparse_vector_u32 csv1;
+        assert(csv1.size() == 0);
         assert(csv1.equal(csv1));
         rsc_sparse_vector_u32 csv2;
         assert(csv1.equal(csv2));
@@ -22169,6 +22171,7 @@ void TestCompressSparseVector()
         sparse_vector_u32 sv1(bm::use_null);
         
         csv1.push_back(10, 100);
+        assert(csv1.size() == 11);
         csv1.push_back(20, 200);
         csv1.push_back(21, 201);
         
@@ -22222,6 +22225,83 @@ void TestCompressSparseVector()
         assert(pos == 21);
     }
     
+    // back inserter tests
+    {
+        rsc_sparse_vector_u32 csv1;
+        {
+        rsc_sparse_vector_u32::back_insert_iterator rs_bi = csv1.get_back_inserter();
+            rs_bi.add_null();
+            rs_bi.add(1);
+            rs_bi.add(2);
+            rs_bi.flush();
+        }
+        assert(csv1.size() == 3);
+        auto v = csv1.get(0);
+        assert(v == 0);
+        assert(csv1.is_null(0));
+        v = csv1.at(1);
+        assert(v == 1);
+        v = csv1.at(2);
+        assert(v == 2);
+    }
+    
+    {
+        rsc_sparse_vector_u32 csv1;
+        {
+        rsc_sparse_vector_u32::back_insert_iterator rs_bi = csv1.get_back_inserter();
+            rs_bi.add(1);
+            rs_bi.add(2);
+            rs_bi.add_null();
+            rs_bi.add(3);
+            rs_bi.flush();
+        }
+        assert(csv1.size() == 4);
+        auto v = csv1.at(0);
+        assert(v == 1);
+        v = csv1.at(1);
+        assert(v == 2);
+        v = csv1.get(2);
+        assert(v == 0);
+        assert(csv1.is_null(2));
+        v = csv1.at(3);
+        assert(v == 3);
+    }
+    
+    {
+        rsc_sparse_vector_u32 csv1;
+        {
+        rsc_sparse_vector_u32::back_insert_iterator rs_bi = csv1.get_back_inserter();
+        for (unsigned i = 0; i < 100000; i++)
+        {
+            if (i&1)
+            {
+                rs_bi.add_null();
+            }
+            else
+            {
+                rs_bi.add(i);
+            }
+        }
+        rs_bi.flush();
+        }
+        csv1.optimize();
+        
+        // validation
+        for (unsigned i = 0; i < 100000; i++)
+        {
+            if (i&1)
+            {
+                assert(csv1.is_null(i));
+            }
+            else
+            {
+                assert(!csv1.is_null(i));
+                auto v = csv1[i];
+                assert(v == i);
+            }
+        }
+    }
+    
     // set test
     {
         rsc_sparse_vector_u32 csv;
@@ -22248,11 +22328,8 @@ void TestCompressSparseVector()
         assert(csv.get(10) == 11);
         assert(csv.get(11) == 12);
         assert(csv.get(5) == 0);
-        
-
-        
     }
-    
+
     // set stress test
     {
         cout << "RSC set stress..." << endl;
@@ -22387,9 +22464,8 @@ void TestCompressSparseVector()
         }
 
         }
-
     }
-    
+
     {
     cout << "load() test" << endl;
     unsigned v;
@@ -22404,6 +22480,7 @@ void TestCompressSparseVector()
         sv1.clear(100, true);
         
         csv1.load_from(sv1);
+        assert(csv1.size() == 22);
         csv1.sync();
         
         csv2.push_back(10, 9);
@@ -22503,6 +22580,7 @@ void TestCompressSparseVector()
 
     
     }
+    
     
     cout << " ------------------------------ Test Compressed Sparse Vector OK" << endl;
 }
@@ -22920,6 +22998,7 @@ int main(int argc, char *argv[])
 
     if (is_all || is_sv)
     {
+/*
         TestSparseVector();
 
         TestSparseVectorInserter();
@@ -22935,7 +23014,7 @@ int main(int argc, char *argv[])
         TestSparseVectorScan();
 
         TestSparseSort();
-
+*/
         TestCompressSparseVector();
 
         TestCompressedSparseVectorScan();

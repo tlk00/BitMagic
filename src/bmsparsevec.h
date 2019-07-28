@@ -240,7 +240,7 @@ public:
         access assignment.
      
         Limitations for buffered inserter:
-        1. Do not use more than one inserter (into one vector) at the same time
+        1. Do not use more than one inserter per vector at a time
         2. Use method flush() at the end to send the rest of accumulated buffer
         flush is happening automatically on destruction, but if flush produces an
         exception (for whatever reason) it will be an exception in destructor.
@@ -275,7 +275,7 @@ public:
         back_insert_iterator& operator=(const back_insert_iterator& bi)
         {
             BM_ASSERT(bi.empty());
-            this->flush(); sv_ = bi.sv_;
+            this->flush(); sv_ = bi.sv_; bv_null_ = bi. bv_null_;
             return *this;
         }
 
@@ -304,15 +304,30 @@ public:
         
         /** flush the accumulated buffer */
         void flush();
-    protected:
-    
+        
+        // ---------------------------------------------------------------
+        // open internals
+        // (TODO: create proper friend declarations)
+        //
+        /**
+            Get access to not-null vector
+            @internal
+        */
+        bvector_type* get_null_bvect() const { return bv_null_; }
+        
         /** add value to the buffer without changing the NULL vector
             @param v - value to push back
             @return index of added value in the internal buffer
             @internal
         */
-        size_type add_value(value_type v);
+        size_type add_value_no_null(value_type v);
         
+        /**
+            Reconf back inserter not to touch the NULL vector
+        */
+        void disable_set_null() { set_not_null_ = false; }
+        // ---------------------------------------------------------------
+
     private:
         enum buf_size_e
         {
@@ -324,6 +339,7 @@ public:
         bvector_type*               bv_null_; ///!< not NULL vector pointer
         buffer_type                 buffer_;  ///!< value buffer
         value_type*                 buf_ptr_; ///!< position in the buffer
+        bool                        set_not_null_;
     };
     
     friend const_iterator;
@@ -510,15 +526,22 @@ public:
         \param arr  - source array
         \param arr_size - source size
         \param offset - target index in the sparse vector
+        \param set_not_null - import should register in not null vector
     */
-    void import(const value_type* arr, size_type arr_size, size_type offset = 0);
+    void import(const value_type* arr,
+                size_type arr_size,
+                size_type offset = 0,
+                bool      set_not_null = true);
     
     /*!
         \brief Import list of elements from a C-style array (pushed back)
         \param arr  - source array
         \param srr_size - source size
+        \param set_not_null - import should register in not null vector
     */
-    void import_back(const value_type* arr, size_type arr_size);
+    void import_back(const value_type* arr,
+                     size_type         arr_size,
+                     bool              set_not_null = true);
     ///@}
 
     // ------------------------------------------------------------
@@ -952,7 +975,8 @@ void sparse_vector<Val, BV>::set_null(size_type idx)
 template<class Val, class BV>
 void sparse_vector<Val, BV>::import(const value_type* arr,
                                     size_type         arr_size,
-                                    size_type         offset)
+                                    size_type         offset,
+                                    bool              set_not_null)
 {
     unsigned char b_list[sizeof(Val)*8];
     unsigned row_len[sizeof(Val)*8] = {0, };
@@ -1016,10 +1040,11 @@ void sparse_vector<Val, BV>::import(const value_type* arr,
     if (i + offset > this->size_)
         this->size_ = i + offset;
     
-    bvector_type* bv_null = this->get_null_bvect();
-    if (bv_null) // configured to support NULL assignments
+    if (set_not_null)
     {
-        bv_null->set_range(offset, offset + arr_size - 1);
+        bvector_type* bv_null = this->get_null_bvect();
+        if (bv_null) // configured to support NULL assignments
+            bv_null->set_range(offset, offset + arr_size - 1);
     }
 }
 
@@ -1027,9 +1052,10 @@ void sparse_vector<Val, BV>::import(const value_type* arr,
 
 template<class Val, class BV>
 void sparse_vector<Val, BV>::import_back(const value_type* arr,
-                                         size_type         arr_size)
+                                         size_type         arr_size,
+                                         bool              set_not_null)
 {
-    this->import(arr, arr_size, this->size());
+    this->import(arr, arr_size, this->size(), set_not_null);
 }
 
 //---------------------------------------------------------------------
@@ -2057,7 +2083,7 @@ bool sparse_vector<Val, BV>::const_iterator::is_null() const
 
 template<class Val, class BV>
 sparse_vector<Val, BV>::back_insert_iterator::back_insert_iterator()
-: sv_(0), bv_null_(0), buf_ptr_(0)
+: sv_(0), bv_null_(0), buf_ptr_(0), set_not_null_(true)
 {}
 
 //---------------------------------------------------------------------
@@ -2065,7 +2091,7 @@ sparse_vector<Val, BV>::back_insert_iterator::back_insert_iterator()
 template<class Val, class BV>
 sparse_vector<Val, BV>::back_insert_iterator::back_insert_iterator(
    typename sparse_vector<Val, BV>::back_insert_iterator::sparse_vector_type* sv)
-: sv_(sv), buf_ptr_(0)
+: sv_(sv), buf_ptr_(0), set_not_null_(true)
 {
     bv_null_ = sv_? sv_->get_null_bvect() : 0;
 }
@@ -2075,7 +2101,7 @@ sparse_vector<Val, BV>::back_insert_iterator::back_insert_iterator(
 template<class Val, class BV>
 sparse_vector<Val, BV>::back_insert_iterator::back_insert_iterator(
     const typename sparse_vector<Val, BV>::back_insert_iterator& bi)
-: sv_(bi.sv_), bv_null_(bi.bv_null_), buf_ptr_(0)
+: sv_(bi.sv_), bv_null_(bi.bv_null_), buf_ptr_(0), set_not_null_(bi.set_not_null_)
 {
     BM_ASSERT(bi.empty());
 }
@@ -2094,7 +2120,7 @@ template<class Val, class BV>
 void sparse_vector<Val, BV>::back_insert_iterator::add(
          typename sparse_vector<Val, BV>::back_insert_iterator::value_type v)
 {
-    size_type buf_idx = this->add_value(v);
+    size_type buf_idx = this->add_value_no_null(v);
     if (bv_null_)
     {
         typename sparse_vector<Val, BV>::size_type sz = sv_->size();
@@ -2106,7 +2132,7 @@ void sparse_vector<Val, BV>::back_insert_iterator::add(
 
 template<class Val, class BV>
 typename sparse_vector<Val, BV>::size_type
-sparse_vector<Val, BV>::back_insert_iterator::add_value(
+sparse_vector<Val, BV>::back_insert_iterator::add_value_no_null(
          typename sparse_vector<Val, BV>::back_insert_iterator::value_type v)
 {
     BM_ASSERT(sv_);
@@ -2172,7 +2198,7 @@ void sparse_vector<Val, BV>::back_insert_iterator::flush()
     if (this->empty())
         return;
     value_type* d = (value_type*)buffer_.data();
-    sv_->import_back(d, size_type(buf_ptr_ - d));
+    sv_->import_back(d, size_type(buf_ptr_ - d), set_not_null_);
     buf_ptr_ = 0;
 }
 
