@@ -16,7 +16,7 @@ limitations under the License.
 For more information please visit:  http://bitmagic.io
 */
 
-/** \example sample20.cpp
+/** \example sample21.cpp
 
   Example for shifting - erase of bits.
  

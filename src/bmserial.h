@@ -1158,6 +1158,7 @@ unsigned char serializer<BV>::find_bit_best_encoding(const bm::word_t* block)
         else
         {
             bc = bm::bit_block_count(block);
+            bit_gaps = 65535;
         }
         BM_ASSERT(bc);
 

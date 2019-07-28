@@ -29,9 +29,9 @@ For more information please visit:  http://bitmagic.io
 
     There are two ways to run BitMagic in 64-bit address mode:
 
-    1. #define BM64ADDR in your project
+    1. define BM64ADDR in your project
     Or
-    2. use #include "bm64.h"
+    2. include "bm64.h"
 
     Limitations: 
     - you CANNOT use 32-bit and 64-bit in the same compilation unit.
