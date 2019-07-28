@@ -553,11 +553,11 @@ rsc_sparse_vector<Val, SV>::rsc_sparse_vector(bm::null_support null_able,
                                               size_type bv_max_size,
                                               const allocator_type&   alloc)
 : sv_(null_able, ap, bv_max_size, alloc),
-  max_id_(0), in_sync_(false)
+  in_sync_(false)
 {
     BM_ASSERT(null_able == bm::use_null);
     BM_ASSERT(int(sv_value_plains) == int(SV::sv_value_plains));
-    
+    size_ = max_id_ = 0;
     construct_bv_blocks();
 }
 
