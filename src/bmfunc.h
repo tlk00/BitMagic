@@ -133,6 +133,17 @@ struct  bit_decode_cache
 
 
 /**
+    \brief Recalc linear bvector block index into 2D matrix coordinates
+    \internal
+*/
+template<typename BI_TYPE>
+void get_block_coord(BI_TYPE nb, unsigned& i, unsigned& j)
+{
+    i = unsigned(nb >> bm::set_array_shift); // top block address
+    j = unsigned(nb &  bm::set_array_mask);  // address in sub-block
+}
+
+/**
     \brief ad-hoc conditional expressions 
     \internal
 */

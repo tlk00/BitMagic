@@ -1724,7 +1724,6 @@ unsigned bit_in<TDecoder>::get_bits(unsigned count)
         acc >>= count;
         used += count;
         goto ret;
-        //return value;
     }
     if (used == (sizeof(acc) * 8))
     {

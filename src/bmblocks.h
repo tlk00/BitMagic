@@ -480,16 +480,6 @@ public:
         return ret;
     }
 
-    /** 
-    Recalculate absolute block address into coordinates
-    */
-    static
-    BMFORCEINLINE
-    void get_block_coord(block_idx_type nb, unsigned& i, unsigned& j)
-    {
-        i = unsigned(nb >> bm::set_array_shift); // top block address
-        j = unsigned(nb &  bm::set_array_mask);  // address in sub-block
-    }
 
     /**
     Find the next non-zero block starting from nb
@@ -1047,7 +1037,7 @@ public:
                                      bool     allow_null_ret=true)
     {
         unsigned i, j;
-        this->get_block_coord(nb, i, j);
+        bm::get_block_coord(nb, i, j);
         bm::word_t*  block = this->get_block_ptr(i, j);
 
         if (!IS_VALID_ADDR(block)) // NULL block or ALLSET
@@ -1091,7 +1081,7 @@ public:
     bm::word_t* check_allocate_block(block_idx_type nb, int initial_block_type)
     {
         unsigned i, j;
-        this->get_block_coord(nb, i, j);
+        bm::get_block_coord(nb, i, j);
         bm::word_t* block = this->get_block_ptr(i, j);
 
         if (!IS_VALID_ADDR(block)) // NULL block or ALLSET

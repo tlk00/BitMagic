@@ -899,7 +899,7 @@ public:
             bm::bvector<Alloc>::blocks_manager_type& bman =
                                                  this->bv_->get_blocks_manager();
             unsigned i0, j0;
-            bman.get_block_coord(nb, i0, j0);
+            bm::get_block_coord(nb, i0, j0);
             this->block_ = bman.get_block(i0, j0);
 
             BM_ASSERT(this->block_);
@@ -2602,7 +2602,7 @@ void bvector<Alloc>::build_rs_index(rs_index_type* rs_idx,
         return;
     block_idx_type nb = (last_bit >> bm::set_block_shift);
     unsigned i0, j0;
-    blockman_.get_block_coord(nb, i0, j0);
+    bm::get_block_coord(nb, i0, j0);
 
     unsigned real_top_blocks = blockman_.find_real_top_blocks();
     unsigned max_top_blocks = blockman_.find_max_top_blocks();
@@ -2844,7 +2844,7 @@ bvector<Alloc>::count_to(size_type right,
     cnt = nblock_right ? rs_idx.rcount(nblock_right-1) : 0;
 
     unsigned i, j;
-    blockman_.get_block_coord(nblock_right, i, j);
+    bm::get_block_coord(nblock_right, i, j);
     const bm::word_t* block = blockman_.get_block_ptr(i, j);
 
     if (!block)
@@ -2891,7 +2891,7 @@ bvector<Alloc>::count_to_test(size_type right,
     //
     size_type cnt = 0;
     unsigned i, j;
-    blockman_.get_block_coord(nblock_right, i, j);
+    bm::get_block_coord(nblock_right, i, j);
     const bm::word_t* block = blockman_.get_block_ptr(i, j);
 
     if (!block)
@@ -2952,7 +2952,7 @@ bvector<Alloc>::count_range(size_type left, size_type right) const
     unsigned nblock_right = unsigned(right >>  bm::set_block_shift);
 
     unsigned i0, j0;
-    blockman_.get_block_coord(nblock_left, i0, j0);
+    bm::get_block_coord(nblock_left, i0, j0);
     const bm::word_t* block = blockman_.get_block(i0, j0);
 
     bool left_gap = BM_IS_GAP(block);
@@ -3001,7 +3001,7 @@ bvector<Alloc>::count_range(size_type left, size_type right) const
         cnt += func.count();
     }
     
-    blockman_.get_block_coord(nblock_right, i0, j0);
+    bm::get_block_coord(nblock_right, i0, j0);
     block = blockman_.get_block(i0, j0);
     bool right_gap = BM_IS_GAP(block);
 
@@ -3107,7 +3107,7 @@ bool bvector<Alloc>::get_bit(size_type n) const
     // calculate logical block number
     unsigned nb = unsigned(n >>  bm::set_block_shift);
     unsigned i, j;
-    blockman_.get_block_coord(nb, i, j);
+    bm::get_block_coord(nb, i, j);
     const bm::word_t* block = blockman_.get_block_ptr(i, j); // get unsanitized block ptr
 
     if (block)
@@ -4173,7 +4173,7 @@ bool bvector<Alloc>::select(size_type rank_in, size_type& pos,
         return found;
 
     unsigned i, j;
-    blockman_.get_block_coord(nb, i, j);
+    bm::get_block_coord(nb, i, j);
     const bm::word_t* block = blockman_.get_block_ptr(i, j);
     
     block = BLOCK_ADDR_SAN(block); // TODO: optimize FULL block selection
@@ -4200,7 +4200,7 @@ bvector<Alloc>::check_or_next(size_type prev) const
     // calculate logical block number
     block_idx_type nb = (prev >>  bm::set_block_shift);
     unsigned i, j;
-    blockman_.get_block_coord(nb, i, j);
+    bm::get_block_coord(nb, i, j);
     const bm::word_t* block = blockman_.get_block_ptr(i, j);
 
     if (block)
@@ -4332,7 +4332,7 @@ bool bvector<Alloc>::insert(size_type n, bool value)
     else // process target block insertion
     {
         unsigned i, j;
-        blockman_.get_block_coord(nb, i, j);
+        bm::get_block_coord(nb, i, j);
         bm::word_t* block = blockman_.get_block_ptr(i, j);
 
         if (!block && !value) // nothing to do
@@ -4353,7 +4353,7 @@ bool bvector<Alloc>::insert(size_type n, bool value)
     }
     
     unsigned i0, j0;
-    blockman_.get_block_coord(nb, i0, j0);
+    bm::get_block_coord(nb, i0, j0);
 
     unsigned top_blocks = blockman_.top_block_size();
     bm::word_t*** blk_root = blockman_.top_blocks_root();
@@ -4500,7 +4500,7 @@ void bvector<Alloc>::erase(size_type n)
     else // process target block bit erase
     {
         unsigned i, j;
-        blockman_.get_block_coord(nb, i, j);
+        bm::get_block_coord(nb, i, j);
         bm::word_t* block = blockman_.get_block_ptr(i, j);
         bool carry_over = test_first_block_bit(nb+1);
         if (!block)
@@ -4524,7 +4524,7 @@ void bvector<Alloc>::erase(size_type n)
     // left shifting of all other blocks
     //
     unsigned i0, j0;
-    blockman_.get_block_coord(nb, i0, j0);
+    bm::get_block_coord(nb, i0, j0);
 
     unsigned top_blocks = blockman_.top_block_size();
     bm::word_t*** blk_root = blockman_.top_blocks_root();
@@ -4728,7 +4728,7 @@ void bvector<Alloc>::combine_operation_with_block(block_idx_type nb,
                                                   bm::operation opcode)
 {
     unsigned i0, j0;
-    blockman_.get_block_coord(nb, i0, j0);
+    bm::get_block_coord(nb, i0, j0);
     bm::word_t* blk = blockman_.get_block_ptr(i0, j0);
 
     bool gap = BM_IS_GAP(blk);
@@ -6436,7 +6436,7 @@ void bvector<Alloc>::set_range_no_check(size_type left,
                                          (gap_word_t)nbit_left, 
                                          (gap_word_t)r, 
                                          (gap_word_t)1);
-        blockman_.get_block_coord(nblock_left, i, j);
+        bm::get_block_coord(nblock_left, i, j);
         block = blockman_.get_block_ptr(i, j);
         combine_operation_with_block(nblock_left,
             BM_IS_GAP(block),
@@ -6462,7 +6462,7 @@ void bvector<Alloc>::set_range_no_check(size_type left,
     if (nb_to > nblock_right)
         return;
 
-    blockman_.get_block_coord(nblock_right, i, j);
+    bm::get_block_coord(nblock_right, i, j);
     block = blockman_.get_block_ptr(i, j);
 
     gap_init_range_block<gap_word_t>(tmp_gap_blk, 
@@ -6511,7 +6511,7 @@ void bvector<Alloc>::clear_range_no_check(size_type left,
             (gap_word_t)nbit_left,
             (gap_word_t)r,
             (gap_word_t)0);
-        blockman_.get_block_coord(nblock_left, i, j);
+        bm::get_block_coord(nblock_left, i, j);
         block = blockman_.get_block_ptr(i, j);
         combine_operation_with_block(nblock_left,
             BM_IS_GAP(block),
@@ -6538,7 +6538,7 @@ void bvector<Alloc>::clear_range_no_check(size_type left,
     if (nb_to > nblock_right)
         return;
 
-    blockman_.get_block_coord(nblock_right, i, j);
+    bm::get_block_coord(nblock_right, i, j);
     block = blockman_.get_block_ptr(i, j);
     gap_init_range_block<gap_word_t>(tmp_gap_blk,
         (gap_word_t)0,

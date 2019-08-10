@@ -104,7 +104,9 @@ struct sparse_vector_serial_layout
     
     /// Return serialization buffer pointer
     const unsigned char* buf() const { return buf_.buf();  }
-    
+    /// Return serialization buffer pointer
+    const unsigned char* data() const { return buf_.buf();  }
+
 private:
     sparse_vector_serial_layout(const sparse_vector_serial_layout&);
     void operator=(const sparse_vector_serial_layout&);

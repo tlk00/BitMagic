@@ -294,7 +294,7 @@ void random_subset<BV>::get_subset(BV&        bv_out,
             continue;
         {
             unsigned i0, j0;
-            bman_in.get_block_coord(nb, i0, j0);
+            bm::get_block_coord(nb, i0, j0);
             const bm::word_t* blk_src = bman_in.get_block(i0, j0);
             BM_ASSERT(blk_src);
 

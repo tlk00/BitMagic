@@ -59,9 +59,9 @@ public:
     typedef typename BV::allocator_type              allocator_type;
     typedef typename bvector_type::allocation_policy allocation_policy_type;
     typedef typename allocator_type::allocator_pool_type allocator_pool_type;
-    typedef typename bvector_type::size_type         size_type;
-    typedef typename bvector_type::block_idx_type    block_idx_type;
-    typedef unsigned char                            octet_type;
+    typedef typename bvector_type::size_type             size_type;
+    typedef typename bvector_type::block_idx_type        block_idx_type;
+    typedef unsigned char                                octet_type;
 
 public:
     // ------------------------------------------------------------
@@ -76,7 +76,7 @@ public:
     
     /*! copy-ctor */
     basic_bmatrix(const basic_bmatrix<BV>& bbm);
-    basic_bmatrix<BV>& operator = (const basic_bmatrix<BV>& bbm)
+    basic_bmatrix<BV>& operator=(const basic_bmatrix<BV>& bbm)
     {
         copy_from(bbm);
         return *this;
@@ -203,13 +203,19 @@ public:
 
     /*!
         \brief run memory optimization for all bit-vector rows
-        \param temp_block - pre-allocated memory block to avoid unnecessary re-allocs
+        \param temp_block - pre-allocated memory block to avoid re-allocs
         \param opt_mode - requested compression depth
         \param stat - memory allocation statistics after optimization
     */
-    void optimize(bm::word_t* temp_block = 0,
-                  typename bvector_type::optmode opt_mode = bvector_type::opt_compress,
-                  typename bvector_type::statistics* stat = 0);
+    void optimize(
+        bm::word_t* temp_block = 0,
+        typename bvector_type::optmode opt_mode = bvector_type::opt_compress,
+        typename bvector_type::statistics* stat = 0);
+    
+    /*! Optimize block in all planes
+        @internal
+    */
+    void optimize_block(block_idx_type nb);
 
     ///@}
 
@@ -220,7 +226,7 @@ protected:
 
     bvector_type* construct_bvector(const bvector_type* bv) const;
     void destruct_bvector(bvector_type* bv) const;
-
+    
     static
     void throw_bad_alloc() { BV::throw_bad_alloc(); }
 
@@ -249,12 +255,12 @@ public:
         sv_plains = (sizeof(Val) * 8 * MAX_SIZE + 1),
         sv_value_plains = (sizeof(Val) * 8 * MAX_SIZE)
     };
-    
+
     enum vector_capacity
     {
         max_vector_size = MAX_SIZE
     };
-    
+
     typedef Val                                      value_type;
     typedef BV                                       bvector_type;
     typedef typename BV::size_type                   size_type;
@@ -266,7 +272,7 @@ public:
     typedef typename bvector_type::enumerator        bvector_enumerator_type;
     typedef typename allocator_type::allocator_pool_type allocator_pool_type;
     typedef bm::basic_bmatrix<BV>                        bmatrix_type;
-    
+
 public:
     base_sparse_vector();
 
@@ -450,6 +456,8 @@ protected:
     void insert_null(size_type idx, bool not_null);
 
 protected:
+    typedef typename bvector_type::block_idx_type block_idx_type;
+
     /** Number of total bit-plains in the value type*/
     static unsigned value_bits()
     {
@@ -458,6 +466,13 @@ protected:
     
     /** plain index for the "NOT NULL" flag1s plain */
     static unsigned null_plain() { return value_bits(); }
+    
+    /** optimize block in all matrix plains */
+    void optimize_block(block_idx_type nb)
+    {
+        bmatr_.optimize_block(nb);
+    }
+
 protected:
     bmatrix_type             bmatr_;              ///< bit-transposed matrix
     size_type                size_;               ///< array size
@@ -1070,7 +1085,25 @@ void basic_bmatrix<BV>::optimize(bm::word_t* temp_block,
     } // for k
 }
 
+//---------------------------------------------------------------------
 
+template<typename BV>
+void basic_bmatrix<BV>::optimize_block(block_idx_type nb)
+{
+    for (unsigned k = 0; k < rsize_; ++k)
+    {
+        bvector_type* bv = get_row(k);
+        if (bv)
+        {
+            unsigned i, j;
+            bm::get_block_coord(nb, i, j);
+            typename bvector_type::blocks_manager_type& bman =
+                                                bv->get_blocks_manager();
+            bman.optimize_bit_block(i, j);
+        }
+    } // for k
+
+}
 
 //---------------------------------------------------------------------
 //---------------------------------------------------------------------

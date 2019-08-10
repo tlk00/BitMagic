@@ -326,7 +326,8 @@ public:
         /** flush the accumulated buffer */
         void flush();
     protected:
-    
+        typedef typename bvector_type::block_idx_type     block_idx_type;
+
         /** add value to the buffer without changing the NULL vector
             @param v - value to push back
             @return index of added value in the internal buffer
@@ -349,6 +350,7 @@ public:
         bvector_type*            bv_null_;     ///!< not NULL vector pointer
         buffer_matrix_type       buf_matrix_;  ///!< value buffer
         size_type                pos_in_buf_;  ///!< buffer position
+        block_idx_type           prev_nb_;     ///!< previous block added
     };
 
 
@@ -536,9 +538,7 @@ public:
 
     /*!
         \brief get specified string element
-     
         Template method expects an STL-compatible type basic_string<>
-     
         \param idx  - element index (vector auto-resized if needs to)
         \param str  - string to get [out]
     */
@@ -1774,7 +1774,7 @@ void str_sparse_vector<CharType, BV, MAX_STR_SIZE>::const_iterator::advance()
 
 template<class CharType, class BV, unsigned MAX_STR_SIZE>
 str_sparse_vector<CharType, BV, MAX_STR_SIZE>::back_insert_iterator::back_insert_iterator()
-: sv_(0), bv_null_(0), pos_in_buf_(~size_type(0))
+: sv_(0), bv_null_(0), pos_in_buf_(~size_type(0)), prev_nb_(0)
 {}
 
 //---------------------------------------------------------------------
@@ -1784,7 +1784,15 @@ str_sparse_vector<CharType, BV, MAX_STR_SIZE>::back_insert_iterator::back_insert
            str_sparse_vector<CharType, BV, MAX_STR_SIZE>* sv)
 : sv_(sv), pos_in_buf_(~size_type(0))
 {
-    bv_null_ = sv_? sv_->get_null_bvect() : 0;
+    if (sv)
+    {
+        prev_nb_ = sv_->size() >> bm::set_block_shift;
+        bv_null_ = sv_->get_null_bvect();
+    }
+    else
+    {
+        bv_null_ = 0; prev_nb_ = 0;
+    }
 }
 
 //---------------------------------------------------------------------
@@ -1792,7 +1800,7 @@ str_sparse_vector<CharType, BV, MAX_STR_SIZE>::back_insert_iterator::back_insert
 template<class CharType, class BV, unsigned MAX_STR_SIZE>
 str_sparse_vector<CharType, BV, MAX_STR_SIZE>::back_insert_iterator::back_insert_iterator(
 const str_sparse_vector<CharType, BV, MAX_STR_SIZE>::back_insert_iterator& bi)
-: sv_(bi.sv_), bv_null_(bi.bv_null_), pos_in_buf_(~size_type(0))
+: sv_(bi.sv_), bv_null_(bi.bv_null_), pos_in_buf_(~size_type(0)), prev_nb_(bi.prev_nb_)
 {
     BM_ASSERT(bi.empty());
 }
@@ -1820,9 +1828,16 @@ void str_sparse_vector<CharType, BV, MAX_STR_SIZE>::back_insert_iterator::flush(
 {
     if (this->empty())
         return;
-    
+
     sv_->import_no_check(buf_matrix_, sv_->size(), pos_in_buf_+1, false);
     pos_in_buf_ = ~size_type(0);
+    block_idx_type nb = sv_->size() >> bm::set_block_shift;
+    if (nb != prev_nb_)
+    {
+        // optimize all previous blocks in all planes
+        sv_->optimize_block(prev_nb_);
+        prev_nb_ = nb;
+    }
 }
 
 //---------------------------------------------------------------------

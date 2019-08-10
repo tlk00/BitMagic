@@ -327,7 +327,9 @@ public:
         */
         void disable_set_null() { set_not_null_ = false; }
         // ---------------------------------------------------------------
-
+        
+    protected:
+        typedef typename bvector_type::block_idx_type     block_idx_type;
     private:
         enum buf_size_e
         {
@@ -339,6 +341,7 @@ public:
         bvector_type*               bv_null_; ///!< not NULL vector pointer
         buffer_type                 buffer_;  ///!< value buffer
         value_type*                 buf_ptr_; ///!< position in the buffer
+        block_idx_type              prev_nb_; ///!< previous block added
         bool                        set_not_null_;
     };
     
@@ -2083,7 +2086,7 @@ bool sparse_vector<Val, BV>::const_iterator::is_null() const
 
 template<class Val, class BV>
 sparse_vector<Val, BV>::back_insert_iterator::back_insert_iterator()
-: sv_(0), bv_null_(0), buf_ptr_(0), set_not_null_(true)
+: sv_(0), bv_null_(0), buf_ptr_(0), prev_nb_(0), set_not_null_(true)
 {}
 
 //---------------------------------------------------------------------
@@ -2093,7 +2096,15 @@ sparse_vector<Val, BV>::back_insert_iterator::back_insert_iterator(
    typename sparse_vector<Val, BV>::back_insert_iterator::sparse_vector_type* sv)
 : sv_(sv), buf_ptr_(0), set_not_null_(true)
 {
-    bv_null_ = sv_? sv_->get_null_bvect() : 0;
+    if (sv)
+    {
+        prev_nb_ = sv_->size() >> bm::set_block_shift;
+        bv_null_ = sv_->get_null_bvect();
+    }
+    else
+    {
+        bv_null_ = 0; prev_nb_ = 0;
+    }
 }
 
 //---------------------------------------------------------------------
@@ -2101,7 +2112,8 @@ sparse_vector<Val, BV>::back_insert_iterator::back_insert_iterator(
 template<class Val, class BV>
 sparse_vector<Val, BV>::back_insert_iterator::back_insert_iterator(
     const typename sparse_vector<Val, BV>::back_insert_iterator& bi)
-: sv_(bi.sv_), bv_null_(bi.bv_null_), buf_ptr_(0), set_not_null_(bi.set_not_null_)
+: sv_(bi.sv_), bv_null_(bi.bv_null_), buf_ptr_(0), prev_nb_(bi.prev_nb_),
+  set_not_null_(bi.set_not_null_)
 {
     BM_ASSERT(bi.empty());
 }
@@ -2200,6 +2212,13 @@ void sparse_vector<Val, BV>::back_insert_iterator::flush()
     value_type* d = (value_type*)buffer_.data();
     sv_->import_back(d, size_type(buf_ptr_ - d), set_not_null_);
     buf_ptr_ = 0;
+    block_idx_type nb = sv_->size() >> bm::set_block_shift;
+    if (nb != prev_nb_)
+    {
+        // optimize all previous blocks in all planes
+        sv_->optimize_block(prev_nb_);
+        prev_nb_ = nb;
+    }
 }
 
 //---------------------------------------------------------------------

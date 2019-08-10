@@ -418,7 +418,7 @@ void print_stat(const BV& bv, typename BV::block_idx_type blocks = 0)
     for (nb = 0; nb < blocks; ++nb)
     {
         unsigned i0, j0;
-        bman.get_block_coord(nb, i0, j0);
+        bm::get_block_coord(nb, i0, j0);
         const bm::word_t* blk = bman.get_block(i0, j0);
 
         if (!blk)
@@ -435,7 +435,7 @@ void print_stat(const BV& bv, typename BV::block_idx_type blocks = 0)
            typename BV::block_idx_type start = nb;
            for(auto i = nb+1; i < bm::set_total_blocks; ++i, ++nb)
            {
-               bman.get_block_coord(nb, i0, j0);
+               bm::get_block_coord(nb, i0, j0);
                blk = bman.get_block(i0, j0);
                if (IS_FULL_BLOCK(blk))
                {
@@ -478,7 +478,7 @@ void print_stat(const BV& bv, typename BV::block_idx_type blocks = 0)
                total_gap_eff += unsigned(mem_eff);
                
                unsigned i,j;
-               bman.get_block_coord(nb, i, j);
+               bm::get_block_coord(nb, i, j);
                std::cout << " [GAP " << nb << "(" << i << "," << j << ")"
                          << "=" << bc << ":" << level << "-L" << len << "(" << mem_eff << ")]";
                 ++printed;
