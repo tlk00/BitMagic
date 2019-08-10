@@ -1537,7 +1537,6 @@ void CheckRangeCopy(const bvect& bv, unsigned from, unsigned to)
         bool found2 =  bv_control.find_range(f2, l2);
         
         bvect bv_cp3(bv, from, to);
-
         
         cerr << "Error: bvector<>::range_copy() failed. from=" << from << " to=" << to << endl;
         if (found1)
@@ -16045,6 +16044,40 @@ void TestSparseVector()
 
     }}
     
+    
+    // test automatic optimization with back_insert iterator
+    {
+       bm::sparse_vector<unsigned, bm::bvector<> > sv;
+       {
+           bm::sparse_vector<unsigned, bm::bvector<>>::back_insert_iterator
+                                                    bi = sv.get_back_inserter();
+           for (unsigned i = 0; i < 65536; ++i)
+           {
+                bi = 15;
+           } // for
+       }
+       
+       bm::sparse_vector<unsigned, bm::bvector<>>::statistics st;
+       
+       sv.calc_stat(&st);
+       assert(st.bit_blocks == 0);
+       assert(st.gap_blocks == 0);
+       
+       {
+           bm::sparse_vector<unsigned, bm::bvector<>>::back_insert_iterator
+                                            bi = sv.get_back_inserter();
+           for (unsigned i = 0; i < 65536; ++i)
+           {
+                bi = 15;
+           }
+       }
+       
+       sv.calc_stat(&st);
+       assert(st.bit_blocks == 0);
+       assert(st.gap_blocks == 0);
+    }
+
+    
     // test insert() / erase()
     {
         bm::sparse_vector<unsigned, bm::bvector<> > sv1;
@@ -18575,6 +18608,39 @@ void TestStrSparseVector()
        assert(str_sv0.is_null(sz));
        
     }
+    
+    // test automatic optimization with back_insert iterator
+    {
+       str_sparse_vector<char, bvect, 32> str_sv0;
+       {
+           str_sparse_vector<char, bvect, 32>::back_insert_iterator
+                                        bi = str_sv0.get_back_inserter();
+           for (unsigned i = 0; i < 65536; ++i)
+           {
+                bi = "123";
+           } // for
+       }
+       
+       str_sparse_vector<char, bvect, 32>::statistics st;
+       
+       str_sv0.calc_stat(&st);
+       assert(st.bit_blocks == 0);
+       assert(st.gap_blocks == 0);
+       
+       {
+           str_sparse_vector<char, bvect, 32>::back_insert_iterator
+                                        bi = str_sv0.get_back_inserter();
+           for (unsigned i = 0; i < 65536; ++i)
+           {
+                bi = "123";
+           }
+       }
+       
+       str_sv0.calc_stat(&st);
+       assert(st.bit_blocks == 0);
+       assert(st.gap_blocks == 0);
+    }
+    
     
 
     // const_iterator / back_inserter
@@ -22981,7 +23047,6 @@ int main(int argc, char *argv[])
         StressTest(120, 3); // AND
         StressTest(120, 1); // SUB
         StressTest(120, 2); // XOR
-
     }
 
 
