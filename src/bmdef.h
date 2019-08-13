@@ -391,7 +391,12 @@ For more information please visit:  http://bitmagic.io
 
 #ifdef __GNUG__
 #ifndef __clang__
+
+#if __GNUC__ > 6 
 #  define BM_FALLTHROUGH __attribute__ ((fallthrough))
+#else
+# define BM_FALLTHROUGH
+#endif
 #else
 #  define BM_FALLTHROUGH [[clang::fallthrough]]
 #endif
