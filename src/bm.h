@@ -3610,6 +3610,7 @@ void bvector<Alloc>::import(const size_type* ids, size_type size_in,
             return;
         }
     }
+    break;
     default:
         break;
     } // switch

@@ -41,6 +41,7 @@ For more information please visit:  http://bitmagic.io
 #undef BM_INCWORD_BITCOUNT
 #undef BM_MINISET_GAPLEN
 #undef BM_MINISET_ARRSIZE
+#undef BM_FALLTHROUGH
 
 #undef BMVECTOPT
 #undef VECT_XOR_ARR_2_MASK
