@@ -798,7 +798,7 @@ void GenerateSV(SV&   sv, unsigned strategy = 0)
         }
         cout << "ok effective size=" << (sv.size() - from) << endl;
     }
-
+    break;
     default:
         break;
     } // switch
