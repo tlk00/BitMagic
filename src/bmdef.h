@@ -401,11 +401,11 @@ For more information please visit:  http://bitmagic.io
 #  else
 #    define BM_FALLTHROUGH __attribute__ ((fallthrough))
 #  endif
-#else
-#  define BM_FALLTHROUGH
 #endif
 
-
+#ifndef BM_FALLTHROUGH
+#  define BM_FALLTHROUGH
+#endif
 
 #endif
 
