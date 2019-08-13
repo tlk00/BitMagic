@@ -1,7 +1,7 @@
 ## BitMagic C++ Library
 
 
-Algorithms and tools for Algebra od Sets for information retrieval, 
+Algorithms and tools for Algebra of Sets for information retrieval, 
 indexing of databases, scientific algorithms, ranking, clustering, unsupervised machine learning 
 and signal processing.
 
