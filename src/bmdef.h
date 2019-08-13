@@ -389,6 +389,11 @@ For more information please visit:  http://bitmagic.io
 #endif
 
 
+#ifdef __GNUG__
+#  define BM_FALLTHROUGH __attribute__ ((fallthrough))
+#endif
+
+
 
 #endif
 

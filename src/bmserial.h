@@ -1290,7 +1290,7 @@ void serializer<BV>::encode_gap_block(const bm::gap_word_t* gap_block, bm::encod
     case bm::set_block_arrgap_inv:
     case bm::set_block_arrgap_egamma_inv:
         invert = true;
-        // fall through is intentional here
+        BM_FALLTHROUGH;
     case bm::set_block_arrgap:
     case bm::set_block_arrgap_egamma:
         arr_len = gap_convert_to_arr(gap_temp_block,
@@ -1305,7 +1305,7 @@ void serializer<BV>::encode_gap_block(const bm::gap_word_t* gap_block, bm::encod
         break;
     case bm::set_block_arrgap_bienc_inv:
         invert = true;
-        // fall through is intentional here
+        BM_FALLTHROUGH;
     case bm::set_block_arrgap_bienc:
         arr_len = gap_convert_to_arr(gap_temp_block,
                                      gap_block,
