@@ -748,8 +748,9 @@ public:
     ///
     /// matrix[size_of_gap*8][(Size_block_in_bytes / size_of_gap) / number_of_planes)] 
     typedef 
-    tmatrix<GT, sizeof(GT)*8, 
-                (((BLOCK_SIZE * sizeof(unsigned)) / (sizeof(GT))) / (sizeof(GT) * 8))>
+    tmatrix<GT, static_cast<unsigned>(sizeof(GT)*8),
+            static_cast<unsigned>(((BLOCK_SIZE * sizeof(unsigned)) / (sizeof(GT)))
+                                  / (sizeof(GT) * 8))>
                 tmatrix_type;
                 
     gap_transpose_engine() : eff_cols_(0)
