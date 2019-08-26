@@ -314,10 +314,10 @@ public:
         size_type v_size = value_size();
         size_type new_size = hv.size();
         buffer_.resize(new_size * v_size);
-        unsigned char* data = buffer_.data();
+        unsigned char* this_data = buffer_.data();
         for (size_type i = 0; i < new_size; ++i)
         {
-            unsigned char *p = data + (i * v_size);
+            unsigned char *p = this_data + (i * v_size);
             new(p) value_type(hv[i]);
         }
     }
@@ -331,10 +331,10 @@ public:
         size_type v_size = value_size();
         size_type new_size = hv.size();
         buffer_.resize(new_size * v_size);
-        unsigned char* data = buffer_.data();
+        unsigned char* this_data = buffer_.data();
         for (size_type i = 0; i < new_size; ++i)
         {
-            unsigned char *p = data + (i * v_size);
+            unsigned char *p = this_data + (i * v_size);
             new(p) value_type(hv[i]);
         }
         return *this;
@@ -344,10 +344,10 @@ public:
     {
         size_type sz = size();
         size_type v_size = value_size();
-        unsigned char* data = buffer_.data();
+        unsigned char* this_data = buffer_.data();
         for (size_type i = 0; i < sz; ++i) 
         {
-            unsigned char *p = data + (i * v_size);
+            unsigned char *p = this_data + (i * v_size);
             reinterpret_cast<value_type*>(p)->~Val();
         }
     }
@@ -423,10 +423,10 @@ public:
             return;
         if (new_size < sz) // shrink
         {
-            unsigned char* data = buffer_.data();
+            unsigned char* this_data = buffer_.data();
             for (size_type i = new_size; i < sz; ++i)
             {
-                unsigned char *p = data + (i * v_size);
+                unsigned char *p = this_data + (i * v_size);
                 reinterpret_cast<value_type*>(p)->~Val();
             }
             buffer_.resize(new_size * v_size);
@@ -434,10 +434,10 @@ public:
         else
         {
             buffer_.resize(new_size * v_size);
-            unsigned char* data = buffer_.data();
+            unsigned char* this_data = buffer_.data();
             for (size_type i = sz; i < new_size; ++i)
             {
-                unsigned char *p = data + (i * v_size);
+                unsigned char *p = this_data + (i * v_size);
                 new(p) value_type();
             }
         }
@@ -661,8 +661,8 @@ public:
     /**
         By default object is constructed but NOT allocated.
     */
-    dynamic_heap_matrix(size_type rows=0, size_type cols=0)
-        : rows_(rows), cols_(cols),
+    dynamic_heap_matrix(size_type rows_in=0, size_type cols_in=0)
+        : rows_(rows_in), cols_(cols_in),
         buffer_()
     {}
 
@@ -678,9 +678,9 @@ public:
     size_type rows() const { return rows_; }
     size_type cols() const { return cols_; }
 
-    void resize(size_type rows, size_type cols)
+    void resize(size_type rows_in, size_type cols_in)
     {
-        rows_ = rows; cols_ = cols;
+        rows_ = rows_in; cols_ = cols_in;
         buffer_.resize(size_in_bytes());
     }
     

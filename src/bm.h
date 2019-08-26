@@ -2654,13 +2654,13 @@ void bvector<Alloc>::build_rs_index(rs_index_type* rs_idx,
             }
             
             // TODO: optimize sub-index compute
-            unsigned first, second;
+            unsigned local_first, local_second;
             if (BM_IS_GAP(block))
             {
                 const bm::gap_word_t* const gap_block = BMGAP_PTR(block);
-                first =
+                local_first =
                     bm::gap_bit_count_range(gap_block, 0, bm::rs3_border0);
-                second =
+                local_second =
                     bm::gap_bit_count_range(gap_block,
                                             bm::gap_word_t(bm::rs3_border0+1),
                                             bm::rs3_border1);
@@ -2669,15 +2669,15 @@ void bvector<Alloc>::build_rs_index(rs_index_type* rs_idx,
             {
                 block = BLOCK_ADDR_SAN(block); // TODO: optimize FULL
 
-                first =
+                local_first =
                     bm::bit_block_calc_count_range(block, 0, bm::rs3_border0);
-                second =
+                local_second =
                     bm::bit_block_calc_count_range(block,
                                                    bm::rs3_border0+1,
                                                    bm::rs3_border1);
             }
-            BM_ASSERT(cnt >= first + second);
-            sub_count[j] = first | (second << 16);
+            BM_ASSERT(cnt >= local_first + local_second);
+            sub_count[j] = local_first | (local_second << 16);
 
         } while (++j < bm::set_sub_array_size);
         
