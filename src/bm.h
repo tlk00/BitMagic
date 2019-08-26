@@ -4776,7 +4776,17 @@ bvector<Alloc>::bit_or(const bm::bvector<Alloc>& bv1,
         size_ = bv2.size_;
     
     bm::word_t*** blk_root_arg1 = bv1.blockman_.top_blocks_root();
+    if (!blk_root_arg1)
+    {
+        this->bit_or(bv2);
+        return *this;
+    }
     bm::word_t*** blk_root_arg2 = bv2.blockman_.top_blocks_root();
+    if (!blk_root_arg2)
+    {
+        this->bit_or(bv1);
+        return *this;
+    }
 
     for (unsigned i = 0; i < top_blocks; ++i)
     {
