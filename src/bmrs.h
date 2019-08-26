@@ -568,10 +568,10 @@ void rs_index<BVAlloc>::resize_effective_super_blocks(size_type sb_eff)
 template<typename BVAlloc>
 void rs_index<BVAlloc>::register_super_block(unsigned i,
                                              const unsigned* bcount,
-                                             const unsigned* sub_count)
+                                             const unsigned* sub_count_in)
 {
     BM_ASSERT(bcount);
-    BM_ASSERT(sub_count);
+    BM_ASSERT(sub_count_in);
 
     if (i > max_sblock_)
         max_sblock_ = i;
@@ -587,8 +587,8 @@ void rs_index<BVAlloc>::register_super_block(unsigned i,
     {
         bc += bcount[j];
         row[j] = bc;
-        sub_row[j] = sub_count[j];
-        BM_ASSERT(bcount[j] >= (sub_count[j] >> 16) + (sub_count[j] & bm::set_block_mask));
+        sub_row[j] = sub_count_in[j];
+        BM_ASSERT(bcount[j] >= (sub_count_in[j] >> 16) + (sub_count_in[j] & bm::set_block_mask));
     } // for j
     sblock_count_[i+1] = sblock_count_[i] + bc;
 }
