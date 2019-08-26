@@ -11926,6 +11926,32 @@ void SyntaxTest()
     
     cout << bv4.count() << " " << bv41.count() << " " << bv5.count() << endl;
     
+    
+    {
+        bvect bv0;
+        bvect bv1, bv2, bv3;
+        bv0 = bv1 | bv2 | bv3;
+        assert(bv0.count() == 0);
+    }
+    {
+        bvect bv0;
+        bvect bv1, bv2, bv3;
+        bv0 = bv1 & bv2 & bv3;
+        assert(bv0.count() == 0);
+    }
+    {
+        bvect bv0;
+        bvect bv1, bv2, bv3;
+        bv0 = bv1 ^ bv2 ^ bv3;
+        assert(bv0.count() == 0);
+    }
+    {
+        bvect bv0;
+        bvect bv1, bv2, bv3;
+        bv0 = bv1 - bv2 - bv3;
+        assert(bv0.count() == 0);
+    }
+
 
     cout << "----------------------------- Syntax test ok." << endl;
 }
