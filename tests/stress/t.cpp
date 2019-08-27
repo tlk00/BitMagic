@@ -11877,54 +11877,55 @@ void SyntaxTest()
         assert(res == 0);
         }
     }
-    
-    bvect bv1;
-    
-    //bvect::allocator_type a = bv1.get_allocator();
-
-    bvect bv2(bv1);
-    bvect bv3;
-    bv3.swap(bv1);
-     
-    bv1[100] = true;
-    bool v = bv1[100];
-    assert(v);
-    v = false;
-
-    bv1[100] = false;
-
-    bv2 |= bv1;
-    bv2 &= bv1;
-    bv2 ^= bv1;
-    bv2 -= bv1;
-
-    bv3 = bv1 | bv2;
-
-    if (bv1 < bv2)
     {
+        bvect bv1;
+        
+        //bvect::allocator_type a = bv1.get_allocator();
+
+        bvect bv2(bv1);
+        bvect bv3;
+        bv3.swap(bv1);
+        
+        bv1[100] = true;
+        bool v = bv1[100];
+        assert(v);
+        v = false;
+
+        bv1[100] = false;
+
+        bv2 |= bv1;
+        bv2 &= bv1;
+        bv2 ^= bv1;
+        bv2 -= bv1;
+
+        bv3 = bv1 | bv2;
+
+        if (bv1 < bv2)
+        {
+        }
+        
+        bv3 = bv1 & bv2;
+        bv3 = bv1 ^ bv2;
+
+        bvect::reference ref = bv1[10];
+        bool bn = !ref;
+        bool bn2 = ~ref;
+        bv1[10] = bn2;
+        bv1[10] = bn;
+
+        bn = bn2 = false;
+
+        ref.flip();
+
+        bvect bvn = ~bv1;
+        
+        // this should trigger move
+        bvect bv4 = bvect_test_return();
+        bvect bv41 = bvect_test_return() | bv2;
+        bvect bv5(bvect_test_return());
+        
+        cout << bv4.count() << " " << bv41.count() << " " << bv5.count() << endl;
     }
-    
-    bv3 = bv1 & bv2;
-    bv3 = bv1 ^ bv2;
-
-    bvect::reference ref = bv1[10];
-    bool bn = !ref;
-    bool bn2 = ~ref;
-    bv1[10] = bn2;
-    bv1[10] = bn;
-
-    bn = bn2 = false;
-
-    ref.flip();
-
-    bvect bvn = ~bv1;
-    
-    // this should trigger move
-    bvect bv4 = bvect_test_return();
-    bvect bv41 = bvect_test_return() | bv2;
-    bvect bv5(bvect_test_return());
-    
-    cout << bv4.count() << " " << bv41.count() << " " << bv5.count() << endl;
     
     
     {
