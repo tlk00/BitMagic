@@ -231,8 +231,8 @@ template<bool T> struct _copyright
 };
 
 template<bool T> const char _copyright<T>::_p[] = 
-    "BitMagic C++ Library. v.5.0.0 (c) 2002-2019 Anatoliy Kuznetsov.";
-template<bool T> const unsigned _copyright<T>::_v[3] = {3, 20, 0};
+    "BitMagic C++ Library. v.5.1.1 (c) 2002-2019 Anatoliy Kuznetsov.";
+template<bool T> const unsigned _copyright<T>::_v[3] = {5, 1, 1};
 
 
 
