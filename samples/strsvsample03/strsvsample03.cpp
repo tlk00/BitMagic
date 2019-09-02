@@ -23,7 +23,7 @@ For more information please visit:  http://bitmagic.io
   \sa bm::str_sparse_vector
 */
 
-/*! \file strsvsample02.cpp
+/*! \file strsvsample03.cpp
     \brief Example: str_sparse_vector<> back insert iterator example
  
     This example loads sparse vector from an STL container uses re-mapping
