@@ -59,6 +59,7 @@ struct bv_statistics
     size_t bv_count;          ///< Number of bit-vectors
     size_t  max_serialize_mem; ///< estimated maximum memory for serialization
     size_t  memory_used; ///< memory usage for all blocks and service tables
+    size_t  gap_cap_overhead; ///< gap memory overhead between length and capacity
     gap_word_t  gap_levels[bm::gap_levels]; ///< GAP block lengths in the bvect
     unsigned long long gaps_by_level[bm::gap_levels]; ///< number of GAP blocks at each level
 
@@ -78,6 +79,8 @@ struct bv_statistics
         size_t mem_used = (capacity * sizeof(gap_word_t));
         memory_used += mem_used;
         max_serialize_mem += (unsigned)(length * sizeof(gap_word_t));
+        BM_ASSERT(length <= capacity);
+        gap_cap_overhead += (capacity - length) * sizeof(gap_word_t);
         for (unsigned i = 0; i < bm::gap_levels; ++i)
         {
             if (capacity == gap_levels[i])
@@ -93,7 +96,7 @@ struct bv_statistics
     void reset()
     {
         bit_blocks = gap_blocks = ptr_sub_blocks = bv_count = 0;
-        max_serialize_mem = memory_used = 0;
+        max_serialize_mem = memory_used = gap_cap_overhead = 0;
         for (unsigned i = 0; i < bm::gap_levels; ++i)
             gaps_by_level[i] = 0ull;
     }
@@ -106,6 +109,7 @@ struct bv_statistics
         bv_count += st.bv_count;
         max_serialize_mem += st.max_serialize_mem + 8;
         memory_used += st.memory_used;
+        gap_cap_overhead += st.gap_cap_overhead;
     }
 };
 

@@ -1314,6 +1314,7 @@ void str_sparse_vector<CharType, BV, MAX_STR_SIZE>::calc_stat(
     st->bv_count += stbv.bv_count;
     st->max_serialize_mem += stbv.max_serialize_mem + 8;
     st->memory_used += stbv.memory_used;
+    st->gap_cap_overhead += stbv.gap_cap_overhead;
     
     size_t remap_mem_usage = sizeof(remap_flags_);
     remap_mem_usage += remap_matrix1_.get_buffer().mem_usage();
