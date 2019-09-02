@@ -202,7 +202,12 @@ public:
     typedef typename bvector_type::allocator_type::allocator_pool_type allocator_pool_type;
 public:
     sparse_vector_deserializer();
-    
+
+    /*!
+        Deserialize sparse vector
+        @param sv - [out] target sparse vector to populate
+        @param buf - source memory pointer
+    */
     void deserialize(SV& sv,  const unsigned char* buf);
     
 private:
@@ -751,7 +756,6 @@ void sparse_vector_deserializer<SV>::deserialize(SV& sv,
                     BM_THROW(BM_ERR_SERIALFORMAT);
                 #endif
                 }
-
             }
         }
     } // if remap traits
