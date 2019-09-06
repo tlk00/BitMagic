@@ -290,10 +290,14 @@ inline
 unsigned bit_scan_reverse32(unsigned value)
 {
     BM_ASSERT(value);
-#if defined(BM_x86) && (defined(__GNUG__) || defined(_MSC_VER))
-    return bm::bsr_asm32(value);
+#if defined(BM_USE_GCC_BUILD)
+    return (unsigned) (31 - __builtin_clz(value));
 #else
+# if defined(BM_x86) && (defined(__GNUG__) || defined(_MSC_VER))
+    return bm::bsr_asm32(value);
+# else
     return bm::ilog2_LUT<unsigned int>(value);
+# endif
 #endif
 }
 
@@ -301,10 +305,14 @@ inline
 unsigned bit_scan_forward32(unsigned value)
 {
     BM_ASSERT(value);
-#if defined(BM_x86) && (defined(__GNUG__) || defined(_MSC_VER))
-    return bm::bsf_asm32(value);
+#if defined(BM_USE_GCC_BUILD)
+    return (unsigned) __builtin_ctz(value);
 #else
-    return bit_scan_fwd(value);
+# if defined(BM_x86) && (defined(__GNUG__) || defined(_MSC_VER))
+    return bm::bsf_asm32(value);
+# else
+        return bit_scan_fwd(value);
+# endif
 #endif
 }
 
@@ -334,26 +342,30 @@ inline
 unsigned count_leading_zeros_u64(bm::id64_t w)
 {
     BM_ASSERT(w);
-
 #if defined(BMAVX2OPT) || defined (BMAVX512OPT)
     return (unsigned)_lzcnt_u64(w);
 #else
-    unsigned z;
-    unsigned w1 = unsigned(w >> 32);
-    if (!w1)
-    {
-        z = 32;
-        w1 = unsigned(w);
-        z += 31 - bm::bit_scan_reverse32(w1);
-    }
-    else
-    {
-        z = 31 - bm::bit_scan_reverse32(w1);
-    }
-    return z;
+    #if defined(BM_USE_GCC_BUILD)
+        return (unsigned) __builtin_clzll(w);
+    #else
+        unsigned z;
+        unsigned w1 = unsigned(w >> 32);
+        if (!w1)
+        {
+            z = 32;
+            w1 = unsigned(w);
+            z += 31 - bm::bit_scan_reverse32(w1);
+        }
+        else
+        {
+            z = 31 - bm::bit_scan_reverse32(w1);
+        }
+        return z;
+    #endif
 #endif
 }
 
+/// 64-bit bit-scan fwd
 inline
 unsigned count_trailing_zeros_u64(bm::id64_t w)
 {
@@ -362,19 +374,23 @@ unsigned count_trailing_zeros_u64(bm::id64_t w)
 #if defined(BMAVX2OPT) || defined (BMAVX512OPT)
     return (unsigned)_tzcnt_u64(w);
 #else
-    unsigned z;
-    unsigned w1 = unsigned(w);
-    if (!w1)
-    {
-        z = 32;
-        w1 = unsigned(w >> 32);
-        z += bm::bit_scan_forward32(w1);
-    }
-    else
-    {
-        z = bm::bit_scan_forward32(w1);
-    }
-    return z;
+    #if defined(BM_USE_GCC_BUILD)
+        return (unsigned) __builtin_ctzll(w);
+    #else
+        unsigned z;
+        unsigned w1 = unsigned(w);
+        if (!w1)
+        {
+            z = 32;
+            w1 = unsigned(w >> 32);
+            z += bm::bit_scan_forward32(w1);
+        }
+        else
+        {
+            z = bm::bit_scan_forward32(w1);
+        }
+        return z;
+    #endif
 #endif
 }
 

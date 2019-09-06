@@ -190,13 +190,18 @@ unsigned bit_scan_reverse(T value)
     
     if (bm::conditional<sizeof(T)==8>::test())
     {
+    #if defined(BM_USE_GCC_BUILD)
+        return (unsigned) (63 - __builtin_clzll(value));
+    #else
         bm::id64_t v8 = value;
         v8 >>= 32;
         unsigned v = (unsigned)v8;
         if (v)
         {
-            return bit_scan_reverse32(v) + 32;
+            v = bm::bit_scan_reverse32(v);
+            return v + 32;
         }
+    #endif
     }
     return bit_scan_reverse32((unsigned)value);
 }
@@ -212,11 +217,15 @@ bm::id_t word_bitcount(bm::id_t w)
 #if defined(BMSSE42OPT) || defined(BMAVX2OPT)
     return bm::id_t(_mm_popcnt_u32(w));
 #else
+    #if defined(BM_USE_GCC_BUILD)
+        return (bm::id_t)__builtin_popcount(w);
+    #else
     return
-    bm::bit_count_table<true>::_count[(unsigned char)(w)] + 
-    bm::bit_count_table<true>::_count[(unsigned char)((w) >> 8)] + 
-    bm::bit_count_table<true>::_count[(unsigned char)((w) >> 16)] + 
-    bm::bit_count_table<true>::_count[(unsigned char)((w) >> 24)];
+        bm::bit_count_table<true>::_count[(unsigned char)(w)] +
+        bm::bit_count_table<true>::_count[(unsigned char)((w) >> 8)] +
+        bm::bit_count_table<true>::_count[(unsigned char)((w) >> 16)] +
+        bm::bit_count_table<true>::_count[(unsigned char)((w) >> 24)];
+    #endif
 #endif
 }
 
@@ -245,13 +254,17 @@ unsigned word_bitcount64(bm::id64_t x)
     return _mm_popcnt_u32(x >> 32) + _mm_popcnt_u32((unsigned)x);
 #endif
 #else
-    x = x - ((x >> 1) & 0x5555555555555555);
-    x = (x & 0x3333333333333333) + ((x >> 2) & 0x3333333333333333);
-    x = (x + (x >> 4)) & 0x0F0F0F0F0F0F0F0F;
-    x = x + (x >> 8);
-    x = x + (x >> 16);
-    x = x + (x >> 32); 
-    return x & 0xFF;
+    #if defined(BM_USE_GCC_BUILD)
+        return (unsigned)__builtin_popcountll(x);
+    #else
+        x = x - ((x >> 1) & 0x5555555555555555);
+        x = (x & 0x3333333333333333) + ((x >> 2) & 0x3333333333333333);
+        x = (x + (x >> 4)) & 0x0F0F0F0F0F0F0F0F;
+        x = x + (x >> 8);
+        x = x + (x >> 16);
+        x = x + (x >> 32);
+        return x & 0xFF;
+    #endif
 #endif
 }
 

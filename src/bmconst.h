@@ -123,17 +123,13 @@ const unsigned sub_block3_size = bm::gap_max_bits / 4;
 
 
 #if defined(BM64OPT) || defined(BM64_SSE4)
-
 typedef id64_t  wordop_t;
-const id64_t    all_bits_mask = 0xffffffffffffffff;
+const id64_t    all_bits_mask = 0xffffffffffffffffULL;
 const unsigned set_block_size_op  = bm::set_block_size / 2;
-
 #else
-
 typedef word_t wordop_t;
 const word_t all_bits_mask = 0xffffffff;
 const unsigned set_block_size_op  = bm::set_block_size;
-
 #endif
 
 

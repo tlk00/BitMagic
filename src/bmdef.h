@@ -71,7 +71,7 @@ For more information please visit:  http://bitmagic.io
 
 // cxx11 features
 //
-#if defined(BM_NO_CXX11)  ||  (defined(_MSC_VER)  &&  _MSC_VER < 1900)
+#if defined(BM_NO_CXX11) || (defined(_MSC_VER)  &&  _MSC_VER < 1900)
 # define BMNOEXEPT
 #else
 # ifndef BMNOEXEPT
@@ -79,6 +79,15 @@ For more information please visit:  http://bitmagic.io
 # endif
 #endif
 
+// WebAssembly compilation settings
+//
+// detects use of EMSCRIPTEN engine and tweaks settings
+// WebAssemply compiles into 32-bit ptr yet 64-bit wordsize use GCC extensions
+//
+#if defined(__EMSCRIPTEN__)
+# define BM64OPT
+# define BM_USE_GCC_BUILD
+#endif
 
 // disable 'register' keyword, which is obsolete in C++11
 //
