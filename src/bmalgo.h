@@ -254,7 +254,7 @@ void rank_compressor<BV>::compress(BV& bv_target,
             if (b_size == n_buffer_cap)
             {
                 bm::combine_or(bv_target, ibuffer+0, ibuffer+b_size);
-                b_size ^= b_size; // = 0
+                b_size = 0;
             }
             ++en_i; ++en_s;
             continue;
@@ -324,7 +324,7 @@ void rank_compressor<BV>::decompress(BV& bv_target,
             if (b_size == n_buffer_cap)
             {
                 bm::combine_or(bv_target, ibuffer+0, ibuffer+b_size);
-                b_size ^= b_size; // = 0
+                b_size = 0;
             }
             ++en_i; ++en_s; ++r_idx;
             continue;
@@ -353,7 +353,7 @@ void rank_compressor<BV>::decompress(BV& bv_target,
         if (b_size == n_buffer_cap)
         {
             bm::combine_or(bv_target, ibuffer+0, ibuffer+b_size);
-            b_size ^= b_size; // = 0
+            b_size = 0; 
         }
         ++en_i; ++en_s; ++r_idx;
         
