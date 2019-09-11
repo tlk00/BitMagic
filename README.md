@@ -29,7 +29,7 @@ used in succinct data structures
 
 BitMagic can serialize-compress bit-vector for efficient storage and transfer.
 Naturally BitMagic uses integer compression schemes: GAP-RLE-Delta combined with Elias Gamma coding or 
-Interpolated Binary Coding. 
+more advanced Interpolated Binary Coding (BIC). 
  
 BitMagic serialization-compression is a hybrid model, where bit-vectors are partitioned in order to adaptively set the best 
 representation. BitMagic compression is adaptive and it remains efficient for both sparse and dense 
@@ -41,12 +41,37 @@ BitMagic is tested on Gov2 benchmark set of inverted lists.
 
 ### Succinct vectors 
 
-BitMagic supports succinct (memory compact) vectors based on bit-transposition transform.
-Bit transposition solves two purposes: free unused bit plains and isolate regularity and enthrothy into
-separately compressed bit-vectors. Compression on bit-planes offers both superior memory performance and fast search.
+BitMagic supports succinct (memory compact) vectors based on bit-transposition transform 
+and rank-select succinct compression.
+Bit transposition solves two purposes: free unused bit plains and isolate regularity and entropy into
+separate (sparse) bit-vectors. Compression on bit-planes offers both superior memory performance and fast search.
 
 Succinct bit-transposed implementation works well for both integer vectors and string vectors and 
-it rivals other succinct schemes like prefix trees. Succinct vectors can be both sorted and unsorted.   
+it rivals other succinct schemes like prefix trees. Succinct vectors can be both sorted and unsorted.
+
+The idea here is similar to Apache Arrow-Parquet, but it takes it farther with bit-transposition.
+
+- bit-transposed representation offers best memory footprint for numeric vector cases when data 
+uses numbers with limited or variable bit rate. If data needs just 27 bits succinct vector will use 
+just that and not the nearest natural 32-bit type. It is adaptive and completely automatic.
+- If string vector needs just a few bits to represent a char in particular position 
+(DNA strings, chemical compounds as smiles, etc. ) BitMagic has an option to do transparent remapping,
+so DNA string vector would use just 2-3 bits (for ATGCN alphabet)
+- Rank-Select approach allows to collapse all NULL values and save more 
+- At the serialization level, BitMagic adds an extra layer of compression (BInary Interpolated Encoding) 
+to each bit-plane. Since Bit-planes are independent shared nothing objects it becomes possible to build 
+parallel serialization schemes which would use many-core CPUs and SIMD and even store 
+succinct vectors in sharded BLOBs. 
+
+Bit-transposed succinct vectors make sense when you we delaing with big data models
+like bioinformatics, high energy physics, web log analysis, big graph problems.   
+Such problems otherwise would have to resort to use databases 
+(and often reduce your data science compute power of vector-columnar representation). 
+
+Another use case is edge computing on small devices or in-browser computing 
+(WebAssemblies) where memory pressure is a very real design factor. Succinct containers allow 
+to stream data faster do more compute on the edge without server-side assist.
+
 
 #### Main features
 
@@ -66,13 +91,23 @@ BitMagic memory managemnt is industry grade and ready for integration into large
 (Now try to evaluate the footprint of an STL map<>, for example).
 
 
-### 64-bit
+### 64-bit vs 32-bit
 
 Yes!
-BitMagic supports 64-bit, can be used with 32-bit address space (less overhead) or 64-bit address space.
+BitMagic supports 64-bit, can be used with 32-bit address space (less overhead) or full 64-bit address space.
 32-bit address space is the default mode 2^31-1 elements should be a good fit for short to medium range
-search systems. 64-bit address mode is available using #define BM64ADDR or #include "bm64.h".
-Current 64-bit implementation now allows 2^48-1 elements for large scale systems.
+IR and data science systems. 64-bit address mode is available using #define BM64ADDR or #include "bm64.h".
+Current 64-bit implementation allows 2^48-1 vector elements for large scale systems.
+
+### WebAssembly
+
+BitMagic compiles and work with WebAssmbly (emscripten). Latest version includes 
+tweaks, specific for the platform. Performance numbers are close to native code 32-bit 
+code without SIMD. 
+Sample compile line would look like:
+
+`emcc -std=c++11 -s ALLOW_MEMORY_GROWTH=1 -O2 -s WASM=1 ... `
+
 
 ### C-library interface:
 
@@ -180,7 +215,7 @@ instructions:
 
 Apply a few environment variables by runing bmenv.sh in the project root directory:
 
-	$ . ./bmenv.sh
+	$ source ./bmenv.sh
 	
 (please use "." "./bmenv.sh" to apply root environment variable)
 
@@ -207,12 +242,12 @@ cmake-supported environment.
 ---
 
 If you use cygwin installation please follow general Unix recommendations.
-MSVC - solution and projects are available via CMAKE generation
+MSVC - solution and projects are available via CMAKE. 
 
 ###### MacOS
 ---
 
-XCODE - project files are available via CMAKE generation
+XCODE - project files are available via CMAKE.
 
 ---
 
