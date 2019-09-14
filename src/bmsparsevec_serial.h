@@ -173,9 +173,6 @@ public:
      
         \param sv         - sparse vector to serialize
         \param sv_layout  - buffer structure to keep the result
-        \param temp_block - temporary buffer
-                            (allocate with BM_DECLARE_TEMP_BLOCK(x) for speed)
-        \param bv_serialization_flags - bit-vector serialization flags
         as defined in bm::serialization_flags
     */
     void serialize(const SV&                        sv,
@@ -327,7 +324,7 @@ Serialization format:
  
    ADDRESS_BITVECTROR:
    INT64: address bit-vector size
-   <memblock>: serialized address bit-vector
+   [memblock]: serialized address bit-vector
  
    LIST_OF_BUFFER_SIZES:
    INT64 - buffer sizes count
@@ -336,8 +333,8 @@ Serialization format:
    ...
  
    BUFFERS:
-   <memblock>: block0
-   <memblock>: block1
+   [memblock]: block0
+   [memblock]: block1
    ...
  
 </pre>

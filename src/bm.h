@@ -1951,8 +1951,8 @@ public:
         \param rank - rank to find (bitcount)
         \param from - start positioon for rank search
         \param pos  - position with speciefied rank (relative to from position)
-        \param blocks_cnt - block count structure to accelerate rank search
-                            should be prepared using build_rs_index
+        \param rs_idx - rank-select index to accelarate search 
+                        (should be prepared using build_rs_index)
 
         \sa build_rs_index, select
 

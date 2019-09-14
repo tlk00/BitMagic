@@ -525,9 +525,7 @@ unsigned short bitscan_popcnt(bm::id_t w, B* bits)
     \brief Unpacks 64-bit word into list of ON bit indexes using popcnt method
     \param w - value
     \param bits - pointer on the result array
-    \param offs - bit address offset to add (0 - default)
     \return number of bits in the list
-
     @ingroup bitfunc
 */
 template<typename B>
@@ -1073,9 +1071,7 @@ bool gap_is_all_zero(const bm::gap_word_t* buf)
 /*!
    \brief Checks if GAP block is all-one.
    \param buf - GAP buffer pointer.
-   \param set_max - max possible bitset length
    \returns true if all-one.
-
    @ingroup gapfunc
 */
 BMFORCEINLINE
@@ -2584,7 +2580,8 @@ unsigned gap_add_value(T* buf, unsigned pos)
 /*!
     @brief Right shift GAP block by 1 bit
     @param buf - block pointer
-    @param co_falg - carry over from the previous block
+    @param co_flag - carry over from the previous block
+    @param new_len - output length of the GAP block after the operation
  
     @return carry over bit (1 or 0)
     @ingroup gapfunc
@@ -2631,8 +2628,9 @@ bool gap_shift_r1(T* buf, unsigned co_flag, unsigned* new_len)
 /*!
     @brief Left shift GAP block by 1 bit
     @param buf - block pointer
-    @param co_falg - carry over from the previous block
- 
+    @param co_flag - carry over from the previous block
+    @param new_len - new length of the block
+
     @return carry over bit (1 or 0)
     @ingroup gapfunc
 */
@@ -6117,7 +6115,10 @@ bool bit_block_or_3way(bm::word_t* BMRESTRICT dst,
    Function does not analyse availability of source and destination blocks.
 
    \param dst - destination block.
-   \param src1 - source1, etc 
+   \param src1 - source1, etc
+   \param src2 - source1, etc
+   \param src3 - source1, etc
+   \param src4 - source1, etc
  
    @return 1 if produced block of ALL ones
 
@@ -6320,8 +6321,8 @@ bm::id64_t bit_block_sub(bm::word_t* BMRESTRICT dst,
    \brief digest based bitblock SUB (AND NOT) operation (3 operand)
 
    \param dst - destination block.
-   \param src1 - source block.
-   \param src1 - source block.
+   \param src1 - source block 1
+   \param src2 - source block 2
    \param digest - known digest of dst block
  
    \return new digest
@@ -6556,7 +6557,6 @@ bm::word_t* bit_operation_xor(bm::word_t* BMRESTRICT dst,
    \brief Performs bitblock XOR operation and calculates bitcount of the result. 
 
    \param src1 - bit block start ptr
-   \param src1_end - bit block end ptr
    \param src2 - second bit block
 
    \returns bitcount value 
@@ -7753,7 +7753,7 @@ void set_block_bits_u32(bm::word_t* BMRESTRICT block,
 
 /**
     @brief array range detector
-    @intenal
+    @internal
 */
 inline
 bool block_ptr_array_range(bm::word_t** arr, unsigned& left, unsigned& right)

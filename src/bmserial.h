@@ -631,7 +631,7 @@ public:
     typedef BV                               bvector_type;
     typedef typename bvector_type::size_type size_type;
 public:
-    /**
+    /*!
     \brief Deserialize bvector using buffer as set operation argument
     
     \param bv - target bvector

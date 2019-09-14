@@ -539,7 +539,7 @@ public:
     /*!
         \brief Import list of elements from a C-style array (pushed back)
         \param arr  - source array
-        \param srr_size - source size
+        \param arr_size - source array size
         \param set_not_null - import should register in not null vector
     */
     void import_back(const value_type* arr,
@@ -784,8 +784,8 @@ public:
         \param size - dest size
         \param offset - target index in the sparse vector to export from
         \param zero_mem - set to false if target array is pre-initialized
-                          with 0s to avoid performance penalty
-     
+                          with 0s to avoid performance penalty   
+        \param pool_ptr - optional pointer to block allocation pool
         \return number of exported elements
      
         \sa decode
