@@ -165,7 +165,8 @@ void visit_each_bit(const BV&                 bv,
 
     1. Source vector (bv_src) is a subset of index vector (bv_idx)
     2. As a subset it can be collapsed using bit-rank method, where each position
-    in the source vector is defined by population count (range) [0..index_position] (count_range())
+    in the source vector is defined by population count (range)
+    [0..index_position] (count_range())
     As a result all integer set of source vector gets re-mapped in
     accord with the index vector.
  
@@ -190,8 +191,8 @@ public:
     void decompress(BV& bv_target, const BV& bv_idx, const BV& bv_src);
 
     /**
-    Rank compression algorithm based on two palallel iterators/enumerators set of source
-    vector gets re-mapped in accord with the index/rank vector.
+    Rank compression algorithm based on two palallel iterators/enumerators
+    set of source vector gets re-mapped in accord with the index/rank vector.
 
     \param bv_target - target bit-vector
     \param bv_idx    - index (rank) vector used for address recalculation
@@ -253,7 +254,7 @@ void rank_compressor<BV>::compress(BV& bv_target,
             ibuffer[b_size++] = r_idx++;
             if (b_size == n_buffer_cap)
             {
-                bm::combine_or(bv_target, ibuffer+0, ibuffer+b_size);
+                bv_target.set(ibuffer, b_size, bm::BM_SORTED);
                 b_size = 0;
             }
             ++en_i; ++en_s;
@@ -282,13 +283,12 @@ void rank_compressor<BV>::compress(BV& bv_target,
     
     if (b_size)
     {
-        bm::combine_or(bv_target, ibuffer+0, ibuffer+b_size);
+        bv_target.set(ibuffer, b_size, bm::BM_SORTED);
     }
 
 }
 
 // ------------------------------------------------------------------------
-
 
 template<class BV>
 void rank_compressor<BV>::decompress(BV& bv_target,
@@ -323,7 +323,7 @@ void rank_compressor<BV>::decompress(BV& bv_target,
             ibuffer[b_size++] = i;
             if (b_size == n_buffer_cap)
             {
-                bm::combine_or(bv_target, ibuffer+0, ibuffer+b_size);
+                bv_target.set(ibuffer, b_size, bm::BM_SORTED);
                 b_size = 0;
             }
             ++en_i; ++en_s; ++r_idx;
@@ -352,8 +352,8 @@ void rank_compressor<BV>::decompress(BV& bv_target,
         ibuffer[b_size++] = new_pos;
         if (b_size == n_buffer_cap)
         {
-            bm::combine_or(bv_target, ibuffer+0, ibuffer+b_size);
-            b_size = 0; 
+            bv_target.set(ibuffer, b_size, bm::BM_SORTED);
+            b_size = 0;
         }
         ++en_i; ++en_s; ++r_idx;
         
@@ -361,7 +361,7 @@ void rank_compressor<BV>::decompress(BV& bv_target,
     
     if (b_size)
     {
-        bm::combine_or(bv_target, ibuffer+0, ibuffer+b_size);
+        bv_target.set(ibuffer, b_size, bm::BM_SORTED);
     }
 }
 
