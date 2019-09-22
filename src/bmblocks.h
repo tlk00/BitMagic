@@ -1364,7 +1364,17 @@ public:
         // non-compressable bit-block
         copy_bit_block(i, j, src_block);
     }
-    
+
+    /**
+        Optimize bit-block
+    */
+    void optimize_bit_block(block_idx_type nb)
+    {
+        unsigned i, j;
+        bm::get_block_coord(nb, i, j);
+        optimize_bit_block(i, j);
+    }
+
     /**
         Optimize bit-block at i-j position
     */

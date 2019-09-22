@@ -1649,7 +1649,8 @@ void sparse_vector<Val, BV>::set_value_no_null(size_type idx, value_type v)
             if (bv)
                 bv->clear_bit_no_check(idx);
         }
-    }
+    } // for i
+
     if (v)
     {
         value_type mask = 1u;
@@ -1670,7 +1671,7 @@ void sparse_vector<Val, BV>::set_value_no_null(size_type idx, value_type v)
                 }
             }
             mask <<=  1;
-        }
+        } // for j
     }
 }
 

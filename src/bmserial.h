@@ -4729,6 +4729,13 @@ iterator_deserializer<BV, SerialIterator>::deserialize(
             count += c;
 			if (exit_on_one && count) // early exit
 				return count;
+            switch (op) // target block optimization for non-const operations
+            {
+            case set_AND: case set_SUB: case set_XOR: case set_OR:
+                bman.optimize_bit_block(i0, j0);
+                break;
+            default: break;
+            } // switch
 
             }
             break;

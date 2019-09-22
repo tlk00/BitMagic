@@ -197,22 +197,36 @@ public:
     typedef typename SV::value_type         value_type;
     typedef typename SV::size_type          size_type;
     typedef typename bvector_type::allocator_type::allocator_pool_type allocator_pool_type;
+
 public:
     sparse_vector_deserializer();
+    ~sparse_vector_deserializer();
 
     /*!
         Deserialize sparse vector
         @param sv - [out] target sparse vector to populate
         @param buf - source memory pointer
+        @param mask_bv - AND mask bit-vector (address gather vector)
     */
-    void deserialize(SV& sv,  const unsigned char* buf);
-    
+    void deserialize(SV& sv, const unsigned char* buf,
+                    const bvector_type* mask_bv = 0);
+
+
+protected:
+    typedef typename bvector_type::allocator_type      alloc_type;
+
+    /// load string remap dict
+    static void load_remap(SV& sv, const unsigned char* remap_buf_ptr);
+
 private:
     sparse_vector_deserializer(const sparse_vector_deserializer&) = delete;
     sparse_vector_deserializer& operator=(const sparse_vector_deserializer&) = delete;
 protected:
-    bm::deserializer<typename SV::bvector_type, bm::decoder> deserial_;
-
+    alloc_type                                  alloc_;
+    bm::word_t*                                 temp_block_;
+    allocator_pool_type                         pool_;
+    bm::deserializer<bvector_type, bm::decoder> deserial_;
+    operation_deserializer<bvector_type>        op_deserial_;
 };
 
 
@@ -615,13 +629,24 @@ void sparse_vector_serializer<SV>::serialize(const SV&  sv,
 template<typename SV>
 sparse_vector_deserializer<SV>::sparse_vector_deserializer()
 {
+    temp_block_ = alloc_.alloc_bit_block();
+}
+
+// -------------------------------------------------------------------------
+
+template<typename SV>
+sparse_vector_deserializer<SV>::~sparse_vector_deserializer()
+{
+    if (temp_block_)
+        alloc_.free_bit_block(temp_block_);
 }
 
 // -------------------------------------------------------------------------
 
 template<typename SV>
 void sparse_vector_deserializer<SV>::deserialize(SV& sv,
-                                                 const unsigned char* buf)
+                                                 const unsigned char* buf,
+                                                 const bvector_type* mask_bv)
 {
     // TODO: implement correct processing of byte-order corect deserialization
     //    ByteOrder bo_current = globals<true>::byte_order();
@@ -679,82 +704,40 @@ void sparse_vector_deserializer<SV>::deserialize(SV& sv,
         return;  // empty vector
         
     sv.resize_internal(size_type(sv_size));
-    bm::word_t*          temp_block = 0;
-    
+
     const unsigned char* remap_buf_ptr = 0;
     
-    unsigned i = 0;
-    for (i = 0; i < plains; ++i)
+    for (unsigned i = 0; i < plains; ++i)
     {
         size_t offset = (size_t) dec.get_64();
-        if (offset == 0) // null vector
-        {
+        if (!offset) // null vector
             continue;
-        }
+
         const unsigned char* bv_buf_ptr = buf + offset; // seek to position
         bvector_type*  bv = sv.get_plain(i);
         BM_ASSERT(bv);
-        if (!temp_block)
+        BM_ASSERT(temp_block_);
+        size_t read_bytes;
+        if (mask_bv) // gather mask set, use AND operation deserializer
         {
-            typename bvector_type::blocks_manager_type& bv_bm =
-                                                bv->get_blocks_manager();
-            temp_block = bv_bm.check_allocate_tempblock();
+            typename bvector_type::mem_pool_guard mp_g_z(pool_, *bv);
+            *bv = *mask_bv;
+            read_bytes =
+                op_deserial_.deserialize(*bv, bv_buf_ptr, temp_block_, bm::set_AND);
         }
-        size_t read_bytes = deserial_.deserialize(*bv, bv_buf_ptr, temp_block);
+        else // use generic deserializer (OR)
+        {
+            read_bytes = deserial_.deserialize(*bv, bv_buf_ptr, temp_block_);
+        }
         remap_buf_ptr = bv_buf_ptr + read_bytes;
     } // for i
     
-    // ----------------------------
     // load the remap matrix
     //
     if (bm::conditional<SV::is_remap_support::value>::test()) // test remapping trait
     {
-        if (matr_s_ser > 0)
-        {
-            if (remap_buf_ptr)
-            {
-                bm::decoder dec_m(remap_buf_ptr);
-                unsigned char rh = dec_m.get_8();
-                if (rh == 'N') // no remap matrix here
-                {
-                }
-                else
-                if (rh == 'R')
-                {
-                    size_t remap_size = (size_t) dec_m.get_64();
-                    unsigned char* remap_buf = sv.init_remap_buffer();
-                    BM_ASSERT(remap_buf);
-                    size_t target_remap_size = sv.remap_size();
-                    if (!remap_size || !remap_buf || remap_size != target_remap_size)
-                    {
-                        #ifndef BM_NO_STL
-                            throw std::logic_error("Invalid serialization format (remap size)");
-                        #else
-                            BM_THROW(BM_ERR_SERIALFORMAT);
-                        #endif
-                    }
-                    dec_m.memcpy(remap_buf, remap_size);
-                    unsigned char end_tok = dec_m.get_8();
-                    if (end_tok != 'E')
-                    {
-                        #ifndef BM_NO_STL
-                            throw std::logic_error("Invalid serialization format");
-                        #else
-                            BM_THROW(BM_ERR_SERIALFORMAT);
-                        #endif
-                    }
-                    sv.set_remap();
-                }
-                else // unknown serialization token
-                {
-                #ifndef BM_NO_STL
-                    throw std::logic_error("Invalid serialization format (remap error)");
-                #else
-                    BM_THROW(BM_ERR_SERIALFORMAT);
-                #endif
-                }
-            }
-        }
+        if (matr_s_ser)
+            load_remap(sv, remap_buf_ptr);
     } // if remap traits
     
     sv.sync(true); // force sync, recalculate RS index, remap tables, etc
@@ -762,6 +745,56 @@ void sparse_vector_deserializer<SV>::deserialize(SV& sv,
 
 // -------------------------------------------------------------------------
 
+template<typename SV>
+void sparse_vector_deserializer<SV>::load_remap(SV& sv,
+                                         const unsigned char* remap_buf_ptr)
+{
+    if (!remap_buf_ptr)
+        return;
+
+    bm::decoder dec_m(remap_buf_ptr);
+    unsigned char rh = dec_m.get_8();
+    switch (rh)
+    {
+    case 'N':
+        break;
+    case 'R':
+        {
+            size_t remap_size = (size_t) dec_m.get_64();
+            unsigned char* remap_buf = sv.init_remap_buffer();
+            BM_ASSERT(remap_buf);
+            size_t target_remap_size = sv.remap_size();
+            if (!remap_size || !remap_buf || remap_size != target_remap_size)
+            {
+                #ifndef BM_NO_STL
+                    throw std::logic_error("Invalid serialization format (remap size)");
+                #else
+                    BM_THROW(BM_ERR_SERIALFORMAT);
+                #endif
+            }
+            dec_m.memcpy(remap_buf, remap_size);
+            unsigned char end_tok = dec_m.get_8();
+            if (end_tok != 'E')
+            {
+                #ifndef BM_NO_STL
+                    throw std::logic_error("Invalid serialization format");
+                #else
+                    BM_THROW(BM_ERR_SERIALFORMAT);
+                #endif
+            }
+            sv.set_remap();
+        }
+        break;
+    default:
+    #ifndef BM_NO_STL
+        throw std::logic_error("Invalid serialization format (remap error)");
+    #else
+        BM_THROW(BM_ERR_SERIALFORMAT);
+    #endif
+    } // switch
+}
+
+// -------------------------------------------------------------------------
 
 } // namespace bm
 

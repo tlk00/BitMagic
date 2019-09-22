@@ -1212,6 +1212,7 @@ public:
                 bv_->set_allocator_pool(0);
         }
 
+        /// check if vector has no assigned allocator and set one
         void assign_if_not_set(allocator_pool_type& pool, bvector<Alloc>& bv)
         {
             if (bv.get_allocator_pool() == 0) // alloc pool not set yet
@@ -6315,16 +6316,11 @@ bvector<Alloc>::combine_operation_with_block(block_idx_type    nb,
                 // special case, maybe we can do the job without
                 // converting the GAP argument to bitblock
                 gap_operation_to_bitset_func_type gfunc =
-                    operation_functions<true>::gap_op_to_bit(opcode);
+                    bm::operation_functions<true>::gap_op_to_bit(opcode);
                 BM_ASSERT(gfunc);
                 (*gfunc)(blk, BMGAP_PTR(arg_blk));
 
-                if (opcode != BM_OR)
-                {
-                    bool b = bm::bit_is_all_zero(blk);
-                    if (b) // operation converged bit-block to empty
-                        blockman_.zero_block(nb);
-                }
+                blockman_.optimize_bit_block(nb);
                 return;
             }
             
