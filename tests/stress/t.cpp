@@ -21,6 +21,7 @@ For more information please visit:  http://bitmagic.io
 //#define BMSSE42OPT
 //#define BMAVX2OPT
 //#define BM_USE_EXPLICIT_TEMP
+#define BM_USE_GCC_BUILD
 
 #include <stdio.h>
 #include <stdlib.h>
@@ -16644,6 +16645,160 @@ void TestSparseVector()
 }
 
 static
+void TestSparseVectorSerial()
+{
+    cout << "---------------------------- Test sparse vector serializer" << endl;
+
+    // simple test gather for non-NULL vector
+    {
+        sparse_vector_u32 sv1;
+        sparse_vector_u32 sv2;
+
+        for (sparse_vector_u32::size_type i = 0; i < 10; ++i)
+            sv1.push_back(i+1);
+        BM_DECLARE_TEMP_BLOCK(tb)
+        sparse_vector_serial_layout<sparse_vector_u32> sv_lay;
+        bm::sparse_vector_serialize<sparse_vector_u32>(sv1, sv_lay, tb);
+        const unsigned char* buf = sv_lay.buf();
+
+        bm::sparse_vector_deserializer<sparse_vector_u32> sv_deserial;
+
+        sparse_vector_u32::bvector_type bv_mask;
+        bv_mask.set(0);
+        bv_mask.set(2);
+        sv_deserial.deserialize(sv2, buf, &bv_mask);
+
+        assert(sv2.size() == sv1.size());
+        assert(sv2.get(0) == 1);
+        assert(sv2.get(1) == 0);
+        assert(sv2.get(2) == 3);
+
+        sparse_vector_u32::statistics st;
+        sv2.calc_stat(&st);
+        assert(!st.bit_blocks);
+        assert(st.gap_blocks);
+    }
+
+    // simple test gather for NULL-able vector
+    {
+        sparse_vector_u32 sv1(bm::use_null);
+        sparse_vector_u32 sv2(sv1);
+
+        for (sparse_vector_u32::size_type i = 0; i < 100; i+=2)
+        {
+            sv1[i] = i+1;
+        }
+        BM_DECLARE_TEMP_BLOCK(tb)
+        sparse_vector_serial_layout<sparse_vector_u32> sv_lay;
+        bm::sparse_vector_serialize<sparse_vector_u32>(sv1, sv_lay, tb);
+        const unsigned char* buf = sv_lay.buf();
+
+        bm::sparse_vector_deserializer<sparse_vector_u32> sv_deserial;
+
+        {
+            sparse_vector_u32::bvector_type bv_mask;
+            bv_mask.set(0);
+            bv_mask.set(2);
+            bv_mask.set(1024); // out of range mask
+            sv_deserial.deserialize(sv2, buf, &bv_mask);
+
+            assert(sv2.size() == sv1.size());
+            assert(sv2.get(0) == 1);
+            assert(sv2.get(1) == 0);
+            assert(sv2.get(2) == 3);
+
+            const sparse_vector_u32::bvector_type* bv_null = sv2.get_null_bvector();
+            auto cnt = bv_null->count();
+            assert(cnt == 2);
+
+            sparse_vector_u32::statistics st;
+            sv2.calc_stat(&st);
+            assert(!st.bit_blocks);
+            assert(st.gap_blocks);
+        }
+        {
+            sparse_vector_u32::bvector_type bv_mask;
+            sv_deserial.deserialize(sv2, buf, &bv_mask);
+            assert(sv2.size() == sv1.size());
+            const sparse_vector_u32::bvector_type* bv_null = sv2.get_null_bvector();
+            auto cnt = bv_null->count();
+            assert(cnt == 0);
+            assert(sv2.get(0) == 0);
+            assert(sv2.get(1) == 0);
+            assert(sv2.get(2) == 0);
+        }
+    }
+
+    // stress test gather deserialization
+    cout << "Gather deserialization stress test..." << endl;
+    {
+        sparse_vector_u32::size_type from, to;
+        sparse_vector_u32 sv1(bm::use_null);
+        sparse_vector_u32 sv2(sv1);
+
+        from = bm::id_max / 2;
+        to = from + 75538;
+
+        unsigned cnt = 0;
+        for (sparse_vector_u32::size_type i = from; i < to; ++i, ++cnt)
+        {
+            if (cnt % 10 == 0)
+                sv1.set_null(i);
+            else
+                sv1.set(i, cnt);
+        } // for i
+        BM_DECLARE_TEMP_BLOCK(tb)
+        sparse_vector_serial_layout<sparse_vector_u32> sv_lay;
+        bm::sparse_vector_serialize<sparse_vector_u32>(sv1, sv_lay, tb);
+        const unsigned char* buf = sv_lay.buf();
+
+        {
+            bm::sparse_vector_deserializer<sparse_vector_u32> sv_deserial;
+
+            auto i = from;
+            auto j = to;
+            for (i = from; i < j; ++i, --j)
+            {
+                sparse_vector_u32::bvector_type bv_mask;
+                bv_mask.set_range(i, j);
+
+                sv_deserial.deserialize(sv2, buf, &bv_mask);
+                assert(sv2.size() == sv1.size());
+
+                for (auto k = i; k < j; ++k)
+                {
+                    auto v1 = sv1[k];
+                    auto v2 = sv2[k];
+                    if (v1 != v2)
+                    {
+                        cerr << "Error:Range deserialization discrepancy!" << endl;
+                        assert(0); exit(1);
+                    }
+                    auto n1 = sv1.is_null(k);
+                    auto n2 = sv2.is_null(k);
+                    if (n1 != n2)
+                    {
+                        cerr << "Error:Range NULL deserialization discrepancy!" << endl;
+                        assert(0); exit(1);
+                    }
+                } // for k
+
+                if (i % 0xFF == 0)
+                {
+                    std::cout << "\r" << j-i << flush;
+                }
+
+            } // for i
+        }
+        cout << "\nOK\n" << endl;
+    }
+
+
+    cout << "---------------------------- Test sparse vector serializer OK" << endl;
+}
+
+
+static
 void TestSparseVectorInserter()
 {
     cout << "---------------------------- Test sparse vector inserter" << endl;
@@ -23090,12 +23245,13 @@ int main(int argc, char *argv[])
 
     if (is_all || is_sv)
     {
-
         TestSparseVector();
 
         TestSparseVectorInserter();
 
         TestSparseVectorGatherDecode();
+
+        TestSparseVectorSerial();
 
         TestSparseVectorTransform();
 
