@@ -464,7 +464,7 @@ protected:
         return base_sparse_vector<Val, BV, MAX_SIZE>::sv_value_plains;
     }
     
-    /** plain index for the "NOT NULL" flag1s plain */
+    /** plain index for the "NOT NULL" flags plain */
     static unsigned null_plain() { return value_bits(); }
     
     /** optimize block in all matrix plains */

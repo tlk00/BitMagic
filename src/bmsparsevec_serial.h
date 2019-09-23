@@ -31,6 +31,7 @@ For more information please visit:  http://bitmagic.io
 
 #include "bmsparsevec.h"
 #include "bmserial.h"
+#include "bmbuffer.h"
 #include "bmdef.h"
 
 namespace bm
@@ -215,18 +216,36 @@ public:
 protected:
     typedef typename bvector_type::allocator_type      alloc_type;
 
+    /// load offset table
+    void load_plains_off_table(bm::decoder& dec, unsigned plains);
+
+    /// load NULL bit-plain (returns new plains count)
+    int load_null_plain(SV& sv,
+                        int plains,
+                        const unsigned char* buf,
+                        const bvector_type* mask_bv);
+
     /// load string remap dict
     static void load_remap(SV& sv, const unsigned char* remap_buf_ptr);
+
+    /// throw error on incorrect deserialization
+    static void raise_invalid_header();
+    /// throw error on incorrect deserialization
+    static void raise_invalid_64bit();
+    /// throw error on incorrect deserialization
+    static void raise_invalid_bitdepth();
 
 private:
     sparse_vector_deserializer(const sparse_vector_deserializer&) = delete;
     sparse_vector_deserializer& operator=(const sparse_vector_deserializer&) = delete;
 protected:
+    const unsigned char*                        remap_buf_ptr_;
     alloc_type                                  alloc_;
     bm::word_t*                                 temp_block_;
     allocator_pool_type                         pool_;
     bm::deserializer<bvector_type, bm::decoder> deserial_;
     operation_deserializer<bvector_type>        op_deserial_;
+    bm::heap_vector<size_t, alloc_type>         off_vect_;
 };
 
 
@@ -628,6 +647,7 @@ void sparse_vector_serializer<SV>::serialize(const SV&  sv,
 
 template<typename SV>
 sparse_vector_deserializer<SV>::sparse_vector_deserializer()
+    : remap_buf_ptr_(0)
 {
     temp_block_ = alloc_.alloc_bit_block();
 }
@@ -651,6 +671,8 @@ void sparse_vector_deserializer<SV>::deserialize(SV& sv,
     // TODO: implement correct processing of byte-order corect deserialization
     //    ByteOrder bo_current = globals<true>::byte_order();
 
+    remap_buf_ptr_ = 0;
+
     bm::decoder dec(buf);
     unsigned char h1 = dec.get_8();
     unsigned char h2 = dec.get_8();
@@ -659,11 +681,7 @@ void sparse_vector_deserializer<SV>::deserialize(SV& sv,
     
     if (h1 != 'B' && (h2 != 'M' || h2 != 'C'))  // no magic header?
     {
-        #ifndef BM_NO_STL
-            throw std::logic_error("Invalid serialization signature header");
-        #else
-            BM_THROW(BM_ERR_SERIALFORMAT);
-        #endif
+        raise_invalid_header();
     }
     unsigned char matr_s_ser = 0;
     //unsigned char bv_bo =
@@ -678,23 +696,14 @@ void sparse_vector_deserializer<SV>::deserialize(SV& sv,
     #else
         if (matr_s_ser == 2) // 64-bit matrix
         {
-        #ifndef BM_NO_STL
-            throw std::logic_error("Invalid serialization target (64-bit BLOB)");
-        #else
-            BM_THROW(BM_ERR_SERIALFORMAT);
-        #endif
+            raise_invalid_64bit();
         }
     #endif
 
-    
     unsigned sv_plains = sv.stored_plains();
     if (!plains || plains > sv_plains)
     {
-        #ifndef BM_NO_STL
-            throw std::logic_error("Invalid serialization target (bit depth)");
-        #else
-            BM_THROW(BM_ERR_SERIALFORMAT);
-        #endif
+        raise_invalid_bitdepth();
     }
     
     sv.clear();
@@ -705,18 +714,29 @@ void sparse_vector_deserializer<SV>::deserialize(SV& sv,
         
     sv.resize_internal(size_type(sv_size));
 
-    const unsigned char* remap_buf_ptr = 0;
-    
-    for (unsigned i = 0; i < plains; ++i)
+    // check if mask needs to be relaculated
+    if (bm::conditional<SV::is_rsc_support::value>::test())
     {
-        size_t offset = (size_t) dec.get_64();
-        if (!offset) // null vector
+        if (mask_bv)
+        {
+        }
+    }
+
+    load_plains_off_table(dec, plains); // read the offset vector of bit-plains
+
+    plains = load_null_plain(sv, int(plains), buf, mask_bv);
+
+    // read-deserialize the plains based on offsets
+    //   backward order to bring the NULL vector first
+    for (int i = int(plains-1); i >= 0; --i)
+    {
+        size_t offset = off_vect_[i]; 
+        if (!offset) // empty vector
             continue;
 
         const unsigned char* bv_buf_ptr = buf + offset; // seek to position
         bvector_type*  bv = sv.get_plain(i);
         BM_ASSERT(bv);
-        BM_ASSERT(temp_block_);
         size_t read_bytes;
         if (mask_bv) // gather mask set, use AND operation deserializer
         {
@@ -729,18 +749,57 @@ void sparse_vector_deserializer<SV>::deserialize(SV& sv,
         {
             read_bytes = deserial_.deserialize(*bv, bv_buf_ptr, temp_block_);
         }
-        remap_buf_ptr = bv_buf_ptr + read_bytes;
+        if (!remap_buf_ptr_)
+            remap_buf_ptr_ = bv_buf_ptr + read_bytes;
+
     } // for i
-    
+
     // load the remap matrix
     //
     if (bm::conditional<SV::is_remap_support::value>::test()) // test remapping trait
     {
         if (matr_s_ser)
-            load_remap(sv, remap_buf_ptr);
+            load_remap(sv, remap_buf_ptr_);
     } // if remap traits
     
     sv.sync(true); // force sync, recalculate RS index, remap tables, etc
+    remap_buf_ptr_ = 0;
+}
+
+// -------------------------------------------------------------------------
+
+template<typename SV>
+int sparse_vector_deserializer<SV>::load_null_plain(SV& sv,
+                                                    int plains,
+                                              const unsigned char* buf,
+                                              const bvector_type* mask_bv)
+{
+    if (!sv.is_nullable())
+        return plains;
+    int i = plains - 1;
+    size_t offset = off_vect_[i];
+    if (offset)
+    {
+        const unsigned char* bv_buf_ptr = buf + offset; // seek to position
+        bvector_type*  bv = sv.get_plain(i);
+        size_t read_bytes = deserial_.deserialize(*bv, bv_buf_ptr, temp_block_);
+        remap_buf_ptr_ = bv_buf_ptr + read_bytes;
+    }
+    return plains-1;
+}
+
+// -------------------------------------------------------------------------
+
+template<typename SV>
+void sparse_vector_deserializer<SV>::load_plains_off_table(
+                                            bm::decoder& dec, unsigned plains)
+{
+    off_vect_.resize(plains);
+    for (unsigned i = 0; i < plains; ++i)
+    {
+        size_t offset = (size_t) dec.get_64();
+        off_vect_[i] = offset;
+    } // for i
 }
 
 // -------------------------------------------------------------------------
@@ -792,6 +851,42 @@ void sparse_vector_deserializer<SV>::load_remap(SV& sv,
         BM_THROW(BM_ERR_SERIALFORMAT);
     #endif
     } // switch
+}
+
+// -------------------------------------------------------------------------
+
+template<typename SV>
+void sparse_vector_deserializer<SV>::raise_invalid_header()
+{
+#ifndef BM_NO_STL
+    throw std::logic_error("Invalid serialization signature header");
+#else
+    BM_THROW(BM_ERR_SERIALFORMAT);
+#endif
+}
+
+// -------------------------------------------------------------------------
+
+template<typename SV>
+void sparse_vector_deserializer<SV>::raise_invalid_64bit()
+{
+#ifndef BM_NO_STL
+    throw std::logic_error("Invalid serialization target (64-bit BLOB)");
+#else
+    BM_THROW(BM_ERR_SERIALFORMAT);
+#endif
+}
+
+// -------------------------------------------------------------------------
+
+template<typename SV>
+void sparse_vector_deserializer<SV>::raise_invalid_bitdepth()
+{
+#ifndef BM_NO_STL
+    throw std::logic_error("Invalid serialization target (bit depth)");
+#else
+    BM_THROW(BM_ERR_SERIALFORMAT);
+#endif
 }
 
 // -------------------------------------------------------------------------

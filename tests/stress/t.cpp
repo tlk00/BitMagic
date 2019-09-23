@@ -16709,11 +16709,11 @@ void TestSparseVectorSerial()
 
             const sparse_vector_u32::bvector_type* bv_null = sv2.get_null_bvector();
             auto cnt = bv_null->count();
-            assert(cnt == 2);
+            assert(cnt == sv1.get_null_bvector()->count());
 
             sparse_vector_u32::statistics st;
             sv2.calc_stat(&st);
-            assert(!st.bit_blocks);
+            //assert(!st.bit_blocks);
             assert(st.gap_blocks);
         }
         {
@@ -16722,7 +16722,7 @@ void TestSparseVectorSerial()
             assert(sv2.size() == sv1.size());
             const sparse_vector_u32::bvector_type* bv_null = sv2.get_null_bvector();
             auto cnt = bv_null->count();
-            assert(cnt == 0);
+            assert(cnt == sv2.get_null_bvector()->count());
             assert(sv2.get(0) == 0);
             assert(sv2.get(1) == 0);
             assert(sv2.get(2) == 0);
@@ -22124,7 +22124,7 @@ void GenerateSV(sparse_vector_u32&   sv, unsigned strategy = 0)
 
 static
 void DetailedCompareSparseVectors(const rsc_sparse_vector_u32& csv,
-                                  const sparse_vector_u32&            sv)
+                                  const sparse_vector_u32&     sv)
 {
     sparse_vector_u32   sv_s(bm::use_null);  // sparse vector decompressed
     
@@ -22441,6 +22441,8 @@ void TestCompressSparseVector()
         assert(v1 == 201);
 
         csv1.sync();
+
+        DetailedCompareSparseVectors(csv1, sv1);
         
         v = csv1.at(10);
         assert(v == 100);
@@ -22471,6 +22473,7 @@ void TestCompressSparseVector()
         bool found = scanner.find_eq(csv1, 201, pos);
         assert(found);
         assert(pos == 21);
+
     }
     
     // back inserter tests

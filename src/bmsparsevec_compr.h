@@ -106,7 +106,7 @@ public:
         bool is_null() const { return csv_.is_null(idx_); }
     private:
         rsc_sparse_vector<Val, SV>& csv_;
-        size_type                          idx_;
+        size_type                   idx_;
     };
 
 
