@@ -398,21 +398,18 @@ For more information please visit:  http://bitmagic.io
 #endif
 
 
-#if __cplusplus >= 201703L
-#  define BM_FALLTHROUGH [[fallthrough]]
-#elif defined(__clang__)
-#  if __cplusplus >= 201103L
-#    define BM_FALLTHROUGH [[clang::fallthrough]]
-#  endif
-#elif defined(__GNUG__)  &&  __GNUC__ >= 7
-#  if __cplusplus >= 201103L
-#    define BM_FALLTHROUGH [[gcc::fallthrough]]
-#  else
-#    define BM_FALLTHROUGH __attribute__ ((fallthrough))
-#  endif
+#ifndef __has_cpp_attribute
+#  define __has_cpp_attribute(x) 0
 #endif
-
-#ifndef BM_FALLTHROUGH
+#if __has_cpp_attribute(fallthrough)
+#  define BM_FALLTHROUGH [[fallthrough]]
+#elif __has_cpp_attribute(gcc::fallthrough)
+#  define BM_FALLTHROUGH [[gcc::fallthrough]]
+#elif __has_cpp_attribute(clang::fallthrough)
+#  define BM_FALLTHROUGH [[clang::fallthrough]]
+#elif defined(__has_attribute)  &&  __has_attribute(fallthrough)
+#  define BM_FALLTHROUGH __attribute__ ((fallthrough))
+#else
 #  define BM_FALLTHROUGH
 #endif
 
