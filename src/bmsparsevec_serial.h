@@ -245,6 +245,8 @@ protected:
     allocator_pool_type                         pool_;
     bm::deserializer<bvector_type, bm::decoder> deserial_;
     operation_deserializer<bvector_type>        op_deserial_;
+    bm::rank_compressor<bvector_type>           rsc_compressor_;
+    bvector_type                                rsc_mask_bv_;
     bm::heap_vector<size_t, alloc_type>         off_vect_;
 };
 
@@ -714,17 +716,23 @@ void sparse_vector_deserializer<SV>::deserialize(SV& sv,
         
     sv.resize_internal(size_type(sv_size));
 
-    // check if mask needs to be relaculated
+    load_plains_off_table(dec, plains); // read the offset vector of bit-plains
+
+    plains = load_null_plain(sv, int(plains), buf, mask_bv);
+
+    // check if mask needs to be relaculated using the NULL (index) vector
     if (bm::conditional<SV::is_rsc_support::value>::test())
     {
         if (mask_bv)
         {
+            const bvector_type* bv_null = sv.get_null_bvector();
+            BM_ASSERT(bv_null);
+            rsc_mask_bv_.clear(true);
+            rsc_compressor_.compress(rsc_mask_bv_, *bv_null, *mask_bv);
+            mask_bv = &rsc_mask_bv_;
         }
     }
 
-    load_plains_off_table(dec, plains); // read the offset vector of bit-plains
-
-    plains = load_null_plain(sv, int(plains), buf, mask_bv);
 
     // read-deserialize the plains based on offsets
     //   backward order to bring the NULL vector first
