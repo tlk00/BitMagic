@@ -21,7 +21,7 @@ For more information please visit:  http://bitmagic.io
 //#define BMSSE42OPT
 //#define BMAVX2OPT
 //#define BM_USE_EXPLICIT_TEMP
-#define BM_USE_GCC_BUILD
+//#define BM_USE_GCC_BUILD
 
 #include <stdio.h>
 #include <stdlib.h>
@@ -22837,6 +22837,46 @@ void TestCompressSparseVector()
 }
 
 static
+void TestCompressSparseVectorSerial()
+{
+    cout << " ------------------------------ TestCompressSparseVectorSerial()" << endl;
+
+    {
+        rsc_sparse_vector_u32 csv1;
+        rsc_sparse_vector_u32 csv2;
+        {
+        rsc_sparse_vector_u32::back_insert_iterator rs_bi = csv1.get_back_inserter();
+            rs_bi.add_null();
+            rs_bi.add(1);
+            rs_bi.add(2);
+            rs_bi.add_null();
+            rs_bi.add(4);
+
+            rs_bi.flush();
+        }
+
+        BM_DECLARE_TEMP_BLOCK(tb)
+        sparse_vector_serial_layout<rsc_sparse_vector_u32> sv_lay;
+        bm::sparse_vector_serialize<rsc_sparse_vector_u32>(csv1, sv_lay, tb);
+        const unsigned char* buf = sv_lay.buf();
+
+        sparse_vector_u32::bvector_type bv_mask;
+        bv_mask.set(1);
+        bv_mask.set(2);
+        bm::sparse_vector_deserializer<rsc_sparse_vector_u32> sv_deserial;
+        sv_deserial.deserialize(csv2, buf, &bv_mask);
+
+        assert(csv2.size() == csv1.size());
+        assert(csv2.get(1) == 1);
+        assert(csv2.get(2) == 2);
+
+    }
+
+
+    cout << " ------------------------------ TestCompressSparseVectorSerial() OK" << endl;
+}
+
+static
 void TestHeapVector()
 {
     {
@@ -23267,6 +23307,8 @@ int main(int argc, char *argv[])
         TestSparseSort();
 
         TestCompressSparseVector();
+
+        TestCompressSparseVectorSerial();
 
         TestCompressedSparseVectorScan();
 
