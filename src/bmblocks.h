@@ -697,8 +697,13 @@ public:
         unsigned i, j, i_from, j_from, i_to, j_to;
         get_block_coord(nb, i_from, j_from);
         get_block_coord(nb_to, i_to, j_to);
-        
-        reserve_top_blocks(i_to+1); // TODO: why do it if it is zero anyway?        
+
+        if (i_to >= top_block_size_)
+        {
+            i_to = top_block_size_-1;
+            j_to = bm::set_sub_array_size;
+        }
+                
         bm::word_t*** blk_root = top_blocks_root();
         
         if (i_from == i_to)  // same subblock
@@ -706,8 +711,9 @@ public:
             bm::word_t** blk_blk = blk_root[i_from];
             if (blk_blk)
             {
+                j_to -= (j_to == bm::set_sub_array_size);
                 for (j = j_from; j <= j_to; ++j)
-                    zero_block(i_from, j);
+                    zero_block(i_from, j); // TODO: optimization (lots of ifs in this loop)
             }
             return;
         }
