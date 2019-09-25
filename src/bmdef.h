@@ -401,13 +401,16 @@ For more information please visit:  http://bitmagic.io
 #ifndef __has_cpp_attribute
 #  define __has_cpp_attribute(x) 0
 #endif
+#ifndef __has_attribute
+#  define __has_attribute(x) 0
+#endif
 #if __has_cpp_attribute(fallthrough)
 #  define BM_FALLTHROUGH [[fallthrough]]
 #elif __has_cpp_attribute(gcc::fallthrough)
 #  define BM_FALLTHROUGH [[gcc::fallthrough]]
 #elif __has_cpp_attribute(clang::fallthrough)
 #  define BM_FALLTHROUGH [[clang::fallthrough]]
-#elif defined(__has_attribute)  &&  __has_attribute(fallthrough)
+#elif __has_attribute(fallthrough)
 #  define BM_FALLTHROUGH __attribute__ ((fallthrough))
 #else
 #  define BM_FALLTHROUGH
