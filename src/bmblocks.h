@@ -696,6 +696,10 @@ public:
         
         unsigned i, j, i_from, j_from, i_to, j_to;
         get_block_coord(nb, i_from, j_from);
+
+        if (i_from >= top_block_size_) // nothing to do
+            return;
+
         get_block_coord(nb_to, i_to, j_to);
 
         if (i_to >= top_block_size_)
