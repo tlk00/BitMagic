@@ -10887,8 +10887,12 @@ void TestSparseVectorSerial()
         sparse_vector_u32 sv1;
         sparse_vector_u32 sv2;
 
-        for (sparse_vector_u32::size_type i = 0; i < 10; ++i)
-            sv1.push_back(i+1);
+
+        {
+            unsigned k=0;
+            for (sparse_vector_u32::size_type i = 0; i < 10; ++i, ++k)
+                sv1.push_back(k+1);
+        }
         BM_DECLARE_TEMP_BLOCK(tb)
         sparse_vector_serial_layout<sparse_vector_u32> sv_lay;
         bm::sparse_vector_serialize<sparse_vector_u32>(sv1, sv_lay, tb);
@@ -10917,9 +10921,10 @@ void TestSparseVectorSerial()
         sparse_vector_u32 sv1(bm::use_null);
         sparse_vector_u32 sv2(sv1);
 
-        for (sparse_vector_u32::size_type i = 0; i < 100; i+=2)
+        unsigned k = 0;
+        for (sparse_vector_u32::size_type i = 0; i < 100; i+=2, k+=2)
         {
-            sv1[i] = i+1;
+            sv1[i] = k+1;
         }
         BM_DECLARE_TEMP_BLOCK(tb)
         sparse_vector_serial_layout<sparse_vector_u32> sv_lay;
@@ -10941,7 +10946,8 @@ void TestSparseVectorSerial()
             assert(sv2.get(2) == 3);
 
             const sparse_vector_u32::bvector_type* bv_null = sv2.get_null_bvector();
-            auto cnt = bv_null->count();
+            assert(bv_null);
+            //auto cnt = bv_null->count();
             //assert(cnt == 2);
 
             sparse_vector_u32::statistics st;
@@ -10954,7 +10960,8 @@ void TestSparseVectorSerial()
             sv_deserial.deserialize(sv2, buf, &bv_mask);
             assert(sv2.size() == sv1.size());
             const sparse_vector_u32::bvector_type* bv_null = sv2.get_null_bvector();
-            auto cnt = bv_null->count();
+            assert(bv_null);
+            //auto cnt = bv_null->count();
             //assert(cnt == 0);
             assert(sv2.get(0) == 0);
             assert(sv2.get(1) == 0);
@@ -11138,6 +11145,104 @@ void TestSparseVectorInserter()
     }}
 
     cout << "---------------------------- Bit-plain sparse vector inserter OK" << endl;
+}
+
+
+static
+void TestCompressSparseVectorSerial()
+{
+    cout << " ------------------------------ TestCompressSparseVectorSerial()" << endl;
+
+    {
+        rsc_sparse_vector_u32 csv1;
+        rsc_sparse_vector_u32 csv2;
+        {
+        rsc_sparse_vector_u32::back_insert_iterator rs_bi = csv1.get_back_inserter();
+            rs_bi.add_null();
+            rs_bi.add(1);
+            rs_bi.add(2);
+            rs_bi.add_null();
+            rs_bi.add(4);
+
+            rs_bi.flush();
+        }
+
+        BM_DECLARE_TEMP_BLOCK(tb)
+        sparse_vector_serial_layout<rsc_sparse_vector_u32> sv_lay;
+        bm::sparse_vector_serialize<rsc_sparse_vector_u32>(csv1, sv_lay, tb);
+        const unsigned char* buf = sv_lay.buf();
+
+        sparse_vector_u32::bvector_type bv_mask;
+        bv_mask.set(1);
+        bv_mask.set(2);
+        bv_mask.set(100);
+        bm::sparse_vector_deserializer<rsc_sparse_vector_u32> sv_deserial;
+        sv_deserial.deserialize(csv2, buf, &bv_mask);
+
+        assert(csv2.size() == csv1.size());
+        assert(csv2.get(1) == 1);
+        assert(csv2.get(2) == 2);
+
+    }
+
+    cout << "\nRSC gather stress test ..." << endl;
+    {
+        rsc_sparse_vector_u32 csv1;
+        rsc_sparse_vector_u32 csv2;
+
+        rsc_sparse_vector_u32::size_type from = bm::id_max32 * 2;
+        rsc_sparse_vector_u32::size_type to = from + 75538;
+
+        {
+            rsc_sparse_vector_u32::back_insert_iterator rs_bi = csv1.get_back_inserter();
+            rs_bi.add_null();
+            rs_bi.add(1);
+            rs_bi.add(2);
+            rs_bi.add_null();
+            rs_bi.add(4);
+            rs_bi.add_null(from); // add many NULLs
+
+            unsigned k = 0;
+            for (auto i = from; i < to; ++i, ++k)
+            {
+                rs_bi.add(k);
+                rs_bi.add_null();
+            }
+            rs_bi.flush();
+        }
+
+        BM_DECLARE_TEMP_BLOCK(tb)
+        sparse_vector_serial_layout<rsc_sparse_vector_u32> sv_lay;
+        bm::sparse_vector_serialize<rsc_sparse_vector_u32>(csv1, sv_lay, tb);
+        const unsigned char* buf = sv_lay.buf();
+
+        auto j = to;
+        for (auto i = from; i < j; ++i, --j)
+        {
+            sparse_vector_u32::bvector_type bv_mask;
+            bv_mask.set_range(i, j);
+            bm::sparse_vector_deserializer<rsc_sparse_vector_u32> sv_deserial;
+            sv_deserial.deserialize(csv2, buf, &bv_mask);
+            csv2.sync();
+
+            for (auto i0 = i; i0 < j; ++i0)
+            {
+                auto v1 = csv1[i0];
+                auto v2 = csv2[i0];
+                assert(v1 == v2);
+                assert(csv1.is_null(i0) == csv2.is_null(i0));
+            } // for
+
+            cout << "\r" << (j-i) << std::flush;
+
+        } // for i
+
+
+    }
+    cout << "\nOK" << endl;
+
+
+    cout << " ------------------------------ TestCompressSparseVectorSerial() OK" << endl;
 }
 
 
@@ -14629,6 +14734,7 @@ int main(int argc, char *argv[])
 
     if (is_all || is_sv)
     {
+/*
          TestSparseVector();
 
          TestSparseVectorInserter();
@@ -14648,6 +14754,8 @@ int main(int argc, char *argv[])
          TestSparseSort();
 
          TestCompressSparseVector();
+*/
+         TestCompressSparseVectorSerial();
 
          TestCompressedSparseVectorScan();
         

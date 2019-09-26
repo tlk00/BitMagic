@@ -1086,6 +1086,17 @@ void rsc_sparse_vector<Val, SV>::back_insert_iterator::add_null()
 //---------------------------------------------------------------------
 
 template<class Val, class SV>
+void rsc_sparse_vector<Val, SV>::back_insert_iterator::add_null(
+                rsc_sparse_vector<Val, SV>::back_insert_iterator::size_type count)
+{
+    BM_ASSERT(csv_);
+    csv_->max_id_+=count;
+    csv_->size_+=count;
+}
+
+//---------------------------------------------------------------------
+
+template<class Val, class SV>
 void rsc_sparse_vector<Val, SV>::back_insert_iterator::flush()
 {
     sv_bi_.flush();

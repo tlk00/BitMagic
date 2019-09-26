@@ -22863,6 +22863,7 @@ void TestCompressSparseVectorSerial()
         sparse_vector_u32::bvector_type bv_mask;
         bv_mask.set(1);
         bv_mask.set(2);
+        bv_mask.set(100);
         bm::sparse_vector_deserializer<rsc_sparse_vector_u32> sv_deserial;
         sv_deserial.deserialize(csv2, buf, &bv_mask);
 
@@ -22871,6 +22872,61 @@ void TestCompressSparseVectorSerial()
         assert(csv2.get(2) == 2);
 
     }
+
+    cout << "\nRSC gather srtess test ..." << endl;
+    {
+        rsc_sparse_vector_u32 csv1;
+        rsc_sparse_vector_u32 csv2;
+
+        rsc_sparse_vector_u32::size_type from = bm::id_max32 / 2;
+        rsc_sparse_vector_u32::size_type to = from + 75538;
+
+        {
+            rsc_sparse_vector_u32::back_insert_iterator rs_bi = csv1.get_back_inserter();
+            rs_bi.add_null();
+            rs_bi.add(1);
+            rs_bi.add(2);
+            rs_bi.add_null();
+            rs_bi.add(4);
+            rs_bi.add_null(from); // add many NULLs
+
+            for (auto i = from; i < to; ++i)
+            {
+                rs_bi.add(i);
+                rs_bi.add_null();
+            }
+            rs_bi.flush();
+        }
+
+        BM_DECLARE_TEMP_BLOCK(tb)
+        sparse_vector_serial_layout<rsc_sparse_vector_u32> sv_lay;
+        bm::sparse_vector_serialize<rsc_sparse_vector_u32>(csv1, sv_lay, tb);
+        const unsigned char* buf = sv_lay.buf();
+
+        auto j = to;
+        for (auto i = from; i < j; ++i, --j)
+        {
+            sparse_vector_u32::bvector_type bv_mask;
+            bv_mask.set_range(i, j);
+            bm::sparse_vector_deserializer<rsc_sparse_vector_u32> sv_deserial;
+            sv_deserial.deserialize(csv2, buf, &bv_mask);
+            csv2.sync();
+
+            for (auto i0 = i; i0 < j; ++i0)
+            {
+                auto v1 = csv1[i0];
+                auto v2 = csv2[i0];
+                assert(v1 == v2);
+                assert(csv1.is_null(i0) == csv2.is_null(i0));
+            } // for
+
+            cout << "\r" << (j-i) << std::flush;
+
+        } // for i
+
+
+    }
+    cout << "\nOK" << endl;
 
 
     cout << " ------------------------------ TestCompressSparseVectorSerial() OK" << endl;

@@ -222,8 +222,7 @@ protected:
     /// load NULL bit-plain (returns new plains count)
     int load_null_plain(SV& sv,
                         int plains,
-                        const unsigned char* buf,
-                        const bvector_type* mask_bv);
+                        const unsigned char* buf);
 
     /// load string remap dict
     static void load_remap(SV& sv, const unsigned char* remap_buf_ptr);
@@ -246,6 +245,7 @@ protected:
     bm::deserializer<bvector_type, bm::decoder> deserial_;
     operation_deserializer<bvector_type>        op_deserial_;
     bm::rank_compressor<bvector_type>           rsc_compressor_;
+    bvector_type                                not_null_mask_bv_;
     bvector_type                                rsc_mask_bv_;
     bm::heap_vector<size_t, alloc_type>         off_vect_;
 };
@@ -652,6 +652,8 @@ sparse_vector_deserializer<SV>::sparse_vector_deserializer()
     : remap_buf_ptr_(0)
 {
     temp_block_ = alloc_.alloc_bit_block();
+    not_null_mask_bv_.set_allocator_pool(&pool_);
+    rsc_mask_bv_.set_allocator_pool(&pool_);
 }
 
 // -------------------------------------------------------------------------
@@ -718,7 +720,7 @@ void sparse_vector_deserializer<SV>::deserialize(SV& sv,
 
     load_plains_off_table(dec, plains); // read the offset vector of bit-plains
 
-    plains = load_null_plain(sv, int(plains), buf, mask_bv);
+    plains = (unsigned)load_null_plain(sv, int(plains), buf);
 
     // check if mask needs to be relaculated using the NULL (index) vector
     if (bm::conditional<SV::is_rsc_support::value>::test())
@@ -728,7 +730,8 @@ void sparse_vector_deserializer<SV>::deserialize(SV& sv,
             const bvector_type* bv_null = sv.get_null_bvector();
             BM_ASSERT(bv_null);
             rsc_mask_bv_.clear(true);
-            rsc_compressor_.compress(rsc_mask_bv_, *bv_null, *mask_bv);
+            not_null_mask_bv_.bit_and(*bv_null, *mask_bv, bvector_type::opt_none);
+            rsc_compressor_.compress(rsc_mask_bv_, *bv_null, not_null_mask_bv_);
             mask_bv = &rsc_mask_bv_;
         }
     }
@@ -738,12 +741,12 @@ void sparse_vector_deserializer<SV>::deserialize(SV& sv,
     //   backward order to bring the NULL vector first
     for (int i = int(plains-1); i >= 0; --i)
     {
-        size_t offset = off_vect_[i]; 
+        size_t offset = off_vect_[unsigned(i)];
         if (!offset) // empty vector
             continue;
 
         const unsigned char* bv_buf_ptr = buf + offset; // seek to position
-        bvector_type*  bv = sv.get_plain(i);
+        bvector_type*  bv = sv.get_plain(unsigned(i));
         BM_ASSERT(bv);
         size_t read_bytes;
         if (mask_bv) // gather mask set, use AND operation deserializer
@@ -779,17 +782,17 @@ void sparse_vector_deserializer<SV>::deserialize(SV& sv,
 template<typename SV>
 int sparse_vector_deserializer<SV>::load_null_plain(SV& sv,
                                                     int plains,
-                                              const unsigned char* buf,
-                                              const bvector_type* mask_bv)
+                                              const unsigned char* buf)
 {
+    BM_ASSERT(plains > 0);
     if (!sv.is_nullable())
         return plains;
     int i = plains - 1;
-    size_t offset = off_vect_[i];
+    size_t offset = off_vect_[unsigned(i)];
     if (offset)
     {
         const unsigned char* bv_buf_ptr = buf + offset; // seek to position
-        bvector_type*  bv = sv.get_plain(i);
+        bvector_type*  bv = sv.get_plain(unsigned(i));
         size_t read_bytes = deserial_.deserialize(*bv, bv_buf_ptr, temp_block_);
         remap_buf_ptr_ = bv_buf_ptr + read_bytes;
     }
