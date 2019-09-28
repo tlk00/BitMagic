@@ -2174,7 +2174,8 @@ sparse_vector<Val, BV>::back_insert_iterator::add_value_no_null(
 template<class Val, class BV>
 void sparse_vector<Val, BV>::back_insert_iterator::add_null()
 {
-    this->add(value_type(0));
+    BM_ASSERT(bv_null_);
+    this->add_value_no_null(value_type(0));
 }
 
 //---------------------------------------------------------------------
@@ -2186,7 +2187,7 @@ void sparse_vector<Val, BV>::back_insert_iterator::add_null(
     if (count < 32)
     {
         for (size_type i = 0; i < count; ++i)
-            this->add(value_type(0));
+            this->add_value_no_null(value_type(0));
     }
     else
     {
@@ -2211,7 +2212,7 @@ void sparse_vector<Val, BV>::back_insert_iterator::flush()
     if (this->empty())
         return;
     value_type* d = (value_type*)buffer_.data();
-    sv_->import_back(d, size_type(buf_ptr_ - d), set_not_null_);
+    sv_->import_back(d, size_type(buf_ptr_ - d), !set_not_null_);
     buf_ptr_ = 0;
     block_idx_type nb = sv_->size() >> bm::set_block_shift;
     if (nb != prev_nb_)
