@@ -10903,7 +10903,7 @@ void TestSparseVectorSerial()
         sparse_vector_u32::bvector_type bv_mask;
         bv_mask.set(0);
         bv_mask.set(2);
-        sv_deserial.deserialize(sv2, buf, &bv_mask);
+        sv_deserial.deserialize(sv2, buf, bv_mask);
 
         assert(sv2.size() == sv1.size());
         assert(sv2.get(0) == 1);
@@ -10938,7 +10938,7 @@ void TestSparseVectorSerial()
             bv_mask.set(0);
             bv_mask.set(2);
             bv_mask.set(1024); // out of range mask
-            sv_deserial.deserialize(sv2, buf, &bv_mask);
+            sv_deserial.deserialize(sv2, buf, bv_mask);
 
             assert(sv2.size() == sv1.size());
             assert(sv2.get(0) == 1);
@@ -10957,7 +10957,7 @@ void TestSparseVectorSerial()
         }
         {
             sparse_vector_u32::bvector_type bv_mask;
-            sv_deserial.deserialize(sv2, buf, &bv_mask);
+            sv_deserial.deserialize(sv2, buf, bv_mask);
             assert(sv2.size() == sv1.size());
             const sparse_vector_u32::bvector_type* bv_null = sv2.get_null_bvector();
             assert(bv_null);
@@ -10975,6 +10975,7 @@ void TestSparseVectorSerial()
         sparse_vector_u32::size_type from, to;
         sparse_vector_u32 sv1(bm::use_null);
         sparse_vector_u32 sv2(sv1);
+        sparse_vector_u32 sv3(sv1);
 
         from = bm::id_max32 * 2;
         to = from + 75538;
@@ -11002,8 +11003,16 @@ void TestSparseVectorSerial()
                 sparse_vector_u32::bvector_type bv_mask;
                 bv_mask.set_range(i, j);
 
-                sv_deserial.deserialize(sv2, buf, &bv_mask);
+                sv_deserial.deserialize(sv2, buf, bv_mask);
                 assert(sv2.size() == sv1.size());
+
+                sv_deserial.deserialize(sv3, buf, i, j);
+                bool is_eq = sv2.equal(sv3);
+                if (!is_eq)
+                {
+                    cerr << "Error: Range deserialiuzation equality failed!" << endl;
+                    assert(0); exit(1);
+                }
 
                 for (auto k = i; k < j; ++k)
                 {
@@ -11177,7 +11186,7 @@ void TestCompressSparseVectorSerial()
         bv_mask.set(2);
         bv_mask.set(100);
         bm::sparse_vector_deserializer<rsc_sparse_vector_u32> sv_deserial;
-        sv_deserial.deserialize(csv2, buf, &bv_mask);
+        sv_deserial.deserialize(csv2, buf, bv_mask);
 
         assert(csv2.size() == csv1.size());
         assert(csv2.get(1) == 1);
@@ -11222,7 +11231,7 @@ void TestCompressSparseVectorSerial()
             sparse_vector_u32::bvector_type bv_mask;
             bv_mask.set_range(i, j);
             bm::sparse_vector_deserializer<rsc_sparse_vector_u32> sv_deserial;
-            sv_deserial.deserialize(csv2, buf, &bv_mask);
+            sv_deserial.deserialize(csv2, buf, bv_mask);
             csv2.sync();
 
             for (auto i0 = i; i0 < j; ++i0)
@@ -14734,7 +14743,7 @@ int main(int argc, char *argv[])
 
     if (is_all || is_sv)
     {
-/*
+
          TestSparseVector();
 
          TestSparseVectorInserter();
@@ -14747,14 +14756,14 @@ int main(int argc, char *argv[])
 
          TestSparseVectorRange();
 
+         TestCompressSparseVector();
+
          TestSparseVectorFilter();
 
          TestSparseVectorScan();
         
          TestSparseSort();
 
-         TestCompressSparseVector();
-*/
          TestCompressSparseVectorSerial();
 
          TestCompressedSparseVectorScan();
