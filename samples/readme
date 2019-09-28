@@ -47,6 +47,7 @@ Sparse vector (bit-transposed sparse vector) for scalar integer types
 	       Benchmark different search/scan methods.
 	       Tech.note: http://bitmagic.io/sparse-vector-search.html
 ./svsample07 - insertion sort using bm::sparse_vector_scanner<>::lower_bound()
+./svsample08 - sparse_vector<> deserialization to extract specific elements and ranges (masked gather)
 
 RSC sparse vector (Succinct vector based on Rank-Select methods) for scalar integer types
 

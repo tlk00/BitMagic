@@ -98,6 +98,7 @@ add_executable(svsample04 ${PROJECT_SOURCE_DIR}/samples/svsample04/svsample04.cp
 add_executable(svsample05 ${PROJECT_SOURCE_DIR}/samples/svsample05/svsample05.cpp)
 add_executable(svsample06 ${PROJECT_SOURCE_DIR}/samples/svsample06/svsample06.cpp)
 add_executable(svsample07 ${PROJECT_SOURCE_DIR}/samples/svsample07/svsample07.cpp)
+add_executable(svsample08 ${PROJECT_SOURCE_DIR}/samples/svsample08/svsample08.cpp)
 
 add_executable(rscsample01 ${PROJECT_SOURCE_DIR}/samples/rscsample01/rscsample01.cpp)
 

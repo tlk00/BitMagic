@@ -62,6 +62,7 @@ TARGETS_BLD =  \
               samples/svsample05 \
               samples/svsample06 \
               samples/svsample07 \
+              samples/svsample08 \
               samples/rscsample01 \
               utils/svutil \
               tests/stress tests/perf tests/stress64 tests/perf64
