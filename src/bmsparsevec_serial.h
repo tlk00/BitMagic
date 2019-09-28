@@ -52,7 +52,6 @@ namespace bm
     different storage shards.
     
     \ingroup svserial
- 
 */
 template<class SV>
 struct sparse_vector_serial_layout
@@ -154,6 +153,7 @@ Remap Matrix:
              N - means no other info is saved on the stream
      INT64:  remap matrix size
  
+    \ingroup svector
     \ingroup svserial
 */
 template<typename SV>
@@ -187,6 +187,7 @@ protected:
 
 /**
     sparse vector de-serializer
+
 */
 template<typename SV>
 class sparse_vector_deserializer
@@ -205,16 +206,52 @@ public:
 
     /*!
         Deserialize sparse vector
+
+        @param sv - [out] target sparse vector to populate
+        @param buf - source memory pointer
+    */
+    void deserialize(SV& sv, const unsigned char* buf)
+        { deserialize_sv(sv, buf, 0); }
+
+    /*!
+        Deserialize sparse vector for the range [from, to]
+
+        @param sv - [out] target sparse vector to populate
+        @param buf - source memory pointer
+        @param from - start vector index for deserialization range
+        @param to - end vector index for deserialization range
+    */
+    void deserialize(SV& sv, const unsigned char* buf,
+                     size_type from, size_type to);
+
+
+    /*!
+        Deserialize sparse vector using address mask vector
+        Address mask defines (by set bits) which vector elements to be extracted
+        from the compressed BLOB
+
         @param sv - [out] target sparse vector to populate
         @param buf - source memory pointer
         @param mask_bv - AND mask bit-vector (address gather vector)
     */
-    void deserialize(SV& sv, const unsigned char* buf,
-                    const bvector_type* mask_bv = 0);
+    void deserialize(SV& sv,
+                     const unsigned char* buf,
+                     const bvector_type& mask_bv)
+        { deserialize_sv(sv, buf, &mask_bv); }
 
 
 protected:
     typedef typename bvector_type::allocator_type      alloc_type;
+
+    /// Deserialization entry point
+    void deserialize_sv(SV& sv, const unsigned char* buf,
+                        const bvector_type* mask_bv);
+
+
+    /// deserialize bit-vector plains
+    void deserialize_plains(SV& sv, unsigned plains,
+                            const unsigned char* buf,
+                            const bvector_type* mask_bv = 0);
 
     /// load offset table
     void load_plains_off_table(bm::decoder& dec, unsigned plains);
@@ -265,6 +302,7 @@ protected:
     \ingroup svserial
     
     @sa serialization_flags
+    @sa sparse_vector_deserializer
 */
 template<class SV>
 void sparse_vector_serialize(
@@ -287,7 +325,8 @@ void sparse_vector_serialize(
  
     \return 0  (error processing via std::logic_error)
  
-    \ingroup svector
+    \ingroup svserial
+    @sa sparse_vector_deserializer
 */
 template<class SV>
 int sparse_vector_deserialize(SV& sv,
@@ -670,6 +709,19 @@ sparse_vector_deserializer<SV>::~sparse_vector_deserializer()
 template<typename SV>
 void sparse_vector_deserializer<SV>::deserialize(SV& sv,
                                                  const unsigned char* buf,
+                                                 size_type from, size_type to)
+{
+    bvector_type mask_bv;
+    typename bvector_type::mem_pool_guard mp_g_z(pool_, mask_bv);
+    mask_bv.set_range(from, to);
+    deserialize_sv(sv, buf, &mask_bv);
+}
+
+// -------------------------------------------------------------------------
+
+template<typename SV>
+void sparse_vector_deserializer<SV>::deserialize_sv(SV& sv,
+                                                 const unsigned char* buf,
                                                  const bvector_type* mask_bv)
 {
     // TODO: implement correct processing of byte-order corect deserialization
@@ -736,7 +788,29 @@ void sparse_vector_deserializer<SV>::deserialize(SV& sv,
         }
     }
 
+    deserialize_plains(sv, plains, buf, mask_bv);
 
+    // load the remap matrix
+    //
+    if (bm::conditional<SV::is_remap_support::value>::test()) // test remapping trait
+    {
+        if (matr_s_ser)
+            load_remap(sv, remap_buf_ptr_);
+    } // if remap traits
+    
+    sv.sync(true); // force sync, recalculate RS index, remap tables, etc
+    remap_buf_ptr_ = 0;
+}
+
+// -------------------------------------------------------------------------
+
+template<typename SV>
+void sparse_vector_deserializer<SV>::deserialize_plains(
+                                                SV& sv,
+                                                unsigned plains,
+                                                const unsigned char* buf,
+                                                const bvector_type* mask_bv)
+{
     // read-deserialize the plains based on offsets
     //   backward order to bring the NULL vector first
     for (int i = int(plains-1); i >= 0; --i)
@@ -760,21 +834,11 @@ void sparse_vector_deserializer<SV>::deserialize(SV& sv,
         {
             read_bytes = deserial_.deserialize(*bv, bv_buf_ptr, temp_block_);
         }
+
         if (!remap_buf_ptr_)
             remap_buf_ptr_ = bv_buf_ptr + read_bytes;
 
     } // for i
-
-    // load the remap matrix
-    //
-    if (bm::conditional<SV::is_remap_support::value>::test()) // test remapping trait
-    {
-        if (matr_s_ser)
-            load_remap(sv, remap_buf_ptr_);
-    } // if remap traits
-    
-    sv.sync(true); // force sync, recalculate RS index, remap tables, etc
-    remap_buf_ptr_ = 0;
 }
 
 // -------------------------------------------------------------------------
