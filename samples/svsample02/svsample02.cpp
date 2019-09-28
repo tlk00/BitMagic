@@ -19,7 +19,7 @@ For more information please visit:  http://bitmagic.io
 /** \example svsample02.cpp
   Example of how to serialize bm::sparse_vector<> template class
  
-  \sa bm::sparse_vector<>
+  \sa bm::sparse_vector
   \sa bm::sparse_vector<>::push_back
   \sa bm::sparse_vector<>::equal
   \sa bm::sparse_vector_serialize
