@@ -2212,7 +2212,7 @@ void sparse_vector<Val, BV>::back_insert_iterator::flush()
     if (this->empty())
         return;
     value_type* d = (value_type*)buffer_.data();
-    sv_->import_back(d, size_type(buf_ptr_ - d), !set_not_null_);
+    sv_->import_back(d, size_type(buf_ptr_ - d), false); //!set_not_null_);
     buf_ptr_ = 0;
     block_idx_type nb = sv_->size() >> bm::set_block_shift;
     if (nb != prev_nb_)
