@@ -53,6 +53,9 @@ RSC sparse vector (Succinct vector based on Rank-Select methods) for scalar inte
 
 
 ./rscsample01 - basics of rsc_sparse_vector<> container. Load, unload, serialize.
+./rscsample02 - back insert iterator for rsc_sparse_vector<> container. 
+                Gather and range deserialization of container.
+                
  
 
 String sparse vector (bit-transposed sparse vector) for ASCII(z) strings
