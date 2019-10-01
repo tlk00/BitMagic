@@ -436,7 +436,7 @@ public:
     typedef typename bvector_type::size_type size_type;
     typedef SerialIterator                   serial_iterator_type;
 public:
-    static
+    //static
     size_type deserialize(bvector_type&         bv,
                           serial_iterator_type& sit,
                           bm::word_t*           temp_block,
@@ -643,7 +643,7 @@ public:
     \return bitcount
     */
     static
-    size_type deserialize(bvector_type&        bv,
+    size_type deserialize(bvector_type&       bv,
                          const unsigned char* buf, 
                          bm::word_t*          temp_block,
                          set_operation        op = bm::set_OR,
@@ -4390,25 +4390,22 @@ operation_deserializer<BV>::deserialize(bvector_type&        bv,
     if (bo_current == bo)
     {
         serial_stream_current ss(buf);
-        return 
-            iterator_deserializer<BV, serial_stream_current>::
-                deserialize(bv, ss, temp_block, op, exit_on_one);
+        bm::iterator_deserializer<BV, serial_stream_current> it_d;
+        return it_d.deserialize(bv, ss, temp_block, op, exit_on_one);
     }
     switch (bo_current) 
     {
     case BigEndian:
         {
         serial_stream_be ss(buf);
-        return 
-            iterator_deserializer<BV, serial_stream_be>::
-                deserialize(bv, ss, temp_block, op, exit_on_one);
+        iterator_deserializer<BV, serial_stream_be> it_d;
+        return it_d.deserialize(bv, ss, temp_block, op, exit_on_one);
         }
     case LittleEndian:
         {
         serial_stream_le ss(buf);
-        return 
-            iterator_deserializer<BV, serial_stream_le>::
-                deserialize(bv, ss, temp_block, op, exit_on_one);
+        iterator_deserializer<BV, serial_stream_le> it_d;
+        return it_d.deserialize(bv, ss, temp_block, op, exit_on_one);
         }
     default:
         BM_ASSERT(0);
@@ -4653,6 +4650,16 @@ iterator_deserializer<BV, SerialIterator>::deserialize(
     }
 
     size_type bv_block_idx = 0;
+    size_type last_block_idx = 0;
+    if (op == bm::set_AND)
+    {
+        size_type last_pos;
+        bool found = bv.find_reverse(last_pos); // TODO: opt: find last block
+        if (found)
+            last_block_idx = (last_pos >> bm::set_block_shift);
+        else
+            return count;
+    }
 
     for (;1;)
     {
@@ -4989,6 +4996,12 @@ iterator_deserializer<BV, SerialIterator>::deserialize(
         ++bv_block_idx;
         BM_ASSERT(bv_block_idx);
 
+        if ((op == bm::set_AND) && 
+            (bv_block_idx > last_block_idx))
+        {
+            //std::cout << "E";
+            break;
+        }
     } // for (deserialization)
 
     return count;
