@@ -3116,7 +3116,7 @@ int main(void)
 //    ptest();
 
     TimeTaker tt("TOTAL", 1);
-/*
+
     MemCpyTest();
 
     BitCountTest();
@@ -3170,9 +3170,8 @@ int main(void)
     SparseVectorAccessTest();
 
     SparseVectorScannerTest();
-*/
+
     SparseVectorRangeDeserializationTest();
-    return 0;
 
     RankCompressionTest();
 

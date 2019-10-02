@@ -22899,12 +22899,18 @@ void TestCompressSparseVectorSerial()
         assert(csv2.get(1) == 1);
         assert(csv2.get(2) == 2);
 
+        sv_deserial.deserialize(csv2, buf, 1, 2);
+        assert(csv2.size() == csv1.size());
+        assert(csv2.get(1) == 1);
+        assert(csv2.get(2) == 2);
+
     }
 
     cout << "\nRSC gather srtess test ..." << endl;
     {
         rsc_sparse_vector_u32 csv1;
         rsc_sparse_vector_u32 csv2;
+        rsc_sparse_vector_u32 csv3;
 
         rsc_sparse_vector_u32::size_type from = bm::id_max32 / 2;
         rsc_sparse_vector_u32::size_type to = from + 75538;
@@ -22947,6 +22953,11 @@ void TestCompressSparseVectorSerial()
                 assert(v1 == v2);
                 assert(csv1.is_null(i0) == csv2.is_null(i0));
             } // for
+
+            sv_deserial.deserialize(csv3, buf, i, j);
+            bool eq = csv2.equal(csv3);
+            assert(eq);
+
 
             cout << "\r" << (j-i) << std::flush;
 
@@ -23372,7 +23383,6 @@ int main(int argc, char *argv[])
 
     if (is_all || is_sv)
     {
-
         TestSparseVector();
 
         TestSparseVectorInserter();

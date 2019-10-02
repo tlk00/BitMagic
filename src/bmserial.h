@@ -436,7 +436,9 @@ public:
     typedef typename bvector_type::size_type size_type;
     typedef SerialIterator                   serial_iterator_type;
 public:
-    //static
+
+    void set_range(size_type from, size_type to);
+
     size_type deserialize(bvector_type&         bv,
                           serial_iterator_type& sit,
                           bm::word_t*           temp_block,
@@ -467,7 +469,10 @@ private:
                               set_operation         op);
     static
     const char* err_msg() { return "BM::de-serialization format error"; }
-
+private:
+    bool                       is_range_set_ = false;
+    size_type                  nb_range_from_ = 0;
+    size_type                  nb_range_to_ = 0;
 };
 
 /*!
@@ -649,6 +654,19 @@ public:
                          set_operation        op = bm::set_OR,
                          bool                 exit_on_one = false ///<! exit early if any one are found
                          );
+
+    /*!
+        Deserialize range using mask vector (AND)
+        \param bv - target bvector (should be set ranged)
+        \param temp_block - temporary block to avoid re-allocations
+        \param idx_from - range of bits set for deserialization [from..to]
+        \param idx_to - range of bits [from..to]
+    */
+    void deserialize_range(bvector_type&       bv,
+                           const unsigned char* buf,
+                           bm::word_t*          temp_block,
+                           size_type            idx_from,
+                           size_type            idx_to);
 private:
     typedef 
         typename BV::blocks_manager_type               blocks_manager_type;
@@ -4371,15 +4389,12 @@ operation_deserializer<BV>::deserialize(bvector_type&        bv,
     unsigned char header_flag = dec.get_8();
     ByteOrder bo = bo_current;
     if (!(header_flag & BM_HM_NO_BO))
-    {
         bo = (bm::ByteOrder) dec.get_8();
-    }
+
     blocks_manager_type& bman = bv.get_blocks_manager();
     bit_block_guard<blocks_manager_type> bg(bman);
-    if (temp_block == 0)
-    {
+    if (!temp_block)
         temp_block = bg.allocate();
-    }
 
     if (op == bm::set_ASSIGN)
     {
@@ -4410,13 +4425,86 @@ operation_deserializer<BV>::deserialize(bvector_type&        bv,
     default:
         BM_ASSERT(0);
         #ifndef BM_NO_STL
-            throw std::logic_error("BM::Platform error unknown endian");
+            throw std::logic_error("BM::platform error: unknown endianness");
         #else
             BM_THROW(BM_ERR_SERIALFORMAT);
         #endif
     };
     return 0;
 }
+
+template<class BV>
+void operation_deserializer<BV>::deserialize_range(
+                       bvector_type&        bv,
+                       const unsigned char* buf,
+                       bm::word_t*          temp_block,
+                       size_type            idx_from,
+                       size_type            idx_to)
+{
+    ByteOrder bo_current = globals<true>::byte_order();
+    bm::decoder dec(buf);
+    unsigned char header_flag = dec.get_8();
+    ByteOrder bo = bo_current;
+    if (!(header_flag & BM_HM_NO_BO))
+        bo = (bm::ByteOrder) dec.get_8();
+
+    blocks_manager_type& bman = bv.get_blocks_manager();
+    bit_block_guard<blocks_manager_type> bg(bman);
+    if (!temp_block)
+        temp_block = bg.allocate();
+
+    const bm::set_operation op = bm::set_AND;
+
+    if (bo_current == bo)
+    {
+        serial_stream_current ss(buf);
+        bm::iterator_deserializer<BV, serial_stream_current> it_d;
+        it_d.set_range(idx_from, idx_to);
+        it_d.deserialize(bv, ss, temp_block, op, false);
+        return;
+    }
+    switch (bo_current)
+    {
+    case BigEndian:
+        {
+        serial_stream_be ss(buf);
+        iterator_deserializer<BV, serial_stream_be> it_d;
+        it_d.set_range(idx_from, idx_to);
+        it_d.deserialize(bv, ss, temp_block, op, false);
+        return;
+        }
+    case LittleEndian:
+        {
+        serial_stream_le ss(buf);
+        iterator_deserializer<BV, serial_stream_le> it_d;
+        it_d.set_range(idx_from, idx_to);
+        it_d.deserialize(bv, ss, temp_block, op, false);
+        return;
+        }
+    default:
+        BM_ASSERT(0);
+        #ifndef BM_NO_STL
+            throw std::logic_error("BM::platform error: unknown endianness");
+        #else
+            BM_THROW(BM_ERR_SERIALFORMAT);
+        #endif
+    };
+    return;
+}
+
+
+
+// ------------------------------------------------------------------
+
+template<class BV, class SerialIterator>
+void iterator_deserializer<BV, SerialIterator>::set_range(
+                                        size_type from, size_type to)
+{
+    is_range_set_ = true;
+    nb_range_from_ = (from >> bm::set_block_shift);
+    nb_range_to_ = (to >> bm::set_block_shift);
+}
+
 
 template<class BV, class SerialIterator>
 void iterator_deserializer<BV, SerialIterator>::load_id_list(
@@ -4650,6 +4738,7 @@ iterator_deserializer<BV, SerialIterator>::deserialize(
     }
 
     size_type bv_block_idx = 0;
+/*
     size_type last_block_idx = 0;
     if (op == bm::set_AND)
     {
@@ -4660,7 +4749,7 @@ iterator_deserializer<BV, SerialIterator>::deserialize(
         else
             return count;
     }
-
+*/
     for (;1;)
     {
         bm::set_operation sop = op;
@@ -4996,12 +5085,9 @@ iterator_deserializer<BV, SerialIterator>::deserialize(
         ++bv_block_idx;
         BM_ASSERT(bv_block_idx);
 
-        if ((op == bm::set_AND) && 
-            (bv_block_idx > last_block_idx))
-        {
-            //std::cout << "E";
+        if (is_range_set_ && (bv_block_idx > nb_range_to_))
             break;
-        }
+
     } // for (deserialization)
 
     return count;

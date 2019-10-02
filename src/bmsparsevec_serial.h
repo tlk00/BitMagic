@@ -211,7 +211,7 @@ public:
         @param buf - source memory pointer
     */
     void deserialize(SV& sv, const unsigned char* buf)
-        { deserialize_sv(sv, buf, 0); }
+        { idx_range_set_ = false; deserialize_sv(sv, buf, 0); }
 
     /*!
         Deserialize sparse vector for the range [from, to]
@@ -237,7 +237,7 @@ public:
     void deserialize(SV& sv,
                      const unsigned char* buf,
                      const bvector_type& mask_bv)
-        { deserialize_sv(sv, buf, &mask_bv); }
+        { idx_range_set_ = false; deserialize_sv(sv, buf, &mask_bv); }
 
 
 protected:
@@ -285,6 +285,10 @@ protected:
     bvector_type                                not_null_mask_bv_;
     bvector_type                                rsc_mask_bv_;
     bm::heap_vector<size_t, alloc_type>         off_vect_;
+
+    bool                                        idx_range_set_;
+    size_type                                   idx_range_from_;
+    size_type                                   idx_range_to_;
 };
 
 
@@ -693,6 +697,7 @@ sparse_vector_deserializer<SV>::sparse_vector_deserializer()
     temp_block_ = alloc_.alloc_bit_block();
     not_null_mask_bv_.set_allocator_pool(&pool_);
     rsc_mask_bv_.set_allocator_pool(&pool_);
+    idx_range_set_ = false;
 }
 
 // -------------------------------------------------------------------------
@@ -714,7 +719,13 @@ void sparse_vector_deserializer<SV>::deserialize(SV& sv,
     bvector_type mask_bv;
     typename bvector_type::mem_pool_guard mp_g_z(pool_, mask_bv);
     mask_bv.set_range(from, to);
+
+    idx_range_set_ = true;
+    idx_range_from_ = from; idx_range_to_ = to;
+
     deserialize_sv(sv, buf, &mask_bv);
+
+    idx_range_set_ = false;
 }
 
 // -------------------------------------------------------------------------
@@ -785,6 +796,14 @@ void sparse_vector_deserializer<SV>::deserialize_sv(SV& sv,
             not_null_mask_bv_.bit_and(*bv_null, *mask_bv, bvector_type::opt_none);
             rsc_compressor_.compress(rsc_mask_bv_, *bv_null, not_null_mask_bv_);
             mask_bv = &rsc_mask_bv_;
+
+            // if it needs range recalculation
+            if (idx_range_set_) // range setting is in effect
+            {
+                //bool rf =
+                rsc_mask_bv_.find_range(idx_range_from_, idx_range_to_);
+            }
+
         }
     }
 
@@ -811,6 +830,11 @@ void sparse_vector_deserializer<SV>::deserialize_plains(
                                                 const unsigned char* buf,
                                                 const bvector_type* mask_bv)
 {
+    if (mask_bv && !idx_range_set_)
+    {
+        idx_range_set_ = mask_bv->find_range(idx_range_from_, idx_range_to_);
+    }
+
     // read-deserialize the plains based on offsets
     //   backward order to bring the NULL vector first
     for (int i = int(plains-1); i >= 0; --i)
@@ -827,8 +851,16 @@ void sparse_vector_deserializer<SV>::deserialize_plains(
         {
             typename bvector_type::mem_pool_guard mp_g_z(pool_, *bv);
             *bv = *mask_bv;
-            read_bytes =
+            if (idx_range_set_)
+            {
+                op_deserial_.deserialize_range(*bv, bv_buf_ptr, temp_block_,
+                                               idx_range_from_, idx_range_to_);
+            }
+            else
+            {
+                //read_bytes =
                 op_deserial_.deserialize(*bv, bv_buf_ptr, temp_block_, bm::set_AND);
+            }
         }
         else // use generic deserializer (OR)
         {
