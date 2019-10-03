@@ -846,10 +846,19 @@ void sparse_vector_deserializer<SV>::deserialize_plains(
         const unsigned char* bv_buf_ptr = buf + offset; // seek to position
         bvector_type*  bv = sv.get_plain(unsigned(i));
         BM_ASSERT(bv);
-        size_t read_bytes;
         if (mask_bv) // gather mask set, use AND operation deserializer
         {
             typename bvector_type::mem_pool_guard mp_g_z(pool_, *bv);
+
+            if (!remap_buf_ptr_) // last valid plain vector (special case)
+            {
+                size_t read_bytes =
+                    deserial_.deserialize(*bv, bv_buf_ptr, temp_block_);
+                remap_buf_ptr_ = bv_buf_ptr + read_bytes;
+                bv->bit_and(*mask_bv);
+                continue;
+            }
+
             *bv = *mask_bv;
             if (idx_range_set_)
             {
@@ -864,11 +873,9 @@ void sparse_vector_deserializer<SV>::deserialize_plains(
         }
         else // use generic deserializer (OR)
         {
-            read_bytes = deserial_.deserialize(*bv, bv_buf_ptr, temp_block_);
+            //read_bytes =
+            deserial_.deserialize(*bv, bv_buf_ptr, temp_block_);
         }
-
-        if (!remap_buf_ptr_)
-            remap_buf_ptr_ = bv_buf_ptr + read_bytes;
 
     } // for i
 }
