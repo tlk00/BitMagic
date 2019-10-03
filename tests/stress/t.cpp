@@ -23585,10 +23585,10 @@ int main(int argc, char *argv[])
     
     if (is_all || is_str_sv)
     {
-//         TestStrSparseVector();
+         TestStrSparseVector();
 
          TestStrSparseVectorSerial();
-return 0;
+
          TestStrSparseSort();
 
          StressTestStrSparseVector();

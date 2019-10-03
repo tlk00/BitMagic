@@ -867,14 +867,15 @@ void sparse_vector_deserializer<SV>::deserialize_plains(
             }
             else
             {
-                //read_bytes =
                 op_deserial_.deserialize(*bv, bv_buf_ptr, temp_block_, bm::set_AND);
             }
         }
         else // use generic deserializer (OR)
         {
-            //read_bytes =
-            deserial_.deserialize(*bv, bv_buf_ptr, temp_block_);
+            size_t read_bytes =
+                deserial_.deserialize(*bv, bv_buf_ptr, temp_block_);
+            if (!remap_buf_ptr_)
+                remap_buf_ptr_ = bv_buf_ptr + read_bytes;
         }
 
     } // for i
