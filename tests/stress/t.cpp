@@ -18902,6 +18902,7 @@ void TestStrSparseVector()
    cout << "---------------------------- Bit-plain STR sparse vector test OK" << endl;
 }
 
+static
 void TestStrSparseVectorSerial()
 {
    cout << "---------------------------- TestStrSparseVectorSerial()" << endl;
