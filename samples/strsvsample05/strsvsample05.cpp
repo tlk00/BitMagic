@@ -35,9 +35,7 @@ For more information please visit:  http://bitmagic.io
 #include <iostream>
 #include <string>
 #include <vector>
-#include <random>
-#include <algorithm>
-#include <fstream>
+#include <assert.h>
 
 #include "bm.h"
 #include "bmstrsparsevec.h"
