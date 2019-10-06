@@ -107,5 +107,6 @@ add_executable(strsvsample01 ${PROJECT_SOURCE_DIR}/samples/strsvsample01/strsvsa
 add_executable(strsvsample02 ${PROJECT_SOURCE_DIR}/samples/strsvsample02/strsvsample02.cpp)
 add_executable(strsvsample03 ${PROJECT_SOURCE_DIR}/samples/strsvsample03/strsvsample03.cpp)
 add_executable(strsvsample04 ${PROJECT_SOURCE_DIR}/samples/strsvsample04/strsvsample04.cpp)
+add_executable(strsvsample05 ${PROJECT_SOURCE_DIR}/samples/strsvsample05/strsvsample05.cpp)
 
 

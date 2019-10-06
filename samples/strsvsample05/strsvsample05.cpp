@@ -18,16 +18,18 @@ For more information please visit:  http://bitmagic.io
 
 /** \example strsvsample05.cpp
   Example of how to use bm::str_sparse_vector<> - succinct container for
-  bit-transposed string collections
+  bit-transposed string collections for deserialization of only select elements
+  from the serealized BLOB
  
   \sa bm::str_sparse_vector
+  \sa bm::sparse_vector_deserializer
 */
 
 /*! \file strsvsample05.cpp
     \brief Example: str_sparse_vector<> gather deserialization example
  
     This example loads a range of a sparse vector from an STL container to save
-    memory and improve performance
+    memory and improve deserialization performance
 */
 
 #include <iostream>
@@ -91,28 +93,27 @@ int main(void)
 
         bm::sparse_vector_deserializer<str_sv_type> sv_deserial;
 
-        bvector_type::size_type from = 100000-1;
+
+        bvector_type::size_type from = 100000;
         bvector_type::size_type to = from + 65536;
-        //for (unsigned i = from; i < to; ++i)
         {
             bvector_type bv_mask;
             bv_mask.set_range(from, to);
             sv_deserial.deserialize(str_sv2, buf, bv_mask);
 
-/*
-            for (unsigned j = i; j < to; ++j)
+            // run a quick comparison, that selected range matches values in
+            // the container str_sv2
+            //
+            char s1[16]; char s2[16];
+            for (bvector_type::size_type j = from; j < to; ++j)
             {
                 str_sv1.get(j, s1, sizeof(s1));
                 str_sv2.get(j, s2, sizeof(s2));
-                cmp = ::strcmp(s1, s2);
+                int cmp = ::strcmp(s1, s2);
                 assert(cmp==0);
-
             } // for j
-
-            if ((i & 0xF) == 0)
-                cout << "\r" << i << "/" << to << flush;
-*/
-        } // for
+            cout << "Gather deserialization check OK" << endl;
+        }
 
 
     }
