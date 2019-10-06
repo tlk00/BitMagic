@@ -18895,7 +18895,6 @@ void TestStrSparseVector()
         s = it4.value();
         cmp = ::strcmp(s, "123");
         assert(cmp == 0);
-
         }
     }
     
