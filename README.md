@@ -81,7 +81,15 @@ sparse vectors can be used for on-the fly compression of astronomical, molecular
 efficient store of associations for graphs, etc.
 - search algorithms for sorted and unsorted succinct vectors (vectors of ints or strings)
 - algorithms on sparse vectors: dynamic range clipping, search, group theory image (re-mapping).
-- all containers are serializable with compression
+- all containers are serializable with compression (binary interpolative coding, elias gamma coding)
+
+#### Serialization
+
+BitMagic serializer supports additional compression using build-in codec for the integer data.
+BitMagic supports serialization evolution - if serialization format changes, 
+old saved data remains readable by the new code. Old code will NOT be able to read new BLOBs.
+BitMagic changes major version number when serialization format changes.
+
 
 ### Memory profiling/monitoring
 
