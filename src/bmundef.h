@@ -80,6 +80,8 @@ For more information please visit:  http://bitmagic.io
 #undef VECT_AND_DIGEST_5WAY
 #undef VECT_BLOCK_SET_DIGEST
 
+#undef VECT_BIT_FIND_DIFF
+
 #undef BMI1_SELECT64
 #undef BMI2_SELECT64
 

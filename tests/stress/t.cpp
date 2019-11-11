@@ -21565,6 +21565,98 @@ void TestBlockZero()
 
 }
 
+static
+void TestFindBlockDiff()
+{
+    cout << " ------------------------------ Test bit_find_first_diff()" << endl;
+    {
+        unsigned pos;
+        bool f;
+        BM_DECLARE_TEMP_BLOCK(tb1);
+        BM_DECLARE_TEMP_BLOCK(tb2);
+
+        for (unsigned i = 0; i < bm::set_block_size; ++i)
+        {
+            tb1.b_.w32[i] = 0; tb2.b_.w32[i] = 0;
+        }
+
+        f = bm::bit_find_first_diff(tb1, tb2, &pos);
+        assert(f ==  false);
+
+        tb2.b_.w32[0] = 1;
+        f = bm::bit_find_first_diff(tb1, tb2, &pos);
+        assert(f);
+        cout << pos << endl;
+        assert(pos == 0);
+        tb2.b_.w32[0] = (1 << 1);
+        f = bm::bit_find_first_diff(tb1, tb2, &pos);
+        assert(f);
+        assert(pos == 1);
+        tb1.b_.w32[0] = (1 << 1);
+        f = bm::bit_find_first_diff(tb1, tb2, &pos);
+        assert(!f);
+
+        for (unsigned i = 0; i < bm::set_block_size; ++i)
+        {
+            tb1.b_.w32[i] = 0; tb2.b_.w32[i] = 0;
+        }
+        tb1.b_.w32[0] = (1<<12); tb2.b_.w32[1] = 18;
+        f = bm::bit_find_first_diff(tb1, tb2, &pos);
+        assert(f);
+        assert(pos == 12);
+
+        for (unsigned i = 0; i < bm::set_block_size; ++i)
+        {
+            tb1.b_.w32[i] = 0; tb2.b_.w32[i] = 0;
+        }
+
+        bm::set_bit(tb1, 12345);
+        f = bm::bit_find_first_diff(tb1, tb2, &pos);
+        assert(f);
+        assert(pos == 12345);
+        bm::set_bit(tb2, 12345);
+        f = bm::bit_find_first_diff(tb1, tb2, &pos);
+        assert(!f);
+
+        for (unsigned i = 0; i < bm::set_block_size; ++i)
+        {
+            tb1.b_.w32[i] = 0; tb2.b_.w32[i] = 0;
+        }
+
+        for (unsigned k = 0; k < 65535; ++k)
+        {
+            bm::set_bit(tb1, k);
+            f = bm::bit_find_first_diff(tb1, tb2, &pos);
+            assert(f);
+            assert(pos == k);
+
+            for (unsigned j = k+1; j < 65535; ++j)
+            {
+                bm::set_bit(tb1, j);
+                f = bm::bit_find_first_diff(tb1, tb2, &pos);
+                assert(f);
+                assert(pos == k);
+                bm::set_bit(tb2, j);
+                f = bm::bit_find_first_diff(tb1, tb2, &pos);
+                assert(f);
+                assert(pos == k);
+                bm::clear_bit(tb1, j);
+                bm::clear_bit(tb2, j);
+            }
+
+            bm::set_bit(tb2, k);
+            f = bm::bit_find_first_diff(tb1, tb2, &pos);
+            assert(!f);
+
+            cout << "\r" << k << flush;
+        } // for
+
+    }
+    cout << "\n ------------------------------ Test bit_find_first_diff() OK" << endl;
+
+}
+
+
 
 static
 void TestBlockDigest()
@@ -23404,6 +23496,8 @@ int main(int argc, char *argv[])
         TestSIMDUtils();
 
         TestArraysAndBuffers();
+
+        TestFindBlockDiff();
      
         Log2Test();
         FindNotNullPtrTest();
@@ -23413,7 +23507,7 @@ int main(int argc, char *argv[])
         SelectTest();
 
          TestBlockZero();
-        
+
          TestBlockDigest();
 
          TestBlockAND();
@@ -23627,4 +23721,5 @@ int main(int argc, char *argv[])
 
     return 0;
 }
+
 

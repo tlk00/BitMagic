@@ -1813,6 +1813,63 @@ void avx2_bit_block_calc_change_bc(const __m256i* BMRESTRICT block,
 }
 
 
+/*!
+   \brief Find first bit which is different between two bit-blocks
+  @ingroup AVX2
+*/
+inline
+bool avx2_bit_find_first_diff(const __m256i* BMRESTRICT block1,
+                              const __m256i* BMRESTRICT block2,
+                              unsigned* pos)
+{
+    const __m256i* block1_end =
+        (const __m256i*)((bm::word_t*)(block1) + bm::set_block_size);
+    __m256i maskZ = _mm256_setzero_si256();
+    __m256i mA, mB;
+    unsigned simd_lane = 0;
+    do
+    {
+        mA = _mm256_xor_si256(_mm256_load_si256(block1),
+                              _mm256_load_si256(block2));
+        mB = _mm256_xor_si256(_mm256_load_si256(block1+1),
+                              _mm256_load_si256(block2+1));
+        __m256i mOR = _mm256_or_si256(mA, mB);
+        if (!_mm256_testz_si256(mOR, mOR)) // test 2x256 lanes
+        {
+            if (!_mm256_testz_si256(mA, mA))
+            {
+                unsigned mask = _mm256_movemask_epi8(_mm256_cmpeq_epi32(mA, maskZ));
+                mask = ~mask; // invert to fing (w != 0)
+                BM_ASSERT(mask);
+                int bsf = bm::bsf_asm32(mask); // find first !=0 (could use lzcnt())
+                unsigned widx = bsf >> 2; // (bsf / 4);
+                unsigned w = _mm256_extract_epi32 (mA, widx);
+                bsf = bm::bsf_asm32(w); // find first bit != 0
+                *pos = (simd_lane * 256) + (widx * 32) + bsf;
+                return true;
+            }
+            if (!_mm256_testz_si256(mB, mB))
+            {
+                unsigned mask = _mm256_movemask_epi8(_mm256_cmpeq_epi32(mB, maskZ));
+                mask = ~mask; // invert to fing (w != 0)
+                BM_ASSERT(mask);
+                int bsf = bm::bsf_asm32(mask); // find first !=0 (could use lzcnt())
+                unsigned widx = bsf >> 2; // (bsf / 4);
+                unsigned w = _mm256_extract_epi32 (mB, widx);
+                bsf = bm::bsf_asm32(w); // find first bit != 0
+                *pos = ((++simd_lane) * 256) + (widx * 32) + bsf;
+                return true;
+            }
+        }
+
+        simd_lane+=2;
+        block1+=2; block2+=2;
+
+    } while (block1 < block1_end);
+    return false;
+}
+
+
 
 
 /* @brief Gap block population count (array sum) utility
@@ -2780,6 +2837,9 @@ unsigned avx2_bit_to_gap(gap_word_t* BMRESTRICT dest,
 
 #define VECT_BIT_TO_GAP(dest, src, dest_len) \
     avx2_bit_to_gap(dest, src, dest_len)
+
+#define VECT_BIT_FIND_DIFF(src1, src2, pos) \
+    avx2_bit_find_first_diff((__m256i*) src1, (__m256i*) (src2), pos)
 
 
 } // namespace

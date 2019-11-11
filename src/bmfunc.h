@@ -3771,6 +3771,58 @@ int bitcmp(const T* buf1, const T* buf2, unsigned len)
     return 0;
 }
 
+/*!
+   \brief Find first bit which is different between two bit-blocks
+   \param blk1 - block 1
+   \param blk2 - block 2
+   \param pos - out - position of difference (undefined if blocks are equal)
+   \return  true if difference was found
+   @ingroup bitfunc
+*/
+inline
+bool bit_find_first_diff(const bm::word_t* blk1, const bm::word_t* blk2,
+                         unsigned* pos)
+{
+    BM_ASSERT(blk1 && blk2 && pos);
+#ifdef VECT_BIT_FIND_DIFF
+    bool f = VECT_BIT_FIND_DIFF(blk1, blk2, pos);
+    return f;
+#else
+#ifdef BM64OPT
+    BM_ASSERT(sizeof(bm::wordop_t) == 8);
+
+    const bm::wordop_t* b1 = (const bm::wordop_t*) blk1;
+    const bm::wordop_t* b2 = (const bm::wordop_t*) blk2;
+
+    for (unsigned i = 0; i < bm::set_block_size/2; ++i)
+    {
+        bm::wordop_t w1 = b1[i]; bm::wordop_t w2 = b2[i];
+        bm::wordop_t diff = w1 ^ w2;
+        if (diff)
+        {
+            unsigned idx = bm::count_trailing_zeros_u64(diff);
+            *pos = unsigned(idx + (i * 8u * sizeof(bm::wordop_t)));
+            return true;
+        }
+    } // for
+#else
+    for (unsigned i = 0; i < bm::set_block_size; ++i)
+    {
+        bm::word_t w1 = blk1[i]; bm::word_t w2 = blk2[i];
+        bm::word_t diff = w1 ^ w2;
+        if (diff)
+        {
+            unsigned idx = bm::bit_scan_forward32(diff); // trailing zeros
+            *pos = unsigned(idx + (i * 8u * sizeof(bm::word_t)));
+            return true;
+        }
+    } // for
+#endif
+#endif
+    return false;
+}
+
+
 #ifndef BMAVX2OPT
 
 /*!

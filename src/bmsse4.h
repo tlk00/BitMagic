@@ -768,6 +768,62 @@ void sse42_bit_block_calc_change_bc(const __m128i* BMRESTRICT block,
 #endif
 
 
+/*!
+   \brief Find first bit which is different between two bit-blocks
+  @ingroup AVX2
+*/
+inline
+bool sse42_bit_find_first_diff(const __m128i* BMRESTRICT block1,
+                               const __m128i* BMRESTRICT block2,
+                               unsigned* pos)
+{
+    const __m128i* block1_end =
+        (const __m128i*)((bm::word_t*)(block1) + bm::set_block_size);
+    __m128i maskZ = _mm_setzero_si128();
+    __m128i mA, mB;
+    unsigned simd_lane = 0;
+    do
+    {
+        mA = _mm_xor_si128(_mm_load_si128(block1), _mm_load_si128(block2));
+        mB = _mm_xor_si128(_mm_load_si128(block1+1), _mm_load_si128(block2+1));
+        __m128i mOR = _mm_or_si128(mA, mB);
+        if (!_mm_test_all_zeros(mOR, mOR)) // test 2x128 lanes
+        {
+            if (!_mm_test_all_zeros(mA, mA))
+            {
+                unsigned mask = _mm_movemask_epi8(_mm_cmpeq_epi32(mA, maskZ));
+                mask = ~mask; // invert to fing (w != 0)
+                BM_ASSERT(mask);
+                int bsf = bm::bsf_asm32(mask); // find first !=0 (could use lzcnt())
+                unsigned widx = bsf >> 2; // (bsf / 4);
+                unsigned w = _mm_extract_epi32 (mA, widx);
+                bsf = bm::bsf_asm32(w); // find first bit != 0
+                *pos = (simd_lane * 128) + (widx * 32) + bsf;
+                return true;
+            }
+            if (!_mm_test_all_zeros(mB, mB))
+            {
+                unsigned mask = _mm_movemask_epi8(_mm_cmpeq_epi32(mB, maskZ));
+                mask = ~mask; // invert to fing (w != 0)
+                BM_ASSERT(mask);
+                int bsf = bm::bsf_asm32(mask); // find first !=0 (could use lzcnt())
+                unsigned widx = bsf >> 2; // (bsf / 4);
+                unsigned w = _mm_extract_epi32 (mB, widx);
+                bsf = bm::bsf_asm32(w); // find first bit != 0
+                *pos = ((++simd_lane) * 128) + (widx * 32) + bsf;
+                return true;
+            }
+        }
+
+        simd_lane+=2;
+        block1+=2; block2+=2;
+
+    } while (block1 < block1_end);
+    return false;
+}
+
+
+
 
 #ifdef __GNUG__
 // necessary measure to silence false warning from GCC about negative pointer arithmetics
@@ -1465,11 +1521,14 @@ bool sse42_shift_r1_and(__m128i* block,
 #define VECT_BLOCK_CHANGE(block) \
     sse42_bit_block_calc_change((__m128i*)block)
 
-
 #ifdef BM64_SSE4
 #define VECT_BLOCK_CHANGE_BC(block, gc, bc) \
     sse42_bit_block_calc_change_bc((__m128i*)block, gc, bc)
 #endif
+
+#define VECT_BIT_FIND_DIFF(src1, src2, pos) \
+    sse42_bit_find_first_diff((__m128i*) src1, (__m128i*) (src2), pos)
+
 
 #ifdef __GNUG__
 #pragma GCC diagnostic pop
