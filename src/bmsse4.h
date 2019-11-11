@@ -777,6 +777,8 @@ bool sse42_bit_find_first_diff(const __m128i* BMRESTRICT block1,
                                const __m128i* BMRESTRICT block2,
                                unsigned* pos)
 {
+    unsigned BM_ALIGN32 simd_buf[4] BM_ALIGN32ATTR;
+
     const __m128i* block1_end =
         (const __m128i*)((bm::word_t*)(block1) + bm::set_block_size);
     __m128i maskZ = _mm_setzero_si128();
@@ -795,8 +797,9 @@ bool sse42_bit_find_first_diff(const __m128i* BMRESTRICT block1,
                 mask = ~mask; // invert to fing (w != 0)
                 BM_ASSERT(mask);
                 int bsf = bm::bsf_asm32(mask); // find first !=0 (could use lzcnt())
+                _mm_store_si128 ((__m128i*)simd_buf, mA);
                 unsigned widx = bsf >> 2; // (bsf / 4);
-                unsigned w = _mm_extract_epi32 (mA, widx);
+                unsigned w = simd_buf[widx]; // _mm_extract_epi32 (mA, widx);
                 bsf = bm::bsf_asm32(w); // find first bit != 0
                 *pos = (simd_lane * 128) + (widx * 32) + bsf;
                 return true;
@@ -807,8 +810,9 @@ bool sse42_bit_find_first_diff(const __m128i* BMRESTRICT block1,
                 mask = ~mask; // invert to fing (w != 0)
                 BM_ASSERT(mask);
                 int bsf = bm::bsf_asm32(mask); // find first !=0 (could use lzcnt())
+                _mm_store_si128 ((__m128i*)simd_buf, mB);
                 unsigned widx = bsf >> 2; // (bsf / 4);
-                unsigned w = _mm_extract_epi32 (mB, widx);
+                unsigned w = simd_buf[widx]; // _mm_extract_epi32 (mB, widx);
                 bsf = bm::bsf_asm32(w); // find first bit != 0
                 *pos = ((++simd_lane) * 128) + (widx * 32) + bsf;
                 return true;

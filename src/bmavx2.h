@@ -1822,6 +1822,8 @@ bool avx2_bit_find_first_diff(const __m256i* BMRESTRICT block1,
                               const __m256i* BMRESTRICT block2,
                               unsigned* pos)
 {
+    unsigned BM_ALIGN32 simd_buf[8] BM_ALIGN32ATTR;
+
     const __m256i* block1_end =
         (const __m256i*)((bm::word_t*)(block1) + bm::set_block_size);
     __m256i maskZ = _mm256_setzero_si256();
@@ -1838,24 +1840,26 @@ bool avx2_bit_find_first_diff(const __m256i* BMRESTRICT block1,
         {
             if (!_mm256_testz_si256(mA, mA))
             {
-                unsigned mask = _mm256_movemask_epi8(_mm256_cmpeq_epi32(mA, maskZ));
-                mask = ~mask; // invert to fing (w != 0)
+                // invert to fing (w != 0)
+                unsigned mask = ~_mm256_movemask_epi8(_mm256_cmpeq_epi32(mA, maskZ));
                 BM_ASSERT(mask);
                 int bsf = bm::bsf_asm32(mask); // find first !=0 (could use lzcnt())
+                _mm256_store_si256 ((__m256i*)simd_buf, mA);
                 unsigned widx = bsf >> 2; // (bsf / 4);
-                unsigned w = _mm256_extract_epi32 (mA, widx);
+                unsigned w = simd_buf[widx];// _mm256_extract_epi32 (mA, widx);
                 bsf = bm::bsf_asm32(w); // find first bit != 0
                 *pos = (simd_lane * 256) + (widx * 32) + bsf;
                 return true;
             }
             if (!_mm256_testz_si256(mB, mB))
             {
-                unsigned mask = _mm256_movemask_epi8(_mm256_cmpeq_epi32(mB, maskZ));
-                mask = ~mask; // invert to fing (w != 0)
+                // invert to fing (w != 0)
+                unsigned mask = ~_mm256_movemask_epi8(_mm256_cmpeq_epi32(mB, maskZ));
                 BM_ASSERT(mask);
                 int bsf = bm::bsf_asm32(mask); // find first !=0 (could use lzcnt())
+                _mm256_store_si256 ((__m256i*)simd_buf, mB);
                 unsigned widx = bsf >> 2; // (bsf / 4);
-                unsigned w = _mm256_extract_epi32 (mB, widx);
+                unsigned w = simd_buf[widx];// _mm256_extract_epi32 (mB, widx);
                 bsf = bm::bsf_asm32(w); // find first bit != 0
                 *pos = ((++simd_lane) * 256) + (widx * 32) + bsf;
                 return true;
