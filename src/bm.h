@@ -2214,8 +2214,8 @@ public:
         \brief Lexicographical comparison with a bitvector.
 
         Function compares current bitvector with the provided argument 
-        bit by bit and returns -1 if our bitvector less than the argument, 
-        1 - greater, 0 - equal.
+        bit by bit and returns -1 if this bitvector less than the argument,
+        1 - greater, 0 - equal
     */
     int compare(const bvector<Alloc>& bvect) const;
     
