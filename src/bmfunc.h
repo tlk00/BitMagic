@@ -2163,6 +2163,37 @@ template<typename T> int gapcmp(const T* buf1, const T* buf2)
     return 0;
 }
 
+/*!
+   \brief Find first bit which is different between two GAP-blocks
+   \param blk1 - block 1
+   \param blk2 - block 2
+   \param pos - out - position of difference (undefined if blocks are equal)
+   \return  true if difference was found
+
+   @ingroup gapfunc
+*/
+template<typename T>
+bool gap_find_first_diff(const T* BMRESTRICT buf1,
+                         const T* BMRESTRICT buf2,
+                         unsigned* BMRESTRICT pos)
+{
+    BM_ASSERT(buf1 && buf2 && pos);
+
+    const T* pcurr1 = buf1;
+    const T* pend1 = pcurr1 + (*pcurr1 >> 3);
+    const T* pcurr2 = buf2;
+    for (++pcurr1, ++pcurr2; pcurr1 <= pend1; ++pcurr1, ++pcurr2)
+    {
+        if (*pcurr1 != *pcurr2)
+        {
+            *pos = 1 + ((*pcurr1 < *pcurr2) ? *pcurr1 : *pcurr2);
+            return true;
+        }
+    } // for
+    return false;
+}
+
+
 
 /*!
    \brief Abstract operation for GAP buffers. 
@@ -3777,6 +3808,7 @@ int bitcmp(const T* buf1, const T* buf2, unsigned len)
    \param blk2 - block 2
    \param pos - out - position of difference (undefined if blocks are equal)
    \return  true if difference was found
+
    @ingroup bitfunc
 */
 inline
@@ -7278,6 +7310,98 @@ bool improve_gap_levels(const T* length,
     return is_improved;
 
 }
+
+/*!
+   \brief Find first bit which is different between two blocks (GAP or bit)
+   \param blk - block 1
+   \param arg_blk - block 2
+   \param pos - out - position of difference (undefined if blocks are equal)
+   \return  true if difference was found
+   @internal
+*/
+inline
+bool block_find_first_diff(const bm::word_t* BMRESTRICT blk,
+                           const bm::word_t* BMRESTRICT arg_blk,
+                           unsigned* BMRESTRICT pos)
+{
+    // If one block is zero we check if the other one has at least
+    // one bit ON
+
+    if (!blk || !arg_blk)
+    {
+        const bm::word_t* pblk; bool is_gap;
+        if (blk)
+        {
+            pblk = blk;
+            is_gap = BM_IS_GAP(blk);
+        }
+        else
+        {
+            pblk = arg_blk;
+            is_gap = BM_IS_GAP(arg_blk);
+        }
+
+        if (is_gap)
+        {
+            unsigned found = bm::gap_find_first(BMGAP_PTR(pblk), pos);
+            if (found)
+                return true;
+        }
+        else
+        {
+            unsigned found = bm::bit_find_first(pblk, pos);
+            if (found)
+                return true;
+        }
+        return false;
+    }
+
+    bool arg_gap = BM_IS_GAP(arg_blk);
+    bool gap = BM_IS_GAP(blk);
+
+    if (arg_gap != gap)
+    {
+        BM_DECLARE_TEMP_BLOCK(temp_blk);
+        bm::word_t* blk1; bm::word_t* blk2;
+
+        if (gap)
+        {
+            bm::gap_convert_to_bitset((bm::word_t*)temp_blk,
+                                    BMGAP_PTR(blk));
+            blk1 = (bm::word_t*)temp_blk;
+            blk2 = (bm::word_t*)arg_blk;
+        }
+        else
+        {
+            bm::gap_convert_to_bitset((bm::word_t*)temp_blk,
+                                      BMGAP_PTR(arg_blk));
+            blk1 = (bm::word_t*)blk;
+            blk2 = (bm::word_t*)temp_blk;
+        }
+        bool found = bm::bit_find_first_diff(blk1, blk2, pos);
+        if (found)
+            return true;
+    }
+    else
+    {
+        if (gap)
+        {
+            bool found =
+                bm::gap_find_first_diff(BMGAP_PTR(blk),
+                                        BMGAP_PTR(arg_blk), pos);
+            if (found)
+                return true;
+        }
+        else
+        {
+            bool found = bm::bit_find_first_diff(blk, arg_blk, pos);
+            if (found)
+                return true;
+        }
+    }
+    return false;
+}
+
 
 
 

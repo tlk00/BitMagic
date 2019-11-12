@@ -1863,7 +1863,7 @@ public:
        \brief Finds index of first 1 bit
        \param pos - index of the found 1 bit
        \return true if search returned result
-       \sa get_first, get_next, extract_next, find_reverse
+       \sa get_first, get_next, extract_next, find_reverse, find_first_mismatch
     */
     bool find(size_type& pos) const;
 
@@ -1873,7 +1873,7 @@ public:
        \param from - position to start search from
        \param pos - index of the found 1 bit
        \return true if search returned result
-       \sa get_first, get_next, extract_next, find_reverse
+       \sa get_first, get_next, extract_next, find_reverse, find_first_mismatch
     */
     bool find(size_type from, size_type& pos) const;
 
@@ -1914,7 +1914,7 @@ public:
        \brief Finds last index of 1 bit
        \param pos - index of the last found 1 bit
        \return true if search returned result
-       \sa get_first, get_next, extract_next, find
+       \sa get_first, get_next, extract_next, find, find_first_mismatch
     */
     bool find_reverse(size_type& pos) const;
     
@@ -2216,8 +2216,21 @@ public:
         Function compares current bitvector with the provided argument 
         bit by bit and returns -1 if this bitvector less than the argument,
         1 - greater, 0 - equal
+
+        @return 0 if this == arg, -1 if this < arg, 1 if this > arg
+        @sa find_first_mismatch
     */
     int compare(const bvector<Alloc>& bvect) const;
+
+    /*!
+        \brief Find index of first bit different between this and the agr vector
+
+        @param bvect - argumnet vector to compare with
+        @param pos - [out] position of the first difference
+        @return true if didfference found, false - both vectors are equivalent
+        @sa compare
+    */
+    bool find_first_mismatch(const bvector<Alloc>& bvect, size_type& pos) const;
     
     //@}
 
@@ -3335,6 +3348,71 @@ int bvector<Alloc>::compare(const bvector<Alloc>& bv) const
     } // for i
 
     return 0;
+}
+
+// -----------------------------------------------------------------------
+
+template<typename Alloc>
+bool bvector<Alloc>::find_first_mismatch(
+                        const bvector<Alloc>& bvect, size_type& pos) const
+{
+    unsigned top_blocks = blockman_.top_block_size();
+    if (!top_blocks)
+    {
+        return bvect.find(pos);
+    }
+    unsigned bvect_top_blocks = bvect.blockman_.top_block_size();
+    if (!bvect_top_blocks)
+    {
+        return this->find(pos);
+    }
+
+    if (bvect_top_blocks > top_blocks) top_blocks = bvect_top_blocks;
+
+    for (unsigned i = 0; i < top_blocks; ++i)
+    {
+        const bm::word_t* const* blk_blk = blockman_.get_topblock(i);
+        const bm::word_t* const* arg_blk_blk = bvect.blockman_.get_topblock(i);
+
+        if (blk_blk == arg_blk_blk)
+            continue;
+
+        for (unsigned j = 0; j < bm::set_sub_array_size; ++j)
+        {
+            const bm::word_t* arg_blk; const bm::word_t* blk;
+            if ((bm::word_t*)arg_blk_blk == FULL_BLOCK_FAKE_ADDR)
+                arg_blk = FULL_BLOCK_REAL_ADDR;
+            else
+            {
+                arg_blk = arg_blk_blk ? arg_blk_blk[j] : 0;
+                if (arg_blk == FULL_BLOCK_FAKE_ADDR)
+                    arg_blk = FULL_BLOCK_REAL_ADDR;
+            }
+            if ((bm::word_t*)blk_blk == FULL_BLOCK_FAKE_ADDR)
+                blk = FULL_BLOCK_REAL_ADDR;
+            else
+            {
+                blk = blk_blk ? blk_blk[j] : 0;
+                if (blk == FULL_BLOCK_FAKE_ADDR)
+                    blk = FULL_BLOCK_REAL_ADDR;
+            }
+            if (blk == arg_blk) continue;
+
+            unsigned block_pos;
+            bool found = bm::block_find_first_diff(blk, arg_blk, &block_pos);
+            if (found)
+            {
+                pos =
+                    (size_type(i) * bm::set_sub_array_size * bm::gap_max_bits) +
+                    (size_type(j) * bm::gap_max_bits) + block_pos;
+                return true;
+            }
+
+        } // for j
+    } // for i
+
+    return false;
+
 }
 
 // -----------------------------------------------------------------------

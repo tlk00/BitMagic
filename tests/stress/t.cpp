@@ -429,6 +429,30 @@ unsigned random_minmax(unsigned min, unsigned max)
     return r % (max-min) + min;
 }
 
+template<typename BV>
+void TestFindDiff(const BV& bv1, BV& bv2)
+{
+    bool f;
+    typename BV::size_type pos, pos_c;
+    f = bv1.find_first_mismatch(bv2, pos);
+    bvect bv_x;
+    bv_x.bit_xor(bv1, bv2, bvect::opt_compress);
+    if (!f)
+    {
+        auto a = bv_x.any();
+        assert(!a);
+        return;
+    }
+    bool cf = bv_x.find(pos_c);
+    assert(f == cf);
+    assert(pos == pos_c);
+
+    f = bv2.find_first_mismatch(bv1, pos);
+    assert(f == cf);
+    assert(pos == pos_c);
+}
+
+
 static
 void FillSets(bvect_mini* bvect_min, 
               bvect* bvect_full,
@@ -2523,6 +2547,10 @@ void TestBlockToGAP()
        assert(len1 == len2);
        int cmp = bm::gapcmp(gap_buf1, gap_buf2);
        assert(cmp == 0);
+
+       unsigned pos;
+       bool f = bm::gap_find_first_diff(gap_buf1, gap_buf2, &pos);
+       assert(!f);
     }
 
     unsigned test_arr[] = { 1, 2, 3, (~0u << 4), ~0u, (~0u >> 1), (~0u >> 2) };
@@ -2548,6 +2576,10 @@ void TestBlockToGAP()
            print_gap(gapv2, 100);
            int cmp = bm::gapcmp(gap_buf1, gap_buf2);
            assert(cmp == 0);
+
+           unsigned pos;
+           bool f = bm::gap_find_first_diff(gap_buf1, gap_buf2, &pos);
+           assert(!f);
         }
     } // for k
     
@@ -2582,6 +2614,10 @@ void TestBlockToGAP()
             {
                int cmp = bm::gapcmp(gap_buf1, gap_buf2);
                assert(cmp == 0);
+
+               unsigned pos;
+               bool f = bm::gap_find_first_diff(gap_buf1, gap_buf2, &pos);
+               assert(!f);
             }
         }
     }
@@ -2626,6 +2662,9 @@ void TestBlockToGAP()
             {
                int cmp = bm::gapcmp(gap_buf1, gap_buf2);
                assert(cmp == 0);
+               unsigned pos;
+               bool f = bm::gap_find_first_diff(gap_buf1, gap_buf2, &pos);
+               assert(!f);
             }
         }
     }
@@ -7105,6 +7144,126 @@ void ComparisonTest()
 
 }
 
+
+static
+void BvectorFindFirstDiffTest()
+{
+    cout << "-------------------------------------- BvectorFindFirstDiffTest" << endl;
+
+    // empty test
+    {
+        bvect bv1, bv2;
+        TestFindDiff(bv1, bv2);
+
+        bv1.set(0);
+        TestFindDiff(bv1, bv2);
+        bv2.set(0);
+        TestFindDiff(bv1, bv2);
+    }
+    // test GAP bits
+    {
+        bvect bv1(bm::BM_GAP), bv2(bm::BM_GAP);
+
+        bv1.set_range(10, 15);
+        bv2.set_range(10, 15);
+
+        TestFindDiff(bv1, bv2);
+    }
+    {
+        bvect bv1(bm::BM_GAP), bv2(bm::BM_GAP);
+
+        bv1.set_range(10, 15);
+        bv2.set_range(10, 12);
+
+        TestFindDiff(bv1, bv2);
+    }
+    {
+        bvect bv1(bm::BM_GAP), bv2(bm::BM_GAP);
+
+        bv1.set_range(bm::id_max32/2 - 10, bm::id_max32/2 + 15);
+        bv2.set_range(bm::id_max32/2 - 10, bm::id_max32/2 + 12);
+
+        TestFindDiff(bv1, bv2);
+    }
+    // test GAP-bit mix
+    {
+        bvect bv1(bm::BM_GAP), bv2;
+
+        bv1.set_range(10, 15);
+        bv2.set_range(10, 12);
+
+        TestFindDiff(bv1, bv2);
+    }
+    {
+        bvect bv1(bm::BM_GAP), bv2;
+
+        bv1.set_range(bm::id_max32/2 - 10, bm::id_max32/2 + 15);
+        bv2.set_range(bm::id_max32/2 - 10, bm::id_max32/2 + 12);
+
+        TestFindDiff(bv1, bv2);
+    }
+
+    // test inverted
+    {
+        bvect bv1, bv2;
+
+        bv1.invert();
+        TestFindDiff(bv1, bv2);
+        bv2.invert();
+        TestFindDiff(bv1, bv2);
+        bv2[123456] = false;
+        TestFindDiff(bv1, bv2);
+    }
+
+
+    // test bits far
+    {
+        bvect bv1, bv2;
+        bv1.set(bm::id_max32/2);
+        TestFindDiff(bv1, bv2);
+        bv2.set(bm::id_max32/2);
+        TestFindDiff(bv1, bv2);
+        bv2.set(bm::id_max32/2+1);
+        TestFindDiff(bv1, bv2);
+        bv1.optimize();
+        TestFindDiff(bv1, bv2);
+        bv2.optimize();
+        TestFindDiff(bv1, bv2);
+    }
+    {
+        bvect bv1, bv2;
+        bv1.set(bm::id_max-1);
+        TestFindDiff(bv1, bv2);
+        bv1.optimize();
+        TestFindDiff(bv1, bv2);
+        bv2.set(bm::id_max-1);
+        TestFindDiff(bv1, bv2);
+        bv2.optimize();
+        TestFindDiff(bv1, bv2);
+    }
+
+    // test FULL blocks
+    {
+        bvect bv1, bv2;
+        bv1.set_range(0, bm::id_max32/2);
+        TestFindDiff(bv1, bv2);
+        bv2.set_range(0, bm::id_max32/2);
+        TestFindDiff(bv1, bv2);
+
+        bv1[bm::id_max32/2 - 100] = false;
+        TestFindDiff(bv1, bv2);
+        bv1.optimize();
+        TestFindDiff(bv1, bv2);
+
+        bv2[bm::id_max32/2 - 100] = false;
+        TestFindDiff(bv1, bv2);
+        bv2.optimize();
+        TestFindDiff(bv1, bv2);
+    }
+
+    cout << "-------------------------------------- BvectorFindFirstDiffTest OK" << endl;
+}
+
 static
 void DesrializationTest2()
 {
@@ -8243,6 +8402,12 @@ void StressTest(unsigned repetitions, int set_operation = -1)
 
         TestRandomSubset(*bvect_full1, rsub);
         TestRandomSubset(*bvect_full2, rsub);
+
+        // test find first difference
+        //
+        TestFindDiff(*bvect_full1, *bvect_full1);
+
+
 
 /*        
         cout << "!!!!!!!!!!!!!!!" << endl;
@@ -23590,6 +23755,8 @@ int main(int argc, char *argv[])
         RangeCopyTest();
 
         ComparisonTest();
+
+        BvectorFindFirstDiffTest();
         
         MutationTest();
         MutationOperationsTest();

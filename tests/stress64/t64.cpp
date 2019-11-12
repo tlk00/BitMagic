@@ -14505,6 +14505,124 @@ void TestCompressedCollection()
     cout << "------------------------ Compressed collection Test OK" << endl;
 }
 
+static
+void BvectorFindFirstDiffTest()
+{
+    cout << "-------------------------------------- BvectorFindFirstDiffTest" << endl;
+
+    // empty test
+    {
+        bvect bv1, bv2;
+        TestFindDiff(bv1, bv2);
+
+        bv1.set(0);
+        TestFindDiff(bv1, bv2);
+        bv2.set(0);
+        TestFindDiff(bv1, bv2);
+    }
+    // test GAP bits
+    {
+        bvect bv1(bm::BM_GAP), bv2(bm::BM_GAP);
+
+        bv1.set_range(10, 15);
+        bv2.set_range(10, 15);
+
+        TestFindDiff(bv1, bv2);
+    }
+    {
+        bvect bv1(bm::BM_GAP), bv2(bm::BM_GAP);
+
+        bv1.set_range(10, 15);
+        bv2.set_range(10, 12);
+
+        TestFindDiff(bv1, bv2);
+    }
+    {
+        bvect bv1(bm::BM_GAP), bv2(bm::BM_GAP);
+
+        bv1.set_range(bm::id_max32/2 - 10, bm::id_max32/2 + 15);
+        bv2.set_range(bm::id_max32/2 - 10, bm::id_max32/2 + 12);
+
+        TestFindDiff(bv1, bv2);
+    }
+    // test GAP-bit mix
+    {
+        bvect bv1(bm::BM_GAP), bv2;
+
+        bv1.set_range(10, 15);
+        bv2.set_range(10, 12);
+
+        TestFindDiff(bv1, bv2);
+    }
+    {
+        bvect bv1(bm::BM_GAP), bv2;
+
+        bv1.set_range(bm::id_max32/2 - 10, bm::id_max32/2 + 15);
+        bv2.set_range(bm::id_max32/2 - 10, bm::id_max32/2 + 12);
+
+        TestFindDiff(bv1, bv2);
+    }
+
+    // test inverted
+    {
+        bvect bv1, bv2;
+
+        bv1.invert();
+        TestFindDiff(bv1, bv2);
+        bv2.invert();
+        TestFindDiff(bv1, bv2);
+        bv2[123456] = false;
+        TestFindDiff(bv1, bv2);
+    }
+
+
+    // test bits far
+    {
+        bvect bv1, bv2;
+        bv1.set(bm::id_max32/2);
+        TestFindDiff(bv1, bv2);
+        bv2.set(bm::id_max32/2);
+        TestFindDiff(bv1, bv2);
+        bv2.set(bm::id_max32/2+1);
+        TestFindDiff(bv1, bv2);
+        bv1.optimize();
+        TestFindDiff(bv1, bv2);
+        bv2.optimize();
+        TestFindDiff(bv1, bv2);
+    }
+    {
+        bvect bv1, bv2;
+        bv1.set(bm::id_max-1);
+        TestFindDiff(bv1, bv2);
+        bv1.optimize();
+        TestFindDiff(bv1, bv2);
+        bv2.set(bm::id_max-1);
+        TestFindDiff(bv1, bv2);
+        bv2.optimize();
+        TestFindDiff(bv1, bv2);
+    }
+
+    // test FULL blocks
+    {
+        bvect bv1, bv2;
+        bv1.set_range(0, bm::id_max32/2);
+        TestFindDiff(bv1, bv2);
+        bv2.set_range(0, bm::id_max32/2);
+        TestFindDiff(bv1, bv2);
+
+        bv1[bm::id_max32/2 - 100] = false;
+        TestFindDiff(bv1, bv2);
+        bv1.optimize();
+        TestFindDiff(bv1, bv2);
+
+        bv2[bm::id_max32/2 - 100] = false;
+        TestFindDiff(bv1, bv2);
+        bv2.optimize();
+        TestFindDiff(bv1, bv2);
+    }
+
+    cout << "-------------------------------------- BvectorFindFirstDiffTest OK" << endl;
+}
 
 
 
@@ -14687,6 +14805,8 @@ int main(int argc, char *argv[])
         RangeRandomFillTest();
 
         RangeCopyTest();
+
+        BvectorFindFirstDiffTest();
 
         ComparisonTest();
     }
