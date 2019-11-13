@@ -401,15 +401,23 @@ void DetailedCompareBVectors(const BV& bv1, const BV& bv2)
         ++en2;
     } // for
 
+    bool eq = bv1.equal(bv2);
+    if (!eq)
+    {
+        cerr << "EQ (1-2) discrepancy! " << endl;
+        exit(1);
+    }
     int cmp = bv1.compare(bv2);
     if (cmp != 0)
     {
         cerr << "Compare (1-2) discrepancy! " << cmp << endl;
+        exit(1);
     }
     cmp = bv2.compare(bv1);
     if (cmp != 0)
     {
         cerr << "Compare (2-1) discrepancy! " << cmp << endl;
+        exit(1);
     }
 
     cout << "Detailed compare OK (no difference)." << endl;
@@ -1106,7 +1114,7 @@ unsigned SerializationOperation(bvect*             bv_target,
             agg.combine_and(bv_agg, agg_list, 2);
             agg.combine_and_sub(bv_agg2, agg_list, 2, 0, 0, false);
             {
-                if (bv_agg.compare(bv_agg2) != 0)
+                if (bv_agg != bv_agg2)
                 {
                     cerr << "Error: Aggregator AND - AND-SUB(0) comparison failed!" << endl;
                     exit(1);
@@ -1145,7 +1153,7 @@ unsigned SerializationOperation(bvect*             bv_target,
             {
                 bvect bv_h;
                 agg.combine_and_sub_horizontal(bv_h, agg_list, 1, agg_list2, 1);
-                if (bv_agg.compare(bv_h) != 0)
+                if (bv_agg != bv_h)
                 {
                     cerr << "Error: Aggregator Horz-AND-SUB comparison failed!" << endl;
                     exit(1);
@@ -1246,6 +1254,11 @@ unsigned SerializationOperation(bvect*             bv_target,
         if (res != 0)
         {
             cout << "set_ASSIGN failed 2! " << endl;
+            exit(1);
+        }
+        if (bv_tmp2 != bv2)
+        {
+            cout << "set_ASSIGN failed 2-1! " << endl;
             exit(1);
         }
         cout << "Deserialization assign to bv_tmp2 OK" << endl;
