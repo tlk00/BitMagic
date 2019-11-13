@@ -1452,9 +1452,14 @@ bool base_sparse_vector<Val, BV, MAX_SIZE>::equal(
             continue;
         }
         // both not NULL
+        bool eq = bv->equal(*arg_bv);
+        if (!eq)
+            return false;
+        /*
         int cmp = bv->compare(*arg_bv);
         if (cmp != 0)
             return false;
+        */
     } // for j
     
     if (null_able == bm::use_null)
@@ -1469,9 +1474,14 @@ bool base_sparse_vector<Val, BV, MAX_SIZE>::equal(
             return false;
         BM_ASSERT(bv_null);
         BM_ASSERT(bv_null_arg);
+        bool eq = bv_null->equal(*bv_null_arg);
+        if (!eq)
+            return false;
+        /*
         int cmp = bv_null->compare(*bv_null);
         if (cmp != 0)
             return false;
+        */
     }
     return true;
 }

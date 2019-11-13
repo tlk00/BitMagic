@@ -664,6 +664,7 @@ public:
     */
     bool equal(const sparse_vector<Val, BV>& sv,
                bm::null_support null_able = bm::use_null) const;
+
     ///@}
 
     // ------------------------------------------------------------
