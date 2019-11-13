@@ -1433,8 +1433,8 @@ public:
     bool operator <= (const bvector<Alloc>& bv) const { return compare(bv)<=0; }
     bool operator > (const bvector<Alloc>& bv) const { return compare(bv)>0; }
     bool operator >= (const bvector<Alloc>& bv) const { return compare(bv) >= 0; }
-    bool operator == (const bvector<Alloc>& bv) const { return compare(bv) == 0; }
-    bool operator != (const bvector<Alloc>& bv) const { return compare(bv) != 0; }
+    bool operator == (const bvector<Alloc>& bv) const { return equal(bv); }
+    bool operator != (const bvector<Alloc>& bv) const { return !equal(bv); }
 
     bvector<Alloc> operator~() const { return bvector<Alloc>(*this).invert(); }
     
@@ -2223,6 +2223,17 @@ public:
     int compare(const bvector<Alloc>& bvect) const;
 
     /*!
+        \brief Equal comparison with an agr bit-vector
+        @return true if vectors are identical
+    */
+    bool equal(const bvector<Alloc>& bvect) const
+    {
+        size_type pos;
+        bool found = find_first_mismatch(bvect, pos);
+        return !found;
+    }
+
+    /*!
         \brief Find index of first bit different between this and the agr vector
 
         @param bvect - argumnet vector to compare with
@@ -2817,9 +2828,6 @@ bvector<Alloc>::block_count_to(const bm::word_t*    block,
                                                    bm::gap_max_bits-1);
                 size_type cnt = rs_idx.count(nb);
                 c = cnt - c;
-                /*
-                size_type cnt = nb ? rs_idx.rcount(nb-1) : 0;
-                c = rs_idx.rcount(nb) - cnt - c; */
             }
         }
     }
