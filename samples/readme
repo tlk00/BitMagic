@@ -4,6 +4,8 @@ Bit-vector operations
 
 ./bvsample01 - basic operations to set/get bits with bvector<> container, find cardinality (bit count)
 ./bvsample02 - set algebra operations, unions, intersections, equivalence of sets, lexicographical comparison
+               find_first_mismatch()
+
 ./bvsample03 - use of different in-memory bitset compression options, calculate memory footprint
 ./bvsample04 - serialization of bvector<> to save compressed BLOB to a file or a database
 ./bvsample05 - use of bvector<>::enumerator - fast iterator to get bits from container

@@ -99,11 +99,31 @@ int main(void)
         bv3 = bv2 ^ bv1;
         print_bvector(bv3);
 
+        // product of XOR is a mismatch vector (definition of XOR)
+        //
+        {
+            bm::bvector<>::size_type pos;
+            bool f = bv3.find(pos);
+            if (f)
+            {
+                cout << "XOR mismatch position = " << pos << endl;
+            }
+
+            // if we need to find only first mismatch we don't need a full
+            // XOR product, we can use bvector<>::find_first_mismatch()
+            //
+            f = bv2.find_first_mismatch(bv1, pos);
+            if (f)
+            {
+                cout << "search mismatch position = " << pos << endl;
+            }
+        }
+
         bv2 ^= bv1;  // You can also use: bv2.bit_xor(bv1);
         print_bvector(bv2);
 
         // For lexicographical comparison there is set of overloaded
-        // operators and function compare.
+        // operators and function compare (see also bvector<>::equal() )
 
         if (bv2 == bv3)
         {
