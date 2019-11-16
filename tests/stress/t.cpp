@@ -41,6 +41,7 @@ For more information please visit:  http://bitmagic.io
 
 #include <bm.h>
 #include <bmalgo.h>
+#include <bmxor.h>
 #include <bmaggregator.h>
 #include <bmutil.h>
 #include <bmserial.h>
@@ -2445,6 +2446,136 @@ void TestBlockCountChange()
 
     
     cout << "---------------------------- CountChange test OK" << endl;
+}
+
+
+inline
+bm::id64_t bit_block_calc_xor_change_digest(
+                        const bm::word_t*  block,
+                        const bm::word_t*  xor_block,
+                        block_waves_xor_descr&  x_descr)
+{
+
+    bm::compute_complexity_descr(block, x_descr);
+    return bm::compute_xor_complexity_descr(block, xor_block, x_descr);
+}
+
+static
+void Check_XOR_Product(const bm::word_t*  block,
+                       const bm::word_t*  xor_block,
+                       bm::id64_t         digest)
+{
+    assert(digest);
+
+    bm::word_t BM_VECT_ALIGN t_blk1[bm::set_block_size] BM_VECT_ALIGN_ATTR = { 0 };
+    bm::word_t BM_VECT_ALIGN t_blk2[bm::set_block_size] BM_VECT_ALIGN_ATTR = { 0 };
+
+    bm::bit_block_xor_product(t_blk1, block, xor_block, digest);
+    bm::bit_block_xor_product(t_blk2, t_blk1, xor_block, digest);
+
+    unsigned cnt = bm::bit_block_xor_count(block, t_blk2);
+    assert(cnt == 0); // identically restored
+}
+
+
+static
+void TestBlockCountXORChange()
+{
+    cout << "---------------------------- TestBlockCountXORChange() test" << endl;
+    unsigned i;
+    bm::id64_t d64;
+    bm::block_waves_xor_descr x_descr;
+
+    {
+        bm::word_t BM_VECT_ALIGN blk[bm::set_block_size] BM_VECT_ALIGN_ATTR = { 0 };
+        bm::word_t BM_VECT_ALIGN blk_xor[bm::set_block_size] BM_VECT_ALIGN_ATTR = { 0 };
+
+        for (i = 0; i < bm::set_block_size; ++i)
+            blk[i] = blk_xor[i] = 0;
+
+        d64 = bit_block_calc_xor_change_digest(blk, blk_xor, x_descr);
+        assert(!d64);
+        for (unsigned k = 0; k < bm::block_waves; ++k)
+        {
+            assert(x_descr.sb_change[k] == 1);
+            assert(x_descr.sb_xor_change[k] == 1);
+        } // for k
+
+        blk[0] = 1;
+        d64 = bit_block_calc_xor_change_digest(blk, blk_xor, x_descr);
+        assert(!d64);
+        assert(x_descr.sb_change[0] == 2);
+        assert(x_descr.sb_xor_change[0] == 2);
+        for (unsigned k = 1; k < bm::block_waves; ++k)
+        {
+            assert(x_descr.sb_change[k] == 1);
+            assert(x_descr.sb_xor_change[k] == 1);
+        } // for k
+
+
+        blk[0] = 1; blk_xor[0] = 1;
+        d64 = bit_block_calc_xor_change_digest(blk, blk_xor, x_descr);
+        assert(x_descr.sb_change[0] == 2);
+        assert(x_descr.sb_xor_change[0] == 1);
+        assert(d64 == 1);
+        for (unsigned k = 1; k < bm::block_waves; ++k)
+        {
+            assert(x_descr.sb_change[k] == 1);
+            assert(x_descr.sb_xor_change[k] == 1);
+        } // for k
+
+        Check_XOR_Product(blk, blk_xor, d64);
+
+        blk[0] = (1 << 10) | (1 << 12); blk_xor[0] = (1 << 11);
+        unsigned off = (60 * bm::set_block_digest_wave_size);
+        blk[off] = (1 << 10) | (1 << 12);
+
+        d64 = bit_block_calc_xor_change_digest(blk, blk_xor, x_descr);
+        assert(x_descr.sb_change[0] == 5);
+        assert(x_descr.sb_xor_change[0] == 3);
+        assert((d64 & 1));
+
+        Check_XOR_Product(blk, blk_xor, d64);
+
+        for (unsigned k = 1; k < bm::block_waves; ++k)
+        {
+            if (k!= 60)
+            {
+                assert(x_descr.sb_change[k] == 1);
+                assert(x_descr.sb_xor_change[k] == 1);
+            }
+            else
+            {
+                assert(x_descr.sb_change[60] == 5);
+                assert(x_descr.sb_xor_change[60] == 5);
+            }
+        } // for k
+
+        blk_xor[off] = (1 << 10) | (1 << 11) | (1 << 12);
+        d64 = bit_block_calc_xor_change_digest(blk, blk_xor, x_descr);
+        assert(x_descr.sb_change[0] == 5);
+        assert(x_descr.sb_xor_change[0] == 3);
+        assert((d64 & 1) && (d64 & (1ull << 60)));
+
+        for (unsigned k = 1; k < bm::block_waves; ++k)
+        {
+            if (k!= 60)
+            {
+                assert(x_descr.sb_change[k] == 1);
+                assert(x_descr.sb_xor_change[k] == 1);
+            }
+            else
+            {
+                assert(x_descr.sb_change[60] == 5);
+                assert(x_descr.sb_xor_change[60] == 3);
+            }
+        } // for k
+
+        Check_XOR_Product(blk, blk_xor, d64);
+
+    }
+
+    cout << "---------------------------- TestBlockCountXORChange() test OK" << endl;
 }
 
 
@@ -23693,6 +23824,8 @@ int main(int argc, char *argv[])
          TestBlockOR();
 
          TestBlockCountChange();
+
+         TestBlockCountXORChange();
 
          TestBlockToGAP();
 
