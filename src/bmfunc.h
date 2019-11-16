@@ -4232,7 +4232,7 @@ bm::id_t bit_count_change(bm::word_t w)
     @internal
 */
 inline
-unsigned bit_block_change32(const bm::word_t* block)
+unsigned bit_block_change32(const bm::word_t* block, unsigned size)
 {
     unsigned gap_count = 1;
 
@@ -4244,8 +4244,8 @@ unsigned bit_block_change32(const bm::word_t* block)
     BM_INCWORD_BITCOUNT(gap_count, w);
     gap_count -= (w_prev = (w0 >> w_shift)); // negative value correction
 
-    const bm::word_t* block_end = block + bm::set_block_size;
-    for (++block ;block < block_end; ++block)
+    const bm::word_t* block_end = block + size; // bm::set_block_size;
+    for (++block; block < block_end; ++block)
     {
         w = w0 = *block;
         ++gap_count;
@@ -4269,6 +4269,7 @@ unsigned bit_block_change32(const bm::word_t* block)
     return gap_count;
 }
 
+
 /*!
     Function calculates basic bit-block statistics
      number of times when bit value changed (GAPS)
@@ -4289,7 +4290,7 @@ void bit_block_change_bc32(const bm::word_t* block,
     #ifdef VECT_BLOCK_CHANGE_BC
         VECT_BLOCK_CHANGE_BC(block, gc, bc);
     #else
-        *gc = bm::bit_block_change32(block);
+        *gc = bm::bit_block_change32(block, bm::set_block_size);
         *bc = bm::bit_block_count(block);
     #endif
 }
@@ -4309,11 +4310,12 @@ inline
 unsigned bit_block_calc_change(const bm::word_t* block)
 {
 #if defined(VECT_BLOCK_CHANGE)
-    return VECT_BLOCK_CHANGE(block);
+    return VECT_BLOCK_CHANGE(block, bm::set_block_size);
 #else
-    return bm::bit_block_change32(block);
+    return bm::bit_block_change32(block, bm::set_block_size);
 #endif
 }
+
 
 
 /*!

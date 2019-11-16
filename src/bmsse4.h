@@ -619,10 +619,11 @@ bool sse42_test_all_eq_wave2(const void* ptr0, const void* ptr1)
     @ingroup SSE4
 */
 inline
-unsigned sse42_bit_block_calc_change(const __m128i* BMRESTRICT block)
+unsigned sse42_bit_block_calc_change(const __m128i* BMRESTRICT block,
+                                     unsigned size)
 {
     const __m128i* block_end =
-        ( __m128i*)((bm::word_t*)(block) + bm::set_block_size);
+        ( __m128i*)((bm::word_t*)(block) + size); // bm::set_block_size
     __m128i m1COshft, m2COshft;
     
     unsigned w0 = *((bm::word_t*)(block));
@@ -1522,8 +1523,8 @@ bool sse42_shift_r1_and(__m128i* block,
 #define VECT_SET_BLOCK_BITS(block, idx, start, stop) \
     sse42_set_block_bits(block, idx, start, stop)
 
-#define VECT_BLOCK_CHANGE(block) \
-    sse42_bit_block_calc_change((__m128i*)block)
+#define VECT_BLOCK_CHANGE(block, size) \
+    sse42_bit_block_calc_change((__m128i*)block, size)
 
 #ifdef BM64_SSE4
 #define VECT_BLOCK_CHANGE_BC(block, gc, bc) \

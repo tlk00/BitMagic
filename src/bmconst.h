@@ -62,7 +62,8 @@ const unsigned set_block_alloc_size = bm::set_block_size * unsigned(sizeof(bm::w
 const unsigned set_block_plain_size = bm::set_block_size / 32u;
 const unsigned set_block_plain_cnt = (unsigned)(sizeof(bm::word_t) * 8u);
 
-const unsigned set_block_digest_wave_size = bm::set_block_size / 64;
+const unsigned block_waves = 64;
+const unsigned set_block_digest_wave_size = bm::set_block_size / bm::block_waves;
 const unsigned set_block_digest_pos_shift = 10;
 
 // Word parameters

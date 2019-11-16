@@ -1650,12 +1650,13 @@ void avx2_i32_shift()
     @ingroup AVX2
 */
 inline
-unsigned avx2_bit_block_calc_change(const __m256i* BMRESTRICT block)
+unsigned avx2_bit_block_calc_change(const __m256i* BMRESTRICT block,
+                                    unsigned size)
 {
     BM_AVX2_POPCNT_PROLOG;
 
     const __m256i* block_end =
-        (const __m256i*)((bm::word_t*)(block) + bm::set_block_size);
+        (const __m256i*)((bm::word_t*)(block) + size); // bm::set_block_size);
     
     __m256i m1COshft, m2COshft;
     __m256i mCOidx = _mm256_set_epi32(6, 5, 4, 3, 2, 1, 0, 0);
@@ -1754,18 +1755,6 @@ void avx2_bit_block_calc_change_bc(const __m256i* BMRESTRICT block,
        
             bit_count += _mm_popcnt_u64(b64[4]) + _mm_popcnt_u64(b64[5]);
             bit_count += _mm_popcnt_u64(b64[6]) + _mm_popcnt_u64(b64[7]);
-        
-/*
-            BM_AVX2_BIT_COUNT(vect_bc2, m1A)
-            cntAcc2 = _mm256_add_epi64(cntAcc2, vect_bc2);
-            BM_AVX2_BIT_COUNT(vect_bc2, m2A)
-            cntAcc2 = _mm256_add_epi64(cntAcc2, vect_bc2);
-
-
-            // horizontal count sum
-            _mm256_store_si256 ((__m256i*)cnt_v, cntAcc2);
-            bit_count += (unsigned)(cnt_v[0] + cnt_v[1] + cnt_v[2] + cnt_v[3]);
-*/
         }
         
         __m256i m1CO = _mm256_srli_epi32(m1A, 31);
@@ -2833,8 +2822,8 @@ unsigned avx2_bit_to_gap(gap_word_t* BMRESTRICT dest,
 #define VECT_SET_BLOCK_BITS(block, idx, start, stop) \
     avx2_set_block_bits3(block, idx, start, stop)
     
-#define VECT_BLOCK_CHANGE(block) \
-    avx2_bit_block_calc_change((__m256i*)block)
+#define VECT_BLOCK_CHANGE(block, size) \
+    avx2_bit_block_calc_change((__m256i*)block, size)
 
 #define VECT_BLOCK_CHANGE_BC(block, gc, bc) \
     avx2_bit_block_calc_change_bc((__m256i*)block, gc, bc)
