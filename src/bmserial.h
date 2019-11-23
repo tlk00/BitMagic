@@ -1803,11 +1803,20 @@ serializer<BV>::serialize(const BV& bv,
                 unsigned kb_i, kb_j;
                 bool kb_found =
                     bman.find_kgb(blk, i0, j0, &tmp_buf[0], &kb_i, &kb_j);
-                if (kb_found) // key-block!
+                if (kb_found) // key GAP block!
                 {
-                    BM_ASSERT(bm::gap_length(BMGAP_PTR(blk)) > bm::gap_length(&tmp_buf[0]));
-                    encode_gap_block(tmp_buf, enc);
-                    continue;
+                    unsigned gl = bm::gap_length(BMGAP_PTR(blk));
+                    unsigned x_gl = bm::gap_length(&tmp_buf[0]);
+                    if ((x_gl < gl))
+                    {
+                        unsigned delta = gl - x_gl;
+                        if (delta > 2)
+                        {
+                            std::cout << "G";
+                            encode_gap_block(tmp_buf, enc);
+                            continue;
+                        }
+                    }
                 }
             }
             #endif
@@ -1815,6 +1824,42 @@ serializer<BV>::serialize(const BV& bv,
         }
         else
         {
+            // experimental, disabled
+            #if 0
+            BM_DECLARE_TEMP_BLOCK(tb)
+            {
+                bm::id64_t d64;
+                unsigned kb_i, kb_j;
+                unsigned bc, gc;
+                bm::bit_block_change_bc32(blk, &gc, &bc);
+
+                bool kb_found =
+                    bman.find_kbb(blk, i0, j0, bc, gc, &kb_i, &kb_j, &d64);
+                if (kb_found) // key block!
+                {
+                    BM_ASSERT(d64);
+
+                    const bm::word_t* kb_blk = bman.get_block(kb_i, kb_j);
+                    bm::bit_block_xor_product(tb, blk, kb_blk, d64);
+
+                    unsigned bcd = bm::word_bitcount64(d64);
+                    if (bcd > 1)
+                    {
+                        unsigned tb_bc, tb_gc;
+                        bm::bit_block_change_bc32(tb, &tb_gc, &tb_bc);
+
+                        if (tb_gc < gc)
+                        {
+                            if (gc - tb_gc > 15)
+                            {
+                                blk = tb;
+                                std::cout << "*[" << bcd << "]";
+                            }
+                        }
+                    }
+                }
+            }
+            #endif
             // ----------------------------------------------
             // BIT BLOCK serialization
             //

@@ -197,7 +197,233 @@ void bit_block_xor_product(bm::word_t* BMRESTRICT target_block,
     } // for i
 }
 
+/**
+    List of reference bit-vectors with their true index associations
 
+    Each referece vector would have two alternative indexes:
+     - index(position) in the reference list
+     - index(row) in the external bit-matrix (plain index)
+
+    @internal
+*/
+template<typename BV>
+class bv_ref_vector
+{
+public:
+    typedef BV                                          bvector_type;
+    typedef typename bvector_type::size_type            size_type;
+    typedef bvector_type*                               bvector_type_ptr;
+    typedef const bvector_type*                         bvector_type_const_ptr;
+    typedef typename bvector_type::allocator_type       bv_allocator_type;
+public:
+
+    /// reset the collection (resize(0))
+    void reset()
+    {
+        ref_bvects_.resize(0);
+        ref_bvects_rows_.resize(0);
+    }
+
+    /**
+        Add reference vector
+        @param bv - bvector pointer
+        @param ref_idx - reference (row) index
+    */
+    void add(const bvector_type* bv, size_type ref_idx)
+    {
+        BM_ASSERT(bv);
+        ref_bvects_.push_back(bv);
+        ref_bvects_rows_.push_back(ref_idx);
+    }
+
+    /// Get reference list size
+    size_type size() const { return (size_type)ref_bvects_.size(); }
+
+    /// Get reference vector by the index in this ref-vector
+    const bvector_type* get_bv(size_type idx) const { return ref_bvects_[idx]; }
+
+    /// Get reference row index by the index in this ref-vector
+    size_type get_row_idx(size_type idx) const { return (size_type)ref_bvects_rows_[idx]; }
+
+    /// not-found value for find methods
+    static
+    size_type not_found() { return ~(size_type(0)); }
+
+    /// Find vector index by the reference index
+    /// @return ~0 if not found
+    size_type find(std::size_t ref_idx) const
+    {
+        size_type sz = size();
+        for (size_type i = 0; i < sz; ++i)
+            if (ref_idx == ref_bvects_rows_[i])
+                return i;
+        return not_found();
+    }
+
+    /// build vector of references from a basic bit-matrix
+    ///  all NULL rows are skipped, not added to the ref.vector
+    template<class BMATR>
+    void build(const BMATR& bmatr)
+    {
+        reset();
+        size_type rows = bmatr.rows();
+        for (size_type r = 0; r < rows; ++r)
+        {
+            bvector_type_const_ptr bv = bmatr.get_row(r);
+            if (bv && bv->is_init())
+                add(bv, r);
+        } // for r
+    }
+
+protected:
+    typedef bm::heap_vector<bvector_type_const_ptr, bv_allocator_type> bvptr_vector_type;
+    typedef bm::heap_vector<std::size_t, bv_allocator_type> bv_plain_vector_type;
+
+protected:
+    bvptr_vector_type        ref_bvects_;       ///< reference vector pointers
+    bv_plain_vector_type     ref_bvects_rows_;  ///< reference vector row idxs
+};
+
+// --------------------------------------------------------------------------
+//
+// --------------------------------------------------------------------------
+
+/**
+    XOR scanner to search for complement-similarities in
+    collections of bit-vectors
+
+    @internal
+*/
+template<typename BV>
+class xor_scanner
+{
+public:
+    typedef bm::bv_ref_vector<BV>                bv_ref_vector_type;
+    typedef BV                                   bvector_type;
+    typedef typename bvector_type::size_type     size_type;
+
+public:
+    void set_ref_vector(bv_ref_vector_type* ref_vect) { ref_vect_ = ref_vect; }
+    const bv_ref_vector_type& get_ref_vector() const { return *ref_vect_; }
+    bv_ref_vector_type& get_ref_vector() { return *ref_vect_; }
+
+    /** Compute statistics for the anchor search vector
+        @param block - bit-block target
+    */
+    void compute_x_block_stats(const bm::word_t* block);
+
+    /** Scan for all candidate blocks to find mask or match
+        @return true if XOR complement or matching vector found
+    */
+    bool search_best_xor_mask(const bm::word_t* block,
+                              size_type ridx_from,
+                              size_type ridx_to,
+                              unsigned i, unsigned j);
+
+    size_type found_ridx() const { return found_ridx_; }
+    unsigned get_x_best_metric() const { return x_best_metric_; }
+
+    /// true if completely identical vector found
+    bool is_eq_found() const { return !x_best_metric_; }
+
+
+    unsigned get_x_bc() const { return x_bc_; }
+    unsigned get_x_gc() const { return x_gc_; }
+    unsigned get_x_block_best() const { return x_block_best_metric_; }
+
+private:
+    bv_ref_vector_type*        ref_vect_ = 0; ///< ref.vect for XOR filter
+
+    // target x-block related statistics
+    //
+    bm::block_waves_xor_descr     x_descr_;  ///< XOR desriptor
+    unsigned                      x_bc_;     ///< bitcount
+    unsigned                      x_gc_;     ///< gap count
+    unsigned                      x_best_metric_; /// dynamic min(gc, bc)
+    unsigned                      x_block_best_metric_; ///< min(gc, bc)
+
+    // scan related metrics
+    bm::id64_t                    x_d64_; ///< search digest
+    size_type                     found_ridx_;
+};
+
+// --------------------------------------------------------------------------
+//
+// --------------------------------------------------------------------------
+
+template<typename BV>
+void xor_scanner<BV>::compute_x_block_stats(const bm::word_t* block)
+{
+    BM_ASSERT(IS_VALID_ADDR(block));
+    BM_ASSERT(!BM_IS_GAP(block));
+    BM_ASSERT(ref_vect_->size() > 0);
+
+    bm::compute_complexity_descr(block, x_descr_);
+    bm::bit_block_change_bc32(block, &x_gc_, &x_bc_);
+    x_block_best_metric_ = x_best_metric_ = x_gc_ < x_bc_ ? x_gc_ : x_bc_;
+}
+
+// --------------------------------------------------------------------------
+
+template<typename BV>
+bool xor_scanner<BV>::search_best_xor_mask(const bm::word_t* block,
+                                           size_type ridx_from,
+                                           size_type ridx_to,
+                                           unsigned i, unsigned j)
+{
+    BM_ASSERT(ridx_from <= ridx_to);
+    BM_ASSERT(IS_VALID_ADDR(block));
+    BM_ASSERT(!BM_IS_GAP(block));
+
+    BM_DECLARE_TEMP_BLOCK(tb)
+
+    if (ridx_to > ref_vect_->size())
+        ridx_to = ref_vect_->size();
+
+    bool kb_found = false;
+    bm::id64_t d64 = 0;
+
+    for (size_type ri = ridx_from; ri < ridx_to; ++ri)
+    {
+        const bvector_type* bv = ref_vect_->get_bv(ri);
+        BM_ASSERT(bv);
+        const typename bvector_type::blocks_manager_type& bman = bv->get_blocks_manager();
+        const bm::word_t* block_xor = bman.get_block_ptr(i, j);
+        if (!IS_VALID_ADDR(block_xor) || BM_IS_GAP(block_xor))
+            continue;
+
+        BM_ASSERT(block != block_xor);
+
+        bm::id64_t xor_d64 =
+            bm::compute_xor_complexity_descr(block, block_xor, x_descr_);
+        if (xor_d64) // candidate XOR block
+        {
+            bm::bit_block_xor_product(tb, block, block_xor, xor_d64);
+            unsigned xor_bc, xor_gc;
+            bm::bit_block_change_bc32(tb, &xor_gc, &xor_bc);
+            if (xor_gc < x_best_metric_ && xor_gc < bm::bie_cut_off)
+            {
+                d64 = xor_d64;
+                x_best_metric_ = xor_gc;
+                kb_found = true;
+                found_ridx_ = ri;
+            }
+            if (xor_bc < x_best_metric_ && xor_bc < bm::bie_cut_off)
+            {
+                d64 = xor_d64;
+                x_best_metric_ = xor_bc;
+                kb_found = true;
+                found_ridx_ = ri;
+                if (!xor_bc) // completely identical block
+                    break;
+            }
+        }
+    } // for ri
+    x_d64_ = d64;
+    return kb_found;
+}
+
+// --------------------------------------------------------------------------
 
 } // namespace bm
 

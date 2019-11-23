@@ -389,7 +389,10 @@ public:
     */
     bm::id64_t get_plains_mask(unsigned element_idx) const;
 
-    
+    /*!
+        get read-only access to inetrnal bit-matrix
+    */
+    const bmatrix_type& get_bmatrix() const { return bmatr_; }
     ///@}
     
     /*!

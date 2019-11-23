@@ -44,6 +44,10 @@ typedef bm::mem_alloc<block_allocator, ptr_allocator, standard_alloc_pool> stand
 template<class A = bm::standard_allocator> class bvector;
 template<class A = bm::standard_allocator> class rs_index;
 
+template<typename Val, typename BVAlloc> class heap_vector;
+template<typename Val, size_t ROWS, size_t COLS, typename BVAlloc> class heap_matrix;
+template<typename Val, typename BVAlloc> class dynamic_heap_matrix;
+
 template<typename BV> class aggregator;
 
 template<typename BV> class rank_compressor;
@@ -56,7 +60,7 @@ template<class SVect> class sparse_vector_scanner;
 template<class SVect> class sparse_vector_serializer;
 template<class SVect> class sparse_vector_deserializer;
 
-
+struct block_waves_xor_descr;
 
 } // namespace
 

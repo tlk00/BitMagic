@@ -2202,6 +2202,12 @@ public:
         @param glevel_len - pointer on C-style array keeping GAP block sizes. 
     */
     void set_gap_levels(const gap_word_t* glevel_len);
+
+    /**
+        Return true if bvector is initialized at all
+        @internal
+    */
+    bool is_init() const { return blockman_.is_init(); }
     
     //@}
     

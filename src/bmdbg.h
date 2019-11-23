@@ -536,7 +536,94 @@ unsigned compute_serialization_size(const BV& bv)
     return blob_size;
 }
 
+#if 0
+template<class SV>
+void print_svector_xor_stat(const SV& sv)
+{
+    BM_DECLARE_TEMP_BLOCK(tb)
+    typename SV::size_type sz = sv.size();
+    if (!sz)
+        return;
+    typename SV::size_type nb_max = (sz >>  bm::set_block_shift);
 
+    for (typename SV::size_type nb = 0; nb < nb_max; ++nb)
+    {
+        std::cout << "nb = " << nb << std::endl;
+
+        unsigned i0 = unsigned(nb >> bm::set_array_shift);
+        unsigned j0 = unsigned(nb &  bm::set_array_mask);
+
+        auto plains = sv.plains();
+        for (unsigned i = 0; i < plains; ++i)
+        {
+            const typename SV::bvector_type* bv = sv.get_plain(i);
+            if (!bv)
+                continue;
+            const typename SV::bvector_type::blocks_manager_type& bman = bv->get_blocks_manager();
+            const bm::word_t* block = bman.get_block_ptr(i0, j0);
+            if (!IS_VALID_ADDR(block) || BM_IS_GAP(block))
+                continue;
+
+            // compute block complexity
+            bm::block_waves_xor_descr  x_descr;
+            bm::compute_complexity_descr(block, x_descr);
+            unsigned gc, bc;
+            bm::bit_block_change_bc32(block, &gc, &bc);
+            unsigned best_metric, block_metric;
+            block_metric = best_metric = gc < bc ? gc : bc;
+
+            bool kb_found = false;
+            bm::id64_t d64 = 0;
+            for (unsigned k = i + 1; k < plains; ++k)
+            {
+                const typename SV::bvector_type* bv_x = sv.get_plain(i);
+                if (!bv_x)
+                    continue;
+                const typename SV::bvector_type::blocks_manager_type& bman_x = bv_x->get_blocks_manager();
+                const bm::word_t* block_x = bman_x.get_block_ptr(i0, j0);
+                if (!IS_VALID_ADDR(block_x) || BM_IS_GAP(block_x))
+                    continue;
+
+                // evaluate potential key block as XOR filter
+                bm::id64_t kb_d64 =
+                    bm::compute_xor_complexity_descr(block, block_x, x_descr);
+                if (kb_d64) // candidate XOR filter found
+                {
+                    bm::bit_block_xor_product(tb, block, block_x, kb_d64);
+                    unsigned kb_bc, kb_gc;
+                    bm::bit_block_change_bc32(tb, &kb_gc, &kb_bc);
+                    if (kb_gc < best_metric && kb_gc < bm::bie_cut_off)
+                    {
+                        d64 = kb_d64;
+                        best_metric = kb_gc;
+                        kb_found = true;
+                        //*kb_j = j0;
+                    }
+                    if (kb_bc < best_metric && kb_bc < bm::bie_cut_off)
+                    {
+                        d64 = kb_d64;
+                        best_metric = kb_bc;
+                        kb_found = true;
+                        //*kb_j = j0;
+                    }
+
+                }
+
+            } // for k
+
+            if (kb_found)
+            {
+                std::cout << "XOR match " << "metric gain = " << std::endl;
+            }
+
+
+            std::cout << std::endl;
+
+        } // for i
+
+    } // for nb
+}
+#endif
 
 template<class SV>
 void print_svector_stat(const SV& svect, bool print_sim = false)

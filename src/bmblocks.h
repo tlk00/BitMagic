@@ -2068,13 +2068,16 @@ public:
     }
 
     // ----------------------------------------------------------------
-    
+    // experimental code, disabled
+#if 0
+
     /// Find key bit-block
     ///
     bool find_kbb(const bm::word_t* block,
                   unsigned i, unsigned j,
                   unsigned bc, unsigned gc,
-                  unsigned* kb_i, unsigned* kb_j) const
+                  unsigned* kb_i, unsigned* kb_j,
+                  bm::id64_t* digest) const
     {
         if (!top_blocks_ || !j)
             return false;
@@ -2091,29 +2094,39 @@ public:
         BM_DECLARE_TEMP_BLOCK(tb)
         const bm::word_t* const* blk_blk = top_blocks_[i];
 
+        // compute block complexity
+        bm::block_waves_xor_descr  x_descr;
+        bm::compute_complexity_descr(block, x_descr);
+
         bool kb_found = false;
         for (unsigned j0 = 0; j0 < j; ++j0)
         {
             const bm::word_t* kb_block = blk_blk[j0];
-            if (!IS_VALID_ADDR(kb_block))
+            if (!IS_VALID_ADDR(kb_block) || BM_IS_GAP(kb_block))
                 continue;
-            if (BM_IS_GAP(kb_block))
-                continue;
-            
-            bm::bit_block_xor_2way(tb, block, kb_block);
-            unsigned kb_bc, kb_gc;
-            bm::bit_block_change_bc32(tb, &kb_gc, &kb_bc);
-            if (kb_gc < best_metric && kb_gc < bm::bie_cut_off)
+
+            // evaluate potential key block as XOR filter
+            bm::id64_t kb_d64 =
+                bm::compute_xor_complexity_descr(block, kb_block, x_descr);
+            if (kb_d64) // candidate XOR filter found
             {
-                best_metric = kb_gc;
-                kb_found = true;
-                *kb_j = j0;
-            }
-            if (kb_bc < best_metric && kb_bc < bm::bie_cut_off)
-            {
-                best_metric = kb_bc;
-                kb_found = true;
-                *kb_j = j0;
+                bm::bit_block_xor_product(tb, block, kb_block, kb_d64);
+                unsigned kb_bc, kb_gc;
+                bm::bit_block_change_bc32(tb, &kb_gc, &kb_bc);
+                if (kb_gc < best_metric && kb_gc < bm::bie_cut_off)
+                {
+                    *digest = kb_d64;
+                    best_metric = kb_gc;
+                    kb_found = true;
+                    *kb_j = j0;
+                }
+                if (kb_bc < best_metric && kb_bc < bm::bie_cut_off)
+                {
+                    *digest = kb_d64;
+                    best_metric = kb_bc;
+                    kb_found = true;
+                    *kb_j = j0;
+                }
             }
 
         } // for j
@@ -2122,7 +2135,6 @@ public:
     }
 
     // ----------------------------------------------------------------
-    
     /// Find key gap-block
     ///
     bool find_kgb(const bm::word_t* block,
@@ -2232,7 +2244,7 @@ public:
 
         return kb_found;
     }
-
+#endif
 
     // ----------------------------------------------------------------
     
