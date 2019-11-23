@@ -15938,6 +15938,89 @@ void TestSparseVector()
         bvp = sv4.get_null_bvector();
         assert(bvp);
     }}
+
+    // reference vector construction for XOR serialization
+    {{
+        bm::sparse_vector<unsigned, bvect> sv;
+        sv.push_back(1);
+        sv.push_back(8);
+
+        bm::bv_ref_vector<bvect> ref_vect;
+        ref_vect.build(sv.get_bmatrix());
+
+        assert(ref_vect.size() == 2);
+
+        auto idx = ref_vect.find(0);
+        assert(idx == 0);
+        idx =  ref_vect.find(1);
+        assert(idx == ref_vect.not_found());
+        idx =  ref_vect.find(2);
+        assert(idx == ref_vect.not_found());
+
+        // test for 8 which is 1 << 3
+        idx =  ref_vect.find(3);
+        assert(idx == 1);
+
+        // test XOR scanner
+        //
+
+        bm::xor_scanner<bvect> xscan;
+        bm::xor_scanner<bvect>::bv_ref_vector_type r_vect;
+        xscan.set_ref_vector(&r_vect);
+        xscan.get_ref_vector().build(sv.get_bmatrix());
+
+        const bvect* bv_x = sv.get_plain(0);
+        const bvect::blocks_manager_type& bman_x = bv_x->get_blocks_manager();
+        const bm::word_t* block_x = bman_x.get_block_ptr(0, 0);
+
+        xscan.compute_x_block_stats(block_x);
+        assert(xscan.get_x_bc() == 1);
+        assert(xscan.get_x_gc() == 2);
+        assert(xscan.get_x_block_best() == 1);
+
+        idx = xscan.get_ref_vector().find(0);
+        assert(idx == 0);
+
+        bool f = xscan.search_best_xor_mask(block_x,
+                                            1, xscan.get_ref_vector().size(),
+                                            0, 0);
+        assert(!f);
+    }}
+
+    // XOR scanner EQ test
+    {{
+        bm::sparse_vector<unsigned, bvect> sv;
+        sv.push_back(9);
+        sv.push_back(9);
+
+        bm::xor_scanner<bvect> xscan;
+        bm::xor_scanner<bvect>::bv_ref_vector_type r_vect;
+        xscan.set_ref_vector(&r_vect);
+        xscan.get_ref_vector().build(sv.get_bmatrix());
+
+        const bvect* bv_x = sv.get_plain(0);
+        const bvect::blocks_manager_type& bman_x = bv_x->get_blocks_manager();
+        const bm::word_t* block_x = bman_x.get_block_ptr(0, 0);
+
+        xscan.compute_x_block_stats(block_x);
+        assert(xscan.get_x_bc() == 2);
+        assert(xscan.get_x_gc() == 2);
+        assert(xscan.get_x_block_best() == 2);
+
+        auto idx = xscan.get_ref_vector().find(0);
+        assert(idx == 0);
+
+        bool f = xscan.search_best_xor_mask(block_x,
+                                            1, xscan.get_ref_vector().size(),
+                                            0, 0);
+        assert(f);
+        idx = xscan.found_ridx();
+        assert(idx == 1);
+        assert(xscan.get_x_best_metric() == 0); // EQ
+        assert(xscan.is_eq_found());
+        idx = xscan.get_ref_vector().get_row_idx(idx);
+        assert(idx == 3); // matrix row 3
+    }}
     
     // basic const_iterator construction
     {{
@@ -23600,6 +23683,40 @@ void TestHeapVector()
 }
 
 static
+void TestXOR_RefVector()
+{
+    cout << " ------------------------------ TestXOR_RefVector()" << endl;
+
+    {
+        bv_ref_vector<bvect> ref_vect;
+        assert(ref_vect.size() == 0);
+
+        bvect bv1, bv2;
+        ref_vect.add(&bv1, 10);
+        ref_vect.add(&bv2, 15);
+
+        assert(ref_vect.size() == 2);
+        assert(ref_vect.get_bv(0) == &bv1);
+        assert(ref_vect.get_bv(1) == &bv2);
+        assert(ref_vect.get_row_idx(0) == 10);
+        assert(ref_vect.get_row_idx(1) == 15);
+
+        size_t idx = ref_vect.find(15);
+        assert(idx == 1);
+        idx = ref_vect.find(10);
+        assert(idx == 0);
+
+        idx = ref_vect.find(100);
+        assert(idx == ref_vect.not_found());
+
+        ref_vect.reset();
+        assert(ref_vect.size() == 0);
+    }
+
+    cout << " ------------------------------ TestXOR_RefVector() OK" << endl;
+}
+
+static
 void show_help()
 {
     std::cerr
@@ -23847,6 +23964,8 @@ int main(int argc, char *argv[])
     if (is_all || is_support)
     {
         TestHeapVector();
+        TestXOR_RefVector();
+
         MiniSetTest();
         BitEncoderTest();
       
