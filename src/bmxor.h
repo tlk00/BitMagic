@@ -147,8 +147,13 @@ bm::id64_t compute_xor_complexity_descr(
                                         bm::set_block_digest_wave_size);
 
         x_descr.sb_xor_change[i] = (unsigned short)xor_change;
-        if (xor_change < x_descr.sb_change[i]) // detected improvement
+        if (xor_change == 1 && (x_descr.sb_change[i] > 1))
+        {
             digest |= (1ull << i);
+        }
+        else
+            if (xor_change < x_descr.sb_change[i]) // detected improvement
+                digest |= (1ull << i);
     } // for i
 
     return digest;
@@ -303,9 +308,8 @@ public:
     typedef typename bvector_type::size_type     size_type;
 
 public:
-    void set_ref_vector(bv_ref_vector_type* ref_vect) { ref_vect_ = ref_vect; }
+    void set_ref_vector(const bv_ref_vector_type* ref_vect) { ref_vect_ = ref_vect; }
     const bv_ref_vector_type& get_ref_vector() const { return *ref_vect_; }
-    bv_ref_vector_type& get_ref_vector() { return *ref_vect_; }
 
     /** Compute statistics for the anchor search vector
         @param block - bit-block target
@@ -318,10 +322,13 @@ public:
     bool search_best_xor_mask(const bm::word_t* block,
                               size_type ridx_from,
                               size_type ridx_to,
-                              unsigned i, unsigned j);
+                              unsigned i, unsigned j,
+                              bm::word_t* tb);
 
     size_type found_ridx() const { return found_ridx_; }
+    const bm::word_t* get_found_block() const { return found_block_xor_; }
     unsigned get_x_best_metric() const { return x_best_metric_; }
+    bm::id64_t get_xor_digest() const { return x_d64_; }
 
     /// true if completely identical vector found
     bool is_eq_found() const { return !x_best_metric_; }
@@ -332,7 +339,7 @@ public:
     unsigned get_x_block_best() const { return x_block_best_metric_; }
 
 private:
-    bv_ref_vector_type*        ref_vect_ = 0; ///< ref.vect for XOR filter
+    const bv_ref_vector_type*        ref_vect_ = 0; ///< ref.vect for XOR filter
 
     // target x-block related statistics
     //
@@ -344,7 +351,8 @@ private:
 
     // scan related metrics
     bm::id64_t                    x_d64_; ///< search digest
-    size_type                     found_ridx_;
+    size_type                     found_ridx_; ///< match vector (in references)
+    const bm::word_t*             found_block_xor_;
 };
 
 // --------------------------------------------------------------------------
@@ -369,19 +377,21 @@ template<typename BV>
 bool xor_scanner<BV>::search_best_xor_mask(const bm::word_t* block,
                                            size_type ridx_from,
                                            size_type ridx_to,
-                                           unsigned i, unsigned j)
+                                           unsigned i, unsigned j,
+                                           bm::word_t* tb)
 {
     BM_ASSERT(ridx_from <= ridx_to);
     BM_ASSERT(IS_VALID_ADDR(block));
     BM_ASSERT(!BM_IS_GAP(block));
+    BM_ASSERT(tb);
 
-    BM_DECLARE_TEMP_BLOCK(tb)
 
     if (ridx_to > ref_vect_->size())
         ridx_to = ref_vect_->size();
 
     bool kb_found = false;
     bm::id64_t d64 = 0;
+    found_block_xor_ = 0;
 
     for (size_type ri = ridx_from; ri < ridx_to; ++ri)
     {
@@ -398,15 +408,20 @@ bool xor_scanner<BV>::search_best_xor_mask(const bm::word_t* block,
             bm::compute_xor_complexity_descr(block, block_xor, x_descr_);
         if (xor_d64) // candidate XOR block
         {
+            // TODO: compute total gain as sum of sub-blocks and use it here
+            // --------------------
             bm::bit_block_xor_product(tb, block, block_xor, xor_d64);
             unsigned xor_bc, xor_gc;
             bm::bit_block_change_bc32(tb, &xor_gc, &xor_bc);
+            // --------------------
+
             if (xor_gc < x_best_metric_ && xor_gc < bm::bie_cut_off)
             {
                 d64 = xor_d64;
                 x_best_metric_ = xor_gc;
                 kb_found = true;
                 found_ridx_ = ri;
+                found_block_xor_ = block_xor;
             }
             if (xor_bc < x_best_metric_ && xor_bc < bm::bie_cut_off)
             {
@@ -414,6 +429,7 @@ bool xor_scanner<BV>::search_best_xor_mask(const bm::word_t* block,
                 x_best_metric_ = xor_bc;
                 kb_found = true;
                 found_ridx_ = ri;
+                found_block_xor_ = block_xor;
                 if (!xor_bc) // completely identical block
                     break;
             }
