@@ -56,6 +56,7 @@ void fill_bvector(bm::bvector<>* bv)
 
 int main(void)
 {
+    bm::operation_deserializer<bm::bvector<> > od;
     try
     {
         bm::bvector<>   bv1;
@@ -130,14 +131,11 @@ int main(void)
         // bv4 = (bv1 OR bv2) AND bv1
         // this must be equal to bv1 ?
         //
-        bm::operation_deserializer<bm::bvector<> >::deserialize(bv4,
-                                                               vect1.data(),
-                                                               tb,
-                                                               bm::set_AND);
+        od.deserialize(bv4, vect1.data(), bm::set_AND);
         
         cout << "bv4 count = " << bv4.count() << endl;
-        int cmp = bv1.compare(bv4);
-        if (cmp != 0)
+        bool eq = bv1.equal(bv4);
+        if (!eq)
         {
             cerr << "Logical error detected!" << endl;
             return 1;
@@ -154,20 +152,14 @@ int main(void)
         //
         // POPCNT((bv1 OR bv2) MINUS bv1)
         auto cnt_sub =
-        bm::operation_deserializer<bm::bvector<> >::deserialize(bv3,
-                                                               sbuf1.buf(),
-                                                               tb,
-                                                               bm::set_COUNT_SUB_AB);
+        od.deserialize(bv3, sbuf1.buf(), bm::set_COUNT_SUB_AB);
         cout << "minus count = " << cnt_sub << endl;
 
         
         // or we can actually perform the operation and get the full vector
         // bv5 = (bv1 OR bv2) MINUS bv1
         //
-        bm::operation_deserializer<bm::bvector<> >::deserialize(bv5,
-                                                               sbuf1.buf(),
-                                                               tb,
-                                                               bm::set_SUB);
+        od.deserialize(bv5, sbuf1.buf(), tb, bm::set_SUB);
         auto bv5_cnt = bv5.count();
         cout << "bv5 count = " << bv5_cnt << endl;
 
@@ -176,8 +168,6 @@ int main(void)
             cerr << "Logical error!" << endl;
             return 1;
         }
-
-
     }
     catch(std::exception& ex)
     {

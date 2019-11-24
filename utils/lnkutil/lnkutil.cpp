@@ -947,10 +947,8 @@ bool link_matrix::combine_or(unsigned id_from, bm::bvector<>& bv) const
         BM_DECLARE_TEMP_BLOCK(tb)
 
         const bm::compressed_buffer_collection<bvector_type>::buffer_type& bv_buf = buf_coll.get(bv_addr);
-        bm::operation_deserializer<bm::bvector<> >::deserialize(bv,
-            bv_buf.buf(),
-            tb,
-            bm::set_OR);
+        bm::operation_deserializer<bm::bvector<> > od;
+        od.deserialize(bv, bv_buf.buf(), tb, bm::set_OR);
         return true;
     }
 

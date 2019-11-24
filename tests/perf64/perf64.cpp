@@ -164,11 +164,12 @@ void bvector64_Serialization()
         }
         {
             bvect64 bv_t;
-            operation_deserializer<bvect64>::deserialize(bv_t,
+            operation_deserializer<bvect64> od;
+            od.deserialize(bv_t,
                                                          sbuf0.buf(),
                                                          0,
                                                          set_OR);
-            operation_deserializer<bvect64>::deserialize(bv_t,
+            od.deserialize(bv_t,
                                                          sbuf1.buf(),
                                                          0,
                                                          set_OR);

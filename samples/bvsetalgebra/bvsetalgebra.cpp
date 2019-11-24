@@ -96,6 +96,7 @@ static
 void DemoOR()
 {
     typedef bm::bvector<>::size_type size_type;
+    bm::operation_deserializer<bm::bvector<> > od;
 
     // bit-vector set union operation: bv_A |= bv_B
     {
@@ -179,11 +180,7 @@ void DemoOR()
             bm::bvector<>   bv_B { 1, 2, 4 };
             make_BLOB(blob, bv_B);
         }
-        BM_DECLARE_TEMP_BLOCK(tb)
-        bm::operation_deserializer<bm::bvector<> >::deserialize(bv_A,
-                                                                blob.data(),
-                                                                tb,
-                                                                bm::set_OR);
+        od.deserialize(bv_A, blob.data(), bm::set_OR);
         print_bvector(bv_A); // 1, 2, 3, 4
     }
     
@@ -224,7 +221,8 @@ static
 void DemoAND()
 {
     typedef bm::bvector<>::size_type size_type;
-    
+    bm::operation_deserializer<bm::bvector<> > od;
+
     // bit-vector set intersect operation: bv_A &= bv_B
     {
         bm::bvector<>   bv_A { 1, 2, 3 };
@@ -293,11 +291,7 @@ void DemoAND()
             bm::bvector<>   bv_B { 1, 2, 4 };
             make_BLOB(blob, bv_B);
         }
-        BM_DECLARE_TEMP_BLOCK(tb)
-        bm::operation_deserializer<bm::bvector<> >::deserialize(bv_A,
-                                                                blob.data(),
-                                                                tb,
-                                                                bm::set_AND);
+        od.deserialize(bv_A, blob.data(), bm::set_AND);
         print_bvector(bv_A); // 1, 2
     }
     
@@ -335,6 +329,8 @@ void DemoAND()
 static
 void DemoXOR()
 {
+    bm::operation_deserializer<bm::bvector<> > od;
+
     // bit-vector xor operation: bv_A ^= bv_B
     {
         bm::bvector<>   bv_A { 1, 2, 3 };
@@ -392,11 +388,7 @@ void DemoXOR()
             bm::bvector<>   bv_B { 1, 2, 4 };
             make_BLOB(blob, bv_B);
         }
-        BM_DECLARE_TEMP_BLOCK(tb)
-        bm::operation_deserializer<bm::bvector<> >::deserialize(bv_A,
-                                                                blob.data(),
-                                                                tb,
-                                                                bm::set_XOR);
+        od.deserialize(bv_A, blob.data(), bm::set_XOR);
         print_bvector(bv_A); // 3, 4
     }
 }
@@ -409,6 +401,7 @@ static
 void DemoSUB()
 {
     typedef bm::bvector<>::size_type size_type;
+    bm::operation_deserializer<bm::bvector<> > od;
 
     // bit-vector set union operation: bv_A -= bv_B
     {
@@ -479,11 +472,7 @@ void DemoSUB()
             bm::bvector<>   bv_B { 1, 2, 4 };
             make_BLOB(blob, bv_B);
         }
-        BM_DECLARE_TEMP_BLOCK(tb)
-        bm::operation_deserializer<bm::bvector<> >::deserialize(bv_A,
-                                                                blob.data(),
-                                                                tb,
-                                                                bm::set_SUB);
+        od.deserialize(bv_A, blob.data(), bm::set_SUB);
         print_bvector(bv_A); // 3
     }
 
@@ -551,7 +540,6 @@ void DemoINV()
 static
 void DemoAND_SUB()
 {
-
     // Operation on two groups of vectors using aggregator
     // 1. Group 0 - find common subset (Set Intersect / AND)
     // 2. Group 1 - find union (OR) of the group and SUBtract it from #1
@@ -565,7 +553,6 @@ void DemoAND_SUB()
         bm::bvector<>    bv_B { 1, 2 };
         bm::bvector<>    bv_C { 1, 2, 4 };
         bm::bvector<>    bv_D { 0, 2, 3, 4, 5 };
-
         
         bm::aggregator<bm::bvector<> > agg;
         agg.set_optimization(); // perform on-the-fly optimization of result

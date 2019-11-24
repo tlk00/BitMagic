@@ -3996,10 +3996,8 @@ void SerializationTest()
          << endl;
 
     bm::deserialize(*bvect_full2, sermem_buf.buf());
-    operation_deserializer<bvect>::deserialize(*bv_target_s,
-                                               sermem_buf.buf(),
-                                               tb,
-                                               set_OR);
+    operation_deserializer<bvect> od;
+    od.deserialize(*bv_target_s, sermem_buf.buf(), tb, set_OR);
 
 
     CheckVectors(*bvect_min1, *bvect_full2, size, true);
@@ -4042,10 +4040,12 @@ void SerializationTest()
          << endl;
 
     bm::deserialize(*bvect_full2, sermem);
-    operation_deserializer<bvect>::deserialize(*bv_target_s,
-                                               sermem,
-                                               0,
-                                               set_OR);
+    operation_deserializer<bvect> od;
+
+    od.deserialize(*bv_target_s,
+                   sermem,
+                   0,
+                   set_OR);
 
     delete [] sermem;
 
@@ -4101,10 +4101,12 @@ void SerializationTest()
     bvect        bvect_full3;
     bm::deserialize(bvect_full3, sermem);
     bvect*  bv_target_s = new bvect();
-    operation_deserializer<bvect>::deserialize(*bv_target_s,
-                                               sermem,
-                                               0,
-                                               set_OR);
+    operation_deserializer<bvect> od;
+
+    od.deserialize(*bv_target_s,
+                   sermem,
+                   0,
+                   set_OR);
 
     CheckVectors(bvect_min1, bvect_full3, max+10, false);
     CheckVectors(bvect_min1, *bv_target_s, max+10, false);
@@ -4145,10 +4147,11 @@ void SerializationTest()
          << endl;
     bm::deserialize(*bvect_full2, sermem_buf.buf());
     bvect*  bv_target_s=new bvect();
-    operation_deserializer<bvect>::deserialize(*bv_target_s,
-                                               sermem_buf.buf(),
-                                               0,
-                                               set_OR);
+    operation_deserializer<bvect64> od;
+    od.deserialize(*bv_target_s,
+                   sermem_buf.buf(),
+                   0,
+                   set_OR);
 
     CheckVectors(*bvect_min1, *bvect_full2, BITVECT_SIZE, false);
     CheckVectors(*bvect_min1, *bv_target_s, BITVECT_SIZE, false);
@@ -4218,10 +4221,11 @@ void SerializationTest()
 
     bm::deserialize(*bvect_full2, sermem);
 
-    operation_deserializer<bvect>::deserialize(*bv_target_s,
-                                               sermem,
-                                               0,
-                                               set_OR);
+    operation_deserializer<bvect64> od;
+    od.deserialize(*bv_target_s,
+                   sermem,
+                   0,
+                   set_OR);
     delete [] sermem;
     
     CheckVectors(*bvect_min1, *bvect_full1, BITVECT_SIZE, true);
@@ -4307,10 +4311,12 @@ void SerializationTest()
     bvect  bv_target_s(*bvect_full2);
 
     bm::deserialize(*bvect_full2, new_sermem);
-    operation_deserializer<bvect>::deserialize(bv_target_s,
-                                               new_sermem,
-                                               0,
-                                               set_OR);
+
+    operation_deserializer<bvect64> od;
+    od.deserialize(bv_target_s,
+                   new_sermem,
+                   0,
+                   set_OR);
 
     delete [] sermem;
     delete [] new_sermem;
@@ -4360,10 +4366,12 @@ void DesrializationTest2()
 
    bm::deserialize(bvtotal, sermemv.data());
     bvect  bv_target_s;
-    operation_deserializer<bvect>::deserialize(bv_target_s,
-                                                sermemv.data(),
-                                                0,
-                                                set_OR);
+
+    operation_deserializer<bvect64> od;
+    od.deserialize(bv_target_s,
+                    sermemv.data(),
+                    0,
+                    set_OR);
 
    bvtotal.optimize(tb);
    int res = bvtotal.compare(bv_target_s);
@@ -4392,10 +4400,12 @@ void DesrializationTest2()
 
    bm::deserialize(bvtotal, sermemv2.data());
    print_stat(bvtotal);
-   operation_deserializer<bvect>::deserialize(bv_target_s,
-                                              sermemv2.data(),
-                                              0,
-                                              set_OR);
+   //operation_deserializer<bvect64> od;
+
+   od.deserialize(bv_target_s,
+                  sermemv2.data(),
+                  0,
+                  set_OR);
     res = bvtotal.compare(bv_target_s);
     if (res != 0)
     {
@@ -4406,17 +4416,16 @@ void DesrializationTest2()
 
 
    bm::deserialize(bvtotal, sermemv2.data());
-
    bm::deserialize(bvtotal, sermemv.data());
 
-    operation_deserializer<bvect>::deserialize(bv_target_s,
-                                               sermemv2.data(),
-                                               0,
-                                               set_OR);
-    operation_deserializer<bvect>::deserialize(bv_target_s,
-                                               sermemv2.data(),
-                                               0,
-                                               set_OR);
+    od.deserialize(bv_target_s,
+                   sermemv2.data(),
+                   0,
+                   set_OR);
+    od.deserialize(bv_target_s,
+                   sermemv2.data(),
+                   0,
+                   set_OR);
 
     res = bvtotal.compare(bv_target_s);
     if (res != 0)
@@ -4453,7 +4462,8 @@ void DesrializationTest2()
 
 
         bm::deserialize(bvtotal, smemv.data());
-        operation_deserializer<bvect>::deserialize(bv_target_s,
+        operation_deserializer<bvect> od;
+        od.deserialize(bv_target_s,
                                                    smemv.data(),
                                                    0,
                                                    set_OR);
@@ -4537,21 +4547,22 @@ void DesrializationTest2()
                 res = bv1.compare(bv_t1);
                 assert(res==0);
             }
+            operation_deserializer<bvect64> od;
 
             {
                 bvect64 bv_t0, bv_t1;
-                operation_deserializer<bvect64>::deserialize(bv_t0, sbuf0.buf(), 0, set_OR);
+                od.deserialize(bv_t0, sbuf0.buf(), 0, set_OR);
                 int cmp = bv0.compare(bv_t0);
                 assert(cmp == 0);
-                operation_deserializer<bvect64>::deserialize(bv_t1, sbuf1.buf(), 0, set_OR);
+                od.deserialize(bv_t1, sbuf1.buf(), 0, set_OR);
                 cmp = bv1.compare(bv_t1);
                 assert(!cmp);
             }
 
             {
                 bvect64 bv_t;
-                operation_deserializer<bvect64>::deserialize(bv_t, sbuf1.buf(), 0, set_OR);
-                operation_deserializer<bvect64>::deserialize(bv_t, sbuf0.buf(), 0, set_OR);
+                od.deserialize(bv_t, sbuf1.buf(), 0, set_OR);
+                od.deserialize(bv_t, sbuf0.buf(), 0, set_OR);
                 int cmp = bv_tc.compare(bv_t);
                 if (cmp)
                 {
@@ -4561,8 +4572,8 @@ void DesrializationTest2()
             }
             {
                 bvect64 bv_t;
-                operation_deserializer<bvect64>::deserialize(bv_t, sbuf0.buf(), 0, set_OR);
-                operation_deserializer<bvect64>::deserialize(bv_t, sbuf0.buf(), 0, set_AND);
+                od.deserialize(bv_t, sbuf0.buf(), 0, set_OR);
+                od.deserialize(bv_t, sbuf0.buf(), 0, set_AND);
                 int cmp = bv0.compare(bv_t);
                 if (cmp)
                 {
@@ -4572,8 +4583,8 @@ void DesrializationTest2()
             }
             {
                 bvect64 bv_t;
-                operation_deserializer<bvect64>::deserialize(bv_t, sbuf1.buf(), 0, set_OR);
-                operation_deserializer<bvect64>::deserialize(bv_t, sbuf1.buf(), 0, set_AND);
+                od.deserialize(bv_t, sbuf1.buf(), 0, set_OR);
+                od.deserialize(bv_t, sbuf1.buf(), 0, set_AND);
                 int cmp = bv1.compare(bv_t);
                 if (cmp)
                 {
@@ -4584,8 +4595,8 @@ void DesrializationTest2()
 
             {
                 bvect64 bv_t;
-                operation_deserializer<bvect64>::deserialize(bv_t, sbuf0.buf(), 0, set_OR);
-                operation_deserializer<bvect64>::deserialize(bv_t, sbuf1.buf(), 0, set_AND);
+                od.deserialize(bv_t, sbuf0.buf(), 0, set_OR);
+                od.deserialize(bv_t, sbuf1.buf(), 0, set_AND);
                 int cmp = bv_tc_and.compare(bv_t);
                 if (cmp)
                 {
@@ -4599,8 +4610,8 @@ void DesrializationTest2()
             //
             {
                 bvect64 bv_t;
-                operation_deserializer<bvect64>::deserialize(bv_t, sbuf0.buf(), 0, set_OR);
-                operation_deserializer<bvect64>::deserialize(bv_t, sbuf0.buf(), 0, set_XOR);
+                od.deserialize(bv_t, sbuf0.buf(), 0, set_OR);
+                od.deserialize(bv_t, sbuf0.buf(), 0, set_XOR);
                 auto cnt = bv_t.count();
                 if (cnt)
                 {
@@ -4610,8 +4621,8 @@ void DesrializationTest2()
             }
             {
                 bvect64 bv_t;
-                operation_deserializer<bvect64>::deserialize(bv_t, sbuf1.buf(), 0, set_OR);
-                operation_deserializer<bvect64>::deserialize(bv_t, sbuf1.buf(), 0, set_XOR);
+                od.deserialize(bv_t, sbuf1.buf(), 0, set_OR);
+                od.deserialize(bv_t, sbuf1.buf(), 0, set_XOR);
                 auto cnt = bv_t.count();
                 if (cnt)
                 {
@@ -4621,8 +4632,8 @@ void DesrializationTest2()
             }
             {
                 bvect64 bv_t;
-                operation_deserializer<bvect64>::deserialize(bv_t, sbuf1.buf(), 0, set_OR);
-                operation_deserializer<bvect64>::deserialize(bv_t, sbuf1.buf(), 0, set_SUB);
+                od.deserialize(bv_t, sbuf1.buf(), 0, set_OR);
+                od.deserialize(bv_t, sbuf1.buf(), 0, set_SUB);
                 auto cnt = bv_t.count();
                 if (cnt)
                 {
@@ -5763,12 +5774,12 @@ bvect::size_type SerializationOperation(bvect*     bv_target,
        exit(1);
    }
 
-
+    operation_deserializer<bvect64> od;
    bvect::size_type count =
-       operation_deserializer<bvect>::deserialize(*bv_target,
-                                                  smem1,
-                                                  0,
-                                                  set_ASSIGN);
+       od.deserialize(*bv_target,
+                      smem1,
+                      0,
+                      set_ASSIGN);
    //cout << slen1 << " " << slen2 << endl;
    int res = bv1.compare(*bv_target);
    if (res != 0)
@@ -5798,11 +5809,12 @@ bvect::size_type SerializationOperation(bvect*     bv_target,
    }
 
    cout << "Operation deserialization... " << op << endl;
+
     count=
-       operation_deserializer<bvect>::deserialize(*bv_target,
-                                                  smem2,
-                                                  0,
-                                                  op);
+       od.deserialize(*bv_target,
+                      smem2,
+                      0,
+                      op);
 
     // check if operation was ok
     {
@@ -5996,10 +6008,10 @@ bvect::size_type SerializationOperation(bvect*     bv_target,
    {
         cout << "Reverse check... " << endl;
         bvect bv_tmp2(BM_GAP);
-        operation_deserializer<bvect>::deserialize(bv_tmp2,
-                                                   smem2,
-                                                   0,
-                                                   set_ASSIGN);
+        od.deserialize(bv_tmp2,
+                       smem2,
+                       0,
+                       set_ASSIGN);
         res = bv_tmp2.compare(bv2);
         if (res != 0)
         {
@@ -6008,10 +6020,10 @@ bvect::size_type SerializationOperation(bvect*     bv_target,
         }
         cout << "Deserialization assign to bv_tmp2 OK" << endl;
         auto count_rev =
-        operation_deserializer<bvect>::deserialize(bv_tmp2,
-                                                   smem1,
-                                                   0,
-                                                   op);
+        od.deserialize(bv_tmp2,
+                       smem1,
+                       0,
+                       op);
         if (count != count_rev)
         {
 //            print_stat(bv1);
@@ -8914,10 +8926,11 @@ void StressTest(unsigned repetitions, int set_operation = -1)
         bm::deserialize(bvtotal, new_sermem_buf.buf());
 
         bvect* bv_target_s=new bvect();
-        operation_deserializer<bvect>::deserialize(*bv_target_s,
-                                            new_sermem_buf.buf(),
-                                            0,
-                                            set_OR);
+        operation_deserializer<bvect64> od;
+        od.deserialize(*bv_target_s,
+                        new_sermem_buf.buf(),
+                        0,
+                        set_OR);
 
         cout << "Ok." << endl;
 //        delete [] new_sermem;
