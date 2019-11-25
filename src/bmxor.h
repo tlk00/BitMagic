@@ -147,7 +147,7 @@ bm::id64_t compute_xor_complexity_descr(
                                         bm::set_block_digest_wave_size);
 
         x_descr.sb_xor_change[i] = (unsigned short)xor_change;
-        if (xor_change == 1 && (x_descr.sb_change[i] > 1))
+        if (xor_change == 1 && (x_descr.sb_change[i] >= 1))
         {
             digest |= (1ull << i);
         }

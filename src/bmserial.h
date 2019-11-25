@@ -2007,7 +2007,7 @@ serializer<BV>::serialize(const BV& bv,
                 if (found)
                 {
                     size_type ridx = xor_scan_.found_ridx();
-                    if (xor_scan_.is_eq_found()) // found a complete copy
+                    if (xor_scan_.is_eq_found()) // golden! (found a copy)
                     {
                         size_type row_idx = xor_scan_.get_ref_vector().get_row_idx(ridx);
                         enc.put_8(bm::set_block_ref_eq);
@@ -2039,10 +2039,10 @@ serializer<BV>::serialize(const BV& bv,
                             enc.put_8(bm::set_block_xor_ref);
                             enc.put_32(unsigned(row_idx));
                             compression_stat_[bm::set_block_xor_ref]++;
-                            blk = xor_block_; // replace block with XOR product
+                            blk = xor_block_; // substitute block with XOR product
                         }
                     }
-                }
+                } // if xor found
 
             }
 
@@ -2852,9 +2852,7 @@ size_t deserializer<BV, DEC>::deserialize(bvector_type&        bv,
         return dec.size()-1;
     }
 
-    block_idx_type i;
-
-    if (!(header_flag & BM_HM_NO_GAPL)) 
+    if (!(header_flag & BM_HM_NO_GAPL))
     {
         //gap_word_t glevels[bm::gap_levels];
         // read GAP levels information
@@ -2889,20 +2887,20 @@ size_t deserializer<BV, DEC>::deserialize(bvector_type&        bv,
     block_idx_type nb;
     unsigned i0, j0;
 
-    for (i = 0; i < bm::set_total_blocks; ++i)
+
+    //for (i = 0; i < bm::set_total_blocks; ++i)
+    block_idx_type i = 0;
+    do
     {
         btype = dec.get_8();
-        
-        bm::get_block_coord(i, i0, j0);
-        bm::word_t* blk = bman.get_block_ptr(i0, j0);
-        // pre-check if we have short zero-run packaging here
-        //
-        if (btype & (1 << 7))
+        if (btype & (1 << 7)) // check if short zero-run packed here
         {
             nb = btype & ~(1 << 7);
-            i += nb-1;
+            i += nb; //nb-1;
             continue;
         }        
+        bm::get_block_coord(i, i0, j0);
+        bm::word_t* blk = bman.get_block_ptr(i0, j0);
 
         switch (btype)
         {
@@ -2911,23 +2909,24 @@ size_t deserializer<BV, DEC>::deserialize(bvector_type&        bv,
             i = bm::set_total_blocks;
             break;
         case set_block_1zero:
-            continue;
+            break;
         case set_block_8zero:
             nb = dec.get_8();
-            i += nb-1;
-            continue;
+            i += nb; // nb-1;
+            continue; // bypass ++i;
         case set_block_16zero:
             nb = dec.get_16();
-            i += nb-1;
-            continue;
+            i += nb; // nb-1;
+            continue; // bypass ++i;
         case set_block_32zero:
             nb = dec.get_32();
-            i += nb-1;
-            continue;
+            i += nb; //nb-1;
+            continue; // bypass ++i;
         case set_block_64zero:
             #ifdef BM64ADDR
                 nb = dec.get_64();
-                i += nb-1;
+                i += nb; //nb-1;
+                continue; // bypass ++i;
             #else
                 BM_ASSERT(0); // attempt to read 64-bit vector in 32-bit mode
                 #ifndef BM_NO_STL
@@ -2937,23 +2936,23 @@ size_t deserializer<BV, DEC>::deserialize(bvector_type&        bv,
                 #endif
                 i = bm::set_total_blocks;
             #endif
-            continue;
+            break;
         case set_block_aone:
             bman.set_all_set(i, bm::set_total_blocks-1);
             i = bm::set_total_blocks;
             break;
         case set_block_1one:
             bman.set_block_all_set(i);
-            continue;
+            break;
         case set_block_8one:
             BM_SET_ONE_BLOCKS(dec.get_8());
-            continue;
+            break;
         case set_block_16one:
             BM_SET_ONE_BLOCKS(dec.get_16());
-            continue;
+            break;
         case set_block_32one:
             BM_SET_ONE_BLOCKS(dec.get_32());
-            continue;
+            break;
         case set_block_64one:
     #ifdef BM64ADDR
             BM_SET_ONE_BLOCKS(dec.get_64());
@@ -2966,68 +2965,54 @@ size_t deserializer<BV, DEC>::deserialize(bvector_type&        bv,
             #endif
             dec.get_64();
     #endif
-            continue;
+            break;
         case set_block_bit:
         {
-            if (blk == 0)
+            if (!blk)
             {
                 blk = bman.get_allocator().alloc_bit_block();
                 bman.set_block(i, blk);
                 dec.get_32(blk, bm::set_block_size);
-                continue;                
+                break;
             }
-			
             dec.get_32(temp_block_, bm::set_block_size);
-            bv.combine_operation_with_block(i, 
-                                            temp_block,
-                                            0, BM_OR);
-			
-            continue;
+            bv.combine_operation_with_block(i, temp_block, 0, BM_OR);
+            break;
         }
         case set_block_bit_1bit:
         {
             size_type bit_idx = dec.get_16();
             bit_idx += i * bm::bits_in_block; 
             bv.set_bit_no_check(bit_idx);
-            continue;
+            break;
         }
         case set_block_bit_0runs:
         {
             //TODO: optimization if block exists
             this->read_0runs_block(dec, temp_block);
-            bv.combine_operation_with_block(i,
-                                            temp_block,
-                                            0, BM_OR);            
-            continue;
+            bv.combine_operation_with_block(i, temp_block, 0, BM_OR);
+            break;
         }
         case set_block_bit_interval: 
         {
             unsigned head_idx, tail_idx;
             head_idx = dec.get_16();
             tail_idx = dec.get_16();
-
-            if (blk == 0)
+            if (!blk)
             {
                 blk = bman.get_allocator().alloc_bit_block();
                 bman.set_block(i, blk);
                 for (unsigned k = 0; k < head_idx; ++k)
-                {
                     blk[k] = 0;
-                }
                 dec.get_32(blk + head_idx, tail_idx - head_idx + 1);
                 for (unsigned j = tail_idx + 1; j < bm::set_block_size; ++j)
-                {
                     blk[j] = 0;
-                }
-                continue;
+                break;
             }
             bm::bit_block_set(temp_block, 0);
             dec.get_32(temp_block + head_idx, tail_idx - head_idx + 1);
-
-            bv.combine_operation_with_block(i, 
-                                            temp_block,
-                                            0, BM_OR);
-            continue;
+            bv.combine_operation_with_block(i, temp_block, 0, BM_OR);
+            break;
         }
         case set_block_gap: 
         case set_block_gapbit:
@@ -3040,7 +3025,7 @@ size_t deserializer<BV, DEC>::deserialize(bvector_type&        bv,
         case set_block_arrgap_bienc:
         case set_block_arrgap_bienc_inv:
             deserialize_gap(btype, dec, bv, bman, i, blk);
-            continue;
+            break;
         case set_block_arrbit:
         {
             gap_word_t len = dec.get_16();
@@ -3058,33 +3043,30 @@ size_t deserializer<BV, DEC>::deserialize(bvector_type&        bv,
                     bm::bit_block_set(blk, 0);
                 }
                 else
-                if (IS_FULL_BLOCK(blk)) // nothing to do
-                {
-                    for (unsigned k = 0; k < len; ++k) // dry read
+                    if (IS_FULL_BLOCK(blk)) // nothing to do
                     {
-                        dec.get_16();
+                        for (unsigned k = 0; k < len; ++k) // dry read
+                            dec.get_16();
+                        break;
                     }
-                    continue;
-                }
             }
-            
             // Get the array one by one and set the bits.
             for (unsigned k = 0; k < len; ++k)
             {
                 gap_word_t bit_idx = dec.get_16();
 				bm::set_bit(blk, bit_idx);
             }
-            continue;
+            break;
         }
         case bm::set_block_arr_bienc:
         case bm::set_block_arrbit_inv:
         case bm::set_block_arr_bienc_inv:
         case bm::set_block_bitgap_bienc:
             decode_bit_block(btype, dec, bman, i, blk);
-            continue;
+            break;
         case bm::set_block_bit_digest0:
             decode_bit_block(btype, dec, bman, i, blk);
-            continue;
+            break;
         case bm::set_block_ref_eq:
             {
                 BM_ASSERT(ref_vect_); // reference vector has to be attached
@@ -3098,8 +3080,15 @@ size_t deserializer<BV, DEC>::deserialize(bvector_type&        bv,
                 const bm::word_t* ref_blk = ref_bman.get_block_ptr(i0, j0);
                 BM_ASSERT(ref_blk);
                 bv.combine_operation_with_block(i, ref_blk, BM_IS_GAP(ref_blk), BM_OR);
-                continue;
+                break;
             }
+        case bm::set_block_xor_ref:
+            {
+                //unsigned row_idx = dec.get_32();
+                //size_type idx = ref_vect_->find(row_idx);
+            }
+            BM_ASSERT(0);
+            break;
         default:
             BM_ASSERT(0); // unknown block type
             throw_err:
@@ -3109,7 +3098,9 @@ size_t deserializer<BV, DEC>::deserialize(bvector_type&        bv,
                 BM_THROW(BM_ERR_SERIALFORMAT);
             #endif
         } // switch
-    } // for i
+
+        ++i;
+    } while (i < bm::set_total_blocks); // for i
 
     bv.set_new_blocks_strat(strat);
 
@@ -3353,6 +3344,7 @@ void serial_stream_iterator<DEC>::next()
         // throw or assert here
         //
         case set_block_ref_eq:
+        case set_block_xor_ref:
             BM_FALLTHROUGH;
             // fall through
         default:
