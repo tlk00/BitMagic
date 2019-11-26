@@ -4462,7 +4462,6 @@ void DesrializationTest2()
 
 
         bm::deserialize(bvtotal, smemv.data());
-        operation_deserializer<bvect> od;
         od.deserialize(bv_target_s,
                                                    smemv.data(),
                                                    0,
@@ -4547,7 +4546,6 @@ void DesrializationTest2()
                 res = bv1.compare(bv_t1);
                 assert(res==0);
             }
-            operation_deserializer<bvect64> od;
 
             {
                 bvect64 bv_t0, bv_t1;
