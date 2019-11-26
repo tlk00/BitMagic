@@ -2486,7 +2486,7 @@ void TestBlockCountXORChange()
             blk[i] = blk_xor[i] = 0;
 
         d64 = bit_block_calc_xor_change_digest(blk, blk_xor, x_descr);
-        assert(!d64);
+        assert(d64 == ~0ull);
         for (unsigned k = 0; k < bm::block_waves; ++k)
         {
             assert(x_descr.sb_change[k] == 1);
@@ -2495,7 +2495,7 @@ void TestBlockCountXORChange()
 
         blk[0] = 1;
         d64 = bit_block_calc_xor_change_digest(blk, blk_xor, x_descr);
-        assert(!d64);
+        assert(d64);
         assert(x_descr.sb_change[0] == 2);
         assert(x_descr.sb_xor_change[0] == 2);
         for (unsigned k = 1; k < bm::block_waves; ++k)
@@ -2509,7 +2509,7 @@ void TestBlockCountXORChange()
         d64 = bit_block_calc_xor_change_digest(blk, blk_xor, x_descr);
         assert(x_descr.sb_change[0] == 2);
         assert(x_descr.sb_xor_change[0] == 1);
-        assert(d64 == 1);
+        assert(d64 == ~0ull);
         for (unsigned k = 1; k < bm::block_waves; ++k)
         {
             assert(x_descr.sb_change[k] == 1);
