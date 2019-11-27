@@ -1655,7 +1655,7 @@ public:
     //@{
 
     /** \brief Returns bvector's capacity (number of bits it can store) */
-    size_type capacity() const { return blockman_.capacity(); }
+    //size_type capacity() const { return blockman_.capacity(); }
 
     /*! \brief return current size of the vector (bits) */
     size_type size() const { return size_; }

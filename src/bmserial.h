@@ -1025,7 +1025,10 @@ void serializer<BV>::encode_header(const BV& bv, bm::encoder& enc)
     #endif
 
     if (ref_vect_)
+    {
+        // TODO: check if XOR search found anything at all
         header_flag |= BM_HM_HXOR; // XOR compression turned ON
+    }
 
     enc.put_8(header_flag);
 
@@ -2978,6 +2981,10 @@ size_t deserializer<BV, DEC>::deserialize(bvector_type&        bv,
             bv_size = dec.get_32();
         if (bv_size > bv.size())
             bv.resize(bv_size);
+    }
+
+    if (header_flag & BM_HM_HXOR) // XOR compression mode
+    {
     }
 
     unsigned char btype;

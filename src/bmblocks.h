@@ -446,6 +446,7 @@ public:
     }
     */
 
+
     /**
         \brief Finds block in 2-level blocks array  
         Specilized version of get_block(unsigned), returns an additional

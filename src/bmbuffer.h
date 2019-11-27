@@ -18,6 +18,7 @@ limitations under the License.
 For more information please visit:  http://bitmagic.io
 */
 
+#include <stddef.h>
 #include "bmdef.h"
 
 namespace bm
@@ -359,7 +360,7 @@ public:
         buffer_.swap(other.buffer_);
     }
 
-    const value_type& operator[](std::size_t pos) const
+    const value_type& operator[](size_type pos) const
     {
         BM_ASSERT(pos < size());
         size_type v_size = value_size();
@@ -367,7 +368,7 @@ public:
         return *reinterpret_cast<const value_type*>(p);
     }
 
-    value_type& operator[](std::size_t pos)
+    value_type& operator[](size_type pos)
     {
         BM_ASSERT(pos < size());
         size_type v_size = value_size();
@@ -375,7 +376,7 @@ public:
         return *reinterpret_cast<value_type*>(p);
     }
 
-    value_type& at(std::size_t pos)
+    value_type& at(size_type pos)
     {
         size_type sz = size();
         if (pos >= sz)
@@ -484,6 +485,7 @@ protected:
     #ifndef BM_NO_STL
         throw std::range_error(err_msg);
     #else
+        (void) err_msg;
         BM_ASSERT_THROW(false, BM_ERR_RANGE);
     #endif
     }
@@ -550,7 +552,7 @@ public:
         return buffer_.size();
     }
 
-    value_type get(size_t row_idx, size_t col_idx) const
+    value_type get(size_type row_idx, size_type col_idx) const
     {
         BM_ASSERT(row_idx < ROWS);
         BM_ASSERT(col_idx < COLS);
@@ -559,7 +561,7 @@ public:
         return ((const value_type*)buf)[col_idx];
     }
 
-    const value_type* row(size_t row_idx) const
+    const value_type* row(size_type row_idx) const
     {
         BM_ASSERT(row_idx < ROWS);
         BM_ASSERT(buffer_.size());
@@ -567,7 +569,7 @@ public:
         return (const value_type*) buf;
     }
 
-    value_type* row(size_t row_idx)
+    value_type* row(size_type row_idx)
     {
         BM_ASSERT(row_idx < ROWS);
         BM_ASSERT(buffer_.size());
