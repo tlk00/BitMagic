@@ -47,7 +47,7 @@ For more information please visit:  http://bitmagic.io
 #define BM_ERR_RANGE_MSG    "BM-03: Incorrect range or index"
 #define BM_ERR_CPU_MSG      "BM-04: Incorrect CPU vectorization (SIMD) version"
 #define BM_ERR_SERIALFORMAT_MSG "BM-05: Serialization format error"
-#define BM_ERR_BAD_VALUE "BM-06: Bad value"
+#define BM_ERR_BAD_VALUE_MSG "BM-06: Bad value"
 
 
 
@@ -345,14 +345,16 @@ BM_API_EXPORT int BM_bvector_find_rank(BM_BVHANDLE h,
    pi - return index of first bit 
    found - return 0 if first bit not found (empty vector)
 */
-BM_API_EXPORT int BM_bvector_get_first(BM_BVHANDLE h, unsigned int* pi, int* pfound);
+BM_API_EXPORT int BM_bvector_get_first(BM_BVHANDLE h, unsigned int* pi,
+                                       int* pfound);
 
 /* find 1 bit index in the vector
 
    i - index of bit to search from
    pnext - return index of the next 1 bit. 0 - means no more 1 bits.
 */
-BM_API_EXPORT int BM_bvector_get_next(BM_BVHANDLE h, unsigned int i, unsigned int* pnext);
+BM_API_EXPORT int BM_bvector_get_next(BM_BVHANDLE h, unsigned int i,
+                                      unsigned int* pnext);
 
 
 
@@ -364,6 +366,14 @@ BM_API_EXPORT int BM_bvector_get_next(BM_BVHANDLE h, unsigned int i, unsigned in
    pres - returns -1 if h1 less than h2, 1 - greater, 0 - equal.
 */
 BM_API_EXPORT int BM_bvector_compare(BM_BVHANDLE h1, BM_BVHANDLE h2, int* pres);
+
+/* Find first mismatch between two vectors
+   pi - return found mismatch index
+   pfound - return 0 if not found (vectors are identical)
+*/
+BM_API_EXPORT int BM_bvector_find_first_mismatch(BM_BVHANDLE h1, BM_BVHANDLE h2,
+                 unsigned int* pi,
+                 int* pfound);
 
 
 

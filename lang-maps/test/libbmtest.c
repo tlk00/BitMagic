@@ -222,7 +222,8 @@ int ConstructionCopyMoveTest()
     {
         BM_BVHANDLE bmh4 = 0;
         unsigned count4;
-        int cmp;
+        unsigned pos;
+        int cmp, found;
         
         res = BM_bvector_construct_copy(&bmh4, bmh3);
         BMERR_CHECK_GOTO(res, "BM_bvector_construct_copy()", free_mem);
@@ -242,6 +243,14 @@ int ConstructionCopyMoveTest()
             printf("5. incorrrect compare result %i \n", cmp);
             res = 1; goto free_mem1;
         }
+        res = BM_bvector_find_first_mismatch(bmh4, bmh3, &pos, &found);
+        BMERR_CHECK_GOTO(res, "BM_bvector_find_first_mismatch()", free_mem1);
+        if (found)
+        {
+            printf("6. incorrrect find mismatch result %i \n", found);
+            res = 1; goto free_mem1;
+        }
+
         
     free_mem1:
         res = BM_bvector_free(bmh4);
@@ -798,7 +807,6 @@ int OperationsTest_OR()
     BM_BVHANDLE bmh1 = 0;
     BM_BVHANDLE bmh2 = 0;
     unsigned int i;
-    unsigned int count1, count2;
     int cmp;
 
     res = BM_bvector_construct(&bmh0, 0);
@@ -860,7 +868,6 @@ int OperationsTest_XOR()
     BM_BVHANDLE bmh1 = 0;
     BM_BVHANDLE bmh2 = 0;
     unsigned int i;
-    unsigned int count1, count2;
     int cmp;
 
     res = BM_bvector_construct(&bmh0, 0);
@@ -922,7 +929,6 @@ int OperationsTest_SUB()
     BM_BVHANDLE bmh1 = 0;
     BM_BVHANDLE bmh2 = 0;
     unsigned int i;
-    unsigned int count1, count2;
     int cmp;
 
     res = BM_bvector_construct(&bmh0, 0);

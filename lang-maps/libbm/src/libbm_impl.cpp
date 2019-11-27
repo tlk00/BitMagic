@@ -279,7 +279,7 @@ int BM_bvector_get_size(BM_BVHANDLE h, unsigned int* psize)
 }
 
 // -----------------------------------------------------------------
-
+/*
 int BM_bvector_get_capacity(BM_BVHANDLE h, unsigned int* pcap)
 {
     if (!h)
@@ -296,7 +296,7 @@ int BM_bvector_get_capacity(BM_BVHANDLE h, unsigned int* pcap)
     ETRY;
     return BM_OK;
 }
-
+*/
 // -----------------------------------------------------------------
 
 
@@ -711,6 +711,28 @@ int BM_bvector_compare(BM_BVHANDLE h1, BM_BVHANDLE h2, int* pres)
     return BM_OK;
     
 }
+
+// -----------------------------------------------------------------
+
+BM_API_EXPORT int BM_bvector_find_first_mismatch(BM_BVHANDLE h1, BM_BVHANDLE h2,
+                 unsigned int* pi,
+                 int* pfound)
+{
+    if (!h1 || !h2 || !pfound || !pi)
+        return BM_ERR_BADARG;
+
+    BM_TRY
+    {
+        const TBM_bvector* bv1 = (TBM_bvector*)h1;
+        const TBM_bvector* bv2 = (TBM_bvector*)h2;
+
+        *pfound = bv1->find_first_mismatch(*bv2, *pi);
+    }
+    BM_CATCH_ALL
+    ETRY;
+    return BM_OK;
+}
+
 
 // -----------------------------------------------------------------
 
