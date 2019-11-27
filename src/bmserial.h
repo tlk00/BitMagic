@@ -47,7 +47,7 @@ For more information please visit:  http://bitmagic.io
 #include "encoding.h"
 #include "bmfunc.h"
 #include "bmtrans.h"
-#include "bmalgo_impl.h"
+#include "bmalgo.h"
 #include "bmutil.h"
 #include "bmbuffer.h"
 #include "bmdef.h"
@@ -3036,7 +3036,7 @@ size_t deserializer<BV, DEC>::deserialize(bvector_type&        bv,
                 #else
                     BM_THROW(BM_ERR_SERIALFORMAT);
                 #endif
-                i = bm::set_total_blocks;
+                //i = bm::set_total_blocks;
             #endif
             break;
         case set_block_aone:
@@ -4845,7 +4845,7 @@ operation_deserializer<BV>::deserialize(bvector_type&        bv,
             BM_THROW(BM_ERR_SERIALFORMAT);
         #endif
     };
-    return 0;
+    //return 0;
 }
 
 template<class BV>
