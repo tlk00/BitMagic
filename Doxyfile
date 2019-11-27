@@ -52,7 +52,7 @@ WARN_LOGFILE           = warn.log
 #---------------------------------------------------------------------------
 # configuration options related to the input files
 #---------------------------------------------------------------------------
-INPUT                  = ./src/bm.h ./src/bmfunc.h  ./src/bmsimd.h \
+INPUT                  = ./src/bm.h ./src/bmfunc.h  ./src/bmsimd.h ./src/bmxor.h \
                          ./src/bmvmin.h ./src/encoding.h ./src/bmbmatrix.h \
                          ./src/bmconst.h ./src/bmsse_util.h ./src/bmsse4.h ./src/bmsse2.h \
                          ./src/bmalgo.h ./src/bmalgo_impl.h ./src/bmalgo_similarity.h ./src/bmgamma.h \
