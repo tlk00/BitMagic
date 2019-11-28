@@ -6811,7 +6811,7 @@ unsigned bit_block_find(const bm::word_t* block, unsigned nbit, unsigned* pos)
 
     \param block - bit block buffer pointer
     \param last - index of the last 1 bit (out)
-    \return 0 is not found
+    \return true if found
 
     @ingroup bitfunc
 */
@@ -6846,26 +6846,29 @@ unsigned bit_find_last(const bm::word_t* block, unsigned* last)
     \return 0 if not found
 
     @ingroup bitfunc
+    @internal
 */
 inline
-unsigned bit_find_first(const bm::word_t* block, unsigned* first)
+bool bit_find_first(const bm::word_t* block, unsigned* pos)
 {
     BM_ASSERT(block);
-    BM_ASSERT(first);
+    BM_ASSERT(pos);
 
-    // TODO: SIMD version
-    
+#ifdef VECT_BIT_FIND_FIRST
+    return VECT_BIT_FIND_FIRST(block, pos);
+#else
     for (unsigned i = 0; i < bm::set_block_size; ++i)
     {
         bm::word_t w = block[i];
         if (w)
         {
-            unsigned idx = bit_scan_forward32(w); // trailing zeros
-            *first = unsigned(idx + (i * 8u * sizeof(bm::word_t)));
+            unsigned idx = bm::bit_scan_forward32(w); // trailing zeros
+            *pos = unsigned(idx + (i * 8u * sizeof(bm::word_t)));
             return w;
         }
     } // for i
-    return 0u;
+    return false;
+#endif
 }
 
 /*!

@@ -1860,6 +1860,58 @@ bool avx2_bit_find_first_diff(const __m256i* BMRESTRICT block1,
 }
 
 
+/*!
+   \brief Find first bit set
+  @ingroup AVX2
+*/
+inline
+bool avx2_bit_find_first(const __m256i* BMRESTRICT block, unsigned* pos)
+{
+    unsigned BM_ALIGN32 simd_buf[8] BM_ALIGN32ATTR;
+
+    const __m256i* block_end =
+        (const __m256i*)((bm::word_t*)(block) + bm::set_block_size);
+    __m256i maskZ = _mm256_setzero_si256();
+    __m256i mA, mB;
+    unsigned simd_lane = 0;
+    do
+    {
+        mA = _mm256_load_si256(block); mB = _mm256_load_si256(block+1);
+        __m256i mOR = _mm256_or_si256(mA, mB);
+        if (!_mm256_testz_si256(mOR, mOR)) // test 2x256 lanes
+        {
+            if (!_mm256_testz_si256(mA, mA))
+            {
+                // invert to fing (w != 0)
+                unsigned mask = ~_mm256_movemask_epi8(_mm256_cmpeq_epi32(mA, maskZ));
+                BM_ASSERT(mask);
+                int bsf = bm::bsf_asm32(mask); // find first !=0 (could use lzcnt())
+                _mm256_store_si256 ((__m256i*)simd_buf, mA);
+                unsigned widx = bsf >> 2; // (bsf / 4);
+                unsigned w = simd_buf[widx];
+                bsf = bm::bsf_asm32(w); // find first bit != 0
+                *pos = (simd_lane * 256) + (widx * 32) + bsf;
+                return true;
+            }
+            // invert to fing (w != 0)
+            unsigned mask = ~_mm256_movemask_epi8(_mm256_cmpeq_epi32(mB, maskZ));
+            BM_ASSERT(mask);
+            int bsf = bm::bsf_asm32(mask); // find first !=0 (could use lzcnt())
+            _mm256_store_si256 ((__m256i*)simd_buf, mB);
+            unsigned widx = bsf >> 2; // (bsf / 4);
+            unsigned w = simd_buf[widx];
+            bsf = bm::bsf_asm32(w); // find first bit != 0
+            *pos = ((++simd_lane) * 256) + (widx * 32) + bsf;
+            return true;
+        }
+
+        simd_lane+=2;
+        block+=2;
+
+    } while (block < block_end);
+    return false;
+}
+
 
 
 /* @brief Gap block population count (array sum) utility
@@ -2827,6 +2879,9 @@ unsigned avx2_bit_to_gap(gap_word_t* BMRESTRICT dest,
 
 #define VECT_BIT_TO_GAP(dest, src, dest_len) \
     avx2_bit_to_gap(dest, src, dest_len)
+
+#define VECT_BIT_FIND_FIRST(src1, pos) \
+    avx2_bit_find_first((__m256i*) src1, pos)
 
 #define VECT_BIT_FIND_DIFF(src1, src2, pos) \
     avx2_bit_find_first_diff((__m256i*) src1, (__m256i*) (src2), pos)
