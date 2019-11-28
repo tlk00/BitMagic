@@ -2244,10 +2244,16 @@ public:
 
         @param bvect - argumnet vector to compare with
         @param pos - [out] position of the first difference
+        @param search_to - search limiter [0..to] to avoid overscan
+                           (default: unlimited to the vectors end)
+
         @return true if didfference found, false - both vectors are equivalent
         @sa compare
     */
-    bool find_first_mismatch(const bvector<Alloc>& bvect, size_type& pos) const;
+    bool find_first_mismatch(const bvector<Alloc>& bvect,
+                                        size_type& pos,
+                                        size_type  search_to = bm::id_max
+                                        ) const;
     
     //@}
 
@@ -3368,20 +3374,26 @@ int bvector<Alloc>::compare(const bvector<Alloc>& bv) const
 
 template<typename Alloc>
 bool bvector<Alloc>::find_first_mismatch(
-                        const bvector<Alloc>& bvect, size_type& pos) const
+                        const bvector<Alloc>& bvect, size_type& pos,
+                        size_type search_to) const
 {
     unsigned top_blocks = blockman_.top_block_size();
     if (!top_blocks)
     {
         return bvect.find(pos);
     }
-    unsigned bvect_top_blocks = bvect.blockman_.top_block_size();
-    if (!bvect_top_blocks)
     {
-        return this->find(pos);
+        unsigned bvect_top_blocks = bvect.blockman_.top_block_size();
+        if (!bvect_top_blocks)
+            return this->find(pos);
+        if (bvect_top_blocks > top_blocks) top_blocks = bvect_top_blocks;
     }
 
-    if (bvect_top_blocks > top_blocks) top_blocks = bvect_top_blocks;
+    unsigned i_to, j_to;
+    {
+        block_idx_type nb_to = (search_to >> bm::set_block_shift);
+        bm::get_block_coord(nb_to, i_to, j_to);
+    }
 
     for (unsigned i = 0; i < top_blocks; ++i)
     {
@@ -3390,6 +3402,9 @@ bool bvector<Alloc>::find_first_mismatch(
 
         if (blk_blk == arg_blk_blk)
             continue;
+
+        if (i > i_to)
+            return false;
 
         for (unsigned j = 0; j < bm::set_sub_array_size; ++j)
         {
@@ -3410,7 +3425,8 @@ bool bvector<Alloc>::find_first_mismatch(
                 if (blk == FULL_BLOCK_FAKE_ADDR)
                     blk = FULL_BLOCK_REAL_ADDR;
             }
-            if (blk == arg_blk) continue;
+            if (blk == arg_blk)
+                continue;
 
             unsigned block_pos;
             bool found = bm::block_find_first_diff(blk, arg_blk, &block_pos);
@@ -3419,7 +3435,15 @@ bool bvector<Alloc>::find_first_mismatch(
                 pos =
                     (size_type(i) * bm::set_sub_array_size * bm::gap_max_bits) +
                     (size_type(j) * bm::gap_max_bits) + block_pos;
+                if (pos > search_to)
+                    return false;
                 return true;
+            }
+
+            if (i == i_to)
+            {
+                if (j >= j_to)
+                    return false;
             }
 
         } // for j
