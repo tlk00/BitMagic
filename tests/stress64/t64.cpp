@@ -10886,6 +10886,84 @@ void TestSparseVector()
     cout << "---------------------------- Bit-plain sparse vector test OK" << endl;
 }
 
+static
+void TestSparseVectorAlgo()
+{
+    cout << " -------------------------- TestSparseVectorAlgo()" << endl;
+
+    {
+        bm::sparse_vector<unsigned, bvect> sv1;
+        bm::sparse_vector<unsigned, bvect> sv2;
+        sv1.push_back(1);
+        sv1.push_back(1);
+        sv1.push_back(1);
+
+        sv2 = sv1;
+
+        bm::sparse_vector<unsigned, bvect>::size_type pos;
+        bool f;
+        f = bm::sparse_vector_find_first_mismatch(sv1, sv2, pos);
+        assert(!f);
+        f = bm::sparse_vector_find_first_mismatch(sv2, sv1, pos);
+        assert(!f);
+        sv2.push_back(4);
+        f = bm::sparse_vector_find_first_mismatch(sv1, sv2, pos);
+        assert(f);
+        assert(pos == 3);
+        f = bm::sparse_vector_find_first_mismatch(sv2, sv1, pos);
+        assert(f);
+        assert(pos == 3);
+
+        sv1.optimize();
+        f = bm::sparse_vector_find_first_mismatch(sv2, sv1, pos);
+        assert(f);
+        assert(pos == 3);
+
+        sv2.optimize();
+        f = bm::sparse_vector_find_first_mismatch(sv2, sv1, pos);
+        assert(f);
+        assert(pos == 3);
+    }
+
+    // sparse with NULLs test
+    {
+        bm::sparse_vector<unsigned, bvect> sv1(bm::use_null);
+        bm::sparse_vector<unsigned, bvect> sv2(bm::use_null);
+        sv1[100] = 1;
+        sv1[1000] = 1;
+        sv1[bm::id_max32 + 1000] = 1;
+
+        sv2 = sv1;
+
+        bm::sparse_vector<unsigned, bvect>::size_type pos;
+        bool f;
+        f = bm::sparse_vector_find_first_mismatch(sv1, sv2, pos);
+        assert(!f);
+        f = bm::sparse_vector_find_first_mismatch(sv2, sv1, pos);
+        assert(!f);
+        sv2.push_back(4);
+        f = bm::sparse_vector_find_first_mismatch(sv1, sv2, pos);
+        assert(f);
+        assert(pos == bm::id_max32 + 1000+1);
+        f = bm::sparse_vector_find_first_mismatch(sv2, sv1, pos);
+        assert(f);
+        assert(pos == bm::id_max32 + 1000+1);
+
+        sv1.optimize();
+        f = bm::sparse_vector_find_first_mismatch(sv2, sv1, pos);
+        assert(f);
+        assert(pos == bm::id_max32 + 1000+1);
+
+        sv2.optimize();
+        f = bm::sparse_vector_find_first_mismatch(sv2, sv1, pos);
+        assert(f);
+        assert(pos == bm::id_max32 + 1000+1);
+    }
+
+    cout << " -------------------------- TestSparseVectorAlgo() OK" << endl;
+}
+
+
 // ---------------------------------------------------------------------
 
 static
@@ -12516,7 +12594,15 @@ void TestCompressSparseVector()
 
         csv.push_back(10, 11);
         csv.set(11, 12);
+        auto v0 = csv.get(11);
         assert(csv.get(11) == 12);
+        csv.set(11, 12); // set it twice
+        v0 = csv.get(11);
+        assert(csv.get(11) == 12);
+        assert(csv.get(0) == 0);
+        assert(csv.get(1) == 1);
+
+
         csv.set(5, 55);
         csv.set(5, 56);
 
@@ -14374,6 +14460,221 @@ void StressTestStrSparseVector()
    cout << endl;
 }
 
+static
+void TestCompressedSparseVectorAlgo()
+{
+    cout << " --------------- TestCompressedSparseVectorAlgo() 64-bit" << endl;
+
+    {
+        rsc_sparse_vector_u32 csv1(bm::use_null);
+        rsc_sparse_vector_u32 csv2(bm::use_null);
+
+        bm::sparse_vector<unsigned, bvect>::size_type pos;
+        bool f;
+        f = bm::sparse_vector_find_first_mismatch(csv1, csv2, pos);
+        assert(!f);
+
+        csv1.push_back(bm::id_max32 + 10, 10);
+        csv1.push_back(bm::id_max32 + 11, 10);
+        csv1.push_back(bm::id_max32 + 200, 0);
+        csv1.push_back(bm::id_max32 + 300, 0);
+
+
+        f = bm::sparse_vector_find_first_mismatch(csv1, csv2, pos);
+        assert(f);
+        assert(pos == bm::id_max32 + 10);
+
+        csv1.sync();
+        csv2.sync();
+
+        f = bm::sparse_vector_find_first_mismatch(csv1, csv2, pos);
+        assert(f);
+        assert(pos == bm::id_max32 + 10);
+    }
+
+    {
+        rsc_sparse_vector_u32 csv1(bm::use_null);
+        rsc_sparse_vector_u32 csv2(bm::use_null);
+
+        csv1.push_back(bm::id_max32 + 200, 0);
+        csv1.push_back(bm::id_max32 + 300, 0);
+
+        csv2.push_back(bm::id_max32 + 200, 0);
+        csv2.push_back(bm::id_max32 + 300, 0);
+
+        bm::sparse_vector<unsigned, bvect>::size_type pos;
+        bool f;
+        f = bm::sparse_vector_find_first_mismatch(csv1, csv2, pos);
+        assert(!f);
+
+        csv2.push_back(bm::id_max32 + 400, 0);
+        f = bm::sparse_vector_find_first_mismatch(csv1, csv2, pos);
+        assert(f);
+        assert(pos == bm::id_max32 + 400);
+    }
+
+    {
+        rsc_sparse_vector_u32 csv1(bm::use_null);
+        rsc_sparse_vector_u32 csv2(bm::use_null);
+
+        bm::sparse_vector<unsigned, bvect>::size_type pos;
+        bool f;
+
+        csv1.push_back(bm::id_max32 + 10, 10);
+        csv1.push_back(bm::id_max32 + 11, 10);
+        csv1.push_back(bm::id_max32 + 200, 0);
+        csv1.push_back(bm::id_max32 + 300, 0);
+
+        csv2 = csv1;
+        f = bm::sparse_vector_find_first_mismatch(csv1, csv2, pos);
+        assert(!f);
+        csv2.push_back(bm::id_max32 + 400, 256);
+
+        f = bm::sparse_vector_find_first_mismatch(csv1, csv2, pos);
+        assert(f);
+        assert(pos == bm::id_max32 + 400);
+
+        csv1.optimize();
+        csv2.optimize();
+
+        csv1.sync();
+        csv2.sync();
+
+        f = bm::sparse_vector_find_first_mismatch(csv1, csv2, pos);
+        assert(f);
+        assert(pos == bm::id_max32 + 400);
+
+    }
+
+    // ----------------------------------------------------------
+
+
+    {
+        cout << endl << "Unique mismatch check" << endl;
+        sparse_vector_u32 sv1(bm::use_null), sv2(bm::use_null);
+        rsc_sparse_vector_u32 csv1(bm::use_null);
+        rsc_sparse_vector_u32 csv2(bm::use_null);
+
+
+        sparse_vector_u32::size_type sv_size = 225600;
+        {
+            unsigned v = 0; unsigned cnt = 0;
+            for (unsigned j = 0; j < sv_size; j+=2)
+            {
+                sv1[bm::id_max32 + j] = v;
+                if (++cnt > 600)
+                {
+                    cnt = 0; v+=2;
+                }
+            }
+        }
+        csv1.load_from(sv1);
+
+        sv2 = sv1;
+        csv2 = csv1;
+
+        bm::sparse_vector<unsigned, bvect>::size_type pos;
+        bool f;
+
+        f = bm::sparse_vector_find_first_mismatch(csv1, csv2, pos);
+        assert(!f);
+        f = bm::sparse_vector_find_first_mismatch(sv1, sv2, pos);
+        assert(!f);
+
+        for (unsigned k = 0; k < 4; ++k)
+        {
+            cout << "PASS = " << k << endl;
+            chrono_taker ct("sparse_vector<> unique value mismatch search");
+
+            for (sparse_vector_u32::size_type k = 0; k < sv_size; ++k)
+            {
+                sparse_vector_u32::size_type j = k + bm::id_max32;
+
+                std::chrono::time_point<std::chrono::steady_clock> st;
+                st = std::chrono::steady_clock::now();
+
+                bool is_null = sv2.is_null(j);
+                if (is_null)
+                {
+                    continue;
+                }
+
+                sparse_vector_u32::value_type v2 = sv2[j];
+                v2 = ~v2;
+                sv2[j] = v2;
+                f = bm::sparse_vector_find_first_mismatch(sv1, sv2, pos);
+                assert(f);
+                assert(pos == j);
+
+                sv2[j] = ~v2; // restore
+                assert(~v2 == sv2.get(j));
+                f = bm::sparse_vector_find_first_mismatch(sv1, sv2, pos);
+                assert(!f);
+
+                v2 = csv2[j];
+                v2 = ~v2;
+                csv2.set(j, v2);
+                f = bm::sparse_vector_find_first_mismatch(csv1, csv2, pos);
+                assert(f);
+                assert(pos == j);
+
+                csv2.set(j, ~v2); // restore
+                auto vv2 = csv2.get(j);
+                assert(~v2 == vv2);
+                f = bm::sparse_vector_find_first_mismatch(csv1, csv2, pos);
+                assert(!f);
+
+
+                if (k % 10000 == 0)
+                {
+                    sv2.optimize();
+                    csv2.optimize();
+                    csv2.sync();
+
+                    std::chrono::time_point<std::chrono::steady_clock> f1 = std::chrono::steady_clock::now();
+                    auto diff = f1 - st;
+                    //auto d = std::chrono::duration <double, std::milli> (diff).count();
+
+                    cout << "\r" << k << "/" << sv_size << " " <<
+                            " (" << diff.count() << ")" << flush;
+                }
+            } // for
+            cout << endl;
+
+            switch(k)
+            {
+            case 0:
+                sv1.optimize();
+                break;
+            case 1:
+                sv1.optimize();
+                csv1.optimize();
+                break;
+            case 2:
+                sv1.optimize();
+                csv1.optimize();
+                sv2.optimize();
+                break;
+            case 3:
+                sv1.optimize();
+                csv1.optimize();
+                sv2.optimize();
+                csv2.optimize();
+                break;
+            default:
+                assert(0);
+            }
+        } // for k
+
+        cout << "Unique search OK" << endl;
+    }
+
+
+
+    cout << " --------------- TestCompressedSparseVectorAlgo() OK" << endl;
+}
+
+
 // -----------------------------------------------------------------------
 
 static
@@ -14874,8 +15175,9 @@ int main(int argc, char *argv[])
 
     if (is_all || is_sv)
     {
-
          TestSparseVector();
+
+         TestSparseVectorAlgo();
 
          TestSparseVectorInserter();
 
@@ -14888,6 +15190,8 @@ int main(int argc, char *argv[])
          TestSparseVectorRange();
 
          TestCompressSparseVector();
+
+         TestCompressedSparseVectorAlgo();
 
          TestSparseVectorFilter();
 

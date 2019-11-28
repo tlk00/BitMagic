@@ -885,7 +885,7 @@ template<typename BV>
 void TestFindDiff(const BV& bv1, BV& bv2)
 {
     bool f;
-    typename BV::size_type pos, pos_c;
+    typename BV::size_type pos, pos_c, pos_l;
     f = bv1.find_first_mismatch(bv2, pos);
     BV bv_x;
     bv_x.bit_xor(bv1, bv2, BV::opt_compress);
@@ -895,6 +895,18 @@ void TestFindDiff(const BV& bv1, BV& bv2)
         assert(!a);
         return;
     }
+    else // found
+    {
+        bool f2 = bv1.find_first_mismatch(bv2, pos_l, pos);
+        assert(f2 == f);
+        assert(pos_l == pos);
+        if (pos)
+        {
+            f2 = bv1.find_first_mismatch(bv2, pos_l, pos-1);
+            assert(!f2);
+        }
+    }
+
     bool cf = bv_x.find(pos_c);
     assert(f == cf);
     assert(pos == pos_c);
