@@ -144,9 +144,110 @@ void dynamic_range_clip_low(SV& svect, unsigned low_bit)
     bv_low_plain->bit_or(bv_acc1);
 }
 
+/**
+    Find first mismatch (element which is different) between two sparse vectors
+    (uses linear scan in bit-vector plains)
+    @param sv1 - vector 1
+    @param sv2 - vector 2
+    @param midx - mismatch index
+
+    @return true if mismatch found
+
+    \ingroup svalgo
+*/
+template<typename SV>
+bool sparse_vector_find_first_mismatch(const SV& sv1,
+                                       const SV& sv2,
+                                       typename SV::size_type& midx)
+{
+    typename SV::size_type mismatch = bm::id_max;
+    bool found = false;
+
+    unsigned sv_idx = 0;
+
+    unsigned plains1 = sv1.plains();
+    BM_ASSERT(plains1);
+
+    // for RSC vector do NOT compare NULL plains
+    if (bm::conditional<SV::is_rsc_support::value>::test())
+        --plains1;
+
+    for (unsigned i = 0; mismatch & (i < plains1); ++i)
+    {
+        typename SV::bvector_type_const_ptr bv1 = sv1.get_plain(i);
+        typename SV::bvector_type_const_ptr bv2 = sv2.get_plain(i);
+        if (!bv1)
+        {
+            if (!bv2)
+                continue;
+            bool f = bv2->find(midx);
+            if (f && (midx < mismatch))
+            {
+                found = f; sv_idx = 2; mismatch = midx;
+            }
+            continue;
+        }
+        if (!bv2)
+        {
+            BM_ASSERT(bv1);
+            bool f = bv1->find(midx);
+            if (f && (midx < mismatch))
+            {
+                found = f; sv_idx = 1; mismatch = midx;
+            }
+            continue;
+        }
+        // both plains are not NULL
+        //
+        bool f = bv1->find_first_mismatch(*bv2, midx, mismatch);
+        if (f && (midx < mismatch)) // better mismatch found
+        {
+            found = f; mismatch = midx;
+            // which vector has '1' at mismatch position?
+            if (bm::conditional<SV::is_rsc_support::value>::test())
+                sv_idx = (bv1->test(mismatch)) ? 1 : 2;
+        }
+
+    } // for i
+
+    // RSC address translation here
+    //
+    if (bm::conditional<SV::is_rsc_support::value>::test())
+    {
+        if (found) // RSC address translation
+        {
+            BM_ASSERT(sv1.is_compressed());
+            BM_ASSERT(sv2.is_compressed());
+
+            switch (sv_idx)
+            {
+            case 1:
+                found = sv1.find_rank(midx + 1, mismatch);
+                break;
+            case 2:
+                found = sv2.find_rank(midx + 1, mismatch);
+                break;
+            default: // unknown, try both
+                BM_ASSERT(0);
+            }
+            BM_ASSERT(found);
+        }
+        else // search for mismatch in the NOT NULL vectors
+        {
+            // no need for address translation in this case
+            typename SV::bvector_type_const_ptr bv_null1 = sv1.get_null_bvector();
+            typename SV::bvector_type_const_ptr bv_null2 = sv2.get_null_bvector();
+            found = bv_null1->find_first_mismatch(*bv_null2, mismatch);
+        }
+    }
+
+    midx = mismatch; // minimal mismatch
+    return found;
+}
+
 
 /**
-    \brief algorithms for sparse_vector scan/seach
+    \brief algorithms for sparse_vector scan/search
  
     Scanner uses properties of bit-vector plains to answer questions
     like "find all sparse vector elements equivalent to XYZ".
