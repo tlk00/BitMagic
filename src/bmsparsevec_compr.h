@@ -671,10 +671,13 @@ void rsc_sparse_vector<Val, SV>::set(size_type idx, value_type v)
     
     bool found = bv_null->test(idx);
     size_type sv_idx = bv_null->count_range(0, idx); // TODO: make test'n'count
-    
+//    size_type sv_idx;
+//    bool found = resolve(idx, &sv_idx);
+
     if (found)
     {
-        sv_.set(--sv_idx, v);
+        //sv_.set(--sv_idx, v);
+        sv_.set_value_no_null(--sv_idx, v);
     }
     else
     {
