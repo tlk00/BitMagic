@@ -34,6 +34,7 @@ For more information please visit:  http://bitmagic.io
 #include <iostream>
 #include <vector>
 #include <algorithm>
+#include <utility>
 
 #include "bm.h"
 #include "bmsparsevec.h"
@@ -127,6 +128,7 @@ void TestSV(const SV& sv, const VECT& vect)
 
 typedef bm::sparse_vector<unsigned, bm::bvector<> > svector_u32;
 typedef std::vector<char>                           vector_char_type;
+typedef std::vector<std::pair<unsigned, unsigned> > vector_pairs_type;
 
 
 static
@@ -182,7 +184,7 @@ void add_centromer_Ns(svector_u32& sv, vector_char_type& vect, unsigned csz)
     }
 }
 
-/// Generate large vectors to approximately simulate human chr1
+/// Generate large vectors to simulate human chr1
 ///
 static
 void generate_big_case(svector_u32& sv, vector_char_type& vect)
@@ -198,69 +200,83 @@ void generate_big_case(svector_u32& sv, vector_char_type& vect)
     TestSV(sv, vect); // paranoiya check
 }
 
-bm::chrono_taker::duration_map_type  timing_map;
-
-const unsigned repeats = 20000;
-
 static
-void test_mismatch_search(const svector_u32& sv)
+void generate_mismatches(vector_pairs_type& vect_m,
+                         const vector_char_type& vect,
+                         unsigned                m_count)
 {
-    svector_u32 sv1(sv); // copy sv
+    vect_m.resize(0);
+    if (!vect.size())
+        return;
 
-    bm::chrono_taker tt1("1. SV mismatch search ", repeats, &timing_map);
-    svector_u32::size_type sz = sv.size();
-    svector_u32::size_type delta = sz / repeats;
-
-    for (svector_u32::size_type i = 0; i < sz; i+=delta)
-    {
-        svector_u32::value_type v1 = sv1[i];
-        svector_u32::value_type v2 = rand() % 4; // generate random code
-        sv1.set(i, v2); // change the copy vector
-
-        svector_u32::size_type pos;
-        bool found = bm::sparse_vector_find_first_mismatch(sv, sv1, pos);
-        if (found)
-        {
-            assert(pos == i);
-            if (pos != i)
-            {
-                cerr << "Search error!" << endl; 
-                exit(1);
-            }
-            sv1.set(i, v1); // restore old value
-        }
-        else
-        {
-            assert(v1 == v2);
-            if (v1 != v2)
-            {
-                cerr << "Search mismatch error!" << endl;
-                exit(1);
-            }
-        }
-        //cout << "\r" << i << flush;
-    } // for i
-    //cout << endl;
-}
-
-static
-void test_mismatch_search(const vector_char_type& vect)
-{
-    vector_char_type vect1(vect); 
-
-    bm::chrono_taker tt1("2. STL iterator search ", repeats, &timing_map);
     vector_char_type::size_type sz = vect.size();
-    vector_char_type::size_type delta = sz / repeats;
+    vector_char_type::size_type delta = sz / m_count;
 
     for (vector_char_type::size_type i = 0; i < sz; i += delta)
     {
         vector_char_type::value_type v1 = vect[i];
-        unsigned code = rand() % 4; 
-        vector_char_type::value_type v2 = int2DNA(code); 
+        unsigned code = rand() % 4;
+        vector_char_type::value_type v2 = int2DNA(code);
+        if (v2 == v1)
+            continue;
+        vect_m.push_back(vector_pairs_type::value_type(i, code));
+    } // for i
+}
+
+// -------------------------------------------------------------------
+
+bm::chrono_taker::duration_map_type  timing_map;
+const unsigned repeats = 20000;
+
+
+
+
+static
+void test_mismatch_search(const svector_u32& sv,
+                          const vector_pairs_type& vect_m)
+{
+    svector_u32 sv1(sv); // copy sv
+    svector_u32::size_type sz = (svector_u32::size_type)vect_m.size();
+
+    bm::chrono_taker tt1("1. SV mismatch search ", sz, &timing_map);
+
+    for (unsigned k = 0; k < sz; ++k)
+    {
+        unsigned i = vect_m[k].first;
+        svector_u32::value_type v1 = sv1[i];
+        svector_u32::value_type v2 = vect_m[k].second;
+        assert(v1 != v2);
+
+        sv1.set(i, v2); // change the copy vector
+
+        svector_u32::size_type pos;
+        bool found = bm::sparse_vector_find_first_mismatch(sv, sv1, pos);
+        assert(found);
+        assert(pos == i);
+
+        sv1.set(pos, v1); // restore old value
+    } // for
+}
+
+static
+void test_mismatch_search(const vector_char_type& vect,
+                          const vector_pairs_type& vect_m)
+{
+    vector_char_type vect1(vect);
+    unsigned sz = (unsigned)vect_m.size();
+
+    bm::chrono_taker tt1("2. STL iterator search ", sz, &timing_map);
+
+    for (unsigned k = 0; k < sz; ++k)
+    {
+        unsigned i = vect_m[k].first;
+        vector_char_type::value_type v1 = vect[i];
+        vector_char_type::value_type v2 = int2DNA(vect_m[k].second);
+        assert(v1 != v2);
 
         vect1[i] = v2; // change the copy vector
 
-        // possible to use std::mismatch here
+        // possible to use std::mismatch() here
         bool found = false;
         vector_char_type::size_type pos;
         auto it = vect.begin(); auto it_end = vect.end();
@@ -270,124 +286,73 @@ void test_mismatch_search(const vector_char_type& vect)
             if (*it != *it1)
             {
                 found = true; 
-                pos = it - vect.begin();
+                pos = vector_char_type::size_type(it - vect.begin());
                 break;
             }
         } // for it
-
-        if (found)
-        {
-            //cout << "+" << flush;
-            assert(pos == i);
-            if (pos != i)
-            {
-                cerr << "Search error!" << endl;
-                exit(1);
-            }
-            vect1[i] = v1; // restore old value
-
-        }
-        else
-        {
-            //cout << "-" << flush;
-            assert(v1 == v2);
-            if (v1 != v2)
-            {
-                cerr << "Search mismatch error!" << endl;
-                exit(1);
-            }
-        }
-        //cout << "\r" << i << flush;
-    } // for i
-    //cout << endl;
-
+        assert(found);
+        assert(pos == i);
+        vect1[i] = v1; // restore old value
+    } // for
 }
 
 
 static
-void test_strcmp(const vector_char_type& vect)
+void test_strcmp(const vector_char_type& vect, const vector_pairs_type& vect_m)
 {
     vector_char_type vect1(vect);
+    unsigned sz = (unsigned)vect_m.size();
 
-    bm::chrono_taker tt1("3. strcmp() test ", repeats, &timing_map);
-    vector_char_type::size_type sz = vect.size();
-    vector_char_type::size_type delta = sz / repeats;
+    bm::chrono_taker tt1("3. strcmp() test ", sz, &timing_map);
 
-    for (vector_char_type::size_type i = 0; i < sz; i += delta)
+    unsigned vs = unsigned(vect.size());
+
+    for (unsigned k = 0; k < sz; ++k)
     {
+        unsigned i = vect_m[k].first;
         vector_char_type::value_type v1 = vect[i];
-        unsigned code = rand() % 4;
-        vector_char_type::value_type v2 = int2DNA(code);
+        assert(vect_m[k].second < 4);
+        vector_char_type::value_type v2 = int2DNA(vect_m[k].second);
+        assert(v1 != v2);
 
         vect1[i] = v2; // change the copy vector
 
         const char* s1 = vect.data();
         const char* s2 = vect1.data();
 
-        int res = ::strncmp(s1, s2, sz);
-        if (res == 0)
-        {
-            assert(v1 == v2);
-            if (v1 != v2)
-            {
-                cerr << "Search mismatch error!" << endl;
-                exit(1);
-            }
-        }
-        else
-        {
-            if (v1 == v2)
-            {
-                cerr << "Search mismatch error!" << endl;
-                exit(1);
-            }
-        }
+        int res = ::strncmp(s1, s2, vs);
+        assert(res);
         vect1[i] = v1; // restore
-        //cout << "\r" << i << flush;
-    } // for i
-    //cout << endl;
+
+    } // for
 }
 
 static
-void test_sv_cmp(const svector_u32& sv)
+void test_sv_cmp(const svector_u32& sv, const vector_pairs_type& vect_m)
 {
     svector_u32 sv1(sv);
+    unsigned sz = (unsigned)vect_m.size();
 
-    bm::chrono_taker tt1("4. sv-cmp() test ", repeats, &timing_map);
-    svector_u32::size_type sz = sv.size();
-    svector_u32::size_type delta = sz / repeats;
+    bm::chrono_taker tt1("4. sv-cmp() test ", sz, &timing_map);
 
-    for (svector_u32::size_type i = 0; i < sz; i += delta)
+    for (unsigned k = 0; k < sz; ++k)
     {
-        svector_u32::value_type v1 = sv[i];
-        svector_u32::value_type v2 = rand() % 4;
+        unsigned i = vect_m[k].first;
+        svector_u32::value_type v1 = sv1[i];
+        svector_u32::value_type v2 = vect_m[k].second;
+        assert(v1 != v2);
 
-        sv1[i] = v2; // change the copy vector
+        sv1.set(i, v2); // change the copy vector
 
         int res = compare_sv(sv, sv1);
-        if (res == 0)
-        {
-            assert(v1 == v2);
-            if (v1 != v2)
-            {
-                cerr << "Search mismatch error!" << endl;
-                exit(1);
-            }
-        }
-        else
-        {
-            if (v1 == v2)
-            {
-                cerr << "Search mismatch error!" << endl;
-                exit(1);
-            }
-            sv1[i] = v1;
-            //sv1.set(i, v1); // restore
-        }
-        //cout << "\r" << i << flush;
-    } // for i
-    //cout << endl;
+        assert(res != 0);
+
+        sv1.set(i, v1); // restore
+    } // for
 }
+
+// -------------------------------------------------------------------
+
 
 int main(void)
 {
@@ -411,21 +376,25 @@ int main(void)
         {
             svector_u32 sv1;
             vector_char_type dna_vect;
+            vector_pairs_type vect_m;
 
             cout << "Generate test data." << endl;
             generate_big_case(sv1, dna_vect);
+            generate_mismatches(vect_m, dna_vect, repeats);
+            cout << "generated mismatches=" << vect_m.size() << endl;
 
             cout << "SV mismatch search test" << endl;
-            test_mismatch_search(sv1);
+            test_mismatch_search(sv1, vect_m);
 
             cout << "STL interator mismatch test" << endl;
-            test_mismatch_search(dna_vect);
+            test_mismatch_search(dna_vect, vect_m);
 
             cout << "::strncmp test" << endl;
-            test_strcmp(dna_vect);
+            test_strcmp(dna_vect, vect_m);
 
             cout << "SV compare test" << endl;
-            test_sv_cmp(sv1);
+            test_sv_cmp(sv1, vect_m);
+
         }
 
         std::cout << std::endl << "Performance:" << std::endl;
