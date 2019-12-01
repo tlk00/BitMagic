@@ -3088,6 +3088,9 @@ bvector<Alloc>::count_range(size_type left,
 template<typename Alloc>
 bvector<Alloc>& bvector<Alloc>::invert()
 {
+    if (!size_)
+        return *this; // cannot invert a set of power 0
+
     unsigned top_blocks = blockman_.reserve_top_blocks(bm::set_top_array_size);
     bm::word_t*** blk_root = blockman_.top_blocks_root();
     for (unsigned i = 0; i < top_blocks; ++i)
