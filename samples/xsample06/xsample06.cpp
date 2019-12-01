@@ -259,6 +259,19 @@ void generate_mismatches(vector_pairs_type& vect_m,
             continue;
         vect_m.push_back(vector_pairs_type::value_type(i, code));
     } // for i
+
+    // add some extra with a distrubution skewed to the beginning
+    //
+    for (vector_char_type::size_type i = 1; i < sz / 4; i += (rand()%(1024 * 10)))
+    {
+        vector_char_type::value_type v1 = vect[i];
+        unsigned code = rand() % 4;
+        vector_char_type::value_type v2 = int2DNA(code);
+        if (v2 == v1)
+            continue;
+        vect_m.push_back(vector_pairs_type::value_type(i, code));
+    } // for i
+
 }
 
 // -------------------------------------------------------------------
@@ -276,6 +289,8 @@ void test_mismatch_search(const svector_u32& sv, const vector_pairs_type& vect_m
     svector_u32 sv1(sv); // copy sv
     svector_u32::size_type sz = (svector_u32::size_type)vect_m.size();
 
+    unsigned cnt = 0;
+
     bm::chrono_taker tt1("1. SV mismatch", sz, &timing_map);
 
     for (unsigned k = 0; k < sz; ++k)
@@ -289,11 +304,13 @@ void test_mismatch_search(const svector_u32& sv, const vector_pairs_type& vect_m
 
         svector_u32::size_type pos;
         bool found = bm::sparse_vector_find_first_mismatch(sv, sv1, pos);
+        cnt += found;
         assert(found);
         assert(pos == i);
 
         sv1.set(pos, v1); // restore old value
     } // for
+    assert(cnt == vect_m.size());
 }
 
 /*
@@ -305,6 +322,8 @@ void test_vect_mismatch_search(const vector_char_type& vect,
 {
     vector_char_type vect1(vect);
     unsigned sz = (unsigned)vect_m.size();
+
+    unsigned cnt = 0;
 
     bm::chrono_taker tt1("2. STL iterator", sz, &timing_map);
 
@@ -331,10 +350,12 @@ void test_vect_mismatch_search(const vector_char_type& vect,
                 break;
             }
         } // for it
+        cnt += found;
         assert(found);
         assert(pos == i);
         vect1[i] = v1; // restore old value
     } // for
+    assert(cnt == vect_m.size());
 }
 
 
@@ -346,6 +367,7 @@ void test_strcmp(const vector_char_type& vect, const vector_pairs_type& vect_m)
 {
     vector_char_type vect1(vect);
     unsigned sz = (unsigned)vect_m.size();
+    unsigned cnt = 0;
 
     bm::chrono_taker tt1("3. strcmp() test ", sz, &timing_map);
 
@@ -365,10 +387,11 @@ void test_strcmp(const vector_char_type& vect, const vector_pairs_type& vect_m)
         const char* s2 = vect1.data();
 
         int res = ::strncmp(s1, s2, vs);
+        cnt += bool(res);
         assert(res);
         vect1[i] = v1; // restore
-
     } // for
+    assert(cnt == vect_m.size());
 }
 
 /*
@@ -379,6 +402,7 @@ void test_sv_cmp(const svector_u32& sv, const vector_pairs_type& vect_m)
 {
     svector_u32 sv1(sv);
     unsigned sz = (unsigned)vect_m.size();
+    unsigned cnt = 0;
 
     bm::chrono_taker tt1("4. sv compare", sz, &timing_map);
 
@@ -393,9 +417,11 @@ void test_sv_cmp(const svector_u32& sv, const vector_pairs_type& vect_m)
 
         int res = compare_sv(sv, sv1);
         assert(res != 0);
+        cnt += bool(res);
 
         sv1.set(i, v1); // restore
     } // for
+    assert(cnt == vect_m.size());
 }
 
 /*
@@ -406,6 +432,7 @@ void test_sv_cmp_it(const svector_u32& sv, const vector_pairs_type& vect_m)
 {
     svector_u32 sv1(sv);
     unsigned sz = (unsigned)vect_m.size();
+    unsigned cnt = 0;
 
     bm::chrono_taker tt1("4. sv-cmp-it()", sz, &timing_map);
 
@@ -419,10 +446,13 @@ void test_sv_cmp_it(const svector_u32& sv, const vector_pairs_type& vect_m)
         sv1.set(i, v2); // change the copy vector
 
         int res = compare_sv_it(sv, sv1);
+        cnt += bool(res);
+
         assert(res != 0);
 
         sv1.set(i, v1); // restore
     } // for
+    assert(cnt == vect_m.size());
 }
 
 // -------------------------------------------------------------------
@@ -467,7 +497,7 @@ int main(void)
             // test compare functions
             //
 
-            cout << "::strncmp test" << endl;
+            cout << "strncmp() test" << endl;
             test_strcmp(dna_vect, vect_m);
 
             cout << "SV compare test" << endl;
