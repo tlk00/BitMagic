@@ -76,16 +76,25 @@ More complex examples to illustrate mixed techniques and use cases
 
 ./xsample01 - advanced: different methods of handling of super sparse sets. Benchmarks of set operations for each method. 
                Details at: http://bitmagic.io/case-ER-join.html
+
 ./xsample02 - sparse vector based counting sort and histogram construction techniques compared to std::sort()
                Details at: http://bitmagic.io/hist-sort.html
+
 ./xsample03 - Search in human genome data (bioinformatics) using bm::sparse_vector<>, bm::rsc_sparse_vector<> 
               Details at: http://bitmagic.io/succinct-snp-search.html 
+
 ./xsample04 - Fingerprint pattern matching, SHIFT-AND Bitap algorithm. Search for DNA substrings.
               Details at: http://bitmagic.io/dna-search.html 
+
 ./xsample04a - Fast construction of bit-indexes using bulk insert iterator, multi-threaded partitioning and merge.
               Details at: http://bitmagic.io/dna-search-idx.html
+
 ./xsample05 - Example how to build a memory compressed dictionary, benchmark how fast BitMagic can search in it.
               As a sample data we use a part of NED catalog of celestial objects.
               Details at: http://bitmagic.io/star-search.html
+
+./xsample06 - Example on how to use DNA 2-bit per bp compression using
+              sparse_vector<> and use of bm::sparse_vector_find_first_mismatch()
+              to create comparison function. Benchmarks for variants of mismatch search 	      and comparison.
 
 
