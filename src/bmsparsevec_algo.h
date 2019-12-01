@@ -147,6 +147,11 @@ void dynamic_range_clip_low(SV& svect, unsigned low_bit)
 /**
     Find first mismatch (element which is different) between two sparse vectors
     (uses linear scan in bit-vector plains)
+
+    Function works with both NULL and NOT NULL vectors
+    NULL means unassigned (uncertainty), so first mismatch NULL is a mismatch
+    even if values in vectors can be formally the same (i.e. 0)
+
     @param sv1 - vector 1
     @param sv2 - vector 2
     @param midx - mismatch index
@@ -169,8 +174,52 @@ bool sparse_vector_find_first_mismatch(const SV& sv1,
     BM_ASSERT(plains1);
 
     // for RSC vector do NOT compare NULL plains
+
     if (bm::conditional<SV::is_rsc_support::value>::test())
-        --plains1;
+    {
+        //--plains1;
+    }
+    else // regular sparse vector - may have NULL plains
+    {
+        typename SV::bvector_type_const_ptr bv_null1 = sv1.get_null_bvector();
+        typename SV::bvector_type_const_ptr bv_null2 = sv2.get_null_bvector();
+        if (bv_null1 && bv_null2) // both (not) NULL vectors present
+        {
+            bool f = bv_null1->find_first_mismatch(*bv_null2, midx, mismatch);
+            if (f && (midx < mismatch)) // better mismatch found
+            {
+                found = f; mismatch = midx;
+            }
+        }
+        else // one or both NULL vectors are not present
+        {
+            if (bv_null1)
+            {
+                typename SV::bvector_type bv_tmp; // TODO: get rid of temp bv
+                bv_tmp.resize(sv2.size());
+                bv_tmp.invert(); // turn into true NULL vector
+
+                // find first NULL value (mismatch)
+                bool f = bv_null1->find_first_mismatch(bv_tmp, midx, mismatch);
+                if (f && (midx < mismatch)) // better mismatch found
+                {
+                    found = f; mismatch = midx;
+                }
+            }
+            if (bv_null2)
+            {
+                typename SV::bvector_type bv_tmp; // TODO: get rid of temp bv
+                bv_tmp.resize(sv1.size());
+                bv_tmp.invert();
+
+                bool f = bv_null2->find_first_mismatch(bv_tmp, midx, mismatch);
+                if (f && (midx < mismatch)) // better mismatch found
+                {
+                    found = f; mismatch = midx;
+                }
+            }
+        }
+    }
 
     for (unsigned i = 0; mismatch & (i < plains1); ++i)
     {
