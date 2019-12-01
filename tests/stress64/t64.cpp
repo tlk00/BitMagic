@@ -1296,7 +1296,16 @@ void EmptyBVTest()
             exit(1);
         }
     }
-    
+
+    {
+        bvect bv1;
+        bv1.resize(0);
+
+        bv1.invert();
+        assert(!bv1.any());
+        assert(bv1.size()==0);
+    }
+
     cout << "---------------------------- Empty bvector test OK" << endl;
     
 }

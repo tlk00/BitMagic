@@ -3486,6 +3486,15 @@ void EmptyBVTest()
             exit(1);
         }
     }
+
+    {
+        bvect bv1;
+        bv1.resize(0);
+
+        bv1.invert();
+        assert(!bv1.any());
+        assert(bv1.size()==0);
+    }
     
     cout << "---------------------------- Empty bvector test OK" << endl;
     
@@ -17228,6 +17237,63 @@ void TestSparseVectorAlgo()
         assert(f);
         assert(pos == bm::id_max32/2 + 1000+1);
     }
+
+    {
+        bm::sparse_vector<unsigned, bvect>::size_type pos;
+        bm::sparse_vector<unsigned, bvect> sv1(bm::use_null);
+        bm::sparse_vector<unsigned, bvect> sv2(bm::use_null);
+
+        sv1[1] = 1;
+        sv1[2] = 2;
+        sv1.set_null(3); // set element 3 to NULL
+        sv1[4] = 0;
+
+        sv2 = sv1;
+
+        bool found = bm::sparse_vector_find_first_mismatch(sv1, sv2, pos);
+        assert(!found);
+
+        sv2[4] = 10;
+        found = bm::sparse_vector_find_first_mismatch(sv1, sv2, pos);
+        assert(found);
+        assert(pos == 4);
+
+        sv2[3] = 0;
+        found = bm::sparse_vector_find_first_mismatch(sv1, sv2, pos);
+        assert(found);
+        assert(pos == 3);
+    }
+
+    {
+        bm::sparse_vector<unsigned, bvect>::size_type pos;
+
+        bm::sparse_vector<unsigned, bvect> sv1(bm::use_null);
+        bm::sparse_vector<unsigned, bvect> sv2;
+
+        bool found = bm::sparse_vector_find_first_mismatch(sv1, sv2, pos);
+        assert(!found);
+
+        sv1[0] = 0;
+        sv1[10] = 1;
+        sv1[20] = 2;
+        sv1.set_null(30); // set element 3 to NULL
+        sv1[40] = 0;
+
+        sv2[0] = 0;
+        sv2[10] = 1;
+        sv2[20] = 2;
+        sv2[40] = 0;
+
+        found = bm::sparse_vector_find_first_mismatch(sv1, sv2, pos);
+        assert(found);
+        assert(pos == 1);
+
+        found = bm::sparse_vector_find_first_mismatch(sv2, sv1, pos);
+        assert(found);
+        assert(pos == 1);
+
+    }
+
 
     cout << " -------------------------- TestSparseVectorAlgo() OK" << endl;
 }
