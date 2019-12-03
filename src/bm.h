@@ -3385,18 +3385,18 @@ bool bvector<Alloc>::find_first_mismatch(
     {
         return bvect.find(pos);
     }
+    unsigned i_to, j_to;
     {
         unsigned bvect_top_blocks = bvect.blockman_.top_block_size();
         if (!bvect_top_blocks)
             return this->find(pos);
-        if (bvect_top_blocks > top_blocks) top_blocks = bvect_top_blocks;
-    }
-
-    unsigned i_to, j_to;
-    {
+        if (bvect_top_blocks > top_blocks)
+            top_blocks = bvect_top_blocks;
         block_idx_type nb_to = (search_to >> bm::set_block_shift);
         bm::get_block_coord(nb_to, i_to, j_to);
     }
+    if (i_to < top_blocks)
+        top_blocks = i_to+1;
 
     for (unsigned i = 0; i < top_blocks; ++i)
     {
@@ -3406,28 +3406,16 @@ bool bvector<Alloc>::find_first_mismatch(
         if (blk_blk == arg_blk_blk)
             continue;
 
-        if (i > i_to)
-            return false;
-
-        for (unsigned j = 0; j < bm::set_sub_array_size; ++j)
+        unsigned j = 0;
+        do
         {
             const bm::word_t* arg_blk; const bm::word_t* blk;
-            if ((bm::word_t*)arg_blk_blk == FULL_BLOCK_FAKE_ADDR)
-                arg_blk = FULL_BLOCK_REAL_ADDR;
-            else
-            {
-                arg_blk = arg_blk_blk ? arg_blk_blk[j] : 0;
-                if (arg_blk == FULL_BLOCK_FAKE_ADDR)
-                    arg_blk = FULL_BLOCK_REAL_ADDR;
-            }
-            if ((bm::word_t*)blk_blk == FULL_BLOCK_FAKE_ADDR)
-                blk = FULL_BLOCK_REAL_ADDR;
-            else
-            {
-                blk = blk_blk ? blk_blk[j] : 0;
-                if (blk == FULL_BLOCK_FAKE_ADDR)
-                    blk = FULL_BLOCK_REAL_ADDR;
-            }
+            arg_blk = ((bm::word_t*)arg_blk_blk == FULL_BLOCK_FAKE_ADDR) ?
+                        FULL_BLOCK_REAL_ADDR :
+                        arg_blk_blk ? (BLOCK_ADDR_SAN(arg_blk_blk[j])) : 0;
+            blk = ((bm::word_t*)blk_blk == FULL_BLOCK_FAKE_ADDR) ?
+                    FULL_BLOCK_REAL_ADDR :
+                    (blk_blk ? (BLOCK_ADDR_SAN(blk_blk[j])) : 0);
             if (blk == arg_blk)
                 continue;
 
@@ -3449,7 +3437,7 @@ bool bvector<Alloc>::find_first_mismatch(
                     return false;
             }
 
-        } // for j
+        } while (++j < bm::set_sub_array_size);
     } // for i
 
     return false;
