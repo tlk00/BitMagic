@@ -483,8 +483,9 @@ int main(void)
             vector_char_type dna_vect;
             vector_pairs_type vect_m;
 
-            cout << "Generate test data." << endl;
+            cout << "Generate benchmark test data." << endl;
             generate_big_case(sv1, dna_vect);
+
             generate_mismatches(vect_m, dna_vect, repeats);
             cout << "generated mismatches=" << vect_m.size() << endl;
 
