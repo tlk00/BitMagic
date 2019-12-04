@@ -463,17 +463,21 @@ int main(void)
     {
         // generate short DNA vector as STL vector and BitMagic 
         // bit-transposed container, print the results (as a demo)
+        // we don't have to re-load it every time,
+        // bit transposed container is serializable
         {
-            svector_u32 sv1;
-            vector_char_type dna_vect;
-
-            generate_DNA_vector(sv1, dna_vect, 20);
-            add_centromer_Ns(sv1, dna_vect, 6);
-
-            sv1.optimize(); // this will compress the sparse (N) plane
-
-            PrintSV(sv1);
-            TestSV(sv1, dna_vect);
+            const char* s = "ATGTCNNNNNTATA";
+            svector_u32 sv;
+            {
+                svector_u32::back_insert_iterator bi = sv.get_back_inserter();
+                for (unsigned i = 0; s[i]; ++i)
+                {
+                    bi = DNA2int(s[i]);
+                }
+                bi.flush();
+            }
+            sv.optimize(); // this will compress the sparse (N) plane
+            PrintSV(sv);
         }
 
         // run a battery of benchmarks for variants of mismatch searches
