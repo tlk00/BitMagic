@@ -6,6 +6,10 @@ compression close to 2-bits per string character (base pair).
 This example show how to do mismatch search and construct comparison function
 on succinct sparse vector. 
 
+Technical notes:
+http://bitmagic.io/dna-compare.html
+
+
 
 How to build:
 --------------
