@@ -295,6 +295,76 @@ bool sparse_vector_find_first_mismatch(const SV& sv1,
 }
 
 
+template<typename SV1, typename SV2>
+bool sparse_vector_find_mismatch(typename SV1::bvector_type& bv, 
+                                 const SV1&                  sv1,
+                                 const SV2&                  sv2)
+{
+    if (bm::conditional<SV1::is_rsc_support::value>::test())
+    {
+        BM_ASSERT(0); // TODO: fixme
+    }
+    if (bm::conditional<SV2::is_rsc_support::value>::test())
+    {
+        BM_ASSERT(0); // TODO: fixme
+    }
+
+    bv.clear();
+
+    unsigned plains = sv1.plains();
+    if (plains < sv2.plains())
+        plains = sv2.plains();
+
+    for (unsigned i = 0; mismatch & (i < plains1); ++i)
+    {
+        typename SV::bvector_type_const_ptr bv1 = sv1.get_plain(i);
+        typename SV::bvector_type_const_ptr bv2 = sv2.get_plain(i);
+
+        if (!bv1)
+        {
+            if (!bv2)
+                continue;
+            bv |= *bv2;
+            continue;
+        }
+        if (!bv2)
+        {
+            BM_ASSERT(bv1);
+            bv |= *bv1;
+            continue;
+        }
+
+        // both plains are not NULL, compute XOR diff
+        //
+        SV::bvector_type bv_xor;
+        bv_xor.bit_xor(*bv1, *bv2, SV::bvector_type::opt_none);
+        bv |= bv_xor;
+
+    } // for i
+
+    // NULL correction 
+    //
+    typename SV::bvector_type_const_ptr bv_null1 = sv1.get_null_bvector();
+    typename SV::bvector_type_const_ptr bv_null2 = sv2.get_null_bvector();
+
+    // NULL correction to exclude all NULL (unknown) values from the result set
+    //  (AND with NOT NULL vector)
+    if (bv_null1 && bv_null2)
+    {
+        SV::bvector_type bv_or;
+        bv_xor.bit_or(*bv1, *bv2, SV::bvector_type::opt_none);
+        bv &= bv_or;
+    }
+    else
+    {
+        if (bv_null1)
+            bv &= *bv_null1;
+        if (bv_null2)
+            bv &= *bv_null2;
+    }
+}
+
+
 /**
     \brief algorithms for sparse_vector scan/search
  
