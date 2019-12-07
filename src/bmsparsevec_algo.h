@@ -158,6 +158,8 @@ void dynamic_range_clip_low(SV& svect, unsigned low_bit)
 
     @return true if mismatch found
 
+    @sa sparse_vector_find_mismatch
+
     \ingroup svalgo
 */
 template<typename SV>
@@ -294,12 +296,39 @@ bool sparse_vector_find_first_mismatch(const SV& sv1,
     return found;
 }
 
+/**
+    Find mismatch vector, indicating positions of mismatch between two sparse vectors
+    (uses linear scan in bit-vector plains)
 
+    Function works with both NULL and NOT NULL vectors
+
+    @param bv - [out] - bit-ector with mismatch positions indicated as 1s
+    @param sv1 - vector 1
+    @param sv2 - vector 2
+    @param null_proc - rules of processing for (not) NULL plain
+      bm::no_null - NULLs from both vectors are treated as uncertainty
+                    and NOT included into final result
+      bm::use_null - difference in NULLs accounted into the result
+
+    @sa sparse_vector_find_first_mismatch
+
+    \ingroup svalgo
+*/
 template<typename SV1, typename SV2>
-bool sparse_vector_find_mismatch(typename SV1::bvector_type& bv, 
+void sparse_vector_find_mismatch(typename SV1::bvector_type& bv,
                                  const SV1&                  sv1,
-                                 const SV2&                  sv2)
+                                 const SV2&                  sv2,
+                                 bm::null_support            null_proc)
 {
+    typedef typename SV1::bvector_type       bvector_type;
+    typedef typename bvector_type::allocator_type        allocator_type;
+    typedef typename allocator_type::allocator_pool_type allocator_pool_type;
+
+    allocator_pool_type  pool; // local pool for blocks
+    typename bvector_type::mem_pool_guard mp_guard_bv;
+    mp_guard_bv.assign_if_not_set(pool, bv);
+
+
     if (bm::conditional<SV1::is_rsc_support::value>::test())
     {
         BM_ASSERT(0); // TODO: fixme
@@ -315,10 +344,10 @@ bool sparse_vector_find_mismatch(typename SV1::bvector_type& bv,
     if (plains < sv2.plains())
         plains = sv2.plains();
 
-    for (unsigned i = 0; mismatch & (i < plains1); ++i)
+    for (unsigned i = 0; i < plains; ++i)
     {
-        typename SV::bvector_type_const_ptr bv1 = sv1.get_plain(i);
-        typename SV::bvector_type_const_ptr bv2 = sv2.get_plain(i);
+        typename SV1::bvector_type_const_ptr bv1 = sv1.get_plain(i);
+        typename SV2::bvector_type_const_ptr bv2 = sv2.get_plain(i);
 
         if (!bv1)
         {
@@ -336,31 +365,90 @@ bool sparse_vector_find_mismatch(typename SV1::bvector_type& bv,
 
         // both plains are not NULL, compute XOR diff
         //
-        SV::bvector_type bv_xor;
-        bv_xor.bit_xor(*bv1, *bv2, SV::bvector_type::opt_none);
+        bvector_type bv_xor;
+        typename bvector_type::mem_pool_guard mp_guard;
+        mp_guard.assign_if_not_set(pool, bv_xor);
+
+        bv_xor.bit_xor(*bv1, *bv2, SV1::bvector_type::opt_none);
         bv |= bv_xor;
 
     } // for i
 
-    // NULL correction 
-    //
-    typename SV::bvector_type_const_ptr bv_null1 = sv1.get_null_bvector();
-    typename SV::bvector_type_const_ptr bv_null2 = sv2.get_null_bvector();
-
-    // NULL correction to exclude all NULL (unknown) values from the result set
-    //  (AND with NOT NULL vector)
-    if (bv_null1 && bv_null2)
+    // size mismatch check
     {
-        SV::bvector_type bv_or;
-        bv_xor.bit_or(*bv1, *bv2, SV::bvector_type::opt_none);
-        bv &= bv_or;
+        typename SV1::size_type sz1 = sv1.size();
+        typename SV2::size_type sz2 = sv2.size();
+        if (sz1 != sz2)
+        {
+            if (sz1 < sz2)
+            {
+            }
+            else
+            {
+                bm::xor_swap(sz1, sz2);
+            }
+            bv.set_range(sz1, sz2-1);
+        }
     }
-    else
+
+    // NULL processings
+    //
+    typename SV1::bvector_type_const_ptr bv_null1 = sv1.get_null_bvector();
+    typename SV2::bvector_type_const_ptr bv_null2 = sv2.get_null_bvector();
+
+    switch (null_proc)
     {
-        if (bv_null1)
-            bv &= *bv_null1;
-        if (bv_null2)
-            bv &= *bv_null2;
+    case bm::no_null:
+        // NULL correction to exclude all NULL (unknown) values from the result set
+        //  (AND with NOT NULL vector)
+        if (bv_null1 && bv_null2)
+        {
+            bvector_type bv_or;
+            typename bvector_type::mem_pool_guard mp_guard;
+            mp_guard.assign_if_not_set(pool, bv_or);
+
+            bv_or.bit_or(*bv_null1, *bv_null2, bvector_type::opt_none);
+            bv &= bv_or;
+        }
+        else
+        {
+            if (bv_null1)
+                bv &= *bv_null1;
+            if (bv_null2)
+                bv &= *bv_null2;
+        }
+    break;
+    case bm::use_null:
+        if (bv_null1 && bv_null2)
+        {
+            bvector_type bv_xor;
+            typename bvector_type::mem_pool_guard mp_guard;
+            mp_guard.assign_if_not_set(pool, bv_xor);
+
+            bv_xor.bit_xor(*bv_null1, *bv_null2, bvector_type::opt_none);
+            bv |= bv_xor;
+        }
+        else
+        {
+            bvector_type bv_null;
+            typename bvector_type::mem_pool_guard mp_guard;
+            mp_guard.assign_if_not_set(pool, bv_null);
+            if (bv_null1)
+            {
+                bv_null = *bv_null1;
+                bv_null.resize(sv1.size());
+            }
+            if (bv_null2)
+            {
+                bv_null = *bv_null2;
+                bv_null.resize(sv2.size());
+            }
+            bv_null.invert();
+            bv |= bv_null;
+        }
+    break;
+    default:
+        BM_ASSERT(0);
     }
 }
 

@@ -17294,6 +17294,182 @@ void TestSparseVectorAlgo()
 
     }
 
+    cout << " ----- Find mismatches " << endl;
+
+    {
+        bvect  bv_m; // mismatch vector
+        bm::sparse_vector<unsigned, bvect> sv1;
+        bm::sparse_vector<unsigned, bvect> sv2;
+
+        bm::sparse_vector_find_mismatch(bv_m, sv1, sv2, bm::no_null);
+        assert(!bv_m.any());
+
+        sv1[0] = 0;
+        sv1[10] = 15;
+        sv1[20] = 23;
+
+        sv2[0] = 0;
+        sv2[10] = 15;
+        sv2[20] = 23;
+
+        bm::sparse_vector_find_mismatch(bv_m, sv1, sv2, bm::no_null);
+        assert(!bv_m.any());
+
+        sv2[0] = 32;
+        bm::sparse_vector_find_mismatch(bv_m, sv1, sv2, bm::no_null);
+        assert(bv_m.count()==1);
+        {
+            bvect bv_c { 0 };
+            bool f = bv_m.equal(bv_c);
+            assert(f);
+        }
+
+        sv1[22] = 255;
+        bm::sparse_vector_find_mismatch(bv_m, sv1, sv2, bm::no_null);
+        cout << bv_m.count() << endl;
+        assert(bv_m.count()==3);
+        {
+            bvect bv_c { 0,  21, 22 };
+            bool f = bv_m.equal(bv_c);
+            assert(f);
+        }
+    }
+
+    {
+        bvect  bv_m; // mismatch vector
+        bm::sparse_vector<unsigned, bvect> sv1(bm::use_null);
+        bm::sparse_vector<unsigned, bvect> sv2(bm::use_null);
+
+        sv1[0] = 0;
+        sv1[10] = 15;
+        sv1[20] = 23;
+
+        sv2[0] = 0;
+        sv2[10] = 15;
+        sv2[20] = 23;
+
+        bm::sparse_vector_find_mismatch(bv_m, sv1, sv2, bm::no_null);
+        assert(!bv_m.any());
+        bm::sparse_vector_find_mismatch(bv_m, sv2, sv1, bm::no_null);
+        assert(!bv_m.any());
+
+        sv2[id_max/2] = 0;
+        sv2[id_max/2+1] = 256;
+
+        bm::sparse_vector_find_mismatch(bv_m, sv1, sv2, bm::no_null);
+        cout << bv_m.count() << endl;
+        assert(bv_m.count()==2);
+        {
+            bvect bv_c { id_max/2,  id_max/2+1 };
+            DetailedCompareBVectors(bv_c, bv_m);
+            bool f = bv_m.equal(bv_c);
+            assert(f);
+        }
+        bm::sparse_vector_find_mismatch(bv_m, sv2, sv1, bm::no_null);
+        cout << bv_m.count() << endl;
+        assert(bv_m.count()==2);
+        {
+            bvect bv_c { id_max/2,  id_max/2+1 };
+            DetailedCompareBVectors(bv_c, bv_m);
+            bool f = bv_m.equal(bv_c);
+            assert(f);
+        }
+    }
+
+
+    {
+        bvect  bv_m; // mismatch vector
+        bm::sparse_vector<unsigned, bvect> sv1;
+        bm::sparse_vector<unsigned, bvect> sv2(bm::use_null);
+
+        sv1[0] = 0;
+        sv1[1] = 15;
+        sv1[2] = 23;
+
+        sv2[0] = 0;
+        sv2[1] = 15;
+        sv2[2] = 23;
+
+        bm::sparse_vector_find_mismatch(bv_m, sv1, sv2, bm::no_null);
+        assert(!bv_m.any());
+        bm::sparse_vector_find_mismatch(bv_m, sv1, sv2, bm::use_null);
+        cout << bv_m.count() << endl;
+        assert(!bv_m.any());
+        bm::sparse_vector_find_mismatch(bv_m, sv2, sv1, bm::use_null);
+        cout << bv_m.count() << endl;
+        assert(!bv_m.any());
+
+        sv2[4] = 10;
+        bm::sparse_vector_find_mismatch(bv_m, sv1, sv2, bm::use_null);
+        cout << bv_m.count() << endl;
+        {
+            bvect bv_c { 3, 4 };
+            DetailedCompareBVectors(bv_c, bv_m);
+            bool f = bv_m.equal(bv_c);
+            assert(f);
+        }
+        bm::sparse_vector_find_mismatch(bv_m, sv2, sv1, bm::use_null);
+        cout << bv_m.count() << endl;
+        {
+            bvect bv_c { 3, 4 };
+            DetailedCompareBVectors(bv_c, bv_m);
+            bool f = bv_m.equal(bv_c);
+            assert(f);
+        }
+
+    }
+
+    {
+        bvect  bv_m; // mismatch vector
+        bm::sparse_vector<unsigned, bvect> sv1;
+        bm::sparse_vector<unsigned, bvect> sv2(bm::use_null);
+
+        sv1[0] = 0;
+        sv1[1] = 1;
+        sv1[2] = 2;
+
+        sv2[0] = 0;
+        sv2[1] = 1;
+        sv2[2] = 2;
+
+        sv2[3] = 0;
+        bm::sparse_vector_find_mismatch(bv_m, sv1, sv2, bm::use_null);
+        cout << bv_m.count() << endl;
+        {
+            bvect bv_c { 3 };
+            DetailedCompareBVectors(bv_c, bv_m);
+            bool f = bv_m.equal(bv_c);
+            assert(f);
+        }
+        bm::sparse_vector_find_mismatch(bv_m, sv2, sv1, bm::use_null);
+        cout << bv_m.count() << endl;
+        {
+            bvect bv_c { 3 };
+            DetailedCompareBVectors(bv_c, bv_m);
+            bool f = bv_m.equal(bv_c);
+            assert(f);
+        }
+
+
+        sv1[5] = 0;
+        bm::sparse_vector_find_mismatch(bv_m, sv2, sv1, bm::use_null);
+        cout << bv_m.count() << endl;
+        {
+            bvect bv_c { 4, 5 };
+            DetailedCompareBVectors(bv_c, bv_m);
+            bool f = bv_m.equal(bv_c);
+            assert(f);
+        }
+        bm::sparse_vector_find_mismatch(bv_m, sv2, sv1, bm::no_null);
+        cout << bv_m.count() << endl;
+        assert(!bv_m.any());
+
+        bm::sparse_vector_find_mismatch(bv_m, sv1, sv2, bm::no_null);
+        cout << bv_m.count() << endl;
+        assert(!bv_m.any());
+    }
+
+
 
     cout << " -------------------------- TestSparseVectorAlgo() OK" << endl;
 }
@@ -24734,7 +24910,7 @@ int main(int argc, char *argv[])
 
     if (is_all || is_sv)
     {
-        TestSparseVector();
+//        TestSparseVector();
 
         TestSparseVectorAlgo();
 
