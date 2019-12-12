@@ -4280,9 +4280,7 @@ unsigned bit_block_change32(const bm::word_t* block, unsigned size)
     @internal
 */
 inline
-void bit_block_change_bc32(const bm::word_t* block,
-                           unsigned* gc,
-                           unsigned* bc)
+void bit_block_change_bc(const bm::word_t* block, unsigned* gc, unsigned* bc)
 {
     BM_ASSERT(gc);
     BM_ASSERT(bc);

@@ -444,6 +444,11 @@ protected:
    typedef typename BV::blocks_manager_type blocks_manager_type;
 
 protected:
+   void xor_decode(size_type x_ref_idx, bm::id64_t x_ref_d64,
+                   blocks_manager_type& bman,
+                        block_idx_type nb);//,
+                        //bm::word_t* blk);
+
    void deserialize_gap(unsigned char btype, decoder_type& dec, 
                         bvector_type&  bv, blocks_manager_type& bman,
                         block_idx_type nb,
@@ -470,17 +475,21 @@ protected:
 
 protected:
     typedef bm::heap_vector<bm::gap_word_t, allocator_type> block_arridx_type;
+    typedef typename allocator_type::allocator_pool_type allocator_pool_type;
 
 protected:
-    block_arridx_type  bit_idx_arr_;
-    block_arridx_type  gap_temp_block_;
-    bm::word_t*        temp_block_;
-    allocator_type     alloc_;
+    block_arridx_type    bit_idx_arr_;
+    block_arridx_type    gap_temp_block_;
+    bm::word_t*          temp_block_;
+
+    allocator_pool_type  pool_;
+    allocator_type       alloc_;
 
     // XOR compression
     //
     const bv_ref_vector_type* ref_vect_;  ///< ref.vector for XOR compression
     bm::word_t*               xor_block_; ///< xor product
+    bm::word_t*               or_block_;
 };
 
 
@@ -891,7 +900,11 @@ const unsigned char set_block_bitgap_bienc      = 33; //!< Interpolated bit-bloc
 const unsigned char set_block_bit_digest0       = 34; //!< H-compression with digest mask
 
 const unsigned char set_block_ref_eq            = 35; //!< block is a copy of a reference block
-const unsigned char set_block_xor_ref           = 36; //!< block is masked XOR of a reference block
+const unsigned char set_block_xor_ref8          = 36; //!< block is masked XOR of a reference block (8-bit)
+const unsigned char set_block_xor_ref16         = 37; //!< block is masked XOR of a reference block (16-bit)
+const unsigned char set_block_xor_ref32         = 38; //!< ..... 32-bit (should never happen)
+
+const unsigned char set_block_xor_gap_ref32     = 39; //!< ..... 32-bit (should never happen)
 
 
 
@@ -1255,7 +1268,7 @@ unsigned char serializer<BV>::find_bit_best_encoding_l5(const bm::word_t* block)
         add_model(bm::set_block_bit_digest0, bit_model_d0_size_ * 8);
 
 
-    bm::bit_block_change_bc32(block, &bit_gaps, &bc);
+    bm::bit_block_change_bc(block, &bit_gaps, &bc);
     BM_ASSERT(bm::bit_block_count(block) == bc);
     BM_ASSERT(bm::bit_block_calc_change(block) == bit_gaps);
 
@@ -1360,7 +1373,7 @@ unsigned char serializer<BV>::find_bit_best_encoding(const bm::word_t* block)
 
         if (compression_level_ >= 4)
         {
-            bm::bit_block_change_bc32(block, &bit_gaps, &bc);
+            bm::bit_block_change_bc(block, &bit_gaps, &bc);
         }
         else
         {
@@ -1437,6 +1450,8 @@ serializer<BV>::find_gap_best_encoding(const bm::gap_word_t* gap_block)
     if (compression_level_ <= 2)
         return bm::set_block_gap;
     unsigned len = bm::gap_length(gap_block);
+    if (len == 2)
+        return bm::set_block_gap;
     unsigned bc = bm::gap_bit_count_unr(gap_block);
     if (bc == 1)
         return bm::set_block_bit_1bit;
@@ -1986,31 +2001,40 @@ serializer<BV>::serialize(const BV& bv,
         //
         if (BM_IS_GAP(blk))
         {
-            // experimental, disabled
-            #if 0
+            if (ref_vect_) // XOR serialization
             {
-                bm::gap_word_t tmp_buf[bm::gap_equiv_len * 3]; // temporary result
-
-                unsigned kb_i, kb_j;
-                bool kb_found =
-                    bman.find_kgb(blk, i0, j0, &tmp_buf[0], &kb_i, &kb_j);
-                if (kb_found) // key GAP block!
+                bool found = xor_scan_.search_best_xor_gap(blk,
+                                                           ref_idx_+1, ref_vect_->size(),
+                                                           i0, j0);
+                if (found)
                 {
-                    unsigned gl = bm::gap_length(BMGAP_PTR(blk));
-                    unsigned x_gl = bm::gap_length(&tmp_buf[0]);
-                    if ((x_gl < gl))
+                    const bm::gap_word_t* gap_block = BMGAP_PTR(blk);
+                    const bm::gap_word_t* gap_xor_block =
+                        (const bm::gap_word_t*) xor_scan_.get_found_block();
+                    size_type ridx = xor_scan_.found_ridx();
+                    size_type plain_idx = xor_scan_.get_ref_vector().get_row_idx(ridx);
+
+                    // TODO: allocate on heap
+                    bm::gap_word_t tmp_buf[bm::gap_equiv_len * 3];
+
+                    unsigned res_len;
+                    bm::gap_operation_xor(gap_block, gap_xor_block, tmp_buf, res_len);
+                    unsigned glen = bm::gap_length(gap_block)-1;
+                    BM_ASSERT(res_len <= glen);
+                    BM_ASSERT(res_len == bm::gap_length(tmp_buf)-1);
+                    unsigned delta = glen - res_len;
+                    if (delta > 2)
                     {
-                        unsigned delta = gl - x_gl;
-                        if (delta > 2)
-                        {
-                            std::cout << "G";
-                            encode_gap_block(tmp_buf, enc);
-                            continue;
-                        }
+                        enc.put_8(bm::set_block_xor_gap_ref32);
+                        enc.put_32(unsigned(plain_idx));
+                        encode_gap_block(tmp_buf, enc);
+
+                        compression_stat_[bm::set_block_xor_gap_ref32]++;
+                        continue;
                     }
                 }
             }
-            #endif
+
             encode_gap_block(BMGAP_PTR(blk), enc);
         }
         else
@@ -2034,32 +2058,34 @@ serializer<BV>::serialize(const BV& bv,
                         compression_stat_[bm::set_block_ref_eq]++;
                         continue;
                     }
-
-                    bm::id64_t d64 = xor_scan_.get_xor_digest();
-                    BM_ASSERT(d64);
-                    const bm::word_t* kb_blk = xor_scan_.get_found_block();
-
-                    bm::bit_block_xor_product(xor_block_, blk, kb_blk, d64);
-                    unsigned bc, gc;
-                    bm::bit_block_change_bc32(xor_block_, &gc, &bc);
-                    unsigned xor_best_metric = gc < bc ? gc : bc;
-                    if (xor_best_metric < xor_scan_.get_x_block_best())
+                    found = xor_scan_.validate_found(xor_block_, blk);
+                    if (found)
                     {
-                        unsigned gain = xor_scan_.get_x_block_best() - xor_best_metric;
-                        gain *= 4; // take 4 as bit estimate for BIC
-                        // gain should be greater than overhead for storing
-                        // reference data: xor token, digest-64, block idx
-                        unsigned gain_min = (unsigned)
-                            sizeof(char) + sizeof(bm::id64_t) + sizeof(unsigned);
-                        gain_min *= 8;
-                        if (gain > gain_min)
+                        bm::id64_t d64 = xor_scan_.get_xor_digest();
+                        BM_ASSERT(d64);
+                        size_type plain_idx = xor_scan_.get_ref_vector().get_row_idx(ridx);
+
+                        if (plain_idx < 256)
                         {
-                            size_type row_idx = xor_scan_.get_ref_vector().get_row_idx(ridx);
-                            enc.put_8(bm::set_block_xor_ref);
-                            enc.put_32(unsigned(row_idx));
-                            compression_stat_[bm::set_block_xor_ref]++;
-                            blk = xor_block_; // substitute block with XOR product
+                            enc.put_8(bm::set_block_xor_ref8);
+                            enc.put_8((unsigned char) plain_idx);
                         }
+                        else
+                        {
+                            if (plain_idx < 65536)
+                            {
+                                enc.put_8(bm::set_block_xor_ref16);
+                                enc.put_16((unsigned short) plain_idx);
+                            }
+                            else
+                            {
+                                enc.put_8(bm::set_block_xor_ref32);
+                                enc.put_32(unsigned(plain_idx));
+                            }
+                        }
+                        enc.put_64(d64); // xor digest
+                        compression_stat_[bm::set_block_xor_ref32]++;
+                        blk = xor_block_; // substitute block with XOR product
                     }
                 } // if xor found
 
@@ -2596,12 +2622,15 @@ void deseriaizer_base<DEC>::read_gap_block(decoder_type&   decoder,
 template<class BV, class DEC>
 deserializer<BV, DEC>::deserializer()
 : ref_vect_(0),
-  xor_block_(0)
+  xor_block_(0),
+  or_block_(0)
 {
     temp_block_ = alloc_.alloc_bit_block();
     bit_idx_arr_.resize(bm::gap_max_bits);
     this->id_array_ = bit_idx_arr_.data();
     gap_temp_block_.resize(bm::gap_max_bits);
+
+    alloc_.set_pool(&pool_);
 }
 
 template<class BV, class DEC>
@@ -2610,6 +2639,7 @@ deserializer<BV, DEC>::~deserializer()
      alloc_.free_bit_block(temp_block_);
      if (xor_block_)
         alloc_.free_bit_block(xor_block_);
+    BM_ASSERT(!or_block_);
 }
 
 template<class BV, class DEC>
@@ -2907,6 +2937,9 @@ size_t deserializer<BV, DEC>::deserialize(bvector_type&        bv,
 
     bm::strategy  strat = bv.get_new_blocks_strat();
     bv.set_new_blocks_strat(BM_GAP);
+    typename bvector_type::mem_pool_guard mp_guard_bv;
+    mp_guard_bv.assign_if_not_set(pool_, bv);
+
 
     decoder_type dec(buf);
 
@@ -2985,7 +3018,18 @@ size_t deserializer<BV, DEC>::deserialize(bvector_type&        bv,
 
     if (header_flag & BM_HM_HXOR) // XOR compression mode
     {
+        if (!xor_block_)
+            xor_block_ = alloc_.alloc_bit_block();
     }
+
+    // reference XOR compression FSM fields
+    //
+    size_type x_ref_idx = 0;
+    bm::id64_t x_ref_d64 = 0;
+    block_idx_type x_nb = 0;
+    bool x_ref_gap = false;
+    unsigned row_idx;
+
 
     unsigned char btype;
     block_idx_type nb;
@@ -3003,6 +3047,7 @@ size_t deserializer<BV, DEC>::deserialize(bvector_type&        bv,
         }        
         bm::get_block_coord(i, i0, j0);
         bm::word_t* blk = bman.get_block_ptr(i0, j0);
+
 
         switch (btype)
         {
@@ -3115,25 +3160,53 @@ size_t deserializer<BV, DEC>::deserialize(bvector_type&        bv,
         case bm::set_block_ref_eq:
             {
                 BM_ASSERT(ref_vect_); // reference vector has to be attached
-                unsigned row_idx = dec.get_32();
+                row_idx = dec.get_32();
                 size_type idx = ref_vect_->find(row_idx);
                 if (idx == ref_vect_->not_found())
+                {
+                    BM_ASSERT(0);
                     goto throw_err;
+                }
                 const bvector_type* ref_bv = ref_vect_->get_bv(idx);
                 BM_ASSERT(ref_bv);
                 const blocks_manager_type& ref_bman = ref_bv->get_blocks_manager();
                 const bm::word_t* ref_blk = ref_bman.get_block_ptr(i0, j0);
-                BM_ASSERT(ref_blk);
-                bv.combine_operation_with_block(i, ref_blk, BM_IS_GAP(ref_blk), BM_OR);
+                if (ref_blk)
+                    bv.combine_operation_with_block(i, ref_blk,
+                                                    BM_IS_GAP(ref_blk), BM_OR);
                 break;
             }
-        case bm::set_block_xor_ref:
+        case bm::set_block_xor_ref8:
+                row_idx = dec.get_8();
+                goto process_xor;
+        case bm::set_block_xor_ref16:
+                row_idx = dec.get_16();
+                goto process_xor;
+        case bm::set_block_xor_ref32:
             {
-                //unsigned row_idx = dec.get_32();
-                //size_type idx = ref_vect_->find(row_idx);
+                row_idx = dec.get_32();
+            process_xor:
+                x_ref_d64 = dec.get_64();
+            process_xor_ref:
+                BM_ASSERT(ref_vect_); // reference vector has to be attached
+                x_ref_idx = ref_vect_->find(row_idx);
+                x_nb = i;
+                if (x_ref_idx == ref_vect_->not_found())
+                {
+                    BM_ASSERT(0);
+                    goto throw_err;
+                }
+                if (blk)
+                {
+                    or_block_ = bman.deoptimize_block(i);
+                    bman.set_block_ptr(i, 0); // borrow OR target before XOR
+                }
             }
-            BM_ASSERT(0);
-            break;
+            continue; // important! cont to avoid inc(i)
+        case bm::set_block_xor_gap_ref32:
+            row_idx = dec.get_32();
+            x_ref_gap = true;
+            goto process_xor_ref;
         default:
             BM_ASSERT(0); // unknown block type
             throw_err:
@@ -3144,6 +3217,14 @@ size_t deserializer<BV, DEC>::deserialize(bvector_type&        bv,
             #endif
         } // switch
 
+        // process XOR reference decode post proc.
+        //
+        if (x_ref_d64 || x_ref_gap)
+        {
+            xor_decode(x_ref_idx, x_ref_d64, bman, x_nb);
+            x_ref_d64 = 0; x_ref_gap = false;
+        }
+
         ++i;
     } while (i < bm::set_total_blocks); // for i
 
@@ -3151,6 +3232,62 @@ size_t deserializer<BV, DEC>::deserialize(bvector_type&        bv,
 
     return dec.size();
 }
+
+// ---------------------------------------------------------------------------
+
+template<class BV, class DEC>
+void deserializer<BV, DEC>::xor_decode(size_type x_ref_idx, bm::id64_t x_ref_d64,
+                                       blocks_manager_type& bman,
+                                       block_idx_type nb)
+{
+    BM_ASSERT(ref_vect_);
+
+    unsigned i0, j0;
+
+    const bvector_type* ref_bv = ref_vect_->get_bv(x_ref_idx);
+    BM_ASSERT(ref_bv);
+    const blocks_manager_type& ref_bman = ref_bv->get_blocks_manager();
+    BM_ASSERT(&ref_bman != &bman);
+    bm::get_block_coord(nb, i0, j0);
+
+    const bm::word_t* ref_blk = ref_bman.get_block_ptr(i0, j0);
+    if (!ref_blk)
+    {
+        BM_ASSERT(!or_block_);
+        return;
+    }
+
+    if (BM_IS_GAP(ref_blk))
+    {
+        bm::gap_word_t* gap_block = BMGAP_PTR(ref_blk);
+        bm::gap_convert_to_bitset(xor_block_, gap_block);
+        ref_blk = xor_block_;
+    }
+    else
+    {
+        if (IS_FULL_BLOCK(ref_blk))
+            ref_blk = FULL_BLOCK_REAL_ADDR;
+    }
+
+    bm::word_t* blk = bman.deoptimize_block(nb);
+    if (!blk)
+    {
+        blk = bman.check_allocate_block(nb, 0);
+    }
+    if (x_ref_d64)
+        bm::bit_block_xor(blk, blk, ref_blk, x_ref_d64);
+    else
+        bm::bit_block_xor(blk, ref_blk);
+
+    if (or_block_)
+    {
+        bm::bit_block_or(blk, or_block_);
+        alloc_.free_bit_block(or_block_);
+        or_block_ = 0;
+        bman.optimize_bit_block(i0, j0);
+    }
+}
+
 
 // ---------------------------------------------------------------------------
 
@@ -3389,7 +3526,9 @@ void serial_stream_iterator<DEC>::next()
         // throw or assert here
         //
         case set_block_ref_eq:
-        case set_block_xor_ref:
+        case set_block_xor_ref8:
+        case set_block_xor_ref16:
+        case set_block_xor_ref32:
             BM_FALLTHROUGH;
             // fall through
         default:
@@ -4747,7 +4886,7 @@ operation_deserializer<BV>::deserialize_xor(bvector_type&       bv,
     switch (op)
     {
     case set_AND:
-        bv &= bv_tmp;
+        bv.bit_and(bv_tmp, bvector_type::opt_compress);
         break;
     case set_ASSIGN:
         bv.swap(bv_tmp);

@@ -1524,7 +1524,7 @@ public:
             gap_word_t* gap_block = BMGAP_PTR(block);
             
             bm::word_t* new_block = alloc_.alloc_bit_block();
-            gap_convert_to_bitset(new_block, gap_block);
+            bm::gap_convert_to_bitset(new_block, gap_block);
             alloc_.free_gap_block(gap_block, this->glen());
             
             set_block_ptr(nb, new_block);

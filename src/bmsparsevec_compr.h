@@ -76,6 +76,7 @@ public:
     typedef typename bvector_type::allocation_policy allocation_policy_type;
     typedef typename bvector_type::rs_index_type     rs_index_type;
     typedef typename bvector_type::enumerator        bvector_enumerator_type;
+    typedef typename SV::bmatrix_type                bmatrix_type;
 
     enum vector_capacity
     {
@@ -479,7 +480,8 @@ public:
     static unsigned plains() { return sparse_vector_type::plains(); }
 
     /** Number of stored bit-plains (value plains + extra */
-    static unsigned stored_plains() { return sparse_vector_type::stored_plains(); }
+    static unsigned stored_plains()
+        { return sparse_vector_type::stored_plains(); }
 
     /*!
         \brief access dense vector
@@ -495,6 +497,11 @@ public:
         \brief Always 1 (non-matrix type)
     */
     size_type effective_vector_max() const { return 1; }
+
+    /*!
+        get read-only access to inetrnal bit-matrix
+    */
+    const bmatrix_type& get_bmatrix() const { return sv_.get_bmatrix(); }
 
     ///@}
     

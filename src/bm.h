@@ -2054,11 +2054,13 @@ public:
 
     /*!
        \brief 2 operand logical AND
-       \param bv - argument vector.
+       \param bv - argument vector
+       \param opt_mode - set an immediate optimization
     */
-    bm::bvector<Alloc>& bit_and(const bm::bvector<Alloc>& bv)
+    bm::bvector<Alloc>& bit_and(const bm::bvector<Alloc>& bv,
+                                optmode opt_mode = opt_none)
     {
-        combine_operation_and(bv);
+        combine_operation_and(bv, opt_mode);
         return *this;
     }
 
@@ -2101,7 +2103,8 @@ public:
 
     /*! \brief perform a set-algebra operation AND
     */
-    void combine_operation_and(const bm::bvector<Alloc>& bvect);
+    void combine_operation_and(const bm::bvector<Alloc>& bvect,
+                               optmode opt_mode);
 
     /*! \brief perform a set-algebra operation MINUS (AND NOT)
     */
@@ -2372,6 +2375,7 @@ private:
                                      unsigned j,
                                      bm::word_t* blk,
                                      const bm::word_t* arg_blk);
+
     void combine_operation_block_sub(unsigned i,
                                      unsigned j,
                                      bm::word_t* blk,
@@ -5393,13 +5397,18 @@ void bvector<Alloc>::combine_operation_xor(const bm::bvector<Alloc>& bv)
 #define BM_AND_OP(x)  if (0 != (blk = blk_blk[j+x])) \
     { \
         if (0 != (arg_blk = blk_blk_arg[j+x])) \
+        { \
             combine_operation_block_and(i, j+x, blk, arg_blk); \
+            if (opt_mode == opt_compress) \
+                blockman_.optimize_bit_block(i, j+x); \
+        } \
         else \
             blockman_.zero_block(i, j+x); \
     }
 
 template<class Alloc>
-void bvector<Alloc>::combine_operation_and(const bm::bvector<Alloc>& bv)
+void bvector<Alloc>::combine_operation_and(const bm::bvector<Alloc>& bv,
+                                typename bm::bvector<Alloc>::optmode opt_mode)
 {
     if (!blockman_.is_init())
         return;  // nothing to do, already empty

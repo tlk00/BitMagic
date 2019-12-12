@@ -168,6 +168,13 @@ public:
     typedef typename bvector_type::allocator_type::allocator_pool_type allocator_pool_type;
 public:
     sparse_vector_serializer();
+
+
+    /// Turn ON and OFF XOR compression of sparse vectors
+    void set_xor_ref(bool is_enabled) { is_xor_ref_ = is_enabled; }
+
+    /// Get XOR reference compression status (enabled/disabled)
+    bool is_xor_ref() const { return is_xor_ref_; }
     
     /*!
         \brief Serialize sparse vector into a memory buffer(s) structure
@@ -178,11 +185,20 @@ public:
     */
     void serialize(const SV&                        sv,
                    sparse_vector_serial_layout<SV>& sv_layout);
+
+protected:
+    typedef typename bm::serializer<bvector_type>::bv_ref_vector_type bv_ref_vector_type;
+
+    void build_xor_ref_vector(const SV& sv);
+
 private:
     sparse_vector_serializer(const sparse_vector_serializer&) = delete;
     sparse_vector_serializer& operator=(const sparse_vector_serializer&) = delete;
 protected:
-    bm::serializer<bvector_type > bvs_;
+    bm::serializer<bvector_type>     bvs_;
+
+    bool                             is_xor_ref_;
+    bv_ref_vector_type               bv_ref_;
 };
 
 /**
@@ -242,6 +258,7 @@ public:
 
 protected:
     typedef typename bvector_type::allocator_type      alloc_type;
+    typedef typename bm::serializer<bvector_type>::bv_ref_vector_type bv_ref_vector_type;
 
     /// Deserialization entry point
     void deserialize_sv(SV& sv, const unsigned char* buf,
@@ -285,6 +302,8 @@ protected:
     bvector_type                                not_null_mask_bv_;
     bvector_type                                rsc_mask_bv_;
     bm::heap_vector<size_t, alloc_type>         off_vect_;
+
+    bv_ref_vector_type                          bv_ref_;
 
     bool                                        idx_range_set_;
     size_type                                   idx_range_from_;
@@ -562,6 +581,20 @@ template<typename SV>
 sparse_vector_serializer<SV>::sparse_vector_serializer()
 {
     bvs_.gap_length_serialization(false);
+    #ifdef BMXORCOMP
+        is_xor_ref_ = true;
+    #else
+        is_xor_ref_ = false;
+    #endif
+}
+
+// -------------------------------------------------------------------------
+
+template<typename SV>
+void sparse_vector_serializer<SV>::build_xor_ref_vector(const SV& sv)
+{
+    bv_ref_.reset();
+    bv_ref_.build(sv.get_bmatrix());
 }
 
 // -------------------------------------------------------------------------
@@ -590,6 +623,15 @@ void sparse_vector_serializer<SV>::serialize(const SV&  sv,
                   8;  // number of plains (64-bit)
     }
 
+    // ---------------------------------
+    // Setup XOR reference compression
+    //
+    if (is_xor_ref())
+    {
+        build_xor_ref_vector(sv);
+        bvs_.set_ref_vectors(&bv_ref_);
+    }
+
     // -----------------------------------------------------
     // Serialize all bvector plains
     //
@@ -605,7 +647,10 @@ void sparse_vector_serializer<SV>::serialize(const SV&  sv,
             sv_layout.set_plain(i, 0, 0);
             continue;
         }
-        
+        unsigned idx = (unsigned)bv_ref_.find(i);
+        BM_ASSERT(idx != bv_ref_.not_found());
+        bvs_.set_curr_ref_idx(idx);
+
         size_t buf_size =
             bvs_.serialize(*bv, buf_ptr, sv_stat.max_serialize_mem);
         
@@ -614,13 +659,13 @@ void sparse_vector_serializer<SV>::serialize(const SV&  sv,
         if (sv_stat.max_serialize_mem > buf_size)
         {
             sv_stat.max_serialize_mem -= buf_size;
+            continue;
         }
-        else
-        {
-            BM_ASSERT(0); // TODO: throw an exception here
-        }
+        BM_ASSERT(0); // TODO: throw an exception here
     } // for i
-        
+
+    bvs_.set_ref_vectors(0); // disangage XOR ref vector
+
     // -----------------------------------------------------
     // serialize the re-map matrix
     //
@@ -781,6 +826,8 @@ void sparse_vector_deserializer<SV>::deserialize_sv(SV& sv,
         
     sv.resize_internal(size_type(sv_size));
 
+    bv_ref_.reset();
+
     load_plains_off_table(dec, plains); // read the offset vector of bit-plains
 
     plains = (unsigned)load_null_plain(sv, int(plains), buf);
@@ -803,11 +850,15 @@ void sparse_vector_deserializer<SV>::deserialize_sv(SV& sv,
                 //bool rf =
                 rsc_mask_bv_.find_range(idx_range_from_, idx_range_to_);
             }
-
         }
     }
 
     deserialize_plains(sv, plains, buf, mask_bv);
+
+    op_deserial_.set_ref_vectors(0);
+    deserial_.set_ref_vectors(0);
+    bv_ref_.reset();
+
 
     // load the remap matrix
     //
@@ -831,21 +882,25 @@ void sparse_vector_deserializer<SV>::deserialize_plains(
                                                 const bvector_type* mask_bv)
 {
     if (mask_bv && !idx_range_set_)
-    {
         idx_range_set_ = mask_bv->find_range(idx_range_from_, idx_range_to_);
-    }
+
+    op_deserial_.set_ref_vectors(&bv_ref_);
+    deserial_.set_ref_vectors(&bv_ref_);
 
     // read-deserialize the plains based on offsets
-    //   backward order to bring the NULL vector first
+    //       backward order to bring the NULL vector first
+    //
     for (int i = int(plains-1); i >= 0; --i)
     {
         size_t offset = off_vect_[unsigned(i)];
         if (!offset) // empty vector
             continue;
-
         const unsigned char* bv_buf_ptr = buf + offset; // seek to position
         bvector_type*  bv = sv.get_plain(unsigned(i));
         BM_ASSERT(bv);
+
+        bv_ref_.add(bv, unsigned(i));
+
         if (mask_bv) // gather mask set, use AND operation deserializer
         {
             typename bvector_type::mem_pool_guard mp_g_z(pool_, *bv);
@@ -860,12 +915,13 @@ void sparse_vector_deserializer<SV>::deserialize_plains(
             }
 
             *bv = *mask_bv;
+            /*
             if (idx_range_set_)
             {
                 op_deserial_.deserialize_range(*bv, bv_buf_ptr, temp_block_,
                                                idx_range_from_, idx_range_to_);
             }
-            else
+            else */
             {
                 op_deserial_.deserialize(*bv, bv_buf_ptr, temp_block_, bm::set_AND);
             }
@@ -879,6 +935,7 @@ void sparse_vector_deserializer<SV>::deserialize_plains(
         }
 
     } // for i
+
 }
 
 // -------------------------------------------------------------------------
@@ -886,7 +943,7 @@ void sparse_vector_deserializer<SV>::deserialize_plains(
 template<typename SV>
 int sparse_vector_deserializer<SV>::load_null_plain(SV& sv,
                                                     int plains,
-                                              const unsigned char* buf)
+                                                    const unsigned char* buf)
 {
     BM_ASSERT(plains > 0);
     if (!sv.is_nullable())
@@ -897,6 +954,7 @@ int sparse_vector_deserializer<SV>::load_null_plain(SV& sv,
     {
         const unsigned char* bv_buf_ptr = buf + offset; // seek to position
         bvector_type*  bv = sv.get_plain(unsigned(i));
+        bv_ref_.add(bv, unsigned(i));
         size_t read_bytes = deserial_.deserialize(*bv, bv_buf_ptr, temp_block_);
         remap_buf_ptr_ = bv_buf_ptr + read_bytes;
     }
