@@ -21,6 +21,7 @@ For more information please visit:  http://bitmagic.io
 //#define BMSSE42OPT
 //#define BMAVX2OPT
 
+#define BMXORCOMP
 
 #include <stdio.h>
 #include <stdlib.h>
