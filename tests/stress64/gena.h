@@ -931,3 +931,27 @@ void GenerateCompressedBufferCollection(CBC& cbc)
     } // for
     cbc.sync();
 }
+
+
+template<typename SV>
+void generate_serialization_test_set(SV&   sv,
+                                     typename SV::size_type vector_max)
+{
+    typename SV::back_insert_iterator bi(sv.get_back_inserter());
+
+    unsigned v = 0;
+    for (typename SV::size_type i = 0; i < vector_max; ++i)
+    {
+        unsigned plato = rand() % 16;
+        for (unsigned j = 0; i < vector_max && j < plato; ++i, ++j)
+        {
+            *bi = v;
+        } // for j
+        if (++v > 100000)
+            v = 0;
+        unsigned nulls = rand() % 16;
+        if (nulls)
+            bi.add_null(nulls);
+        i += nulls;
+    } // for i
+}

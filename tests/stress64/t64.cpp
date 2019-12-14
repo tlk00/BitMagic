@@ -11354,6 +11354,95 @@ void TestCompressSparseVectorSerial()
 }
 
 
+static
+void TestSparseVectorSerialization2()
+{
+    cout << " ------------------------------ TestSparseVectorSerialization2()" << endl;
+    const unsigned int BSIZE = 250000000;
+
+    const unsigned char* buf;
+    bool eq;
+    size_t sz1, sz2;
+
+    sparse_vector_u32 sv1(bm::use_null);
+    sparse_vector_u32 sv2(bm::use_null);
+    sparse_vector_u32 sv3(bm::use_null);
+
+    generate_serialization_test_set(sv1, BSIZE);
+
+    bm::sparse_vector_serial_layout<sparse_vector_u32> sv_lay;
+
+    bm::sparse_vector_serializer<sparse_vector_u32> sv_serializer;
+    bm::sparse_vector_deserializer<sparse_vector_u32> sv_deserial;
+
+    for (unsigned k = 0; k < 2; ++k)
+    {
+        {
+            {
+                sv_serializer.set_xor_ref(false); // disable XOR compression
+                sv_serializer.serialize(sv1, sv_lay);
+            }
+
+            buf = sv_lay.buf();
+            sz1 = sv_lay.size();
+
+            sv_deserial.deserialize(sv2, buf);
+
+            eq = sv1.equal(sv2);
+            if (!eq)
+            {
+                cerr << "Error: SparseVectorSerializationTest() integrity failure! (1)" << endl;
+                sparse_vector_u32::size_type pos;
+
+                bool f = bm::sparse_vector_find_first_mismatch(sv1, sv2, pos);
+                assert(f);
+                cerr << "Mismatch at: " << pos << endl;
+
+                sv_deserial.deserialize(sv2, buf);
+
+                exit(1);
+            }
+            sv2.resize(0);
+        }
+
+        {
+            sv_serializer.set_xor_ref(true); // enable XOR compression
+            sv_serializer.serialize(sv1, sv_lay);
+        }
+
+        buf = sv_lay.buf();
+        sz2 = sv_lay.size();
+        sv_deserial.deserialize(sv3, buf);
+        eq = sv1.equal(sv3);
+        if (!eq)
+        {
+            cerr << "Error: SparseVectorSerializationTest() integrity failure! (2)" << endl;
+            sparse_vector_u32::size_type pos;
+            bool f = bm::sparse_vector_find_first_mismatch(sv1, sv3, pos);
+            assert(f);
+            cerr << "Mismatch at: " << pos << endl;
+
+            sv_deserial.deserialize(sv3, buf);
+
+            exit(1);
+        }
+
+        if (sz2 > sz1)
+        {
+            cerr << "XOR negative compression!" << endl;
+            assert(0);
+        }
+        else
+        {
+            cout << "sz1 = " << sz1 << " gain=" << (sz1 - sz2) << endl;
+        }
+        sv1.optimize();
+    } // for k
+
+    cout << " ------------------------------ TestSparseVectorSerialization2() OK" << endl;
+
+}
+
 
 // ------------------------------------------------------------------------
 
@@ -14591,9 +14680,9 @@ void TestCompressedSparseVectorAlgo()
         f = bm::sparse_vector_find_first_mismatch(sv1, sv2, pos);
         assert(!f);
 
-        for (unsigned k = 0; k < 4; ++k)
+        for (unsigned p = 0; p < 4; ++p)
         {
-            cout << "PASS = " << k << endl;
+            cout << "PASS = " << p << endl;
             chrono_taker ct("sparse_vector<> unique value mismatch search");
 
             for (sparse_vector_u32::size_type k = 0; k < sv_size; ++k)
@@ -14651,7 +14740,7 @@ void TestCompressedSparseVectorAlgo()
             } // for
             cout << endl;
 
-            switch(k)
+            switch(p)
             {
             case 0:
                 sv1.optimize();
@@ -14674,7 +14763,7 @@ void TestCompressedSparseVectorAlgo()
             default:
                 assert(0);
             }
-        } // for k
+        } // for p
 
         cout << "Unique search OK" << endl;
     }
@@ -15194,6 +15283,8 @@ int main(int argc, char *argv[])
          TestSparseVectorGatherDecode();
 
          TestSparseVectorSerial();
+
+         TestSparseVectorSerialization2();
 
          TestSparseVectorTransform();
 
