@@ -647,9 +647,12 @@ void sparse_vector_serializer<SV>::serialize(const SV&  sv,
             sv_layout.set_plain(i, 0, 0);
             continue;
         }
-        unsigned idx = (unsigned)bv_ref_.find(i);
-        BM_ASSERT(idx != bv_ref_.not_found());
-        bvs_.set_curr_ref_idx(idx);
+        if (is_xor_ref())
+        {
+            unsigned idx = (unsigned)bv_ref_.find(i);
+            BM_ASSERT(idx != bv_ref_.not_found());
+            bvs_.set_curr_ref_idx(idx);
+        }
 
         size_t buf_size =
             bvs_.serialize(*bv, buf_ptr, sv_stat.max_serialize_mem);
