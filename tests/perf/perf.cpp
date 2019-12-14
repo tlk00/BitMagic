@@ -2848,6 +2848,32 @@ void RankCompressionTest()
 }
 
 static
+void generate_serialization_test_set(sparse_vector_u32&   sv,
+                                     unsigned vector_max = BSIZE)
+{
+    sparse_vector_u32::back_insert_iterator bi(sv.get_back_inserter());
+
+    unsigned v = 0;
+    for (unsigned i = 0; i < vector_max; ++i)
+    {
+        unsigned plato = rand() % 16;
+        for (unsigned j = 0; i < vector_max && j < plato; ++i, ++j)
+        {
+            *bi = v;
+        } // for j
+        if (++v > 100000)
+            v = 0;
+        unsigned nulls = rand() % 16;
+        if (nulls)
+            bi.add_null(nulls);
+        i += nulls;
+    } // for i
+
+    sv.optimize();
+}
+
+
+static
 void generate_scanner_test_set(std::vector<unsigned>& vect,
                                bvect&               bv_null,
                                sparse_vector_u32&   sv,
@@ -2965,6 +2991,64 @@ void SparseVectorScannerTest()
     }
 }
 
+
+static
+void SparseVectorSerializationTest()
+{
+    sparse_vector_u32 sv1(bm::use_null);
+    sparse_vector_u32 sv2(bm::use_null);
+    sparse_vector_u32 sv3(bm::use_null);
+
+    generate_serialization_test_set(sv1, BSIZE);
+
+    bm::sparse_vector_serial_layout<sparse_vector_u32> sv_lay;
+
+    bm::sparse_vector_serializer<sparse_vector_u32> sv_serializer;
+    bm::sparse_vector_deserializer<sparse_vector_u32> sv_deserial;
+
+    sv_serializer.set_xor_ref(false); // disable XOR compression
+    sv_serializer.serialize(sv1, sv_lay);
+
+    const unsigned char* buf = sv_lay.buf();
+    size_t sz1 = sv_lay.size();
+
+    sv_deserial.deserialize(sv2, buf);
+
+    bool eq = sv1.equal(sv2);
+    if (!eq)
+    {
+        cerr << "Error: SparseVectorSerializationTest() integrity failure! (1)" << endl;
+        exit(1);
+    }
+    sv2.resize(0);
+
+    sv_serializer.set_xor_ref(true); // enable XOR compression
+    sv_serializer.serialize(sv1, sv_lay);
+
+    buf = sv_lay.buf();
+    size_t sz2 = sv_lay.size();
+    sv_deserial.deserialize(sv3, buf);
+    eq = sv1.equal(sv3);
+    if (!eq)
+    {
+        cerr << "Error: SparseVectorSerializationTest() integrity failure! (2)" << endl;
+        sparse_vector_u32::size_type pos;
+        bool f = bm::sparse_vector_find_first_mismatch(sv1, sv3, pos);
+        assert(f);
+        cerr << "Mismatch at: " << pos << endl;
+        exit(1);
+    }
+
+    if (sz2 > sz1)
+    {
+        cerr << "XOR negative compression!" << endl;
+    }
+    else
+    {
+        cout << "sz1 = " << sz1 << " gain=" << (sz1 - sz2) << endl;
+    }
+
+}
 
 static
 void SparseVectorRangeDeserializationTest()
@@ -3170,6 +3254,8 @@ int main(void)
     SparseVectorAccessTest();
 
     SparseVectorScannerTest();
+
+    SparseVectorSerializationTest();
 
     SparseVectorRangeDeserializationTest();
 
