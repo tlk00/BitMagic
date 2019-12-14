@@ -2995,6 +2995,10 @@ void SparseVectorScannerTest()
 static
 void SparseVectorSerializationTest()
 {
+    const unsigned char* buf;
+    bool eq;
+    size_t sz1, sz2;
+
     sparse_vector_u32 sv1(bm::use_null);
     sparse_vector_u32 sv2(bm::use_null);
     sparse_vector_u32 sv3(bm::use_null);
@@ -3006,27 +3010,45 @@ void SparseVectorSerializationTest()
     bm::sparse_vector_serializer<sparse_vector_u32> sv_serializer;
     bm::sparse_vector_deserializer<sparse_vector_u32> sv_deserial;
 
-    sv_serializer.set_xor_ref(false); // disable XOR compression
-    sv_serializer.serialize(sv1, sv_lay);
 
-    const unsigned char* buf = sv_lay.buf();
-    size_t sz1 = sv_lay.size();
-
-    sv_deserial.deserialize(sv2, buf);
-
-    bool eq = sv1.equal(sv2);
-    if (!eq)
     {
-        cerr << "Error: SparseVectorSerializationTest() integrity failure! (1)" << endl;
-        exit(1);
-    }
-    sv2.resize(0);
+        {
+            TimeTaker tt("bm::sparse_vector<> serialization XOR disabled ", 1);
 
-    sv_serializer.set_xor_ref(true); // enable XOR compression
-    sv_serializer.serialize(sv1, sv_lay);
+            sv_serializer.set_xor_ref(false); // disable XOR compression
+            sv_serializer.serialize(sv1, sv_lay);
+        }
+
+        buf = sv_lay.buf();
+        sz1 = sv_lay.size();
+
+        sv_deserial.deserialize(sv2, buf);
+
+        eq = sv1.equal(sv2);
+        if (!eq)
+        {
+            cerr << "Error: SparseVectorSerializationTest() integrity failure! (1)" << endl;
+            sparse_vector_u32::size_type pos;
+
+            bool f = bm::sparse_vector_find_first_mismatch(sv1, sv2, pos);
+            assert(f);
+            cerr << "Mismatch at: " << pos << endl;
+
+            sv_deserial.deserialize(sv2, buf);
+
+            exit(1);
+        }
+        sv2.resize(0);
+    }
+
+    {
+        TimeTaker tt("bm::sparse_vector<> serialization XOR enabled ", 1);
+        sv_serializer.set_xor_ref(true); // enable XOR compression
+        sv_serializer.serialize(sv1, sv_lay);
+    }
 
     buf = sv_lay.buf();
-    size_t sz2 = sv_lay.size();
+    sz2 = sv_lay.size();
     sv_deserial.deserialize(sv3, buf);
     eq = sv1.equal(sv3);
     if (!eq)
@@ -3036,16 +3058,20 @@ void SparseVectorSerializationTest()
         bool f = bm::sparse_vector_find_first_mismatch(sv1, sv3, pos);
         assert(f);
         cerr << "Mismatch at: " << pos << endl;
+
+        sv_deserial.deserialize(sv3, buf);
+
         exit(1);
     }
 
     if (sz2 > sz1)
     {
         cerr << "XOR negative compression!" << endl;
+        assert(0);
     }
     else
     {
-        cout << "sz1 = " << sz1 << " gain=" << (sz1 - sz2) << endl;
+        //cout << "sz1 = " << sz1 << " gain=" << (sz1 - sz2) << endl;
     }
 
 }
