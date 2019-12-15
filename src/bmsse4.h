@@ -702,7 +702,7 @@ unsigned sse42_bit_block_calc_xor_change(const __m128i* BMRESTRICT block,
                                      unsigned size)
 {
     const __m128i* block_end =
-        ( __m128i*)((bm::word_t*)(block) + size); // bm::set_block_size
+        ( __m128i*)((bm::word_t*)(block) + size);
     __m128i m1COshft, m2COshft;
 
     unsigned w0 = *((bm::word_t*)(block));
