@@ -73,6 +73,21 @@ unsigned bit_block_xor_change32(const bm::word_t* BMRESTRICT block,
     return gap_count;
 }
 
+/*!
+    Function calculates number of times when bit value changed
+    @internal
+*/
+inline
+unsigned bit_block_xor_change(const bm::word_t* BMRESTRICT block,
+                              const bm::word_t* BMRESTRICT xor_block,
+                              unsigned size)
+{
+#ifdef VECT_BLOCK_XOR_CHANGE
+    return VECT_BLOCK_XOR_CHANGE(block, xor_block, size);
+#else
+    return bit_block_xor_change32(block, xor_block, size);
+#endif
+}
 
 /**
     Structure to compute XOR gap-count profile by sub-block waves
@@ -141,10 +156,9 @@ bm::id64_t compute_xor_complexity_descr(
         const bm::word_t* sub_block = block + off;
         const bm::word_t* xor_sub_block = xor_block + off;
 
-        // TODO: SIMD
         unsigned xor_change =
-                bm::bit_block_xor_change32(sub_block, xor_sub_block,
-                                        bm::set_block_digest_wave_size);
+                bm::bit_block_xor_change(sub_block, xor_sub_block,
+                                         bm::set_block_digest_wave_size);
 
         x_descr.sb_xor_change[i] = (unsigned short)xor_change;
         if (xor_change == 1 && (x_descr.sb_change[i] >= 1))
@@ -174,38 +188,37 @@ void bit_block_xor(bm::word_t*  target_block,
                    const bm::word_t*  block, const bm::word_t*  xor_block,
                    bm::id64_t digest)
 {
-    // TODO: SIMD
-    //
     BM_ASSERT(target_block);
     BM_ASSERT(block);
     BM_ASSERT(xor_block);
     BM_ASSERT(digest);
 
+#ifdef VECT_BIT_BLOCK_XOR
+    VECT_BIT_BLOCK_XOR(target_block, block, xor_block, digest);
+#else
     for (unsigned i = 0; i < bm::block_waves; ++i)
     {
+        const bm::id64_t mask = (1ull << i);
+
         unsigned off = (i * bm::set_block_digest_wave_size);
         const bm::word_t* sub_block = block + off;
         bm::word_t* t_sub_block = target_block + off;
 
         const bm::word_t* sub_block_end = sub_block + bm::set_block_digest_wave_size;
 
-        bm::id64_t mask = (1ull << i);
         if (digest & mask) // XOR filtered sub-block
         {
             const bm::word_t* xor_sub_block = xor_block + off;
             for (; sub_block < sub_block_end; )
-            {
                 *t_sub_block++ = *sub_block++ ^ *xor_sub_block++;
-            }
         }
-        else // copy source
+        else // just copy source
         {
             for (; sub_block < sub_block_end;)
-            {
                 *t_sub_block++ = *sub_block++;
-            }
         }
     } // for i
+#endif
 }
 
 
@@ -476,9 +489,6 @@ bool xor_scanner<BV>::search_best_xor_gap(const bm::word_t* block,
     BM_ASSERT(ridx_from <= ridx_to);
     BM_ASSERT(BM_IS_GAP(block));
 
-    // TODO: get rid of this
-    bm::gap_word_t tmp_buf[bm::gap_equiv_len * 3]; // temporary result
-
     if (ridx_to > ref_vect_->size())
         ridx_to = ref_vect_->size();
 
@@ -507,11 +517,9 @@ bool xor_scanner<BV>::search_best_xor_gap(const bm::word_t* block,
 
         BM_ASSERT(block != block_xor);
 
-        // TODO: get rid of this, use "dry" op, without result materialization
         unsigned res_len;
-        bm::gap_operation_xor(gap_block, gap_xor_block, tmp_buf, res_len);
-
-        if (res_len < best_gap_len)
+        bool f = bm::gap_operation_dry_xor(gap_block, gap_xor_block, res_len, best_gap_len);
+        if (f && (res_len < best_gap_len))
         {
             best_gap_len = res_len;
             kb_found = true;

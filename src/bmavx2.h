@@ -1656,7 +1656,7 @@ unsigned avx2_bit_block_calc_change(const __m256i* BMRESTRICT block,
     BM_AVX2_POPCNT_PROLOG;
 
     const __m256i* block_end =
-        (const __m256i*)((bm::word_t*)(block) + size); // bm::set_block_size);
+        (const __m256i*)((bm::word_t*)(block) + size);
     
     __m256i m1COshft, m2COshft;
     __m256i mCOidx = _mm256_set_epi32(6, 5, 4, 3, 2, 1, 0, 0);
@@ -1715,6 +1715,85 @@ unsigned avx2_bit_block_calc_change(const __m256i* BMRESTRICT block,
     count -= (w0 & 1u); // correct initial carry-in error
     return count;
 }
+
+/*!
+    AVX2 calculate number of bit changes from 0 to 1 from a XOR product
+    @ingroup AVX2
+*/
+inline
+unsigned avx2_bit_block_calc_xor_change(const __m256i* BMRESTRICT block,
+                                    const __m256i* BMRESTRICT xor_block,
+                                    unsigned size)
+{
+    BM_AVX2_POPCNT_PROLOG;
+
+    const __m256i* block_end =
+        (const __m256i*)((bm::word_t*)(block) + size);
+
+    __m256i m1COshft, m2COshft;
+    __m256i mCOidx = _mm256_set_epi32(6, 5, 4, 3, 2, 1, 0, 0);
+    __m256i cntAcc = _mm256_setzero_si256();
+
+    unsigned w0 = *((bm::word_t*)(block));
+    unsigned count = 1;
+
+    bm::id64_t BM_ALIGN32 cnt_v[4] BM_ALIGN32ATTR;
+
+    unsigned co2, co1 = 0;
+    for (;block < block_end; block+=2, xor_block+=2)
+    {
+        __m256i m1A = _mm256_load_si256(block);
+        __m256i m2A = _mm256_load_si256(block+1);
+        __m256i m1B = _mm256_load_si256(xor_block);
+        __m256i m2B = _mm256_load_si256(xor_block+1);
+
+        m1A = _mm256_xor_si256 (m1A, m1B);
+        m2A = _mm256_xor_si256 (m2A, m2B);
+
+
+        __m256i m1CO = _mm256_srli_epi32(m1A, 31);
+        __m256i m2CO = _mm256_srli_epi32(m2A, 31);
+
+        co2 = _mm256_extract_epi32(m1CO, 7);
+
+        __m256i m1As = _mm256_slli_epi32(m1A, 1); // (block[i] << 1u)
+        __m256i m2As = _mm256_slli_epi32(m2A, 1);
+
+        // shift CO flags using +1 permute indexes, add CO to v[0]
+        m1COshft = _mm256_permutevar8x32_epi32(m1CO, mCOidx);
+        m1COshft = _mm256_insert_epi32(m1COshft, co1, 0); // v[0] = co_flag
+
+        co1 = co2;
+
+        co2 = _mm256_extract_epi32(m2CO, 7);
+        m2COshft = _mm256_permutevar8x32_epi32(m2CO, mCOidx);
+        m2COshft = _mm256_insert_epi32(m2COshft, co1, 0);
+
+        m1As = _mm256_or_si256(m1As, m1COshft); // block[i] |= co_flag
+        m2As = _mm256_or_si256(m2As, m2COshft);
+
+        co1 = co2;
+
+        // we now have two shifted AVX2 regs with carry-over
+        m1A = _mm256_xor_si256(m1A, m1As); // w ^= (w >> 1);
+        m2A = _mm256_xor_si256(m2A, m2As);
+
+        {
+            BM_AVX2_BIT_COUNT(bc, m1A)
+            cntAcc = _mm256_add_epi64(cntAcc, bc);
+            BM_AVX2_BIT_COUNT(bc, m2A)
+            cntAcc = _mm256_add_epi64(cntAcc, bc);
+        }
+    } // for
+
+    // horizontal count sum
+    _mm256_store_si256 ((__m256i*)cnt_v, cntAcc);
+    count += (unsigned)(cnt_v[0] + cnt_v[1] + cnt_v[2] + cnt_v[3]);
+
+    count -= (w0 & 1u); // correct initial carry-in error
+    return count;
+}
+
 
 
 /*!
@@ -2760,6 +2839,59 @@ unsigned avx2_bit_to_gap(gap_word_t* BMRESTRICT dest,
     return len;
 }
 
+/**
+    Build partial XOR product of 2 bit-blocks using digest mask
+
+    @param target_block - target := block ^ xor_block
+    @param block - arg1
+    @param xor_block - arg2
+    @param digest - mask for each block wave to XOR (1) or just copy (0)
+
+    @ingroup AVX2
+    @internal
+*/
+inline
+void avx2_bit_block_xor(bm::word_t*  target_block,
+                   const bm::word_t*  block, const bm::word_t*  xor_block,
+                   bm::id64_t digest)
+{
+    for (unsigned i = 0; i < bm::block_waves; ++i)
+    {
+        const bm::id64_t mask = (1ull << i);
+        unsigned off = (i * bm::set_block_digest_wave_size);
+        const __m256i* sub_block = (__m256i*) (block + off);
+        __m256i* t_sub_block = (__m256i*)(target_block + off);
+
+        if (digest & mask) // XOR filtered sub-block
+        {
+            const __m256i* xor_sub_block = (__m256i*) (xor_block + off);
+            __m256i mA, mB, mC, mD;
+            mA = _mm256_xor_si256(_mm256_load_si256(sub_block),
+                                  _mm256_load_si256(xor_sub_block));
+            mB = _mm256_xor_si256(_mm256_load_si256(sub_block+1),
+                                  _mm256_load_si256(xor_sub_block+1));
+            mC = _mm256_xor_si256(_mm256_load_si256(sub_block+2),
+                                  _mm256_load_si256(xor_sub_block+2));
+            mD = _mm256_xor_si256(_mm256_load_si256(sub_block+3),
+                                  _mm256_load_si256(xor_sub_block+3));
+
+            _mm256_store_si256(t_sub_block, mA);
+            _mm256_store_si256(t_sub_block+1, mB);
+            _mm256_store_si256(t_sub_block+2, mC);
+            _mm256_store_si256(t_sub_block+3, mD);
+        }
+        else // just copy source
+        {
+            _mm256_store_si256(t_sub_block , _mm256_load_si256(sub_block));
+            _mm256_store_si256(t_sub_block+1, _mm256_load_si256(sub_block+1));
+            _mm256_store_si256(t_sub_block+2, _mm256_load_si256(sub_block+2));
+            _mm256_store_si256(t_sub_block+3, _mm256_load_si256(sub_block+3));
+        }
+    } // for i
+}
+
+
+
 
 #ifdef __GNUG__
 #pragma GCC diagnostic pop
@@ -2874,6 +3006,9 @@ unsigned avx2_bit_to_gap(gap_word_t* BMRESTRICT dest,
 #define VECT_BLOCK_CHANGE(block, size) \
     avx2_bit_block_calc_change((__m256i*)block, size)
 
+#define VECT_BLOCK_XOR_CHANGE(block, xor_block, size) \
+    avx2_bit_block_calc_xor_change((__m256i*)block, (__m256i*)xor_block, size)
+
 #define VECT_BLOCK_CHANGE_BC(block, gc, bc) \
     avx2_bit_block_calc_change_bc((__m256i*)block, gc, bc)
 
@@ -2886,6 +3021,8 @@ unsigned avx2_bit_to_gap(gap_word_t* BMRESTRICT dest,
 #define VECT_BIT_FIND_DIFF(src1, src2, pos) \
     avx2_bit_find_first_diff((__m256i*) src1, (__m256i*) (src2), pos)
 
+#define VECT_BIT_BLOCK_XOR(t, src, src_xor, d) \
+    avx2_bit_block_xor(t, src, src_xor, d)
 
 } // namespace
 

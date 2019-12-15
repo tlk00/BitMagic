@@ -2275,6 +2275,85 @@ void gap_buff_op(T*         BMRESTRICT dest,
 }
 
 /*!
+   \brief Abstract operation for GAP buffers (predicts legth)
+          Receives functor F as a template argument
+   \param vect1 - operand 1 GAP encoded buffer.
+   \param vect2 - operand 2 GAP encoded buffer.
+   \param f - operation functor.
+   \param dlen - destination length after the operation
+
+   \note Internal function.
+   @internal
+
+   @ingroup gapfunc
+*/
+template<typename T, class F>
+bool gap_buff_dry_op(const T*   BMRESTRICT vect1,
+                     const T*   BMRESTRICT vect2,
+                          F&         f,
+                     unsigned&  dlen,
+                     unsigned limit)
+{
+    const T*  cur1 = vect1;
+    const T*  cur2 = vect2;
+
+    T bitval1 = (T)((*cur1++ & 1));
+    T bitval2 = (T)((*cur2++ & 1));
+
+    T bitval = (T) f(bitval1, bitval2);
+    T bitval_prev = bitval;
+
+    unsigned len = 1;
+
+//    T* res = dest;
+//    *res = bitval;
+//    ++res;
+
+    T c1 = *cur1; T c2 = *cur2;
+    while (1)
+    {
+        bitval = (T) f(bitval1, bitval2);
+
+        // Check if GAP value changes and we need to
+        // start the next one
+        //
+        len += (bitval != bitval_prev);
+        if (len > limit)
+            return false;
+        bitval_prev = bitval;
+        if (c1 < c2) // (*cur1 < *cur2)
+        {
+//            *res = c1;
+            ++cur1; c1 = *cur1;
+            bitval1 ^= 1;
+        }
+        else // >=
+        {
+            //*res = c2;
+            if (c2 < c1) // (*cur2 < *cur1)
+            {
+                bitval2 ^= 1;
+            }
+            else  // equal
+            {
+                if (c2 == (bm::gap_max_bits - 1))
+                    break;
+
+                ++cur1; c1 = *cur1;
+                bitval1 ^= 1; bitval2 ^= 1;
+            }
+            ++cur2; c2 = *cur2;
+        }
+
+    } // while
+
+    dlen = len;//(unsigned)(res - dest);
+//    *dest = (T)((*dest & 7) + (dlen << 3));
+    return true;
+}
+
+
+/*!
    \brief Abstract distance test operation for GAP buffers. 
           Receives functor F as a template argument
    \param vect1 - operand 1 GAP encoded buffer.
@@ -5000,7 +5079,7 @@ unsigned gap_operation_any_and(const gap_word_t* BMRESTRICT vect1,
 
    @ingroup gapfunc
 */
-BMFORCEINLINE 
+inline
 unsigned gap_count_and(const gap_word_t* BMRESTRICT vect1,
                        const gap_word_t* BMRESTRICT vect2)
 {
@@ -5025,7 +5104,7 @@ unsigned gap_count_and(const gap_word_t* BMRESTRICT vect1,
 
    @ingroup gapfunc
 */
-BMFORCEINLINE 
+inline
 gap_word_t* gap_operation_xor(const gap_word_t*  BMRESTRICT vect1,
                               const gap_word_t*  BMRESTRICT vect2,
                               gap_word_t*        BMRESTRICT tmp_buf,
@@ -5033,6 +5112,18 @@ gap_word_t* gap_operation_xor(const gap_word_t*  BMRESTRICT vect1,
 {
     gap_buff_op(tmp_buf, vect1, 0, vect2, 0, bm::xor_op, dsize);
     return tmp_buf;
+}
+
+/*! Light weight gap_operation_xor for len prediction
+   @ingroup gapfunc
+*/
+inline
+bool gap_operation_dry_xor(const gap_word_t*  BMRESTRICT vect1,
+                           const gap_word_t*  BMRESTRICT vect2,
+                           unsigned&                     dsize,
+                           unsigned limit)
+{
+    return gap_buff_dry_op(vect1, vect2, bm::xor_op, dsize, limit);
 }
 
 

@@ -904,7 +904,9 @@ const unsigned char set_block_xor_ref8          = 36; //!< block is masked XOR o
 const unsigned char set_block_xor_ref16         = 37; //!< block is masked XOR of a reference block (16-bit)
 const unsigned char set_block_xor_ref32         = 38; //!< ..... 32-bit (should never happen)
 
-const unsigned char set_block_xor_gap_ref32     = 39; //!< ..... 32-bit (should never happen)
+const unsigned char set_block_xor_gap_ref8      = 39; //!< ..... 8-bit
+const unsigned char set_block_xor_gap_ref16     = 40; //!< ..... 16-bit
+const unsigned char set_block_xor_gap_ref32     = 41; //!< ..... 32-bit (should never happen)
 
 
 
@@ -2001,7 +2003,7 @@ serializer<BV>::serialize(const BV& bv,
         //
         if (BM_IS_GAP(blk))
         {
-            if (ref_vect_) // XOR serialization
+            if (ref_vect_) // XOR filter
             {
                 bool found = xor_scan_.search_best_xor_gap(blk,
                                                            ref_idx_+1, ref_vect_->size(),
@@ -2009,24 +2011,41 @@ serializer<BV>::serialize(const BV& bv,
                 if (found)
                 {
                     const bm::gap_word_t* gap_block = BMGAP_PTR(blk);
+                    unsigned glen = bm::gap_length(gap_block)-1;
+
                     const bm::gap_word_t* gap_xor_block =
                         (const bm::gap_word_t*) xor_scan_.get_found_block();
                     size_type ridx = xor_scan_.found_ridx();
                     size_type plain_idx = xor_scan_.get_ref_vector().get_row_idx(ridx);
 
-                    // TODO: allocate on heap
-                    bm::gap_word_t tmp_buf[bm::gap_equiv_len * 3];
+                    bm::gap_word_t* tmp_buf = (bm::gap_word_t*)xor_block_;
 
                     unsigned res_len;
                     bm::gap_operation_xor(gap_block, gap_xor_block, tmp_buf, res_len);
-                    unsigned glen = bm::gap_length(gap_block)-1;
+
                     BM_ASSERT(res_len <= glen);
-                    BM_ASSERT(res_len == bm::gap_length(tmp_buf)-1);
+                    BM_ASSERT(1+res_len == bm::gap_length(tmp_buf));
                     unsigned delta = glen - res_len;
                     if (delta > 2)
                     {
-                        enc.put_8(bm::set_block_xor_gap_ref32);
-                        enc.put_32(unsigned(plain_idx));
+                        if (plain_idx < 256)
+                        {
+                            enc.put_8(bm::set_block_xor_gap_ref8);
+                            enc.put_8((unsigned char) plain_idx);
+                        }
+                        else
+                        {
+                            if (plain_idx < 65536)
+                            {
+                                enc.put_8(bm::set_block_xor_gap_ref16);
+                                enc.put_16((unsigned short) plain_idx);
+                            }
+                            else
+                            {
+                                enc.put_8(bm::set_block_xor_gap_ref32);
+                                enc.put_32(unsigned(plain_idx));
+                            }
+                        }
                         encode_gap_block(tmp_buf, enc);
 
                         compression_stat_[bm::set_block_xor_gap_ref32]++;
@@ -2039,7 +2058,7 @@ serializer<BV>::serialize(const BV& bv,
         }
         else
         {
-            if (ref_vect_) // XOR serialization
+            if (ref_vect_) // XOR filter
             {
                 xor_scan_.compute_x_block_stats(blk);
                 bool found =
@@ -3161,6 +3180,7 @@ size_t deserializer<BV, DEC>::deserialize(bvector_type&        bv,
         case bm::set_block_bit_digest0:
             decode_bit_block(btype, dec, bman, i, blk);
             break;
+
         // ------------------------------------  XOR compression markers
         case bm::set_block_ref_eq:
             {
@@ -3229,6 +3249,24 @@ size_t deserializer<BV, DEC>::deserialize(bvector_type&        bv,
                 }
             }
             continue; // important! cont to avoid inc(i)
+        case bm::set_block_xor_gap_ref8:
+            if (x_ref_d64 || x_ref_gap) // previous delayed XOR post proc.
+            {
+                xor_decode(x_ref_idx, x_ref_d64, bman, x_nb);
+                x_ref_d64 = 0; x_ref_gap = false;
+            }
+            row_idx = dec.get_8();
+            x_ref_gap = true;
+            goto process_xor_ref;
+        case bm::set_block_xor_gap_ref16:
+            if (x_ref_d64 || x_ref_gap) // previous delayed XOR post proc.
+            {
+                xor_decode(x_ref_idx, x_ref_d64, bman, x_nb);
+                x_ref_d64 = 0; x_ref_gap = false;
+            }
+            row_idx = dec.get_16();
+            x_ref_gap = true;
+            goto process_xor_ref;
         case bm::set_block_xor_gap_ref32:
             if (x_ref_d64 || x_ref_gap) // previous delayed XOR post proc.
             {
