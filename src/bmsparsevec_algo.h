@@ -165,7 +165,9 @@ void dynamic_range_clip_low(SV& svect, unsigned low_bit)
 template<typename SV>
 bool sparse_vector_find_first_mismatch(const SV& sv1,
                                        const SV& sv2,
-                                       typename SV::size_type& midx)
+                                       typename SV::size_type& midx,
+                                       bm::null_support  null_proc = bm::use_null
+                                       )
 {
     typename SV::size_type mismatch = bm::id_max;
     bool found = false;
@@ -183,44 +185,48 @@ bool sparse_vector_find_first_mismatch(const SV& sv1,
     }
     else // regular sparse vector - may have NULL plains
     {
-        typename SV::bvector_type_const_ptr bv_null1 = sv1.get_null_bvector();
-        typename SV::bvector_type_const_ptr bv_null2 = sv2.get_null_bvector();
-        if (bv_null1 && bv_null2) // both (not) NULL vectors present
+        if (null_proc == bm::use_null)
         {
-            bool f = bv_null1->find_first_mismatch(*bv_null2, midx, mismatch);
-            if (f && (midx < mismatch)) // better mismatch found
+            typename SV::bvector_type_const_ptr bv_null1 = sv1.get_null_bvector();
+            typename SV::bvector_type_const_ptr bv_null2 = sv2.get_null_bvector();
+            if (bv_null1 && bv_null2) // both (not) NULL vectors present
             {
-                found = f; mismatch = midx;
-            }
-        }
-        else // one or both NULL vectors are not present
-        {
-            if (bv_null1)
-            {
-                typename SV::bvector_type bv_tmp; // TODO: get rid of temp bv
-                bv_tmp.resize(sv2.size());
-                bv_tmp.invert(); // turn into true NULL vector
-
-                // find first NULL value (mismatch)
-                bool f = bv_null1->find_first_mismatch(bv_tmp, midx, mismatch);
+                bool f = bv_null1->find_first_mismatch(*bv_null2, midx, mismatch);
                 if (f && (midx < mismatch)) // better mismatch found
                 {
                     found = f; mismatch = midx;
                 }
-            }
-            if (bv_null2)
-            {
-                typename SV::bvector_type bv_tmp; // TODO: get rid of temp bv
-                bv_tmp.resize(sv1.size());
-                bv_tmp.invert();
 
-                bool f = bv_null2->find_first_mismatch(bv_tmp, midx, mismatch);
-                if (f && (midx < mismatch)) // better mismatch found
+            }
+            else // one or both NULL vectors are not present
+            {
+                if (bv_null1)
                 {
-                    found = f; mismatch = midx;
+                    typename SV::bvector_type bv_tmp; // TODO: get rid of temp bv
+                    bv_tmp.resize(sv2.size());
+                    bv_tmp.invert(); // turn into true NULL vector
+
+                    // find first NULL value (mismatch)
+                    bool f = bv_null1->find_first_mismatch(bv_tmp, midx, mismatch);
+                    if (f && (midx < mismatch)) // better mismatch found
+                    {
+                        found = f; mismatch = midx;
+                    }
+                }
+                if (bv_null2)
+                {
+                    typename SV::bvector_type bv_tmp; // TODO: get rid of temp bv
+                    bv_tmp.resize(sv1.size());
+                    bv_tmp.invert();
+
+                    bool f = bv_null2->find_first_mismatch(bv_tmp, midx, mismatch);
+                    if (f && (midx < mismatch)) // better mismatch found
+                    {
+                        found = f; mismatch = midx;
+                    }
                 }
             }
-        }
+        } // null_proc
     }
 
     for (unsigned i = 0; mismatch & (i < plains1); ++i)
