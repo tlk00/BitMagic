@@ -1604,7 +1604,7 @@ void sse42_bit_block_xor(bm::word_t*  target_block,
             mC = _mm_xor_si128(_mm_load_si128(sub_block+6),
                                   _mm_load_si128(xor_sub_block+6));
             mD = _mm_xor_si128(_mm_load_si128(sub_block+7),
-                                  _mm_load_si128(xor_sub_block+6));
+                                  _mm_load_si128(xor_sub_block+7));
 
             _mm_store_si128(t_sub_block+4, mA);
             _mm_store_si128(t_sub_block+5, mB);
