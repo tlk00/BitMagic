@@ -17921,6 +17921,13 @@ void TestSparseVectorSerial()
 
         {
             bm::sparse_vector_deserializer<sparse_vector_u32> sv_deserial;
+            sparse_vector_u32 sv4(bm::use_null);
+            sv_deserial.deserialize(sv4, buf);
+            {
+                bool is_eq = sv1.equal(sv4);
+                assert(is_eq);
+            }
+
 
             auto i = from;
             auto j = to;
@@ -17939,11 +17946,46 @@ void TestSparseVectorSerial()
                     cerr << "Error: Range deserialization equality failed!" << endl;
                     assert(0); exit(1);
                 }
+                sparse_vector_u32::size_type pos;
+                bool found;
 
+                sparse_vector_u32 sv_filt(sv1);
+                sv_filt.filter(bv_mask);
+                sparse_vector_u32 sv_range(bm::use_null);
+                sv_range.copy_range(sv1, i, j);
+
+                is_eq = sv_filt.equal(sv_range);
+                assert(is_eq);
+
+                //sv3.filter(bv_mask);
+
+                found = bm::sparse_vector_find_first_mismatch(sv_filt, sv3, pos, bm::no_null);
+                if (found)
+                {
+                    found = bm::sparse_vector_find_first_mismatch(sv_filt, sv3, pos, bm::no_null);
+
+                    auto vf = sv_filt.get(pos);
+                    auto v1 = sv1.get(pos);
+                    auto v3 = sv3.get(pos);
+
+                    cerr << vf << "!=" << v3 << "!=" << v1 << endl;
+                    cerr << "Filter Range deserialization mismatch found! at pos=" << pos << endl;
+                    cerr << "[" << i << ".." << j << "]" << endl;
+                    assert(0); exit(1);
+                }
+
+                found = bm::sparse_vector_find_first_mismatch(sv_range, sv2, pos, bm::no_null);
+                if (found)
+                {
+                    cerr << "Range deserialization mismatch found! at pos=" << pos << endl;
+                    cerr << "[" << i << ".." << j << "]" << endl;
+                    assert(0); exit(1);
+                }
+/*
                 for (auto k = i; k < j; ++k)
                 {
-                    auto v1 = sv1[k];
-                    auto v2 = sv2[k];
+                    auto v1 = sv1.get(k);
+                    auto v2 = sv2.get(k);
                     if (v1 != v2)
                     {
                         cerr << "Error:Range deserialization discrepancy!" << endl;
@@ -17957,7 +17999,7 @@ void TestSparseVectorSerial()
                         assert(0); exit(1);
                     }
                 } // for k
-
+*/
                 if (i % 0xFF == 0)
                 {
                     std::cout << "\r" << j-i << flush;
