@@ -2460,9 +2460,9 @@ bm::id64_t bit_block_calc_xor_change_digest(
                         const bm::word_t*  xor_block,
                         block_waves_xor_descr&  x_descr)
 {
-
+    unsigned bgain;
     bm::compute_complexity_descr(block, x_descr);
-    return bm::compute_xor_complexity_descr(block, xor_block, x_descr);
+    return bm::compute_xor_complexity_descr(block, xor_block, x_descr, bgain);
 }
 
 static
@@ -25169,6 +25169,7 @@ int main(int argc, char *argv[])
         TestSparseVectorGatherDecode();
 
         TestSparseVectorSerial();
+
         TestSparseVectorSerialization2();
 
         TestSparseVectorTransform();
