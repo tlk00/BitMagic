@@ -145,10 +145,10 @@ inline
 bm::id64_t compute_xor_complexity_descr(
                         const bm::word_t* BMRESTRICT block,
                         const bm::word_t* BMRESTRICT xor_block,
-                        block_waves_xor_descr& BMRESTRICT x_descr)
+                        block_waves_xor_descr& BMRESTRICT x_descr,
+                        unsigned& block_gain)
 {
-    // TODO: add vectorizations
-    //
+    block_gain = 0; // approximate block gain (sum of sub-waves)
     bm::id64_t digest = 0;
     for (unsigned i = 0; i < bm::block_waves; ++i)
     {
@@ -161,15 +161,20 @@ bm::id64_t compute_xor_complexity_descr(
                                          bm::set_block_digest_wave_size);
 
         x_descr.sb_xor_change[i] = (unsigned short)xor_change;
-        if (xor_change == 1 && (x_descr.sb_change[i] >= 1))
+        if ((xor_change <= 1) && (x_descr.sb_change[i] >= 0))
         {
             digest |= (1ull << i);
+            block_gain += x_descr.sb_change[i];
         }
         else
+        {
             if (xor_change < x_descr.sb_change[i]) // detected improvement
+            {
                 digest |= (1ull << i);
+                block_gain += (x_descr.sb_change[i] - xor_change);
+            }
+        }
     } // for i
-
     return digest;
 }
 
@@ -427,6 +432,9 @@ bool xor_scanner<BV>::search_best_xor_mask(const bm::word_t* block,
     bm::id64_t d64 = 0;
     found_block_xor_ = 0;
 
+    unsigned best_block_gain = 0;
+    int best_ri = -1;
+
     for (size_type ri = ridx_from; ri < ridx_to; ++ri)
     {
         const bvector_type* bv = ref_vect_->get_bv(ri);
@@ -438,10 +446,20 @@ bool xor_scanner<BV>::search_best_xor_mask(const bm::word_t* block,
 
         BM_ASSERT(block != block_xor);
 
+        unsigned block_gain = 0;
+
         bm::id64_t xor_d64 =
-            bm::compute_xor_complexity_descr(block, block_xor, x_descr_);
+            bm::compute_xor_complexity_descr(block, block_xor, x_descr_, block_gain);
         if (xor_d64) // candidate XOR block
         {
+
+            if (block_gain > best_block_gain)
+            {
+                best_block_gain = block_gain;
+                best_ri = int(ri);
+                d64 = xor_d64;
+            }
+/*
             // TODO: compute total gain as sum of sub-blocks and use it here
             // --------------------
             bm::bit_block_xor(tb, block, block_xor, xor_d64);
@@ -472,8 +490,45 @@ bool xor_scanner<BV>::search_best_xor_mask(const bm::word_t* block,
                     break;
                 }
             }
+*/
         }
     } // for ri
+
+    if (best_ri != -1) // found some gain
+    {
+        unsigned xor_bc, xor_gc;
+        const bvector_type* bv = ref_vect_->get_bv(size_type(best_ri));
+        const typename bvector_type::blocks_manager_type& bman = bv->get_blocks_manager();
+        const bm::word_t* block_xor = bman.get_block_ptr(i, j);
+
+        bm::bit_block_xor(tb, block, block_xor, d64);
+        bm::bit_block_change_bc(tb, &xor_gc, &xor_bc);
+
+        if (xor_gc < x_best_metric_ && xor_gc < bm::bie_cut_off)
+        {
+            x_best_metric_ = xor_gc;
+            kb_found = true;
+            found_ridx_ = size_type(best_ri);
+            found_block_xor_ = block_xor;
+        }
+        if (xor_bc < x_best_metric_ && xor_bc < bm::bie_cut_off)
+        {
+            x_best_metric_ = xor_bc;
+            kb_found = true;
+            found_ridx_ = size_type(best_ri);
+            found_block_xor_ = block_xor;
+            if (!xor_bc) // completely identical block?
+            {
+                unsigned pos;
+                bool f = bit_find_first_diff(block, block_xor, &pos);
+                x_best_metric_ += f;
+/*
+                bool f = bm::bit_is_all_zero(tb);
+                x_best_metric_ += !f; */
+            }
+        }
+    }
+
     x_d64_ = d64;
     return kb_found;
 }
