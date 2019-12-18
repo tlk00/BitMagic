@@ -1795,7 +1795,6 @@ public:
     */
     unsigned reserve_top_blocks(unsigned top_blocks)
     {
-        BM_ASSERT(top_blocks);
         if (top_blocks_ && top_blocks <= top_block_size_)
             return top_block_size_; // nothing to do
         
