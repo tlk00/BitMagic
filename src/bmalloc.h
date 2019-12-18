@@ -371,6 +371,7 @@ public:
     */
     void* alloc_ptr(size_t size)
     {
+        BM_ASSERT(size);
         return ptr_alloc_.allocate(size, 0);
     }
 

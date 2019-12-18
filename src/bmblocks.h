@@ -1795,6 +1795,7 @@ public:
     */
     unsigned reserve_top_blocks(unsigned top_blocks)
     {
+        BM_ASSERT(top_blocks);
         if (top_blocks_ && top_blocks <= top_block_size_)
             return top_block_size_; // nothing to do
         
@@ -2240,14 +2241,14 @@ private:
               block_idx_type block_from = 0,
               block_idx_type block_to = bm::set_total_blocks)
     {
-        unsigned arg_top_blocks = blockman.top_block_size();
-        this->reserve_top_blocks(arg_top_blocks);
-        
-        bm::word_t*** blk_root = top_blocks_root();
         bm::word_t*** blk_root_arg = blockman.top_blocks_root();
-        
         if (!blk_root_arg)
             return;
+
+        unsigned arg_top_blocks = blockman.top_block_size();
+        this->reserve_top_blocks(arg_top_blocks);
+        bm::word_t*** blk_root = top_blocks_root();
+
         
         unsigned i_from, j_from, i_to, j_to;
         get_block_coord(block_from, i_from, j_from);
