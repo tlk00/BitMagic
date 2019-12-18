@@ -452,45 +452,12 @@ bool xor_scanner<BV>::search_best_xor_mask(const bm::word_t* block,
             bm::compute_xor_complexity_descr(block, block_xor, x_descr_, block_gain);
         if (xor_d64) // candidate XOR block
         {
-
             if (block_gain > best_block_gain)
             {
                 best_block_gain = block_gain;
                 best_ri = int(ri);
                 d64 = xor_d64;
             }
-/*
-            // TODO: compute total gain as sum of sub-blocks and use it here
-            // --------------------
-            bm::bit_block_xor(tb, block, block_xor, xor_d64);
-            unsigned xor_bc, xor_gc;
-            bm::bit_block_change_bc(tb, &xor_gc, &xor_bc);
-            // --------------------
-
-            if (xor_gc < x_best_metric_ && xor_gc < bm::bie_cut_off)
-            {
-                d64 = xor_d64;
-                x_best_metric_ = xor_gc;
-                kb_found = true;
-                found_ridx_ = ri;
-                found_block_xor_ = block_xor;
-            }
-            if (xor_bc < x_best_metric_ && xor_bc < bm::bie_cut_off)
-            {
-                d64 = xor_d64;
-                x_best_metric_ = xor_bc;
-                kb_found = true;
-                found_ridx_ = ri;
-                found_block_xor_ = block_xor;
-                if (!xor_bc) // completely identical block?
-                {
-                    unsigned pos;
-                    bool f = bit_find_first_diff(block, block_xor, &pos);
-                    x_best_metric_ += f;
-                    break;
-                }
-            }
-*/
         }
     } // for ri
 
@@ -522,9 +489,6 @@ bool xor_scanner<BV>::search_best_xor_mask(const bm::word_t* block,
                 unsigned pos;
                 bool f = bit_find_first_diff(block, block_xor, &pos);
                 x_best_metric_ += f;
-/*
-                bool f = bm::bit_is_all_zero(tb);
-                x_best_metric_ += !f; */
             }
         }
     }
