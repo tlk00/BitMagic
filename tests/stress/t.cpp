@@ -429,7 +429,7 @@ void DetailedCompareBVectors(const BV& bv1, const BV& bv2)
 void CheckVectors(bvect_mini &bvect_min, 
                   bvect      &bvect_full,
                   unsigned size,
-                  bool     detailed = false);
+                  bool     detailed = true);
 
 void generate_bvector(bvect& bv, unsigned vector_max = 40000000, bool optimize=true);
 
@@ -1869,7 +1869,7 @@ bool FindLastBit(const bvect& bv, bm::id_t& last_pos)
 void CheckVectors(bvect_mini &bvect_min, 
                   bvect      &bvect_full,
                   unsigned size,
-                  bool     /*detailed*/)
+                  bool     detailed)
 {
     cout << "\nVectors checking...bits to compare = " << size << endl;
 
@@ -1886,7 +1886,7 @@ void CheckVectors(bvect_mini &bvect_min,
         cout << "Count comparison failed !!!!" << endl;
         print_stat(bvect_full);
         DetailedCheckVectors(bvect_min, bvect_full, size);
-
+        assert(0);
         exit(1);  
     } 
 
@@ -1913,6 +1913,9 @@ void CheckVectors(bvect_mini &bvect_min,
             assert(pos1 == pos2);
         }
     }
+    
+    if (!detailed)
+        return;
     
     // get_next comparison
     cout << "Positive bits comparison..." << flush;
@@ -5360,7 +5363,7 @@ void RangeCopyTest()
 
 
 static
-void AndOperationsTest()
+void AndOperationsTest(bool detailed)
 {
     assert(ITERATIONS < BITVECT_SIZE);
 
@@ -5423,8 +5426,8 @@ void AndOperationsTest()
         exit(1);
     }
 
-    CheckVectors(bvect_min1, bvect_full1, 256);
-    CheckVectors(bvect_min1, bv_target_s, 256);
+    CheckVectors(bvect_min1, bvect_full1, 256, detailed);
+    CheckVectors(bvect_min1, bv_target_s, 256, detailed);
     CheckCountRange(bvect_full1, 0, 256);
 
     }
@@ -5473,7 +5476,7 @@ void AndOperationsTest()
         bvect_full2.set_bit(i);
     }
 
-    CheckVectors(bvect_min1, bvect_full1, BITVECT_SIZE/10+10);
+    CheckVectors(bvect_min1, bvect_full1, BITVECT_SIZE/10+10, detailed);
     CheckCountRange(bvect_full1, 0, BITVECT_SIZE/10+10);
 
 //    FillSets(&bvect_min1, &bvect_full1, 1, BITVECT_SIZE/7, 0);
@@ -5506,8 +5509,8 @@ void AndOperationsTest()
         exit(1);
     }
 
-    CheckVectors(bvect_min1, bvect_full1, BITVECT_SIZE/10+10);
-    CheckVectors(bvect_min1, bv_target_s, BITVECT_SIZE/10+10);
+    CheckVectors(bvect_min1, bvect_full1, BITVECT_SIZE/10+10, detailed);
+    CheckVectors(bvect_min1, bv_target_s, BITVECT_SIZE/10+10, detailed);
     CheckCountRange(bvect_full1, 0, BITVECT_SIZE/10+10);
 
     }
@@ -5557,8 +5560,8 @@ void AndOperationsTest()
         exit(1);
     }
 
-    CheckVectors(bvect_min1, bvect_full1, BITVECT_SIZE/10+10);
-    CheckVectors(bvect_min1, bv_target_s, BITVECT_SIZE/10+10);
+    CheckVectors(bvect_min1, bvect_full1, BITVECT_SIZE/10+10, detailed);
+    CheckVectors(bvect_min1, bv_target_s, BITVECT_SIZE/10+10, detailed);
     CheckCountRange(bvect_full1, 0, BITVECT_SIZE/10+10);
 
     }
@@ -5607,13 +5610,23 @@ void AndOperationsTest()
         exit(1);
     }
 
-    CheckVectors(bvect_min1, bvect_full1, BITVECT_SIZE);
-    CheckVectors(bvect_min1, bv_target_s, BITVECT_SIZE);
+    {
+        bvect::size_type pos;
+        bool f = bvect_full1.find_first_mismatch(bv_target_s, pos);
+        if (f)
+        {
+            cerr << "Mismatch at position = " << pos << endl;
+            assert(0); exit(1);
+        }
+    }
+
+    CheckVectors(bvect_min1, bvect_full1, BITVECT_SIZE, detailed);
+    CheckVectors(bvect_min1, bv_target_s, BITVECT_SIZE, detailed);
     CheckCountRange(bvect_full1, 0, BITVECT_SIZE);
 
     BM_DECLARE_TEMP_BLOCK(tb)
     bvect_full1.optimize(tb);
-    CheckVectors(bvect_min1, bvect_full1, BITVECT_SIZE);
+    CheckVectors(bvect_min1, bvect_full1, BITVECT_SIZE, detailed);
     CheckCountRange(bvect_full1, 0, BITVECT_SIZE);
     CheckCountRange(bvect_full1, BITVECT_SIZE/2, BITVECT_SIZE);
 
@@ -5645,7 +5658,7 @@ void AndOperationsTest()
     bvect_min1.combine_and(bvect_min2);
 
     bm::combine_and_sorted(bvect_full1, first, last);
-    CheckVectors(bvect_min1, bvect_full1, BITVECT_SIZE);
+    CheckVectors(bvect_min1, bvect_full1, BITVECT_SIZE, detailed);
     }
     
     {
@@ -5799,7 +5812,7 @@ void AndOperationsTest()
 }
 
 static
-void OrOperationsTest()
+void OrOperationsTest(bool detailed)
 {
     assert(ITERATIONS < BITVECT_SIZE);
 
@@ -5863,9 +5876,18 @@ void OrOperationsTest()
         exit(1);
     }
 
+    {
+        bvect::size_type pos;
+        bool f = bvect_full1.find_first_mismatch(bv_target_s, pos);
+        if (f)
+        {
+            cerr << "Mismatch found pos=" << pos << endl;
+            assert(0); exit(1);
+        }
+    }
 
-    CheckVectors(bvect_min1, bvect_full1, 256);
-    CheckVectors(bvect_min1, bv_target_s, 256);
+    CheckVectors(bvect_min1, bvect_full1, 256, detailed);
+    CheckVectors(bvect_min1, bv_target_s, 256, detailed);
     CheckCountRange(bvect_full1, 0, 256);
     CheckCountRange(bvect_full1, 128, 256);
     }
@@ -5914,8 +5936,18 @@ void OrOperationsTest()
         exit(1);
     }
 
-    CheckVectors(bvect_min1, bvect_full1, BITVECT_SIZE/10+10);
-    CheckVectors(bvect_min1, bvect_full1, BITVECT_SIZE/10+10);
+    {
+        bvect::size_type pos;
+        bool f = bvect_full1.find_first_mismatch(bv_target_s, pos);
+        if (f)
+        {
+            cerr << "Mismatch found pos=" << pos << endl;
+            assert(0); exit(1);
+        }
+    }
+
+    CheckVectors(bvect_min1, bvect_full1, BITVECT_SIZE/10+10, detailed);
+    CheckVectors(bvect_min1, bvect_full1, BITVECT_SIZE/10+10, detailed);
     CheckCountRange(bvect_full1, 0, BITVECT_SIZE/10+10);
 
     }
@@ -5987,8 +6019,18 @@ void OrOperationsTest()
     BM_DECLARE_TEMP_BLOCK(tb)
     bvect_full1.optimize(tb);
 
-    CheckVectors(bvect_min1, bvect_full1, BITVECT_SIZE);
-    CheckVectors(bvect_min1, bv_target_s, BITVECT_SIZE);
+    {
+        bvect::size_type pos;
+        bool f = bvect_full1.find_first_mismatch(bv_target_s, pos);
+        if (f)
+        {
+            cerr << "Mismatch found pos=" << pos << endl;
+            assert(0); exit(1);
+        }
+    }
+
+    CheckVectors(bvect_min1, bvect_full1, BITVECT_SIZE, detailed);
+    CheckVectors(bvect_min1, bv_target_s, BITVECT_SIZE, detailed);
     CheckCountRange(bvect_full1, 0, BITVECT_SIZE);
 
 
@@ -6232,7 +6274,7 @@ void OrOperationsTest()
 
 
 static
-void SubOperationsTest()
+void SubOperationsTest(bool detailed)
 {
     assert(ITERATIONS < BITVECT_SIZE);
 
@@ -6294,8 +6336,18 @@ void SubOperationsTest()
         exit(1);
     }
 
-    CheckVectors(bvect_min1, bvect_full1, 256);
-    CheckVectors(bvect_min1, bv_target_s, 256);
+    {
+        bvect::size_type pos;
+        bool f = bvect_full1.find_first_mismatch(bv_target_s, pos);
+        if (f)
+        {
+            cerr << "Mismatch found pos=" << pos << endl;
+            assert(0); exit(1);
+        }
+    }
+
+    CheckVectors(bvect_min1, bvect_full1, 256, detailed);
+    CheckVectors(bvect_min1, bv_target_s, 256, detailed);
     CheckCountRange(bvect_full1, 0, 256);
 
     }
@@ -6346,9 +6398,18 @@ void SubOperationsTest()
         exit(1);
     }
     
+    {
+        bvect::size_type pos;
+        bool f = bvect_full1.find_first_mismatch(bv_target_s, pos);
+        if (f)
+        {
+            cerr << "Mismatch found pos=" << pos << endl;
+            assert(0); exit(1);
+        }
+    }
 
-    CheckVectors(bvect_min1, bvect_full1, BITVECT_SIZE/10+10);
-    CheckVectors(bvect_min1, bv_target_s, BITVECT_SIZE/10+10);
+    CheckVectors(bvect_min1, bvect_full1, BITVECT_SIZE/10+10, detailed);
+    CheckVectors(bvect_min1, bv_target_s, BITVECT_SIZE/10+10, detailed);
     CheckCountRange(bvect_full1, 0, BITVECT_SIZE/10+10);
 
     }
@@ -6402,8 +6463,18 @@ void SubOperationsTest()
 
     BM_DECLARE_TEMP_BLOCK(tb)
     bvect_full1.optimize(tb);
-    CheckVectors(bvect_min1, bvect_full1, BITVECT_SIZE);
-    CheckVectors(bvect_min1, bv_target_s, BITVECT_SIZE);
+    {
+        bvect::size_type pos;
+        bool f = bvect_full1.find_first_mismatch(bv_target_s, pos);
+        if (f)
+        {
+            cerr << "Mismatch found pos=" << pos << endl;
+            assert(0); exit(1);
+        }
+    }
+
+    CheckVectors(bvect_min1, bvect_full1, BITVECT_SIZE, detailed);
+    CheckVectors(bvect_min1, bv_target_s, BITVECT_SIZE, detailed);
     CheckCountRange(bvect_full1, 0, BITVECT_SIZE);
 
     }
@@ -6540,7 +6611,7 @@ void SubOperationsTest()
 
 
 static
-void XorOperationsTest()
+void XorOperationsTest(bool detailed)
 {
     assert(ITERATIONS < BITVECT_SIZE);
 
@@ -6601,8 +6672,17 @@ void XorOperationsTest()
         exit(1);
     }
 
-    CheckVectors(bvect_min1, bvect_full1, 256);
-    CheckVectors(bvect_min1, bv_target_s, 256);
+    {
+        bvect::size_type pos;
+        bool f = bvect_full1.find_first_mismatch(bv_target_s, pos);
+        if (f)
+        {
+            cerr << "Mismatch found pos=" << pos << endl;
+            assert(0); exit(1);
+        }
+    }
+    CheckVectors(bvect_min1, bvect_full1, 256, detailed);
+    CheckVectors(bvect_min1, bv_target_s, 256, detailed);
     CheckCountRange(bvect_full1, 0, 256);
     CheckCountRange(bvect_full1, 128, 256);
 
@@ -6650,8 +6730,19 @@ void XorOperationsTest()
         }
         
         bvect_min1.combine_xor(bvect_min2);
-        CheckVectors(bvect_min1, bvect1, BITVECT_SIZE, true);
-        CheckVectors(bvect_min1, bv_target_s, BITVECT_SIZE, true);
+
+        {
+            bvect::size_type pos;
+            bool f = bvect1.find_first_mismatch(bv_target_s, pos);
+            if (f)
+            {
+                cerr << "Mismatch found pos=" << pos << endl;
+                assert(0); exit(1);
+            }
+        }
+
+        CheckVectors(bvect_min1, bvect1, BITVECT_SIZE, detailed);
+        CheckVectors(bvect_min1, bv_target_s, BITVECT_SIZE, detailed);
         CheckCountRange(bvect1, 0, BITVECT_SIZE);
     }
     
@@ -6713,8 +6804,18 @@ void XorOperationsTest()
         }
         
         bvect_min1.combine_xor(bvect_min2);
-        CheckVectors(bvect_min1, bvect1, BITVECT_SIZE, true);
-        CheckVectors(bvect_min1, bv_target_s, BITVECT_SIZE, true);
+        {
+            bvect::size_type pos;
+            bool f = bvect1.find_first_mismatch(bv_target_s, pos);
+            if (f)
+            {
+                cerr << "Mismatch found pos=" << pos << endl;
+                assert(0); exit(1);
+            }
+        }
+
+        CheckVectors(bvect_min1, bvect1, BITVECT_SIZE, detailed);
+        CheckVectors(bvect_min1, bv_target_s, BITVECT_SIZE, detailed);
     }
 
 
@@ -6815,8 +6916,18 @@ void XorOperationsTest()
         exit(1);
     }
 
-    CheckVectors(bvect_min1, bvect_full1, BITVECT_SIZE/10+10);
-    CheckVectors(bvect_min1, bv_target_s, BITVECT_SIZE/10+10);
+    {
+        bvect::size_type pos;
+        bool f = bvect_full1.find_first_mismatch(bv_target_s, pos);
+        if (f)
+        {
+            cerr << "Mismatch found pos=" << pos << endl;
+            assert(0); exit(1);
+        }
+    }
+
+    CheckVectors(bvect_min1, bvect_full1, BITVECT_SIZE/10+10, detailed);
+    CheckVectors(bvect_min1, bv_target_s, BITVECT_SIZE/10+10, detailed);
     CheckCountRange(bvect_full1, 0, BITVECT_SIZE/10+10);
 
     }
@@ -6870,8 +6981,18 @@ void XorOperationsTest()
 
     BM_DECLARE_TEMP_BLOCK(tb)
     bvect_full1.optimize(tb);
-    CheckVectors(bvect_min1, bvect_full1, BITVECT_SIZE);
-    CheckVectors(bvect_min1, bv_target_s, BITVECT_SIZE);
+    {
+        bvect::size_type pos;
+        bool f = bvect_full1.find_first_mismatch(bv_target_s, pos);
+        if (f)
+        {
+            cerr << "Mismatch found pos=" << pos << endl;
+            assert(0); exit(1);
+        }
+    }
+
+    CheckVectors(bvect_min1, bvect_full1, BITVECT_SIZE, detailed);
+    CheckVectors(bvect_min1, bv_target_s, BITVECT_SIZE, detailed);
     CheckCountRange(bvect_full1, 0, BITVECT_SIZE);
 
 
@@ -8433,7 +8554,7 @@ void StressTestAggregatorShiftAND(unsigned repeats)
 
 
 static
-void StressTest(unsigned repetitions, int set_operation = -1)
+void StressTest(unsigned repetitions, int set_operation, bool detailed)
 {
 
    unsigned RatioSum = 0;
@@ -8782,7 +8903,7 @@ void StressTest(unsigned repetitions, int set_operation = -1)
 
 
         cout << "Operation comparison" << endl;
-        CheckVectors(*bvect_min1, *bvect_full1, size);
+        CheckVectors(*bvect_min1, *bvect_full1, size, detailed);
 
         int cres2 = bvect_full1->compare(*bvect_full2);
 
@@ -8794,12 +8915,21 @@ void StressTest(unsigned repetitions, int set_operation = -1)
             cout << bvect_full1->get_first() << " " << bvect_full1->count() << endl;
             cout << bvect_full2->get_first() << " " << bvect_full2->count() << endl;
 
-           // bvect_full1->stat(1000);
             cout << endl;
-           // bvect_full2->stat(1000);
             printf("Bitset comparison operation failed.\n");
-            exit(1);
+            assert(0); exit(1);
         }
+        if (cres1 == 0) // re-confirm match
+        {
+            bvect::size_type pos;
+            bool f = bvect_full1->find_first_mismatch(*bvect_full2, pos);
+            if (f)
+            {
+                cerr << "Mismatch found pos=" << pos << endl;
+                assert(0); exit(1);
+            }
+        }
+
 
         {
             bvect bv1(*bvect_full1);
@@ -8894,10 +9024,21 @@ void StressTest(unsigned repetitions, int set_operation = -1)
                 
         cout << "Optimization comparison" << endl;
 
-        CheckVectors(*bvect_min1, *bvect_full1, size);
-
-        bvect_full1->set_gap_levels(gap_len_table_min<true>::_len);
-        CheckVectors(*bvect_min1, *bvect_full1, size);
+        CheckVectors(*bvect_min1, *bvect_full1, size, detailed);
+        {
+            bvect bv(*bvect_full1);
+            bvect_full1->set_gap_levels(gap_len_table_min<true>::_len);
+            {
+                bvect::size_type pos;
+                bool f = bv.find_first_mismatch(*bvect_full1, pos);
+                if (f)
+                {
+                    cerr << "Mismatch found pos=" << pos << endl;
+                    assert(0); exit(1);
+                }
+            }
+        }
+        CheckVectors(*bvect_min1, *bvect_full1, size, detailed);
         CheckIntervals(*bvect_full1, BITVECT_SIZE);
 
         //CheckCountRange(*bvect_full1, 0, size);
@@ -8976,7 +9117,17 @@ void StressTest(unsigned repetitions, int set_operation = -1)
 
         cout << "Serialization comparison" << endl;
 
-        CheckVectors(*bvect_min1, *bvect_full3, size, true);
+        {
+            bvect::size_type pos;
+            bool f = bv_target_s->find_first_mismatch(*bvect_full3, pos);
+            if (f)
+            {
+                cerr << "Mismatch found pos=" << pos << endl;
+                assert(0); exit(1);
+            }
+        }
+        CheckVectors(*bvect_min1, *bvect_full3, size, detailed);
+
         int res = bv_target_s->compare(*bvect_full3);
         if (res != 0)
         {
@@ -9518,7 +9669,7 @@ void GAPCheck()
             cout << "random test: count comparison failed. " 
                  << " LEN = " << len << " count = " << count
                  << endl;
-                 exit(1);
+            assert(0);  exit(1);
            }            
 
            for (unsigned j = start; j < end; ++j)
@@ -25133,15 +25284,16 @@ int main(int argc, char *argv[])
 
     if (is_all || is_bvops)
     {
-        AndOperationsTest();
-        OrOperationsTest();
-        XorOperationsTest();
-        SubOperationsTest();
 
-        StressTest(120, 0); // OR
-        StressTest(120, 3); // AND
-        StressTest(120, 1); // SUB
-        StressTest(120, 2); // XOR
+        AndOperationsTest(false); // disable detailed check
+        OrOperationsTest(false);
+        XorOperationsTest(false);
+        SubOperationsTest(false);
+
+        StressTest(120, 0, false); // OR
+        StressTest(120, 3, false); // AND
+        StressTest(120, 1, false); // SUB
+        StressTest(120, 2, false); // XOR
     }
 
 
@@ -25214,7 +25366,7 @@ int main(int argc, char *argv[])
 
     if (is_all || is_bvops)
     {
-        StressTest(300);
+        StressTest(300, -1, true);
     }
 
     finish_time = time(0);
