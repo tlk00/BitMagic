@@ -1795,7 +1795,7 @@ public:
     */
     unsigned reserve_top_blocks(unsigned top_blocks)
     {
-        if (top_blocks_ && top_blocks <= top_block_size_)
+        if ((top_blocks_ && top_blocks <= top_block_size_) || !top_blocks )
             return top_block_size_; // nothing to do
         
         bm::word_t*** new_blocks = 
