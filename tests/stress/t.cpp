@@ -10427,7 +10427,7 @@ void SerializationCompressionLevelsTest()
         bv_ser.serialize(bv, sermem_buf, 0);
        
         const bvect::size_type* cstat = bv_ser.get_compression_stat();
-        assert(cstat[bm::set_block_arrgap_bienc] == 1);
+        assert(cstat[bm::set_block_arrgap_bienc_v2] == 1);
        
         bvect bv2;
         bm::deserialize(bv2, sermem_buf.buf());
@@ -10464,7 +10464,7 @@ void SerializationCompressionLevelsTest()
         bv_ser.serialize(bv, sermem_buf, 0);
        
         const bvect::size_type* cstat = bv_ser.get_compression_stat();
-        assert(cstat[bm::set_block_arrgap_bienc_inv] == 1);
+        assert(cstat[bm::set_block_arrgap_bienc_inv_v2] == 1);
        
         bvect bv2;
         bm::deserialize(bv2, sermem_buf.buf());
