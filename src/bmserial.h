@@ -1319,10 +1319,12 @@ void serializer<BV>::interpolated_gap_array(const bm::gap_word_t* gap_block,
 {
     BM_ASSERT(arr_len <= 65535);
 
+//interpolated_gap_array_v0(gap_block, arr_len, enc, inverted);
+//return;
 
     unsigned char scode = inverted ? bm::set_block_arrgap_bienc_inv_v2
                                    : bm::set_block_arrgap_bienc_v2;
-    if (arr_len > 3)
+    if (arr_len > 4)
     {
         bm::gap_word_t min_v = gap_block[0];
         bm::gap_word_t max_v = gap_block[arr_len-1];
@@ -1334,6 +1336,7 @@ void serializer<BV>::interpolated_gap_array(const bm::gap_word_t* gap_block,
             return;
         }
 
+        BM_ASSERT(arr_len < 16383);
         encoder::position_type enc_pos0 = enc.get_pos();
         {
             bit_out_type bout(enc);
@@ -2746,12 +2749,12 @@ void deseriaizer_base<DEC>::read_gap_block(decoder_type&   decoder,
             } // for
         }
         break;
-    case set_block_arrgap_egamma:
     case set_block_arrgap_egamma_inv:
-    case set_block_arrgap_bienc:
     case set_block_arrgap_bienc_inv:
-    case set_block_arrgap_bienc_v2:
     case set_block_arrgap_bienc_inv_v2:
+    case set_block_arrgap_egamma:
+    case set_block_arrgap_bienc:
+    case set_block_arrgap_bienc_v2:
         {
         	unsigned arr_len = read_id_list(decoder, block_type, id_array_);
             dst_block[0] = 0;
@@ -2828,7 +2831,8 @@ void deseriaizer_base<DEC>::read_gap_block(decoder_type&   decoder,
 
     if (block_type == set_block_arrgap_egamma_inv || 
         block_type == set_block_arrgap_inv ||
-        block_type == set_block_arrgap_bienc_inv)
+        block_type == set_block_arrgap_bienc_inv ||
+        block_type == set_block_arrgap_bienc_inv_v2)
     {
         gap_invert(dst_block);
     }

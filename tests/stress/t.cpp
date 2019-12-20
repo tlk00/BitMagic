@@ -25285,15 +25285,15 @@ int main(int argc, char *argv[])
     if (is_all || is_bvops)
     {
 
-        AndOperationsTest(false); // disable detailed check
-        OrOperationsTest(false);
-        XorOperationsTest(false);
-        SubOperationsTest(false);
+        AndOperationsTest(true); // enable detailed check
+        OrOperationsTest(true);
+        XorOperationsTest(true);
+        SubOperationsTest(true);
 
-        StressTest(120, 0, false); // OR
-        StressTest(120, 3, false); // AND
-        StressTest(120, 1, false); // SUB
-        StressTest(120, 2, false); // XOR
+        StressTest(150, 0, false); // OR - detailed check disabled
+        StressTest(150, 3, false); // AND
+        StressTest(150, 1, false); // SUB
+        StressTest(150, 2, false); // XOR
     }
 
 
