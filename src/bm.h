@@ -1234,6 +1234,7 @@ public:
     friend class iterator_base;
     friend class enumerator;
     template<class BV> friend class aggregator;
+    template<class BV> friend class operation_deserializer;
 
 public:
     /*! @brief memory allocation policy
@@ -3541,7 +3542,7 @@ void bvector<Alloc>::set_bit_no_check(size_type n)
     bool val = true; // set bit
     
     // calculate logical block number
-    unsigned nblock = unsigned(n >>  bm::set_block_shift);
+    block_idx_type nblock = (n >>  bm::set_block_shift);
     // calculate word number in block and bit
     unsigned nbit   = unsigned(n & bm::set_block_mask);
 

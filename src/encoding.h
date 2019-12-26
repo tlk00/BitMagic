@@ -97,6 +97,9 @@ public:
     
     /// Return current buffer pointer
     const unsigned char* get_pos() const { return buf_; }
+
+    /// Set current buffer pointer
+    void set_pos(const unsigned char* pos) { buf_ = pos; }
 protected:
    const unsigned char*   buf_;
    const unsigned char*   start_;

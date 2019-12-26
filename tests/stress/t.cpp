@@ -10476,6 +10476,7 @@ void SerializationCompressionLevelsTest()
        
         bm::serializer<bvect> bv_ser(tb);
         bv_ser.set_compression_level(4); // use elias gamma
+        bv_ser.set_bookmarks(true);
        
         bm::serializer<bvect>::buffer sermem_buf;
 
@@ -10512,7 +10513,8 @@ void SerializationCompressionLevelsTest()
        
         bm::serializer<bvect> bv_ser(tb);
         bv_ser.set_compression_level(5); // use interpolative encoder
-       
+        bv_ser.set_bookmarks(true);
+
         bm::serializer<bvect>::buffer sermem_buf;
 
         bv_ser.serialize(bv, sermem_buf, 0);
@@ -10543,7 +10545,8 @@ void SerializationCompressionLevelsTest()
        
         bm::serializer<bvect> bv_ser(tb);
         bv_ser.set_compression_level(4); // use elias gamma
-       
+        bv_ser.set_bookmarks(true);
+
         bm::serializer<bvect>::buffer sermem_buf;
 
         bv_ser.serialize(bv, sermem_buf, 0);
@@ -10572,7 +10575,8 @@ void SerializationCompressionLevelsTest()
        
         bm::serializer<bvect> bv_ser(tb);
         bv_ser.set_compression_level(5); // binary interpolated coding
-       
+        bv_ser.set_bookmarks(true);
+
         bm::serializer<bvect>::buffer sermem_buf;
 
         bv_ser.serialize(bv, sermem_buf, 0);
@@ -10609,7 +10613,8 @@ void SerializationCompressionLevelsTest()
        
         bm::serializer<bvect> bv_ser(tb);
         bv_ser.set_compression_level(5); // binary interplated coding
-       
+        bv_ser.set_bookmarks(true);
+
         bm::serializer<bvect>::buffer sermem_buf;
 
         bv_ser.serialize(bv, sermem_buf, 0);
@@ -10646,7 +10651,8 @@ void SerializationCompressionLevelsTest()
        
         bm::serializer<bvect> bv_ser(tb);
         bv_ser.set_compression_level(4); // use elias gamma
-       
+        bv_ser.set_bookmarks(true);
+
         bm::serializer<bvect>::buffer sermem_buf;
 
         bv_ser.serialize(bv, sermem_buf, 0);
@@ -10676,7 +10682,8 @@ void SerializationCompressionLevelsTest()
        
         bm::serializer<bvect> bv_ser(tb);
         bv_ser.set_compression_level(4); // use elias gamma
-       
+        bv_ser.set_bookmarks(true);
+
         bm::serializer<bvect>::buffer sermem_buf;
 
         bv_ser.serialize(bv, sermem_buf, 0);
@@ -10712,6 +10719,7 @@ void SerializationCompressionLevelsTest()
         bm::serializer<bvect> bms;
         bms.set_ref_vectors(&bv_ref);
         bms.set_curr_ref_idx(0);
+        bms.set_bookmarks(true);
 
         bm::serializer<bvect>::buffer buf;
         bms.serialize(bv1, buf);
@@ -10756,6 +10764,7 @@ void SerializationCompressionLevelsTest()
         bm::serializer<bvect> bms;
         bms.set_ref_vectors(&bv_ref);
         bms.set_curr_ref_idx(0);
+        bms.set_bookmarks(true);
 
         bm::serializer<bvect>::buffer buf;
         bms.serialize(bv1, buf);
@@ -10830,6 +10839,7 @@ void SerializationCompressionLevelsTest()
         bm::serializer<bvect> bms;
         bms.set_ref_vectors(&bv_ref);
         bms.set_curr_ref_idx(0);
+        bms.set_bookmarks(true);
 
         bm::serializer<bvect>::buffer buf;
         bms.serialize(bv1, buf);
@@ -10885,7 +10895,8 @@ void SerializationCompressionLevelsTest()
        
         bm::serializer<bvect> bv_ser;
         bv_ser.set_compression_level(4);
-       
+        bv_ser.set_bookmarks(true);
+
         bm::serializer<bvect>::buffer sermem_buf;
 
         bv_ser.serialize(bv, sermem_buf, 0);
@@ -10913,7 +10924,8 @@ void SerializationCompressionLevelsTest()
        
         bm::serializer<bvect> bv_ser;
         bv_ser.set_compression_level(4);
-       
+        bv_ser.set_bookmarks(true);
+
         bm::serializer<bvect>::buffer sermem_buf;
 
         bv_ser.serialize(bv, sermem_buf, 0);
@@ -10940,7 +10952,8 @@ void SerializationCompressionLevelsTest()
        
         bm::serializer<bvect> bv_ser;
         bv_ser.set_compression_level(4);
-       
+        bv_ser.set_bookmarks(true);
+
         bm::serializer<bvect>::buffer sermem_buf;
 
         bv_ser.serialize(bv, sermem_buf, 0);
@@ -10968,7 +10981,8 @@ void SerializationCompressionLevelsTest()
        
         bm::serializer<bvect> bv_ser;
         bv_ser.set_compression_level(4);
-       
+        bv_ser.set_bookmarks(true);
+
         bm::serializer<bvect>::buffer sermem_buf;
 
         bv_ser.serialize(bv, sermem_buf, 0);
@@ -10995,7 +11009,8 @@ void SerializationCompressionLevelsTest()
        
         bm::serializer<bvect> bv_ser;
         bv_ser.set_compression_level(3);
-       
+        bv_ser.set_bookmarks(true);
+
         bm::serializer<bvect>::buffer sermem_buf;
 
         bv_ser.serialize(bv, sermem_buf, 0);
@@ -11023,7 +11038,8 @@ void SerializationCompressionLevelsTest()
        
         bm::serializer<bvect> bv_ser;
         bv_ser.set_compression_level(4);
-       
+        bv_ser.set_bookmarks(true);
+
         bm::serializer<bvect>::buffer sermem_buf;
 
         bv_ser.serialize(bv, sermem_buf, 0);
@@ -11054,7 +11070,8 @@ void SerializationCompressionLevelsTest()
        
         bm::serializer<bvect> bv_ser;
         bv_ser.set_compression_level(4);
-       
+        bv_ser.set_bookmarks(true);
+
         bm::serializer<bvect>::buffer sermem_buf;
 
         bv_ser.serialize(bv, sermem_buf, 0);
@@ -11084,7 +11101,8 @@ void SerializationCompressionLevelsTest()
 
         bm::serializer<bvect> bv_ser;
         bv_ser.set_compression_level(4);
-       
+        bv_ser.set_bookmarks(true);
+
         bm::serializer<bvect>::buffer sermem_buf;
 
         bv_ser.serialize(bv, sermem_buf, 0);
@@ -11134,6 +11152,9 @@ void SerializationCompressionLevelsTest()
 
             bm::serializer<bvect> bv_ser;
             bv_ser.set_compression_level(5); // interpolated binary
+            bv_ser.set_bookmarks(true);
+
+
             bm::serializer<bvect>::buffer sermem_buf;
             bv_ser.serialize(bv, sermem_buf, 0);
             size_t l5size = sermem_buf.size();
@@ -11192,6 +11213,8 @@ void SerializationCompressionLevelsTest()
             {
                 bm::serializer<bvect> bv_ser;
                 bv_ser.set_compression_level(4);
+                bv_ser.set_bookmarks(true);
+
                 bm::serializer<bvect>::buffer sermem_buf;
                 bv_ser.serialize(bv, sermem_buf, 0);
                 const bvect::size_type* cstat = bv_ser.get_compression_stat();
@@ -11201,6 +11224,9 @@ void SerializationCompressionLevelsTest()
 
             bm::serializer<bvect> bv_ser;
             bv_ser.set_compression_level(5); // interpolated binary
+            bv_ser.set_bookmarks(true);
+
+
             bm::serializer<bvect>::buffer sermem_buf;
             bv_ser.serialize(bv, sermem_buf, 0);
             size_t l5size = sermem_buf.size();
@@ -11245,7 +11271,8 @@ void SerializationCompressionLevelsTest()
 
         bm::serializer<bvect> bv_ser;
         bv_ser.set_compression_level(5);
-       
+        bv_ser.set_bookmarks(true);
+
         bm::serializer<bvect>::buffer sermem_buf;
 
         bv_ser.serialize(bv, sermem_buf, 0);
@@ -11274,7 +11301,8 @@ void SerializationCompressionLevelsTest()
 
         bm::serializer<bvect> bv_ser;
         bv_ser.set_compression_level(5);
-       
+        bv_ser.set_bookmarks(true);
+
         bm::serializer<bvect>::buffer sermem_buf;
 
         bv_ser.serialize(bv, sermem_buf, 0);
@@ -11307,7 +11335,8 @@ void SerializationCompressionLevelsTest()
 
         bm::serializer<bvect> bv_ser;
         bv_ser.set_compression_level(5);
- 
+        bv_ser.set_bookmarks(true);
+
         bm::serializer<bvect>::buffer sermem_buf;
         bv_ser.serialize(bv, sermem_buf, 0);
  
@@ -24818,15 +24847,16 @@ void TestCompressSparseVectorSerial()
 
     }
 
-    cout << "\nRSC gather srtess test ..." << endl;
+    cout << "\nRSC gather stress test ..." << endl;
     {
         rsc_sparse_vector_u32 csv1;
         rsc_sparse_vector_u32 csv2;
         rsc_sparse_vector_u32 csv3;
 
         rsc_sparse_vector_u32::size_type from = bm::id_max32 / 2;
-        rsc_sparse_vector_u32::size_type to = from + 75538;
+        rsc_sparse_vector_u32::size_type to = from + 257 * 65536;
 
+        cout << "   generation... " << endl;
         {
             rsc_sparse_vector_u32::back_insert_iterator rs_bi = csv1.get_back_inserter();
             rs_bi.add_null();
@@ -24843,37 +24873,48 @@ void TestCompressSparseVectorSerial()
             }
             rs_bi.flush();
         }
+        cout << "   generation OK" << endl;
 
-        BM_DECLARE_TEMP_BLOCK(tb)
         sparse_vector_serial_layout<rsc_sparse_vector_u32> sv_lay;
-        bm::sparse_vector_serialize<rsc_sparse_vector_u32>(csv1, sv_lay, tb);
-        const unsigned char* buf = sv_lay.buf();
 
-        auto j = to;
-        for (auto i = from; i < j; ++i, --j)
+        bm::sparse_vector_serializer<rsc_sparse_vector_u32> sv_serializer;
+        sv_serializer.set_bookmarks(false);
+
+        for (unsigned pass = 0; pass < 2; ++pass)
         {
-            sparse_vector_u32::bvector_type bv_mask;
-            bv_mask.set_range(i, j);
-            bm::sparse_vector_deserializer<rsc_sparse_vector_u32> sv_deserial;
-            sv_deserial.deserialize(csv2, buf, bv_mask);
-            csv2.sync();
+            cout << "\nPASS=" << pass << endl;
+            sv_serializer.serialize(csv1, sv_lay);
 
-            for (auto i0 = i; i0 < j; ++i0)
+            const unsigned char* buf = sv_lay.buf();
+
+            auto j = to;
+            for (auto i = from; i < j; ++i, --j)
             {
-                auto v1 = csv1[i0];
-                auto v2 = csv2[i0];
-                assert(v1 == v2);
-                assert(csv1.is_null(i0) == csv2.is_null(i0));
-            } // for
+                sparse_vector_u32::bvector_type bv_mask;
+                bv_mask.set_range(i, j);
+                bm::sparse_vector_deserializer<rsc_sparse_vector_u32> sv_deserial;
+                sv_deserial.deserialize(csv2, buf, bv_mask);
+                csv2.sync();
 
-            sv_deserial.deserialize(csv3, buf, i, j);
-            bool eq = csv2.equal(csv3);
-            assert(eq);
+                for (auto i0 = i; i0 < j; ++i0)
+                {
+                    auto v1 = csv1[i0];
+                    auto v2 = csv2[i0];
+                    assert(v1 == v2);
+                    assert(csv1.is_null(i0) == csv2.is_null(i0));
+                } // for
+
+                sv_deserial.deserialize(csv3, buf, i, j);
+                bool eq = csv2.equal(csv3);
+                assert(eq);
 
 
-            cout << "\r" << (j-i) << std::flush;
+                cout << "\r" << (j-i) << std::flush;
+            } // for i
 
-        } // for i
+            cout << "\n bookmarks ON" << endl;
+            sv_serializer.set_bookmarks(true);
+        } // for pass
 
 
     }

@@ -166,9 +166,14 @@ public:
     typedef typename SV::value_type         value_type;
     typedef typename SV::size_type          size_type;
     typedef typename bvector_type::allocator_type::allocator_pool_type allocator_pool_type;
+
 public:
     sparse_vector_serializer();
 
+    /**
+        Add skip-markers for faster range deserialization
+    */
+    void set_bookmarks(bool value) { bvs_.set_bookmarks(value); }
 
     /// Turn ON and OFF XOR compression of sparse vectors
     void set_xor_ref(bool is_enabled) { is_xor_ref_ = is_enabled; }
@@ -297,7 +302,7 @@ protected:
     bm::word_t*                                 temp_block_;
     allocator_pool_type                         pool_;
     bm::deserializer<bvector_type, bm::decoder> deserial_;
-    operation_deserializer<bvector_type>        op_deserial_;
+    bm::operation_deserializer<bvector_type>    op_deserial_;
     bm::rank_compressor<bvector_type>           rsc_compressor_;
     bvector_type                                not_null_mask_bv_;
     bvector_type                                rsc_mask_bv_;
@@ -913,18 +918,18 @@ void sparse_vector_deserializer<SV>::deserialize_plains(
                 size_t read_bytes =
                     deserial_.deserialize(*bv, bv_buf_ptr, temp_block_);
                 remap_buf_ptr_ = bv_buf_ptr + read_bytes;
-                bv->bit_and(*mask_bv);
+                bv->bit_and(*mask_bv, bvector_type::opt_compress);
                 continue;
             }
 
             *bv = *mask_bv;
-            /*
+
             if (idx_range_set_)
             {
                 op_deserial_.deserialize_range(*bv, bv_buf_ptr, temp_block_,
                                                idx_range_from_, idx_range_to_);
             }
-            else */
+            else
             {
                 op_deserial_.deserialize(*bv, bv_buf_ptr, temp_block_, bm::set_AND);
             }

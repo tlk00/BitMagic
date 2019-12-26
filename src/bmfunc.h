@@ -1765,6 +1765,65 @@ bm::id64_t sum_arr(T* first, T* last)
     return sum;
 }
 
+/*!
+    Extract short (len=1) exceptions from the GAP block
+    \param buf - GAP buffer to split
+    \param arr0 - [OUT] list of isolates 0 positions (clear list)
+    \param arr1 - [OUT] list of isolated 1 positions (set list)
+    \param arr0_cnt - [OUT] arr0 size
+    \param arr1_cnt -
+    @ingroup gapfunc
+*/
+template<typename T>
+void gap_split(const T* buf, T* arr0, T* arr1, T& arr0_cnt, T& arr1_cnt)
+{
+    const T* pcurr = buf;
+    unsigned len = (*pcurr >> 3);
+    const T* pend = pcurr + len;
+
+    T cnt0, cnt1;
+    cnt0 = cnt1 = 0;
+    unsigned is_set = (*buf & 1);
+
+    if (*pcurr == 0)
+    {
+        if (is_set)
+        {
+            arr1[cnt1] = *pcurr;
+            ++cnt1;
+        }
+        else
+        {
+            arr0[cnt0] = *pcurr;
+            ++cnt0;
+        }
+    }
+    T prev = *pcurr;
+    ++pcurr;
+
+    while (pcurr <= pend)
+    {
+        is_set ^= 1;
+        T delta = *pcurr - prev;
+        if (delta == 1)
+        {
+            if (is_set)
+            {
+                arr1[cnt1] = prev;
+                ++cnt1;
+            }
+            else
+            {
+                arr0[cnt0] = prev;
+                ++cnt0;
+            }
+        }
+        prev = *pcurr++;
+    } // while
+
+    arr0_cnt = cnt0;
+    arr1_cnt = cnt1;
+}
 
 
 /*!
@@ -1774,7 +1833,8 @@ bm::id64_t sum_arr(T* first, T* last)
    \return Number of non-zero bits.
    @ingroup gapfunc
 */
-template<typename T> unsigned gap_bit_count(const T* buf, unsigned dsize=0) 
+template<typename T>
+unsigned gap_bit_count(const T* buf, unsigned dsize=0)
 {
     const T* pcurr = buf;
     if (dsize == 0)
