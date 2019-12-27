@@ -13848,6 +13848,49 @@ void TestStrSparseVector()
 }
 
 
+static
+void KeepRangeTest()
+{
+    std::cout << "--------------------- KeepRangeTest()" << endl;
+
+    {
+        bvect bv;
+        bv.keep_range(10, 100);
+        assert(!bv.any());
+        bv.keep_range(0, 0);
+        assert(!bv.any());
+    }
+
+    {
+        bvect bv;
+        bv.invert();
+        bv.keep_range(10, 20);
+
+        assert(bv.count() == 11);
+        assert(bv.count_range(10, 20) == 11);
+        bv.keep_range(20, 10);
+        assert(bv.count() == 11);
+        assert(bv.count_range(10, 20) == 11);
+
+        bv.keep_range(10, 10);
+        assert(bv.test(10));
+        assert(bv.count() == 1);
+        assert(bv.count_range(10, 10) == 1);
+    }
+
+    {
+        bvect bv{ 10, 256, bm::id_max / 2, bm::id_max - 1 };
+        bv.optimize();
+        bv.keep_range(bm::id_max / 2 - 100, bm::id_max / 2);
+        assert(bv.count() == 1);
+        assert(bv.test(bm::id_max / 2));
+    }
+
+
+    std::cout << "--------------------- KeepRangeTest() OK" << endl;
+}
+
+
 // -------------------------------------------------------------------------
 
 
@@ -15196,6 +15239,8 @@ int main(int argc, char *argv[])
         RSIndexTest();
 
         CountRangeTest();
+
+        KeepRangeTest();
 
         OptimizeTest();
 
