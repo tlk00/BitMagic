@@ -291,10 +291,13 @@ bool sparse_vector_find_first_mismatch(const SV& sv1,
         }
         else // search for mismatch in the NOT NULL vectors
         {
-            // no need for address translation in this case
-            typename SV::bvector_type_const_ptr bv_null1 = sv1.get_null_bvector();
-            typename SV::bvector_type_const_ptr bv_null2 = sv2.get_null_bvector();
-            found = bv_null1->find_first_mismatch(*bv_null2, mismatch);
+            if (null_proc == bm::use_null)
+            {
+                // no need for address translation in this case
+                typename SV::bvector_type_const_ptr bv_null1 = sv1.get_null_bvector();
+                typename SV::bvector_type_const_ptr bv_null2 = sv2.get_null_bvector();
+                found = bv_null1->find_first_mismatch(*bv_null2, mismatch);
+            }
         }
     }
 
