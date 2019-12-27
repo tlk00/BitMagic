@@ -5342,28 +5342,7 @@ void operation_deserializer<BV>::deserialize_xor_range(
             BM_ASSERT(0);
         };
     }
-
-    // TODO: add bvector<>::keep_range()
-    if (idx_from > 0)
-    {
-        bv.clear_range_no_check(0, idx_from-1);
-    }
-    if (idx_to < bm::id_max-1)
-    {
-        bv.clear_range_no_check(idx_to+1, bm::id_max-1);
-    }
-
-/*
-    // TODO: performance optimization to avoid over-decode of blocks
-    // where full deserialization is not required
-    //
-    bvector_type bv_tmp;
-    bm::deserialize(bv_tmp, buf, temp_block_, ref_vect_);
-    // TODO: optimization
-    bv.clear();
-    bv.set_range(idx_from, idx_to);
-    bv &= bv_tmp;
-*/
+    bv.keep_range_no_check(idx_from, idx_to);
 }
 
 
