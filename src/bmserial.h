@@ -1137,10 +1137,10 @@ void serializer<BV>::interpolated_encode_gap_block(
         BM_ASSERT(gap_block[len-1] == 65535);
 
         bm::gap_word_t head = gap_block[0];
-        head &= ~(3 << 1); // clear the level flags
+        head &= bm::gap_word_t(~(3 << 1)); // clear the level flags
         bm::gap_word_t min_v = gap_block[1];
         bm::gap_word_t max_v = gap_block[len-2];
-        bm::gap_word_t tail_delta = 65535 - max_v;
+        bm::gap_word_t tail_delta = bm::gap_word_t(65535 - max_v);
 
         if (min_v < 256)
             head |= (1 << 1);
@@ -1331,7 +1331,7 @@ void serializer<BV>::interpolated_gap_array(const bm::gap_word_t* gap_block,
     {
         bm::gap_word_t min_v = gap_block[0];
         bm::gap_word_t max_v = gap_block[arr_len-1];
-        bm::gap_word_t tail = max_v - min_v;
+        bm::gap_word_t tail = bm::gap_word_t(max_v - min_v);
 
         if (min_v >= 256 && tail >= 256)// || arr_len > 128)
         {
@@ -2614,9 +2614,9 @@ unsigned deseriaizer_base<DEC>::read_id_list(decoder_type&   decoder,
                 max_v = decoder.get_8();
             else
                 max_v = decoder.get_16();
-            max_v = min_v + max_v;
+            max_v = bm::gap_word_t(min_v + max_v);
 
-            len >>= 2;
+            len = bm::gap_word_t(len >> 2);
 
             bit_in_type bin(decoder);
             dst_arr[0] = min_v;
@@ -2852,7 +2852,7 @@ void deseriaizer_base<DEC>::read_gap_block(decoder_type&   decoder,
             unsigned len = (gap_head >> 3);
             bm::gap_word_t min8 = gap_head & (1 << 1);
             bm::gap_word_t tail8 = gap_head & (1 << 2);
-            gap_head &= ~(3 << 1); // clear the flags
+            gap_head &= bm::gap_word_t(~(3 << 1)); // clear the flags
             if (min8)
                 min_v = decoder.get_8();
             else
@@ -2861,7 +2861,7 @@ void deseriaizer_base<DEC>::read_gap_block(decoder_type&   decoder,
                 max_v = decoder.get_8();
             else
                 max_v = decoder.get_16();
-            max_v = 65535 - max_v; // tail correction
+            max_v = bm::gap_word_t(65535 - max_v); // tail correction
 
             dst_block[0] = gap_head;
             dst_block[1] = min_v;
