@@ -752,9 +752,12 @@ public:
         \param sv - source vector
         \param left  - index from in losed diapason of [left..right]
         \param right - index to in losed diapason of [left..right]
+        \param splice_null - "use_null" copy range for (not) NULL vector or
+                             do not touch it
     */
     void copy_range(const sparse_vector<Val, BV>& sv,
-                    size_type left, size_type right);
+                    size_type left, size_type right,
+                    bm::null_support splice_null = bm::use_null);
     
     /**
         @brief Apply value filter, defined by mask vector
@@ -1861,19 +1864,22 @@ sparse_vector<Val, BV>::merge(sparse_vector<Val, BV>& sv)
 template<class Val, class BV>
 void sparse_vector<Val, BV>::copy_range(const sparse_vector<Val, BV>& sv,
                                         typename sparse_vector<Val, BV>::size_type left,
-                                        typename sparse_vector<Val, BV>::size_type right)
+                                        typename sparse_vector<Val, BV>::size_type right,
+                                        bm::null_support splice_null)
 {
     if (left > right)
         bm::xor_swap(left, right);
     
     bvector_type* bv_null = this->get_null_bvect();
+    const bvector_type* bv_null_arg = sv.get_null_bvector();
+
     unsigned plains;
     if (bv_null)
     {
         plains = this->stored_plains();
-        const bvector_type* bv_null_arg = sv.get_null_bvector();
-        if (bv_null_arg)
+        if (bv_null_arg && (splice_null == bm::use_null))
             bv_null->copy_range(*bv_null_arg, left, right);
+        --plains;
     }
     else
         plains = this->plains();
@@ -1883,6 +1889,7 @@ void sparse_vector<Val, BV>::copy_range(const sparse_vector<Val, BV>& sv,
         const bvector_type* arg_bv = sv.bmatr_.row(j);
         if (arg_bv)
         {
+            BM_ASSERT(arg_bv != bv_null_arg);
             bvector_type* bv = this->bmatr_.get_row(j);
             if (!bv)
                 bv = this->get_plain(j);

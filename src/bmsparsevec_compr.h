@@ -431,6 +431,24 @@ public:
 
     ///@}
 
+    // ------------------------------------------------------------
+    /*! @name Merge, split, partition data                        */
+    ///@{
+
+    /**
+        @brief copy range of values from another sparse vector
+
+        Copy [left..right] values from the source vector,
+        clear everything outside the range.
+
+        \param csv   - source vector
+        \param left  - index from in losed diapason of [left..right]
+        \param right - index to in losed diapason of [left..right]
+    */
+    void copy_range(const rsc_sparse_vector<Val, SV>& csv,
+        size_type left, size_type right);
+
+    ///@}
 
     // ------------------------------------------------------------
     /*! @name Fast access structues sync                         */
@@ -520,6 +538,9 @@ protected:
         \return true if id is known and resolved successfully
     */
     bool resolve(size_type idx, size_type* idx_to) const;
+
+    bool resolve_range(size_type from, size_type to, 
+                       size_type* idx_from, size_type* idx_to) const;
     
     void resize_internal(size_type sz) { sv_.resize_internal(sz); }
     size_type size_internal() const { return sv_.size(); }
@@ -839,6 +860,33 @@ bool rsc_sparse_vector<Val, SV>::resolve(size_type idx, size_type* idx_to) const
     }
     return bool(*idx_to);
 }
+//---------------------------------------------------------------------
+
+template<class Val, class SV>
+bool rsc_sparse_vector<Val, SV>::resolve_range(
+    size_type from, size_type to,
+    size_type* idx_from, size_type* idx_to) const
+{
+    BM_ASSERT(idx_to && idx_from);
+    const bvector_type* bv_null = sv_.get_null_bvector();
+    size_type copy_sz, sv_left;
+    if (in_sync_)
+        copy_sz = bv_null->count_range(from, to, *bv_blocks_ptr_);
+    else  // slow access
+        copy_sz = bv_null->count_range(from, to);
+    if (!copy_sz)
+        return false;
+    if (in_sync_)
+        sv_left = bv_null->count_range(0, from, *bv_blocks_ptr_);
+    else
+        sv_left = bv_null->count_range(0, from);
+    bool tl = bv_null->test(from); // TODO: add count and test
+    sv_left -= tl; // rank correction
+
+    *idx_from = sv_left; *idx_to = sv_left + copy_sz - 1;
+    return true;
+}
+
 
 //---------------------------------------------------------------------
 
@@ -1115,6 +1163,36 @@ void rsc_sparse_vector<Val, SV>::back_insert_iterator::flush()
 
 //---------------------------------------------------------------------
 
+template<class Val, class SV>
+void rsc_sparse_vector<Val, SV>::copy_range(
+                            const rsc_sparse_vector<Val, SV>& csv,
+                            size_type left, size_type right)
+{
+    if (left > right)
+        bm::xor_swap(left, right);
+
+    if (left >= csv.size())
+        return;
+    
+    size_ = csv.size_; max_id_ = csv.max_id_;
+    in_sync_ = false;
+
+    const bvector_type* arg_bv_null = csv.sv_.get_null_bvector();
+    size_type sv_left, sv_right;
+    bool range_valid = csv.resolve_range(left, right, &sv_left, &sv_right);
+
+    if (!range_valid)
+    {
+        sv_.clear();
+        sv_.resize(size_);
+        bvector_type* bv_null = sv_.get_null_bvect();
+        bv_null->copy_range(*arg_bv_null, 0, right);
+        return;
+    }
+    bvector_type* bv_null = sv_.get_null_bvect();
+    bv_null->copy_range(*arg_bv_null, 0, right); // not NULL vector gets a full copy
+    sv_.copy_range(csv.sv_, sv_left, sv_right, bm::no_null); // don't copy NULL
+}
 
 
 } // namespace bm

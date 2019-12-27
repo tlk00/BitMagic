@@ -173,7 +173,7 @@ public:
     /**
         Add skip-markers for faster range deserialization
     */
-    void set_bookmarks(bool value) { bvs_.set_bookmarks(value); }
+    void set_bookmarks(bool is_enabled) { bvs_.set_bookmarks(is_enabled); }
 
     /// Turn ON and OFF XOR compression of sparse vectors
     void set_xor_ref(bool is_enabled) { is_xor_ref_ = is_enabled; }
