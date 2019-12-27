@@ -14263,7 +14263,7 @@ void TestSparseSort()
         cout << "sort validation.." << endl;
         std::sort(u_coll.begin(), u_coll.end());
         unsigned i = 0;
-        unsigned u_prev;
+        unsigned u_prev = 0;
         for (unsigned u : u_coll)
         {
             unsigned sv_u;
