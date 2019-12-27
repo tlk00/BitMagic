@@ -1578,10 +1578,39 @@ public:
         \param value - value to set interval in
         
         \return *this
+        @sa clear_range
     */
     bvector<Alloc>& set_range(size_type left,
                               size_type right,
                               bool     value = true);
+
+
+    /*!
+        \brief Sets all bits to zero in the specified closed interval [left,right]
+        Interval must be inside the bvector's size.
+        This method DOES NOT resize vector.
+
+        \param left  - interval start
+        \param right - interval end (closed interval)
+
+        @sa set_range
+    */
+    void clear_range(size_type left, size_type right)
+    {
+        set_range(left, right, false);
+    }
+
+
+    /*!
+        \brief Sets all bits to zero outside of the closed interval [left,right]
+        Expected result:  00000...0[left, right]0....0000
+
+        \param left  - interval start
+        \param right - interval end (closed interval)
+
+        @sa set_range
+    */
+    void keep_range(size_type left, size_type right);
     
     /*!
         \brief Copy all bits in the specified closed interval [left,right]
@@ -1691,7 +1720,6 @@ public:
     /*!
        \brief Returns count of 1 bits in the given range [left..right]
        Uses rank-select index to accelerate the search
-
        \param left   - index of first bit start counting from
        \param right  - index of last bit
        \param rs_idx - block count structure to accelerate search
@@ -2389,15 +2417,22 @@ private:
 private:
 
     /**
-       \brief Set range without validity/bouds checking
+       \brief Set range without validity/bounds checking
     */
     void set_range_no_check(size_type left,
                             size_type right);
     /**
-        \brief Clear range without validity/bouds checking
+        \brief Clear range without validity/bounds checking
     */
     void clear_range_no_check(size_type left,
                               size_type right);
+
+    /**
+        \brief Clear outside the range without validity/bounds checking
+    */
+    void keep_range_no_check(size_type left,
+                             size_type right);
+
     /**
         Compute rank in block using rank-select index
     */
@@ -2485,8 +2520,19 @@ void bvector<Alloc>::move_from(bvector<Alloc>& bvect) BMNOEXEPT
     }
 }
 
+//---------------------------------------------------------------------
 
+template<class Alloc>
+void bvector<Alloc>::keep_range(size_type left, size_type right)
+{
+    if (!blockman_.is_init())
+        return; // nothing to do
 
+    if (right < left)
+        bm::xor_swap(left, right);
+
+    keep_range_no_check(left, right);
+}
 // -----------------------------------------------------------------------
 
 template<typename Alloc> 
@@ -6704,6 +6750,28 @@ void bvector<Alloc>::copy_range(const bvector<Alloc>& bvect,
 //---------------------------------------------------------------------
 
 template<class Alloc>
+void bvector<Alloc>::keep_range_no_check(size_type left, size_type right)
+{
+    BM_ASSERT(left <= right);
+    BM_ASSERT_THROW(right < bm::id_max, BM_ERR_RANGE);
+
+    if (left)
+    {
+        clear_range_no_check(0, left - 1); // TODO: optimize clear from
+    }
+    if (right < bm::id_max - 1)
+    {
+        size_type last;
+        bool found = find_reverse(last);
+        if (found && (last > right))
+            clear_range_no_check(right + 1, last);
+    }
+    BM_ASSERT(count() == count_range(left, right));
+}
+
+//---------------------------------------------------------------------
+
+template<class Alloc>
 void bvector<Alloc>::copy_range_no_check(const bvector<Alloc>& bvect,
                                          size_type left,
                                          size_type right)
@@ -6716,21 +6784,8 @@ void bvector<Alloc>::copy_range_no_check(const bvector<Alloc>& bvect,
     block_idx_type nblock_right = (right >>  bm::set_block_shift);
     
     blockman_.copy(bvect.blockman_, nblock_left, nblock_right);
-    // clear the flanks
-    //
-    if (left)
-    {
-        size_type from = 
-            (left < bm::gap_max_bits) ? 0 : (left - bm::gap_max_bits);
-        clear_range_no_check(from, left-1); // TODO: optimize clear from
-    }
-    if (right < bm::id_max-1)
-    {
-        size_type last;
-        bool found = find_reverse(last);
-        if (found && (last > right))
-            clear_range_no_check(right+1, last);
-    }
+
+    keep_range_no_check(left, right); // clear the flanks
 }
 
 //---------------------------------------------------------------------
