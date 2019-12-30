@@ -34,7 +34,7 @@ void generate_vect_simpl0(VT& vect)
     std::swap(vect, v_tmp);
 }
 
-/// sub-tange vector generator
+/// sub-range vector generator
 ///
 /// @internal
 template<typename VT, typename DISTR, typename MT_RAND>

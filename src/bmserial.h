@@ -2052,6 +2052,7 @@ void serializer<BV>::interpolated_arr_bit_block(const bm::word_t* block,
       enc.put_64(nb); \
    }
 
+/*
 #define BM_SET_ONE_BLOCKS(x) \
     {\
          block_idx_type end_block = i + x; \
@@ -2059,7 +2060,7 @@ void serializer<BV>::interpolated_arr_bit_block(const bm::word_t* block,
             bman.set_block_all_set(i); \
     } \
     --i
-
+*/
 
 template<class BV>
 typename serializer<BV>::size_type
@@ -2175,14 +2176,25 @@ serializer<BV>::serialize(const BV& bv,
             full_block:
                 flag = 1;
                 // Look ahead for similar blocks
-                // TODO: optimize search for next 0xFFFF block
                 for(j = i+1; j < bm::set_total_blocks; ++j)
                 {
                     bm::get_block_coord(j, i0, j0);
+                    if (!j0) // look ahead if the whole superblock is 0xFF
+                    {
+                        bm::word_t*** blk_root = bman.top_blocks_root();
+                        if ((bm::word_t*)blk_root[i0] == FULL_BLOCK_FAKE_ADDR)
+                        {
+                            j += 255;
+                            continue;
+                        }
+                    }
                     const bm::word_t* blk_next = bman.get_block(i0, j0);
                     if (flag != bm::check_block_one(blk_next, true)) // deep scan
                        break;
-                }
+                } // for j
+
+                // TODO: improve this condition, because last block is always
+                // has 0 at the end, thus this never happen in practice
                 if (j == bm::set_total_blocks)
                 {
                     enc.put_8(set_block_aone);
@@ -3307,6 +3319,8 @@ size_t deserializer<BV, DEC>::deserialize(bvector_type&        bv,
             xor_block_ = alloc_.alloc_bit_block();
     }
 
+    size_type full_blocks = 0;
+
     // reference XOR compression FSM fields
     //
     size_type x_ref_idx = 0;
@@ -3388,17 +3402,24 @@ size_t deserializer<BV, DEC>::deserialize(bvector_type&        bv,
             bman.set_block_all_set(i);
             break;
         case set_block_8one:
-            BM_SET_ONE_BLOCKS(dec.get_8());
+            full_blocks = dec.get_8();
+            goto process_full_blocks;
+  //          BM_SET_ONE_BLOCKS(dec.get_8());
             break;
         case set_block_16one:
-            BM_SET_ONE_BLOCKS(dec.get_16());
+//            BM_SET_ONE_BLOCKS(dec.get_16());
+            full_blocks = dec.get_16();
+            goto process_full_blocks;
             break;
         case set_block_32one:
-            BM_SET_ONE_BLOCKS(dec.get_32());
+            full_blocks = dec.get_32();
+            goto process_full_blocks;
+//            BM_SET_ONE_BLOCKS(dec.get_32());
             break;
         case set_block_64one:
     #ifdef BM64ADDR
-            BM_SET_ONE_BLOCKS(dec.get_64());
+            full_blocks = dec.get_64();
+            goto process_full_blocks;
     #else
             BM_ASSERT(0); // 32-bit vector cannot read 64-bit
             #ifndef BM_NO_STL
@@ -3408,6 +3429,14 @@ size_t deserializer<BV, DEC>::deserialize(bvector_type&        bv,
             #endif
             dec.get_64();
     #endif
+            process_full_blocks:
+            {
+                BM_ASSERT(full_blocks);
+                size_type from = i * bm::gap_max_bits;
+                size_type to = from + full_blocks * bm::gap_max_bits;
+                bv.set_range(from, to-1);
+                i += full_blocks-1;
+            }
             break;
         case set_block_bit:
             decode_block_bit(dec, bv, i, blk);
@@ -3883,6 +3912,10 @@ void serial_stream_iterator<DEC>::next()
         case set_block_32one:
             state_ = e_one_blocks;
             mono_block_cnt_ = decoder_.get_32()-1;
+            break;
+        case set_block_64one:
+            state_ = e_one_blocks;
+            mono_block_cnt_ = decoder_.get_64()-1;
             break;
 
         case bm::set_block_bit:
@@ -5468,6 +5501,15 @@ void operation_deserializer<BV>::deserialize_range(
     bm::decoder dec(buf);
     unsigned char header_flag = dec.get_8();
 
+    // check if it is empty fresh vector, set the range then
+    //
+    blocks_manager_type& bman = bv.get_blocks_manager();
+    if (!bman.is_init())
+        bv.set_range(idx_from, idx_to);
+    else
+    {} // assume that the target range set outside the call
+
+
     if (header_flag & BM_HM_HXOR) // XOR compression
     {
         BM_ASSERT(ref_vect_);
@@ -5785,6 +5827,7 @@ iterator_deserializer<BV, SerialIterator>::deserialize(
             return count;
     }
 */
+    size_type empty_op_cnt = 0; // counter for empty target operations
     for (;1;)
     {
         bm::set_operation sop = op;
@@ -5974,7 +6017,18 @@ iterator_deserializer<BV, SerialIterator>::deserialize(
                 bman.zero_block(bv_block_idx);
                 break;
             case set_COUNT_SUB_AB: case set_AND:
-                // nothing to do
+                // nothing to do, check maybe nothing else to do at all
+                if (++empty_op_cnt > 64)
+                {
+                    size_type last_id;
+                    bool b = bv.find_reverse(last_id);
+                    if (!b)
+                        return count;
+                    size_type last_nb = (last_id >> bm::set_block_shift);
+                    if (last_nb < bv_block_idx)
+                        return count; // early exit, nothing to do here
+                    empty_op_cnt = 0;
+                }
                 break;
             case set_COUNT_AND: case set_COUNT_A:
                 count += blk ? bman.block_bitcount(blk) : 0;

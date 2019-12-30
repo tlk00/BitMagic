@@ -3432,15 +3432,27 @@ bool bvector<Alloc>::find_first_mismatch(
                         size_type search_to) const
 {
     unsigned top_blocks = blockman_.top_block_size();
-    if (!top_blocks)
+    bm::word_t*** top_root = blockman_.top_blocks_root();
+
+    if (!top_blocks || !top_root)
     {
         return bvect.find(pos);
     }
+    bm::word_t*** arg_top_root = bvect.blockman_.top_blocks_root();
     unsigned i_to, j_to;
     {
         unsigned bvect_top_blocks = bvect.blockman_.top_block_size();
-        if (!bvect_top_blocks)
-            return this->find(pos);
+        if (!bvect_top_blocks || !arg_top_root)
+        {
+            bool f = this->find(pos);
+            if (f)
+            {
+                if (pos > search_to)
+                    return false;
+            }
+            return f;
+        }
+
         if (bvect_top_blocks > top_blocks)
             top_blocks = bvect_top_blocks;
         block_idx_type nb_to = (search_to >> bm::set_block_shift);
@@ -3455,8 +3467,29 @@ bool bvector<Alloc>::find_first_mismatch(
         const bm::word_t* const* arg_blk_blk = bvect.blockman_.get_topblock(i);
 
         if (blk_blk == arg_blk_blk)
-            continue;
+        {
+        /* TODO: fix buffer overrread here
+            unsigned arg_top_blocks = bvect.blockman_.top_block_size_;
+            if (top_blocks < arg_top_blocks)
+                arg_top_blocks = top_blocks;
+            if (i_to < arg_top_blocks)
+                arg_top_blocks = i_to+1;
 
+            // look ahead for top level mismatch
+            for (++i; i < arg_top_blocks; ++i)
+            {
+                if (top_root[i] != arg_top_root[i])
+                {
+                    blk_blk = blockman_.get_topblock(i);
+                    arg_blk_blk = bvect.blockman_.get_topblock(i);
+                    BM_ASSERT(blk_blk != arg_blk_blk);
+                    goto find_sub_block;
+                }
+            }
+            */
+            continue;
+        }
+     //find_sub_block:
         unsigned j = 0;
         do
         {
@@ -5056,9 +5089,22 @@ bvector<Alloc>::bit_xor(const bm::bvector<Alloc>& bv1,
             continue;
         }
         if ((bm::word_t*)blk_blk_arg1 == FULL_BLOCK_FAKE_ADDR)
+        {
+            if (!blk_blk_arg2)
+            {
+                set_full_sb:
+                bm::word_t*** blk_root= blockman_.top_blocks_root();
+                blk_root[i] = (bm::word_t**)FULL_BLOCK_FAKE_ADDR;
+                continue;
+            }
             blk_blk_arg1 = FULL_SUB_BLOCK_REAL_ADDR;
+        }
         if ((bm::word_t*)blk_blk_arg2 == FULL_BLOCK_FAKE_ADDR)
+        {
+            if (!blk_blk_arg1)
+                goto set_full_sb;
             blk_blk_arg2 = FULL_SUB_BLOCK_REAL_ADDR;
+        }
 
         bm::word_t** blk_blk = blockman_.alloc_top_subblock(i);
         bool any_blocks = false;
@@ -6785,7 +6831,20 @@ void bvector<Alloc>::copy_range_no_check(const bvector<Alloc>& bvect,
     
     blockman_.copy(bvect.blockman_, nblock_left, nblock_right);
 
-    keep_range_no_check(left, right); // clear the flanks
+    if (left)
+    {
+        size_type from =
+            (left < bm::gap_max_bits) ? 0 : (left - bm::gap_max_bits);
+        clear_range_no_check(from, left-1); // TODO: optimize clear from
+    }
+    if (right < bm::id_max-1)
+    {
+        size_type last;
+        bool found = find_reverse(last);
+        if (found && (last > right))
+            clear_range_no_check(right+1, last);
+    }
+    //keep_range_no_check(left, right); // clear the flanks
 }
 
 //---------------------------------------------------------------------

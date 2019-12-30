@@ -743,11 +743,13 @@ public:
             --i_to; // safe because (i_from == i_to) case is covered
         }
         // process all full sub-lanes
-        //
+        // TODO: loop unroll /SIMD
         for (i = i_from; i <= i_to; ++i)
         {
             bm::word_t** blk_blk = blk_root[i];
-            if (!blk_blk || blk_blk == (bm::word_t**)FULL_BLOCK_FAKE_ADDR)
+            if (!blk_blk)
+                continue;
+            if (blk_blk == (bm::word_t**)FULL_BLOCK_FAKE_ADDR)
             {
                 blk_root[i] = 0;
                 continue;
@@ -1804,8 +1806,16 @@ public:
         unsigned i = 0;
         if (top_blocks_)
         {
+            if (i < top_block_size_)
+            {
+                ::memcpy(&new_blocks[0], &top_blocks_[0],
+                            top_block_size_ * sizeof(top_blocks_[0]));
+                i = top_block_size_;
+            }
+            /*
             for (; i < top_block_size_; ++i)
                 new_blocks[i] = top_blocks_[i];
+            */
             alloc_.free_ptr(top_blocks_, top_block_size_);
         }
         if (i < top_blocks)
@@ -2245,6 +2255,12 @@ private:
             return;
 
         unsigned arg_top_blocks = blockman.top_block_size();
+        {
+            block_idx_type need_top_blocks = 1 + (block_to / 256);
+            if (need_top_blocks < arg_top_blocks)
+                arg_top_blocks = unsigned(need_top_blocks);
+        }
+
         this->reserve_top_blocks(arg_top_blocks);
         bm::word_t*** blk_root = top_blocks_root();
 
