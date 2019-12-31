@@ -55,8 +55,10 @@ public:
     void put_8(unsigned char c);
     void put_16(bm::short_t  s);
     void put_16(const bm::short_t* s, unsigned count);
+    void put_24(bm::word_t  w);
     void put_32(bm::word_t  w);
     void put_32(const bm::word_t* w, unsigned count);
+    void put_48(bm::id64_t w);
     void put_64(bm::id64_t w);
     void put_prefixed_array_32(unsigned char c, 
                                const bm::word_t* w, unsigned count);
@@ -117,7 +119,9 @@ class decoder : public decoder_base
 public:
     decoder(const unsigned char* buf);
     bm::short_t get_16();
+    bm::word_t get_24();
     bm::word_t get_32();
+    bm::id64_t get_48();
     bm::id64_t get_64();
     void get_32(bm::word_t* w, unsigned count);
     bool get_32_OR(bm::word_t* w, unsigned count);
@@ -149,7 +153,9 @@ class decoder_little_endian : public decoder_base
 public:
     decoder_little_endian(const unsigned char* buf);
     bm::short_t get_16();
+    bm::word_t get_24();
     bm::word_t get_32();
+    bm::id64_t get_48();
     bm::id64_t get_64();
     void get_32(bm::word_t* w, unsigned count);
     bool get_32_OR(bm::word_t* w, unsigned count);
@@ -493,6 +499,21 @@ inline void encoder::set_pos(encoder::position_type buf_pos)
     buf_ = buf_pos;
 }
 
+/*!
+   \fn void encoder::put_24(bm::word_t w)
+   \brief Puts 24 bits word into encoding buffer.
+   \param w - word to encode.
+*/
+inline void encoder::put_24(bm::word_t w)
+{
+    BM_ASSERT((w & ~(0xFFFFFF)) == 0);
+
+    buf_[0] = (unsigned char)w;
+    buf_[1] = (unsigned char)(w >> 8);
+    buf_[2] = (unsigned char)(w >> 16);
+    buf_ += 3;
+}
+
 
 /*!
    \fn void encoder::put_32(bm::word_t w)
@@ -511,6 +532,23 @@ inline void encoder::put_32(bm::word_t w)
     *buf_++ = (unsigned char) (w >> 24);
 #endif
 }
+
+/*!
+   \fn void encoder::put_48(bm::id64_t w)
+   \brief Puts 48 bits word into encoding buffer.
+   \param w - word to encode.
+*/
+inline void encoder::put_48(bm::id64_t w)
+{ 
+    BM_ASSERT((w & ~(0xFFFFFFFFFFFFUL)) == 0);
+    *buf_++ = (unsigned char)w;
+    *buf_++ = (unsigned char)(w >> 8);
+    *buf_++ = (unsigned char)(w >> 16);
+    *buf_++ = (unsigned char)(w >> 24);
+    *buf_++ = (unsigned char)(w >> 32);
+    *buf_++ = (unsigned char)(w >> 40);
+}
+
 
 /*!
    \fn void encoder::put_64(bm::id64_t w)
@@ -607,6 +645,19 @@ BMFORCEINLINE bm::short_t decoder::get_16()
 }
 
 /*!
+   \fn bm::word_t decoder::get_24()
+   \brief Reads 32-bit word from the decoding buffer.
+*/
+inline bm::word_t decoder::get_24()
+{
+    bm::word_t a = buf_[0] + ((unsigned)buf_[1] << 8) +
+        ((unsigned)buf_[2] << 16);
+    buf_ += 3;
+    return a;
+}
+
+
+/*!
    \fn bm::word_t decoder::get_32()
    \brief Reads 32-bit word from the decoding buffer.
 */
@@ -620,6 +671,23 @@ BMFORCEINLINE bm::word_t decoder::get_32()
                    ((unsigned)buf_[2] << 16) + ((unsigned)buf_[3] << 24);
 #endif
     buf_+=sizeof(a);
+    return a;
+}
+
+/*!
+   \fn bm::word_t decoder::get_48()
+   \brief Reads 64-bit word from the decoding buffer.
+*/
+inline
+bm::id64_t decoder::get_48()
+{
+    bm::id64_t a = buf_[0] +
+        ((bm::id64_t)buf_[1] << 8) +
+        ((bm::id64_t)buf_[2] << 16) +
+        ((bm::id64_t)buf_[3] << 24) +
+        ((bm::id64_t)buf_[4] << 32) +
+        ((bm::id64_t)buf_[5] << 40);
+    buf_ += 6;
     return a;
 }
 
@@ -808,12 +876,34 @@ bm::short_t decoder_little_endian::get_16()
     return a;
 }
 
+inline bm::word_t decoder_little_endian::get_24()
+{
+    // TODO: validate if this is a correct for cross endian opts
+    bm::word_t a = buf_[0] + ((unsigned)buf_[1] << 8) +
+        ((unsigned)buf_[2] << 16);
+    buf_ += 3;
+    return a;
+}
+
 inline
 bm::word_t decoder_little_endian::get_32()
 {
     bm::word_t a = ((unsigned)buf_[0] << 24)+ ((unsigned)buf_[1] << 16) +
                    ((unsigned)buf_[2] << 8) + ((unsigned)buf_[3]);
     buf_+=sizeof(a);
+    return a;
+}
+
+inline
+bm::id64_t decoder_little_endian::get_48()
+{
+    bm::id64_t a = buf_[0] +
+        ((bm::id64_t)buf_[1] << 8) +
+        ((bm::id64_t)buf_[2] << 16) +
+        ((bm::id64_t)buf_[3] << 24) +
+        ((bm::id64_t)buf_[4] << 32) +
+        ((bm::id64_t)buf_[5] << 40);
+    buf_ += 6;
     return a;
 }
 

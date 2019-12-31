@@ -15386,7 +15386,27 @@ void BitEncoderTest()
         
     }
 
-    
+    // test for 24-48-bit encode
+    {
+        bm::encoder enc(buf, sizeof(buf));
+        enc.put_24(0xFFFFFF);
+        enc.put_24(0xFEAAFE);
+        enc.put_48(0xF0FAFFBEEFFFUL);
+        enc.put_8(0);
+
+        assert(enc.size() == 6+6+1);
+
+        bm::decoder dec(buf);
+        auto v1 = dec.get_24();
+        assert(v1 == 0xFFFFFF);
+        auto v2 = dec.get_24();
+        assert(v2 == 0xFEAAFE);
+        auto v3 = dec.get_48();
+        assert(v3 == 0xF0FAFFBEEFFFUL);
+
+        unsigned char e = dec.get_8();
+        assert(!e);
+    }
     
     
     cout << "---------------------------- BitEncoderTest" << endl;
