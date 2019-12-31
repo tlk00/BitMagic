@@ -319,6 +319,27 @@ protected:
     
     void reset_models() { mod_size_ = 0; }
     void add_model(unsigned char mod, unsigned score);
+protected:
+
+    /// Bookmark state
+    struct bookmark_state
+    {
+        bookmark_state(block_idx_type nb_range = bm::set_sub_array_size)
+            : ptr_(0), nb_(0),
+              nb_range_(nb_range)
+        {
+            BM_ASSERT(nb_range);
+            min_bytes_range_ = nb_range * 4;
+        }
+
+        unsigned char*  ptr_; ///< bookmark pointer
+        block_idx_type  nb_;  ///< bookmark block idx
+        block_idx_type  nb_range_; ///< target bookmark range in blocks
+        size_t          min_bytes_range_; ///< minumal bytes distance
+    };
+
+    void process_bookmark(block_idx_type nb, bookmark_state& bookm,
+                          bm::encoder& enc);
 
 private:
     serializer(const serializer&);
@@ -2052,15 +2073,43 @@ void serializer<BV>::interpolated_arr_bit_block(const bm::word_t* block,
       enc.put_64(nb); \
    }
 
-/*
-#define BM_SET_ONE_BLOCKS(x) \
-    {\
-         block_idx_type end_block = i + x; \
-         for (;i < end_block; ++i) \
-            bman.set_block_all_set(i); \
-    } \
-    --i
-*/
+
+template<class BV>
+void serializer<BV>::process_bookmark(block_idx_type   nb,
+                                      bookmark_state&  bookm,
+                                      bm::encoder&     enc)
+{
+    block_idx_type nb_delta = nb - bookm.nb_;
+    if (bookm.ptr_ && nb_delta >= bookm.nb_range_)
+    {
+        unsigned char* curr = enc.get_pos();
+        size_t bytes_delta = size_t(curr - bookm.ptr_);
+        if (bytes_delta > bookm.min_bytes_range_)
+        {
+            enc.set_pos(bookm.ptr_); // rewind back and save the skip
+            enc.put_32(unsigned(bytes_delta - sizeof(unsigned)));
+
+            enc.set_pos(curr); // restore and save the sync mark
+            enc.put_8(set_sb_sync_mark);
+            #ifdef BM64ADDR
+                enc.put_64(nb);
+            #else
+                enc.put_32(nb);
+            #endif
+            bookm.ptr_ = 0;
+        }
+    }
+    if (!bookm.ptr_) // save new bookmart position
+    {
+        enc.put_8(set_sb_bookmark32);
+
+        bookm.ptr_ = enc.get_pos();
+        bookm.nb_ = nb;
+
+        enc.put_32(0); // stream space reservation
+    }
+}
+
 
 template<class BV>
 typename serializer<BV>::size_type
@@ -2075,8 +2124,8 @@ serializer<BV>::serialize(const BV& bv,
     bm::encoder enc(buf, buf_size);  // create the encoder
     encode_header(bv, enc);
 
-    unsigned char* last_bookmark = 0;
-    unsigned last_book_mark_i0 = 0;
+    bookmark_state  sb_bookmark;
+//    bookmark_state  blk_bookmark(8);
 
     block_idx_type i, j;
     for (i = 0; i < bm::set_total_blocks; ++i)
@@ -2085,51 +2134,14 @@ serializer<BV>::serialize(const BV& bv,
         bm::get_block_coord(i, i0, j0);
 
         // ----------------------------------------------------
-        // superblock skip marker
+        // bookmark the stream to allow fast skip on decode
         //
-        if (j0 == 0 && sb_bookmarks_)
+
+        if (sb_bookmarks_)
         {
-            if (last_bookmark)
-            {
-                unsigned sb_delta = i0 - last_book_mark_i0;
-                if (sb_delta > 256) // we are too far ahead
-                {
-                    last_bookmark = 0; // forget that lost bookmark
-                }
-                else
-                {
-                    unsigned char* curr = enc.get_pos();
-                    size_t delta = size_t(curr - last_bookmark);
-                    if (delta > 256)
-                    {
-                        enc.set_pos(last_bookmark); // rewind back and save the skip
-                        enc.put_32(unsigned(delta - sizeof(unsigned)));
-
-                        enc.set_pos(curr); // restore and save the sync mark
-                        enc.put_8(set_sb_sync_mark);
-                        #ifdef BM64ADDR
-                            enc.put_64(i);
-                        #else
-                            enc.put_32(i);
-                        #endif
-                        last_bookmark = 0;
-                    }
-                    else
-                    {
-                        // TODO: erase the inefficient skip point
-                    }
-                }
-            }
-
-            if (!last_bookmark)
-            {
-                enc.put_8(set_sb_bookmark32);
-                last_bookmark = enc.get_pos();
-                enc.put_32(0);
-                last_book_mark_i0 = i0;
-            }
+            process_bookmark(i, sb_bookmark, enc);
+            //process_bookmark(i, blk_bookmark, enc);
         }
-
         const bm::word_t* blk = bman.get_block(i0, j0);
 
         // ----------------------------------------------------
@@ -5815,19 +5827,8 @@ iterator_deserializer<BV, SerialIterator>::deserialize(
     }
 
     size_type bv_block_idx = 0;
-/*
-    size_type last_block_idx = 0;
-    if (op == bm::set_AND)
-    {
-        size_type last_pos;
-        bool found = bv.find_reverse(last_pos); // TODO: opt: find last block
-        if (found)
-            last_block_idx = (last_pos >> bm::set_block_shift);
-        else
-            return count;
-    }
-*/
     size_type empty_op_cnt = 0; // counter for empty target operations
+    
     for (;1;)
     {
         bm::set_operation sop = op;
@@ -5851,7 +5852,7 @@ iterator_deserializer<BV, SerialIterator>::deserialize(
 
             // try to skip forward
             //
-            if (j0 == 0 && is_range_set_ && (bv_block_idx < nb_range_from_))
+            if (is_range_set_ && (bv_block_idx < nb_range_from_))
             {
                 bool skip_flag = sit.try_skip(nb_range_from_);
                 if (skip_flag)
@@ -6098,7 +6099,7 @@ iterator_deserializer<BV, SerialIterator>::deserialize(
 
             // try to skip forward
             //
-            if (j0==0 && is_range_set_ && (bv_block_idx < nb_range_from_))
+            if (is_range_set_ && (bv_block_idx < nb_range_from_))
             {
                 bool skip_flag = sit.try_skip(nb_range_from_);
                 if (skip_flag)

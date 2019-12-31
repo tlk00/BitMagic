@@ -4684,6 +4684,11 @@ void CheckRangeDeserial(const bvect&     bv,
 
     cout << " Check Range [" << from << ", " << to << "] = " << (to-from) << endl;
 
+    int max_inc = 256;
+    if (to - from > 65536)
+        max_inc = 1024;
+
+
     bool eq;
     bm::operation_deserializer<bvect> od;
 
@@ -4736,8 +4741,6 @@ void CheckRangeDeserial(const bvect&     bv,
             assert(eq);
         }
 
-        int max_inc = 300;//(to - from) / 200;
-
         bvect::size_type cnt = 0;
 
         cout << "      start range" << endl;
@@ -4761,13 +4764,12 @@ void CheckRangeDeserial(const bvect&     bv,
                 assert(eq);
 
                 auto r = target - i;
-                //if ((cnt % 16) == 0 || cnt < 128)
-                    cout << "\r      " << r << "      " << flush;
-                if (cnt > 128 && (target - i) > 256)
+                cout << "\r      " << r << "      " << flush;
+                if (cnt > 128 && (target - i) > 128)
                 {
                     {
-                        i += rand()%100;
-                        target -= rand() % 64;
+                        i += rand() % max_inc;
+                        target -= rand() % max_inc;
                     }
                     bv_rd_m.keep_range(i, target);
                     continue;
@@ -4802,10 +4804,9 @@ void CheckRangeDeserial(const bvect&     bv,
             assert(eq);
 
             auto r = j - i;
-            //if ((cnt % 32) == 0 || cnt < 512)
-                cout << "\r      " << r << "      " << flush;
+            cout << "\r      " << r << "      " << flush;
             // turn on random gallop mode
-            if (cnt > 200)
+            if (cnt > 100)
             {
                 {
                     i = bvect::size_type(i + unsigned(rand() % max_inc));
@@ -4828,7 +4829,7 @@ void RangeDeserializationTest()
     cout << "\n------------------------------- RangeDeserializationTest()" << endl;
 
     // empty
-/*
+
     cout << "======= BV Empty " << endl;
     {
         bvect bv_e;
@@ -4857,7 +4858,7 @@ void RangeDeserializationTest()
         CheckRangeDeserial(bv3, bm::id_max48/2 + 1, bm::id_max48/2 + 32);
         CheckRangeDeserial(bv3, bm::id_max48-65536, bm::id_max48-1);
     }
-*/
+
 
     // generated random
     cout << "======= BV random generated " << endl;
@@ -15490,10 +15491,10 @@ int main(int argc, char *argv[])
     if (is_all || is_bvser || is_bvbasic)
     {
         //SerializationCompressionLevelsTest();
-/*
+
         SerializationTest();
         DesrializationTest2();
-*/
+
         RangeDeserializationTest();
 
     }
