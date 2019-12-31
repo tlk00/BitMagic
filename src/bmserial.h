@@ -3927,7 +3927,7 @@ void serial_stream_iterator<DEC>::next()
             break;
         case set_block_64one:
             state_ = e_one_blocks;
-            mono_block_cnt_ = decoder_.get_64()-1;
+            mono_block_cnt_ = block_idx_type(decoder_.get_64()-1);
             break;
 
         case bm::set_block_bit:
