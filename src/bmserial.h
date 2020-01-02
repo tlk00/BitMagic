@@ -203,10 +203,16 @@ public:
     void byte_order_serialization(bool value);
 
     /**
-        Add skip-markers to serialization BLOB for faster range decode.
-        @param value - TRUE searilization will contain bookmark codes
+        Add skip-markers to serialization BLOB for faster range decode
+        (in expense of some BLOB size increase)
+
+        @param enable - TRUE searilization will add bookmark codes
+        @param bm_interval - bookmark interval in (number of blocks)
+                            (suggested between 4 and 512)
+        smaller interval means more bookmarks added to the skip list thus
+        more increasing the BLOB size
     */
-    void set_bookmarks(bool value);
+    void set_bookmarks(bool enable, unsigned bm_interval = 256);
 
     /**
         Attach collection of reference vectors for XOR serialization
@@ -324,11 +330,10 @@ protected:
     /// Bookmark state
     struct bookmark_state
     {
-        bookmark_state(block_idx_type nb_range = bm::set_sub_array_size)
+        bookmark_state(block_idx_type nb_range)
             : ptr_(0), nb_(0),
               nb_range_(nb_range)
         {
-            BM_ASSERT(nb_range);
             min_bytes_range_ = nb_range * 4;
         }
 
@@ -364,7 +369,10 @@ private:
     size_type*      compression_stat_;
     bool            gap_serial_;
     bool            byte_order_serial_;
+
     bool            sb_bookmarks_;
+    unsigned        sb_range_;
+
     bm::word_t*     temp_block_;
     unsigned        compression_level_;
     bool            own_temp_block_;
@@ -976,9 +984,15 @@ const unsigned char set_block_arrgap_bienc_v2   = 43; //!< //!< Interpolated GAP
 const unsigned char set_block_arrgap_bienc_inv_v2 = 44; //!< Interpolated GAP array (inverted)
 const unsigned char set_block_bitgap_bienc_v2   = 45; //!< Interpolated bit-block as GAPs (v2 - reseved)
 
-const unsigned char set_sb_bookmark32           = 46;
+const unsigned char set_sb_bookmark32           = 46; //! bookmark jump ahead (32-bit)
 const unsigned char set_sb_bookmark16           = 47;
-const unsigned char set_sb_sync_mark            = 48;
+
+const unsigned char set_nb_sync_mark8           = 48; //!< bookmark sync point (8-bits)
+const unsigned char set_nb_sync_mark16          = 49;
+const unsigned char set_nb_sync_mark24          = 50;
+const unsigned char set_nb_sync_mark32          = 51;
+const unsigned char set_nb_sync_mark48          = 52;
+const unsigned char set_nb_sync_mark64          = 53; 
 
 template<class BV>
 serializer<BV>::serializer(const allocator_type&   alloc,
@@ -1075,9 +1089,18 @@ void serializer<BV>::byte_order_serialization(bool value)
 }
 
 template<class BV>
-void serializer<BV>::set_bookmarks(bool value)
+void serializer<BV>::set_bookmarks(bool enable, unsigned bm_interval)
 {
-    sb_bookmarks_ = value;
+    sb_bookmarks_ = enable;
+    if (enable)
+        {
+        if (bm_interval > 512)
+            bm_interval = 512;
+        else
+            if (bm_interval < 4)
+                bm_interval = 4;
+    }
+    sb_range_ = bm_interval;
 }
 
 template<class BV>
@@ -2079,6 +2102,8 @@ void serializer<BV>::process_bookmark(block_idx_type   nb,
                                       bookmark_state&  bookm,
                                       bm::encoder&     enc)
 {
+    BM_ASSERT(bookm.nb_range_);
+
     block_idx_type nb_delta = nb - bookm.nb_;
     if (bookm.ptr_ && nb_delta >= bookm.nb_range_)
     {
@@ -2087,15 +2112,49 @@ void serializer<BV>::process_bookmark(block_idx_type   nb,
         if (bytes_delta > bookm.min_bytes_range_)
         {
             enc.set_pos(bookm.ptr_); // rewind back and save the skip
-            enc.put_32(unsigned(bytes_delta - sizeof(unsigned)));
+            bytes_delta -= sizeof(unsigned);
+            enc.put_32(unsigned(bytes_delta));
 
             enc.set_pos(curr); // restore and save the sync mark
-            enc.put_8(set_sb_sync_mark);
+
+            if (nb < 0xFF)
+            {
+                enc.put_8(set_nb_sync_mark8);
+                enc.put_8((unsigned char) nb);
+            }
+            else
+            if (nb < 0xFFFF)
+            {
+                enc.put_8(set_nb_sync_mark16);
+                enc.put_16((unsigned short) nb);
+            }
+            else
+            if (nb < 0xFFFFFF)
+            {
+                enc.put_8(set_nb_sync_mark24);
+                enc.put_24(unsigned(nb));
+            }
+            else
+            if (nb < ~0U)
+            {
+                enc.put_8(set_nb_sync_mark32);
+                enc.put_32(unsigned(nb));
+            }
+            else
+            {
             #ifdef BM64ADDR
-                enc.put_64(nb);
-            #else
-                enc.put_32(nb);
+                if (nb < 0xFFFFFFFFFFFFUL)
+                {
+                    enc.put_8(set_nb_sync_mark48);
+                    enc.put_48(nb);
+                }
+                else
+                {
+                    enc.put_8(set_nb_sync_mark64);
+                    enc.put_64(nb);
+                }
             #endif
+            }
             bookm.ptr_ = 0;
         }
     }
@@ -2124,7 +2183,7 @@ serializer<BV>::serialize(const BV& bv,
     bm::encoder enc(buf, buf_size);  // create the encoder
     encode_header(bv, enc);
 
-    bookmark_state  sb_bookmark;
+    bookmark_state  sb_bookmark(sb_range_);
 //    bookmark_state  blk_bookmark(8);
 
     block_idx_type i, j;
@@ -2136,12 +2195,11 @@ serializer<BV>::serialize(const BV& bv,
         // ----------------------------------------------------
         // bookmark the stream to allow fast skip on decode
         //
-
         if (sb_bookmarks_)
         {
             process_bookmark(i, sb_bookmark, enc);
-            //process_bookmark(i, blk_bookmark, enc);
         }
+
         const bm::word_t* blk = bman.get_block(i0, j0);
 
         // ----------------------------------------------------
@@ -3341,6 +3399,7 @@ size_t deserializer<BV, DEC>::deserialize(bvector_type&        bv,
     bool x_ref_gap = false;
     unsigned row_idx;
 
+    block_idx_type nb_sync;
 
     unsigned char btype;
     block_idx_type nb;
@@ -3416,17 +3475,14 @@ size_t deserializer<BV, DEC>::deserialize(bvector_type&        bv,
         case set_block_8one:
             full_blocks = dec.get_8();
             goto process_full_blocks;
-  //          BM_SET_ONE_BLOCKS(dec.get_8());
             break;
         case set_block_16one:
-//            BM_SET_ONE_BLOCKS(dec.get_16());
             full_blocks = dec.get_16();
             goto process_full_blocks;
             break;
         case set_block_32one:
             full_blocks = dec.get_32();
             goto process_full_blocks;
-//            BM_SET_ONE_BLOCKS(dec.get_32());
             break;
         case set_block_64one:
     #ifdef BM64ADDR
@@ -3504,24 +3560,35 @@ size_t deserializer<BV, DEC>::deserialize(bvector_type&        bv,
         case set_sb_bookmark16:
             dec.get_16();
             continue; // bypass ++i;
-        case set_sb_sync_mark:
-        {
-            #ifdef BM64ADDR
-                block_idx_type nb_sync = dec.get_64();
-            #else
-                block_idx_type nb_sync = dec.get_32();
-            #endif
-            BM_ASSERT(i == nb_sync);
-            if (i != nb_sync)
-            {
-                #ifndef BM_NO_STL
-                    throw std::logic_error(this->err_msg());
-                #else
-                    BM_THROW(BM_ERR_SERIALFORMAT);
-                #endif
-            }
-        }
-        continue; // bypass ++i;
+
+        case set_nb_sync_mark8:
+            nb_sync = dec.get_8();
+            goto process_nb_sync;
+        case set_nb_sync_mark16:
+            nb_sync = dec.get_16();
+            goto process_nb_sync;
+        case set_nb_sync_mark24:
+            nb_sync = dec.get_24();
+            goto process_nb_sync;
+        case set_nb_sync_mark32:
+            nb_sync = dec.get_32();
+            goto process_nb_sync;
+        case set_nb_sync_mark48:
+            nb_sync = dec.get_48();
+            goto process_nb_sync;
+        case set_nb_sync_mark64:
+            nb_sync = dec.get_64();
+            process_nb_sync:
+                BM_ASSERT(i == nb_sync);
+                if (i != nb_sync)
+                {
+                    #ifndef BM_NO_STL
+                        throw std::logic_error(this->err_msg());
+                    #else
+                        BM_THROW(BM_ERR_SERIALFORMAT);
+                    #endif
+                }
+            continue; // bypass ++i;
 
         // ------------------------------------  XOR compression markers
         case bm::set_block_ref_eq:
@@ -3815,6 +3882,45 @@ bool serial_stream_iterator<DEC>::try_skip(block_idx_type expect_nb)
         decoder_.set_pos(skip_pos_);
 
         unsigned char sync_mark = decoder_.get_8();
+        block_idx_type nb_sync;
+        switch (sync_mark)
+        {
+        case set_nb_sync_mark8:
+            nb_sync = decoder_.get_8();
+            break;
+        case set_nb_sync_mark16:
+            nb_sync = decoder_.get_16();
+            break;
+        case set_nb_sync_mark24:
+            nb_sync = decoder_.get_24();
+            break;
+        case set_nb_sync_mark32:
+            nb_sync = decoder_.get_32();
+            break;
+        case set_nb_sync_mark48:
+            nb_sync = decoder_.get_48();
+            break;
+        case set_nb_sync_mark64:
+            nb_sync = decoder_.get_64();
+            break;
+        default:
+            BM_ASSERT(0);
+            decoder_.set_pos(save_pos);
+            skip_offset_ = 0;
+            return false;
+        } // switch
+
+        if (nb_sync <= expect_nb) // within reach
+        {
+            block_idx_ = nb_sync;
+            state_ = e_blocks;
+            skip_offset_ = 0;
+            return true;
+        }
+        skip_offset_ = 0;
+        decoder_.set_pos(save_pos);
+
+        /*
         if (sync_mark != set_sb_sync_mark)
         {
             BM_ASSERT(0);
@@ -3837,6 +3943,7 @@ bool serial_stream_iterator<DEC>::try_skip(block_idx_type expect_nb)
         }
         skip_offset_ = 0;
         decoder_.set_pos(save_pos);
+        */
     }
     return false;
 }
@@ -3849,6 +3956,7 @@ void serial_stream_iterator<DEC>::next()
         ++block_idx_;
         return;
     }
+    block_idx_type nb_sync;
 
     switch (state_) 
     {
@@ -3983,24 +4091,35 @@ void serial_stream_iterator<DEC>::next()
             skip_offset_ = decoder_.get_16();
             skip_pos_ = decoder_.get_pos() + skip_offset_;
             break;
-        case set_sb_sync_mark:
-        {
-            #ifdef BM64ADDR
-                block_idx_type nb_sync = decoder_.get_64();
-            #else
-                block_idx_type nb_sync = decoder_.get_32();
-            #endif
-            BM_ASSERT(block_idx_ == nb_sync);
-            if (block_idx_ != nb_sync)
-            {
-                #ifndef BM_NO_STL
-                    throw std::logic_error(this->err_msg());
-                #else
-                    BM_THROW(BM_ERR_SERIALFORMAT);
-                #endif
-            }
-        }
-        break;
+
+        case set_nb_sync_mark8:
+            nb_sync = decoder_.get_8();
+            goto process_nb_sync;
+        case set_nb_sync_mark16:
+            nb_sync = decoder_.get_16();
+            goto process_nb_sync;
+        case set_nb_sync_mark24:
+            nb_sync = decoder_.get_24();
+            goto process_nb_sync;
+        case set_nb_sync_mark32:
+            nb_sync = decoder_.get_32();
+            goto process_nb_sync;
+        case set_nb_sync_mark48:
+            nb_sync = decoder_.get_48();
+            goto process_nb_sync;
+        case set_nb_sync_mark64:
+            nb_sync = decoder_.get_64();
+            process_nb_sync:
+                BM_ASSERT(block_idx_ == nb_sync);
+                if (block_idx_ != nb_sync)
+                {
+                    #ifndef BM_NO_STL
+                        throw std::logic_error(this->err_msg());
+                    #else
+                        BM_THROW(BM_ERR_SERIALFORMAT);
+                    #endif
+                }
+            break;
 
         // --------------------------------------------------------------
         // XOR deserials are incompatible with the operation deserialial

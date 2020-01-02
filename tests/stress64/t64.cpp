@@ -4680,6 +4680,7 @@ void CheckRangeDeserial(const bvect&     bv,
                         bvect::size_type from,
                         bvect::size_type to)
 {
+    static unsigned bm_distance = 15;
     assert(from < to);
 
     cout << " Check Range [" << from << ", " << to << "] = " << (to-from) << endl;
@@ -4815,8 +4816,9 @@ void CheckRangeDeserial(const bvect&     bv,
             }
         } // for i-j
 
-        bvs.set_bookmarks(true);
-        cout << "\n bookmarks ON" << endl;
+        bvs.set_bookmarks(true, bm_distance++);
+        cout << "\n bookmarks ON distance=" << (bm_distance-1) << endl;
+
     } // for pass (bookmarks)
 
     cout << "\r       " << endl;
@@ -5993,7 +5995,16 @@ bvect::size_type SerializationOperation(bvect*     bv_target,
    unsigned char* smem1 = new unsigned char[st1.max_serialize_mem];
    unsigned char* smem2 = new unsigned char[st2.max_serialize_mem];
 
-   size_t slen1 = bm::serialize(bv1, smem1, tb);
+   bm::serializer<bvect64> bv_ser;
+
+    if (rand() & 1) // setup random bookmark set
+    {
+        unsigned bm_range = rand()%256;
+        bv_ser.set_bookmarks(true, bm_range);
+        cout << "Bookmark ON at every:" << bm_range << endl;
+    }
+
+   size_t slen1 = bv_ser.serialize(bv1, smem1, st1.max_serialize_mem);
    size_t slen2 = bm::serialize(bv2, smem2, tb);
 
    if (slen1 > st1.max_serialize_mem || slen2 > st2.max_serialize_mem)
@@ -6003,7 +6014,36 @@ bvect::size_type SerializationOperation(bvect*     bv_target,
        exit(1);
    }
 
-    operation_deserializer<bvect64> od;
+   operation_deserializer<bvect64> od;
+
+    // Range extraction test
+    {
+        bvect::size_type first, last;
+        bool found = bv1.find_range(first, last);
+        if (found)
+        {
+            unsigned frac = rand() %4;
+            if (!frac)
+                frac = 4;
+            auto r_part = (last - first) / frac;
+            bvect::size_type start, end;
+            if (r_part > last)
+                start = r_part;
+            else
+                start = last - r_part;
+            end = last;
+
+            bvect bv_r;
+            bv_r.copy_range(bv1, start, end);
+            bvect bv_od_r;
+            od.deserialize_range(bv_od_r, smem1, start, end);
+
+            bool eq;
+            eq = bv_r.equal(bv_od_r);
+            assert(eq);
+        }
+    }
+
    bvect::size_type count =
        od.deserialize(*bv_target,
                       smem1,
@@ -9125,6 +9165,7 @@ void StressTest(unsigned repetitions, int set_operation = -1)
         bm::serializer<bvect> bv_ser;
         bv_ser.gap_length_serialization(false);
         bv_ser.byte_order_serialization(false);
+        bv_ser.set_bookmarks(true, 128);
        
         bm::serializer<bvect>::buffer sermem_buf;
        
@@ -15491,10 +15532,8 @@ int main(int argc, char *argv[])
     if (is_all || is_bvser || is_bvbasic)
     {
         //SerializationCompressionLevelsTest();
-
         SerializationTest();
         DesrializationTest2();
-
         RangeDeserializationTest();
 
     }
