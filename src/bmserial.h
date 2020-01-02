@@ -5842,14 +5842,27 @@ iterator_deserializer<BV, SerialIterator>::deserialize(
         switch (state)
         {
         case serial_iterator_type::e_blocks:
-            sit.next();
+            sit.next(); 
+
+            // try to skip forward
+            //
+            if (is_range_set_ && (bv_block_idx < nb_range_from_))
+            {
+                bool skip_flag = sit.try_skip(nb_range_from_);
+                if (skip_flag)
+                {
+                    bv_block_idx = sit.block_idx();
+                    BM_ASSERT(bv_block_idx <= nb_range_from_);
+                    BM_ASSERT(sit.state() == serial_iterator_type::e_blocks);
+                }
+            }
             continue;
         case serial_iterator_type::e_bit_block:
             {
             BM_ASSERT(sit.block_idx() == bv_block_idx);
             unsigned i0, j0;
             bm::get_block_coord(bv_block_idx, i0, j0);
-
+/*
             // try to skip forward
             //
             if (is_range_set_ && (bv_block_idx < nb_range_from_))
@@ -5863,7 +5876,7 @@ iterator_deserializer<BV, SerialIterator>::deserialize(
                     continue;
                 }
             }
-
+*/
             bm::word_t* blk = bman.get_block_ptr(i0, j0);
             if (!blk)
             {
@@ -6096,7 +6109,7 @@ iterator_deserializer<BV, SerialIterator>::deserialize(
 
             unsigned i0, j0;
             bm::get_block_coord(bv_block_idx, i0, j0);
-
+/*
             // try to skip forward
             //
             if (is_range_set_ && (bv_block_idx < nb_range_from_))
@@ -6110,7 +6123,7 @@ iterator_deserializer<BV, SerialIterator>::deserialize(
                     continue;
                 }
             }
-
+*/
             const bm::word_t* blk = bman.get_block(i0, j0);
 
             sit.get_gap_block(gap_temp_block);
