@@ -332,15 +332,21 @@ protected:
     {
         bookmark_state(block_idx_type nb_range)
             : ptr_(0), nb_(0),
-              nb_range_(nb_range)
+              nb_range_(nb_range), bm_type_(0)
         {
             min_bytes_range_ = nb_range * 4;
+            if (nb_range <= 15) 
+                bm_type_ = 2;  // 16-bit offset
+            else
+            if (nb_range <= 255)
+                bm_type_ = 1; // 24-bit offset
         }
 
         unsigned char*  ptr_; ///< bookmark pointer
         block_idx_type  nb_;  ///< bookmark block idx
         block_idx_type  nb_range_; ///< target bookmark range in blocks
-        size_t          min_bytes_range_; ///< minumal bytes distance
+        unsigned        bm_type_;  ///< 0:32-bit, 1: 24-bit, 2: 16-bit
+        size_t          min_bytes_range_; ///< minumal distance (bytes) between marks
     };
 
     void process_bookmark(block_idx_type nb, bookmark_state& bookm,
@@ -984,15 +990,16 @@ const unsigned char set_block_arrgap_bienc_v2   = 43; //!< //!< Interpolated GAP
 const unsigned char set_block_arrgap_bienc_inv_v2 = 44; //!< Interpolated GAP array (inverted)
 const unsigned char set_block_bitgap_bienc_v2   = 45; //!< Interpolated bit-block as GAPs (v2 - reseved)
 
-const unsigned char set_sb_bookmark32           = 46; //! bookmark jump ahead (32-bit)
-const unsigned char set_sb_bookmark16           = 47;
+const unsigned char set_sb_bookmark16           = 46; //<! jump ahead mark (16-bit)
+const unsigned char set_sb_bookmark24           = 47; //<! jump ahead mark (24-bit)
+const unsigned char set_sb_bookmark32           = 48; //<! jump ahead mark (32-bit)
 
-const unsigned char set_nb_sync_mark8           = 48; //!< bookmark sync point (8-bits)
-const unsigned char set_nb_sync_mark16          = 49;
-const unsigned char set_nb_sync_mark24          = 50;
-const unsigned char set_nb_sync_mark32          = 51;
-const unsigned char set_nb_sync_mark48          = 52;
-const unsigned char set_nb_sync_mark64          = 53; 
+const unsigned char set_nb_sync_mark8           = 49; //!< bookmark sync point (8-bits)
+const unsigned char set_nb_sync_mark16          = 50;
+const unsigned char set_nb_sync_mark24          = 51;
+const unsigned char set_nb_sync_mark32          = 52;
+const unsigned char set_nb_sync_mark48          = 53;
+const unsigned char set_nb_sync_mark64          = 54; 
 
 template<class BV>
 serializer<BV>::serializer(const allocator_type&   alloc,
@@ -2117,25 +2124,25 @@ void serializer<BV>::process_bookmark(block_idx_type   nb,
 
             enc.set_pos(curr); // restore and save the sync mark
 
-            if (nb < 0xFF)
+            if (nb <= 0xFF)
             {
                 enc.put_8(set_nb_sync_mark8);
                 enc.put_8((unsigned char) nb);
             }
             else
-            if (nb < 0xFFFF)
+            if (nb <= 0xFFFF)
             {
                 enc.put_8(set_nb_sync_mark16);
                 enc.put_16((unsigned short) nb);
             }
             else
-            if (nb < 0xFFFFFF)
+            if (nb <= 0xFFFFFF)
             {
                 enc.put_8(set_nb_sync_mark24);
                 enc.put_24(unsigned(nb));
             }
             else
-            if (nb < ~0U)
+            if (nb <= ~0U)
             {
                 enc.put_8(set_nb_sync_mark32);
                 enc.put_32(unsigned(nb));
@@ -2160,8 +2167,25 @@ void serializer<BV>::process_bookmark(block_idx_type   nb,
     }
     if (!bookm.ptr_) // save new bookmart position
     {
+        /*
+        // bookmarks use VBR to save offset
+        bookm.ptr_ = enc.get_pos() + 1;
+        switch (bookm.bm_type_)
+        {
+        case 1: // 24-bit mark
+            enc.put_8(bm::set_sb_bookmark24);
+            enc.put_24(0);
+            break;
+        case 2: // 16-bit mark
+            enc.put_8(bm::set_sb_bookmark16);
+            enc.put_16(0);
+            break;
+        default: // 32-bit mark
+            enc.put_8(bm::set_sb_bookmark32);
+            enc.put_32(0);
+        } // switch
+        */
         enc.put_8(set_sb_bookmark32);
-
         bookm.ptr_ = enc.get_pos();
         bookm.nb_ = nb;
 
@@ -3574,10 +3598,10 @@ size_t deserializer<BV, DEC>::deserialize(bvector_type&        bv,
             nb_sync = dec.get_32();
             goto process_nb_sync;
         case set_nb_sync_mark48:
-            nb_sync = dec.get_48();
+            nb_sync = block_idx_type(dec.get_48());
             goto process_nb_sync;
         case set_nb_sync_mark64:
-            nb_sync = dec.get_64();
+            nb_sync = block_idx_type(dec.get_64());
             process_nb_sync:
                 BM_ASSERT(i == nb_sync);
                 if (i != nb_sync)
@@ -3898,10 +3922,26 @@ bool serial_stream_iterator<DEC>::try_skip(block_idx_type expect_nb)
             nb_sync = decoder_.get_32();
             break;
         case set_nb_sync_mark48:
-            nb_sync = decoder_.get_48();
+            #ifndef BM64ADDR
+                BM_ASSERT(0);
+                #ifndef BM_NO_STL
+                    throw std::logic_error(this->err_msg());
+                #else
+                    BM_THROW(BM_ERR_SERIALFORMAT);
+                #endif
+            #endif  
+            nb_sync = block_idx_type(decoder_.get_48());
             break;
         case set_nb_sync_mark64:
-            nb_sync = decoder_.get_64();
+            #ifndef BM64ADDR
+                BM_ASSERT(0);
+                #ifndef BM_NO_STL
+                    throw std::logic_error(this->err_msg());
+                #else
+                    BM_THROW(BM_ERR_SERIALFORMAT);
+                #endif
+            #endif  
+            nb_sync = block_idx_type(decoder_.get_64());
             break;
         default:
             BM_ASSERT(0);
@@ -3920,30 +3960,6 @@ bool serial_stream_iterator<DEC>::try_skip(block_idx_type expect_nb)
         skip_offset_ = 0;
         decoder_.set_pos(save_pos);
 
-        /*
-        if (sync_mark != set_sb_sync_mark)
-        {
-            BM_ASSERT(0);
-            decoder_.set_pos(save_pos);
-            skip_offset_ = 0;
-            return false;
-        }
-        #ifdef BM64ADDR
-            block_idx_type nb_sync = decoder_.get_64();
-        #else
-            block_idx_type nb_sync = decoder_.get_32();
-        #endif
-
-        if (nb_sync <= expect_nb) // within reach
-        {
-            block_idx_ = nb_sync;
-            state_ = e_blocks;
-            skip_offset_ = 0;
-            return true;
-        }
-        skip_offset_ = 0;
-        decoder_.set_pos(save_pos);
-        */
     }
     return false;
 }
@@ -4105,10 +4121,10 @@ void serial_stream_iterator<DEC>::next()
             nb_sync = decoder_.get_32();
             goto process_nb_sync;
         case set_nb_sync_mark48:
-            nb_sync = decoder_.get_48();
+            nb_sync = block_idx_type(decoder_.get_48());
             goto process_nb_sync;
         case set_nb_sync_mark64:
-            nb_sync = decoder_.get_64();
+            nb_sync = block_idx_type(decoder_.get_64());
             process_nb_sync:
                 BM_ASSERT(block_idx_ == nb_sync);
                 if (block_idx_ != nb_sync)
@@ -5981,21 +5997,6 @@ iterator_deserializer<BV, SerialIterator>::deserialize(
             BM_ASSERT(sit.block_idx() == bv_block_idx);
             unsigned i0, j0;
             bm::get_block_coord(bv_block_idx, i0, j0);
-/*
-            // try to skip forward
-            //
-            if (is_range_set_ && (bv_block_idx < nb_range_from_))
-            {
-                bool skip_flag = sit.try_skip(nb_range_from_);
-                if (skip_flag)
-                {
-                    bv_block_idx = sit.block_idx();
-                    BM_ASSERT(bv_block_idx <= nb_range_from_);
-                    BM_ASSERT(sit.state() == serial_iterator_type::e_blocks);
-                    continue;
-                }
-            }
-*/
             bm::word_t* blk = bman.get_block_ptr(i0, j0);
             if (!blk)
             {
@@ -6228,21 +6229,6 @@ iterator_deserializer<BV, SerialIterator>::deserialize(
 
             unsigned i0, j0;
             bm::get_block_coord(bv_block_idx, i0, j0);
-/*
-            // try to skip forward
-            //
-            if (is_range_set_ && (bv_block_idx < nb_range_from_))
-            {
-                bool skip_flag = sit.try_skip(nb_range_from_);
-                if (skip_flag)
-                {
-                    bv_block_idx = sit.block_idx();
-                    BM_ASSERT(bv_block_idx <= nb_range_from_);
-                    BM_ASSERT(sit.state() == serial_iterator_type::e_blocks);
-                    continue;
-                }
-            }
-*/
             const bm::word_t* blk = bman.get_block(i0, j0);
 
             sit.get_gap_block(gap_temp_block);
