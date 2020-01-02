@@ -12915,7 +12915,7 @@ void TestCompressSparseVector()
         csv.push_back(10, 11);
         csv.set(11, 12);
         auto v0 = csv.get(11);
-        assert(csv.get(11) == 12);
+        assert(v0 == 12);
         csv.set(11, 12); // set it twice
         v0 = csv.get(11);
         assert(csv.get(11) == 12);
