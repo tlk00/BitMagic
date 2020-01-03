@@ -335,11 +335,12 @@ protected:
               nb_range_(nb_range), bm_type_(0)
         {
             min_bytes_range_ = nb_range * 4;
-            if (nb_range <= 15) 
+            if (nb_range < 15)
                 bm_type_ = 2;  // 16-bit offset
             else
-            if (nb_range <= 255)
+            if (nb_range < 255)
                 bm_type_ = 1; // 24-bit offset
+
         }
 
         unsigned char*  ptr_; ///< bookmark pointer
@@ -990,9 +991,9 @@ const unsigned char set_block_arrgap_bienc_v2   = 43; //!< //!< Interpolated GAP
 const unsigned char set_block_arrgap_bienc_inv_v2 = 44; //!< Interpolated GAP array (inverted)
 const unsigned char set_block_bitgap_bienc_v2   = 45; //!< Interpolated bit-block as GAPs (v2 - reseved)
 
-const unsigned char set_sb_bookmark16           = 46; //<! jump ahead mark (16-bit)
-const unsigned char set_sb_bookmark24           = 47; //<! jump ahead mark (24-bit)
-const unsigned char set_sb_bookmark32           = 48; //<! jump ahead mark (32-bit)
+const unsigned char set_nb_bookmark16           = 46; //<! jump ahead mark (16-bit)
+const unsigned char set_nb_bookmark24           = 47; //<! jump ahead mark (24-bit)
+const unsigned char set_nb_bookmark32           = 48; //<! jump ahead mark (32-bit)
 
 const unsigned char set_nb_sync_mark8           = 49; //!< bookmark sync point (8-bits)
 const unsigned char set_nb_sync_mark16          = 50;
@@ -2119,30 +2120,50 @@ void serializer<BV>::process_bookmark(block_idx_type   nb,
         if (bytes_delta > bookm.min_bytes_range_)
         {
             enc.set_pos(bookm.ptr_); // rewind back and save the skip
-            bytes_delta -= sizeof(unsigned);
-            enc.put_32(unsigned(bytes_delta));
+            //bytes_delta -= sizeof(unsigned);
+            switch (bookm.bm_type_)
+            {
+            case 0: // 32-bit mark
+                bytes_delta -= sizeof(unsigned);
+                if (bytes_delta < 0xFFFFFFFF)
+                    enc.put_32(unsigned(bytes_delta));
+                break;
+            case 1: // 24-bit mark
+                bytes_delta -= (sizeof(unsigned)-1);
+                if (bytes_delta < 0xFFFFFF)
+                    enc.put_24(unsigned(bytes_delta));
+                break;
+            case 2: // 16-bit mark
+                bytes_delta -= sizeof(unsigned short);
+                if (bytes_delta < 0xFFFF)
+                    enc.put_16((unsigned short)bytes_delta);
+                break;
+            default:
+                BM_ASSERT(0);
+                break;
+            } // switch
 
             enc.set_pos(curr); // restore and save the sync mark
 
-            if (nb <= 0xFF)
+            if (nb < 0xFF)
             {
                 enc.put_8(set_nb_sync_mark8);
                 enc.put_8((unsigned char) nb);
             }
             else
-            if (nb <= 0xFFFF)
+            if (nb < 0xFFFF)
             {
                 enc.put_8(set_nb_sync_mark16);
                 enc.put_16((unsigned short) nb);
             }
             else
-            if (nb <= 0xFFFFFF)
+            if (nb < 0xFFFFFF)
             {
                 enc.put_8(set_nb_sync_mark24);
                 enc.put_24(unsigned(nb));
             }
             else
-            if (nb <= ~0U)
+            if (nb < ~0U)
             {
                 enc.put_8(set_nb_sync_mark32);
                 enc.put_32(unsigned(nb));
@@ -2165,31 +2186,33 @@ void serializer<BV>::process_bookmark(block_idx_type   nb,
             bookm.ptr_ = 0;
         }
     }
-    if (!bookm.ptr_) // save new bookmart position
+
+    if (!bookm.ptr_) // start new bookmark
     {
-        /*
         // bookmarks use VBR to save offset
+        bookm.nb_ = nb;
         bookm.ptr_ = enc.get_pos() + 1;
         switch (bookm.bm_type_)
         {
+        case 0: // 32-bit mark
+            enc.put_8(bm::set_nb_bookmark32);
+//            bookm.ptr_ = enc.get_pos();
+            enc.put_32(0);
+            break;
         case 1: // 24-bit mark
-            enc.put_8(bm::set_sb_bookmark24);
+            enc.put_8(bm::set_nb_bookmark24);
+//            bookm.ptr_ = enc.get_pos();
             enc.put_24(0);
             break;
         case 2: // 16-bit mark
-            enc.put_8(bm::set_sb_bookmark16);
+            enc.put_8(bm::set_nb_bookmark16);
+//            bookm.ptr_ = enc.get_pos();
             enc.put_16(0);
             break;
-        default: // 32-bit mark
-            enc.put_8(bm::set_sb_bookmark32);
-            enc.put_32(0);
+        default:
+            BM_ASSERT(0);
+            break;
         } // switch
-        */
-        enc.put_8(set_sb_bookmark32);
-        bookm.ptr_ = enc.get_pos();
-        bookm.nb_ = nb;
-
-        enc.put_32(0); // stream space reservation
     }
 }
 
@@ -3578,10 +3601,13 @@ size_t deserializer<BV, DEC>::deserialize(bvector_type&        bv,
             decode_bit_block(btype, dec, bman, i, blk);
             break;
         // --------------------------------------- bookmarks and skip jumps
-        case set_sb_bookmark32:
+        case set_nb_bookmark32:
             dec.get_32();
             continue; // bypass ++i;
-        case set_sb_bookmark16:
+        case set_nb_bookmark24:
+            dec.get_24();
+            continue; // bypass ++i;
+        case set_nb_bookmark16:
             dec.get_16();
             continue; // bypass ++i;
 
@@ -4097,13 +4123,17 @@ void serial_stream_iterator<DEC>::next()
             state_ = e_gap_block; //e_bit_block; // TODO: make a better decision here
             break;
 
-        // ----------------------------------------------- bookmarks and skips
+        // --------------------------------------------- bookmarks and syncs
         //
-        case set_sb_bookmark32:
+        case set_nb_bookmark32:
             skip_offset_ = decoder_.get_32();
             skip_pos_ = decoder_.get_pos() + skip_offset_;
             break;
-        case set_sb_bookmark16:
+        case set_nb_bookmark24:
+            skip_offset_ = decoder_.get_24();
+            skip_pos_ = decoder_.get_pos() + skip_offset_;
+            break;
+        case set_nb_bookmark16:
             skip_offset_ = decoder_.get_16();
             skip_pos_ = decoder_.get_pos() + skip_offset_;
             break;
