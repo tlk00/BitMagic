@@ -4680,7 +4680,7 @@ void CheckRangeDeserial(const bvect&     bv,
                         bvect::size_type from,
                         bvect::size_type to)
 {
-    static unsigned bm_distance = 15;
+    static unsigned bm_distance = 8;
     assert(from < to);
 
     cout << " Check Range [" << from << ", " << to << "] = " << (to-from) << endl;
@@ -4695,6 +4695,7 @@ void CheckRangeDeserial(const bvect&     bv,
 
     bm::serializer<bvect> bvs;
     bvs.set_bookmarks(false);
+    //bvs.set_bookmarks(true, bm_distance++);
 
     cout << " bookmarks OFF" << endl;
 
@@ -4769,8 +4770,8 @@ void CheckRangeDeserial(const bvect&     bv,
                 if (cnt > 128 && (target - i) > 128)
                 {
                     {
-                        i += rand() % max_inc;
-                        target -= rand() % max_inc;
+                        i += bvect::size_type(rand() % max_inc);
+                        target -= bvect::size_type(rand() % max_inc);
                     }
                     bv_rd_m.keep_range(i, target);
                     continue;
@@ -15532,8 +15533,10 @@ int main(int argc, char *argv[])
     if (is_all || is_bvser || is_bvbasic)
     {
         //SerializationCompressionLevelsTest();
+
         SerializationTest();
         DesrializationTest2();
+        
         RangeDeserializationTest();
 
     }
