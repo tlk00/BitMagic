@@ -324,7 +324,7 @@ template<typename SZT>
 SZT random_minmax(SZT min, SZT max)
 {
     SZT r = (unsigned(rand()) << 16u) | unsigned(rand());
-    if (sizeof(SZT) == 8)
+    if (bm::conditional<sizeof(SZT) == 8>::test())
     {
         SZT r2 = (unsigned(rand()) << 16u) | unsigned(rand());
         r |= (r2 << 32);

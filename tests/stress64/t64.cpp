@@ -4680,7 +4680,7 @@ void CheckRangeDeserial(const bvect&     bv,
                         bvect::size_type from,
                         bvect::size_type to)
 {
-    static unsigned bm_distance = 8;
+    static unsigned bm_distance = 4;
     assert(from < to);
 
     cout << " Check Range [" << from << ", " << to << "] = " << (to-from) << endl;
@@ -4831,24 +4831,6 @@ void RangeDeserializationTest()
 {
     cout << "\n------------------------------- RangeDeserializationTest()" << endl;
 
-    // empty
-
-    cout << "======= BV Empty " << endl;
-    {
-        bvect bv_e;
-        CheckRangeDeserial(bv_e, 0, 256*65536);
-        CheckRangeDeserial(bv_e, bm::id_max32/4-(256*65536), bm::id_max32/4);
-    }
-
-    // inverted
-    cout << "======= BV inverted " << endl;
-    {
-        bvect bv_i; // inverted
-        bv_i.invert();
-        CheckRangeDeserial(bv_i, 0, 256*65536);
-        CheckRangeDeserial(bv_i, bm::id_max32/4-(256*65536), bm::id_max32/4);
-    }
-
     cout << "======= BV 48-bit sparse " << endl;
     {
         bvect bv3;  // 48-bit super sparse
@@ -4857,11 +4839,10 @@ void RangeDeserializationTest()
         load_BV_set_ref(bv3, vect);
 
         CheckRangeDeserial(bv3, 0, 77777);
-        CheckRangeDeserial(bv3, (bm::id_max32-10), bm::id_max32+10);
-        CheckRangeDeserial(bv3, bm::id_max48/2 + 1, bm::id_max48/2 + 32);
-        CheckRangeDeserial(bv3, bm::id_max48-65536, bm::id_max48-1);
+        CheckRangeDeserial(bv3, (bm::id_max32 - 10), bm::id_max32 + 10);
+        CheckRangeDeserial(bv3, bm::id_max48 / 2 + 1, bm::id_max48 / 2 + 32);
+        CheckRangeDeserial(bv3, bm::id_max48 - 65536, bm::id_max48 - 1);
     }
-
 
     // generated random
     cout << "======= BV random generated " << endl;
@@ -4890,6 +4871,25 @@ void RangeDeserializationTest()
         CheckRangeDeserial(bv4, (bm::id_max32-65535), bm::id_max32+10);
         CheckRangeDeserial(bv4, bm::id_max48-75536, bm::id_max48-1);
     }
+
+    /*
+        cout << "======= BV Empty " << endl;
+        {
+            bvect bv_e;
+            CheckRangeDeserial(bv_e, 0, 256*65536);
+            CheckRangeDeserial(bv_e, bm::id_max32/4-(256*65536), bm::id_max32/4);
+        }
+
+        // inverted
+        cout << "======= BV inverted " << endl;
+        {
+            bvect bv_i; // inverted
+            bv_i.invert();
+            CheckRangeDeserial(bv_i, 0, 256*65536);
+            CheckRangeDeserial(bv_i, bm::id_max32/4-(256*65536), bm::id_max32/4);
+        }
+
+    */
 
     cout << "\n------------------------------- RangeDeserializationTest() OK" << endl;
 }
@@ -15536,7 +15536,7 @@ int main(int argc, char *argv[])
 
         SerializationTest();
         DesrializationTest2();
-        
+       
         RangeDeserializationTest();
 
     }
