@@ -327,20 +327,22 @@ protected:
     void add_model(unsigned char mod, unsigned score);
 protected:
 
-    /// Bookmark state
+    /// Bookmark state structure
     struct bookmark_state
     {
         bookmark_state(block_idx_type nb_range)
             : ptr_(0), nb_(0),
               nb_range_(nb_range), bm_type_(0)
         {
-            min_bytes_range_ = nb_range * 4;
+            min_bytes_range_ = nb_range * 8;
+            if (min_bytes_range_ < 512)
+                min_bytes_range_ = 512;
+
             if (nb_range < 15)
                 bm_type_ = 2;  // 16-bit offset
             else
             if (nb_range < 255)
                 bm_type_ = 1; // 24-bit offset
-
         }
 
         unsigned char*  ptr_; ///< bookmark pointer
@@ -350,6 +352,15 @@ protected:
         size_t          min_bytes_range_; ///< minumal distance (bytes) between marks
     };
 
+    /**
+       Check if bookmark needs to be placed and if so, encode it 
+       into serialization BLOB
+
+       @param nb - block idx
+       @param bookm - bookmark state structure
+       @param enc - BLOB encoder
+    */
+    static
     void process_bookmark(block_idx_type nb, bookmark_state& bookm,
                           bm::encoder& enc);
 
@@ -750,7 +761,7 @@ public:
     /// Try to skip if skip bookmark is available within reach
     /// @return true if skip went well
     ///
-    bool try_skip(block_idx_type expect_nb);
+    bool try_skip(block_idx_type nb, block_idx_type expect_nb);
 
 protected:
     get_bit_func_type  bit_func_table_[bm::set_END];
@@ -770,8 +781,9 @@ protected:
     gap_word_t         gap_head_;
     gap_word_t*        block_idx_arr_;
 
-    unsigned             skip_offset_; ///< bookmark to skip 256 encoded blocks
-    const unsigned char* skip_pos_;    ///< decoder skip position
+    block_idx_type       bookmark_idx_; ///< last bookmark block index
+    unsigned             skip_offset_;  ///< bookmark to skip 256 encoded blocks
+    const unsigned char* skip_pos_;     ///< decoder skip position
 };
 
 /**
@@ -2120,13 +2132,13 @@ void serializer<BV>::process_bookmark(block_idx_type   nb,
         if (bytes_delta > bookm.min_bytes_range_)
         {
             enc.set_pos(bookm.ptr_); // rewind back and save the skip
-            //bytes_delta -= sizeof(unsigned);
             switch (bookm.bm_type_)
             {
             case 0: // 32-bit mark
                 bytes_delta -= sizeof(unsigned);
-                if (bytes_delta < 0xFFFFFFFF)
+                if (bytes_delta < 0xFFFFFFFF) // range overflow check
                     enc.put_32(unsigned(bytes_delta));
+                // if range is somehow off, bookmark remains 0 (NULL)
                 break;
             case 1: // 24-bit mark
                 bytes_delta -= (sizeof(unsigned)-1);
@@ -2145,41 +2157,41 @@ void serializer<BV>::process_bookmark(block_idx_type   nb,
 
             enc.set_pos(curr); // restore and save the sync mark
 
-            if (nb < 0xFF)
+            if (nb_delta < 0xFF)
             {
                 enc.put_8(set_nb_sync_mark8);
-                enc.put_8((unsigned char) nb);
+                enc.put_8((unsigned char) nb_delta);
             }
             else
-            if (nb < 0xFFFF)
+            if (nb_delta < 0xFFFF)
             {
                 enc.put_8(set_nb_sync_mark16);
-                enc.put_16((unsigned short) nb);
+                enc.put_16((unsigned short) nb_delta);
             }
             else
-            if (nb < 0xFFFFFF)
+            if (nb_delta < 0xFFFFFF)
             {
                 enc.put_8(set_nb_sync_mark24);
-                enc.put_24(unsigned(nb));
+                enc.put_24(unsigned(nb_delta));
             }
             else
-            if (nb < ~0U)
+            if (nb_delta < ~0U)
             {
                 enc.put_8(set_nb_sync_mark32);
-                enc.put_32(unsigned(nb));
+                enc.put_32(unsigned(nb_delta));
             }
             else
             {
             #ifdef BM64ADDR
-                if (nb < 0xFFFFFFFFFFFFUL)
+                if (nb_delta < 0xFFFFFFFFFFFFUL)
                 {
                     enc.put_8(set_nb_sync_mark48);
-                    enc.put_48(nb);
+                    enc.put_48(nb_delta);
                 }
                 else
                 {
                     enc.put_8(set_nb_sync_mark64);
-                    enc.put_64(nb);
+                    enc.put_64(nb_delta);
                 }
             #endif
             }
@@ -2196,17 +2208,14 @@ void serializer<BV>::process_bookmark(block_idx_type   nb,
         {
         case 0: // 32-bit mark
             enc.put_8(bm::set_nb_bookmark32);
-//            bookm.ptr_ = enc.get_pos();
-            enc.put_32(0);
+            enc.put_32(0); // put NULL mark at first 
             break;
         case 1: // 24-bit mark
             enc.put_8(bm::set_nb_bookmark24);
-//            bookm.ptr_ = enc.get_pos();
             enc.put_24(0);
             break;
         case 2: // 16-bit mark
             enc.put_8(bm::set_nb_bookmark16);
-//            bookm.ptr_ = enc.get_pos();
             enc.put_16(0);
             break;
         default:
@@ -2231,7 +2240,6 @@ serializer<BV>::serialize(const BV& bv,
     encode_header(bv, enc);
 
     bookmark_state  sb_bookmark(sb_range_);
-//    bookmark_state  blk_bookmark(8);
 
     block_idx_type i, j;
     for (i = 0; i < bm::set_total_blocks; ++i)
@@ -3452,6 +3460,7 @@ size_t deserializer<BV, DEC>::deserialize(bvector_type&        bv,
     block_idx_type nb;
     unsigned i0, j0;
 
+    block_idx_type bookmark_idx = 0;
     block_idx_type i = 0;
     do
     {
@@ -3600,14 +3609,19 @@ size_t deserializer<BV, DEC>::deserialize(bvector_type&        bv,
         case bm::set_block_bit_digest0:
             decode_bit_block(btype, dec, bman, i, blk);
             break;
+
         // --------------------------------------- bookmarks and skip jumps
+        //
         case set_nb_bookmark32:
+            bookmark_idx = i;
             dec.get_32();
             continue; // bypass ++i;
         case set_nb_bookmark24:
+            bookmark_idx = i; 
             dec.get_24();
             continue; // bypass ++i;
         case set_nb_bookmark16:
+            bookmark_idx = i;
             dec.get_16();
             continue; // bypass ++i;
 
@@ -3628,9 +3642,9 @@ size_t deserializer<BV, DEC>::deserialize(bvector_type&        bv,
             goto process_nb_sync;
         case set_nb_sync_mark64:
             nb_sync = block_idx_type(dec.get_64());
-            process_nb_sync:
-                BM_ASSERT(i == nb_sync);
-                if (i != nb_sync)
+        process_nb_sync:                
+                BM_ASSERT(i == bookmark_idx + nb_sync);
+                if (i != bookmark_idx + nb_sync)
                 {
                     #ifndef BM_NO_STL
                         throw std::logic_error(this->err_msg());
@@ -3638,6 +3652,7 @@ size_t deserializer<BV, DEC>::deserialize(bvector_type&        bv,
                         BM_THROW(BM_ERR_SERIALFORMAT);
                     #endif
                 }
+                
             continue; // bypass ++i;
 
         // ------------------------------------  XOR compression markers
@@ -3918,7 +3933,8 @@ serial_stream_iterator<DEC>::~serial_stream_iterator()
 }
 
 template<class DEC>
-bool serial_stream_iterator<DEC>::try_skip(block_idx_type expect_nb)
+bool serial_stream_iterator<DEC>::try_skip(block_idx_type nb, 
+                                           block_idx_type expect_nb)
 {
     if (skip_offset_) // skip bookmark is available
     {
@@ -3976,6 +3992,7 @@ bool serial_stream_iterator<DEC>::try_skip(block_idx_type expect_nb)
             return false;
         } // switch
 
+        nb_sync += nb;
         if (nb_sync <= expect_nb) // within reach
         {
             block_idx_ = nb_sync;
@@ -3985,7 +4002,6 @@ bool serial_stream_iterator<DEC>::try_skip(block_idx_type expect_nb)
         }
         skip_offset_ = 0;
         decoder_.set_pos(save_pos);
-
     }
     return false;
 }
@@ -4126,14 +4142,17 @@ void serial_stream_iterator<DEC>::next()
         // --------------------------------------------- bookmarks and syncs
         //
         case set_nb_bookmark32:
+            bookmark_idx_ = block_idx_;
             skip_offset_ = decoder_.get_32();
             skip_pos_ = decoder_.get_pos() + skip_offset_;
             break;
         case set_nb_bookmark24:
+            bookmark_idx_ = block_idx_;
             skip_offset_ = decoder_.get_24();
             skip_pos_ = decoder_.get_pos() + skip_offset_;
             break;
         case set_nb_bookmark16:
+            bookmark_idx_ = block_idx_;
             skip_offset_ = decoder_.get_16();
             skip_pos_ = decoder_.get_pos() + skip_offset_;
             break;
@@ -4156,8 +4175,8 @@ void serial_stream_iterator<DEC>::next()
         case set_nb_sync_mark64:
             nb_sync = block_idx_type(decoder_.get_64());
             process_nb_sync:
-                BM_ASSERT(block_idx_ == nb_sync);
-                if (block_idx_ != nb_sync)
+                BM_ASSERT(block_idx_ == bookmark_idx_ + nb_sync);
+                if (block_idx_ != bookmark_idx_ + nb_sync)
                 {
                     #ifndef BM_NO_STL
                         throw std::logic_error(this->err_msg());
@@ -6013,7 +6032,8 @@ iterator_deserializer<BV, SerialIterator>::deserialize(
             //
             if (is_range_set_ && (bv_block_idx < nb_range_from_))
             {
-                bool skip_flag = sit.try_skip(nb_range_from_);
+                // TODO: use saved bookmark block-idx
+                bool skip_flag = sit.try_skip(bv_block_idx, nb_range_from_);
                 if (skip_flag)
                 {
                     bv_block_idx = sit.block_idx();
