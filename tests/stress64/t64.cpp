@@ -4765,6 +4765,13 @@ void CheckRangeDeserial(const bvect&     bv,
                 eq = bv_rd.equal(bv_rd_m);
                 assert(eq);
 
+                {
+                    bvect bv_rd2;
+                    bm::deserialize_range(bv_rd2, sdata, i, target);
+                    eq = bv_rd.equal(bv_rd2);
+                    assert(eq);
+                }
+
                 auto r = target - i;
                 cout << "\r      " << r << "      " << flush;
                 if (cnt > 128 && (target - i) > 128)
@@ -4872,7 +4879,7 @@ void RangeDeserializationTest()
         CheckRangeDeserial(bv4, bm::id_max48-75536, bm::id_max48-1);
     }
 
-    /*
+
         cout << "======= BV Empty " << endl;
         {
             bvect bv_e;
@@ -4889,7 +4896,7 @@ void RangeDeserializationTest()
             CheckRangeDeserial(bv_i, bm::id_max32/4-(256*65536), bm::id_max32/4);
         }
 
-    */
+
 
     cout << "\n------------------------------- RangeDeserializationTest() OK" << endl;
 }
@@ -13336,6 +13343,8 @@ void TestSparseVector_Stress(unsigned count)
             }}
             ++fill_factor;
             if (fill_factor > 2) fill_factor = 0;
+
+            std::cout << "\r" << min << std::flush;
         } // for min
         
         cout << "." << flush;
@@ -15536,7 +15545,7 @@ int main(int argc, char *argv[])
 
         SerializationTest();
         DesrializationTest2();
-       
+  
         RangeDeserializationTest();
 
     }
@@ -15615,7 +15624,7 @@ int main(int argc, char *argv[])
          TestCompressSparseVectorSerial();
 
          TestCompressedSparseVectorScan();
-        
+
         if (!is_nostress)
         {
             TestSparseVector_Stress(2);
