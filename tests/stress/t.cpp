@@ -25001,7 +25001,8 @@ void TestCompressSparseVectorSerial()
                     csv_range.copy_range(csv1, i, j);
 
                     rsc_sparse_vector_u32::size_type pos;
-                    bool f = bm::sparse_vector_find_first_mismatch(csv_range, csv2, pos, bm::no_null);
+                    bool f = bm::sparse_vector_find_first_mismatch(
+                                        csv_range, csv2, pos, bm::no_null);
                     if (f)
                     {
                         auto v2 = csv2.get(pos);
@@ -25027,7 +25028,7 @@ void TestCompressSparseVectorSerial()
                     }
 
                 }
-                sv_deserial.deserialize(csv3, buf, i, j);
+                sv_deserial.deserialize_range(csv3, buf, i, j);
                 bool eq = csv2.equal(csv3);
                 assert(eq);
 
@@ -25046,7 +25047,7 @@ void TestCompressSparseVectorSerial()
             } // for i
 
             cout << "\n bookmarks ON" << endl;
-            sv_serializer.set_bookmarks(true);
+            sv_serializer.set_bookmarks(true, unsigned(rand()%64));
         } // for pass
 
 
