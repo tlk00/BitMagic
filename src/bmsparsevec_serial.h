@@ -165,15 +165,23 @@ public:
     typedef bvector_type*                   bvector_type_ptr;
     typedef typename SV::value_type         value_type;
     typedef typename SV::size_type          size_type;
-    typedef typename bvector_type::allocator_type::allocator_pool_type allocator_pool_type;
+    typedef typename bvector_type::allocator_type::allocator_pool_type
+                                                   allocator_pool_type;
 
 public:
     sparse_vector_serializer();
 
     /**
         Add skip-markers for faster range deserialization
+
+        @param enable - TRUE searilization will add bookmark codes
+        @param bm_interval - bookmark interval in (number of blocks)
+                            (suggested between 4 and 512)
+        smaller interval means more bookmarks added to the skip list thus
+        more increasing the BLOB size
     */
-    void set_bookmarks(bool is_enabled) { bvs_.set_bookmarks(is_enabled); }
+    void set_bookmarks(bool enable, unsigned bm_interval = 256)
+        { bvs_.set_bookmarks(enable, bm_interval); }
 
     /// Turn ON and OFF XOR compression of sparse vectors
     void set_xor_ref(bool is_enabled) { is_xor_ref_ = is_enabled; }
@@ -192,7 +200,8 @@ public:
                    sparse_vector_serial_layout<SV>& sv_layout);
 
 protected:
-    typedef typename bm::serializer<bvector_type>::bv_ref_vector_type bv_ref_vector_type;
+    typedef typename
+    bm::serializer<bvector_type>::bv_ref_vector_type bv_ref_vector_type;
 
     void build_xor_ref_vector(const SV& sv);
 
@@ -242,8 +251,14 @@ public:
         @param from - start vector index for deserialization range
         @param to - end vector index for deserialization range
     */
+    void deserialize_range(SV& sv, const unsigned char* buf,
+                           size_type from, size_type to);
+
     void deserialize(SV& sv, const unsigned char* buf,
-                     size_type from, size_type to);
+                     size_type from, size_type to)
+    {
+        deserialize_range(sv, buf, from, to);
+    }
 
 
     /*!
@@ -265,7 +280,14 @@ protected:
     typedef typename bvector_type::allocator_type      alloc_type;
     typedef typename bm::serializer<bvector_type>::bv_ref_vector_type bv_ref_vector_type;
 
-    /// Deserialization entry point
+
+    /// Deserialize header/version and other common info
+    ///
+    /// @return number of bit-plains
+    ///
+    unsigned load_header(bm::decoder& dec, SV& sv, unsigned char& matr_s_ser);
+
+    /// Deserialization main
     void deserialize_sv(SV& sv, const unsigned char* buf,
                         const bvector_type* mask_bv);
 
@@ -765,7 +787,7 @@ sparse_vector_deserializer<SV>::~sparse_vector_deserializer()
 // -------------------------------------------------------------------------
 
 template<typename SV>
-void sparse_vector_deserializer<SV>::deserialize(SV& sv,
+void sparse_vector_deserializer<SV>::deserialize_range(SV& sv,
                                                  const unsigned char* buf,
                                                  size_type from, size_type to)
 {
@@ -773,8 +795,7 @@ void sparse_vector_deserializer<SV>::deserialize(SV& sv,
     typename bvector_type::mem_pool_guard mp_g_z(pool_, mask_bv);
     mask_bv.set_range(from, to);
 
-    idx_range_set_ = true;
-    idx_range_from_ = from; idx_range_to_ = to;
+    idx_range_set_ = true; idx_range_from_ = from; idx_range_to_ = to;
 
     deserialize_sv(sv, buf, &mask_bv);
 
@@ -788,44 +809,12 @@ void sparse_vector_deserializer<SV>::deserialize_sv(SV& sv,
                                                  const unsigned char* buf,
                                                  const bvector_type* mask_bv)
 {
-    // TODO: implement correct processing of byte-order corect deserialization
-    //    ByteOrder bo_current = globals<true>::byte_order();
-
     remap_buf_ptr_ = 0;
+    bm::decoder dec(buf); // TODO: implement correct processing of byte-order
 
-    bm::decoder dec(buf);
-    unsigned char h1 = dec.get_8();
-    unsigned char h2 = dec.get_8();
-
-    BM_ASSERT(h1 == 'B' && (h2 == 'M' || h2 == 'C'));
-    
-    if (h1 != 'B' && (h2 != 'M' || h2 != 'C'))  // no magic header?
-    {
-        raise_invalid_header();
-    }
     unsigned char matr_s_ser = 0;
-    //unsigned char bv_bo =
-        dec.get_8();
-    unsigned plains = dec.get_8();
-    if (plains == 0)  // bit-matrix
-    {
-        matr_s_ser = dec.get_8(); // matrix serialization version
-        plains = (unsigned) dec.get_64(); // number of rows in the bit-matrix
-    }
-    #ifdef BM64ADDR
-    #else
-        if (matr_s_ser == 2) // 64-bit matrix
-        {
-            raise_invalid_64bit();
-        }
-    #endif
+    unsigned plains = load_header(dec, sv, matr_s_ser);
 
-    unsigned sv_plains = sv.stored_plains();
-    if (!plains || plains > sv_plains)
-    {
-        raise_invalid_bitdepth();
-    }
-    
     sv.clear();
     
     bm::id64_t sv_size = dec.get_64();
@@ -833,7 +822,6 @@ void sparse_vector_deserializer<SV>::deserialize_sv(SV& sv,
         return;  // empty vector
         
     sv.resize_internal(size_type(sv_size));
-
     bv_ref_.reset();
 
     load_plains_off_table(dec, plains); // read the offset vector of bit-plains
@@ -870,7 +858,7 @@ void sparse_vector_deserializer<SV>::deserialize_sv(SV& sv,
 
     // load the remap matrix
     //
-    if (bm::conditional<SV::is_remap_support::value>::test()) // test remapping trait
+    if (bm::conditional<SV::is_remap_support::value>::test()) // test remap trait
     {
         if (matr_s_ser)
             load_remap(sv, remap_buf_ptr_);
@@ -878,6 +866,41 @@ void sparse_vector_deserializer<SV>::deserialize_sv(SV& sv,
     
     sv.sync(true); // force sync, recalculate RS index, remap tables, etc
     remap_buf_ptr_ = 0;
+}
+
+// -------------------------------------------------------------------------
+
+template<typename SV>
+unsigned sparse_vector_deserializer<SV>::load_header(
+        bm::decoder& dec, SV& sv, unsigned char& matr_s_ser)
+{
+    unsigned char h1 = dec.get_8();
+    unsigned char h2 = dec.get_8();
+
+    BM_ASSERT(h1 == 'B' && (h2 == 'M' || h2 == 'C'));
+
+    if (h1 != 'B' && (h2 != 'M' || h2 != 'C'))  // no magic header?
+        raise_invalid_header();
+
+    unsigned char bv_bo = dec.get_8(); (void) bv_bo;
+    unsigned plains = dec.get_8();
+    if (plains == 0)  // bit-matrix
+    {
+        matr_s_ser = dec.get_8(); // matrix serialization version
+        plains = (unsigned) dec.get_64(); // number of rows in the bit-matrix
+    }
+    #ifdef BM64ADDR
+    #else
+        if (matr_s_ser == 2) // 64-bit matrix
+        {
+            raise_invalid_64bit();
+        }
+    #endif
+
+    unsigned sv_plains = sv.stored_plains();
+    if (!plains || plains > sv_plains)
+        raise_invalid_bitdepth();
+    return plains;
 }
 
 // -------------------------------------------------------------------------

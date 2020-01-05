@@ -87,6 +87,7 @@ For more information please visit:  http://bitmagic.io
 #if defined(__EMSCRIPTEN__)
 # define BM64OPT
 # define BM_USE_GCC_BUILD
+//# define BM_FORBID_UNALIGNED_ACCESS
 #endif
 
 // disable 'register' keyword, which is obsolete in C++11

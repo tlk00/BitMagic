@@ -204,7 +204,7 @@ public:
 
     /**
         Add skip-markers to serialization BLOB for faster range decode
-        (in expense of some BLOB size increase)
+        at the expense of some BLOB size increase
 
         @param enable - TRUE searilization will add bookmark codes
         @param bm_interval - bookmark interval in (number of blocks)
@@ -411,14 +411,18 @@ private:
 /**
     Base deserialization class
     \ingroup bvserial
+    @internal
 */
-template<class DEC> class deseriaizer_base
+template<typename DEC, typename BLOCK_IDX>
+class deseriaizer_base
 {
 protected:
-    typedef DEC decoder_type;
-    
+    typedef DEC       decoder_type;
+    typedef BLOCK_IDX block_idx_type;
 protected:
-    deseriaizer_base() : id_array_(0) {}
+    deseriaizer_base()
+        : id_array_(0), bookmark_idx_(0), skip_offset_(0), skip_pos_(0)
+    {}
     
     /// Read GAP block from the stream
     void read_gap_block(decoder_type&   decoder, 
@@ -453,9 +457,17 @@ protected:
     static
     const char* err_msg() { return "BM::Invalid serialization format"; }
 
+    /// Try to skip if skip bookmark is available within reach
+    /// @return new block idx if skip went well
+    ///
+    block_idx_type try_skip(decoder_type& decoder, block_idx_type nb, block_idx_type expect_nb);
 
 protected:
     bm::gap_word_t*   id_array_; ///< ptr to idx array for temp decode use
+
+    block_idx_type       bookmark_idx_;///< last bookmark block index
+    unsigned             skip_offset_; ///< bookmark to skip 256 encoded blocks
+    const unsigned char* skip_pos_;    ///< decoder skip position
 };
 
 /**
@@ -463,16 +475,16 @@ protected:
     \ingroup bvserial 
 */
 template<class BV, class DEC>
-class deserializer : protected deseriaizer_base<DEC>
+class deserializer :
+            protected deseriaizer_base<DEC, typename BV::block_idx_type>
 {
 public:
-    typedef deseriaizer_base<DEC>                          parent_type;
     typedef BV                                             bvector_type;
     typedef typename bvector_type::allocator_type          allocator_type;
     typedef typename BV::size_type                         size_type;
     typedef typename bvector_type::block_idx_type          block_idx_type;
-    typedef typename deseriaizer_base<DEC>::decoder_type   decoder_type;
-
+    typedef deseriaizer_base<DEC, block_idx_type>          parent_type;
+    typedef typename parent_type::decoder_type             decoder_type;
     typedef bm::bv_ref_vector<BV>                          bv_ref_vector_type;
 
 public:
@@ -570,7 +582,6 @@ protected:
     unsigned                  is_range_set_;
     size_type                 idx_from_;
     size_type                 idx_to_;
-
 };
 
 
@@ -638,16 +649,13 @@ private:
     \ingroup bvserial
     @internal
 */
-template<class DEC>
-class serial_stream_iterator : protected deseriaizer_base<DEC>
+template<class DEC, typename BLOCK_IDX>
+class serial_stream_iterator : protected deseriaizer_base<DEC, BLOCK_IDX>
 {
 public:
-    typedef typename deseriaizer_base<DEC>::decoder_type decoder_type;
-    #ifdef BM64ADDR
-        typedef bm::id64_t   block_idx_type;
-    #else
-        typedef bm::id_t     block_idx_type;
-    #endif
+    typedef typename deseriaizer_base<DEC, BLOCK_IDX>::decoder_type decoder_type;
+    typedef BLOCK_IDX   block_idx_type;
+    typedef deseriaizer_base<DEC, block_idx_type>    parent_type;
 
 public:
     serial_stream_iterator(const unsigned char* buf);
@@ -712,7 +720,7 @@ public:
     /// member function pointer for bitset-bitset get operations
     /// 
     typedef 
-        unsigned (serial_stream_iterator<DEC>::*get_bit_func_type)
+        unsigned (serial_stream_iterator<DEC, BLOCK_IDX>::*get_bit_func_type)
                                                 (bm::word_t*,bm::word_t*);
 
     unsigned 
@@ -761,7 +769,15 @@ public:
     /// Try to skip if skip bookmark is available within reach
     /// @return true if skip went well
     ///
-    bool try_skip(block_idx_type nb, block_idx_type expect_nb);
+    bool try_skip(block_idx_type nb, block_idx_type expect_nb)
+    {
+        block_idx_type new_nb = parent_type::try_skip(decoder_, nb, expect_nb);
+        if (new_nb)
+        {
+            block_idx_ = new_nb; state_ = e_blocks;
+        }
+        return new_nb;
+    }
 
 protected:
     get_bit_func_type  bit_func_table_[bm::set_END];
@@ -780,10 +796,6 @@ protected:
 
     gap_word_t         gap_head_;
     gap_word_t*        block_idx_arr_;
-
-    block_idx_type       bookmark_idx_; ///< last bookmark block index
-    unsigned             skip_offset_;  ///< bookmark to skip 256 encoded blocks
-    const unsigned char* skip_pos_;     ///< decoder skip position
 };
 
 /**
@@ -798,11 +810,11 @@ template<typename BV>
 class operation_deserializer
 {
 public:
-    typedef BV                               bvector_type;
-    typedef typename BV::allocator_type      allocator_type;
-    typedef typename bvector_type::size_type size_type;
+    typedef BV                                      bvector_type;
+    typedef typename BV::allocator_type             allocator_type;
+    typedef typename bvector_type::size_type        size_type;
+    typedef bm::bv_ref_vector<BV>                   bv_ref_vector_type;
 
-    typedef bm::bv_ref_vector<BV>            bv_ref_vector_type;
 public:
     operation_deserializer();
     ~operation_deserializer();
@@ -898,15 +910,15 @@ private:
                                     size_type            idx_to);
 
 private:
-    typedef 
+    typedef typename bvector_type::block_idx_type         block_idx_type;
+    typedef
         typename BV::blocks_manager_type               blocks_manager_type;
     typedef 
-        serial_stream_iterator<bm::decoder>            serial_stream_current;
+        serial_stream_iterator<bm::decoder, block_idx_type> serial_stream_current;
     typedef 
-        serial_stream_iterator<bm::decoder_big_endian> serial_stream_be;
+        serial_stream_iterator<bm::decoder_big_endian, block_idx_type> serial_stream_be;
     typedef 
-        serial_stream_iterator<bm::decoder_little_endian> serial_stream_le;
-    typedef typename bvector_type::block_idx_type         block_idx_type;
+        serial_stream_iterator<bm::decoder_little_endian, block_idx_type> serial_stream_le;
 
 private:
     allocator_type       alloc_;
@@ -948,8 +960,8 @@ enum serialization_header_mask {
 };
 
 
-
-// Serialization stream block type constants
+// --------------------------------------------------------------------
+// Serialization stream encoding constants
 //
 
 const unsigned char set_block_end               = 0;  //!< End of serialization
@@ -993,26 +1005,25 @@ const unsigned char set_block_ref_eq            = 35; //!< block is a copy of a 
 const unsigned char set_block_xor_ref8          = 36; //!< block is masked XOR of a reference block (8-bit)
 const unsigned char set_block_xor_ref16         = 37; //!< block is masked XOR of a reference block (16-bit)
 const unsigned char set_block_xor_ref32         = 38; //!< ..... 32-bit (should never happen)
-
 const unsigned char set_block_xor_gap_ref8      = 39; //!< ..... 8-bit
 const unsigned char set_block_xor_gap_ref16     = 40; //!< ..... 16-bit
 const unsigned char set_block_xor_gap_ref32     = 41; //!< ..... 32-bit (should never happen)
+const unsigned char set_block_xor_chain         = 42; //!< XOR chain (reserved)
 
-const unsigned char set_block_gap_bienc_v2      = 42; //!< Interpolated GAP block (v2)
-const unsigned char set_block_arrgap_bienc_v2   = 43; //!< //!< Interpolated GAP array (v2)
-const unsigned char set_block_arrgap_bienc_inv_v2 = 44; //!< Interpolated GAP array (inverted)
-const unsigned char set_block_bitgap_bienc_v2   = 45; //!< Interpolated bit-block as GAPs (v2 - reseved)
+const unsigned char set_block_gap_bienc_v2        = 43; //!< Interpolated GAP block (v2)
+const unsigned char set_block_arrgap_bienc_v2     = 44; //!< //!< Interpolated GAP array (v2)
+const unsigned char set_block_arrgap_bienc_inv_v2 = 45; //!< Interpolated GAP array (inverted)
+const unsigned char set_block_bitgap_bienc_v2     = 46; //!< Interpolated bit-block as GAPs (v2 - reseved)
 
-const unsigned char set_nb_bookmark16           = 46; //<! jump ahead mark (16-bit)
-const unsigned char set_nb_bookmark24           = 47; //<! jump ahead mark (24-bit)
-const unsigned char set_nb_bookmark32           = 48; //<! jump ahead mark (32-bit)
-
-const unsigned char set_nb_sync_mark8           = 49; //!< bookmark sync point (8-bits)
-const unsigned char set_nb_sync_mark16          = 50;
-const unsigned char set_nb_sync_mark24          = 51;
-const unsigned char set_nb_sync_mark32          = 52;
-const unsigned char set_nb_sync_mark48          = 53;
-const unsigned char set_nb_sync_mark64          = 54; 
+const unsigned char set_nb_bookmark16           = 47; //<! jump ahead mark (16-bit)
+const unsigned char set_nb_bookmark24           = 48; //<! jump ahead mark (24-bit)
+const unsigned char set_nb_bookmark32           = 49; //<! jump ahead mark (32-bit)
+const unsigned char set_nb_sync_mark8           = 50; //!< bookmark sync point (8-bits)
+const unsigned char set_nb_sync_mark16          = 51;
+const unsigned char set_nb_sync_mark24          = 52;
+const unsigned char set_nb_sync_mark32          = 53;
+const unsigned char set_nb_sync_mark48          = 54;
+const unsigned char set_nb_sync_mark64          = 55; //!< ..... 64-bit (should never happen)
 
 template<class BV>
 serializer<BV>::serializer(const allocator_type&   alloc,
@@ -1222,7 +1233,6 @@ void serializer<BV>::interpolated_encode_gap_block(
             enc.put_8((unsigned char)tail_delta);
         else
             enc.put_16(tail_delta);
-
 
         bit_out_type bout(enc);
         bout.bic_encode_u16(&gap_block[2], len-4, min_v, max_v);
@@ -2630,7 +2640,7 @@ size_t serialize(BV& bv,
 
 
 /*!
-    @brief Bitvector deserialization from memory.
+    @brief Bitvector deserialization from a memory BLOB
 
     @param bv - target bvector
     @param buf - pointer on memory which keeps serialized bvector
@@ -2643,6 +2653,8 @@ size_t serialize(BV& bv,
     of previous serialization. Function does not remove bits 
     which are currently set. Effectively it is OR logical operation
     between the target bit-vector and serialized one.
+
+    @sa deserialize_range
 
     @ingroup bvserial
 */
@@ -2688,10 +2700,81 @@ size_t deserialize(BV& bv,
     return 0;
 }
 
-template<class DEC>
-unsigned deseriaizer_base<DEC>::read_id_list(decoder_type&   decoder, 
-		    								 unsigned        block_type, 
-				   					         bm::gap_word_t* dst_arr)
+
+/*!
+    @brief Bitvector range deserialization from a memory BLOB
+
+    @param bv - target bvector
+    @param buf - pointer on memory which keeps serialized bvector
+    @param from - bit-vector index to deserialize from
+    @param to   - bit-vector index to deserialize to
+
+    Function deserializes bitvector from memory block containig results
+    of previous serialization. Function does not remove bits
+    which are currently set. Effectively it is OR logical operation
+    between the target bit-vector and serialized one.
+
+    @sa deserialize
+
+    @ingroup bvserial
+*/
+template<class BV>
+void deserialize_range(BV& bv,
+                   const unsigned char* buf,
+                   typename BV::size_type from,
+                   typename BV::size_type to,
+                   const bm::bv_ref_vector<BV>* ref_vect = 0)
+{
+    ByteOrder bo_current = globals<true>::byte_order();
+
+    bm::decoder dec(buf);
+    unsigned char header_flag = dec.get_8();
+    ByteOrder bo = bo_current;
+    if (!(header_flag & BM_HM_NO_BO))
+    {
+        bo = (bm::ByteOrder) dec.get_8();
+    }
+
+    if (bo_current == bo)
+    {
+        deserializer<BV, bm::decoder> deserial;
+        deserial.set_ref_vectors(ref_vect);
+        deserial.set_range(from, to);
+        deserial.deserialize(bv, buf);
+    }
+    else
+    {
+        switch (bo_current)
+        {
+        case BigEndian:
+            {
+            deserializer<BV, bm::decoder_big_endian> deserial;
+            deserial.set_ref_vectors(ref_vect);
+            deserial.set_range(from, to);
+            deserial.deserialize(bv, buf);
+            }
+            break;
+        case LittleEndian:
+            {
+            deserializer<BV, bm::decoder_little_endian> deserial;
+            deserial.set_ref_vectors(ref_vect);
+            deserial.set_range(from, to);
+            deserial.deserialize(bv, buf);
+            }
+            break;;
+        default:
+            BM_ASSERT(0);
+        };
+    }
+    bv.keep_range(from, to);
+}
+
+
+template<typename DEC, typename BLOCK_IDX>
+unsigned deseriaizer_base<DEC, BLOCK_IDX>::read_id_list(
+                                            decoder_type&   decoder,
+		    							    unsigned        block_type,
+				   					        bm::gap_word_t* dst_arr)
 {
     typedef bit_in<DEC> bit_in_type;
 
@@ -2773,8 +2856,9 @@ unsigned deseriaizer_base<DEC>::read_id_list(decoder_type&   decoder,
 	return len;
 }
 
-template<class DEC>
-void deseriaizer_base<DEC>::read_bic_arr(decoder_type& dec, bm::word_t* blk)
+template<typename DEC, typename BLOCK_IDX>
+void deseriaizer_base<DEC, BLOCK_IDX>::read_bic_arr(decoder_type& dec,
+                                                    bm::word_t*   blk)
 {
     BM_ASSERT(!BM_IS_GAP(blk));
     
@@ -2795,8 +2879,8 @@ void deseriaizer_base<DEC>::read_bic_arr(decoder_type& dec, bm::word_t* blk)
     bin.bic_decode_u16_bitset(blk, arr_len-2, min_v, max_v);
 }
 
-template<class DEC>
-void deseriaizer_base<DEC>::read_bic_arr_inv(decoder_type&   decoder, bm::word_t* blk)
+template<typename DEC, typename BLOCK_IDX>
+void deseriaizer_base<DEC, BLOCK_IDX>::read_bic_arr_inv(decoder_type&   decoder, bm::word_t* blk)
 {
     // TODO: optimization
     bm::bit_block_set(blk, 0);
@@ -2804,8 +2888,8 @@ void deseriaizer_base<DEC>::read_bic_arr_inv(decoder_type&   decoder, bm::word_t
     bm::bit_invert(blk);
 }
 
-template<class DEC>
-void deseriaizer_base<DEC>::read_bic_gap(decoder_type& dec, bm::word_t* blk)
+template<typename DEC, typename BLOCK_IDX>
+void deseriaizer_base<DEC, BLOCK_IDX>::read_bic_gap(decoder_type& dec, bm::word_t* blk)
 {
     BM_ASSERT(!BM_IS_GAP(blk));
     
@@ -2832,9 +2916,9 @@ void deseriaizer_base<DEC>::read_bic_gap(decoder_type& dec, bm::word_t* blk)
     bm::gap_add_to_bitset(blk, id_array_, arr_len);
 }
 
-template<class DEC>
-void deseriaizer_base<DEC>::read_digest0_block(decoder_type& dec,
-                                               bm::word_t*   block)
+template<typename DEC, typename BLOCK_IDX>
+void deseriaizer_base<DEC, BLOCK_IDX>::read_digest0_block(decoder_type& dec,
+                                                          bm::word_t*   block)
 {
     bm::id64_t d0 = dec.get_64();
     while (d0)
@@ -2871,8 +2955,9 @@ void deseriaizer_base<DEC>::read_digest0_block(decoder_type& dec,
     } // while
 }
 
-template<class DEC>
-void deseriaizer_base<DEC>::read_0runs_block(decoder_type& dec, bm::word_t* blk)
+template<typename DEC, typename BLOCK_IDX>
+void deseriaizer_base<DEC, BLOCK_IDX>::read_0runs_block(decoder_type& dec,
+                                                        bm::word_t* blk)
 {
     //TODO: optimization if block exists and it is OR-ed read
     bm::bit_block_set(blk, 0);
@@ -2899,8 +2984,8 @@ void deseriaizer_base<DEC>::read_0runs_block(decoder_type& dec, bm::word_t* blk)
 }
 
 
-template<class DEC>
-void deseriaizer_base<DEC>::read_gap_block(decoder_type&   decoder, 
+template<typename DEC, typename BLOCK_IDX>
+void deseriaizer_base<DEC, BLOCK_IDX>::read_gap_block(decoder_type&   decoder,
                                            unsigned        block_type, 
                                            bm::gap_word_t* dst_block,
                                            bm::gap_word_t& gap_head)
@@ -3025,6 +3110,84 @@ void deseriaizer_base<DEC>::read_gap_block(decoder_type&   decoder,
         gap_invert(dst_block);
     }
 }
+
+template<typename DEC, typename BLOCK_IDX>
+typename deseriaizer_base<DEC, BLOCK_IDX>::block_idx_type
+deseriaizer_base<DEC, BLOCK_IDX>::try_skip(
+                                        decoder_type&   decoder,
+                                        block_idx_type nb,
+                                        block_idx_type expect_nb)
+{
+    if (skip_offset_) // skip bookmark is available
+    {
+        const unsigned char* save_pos = decoder.get_pos(); // save position
+
+        if (save_pos > skip_pos_) // checkpoint passed
+        {
+            skip_offset_ = 0;
+            return false;
+        }
+        decoder.set_pos(skip_pos_);
+
+        unsigned char sync_mark = decoder.get_8();
+        block_idx_type nb_sync;
+        switch (sync_mark)
+        {
+        case set_nb_sync_mark8:
+            nb_sync = decoder.get_8();
+            break;
+        case set_nb_sync_mark16:
+            nb_sync = decoder.get_16();
+            break;
+        case set_nb_sync_mark24:
+            nb_sync = decoder.get_24();
+            break;
+        case set_nb_sync_mark32:
+            nb_sync = decoder.get_32();
+            break;
+        case set_nb_sync_mark48:
+            #ifndef BM64ADDR
+                BM_ASSERT(0);
+                #ifndef BM_NO_STL
+                    throw std::logic_error(this->err_msg());
+                #else
+                    BM_THROW(BM_ERR_SERIALFORMAT);
+                #endif
+            #endif
+            nb_sync = block_idx_type(decoder.get_48());
+            break;
+        case set_nb_sync_mark64:
+            #ifndef BM64ADDR
+                BM_ASSERT(0);
+                #ifndef BM_NO_STL
+                    throw std::logic_error(this->err_msg());
+                #else
+                    BM_THROW(BM_ERR_SERIALFORMAT);
+                #endif
+            #endif
+            nb_sync = block_idx_type(decoder.get_64());
+            break;
+        default:
+            BM_ASSERT(0);
+            decoder.set_pos(save_pos);
+            skip_offset_ = 0;
+            return 0;
+        } // switch
+
+        nb_sync += nb;
+        if (nb_sync <= expect_nb) // within reach
+        {
+            //block_idx_ = nb_sync;
+            //state_ = e_blocks;
+            skip_offset_ = 0;
+            return nb_sync;
+        }
+        skip_offset_ = 0;
+        decoder.set_pos(save_pos);
+    }
+    return 0;
+}
+
 
 // -------------------------------------------------------------------------
 
@@ -3343,9 +3506,6 @@ void deserializer<BV, DEC>::decode_arrbit(decoder_type& dec,
     }
 }
 
-
-
-
 template<class BV, class DEC>
 size_t deserializer<BV, DEC>::deserialize(bvector_type&        bv,
                                           const unsigned char* buf,
@@ -3460,7 +3620,6 @@ size_t deserializer<BV, DEC>::deserialize(bvector_type&        bv,
     block_idx_type nb;
     unsigned i0, j0;
 
-    block_idx_type bookmark_idx = 0;
     block_idx_type i = 0;
     do
     {
@@ -3613,16 +3772,25 @@ size_t deserializer<BV, DEC>::deserialize(bvector_type&        bv,
         // --------------------------------------- bookmarks and skip jumps
         //
         case set_nb_bookmark32:
-            bookmark_idx = i;
-            dec.get_32();
-            continue; // bypass ++i;
+            this->bookmark_idx_ = i;
+            this->skip_offset_ = dec.get_32();
+            goto process_bookmark;
         case set_nb_bookmark24:
-            bookmark_idx = i; 
-            dec.get_24();
-            continue; // bypass ++i;
+            this->bookmark_idx_ = i;
+            this->skip_offset_ = dec.get_24();
+            goto process_bookmark;
         case set_nb_bookmark16:
-            bookmark_idx = i;
-            dec.get_16();
+            this->bookmark_idx_ = i;
+            this->skip_offset_ = dec.get_16();
+        process_bookmark:
+            if (is_range_set_)
+            {
+                this->skip_pos_ = dec.get_pos() + this->skip_offset_;
+                block_idx_type nb_from = (idx_from_ >> bm::set_block_shift);
+                nb_from = this->try_skip(dec, i, nb_from);
+                if (nb_from)
+                    i = nb_from;
+            }
             continue; // bypass ++i;
 
         case set_nb_sync_mark8:
@@ -3643,8 +3811,8 @@ size_t deserializer<BV, DEC>::deserialize(bvector_type&        bv,
         case set_nb_sync_mark64:
             nb_sync = block_idx_type(dec.get_64());
         process_nb_sync:                
-                BM_ASSERT(i == bookmark_idx + nb_sync);
-                if (i != bookmark_idx + nb_sync)
+                BM_ASSERT(i == this->bookmark_idx_ + nb_sync);
+                if (i != this->bookmark_idx_ + nb_sync)
                 {
                     #ifndef BM_NO_STL
                         throw std::logic_error(this->err_msg());
@@ -3832,8 +4000,8 @@ void deserializer<BV, DEC>::xor_decode(size_type x_ref_idx, bm::id64_t x_ref_d64
 
 // ---------------------------------------------------------------------------
 
-template<class DEC>
-serial_stream_iterator<DEC>::serial_stream_iterator(const unsigned char* buf)
+template<typename DEC, typename BLOCK_IDX>
+serial_stream_iterator<DEC, BLOCK_IDX>::serial_stream_iterator(const unsigned char* buf)
   : decoder_(buf),
     end_of_stream_(false),
     bv_size_(0),
@@ -3841,38 +4009,37 @@ serial_stream_iterator<DEC>::serial_stream_iterator(const unsigned char* buf)
     id_cnt_(0),
     block_idx_(0),
     mono_block_cnt_(0),
-    block_idx_arr_(0),
-    skip_offset_(0)
+    block_idx_arr_(0)
 {
     ::memset(bit_func_table_, 0, sizeof(bit_func_table_));
 
     bit_func_table_[bm::set_AND] = 
-        &serial_stream_iterator<DEC>::get_bit_block_AND;
+        &serial_stream_iterator<DEC, BLOCK_IDX>::get_bit_block_AND;
 
     bit_func_table_[bm::set_ASSIGN] = 
-        &serial_stream_iterator<DEC>::get_bit_block_ASSIGN;
+        &serial_stream_iterator<DEC, BLOCK_IDX>::get_bit_block_ASSIGN;
     bit_func_table_[bm::set_OR]     = 
-        &serial_stream_iterator<DEC>::get_bit_block_OR;
+        &serial_stream_iterator<DEC, BLOCK_IDX>::get_bit_block_OR;
     bit_func_table_[bm::set_SUB] = 
-        &serial_stream_iterator<DEC>::get_bit_block_SUB;
+        &serial_stream_iterator<DEC, BLOCK_IDX>::get_bit_block_SUB;
     bit_func_table_[bm::set_XOR] = 
-        &serial_stream_iterator<DEC>::get_bit_block_XOR;
+        &serial_stream_iterator<DEC, BLOCK_IDX>::get_bit_block_XOR;
     bit_func_table_[bm::set_COUNT] = 
-        &serial_stream_iterator<DEC>::get_bit_block_COUNT;
+        &serial_stream_iterator<DEC, BLOCK_IDX>::get_bit_block_COUNT;
     bit_func_table_[bm::set_COUNT_AND] = 
-        &serial_stream_iterator<DEC>::get_bit_block_COUNT_AND;
+        &serial_stream_iterator<DEC, BLOCK_IDX>::get_bit_block_COUNT_AND;
     bit_func_table_[bm::set_COUNT_XOR] = 
-        &serial_stream_iterator<DEC>::get_bit_block_COUNT_XOR;
+        &serial_stream_iterator<DEC, BLOCK_IDX>::get_bit_block_COUNT_XOR;
     bit_func_table_[bm::set_COUNT_OR] = 
-        &serial_stream_iterator<DEC>::get_bit_block_COUNT_OR;
+        &serial_stream_iterator<DEC, BLOCK_IDX>::get_bit_block_COUNT_OR;
     bit_func_table_[bm::set_COUNT_SUB_AB] = 
-        &serial_stream_iterator<DEC>::get_bit_block_COUNT_SUB_AB;
+        &serial_stream_iterator<DEC, BLOCK_IDX>::get_bit_block_COUNT_SUB_AB;
     bit_func_table_[bm::set_COUNT_SUB_BA] = 
-        &serial_stream_iterator<DEC>::get_bit_block_COUNT_SUB_BA;
+        &serial_stream_iterator<DEC, BLOCK_IDX>::get_bit_block_COUNT_SUB_BA;
     bit_func_table_[bm::set_COUNT_A] = 
-        &serial_stream_iterator<DEC>::get_bit_block_COUNT_A;
+        &serial_stream_iterator<DEC, BLOCK_IDX>::get_bit_block_COUNT_A;
     bit_func_table_[bm::set_COUNT_B] = 
-        &serial_stream_iterator<DEC>::get_bit_block_COUNT;
+        &serial_stream_iterator<DEC, BLOCK_IDX>::get_bit_block_COUNT;
 
 
     // reading stream header
@@ -3925,89 +4092,16 @@ serial_stream_iterator<DEC>::serial_stream_iterator(const unsigned char* buf)
     this->id_array_ = block_idx_arr_;
 }
 
-template<class DEC>
-serial_stream_iterator<DEC>::~serial_stream_iterator()
+template<typename DEC, typename BLOCK_IDX>
+serial_stream_iterator<DEC, BLOCK_IDX>::~serial_stream_iterator()
 {
     if (block_idx_arr_)
         ::free(block_idx_arr_);
 }
 
-template<class DEC>
-bool serial_stream_iterator<DEC>::try_skip(block_idx_type nb, 
-                                           block_idx_type expect_nb)
-{
-    if (skip_offset_) // skip bookmark is available
-    {
-        const unsigned char* save_pos = decoder_.get_pos(); // save position
 
-        if (save_pos > skip_pos_) // checkpoint passed
-        {
-            skip_offset_ = 0;
-            return false;
-        }
-        decoder_.set_pos(skip_pos_);
-
-        unsigned char sync_mark = decoder_.get_8();
-        block_idx_type nb_sync;
-        switch (sync_mark)
-        {
-        case set_nb_sync_mark8:
-            nb_sync = decoder_.get_8();
-            break;
-        case set_nb_sync_mark16:
-            nb_sync = decoder_.get_16();
-            break;
-        case set_nb_sync_mark24:
-            nb_sync = decoder_.get_24();
-            break;
-        case set_nb_sync_mark32:
-            nb_sync = decoder_.get_32();
-            break;
-        case set_nb_sync_mark48:
-            #ifndef BM64ADDR
-                BM_ASSERT(0);
-                #ifndef BM_NO_STL
-                    throw std::logic_error(this->err_msg());
-                #else
-                    BM_THROW(BM_ERR_SERIALFORMAT);
-                #endif
-            #endif  
-            nb_sync = block_idx_type(decoder_.get_48());
-            break;
-        case set_nb_sync_mark64:
-            #ifndef BM64ADDR
-                BM_ASSERT(0);
-                #ifndef BM_NO_STL
-                    throw std::logic_error(this->err_msg());
-                #else
-                    BM_THROW(BM_ERR_SERIALFORMAT);
-                #endif
-            #endif  
-            nb_sync = block_idx_type(decoder_.get_64());
-            break;
-        default:
-            BM_ASSERT(0);
-            decoder_.set_pos(save_pos);
-            skip_offset_ = 0;
-            return false;
-        } // switch
-
-        nb_sync += nb;
-        if (nb_sync <= expect_nb) // within reach
-        {
-            block_idx_ = nb_sync;
-            state_ = e_blocks;
-            skip_offset_ = 0;
-            return true;
-        }
-        skip_offset_ = 0;
-        decoder_.set_pos(save_pos);
-    }
-    return false;
-}
-
-template<class DEC>
-void serial_stream_iterator<DEC>::next()
+template<typename DEC, typename BLOCK_IDX>
+void serial_stream_iterator<DEC, BLOCK_IDX>::next()
 {
     if (is_eof())
     {
@@ -4142,19 +4236,19 @@ void serial_stream_iterator<DEC>::next()
         // --------------------------------------------- bookmarks and syncs
         //
         case set_nb_bookmark32:
-            bookmark_idx_ = block_idx_;
-            skip_offset_ = decoder_.get_32();
-            skip_pos_ = decoder_.get_pos() + skip_offset_;
+            this->bookmark_idx_ = block_idx_;
+            this->skip_offset_ = decoder_.get_32();
+            this->skip_pos_ = decoder_.get_pos() + this->skip_offset_;
             break;
         case set_nb_bookmark24:
-            bookmark_idx_ = block_idx_;
-            skip_offset_ = decoder_.get_24();
-            skip_pos_ = decoder_.get_pos() + skip_offset_;
+            this->bookmark_idx_ = block_idx_;
+            this->skip_offset_ = decoder_.get_24();
+            this->skip_pos_ = decoder_.get_pos() + this->skip_offset_;
             break;
         case set_nb_bookmark16:
-            bookmark_idx_ = block_idx_;
-            skip_offset_ = decoder_.get_16();
-            skip_pos_ = decoder_.get_pos() + skip_offset_;
+            this->bookmark_idx_ = block_idx_;
+            this->skip_offset_ = decoder_.get_16();
+            this->skip_pos_ = decoder_.get_pos() + this->skip_offset_;
             break;
 
         case set_nb_sync_mark8:
@@ -4175,8 +4269,8 @@ void serial_stream_iterator<DEC>::next()
         case set_nb_sync_mark64:
             nb_sync = block_idx_type(decoder_.get_64());
             process_nb_sync:
-                BM_ASSERT(block_idx_ == bookmark_idx_ + nb_sync);
-                if (block_idx_ != bookmark_idx_ + nb_sync)
+                BM_ASSERT(block_idx_ == this->bookmark_idx_ + nb_sync);
+                if (block_idx_ != this->bookmark_idx_ + nb_sync)
                 {
                     #ifndef BM_NO_STL
                         throw std::logic_error(this->err_msg());
@@ -4229,9 +4323,9 @@ void serial_stream_iterator<DEC>::next()
     } // switch
 }
 
-template<class DEC>
-typename serial_stream_iterator<DEC>::block_idx_type
-serial_stream_iterator<DEC>::skip_mono_blocks()
+template<typename DEC, typename BLOCK_IDX>
+typename serial_stream_iterator<DEC, BLOCK_IDX>::block_idx_type
+serial_stream_iterator<DEC, BLOCK_IDX>::skip_mono_blocks()
 {
 	BM_ASSERT(state_ == e_zero_blocks || state_ == e_one_blocks);
     if (!mono_block_cnt_)
@@ -4245,8 +4339,8 @@ serial_stream_iterator<DEC>::skip_mono_blocks()
     return block_idx_;
 }
 
-template<class DEC>
-void serial_stream_iterator<DEC>::get_inv_arr(bm::word_t* block)
+template<typename DEC, typename BLOCK_IDX>
+void serial_stream_iterator<DEC, BLOCK_IDX>::get_inv_arr(bm::word_t* block)
 {
     gap_word_t len = decoder_.get_16();
     if (block)
@@ -4266,9 +4360,9 @@ void serial_stream_iterator<DEC>::get_inv_arr(bm::word_t* block)
 }
 
 
-template<class DEC>
+template<typename DEC, typename BLOCK_IDX>
 unsigned 
-serial_stream_iterator<DEC>::get_bit_block_ASSIGN(
+serial_stream_iterator<DEC, BLOCK_IDX>::get_bit_block_ASSIGN(
                                             bm::word_t*  dst_block,
                                             bm::word_t*  tmp_block)
 {
@@ -4365,10 +4459,11 @@ serial_stream_iterator<DEC>::get_bit_block_ASSIGN(
     return count;
 }
 
-template<class DEC>
+template<typename DEC, typename BLOCK_IDX>
 unsigned 
-serial_stream_iterator<DEC>::get_bit_block_OR(bm::word_t*  dst_block,
-                                              bm::word_t*  tmp_block)
+serial_stream_iterator<DEC, BLOCK_IDX>::get_bit_block_OR(
+                                                bm::word_t*  dst_block,
+                                                bm::word_t*  tmp_block)
 {
     BM_ASSERT(this->state_ == e_bit_block);
     unsigned count = 0;
@@ -4439,10 +4534,11 @@ serial_stream_iterator<DEC>::get_bit_block_OR(bm::word_t*  dst_block,
     return count;
 }
 
-template<class DEC>
+template<typename DEC, typename BLOCK_IDX>
 unsigned 
-serial_stream_iterator<DEC>::get_bit_block_AND(bm::word_t* BMRESTRICT dst_block,
-                                               bm::word_t* BMRESTRICT tmp_block)
+serial_stream_iterator<DEC, BLOCK_IDX>::get_bit_block_AND(
+                                        bm::word_t* BMRESTRICT dst_block,
+                                        bm::word_t* BMRESTRICT tmp_block)
 {
     BM_ASSERT(this->state_ == e_bit_block);
     BM_ASSERT(dst_block != tmp_block);
@@ -4551,10 +4647,11 @@ serial_stream_iterator<DEC>::get_bit_block_AND(bm::word_t* BMRESTRICT dst_block,
     return count;
 }
 
-template<class DEC>
+template<typename DEC, typename BLOCK_IDX>
 unsigned 
-serial_stream_iterator<DEC>::get_bit_block_XOR(bm::word_t*  dst_block,
-                                               bm::word_t*  tmp_block)
+serial_stream_iterator<DEC, BLOCK_IDX>::get_bit_block_XOR(
+                                                bm::word_t*  dst_block,
+                                                bm::word_t*  tmp_block)
 {
     BM_ASSERT(this->state_ == e_bit_block);
     BM_ASSERT(dst_block != tmp_block);
@@ -4655,10 +4752,11 @@ serial_stream_iterator<DEC>::get_bit_block_XOR(bm::word_t*  dst_block,
     return count;
 }
 
-template<class DEC>
+template<typename DEC, typename BLOCK_IDX>
 unsigned 
-serial_stream_iterator<DEC>::get_bit_block_SUB(bm::word_t*  dst_block,
-                                               bm::word_t*  tmp_block)
+serial_stream_iterator<DEC, BLOCK_IDX>::get_bit_block_SUB(
+                                                bm::word_t*  dst_block,
+                                                bm::word_t*  tmp_block)
 {
     BM_ASSERT(this->state_ == e_bit_block);
     BM_ASSERT(dst_block != tmp_block);
@@ -4757,9 +4855,10 @@ serial_stream_iterator<DEC>::get_bit_block_SUB(bm::word_t*  dst_block,
 }
 
 
-template<class DEC>
+template<typename DEC, typename BLOCK_IDX>
 unsigned 
-serial_stream_iterator<DEC>::get_bit_block_COUNT(bm::word_t*  /*dst_block*/,
+serial_stream_iterator<DEC, BLOCK_IDX>::get_bit_block_COUNT(
+                                                 bm::word_t*  /*dst_block*/,
                                                  bm::word_t*  tmp_block)
 {
     BM_ASSERT(this->state_ == e_bit_block);
@@ -4840,10 +4939,11 @@ serial_stream_iterator<DEC>::get_bit_block_COUNT(bm::word_t*  /*dst_block*/,
     return count;
 }
 
-template<class DEC>
+template<typename DEC, typename BLOCK_IDX>
 unsigned 
-serial_stream_iterator<DEC>::get_bit_block_COUNT_A(bm::word_t*  dst_block,
-                                                   bm::word_t*  tmp_block)
+serial_stream_iterator<DEC, BLOCK_IDX>::get_bit_block_COUNT_A(
+                                                    bm::word_t*  dst_block,
+                                                    bm::word_t*  tmp_block)
 {
     BM_ASSERT(this->state_ == e_bit_block);
     unsigned count = 0;
@@ -4922,10 +5022,11 @@ serial_stream_iterator<DEC>::get_bit_block_COUNT_A(bm::word_t*  dst_block,
 }
 
 
-template<class DEC>
+template<typename DEC, typename BLOCK_IDX>
 unsigned 
-serial_stream_iterator<DEC>::get_bit_block_COUNT_AND(bm::word_t*  dst_block,
-                                                     bm::word_t*  tmp_block)
+serial_stream_iterator<DEC, BLOCK_IDX>::get_bit_block_COUNT_AND(
+                                                    bm::word_t*  dst_block,
+                                                    bm::word_t*  tmp_block)
 {
     BM_ASSERT(this->state_ == e_bit_block);
     BM_ASSERT(dst_block);
@@ -5006,9 +5107,10 @@ serial_stream_iterator<DEC>::get_bit_block_COUNT_AND(bm::word_t*  dst_block,
     return count;
 }
 
-template<class DEC>
+template<typename DEC,typename BLOCK_IDX>
 unsigned 
-serial_stream_iterator<DEC>::get_bit_block_COUNT_OR(bm::word_t*  dst_block,
+serial_stream_iterator<DEC, BLOCK_IDX>::get_bit_block_COUNT_OR(
+                                                    bm::word_t*  dst_block,
                                                     bm::word_t*  tmp_block)
 {
     BM_ASSERT(this->state_ == e_bit_block);
@@ -5106,10 +5208,11 @@ serial_stream_iterator<DEC>::get_bit_block_COUNT_OR(bm::word_t*  dst_block,
     return count_adapter.sum();
 }
 
-template<class DEC>
+template<typename DEC, typename BLOCK_IDX>
 unsigned 
-serial_stream_iterator<DEC>::get_bit_block_COUNT_XOR(bm::word_t*  dst_block,
-                                                     bm::word_t*  tmp_block)
+serial_stream_iterator<DEC, BLOCK_IDX>::get_bit_block_COUNT_XOR(
+                                                    bm::word_t*  dst_block,
+                                                    bm::word_t*  tmp_block)
 {
     BM_ASSERT(this->state_ == e_bit_block);
     BM_ASSERT(dst_block);
@@ -5207,10 +5310,11 @@ serial_stream_iterator<DEC>::get_bit_block_COUNT_XOR(bm::word_t*  dst_block,
     return count_adapter.sum();
 }
 
-template<class DEC>
+template<typename DEC, typename BLOCK_IDX>
 unsigned 
-serial_stream_iterator<DEC>::get_bit_block_COUNT_SUB_AB(bm::word_t*  dst_block,
-                                                        bm::word_t*  tmp_block)
+serial_stream_iterator<DEC, BLOCK_IDX>::get_bit_block_COUNT_SUB_AB(
+                                                    bm::word_t*  dst_block,
+                                                    bm::word_t*  tmp_block)
 {
     BM_ASSERT(this->state_ == e_bit_block);
     BM_ASSERT(dst_block);
@@ -5308,9 +5412,10 @@ serial_stream_iterator<DEC>::get_bit_block_COUNT_SUB_AB(bm::word_t*  dst_block,
     return count_adapter.sum();
 }
 
-template<class DEC>
+template<typename DEC, typename BLOCK_IDX>
 unsigned 
-serial_stream_iterator<DEC>::get_bit_block_COUNT_SUB_BA(bm::word_t*  dst_block,
+serial_stream_iterator<DEC, BLOCK_IDX>::get_bit_block_COUNT_SUB_BA(
+                                                        bm::word_t*  dst_block,
                                                         bm::word_t*  tmp_block)
 {
     BM_ASSERT(this->state_ == e_bit_block);
@@ -5354,7 +5459,6 @@ serial_stream_iterator<DEC>::get_bit_block_COUNT_SUB_BA(bm::word_t*  dst_block,
         } // for
         return count;
         }
-
     case set_block_bit_interval:
         {
         unsigned head_idx = decoder_.get_16();
@@ -5403,8 +5507,9 @@ serial_stream_iterator<DEC>::get_bit_block_COUNT_SUB_BA(bm::word_t*  dst_block,
 
 
 
-template<class DEC>
-unsigned serial_stream_iterator<DEC>::get_arr_bit(bm::word_t* dst_block, 
+template<typename DEC, typename BLOCK_IDX>
+unsigned serial_stream_iterator<DEC, BLOCK_IDX>::get_arr_bit(
+                                                  bm::word_t* dst_block,
                                                   bool        clear_target)
 {
     BM_ASSERT(this->block_type_ == set_block_arrbit || 
@@ -5441,8 +5546,8 @@ unsigned serial_stream_iterator<DEC>::get_arr_bit(bm::word_t* dst_block,
     return len;
 }
 
-template<class DEC>
-unsigned serial_stream_iterator<DEC>::get_bit()
+template<typename DEC, typename BLOCK_IDX>
+unsigned serial_stream_iterator<DEC, BLOCK_IDX>::get_bit()
 {
     BM_ASSERT(this->block_type_ == set_block_bit_1bit);
     ++(this->block_idx_);
@@ -5451,9 +5556,9 @@ unsigned serial_stream_iterator<DEC>::get_bit()
 	return decoder_.get_16(); // 1bit_idx	
 }
 
-template<class DEC>
+template<typename DEC, typename BLOCK_IDX>
 void 
-serial_stream_iterator<DEC>::get_gap_block(bm::gap_word_t* dst_block)
+serial_stream_iterator<DEC, BLOCK_IDX>::get_gap_block(bm::gap_word_t* dst_block)
 {
     BM_ASSERT(this->state_ == e_gap_block || 
               this->block_type_ == set_block_bit_1bit);
@@ -5469,11 +5574,12 @@ serial_stream_iterator<DEC>::get_gap_block(bm::gap_word_t* dst_block)
 }
 
 
-template<class DEC>
+template<typename DEC, typename BLOCK_IDX>
 unsigned 
-serial_stream_iterator<DEC>::get_bit_block(bm::word_t*    dst_block,
-                                           bm::word_t*    tmp_block,
-                                           set_operation  op)
+serial_stream_iterator<DEC, BLOCK_IDX>::get_bit_block(
+                                            bm::word_t*    dst_block,
+                                            bm::word_t*    tmp_block,
+                                            set_operation  op)
 {
     BM_ASSERT(this->state_ == e_bit_block);
     
