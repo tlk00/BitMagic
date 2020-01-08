@@ -287,7 +287,6 @@ protected:
     ///
     unsigned load_header(bm::decoder& dec, SV& sv, unsigned char& matr_s_ser);
 
-    /// Deserialization main
     void deserialize_sv(SV& sv, const unsigned char* buf,
                         const bvector_type* mask_bv);
 
@@ -303,7 +302,8 @@ protected:
     /// load NULL bit-plain (returns new plains count)
     int load_null_plain(SV& sv,
                         int plains,
-                        const unsigned char* buf);
+                        const unsigned char* buf,
+                        const bvector_type* mask_bv);
 
     /// load string remap dict
     static void load_remap(SV& sv, const unsigned char* remap_buf_ptr);
@@ -791,13 +791,63 @@ void sparse_vector_deserializer<SV>::deserialize_range(SV& sv,
                                                  const unsigned char* buf,
                                                  size_type from, size_type to)
 {
-    bvector_type mask_bv;
-    typename bvector_type::mem_pool_guard mp_g_z(pool_, mask_bv);
-    mask_bv.set_range(from, to);
-
     idx_range_set_ = true; idx_range_from_ = from; idx_range_to_ = to;
 
-    deserialize_sv(sv, buf, &mask_bv);
+    remap_buf_ptr_ = 0;
+    bm::decoder dec(buf); // TODO: implement correct processing of byte-order
+
+    unsigned char matr_s_ser = 0;
+    unsigned plains = load_header(dec, sv, matr_s_ser);
+
+    sv.clear();
+
+    bm::id64_t sv_size = dec.get_64();
+    if (sv_size == 0)
+        return;  // empty vector
+
+    sv.resize_internal(size_type(sv_size));
+    bv_ref_.reset();
+
+    load_plains_off_table(dec, plains); // read the offset vector of bit-plains
+
+    // TODO: add range for not NULL plane
+    plains = (unsigned)load_null_plain(sv, int(plains), buf, 0);
+
+    // check if mask needs to be relaculated using the NULL (index) vector
+    if (bm::conditional<SV::is_rsc_support::value>::test())
+    {
+        // recalculate plains range
+        size_type sv_left, sv_right;
+        bool range_valid = sv.resolve_range(from, to, &sv_left, &sv_right);
+        if (!range_valid)
+        {
+            sv.clear();
+            idx_range_set_ = false;
+            return;
+        }
+        else
+        {
+            idx_range_set_ = true; idx_range_from_ = sv_left; idx_range_to_ = sv_right;
+        }
+    }
+
+    deserialize_plains(sv, plains, buf, 0);
+
+    op_deserial_.set_ref_vectors(0);
+    deserial_.set_ref_vectors(0);
+    bv_ref_.reset();
+
+
+    // load the remap matrix
+    //
+    if (bm::conditional<SV::is_remap_support::value>::test()) // test remap trait
+    {
+        if (matr_s_ser)
+            load_remap(sv, remap_buf_ptr_);
+    } // if remap traits
+
+    sv.sync(true); // force sync, recalculate RS index, remap tables, etc
+    remap_buf_ptr_ = 0;
 
     idx_range_set_ = false;
 }
@@ -826,7 +876,7 @@ void sparse_vector_deserializer<SV>::deserialize_sv(SV& sv,
 
     load_plains_off_table(dec, plains); // read the offset vector of bit-plains
 
-    plains = (unsigned)load_null_plain(sv, int(plains), buf);
+    plains = (unsigned)load_null_plain(sv, int(plains), buf, mask_bv);
 
     // check if mask needs to be relaculated using the NULL (index) vector
     if (bm::conditional<SV::is_rsc_support::value>::test())
@@ -836,7 +886,7 @@ void sparse_vector_deserializer<SV>::deserialize_sv(SV& sv,
             const bvector_type* bv_null = sv.get_null_bvector();
             BM_ASSERT(bv_null);
             rsc_mask_bv_.clear(true);
-            not_null_mask_bv_.bit_and(*bv_null, *mask_bv, bvector_type::opt_none);
+            not_null_mask_bv_.bit_and(*bv_null, *mask_bv, bvector_type::opt_compress);
             rsc_compressor_.compress(rsc_mask_bv_, *bv_null, not_null_mask_bv_);
             mask_bv = &rsc_mask_bv_;
 
@@ -944,9 +994,14 @@ void sparse_vector_deserializer<SV>::deserialize_plains(
                 bv->bit_and(*mask_bv, bvector_type::opt_compress);
                 continue;
             }
+            if (idx_range_set_)
+            {
+                deserial_.set_range(idx_range_from_, idx_range_to_);
+            }
+            deserial_.deserialize(*bv, bv_buf_ptr);
 
-            *bv = *mask_bv;
-
+            bv->bit_and(*mask_bv, bvector_type::opt_compress);
+/*
             if (idx_range_set_)
             {
                 op_deserial_.deserialize_range(*bv, bv_buf_ptr, temp_block_,
@@ -956,16 +1011,27 @@ void sparse_vector_deserializer<SV>::deserialize_plains(
             {
                 op_deserial_.deserialize(*bv, bv_buf_ptr, temp_block_, bm::set_AND);
             }
+*/
         }
-        else // use generic deserializer (OR)
+        else
         {
-            size_t read_bytes =
-                deserial_.deserialize(*bv, bv_buf_ptr, temp_block_);
-            if (!remap_buf_ptr_)
-                remap_buf_ptr_ = bv_buf_ptr + read_bytes;
+            if (idx_range_set_)
+            {
+                deserial_.set_range(idx_range_from_, idx_range_to_);
+                deserial_.deserialize(*bv, bv_buf_ptr);
+                bv->keep_range(idx_range_from_, idx_range_to_);
+            }
+            else
+            {
+                size_t read_bytes =
+                    deserial_.deserialize(*bv, bv_buf_ptr, temp_block_);
+                if (!remap_buf_ptr_)
+                    remap_buf_ptr_ = bv_buf_ptr + read_bytes;
+            }
         }
 
     } // for i
+    deserial_.unset_range();
 
 }
 
@@ -974,7 +1040,8 @@ void sparse_vector_deserializer<SV>::deserialize_plains(
 template<typename SV>
 int sparse_vector_deserializer<SV>::load_null_plain(SV& sv,
                                                     int plains,
-                                                    const unsigned char* buf)
+                                                    const unsigned char* buf,
+                                                    const bvector_type* mask_bv)
 {
     BM_ASSERT(plains > 0);
     if (!sv.is_nullable())
@@ -986,8 +1053,29 @@ int sparse_vector_deserializer<SV>::load_null_plain(SV& sv,
         const unsigned char* bv_buf_ptr = buf + offset; // seek to position
         bvector_type*  bv = sv.get_plain(unsigned(i));
         bv_ref_.add(bv, unsigned(i));
-        size_t read_bytes = deserial_.deserialize(*bv, bv_buf_ptr, temp_block_);
-        remap_buf_ptr_ = bv_buf_ptr + read_bytes;
+        if (bm::conditional<SV::is_rsc_support::value>::test())
+        {
+            // load the whole not-NULL vector regardless of range
+            // TODO: load [0, idx_range_to_]
+            size_t read_bytes = deserial_.deserialize(*bv, bv_buf_ptr, temp_block_);
+            remap_buf_ptr_ = bv_buf_ptr + read_bytes;
+        }
+        else // non-compressed SV
+        {
+            if (idx_range_set_)
+            {
+                deserial_.set_range(idx_range_from_, idx_range_to_);
+                deserial_.deserialize(*bv, bv_buf_ptr, temp_block_);
+                bv->keep_range(idx_range_from_, idx_range_to_);
+            }
+            else
+            {
+                size_t read_bytes = deserial_.deserialize(*bv, bv_buf_ptr, temp_block_);
+                remap_buf_ptr_ = bv_buf_ptr + read_bytes;
+            }
+            if (mask_bv)
+                bv->bit_and(*mask_bv, bvector_type::opt_compress);
+        }
     }
     return plains-1;
 }

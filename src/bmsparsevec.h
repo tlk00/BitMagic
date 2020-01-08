@@ -894,6 +894,12 @@ protected:
     unsigned char* init_remap_buffer() { return 0; }
     void set_remap() { }
 
+    bool resolve_range(size_type from, size_type to,
+                       size_type* idx_from, size_type* idx_to) const
+    {
+        *idx_from = from; *idx_to = to; return true;
+    }
+
 protected:
     template<class V, class SV> friend class rsc_sparse_vector;
     template<class SVect> friend class sparse_vector_scanner;

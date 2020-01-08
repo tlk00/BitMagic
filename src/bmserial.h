@@ -515,6 +515,7 @@ public:
         set deserialization range [from, to]
         This is NOT exact, approximate range, content outside range
         is not guaranteed to be absent
+        @sa unset_range()
     */
     void set_range(size_type from, size_type to)
     {
@@ -522,7 +523,8 @@ public:
     }
 
     /**
-        Disable range setting
+        Disable range deserialization
+        @sa set_range()
     */
     void unset_range() { is_range_set_ = 0; }
 

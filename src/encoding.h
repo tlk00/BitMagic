@@ -506,7 +506,7 @@ inline void encoder::set_pos(encoder::position_type buf_pos)
 */
 inline void encoder::put_24(bm::word_t w)
 {
-    BM_ASSERT((w & ~(0xFFFFFF)) == 0);
+    BM_ASSERT((w & ~(0xFFFFFFU)) == 0);
 
     buf_[0] = (unsigned char)w;
     buf_[1] = (unsigned char)(w >> 8);

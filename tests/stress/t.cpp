@@ -11826,6 +11826,30 @@ void TestSparseVectorSerialization2()
             sv2.resize(0);
         }
 
+        // check range de-serialization
+        {
+            sparse_vector_u32 sv4(bm::use_null);
+            sparse_vector_u32::size_type left = BSIZE / 2;
+            sparse_vector_u32::size_type right = BSIZE;
+
+            sv_deserial.deserialize_range(sv4, buf, left, right);
+
+            sparse_vector_u32 sv_r(bm::use_null);
+            sv_r.copy_range(sv1, left, right);
+
+            eq = sv_r.equal(sv4);
+            if (!eq)
+            {
+                sparse_vector_u32::size_type pos;
+                bool f = bm::sparse_vector_find_first_mismatch(sv1, sv4, pos);
+                assert(f);
+                cerr << "Mismatch at: " << pos << endl;
+                assert(eq);
+                exit(1);
+            }
+        }
+
+
         {
             sv_serializer.set_xor_ref(true); // enable XOR compression
             sv_serializer.serialize(sv1, sv_lay);
@@ -11833,6 +11857,7 @@ void TestSparseVectorSerialization2()
 
         buf = sv_lay.buf();
         sz2 = sv_lay.size();
+
         sv_deserial.deserialize(sv3, buf);
         eq = sv1.equal(sv3);
         if (!eq)
@@ -11857,7 +11882,33 @@ void TestSparseVectorSerialization2()
         {
             cout << "sz1 = " << sz1 << " gain=" << (sz1 - sz2) << endl;
         }
+
+        // check range deserialization
+        {
+            sparse_vector_u32 sv4(bm::use_null);
+            sparse_vector_u32::size_type left = BSIZE / 2;
+            sparse_vector_u32::size_type right = BSIZE;
+
+            sv_deserial.deserialize_range(sv4, buf, left, right);
+
+            sparse_vector_u32 sv_r(bm::use_null);
+            sv_r.copy_range(sv1, left, right);
+
+            eq = sv_r.equal(sv4);
+            if (!eq)
+            {
+                sparse_vector_u32::size_type pos;
+                bool f = bm::sparse_vector_find_first_mismatch(sv1, sv4, pos);
+                assert(f);
+                cerr << "Mismatch at: " << pos << endl;
+                assert(eq);
+                exit(1);
+            }
+        }
+
         sv1.optimize();
+        sv_serializer.set_bookmarks(true, rand()%512);
+
     } // for k
 
     cout << " ------------------------------ TestSparseVectorSerialization2() OK" << endl;
@@ -18120,7 +18171,9 @@ void TestSparseVectorSerial()
 
                 const sparse_vector_u32::bvector_type* bv_null = sv2.get_null_bvector();
                 auto cnt = bv_null->count();
-                assert(cnt == sv1.get_null_bvector()->count());
+                auto cnt1 = sv1.get_null_bvector()->count();
+                assert(cnt == 2);
+                assert(cnt != cnt1);
 
                 sparse_vector_u32::statistics st;
                 sv2.calc_stat(&st);
@@ -18175,23 +18228,14 @@ void TestSparseVectorSerial()
 
                 auto i = from;
                 auto j = to;
+                bool is_eq;
+                sparse_vector_u32::size_type pos;
+                bool found;
+
                 for (i = from; i < j; ++i, --j)
                 {
                     sparse_vector_u32::bvector_type bv_mask;
                     bv_mask.set_range(i, j);
-
-                    sv_deserial.deserialize(sv2, buf, bv_mask);
-                    assert(sv2.size() == sv1.size());
-
-                    sv_deserial.deserialize(sv3, buf, i, j);
-                    bool is_eq = sv2.equal(sv3);
-                    if (!is_eq)
-                    {
-                        cerr << "Error: Range deserialization equality failed!" << endl;
-                        assert(0); exit(1);
-                    }
-                    sparse_vector_u32::size_type pos;
-                    bool found;
 
                     sparse_vector_u32 sv_filt(sv1);
                     sv_filt.filter(bv_mask);
@@ -18200,6 +18244,28 @@ void TestSparseVectorSerial()
 
                     is_eq = sv_filt.equal(sv_range);
                     assert(is_eq);
+
+
+                    sv_deserial.deserialize(sv2, buf, bv_mask);
+                    assert(sv2.size() == sv1.size());
+                    is_eq = sv2.equal(sv_range);
+                    if (!is_eq)
+                    {
+                        found = bm::sparse_vector_find_first_mismatch(sv2, sv_range, pos, bm::no_null);
+                        if (found)
+                        {
+                            cerr << "Mismatch at:" << pos << endl;
+                        }
+                        assert(is_eq);
+                    }
+
+                    sv_deserial.deserialize(sv3, buf, i, j);
+                    is_eq = sv2.equal(sv3);
+                    if (!is_eq)
+                    {
+                        cerr << "Error: Range deserialization equality failed!" << endl;
+                        assert(0); exit(1);
+                    }
 
                     //sv3.filter(bv_mask);
 
@@ -24995,6 +25061,9 @@ void TestCompressSparseVectorSerial()
                 assert(csv2.get(j + 1) == 0);
                 csv2.sync();
 
+                sv_deserial.deserialize_range(csv3, buf, i, j);
+                bool eq = csv2.equal(csv3);
+                assert(eq);
 
                 {
                     rsc_sparse_vector_u32 csv_range;
@@ -25026,11 +25095,7 @@ void TestCompressSparseVectorSerial()
                             assert(csv_range.is_null(i0) == csv2.is_null(i0));
                         } // for i0
                     }
-
                 }
-                sv_deserial.deserialize_range(csv3, buf, i, j);
-                bool eq = csv2.equal(csv3);
-                assert(eq);
 
                 cout << "\r  " << (j-i) << "           " << std::flush;
 
@@ -25527,7 +25592,7 @@ int main(int argc, char *argv[])
         TestCompressSparseVector();
 
         TestCompressedSparseVectorAlgo();
-        
+
         TestCompressSparseVectorSerial();
 
         TestCompressedSparseVectorScan();
