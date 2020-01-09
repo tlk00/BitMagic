@@ -352,6 +352,8 @@ typedef bm::rs_index<> rs_ind;
 
 #endif
 
+typedef std::vector<unsigned> ref_vect;
+
 typedef bm::sparse_vector<unsigned, bvect > sparse_vector_u32;
 typedef bm::sparse_vector<unsigned long long, bvect > sparse_vector_u64;
 typedef bm::rsc_sparse_vector<unsigned, sparse_vector_u32> rsc_sparse_vector_u32;
@@ -7707,6 +7709,213 @@ void DesrializationTest2()
    } // for i
 
 }
+
+// ---------------------------------------------------------------------------
+
+static
+void CheckRangeDeserial(const bvect&     bv,
+                        bvect::size_type from,
+                        bvect::size_type to)
+{
+    static unsigned bm_distance = 4;
+    assert(from < to);
+
+    cout << " Check Range [" << from << ", " << to << "] = " << (to-from) << endl;
+
+    int max_inc = 256;
+    if (to - from > 65536)
+        max_inc = 1024;
+
+
+    bool eq;
+    bm::operation_deserializer<bvect> od;
+
+    bm::serializer<bvect> bvs;
+    bvs.set_bookmarks(false);
+    //bvs.set_bookmarks(true, bm_distance++);
+
+    cout << " bookmarks OFF" << endl;
+
+    for (unsigned pass = 0; pass < 2; ++pass)
+    {
+        cout << "   pass = " << pass << endl;
+        bm::serializer<bvect>::buffer buf;
+        cout << "   serialize ..." << flush;
+        bvs.serialize(bv, buf);
+        cout << "OK" << endl;
+
+        bvect bv_r;
+        bv_r.copy_range(bv, from, to);
+        auto count_r = bv.count_range(from, to);
+        auto count = bv_r.count();
+        assert(count == count_r);
+
+        {
+            bvect bv_c;
+            bm::deserialize(bv_c, buf.data());
+            eq = bv.equal(bv_c);
+            assert(eq);
+        }
+
+        {
+            bvect bv_x;
+            bv_x.bit_xor(bv, bv_r, bvect::opt_compress);
+            count_r = bv_x.count_range(from, to);
+            assert(!count_r);
+        }
+
+        const unsigned char* sdata = buf.data();
+
+        {
+
+            bvect bv_rd_m;
+            bv_rd_m.set_range(from, to);
+            od.deserialize(bv_rd_m, sdata, 0, bm::set_AND);
+            eq = bv_r.equal(bv_rd_m);
+            assert(eq);
+
+            bvect bv_rd;
+            od.deserialize_range(bv_rd, sdata, from, to);
+            eq = bv_r.equal(bv_rd);
+            assert(eq);
+        }
+
+        bvect::size_type cnt = 0;
+
+        cout << "      start range" << endl;
+        {
+            bvect::size_type target = from + 65536 * 2;
+            if (target > to)
+                target = to;
+
+            bvect bv_rd_m;
+            bv_rd_m.set_range(from, target);
+            for (bvect::size_type i = from; i <= target; ++cnt)
+            {
+                bv_r.copy_range(bv, i, target);
+                bvect bv_rd;
+                od.deserialize_range(bv_rd, sdata, i, target);
+                eq = bv_r.equal(bv_rd);
+                assert(eq);
+
+                od.deserialize(bv_rd_m, sdata, 0, bm::set_AND);
+                eq = bv_rd.equal(bv_rd_m);
+                assert(eq);
+
+                {
+                    bvect bv_rd2;
+                    bm::deserialize_range(bv_rd2, sdata, i, target);
+                    eq = bv_rd.equal(bv_rd2);
+                    assert(eq);
+                }
+
+                auto r = target - i;
+                cout << "\r      " << r << "      " << flush;
+                if (cnt > 128 && (target - i) > 128)
+                {
+                    {
+                        i += bvect::size_type(rand() % max_inc);
+                        target -= bvect::size_type(rand() % max_inc);
+                    }
+                    bv_rd_m.keep_range(i, target);
+                    continue;
+                }
+                else
+                {
+                    bv_rd_m.set(i, false);
+                    bv_rd_m.set(target, false);
+                }
+                ++i; --target;
+            } // for i
+        }
+
+        cout << "\r       " << endl;
+        cout << "      whole range (randomized)" << endl;
+
+        cnt = 0;
+        bvect::size_type j = to;
+
+        for (bvect::size_type i = from; i <= j; ++i, --j, ++cnt)
+        {
+            bv_r.copy_range(bv, i, j);
+            bvect bv_rd;
+            od.deserialize_range(bv_rd, buf.data(), i, j);
+            eq = bv_r.equal(bv_rd);
+            assert(eq);
+
+            bvect bv_rd_m;
+            bv_rd_m.set_range(i, j);
+            od.deserialize(bv_rd_m, buf.data(), 0, bm::set_AND);
+            eq = bv_rd.equal(bv_rd_m);
+            assert(eq);
+
+            auto r = j - i;
+            cout << "\r      " << r << "      " << flush;
+            // turn on random gallop mode
+            if (cnt > 100)
+            {
+                {
+                    i = bvect::size_type(i + unsigned(rand() % max_inc));
+                    j = bvect::size_type(j - unsigned(rand() % max_inc));
+                }
+            }
+        } // for i-j
+
+        bvs.set_bookmarks(true, bm_distance++);
+        cout << "\n bookmarks ON distance=" << (bm_distance-1) << endl;
+
+    } // for pass (bookmarks)
+
+    cout << "\r       " << endl;
+
+}
+
+static
+void RangeDeserializationTest()
+{
+    cout << "\n------------------------------- RangeDeserializationTest()" << endl;
+
+
+    // generated random
+    cout << "======= BV random generated " << endl;
+    {
+        bvect bv1;  // generated random
+
+        generate_bvector(bv1, bm::id_max32/4, false);
+        CheckRangeDeserial(bv1, 0, 5*65536);
+        CheckRangeDeserial(bv1, bm::id_max32/4-(8*65536), bm::id_max32/4);
+
+        bv1.optimize();
+        CheckRangeDeserial(bv1, 128*65536, 130*65536);
+        CheckRangeDeserial(bv1, bm::id_max32/4-(2*65536), bm::id_max32/4);
+    }
+
+
+
+        cout << "======= BV Empty " << endl;
+        {
+            bvect bv_e;
+            CheckRangeDeserial(bv_e, 0, 256*65536);
+            CheckRangeDeserial(bv_e, bm::id_max32/4-(256*65536), bm::id_max32/4);
+        }
+
+        // inverted
+        cout << "======= BV inverted " << endl;
+        {
+            bvect bv_i; // inverted
+            bv_i.invert();
+            CheckRangeDeserial(bv_i, 0, 256*65536);
+            CheckRangeDeserial(bv_i, bm::id_max32/4-(256*65536), bm::id_max32/4);
+        }
+
+
+
+    cout << "\n------------------------------- RangeDeserializationTest() OK" << endl;
+}
+
+// ---------------------------------------------------------------------------
+
+
 
 
 
@@ -25518,6 +25727,7 @@ int main(int argc, char *argv[])
         SerializationCompressionLevelsTest();
         SerializationTest();
         DesrializationTest2();
+        RangeDeserializationTest();
     }
     
     if (is_all || is_bvshift)
