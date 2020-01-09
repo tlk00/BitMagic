@@ -3064,14 +3064,14 @@ void SparseVectorSerializationTest()
         exit(1);
     }
 
-    if (sz2 > sz1)
+    if (sz2 >= sz1)
     {
         cerr << "XOR negative compression!" << endl;
         assert(0);
     }
     else
     {
-        //cout << "sz1 = " << sz1 << " gain=" << (sz1 - sz2) << endl;
+        cout << "sz1 = " << sz1 << " gain=" << (sz1 - sz2) << endl;
     }
 
 }
@@ -3086,20 +3086,19 @@ void SparseVectorRangeDeserializationTest()
 
     generate_scanner_test_set(vect, bv_null, sv1, BSIZE);
 
-    bm::sparse_vector_serial_layout<sparse_vector_u32> sv_lay;
-    {
-        BM_DECLARE_TEMP_BLOCK(tb)
-        sv1.optimize(tb);
-        bm::sparse_vector_serialize(sv1, sv_lay, tb);
-    }
-
-    const unsigned char* buf = sv_lay.buf();
-
     bm::sparse_vector_deserializer<sparse_vector_u32> sv_deserial;
+    bm::sparse_vector_serializer<sparse_vector_u32> sv_serializer;
+    sv_serializer.set_bookmarks(false);
 
+    bm::sparse_vector_serial_layout<sparse_vector_u32> sv_lay;
+    const unsigned char* buf;
+
+    sv_serializer.serialize(sv1, sv_lay);
+
+    buf = sv_lay.buf();
+    
     {
-        TimeTaker tt("bm::sparse_vector<> Range Deserialization() ", 1);
-
+        TimeTaker tt("bm::sparse_vector<> Range Deserialization() - NO bookmarks ", 1);
         for (unsigned i = 0; i < 15; ++i)
         {
             sv_deserial.deserialize(sv2, buf, 0, 65536 * 2);
@@ -3110,15 +3109,51 @@ void SparseVectorRangeDeserializationTest()
 
     assert(sv1.size() == sv2.size());
     // validation
-    sparse_vector_u32::size_type to = (65536 * 2) + (BSIZE / 2);
-    for (sparse_vector_u32::size_type from = BSIZE / 2; from <= to; ++from)
     {
-        auto v1 = sv1[from];
-        auto v2 = sv2[from];
-        if (v1 != v2)
+        sparse_vector_u32::size_type to = (65536 * 2) + (BSIZE / 2);
+        for (sparse_vector_u32::size_type from = BSIZE / 2; from <= to; ++from)
         {
-            cerr << "Range extraction failed!" << endl;
-            exit(1);
+            auto v1 = sv1[from];
+            auto v2 = sv2[from];
+            if (v1 != v2)
+            {
+                cerr << "Range extraction failed!" << endl;
+                exit(1);
+            }
+        }
+    }
+
+
+    // book-mark enabled serialization
+    //
+    sv_serializer.set_bookmarks(true, 64);
+    sv_serializer.serialize(sv1, sv_lay);
+
+    buf = sv_lay.buf();
+
+    {
+        TimeTaker tt("bm::sparse_vector<> Range Deserialization() - WITH bookmarks ", 1);
+        for (unsigned i = 0; i < 15; ++i)
+        {
+            sv_deserial.deserialize_range(sv2, buf, 0, 65536 * 2);
+            sv_deserial.deserialize_range(sv2, buf, BSIZE / 4, BSIZE / 2);
+            sv_deserial.deserialize_range(sv2, buf, BSIZE / 2, (65536 * 2) + (BSIZE / 2));
+        }
+    }
+
+    // validation
+    //
+    {
+        sparse_vector_u32::size_type to = (65536 * 2) + (BSIZE / 2);
+        for (sparse_vector_u32::size_type from = BSIZE / 2; from <= to; ++from)
+        {
+            auto v1 = sv1[from];
+            auto v2 = sv2[from];
+            if (v1 != v2)
+            {
+                cerr << "Bookmark Range extraction failed!" << endl;
+                exit(1);
+            }
         }
     }
 
