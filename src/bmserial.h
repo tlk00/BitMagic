@@ -110,7 +110,8 @@ public:
     // --------------------------------------------------------------------
     /**
         Set compression level. Higher compression takes more time to process.
-        @param clevel - compression level (0-4)
+        @param clevel - compression level (0-5)
+        @sa get_compression_level
     */
     void set_compression_level(unsigned clevel);
 
@@ -124,6 +125,7 @@ public:
         5 - binary interpolated encoding (Moffat, et al)
      
         Recommended: use 3 or 5
+
     */
     unsigned get_compression_level() const { return compression_level_; }
 
