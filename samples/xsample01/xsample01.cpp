@@ -261,7 +261,7 @@ void generate_bv_index(bv_index& bvi)
 {
     for (unsigned i = 0; i < index_size; ++i)
     {
-        std::auto_ptr<TBVector> ap(construct_bvector());
+        std::unique_ptr<TBVector> ap(construct_bvector());
         
         generate_random_vector(ap.get());
         
