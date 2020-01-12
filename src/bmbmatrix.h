@@ -230,6 +230,7 @@ protected:
     static
     void throw_bad_alloc() { BV::throw_bad_alloc(); }
 
+
 protected:
     size_type                bv_size_;
     allocator_type           alloc_;
@@ -475,6 +476,15 @@ protected:
     {
         bmatr_.optimize_block(nb);
     }
+
+    /**
+        Perform copy_range() on a set of plains
+    */
+    void copy_range_plains(
+        const base_sparse_vector<Val, BV, MAX_SIZE>& bsv,
+        typename base_sparse_vector<Val, BV, MAX_SIZE>::size_type left,
+        typename base_sparse_vector<Val, BV, MAX_SIZE>::size_type right,
+        bm::null_support splice_null);
 
 protected:
     bmatrix_type             bmatr_;              ///< bit-transposed matrix
@@ -1491,6 +1501,41 @@ bool base_sparse_vector<Val, BV, MAX_SIZE>::equal(
 
 //---------------------------------------------------------------------
 
+template<class Val, class BV, unsigned MAX_SIZE>
+void base_sparse_vector<Val, BV, MAX_SIZE>::copy_range_plains(
+        const base_sparse_vector<Val, BV, MAX_SIZE>& bsv,
+        typename base_sparse_vector<Val, BV, MAX_SIZE>::size_type left,
+        typename base_sparse_vector<Val, BV, MAX_SIZE>::size_type right,
+        bm::null_support splice_null)
+{
+    bvector_type* bv_null = get_null_bvect();
+    const bvector_type* bv_null_arg = bsv.get_null_bvector();
+    unsigned plains;
+    if (bv_null)
+    {
+        plains = this->stored_plains();
+        if (bv_null_arg && (splice_null == bm::use_null))
+            bv_null->copy_range(*bv_null_arg, left, right);
+        --plains;
+    }
+    else
+        plains = this->plains();
+
+    for (unsigned j = 0; j < plains; ++j)
+    {
+        const bvector_type* arg_bv = bsv.bmatr_.row(j);
+        if (arg_bv)
+        {
+            bvector_type* bv = this->bmatr_.get_row(j);
+            if (!bv)
+                bv = this->get_plain(j);
+            bv->copy_range(*arg_bv, left, right);
+        }
+    } // for j
+
+}
+
+//---------------------------------------------------------------------
 
 } // namespace
 

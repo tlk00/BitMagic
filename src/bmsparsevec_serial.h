@@ -986,7 +986,8 @@ void sparse_vector_deserializer<SV>::deserialize_plains(
         {
             typename bvector_type::mem_pool_guard mp_g_z(pool_, *bv);
 
-            if (!remap_buf_ptr_) // last valid plain vector (special case)
+            if (bm::conditional<SV::is_remap_support::value>::test()
+                && !remap_buf_ptr_) // last plain vector (special case)
             {
                 size_t read_bytes =
                     deserial_.deserialize(*bv, bv_buf_ptr, temp_block_);
@@ -995,26 +996,22 @@ void sparse_vector_deserializer<SV>::deserialize_plains(
                 continue;
             }
             if (idx_range_set_)
-            {
                 deserial_.set_range(idx_range_from_, idx_range_to_);
-            }
             deserial_.deserialize(*bv, bv_buf_ptr);
-
             bv->bit_and(*mask_bv, bvector_type::opt_compress);
-/*
-            if (idx_range_set_)
-            {
-                op_deserial_.deserialize_range(*bv, bv_buf_ptr, temp_block_,
-                                               idx_range_from_, idx_range_to_);
-            }
-            else
-            {
-                op_deserial_.deserialize(*bv, bv_buf_ptr, temp_block_, bm::set_AND);
-            }
-*/
         }
         else
         {
+            if (bm::conditional<SV::is_remap_support::value>::test() &&
+                !remap_buf_ptr_)
+            {
+                size_t read_bytes =
+                    deserial_.deserialize(*bv, bv_buf_ptr, temp_block_);
+                remap_buf_ptr_ = bv_buf_ptr + read_bytes;
+                if (idx_range_set_)
+                    bv->keep_range(idx_range_from_, idx_range_to_);
+                continue;
+            }
             if (idx_range_set_)
             {
                 deserial_.set_range(idx_range_from_, idx_range_to_);
@@ -1023,10 +1020,8 @@ void sparse_vector_deserializer<SV>::deserialize_plains(
             }
             else
             {
-                size_t read_bytes =
-                    deserial_.deserialize(*bv, bv_buf_ptr, temp_block_);
-                if (!remap_buf_ptr_)
-                    remap_buf_ptr_ = bv_buf_ptr + read_bytes;
+                //size_t read_bytes =
+                deserial_.deserialize(*bv, bv_buf_ptr, temp_block_);
             }
         }
 
@@ -1050,6 +1045,9 @@ int sparse_vector_deserializer<SV>::load_null_plain(SV& sv,
     size_t offset = off_vect_[unsigned(i)];
     if (offset)
     {
+        // TODO: improve serialization format to avoid non-range decode of
+        // the NULL vector just to get to the offset of remap table
+
         const unsigned char* bv_buf_ptr = buf + offset; // seek to position
         bvector_type*  bv = sv.get_plain(unsigned(i));
         bv_ref_.add(bv, unsigned(i));
@@ -1062,16 +1060,27 @@ int sparse_vector_deserializer<SV>::load_null_plain(SV& sv,
         }
         else // non-compressed SV
         {
+            // NULL plain in string vector with substitute re-map
+            //
+            if (bm::conditional<SV::is_remap_support::value>::test())
+            {
+                BM_ASSERT(!remap_buf_ptr_);
+                size_t read_bytes = deserial_.deserialize(*bv, bv_buf_ptr, temp_block_);
+                remap_buf_ptr_ = bv_buf_ptr + read_bytes;
+                if (idx_range_set_)
+                    bv->keep_range(idx_range_from_, idx_range_to_);
+            }
+            else
             if (idx_range_set_)
             {
                 deserial_.set_range(idx_range_from_, idx_range_to_);
                 deserial_.deserialize(*bv, bv_buf_ptr, temp_block_);
                 bv->keep_range(idx_range_from_, idx_range_to_);
+                deserial_.unset_range();
             }
             else
             {
-                size_t read_bytes = deserial_.deserialize(*bv, bv_buf_ptr, temp_block_);
-                remap_buf_ptr_ = bv_buf_ptr + read_bytes;
+                deserial_.deserialize(*bv, bv_buf_ptr, temp_block_);
             }
             if (mask_bv)
                 bv->bit_and(*mask_bv, bvector_type::opt_compress);

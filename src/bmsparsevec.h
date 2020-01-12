@@ -752,8 +752,8 @@ public:
         \param sv - source vector
         \param left  - index from in losed diapason of [left..right]
         \param right - index to in losed diapason of [left..right]
-        \param splice_null - "use_null" copy range for (not) NULL vector or
-                             do not touch it
+        \param splice_null - "use_null" copy range for NULL vector or
+                             do not copy it
     */
     void copy_range(const sparse_vector<Val, BV>& sv,
                     size_type left, size_type right,
@@ -1875,33 +1875,8 @@ void sparse_vector<Val, BV>::copy_range(const sparse_vector<Val, BV>& sv,
 {
     if (left > right)
         bm::xor_swap(left, right);
-    
-    bvector_type* bv_null = this->get_null_bvect();
-    const bvector_type* bv_null_arg = sv.get_null_bvector();
-
-    unsigned plains;
-    if (bv_null)
-    {
-        plains = this->stored_plains();
-        if (bv_null_arg && (splice_null == bm::use_null))
-            bv_null->copy_range(*bv_null_arg, left, right);
-        --plains;
-    }
-    else
-        plains = this->plains();
-    
-    for (unsigned j = 0; j < plains; ++j)
-    {
-        const bvector_type* arg_bv = sv.bmatr_.row(j);
-        if (arg_bv)
-        {
-            BM_ASSERT(arg_bv != bv_null_arg);
-            bvector_type* bv = this->bmatr_.get_row(j);
-            if (!bv)
-                bv = this->get_plain(j);
-            bv->copy_range(*arg_bv, left, right);
-        }
-    } // for j
+    //this->clear();
+    this->copy_range_plains(sv, left, right, splice_null);
     this->resize(sv.size());
 }
 //---------------------------------------------------------------------

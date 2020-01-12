@@ -913,6 +913,28 @@ public:
     ///@}
 
     // ------------------------------------------------------------
+    /*! @name Merge, split, partition data                        */
+    ///@{
+
+    /**
+        @brief copy range of values from another sparse vector
+
+        Copy [left..right] values from the source vector,
+        clear everything outside the range.
+
+        \param sv - source vector
+        \param left  - index from in losed diapason of [left..right]
+        \param right - index to in losed diapason of [left..right]
+        \param splice_null - "use_null" copy range for NULL vector or
+                             do not copy it
+    */
+    void copy_range(const str_sparse_vector<CharType, BV, MAX_STR_SIZE>& sv,
+                    size_type left, size_type right,
+                    bm::null_support splice_null = bm::use_null);
+
+    ///@}
+
+    // ------------------------------------------------------------
 
     /*! \brief syncronize internal structures */
     void sync(bool force);
@@ -1068,7 +1090,15 @@ protected:
         return remap_matrix1_.get_buffer().data();
     }
     void set_remap() { remap_flags_ = 1; }
-    
+
+protected:
+
+    bool resolve_range(size_type from, size_type to,
+                       size_type* idx_from, size_type* idx_to) const
+    {
+        *idx_from = from; *idx_to = to; return true;
+    }
+
 protected:
     template<class SVect> friend class sparse_vector_serializer;
     template<class SVect> friend class sparse_vector_deserializer;
@@ -1630,6 +1660,27 @@ bool str_sparse_vector<CharType, BV, MAX_STR_SIZE>::equal(
     }
     return parent_type::equal(sv, null_able);
 }
+
+//---------------------------------------------------------------------
+
+template<class CharType, class BV, unsigned MAX_STR_SIZE>
+void str_sparse_vector<CharType, BV, MAX_STR_SIZE>::copy_range(
+                const str_sparse_vector<CharType, BV, MAX_STR_SIZE>& sv,
+                size_type left, size_type right,
+                bm::null_support splice_null)
+{
+    if (left > right)
+        bm::xor_swap(left, right);
+    this->clear();
+
+    remap_flags_ = sv.remap_flags_;
+    remap_matrix1_ = sv.remap_matrix1_;
+    remap_matrix2_ = sv.remap_matrix2_;
+
+    this->copy_range_plains(sv, left, right, splice_null);
+    this->resize(sv.size());
+}
+
 
 //---------------------------------------------------------------------
 
