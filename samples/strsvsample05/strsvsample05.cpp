@@ -17,12 +17,15 @@ For more information please visit:  http://bitmagic.io
 */
 
 /** \example strsvsample05.cpp
+
   Example of how to use bm::str_sparse_vector<> - succinct container for
   bit-transposed string collections for deserialization of only select elements
-  from the serealized BLOB
+  from the serialized BLOB
  
   \sa bm::str_sparse_vector
   \sa bm::sparse_vector_deserializer
+  \sa bm::sparse_vector_serializer
+
 */
 
 /*! \file strsvsample05.cpp
@@ -56,6 +59,7 @@ int main(void)
     {
        str_sv_type str_sv1;
        str_sv_type str_sv2;
+       str_sv_type str_sv3;
 
        {
            str_sv_type str_sv0;
@@ -85,34 +89,78 @@ int main(void)
         cout << "Used memory: " << st.memory_used << std::endl;
 
         bm::sparse_vector_serial_layout<str_sv_type> sv_lay;
-        bm::sparse_vector_serialize<str_sv_type>(str_sv1, sv_lay, tb);
+
+        // construct a serializer utility class, setup serialization parameters
+        //
+        // please note, use of "set_bookmarks()" to enable fast range
+        // deserialization. Bookmarks somewhat increase the BLOB size but allow
+        // more effeiciently skip parts which we would not need (paging) and
+        // avoid decompression of blocks we would never need
+        //
+        // This example sets "128" as a bookmarks parameter, but you have to
+        // experiment with what works for you, between 4 and 512
+        //
+        // Each block corresponds to 64K vector element
+        // making bookmarks after each block does not make much sense
+        // because decode is reasonably fast and some residual throw away
+        // is usually ok.
+        //
+        bm::sparse_vector_serializer<str_sv_type> sv_serializer;
+        sv_serializer.set_bookmarks(true, 128);
+
+
+        // run str-vector serialization with compression
+        //
+        sv_serializer.serialize(str_sv1, sv_lay);
+
         const unsigned char* buf = sv_lay.buf();
         cout << "Serialized size = " << sv_lay.size() << endl;
 
+        // instantiate deserializer utility class
+        //
         bm::sparse_vector_deserializer<str_sv_type> sv_deserial;
 
 
         bvector_type::size_type from = 100000;
         bvector_type::size_type to = from + 65536;
         {
+            // 1.
+            // one way to deserialize is to provide a mask vector
+            // specifying which sparse vector elements needs to be
+            // decompressed from the BLOB
+            // mask vector does not necessarily has to be just one range
+            //
             bvector_type bv_mask;
             bv_mask.set_range(from, to);
             sv_deserial.deserialize(str_sv2, buf, bv_mask);
 
-            // run a quick comparison, that selected range matches values in
-            // the container str_sv2
+
+            // 2.
+            // If it is just one range (common use case for paging)
+            // it is faster and cleaner to use deserialize_range().
+            // It will produce the same result as with (1) just faster.
             //
-            char s1[16]; char s2[16];
+            sv_deserial.deserialize_range(str_sv3, buf, from, to);
+
+            // run a quick comparison, that selected range matches values in
+            // the container str_sv2, str_sv3
+            //
+            char s1[16]; char s2[16]; char s3[16];
             for (bvector_type::size_type j = from; j < to; ++j)
             {
                 str_sv1.get(j, s1, sizeof(s1));
                 str_sv2.get(j, s2, sizeof(s2));
-                int cmp = ::strcmp(s1, s2);
+                str_sv3.get(j, s3, sizeof(s3));
+
+                int cmp;
+                cmp = ::strcmp(s1, s2);
                 assert(cmp==0);
+                cmp = ::strcmp(s1, s3);
+                assert(cmp==0);
+
             } // for j
             cout << "Gather deserialization check OK" << endl;
         }
-
 
     }
     catch(std::exception& ex)

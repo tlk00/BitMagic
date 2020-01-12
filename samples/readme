@@ -45,18 +45,20 @@ Sparse vector (bit-transposed sparse vector) for scalar integer types
                using memory-efficient bit-transposed sparse_vector as a translation function
                Tech.note: http://bitmagic.io/set2set-assoc-remap-opt.html
 ./svsample06 - load data and search for value(s) in sparse_vector. This sample illustrates back insert 
-               iterator, const_iterator and bm::sparse_vector_scanner<> search class. 
+               iterator, const_iterator and bm::sparse_vector_scanner<> search class 
 	       Benchmark different search/scan methods.
 	       Tech.note: http://bitmagic.io/sparse-vector-search.html
 ./svsample07 - insertion sort using bm::sparse_vector_scanner<>::lower_bound()
-./svsample08 - sparse_vector<> deserialization to extract specific elements and ranges (masked gather)
+./svsample08 - sparse_vector<> deserialization to extract specific elements and ranges.
+               Example illustrates how to add bookmarks to the serialized BLOB for faster 
+               range deserialization
 
 RSC sparse vector (Succinct vector based on Rank-Select methods) for scalar integer types
 
 
 ./rscsample01 - basics of rsc_sparse_vector<> container. Load, unload, serialize.
 ./rscsample02 - back insert iterator for rsc_sparse_vector<> container. 
-                Gather and range deserialization of container.
+                Gather and range deserialization of a rans-select compressed container.
                 
  
 
@@ -67,7 +69,8 @@ String sparse vector (bit-transposed sparse vector) for ASCII(z) strings
 ./strsvsample03 - str_sparse_vector<>::back_insert_iterator is used, then sparse vector
                   remap compressed and saved to disk using serialization API.
 ./strsvsample04 - Use str_sparse_vector<> container with NULL (unassigned) values
-./strsvsample05 - Use str_sparse_vector<> container selective (gather) deserialization
+./strsvsample05 - Use str_sparse_vector<> container selective (gather) deserialization and range deserialization.
+                  How to add bookmarks to the the serialized BLOB for faster range deserialization.
 
 
 

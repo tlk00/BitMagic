@@ -25,7 +25,9 @@ For more information please visit:  http://bitmagic.io
 */
 
 /*! \file rscsample02.cpp
-    \brief Example: rsc_sparse_vector<> selective de-serialization
+    \brief Example: rsc_sparse_vector<> selective and range de-serialization
+
+    @sa strsvsample05.cpp
 */
 
 #include <iostream>
@@ -87,7 +89,14 @@ int main(void)
             BM_DECLARE_TEMP_BLOCK(tb)
             // optimize memory allocation of sparse vector
             csv1.optimize(tb);
-            bm::sparse_vector_serialize(csv1, sv_lay, tb);
+
+            // configure serializer, set bookmarking option for faster
+            // range deserialization
+            //
+            bm::sparse_vector_serializer<rsc_sparse_vector_u32> sv_serializer;
+            sv_serializer.set_bookmarks(true, 64);
+
+            sv_serializer.serialize(csv1, sv_lay); // serialization
         }
 
         // get serialization pointer
@@ -116,7 +125,7 @@ int main(void)
         // It is an equivalent of setting selection bits in the mask vector
         // but defines the intent more clearly and works faster
         {
-            sv_deserial.deserialize(csv2, buf, 1, 4);
+            sv_deserial.deserialize_range(csv2, buf, 1, 4);
         }
         PrintSV(csv2); // size() = 8 : 0, 11, NULL, 13, 14, NULL, NULL, 0,
 

@@ -17,16 +17,20 @@ For more information please visit:  http://bitmagic.io
 */
 
 /** \example svsample08.cpp
-  Example of how to serialize bm::sparse_vector<> template class
+  Example of how to serialize bm::sparse_vector<> container
  
   \sa bm::sparse_vector
   \sa bm::sparse_vector_deserializer
   \sa bm::sparse_vector_serial_layout
+  \sa bm::sparse_vector_serializer
 
 */
 
 /*! \file svsample08.cpp
-    \brief Example: sparse_vector<> selective de-serialization
+    \brief Example: sparse_vector<> selective de-serialization (gather)
+    and range deserialization
+
+    @sa strsvsample05.cpp
 */
 
 #include <iostream>
@@ -84,7 +88,29 @@ int main(void)
             BM_DECLARE_TEMP_BLOCK(tb)
             // optimize memory allocation of sparse vector
             sv1.optimize(tb);
-            bm::sparse_vector_serialize(sv1, sv_lay, tb);
+
+
+            // construct a serializer utility class, setup serialization parameters
+            //
+            // please note, use of "set_bookmarks()" to enable fast range
+            // deserialization. Bookmarks somewhat increase the BLOB size but allow
+            // more effeiciently skip parts which we would not need (paging) and
+            // avoid decompression of blocks we would never need
+            //
+            // This example sets "64" as a bookmarks parameter, but you have to
+            // experiment with what works for you, between 4 and 512
+            //
+            // Each block corresponds to 64K vector element
+            // making bookmarks after each block does not make much sense
+            // because decode is reasonably fast and some residual throw away
+            // is usually ok.
+            //
+
+            bm::sparse_vector_serializer<svector_u32> sv_serializer;
+            sv_serializer.set_bookmarks(true, 64);
+
+            // serialization, creates a compressed BLOB
+            sv_serializer.serialize(sv1, sv_lay);
         }
 
         // get serialization pointer
@@ -113,7 +139,7 @@ int main(void)
         // It is an equivalent of setting selection bits in the mask vector
         // but defines the intent more clearly and works faster
         {
-            sv_deserial.deserialize(sv2, buf, 1, 4);
+            sv_deserial.deserialize_range(sv2, buf, 1, 4);
         }
         PrintSV(sv2); // size() = 8 : 0, 11, NULL, 13, 14, NULL, NULL, 0,
 
