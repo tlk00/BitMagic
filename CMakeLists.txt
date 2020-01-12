@@ -7,6 +7,8 @@ set( CMAKE_VERBOSE_MAKEFILE on )
 
 # SET(BMOPTFLAGS "BMSSE42OPT" CACHE STRING "User-specified optimization flag")
 
+find_package(Threads REQUIRED)
+
 set(CMAKE_BINARY_DIR ${CMAKE_SOURCE_DIR}/build/bin)
 set(EXECUTABLE_OUTPUT_PATH ${CMAKE_BINARY_DIR})
 set(LIBRARY_OUTPUT_PATH ${CMAKE_BINARY_DIR})
@@ -28,7 +30,7 @@ if ("${CMAKE_CXX_COMPILER_ID}" STREQUAL "GNU" OR
 
     set(flags "-Wall -Wextra -Wno-ignored-qualifiers -march=core2 -fPIC")
     set(optflags -g0 -O3)
-    SET( CMAKE_EXE_LINKER_FLAGS  "${CMAKE_EXE_LINKER_FLAGS} -Wl,-stack_size,0x100000000")
+    SET( CMAKE_EXE_LINKER_FLAGS  "${CMAKE_EXE_LINKER_FLAGS} -Wl,-lpthread")
 
 elseif ("${CMAKE_CXX_COMPILER_ID}" STREQUAL "Intel")
     set(flags, "-tpp7 -march=core2 -restrict -DBM_HASRESTRICT -fno-fnalias -Wall")
@@ -43,11 +45,11 @@ elseif ("${CMAKE_CXX_COMPILER_ID}" STREQUAL "MSVC")
 
     set(flags "/W4 /EHsc /F 5000000 ")
     set(optflags "-O2")
-    SET( CMAKE_EXE_LINKER_FLAGS  "${CMAKE_EXE_LINKER_FLAGS} /STACK:\"10000000\"")
+    SET( CMAKE_EXE_LINKER_FLAGS  "${CMAKE_EXE_LINKER_FLAGS} -lpthread ")
 endif()
 
-set(CMAKE_C_FLAGS   "${CMAKE_C_FLAGS} ${flags} ${bmoptf}")
-set(CMAKE_CXX_FLAGS "${CMAKE_CXX_FLAGS} ${flags} ${bmoptf}")
+set(CMAKE_C_FLAGS   "${CMAKE_C_FLAGS} ${flags} ${bmoptf} -pthread")
+set(CMAKE_CXX_FLAGS "${CMAKE_CXX_FLAGS} ${flags} ${bmoptf} -pthread")
 
 add_executable(bmsvutil ${PROJECT_SOURCE_DIR}/utils/svutil/svutil.cpp)
 
