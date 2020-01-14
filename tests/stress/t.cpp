@@ -25368,14 +25368,14 @@ static
 void TestHeapVector()
 {
     {
-        bm::heap_vector<bm::id64_t, bvect::allocator_type> hv;
+        bm::heap_vector<bm::id64_t, bvect::allocator_type, true> hv;
         hv.add() = ~10ull;
         hv.push_back(~0ull);
         assert(hv[0] == ~10ull);
         assert(hv[1] == ~0ull);
     }
     {
-        bm::heap_vector<bm::id64_t, bvect::allocator_type> hv;
+        bm::heap_vector<bm::id64_t, bvect::allocator_type, true> hv;
         for (unsigned i = 0; i < 65535; ++i)
             hv.push_back(i);
         for (unsigned i = 0; i < 65535; ++i)
@@ -25385,7 +25385,7 @@ void TestHeapVector()
     }
 
     {
-        bm::heap_vector<bvect, bvect::allocator_type> hv;
+        bm::heap_vector<bvect, bvect::allocator_type, false> hv;
 
         bvect& bv0 = hv.add();
         bv0.set(1);
@@ -25402,12 +25402,12 @@ void TestHeapVector()
         assert(hv.size() == 2);
         assert(!hv[1].any());
 
-        bm::heap_vector<bvect, bvect::allocator_type> hv2(hv);
+        bm::heap_vector<bvect, bvect::allocator_type, false> hv2(hv);
         assert(hv2.size() == 2);
         assert(hv2[0].test(1));
         assert(!hv2[1].any());
 
-        bm::heap_vector<bvect, bvect::allocator_type> hv3;
+        bm::heap_vector<bvect, bvect::allocator_type, false> hv3;
         hv3.reserve(10);
         hv3 = hv;
         hv3[1].set(0);
@@ -25415,7 +25415,7 @@ void TestHeapVector()
         assert(hv3.at(0).test(1));
         assert(hv3.at(1).any());
 
-        bm::heap_vector<bvect, bvect::allocator_type> hv4;
+        bm::heap_vector<bvect, bvect::allocator_type, false> hv4;
         hv4.swap(hv3);
         assert(hv3.size() == 0);
 
