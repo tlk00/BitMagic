@@ -310,7 +310,6 @@ public:
     heap_vector()
         : buffer_()    
     {
-        BM_ASSERT(trivial_type == std::is_trivially_constructible<value_type>::value);
     }
 
     heap_vector(const heap_vector<Val, BVAlloc, trivial_type>& hv)
