@@ -352,7 +352,7 @@ typedef bm::rs_index<> rs_ind;
 
 #endif
 
-typedef std::vector<unsigned> ref_vect;
+typedef std::vector<unsigned> ref_vect_type;
 
 typedef bm::sparse_vector<unsigned, bvect > sparse_vector_u32;
 typedef bm::sparse_vector<unsigned long long, bvect > sparse_vector_u64;
