@@ -373,7 +373,7 @@ private:
 private:
     typedef bm::bit_out<bm::encoder>                        bit_out_type;
     typedef bm::gamma_encoder<bm::gap_word_t, bit_out_type> gamma_encoder_func;
-    typedef bm::heap_vector<bm::gap_word_t, allocator_type> block_arridx_type;
+    typedef bm::heap_vector<bm::gap_word_t, allocator_type, true> block_arridx_type;
     typedef typename allocator_type::allocator_pool_type    allocator_pool_type;
 
 private:
@@ -564,7 +564,7 @@ protected:
                       bm::word_t* blk);
 
 protected:
-    typedef bm::heap_vector<bm::gap_word_t, allocator_type> block_arridx_type;
+    typedef bm::heap_vector<bm::gap_word_t, allocator_type, true> block_arridx_type;
     typedef typename allocator_type::allocator_pool_type allocator_pool_type;
 
 protected:
@@ -1042,7 +1042,7 @@ serializer<BV>::serializer(const allocator_type&   alloc,
   ref_idx_(0),
   xor_block_(0)
 {
-    bit_idx_arr_.resize(65536);
+    bit_idx_arr_.resize(bm::gap_max_bits);
     if (temp_block == 0)
     {
         temp_block_ = alloc_.alloc_bit_block();

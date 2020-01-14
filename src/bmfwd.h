@@ -44,7 +44,7 @@ typedef bm::mem_alloc<block_allocator, ptr_allocator, standard_alloc_pool> stand
 template<class A = bm::standard_allocator> class bvector;
 template<class A = bm::standard_allocator> class rs_index;
 
-template<typename Val, typename BVAlloc> class heap_vector;
+template<typename Val, typename BVAlloc, bool trivial_type> class heap_vector;
 template<typename Val, size_t ROWS, size_t COLS, typename BVAlloc> class heap_matrix;
 template<typename Val, typename BVAlloc> class dynamic_heap_matrix;
 

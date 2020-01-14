@@ -306,8 +306,8 @@ public:
     }
 
 protected:
-    typedef bm::heap_vector<bvector_type_const_ptr, bv_allocator_type> bvptr_vector_type;
-    typedef bm::heap_vector<std::size_t, bv_allocator_type> bv_plain_vector_type;
+    typedef bm::heap_vector<bvector_type_const_ptr, bv_allocator_type, true> bvptr_vector_type;
+    typedef bm::heap_vector<std::size_t, bv_allocator_type, true> bv_plain_vector_type;
 
 protected:
     bvptr_vector_type        ref_bvects_;       ///< reference vector pointers

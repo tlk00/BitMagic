@@ -328,7 +328,7 @@ protected:
     bm::rank_compressor<bvector_type>           rsc_compressor_;
     bvector_type                                not_null_mask_bv_;
     bvector_type                                rsc_mask_bv_;
-    bm::heap_vector<size_t, alloc_type>         off_vect_;
+    bm::heap_vector<size_t, alloc_type, true>   off_vect_;
 
     bv_ref_vector_type                          bv_ref_;
 

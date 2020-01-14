@@ -135,8 +135,8 @@ public:
     block_idx_type find(size_type rank) const;
     
 private:
-    typedef bm::heap_vector<sblock_count_type, bv_allocator_type>  sblock_count_vector_type;
-    typedef bm::heap_vector<unsigned, bv_allocator_type>  sblock_row_vector_type;
+    typedef bm::heap_vector<sblock_count_type, bv_allocator_type, true>  sblock_count_vector_type;
+    typedef bm::heap_vector<unsigned, bv_allocator_type, true>  sblock_row_vector_type;
     typedef bm::dynamic_heap_matrix<unsigned, bv_allocator_type>  blocks_matrix_type;
 
 private:
