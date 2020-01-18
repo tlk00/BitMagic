@@ -2225,8 +2225,8 @@ template<typename T> int gapcmp(const T* buf1, const T* buf2)
 
 /*!
    \brief Find first bit which is different between two GAP-blocks
-   \param blk1 - block 1
-   \param blk2 - block 2
+   \param buf1 - block 1
+   \param buf2 - block 2
    \param pos - out - position of difference (undefined if blocks are equal)
    \return  true if difference was found
 
@@ -2341,6 +2341,10 @@ void gap_buff_op(T*         BMRESTRICT dest,
    \param vect2 - operand 2 GAP encoded buffer.
    \param f - operation functor.
    \param dlen - destination length after the operation
+   \param limit - maximum target length limit,
+                  returns false if limit is reached
+   \return true if operation would be successfull or 
+           false if limit reached
 
    \note Internal function.
    @internal
@@ -2365,10 +2369,6 @@ bool gap_buff_dry_op(const T*   BMRESTRICT vect1,
 
     unsigned len = 1;
 
-//    T* res = dest;
-//    *res = bitval;
-//    ++res;
-
     T c1 = *cur1; T c2 = *cur2;
     while (1)
     {
@@ -2381,15 +2381,13 @@ bool gap_buff_dry_op(const T*   BMRESTRICT vect1,
         if (len > limit)
             return false;
         bitval_prev = bitval;
-        if (c1 < c2) // (*cur1 < *cur2)
+        if (c1 < c2) 
         {
-//            *res = c1;
             ++cur1; c1 = *cur1;
             bitval1 ^= 1;
         }
         else // >=
         {
-            //*res = c2;
             if (c2 < c1) // (*cur2 < *cur1)
             {
                 bitval2 ^= 1;
@@ -2407,8 +2405,7 @@ bool gap_buff_dry_op(const T*   BMRESTRICT vect1,
 
     } // while
 
-    dlen = len;//(unsigned)(res - dest);
-//    *dest = (T)((*dest & 7) + (dlen << 3));
+    dlen = len;
     return true;
 }
 
@@ -6991,7 +6988,7 @@ unsigned bit_find_last(const bm::word_t* block, unsigned* last)
     \brief BIT block find the first set bit
 
     \param block - bit block buffer pointer
-    \param first - index of the first 1 bit (out)
+    \param pos - index of the first 1 bit (out)
     \return 0 if not found
 
     @ingroup bitfunc

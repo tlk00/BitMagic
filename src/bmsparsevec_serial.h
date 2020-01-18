@@ -346,8 +346,6 @@ protected:
     \param sv_layout  - buffer structure to keep the result
     \param temp_block - temporary buffer 
                         (allocate with BM_DECLARE_TEMP_BLOCK(x) for speed)
-    \param bv_serialization_flags - bit-vector serialization flags
-    as defined in bm::serialization_flags    
     
     \ingroup svserial
     

@@ -827,7 +827,7 @@ public:
     \brief Deserialize bvector using buffer as set operation argument
 
     \param bv - target bvector
-    \param buf - serialized buffer as a logical argument
+    \param buf - serialized buffer used as as a logical operation argument
     \param op - set algebra operation (default: OR)
     \param exit_on_one - quick exit if set operation found some result
 
@@ -841,7 +841,7 @@ public:
     /*!
         Deserialize range using mask vector (AND)
         \param bv - target bvector (should be set ranged)
-        \param temp_block - temporary block to avoid re-allocations
+        \param buf - serialized buffer pointer
         \param idx_from - range of bits set for deserialization [from..to]
         \param idx_to - range of bits [from..to]
     */
@@ -862,7 +862,6 @@ public:
     
     \param bv - target bvector
     \param buf - serialized buffer as a logical argument
-    \param temp_block - temporary block to avoid re-allocations
     \param op - set algebra operation (default: OR)
     \param exit_on_one - quick exit if set operation found some result
     
@@ -878,7 +877,7 @@ public:
     /*!
         Deserialize range using mask vector (AND)
         \param bv - target bvector (should be set ranged)
-        \param temp_block - temporary block to avoid re-allocations
+        \param buf - serialized buffer pointer
         \param idx_from - range of bits set for deserialization [from..to]
         \param idx_to - range of bits [from..to]
     */
@@ -2650,6 +2649,9 @@ size_t serialize(BV& bv,
     @param buf - pointer on memory which keeps serialized bvector
     @param temp_block - pointer on temporary block, 
             if NULL bvector allocates own.
+    @param ref_vect - [in] optional pointer to a list of 
+                      reference vectors used for
+                      XOR compression.
 
     @return Number of bytes consumed by deserializer.
 
@@ -2712,6 +2714,9 @@ size_t deserialize(BV& bv,
     @param buf - pointer on memory which keeps serialized bvector
     @param from - bit-vector index to deserialize from
     @param to   - bit-vector index to deserialize to
+    @param ref_vect - [in] optional pointer to a list of
+                      reference vectors used for
+                      XOR compression.
 
     Function deserializes bitvector from memory block containig results
     of previous serialization. Function does not remove bits

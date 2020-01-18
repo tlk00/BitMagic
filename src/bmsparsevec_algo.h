@@ -155,6 +155,9 @@ void dynamic_range_clip_low(SV& svect, unsigned low_bit)
     @param sv1 - vector 1
     @param sv2 - vector 2
     @param midx - mismatch index
+    @param null_proc - defines if we want to include (not) NULL
+                  vector into comparison (bm::use_null) or not.
+                  By default search takes NULL vector into account 
 
     @return true if mismatch found
 
@@ -166,8 +169,7 @@ template<typename SV>
 bool sparse_vector_find_first_mismatch(const SV& sv1,
                                        const SV& sv2,
                                        typename SV::size_type& midx,
-                                       bm::null_support  null_proc = bm::use_null
-                                       )
+                                       bm::null_support  null_proc = bm::use_null)
 {
     typename SV::size_type mismatch = bm::id_max;
     bool found = false;
