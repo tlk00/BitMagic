@@ -1699,7 +1699,7 @@ public:
     //@}
     // --------------------------------------------------------------------
 
-    /*! @name Population counting and ranking methods
+    /*! @name Population counting and ranks
     */
     //@{
 
@@ -1739,8 +1739,17 @@ public:
 
        \return population count in the diapason
     */
-    size_type count_range(size_type left,
-                          size_type right) const;
+    size_type count_range(size_type left, size_type right) const;
+
+    /*!
+       \brief Returns true if all bits in the range are 1
+
+       \param left - index of first bit start checking
+       \param right - index of last bit
+
+       \return true if all bits are 1
+    */
+    bool is_all_one_range(size_type left, size_type right) const;
 
     
 
@@ -3033,8 +3042,8 @@ bvector<Alloc>::count_range(size_type left, size_type right) const
     size_type cnt = 0;
 
     // calculate logical number of start and destination blocks
-    unsigned nblock_left  = unsigned(left  >>  bm::set_block_shift);
-    unsigned nblock_right = unsigned(right >>  bm::set_block_shift);
+    block_idx_type nblock_left  = (left  >>  bm::set_block_shift);
+    block_idx_type nblock_right = (right >>  bm::set_block_shift);
 
     unsigned i0, j0;
     bm::get_block_coord(nblock_left, i0, j0);
@@ -3080,9 +3089,10 @@ bvector<Alloc>::count_range(size_type left, size_type right) const
     {
         func.reset();
         word_t*** blk_root = blockman_.top_blocks_root();
-        unsigned top_blocks_size = blockman_.top_block_size();
+        block_idx_type top_blocks_size = blockman_.top_block_size();
         
-        bm::for_each_nzblock_range(blk_root, top_blocks_size, nblock_left+1, nblock_right-1, func);
+        bm::for_each_nzblock_range(blk_root, top_blocks_size,
+                                   nblock_left+1, nblock_right-1, func);
         cnt += func.count();
     }
     
@@ -3104,6 +3114,145 @@ bvector<Alloc>::count_range(size_type left, size_type right) const
         }
     }
     return cnt;
+}
+
+// -----------------------------------------------------------------------
+
+template<typename Alloc>
+bool bvector<Alloc>::is_all_one_range(size_type left, size_type right) const
+{
+    if (!blockman_.is_init())
+        return false; // nothing to do
+
+    if (right < left)
+        bm::xor_swap(left, right);
+
+    BM_ASSERT(left < bm::id_max && right < bm::id_max);
+    BM_ASSERT_THROW(right < bm::id_max, BM_ERR_RANGE);
+
+    block_idx_type nblock_left  = (left  >> bm::set_block_shift);
+    block_idx_type nblock_right = (right >> bm::set_block_shift);
+
+    if (nblock_left == nblock_right) // hit in the same block
+    {
+        unsigned i0, j0;
+        bm::get_block_coord(nblock_left, i0, j0);
+        const bm::word_t* block = blockman_.get_block(i0, j0);
+        if (!block)
+            return false;
+        if (block == FULL_BLOCK_FAKE_ADDR)
+            return true;
+        bool is_gap = BM_IS_GAP(block);
+
+        unsigned nbit_left  = unsigned(left  & bm::set_block_mask);
+        unsigned nbit_right = unsigned(right & bm::set_block_mask);
+        unsigned cnt;
+        if (is_gap)
+        {
+            // TODO: more efficient algo
+            cnt = bm::gap_bit_count_range(BMGAP_PTR(block),
+                                          (gap_word_t)nbit_left,
+                                          (gap_word_t)nbit_right);
+        }
+        else // bit block
+        {
+            // TODO: more efficient algo
+            cnt = bm::bit_block_calc_count_range(block, nbit_left, nbit_right);
+        }
+        return (cnt == (nbit_right - nbit_left + 1));
+    }
+
+    // process entry point block
+    {
+        unsigned i0, j0;
+        bm::get_block_coord(nblock_left, i0, j0);
+        const bm::word_t* block = blockman_.get_block(i0, j0);
+        if (!block)
+            return false;
+        if (block != FULL_BLOCK_FAKE_ADDR)
+        {
+            bool is_gap = BM_IS_GAP(block);
+            unsigned nbit_left  = unsigned(left  & bm::set_block_mask);
+            unsigned cnt;
+            if (is_gap)
+            {
+                // TODO: more efficient algo
+                cnt = bm::gap_bit_count_range(BMGAP_PTR(block),
+                                              (gap_word_t)nbit_left,
+                                              (gap_word_t)(bm::gap_max_bits-1));
+            }
+            else // bit block
+            {
+                // TODO: more efficient algo
+                cnt = bm::bit_block_calc_count_range(block, nbit_left, bm::gap_max_bits-1);
+            }
+            if (cnt != (bm::gap_max_bits - nbit_left))
+                return false;
+        }
+        ++nblock_left;
+    }
+
+    // process tail block
+    {
+        unsigned i0, j0;
+        bm::get_block_coord(nblock_right, i0, j0);
+        const bm::word_t* block = blockman_.get_block(i0, j0);
+        if (!block)
+            return false;
+        if (block != FULL_BLOCK_FAKE_ADDR)
+        {
+            bool is_gap = BM_IS_GAP(block);
+            unsigned nbit_right  = unsigned(right  & bm::set_block_mask);
+            unsigned cnt;
+            if (is_gap)
+            {
+                // TODO: more efficient algo
+                cnt = bm::gap_bit_count_range(BMGAP_PTR(block),
+                                              (gap_word_t)0,
+                                              (gap_word_t)nbit_right);
+            }
+            else // bit block
+            {
+                // TODO: more efficient algo
+                cnt = bm::bit_block_calc_count_range(block, 0, nbit_right);
+            }
+            if (cnt != (nbit_right + 1))
+                return false;
+        }
+        --nblock_right;
+    }
+
+    // check all blocks in the middle
+    //
+    if (nblock_left <= nblock_right)
+    {
+        unsigned i_from, j_from, i_to, j_to;
+        bm::get_block_coord(nblock_left, i_from, j_from);
+        bm::get_block_coord(nblock_right, i_to, j_to);
+
+        bm::word_t*** blk_root = blockman_.top_blocks_root();
+
+        for (unsigned i = i_from; i <= i_to; ++i)
+        {
+            bm::word_t** blk_blk = blk_root[i];
+            if (!blk_blk)
+                return false;
+            if ((bm::word_t*)blk_blk == FULL_BLOCK_FAKE_ADDR)
+                continue;
+
+            unsigned j = (i == i_from) ? j_from : 0;
+            unsigned j_limit = (i == i_to) ? j_to+1 : bm::set_sub_array_size;
+            do
+            {
+                bool all_one = bm::check_block_one(blk_blk[j], true);
+                if (!all_one)
+                    return false;
+            } while (++j < j_limit);
+
+        } // for i
+    }
+
+    return true;
 }
 
 

@@ -1383,16 +1383,16 @@ void for_each_nzblock_range(T*** root, N top_size, N nb_from, N nb_to, F& f)
     BM_ASSERT(top_size);
     if (nb_from > nb_to)
         return;
-    unsigned i_from = nb_from >> bm::set_array_shift;
-    unsigned j_from = nb_from &  bm::set_array_mask;
-    unsigned i_to = nb_to >> bm::set_array_shift;
-    unsigned j_to = nb_to &  bm::set_array_mask;
+    unsigned i_from = unsigned(nb_from >> bm::set_array_shift);
+    unsigned j_from = unsigned(nb_from &  bm::set_array_mask);
+    unsigned i_to = unsigned(nb_to >> bm::set_array_shift);
+    unsigned j_to = unsigned(nb_to &  bm::set_array_mask);
     
     if (i_from >= top_size)
         return;
     if (i_to >= top_size)
     {
-        i_to = top_size-1;
+        i_to = unsigned(top_size-1);
         j_to = bm::set_sub_array_size-1;
     }
     
@@ -1936,6 +1936,7 @@ template<typename T>
 unsigned gap_bit_count_range(const T* const buf, unsigned left, unsigned right)
 {
     BM_ASSERT(left <= right);
+    BM_ASSERT(right < bm::gap_max_bits);
     
     const T* pcurr = buf;
     const T* pend = pcurr + (*pcurr >> 3);

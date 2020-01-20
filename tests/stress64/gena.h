@@ -117,6 +117,8 @@ void generate_bvector(BV& bv, typename BV::size_type vector_max, bool optimize)
         {
             unsigned len = rand() % 64;
             bv.set_range(i, i + len);
+            bool all_one_range = bv.is_all_one_range(i, i + len);
+            assert(all_one_range);
             i += len;
             if (i > vector_max)
                 break;
@@ -203,6 +205,8 @@ void FillSetsIntervals(BVMINI* bvect_min,
         if (i < end)
         {
             bvect_full.set_range(i, end - 1, set_flag);
+            bool all_one_range = bvect_full.is_all_one_range(i, end - 1);
+            assert(all_one_range == set_flag);
         }
 
         for (j = i; j < end; ++j)
@@ -290,6 +294,8 @@ void FillSetsIntervals(
         if (i < end)
         {
             bvect_full.set_range(i, end - 1, set_flag);
+            bool all_one_range = bvect_full.is_all_one_range(i, end - 1);
+            assert(all_one_range == set_flag);
         }
 
         i = end;
