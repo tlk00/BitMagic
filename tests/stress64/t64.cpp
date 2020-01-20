@@ -2012,6 +2012,142 @@ void CountRangeTest()
     cout << "---------------------------- CountRangeTest OK" << endl;
 }
 
+// -----------------------------------------------------------------------
+
+bvect::size_type
+from_arr[] = { 0, 0, 0,  0,  7,  1,   0,     65535, 65535,   0,     0,                 bm::id_max/2-2001, bm::id_max-2000};
+bvect::size_type
+to_arr[]   = { 0, 1, 16, 32, 31, 255, 65535, 65536, 65536*2, 65537, bm::id_max/2-2000, bm::id_max/2+2000, bm::id_max-1};
+
+
+static
+void verify_all_one_ranges(const bvect& bv, bool all_one)
+{
+    size_t fr_size = sizeof(from_arr) / sizeof(from_arr[0]);
+    size_t to_size = sizeof(to_arr) / sizeof(to_arr[0]);
+
+    assert(fr_size == to_size);
+
+    for (unsigned t = 0; t < fr_size; ++t)
+    {
+        bool one_test, one_test_cnt;
+        bvect::size_type from(from_arr[t]), to(to_arr[t]);
+
+        one_test = bv.is_all_one_range(from, to);
+        if (all_one)
+        {
+            assert(one_test);
+        }
+        else
+        {
+            auto cnt = bv.count_range(from, to);
+            one_test_cnt = (cnt == to - from + 1);
+            assert(one_test_cnt == one_test);
+        }
+
+        // [from-1, to] range check
+        //
+        if (from)
+        {
+            --from;
+            one_test = bv.is_all_one_range(from, to);
+            if (all_one)
+            {
+                assert(one_test);
+            }
+            else
+            {
+                auto cnt = bv.count_range(from, to);
+                one_test_cnt = (cnt == to - from + 1);
+                assert(one_test_cnt == one_test);
+            }
+            ++from;
+        }
+        // [from, to+1] range check
+        //
+        if (to < bm::id_max-1)
+        {
+            ++to;
+            one_test = bv.is_all_one_range(from, to);
+            if (all_one)
+            {
+                assert(one_test);
+            }
+            else
+            {
+                auto cnt = bv.count_range(from, to);
+                one_test_cnt = (cnt == to - from + 1);
+                assert(one_test_cnt == one_test);
+            }
+            --to;
+        }
+
+
+    } // for t
+}
+
+static
+void IsAllOneRangeTest()
+{
+    cout << "---------------------------- IsAllOneRangeTest()" << endl;
+
+    cout << "Check empty bvector" << endl;
+    {{
+        bvect bv1;
+        verify_all_one_ranges(bv1, false);
+        bv1.set(0);
+        bv1.clear(0);
+        verify_all_one_ranges(bv1, false);
+    }}
+
+    cout << "Check inverted bvector" << endl;
+    {{
+        bvect bv1;
+        bv1.invert();
+
+        verify_all_one_ranges(bv1, true);
+    }}
+
+    cout << "Check set ranges" << endl;
+    {{
+        size_t fr_size = sizeof(from_arr) / sizeof(from_arr[0]);
+        size_t to_size = sizeof(to_arr) / sizeof(to_arr[0]);
+        assert(fr_size == to_size);
+
+        for (unsigned t = 0; t < fr_size; ++t)
+        {
+            bvect::size_type from(from_arr[t]), to(to_arr[t]);
+
+            {
+                bvect bv1;
+                bvect bv2(bm::BM_GAP);
+
+                if (to - from < 65536*10)
+                {
+                    for (bvect::size_type i = from; i <= to; ++i)
+                        bv1.set(i);
+                }
+                else
+                {
+                    bv1.set_range(from, to);
+                }
+                bv2.set_range(from, to);
+
+                bool one_test1 = bv1.is_all_one_range(from, to);
+                bool one_test2 = bv2.is_all_one_range(from, to);
+                assert(one_test1 == one_test2);
+
+                verify_all_one_ranges(bv1, false);
+                verify_all_one_ranges(bv2, false);
+            }
+        } // for t
+
+    }}
+
+    cout << "---------------------------- IsAllOneRangeTest() OK" << endl;
+}
+
+
 
 // -----------------------------------------------------------------------
 
@@ -15511,6 +15647,8 @@ int main(int argc, char *argv[])
         RSIndexTest();
 
         CountRangeTest();
+
+        IsAllOneRangeTest();
 
         KeepRangeTest();
 
