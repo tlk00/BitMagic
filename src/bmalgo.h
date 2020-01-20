@@ -43,7 +43,7 @@ namespace bm
     \param bv1 - Argument bit-vector.
     \param bv2 - Argument bit-vector.
     \return bitcount of the result
-    \ingroup  distance, setalgo
+    \ingroup  setalgo
 */
 template<class BV>
 typename BV::size_type count_and(const BV& bv1, const BV& bv2)
@@ -56,7 +56,7 @@ typename BV::size_type count_and(const BV& bv1, const BV& bv2)
    \param bv1 - Argument bit-vector.
    \param bv2 - Argument bit-vector.
    \return non zero value if there is any bit
-   \ingroup  distance, setalgo
+   \ingroup  setalgo
 */
 template<class BV>
 typename BV::size_type any_and(const BV& bv1, const BV& bv2)
@@ -74,7 +74,7 @@ typename BV::size_type any_and(const BV& bv1, const BV& bv2)
    \param bv1 - Argument bit-vector.
    \param bv2 - Argument bit-vector.
    \return bitcount of the result
-   \ingroup  distance, setalgo
+   \ingroup  setalgo
 */
 template<class BV>
 bm::distance_metric_descriptor::size_type
@@ -91,7 +91,7 @@ count_xor(const BV& bv1, const BV& bv2)
    \param bv1 - Argument bit-vector.
    \param bv2 - Argument bit-vector.
    \return non zero value if there is any bit
-   \ingroup  distance, setalgo
+   \ingroup  setalgo
 */
 template<class BV>
 typename BV::size_type any_xor(const BV& bv1, const BV& bv2)
@@ -109,7 +109,7 @@ typename BV::size_type any_xor(const BV& bv1, const BV& bv2)
    \param bv1 - Argument bit-vector.
    \param bv2 - Argument bit-vector.
    \return bitcount of the result
-   \ingroup  distance, setalgo
+   \ingroup  setalgo
 */
 template<class BV>
 typename BV::size_type count_sub(const BV& bv1, const BV& bv2)
@@ -126,7 +126,7 @@ typename BV::size_type count_sub(const BV& bv1, const BV& bv2)
    \param bv1 - Argument bit-vector.
    \param bv2 - Argument bit-vector.
    \return non zero value if there is any bit
-   \ingroup  distance, setalgo
+   \ingroup  setalgo
 */
 template<class BV>
 typename BV::size_type any_sub(const BV& bv1, const BV& bv2)
@@ -143,7 +143,7 @@ typename BV::size_type any_sub(const BV& bv1, const BV& bv2)
    \param bv1 - Argument bit-vector.
    \param bv2 - Argument bit-vector.
    \return bitcount of the result
-   \ingroup  distance, setalgo
+   \ingroup  setalgo
 */
 template<class BV>
 typename BV::size_type count_or(const BV& bv1, const BV& bv2)
@@ -159,7 +159,7 @@ typename BV::size_type count_or(const BV& bv1, const BV& bv2)
    \param bv1 - Argument bit-vector.
    \param bv2 - Argument bit-vector.
    \return non zero value if there is any bit
-   \ingroup  distance, setalgo
+   \ingroup  setalgo
 */
 template<class BV>
 typename BV::size_type any_or(const BV& bv1, const BV& bv2)

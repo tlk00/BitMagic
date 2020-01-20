@@ -641,6 +641,7 @@ void gap_2_bitblock(const GT* BMRESTRICT gap_buf,
     }
 }
 
+#if 0
 /**
     @brief Compute t-matrix rows statistics used for compression
 
@@ -651,7 +652,6 @@ void gap_2_bitblock(const GT* BMRESTRICT gap_buf,
 
     @internal
 */
-#if 0
 template<class TMatrix>
 void compute_tmatrix_rstat(const TMatrix& tmatrix, 
                            const unsigned char* pc_vector,

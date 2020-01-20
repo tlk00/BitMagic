@@ -84,6 +84,7 @@ inline char int2DNA(unsigned code)
     if (code < 5)
         return lut[code];
     assert(0);
+    return 'N';
 }
 
 /// Print sparse vector 
