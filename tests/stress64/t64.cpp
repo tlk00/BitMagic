@@ -2098,6 +2098,7 @@ void IsAllOneRangeTest()
         bv1.set(0);
         bv1.clear(0);
         verify_all_one_ranges(bv1, false);
+        IntervalsCheck(bv1);
     }}
 
     cout << "Check inverted bvector" << endl;
@@ -2106,6 +2107,7 @@ void IsAllOneRangeTest()
         bv1.invert();
 
         verify_all_one_ranges(bv1, true);
+        IntervalsCheck(bv1);
     }}
 
     cout << "Check set ranges" << endl;
@@ -2139,6 +2141,9 @@ void IsAllOneRangeTest()
 
                 verify_all_one_ranges(bv1, false);
                 verify_all_one_ranges(bv2, false);
+
+                IntervalsCheck(bv1);
+                IntervalsCheck(bv2);
             }
         } // for t
 
@@ -3525,6 +3530,9 @@ void CheckVectors(bvect_mini &bvect_min,
             assert(pos1 == pos2);
         }
     }
+
+    IntervalsCheck(bvect_full);
+
     
     // get_next comparison
     cout << "Positive bits comparison..." << flush;
@@ -15704,7 +15712,7 @@ int main(int argc, char *argv[])
     {
         if (!is_only_stress)
         {
-            AndOperationsTest();
+            //AndOperationsTest();
             OrOperationsTest();
             XorOperationsTest();
             SubOperationsTest();

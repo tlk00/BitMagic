@@ -129,6 +129,62 @@ void compare_BV(const BV& bv, const VT& vect, bool compare_count = true)
 }
 
 
+template<class BV>
+void IntervalsCheck(const BV& bv)
+{
+    BV bv_inv(bv);
+    bv_inv.invert();
+
+    typename BV::size_type intervals = bm::count_intervals(bv);
+    typename BV::size_type intervals_c = 1;
+
+    typename BV::enumerator en1 = bv.get_enumerator(0);
+    typename BV::enumerator en2 = bv_inv.get_enumerator(0);
+
+    while (en1.valid())
+    {
+        typename BV::size_type from = *en1;
+        typename BV::size_type to = *en2;
+        assert(from != to);
+
+        bool all_one = bv.is_all_one_range(from, to);
+        assert(!all_one);
+
+        if (to == bm::id_max)
+        {}
+        else
+        {
+            ++intervals_c;
+        }
+        if (to < from)
+        {
+            --from;
+            assert(!bv.test(to));
+            all_one = bv.is_all_one_range(from, to);
+            assert(!all_one);
+            typename BV::size_type cnt = bv.count_range(to, from);
+            assert(!cnt);
+
+            en2.go_to(from+1);
+            if (!en2.valid())
+                break;
+        }
+        else
+        {
+            --to;
+            assert(bv.test(to));
+            all_one = bv.is_all_one_range(from, to);
+            assert(all_one);
+            typename BV::size_type cnt = bv.count_range(from, to);
+            assert(cnt == (to - from + 1));
+            en1.go_to(to+1);
+        }
+
+    } // while
+    assert(intervals == intervals_c);
+}
+
+
 template<class SV, class Vect>
 bool CompareSparseVector(const SV& sv, const Vect& vect, bool interval_filled = false)
 {

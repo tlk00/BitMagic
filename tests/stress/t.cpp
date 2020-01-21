@@ -1867,6 +1867,61 @@ bool FindLastBit(const bvect& bv, bm::id_t& last_pos)
     return true;
 }
 
+static
+void IntervalsCheck(const bvect& bv)
+{
+    bvect bv_inv(bv);
+    bv_inv.invert();
+
+    bvect::size_type intervals = bm::count_intervals(bv);
+    bvect::size_type intervals_c = 1;
+
+    bvect::enumerator en1 = bv.get_enumerator(0);
+    bvect::enumerator en2 = bv_inv.get_enumerator(0);
+
+    while (en1.valid())
+    {
+        bvect::size_type from = *en1;
+        bvect::size_type to = *en2;
+        assert(from != to);
+
+        bool all_one = bv.is_all_one_range(from, to);
+        assert(!all_one);
+
+        if (to == bm::id_max)
+        {}
+        else
+        {
+            ++intervals_c;
+        }
+        if (to < from)
+        {
+            --from;
+            assert(!bv.test(to));
+            all_one = bv.is_all_one_range(from, to);
+            assert(!all_one);
+            bvect::size_type cnt = bv.count_range(to, from);
+            assert(!cnt);
+
+            en2.go_to(from+1);
+            if (!en2.valid())
+                break;
+        }
+        else
+        {
+            --to;
+            assert(bv.test(to));
+            all_one = bv.is_all_one_range(from, to);
+            assert(all_one);
+            bvect::size_type cnt = bv.count_range(from, to);
+            assert(cnt == (to - from + 1));
+            en1.go_to(to+1);
+        }
+
+    } // while
+    assert(intervals == intervals_c);
+}
+
 
 // vectors comparison check
 
@@ -1917,6 +1972,8 @@ void CheckVectors(bvect_mini &bvect_min,
             assert(pos1 == pos2);
         }
     }
+
+    IntervalsCheck(bvect_full);
     
     if (!detailed)
         return;
@@ -14969,9 +15026,9 @@ void CountRangeTest()
 // -----------------------------------------------------------------------
 
 bvect::size_type
-from_arr[] = { 0, 0, 0,  0,  7,  1,   0,     65535, 65535,   0,     0,                 bm::id_max/2-2001, bm::id_max-2000};
+from_arr[] = { 0, 0, 0,  0,  7,  1,   0,     65535, 65535,   0,     0,                 bm::id_max/2-2001, bm::id_max-2000, bm::id_max-1};
 bvect::size_type
-to_arr[]   = { 0, 1, 16, 32, 31, 255, 65535, 65536, 65536*2, 65537, bm::id_max/2-2000, bm::id_max/2+2000, bm::id_max-1};
+to_arr[]   = { 0, 1, 16, 32, 31, 255, 65535, 65536, 65536*2, 65537, bm::id_max/2-2000, bm::id_max/2+2000, bm::id_max-1,    bm::id_max-1};
 
 static
 void verify_all_one_ranges(const bvect& bv, bool all_one)
@@ -15049,6 +15106,7 @@ void IsAllOneRangeTest()
         bv1.set(0);
         bv1.clear(0);
         verify_all_one_ranges(bv1, false);
+        IntervalsCheck(bv1);
     }}
 
     cout << "Check inverted bvector" << endl;
@@ -15057,6 +15115,8 @@ void IsAllOneRangeTest()
         bv1.invert();
 
         verify_all_one_ranges(bv1, true);
+        IntervalsCheck(bv1);
+
     }}
 
     cout << "Check set ranges" << endl;
@@ -15090,6 +15150,9 @@ void IsAllOneRangeTest()
 
                 verify_all_one_ranges(bv1, false);
                 verify_all_one_ranges(bv2, false);
+
+                IntervalsCheck(bv1);
+                IntervalsCheck(bv2);
             }
         } // for t
 
@@ -25845,7 +25908,6 @@ int main(int argc, char *argv[])
 
     if (is_all || is_bvbasic)
     {
-
          ExportTest();
          ResizeTest();
 
