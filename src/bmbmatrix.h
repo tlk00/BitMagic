@@ -370,7 +370,7 @@ public:
         \brief get access to bit-plain as is (can return NULL)
     */
     bvector_type_ptr plain(unsigned i) { return bmatr_.get_row(i); }
-    const bvector_type_ptr plain(unsigned i) const { return bmatr_.get_row(i); }
+    bvector_type_const_ptr plain(unsigned i) const { return bmatr_.get_row(i); }
 
     bvector_type* get_null_bvect() { return bmatr_.get_row(this->null_plain());}
 
