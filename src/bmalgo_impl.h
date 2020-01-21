@@ -1333,7 +1333,11 @@ typename BV::size_type count_intervals(const BV& bv)
     typename BV::blocks_manager_type::block_idx_type st = 0;
     bm::for_each_block(blk_root, bman.top_block_size(), func, st);
 
-    return func.count();        
+    typename BV::size_type intervals = func.count();
+    bool last_bit_set = bv.test(bm::id_max-1);
+
+    intervals -= last_bit_set; // correct last (out of range) interval
+    return intervals;
 }
 
 /*!
