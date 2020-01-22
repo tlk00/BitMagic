@@ -1868,84 +1868,6 @@ bool FindLastBit(const bvect& bv, bm::id_t& last_pos)
 }
 
 
-/*
-static
-void IntervalsCheck(const bvect& bv)
-{
-    bvect bv_inv(bv);
-    bv_inv.invert();
-
-    bvect::size_type intervals = bm::count_intervals(bv);
-    bvect::size_type intervals_c = 1;
-
-    bvect::enumerator en1 = bv.get_enumerator(0);
-    bvect::enumerator en2 = bv_inv.get_enumerator(0);
-
-    while (en1.valid())
-    {
-        bvect::size_type from = *en1;
-        bvect::size_type to = *en2;
-        assert(from != to);
-
-        bool all_one;
-        if (to == bm::id_max)
-        {
-            all_one = bv.is_all_one_range(from, to-1);
-            assert(all_one);
-            break;
-        }
-        else
-        {
-            all_one = bv.is_all_one_range(from, to);
-            assert(!all_one);
-        }
-
-        if (to == bm::id_max)
-        {}
-        else
-        {
-            ++intervals_c;
-        }
-        if (to < from)
-        {
-            --from;
-            assert(!bv.test(to));
-            all_one = bv.is_all_one_range(from, to);
-            assert(!all_one);
-            bvect::size_type cnt = bv.count_range(to, from);
-            assert(!cnt);
-
-            en2.go_to(from+1);
-            if (!en2.valid())
-                break;
-        }
-        else
-        {
-            --to;
-            assert(bv.test(to));
-            all_one = bv.is_all_one_range(from, to);
-            assert(all_one);
-            bvect::size_type cnt = bv.count_range(from, to);
-            assert(cnt == (to - from + 1));
-            en1.go_to(to+1);
-        }
-
-    } // while
-    if (intervals != intervals_c)
-    {
-        bvect::size_type diff;
-        diff = std::max(intervals, intervals_c) - std::min(intervals, intervals_c);
-        if (diff > 1)
-        {
-            cerr << "Intervals difference:" << diff << endl;
-            assert(0);
-            exit(1);
-        }
-    }
-
-    //assert(intervals == intervals_c);
-}
-*/
 
 template<class BV>
 void IntervalsCheck(const BV& bv)
@@ -13835,10 +13757,10 @@ void BitCountChangeTest()
     cnt = count_intervals(bv1);
     cout << "Inverted cnt=" << cnt << endl;
 
-    if (cnt != 2)
+    if (cnt != 1)
     {
         cout << "2.inverted count_intervals() failed " << cnt << endl;
-        exit(1);
+        assert(0); exit(1);
     }
 
     bv1.invert();
@@ -25996,6 +25918,7 @@ int main(int argc, char *argv[])
 
     if (is_all || is_low_level)
     {
+
         TestRecomb();
 
         OptimGAPTest();
@@ -26038,7 +25961,7 @@ int main(int argc, char *argv[])
          TestBlockLast();
 
          BitForEachTest();
-        
+
          BitCountChangeTest();
          WordCmpTest();
         
