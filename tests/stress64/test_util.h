@@ -147,8 +147,18 @@ void IntervalsCheck(const BV& bv)
         typename BV::size_type to = *en2;
         assert(from != to);
 
-        bool all_one = bv.is_all_one_range(from, to);
-        assert(!all_one);
+        bool all_one;
+        if (to == bm::id_max)
+        {
+            all_one = bv.is_all_one_range(from, to-1);
+            assert(all_one);
+            break;
+        }
+        else
+        {
+            all_one = bv.is_all_one_range(from, to);
+            assert(!all_one);
+        }
 
         if (to == bm::id_max)
         {}
@@ -181,7 +191,17 @@ void IntervalsCheck(const BV& bv)
         }
 
     } // while
-    assert(intervals == intervals_c);
+    if (intervals != intervals_c)
+    {
+        typename BV::size_type diff;
+        diff = std::max(intervals, intervals_c) - std::min(intervals, intervals_c);
+        if (diff > 1)
+        {
+            cerr << "Intervals difference:" << diff << endl;
+            assert(0);
+            exit(1);
+        }
+    }
 }
 
 

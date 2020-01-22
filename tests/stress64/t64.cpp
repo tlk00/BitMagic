@@ -15712,7 +15712,7 @@ int main(int argc, char *argv[])
     {
         if (!is_only_stress)
         {
-            //AndOperationsTest();
+            AndOperationsTest();
             OrOperationsTest();
             XorOperationsTest();
             SubOperationsTest();

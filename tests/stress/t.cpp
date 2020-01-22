@@ -1867,6 +1867,8 @@ bool FindLastBit(const bvect& bv, bm::id_t& last_pos)
     return true;
 }
 
+
+/*
 static
 void IntervalsCheck(const bvect& bv)
 {
@@ -1885,8 +1887,18 @@ void IntervalsCheck(const bvect& bv)
         bvect::size_type to = *en2;
         assert(from != to);
 
-        bool all_one = bv.is_all_one_range(from, to);
-        assert(!all_one);
+        bool all_one;
+        if (to == bm::id_max)
+        {
+            all_one = bv.is_all_one_range(from, to-1);
+            assert(all_one);
+            break;
+        }
+        else
+        {
+            all_one = bv.is_all_one_range(from, to);
+            assert(!all_one);
+        }
 
         if (to == bm::id_max)
         {}
@@ -1919,7 +1931,96 @@ void IntervalsCheck(const bvect& bv)
         }
 
     } // while
-    assert(intervals == intervals_c);
+    if (intervals != intervals_c)
+    {
+        bvect::size_type diff;
+        diff = std::max(intervals, intervals_c) - std::min(intervals, intervals_c);
+        if (diff > 1)
+        {
+            cerr << "Intervals difference:" << diff << endl;
+            assert(0);
+            exit(1);
+        }
+    }
+
+    //assert(intervals == intervals_c);
+}
+*/
+
+template<class BV>
+void IntervalsCheck(const BV& bv)
+{
+    BV bv_inv(bv);
+    bv_inv.invert();
+
+    typename BV::size_type intervals = bm::count_intervals(bv);
+    typename BV::size_type intervals_c = 1;
+
+    typename BV::enumerator en1 = bv.get_enumerator(0);
+    typename BV::enumerator en2 = bv_inv.get_enumerator(0);
+
+    while (en1.valid())
+    {
+        typename BV::size_type from = *en1;
+        typename BV::size_type to = *en2;
+        assert(from != to);
+
+        bool all_one;
+        if (to == bm::id_max)
+        {
+            all_one = bv.is_all_one_range(from, to-1);
+            assert(all_one);
+            break;
+        }
+        else
+        {
+            all_one = bv.is_all_one_range(from, to);
+            assert(!all_one);
+        }
+
+
+        if (to == bm::id_max)
+        {}
+        else
+        {
+            ++intervals_c;
+        }
+        if (to < from)
+        {
+            --from;
+            assert(!bv.test(to));
+            all_one = bv.is_all_one_range(from, to);
+            assert(!all_one);
+            typename BV::size_type cnt = bv.count_range(to, from);
+            assert(!cnt);
+
+            en2.go_to(from+1);
+            if (!en2.valid())
+                break;
+        }
+        else
+        {
+            --to;
+            assert(bv.test(to));
+            all_one = bv.is_all_one_range(from, to);
+            assert(all_one);
+            typename BV::size_type cnt = bv.count_range(from, to);
+            assert(cnt == (to - from + 1));
+            en1.go_to(to+1);
+        }
+
+    } // while
+    if (intervals != intervals_c)
+    {
+        typename BV::size_type diff;
+        diff = std::max(intervals, intervals_c) - std::min(intervals, intervals_c);
+        if (diff > 1)
+        {
+            cerr << "Intervals difference:" << diff << endl;
+            assert(0);
+            exit(1);
+        }
+    }
 }
 
 
@@ -15119,6 +15220,63 @@ void IsAllOneRangeTest()
 
     }}
 
+    cout << "Check GAP ranges bvector" << endl;
+    {{
+        bvect bv1(bm::BM_GAP);
+        bv1.set_range(0,1);
+        bool one_test;
+        one_test = bv1.is_all_one_range(0, 0);
+        assert(one_test);
+        one_test = bv1.is_all_one_range(0, 1);
+        assert(one_test);
+        one_test = bv1.is_all_one_range(1, 1);
+        assert(one_test);
+        one_test = bv1.is_all_one_range(1, 2);
+        assert(!one_test);
+
+        bv1.set_range(256, 65536);
+        one_test = bv1.is_all_one_range(256, 65535);
+        assert(one_test);
+        one_test = bv1.is_all_one_range(65535, 65535);
+        assert(one_test);
+        one_test = bv1.is_all_one_range(65535, 65536);
+        assert(one_test);
+
+        one_test = bv1.is_all_one_range(65535, 65537);
+        assert(!one_test);
+    }}
+
+    cout << "Check bit ranges bvector" << endl;
+    {{
+        bvect bv1;
+        bv1[1] = true; bv1[2] = true;
+        bool one_test;
+        one_test = bv1.is_all_one_range(0, 0);
+        assert(!one_test);
+        one_test = bv1.is_all_one_range(0, 1);
+        assert(!one_test);
+        one_test = bv1.is_all_one_range(2, 1);
+        assert(one_test);
+
+        one_test = bv1.is_all_one_range(258, 65530);
+        assert(!one_test);
+
+        for (bvect::size_type i = 256; i <= 65536; ++i)
+        {
+            bv1.set(i);
+        }
+        one_test = bv1.is_all_one_range(258, 65530);
+        assert(one_test);
+        one_test = bv1.is_all_one_range(256, 65535);
+        assert(one_test);
+        one_test = bv1.is_all_one_range(65535, 65535);
+        assert(one_test);
+        one_test = bv1.is_all_one_range(65535, 65536);
+        assert(one_test);
+        one_test = bv1.is_all_one_range(65536, 65537);
+        assert(!one_test);
+    }}
+
     cout << "Check set ranges" << endl;
     {{
         size_t fr_size = sizeof(from_arr) / sizeof(from_arr[0]);
@@ -15158,7 +15316,7 @@ void IsAllOneRangeTest()
 
     }}
 
-    cout << "---------------------------- IsAllOneRangeTest() OK" << endl;
+    cout << "---------------------------- IsAllOneRangeTest() OK\n" << endl;
 }
 
 
