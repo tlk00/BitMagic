@@ -3031,10 +3031,12 @@ typename bvector<Alloc>::size_type
 bvector<Alloc>::count_range(size_type left, size_type right) const
 {
     BM_ASSERT(left < bm::id_max && right < bm::id_max);
-    BM_ASSERT(left <= right);
+    if (left > right)
+        bm::xor_swap(left, right);
+    //BM_ASSERT(left <= right);
 
     BM_ASSERT_THROW(right < bm::id_max, BM_ERR_RANGE);
-    BM_ASSERT_THROW(left <= right, BM_ERR_RANGE);
+    //BM_ASSERT_THROW(left <= right, BM_ERR_RANGE);
     
     if (!blockman_.is_init())
         return 0;
@@ -3138,28 +3140,9 @@ bool bvector<Alloc>::is_all_one_range(size_type left, size_type right) const
         unsigned i0, j0;
         bm::get_block_coord(nblock_left, i0, j0);
         const bm::word_t* block = blockman_.get_block(i0, j0);
-        if (!block)
-            return false;
-        if (block == FULL_BLOCK_FAKE_ADDR)
-            return true;
-        bool is_gap = BM_IS_GAP(block);
-
         unsigned nbit_left  = unsigned(left  & bm::set_block_mask);
         unsigned nbit_right = unsigned(right & bm::set_block_mask);
-        unsigned cnt;
-        if (is_gap)
-        {
-            // TODO: more efficient algo
-            cnt = bm::gap_bit_count_range(BMGAP_PTR(block),
-                                          (gap_word_t)nbit_left,
-                                          (gap_word_t)nbit_right);
-        }
-        else // bit block
-        {
-            // TODO: more efficient algo
-            cnt = bm::bit_block_calc_count_range(block, nbit_left, nbit_right);
-        }
-        return (cnt == (nbit_right - nbit_left + 1));
+        return bm::block_is_all_one_range(block, nbit_left, nbit_right);
     }
 
     // process entry point block
@@ -3167,28 +3150,11 @@ bool bvector<Alloc>::is_all_one_range(size_type left, size_type right) const
         unsigned i0, j0;
         bm::get_block_coord(nblock_left, i0, j0);
         const bm::word_t* block = blockman_.get_block(i0, j0);
-        if (!block)
-            return false;
-        if (block != FULL_BLOCK_FAKE_ADDR)
-        {
-            bool is_gap = BM_IS_GAP(block);
-            unsigned nbit_left  = unsigned(left  & bm::set_block_mask);
-            unsigned cnt;
-            if (is_gap)
-            {
-                // TODO: more efficient algo
-                cnt = bm::gap_bit_count_range(BMGAP_PTR(block),
-                                              (gap_word_t)nbit_left,
-                                              (gap_word_t)(bm::gap_max_bits-1));
-            }
-            else // bit block
-            {
-                // TODO: more efficient algo
-                cnt = bm::bit_block_calc_count_range(block, nbit_left, bm::gap_max_bits-1);
-            }
-            if (cnt != (bm::gap_max_bits - nbit_left))
-                return false;
-        }
+
+        unsigned nbit_left  = unsigned(left  & bm::set_block_mask);
+        bool all_one = bm::block_is_all_one_range(block, nbit_left, (bm::gap_max_bits-1));
+        if (!all_one)
+            return all_one;
         ++nblock_left;
     }
 
@@ -3197,28 +3163,10 @@ bool bvector<Alloc>::is_all_one_range(size_type left, size_type right) const
         unsigned i0, j0;
         bm::get_block_coord(nblock_right, i0, j0);
         const bm::word_t* block = blockman_.get_block(i0, j0);
-        if (!block)
-            return false;
-        if (block != FULL_BLOCK_FAKE_ADDR)
-        {
-            bool is_gap = BM_IS_GAP(block);
-            unsigned nbit_right  = unsigned(right  & bm::set_block_mask);
-            unsigned cnt;
-            if (is_gap)
-            {
-                // TODO: more efficient algo
-                cnt = bm::gap_bit_count_range(BMGAP_PTR(block),
-                                              (gap_word_t)0,
-                                              (gap_word_t)nbit_right);
-            }
-            else // bit block
-            {
-                // TODO: more efficient algo
-                cnt = bm::bit_block_calc_count_range(block, 0, nbit_right);
-            }
-            if (cnt != (nbit_right + 1))
-                return false;
-        }
+        unsigned nbit_right  = unsigned(right  & bm::set_block_mask);
+        bool all_one = bm::block_is_all_one_range(block, 0, nbit_right);
+        if (!all_one)
+            return all_one;
         --nblock_right;
     }
 
@@ -3246,12 +3194,10 @@ bool bvector<Alloc>::is_all_one_range(size_type left, size_type right) const
             {
                 bool all_one = bm::check_block_one(blk_blk[j], true);
                 if (!all_one)
-                    return false;
+                    return all_one;
             } while (++j < j_limit);
-
         } // for i
     }
-
     return true;
 }
 

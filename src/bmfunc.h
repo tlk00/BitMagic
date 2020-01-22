@@ -1967,6 +1967,28 @@ unsigned gap_bit_count_range(const T* const buf, unsigned left, unsigned right)
 }
 
 /*!
+   \brief Test if all bits are 1 in GAP buffer in the [left, right] range.
+   \param buf - GAP buffer pointer.
+   \param left - leftmost bit index to start from
+   \param right- rightmost bit index
+   \return true if 11111
+   @ingroup gapfunc
+*/
+template<typename T>
+bool gap_is_all_one_range(const T* const buf, unsigned left, unsigned right)
+{
+    BM_ASSERT(left <= right);
+    BM_ASSERT(right < bm::gap_max_bits);
+
+    unsigned is_set;
+    unsigned start_pos = bm::gap_bfind(buf, left, &is_set);
+    if (!is_set) // GAP is 0
+        return false;
+    const T* const pcurr = buf + start_pos;
+    return (right <= *pcurr);
+}
+
+/*!
     \brief GAP block find position for the rank
 
     \param block - bit block buffer pointer
@@ -4451,6 +4473,61 @@ unsigned bit_block_calc_change(const bm::word_t* block)
 #endif
 }
 
+/*!
+    Check if all bits are 1 in [left, right] range
+    @ingroup bitfunc
+*/
+inline
+bool bit_block_is_all_one_range(const bm::word_t* const block,
+                                bm::word_t left,
+                                bm::word_t right)
+{
+    BM_ASSERT(left <= right);
+    BM_ASSERT(right <= bm::gap_max_bits-1);
+
+    unsigned nword, nbit, bitcount, temp;
+    nbit = left & bm::set_word_mask;
+    const bm::word_t* word =
+        block + (nword = unsigned(left >> bm::set_word_shift));
+    if (left == right)  // special case (only 1 bit to check)
+        return (*word >> nbit) & 1u;
+
+    bitcount = right - left + 1u;
+    if (nbit) // starting position is not aligned
+    {
+        unsigned right_margin = nbit + right - left;
+        if (right_margin < 32)
+        {
+            unsigned mask =
+                block_set_table<true>::_right[nbit] &
+                block_set_table<true>::_left[right_margin];
+            return mask == (*word & mask);
+        }
+        temp = *word & block_set_table<true>::_right[nbit];
+        if (temp != block_set_table<true>::_right[nbit])
+            return false;
+        bitcount -= 32 - nbit;
+        ++word;
+    }
+
+    // now when we are word aligned, we can count bits the usual way
+    // TODO: loop unroll and SIMD
+    const bm::word_t maskFF = ~0u;
+    for ( ;bitcount >= 32; bitcount-=32, ++word)
+    {
+        if (*word != maskFF)
+            return false;
+    }
+    BM_ASSERT(bitcount < 32);
+
+    if (bitcount)  // we have a tail to count
+    {
+        temp = *word & block_set_table<true>::_left[bitcount-1];
+        if (temp != block_set_table<true>::_left[bitcount-1])
+            return false;
+    }
+    return true;
+}
 
 
 /*!
@@ -5047,6 +5124,30 @@ bool is_bits_one(const bm::wordop_t* start)
    } while (start < end);
    return true;
 #endif
+}
+
+
+/*! @brief Returns "true" if all bits are 1 in the block [left, right]
+    Function check for block varieties
+    @internal
+*/
+inline
+bool block_is_all_one_range(const bm::word_t* const block,
+                            unsigned left, unsigned right)
+{
+    BM_ASSERT(left <= right);
+    BM_ASSERT(right < bm::gap_max_bits);
+
+    if (!block)
+        return false;
+    if (IS_FULL_BLOCK(block))
+        return true;
+    bool is_gap = BM_IS_GAP(block);
+    if (is_gap)
+    {
+        return bm::gap_is_all_one_range(BMGAP_PTR(block), left, right);
+    }
+    return bm::bit_block_is_all_one_range(block, left, right);
 }
 
 // ----------------------------------------------------------------------
