@@ -1209,21 +1209,26 @@ template<typename T>
 unsigned gap_bfind(const T* buf, unsigned pos, unsigned* is_set)
 {
     BM_ASSERT(pos < bm::gap_max_bits);
-    *is_set = (*buf) & 1;
 
-    unsigned start = 1;
-    unsigned end = 1 + ((*buf) >> 3);
+    #ifdef VECT_GAP_BFIND
+        return VECT_GAP_BFIND(buf, pos, is_set);
+    #else
+        *is_set = (*buf) & 1;
 
-    while ( start != end )
-    {
-        unsigned curr = (start + end) >> 1;
-        if ( buf[curr] < pos )
-            start = curr + 1;
-        else
-            end = curr;
-    }
-    *is_set ^= ((start-1) & 1);
-    return start; 
+        unsigned start = 1;
+        unsigned end = 1 + ((*buf) >> 3);
+
+        while ( start != end )
+        {
+            unsigned curr = (start + end) >> 1;
+            if ( buf[curr] < pos )
+                start = curr + 1;
+            else
+                end = curr;
+        }
+        *is_set ^= ((start-1) & 1);
+        return start;
+    #endif
 }
 
 
@@ -1325,7 +1330,6 @@ unsigned gap_test_unr(const T* buf, const unsigned pos)
 
     BM_ASSERT(res == bm::gap_test(buf, pos));
     return res;
-//#endif
 #elif defined(BMSSE42OPT)
     unsigned start = 1;
     unsigned end = 1 + ((*buf) >> 3);
@@ -1971,7 +1975,7 @@ unsigned gap_bit_count_range(const T* const buf, unsigned left, unsigned right)
    \param buf - GAP buffer pointer.
    \param left - leftmost bit index to start from
    \param right- rightmost bit index
-   \return true if 11111
+   \return true if all bits are "11111"
    @ingroup gapfunc
 */
 template<typename T>
@@ -4492,7 +4496,7 @@ bool bit_block_is_all_one_range(const bm::word_t* const block,
     if (left == right)  // special case (only 1 bit to check)
         return (*word >> nbit) & 1u;
 
-    bitcount = right - left + 1u;
+    //bitcount = right - left + 1u;
     if (nbit) // starting position is not aligned
     {
         unsigned right_margin = nbit + right - left;
@@ -4506,18 +4510,33 @@ bool bit_block_is_all_one_range(const bm::word_t* const block,
         temp = *word & block_set_table<true>::_right[nbit];
         if (temp != block_set_table<true>::_right[nbit])
             return false;
-        bitcount -= 32 - nbit;
+        bitcount = (right - left + 1u) - (32 - nbit);
         ++word;
     }
+    else
+    {
+        bitcount = right - left + 1u;
+    }
 
-    // now when we are word aligned, we can count bits the usual way
-    // TODO: loop unroll and SIMD
+    // now when we are word aligned, we can scan the bit-stream
+    const bm::id64_t maskFF64 = ~0ull;
     const bm::word_t maskFF = ~0u;
+    // loop unrolled to evaluate 4 words at a time
+    // TODO: SIMD
+    for ( ;bitcount >= 128; bitcount-=128)
+    {
+        bm::id64_t w64_0 = bm::id64_t(word[0]) + (bm::id64_t(word[1]) << 32);
+        bm::id64_t w64_1 = bm::id64_t(word[2]) + (bm::id64_t(word[3]) << 32);
+        if ((w64_0 ^ maskFF64) | (w64_1 ^ maskFF64))
+            return false;
+        word += 4;
+    } // for
+
     for ( ;bitcount >= 32; bitcount-=32, ++word)
     {
         if (*word != maskFF)
             return false;
-    }
+    } // for
     BM_ASSERT(bitcount < 32);
 
     if (bitcount)  // we have a tail to count
