@@ -2769,6 +2769,65 @@ void RangeCopyTest()
 }
 
 static
+void IntervalsTest()
+{
+    const unsigned vect_max = BSIZE*2;
+    bvect bv;
+
+    // generate the test vector
+    {
+        bvect::size_type istart(0), ilen(0);
+        for (istart = 0; istart < vect_max; )
+        {
+            for (bvect::size_type i = istart; i <= (istart+ilen); ++i)
+            {
+                bool b = bv.test(i);
+                if (b)
+                {
+                    cerr << "Errro: set check failed!" << endl;
+                    assert(0); exit(1);
+                }
+                bv.set(i);
+            } // for i
+            ilen += 1;
+            istart += (ilen + 2);
+            if (ilen > 1024)
+                ilen = 0;
+        } // for istart
+    }
+    //auto cnt = bm::count_intervals(bv);
+    //cout << cnt << endl;
+
+    const char* msg = "bvector<>::is_all_one_range() (BITS)";
+    for (unsigned pass = 0; pass < 2; ++pass)
+    {
+        {
+            TimeTaker tt(msg, REPEATS * 1);
+            bvect::size_type istart(0), ilen(0);
+            for (istart = 0; istart < vect_max; )
+            {
+                for (bvect::size_type i = istart; i <= (istart+ilen); ++i)
+                {
+                    bool all_one = bv.is_all_one_range(istart, i);
+                    if (!all_one)
+                    {
+                        cerr << "Errro: is_all_one_range test failed!" << endl;
+                        assert(0); exit(1);
+                    }
+                } // for i
+                ilen += 1;
+                istart += (ilen + 2);
+                if (ilen > 1024)
+                    ilen = 0;
+            } // for istart
+        }
+        bv.optimize();
+        msg = "bvector<>::is_all_one_range() (BITS+GAPS)";
+    } // for pass
+
+}
+
+static
 void RankCompressionTest()
 {
     bvect bv_i1, bv_s1, bv11, bv12, bv21, bv22;
@@ -3293,6 +3352,8 @@ int main(void)
     BvectorShiftTest();
 
     RangeCopyTest();
+
+    IntervalsTest();
 
     AggregatorTest();
 
