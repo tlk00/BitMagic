@@ -1906,7 +1906,8 @@ unsigned gap_bit_count_range(const T* const buf, unsigned left, unsigned right)
    @ingroup gapfunc
 */
 template<typename T>
-bool gap_is_all_one_range(const T* const buf, unsigned left, unsigned right)
+bool gap_is_all_one_range(const T* const BMRESTRICT buf,
+                          unsigned left, unsigned right)
 {
     BM_ASSERT(left <= right);
     BM_ASSERT(right < bm::gap_max_bits);
@@ -1918,6 +1919,34 @@ bool gap_is_all_one_range(const T* const buf, unsigned left, unsigned right)
     const T* const pcurr = buf + start_pos;
     return (right <= *pcurr);
 }
+
+/*!
+   \brief Test if any bits are 1 in GAP buffer in the [left, right] range.
+   \param buf - GAP buffer pointer.
+   \param left - leftmost bit index to start from
+   \param right- rightmost bit index
+   \return true if at least 1 "00010"
+   @ingroup gapfunc
+*/
+template<typename T>
+bool gap_any_range(const T* const BMRESTRICT buf,
+                    unsigned left, unsigned right)
+{
+    BM_ASSERT(left <= right);
+    BM_ASSERT(right < bm::gap_max_bits);
+
+    unsigned is_set;
+    unsigned start_pos = bm::gap_bfind(buf, left, &is_set);
+    const T* const pcurr = buf + start_pos;
+    if (!is_set) // start GAP is 0 ...
+    {
+        if (right <= *pcurr) // ...bit if the interval goes into at least 1 blk
+            return false; // .. nope
+        return true;
+    }
+    return true;
+}
+
 
 /*!
     \brief GAP block find position for the rank
@@ -4409,7 +4438,7 @@ unsigned bit_block_calc_change(const bm::word_t* block)
     @ingroup bitfunc
 */
 inline
-bool bit_block_is_all_one_range(const bm::word_t* const block,
+bool bit_block_is_all_one_range(const bm::word_t* const BMRESTRICT block,
                                 bm::word_t left,
                                 bm::word_t right)
 {
@@ -4965,7 +4994,7 @@ bool bit_block_shift_r1_and_unr(bm::word_t* BMRESTRICT block,
     @ingroup bitfunc
 */
 inline 
-bm::id_t bit_block_any_range(const bm::word_t* block,
+bm::id_t bit_block_any_range(const bm::word_t* const BMRESTRICT block,
                              bm::word_t left,
                              bm::word_t right)
 {
@@ -5019,7 +5048,7 @@ bm::id_t bit_block_any_range(const bm::word_t* block,
     {
         acc |= *word++;
     } // for
-    
+
     if (bitcount)  // we have a tail to count
         acc |= (*word) & block_set_table<true>::_left[bitcount-1];
 
@@ -5074,29 +5103,70 @@ bool is_bits_one(const bm::wordop_t* start)
 #endif
 }
 
+// ----------------------------------------------------------------------
 
 /*! @brief Returns "true" if all bits are 1 in the block [left, right]
     Function check for block varieties
     @internal
 */
 inline
-bool block_is_all_one_range(const bm::word_t* const block,
+bool block_is_all_one_range(const bm::word_t* const BMRESTRICT block,
                             unsigned left, unsigned right)
 {
     BM_ASSERT(left <= right);
     BM_ASSERT(right < bm::gap_max_bits);
+    if (block)
+    {
+        if (IS_FULL_BLOCK(block))
+            return true;
+        if (BM_IS_GAP(block))
+            return bm::gap_is_all_one_range(BMGAP_PTR(block), left, right);
+        return bm::bit_block_is_all_one_range(block, left, right);
+    }
+    return false;
+}
 
+// ----------------------------------------------------------------------
+
+/*! @brief Returns "true" if one bit is set in the block [left, right]
+    Function check for block varieties
+    @internal
+*/
+inline
+bool block_any_range(const bm::word_t* const BMRESTRICT block,
+                            unsigned left, unsigned right)
+{
+    BM_ASSERT(left <= right);
+    BM_ASSERT(right < bm::gap_max_bits);
     if (!block)
         return false;
     if (IS_FULL_BLOCK(block))
         return true;
-    bool is_gap = BM_IS_GAP(block);
-    if (is_gap)
-    {
-        return bm::gap_is_all_one_range(BMGAP_PTR(block), left, right);
-    }
-    return bm::bit_block_is_all_one_range(block, left, right);
+    if (BM_IS_GAP(block))
+        return bm::gap_any_range(BMGAP_PTR(block), left, right);
+    return bm::bit_block_any_range(block, left, right);
 }
+
+// ----------------------------------------------------------------------
+
+/*! @brief Returns "true" if one bit is set in the block
+    Function check for block varieties
+    @internal
+*/
+inline
+bool block_any(const bm::word_t* const BMRESTRICT block)
+{
+    if (!block)
+        return false;
+    if (IS_FULL_BLOCK(block))
+        return true;
+    bool all_zero = (BM_IS_GAP(block)) ?
+                        bm::gap_is_all_zero(BMGAP_PTR(block))
+                      : bm::bit_is_all_zero(block);
+    return !all_zero;
+}
+
+
 
 // ----------------------------------------------------------------------
 

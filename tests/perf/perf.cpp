@@ -2772,7 +2772,7 @@ static
 void IntervalsTest()
 {
     const unsigned vect_max = BSIZE*2;
-    bvect bv;
+    bvect bv, bv_inv;
 
     // generate the test vector
     {
@@ -2795,10 +2795,13 @@ void IntervalsTest()
                 ilen = 0;
         } // for istart
     }
+    bv_inv = bv;
+    bv_inv.invert();
     //auto cnt = bm::count_intervals(bv);
     //cout << cnt << endl;
 
     const char* msg = "bvector<>::is_all_one_range() (BITS)";
+    const char* msg2 = "bvector<>::any_range() (BITS)";
     for (unsigned pass = 0; pass < 2; ++pass)
     {
         {
@@ -2811,7 +2814,13 @@ void IntervalsTest()
                     bool all_one = bv.is_all_one_range(istart, i);
                     if (!all_one)
                     {
-                        cerr << "Errro: is_all_one_range test failed!" << endl;
+                        cerr << "Errro: is_all_one_range test failed! (1)" << endl;
+                        assert(0); exit(1);
+                    }
+                    all_one = bv_inv.is_all_one_range(istart, i);
+                    if (all_one)
+                    {
+                        cerr << "Errro: is_all_one_range test failed! (2)" << endl;
                         assert(0); exit(1);
                     }
                 } // for i
@@ -2821,8 +2830,38 @@ void IntervalsTest()
                     ilen = 0;
             } // for istart
         }
+        {
+            TimeTaker tt(msg2, REPEATS * 1);
+            bvect::size_type istart(0), ilen(0);
+            for (istart = 0; istart < vect_max; )
+            {
+                for (bvect::size_type i = istart; i <= (istart+ilen); ++i)
+                {
+                    bool any_one = bv.any_range(istart, i);
+                    if (!any_one)
+                    {
+                        cerr << "Errro: any_range test failed! (1)" << endl;
+                        assert(0); exit(1);
+                    }
+                    any_one = bv_inv.any_range(istart, i);
+                    if (any_one)
+                    {
+                        cerr << "Errro: any_range test failed! (2)" << endl;
+                        assert(0); exit(1);
+                    }
+
+                } // for i
+                ilen += 1;
+                istart += (ilen + 2);
+                if (ilen > 1024)
+                    ilen = 0;
+            } // for istart
+        }
+
         bv.optimize();
+        bv_inv.optimize();
         msg = "bvector<>::is_all_one_range() (BITS+GAPS)";
+        msg2 = "bvector<>::any_range() (BITS+GAPS)";
     } // for pass
 
 }

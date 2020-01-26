@@ -1742,16 +1742,27 @@ public:
     size_type count_range(size_type left, size_type right) const;
 
     /*!
-       \brief Returns true if all bits in the range are 1s
+       \brief Returns true if all bits in the range are 1s (saturated interval)
+       Function uses closed interval [left, right]
 
        \param left - index of first bit start checking
        \param right - index of last bit
 
-       \return true if all bits are 1
+       \return true if all bits are 1, false otherwise
     */
     bool is_all_one_range(size_type left, size_type right) const;
 
-    
+    /*!
+       \brief Returns true if any bits in the range are 1s (non-empty interval)
+       Function uses closed interval [left, right]
+
+       \param left - index of first bit start checking
+       \param right - index of last bit
+
+       \return true if at least 1 bits is set
+    */
+    bool any_range(size_type left, size_type right) const;
+
 
     /*! \brief compute running total of all blocks in bit vector (rank-select index)
         \param rs_idx - [out] pointer to index / count structure
@@ -3128,6 +3139,8 @@ bool bvector<Alloc>::is_all_one_range(size_type left, size_type right) const
 
     if (right < left)
         bm::xor_swap(left, right);
+    if (left == right)
+        return test(left);
 
     BM_ASSERT(left < bm::id_max && right < bm::id_max);
     BM_ASSERT_THROW(right < bm::id_max, BM_ERR_RANGE);
@@ -3135,11 +3148,12 @@ bool bvector<Alloc>::is_all_one_range(size_type left, size_type right) const
     block_idx_type nblock_left  = (left  >> bm::set_block_shift);
     block_idx_type nblock_right = (right >> bm::set_block_shift);
 
+    unsigned i0, j0;
+    bm::get_block_coord(nblock_left, i0, j0);
+    const bm::word_t* block = blockman_.get_block(i0, j0);
+
     if (nblock_left == nblock_right) // hit in the same block
     {
-        unsigned i0, j0;
-        bm::get_block_coord(nblock_left, i0, j0);
-        const bm::word_t* block = blockman_.get_block(i0, j0);
         unsigned nbit_left  = unsigned(left  & bm::set_block_mask);
         unsigned nbit_right = unsigned(right & bm::set_block_mask);
         return bm::block_is_all_one_range(block, nbit_left, nbit_right);
@@ -3147,10 +3161,6 @@ bool bvector<Alloc>::is_all_one_range(size_type left, size_type right) const
 
     // process entry point block
     {
-        unsigned i0, j0;
-        bm::get_block_coord(nblock_left, i0, j0);
-        const bm::word_t* block = blockman_.get_block(i0, j0);
-
         unsigned nbit_left  = unsigned(left  & bm::set_block_mask);
         bool all_one = bm::block_is_all_one_range(block,
                                             nbit_left, (bm::gap_max_bits-1));
@@ -3161,9 +3171,8 @@ bool bvector<Alloc>::is_all_one_range(size_type left, size_type right) const
 
     // process tail block
     {
-        unsigned i0, j0;
         bm::get_block_coord(nblock_right, i0, j0);
-        const bm::word_t* block = blockman_.get_block(i0, j0);
+        block = blockman_.get_block(i0, j0);
         unsigned nbit_right  = unsigned(right  & bm::set_block_mask);
         bool all_one = bm::block_is_all_one_range(block, 0, nbit_right);
         if (!all_one)
@@ -3202,6 +3211,97 @@ bool bvector<Alloc>::is_all_one_range(size_type left, size_type right) const
     return true;
 }
 
+// -----------------------------------------------------------------------
+
+template<typename Alloc>
+bool bvector<Alloc>::any_range(size_type left, size_type right) const
+{
+    if (!blockman_.is_init())
+        return false; // nothing to do
+
+    if (right < left)
+        bm::xor_swap(left, right);
+    if (left == right)
+        return test(left);
+
+    BM_ASSERT(left < bm::id_max && right < bm::id_max);
+    BM_ASSERT_THROW(right < bm::id_max, BM_ERR_RANGE);
+
+    block_idx_type nblock_left  = (left  >> bm::set_block_shift);
+    block_idx_type nblock_right = (right >> bm::set_block_shift);
+
+    unsigned i0, j0;
+    bm::get_block_coord(nblock_left, i0, j0);
+    const bm::word_t* block = blockman_.get_block(i0, j0);
+
+    if (nblock_left == nblock_right) // hit in the same block
+    {
+        unsigned nbit_left  = unsigned(left  & bm::set_block_mask);
+        unsigned nbit_right = unsigned(right & bm::set_block_mask);
+        return bm::block_any_range(block, nbit_left, nbit_right);
+    }
+
+    // process entry point block
+    {
+        unsigned nbit_left  = unsigned(left  & bm::set_block_mask);
+        bool any_one = bm::block_any_range(block,
+                                           nbit_left, (bm::gap_max_bits-1));
+        if (any_one)
+            return any_one;
+        ++nblock_left;
+    }
+
+    // process tail block
+    {
+        bm::get_block_coord(nblock_right, i0, j0);
+        block = blockman_.get_block(i0, j0);
+        unsigned nbit_right  = unsigned(right  & bm::set_block_mask);
+        bool any_one = bm::block_any_range(block, 0, nbit_right);
+        if (any_one)
+            return any_one;
+        --nblock_right;
+    }
+
+    // check all blocks in the middle
+    //
+    if (nblock_left <= nblock_right)
+    {
+        unsigned i_from, j_from, i_to, j_to;
+        bm::get_block_coord(nblock_left, i_from, j_from);
+        bm::get_block_coord(nblock_right, i_to, j_to);
+
+        bm::word_t*** blk_root = blockman_.top_blocks_root();
+        {
+            block_idx_type top_size = blockman_.top_block_size();
+            if (i_from >= top_size)
+                return false;
+            if (i_to >= top_size)
+            {
+                i_to = unsigned(top_size-1);
+                j_to = bm::set_sub_array_size-1;
+            }
+        }
+
+        for (unsigned i = i_from; i <= i_to; ++i)
+        {
+            bm::word_t** blk_blk = blk_root[i];
+            if (!blk_blk)
+                continue;
+            if ((bm::word_t*)blk_blk == FULL_BLOCK_FAKE_ADDR)
+                return true;
+
+            unsigned j = (i == i_from) ? j_from : 0;
+            unsigned j_limit = (i == i_to) ? j_to+1 : bm::set_sub_array_size;
+            do
+            {
+                bool any_one = bm::block_any(blk_blk[j]);
+                if (any_one)
+                    return any_one;
+            } while (++j < j_limit);
+        } // for i
+    }
+    return false;
+}
 
 // -----------------------------------------------------------------------
 

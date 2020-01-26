@@ -631,6 +631,8 @@ void FillSetsIntervals(bvect_mini* bvect_min,
             bvect_full.set_range(i, end-1, set_flag);
             bool all_one_range = bvect_full.is_all_one_range(i, end - 1);
             assert(all_one_range == set_flag);
+            bool any_one = bvect_full.any_range(i, end - 1);
+            assert(any_one == set_flag);
         }
        
         for (j = i; j < end; ++j)
@@ -1887,17 +1889,29 @@ void IntervalsCheck(const BV& bv)
         typename BV::size_type to = *en2;
         assert(from != to);
 
-        bool all_one;
+        bool all_one, any_one;
         if (to == bm::id_max)
         {
             all_one = bv.is_all_one_range(from, to-1);
             assert(all_one);
+            any_one = bv.any_range(from, to-1);
+            assert(any_one);
             break;
         }
         else
         {
             all_one = bv.is_all_one_range(from, to);
             assert(!all_one);
+            any_one = bv.any_range(from, to);
+            auto cnt = bv.count_range(from, to);
+            if (any_one)
+            {
+                assert(cnt);
+            }
+            else
+            {
+                assert(!cnt);
+            }
         }
 
 
@@ -1913,6 +1927,8 @@ void IntervalsCheck(const BV& bv)
             assert(!bv.test(to));
             all_one = bv.is_all_one_range(from, to);
             assert(!all_one);
+            any_one = bv.any_range(from, to);
+            assert(!any_one);
             typename BV::size_type cnt = bv.count_range(to, from);
             assert(!cnt);
 
@@ -1926,6 +1942,8 @@ void IntervalsCheck(const BV& bv)
             assert(bv.test(to));
             all_one = bv.is_all_one_range(from, to);
             assert(all_one);
+            any_one = bv.any_range(from, to);
+            assert(any_one);
             typename BV::size_type cnt = bv.count_range(from, to);
             assert(cnt == (to - from + 1));
             en1.go_to(to+1);
@@ -15063,19 +15081,30 @@ void verify_all_one_ranges(const bvect& bv, bool all_one)
 
     for (unsigned t = 0; t < fr_size; ++t)
     {
-        bool one_test, one_test_cnt;
+        bool one_test, one_test_cnt, any_one_test;
         bvect::size_type from(from_arr[t]), to(to_arr[t]);
 
         one_test = bv.is_all_one_range(from, to);
         if (all_one)
         {
             assert(one_test);
+            any_one_test = bv.any_range(from, to);
+            assert(any_one_test);
         }
         else
         {
             auto cnt = bv.count_range(from, to);
             one_test_cnt = (cnt == to - from + 1);
             assert(one_test_cnt == one_test);
+            any_one_test = bv.any_range(from, to);
+            if (cnt)
+            {
+                assert(any_one_test);
+            }
+            else
+            {
+                assert(!any_one_test);
+            }
         }
         // [from-1, to] range check
         //
@@ -15083,15 +15112,25 @@ void verify_all_one_ranges(const bvect& bv, bool all_one)
         {
             --from;
             one_test = bv.is_all_one_range(from, to);
+            any_one_test = bv.any_range(from, to);
             if (all_one)
             {
                 assert(one_test);
+                assert(any_one_test);
             }
             else
             {
                 auto cnt = bv.count_range(from, to);
                 one_test_cnt = (cnt == to - from + 1);
                 assert(one_test_cnt == one_test);
+                if (cnt)
+                {
+                    assert(any_one_test);
+                }
+                else
+                {
+                    assert(!any_one_test);
+                }
             }
             ++from;
         }
@@ -15101,15 +15140,25 @@ void verify_all_one_ranges(const bvect& bv, bool all_one)
         {
             ++to;
             one_test = bv.is_all_one_range(from, to);
+            any_one_test = bv.any_range(from, to);
             if (all_one)
             {
                 assert(one_test);
+                assert(any_one_test);
             }
             else
             {
                 auto cnt = bv.count_range(from, to);
                 one_test_cnt = (cnt == to - from + 1);
                 assert(one_test_cnt == one_test);
+                if (cnt)
+                {
+                    assert(any_one_test);
+                }
+                else
+                {
+                    assert(!any_one_test);
+                }
             }
             --to;
         }
@@ -15146,19 +15195,32 @@ void IsAllOneRangeTest()
     {{
         bvect bv1(bm::BM_GAP);
         bv1.set_range(0,1);
-        bool one_test;
+        bool one_test, any_one;
         one_test = bv1.is_all_one_range(0, 0);
         assert(one_test);
+        any_one = bv1.any_range(0, 0);
+        assert(any_one);
+
         one_test = bv1.is_all_one_range(0, 1);
         assert(one_test);
+        any_one = bv1.any_range(0, 0);
+        assert(any_one);
+
         one_test = bv1.is_all_one_range(1, 1);
         assert(one_test);
+        any_one = bv1.any_range(1, 1);
+        assert(any_one);
         one_test = bv1.is_all_one_range(1, 2);
         assert(!one_test);
+        any_one = bv1.any_range(1, 2);
+        assert(any_one);
 
         bv1.set_range(256, 65536);
         one_test = bv1.is_all_one_range(256, 65535);
         assert(one_test);
+        any_one = bv1.any_range(256, 65535);
+        assert(any_one);
+
         one_test = bv1.is_all_one_range(65535, 65535);
         assert(one_test);
         one_test = bv1.is_all_one_range(65535, 65536);
@@ -15166,19 +15228,33 @@ void IsAllOneRangeTest()
 
         one_test = bv1.is_all_one_range(65535, 65537);
         assert(!one_test);
+        any_one = bv1.any_range(65535, 65537);
+        assert(any_one);
+        any_one = bv1.any_range(65538, 65537);
+        assert(!any_one);
+        any_one = bv1.any_range(65538, bm::id_max-1);
+        assert(!any_one);
+
     }}
 
     cout << "Check bit ranges bvector" << endl;
     {{
         bvect bv1;
         bv1[1] = true; bv1[2] = true;
-        bool one_test;
+        bool one_test, any_one;
         one_test = bv1.is_all_one_range(0, 0);
         assert(!one_test);
+        any_one = bv1.any_range(0, 0);
+        assert(!any_one);
+        any_one = bv1.any_range(0, 1);
+        assert(any_one);
+
         one_test = bv1.is_all_one_range(0, 1);
         assert(!one_test);
         one_test = bv1.is_all_one_range(2, 1);
         assert(one_test);
+        any_one = bv1.any_range(2, 1);
+        assert(any_one);
 
         one_test = bv1.is_all_one_range(258, 65530);
         assert(!one_test);
@@ -15189,6 +15265,8 @@ void IsAllOneRangeTest()
         }
         one_test = bv1.is_all_one_range(258, 65530);
         assert(one_test);
+        any_one = bv1.any_range(258, 65530);
+        assert(any_one);
         one_test = bv1.is_all_one_range(256, 65535);
         assert(one_test);
         one_test = bv1.is_all_one_range(65535, 65535);
@@ -15197,6 +15275,13 @@ void IsAllOneRangeTest()
         assert(one_test);
         one_test = bv1.is_all_one_range(65536, 65537);
         assert(!one_test);
+        any_one = bv1.any_range(65535, 65537);
+        assert(any_one);
+        any_one = bv1.any_range(65538, 65537);
+        assert(!any_one);
+        any_one = bv1.any_range(65538, bm::id_max-1);
+        assert(!any_one);
+
     }}
 
     cout << "Check set ranges" << endl;
@@ -15227,6 +15312,26 @@ void IsAllOneRangeTest()
                 bool one_test1 = bv1.is_all_one_range(from, to);
                 bool one_test2 = bv2.is_all_one_range(from, to);
                 assert(one_test1 == one_test2);
+
+                bool any_one1 = bv1.any_range(from, to);
+                bool any_one2 = bv2.any_range(from, to);
+                assert(any_one1 == any_one2);
+
+                if (from)
+                {
+                    any_one1 = bv1.any_range(from-1, from);
+                    assert(any_one1 == any_one2);
+                    any_one2 = bv2.any_range(from-1, from);
+                    assert(any_one1 == any_one2);
+                }
+
+                if (to < bm::id_max-1)
+                {
+                    any_one1 = bv1.any_range(to, to+1);
+                    assert(any_one1 == any_one2);
+                    any_one2 = bv2.any_range(to, to+1);
+                    assert(any_one1 == any_one2);
+                }
 
                 verify_all_one_ranges(bv1, false);
                 verify_all_one_ranges(bv2, false);
@@ -25918,7 +26023,6 @@ int main(int argc, char *argv[])
 
     if (is_all || is_low_level)
     {
-
         TestRecomb();
 
         OptimGAPTest();
