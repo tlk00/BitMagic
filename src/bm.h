@@ -1742,7 +1742,7 @@ public:
     size_type count_range(size_type left, size_type right) const;
 
     /*!
-       \brief Returns true if all bits in the range are 1
+       \brief Returns true if all bits in the range are 1s
 
        \param left - index of first bit start checking
        \param right - index of last bit
@@ -3152,7 +3152,8 @@ bool bvector<Alloc>::is_all_one_range(size_type left, size_type right) const
         const bm::word_t* block = blockman_.get_block(i0, j0);
 
         unsigned nbit_left  = unsigned(left  & bm::set_block_mask);
-        bool all_one = bm::block_is_all_one_range(block, nbit_left, (bm::gap_max_bits-1));
+        bool all_one = bm::block_is_all_one_range(block,
+                                            nbit_left, (bm::gap_max_bits-1));
         if (!all_one)
             return all_one;
         ++nblock_left;

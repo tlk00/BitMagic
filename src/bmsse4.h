@@ -577,6 +577,17 @@ bool sse4_is_all_one(const __m128i* BMRESTRICT block)
 }
 
 /*!
+    @brief check if SSE wave is all oxFFFF...FFF
+    @ingroup SSE4
+*/
+BMFORCEINLINE
+bool sse42_test_all_one_wave(const void* ptr)
+{
+    return _mm_test_all_ones(_mm_loadu_si128((__m128i*)ptr));
+}
+
+
+/*!
     @brief check if wave of pointers is all NULL
     @ingroup SSE4
 */
@@ -973,12 +984,14 @@ bool sse42_bit_find_first(const __m128i* BMRESTRICT block,
 #endif
 
 /*!
-     SSE4.2 check for one to two (variable len) 128 bit SSE lines for gap search results (8 elements)
+     SSE4.2 check for one to two (variable len) 128 bit SSE lines
+     for gap search results (8 elements)
      @ingroup SSE4
      \internal
 */
 inline
-unsigned sse4_gap_find(const bm::gap_word_t* BMRESTRICT pbuf, const bm::gap_word_t pos, const unsigned size)
+unsigned sse4_gap_find(const bm::gap_word_t* BMRESTRICT pbuf,
+                       const bm::gap_word_t pos, const unsigned size)
 {
     BM_ASSERT(size <= 16);
     BM_ASSERT(size);
@@ -1030,6 +1043,74 @@ unsigned sse4_gap_find(const bm::gap_word_t* BMRESTRICT pbuf, const bm::gap_word
 
     return size - bc;
 }
+
+/**
+    Hybrid binary search, starts as binary, then switches to linear scan
+
+   \param buf - GAP buffer pointer.
+   \param pos - index of the element.
+   \param is_set - output. GAP value (0 or 1).
+   \return GAP index.
+
+    @ingroup SSE4
+*/
+inline
+unsigned sse42_gap_bfind(const unsigned short* BMRESTRICT buf,
+                         unsigned pos, unsigned* BMRESTRICT is_set)
+{
+    unsigned start = 1;
+    unsigned end = 1 + ((*buf) >> 3);
+    unsigned dsize = end - start;
+
+    if (dsize < 17)
+    {
+        start = bm::sse4_gap_find(buf+1, (bm::gap_word_t)pos, dsize);
+        *is_set = ((*buf) & 1) ^ (start & 1);
+        BM_ASSERT(buf[start+1] >= pos);
+        BM_ASSERT(buf[start] < pos || (start==0));
+
+        return start+1;
+    }
+    unsigned arr_end = end;
+    while (start != end)
+    {
+        unsigned curr = (start + end) >> 1;
+        if (buf[curr] < pos)
+            start = curr + 1;
+        else
+            end = curr;
+
+        unsigned size = end - start;
+        if (size < 16)
+        {
+            size += (end != arr_end);
+            unsigned idx =
+                bm::sse4_gap_find(buf + start, (bm::gap_word_t)pos, size);
+            start += idx;
+
+            BM_ASSERT(buf[start] >= pos);
+            BM_ASSERT(buf[start - 1] < pos || (start == 1));
+            break;
+        }
+    }
+
+    *is_set = ((*buf) & 1) ^ ((start-1) & 1);
+    return start;
+}
+
+/**
+    Hybrid binary search, starts as binary, then switches to scan
+    @ingroup SSE4
+*/
+inline
+unsigned sse42_gap_test(const unsigned short* BMRESTRICT buf, unsigned pos)
+{
+    unsigned is_set;
+    bm::sse42_gap_bfind(buf, pos, &is_set);
+    return is_set;
+}
+
+
 
 /**
     Experimental (test) function to do SIMD vector search (lower bound)
@@ -1751,6 +1832,8 @@ void sse42_bit_block_xor(bm::word_t*  target_block,
 #define VECT_BIT_BLOCK_XOR(t, src, src_xor, d) \
     sse42_bit_block_xor(t, src, src_xor, d)
 
+#define VECT_GAP_BFIND(buf, pos, is_set) \
+    sse42_gap_bfind(buf, pos, is_set)
 
 #ifdef __GNUG__
 #pragma GCC diagnostic pop

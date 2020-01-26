@@ -398,6 +398,74 @@ unsigned sse2_gap_find(const bm::gap_word_t* BMRESTRICT pbuf, const bm::gap_word
     }
     return size;
 }
+
+/**
+    Hybrid binary search, starts as binary, then switches to linear scan
+
+   \param buf - GAP buffer pointer.
+   \param pos - index of the element.
+   \param is_set - output. GAP value (0 or 1).
+   \return GAP index.
+
+    @ingroup SSE2
+*/
+inline
+unsigned sse2_gap_bfind(const unsigned short* BMRESTRICT buf,
+                         unsigned pos, unsigned* BMRESTRICT is_set)
+{
+    unsigned start = 1;
+    unsigned end = 1 + ((*buf) >> 3);
+    unsigned dsize = end - start;
+
+    if (dsize < 17)
+    {
+        start = bm::sse2_gap_find(buf+1, (bm::gap_word_t)pos, dsize);
+        *is_set = ((*buf) & 1) ^ (start & 1);
+        BM_ASSERT(buf[start+1] >= pos);
+        BM_ASSERT(buf[start] < pos || (start==0));
+
+        return start+1;
+    }
+    unsigned arr_end = end;
+    while (start != end)
+    {
+        unsigned curr = (start + end) >> 1;
+        if (buf[curr] < pos)
+            start = curr + 1;
+        else
+            end = curr;
+
+        unsigned size = end - start;
+        if (size < 16)
+        {
+            size += (end != arr_end);
+            unsigned idx =
+                bm::sse2_gap_find(buf + start, (bm::gap_word_t)pos, size);
+            start += idx;
+
+            BM_ASSERT(buf[start] >= pos);
+            BM_ASSERT(buf[start - 1] < pos || (start == 1));
+            break;
+        }
+    }
+
+    *is_set = ((*buf) & 1) ^ ((start-1) & 1);
+    return start;
+}
+
+/**
+    Hybrid binary search, starts as binary, then switches to scan
+    @ingroup SSE2
+*/
+inline
+unsigned sse2_gap_test(const unsigned short* BMRESTRICT buf, unsigned pos)
+{
+    unsigned is_set;
+    bm::sse2_gap_bfind(buf, pos, &is_set);
+    return is_set;
+}
+
+
 #ifdef __GNUG__
 #pragma GCC diagnostic pop
 #endif
@@ -460,6 +528,8 @@ unsigned sse2_gap_find(const bm::gap_word_t* BMRESTRICT pbuf, const bm::gap_word
 #define VECT_SET_BLOCK(dst, value) \
     sse2_set_block((__m128i*) dst, value)
 
+#define VECT_GAP_BFIND(buf, pos, is_set) \
+    sse2_gap_bfind(buf, pos, is_set)
 
 
 } // namespace

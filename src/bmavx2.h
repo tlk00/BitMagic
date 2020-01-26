@@ -1368,6 +1368,20 @@ bool avx2_is_all_one(const __m256i* BMRESTRICT block)
 }
 
 /*!
+    @brief check if wave of pointers is all 0xFFF
+    @ingroup AVX2
+*/
+BMFORCEINLINE
+bool avx2_test_all_one_wave(const void* ptr)
+{
+    __m256i maskF = _mm256_set1_epi32(~0u); // braodcast 0xFF
+   __m256i wcmpA = _mm256_cmpeq_epi8(_mm256_loadu_si256((__m256i*)ptr), maskF); // (w0 == maskF)
+    unsigned maskA = unsigned(_mm256_movemask_epi8(wcmpA));
+    return (maskA == ~0u);
+}
+
+
+/*!
     @brief check if wave of pointers is all NULL
     @ingroup AVX2
 */
@@ -2487,8 +2501,8 @@ int avx2_cmpge_u16(__m256i vect16, unsigned short value)
     @ingroup AVX2
 */
 inline
-unsigned avx2_gap_bfind(const unsigned short* buf,
-                        unsigned pos, unsigned* is_set)
+unsigned avx2_gap_bfind(const unsigned short* BMRESTRICT buf,
+                        unsigned pos, unsigned* BMRESTRICT is_set)
 {
     BM_ASSERT(is_set);
 
@@ -2554,23 +2568,19 @@ unsigned avx2_gap_bfind(const unsigned short* buf,
                 mSub = _mm256_subs_epu16(mPos, vect16);
                 mge_mask = _mm256_cmpeq_epi16(mSub, mZ);
                 int mask = _mm256_movemask_epi8(mge_mask);
-                BM_ASSERT(mask);
-                // TODO: if should be not needed, cleanup
-                //if (mask)
-                {
-                    int lz = _tzcnt_u32(mask) / 2;
-                    start += lz;
-                    res = ((*buf) & 1) ^ ((start-1) & 1);
-                    *is_set = res;
-                    return start;
-                }
-                //start += unroll_factor; // remove with if when sure
+                BM_ASSERT(mask); // the rersult MUST be here at this point
+
+                int lz = _tzcnt_u32(mask) / 2;
+                start += lz;
+                res = ((*buf) & 1) ^ ((start-1) & 1);
+                *is_set = res;
+                return start;
             }
             for (; start < end; ++start)
             {
                 if (buf[start] >= pos)
                     break;
-            }
+            } // for
             break;
         }
         unsigned curr = (start + end) >> 1;
@@ -2587,103 +2597,14 @@ unsigned avx2_gap_bfind(const unsigned short* buf,
 
 /**
     Hybrid binary search, starts as binary, then switches to scan
-
     @ingroup AVX2
 */
 inline
-unsigned avx2_gap_test(const unsigned short* buf, unsigned pos)
+unsigned avx2_gap_test(const unsigned short* BMRESTRICT buf, unsigned pos)
 {
     unsigned is_set;
     bm::avx2_gap_bfind(buf, pos, &is_set);
     return is_set;
-/*
-    const unsigned linear_cutoff = 48;
-    const unsigned unroll_factor = 16;
-
-    BM_ASSERT(pos < bm::gap_max_bits);
-
-    unsigned res;
-    unsigned start = 1;
-    unsigned end = 1 + ((*buf) >> 3);
-    unsigned arr_end = end;
-
-    if (end - start < unroll_factor) // too small for a full AVX stride
-    {
-        for (; start < end; ++start)
-        {
-            if (buf[start] >= pos)
-            {
-                res = ((*buf) & 1) ^ ((--start) & 1);
-                return res;
-            }
-        } // for
-        BM_ASSERT(0);
-    }
-
-    while (start != end)
-    {
-        unsigned dsize = end - start;
-        if (dsize < linear_cutoff)
-        {
-            // set wider scan window to possibly over-read the range,
-            // but stay within allocated block memory
-            //
-            dsize = arr_end - start;
-            
-            __m256i mZ = _mm256_setzero_si256();
-            __m256i mPos  = _mm256_set1_epi16((unsigned short)pos);
-            __m256i vect16, mSub, mge_mask;
-
-            unsigned len_unr = start + (dsize - (dsize % unroll_factor));
-            for (; start < len_unr; start += unroll_factor)
-            {
-                vect16 = _mm256_loadu_si256((__m256i*)(&buf[start])); // 16x u16s
-                mSub = _mm256_subs_epu16(mPos, vect16);
-                mge_mask = _mm256_cmpeq_epi16(mSub, mZ);
-                int mask = _mm256_movemask_epi8(mge_mask);
-                if (mask)
-                {
-                    int lz = _tzcnt_u32(mask) / 2;
-                    start += lz;
-                    res = ((*buf) & 1) ^ ((--start) & 1);
-                    return res;
-                }
-            } // for k
-            unsigned tail = unroll_factor - (end - start);
-            if (start > tail+1)
-            {
-                start -= tail; // rewind back, but stay within block
-                vect16 = _mm256_loadu_si256((__m256i*)(&buf[start])); // 16x u16s
-                mSub = _mm256_subs_epu16(mPos, vect16);
-                mge_mask = _mm256_cmpeq_epi16(mSub, mZ);
-                int mask = _mm256_movemask_epi8(mge_mask);
-                BM_ASSERT(mask);
-                // TODO: if should be not needed, cleanup
-                if (mask)
-                {
-                    int lz = _tzcnt_u32(mask) / 2;
-                    start += lz;
-                    res = ((*buf) & 1) ^ ((--start) & 1);
-                    return res;
-                }
-                start += unroll_factor; // remove with if when sure
-            }
-            for (; start < end; ++start)
-            {
-                if (buf[start] >= pos)
-                    break;
-            }
-            break;
-        }
-        unsigned curr = (start + end) >> 1;
-        if (buf[curr] < pos)
-            start = curr + 1;
-        else
-            end = curr;
-    } // while
-    res = ((*buf) & 1) ^ ((--start) & 1);
-    return res;
-*/
 }
 
 /**

@@ -823,9 +823,6 @@ void sse2_stream_block(__m128i* BMRESTRICT dst,
 inline 
 void sse2_invert_block(__m128i* dst)
 {
-    //__m128i mZ = _mm_setzero_si128();
-    //__m128i maskF = _mm_cmpeq_epi8(mZ, mZ); // 0xFF..
-
     __m128i maskF = _mm_set1_epi32(~0u);
     __m128i* BMRESTRICT dst_end =
         (__m128i*)((bm::word_t*)(dst) + bm::set_block_size);

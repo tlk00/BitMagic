@@ -1291,83 +1291,10 @@ unsigned gap_test_unr(const T* buf, const unsigned pos)
         return (*buf) & 1;
     }
 #if defined(BMSSE2OPT)
-    unsigned start = 1;
-    unsigned end = 1 + ((*buf) >> 3);
-    unsigned dsize = end - start;
-
-    if (dsize < 17)
-    {
-        start = bm::sse2_gap_find(buf + 1, (bm::gap_word_t)pos, dsize);
-        unsigned res = ((*buf) & 1) ^ ((start) & 1);
-        BM_ASSERT(buf[start + 1] >= pos);
-        BM_ASSERT(buf[start] < pos || (start == 0));
-        BM_ASSERT(res == bm::gap_test(buf, pos));
-        return res;
-    }
-    unsigned arr_end = end;
-    while (start != end)
-    {
-        unsigned curr = (start + end) >> 1;
-        if (buf[curr] < pos)
-            start = curr + 1;
-        else
-            end = curr;
-
-        unsigned size = end - start;
-        if (size < 16)
-        {
-            size += (end != arr_end);
-            unsigned idx = bm::sse2_gap_find(buf + start, (bm::gap_word_t)pos, size);
-            start += idx;
-
-            BM_ASSERT(buf[start] >= pos);
-            BM_ASSERT(buf[start - 1] < pos || (start == 1));
-            break;
-        }
-    }
-
-    unsigned res = ((*buf) & 1) ^ ((--start) & 1);
-
+    unsigned res = bm::sse2_gap_test(buf, pos);
     BM_ASSERT(res == bm::gap_test(buf, pos));
-    return res;
 #elif defined(BMSSE42OPT)
-    unsigned start = 1;
-    unsigned end = 1 + ((*buf) >> 3);
-    unsigned dsize = end - start;
-
-    if (dsize < 17)
-    {
-        start = bm::sse4_gap_find(buf+1, (bm::gap_word_t)pos, dsize);
-        unsigned res = ((*buf) & 1) ^ ((start) & 1);
-        BM_ASSERT(buf[start+1] >= pos);
-        BM_ASSERT(buf[start] < pos || (start==0));
-        BM_ASSERT(res == bm::gap_test(buf, pos));
-        return res;
-    }
-    unsigned arr_end = end;
-    while (start != end)
-    {
-        unsigned curr = (start + end) >> 1;
-        if (buf[curr] < pos)
-            start = curr + 1;
-        else
-            end = curr;
-
-        unsigned size = end - start;
-        if (size < 16)
-        {
-            size += (end != arr_end);
-            unsigned idx = bm::sse4_gap_find(buf + start, (bm::gap_word_t)pos, size);
-            start += idx;
-
-            BM_ASSERT(buf[start] >= pos);
-            BM_ASSERT(buf[start - 1] < pos || (start == 1));
-            break;
-        }
-    }
-    
-    unsigned res = ((*buf) & 1) ^ ((--start) & 1);
-
+    unsigned res = bm::sse42_gap_test(buf, pos);
     BM_ASSERT(res == bm::gap_test(buf, pos));
 #elif defined(BMAVX2OPT)
     unsigned res = bm::avx2_gap_test(buf, pos);
@@ -4496,7 +4423,6 @@ bool bit_block_is_all_one_range(const bm::word_t* const block,
     if (left == right)  // special case (only 1 bit to check)
         return (*word >> nbit) & 1u;
 
-    //bitcount = right - left + 1u;
     if (nbit) // starting position is not aligned
     {
         unsigned right_margin = nbit + right - left;
@@ -4522,14 +4448,14 @@ bool bit_block_is_all_one_range(const bm::word_t* const block,
     const bm::id64_t maskFF64 = ~0ull;
     const bm::word_t maskFF = ~0u;
     // loop unrolled to evaluate 4 words at a time
-    // TODO: SIMD
-    for ( ;bitcount >= 128; bitcount-=128)
+    // SIMD showed no advantage, unless evaluate sub-wave intervals
+    //
+    for ( ;bitcount >= 128; bitcount-=128, word+=4)
     {
         bm::id64_t w64_0 = bm::id64_t(word[0]) + (bm::id64_t(word[1]) << 32);
         bm::id64_t w64_1 = bm::id64_t(word[2]) + (bm::id64_t(word[3]) << 32);
         if ((w64_0 ^ maskFF64) | (w64_1 ^ maskFF64))
             return false;
-        word += 4;
     } // for
 
     for ( ;bitcount >= 32; bitcount-=32, ++word)
@@ -5066,8 +4992,7 @@ bm::id_t bit_block_any_range(const bm::word_t* block,
             unsigned mask =
                 block_set_table<true>::_right[nbit] &
                 block_set_table<true>::_left[right_margin];
-            acc = *word & mask;
-            return acc;
+            return *word & mask;
         }
         else
         {
@@ -5079,22 +5004,26 @@ bm::id_t bit_block_any_range(const bm::word_t* block,
         ++word;
     }
 
-    // now when we are word aligned, we can check bits the usual way
+    // loop unrolled to evaluate 4 words at a time
+    // SIMD showed no advantage, unless evaluate sub-wave intervals
+    //
+    for ( ;bitcount >= 128; bitcount-=128, word+=4)
+    {
+        acc = word[0] | word[1] | word[2] | word[3];
+        if (acc)
+            return acc;
+    } // for
+
+    acc = 0;
     for ( ;bitcount >= 32; bitcount -= 32)
     {
-        acc = *word++;
-        if (acc) 
-            return acc;
-    }
-
+        acc |= *word++;
+    } // for
+    
     if (bitcount)  // we have a tail to count
-    {
-        acc = (*word) & block_set_table<true>::_left[bitcount-1];
-        if (acc) 
-            return acc;
-    }
+        acc |= (*word) & block_set_table<true>::_left[bitcount-1];
 
-    return 0;
+    return acc;
 }
 
 // ----------------------------------------------------------------------
