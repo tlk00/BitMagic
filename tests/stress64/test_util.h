@@ -112,6 +112,11 @@ void compare_BV(const BV& bv, const VT& vect, bool compare_count = true)
                      << endl;
                 assert(0); exit(1);
             }
+            bool b = bv.any_range(prev_id, v1);
+            if (r)
+            {
+                assert(b);
+            }
         }
         prev_id = v1;
     }
@@ -147,17 +152,21 @@ void IntervalsCheck(const BV& bv)
         typename BV::size_type to = *en2;
         assert(from != to);
 
-        bool all_one;
+        bool all_one, any_one;
         if (to == bm::id_max)
         {
             all_one = bv.is_all_one_range(from, to-1);
             assert(all_one);
+            any_one = bv.any_range(from, to - 1);
+            assert(any_one);
             break;
         }
         else
         {
             all_one = bv.is_all_one_range(from, to);
             assert(!all_one);
+            any_one = bv.any_range(from, to);
+            assert(!any_one);
         }
 
         if (to == bm::id_max)
@@ -174,6 +183,8 @@ void IntervalsCheck(const BV& bv)
             assert(!all_one);
             typename BV::size_type cnt = bv.count_range(to, from);
             assert(!cnt);
+            any_one = bv.any_range(to, from);
+            assert(!any_one);
 
             en2.go_to(from+1);
             if (!en2.valid())
@@ -188,6 +199,8 @@ void IntervalsCheck(const BV& bv)
             typename BV::size_type cnt = bv.count_range(from, to);
             assert(cnt == (to - from + 1));
             en1.go_to(to+1);
+            any_one = bv.any_range(from, to);
+            assert(any_one);
         }
 
     } // while

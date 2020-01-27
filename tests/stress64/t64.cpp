@@ -2030,19 +2030,29 @@ void verify_all_one_ranges(const bvect& bv, bool all_one)
 
     for (unsigned t = 0; t < fr_size; ++t)
     {
-        bool one_test, one_test_cnt;
+        bool one_test, one_test_cnt, any_one_test;
         bvect::size_type from(from_arr[t]), to(to_arr[t]);
 
         one_test = bv.is_all_one_range(from, to);
+        any_one_test = bv.any_range(from, to);
         if (all_one)
         {
             assert(one_test);
+            assert(any_one_test);
         }
         else
         {
             auto cnt = bv.count_range(from, to);
             one_test_cnt = (cnt == to - from + 1);
             assert(one_test_cnt == one_test);
+            if (cnt)
+            {
+                assert(any_one_test);
+            }
+            else
+            {
+                assert(!any_one_test);
+            }
         }
 
         // [from-1, to] range check
@@ -2051,15 +2061,25 @@ void verify_all_one_ranges(const bvect& bv, bool all_one)
         {
             --from;
             one_test = bv.is_all_one_range(from, to);
+            any_one_test = bv.any_range(from, to);
             if (all_one)
             {
                 assert(one_test);
+                assert(any_one_test);
             }
             else
             {
                 auto cnt = bv.count_range(from, to);
                 one_test_cnt = (cnt == to - from + 1);
                 assert(one_test_cnt == one_test);
+                if (cnt)
+                {
+                    assert(any_one_test);
+                }
+                else
+                {
+                    assert(!any_one_test);
+                }
             }
             ++from;
         }
@@ -2069,15 +2089,25 @@ void verify_all_one_ranges(const bvect& bv, bool all_one)
         {
             ++to;
             one_test = bv.is_all_one_range(from, to);
+            any_one_test = bv.any_range(from, to);
             if (all_one)
             {
                 assert(one_test);
+                assert(any_one_test);
             }
             else
             {
                 auto cnt = bv.count_range(from, to);
                 one_test_cnt = (cnt == to - from + 1);
                 assert(one_test_cnt == one_test);
+                if (cnt)
+                {
+                    assert(any_one_test);
+                }
+                else
+                {
+                    assert(!any_one_test);
+                }
             }
             --to;
         }
@@ -2137,7 +2167,20 @@ void IsAllOneRangeTest()
 
                 bool one_test1 = bv1.is_all_one_range(from, to);
                 bool one_test2 = bv2.is_all_one_range(from, to);
+                bool any_one1 = bv1.any_range(from, to);
+                bool any_one2 = bv2.any_range(from, to);
+
                 assert(one_test1 == one_test2);
+                assert(any_one1 == any_one2);
+                auto cnt = bv1.count_range(from, to);
+                if (any_one1)
+                {
+                    assert(cnt);
+                }
+                else
+                {
+                    assert(!cnt);
+                }
 
                 verify_all_one_ranges(bv1, false);
                 verify_all_one_ranges(bv2, false);

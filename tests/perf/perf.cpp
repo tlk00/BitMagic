@@ -2802,8 +2802,35 @@ void IntervalsTest()
 
     const char* msg = "bvector<>::is_all_one_range() (BITS)";
     const char* msg2 = "bvector<>::any_range() (BITS)";
+    const char* msg3 = "bvector<>::count_range() (BITS)";
     for (unsigned pass = 0; pass < 2; ++pass)
     {
+        {
+            TimeTaker tt(msg3, REPEATS * 1);
+            bvect::size_type istart(0), ilen(0);
+            for (istart = 0; istart < vect_max; )
+            {
+                for (bvect::size_type i = istart; i <= (istart + ilen); ++i)
+                {
+                    auto cnt = bv.count_range(istart, i);
+                    if (!cnt)
+                    {
+                        cerr << "Errro: count_range test failed! (1)" << endl;
+                        assert(0); exit(1);
+                    }
+                    auto icnt = bv_inv.count_range(istart, i);
+                    if (icnt)
+                    {
+                        cerr << "Errro: count_range test failed! (2)" << endl;
+                        assert(0); exit(1);
+                    }
+                } // for i
+                ilen += 1;
+                istart += (ilen + 2);
+                if (ilen > 1024)
+                    ilen = 0;
+            } // for istart
+        }
         {
             TimeTaker tt(msg, REPEATS * 1);
             bvect::size_type istart(0), ilen(0);
@@ -2860,8 +2887,10 @@ void IntervalsTest()
 
         bv.optimize();
         bv_inv.optimize();
+
         msg = "bvector<>::is_all_one_range() (BITS+GAPS)";
         msg2 = "bvector<>::any_range() (BITS+GAPS)";
+        msg3 = "bvector<>::count_range() (BITS+GAPS)";
     } // for pass
 
 }
@@ -3393,7 +3422,7 @@ int main(void)
     RangeCopyTest();
 
     IntervalsTest();
-
+    
     AggregatorTest();
 
     OrTest();
