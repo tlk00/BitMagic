@@ -4504,6 +4504,8 @@ bool bit_block_is_all_one_range(const bm::word_t* const BMRESTRICT block,
 }
 
 
+
+
 /*!
     Function calculates number of 1 bits in the given array of words in
     the range between left anf right bits (borders included)
@@ -5125,6 +5127,56 @@ bool block_is_all_one_range(const bm::word_t* const BMRESTRICT block,
     }
     return false;
 }
+
+/*! @brief Returns "true" if all bits are 1 in the block [left, right]
+    and border bits are 0
+    @internal
+*/
+inline
+bool block_is_interval(const bm::word_t* const BMRESTRICT block,
+                       unsigned left, unsigned right)
+{
+    BM_ASSERT(left <= right);
+    BM_ASSERT(right < bm::gap_max_bits-1);
+    if (block)
+    {
+        if (IS_FULL_BLOCK(block))
+            return false; 
+
+        bool is_left, is_right, all_one;
+        if (BM_IS_GAP(block))
+        {
+            const bm::gap_word_t* gap = BMGAP_PTR(block);
+            is_left = bm::gap_test(gap, left - 1);
+            if (is_left == false)
+            {
+                is_right = bm::gap_test(gap, right + 1);
+                if (is_right == false)
+                {
+                    all_one = bm::gap_is_all_one_range(gap, left, right);
+                    return all_one;
+                }
+            }
+        }
+        else // bit-block
+        {
+            unsigned nword = ((left-1) >> bm::set_word_shift);
+            is_left = block[nword] & (1u << ((left-1) & bm::set_word_mask));
+            if (is_left == false)
+            {
+                nword = ((right + 1) >> bm::set_word_shift);
+                is_right = block[nword] & (1u << ((right + 1) & bm::set_word_mask));
+                if (is_right == false)
+                {
+                    all_one = bm::bit_block_is_all_one_range(block, left, right);
+                    return all_one;
+                }
+            }
+        }
+    }
+    return false;
+}
+
 
 // ----------------------------------------------------------------------
 

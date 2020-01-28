@@ -2768,31 +2768,62 @@ void RangeCopyTest()
 
 }
 
+/// Reference (naive) inetrval detector based on population counting 
+/// and boundaries tests
+///
+template<typename BV>
+bool test_interval(const BV& bv,
+                   typename BV::size_type left, typename BV::size_type right)
+{
+    if (left > right)
+        bm::xor_swap(left, right); // make sure left <= right
+    bool is_left(0), is_right(0);
+    if (left) // check left-1 bit (if exists)
+        is_left = bv.test(left - 1);
+    if ((is_left == false) && (right < bm::id_max - 1))
+        is_right = bv.test(right + 1); // check [...right] range condition
+    if (is_left == false && is_right == false)
+    {
+        typename BV::size_type cnt = bv.count_range(left, right);
+        if (cnt == (1 + right - left))
+            return true;
+    }
+    return false;
+}
+
 static
 void IntervalsTest()
 {
-    const unsigned vect_max = BSIZE*2;
+    const unsigned vect_max = BSIZE * 2;
     bvect bv, bv_inv;
 
     // generate the test vector
     {
+        bool b;
         bvect::size_type istart(0), ilen(0);
         for (istart = 0; istart < vect_max; )
         {
             for (bvect::size_type i = istart; i <= (istart+ilen); ++i)
             {
-                bool b = bv.test(i);
+                /*
+                b = bv.test(i);
                 if (b)
                 {
                     cerr << "Errro: set check failed!" << endl;
                     assert(0); exit(1);
                 }
+                */
                 bv.set(i);
+                //cout << i << " ";
             } // for i
+            //cout << endl;
             ilen += 1;
+            b = bv.test(istart + ilen);
+            assert(!b);
             istart += (ilen + 2);
             if (ilen > 1024)
                 ilen = 0;
+            
         } // for istart
     }
     bv_inv = bv;
@@ -2803,8 +2834,12 @@ void IntervalsTest()
     const char* msg = "bvector<>::is_all_one_range() (BITS)";
     const char* msg2 = "bvector<>::any_range() (BITS)";
     const char* msg3 = "bvector<>::count_range() (BITS)";
+    const char* msg4 = "bvector<>::is_interval() (BITS)";
+    const char* msg5 = "reference_is_interval() (BITS)";
+
     for (unsigned pass = 0; pass < 2; ++pass)
     {
+
         {
             TimeTaker tt(msg3, REPEATS * 1);
             bvect::size_type istart(0), ilen(0);
@@ -2857,6 +2892,76 @@ void IntervalsTest()
                     ilen = 0;
             } // for istart
         }
+
+        {
+            TimeTaker tt(msg4, REPEATS * 1);
+            bvect::size_type istart(0), ilen(0);
+            for (istart = 0; istart < vect_max; )
+            {
+                for (bvect::size_type i = istart; i <= (istart + ilen); ++i)
+                {
+                    bool is_int = bv.is_interval(istart, i);
+                    if (!is_int)
+                    {
+                        if (i == istart + ilen)
+                        {
+                            cerr << "Error: is_interval test failed! (1)" << endl;
+                            is_int = bv.is_interval(istart, i);
+                            assert(0); exit(1);
+                        }
+                    }
+                    else
+                    {
+                        assert(i == istart + ilen);
+                    }
+                    is_int = bv_inv.is_interval(istart, i);
+                    if (is_int)
+                    {
+                        cerr << "Errro: is_interval test failed! (2)" << endl;
+                        assert(0); exit(1);
+                    }
+                } // for i
+                ilen += 1;
+                istart += (ilen + 2);
+                if (ilen > 1024)
+                    ilen = 0;
+            } // for istart
+        }
+
+        {
+            TimeTaker tt(msg5, REPEATS * 1);
+            bvect::size_type istart(0), ilen(0);
+            for (istart = 0; istart < vect_max; )
+            {
+                for (bvect::size_type i = istart; i <= (istart + ilen); ++i)
+                {
+                    bool is_int = test_interval(bv, istart, i);
+                    if (!is_int)
+                    {
+                        if (i == istart + ilen)
+                        {
+                            cerr << "Error: test_interval test failed! (1)" << endl;
+                            assert(0); exit(1);
+                        }
+                    }
+                    else
+                    {
+                        assert(i == istart + ilen);
+                    }
+                    is_int = test_interval(bv_inv, istart, i);
+                    if (is_int)
+                    {
+                        cerr << "Errro: test_interval test failed! (2)" << endl;
+                        assert(0); exit(1);
+                    }
+                } // for i
+                ilen += 1;
+                istart += (ilen + 2);
+                if (ilen > 1024)
+                    ilen = 0;
+            } // for istart
+        }
+
         {
             TimeTaker tt(msg2, REPEATS * 1);
             bvect::size_type istart(0), ilen(0);
@@ -2891,6 +2996,8 @@ void IntervalsTest()
         msg = "bvector<>::is_all_one_range() (BITS+GAPS)";
         msg2 = "bvector<>::any_range() (BITS+GAPS)";
         msg3 = "bvector<>::count_range() (BITS+GAPS)";
+        msg4 = "bvector<>::is_interval() (BITS+GAPS)";
+        msg5 = "reference_is_interval() (BITS+GAPS)";
     } // for pass
 
 }
@@ -3159,7 +3266,7 @@ void SparseVectorSerializationTest()
 
             bool f = bm::sparse_vector_find_first_mismatch(sv1, sv2, pos);
             assert(f);
-            cerr << "Mismatch at: " << pos << endl;
+            cerr << "Mismatch at: " << pos << " " << f << endl;
 
             sv_deserial.deserialize(sv2, buf);
 

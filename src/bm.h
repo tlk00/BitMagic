@@ -3321,13 +3321,33 @@ bool bvector<Alloc>::is_interval(size_type left, size_type right) const
     if (right < left)
         bm::xor_swap(left, right);
 
+    block_idx_type nblock_left = (left >> bm::set_block_shift);
+    block_idx_type nblock_right = (right >> bm::set_block_shift);
+
+    if (nblock_left == nblock_right) // same block (fast case)
+    {
+        unsigned nbit_left = unsigned(left  & bm::set_block_mask);
+        unsigned nbit_right = unsigned(right  & bm::set_block_mask);
+        if ((nbit_left > 0) && (nbit_right < bm::gap_max_bits-1)) 
+        {
+            unsigned i0, j0;
+            bm::get_block_coord(nblock_left, i0, j0);
+            const bm::word_t* block = blockman_.get_block(i0, j0);
+            bool b = bm::block_is_interval(block, nbit_left, nbit_right);
+            return b;
+        }
+    }
+
     bool is_left, is_right, is_all_one;
     is_left = left > 0 ? test(left-1) : false;
-    is_right = right < (bm::id_max-1) ? test(right+1) : false;
-    if (is_left==false && is_right==false)
+    if (is_left == false)
     {
-        is_all_one = is_all_one_range(left, right);
-        return is_all_one;
+        is_right = (right < (bm::id_max - 1)) ? test(right + 1) : false;
+        if (is_left == false && is_right == false)
+        {
+            is_all_one = is_all_one_range(left, right);
+            return is_all_one;
+        }
     }
     return false;
 }
