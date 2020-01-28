@@ -3323,7 +3323,7 @@ bool bvector<Alloc>::is_interval(size_type left, size_type right) const
 
     bool is_left, is_right, is_all_one;
     is_left = left > 0 ? test(left-1) : true;
-    is_right = right < bm::id_max-1 ? test(right-1) : true;
+    is_right = right < bm::id_max-1 ? test(right+1) : true;
     if (is_left & is_right)
     {
         is_all_one = is_all_one_range(left, right);
