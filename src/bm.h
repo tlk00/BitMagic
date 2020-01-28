@@ -1596,9 +1596,7 @@ public:
         @sa set_range
     */
     void clear_range(size_type left, size_type right)
-    {
-        set_range(left, right, false);
-    }
+                        { set_range(left, right, false); }
 
 
     /*!
@@ -1642,20 +1640,13 @@ public:
        \param free_mem if "true" (default) bvector frees the memory,
        otherwise sets blocks to 0.
     */
-    void clear(bool free_mem = false)
-    {
-        blockman_.set_all_zero(free_mem);
-    }
+    void clear(bool free_mem = false) { blockman_.set_all_zero(free_mem); }
 
     /*!
        \brief Clears every bit in the bitvector.
        \return *this;
     */
-    bvector<Alloc>& reset()
-    {
-        clear(true);
-        return *this;
-    }
+    bvector<Alloc>& reset() { clear(true); return *this; }
     
     /*!
        \brief Flips bit n
@@ -1699,7 +1690,7 @@ public:
     //@}
     // --------------------------------------------------------------------
 
-    /*! @name Population counting and ranks
+    /*! @name Population counting, ranks, ranges and intervals
     */
     //@{
 
@@ -1749,6 +1740,7 @@ public:
        \param right - index of last bit
 
        \return true if all bits are 1, false otherwise
+       @sa any_range, count_range
     */
     bool is_all_one_range(size_type left, size_type right) const;
 
@@ -1760,8 +1752,24 @@ public:
        \param right - index of last bit
 
        \return true if at least 1 bits is set
+       @sa is_all_one_range, count_range
     */
     bool any_range(size_type left, size_type right) const;
+
+    /*!
+        \brief Returns true if range is all 1s flanked with 0s
+        Function performs the test on a closed range [left, right]
+        true interval is all 1s AND test(left-1)==false AND test(right+1)==false
+        Examples:
+            01110 [1,3] - true
+            11110 [0,3] - true
+            11110 [1,3] - false
+       \param left - index of first bit start checking
+       \param right - index of last bit
+       \return true/false
+       @sa is_all_one_range
+    */
+    bool is_interval(size_type left, size_type right) const;
 
 
     /*! \brief compute running total of all blocks in bit vector (rank-select index)
@@ -1807,15 +1815,16 @@ public:
         plus count_to()
      
         \param n - index of bit to test and rank
-        \param blocks_cnt - block count structure to accelerate search
-               should be prepared using running_count_blocks
+        \param rs_idx - rank-select index
+                       (block count structure to accelerate search)
+                        should be prepared using build_rs_index()
 
         \return population count in the diapason or 0 if right bit test failed
 
         \sa build_rs_index
         \sa count_to
     */
-    size_type count_to_test(size_type n, const rs_index_type&  blocks_cnt) const;
+    size_type count_to_test(size_type n, const rs_index_type&  rs_idx) const;
 
 
     /*! Recalculate bitcount (deprecated)
@@ -3044,11 +3053,9 @@ bvector<Alloc>::count_range(size_type left, size_type right) const
     BM_ASSERT(left < bm::id_max && right < bm::id_max);
     if (left > right)
         bm::xor_swap(left, right);
-    //BM_ASSERT(left <= right);
 
     BM_ASSERT_THROW(right < bm::id_max, BM_ERR_RANGE);
-    //BM_ASSERT_THROW(left <= right, BM_ERR_RANGE);
-    
+
     if (!blockman_.is_init())
         return 0;
 
@@ -3299,6 +3306,28 @@ bool bvector<Alloc>::any_range(size_type left, size_type right) const
                     return any_one;
             } while (++j < j_limit);
         } // for i
+    }
+    return false;
+}
+
+// -----------------------------------------------------------------------
+
+template<typename Alloc>
+bool bvector<Alloc>::is_interval(size_type left, size_type right) const
+{
+    if (!blockman_.is_init())
+        return false; // nothing to do
+
+    if (right < left)
+        bm::xor_swap(left, right);
+
+    bool is_left, is_right, is_all_one;
+    is_left = left > 0 ? test(left-1) : true;
+    is_right = right < bm::id_max-1 ? test(right-1) : true;
+    if (is_left & is_right)
+    {
+        is_all_one = is_all_one_range(left, right);
+        return is_all_one;
     }
     return false;
 }

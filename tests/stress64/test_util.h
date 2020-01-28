@@ -152,7 +152,7 @@ void IntervalsCheck(const BV& bv)
         typename BV::size_type to = *en2;
         assert(from != to);
 
-        bool all_one, any_one;
+        bool all_one, any_one, is_interval;
         if (to == bm::id_max)
         {
             all_one = bv.is_all_one_range(from, to-1);
@@ -165,8 +165,9 @@ void IntervalsCheck(const BV& bv)
         {
             all_one = bv.is_all_one_range(from, to);
             assert(!all_one);
+            auto cnt = bv.count_range(from, to);
             any_one = bv.any_range(from, to);
-            assert(!any_one);
+            assert(any_one == (cnt>0));
         }
 
         if (to == bm::id_max)
@@ -185,6 +186,8 @@ void IntervalsCheck(const BV& bv)
             assert(!cnt);
             any_one = bv.any_range(to, from);
             assert(!any_one);
+            is_interval = bv.is_interval(to, from);
+            assert(!is_interval);
 
             en2.go_to(from+1);
             if (!en2.valid())
@@ -201,6 +204,8 @@ void IntervalsCheck(const BV& bv)
             en1.go_to(to+1);
             any_one = bv.any_range(from, to);
             assert(any_one);
+            is_interval = bv.is_interval(from, to);
+            assert(is_interval);
         }
 
     } // while

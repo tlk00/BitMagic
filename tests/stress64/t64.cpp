@@ -2030,15 +2030,17 @@ void verify_all_one_ranges(const bvect& bv, bool all_one)
 
     for (unsigned t = 0; t < fr_size; ++t)
     {
-        bool one_test, one_test_cnt, any_one_test;
+        bool one_test, one_test_cnt, any_one_test, is_int;
         bvect::size_type from(from_arr[t]), to(to_arr[t]);
 
         one_test = bv.is_all_one_range(from, to);
         any_one_test = bv.any_range(from, to);
+        is_int = bv.is_interval(from, to);
         if (all_one)
         {
             assert(one_test);
             assert(any_one_test);
+            assert(is_int);
         }
         else
         {
@@ -2053,6 +2055,10 @@ void verify_all_one_ranges(const bvect& bv, bool all_one)
             {
                 assert(!any_one_test);
             }
+            if (one_test_cnt)
+            {
+                assert(is_int);
+            }
         }
 
         // [from-1, to] range check
@@ -2062,16 +2068,19 @@ void verify_all_one_ranges(const bvect& bv, bool all_one)
             --from;
             one_test = bv.is_all_one_range(from, to);
             any_one_test = bv.any_range(from, to);
+            is_int = bv.is_interval(from, to);
             if (all_one)
             {
                 assert(one_test);
                 assert(any_one_test);
+                assert(is_int);
             }
             else
             {
                 auto cnt = bv.count_range(from, to);
                 one_test_cnt = (cnt == to - from + 1);
                 assert(one_test_cnt == one_test);
+                assert(is_int == one_test_cnt);
                 if (cnt)
                 {
                     assert(any_one_test);
@@ -2090,16 +2099,19 @@ void verify_all_one_ranges(const bvect& bv, bool all_one)
             ++to;
             one_test = bv.is_all_one_range(from, to);
             any_one_test = bv.any_range(from, to);
+            is_int = bv.is_interval(from, to);
             if (all_one)
             {
                 assert(one_test);
                 assert(any_one_test);
+                assert(is_int);
             }
             else
             {
                 auto cnt = bv.count_range(from, to);
                 one_test_cnt = (cnt == to - from + 1);
                 assert(one_test_cnt == one_test);
+                assert(is_int == one_test_cnt);
                 if (cnt)
                 {
                     assert(any_one_test);
@@ -2111,8 +2123,6 @@ void verify_all_one_ranges(const bvect& bv, bool all_one)
             }
             --to;
         }
-
-
     } // for t
 }
 
@@ -15687,6 +15697,7 @@ int main(int argc, char *argv[])
     
     if (is_all || is_bvbasic)
     {
+
         SyntaxTest();
         GenericBVectorTest();
         SetTest();
