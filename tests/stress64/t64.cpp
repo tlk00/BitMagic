@@ -2057,7 +2057,19 @@ void verify_all_one_ranges(const bvect& bv, bool all_one)
             }
             if (one_test_cnt)
             {
-                assert(is_int);
+                if (!is_int)
+                {
+                    bool l, r;
+                    if (to < bm::id_max-1)
+                        r = !bv.test(to+1);
+                    else
+                        r = false;
+                    if (from)
+                        l = !bv.test(from-1);
+                    else
+                        l = false;
+                    assert(l==false || r==false);
+                }
             }
         }
 
@@ -2080,7 +2092,6 @@ void verify_all_one_ranges(const bvect& bv, bool all_one)
                 auto cnt = bv.count_range(from, to);
                 one_test_cnt = (cnt == to - from + 1);
                 assert(one_test_cnt == one_test);
-                assert(is_int == one_test_cnt);
                 if (cnt)
                 {
                     assert(any_one_test);
@@ -2089,6 +2100,20 @@ void verify_all_one_ranges(const bvect& bv, bool all_one)
                 {
                     assert(!any_one_test);
                 }
+                if (!is_int && one_test_cnt)
+                {
+                    bool l, r;
+                    if (to < bm::id_max-1)
+                        r = bv.test(to+1);
+                    else
+                        r = false;
+                    if (from)
+                        l = bv.test(from-1);
+                    else
+                        l = false;
+                    assert(l || r);
+                }
+
             }
             ++from;
         }
@@ -2111,7 +2136,6 @@ void verify_all_one_ranges(const bvect& bv, bool all_one)
                 auto cnt = bv.count_range(from, to);
                 one_test_cnt = (cnt == to - from + 1);
                 assert(one_test_cnt == one_test);
-                assert(is_int == one_test_cnt);
                 if (cnt)
                 {
                     assert(any_one_test);
@@ -2119,6 +2143,20 @@ void verify_all_one_ranges(const bvect& bv, bool all_one)
                 else
                 {
                     assert(!any_one_test);
+                }
+                if (!is_int && one_test_cnt)
+                {
+                    bool l, r;
+                    if (to < bm::id_max-1)
+                        r = bv.test(to+1);
+                    else
+                        r = false;
+                    if (from)
+                        l = bv.test(from-1);
+                    else
+                        l = false;
+
+                    assert(l || r);
                 }
             }
             --to;
@@ -2140,7 +2178,7 @@ void IsAllOneRangeTest()
         verify_all_one_ranges(bv1, false);
         IntervalsCheck(bv1);
     }}
-
+/*
     cout << "Check inverted bvector" << endl;
     {{
         bvect bv1;
@@ -2149,7 +2187,7 @@ void IsAllOneRangeTest()
         verify_all_one_ranges(bv1, true);
         IntervalsCheck(bv1);
     }}
-
+*/
     cout << "Check set ranges" << endl;
     {{
         size_t fr_size = sizeof(from_arr) / sizeof(from_arr[0]);
@@ -15697,7 +15735,6 @@ int main(int argc, char *argv[])
     
     if (is_all || is_bvbasic)
     {
-
         SyntaxTest();
         GenericBVectorTest();
         SetTest();
