@@ -2178,7 +2178,7 @@ void IsAllOneRangeTest()
         verify_all_one_ranges(bv1, false);
         IntervalsCheck(bv1);
     }}
-/*
+
     cout << "Check inverted bvector" << endl;
     {{
         bvect bv1;
@@ -2187,7 +2187,7 @@ void IsAllOneRangeTest()
         verify_all_one_ranges(bv1, true);
         IntervalsCheck(bv1);
     }}
-*/
+
     cout << "Check set ranges" << endl;
     {{
         size_t fr_size = sizeof(from_arr) / sizeof(from_arr[0]);
