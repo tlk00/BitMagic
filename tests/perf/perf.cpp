@@ -2801,22 +2801,15 @@ void IntervalsTest()
     {
         bool b;
         bvect::size_type istart(0), ilen(0);
+        bvect::bulk_insert_iterator iit(bv);
+
         for (istart = 0; istart < vect_max; )
         {
             for (bvect::size_type i = istart; i <= (istart+ilen); ++i)
             {
-                /*
-                b = bv.test(i);
-                if (b)
-                {
-                    cerr << "Errro: set check failed!" << endl;
-                    assert(0); exit(1);
-                }
-                */
-                bv.set(i);
-                //cout << i << " ";
+                iit = i;
+                //bv.set(i);
             } // for i
-            //cout << endl;
             ilen += 1;
             b = bv.test(istart + ilen);
             assert(!b);
@@ -3529,7 +3522,7 @@ int main(void)
     RangeCopyTest();
 
     IntervalsTest();
-    
+
     AggregatorTest();
 
     OrTest();

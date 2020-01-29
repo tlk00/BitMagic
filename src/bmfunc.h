@@ -1938,6 +1938,7 @@ bool gap_any_range(const T* const BMRESTRICT buf,
     unsigned is_set;
     unsigned start_pos = bm::gap_bfind(buf, left, &is_set);
     const T* const pcurr = buf + start_pos;
+
     if (!is_set) // start GAP is 0 ...
     {
         if (right <= *pcurr) // ...bit if the interval goes into at least 1 blk
@@ -1946,6 +1947,36 @@ bool gap_any_range(const T* const BMRESTRICT buf,
     }
     return true;
 }
+
+/*!
+   \brief Test if any bits are 1 in GAP buffer in the [left, right] range
+   and flanked with 0s
+   \param buf - GAP buffer pointer.
+   \param left - leftmost bit index to start from
+   \param right- rightmost bit index
+   \return true if "011110"
+   @ingroup gapfunc
+*/
+template<typename T>
+bool gap_is_interval(const T* const BMRESTRICT buf,
+                     unsigned left, unsigned right)
+{
+    BM_ASSERT(left <= right);
+    BM_ASSERT(left > 0); // cannot check left-1 otherwise
+    BM_ASSERT(right < bm::gap_max_bits-1); // cannot check right+1 otherwise
+
+    unsigned is_set;
+    unsigned start_pos = bm::gap_bfind(buf, left, &is_set);
+    const T* pcurr = buf + start_pos;
+    if (!is_set || (right != *pcurr) || (start_pos <= 1))
+        return false;
+    --pcurr;
+    if (*pcurr != left-1)
+        return false;
+
+    return true;
+}
+
 
 
 /*!
@@ -5147,16 +5178,8 @@ bool block_is_interval(const bm::word_t* const BMRESTRICT block,
         if (BM_IS_GAP(block))
         {
             const bm::gap_word_t* gap = BMGAP_PTR(block);
-            is_left = bm::gap_test(gap, left - 1);
-            if (is_left == false)
-            {
-                is_right = bm::gap_test(gap, right + 1);
-                if (is_right == false)
-                {
-                    all_one = bm::gap_is_all_one_range(gap, left, right);
-                    return all_one;
-                }
-            }
+            all_one = bm::gap_is_interval(gap, left, right);
+            return all_one;
         }
         else // bit-block
         {

@@ -366,6 +366,28 @@ const unsigned BITVECT_SIZE = 100000000 * 2;
 const unsigned ITERATIONS = 180000;
 //const unsigned PROGRESS_PRINT = 2000000;
 
+/// Reference (naive) inetrval detector based on population counting
+/// and boundaries tests
+///
+template<typename BV>
+bool test_interval(const BV& bv,
+                   typename BV::size_type left, typename BV::size_type right)
+{
+    if (left > right)
+        bm::xor_swap(left, right); // make sure left <= right
+    bool is_left(0), is_right(0);
+    if (left) // check left-1 bit (if exists)
+        is_left = bv.test(left - 1);
+    if ((is_left == false) && (right < bm::id_max - 1))
+        is_right = bv.test(right + 1); // check [...right] range condition
+    if (is_left == false && is_right == false)
+    {
+        typename BV::size_type cnt = bv.count_range(left, right);
+        if (cnt == (1 + right - left))
+            return true;
+    }
+    return false;
+}
 
 
 template<class BV>
@@ -633,6 +655,9 @@ void FillSetsIntervals(bvect_mini* bvect_min,
             assert(all_one_range == set_flag);
             bool any_one = bvect_full.any_range(i, end - 1);
             assert(any_one == set_flag);
+            bool is_int = bvect_full.is_interval(i, end-1);
+            bool is_int_c = test_interval(bvect_full, i, end-1);
+            assert(is_int == is_int_c);
         }
        
         for (j = i; j < end; ++j)
@@ -1890,12 +1915,16 @@ void IntervalsCheck(const BV& bv)
         assert(from != to);
 
         bool all_one, any_one;
+        bool is_int, is_int_c;
         if (to == bm::id_max)
         {
             all_one = bv.is_all_one_range(from, to-1);
             assert(all_one);
             any_one = bv.any_range(from, to-1);
             assert(any_one);
+            is_int = bv.is_interval(from, to-1);
+            is_int_c = test_interval(bv, from, to-1);
+            assert(is_int == is_int_c);
             break;
         }
         else
@@ -1912,6 +1941,9 @@ void IntervalsCheck(const BV& bv)
             {
                 assert(!cnt);
             }
+            is_int = bv.is_interval(from, to);
+            is_int_c = test_interval(bv, from, to);
+            assert(is_int == is_int_c);
         }
 
 
@@ -1931,6 +1963,10 @@ void IntervalsCheck(const BV& bv)
             assert(!any_one);
             typename BV::size_type cnt = bv.count_range(to, from);
             assert(!cnt);
+            is_int = bv.is_interval(from, to);
+            is_int_c = test_interval(bv, from, to);
+            assert(is_int == is_int_c);
+
 
             en2.go_to(from+1);
             if (!en2.valid())
@@ -1946,6 +1982,10 @@ void IntervalsCheck(const BV& bv)
             assert(any_one);
             typename BV::size_type cnt = bv.count_range(from, to);
             assert(cnt == (to - from + 1));
+            is_int = bv.is_interval(from, to);
+            is_int_c = test_interval(bv, from, to);
+            assert(is_int == is_int_c);
+
             en1.go_to(to+1);
         }
 
@@ -15082,6 +15122,7 @@ void verify_all_one_ranges(const bvect& bv, bool all_one)
     for (unsigned t = 0; t < fr_size; ++t)
     {
         bool one_test, one_test_cnt, any_one_test;
+        bool is_int, is_int_c;
         bvect::size_type from(from_arr[t]), to(to_arr[t]);
 
         one_test = bv.is_all_one_range(from, to);
@@ -15090,6 +15131,11 @@ void verify_all_one_ranges(const bvect& bv, bool all_one)
             assert(one_test);
             any_one_test = bv.any_range(from, to);
             assert(any_one_test);
+            is_int = bv.is_interval(from, to);
+            is_int_c = test_interval(bv, from, to);
+            assert(is_int == is_int_c);
+            assert(!is_int);
+
         }
         else
         {
@@ -15105,6 +15151,10 @@ void verify_all_one_ranges(const bvect& bv, bool all_one)
             {
                 assert(!any_one_test);
             }
+            is_int = bv.is_interval(from, to);
+            is_int_c = test_interval(bv, from, to);
+            assert(is_int == is_int_c);
+
         }
         // [from-1, to] range check
         //
@@ -15113,6 +15163,11 @@ void verify_all_one_ranges(const bvect& bv, bool all_one)
             --from;
             one_test = bv.is_all_one_range(from, to);
             any_one_test = bv.any_range(from, to);
+
+            is_int = bv.is_interval(from, to);
+            is_int_c = test_interval(bv, from, to);
+            assert(is_int == is_int_c);
+
             if (all_one)
             {
                 assert(one_test);
@@ -15141,6 +15196,11 @@ void verify_all_one_ranges(const bvect& bv, bool all_one)
             ++to;
             one_test = bv.is_all_one_range(from, to);
             any_one_test = bv.any_range(from, to);
+
+            is_int = bv.is_interval(from, to);
+            is_int_c = test_interval(bv, from, to);
+            assert(is_int == is_int_c);
+
             if (all_one)
             {
                 assert(one_test);
@@ -15195,16 +15255,21 @@ void IsAllOneRangeTest()
     {{
         bvect bv1(bm::BM_GAP);
         bv1.set_range(0,1);
-        bool one_test, any_one;
+        bool one_test, any_one, is_int;
         one_test = bv1.is_all_one_range(0, 0);
         assert(one_test);
         any_one = bv1.any_range(0, 0);
         assert(any_one);
+        is_int = bv1.is_interval(0, 0);
+        assert(!is_int);
+
 
         one_test = bv1.is_all_one_range(0, 1);
         assert(one_test);
         any_one = bv1.any_range(0, 0);
         assert(any_one);
+        is_int = bv1.is_interval(0, 1);
+        assert(is_int);
 
         one_test = bv1.is_all_one_range(1, 1);
         assert(one_test);
@@ -15214,12 +15279,29 @@ void IsAllOneRangeTest()
         assert(!one_test);
         any_one = bv1.any_range(1, 2);
         assert(any_one);
+        is_int = bv1.is_interval(1, 2);
+        assert(!is_int);
+
+        is_int = bv1.is_interval(256, 65536);
+        assert(!is_int);
 
         bv1.set_range(256, 65536);
+        bv1.optimize();
         one_test = bv1.is_all_one_range(256, 65535);
         assert(one_test);
         any_one = bv1.any_range(256, 65535);
         assert(any_one);
+        is_int = bv1.is_interval(256, 65536);
+        assert(is_int);
+        is_int = bv1.is_interval(255, 65536);
+        assert(!is_int);
+        is_int = bv1.is_interval(254, 65536);
+        assert(!is_int);
+        is_int = bv1.is_interval(257, 65536);
+        assert(!is_int);
+        is_int = bv1.is_interval(257, 65535);
+        assert(!is_int);
+
 
         one_test = bv1.is_all_one_range(65535, 65535);
         assert(one_test);
