@@ -919,7 +919,7 @@ void xor_swap(W& x, W& y) BMNOEXEPT
     @internal
 */
 template<typename N>
-bool find_not_null_ptr(bm::word_t*** arr, N start, N size, N* pos)
+bool find_not_null_ptr(bm::word_t*** arr, N start, N size, N* pos) BMNOEXEPT
 {
     BM_ASSERT(pos);
 //    BM_ASSERT(start < size);
@@ -1616,7 +1616,7 @@ void for_each_nzblock2(T*** root, unsigned size1, F& f)
     Function returns if function-predicate returns true
 */
 template<typename T, typename BI, typename F>
-bool for_each_nzblock_if(T*** root, BI size1, F& f)
+bool for_each_nzblock_if(T*** root, BI size1, F& f) BMNOEXEPT
 {
     BI block_idx = 0;
     for (BI i = 0; i < size1; ++i)
@@ -1855,7 +1855,7 @@ unsigned gap_bit_count_unr(const T* buf) BMNOEXEPT
     {
         cnt += *pcurr - *(pcurr - 1);
     }
-    BM_ASSERT(cnt == gap_bit_count(buf));
+    BM_ASSERT(cnt == bm::gap_bit_count(buf));
     return cnt;
 }
 
@@ -4254,7 +4254,7 @@ D gap_convert_to_arr(D* BMRESTRICT       dest,
     @ingroup bitfunc 
 */
 inline 
-bm::id_t bit_block_count(const bm::word_t* block)
+bm::id_t bit_block_count(const bm::word_t* block) BMNOEXEPT
 {
     const bm::word_t* block_end = block + bm::set_block_size;
     bm::id_t count = 0;
@@ -4752,7 +4752,7 @@ void bit_block_rotate_left_1_unr(bm::word_t* block) BMNOEXEPT
     @ingroup bitfunc
 */
 inline
-bm::word_t bit_block_insert(bm::word_t* block,
+bm::word_t bit_block_insert(bm::word_t* BMRESTRICT block,
                             unsigned bitpos, bool value) BMNOEXEPT
 {
     BM_ASSERT(block);
@@ -4801,8 +4801,8 @@ bm::word_t bit_block_insert(bm::word_t* block,
     @ingroup bitfunc
 */
 inline
-bool bit_block_shift_r1(bm::word_t* block,
-                        bm::word_t* empty_acc, bm::word_t co_flag) BMNOEXEPT
+bool bit_block_shift_r1(bm::word_t* BMRESTRICT block,
+                        bm::word_t* BMRESTRICT empty_acc, bm::word_t co_flag) BMNOEXEPT
 {
     BM_ASSERT(block);
     BM_ASSERT(empty_acc);
@@ -4830,8 +4830,9 @@ bool bit_block_shift_r1(bm::word_t* block,
     @ingroup bitfunc
 */
 inline
-bool bit_block_shift_r1_unr(bm::word_t* block,
-                            bm::word_t* empty_acc, bm::word_t co_flag) BMNOEXEPT
+bool bit_block_shift_r1_unr(bm::word_t* BMRESTRICT block,
+                            bm::word_t* BMRESTRICT empty_acc,
+                            bm::word_t co_flag) BMNOEXEPT
 {
     BM_ASSERT(block);
     BM_ASSERT(empty_acc);
@@ -4915,7 +4916,7 @@ void bit_block_erase(bm::word_t* block,
     if (!bitpos)
     {
         bm::word_t acc;
-        bit_block_shift_l1_unr(block, &acc, carry_over);
+        bm::bit_block_shift_l1_unr(block, &acc, carry_over);
         return;
     }
     
