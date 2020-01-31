@@ -76,13 +76,13 @@ public:
     {
     public:
         typedef id_type size_type;
-        bm_func_base_const(const blocks_manager& bman) : bm_(bman) {}
+        bm_func_base_const(const blocks_manager& bman) BMNOEXEPT : bm_(bman) {}
 
-        void on_empty_top(unsigned /* top_block_idx*/ ) {}
-        void on_empty_block(block_idx_type /* block_idx*/ ) {}
+        void on_empty_top(unsigned /* top_block_idx*/ ) BMNOEXEPT {}
+        void on_empty_block(block_idx_type /* block_idx*/ ) BMNOEXEPT {}
     private:
-        bm_func_base_const(const bm_func_base_const&);
-        bm_func_base_const& operator=(const bm_func_base_const&);
+        bm_func_base_const(const bm_func_base_const&) BMNOEXEPT;
+        bm_func_base_const& operator=(const bm_func_base_const&) BMNOEXEPT;
     protected:
         const blocks_manager&  bm_;
     };
@@ -92,7 +92,7 @@ public:
     class block_count_base : public bm_func_base_const
     {
     protected:
-        block_count_base(const blocks_manager& bm) 
+        block_count_base(const blocks_manager& bm) BMNOEXEPT
             : bm_func_base_const(bm) {}
 
         bm::id_t block_count(const bm::word_t* block) const
@@ -108,17 +108,17 @@ public:
     public:
         typedef id_type size_type;
 
-        block_count_func(const blocks_manager& bm) 
+        block_count_func(const blocks_manager& bm) BMNOEXEPT
             : block_count_base(bm), count_(0) {}
 
-        id_type count() const { return count_; }
+        id_type count() const BMNOEXEPT { return count_; }
 
-        void operator()(const bm::word_t* block)
+        void operator()(const bm::word_t* block) BMNOEXEPT
         {
             count_ += this->block_count(block);
         }
-        void add_full(id_type c) { count_ += c; }
-        void reset() { count_ = 0; }
+        void add_full(id_type c) BMNOEXEPT { count_ += c; }
+        void reset() BMNOEXEPT { count_ = 0; }
 
     private:
         id_type count_;
@@ -456,7 +456,7 @@ public:
         \param no_more_blocks - 1 if there are no more blocks at all
         \return block adress or NULL if not yet allocated
     */
-    bm::word_t* get_block(block_idx_type nb, int* no_more_blocks) const
+    bm::word_t* get_block(block_idx_type nb, int* no_more_blocks) const BMNOEXEPT
     {
         BM_ASSERT(top_blocks_);
         unsigned i = unsigned(nb >> bm::set_array_shift);
@@ -1837,7 +1837,7 @@ public:
     
     
     /// if tree of blocks already up
-    bool is_init() const { return top_blocks_ != 0; }
+    bool is_init() const BMNOEXEPT { return top_blocks_ != 0; }
     
     /// allocate first level of descr. of blocks 
     void init_tree()

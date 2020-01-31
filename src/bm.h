@@ -1720,7 +1720,7 @@ public:
     */
     size_type count_range(size_type left,
                           size_type right,
-                          const rs_index_type&  rs_idx) const;
+                          const rs_index_type&  rs_idx) const BMNOEXEPT;
     
     /*!
        \brief Returns count of 1 bits in the given range [left..right]
@@ -1730,7 +1730,7 @@ public:
 
        \return population count in the diapason
     */
-    size_type count_range(size_type left, size_type right) const;
+    size_type count_range(size_type left, size_type right) const BMNOEXEPT;
 
     /*!
        \brief Returns true if all bits in the range are 1s (saturated interval)
@@ -1742,7 +1742,7 @@ public:
        \return true if all bits are 1, false otherwise
        @sa any_range, count_range
     */
-    bool is_all_one_range(size_type left, size_type right) const;
+    bool is_all_one_range(size_type left, size_type right) const BMNOEXEPT;
 
     /*!
        \brief Returns true if any bits in the range are 1s (non-empty interval)
@@ -1754,7 +1754,7 @@ public:
        \return true if at least 1 bits is set
        @sa is_all_one_range, count_range
     */
-    bool any_range(size_type left, size_type right) const;
+    bool any_range(size_type left, size_type right) const BMNOEXEPT;
 
     /*!
         \brief Returns true if range is all 1s flanked with 0s
@@ -1769,7 +1769,7 @@ public:
        \return true/false
        @sa is_all_one_range
     */
-    bool is_interval(size_type left, size_type right) const;
+    bool is_interval(size_type left, size_type right) const BMNOEXEPT;
 
 
     /*! \brief compute running total of all blocks in bit vector (rank-select index)
@@ -1847,14 +1847,14 @@ public:
        \param n - Index of the bit to check.
        \return Bit value (1 or 0)
     */
-    bool get_bit(size_type n) const;
+    bool get_bit(size_type n) const BMNOEXEPT;
 
     /*!
        \brief returns true if bit n is set and false is bit n is 0. 
        \param n - Index of the bit to check.
        \return Bit value (1 or 0)
     */
-    bool test(size_type n) const { return get_bit(n); }
+    bool test(size_type n) const BMNOEXEPT { return get_bit(n); }
     
     //@}
     
@@ -3048,13 +3048,13 @@ bvector<Alloc>::count_to_test(size_type right,
 
 template<typename Alloc>
 typename bvector<Alloc>::size_type
-bvector<Alloc>::count_range(size_type left, size_type right) const
+bvector<Alloc>::count_range(size_type left, size_type right) const BMNOEXEPT
 {
     BM_ASSERT(left < bm::id_max && right < bm::id_max);
     if (left > right)
         bm::xor_swap(left, right);
-
-    BM_ASSERT_THROW(right < bm::id_max, BM_ERR_RANGE);
+    if (right == bm::id_max)
+        --right;
 
     if (!blockman_.is_init())
         return 0;
@@ -3139,18 +3139,19 @@ bvector<Alloc>::count_range(size_type left, size_type right) const
 // -----------------------------------------------------------------------
 
 template<typename Alloc>
-bool bvector<Alloc>::is_all_one_range(size_type left, size_type right) const
+bool bvector<Alloc>::is_all_one_range(size_type left, size_type right) const BMNOEXEPT
 {
     if (!blockman_.is_init())
         return false; // nothing to do
 
     if (right < left)
         bm::xor_swap(left, right);
+    if (right == bm::id_max)
+        --right;
     if (left == right)
         return test(left);
 
     BM_ASSERT(left < bm::id_max && right < bm::id_max);
-    BM_ASSERT_THROW(right < bm::id_max, BM_ERR_RANGE);
 
     block_idx_type nblock_left  = (left  >> bm::set_block_shift);
     block_idx_type nblock_right = (right >> bm::set_block_shift);
@@ -3221,18 +3222,19 @@ bool bvector<Alloc>::is_all_one_range(size_type left, size_type right) const
 // -----------------------------------------------------------------------
 
 template<typename Alloc>
-bool bvector<Alloc>::any_range(size_type left, size_type right) const
+bool bvector<Alloc>::any_range(size_type left, size_type right) const BMNOEXEPT
 {
+    BM_ASSERT(left < bm::id_max && right < bm::id_max);
+
     if (!blockman_.is_init())
         return false; // nothing to do
 
     if (right < left)
         bm::xor_swap(left, right);
+    if (right == bm::id_max)
+        --right;
     if (left == right)
         return test(left);
-
-    BM_ASSERT(left < bm::id_max && right < bm::id_max);
-    BM_ASSERT_THROW(right < bm::id_max, BM_ERR_RANGE);
 
     block_idx_type nblock_left  = (left  >> bm::set_block_shift);
     block_idx_type nblock_right = (right >> bm::set_block_shift);
@@ -3313,13 +3315,15 @@ bool bvector<Alloc>::any_range(size_type left, size_type right) const
 // -----------------------------------------------------------------------
 
 template<typename Alloc>
-bool bvector<Alloc>::is_interval(size_type left, size_type right) const
+bool bvector<Alloc>::is_interval(size_type left, size_type right) const BMNOEXEPT
 {
     if (!blockman_.is_init())
         return false; // nothing to do
 
     if (right < left)
         bm::xor_swap(left, right);
+    if (right == bm::id_max)
+        --right;
 
     block_idx_type nblock_left = (left >> bm::set_block_shift);
     block_idx_type nblock_right = (right >> bm::set_block_shift);
@@ -3337,7 +3341,6 @@ bool bvector<Alloc>::is_interval(size_type left, size_type right) const
             return b;
         }
     }
-
     bool is_left, is_right, is_all_one;
     is_left = left > 0 ? test(left-1) : false;
     if (is_left == false)
@@ -3349,6 +3352,7 @@ bool bvector<Alloc>::is_interval(size_type left, size_type right) const
             return is_all_one;
         }
     }
+
     return false;
 }
 
@@ -3358,12 +3362,14 @@ template<typename Alloc>
 typename bvector<Alloc>::size_type
 bvector<Alloc>::count_range(size_type left,
                             size_type right,
-                            const rs_index_type&  rs_idx) const
+                            const rs_index_type&  rs_idx) const BMNOEXEPT
 {
     BM_ASSERT(left <= right);
 
+    if (left > right)
+        bm::xor_swap(left, right);
+
     BM_ASSERT_THROW(right < bm::id_max, BM_ERR_RANGE);
-    BM_ASSERT_THROW(left <= right, BM_ERR_RANGE);
 
     if (left == right)
         return this->test(left);
@@ -3432,7 +3438,7 @@ bvector<Alloc>& bvector<Alloc>::invert()
 // -----------------------------------------------------------------------
 
 template<typename Alloc> 
-bool bvector<Alloc>::get_bit(size_type n) const
+bool bvector<Alloc>::get_bit(size_type n) const BMNOEXEPT
 {    
     BM_ASSERT(n < size_);
     BM_ASSERT_THROW((n < size_), BM_ERR_RANGE);
