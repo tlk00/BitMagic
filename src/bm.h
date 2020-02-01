@@ -463,7 +463,7 @@ public:
         typedef void                     pointer;
         typedef void                     reference;
 
-        bulk_insert_iterator()
+        bulk_insert_iterator() 
             : bvect_(0), buf_(0), buf_size_(0), sorted_(BM_UNKNOWN) {}
         
         ~bulk_insert_iterator()
@@ -1806,8 +1806,9 @@ public:
        \sa build_rs_index
        \sa count_to_test, select, rank
     */
-    size_type rank(size_type n, const rs_index_type&  rs_idx) const
-                                            {  return count_to(n, rs_idx); }
+    size_type rank(size_type n, 
+                   const rs_index_type&  rs_idx) const BMNOEXEPT
+                                    {  return count_to(n, rs_idx); }
     
 
     /*!
@@ -1827,7 +1828,8 @@ public:
         \sa count_to
     */
     size_type
-    count_to_test(size_type n, const rs_index_type&  rs_idx) const BMNOEXEPT;
+    count_to_test(size_type n, 
+                  const rs_index_type&  rs_idx) const BMNOEXEPT;
 
 
     /*! Recalculate bitcount (deprecated)
@@ -2219,7 +2221,7 @@ public:
 
        @sa statistics
     */
-    void calc_stat(struct bm::bvector<Alloc>::statistics* st) const;
+    void calc_stat(struct bm::bvector<Alloc>::statistics* st) const BMNOEXEPT;
 
     /*!
        \brief Sets new blocks allocation strategy.
@@ -2234,7 +2236,8 @@ public:
                  1 - Blocks mutation mode (adaptive algorithm)
        \sa set_new_blocks_strat
     */
-    strategy  get_new_blocks_strat() const { return new_blocks_strat_; }
+    strategy  get_new_blocks_strat() const BMNOEXEPT 
+                             { return new_blocks_strat_; }
 
     /*!
        \brief Optimize memory bitvector's memory allocation.
@@ -2273,7 +2276,7 @@ public:
         Return true if bvector is initialized at all
         @internal
     */
-    bool is_init() const { return blockman_.is_init(); }
+    bool is_init() const BMNOEXEPT { return blockman_.is_init(); }
     
     //@}
     
@@ -2339,14 +2342,16 @@ public:
         Use only if you are BitMagic library
         @internal
     */
-    const blocks_manager_type& get_blocks_manager() const { return blockman_; }
+    const blocks_manager_type& get_blocks_manager() const BMNOEXEPT 
+                                            { return blockman_; }
     
     /**
         \brief get access to memory manager (internal)
         Use only if you are BitMagic library
         @internal
     */
-    blocks_manager_type& get_blocks_manager() { return blockman_; }
+    blocks_manager_type& get_blocks_manager() BMNOEXEPT 
+                                    { return blockman_; }
 
     //@}
     
@@ -2478,7 +2483,7 @@ private:
     /**
         Return value of first bit in the block
     */
-    bool test_first_block_bit(block_idx_type nb) const;
+    bool test_first_block_bit(block_idx_type nb) const BMNOEXEPT;
     
 private:
     blocks_manager_type  blockman_;         //!< bitblocks manager
@@ -3800,7 +3805,8 @@ void bvector<Alloc>::swap(bvector<Alloc>& bvect) BMNOEXEPT
 // -----------------------------------------------------------------------
 
 template<typename Alloc> 
-void bvector<Alloc>::calc_stat(struct bvector<Alloc>::statistics* st) const
+void bvector<Alloc>::calc_stat(
+                   struct bvector<Alloc>::statistics* st) const BMNOEXEPT
 {
     BM_ASSERT(st);
     
@@ -5094,7 +5100,7 @@ void bvector<Alloc>::erase(size_type n)
 //---------------------------------------------------------------------
 
 template<class Alloc>
-bool bvector<Alloc>::test_first_block_bit(block_idx_type nb) const
+bool bvector<Alloc>::test_first_block_bit(block_idx_type nb) const BMNOEXEPT
 {
     if (nb >= bm::set_total_blocks) // last possible block
         return false;
