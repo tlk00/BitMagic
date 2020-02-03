@@ -2040,7 +2040,11 @@ void verify_all_one_ranges(const bvect& bv, bool all_one)
         {
             assert(one_test);
             assert(any_one_test);
-            assert(is_int);
+            if (is_int)
+            {
+                assert(from == 0 || bv.test(from-1) == false);
+                assert(bv.test(to+1) == false);
+            }
         }
         else
         {
@@ -2085,7 +2089,11 @@ void verify_all_one_ranges(const bvect& bv, bool all_one)
             {
                 assert(one_test);
                 assert(any_one_test);
-                assert(is_int);
+                if (is_int)
+                {
+                    assert(from == 0 || bv.test(from-1) == false);
+                    assert(bv.test(to+1) == false);
+                }
             }
             else
             {
@@ -2129,7 +2137,11 @@ void verify_all_one_ranges(const bvect& bv, bool all_one)
             {
                 assert(one_test);
                 assert(any_one_test);
-                assert(is_int);
+                if (is_int)
+                {
+                    assert(from == 0 || bv.test(from-1) == false);
+                    assert(bv.test(to+1) == false);
+                }
             }
             else
             {
