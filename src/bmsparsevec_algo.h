@@ -503,7 +503,7 @@ public:
     /**
         \brief reset sparse vector binding
     */
-    void reset_binding();
+    void reset_binding() BMNOEXEPT;
 
     /**
         \brief find all sparse vector elements EQ to search value
@@ -709,7 +709,7 @@ protected:
     int compare_str(const SV& sv, size_type idx, const value_type* str);
 
     /// compare sv[idx] with input value
-    int compare(const SV& sv, size_type idx, const value_type val);
+    int compare(const SV& sv, size_type idx, const value_type val) BMNOEXEPT;
 
 protected:
     sparse_vector_scanner(const sparse_vector_scanner&) = delete;
@@ -1157,7 +1157,7 @@ void sparse_vector_scanner<SV>::bind(const SV&  sv, bool sorted)
 //----------------------------------------------------------------------------
 
 template<typename SV>
-void sparse_vector_scanner<SV>::reset_binding()
+void sparse_vector_scanner<SV>::reset_binding() BMNOEXEPT
 {
     bound_sv_ = 0;
     effective_str_max_ = 0;
@@ -2020,7 +2020,7 @@ int sparse_vector_scanner<SV>::compare_str(const SV& sv,
 template<typename SV>
 int sparse_vector_scanner<SV>::compare(const SV& sv,
                                        size_type idx,
-                                       const value_type val)
+                                       const value_type val) BMNOEXEPT
 {
     // TODO: implement sentinel elements cache (similar to compare_str())
     return sv.compare(idx, val);

@@ -82,7 +82,7 @@ public:
      
         \return true if id is known and resolved successfully
     */
-    bool resolve(size_type id_from, size_type* id_to) const;
+    bool resolve(size_type id_from, size_type* id_to) const BMNOEXEPT;
     
     /*!
         \brief Resolve id to integer id (address) without sync check
@@ -94,7 +94,7 @@ public:
      
         \return true if id is known and resolved successfully
     */
-    bool get(size_type id_from, size_type* id_to) const;
+    bool get(size_type id_from, size_type* id_to) const BMNOEXEPT;
     
     /*!
         \brief Set id (bit) to address resolver
@@ -146,7 +146,7 @@ public:
     /*!
         \brief equality comparison
     */
-    bool equal(const bvps_addr_resolver& addr_res) const;
+    bool equal(const bvps_addr_resolver& addr_res) const BMNOEXEPT;
     
 protected:
     void construct_rs_index();
@@ -459,7 +459,8 @@ void bvps_addr_resolver<BV>::move_from(bvps_addr_resolver& addr_res) BMNOEXEPT
 //---------------------------------------------------------------------
 
 template<class BV>
-bool bvps_addr_resolver<BV>::resolve(size_type id_from, size_type* id_to) const
+bool bvps_addr_resolver<BV>::resolve(size_type id_from,
+                                    size_type* id_to) const BMNOEXEPT
 {
     BM_ASSERT(id_to);
     if (in_sync_)
@@ -484,7 +485,8 @@ bool bvps_addr_resolver<BV>::resolve(size_type id_from, size_type* id_to) const
 //---------------------------------------------------------------------
 
 template<class BV>
-bool bvps_addr_resolver<BV>::get(size_type id_from, size_type* id_to) const
+bool bvps_addr_resolver<BV>::get(size_type id_from,
+                                 size_type* id_to) const BMNOEXEPT
 {
     BM_ASSERT(id_to);
     BM_ASSERT(in_sync_);
@@ -529,10 +531,10 @@ void bvps_addr_resolver<BV>::optimize(bm::word_t* temp_block)
 //---------------------------------------------------------------------
 
 template<class BV>
-bool bvps_addr_resolver<BV>::equal(const bvps_addr_resolver& addr_res) const
+bool bvps_addr_resolver<BV>::equal(
+                    const bvps_addr_resolver& addr_res) const BMNOEXEPT
 {
-    int cmp = addr_bv_.compare(addr_res.addr_bv_);
-    return (cmp == 0);
+    return addr_bv_.equal(addr_res.addr_bv_);
 }
 
 //---------------------------------------------------------------------

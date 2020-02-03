@@ -99,7 +99,7 @@ namespace bm
     Get minimum of 2 values
 */
 template<typename T>
-T min_value(T v1, T v2)
+T min_value(T v1, T v2) BMNOEXEPT
 {
     return v1 < v2 ? v1 : v2;
 }
@@ -109,7 +109,7 @@ T min_value(T v1, T v2)
     Fast loop-less function to find LOG2
 */
 template<typename T>
-T ilog2(T x)
+T ilog2(T x) BMNOEXEPT
 {
     unsigned int l = 0;
     
@@ -122,7 +122,7 @@ T ilog2(T x)
 }
 
 template<>
-inline bm::gap_word_t ilog2(gap_word_t x)
+inline bm::gap_word_t ilog2(gap_word_t x) BMNOEXEPT
 {
     unsigned int l = 0;
     if (x >= 1<<8)  { x = (bm::gap_word_t)(x >> 8); l |= 8; }
@@ -140,7 +140,7 @@ template<class T>
 class ptr_guard
 {
 public:
-    ptr_guard(T* p) : ptr_(p) {}
+    ptr_guard(T* p) BMNOEXEPT : ptr_(p) {}
     ~ptr_guard() { delete ptr_; }
 private:
     ptr_guard(const ptr_guard<T>& p);
@@ -154,8 +154,7 @@ private:
     @ingroup bitfunc
     @internal
 */
-inline 
-unsigned count_leading_zeros(unsigned x) 
+inline unsigned count_leading_zeros(unsigned x) BMNOEXEPT
 {
     unsigned n =
         (x >= (1U << 16)) ?
@@ -171,7 +170,7 @@ unsigned count_leading_zeros(unsigned x)
     @internal
 */
 inline
-unsigned count_trailing_zeros(unsigned v)
+unsigned count_trailing_zeros(unsigned v) BMNOEXEPT
 {
     // (v & -v) isolates the last set bit
     return unsigned(bm::tzcnt_table<true>::_lut[(-v & v) % 37]);
@@ -181,7 +180,7 @@ unsigned count_trailing_zeros(unsigned v)
     Lookup table based integer LOG2
 */
 template<typename T>
-T ilog2_LUT(T x)
+T ilog2_LUT(T x) BMNOEXEPT
 {
     unsigned l = 0;
     if (x & 0xffff0000) 
@@ -200,7 +199,7 @@ T ilog2_LUT(T x)
     Lookup table based short integer LOG2
 */
 template<>
-inline bm::gap_word_t ilog2_LUT<bm::gap_word_t>(bm::gap_word_t x)
+inline bm::gap_word_t ilog2_LUT<bm::gap_word_t>(bm::gap_word_t x) BMNOEXEPT
 {
     bm::gap_word_t l = 0;
     if (x & 0xff00) 
@@ -218,7 +217,7 @@ inline bm::gap_word_t ilog2_LUT<bm::gap_word_t>(bm::gap_word_t x)
 #ifdef __GNUG__
 
 BMFORCEINLINE
-unsigned bsf_asm32(unsigned int v)
+unsigned bsf_asm32(unsigned int v) BMNOEXEPT
 {
     unsigned r;
     asm volatile(" bsfl %1, %0": "=r"(r): "rm"(v) );
@@ -226,7 +225,7 @@ unsigned bsf_asm32(unsigned int v)
 }
  
 BMFORCEINLINE
-unsigned bsr_asm32(unsigned int v)
+unsigned bsr_asm32(unsigned int v) BMNOEXEPT
 {
     unsigned r;
     asm volatile(" bsrl %1, %0": "=r"(r): "rm"(v) );
@@ -240,7 +239,7 @@ unsigned bsr_asm32(unsigned int v)
 #if defined(_M_AMD64) || defined(_M_X64) // inline assembly not supported
 
 BMFORCEINLINE
-unsigned int bsr_asm32(unsigned int value)
+unsigned int bsr_asm32(unsigned int value) BMNOEXEPT
 {
     unsigned long r;
     _BitScanReverse(&r, value);
@@ -248,7 +247,7 @@ unsigned int bsr_asm32(unsigned int value)
 }
 
 BMFORCEINLINE
-unsigned int bsf_asm32(unsigned int value)
+unsigned int bsf_asm32(unsigned int value) BMNOEXEPT
 {
     unsigned long r;
     _BitScanForward(&r, value);
@@ -258,13 +257,13 @@ unsigned int bsf_asm32(unsigned int value)
 #else
 
 BMFORCEINLINE
-unsigned int bsr_asm32(unsigned int value)
+unsigned int bsr_asm32(unsigned int value) BMNOEXEPT
 {   
   __asm  bsr  eax, value
 }
 
 BMFORCEINLINE
-unsigned int bsf_asm32(unsigned int value)
+unsigned int bsf_asm32(unsigned int value) BMNOEXEPT
 {   
   __asm  bsf  eax, value
 }
@@ -280,14 +279,14 @@ unsigned int bsf_asm32(unsigned int value)
 // http://citeseerx.ist.psu.edu/viewdoc/summary?doi=10.1.1.37.8562
 //
 template<typename T>
-T bit_scan_fwd(T v)
+T bit_scan_fwd(T v) BMNOEXEPT
 {
     return
         DeBruijn_bit_position<true>::_multiply[(((v & -v) * 0x077CB531U)) >> 27];
 }
 
 inline
-unsigned bit_scan_reverse32(unsigned value)
+unsigned bit_scan_reverse32(unsigned value) BMNOEXEPT
 {
     BM_ASSERT(value);
 #if defined(BM_USE_GCC_BUILD)
@@ -302,7 +301,7 @@ unsigned bit_scan_reverse32(unsigned value)
 }
 
 inline
-unsigned bit_scan_forward32(unsigned value)
+unsigned bit_scan_forward32(unsigned value) BMNOEXEPT
 {
     BM_ASSERT(value);
 #if defined(BM_USE_GCC_BUILD)
@@ -318,7 +317,7 @@ unsigned bit_scan_forward32(unsigned value)
 
 
 BMFORCEINLINE
-unsigned long long bmi_bslr_u64(unsigned long long w)
+unsigned long long bmi_bslr_u64(unsigned long long w) BMNOEXEPT
 {
 #if defined(BMAVX2OPT) || defined (BMAVX512OPT)
     return _blsr_u64(w);
@@ -339,7 +338,7 @@ unsigned long long bmi_blsi_u64(unsigned long long w)
 
 /// 64-bit bit-scan reverse
 inline
-unsigned count_leading_zeros_u64(bm::id64_t w)
+unsigned count_leading_zeros_u64(bm::id64_t w) BMNOEXEPT
 {
     BM_ASSERT(w);
 #if defined(BMAVX2OPT) || defined (BMAVX512OPT)
@@ -367,7 +366,7 @@ unsigned count_leading_zeros_u64(bm::id64_t w)
 
 /// 64-bit bit-scan fwd
 inline
-unsigned count_trailing_zeros_u64(bm::id64_t w)
+unsigned count_trailing_zeros_u64(bm::id64_t w) BMNOEXEPT
 {
     BM_ASSERT(w);
 

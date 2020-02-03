@@ -280,7 +280,7 @@ public:
            \fn bool bm::bvector::iterator_base::invalidate() 
            \brief Turns iterator into an invalid state.
         */
-        void invalidate() BMNOEXEPT { position_ = bm::id_max; }
+        void invalidate() BMNOEXEPT { position_ = bm::id_max; block_type_ = ~0u;}
         
         /** \brief Compare FSMs for testing purposes
             \internal
@@ -721,7 +721,6 @@ public:
         enumerator& go_up() BMNOEXEPT
         {
             BM_ASSERT(this->valid());
-            //BM_ASSERT_THROW(this->valid(), BM_ERR_RANGE);
 
             // Current block search.
             //

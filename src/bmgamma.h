@@ -42,25 +42,25 @@ template<typename T, typename TBitIO>
 class gamma_decoder
 {
 public:
-    gamma_decoder(TBitIO& bin) : bin_(bin) 
+    gamma_decoder(TBitIO& bin) BMNOEXEPT : bin_(bin)
     {}
     
     /**
         Start encoding sequence
     */
-    void start()
+    void start() BMNOEXEPT
     {}
     
     /**
         Stop decoding sequence
     */
-    void stop()
+    void stop() BMNOEXEPT
     {}
     
     /**
         Decode word
     */
-    T operator()(void)
+    T operator()(void) BMNOEXEPT
     {
         unsigned l = bin_.eat_zero_bits();
         bin_.get_bit(); // get border bit

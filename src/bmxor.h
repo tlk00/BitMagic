@@ -36,7 +36,7 @@ namespace bm
 inline
 unsigned bit_block_xor_change32(const bm::word_t* BMRESTRICT block,
                                 const bm::word_t* BMRESTRICT xor_block,
-                                unsigned size)
+                                unsigned size) BMNOEXEPT
 {
     unsigned gap_count = 1;
 
@@ -80,7 +80,7 @@ unsigned bit_block_xor_change32(const bm::word_t* BMRESTRICT block,
 inline
 unsigned bit_block_xor_change(const bm::word_t* BMRESTRICT block,
                               const bm::word_t* BMRESTRICT xor_block,
-                              unsigned size)
+                              unsigned size) BMNOEXEPT
 {
 #ifdef VECT_BLOCK_XOR_CHANGE
     return VECT_BLOCK_XOR_CHANGE(block, xor_block, size);
@@ -112,7 +112,7 @@ struct block_waves_xor_descr
 inline
 void compute_complexity_descr(
                         const bm::word_t* BMRESTRICT block,
-                        block_waves_xor_descr& BMRESTRICT x_descr)
+                        block_waves_xor_descr& BMRESTRICT x_descr) BMNOEXEPT
 {
     for (unsigned i = 0; i < bm::block_waves; ++i)
     {
@@ -146,7 +146,7 @@ bm::id64_t compute_xor_complexity_descr(
                         const bm::word_t* BMRESTRICT block,
                         const bm::word_t* BMRESTRICT xor_block,
                         block_waves_xor_descr& BMRESTRICT x_descr,
-                        unsigned& block_gain)
+                        unsigned& BMRESTRICT block_gain) BMNOEXEPT
 {
     block_gain = 0; // approximate block gain (sum of sub-waves)
     bm::id64_t digest = 0;
@@ -191,7 +191,7 @@ bm::id64_t compute_xor_complexity_descr(
 inline
 void bit_block_xor(bm::word_t*  target_block,
                    const bm::word_t*  block, const bm::word_t*  xor_block,
-                   bm::id64_t digest)
+                   bm::id64_t digest) BMNOEXEPT
 {
     BM_ASSERT(target_block);
     BM_ASSERT(block);
@@ -267,21 +267,23 @@ public:
     }
 
     /// Get reference list size
-    size_type size() const { return (size_type)ref_bvects_.size(); }
+    size_type size() const BMNOEXEPT { return (size_type)ref_bvects_.size(); }
 
     /// Get reference vector by the index in this ref-vector
-    const bvector_type* get_bv(size_type idx) const { return ref_bvects_[idx]; }
+    const bvector_type* get_bv(size_type idx) const BMNOEXEPT
+                                        { return ref_bvects_[idx]; }
 
     /// Get reference row index by the index in this ref-vector
-    size_type get_row_idx(size_type idx) const { return (size_type)ref_bvects_rows_[idx]; }
+    size_type get_row_idx(size_type idx) const BMNOEXEPT
+                        { return (size_type)ref_bvects_rows_[idx]; }
 
     /// not-found value for find methods
     static
-    size_type not_found() { return ~(size_type(0)); }
+    size_type not_found() BMNOEXEPT { return ~(size_type(0)); }
 
     /// Find vector index by the reference index
     /// @return ~0 if not found
-    size_type find(std::size_t ref_idx) const
+    size_type find(std::size_t ref_idx) const BMNOEXEPT
     {
         size_type sz = size();
         for (size_type i = 0; i < sz; ++i)
@@ -333,13 +335,16 @@ public:
     typedef typename bvector_type::size_type     size_type;
 
 public:
-    void set_ref_vector(const bv_ref_vector_type* ref_vect) { ref_vect_ = ref_vect; }
-    const bv_ref_vector_type& get_ref_vector() const { return *ref_vect_; }
+    void set_ref_vector(const bv_ref_vector_type* ref_vect) BMNOEXEPT
+    { ref_vect_ = ref_vect; }
+
+    const bv_ref_vector_type& get_ref_vector() const BMNOEXEPT
+    { return *ref_vect_; }
 
     /** Compute statistics for the anchor search vector
         @param block - bit-block target
     */
-    void compute_x_block_stats(const bm::word_t* block);
+    void compute_x_block_stats(const bm::word_t* block) BMNOEXEPT;
 
     /** Scan for all candidate bit-blocks to find mask or match
         @return true if XOR complement or matching vector found
@@ -360,23 +365,26 @@ public:
     /**
         Validate serialization target
     */
-    bool validate_found(bm::word_t* xor_block, const bm::word_t* block) const;
+    bool validate_found(bm::word_t* xor_block,
+                        const bm::word_t* block) const BMNOEXEPT;
 
-    size_type found_ridx() const { return found_ridx_; }
-    const bm::word_t* get_found_block() const { return found_block_xor_; }
-    unsigned get_x_best_metric() const { return x_best_metric_; }
-    bm::id64_t get_xor_digest() const { return x_d64_; }
+    size_type found_ridx() const BMNOEXEPT { return found_ridx_; }
+    const bm::word_t* get_found_block() const BMNOEXEPT
+    { return found_block_xor_; }
+    unsigned get_x_best_metric() const BMNOEXEPT { return x_best_metric_; }
+    bm::id64_t get_xor_digest() const BMNOEXEPT { return x_d64_; }
 
     /// true if completely identical vector found
-    bool is_eq_found() const { return !x_best_metric_; }
+    bool is_eq_found() const BMNOEXEPT { return !x_best_metric_; }
 
 
-    unsigned get_x_bc() const { return x_bc_; }
-    unsigned get_x_gc() const { return x_gc_; }
-    unsigned get_x_block_best() const { return x_block_best_metric_; }
+    unsigned get_x_bc() const BMNOEXEPT { return x_bc_; }
+    unsigned get_x_gc() const BMNOEXEPT { return x_gc_; }
+    unsigned get_x_block_best() const BMNOEXEPT
+                    { return x_block_best_metric_; }
 
 
-    bm::block_waves_xor_descr& get_descr() { return x_descr_; }
+    bm::block_waves_xor_descr& get_descr() BMNOEXEPT { return x_descr_; }
 
 private:
     const bv_ref_vector_type*        ref_vect_ = 0; ///< ref.vect for XOR filter
@@ -400,7 +408,7 @@ private:
 // --------------------------------------------------------------------------
 
 template<typename BV>
-void xor_scanner<BV>::compute_x_block_stats(const bm::word_t* block)
+void xor_scanner<BV>::compute_x_block_stats(const bm::word_t* block) BMNOEXEPT
 {
     BM_ASSERT(IS_VALID_ADDR(block));
     BM_ASSERT(!BM_IS_GAP(block));
@@ -439,7 +447,8 @@ bool xor_scanner<BV>::search_best_xor_mask(const bm::word_t* block,
     {
         const bvector_type* bv = ref_vect_->get_bv(ri);
         BM_ASSERT(bv);
-        const typename bvector_type::blocks_manager_type& bman = bv->get_blocks_manager();
+        const typename bvector_type::blocks_manager_type& bman =
+                                                bv->get_blocks_manager();
         const bm::word_t* block_xor = bman.get_block_ptr(i, j);
         if (!IS_VALID_ADDR(block_xor) || BM_IS_GAP(block_xor))
             continue;
@@ -487,7 +496,7 @@ bool xor_scanner<BV>::search_best_xor_mask(const bm::word_t* block,
             if (!xor_bc) // completely identical block?
             {
                 unsigned pos;
-                bool f = bit_find_first_diff(block, block_xor, &pos);
+                bool f = bm::bit_find_first_diff(block, block_xor, &pos);
                 x_best_metric_ += f;
             }
         }
@@ -555,7 +564,7 @@ bool xor_scanner<BV>::search_best_xor_gap(const bm::word_t* block,
 
 template<typename BV>
 bool xor_scanner<BV>::validate_found(bm::word_t* xor_block,
-                                     const bm::word_t* block) const
+                                     const bm::word_t* block) const BMNOEXEPT
 {
     bm::id64_t d64 = get_xor_digest();
     BM_ASSERT(d64);

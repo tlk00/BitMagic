@@ -101,10 +101,10 @@ public:
         reference(rsc_sparse_vector<Val, SV>& csv, size_type idx) BMNOEXEPT
         : csv_(csv), idx_(idx)
         {}
-        operator value_type() const { return csv_.get(idx_); }
-        bool operator==(const reference& ref) const
+        operator value_type() const BMNOEXEPT { return csv_.get(idx_); }
+        bool operator==(const reference& ref) const BMNOEXEPT
                                 { return bool(*this) == bool(ref); }
-        bool is_null() const { return csv_.is_null(idx_); }
+        bool is_null() const BMNOEXEPT { return csv_.is_null(idx_); }
     private:
         rsc_sparse_vector<Val, SV>& csv_;
         size_type                   idx_;
@@ -166,10 +166,10 @@ public:
         void add(value_type v);
         
         /** add NULL (no-value) to the container */
-        void add_null();
+        void add_null() BMNOEXEPT;
         
         /** add a series of consequitve NULLs (no-value) to the container */
-        void add_null(size_type count);
+        void add_null(size_type count) BMNOEXEPT;
         
         /** flush the accumulated buffer */
         void flush();
@@ -183,7 +183,8 @@ public:
         ///size_type add_value(value_type v);
         
         typedef rsc_sparse_vector_type::sparse_vector_type sparse_vector_type;
-        typedef typename sparse_vector_type::back_insert_iterator   sparse_vector_bi;
+        typedef
+        typename sparse_vector_type::back_insert_iterator  sparse_vector_bi;
     private:
         rsc_sparse_vector_type* csv_;      ///!< pointer on the parent vector
         sparse_vector_bi        sv_bi_;
@@ -205,7 +206,7 @@ public:
     
     
     /*! copy assignmment operator */
-    rsc_sparse_vector<Val,SV>& operator = (const rsc_sparse_vector<Val, SV>& csv)
+    rsc_sparse_vector<Val,SV>& operator=(const rsc_sparse_vector<Val, SV>& csv)
     {
         if (this != &csv)
         {
@@ -249,7 +250,7 @@ public:
     /*! \brief return size of the vector
         \return size of sparse vector
     */
-    size_type size() const;
+    size_type size() const BMNOEXEPT;
     
     /*! \brief return true if vector is empty
         \return true if empty
@@ -281,7 +282,7 @@ public:
         \param idx - element index
         \return value of the element
     */
-    value_type get(size_type idx) const;
+    value_type get(size_type idx) const BMNOEXEPT;
     
     /*!
         \brief set specified element with bounds checking and automatic resize
@@ -315,19 +316,19 @@ public:
         \return true if it is NULL false if it was assigned or container
         is not configured to support assignment flags
     */
-    bool is_null(size_type idx) const;
+    bool is_null(size_type idx) const BMNOEXEPT;
     
     /**
         \brief Get bit-vector of assigned values (or NULL)
     */
-    const bvector_type* get_null_bvector() const;
+    const bvector_type* get_null_bvector() const BMNOEXEPT;
 
     /**
         \brief find position of compressed element by its rank
         \param rank - rank  (virtual index in sparse vector)
         \param idx  - index (true position)
     */
-    bool find_rank(size_type rank, size_type& idx) const;
+    bool find_rank(size_type rank, size_type& idx) const BMNOEXEPT;
 
     //@}
     
@@ -367,7 +368,7 @@ public:
         \brief check if another vector has the same content
         \return true, if it is the same
     */
-    bool equal(const rsc_sparse_vector<Val, SV>& csv) const;
+    bool equal(const rsc_sparse_vector<Val, SV>& csv) const BMNOEXEPT;
     //@}
 
 
@@ -408,13 +409,14 @@ public:
         \param opt_mode - requested compression depth
         \param stat - memory allocation statistics after optimization
     */
-    void optimize(bm::word_t* temp_block = 0,
-                  typename bvector_type::optmode opt_mode = bvector_type::opt_compress,
-                  statistics* stat = 0);
+    void optimize(
+        bm::word_t* temp_block = 0,
+        typename bvector_type::optmode opt_mode = bvector_type::opt_compress,
+        statistics* stat = 0);
     
     /*! \brief resize to zero, free memory
     */
-    void clear() BMNOEXEPT;
+    void clear();
     
     /*!
         @brief Calculates memory statistics.
@@ -427,7 +429,8 @@ public:
 
         @sa statistics
     */
-    void calc_stat(struct rsc_sparse_vector<Val, SV>::statistics* st) const;
+    void calc_stat(
+           struct rsc_sparse_vector<Val, SV>::statistics* st) const BMNOEXEPT;
 
     ///@}
 
@@ -467,12 +470,12 @@ public:
     /*!
         \brief returns true if prefix sum table is in sync with the vector
     */
-    bool in_sync() const { return in_sync_; }
+    bool in_sync() const BMNOEXEPT { return in_sync_; }
     
     /*!
         \brief Unsync the prefix sum table
     */
-    void unsync() { in_sync_ = false; }
+    void unsync() BMNOEXEPT { in_sync_ = false; }
     ///@}
 
     // ------------------------------------------------------------
@@ -483,19 +486,23 @@ public:
         \brief get access to bit-plain, function checks and creates a plain
         \return bit-vector for the bit plain
     */
-    bvector_type_const_ptr get_plain(unsigned i) const { return sv_.get_plain(i); }
+    bvector_type_const_ptr get_plain(unsigned i) const BMNOEXEPT
+        { return sv_.get_plain(i); }
 
-    bvector_type_ptr get_plain(unsigned i)  { return sv_.get_plain(i); }
+    bvector_type_ptr get_plain(unsigned i) BMNOEXEPT
+        { return sv_.get_plain(i); }
     
     /*!
         Number of effective bit-plains in the value type
     */
-    unsigned effective_plains() const { return sv_.effective_plains(); }
+    unsigned effective_plains() const BMNOEXEPT
+        { return sv_.effective_plains(); }
     
     /*!
         \brief get total number of bit-plains in the vector
     */
-    static unsigned plains() { return sparse_vector_type::plains(); }
+    static unsigned plains() BMNOEXEPT
+        { return sparse_vector_type::plains(); }
 
     /** Number of stored bit-plains (value plains + extra */
     static unsigned stored_plains()
@@ -504,22 +511,23 @@ public:
     /*!
         \brief access dense vector
     */
-    const sparse_vector_type& get_sv() const { return sv_; }
+    const sparse_vector_type& get_sv() const BMNOEXEPT { return sv_; }
 
     /*!
         \brief size of internal dense vector
     */
-    size_type effective_size() const { return sv_.size(); }
+    size_type effective_size() const BMNOEXEPT { return sv_.size(); }
 
     /**
         \brief Always 1 (non-matrix type)
     */
-    size_type effective_vector_max() const { return 1; }
+    size_type effective_vector_max() const BMNOEXEPT { return 1; }
 
     /*!
         get read-only access to inetrnal bit-matrix
     */
-    const bmatrix_type& get_bmatrix() const { return sv_.get_bmatrix(); }
+    const bmatrix_type& get_bmatrix() const BMNOEXEPT
+        { return sv_.get_bmatrix(); }
 
     ///@}
     
@@ -537,10 +545,10 @@ protected:
      
         \return true if id is known and resolved successfully
     */
-    bool resolve(size_type idx, size_type* idx_to) const;
+    bool resolve(size_type idx, size_type* idx_to) const BMNOEXEPT;
 
     bool resolve_range(size_type from, size_type to, 
-                       size_type* idx_from, size_type* idx_to) const;
+                       size_type* idx_from, size_type* idx_to) const BMNOEXEPT;
     
     void resize_internal(size_type sz) { sv_.resize_internal(sz); }
     size_type size_internal() const { return sv_.size(); }
@@ -636,7 +644,7 @@ rsc_sparse_vector<Val, SV>::rsc_sparse_vector(rsc_sparse_vector<Val,SV>&& csv) B
 
 template<class Val, class SV>
 typename rsc_sparse_vector<Val, SV>::size_type
-rsc_sparse_vector<Val, SV>::size() const
+rsc_sparse_vector<Val, SV>::size() const BMNOEXEPT
 {
     return size_;
 }
@@ -699,12 +707,8 @@ void rsc_sparse_vector<Val, SV>::set(size_type idx, value_type v)
     
     bool found = bv_null->test(idx);
     size_type sv_idx = bv_null->count_range(0, idx); // TODO: make test'n'count
-//    size_type sv_idx;
-//    bool found = resolve(idx, &sv_idx);
-
     if (found)
     {
-        //sv_.set(--sv_idx, v);
         sv_.set_value_no_null(--sv_idx, v);
     }
     else
@@ -725,7 +729,7 @@ void rsc_sparse_vector<Val, SV>::set(size_type idx, value_type v)
 
 template<class Val, class SV>
 bool rsc_sparse_vector<Val, SV>::equal(
-                    const rsc_sparse_vector<Val, SV>& csv) const
+                    const rsc_sparse_vector<Val, SV>& csv) const BMNOEXEPT
 {
     if (this == &csv)
         return true;
@@ -837,10 +841,10 @@ void rsc_sparse_vector<Val, SV>::sync(bool force)
 //---------------------------------------------------------------------
 
 template<class Val, class SV>
-bool rsc_sparse_vector<Val, SV>::resolve(size_type idx, size_type* idx_to) const
+bool rsc_sparse_vector<Val, SV>::resolve(size_type idx,
+                                         size_type* idx_to) const BMNOEXEPT
 {
     BM_ASSERT(idx_to);
-    
     const bvector_type* bv_null = sv_.get_null_bvector();
     if (in_sync_)
     {
@@ -865,7 +869,7 @@ bool rsc_sparse_vector<Val, SV>::resolve(size_type idx, size_type* idx_to) const
 template<class Val, class SV>
 bool rsc_sparse_vector<Val, SV>::resolve_range(
     size_type from, size_type to,
-    size_type* idx_from, size_type* idx_to) const
+    size_type* idx_from, size_type* idx_to) const BMNOEXEPT
 {
     BM_ASSERT(idx_to && idx_from);
     const bvector_type* bv_null = sv_.get_null_bvector();
@@ -910,7 +914,7 @@ rsc_sparse_vector<Val, SV>::at(size_type idx) const
 
 template<class Val, class SV>
 typename rsc_sparse_vector<Val, SV>::value_type
-rsc_sparse_vector<Val, SV>::get(size_type idx) const
+rsc_sparse_vector<Val, SV>::get(size_type idx) const BMNOEXEPT
 {
     size_type sv_idx;
     bool found = resolve(idx, &sv_idx);
@@ -923,7 +927,7 @@ rsc_sparse_vector<Val, SV>::get(size_type idx) const
 //---------------------------------------------------------------------
 
 template<class Val, class SV>
-bool rsc_sparse_vector<Val, SV>::is_null(size_type idx) const
+bool rsc_sparse_vector<Val, SV>::is_null(size_type idx) const BMNOEXEPT
 {
     const bvector_type* bv_null = sv_.get_null_bvector();
     BM_ASSERT(bv_null);
@@ -950,7 +954,7 @@ void rsc_sparse_vector<Val, SV>::optimize(bm::word_t*  temp_block,
 //---------------------------------------------------------------------
 
 template<class Val, class SV>
-void rsc_sparse_vector<Val, SV>::clear() BMNOEXEPT
+void rsc_sparse_vector<Val, SV>::clear()
 {
     sv_.clear();
     in_sync_ = false;  max_id_ = size_ = 0;
@@ -960,7 +964,7 @@ void rsc_sparse_vector<Val, SV>::clear() BMNOEXEPT
 
 template<class Val, class SV>
 void rsc_sparse_vector<Val, SV>::calc_stat(
-            struct rsc_sparse_vector<Val, SV>::statistics* st) const
+            struct rsc_sparse_vector<Val, SV>::statistics* st) const BMNOEXEPT
 {
     BM_ASSERT(st);
     sv_.calc_stat((typename sparse_vector_type::statistics*)st);
@@ -977,7 +981,7 @@ void rsc_sparse_vector<Val, SV>::calc_stat(
 
 template<class Val, class SV>
 const typename rsc_sparse_vector<Val, SV>::bvector_type*
-rsc_sparse_vector<Val, SV>::get_null_bvector() const
+rsc_sparse_vector<Val, SV>::get_null_bvector() const BMNOEXEPT
 {
     return sv_.get_null_bvector();
 }
@@ -986,7 +990,8 @@ rsc_sparse_vector<Val, SV>::get_null_bvector() const
 
 template<class Val, class SV>
 bool
-rsc_sparse_vector<Val, SV>::find_rank(size_type rank, size_type& idx) const
+rsc_sparse_vector<Val, SV>::find_rank(size_type rank,
+                                      size_type& idx) const BMNOEXEPT
 {
     BM_ASSERT(rank);
     bool b;
@@ -1086,6 +1091,40 @@ void rsc_sparse_vector<Val, SV>::free_bv_blocks()
 }
 
 //---------------------------------------------------------------------
+
+template<class Val, class SV>
+void rsc_sparse_vector<Val, SV>::copy_range(
+                            const rsc_sparse_vector<Val, SV>& csv,
+                            size_type left, size_type right)
+{
+    if (left > right)
+        bm::xor_swap(left, right);
+
+    if (left >= csv.size())
+        return;
+
+    size_ = csv.size_; max_id_ = csv.max_id_;
+    in_sync_ = false;
+
+    const bvector_type* arg_bv_null = csv.sv_.get_null_bvector();
+    size_type sv_left, sv_right;
+    bool range_valid = csv.resolve_range(left, right, &sv_left, &sv_right);
+
+    if (!range_valid)
+    {
+        sv_.clear();
+        sv_.resize(size_);
+        bvector_type* bv_null = sv_.get_null_bvect();
+        bv_null->copy_range(*arg_bv_null, 0, right);
+        return;
+    }
+    bvector_type* bv_null = sv_.get_null_bvect();
+    bv_null->copy_range(*arg_bv_null, 0, right); // not NULL vector gets a full copy
+    sv_.copy_range(csv.sv_, sv_left, sv_right, bm::no_null); // don't copy NULL
+}
+
+
+//---------------------------------------------------------------------
 //
 //---------------------------------------------------------------------
 
@@ -1134,7 +1173,7 @@ void rsc_sparse_vector<Val, SV>::back_insert_iterator::add(
 //---------------------------------------------------------------------
 
 template<class Val, class SV>
-void rsc_sparse_vector<Val, SV>::back_insert_iterator::add_null()
+void rsc_sparse_vector<Val, SV>::back_insert_iterator::add_null() BMNOEXEPT
 {
     BM_ASSERT(csv_);
     csv_->max_id_++;
@@ -1145,7 +1184,7 @@ void rsc_sparse_vector<Val, SV>::back_insert_iterator::add_null()
 
 template<class Val, class SV>
 void rsc_sparse_vector<Val, SV>::back_insert_iterator::add_null(
-                rsc_sparse_vector<Val, SV>::back_insert_iterator::size_type count)
+    rsc_sparse_vector<Val, SV>::back_insert_iterator::size_type count) BMNOEXEPT
 {
     BM_ASSERT(csv_);
     csv_->max_id_+=count;
@@ -1163,36 +1202,6 @@ void rsc_sparse_vector<Val, SV>::back_insert_iterator::flush()
 
 //---------------------------------------------------------------------
 
-template<class Val, class SV>
-void rsc_sparse_vector<Val, SV>::copy_range(
-                            const rsc_sparse_vector<Val, SV>& csv,
-                            size_type left, size_type right)
-{
-    if (left > right)
-        bm::xor_swap(left, right);
-
-    if (left >= csv.size())
-        return;
-    
-    size_ = csv.size_; max_id_ = csv.max_id_;
-    in_sync_ = false;
-
-    const bvector_type* arg_bv_null = csv.sv_.get_null_bvector();
-    size_type sv_left, sv_right;
-    bool range_valid = csv.resolve_range(left, right, &sv_left, &sv_right);
-
-    if (!range_valid)
-    {
-        sv_.clear();
-        sv_.resize(size_);
-        bvector_type* bv_null = sv_.get_null_bvect();
-        bv_null->copy_range(*arg_bv_null, 0, right);
-        return;
-    }
-    bvector_type* bv_null = sv_.get_null_bvect();
-    bv_null->copy_range(*arg_bv_null, 0, right); // not NULL vector gets a full copy
-    sv_.copy_range(csv.sv_, sv_left, sv_right, bm::no_null); // don't copy NULL
-}
 
 
 } // namespace bm

@@ -33,35 +33,35 @@ namespace bm
 class byte_buffer_ptr
 {
 public:
-    byte_buffer_ptr()
+    byte_buffer_ptr() BMNOEXEPT
         : byte_buf_(0), size_(0)
     {}
     
     /// construct byte buffer pointer
     ///
-    byte_buffer_ptr(unsigned char* in_buf, size_t in_size)
+    byte_buffer_ptr(unsigned char* in_buf, size_t in_size) BMNOEXEPT
         : byte_buf_(in_buf), size_(in_size)
     {}
     
     /// Set buffer pointer
-    void set_buf(unsigned char* in_buf, size_t in_size)
+    void set_buf(unsigned char* in_buf, size_t in_size) BMNOEXEPT
     {
         byte_buf_ = in_buf; size_= in_size;
     }
 
     /// Get buffer size
-    size_t size() const { return size_; }
+    size_t size() const BMNOEXEPT { return size_; }
     
     /// Get read access to buffer memory
-    const unsigned char* buf() const { return byte_buf_; }
+    const unsigned char* buf() const BMNOEXEPT { return byte_buf_; }
 
     /// Get write access to buffer memory
-    unsigned char* data() { return byte_buf_; }
+    unsigned char* data() BMNOEXEPT { return byte_buf_; }
 
-    bool operator==(const byte_buffer_ptr& lhs) const { return equal(lhs); }
+    bool operator==(const byte_buffer_ptr& lhs) const BMNOEXEPT { return equal(lhs); }
     
     /// return true if content and size is the same
-    bool equal(const byte_buffer_ptr& lhs) const
+    bool equal(const byte_buffer_ptr& lhs) const BMNOEXEPT
     {
         if (this == &lhs)
             return true;
@@ -89,7 +89,7 @@ public:
     typedef size_t                                           size_type;
     
 public:
-    byte_buffer() : capacity_(0), alloc_factor_(0)
+    byte_buffer() BMNOEXEPT : capacity_(0), alloc_factor_(0)
     {}
     
     byte_buffer(size_t in_capacity)
@@ -98,7 +98,7 @@ public:
         allocate(in_capacity);
     }
     
-    byte_buffer(const byte_buffer& lhs)
+    byte_buffer(const byte_buffer& lhs) BMNOEXEPT
     {
         byte_buf_ = 0;
         size_ = capacity_ = alloc_factor_ = 0;
@@ -128,7 +128,7 @@ public:
     }
 #endif
 
-    byte_buffer& operator=(const byte_buffer& lhs)
+    byte_buffer& operator=(const byte_buffer& lhs) BMNOEXEPT
     {
         if (this == &lhs)
             return *this;
@@ -190,7 +190,7 @@ public:
     
     
     /// Get buffer capacity
-    size_t capacity() const { return capacity_; }
+    size_t capacity() const BMNOEXEPT { return capacity_; }
 
     /// adjust current size (buffer content preserved)
     void resize(size_t new_size, bool copy_content = true)
@@ -247,7 +247,7 @@ public:
     }
     
     /// return memory consumtion
-    size_t mem_usage() const
+    size_t mem_usage() const BMNOEXEPT
     {
         return sizeof(capacity_) + sizeof(alloc_factor_) +
                capacity();
@@ -258,7 +258,7 @@ private:
     void set_buf(unsigned char* buf, size_t size);
 
     /// compute number of words for the desired capacity
-    static size_t compute_words(size_t capacity)
+    static size_t compute_words(size_t capacity) BMNOEXEPT
     {
         size_t words = (capacity / sizeof(bm::word_t))+1;
         return words;
@@ -307,10 +307,8 @@ public:
     typedef Val                                              value_type;
     typedef typename buffer_type::size_type                  size_type;
 
-    heap_vector()
-        : buffer_()    
-    {
-    }
+    heap_vector() BMNOEXEPT : buffer_()
+    {}
 
     heap_vector(const heap_vector<Val, BVAlloc, trivial_type>& hv)
         : buffer_()
@@ -359,14 +357,14 @@ public:
         }
     }
     
-    value_type* data() { return (value_type*) buffer_.data(); }
+    value_type* data() BMNOEXEPT { return (value_type*) buffer_.data(); }
 
     void swap(heap_vector<Val, BVAlloc, trivial_type>& other) BMNOEXEPT
     {
         buffer_.swap(other.buffer_);
     }
 
-    const value_type& operator[](size_type pos) const
+    const value_type& operator[](size_type pos) const BMNOEXEPT
     {
         BM_ASSERT(pos < size());
         size_type v_size = value_size();
@@ -374,7 +372,7 @@ public:
         return *reinterpret_cast<const value_type*>(p);
     }
 
-    value_type& operator[](size_type pos)
+    value_type& operator[](size_type pos) BMNOEXEPT
     {
         BM_ASSERT(pos < size());
         size_type v_size = value_size();
@@ -393,22 +391,22 @@ public:
         return *reinterpret_cast<value_type*>(p);
     }
     
-    const value_type* begin() const
+    const value_type* begin() const BMNOEXEPT
     {
         return (const value_type*) buffer_.buf();
     }
 
-    size_type size() const
+    size_type size() const BMNOEXEPT
     {
         return buffer_.size() / value_size();
     }
 
-    size_type capacity() const
+    size_type capacity() const BMNOEXEPT
     {
         return buffer_.capacity() / value_size();
     }
 
-    bool empty() const
+    bool empty() const BMNOEXEPT
     {
         return (buffer_.size() == 0);
     }
@@ -492,7 +490,7 @@ protected:
         buffer_.resize(new_size * v_size);
     }
 
-    static size_type value_size()
+    static size_type value_size() BMNOEXEPT
     {
         size_type size_of = sizeof(value_type);
         return size_of;
@@ -537,13 +535,13 @@ public:
         row_size_in_bytes = sizeof(value_type) * COLS
     };
 
-    static size_t rows() { return ROWS; }
-    static size_t cols() { return COLS; }
+    static size_t rows() BMNOEXEPT { return ROWS; }
+    static size_t cols() BMNOEXEPT { return COLS; }
 
     /**
         By default object is constructed NOT allocated.
     */
-    heap_matrix()
+    heap_matrix() BMNOEXEPT
         : buffer_()
     {}
 
@@ -565,12 +563,12 @@ public:
         buffer_.resize(size_in_bytes);
     }
     
-    bool is_init() const
+    bool is_init() const BMNOEXEPT
     {
         return buffer_.size();
     }
 
-    value_type get(size_type row_idx, size_type col_idx) const
+    value_type get(size_type row_idx, size_type col_idx) const BMNOEXEPT
     {
         BM_ASSERT(row_idx < ROWS);
         BM_ASSERT(col_idx < COLS);
@@ -579,7 +577,7 @@ public:
         return ((const value_type*)buf)[col_idx];
     }
 
-    const value_type* row(size_type row_idx) const
+    const value_type* row(size_type row_idx) const BMNOEXEPT
     {
         BM_ASSERT(row_idx < ROWS);
         BM_ASSERT(buffer_.size());
@@ -587,7 +585,7 @@ public:
         return (const value_type*) buf;
     }
 
-    value_type* row(size_type row_idx)
+    value_type* row(size_type row_idx) BMNOEXEPT
     {
         BM_ASSERT(row_idx < ROWS);
         BM_ASSERT(buffer_.size());
@@ -597,7 +595,7 @@ public:
     }
 
     /** memset all buffer to all zeroes */
-    void set_zero()
+    void set_zero() BMNOEXEPT
     {
         ::memset(buffer_.data(), 0, size_in_bytes);
     }
@@ -624,7 +622,7 @@ public:
     /*! remapping: vect[idx] = matrix[idx, vect[idx] ]
     */
     template<typename VECT_TYPE>
-    void remap(VECT_TYPE* vect, size_type size) const
+    void remap(VECT_TYPE* vect, size_type size) const BMNOEXEPT
     {
         BM_ASSERT(size <= ROWS);
         const unsigned char* buf = buffer_.buf();
@@ -641,7 +639,7 @@ public:
     /*! zero-terminated remap: vect[idx] = matrix[idx, vect[idx] ]
     */
     template<typename VECT_TYPE>
-    void remapz(VECT_TYPE* vect) const
+    void remapz(VECT_TYPE* vect) const BMNOEXEPT
     {
         const unsigned char* buf = buffer_.buf();
         for (size_type i = 0; i < ROWS; ++i)
@@ -704,12 +702,12 @@ public:
         buffer_.resize(size_in_bytes());
     }
     
-    bool is_init() const
+    bool is_init() const BMNOEXEPT
     {
         return buffer_.size();
     }
 
-    const value_type* row(size_type row_idx) const
+    const value_type* row(size_type row_idx) const BMNOEXEPT
     {
         BM_ASSERT(row_idx < rows_);
         BM_ASSERT(buffer_.size());
@@ -717,7 +715,7 @@ public:
         return (const value_type*) buf;
     }
 
-    value_type* row(size_type row_idx)
+    value_type* row(size_type row_idx) BMNOEXEPT
     {
         BM_ASSERT(row_idx < rows_);
         BM_ASSERT(buffer_.size());
@@ -727,7 +725,7 @@ public:
     }
 
     /** memset all buffer to all zeroes */
-    void set_zero()
+    void set_zero() BMNOEXEPT
     {
         ::memset(buffer_.data(), 0, size_in_bytes());
     }
@@ -751,16 +749,17 @@ public:
     }
 
     /** Get low-level buffer access */
-    buffer_type& get_buffer() { return buffer_; }
+    buffer_type& get_buffer() BMNOEXEPT { return buffer_; }
     /** Get low-level buffer access */
-    const buffer_type& get_buffer() const { return buffer_; }
+    const buffer_type& get_buffer() const BMNOEXEPT { return buffer_; }
 
 protected:
-    size_type size_in_bytes() const
+
+    size_type size_in_bytes() const BMNOEXEPT
     {
         return sizeof(value_type) * cols_ * rows_;
     }
-    size_type row_size_in_bytes() const
+    size_type row_size_in_bytes() const BMNOEXEPT
     {
         return sizeof(value_type) * cols_;
     }

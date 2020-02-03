@@ -70,7 +70,7 @@ enum distance_metric
     \ingroup  distance
 */
 inline
-distance_metric operation2metric(set_operation op)
+distance_metric operation2metric(set_operation op) BMNOEXEPT
 {
     BM_ASSERT(is_const_set_operation(op));
     if (op == set_COUNT) op = set_COUNT_B;
@@ -95,11 +95,11 @@ struct distance_metric_descriptor
      distance_metric   metric;
      size_type          result;
      
-     distance_metric_descriptor(distance_metric m)
+     distance_metric_descriptor(distance_metric m) BMNOEXEPT
      : metric(m),
        result(0)
     {}
-    distance_metric_descriptor()
+    distance_metric_descriptor() BMNOEXEPT
     : metric(bm::COUNT_XOR),
       result(0)
     {}
@@ -107,7 +107,7 @@ struct distance_metric_descriptor
     /*! 
         \brief Sets metric result to 0
     */
-    void reset()
+    void reset() BMNOEXEPT
     {
         result = 0;
     }
@@ -125,7 +125,7 @@ inline
 void combine_count_operation_with_block(const bm::word_t*           blk,
                                         const bm::word_t*           arg_blk,
                                         distance_metric_descriptor* dmit,
-                                        distance_metric_descriptor* dmit_end)
+                                        distance_metric_descriptor* dmit_end) BMNOEXEPT
                                             
 {     
      gap_word_t* g1 = BMGAP_PTR(blk);
@@ -340,7 +340,7 @@ void combine_count_operation_with_block(const bm::word_t*           blk,
 */
 inline
 unsigned combine_count_and_operation_with_block(const bm::word_t* blk,
-                                                const bm::word_t* arg_blk)
+                                                const bm::word_t* arg_blk) BMNOEXEPT
 {
     unsigned gap = BM_IS_GAP(blk);
     unsigned arg_gap = BM_IS_GAP(arg_blk);
@@ -381,7 +381,7 @@ void combine_any_operation_with_block(const bm::word_t* blk,
                                       const bm::word_t* arg_blk,
                                       unsigned arg_gap,
                                       distance_metric_descriptor* dmit,
-                                      distance_metric_descriptor* dmit_end)
+                                      distance_metric_descriptor* dmit_end) BMNOEXEPT
                                             
 {
      gap_word_t* res=0;
@@ -628,7 +628,7 @@ inline
 unsigned
 combine_count_operation_with_block(const bm::word_t* blk,
                                    const bm::word_t* arg_blk,
-                                   distance_metric metric)
+                                   distance_metric metric) BMNOEXEPT
 {
     distance_metric_descriptor dmd(metric);
     combine_count_operation_with_block(blk, //gap, 
@@ -649,7 +649,7 @@ combine_any_operation_with_block(const bm::word_t* blk,
                                           unsigned gap,
                                           const bm::word_t* arg_blk,
                                           unsigned arg_gap,
-                                          distance_metric metric)
+                                          distance_metric metric) BMNOEXEPT
 {
     distance_metric_descriptor dmd(metric);
     combine_any_operation_with_block(blk, gap, 
@@ -668,7 +668,7 @@ combine_any_operation_with_block(const bm::word_t* blk,
 inline
 void distance_stage(const distance_metric_descriptor* dmit,
                     const distance_metric_descriptor* dmit_end,
-                    bool*                             is_all_and)
+                    bool*                             is_all_and) BMNOEXEPT
 {
     for (const distance_metric_descriptor* it = dmit; it < dmit_end; ++it)
     {
@@ -702,7 +702,7 @@ template<class BV>
 void distance_operation(const BV& bv1, 
                         const BV& bv2, 
                         distance_metric_descriptor* dmit,
-                        distance_metric_descriptor* dmit_end)
+                        distance_metric_descriptor* dmit_end) BMNOEXEPT
 {
     const typename BV::blocks_manager_type& bman1 = bv1.get_blocks_manager();
     const typename BV::blocks_manager_type& bman2 = bv2.get_blocks_manager();
@@ -787,7 +787,7 @@ void distance_operation(const BV& bv1,
 */
 template<class BV>
 typename BV::size_type distance_and_operation(const BV& bv1,
-                                              const BV& bv2)
+                                              const BV& bv2) BMNOEXEPT
 {
     const typename BV::blocks_manager_type& bman1 = bv1.get_blocks_manager();
     const typename BV::blocks_manager_type& bman2 = bv2.get_blocks_manager();
@@ -858,7 +858,7 @@ template<class BV>
 void distance_operation_any(const BV& bv1, 
                             const BV& bv2, 
                             distance_metric_descriptor* dmit,
-                            distance_metric_descriptor* dmit_end)
+                            distance_metric_descriptor* dmit_end) BMNOEXEPT
 {
     const typename BV::blocks_manager_type& bman1 = bv1.get_blocks_manager();
     const typename BV::blocks_manager_type& bman2 = bv2.get_blocks_manager();
@@ -980,7 +980,8 @@ void distance_operation_any(const BV& bv1,
     \internal
 */
 template<typename It, typename SIZE_TYPE>
-It block_range_scan(It  first, It last, SIZE_TYPE nblock, SIZE_TYPE* max_id)
+It block_range_scan(It  first, It last,
+                    SIZE_TYPE nblock, SIZE_TYPE* max_id) BMNOEXEPT
 {
     SIZE_TYPE m = *max_id;
     It right;

@@ -97,7 +97,7 @@ private:
     unsigned process_word(bm::word_t*       blk_out, 
                           const bm::word_t* blk_src,
                           unsigned          nword,
-                          unsigned          take_count);
+                          unsigned          take_count) BMNOEXEPT;
 
     static
     void get_random_array(bm::word_t*       blk_out, 
@@ -106,7 +106,7 @@ private:
                           unsigned          count);
     static
     unsigned compute_take_count(unsigned bc,
-                        size_type in_count, size_type sample_count);
+                size_type in_count, size_type sample_count) BMNOEXEPT;
 
 
 private:
@@ -357,9 +357,10 @@ void random_subset<BV>::get_subset(BV&        bv_out,
 }
 
 template<class BV>
-unsigned random_subset<BV>::compute_take_count(unsigned bc,
-                                               size_type in_count,
-                                               size_type sample_count)
+unsigned random_subset<BV>::compute_take_count(
+                                    unsigned bc,
+                                    size_type in_count,
+                                    size_type sample_count) BMNOEXEPT
 {
     float block_percent = float(bc) / float(in_count);
     float bits_to_take = float(sample_count) * block_percent;
@@ -404,7 +405,7 @@ void random_subset<BV>::get_block_subset(bm::word_t*       blk_out,
         }
         // now transform vacant bits to array, then pick random elements
         //
-        unsigned arr_len = bit_convert_to_arr(bit_list_, 
+        unsigned arr_len = bm::bit_convert_to_arr(bit_list_,
                                               sub_block_, 
                                               bm::gap_max_bits, 
                                               bm::gap_max_bits,
@@ -418,7 +419,7 @@ template<class BV>
 unsigned random_subset<BV>::process_word(bm::word_t*       blk_out, 
                                          const bm::word_t* blk_src,
                                          unsigned          nword,
-                                         unsigned          take_count)
+                                         unsigned          take_count) BMNOEXEPT
 {
     unsigned new_bits, mask;
     do 
