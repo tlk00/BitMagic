@@ -26175,6 +26175,7 @@ int main(int argc, char *argv[])
 
     if (is_all || is_bvbasic)
     {
+
          ExportTest();
          ResizeTest();
 
