@@ -387,20 +387,23 @@ void BitForEachTest()
         }
     }
     }
-    
+
+    // disabled (very slow)
+    #if 0
     if (platform_test)
     {
-    unsigned bit_list[32];
-    TimeTaker tt("BitList4 algorithm(sub-octet+switch)", REPEATS*20);
+        unsigned bit_list[32];
+        TimeTaker tt("BitList4 algorithm(sub-octet+switch)", REPEATS*20);
 
-    for (unsigned i = 0; i < REPEATS*100; ++i)
-    {    
-        for (unsigned j = 0; j < 65536; ++j)
+        for (unsigned i = 0; i < REPEATS*100; ++i)
         {
-            bm::bit_list_4(i*test_arr[j], bit_list);
+            for (unsigned j = 0; j < 65536; ++j)
+            {
+                bm::bit_list_4(i*test_arr[j], bit_list);
+            }
         }
     }
-    }
+    #endif
 
     {
         unsigned bit_list[32];
@@ -1288,10 +1291,13 @@ void SerializationTest()
         id_size += cnt * (unsigned)sizeof(unsigned);
     }
     }
-    
-    char cbuf[256];
+
+
+    char cbuf[256] = {0, };
+    sprintf(cbuf, "%u", value);
+    /*
     cout << cbuf << " " << id_size << " " << len << " " << value << endl;
-    
+    */
     
     
     delete bv;
@@ -2104,9 +2110,11 @@ void BitBlockShiftTest()
 
     {
         TimeTaker tt("Bit-block shift-r(1)", repeats);
-        for (i = 0; i < repeats; ++i)
         {
-            bm::bit_block_shift_r1(blk0, &acc0, 0);
+            for (i = 0; i < repeats; ++i)
+            {
+                bm::bit_block_shift_r1(blk0, &acc0, 0);
+            }
         }
     }
 
@@ -2773,7 +2781,7 @@ void RangeCopyTest()
 ///
 template<typename BV>
 bool test_interval(const BV& bv,
-                   typename BV::size_type left, typename BV::size_type right)
+        typename BV::size_type left, typename BV::size_type right) noexcept
 {
     if (left > right)
         bm::xor_swap(left, right); // make sure left <= right
@@ -2859,6 +2867,7 @@ void IntervalsTest()
                     ilen = 0;
             } // for istart
         }
+
         {
             TimeTaker tt(msg, REPEATS * 1);
             bvect::size_type istart(0), ilen(0);
@@ -2907,6 +2916,7 @@ void IntervalsTest()
                     {
                         assert(i == istart + ilen);
                     }
+
                     is_int = bv_inv.is_interval(istart, i);
                     if (is_int)
                     {
@@ -3298,7 +3308,7 @@ void SparseVectorSerializationTest()
     }
     else
     {
-        cout << "sz1 = " << sz1 << " gain=" << (sz1 - sz2) << endl;
+        //cout << "sz1 = " << sz1 << " gain=" << (sz1 - sz2) << endl;
     }
 
 }
@@ -3492,7 +3502,7 @@ int main(void)
     MemCpyTest();
 
     BitCountTest();
-    
+
     BitCountSparseTest();
 
     BitForEachTest();
@@ -3530,7 +3540,7 @@ int main(void)
     AndTest();
     XorTest();
 
-    SubTest();  
+    SubTest();
 
     InvertTest();  
 
