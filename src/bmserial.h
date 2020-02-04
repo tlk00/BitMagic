@@ -113,7 +113,7 @@ public:
         @param clevel - compression level (0-5)
         @sa get_compression_level
     */
-    void set_compression_level(unsigned clevel) BMNOEXEPT;
+    void set_compression_level(unsigned clevel) BMNOEXCEPT;
 
     /**
         Get compression level (0-5), Default 5 (recommended)
@@ -127,7 +127,7 @@ public:
         Recommended: use 3 or 5
 
     */
-    unsigned get_compression_level() const BMNOEXEPT
+    unsigned get_compression_level() const BMNOEXCEPT
         { return compression_level_; }
 
 
@@ -190,7 +190,7 @@ public:
         Return serialization counter vector
         @internal
     */
-    const size_type* get_compression_stat() const BMNOEXEPT
+    const size_type* get_compression_stat() const BMNOEXCEPT
                                     { return compression_stat_; }
     
     /**
@@ -198,13 +198,13 @@ public:
                 
         @param value - when TRUE serialized vector includes GAP levels parameters
     */
-    void gap_length_serialization(bool value) BMNOEXEPT;
+    void gap_length_serialization(bool value) BMNOEXCEPT;
     
     /**
         Set byte-order serialization (for cross platform compatibility)
         @param value - TRUE serialization format includes byte-order marker
     */
-    void byte_order_serialization(bool value) BMNOEXEPT;
+    void byte_order_serialization(bool value) BMNOEXCEPT;
 
     /**
         Add skip-markers to serialization BLOB for faster range decode
@@ -216,7 +216,7 @@ public:
         smaller interval means more bookmarks added to the skip list thus
         more increasing the BLOB size
     */
-    void set_bookmarks(bool enable, unsigned bm_interval = 256) BMNOEXEPT;
+    void set_bookmarks(bool enable, unsigned bm_interval = 256) BMNOEXCEPT;
 
     /**
         Attach collection of reference vectors for XOR serialization
@@ -229,21 +229,21 @@ public:
         Set current index in rer.vector collection
         (not a row idx or plain idx)
     */
-    void set_curr_ref_idx(size_type ref_idx) BMNOEXEPT;
+    void set_curr_ref_idx(size_type ref_idx) BMNOEXCEPT;
 
 
 protected:
     /**
         Encode serialization header information
     */
-    void encode_header(const BV& bv, bm::encoder& enc) BMNOEXEPT;
+    void encode_header(const BV& bv, bm::encoder& enc) BMNOEXCEPT;
     
     /*! Encode GAP block */
     void encode_gap_block(const bm::gap_word_t* gap_block, bm::encoder& enc);
 
     /*! Encode GAP block with Elias Gamma coder */
     void gamma_gap_block(const bm::gap_word_t* gap_block,
-                         bm::encoder&          enc) BMNOEXEPT;
+                         bm::encoder&          enc) BMNOEXCEPT;
 
     /**
         Encode GAP block as delta-array with Elias Gamma coder
@@ -251,30 +251,30 @@ protected:
     void gamma_gap_array(const bm::gap_word_t* gap_block, 
                          unsigned              arr_len, 
                          bm::encoder&          enc,
-                         bool                  inverted = false) BMNOEXEPT;
+                         bool                  inverted = false) BMNOEXCEPT;
     
     /// Encode bit-block as an array of bits
     void encode_bit_array(const bm::word_t* block,
-                          bm::encoder& enc, bool inverted) BMNOEXEPT;
+                          bm::encoder& enc, bool inverted) BMNOEXCEPT;
     
     void gamma_gap_bit_block(const bm::word_t* block,
-                             bm::encoder&      enc) BMNOEXEPT;
+                             bm::encoder&      enc) BMNOEXCEPT;
     
     void gamma_arr_bit_block(const bm::word_t* block,
-                          bm::encoder& enc, bool inverted) BMNOEXEPT;
+                          bm::encoder& enc, bool inverted) BMNOEXCEPT;
 
     void bienc_arr_bit_block(const bm::word_t* block,
-                            bm::encoder& enc, bool inverted) BMNOEXEPT;
+                            bm::encoder& enc, bool inverted) BMNOEXCEPT;
 
     /// encode bit-block as interpolated bit block of gaps
     void bienc_gap_bit_block(const bm::word_t* block,
-                             bm::encoder& enc) BMNOEXEPT;
+                             bm::encoder& enc) BMNOEXCEPT;
 
     void interpolated_arr_bit_block(const bm::word_t* block,
-                            bm::encoder& enc, bool inverted) BMNOEXEPT;
+                            bm::encoder& enc, bool inverted) BMNOEXCEPT;
     /// encode bit-block as interpolated gap block
     void interpolated_gap_bit_block(const bm::word_t* block,
-                                    bm::encoder&      enc) BMNOEXEPT;
+                                    bm::encoder&      enc) BMNOEXCEPT;
 
     /**
         Encode GAP block as an array with binary interpolated coder
@@ -282,29 +282,29 @@ protected:
     void interpolated_gap_array(const bm::gap_word_t* gap_block,
                                 unsigned              arr_len,
                                 bm::encoder&          enc,
-                                bool                  inverted) BMNOEXEPT;
+                                bool                  inverted) BMNOEXCEPT;
     void interpolated_gap_array_v0(const bm::gap_word_t* gap_block,
                                    unsigned              arr_len,
                                    bm::encoder&          enc,
-                                   bool                  inverted) BMNOEXEPT;
+                                   bool                  inverted) BMNOEXCEPT;
 
 
     /*! Encode GAP block with using binary interpolated encoder */
     void interpolated_encode_gap_block(
-                const bm::gap_word_t* gap_block, bm::encoder& enc) BMNOEXEPT;
+                const bm::gap_word_t* gap_block, bm::encoder& enc) BMNOEXCEPT;
 
     /**
         Encode BIT block with repeatable runs of zeroes
     */
     void encode_bit_interval(const bm::word_t* blk, 
                              bm::encoder&      enc,
-                             unsigned          size_control) BMNOEXEPT;
+                             unsigned          size_control) BMNOEXCEPT;
     /**
         Encode bit-block using digest (hierarchical compression)
     */
     void encode_bit_digest(const bm::word_t*  blk,
                            bm::encoder&       enc,
-                           bm::id64_t         d0) BMNOEXEPT;
+                           bm::id64_t         d0) BMNOEXCEPT;
 
     /**
         Determine best representation for GAP block based
@@ -319,25 +319,25 @@ protected:
         @internal
     */
     unsigned char
-    find_gap_best_encoding(const bm::gap_word_t* gap_block) BMNOEXEPT;
+    find_gap_best_encoding(const bm::gap_word_t* gap_block) BMNOEXCEPT;
     
     /// Determine best representation for a bit-block
-    unsigned char find_bit_best_encoding(const bm::word_t* block) BMNOEXEPT;
+    unsigned char find_bit_best_encoding(const bm::word_t* block) BMNOEXCEPT;
 
     /// Determine best representation for a bit-block (level 5)
-    unsigned char find_bit_best_encoding_l5(const bm::word_t* block) BMNOEXEPT;
+    unsigned char find_bit_best_encoding_l5(const bm::word_t* block) BMNOEXCEPT;
 
     /// Reset all accumulated compression statistics
-    void reset_compression_stats() BMNOEXEPT;
+    void reset_compression_stats() BMNOEXCEPT;
     
-    void reset_models() BMNOEXEPT { mod_size_ = 0; }
-    void add_model(unsigned char mod, unsigned score) BMNOEXEPT;
+    void reset_models() BMNOEXCEPT { mod_size_ = 0; }
+    void add_model(unsigned char mod, unsigned score) BMNOEXCEPT;
 protected:
 
     /// Bookmark state structure
     struct bookmark_state
     {
-        bookmark_state(block_idx_type nb_range) BMNOEXEPT
+        bookmark_state(block_idx_type nb_range) BMNOEXCEPT
             : ptr_(0), nb_(0),
               nb_range_(nb_range), bm_type_(0)
         {
@@ -369,7 +369,7 @@ protected:
     */
     static
     void process_bookmark(block_idx_type nb, bookmark_state& bookm,
-                          bm::encoder&   enc) BMNOEXEPT;
+                          bm::encoder&   enc) BMNOEXCEPT;
 
 private:
     serializer(const serializer&);
@@ -447,31 +447,31 @@ protected:
                           bm::gap_word_t* dst_arr);
     
     /// Read binary interpolated list into a bit-set
-    void read_bic_arr(decoder_type&   decoder, bm::word_t* blk) BMNOEXEPT;
+    void read_bic_arr(decoder_type&   decoder, bm::word_t* blk) BMNOEXCEPT;
 
     /// Read binary interpolated gap blocks into a bitset
-    void read_bic_gap(decoder_type&   decoder, bm::word_t* blk) BMNOEXEPT;
+    void read_bic_gap(decoder_type&   decoder, bm::word_t* blk) BMNOEXCEPT;
 
     /// Read inverted binary interpolated list into a bit-set
-    void read_bic_arr_inv(decoder_type&   decoder, bm::word_t* blk) BMNOEXEPT;
+    void read_bic_arr_inv(decoder_type&   decoder, bm::word_t* blk) BMNOEXCEPT;
     
     /// Read digest0-type bit-block
-    void read_digest0_block(decoder_type& decoder, bm::word_t* blk) BMNOEXEPT;
+    void read_digest0_block(decoder_type& decoder, bm::word_t* blk) BMNOEXCEPT;
     
     
     /// read bit-block encoded as runs
     static
-    void read_0runs_block(decoder_type& decoder, bm::word_t* blk) BMNOEXEPT;
+    void read_0runs_block(decoder_type& decoder, bm::word_t* blk) BMNOEXCEPT;
     
     static
-    const char* err_msg() { return "BM::Invalid serialization format"; }
+    const char* err_msg() BMNOEXCEPT { return "BM::Invalid serialization format"; }
 
     /// Try to skip if skip bookmark is available within reach
     /// @return new block idx if skip went well
     ///
     block_idx_type try_skip(decoder_type&  decoder,
                             block_idx_type nb,
-                            block_idx_type expect_nb) BMNOEXEPT;
+                            block_idx_type expect_nb) BMNOEXCEPT;
 
 protected:
     bm::gap_word_t*   id_array_; ///< ptr to idx array for temp decode use
@@ -528,7 +528,7 @@ public:
         is not guaranteed to be absent
         @sa unset_range()
     */
-    void set_range(size_type from, size_type to) BMNOEXEPT
+    void set_range(size_type from, size_type to) BMNOEXCEPT
     {
         is_range_set_ = 1; idx_from_ = from; idx_to_ = to;
     }
@@ -537,7 +537,7 @@ public:
         Disable range deserialization
         @sa set_range()
     */
-    void unset_range() BMNOEXEPT { is_range_set_ = 0; }
+    void unset_range() BMNOEXCEPT { is_range_set_ = 0; }
 
 protected:
    typedef typename BV::blocks_manager_type blocks_manager_type;
@@ -617,7 +617,7 @@ public:
     void set_range(size_type from, size_type to);
 
     /// disable range filtration
-    void unset_range() BMNOEXEPT { is_range_set_ = false; }
+    void unset_range() BMNOEXCEPT { is_range_set_ = false; }
 
     size_type deserialize(bvector_type&         bv,
                           serial_iterator_type& sit,
@@ -648,7 +648,7 @@ private:
                               serial_iterator_type& sit,
                               set_operation         op);
     static
-    const char* err_msg() BMNOEXEPT
+    const char* err_msg() BMNOEXCEPT
                 { return "BM::de-serialization format error"; }
 private:
     bool                       is_range_set_ = false;
@@ -685,7 +685,7 @@ public:
     void next();
 
 	/// skip all zero or all-one blocks
-	block_idx_type skip_mono_blocks() BMNOEXEPT;
+	block_idx_type skip_mono_blocks() BMNOEXCEPT;
 
     /// read bit block, using logical operation
     unsigned get_bit_block(bm::word_t*       dst_block, 
@@ -718,17 +718,17 @@ public:
     };
 
     /// Returns iterator internal state
-    iterator_state state() const BMNOEXEPT { return this->state_; }
+    iterator_state state() const BMNOEXCEPT { return this->state_; }
 
-    iterator_state get_state() const BMNOEXEPT { return this->state_; }
+    iterator_state get_state() const BMNOEXCEPT { return this->state_; }
     /// Number of ids in the inverted list (valid for e_list_ids)
-    unsigned get_id_count() const BMNOEXEPT { return this->id_cnt_; }
+    unsigned get_id_count() const BMNOEXCEPT { return this->id_cnt_; }
 
     /// Get last id from the id list
-    bm::id_t get_id() const BMNOEXEPT { return this->last_id_; }
+    bm::id_t get_id() const BMNOEXCEPT { return this->last_id_; }
 
     /// Get current block index 
-    block_idx_type block_idx() const BMNOEXEPT { return this->block_idx_; }
+    block_idx_type block_idx() const BMNOEXCEPT { return this->block_idx_; }
 
 public:
     /// member function pointer for bitset-bitset get operations
@@ -771,19 +771,19 @@ public:
     /// (Converts inverted list into bits)
     /// Returns number of words (bits) being read
     unsigned get_arr_bit(bm::word_t* dst_block, 
-                         bool clear_target=true) BMNOEXEPT;
+                         bool clear_target=true) BMNOEXCEPT;
 
 	/// Get current block type
-	unsigned get_block_type() const BMNOEXEPT { return block_type_; }
+	unsigned get_block_type() const BMNOEXCEPT { return block_type_; }
 
-	unsigned get_bit() BMNOEXEPT;
+	unsigned get_bit() BMNOEXCEPT;
  
-    void get_inv_arr(bm::word_t* block) BMNOEXEPT;
+    void get_inv_arr(bm::word_t* block) BMNOEXCEPT;
 
     /// Try to skip if skip bookmark is available within reach
     /// @return true if skip went well
     ///
-    bool try_skip(block_idx_type nb, block_idx_type expect_nb) BMNOEXEPT
+    bool try_skip(block_idx_type nb, block_idx_type expect_nb) BMNOEXCEPT
     {
         block_idx_type new_nb = parent_type::try_skip(decoder_, nb, expect_nb);
         if (new_nb)
@@ -1073,6 +1073,7 @@ serializer<BV>::serializer(bm::word_t*    temp_block)
   gap_serial_(false),
   byte_order_serial_(true),
   sb_bookmarks_(false),
+  sb_range_(0),
   compression_level_(bm::set_compression_default),
   ref_vect_(0),
   ref_idx_(0),
@@ -1106,7 +1107,7 @@ serializer<BV>::~serializer()
 
 
 template<class BV>
-void serializer<BV>::reset_compression_stats() BMNOEXEPT
+void serializer<BV>::reset_compression_stats() BMNOEXCEPT
 {
     for (unsigned i = 0; i < 256; ++i)
         compression_stat_[i] = 0;
@@ -1114,30 +1115,30 @@ void serializer<BV>::reset_compression_stats() BMNOEXEPT
 
 
 template<class BV>
-void serializer<BV>::set_compression_level(unsigned clevel) BMNOEXEPT
+void serializer<BV>::set_compression_level(unsigned clevel) BMNOEXCEPT
 {
     if (clevel <= bm::set_compression_max)
         compression_level_ = clevel;
 }
 
 template<class BV>
-void serializer<BV>::gap_length_serialization(bool value) BMNOEXEPT
+void serializer<BV>::gap_length_serialization(bool value) BMNOEXCEPT
 {
     gap_serial_ = value;
 }
 
 template<class BV>
-void serializer<BV>::byte_order_serialization(bool value) BMNOEXEPT
+void serializer<BV>::byte_order_serialization(bool value) BMNOEXCEPT
 {
     byte_order_serial_ = value;
 }
 
 template<class BV>
-void serializer<BV>::set_bookmarks(bool enable, unsigned bm_interval) BMNOEXEPT
+void serializer<BV>::set_bookmarks(bool enable, unsigned bm_interval) BMNOEXCEPT
 {
     sb_bookmarks_ = enable;
     if (enable)
-        {
+    {
         if (bm_interval > 512)
             bm_interval = 512;
         else
@@ -1157,13 +1158,13 @@ void serializer<BV>::set_ref_vectors(const bv_ref_vector_type* ref_vect)
 }
 
 template<class BV>
-void serializer<BV>::set_curr_ref_idx(size_type ref_idx) BMNOEXEPT
+void serializer<BV>::set_curr_ref_idx(size_type ref_idx) BMNOEXCEPT
 {
     ref_idx_ = ref_idx;
 }
 
 template<class BV>
-void serializer<BV>::encode_header(const BV& bv, bm::encoder& enc) BMNOEXEPT
+void serializer<BV>::encode_header(const BV& bv, bm::encoder& enc) BMNOEXCEPT
 {
     const blocks_manager_type& bman = bv.get_blocks_manager();
 
@@ -1216,7 +1217,7 @@ void serializer<BV>::encode_header(const BV& bv, bm::encoder& enc) BMNOEXEPT
 
 template<class BV>
 void serializer<BV>::interpolated_encode_gap_block(
-            const bm::gap_word_t* gap_block, bm::encoder& enc) BMNOEXEPT
+            const bm::gap_word_t* gap_block, bm::encoder& enc) BMNOEXCEPT
 {
     unsigned len = bm::gap_length(gap_block);
     if (len > 4) // BIC encoding
@@ -1276,7 +1277,7 @@ void serializer<BV>::interpolated_encode_gap_block(
 
 template<class BV>
 void serializer<BV>::gamma_gap_block(const bm::gap_word_t* gap_block,
-                                     bm::encoder& enc) BMNOEXEPT
+                                     bm::encoder& enc) BMNOEXCEPT
 {
     unsigned len = gap_length(gap_block);
     if (len > 3 && (compression_level_ > 3)) // Use Elias Gamma encoding
@@ -1317,7 +1318,7 @@ template<class BV>
 void serializer<BV>::gamma_gap_array(const bm::gap_word_t* gap_array, 
                                      unsigned              arr_len, 
                                      bm::encoder&          enc,
-                                     bool                  inverted) BMNOEXEPT
+                                     bool                  inverted) BMNOEXCEPT
 {
     unsigned char scode = inverted ? bm::set_block_arrgap_egamma_inv
                                    : bm::set_block_arrgap_egamma;
@@ -1363,7 +1364,7 @@ void serializer<BV>::interpolated_gap_array_v0(
                                 const bm::gap_word_t* gap_block,
                                 unsigned              arr_len,
                                 bm::encoder&          enc,
-                                bool                  inverted) BMNOEXEPT
+                                bool                  inverted) BMNOEXCEPT
 {
     BM_ASSERT(arr_len <= 65535);
     unsigned char scode = inverted ? bm::set_block_arrgap_bienc_inv
@@ -1410,7 +1411,7 @@ template<class BV>
 void serializer<BV>::interpolated_gap_array(const bm::gap_word_t* gap_block,
                                             unsigned              arr_len,
                                             bm::encoder&          enc,
-                                            bool                  inverted) BMNOEXEPT
+                                            bool                  inverted) BMNOEXCEPT
 {
     BM_ASSERT(arr_len <= 65535);
 
@@ -1482,7 +1483,7 @@ void serializer<BV>::interpolated_gap_array(const bm::gap_word_t* gap_block,
 
 
 template<class BV>
-void serializer<BV>::add_model(unsigned char mod, unsigned score) BMNOEXEPT
+void serializer<BV>::add_model(unsigned char mod, unsigned score) BMNOEXCEPT
 {
     BM_ASSERT(mod_size_ < 64); // too many models (memory corruption?)
     scores_[mod_size_] = score; models_[mod_size_] = mod;
@@ -1491,7 +1492,7 @@ void serializer<BV>::add_model(unsigned char mod, unsigned score) BMNOEXEPT
 
 template<class BV>
 unsigned char
-serializer<BV>::find_bit_best_encoding_l5(const bm::word_t* block) BMNOEXEPT
+serializer<BV>::find_bit_best_encoding_l5(const bm::word_t* block) BMNOEXCEPT
 {
     unsigned bc, bit_gaps;
     
@@ -1579,7 +1580,7 @@ serializer<BV>::find_bit_best_encoding_l5(const bm::word_t* block) BMNOEXEPT
 
 template<class BV>
 unsigned char
-serializer<BV>::find_bit_best_encoding(const bm::word_t* block) BMNOEXEPT
+serializer<BV>::find_bit_best_encoding(const bm::word_t* block) BMNOEXCEPT
 {
     reset_models();
     
@@ -1685,7 +1686,7 @@ serializer<BV>::find_bit_best_encoding(const bm::word_t* block) BMNOEXEPT
 
 template<class BV>
 unsigned char
-serializer<BV>::find_gap_best_encoding(const bm::gap_word_t* gap_block)BMNOEXEPT
+serializer<BV>::find_gap_best_encoding(const bm::gap_word_t* gap_block)BMNOEXCEPT
 {
     // heuristics and hard-coded rules to determine
     // the best representation for d-GAP block
@@ -1792,7 +1793,7 @@ template<class BV>
 void serializer<BV>::encode_bit_interval(const bm::word_t* blk, 
                                          bm::encoder&      enc,
                                          unsigned          //size_control
-                                         ) BMNOEXEPT
+                                         ) BMNOEXCEPT
 {
     enc.put_8(bm::set_block_bit_0runs);
     enc.put_8((blk[0]==0) ? 0 : 1); // encode start
@@ -1843,7 +1844,7 @@ void serializer<BV>::encode_bit_interval(const bm::word_t* blk,
 template<class BV>
 void serializer<BV>::encode_bit_digest(const bm::word_t* block,
                                        bm::encoder&     enc,
-                                       bm::id64_t       d0) BMNOEXEPT
+                                       bm::id64_t       d0) BMNOEXCEPT
 {
     // evaluate a few "sure" models here and pick the best
     //
@@ -1940,7 +1941,7 @@ void serializer<BV>::optimize_serialize_destroy(BV& bv,
 template<class BV>
 void serializer<BV>::encode_bit_array(const bm::word_t* block,
                                       bm::encoder&      enc,
-                                      bool              inverted) BMNOEXEPT
+                                      bool              inverted) BMNOEXCEPT
 {
     unsigned arr_len;
     unsigned mask = inverted ? ~0u : 0u;
@@ -1963,7 +1964,7 @@ void serializer<BV>::encode_bit_array(const bm::word_t* block,
 
 template<class BV>
 void serializer<BV>::gamma_gap_bit_block(const bm::word_t* block,
-                                         bm::encoder&      enc) BMNOEXEPT
+                                         bm::encoder&      enc) BMNOEXCEPT
 {
     unsigned len = bm::bit_to_gap(bit_idx_arr_.data(), block, bm::gap_equiv_len);
     BM_ASSERT(len); (void)len;
@@ -1973,7 +1974,7 @@ void serializer<BV>::gamma_gap_bit_block(const bm::word_t* block,
 template<class BV>
 void serializer<BV>::gamma_arr_bit_block(const bm::word_t* block,
                                          bm::encoder&      enc,
-                                         bool              inverted) BMNOEXEPT
+                                         bool              inverted) BMNOEXCEPT
 {
     unsigned mask = inverted ? ~0u : 0u;
     unsigned arr_len = bit_convert_to_arr(bit_idx_arr_.data(),
@@ -1993,7 +1994,7 @@ void serializer<BV>::gamma_arr_bit_block(const bm::word_t* block,
 template<class BV>
 void serializer<BV>::bienc_arr_bit_block(const bm::word_t* block,
                                         bm::encoder&       enc,
-                                        bool               inverted) BMNOEXEPT
+                                        bool               inverted) BMNOEXCEPT
 {
     unsigned mask = inverted ? ~0u : 0u;
     unsigned arr_len = bit_convert_to_arr(bit_idx_arr_.data(),
@@ -2011,7 +2012,7 @@ void serializer<BV>::bienc_arr_bit_block(const bm::word_t* block,
 
 template<class BV>
 void serializer<BV>::interpolated_gap_bit_block(const bm::word_t* block,
-                                                bm::encoder&      enc) BMNOEXEPT
+                                                bm::encoder&      enc) BMNOEXCEPT
 {
     unsigned len = bm::bit_to_gap(bit_idx_arr_.data(), block, bm::gap_max_bits);
     BM_ASSERT(len); (void)len;
@@ -2021,7 +2022,7 @@ void serializer<BV>::interpolated_gap_bit_block(const bm::word_t* block,
 
 template<class BV>
 void serializer<BV>::bienc_gap_bit_block(const bm::word_t* block,
-                                         bm::encoder& enc) BMNOEXEPT
+                                         bm::encoder& enc) BMNOEXCEPT
 {
     unsigned len = bm::bit_to_gap(bit_idx_arr_.data(), block, bm::gap_max_bits);
     BM_ASSERT(len); (void)len;
@@ -2070,7 +2071,7 @@ template<class BV>
 void
 serializer<BV>::interpolated_arr_bit_block(const bm::word_t* block,
                                            bm::encoder&      enc,
-                                           bool              inverted) BMNOEXEPT
+                                           bool              inverted) BMNOEXCEPT
 {
     unsigned mask = inverted ? ~0u : 0u;
     unsigned arr_len = bit_convert_to_arr(bit_idx_arr_.data(),
@@ -2151,7 +2152,7 @@ serializer<BV>::interpolated_arr_bit_block(const bm::word_t* block,
 template<class BV>
 void serializer<BV>::process_bookmark(block_idx_type   nb,
                                       bookmark_state&  bookm,
-                                      bm::encoder&     enc) BMNOEXEPT
+                                      bm::encoder&     enc) BMNOEXCEPT
 {
     BM_ASSERT(bookm.nb_range_);
 
@@ -2884,7 +2885,7 @@ unsigned deseriaizer_base<DEC, BLOCK_IDX>::read_id_list(
 template<typename DEC, typename BLOCK_IDX>
 void
 deseriaizer_base<DEC, BLOCK_IDX>::read_bic_arr(decoder_type& dec,
-                                               bm::word_t*   blk) BMNOEXEPT
+                                               bm::word_t*   blk) BMNOEXCEPT
 {
     BM_ASSERT(!BM_IS_GAP(blk));
     
@@ -2907,7 +2908,7 @@ deseriaizer_base<DEC, BLOCK_IDX>::read_bic_arr(decoder_type& dec,
 template<typename DEC, typename BLOCK_IDX>
 void
 deseriaizer_base<DEC, BLOCK_IDX>::read_bic_arr_inv(decoder_type&   decoder,
-                                                   bm::word_t* blk) BMNOEXEPT
+                                                   bm::word_t* blk) BMNOEXCEPT
 {
     // TODO: optimization
     bm::bit_block_set(blk, 0);
@@ -2917,7 +2918,7 @@ deseriaizer_base<DEC, BLOCK_IDX>::read_bic_arr_inv(decoder_type&   decoder,
 
 template<typename DEC, typename BLOCK_IDX>
 void deseriaizer_base<DEC, BLOCK_IDX>::read_bic_gap(decoder_type& dec,
-                                                    bm::word_t*   blk) BMNOEXEPT
+                                                    bm::word_t*   blk) BMNOEXCEPT
 {
     BM_ASSERT(!BM_IS_GAP(blk));
     
@@ -2942,7 +2943,7 @@ void deseriaizer_base<DEC, BLOCK_IDX>::read_bic_gap(decoder_type& dec,
 template<typename DEC, typename BLOCK_IDX>
 void deseriaizer_base<DEC, BLOCK_IDX>::read_digest0_block(
                                                 decoder_type& dec,
-                                                bm::word_t*   block) BMNOEXEPT
+                                                bm::word_t*   block) BMNOEXCEPT
 {
     bm::id64_t d0 = dec.get_64();
     while (d0)
@@ -2982,7 +2983,7 @@ void deseriaizer_base<DEC, BLOCK_IDX>::read_digest0_block(
 template<typename DEC, typename BLOCK_IDX>
 void deseriaizer_base<DEC, BLOCK_IDX>::read_0runs_block(
                                             decoder_type& dec,
-                                            bm::word_t* blk) BMNOEXEPT
+                                            bm::word_t* blk) BMNOEXCEPT
 {
     //TODO: optimization if block exists and it is OR-ed read
     bm::bit_block_set(blk, 0);
@@ -3043,7 +3044,7 @@ deseriaizer_base<DEC, BLOCK_IDX>::read_gap_block(decoder_type&   decoder,
             for (gap_word_t k = 0; k < len; ++k)
             {
                 gap_word_t bit_idx = decoder.get_16();
-				gap_add_value(dst_block, bit_idx);
+				bm::gap_add_value(dst_block, bit_idx);
             } // for
         }
         break;
@@ -3141,7 +3142,7 @@ typename deseriaizer_base<DEC, BLOCK_IDX>::block_idx_type
 deseriaizer_base<DEC, BLOCK_IDX>::try_skip(
                                         decoder_type&   decoder,
                                         block_idx_type nb,
-                                        block_idx_type expect_nb) BMNOEXEPT
+                                        block_idx_type expect_nb) BMNOEXCEPT
 {
     if (skip_offset_) // skip bookmark is available
     {
@@ -3171,26 +3172,22 @@ deseriaizer_base<DEC, BLOCK_IDX>::try_skip(
             nb_sync = decoder.get_32();
             break;
         case set_nb_sync_mark48:
+            nb_sync = block_idx_type(decoder.get_48());
             #ifndef BM64ADDR
                 BM_ASSERT(0);
-                #ifndef BM_NO_STL
-                    throw std::logic_error(this->err_msg());
-                #else
-                    BM_THROW(BM_ERR_SERIALFORMAT);
-                #endif
+                decoder.set_pos(save_pos);
+                skip_offset_ = 0;
+                return 0; // invalid bookmark from 64-bit serialization
             #endif
-            nb_sync = block_idx_type(decoder.get_48());
             break;
         case set_nb_sync_mark64:
+            nb_sync = block_idx_type(decoder.get_64());
             #ifndef BM64ADDR
                 BM_ASSERT(0);
-                #ifndef BM_NO_STL
-                    throw std::logic_error(this->err_msg());
-                #else
-                    BM_THROW(BM_ERR_SERIALFORMAT);
-                #endif
+                decoder.set_pos(save_pos);
+                skip_offset_ = 0;
+                return 0; // invalid bookmark from 64-bit serialization
             #endif
-            nb_sync = block_idx_type(decoder.get_64());
             break;
         default:
             BM_ASSERT(0);
@@ -3202,8 +3199,6 @@ deseriaizer_base<DEC, BLOCK_IDX>::try_skip(
         nb_sync += nb;
         if (nb_sync <= expect_nb) // within reach
         {
-            //block_idx_ = nb_sync;
-            //state_ = e_blocks;
             skip_offset_ = 0;
             return nb_sync;
         }
@@ -4358,7 +4353,7 @@ void serial_stream_iterator<DEC, BLOCK_IDX>::next()
 
 template<typename DEC, typename BLOCK_IDX>
 typename serial_stream_iterator<DEC, BLOCK_IDX>::block_idx_type
-serial_stream_iterator<DEC, BLOCK_IDX>::skip_mono_blocks() BMNOEXEPT
+serial_stream_iterator<DEC, BLOCK_IDX>::skip_mono_blocks() BMNOEXCEPT
 {
 	BM_ASSERT(state_ == e_zero_blocks || state_ == e_one_blocks);
     if (!mono_block_cnt_)
@@ -4374,7 +4369,7 @@ serial_stream_iterator<DEC, BLOCK_IDX>::skip_mono_blocks() BMNOEXEPT
 
 template<typename DEC, typename BLOCK_IDX>
 void
-serial_stream_iterator<DEC, BLOCK_IDX>::get_inv_arr(bm::word_t* block) BMNOEXEPT
+serial_stream_iterator<DEC, BLOCK_IDX>::get_inv_arr(bm::word_t* block) BMNOEXCEPT
 {
     gap_word_t len = decoder_.get_16();
     if (block)
@@ -5544,7 +5539,7 @@ serial_stream_iterator<DEC, BLOCK_IDX>::get_bit_block_COUNT_SUB_BA(
 template<typename DEC, typename BLOCK_IDX>
 unsigned serial_stream_iterator<DEC, BLOCK_IDX>::get_arr_bit(
                                           bm::word_t* dst_block,
-                                          bool        clear_target) BMNOEXEPT
+                                          bool        clear_target) BMNOEXCEPT
 {
     BM_ASSERT(this->block_type_ == set_block_arrbit || 
               this->block_type_ == set_block_bit_1bit);
@@ -5580,7 +5575,7 @@ unsigned serial_stream_iterator<DEC, BLOCK_IDX>::get_arr_bit(
 }
 
 template<typename DEC, typename BLOCK_IDX>
-unsigned serial_stream_iterator<DEC, BLOCK_IDX>::get_bit() BMNOEXEPT
+unsigned serial_stream_iterator<DEC, BLOCK_IDX>::get_bit() BMNOEXCEPT
 {
     BM_ASSERT(this->block_type_ == set_block_bit_1bit);
     ++(this->block_idx_);

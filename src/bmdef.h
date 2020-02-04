@@ -72,10 +72,10 @@ For more information please visit:  http://bitmagic.io
 // cxx11 features
 //
 #if defined(BM_NO_CXX11) || (defined(_MSC_VER)  &&  _MSC_VER < 1900)
-# define BMNOEXEPT
+# define BMNOEXCEPT
 #else
-# ifndef BMNOEXEPT
-#  define BMNOEXEPT noexcept
+# ifndef BMNOEXCEPT
+#  define BMNOEXCEPT noexcept
 # endif
 #endif
 
@@ -88,12 +88,6 @@ For more information please visit:  http://bitmagic.io
 # define BM64OPT
 # define BM_USE_GCC_BUILD
 //# define BM_FORBID_UNALIGNED_ACCESS
-#endif
-
-// disable 'register' keyword, which is obsolete in C++11
-//
-#ifndef BMREGISTER
-# define BMREGISTER
 #endif
 
 

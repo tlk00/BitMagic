@@ -927,7 +927,8 @@ unsigned sparse_vector_deserializer<SV>::load_header(
 
     BM_ASSERT(h1 == 'B' && (h2 == 'M' || h2 == 'C'));
 
-    if (h1 != 'B' && (h2 != 'M' || h2 != 'C'))  // no magic header?
+    bool sig2_ok = (h2 == 'M' || h2 == 'C');
+    if (h1 != 'B' || !sig2_ok) //&& (h2 != 'M' || h2 != 'C'))  // no magic header?
         raise_invalid_header();
 
     unsigned char bv_bo = dec.get_8(); (void) bv_bo;

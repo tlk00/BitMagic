@@ -122,12 +122,12 @@ public:
         @return current arg group size (0 if vector was not added (empty))
         @sa reset
     */
-    unsigned add(const bvector_type* bv, unsigned agr_group = 0) BMNOEXEPT;
+    unsigned add(const bvector_type* bv, unsigned agr_group = 0) BMNOEXCEPT;
     
     /**
         Reset aggregate groups, forget all attached vectors
     */
-    void reset() BMNOEXEPT;
+    void reset() BMNOEXCEPT;
 
     /**
         Aggregate added group of vectors using logical OR
@@ -195,7 +195,7 @@ public:
         Set search hint for the range, where results needs to be searched
         (experimental for internal use).
     */
-    void set_range_hint(size_type from, size_type to) BMNOEXEPT;
+    void set_range_hint(size_type from, size_type to) BMNOEXCEPT;
     
     //@}
     
@@ -305,10 +305,10 @@ public:
     //@{
 
     /** Get current operation code */
-    int get_operation() const BMNOEXEPT { return operation_; }
+    int get_operation() const BMNOEXCEPT { return operation_; }
 
     /** Set operation code for the aggregator */
-    void set_operation(int op_code) BMNOEXEPT { operation_ = op_code; }
+    void set_operation(int op_code) BMNOEXCEPT { operation_ = op_code; }
 
     /**
         Prepare operation, create internal resources, analyse dependencies.
@@ -362,19 +362,19 @@ protected:
 
     static
     unsigned max_top_blocks(const bvector_type_const_ptr* bv_src,
-                            unsigned src_size) BMNOEXEPT;
+                            unsigned src_size) BMNOEXCEPT;
     
     bm::word_t* sort_input_blocks_or(const bvector_type_const_ptr* bv_src,
                                      unsigned src_size,
                                      unsigned i, unsigned j,
                                      unsigned* arg_blk_count,
-                                     unsigned* arg_blk_gap_count) BMNOEXEPT;
+                                     unsigned* arg_blk_gap_count) BMNOEXCEPT;
     
     bm::word_t* sort_input_blocks_and(const bvector_type_const_ptr* bv_src,
                                       unsigned src_size,
                                       unsigned i, unsigned j,
                                       unsigned* arg_blk_count,
-                                      unsigned* arg_blk_gap_count) BMNOEXEPT;
+                                      unsigned* arg_blk_gap_count) BMNOEXCEPT;
 
 
     bool process_bit_blocks_or(blocks_manager_type& bman_target,
@@ -397,9 +397,9 @@ protected:
     unsigned find_effective_sub_block_size(unsigned i,
                                            const bvector_type_const_ptr* bv_src,
                                            unsigned src_size,
-                                           bool     top_null_as_zero) BMNOEXEPT;
+                                           bool     top_null_as_zero) BMNOEXCEPT;
     
-    bool any_carry_overs(unsigned co_size) const BMNOEXEPT;
+    bool any_carry_overs(unsigned co_size) const BMNOEXCEPT;
     
     /**
         @return carry over
@@ -409,7 +409,7 @@ protected:
                                      unsigned          carry_over);
     
     const bm::word_t* get_arg_block(const bvector_type_const_ptr* bv_src,
-                                unsigned k, unsigned i, unsigned j) BMNOEXEPT;
+                                unsigned k, unsigned i, unsigned j) BMNOEXCEPT;
 
     bvector_type* check_create_target();
     
@@ -534,7 +534,7 @@ aggregator<BV>::~aggregator()
 // ------------------------------------------------------------------------
 
 template<typename BV>
-void aggregator<BV>::reset() BMNOEXEPT
+void aggregator<BV>::reset() BMNOEXCEPT
 {
     arg_group0_size = arg_group1_size = operation_ = top_block_size_ = 0;
     operation_status_ = op_undefined;
@@ -545,7 +545,7 @@ void aggregator<BV>::reset() BMNOEXEPT
 // ------------------------------------------------------------------------
 
 template<typename BV>
-void aggregator<BV>::set_range_hint(size_type from, size_type to) BMNOEXEPT
+void aggregator<BV>::set_range_hint(size_type from, size_type to) BMNOEXCEPT
 {
     range_from_ = from; range_to_ = to;
     range_set_ = true;
@@ -569,7 +569,7 @@ aggregator<BV>::check_create_target()
 
 template<typename BV>
 unsigned aggregator<BV>::add(const bvector_type* bv,
-                             unsigned agr_group) BMNOEXEPT
+                             unsigned agr_group) BMNOEXCEPT
 {
     BM_ASSERT_THROW(agr_group <= 1, BM_ERR_RANGE);
     BM_ASSERT(agr_group <= 1);
@@ -897,7 +897,7 @@ aggregator<BV>::find_effective_sub_block_size(
                                         unsigned i,
                                         const bvector_type_const_ptr* bv_src,
                                         unsigned src_size,
-                                        bool     top_null_as_zero) BMNOEXEPT
+                                        bool     top_null_as_zero) BMNOEXCEPT
 {
     // quick hack to avoid scanning large, arrays, where such scan can be quite
     // expensive by itself (this makes this function approximate)
@@ -1476,7 +1476,7 @@ unsigned aggregator<BV>::resize_target(bvector_type& bv_target,
 template<typename BV>
 unsigned
 aggregator<BV>::max_top_blocks(const bvector_type_const_ptr* bv_src,
-                               unsigned src_size) BMNOEXEPT
+                               unsigned src_size) BMNOEXCEPT
 {
     unsigned top_blocks = 1;
 
@@ -1501,7 +1501,7 @@ bm::word_t* aggregator<BV>::sort_input_blocks_or(
                         unsigned src_size,
                         unsigned i, unsigned j,
                         unsigned* arg_blk_count,
-                        unsigned* arg_blk_gap_count) BMNOEXEPT
+                        unsigned* arg_blk_gap_count) BMNOEXCEPT
 {
     bm::word_t* blk = 0;
     for (unsigned k = 0; k < src_size; ++k)
@@ -1540,7 +1540,7 @@ bm::word_t* aggregator<BV>::sort_input_blocks_and(
                                 unsigned src_size,
                                 unsigned i, unsigned j,
                                 unsigned* arg_blk_count,
-                                unsigned* arg_blk_gap_count) BMNOEXEPT
+                                unsigned* arg_blk_gap_count) BMNOEXCEPT
 {
     unsigned full_blk_cnt = 0;
     bm::word_t* blk = FULL_BLOCK_FAKE_ADDR;
@@ -1837,7 +1837,7 @@ bool aggregator<BV>::process_shift_right_and(const bm::word_t* arg_blk,
 template<typename BV>
 const bm::word_t* aggregator<BV>::get_arg_block(
                                 const bvector_type_const_ptr* bv_src,
-                                unsigned k, unsigned i, unsigned j) BMNOEXEPT
+                                unsigned k, unsigned i, unsigned j) BMNOEXCEPT
 {
     const blocks_manager_type& bman_arg = bv_src[k]->get_blocks_manager();
     return bman_arg.get_block(i, j);
@@ -1846,7 +1846,7 @@ const bm::word_t* aggregator<BV>::get_arg_block(
 // ------------------------------------------------------------------------
 
 template<typename BV>
-bool aggregator<BV>::any_carry_overs(unsigned co_size) const BMNOEXEPT
+bool aggregator<BV>::any_carry_overs(unsigned co_size) const BMNOEXCEPT
 {
     // TODO: loop unroll?
     for (unsigned i = 0; i < co_size; ++i)

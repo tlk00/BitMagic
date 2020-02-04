@@ -113,10 +113,10 @@ public:
     class reference
     {
     public:
-        reference(sparse_vector<Val, BV>& sv, size_type idx) BMNOEXEPT
+        reference(sparse_vector<Val, BV>& sv, size_type idx) BMNOEXCEPT
         : sv_(sv), idx_(idx)
         {}
-        operator value_type() const BMNOEXEPT { return sv_.get(idx_); }
+        operator value_type() const BMNOEXCEPT { return sv_.get(idx_); }
         reference& operator=(const reference& ref)
         {
             sv_.set(idx_, (value_type)ref);
@@ -127,9 +127,9 @@ public:
             sv_.set(idx_, val);
             return *this;
         }
-        bool operator==(const reference& ref) const BMNOEXEPT
+        bool operator==(const reference& ref) const BMNOEXCEPT
                                 { return bool(*this) == bool(ref); }
-        bool is_null() const BMNOEXEPT { return sv_.is_null(idx_); }
+        bool is_null() const BMNOEXCEPT { return sv_.is_null(idx_); }
     private:
         sparse_vector<Val, BV>& sv_;
         size_type               idx_;
@@ -169,10 +169,10 @@ public:
         typedef value_type&                 reference;
 
     public:
-        const_iterator() BMNOEXEPT;
-        const_iterator(const sparse_vector_type* sv) BMNOEXEPT;
-        const_iterator(const sparse_vector_type* sv, size_type pos) BMNOEXEPT;
-        const_iterator(const const_iterator& it) BMNOEXEPT;
+        const_iterator() BMNOEXCEPT;
+        const_iterator(const sparse_vector_type* sv) BMNOEXCEPT;
+        const_iterator(const sparse_vector_type* sv, size_type pos) BMNOEXCEPT;
+        const_iterator(const const_iterator& it) BMNOEXCEPT;
         
         bool operator==(const const_iterator& it) const
                                 { return (pos_ == it.pos_) && (sv_ == it.sv_); }
@@ -188,11 +188,11 @@ public:
                                 { return pos_ >= it.pos_; }
 
         /// \brief Get current position (value)
-        value_type operator*() const BMNOEXEPT { return this->value(); }
+        value_type operator*() const BMNOEXCEPT { return this->value(); }
         
         
         /// \brief Advance to the next available value
-        const_iterator& operator++() BMNOEXEPT { this->advance(); return *this; }
+        const_iterator& operator++() BMNOEXCEPT { this->advance(); return *this; }
 
         /// \brief Advance to the next available value
         const_iterator& operator++(int)
@@ -200,27 +200,27 @@ public:
 
 
         /// \brief Get current position (value)
-        value_type value() const BMNOEXEPT;
+        value_type value() const BMNOEXCEPT;
         
         /// \brief Get NULL status
-        bool is_null() const BMNOEXEPT;
+        bool is_null() const BMNOEXCEPT;
         
         /// Returns true if iterator is at a valid position
-        bool valid() const BMNOEXEPT { return pos_ != bm::id_max; }
+        bool valid() const BMNOEXCEPT { return pos_ != bm::id_max; }
         
         /// Invalidate current iterator
-        void invalidate() BMNOEXEPT { pos_ = bm::id_max; }
+        void invalidate() BMNOEXCEPT { pos_ = bm::id_max; }
         
         /// Current position (index) in the vector
-        size_type pos() const BMNOEXEPT{ return pos_; }
+        size_type pos() const BMNOEXCEPT{ return pos_; }
         
         /// re-position to a specified position
-        void go_to(size_type pos) BMNOEXEPT;
+        void go_to(size_type pos) BMNOEXCEPT;
         
         /// advance iterator forward by one
-        void advance() BMNOEXEPT;
+        void advance() BMNOEXCEPT;
         
-        void skip_zero_values() BMNOEXEPT;
+        void skip_zero_values() BMNOEXCEPT;
     private:
         enum buf_size_e
         {
@@ -387,11 +387,11 @@ public:
 
 #ifndef BM_NO_CXX11
     /*! move-ctor */
-    sparse_vector(sparse_vector<Val, BV>&& sv) BMNOEXEPT;
+    sparse_vector(sparse_vector<Val, BV>&& sv) BMNOEXCEPT;
 
 
     /*! move assignmment operator */
-    sparse_vector<Val,BV>& operator = (sparse_vector<Val, BV>&& sv) BMNOEXEPT
+    sparse_vector<Val,BV>& operator = (sparse_vector<Val, BV>&& sv) BMNOEXCEPT
     {
         if (this != &sv)
         {
@@ -402,7 +402,7 @@ public:
     }
 #endif
 
-    ~sparse_vector() BMNOEXEPT;
+    ~sparse_vector() BMNOEXCEPT;
     ///@}
 
     
@@ -411,7 +411,7 @@ public:
     ///@{
 
     /** \brief Operator to get write access to an element  */
-    reference operator[](size_type idx) BMNOEXEPT
+    reference operator[](size_type idx) BMNOEXCEPT
                             { return reference(*this, idx); }
 
     /*!
@@ -419,7 +419,7 @@ public:
         \param idx - element index
         \return value of the element
     */
-    value_type operator[](size_type idx) const BMNOEXEPT
+    value_type operator[](size_type idx) const BMNOEXCEPT
                                     { return this->get(idx); }
 
     /*!
@@ -433,7 +433,7 @@ public:
         \param idx - element index
         \return value of the element
     */
-    value_type get(size_type idx) const BMNOEXEPT;
+    value_type get(size_type idx) const BMNOEXCEPT;
 
     /*!
         \brief set specified element with bounds checking and automatic resize
@@ -517,7 +517,7 @@ public:
     /** \brief trait if sparse vector is "compressed" (false)
     */
     static
-    bool is_compressed() BMNOEXEPT { return false; }
+    bool is_compressed() BMNOEXCEPT { return false; }
     
     ///@}
 
@@ -610,14 +610,14 @@ public:
 
     /*! \brief content exchange
     */
-    void swap(sparse_vector<Val, BV>& sv) BMNOEXEPT;
+    void swap(sparse_vector<Val, BV>& sv) BMNOEXCEPT;
 
     // ------------------------------------------------------------
     /*! @name Clear                                              */
     ///@{
 
     /*! \brief resize to zero, free memory */
-    void clear() BMNOEXEPT;
+    void clear() BMNOEXCEPT;
 
     /*!
         \brief clear range (assign bit 0 for all plains)
@@ -638,12 +638,12 @@ public:
     /*! \brief return size of the vector
         \return size of sparse vector
     */
-    size_type size() const BMNOEXEPT { return this->size_; }
+    size_type size() const BMNOEXCEPT { return this->size_; }
     
     /*! \brief return true if vector is empty
         \return true if empty
     */
-    bool empty() const BMNOEXEPT { return (size() == 0); }
+    bool empty() const BMNOEXCEPT { return (size() == 0); }
     
     /*! \brief resize vector
         \param sz - new size
@@ -665,7 +665,7 @@ public:
         \return true, if it is the same
     */
     bool equal(const sparse_vector<Val, BV>& sv,
-               bm::null_support null_able = bm::use_null) const BMNOEXEPT;
+               bm::null_support null_able = bm::use_null) const BMNOEXCEPT;
 
     ///@}
 
@@ -681,7 +681,7 @@ public:
      
         \return 0 - equal, < 0 - vect[i] < str, >0 otherwise
     */
-    int compare(size_type idx, const value_type val) const BMNOEXEPT;
+    int compare(size_type idx, const value_type val) const BMNOEXCEPT;
     
     ///@}
 
@@ -936,7 +936,7 @@ sparse_vector<Val, BV>::sparse_vector(const sparse_vector<Val, BV>& sv)
 #ifndef BM_NO_CXX11
 
 template<class Val, class BV>
-sparse_vector<Val, BV>::sparse_vector(sparse_vector<Val, BV>&& sv) BMNOEXEPT
+sparse_vector<Val, BV>::sparse_vector(sparse_vector<Val, BV>&& sv) BMNOEXCEPT
 {
     parent_type::swap(sv);
 }
@@ -947,13 +947,13 @@ sparse_vector<Val, BV>::sparse_vector(sparse_vector<Val, BV>&& sv) BMNOEXEPT
 //---------------------------------------------------------------------
 
 template<class Val, class BV>
-sparse_vector<Val, BV>::~sparse_vector() BMNOEXEPT
+sparse_vector<Val, BV>::~sparse_vector() BMNOEXCEPT
 {}
 
 //---------------------------------------------------------------------
 
 template<class Val, class BV>
-void sparse_vector<Val, BV>::swap(sparse_vector<Val, BV>& sv) BMNOEXEPT
+void sparse_vector<Val, BV>::swap(sparse_vector<Val, BV>& sv) BMNOEXCEPT
 {
     parent_type::swap(sv);
 }
@@ -1389,12 +1389,12 @@ sparse_vector<Val, BV>::extract(value_type* arr,
     {
         sv_decode_visitor_func(value_type* varr,
                                value_type  mask,
-                               size_type   off) BMNOEXEPT
+                               size_type   off) BMNOEXCEPT
         : arr_(varr), mask_(mask), off_(off)
         {}
         
         void add_bits(size_type arr_offset,
-                      const unsigned char* bits, unsigned bits_size) BMNOEXEPT
+                      const unsigned char* bits, unsigned bits_size) BMNOEXCEPT
         {
             size_type idx_base = arr_offset - off_;
             const value_type m = mask_;
@@ -1403,7 +1403,7 @@ sparse_vector<Val, BV>::extract(value_type* arr,
                 arr_[idx_base + bits[i]] |= m;
         }
         
-        void add_range(size_type arr_offset, unsigned sz) BMNOEXEPT
+        void add_range(size_type arr_offset, unsigned sz) BMNOEXCEPT
         {
             size_type idx_base = arr_offset - off_;
             const value_type m = mask_;
@@ -1478,7 +1478,7 @@ sparse_vector<Val, BV>::at(typename sparse_vector<Val, BV>::size_type idx) const
 template<class Val, class BV>
 typename sparse_vector<Val, BV>::value_type
 sparse_vector<Val, BV>::get(
-        typename sparse_vector<Val, BV>::size_type i) const BMNOEXEPT
+        typename sparse_vector<Val, BV>::size_type i) const BMNOEXCEPT
 {
     BM_ASSERT(i < bm::id_max);
     BM_ASSERT(i < size());
@@ -1713,7 +1713,7 @@ void sparse_vector<Val, BV>::inc(size_type idx)
 //---------------------------------------------------------------------
 
 template<class Val, class BV>
-void sparse_vector<Val, BV>::clear() BMNOEXEPT
+void sparse_vector<Val, BV>::clear() BMNOEXCEPT
 {
     parent_type::clear();
 }
@@ -1912,7 +1912,7 @@ void sparse_vector<Val, BV>::filter(
 
 template<class Val, class BV>
 int sparse_vector<Val, BV>::compare(size_type idx,
-                                    const value_type val) const BMNOEXEPT
+                                    const value_type val) const BMNOEXCEPT
 {
     // TODO: consider bit-by-bit comparison to minimize CPU hit miss in plans get()
     value_type sv_value = get(idx);
@@ -1923,7 +1923,7 @@ int sparse_vector<Val, BV>::compare(size_type idx,
 
 template<class Val, class BV>
 bool sparse_vector<Val, BV>::equal(const sparse_vector<Val, BV>& sv,
-                                   bm::null_support null_able) const BMNOEXEPT
+                                   bm::null_support null_able) const BMNOEXCEPT
 {
     return parent_type::equal(sv, null_able);
 }
@@ -1954,7 +1954,7 @@ void sparse_vector<Val, BV>::set_allocator_pool(
 
 
 template<class Val, class BV>
-sparse_vector<Val, BV>::const_iterator::const_iterator() BMNOEXEPT
+sparse_vector<Val, BV>::const_iterator::const_iterator() BMNOEXCEPT
 : sv_(0), pos_(bm::id_max), buf_ptr_(0)
 {}
 
@@ -1962,7 +1962,7 @@ sparse_vector<Val, BV>::const_iterator::const_iterator() BMNOEXEPT
 
 template<class Val, class BV>
 sparse_vector<Val, BV>::const_iterator::const_iterator(
-    const typename sparse_vector<Val, BV>::const_iterator& it) BMNOEXEPT
+    const typename sparse_vector<Val, BV>::const_iterator& it) BMNOEXCEPT
 : sv_(it.sv_), pos_(it.pos_), buf_ptr_(0)
 {}
 
@@ -1970,7 +1970,7 @@ sparse_vector<Val, BV>::const_iterator::const_iterator(
 
 template<class Val, class BV>
 sparse_vector<Val, BV>::const_iterator::const_iterator(
-  const typename sparse_vector<Val, BV>::const_iterator::sparse_vector_type* sv) BMNOEXEPT
+  const typename sparse_vector<Val, BV>::const_iterator::sparse_vector_type* sv) BMNOEXCEPT
 : sv_(sv), buf_ptr_(0)
 {
     BM_ASSERT(sv_);
@@ -1982,7 +1982,7 @@ sparse_vector<Val, BV>::const_iterator::const_iterator(
 template<class Val, class BV>
 sparse_vector<Val, BV>::const_iterator::const_iterator(
  const typename sparse_vector<Val, BV>::const_iterator::sparse_vector_type* sv,
- typename sparse_vector<Val, BV>::size_type pos) BMNOEXEPT
+ typename sparse_vector<Val, BV>::size_type pos) BMNOEXCEPT
 : sv_(sv), buf_ptr_(0)
 {
     BM_ASSERT(sv_);
@@ -1992,7 +1992,7 @@ sparse_vector<Val, BV>::const_iterator::const_iterator(
 //---------------------------------------------------------------------
 
 template<class Val, class BV>
-void sparse_vector<Val, BV>::const_iterator::go_to(size_type pos) BMNOEXEPT
+void sparse_vector<Val, BV>::const_iterator::go_to(size_type pos) BMNOEXCEPT
 {
     pos_ = (!sv_ || pos >= sv_->size()) ? bm::id_max : pos;
     buf_ptr_ = 0;
@@ -2001,7 +2001,7 @@ void sparse_vector<Val, BV>::const_iterator::go_to(size_type pos) BMNOEXEPT
 //---------------------------------------------------------------------
 
 template<class Val, class BV>
-void sparse_vector<Val, BV>::const_iterator::advance() BMNOEXEPT
+void sparse_vector<Val, BV>::const_iterator::advance() BMNOEXCEPT
 {
     if (pos_ == bm::id_max) // nothing to do, we are at the end
         return;
@@ -2023,7 +2023,7 @@ void sparse_vector<Val, BV>::const_iterator::advance() BMNOEXEPT
 
 template<class Val, class BV>
 typename sparse_vector<Val, BV>::const_iterator::value_type
-sparse_vector<Val, BV>::const_iterator::value() const BMNOEXEPT
+sparse_vector<Val, BV>::const_iterator::value() const BMNOEXCEPT
 {
     BM_ASSERT(this->valid());
     value_type v;
@@ -2041,7 +2041,7 @@ sparse_vector<Val, BV>::const_iterator::value() const BMNOEXEPT
 //---------------------------------------------------------------------
 
 template<class Val, class BV>
-void sparse_vector<Val, BV>::const_iterator::skip_zero_values() BMNOEXEPT
+void sparse_vector<Val, BV>::const_iterator::skip_zero_values() BMNOEXCEPT
 {
     value_type v = value();
     if (buf_ptr_)
@@ -2069,7 +2069,7 @@ void sparse_vector<Val, BV>::const_iterator::skip_zero_values() BMNOEXEPT
 //---------------------------------------------------------------------
 
 template<class Val, class BV>
-bool sparse_vector<Val, BV>::const_iterator::is_null() const BMNOEXEPT
+bool sparse_vector<Val, BV>::const_iterator::is_null() const BMNOEXCEPT
 {
     return sv_->is_null(pos_);
 }

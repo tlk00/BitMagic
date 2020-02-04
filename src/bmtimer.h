@@ -46,7 +46,7 @@ public:
         std::chrono::duration<double, std::milli>  duration;
         unsigned                                   repeats;
         
-        statistics() : repeats(1) {}
+        statistics() : duration(0), repeats(1) {}
         
         statistics(std::chrono::duration<double, std::milli> d, unsigned r)
         : duration(d), repeats(r)

@@ -59,7 +59,7 @@ public:
     rs_index(const rs_index& rsi);
     
     /// init arrays to zeros
-    void init() BMNOEXEPT;
+    void init() BMNOEXCEPT;
 
     /// copy rs index
     void copy_from(const rs_index& rsi);
@@ -165,7 +165,7 @@ rs_index<BVAlloc>::rs_index(const rs_index<BVAlloc>& rsi)
 
 
 template<typename BVAlloc>
-void rs_index<BVAlloc>::init() BMNOEXEPT
+void rs_index<BVAlloc>::init() BMNOEXCEPT
 {
     sblock_count_.resize(0);
     sblock_row_idx_.resize(0);

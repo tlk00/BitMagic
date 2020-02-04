@@ -98,13 +98,13 @@ public:
     class reference
     {
     public:
-        reference(rsc_sparse_vector<Val, SV>& csv, size_type idx) BMNOEXEPT
+        reference(rsc_sparse_vector<Val, SV>& csv, size_type idx) BMNOEXCEPT
         : csv_(csv), idx_(idx)
         {}
-        operator value_type() const BMNOEXEPT { return csv_.get(idx_); }
-        bool operator==(const reference& ref) const BMNOEXEPT
+        operator value_type() const BMNOEXCEPT { return csv_.get(idx_); }
+        bool operator==(const reference& ref) const BMNOEXCEPT
                                 { return bool(*this) == bool(ref); }
-        bool is_null() const BMNOEXEPT { return csv_.is_null(idx_); }
+        bool is_null() const BMNOEXCEPT { return csv_.is_null(idx_); }
     private:
         rsc_sparse_vector<Val, SV>& csv_;
         size_type                   idx_;
@@ -166,10 +166,10 @@ public:
         void add(value_type v);
         
         /** add NULL (no-value) to the container */
-        void add_null() BMNOEXEPT;
+        void add_null() BMNOEXCEPT;
         
         /** add a series of consequitve NULLs (no-value) to the container */
-        void add_null(size_type count) BMNOEXEPT;
+        void add_null(size_type count) BMNOEXCEPT;
         
         /** flush the accumulated buffer */
         void flush();
@@ -223,10 +223,10 @@ public:
     
 #ifndef BM_NO_CXX11
     /*! move-ctor */
-    rsc_sparse_vector(rsc_sparse_vector<Val,SV>&& csv) BMNOEXEPT;
+    rsc_sparse_vector(rsc_sparse_vector<Val,SV>&& csv) BMNOEXCEPT;
 
     /*! move assignmment operator */
-    rsc_sparse_vector<Val,SV>& operator=(rsc_sparse_vector<Val,SV>&& csv) BMNOEXEPT
+    rsc_sparse_vector<Val,SV>& operator=(rsc_sparse_vector<Val,SV>&& csv) BMNOEXCEPT
     {
         if (this != &csv)
         {
@@ -250,7 +250,7 @@ public:
     /*! \brief return size of the vector
         \return size of sparse vector
     */
-    size_type size() const BMNOEXEPT;
+    size_type size() const BMNOEXCEPT;
     
     /*! \brief return true if vector is empty
         \return true if empty
@@ -282,7 +282,7 @@ public:
         \param idx - element index
         \return value of the element
     */
-    value_type get(size_type idx) const BMNOEXEPT;
+    value_type get(size_type idx) const BMNOEXCEPT;
     
     /*!
         \brief set specified element with bounds checking and automatic resize
@@ -316,19 +316,19 @@ public:
         \return true if it is NULL false if it was assigned or container
         is not configured to support assignment flags
     */
-    bool is_null(size_type idx) const BMNOEXEPT;
+    bool is_null(size_type idx) const BMNOEXCEPT;
     
     /**
         \brief Get bit-vector of assigned values (or NULL)
     */
-    const bvector_type* get_null_bvector() const BMNOEXEPT;
+    const bvector_type* get_null_bvector() const BMNOEXCEPT;
 
     /**
         \brief find position of compressed element by its rank
         \param rank - rank  (virtual index in sparse vector)
         \param idx  - index (true position)
     */
-    bool find_rank(size_type rank, size_type& idx) const BMNOEXEPT;
+    bool find_rank(size_type rank, size_type& idx) const BMNOEXCEPT;
 
     //@}
     
@@ -368,7 +368,7 @@ public:
         \brief check if another vector has the same content
         \return true, if it is the same
     */
-    bool equal(const rsc_sparse_vector<Val, SV>& csv) const BMNOEXEPT;
+    bool equal(const rsc_sparse_vector<Val, SV>& csv) const BMNOEXCEPT;
     //@}
 
 
@@ -430,7 +430,7 @@ public:
         @sa statistics
     */
     void calc_stat(
-           struct rsc_sparse_vector<Val, SV>::statistics* st) const BMNOEXEPT;
+           struct rsc_sparse_vector<Val, SV>::statistics* st) const BMNOEXCEPT;
 
     ///@}
 
@@ -470,12 +470,12 @@ public:
     /*!
         \brief returns true if prefix sum table is in sync with the vector
     */
-    bool in_sync() const BMNOEXEPT { return in_sync_; }
+    bool in_sync() const BMNOEXCEPT { return in_sync_; }
     
     /*!
         \brief Unsync the prefix sum table
     */
-    void unsync() BMNOEXEPT { in_sync_ = false; }
+    void unsync() BMNOEXCEPT { in_sync_ = false; }
     ///@}
 
     // ------------------------------------------------------------
@@ -486,22 +486,22 @@ public:
         \brief get access to bit-plain, function checks and creates a plain
         \return bit-vector for the bit plain
     */
-    bvector_type_const_ptr get_plain(unsigned i) const BMNOEXEPT
+    bvector_type_const_ptr get_plain(unsigned i) const BMNOEXCEPT
         { return sv_.get_plain(i); }
 
-    bvector_type_ptr get_plain(unsigned i) BMNOEXEPT
+    bvector_type_ptr get_plain(unsigned i) BMNOEXCEPT
         { return sv_.get_plain(i); }
     
     /*!
         Number of effective bit-plains in the value type
     */
-    unsigned effective_plains() const BMNOEXEPT
+    unsigned effective_plains() const BMNOEXCEPT
         { return sv_.effective_plains(); }
     
     /*!
         \brief get total number of bit-plains in the vector
     */
-    static unsigned plains() BMNOEXEPT
+    static unsigned plains() BMNOEXCEPT
         { return sparse_vector_type::plains(); }
 
     /** Number of stored bit-plains (value plains + extra */
@@ -511,22 +511,22 @@ public:
     /*!
         \brief access dense vector
     */
-    const sparse_vector_type& get_sv() const BMNOEXEPT { return sv_; }
+    const sparse_vector_type& get_sv() const BMNOEXCEPT { return sv_; }
 
     /*!
         \brief size of internal dense vector
     */
-    size_type effective_size() const BMNOEXEPT { return sv_.size(); }
+    size_type effective_size() const BMNOEXCEPT { return sv_.size(); }
 
     /**
         \brief Always 1 (non-matrix type)
     */
-    size_type effective_vector_max() const BMNOEXEPT { return 1; }
+    size_type effective_vector_max() const BMNOEXCEPT { return 1; }
 
     /*!
         get read-only access to inetrnal bit-matrix
     */
-    const bmatrix_type& get_bmatrix() const BMNOEXEPT
+    const bmatrix_type& get_bmatrix() const BMNOEXCEPT
         { return sv_.get_bmatrix(); }
 
     ///@}
@@ -545,10 +545,10 @@ protected:
      
         \return true if id is known and resolved successfully
     */
-    bool resolve(size_type idx, size_type* idx_to) const BMNOEXEPT;
+    bool resolve(size_type idx, size_type* idx_to) const BMNOEXCEPT;
 
     bool resolve_range(size_type from, size_type to, 
-                       size_type* idx_from, size_type* idx_to) const BMNOEXEPT;
+                       size_type* idx_from, size_type* idx_to) const BMNOEXCEPT;
     
     void resize_internal(size_type sz) { sv_.resize_internal(sz); }
     size_type size_internal() const { return sv_.size(); }
@@ -627,7 +627,7 @@ rsc_sparse_vector<Val, SV>::rsc_sparse_vector(
 //---------------------------------------------------------------------
 
 template<class Val, class SV>
-rsc_sparse_vector<Val, SV>::rsc_sparse_vector(rsc_sparse_vector<Val,SV>&& csv) BMNOEXEPT
+rsc_sparse_vector<Val, SV>::rsc_sparse_vector(rsc_sparse_vector<Val,SV>&& csv) BMNOEXCEPT
 : sv_(bm::use_null),
   size_(0),
   max_id_(0), in_sync_(false)
@@ -644,7 +644,7 @@ rsc_sparse_vector<Val, SV>::rsc_sparse_vector(rsc_sparse_vector<Val,SV>&& csv) B
 
 template<class Val, class SV>
 typename rsc_sparse_vector<Val, SV>::size_type
-rsc_sparse_vector<Val, SV>::size() const BMNOEXEPT
+rsc_sparse_vector<Val, SV>::size() const BMNOEXCEPT
 {
     return size_;
 }
@@ -729,7 +729,7 @@ void rsc_sparse_vector<Val, SV>::set(size_type idx, value_type v)
 
 template<class Val, class SV>
 bool rsc_sparse_vector<Val, SV>::equal(
-                    const rsc_sparse_vector<Val, SV>& csv) const BMNOEXEPT
+                    const rsc_sparse_vector<Val, SV>& csv) const BMNOEXCEPT
 {
     if (this == &csv)
         return true;
@@ -842,7 +842,7 @@ void rsc_sparse_vector<Val, SV>::sync(bool force)
 
 template<class Val, class SV>
 bool rsc_sparse_vector<Val, SV>::resolve(size_type idx,
-                                         size_type* idx_to) const BMNOEXEPT
+                                         size_type* idx_to) const BMNOEXCEPT
 {
     BM_ASSERT(idx_to);
     const bvector_type* bv_null = sv_.get_null_bvector();
@@ -869,7 +869,7 @@ bool rsc_sparse_vector<Val, SV>::resolve(size_type idx,
 template<class Val, class SV>
 bool rsc_sparse_vector<Val, SV>::resolve_range(
     size_type from, size_type to,
-    size_type* idx_from, size_type* idx_to) const BMNOEXEPT
+    size_type* idx_from, size_type* idx_to) const BMNOEXCEPT
 {
     BM_ASSERT(idx_to && idx_from);
     const bvector_type* bv_null = sv_.get_null_bvector();
@@ -914,7 +914,7 @@ rsc_sparse_vector<Val, SV>::at(size_type idx) const
 
 template<class Val, class SV>
 typename rsc_sparse_vector<Val, SV>::value_type
-rsc_sparse_vector<Val, SV>::get(size_type idx) const BMNOEXEPT
+rsc_sparse_vector<Val, SV>::get(size_type idx) const BMNOEXCEPT
 {
     size_type sv_idx;
     bool found = resolve(idx, &sv_idx);
@@ -927,7 +927,7 @@ rsc_sparse_vector<Val, SV>::get(size_type idx) const BMNOEXEPT
 //---------------------------------------------------------------------
 
 template<class Val, class SV>
-bool rsc_sparse_vector<Val, SV>::is_null(size_type idx) const BMNOEXEPT
+bool rsc_sparse_vector<Val, SV>::is_null(size_type idx) const BMNOEXCEPT
 {
     const bvector_type* bv_null = sv_.get_null_bvector();
     BM_ASSERT(bv_null);
@@ -964,7 +964,7 @@ void rsc_sparse_vector<Val, SV>::clear()
 
 template<class Val, class SV>
 void rsc_sparse_vector<Val, SV>::calc_stat(
-            struct rsc_sparse_vector<Val, SV>::statistics* st) const BMNOEXEPT
+            struct rsc_sparse_vector<Val, SV>::statistics* st) const BMNOEXCEPT
 {
     BM_ASSERT(st);
     sv_.calc_stat((typename sparse_vector_type::statistics*)st);
@@ -981,7 +981,7 @@ void rsc_sparse_vector<Val, SV>::calc_stat(
 
 template<class Val, class SV>
 const typename rsc_sparse_vector<Val, SV>::bvector_type*
-rsc_sparse_vector<Val, SV>::get_null_bvector() const BMNOEXEPT
+rsc_sparse_vector<Val, SV>::get_null_bvector() const BMNOEXCEPT
 {
     return sv_.get_null_bvector();
 }
@@ -991,7 +991,7 @@ rsc_sparse_vector<Val, SV>::get_null_bvector() const BMNOEXEPT
 template<class Val, class SV>
 bool
 rsc_sparse_vector<Val, SV>::find_rank(size_type rank,
-                                      size_type& idx) const BMNOEXEPT
+                                      size_type& idx) const BMNOEXCEPT
 {
     BM_ASSERT(rank);
     bool b;
@@ -1173,7 +1173,7 @@ void rsc_sparse_vector<Val, SV>::back_insert_iterator::add(
 //---------------------------------------------------------------------
 
 template<class Val, class SV>
-void rsc_sparse_vector<Val, SV>::back_insert_iterator::add_null() BMNOEXEPT
+void rsc_sparse_vector<Val, SV>::back_insert_iterator::add_null() BMNOEXCEPT
 {
     BM_ASSERT(csv_);
     csv_->max_id_++;
@@ -1184,7 +1184,7 @@ void rsc_sparse_vector<Val, SV>::back_insert_iterator::add_null() BMNOEXEPT
 
 template<class Val, class SV>
 void rsc_sparse_vector<Val, SV>::back_insert_iterator::add_null(
-    rsc_sparse_vector<Val, SV>::back_insert_iterator::size_type count) BMNOEXEPT
+    rsc_sparse_vector<Val, SV>::back_insert_iterator::size_type count) BMNOEXCEPT
 {
     BM_ASSERT(csv_);
     csv_->max_id_+=count;

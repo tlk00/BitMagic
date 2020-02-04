@@ -46,7 +46,7 @@ namespace bm
     \ingroup  setalgo
 */
 template<class BV>
-typename BV::size_type count_and(const BV& bv1, const BV& bv2) BMNOEXEPT
+typename BV::size_type count_and(const BV& bv1, const BV& bv2) BMNOEXCEPT
 {
     return bm::distance_and_operation(bv1, bv2);
 }
@@ -59,7 +59,7 @@ typename BV::size_type count_and(const BV& bv1, const BV& bv2) BMNOEXEPT
    \ingroup  setalgo
 */
 template<class BV>
-typename BV::size_type any_and(const BV& bv1, const BV& bv2) BMNOEXEPT
+typename BV::size_type any_and(const BV& bv1, const BV& bv2) BMNOEXCEPT
 {
     distance_metric_descriptor dmd(bm::COUNT_AND);
 
@@ -78,7 +78,7 @@ typename BV::size_type any_and(const BV& bv1, const BV& bv2) BMNOEXEPT
 */
 template<class BV>
 bm::distance_metric_descriptor::size_type
-count_xor(const BV& bv1, const BV& bv2) BMNOEXEPT
+count_xor(const BV& bv1, const BV& bv2) BMNOEXCEPT
 {
     distance_metric_descriptor dmd(bm::COUNT_XOR);
 
@@ -94,7 +94,7 @@ count_xor(const BV& bv1, const BV& bv2) BMNOEXEPT
    \ingroup  setalgo
 */
 template<class BV>
-typename BV::size_type any_xor(const BV& bv1, const BV& bv2) BMNOEXEPT
+typename BV::size_type any_xor(const BV& bv1, const BV& bv2) BMNOEXCEPT
 {
     distance_metric_descriptor dmd(bm::COUNT_XOR);
 
@@ -112,7 +112,7 @@ typename BV::size_type any_xor(const BV& bv1, const BV& bv2) BMNOEXEPT
    \ingroup  setalgo
 */
 template<class BV>
-typename BV::size_type count_sub(const BV& bv1, const BV& bv2) BMNOEXEPT
+typename BV::size_type count_sub(const BV& bv1, const BV& bv2) BMNOEXCEPT
 {
     distance_metric_descriptor dmd(bm::COUNT_SUB_AB);
 
@@ -129,7 +129,7 @@ typename BV::size_type count_sub(const BV& bv1, const BV& bv2) BMNOEXEPT
    \ingroup  setalgo
 */
 template<class BV>
-typename BV::size_type any_sub(const BV& bv1, const BV& bv2) BMNOEXEPT
+typename BV::size_type any_sub(const BV& bv1, const BV& bv2) BMNOEXCEPT
 {
     distance_metric_descriptor dmd(bm::COUNT_SUB_AB);
 
@@ -146,7 +146,7 @@ typename BV::size_type any_sub(const BV& bv1, const BV& bv2) BMNOEXEPT
    \ingroup  setalgo
 */
 template<class BV>
-typename BV::size_type count_or(const BV& bv1, const BV& bv2) BMNOEXEPT
+typename BV::size_type count_or(const BV& bv1, const BV& bv2) BMNOEXCEPT
 {
     distance_metric_descriptor dmd(bm::COUNT_OR);
 
@@ -162,7 +162,7 @@ typename BV::size_type count_or(const BV& bv1, const BV& bv2) BMNOEXEPT
    \ingroup  setalgo
 */
 template<class BV>
-typename BV::size_type any_or(const BV& bv1, const BV& bv2) BMNOEXEPT
+typename BV::size_type any_or(const BV& bv1, const BV& bv2) BMNOEXCEPT
 {
     distance_metric_descriptor dmd(bm::COUNT_OR);
 

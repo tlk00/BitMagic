@@ -237,34 +237,36 @@ public:
     {
     friend class bvector;
     public:
-        iterator_base() BMNOEXEPT : bv_(0), position_(bm::id_max), block_(0) {}
+        iterator_base() BMNOEXCEPT 
+            : bv_(0), position_(bm::id_max), block_(0), block_type_(0), block_idx_(0)
+        {}
 
-        bool operator==(const iterator_base& it) const BMNOEXEPT
+        bool operator==(const iterator_base& it) const BMNOEXCEPT
         {
             return (position_ == it.position_) && (bv_ == it.bv_);
         }
 
-        bool operator!=(const iterator_base& it) const BMNOEXEPT
+        bool operator!=(const iterator_base& it) const BMNOEXCEPT
         {
             return ! operator==(it);
         }
 
-        bool operator < (const iterator_base& it) const BMNOEXEPT
+        bool operator < (const iterator_base& it) const BMNOEXCEPT
         {
             return position_ < it.position_;
         }
 
-        bool operator <= (const iterator_base& it) const BMNOEXEPT
+        bool operator <= (const iterator_base& it) const BMNOEXCEPT
         {
             return position_ <= it.position_;
         }
 
-        bool operator > (const iterator_base& it) const BMNOEXEPT
+        bool operator > (const iterator_base& it) const BMNOEXCEPT
         {
             return position_ > it.position_;
         }
 
-        bool operator >= (const iterator_base& it) const BMNOEXEPT
+        bool operator >= (const iterator_base& it) const BMNOEXCEPT
         {
             return position_ >= it.position_;
         }
@@ -274,18 +276,18 @@ public:
            \brief Checks if iterator is still valid. Analog of != 0 comparison for pointers.
            \returns true if iterator is valid.
         */
-        bool valid() const BMNOEXEPT { return position_ != bm::id_max; }
+        bool valid() const BMNOEXCEPT { return position_ != bm::id_max; }
 
         /**
            \fn bool bm::bvector::iterator_base::invalidate() 
            \brief Turns iterator into an invalid state.
         */
-        void invalidate() BMNOEXEPT { position_ = bm::id_max; block_type_ = ~0u;}
+        void invalidate() BMNOEXCEPT { position_ = bm::id_max; block_type_ = ~0u;}
         
         /** \brief Compare FSMs for testing purposes
             \internal
         */
-        bool compare_state(const iterator_base& ib) const BMNOEXEPT
+        bool compare_state(const iterator_base& ib) const BMNOEXCEPT
         {
             if (this->bv_ != ib.bv_)                 return false;
             if (this->position_ != ib.position_)     return false;
@@ -499,7 +501,7 @@ public:
             sorted_ = BM_UNKNOWN;
         }
 
-        bulk_insert_iterator(bulk_insert_iterator&& iit) BMNOEXEPT
+        bulk_insert_iterator(bulk_insert_iterator&& iit) BMNOEXCEPT
             : bvect_(iit.bvect_)
         {
             buf_ = iit.buf_; iit.buf_ = 0;
@@ -518,7 +520,7 @@ public:
             return *this;
         }
         
-        bulk_insert_iterator& operator=(bulk_insert_iterator&& ii) BMNOEXEPT
+        bulk_insert_iterator& operator=(bulk_insert_iterator&& ii) BMNOEXCEPT
         {
             bvect_ = ii.bvect_;
             if (buf_)
@@ -562,11 +564,11 @@ public:
             bvect_->sync_size();
         }
         
-        bvector_type* get_bvector() const BMNOEXEPT { return bvect_; }
+        bvector_type* get_bvector() const BMNOEXCEPT { return bvect_; }
         
     protected:
         static
-        size_type buf_size_max() BMNOEXEPT
+        size_type buf_size_max() BMNOEXCEPT
         {
             #ifdef BM64ADDR
                 return bm::set_block_size / 2;
@@ -606,7 +608,7 @@ public:
             This construction creates unpositioned iterator with status
             valid() == false. It can be re-positioned using go_first() or go_to()
         */
-        enumerator(const bvector<Alloc>* bv) BMNOEXEPT
+        enumerator(const bvector<Alloc>* bv) BMNOEXCEPT
             : iterator_base()
         {
             this->bv_ = const_cast<bvector<Alloc>*>(bv);
@@ -618,7 +620,7 @@ public:
                        if position is 0, it finds the next 1 or becomes not valid
                        (en.valid() == false)
         */
-        enumerator(const bvector<Alloc>* bv, size_type pos) BMNOEXEPT
+        enumerator(const bvector<Alloc>* bv, size_type pos) BMNOEXCEPT
             : iterator_base()
         { 
             this->bv_ = const_cast<bvector<Alloc>*>(bv);
@@ -626,18 +628,18 @@ public:
         }
 
         /*! \brief Get current position (value) */
-        size_type operator*() const BMNOEXEPT { return this->position_; }
+        size_type operator*() const BMNOEXCEPT { return this->position_; }
 
         /*! \brief Get current position (value) */
-        size_type value() const BMNOEXEPT { return this->position_; }
+        size_type value() const BMNOEXCEPT { return this->position_; }
         
         /*! \brief Advance enumerator forward to the next available bit */
-        enumerator& operator++() BMNOEXEPT { return this->go_up(); }
+        enumerator& operator++() BMNOEXCEPT { return this->go_up(); }
 
         /*! \brief Advance enumerator forward to the next available bit.
              Possibly do NOT use this operator it is slower than the pre-fix increment.
          */
-        enumerator operator++(int) BMNOEXEPT
+        enumerator operator++(int) BMNOEXCEPT
         {
             enumerator tmp = *this;
             this->go_up();
@@ -646,7 +648,7 @@ public:
 
 
         /*! \brief Position enumerator to the first available bit */
-        void go_first() BMNOEXEPT
+        void go_first() BMNOEXCEPT
         {
             BM_ASSERT(this->bv_);
             
@@ -718,7 +720,7 @@ public:
 
 
         /*! \brief Advance enumerator to the next available bit */
-        enumerator& go_up() BMNOEXEPT
+        enumerator& go_up() BMNOEXCEPT
         {
             BM_ASSERT(this->valid());
 
@@ -790,7 +792,7 @@ public:
             @brief Skip to specified relative rank
             @param rank - number of ON bits to go for
         */
-        enumerator& skip_to_rank(size_type rank) BMNOEXEPT
+        enumerator& skip_to_rank(size_type rank) BMNOEXCEPT
         {
             --rank;
             if (!rank)
@@ -802,7 +804,7 @@ public:
             @brief Skip specified number of bits from enumeration
             @param rank - number of ON bits to skip
         */
-        enumerator& skip(size_type rank) BMNOEXEPT
+        enumerator& skip(size_type rank) BMNOEXCEPT
         {
             if (!this->valid() || !rank)
                 return *this;
@@ -875,7 +877,7 @@ public:
         /*!
             @brief go to a specific position in the bit-vector (or next)
         */
-        enumerator& go_to(size_type pos) BMNOEXEPT
+        enumerator& go_to(size_type pos) BMNOEXCEPT
         {
             if (pos == 0)
             {
@@ -968,7 +970,7 @@ public:
     private:
         typedef typename iterator_base::block_descr block_descr_type;
         
-        bool decode_wave(block_descr_type* bdescr) BMNOEXEPT
+        bool decode_wave(block_descr_type* bdescr) BMNOEXCEPT
         {
             bdescr->bit_.cnt = bm::bitscan_wave(bdescr->bit_.ptr, bdescr->bit_.bits);
             if (bdescr->bit_.cnt) // found
@@ -981,7 +983,7 @@ public:
             return false;
         }
         
-        bool decode_bit_group(block_descr_type* bdescr) BMNOEXEPT
+        bool decode_bit_group(block_descr_type* bdescr) BMNOEXCEPT
         {
             const word_t* block_end = this->block_ + bm::set_block_size;
             for (; bdescr->bit_.ptr < block_end;)
@@ -995,7 +997,7 @@ public:
         }
         
         bool decode_bit_group(block_descr_type* bdescr,
-                              size_type& rank) BMNOEXEPT
+                              size_type& rank) BMNOEXCEPT
         {
             const word_t* block_end = this->block_ + bm::set_block_size;
             
@@ -1019,7 +1021,7 @@ public:
             return false;
         }
 
-        bool search_in_bitblock() BMNOEXEPT
+        bool search_in_bitblock() BMNOEXCEPT
         {
             BM_ASSERT(this->block_type_ == 0);
             
@@ -1029,7 +1031,7 @@ public:
             return decode_bit_group(bdescr);
         }
 
-        bool search_in_gapblock() BMNOEXEPT
+        bool search_in_gapblock() BMNOEXCEPT
         {
             BM_ASSERT(this->block_type_ == 1);
 
@@ -1065,7 +1067,7 @@ public:
             return false;
         }
         
-        bool search_in_blocks() BMNOEXEPT
+        bool search_in_blocks() BMNOEXCEPT
         {
             ++(this->block_idx_);
             const blocks_manager_type& bman = this->bv_->blockman_;
@@ -1146,8 +1148,7 @@ public:
         
         counted_enumerator(const enumerator& en) : enumerator(en)
         {
-            if (this->valid())
-                bit_count_ = 1;
+            bit_count_ = this->valid(); // 0 || 1
         }
         
         counted_enumerator& operator=(const enumerator& en)
@@ -1181,7 +1182,7 @@ public:
             Method returns number of ON bits fromn the bit 0 to the current bit 
             For the first bit in bitvector it is 1, for the second 2 
         */
-        size_type count() const BMNOEXEPT { return bit_count_; }
+        size_type count() const BMNOEXCEPT { return bit_count_; }
     private:
         /*! Function closed for usage */
         counted_enumerator& go_to(size_type pos);
@@ -1329,7 +1330,7 @@ public:
     }
 
     
-    ~bvector() BMNOEXEPT {}
+    ~bvector() BMNOEXCEPT {}
     /*!
         \brief Explicit post-construction initialization
     */
@@ -1353,7 +1354,7 @@ public:
     /*!
         \brief Move constructor
     */
-    bvector(bvector<Alloc>&& bvect) BMNOEXEPT
+    bvector(bvector<Alloc>&& bvect) BMNOEXCEPT
     {
         blockman_.move_from(bvect.blockman_);
         size_ = bvect.size_;
@@ -1380,7 +1381,7 @@ public:
     /*! 
         \brief Move assignment operator
     */
-    bvector& operator=(bvector<Alloc>&& bvect) BMNOEXEPT
+    bvector& operator=(bvector<Alloc>&& bvect) BMNOEXCEPT
     {
         this->move_from(bvect);
         return *this;
@@ -1389,11 +1390,11 @@ public:
     /*!
         \brief Move bvector content from another bvector
     */
-    void move_from(bvector<Alloc>& bvect) BMNOEXEPT;
+    void move_from(bvector<Alloc>& bvect) BMNOEXCEPT;
     
     /*! \brief Exchanges content of bv and this bvector.
     */
-    void swap(bvector<Alloc>& bvect) BMNOEXEPT;
+    void swap(bvector<Alloc>& bvect) BMNOEXCEPT;
 
     /*! \brief Merge/move content from another vector
     
@@ -1419,7 +1420,7 @@ public:
         return reference(*this, n);
     }
 
-    bool operator[](size_type n) const
+    bool operator[](size_type n) const BMNOEXCEPT
     {
         BM_ASSERT(n < size_);
         return get_bit(n);
@@ -1434,17 +1435,15 @@ public:
     bool operator <= (const bvector<Alloc>& bv) const { return compare(bv)<=0; }
     bool operator > (const bvector<Alloc>& bv) const { return compare(bv)>0; }
     bool operator >= (const bvector<Alloc>& bv) const { return compare(bv) >= 0; }
-    bool operator == (const bvector<Alloc>& bv) const { return equal(bv); }
-    bool operator != (const bvector<Alloc>& bv) const { return !equal(bv); }
+    bool operator == (const bvector<Alloc>& bv) const BMNOEXCEPT { return equal(bv); }
+    bool operator != (const bvector<Alloc>& bv) const BMNOEXCEPT { return !equal(bv); }
 
     bvector<Alloc> operator~() const { return bvector<Alloc>(*this).invert(); }
     
     Alloc get_allocator() const
-    {
-        return blockman_.get_allocator();
-    }
+        { return blockman_.get_allocator(); }
 
-    /// Set allocator pool for local (non-threaded) 
+    /// Set allocator pool for local (non-th readed) 
     /// memory cyclic(lots of alloc-free ops) opertations
     ///
     void set_allocator_pool(allocator_pool_type* pool_ptr)
@@ -1679,7 +1678,7 @@ public:
     //size_type capacity() const { return blockman_.capacity(); }
 
     /*! \brief return current size of the vector (bits) */
-    size_type size() const BMNOEXEPT { return size_; }
+    size_type size() const BMNOEXCEPT { return size_; }
 
     /*!
         \brief Change size of the bvector
@@ -1698,7 +1697,7 @@ public:
        \brief population cout (count of ON bits)
        \return Total number of bits ON.
     */
-    size_type count() const BMNOEXEPT;
+    size_type count() const BMNOEXCEPT;
 
     /*! \brief Computes bitcount values for all bvector blocks
         \param arr - pointer on array of block bit counts
@@ -1706,7 +1705,7 @@ public:
         This number +1 gives you number of arr elements initialized during the
         function call.
     */
-    block_idx_type count_blocks(unsigned* arr) const BMNOEXEPT;
+    block_idx_type count_blocks(unsigned* arr) const BMNOEXCEPT;
     
     /*!
        \brief Returns count of 1 bits in the given range [left..right]
@@ -1720,7 +1719,7 @@ public:
     */
     size_type count_range(size_type left,
                           size_type right,
-                          const rs_index_type&  rs_idx) const BMNOEXEPT;
+                          const rs_index_type&  rs_idx) const BMNOEXCEPT;
     
     /*!
        \brief Returns count of 1 bits in the given range [left..right]
@@ -1730,7 +1729,7 @@ public:
 
        \return population count in the diapason
     */
-    size_type count_range(size_type left, size_type right) const BMNOEXEPT;
+    size_type count_range(size_type left, size_type right) const BMNOEXCEPT;
 
     /*!
        \brief Returns true if all bits in the range are 1s (saturated interval)
@@ -1742,7 +1741,7 @@ public:
        \return true if all bits are 1, false otherwise
        @sa any_range, count_range
     */
-    bool is_all_one_range(size_type left, size_type right) const BMNOEXEPT;
+    bool is_all_one_range(size_type left, size_type right) const BMNOEXCEPT;
 
     /*!
        \brief Returns true if any bits in the range are 1s (non-empty interval)
@@ -1754,7 +1753,7 @@ public:
        \return true if at least 1 bits is set
        @sa is_all_one_range, count_range
     */
-    bool any_range(size_type left, size_type right) const BMNOEXEPT;
+    bool any_range(size_type left, size_type right) const BMNOEXCEPT;
 
     /*!
         \brief Returns true if range is all 1s flanked with 0s
@@ -1769,7 +1768,7 @@ public:
        \return true/false
        @sa is_all_one_range
     */
-    bool is_interval(size_type left, size_type right) const BMNOEXEPT;
+    bool is_interval(size_type left, size_type right) const BMNOEXCEPT;
 
 
     /*! \brief compute running total of all blocks in bit vector (rank-select index)
@@ -1793,7 +1792,7 @@ public:
        \sa count_to_test, select, rank
     */
     size_type count_to(size_type n,
-                       const rs_index_type&  rs_idx) const BMNOEXEPT;
+                       const rs_index_type&  rs_idx) const BMNOEXCEPT;
     
     
     /*!
@@ -1806,7 +1805,7 @@ public:
        \sa count_to_test, select, rank
     */
     size_type rank(size_type n, 
-                   const rs_index_type&  rs_idx) const BMNOEXEPT
+                   const rs_index_type&  rs_idx) const BMNOEXCEPT
                                     {  return count_to(n, rs_idx); }
     
 
@@ -1828,17 +1827,17 @@ public:
     */
     size_type
     count_to_test(size_type n, 
-                  const rs_index_type&  rs_idx) const BMNOEXEPT;
+                  const rs_index_type&  rs_idx) const BMNOEXCEPT;
 
 
     /*! Recalculate bitcount (deprecated)
     */
-    size_type recalc_count() BMNOEXEPT { return count(); }
+    size_type recalc_count() BMNOEXCEPT { return count(); }
     
     /*!
         Disables count cache. (deprecated).
     */
-    void forget_count() BMNOEXEPT {}
+    void forget_count() BMNOEXCEPT {}
     
     //@}
     
@@ -1851,14 +1850,14 @@ public:
        \param n - Index of the bit to check.
        \return Bit value (1 or 0)
     */
-    bool get_bit(size_type n) const BMNOEXEPT;
+    bool get_bit(size_type n) const BMNOEXCEPT;
 
     /*!
        \brief returns true if bit n is set and false is bit n is 0. 
        \param n - Index of the bit to check.
        \return Bit value (1 or 0)
     */
-    bool test(size_type n) const BMNOEXEPT { return get_bit(n); }
+    bool test(size_type n) const BMNOEXCEPT { return get_bit(n); }
     
     //@}
     
@@ -1907,12 +1906,12 @@ public:
        \brief Returns true if any bits in this bitset are set, and otherwise returns false.
        \return true if any bit is set
     */
-    bool any() const BMNOEXEPT;
+    bool any() const BMNOEXCEPT;
 
     /*!
         \brief Returns true if no bits are set, otherwise returns false.
     */
-    bool none() const BMNOEXEPT { return !any(); }
+    bool none() const BMNOEXCEPT { return !any(); }
     
     //@}
     // --------------------------------------------------------------------
@@ -1927,7 +1926,7 @@ public:
        \return true if search returned result
        \sa get_first, get_next, extract_next, find_reverse, find_first_mismatch
     */
-    bool find(size_type& pos) const BMNOEXEPT;
+    bool find(size_type& pos) const BMNOEXCEPT;
 
     /*!
        \fn bool bvector::find(bm::id_t from, bm::id_t& pos) const
@@ -1937,7 +1936,7 @@ public:
        \return true if search returned result
        \sa get_first, get_next, extract_next, find_reverse, find_first_mismatch
     */
-    bool find(size_type from, size_type& pos) const BMNOEXEPT;
+    bool find(size_type from, size_type& pos) const BMNOEXCEPT;
 
     /*!
        \fn bm::id_t bvector::get_first() const
@@ -1948,7 +1947,7 @@ public:
        \return Index of the first 1 bit, may return 0
        \sa get_next, find, extract_next, find_reverse
     */
-    size_type get_first() const BMNOEXEPT { return check_or_next(0); }
+    size_type get_first() const BMNOEXCEPT { return check_or_next(0); }
 
     /*!
        \fn bm::id_t bvector::get_next(bm::id_t prev) const
@@ -1957,7 +1956,7 @@ public:
        \return Index of the next bit which is ON or 0 if not found.
        \sa get_first, find, extract_next, find_reverse
     */
-    size_type get_next(size_type prev) const BMNOEXEPT
+    size_type get_next(size_type prev) const BMNOEXCEPT
                 { return (++prev == bm::id_max) ? 0 : check_or_next(prev); }
 
     /*!
@@ -1978,7 +1977,7 @@ public:
        \return true if search returned result
        \sa get_first, get_next, extract_next, find, find_first_mismatch
     */
-    bool find_reverse(size_type& pos) const BMNOEXEPT;
+    bool find_reverse(size_type& pos) const BMNOEXCEPT;
     
     /*!
        \brief Finds dynamic range of bit-vector [first, last]
@@ -1987,7 +1986,7 @@ public:
        \return true if search returned result
        \sa get_first, get_next, extract_next, find, find_reverse
     */
-    bool find_range(size_type& first, size_type& last) const BMNOEXEPT;
+    bool find_range(size_type& first, size_type& last) const BMNOEXCEPT;
     
     /*!
         \brief Find bit-vector position for the specified rank(bitcount)
@@ -2003,7 +2002,7 @@ public:
         \return true if requested rank was found
     */
     bool find_rank(size_type rank, size_type from,
-                   size_type& pos) const BMNOEXEPT;
+                   size_type& pos) const BMNOEXCEPT;
 
     /*!
         \brief Find bit-vector position for the specified rank(bitcount)
@@ -2023,7 +2022,7 @@ public:
         \return true if requested rank was found
     */
     bool find_rank(size_type rank, size_type from, size_type& pos,
-                   const rs_index_type&  rs_idx) const BMNOEXEPT;
+                   const rs_index_type&  rs_idx) const BMNOEXCEPT;
     
     /*!
         \brief select bit-vector position for the specified rank(bitcount)
@@ -2042,7 +2041,7 @@ public:
         \return true if requested rank was found
     */
     bool select(size_type rank, size_type& pos,
-                const rs_index_type&  rs_idx) const BMNOEXEPT;
+                const rs_index_type&  rs_idx) const BMNOEXCEPT;
 
     //@}
 
@@ -2220,7 +2219,7 @@ public:
 
        @sa statistics
     */
-    void calc_stat(struct bm::bvector<Alloc>::statistics* st) const BMNOEXEPT;
+    void calc_stat(struct bm::bvector<Alloc>::statistics* st) const BMNOEXCEPT;
 
     /*!
        \brief Sets new blocks allocation strategy.
@@ -2235,7 +2234,7 @@ public:
                  1 - Blocks mutation mode (adaptive algorithm)
        \sa set_new_blocks_strat
     */
-    strategy  get_new_blocks_strat() const BMNOEXEPT 
+    strategy  get_new_blocks_strat() const BMNOEXCEPT 
                              { return new_blocks_strat_; }
 
     /*!
@@ -2275,7 +2274,7 @@ public:
         Return true if bvector is initialized at all
         @internal
     */
-    bool is_init() const BMNOEXEPT { return blockman_.is_init(); }
+    bool is_init() const BMNOEXCEPT { return blockman_.is_init(); }
     
     //@}
     
@@ -2294,13 +2293,13 @@ public:
         @return 0 if this == arg, -1 if this < arg, 1 if this > arg
         @sa find_first_mismatch
     */
-    int compare(const bvector<Alloc>& bvect) const BMNOEXEPT;
+    int compare(const bvector<Alloc>& bvect) const BMNOEXCEPT;
 
     /*!
         \brief Equal comparison with an agr bit-vector
         @return true if vectors are identical
     */
-    bool equal(const bvector<Alloc>& bvect) const BMNOEXEPT
+    bool equal(const bvector<Alloc>& bvect) const BMNOEXCEPT
     {
         size_type pos;
         bool found = find_first_mismatch(bvect, pos);
@@ -2321,7 +2320,7 @@ public:
     bool find_first_mismatch(const bvector<Alloc>& bvect,
                                         size_type& pos,
                                         size_type  search_to = bm::id_max
-                                        ) const BMNOEXEPT;
+                                        ) const BMNOEXCEPT;
     
     //@}
 
@@ -2341,7 +2340,7 @@ public:
         Use only if you are BitMagic library
         @internal
     */
-    const blocks_manager_type& get_blocks_manager() const BMNOEXEPT 
+    const blocks_manager_type& get_blocks_manager() const BMNOEXCEPT 
                                             { return blockman_; }
     
     /**
@@ -2349,7 +2348,7 @@ public:
         Use only if you are BitMagic library
         @internal
     */
-    blocks_manager_type& get_blocks_manager() BMNOEXEPT 
+    blocks_manager_type& get_blocks_manager() BMNOEXCEPT 
                                     { return blockman_; }
 
     //@}
@@ -2376,7 +2375,7 @@ protected:
 
 private:
 
-    size_type check_or_next(size_type prev) const BMNOEXEPT;
+    size_type check_or_next(size_type prev) const BMNOEXCEPT;
     
     /// set bit in GAP block withlength extension control
     bool gap_block_set(bm::gap_word_t* gap_blk,
@@ -2478,11 +2477,11 @@ private:
     size_type block_count_to(const bm::word_t* block,
                             block_idx_type nb,
                             unsigned nbit_right,
-                            const rs_index_type&  blocks_cnt) BMNOEXEPT;
+                            const rs_index_type&  blocks_cnt) BMNOEXCEPT;
     /**
         Return value of first bit in the block
     */
-    bool test_first_block_bit(block_idx_type nb) const BMNOEXEPT;
+    bool test_first_block_bit(block_idx_type nb) const BMNOEXCEPT;
     
 private:
     blocks_manager_type  blockman_;         //!< bitblocks manager
@@ -2548,7 +2547,7 @@ void bvector<Alloc>::init()
 // -----------------------------------------------------------------------
 
 template<typename Alloc>
-void bvector<Alloc>::move_from(bvector<Alloc>& bvect) BMNOEXEPT
+void bvector<Alloc>::move_from(bvector<Alloc>& bvect) BMNOEXCEPT
 {
     if (this != &bvect)
     {
@@ -2610,7 +2609,7 @@ bvector<Alloc>& bvector<Alloc>::set_range(size_type left,
 // -----------------------------------------------------------------------
 
 template<typename Alloc> 
-typename bvector<Alloc>::size_type bvector<Alloc>::count() const BMNOEXEPT
+typename bvector<Alloc>::size_type bvector<Alloc>::count() const BMNOEXCEPT
 {
     if (!blockman_.is_init())
         return 0;
@@ -2630,6 +2629,9 @@ typename bvector<Alloc>::size_type bvector<Alloc>::count() const BMNOEXEPT
             if (!found)
                 break;
             blk_blk = blk_root[i];
+            BM_ASSERT(blk_blk);
+            if (!blk_blk)
+                break;
         }
         if ((bm::word_t*)blk_blk == FULL_BLOCK_FAKE_ADDR)
         {
@@ -2657,7 +2659,7 @@ typename bvector<Alloc>::size_type bvector<Alloc>::count() const BMNOEXEPT
 // -----------------------------------------------------------------------
 
 template<typename Alloc>
-bool bvector<Alloc>::any() const BMNOEXEPT
+bool bvector<Alloc>::any() const BMNOEXCEPT
 {
     word_t*** blk_root = blockman_.top_blocks_root();
     if (!blk_root)
@@ -2818,7 +2820,7 @@ void bvector<Alloc>::build_rs_index(rs_index_type* rs_idx,
 
 template<typename Alloc>
 typename bvector<Alloc>::block_idx_type
-bvector<Alloc>::count_blocks(unsigned* arr) const BMNOEXEPT
+bvector<Alloc>::count_blocks(unsigned* arr) const BMNOEXCEPT
 {
     bm::word_t*** blk_root = blockman_.top_blocks_root();
     if (blk_root == 0)
@@ -2835,7 +2837,7 @@ typename bvector<Alloc>::size_type
 bvector<Alloc>::block_count_to(const bm::word_t*    block,
                                block_idx_type       nb,
                                unsigned             nbit_right,
-                               const rs_index_type& rs_idx) BMNOEXEPT
+                               const rs_index_type& rs_idx) BMNOEXCEPT
 {
     size_type c;
     unsigned sub_range = rs_idx.find_sub_range(nbit_right);
@@ -2947,7 +2949,7 @@ bvector<Alloc>::block_count_to(const bm::word_t*    block,
 template<typename Alloc>
 typename bvector<Alloc>::size_type 
 bvector<Alloc>::count_to(size_type right,
-                         const rs_index_type&  rs_idx) const BMNOEXEPT
+                         const rs_index_type&  rs_idx) const BMNOEXCEPT
 {
     BM_ASSERT(right < bm::id_max);
     if (!blockman_.is_init())
@@ -3001,7 +3003,7 @@ bvector<Alloc>::count_to(size_type right,
 template<typename Alloc>
 typename bvector<Alloc>::size_type 
 bvector<Alloc>::count_to_test(size_type right,
-                              const rs_index_type&  blocks_cnt) const BMNOEXEPT
+                              const rs_index_type&  blocks_cnt) const BMNOEXCEPT
 {
     BM_ASSERT(right < bm::id_max);
     if (!blockman_.is_init())
@@ -3058,7 +3060,7 @@ bvector<Alloc>::count_to_test(size_type right,
 
 template<typename Alloc>
 typename bvector<Alloc>::size_type
-bvector<Alloc>::count_range(size_type left, size_type right) const BMNOEXEPT
+bvector<Alloc>::count_range(size_type left, size_type right) const BMNOEXCEPT
 {
     BM_ASSERT(left < bm::id_max && right < bm::id_max);
     if (left > right)
@@ -3149,7 +3151,7 @@ bvector<Alloc>::count_range(size_type left, size_type right) const BMNOEXEPT
 // -----------------------------------------------------------------------
 
 template<typename Alloc>
-bool bvector<Alloc>::is_all_one_range(size_type left, size_type right) const BMNOEXEPT
+bool bvector<Alloc>::is_all_one_range(size_type left, size_type right) const BMNOEXCEPT
 {
     if (!blockman_.is_init())
         return false; // nothing to do
@@ -3232,7 +3234,7 @@ bool bvector<Alloc>::is_all_one_range(size_type left, size_type right) const BMN
 // -----------------------------------------------------------------------
 
 template<typename Alloc>
-bool bvector<Alloc>::any_range(size_type left, size_type right) const BMNOEXEPT
+bool bvector<Alloc>::any_range(size_type left, size_type right) const BMNOEXCEPT
 {
     BM_ASSERT(left < bm::id_max && right < bm::id_max);
 
@@ -3325,7 +3327,7 @@ bool bvector<Alloc>::any_range(size_type left, size_type right) const BMNOEXEPT
 // -----------------------------------------------------------------------
 
 template<typename Alloc>
-bool bvector<Alloc>::is_interval(size_type left, size_type right) const BMNOEXEPT
+bool bvector<Alloc>::is_interval(size_type left, size_type right) const BMNOEXCEPT
 {
     if (!blockman_.is_init())
         return false; // nothing to do
@@ -3372,7 +3374,7 @@ template<typename Alloc>
 typename bvector<Alloc>::size_type
 bvector<Alloc>::count_range(size_type left,
                             size_type right,
-                            const rs_index_type&  rs_idx) const BMNOEXEPT
+                            const rs_index_type&  rs_idx) const BMNOEXCEPT
 {
     BM_ASSERT(left <= right);
 
@@ -3448,7 +3450,7 @@ bvector<Alloc>& bvector<Alloc>::invert()
 // -----------------------------------------------------------------------
 
 template<typename Alloc> 
-bool bvector<Alloc>::get_bit(size_type n) const BMNOEXEPT
+bool bvector<Alloc>::get_bit(size_type n) const BMNOEXCEPT
 {    
     BM_ASSERT(n < size_);
     BM_ASSERT_THROW((n < size_), BM_ERR_RANGE);
@@ -3570,7 +3572,7 @@ void bvector<Alloc>::set_gap_levels(const gap_word_t* glevel_len)
 // -----------------------------------------------------------------------
 
 template<typename Alloc> 
-int bvector<Alloc>::compare(const bvector<Alloc>& bv) const BMNOEXEPT
+int bvector<Alloc>::compare(const bvector<Alloc>& bv) const BMNOEXCEPT
 {
     int res;
     unsigned top_blocks = blockman_.top_block_size();
@@ -3690,7 +3692,7 @@ int bvector<Alloc>::compare(const bvector<Alloc>& bv) const BMNOEXEPT
 template<typename Alloc>
 bool bvector<Alloc>::find_first_mismatch(
                         const bvector<Alloc>& bvect, size_type& pos,
-                        size_type search_to) const BMNOEXEPT
+                        size_type search_to) const BMNOEXCEPT
 {
     unsigned top_blocks = blockman_.top_block_size();
     bm::word_t*** top_root = blockman_.top_blocks_root();
@@ -3792,7 +3794,7 @@ bool bvector<Alloc>::find_first_mismatch(
 // -----------------------------------------------------------------------
 
 template<typename Alloc>
-void bvector<Alloc>::swap(bvector<Alloc>& bvect) BMNOEXEPT
+void bvector<Alloc>::swap(bvector<Alloc>& bvect) BMNOEXCEPT
 {
     if (this != &bvect)
     {
@@ -3805,7 +3807,7 @@ void bvector<Alloc>::swap(bvector<Alloc>& bvect) BMNOEXEPT
 
 template<typename Alloc> 
 void bvector<Alloc>::calc_stat(
-                   struct bvector<Alloc>::statistics* st) const BMNOEXEPT
+                   struct bvector<Alloc>::statistics* st) const BMNOEXCEPT
 {
     BM_ASSERT(st);
     
@@ -3834,6 +3836,9 @@ void bvector<Alloc>::calc_stat(
                 if (!found)
                     break;
                 blk_blk = blk_root[i];
+                BM_ASSERT(blk_blk);
+                if (!blk_blk)
+                    break;
             }
             if ((bm::word_t*)blk_blk == FULL_BLOCK_FAKE_ADDR)
                 continue;
@@ -4351,7 +4356,7 @@ bool bvector<Alloc>::and_bit_no_check(size_type n, bool val)
 //---------------------------------------------------------------------
 
 template<class Alloc>
-bool bvector<Alloc>::find(size_type from, size_type& pos) const BMNOEXEPT
+bool bvector<Alloc>::find(size_type from, size_type& pos) const BMNOEXCEPT
 {
     if (from == bm::id_max)
         return false;
@@ -4366,7 +4371,7 @@ bool bvector<Alloc>::find(size_type from, size_type& pos) const BMNOEXEPT
 //---------------------------------------------------------------------
 
 template<class Alloc>
-bool bvector<Alloc>::find_reverse(size_type& pos) const BMNOEXEPT
+bool bvector<Alloc>::find_reverse(size_type& pos) const BMNOEXCEPT
 {
     bool found;
     
@@ -4421,7 +4426,7 @@ bool bvector<Alloc>::find_reverse(size_type& pos) const BMNOEXEPT
 //---------------------------------------------------------------------
 
 template<class Alloc>
-bool bvector<Alloc>::find(size_type& pos) const BMNOEXEPT
+bool bvector<Alloc>::find(size_type& pos) const BMNOEXCEPT
 {
     bool found;
     
@@ -4468,7 +4473,7 @@ bool bvector<Alloc>::find(size_type& pos) const BMNOEXEPT
 
 template<class Alloc>
 bool bvector<Alloc>::find_range(size_type& in_first,
-                                size_type& in_last) const BMNOEXEPT
+                                size_type& in_last) const BMNOEXCEPT
 {
     bool found = find(in_first);
     if (found)
@@ -4489,7 +4494,7 @@ bool bvector<Alloc>::find_range(size_type& in_first,
 template<class Alloc>
 bool bvector<Alloc>::find_rank(size_type  rank_in, 
                                size_type  from, 
-                               size_type& pos) const BMNOEXEPT
+                               size_type& pos) const BMNOEXCEPT
 {
     BM_ASSERT_THROW(from < bm::id_max, BM_ERR_RANGE);
 
@@ -4543,7 +4548,7 @@ template<class Alloc>
 bool bvector<Alloc>::find_rank(size_type             rank_in, 
                                size_type             from, 
                                size_type&            pos,
-                               const rs_index_type&  rs_idx) const BMNOEXEPT
+                               const rs_index_type&  rs_idx) const BMNOEXCEPT
 {
     BM_ASSERT_THROW(from < bm::id_max, BM_ERR_RANGE);
 
@@ -4612,7 +4617,7 @@ bool bvector<Alloc>::find_rank(size_type             rank_in,
 
 template<class Alloc>
 bool bvector<Alloc>::select(size_type rank_in, size_type& pos,
-                            const rs_index_type&  rs_idx) const BMNOEXEPT
+                            const rs_index_type&  rs_idx) const BMNOEXCEPT
 {
     bool ret = false;
     
@@ -4648,7 +4653,7 @@ bool bvector<Alloc>::select(size_type rank_in, size_type& pos,
 
 template<class Alloc> 
 typename bvector<Alloc>::size_type 
-bvector<Alloc>::check_or_next(size_type prev) const BMNOEXEPT
+bvector<Alloc>::check_or_next(size_type prev) const BMNOEXCEPT
 {
     if (!blockman_.is_init())
         return 0;
@@ -5099,7 +5104,7 @@ void bvector<Alloc>::erase(size_type n)
 //---------------------------------------------------------------------
 
 template<class Alloc>
-bool bvector<Alloc>::test_first_block_bit(block_idx_type nb) const BMNOEXEPT
+bool bvector<Alloc>::test_first_block_bit(block_idx_type nb) const BMNOEXCEPT
 {
     if (nb >= bm::set_total_blocks) // last possible block
         return false;

@@ -97,7 +97,7 @@ private:
     unsigned process_word(bm::word_t*       blk_out, 
                           const bm::word_t* blk_src,
                           unsigned          nword,
-                          unsigned          take_count) BMNOEXEPT;
+                          unsigned          take_count) BMNOEXCEPT;
 
     static
     void get_random_array(bm::word_t*       blk_out, 
@@ -106,7 +106,7 @@ private:
                           unsigned          count);
     static
     unsigned compute_take_count(unsigned bc,
-                size_type in_count, size_type sample_count) BMNOEXEPT;
+                size_type in_count, size_type sample_count) BMNOEXCEPT;
 
 
 private:
@@ -360,7 +360,7 @@ template<class BV>
 unsigned random_subset<BV>::compute_take_count(
                                     unsigned bc,
                                     size_type in_count,
-                                    size_type sample_count) BMNOEXEPT
+                                    size_type sample_count) BMNOEXCEPT
 {
     float block_percent = float(bc) / float(in_count);
     float bits_to_take = float(sample_count) * block_percent;
@@ -419,7 +419,7 @@ template<class BV>
 unsigned random_subset<BV>::process_word(bm::word_t*       blk_out, 
                                          const bm::word_t* blk_src,
                                          unsigned          nword,
-                                         unsigned          take_count) BMNOEXEPT
+                                         unsigned          take_count) BMNOEXCEPT
 {
     unsigned new_bits, mask;
     do 

@@ -95,19 +95,19 @@ public:
     {
     public:
         const_reference(const str_sparse_vector<CharType, BV, MAX_STR_SIZE>& str_sv,
-                  size_type idx) BMNOEXEPT
+                  size_type idx) BMNOEXCEPT
         : str_sv_(str_sv), idx_(idx)
         {}
         
-        operator const value_type*() const BMNOEXEPT
+        operator const value_type*() const BMNOEXCEPT
         {
             str_sv_.get(idx_, buf_, MAX_STR_SIZE);
             return &(buf_[0]);
         }
 
-        bool operator==(const const_reference& ref) const BMNOEXEPT
+        bool operator==(const const_reference& ref) const BMNOEXCEPT
                                 { return bool(*this) == bool(ref); }
-        bool is_null() const BMNOEXEPT { return str_sv_.is_null(idx_); }
+        bool is_null() const BMNOEXCEPT { return str_sv_.is_null(idx_); }
     private:
         const str_sparse_vector<CharType, BV, MAX_STR_SIZE>& str_sv_;
         size_type                                            idx_;
@@ -122,11 +122,11 @@ public:
     {
     public:
         reference(str_sparse_vector<CharType, BV, MAX_STR_SIZE>& str_sv,
-                  size_type idx) BMNOEXEPT
+                  size_type idx) BMNOEXCEPT
         : str_sv_(str_sv), idx_(idx)
         {}
         
-        operator const value_type*() const BMNOEXEPT
+        operator const value_type*() const BMNOEXCEPT
         {
             str_sv_.get(idx_, buf_, MAX_STR_SIZE);
             return &(buf_[0]);
@@ -144,9 +144,9 @@ public:
             str_sv_.set(idx_, str);
             return *this;
         }
-        bool operator==(const reference& ref) const BMNOEXEPT
+        bool operator==(const reference& ref) const BMNOEXCEPT
                                 { return bool(*this) == bool(ref); }
-        bool is_null() const BMNOEXEPT { return str_sv_.is_null(idx_); }
+        bool is_null() const BMNOEXCEPT { return str_sv_.is_null(idx_); }
     private:
         str_sparse_vector<CharType, BV, MAX_STR_SIZE>& str_sv_;
         size_type                                      idx_;
@@ -183,56 +183,56 @@ public:
         typedef CharType*                   pointer;
         typedef CharType*&                  reference;
     public:
-        const_iterator() BMNOEXEPT;
-        const_iterator(const str_sparse_vector_type* sv) BMNOEXEPT;
-        const_iterator(const str_sparse_vector_type* sv, size_type pos) BMNOEXEPT;
-        const_iterator(const const_iterator& it) BMNOEXEPT;
+        const_iterator() BMNOEXCEPT;
+        const_iterator(const str_sparse_vector_type* sv) BMNOEXCEPT;
+        const_iterator(const str_sparse_vector_type* sv, size_type pos) BMNOEXCEPT;
+        const_iterator(const const_iterator& it) BMNOEXCEPT;
         
-        bool operator==(const const_iterator& it) const BMNOEXEPT
+        bool operator==(const const_iterator& it) const BMNOEXCEPT
                                 { return (pos_ == it.pos_) && (sv_ == it.sv_); }
-        bool operator!=(const const_iterator& it) const BMNOEXEPT
+        bool operator!=(const const_iterator& it) const BMNOEXCEPT
                                 { return ! operator==(it); }
-        bool operator < (const const_iterator& it) const BMNOEXEPT
+        bool operator < (const const_iterator& it) const BMNOEXCEPT
                                 { return pos_ < it.pos_; }
-        bool operator <= (const const_iterator& it) const BMNOEXEPT
+        bool operator <= (const const_iterator& it) const BMNOEXCEPT
                                 { return pos_ <= it.pos_; }
-        bool operator > (const const_iterator& it) const BMNOEXEPT
+        bool operator > (const const_iterator& it) const BMNOEXCEPT
                                 { return pos_ > it.pos_; }
-        bool operator >= (const const_iterator& it) const BMNOEXEPT
+        bool operator >= (const const_iterator& it) const BMNOEXCEPT
                                 { return pos_ >= it.pos_; }
 
         /// \brief Get current position (value)
-        const value_type* operator*() const BMNOEXEPT { return this->value(); }
+        const value_type* operator*() const BMNOEXCEPT { return this->value(); }
 
         /// \brief Advance to the next available value
-        const_iterator& operator++() BMNOEXEPT
+        const_iterator& operator++() BMNOEXCEPT
             { this->advance(); return *this; }
 
         /// \brief Advance to the next available value
-        const_iterator& operator++(int) BMNOEXEPT
+        const_iterator& operator++(int) BMNOEXCEPT
             { const_iterator tmp(*this);this->advance(); return tmp; }
 
 
         /// \brief Get current position (value)
-        const value_type* value() const BMNOEXEPT;
+        const value_type* value() const BMNOEXCEPT;
 
         /// \brief Get NULL status
-        bool is_null() const BMNOEXEPT { return sv_->is_null(this->pos_); }
+        bool is_null() const BMNOEXCEPT { return sv_->is_null(this->pos_); }
 
         /// Returns true if iterator is at a valid position
-        bool valid() const BMNOEXEPT { return pos_ != bm::id_max; }
+        bool valid() const BMNOEXCEPT { return pos_ != bm::id_max; }
 
         /// Invalidate current iterator
-        void invalidate() BMNOEXEPT { pos_ = bm::id_max; }
+        void invalidate() BMNOEXCEPT { pos_ = bm::id_max; }
 
         /// Current position (index) in the vector
-        size_type pos() const BMNOEXEPT { return pos_; }
+        size_type pos() const BMNOEXCEPT { return pos_; }
 
         /// re-position to a specified position
-        void go_to(size_type pos) BMNOEXEPT;
+        void go_to(size_type pos) BMNOEXCEPT;
 
         /// advance iterator forward by one
-        void advance() BMNOEXEPT;
+        void advance() BMNOEXCEPT;
 
     protected:
         typedef bm::heap_matrix<CharType,
@@ -280,9 +280,9 @@ public:
         typedef void reference;
         
     public:
-        back_insert_iterator() BMNOEXEPT;
-        back_insert_iterator(str_sparse_vector_type* sv) BMNOEXEPT;
-        back_insert_iterator(const back_insert_iterator& bi) BMNOEXEPT;
+        back_insert_iterator() BMNOEXCEPT;
+        back_insert_iterator(str_sparse_vector_type* sv) BMNOEXCEPT;
+        back_insert_iterator(const back_insert_iterator& bi) BMNOEXCEPT;
         
         back_insert_iterator& operator=(const back_insert_iterator& bi)
         {
@@ -322,7 +322,7 @@ public:
         void add_null(size_type count);
 
         /** return true if insertion buffer is empty */
-        bool empty() const BMNOEXEPT;
+        bool empty() const BMNOEXCEPT;
         
         /** flush the accumulated buffer */
         void flush();
@@ -394,7 +394,7 @@ public:
     }
 #ifndef BM_NO_CXX11
     /*! move-ctor */
-    str_sparse_vector(str_sparse_vector<CharType, BV, MAX_STR_SIZE>&& str_sv) BMNOEXEPT
+    str_sparse_vector(str_sparse_vector<CharType, BV, MAX_STR_SIZE>&& str_sv) BMNOEXCEPT
     {
         parent_type::swap(str_sv);
         remap_flags_ = str_sv.remap_flags_;
@@ -404,7 +404,7 @@ public:
 
     /*! move assignmment operator */
     str_sparse_vector<CharType, BV, MAX_STR_SIZE>& operator =
-            (str_sparse_vector<CharType, BV, MAX_STR_SIZE>&& str_sv) BMNOEXEPT
+            (str_sparse_vector<CharType, BV, MAX_STR_SIZE>&& str_sv) BMNOEXCEPT
     {
         if (this != &str_sv)
         {
@@ -477,7 +477,7 @@ public:
         @return string length
     */
     size_type get(size_type idx,
-                 value_type* str, size_type buf_size) const BMNOEXEPT;
+                 value_type* str, size_type buf_size) const BMNOEXCEPT;
     
     /*!
         \brief set specified element with bounds checking and automatic resize
@@ -570,7 +570,7 @@ public:
     }
 
     /*! Swap content */
-    void swap(str_sparse_vector& str_sv) BMNOEXEPT;
+    void swap(str_sparse_vector& str_sv) BMNOEXCEPT;
 
     ///@}
     
@@ -591,14 +591,14 @@ public:
      
         \return 0 - equal, < 0 - vect[i] < str, >0 otherwise
     */
-    int compare(size_type idx, const value_type* str) const BMNOEXEPT;
+    int compare(size_type idx, const value_type* str) const BMNOEXCEPT;
     
     
     /**
         \brief Find size of common prefix between two vector elements in octets
         \return size of common prefix
     */
-    unsigned common_prefix_length(size_type idx1, size_type idx2) const BMNOEXEPT;
+    unsigned common_prefix_length(size_type idx1, size_type idx2) const BMNOEXCEPT;
 
     ///@}
 
@@ -608,7 +608,7 @@ public:
     ///@{
 
     /*! \brief resize to zero, free memory */
-    void clear() BMNOEXEPT;
+    void clear() BMNOEXCEPT;
 
     /*!
         \brief clear range (assign bit 0 for all plains)
@@ -656,7 +656,7 @@ public:
         to the reserved maximum.
         \return current string length maximum
     */
-    size_type effective_max_str() const BMNOEXEPT;
+    size_type effective_max_str() const BMNOEXCEPT;
     
     /*! \brief get effective string length used in vector
         \return current string length maximum
@@ -693,7 +693,7 @@ public:
     */
     void calc_stat(
         struct str_sparse_vector<CharType, BV, MAX_STR_SIZE>::statistics* st
-        ) const BMNOEXEPT;
+        ) const BMNOEXCEPT;
     
     
     ///@}
@@ -703,15 +703,15 @@ public:
     //@{
 
     /** Provide const iterator access to container content  */
-    const_iterator begin() const BMNOEXEPT;
+    const_iterator begin() const BMNOEXCEPT;
 
     /** Provide const iterator access to the end    */
-    const_iterator end() const BMNOEXEPT { return const_iterator(this, bm::id_max); }
+    const_iterator end() const BMNOEXCEPT { return const_iterator(this, bm::id_max); }
 
     /** Get const_itertor re-positioned to specific element
     @param idx - position in the sparse vector
     */
-    const_iterator get_const_iterator(size_type idx) const BMNOEXEPT
+    const_iterator get_const_iterator(size_type idx) const BMNOEXCEPT
         { return const_iterator(this, idx); }
     
      /** Provide back insert iterator
@@ -732,7 +732,7 @@ public:
     /** \brief trait if sparse vector is "compressed" (false)
     */
     static
-    bool is_compressed() BMNOEXEPT { return false; }
+    bool is_compressed() BMNOEXCEPT { return false; }
 
     ///@}
 
@@ -747,7 +747,7 @@ public:
     /**
         Get remapping status (true|false)
     */
-    bool is_remap() const BMNOEXEPT { return remap_flags_ != 0; }
+    bool is_remap() const BMNOEXCEPT { return remap_flags_ != 0; }
     
     /**
         Build remapping profile and load content from another sparse vector
@@ -759,7 +759,7 @@ public:
         Calculate flags which octets are present on each byte-plain.
         @internal
     */
-    void calc_octet_stat(plain_octet_matrix_type& octet_matrix) const BMNOEXEPT;
+    void calc_octet_stat(plain_octet_matrix_type& octet_matrix) const BMNOEXCEPT;
 
     static
     void build_octet_remap(
@@ -777,7 +777,7 @@ public:
                     size_type                    buf_size,
                     const value_type* BMRESTRICT str,
                     const plain_octet_matrix_type& BMRESTRICT octet_remap_matrix2
-                    ) BMNOEXEPT;
+                    ) BMNOEXCEPT;
     
     /*!
         remap string from external (ASCII) system to matrix internal code
@@ -785,7 +785,7 @@ public:
     */
     bool remap_tosv(value_type*       sv_str,
                     size_type         buf_size,
-                    const value_type* str) const BMNOEXEPT
+                    const value_type* str) const BMNOEXCEPT
     {
         return remap_tosv(sv_str, buf_size, str, remap_matrix2_);
     }
@@ -801,7 +801,7 @@ public:
             size_type                    buf_size,
             const value_type* BMRESTRICT sv_str,
             const plain_octet_matrix_type& BMRESTRICT octet_remap_matrix1
-            ) BMNOEXEPT;
+            ) BMNOEXCEPT;
     /*!
         re-calculate remap matrix2 based on matrix1
         @internal
@@ -954,18 +954,18 @@ public:
         \return true, if it is the same
     */
     bool equal(const str_sparse_vector<CharType, BV, MAX_STR_SIZE>& sv,
-               bm::null_support null_able = bm::use_null) const BMNOEXEPT;
+               bm::null_support null_able = bm::use_null) const BMNOEXCEPT;
 
     /**
         \brief find position of compressed element by its rank
     */
     static
-    bool find_rank(size_type rank, size_type& pos) BMNOEXEPT;
+    bool find_rank(size_type rank, size_type& pos) BMNOEXCEPT;
     
     /**
         \brief size of sparse vector (may be different for RSC)
     */
-    size_type effective_size() const BMNOEXEPT { return size(); }
+    size_type effective_size() const BMNOEXCEPT { return size(); }
 
 protected:
 
@@ -1144,7 +1144,7 @@ str_sparse_vector<CharType, BV, MAX_STR_SIZE>::str_sparse_vector(
 
 template<class CharType, class BV, unsigned MAX_STR_SIZE>
 void str_sparse_vector<CharType, BV, MAX_STR_SIZE>::swap(
-                                str_sparse_vector& str_sv) BMNOEXEPT
+                                str_sparse_vector& str_sv) BMNOEXCEPT
 {
     parent_type::swap(str_sv);
     bm::xor_swap(remap_flags_, str_sv.remap_flags_);
@@ -1293,7 +1293,7 @@ void str_sparse_vector<CharType, BV, MAX_STR_SIZE>::insert_value_no_null(
 template<class CharType, class BV, unsigned MAX_STR_SIZE>
 typename str_sparse_vector<CharType, BV, MAX_STR_SIZE>::size_type
 str_sparse_vector<CharType, BV, MAX_STR_SIZE>::get(
-            size_type idx, value_type* str, size_type buf_size) const BMNOEXEPT
+            size_type idx, value_type* str, size_type buf_size) const BMNOEXCEPT
 {
     size_type i = 0;
     for (; i < MAX_STR_SIZE; ++i)
@@ -1337,7 +1337,7 @@ void str_sparse_vector<CharType, BV, MAX_STR_SIZE>::optimize(
 template<class CharType, class BV, unsigned MAX_STR_SIZE>
 void str_sparse_vector<CharType, BV, MAX_STR_SIZE>::calc_stat(
     struct str_sparse_vector<CharType, BV, MAX_STR_SIZE>::statistics* st
-    ) const BMNOEXEPT
+    ) const BMNOEXCEPT
 {
     BM_ASSERT(st);
     typename bvector_type::statistics stbv;
@@ -1369,7 +1369,7 @@ void str_sparse_vector<CharType, BV, MAX_STR_SIZE>::calc_stat(
 template<class CharType, class BV, unsigned MAX_STR_SIZE>
 int str_sparse_vector<CharType, BV, MAX_STR_SIZE>::compare(
                      size_type idx,
-                     const value_type* str) const BMNOEXEPT
+                     const value_type* str) const BMNOEXCEPT
 {
     BM_ASSERT(str);
     int res = 0;
@@ -1397,7 +1397,7 @@ int str_sparse_vector<CharType, BV, MAX_STR_SIZE>::compare(
 
 template<class CharType, class BV, unsigned MAX_STR_SIZE>
 unsigned str_sparse_vector<CharType, BV, MAX_STR_SIZE>::common_prefix_length(
-                                size_type idx1, size_type idx2) const BMNOEXEPT
+                                size_type idx1, size_type idx2) const BMNOEXCEPT
 {
     unsigned i = 0;
     for (; i < MAX_STR_SIZE; ++i)
@@ -1425,7 +1425,7 @@ template<class CharType, class BV, unsigned MAX_STR_SIZE>
 bool 
 str_sparse_vector<CharType, BV, MAX_STR_SIZE>::find_rank(
                                                 size_type rank,
-                                                size_type& pos) BMNOEXEPT
+                                                size_type& pos) BMNOEXCEPT
 {
     BM_ASSERT(rank);
     pos = rank - 1;
@@ -1437,7 +1437,7 @@ str_sparse_vector<CharType, BV, MAX_STR_SIZE>::find_rank(
 template<class CharType, class BV, unsigned MAX_STR_SIZE>
 typename str_sparse_vector<CharType, BV, MAX_STR_SIZE>::size_type
 str_sparse_vector<CharType, BV, MAX_STR_SIZE>::effective_max_str()
-                                                        const BMNOEXEPT
+                                                        const BMNOEXCEPT
 {
     for (int i = MAX_STR_SIZE-1; i >= 0; --i)
     {
@@ -1455,7 +1455,7 @@ str_sparse_vector<CharType, BV, MAX_STR_SIZE>::effective_max_str()
 
 template<class CharType, class BV, unsigned MAX_STR_SIZE>
 void str_sparse_vector<CharType, BV, MAX_STR_SIZE>::calc_octet_stat(
-                    plain_octet_matrix_type& octet_matrix) const BMNOEXEPT
+                    plain_octet_matrix_type& octet_matrix) const BMNOEXCEPT
 {
     octet_matrix.init();
     octet_matrix.set_zero();
@@ -1543,7 +1543,7 @@ bool str_sparse_vector<CharType, BV, MAX_STR_SIZE>::remap_tosv(
        value_type*   BMRESTRICT     sv_str,
        size_type                    buf_size,
        const value_type* BMRESTRICT str,
-       const plain_octet_matrix_type& BMRESTRICT octet_remap_matrix2) BMNOEXEPT
+       const plain_octet_matrix_type& BMRESTRICT octet_remap_matrix2) BMNOEXCEPT
 {
     for (unsigned i = 0; i < buf_size; ++i)
     {
@@ -1572,7 +1572,7 @@ bool str_sparse_vector<CharType, BV, MAX_STR_SIZE>::remap_fromsv(
          size_type         buf_size,
          const value_type* BMRESTRICT sv_str,
          const plain_octet_matrix_type& BMRESTRICT octet_remap_matrix1
-         ) BMNOEXEPT
+         ) BMNOEXCEPT
 {
     for (unsigned i = 0; i < buf_size; ++i)
     {
@@ -1650,7 +1650,7 @@ void str_sparse_vector<CharType, BV, MAX_STR_SIZE>::sync(bool /*force*/)
 template<class CharType, class BV, unsigned MAX_STR_SIZE>
 bool str_sparse_vector<CharType, BV, MAX_STR_SIZE>::equal(
                 const str_sparse_vector<CharType, BV, MAX_STR_SIZE>& sv,
-                bm::null_support null_able) const BMNOEXEPT
+                bm::null_support null_able) const BMNOEXCEPT
 {
     // at this point both vectors should have the same remap settings
     // to be considered "equal".
@@ -1697,7 +1697,7 @@ void str_sparse_vector<CharType, BV, MAX_STR_SIZE>::copy_range(
 
 template<class CharType, class BV, unsigned MAX_STR_SIZE>
 typename str_sparse_vector<CharType, BV, MAX_STR_SIZE>::const_iterator
-str_sparse_vector<CharType, BV, MAX_STR_SIZE>::begin() const BMNOEXEPT
+str_sparse_vector<CharType, BV, MAX_STR_SIZE>::begin() const BMNOEXCEPT
 {
     typedef typename
         str_sparse_vector<CharType, BV, MAX_STR_SIZE>::const_iterator it_type;
@@ -1707,7 +1707,7 @@ str_sparse_vector<CharType, BV, MAX_STR_SIZE>::begin() const BMNOEXEPT
 //---------------------------------------------------------------------
 
 template<class CharType, class BV, unsigned MAX_STR_SIZE>
-void str_sparse_vector<CharType, BV, MAX_STR_SIZE>::clear() BMNOEXEPT
+void str_sparse_vector<CharType, BV, MAX_STR_SIZE>::clear() BMNOEXCEPT
 {
     parent_type::clear();
 }
@@ -1747,7 +1747,7 @@ void str_sparse_vector<CharType, BV, MAX_STR_SIZE>::throw_bad_value(
 
 
 template<class CharType, class BV, unsigned MAX_STR_SIZE>
-str_sparse_vector<CharType, BV, MAX_STR_SIZE>::const_iterator::const_iterator() BMNOEXEPT
+str_sparse_vector<CharType, BV, MAX_STR_SIZE>::const_iterator::const_iterator() BMNOEXCEPT
 : sv_(0), pos_(bm::id_max), pos_in_buf_(~size_type(0))
 {}
 
@@ -1755,7 +1755,7 @@ str_sparse_vector<CharType, BV, MAX_STR_SIZE>::const_iterator::const_iterator() 
 
 template<class CharType, class BV, unsigned MAX_STR_SIZE>
 str_sparse_vector<CharType, BV, MAX_STR_SIZE>::const_iterator::const_iterator(
-   const str_sparse_vector<CharType, BV, MAX_STR_SIZE>::const_iterator& it) BMNOEXEPT
+   const str_sparse_vector<CharType, BV, MAX_STR_SIZE>::const_iterator& it) BMNOEXCEPT
 : sv_(it.sv_), pos_(it.pos_), pos_in_buf_(~size_type(0))
 {}
 
@@ -1763,7 +1763,7 @@ str_sparse_vector<CharType, BV, MAX_STR_SIZE>::const_iterator::const_iterator(
 
 template<class CharType, class BV, unsigned MAX_STR_SIZE>
 str_sparse_vector<CharType, BV, MAX_STR_SIZE>::const_iterator::const_iterator(
-    const str_sparse_vector<CharType, BV, MAX_STR_SIZE>* sv) BMNOEXEPT
+    const str_sparse_vector<CharType, BV, MAX_STR_SIZE>* sv) BMNOEXCEPT
 : sv_(sv), pos_(sv->empty() ? bm::id_max : 0), pos_in_buf_(~size_type(0))
 {}
 
@@ -1772,7 +1772,7 @@ str_sparse_vector<CharType, BV, MAX_STR_SIZE>::const_iterator::const_iterator(
 template<class CharType, class BV, unsigned MAX_STR_SIZE>
 str_sparse_vector<CharType, BV, MAX_STR_SIZE>::const_iterator::const_iterator(
     const str_sparse_vector<CharType, BV, MAX_STR_SIZE>* sv,
-    typename str_sparse_vector<CharType, BV, MAX_STR_SIZE>::size_type pos) BMNOEXEPT
+    typename str_sparse_vector<CharType, BV, MAX_STR_SIZE>::size_type pos) BMNOEXCEPT
 : sv_(sv), pos_(pos >= sv->size() ? bm::id_max : pos), pos_in_buf_(~size_type(0))
 {}
 
@@ -1780,7 +1780,7 @@ str_sparse_vector<CharType, BV, MAX_STR_SIZE>::const_iterator::const_iterator(
 
 template<class CharType, class BV, unsigned MAX_STR_SIZE>
 const typename str_sparse_vector<CharType, BV, MAX_STR_SIZE>::value_type*
-str_sparse_vector<CharType, BV, MAX_STR_SIZE>::const_iterator::value() const BMNOEXEPT
+str_sparse_vector<CharType, BV, MAX_STR_SIZE>::const_iterator::value() const BMNOEXCEPT
 {
     BM_ASSERT(sv_);
     BM_ASSERT(this->valid());
@@ -1805,7 +1805,7 @@ template<class CharType, class BV, unsigned MAX_STR_SIZE>
 void
 str_sparse_vector<CharType, BV, MAX_STR_SIZE>::const_iterator::go_to(
    typename str_sparse_vector<CharType, BV, MAX_STR_SIZE>::size_type pos
-   ) BMNOEXEPT
+   ) BMNOEXCEPT
 {
     pos_ = (!sv_ || pos >= sv_->size()) ? bm::id_max : pos;
     pos_in_buf_ = ~size_type(0);
@@ -1815,7 +1815,7 @@ str_sparse_vector<CharType, BV, MAX_STR_SIZE>::const_iterator::go_to(
 
 template<class CharType, class BV, unsigned MAX_STR_SIZE>
 void
-str_sparse_vector<CharType, BV, MAX_STR_SIZE>::const_iterator::advance() BMNOEXEPT
+str_sparse_vector<CharType, BV, MAX_STR_SIZE>::const_iterator::advance() BMNOEXCEPT
 {
     if (pos_ == bm::id_max) // nothing to do, we are at the end
         return;
@@ -1839,7 +1839,7 @@ str_sparse_vector<CharType, BV, MAX_STR_SIZE>::const_iterator::advance() BMNOEXE
 //---------------------------------------------------------------------
 
 template<class CharType, class BV, unsigned MAX_STR_SIZE>
-str_sparse_vector<CharType, BV, MAX_STR_SIZE>::back_insert_iterator::back_insert_iterator() BMNOEXEPT
+str_sparse_vector<CharType, BV, MAX_STR_SIZE>::back_insert_iterator::back_insert_iterator() BMNOEXCEPT
 : sv_(0), bv_null_(0), pos_in_buf_(~size_type(0)), prev_nb_(0)
 {}
 
@@ -1847,7 +1847,7 @@ str_sparse_vector<CharType, BV, MAX_STR_SIZE>::back_insert_iterator::back_insert
 
 template<class CharType, class BV, unsigned MAX_STR_SIZE>
 str_sparse_vector<CharType, BV, MAX_STR_SIZE>::back_insert_iterator::back_insert_iterator(
-           str_sparse_vector<CharType, BV, MAX_STR_SIZE>* sv) BMNOEXEPT
+           str_sparse_vector<CharType, BV, MAX_STR_SIZE>* sv) BMNOEXCEPT
 : sv_(sv), pos_in_buf_(~size_type(0))
 {
     if (sv)
@@ -1865,7 +1865,7 @@ str_sparse_vector<CharType, BV, MAX_STR_SIZE>::back_insert_iterator::back_insert
 
 template<class CharType, class BV, unsigned MAX_STR_SIZE>
 str_sparse_vector<CharType, BV, MAX_STR_SIZE>::back_insert_iterator::back_insert_iterator(
-const str_sparse_vector<CharType, BV, MAX_STR_SIZE>::back_insert_iterator& bi) BMNOEXEPT
+const str_sparse_vector<CharType, BV, MAX_STR_SIZE>::back_insert_iterator& bi) BMNOEXCEPT
 : sv_(bi.sv_), bv_null_(bi.bv_null_), pos_in_buf_(~size_type(0)), prev_nb_(bi.prev_nb_)
 {
     BM_ASSERT(bi.empty());
@@ -1884,7 +1884,7 @@ str_sparse_vector<CharType, BV, MAX_STR_SIZE>::back_insert_iterator::~back_inser
 template<class CharType, class BV, unsigned MAX_STR_SIZE>
 bool
 str_sparse_vector<CharType, BV, MAX_STR_SIZE>::back_insert_iterator::empty()
-                                                                const BMNOEXEPT
+                                                                const BMNOEXCEPT
 {
     return (pos_in_buf_ == ~size_type(0) || !sv_);
 }

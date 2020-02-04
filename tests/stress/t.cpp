@@ -13022,6 +13022,8 @@ void FindNotNullPtrTest()
     bm::word_t*** arr = 0;
     unsigned arr_size = 895;
     arr = (bm::word_t***)::malloc(sizeof(void*) * arr_size);
+    if (!arr)
+        return;
 
     for (unsigned i = 0; i < arr_size; ++i)
     {
@@ -19913,8 +19915,8 @@ void TestSparseVectorScan()
 
         bvect bv_control, bv_control2;
         bvect::allocator_pool_type pool;
-        bvect::mem_pool_guard(pool, bv_control);
-        bvect::mem_pool_guard(pool, bv_control2);
+        bvect::mem_pool_guard g1(pool, bv_control);
+        bvect::mem_pool_guard g2(pool, bv_control2);
 
         unsigned sv_size = 1256000;
         {
@@ -19994,7 +19996,7 @@ void TestSparseVectorScan()
             rsc_sparse_vector_u32 csv;
             
             bvect bv_control, bv_control2;
-            bvect::mem_pool_guard(pool, bv_control);
+            bvect::mem_pool_guard g0(pool, bv_control);
 
             unsigned sv_size = 67000;
             

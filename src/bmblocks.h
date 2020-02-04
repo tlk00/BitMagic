@@ -76,13 +76,13 @@ public:
     {
     public:
         typedef id_type size_type;
-        bm_func_base_const(const blocks_manager& bman) BMNOEXEPT : bm_(bman) {}
+        bm_func_base_const(const blocks_manager& bman) BMNOEXCEPT : bm_(bman) {}
 
-        void on_empty_top(unsigned /* top_block_idx*/ ) BMNOEXEPT {}
-        void on_empty_block(block_idx_type /* block_idx*/ ) BMNOEXEPT {}
+        void on_empty_top(unsigned /* top_block_idx*/ ) BMNOEXCEPT {}
+        void on_empty_block(block_idx_type /* block_idx*/ ) BMNOEXCEPT {}
     private:
-        bm_func_base_const(const bm_func_base_const&) BMNOEXEPT;
-        bm_func_base_const& operator=(const bm_func_base_const&) BMNOEXEPT;
+        bm_func_base_const(const bm_func_base_const&) BMNOEXCEPT;
+        bm_func_base_const& operator=(const bm_func_base_const&) BMNOEXCEPT;
     protected:
         const blocks_manager&  bm_;
     };
@@ -92,7 +92,7 @@ public:
     class block_count_base : public bm_func_base_const
     {
     protected:
-        block_count_base(const blocks_manager& bm) BMNOEXEPT
+        block_count_base(const blocks_manager& bm) BMNOEXCEPT
             : bm_func_base_const(bm) {}
 
         bm::id_t block_count(const bm::word_t* block) const
@@ -108,17 +108,17 @@ public:
     public:
         typedef id_type size_type;
 
-        block_count_func(const blocks_manager& bm) BMNOEXEPT
+        block_count_func(const blocks_manager& bm) BMNOEXCEPT
             : block_count_base(bm), count_(0) {}
 
-        id_type count() const BMNOEXEPT { return count_; }
+        id_type count() const BMNOEXCEPT { return count_; }
 
-        void operator()(const bm::word_t* block) BMNOEXEPT
+        void operator()(const bm::word_t* block) BMNOEXCEPT
         {
             count_ += this->block_count(block);
         }
-        void add_full(id_type c) BMNOEXEPT { count_ += c; }
-        void reset() BMNOEXEPT { count_ = 0; }
+        void add_full(id_type c) BMNOEXCEPT { count_ += c; }
+        void reset() BMNOEXCEPT { count_ = 0; }
 
     private:
         id_type count_;
@@ -131,13 +131,13 @@ public:
     public:
         typedef id_type size_type;
 
-        block_count_arr_func(const blocks_manager& bm, unsigned* arr) BMNOEXEPT
+        block_count_arr_func(const blocks_manager& bm, unsigned* arr) BMNOEXCEPT
             : block_count_base(bm), arr_(arr), last_idx_(0) 
         {
             arr_[0] = 0;
         }
 
-        void operator()(const bm::word_t* block, id_type idx) BMNOEXEPT
+        void operator()(const bm::word_t* block, id_type idx) BMNOEXCEPT
         {
             while (++last_idx_ < idx)
             {
@@ -147,8 +147,8 @@ public:
             last_idx_ = idx;
         }
 
-        id_type last_block() const BMNOEXEPT { return last_idx_; }
-        void on_non_empty_top(unsigned) BMNOEXEPT {}
+        id_type last_block() const BMNOEXCEPT { return last_idx_; }
+        void on_non_empty_top(unsigned) BMNOEXCEPT {}
 
     private:
         unsigned*  arr_;
@@ -161,14 +161,14 @@ public:
     public:
         typedef id_type size_type;
 
-        block_count_change_func(const blocks_manager& bm) BMNOEXEPT
+        block_count_change_func(const blocks_manager& bm) BMNOEXCEPT
             : bm_func_base_const(bm),
                 count_(0),
                 prev_block_border_bit_(0)
         {}
 
         block_idx_type block_count(const bm::word_t* block,
-                                   block_idx_type idx) BMNOEXEPT
+                                   block_idx_type idx) BMNOEXCEPT
         {
             block_idx_type cnt = 0;
             id_type first_bit;
@@ -214,9 +214,9 @@ public:
             return cnt;
         }
         
-        id_type count() const BMNOEXEPT { return count_; }
+        id_type count() const BMNOEXCEPT { return count_; }
 
-        void operator()(const bm::word_t* block, block_idx_type idx) BMNOEXEPT
+        void operator()(const bm::word_t* block, block_idx_type idx) BMNOEXCEPT
         {
             count_ += block_count(block, idx);
         }
@@ -233,12 +233,12 @@ public:
     public:
         typedef id_type size_type;
 
-        block_any_func(const blocks_manager& bm) BMNOEXEPT
+        block_any_func(const blocks_manager& bm) BMNOEXCEPT
             : bm_func_base_const(bm) 
         {}
 
         bool operator()
-                (const bm::word_t* block, block_idx_type /*idx*/) BMNOEXEPT
+                (const bm::word_t* block, block_idx_type /*idx*/) BMNOEXCEPT
         {
             if (BM_IS_GAP(block)) // gap block
                 return (!gap_is_all_zero(BMGAP_PTR(block)));
@@ -359,7 +359,7 @@ public:
     }
     
 #ifndef BM_NO_CXX11
-    blocks_manager(blocks_manager&& blockman) BMNOEXEPT
+    blocks_manager(blocks_manager&& blockman) BMNOEXCEPT
         : max_bits_(blockman.max_bits_),
           top_blocks_(0),
           top_block_size_(blockman.top_block_size_),
@@ -371,7 +371,7 @@ public:
     }
 #endif
 
-    ~blocks_manager() BMNOEXEPT
+    ~blocks_manager() BMNOEXCEPT
     {
         if (temp_block_)
             alloc_.free_bit_block(temp_block_);
@@ -381,7 +381,7 @@ public:
     /*! \brief Swaps content 
         \param bm  another blocks manager
     */
-    void swap(blocks_manager& bm) BMNOEXEPT
+    void swap(blocks_manager& bm) BMNOEXCEPT
     {
         BM_ASSERT(this != &bm);
 
@@ -401,7 +401,7 @@ public:
     
     /*! \brief implementation of moving semantics
     */
-    void move_from(blocks_manager& bm) BMNOEXEPT
+    void move_from(blocks_manager& bm) BMNOEXCEPT
     {
         deinit_tree();
         swap(bm);
@@ -424,7 +424,7 @@ public:
         \param bits_to_store - supposed capacity (number of bits)
         \return size of the top level block
     */
-    unsigned compute_top_block_size(id_type bits_to_store) const BMNOEXEPT
+    unsigned compute_top_block_size(id_type bits_to_store) const BMNOEXCEPT
     {
         if (bits_to_store >= bm::id_max)  // working in full-range mode
             return bm::set_top_array_size;
@@ -459,7 +459,7 @@ public:
         \return block adress or NULL if not yet allocated
     */
     const bm::word_t*
-    get_block(block_idx_type nb, int* no_more_blocks) const BMNOEXEPT
+    get_block(block_idx_type nb, int* no_more_blocks) const BMNOEXCEPT
     {
         BM_ASSERT(top_blocks_);
         unsigned i = unsigned(nb >> bm::set_array_shift);
@@ -492,7 +492,7 @@ public:
     @return bm::set_total_blocks - no more blocks
     */
     block_idx_type
-    find_next_nz_block(block_idx_type nb, bool deep_scan=true) const BMNOEXEPT
+    find_next_nz_block(block_idx_type nb, bool deep_scan=true) const BMNOEXCEPT
     {
         if (is_init())
         {
@@ -524,7 +524,7 @@ public:
         \param j - second level block index
         \return block adress or NULL if not yet allocated
     */
-    const bm::word_t* get_block(unsigned i, unsigned j) const BMNOEXEPT
+    const bm::word_t* get_block(unsigned i, unsigned j) const BMNOEXCEPT
     {
         if (!top_blocks_ || i >= top_block_size_) return 0;
         const bm::word_t* const* blk_blk = top_blocks_[i];
@@ -540,7 +540,7 @@ public:
         \param j - second level block index
         \return block adress or NULL if not yet allocated
     */
-    const bm::word_t* get_block_ptr(unsigned i, unsigned j) const BMNOEXEPT
+    const bm::word_t* get_block_ptr(unsigned i, unsigned j) const BMNOEXCEPT
     {
         if (!top_blocks_ || i >= top_block_size_) return 0;
 
@@ -556,7 +556,7 @@ public:
         \param j - second level block index
         \return block adress or NULL if not yet allocated
     */
-    bm::word_t* get_block_ptr(unsigned i, unsigned j) BMNOEXEPT
+    bm::word_t* get_block_ptr(unsigned i, unsigned j) BMNOEXCEPT
     {
         if (!top_blocks_ || i >= top_block_size_)
             return 0;
@@ -573,7 +573,7 @@ public:
         \param i - top level block index
         \return block adress or NULL if not yet allocated
     */
-    const bm::word_t* const * get_topblock(unsigned i) const BMNOEXEPT
+    const bm::word_t* const * get_topblock(unsigned i) const BMNOEXCEPT
     {
         return (!top_blocks_ || i >= top_block_size_) ? 0 : top_blocks_[i];
     }
@@ -581,7 +581,7 @@ public:
     /** 
         \brief Returns root block in the tree.
     */
-    bm::word_t*** top_blocks_root() const BMNOEXEPT
+    bm::word_t*** top_blocks_root() const BMNOEXCEPT
     {
         blocks_manager* bm = 
             const_cast<blocks_manager*>(this);
@@ -1456,7 +1456,7 @@ public:
         Places new block into blocks table.
     */
     BMFORCEINLINE
-    void set_block_ptr(unsigned i, unsigned j, bm::word_t* block) BMNOEXEPT
+    void set_block_ptr(unsigned i, unsigned j, bm::word_t* block) BMNOEXCEPT
     {
         BM_ASSERT(is_init());
         BM_ASSERT(i < top_block_size_);
@@ -1620,7 +1620,7 @@ public:
         Count number of bits ON in the block
     */
     static
-    bm::id_t block_bitcount(const bm::word_t* block) BMNOEXEPT
+    bm::id_t block_bitcount(const bm::word_t* block) BMNOEXCEPT
     {
         BM_ASSERT(block);
         id_t count;
@@ -1745,7 +1745,7 @@ public:
     
     /** Returns true if second level block pointer is 0.
     */
-    bool is_subblock_null(unsigned nsub) const BMNOEXEPT
+    bool is_subblock_null(unsigned nsub) const BMNOEXCEPT
     {
         BM_ASSERT(top_blocks_);
         if (nsub >= top_block_size_)
@@ -1753,14 +1753,14 @@ public:
         return top_blocks_[nsub] == NULL;
     }
 
-    bm::word_t*** top_blocks_root() BMNOEXEPT
+    bm::word_t*** top_blocks_root() BMNOEXCEPT
     {
         return top_blocks_;
     }
 
     /*! \brief Returns current GAP level vector
     */
-    const gap_word_t* glen() const BMNOEXEPT
+    const gap_word_t* glen() const BMNOEXCEPT
     {
         return glevel_len_;
     }
@@ -1768,14 +1768,14 @@ public:
     /*! \brief Returns GAP level length for specified level
         \param level - level number
     */
-    unsigned glen(unsigned level) const BMNOEXEPT
+    unsigned glen(unsigned level) const BMNOEXCEPT
     {
         return glevel_len_[level];
     }
     
     /*! \brief Returns size of the top block array in the tree 
     */
-    unsigned top_block_size() const BMNOEXEPT
+    unsigned top_block_size() const BMNOEXCEPT
     {
         return top_block_size_;
     }
@@ -1829,15 +1829,15 @@ public:
     
     /** \brief Returns reference on the allocator
     */
-    allocator_type& get_allocator() BMNOEXEPT { return alloc_; }
+    allocator_type& get_allocator() BMNOEXCEPT { return alloc_; }
 
     /** \brief Returns allocator
     */
-    allocator_type get_allocator() const BMNOEXEPT { return alloc_; }
+    allocator_type get_allocator() const BMNOEXCEPT { return alloc_; }
     
     
     /// if tree of blocks already up
-    bool is_init() const BMNOEXEPT { return top_blocks_ != 0; }
+    bool is_init() const BMNOEXCEPT { return top_blocks_ != 0; }
     
     /// allocate first level of descr. of blocks 
     void init_tree()
@@ -1907,7 +1907,7 @@ public:
     /** destroy tree, free memory in all blocks and control structures
         Note: pointers are NOT assigned to zero(!)
     */
-    void destroy_tree() BMNOEXEPT
+    void destroy_tree() BMNOEXCEPT
     {
         if (!top_blocks_)
             return;
@@ -1937,7 +1937,7 @@ public:
     }
     #undef BM_FREE_OP
 
-    void deinit_tree() BMNOEXEPT
+    void deinit_tree() BMNOEXCEPT
     {
         destroy_tree();
         top_blocks_ = 0; top_block_size_ = 0;
@@ -1946,7 +1946,7 @@ public:
     // ----------------------------------------------------------------
     
     /// calculate top blocks which are not NULL and not FULL
-    unsigned find_real_top_blocks() const BMNOEXEPT
+    unsigned find_real_top_blocks() const BMNOEXCEPT
     {
         unsigned cnt = 0;
         unsigned top_blocks = top_block_size();
@@ -1964,7 +1964,7 @@ public:
     // ----------------------------------------------------------------
 
     /// calculate max top blocks size whithout NULL-tail
-    unsigned find_max_top_blocks() const BMNOEXEPT
+    unsigned find_max_top_blocks() const BMNOEXCEPT
     {
         unsigned top_blocks = top_block_size();
         if (!top_blocks)
@@ -2015,7 +2015,7 @@ public:
         Calculate approximate memory needed to serialize big runs
         of 0000s and 111s (as blocks)
     */
-    size_t calc_serialization_null_full() const BMNOEXEPT
+    size_t calc_serialization_null_full() const BMNOEXCEPT
     {
         size_t s_size = sizeof(unsigned);
         if (!top_blocks_)
@@ -2041,6 +2041,9 @@ public:
                 }
                 nb_empty += (i - nb_prev) * bm::set_sub_array_size;
                 blk_blk = top_blocks_[i];
+                BM_ASSERT(blk_blk);
+                if (!blk_blk)
+                    break;
             }
             if ((bm::word_t*)blk_blk == FULL_BLOCK_FAKE_ADDR)
             {
@@ -2357,7 +2360,7 @@ template<class BlocksManager>
 class bit_block_guard
 {
 public:
-    bit_block_guard(BlocksManager& bman, bm::word_t* blk=0) BMNOEXEPT
+    bit_block_guard(BlocksManager& bman, bm::word_t* blk=0) BMNOEXCEPT
         : bman_(bman), 
           block_(blk)
     {}
@@ -2377,7 +2380,7 @@ public:
         attach(bman_.get_allocator().alloc_bit_block(3));
         return block_;
     }
-    bm::word_t* get() BMNOEXEPT { return block_; }
+    bm::word_t* get() BMNOEXCEPT { return block_; }
 
 private:
     bit_block_guard(const bit_block_guard&);

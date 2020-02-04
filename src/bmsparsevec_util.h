@@ -70,7 +70,7 @@ public:
     /*!
         \brief Move content from the argument address resolver
     */
-    void move_from(bvps_addr_resolver& addr_res) BMNOEXEPT;
+    void move_from(bvps_addr_resolver& addr_res) BMNOEXCEPT;
     
     /*!
         \brief Resolve id to integer id (address)
@@ -82,7 +82,7 @@ public:
      
         \return true if id is known and resolved successfully
     */
-    bool resolve(size_type id_from, size_type* id_to) const BMNOEXEPT;
+    bool resolve(size_type id_from, size_type* id_to) const BMNOEXCEPT;
     
     /*!
         \brief Resolve id to integer id (address) without sync check
@@ -94,7 +94,7 @@ public:
      
         \return true if id is known and resolved successfully
     */
-    bool get(size_type id_from, size_type* id_to) const BMNOEXEPT;
+    bool get(size_type id_from, size_type* id_to) const BMNOEXCEPT;
     
     /*!
         \brief Set id (bit) to address resolver
@@ -146,7 +146,7 @@ public:
     /*!
         \brief equality comparison
     */
-    bool equal(const bvps_addr_resolver& addr_res) const BMNOEXEPT;
+    bool equal(const bvps_addr_resolver& addr_res) const BMNOEXCEPT;
     
 protected:
     void construct_rs_index();
@@ -437,7 +437,7 @@ bvps_addr_resolver<BV>::bvps_addr_resolver(const bvps_addr_resolver& addr_res)
 
 
 template<class BV>
-void bvps_addr_resolver<BV>::move_from(bvps_addr_resolver& addr_res) BMNOEXEPT
+void bvps_addr_resolver<BV>::move_from(bvps_addr_resolver& addr_res) BMNOEXCEPT
 {
     if (this != &addr_res)
     {
@@ -460,7 +460,7 @@ void bvps_addr_resolver<BV>::move_from(bvps_addr_resolver& addr_res) BMNOEXEPT
 
 template<class BV>
 bool bvps_addr_resolver<BV>::resolve(size_type id_from,
-                                    size_type* id_to) const BMNOEXEPT
+                                    size_type* id_to) const BMNOEXCEPT
 {
     BM_ASSERT(id_to);
     if (in_sync_)
@@ -486,7 +486,7 @@ bool bvps_addr_resolver<BV>::resolve(size_type id_from,
 
 template<class BV>
 bool bvps_addr_resolver<BV>::get(size_type id_from,
-                                 size_type* id_to) const BMNOEXEPT
+                                 size_type* id_to) const BMNOEXCEPT
 {
     BM_ASSERT(id_to);
     BM_ASSERT(in_sync_);
@@ -532,7 +532,7 @@ void bvps_addr_resolver<BV>::optimize(bm::word_t* temp_block)
 
 template<class BV>
 bool bvps_addr_resolver<BV>::equal(
-                    const bvps_addr_resolver& addr_res) const BMNOEXEPT
+                    const bvps_addr_resolver& addr_res) const BMNOEXCEPT
 {
     return addr_bv_.equal(addr_res.addr_bv_);
 }
