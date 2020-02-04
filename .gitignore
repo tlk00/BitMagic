@@ -45,3 +45,7 @@ utils/svutil/match.raw
 *.d~
 *.filters
 *.vcxproj
+*.tlog
+*.fa
+*.sv
+*.xml
