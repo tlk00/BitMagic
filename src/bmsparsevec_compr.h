@@ -141,8 +141,8 @@ public:
         typedef void reference;
         
     public:
-        back_insert_iterator();
-        back_insert_iterator(rsc_sparse_vector_type* csv);
+        back_insert_iterator() BMNOEXCEPT;
+        back_insert_iterator(rsc_sparse_vector_type* csv) BMNOEXCEPT;
         
         back_insert_iterator& operator=(const back_insert_iterator& bi)
         {
@@ -154,7 +154,8 @@ public:
         ~back_insert_iterator();
         
         /** push value to the vector */
-        back_insert_iterator& operator=(value_type v) { this->add(v); return *this; }
+        back_insert_iterator& operator=(value_type v)
+            { this->add(v); return *this; }
         /** noop */
         back_insert_iterator& operator*() { return *this; }
         /** noop */
@@ -416,7 +417,7 @@ public:
     
     /*! \brief resize to zero, free memory
     */
-    void clear();
+    void clear() BMNOEXCEPT;
     
     /*!
         @brief Calculates memory statistics.
@@ -551,13 +552,13 @@ protected:
                        size_type* idx_from, size_type* idx_to) const BMNOEXCEPT;
     
     void resize_internal(size_type sz) { sv_.resize_internal(sz); }
-    size_type size_internal() const { return sv_.size(); }
+    size_type size_internal() const BMNOEXCEPT { return sv_.size(); }
 
-    bool is_remap() const { return false; }
-    size_t remap_size() const { return 0; }
-    const unsigned char* get_remap_buffer() const { return 0; }
-    unsigned char* init_remap_buffer() { return 0; }
-    void set_remap() { }
+    bool is_remap() const BMNOEXCEPT { return false; }
+    size_t remap_size() const BMNOEXCEPT { return 0; }
+    const unsigned char* get_remap_buffer() const BMNOEXCEPT { return 0; }
+    unsigned char* init_remap_buffer() BMNOEXCEPT { return 0; }
+    void set_remap() BMNOEXCEPT { }
     
     void push_back_no_check(size_type idx, value_type v);
 
@@ -954,7 +955,7 @@ void rsc_sparse_vector<Val, SV>::optimize(bm::word_t*  temp_block,
 //---------------------------------------------------------------------
 
 template<class Val, class SV>
-void rsc_sparse_vector<Val, SV>::clear()
+void rsc_sparse_vector<Val, SV>::clear() BMNOEXCEPT
 {
     sv_.clear();
     in_sync_ = false;  max_id_ = size_ = 0;
@@ -1130,7 +1131,7 @@ void rsc_sparse_vector<Val, SV>::copy_range(
 
 
 template<class Val, class SV>
-rsc_sparse_vector<Val, SV>::back_insert_iterator::back_insert_iterator()
+rsc_sparse_vector<Val, SV>::back_insert_iterator::back_insert_iterator() BMNOEXCEPT
 : csv_(0)
 {}
 
@@ -1139,7 +1140,7 @@ rsc_sparse_vector<Val, SV>::back_insert_iterator::back_insert_iterator()
 
 template<class Val, class SV>
 rsc_sparse_vector<Val, SV>::back_insert_iterator::back_insert_iterator
-                                                 (rsc_sparse_vector_type* csv)
+                                (rsc_sparse_vector_type* csv) BMNOEXCEPT
 {
     csv_ = csv;
     sv_bi_ = csv->sv_.get_back_inserter();

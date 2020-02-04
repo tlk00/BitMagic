@@ -313,7 +313,7 @@ public:
             Get access to not-null vector
             @internal
         */
-        bvector_type* get_null_bvect() const { return bv_null_; }
+        bvector_type* get_null_bvect() const BMNOEXCEPT { return bv_null_; }
         
         /** add value to the buffer without changing the NULL vector
             @param v - value to push back
@@ -323,9 +323,9 @@ public:
         size_type add_value_no_null(value_type v);
         
         /**
-            Reconf back inserter not to touch the NULL vector
+            Reconfшпгку back inserter not to touch the NULL vector
         */
-        void disable_set_null() { set_not_null_ = false; }
+        void disable_set_null() BMNOEXCEPT { set_not_null_ = false; }
         // ---------------------------------------------------------------
         
     protected:
@@ -487,21 +487,24 @@ public:
     //@{
 
     /** Provide const iterator access to container content  */
-    const_iterator begin() const;
+    const_iterator begin() const BMNOEXCEPT;
 
     /** Provide const iterator access to the end    */
-    const_iterator end() const { return const_iterator(this, bm::id_max); }
+    const_iterator end() const BMNOEXCEPT
+        { return const_iterator(this, bm::id_max); }
 
     /** Get const_itertor re-positioned to specific element
     @param idx - position in the sparse vector
     */
-    const_iterator get_const_iterator(size_type idx) const { return const_iterator(this, idx); }
+    const_iterator get_const_iterator(size_type idx) const BMNOEXCEPT
+        { return const_iterator(this, idx); }
  
     /** Provide back insert iterator
         Back insert iterator implements buffered insertion,
         which is faster, than random access or push_back
     */
-    back_insert_iterator get_back_inserter() { return back_insert_iterator(this); }
+    back_insert_iterator get_back_inserter()
+        { return back_insert_iterator(this); }
     ///@}
 
 
@@ -718,7 +721,8 @@ public:
 
         @sa statistics
     */
-    void calc_stat(struct sparse_vector<Val, BV>::statistics* st) const;
+    void calc_stat(
+        struct sparse_vector<Val, BV>::statistics* st) const BMNOEXCEPT;
     ///@}
 
     // ------------------------------------------------------------
@@ -827,7 +831,7 @@ public:
         \internal
     */
     static
-    size_type translate_address(size_type i) { return i; }
+    size_type translate_address(size_type i) BMNOEXCEPT { return i; }
     
     /**
         \brief throw range error
@@ -848,24 +852,24 @@ public:
     \brief find position of compressed element by its rank
     */
     static
-    bool find_rank(size_type rank, size_type& pos);
+    bool find_rank(size_type rank, size_type& pos) BMNOEXCEPT;
 
     /**
         \brief size of sparse vector (may be different for RSC)
     */
-    size_type effective_size() const { return size(); }
+    size_type effective_size() const BMNOEXCEPT { return size(); }
 
     /**
         \brief Always 1 (non-matrix type)
     */
-    size_type effective_vector_max() const { return 1; }
+    size_type effective_vector_max() const BMNOEXCEPT { return 1; }
 
     ///@}
 
     /// Set allocator pool for local (non-threaded)
     /// memory cyclic(lots of alloc-free ops) opertations
     ///
-    void set_allocator_pool(allocator_pool_type* pool_ptr);
+    void set_allocator_pool(allocator_pool_type* pool_ptr) BMNOEXCEPT;
     
 protected:
     enum octet_plains
@@ -889,16 +893,16 @@ protected:
     void insert_value_no_null(size_type idx, value_type v);
 
     void resize_internal(size_type sz) { resize(sz); }
-    size_type size_internal() const { return size(); }
+    size_type size_internal() const BMNOEXCEPT { return size(); }
 
-    bool is_remap() const { return false; }
-    size_t remap_size() const { return 0; }
-    const unsigned char* get_remap_buffer() const { return 0; }
-    unsigned char* init_remap_buffer() { return 0; }
-    void set_remap() { }
+    bool is_remap() const BMNOEXCEPT { return false; }
+    size_t remap_size() const BMNOEXCEPT { return 0; }
+    const unsigned char* get_remap_buffer() const BMNOEXCEPT { return 0; }
+    unsigned char* init_remap_buffer() BMNOEXCEPT { return 0; }
+    void set_remap() BMNOEXCEPT { }
 
     bool resolve_range(size_type from, size_type to,
-                       size_type* idx_from, size_type* idx_to) const
+                       size_type* idx_from, size_type* idx_to) const BMNOEXCEPT
     {
         *idx_from = from; *idx_to = to; return true;
     }
@@ -1721,7 +1725,7 @@ void sparse_vector<Val, BV>::clear() BMNOEXCEPT
 //---------------------------------------------------------------------
 
 template<class Val, class BV>
-bool sparse_vector<Val, BV>::find_rank(size_type rank, size_type& pos)
+bool sparse_vector<Val, BV>::find_rank(size_type rank, size_type& pos) BMNOEXCEPT
 {
     BM_ASSERT(rank);
     pos = rank - 1; 
@@ -1745,7 +1749,7 @@ sparse_vector<Val, BV>::clear_range(
 
 template<class Val, class BV>
 void sparse_vector<Val, BV>::calc_stat(
-     struct sparse_vector<Val, BV>::statistics* st) const
+     struct sparse_vector<Val, BV>::statistics* st) const BMNOEXCEPT
 {
     BM_ASSERT(st);
     typename bvector_type::statistics stbv;
@@ -1932,7 +1936,7 @@ bool sparse_vector<Val, BV>::equal(const sparse_vector<Val, BV>& sv,
 
 template<class Val, class BV>
 typename sparse_vector<Val, BV>::const_iterator
-sparse_vector<Val, BV>::begin() const
+sparse_vector<Val, BV>::begin() const BMNOEXCEPT
 {
     typedef typename sparse_vector<Val, BV>::const_iterator it_type;
     return it_type(this);
@@ -1942,7 +1946,7 @@ sparse_vector<Val, BV>::begin() const
 
 template<class Val, class BV>
 void sparse_vector<Val, BV>::set_allocator_pool(
-    typename sparse_vector<Val, BV>::allocator_pool_type* pool_ptr)
+    typename sparse_vector<Val, BV>::allocator_pool_type* pool_ptr) BMNOEXCEPT
 {
     this->bmatr_.set_allocator_pool(pool_ptr);
 }
@@ -1970,7 +1974,8 @@ sparse_vector<Val, BV>::const_iterator::const_iterator(
 
 template<class Val, class BV>
 sparse_vector<Val, BV>::const_iterator::const_iterator(
-  const typename sparse_vector<Val, BV>::const_iterator::sparse_vector_type* sv) BMNOEXCEPT
+  const typename sparse_vector<Val, BV>::const_iterator::sparse_vector_type* sv
+  ) BMNOEXCEPT
 : sv_(sv), buf_ptr_(0)
 {
     BM_ASSERT(sv_);

@@ -145,19 +145,19 @@ public:
     class reference
     {
     public:
-        reference(bvector<Alloc>& bv, size_type position)
+        reference(bvector<Alloc>& bv, size_type position) BMNOEXCEPT
         : bv_(bv),
           position_(position)
         {}
 
-        reference(const reference& ref)
+        reference(const reference& ref) BMNOEXCEPT
         : bv_(ref.bv_), 
           position_(ref.position_)
         {
             bv_.set(position_, ref.bv_.get_bit(position_));
         }
         
-        operator bool() const
+        operator bool() const BMNOEXCEPT
         {
             return bv_.get_bit(position_);
         }
@@ -168,13 +168,13 @@ public:
             return *this;
         }
 
-        const reference& operator=(bool value) const
+        const reference& operator=(bool value) const BMNOEXCEPT
         {
             bv_.set(position_, value);
             return *this;
         }
 
-        bool operator==(const reference& ref) const
+        bool operator==(const reference& ref) const BMNOEXCEPT
         {
             return bool(*this) == bool(ref);
         }
@@ -204,13 +204,13 @@ public:
         }
 
         /*! Logical Not operator */
-        bool operator!() const
+        bool operator!() const BMNOEXCEPT
         {
             return !bv_.get_bit(position_);
         }
 
         /*! Bit Not operator */
-        bool operator~() const
+        bool operator~() const BMNOEXCEPT
         {
             return !bv_.get_bit(position_);
         }
@@ -238,7 +238,8 @@ public:
     friend class bvector;
     public:
         iterator_base() BMNOEXCEPT 
-            : bv_(0), position_(bm::id_max), block_(0), block_type_(0), block_idx_(0)
+            : bv_(0), position_(bm::id_max), block_(0), block_type_(0),
+              block_idx_(0)
         {}
 
         bool operator==(const iterator_base& it) const BMNOEXCEPT
@@ -381,9 +382,9 @@ public:
         typedef void               pointer;
         typedef void               reference;
 
-        insert_iterator() : bvect_(0), max_bit_(0) {}
+        insert_iterator() BMNOEXCEPT : bvect_(0), max_bit_(0) {}
 
-        insert_iterator(bvector<Alloc>& bvect)
+        insert_iterator(bvector<Alloc>& bvect) BMNOEXCEPT
             : bvect_(&bvect), 
               max_bit_(bvect.size())
         {
@@ -465,7 +466,7 @@ public:
         typedef void                     pointer;
         typedef void                     reference;
 
-        bulk_insert_iterator() 
+        bulk_insert_iterator() BMNOEXCEPT
             : bvect_(0), buf_(0), buf_size_(0), sorted_(BM_UNKNOWN) {}
         
         ~bulk_insert_iterator()
@@ -475,7 +476,8 @@ public:
                 bvect_->blockman_.get_allocator().free_bit_block((bm::word_t*)buf_);
         }
 
-        bulk_insert_iterator(bvector<Alloc>& bvect, bm::sort_order so = BM_UNKNOWN)
+        bulk_insert_iterator(bvector<Alloc>& bvect,
+                             bm::sort_order so = BM_UNKNOWN) BMNOEXCEPT
             : bvect_(&bvect), sorted_(so)
         {
             bvect_->init();
@@ -601,7 +603,7 @@ public:
         typedef unsigned&    reference;
 
     public:
-        enumerator() : iterator_base()
+        enumerator() BMNOEXCEPT : iterator_base()
         {}
         
         /*! @brief Construct enumerator associated with a vector.
@@ -716,7 +718,7 @@ public:
         }
         
         /// advance iterator forward by one
-        void advance() { this->go_up(); }
+        void advance() BMNOEXCEPT { this->go_up(); }
 
 
         /*! \brief Advance enumerator to the next available bit */
@@ -726,7 +728,6 @@ public:
 
             // Current block search.
             //
-            
             block_descr_type* bdescr = &(this->bdescr_);
             switch (this->block_type_)
             {
@@ -744,19 +745,14 @@ public:
                     
                     bdescr->bit_.ptr += bm::set_bitscan_wave_size;
                     if (decode_bit_group(bdescr))
-                    {
                         return *this;
-                    }
                 }
                 break;
             case 1:   // DGAP Block
                 {
                     ++this->position_;
                     if (--(bdescr->gap_.gap_len))
-                    {
                         return *this;
-                    }
-
                     // next gap is "OFF" by definition.
                     if (*(bdescr->gap_.ptr) == bm::gap_max_bits - 1)
                     {
@@ -778,7 +774,6 @@ public:
                 }
             default:
                 BM_ASSERT(0);
-
             } // switch
 
             if (search_in_blocks())
@@ -1000,7 +995,6 @@ public:
                               size_type& rank) BMNOEXCEPT
         {
             const word_t* block_end = this->block_ + bm::set_block_size;
-            
             for (; bdescr->bit_.ptr < block_end;)
             {
                 const bm::id64_t* w64_p = (bm::id64_t*)bdescr->bit_.ptr;
@@ -1027,7 +1021,6 @@ public:
             
             block_descr_type* bdescr = &(this->bdescr_);
             bdescr->bit_.ptr = this->block_;
-            
             return decode_bit_group(bdescr);
         }
 
@@ -1103,13 +1096,11 @@ public:
                 for(; j < bm::set_sub_array_size; ++j, ++(this->block_idx_))
                 {
                     this->block_ = blk_blk[j];
-
                     if (this->block_ == 0)
                     {
                         this->position_ += bm::bits_in_block;
                         continue;
                     }
-
                     this->block_type_ = BM_IS_GAP(this->block_);
                     if (this->block_type_)
                     {
@@ -1144,14 +1135,14 @@ public:
 #ifndef BM_NO_STL
         typedef std::input_iterator_tag  iterator_category;
 #endif
-        counted_enumerator() : bit_count_(0){}
+        counted_enumerator() BMNOEXCEPT : bit_count_(0){}
         
-        counted_enumerator(const enumerator& en) : enumerator(en)
+        counted_enumerator(const enumerator& en) BMNOEXCEPT : enumerator(en)
         {
             bit_count_ = this->valid(); // 0 || 1
         }
         
-        counted_enumerator& operator=(const enumerator& en)
+        counted_enumerator& operator=(const enumerator& en) BMNOEXCEPT
         {
             enumerator* me = this;
             *me = en;
@@ -1160,11 +1151,10 @@ public:
             return *this;
         }
         
-        counted_enumerator& operator++()
+        counted_enumerator& operator++() BMNOEXCEPT
         {
             this->go_up();
-            if (this->valid())
-                ++(this->bit_count_);
+            this->bit_count_ += this->valid();
             return *this;
         }
 
@@ -1172,8 +1162,7 @@ public:
         {
             counted_enumerator tmp(*this);
             this->go_up();
-            if (this->valid())
-                ++bit_count_;
+            this->bit_count_ += this->valid();
             return tmp;
         }
         
@@ -1199,10 +1188,10 @@ public:
     class mem_pool_guard
     {
     public:
-        mem_pool_guard() : bv_(0)
+        mem_pool_guard() BMNOEXCEPT : bv_(0)
         {}
 
-        mem_pool_guard(allocator_pool_type& pool, bvector<Alloc>& bv)
+        mem_pool_guard(allocator_pool_type& pool, bvector<Alloc>& bv) BMNOEXCEPT
             : bv_(&bv)
         {
             bv.set_allocator_pool(&pool);
@@ -1214,13 +1203,14 @@ public:
         }
 
         /// check if vector has no assigned allocator and set one
-        void assign_if_not_set(allocator_pool_type& pool, bvector<Alloc>& bv)
+        void assign_if_not_set(allocator_pool_type& pool,
+                               bvector<Alloc>& bv) BMNOEXCEPT
         {
-            if (bv.get_allocator_pool() == 0) // alloc pool not set yet
+            if (!bv.get_allocator_pool()) // alloc pool not set yet
             {
                 BM_ASSERT(!bv_);
                 bv_ = &bv;
-                bv.set_allocator_pool(&pool);
+                bv_->set_allocator_pool(&pool);
             }
         }
 
@@ -1249,7 +1239,7 @@ public:
         const         gap_word_t* glevel_len;
         
         allocation_policy(bm::strategy s=BM_BIT,
-                          const gap_word_t* glevels = bm::gap_len_table<true>::_len)
+            const gap_word_t* glevels = bm::gap_len_table<true>::_len) BMNOEXCEPT
         : strat(s), glevel_len(glevels)
         {}
     };
@@ -1446,12 +1436,12 @@ public:
     /// Set allocator pool for local (non-th readed) 
     /// memory cyclic(lots of alloc-free ops) opertations
     ///
-    void set_allocator_pool(allocator_pool_type* pool_ptr)
+    void set_allocator_pool(allocator_pool_type* pool_ptr) BMNOEXCEPT
                         { blockman_.get_allocator().set_pool(pool_ptr); }
 
     /// Get curent allocator pool (if set)
     /// @return pointer to the current pool or NULL
-    allocator_pool_type* get_allocator_pool()
+    allocator_pool_type* get_allocator_pool() BMNOEXCEPT
                         { return blockman_.get_allocator().get_pool(); }
 
     // --------------------------------------------------------------------
