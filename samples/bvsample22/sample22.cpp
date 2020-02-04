@@ -29,8 +29,12 @@ For more information please visit:  http://bitmagic.io
   This creates a use case to use compressed bit-vector as an engine
   for ranges and intervals.
  
-  \sa bm::bvector::erase
-  \sa bm::bvector::shift_left
+  \sa bm::bvector::set_range
+  \sa bm::bvector::clear_range
+  \sa bm::bvector::keep_range
+  \sa bm::bvector::is_all_one_range
+  \sa bm::bvector::any_range
+  \sa bm::bvector::is_interval
 */
 
 /*! \file sample22.cpp
