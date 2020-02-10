@@ -4091,9 +4091,9 @@ void bvector<Alloc>::import_block(const size_type* ids,
         blockman_.check_allocate_block(nblock, 1, 0, &block_type, true/*allow NULL ret*/);
     if (!IS_FULL_BLOCK(blk))
     {
+        // TODO: add a special case when we import just a few bits per block
         if (BM_IS_GAP(blk))
             blk = blockman_.deoptimize_block(nblock); // TODO: try to avoid
-
         #ifdef BM64ADDR
             bm::set_block_bits_u64(blk, ids, start, stop);
         #else

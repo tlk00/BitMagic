@@ -64,7 +64,7 @@ struct bv_statistics
     unsigned long long gaps_by_level[bm::gap_levels]; ///< number of GAP blocks at each level
 
     /// cound bit block
-    void add_bit_block()
+    void add_bit_block() BMNOEXCEPT
     {
         ++bit_blocks;
         size_t mem_used = sizeof(bm::word_t) * bm::set_block_size;
@@ -73,7 +73,7 @@ struct bv_statistics
     }
 
     /// count gap block
-    void add_gap_block(unsigned capacity, unsigned length)
+    void add_gap_block(unsigned capacity, unsigned length) BMNOEXCEPT
     {
         ++gap_blocks;
         size_t mem_used = (capacity * sizeof(gap_word_t));
@@ -93,7 +93,7 @@ struct bv_statistics
     }
     
     /// Reset statisctics
-    void reset()
+    void reset() BMNOEXCEPT
     {
         bit_blocks = gap_blocks = ptr_sub_blocks = bv_count = 0;
         max_serialize_mem = memory_used = gap_cap_overhead = 0;
@@ -102,10 +102,11 @@ struct bv_statistics
     }
     
     /// Sum data from another sttructure
-    void add(const bv_statistics& st)
+    void add(const bv_statistics& st) BMNOEXCEPT
     {
         bit_blocks += st.bit_blocks;
         gap_blocks += st.gap_blocks;
+        ptr_sub_blocks += st.ptr_sub_blocks;
         bv_count += st.bv_count;
         max_serialize_mem += st.max_serialize_mem + 8;
         memory_used += st.memory_used;
@@ -2610,8 +2611,8 @@ unsigned gap_set_value(unsigned val,
                        unsigned* BMRESTRICT is_set) BMNOEXCEPT
 {
     BM_ASSERT(pos < bm::gap_max_bits);
-    unsigned curr = gap_bfind(buf, pos, is_set);
 
+    unsigned curr = bm::gap_bfind(buf, pos, is_set);
     T end = (T)(*buf >> 3);
     if (*is_set == val)
     {
@@ -2629,7 +2630,7 @@ unsigned gap_set_value(unsigned val,
     if (pos == 0)
     {
         *buf ^= 1;
-        if ( buf[1] ) // We need to insert a 1 bit platform here.
+        if ( buf[1] ) // We need to insert a 1 bit GAP here
         {
             ::memmove(&buf[2], &buf[1], (end - 1) * sizeof(gap_word_t));
             buf[1] = 0;
@@ -2637,8 +2638,7 @@ unsigned gap_set_value(unsigned val,
         }
         else // Only 1 bit in the GAP. We need to delete the first GAP.
         {
-            pprev = buf + 1;
-            pcurr = pprev + 1;
+            pprev = buf + 1; pcurr = pprev + 1;
             do
             {
                 *pprev++ = *pcurr++;
@@ -2646,16 +2646,16 @@ unsigned gap_set_value(unsigned val,
             --end;
         }
     }
-    else if (curr > 1 && ((unsigned)(*pprev))+1 == pos) // Left border bit
+    else
+    if (curr > 1 && ((unsigned)(*pprev))+1 == pos) // Left border bit
     {
        ++(*pprev);
        if (*pprev == *pcurr)  // Curr. GAP to be merged with prev.GAP.
        {
             --end;
-            if (pcurr != pend) // GAP merge: 2 GAPS to be deleted 
+            if (pcurr != pend) // GAP merge: 2 GAPS to be deleted
             {
-                --end;
-                ++pcurr;
+                --end; ++pcurr;
                 do
                 {
                     *pprev++ = *pcurr++;
@@ -2663,15 +2663,13 @@ unsigned gap_set_value(unsigned val,
             }
        }    
     }
-    else if (*pcurr == pos) // Rightmost bit in the GAP. Border goes left.
+    else
+    if (*pcurr == pos) // Rightmost bit in the GAP. Border goes left.
     {
-        --(*pcurr);       
-        if (pcurr == pend)
-        {
-           ++end;
-        }
+        --(*pcurr);
+        end += (pcurr == pend);
     }
-    else  // Worst case we need to split current block.
+    else  // Worst case: split current GAP
     {
         ::memmove(pcurr+2, pcurr, (end - curr + 1)*(sizeof(T)));
         *pcurr++ = (T)(pos - 1);
@@ -2681,7 +2679,6 @@ unsigned gap_set_value(unsigned val,
 
     // Set correct length word.
     *buf = (T)((*buf & 7) + (end << 3));
-
     buf[end] = bm::gap_max_bits - 1;
     return end;
 }

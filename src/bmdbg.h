@@ -510,15 +510,15 @@ void print_stat(const BV& bv, typename BV::block_idx_type blocks = 0)
 }
 
 template<class BV>
-unsigned compute_serialization_size(const BV& bv)
+size_t compute_serialization_size(const BV& bv)
 {
     BM_DECLARE_TEMP_BLOCK(tb)
     unsigned char*  buf = 0;
-    unsigned blob_size = 0;
+    typename BV::size_type blob_size = 0;
     try
     {
         bm::serializer<BV> bvs(typename BV::allocator_type(), tb);
-        bvs.set_compression_level(4);
+        //bvs.set_compression_level(4);
         
         typename BV::statistics st;
         bv.calc_stat(&st);
@@ -677,12 +677,12 @@ void print_svector_stat(const SV& svect, bool print_sim = false)
                 const typename SV::bvector_type* bv1 = sim_vec[k].get_first();
                 const typename SV::bvector_type* bv2 = sim_vec[k].get_second();
 
-                unsigned bv_size2 = compute_serialization_size(*bv2);
+                auto bv_size2 = compute_serialization_size(*bv2);
                 
                 typename SV::bvector_type bvx(*bv2);
                 bvx ^= *bv1;
                 
-                unsigned bv_size_x = compute_serialization_size(bvx);
+                auto bv_size_x = compute_serialization_size(bvx);
                 if (bv_size_x < bv_size2) // true savings
                 {
                     size_t diff = bv_size2 - bv_size_x;
@@ -904,10 +904,15 @@ int file_save_svector(const SV& sv, const std::string& fname, size_t* sv_blob_si
     BM_ASSERT(!fname.empty());
     
     bm::sparse_vector_serial_layout<SV> sv_lay;
-    
+
+    bm::sparse_vector_serializer<SV> sv_serializer;
+    sv_serializer.set_xor_ref(true);
+
+    sv_serializer.serialize(sv, sv_lay);
+/*
     BM_DECLARE_TEMP_BLOCK(tb)
     bm::sparse_vector_serialize(sv, sv_lay, tb);
-
+*/
     std::ofstream fout(fname.c_str(), std::ios::binary);
     if (!fout.good())
     {
@@ -956,7 +961,7 @@ int file_load_svector(SV& sv, const std::string& fname)
 }
 
 
-// comapre-check if sparse vector is excatly coresponds to vector 
+// compare-check if sparse vector is excatly coresponds to vector
 //
 // returns 0 - if equal
 //         1 - no size match
@@ -976,6 +981,20 @@ int svector_check(const SV& sv, const V& vect)
             return 2;
     } // for i
     return 0;
+}
+
+
+template<class SV, class BV>
+void convert_bv2sv(SV& sv, const BV& bv)
+{
+    typename SV::back_insert_iterator bit = sv.get_back_inserter();
+    typename BV::enumerator en = bv.first();
+    for (; en.valid(); ++en)
+    {
+        auto v = en.value();
+        bit = v;
+    }
+    bit.flush();
 }
 
 

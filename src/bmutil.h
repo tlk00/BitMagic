@@ -94,7 +94,6 @@ namespace bm
             bm::word_t* end() { return (b_.w32 + bm::set_block_size); }
         };
     
-    
 /**
     Get minimum of 2 values
 */
