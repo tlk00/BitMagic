@@ -1556,6 +1556,10 @@ public:
     */
     void set_bit_no_check(size_type n);
 
+    /**
+        \brief Set specified bit without checking preconditions (size, etc)
+    */
+    bool set_bit_no_check(size_type n, bool val);
 
     /*!
         \brief Sets all bits in the specified closed interval [left,right]
@@ -2367,19 +2371,20 @@ private:
 
     size_type check_or_next(size_type prev) const BMNOEXCEPT;
     
-    /// set bit in GAP block withlength extension control
+    /// set bit in GAP block with GAP block length control
     bool gap_block_set(bm::gap_word_t* gap_blk,
                        bool val, block_idx_type nblock, unsigned nbit);
-    
+
+    /// set bit in GAP block with GAP block length control
+    void gap_block_set_no_ret(bm::gap_word_t* gap_blk,
+                              bool val, block_idx_type nblock,
+                              unsigned nbit);
+
     /// check if specified bit is 1, and set it to 0
     /// if specified bit is 0, scan for the next 1 and returns it
     /// if no 1 found returns 0
     size_type check_or_next_extract(size_type prev);
 
-    /**
-        \brief Set specified bit without checking preconditions (size, etc)
-    */
-    bool set_bit_no_check(size_type n, bool val);
 
     /**
         \brief AND specified bit without checking preconditions (size, etc)
@@ -3893,8 +3898,7 @@ void bvector<Alloc>::set_bit_no_check(size_type n)
 
     if (block_type) // gap block
     {
-        bm::gap_word_t* gap_blk = BMGAP_PTR(blk);
-        gap_block_set(gap_blk, val, nblock, nbit);
+        this->gap_block_set_no_ret(BMGAP_PTR(blk), val, nblock, nbit);
     }
     else  // bit block
     {
@@ -4055,7 +4059,10 @@ void bvector<Alloc>::import(const size_type* ids, size_type size_in,
         block_idx_type nblock_end = (ids[size_in-1] >> bm::set_block_shift);
         if (nblock == nblock_end) // special case: one block import
         {
-            import_block(ids, nblock, 0, stop);
+            if (stop == 1)
+                set_bit_no_check(ids[0]);
+            else
+                import_block(ids, nblock, 0, stop);
             return;
         }
     }
@@ -4074,7 +4081,11 @@ void bvector<Alloc>::import(const size_type* ids, size_type size_in,
             stop = bm::idx_arr_block_lookup_u32(ids, size_in, nblock, start);
         #endif
         BM_ASSERT(start < stop);
-        import_block(ids, nblock, start, stop);
+
+        if (stop - start == 1 && n < bm::id_max) // just one bit to set
+            set_bit_no_check(n);
+        else
+            import_block(ids, nblock, start, stop);
         start = stop;
     } while (start < size_in);
 }
@@ -4083,17 +4094,22 @@ void bvector<Alloc>::import(const size_type* ids, size_type size_in,
 
 template<class Alloc>
 void bvector<Alloc>::import_block(const size_type* ids,
-                                  block_idx_type nblock,
-                                  size_type start, size_type stop)
+                                  block_idx_type   nblock,
+                                  size_type        start,
+                                  size_type        stop)
 {
+    BM_ASSERT(stop > start);
     int block_type;
     bm::word_t* blk =
-        blockman_.check_allocate_block(nblock, 1, 0, &block_type, true/*allow NULL ret*/);
+        blockman_.check_allocate_block(nblock, 1, 0, &block_type,
+                                       true/*allow NULL ret*/);
     if (!IS_FULL_BLOCK(blk))
     {
         // TODO: add a special case when we import just a few bits per block
         if (BM_IS_GAP(blk))
+        {
             blk = blockman_.deoptimize_block(nblock); // TODO: try to avoid
+        }
         #ifdef BM64ADDR
             bm::set_block_bits_u64(blk, ids, start, stop);
         #else
@@ -4124,37 +4140,29 @@ bool bvector<Alloc>::set_bit_no_check(size_type n, bool val)
         return false;
 
     // calculate word number in block and bit
-    unsigned nbit   = unsigned(n & bm::set_block_mask); 
-
+    unsigned nbit   = unsigned(n & bm::set_block_mask);
     if (block_type) // gap
     {
-        bm::gap_word_t* gap_blk = BMGAP_PTR(blk);
-        unsigned is_set = gap_block_set(gap_blk, val, nblock, nbit);
-        return is_set;
+        return gap_block_set(BMGAP_PTR(blk), val, nblock, nbit);
     }
     else  // bit block
     {
         unsigned nword  = unsigned(nbit >> bm::set_word_shift); 
         nbit &= bm::set_word_mask;
-
         bm::word_t* word = blk + nword;
         bm::word_t  mask = (((bm::word_t)1) << nbit);
 
         if (val)
         {
-            if ( ((*word) & mask) == 0 )
-            {
-                *word |= mask; // set bit
-                return true;
-            }
+            val = ~(*word & mask);
+            *word |= mask; // set bit
+            return val;
         }
         else
         {
-            if ((*word) & mask)
-            {
-                *word &= ~mask; // clear bit
-                return true;
-            }
+            val = ~(*word & mask);
+            *word &= ~mask; // clear bit
+            return val;
         }
     }
     return false;
@@ -4164,21 +4172,38 @@ bool bvector<Alloc>::set_bit_no_check(size_type n, bool val)
 
 template<class Alloc>
 bool bvector<Alloc>::gap_block_set(bm::gap_word_t* gap_blk,
-                                   bool val, block_idx_type nblock, unsigned nbit)
+                                   bool val, block_idx_type nblock,
+                                   unsigned nbit)
 {
-    unsigned is_set, new_block_len;
-    new_block_len =
-        bm::gap_set_value(val, gap_blk, nbit, &is_set);
-    if (is_set)
+    unsigned is_set, new_len, old_len;
+    old_len = bm::gap_length(gap_blk)-1;
+    new_len = bm::gap_set_value(val, gap_blk, nbit, &is_set);
+    if (old_len < new_len)
     {
         unsigned threshold = bm::gap_limit(gap_blk, blockman_.glen());
-        if (new_block_len > threshold)
-        {
+        if (new_len > threshold)
             blockman_.extend_gap_block(nblock, gap_blk);
-        }
     }
     return is_set;
 }
+
+// -----------------------------------------------------------------------
+
+template<class Alloc>
+void bvector<Alloc>::gap_block_set_no_ret(bm::gap_word_t* gap_blk,
+                        bool val, block_idx_type nblock, unsigned nbit)
+{
+    unsigned new_len, old_len;
+    old_len = bm::gap_length(gap_blk)-1;
+    new_len = bm::gap_set_value(val, gap_blk, nbit);
+    if (old_len < new_len)
+    {
+        unsigned threshold = bm::gap_limit(gap_blk, blockman_.glen());
+        if (new_len > threshold)
+            blockman_.extend_gap_block(nblock, gap_blk);
+    }
+}
+
 
 // -----------------------------------------------------------------------
 

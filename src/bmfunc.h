@@ -2627,10 +2627,10 @@ unsigned gap_set_value(unsigned val,
 
     // Special case, first bit GAP operation. There is no platform beside it.
     // initial flag must be inverted.
-    if (pos == 0)
+    if (!pos)
     {
         *buf ^= 1;
-        if ( buf[1] ) // We need to insert a 1 bit GAP here
+        if (buf[1]) // We need to insert a 1 bit GAP here
         {
             ::memmove(&buf[2], &buf[1], (end - 1) * sizeof(gap_word_t));
             buf[1] = 0;
@@ -2671,15 +2671,102 @@ unsigned gap_set_value(unsigned val,
     }
     else  // Worst case: split current GAP
     {
-        ::memmove(pcurr+2, pcurr, (end - curr + 1)*(sizeof(T)));
-        *pcurr++ = (T)(pos - 1);
-        *pcurr = (T)pos;
-        end = (T)(end + 2);
+        if (*pcurr != bm::gap_max_bits-1) // last gap does not need memmove
+            ::memmove(pcurr+2, pcurr, (end - curr + 1)*(sizeof(T)));
+        end += 2;
+        pcurr[0] = (T)(pos-1);
+        pcurr[1] = (T)pos;
     }
 
-    // Set correct length word.
+    // Set correct length word and last border word
     *buf = (T)((*buf & 7) + (end << 3));
-    buf[end] = bm::gap_max_bits - 1;
+    buf[end] = bm::gap_max_bits-1;
+    return end;
+}
+
+/*!
+   \brief Sets or clears bit in the GAP buffer.
+
+   \param val - new bit value
+   \param buf - GAP buffer.
+   \param pos - Index of bit to set.
+
+   \return New GAP buffer length.
+
+   @ingroup gapfunc
+*/
+template<typename T>
+unsigned gap_set_value(unsigned val,
+                       T* BMRESTRICT buf,
+                       unsigned pos) BMNOEXCEPT
+{
+    BM_ASSERT(pos < bm::gap_max_bits);
+    unsigned is_set;
+    unsigned curr = bm::gap_bfind(buf, pos, &is_set);
+    T end = (T)(*buf >> 3);
+    if (is_set == val)
+        return end;
+
+    T* pcurr = buf + curr;
+    T* pprev = pcurr - 1;
+    T* pend = buf + end;
+
+    // Special case, first bit GAP operation. There is no platform beside it.
+    // initial flag must be inverted.
+    if (!pos)
+    {
+        *buf ^= 1;
+        if (buf[1]) // We need to insert a 1 bit GAP here
+        {
+            ::memmove(&buf[2], &buf[1], (end - 1) * sizeof(gap_word_t));
+            buf[1] = 0;
+            ++end;
+        }
+        else // Only 1 bit in the GAP. We need to delete the first GAP.
+        {
+            pprev = buf + 1; pcurr = pprev + 1;
+            do
+            {
+                *pprev++ = *pcurr++;
+            } while (pcurr < pend);
+            --end;
+        }
+    }
+    else
+    if (curr > 1 && ((unsigned)(*pprev))+1 == pos) // Left border bit
+    {
+       ++(*pprev);
+       if (*pprev == *pcurr)  // Curr. GAP to be merged with prev.GAP.
+       {
+            --end;
+            if (pcurr != pend) // GAP merge: 2 GAPS to be deleted
+            {
+                --end; ++pcurr;
+                do
+                {
+                    *pprev++ = *pcurr++;
+                } while (pcurr < pend);
+            }
+       }
+    }
+    else
+    if (*pcurr == pos) // Rightmost bit in the GAP. Border goes left.
+    {
+        --(*pcurr);
+        end += (pcurr == pend);
+    }
+    else  // Worst case: split current GAP
+    {
+        if (*pcurr != bm::gap_max_bits-1) // last gap does not need memmove
+            ::memmove(pcurr+2, pcurr, (end - curr + 1)*(sizeof(T)));
+        end += 2;
+        pcurr[0] = (T)(pos-1);
+        pcurr[1] = (T)pos;
+    }
+
+    // Set correct length word and last border word
+    *buf = (T)((*buf & 7) + (end << 3));
+    buf[end] = bm::gap_max_bits-1;
     return end;
 }
 
@@ -2706,7 +2793,7 @@ unsigned gap_add_value(T* buf, unsigned pos) BMNOEXCEPT
 
     // Special case, first bit GAP operation. There is no platform beside it.
     // initial flag must be inverted.
-    if (pos == 0)
+    if (!pos)
     {
         *buf ^= 1;
         if ( buf[1] ) // We need to insert a 1 bit platform here.
@@ -2732,9 +2819,12 @@ unsigned gap_add_value(T* buf, unsigned pos) BMNOEXCEPT
        if (*pprev == *pcurr)  // Curr. GAP to be merged with prev.GAP.
        {
             --end;
+            BM_ASSERT(pcurr == pend);
+            /*
             if (pcurr != pend) // GAP merge: 2 GAPS to be deleted 
             {
-                // TODO: should never get here...
+                // TODO: should never get here, test and remove!
+                BM_ASSERT(0);
                 --end;
                 ++pcurr;
                 do
@@ -2742,26 +2832,23 @@ unsigned gap_add_value(T* buf, unsigned pos) BMNOEXCEPT
                     *pprev++ = *pcurr++;
                 } while (pcurr < pend);
             }
+            */
        } 
     }
     else if (*pcurr == pos) // Rightmost bit in the GAP. Border goes left.
     {
         --(*pcurr);       
-        if (pcurr == pend)
-        {
-           ++end;
-        }
+        end += (pcurr == pend);
     }
     else  // Worst case we need to split current block.
     {
-        *pcurr++ = (T)(pos - 1);
-        *pcurr = (T)pos;
+        pcurr[0] = (T)(pos-1);
+        pcurr[1] = (T)pos;
         end = (T)(end+2);
     }
 
     // Set correct length word.
     *buf = (T)((*buf & 7) + (end << 3));
-
     buf[end] = bm::gap_max_bits - 1;
     return end;
 }
@@ -8279,8 +8366,7 @@ void set_block_bits_u64(bm::word_t* BMRESTRICT block,
         unsigned nbit = unsigned(n & bm::set_block_mask);
         unsigned nword  = nbit >> bm::set_word_shift;
         nbit &= bm::set_word_mask;
-        bm::word_t mask = (1u << nbit);
-        block[nword] |= mask;
+        block[nword] |= (1u << nbit);
     } // for i
 }
 
@@ -8312,8 +8398,7 @@ void set_block_bits_u32(bm::word_t* BMRESTRICT block,
         unsigned nbit = unsigned(n & bm::set_block_mask);
         unsigned nword  = nbit >> bm::set_word_shift;
         nbit &= bm::set_word_mask;
-        bm::word_t mask = (1u << nbit);
-        block[nword] |= mask;
+        block[nword] |= (1u << nbit);
     } // for i
 #endif
 }
