@@ -149,17 +149,26 @@ void get_block_coord(BI_TYPE nb, unsigned& i, unsigned& j) BMNOEXCEPT
 }
 
 /**
-    \brief ad-hoc conditional expressions 
+    Compute bit address of the first bit in a superblock
     \internal
 */
-template <bool b> struct conditional
+template<typename RTYPE>
+BMFORCEINLINE RTYPE get_super_block_start(unsigned i) BMNOEXCEPT
 {
-    static bool test() { return true; }
-};
-template <> struct conditional<false>
+    return RTYPE(i) * bm::set_sub_total_bits;
+}
+
+/**
+    Compute bit address of the first bit in a block
+    \internal
+*/
+template<typename RTYPE>
+BMFORCEINLINE RTYPE get_block_start(unsigned i, unsigned j) BMNOEXCEPT
 {
-    static bool test() { return false; }
-};
+    RTYPE idx = bm::get_super_block_start<RTYPE>(i);
+    idx += (j) * bm::gap_max_bits;
+    return idx;
+}
 
 /*! 
     @defgroup gapfunc GAP functions
@@ -176,36 +185,6 @@ template <> struct conditional<false>
    \internal
    @ingroup bvector
  */
-
-
-
-
-/*!
-    Returns BSR value
-    @ingroup bitfunc
-*/
-template <class T>
-unsigned bit_scan_reverse(T value) BMNOEXCEPT
-{
-    BM_ASSERT(value);
-    
-    if (bm::conditional<sizeof(T)==8>::test())
-    {
-    #if defined(BM_USE_GCC_BUILD)
-        return (unsigned) (63 - __builtin_clzll(value));
-    #else
-        bm::id64_t v8 = value;
-        v8 >>= 32;
-        unsigned v = (unsigned)v8;
-        if (v)
-        {
-            v = bm::bit_scan_reverse32(v);
-            return v + 32;
-        }
-    #endif
-    }
-    return bit_scan_reverse32((unsigned)value);
-}
 
 
 /*!
@@ -1982,10 +1961,61 @@ bool gap_is_interval(const T* const BMRESTRICT buf,
     --pcurr;
     if (*pcurr != left-1)
         return false;
-
     return true;
 }
 
+/**
+    \brief Searches for the last 1 bit in the 111 interval of a GAP block
+    \param block - BIT buffer
+    \param nbit - bit index to start checking from
+    \param pos - [out] found value
+
+    \return false if not found
+    @ingroup gapfunc
+*/
+template<typename T>
+bool gap_find_interval_end(const T* const BMRESTRICT buf,
+                           unsigned nbit, unsigned* BMRESTRICT pos) BMNOEXCEPT
+{
+    BM_ASSERT(pos);
+    BM_ASSERT(nbit < bm::gap_max_bits);
+
+    unsigned is_set;
+    unsigned start_pos = bm::gap_bfind(buf, nbit, &is_set);
+    if (!is_set)
+        return false;
+    *pos = buf[start_pos];
+    return true;
+}
+
+
+/**
+    \brief Searches for the first 1 bit in the 111 interval of a GAP block
+    \param block - BIT buffer
+    \param nbit - bit index to start checking from
+    \param pos - [out] found value
+
+    \return false if not found
+    @ingroup gapfunc
+*/
+template<typename T>
+bool gap_find_interval_start(const T* const BMRESTRICT buf,
+                           unsigned nbit, unsigned* BMRESTRICT pos) BMNOEXCEPT
+{
+    BM_ASSERT(pos);
+    BM_ASSERT(nbit < bm::gap_max_bits);
+
+    unsigned is_set;
+    unsigned start_pos = bm::gap_bfind(buf, nbit, &is_set);
+    if (!is_set)
+        return false;
+    --start_pos;
+    if (!start_pos)
+        *pos = 0;
+    else
+        *pos = buf[start_pos]+1;
+    return true;
+}
 
 
 /*!
@@ -2820,20 +2850,7 @@ unsigned gap_add_value(T* buf, unsigned pos) BMNOEXCEPT
        {
             --end;
             BM_ASSERT(pcurr == pend);
-            /*
-            if (pcurr != pend) // GAP merge: 2 GAPS to be deleted 
-            {
-                // TODO: should never get here, test and remove!
-                BM_ASSERT(0);
-                --end;
-                ++pcurr;
-                do
-                {
-                    *pprev++ = *pcurr++;
-                } while (pcurr < pend);
-            }
-            */
-       } 
+       }
     }
     else if (*pcurr == pos) // Rightmost bit in the GAP. Border goes left.
     {
@@ -3082,6 +3099,9 @@ unsigned gap_block_find(const T* BMRESTRICT buf,
     *prev = val;
     return (val != bm::gap_max_bits);  // no bug here.
 }
+
+//------------------------------------------------------------------------
+
 
 /*! 
     \brief Set 1 bit in a block
@@ -5097,7 +5117,7 @@ bool bit_block_shift_r1_and(bm::word_t* BMRESTRICT block,
                 
                 block[d_base] = co_flag & mask_block[d_base];
                 if (block[d_base])
-                    d |= dmask; // update d
+                    d |= dmask; // update digest
                 co_flag = 0;
             }
         }
@@ -5318,6 +5338,200 @@ bool block_is_interval(const bm::word_t* const BMRESTRICT block,
     return false;
 }
 
+// ----------------------------------------------------------------------
+
+/**
+    \brief Searches for the last 1 bit in the 111 interval of a BIT block
+    \param block - BIT buffer
+    \param nbit - bit index to start checking from
+    \param pos - [out] found value
+
+    \return false if not found
+    @ingroup bitfunc
+*/
+inline
+bool bit_block_find_interval_end(const bm::word_t* BMRESTRICT block,
+                           unsigned nbit, unsigned* BMRESTRICT pos) BMNOEXCEPT
+{
+    BM_ASSERT(block);
+    BM_ASSERT(pos);
+
+    unsigned nword  = unsigned(nbit >> bm::set_word_shift);
+    unsigned bit_pos = (nbit & bm::set_word_mask);
+    bm::word_t w = block[nword];
+    w &= (1u << bit_pos);
+    if (!w)
+        return false;
+
+    if (nbit == bm::gap_max_bits-1)
+    {
+        *pos = bm::gap_max_bits-1;
+        return true;
+    }
+    *pos = nbit;
+
+    ++nbit;
+    nword  = unsigned(nbit >> bm::set_word_shift);
+    bit_pos = (nbit & bm::set_word_mask);
+
+    w = (~block[nword]) >> bit_pos;
+    w <<= bit_pos; // clear the trailing bits
+    if (w)
+    {
+        bit_pos = bm::bit_scan_forward32(w); // trailing zeros
+        *pos = unsigned(bit_pos + (nword * 8u * unsigned(sizeof(bm::word_t)))-1);
+        return true;
+    }
+
+    for (++nword; nword < bm::set_block_size; ++nword)
+    {
+        w = ~block[nword];
+        if (w)
+        {
+            bit_pos = bm::bit_scan_forward32(w); // trailing zeros
+            *pos = unsigned(bit_pos + (nword * 8u * unsigned(sizeof(bm::word_t)))-1);
+            return true;
+        }
+    } // for nword
+
+    // 0 not found, all block is 1s...
+    *pos = bm::gap_max_bits-1;
+    return true;
+}
+
+
+/*! @brief Find end of the current 111 interval
+    @return search result code 0 - not found, 1 found, 2 - found at the end
+    @internal
+*/
+inline
+unsigned block_find_interval_end(const bm::word_t* BMRESTRICT block,
+                                 unsigned  nbit_from,
+                                 unsigned* BMRESTRICT found_nbit) BMNOEXCEPT
+{
+    BM_ASSERT(block && found_nbit);
+    BM_ASSERT(nbit_from < bm::gap_max_bits);
+
+    bool b;
+    if (BM_IS_GAP(block))
+    {
+        const bm::gap_word_t* gap = BMGAP_PTR(block);
+        b = bm::gap_find_interval_end(gap, nbit_from, found_nbit);
+        if (b && *found_nbit == bm::gap_max_bits-1)
+            return 2; // end of block, keep searching
+    }
+    else // bit-block
+    {
+        if (IS_FULL_BLOCK(block))
+        {
+            *found_nbit = bm::gap_max_bits-1;
+            return 2;
+        }
+        b = bm::bit_block_find_interval_end(block, nbit_from, found_nbit);
+        if (b && *found_nbit == bm::gap_max_bits-1)
+            return 2; // end of block, keep searching
+    }
+    return b;
+}
+
+// ----------------------------------------------------------------------
+
+/**
+    \brief Searches for the first 1 bit in the 111 interval of a BIT block
+    \param block - BIT buffer
+    \param nbit - bit index to start checking from
+    \param pos - [out] found value
+
+    \return false if not found
+    @ingroup bitfunc
+*/
+inline
+bool bit_block_find_interval_start(const bm::word_t* BMRESTRICT block,
+                           unsigned nbit, unsigned* BMRESTRICT pos) BMNOEXCEPT
+{
+    BM_ASSERT(block);
+    BM_ASSERT(pos);
+
+    unsigned nword  = unsigned(nbit >> bm::set_word_shift);
+    unsigned bit_pos = (nbit & bm::set_word_mask);
+    bm::word_t w = block[nword];
+    w &= (1u << bit_pos);
+    if (!w)
+        return false;
+
+    if (nbit == 0)
+    {
+        *pos = 0;
+        return true;
+    }
+    *pos = nbit;
+
+    --nbit;
+    nword  = unsigned(nbit >> bm::set_word_shift);
+    bit_pos = (nbit & bm::set_word_mask);
+
+    w = (~block[nword]) & block_set_table<true>::_left[bit_pos];
+    if (w)
+    {
+        bit_pos = bm::bit_scan_reverse32(w);
+        *pos = unsigned(bit_pos + (nword * 8u * unsigned(sizeof(bm::word_t)))+1);
+        return true;
+    }
+
+    if (nword)
+    {
+        for (--nword; true; --nword)
+        {
+            w = ~block[nword];
+            if (w)
+            {
+                bit_pos = bm::bit_scan_reverse32(w); // trailing zeros
+                *pos = unsigned(bit_pos + (nword * 8u * unsigned(sizeof(bm::word_t)))+1);
+                return true;
+            }
+            if (!nword)
+                break;
+        } // for nword
+    }
+
+    // 0 not found, all block is 1s...
+    *pos = 0;
+    return true;
+}
+
+
+/*! @brief Find start of the current 111 interval
+    @return search result code 0 - not found, 1 found, 2 - found at the start
+    @internal
+*/
+inline
+unsigned block_find_interval_start(const bm::word_t* BMRESTRICT block,
+                                   unsigned  nbit_from,
+                                   unsigned* BMRESTRICT found_nbit) BMNOEXCEPT
+{
+    BM_ASSERT(block && found_nbit);
+    BM_ASSERT(nbit_from < bm::gap_max_bits);
+    bool b;
+    if (BM_IS_GAP(block))
+    {
+        const bm::gap_word_t* gap = BMGAP_PTR(block);
+        b = bm::gap_find_interval_start(gap, nbit_from, found_nbit);
+        if (b && *found_nbit == 0)
+            return 2; // start of block, keep searching
+    }
+    else // bit-block
+    {
+        if (IS_FULL_BLOCK(block))
+        {
+            *found_nbit = 0;
+            return 2;
+        }
+        b = bm::bit_block_find_interval_start(block, nbit_from, found_nbit);
+        if (b && *found_nbit == 0)
+            return 2; // start of block, keep searching
+    }
+    return b;
+}
 
 // ----------------------------------------------------------------------
 
@@ -7267,6 +7481,8 @@ unsigned bit_block_find(const bm::word_t* BMRESTRICT block,
     } // for i
     return 0u;
 }
+
+
 
 
 /*!

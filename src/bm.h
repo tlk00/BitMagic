@@ -283,7 +283,8 @@ public:
            \fn bool bm::bvector::iterator_base::invalidate() 
            \brief Turns iterator into an invalid state.
         */
-        void invalidate() BMNOEXCEPT { position_ = bm::id_max; block_type_ = ~0u;}
+        void invalidate() BMNOEXCEPT
+            { position_ = bm::id_max; block_type_ = ~0u;}
         
         /** \brief Compare FSMs for testing purposes
             \internal
@@ -1916,7 +1917,7 @@ public:
     /*!
        \fn bool bvector::find(bm::id_t& pos) const
        \brief Finds index of first 1 bit
-       \param pos - index of the found 1 bit
+       \param pos - [out] index of the found 1 bit
        \return true if search returned result
        \sa get_first, get_next, extract_next, find_reverse, find_first_mismatch
     */
@@ -1924,13 +1925,42 @@ public:
 
     /*!
        \fn bool bvector::find(bm::id_t from, bm::id_t& pos) const
-       \brief Finds index of 1 bit starting from position
+       \brief Find index of 1 bit starting from position
        \param from - position to start search from
-       \param pos - index of the found 1 bit
+       \param pos - [out] index of the found 1 bit
        \return true if search returned result
        \sa get_first, get_next, extract_next, find_reverse, find_first_mismatch
     */
     bool find(size_type from, size_type& pos) const BMNOEXCEPT;
+
+    /*!
+       \brief Find index of last 1 bit gap (01110) starting from position
+       Scan for the last 1 in a block of continious 1s.
+       Method employs closed interval semantics: [from..pos]0
+
+       \param from - position to start search from
+       \param pos - [out] index of the found last 1 bit
+       \return true if search returned result, false if not found
+               (start point is zero)
+
+       \sa is_interval, find_interval_start
+    */
+    bool find_interval_end(size_type from, size_type& pos) const BMNOEXCEPT;
+
+    /*!
+       \brief Reverse find index of first 1 bit gap (01110) starting from position
+       Reverse scan for the first 1 in a block of continious 1s.
+       Method employs closed interval semantics: 0[pos..from]
+
+       \param from - position to start reverse search from
+       \param pos - [out] index of the found first 1 bit in a gap of bits
+       \return true if search returned result, false if not found
+               (start point is zero)
+
+       \sa is_interval, find_interval_end
+    */
+    bool find_interval_start(size_type from, size_type& pos) const BMNOEXCEPT;
+
 
     /*!
        \fn bm::id_t bvector::get_first() const
@@ -3329,6 +3359,8 @@ bool bvector<Alloc>::is_interval(size_type left, size_type right) const BMNOEXCE
 
     if (right < left)
         bm::xor_swap(left, right);
+    if (left == bm::id_max) // out of range
+        return false;
     if (right == bm::id_max)
         --right;
 
@@ -3343,7 +3375,7 @@ bool bvector<Alloc>::is_interval(size_type left, size_type right) const BMNOEXCE
         {
             unsigned i0, j0;
             bm::get_block_coord(nblock_left, i0, j0);
-            const bm::word_t* block = blockman_.get_block(i0, j0);
+            const bm::word_t* block = blockman_.get_block_ptr(i0, j0);
             bool b = bm::block_is_interval(block, nbit_left, nbit_right);
             return b;
         }
@@ -4381,6 +4413,206 @@ bool bvector<Alloc>::find(size_type from, size_type& pos) const BMNOEXCEPT
     }
     pos = check_or_next(from);
     return (pos != 0);
+}
+
+//---------------------------------------------------------------------
+
+template<class Alloc>
+bool bvector<Alloc>::find_interval_end(size_type from,
+                                       size_type& pos) const BMNOEXCEPT
+{
+    if (from == bm::id_max)
+        return false;
+    if (!blockman_.is_init())
+        return false; // nothing to do
+
+    block_idx_type nb = (from >> bm::set_block_shift);
+    unsigned i0, j0;
+    bm::get_block_coord(nb, i0, j0);
+
+    unsigned found_nbit;
+
+    const bm::word_t* block = blockman_.get_block_ptr(i0, j0);
+    if (!block)
+        return false;
+    unsigned nbit = unsigned(from & bm::set_block_mask);
+    unsigned res = bm::block_find_interval_end(block, nbit, &found_nbit);
+    switch (res)
+    {
+    case 0: // not interval
+        return false;
+    case 1: // interval found
+        pos = found_nbit + (nb * bm::gap_max_bits);
+        return true;
+    case 2: // keep scanning
+        pos = found_nbit + (nb * bm::gap_max_bits);
+        break;
+    default:
+        BM_ASSERT(0);
+    } // switch
+
+    block_idx_type nblock_right = (bm::id_max >> bm::set_block_shift);
+    unsigned i_from, j_from, i_to, j_to;
+    bm::get_block_coord(nblock_right, i_to, j_to);
+    block_idx_type top_size = blockman_.top_block_size();
+    if (i_to >= top_size)
+        i_to = unsigned(top_size-1);
+
+    ++nb;
+    bm::word_t*** blk_root = blockman_.top_blocks_root();
+    bm::get_block_coord(nb, i_from, j_from);
+
+    for (unsigned i = i_from; i <= i_to; ++i)
+    {
+        bm::word_t** blk_blk = blk_root[i];
+        if (!blk_blk)
+            return true;
+        if ((bm::word_t*)blk_blk == FULL_BLOCK_FAKE_ADDR)
+        {
+            if (i > i_from)
+            {
+                pos += bm::gap_max_bits * bm::set_sub_array_size;
+                continue;
+            }
+            else
+            {
+                // TODO: optimization to avoid scanning rest of the super block
+            }
+        }
+
+        unsigned j = (i == i_from) ? j_from : 0;
+        do
+        {
+            if ((bm::word_t*)blk_blk == FULL_BLOCK_FAKE_ADDR)
+            {
+                pos += bm::gap_max_bits;
+                continue;
+            }
+
+            block = blk_blk[j];
+            if (!block)
+                return true;
+
+            res = bm::block_find_interval_end(block, 0, &found_nbit);
+            switch (res)
+            {
+            case 0: // not interval (but it was the interval, so last result
+                return true;
+            case 1: // interval found
+                pos += found_nbit+1;
+                return true;
+            case 2: // keep scanning
+                pos += bm::gap_max_bits;
+                break;
+            default:
+                BM_ASSERT(0);
+            } // switch
+        } while (++j < bm::set_sub_array_size);
+    } // for i
+
+    return true;
+}
+
+//---------------------------------------------------------------------
+
+template<class Alloc>
+bool bvector<Alloc>::find_interval_start(size_type from,
+                                         size_type& pos) const BMNOEXCEPT
+{
+    if (!blockman_.is_init())
+        return false; // nothing to do
+    if (!from)
+    {
+        pos = from;
+        return test(from);
+    }
+
+    block_idx_type nb = (from >> bm::set_block_shift);
+    unsigned i0, j0;
+    bm::get_block_coord(nb, i0, j0);
+
+    size_type base_idx;
+    unsigned found_nbit;
+
+    const bm::word_t* block = blockman_.get_block_ptr(i0, j0);
+    if (!block)
+        return false;
+    unsigned nbit = unsigned(from & bm::set_block_mask);
+    unsigned res = bm::block_find_interval_start(block, nbit, &found_nbit);
+
+    switch (res)
+    {
+    case 0: // not interval
+        return false;
+    case 1: // interval found
+        pos = found_nbit + (nb * bm::gap_max_bits);
+        return true;
+    case 2: // keep scanning
+        base_idx = bm::get_block_start<size_type>(i0, j0);
+        pos = base_idx + found_nbit;
+        if (!nb)
+            return true;
+        break;
+    default:
+        BM_ASSERT(0);
+    } // switch
+
+    --nb;
+    bm::get_block_coord(nb, i0, j0);
+    bm::word_t*** blk_root = blockman_.top_blocks_root();
+
+    for (unsigned i = i0; true; --i)
+    {
+        bm::word_t** blk_blk = blk_root[i];
+        if (!blk_blk)
+            return true;
+        if ((bm::word_t*)blk_blk == FULL_BLOCK_FAKE_ADDR)
+        {
+            pos = bm::get_super_block_start<size_type>(i);
+            if (!i)
+                break;
+            continue;
+        }
+        unsigned j = (i == i0) ? j0 : 255;
+        for (; true; --j)
+        {
+            if ((bm::word_t*)blk_blk == FULL_BLOCK_FAKE_ADDR)
+            {
+                pos = bm::get_block_start<size_type>(i, j);
+                goto loop_j_end; // continue
+            }
+
+            block = blk_blk[j];
+            if (!block)
+                return true;
+
+            res = bm::block_find_interval_start(block,
+                                            bm::gap_max_bits-1, &found_nbit);
+            switch (res)
+            {
+            case 0: // not interval (but it was the interval, so last result
+                return true;
+            case 1: // interval found
+                base_idx = bm::get_block_start<size_type>(i, j);
+                pos = base_idx + found_nbit;
+                return true;
+            case 2: // keep scanning
+                pos = bm::get_block_start<size_type>(i, j);
+                break;
+            default:
+                BM_ASSERT(0);
+            } // switch
+
+            loop_j_end: // continue point
+            if (!j)
+                break;
+        } // for j
+
+        if (!i)
+            break;
+    } // for i
+
+    return true;
 }
 
 //---------------------------------------------------------------------

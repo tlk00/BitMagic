@@ -103,6 +103,19 @@ T min_value(T v1, T v2) BMNOEXCEPT
     return v1 < v2 ? v1 : v2;
 }
 
+/**
+    \brief ad-hoc conditional expressions
+    \internal
+*/
+template <bool b> struct conditional
+{
+    static bool test() { return true; }
+};
+template <> struct conditional<false>
+{
+    static bool test() { return false; }
+};
+
 
 /**
     Fast loop-less function to find LOG2
@@ -392,6 +405,34 @@ unsigned count_trailing_zeros_u64(bm::id64_t w) BMNOEXCEPT
 #endif
 }
 
+
+
+/*!
+    Returns BSR value
+    @ingroup bitfunc
+*/
+template <class T>
+unsigned bit_scan_reverse(T value) BMNOEXCEPT
+{
+    BM_ASSERT(value);
+
+    if (bm::conditional<sizeof(T)==8>::test())
+    {
+    #if defined(BM_USE_GCC_BUILD)
+        return (unsigned) (63 - __builtin_clzll(value));
+    #else
+        bm::id64_t v8 = value;
+        v8 >>= 32;
+        unsigned v = (unsigned)v8;
+        if (v)
+        {
+            v = bm::bit_scan_reverse32(v);
+            return v + 32;
+        }
+    #endif
+    }
+    return bm::bit_scan_reverse32((unsigned)value);
+}
 
 
 #ifdef __GNUG__

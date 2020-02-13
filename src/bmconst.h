@@ -96,14 +96,14 @@ const unsigned set_array_shift = 8u;
 const unsigned set_array_mask  = 0xFFu;
 
 const unsigned set_total_blocks32 = (bm::set_array_size32 * bm::set_array_size32);
+const unsigned set_sub_total_bits = bm::set_sub_array_size * bm::gap_max_bits;
 
 #ifdef BM64ADDR
 const unsigned set_total_blocks48 = bm::id_max48 / bm::gap_max_bits;
 const unsigned long long id_max = bm::id_max48;
-const unsigned long long set_array_size48 = 1 + (bm::id_max48 / (bm::set_sub_array_size * bm::gap_max_bits));
+const unsigned long long set_array_size48 = 1 + (bm::id_max48 / set_sub_total_bits);
 const unsigned  set_top_array_size = bm::set_array_size48;
 const id64_t set_total_blocks = id64_t(bm::set_top_array_size) * set_sub_array_size;
-//bm::id_max / (bm::gap_max_bits * bm::set_sub_array_size);
 #else
 const unsigned id_max = bm::id_max32;
 const unsigned set_top_array_size = bm::set_array_size32;

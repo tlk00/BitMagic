@@ -398,16 +398,21 @@ protected:
                                            const bvector_type_const_ptr* bv_src,
                                            unsigned src_size,
                                            bool     top_null_as_zero) BMNOEXCEPT;
-    
-    bool any_carry_overs(unsigned co_size) const BMNOEXCEPT;
+
+    static
+    bool any_carry_overs(const unsigned char* carry_overs,
+                         unsigned co_size)  BMNOEXCEPT;
     
     /**
         @return carry over
     */
-    bool process_shift_right_and(const bm::word_t* arg_blk,
-                                     digest_type&      digest,
-                                     unsigned          carry_over);
-    
+    static
+    unsigned process_shift_right_and(bm::word_t*       BMRESTRICT blk,
+                                 const bm::word_t* BMRESTRICT arg_blk,
+                                 digest_type&      BMRESTRICT digest,
+                                 unsigned          carry_over) BMNOEXCEPT;
+
+    static
     const bm::word_t* get_arg_block(const bvector_type_const_ptr* bv_src,
                                 unsigned k, unsigned i, unsigned j) BMNOEXCEPT;
 
@@ -996,8 +1001,6 @@ void aggregator<BV>::combine_and(unsigned i, unsigned j,
 {
     BM_ASSERT(src_size);
     
-    typename bvector_type::blocks_manager_type& bman_target = bv_target.get_blocks_manager();
-
     unsigned arg_blk_count = 0;
     unsigned arg_blk_gap_count = 0;
     bm::word_t* blk =
@@ -1016,12 +1019,11 @@ void aggregator<BV>::combine_and(unsigned i, unsigned j,
             if (ar_->v_arg_and_blk[0] == FULL_BLOCK_REAL_ADDR)
             {
                 // another nothing to do: one FULL block
+                blocks_manager_type& bman_target = bv_target.get_blocks_manager();
                 bman_target.check_alloc_top_subblock(i);
                 bman_target.set_block_ptr(i, j, blk);
                 if (++j == bm::set_sub_array_size)
-                {
                     bman_target.validate_top_full(i);
-                }
                 return;
             }
         }
@@ -1036,14 +1038,13 @@ void aggregator<BV>::combine_and(unsigned i, unsigned j,
         //
         if (arg_blk_gap_count)
         {
-            digest =
-                process_gap_blocks_and(arg_blk_gap_count, digest);
+            digest = process_gap_blocks_and(arg_blk_gap_count, digest);
         }
-        if (digest) // some results
+        if (digest) // we have results , allocate block and copy from temp
         {
-            // we have some results, allocate block and copy from temp
+            blocks_manager_type& bman_target = bv_target.get_blocks_manager();
             bman_target.opt_copy_bit_block(i, j, ar_->tb1,
-                                           opt_mode_, ar_->tb_opt);
+                                            opt_mode_, ar_->tb_opt);
         }
     }
 }
@@ -1690,14 +1691,15 @@ bool aggregator<BV>::combine_shift_right_and(
     {
         if (i > top_block_size_)
         {
-            if (!this->any_carry_overs(src_and_size))
+            if (!any_carry_overs(&ar_->carry_overs_[0], src_and_size))
                 break; // quit early if there is nothing to carry on
         }
 
         unsigned j = 0;
         do
         {
-            bool found = combine_shift_right_and(i, j, bv_target, bv_src_and, src_and_size);
+            bool found =
+            combine_shift_right_and(i, j, bv_target, bv_src_and, src_and_size);
             if (found && any)
                 return found;
         } while (++j < bm::set_sub_array_size);
@@ -1715,7 +1717,6 @@ bool aggregator<BV>::combine_shift_right_and(unsigned i, unsigned j,
                                         const bvector_type_const_ptr* bv_src,
                                         unsigned src_size)
 {
-    blocks_manager_type& bman_target = bv_target.get_blocks_manager();
     bm::word_t* blk = temp_blk_ ? temp_blk_ : ar_->tb1;
     unsigned char* carry_overs = &(ar_->carry_overs_[0]);
 
@@ -1755,18 +1756,24 @@ bool aggregator<BV>::combine_shift_right_and(unsigned i, unsigned j,
         if (blk_zero) // delayed temp block 0-init requested
         {
             bm::bit_block_set(blk, 0);
-            blk_zero = false;
+            blk_zero = !blk_zero; // = false
         }
         const bm::word_t* arg_blk = get_arg_block(bv_src, k, i, j);
-        carry_overs[k] = process_shift_right_and(arg_blk, digest, carry_over);
+        carry_overs[k] = (unsigned char)
+            process_shift_right_and(blk, arg_blk, digest, carry_over);
+        BM_ASSERT(carry_overs[k] == 0 || carry_overs[k] == 1);
     } // for k
-    
+
+    if (blk_zero) // delayed temp block 0-init
+    {
+        bm::bit_block_set(blk, 0);
+    }
     // block now gets emitted into the target bit-vector
     if (digest)
     {
         BM_ASSERT(!bm::bit_is_all_zero(blk));
-        bman_target.opt_copy_bit_block(i, j, blk,
-                                       opt_mode_, ar_->tb_opt);
+        blocks_manager_type& bman_target = bv_target.get_blocks_manager();
+        bman_target.opt_copy_bit_block(i, j, blk, opt_mode_, ar_->tb_opt);
         return true;
     }
     return false;
@@ -1775,11 +1782,13 @@ bool aggregator<BV>::combine_shift_right_and(unsigned i, unsigned j,
 // ------------------------------------------------------------------------
 
 template<typename BV>
-bool aggregator<BV>::process_shift_right_and(const bm::word_t* arg_blk,
-                                             digest_type&      digest,
-                                             unsigned          carry_over)
+unsigned aggregator<BV>::process_shift_right_and(
+                            bm::word_t*       BMRESTRICT blk,
+                            const bm::word_t* BMRESTRICT arg_blk,
+                            digest_type&      BMRESTRICT digest,
+                            unsigned                    carry_over) BMNOEXCEPT
 {
-    bm::word_t* blk = temp_blk_ ? temp_blk_ : ar_->tb1;
+    BM_ASSERT(carry_over == 1 || carry_over == 0);
 
     if (BM_IS_GAP(arg_blk)) // GAP argument
     {
@@ -1807,8 +1816,8 @@ bool aggregator<BV>::process_shift_right_and(const bm::word_t* arg_blk,
             if (digest)
             {
                 carry_over =
-                bm::bit_block_shift_r1_and_unr(blk, carry_over, arg_blk,
-                                               &digest);
+                    bm::bit_block_shift_r1_and_unr(blk, carry_over, arg_blk,
+                                                   &digest);
             }
             else // digest == 0
             {
@@ -1820,13 +1829,12 @@ bool aggregator<BV>::process_shift_right_and(const bm::word_t* arg_blk,
         }
         else  // arg is zero - target block => zero
         {
-            unsigned co = blk[bm::set_block_size-1] >> 31; // carry out
+            carry_over = blk[bm::set_block_size-1] >> 31; // carry out
             if (digest)
             {
                 bm::bit_block_set(blk, 0);  // TODO: digest based set
-                digest ^= digest;
+                digest = 0;
             }
-            carry_over = co;
         }
     }
     return carry_over;
@@ -1839,20 +1847,23 @@ const bm::word_t* aggregator<BV>::get_arg_block(
                                 const bvector_type_const_ptr* bv_src,
                                 unsigned k, unsigned i, unsigned j) BMNOEXCEPT
 {
-    const blocks_manager_type& bman_arg = bv_src[k]->get_blocks_manager();
-    return bman_arg.get_block(i, j);
+    return bv_src[k]->get_blocks_manager().get_block(i, j);
 }
 
 // ------------------------------------------------------------------------
 
 template<typename BV>
-bool aggregator<BV>::any_carry_overs(unsigned co_size) const BMNOEXCEPT
+bool aggregator<BV>::any_carry_overs(const unsigned char* carry_overs,
+                                     unsigned co_size)  BMNOEXCEPT
 {
     // TODO: loop unroll?
-    for (unsigned i = 0; i < co_size; ++i)
-        if (ar_->carry_overs_[i])
-            return true;
-    return false;
+    unsigned acc = carry_overs[0];
+    for (unsigned i = 1; i < co_size; ++i)
+        acc |= carry_overs[i];
+//        if (ar_->carry_overs_[i])
+//            return true;
+//    return false;
+    return acc;
 }
 
 // ------------------------------------------------------------------------
@@ -1896,7 +1907,7 @@ aggregator<BV>::run_step(unsigned i, unsigned j)
         {
         if (i > top_block_size_)
         {
-            if (!this->any_carry_overs(arg_group0_size))
+            if (!this->any_carry_overs(&ar_->carry_overs_[0], arg_group0_size))
             {
                 operation_status_ = op_done;
                 return operation_status_;
