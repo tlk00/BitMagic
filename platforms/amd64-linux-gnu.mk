@@ -24,7 +24,7 @@ ifeq ($(COMPILER),GNU_CC)
     #-g
 
     OS_VER = -D__$(shell uname -s)_$(shell uname -r | sed -e 's/\./_/g' -e 's/-.*//')
-    PLATFORM_CXXFLAGS = -D_REENTRANT $(OS_VER) -D_GNU_SOURCE -std=c++11 -Wall -Werror=implicit-fallthrough -Wno-noexcept-type
+    PLATFORM_CXXFLAGS = -D_REENTRANT $(OS_VER) -D_GNU_SOURCE -std=c++11 -Wall 
     PLATFORM_CFLAGS = -D_REENTRANT $(OS_VER)
     COMMON_LDFLAGS = $(LINKER_DFLAGS) -export-dynamic
     COMMON_CLDFLAGS = $(COMMON_LDFLAGS)
@@ -34,7 +34,7 @@ ifeq ($(COMPILER),GNU_CC)
     LD = g++
     CC_PIC_FLAGS = -fPIC
     CXX_PIC_FLAGS = -fPIC
-    OPT_FLAGS = -g0 -O3 -ggdb -fomit-frame-pointer -pipe
+    OPT_FLAGS = -g0 -O2 -ggdb -fomit-frame-pointer -pipe
     SO_FLAGS = -shared
     SO_LIBS =
 
@@ -53,12 +53,12 @@ ifeq ($(COMPILER), ICC)
     COMMON_LDFLAGS = $(LINKER_DFLAGS) -export-dynamic
     COMMON_CLDFLAGS = $(COMMON_LDFLAGS)
     EXTERN_LIBS = $(EXTERN_LIBS_BASE)/lib
-    CXX = icc -tpp7  -restrict -DBM_HASRESTRICT -fno-fnalias -DBMSSE2OPT
+    CXX = icc -tpp7  -restrict -DBM_HASRESTRICT -fno-fnalias 
     CC = icc -march=core2 -Wall
     LD = icc
     CC_PIC_FLAGS = -fPIC
     CXX_PIC_FLAGS = -fPIC
-    OPT_FLAGS = -O3 -opt_report_fileopt.txt -opt_report_levelmax
+    OPT_FLAGS = -O2 -opt_report_fileopt.txt -opt_report_levelmax
     SO_FLAGS = -shared
     SO_LIBS =
 endif
