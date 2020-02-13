@@ -658,6 +658,12 @@ void FillSetsIntervals(bvect_mini* bvect_min,
             bool is_int = bvect_full.is_interval(i, end-1);
             bool is_int_c = test_interval(bvect_full, i, end-1);
             assert(is_int == is_int_c);
+            if (is_int)
+            {
+                bvect::size_type pos;
+                bool b = bvect_full.find_interval_end(i, pos);
+                assert(b && pos == end-1);
+            }
         }
        
         for (j = i; j < end; ++j)
@@ -678,10 +684,7 @@ void FillSetsIntervals(bvect_mini* bvect_min,
                            
         } // j
 
-
         i = end;
-
-
         len = unsigned(rand()) % (factor* 10 * bm::gap_max_bits);
         if (len % 2)
         {
@@ -1055,11 +1058,7 @@ unsigned SerializationOperation(bvect*             bv_target,
 
    cout << "Operation deserialization... " << op << endl;
 
-    count=
-       od.deserialize(*bv_target,
-                                                  smem2,
-                                                  0,
-                                                  op);
+    count = od.deserialize(*bv_target, smem2, 0, op);
     cout << "OK" << endl;
 
     // check if operation was ok
@@ -1925,6 +1924,24 @@ void IntervalsCheck(const BV& bv)
             is_int = bv.is_interval(from, to-1);
             is_int_c = test_interval(bv, from, to-1);
             assert(is_int == is_int_c);
+            {
+                bvect::size_type pos;
+                bool b = bv.find_interval_end(from, pos);
+                assert(b == is_int);
+                if (b)
+                {
+                    assert(pos == to-1);
+                }
+            }
+            if (is_int)
+            {
+                bvect::size_type pos;
+                bool b = bv.find_interval_start(from, pos);
+                assert(b && pos == from);
+                b = bv.find_interval_start(to-1, pos);
+                assert(b && pos == from);
+            }
+
             break;
         }
         else
@@ -1944,6 +1961,22 @@ void IntervalsCheck(const BV& bv)
             is_int = bv.is_interval(from, to);
             is_int_c = test_interval(bv, from, to);
             assert(is_int == is_int_c);
+            if (is_int)
+            {
+                bvect::size_type pos;
+                bool b = bv.find_interval_end(from, pos);
+                assert(b == is_int);
+                if (b)
+                {
+                    assert(pos == to);
+                }
+                b = bv.find_interval_start(from, pos);
+                assert(b && pos == from);
+                pos = 0xDEADBEEF;
+                b = bv.find_interval_start(to, pos);
+                assert(b && pos == from);
+            }
+
         }
 
 
@@ -1966,7 +1999,21 @@ void IntervalsCheck(const BV& bv)
             is_int = bv.is_interval(from, to);
             is_int_c = test_interval(bv, from, to);
             assert(is_int == is_int_c);
-
+            if (is_int)
+            {
+                bvect::size_type pos;
+                bool b = bv.find_interval_end(from, pos);
+                assert(b == is_int);
+                if (b)
+                {
+                    assert(pos == to);
+                }
+                b = bv.find_interval_start(from, pos);
+                assert(b && pos == from);
+                pos = 0xDEADBEEF;
+                b = bv.find_interval_start(to, pos);
+                assert(b && pos == from);
+            }
 
             en2.go_to(from+1);
             if (!en2.valid())
@@ -1985,6 +2032,21 @@ void IntervalsCheck(const BV& bv)
             is_int = bv.is_interval(from, to);
             is_int_c = test_interval(bv, from, to);
             assert(is_int == is_int_c);
+            if (is_int)
+            {
+                bvect::size_type pos;
+                bool b = bv.find_interval_end(from, pos);
+                assert(b == is_int);
+                if (b)
+                {
+                    assert(pos == to);
+                }
+                b = bv.find_interval_start(from, pos);
+                assert(b && pos == from);
+                pos = 0xDEADBEEF;
+                b = bv.find_interval_start(to, pos);
+                assert(b && pos == from);
+            }
 
             en1.go_to(to+1);
         }
@@ -10441,13 +10503,12 @@ void SimpleGapFillSets(bvect&   bv0,
                        unsigned fill_factor)
 {
     bvect::bulk_insert_iterator bii0(bv0);
-    bvect::bulk_insert_iterator bii1(bv1);
-
     for (unsigned i = min; i < max; i += fill_factor)
     {
         bii0 = i;
-        bii1 = i;
+        bv1.set(i);
     } // for i
+    bii0.flush();
 }
 
 static
@@ -10460,7 +10521,7 @@ void GAPTestStress()
     {
         bvect bv0, bv1;
         SimpleGapFillSets(bv0, bv1, 0, BV_SIZE, ff);
-        bv1.optimize();
+        bv0.optimize();
         for (unsigned i = 0; i < BV_SIZE+1; ++i)
         {
             bool b0 = bv0.test(i);
@@ -10471,6 +10532,8 @@ void GAPTestStress()
                 exit(1);
             }
         } // for i
+        bool b = bv0.equal(bv1);
+        assert(b);
         if (ff % 100 == 0)
         {
             cout << "*" << flush;
@@ -13251,7 +13314,25 @@ void SetTest()
             exit(1);
         }
     }
-    
+
+    {
+        bvect bvc;
+        bvect bv(bm::BM_GAP);
+        bv.set(10);
+        bvc.set(10);
+        bv.set(11);
+        bvc.set(11);
+
+        for (unsigned i = 100; i < 110; i+= 2)
+        {
+            bool b1 = bv.set_bit_no_check(i, true);
+            assert(b1);
+            bool b2 = bvc.set_bit_no_check(i, true);
+            assert(b2);
+        }
+        assert(bv.equal(bvc));
+    }
+
     {
         bvect bv_full;
         bv_full.invert();
@@ -15137,7 +15218,16 @@ void verify_all_one_ranges(const bvect& bv, bool all_one)
             is_int_c = test_interval(bv, from, to);
             assert(is_int == is_int_c);
             assert(!is_int);
-
+            if (is_int)
+            {
+                if (to < from)
+                    bm::xor_swap(to, from);
+                bvect::size_type pos;
+                bool b = bv.find_interval_end(from, pos);
+                assert(b && pos == to);
+                b = bv.find_interval_start(to, pos);
+                assert(b && pos == from);
+            }
         }
         else
         {
@@ -15156,6 +15246,16 @@ void verify_all_one_ranges(const bvect& bv, bool all_one)
             is_int = bv.is_interval(from, to);
             is_int_c = test_interval(bv, from, to);
             assert(is_int == is_int_c);
+            if (is_int)
+            {
+                if (to < from)
+                    bm::xor_swap(to, from);
+                bvect::size_type pos;
+                bool b = bv.find_interval_end(from, pos);
+                assert(b && pos == to);
+                b = bv.find_interval_start(to, pos);
+                assert(b && pos == from);
+            }
 
         }
         // [from-1, to] range check
@@ -15229,27 +15329,282 @@ void verify_all_one_ranges(const bvect& bv, bool all_one)
 }
 
 static
-void IsAllOneRangeTest()
+void Intervals_RangesTest()
 {
-    cout << "---------------------------- IsAllOneRangeTest()" << endl;
+    cout << "---------------------------- Intervals_RangesTest()" << endl;
 
+    bool b;
+    bvect::size_type pos;
     cout << "Check empty bvector" << endl;
     {{
         bvect bv1;
         verify_all_one_ranges(bv1, false);
+
+        b = bv1.find_interval_end(0, pos);
+        assert(!b);
+        b = bv1.find_interval_start(0, pos);
+        assert(!b);
+
         bv1.set(0);
         bv1.clear(0);
         verify_all_one_ranges(bv1, false);
         IntervalsCheck(bv1);
     }}
 
-    cout << "Check inverted bvector" << endl;
+    cout << "Check inverted bvector..." << endl;
     {{
         bvect bv1;
         bv1.invert();
 
         verify_all_one_ranges(bv1, true);
         IntervalsCheck(bv1);
+
+        b = bv1.find_interval_end(65536, pos);
+        assert(b && pos == bm::id_max-1);
+        b = bv1.find_interval_end(65536*4, pos);
+        assert(b && pos == bm::id_max-1);
+        b = bv1.find_interval_end(bm::id_max/2, pos);
+        assert(b && pos == bm::id_max-1);
+        b = bv1.find_interval_end(bm::id_max-2, pos);
+        assert(b && pos == bm::id_max-1);
+
+        b = bv1.find_interval_start(0, pos);
+        assert(b && pos == 0);
+        b = bv1.find_interval_start(65535, pos);
+        assert(b && pos == 0);
+        b = bv1.find_interval_start(65535*4, pos);
+        assert(b && pos == 0);
+        b = bv1.find_interval_start(bm::id_max-1, pos);
+        assert(b && pos == 0);
+
+        for (bvect::size_type i = 0; i < bm::id_max/4; i+=rand()%256)
+        {
+            b = bv1.find_interval_end(i, pos);
+            assert(b && pos == bm::id_max-1);
+
+            b = bv1.find_interval_start(i, pos);
+            assert(b && pos == 0);
+        } // for i
+
+
+
+        bv1.optimize();
+        b = bv1.find_interval_end(1, pos);
+        assert(b && pos == bm::id_max-1);
+
+    }}
+
+
+    {{
+        bvect bv1;
+        bv1.set(5);
+        bv1.set(31);
+
+        b = bv1.find_interval_end(5, pos);
+        assert(b && pos == 5);
+        b = bv1.find_interval_end(31, pos);
+        assert(b && pos == 31);
+
+        b = bv1.find_interval_start(5, pos);
+        assert(b && pos == 5);
+        b = bv1.find_interval_start(31, pos);
+        assert(b && pos == 31);
+
+        bv1.set(6);
+
+        b = bv1.find_interval_end(5, pos);
+        assert(b && pos == 6);
+        b = bv1.find_interval_end(6, pos);
+        assert(b && pos == 6);
+
+        b = bv1.find_interval_start(5, pos);
+        assert(b && pos == 5);
+        b = bv1.find_interval_start(6, pos);
+        assert(b && pos == 5);
+
+    }}
+
+    {{
+        bvect::size_type base = 0;
+
+        for (; base < bm::id_max/2; base += 65536)
+        {
+            bvect bv1 { 31+base, 32+base, 33+base, 34+base };
+            b = bv1.find_interval_end(31+base, pos);
+            assert(b && pos == 34+base);
+            b = bv1.find_interval_start(31+base, pos);
+            assert(b && pos == 31+base);
+            b = bv1.find_interval_start(32+base, pos);
+            assert(b && pos == 31+base);
+            b = bv1.find_interval_start(34+base, pos);
+            assert(b && pos == 31+base);
+
+            b = bv1.find_interval_start(35+base, pos);
+            assert(!b);
+        } // for base
+    }}
+
+    {{
+        bvect bv1;
+        bv1.invert();
+        bv1.set(0, false);
+
+        //for (unsigned pass = 0; pass < 2; ++pass)
+        {
+            b = bv1.find_interval_start(65538, pos);
+            assert(b && pos == 1);
+            b = bv1.find_interval_start(65536*300, pos);
+            assert(b && pos == 1);
+            b = bv1.find_interval_start(bm::id_max-1, pos);
+            assert(b && pos == 1);
+
+            bv1.set(31, false);
+
+            b = bv1.find_interval_start(bm::id_max-1, pos);
+            assert(b && pos == 32);
+
+            bv1.set(65535, false);
+            b = bv1.find_interval_start(65536, pos);
+            assert(b && pos == 65536);
+            b = bv1.find_interval_start(65536*300, pos);
+            assert(b && pos == 65536);
+            b = bv1.find_interval_start(bm::id_max-1, pos);
+            assert(b && pos == 65536);
+
+            bv1.set(65535*256-1, false);
+            b = bv1.find_interval_start(65535*256, pos);
+            assert(b && pos == 65535*256-1+1);
+
+            b = bv1.find_interval_start(bm::id_max-1, pos);
+            assert(b && pos == 65535*256-1+1);
+            bv1.set(65535*256+1, false);
+            b = bv1.find_interval_start(bm::id_max-1, pos);
+            assert(b && pos == 65535*256+1+1);
+
+        } // for pass
+
+    }}
+
+
+
+    {{
+        bvect bv1;
+        bv1.set(65536);
+
+        for (unsigned pass = 0; pass<2; ++pass)
+        {
+            b = bv1.find_interval_start(65536, pos);
+            assert(b && pos == 65536);
+
+            b = bv1.find_interval_end(65536, pos);
+            assert(b && pos == 65536);
+
+            bv1.optimize();
+            b = bv1.find_interval_start(65536, pos);
+            assert(b && pos == 65536);
+
+            b = bv1.find_interval_end(65536, pos);
+            assert(b && pos == 65536);
+
+            bv1.set(0);
+            bv1.set(1);
+
+            b = bv1.find_interval_start(0, pos);
+            assert(b && pos == 0);
+            pos = 0xDEADBEEF;
+            b = bv1.find_interval_start(1, pos);
+            assert(b && pos == 0);
+
+            bv1.optimize();
+
+        } // for unsigned
+    }}
+
+
+
+    {{
+        bvect bv1;
+        bv1.set_range(0, 65535);
+
+        b = bv1.find_interval_end(65536, pos);
+        assert(!b);
+        b = bv1.find_interval_end(0, pos);
+        assert(b);
+        assert(pos == 65535);
+        b = bv1.find_interval_start(pos, pos);
+        assert(b && pos == 0);
+
+        b = bv1.find_interval_end(1234, pos);
+        assert(b);
+        assert(pos == 65535);
+
+        bv1[65536]=true;
+        bv1[65536]=false;
+
+        b = bv1.find_interval_end(65536, pos);
+        assert(!b);
+        b = bv1.find_interval_end(0, pos);
+        assert(b);
+        assert(pos == 65535);
+        b = bv1.find_interval_end(1234, pos);
+        assert(b);
+        assert(pos == 65535);
+
+        bv1[65536]=true;
+        b = bv1.find_interval_end(65536, pos);
+        assert(b);
+        assert(pos == 65536);
+        b = bv1.find_interval_end(1234, pos);
+        assert(b);
+        assert(pos == 65536);
+    }}
+
+
+    cout << "find_interval_start/end()... bit stress" << endl;
+    {{
+        bvect bv1;
+        bvect::size_type to = 65536*3 + 12;
+        for (bvect::size_type i = 0; i < to; ++i)
+            bv1.set(i);
+        for (bvect::size_type i = 0; i < to; ++i)
+        {
+            b = bv1.find_interval_end(i, pos);
+            assert(b && pos == to-1);
+
+            b = bv1.find_interval_start(i, pos);
+            assert(b && pos == 0);
+        } // for i
+        for (bvect::size_type j = to-1; j > 0; --j)
+        {
+            b = bv1.find_interval_end(j, pos);
+            assert(b && pos == to-1);
+            b = bv1.find_interval_start(j, pos);
+            assert(b && pos == 0);
+        } // for
+
+        --to;
+        for (bvect::size_type i = 0; i <= to; ++i, --to)
+        {
+            b = bv1.find_interval_end(i, pos);
+            assert(b && pos == to);
+
+            b = bv1.is_interval(i, to);
+            assert(b);
+
+            b = bv1.find_interval_start(i, pos);
+            assert(b && pos == i);
+            b = bv1.find_interval_start(to, pos);
+            assert(b && pos == i);
+
+            bv1.set(i, false);
+            bv1.set(to, false);
+
+            b = bv1.find_interval_start(i, pos);
+            assert(!b);
+            b = bv1.find_interval_start(to, pos);
+            assert(!b);
+
+        } // for i
 
     }}
 
@@ -15427,7 +15782,7 @@ void IsAllOneRangeTest()
 
     }}
 
-    cout << "---------------------------- IsAllOneRangeTest() OK\n" << endl;
+    cout << "---------------------------- Intervals_RangesTest() OK\n" << endl;
 }
 
 
@@ -26177,7 +26532,6 @@ int main(int argc, char *argv[])
 
     if (is_all || is_bvbasic)
     {
-
          ExportTest();
          ResizeTest();
 
@@ -26192,7 +26546,7 @@ int main(int argc, char *argv[])
 
          CountRangeTest();
 
-         IsAllOneRangeTest();
+         Intervals_RangesTest();
 
          KeepRangeTest();
 
@@ -26273,6 +26627,7 @@ int main(int argc, char *argv[])
          AggregatorTest();
          StressTestAggregatorOR(100);
          StressTestAggregatorAND(100);
+
          StressTestAggregatorShiftAND(5);
 
     //     StressTestAggregatorSUB(100);
