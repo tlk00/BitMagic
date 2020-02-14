@@ -4197,7 +4197,7 @@ bool bvector<Alloc>::set_bit_no_check(size_type n, bool val)
             return val;
         }
     }
-    return false;
+    //return false;
 }
 
 // -----------------------------------------------------------------------

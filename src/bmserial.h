@@ -3603,6 +3603,7 @@ size_t deserializer<BV, DEC>::deserialize(bvector_type&        bv,
         {
             // 64-bit vector cannot be deserialized into 32-bit
             BM_ASSERT(sizeof(block_idx_type)==8);
+            bv_size = (block_idx_type)dec.get_64();
             #ifndef BM64ADDR
                 #ifndef BM_NO_STL
                     throw std::logic_error(this->err_msg());
@@ -3610,7 +3611,6 @@ size_t deserializer<BV, DEC>::deserialize(bvector_type&        bv,
                     BM_THROW(BM_ERR_SERIALFORMAT);
                 #endif
             #endif
-            bv_size = (block_idx_type)dec.get_64();
         }
         else
             bv_size = dec.get_32();
@@ -3725,12 +3725,12 @@ size_t deserializer<BV, DEC>::deserialize(bvector_type&        bv,
             goto process_full_blocks;
     #else
             BM_ASSERT(0); // 32-bit vector cannot read 64-bit
+            dec.get_64();
             #ifndef BM_NO_STL
                 throw std::logic_error(this->err_msg());
             #else
                 BM_THROW(BM_ERR_SERIALFORMAT);
             #endif
-            dec.get_64();
     #endif
             process_full_blocks:
             {
