@@ -2309,6 +2309,16 @@ bool gap_find_first_diff(const T* BMRESTRICT buf1,
     return false;
 }
 
+// -------------------------------------------------------------------------
+//
+// GCC gives a function anme mangling warning for the differences between
+// CXX-11 and CXX-17 this group of functions are internal and not supposed
+// to be used via function pointers, so name mangling around NOEXCEPT
+// should not be a problem
+//
+// Possible Alternative solution:
+// define BMNOEXEPT2 only for Emscripten (Wasm) build, where it is needed
+//
 #ifdef __GNUG__
 #pragma GCC diagnostic push
 #pragma GCC diagnostic ignored "-Wnoexcept-type"
@@ -2386,7 +2396,6 @@ void gap_buff_op(T*         BMRESTRICT dest,
             }
             ++cur2; c2 = *cur2;
         }
-
     } // while
 
     dlen = (unsigned)(res - dest);
@@ -2590,8 +2599,7 @@ unsigned gap_buff_count_op(const T*  vect1, const T*  vect2, F f) BMNOEXCEPT
                 count += res - res_prev; 
                 res_prev = res;
             }
-            ++cur1;
-            bitval1 ^= 1;
+            ++cur1; bitval1 ^= 1;
         }
         else // >=
         {
@@ -2608,13 +2616,10 @@ unsigned gap_buff_count_op(const T*  vect1, const T*  vect2, F f) BMNOEXCEPT
             else  // equal
             {
                 if (*cur2 == (bm::gap_max_bits - 1))
-                {
                     break;
-                }
 
                 ++cur1;
-                bitval1 ^= 1;
-                bitval2 ^= 1;
+                bitval1 ^= 1; bitval2 ^= 1;
             }
             ++cur2;
         }
@@ -2677,11 +2682,7 @@ unsigned gap_set_value(unsigned val,
         else // Only 1 bit in the GAP. We need to delete the first GAP.
         {
             pprev = buf + 1; pcurr = pprev + 1;
-            do
-            {
-                *pprev++ = *pcurr++;
-            } while (pcurr < pend);
-            --end;
+            goto copy_gaps;
         }
     }
     else
@@ -2693,11 +2694,10 @@ unsigned gap_set_value(unsigned val,
             --end;
             if (pcurr != pend) // GAP merge: 2 GAPS to be deleted
             {
-                --end; ++pcurr;
-                do
-                {
-                    *pprev++ = *pcurr++;
-                } while (pcurr < pend);
+                ++pcurr;
+                copy_gaps:
+                --end;
+                do { *pprev++ = *pcurr++; } while (pcurr < pend);
             }
        }    
     }
@@ -2763,11 +2763,7 @@ unsigned gap_set_value(unsigned val,
         else // Only 1 bit in the GAP. We need to delete the first GAP.
         {
             pprev = buf + 1; pcurr = pprev + 1;
-            do
-            {
-                *pprev++ = *pcurr++;
-            } while (pcurr < pend);
-            --end;
+            goto copy_gaps;
         }
     }
     else
@@ -2779,11 +2775,10 @@ unsigned gap_set_value(unsigned val,
             --end;
             if (pcurr != pend) // GAP merge: 2 GAPS to be deleted
             {
-                --end; ++pcurr;
-                do
-                {
-                    *pprev++ = *pcurr++;
-                } while (pcurr < pend);
+                ++pcurr;
+                copy_gaps:
+                --end;
+                do { *pprev++ = *pcurr++; } while (pcurr < pend);
             }
        }
     }
@@ -2842,13 +2837,9 @@ unsigned gap_add_value(T* buf, unsigned pos) BMNOEXCEPT
         }
         else // Only 1 bit in the GAP. We need to delete the first GAP.
         {
-            pprev = buf + 1;
-            pcurr = pprev + 1;
-            do
-            {
-                *pprev++ = *pcurr++;
-            } while (pcurr < pend);
+            pprev = buf + 1; pcurr = pprev + 1;
             --end;
+            do { *pprev++ = *pcurr++; } while (pcurr < pend);
         }
     }
     else if (((unsigned)(*pprev))+1 == pos && (curr > 1) ) // Left border bit
