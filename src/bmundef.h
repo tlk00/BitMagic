@@ -72,7 +72,10 @@ For more information please visit:  http://bitmagic.io
 
 #undef VECT_ARR_BLOCK_LOOKUP
 #undef VECT_SET_BLOCK_BITS
+
 #undef VECT_BLOCK_CHANGE
+#undef VECT_BLOCK_CHANGE_BC
+
 #undef VECT_BIT_TO_GAP
 
 #undef VECT_AND_DIGEST
@@ -80,7 +83,12 @@ For more information please visit:  http://bitmagic.io
 #undef VECT_AND_DIGEST_5WAY
 #undef VECT_BLOCK_SET_DIGEST
 
+#undef VECT_BLOCK_XOR_CHANGE
+#undef VECT_BIT_BLOCK_XOR
+
+#undef VECT_BIT_FIND_FIRST
 #undef VECT_BIT_FIND_DIFF
+#undef VECT_GAP_BFIND
 
 #undef BMI1_SELECT64
 #undef BMI2_SELECT64
