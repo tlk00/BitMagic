@@ -1200,7 +1200,7 @@ unsigned gap_bfind(const T* BMRESTRICT buf,
                    unsigned pos, unsigned* BMRESTRICT is_set) BMNOEXCEPT
 {
     BM_ASSERT(pos < bm::gap_max_bits);
-
+    #undef VECT_GAP_BFIND // TODO: VECTOR bfind causes performance degradation
     #ifdef VECT_GAP_BFIND
         return VECT_GAP_BFIND(buf, pos, is_set);
     #else
