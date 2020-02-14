@@ -26,7 +26,7 @@ For more information please visit:  http://bitmagic.io
 
 */
 
-/*! \file svsample06.cpp
+/*! \file xsample06.cpp
     \brief Example: Use of sparse vector for compressed DNA strings
 */
 
