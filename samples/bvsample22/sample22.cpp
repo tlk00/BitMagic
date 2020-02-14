@@ -35,6 +35,9 @@ For more information please visit:  http://bitmagic.io
   \sa bm::bvector::is_all_one_range
   \sa bm::bvector::any_range
   \sa bm::bvector::is_interval
+  \sa bm::bvector::find_interval_end
+  \sa bm::bvector::find_interval_start
+  \sa bm::deserialize_range
 */
 
 /*! \file sample22.cpp
@@ -44,6 +47,7 @@ For more information please visit:  http://bitmagic.io
 #include <iostream>
 
 #include "bm.h"
+#include "bmserial.h"
 
 using namespace std;
 
@@ -92,19 +96,91 @@ int main(void)
         any_one = bv.any_range(0, 100); // true 
         cout << any_one << endl;
 
-        bv.clear_range(99, 100); // clear bit in [99..100]
+        // interval boundaries detection
+        //
+        //
+        cout << "bvector<>::find_interval demo" << endl;
+        bm::bvector<>::size_type pos;
+
+        // interval end search from interval start
+        bool found = bv.find_interval_end(100, pos); 
+        if (found)
+            cout << pos << endl; // 110
+        else
+            cout << "Not found." << endl;
+
+        // interval end start from a non-interval location
+        // - it will not find anything
+        found = bv.find_interval_end(99, pos);
+        if (found)
+            cout << pos << endl; 
+        else
+            cout << "Not found." << endl; // This ! 
+
+        // start search from a position within the interval
+        found = bv.find_interval_start(105, pos); 
+        if (found)
+            cout << pos << endl; // 100
+        else
+            cout << "Not found." << endl;
+
+        bm::bvector<> bv3(bv);
+        
+
+        // range editing 
+        //
+        cout << endl;
+
+        bm::bvector<> bv2;
+        bv2.copy_range(bv, 101, 105); // make a copy of [101..105]
+
+        bv.clear_range(99, 100); // clear bits in [99..100]
         PrintContainer(bv.first(), bv.end());
 
         bv.keep_range(99, 105); // clear everything outside [99..105]
-        PrintContainer(bv.first(), bv.end());
+        PrintContainer(bv.first(), bv.end()); // print edited vector
+
+        PrintContainer(bv2.first(), bv2.end()); // print range copy vector
+
+        bool eq = bv.equal(bv2); // make sure both vectors are the same
+        cout << eq << endl; // true
+
+        // demo (de)serialization range
+        // BM can serialize a bit-vector and selectively restore only 
+        // part of it (range). Adding block bookmarks makes target range
+        // extraction faster. 
+        //
+        {
+            // configure serializer to use bookmarks every 64 blocks
+            // for faster extraction. Higher number gives you smaller BLOB
+            // but slower speed. Tweak it as needed.
+            // 
+            // (range deserialization would work even without bookmarks)
+            //
+            bm::serializer<bm::bvector<> > ser;
+            ser.set_bookmarks(true, 64); 
+            
+            bm::serializer<bm::bvector<> >::buffer buf;
+            ser.serialize(bv3, buf);
+            cout << "BLOB size=" << buf.size() << endl;
+
+            // equivalent of a copy_range right from a compressed BLOB
+            bm::bvector<> bv4;
+            bm::deserialize_range(bv4, buf.data(), 101, 105);
+
+            PrintContainer(bv4.first(), bv4.end()); // print deserialized range vector
+
+            eq = bv4.equal(bv2); // make sure both vectors are the same
+            cout << eq << endl; // true
+        }
+
     }
     catch(std::exception& ex)
     {
         std::cerr << ex.what() << std::endl;
         return 1;
     }
-    
-    
+        
     return 0;
 }
 
