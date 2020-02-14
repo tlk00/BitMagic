@@ -2810,14 +2810,14 @@ void IntervalsTest()
         bool b;
         bvect::size_type istart(0), ilen(0);
         bvect::bulk_insert_iterator iit(bv);
-
         for (istart = 0; istart < vect_max; )
         {
             for (bvect::size_type i = istart; i <= (istart+ilen); ++i)
             {
                 iit = i;
-                //bv.set(i);
             } // for i
+            iit.flush();
+
             ilen += 1;
             b = bv.test(istart + ilen);
             assert(!b);
@@ -2837,6 +2837,8 @@ void IntervalsTest()
     const char* msg3 = "bvector<>::count_range() (BITS)";
     const char* msg4 = "bvector<>::is_interval() (BITS)";
     const char* msg5 = "reference_is_interval() (BITS)";
+    const char* msg6 = "bvector<>::find_interval_start() (BITS)";
+    const char* msg7 = "bvector<>::find_interval_end() (BITS)";
 
     for (unsigned pass = 0; pass < 2; ++pass)
     {
@@ -2993,6 +2995,51 @@ void IntervalsTest()
             } // for istart
         }
 
+        {
+            TimeTaker tt(msg6, REPEATS * 1);
+            bvect::size_type istart(0), ilen(0);
+            for (istart = 0; istart < vect_max; )
+            {
+                for (bvect::size_type i = istart; i <= (istart + ilen); ++i)
+                {
+                    bvect::size_type pos;
+                    auto diff = i - istart;
+                    if (!diff)
+                        continue;
+                    bool b = bv.find_interval_start(istart+diff, pos);
+                    assert(b);
+                    assert(pos == istart);
+                } // for i
+                ilen += 1;
+                istart += (ilen + 2);
+                if (ilen > 1024)
+                    ilen = 0;
+            } // for istart
+        }
+
+        {
+            TimeTaker tt(msg7, REPEATS * 1);
+            bvect::size_type istart(0), ilen(0);
+            for (istart = 0; istart < vect_max; )
+            {
+                for (bvect::size_type i = istart; i <= (istart + ilen); ++i)
+                {
+                    bvect::size_type pos;
+                    auto diff = i - istart;
+                    if (!diff)
+                        continue;
+                    bool b = bv.find_interval_end(istart+diff, pos);
+                    assert(b);
+                    assert(pos == istart+ilen);
+                } // for i
+                ilen += 1;
+                istart += (ilen + 2);
+                if (ilen > 1024)
+                    ilen = 0;
+            } // for istart
+        }
+
+
         bv.optimize();
         bv_inv.optimize();
 
@@ -3001,6 +3048,8 @@ void IntervalsTest()
         msg3 = "bvector<>::count_range() (BITS+GAPS)";
         msg4 = "bvector<>::is_interval() (BITS+GAPS)";
         msg5 = "reference_is_interval() (BITS+GAPS)";
+        msg6 = "bvector<>::find_interval_start() (BITS+GAPS)";
+        msg7 = "bvector<>::find_interval_end() (BITS+GAPS)";
     } // for pass
 
 }
