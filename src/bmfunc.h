@@ -2393,9 +2393,6 @@ void gap_buff_op(T*         BMRESTRICT dest,
     *dest = (T)((*dest & 7) + (dlen << 3));
 }
 
-#ifdef __GNUG__
-#pragma GCC diagnostic pop
-#endif
 
 /*!
    \brief Abstract operation for GAP buffers (predicts legth)
@@ -2557,7 +2554,7 @@ unsigned gap_buff_any_op(const T*   BMRESTRICT vect1,
    @ingroup gapfunc
 */
 template<typename T, class F> 
-unsigned gap_buff_count_op(const T*  vect1, const T*  vect2, F f)
+unsigned gap_buff_count_op(const T*  vect1, const T*  vect2, F f) BMNOEXCEPT
 {
     unsigned count;// = 0;
     const T* cur1 = vect1;
@@ -2626,6 +2623,10 @@ unsigned gap_buff_count_op(const T*  vect1, const T*  vect2, F f)
 
     return count;
 }
+
+#ifdef __GNUG__
+#pragma GCC diagnostic pop
+#endif
 
 
 
