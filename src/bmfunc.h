@@ -2309,7 +2309,10 @@ bool gap_find_first_diff(const T* BMRESTRICT buf1,
     return false;
 }
 
-
+#ifdef __GNUG__
+#pragma GCC diagnostic push
+#pragma GCC diagnostic ignored "-Wnoexcept-type"
+#endif
 
 /*!
    \brief Abstract operation for GAP buffers. 
@@ -2389,6 +2392,10 @@ void gap_buff_op(T*         BMRESTRICT dest,
     dlen = (unsigned)(res - dest);
     *dest = (T)((*dest & 7) + (dlen << 3));
 }
+
+#ifdef __GNUG__
+#pragma GCC diagnostic pop
+#endif
 
 /*!
    \brief Abstract operation for GAP buffers (predicts legth)
