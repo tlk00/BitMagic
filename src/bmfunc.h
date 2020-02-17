@@ -1324,16 +1324,12 @@ void for_each_nzblock_range(T*** root,
     {
         T** blk_blk = root[i];
         if (!blk_blk)
-        {
             continue;
-        }
         if ((bm::word_t*)blk_blk == FULL_BLOCK_FAKE_ADDR)
         {
             unsigned j = (i == i_from) ? j_from : 0;
             if (!j && (i != i_to)) // full sub-block
-            {
-                f.add_full(bm::set_sub_array_size * bm::gap_max_bits);
-            }
+                f.add_full(bm::set_sub_total_bits);
             else
             {
                 do
@@ -1350,13 +1346,10 @@ void for_each_nzblock_range(T*** root,
             do
             {
                 if (blk_blk[j])
-                {
                     f(blk_blk[j]);
-                }
                 if ((i == i_to) && (j == j_to))
                     return;
-                ++j;
-            } while (j < bm::set_sub_array_size);
+            } while (++j < bm::set_sub_array_size);
         }
     } // for i
 }
@@ -3937,7 +3930,6 @@ void gap_init_range_block(T* buf,
                           T  from,
                           T  to,
                           T  value) BMNOEXCEPT
-                          //unsigned set_max)
 {
     BM_ASSERT(value == 0 || value == 1);
     const unsigned set_max = bm::bits_in_block;
@@ -4647,7 +4639,6 @@ bool bit_block_is_all_one_range(const bm::word_t* const BMRESTRICT block,
         if ((w64_0 ^ maskFF64) | (w64_1 ^ maskFF64))
             return false;
     } // for
-
 
     for ( ;bitcount >= 32; bitcount-=32, ++word)
     {

@@ -3142,7 +3142,8 @@ bvector<Alloc>::count_range(size_type left, size_type right) const BMNOEXCEPT
     {
         return cnt;
     }
-    
+
+    // process all full mid-blocks
     {
         func.reset();
         word_t*** blk_root = blockman_.top_blocks_root();
@@ -3176,7 +3177,8 @@ bvector<Alloc>::count_range(size_type left, size_type right) const BMNOEXCEPT
 // -----------------------------------------------------------------------
 
 template<typename Alloc>
-bool bvector<Alloc>::is_all_one_range(size_type left, size_type right) const BMNOEXCEPT
+bool bvector<Alloc>::is_all_one_range(size_type left,
+                                      size_type right) const BMNOEXCEPT
 {
     if (!blockman_.is_init())
         return false; // nothing to do

@@ -14281,6 +14281,261 @@ void BitCountChangeTest()
     cout << "---------------------------- BitCountChangeTest Ok." << endl;
 }
 
+static
+void BitRangeAllSetTest()
+{
+    cout << "---------------------------- BitRangeAllSetTest()" << endl;
+
+    BM_DECLARE_TEMP_BLOCK(tb1);
+    bm::bit_block_set(tb1, ~0u);
+
+    bool b;
+
+    {
+        b =  bm::bit_block_is_all_one_range(tb1, 0, 65535);
+        assert(b);
+        tb1[2047] &= ~(1<<31);
+
+        bool all_one = bm::check_block_one(tb1, true);
+        assert(!all_one);
+
+        auto cnt = bit_block_calc_count_range(tb1, 0, 65535);
+        assert(cnt = 65536);
+
+        b =  bm::bit_block_is_all_one_range(tb1, 0, 65535);
+        assert(!b);
+    }
+
+    cout << "---------------------------- BitRangeAllSetTest() Ok." << endl;
+}
+
+
+
+struct TestDecodeFunctor
+{
+    typedef std::vector<bvect::size_type> decode_vector;
+    typedef bvect::size_type   size_type;
+
+
+    TestDecodeFunctor(decode_vector& dvect)
+        : dvect_(dvect)
+    {
+        dvect_.resize(0);
+    }
+
+    void add_bits(size_type offset, const unsigned char* bits, unsigned size)
+    {
+        for (size_type i = 0; i < size; ++i)
+            dvect_.push_back(offset + bits[i]);
+    }
+    void add_range(size_type offset, unsigned size)
+    {
+        for (size_type i = 0; i < size; ++i)
+            dvect_.push_back(offset + i);
+    }
+
+    decode_vector& dvect_;
+};
+
+static
+void BitForEachRangeFuncTest()
+{
+    cout << "---------------------------- BitForEachRangeFuncTest()" << endl;
+
+    std::vector<bvect::size_type> dvect; // decode vector
+    BM_DECLARE_TEMP_BLOCK(tb1);
+
+    bm::bit_block_set(tb1, 0u);
+
+    {
+        TestDecodeFunctor func(dvect);
+        bm::for_each_bit_blk(FULL_BLOCK_FAKE_ADDR, 0u, 0u, 0u, func);
+        assert(dvect.size()==1);
+        assert(dvect[0] == 0);
+
+        dvect.resize(0);
+        bm::for_each_bit_blk(FULL_BLOCK_FAKE_ADDR, 0u, 0u, 10u, func);
+
+        assert(dvect.size()==11);
+        for (size_t i = 0; i < dvect.size(); ++i)
+        {
+            auto v = dvect[i];
+            assert(v == i);
+        } // for i
+    }
+
+    {
+        TestDecodeFunctor func(dvect);
+        bm::for_each_bit_blk(tb1, 0u, 0u, 0u, func);
+        assert(dvect.size()==0);
+
+        tb1[0] = 1;
+        bm::for_each_bit_blk(tb1, 0u, 0u, 0u, func);
+        assert(dvect.size()==1);
+        assert(dvect[0] == 0);
+        dvect.resize(0);
+
+        for (unsigned k = 0; k < 65535; ++k)
+        {
+            bm::for_each_bit_blk(tb1, k, 0, k, func);
+            assert(dvect.size()==1);
+            assert(dvect[0] == k);
+            dvect.resize(0);
+        }
+
+        tb1[0] = 3;
+
+        bm::for_each_bit_blk(tb1, 0u, 0u, 31u, func);
+        assert(dvect.size()==2);
+        assert(dvect[0] == 0);
+        assert(dvect[1] == 1);
+        dvect.resize(0);
+
+        bm::for_each_bit_blk(tb1, 0u, 1u, 31u, func);
+        assert(dvect.size()==1);
+        assert(dvect[0] == 1);
+        dvect.resize(0);
+
+        tb1[0] = (1u<<5) | (1u << 7) | (1u<<31);
+        bm::for_each_bit_blk(tb1, 0u, 4u, 31u, func);
+        assert(dvect.size()==3);
+        assert(dvect[0] == 5);
+        assert(dvect[1] == 7);
+        assert(dvect[2] == 31);
+        dvect.resize(0);
+
+        tb1[1] = 1;
+        bm::for_each_bit_blk(tb1, 0u, 0u, 37u, func);
+        assert(dvect.size()==4);
+        assert(dvect[0] == 5);
+        assert(dvect[1] == 7);
+        assert(dvect[2] == 31);
+        assert(dvect[3] == 32);
+        dvect.resize(0);
+
+
+        bm::for_each_bit_blk(tb1, 0u, 4u, 37u, func);
+        assert(dvect.size()==4);
+        assert(dvect[0] == 5);
+        assert(dvect[1] == 7);
+        assert(dvect[2] == 31);
+        assert(dvect[3] == 32);
+        dvect.resize(0);
+
+        bm::for_each_bit_blk(tb1, 120u, 31u, 32u, func);
+        assert(dvect.size()==2);
+        assert(dvect[0] == 31+120);
+        assert(dvect[1] == 32+120);
+        dvect.resize(0);
+
+    }
+
+    {
+        bm::bit_block_set(tb1, 0u);
+        tb1[0] = 1;
+        tb1[2047] = 1u << 31;
+
+        TestDecodeFunctor func(dvect);
+        tb1[1] = 1;
+        bm::for_each_bit_blk(tb1, 0u, 0u, 63u, func);
+        assert(dvect.size()==2);
+        assert(dvect[0] == 0);
+        assert(dvect[1] == 32);
+        dvect.resize(0);
+
+        tb1[1] = 0;
+
+        bm::for_each_bit_blk(tb1, 0u, 0u, 65535u, func);
+        assert(dvect.size()==2);
+        assert(dvect[0] == 0);
+        assert(dvect[1] == 65535);
+        dvect.resize(0);
+
+        tb1[0] = 1<<5;
+
+        bm::for_each_bit_blk(tb1, 0u, 3u, 65535u, func);
+        assert(dvect.size()==2);
+        assert(dvect[0] == 5);
+        assert(dvect[1] == 65535);
+        dvect.resize(0);
+
+        for (unsigned k = 0; k < 128; ++k)
+        {
+            bm::for_each_bit_blk(tb1, 0u, 65535u-k, 65535u, func);
+            assert(dvect.size()==1);
+            assert(dvect[0] == 65535);
+            dvect.resize(0);
+        }
+    }
+
+
+
+    cout << " for_each_bit_blk() stress 1 ..." << endl;
+    {
+        bm::bit_block_set(tb1, ~0u);
+
+        unsigned off = 1234567;
+        unsigned j = 65535;
+        for (unsigned i0 = 0; i0 <= j; ++i0)
+        {
+            TestDecodeFunctor func(dvect);
+
+            bm::for_each_bit_blk(FULL_BLOCK_FAKE_ADDR, off, i0, j, func);
+            for (size_t i = 0; i < dvect.size(); ++i)
+            {
+                auto v = dvect[i];
+                assert(v == (i0+off+i));
+            } // for i
+            dvect.resize(0);
+            bm::for_each_bit_blk(tb1, off, i0, j, func);
+            for (size_t i = 0; i < dvect.size(); ++i)
+            {
+                auto v = dvect[i];
+                assert(v == (i0+off+i));
+            } // for i
+
+        }
+    }
+
+    cout << " for_each_bit_blk() stress 2 ..." << endl;
+    {
+        bm::bit_block_set(tb1, ~0u);
+
+        unsigned off = 1234567;
+        unsigned j = 65535;
+        for (unsigned i0 = 0; i0 <= j; ++i0, --j)
+        {
+            TestDecodeFunctor func(dvect);
+
+            bm::for_each_bit_blk(FULL_BLOCK_FAKE_ADDR, off, i0, j, func);
+            assert(dvect.size() == j-i0+1);
+            for (size_t i = 0; i < dvect.size(); i+=2)
+            {
+                auto v = dvect[i];
+                assert(v == (i0+off+i));
+            } // for i
+            dvect.resize(0);
+
+            auto cnt = bm::bit_block_calc_count_range(tb1, i0, j);
+            assert(cnt == (j-i0+1));
+            bool all_one = bm::bit_block_is_all_one_range(tb1, i0, j);
+            assert(all_one);
+
+            bm::for_each_bit_blk(tb1, off, i0, j, func);
+            assert(dvect.size() == j-i0+1);
+
+            for (size_t i = 0; i < dvect.size(); i+=2)
+            {
+                auto v = dvect[i];
+                assert(v == (i0+off+i));
+            } // for i
+
+        }
+    }
+
+
+    cout << "---------------------------- BitForEachRangeFuncTest() Ok." << endl;
+}
 
 
 static
@@ -23876,7 +24131,19 @@ void generate_bvector(bvect& bv, unsigned vector_max, bool optimize)
             bv.set_range(i, i + len);
             bool all_one_range = bv.is_all_one_range(i, i + len);
             assert(all_one_range);
-            i += len;
+            if (len)
+            {
+                bool is_int = bv.is_interval(i, i+len);
+                assert(is_int);
+                bvect::size_type pos;
+                bool b = bv.find_interval_start(i+len/2, pos);
+                assert(b);
+                assert(pos == i);
+                b = bv.find_interval_end(i+len/2, pos);
+                assert(b);
+                assert(pos == i+len);
+            }
+            i += len+1;
             if (i > vector_max)
                 break;
         }
@@ -23899,7 +24166,7 @@ extern "C" {
     {
         if (bit_idx > (65536 * 256))
         {
-            throw 1;
+            assert(0);
         }
         std::vector<bm::id_t>* vp = (std::vector<bm::id_t>*)handle_ptr;
         vp->push_back(bit_idx);
@@ -23911,25 +24178,130 @@ extern "C" {
 static
 void RangeForEachTest(bvect::size_type from, bvect::size_type to)
 {
-    bvect bv;
-    bv.set_range(from, to);
-    std::vector<bvect::size_type> v;
-    bm::visit_each_bit(bv, (void*)&v, bit_decode_func);
-    
-    assert(v.size() == bv.count());
-    assert(v[0] == from);
-    
-    for (size_t i = 1; i < v.size(); ++i)
+    bvect bv, bv1;
     {
-        bvect::size_type prev = v[i-1];
-        bvect::size_type curr = v[i];
-        assert(prev+1 == curr);
+        bv.set_range(from, to);
+
+        for (bvect::size_type i = from; i <= to; ++i)
+            bv1.set(i);
     }
-    bvect bv_control;
-    bm::combine_or(bv_control, v.begin(), v.end());
-    int res = bv.compare(bv_control);
-    assert(res == 0);
+
+    std::vector<bvect::size_type> v;
+    std::vector<bvect::size_type> v1;
+    {
+        bm::visit_each_bit(bv, (void*)&v, bit_decode_func);
+        bm::visit_each_bit(bv1, (void*)&v1, bit_decode_func);
+
+        assert(v.size() == bv.count());
+        assert(v[0] == from);
+        assert(v1.size() == bv1.count());
+        assert(v1[0] == from);
+
+        for (size_t i = 1; i < v.size(); ++i)
+        {
+            bvect::size_type prev = v[i-1];
+            bvect::size_type curr = v[i];
+            assert(prev+1 == curr);
+            prev = v1[i-1];
+            curr = v1[i];
+            assert(prev+1 == curr);
+        }
+        {
+            bvect bv_control;
+            bm::combine_or(bv_control, v.begin(), v.end());
+            bool eq = bv.equal(bv_control);
+            assert(eq);
+            bv_control.clear();
+            bm::combine_or(bv_control, v1.begin(), v1.end());
+            eq = bv.equal(bv_control);
+            assert(eq);
+        }
+    }
 }
+
+template<class BV>
+void VisitorAllRangeTest(const BV& bv)
+{
+    typename BV::size_type left, right, next, i_end;
+    bool non_empty = bv.find_range(left, right);
+    assert(non_empty);
+
+    std::vector<bvect::size_type> v;
+    v.reserve(bv.count());
+
+    for (auto i = left; i <= right; ++i)
+    {
+        v.resize(0);
+        bm::visit_each_bit_range(bv, i, right, (void*)&v, bit_decode_func);
+        {
+            bvect bv2;
+            bv2.copy_range(bv, i, right);
+
+            bvect bv_control;
+            bm::combine_or(bv_control, v.begin(), v.end());
+            bool eq = bv2.equal(bv_control);
+            assert(eq);
+        }
+        next = bv.get_next(i);
+        if (next)
+        {
+            auto delta = next - i;
+            if (delta > 32)
+            {
+                i += delta / 2;
+            }
+            else
+            if (delta == 1)
+            {
+                bool f = bv.find_interval_end(i, i_end);
+                if (f)
+                {
+                    delta = i_end - i;
+                    if (delta > 32)
+                        i += delta / 2;
+                }
+            }
+        }
+    } // for i
+
+    for (; left <= right; ++left, --right)
+    {
+        v.resize(0);
+        bm::visit_each_bit_range(bv, left, right, (void*)&v, bit_decode_func);
+        {
+            bvect bv2;
+            bv2.copy_range(bv, left, right);
+
+            bvect bv_control;
+            bm::combine_or(bv_control, v.begin(), v.end());
+            bool eq = bv2.equal(bv_control);
+            assert(eq);
+        }
+        next = bv.get_next(left);
+        if (next)
+        {
+            auto delta = next - left;
+            if (delta > 128)
+            {
+                left += delta / 2;
+            }
+            else
+            if (delta == 1)
+            {
+                bool f = bv.find_interval_end(left, i_end);
+                if (f)
+                {
+                    delta = i_end - left;
+                    if (delta > 32)
+                        left += delta / 2;
+                }
+            }
+
+        }
+    } // for i
+
+}
+
 
 static
 void BvectorBitForEachTest()
@@ -23940,27 +24312,33 @@ void BvectorBitForEachTest()
     {
         cout << "test empty vector" << endl;
         bvect bv1;
-        std::vector<unsigned> v1;
-        
+        std::vector<bvect::size_type> v1, v2;
+
         bm::visit_each_bit(bv1, (void*)&v1, bit_decode_func);
-        if (v1.size())
+        bm::visit_each_bit_range(bv1, 0, bm::id_max-1, (void*)&v2, bit_decode_func);
+        if (v1.size() || v2.size())
         {
             cerr << "1. Failed empty vector decode " << v1.size() << endl;
             exit(1);
         }
+
+
         bv1.init();
         bm::visit_each_bit(bv1, (void*)&v1, bit_decode_func);
-        if (v1.size())
+        bm::visit_each_bit_range(bv1, 0, bm::id_max-1, (void*)&v2, bit_decode_func);
+        if (v1.size() || v2.size())
         {
             cerr << "2. Failed empty vector decode " << v1.size() << endl;
             exit(1);
         }
+
         
         bv1.set(100000, true);
         bv1.set(100000, false);
         
         bm::visit_each_bit(bv1, (void*)&v1, bit_decode_func);
-        if (v1.size())
+        bm::visit_each_bit_range(bv1, 100000, 100000, (void*)&v2, bit_decode_func);
+        if (v1.size() || v2.size())
         {
             cerr << "3. Failed empty vector decode " << v1.size() << endl;
             exit(1);
@@ -23968,21 +24346,61 @@ void BvectorBitForEachTest()
 
         bv1.optimize();
         bm::visit_each_bit(bv1, (void*)&v1, bit_decode_func);
-        if (v1.size())
+        bm::visit_each_bit_range(bv1, 100000, 100000, (void*)&v2, bit_decode_func);
+        if (v1.size() || v2.size())
         {
             cerr << "3. Failed empty vector decode " << v1.size() << endl;
             exit(1);
         }
     }
-    
+
+    {
+        std::vector<bvect::size_type> v1;
+
+        bvect bv(BM_GAP);
+        bv.set_range(20, 30);
+
+        bm::visit_each_bit_range(bv, 20, 20, (void*)&v1, bit_decode_func);
+        assert(v1.size()==1);
+        assert(v1[0] == 20);
+        v1.resize(0);
+
+        bm::visit_each_bit_range(bv, 20, 21, (void*)&v1, bit_decode_func);
+        assert(v1.size()==2);
+        assert(v1[0] == 20);
+        assert(v1[1] == 21);
+        v1.resize(0);
+
+        VisitorAllRangeTest(bv);
+
+        bv.set_range(200, 300);
+        bv.set_range(2000, 3000);
+        bv.set_range(20000, 30000);
+
+        VisitorAllRangeTest(bv);
+    }
+
+    {
+        std::vector<bvect::size_type> v1;
+
+        bvect bv(BM_GAP);
+        bv.set_range(bm::id_max-100, bm::id_max-1);
+        bv.set_range(bm::id_max-1000, bm::id_max-1000+23);
+        bv.optimize();
+
+        VisitorAllRangeTest(bv);
+    }
+
+
     {
         bvect bv1 { 0,1,2, 10, 32, 100, 65535,
                             65535+1, 65535+2, 65535+10, 65535+11, 65535+31,
                             20000000 };
         bvect bv2;
-        std::vector<unsigned> v1;
+        std::vector<unsigned> v1, v2;
         
         bm::visit_each_bit(bv1, (void*)&v1, bit_decode_func);
+        bm::visit_each_bit_range(bv1, 0, bm::id_max-1, (void*)&v2, bit_decode_func);
 
         {
             for (size_t i = 0; i < v1.size(); ++i)
@@ -23996,6 +24414,10 @@ void BvectorBitForEachTest()
                       << " should be " << bv1.count() << std::endl;
             exit(1);
         }
+        if (v1 != v2)
+        {
+            assert(0);
+        }
         bm::combine_or(bv2, v1.begin(), v1.end());
         
         res = bv2.compare(bv1);
@@ -24004,6 +24426,8 @@ void BvectorBitForEachTest()
             std::cerr << "0. Bit for each failed comparison test. " << endl;
             exit(1);
         }
+
+        VisitorAllRangeTest(bv1);
         
         bv1.optimize();
         bv2.reset();
@@ -24030,8 +24454,59 @@ void BvectorBitForEachTest()
             std::cerr << "1. Bit for each failed comparison test. " << endl;
             exit(1);
         }
+        VisitorAllRangeTest(bv1);
 
     }
+
+    cout << "Inverted bvector tests..." << endl;
+    {
+        bvect::size_type from(200), to(65536*3+5);
+        for (unsigned pass = 0; pass < 2; ++pass)
+        {
+            assert(from <=to);
+            bvect bv;
+            bv.invert();
+
+            bvect bv1(bv);
+            bv1.keep_range(from, to);
+            bvect bv2;
+            bv2.copy_range(bv, from, to);
+
+
+            std::vector<bvect::size_type> v1;
+            bvect bv_c;
+            {
+            bm::visit_each_bit_range(bv, from, to, (void*)&v1, bit_decode_func);
+            assert(v1.size() == to-from+1);
+            bm::combine_or(bv_c, v1.begin(), v1.end());
+            }
+            v1.resize(0);
+
+            bool eq;
+            eq = bv_c.equal(bv1);
+            assert(eq);
+            eq = bv_c.equal(bv2);
+            assert(eq);
+
+            bv_c.clear();
+
+            {
+            bm::visit_each_bit_range(bv1, from, to, (void*)&v1, bit_decode_func);
+            assert(v1.size() == to-from+1);
+            bm::combine_or(bv_c, v1.begin(), v1.end());
+            }
+
+            eq = bv_c.equal(bv1);
+            assert(eq);
+            eq = bv_c.equal(bv2);
+            assert(eq);
+            bv_c.clear();
+
+            to = bm::id_max/2;
+            ++from;
+        }
+    }
+    cout << "OK" << endl;
     
     {
         bvect bv1, bv2;
@@ -24041,7 +24516,6 @@ void BvectorBitForEachTest()
         v1.reserve(bv1.count());
         
         bm::visit_each_bit(bv1, (void*)&v1, bit_decode_func);
-
         if (v1.size() != bv1.count())
         {
             std::cerr << "Bit for each failed size test. " << v1.size()
@@ -24049,7 +24523,6 @@ void BvectorBitForEachTest()
             exit(1);
         }
         bm::combine_or(bv2, v1.begin(), v1.end());
-        
         res = bv2.compare(bv1);
         if (res != 0)
         {
@@ -24061,6 +24534,9 @@ void BvectorBitForEachTest()
         
         v1.resize(0);
         bv2.clear(true);
+
+        VisitorAllRangeTest(bv1);
+
         bv1.optimize();
 
         bm::visit_each_bit(bv1, (void*)&v1, bit_decode_func);
@@ -24079,6 +24555,7 @@ void BvectorBitForEachTest()
             std::cerr << "Bit for each failed comparison test. " << endl;
             exit(1);
         }
+        VisitorAllRangeTest(bv1);
     }
     
     {
@@ -26507,6 +26984,10 @@ int main(int argc, char *argv[])
 
          BitCountChangeTest();
          WordCmpTest();
+
+         BitRangeAllSetTest();
+
+         BitForEachRangeFuncTest();
         
         //BitBlockTransposeTest();
     }

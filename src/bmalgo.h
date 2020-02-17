@@ -173,27 +173,28 @@ typename BV::size_type any_or(const BV& bv1, const BV& bv2) BMNOEXCEPT
 
 
 #define BM_SCANNER_OP(x) \
-    if (0 != (block = blk_blk[j+x])) \
+if (0 != (block = blk_blk[j+x])) \
+{ \
+    if (BM_IS_GAP(block)) \
     { \
-        if (BM_IS_GAP(block)) \
-        { \
-            bm::for_each_gap_blk(BMGAP_PTR(block), (r+j+x)*bm::bits_in_block,\
-                                 bit_functor); \
-        } \
-        else \
-        { \
-            bm::for_each_bit_blk(block, (r+j+x)*bm::bits_in_block,bit_functor); \
-        } \
-    }
+        bm::for_each_gap_blk(BMGAP_PTR(block), (r+j+x)*bm::bits_in_block,\
+                             bit_functor); \
+    } \
+    else \
+    { \
+        bm::for_each_bit_blk(block, (r+j+x)*bm::bits_in_block,bit_functor); \
+    } \
+}
     
 
 /**
     @brief bit-vector visitor scanner to traverse each 1 bit using C++ visitor
  
     @param bv - bit vector to scan
-    @param bit_functor (should support add_bits() and add_range() methods
+    @param bit_functor - visitor: should support add_bits(), add_range()
  
     \ingroup setalgo
+    @sa for_each_bit_range visit_each_bit
 */
 template<class BV, class Func>
 void for_each_bit(const BV&    bv,
@@ -248,10 +249,138 @@ void for_each_bit(const BV&    bv,
     }  // for i
 }
 
+/**
+    @brief bit-vector range visitor to traverse each 1 bit
+
+    @param bv - bit vector to scan
+    @param right - start of closed interval [from..to]
+    @param left   - end of close interval [from..to]
+    @param bit_functor - visitor: should support add_bits(), add_range()
+
+    \ingroup setalgo
+    @sa for_each_bit
+*/
+template<class BV, class Func>
+void for_each_bit_range(const BV&             bv,
+                       typename BV::size_type left,
+                       typename BV::size_type right,
+                       Func&                  bit_functor)
+{
+    typedef typename BV::size_type      size_type;
+    typedef typename BV::block_idx_type block_idx_type;
+
+    const typename BV::blocks_manager_type& bman = bv.get_blocks_manager();
+    bm::word_t*** blk_root = bman.top_blocks_root();
+    if (!blk_root)
+        return;
+    if (left > right)
+        bm::xor_swap(left, right);
+    if (right == bm::id_max)
+        --right;
+    BM_ASSERT(left < bm::id_max && right < bm::id_max);
+
+    block_idx_type nblock_left  = (left  >> bm::set_block_shift);
+    block_idx_type nblock_right = (right >> bm::set_block_shift);
+
+    unsigned i0, j0;
+    bm::get_block_coord(nblock_left, i0, j0);
+    const bm::word_t* block = bman.get_block_ptr(i0, j0);
+    unsigned nbit_left  = unsigned(left  & bm::set_block_mask);
+    size_type offset = nblock_left * bm::bits_in_block;
+
+    if (nblock_left == nblock_right) // hit in the same block
+    {
+        if (!block)
+            return;
+        unsigned nbit_right = unsigned(right & bm::set_block_mask);
+        if (BM_IS_GAP(block))
+        {
+            bm::for_each_gap_blk_range(BMGAP_PTR(block), offset,
+                                       nbit_left, nbit_right, bit_functor);
+        }
+        else
+        {
+            bm::for_each_bit_blk(block, offset, nbit_left, nbit_right,
+                                 bit_functor);
+        }
+        return;
+    }
+    // process left block
+    if (nbit_left && block)
+    {
+        if (BM_IS_GAP(block))
+        {
+            bm::for_each_gap_blk_range(BMGAP_PTR(block), offset,
+                                nbit_left, bm::bits_in_block-1, bit_functor);
+        }
+        else
+        {
+            bm::for_each_bit_blk(block, offset, nbit_left, bm::bits_in_block-1,
+                                 bit_functor);
+        }
+        ++nblock_left;
+    }
+
+    // process all complete blocks in the middle
+    {
+        block_idx_type top_blocks_size = bman.top_block_size();
+        bm::for_each_bit_block_range(blk_root, top_blocks_size,
+                                nblock_left, nblock_right-1, bit_functor);
+    }
+
+    unsigned nbit_right = unsigned(right & bm::set_block_mask);
+    bm::get_block_coord(nblock_right, i0, j0);
+    block = bman.get_block_ptr(i0, j0);
+
+    if (block)
+    {
+        offset = nblock_right * bm::bits_in_block;
+        if (BM_IS_GAP(block))
+        {
+            bm::for_each_gap_blk_range(BMGAP_PTR(block), offset,
+                                       0, nbit_right, bit_functor);
+        }
+        else
+        {
+            bm::for_each_bit_blk(block, offset, 0, nbit_right, bit_functor);
+        }
+    }
+}
+
+
 #undef BM_SCANNER_OP
 
+
+/// private adaptor for C-style callbacks
+///
+/// @internal
+///
+template <class VCBT, class size_type>
+struct bit_vitor_callback_adaptor
+{
+    typedef VCBT bit_visitor_callback_type;
+
+    bit_vitor_callback_adaptor(void* h, bit_visitor_callback_type cb_func)
+        : handle_(h), func_(cb_func)
+    {}
+
+    void add_bits(size_type offset, const unsigned char* bits, unsigned size)
+    {
+        for (unsigned i = 0; i < size; ++i)
+            func_(handle_, offset + bits[i]);
+    }
+    void add_range(size_type offset, unsigned size)
+    {
+        for (unsigned i = 0; i < size; ++i)
+            func_(handle_, offset + i);
+    }
+
+    void* handle_;
+    bit_visitor_callback_type func_;
+};
+
 /**
-    @brief bit-vector visitor scanner to traverse each 1 bit using C callback
+    @brief bvector visitor scanner to traverse each 1 bit using C callback
  
     @param bv - bit vector to scan
     @param handle_ptr - handle to private memory used by callback
@@ -267,31 +396,37 @@ void visit_each_bit(const BV&                 bv,
                     bit_visitor_callback_type callback_ptr)
 {
     typedef typename BV::size_type size_type;
-    // private adaptor for C-style callbacks
-    struct callback_adaptor
-    {
-        callback_adaptor(void* h, bit_visitor_callback_type cb_func)
-        : handle_(h), func_(cb_func)
-        {}
-        
-        void add_bits(size_type offset, const unsigned char* bits, unsigned size)
-        {
-            for (unsigned i = 0; i < size; ++i)
-                func_(handle_, offset + bits[i]);
-        }
-        void add_range(size_type offset, unsigned size)
-        {
-            for (unsigned i = 0; i < size; ++i)
-                func_(handle_, offset + i);
-        }
-        
-        void* handle_;
-        bit_visitor_callback_type func_;
-    };
-    
-    callback_adaptor func(handle_ptr, callback_ptr);
+    bm::bit_vitor_callback_adaptor<bit_visitor_callback_type, size_type>
+            func(handle_ptr, callback_ptr);
     bm::for_each_bit(bv, func);
 }
+
+/**
+    @brief bvector visitor scanner to traverse each bits in range (C callback)
+
+    @param bv - bit vector to scan
+    @param left - from [left..right]
+    @param left - to [left..right]
+    @param handle_ptr - handle to private memory used by callback
+    @param callback_ptr - callback function
+
+    \ingroup setalgo
+
+    @sa bit_visitor_callback_type for_each_bit
+*/
+template<class BV>
+void visit_each_bit_range(const BV&                 bv,
+                          typename BV::size_type    left,
+                          typename BV::size_type    right,
+                          void*                     handle_ptr,
+                          bit_visitor_callback_type callback_ptr)
+{
+    typedef typename BV::size_type size_type;
+    bm::bit_vitor_callback_adaptor<bit_visitor_callback_type, size_type>
+            func(handle_ptr, callback_ptr);
+    bm::for_each_bit_range(bv, left, right, func);
+}
+
 
 
 /**
