@@ -180,7 +180,7 @@ optimizations.
 All variants of test builds take days to run, so the working master branch is 
 not guaranteed to be perfect all the time. For production please use stable 
 release branches or distributions from SourceForge:
-[https://sourceforge.net/projects/bmagic/files/)
+https://sourceforge.net/projects/bmagic/files/
 
 
 All of the above does not guarantee it is bug free project.
