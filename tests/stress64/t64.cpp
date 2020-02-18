@@ -2567,6 +2567,8 @@ void VisitorAllRangeTest(const BV& bv, typename BV::size_type step)
         if (!factor) factor = 10;
         step = drange / factor;
     }
+    if (!step)
+        step = 1;
     cout << "   step=" << step << endl;
 
 

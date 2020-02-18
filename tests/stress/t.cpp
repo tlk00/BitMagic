@@ -486,12 +486,15 @@ void VisitorAllRangeTest(const BV& bv, typename BV::size_type step = 1)
     bool non_empty = bv.find_range(left, right);
     if (!non_empty)
         return;
-
     auto drange = right - left;
     if (!drange)
         drange = 256;
     if (!step)
         step = drange / 100;
+    if (!step)
+        step = 1;
+
+    cout << "... VisitorAllRangeTest() step=" << step << endl;
 
     std::vector<bvect::size_type> v;
     v.reserve(bv.count());
@@ -537,7 +540,7 @@ void VisitorAllRangeTest(const BV& bv, typename BV::size_type step = 1)
         if (!pcnt)
         {
             cout << "\r" << i << " / " << right << flush;
-            pcnt = 256;
+            pcnt = 128;
         }
         --pcnt;
 
@@ -581,7 +584,7 @@ void VisitorAllRangeTest(const BV& bv, typename BV::size_type step = 1)
         if (!pcnt)
         {
             cout << "\r" << left << " / " << right << flush;
-            pcnt = 256;
+            pcnt = 128;
         }
         --pcnt;
 
@@ -2033,6 +2036,7 @@ bool FindLastBit(const bvect& bv, bm::id_t& last_pos)
 template<class BV>
 void IntervalsCheck(const BV& bv)
 {
+    cout << " ... IntervalsCheck" << endl;
     BV bv_inv(bv);
     bv_inv.invert();
 
@@ -14437,7 +14441,7 @@ void BitRangeAllSetTest()
         assert(!all_one);
 
         auto cnt = bit_block_calc_count_range(tb1, 0, 65535);
-        assert(cnt = 65536);
+        assert(cnt == 65536);
 
         b =  bm::bit_block_is_all_one_range(tb1, 0, 65535);
         assert(!b);
@@ -27125,7 +27129,6 @@ int main(int argc, char *argv[])
 
     if (is_all || is_bvops)
     {
-
         AndOperationsTest(true); // enable detailed check
         OrOperationsTest(true);
         XorOperationsTest(true);
