@@ -83,9 +83,8 @@ efficient store of associations for graphs, etc.
 - algorithms on sparse vectors: dynamic range clipping, search, group theory image (re-mapping).
 - all containers are serializable with compression (binary interpolative coding, elias gamma coding)
 
-#### Serialization
+#### Serialization and versioning
 
-BitMagic serializer supports additional compression using build-in codec for the integer data.
 BitMagic supports serialization evolution - if serialization format changes, 
 old saved data remains readable by the new code. Old code will NOT be able to read new BLOBs.
 BitMagic changes major version number when serialization format changes.
@@ -139,7 +138,8 @@ rank-select compression
 ---
 
 BitMagic C++ is a header only library (easy to build and use in your project) and it comes 
-with a set of examples. 
+with a set of examples. It is NOT advised to use tests as a code example to study library usage.
+Tests do not illustate the best usage patterns and models and often intentionally inefficient.
 
 API documentation and examples:
 [http://www.bitmagic.io/apis.html](http://www.bitmagic.io/apis.html)
@@ -172,13 +172,16 @@ for using BitMagic Library.
 BitMagic library pays serious attention to code quality and test coverage.  
 As a low level library BitMagic needs to be stable and conformant to be useful.
 
-We do not rely on unit tests alone, our tests often use _"chaos testing"_ where stress tests
-are based on randomized, generated sets and randomized operations. We regularly build
-and run test suits for Release and Debug mode for various combinations of SIMD 
+We do not rely on unit tests alone, our tests often use _"chaos testing"_ (aka fuzzing)
+where stress tests are based on randomized, generated sets and randomized operations. 
+We regularly build and run test suits for Release and Debug mode for various combinations of SIMD 
 optimizations. 
 
 All variants of test builds take days to run, so the working master branch is 
-not guaranteed to be perfect.
+not guaranteed to be perfect all the time. For production please use stable 
+release branches or distributions from SourceForge:
+[https://sourceforge.net/projects/bmagic/files/)
+
 
 All of the above does not guarantee it is bug free project.
 
