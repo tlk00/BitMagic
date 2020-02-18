@@ -84,10 +84,15 @@ For more information please visit:  http://bitmagic.io
 // detects use of EMSCRIPTEN engine and tweaks settings
 // WebAssemply compiles into 32-bit ptr yet 64-bit wordsize use GCC extensions
 //
+// BMNOEXCEPT2 is to declare "noexcept" for WebAsm only where needed
+// and silence GCC warnings where not
 #if defined(__EMSCRIPTEN__)
 # define BM64OPT
 # define BM_USE_GCC_BUILD
+#  define BMNOEXCEPT2 noexcept
 //# define BM_FORBID_UNALIGNED_ACCESS
+#else
+#  define BMNOEXCEPT2
 #endif
 
 

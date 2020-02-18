@@ -2304,18 +2304,6 @@ bool gap_find_first_diff(const T* BMRESTRICT buf1,
 
 // -------------------------------------------------------------------------
 //
-// GCC gives a function anme mangling warning for the differences between
-// CXX-11 and CXX-17 this group of functions are internal and not supposed
-// to be used via function pointers, so name mangling around NOEXCEPT
-// should not be a problem
-//
-// Possible Alternative solution:
-// define BMNOEXEPT2 only for Emscripten (Wasm) build, where it is needed
-//
-#ifdef __GNUG__
-#pragma GCC diagnostic push
-#pragma GCC diagnostic ignored "-Wnoexcept-type"
-#endif
 
 /*!
    \brief Abstract operation for GAP buffers. 
@@ -2341,7 +2329,7 @@ void gap_buff_op(T*         BMRESTRICT dest,
                  const T*   BMRESTRICT vect2,
                  unsigned   vect2_mask, 
                  F&         f,
-                 unsigned&  dlen) BMNOEXCEPT
+                 unsigned&  dlen) BMNOEXCEPT2
 {
     const T*  cur1 = vect1;
     const T*  cur2 = vect2;
@@ -2418,7 +2406,7 @@ bool gap_buff_dry_op(const T*   BMRESTRICT vect1,
                      const T*   BMRESTRICT vect2,
                           F&         f,
                      unsigned&  dlen,
-                     unsigned limit) BMNOEXCEPT
+                     unsigned limit) BMNOEXCEPT2
 {
     const T*  cur1 = vect1;
     const T*  cur2 = vect2;
@@ -2491,7 +2479,7 @@ unsigned gap_buff_any_op(const T*   BMRESTRICT vect1,
                          unsigned              vect1_mask, 
                          const T*   BMRESTRICT vect2,
                          unsigned              vect2_mask, 
-                         F                     f) BMNOEXCEPT
+                         F                     f) BMNOEXCEPT2
 {
     const T*  cur1 = vect1;
     const T*  cur2 = vect2;
@@ -2556,7 +2544,7 @@ unsigned gap_buff_any_op(const T*   BMRESTRICT vect1,
    @ingroup gapfunc
 */
 template<typename T, class F> 
-unsigned gap_buff_count_op(const T*  vect1, const T*  vect2, F f) BMNOEXCEPT
+unsigned gap_buff_count_op(const T*  vect1, const T*  vect2, F f) BMNOEXCEPT2
 {
     unsigned count;// = 0;
     const T* cur1 = vect1;
@@ -2622,11 +2610,11 @@ unsigned gap_buff_count_op(const T*  vect1, const T*  vect2, F f) BMNOEXCEPT
     return count;
 }
 
+
 #ifdef __GNUG__
-#pragma GCC diagnostic pop
+#pragma GCC diagnostic push
+#pragma GCC diagnostic ignored "-Wconversion"
 #endif
-
-
 
 /*!
    \brief Sets or clears bit in the GAP buffer.
@@ -2861,6 +2849,11 @@ unsigned gap_add_value(T* buf, unsigned pos) BMNOEXCEPT
     buf[end] = bm::gap_max_bits - 1;
     return end;
 }
+
+#ifdef __GNUG__
+#pragma GCC diagnostic pop
+#endif
+
 
 /*!
     @brief Right shift GAP block by 1 bit
