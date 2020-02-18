@@ -369,15 +369,47 @@ struct bit_vitor_callback_adaptor
         for (unsigned i = 0; i < size; ++i)
             func_(handle_, offset + bits[i]);
     }
-    void add_range(size_type offset, unsigned size)
+    void add_range(size_type offset, size_type size)
     {
-        for (unsigned i = 0; i < size; ++i)
+        for (size_type i = 0; i < size; ++i)
             func_(handle_, offset + i);
     }
 
     void* handle_;
     bit_visitor_callback_type func_;
 };
+
+
+/// Functor for bit-copy (for testing)
+///
+/// @internal
+///
+template <class BV>
+struct bit_vistor_copy_functor
+{
+    typedef typename BV::size_type size_type;
+
+    bit_vistor_copy_functor(BV& bv)
+        : bv_(bv)
+    {
+        bv_.init();
+    }
+
+    void add_bits(size_type offset, const unsigned char* bits, unsigned size)
+    {
+        for (unsigned i = 0; i < size; ++i)
+            bv_.set_bit_no_check(offset + bits[i]);
+    }
+    void add_range(size_type offset, size_type size)
+    {
+        bv_.set_range(offset, offset + size - 1);
+    }
+
+    BV& bv_;
+    bit_visitor_callback_type func_;
+};
+
+
 
 /**
     @brief bvector visitor scanner to traverse each 1 bit using C callback

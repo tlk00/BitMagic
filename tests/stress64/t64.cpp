@@ -2548,6 +2548,122 @@ extern "C" {
     }
 } // extern C
 
+template<class BV>
+void VisitorAllRangeTest(const BV& bv, typename BV::size_type step)
+{
+    cout << ".... VisitorAllRangeTest()";
+
+    typename BV::size_type left, right, next, i_end;
+    bool non_empty = bv.find_range(left, right);
+    if (!non_empty)
+        return;
+
+    auto drange = right - left;
+    if (!drange)
+        drange = 256;
+    if (!step)
+    {
+        unsigned factor = rand()%32;
+        if (!factor) factor = 10;
+        step = drange / factor;
+    }
+    cout << "   step=" << step << endl;
+
+
+    auto pcnt = 4;
+    for (auto i = left; i <= right; i+=step, right-=step)
+    {
+        {
+            bvect bv_control;
+            bm::bit_vistor_copy_functor<bvect> func(bv_control);
+            bm::for_each_bit_range(bv, i, right, func);
+
+            bvect bv2;
+            bv2.copy_range(bv, i, right);
+
+            bool eq = bv2.equal(bv_control);
+            assert(eq);
+        }
+        next = bv.get_next(i);
+        if (next)
+        {
+            auto delta = next - i;
+            if (delta > 32)
+            {
+                i += delta / 2;
+            }
+            else
+            if (delta == 1)
+            {
+                bool f = bv.find_interval_end(next, i_end);
+                if (f)
+                {
+                    delta = i_end - i;
+                    if (delta > 4)
+                        i += delta / 2;
+                }
+                else
+                {
+                    assert(!bv.test(i));
+                }
+            }
+        }
+        if (!pcnt)
+        {
+            cout << "\r" << i << " / " << right << flush;
+            pcnt = 4;
+        }
+        --pcnt;
+
+    } // for i
+    cout << endl;
+/*
+    pcnt = 4;
+    for (; left <= right; left+=step, --right)
+    {
+        {
+            bvect bv_control;
+            bm::bit_vistor_copy_functor<bvect> func(bv_control);
+            bm::for_each_bit_range(bv, left, right, func);
+
+            bvect bv2;
+            bv2.copy_range(bv, left, right);
+
+            bool eq = bv2.equal(bv_control);
+            assert(eq);
+        }
+        next = bv.get_next(left);
+        if (next)
+        {
+            auto delta = next - left;
+            if (delta > 128)
+            {
+                left += delta / 2;
+            }
+            else
+            if (delta == 1)
+            {
+                bool f = bv.find_interval_end(left, i_end);
+                if (f)
+                {
+                    delta = i_end - left;
+                    if (delta > 4)
+                        left += delta / 2;
+                }
+            }
+        }
+        if (!pcnt)
+        {
+            cout << "\r" << left << " / " << right << flush;
+            pcnt = 4;
+        }
+        --pcnt;
+    } // for i
+    */
+    cout << endl;
+}
+
+
 
 static
 void RangeForEachTest(bvect::size_type from, bvect::size_type to)
@@ -6962,6 +7078,8 @@ void AndOperationsTest()
     CheckVectors(bvect_min1, bv_target_s, BITVECT_SIZE/10+10, true);
 //    CheckCountRange(bvect_full1, 0, BITVECT_SIZE/10+10);
 
+    VisitorAllRangeTest(bv_target_s, 0);
+
     }
 
     {
@@ -9381,6 +9499,10 @@ void StressTest(unsigned repetitions, int set_operation = -1)
             }
 
 
+        }
+
+        {
+            VisitorAllRangeTest(*bvect_full2, 0);
         }
 
         delete bvect_full2;

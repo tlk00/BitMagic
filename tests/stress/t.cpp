@@ -455,6 +455,141 @@ void CheckVectors(bvect_mini &bvect_min,
                   unsigned size,
                   bool     detailed = true);
 
+
+extern "C" {
+    static
+    int bit_decode_func(void* handle_ptr, bm::id_t bit_idx)
+    {
+        std::vector<bm::id_t>* vp = (std::vector<bm::id_t>*)handle_ptr;
+        vp->push_back(bit_idx);
+        return 0;
+    }
+
+    static
+    int bit_decode_func2(void* handle_ptr, bm::id_t bit_idx)
+    {
+        if (bit_idx > (65536 * 256))
+        {
+            throw 1;
+        }
+        std::vector<bm::id_t>* vp = (std::vector<bm::id_t>*)handle_ptr;
+        vp->push_back(bit_idx);
+        return 0;
+    }
+} // extern C
+
+
+template<class BV>
+void VisitorAllRangeTest(const BV& bv, typename BV::size_type step = 1)
+{
+    typename BV::size_type left, right, next, i_end;
+    bool non_empty = bv.find_range(left, right);
+    if (!non_empty)
+        return;
+
+    auto drange = right - left;
+    if (!drange)
+        drange = 256;
+    if (!step)
+        step = drange / 100;
+
+    std::vector<bvect::size_type> v;
+    v.reserve(bv.count());
+
+    auto pcnt = 256;
+    for (auto i = left; i <= right; i+=step)
+    {
+        v.resize(0);
+        bm::visit_each_bit_range(bv, i, right, (void*)&v, bit_decode_func);
+        {
+            bvect bv2;
+            bv2.copy_range(bv, i, right);
+
+            bvect bv_control;
+            bm::combine_or(bv_control, v.begin(), v.end());
+            bool eq = bv2.equal(bv_control);
+            assert(eq);
+        }
+        next = bv.get_next(i);
+        if (next)
+        {
+            auto delta = next - i;
+            if (delta > 32)
+            {
+                i += delta / 2;
+            }
+            else
+            if (delta == 1)
+            {
+                bool f = bv.find_interval_end(next, i_end);
+                if (f)
+                {
+                    delta = i_end - i;
+                    if (delta > 4)
+                        i += delta / 2;
+                }
+                else
+                {
+                    assert(!bv.test(i));
+                }
+            }
+        }
+        if (!pcnt)
+        {
+            cout << "\r" << i << " / " << right << flush;
+            pcnt = 256;
+        }
+        --pcnt;
+
+    } // for i
+    cout << endl;
+
+    pcnt = 256;
+    for (; left <= right; left+=step, --right)
+    {
+        v.resize(0);
+        bm::visit_each_bit_range(bv, left, right, (void*)&v, bit_decode_func);
+        {
+            bvect bv2;
+            bv2.copy_range(bv, left, right);
+
+            bvect bv_control;
+            bm::combine_or(bv_control, v.begin(), v.end());
+            bool eq = bv2.equal(bv_control);
+            assert(eq);
+        }
+        next = bv.get_next(left);
+        if (next)
+        {
+            auto delta = next - left;
+            if (delta > 128)
+            {
+                left += delta / 2;
+            }
+            else
+            if (delta == 1)
+            {
+                bool f = bv.find_interval_end(left, i_end);
+                if (f)
+                {
+                    delta = i_end - left;
+                    if (delta > 4)
+                        left += delta / 2;
+                }
+            }
+        }
+        if (!pcnt)
+        {
+            cout << "\r" << left << " / " << right << flush;
+            pcnt = 256;
+        }
+        --pcnt;
+
+    } // for i
+    cout << endl;
+}
+
+
 void generate_bvector(bvect& bv, unsigned vector_max = 40000000, bool optimize=true);
 
 static
@@ -9408,8 +9543,10 @@ void StressTest(unsigned repetitions, int set_operation, bool detailed)
                     exit(1);
                 }
             }
+        }
 
-
+        {
+            VisitorAllRangeTest(*bvect_full2, 0); // test with automatic step
         }
 
         delete bvect_full2;
@@ -24152,27 +24289,6 @@ void generate_bvector(bvect& bv, unsigned vector_max, bool optimize)
         bv.optimize();
 }
 
-extern "C" {
-    static
-    int bit_decode_func(void* handle_ptr, bm::id_t bit_idx)
-    {
-        std::vector<bm::id_t>* vp = (std::vector<bm::id_t>*)handle_ptr;
-        vp->push_back(bit_idx);
-        return 0;
-    }
-    
-    static
-    int bit_decode_func2(void* handle_ptr, bm::id_t bit_idx)
-    {
-        if (bit_idx > (65536 * 256))
-        {
-            assert(0);
-        }
-        std::vector<bm::id_t>* vp = (std::vector<bm::id_t>*)handle_ptr;
-        vp->push_back(bit_idx);
-        return 0;
-    }
-} // extern C
 
 
 static
@@ -24219,88 +24335,6 @@ void RangeForEachTest(bvect::size_type from, bvect::size_type to)
     }
 }
 
-template<class BV>
-void VisitorAllRangeTest(const BV& bv)
-{
-    typename BV::size_type left, right, next, i_end;
-    bool non_empty = bv.find_range(left, right);
-    assert(non_empty);
-
-    std::vector<bvect::size_type> v;
-    v.reserve(bv.count());
-
-    for (auto i = left; i <= right; ++i)
-    {
-        v.resize(0);
-        bm::visit_each_bit_range(bv, i, right, (void*)&v, bit_decode_func);
-        {
-            bvect bv2;
-            bv2.copy_range(bv, i, right);
-
-            bvect bv_control;
-            bm::combine_or(bv_control, v.begin(), v.end());
-            bool eq = bv2.equal(bv_control);
-            assert(eq);
-        }
-        next = bv.get_next(i);
-        if (next)
-        {
-            auto delta = next - i;
-            if (delta > 32)
-            {
-                i += delta / 2;
-            }
-            else
-            if (delta == 1)
-            {
-                bool f = bv.find_interval_end(i, i_end);
-                if (f)
-                {
-                    delta = i_end - i;
-                    if (delta > 32)
-                        i += delta / 2;
-                }
-            }
-        }
-    } // for i
-
-    for (; left <= right; ++left, --right)
-    {
-        v.resize(0);
-        bm::visit_each_bit_range(bv, left, right, (void*)&v, bit_decode_func);
-        {
-            bvect bv2;
-            bv2.copy_range(bv, left, right);
-
-            bvect bv_control;
-            bm::combine_or(bv_control, v.begin(), v.end());
-            bool eq = bv2.equal(bv_control);
-            assert(eq);
-        }
-        next = bv.get_next(left);
-        if (next)
-        {
-            auto delta = next - left;
-            if (delta > 128)
-            {
-                left += delta / 2;
-            }
-            else
-            if (delta == 1)
-            {
-                bool f = bv.find_interval_end(left, i_end);
-                if (f)
-                {
-                    delta = i_end - left;
-                    if (delta > 32)
-                        left += delta / 2;
-                }
-            }
-
-        }
-    } // for i
-
-}
 
 
 static
@@ -24458,6 +24492,64 @@ void BvectorBitForEachTest()
 
     }
 
+
+    {
+        bvect bv1, bv2;
+        std::vector<unsigned> v1;
+        
+        generate_bvector(bv1);
+        v1.reserve(bv1.count());
+        
+        bm::visit_each_bit(bv1, (void*)&v1, bit_decode_func);
+        if (v1.size() != bv1.count())
+        {
+            std::cerr << "Bit for each failed size test. " << v1.size()
+                      << " should be " << bv1.count() << std::endl;
+            exit(1);
+        }
+        bm::combine_or(bv2, v1.begin(), v1.end());
+        res = bv2.compare(bv1);
+        if (res != 0)
+        {
+            std::cerr << "Bit for each failed comparison test. " << endl;
+            exit(1);
+        }
+
+        cout << "for each bit in optimized bit-vector..." << endl;
+        
+        v1.resize(0);
+        bv2.clear(true);
+
+        VisitorAllRangeTest(bv1, (bvect::size_type)v1.size()/2048);
+
+        bv1.optimize();
+
+        bm::visit_each_bit(bv1, (void*)&v1, bit_decode_func);
+
+        if (v1.size() != bv1.count())
+        {
+            std::cerr << "Bit for each failed size test. " << v1.size()
+                      << " should be " << bv1.count() << std::endl;
+            exit(1);
+        }
+        bm::combine_or(bv2, v1.begin(), v1.end());
+        
+        res = bv2.compare(bv1);
+        if (res != 0)
+        {
+            std::cerr << "Bit for each failed comparison test. " << endl;
+            exit(1);
+        }
+        VisitorAllRangeTest(bv1, (bvect::size_type)v1.size()/3048);
+    }
+    
+    {
+        RangeForEachTest(0, 65536);
+        RangeForEachTest(65536, 65536+65536);
+        RangeForEachTest(bm::id_max/2, bm::id_max/2 + (65536*256));
+    }
+
+
     cout << "Inverted bvector tests..." << endl;
     {
         bvect::size_type from(200), to(65536*3+5);
@@ -24506,63 +24598,6 @@ void BvectorBitForEachTest()
             ++from;
         }
     }
-    cout << "OK" << endl;
-    
-    {
-        bvect bv1, bv2;
-        std::vector<unsigned> v1;
-        
-        generate_bvector(bv1);
-        v1.reserve(bv1.count());
-        
-        bm::visit_each_bit(bv1, (void*)&v1, bit_decode_func);
-        if (v1.size() != bv1.count())
-        {
-            std::cerr << "Bit for each failed size test. " << v1.size()
-                      << " should be " << bv1.count() << std::endl;
-            exit(1);
-        }
-        bm::combine_or(bv2, v1.begin(), v1.end());
-        res = bv2.compare(bv1);
-        if (res != 0)
-        {
-            std::cerr << "Bit for each failed comparison test. " << endl;
-            exit(1);
-        }
-
-        cout << "for each bit in optimized bit-vector..." << endl;
-        
-        v1.resize(0);
-        bv2.clear(true);
-
-        VisitorAllRangeTest(bv1);
-
-        bv1.optimize();
-
-        bm::visit_each_bit(bv1, (void*)&v1, bit_decode_func);
-
-        if (v1.size() != bv1.count())
-        {
-            std::cerr << "Bit for each failed size test. " << v1.size()
-                      << " should be " << bv1.count() << std::endl;
-            exit(1);
-        }
-        bm::combine_or(bv2, v1.begin(), v1.end());
-        
-        res = bv2.compare(bv1);
-        if (res != 0)
-        {
-            std::cerr << "Bit for each failed comparison test. " << endl;
-            exit(1);
-        }
-        VisitorAllRangeTest(bv1);
-    }
-    
-    {
-        RangeForEachTest(0, 65536);
-        RangeForEachTest(65536, 65536+65536);
-        RangeForEachTest(bm::id_max/2, bm::id_max/2 + (65536*256));
-    }
 
     {
         bvect bv;
@@ -24577,7 +24612,8 @@ void BvectorBitForEachTest()
         }
 
     }
-    
+    cout << "OK" << endl;
+
     
     cout << "------------------------ bvector BitForEach Test OK" << endl;
 }
