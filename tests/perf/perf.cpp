@@ -2332,6 +2332,8 @@ void SparseVectorAccessTest()
     }
     std::vector<unsigned> target_v;
     target_v.resize(idx.size());
+    std::vector<unsigned> target_v2;
+    target_v2.resize(idx.size());
 
     {
         TimeTaker tt("sparse_vector random element access test", REPEATS/10 );
@@ -2352,6 +2354,25 @@ void SparseVectorAccessTest()
             sv1.gather(target_v.data(), idx.data(), unsigned(idx.size()), bm::BM_UNSORTED);
         }
     }
+
+    {
+        TimeTaker tt("sparse_vector<>::decode()", REPEATS / 10);
+        auto from = gather_from;
+        for (unsigned i = 0; i < REPEATS / 10; ++i)
+        {
+            auto dsize = sv1.decode(target_v2.data(), gather_from, (unsigned)idx.size(), true);
+            from += (dsize % 123);
+        }
+    }
+
+    {
+        if (target_v != target_v2)
+        {
+            std::cerr << "gather-decode check failed" << endl;
+            exit(1);
+        }
+    }
+
 /*
 
     {
