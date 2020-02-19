@@ -232,7 +232,6 @@ public:
         size_type                         pos_;     ///!< Position
         mutable buffer_type               buffer_;  ///!< value buffer
         mutable value_type*               buf_ptr_; ///!< position in the buffer
-        mutable allocator_pool_type       pool_;
     };
     
     /**
@@ -806,8 +805,7 @@ public:
     size_type extract(value_type* arr,
                       size_type size,
                       size_type offset = 0,
-                      bool      zero_mem = true,
-                      allocator_pool_type* pool_ptr = 0) const;
+                      bool      zero_mem = true) const BMNOEXCEPT2;
 
     /** \brief extract small window without use of masking vector
         \sa decode
@@ -1091,7 +1089,9 @@ sparse_vector<Val, BV>::decode(value_type* arr,
     {
         return extract_range(arr, dec_size, idx_from, zero_mem);
     }
-    return extract_plains(arr, dec_size, idx_from, zero_mem);
+    return extract(arr, dec_size, idx_from, zero_mem);
+
+    //return extract_plains(arr, dec_size, idx_from, zero_mem);
     // TODO: write proper extract() based on for_each_range() and a visitor
     /*
     if (dec_size < 1024)
@@ -1380,47 +1380,44 @@ sparse_vector<Val, BV>::extract_plains(value_type* arr,
 
 template<class Val, class BV>
 typename sparse_vector<Val, BV>::size_type
-sparse_vector<Val, BV>::extract(value_type* arr,
+sparse_vector<Val, BV>::extract(value_type* BMRESTRICT arr,
                                 size_type   size,
                                 size_type   offset,
-                                bool        zero_mem,
-                                allocator_pool_type* pool_ptr) const
+                                bool        zero_mem) const BMNOEXCEPT2
 {
     /// Decoder functor
     /// @internal
     ///
     struct sv_decode_visitor_func
     {
-        sv_decode_visitor_func(value_type* varr,
+        sv_decode_visitor_func(value_type* BMRESTRICT varr,
                                value_type  mask,
                                size_type   off) BMNOEXCEPT
         : arr_(varr), mask_(mask), off_(off)
         {}
-        
         void add_bits(size_type arr_offset,
                       const unsigned char* bits, unsigned bits_size) BMNOEXCEPT
         {
             size_type idx_base = arr_offset - off_;
             const value_type m = mask_;
-            unsigned i = 0;
-            for (; i < bits_size; ++i)
+            for (unsigned i = 0; i < bits_size; ++i)
                 arr_[idx_base + bits[i]] |= m;
         }
-        
-        void add_range(size_type arr_offset, unsigned sz) BMNOEXCEPT
+        void add_range(size_type arr_offset, size_type sz) BMNOEXCEPT
         {
             size_type idx_base = arr_offset - off_;
             const value_type m = mask_;
-            for (unsigned i = 0; i < sz; ++i)
+            for (size_type i = 0; i < sz; ++i)
                 arr_[i + idx_base] |= m;
         }
-        value_type*  arr_;
+
+        value_type* BMRESTRICT arr_;
         value_type   mask_;
         size_type    off_;
     };
 
 
-    if (size == 0)
+    if (!size)
         return 0;
 
     if (zero_mem)
@@ -1429,40 +1426,18 @@ sparse_vector<Val, BV>::extract(value_type* arr,
     size_type start = offset;
     size_type end = start + size;
     if (end > this->size_)
-    {
         end = this->size_;
-    }
-    
-	bool masked_scan = !(offset == 0 && size == this->size());
-    if (masked_scan) // use temp vector to decompress the area
-    {
-        bvector_type bv_mask;
-        bv_mask.set_allocator_pool(pool_ptr);
-        
-        for (size_type i = 0; i < parent_type::value_bits(); ++i)
-        {
-            const bvector_type* bv = this->bmatr_.get_row(i);
-            if (bv)
-            {
-                bv_mask.copy_range(*bv, offset, end - 1);
-                sv_decode_visitor_func func(arr, (value_type(1) << i), offset);
-                bm::for_each_bit(bv_mask, func);
-            }
-        } // for i
-    }
-    else
-    {
-        for (size_type i = 0; i < parent_type::value_bits(); ++i)
-        {
-            const bvector_type* bv = this->bmatr_.get_row(i);
-            if (bv)
-            {
-                sv_decode_visitor_func func(arr, (value_type(1) << i), 0);
-                bm::for_each_bit(*bv, func);
-            }
-        } // for i
-    }
 
+    sv_decode_visitor_func func(arr, 0, offset);
+
+    for (size_type i = 0; i < parent_type::value_bits(); ++i)
+    {
+        const bvector_type* bv = this->bmatr_.get_row(i);
+        if (!bv)
+            continue;
+        func.mask_ = (value_type(1) << i); // set target plane OR mask
+        bm::for_each_bit_range(*bv, offset, end-1, func);
+    } // for i
     return end - start;
 }
 
@@ -2037,7 +2012,7 @@ sparse_vector<Val, BV>::const_iterator::value() const BMNOEXCEPT
     {
         buffer_.reserve(n_buf_size * sizeof(value_type));
         buf_ptr_ = (value_type*)(buffer_.data());
-        sv_->extract(buf_ptr_, n_buf_size, pos_, true, &pool_);
+        sv_->extract(buf_ptr_, n_buf_size, pos_, true);
     }
     v = *buf_ptr_;
     return v;
