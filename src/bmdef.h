@@ -73,9 +73,11 @@ For more information please visit:  http://bitmagic.io
 //
 #if defined(BM_NO_CXX11) || (defined(_MSC_VER)  &&  _MSC_VER < 1900)
 # define BMNOEXCEPT
+# define BMNOEXCEPT2
 #else
 # ifndef BMNOEXCEPT
 #  define BMNOEXCEPT noexcept
+#  define BMNOEXCEPT2
 # endif
 #endif
 
@@ -89,8 +91,7 @@ For more information please visit:  http://bitmagic.io
 #if defined(__EMSCRIPTEN__)
 # define BM64OPT
 # define BM_USE_GCC_BUILD
-#  define BMNOEXCEPT2 noexcept
-//# define BM_FORBID_UNALIGNED_ACCESS
+# define BMNOEXCEPT2 noexcept
 #else
 #  define BMNOEXCEPT2
 #endif
