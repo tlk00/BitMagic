@@ -14441,7 +14441,7 @@ void BitRangeAllSetTest()
         assert(!all_one);
 
         auto cnt = bit_block_calc_count_range(tb1, 0, 65535);
-        assert(cnt == 65536);
+        assert(cnt == 65535);
 
         b =  bm::bit_block_is_all_one_range(tb1, 0, 65535);
         assert(!b);
@@ -26979,6 +26979,7 @@ int main(int argc, char *argv[])
 
     if (is_all || is_low_level)
     {
+
         TestRecomb();
 
         OptimGAPTest();
