@@ -2348,7 +2348,7 @@ void SparseVectorAccessTest()
     }
 
     {
-        TimeTaker tt("sparse_vectot<>::gather() ", REPEATS/10 );
+        TimeTaker tt("sparse_vectot<>::gather() ", REPEATS/5 );
         for (unsigned i = 0; i < REPEATS/10; ++i)
         {
             sv1.gather(target_v.data(), idx.data(), unsigned(idx.size()), bm::BM_UNSORTED);
@@ -2356,11 +2356,11 @@ void SparseVectorAccessTest()
     }
 
     {
-        TimeTaker tt("sparse_vector<>::decode()", REPEATS / 10);
+        TimeTaker tt("sparse_vector<>::decode()", REPEATS / 5);
         auto from = gather_from;
         for (unsigned i = 0; i < REPEATS / 10; ++i)
         {
-            auto dsize = sv1.decode(target_v2.data(), gather_from, (unsigned)idx.size(), true);
+            auto dsize = sv1.decode(target_v2.data(), gather_from, (unsigned)idx.size(), (i == 0));
             from += (dsize % 123);
         }
     }
@@ -2373,18 +2373,7 @@ void SparseVectorAccessTest()
         }
     }
 
-/*
 
-    {
-        TimeTaker tt("sparse_vector extract test", REPEATS );
-        for (unsigned i = 0; i < REPEATS/10; ++i)
-        {
-            unsigned target_off = gather_to - gather_from;
-            sv1.extract(&target1[0], sv1.size());
-            //sv1.extract(&target[0], 256000, target_off);
-        }
-    }
-*/
     {
         TimeTaker tt("sparse_vector const_iterator test", REPEATS );
         for (unsigned i = 0; i < REPEATS/10; ++i)
@@ -2399,6 +2388,7 @@ void SparseVectorAccessTest()
             }
         }
     }
+
 /*
     // check just in case
     //
