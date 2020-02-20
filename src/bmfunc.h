@@ -2479,7 +2479,7 @@ unsigned gap_buff_any_op(const T*   BMRESTRICT vect1,
                          unsigned              vect1_mask, 
                          const T*   BMRESTRICT vect2,
                          unsigned              vect2_mask, 
-                         F                     f) BMNOEXCEPT2
+                         F                     f) BMNOEXCEPT2	
 {
     const T*  cur1 = vect1;
     const T*  cur2 = vect2;
@@ -5563,27 +5563,27 @@ bool block_any(const bm::word_t* const BMRESTRICT block) BMNOEXCEPT
 // GAP blocks manipulation functions:
 
 /*! \brief GAP and functor */
-BMFORCEINLINE unsigned and_op(unsigned v1, unsigned v2) BMNOEXCEPT
+BMFORCEINLINE unsigned and_op(unsigned v1, unsigned v2) BMNOEXCEPT2
 {
     return v1 & v2;
 }
 
 
 /*! \brief GAP xor functor */
-BMFORCEINLINE unsigned xor_op(unsigned v1, unsigned v2) BMNOEXCEPT
+BMFORCEINLINE unsigned xor_op(unsigned v1, unsigned v2) BMNOEXCEPT2
 {
     return v1 ^ v2;
 }
 
 
 /*! \brief GAP or functor */
-BMFORCEINLINE unsigned or_op(unsigned v1, unsigned v2) BMNOEXCEPT
+BMFORCEINLINE unsigned or_op(unsigned v1, unsigned v2) BMNOEXCEPT2
 {
     return v1 | v2;
 }
 
 /*! \brief GAP or functor */
-BMFORCEINLINE unsigned sub_op(unsigned v1, unsigned v2) BMNOEXCEPT
+BMFORCEINLINE unsigned sub_op(unsigned v1, unsigned v2) BMNOEXCEPT2
 {
     return v1 & ~v2;
 }
