@@ -1741,7 +1741,7 @@ void for_each_gap_blk_range(const T* BMRESTRICT buf,
         T prev = *(pcurr-1);
         if (right <= *pcurr)
         {
-            int sz = right - prev;
+            int sz = int(right) - int(prev);
             if (sz > 0)
                 bit_functor.add_range(offset + prev + 1, unsigned(sz));
             return;
