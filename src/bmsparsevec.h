@@ -1085,21 +1085,7 @@ sparse_vector<Val, BV>::decode(value_type* arr,
                                size_type   dec_size,
                                bool        zero_mem) const
 {
-    if (dec_size < 32)
-    {
-        return extract_range(arr, dec_size, idx_from, zero_mem);
-    }
     return extract(arr, dec_size, idx_from, zero_mem);
-
-    //return extract_plains(arr, dec_size, idx_from, zero_mem);
-    // TODO: write proper extract() based on for_each_range() and a visitor
-    /*
-    if (dec_size < 1024)
-    {
-        return extract_plains(arr, dec_size, idx_from, zero_mem);
-    }
-    return extract(arr, dec_size, idx_from, zero_mem);
-    */
 }
 
 //---------------------------------------------------------------------
@@ -1392,30 +1378,31 @@ sparse_vector<Val, BV>::extract(value_type* BMRESTRICT arr,
     {
         sv_decode_visitor_func(value_type* BMRESTRICT varr,
                                value_type  mask,
-                               size_type   off) BMNOEXCEPT
-        : arr_(varr), mask_(mask), off_(off)
+                               size_type   off) BMNOEXCEPT2
+        : arr_(varr), mask_(mask), sv_off_(off)
         {}
-        void add_bits(size_type arr_offset,
+
+        void add_bits(size_type bv_offset,
                       const unsigned char* bits, unsigned bits_size) BMNOEXCEPT
         {
-            size_type idx_base = arr_offset - off_;
-            const value_type m = mask_;
+            // can be negative (-1) when bv base offset = 0 and sv = 1,2..
+            size_type base = bv_offset - sv_off_; 
+            value_type m = mask_;
             for (unsigned i = 0; i < bits_size; ++i)
-                arr_[idx_base + bits[i]] |= m;
+                arr_[bits[i] + base] |= m;
         }
-        void add_range(size_type arr_offset, size_type sz) BMNOEXCEPT
+        void add_range(size_type bv_offset, size_type sz) BMNOEXCEPT
         {
-            size_type idx_base = arr_offset - off_;
-            const value_type m = mask_;
+            auto base = bv_offset - sv_off_;
+            value_type m = mask_;
             for (size_type i = 0; i < sz; ++i)
-                arr_[i + idx_base] |= m;
+                arr_[i + base] |= m;
         }
 
-        value_type* BMRESTRICT arr_;
-        value_type   mask_;
-        size_type    off_;
+        value_type* BMRESTRICT arr_;       ///< target array for reverse transpose
+        value_type             mask_;      ///< bit-plane mask 
+        size_type              sv_off_;    ///< SV read offset
     };
-
 
     if (!size)
         return 0;
@@ -1423,8 +1410,7 @@ sparse_vector<Val, BV>::extract(value_type* BMRESTRICT arr,
     if (zero_mem)
         ::memset(arr, 0, sizeof(value_type)*size);
     
-    size_type start = offset;
-    size_type end = start + size;
+    size_type end = offset + size;
     if (end > this->size_)
         end = this->size_;
 
@@ -1438,7 +1424,7 @@ sparse_vector<Val, BV>::extract(value_type* BMRESTRICT arr,
         func.mask_ = (value_type(1) << i); // set target plane OR mask
         bm::for_each_bit_range(*bv, offset, end-1, func);
     } // for i
-    return end - start;
+    return end - offset;
 }
 
 //---------------------------------------------------------------------
