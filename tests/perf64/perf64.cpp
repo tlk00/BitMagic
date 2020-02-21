@@ -218,8 +218,8 @@ void bvector64_Serialization()
 
 int main(void)
 {
-//    bvector64_VerySparse_SetDestroyCycle();
-//    bvector64_VerySparse_RefAccessCycle();
+    bvector64_VerySparse_SetDestroyCycle();
+    bvector64_VerySparse_RefAccessCycle();
     bvector64_Serialization();
     
     std::cout << std::endl << "Performance:" << std::endl;
