@@ -19974,7 +19974,33 @@ static
 void TestSparseVectorGatherDecode()
 {
     cout << "---------------------------- Test sparse vector gather decode" << endl;
-    
+
+
+    {
+        unsigned base = 0;
+        sparse_vector_u32 sv0;
+        sv0[base+0] = 0;
+        sv0[base+1] = 1;
+        sv0[base+2] = 1;
+        sv0[base+3] = 1;
+
+        for (unsigned pass = 0; pass < 2; ++pass)
+        {
+            unsigned d[32] = { 25, };
+
+            auto sz = sv0.decode(&d[0], base + 1, 2);
+            assert(sz == 2);
+            assert(d[0] == 1);
+            assert(d[1] == 1);
+            sz = sv0.decode(&d[0], base + 2, 2);
+            assert(sz == 2);
+            assert(d[0] == 1);
+            assert(d[1] == 1);
+
+            sv0.optimize();
+        }
+    }
+
     sparse_vector_u32 sv;
     sparse_vector_u32 sv2;
     sparse_vector_u32 sv3;
