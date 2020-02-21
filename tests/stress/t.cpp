@@ -486,6 +486,11 @@ void VisitorAllRangeTest(const BV& bv, typename BV::size_type step = 1)
     bool non_empty = bv.find_range(left, right);
     if (!non_empty)
         return;
+    if (left < 65536)
+        left = 0;
+    if (right < 65536)
+        right = 65535;
+
     auto drange = right - left;
     if (!drange)
         drange = 256;
@@ -496,20 +501,17 @@ void VisitorAllRangeTest(const BV& bv, typename BV::size_type step = 1)
 
     cout << "... VisitorAllRangeTest() step=" << step << endl;
 
-    std::vector<bvect::size_type> v;
-    v.reserve(bv.count());
-
     auto pcnt = 256;
     for (auto i = left; i <= right; i+=step)
     {
-        v.resize(0);
-        bm::visit_each_bit_range(bv, i, right, (void*)&v, bit_decode_func);
         {
+            bvect bv_control;
+            bm::bit_vistor_copy_functor<bvect> func(bv_control);
+            bm::for_each_bit_range(bv, i, right, func);
+
             bvect bv2;
             bv2.copy_range(bv, i, right);
 
-            bvect bv_control;
-            bm::combine_or(bv_control, v.begin(), v.end());
             bool eq = bv2.equal(bv_control);
             assert(eq);
         }
@@ -550,14 +552,14 @@ void VisitorAllRangeTest(const BV& bv, typename BV::size_type step = 1)
     pcnt = 256;
     for (; left <= right; left+=step, --right)
     {
-        v.resize(0);
-        bm::visit_each_bit_range(bv, left, right, (void*)&v, bit_decode_func);
         {
+            bvect bv_control;
+            bm::bit_vistor_copy_functor<bvect> func(bv_control);
+            bm::for_each_bit_range(bv, left, right, func);
+
             bvect bv2;
             bv2.copy_range(bv, left, right);
 
-            bvect bv_control;
-            bm::combine_or(bv_control, v.begin(), v.end());
             bool eq = bv2.equal(bv_control);
             assert(eq);
         }
@@ -24409,6 +24411,7 @@ void BvectorBitForEachTest()
         }
 
         bv1.optimize();
+
         bm::visit_each_bit(bv1, (void*)&v1, bit_decode_func);
         bm::visit_each_bit_range(bv1, 100000, 100000, (void*)&v2, bit_decode_func);
         if (v1.size() || v2.size())
@@ -24416,6 +24419,7 @@ void BvectorBitForEachTest()
             cerr << "3. Failed empty vector decode " << v1.size() << endl;
             exit(1);
         }
+        assert(v1 == v2);
     }
 
     {
@@ -24437,10 +24441,20 @@ void BvectorBitForEachTest()
 
         VisitorAllRangeTest(bv);
 
+        bv.set(50);
+        VisitorAllRangeTest(bv);
+
+        bv.set(65535);
+        VisitorAllRangeTest(bv);
+
         bv.set_range(200, 300);
+        VisitorAllRangeTest(bv);
+
         bv.set_range(2000, 3000);
         bv.set_range(20000, 30000);
 
+
+        bv.set_range(65535-34, 65535);
         VisitorAllRangeTest(bv);
     }
 
@@ -27080,6 +27094,7 @@ int main(int argc, char *argv[])
 
     if (is_all || is_bvbasic)
     {
+
          ExportTest();
          ResizeTest();
 
