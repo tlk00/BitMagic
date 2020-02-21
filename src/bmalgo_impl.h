@@ -1712,25 +1712,42 @@ void for_each_gap_blk(const T* buf, SIZE_TYPE offset,
    @internal
 */
 template<typename T, typename Func, typename SIZE_TYPE>
-void for_each_gap_blk_range(const T* buf, SIZE_TYPE offset,
+void for_each_gap_blk_range(const T* BMRESTRICT buf,
+                            SIZE_TYPE offset,
                             unsigned left, unsigned right,
                             Func&  bit_functor)
 {
     BM_ASSERT(left <= right);
     BM_ASSERT(right < bm::bits_in_block);
 
-    T gap_mask_blk[5]; // AND mask
-    T tmp_buf[bm::gap_equiv_len * 3]; // temporary result
+    unsigned is_set;
+    unsigned start_pos = bm::gap_bfind(buf, left, &is_set);
+    const T* BMRESTRICT pcurr = buf + start_pos;
 
-    unsigned res_len;
-    bm::gap_init_range_block<T>(gap_mask_blk, (T)left, (T)right, (T)1);
+    if (is_set)
+    {
+        if (right <= *pcurr)
+        {
+            bit_functor.add_range(offset + left, (right + 1)-left);
+            return;
+        }
+        bit_functor.add_range(offset + left, (*pcurr + 1)-left);
+        ++pcurr;
+    }
 
-    T* res = bm::gap_operation_and(buf, gap_mask_blk, tmp_buf, res_len);
-    BM_ASSERT(res == tmp_buf);
-    BM_ASSERT(!(res == tmp_buf && res_len == 0));
-    (void)res; // silence unused variable error
-
-    bm::for_each_gap_blk(tmp_buf, offset, bit_functor);
+    const T* BMRESTRICT pend = buf + (*buf >> 3);
+    for (++pcurr; pcurr <= pend; pcurr += 2)
+    {
+        T prev = *(pcurr-1);
+        if (right <= *pcurr)
+        {
+            int sz = right - prev;
+            if (sz > 0)
+                bit_functor.add_range(offset + prev + 1, unsigned(sz));
+            return;
+        }
+        bit_functor.add_range(offset + prev + 1, *pcurr - prev);
+    } // for
 }
 
 

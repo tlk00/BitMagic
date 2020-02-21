@@ -397,11 +397,13 @@ struct bit_vistor_copy_functor
 
     void add_bits(size_type offset, const unsigned char* bits, unsigned size)
     {
+        BM_ASSERT(size);
         for (unsigned i = 0; i < size; ++i)
             bv_.set_bit_no_check(offset + bits[i]);
     }
     void add_range(size_type offset, size_type size)
     {
+        BM_ASSERT(size);
         bv_.set_range(offset, offset + size - 1);
     }
 
