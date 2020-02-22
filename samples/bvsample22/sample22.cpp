@@ -34,14 +34,14 @@ For more information please visit:  http://bitmagic.io
   \sa bm::bvector::keep_range
   \sa bm::bvector::is_all_one_range
   \sa bm::bvector::any_range
-  \sa bm::bvector::is_interval
-  \sa bm::bvector::find_interval_end
-  \sa bm::bvector::find_interval_start
+  \sa bm::is_interval
+  \sa bm::find_interval_end
+  \sa bm::find_interval_start
   \sa bm::deserialize_range
 */
 
 /*! \file sample22.cpp
-    \brief Example: bvector<> - range and interval functions
+    \brief Example: bvector<> - ranges and intervals functions
 */
 
 #include <iostream>
@@ -66,7 +66,7 @@ int main(void)
 {
     try
     {        
-        bm::bvector<>   bv(bm::BM_GAP); // use RLE compressed vector from the start
+        bm::bvector<> bv(bm::BM_GAP); // use RLE compressed vector from the start
         
         bv.set_range(100, 110); // sets a range of 1s [100, 110] .....11111....
 
