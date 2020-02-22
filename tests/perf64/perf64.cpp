@@ -37,6 +37,7 @@ For more information please visit:  http://bitmagic.io
 #include <memory>
 
 #include "bm64.h"
+#include "bmintervals.h"
 #include "bmsparsevec.h"
 #include "bmstrsparsevec.h"
 #include "bmsparsevec_algo.h"

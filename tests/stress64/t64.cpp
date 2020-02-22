@@ -48,6 +48,7 @@ For more information please visit:  http://bitmagic.io
 #include <bmvmin.h>
 #include <bmdbg.h>
 #include <bmalgo.h>
+#include <bmintervals.h>
 #include <bmsparsevec_util.h>
 #include <bmtimer.h>
 
@@ -2035,7 +2036,7 @@ void verify_all_one_ranges(const bvect& bv, bool all_one)
 
         one_test = bv.is_all_one_range(from, to);
         any_one_test = bv.any_range(from, to);
-        is_int = bv.is_interval(from, to);
+        is_int = bm::is_interval(bv, from, to);
         if (all_one)
         {
             assert(one_test);
@@ -2084,7 +2085,7 @@ void verify_all_one_ranges(const bvect& bv, bool all_one)
             --from;
             one_test = bv.is_all_one_range(from, to);
             any_one_test = bv.any_range(from, to);
-            is_int = bv.is_interval(from, to);
+            is_int = bm::is_interval(bv, from, to);
             if (all_one)
             {
                 assert(one_test);
@@ -2132,7 +2133,7 @@ void verify_all_one_ranges(const bvect& bv, bool all_one)
             ++to;
             one_test = bv.is_all_one_range(from, to);
             any_one_test = bv.any_range(from, to);
-            is_int = bv.is_interval(from, to);
+            is_int = bm::is_interval(bv, from, to);
             if (all_one)
             {
                 assert(one_test);
@@ -2597,7 +2598,7 @@ void VisitorAllRangeTest(const BV& bv, typename BV::size_type step)
             else
             if (delta == 1)
             {
-                bool f = bv.find_interval_end(next, i_end);
+                bool f = bm::find_interval_end(bv, next, i_end);
                 if (f)
                 {
                     delta = i_end - i;

@@ -38,6 +38,7 @@ For more information please visit:  http://bitmagic.io
 
 #include "bm.h"
 #include "bmalgo.h"
+#include "bmintervals.h"
 #include "bmaggregator.h"
 #include "bmserial.h"
 #include "bmsparsevec.h"
@@ -2915,13 +2916,13 @@ void IntervalsTest()
             {
                 for (bvect::size_type i = istart; i <= (istart + ilen); ++i)
                 {
-                    bool is_int = bv.is_interval(istart, i);
+                    bool is_int = bm::is_interval(bv, istart, i);
                     if (!is_int)
                     {
                         if (i == istart + ilen)
                         {
                             cerr << "Error: is_interval test failed! (1)" << endl;
-                            is_int = bv.is_interval(istart, i);
+                            is_int = bm::is_interval(bv, istart, i);
                             assert(0); exit(1);
                         }
                     }
@@ -2930,7 +2931,7 @@ void IntervalsTest()
                         assert(i == istart + ilen);
                     }
 
-                    is_int = bv_inv.is_interval(istart, i);
+                    is_int = bm::is_interval(bv_inv, istart, i);
                     if (is_int)
                     {
                         cerr << "Errro: is_interval test failed! (2)" << endl;
@@ -3017,7 +3018,7 @@ void IntervalsTest()
                     auto diff = i - istart;
                     if (!diff)
                         continue;
-                    bool b = bv.find_interval_start(istart+diff, pos);
+                    bool b = bm::find_interval_start(bv, istart+diff, pos);
                     assert(b);
                     assert(pos == istart);
                 } // for i
@@ -3039,7 +3040,7 @@ void IntervalsTest()
                     auto diff = i - istart;
                     if (!diff)
                         continue;
-                    bool b = bv.find_interval_end(istart+diff, pos);
+                    bool b = bm::find_interval_end(bv, istart+diff, pos);
                     assert(b);
                     assert(pos == istart+ilen);
                 } // for i

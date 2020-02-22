@@ -186,7 +186,7 @@ void IntervalsCheck(const BV& bv)
             assert(!cnt);
             any_one = bv.any_range(to, from);
             assert(!any_one);
-            is_interval = bv.is_interval(to, from);
+            is_interval = bm::is_interval(bv, to, from);
             assert(!is_interval);
 
             en2.go_to(from+1);
@@ -204,7 +204,7 @@ void IntervalsCheck(const BV& bv)
             en1.go_to(to+1);
             any_one = bv.any_range(from, to);
             assert(any_one);
-            is_interval = bv.is_interval(from, to);
+            is_interval = bm::is_interval(bv, from, to);
             assert(is_interval);
         }
 
