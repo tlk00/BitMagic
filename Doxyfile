@@ -56,6 +56,7 @@ INPUT                  = ./src/bm.h ./src/bmfunc.h  ./src/bmsimd.h ./src/bmxor.h
                          ./src/bmvmin.h ./src/encoding.h ./src/bmbmatrix.h \
                          ./src/bmconst.h ./src/bmsse_util.h ./src/bmsse4.h ./src/bmsse2.h \
                          ./src/bmalgo.h ./src/bmalgo_impl.h ./src/bmalgo_similarity.h ./src/bmgamma.h \
+                         ./src/bmintervals.h \
                          ./src/bmdef.h ./src/bmtrans.h ./src/bmutil.h ./src/bmaggregator.h \
                          ./src/bmundef.h ./src/bmserial.h ./src/bmalloc.h ./src/bmrandom.h \                        
                          ./src/bmsparsevec.h ./src/bmsparsevec_algo.h ./src/bmsparsevec_serial.h \

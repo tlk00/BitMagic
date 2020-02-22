@@ -37,7 +37,7 @@ For more information please visit:  http://bitmagic.io
 
 
 #include "bmtrans.h"
-#include "bmalgo.h"
+#include "bmalgo_impl.h"
 #include "bmbuffer.h"
 #include "bmbmatrix.h"
 #include "bmdef.h"
@@ -1422,7 +1422,7 @@ sparse_vector<Val, BV>::extract(value_type* BMRESTRICT arr,
         if (!bv)
             continue;
         func.mask_ = (value_type(1) << i); // set target plane OR mask
-        bm::for_each_bit_range(*bv, offset, end-1, func);
+        bm::for_each_bit_range_no_check(*bv, offset, end-1, func);
     } // for i
     return end - offset;
 }

@@ -18,7 +18,7 @@ limitations under the License.
 For more information please visit:  http://bitmagic.io
 */
 /*! \file bmsparsevec_algo.h
-    \brief Algorithms for sparse_vector<>
+    \brief Algorithms for bm::sparse_vector
 */
 
 #ifndef BM__H__INCLUDED__
@@ -31,6 +31,7 @@ For more information please visit:  http://bitmagic.io
 #include "bmsparsevec.h"
 #include "bmaggregator.h"
 #include "bmbuffer.h"
+#include "bmalgo.h"
 #include "bmdef.h"
 
 #ifdef _MSC_VER

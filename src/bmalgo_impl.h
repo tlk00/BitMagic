@@ -1829,6 +1829,93 @@ void for_each_bit_block_range(T*** root,
 }
 
 
+/**
+    Implementation of for_each_bit_range without boilerplave checks
+    @internal
+*/
+template<class BV, class Func>
+void for_each_bit_range_no_check(const BV&             bv,
+                       typename BV::size_type left,
+                       typename BV::size_type right,
+                       Func&                  bit_functor)
+{
+    typedef typename BV::size_type      size_type;
+    typedef typename BV::block_idx_type block_idx_type;
+
+    const typename BV::blocks_manager_type& bman = bv.get_blocks_manager();
+    bm::word_t*** blk_root = bman.top_blocks_root();
+    if (!blk_root)
+        return;
+        
+    block_idx_type nblock_left  = (left  >> bm::set_block_shift);
+    block_idx_type nblock_right = (right >> bm::set_block_shift);
+
+    unsigned i0, j0;
+    bm::get_block_coord(nblock_left, i0, j0);
+    const bm::word_t* block = bman.get_block_ptr(i0, j0);
+    unsigned nbit_left  = unsigned(left  & bm::set_block_mask);
+    size_type offset = nblock_left * bm::bits_in_block;
+
+    if (nblock_left == nblock_right) // hit in the same block
+    {
+        if (!block)
+            return;
+        unsigned nbit_right = unsigned(right & bm::set_block_mask);
+        if (BM_IS_GAP(block))
+        {
+            bm::for_each_gap_blk_range(BMGAP_PTR(block), offset,
+                                       nbit_left, nbit_right, bit_functor);
+        }
+        else
+        {
+            bm::for_each_bit_blk(block, offset, nbit_left, nbit_right,
+                                 bit_functor);
+        }
+        return;
+    }
+    // process left block
+    if (nbit_left && block)
+    {
+        if (BM_IS_GAP(block))
+        {
+            bm::for_each_gap_blk_range(BMGAP_PTR(block), offset,
+                                nbit_left, bm::bits_in_block-1, bit_functor);
+        }
+        else
+        {
+            bm::for_each_bit_blk(block, offset, nbit_left, bm::bits_in_block-1,
+                                 bit_functor);
+        }
+        ++nblock_left;
+    }
+
+    // process all complete blocks in the middle
+    {
+        block_idx_type top_blocks_size = bman.top_block_size();
+        bm::for_each_bit_block_range(blk_root, top_blocks_size,
+                                nblock_left, nblock_right-1, bit_functor);
+    }
+
+    unsigned nbit_right = unsigned(right & bm::set_block_mask);
+    bm::get_block_coord(nblock_right, i0, j0);
+    block = bman.get_block_ptr(i0, j0);
+
+    if (block)
+    {
+        offset = nblock_right * bm::bits_in_block;
+        if (BM_IS_GAP(block))
+        {
+            bm::for_each_gap_blk_range(BMGAP_PTR(block), offset,
+                                       0, nbit_right, bit_functor);
+        }
+        else
+        {
+            bm::for_each_bit_blk(block, offset, 0, nbit_right, bit_functor);
+        }
+    }
+}
+
+
 
 } // namespace bm
 
