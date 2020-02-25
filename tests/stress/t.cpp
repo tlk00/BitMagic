@@ -13208,6 +13208,110 @@ void BlockLevelTest()
 
 }
 
+static
+void IntervalEnumeratorTest()
+{
+    cout << "----------------------------- IntervalEnumeratorTest()" << endl;
+
+    bool valid;
+    cout << "empty bvector tests" << endl;
+    {
+        bm::interval_enumerator<bvect> ien;
+        valid = ien.valid();
+        assert(!valid);
+    }
+
+    {
+        bvect bv;
+        bm::interval_enumerator<bvect> ien(bv);
+
+        valid = ien.valid();
+        assert(!valid);
+    }
+
+
+    cout << "inverted bvector tests" << endl;
+    {
+        bvect bv;
+        bv.invert();
+        bm::interval_enumerator<bvect> ien(bv);
+
+        valid = ien.valid();
+        assert(valid);
+        assert(ien.start() == 0);
+        assert(ien.end() == bm::id_max-1);
+    }
+
+    cout << "GAP bvector tests" << endl;
+    {
+        bvect bv;
+        bv.set_range(0, 33);
+
+        bm::interval_enumerator<bvect> ien(bv);
+        valid = ien.valid();
+        assert(valid);
+        assert(ien.start() == 0);
+        assert(ien.end() == 33);
+
+        bv.set_range(bm::id_max/2, bm::id_max/2 + 2);
+        ien.go_to(100);
+        valid = ien.valid();
+        assert(valid);
+        assert(ien.start() == bm::id_max/2);
+        assert(ien.end() == bm::id_max/2 + 2);
+
+        bv.set_range(bm::id_max-1, bm::id_max-1);
+        ien.go_to(bm::id_max-2);
+        valid = ien.valid();
+        assert(valid);
+        assert(ien.start() == bm::id_max-1);
+        assert(ien.end() == bm::id_max-1);
+
+        ien.go_to(0);
+        valid = ien.valid();
+        assert(valid);
+        assert(ien.start() == 0);
+        assert(ien.end() == 33);
+
+        valid = ien.advance();
+        assert(valid);
+        assert(ien.start() == bm::id_max/2);
+        assert(ien.end() == bm::id_max/2 + 2);
+
+        valid = ien.advance();
+        assert(valid);
+        assert(ien.start() == bm::id_max-1);
+        assert(ien.end() == bm::id_max-1);
+
+        valid = ien.advance();
+        assert(!valid);
+    }
+
+/*
+    {
+        bvect bv { bm::id_max-1};
+        bm::interval_enumerator<bvect> ien(bv);
+
+        valid = ien.valid();
+        assert(valid);
+        assert(ien.start() == bm::id_max-1);
+    }
+
+    {
+        bvect bv { 0 };
+        bm::interval_enumerator<bvect> ien(bv);
+
+        valid = ien.valid();
+        assert(valid);
+        assert(ien.start() == 0);
+    }
+*/
+
+
+    cout << "----------------------------- IntervalEnumeratorTest() OK" << endl;
+}
+
+
 /*
 __int64 CalcBitCount64(__int64 b)
 {
@@ -27113,11 +27217,13 @@ int main(int argc, char *argv[])
          EmptyBVTest();
          ClearAllTest();
 
-         EnumeratorTest();
-
          CountRangeTest();
 
+         EnumeratorTest();
+
          Intervals_RangesTest();
+
+         IntervalEnumeratorTest();
 
          KeepRangeTest();
 

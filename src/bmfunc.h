@@ -4124,7 +4124,7 @@ bool bit_find_first_diff(const bm::word_t* BMRESTRICT blk1,
    \brief Converts bit block to GAP.
    \param dest - Destinatio GAP buffer.
    \param block - Source bitblock buffer.
-   \param dest_len - length of the dest. buffer.
+   \param dest_len - length of the destination buffer.
    \return  New length of GAP block or 0 if conversion failed
    (insufficicent space).
 
@@ -4210,6 +4210,11 @@ complete:
 }
 #endif
 
+/**
+   Convert bit block to GAP representation
+   @internal
+   @ingroup bitfunc
+*/
 inline
 unsigned bit_to_gap(gap_word_t* BMRESTRICT dest,
                     const unsigned* BMRESTRICT block,
