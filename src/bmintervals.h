@@ -351,11 +351,239 @@ bool find_interval_end(const BV& bv,
     return true;
 }
 
+//----------------------------------------------------------------------------
+
+/// @internal
+///
+template<typename BV>
+class interval_enumerator
+{
+public:
+#ifndef BM_NO_STL
+        typedef std::input_iterator_tag  iterator_category;
+#endif
+        typedef BV                                         bvector_type;
+        typedef typename bvector_type::size_type           size_type;
+        typedef typename bvector_type::allocator_type      allocator_type;
+        typedef bm::byte_buffer<allocator_type>            buffer_type;
+
+public:
+
+    interval_enumerator()
+        : bv_(0), pos_(bm::id_max), end_pos_(bm::id_max), gap_ptr_(0)
+    {}
+
+    interval_enumerator(const BV& bv)
+        : bv_(&bv), pos_(bm::id_max), end_pos_(bm::id_max), gap_ptr_(0)
+    {
+        go_to_impl(0, true);
+    }
+
+    size_type start() const BMNOEXCEPT;
+    size_type end() const BMNOEXCEPT;
+
+    bool valid() const BMNOEXCEPT;
+
+    void go_to(size_type pos);
+
+    bool advance();
+
+protected:
+    typedef typename bvector_type::block_idx_type       block_idx_type;
+
+    bool go_to_impl(size_type pos, bool extend_start);
+
+    /// Turn FSM into invalid state (out of range)
+    void invalidate() BMNOEXCEPT;
+
+
+private:
+    const BV*                  bv_;      ///!< bit-vector for traversal
+    mutable buffer_type        buffer_;  ///!< buffer for decoded block
+    size_type                  pos_;     ///!< current position
+    size_type                  end_pos_; ///!< current interval end position
+    const bm::gap_word_t*      gap_ptr_; ///!< current pointer in GAP block
+};
 
 
 //----------------------------------------------------------------------------
 //
 //----------------------------------------------------------------------------
+
+template<typename BV>
+typename interval_enumerator<BV>::size_type
+interval_enumerator<BV>::start() const BMNOEXCEPT
+{
+    return pos_;
+}
+
+//----------------------------------------------------------------------------
+
+template<typename BV>
+typename interval_enumerator<BV>::size_type
+interval_enumerator<BV>::end() const BMNOEXCEPT
+{
+    return end_pos_;
+}
+
+//----------------------------------------------------------------------------
+
+template<typename BV>
+bool interval_enumerator<BV>::valid() const BMNOEXCEPT
+{
+    return (pos_ != bm::id_max);
+}
+
+//----------------------------------------------------------------------------
+
+template<typename BV>
+void interval_enumerator<BV>::invalidate() BMNOEXCEPT
+{
+    pos_ = end_pos_ = bm::id_max;
+}
+
+//----------------------------------------------------------------------------
+
+template<typename BV>
+void interval_enumerator<BV>::go_to(size_type pos)
+{
+    go_to_impl(pos, true);
+}
+
+//----------------------------------------------------------------------------
+
+template<typename BV>
+bool interval_enumerator<BV>::go_to_impl(size_type pos, bool extend_start)
+{
+    if (!bv_ || !bv_->is_init() || pos == pos < bm::id_max)
+    {
+        invalidate();
+        return false;
+    }
+
+    bool found;
+    size_type start_pos;
+
+    // go to prolog: identify the true interval start position
+    //
+    if (extend_start)
+    {
+        found = bm::find_interval_start(*bv_, pos, start_pos);
+        if (!found)
+        {
+            found = bv_->find(pos, start_pos);
+            if (!found)
+            {
+                invalidate();
+                return false;
+            }
+        }
+    }
+    else
+    {
+        found = bv_->find(pos, start_pos);
+        if (!found)
+        {
+            invalidate();
+            return false;
+        }
+    }
+
+    // start position established, start decoding from it
+    pos_ = pos = start_pos;
+
+    block_idx_type nb = (pos >> bm::set_block_shift);
+    const typename BV::blocks_manager_type& bman = bv_->get_blocks_manager();
+    {
+        unsigned i0, j0;
+        bm::get_block_coord(nb, i0, j0);
+        const bm::word_t* block = bman.get_block_ptr(i0, j0);
+        BM_ASSERT(block);
+
+        if (block == FULL_BLOCK_FAKE_ADDR)
+        {
+            // super-long interval, find the end of it
+            found = bm::find_interval_end(*bv_, pos, end_pos_);
+            BM_ASSERT(found);
+            return true;
+        }
+
+        if (BM_IS_GAP(block))
+        {
+            const bm::gap_word_t* BMRESTRICT gap_block = BMGAP_PTR(block);
+            unsigned nbit = unsigned(pos  & bm::set_block_mask);
+
+            unsigned is_set;
+            unsigned gap_pos = bm::gap_bfind(gap_block, nbit, &is_set);
+            BM_ASSERT(is_set);
+
+            end_pos_ = (nb * bm::gap_max_bits) + gap_block[gap_pos];
+            if (gap_block[gap_pos] == bm::gap_max_bits-1)
+            {
+                // it is the end of the GAP block - run search
+                //
+                if (end_pos_ == bm::id_max-1)
+                {
+                    gap_ptr_ = 0;
+                    return true;
+                }
+                found = bm::find_interval_end(*bv_, end_pos_+1, start_pos);
+                if (found)
+                {
+                    end_pos_ = start_pos;
+                    gap_ptr_ = 0;
+                    return true;
+                }
+            }
+            gap_ptr_ = gap_block + gap_pos;
+            return true;
+        }
+    }
+    BM_ASSERT(0);
+    return false;
+}
+
+//----------------------------------------------------------------------------
+
+template<typename BV>
+bool interval_enumerator<BV>::advance()
+{
+    if (end_pos_ == bm::id_max-1)
+    {
+        invalidate();
+        return false;
+    }
+    bool found;
+    if (gap_ptr_) // in GAP block
+    {
+        ++gap_ptr_; // 0 - GAP
+        if (*gap_ptr_ == bm::gap_max_bits-1) // GAP block end
+        {
+            return go_to_impl(end_pos_+ 1, false);
+        }
+        unsigned prev = *gap_ptr_;
+
+        ++gap_ptr_; // 1 - GAP
+        block_idx_type nb = (pos_ >> bm::set_block_shift);
+        pos_ = (nb * bm::gap_max_bits) + prev + 1;
+        if (*gap_ptr_ == bm::gap_max_bits-1) // GAP block end
+        {
+            found = bm::find_interval_end(*bv_, pos_, end_pos_);
+            BM_ASSERT(found);
+            gap_ptr_ = 0;
+            return true;
+        }
+        end_pos_ = (nb * bm::gap_max_bits) + *gap_ptr_;
+        return true;
+    }
+
+    return go_to_impl(end_pos_+ 1, false);
+}
+
+//----------------------------------------------------------------------------
+//
+//----------------------------------------------------------------------------
+
 
 } // namespace bm
 
