@@ -465,7 +465,7 @@ extern "C" {
         vp->push_back(bit_idx);
         return 0;
     }
-
+    /*
     static
     int bit_decode_func2(void* handle_ptr, bm::id_t bit_idx)
     {
@@ -477,6 +477,7 @@ extern "C" {
         vp->push_back(bit_idx);
         return 0;
     }
+    */
 } // extern C
 
 
@@ -24375,7 +24376,7 @@ void BvectorBitForEachTest()
 {
     cout << "------------------------ bvector BitForEach Test" << endl;
     int res;
-    
+ 
     {
         cout << "test empty vector" << endl;
         bvect bv1;
@@ -24610,14 +24611,17 @@ void BvectorBitForEachTest()
             bv2.copy_range(bv, from, to);
 
 
-            std::vector<bvect::size_type> v1;
+ //           std::vector<bvect::size_type> v1;
             bvect bv_c;
             {
-            bm::visit_each_bit_range(bv, from, to, (void*)&v1, bit_decode_func);
-            assert(v1.size() == to-from+1);
-            bm::combine_or(bv_c, v1.begin(), v1.end());
+                bm::bit_vistor_copy_functor<bvect> func(bv_c);
+                bm::for_each_bit_range(bv, from, to, func);
+
+//            bm::visit_each_bit_range(bv, from, to, (void*)&v1, bit_decode_func);
+//            assert(v1.size() == to-from+1);
+//            bm::combine_or(bv_c, v1.begin(), v1.end());
             }
-            v1.resize(0);
+//            v1.resize(0);
 
             bool eq;
             eq = bv_c.equal(bv1);
@@ -24626,7 +24630,7 @@ void BvectorBitForEachTest()
             assert(eq);
 
             bv_c.clear();
-
+/*
             {
             bm::visit_each_bit_range(bv1, from, to, (void*)&v1, bit_decode_func);
             assert(v1.size() == to-from+1);
@@ -24637,6 +24641,7 @@ void BvectorBitForEachTest()
             assert(eq);
             eq = bv_c.equal(bv2);
             assert(eq);
+*/
             bv_c.clear();
 
             to = bm::id_max/2;
@@ -24644,6 +24649,8 @@ void BvectorBitForEachTest()
         }
     }
 
+    // dsabled for now as it produces excessive memory consumption
+    #if 0
     {
         bvect bv;
         bv.set();
@@ -24655,8 +24662,8 @@ void BvectorBitForEachTest()
         } catch (...)
         {
         }
-
     }
+    #endif 
     cout << "OK" << endl;
 
     
