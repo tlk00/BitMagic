@@ -13286,16 +13286,6 @@ void IntervalEnumeratorTest()
         assert(!valid);
     }
 
-/*
-    {
-        bvect bv { bm::id_max-1};
-        bm::interval_enumerator<bvect> ien(bv);
-
-        valid = ien.valid();
-        assert(valid);
-        assert(ien.start() == bm::id_max-1);
-    }
-
     {
         bvect bv { 0 };
         bm::interval_enumerator<bvect> ien(bv);
@@ -13303,8 +13293,45 @@ void IntervalEnumeratorTest()
         valid = ien.valid();
         assert(valid);
         assert(ien.start() == 0);
+        assert(ien.end() == 0);
     }
-*/
+
+
+    {
+        bvect bv { bm::id_max-1};
+        bm::interval_enumerator<bvect> ien(bv);
+
+        valid = ien.valid();
+        assert(valid);
+        assert(ien.start() == bm::id_max-1);
+        assert(ien.end() == bm::id_max-1);
+
+    }
+
+    {
+        bvect bv { 0, 100, bm::id_max-1 };
+        bm::interval_enumerator<bvect> ien(bv);
+
+        valid = ien.valid();
+        assert(valid);
+        assert(ien.start() == 0);
+        assert(ien.end() == 0);
+
+        valid = ien.advance();
+        assert(valid);
+        assert(ien.start() == 100);
+        assert(ien.end() == 100);
+
+        valid = ien.advance();
+        assert(valid);
+        assert(ien.start() == bm::id_max-1);
+        assert(ien.end() == bm::id_max-1);
+
+        valid = ien.advance();
+        assert(!valid);
+    }
+
+
 
 
     cout << "----------------------------- IntervalEnumeratorTest() OK" << endl;
