@@ -13208,6 +13208,29 @@ void BlockLevelTest()
 
 }
 
+template<class BV>
+void interval_copy_range(BV& bv, const BV& bv_src,
+                         typename BV::size_type from, typename BV::size_type to)
+{
+    bv.clear();
+
+    bm::interval_enumerator<bvect> ien(bv_src, from, false);
+    while (ien.valid())
+    {
+        auto st = ien.start();
+        assert(st >= from);
+        if (st > to)
+            break;
+        auto end = ien.end();
+        if (end > to)
+            end = to;
+
+        bv.set_range(st, end);
+        if (!ien.advance())
+            break;
+    } // while
+}
+
 static
 void IntervalEnumeratorTest()
 {
@@ -13234,11 +13257,20 @@ void IntervalEnumeratorTest()
     {
         bvect bv;
         bv.invert();
-        bm::interval_enumerator<bvect> ien(bv);
 
+        {
+            bm::interval_enumerator<bvect> ien(bv);
+
+            valid = ien.valid();
+            assert(valid);
+            assert(ien.start() == 0);
+            assert(ien.end() == bm::id_max-1);
+        }
+
+        bm::interval_enumerator<bvect> ien(bv, 1, false);
         valid = ien.valid();
         assert(valid);
-        assert(ien.start() == 0);
+        assert(ien.start() == 1);
         assert(ien.end() == bm::id_max-1);
     }
 
@@ -13287,7 +13319,31 @@ void IntervalEnumeratorTest()
         assert(!valid);
     }
 
-/*
+    {
+        bvect bv { 0 };
+        {
+            bm::interval_enumerator<bvect> ien(bv);
+
+            valid = ien.valid();
+            assert(valid);
+            assert(ien.start() == 0);
+            assert(ien.end() == 0);
+        }
+
+        bv.set(100);
+        bv.set(101);
+
+        {
+            bm::interval_enumerator<bvect> ien(bv, 1, false);
+
+            valid = ien.valid();
+            assert(valid);
+            assert(ien.start() == 100);
+            assert(ien.end() == 101);
+        }
+    }
+
+
     {
         bvect bv { bm::id_max-1};
         bm::interval_enumerator<bvect> ien(bv);
@@ -13295,20 +13351,99 @@ void IntervalEnumeratorTest()
         valid = ien.valid();
         assert(valid);
         assert(ien.start() == bm::id_max-1);
+        assert(ien.end() == bm::id_max-1);
+
     }
 
     {
-        bvect bv { 0 };
-        bm::interval_enumerator<bvect> ien(bv);
+        bvect bv { 0, 100, bm::id_max-1 };
+        for (unsigned pass = 0; pass < 2; ++pass)
+        {
+            bm::interval_enumerator<bvect> ien(bv);
 
-        valid = ien.valid();
-        assert(valid);
-        assert(ien.start() == 0);
+            valid = ien.valid();
+            assert(valid);
+            assert(ien.start() == 0);
+            assert(ien.end() == 0);
+
+            valid = ien.advance();
+            assert(valid);
+            assert(ien.start() == 100);
+            assert(ien.end() == 100);
+
+            valid = ien.advance();
+            assert(valid);
+            assert(ien.start() == bm::id_max-1);
+            assert(ien.end() == bm::id_max-1);
+
+            valid = ien.advance();
+            assert(!valid);
+            bv.optimize();
+
+        } // for pass
     }
-*/
+
+    cout << "interval_enumerator +N stress test" << endl;
+    {
+        unsigned delta_max = 65536;
+        double duration = 0;
+        for (unsigned inc = 1; inc < delta_max; ++inc)
+        {
+            clock_t start = clock();
+            cout << "\rinc = " << inc << " of " << delta_max << " (" << duration << ")" << flush;
+            bvect bv;
+            bvect bv_c;
+            bvect::size_type test_max = 65535 * 256;
+
+            for (bvect::size_type i = 0; i < test_max; i+=inc)
+                bv.set(i);
+
+            for (unsigned pass = 0; pass < 2; ++pass)
+            {
+                bm::interval_enumerator<bvect> ien(bv);
+                while (ien.valid())
+                {
+                    auto from = ien.start();
+                    auto to = ien.end();
+                    bv_c.set_range(from, to);
+                    if (!ien.advance())
+                        break;
+                }
+                bool eq = bv.equal(bv_c);
+                assert(eq);
+
+                {
+                    bvect::size_type copy_to = test_max/100;
+                    for (bvect::size_type k = 1; k < copy_to; ++k)
+                    {
+                        bvect bv2; bvect bv2_c;
+                        bv2_c.copy_range(bv, k, copy_to);
+
+                        interval_copy_range(bv2, bv, k, copy_to);
+                        eq = bv2.equal(bv2_c);
+                        assert(eq);
+                        copy_to -= rand()%128;
+                    }
+                }
+
+                bv.optimize();
+                bv_c.clear();
+            } // for pass
+
+            clock_t finish = clock();
+            clock_t elapsed_clocks = finish - start;
+            duration = (double)(elapsed_clocks) / CLOCKS_PER_SEC;
+
+            cout << "\rinc = " << inc << " of " << delta_max << " (" << duration << ")" << flush;
+
+        } // for inc
+
+    }
 
 
-    cout << "----------------------------- IntervalEnumeratorTest() OK" << endl;
+
+
+    cout << "\n----------------------------- IntervalEnumeratorTest() OK" << endl;
 }
 
 

@@ -6759,7 +6759,10 @@ bvector<Alloc>::combine_operation_with_block(block_idx_type    nb,
                 BM_ASSERT(gfunc);
                 (*gfunc)(blk, BMGAP_PTR(arg_blk));
 
-                blockman_.optimize_bit_block(nb);
+                // TODO: commented out optimization, because it can be very slow
+                // need to take into account previous operation not to make
+                // fruitless attempts here
+                //blockman_.optimize_bit_block(nb);
                 return;
             }
             

@@ -376,30 +376,39 @@ public:
     interval_enumerator(const BV& bv)
         : bv_(&bv), pos_(bm::id_max), end_pos_(bm::id_max), gap_ptr_(0)
     {
-        go_to_impl(0, true);
+        go_to_impl(0, false);
     }
+
+    interval_enumerator(const BV& bv, size_type start_pos, bool extend_start)
+        : bv_(&bv), pos_(bm::id_max), end_pos_(bm::id_max), gap_ptr_(0)
+    {
+        go_to_impl(start_pos, extend_start);
+    }
+
 
     size_type start() const BMNOEXCEPT;
     size_type end() const BMNOEXCEPT;
 
     bool valid() const BMNOEXCEPT;
 
-    void go_to(size_type pos);
+    void go_to(size_type pos, bool extend_start = true);
 
     bool advance();
 
 protected:
     typedef typename bvector_type::block_idx_type       block_idx_type;
+    typedef typename bvector_type::allocator_type       bv_allocator_type;
+    typedef bm::heap_vector<unsigned short, bv_allocator_type, true>
+                                                    gap_vector_type;
 
     bool go_to_impl(size_type pos, bool extend_start);
 
     /// Turn FSM into invalid state (out of range)
     void invalidate() BMNOEXCEPT;
 
-
 private:
     const BV*                  bv_;      ///!< bit-vector for traversal
-    mutable buffer_type        buffer_;  ///!< buffer for decoded block
+    gap_vector_type            gap_buf_; ///!< GAP buf.vector for bit-block
     size_type                  pos_;     ///!< current position
     size_type                  end_pos_; ///!< current interval end position
     const bm::gap_word_t*      gap_ptr_; ///!< current pointer in GAP block
@@ -445,9 +454,9 @@ void interval_enumerator<BV>::invalidate() BMNOEXCEPT
 //----------------------------------------------------------------------------
 
 template<typename BV>
-void interval_enumerator<BV>::go_to(size_type pos)
+void interval_enumerator<BV>::go_to(size_type pos, bool extend_start)
 {
-    go_to_impl(pos, true);
+    go_to_impl(pos, extend_start);
 }
 
 //----------------------------------------------------------------------------
@@ -455,7 +464,7 @@ void interval_enumerator<BV>::go_to(size_type pos)
 template<typename BV>
 bool interval_enumerator<BV>::go_to_impl(size_type pos, bool extend_start)
 {
-    if (!bv_ || !bv_->is_init() || pos == pos < bm::id_max)
+    if (!bv_ || !bv_->is_init() || (pos >= bm::id_max))
     {
         invalidate();
         return false;
@@ -494,52 +503,85 @@ bool interval_enumerator<BV>::go_to_impl(size_type pos, bool extend_start)
 
     block_idx_type nb = (pos >> bm::set_block_shift);
     const typename BV::blocks_manager_type& bman = bv_->get_blocks_manager();
+    unsigned i0, j0;
+    bm::get_block_coord(nb, i0, j0);
+    const bm::word_t* block = bman.get_block_ptr(i0, j0);
+    BM_ASSERT(block);
+
+    if (block == FULL_BLOCK_FAKE_ADDR)
     {
-        unsigned i0, j0;
-        bm::get_block_coord(nb, i0, j0);
-        const bm::word_t* block = bman.get_block_ptr(i0, j0);
-        BM_ASSERT(block);
-
-        if (block == FULL_BLOCK_FAKE_ADDR)
-        {
-            // super-long interval, find the end of it
-            found = bm::find_interval_end(*bv_, pos, end_pos_);
-            BM_ASSERT(found);
-            return true;
-        }
-
-        if (BM_IS_GAP(block))
-        {
-            const bm::gap_word_t* BMRESTRICT gap_block = BMGAP_PTR(block);
-            unsigned nbit = unsigned(pos  & bm::set_block_mask);
-
-            unsigned is_set;
-            unsigned gap_pos = bm::gap_bfind(gap_block, nbit, &is_set);
-            BM_ASSERT(is_set);
-
-            end_pos_ = (nb * bm::gap_max_bits) + gap_block[gap_pos];
-            if (gap_block[gap_pos] == bm::gap_max_bits-1)
-            {
-                // it is the end of the GAP block - run search
-                //
-                if (end_pos_ == bm::id_max-1)
-                {
-                    gap_ptr_ = 0;
-                    return true;
-                }
-                found = bm::find_interval_end(*bv_, end_pos_+1, start_pos);
-                if (found)
-                {
-                    end_pos_ = start_pos;
-                    gap_ptr_ = 0;
-                    return true;
-                }
-            }
-            gap_ptr_ = gap_block + gap_pos;
-            return true;
-        }
+        // super-long interval, find the end of it
+        found = bm::find_interval_end(*bv_, pos, end_pos_);
+        BM_ASSERT(found);
+        return true;
     }
+
+    if (BM_IS_GAP(block))
+    {
+        const bm::gap_word_t* BMRESTRICT gap_block = BMGAP_PTR(block);
+        unsigned nbit = unsigned(pos  & bm::set_block_mask);
+
+        unsigned is_set;
+        unsigned gap_pos = bm::gap_bfind(gap_block, nbit, &is_set);
+        BM_ASSERT(is_set);
+
+        end_pos_ = (nb * bm::gap_max_bits) + gap_block[gap_pos];
+        if (gap_block[gap_pos] == bm::gap_max_bits-1)
+        {
+            // it is the end of the GAP block - run search
+            //
+            if (end_pos_ == bm::id_max-1)
+            {
+                gap_ptr_ = 0;
+                return true;
+            }
+            found = bm::find_interval_end(*bv_, end_pos_+1, start_pos);
+            if (found)
+            {
+                end_pos_ = start_pos;
+                gap_ptr_ = 0;
+                return true;
+            }
+        }
+        gap_ptr_ = gap_block + gap_pos;
+        return true;
+    }
+
+    // bit-block: turn to GAP and position there
+    //
+    if (gap_buf_.size() == 0)
+    {
+        gap_buf_.resize(bm::gap_max_bits+64);
+    }
+    bm::gap_word_t* gap_tmp = gap_buf_.data();
+    unsigned len = bm::bit_to_gap(gap_tmp, block, bm::gap_max_bits+64);
+    BM_ASSERT(len);
+
+
+    size_type base_idx = (nb * bm::gap_max_bits);
+    for (unsigned i = 1; i <= len; ++i)
+    {
+        size_type gap_pos = base_idx + gap_tmp[i];
+        if (gap_pos >= pos)
+        {
+            if (gap_tmp[i] == bm::gap_max_bits - 1)
+            {
+                found = bm::find_interval_end(*bv_, gap_pos, end_pos_);
+                BM_ASSERT(found);
+                gap_ptr_ = 0;
+                return true;
+            }
+
+            gap_ptr_ = &gap_tmp[i];
+            end_pos_ = gap_pos;
+            return true;
+        }
+        if (gap_tmp[i] == bm::gap_max_bits - 1)
+            break;
+    } // for
+
     BM_ASSERT(0);
+
     return false;
 }
 

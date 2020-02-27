@@ -1620,6 +1620,177 @@ void EnumeratorTest()
     }
 }
 
+
+static
+void IntervalEnumeratorTest()
+{
+    cout << "----------------------------- IntervalEnumeratorTest()" << endl;
+
+    bool valid;
+    cout << "empty bvector tests" << endl;
+    {
+        bm::interval_enumerator<bvect> ien;
+        valid = ien.valid();
+        assert(!valid);
+    }
+
+    {
+        bvect bv;
+        bm::interval_enumerator<bvect> ien(bv);
+
+        valid = ien.valid();
+        assert(!valid);
+    }
+
+
+    cout << "inverted bvector tests" << endl;
+    {
+        bvect bv;
+        bv.invert();
+        bm::interval_enumerator<bvect> ien(bv);
+
+        valid = ien.valid();
+        assert(valid);
+        assert(ien.start() == 0);
+        assert(ien.end() == bm::id_max-1);
+    }
+
+    cout << "GAP bvector tests" << endl;
+    {
+        bvect bv;
+        bv.set_range(0, 33);
+
+        bm::interval_enumerator<bvect> ien(bv);
+        valid = ien.valid();
+        assert(valid);
+        assert(ien.start() == 0);
+        assert(ien.end() == 33);
+
+        bv.set_range(bm::id_max/2, bm::id_max/2 + 2);
+        ien.go_to(100);
+        valid = ien.valid();
+        assert(valid);
+        assert(ien.start() == bm::id_max/2);
+        assert(ien.end() == bm::id_max/2 + 2);
+
+        bv.set_range(bm::id_max-1, bm::id_max-1);
+        ien.go_to(bm::id_max-2);
+        valid = ien.valid();
+        assert(valid);
+        assert(ien.start() == bm::id_max-1);
+        assert(ien.end() == bm::id_max-1);
+
+        ien.go_to(0);
+        valid = ien.valid();
+        assert(valid);
+        assert(ien.start() == 0);
+        assert(ien.end() == 33);
+
+        valid = ien.advance();
+        assert(valid);
+        assert(ien.start() == bm::id_max/2);
+        assert(ien.end() == bm::id_max/2 + 2);
+
+        valid = ien.advance();
+        assert(valid);
+        assert(ien.start() == bm::id_max-1);
+        assert(ien.end() == bm::id_max-1);
+
+        valid = ien.advance();
+        assert(!valid);
+    }
+
+    {
+        bvect bv { 0 };
+        bm::interval_enumerator<bvect> ien(bv);
+
+        valid = ien.valid();
+        assert(valid);
+        assert(ien.start() == 0);
+        assert(ien.end() == 0);
+    }
+
+
+    {
+        bvect bv { bm::id_max-1};
+        bm::interval_enumerator<bvect> ien(bv);
+
+        valid = ien.valid();
+        assert(valid);
+        assert(ien.start() == bm::id_max-1);
+        assert(ien.end() == bm::id_max-1);
+
+    }
+
+    {
+        bvect bv { 0, 100, bm::id_max-1 };
+        for (unsigned pass = 0; pass < 2; ++pass)
+        {
+            bm::interval_enumerator<bvect> ien(bv);
+
+            valid = ien.valid();
+            assert(valid);
+            assert(ien.start() == 0);
+            assert(ien.end() == 0);
+
+            valid = ien.advance();
+            assert(valid);
+            assert(ien.start() == 100);
+            assert(ien.end() == 100);
+
+            valid = ien.advance();
+            assert(valid);
+            assert(ien.start() == bm::id_max-1);
+            assert(ien.end() == bm::id_max-1);
+
+            valid = ien.advance();
+            assert(!valid);
+            bv.optimize();
+
+        } // for pass
+    }
+
+    cout << "interval_enumerator +N stress test" << endl;
+    {
+        unsigned delta_max = 65536;
+        for (unsigned inc = 1; inc < delta_max; ++inc)
+        {
+            cout << "\rinc = " << inc << " of " << delta_max << flush;
+            bvect bv;
+            bvect bv_c;
+            bvect::size_type test_max = 65535 * 256;
+
+            for (bvect::size_type i = 0; i < test_max; i+=inc)
+                bv.set(i);
+
+            for (unsigned pass = 0; pass < 2; ++pass)
+            {
+                bm::interval_enumerator<bvect> ien(bv);
+                while (ien.valid())
+                {
+                    auto from = ien.start();
+                    auto to = ien.end();
+                    bv_c.set_range(from, to);
+                    if (!ien.advance())
+                        break;
+                }
+                bool eq = bv.equal(bv_c);
+                assert(eq);
+
+                bv.optimize();
+                bv_c.clear();
+            } // for pass
+        } // for inc
+
+    }
+
+
+
+
+    cout << "\n----------------------------- IntervalEnumeratorTest() OK" << endl;
+}
+
+
 static
 void VerifyCountRange(const bvect& bv,
                       const bvect::rs_index_type& bc_arr,
@@ -15937,6 +16108,8 @@ int main(int argc, char *argv[])
         BvectorFindFirstDiffTest();
 
         ComparisonTest();
+
+        IntervalEnumeratorTest();
     }
     
     if (is_all || is_bvser || is_bvbasic)
