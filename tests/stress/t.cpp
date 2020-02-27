@@ -13310,31 +13310,70 @@ void IntervalEnumeratorTest()
 
     {
         bvect bv { 0, 100, bm::id_max-1 };
-        bm::interval_enumerator<bvect> ien(bv);
+        for (unsigned pass = 0; pass < 2; ++pass)
+        {
+            bm::interval_enumerator<bvect> ien(bv);
 
-        valid = ien.valid();
-        assert(valid);
-        assert(ien.start() == 0);
-        assert(ien.end() == 0);
+            valid = ien.valid();
+            assert(valid);
+            assert(ien.start() == 0);
+            assert(ien.end() == 0);
 
-        valid = ien.advance();
-        assert(valid);
-        assert(ien.start() == 100);
-        assert(ien.end() == 100);
+            valid = ien.advance();
+            assert(valid);
+            assert(ien.start() == 100);
+            assert(ien.end() == 100);
 
-        valid = ien.advance();
-        assert(valid);
-        assert(ien.start() == bm::id_max-1);
-        assert(ien.end() == bm::id_max-1);
+            valid = ien.advance();
+            assert(valid);
+            assert(ien.start() == bm::id_max-1);
+            assert(ien.end() == bm::id_max-1);
 
-        valid = ien.advance();
-        assert(!valid);
+            valid = ien.advance();
+            assert(!valid);
+            bv.optimize();
+
+        } // for pass
+    }
+
+    cout << "interval_enumerator +N stress test" << endl;
+    {
+        unsigned delta_max = 65536;
+        for (unsigned inc = 1; inc < delta_max; ++inc)
+        {
+            cout << "\rinc = " << inc << " of " << delta_max << flush;
+            bvect bv;
+            bvect bv_c;
+            bvect::size_type test_max = 65535 * 256;
+
+            for (bvect::size_type i = 0; i < test_max; i+=inc)
+                bv.set(i);
+
+            for (unsigned pass = 0; pass < 2; ++pass)
+            {
+                bm::interval_enumerator<bvect> ien(bv);
+                while (ien.valid())
+                {
+                    auto from = ien.start();
+                    auto to = ien.end();
+                    bv_c.set_range(from, to);
+                    if (!ien.advance())
+                        break;
+                }
+                bool eq = bv.equal(bv_c);
+                assert(eq);
+
+                bv.optimize();
+                bv_c.clear();
+            } // for pass
+        } // for inc
+
     }
 
 
 
 
-    cout << "----------------------------- IntervalEnumeratorTest() OK" << endl;
+    cout << "\n----------------------------- IntervalEnumeratorTest() OK" << endl;
 }
 
 
