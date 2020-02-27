@@ -2788,7 +2788,7 @@ void RangeCopyTest()
 
 }
 
-/// Reference (naive) inetrval detector based on population counting 
+/// Reference (naive) interval detector based on population counting 
 /// and boundaries tests
 ///
 template<typename BV>
@@ -2851,10 +2851,10 @@ void IntervalsTest()
     const char* msg5 = "reference_is_interval() (BITS)";
     const char* msg6 = "bvector<>::find_interval_start() (BITS)";
     const char* msg7 = "bvector<>::find_interval_end() (BITS)";
+    const char* msg8 = "interval_enumerator<> (BITS)";
 
     for (unsigned pass = 0; pass < 2; ++pass)
     {
-
         {
             TimeTaker tt(msg3, REPEATS * 1);
             bvect::size_type istart(0), ilen(0);
@@ -3051,6 +3051,26 @@ void IntervalsTest()
             } // for istart
         }
 
+        {
+            bvect::size_type cnt_c = bv.count();
+
+            TimeTaker tt(msg8, REPEATS * 1);
+   
+            for (unsigned i = 0; i < REPEATS; ++i)
+            {
+                bvect::size_type cnt = 0;
+                bm::interval_enumerator<bvect> ien(bv);
+                if (ien.valid())
+                {
+                    do {
+                        auto s = ien.start();
+                        auto e = ien.end();
+                        cnt += e - s + 1;
+                    } while (ien.advance());
+                }
+                assert(cnt == cnt_c);
+            }
+        }
 
         bv.optimize();
         bv_inv.optimize();
@@ -3062,6 +3082,7 @@ void IntervalsTest()
         msg5 = "reference_is_interval() (BITS+GAPS)";
         msg6 = "bvector<>::find_interval_start() (BITS+GAPS)";
         msg7 = "bvector<>::find_interval_end() (BITS+GAPS)";
+        msg8 = "interval_enumerator<> (BITS+GAPS)";
     } // for pass
 
 }
