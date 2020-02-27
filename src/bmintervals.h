@@ -376,8 +376,15 @@ public:
     interval_enumerator(const BV& bv)
         : bv_(&bv), pos_(bm::id_max), end_pos_(bm::id_max), gap_ptr_(0)
     {
-        go_to_impl(0, true);
+        go_to_impl(0, false);
     }
+
+    interval_enumerator(const BV& bv, size_type start_pos, bool extend_start)
+        : bv_(&bv), pos_(bm::id_max), end_pos_(bm::id_max), gap_ptr_(0)
+    {
+        go_to_impl(start_pos, extend_start);
+    }
+
 
     size_type start() const BMNOEXCEPT;
     size_type end() const BMNOEXCEPT;
@@ -457,7 +464,7 @@ void interval_enumerator<BV>::go_to(size_type pos, bool extend_start)
 template<typename BV>
 bool interval_enumerator<BV>::go_to_impl(size_type pos, bool extend_start)
 {
-    if (!bv_ || !bv_->is_init() || pos == pos < bm::id_max)
+    if (!bv_ || !bv_->is_init() || (pos >= bm::id_max))
     {
         invalidate();
         return false;
