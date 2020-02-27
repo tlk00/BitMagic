@@ -384,7 +384,7 @@ public:
 
     bool valid() const BMNOEXCEPT;
 
-    void go_to(size_type pos);
+    void go_to(size_type pos, bool extend_start = true);
 
     bool advance();
 
@@ -399,10 +399,9 @@ protected:
     /// Turn FSM into invalid state (out of range)
     void invalidate() BMNOEXCEPT;
 
-
 private:
     const BV*                  bv_;      ///!< bit-vector for traversal
-    gap_vector_type            gap_buf_;
+    gap_vector_type            gap_buf_; ///!< GAP buf.vector for bit-block
     size_type                  pos_;     ///!< current position
     size_type                  end_pos_; ///!< current interval end position
     const bm::gap_word_t*      gap_ptr_; ///!< current pointer in GAP block
@@ -448,9 +447,9 @@ void interval_enumerator<BV>::invalidate() BMNOEXCEPT
 //----------------------------------------------------------------------------
 
 template<typename BV>
-void interval_enumerator<BV>::go_to(size_type pos)
+void interval_enumerator<BV>::go_to(size_type pos, bool extend_start)
 {
-    go_to_impl(pos, true);
+    go_to_impl(pos, extend_start);
 }
 
 //----------------------------------------------------------------------------
@@ -553,11 +552,19 @@ bool interval_enumerator<BV>::go_to_impl(size_type pos, bool extend_start)
 
 
     size_type base_idx = (nb * bm::gap_max_bits);
-    for (unsigned i = 1; i < len; ++i)
+    for (unsigned i = 1; i <= len; ++i)
     {
         size_type gap_pos = base_idx + gap_tmp[i];
         if (gap_pos >= pos)
         {
+            if (gap_tmp[i] == bm::gap_max_bits - 1)
+            {
+                found = bm::find_interval_end(*bv_, gap_pos, end_pos_);
+                BM_ASSERT(found);
+                gap_ptr_ = 0;
+                return true;
+            }
+
             gap_ptr_ = &gap_tmp[i];
             end_pos_ = gap_pos;
             return true;
