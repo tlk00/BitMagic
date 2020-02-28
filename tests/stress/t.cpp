@@ -13208,11 +13208,16 @@ void BlockLevelTest()
 
 }
 
+
+
 template<class BV>
 void interval_copy_range(BV& bv, const BV& bv_src,
                          typename BV::size_type from, typename BV::size_type to)
 {
     bv.clear();
+
+    if (from > to)
+        bm::xor_swap(from, to);
 
     bm::interval_enumerator<bvect> ien(bv_src, from, false);
     while (ien.valid())
@@ -13230,6 +13235,99 @@ void interval_copy_range(BV& bv, const BV& bv_src,
             break;
     } // while
 }
+
+template<typename BV>
+void IntervalsEnumeratorCheck(const BV& bv)
+{
+    bvect::allocator_pool_type pool;
+
+    typename BV::size_type f, l, m;
+    auto b = bv.find_range(f, l);
+    if (!b)
+    {
+        assert(bv.count() == 0);
+        return;
+    }
+    m = l - f;
+    if (!m)
+        m = l;
+
+    bool eq;
+    // Full vector
+    {
+        bvect bv2; bvect bv2_c;
+        bvect::mem_pool_guard g1(pool, bv2);
+        bvect::mem_pool_guard g2(pool, bv2_c);
+
+        bv2_c.copy_range(bv, 0, bm::id_max-1);
+
+        interval_copy_range(bv2, bv, 0, bm::id_max - 1);
+        eq = bv2.equal(bv2_c);
+        assert(eq);
+    }
+    // 0 -> frist
+    {
+        bvect bv2; bvect bv2_c;
+        bvect::mem_pool_guard g1(pool, bv2);
+        bvect::mem_pool_guard g2(pool, bv2_c);
+
+        bv2_c.copy_range(bv, 0, l);
+
+        interval_copy_range(bv2, bv, 0, l);
+        eq = bv2.equal(bv2_c);
+        assert(eq);
+    }
+    // [first..last]
+    {
+        bvect bv2; bvect bv2_c;
+        bvect::mem_pool_guard g1(pool, bv2);
+        bvect::mem_pool_guard g2(pool, bv2_c);
+
+        bv2_c.copy_range(bv, f, l);
+
+        interval_copy_range(bv2, bv, f, l);
+        eq = bv2.equal(bv2_c);
+        assert(eq);
+    }
+    // [last..]
+    {
+        bvect bv2; bvect bv2_c;
+        bvect::mem_pool_guard g1(pool, bv2);
+        bvect::mem_pool_guard g2(pool, bv2_c);
+
+        bv2_c.copy_range(bv, l, bm::id_max-1);
+
+        interval_copy_range(bv2, bv, l, bm::id_max - 1);
+        eq = bv2.equal(bv2_c);
+        assert(eq);
+    }
+    // [mid..last]
+    {
+        bvect bv2; bvect bv2_c;
+        bvect::mem_pool_guard g1(pool, bv2);
+        bvect::mem_pool_guard g2(pool, bv2_c);
+
+        bv2_c.copy_range(bv, m, l);
+
+        interval_copy_range(bv2, bv, m, l);
+        eq = bv2.equal(bv2_c);
+        assert(eq);
+    }
+    // [first..mid]
+    {
+        bvect bv2; bvect bv2_c;
+        bvect::mem_pool_guard g1(pool, bv2);
+        bvect::mem_pool_guard g2(pool, bv2_c);
+
+        bv2_c.copy_range(bv, f, m);
+
+        interval_copy_range(bv2, bv, f, m);
+        eq = bv2.equal(bv2_c);
+        assert(eq);
+    }
+
+}
+
 
 static
 void IntervalEnumeratorTest()
@@ -13271,6 +13369,7 @@ void IntervalEnumeratorTest()
             assert(valid);
             assert(ien.start() == 0);
             assert(ien.end() == bm::id_max-1);
+            IntervalsEnumeratorCheck(bv);
         }
 
         bm::interval_enumerator<bvect> ien(bv, 1, false);
@@ -13323,6 +13422,7 @@ void IntervalEnumeratorTest()
 
         valid = ien.advance();
         assert(!valid);
+        IntervalsEnumeratorCheck(bv);
     }
 
     {
@@ -13356,6 +13456,7 @@ void IntervalEnumeratorTest()
         assert(ien2 > ien1);
         assert(ien2 >= ien1);
 
+        IntervalsEnumeratorCheck(bv);
     }
 
 
@@ -13369,6 +13470,7 @@ void IntervalEnumeratorTest()
         assert(ien.start() == bm::id_max-1);
         assert(ien.end() == bm::id_max-1);
 
+        IntervalsEnumeratorCheck(bv);
     }
 
     {
@@ -13405,6 +13507,8 @@ void IntervalEnumeratorTest()
 
     cout << "interval_enumerator +N stress test" << endl;
     {
+        bvect::allocator_pool_type pool;
+
         unsigned delta_max = 65536*2;
         double duration = 0;
         for (unsigned inc = 1; inc < delta_max; ++inc)
@@ -13413,13 +13517,17 @@ void IntervalEnumeratorTest()
             cout << "\rinc = " << inc << " of " << delta_max << " (" << duration << ")" << flush;
             bvect bv;
             bvect bv_c;
+            bvect::mem_pool_guard g1(pool, bv);
+            bvect::mem_pool_guard g2(pool, bv_c);
+
             bvect::size_type test_max = 65535 * 256;
 
             for (bvect::size_type i = 0; i < test_max; i+=inc)
                 bv.set(i);
-//bv.optimize();
+
             for (unsigned pass = 0; pass < 2; ++pass)
             {
+                IntervalsEnumeratorCheck(bv);
                 bm::interval_enumerator<bvect> ien(bv);
                 while (ien.valid())
                 {
@@ -13456,8 +13564,8 @@ void IntervalEnumeratorTest()
 
             cout << "\rinc = " << inc << " of " << delta_max << " (" << duration << ")" << flush;
 
-            if (inc > 128)
-                inc += rand() % 26; // fast pace randomiser
+            if (inc > 65536)
+                inc += rand() % 128; // fast pace randomiser
         } // for inc
 
     }
