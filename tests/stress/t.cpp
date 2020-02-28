@@ -13252,6 +13252,12 @@ void IntervalEnumeratorTest()
         assert(!valid);
     }
 
+    {
+        bm::interval_enumerator<bvect> ien1;
+        bm::interval_enumerator<bvect> ien2;
+
+        assert(ien1 == ien2);
+    }
 
     cout << "inverted bvector tests" << endl;
     {
@@ -13341,7 +13347,17 @@ void IntervalEnumeratorTest()
             assert(ien.start() == 100);
             assert(ien.end() == 101);
         }
+
+        bm::interval_enumerator<bvect> ien1(bv);
+        bm::interval_enumerator<bvect> ien2(bv, 1, false);
+        assert(ien1 != ien2);
+        assert(ien1 < ien2);
+        assert(ien1 <= ien2);
+        assert(ien2 > ien1);
+        assert(ien2 >= ien1);
+
     }
+
 
 
     {
@@ -13365,18 +13381,22 @@ void IntervalEnumeratorTest()
             assert(valid);
             assert(ien.start() == 0);
             assert(ien.end() == 0);
+            assert((*ien).first == 0);
+            assert(ien.get().second == 0);
 
             valid = ien.advance();
             assert(valid);
             assert(ien.start() == 100);
             assert(ien.end() == 100);
 
-            valid = ien.advance();
+            ++ien;
+            valid = ien.valid();
             assert(valid);
             assert(ien.start() == bm::id_max-1);
             assert(ien.end() == bm::id_max-1);
 
-            valid = ien.advance();
+            ien++;
+            valid = ien.valid();
             assert(!valid);
             bv.optimize();
 
@@ -13436,6 +13456,8 @@ void IntervalEnumeratorTest()
 
             cout << "\rinc = " << inc << " of " << delta_max << " (" << duration << ")" << flush;
 
+            if (inc > 128)
+                inc += rand() % 26; // fast pace randomiser
         } // for inc
 
     }

@@ -122,6 +122,8 @@ struct pair
 {
     First   first;
     Second  second;
+    
+    pair(First f, Second s) : first(f), second(s) {}
 };
 
 /**
@@ -4894,7 +4896,8 @@ bm::word_t bit_block_insert(bm::word_t* BMRESTRICT block,
 */
 inline
 bool bit_block_shift_r1(bm::word_t* BMRESTRICT block,
-                        bm::word_t* BMRESTRICT empty_acc, bm::word_t co_flag) BMNOEXCEPT
+                        bm::word_t* BMRESTRICT empty_acc,
+                        bm::word_t             co_flag) BMNOEXCEPT
 {
     BM_ASSERT(block);
     BM_ASSERT(empty_acc);
@@ -4924,7 +4927,7 @@ bool bit_block_shift_r1(bm::word_t* BMRESTRICT block,
 inline
 bool bit_block_shift_r1_unr(bm::word_t* BMRESTRICT block,
                             bm::word_t* BMRESTRICT empty_acc,
-                            bm::word_t co_flag) BMNOEXCEPT
+                            bm::word_t             co_flag) BMNOEXCEPT
 {
     BM_ASSERT(block);
     BM_ASSERT(empty_acc);
@@ -4978,7 +4981,8 @@ bool bit_block_shift_l1(bm::word_t* block,
 */
 inline
 bool bit_block_shift_l1_unr(bm::word_t* block,
-                            bm::word_t* empty_acc, bm::word_t co_flag) BMNOEXCEPT
+                            bm::word_t* empty_acc,
+                            bm::word_t  co_flag) BMNOEXCEPT
 {
     BM_ASSERT(block);
     BM_ASSERT(empty_acc);
@@ -5000,7 +5004,8 @@ bool bit_block_shift_l1_unr(bm::word_t* block,
 */
 inline
 void bit_block_erase(bm::word_t* block,
-                     unsigned bitpos, bool carry_over) BMNOEXCEPT
+                     unsigned    bitpos,
+                     bool        carry_over) BMNOEXCEPT
 {
     BM_ASSERT(block);
     BM_ASSERT(bitpos < 65536);

@@ -174,17 +174,17 @@ public:
         const_iterator(const sparse_vector_type* sv, size_type pos) BMNOEXCEPT;
         const_iterator(const const_iterator& it) BMNOEXCEPT;
         
-        bool operator==(const const_iterator& it) const
+        bool operator==(const const_iterator& it) const BMNOEXCEPT
                                 { return (pos_ == it.pos_) && (sv_ == it.sv_); }
-        bool operator!=(const const_iterator& it) const
+        bool operator!=(const const_iterator& it) const BMNOEXCEPT
                                 { return ! operator==(it); }
-        bool operator < (const const_iterator& it) const
+        bool operator < (const const_iterator& it) const BMNOEXCEPT
                                 { return pos_ < it.pos_; }
-        bool operator <= (const const_iterator& it) const
+        bool operator <= (const const_iterator& it) const BMNOEXCEPT
                                 { return pos_ <= it.pos_; }
-        bool operator > (const const_iterator& it) const
+        bool operator > (const const_iterator& it) const BMNOEXCEPT
                                 { return pos_ > it.pos_; }
-        bool operator >= (const const_iterator& it) const
+        bool operator >= (const const_iterator& it) const BMNOEXCEPT
                                 { return pos_ >= it.pos_; }
 
         /// \brief Get current position (value)

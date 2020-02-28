@@ -39,6 +39,154 @@ For more information please visit:  http://bitmagic.io
 namespace bm
 {
 
+/*!
+    \brief forward iterator class to traverse bit-vector as ranges
+
+    Traverse enumerator for forward walking bit-vector as intervals:
+    series of consequtive 1111s flanked with zeroes.
+    Enumerator can traverse the whole bit-vector or jump(go_to) to position.
+
+   \ingroup bvintervals
+*/
+template<typename BV>
+class interval_enumerator
+{
+public:
+#ifndef BM_NO_STL
+        typedef std::input_iterator_tag  iterator_category;
+#endif
+        typedef BV                                         bvector_type;
+        typedef typename bvector_type::size_type           size_type;
+        typedef typename bvector_type::allocator_type      allocator_type;
+        typedef bm::byte_buffer<allocator_type>            buffer_type;
+        typedef bm::pair<size_type, size_type>             pair_type;
+
+public:
+    /*! @name Construction / destruction  */
+    //@{
+
+    interval_enumerator()
+        : bv_(0), interval_(bm::id_max, bm::id_max), gap_ptr_(0)
+    {}
+
+    /**
+        Construct enumerator for the bit-vector
+    */
+    interval_enumerator(const BV& bv)
+        : bv_(&bv), interval_(bm::id_max, bm::id_max), gap_ptr_(0)
+    {
+        go_to_impl(0, false);
+    }
+
+    /**
+        Construct enumerator for the specified position
+        @param bv - source bit-vector
+        @param start_pos - position on bit-vector to search for interval
+        @param extend_start - flag to extend interval start to the start if
+            true start happenes to be less than start_pos
+        @sa go_to
+    */
+    interval_enumerator(const BV& bv, size_type start_pos, bool extend_start)
+        : bv_(&bv), interval_(bm::id_max, bm::id_max), gap_ptr_(0)
+    {
+        go_to_impl(start_pos, extend_start);
+    }
+
+    //@}
+
+
+    // -----------------------------------------------------------------
+
+    /*! @name Comparison methods all use start position to compare  */
+    //@{
+
+    bool operator==(const interval_enumerator<BV>& ien) const BMNOEXCEPT
+                            { return (start() == ien.start()); }
+    bool operator!=(const interval_enumerator<BV>& ien) const BMNOEXCEPT
+                            { return (start() != ien.start()); }
+    bool operator < (const interval_enumerator<BV>& ien) const BMNOEXCEPT
+                            { return (start() < ien.start()); }
+    bool operator <= (const interval_enumerator<BV>& ien) const BMNOEXCEPT
+                            { return (start() <= ien.start()); }
+    bool operator > (const interval_enumerator<BV>& ien) const BMNOEXCEPT
+                            { return (start() > ien.start()); }
+    bool operator >= (const interval_enumerator<BV>& ien) const BMNOEXCEPT
+                            { return (start() >= ien.start()); }
+    //@}
+
+
+    /// Return interval start/left as bit-vector coordinate 011110 [left..right]
+    size_type start() const BMNOEXCEPT;
+    /// Return interval end/right as bit-vector coordinate 011110 [left..right]
+    size_type end() const BMNOEXCEPT;
+
+    const pair_type& operator*() const BMNOEXCEPT { return interval_; }
+
+    /// Get interval pair
+    const pair_type& get() const BMNOEXCEPT { return interval_; }
+
+    /// Returns true if enumerator is valid (false if traversal is done)
+    bool valid() const BMNOEXCEPT;
+
+    // -----------------------------------------------------------------
+
+    /*! @name enumerator positioning  */
+    //@{
+
+    /*!
+        @brief Go to inetrval at specified position
+        Jump to position with interval. If interval is not available at
+        the specified position (o bit) enumerator will find the next interval.
+        If interval is present we have an option to find interval start [left..]
+        and set enumerator from the effective start coodrinate
+
+        @param pos - position on bit-vector
+        @param extend_start - find effective start if it is less than the
+                              go to position
+        @return true if enumerator remains valid after the jump
+    */
+    bool go_to(size_type pos, bool extend_start = true);
+
+    /*! Advance to the next interval
+        @return true if interval is available
+        @sa valid
+    */
+    bool advance();
+
+    /*! \brief Advance enumerator forward to the next available bit */
+    interval_enumerator<BV>& operator++() BMNOEXCEPT
+        { advance(); return *this; }
+
+    /*! \brief Advance enumerator forward to the next available bit */
+    interval_enumerator<BV> operator++(int) BMNOEXCEPT
+    {
+        interval_enumerator<BV> tmp = *this;
+        advance();
+        return tmp;
+    }
+    //@}
+
+protected:
+    typedef typename bvector_type::block_idx_type       block_idx_type;
+    typedef typename bvector_type::allocator_type       bv_allocator_type;
+    typedef bm::heap_vector<unsigned short, bv_allocator_type, true>
+                                                    gap_vector_type;
+
+
+    bool go_to_impl(size_type pos, bool extend_start);
+
+    /// Turn FSM into invalid state (out of range)
+    void invalidate() BMNOEXCEPT;
+
+private:
+    const BV*                  bv_;      ///!< bit-vector for traversal
+    gap_vector_type            gap_buf_; ///!< GAP buf.vector for bit-block
+    pair_type                  interval_; ///! current inetrval
+//    size_type                  pos_;     ///!< current position
+//    size_type                  end_pos_; ///!< current interval end position
+    const bm::gap_word_t*      gap_ptr_; ///!< current pointer in GAP block
+};
+
 //----------------------------------------------------------------------------
 
 /*!
@@ -53,6 +201,9 @@ namespace bm
    \param left - index of first bit start checking
    \param right - index of last bit
    \return true/false
+
+   \ingroup bvintervals
+
    @sa is_all_one_range
 */
 template<class BV>
@@ -351,68 +502,6 @@ bool find_interval_end(const BV& bv,
     return true;
 }
 
-//----------------------------------------------------------------------------
-
-/// @internal
-///
-template<typename BV>
-class interval_enumerator
-{
-public:
-#ifndef BM_NO_STL
-        typedef std::input_iterator_tag  iterator_category;
-#endif
-        typedef BV                                         bvector_type;
-        typedef typename bvector_type::size_type           size_type;
-        typedef typename bvector_type::allocator_type      allocator_type;
-        typedef bm::byte_buffer<allocator_type>            buffer_type;
-
-public:
-
-    interval_enumerator()
-        : bv_(0), pos_(bm::id_max), end_pos_(bm::id_max), gap_ptr_(0)
-    {}
-
-    interval_enumerator(const BV& bv)
-        : bv_(&bv), pos_(bm::id_max), end_pos_(bm::id_max), gap_ptr_(0)
-    {
-        go_to_impl(0, false);
-    }
-
-    interval_enumerator(const BV& bv, size_type start_pos, bool extend_start)
-        : bv_(&bv), pos_(bm::id_max), end_pos_(bm::id_max), gap_ptr_(0)
-    {
-        go_to_impl(start_pos, extend_start);
-    }
-
-
-    size_type start() const BMNOEXCEPT;
-    size_type end() const BMNOEXCEPT;
-
-    bool valid() const BMNOEXCEPT;
-
-    void go_to(size_type pos, bool extend_start = true);
-
-    bool advance();
-
-protected:
-    typedef typename bvector_type::block_idx_type       block_idx_type;
-    typedef typename bvector_type::allocator_type       bv_allocator_type;
-    typedef bm::heap_vector<unsigned short, bv_allocator_type, true>
-                                                    gap_vector_type;
-
-    bool go_to_impl(size_type pos, bool extend_start);
-
-    /// Turn FSM into invalid state (out of range)
-    void invalidate() BMNOEXCEPT;
-
-private:
-    const BV*                  bv_;      ///!< bit-vector for traversal
-    gap_vector_type            gap_buf_; ///!< GAP buf.vector for bit-block
-    size_type                  pos_;     ///!< current position
-    size_type                  end_pos_; ///!< current interval end position
-    const bm::gap_word_t*      gap_ptr_; ///!< current pointer in GAP block
-};
 
 
 //----------------------------------------------------------------------------
@@ -423,7 +512,7 @@ template<typename BV>
 typename interval_enumerator<BV>::size_type
 interval_enumerator<BV>::start() const BMNOEXCEPT
 {
-    return pos_;
+    return interval_.first;
 }
 
 //----------------------------------------------------------------------------
@@ -432,7 +521,7 @@ template<typename BV>
 typename interval_enumerator<BV>::size_type
 interval_enumerator<BV>::end() const BMNOEXCEPT
 {
-    return end_pos_;
+    return interval_.second;
 }
 
 //----------------------------------------------------------------------------
@@ -440,7 +529,7 @@ interval_enumerator<BV>::end() const BMNOEXCEPT
 template<typename BV>
 bool interval_enumerator<BV>::valid() const BMNOEXCEPT
 {
-    return (pos_ != bm::id_max);
+    return (interval_.first != bm::id_max);
 }
 
 //----------------------------------------------------------------------------
@@ -448,15 +537,15 @@ bool interval_enumerator<BV>::valid() const BMNOEXCEPT
 template<typename BV>
 void interval_enumerator<BV>::invalidate() BMNOEXCEPT
 {
-    pos_ = end_pos_ = bm::id_max;
+    interval_.first = interval_.second = bm::id_max;
 }
 
 //----------------------------------------------------------------------------
 
 template<typename BV>
-void interval_enumerator<BV>::go_to(size_type pos, bool extend_start)
+bool interval_enumerator<BV>::go_to(size_type pos, bool extend_start)
 {
-    go_to_impl(pos, extend_start);
+    return go_to_impl(pos, extend_start);
 }
 
 //----------------------------------------------------------------------------
@@ -499,7 +588,7 @@ bool interval_enumerator<BV>::go_to_impl(size_type pos, bool extend_start)
     }
 
     // start position established, start decoding from it
-    pos_ = pos = start_pos;
+    interval_.first = pos = start_pos;
 
     block_idx_type nb = (pos >> bm::set_block_shift);
     const typename BV::blocks_manager_type& bman = bv_->get_blocks_manager();
@@ -511,7 +600,7 @@ bool interval_enumerator<BV>::go_to_impl(size_type pos, bool extend_start)
     if (block == FULL_BLOCK_FAKE_ADDR)
     {
         // super-long interval, find the end of it
-        found = bm::find_interval_end(*bv_, pos, end_pos_);
+        found = bm::find_interval_end(*bv_, pos, interval_.second);
         BM_ASSERT(found);
         return true;
     }
@@ -525,20 +614,20 @@ bool interval_enumerator<BV>::go_to_impl(size_type pos, bool extend_start)
         unsigned gap_pos = bm::gap_bfind(gap_block, nbit, &is_set);
         BM_ASSERT(is_set);
 
-        end_pos_ = (nb * bm::gap_max_bits) + gap_block[gap_pos];
+        interval_.second = (nb * bm::gap_max_bits) + gap_block[gap_pos];
         if (gap_block[gap_pos] == bm::gap_max_bits-1)
         {
             // it is the end of the GAP block - run search
             //
-            if (end_pos_ == bm::id_max-1)
+            if (interval_.second == bm::id_max-1)
             {
                 gap_ptr_ = 0;
                 return true;
             }
-            found = bm::find_interval_end(*bv_, end_pos_+1, start_pos);
+            found = bm::find_interval_end(*bv_, interval_.second + 1, start_pos);
             if (found)
             {
-                end_pos_ = start_pos;
+                interval_.second = start_pos;
                 gap_ptr_ = 0;
                 return true;
             }
@@ -566,14 +655,14 @@ bool interval_enumerator<BV>::go_to_impl(size_type pos, bool extend_start)
         {
             if (gap_tmp[i] == bm::gap_max_bits - 1)
             {
-                found = bm::find_interval_end(*bv_, gap_pos, end_pos_);
+                found = bm::find_interval_end(*bv_, gap_pos, interval_.second);
                 BM_ASSERT(found);
                 gap_ptr_ = 0;
                 return true;
             }
 
             gap_ptr_ = &gap_tmp[i];
-            end_pos_ = gap_pos;
+            interval_.second = gap_pos;
             return true;
         }
         if (gap_tmp[i] == bm::gap_max_bits - 1)
@@ -590,7 +679,9 @@ bool interval_enumerator<BV>::go_to_impl(size_type pos, bool extend_start)
 template<typename BV>
 bool interval_enumerator<BV>::advance()
 {
-    if (end_pos_ == bm::id_max-1)
+    BM_ASSERT(valid());
+
+    if (interval_.second == bm::id_max-1)
     {
         invalidate();
         return false;
@@ -601,25 +692,24 @@ bool interval_enumerator<BV>::advance()
         ++gap_ptr_; // 0 - GAP
         if (*gap_ptr_ == bm::gap_max_bits-1) // GAP block end
         {
-            return go_to_impl(end_pos_+ 1, false);
+            return go_to_impl(interval_.second + 1, false);
         }
         unsigned prev = *gap_ptr_;
 
         ++gap_ptr_; // 1 - GAP
-        block_idx_type nb = (pos_ >> bm::set_block_shift);
-        pos_ = (nb * bm::gap_max_bits) + prev + 1;
+        block_idx_type nb = (interval_.first >> bm::set_block_shift);
+        interval_.first = (nb * bm::gap_max_bits) + prev + 1;
         if (*gap_ptr_ == bm::gap_max_bits-1) // GAP block end
         {
-            found = bm::find_interval_end(*bv_, pos_, end_pos_);
+            found = bm::find_interval_end(*bv_, interval_.first, interval_.second);
             BM_ASSERT(found);
             gap_ptr_ = 0;
             return true;
         }
-        end_pos_ = (nb * bm::gap_max_bits) + *gap_ptr_;
+        interval_.second = (nb * bm::gap_max_bits) + *gap_ptr_;
         return true;
     }
-
-    return go_to_impl(end_pos_+ 1, false);
+    return go_to_impl(interval_.second + 1, false);
 }
 
 //----------------------------------------------------------------------------
