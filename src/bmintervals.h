@@ -626,11 +626,9 @@ bool interval_enumerator<BV>::go_to_impl(size_type pos, bool extend_start)
             }
             found = bm::find_interval_end(*bv_, interval_.second + 1, start_pos);
             if (found)
-            {
                 interval_.second = start_pos;
-                gap_ptr_ = 0;
-                return true;
-            }
+            gap_ptr_ = 0;
+            return true;
         }
         gap_ptr_ = gap_block + gap_pos;
         return true;
@@ -702,7 +700,7 @@ bool interval_enumerator<BV>::advance()
         if (*gap_ptr_ == bm::gap_max_bits-1) // GAP block end
         {
             found = bm::find_interval_end(*bv_, interval_.first, interval_.second);
-            BM_ASSERT(found);
+            BM_ASSERT(found); (void)found;
             gap_ptr_ = 0;
             return true;
         }
