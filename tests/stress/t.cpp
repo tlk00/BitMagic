@@ -13405,7 +13405,7 @@ void IntervalEnumeratorTest()
 
     cout << "interval_enumerator +N stress test" << endl;
     {
-        unsigned delta_max = 65536;
+        unsigned delta_max = 65536*2;
         double duration = 0;
         for (unsigned inc = 1; inc < delta_max; ++inc)
         {
@@ -13417,7 +13417,7 @@ void IntervalEnumeratorTest()
 
             for (bvect::size_type i = 0; i < test_max; i+=inc)
                 bv.set(i);
-
+//bv.optimize();
             for (unsigned pass = 0; pass < 2; ++pass)
             {
                 bm::interval_enumerator<bvect> ien(bv);
