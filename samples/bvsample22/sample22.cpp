@@ -48,6 +48,7 @@ For more information please visit:  http://bitmagic.io
 
 #include "bm.h"
 #include "bmserial.h"
+#include "bmintervals.h"
 
 using namespace std;
 
@@ -84,9 +85,9 @@ int main(void)
 
         cout << "bvector<>::is_interval() demo" << endl;
         // verify if the range is all 1s AND flanked by 0s "...011110..."
-        bool is_int = bv.is_interval(100, 110); // true
+        bool is_int = bm::is_interval(bv, 100, 110); // true
         cout << is_int << endl;
-        is_int = bv.is_interval(99, 110); // false (internal range is not all 1s)
+        is_int = bm::is_interval(bv, 99, 110); // false (internal range is not all 1s)
         cout << is_int << endl;
 
         cout << "bvector<>::any_range() demo" << endl;
@@ -103,7 +104,7 @@ int main(void)
         bm::bvector<>::size_type pos;
 
         // interval end search from interval start
-        bool found = bv.find_interval_end(100, pos); 
+        bool found = bm::find_interval_end(bv, 100, pos);
         if (found)
             cout << pos << endl; // 110
         else
@@ -111,14 +112,14 @@ int main(void)
 
         // interval end start from a non-interval location
         // - it will not find anything
-        found = bv.find_interval_end(99, pos);
+        found = bm::find_interval_end(bv, 99, pos);
         if (found)
             cout << pos << endl; 
         else
             cout << "Not found." << endl; // This ! 
 
         // start search from a position within the interval
-        found = bv.find_interval_start(105, pos); 
+        found = bm::find_interval_start(bv, 105, pos);
         if (found)
             cout << pos << endl; // 100
         else
