@@ -2208,6 +2208,126 @@ void IntervalsCheck(const BV& bv)
     }
 }
 
+template<class BV>
+void interval_copy_range(BV& bv, const BV& bv_src,
+                         typename BV::size_type from, typename BV::size_type to)
+{
+    bv.clear();
+
+    if (from > to)
+        bm::xor_swap(from, to);
+
+    bm::interval_enumerator<bvect> ien(bv_src, from, false);
+    while (ien.valid())
+    {
+        auto st = ien.start();
+        assert(st >= from);
+        if (st > to)
+            break;
+        auto end = ien.end();
+        if (end > to)
+            end = to;
+
+        bv.set_range(st, end);
+        if (!ien.advance())
+            break;
+    } // while
+}
+
+template<typename BV>
+void IntervalsEnumeratorCheck(const BV& bv)
+{
+    bvect::allocator_pool_type pool;
+
+    typename BV::size_type f, l, m;
+    auto b = bv.find_range(f, l);
+    if (!b)
+    {
+        assert(bv.count() == 0);
+        return;
+    }
+    m = l - f;
+    if (!m)
+        m = l;
+
+    bool eq;
+    // Full vector
+    {
+        bvect bv2; bvect bv2_c;
+        bvect::mem_pool_guard g1(pool, bv2);
+        bvect::mem_pool_guard g2(pool, bv2_c);
+
+        bv2_c.copy_range(bv, 0, bm::id_max-1);
+
+        interval_copy_range(bv2, bv, 0, bm::id_max - 1);
+        eq = bv2.equal(bv2_c);
+        assert(eq);
+    }
+    // 0 -> frist
+    {
+        bvect bv2; bvect bv2_c;
+        bvect::mem_pool_guard g1(pool, bv2);
+        bvect::mem_pool_guard g2(pool, bv2_c);
+
+        bv2_c.copy_range(bv, 0, l);
+
+        interval_copy_range(bv2, bv, 0, l);
+        eq = bv2.equal(bv2_c);
+        assert(eq);
+    }
+    // [first..last]
+    {
+        bvect bv2; bvect bv2_c;
+        bvect::mem_pool_guard g1(pool, bv2);
+        bvect::mem_pool_guard g2(pool, bv2_c);
+
+        bv2_c.copy_range(bv, f, l);
+
+        interval_copy_range(bv2, bv, f, l);
+        eq = bv2.equal(bv2_c);
+        assert(eq);
+    }
+    // [last..]
+    {
+        bvect bv2; bvect bv2_c;
+        bvect::mem_pool_guard g1(pool, bv2);
+        bvect::mem_pool_guard g2(pool, bv2_c);
+
+        bv2_c.copy_range(bv, l, bm::id_max-1);
+
+        interval_copy_range(bv2, bv, l, bm::id_max - 1);
+        eq = bv2.equal(bv2_c);
+        assert(eq);
+    }
+    // [mid..last]
+    {
+        bvect bv2; bvect bv2_c;
+        bvect::mem_pool_guard g1(pool, bv2);
+        bvect::mem_pool_guard g2(pool, bv2_c);
+
+        bv2_c.copy_range(bv, m, l);
+
+        interval_copy_range(bv2, bv, m, l);
+        eq = bv2.equal(bv2_c);
+        assert(eq);
+    }
+    // [first..mid]
+    {
+        bvect bv2; bvect bv2_c;
+        bvect::mem_pool_guard g1(pool, bv2);
+        bvect::mem_pool_guard g2(pool, bv2_c);
+
+        bv2_c.copy_range(bv, f, m);
+
+        interval_copy_range(bv2, bv, f, m);
+        eq = bv2.equal(bv2_c);
+        assert(eq);
+    }
+
+}
+
+
+
 
 // vectors comparison check
 
@@ -2260,6 +2380,7 @@ void CheckVectors(bvect_mini &bvect_min,
     }
 
     IntervalsCheck(bvect_full);
+    IntervalsEnumeratorCheck(bvect_full);
     
     if (!detailed)
         return;
@@ -13209,124 +13330,6 @@ void BlockLevelTest()
 }
 
 
-
-template<class BV>
-void interval_copy_range(BV& bv, const BV& bv_src,
-                         typename BV::size_type from, typename BV::size_type to)
-{
-    bv.clear();
-
-    if (from > to)
-        bm::xor_swap(from, to);
-
-    bm::interval_enumerator<bvect> ien(bv_src, from, false);
-    while (ien.valid())
-    {
-        auto st = ien.start();
-        assert(st >= from);
-        if (st > to)
-            break;
-        auto end = ien.end();
-        if (end > to)
-            end = to;
-
-        bv.set_range(st, end);
-        if (!ien.advance())
-            break;
-    } // while
-}
-
-template<typename BV>
-void IntervalsEnumeratorCheck(const BV& bv)
-{
-    bvect::allocator_pool_type pool;
-
-    typename BV::size_type f, l, m;
-    auto b = bv.find_range(f, l);
-    if (!b)
-    {
-        assert(bv.count() == 0);
-        return;
-    }
-    m = l - f;
-    if (!m)
-        m = l;
-
-    bool eq;
-    // Full vector
-    {
-        bvect bv2; bvect bv2_c;
-        bvect::mem_pool_guard g1(pool, bv2);
-        bvect::mem_pool_guard g2(pool, bv2_c);
-
-        bv2_c.copy_range(bv, 0, bm::id_max-1);
-
-        interval_copy_range(bv2, bv, 0, bm::id_max - 1);
-        eq = bv2.equal(bv2_c);
-        assert(eq);
-    }
-    // 0 -> frist
-    {
-        bvect bv2; bvect bv2_c;
-        bvect::mem_pool_guard g1(pool, bv2);
-        bvect::mem_pool_guard g2(pool, bv2_c);
-
-        bv2_c.copy_range(bv, 0, l);
-
-        interval_copy_range(bv2, bv, 0, l);
-        eq = bv2.equal(bv2_c);
-        assert(eq);
-    }
-    // [first..last]
-    {
-        bvect bv2; bvect bv2_c;
-        bvect::mem_pool_guard g1(pool, bv2);
-        bvect::mem_pool_guard g2(pool, bv2_c);
-
-        bv2_c.copy_range(bv, f, l);
-
-        interval_copy_range(bv2, bv, f, l);
-        eq = bv2.equal(bv2_c);
-        assert(eq);
-    }
-    // [last..]
-    {
-        bvect bv2; bvect bv2_c;
-        bvect::mem_pool_guard g1(pool, bv2);
-        bvect::mem_pool_guard g2(pool, bv2_c);
-
-        bv2_c.copy_range(bv, l, bm::id_max-1);
-
-        interval_copy_range(bv2, bv, l, bm::id_max - 1);
-        eq = bv2.equal(bv2_c);
-        assert(eq);
-    }
-    // [mid..last]
-    {
-        bvect bv2; bvect bv2_c;
-        bvect::mem_pool_guard g1(pool, bv2);
-        bvect::mem_pool_guard g2(pool, bv2_c);
-
-        bv2_c.copy_range(bv, m, l);
-
-        interval_copy_range(bv2, bv, m, l);
-        eq = bv2.equal(bv2_c);
-        assert(eq);
-    }
-    // [first..mid]
-    {
-        bvect bv2; bvect bv2_c;
-        bvect::mem_pool_guard g1(pool, bv2);
-        bvect::mem_pool_guard g2(pool, bv2_c);
-
-        bv2_c.copy_range(bv, f, m);
-
-        interval_copy_range(bv2, bv, f, m);
-        eq = bv2.equal(bv2_c);
-        assert(eq);
-    }
-
-}
 
 
 static

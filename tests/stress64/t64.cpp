@@ -2419,6 +2419,8 @@ void IsAllOneRangeTest()
 
                 IntervalsCheck(bv1);
                 IntervalsCheck(bv2);
+                IntervalsEnumeratorCheck(bv1);
+                IntervalsEnumeratorCheck(bv2);
             }
         } // for t
 
@@ -3925,6 +3927,7 @@ void CheckVectors(bvect_mini &bvect_min,
     }
 
     IntervalsCheck(bvect_full);
+    IntervalsEnumeratorCheck(bvect_full);
 
     
     // get_next comparison
