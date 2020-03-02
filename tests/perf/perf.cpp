@@ -2852,6 +2852,7 @@ void IntervalsTest()
     const char* msg6 = "bvector<>::find_interval_start() (BITS)";
     const char* msg7 = "bvector<>::find_interval_end() (BITS)";
     const char* msg8 = "interval_enumerator<> (BITS)";
+    const char* msg9 = "bvector<>::enumerator (BITS)";
 
     for (unsigned pass = 0; pass < 2; ++pass)
     {
@@ -3051,9 +3052,8 @@ void IntervalsTest()
             } // for istart
         }
 
+        bvect::size_type cnt_c = bv.count();
         {
-            bvect::size_type cnt_c = bv.count();
-
             TimeTaker tt(msg8, REPEATS * 1);
    
             for (unsigned i = 0; i < REPEATS; ++i)
@@ -3071,6 +3071,27 @@ void IntervalsTest()
                 assert(cnt == cnt_c);
             }
         }
+        {
+            bvect::size_type sum = 0;
+            TimeTaker tt(msg9, REPEATS * 1);
+
+            for (unsigned i = 0; i < REPEATS; ++i)
+            {
+                bvect::size_type cnt = 0;
+                bvect::enumerator en = bv.get_enumerator(0);
+                while (en.valid())
+                {
+                    auto v = *en; 
+                    sum += v;
+                    ++cnt;
+                    ++en;
+                }
+                assert(cnt == cnt_c);
+            }
+            char buf[256];
+            sprintf(buf, "%u", sum); // this is to prevent unwanted optimizations by some compilers
+
+        }
 
         bv.optimize();
         bv_inv.optimize();
@@ -3083,6 +3104,7 @@ void IntervalsTest()
         msg6 = "bvector<>::find_interval_start() (BITS+GAPS)";
         msg7 = "bvector<>::find_interval_end() (BITS+GAPS)";
         msg8 = "interval_enumerator<> (BITS+GAPS)";
+        msg9 = "bvector<>::enumerator (BITS+GAPS)";
     } // for pass
 
 }
