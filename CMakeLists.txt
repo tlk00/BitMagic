@@ -83,6 +83,7 @@ add_executable(bvsample19 ${PROJECT_SOURCE_DIR}/samples/bvsample19/sample19.cpp)
 add_executable(bvsample20 ${PROJECT_SOURCE_DIR}/samples/bvsample20/sample20.cpp)
 add_executable(bvsample21 ${PROJECT_SOURCE_DIR}/samples/bvsample21/sample21.cpp)
 add_executable(bvsample22 ${PROJECT_SOURCE_DIR}/samples/bvsample22/sample22.cpp)
+add_executable(bvsample23 ${PROJECT_SOURCE_DIR}/samples/bvsample23/sample23.cpp)
 
 add_executable(bvsetalgebra ${PROJECT_SOURCE_DIR}/samples/bvsetalgebra/bvsetalgebra.cpp)
 

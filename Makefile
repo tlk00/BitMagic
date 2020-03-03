@@ -46,6 +46,7 @@ TARGETS_BLD =  \
               samples/bvsample20 \
               samples/bvsample21 \
               samples/bvsample22 \
+              samples/bvsample23 \
               samples/bvsample01_64 \
               samples/bvsetalgebra \
               samples/xsample01 \

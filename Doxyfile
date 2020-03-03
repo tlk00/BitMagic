@@ -83,6 +83,7 @@ INPUT                  = ./src/bm.h ./src/bmfunc.h  ./src/bmsimd.h ./src/bmxor.h
 ./samples/bvsample20/sample20.cpp \
 ./samples/bvsample21/sample21.cpp \
 ./samples/bvsample22/sample22.cpp \
+./samples/bvsample23/sample23.cpp \
 ./samples/bvsetalgebra/bvsetalgebra.cpp \
 ./samples/xsample01/xsample01.cpp \
 ./samples/xsample02/xsample02.cpp \
