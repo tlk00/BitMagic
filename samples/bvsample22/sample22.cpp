@@ -38,6 +38,9 @@ For more information please visit:  http://bitmagic.io
   \sa bm::find_interval_end
   \sa bm::find_interval_start
   \sa bm::deserialize_range
+
+  \sa sample23.cpp
+  \sa bvintervals
 */
 
 /*! \file sample22.cpp
