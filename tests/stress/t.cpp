@@ -2228,6 +2228,7 @@ void interval_copy_range(BV& bv, const BV& bv_src,
         if (end > to)
             end = to;
 
+        assert(st <= end);
         bv.set_range(st, end);
         if (!ien.advance())
             break;
@@ -2235,8 +2236,10 @@ void interval_copy_range(BV& bv, const BV& bv_src,
 }
 
 template<typename BV>
-void IntervalsEnumeratorCheck(const BV& bv)
+void IntervalsEnumeratorCheck(const BV& bv, bool report)
 {
+    if (report)
+        cout << "..IntervalsEnumeratorCheck()" << flush;
     bvect::allocator_pool_type pool;
 
     typename BV::size_type f, l, m;
@@ -2251,6 +2254,8 @@ void IntervalsEnumeratorCheck(const BV& bv)
         m = l;
 
     bool eq;
+    if (report)
+        cout << "1 " << flush;
     // Full vector
     {
         bvect bv2; bvect bv2_c;
@@ -2263,6 +2268,8 @@ void IntervalsEnumeratorCheck(const BV& bv)
         eq = bv2.equal(bv2_c);
         assert(eq);
     }
+    if (report)
+        cout << "2 " << flush;
     // 0 -> frist
     {
         bvect bv2; bvect bv2_c;
@@ -2275,6 +2282,9 @@ void IntervalsEnumeratorCheck(const BV& bv)
         eq = bv2.equal(bv2_c);
         assert(eq);
     }
+
+    if (report)
+        cout << "3 " << flush;
     // [first..last]
     {
         bvect bv2; bvect bv2_c;
@@ -2287,6 +2297,8 @@ void IntervalsEnumeratorCheck(const BV& bv)
         eq = bv2.equal(bv2_c);
         assert(eq);
     }
+    if (report)
+        cout << "4 " << flush;
     // [last..]
     {
         bvect bv2; bvect bv2_c;
@@ -2299,6 +2311,8 @@ void IntervalsEnumeratorCheck(const BV& bv)
         eq = bv2.equal(bv2_c);
         assert(eq);
     }
+    if (report)
+        cout << "5 " << flush;
     // [mid..last]
     {
         bvect bv2; bvect bv2_c;
@@ -2311,6 +2325,8 @@ void IntervalsEnumeratorCheck(const BV& bv)
         eq = bv2.equal(bv2_c);
         assert(eq);
     }
+    if (report)
+        cout << "6 " << flush;
     // [first..mid]
     {
         bvect bv2; bvect bv2_c;
@@ -2323,7 +2339,8 @@ void IntervalsEnumeratorCheck(const BV& bv)
         eq = bv2.equal(bv2_c);
         assert(eq);
     }
-
+    if (report)
+        cout << endl;
 }
 
 
@@ -2338,12 +2355,12 @@ void CheckVectors(bvect_mini &bvect_min,
 {
     cout << "\nVectors checking...bits to compare = " << size << endl;
 
-    cout << "Bitcount summary : " << endl;
+    cout << "Bitcount summary : ";
     unsigned min_count = bvect_min.bit_count();
-    cout << "minvector count = " << min_count << endl;
+    cout << " minvector count = " << min_count;
     unsigned count = bvect_full.count();
     unsigned full_count = bvect_full.recalc_count();
-    cout << "fullvector re-count = " << full_count << endl;
+    cout << " fullvector re-count = " << full_count << endl;
     
     if (min_count != full_count)
     {
@@ -2380,7 +2397,7 @@ void CheckVectors(bvect_mini &bvect_min,
     }
 
     IntervalsCheck(bvect_full);
-    IntervalsEnumeratorCheck(bvect_full);
+    IntervalsEnumeratorCheck(bvect_full, true);
     
     if (!detailed)
         return;
@@ -13372,7 +13389,7 @@ void IntervalEnumeratorTest()
             assert(valid);
             assert(ien.start() == 0);
             assert(ien.end() == bm::id_max-1);
-            IntervalsEnumeratorCheck(bv);
+            IntervalsEnumeratorCheck(bv, false);
         }
 
         bm::interval_enumerator<bvect> ien(bv, 1, false);
@@ -13425,7 +13442,7 @@ void IntervalEnumeratorTest()
 
         valid = ien.advance();
         assert(!valid);
-        IntervalsEnumeratorCheck(bv);
+        IntervalsEnumeratorCheck(bv, false);
     }
 
     {
@@ -13459,7 +13476,7 @@ void IntervalEnumeratorTest()
         assert(ien2 > ien1);
         assert(ien2 >= ien1);
 
-        IntervalsEnumeratorCheck(bv);
+        IntervalsEnumeratorCheck(bv, false);
     }
 
 
@@ -13473,7 +13490,7 @@ void IntervalEnumeratorTest()
         assert(ien.start() == bm::id_max-1);
         assert(ien.end() == bm::id_max-1);
 
-        IntervalsEnumeratorCheck(bv);
+        IntervalsEnumeratorCheck(bv, false);
     }
 
     {
@@ -13530,7 +13547,7 @@ void IntervalEnumeratorTest()
 
             for (unsigned pass = 0; pass < 2; ++pass)
             {
-                IntervalsEnumeratorCheck(bv);
+                IntervalsEnumeratorCheck(bv, false);
                 bm::interval_enumerator<bvect> ien(bv);
                 while (ien.valid())
                 {

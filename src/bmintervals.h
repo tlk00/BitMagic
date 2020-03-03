@@ -600,6 +600,7 @@ bool interval_enumerator<BV>::go_to_impl(size_type pos, bool extend_start)
         // super-long interval, find the end of it
         found = bm::find_interval_end(*bv_, pos, interval_.second);
         BM_ASSERT(found);
+        gap_ptr_ = 0;
         return true;
     }
 
@@ -682,18 +683,20 @@ bool interval_enumerator<BV>::advance()
         invalidate();
         return false;
     }
+    block_idx_type nb = (interval_.first >> bm::set_block_shift);
+
     bool found;
     if (gap_ptr_) // in GAP block
     {
         ++gap_ptr_; // 0 - GAP
         if (*gap_ptr_ == bm::gap_max_bits-1) // GAP block end
         {
-            return go_to_impl(interval_.second + 1, false);
+            return go_to_impl(((nb+1) * bm::gap_max_bits), false);
         }
         unsigned prev = *gap_ptr_;
 
         ++gap_ptr_; // 1 - GAP
-        block_idx_type nb = (interval_.first >> bm::set_block_shift);
+        BM_ASSERT(*gap_ptr_ > prev);
         interval_.first = (nb * bm::gap_max_bits) + prev + 1;
         if (*gap_ptr_ == bm::gap_max_bits-1) // GAP block end
         {
