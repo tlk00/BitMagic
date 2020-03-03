@@ -368,7 +368,7 @@ void visit_each_bit(const BV&                 bv,
 
     @param bv - bit vector to scan
     @param left - from [left..right]
-    @param left - to [left..right]
+    @param right - to [left..right]
     @param handle_ptr - handle to private memory used by callback
     @param callback_ptr - callback function
 

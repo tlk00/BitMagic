@@ -30,8 +30,8 @@ For more information please visit:  http://bitmagic.io
 
 #include "bmdef.h"
 
-/** \defgroup bvintervals Algorithms for bit ranges
-    Algorithms for bit ranges and intervals
+/** \defgroup bvintervals Algorithms for bit intervals
+    Algorithms and iterators for bit ranges and intervals
     @ingroup bvector
  */
 
@@ -182,8 +182,6 @@ private:
     const BV*                  bv_;      ///!< bit-vector for traversal
     gap_vector_type            gap_buf_; ///!< GAP buf.vector for bit-block
     pair_type                  interval_; ///! current inetrval
-//    size_type                  pos_;     ///!< current position
-//    size_type                  end_pos_; ///!< current interval end position
     const bm::gap_word_t*      gap_ptr_; ///!< current pointer in GAP block
 };
 

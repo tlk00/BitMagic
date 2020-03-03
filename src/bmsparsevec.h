@@ -795,7 +795,6 @@ public:
         \param offset - target index in the sparse vector to export from
         \param zero_mem - set to false if target array is pre-initialized
                           with 0s to avoid performance penalty   
-        \param pool_ptr - optional pointer to block allocation pool
         \return number of exported elements
      
         \sa decode

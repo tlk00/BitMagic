@@ -1558,8 +1558,8 @@ void for_each_bit_blk(const bm::word_t* block, SIZE_TYPE offset,
 
    \param block - bit block buffer pointer
    \param offset - global block offset (number of bits)
-   \param bit_from - bit addredd in block from [from..to]
-   \param bit_to - bit addredd in block to [from..to]
+   \param left - bit addredd in block from [from..to]
+   \param right - bit addredd in block to [from..to]
    \param bit_functor - functor must support .add_bits(offset, bits_ptr, size)
 
    @ingroup bitfunc

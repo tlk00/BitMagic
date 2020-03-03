@@ -1961,7 +1961,7 @@ bool gap_is_interval(const T* const BMRESTRICT buf,
 
 /**
     \brief Searches for the last 1 bit in the 111 interval of a GAP block
-    \param block - BIT buffer
+    \param buf - BIT block buffer
     \param nbit - bit index to start checking from
     \param pos - [out] found value
 
@@ -1986,7 +1986,7 @@ bool gap_find_interval_end(const T* const BMRESTRICT buf,
 
 /**
     \brief Searches for the first 1 bit in the 111 interval of a GAP block
-    \param block - BIT buffer
+    \param buf - BIT block buffer
     \param nbit - bit index to start checking from
     \param pos - [out] found value
 
