@@ -25,7 +25,10 @@ Bit-vector operations
 ./bvsample19 - bvector<>::merge - merge of bit-vectors (can be used for partitioned processing)
 ./bvsample20 - bvector<>::shift_right() and bvector<>::insert() - bit-shifting / insertion sample
 ./bvsample21 - bvector<>::shift_left() and bvector<>::erase() - bit-shifting / bit delete sample
-./bvsample22 - bvector<> range and interval methods
+
+./bvsample22 - algorithms for ranges and intervals (bmintervals.h) 
+./bvsample23 - bm::interval_enumerator<> - iterator for interval traversal of bit-vector (bmintervals.h) 
+
 
 ./bvsetalgebra - Tutorial for Algebra of Sets operations
 Tutorial: http://bitmagic.io/set-algebra.html
