@@ -3020,7 +3020,7 @@ void IntervalsTest()
                     if (!diff)
                         continue;
                     bool b = bm::find_interval_start(bv, istart+diff, pos);
-                    assert(b);
+                    assert(b); (void)b;
                     assert(pos == istart);
                 } // for i
                 ilen += 1;
@@ -3042,7 +3042,7 @@ void IntervalsTest()
                     if (!diff)
                         continue;
                     bool b = bm::find_interval_end(bv, istart+diff, pos);
-                    assert(b);
+                    assert(b); (void)b;
                     assert(pos == istart+ilen);
                 } // for i
                 ilen += 1;
@@ -3069,6 +3069,11 @@ void IntervalsTest()
                     } while (ien.advance());
                 }
                 assert(cnt == cnt_c);
+                if (cnt != cnt_c)
+                {
+                    cerr << "Count mismatch!" << endl;
+                    exit(1);
+                }
             }
         }
         {
@@ -3397,7 +3402,7 @@ void SparseVectorSerializationTest()
         cerr << "Error: SparseVectorSerializationTest() integrity failure! (2)" << endl;
         sparse_vector_u32::size_type pos;
         bool f = bm::sparse_vector_find_first_mismatch(sv1, sv3, pos);
-        assert(f);
+        assert(f); (void)f;
         cerr << "Mismatch at: " << pos << endl;
 
         sv_deserial.deserialize(sv3, buf);

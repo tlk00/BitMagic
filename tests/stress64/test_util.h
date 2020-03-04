@@ -117,6 +117,7 @@ void compare_BV(const BV& bv, const VT& vect, bool compare_count = true)
             {
                 assert(b);
             }
+            (void)b;
         }
         prev_id = v1;
     }
