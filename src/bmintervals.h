@@ -62,7 +62,7 @@ public:
         typedef bm::pair<size_type, size_type>             pair_type;
 
 public:
-    /*! @name Construction / destruction  */
+    /*! @name Construction and assignment */
     //@{
 
     interval_enumerator()
@@ -90,6 +90,24 @@ public:
         : bv_(&bv), interval_(bm::id_max, bm::id_max), gap_ptr_(0)
     {
         go_to_impl(start_pos, extend_start);
+    }
+
+    /**
+        Copy constructor
+    */
+    interval_enumerator(const interval_enumerator<BV>& ien)
+        : bv_(ien.bv_), interval_(bm::id_max, bm::id_max), gap_ptr_(0)
+    {
+        go_to_impl(ien.start(), false);
+    }
+
+    /**
+        Assignment operator
+    */
+    interval_enumerator& operator=(const interval_enumerator<BV>& ien)
+    {
+        bv_ = ien.bv_; gap_ptr_ = 0;
+        go_to_impl(ien.start(), false);
     }
 
     //@}
