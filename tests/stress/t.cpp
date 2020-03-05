@@ -13397,7 +13397,22 @@ void IntervalEnumeratorTest()
         assert(valid);
         assert(ien.start() == 1);
         assert(ien.end() == bm::id_max-1);
+
+        bm::interval_enumerator<bvect> ien2(bv, 10, false);
+        valid = ien2.valid();
+        assert(valid);
+        assert(ien2.start() == 10);
+        assert(ien2.end() == bm::id_max-1);
+
+        ien.swap(ien2);
+        assert(ien.start() == 10);
+        assert(ien2.start() == 1);
+
+        bm::interval_enumerator<bvect> ien3(std::move(ien2));
+        assert(ien3.start() == 1);
     }
+
+
 
     cout << "GAP bvector tests" << endl;
     {

@@ -110,6 +110,23 @@ public:
         go_to_impl(ien.start(), false);
     }
 
+#ifndef BM_NO_CXX11
+    /** move-ctor */
+    interval_enumerator(interval_enumerator<BV>&& ien) BMNOEXCEPT
+        : bv_(0), interval_(bm::id_max, bm::id_max), gap_ptr_(0)
+    {
+        this->swap(ien);
+    }
+
+    /** move assignmment operator */
+    interval_enumerator<BV>& operator=(interval_enumerator<BV>&& ien) BMNOEXCEPT
+    {
+        if (this != &ien)
+            this->swap(ien);
+        return *this;
+    }
+#endif
+
     //@}
 
 
@@ -183,6 +200,11 @@ public:
         return tmp;
     }
     //@}
+
+    /**
+        swap enumerator with another one
+    */
+    void swap(interval_enumerator<BV>& ien) BMNOEXCEPT;
 
 protected:
     typedef typename bvector_type::block_idx_type       block_idx_type;
@@ -727,6 +749,24 @@ bool interval_enumerator<BV>::advance()
         return true;
     }
     return go_to_impl(interval_.second + 1, false);
+}
+
+//----------------------------------------------------------------------------
+
+template<typename BV>
+void interval_enumerator<BV>::swap(interval_enumerator<BV>& ien) BMNOEXCEPT
+{
+    const BV* bv_tmp = bv_;
+    bv_ = ien.bv_;
+    ien.bv_ = bv_tmp;
+
+    gap_buf_.swap(ien.gap_buf_);
+    bm::xor_swap(interval_.first, ien.interval_.first);
+    bm::xor_swap(interval_.second, ien.interval_.second);
+
+    const bm::gap_word_t* gap_tmp = gap_ptr_;
+    gap_ptr_ = ien.gap_ptr_;
+    ien.gap_ptr_ = gap_tmp;
 }
 
 //----------------------------------------------------------------------------
