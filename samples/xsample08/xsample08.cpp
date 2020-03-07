@@ -18,12 +18,26 @@ For more information please visit:  http://bitmagic.io
 
 /** \example xsample08.cpp
 
-  Example on intervals and how to use it for layout calculation
+  Example on intervals and how to use it for layout calculation.
+  As a use case this example uses genomics visualization for
+  features mapped into genomic coordinates.
 
+  It is also illustartes vector model using coordinate ranges
+  or feature vectors. Various properties of the initial model acn be
+  dropped (sliced) to improve memory efficiency, better storage
+  or network transfer.
+
+  This example does NOT do serialization of models (which is possible)
+  for the clarity of the sample code.
 
   \sa bm::bvector::set_range
   \sa bm::bvector::any_range
+  \sa bm::bvector::copy_range
   \sa bm::interval_enumerator
+  \sa bm::rsc_sparse_vector
+  \sa bm::rsc_sparse_vector::copy_range
+  \sa bm::find_interval_start
+  \sa bm::find_interval_end
 
   \sa sample22.cpp
   \sa sample23.cpp
@@ -42,57 +56,140 @@ For more information please visit:  http://bitmagic.io
 
 #include "bm.h"
 #include "bmintervals.h"
+#include "bmsparsevec_compr.h"
 
 using namespace std;
 
 typedef bm::interval_enumerator<bm::bvector<> > interval_enumerator_type;
-
 typedef std::vector<std::unique_ptr<bm::bvector<> > > layout_vector_type;
 
+typedef bm::sparse_vector<unsigned char, bm::bvector<> >       sparse_vector_u8;
+typedef bm::rsc_sparse_vector<unsigned char, sparse_vector_u8> rsc_vector_u8;
+typedef std::vector<std::unique_ptr<rsc_vector_u8> >  starnds_vector_type;
+
+
+// -------------------------------------------------------------------
+
+/// Data frame object, sued to buid succinct data model
+///
+///
 struct data_model
 {
-    layout_vector_type lv_;  ///< layout vector
-    layout_vector_type stv_; ///< strand vector
+    /// Optimize memory layoput, build index for faster read access
+    ///
+    void optimize();
+
+    void add_layout(size_t plane, bm::bvector<>* bv);
+    void add_strand(size_t plane, rsc_vector_u8* strand);
+
+    layout_vector_type     layout_v;   ///< layout vector
+    starnds_vector_type    strand_v;  ///< strand planes vector
 };
 
-void set_strand(data_model& dm, size_t plane, unsigned start, bool strand)
+void data_model::optimize()
+{
+    BM_DECLARE_TEMP_BLOCK(tb); // explicit temp for faster optimization
+    for (size_t i  = 0; i < layout_v.size(); ++i)
+    {
+        auto bv = layout_v[i].get();
+        if (bv)
+            bv->optimize(tb); // memory optimization
+    } // for i
+    for (size_t i  = 0; i < strand_v.size(); ++i)
+    {
+        auto strand_plane = strand_v[i].get();
+        if (strand_plane)
+        {
+            strand_plane->optimize(tb);
+            strand_plane->sync(); // build rank-select idx (faster read access)
+        }
+    } // for i
+}
+
+void data_model::add_layout(size_t plane, bm::bvector<>* bv)
+{
+    unique_ptr<bm::bvector<> > ap(bv);
+    if (layout_v.size() == plane) // push back requested
+    {
+        layout_v.emplace_back(move(ap));
+    }
+    else
+    {
+        while (layout_v.size() < plane) // this is crude resize() but it would do
+            layout_v.emplace_back(new bm::bvector<>(bm::BM_GAP));
+        layout_v[plane] = std::move(ap);
+    }
+}
+
+void data_model::add_strand(size_t plane, rsc_vector_u8* strand)
+{
+    unique_ptr<rsc_vector_u8 > ap(strand);
+    if (strand_v.size() == plane) // push back requested
+    {
+        strand_v.emplace_back(move(ap));
+    }
+    else
+    {
+        while (strand_v.size() < plane) // this is crude resize() but it would do
+            strand_v.emplace_back(new rsc_vector_u8());
+        strand_v[plane] = std::move(ap);
+    }
+}
+
+
+// -------------------------------------------------------------------
+
+void set_feature_strand(data_model& dm, size_t   plane,
+                        bm::bvector<>::size_type pos,
+                        unsigned char strand)
 {
     if (!strand)
         return;
-    while (dm.stv_.size() <= plane)
-        dm.stv_.emplace_back(std::unique_ptr<bm::bvector<> >(nullptr));
-
-    bm::bvector<>* bv;
-    bv = dm.stv_[plane].get();
-    if (!bv)
+    while (dm.strand_v.size() <= plane) // add planes
     {
-        bv = new bm::bvector<>(bm::BM_GAP);
-        dm.stv_[plane] = std::unique_ptr<bm::bvector<> >(bv);
+        std::unique_ptr<rsc_vector_u8> p2(new rsc_vector_u8());
+        dm.strand_v.emplace_back(move(p2));
     }
-    bv->set_bit(start);
+
+    rsc_vector_u8* strand_plane = dm.strand_v[plane].get();
+    if (!strand_plane)
+    {
+        strand_plane = new rsc_vector_u8();
+        dm.strand_v[plane] = unique_ptr<rsc_vector_u8 >(strand_plane);
+    }
+    assert(strand_plane->is_null(pos));
+    strand_plane->set(pos, strand);
 }
 
-void add_object(data_model& dm, unsigned start, unsigned end, bool strand)
+/// Register new object in the data model: [start..end] + strand
+///
+void add_object(data_model& dm,
+                unsigned start, unsigned end,
+                unsigned char strand)
 {
     assert(start <= end);
 
     bm::bvector<>* bv; // layout plane vector
 
-    for (size_t i  = 0; i < dm.lv_.size(); ++i)
+    for (size_t i  = 0; i < dm.layout_v.size(); ++i)
     {
-        bv = dm.lv_[i].get();
+        bv = dm.layout_v[i].get();
         if (!bv)
         {
             bv = new bm::bvector<>(bm::BM_GAP);
-            dm.lv_[i] = std::unique_ptr<bm::bvector<> >(bv);
+            dm.layout_v[i] = unique_ptr<bm::bvector<> >(bv);
+            // bv just created (empty) no need to do range check
             bv->set_range(start, end);
-            set_strand(dm, i, start, strand);
+            set_feature_strand(dm, i, start, strand);
+
             return;
         }
-        if (!bv->any_range(start, end))
+        if (!bv->any_range(start, end)) // check if layout space is not used
         {
-            bv->set_range(start, end);
-            set_strand(dm, i, start, strand);
+            bv->set_range(start, end);  // add [start..end] coordinates
+            // set strand at the start of feature
+            set_feature_strand(dm, i, start, strand);
+
             return;
         }
     } // for i
@@ -100,44 +197,117 @@ void add_object(data_model& dm, unsigned start, unsigned end, bool strand)
     // not found, make new plane
     //
     bv = new bm::bvector<>(bm::BM_GAP);
-    dm.lv_.emplace_back(std::unique_ptr<bm::bvector<> >(bv));
+    dm.layout_v.emplace_back(std::unique_ptr<bm::bvector<> >(bv));
     bv->set_range(start, end);
-    set_strand(dm, dm.lv_.size()-1, start, strand);
+    set_feature_strand(dm, dm.layout_v.size()-1, start, strand);
 }
 
+/// Data model splicer
+///
+
+void splice_model(data_model& dm_target, const data_model& dm,
+                  bm::bvector<>::size_type start,
+                  bm::bvector<>::size_type end,
+                  bool copy_strands)
+{
+    const bm::bvector<>* bv; // layout
+    const rsc_vector_u8* strand_plane;
+
+    size_t t_plane = 0;
+    for (size_t i  = 0; i < dm.layout_v.size(); ++i)
+    {
+        bv = dm.layout_v[i].get();
+        if (bv)
+        {
+            bm::bvector<>::size_type start_pos;
+            bm::bvector<>::size_type end_pos;
+
+            bool found = bm::find_interval_start(*bv, start, start_pos);
+            if (!found)
+                start_pos = start;
+            found = bm::find_interval_end(*bv, end, end_pos);
+            if (!found)
+                end_pos = end;
+
+            unique_ptr<bm::bvector<>> bv_ptr(new bm::bvector<>(bm::BM_GAP));
+            bv_ptr->copy_range(*bv, start_pos, end_pos);
+            if (bv_ptr->any()) // copy range may have ended as empty
+            {
+                dm_target.add_layout(t_plane, bv_ptr.release());
+
+                // slice the strands plane (if requested)
+                //
+                if (copy_strands)
+                {
+                    if (i < dm.strand_v.size())
+                    {
+                        strand_plane = dm.strand_v[i].get();
+                        if (strand_plane)
+                        {
+                            unique_ptr<rsc_vector_u8> strand_ptr(new rsc_vector_u8());
+                            strand_ptr->copy_range(*strand_plane, start_pos, end_pos);
+                            dm_target.add_strand(t_plane, strand_ptr.release());
+                        }
+                    }
+                }
+                ++t_plane;
+            } // if any()
+
+        } // if bv
+    } // for i
+
+}
+
+
+/// This is ASCII art "renderer" for the data model.
+/// illustrates how to manipulate succinct data model to create graphics
+///
 void print_model(const data_model& dm)
 {
     const bm::bvector<>* bv; // layout
-    const bm::bvector<>* bv_strand; // strand
-    for (size_t i  = 0; i < dm.lv_.size(); ++i)
+    const rsc_vector_u8* strand_plane;
+
+    // Sequence on top is for purely decorative purposes
+    cout <<
+    "-------------------------------------------------------------------------"
+    << endl <<
+    "ATGTTAGCCCGCGCATATTATATATGTAGCGTATTAAGCGDGGAGATTACCCTTGCATTAGGTTANNNNNNNN"
+    << endl <<
+    "-------------------------------------------------------------------------"
+    << endl;
+
+    for (size_t i  = 0; i < dm.layout_v.size(); ++i)
     {
-        bv = dm.lv_[i].get();
+        bv = dm.layout_v[i].get();
         if (bv)
         {
-            bv_strand = i < dm.stv_.size() ? dm.stv_[i].get() : nullptr;
+            strand_plane = i < dm.strand_v.size() ? dm.strand_v[i].get() : nullptr;
             interval_enumerator_type ien(*bv);
             if (ien.valid())
             {
                 bm::bvector<>::size_type spaces = 0;
                 do
                 {
-                    auto st = ien.start();
-
-                    char ch_strand = '<';
-                    if (bv_strand && bv_strand->test(st))
-                        ch_strand = '>';
-
-                    auto end = ien.end();
-                    bool first = true;
+                    auto st = ien.start(); auto end = ien.end();
+                    char ch_strand = '?';
+                    if (strand_plane)
+                    {
+                        auto strand = strand_plane->get(st);
+                        switch (strand)
+                        {
+                        case 0: ch_strand = '>'; break; // positive
+                        case 1: ch_strand = '<'; break; // negative
+                        default: break; // unknown strand
+                        }
+                    }
                     for (; spaces < st; ++spaces)
                         cout << " ";
-                    for (; st <= end; ++st)
+                    for (bool first = true; st <= end; ++st, first = false)
                     {
                         if (st == end)
                             cout << ch_strand;
                         else
                             cout << (first ? ch_strand : '.');
-                        first = false;
                     } // for
                     spaces = end+1;
                 } while (ien.advance());
@@ -147,6 +317,9 @@ void print_model(const data_model& dm)
     } // for
 }
 
+enum Strand { positive=0, negative=1, unknown=2 };
+
+
 
 int main(void)
 {
@@ -154,14 +327,46 @@ int main(void)
     {
         data_model dm;
 
-        add_object(dm, 0, 0, false);
-        add_object(dm, 5, 10, false);
-        add_object(dm, 4, 70, true);
-        add_object(dm, 15, 20, true);
-        add_object(dm, 20, 30, true);
-        add_object(dm, 16, 21, false);
+        // build the data model using succinct vectors
+        //
+        add_object(dm, 0, 0,   negative);
+        add_object(dm, 5, 10,  positive);
+        add_object(dm, 4, 70,  negative);
+        add_object(dm, 15, 20, negative);
+        add_object(dm, 20, 30, positive);
+        add_object(dm, 16, 21, unknown);
 
+        dm.optimize(); // run compression and build access index
+
+        // View the model using toy ASCII art renderer
+        //
         print_model(dm);
+
+        // create a model splice for [5..10] range
+        // plus drop strand property (renderer will assume unknown)
+        //
+        {
+            data_model dm_splice;
+
+            splice_model(dm_splice, dm, 5, 10, false);
+            dm_splice.optimize();
+
+            cout << endl;
+            print_model(dm_splice);
+        }
+
+        // create a model splice for [5..10] range
+        // now WITH strand property
+        //
+        {
+            data_model dm_splice;
+
+            splice_model(dm_splice, dm, 5, 10, true);
+            dm_splice.optimize();
+
+            cout << endl;
+            print_model(dm_splice);
+        }
     }
     catch(std::exception& ex)
     {
