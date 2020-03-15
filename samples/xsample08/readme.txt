@@ -47,5 +47,6 @@ ATGTTAGCCCGCGCATATTATATATGTAGCGTATTAAGCGDGGAGATTACCCTTGCATTAGGTTANNNNNNNN
     <.................................................................<
 
 
-
+See also:
+http://bitmagic.io/gen-layout.html
 

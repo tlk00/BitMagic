@@ -105,5 +105,7 @@ More complex examples to illustrate mixed techniques and use cases
               to create comparison function. Benchmarks for variants of mismatch search and comparison.
               http://bitmagic.io/dna-compare.html
 
-
+./xsample08 - Example on how to build data model for Genomics Viewer using bit-intervals and succinct
+              vectors. Example illustrates a toy rendering with ASCII art and data model range slicing.
+              http://bitmagic.io/gen-layout.html
 
