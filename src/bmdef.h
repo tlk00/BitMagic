@@ -77,7 +77,10 @@ For more information please visit:  http://bitmagic.io
 #else
 # ifndef BMNOEXCEPT
 #  define BMNOEXCEPT noexcept
+#if defined(__EMSCRIPTEN__)
+#else
 #  define BMNOEXCEPT2
+#endif
 # endif
 #endif
 
