@@ -1727,6 +1727,7 @@ bool FindRank(const T& bv, bm::id_t rank, bm::id_t from, bm::id_t& pos)
         << "pos=" << pos << " skip()pos=" << pos2
         << " from=" << from
         << endl;
+        assert(0);
         exit(1);
     }
     
@@ -1797,7 +1798,8 @@ void CheckRangeCopy(const bvect& bv, unsigned from, unsigned to)
 }
 
 
-template<class T> void CheckCountRange(const T& vect, 
+template<class T>
+void CheckCountRange(const T& vect, 
                                        unsigned left, 
                                        unsigned right)
 {
@@ -13157,43 +13159,6 @@ void EnumeratorTest()
         }
     }
 
-    cout << "FULL bvector enumerator stress test ..." << endl;
-    {
-        bvect bvect1;
-        bvect1.set();
-
-        bvect::enumerator en = bvect1.first();
-        unsigned num = bvect1.get_first();
-        while (en.valid())
-        {
-            if (*en != num)
-            {
-                cout << "Enumeration comparison failed !" << 
-                        " enumerator = " << *en <<
-                        " get_next() = " << num << endl;
-                assert(0);
-                exit(1);
-            }
-
-            ++en;
-            num = bvect1.get_next(num);
-            {
-                bvect::enumerator en2(&bvect1, num);
-                if (*en2 != num)
-                {
-                    cout << "Enumeration comparison failed !" <<
-                            " enumerator = " << *en <<
-                            " get_next() = " << num << endl;
-                    assert(0);
-                    exit(1);
-                }
-                CompareEnumerators(en, en2);
-            }
-            if (num > (bm::set_sub_array_size * bm::gap_max_bits * 2))
-                break;
-        } // while
-    }
-    cout << "FULL bvector enumerator stress test ... OK" << endl;
 
     {
         bvect bvect1;
@@ -13306,6 +13271,45 @@ void EnumeratorTest()
             exit(1);
         }
     }
+
+    cout << "FULL bvector enumerator stress test ..." << endl;
+    {
+        bvect bvect1;
+        bvect1.set();
+
+        bvect::enumerator en = bvect1.first();
+        unsigned num = bvect1.get_first();
+        while (en.valid())
+        {
+            if (*en != num)
+            {
+                cout << "Enumeration comparison failed !" <<
+                        " enumerator = " << *en <<
+                        " get_next() = " << num << endl;
+                assert(0);
+                exit(1);
+            }
+
+            ++en;
+            num = bvect1.get_next(num);
+            {
+                bvect::enumerator en2(&bvect1, num);
+                if (*en2 != num)
+                {
+                    cout << "Enumeration comparison failed !" <<
+                            " enumerator = " << *en <<
+                            " get_next() = " << num << endl;
+                    assert(0);
+                    exit(1);
+                }
+                CompareEnumerators(en, en2);
+            }
+            if (num > (bm::set_sub_array_size * bm::gap_max_bits * 2))
+                break;
+        } // while
+    }
+    cout << "FULL bvector enumerator stress test ... OK" << endl;
+
 }
 
 
@@ -26814,10 +26818,32 @@ void TestCompressSparseVector()
         
         cout << "\nOK" << endl;
     }
-    
+
     
     {
     cout << "decode() test" << endl;
+
+        {
+            unsigned arr[10];
+            rsc_sparse_vector_u32 csv1;
+
+            csv1.push_back(5, 1);
+            csv1.push_back(6, 1);
+            csv1.push_back(8, 2);
+
+            csv1.push_back(100, 4);
+            csv1.sync();
+
+            auto sz = csv1.decode(&arr[0], 100, 1);
+            assert(sz==1);
+            assert(arr[0] == 4);
+
+            csv1.set_null(100);
+            csv1.sync();
+
+            sz = csv1.decode(&arr[0], 100, 1);
+            assert(sz == 0);
+        }
     
         {
         rsc_sparse_vector_u32 csv1;
