@@ -520,24 +520,43 @@ unsigned short bitscan_popcnt64(bm::id64_t w, B* bits) BMNOEXCEPT
     unsigned short pos = 0;
     while (w)
     {
-        bm::id64_t t = w & -w;
+        bm::id64_t t = bmi_blsi_u64(w); // w & -w;
         bits[pos++] = (B) bm::word_bitcount64(t - 1);
-        w &= w - 1;
+        w = bmi_bslr_u64(w); // w &= w - 1;
     }
     return pos;
 }
+
+/*!
+  \brief Unpacks 64-bit word into list of ON bit indexes using popcnt method
+  \param w - value
+  \param bits - pointer on the result array
+  \param offs - value to add to bit position (programmed shift)
+  \return number of bits in the list
+  @ingroup bitfunc
+*/
+template<typename B>
+unsigned short
+bitscan_popcnt64(bm::id64_t w, B* bits, unsigned short offs) BMNOEXCEPT
+{
+    unsigned short pos = 0;
+    while (w)
+    {
+        bm::id64_t t = bmi_blsi_u64(w); // w & -w;
+        bits[pos++] = B(bm::word_bitcount64(t - 1) + offs);
+        w = bmi_bslr_u64(w); // w &= w - 1;
+    }
+    return pos;
+}
+
 
 template<typename V, typename B>
 unsigned short bitscan(V w, B* bits) BMNOEXCEPT
 {
     if (bm::conditional<sizeof(V) == 8>::test())
-    {
         return bm::bitscan_popcnt64(w, bits);
-    }
     else
-    {
         return bm::bitscan_popcnt((bm::word_t)w, bits);
-    }
 }
 
 // --------------------------------------------------------------
@@ -8387,8 +8406,11 @@ operation_functions<T>::bit_op_count_table_[bm::set_END] = {
     0,                            // set_COUNT_B
 };
 
-
-const unsigned short set_bitscan_wave_size = 2;
+/**
+    Size of bit decode wave in words
+    @internal
+ */
+const unsigned short set_bitscan_wave_size = 4;
 /*!
     \brief Unpacks word wave (Nx 32-bit words)
     \param w_ptr - pointer on wave start
@@ -8401,7 +8423,7 @@ const unsigned short set_bitscan_wave_size = 2;
 inline
 unsigned short
 bitscan_wave(const bm::word_t* BMRESTRICT w_ptr,
-            unsigned char* BMRESTRICT bits) BMNOEXCEPT
+             unsigned char* BMRESTRICT bits) BMNOEXCEPT
 {
     bm::word_t w0, w1;
     unsigned short cnt0;
@@ -8413,12 +8435,20 @@ bitscan_wave(const bm::word_t* BMRESTRICT w_ptr,
     // combine into 64-bit word and scan (when HW popcnt64 is available)
     bm::id64_t w = (bm::id64_t(w1) << 32) | w0;
     cnt0 = (unsigned short) bm::bitscan_popcnt64(w, bits);
+
+    w0 = w_ptr[2];
+    w1 = w_ptr[3];
+    w = (bm::id64_t(w1) << 32) | w0;
+    cnt0 += bm::bitscan_popcnt64(w, bits + cnt0, 64);
 #else
-    unsigned short cnt1;
     // decode wave as two 32-bit bitscan decodes
-    cnt0 = w0 ? bm::bitscan_popcnt(w0, bits) : 0;
-    cnt1 = w1 ? bm::bitscan_popcnt(w1, bits + cnt0, 32) : 0;
-    cnt0 = (unsigned short)(cnt0 + cnt1);
+    cnt0 = bm::bitscan_popcnt(w0, bits);
+    cnt0 += bm::bitscan_popcnt(w1, bits + cnt0, 32);
+
+    w0 = w_ptr[2];
+    w1 = w_ptr[3];
+    cnt0 += bm::bitscan_popcnt(w0, bits + cnt0, 64);
+    cnt0 += bm::bitscan_popcnt(w1, bits + cnt0, 64+32);
 #endif
     return cnt0;
 }
