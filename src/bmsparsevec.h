@@ -218,7 +218,8 @@ public:
         void go_to(size_type pos) BMNOEXCEPT;
         
         /// advance iterator forward by one
-        void advance() BMNOEXCEPT;
+        /// @return true if it is still valid
+        bool advance() BMNOEXCEPT;
         
         void skip_zero_values() BMNOEXCEPT;
     private:
@@ -1454,7 +1455,7 @@ sparse_vector<Val, BV>::get(
         bool b = this->bmatr_.test_4rows(j);
         if (b)
         {
-            value_type vm = this->bmatr_.get_half_octet(i, j);
+            value_type vm = (value_type)this->bmatr_.get_half_octet(i, j);
             v |= vm << j;
         }
     } // for j
@@ -1966,22 +1967,23 @@ void sparse_vector<Val, BV>::const_iterator::go_to(size_type pos) BMNOEXCEPT
 //---------------------------------------------------------------------
 
 template<class Val, class BV>
-void sparse_vector<Val, BV>::const_iterator::advance() BMNOEXCEPT
+bool sparse_vector<Val, BV>::const_iterator::advance() BMNOEXCEPT
 {
     if (pos_ == bm::id_max) // nothing to do, we are at the end
-        return;
+        return false;
     ++pos_;
     if (pos_ >= sv_->size())
-        this->invalidate();
-    else
     {
-        if (buf_ptr_)
-        {
-            ++buf_ptr_;
-            if (buf_ptr_ - ((value_type*)buffer_.data()) >= n_buf_size)
-                buf_ptr_ = 0;
-        }
+        this->invalidate();
+        return false;
     }
+    if (buf_ptr_)
+    {
+        ++buf_ptr_;
+        if (buf_ptr_ - ((value_type*)buffer_.data()) >= n_buf_size)
+            buf_ptr_ = 0;
+    }
+    return true;
 }
 
 //---------------------------------------------------------------------

@@ -221,7 +221,7 @@ public:
         }
         return *this;
     }
-    
+
 #ifndef BM_NO_CXX11
     /*! move-ctor */
     rsc_sparse_vector(rsc_sparse_vector<Val,SV>&& csv) BMNOEXCEPT;
@@ -342,6 +342,12 @@ public:
                      size_type   size,
                      bool        zero_mem = true) const;
 
+/*
+    size_type decode2(value_type* arr,
+                     size_type   idx_from,
+                     size_type   size,
+                     bool        zero_mem = true) const;
+*/
     ///@}
 
     
@@ -589,8 +595,7 @@ rsc_sparse_vector<Val, SV>::rsc_sparse_vector(bm::null_support null_able,
                                               allocation_policy_type ap,
                                               size_type bv_max_size,
                                               const allocator_type&   alloc)
-: sv_(null_able, ap, bv_max_size, alloc),
-  in_sync_(false)
+: sv_(null_able, ap, bv_max_size, alloc), in_sync_(false)
 {
     BM_ASSERT(null_able == bm::use_null);
     BM_ASSERT(int(sv_value_plains) == int(SV::sv_value_plains));
@@ -611,24 +616,20 @@ rsc_sparse_vector<Val, SV>::~rsc_sparse_vector()
 template<class Val, class SV>
 rsc_sparse_vector<Val, SV>::rsc_sparse_vector(
                           const rsc_sparse_vector<Val, SV>& csv)
-: sv_(csv.sv_),
-  size_(csv.size_),
-  max_id_(csv.max_id_),
-  in_sync_(csv.in_sync_)
+: sv_(csv.sv_), size_(csv.size_), max_id_(csv.max_id_), in_sync_(csv.in_sync_)
 {
     BM_ASSERT(int(sv_value_plains) == int(SV::sv_value_plains));
     
     construct_bv_blocks();
     if (in_sync_)
-    {
         bv_blocks_ptr_->copy_from(*(csv.bv_blocks_ptr_));
-    }
 }
 
 //---------------------------------------------------------------------
 
 template<class Val, class SV>
-rsc_sparse_vector<Val, SV>::rsc_sparse_vector(rsc_sparse_vector<Val,SV>&& csv) BMNOEXCEPT
+rsc_sparse_vector<Val, SV>::rsc_sparse_vector(
+                            rsc_sparse_vector<Val,SV>&& csv) BMNOEXCEPT
 : sv_(bm::use_null),
   size_(0),
   max_id_(0), in_sync_(false)
@@ -695,6 +696,7 @@ void rsc_sparse_vector<Val, SV>::set_null(size_type idx)
         size_type sv_idx = bv_null->count_range(0, idx);
         bv_null->clear_bit_no_check(idx);
         sv_.erase(--sv_idx);
+        in_sync_ = false;
     }
 }
 
@@ -744,7 +746,7 @@ bool rsc_sparse_vector<Val, SV>::equal(
 
 template<class Val, class SV>
 void rsc_sparse_vector<Val, SV>::load_from(
-                                    const sparse_vector_type& sv_src)
+                                        const sparse_vector_type& sv_src)
 {
     max_id_ = size_ = 0;
 
@@ -1012,7 +1014,7 @@ typename rsc_sparse_vector<Val, SV>::size_type
 rsc_sparse_vector<Val, SV>::decode(value_type* arr,
                                    size_type   idx_from,
                                    size_type   size,
-                                   bool        /*zero_mem*/) const
+                                   bool        zero_mem) const
 {
     if (size == 0)
         return 0;
@@ -1033,39 +1035,93 @@ rsc_sparse_vector<Val, SV>::decode(value_type* arr,
     bool b = bv_null->test(idx_from);
     
     bvector_enumerator_type en_i = bv_null->get_enumerator(idx_from);
+    BM_ASSERT(en_i.valid());
+
+    if (zero_mem)
+        ::memset(arr, 0, sizeof(value_type)*size);
+
+    rank -= b;
+    sparse_vector_const_iterator it = sv_.get_const_iterator(rank);
+    size_type i = 0;
+    if (it.valid())
+    {
+        do
+        {
+            size_type en_idx = *en_i;
+            size_type delta = en_idx - idx_from;
+            idx_from += delta;
+            i += delta;
+            if (i >= size)
+                return size;
+            arr[i++] = it.value();
+            if (!en_i.advance())
+                break;
+            if (!it.advance())
+                break;
+            ++idx_from;
+        } while (i < size);
+    }
+    return i;
+}
+
+/*
+template<class Val, class SV>
+typename rsc_sparse_vector<Val, SV>::size_type
+rsc_sparse_vector<Val, SV>::decode2(value_type* arr,
+                                   size_type   idx_from,
+                                   size_type   size,
+                                   bool        zero_mem) const
+{
+    if (size == 0)
+        return 0;
+
+    BM_ASSERT(arr);
+    BM_ASSERT(in_sync_);  // call sync() before decoding
+    BM_ASSERT(bv_blocks_ptr_);
+
+    if (idx_from >= this->size())
+        return 0;
+
+    if ((bm::id_max - size) <= idx_from)
+        size = bm::id_max - idx_from;
+
+    const bvector_type* bv_null = sv_.get_null_bvector();
+
+    size_type rank = bv_null->count_to(idx_from, *bv_blocks_ptr_);
+    bool b = bv_null->test(idx_from);
+
+    bvector_enumerator_type en_i = bv_null->get_enumerator(idx_from);
+    BM_ASSERT(en_i.valid());
+
     size_type i = *en_i;
     if (idx_from + size <= i)  // empty space (all zeros)
     {
         ::memset(arr, 0, sizeof(value_type)*size);
         return size;
     }
-    rank -= b;
-    sparse_vector_const_iterator it = sv_.get_const_iterator(rank);
-    i = 0;
-    while (it.valid())
+
+    size_type extract_cnt =
+        bv_null->count_range(idx_from, idx_from + size - 1, *bv_blocks_ptr_);
+
+    BM_ASSERT(extract_cnt);
+    sv_.decode(arr, rank, extract_cnt+1, false);
+
+    typedef bm::interval_enumerator<bvector_type> interval_enumerator_type;
+    interval_enumerator_type i_en(*bv_null, idx_from, false);
+
+    while (i_en.valid())
     {
-        if (!en_i.valid())
+        size_type from = i_en.start();
+        size_type to = i_en.end();
+
+        if (from >= idx_from + size)
             break;
-        size_type en_idx = *en_i;
-        while (idx_from < en_idx) // zero the empty prefix
-        {
-            arr[i] ^= arr[i];
-            ++i; ++idx_from;
-            if (i == size)
-                return i;
-        }
-        BM_ASSERT(idx_from == en_idx);
-        arr[i] = *it;
-        ++i; ++idx_from;
-        if (i == size)
-            return i;
-        
-        en_i.advance();
-        it.advance();
-    } // while
-    
-    return i;
+        i_en.advance();
+    }
+
+    return extract_cnt;
 }
+*/
 
 //---------------------------------------------------------------------
 
@@ -1123,6 +1179,8 @@ void rsc_sparse_vector<Val, SV>::copy_range(
     bv_null->copy_range(*arg_bv_null, 0, right); // not NULL vector gets a full copy
     sv_.copy_range(csv.sv_, sv_left, sv_right, bm::no_null); // don't copy NULL
 }
+
+
 
 
 //---------------------------------------------------------------------

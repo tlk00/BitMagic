@@ -1048,7 +1048,7 @@ void set2set_11_transform<SV>::remap(const bvector_type&        bv_in,
             {
                 sv_ptr_->gather(&gb_->buffer_[0], &gb_->gather_idx_[0], buf_cnt, BM_SORTED_UNIFORM);
                 bv_out.set(&gb_->buffer_[0], buf_cnt, BM_SORTED);
-                buf_cnt ^= buf_cnt;
+                buf_cnt = 0;
             }
             nb_old = nb;
             gb_->gather_idx_[buf_cnt++] = idx;
@@ -1062,7 +1062,7 @@ void set2set_11_transform<SV>::remap(const bvector_type&        bv_in,
         {
             sv_ptr_->gather(&gb_->buffer_[0], &gb_->gather_idx_[0], buf_cnt, BM_SORTED_UNIFORM);
             bv_out.set(&gb_->buffer_[0], buf_cnt, bm::BM_SORTED);
-            buf_cnt ^= buf_cnt;
+            buf_cnt = 0;
         }
     } // for en
     if (buf_cnt)
