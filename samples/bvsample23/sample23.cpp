@@ -48,17 +48,6 @@ For more information please visit:  http://bitmagic.io
 
 using namespace std;
 
-// Utility template function used to print container
-template<class T> void PrintContainer(T first, T last)
-{
-    if (first == last)
-        cout << "<EMPTY SET>";
-    else
-        for(;first != last; ++first)
-            cout << *first << ", ";
-    cout << endl;
-}
-
 typedef bm::interval_enumerator<bm::bvector<> > interval_enumerator_type;
 
 int main(void)
