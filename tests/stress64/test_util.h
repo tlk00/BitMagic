@@ -707,16 +707,22 @@ template<typename CSV>
 void CheckCompressedDecode(const CSV& csv,
     typename CSV::size_type from, typename CSV::size_type size)
 {
-    std::vector<typename CSV::value_type> vect;
+    std::vector<typename CSV::value_type> vect, vect2, vect_tmp;
     vect.resize(size);
+    vect2.resize(size);
+    vect_tmp.resize(size);
 
     typename CSV::size_type sz = csv.decode(&vect[0], from, size);
+    typename CSV::size_type sz2 = csv.decode_buf(&vect2[0], &vect_tmp[0], from, size);
+    assert(sz == sz2);
+
     typename CSV::size_type ex_idx = 0;
     for (typename CSV::size_type i = from; i < from + sz; ++i)
     {
         auto v = csv.get(i);
         auto vx = vect[ex_idx];
-        if (v != vx)
+        unsigned vx2 = vect[ex_idx];
+        if (v != vx || v != vx2)
         {
             cerr << "compressed vector decode mismatch from="
                 << from << " idx=" << i
