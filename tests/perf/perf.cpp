@@ -45,6 +45,7 @@ For more information please visit:  http://bitmagic.io
 #include "bmsparsevec_algo.h"
 #include "bmsparsevec_serial.h"
 #include "bmstrsparsevec.h"
+#include "bmsparsevec_compr.h"
 #include "bmrandom.h"
 
 //#include "bmdbg.h"
@@ -2225,16 +2226,18 @@ void ptest()
 typedef bm::sparse_vector<unsigned, bvect> svect;
 typedef bm::sparse_vector<unsigned, bvect> sparse_vector_u32;
 
+typedef bm::sparse_vector<unsigned, bvect > sparse_vector_u32;
+typedef bm::sparse_vector<unsigned long long, bvect > sparse_vector_u64;
+typedef bm::rsc_sparse_vector<unsigned, sparse_vector_u32> rsc_sparse_vector_u32;
+
+
 // create a benchmark svector with a few dufferent distribution patterns
 //
 static
 void FillSparseIntervals(svect& sv)
 {
     sv.resize(250000000);
-    
     unsigned i;
-    
-
     for (i = 256000; i < 712000 * 2; ++i)
     {
         sv.set(i, 0xFFE);
@@ -2243,17 +2246,29 @@ void FillSparseIntervals(svect& sv)
     {
         sv.set(i, i);
     }
-    
     for (i = 180000000; i < 190000000; ++i)
     {
         sv.set(i, rand() % 128000);
     }
-    
     for (i = 200000000; i < 210000000; ++i)
     {
         sv.set(i, rand() % 128000);
     }
+}
 
+template<class SV>
+void FillSparseNullVector(SV& sv, typename SV::size_type size,
+                          unsigned data_size, unsigned null_factor)
+{
+    typename SV::size_type i = 0;
+    for (; i < size; i+= null_factor)
+    {
+        typename SV::size_type k = 0;
+        for (;k < data_size; ++k, ++i)
+        {
+            sv[i] = 0x0DFA;
+        } // for k
+    } // for i
 }
 
 static
@@ -2411,6 +2426,112 @@ void SparseVectorAccessTest()
     sprintf(buf, "%i", (int)cnt); // to fool some smart compilers like ICC
 
 }
+
+
+void RSC_SparseVectorAccesTest()
+{
+    BM_DECLARE_TEMP_BLOCK(tb)
+
+    unsigned test_size = 250000000;
+    unsigned dec_size = 65536 * 3;
+
+    std::vector<unsigned> vect, vect1, vect2;
+    vect.resize(dec_size);
+    vect1.resize(dec_size);
+    vect2.resize(dec_size);
+
+
+    sparse_vector_u32   sv1(bm::use_null);
+    rsc_sparse_vector_u32::size_type sz, sz1;
+
+
+    FillSparseNullVector(sv1, test_size, 2, 150);
+    {
+        rsc_sparse_vector_u32 csv1;
+        csv1.load_from(sv1);
+        csv1.optimize(tb);
+        sv1.clear();
+
+        {
+            TimeTaker tt("rsc_sparse_vector()::decode() test (sparse)", REPEATS*10 );
+            unsigned from = 0;
+            for (unsigned i = 0; i < REPEATS*10; ++i)
+            {
+                sz = csv1.decode(&vect[0], from, dec_size);
+                assert(sz); (void)sz;
+                from += 3;//rand() % dec_size;
+                if (from > csv1.size())
+                    from = 0;
+            } // for
+        }
+        {
+            TimeTaker tt("rsc_sparse_vector()::decode_buf() test (sparse)", REPEATS*10 );
+            unsigned from = 0;
+            for (unsigned i = 0; i < REPEATS*10; ++i)
+            {
+                sz1 = csv1.decode_buf(&vect1[0], &vect2[0], from, dec_size);
+                assert(sz); (void)sz;
+                from += 3;//rand() % dec_size;
+                if (from > csv1.size())
+                    from = 0;
+            } // for
+        }
+        assert (sz == sz1);
+        for (unsigned i = 0; i < sz; ++i)
+        {
+            auto v = vect[i];
+            auto v1 = vect1[i];
+            assert(v == v1);
+        }
+
+    }
+
+    FillSparseNullVector(sv1, test_size, 64, 5);
+    {
+        rsc_sparse_vector_u32 csv1;
+        csv1.load_from(sv1);
+        csv1.optimize(tb);
+        sv1.clear();
+
+        {
+            TimeTaker tt("rsc_sparse_vector<>::decode() test (dense)", REPEATS*10 );
+            unsigned from = 0;
+            for (unsigned i = 0; i < REPEATS*10; ++i)
+            {
+                sz = csv1.decode(&vect[0], from, dec_size);
+
+                assert(sz);(void)sz;
+                from += 7; // rand() % dec_size;
+                if (from > csv1.size())
+                    from = 0;
+            } // for
+        }
+        {
+            TimeTaker tt("rsc_sparse_vector()::decode_buf() test (dense)", REPEATS*10 );
+            unsigned from = 0;
+            for (unsigned i = 0; i < REPEATS*10; ++i)
+            {
+                sz1 = csv1.decode_buf(&vect1[0], &vect2[0], from, dec_size);
+                assert(sz); (void)sz;
+                from += 7; // rand() % dec_size;
+                if (from > csv1.size())
+                    from = 0;
+            } // for
+        }
+        assert (sz == sz1);
+        for (unsigned i = 0; i < sz; ++i)
+        {
+            assert(vect[i] == vect1[i]);
+        }
+
+    }
+
+
+
+}
+
+
+
 
 static
 void OptimizeTest()
@@ -3667,6 +3788,8 @@ int main(void)
     SparseVectorSerializationTest();
 
     SparseVectorRangeDeserializationTest();
+
+    RSC_SparseVectorAccesTest();
 
     RankCompressionTest();
 
