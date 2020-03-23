@@ -26385,22 +26385,28 @@ static
 void CheckCompressedDecode(const rsc_sparse_vector_u32& csv,
                            unsigned from, unsigned size)
 {
-    std::vector<unsigned> vect;
+    std::vector<unsigned> vect, vect2, vect_tmp;
     vect.resize(size);
+    vect2.resize(size);
+    vect_tmp.resize(size);
     
     unsigned sz = csv.decode(&vect[0], from, size);
+    unsigned sz2 = csv.decode_buf(&vect2[0], &vect_tmp[0], from, size);
+    assert(sz == sz2);
+
     unsigned ex_idx = 0;
     for (unsigned i = from; i < from + sz; ++i)
     {
         unsigned v = csv.get(i);
         unsigned vx = vect[ex_idx];
-        if (v != vx)
+        unsigned vx2 = vect[ex_idx];
+        if (v != vx || v != vx2)
         {
             cerr << "compressed vector decode mismatch from="
                  << from << " idx=" << i
-                 << " v=" << v << " vx=" << vx
+                 << " v=" << v << " vx=" << vx << " vx2=" << vx2
                  << endl;
-            exit(1);
+            assert(0); exit(1);
         }
         ++ex_idx;
     }
@@ -26745,86 +26751,15 @@ void TestCompressSparseVector()
         assert(csv.get(5) == 0);
     }
 
-    // set stress test
-    {
-        cout << "RSC set stress..." << endl;
-        std::vector<std::pair<unsigned, unsigned> > vect;
-        rsc_sparse_vector_u32 csv;
-        
-        const unsigned max_size = 2000000;
-        
-        cout << "Test set generation." << endl;
-        for (unsigned i = 0; i < max_size; i+=2)
-        {
-            std::pair<unsigned, unsigned> pr(i, i+10);
-            vect.push_back(pr);
-        } // for
-        
-        {
-            std::random_device rd;
-            std::mt19937 g(rd());
-            std::shuffle(vect.begin(), vect.end(), g);
-        }
-        
-        cout << "RSC set() " << endl;
-        unsigned i = 0;
-        for (auto rit = vect.rbegin(); rit != vect.rend(); ++rit)
-        {
-            std::pair<unsigned, unsigned> pr = *rit;
-            csv.set(pr.first, pr.second);
-            unsigned v = csv[pr.first];
-            assert(v == pr.second);
-
-            if (i % 4096 == 0)
-            {
-                cout << "\r" << pr.first << "/" << max_size << flush;
-                csv.optimize();
-            }
-
-            ++i;
-        } // for
-        
-        cout << "\nRSC verification..." << endl;
-        
-        csv.optimize();
-        csv.sync();
-        i = 0;
-        for (i = 0; i < vect.size(); ++i)
-        {
-            const std::pair<unsigned, unsigned>& pr = vect[i];
-            unsigned v = csv[pr.first];
-            assert(v == pr.second);
-            if (i % 4096 == 0)
-                cout << "\r" << pr.first << "/" << max_size << flush;
-        } // for
-        
-        cout << "\nRSC set null..." << endl;
-
-        i = 0;
-        for (auto rit = vect.rbegin(); rit != vect.rend(); ++rit)
-        {
-            std::pair<unsigned, unsigned> pr = *rit;
-            csv.set_null(pr.first);
-            assert(csv.is_null(pr.first));
-            if (i % 4096 == 0)
-            {
-                cout << "\r" << i << "/" << max_size << flush;
-                csv.optimize();
-            }
-            ++i;
-        } // for
-
-
-        
-        cout << "\nOK" << endl;
-    }
 
     
     {
-    cout << "decode() test" << endl;
+    cout << "decode() tests" << endl;
 
         {
             unsigned arr[10];
+            unsigned arr1[10];
+            unsigned arr2[10];
             rsc_sparse_vector_u32 csv1;
 
             csv1.push_back(5, 1);
@@ -26838,11 +26773,19 @@ void TestCompressSparseVector()
             assert(sz==1);
             assert(arr[0] == 4);
 
+            auto sz2 = csv1.decode_buf(&arr1[0], &arr2[0], 100, 1);
+            assert(sz2==1);
+            assert(arr1[0] == 4);
+
+
             csv1.set_null(100);
             csv1.sync();
 
             sz = csv1.decode(&arr[0], 100, 1);
             assert(sz == 0);
+
+            sz2 = csv1.decode_buf(&arr1[0], &arr2[0], 100, 1);
+            assert(sz2==0);
         }
     
         {
@@ -26901,6 +26844,81 @@ void TestCompressSparseVector()
         }
 
         }
+    }
+
+
+    // set stress test
+    {
+        cout << "RSC set stress..." << endl;
+        std::vector<std::pair<unsigned, unsigned> > vect;
+        rsc_sparse_vector_u32 csv;
+
+        const unsigned max_size = 2000000;
+
+        cout << "Test set generation." << endl;
+        for (unsigned i = 0; i < max_size; i+=2)
+        {
+            std::pair<unsigned, unsigned> pr(i, i+10);
+            vect.push_back(pr);
+        } // for
+
+        {
+            std::random_device rd;
+            std::mt19937 g(rd());
+            std::shuffle(vect.begin(), vect.end(), g);
+        }
+
+        cout << "RSC set() " << endl;
+        unsigned i = 0;
+        for (auto rit = vect.rbegin(); rit != vect.rend(); ++rit)
+        {
+            std::pair<unsigned, unsigned> pr = *rit;
+            csv.set(pr.first, pr.second);
+            unsigned v = csv[pr.first];
+            assert(v == pr.second);
+
+            if (i % 4096 == 0)
+            {
+                cout << "\r" << pr.first << "/" << max_size << flush;
+                csv.optimize();
+            }
+
+            ++i;
+        } // for
+
+        cout << "\nRSC verification..." << endl;
+
+        csv.optimize();
+        csv.sync();
+        i = 0;
+        for (i = 0; i < vect.size(); ++i)
+        {
+            const std::pair<unsigned, unsigned>& pr = vect[i];
+            unsigned v = csv[pr.first];
+            assert(v == pr.second);
+            if (i % 4096 == 0)
+                cout << "\r" << pr.first << "/" << max_size << flush;
+        } // for
+
+        cout << "\nRSC set null..." << endl;
+
+        i = 0;
+        for (auto rit = vect.rbegin(); rit != vect.rend(); ++rit)
+        {
+            std::pair<unsigned, unsigned> pr = *rit;
+            csv.set_null(pr.first);
+            assert(csv.is_null(pr.first));
+            if (i % 4096 == 0)
+            {
+                cout << "\r" << i << "/" << max_size << flush;
+                csv.optimize();
+            }
+            ++i;
+        } // for
+
+
+
+        cout << "\nOK" << endl;
     }
 
     {
