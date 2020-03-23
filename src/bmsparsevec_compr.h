@@ -336,18 +336,43 @@ public:
     // ------------------------------------------------------------
     /*! @name Export content to C-stype array                    */
     ///@{
-    
+
+    /**
+        \brief C-style decode
+        \param arr - decode target array (must be properly sized)
+        \param idx_from - start address to decode
+        \param size - number of elements to decode
+        \param zero_mem - flag if array needs to beset to zeros first
+
+        @return actual decoded size
+        @sa decode_buf
+     */
     size_type decode(value_type* arr,
                      size_type   idx_from,
                      size_type   size,
                      bool        zero_mem = true) const;
 
-/*
-    size_type decode2(value_type* arr,
-                     size_type   idx_from,
-                     size_type   size,
-                     bool        zero_mem = true) const;
-*/
+
+    /**
+        \brief C-style decode (variant with external memory)
+         Analog of decode, but requires two arrays.
+         Faster than decode in many cases.
+
+        \param arr - decode target array (must be properly sized)
+        \param arr_buf_tmp - decode temp bufer (must be same size of arr)
+        \param idx_from - start address to decode
+        \param size - number of elements to decode
+        \param zero_mem - flag if array needs to beset to zeros first
+
+        @return actual decoded size
+        @sa decode
+     */
+    size_type decode_buf(value_type* arr,
+                         value_type* arr_buf_tmp,
+                         size_type   idx_from,
+                         size_type   size,
+                         bool        zero_mem = true) const;
+
     ///@}
 
     
@@ -1028,19 +1053,22 @@ rsc_sparse_vector<Val, SV>::decode(value_type* arr,
     
     if ((bm::id_max - size) <= idx_from)
         size = bm::id_max - idx_from;
+    if ((idx_from + size) > this->size())
+        size = this->size() - idx_from;
 
     const bvector_type* bv_null = sv_.get_null_bvector();
 
+    // TODO: implement rank corected count_to
     size_type rank = bv_null->count_to(idx_from, *bv_blocks_ptr_);
     bool b = bv_null->test(idx_from);
-    
+    rank -= b;
+
     bvector_enumerator_type en_i = bv_null->get_enumerator(idx_from);
     BM_ASSERT(en_i.valid());
 
     if (zero_mem)
         ::memset(arr, 0, sizeof(value_type)*size);
 
-    rank -= b;
     sparse_vector_const_iterator it = sv_.get_const_iterator(rank);
     size_type i = 0;
     if (it.valid())
@@ -1064,64 +1092,62 @@ rsc_sparse_vector<Val, SV>::decode(value_type* arr,
     return i;
 }
 
-/*
+
 template<class Val, class SV>
 typename rsc_sparse_vector<Val, SV>::size_type
-rsc_sparse_vector<Val, SV>::decode2(value_type* arr,
-                                   size_type   idx_from,
-                                   size_type   size,
-                                   bool        zero_mem) const
+rsc_sparse_vector<Val, SV>::decode_buf(value_type*     arr,
+                                       value_type*     arr_buf_tmp,
+                                       size_type       idx_from,
+                                       size_type       size,
+                                       bool            zero_mem) const
 {
-    if (size == 0)
+    if (!size || (idx_from >= this->size()))
         return 0;
 
     BM_ASSERT(arr);
     BM_ASSERT(in_sync_);  // call sync() before decoding
     BM_ASSERT(bv_blocks_ptr_);
 
-    if (idx_from >= this->size())
-        return 0;
-
     if ((bm::id_max - size) <= idx_from)
         size = bm::id_max - idx_from;
+    if ((idx_from + size) > this->size())
+        size = this->size() - idx_from;
 
     const bvector_type* bv_null = sv_.get_null_bvector();
 
+    // TODO: implement rank corected count_to
     size_type rank = bv_null->count_to(idx_from, *bv_blocks_ptr_);
     bool b = bv_null->test(idx_from);
+    rank -= b;
 
     bvector_enumerator_type en_i = bv_null->get_enumerator(idx_from);
     BM_ASSERT(en_i.valid());
 
-    size_type i = *en_i;
-    if (idx_from + size <= i)  // empty space (all zeros)
-    {
+    if (zero_mem)
         ::memset(arr, 0, sizeof(value_type)*size);
+
+    size_type i = en_i.value();
+    if (idx_from + size <= i)  // empty space (all zeros)
         return size;
-    }
 
     size_type extract_cnt =
         bv_null->count_range(idx_from, idx_from + size - 1, *bv_blocks_ptr_);
 
-    BM_ASSERT(extract_cnt);
-    sv_.decode(arr, rank, extract_cnt+1, false);
+    BM_ASSERT(extract_cnt < this->size());
+    auto ex_sz = sv_.decode(arr_buf_tmp, rank, extract_cnt, true);
+    BM_ASSERT(ex_sz == extract_cnt); (void) ex_sz;
 
-    typedef bm::interval_enumerator<bvector_type> interval_enumerator_type;
-    interval_enumerator_type i_en(*bv_null, idx_from, false);
-
-    while (i_en.valid())
+    for (i = 0; i < extract_cnt; ++i)
     {
-        size_type from = i_en.start();
-        size_type to = i_en.end();
+        BM_ASSERT(en_i.valid());
+        size_type en_idx = *en_i;
+        arr[en_idx-idx_from] = arr_buf_tmp[i];
+        en_i.advance();
+    } // for i
 
-        if (from >= idx_from + size)
-            break;
-        i_en.advance();
-    }
-
-    return extract_cnt;
+    return size;
 }
-*/
+
 
 //---------------------------------------------------------------------
 
