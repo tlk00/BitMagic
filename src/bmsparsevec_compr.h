@@ -1250,7 +1250,7 @@ rsc_sparse_vector<Val, SV>::decode_buf(value_type*     arr,
     size_type extract_cnt =
         bv_null->count_range(idx_from, idx_from + size - 1, *bv_blocks_ptr_);
 
-    BM_ASSERT(extract_cnt < this->size());
+    BM_ASSERT(extract_cnt <= this->size());
     auto ex_sz = sv_.decode(arr_buf_tmp, rank, extract_cnt, true);
     BM_ASSERT(ex_sz == extract_cnt); (void) ex_sz;
 
