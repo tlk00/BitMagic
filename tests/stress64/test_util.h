@@ -716,13 +716,16 @@ void CheckCompressedDecode(const CSV& csv,
     typename CSV::size_type sz2 = csv.decode_buf(&vect2[0], &vect_tmp[0], from, size);
     assert(sz == sz2);
 
+    typename CSV::const_iterator it = csv.get_const_iterator(from);
     typename CSV::size_type ex_idx = 0;
     for (typename CSV::size_type i = from; i < from + sz; ++i)
     {
         auto v = csv.get(i);
         auto vx = vect[ex_idx];
-        unsigned vx2 = vect[ex_idx];
-        if (v != vx || v != vx2)
+        auto vx2 = vect[ex_idx];
+        auto vx_it = *it;
+
+        if (v != vx || v != vx2 || v != vx_it)
         {
             cerr << "compressed vector decode mismatch from="
                 << from << " idx=" << i
@@ -731,6 +734,7 @@ void CheckCompressedDecode(const CSV& csv,
             assert(0);  exit(1);
         }
         ++ex_idx;
+        ++it;
     }
 }
 
