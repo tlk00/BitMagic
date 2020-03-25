@@ -188,7 +188,7 @@ public:
                                 { return pos_ >= it.pos_; }
 
         /// \brief Get current position (value)
-        value_type operator*() const BMNOEXCEPT { return this->value(); }
+        value_type operator*() const  { return this->value(); }
         
         
         /// \brief Advance to the next available value
@@ -200,7 +200,7 @@ public:
 
 
         /// \brief Get current position (value)
-        value_type value() const BMNOEXCEPT;
+        value_type value() const;
         
         /// \brief Get NULL status
         bool is_null() const BMNOEXCEPT;
@@ -1990,7 +1990,7 @@ bool sparse_vector<Val, BV>::const_iterator::advance() BMNOEXCEPT
 
 template<class Val, class BV>
 typename sparse_vector<Val, BV>::const_iterator::value_type
-sparse_vector<Val, BV>::const_iterator::value() const BMNOEXCEPT
+sparse_vector<Val, BV>::const_iterator::value() const
 {
     BM_ASSERT(this->valid());
     value_type v;

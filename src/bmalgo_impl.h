@@ -1623,29 +1623,17 @@ void for_each_bit_blk(const bm::word_t* block, SIZE_TYPE offset,
     {
         bitcount = right - left + 1u;
     }
+    BM_ASSERT(bm::set_bitscan_wave_size == 4);
     // now when we are word aligned, we can scan the bit-stream
     // loop unrolled to evaluate 4 words at a time
-    // TODO: more effient decode of a wave
-    #if 0
-    for ( ;bitcount >= 128; bitcount-=128, word+=4)
+    for ( ;bitcount >= 128;
+           bitcount-=128, word+=bm::set_bitscan_wave_size,
+           nword += bm::set_bitscan_wave_size)
     {
-        cnt = bm::bitscan_popcnt(word[0], bits);
+        cnt = bm::bitscan_wave(word, bits);
         if (cnt)
             bit_functor.add_bits(offset + (nword * 32), bits, cnt);
-        ++nword;
-        cnt = bm::bitscan_popcnt(word[1], bits);
-        if (cnt)
-            bit_functor.add_bits(offset + (nword * 32), bits, cnt);
-        ++nword;
-        cnt = bm::bitscan_popcnt(word[2], bits);
-        if (cnt)
-            bit_functor.add_bits(offset + (nword * 32), bits, cnt);
-        ++nword;
-        cnt = bm::bitscan_popcnt(word[3], bits);
-        if (cnt)
-            bit_functor.add_bits(offset + (nword * 32), bits, cnt)
     } // for
-    #endif
 
     for ( ;bitcount >= 32; bitcount-=32, ++word)
     {

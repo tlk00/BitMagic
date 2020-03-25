@@ -110,6 +110,108 @@ public:
         size_type                   idx_;
     };
 
+    /**
+        Const iterator to traverse the rsc sparse vector.
+
+        Implementation uses buffer for decoding so, competing changes
+        to the original vector may not match the iterator returned values.
+
+        This iterator keeps an operational buffer, memory footprint is not
+        negligable
+
+        @ingroup sv
+    */
+    class const_iterator
+    {
+    public:
+    friend class rsc_sparse_vector;
+
+#ifndef BM_NO_STL
+        typedef std::input_iterator_tag  iterator_category;
+#endif
+        typedef rsc_sparse_vector<Val, SV>           rsc_sparse_vector_type;
+        typedef rsc_sparse_vector_type*              rsc_sparse_vector_type_ptr;
+        typedef typename rsc_sparse_vector_type::value_type    value_type;
+        typedef typename rsc_sparse_vector_type::size_type     size_type;
+        typedef typename rsc_sparse_vector_type::bvector_type  bvector_type;
+        typedef typename bvector_type::allocator_type          allocator_type;
+        typedef typename
+        bvector_type::allocator_type::allocator_pool_type allocator_pool_type;
+        typedef bm::byte_buffer<allocator_type>            buffer_type;
+
+        typedef unsigned                    difference_type;
+        typedef unsigned*                   pointer;
+        typedef value_type&                 reference;
+
+    public:
+        const_iterator() BMNOEXCEPT;
+        const_iterator(const rsc_sparse_vector_type* csv) BMNOEXCEPT;
+        const_iterator(const rsc_sparse_vector_type* csv, size_type pos) BMNOEXCEPT;
+        const_iterator(const const_iterator& it) BMNOEXCEPT;
+
+        bool operator==(const const_iterator& it) const BMNOEXCEPT
+                                { return (pos_ == it.pos_) && (csv_ == it.csv_); }
+        bool operator!=(const const_iterator& it) const BMNOEXCEPT
+                                { return ! operator==(it); }
+        bool operator < (const const_iterator& it) const BMNOEXCEPT
+                                { return pos_ < it.pos_; }
+        bool operator <= (const const_iterator& it) const BMNOEXCEPT
+                                { return pos_ <= it.pos_; }
+        bool operator > (const const_iterator& it) const BMNOEXCEPT
+                                { return pos_ > it.pos_; }
+        bool operator >= (const const_iterator& it) const BMNOEXCEPT
+                                { return pos_ >= it.pos_; }
+
+        /// \brief Get current position (value)
+        value_type operator*() const { return this->value(); }
+
+
+        /// \brief Advance to the next available value
+        const_iterator& operator++() BMNOEXCEPT { this->advance(); return *this; }
+
+        /// \brief Advance to the next available value
+        const_iterator& operator++(int)
+            { const_iterator tmp(*this);this->advance(); return tmp; }
+
+
+        /// \brief Get current position (value)
+        value_type value() const;
+
+        /// \brief Get NULL status
+        bool is_null() const BMNOEXCEPT;
+
+        /// Returns true if iterator is at a valid position
+        bool valid() const BMNOEXCEPT { return pos_ != bm::id_max; }
+
+        /// Invalidate current iterator
+        void invalidate() BMNOEXCEPT { pos_ = bm::id_max; }
+
+        /// Current position (index) in the vector
+        size_type pos() const BMNOEXCEPT{ return pos_; }
+
+        /// re-position to a specified position
+        void go_to(size_type pos) BMNOEXCEPT;
+
+        /// advance iterator forward by one
+        /// @return true if it is still valid
+        bool advance() BMNOEXCEPT;
+
+        void skip_zero_values() BMNOEXCEPT;
+    private:
+        enum buf_size_e
+        {
+            n_buf_size = 1024 * 8
+        };
+
+    private:
+        const rsc_sparse_vector_type*     csv_;     ///!< ptr to parent
+        size_type                         pos_;     ///!< Position
+        mutable buffer_type               vbuffer_; ///!< value buffer
+        mutable buffer_type               tbuffer_; ///!< temp buffer
+        mutable value_type*               buf_ptr_; ///!< position in the buffer
+    };
+
+
 
     /**
         Back insert iterator implements buffered insert, faster than generic
@@ -427,6 +529,20 @@ public:
     // ------------------------------------------------------------
     /*! @name Iterator access */
     //@{
+
+    /** Provide const iterator access to container content  */
+    const_iterator begin() const BMNOEXCEPT
+        { return const_iterator(this); }
+        
+    /** Provide const iterator access to the end    */
+    const_iterator end() const BMNOEXCEPT
+        { return const_iterator(this, bm::id_max); }
+
+    /** Get const_itertor re-positioned to specific element
+    @param idx - position in the sparse vector
+    */
+    const_iterator get_const_iterator(size_type idx) const BMNOEXCEPT
+        { return const_iterator(this, idx); }
 
     back_insert_iterator get_back_inserter() { return back_insert_iterator(this); }
     ///@}
@@ -1104,7 +1220,8 @@ rsc_sparse_vector<Val, SV>::decode_buf(value_type*     arr,
     if (!size || (idx_from >= this->size()))
         return 0;
 
-    BM_ASSERT(arr);
+    BM_ASSERT(arr && arr_buf_tmp);
+    BM_ASSERT(arr != arr_buf_tmp);
     BM_ASSERT(in_sync_);  // call sync() before decoding
     BM_ASSERT(bv_blocks_ptr_);
 
@@ -1284,6 +1401,137 @@ void rsc_sparse_vector<Val, SV>::back_insert_iterator::flush()
     sv_bi_.flush();
     csv_->in_sync_ = false;
 }
+
+//---------------------------------------------------------------------
+//
+//---------------------------------------------------------------------
+
+template<class Val, class BV>
+rsc_sparse_vector<Val, BV>::const_iterator::const_iterator() BMNOEXCEPT
+: csv_(0), pos_(bm::id_max), buf_ptr_(0)
+{}
+
+//---------------------------------------------------------------------
+
+template<class Val, class SV>
+rsc_sparse_vector<Val, SV>::const_iterator::const_iterator(
+    const typename rsc_sparse_vector<Val, SV>::const_iterator& it) BMNOEXCEPT
+: csv_(it.csv_), pos_(it.pos_), buf_ptr_(0)
+{}
+
+//---------------------------------------------------------------------
+
+template<class Val, class SV>
+rsc_sparse_vector<Val, SV>::const_iterator::const_iterator(
+  const typename rsc_sparse_vector<Val, SV>::const_iterator::rsc_sparse_vector_type* csv
+  ) BMNOEXCEPT
+: csv_(csv), buf_ptr_(0)
+{
+    BM_ASSERT(csv_);
+    pos_ = csv_->empty() ? bm::id_max : 0u;
+}
+
+//---------------------------------------------------------------------
+
+template<class Val, class SV>
+rsc_sparse_vector<Val, SV>::const_iterator::const_iterator(
+ const typename rsc_sparse_vector<Val, SV>::const_iterator::rsc_sparse_vector_type* csv,
+ typename rsc_sparse_vector<Val, SV>::size_type pos) BMNOEXCEPT
+: csv_(csv), buf_ptr_(0)
+{
+    BM_ASSERT(csv_);
+    this->go_to(pos);
+}
+
+//---------------------------------------------------------------------
+
+template<class Val, class SV>
+void rsc_sparse_vector<Val, SV>::const_iterator::go_to(size_type pos) BMNOEXCEPT
+{
+    pos_ = (!csv_ || pos >= csv_->size()) ? bm::id_max : pos;
+    buf_ptr_ = 0;
+}
+
+//---------------------------------------------------------------------
+
+template<class Val, class SV>
+bool rsc_sparse_vector<Val, SV>::const_iterator::advance() BMNOEXCEPT
+{
+    if (pos_ == bm::id_max) // nothing to do, we are at the end
+        return false;
+    ++pos_;
+    if (pos_ >= csv_->size())
+    {
+        this->invalidate();
+        return false;
+    }
+    if (buf_ptr_)
+    {
+        ++buf_ptr_;
+        if (buf_ptr_ - ((value_type*)vbuffer_.data()) >= n_buf_size)
+            buf_ptr_ = 0;
+    }
+    return true;
+}
+
+//---------------------------------------------------------------------
+
+template<class Val, class SV>
+typename rsc_sparse_vector<Val, SV>::const_iterator::value_type
+rsc_sparse_vector<Val, SV>::const_iterator::value() const
+{
+    BM_ASSERT(this->valid());
+    value_type v;
+
+    if (!buf_ptr_)
+    {
+        vbuffer_.reserve(n_buf_size * sizeof(value_type));
+        tbuffer_.reserve(n_buf_size * sizeof(value_type));
+        buf_ptr_ = (value_type*)(vbuffer_.data());
+        value_type* tmp_buf_ptr = (value_type*) (tbuffer_.data());
+
+        csv_->decode_buf(buf_ptr_, tmp_buf_ptr, pos_, n_buf_size, true);
+    }
+    v = *buf_ptr_;
+    return v;
+}
+
+//---------------------------------------------------------------------
+
+template<class Val, class SV>
+void rsc_sparse_vector<Val, SV>::const_iterator::skip_zero_values() BMNOEXCEPT
+{
+    value_type v = value();
+    if (buf_ptr_)
+    {
+        v = *buf_ptr_;
+        value_type* buf_end = ((value_type*)vbuffer_.data()) + n_buf_size;
+        while(!v)
+        {
+            ++pos_;
+            if (++buf_ptr_ < buf_end)
+                v = *buf_ptr_;
+            else
+                break;
+        }
+        if (pos_ >= csv_->size())
+        {
+            pos_ = bm::id_max;
+            return;
+        }
+        if (buf_ptr_ >= buf_end)
+            buf_ptr_ = 0;
+    }
+}
+
+//---------------------------------------------------------------------
+
+template<class Val, class SV>
+bool rsc_sparse_vector<Val, SV>::const_iterator::is_null() const BMNOEXCEPT
+{
+    return csv_->is_null(pos_);
+}
+
 
 //---------------------------------------------------------------------
 
