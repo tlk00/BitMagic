@@ -25,6 +25,12 @@ integer sets and compressed BLOBs
 - operations with rank: population count distances on bit-vector. Rank-Select operations are often 
 used in succinct data structures
 
+### Ranges and Intervals (bm::bvector<>):
+
+BitMagic supports re-interpretation of bit-vectors as collections of non overlapping ranges 
+of 1s flanked with 0s (for example: 011110110). Regular set functions provide set intersect / unions
+intreval operations implement interval iterator and searches for interval boundaries.
+
 ### Serialization with compression
 
 BitMagic can serialize-compress bit-vector for efficient storage and transfer.
