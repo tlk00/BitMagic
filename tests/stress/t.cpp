@@ -26394,21 +26394,29 @@ void CheckCompressedDecode(const rsc_sparse_vector_u32& csv,
     unsigned sz2 = csv.decode_buf(&vect2[0], &vect_tmp[0], from, size);
     assert(sz == sz2);
 
-    unsigned ex_idx = 0;
-    for (unsigned i = from; i < from + sz; ++i)
     {
-        unsigned v = csv.get(i);
-        unsigned vx = vect[ex_idx];
-        unsigned vx2 = vect[ex_idx];
-        if (v != vx || v != vx2)
+        rsc_sparse_vector_u32::const_iterator it = csv.get_const_iterator(from);
+
+        unsigned ex_idx = 0;
+        for (unsigned i = from; i < from + sz; ++i)
         {
-            cerr << "compressed vector decode mismatch from="
-                 << from << " idx=" << i
-                 << " v=" << v << " vx=" << vx << " vx2=" << vx2
-                 << endl;
-            assert(0); exit(1);
+            unsigned v = csv.get(i);
+            unsigned vx = vect[ex_idx];
+            unsigned vx2 = vect[ex_idx];
+            auto vx_it = *it;
+
+            if (v != vx || v != vx2 || v != vx_it)
+            {
+                cerr << "compressed vector decode mismatch from="
+                     << from << " idx=" << i
+                     << " v=" << v << " vx=" << vx << " vx2=" << vx2
+                     << " vx_it = " << vx_it
+                     << endl;
+                assert(0); exit(1);
+            }
+            ++ex_idx;
+            ++it;
         }
-        ++ex_idx;
     }
 }
 
@@ -26618,6 +26626,37 @@ void TestCompressSparseVector()
         bool found = scanner.find_eq(csv1, 201, pos);
         assert(found);
         assert(pos == 21);
+
+    }
+
+    // const_iterator tests
+    {
+        {
+        rsc_sparse_vector_u32 csv1;
+            {
+                rsc_sparse_vector_u32::const_iterator it;
+                assert(!it.valid());
+            }
+        csv1.push_back(0, 100);
+        csv1.push_back(2, 200);
+
+        csv1.sync();
+            {
+                rsc_sparse_vector_u32::const_iterator it(&csv1);
+                rsc_sparse_vector_u32::const_iterator it2(it);
+                assert(it2.valid());
+
+                assert(it.valid());
+                assert(*it == 100);
+                bool b = it.advance();
+                assert(b);
+                assert(*it == 0);
+                assert(it.is_null());
+                ++it;
+                assert(it.valid());
+                assert(it.value() == 200);
+            }
+        }
 
     }
     
