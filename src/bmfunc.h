@@ -2092,11 +2092,14 @@ SIZE_TYPE gap_find_rank(const T* const block,
     \brief Counts 1 bits in GAP buffer in the closed [0, right] range.
     \param buf - GAP buffer pointer.
     \param right- rightmost bit index
-    \return Number of non-zero bits.
+    \param is_corrected - if true the result will be rank corrected
+                       if right bit == true count=count-1
+    \return Number of non-zero bits
     @ingroup gapfunc
 */
 template<typename T>
-unsigned gap_bit_count_to(const T* const buf, T right) BMNOEXCEPT
+unsigned gap_bit_count_to(const T* const buf, T right,
+                          bool is_corrected=false) BMNOEXCEPT
 {
     const T* pcurr = buf;
     const T* pend = pcurr + (*pcurr >> 3);
@@ -2109,6 +2112,7 @@ unsigned gap_bit_count_to(const T* const buf, T right) BMNOEXCEPT
     if (right <= *pcurr) // we are in the target block right now
     {
         bits_counter = (right + 1u) & is_set; // & is_set == if (is_set)
+        bits_counter -= (is_set & is_corrected);
         return bits_counter;
     }
     bits_counter += (*pcurr + 1u) & is_set;
@@ -2118,10 +2122,14 @@ unsigned gap_bit_count_to(const T* const buf, T right) BMNOEXCEPT
     {
         bits_counter += (*pcurr - prev_gap) & is_set;
         if (pcurr == pend)
+        {
+            bits_counter -= (is_set & is_corrected);
             return bits_counter;
+        }
         prev_gap = *pcurr++;
     }
     bits_counter += (right - prev_gap) & is_set;
+    bits_counter -= (is_set & is_corrected);
     return bits_counter;
 }
 

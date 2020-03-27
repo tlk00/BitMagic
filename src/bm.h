@@ -1272,7 +1272,8 @@ public:
 
     /*!
        \brief population cout (count of ON bits)
-       \return Total number of bits ON.
+       \sa count_range
+       \return Total number of bits ON
     */
     size_type count() const BMNOEXCEPT;
 
@@ -1283,7 +1284,8 @@ public:
         function call.
     */
     block_idx_type count_blocks(unsigned* arr) const BMNOEXCEPT;
-    
+
+
     /*!
        \brief Returns count of 1 bits in the given range [left..right]
        Uses rank-select index to accelerate the search
@@ -1351,25 +1353,41 @@ public:
                        should be prepared using build_rs_index
        \return population count in the range [0..n]
        \sa build_rs_index
-       \sa count_to_test, select, rank
+       \sa count_to_test, select, rank, rank_corrected
     */
     size_type count_to(size_type n,
                        const rs_index_type&  rs_idx) const BMNOEXCEPT;
     
     
     /*!
-       \brief Returns rank of specified bit position
+       \brief Returns rank of specified bit position (same as count_to())
      
        \param n - index of bit to rank
        \param rs_idx -  rank-select index
        \return population count in the range [0..n]
        \sa build_rs_index
-       \sa count_to_test, select, rank
+       \sa count_to_test, select, rank, rank_corrected
     */
     size_type rank(size_type n, 
                    const rs_index_type&  rs_idx) const BMNOEXCEPT
                                     {  return count_to(n, rs_idx); }
     
+    /*!
+       \brief Returns rank corrceted by the requested border value (as -1)
+
+       This is rank function (bit-count) minus value of bit 'n'
+       if bit-n is true function returns rank()-1 if false returns rank()
+       faster than rank() + test().
+
+
+       \param n - index of bit to rank
+       \param rs_idx -  rank-select index
+       \return population count in the range [0..n] corrected as -1 by the value of n
+       \sa build_rs_index
+       \sa count_to_test, select, rank
+    */
+    size_type rank_corrected(size_type n,
+                 const rs_index_type&  rs_idx) const BMNOEXCEPT;
 
     /*!
         \brief popcount in [0..right] range if test(right) == true
@@ -2567,7 +2585,7 @@ bvector<Alloc>::count_to(size_type right,
 template<typename Alloc>
 typename bvector<Alloc>::size_type 
 bvector<Alloc>::count_to_test(size_type right,
-                              const rs_index_type&  blocks_cnt) const BMNOEXCEPT
+                              const rs_index_type&  rs_idx) const BMNOEXCEPT
 {
     BM_ASSERT(right < bm::id_max);
     if (!blockman_.is_init())
@@ -2576,15 +2594,13 @@ bvector<Alloc>::count_to_test(size_type right,
     unsigned nblock_right = unsigned(right >> bm::set_block_shift);
     unsigned nbit_right = unsigned(right & bm::set_block_mask);
 
-    // running count of all blocks before target
-    //
-    size_type cnt = 0;
     unsigned i, j;
     bm::get_block_coord(nblock_right, i, j);
     const bm::word_t* block = blockman_.get_block_ptr(i, j);
 
+    size_type cnt = 0;
     if (!block)
-        return 0;
+        return cnt;
 
     bool gap = BM_IS_GAP(block);
     if (gap)
@@ -2593,7 +2609,7 @@ bvector<Alloc>::count_to_test(size_type right,
         if (bm::gap_test_unr(gap_blk, (gap_word_t)nbit_right))
             cnt = bm::gap_bit_count_to(gap_blk, (gap_word_t)nbit_right);
         else
-            return 0;
+            return cnt;
     }
     else
     {
@@ -2608,17 +2624,63 @@ bvector<Alloc>::count_to_test(size_type right,
             w &= (1u << (nbit_right & bm::set_word_mask));
             if (w)
             {
-                cnt = block_count_to(block,
-                                         nblock_right, nbit_right, blocks_cnt);
+                cnt = block_count_to(block, nblock_right, nbit_right, rs_idx);
                 BM_ASSERT(cnt == bm::bit_block_calc_count_to(block, nbit_right));
             }
             else
-                return 0;
+            {
+                return cnt;
+            }
         }
     }
-    cnt += nblock_right ? blocks_cnt.rcount(nblock_right - 1) : 0;
+    cnt += nblock_right ? rs_idx.rcount(nblock_right - 1) : 0;
     return cnt;
 }
+
+// -----------------------------------------------------------------------
+
+template<typename Alloc>
+typename bvector<Alloc>::size_type
+bvector<Alloc>::rank_corrected(size_type right,
+                               const rs_index_type&  rs_idx) const BMNOEXCEPT
+{
+  BM_ASSERT(right < bm::id_max);
+  if (!blockman_.is_init())
+      return 0;
+
+  unsigned nblock_right = unsigned(right >> bm::set_block_shift);
+  unsigned nbit_right = unsigned(right & bm::set_block_mask);
+
+  size_type cnt = nblock_right ? rs_idx.rcount(nblock_right - 1) : 0;
+
+  unsigned i, j;
+  bm::get_block_coord(nblock_right, i, j);
+  const bm::word_t* block = blockman_.get_block_ptr(i, j);
+
+  if (!block)
+      return cnt;
+
+  bool gap = BM_IS_GAP(block);
+  if (gap)
+  {
+      cnt += bm::gap_bit_count_to(BMGAP_PTR(block), (gap_word_t)nbit_right,
+                                  true /* rank corrected */);
+  }
+  else
+  {
+      if (block == FULL_BLOCK_FAKE_ADDR)
+          cnt += nbit_right;
+      else
+      {
+          cnt += block_count_to(block, nblock_right, nbit_right, rs_idx);
+          unsigned w = block[nbit_right >> bm::set_word_shift] &
+                       (1u << (nbit_right & bm::set_word_mask));
+          cnt -= bool(w); // rank correction
+      }
+  }
+  return cnt;
+}
+
 
 // -----------------------------------------------------------------------
 
