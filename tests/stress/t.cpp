@@ -26405,13 +26405,27 @@ void CheckCompressedDecode(const rsc_sparse_vector_u32& csv,
             unsigned vx2 = vect[ex_idx];
             auto vx_it = *it;
 
-            if (v != vx || v != vx2 || v != vx_it)
+            //rsc_sparse_vector_u32::const_iterator it2 = csv.get_const_iterator(i);
+            //auto vx_it2 = it2.value();
+
+            if (v != vx || v != vx2 || v != vx_it /*|| vx_it != vx_it2*/)
             {
                 cerr << "compressed vector decode mismatch from="
-                     << from << " idx=" << i
+                     << from << " i=" << i
                      << " v=" << v << " vx=" << vx << " vx2=" << vx2
                      << " vx_it = " << vx_it
+                     << " ex_idx=" << ex_idx
                      << endl;
+                /*
+                vx_it = *it;
+                rsc_sparse_vector_u32::const_iterator it2 = csv.get_const_iterator(i);
+                vx_it = it2.value();
+
+                std::vector<unsigned> vect3;
+                vect3.resize(1024);
+                csv.decode(&vect3[0], i , 1024);
+                assert(vect3[0] == v);
+                assert(v == vx_it); */
                 assert(0); exit(1);
             }
             ++ex_idx;
@@ -26553,7 +26567,7 @@ static
 void TestCompressSparseVector()
 {
     cout << " ------------------------------ Test Compressed Sparse Vector " << endl;
-    
+
     {
         rsc_sparse_vector_u32 csv1;
         assert(csv1.size() == 0);
@@ -26563,7 +26577,7 @@ void TestCompressSparseVector()
         rsc_sparse_vector_u32 csv3(csv1);
         assert(csv3.equal(csv2));
     }
-    
+
     {
     cout << "push_back() test" << endl;
     unsigned v, v1;
@@ -26657,7 +26671,6 @@ void TestCompressSparseVector()
                 assert(it.value() == 200);
             }
         }
-
     }
     
     // back inserter tests
