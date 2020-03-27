@@ -473,7 +473,7 @@ public:
                          value_type* arr_buf_tmp,
                          size_type   idx_from,
                          size_type   size,
-                         bool        zero_mem = true) const;
+                         bool        zero_mem = true) const BMNOEXCEPT;
 
     ///@}
 
@@ -997,17 +997,11 @@ bool rsc_sparse_vector<Val, SV>::resolve(size_type idx,
     else  // slow access
     {
         bool found = bv_null->test(idx);
-        if (!found)
-        {
-            *idx_to = 0;
-        }
-        else
-        {
-            *idx_to = bv_null->count_range(0, idx);
-        }
+        *idx_to = found ? bv_null->count_range(0, idx) : 0;
     }
     return bool(*idx_to);
 }
+
 //---------------------------------------------------------------------
 
 template<class Val, class SV>
@@ -1024,12 +1018,15 @@ bool rsc_sparse_vector<Val, SV>::resolve_range(
         copy_sz = bv_null->count_range(from, to);
     if (!copy_sz)
         return false;
+
     if (in_sync_)
-        sv_left = bv_null->count_range(0, from, *bv_blocks_ptr_);
+        sv_left = bv_null->rank_corrected(from, *bv_blocks_ptr_);
     else
+    {
         sv_left = bv_null->count_range(0, from);
-    bool tl = bv_null->test(from); // TODO: add count and test
-    sv_left -= tl; // rank correction
+        bool tl = bv_null->test(from); // TODO: add count and test
+        sv_left -= tl; // rank correction
+    }
 
     *idx_from = sv_left; *idx_to = sv_left + copy_sz - 1;
     return true;
@@ -1173,11 +1170,9 @@ rsc_sparse_vector<Val, SV>::decode(value_type* arr,
         size = this->size() - idx_from;
 
     const bvector_type* bv_null = sv_.get_null_bvector();
+    size_type rank = bv_null->rank_corrected(idx_from, *bv_blocks_ptr_);
 
-    // TODO: implement rank corected count_to
-    size_type rank = bv_null->count_to(idx_from, *bv_blocks_ptr_);
-    bool b = bv_null->test(idx_from);
-    rank -= b;
+    BM_ASSERT(rank == bv_null->count_range(0, idx_from) - bv_null->test(idx_from));
 
     bvector_enumerator_type en_i = bv_null->get_enumerator(idx_from);
     BM_ASSERT(en_i.valid());
@@ -1215,7 +1210,7 @@ rsc_sparse_vector<Val, SV>::decode_buf(value_type*     arr,
                                        value_type*     arr_buf_tmp,
                                        size_type       idx_from,
                                        size_type       size,
-                                       bool            zero_mem) const
+                                       bool            zero_mem) const BMNOEXCEPT
 {
     if (!size || (idx_from >= this->size()))
         return 0;
@@ -1230,18 +1225,17 @@ rsc_sparse_vector<Val, SV>::decode_buf(value_type*     arr,
     if ((idx_from + size) > this->size())
         size = this->size() - idx_from;
 
-    const bvector_type* bv_null = sv_.get_null_bvector();
-
-    // TODO: implement rank corected count_to
-    size_type rank = bv_null->count_to(idx_from, *bv_blocks_ptr_);
-    bool b = bv_null->test(idx_from);
-    rank -= b;
-
-    bvector_enumerator_type en_i = bv_null->get_enumerator(idx_from);
-    BM_ASSERT(en_i.valid());
-
     if (zero_mem)
         ::memset(arr, 0, sizeof(value_type)*size);
+
+    const bvector_type* bv_null = sv_.get_null_bvector();
+    size_type rank = bv_null->rank_corrected(idx_from, *bv_blocks_ptr_);
+
+    BM_ASSERT(rank == bv_null->count_range(0, idx_from) - bv_null->test(idx_from));
+
+    bvector_enumerator_type en_i = bv_null->get_enumerator(idx_from);
+    if (!en_i.valid())
+        return size;
 
     size_type i = en_i.value();
     if (idx_from + size <= i)  // empty space (all zeros)
@@ -1309,11 +1303,9 @@ void rsc_sparse_vector<Val, SV>::copy_range(
     const bvector_type* arg_bv_null = csv.sv_.get_null_bvector();
     size_type sv_left, sv_right;
     bool range_valid = csv.resolve_range(left, right, &sv_left, &sv_right);
-
     if (!range_valid)
     {
-        sv_.clear();
-        sv_.resize(size_);
+        sv_.clear(); sv_.resize(size_);
         bvector_type* bv_null = sv_.get_null_bvect();
         bv_null->copy_range(*arg_bv_null, 0, right);
         return;
