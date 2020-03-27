@@ -213,6 +213,11 @@ public:
     {
         if (new_capacity <= capacity_)
             return;
+        if (!capacity_)
+        {
+            allocate(new_capacity);
+            return;
+        }
         
         byte_buffer tmp_buffer(new_capacity);
         tmp_buffer = *this;
