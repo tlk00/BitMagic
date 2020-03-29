@@ -80,6 +80,8 @@ int main(void)
             bit.add_null(2);
             bit = 256;
             bit.flush();
+
+            csv1.sync();
         }
         PrintSV(csv1); // size() = 8 : 10, 11, NULL, 13, 14, NULL, NULL, 256,
 
