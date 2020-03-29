@@ -54,6 +54,22 @@ int main(void)
         r1 = bv.rank(30, *rs_idx);
         std::cout << r1 << std::endl;  // 3
 
+        // position value corrected rank
+        // one special case of rank function returns rank-1
+        // if position bit is set or just rank, otherwise
+        //
+        // this is an equivalent of
+        // bv.count_range(0, n) - bv.text(n)
+        // (just faster, because of the fused rank-test)
+        //
+
+        auto r1c = bv.rank_corrected(31, *rs_idx); // 3
+        std::cout << r1c << std::endl;
+        r1c = bv.rank_corrected(32, *rs_idx); // 4
+        std::cout << r1c << std::endl;
+        r1c = bv.rank_corrected(33, *rs_idx); // 4
+        std::cout << r1c << std::endl;
+
 
         // now perform a search for a position for a rank
         //
