@@ -1,5 +1,5 @@
 /*
-Copyright(c) 2002-2019 Anatoliy Kuznetsov(anatoliy_kuznetsov at yahoo.com)
+Copyright(c) 2002-2020 Anatoliy Kuznetsov(anatoliy_kuznetsov at yahoo.com)
 
 Licensed under the Apache License, Version 2.0 (the "License");
 you may not use this file except in compliance with the License.
@@ -20,8 +20,8 @@ For more information please visit:  http://bitmagic.io
   Example of how to use bm::rsc_sparse_vector<>::const_iterator
  
   \sa bm::rsc_sparse_vector
-  \sa bm::rsc_sparse_vector<>::const_iterator
-  \sa bm::rsc_sparse_vector<>::const_iterator::go_to
+  \sa bm::rsc_sparse_vector::const_iterator
+  \sa bm::rsc_sparse_vector::const_iterator::go_to
 
 */
 
