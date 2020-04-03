@@ -89,6 +89,7 @@ public:
     
 public:
 
+    // -----------------------------------------------------------------------
     /*! @name Construction and setup */
     //@{
     aggregator();
@@ -105,6 +106,12 @@ public:
     void set_optimization(
         typename bvector_type::optmode opt = bvector_type::opt_compress)
         { opt_mode_ = opt; }
+
+    void set_compute_count(bool count_mode)
+    {
+        compute_count_ = count_mode; count_ = 0;
+    }
+
     //@}
     
     
@@ -196,6 +203,8 @@ public:
         (experimental for internal use).
     */
     void set_range_hint(size_type from, size_type to) BMNOEXCEPT;
+
+    size_type count() const { return count_; }
     
     //@}
     
@@ -456,8 +465,9 @@ private:
     size_type            range_from_ = bm::id_max; ///< search from
     size_type            range_to_   = bm::id_max; ///< search to
     
-    typename bvector_type::optmode opt_mode_;
-
+    typename bvector_type::optmode opt_mode_; ///< perform search result optimization
+    bool                           compute_count_; ///< compute search result count
+    size_type                      count_;         ///< search result count
 };
 
 
@@ -521,7 +531,9 @@ void aggregator_pipeline_execute(It  first, It last)
 
 template<typename BV>
 aggregator<BV>::aggregator()
-: opt_mode_(bvector_type::opt_none)
+: opt_mode_(bvector_type::opt_none),
+  compute_count_(false),
+  count_(0)
 {
     ar_ = (arena*) bm::aligned_new_malloc(sizeof(arena));
 }
@@ -545,6 +557,7 @@ void aggregator<BV>::reset() BMNOEXCEPT
     operation_status_ = op_undefined;
     range_set_ = false;
     range_from_ = range_to_ = bm::id_max;
+    count_ = 0;
 }
 
 // ------------------------------------------------------------------------
@@ -654,6 +667,7 @@ bool aggregator<BV>::find_first_and_sub(size_type& idx)
 template<typename BV>
 void aggregator<BV>::combine_shift_right_and(bvector_type& bv_target)
 {
+    count_ = 0;
     combine_shift_right_and(bv_target, ar_->arg_bv0, arg_group0_size, false);
 }
 
@@ -1706,6 +1720,9 @@ bool aggregator<BV>::combine_shift_right_and(
 
     } // for i
 
+    if (compute_count_)
+        return bool(count_);
+
     return bv_target.any();
 }
 
@@ -1772,8 +1789,17 @@ bool aggregator<BV>::combine_shift_right_and(unsigned i, unsigned j,
     if (digest)
     {
         BM_ASSERT(!bm::bit_is_all_zero(blk));
-        blocks_manager_type& bman_target = bv_target.get_blocks_manager();
-        bman_target.opt_copy_bit_block(i, j, blk, opt_mode_, ar_->tb_opt);
+
+        if (compute_count_)
+        {
+            unsigned cnt = bm::bit_block_count(blk, digest);
+            count_ += cnt;
+        }
+        else
+        {
+            blocks_manager_type& bman_target = bv_target.get_blocks_manager();
+            bman_target.opt_copy_bit_block(i, j, blk, opt_mode_, ar_->tb_opt);
+        }
         return true;
     }
     return false;

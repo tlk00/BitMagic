@@ -5228,6 +5228,7 @@ void BvectorShiftTest()
                 } // for
                 
                 bvect bv2;
+                agg.set_compute_count(false);
                 agg.combine_shift_right_and(bv2);
                 int cmp = bv1.compare(bv2);
                 if (cmp != 0)
@@ -5235,6 +5236,14 @@ void BvectorShiftTest()
                     cerr << "Shift-R compare failure!" << endl;
                     exit(1);
                 }
+                bvect bv3;
+                agg.set_compute_count(true);
+                agg.combine_shift_right_and(bv3);
+                assert(!bv3.any());
+                auto cnt = agg.count();
+                auto cnt_c = bv1.count();
+                assert(cnt == cnt_c);
+
             } // for
         }
     }
@@ -8718,7 +8727,7 @@ void AggregatorTest()
     bv2[65536]=true;
     
     agg.add(&bv1); agg.add(&bv2);
-    
+    agg.set_compute_count(false);
     agg.combine_shift_right_and(bv0);
     agg.reset();
     bool any = bv0.any();
@@ -9227,6 +9236,7 @@ void StressTestAggregatorShiftAND(unsigned repeats)
             } // for
             
             bvect bv_target1;
+            agg.set_compute_count(false);
             agg.combine_shift_right_and(bv_target1);
             auto cmp = bv_target1.compare(bv_target0);
             if (cmp != 0)
@@ -9237,6 +9247,15 @@ void StressTestAggregatorShiftAND(unsigned repeats)
             }
             if (i % 250 == 0)
                 cout << "\r" << i << flush;
+
+            bvect bv_target2;
+            agg.set_compute_count(true);
+            agg.combine_shift_right_and(bv_target2);
+            assert(!bv_target2.any());
+            auto cnt = agg.count();
+            auto cnt_c = bv_target1.count();
+            assert(cnt == cnt_c);
+
         } // for
         cout << "\n\n ---------- SHIFT-AND step: " << r << endl;
     } // for

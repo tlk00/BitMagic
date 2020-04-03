@@ -5837,6 +5837,7 @@ void BvectorShiftTest()
                 } // for
                 
                 bvect bv2;
+                agg.set_compute_count(false);
                 agg.combine_shift_right_and(bv2);
                 int cmp = bv1.compare(bv2);
                 if (cmp != 0)
@@ -5844,6 +5845,14 @@ void BvectorShiftTest()
                     cerr << "Shift-R compare failure!" << endl;
                     exit(1);
                 }
+                bvect bv3;
+                agg.set_compute_count(true);
+                agg.combine_shift_right_and(bv3);
+                assert(!bv3.any());
+                auto cnt = agg.count();
+                auto cnt_c = bv1.count();
+                assert(cnt == cnt_c);
+
             } // for
         }
     }
@@ -10646,6 +10655,7 @@ void StressTestAggregatorShiftAND(unsigned repeats)
             } // for
             
             bvect bv_target1;
+            agg.set_compute_count(false);
             agg.combine_shift_right_and(bv_target1);
             auto cmp = bv_target1.compare(bv_target0);
             if (cmp != 0)
@@ -10654,8 +10664,17 @@ void StressTestAggregatorShiftAND(unsigned repeats)
                 //DetailedCheckVectors(bv_target0, bv_target1);
                 assert(0); exit(1);
             }
+            bvect bv_target2;
+            agg.set_compute_count(true);
+            agg.combine_shift_right_and(bv_target2);
+            assert(!bv_target2.any());
+            auto cnt = agg.count();
+            auto cnt_c = bv_target1.count();
+            assert(cnt == cnt_c);
+
             if (i % 250 == 0)
                 cout << "\r" << i << flush;
+
         } // for
         cout << "\n\n ---------- SHIFT-AND step: " << r << endl;
     } // for
