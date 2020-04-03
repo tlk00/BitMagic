@@ -223,6 +223,66 @@ bm::id_t avx2_bit_count(const __m256i* BMRESTRICT block,
 }
 
 /*!
+    @brief Calculate population count based on digest
+
+    @return popcnt
+    @ingroup AVX2
+*/
+inline
+bm::id_t avx2_bit_block_count(const bm::word_t* const block,
+                              bm::id64_t digest)
+{
+    bm::id_t count = 0;
+    bm::id64_t* cnt64;
+    BM_AVX2_POPCNT_PROLOG;
+    __m256i cnt = _mm256_setzero_si256();
+    while (digest)
+    {
+        bm::id64_t t = bm::bmi_blsi_u64(digest); // d & -d;
+
+        unsigned wave = _mm_popcnt_u64(t - 1);
+        unsigned off = wave * bm::set_block_digest_wave_size;
+
+        const __m256i* BMRESTRICT wave_src = (__m256i*)&block[off];
+
+        __m256i m1A, m1B, m1C, m1D;
+        m1A = _mm256_load_si256(wave_src);
+        m1B = _mm256_load_si256(wave_src+1);
+        if (!_mm256_testz_si256(m1A, m1A))
+        {
+            BM_AVX2_BIT_COUNT(bc, m1A)
+            cnt = _mm256_add_epi64(cnt, bc);
+        }
+        if (!_mm256_testz_si256(m1B, m1B))
+        {
+            BM_AVX2_BIT_COUNT(bc, m1B)
+            cnt = _mm256_add_epi64(cnt, bc);
+        }
+
+        m1C = _mm256_load_si256(wave_src+2);
+        m1D = _mm256_load_si256(wave_src+3);
+        if (!_mm256_testz_si256(m1C, m1C))
+        {
+            BM_AVX2_BIT_COUNT(bc, m1C)
+            cnt = _mm256_add_epi64(cnt, bc);
+        }
+        if (!_mm256_testz_si256(m1D, m1D))
+        {
+            BM_AVX2_BIT_COUNT(bc, m1D)
+            cnt = _mm256_add_epi64(cnt, bc);
+        }
+
+        digest = bm::bmi_bslr_u64(digest); // d &= d - 1;
+    } // while
+    cnt64 = (bm::id64_t*)&cnt;
+    count = (unsigned)(cnt64[0] + cnt64[1] + cnt64[2] + cnt64[3]);
+    return count;
+
+}
+
+
+
+/*!
   @brief AND bit count for two aligned bit-blocks
   @ingroup AVX2
 */
@@ -3061,6 +3121,10 @@ void avx2_bit_block_xor(bm::word_t*  target_block,
 
 #define VECT_GAP_BFIND(buf, pos, is_set) \
     avx2_gap_bfind(buf, pos, is_set)
+
+#define VECT_BIT_COUNT_DIGEST(blk, d) \
+    avx2_bit_block_count(blk, d)
+
 
 } // namespace
 

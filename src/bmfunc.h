@@ -4442,6 +4442,9 @@ inline
 bm::id_t bit_block_count(const bm::word_t* const block,
                          bm::id64_t digest) BMNOEXCEPT
 {
+#ifdef VECT_BIT_COUNT_DIGEST
+    return VECT_BIT_COUNT_DIGEST(block, digest);
+#else
     bm::id_t count = 0;
     bm::id64_t d = digest;
     while (d)
@@ -4466,6 +4469,7 @@ bm::id_t bit_block_count(const bm::word_t* const block,
         d = bm::bmi_bslr_u64(d); // d &= d - 1;
     } // while
     return count;
+#endif
 }
 
 
