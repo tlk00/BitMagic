@@ -8041,6 +8041,79 @@ void BvectorFindFirstDiffTest()
     cout << "-------------------------------------- BvectorFindFirstDiffTest OK" << endl;
 }
 
+
+static
+void RankRangeSplitTest()
+{
+    cout << "-------------------------------------- RankRangeSplitTest" << endl;
+
+    std::vector<std::pair<bvect::size_type, bvect::size_type>> pair_vect;
+    {
+        bvect bv;
+        bm::rank_range_split(bv, 2, pair_vect);
+        assert(pair_vect.size()==0);
+    }
+
+    {
+        bvect bv { 1, 2, 10, 100, 200 };
+        bm::rank_range_split(bv, 2, pair_vect);
+        assert(pair_vect.size()==3);
+
+        assert(pair_vect[0].first == 1);
+        assert(pair_vect[0].second == 2);
+
+        assert(pair_vect[1].first == 3);
+        assert(pair_vect[1].second == 100);
+
+        assert(pair_vect[2].first == 101);
+        assert(pair_vect[2].second == 200);
+    }
+
+    {
+        bvect bv;
+
+        generate_bvector(bv);
+        bv.optimize();
+        auto cnt = bv.count();
+
+        bvect::size_type first, last;
+        bool b = bv.find_range(first, last);
+        assert(b);
+
+        for (bvect::size_type i = 1; i < cnt+1; ++i)
+        {
+            bm::rank_range_split(bv, i, pair_vect);
+            assert(pair_vect.size());
+            assert(pair_vect[0].first == first);
+            assert(pair_vect[pair_vect.size()-1].second == last);
+
+            bvect::size_type cnt_c = 0;
+            for (size_t k = 0; k < pair_vect.size(); ++k)
+            {
+                auto& p = pair_vect[k];
+                auto c = bv.count_range(p.first, p.second);
+                assert(c);
+                assert(c <= i);
+                cnt_c += c;
+                assert(p.first >= first);
+                assert(p.second <= last);
+                if (k < pair_vect.size()-1)
+                {
+                    assert(c == i);
+                }
+            } // for k
+
+            assert(cnt == cnt_c);
+            if (i % 500 == 0)
+            {
+                cout << "\r" << i << "/" << cnt << flush;
+            }
+        } // for i
+    }
+
+    cout << "\r-------------------------------------- RankRangeSplitTest OK" << endl;
+}
+
 static
 void DesrializationTest2()
 {
@@ -27621,7 +27694,6 @@ int main(int argc, char *argv[])
 
     if (is_all || is_bvbasic)
     {
-
          ExportTest();
          ResizeTest();
 
@@ -27669,7 +27741,9 @@ int main(int argc, char *argv[])
         ComparisonTest();
 
         BvectorFindFirstDiffTest();
-        
+
+        RankRangeSplitTest();
+
         MutationTest();
         MutationOperationsTest();
         

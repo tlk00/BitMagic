@@ -389,6 +389,61 @@ void visit_each_bit_range(const BV&                 bv,
     bm::for_each_bit_range(bv, left, right, func);
 }
 
+/**
+    @brief Algorithm to identify bit-vector ranges (splits) for the rank
+
+    Rank range split algorithm walks the bit-vector to create list of
+    non-overlapping ranges [s1..e1],[s2..e2]...[sN...eN] with requested
+    (rank) number of 1 bits. All ranges should be the same popcount weight,
+    except the last one, which may have less.
+    Scan is progressing from left to right so result ranges will be
+    naturally sorted.
+
+    @param bv       - bit vector to perform the range split scan
+    @param rank     - requested number of bits in each range
+    @param target_v - [out] STL vector of pairs to keep scan results
+
+    \ingroup setalgo
+ */
+template<typename BV, typename PairVect>
+void rank_range_split(const BV&              bv,
+                      typename BV::size_type rank,
+                      PairVect&              target_v)
+{
+    target_v.resize(0);
+    if (!rank)
+        return;
+
+    typename BV::size_type first, last, pos;
+    bool found = bv.find_range(first, last);
+    if (!found) // empty bit-vector
+        return;
+
+    while (1)
+    {
+        typename PairVect::value_type pv;
+        found = bv.find_rank(rank, first, pos);
+        if (found)
+        {
+            pv.first = first; pv.second = pos;
+            target_v.push_back(pv);
+            if (pos >= last)
+                break;
+            first = pos + 1;
+            continue;
+        }
+        // insufficient rank (last range)
+        found = bv.any_range(first, last);
+        if (found)
+        {
+            pv.first = first; pv.second = last;
+            target_v.push_back(pv);
+        }
+        break;
+    } // while
+
+}
+
 
 
 /**
@@ -656,6 +711,7 @@ void rank_compressor<BV>::compress_by_source(BV& bv_target,
     visitor_func func(bv_target, bv_idx, bc_idx);
     bm::for_each_bit(bv_src, func);
 }
+
 
 
 
