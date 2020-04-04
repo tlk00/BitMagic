@@ -8,7 +8,7 @@ Bit-vector operations
 
 ./bvsample03 - use of different in-memory bitset compression options, calculate memory footprint
 ./bvsample04 - serialization of bvector<> to save compressed BLOB to a file or a database
-./bvsample05 - use of bvector<>::enumerator - fast iterator to get bits from container
+./bvsample05 - use of bvector<>::enumerator - fast iterator to decode bit-vector into indexes of 1 bits
 ./bvsample06 - allocator example
 ./bvsample07 - Example how to use logical operations between arrays and bit vectors
 ./bvsample08 - STL interoperability and set operations with iterators
@@ -28,7 +28,7 @@ Bit-vector operations
 
 ./bvsample22 - algorithms for ranges and intervals (bmintervals.h) 
 ./bvsample23 - bm::interval_enumerator<> - iterator for interval traversal of bit-vector (bmintervals.h) 
-
+./bvsample24 - bm::rank_range_split(..) algorithm to split bit-vector into equal rank(weight) ranges
 
 ./bvsetalgebra - Tutorial for Algebra of Sets operations
 Tutorial: http://bitmagic.io/set-algebra.html
