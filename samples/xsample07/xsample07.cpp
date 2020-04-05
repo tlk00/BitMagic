@@ -37,7 +37,7 @@ For more information please visit:  http://bitmagic.io
 #include <future>
 #include <thread>
 #include <mutex>
-#include <stdatomic.h>
+#include <atomic>
 
 //#include "bm.h"
 #include "bm64.h"  // use 48-bit vectors
