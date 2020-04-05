@@ -37,10 +37,11 @@ For more information please visit:  http://bitmagic.io
 #include <future>
 #include <thread>
 #include <mutex>
-
+#include <stdatomic.h>
 
 //#include "bm.h"
 #include "bm64.h"  // use 48-bit vectors
+#include "bmalgo.h"
 #include "bmserial.h"
 #include "bmaggregator.h"
 
@@ -67,17 +68,19 @@ unsigned     parallel_jobs = 4;
 #include "cmd_args.h"
 
 
-// Globals
-//
-bm::chrono_taker::duration_map_type  timing_map;
-DNA_FingerprintScanner               dna_scanner;
 
 // Global types
 //
 //typedef bm::sparse_vector<bm::id64_t, bm::bvector<> > svector_u64;
 typedef std::vector<char>                             vector_char_type;
+typedef DNA_FingerprintScanner<bm::bvector<> >        dna_scanner_type;
 
 
+// Globals
+//
+bm::chrono_taker::duration_map_type     timing_map;
+dna_scanner_type                        dna_scanner;
+std::atomic_ullong                      k_mer_progress_count(0);
 
 
 /// really simple FASTA file parser
@@ -229,7 +232,18 @@ void sort_unique(VECT& vect)
     vect.erase(last, vect.end());
 }
 
+/**
+    This function turns each k-mer into an integer number and encodes it
+    in a bit-vector (presense vector)
+    The natural limitation here is that integer has to be less tha 48-bits
+    (limitations of bm::bvector<>)
+    This method build a presense k-mer fingerprint vector which can be
+    used for Jaccard distance comparison.
 
+    @param bv - [out] - target bit-vector
+    @param seq_vect - [out] DNA sequence vector
+    @param k-size   - dimention for k-mer generation
+ */
 template<typename BV>
 void generate_k_mer_bvector(BV& bv,
                             const vector_char_type& seq_vect,
@@ -237,7 +251,6 @@ void generate_k_mer_bvector(BV& bv,
                             bool check)
 {
     const bm::id64_t chunk_size = 400000000;
-//cerr << "buffer memory consumption:" << chunk_size * sizeof(bm::id64_t);
     bm::chrono_taker tt1("2. Generate k-mers", 1, &timing_map);
 
     bv.clear();
@@ -251,56 +264,234 @@ void generate_k_mer_bvector(BV& bv,
     k_buf.reserve(chunk_size);
 
     {
-        //vector_char_type::size_type opt_cnt = chunk_size;
         typename BV::bulk_insert_iterator bit(bv);
         vector_char_type::size_type dna_sz = seq_vect.size();
         for (vector_char_type::size_type pos = 0; pos < dna_sz; ++pos)
         {
             bm::id64_t k_mer_code;
             bool valid = get_kmer_code(dna_str, pos, k_size, k_mer_code);
-            if (valid)
+            if (!valid)
+                continue;
+            ++k_cnt;
+
+            if (check)
+                validate_k_mer(dna_str, pos, k_size, k_mer_code);
+
+            // generated k-mer codes are accumulated in buffer for sorting
+            k_buf.push_back(k_mer_code);
+            if (k_buf.size() == chunk_size) // soring point
             {
-                ++k_cnt;
-                if (check)
-                    validate_k_mer(dna_str, pos, k_size, k_mer_code);
-                //bit = k_mer_code;
-                //bv.set_bit_no_check(k_mer_code);
-                k_buf.push_back(k_mer_code);
-
-                //if (!(--opt_cnt))
-                /*
-                if (k_buf.size() == chunk_size)
+                sort_unique(k_buf);
+                if (k_buf.size())
                 {
-                    sort_unique(k_buf);
-                    if (k_buf.size())
-                    {
-                        //bv.set(&k_buf[0], k_buf.size(), bm::BM_SORTED);
-                        k_buf.resize(0);
-                        //bv.optimize(); // periodically re-optimize to save memory
-                    }
-
-                    //opt_cnt = chunk_size;
-                    float pcnt = float(pos) / float(dna_sz);
-                    pcnt *= 100;
-                    cout << "\r" << unsigned(pcnt) << "% of " << dna_sz
-                         << " (" << (pos+1) <<")    "
-                         << flush;
+                    bv.set(&k_buf[0], k_buf.size(), bm::BM_SORTED);
+                    k_buf.resize(0);
+                    bv.optimize(); // periodically re-optimize to save memory
                 }
-                */
+
+                float pcnt = float(pos) / float(dna_sz);
+                pcnt *= 100;
+                cout << "\r" << unsigned(pcnt) << "% of " << dna_sz
+                     << " (" << (pos+1) <<")    "
+                     << flush;
             }
         } // for pos
 
-        if (k_buf.size())
+        if (k_buf.size()) // add last incomplete chunk here
         {
             sort_unique(k_buf);
+            bv.set(&k_buf[0], k_buf.size(), bm::BM_SORTED);
+
             cout << "Unique k-mers: " << k_buf.size() << endl;
-
         }
-
-        //bit.flush();
+        bit.flush();
     }
     bv.optimize();
-    cout << "\r valid k-mers:" << k_cnt << "                         " << endl;
+    cout << "\rValid k-mers:" << k_cnt << "                         " << endl;
+}
+
+template<typename BV>
+void count_kmers(const BV& bv_kmers)
+{
+    std::string kmer_str;
+    typename BV::size_type cnt = 0; // progress report counter
+    typename BV::enumerator en = bv_kmers.first();
+    for ( ;en.valid(); ++en, ++cnt)
+    {
+        auto k_mer_code = *en;
+        translate_kmer(kmer_str, k_mer_code, ik_size); // translate k-mer code to string
+
+        // find list of sequence positions where k-mer is found
+        //
+        //dna_scanner.Find(kmer_str, km_search);
+
+        typename BV::size_type count = dna_scanner.FindCount(kmer_str);
+        (void) count;
+/*
+        if (count != km_search.size())
+        {
+            cerr << "Count failure at: " << cnt << endl;
+            cerr << count << " " << km_search.size() << endl;
+            exit(1);
+        }
+*/
+        if ((cnt % 1000) == 0)
+        {
+            cout << "\r" << cnt << flush;
+        }
+
+    } // for en
+}
+
+/**
+    k-mer counting job functor class
+
+    Functor received its range of k-mers in the presence-absense
+    bit-vector then follows it to run the search-counting algorithm
+    using DNA fingerprints common for all job functors.
+
+    bm::aggregator<> cannot be shared across threads,
+    so functor creates its own
+ */
+template<typename DNA_Scan>
+class Counting_JobFunctor
+{
+public:
+    typedef typename DNA_Scan::bvector_type  bvector_type;
+    typedef typename bvector_type::size_type size_type;
+
+    /// constructor
+    ///
+    Counting_JobFunctor(const DNA_Scan&     parent_scanner,
+                        const bvector_type& bv_kmers,
+                        size_type           from,
+                        size_type           to)
+        : m_parent_scanner(parent_scanner), m_bv_kmers(bv_kmers),
+          m_from(from), m_to(to)
+    {}
+
+    /// copy-ctor
+    Counting_JobFunctor(const Counting_JobFunctor& func)
+        : m_parent_scanner(func.m_parent_scanner), m_bv_kmers(func.m_bv_kmers),
+          m_from(func.m_from), m_to(func.m_to)
+    {}
+
+    // Main functor method
+    void operator() ()
+    {
+        std::string kmer_str;
+        size_type cnt = 0; // progress report counter
+
+        bvector_type bv_search_res;
+
+        typename bvector_type::enumerator en = m_bv_kmers.get_enumerator(m_from);
+        for ( ;en.valid(); ++en, ++cnt)
+        {
+            auto k_mer_code = *en;
+            if (k_mer_code > m_to)
+                break;
+            translate_kmer(kmer_str, k_mer_code, ik_size); // translate k-mer code to string
+
+            // setup the aggregator to perform search
+            //
+            m_Agg.reset();
+            m_Agg.set_compute_count(true); // disable full search, only count
+            for (size_t i = 0; i < kmer_str.size(); ++i)
+            {
+                const bvector_type& bv_mask = m_parent_scanner.GetVector(kmer_str[i]);
+                m_Agg.add(&bv_mask);
+            }
+
+            m_Agg.combine_shift_right_and(bv_search_res);
+
+            // Note we get search count from the Aggregator, not from search
+            // result vector, which will be empty,
+            // because we set_compute_count(true)
+            //
+            size_type search_count = m_Agg.count();
+            (void) search_count;
+
+            k_mer_progress_count.fetch_add(1);
+
+        } // for en
+    }
+
+private:
+    const DNA_Scan&                    m_parent_scanner;
+    const bvector_type&                m_bv_kmers;
+    size_type                          m_from;
+    size_type                          m_to;
+    typename DNA_Scan::aggregator_type m_Agg;
+};
+
+template<typename BV>
+void count_kmers_parallel(const BV& bv_kmers, unsigned concurrency)
+{
+    typedef typename BV::size_type bv_size_type;
+    typedef std::vector<std::pair<bv_size_type, bv_size_type> > bv_ranges_vector;
+
+    bv_ranges_vector pair_vect;
+
+    bv_size_type cnt = bv_kmers.count();
+    bv_size_type split_rank = cnt / concurrency; // target population count per job
+
+    if (split_rank < concurrency || concurrency < 2)
+    {
+        count_kmers(bv_kmers); // run single threaded
+        return;
+    }
+
+    // run split algorithm to determine equal weight ranges for parallel
+    // processing
+    bm::rank_range_split(bv_kmers, split_rank, pair_vect);
+
+    // Create parallel async tasks running on a range of source sequence
+    //
+    std::vector<std::future<void> > futures;
+    futures.reserve(concurrency);
+
+    for (size_t k = 0; k < pair_vect.size(); ++k)
+    {
+        futures.emplace_back(std::async(std::launch::async,
+            Counting_JobFunctor<dna_scanner_type>(dna_scanner, bv_kmers,
+                                pair_vect[k].first,
+                                pair_vect[k].second)));
+    } // for k
+
+    // wait for all jobs to finish, print progress report
+    //
+    for (auto& e : futures)
+    {
+        unsigned long long c_prev = 0;
+        while(1)
+        {
+            std::future_status status = e.wait_for(std::chrono::seconds(60));
+            if (status == std::future_status::ready)
+                break;
+
+            // progress report (entertainment)
+            //
+            unsigned long long c = k_mer_progress_count;
+            auto delta = c - c_prev;
+            c_prev = c;
+
+            auto remain_cnt = cnt - c;
+            auto remain_min = remain_cnt / delta;
+            cout << "\r" << c << ": progress per minute=" << delta;
+            if (remain_min < 120)
+            {
+                 cout << " wait for " << remain_min << "m     " << flush;
+            }
+            else
+            {
+                auto remain_h = remain_min / 60;
+                cout << " wait for " << remain_h << "h     " << flush;
+            }
+        } // while
+
+    } // for
+    cout << endl;
+
 }
 
 
@@ -316,6 +507,8 @@ int main(int argc, char *argv[])
         auto ret = parse_args(argc, argv);
         if (ret != 0)
             return ret;
+
+        cout << "concurrency=" << parallel_jobs << endl;
 
         if (!ifa_name.empty()) // FASTA file load
         {
@@ -353,19 +546,19 @@ int main(int argc, char *argv[])
         {
             bm::chrono_taker tt1("4. Build DNA fingerprints (bulk, parallel)", 1, &timing_map);
             dna_scanner.BuildParallel(seq_vect, parallel_jobs);
-
-            //dna_scanner.Build(seq_vect);
         }
 
-#if 0
+
         if (seq_vect.size())
         {
-            cout << " Searchging for k-mers..." << endl;
-            bm::chrono_taker tt1("5. Fingerprint search", 1, &timing_map);
+            cout << " Searching for k-mer counts..." << endl;
+            bm::chrono_taker tt1("5. k-mer counting", 1, &timing_map);
 
+            count_kmers_parallel(bv_kmers, parallel_jobs);
+
+#if 0
             std::string kmer_str;
             std::vector<bm::bvector<>::size_type> km_search;
-            //std::vector<bm::bvector<>::size_type> km_search_control;
             bm::bvector<>::size_type cnt = 0;
             bm::bvector<>::enumerator en = bv_kmers.first();
             for ( ;en.valid(); ++en, ++cnt)
@@ -375,9 +568,17 @@ int main(int argc, char *argv[])
 
                 // find list of sequence positions where k-mer is found
                 //
-                dna_scanner.FindAggFused(kmer_str, km_search);
+                dna_scanner.Find(kmer_str, km_search);
 
-//                dna_scanner.Find(kmer_str, km_search);
+                bm::bvector<>::size_type count = dna_scanner.FindCount(kmer_str);
+
+                if (count != km_search.size())
+                {
+                    cerr << "Count failure at: " << cnt << endl;
+                    cerr << count << " " << km_search.size() << endl;
+                    exit(1);
+                }
+
 /*
                 if (!km_search.size())
                 {
@@ -410,11 +611,10 @@ int main(int argc, char *argv[])
                 {
                     cout << "\r" << cnt << flush;
                 }
-                if (cnt == 5000)
-                    break;
             } // for en
-        }
 #endif
+        }
+
 
         if (is_timing)
         {

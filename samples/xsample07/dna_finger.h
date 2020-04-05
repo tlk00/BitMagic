@@ -8,13 +8,15 @@
 /**
     Utility for keeping all DNA finger print vectors
 */
+template <typename BV>
 class DNA_FingerprintScanner
 {
 public:
     enum { eA = 0, eC, eG, eT, eN, eEnd };
 
-    typedef bm::bvector<>::size_type        size_type;
-    typedef bm::aggregator<bm::bvector<> >  aggregator_type;
+    typedef BV bvector_type;
+    typedef typename bvector_type::size_type    size_type;
+    typedef bm::aggregator<bvector_type>        aggregator_type;
 
 public:
     DNA_FingerprintScanner() {}
@@ -35,7 +37,7 @@ public:
             void operator() (size_t from, size_t to)
             {
                 const std::vector<char>& sequence = *src_sequence;
-                bm::bvector<> bvA, bvT, bvG, bvC, bvN;
+                bvector_type bvA, bvT, bvG, bvC, bvN;
 
                 {
                     bm::bvector<>::bulk_insert_iterator iA(bvA, bm::BM_SORTED);
@@ -158,11 +160,13 @@ public:
     ///
     void BuildBulk(const std::vector<char>& sequence)
     {
-        bm::bvector<>::bulk_insert_iterator iA(m_FPrintBV[eA], bm::BM_SORTED);
-        bm::bvector<>::bulk_insert_iterator iC(m_FPrintBV[eC], bm::BM_SORTED);
-        bm::bvector<>::bulk_insert_iterator iG(m_FPrintBV[eG], bm::BM_SORTED);
-        bm::bvector<>::bulk_insert_iterator iT(m_FPrintBV[eT], bm::BM_SORTED);
-        bm::bvector<>::bulk_insert_iterator iN(m_FPrintBV[eN], bm::BM_SORTED);
+        typedef typename bvector_type::bulk_insert_iterator bulk_inserter_type;
+
+        bulk_inserter_type iA(m_FPrintBV[eA], bm::BM_SORTED);
+        bulk_inserter_type iC(m_FPrintBV[eC], bm::BM_SORTED);
+        bulk_inserter_type iG(m_FPrintBV[eG], bm::BM_SORTED);
+        bulk_inserter_type iT(m_FPrintBV[eT], bm::BM_SORTED);
+        bulk_inserter_type iN(m_FPrintBV[eN], bm::BM_SORTED);
 
         for (size_t i = 0; i < sequence.size(); ++i)
         {
@@ -196,7 +200,7 @@ public:
 
 
     /// Return fingerprint bit-vector
-    const bm::bvector<>& GetVector(char letter) const
+    const bvector_type& GetVector(char letter) const
     {
         switch (letter)
         {
@@ -216,45 +220,10 @@ public:
         throw std::runtime_error("Error. Invalid letter!");
     }
 
-    /// Find word strings
-    ///    using shift + and on fingerprint vectors
-    /// (horizontal, non-fused basic method)
-    ///
-
-    void Find(const std::string& word, std::vector<size_type>& res)
-    {
-        res.resize(0);
-        if (word.empty())
-            return;
-        bm::bvector<> bv(GetVector(word[0])); // step 1: copy first vector
-
-        // run series of shifts + logical ANDs
-        for (size_t i = 1; i < word.size(); ++i)
-        {
-            bv.shift_right();  // SHIFT the accumulator bit-vector
-            // get and AND the next fingerprint
-            const bm::bvector<>& bv_mask = GetVector(word[i]);
-            bv &= bv_mask;
-
-            auto any = bv.any();
-            if (!any)
-                break;
-
-        }
-
-        // translate results from bvector of word ends to result
-/*
-        unsigned ws = unsigned(word.size()) - 1;
-        TranslateResults(bv, ws, res);
-*/
-    };
-
-
 
     /// This method uses cache blocked aggregator with fused SHIFT+AND kernel
     ///
-
-    void FindAggFused(const std::string& word, std::vector<size_type>& res)
+    void Find(const std::string& word, std::vector<size_type>& res)
     {
         res.resize(0);
 
@@ -262,6 +231,7 @@ public:
             return;
         // first we setup aggregator, add a group of vectors to be processed
         m_Agg.reset();
+        m_Agg.set_compute_count(false);
         for (size_t i = 0; i < word.size(); ++i)
         {
             const bm::bvector<>& bv_mask = GetVector(word[i]);
@@ -272,12 +242,37 @@ public:
         //
         bm::bvector<> bv;
         m_Agg.combine_shift_right_and(bv);
-/*
+
         // translate results from bvector of word ends to result
         unsigned ws = unsigned(word.size()) - 1;
         TranslateResults(bv, ws, res);
-*/
+
     };
+
+    /// This method uses cache blocked aggregator with fused SHIFT+AND kernel
+    ///
+    /// @return search result count
+    size_type FindCount(const std::string& word)
+    {
+        if (word.empty())
+            return 0;
+        // first we setup aggregator, add a group of vectors to be processed
+        m_Agg.reset();
+        m_Agg.set_compute_count(true);
+
+        for (size_t i = 0; i < word.size(); ++i)
+        {
+            const bm::bvector<>& bv_mask = GetVector(word[i]);
+            m_Agg.add(&bv_mask);
+        }
+
+        // now run the whole algorithm to get benefits of cache blocking
+        //
+        bm::bvector<> bv;
+        m_Agg.combine_shift_right_and(bv);
+        return m_Agg.count();
+    };
+
 
 
     /// Find a set of words in one pass using pipeline
@@ -331,17 +326,17 @@ protected:
                           unsigned left_shift,
                           std::vector<size_type>& res)
     {
-        bm::bvector<>::enumerator en = bv.first();
-        for (; en.valid(); ++en)
+        typename bvector_type::enumerator en = bv.first();
+        for (;en.valid(); ++en)
         {
             auto pos = *en;
             res.push_back(pos - left_shift);
-        }
+        } // for en
     }
 
 private:
-    bm::bvector<>   m_FPrintBV[eEnd];
-    aggregator_type m_Agg;
+    bvector_type     m_FPrintBV[eEnd];
+    aggregator_type  m_Agg;
 };
 
 
