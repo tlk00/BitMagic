@@ -26896,6 +26896,117 @@ void TestCompressSparseVector()
     }
 
 
+    cout << "random assignmnet in sync() mode...." << endl;
+    {
+        bvect bv { 10, 20, 100, 200, bm::id_max/2, bm::id_max-1 };
+
+        bvect::size_type first, last, mid;
+        bv.find_range(first, last);
+        mid = first + ((last - first) / 4);
+
+        rsc_sparse_vector_u32 csv1;
+        rsc_sparse_vector_u32 csv2(bv);
+        {
+            bvect::enumerator en = bv.get_enumerator(mid);
+            for (;en.valid(); ++en)
+            {
+                auto idx = *en;
+                csv1.set(idx, idx);
+            }
+            en.go_to(0);
+            for (;en.valid(); ++en)
+            {
+                auto idx = *en;
+                if (idx >= mid)
+                    break;
+                csv1.set(idx, idx);
+            }
+        }
+        {
+            csv2.sync();
+            bvect::enumerator en = bv.get_enumerator(mid);
+            for (;en.valid(); ++en)
+            {
+                auto idx = *en;
+                csv2.set(idx, idx);
+            }
+
+            en.go_to(0);
+            for (;en.valid(); ++en)
+            {
+                auto idx = *en;
+                if (idx >= mid)
+                    break;
+                csv2.set(idx, idx);
+            }
+        }
+        bool eq = csv1.equal(csv2);
+        if (!eq)
+        {
+            cerr << "Error: rsc_sparse_vector() add values check failed" << endl;
+            assert(0); exit(1);
+        }
+    }
+
+    cout << "random assignmnet in sync() mode.... [stress]" << endl;
+    {
+        bvect bv;
+        generate_bvector(bv);
+        bv.optimize();
+
+        bvect::size_type first, last, mid;
+        bv.find_range(first, last);
+        mid = first + ((last - first) / 4);
+
+        rsc_sparse_vector_u32 csv1;
+        rsc_sparse_vector_u32 csv2(bv);
+        {
+            bvect::enumerator en = bv.get_enumerator(mid);
+            for (;en.valid(); ++en)
+            {
+                auto idx = *en;
+                csv1.set(idx, idx & 0xFF);
+            }
+            csv1.optimize();
+            en.go_to(0);
+            for (;en.valid(); ++en)
+            {
+                auto idx = *en;
+                if (idx >= mid)
+                    break;
+                csv1.set(idx, idx & 0xFF);
+            }
+            csv1.optimize();
+        }
+        {
+            csv2.sync();
+            bvect::enumerator en = bv.get_enumerator(mid);
+            for (;en.valid(); ++en)
+            {
+                auto idx = *en;
+                csv2.set(idx, idx & 0xFF);
+            }
+            csv2.optimize();
+
+            en.go_to(0);
+            for (;en.valid(); ++en)
+            {
+                auto idx = *en;
+                if (idx >= mid)
+                    break;
+                csv2.set(idx, idx & 0xFF);
+            }
+            csv2.optimize();
+
+        }
+        bool eq = csv1.equal(csv2);
+        if (!eq)
+        {
+            cerr << "Error: rsc_sparse_vector() add values check failed" << endl;
+            assert(0); exit(1);
+        }
+    }
+
     
     {
     cout << "decode() tests" << endl;
