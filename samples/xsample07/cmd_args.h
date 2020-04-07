@@ -5,10 +5,11 @@ inline
 void show_help()
 {
     std::cerr
-        << "BitMagic DNA k-mer build example (c) 2019" << std::endl
+        << "BitMagic DNA k-mer build and count (c) 2020" << std::endl
         << "-fa   file-name            -- input FASTA file" << std::endl
         << "-k    size                 -- k-mer size (4,8,16,..24) " << std::endl
         << "-kd   file-name            -- k-mer dictionary file (output)"  << std::endl
+        << "-kdc  file-name            -- k-mer counts file (output)" << std::endl
         << "-j    number-of-threads    -- number of parallel jobs to run" << std::endl
         << "-diag                      -- run diagnostics"  << std::endl
         << "-timing                    -- collect timings"  << std::endl
@@ -51,6 +52,19 @@ int parse_args(int argc, char *argv[])
             else
             {
                 std::cerr << "Error: -kd requires file name" << std::endl;
+                return 1;
+            }
+            continue;
+        }
+        if (arg == "-kdc" || arg == "--kdc")
+        {
+            if (i + 1 < argc)
+            {
+                ikd_counts_name = argv[++i];
+            }
+            else
+            {
+                std::cerr << "Error: -kdc requires file name" << std::endl;
                 return 1;
             }
             continue;

@@ -44,6 +44,7 @@ For more information please visit:  http://bitmagic.io
 #include "bmalgo.h"
 #include "bmserial.h"
 #include "bmaggregator.h"
+#include "bmsparsevec_compr.h"
 
 // BitMagic utilities for debug and timings
 #include "bmdbg.h"
@@ -59,6 +60,7 @@ using namespace std;
 //
 std::string  ifa_name;
 std::string  ikd_name;
+std::string  ikd_counts_name;
 bool         is_diag = false;
 bool         is_timing = false;
 bool         is_bench = false;
@@ -71,9 +73,10 @@ unsigned     parallel_jobs = 4;
 
 // Global types
 //
-//typedef bm::sparse_vector<bm::id64_t, bm::bvector<> > svector_u64;
 typedef std::vector<char>                             vector_char_type;
 typedef DNA_FingerprintScanner<bm::bvector<> >        dna_scanner_type;
+typedef bm::sparse_vector<unsigned, bm::bvector<> >   sparse_vector_u32;
+typedef bm::rsc_sparse_vector<unsigned, sparse_vector_u32 > rsc_sparse_vector_u32;
 
 
 // Globals
@@ -311,7 +314,7 @@ void generate_k_mer_bvector(BV& bv,
 }
 
 template<typename BV>
-void count_kmers(const BV& bv_kmers)
+void count_kmers(const BV& bv_kmers, rsc_sparse_vector_u32& kmer_counts)
 {
     std::string kmer_str;
     typename BV::size_type cnt = 0; // progress report counter
@@ -326,19 +329,11 @@ void count_kmers(const BV& bv_kmers)
         //dna_scanner.Find(kmer_str, km_search);
 
         typename BV::size_type count = dna_scanner.FindCount(kmer_str);
-        (void) count;
-/*
-        if (count != km_search.size())
-        {
-            cerr << "Count failure at: " << cnt << endl;
-            cerr << count << " " << km_search.size() << endl;
-            exit(1);
-        }
-*/
+        assert(count);
+        kmer_counts.set(k_mer_code, (unsigned)count);
+
         if ((cnt % 1000) == 0)
-        {
             cout << "\r" << cnt << flush;
-        }
 
     } // for en
 }
@@ -365,18 +360,19 @@ public:
     Counting_JobFunctor(const DNA_Scan&     parent_scanner,
                         const bvector_type& bv_kmers,
                         size_type           from,
-                        size_type           to)
+                        size_type           to,
+                        rsc_sparse_vector_u32& kmer_counts)
         : m_parent_scanner(parent_scanner), m_bv_kmers(bv_kmers),
-          m_from(from), m_to(to)
+          m_from(from), m_to(to), m_kmer_counts(kmer_counts)
     {}
 
     /// copy-ctor
     Counting_JobFunctor(const Counting_JobFunctor& func)
         : m_parent_scanner(func.m_parent_scanner), m_bv_kmers(func.m_bv_kmers),
-          m_from(func.m_from), m_to(func.m_to)
+          m_from(func.m_from), m_to(func.m_to), m_kmer_counts(func.m_kmer_counts)
     {}
 
-    // Main functor method
+    /// Main logic (functor)
     void operator() ()
     {
         std::string kmer_str;
@@ -409,7 +405,16 @@ public:
             // because we set_compute_count(true)
             //
             size_type search_count = m_Agg.count();
-            (void) search_count;
+
+            // counts are shared across threads, use locked access
+            // to save the results
+            // TODO: implement results buffering to avoid mutex overhead
+            {
+                static std::mutex                  mtx_counts_lock;
+                std::lock_guard<std::mutex> guard(mtx_counts_lock);
+                m_kmer_counts.set(k_mer_code, unsigned(search_count));
+                assert(m_kmer_counts.in_sync());
+            }
 
             k_mer_progress_count.fetch_add(1);
 
@@ -422,10 +427,17 @@ private:
     size_type                          m_from;
     size_type                          m_to;
     typename DNA_Scan::aggregator_type m_Agg;
+
+    rsc_sparse_vector_u32&             m_kmer_counts;
 };
 
+/**
+    Runs k-mer counting in parallel
+*/
 template<typename BV>
-void count_kmers_parallel(const BV& bv_kmers, unsigned concurrency)
+void count_kmers_parallel(const BV& bv_kmers,
+                          rsc_sparse_vector_u32& kmer_counts,
+                          unsigned concurrency)
 {
     typedef typename BV::size_type bv_size_type;
     typedef std::vector<std::pair<bv_size_type, bv_size_type> > bv_ranges_vector;
@@ -437,7 +449,7 @@ void count_kmers_parallel(const BV& bv_kmers, unsigned concurrency)
 
     if (split_rank < concurrency || concurrency < 2)
     {
-        count_kmers(bv_kmers); // run single threaded
+        count_kmers(bv_kmers, kmer_counts); // run single threaded
         return;
     }
 
@@ -455,7 +467,8 @@ void count_kmers_parallel(const BV& bv_kmers, unsigned concurrency)
         futures.emplace_back(std::async(std::launch::async,
             Counting_JobFunctor<dna_scanner_type>(dna_scanner, bv_kmers,
                                 pair_vect[k].first,
-                                pair_vect[k].second)));
+                                pair_vect[k].second,
+                                kmer_counts)));
     } // for k
 
     // wait for all jobs to finish, print progress report
@@ -498,9 +511,8 @@ void count_kmers_parallel(const BV& bv_kmers, unsigned concurrency)
 
 int main(int argc, char *argv[])
 {
-    vector_char_type  seq_vect; // read FASTA sequence
-    bm::bvector<>     bv_kmers; //
-    //svector_u64       sv_kmers;
+    vector_char_type       seq_vect; // read FASTA sequence
+    bm::bvector<>          bv_kmers; // k-mer presense(-absence) vector
 
     try
     {
@@ -549,70 +561,24 @@ int main(int argc, char *argv[])
         }
 
 
-        if (seq_vect.size())
+        if (seq_vect.size() && !ikd_counts_name.empty())
         {
             cout << " Searching for k-mer counts..." << endl;
             bm::chrono_taker tt1("5. k-mer counting", 1, &timing_map);
 
-            count_kmers_parallel(bv_kmers, parallel_jobs);
+            rsc_sparse_vector_u32  rsc_kmer_counts(bv_kmers); // rank-select sparse vectoror for counts
+            rsc_kmer_counts.sync();
 
-#if 0
-            std::string kmer_str;
-            std::vector<bm::bvector<>::size_type> km_search;
-            bm::bvector<>::size_type cnt = 0;
-            bm::bvector<>::enumerator en = bv_kmers.first();
-            for ( ;en.valid(); ++en, ++cnt)
+            count_kmers_parallel(bv_kmers, rsc_kmer_counts, parallel_jobs);
+
+            rsc_kmer_counts.optimize();
+
+            int res = bm::file_save_svector(rsc_kmer_counts, ikd_counts_name);
+            if (res)
             {
-                auto k_mer_code = *en;
-                translate_kmer(kmer_str, k_mer_code, ik_size);
-
-                // find list of sequence positions where k-mer is found
-                //
-                dna_scanner.Find(kmer_str, km_search);
-
-                bm::bvector<>::size_type count = dna_scanner.FindCount(kmer_str);
-
-                if (count != km_search.size())
-                {
-                    cerr << "Count failure at: " << cnt << endl;
-                    cerr << count << " " << km_search.size() << endl;
-                    exit(1);
-                }
-
-/*
-                if (!km_search.size())
-                {
-                    bool b = bv_kmers.test(k_mer_code);
-                    if (!b)
-                    {
-                        cout << "enumerator test failure!" << endl;
-                    }
-
-                    cerr << "Error! incorrect search " << k_mer_code
-                         << " " << kmer_str << endl;
-                    dna_scanner.Find(kmer_str, km_search_control);
-                    cout << "control size=" << km_search_control.size() << endl;
-
-                    const char* s = &seq_vect[0];
-                    const char* pch = ::strstr(s, kmer_str.c_str());
-                    if (!pch)
-                    {
-                        cout << "::strstr() not found ..." << endl;
-                    }
-                    else
-                    {
-                        auto pos = pch - s;
-                        cout << "strstr() found at:" << pos << endl;
-                    }
-                    exit(1);
-                }
-*/
-                if ((cnt % 1000) == 0)
-                {
-                    cout << "\r" << cnt << flush;
-                }
-            } // for en
-#endif
+                cerr << "Error: Count vector save failed!" << endl;
+                exit(1);
+            }
         }
 
 
