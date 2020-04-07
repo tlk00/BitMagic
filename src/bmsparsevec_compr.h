@@ -296,12 +296,25 @@ public:
 public:
     // ------------------------------------------------------------
     /*! @name Construction and assignment  */
+
     //@{
 
     rsc_sparse_vector(bm::null_support null_able = bm::use_null,
                       allocation_policy_type ap = allocation_policy_type(),
                       size_type bv_max_size = bm::id_max,
                       const allocator_type&   alloc  = allocator_type());
+
+    /**
+        Contructor to pre-initialize the list of assigned (not NULL) elements.
+
+        If the list of not NULL elements is known upfront it can help to
+        pre-declare it, enable rank-select index and then use set function.
+        This scenario gives significant speed boost, comparing random assignment
+
+        @param bv_null - not NULL vector for the container
+    */
+    rsc_sparse_vector(const bvector_type& bv_null);
+
     ~rsc_sparse_vector();
     
     /*! copy-ctor */
@@ -711,8 +724,11 @@ protected:
 
 
 private:
-    void construct_bv_blocks();
-    void free_bv_blocks();
+
+    /// Allocate memory for RS index
+    void construct_rs_index();
+    /// Free rs-index
+    void free_rs_index();
 
 protected:
     template<class SVect> friend class sparse_vector_scanner;
@@ -741,7 +757,32 @@ rsc_sparse_vector<Val, SV>::rsc_sparse_vector(bm::null_support null_able,
     BM_ASSERT(null_able == bm::use_null);
     BM_ASSERT(int(sv_value_plains) == int(SV::sv_value_plains));
     size_ = max_id_ = 0;
-    construct_bv_blocks();
+    construct_rs_index();
+}
+
+//---------------------------------------------------------------------
+
+template<class Val, class SV>
+rsc_sparse_vector<Val, SV>::rsc_sparse_vector(const bvector_type& bv_null)
+: sv_(bm::use_null), in_sync_(false)
+{
+    construct_rs_index();
+    bvector_type* bv = sv_.get_null_bvect();
+    BM_ASSERT(bv);
+    *bv = bv_null;
+
+    bool found = bv->find_reverse(max_id_);
+    if (found)
+    {
+        size_ = max_id_ + 1;
+        size_type sz = bv->count();
+        sv_.resize(sz);
+    }
+    else
+    {
+        BM_ASSERT(!bv->any());
+        size_ = max_id_ = 0;
+    }
 }
 
 //---------------------------------------------------------------------
@@ -749,7 +790,7 @@ rsc_sparse_vector<Val, SV>::rsc_sparse_vector(bm::null_support null_able,
 template<class Val, class SV>
 rsc_sparse_vector<Val, SV>::~rsc_sparse_vector()
 {
-    free_bv_blocks();
+    free_rs_index();
 }
 
 //---------------------------------------------------------------------
@@ -761,7 +802,7 @@ rsc_sparse_vector<Val, SV>::rsc_sparse_vector(
 {
     BM_ASSERT(int(sv_value_plains) == int(SV::sv_value_plains));
     
-    construct_bv_blocks();
+    construct_rs_index();
     if (in_sync_)
         bv_blocks_ptr_->copy_from(*(csv.bv_blocks_ptr_));
 }
@@ -848,9 +889,13 @@ void rsc_sparse_vector<Val, SV>::set(size_type idx, value_type v)
 {
     bvector_type* bv_null = sv_.get_null_bvect();
     BM_ASSERT(bv_null);
-    
+
+    size_type sv_idx;
     bool found = bv_null->test(idx);
-    size_type sv_idx = bv_null->count_range(0, idx); // TODO: make test'n'count
+
+    sv_idx = in_sync_ ? bv_null->count_to(idx, *bv_blocks_ptr_)
+                      : bv_null->count_range(0, idx); // TODO: make test'n'count
+
     if (found)
     {
         sv_.set_value_no_null(--sv_idx, v);
@@ -1263,7 +1308,7 @@ rsc_sparse_vector<Val, SV>::decode_buf(value_type*     arr,
 //---------------------------------------------------------------------
 
 template<class Val, class SV>
-void rsc_sparse_vector<Val, SV>::construct_bv_blocks()
+void rsc_sparse_vector<Val, SV>::construct_rs_index()
 {
     if (bv_blocks_ptr_)
         return;
@@ -1275,7 +1320,7 @@ void rsc_sparse_vector<Val, SV>::construct_bv_blocks()
 //---------------------------------------------------------------------
 
 template<class Val, class SV>
-void rsc_sparse_vector<Val, SV>::free_bv_blocks()
+void rsc_sparse_vector<Val, SV>::free_rs_index()
 {
     if (bv_blocks_ptr_)
     {
