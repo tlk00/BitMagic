@@ -17,7 +17,7 @@ For more information please visit:  http://bitmagic.io
 */
 
 /** \example sample24.cpp
-Example for finding bit-vector ranges with the specifed number of ON bits
+@brief Example for finding bit-vector ranges with the specifed number of ON bits
 
 The use case here:
    - search algorithm runs a query, the result set represented as a bit-vector
@@ -31,6 +31,9 @@ The use case here:
      the specifed population count
 
     @sa bm::rank_range_split
+    @sa bm::bvector::get_enumerator
+    @sa bm::bvector::enumerator
+
 */
 
 /*! \file sample24.cpp
@@ -75,6 +78,7 @@ int main(void)
             const auto& p = pair_vect[k];
             cout << k << ": [" << p.first << ".." << p.second << "] ";
 
+            // find and print bits in the target range with bvector<>::enumerator
             bm::bvector<>::enumerator en = bv.get_enumerator(p.first);
             for (; en.valid(); ++en)
             {
