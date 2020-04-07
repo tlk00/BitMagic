@@ -13652,6 +13652,57 @@ void TestCompressSparseVector()
         cout << "\nOK" << endl;
     }
 
+    cout << "random assignmnet in sync() mode...." << endl;
+    {
+        bvect bv { 10, 20, 100, 200, bm::id_max/2, bm::id_max-1 };
+
+        bvect::size_type first, last, mid;
+        bv.find_range(first, last);
+        mid = first + ((last - first) / 4);
+
+        rsc_sparse_vector_u32 csv1;
+        rsc_sparse_vector_u32 csv2(bv);
+        {
+            bvect::enumerator en = bv.get_enumerator(mid);
+            for (;en.valid(); ++en)
+            {
+                auto idx = *en;
+                csv1.set(idx, 40);
+            }
+            en.go_to(0);
+            for (;en.valid(); ++en)
+            {
+                auto idx = *en;
+                if (idx >= mid)
+                    break;
+                csv1.set(idx, 40);
+            }
+        }
+        {
+            csv2.sync();
+            bvect::enumerator en = bv.get_enumerator(mid);
+            for (;en.valid(); ++en)
+            {
+                auto idx = *en;
+                csv2.set(idx, 40);
+            }
+
+            en.go_to(0);
+            for (;en.valid(); ++en)
+            {
+                auto idx = *en;
+                if (idx >= mid)
+                    break;
+                csv2.set(idx, 40);
+            }
+        }
+        bool eq = csv1.equal(csv2);
+        if (!eq)
+        {
+            cerr << "Error: rsc_sparse_vector() add values check failed" << endl;
+            assert(0); exit(1);
+        }
+    }
 
     {
         cout << "decode() test" << endl;
