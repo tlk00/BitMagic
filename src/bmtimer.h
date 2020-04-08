@@ -147,7 +147,13 @@ public:
                 if (ms > 1000)
                 {
                     double sec = ms / 1000;
-                    std::cout << it->first << "; " << std::setprecision(4) << sec << " sec" << std::endl;
+                    if (sec > 60)
+                    {
+                        double min = sec / 60;
+                        std::cout << it->first << "; " << std::setprecision(4) << min << " min" << std::endl;
+                    }
+                    else
+                        std::cout << it->first << "; " << std::setprecision(4) << sec << " sec" << std::endl;
                 }
                 else
                     std::cout << it->first << "; " << it->second.duration.count() << " ms" << std::endl;
