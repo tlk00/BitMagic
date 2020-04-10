@@ -905,6 +905,9 @@ protected:
         *idx_from = from; *idx_to = to; return true;
     }
 
+    /// Increment element by 1 without chnaging NULL vector or size
+    void inc_no_null(size_type idx);
+
 protected:
     template<class V, class SV> friend class rsc_sparse_vector;
     template<class SVect> friend class sparse_vector_scanner;
@@ -1662,7 +1665,17 @@ void sparse_vector<Val, BV>::inc(size_type idx)
 {
     if (idx >= this->size_)
         this->size_ = idx+1;
+    inc_no_null(idx);
+    bvector_type* bv_null = this->get_null_bvect();
+    if (bv_null)
+        bv_null->set_bit_no_check(idx);
+}
 
+//---------------------------------------------------------------------
+
+template<class Val, class BV>
+void sparse_vector<Val, BV>::inc_no_null(size_type idx)
+{
     for (unsigned i = 0; i < parent_type::sv_value_plains; ++i)
     {
         bvector_type* bv = this->get_plain(i);
@@ -1670,9 +1683,6 @@ void sparse_vector<Val, BV>::inc(size_type idx)
         if (!carry_over)
             break;
     }
-    bvector_type* bv_null = this->get_null_bvect();
-    if (bv_null)
-        bv_null->set_bit_no_check(idx);
 }
 
 //---------------------------------------------------------------------

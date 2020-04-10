@@ -26912,6 +26912,7 @@ void TestCompressSparseVector()
             {
                 auto idx = *en;
                 csv1.set(idx, idx);
+                csv1.inc(idx);
             }
             en.go_to(0);
             for (;en.valid(); ++en)
@@ -26920,7 +26921,9 @@ void TestCompressSparseVector()
                 if (idx >= mid)
                     break;
                 csv1.set(idx, idx);
+                csv1.inc(idx);
             }
+            assert(!csv1.in_sync());
         }
         {
             csv2.sync();
@@ -26929,6 +26932,7 @@ void TestCompressSparseVector()
             {
                 auto idx = *en;
                 csv2.set(idx, idx);
+                csv2.inc(idx);
             }
 
             en.go_to(0);
@@ -26938,7 +26942,10 @@ void TestCompressSparseVector()
                 if (idx >= mid)
                     break;
                 csv2.set(idx, idx);
+                csv2.inc(idx);
             }
+            assert(csv2.in_sync());
+
         }
         bool eq = csv1.equal(csv2);
         if (!eq)
@@ -26948,7 +26955,7 @@ void TestCompressSparseVector()
         }
     }
 
-    cout << "random assignmnet in sync() mode.... [stress]" << endl;
+    cout << "random assignment in sync() mode.... [stress]" << endl;
     {
         bvect bv;
         generate_bvector(bv);
@@ -26966,6 +26973,8 @@ void TestCompressSparseVector()
             {
                 auto idx = *en;
                 csv1.set(idx, idx & 0xFF);
+                csv1.inc(idx);
+
             }
             csv1.optimize();
             en.go_to(0);
@@ -26975,9 +26984,11 @@ void TestCompressSparseVector()
                 if (idx >= mid)
                     break;
                 csv1.set(idx, idx & 0xFF);
+                csv1.inc(idx);
             }
             csv1.optimize();
         }
+        // sync mode
         {
             csv2.sync();
             bvect::enumerator en = bv.get_enumerator(mid);
@@ -26985,7 +26996,9 @@ void TestCompressSparseVector()
             {
                 auto idx = *en;
                 csv2.set(idx, idx & 0xFF);
+                csv2.inc(idx);
             }
+            assert(csv2.in_sync());
             csv2.optimize();
 
             en.go_to(0);
@@ -26995,7 +27008,9 @@ void TestCompressSparseVector()
                 if (idx >= mid)
                     break;
                 csv2.set(idx, idx & 0xFF);
+                csv2.inc(idx);
             }
+            assert(csv2.in_sync());
             csv2.optimize();
 
         }

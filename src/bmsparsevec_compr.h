@@ -418,6 +418,13 @@ public:
     */
     void set(size_type idx, value_type v);
     
+
+    /*!
+        \brief increment specified element by one
+        \param idx - element index
+    */
+    void inc(size_type idx);
+
     /*!
         \brief set specified element to NULL
         RSC vector actually erases element when it is set to NULL (expensive).
@@ -426,7 +433,6 @@ public:
     void set_null(size_type idx);
 
 
-    
     /** \brief test if specified element is NULL
         \param idx - element index
         \return true if it is NULL false if it was assigned or container
@@ -878,6 +884,38 @@ void rsc_sparse_vector<Val, SV>::set_null(size_type idx)
         size_type sv_idx = bv_null->count_range(0, idx);
         bv_null->clear_bit_no_check(idx);
         sv_.erase(--sv_idx);
+        in_sync_ = false;
+    }
+}
+
+//---------------------------------------------------------------------
+
+template<class Val, class SV>
+void rsc_sparse_vector<Val, SV>::inc(size_type idx)
+{
+    bvector_type* bv_null = sv_.get_null_bvect();
+    BM_ASSERT(bv_null);
+
+    size_type sv_idx;
+    bool found = bv_null->test(idx);
+
+    sv_idx = in_sync_ ? bv_null->count_to(idx, *bv_blocks_ptr_)
+                      : bv_null->count_range(0, idx); // TODO: make test'n'count
+
+    if (found)
+    {
+        sv_.inc_no_null(--sv_idx);
+    }
+    else
+    {
+        sv_.inc_no_null(sv_idx);
+        bv_null->set_bit_no_check(idx);
+
+        if (idx > max_id_)
+        {
+            max_id_ = idx;
+            size_ = max_id_ + 1;
+        }
         in_sync_ = false;
     }
 }
