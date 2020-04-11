@@ -232,7 +232,7 @@ bool sparse_vector_find_first_mismatch(const SV& sv1,
         } // null_proc
     }
 
-    for (unsigned i = 0; mismatch & (i < plains1); ++i)
+    for (unsigned i = 0; mismatch && (i < plains1); ++i)
     {
         typename SV::bvector_type_const_ptr bv1 = sv1.get_plain(i);
         typename SV::bvector_type_const_ptr bv2 = sv2.get_plain(i);
