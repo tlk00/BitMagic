@@ -21473,6 +21473,29 @@ void TestCompressedSparseVectorAlgo()
 
     // ----------------------------------------------------------
 
+    {
+        rsc_sparse_vector_u32 csv1;
+        rsc_sparse_vector_u32 csv2;
+        bm::sparse_vector<unsigned, bvect>::size_type pos;
+        bool f;
+
+        for (unsigned i = 0; i < 1022; ++i)
+        {
+            csv1.set(i, 65536);
+            csv2.set(i, 65536);
+        }
+        csv1.set(1023, 4);
+        csv2.set(1023, 8);
+
+        f = bm::sparse_vector_find_first_mismatch(csv1, csv2, pos);
+        assert(f);
+        assert(pos == 1023);
+
+        csv1.sync(); csv2.sync();
+        f = bm::sparse_vector_find_first_mismatch(csv1, csv2, pos);
+        assert(f);
+        assert(pos == 1023);
+    }
 
     {
         cout << endl << "Unique mismatch check" << endl;
@@ -27953,7 +27976,7 @@ int main(int argc, char *argv[])
 
     if (is_all || is_csv)
     {
-        TestCompressSparseVector();
+//        TestCompressSparseVector();
 
         TestCompressedSparseVectorAlgo();
 
