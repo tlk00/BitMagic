@@ -426,6 +426,22 @@ public:
     void inc(size_type idx);
 
     /*!
+        \brief increment specified element by one
+        \param idx - element index
+        \param v - increment value
+    */
+    void inc(size_type idx, value_type v);
+
+    /*!
+        \brief increment specified element by one, element MUST be NOT NULL
+        Faster than just inc() if element is NULL - behavior is undefined
+        \param idx - element index
+        \param v - increment value
+        @sa inc
+    */
+    void inc_not_null(size_type idx, value_type v);
+
+    /*!
         \brief set specified element to NULL
         RSC vector actually erases element when it is set to NULL (expensive).
         \param idx - element index
@@ -908,7 +924,7 @@ void rsc_sparse_vector<Val, SV>::inc(size_type idx)
     }
     else
     {
-        sv_.inc_no_null(sv_idx);
+        sv_.insert_value_no_null(sv_idx, 1);
         bv_null->set_bit_no_check(idx);
 
         if (idx > max_id_)
@@ -919,6 +935,57 @@ void rsc_sparse_vector<Val, SV>::inc(size_type idx)
         in_sync_ = false;
     }
 }
+
+//---------------------------------------------------------------------
+
+template<class Val, class SV>
+void rsc_sparse_vector<Val, SV>::inc(size_type idx, value_type v)
+{
+    bvector_type* bv_null = sv_.get_null_bvect();
+    BM_ASSERT(bv_null);
+
+    size_type sv_idx;
+    bool found = bv_null->test(idx);
+
+    sv_idx = in_sync_ ? bv_null->count_to(idx, *bv_blocks_ptr_)
+                      : bv_null->count_range(0, idx); // TODO: make test'n'count
+
+    if (found)
+    {
+        sv_.inc_no_null(--sv_idx, v);
+    }
+    else
+    {
+        sv_.insert_value_no_null(sv_idx, v);
+        bv_null->set_bit_no_check(idx);
+
+        if (idx > max_id_)
+        {
+            max_id_ = idx;
+            size_ = max_id_ + 1;
+        }
+        in_sync_ = false;
+    }
+}
+
+//---------------------------------------------------------------------
+
+template<class Val, class SV>
+void rsc_sparse_vector<Val, SV>::inc_not_null(size_type idx, value_type v)
+{
+    bvector_type* bv_null = sv_.get_null_bvect();
+    BM_ASSERT(bv_null->test(idx)); // idx must be NOT NULL
+
+    size_type sv_idx;
+    sv_idx = in_sync_ ? bv_null->count_to(idx, *bv_blocks_ptr_)
+                      : bv_null->count_range(0, idx); // TODO: make test'n'count
+    --sv_idx;
+    if (v == 1)
+        sv_.inc_no_null(sv_idx);
+    else
+        sv_.inc_no_null(sv_idx, v);
+}
+
 
 //---------------------------------------------------------------------
 

@@ -908,6 +908,9 @@ protected:
     /// Increment element by 1 without chnaging NULL vector or size
     void inc_no_null(size_type idx);
 
+    /// increment by v  without chnaging NULL vector or size
+    void inc_no_null(size_type idx, value_type v);
+
 protected:
     template<class V, class SV> friend class rsc_sparse_vector;
     template<class SVect> friend class sparse_vector_scanner;
@@ -1683,6 +1686,15 @@ void sparse_vector<Val, BV>::inc_no_null(size_type idx)
         if (!carry_over)
             break;
     }
+}
+
+//---------------------------------------------------------------------
+
+template<class Val, class BV>
+void sparse_vector<Val, BV>::inc_no_null(size_type idx, value_type v)
+{
+    value_type v_prev = get(idx);
+    set_value_no_null(idx, v + v_prev);
 }
 
 //---------------------------------------------------------------------
