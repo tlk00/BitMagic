@@ -634,6 +634,14 @@ public:
     void copy_range(const rsc_sparse_vector<Val, SV>& csv,
         size_type left, size_type right);
 
+    /**
+        @brief merge two vectors (argument gets destroyed)
+        It is important that both vectors have the same NULL vectors
+        @param csv - [in,out] argumnet vector to merge
+                     (works like move so arg should not be used after the merge)
+     */
+    void merge_not_null(rsc_sparse_vector<Val, SV>& csv);
+
     ///@}
 
     // ------------------------------------------------------------
@@ -1466,6 +1474,16 @@ void rsc_sparse_vector<Val, SV>::copy_range(
 }
 
 
+//---------------------------------------------------------------------
+
+template<class Val, class SV>
+void rsc_sparse_vector<Val, SV>::merge_not_null(rsc_sparse_vector<Val, SV>& csv)
+{
+    // MUST have the same NULL to work
+    BM_ASSERT(sv_.get_null_bvector()->equal(*csv.sv_.get_null_bvector()));
+
+    sv_.merge(csv.sv_);
+}
 
 
 //---------------------------------------------------------------------
