@@ -123,15 +123,14 @@ bool get_kmer_code(const char* dna,
                   size_t pos, unsigned k_size,
                   bm::id64_t& k_mer)
 {
-    assert(k_size > 2 && k_size <= 32);
-
     // generate k-mer
     //
     bm::id64_t k_acc = 0;
     unsigned shift = 0;
+    dna += pos;
     for (size_t i = 0; i < k_size; ++i)
     {
-        char bp = dna[pos+i];
+        char bp = dna[i];
         bm::id64_t dna_code;
         switch (bp)
         {
@@ -263,42 +262,6 @@ void sort_count(VECT& vect, COUNT_VECT& cvect)
     cvect.inc_not_null(prev, cnt);
     assert(cvect.in_sync());
 }
-
-/// Auxiliary function to do sort+unique on a vactor of ints and save results
-/// in a counts vector
-///
-template<typename VECT, typename COUNT_VECT>
-void sort_count(VECT& vect, COUNT_VECT& cvect, std::mutex& mtx_counts_lock)
-{
-    if (!vect.size())
-        return;
-    std::sort(vect.begin(), vect.end());
-    typename VECT::value_type prev = vect[0];
-    typename COUNT_VECT::value_type cnt = 1;
-    auto vsize = vect.size();
-    size_t i = 1;
-    for (; i < vsize; ++i)
-    {
-        auto v = vect[i];
-        if (v == prev)
-        {
-            ++cnt;
-            continue;
-        }
-        {
-            std::lock_guard<std::mutex> guard(mtx_counts_lock);
-            cvect.inc_not_null(prev, cnt);
-        }
-        prev = v; cnt = 1;
-    } // for i
-
-    {
-        std::lock_guard<std::mutex> guard(mtx_counts_lock);
-        cvect.inc_not_null(prev, cnt);
-    }
-    assert(cvect.in_sync());
-}
-
 
 /**
     This function turns each k-mer into an integer number and encodes it
@@ -448,36 +411,43 @@ public:
     /// Main logic (functor)
     void operator() ()
     {
+        const bvector_type* bv_null = m_kmer_counts.get_null_bvector();
+        rsc_sparse_vector_u32 kmer_counts_part(*bv_null);
+        kmer_counts_part.sync();
+
         const bm::id64_t chunk_size = 10000000;
         if (m_seq_vect.empty())
             return;
 
         const char* dna_str = &m_seq_vect[0];
-//        vector_char_type::size_type k_cnt = 0;
         std::vector<bm::id64_t> k_buf;
         k_buf.reserve(chunk_size);
 
-        static std::mutex   mtx_counts_lock;
-
+        const auto from = m_from;
+        const auto to = m_to;
         vector_char_type::size_type dna_sz = m_seq_vect.size()-(m_k_size-1);
         for (vector_char_type::size_type pos = 0; pos < dna_sz; ++pos)
         {
             bm::id64_t k_mer_code;
             bool valid = get_kmer_code(dna_str, pos, m_k_size, k_mer_code);
-            if (!valid)
+            if ((!valid) || !(k_mer_code >= from && k_mer_code <= to))
                 continue;
-            if (!(k_mer_code >= m_from && k_mer_code <= m_to))
-                continue;
-
             // generated k-mer codes are accumulated in buffer for sorting
             k_buf.push_back(k_mer_code);
             if (k_buf.size() == chunk_size) // sorting point
             {
-                sort_count(k_buf, m_kmer_counts, mtx_counts_lock);
+                sort_count(k_buf, kmer_counts_part);
                 k_buf.resize(0);
             }
         } // for pos
-        sort_count(k_buf, m_kmer_counts, mtx_counts_lock);
+        sort_count(k_buf, kmer_counts_part);
+
+        // merge results
+        {
+            static std::mutex   mtx_counts_lock;
+            std::lock_guard<std::mutex> guard(mtx_counts_lock);
+            m_kmer_counts.merge_not_null(kmer_counts_part);
+        }
     }
 
 private:
