@@ -45,6 +45,8 @@ For more information please visit:  http://bitmagic.io
 #include "bmserial.h"
 #include "bmaggregator.h"
 #include "bmsparsevec_compr.h"
+#include "bmsparsevec_algo.h"
+
 
 // BitMagic utilities for debug and timings
 #include "bmdbg.h"
@@ -110,26 +112,6 @@ int load_FASTA(const std::string& fname, vector_char_type& seq_vect)
     return 0;
 }
 
-/// Translate DNA letter to integer code
-///
-inline
-unsigned DNA2int(char DNA_bp)
-{
-    switch (DNA_bp)
-    {
-    case 'A':
-        return 0; // 00
-    case 'T':
-        return 1; // 01
-    case 'G':
-        return 2; // 10
-    case 'C':
-        return 3; // 11
-    default:
-        return 0;
-    }
-}
-
 
 /// Calculate k-mer as an unsigned long integer
 ///
@@ -150,11 +132,25 @@ bool get_kmer_code(const char* dna,
     for (size_t i = 0; i < k_size; ++i)
     {
         char bp = dna[pos+i];
-        if (!bp) // boundary: string terminated - ignore short k-mer
+        bm::id64_t dna_code;
+        switch (bp)
+        {
+        case 'A':
+            dna_code = 0; // 00
+            break;
+        case 'T':
+            dna_code = 1; // 01
+            break;
+        case 'G':
+            dna_code = 2; // 10
+            break;
+        case 'C':
+            dna_code = 3; // 11
+            break;
+        default: // ambiguity codes are ignored (for simplicity)
             return false;
-        if (bp == 'N')
-            return false; // 'N' containing k-mers are ignored (for simplicity)
-        bm::id64_t dna_code = DNA2int(bp);
+        }
+
         k_acc |= (dna_code << shift); // accumulate new code within 64-bit accum
         shift += 2; // each DNA base pair needs 2-bits to store
     } // for i
@@ -227,13 +223,82 @@ void validate_k_mer(const char* dna,
     }
 }
 
-template<class VECT>
+/// Auxiliary function to do sort+unique on a vactor of ints
+/// erases all duplicate elements
+///
+template<typename VECT>
 void sort_unique(VECT& vect)
 {
     std::sort(vect.begin(), vect.end());
     auto last = std::unique(vect.begin(), vect.end());
     vect.erase(last, vect.end());
 }
+
+
+/// Auxiliary function to do sort+unique on a vactor of ints and save results
+/// in a counts vector
+///
+template<typename VECT, typename COUNT_VECT>
+void sort_count(VECT& vect, COUNT_VECT& cvect)
+{
+    if (!vect.size())
+        return;
+    std::sort(vect.begin(), vect.end());
+    typename VECT::value_type prev = vect[0];
+    typename COUNT_VECT::value_type cnt = 1;
+    auto vsize = vect.size();
+    size_t i = 1;
+    for (; i < vsize; ++i)
+    {
+        auto v = vect[i];
+        if (v == prev)
+        {
+            ++cnt;
+            continue;
+        }
+        cvect.inc_not_null(prev, cnt);
+        prev = v; cnt = 1;
+    } // for i
+
+    cvect.inc_not_null(prev, cnt);
+    assert(cvect.in_sync());
+}
+
+/// Auxiliary function to do sort+unique on a vactor of ints and save results
+/// in a counts vector
+///
+template<typename VECT, typename COUNT_VECT>
+void sort_count(VECT& vect, COUNT_VECT& cvect, std::mutex& mtx_counts_lock)
+{
+    if (!vect.size())
+        return;
+    std::sort(vect.begin(), vect.end());
+    typename VECT::value_type prev = vect[0];
+    typename COUNT_VECT::value_type cnt = 1;
+    auto vsize = vect.size();
+    size_t i = 1;
+    for (; i < vsize; ++i)
+    {
+        auto v = vect[i];
+        if (v == prev)
+        {
+            ++cnt;
+            continue;
+        }
+        {
+            std::lock_guard<std::mutex> guard(mtx_counts_lock);
+            cvect.inc_not_null(prev, cnt);
+        }
+        prev = v; cnt = 1;
+    } // for i
+
+    {
+        std::lock_guard<std::mutex> guard(mtx_counts_lock);
+        cvect.inc_not_null(prev, cnt);
+    }
+    assert(cvect.in_sync());
+}
+
 
 /**
     This function turns each k-mer into an integer number and encodes it
@@ -268,7 +333,7 @@ void generate_k_mer_bvector(BV& bv,
 
     {
         typename BV::bulk_insert_iterator bit(bv);
-        vector_char_type::size_type dna_sz = seq_vect.size();
+        vector_char_type::size_type dna_sz = seq_vect.size()-(k_size-1);
         for (vector_char_type::size_type pos = 0; pos < dna_sz; ++pos)
         {
             bm::id64_t k_mer_code;
@@ -287,7 +352,7 @@ void generate_k_mer_bvector(BV& bv,
                 sort_unique(k_buf);
                 if (k_buf.size())
                 {
-                    bv.set(&k_buf[0], k_buf.size(), bm::BM_SORTED);
+                    bv.set(&k_buf[0], k_buf.size(), bm::BM_SORTED); // fast bulk set
                     k_buf.resize(0);
                     bv.optimize(); // periodically re-optimize to save memory
                 }
@@ -303,7 +368,7 @@ void generate_k_mer_bvector(BV& bv,
         if (k_buf.size()) // add last incomplete chunk here
         {
             sort_unique(k_buf);
-            bv.set(&k_buf[0], k_buf.size(), bm::BM_SORTED);
+            bv.set(&k_buf[0], k_buf.size(), bm::BM_SORTED); // fast bulk set
 
             cout << "Unique k-mers: " << k_buf.size() << endl;
         }
@@ -313,6 +378,172 @@ void generate_k_mer_bvector(BV& bv,
     cout << "\rValid k-mers:" << k_cnt << "                         " << endl;
 }
 
+/// k-mer counting algorithm using reference sequence,
+/// regenerates k-mer codes, sorts them and counts
+///
+inline
+void count_kmers(const vector_char_type& seq_vect,
+                 unsigned k_size,
+                 rsc_sparse_vector_u32& kmer_counts)
+{
+    const bm::id64_t chunk_size = 400000000;
+    if (seq_vect.empty())
+        return;
+    const char* dna_str = &seq_vect[0];
+    vector_char_type::size_type k_cnt = 0;
+    std::vector<bm::id64_t> k_buf;
+    k_buf.reserve(chunk_size);
+
+    vector_char_type::size_type dna_sz = seq_vect.size()-(k_size-1);
+    for (vector_char_type::size_type pos = 0; pos < dna_sz; ++pos)
+    {
+        bm::id64_t k_mer_code;
+        bool valid = get_kmer_code(dna_str, pos, k_size, k_mer_code);
+        if (!valid)
+            continue;
+
+        ++k_cnt;
+
+        // generated k-mer codes are accumulated in buffer for sorting
+        k_buf.push_back(k_mer_code);
+        if (k_buf.size() == chunk_size) // sorting point
+        {
+            sort_count(k_buf, kmer_counts);
+            k_buf.resize(0);
+
+            float pcnt = float(pos) / float(dna_sz);
+            pcnt *= 100;
+            cout << "\r" << unsigned(pcnt) << "% of " << dna_sz
+                 << " (" << (pos+1) <<")    "
+                 << flush;
+        }
+    } // for pos
+    sort_count(k_buf, kmer_counts);
+}
+
+template<typename BV>
+class SortCounting_JobFunctor
+{
+public:
+    typedef BV                                 bvector_type;
+    typedef typename bvector_type::size_type   size_type;
+
+    /// constructor
+    ///
+    SortCounting_JobFunctor(const vector_char_type& seq_vect,
+                            unsigned            k_size,
+                            size_type           from,
+                            size_type           to,
+                            rsc_sparse_vector_u32& kmer_counts)
+        : m_seq_vect(seq_vect), m_k_size(k_size), m_from(from), m_to(to),
+          m_kmer_counts(kmer_counts)
+    {}
+
+    SortCounting_JobFunctor(const SortCounting_JobFunctor& func)
+        : m_seq_vect(func.m_seq_vect), m_k_size(func.m_k_size),
+          m_from(func.m_from), m_to(func.m_to),
+          m_kmer_counts(func.m_kmer_counts)
+    {}
+
+    /// Main logic (functor)
+    void operator() ()
+    {
+        const bm::id64_t chunk_size = 10000000;
+        if (m_seq_vect.empty())
+            return;
+
+        const char* dna_str = &m_seq_vect[0];
+//        vector_char_type::size_type k_cnt = 0;
+        std::vector<bm::id64_t> k_buf;
+        k_buf.reserve(chunk_size);
+
+        static std::mutex   mtx_counts_lock;
+
+        vector_char_type::size_type dna_sz = m_seq_vect.size()-(m_k_size-1);
+        for (vector_char_type::size_type pos = 0; pos < dna_sz; ++pos)
+        {
+            bm::id64_t k_mer_code;
+            bool valid = get_kmer_code(dna_str, pos, m_k_size, k_mer_code);
+            if (!valid)
+                continue;
+            if (!(k_mer_code >= m_from && k_mer_code <= m_to))
+                continue;
+
+            // generated k-mer codes are accumulated in buffer for sorting
+            k_buf.push_back(k_mer_code);
+            if (k_buf.size() == chunk_size) // sorting point
+            {
+                sort_count(k_buf, m_kmer_counts, mtx_counts_lock);
+                k_buf.resize(0);
+            }
+        } // for pos
+        sort_count(k_buf, m_kmer_counts, mtx_counts_lock);
+    }
+
+private:
+    const vector_char_type&   m_seq_vect;
+    unsigned                  m_k_size;
+    size_type                 m_from;
+    size_type                 m_to;
+    rsc_sparse_vector_u32&    m_kmer_counts;
+};
+
+template<typename BV>
+void count_kmers_parallel(const BV& bv_kmers,
+                          const vector_char_type& seq_vect,
+                          rsc_sparse_vector_u32& kmer_counts,
+                          unsigned concurrency)
+{
+    typedef typename BV::size_type bv_size_type;
+    typedef std::vector<std::pair<bv_size_type, bv_size_type> > bv_ranges_vector;
+
+    bv_ranges_vector pair_vect;
+
+    bv_size_type cnt = bv_kmers.count();
+    bv_size_type split_rank = cnt / concurrency; // target population count per job
+
+    if (split_rank < concurrency || concurrency < 2)
+    {
+        count_kmers(seq_vect, ik_size, kmer_counts); // run single threaded
+        return;
+    }
+    // run split algorithm to determine equal weight ranges for parallel
+    // processing
+    bm::rank_range_split(bv_kmers, split_rank, pair_vect);
+
+    // Create parallel async tasks running on a range of source sequence
+    //
+    std::vector<std::future<void> > futures;
+    futures.reserve(concurrency);
+
+    for (size_t k = 0; k < pair_vect.size(); ++k)
+    {
+        futures.emplace_back(std::async(std::launch::async,
+            SortCounting_JobFunctor<BV>(seq_vect, ik_size,
+                                pair_vect[k].first,
+                                pair_vect[k].second,
+                                kmer_counts)));
+    } // for k
+    // wait for all jobs to finish, print progress report
+    //
+    for (auto& e : futures)
+    {
+        unsigned m = 0;
+        while(1)
+        {
+            std::future_status status = e.wait_for(std::chrono::seconds(60));
+            if (status == std::future_status::ready)
+                break;
+            cout << "\r" << ++m << " min" << flush;
+        } // while
+    } // for
+    cout << endl;
+
+}
+
+
+/// k-mer counting method using Bitap algorithm for occurence search
+///
 template<typename BV>
 void count_kmers(const BV& bv_kmers, rsc_sparse_vector_u32& kmer_counts)
 {
@@ -325,8 +556,15 @@ void count_kmers(const BV& bv_kmers, rsc_sparse_vector_u32& kmer_counts)
         translate_kmer(kmer_str, k_mer_code, ik_size); // translate k-mer code to string
 
         // find list of sequence positions where k-mer is found
-        //
-        //dna_scanner.Find(kmer_str, km_search);
+        // (uncomment if you need a full search)
+        /*
+        typename BV::size_type bv_count;
+        {
+            std::vector<typename BV::size_type> km_search;
+            dna_scanner.Find(kmer_str, km_search);
+            bv_count = km_search.size();
+        }
+        */
 
         typename BV::size_type count = dna_scanner.FindCount(kmer_str);
         assert(count);
@@ -339,7 +577,7 @@ void count_kmers(const BV& bv_kmers, rsc_sparse_vector_u32& kmer_counts)
 }
 
 /**
-    k-mer counting job functor class
+    k-mer counting job functor class using bm::aggregator<>
 
     Functor received its range of k-mers in the presence-absense
     bit-vector then follows it to run the search-counting algorithm
@@ -378,7 +616,8 @@ public:
         std::string kmer_str;
         size_type cnt = 0; // progress report counter
 
-        bvector_type bv_search_res;
+        static std::mutex   mtx_counts_lock;
+        bvector_type        bv_search_res;
 
         typename bvector_type::enumerator en = m_bv_kmers.get_enumerator(m_from);
         for ( ;en.valid(); ++en, ++cnt)
@@ -410,7 +649,6 @@ public:
             // to save the results
             // TODO: implement results buffering to avoid mutex overhead
             {
-                static std::mutex                  mtx_counts_lock;
                 std::lock_guard<std::mutex> guard(mtx_counts_lock);
                 m_kmer_counts.set(k_mer_code, unsigned(search_count));
                 assert(m_kmer_counts.in_sync());
@@ -501,7 +739,6 @@ void count_kmers_parallel(const BV& bv_kmers,
                 cout << " wait for " << remain_h << "h     " << flush;
             }
         } // while
-
     } // for
     cout << endl;
 
@@ -518,7 +755,10 @@ int main(int argc, char *argv[])
     {
         auto ret = parse_args(argc, argv);
         if (ret != 0)
+        {
+            cerr << "cmd-line parse error. " << endl;
             return ret;
+        }
 
         cout << "concurrency=" << parallel_jobs << endl;
 
@@ -560,25 +800,64 @@ int main(int argc, char *argv[])
             dna_scanner.BuildParallel(seq_vect, parallel_jobs);
         }
 
-
         if (seq_vect.size() && !ikd_counts_name.empty())
         {
-            cout << " Searching for k-mer counts..." << endl;
-            bm::chrono_taker tt1("5. k-mer counting", 1, &timing_map);
-
-            rsc_sparse_vector_u32  rsc_kmer_counts(bv_kmers); // rank-select sparse vectoror for counts
+            rsc_sparse_vector_u32  rsc_kmer_counts(bv_kmers); // rank-select sparse vector for counts
             rsc_kmer_counts.sync();
+            rsc_sparse_vector_u32  rsc_kmer_counts2(bv_kmers); // rank-select sparse vector for counts
+            rsc_kmer_counts2.sync();
 
-            count_kmers_parallel(bv_kmers, rsc_kmer_counts, parallel_jobs);
 
-            rsc_kmer_counts.optimize();
+            cout << " Searching for k-mer counts..." << endl;
 
-            int res = bm::file_save_svector(rsc_kmer_counts, ikd_counts_name);
-            if (res)
+            if (is_diag)
             {
-                cerr << "Error: Count vector save failed!" << endl;
-                exit(1);
+                cout << " ... using bm::aggregator<>" << endl;
+                bm::chrono_taker tt1("5a. k-mer counting (bm::aggregator<>)", 1, &timing_map);
+
+                count_kmers_parallel(bv_kmers, rsc_kmer_counts, parallel_jobs);
+                //count_kmers(bv_kmers, rsc_kmer_counts);
+
+                rsc_kmer_counts.optimize();
             }
+
+            {
+                cout << " ... using std::sort() and count" << endl;
+                bm::chrono_taker tt1("5. k-mer counting std::sort()", 1, &timing_map);
+
+                //count_kmers(seq_vect, ik_size, rsc_kmer_counts2);
+                count_kmers_parallel(bv_kmers, seq_vect,
+                                     rsc_kmer_counts2, parallel_jobs);
+
+                rsc_kmer_counts2.optimize();
+
+                int res = bm::file_save_svector(rsc_kmer_counts2, ikd_counts_name);
+                if (res)
+                {
+                    cerr << "Error: Count vector save failed!" << endl;
+                    exit(1);
+                }
+
+                if (is_diag) // verification
+                {
+                    bool eq = rsc_kmer_counts.equal(rsc_kmer_counts2);
+                    if(!eq)
+                    {
+                        rsc_sparse_vector_u32::size_type idx;
+                        bool found = bm::sparse_vector_find_first_mismatch(rsc_kmer_counts,
+                                                              rsc_kmer_counts2,
+                                                              idx);
+                        auto v1 = rsc_kmer_counts.get(idx);
+                        auto v2 = rsc_kmer_counts2.get(idx);
+                        cerr << "Mismatch at idx=" << idx << " v1=" << v1 << " v2=" << v2 << endl;
+                        assert(found); (void)found;
+                        assert(eq);
+                        cerr << "Integrity check failed!" << endl;
+                        exit(1);
+                    }
+                }
+            }
+
         }
 
 
