@@ -26919,6 +26919,73 @@ void TestCompressSparseVector()
     }
 
 
+    cout << "inc() and merge_not_null() tests" << endl;
+    {
+        rsc_sparse_vector_u32::bvector_type bv { 1, 2, 10, 200, bm::id_max/2, bm::id_max-1 };
+        rsc_sparse_vector_u32 csv1(bv);
+        rsc_sparse_vector_u32 csv2(bv);
+
+        csv1.sync(); csv2.sync();
+
+        csv1.inc(1);
+        csv1.inc(2, 10);
+
+        csv2.set(200, 7);
+        csv2.inc(bm::id_max/2);
+        csv2.inc(bm::id_max/2, 1);
+        csv2.inc(bm::id_max-1, 255);
+
+        csv1.merge_not_null(csv2);
+
+        assert(csv1.in_sync());
+
+        assert(csv1.get(1) == 1);
+        assert(csv1.get(2) == 10);
+        assert(csv1.get(200) == 7);
+        assert(csv1.get(bm::id_max/2) == 2);
+        assert(csv1.get(bm::id_max-1) == 255);
+    }
+
+    {
+        rsc_sparse_vector_u32::bvector_type bv;
+        bv.set_range(1, 65536*2);
+
+        for (unsigned i = 1; i < 65536*2; ++i)
+        {
+            rsc_sparse_vector_u32 csv1(bv);
+            rsc_sparse_vector_u32 csv2(bv);
+            csv1.sync(); csv2.sync();
+
+            for (unsigned i0 = 1; i0 < i; ++i0)
+            {
+                csv1.set(i0, i0);
+                csv1.inc(i0, i0);
+            }
+            for (unsigned i1 = i+1; i1 < 65536*2; ++i1)
+            {
+                csv2.set(i1, i1);
+                csv2.inc(i1, i1);
+            }
+            csv1.merge_not_null(csv2);
+            assert(csv1.in_sync());
+
+            for (unsigned i0 = 1; i0 < i; ++i0)
+            {
+                assert(csv1.get(i0) == i0*2);
+            }
+            for (unsigned i1 = i+1; i1 < 65536*2; ++i1)
+            {
+                assert(csv1.get(i1) == i1*2);
+            }
+            assert(csv1.get(i) == 0);
+
+            if (i % 100 == 0)
+                cout << "\r" << i << flush;
+
+        } // for
+        cout << endl;
+    }
+
     cout << "random assignmnet in sync() mode...." << endl;
     {
         bvect bv { 10, 20, 100, 200, bm::id_max/2, bm::id_max-1 };
@@ -27976,7 +28043,7 @@ int main(int argc, char *argv[])
 
     if (is_all || is_csv)
     {
-//        TestCompressSparseVector();
+        TestCompressSparseVector();
 
         TestCompressedSparseVectorAlgo();
 
