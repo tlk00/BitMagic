@@ -111,7 +111,8 @@ INPUT                  = ./src/bm.h ./src/bmfunc.h  ./src/bmsimd.h ./src/bmxor.h
 ./samples/svsample09/svsample09.cpp \
 ./samples/rscsample01/rscsample01.cpp \
 ./samples/rscsample02/rscsample02.cpp \
-./samples/rscsample03/rscsample03.cpp 
+./samples/rscsample03/rscsample03.cpp \
+./samples/rscsample04/rscsample04.cpp 
 
 FILE_PATTERNS          = *.cpp \
                          *.h
