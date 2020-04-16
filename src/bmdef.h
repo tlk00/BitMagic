@@ -408,7 +408,8 @@ For more information please visit:  http://bitmagic.io
 #ifndef __has_attribute
 #  define __has_attribute(x) 0
 #endif
-#if __has_cpp_attribute(fallthrough)
+#if __has_cpp_attribute(fallthrough)  &&  \
+    (!defined(__clang__)  ||  __clang_major__ > 7  ||  __cplusplus >= 201703L)
 #  define BM_FALLTHROUGH [[fallthrough]]
 #elif __has_cpp_attribute(gcc::fallthrough)
 #  define BM_FALLTHROUGH [[gcc::fallthrough]]
