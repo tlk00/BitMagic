@@ -112,6 +112,28 @@ int load_FASTA(const std::string& fname, vector_char_type& seq_vect)
     return 0;
 }
 
+inline
+bool get_DNA_code(char bp, bm::id64_t& dna_code)
+{
+    switch (bp)
+    {
+    case 'A':
+        dna_code = 0; // 00
+        break;
+    case 'T':
+        dna_code = 1; // 01
+        break;
+    case 'G':
+        dna_code = 2; // 10
+        break;
+    case 'C':
+        dna_code = 3; // 11
+        break;
+    default: // ambiguity codes are ignored (for simplicity)
+        return false;
+    }
+    return true;
+}
 
 /// Calculate k-mer as an unsigned long integer
 ///
@@ -132,24 +154,9 @@ bool get_kmer_code(const char* dna,
     {
         char bp = dna[i];
         bm::id64_t dna_code;
-        switch (bp)
-        {
-        case 'A':
-            dna_code = 0; // 00
-            break;
-        case 'T':
-            dna_code = 1; // 01
-            break;
-        case 'G':
-            dna_code = 2; // 10
-            break;
-        case 'C':
-            dna_code = 3; // 11
-            break;
-        default: // ambiguity codes are ignored (for simplicity)
+        bool valid = get_DNA_code(bp, dna_code);
+        if (!valid)
             return false;
-        }
-
         k_acc |= (dna_code << shift); // accumulate new code within 64-bit accum
         shift += 2; // each DNA base pair needs 2-bits to store
     } // for i
@@ -290,43 +297,77 @@ void generate_k_mer_bvector(BV& bv,
         return;
     const char* dna_str = &seq_vect[0];
 
-    vector_char_type::size_type k_cnt = 0;
     std::vector<bm::id64_t> k_buf;
     k_buf.reserve(chunk_size);
 
     {
-        typename BV::bulk_insert_iterator bit(bv);
+        bm::id64_t k_mer_code;
         vector_char_type::size_type dna_sz = seq_vect.size()-(k_size-1);
-        for (vector_char_type::size_type pos = 0; pos < dna_sz; ++pos)
+        vector_char_type::size_type pos = 0;
+        bool valid = false;
+        for (; pos < dna_sz; ++pos)
         {
-            bm::id64_t k_mer_code;
-            bool valid = get_kmer_code(dna_str, pos, k_size, k_mer_code);
-            if (!valid)
-                continue;
-            ++k_cnt;
-
-            if (check)
-                validate_k_mer(dna_str, pos, k_size, k_mer_code);
-
-            // generated k-mer codes are accumulated in buffer for sorting
-            k_buf.push_back(k_mer_code);
-            if (k_buf.size() == chunk_size) // soring point
+            valid = get_kmer_code(dna_str, pos, k_size, k_mer_code);
+            if (valid)
             {
-                sort_unique(k_buf);
-                if (k_buf.size())
-                {
-                    bv.set(&k_buf[0], k_buf.size(), bm::BM_SORTED); // fast bulk set
-                    k_buf.resize(0);
-                    bv.optimize(); // periodically re-optimize to save memory
-                }
-
-                float pcnt = float(pos) / float(dna_sz);
-                pcnt *= 100;
-                cout << "\r" << unsigned(pcnt) << "% of " << dna_sz
-                     << " (" << (pos+1) <<")    "
-                     << flush;
+                k_buf.push_back(k_mer_code);
+                break;
             }
         } // for pos
+
+        const unsigned k_shift = (k_size-1) * 2;
+        if (valid)
+        {
+            for (++pos; pos < dna_sz; ++pos)
+            {
+                bm::id64_t bp_code;
+                valid = get_DNA_code(dna_str[pos + (k_size - 1)],  bp_code);
+                if (!valid)
+                {
+                    pos += k_size; // wind fwrd to the next BP char
+                    for (; pos < dna_sz; ++pos) // search for the next valid k-mer
+                    {
+                        valid = get_kmer_code(dna_str, pos, k_size, k_mer_code);
+                        if (valid)
+                        {
+                            k_buf.push_back(k_mer_code);
+                            break;
+                        }
+                    }
+                    continue;
+                }
+                // shift out the previous base pair code, OR the new arrival
+                k_mer_code = ((k_mer_code >> 2) | (bp_code << k_shift));
+                // generated k-mer codes are accumulated in buffer for sorting
+                k_buf.push_back(k_mer_code);
+
+                if (check)
+                {
+                    validate_k_mer(dna_str, pos, k_size, k_mer_code);
+                    bm::id64_t k_check;
+                    valid = get_kmer_code(dna_str, pos, k_size, k_check);
+                    assert(valid);
+                    assert(k_check == k_mer_code);
+                }
+
+                if (k_buf.size() == chunk_size) // soring check.point
+                {
+                    sort_unique(k_buf);
+                    if (k_buf.size())
+                    {
+                        bv.set(&k_buf[0], k_buf.size(), bm::BM_SORTED); // fast bulk set
+                        k_buf.resize(0);
+                        bv.optimize(); // periodically re-optimize to save memory
+                    }
+
+                    float pcnt = float(pos) / float(dna_sz);
+                    pcnt *= 100;
+                    cout << "\r" << unsigned(pcnt) << "% of " << dna_sz
+                         << " (" << (pos+1) <<")    "
+                         << flush;
+                }
+            } // for pos
+        }
 
         if (k_buf.size()) // add last incomplete chunk here
         {
@@ -335,10 +376,8 @@ void generate_k_mer_bvector(BV& bv,
 
             cout << "Unique k-mers: " << k_buf.size() << endl;
         }
-        bit.flush();
     }
     bv.optimize();
-    cout << "\rValid k-mers:" << k_cnt << "                         " << endl;
 }
 
 /// k-mer counting algorithm using reference sequence,
@@ -353,34 +392,62 @@ void count_kmers(const vector_char_type& seq_vect,
     if (seq_vect.empty())
         return;
     const char* dna_str = &seq_vect[0];
-    vector_char_type::size_type k_cnt = 0;
     std::vector<bm::id64_t> k_buf;
     k_buf.reserve(chunk_size);
 
+    bm::id64_t k_mer_code;
     vector_char_type::size_type dna_sz = seq_vect.size()-(k_size-1);
-    for (vector_char_type::size_type pos = 0; pos < dna_sz; ++pos)
+    vector_char_type::size_type pos = 0;
+    bool valid = false;
+    for (; pos < dna_sz; ++pos)
     {
-        bm::id64_t k_mer_code;
-        bool valid = get_kmer_code(dna_str, pos, k_size, k_mer_code);
-        if (!valid)
-            continue;
-
-        ++k_cnt;
-
-        // generated k-mer codes are accumulated in buffer for sorting
-        k_buf.push_back(k_mer_code);
-        if (k_buf.size() == chunk_size) // sorting point
+        valid = get_kmer_code(dna_str, pos, k_size, k_mer_code);
+        if (valid)
         {
-            sort_count(k_buf, kmer_counts);
-            k_buf.resize(0);
-
-            float pcnt = float(pos) / float(dna_sz);
-            pcnt *= 100;
-            cout << "\r" << unsigned(pcnt) << "% of " << dna_sz
-                 << " (" << (pos+1) <<")    "
-                 << flush;
+            k_buf.push_back(k_mer_code);
+            break;
         }
     } // for pos
+    const unsigned k_shift = (k_size-1) * 2;
+    if (valid)
+    {
+        for (++pos; pos < dna_sz; ++pos)
+        {
+            bm::id64_t bp_code;
+            valid = get_DNA_code(dna_str[pos + (k_size - 1)],  bp_code);
+            if (!valid)
+            {
+                pos += k_size; // wind fwrd to the next BP char
+                for (; pos < dna_sz; ++pos) // search for the next valid k-mer
+                {
+                    valid = get_kmer_code(dna_str, pos, k_size, k_mer_code);
+                    if (valid)
+                    {
+                        k_buf.push_back(k_mer_code);
+                        break;
+                    }
+                }
+                continue;
+            }
+            // shift out the previous base pair code, OR the new arrival
+            k_mer_code = ((k_mer_code >> 2) | (bp_code << k_shift));
+            // generated k-mer codes are accumulated in buffer for sorting
+            k_buf.push_back(k_mer_code);
+
+            if (k_buf.size() == chunk_size) // sorting point
+            {
+                sort_count(k_buf, kmer_counts);
+                k_buf.resize(0);
+
+                float pcnt = float(pos) / float(dna_sz);
+                pcnt *= 100;
+                cout << "\r" << unsigned(pcnt) << "% of " << dna_sz
+                     << " (" << (pos+1) <<")    "
+                     << flush;
+            }
+
+        } // for pos
+    }
     sort_count(k_buf, kmer_counts);
 }
 
@@ -415,7 +482,7 @@ public:
         rsc_sparse_vector_u32 kmer_counts_part(*bv_null);
         kmer_counts_part.sync();
 
-        const bm::id64_t chunk_size = 10000000;
+        const bm::id64_t chunk_size = 2000000;
         if (m_seq_vect.empty())
             return;
 
@@ -423,23 +490,60 @@ public:
         std::vector<bm::id64_t> k_buf;
         k_buf.reserve(chunk_size);
 
-        const auto from = m_from;
-        const auto to = m_to;
+        const auto k_size = m_k_size;
+
+        bm::id64_t k_mer_code;
         vector_char_type::size_type dna_sz = m_seq_vect.size()-(m_k_size-1);
-        for (vector_char_type::size_type pos = 0; pos < dna_sz; ++pos)
+        vector_char_type::size_type pos = 0;
+        bool valid = false;
+        for (; pos < dna_sz; ++pos)
         {
-            bm::id64_t k_mer_code;
-            bool valid = get_kmer_code(dna_str, pos, m_k_size, k_mer_code);
-            if ((!valid) || !(k_mer_code >= from && k_mer_code <= to))
-                continue;
-            // generated k-mer codes are accumulated in buffer for sorting
-            k_buf.push_back(k_mer_code);
-            if (k_buf.size() == chunk_size) // sorting point
+            valid = get_kmer_code(dna_str, pos, k_size, k_mer_code);
+            if (valid)
             {
-                sort_count(k_buf, kmer_counts_part);
-                k_buf.resize(0);
+                if (k_mer_code >= m_from && k_mer_code <= m_to)
+                    k_buf.push_back(k_mer_code);
+                break;
             }
         } // for pos
+
+        const unsigned k_shift = (k_size-1) * 2;
+        if (valid)
+        {
+            for (++pos; pos < dna_sz; ++pos)
+            {
+                bm::id64_t bp_code;
+                valid = get_DNA_code(dna_str[pos + (k_size - 1)],  bp_code);
+                if (!valid)
+                {
+                    pos += k_size; // wind fwrd to the next BP char
+                    for (; pos < dna_sz; ++pos) // search for the next valid k-mer
+                    {
+                        valid = get_kmer_code(dna_str, pos, k_size, k_mer_code);
+                        if (valid)
+                        {
+                            if (k_mer_code >= m_from && k_mer_code <= m_to)
+                                k_buf.push_back(k_mer_code);
+                            break;
+                        }
+                    }
+                    continue;
+                }
+                // shift out the previous base pair code, OR the new arrival
+                k_mer_code = ((k_mer_code >> 2) | (bp_code << k_shift));
+                // generated k-mer codes are accumulated in buffer for sorting
+                if (k_mer_code >= m_from && k_mer_code <= m_to)
+                {
+                    k_buf.push_back(k_mer_code);
+                    if (k_buf.size() == chunk_size) // sorting point
+                    {
+                        sort_count(k_buf, kmer_counts_part);
+                        k_buf.resize(0);
+                    }
+                }
+            } // for pos
+        }
+
         sort_count(k_buf, kmer_counts_part);
 
         // merge results
