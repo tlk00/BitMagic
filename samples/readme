@@ -81,7 +81,8 @@ String sparse vector (bit-transposed sparse vector) for ASCII(z) strings
 
 
 
-More complex examples to illustrate mixed techniques and use cases
+More complex examples to illustrate mixed techniques and use cases:
+
 
 ./xsample01 - advanced: different methods of handling of super sparse sets. Benchmarks of set operations for each method. 
                Details at: http://bitmagic.io/case-ER-join.html
@@ -106,6 +107,13 @@ More complex examples to illustrate mixed techniques and use cases
               sparse_vector<> and use of bm::sparse_vector_find_first_mismatch()
               to create comparison function. Benchmarks for variants of mismatch search and comparison.
               http://bitmagic.io/dna-compare.html
+
+./xsample07 - DNA k-mer counting example for short (K < 24 ) k-mers.
+              Example generates k-mer codes, stores it with 64-bit bvector and computes frequency for each k-mer 
+              for term-frequency analysis (TF/IDF). Illustrates use of bvector<>, succinct rsc_sparse_vector<> and
+              search scanner for succinct vector. Example shows multi-threading techniques, map-reduce like techniques 
+	      when using BitMagic containers.
+              
 
 ./xsample08 - Example on how to build data model for Genomics Viewer using bit-intervals and succinct
               vectors. Example illustrates a toy rendering with ASCII art and data model range slicing.
