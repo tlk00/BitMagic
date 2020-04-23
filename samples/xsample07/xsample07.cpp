@@ -31,6 +31,7 @@ For more information please visit:  http://bitmagic.io
 
 #include <iostream>
 #include <vector>
+#include <map>
 #include <algorithm>
 #include <utility>
 
@@ -39,7 +40,6 @@ For more information please visit:  http://bitmagic.io
 #include <mutex>
 #include <atomic>
 
-//#include "bm.h"
 #include "bm64.h"  // use 48-bit vectors
 #include "bmalgo.h"
 #include "bmserial.h"
@@ -63,11 +63,15 @@ using namespace std;
 std::string  ifa_name;
 std::string  ikd_name;
 std::string  ikd_counts_name;
+std::string  kh_name;
+std::string  ikd_rep_name;
+std::string  ikd_freq_name;
 bool         is_diag = false;
 bool         is_timing = false;
 bool         is_bench = false;
 unsigned     ik_size = 8;
 unsigned     parallel_jobs = 4;
+unsigned     f_percent = 5; // percent of k-mers we try to clear as over-represented
 
 #include "cmd_args.h"
 
@@ -79,16 +83,17 @@ typedef std::vector<char>                             vector_char_type;
 typedef DNA_FingerprintScanner<bm::bvector<> >        dna_scanner_type;
 typedef bm::sparse_vector<unsigned, bm::bvector<> >   sparse_vector_u32;
 typedef bm::rsc_sparse_vector<unsigned, sparse_vector_u32 > rsc_sparse_vector_u32;
+typedef std::map<unsigned, unsigned>                  histogram_map_u32;
 
 
-// Globals
+// Global vars
 //
 bm::chrono_taker::duration_map_type     timing_map;
 dna_scanner_type                        dna_scanner;
 std::atomic_ullong                      k_mer_progress_count(0);
 
 
-/// really simple FASTA file parser
+/// really simple FASTA parser (one entry per file)
 ///
 static
 int load_FASTA(const std::string& fname, vector_char_type& seq_vect)
@@ -183,17 +188,17 @@ char int2DNA(unsigned code)
 /// @param k_mer  - k-mer code
 /// @param k_size -
 inline
-void translate_kmer(std::string& dna, bm::id64_t k_mer, unsigned k_size)
+void translate_kmer(std::string& dna, bm::id64_t kmer_code, unsigned k_size)
 {
     dna.resize(k_size);
     for (size_t i = 0; i < k_size; ++i)
     {
-        unsigned dna_code = unsigned(k_mer & 3);
+        unsigned dna_code = unsigned(kmer_code & 3);
         char bp = int2DNA(dna_code);
         dna[i] = bp;
-        k_mer >>= 2;
+        kmer_code >>= 2;
     } // for i
-    assert(!k_mer);
+    assert(!kmer_code);
 }
 
 
@@ -451,6 +456,8 @@ void count_kmers(const vector_char_type& seq_vect,
     sort_count(k_buf, kmer_counts);
 }
 
+/// Functor to process job batch (task)
+///
 template<typename BV>
 class SortCounting_JobFunctor
 {
@@ -562,6 +569,8 @@ private:
     rsc_sparse_vector_u32&    m_kmer_counts;
 };
 
+/// MT k-mer counting
+///
 template<typename BV>
 void count_kmers_parallel(const BV& bv_kmers,
                           const vector_char_type& seq_vect,
@@ -819,6 +828,118 @@ void count_kmers_parallel(const BV& bv_kmers,
 }
 
 
+/// Compute a map of how often each k-mer freaquency is observed in the
+/// k-mer counts vector
+/// @param hmap - [out] histogram map
+/// @param kmer_counts - [in] kmer counts vector
+///
+static
+void compute_kmer_histogram(histogram_map_u32& hmap,
+                            const rsc_sparse_vector_u32& kmer_counts)
+{
+    const rsc_sparse_vector_u32::bvector_type* bv_null =
+                                    kmer_counts.get_null_bvector();
+    auto en = bv_null->first();
+    for (; en.valid(); ++en)
+    {
+        auto kmer_code = *en;
+        auto kmer_count = kmer_counts.get(kmer_code);
+        auto mit = hmap.find(kmer_count);
+        if (mit == hmap.end())
+            hmap[kmer_count] = 1;
+        else
+            mit->second++;
+    } // for
+}
+
+/// Save TSV report of k-mer frequences
+/// (reverse sorted, most frequent k-mers first)
+///
+void report_hmap(const string& fname, const histogram_map_u32& hmap)
+{
+    ofstream outf;
+    outf.open(fname, ios::out | ios::trunc );
+
+    outf << "kmer count \t number of kmers\n";
+
+    auto it = hmap.rbegin();
+    auto it_end = hmap.rend();
+    for (; it != it_end; ++it)
+    {
+        outf << it->first << "\t" << it->second << endl;
+    }
+}
+
+/// Create vector, representing frequent subset of k-mers
+///
+/// @param frequent_bv[out] - bit-vector of frequent k-mers (subset of all k-mers)
+/// @param hmap - histogram map of all k-mers
+/// @param kmer_counts - kmer frequency(counts) vector
+/// @param percent - percent of frequent k-mers to build a subset (5%)
+///   percent here is of total number of k-mers (not percent of all occurences)
+/// @param k_size - K mer size
+///
+template<typename BV>
+void compute_frequent_kmers(BV& frequent_bv,
+                            const histogram_map_u32& hmap,
+                            const rsc_sparse_vector_u32& kmer_counts,
+                            unsigned percent,
+                            unsigned k_size)
+{
+    (void)k_size;
+    frequent_bv.clear();
+
+    if (!percent)
+        return;
+
+    // scanner class for fast search for values in sparse vector
+    bm::sparse_vector_scanner<rsc_sparse_vector_u32> scanner;
+    BV bv_found;  // search results vector
+
+    const rsc_sparse_vector_u32::bvector_type* bv_null =
+                                    kmer_counts.get_null_bvector();
+
+    auto total_kmers = bv_null->count();
+    bm::id64_t target_f_count = (total_kmers * percent) / 100; // how many frequent k-mers we need to pick
+
+    auto it = hmap.rbegin();
+    auto it_end = hmap.rend();
+    for (; it != it_end; ++it)
+    {
+        auto kmer_count = it->first;
+
+        scanner.find_eq(kmer_counts, kmer_count, bv_found); // seach for all values == 25
+        auto found_cnt = bv_found.count();
+
+        assert(found_cnt);
+        {
+            bm::bvector<>::enumerator en = bv_found.first();
+            for (; en.valid(); ++en)
+            {
+                auto kmer_code = *en;
+                unsigned k_count = kmer_counts.get(kmer_code);
+
+                if (k_count == 1) // unique k-mer, ignore
+                    continue;
+
+                if (it->second == 1)
+                {
+                    assert(k_count ==  kmer_count);
+                }
+                frequent_bv.set(kmer_code);
+                if (kmer_count >= target_f_count)
+                {
+                    frequent_bv.optimize();
+                    return;
+                }
+                target_f_count -= 1;
+
+            } // for en
+        }
+    } // for it
+    frequent_bv.optimize();
+}
+
 
 int main(int argc, char *argv[])
 {
@@ -838,6 +959,8 @@ int main(int argc, char *argv[])
 
         if (!ifa_name.empty()) // FASTA file load
         {
+            // limitation: loads a single molecule only
+            //
             auto res = load_FASTA(ifa_name, seq_vect);
             if (res != 0)
                 return res;
@@ -874,17 +997,18 @@ int main(int argc, char *argv[])
             dna_scanner.BuildParallel(seq_vect, parallel_jobs);
         }
 
-        if (seq_vect.size() && !ikd_counts_name.empty())
+        if (seq_vect.size() &&
+           (!ikd_counts_name.empty() || !ikd_rep_name.empty()))
         {
             rsc_sparse_vector_u32  rsc_kmer_counts(bv_kmers); // rank-select sparse vector for counts
             rsc_kmer_counts.sync();
-            rsc_sparse_vector_u32  rsc_kmer_counts2(bv_kmers); // rank-select sparse vector for counts
+            rsc_sparse_vector_u32  rsc_kmer_counts2(bv_kmers);
             rsc_kmer_counts2.sync();
 
 
             cout << " Searching for k-mer counts..." << endl;
 
-            if (is_diag)
+            if (is_diag) // compute reference counts using slower algorithm for verification
             {
                 cout << " ... using bm::aggregator<>" << endl;
                 bm::chrono_taker tt1("5a. k-mer counting (bm::aggregator<>)", 1, &timing_map);
@@ -899,17 +1023,19 @@ int main(int argc, char *argv[])
                 cout << " ... using std::sort() and count" << endl;
                 bm::chrono_taker tt1("5. k-mer counting std::sort()", 1, &timing_map);
 
-                //count_kmers(seq_vect, ik_size, rsc_kmer_counts2);
                 count_kmers_parallel(bv_kmers, seq_vect,
                                      rsc_kmer_counts2, parallel_jobs);
 
                 rsc_kmer_counts2.optimize();
 
-                int res = bm::file_save_svector(rsc_kmer_counts2, ikd_counts_name);
-                if (res)
+                if (!ikd_counts_name.empty())
                 {
-                    cerr << "Error: Count vector save failed!" << endl;
-                    exit(1);
+                    int res = bm::file_save_svector(rsc_kmer_counts2, ikd_counts_name);
+                    if (res)
+                    {
+                        cerr << "Error: Count vector save failed!" << endl;
+                        exit(1);
+                    }
                 }
 
                 if (is_diag) // verification
@@ -932,8 +1058,45 @@ int main(int argc, char *argv[])
                 }
             }
 
-        }
+            // build histogram of k-mer counts
+            // as a map of kmer_count -> number of occurences of k-mer
+            //
 
+            histogram_map_u32 hmap;
+            {
+                bm::chrono_taker tt1("6. build histogram of k-mer frequencies", 1, &timing_map);
+                compute_kmer_histogram(hmap, rsc_kmer_counts2);
+            }
+            if (!kh_name.empty())
+            {
+                report_hmap(kh_name, hmap);
+            }
+
+            // here we build a build-vector of frequent (say top 5%) k-mers
+            // (if needed we can exclude it because they likely represent repeats
+            //
+            bm::bvector<> bv_freq(bm::BM_GAP);
+            {
+                bm::chrono_taker tt1("7. Build vector of frequent k-mers", 1, &timing_map);
+                compute_frequent_kmers(bv_freq, hmap, rsc_kmer_counts2, 5, ik_size);
+            }
+            if (!ikd_freq_name.empty())
+            {
+                bm::SaveBVector(ikd_freq_name.c_str(), bv_freq);
+            }
+
+            cout << "Found frequent k-mers: " << bv_freq.count() << endl;
+
+            if (!ikd_rep_name.empty())
+            {
+                // exclude frequent k-mers (logical SUBtraction)
+                //
+                bv_kmers.bit_sub(bv_freq);
+                bv_kmers.optimize();
+
+                bm::SaveBVector(ikd_rep_name.c_str(), bv_kmers);
+            }
+        }
 
         if (is_timing)
         {

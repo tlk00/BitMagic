@@ -1,6 +1,10 @@
 Example on how to build (short) k-mers for DNA sequences,
-translate into a k-mer presence-absence bit-vector
-and run k-mer counting algorithm using DNA binary fingerprints (Bitap algorithm).
+translate into a k-mer presence-absence bit-vector and run k-mer counting algorithms.
+K-mer counts (Term Frequency vector) can be saved to disk as succinct/compressed BLOB.
+
+Based on TF vector example can compute top N percent of highly represented k-mers
+which are most likely parts of repeats
+
 
 
 How to get test data:
@@ -50,3 +54,7 @@ Generate k-mer fingerprint (4 threads):
 
 Generate k-mer fingerprint and count all k-mers (8threads):
 >./xsample07_avx2 -kd test10.kd -kdc test10.kdc -fa NC_000001.11.fa -k 10  -t -j 8
+
+Generate k-mer fingerprint and count all k-mers and compute frequent k-mer vector for top 10% of all k-mers.
+k-mer frequency histogram is reported to a file (hmap.tsv) :
+>./xsample07_avx2 -kd test.kd -kdf test.kdf -kdc test.kdc  -fa NC_000001.11.fa -k 16  -t -j 4 -kh hmap.tsv -fpc 10

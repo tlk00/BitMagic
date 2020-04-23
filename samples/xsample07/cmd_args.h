@@ -9,8 +9,12 @@ void show_help()
         << "-fa   file-name            -- input FASTA file" << std::endl
         << "-k    size                 -- k-mer size (4,8,16,..24) " << std::endl
         << "-kd   file-name            -- k-mer dictionary file (output)"  << std::endl
+        << "-kdf  file-name            -- k-mer dictionary for frequent k-mers (see -fpc)" << std::endl
+        << "-kdr  file-name            -- k-mer dictionary clean from frequent(over-represented) k-mers" << std::endl
+        << "-fpc  <int>                -- frequent k-mers to exclude (see -kdr) percents " << std::endl
         << "-kdc  file-name            -- k-mer counts file (output)" << std::endl
         << "-j    number-of-threads    -- number of parallel jobs to run" << std::endl
+        << "-kh   file-name            -- k-mer counts distibution histogram (TSV)" << std::endl
         << "-diag                      -- run diagnostics"  << std::endl
         << "-timing                    -- collect timings"  << std::endl
       ;
@@ -69,6 +73,47 @@ int parse_args(int argc, char *argv[])
             }
             continue;
         }
+        if (arg == "-kdr" || arg == "--kdr")
+        {
+            if (i + 1 < argc)
+            {
+                ikd_rep_name = argv[++i];
+            }
+            else
+            {
+                std::cerr << "Error: -kdr requires file name" << std::endl;
+                return 1;
+            }
+            continue;
+        }
+        if (arg == "-kdf" || arg == "--kdf")
+        {
+            if (i + 1 < argc)
+            {
+                ikd_freq_name = argv[++i];
+            }
+            else
+            {
+                std::cerr << "Error: -kdf requires file name" << std::endl;
+                return 1;
+            }
+            continue;
+        }
+
+        if (arg == "-kh" || arg == "--kh")
+        {
+            if (i + 1 < argc)
+            {
+                kh_name = argv[++i];
+            }
+            else
+            {
+                std::cerr << "Error: -kh requires file name" << std::endl;
+                return 1;
+            }
+            continue;
+        }
+
         if (arg == "-k" || arg == "--k")
         {
             if (i + 1 < argc)
@@ -97,6 +142,27 @@ int parse_args(int argc, char *argv[])
             }
             continue;
         }
+
+        if (arg == "-fpc" || arg == "--fpc")
+        {
+            if (i + 1 < argc)
+            {
+                f_percent = unsigned(::atoi(argv[++i]));
+                if (f_percent == 0 || f_percent >= 100)
+                {
+                    std::cerr << "WARNING: -fpc value incorrect " << f_percent;
+                    f_percent = 5;
+                    std::cerr << " assumed as " << f_percent << endl;
+                }
+            }
+            else
+            {
+                std::cerr << "Error: -fpc requires integer " << std::endl;
+                return 1;
+            }
+            continue;
+        }
+
         if (arg == "-j" || arg == "--j")
         {
             if (i + 1 < argc)

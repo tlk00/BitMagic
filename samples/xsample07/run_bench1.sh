@@ -3,13 +3,13 @@
 # Script for sample benchmarking
 #
 
-THREADS=4
+THREADS=3
 K_MIN=7
-K_MAX=8
+K_MAX=18
 
-SIMD=
-SIMD=_sse42
-#SIMD=_avx2
+#SIMD=
+#SIMD=_sse42
+SIMD=_avx2
 for ((K = $K_MIN ; K <= K_MAX ; K++));
 do
   echo "----------------------------------------------------------------- $K"
