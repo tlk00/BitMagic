@@ -100,6 +100,7 @@ public:
 
     CSequenceColl()
     {}
+    CSequenceColl(const CSequenceColl&) = delete;
 
     void add_sequence(const string& acc, vector_char_type* seq_ptr)
     {
@@ -130,6 +131,16 @@ public:
     const string& get_acc(size_t i) const { return m_acc[i]; }
     const vector_char_type& get_sequence(size_t i) const { return *(m_seqs[i]); }
 
+    size_t seq_size(size_t i) const { return m_seqs[i]->size(); }
+
+    size_t total_seq_size() const
+    {
+        size_t sum = 0;
+        for (size_t i = 0; i < m_seqs.size(); ++i)
+            sum += seq_size(i);
+        return sum;
+    }
+
 
 private:
     vector<unique_ptr<vector_char_type> > m_seqs;
@@ -156,7 +167,6 @@ int load_FASTA(const std::string& fname, CSequenceColl& seq_coll)
         {
             if (!acc.empty())
             {
-//                cout << "\r" << acc <<  "     ";
                 seq_vect->shrink_to_fit();
                 seq_coll.add_sequence(acc, seq_vect.release());
                 acc.resize(0);
@@ -318,6 +328,7 @@ void generate_k_mer_bvector(BV& bv,
     const char* dna_str = &seq_vect[0];
 
     k_buf.reserve(chunk_size);
+    k_buf.resize(0);
 
     {
         bm::id64_t k_mer_code;
@@ -383,11 +394,8 @@ void generate_k_mer_bvector(BV& bv,
         {
             sort_unique(k_buf);
             bv.set(&k_buf[0], k_buf.size(), bm::BM_SORTED); // fast bulk set
-
-            //cout << "Unique k-mers: " << k_buf.size() << endl;
         }
     }
-    bv.optimize();
 }
 
 std::atomic_ullong                      k_mer_progress_count(0);
@@ -401,6 +409,7 @@ void generate_k_mers(CSequenceColl& seq_coll, unsigned k_size,
         return;
 
     std::vector<bm::id64_t> k_buf; // sort buffer
+    BM_DECLARE_TEMP_BLOCK(tb)
 
     CSequenceColl::buffer_type buf;
     typedef bm::bvector<>::allocator_type        allocator_type;
@@ -418,10 +427,11 @@ void generate_k_mers(CSequenceColl& seq_coll, unsigned k_size,
         const vector_char_type& seq_vect = seq_coll.get_sequence(i);
         generate_k_mer_bvector(bv, seq_vect, k_size, k_buf);
 
+
         // serialize the vector
         //
         typename bm::bvector<>::statistics st;
-        bv.calc_stat(&st);
+        bv.optimize(tb, bm::bvector<>::opt_compress, &st);
 
         buf.resize(st.max_serialize_mem);
         size_t blob_size = bm::serialize(bv, &buf[0]);
@@ -439,18 +449,29 @@ static
 void generate_k_mers_parallel(CSequenceColl& seq_coll, unsigned k_size,
                               unsigned concurrency)
 {
-    size_t batch_size = seq_coll.size() / concurrency;
+    size_t total_seq_size = seq_coll.total_seq_size();
+
+    size_t batch_size = total_seq_size / concurrency;
     if (!batch_size)
         batch_size = 1;
     std::vector<std::future<void> > futures;
 
     for (size_t from = 0; from <= seq_coll.size(); )
     {
-        size_t to = from + batch_size;
+        size_t to = from;
+        for (size_t to_pick = 0; to < seq_coll.size(); ++to)
+        {
+            to_pick += seq_coll.seq_size(to);
+            if (to_pick >= batch_size)
+                break;
+        } // for
 
-        futures.emplace_back(std::async(std::launch::async,
-                            [&seq_coll, k_size, from, to]() { generate_k_mers(seq_coll, k_size, from, to); }
-                            ));
+        cout << " [" << from << ".." << to << "] " << (to-from+1) << endl;
+
+        futures.emplace_back(
+            std::async(std::launch::async,
+            [&seq_coll, k_size, from, to]() { generate_k_mers(seq_coll, k_size, from, to); }
+            ));
 
         from = to+1;
     } // for from
