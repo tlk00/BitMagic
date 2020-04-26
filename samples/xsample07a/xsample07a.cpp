@@ -300,22 +300,23 @@ void sort_unique(VECT& vect)
     @param bv - [out] - target bit-vector
     @param seq_vect - [out] DNA sequence vector
     @param k-size   - dimention for k-mer generation
+    @param k_buf    - sort buffer for generated k-mers
+    @param chunk_size - sort buffer size (number of k-mers per sort)
  */
 template<typename BV>
 void generate_k_mer_bvector(BV& bv,
                             const vector_char_type& seq_vect,
-                            unsigned k_size)
+                            unsigned k_size,
+                            std::vector<bm::id64_t>& k_buf,
+                            const bm::id64_t chunk_size = 400000000
+                            )
 {
-    const bm::id64_t chunk_size = 400000000;
-    bm::chrono_taker tt1("2. Generate k-mers", 1, &timing_map);
-
     bv.clear();
     bv.init(); // need to explicitly init to use bvector<>::set_bit_no_check()
     if (seq_vect.empty())
         return;
     const char* dna_str = &seq_vect[0];
 
-    std::vector<bm::id64_t> k_buf;
     k_buf.reserve(chunk_size);
 
     {
@@ -399,6 +400,8 @@ void generate_k_mers(CSequenceColl& seq_coll, unsigned k_size,
     if (!seq_coll.size() || (from >= seq_coll.size()))
         return;
 
+    std::vector<bm::id64_t> k_buf; // sort buffer
+
     CSequenceColl::buffer_type buf;
     typedef bm::bvector<>::allocator_type        allocator_type;
     typedef allocator_type::allocator_pool_type  allocator_pool_type;
@@ -413,7 +416,7 @@ void generate_k_mers(CSequenceColl& seq_coll, unsigned k_size,
     for (size_t i = from; i <= to; ++i)
     {
         const vector_char_type& seq_vect = seq_coll.get_sequence(i);
-        generate_k_mer_bvector(bv, seq_vect, k_size);
+        generate_k_mer_bvector(bv, seq_vect, k_size, k_buf);
 
         // serialize the vector
         //
@@ -439,13 +442,11 @@ void generate_k_mers_parallel(CSequenceColl& seq_coll, unsigned k_size,
     size_t batch_size = seq_coll.size() / concurrency;
     if (!batch_size)
         batch_size = 1;
-cout << "Batch = " << batch_size << endl;
     std::vector<std::future<void> > futures;
 
     for (size_t from = 0; from <= seq_coll.size(); )
     {
         size_t to = from + batch_size;
-cout << "f=" << from << " to=" << to << endl;
 
         futures.emplace_back(std::async(std::launch::async,
                             [&seq_coll, k_size, from, to]() { generate_k_mers(seq_coll, k_size, from, to); }
