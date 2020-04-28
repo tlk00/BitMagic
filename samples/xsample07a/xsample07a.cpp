@@ -47,6 +47,7 @@ For more information please visit:  http://bitmagic.io
 #include "bmaggregator.h"
 #include "bmsparsevec_compr.h"
 #include "bmsparsevec_algo.h"
+#include "bmrandom.h"
 
 
 // BitMagic utilities for debug and timings
@@ -81,6 +82,7 @@ unsigned     f_percent = 5; // percent of k-mers we try to clear as over-represe
 // Global types
 //
 typedef std::vector<char>                             vector_char_type;
+typedef bm::dynamic_heap_matrix<unsigned, bm::bvector<>::allocator_type> distance_matrix_type;
 typedef DNA_FingerprintScanner<bm::bvector<> >        dna_scanner_type;
 typedef bm::sparse_vector<unsigned, bm::bvector<> >   sparse_vector_u32;
 typedef bm::rsc_sparse_vector<unsigned, sparse_vector_u32 > rsc_sparse_vector_u32;
@@ -141,6 +143,21 @@ public:
         return sum;
     }
 
+    ///
+    size_t buf_size() const { return m_kmer_bufs.size(); }
+
+    /// Get k-mer vector BLOB size
+    size_t get_buf_size(size_t i) const { return m_kmer_bufs[i]->size(); }
+
+    /// Get k-mer BLOB pointer
+    const unsigned char* get_buf(size_t i) const
+    {
+        const buffer_type* p =  m_kmer_bufs[i].get();
+        if (!p)
+            return 0;
+        return p->data();
+    }
+
 
 private:
     vector<unique_ptr<vector_char_type> > m_seqs;
@@ -196,6 +213,85 @@ int load_FASTA(const std::string& fname, CSequenceColl& seq_coll)
 
     cout << "\r                            \r" << endl;
     return 0;
+}
+
+/// save k-mer vectors to a file
+static
+void save_kmer_buffers(const std::string& fname, const CSequenceColl& seq_coll)
+{
+    char magic_ch = '\t';
+    std::ofstream bfile (fname, std::ios::out | std::ios::binary);
+    if (!bfile.good())
+    {
+        std::cerr << "Cannot open file for write: " << fname << std::endl;
+        exit(1);
+    }
+
+    // save collection size
+    size_t sz = seq_coll.size();
+    bfile.write((char*)&sz, std::streamsize(sizeof(sz)));
+
+    // save the collection elements
+    //
+    for (size_t i = 0; i < sz; ++i)
+    {
+        size_t buf_size = 0;
+        const unsigned char* buf = seq_coll.get_buf(i);
+        if (!buf)
+        {
+            bfile.write((char*)&buf_size, std::streamsize(sizeof(buf_size)));
+            continue;
+        }
+        buf_size = seq_coll.get_buf_size(i);
+        bfile.write((char*)&buf_size, std::streamsize(sizeof(buf_size)));
+        if (buf_size)
+        {
+            bfile.write((char*)buf, std::streamsize(buf_size));
+            bfile.write((char*)&magic_ch, 1);
+        }
+    } // for i
+}
+
+/// Load k-mer vectors
+///
+static
+void load_kmer_buffers(const std::string& fname, CSequenceColl& seq_coll)
+{
+    char magic_ch = '\t';
+    std::ifstream bfile (fname, std::ios::in | std::ios::binary);
+    if (!bfile.good())
+    {
+        std::cerr << "Cannot open file for read: " << fname << std::endl;
+        exit(1);
+    }
+
+    // save collection size
+    size_t sz;
+    bfile.read((char*)&sz, std::streamsize(sizeof(sz)));
+
+    CSequenceColl::buffer_type buf;
+
+    // load the collection elements
+    //
+    for (size_t i = 0; i < sz; ++i)
+    {
+        size_t buf_size = 0;
+        bfile.read((char*)&buf_size, std::streamsize(sizeof(buf_size)));
+        if (buf_size)
+        {
+            buf.resize(buf_size);
+            bfile.read((char*) buf.data(), std::streamsize(buf_size));
+            char control_ch = 0;
+            bfile.read((char*)&control_ch, 1);
+            if (control_ch != magic_ch)
+            {
+                cerr << "Control read failure!" << endl;
+                exit(1);
+            }
+            seq_coll.set_buffer(i, buf);
+        }
+
+    } // for i
 }
 
 
@@ -286,19 +382,6 @@ void translate_kmer(std::string& dna, bm::id64_t kmer_code, unsigned k_size)
 
 
 
-
-/// Auxiliary function to do sort+unique on a vactor of ints
-/// erases all duplicate elements
-///
-template<typename VECT>
-void sort_unique(VECT& vect)
-{
-    std::sort(vect.begin(), vect.end());
-    auto last = std::unique(vect.begin(), vect.end());
-    vect.erase(last, vect.end());
-}
-
-
 /**
     This function turns each k-mer into an integer number and encodes it
     in a bit-vector (presense vector)
@@ -373,7 +456,7 @@ void generate_k_mer_bvector(BV& bv,
 
                 if (k_buf.size() == chunk_size) // soring check.point
                 {
-                    sort_unique(k_buf);
+                    std::sort(k_buf.begin(), k_buf.end());
                     if (k_buf.size())
                     {
                         bv.set(&k_buf[0], k_buf.size(), bm::BM_SORTED); // fast bulk set
@@ -392,7 +475,7 @@ void generate_k_mer_bvector(BV& bv,
 
         if (k_buf.size()) // add last incomplete chunk here
         {
-            sort_unique(k_buf);
+            std::sort(k_buf.begin(), k_buf.end());
             bv.set(&k_buf[0], k_buf.size(), bm::BM_SORTED); // fast bulk set
         }
     }
@@ -415,18 +498,21 @@ void generate_k_mers(CSequenceColl& seq_coll, unsigned k_size,
     typedef bm::bvector<>::allocator_type        allocator_type;
     typedef allocator_type::allocator_pool_type  allocator_pool_type;
     allocator_pool_type  pool; // local pool for blocks
+
     bm::bvector<> bv;
-    bm::bvector<>::mem_pool_guard mp_guard_bv;
+    bm::bvector<>::mem_pool_guard mp_guard_bv; // memory pool reduces allocation calls to heap
     mp_guard_bv.assign_if_not_set(pool, bv);
 
     if (!to || to >= seq_coll.size())
         to = seq_coll.size()-1;
 
+    bm::serializer<bm::bvector<> > bvs; // serializer object
+    bvs.set_bookmarks(false);
+
     for (size_t i = from; i <= to; ++i)
     {
         const vector_char_type& seq_vect = seq_coll.get_sequence(i);
         generate_k_mer_bvector(bv, seq_vect, k_size, k_buf);
-
 
         // serialize the vector
         //
@@ -434,7 +520,8 @@ void generate_k_mers(CSequenceColl& seq_coll, unsigned k_size,
         bv.optimize(tb, bm::bvector<>::opt_compress, &st);
 
         buf.resize(st.max_serialize_mem);
-        size_t blob_size = bm::serialize(bv, &buf[0]);
+
+        size_t blob_size = bvs.serialize(bv, &buf[0], buf.size());
         buf.resize(blob_size);
 
         seq_coll.set_buffer(i, buf);
@@ -442,7 +529,6 @@ void generate_k_mers(CSequenceColl& seq_coll, unsigned k_size,
         k_mer_progress_count.fetch_add(1);
 
     } // for i
-    cout << endl;
 }
 
 static
@@ -451,9 +537,12 @@ void generate_k_mers_parallel(CSequenceColl& seq_coll, unsigned k_size,
 {
     size_t total_seq_size = seq_coll.total_seq_size();
 
+    if (!concurrency)
+        concurrency = 1;
+
     size_t batch_size = total_seq_size / concurrency;
     if (!batch_size)
-        batch_size = 1;
+        batch_size = total_seq_size;
     std::vector<std::future<void> > futures;
 
     for (size_t from = 0; from <= seq_coll.size(); )
@@ -511,6 +600,90 @@ void generate_k_mers_parallel(CSequenceColl& seq_coll, unsigned k_size,
     cout << endl;
 }
 
+static
+void compute_distances(const CSequenceColl& seq_coll,
+                       size_t idx,
+                       float similarity_cut_off)
+{
+    assert(similarity_cut_off < 1);
+    std::vector<std::pair<unsigned, unsigned> > cand_vect;
+
+    auto sz = seq_coll.buf_size();
+
+    if (idx >= sz)
+        return;
+
+    const unsigned char* buf = seq_coll.get_buf(idx);
+    if (!buf)
+        return;
+
+    bm::bvector<> bv;
+    bm::deserialize(bv, buf);
+
+    auto i_cnt = bv.count();
+
+    // approximate number of k-mers we consider similar
+    float similarity_target = i_cnt * similarity_cut_off;
+
+    bm::operation_deserializer<bm::bvector<> > od;
+
+    for (size_t i = 0; i < sz; ++i)
+    {
+        if (i == idx) // self distance (diagonal element)
+            continue;
+
+        buf = seq_coll.get_buf(i);
+        if (!buf)
+            continue;
+        // constant deserializer AND just to count the product
+        // without actual deserialization (from the compressed BLOB)
+        //
+        bm::id64_t and_cnt = od.deserialize(bv, buf, 0, bm::set_COUNT_AND);
+
+        if (and_cnt && and_cnt > similarity_target) // similar enough to be a candidate
+        {
+            cand_vect.push_back(std::make_pair(unsigned(and_cnt), unsigned(i)));
+        }
+
+    } // for i
+
+    if (cand_vect.size())
+    {
+        std::sort(cand_vect.begin(), cand_vect.end());
+
+        for (size_t i = 0; i < cand_vect.size(); ++i)
+        {
+            const auto p = cand_vect[i];
+            float s_factor = float(p.first)/float(i_cnt);
+            cout << s_factor << " - " << p.second << endl;
+        }
+
+        cout << "idx = " << idx << endl;
+        cout << "number of k-mers in the base vector = " << i_cnt << endl;
+        cout << "Total cluster size = " << cand_vect.size() << endl << endl;;
+
+
+
+    }
+    else // no similarities above the cut-off found
+    {
+        // what to do?
+        cout << "Empty set" << endl;
+    }
+
+}
+/*
+static
+void compute_distances(distance_matrix_type& dm, const CSequenceColl& seq_coll)
+{
+    auto sz = seq_coll.buf_size();
+    for (size_t i = 0; i < sz; ++i)
+    {
+        compute_distances(dm, seq_coll, i);
+        cout << "\r" << i << flush;
+    }
+}
+*/
 
 int main(int argc, char *argv[])
 {
@@ -538,11 +711,53 @@ int main(int argc, char *argv[])
 
         cout << "Sequences size = " << seq_coll.size() << endl;
 
-        if (ik_size)
+        if (ik_size && !ifa_name.empty())
         {
-            bm::chrono_taker tt1("2. Generate k-mers", 1, &timing_map);
-            seq_coll.sync_buffers_size();
-            generate_k_mers_parallel(seq_coll, ik_size, parallel_jobs);
+            {
+                bm::chrono_taker tt1("2. Generate k-mers", 1, &timing_map);
+                seq_coll.sync_buffers_size();
+                generate_k_mers_parallel(seq_coll, ik_size, parallel_jobs);
+            }
+
+            if (!ikd_name.empty())
+            {
+                bm::chrono_taker tt1("3. Save k-mers", 1, &timing_map);
+                save_kmer_buffers(ikd_name, seq_coll);
+            }
+        }
+
+        if (ik_size && ifa_name.empty() && !ikd_name.empty())
+        {
+            {
+            bm::chrono_taker tt1("4. Load k-mers", 1, &timing_map);
+            load_kmer_buffers(ikd_name, seq_coll);
+            }
+
+            if (seq_coll.buf_size())
+            {
+                bm::chrono_taker tt1("5. compute k-mer similarity", 1, &timing_map);
+//                distance_matrix_type dm(seq_coll.buf_size(), seq_coll.buf_size());
+//                dm.init();
+//                dm.set_zero();
+
+
+                bm::bvector<> bv_total;
+                bv_total.set_range(0, seq_coll.buf_size());
+cout << bv_total.count() << endl;;
+                bm::random_subset<bm::bvector<> > rsub; // sub-set getter
+                bm::bvector<> bv_rsub; // random subset of sequences
+
+                rsub.sample(bv_rsub, bv_total, 10); // pick random sequences
+cout << bv_rsub.count() << endl;
+
+                bm::bvector<>::enumerator en(bv_rsub.first());
+                for (; en.valid(); ++en)
+                {
+                    auto idx = *en;
+                    cout << idx << endl;
+                    compute_distances(seq_coll, idx, float(0.05));
+                }
+            }
         }
 
 
