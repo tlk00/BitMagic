@@ -31,6 +31,7 @@ For more information please visit:  http://bitmagic.io
 
 #include <iostream>
 #include <vector>
+#include <list>
 #include <map>
 #include <algorithm>
 #include <utility>
@@ -81,19 +82,39 @@ unsigned     f_percent = 5; // percent of k-mers we try to clear as over-represe
 
 // Global types
 //
+typedef bm::bvector<>                                 bvector_type;
 typedef std::vector<char>                             vector_char_type;
 typedef bm::dynamic_heap_matrix<unsigned, bm::bvector<>::allocator_type> distance_matrix_type;
-typedef DNA_FingerprintScanner<bm::bvector<> >        dna_scanner_type;
-typedef bm::sparse_vector<unsigned, bm::bvector<> >   sparse_vector_u32;
-typedef bm::rsc_sparse_vector<unsigned, sparse_vector_u32 > rsc_sparse_vector_u32;
-typedef std::map<unsigned, unsigned>                  histogram_map_u32;
-
+typedef std::vector<std::unique_ptr<bvector_type> >   bvector_ptr_vector_type;
 
 // Global vars
 //
 bm::chrono_taker::duration_map_type     timing_map;
-//dna_scanner_type                        dna_scanner;
 
+
+/// wait for any opening in a list of futures
+///    used to schedule parallel tasks with CPU overbooking control
+///
+template<typename FV>
+void wait_for_slot(FV& futures, unsigned* parallel_cnt, unsigned concurrency)
+{
+    do
+    {
+        for (auto e = futures.begin(); e != futures.end(); ++e)
+        {
+            std::future_status status = e->wait_for(std::chrono::milliseconds(100));
+            if (status == std::future_status::ready)
+            {
+                (*parallel_cnt) -= 1;
+                futures.erase(e);
+                break;
+            }
+        } // for e
+    } while (*parallel_cnt >= concurrency);
+}
+
+/// Collection of sequences and k-mer fingerprint vectors
+///
 class CSequenceColl
 {
 public:
@@ -158,6 +179,13 @@ public:
         return p->data();
     }
 
+    /// Deserialize group of k-mer fingerprint vectors
+    ///
+    void deserialize_k_mers(bvector_ptr_vector_type& k_mers_vect,
+                            const bm::bvector<>& bv_req,
+                            bm::bvector<>::size_type bv_req_count) const;
+
+
 
 private:
     vector<unique_ptr<vector_char_type> > m_seqs;
@@ -165,7 +193,40 @@ private:
     vector<unique_ptr<buffer_type> >      m_kmer_bufs;
 };
 
+void CSequenceColl::deserialize_k_mers(bvector_ptr_vector_type& k_mers_vect,
+                                       const bm::bvector<>& bv_req,
+                                bm::bvector<>::size_type bv_req_count) const
+{
+    std::list<std::future<void> > futures;
 
+    k_mers_vect.resize(0);
+    k_mers_vect.reserve(bv_req_count);
+
+    bm::bvector<>::enumerator en(bv_req.first());
+    for (; en.valid(); ++en)
+    {
+        auto i_idx = *en;
+        bm::bvector<>* bv = new bm::bvector<>(); // k-mer fingerprint
+        k_mers_vect.emplace_back(bv);
+        const unsigned char* buf = this->get_buf(i_idx);
+        if (!buf)
+            continue;
+        futures.emplace_back(                      // async decompress
+            std::async(std::launch::async,
+            [bv, buf]() { bm::deserialize(*bv, buf); }
+            ));
+
+    } // for en
+    for (auto& e : futures)
+        e.wait();
+}
+
+
+// -----------------------------------------------------------------------
+//
+
+/// Load multi-sequence FASTA
+///
 static
 int load_FASTA(const std::string& fname, CSequenceColl& seq_coll)
 {
@@ -555,8 +616,6 @@ void generate_k_mers_parallel(CSequenceColl& seq_coll, unsigned k_size,
                 break;
         } // for
 
-        cout << " [" << from << ".." << to << "] " << (to-from+1) << endl;
-
         futures.emplace_back(
             std::async(std::launch::async,
             [&seq_coll, k_size, from, to]() { generate_k_mers(seq_coll, k_size, from, to); }
@@ -599,6 +658,681 @@ void generate_k_mers_parallel(CSequenceColl& seq_coll, unsigned k_size,
     } // for
     cout << endl;
 }
+
+// -----------------------------------------------------------------------
+
+/// Group (clustrer) of sequences
+///
+class CSeqGroup
+{
+public:
+    CSeqGroup(bm::id64_t lead_id = ~0ull)
+        : m_lead_id(lead_id)
+    {}
+
+
+    /// set id for the group representative
+    void set_lead(bm::id64_t lead_id)
+        { add_member(m_lead_id = lead_id); }
+    /// Get lead id
+    bm::id64_t get_lead() const { return m_lead_id; }
+
+    /// check is cluster is non-empty
+    bool is_assigned() { return m_lead_id != ~0ull; }
+
+    /// add a member to the group
+    void add_member(bm::id64_t id) { m_bv_members.set(id); }
+    void add_member(bm::id64_t id, const bm::bvector<>& bv_kmer)
+    {
+        m_bv_members.set(id);
+        m_bv_kmer_union |= bv_kmer;
+    }
+    void add_member_sync(bm::id64_t id)
+    {
+        std::lock_guard<std::mutex> guard(mtx_add_member_lock);
+        m_bv_members.set(id);
+    }
+
+    void clear_member(bm::id64_t id) { m_bv_members.set(id, false); }
+
+    bm::bvector<>& get_rep() { return m_bv_rep; }
+    const bm::bvector<>& get_rep() const { return m_bv_rep; }
+
+    const bm::bvector<>& get_members() const { return m_bv_members; }
+    bm::bvector<>& get_members() { return m_bv_members; }
+
+    bm::bvector<>& get_kmer_union() { return m_bv_kmer_union; }
+    const bm::bvector<>& get_kmer_union() const { return m_bv_kmer_union; }
+
+    friend class CSeqClusters;
+
+private:
+    bm::id64_t    m_lead_id;       ///< groups lead vector ID
+    bm::bvector<> m_bv_members;    ///< vector of all group member ids
+    std::mutex    mtx_add_member_lock; ///< concurrency protection for add_member_sync()
+
+    bm::bvector<> m_bv_rep;        ///< group's representative vector
+    bm::bvector<> m_bv_kmer_union; ///< union of all k-mers of members
+};
+
+// -----------------------------------------------------------------------
+//
+//
+
+class CSeqClusters
+{
+public:
+    typedef std::vector<std::unique_ptr<CSeqGroup> > groups_vector_type;
+public:
+    CSeqClusters()
+    {}
+    CSeqClusters(const CSeqClusters&)=delete;
+
+    void add_group(CSeqGroup* sg) { m_seq_groups.emplace_back(sg); }
+
+    /// Remove groups which turned empty after clusterization
+    void clear_empty_groups();
+
+    /// Compute union of all cluster group members
+    const bm::bvector<>& union_all_groups();
+
+    /// Resolve duplicate membership between groups
+    ///
+    void resolve_duplicates(const CSequenceColl& seq_coll);
+
+    /// Find the best representatives in all cluster groups
+    /// the criteria is maximum absolute similarity to all members
+    ///
+    void elect_leaders(const CSequenceColl& seq_coll,
+                       unsigned concurrency);
+
+
+    size_t groups_size() const { return m_seq_groups.size(); }
+    CSeqGroup* get_group(size_t idx) { return m_seq_groups[idx].get(); }
+
+    /// print clusterization report
+    void print_summary() const;
+
+private:
+    bm::bvector<>         m_all_members; ///< Union of all group members
+    groups_vector_type    m_seq_groups; ///< vector of all formed clusters
+};
+
+void CSeqClusters::clear_empty_groups()
+{
+    for (groups_vector_type::iterator it = m_seq_groups.begin();
+         it != m_seq_groups.end(); )
+    {
+        CSeqGroup* sg = it->get();
+        bm::bvector<>& bv_mem = sg->get_members();
+        auto cnt = bv_mem.count();
+        if (cnt < 2) // practically empty group
+            it = m_seq_groups.erase(it);
+        else
+            ++it;
+    } // for
+}
+
+const bm::bvector<>& CSeqClusters::union_all_groups()
+{
+    BM_DECLARE_TEMP_BLOCK(tb)
+
+    m_all_members.clear();
+    for (groups_vector_type::const_iterator it = m_seq_groups.begin();
+         it != m_seq_groups.end(); ++it)
+    {
+        const CSeqGroup* sg = it->get();
+        m_all_members |= sg->get_members();
+    } // for
+    m_all_members.optimize(tb);
+    return m_all_members;
+}
+
+
+void resolve_duplicates(CSeqGroup& seq_group1,
+                        CSeqGroup& seq_group2,
+                        const CSequenceColl& seq_coll);
+
+void CSeqClusters::resolve_duplicates(const CSequenceColl& seq_coll)
+{
+    for (size_t i = 0; i < m_seq_groups.size(); ++i)
+    {
+        CSeqGroup* sg1 = m_seq_groups[i].get();
+        for (size_t j = 0; j < i; ++j)
+        {
+            CSeqGroup* sg2 = m_seq_groups[j].get();
+            // resolve pairwise conflicts between cluster groups
+            ::resolve_duplicates(*sg1, *sg2, seq_coll);
+        } // for j
+    } // for i
+}
+
+/// Compute similarity distances for one row/vector (1:N) of distance matrix
+///
+static
+void compute_and_sim_row(
+        unsigned* row,
+        const bm::bvector<>* bv_i,
+        size_t i,
+        const std::vector<std::unique_ptr<bvector_type> >& k_mers_vect)
+{
+    size_t j;
+    for (j = 0; j < i; ++j)
+    {
+        const bm::bvector<>* bv_j = k_mers_vect[j].get();
+        bm::id64_t and_cnt = bm::count_and(*bv_i, *bv_j);
+        row[j] = unsigned(and_cnt);
+    }
+    auto cnt = bv_i->count();
+    row[j] = unsigned(cnt);
+}
+
+/// Compute similarity distances matrix (COUNT(AND(a, b))
+///
+static
+void compute_and_sim(distance_matrix_type& dm,
+                     const CSequenceColl& seq_coll,
+                     const bm::bvector<>& bv_mem,
+                     bm::bvector<>::size_type bv_mem_cnt,
+                     unsigned concurrency)
+{
+    if (concurrency < 1)
+        concurrency = 1;
+    auto N = bv_mem_cnt;
+
+    const unsigned k_max_electors = 500;
+    bm::bvector<> bv_sub; // subset vector
+    if (N > k_max_electors) // TODO: parameterize the
+    {
+        bm::random_subset<bm::bvector<> > rsub;
+        rsub.sample(bv_sub, bv_mem, k_max_electors); // pick random sunset
+    }
+
+
+    bvector_ptr_vector_type k_mers_vect;
+
+    // materialize list of vectors used in distance calculation
+    //
+    seq_coll.deserialize_k_mers(k_mers_vect, bv_mem, N);
+
+    std::list<std::future<void> > futures;
+    unsigned parallel_cnt = 0; // number of jobs in flight at a time
+
+    size_t i;
+    for (i = 0; i < N; ++i)
+    {
+        const bm::bvector<>* bv_i = k_mers_vect[i].get();
+        unsigned* row = dm.row(i);
+
+        if (parallel_cnt < concurrency)
+        {
+        schedule_job:
+            futures.emplace_back(
+                std::async(std::launch::async,
+                [row, bv_i, i, &k_mers_vect]()
+                        { compute_and_sim_row(row, bv_i, i, k_mers_vect); }
+                ));
+            ++parallel_cnt;
+        }
+        else
+        {
+            // wait for an async() slot to open (overbooking control)
+            ::wait_for_slot(futures, &parallel_cnt, concurrency);
+            goto schedule_job;
+        }
+    } // for i
+
+    // sync point
+    for (auto& e : futures)
+        e.wait();
+
+    dm.replicate_triange(); // copy to full simetrical distances from triangle
+}
+
+/// Compute union (Universe) of all k-mers in the cluster group
+/// Implemented as a OR of all k-mer fingerprints
+static
+void compute_seq_group_union(CSeqGroup&           seq_group,
+                             const CSequenceColl& seq_coll)
+{
+    BM_DECLARE_TEMP_BLOCK(tb)
+
+    bm::bvector<>& bv_kmer_union = seq_group.get_kmer_union();
+    bv_kmer_union.clear();
+
+    bm::bvector<>& bv_all_members = seq_group.get_members();
+    bm::bvector<>::enumerator en(bv_all_members.first());
+    for( ;en.valid(); ++en)
+    {
+        auto idx = *en;
+        const unsigned char* buf = seq_coll.get_buf(idx);
+        if (!buf)
+            continue;
+
+        bm::deserialize(bv_kmer_union, buf, tb); // deserialize is an OR operation
+    } // for en
+    bv_kmer_union.optimize(tb);
+}
+
+void CSeqClusters::elect_leaders(const CSequenceColl& seq_coll,
+                                 unsigned concurrency)
+{
+    bm::operation_deserializer<bm::bvector<> > od;
+    bm::random_subset<bm::bvector<> > rsub;
+
+    std::list<std::future<void> > futures;
+
+    for (size_t k = 0; k < m_seq_groups.size(); ++k)
+    {
+        CSeqGroup* sg = m_seq_groups[k].get();
+        bm::bvector<>& bv_all_members = sg->get_members();
+        bv_all_members.set(sg->get_lead());
+        auto N = bv_all_members.count();
+        auto all_members_count = N; (void) all_members_count;
+
+        const unsigned k_max_electors = 500;
+        const bm::bvector<>* bv_mem = &bv_all_members; // vector of electors
+        bm::bvector<> bv_sub; // subset vector
+        if (N > k_max_electors) // TODO: parameterize the
+        {
+            // pick a random sub-set as "electoral colledge"
+            rsub.sample(bv_sub, bv_all_members, k_max_electors);
+            bv_sub.set(sg->get_lead()); // current leader always takes part
+            bv_mem = &bv_sub;
+            N = bv_sub.count();
+        }
+
+        // NxN distance matrix between members
+        //
+        distance_matrix_type dm(N, N);
+        dm.init();
+        dm.set_zero();
+
+        // compute triangular distance matrix
+        //
+        compute_and_sim(dm, seq_coll, *bv_mem, N, concurrency);
+
+        // leader election based on maximum similarity to other cluster
+        // elements
+        //
+        bm::id64_t best_score = 0;
+        bm::id64_t leader_idx = sg->get_lead();
+        assert(bv_mem->test(leader_idx));
+        auto rank = bv_mem->count_range(0, leader_idx);
+        assert(rank);
+        dm.sum(best_score, rank-1);  // use sum or all similarities as a score for the leader
+        bm::id64_t old_leader_idx = leader_idx;
+
+        bm::bvector<>::enumerator en(bv_mem->first());
+        for (size_t i = 0; en.valid(); ++en, ++i)
+        {
+            bm::id64_t cand_score;
+            dm.sum(cand_score, i);  // use sum or all similarities as a score
+            if (cand_score > best_score) // better candidate for a leader
+            {
+                best_score = cand_score;
+                leader_idx = *en;
+            }
+        } // for en
+
+        if (leader_idx != old_leader_idx) // found a new leader
+        {
+            sg->set_lead(leader_idx);
+            const unsigned char* buf = seq_coll.get_buf(leader_idx);
+            assert(buf);
+            bm::bvector<>* bv = &sg->get_rep();
+
+            // async replace the leader representative k-mer vector
+            //
+            futures.emplace_back(
+                std::async(std::launch::async,
+                [bv, buf]() { bv->clear(); bm::deserialize(*bv, buf); }
+                ));
+            // re-compute k-mer UNION of all vectors
+            futures.emplace_back(
+                std::async(std::launch::async,
+                [sg, &seq_coll]() { compute_seq_group_union(*sg, seq_coll); }
+                ));
+        }
+
+    } // for i
+
+    for (auto& e : futures) // wait for all forked tasks
+        e.wait();
+
+
+}
+
+
+void CSeqClusters::print_summary() const
+{
+    for (size_t i = 0; i < m_seq_groups.size(); ++i)
+    {
+        const CSeqGroup* sg = m_seq_groups[i].get();
+        const bm::bvector<>& bv_mem = sg->get_members();
+        cout << sg->get_lead() << ": "
+             << bv_mem.count() << endl;
+    }
+    cout << "Total: " <<  m_seq_groups.size() << endl << endl;
+}
+
+
+static
+void compute_group(CSeqGroup& seq_group,
+                   const CSequenceColl& seq_coll,
+                   float similarity_cut_off)
+{
+    assert(similarity_cut_off < 1);
+    assert(seq_group.is_assigned());
+
+    std::vector<std::pair<unsigned, unsigned> > cand_vect;
+
+    auto sz = seq_coll.buf_size();
+    size_t idx = seq_group.get_lead();
+    if (idx >= sz)
+        return;
+
+    const unsigned char* buf = seq_coll.get_buf(idx);
+    if (!buf)
+        return;
+
+    bm::bvector<>& bv = seq_group.get_rep();
+    bm::deserialize(bv, buf);
+
+    auto i_cnt = bv.count();
+    // approximate number of k-mers we consider similar
+    float similarity_target = i_cnt * similarity_cut_off;
+
+
+    bm::operation_deserializer<bm::bvector<> > od;
+
+    bool found = false;
+
+    // use "triangular matrix" N/2 algorithm (scan all lower elements)
+    //
+    for (size_t i = 0; i < idx; ++i)
+    {
+        if (i == idx) // self distance (diagonal element)
+            break;
+
+        buf = seq_coll.get_buf(i);
+        if (!buf)
+            continue;
+        // constant deserializer AND just to count the product
+        // without actual deserialization (from the compressed BLOB)
+        //
+        bm::id64_t and_cnt = od.deserialize(bv, buf, 0, bm::set_COUNT_AND);
+
+        if (and_cnt && and_cnt > similarity_target) // similar enough to be a candidate
+        {
+            cand_vect.push_back(std::make_pair(unsigned(and_cnt), unsigned(i)));
+            seq_group.add_member(i);
+            found = true;
+        }
+
+    } // for i
+
+    if (!found)
+        seq_group.clear_member(idx);
+
+}
+
+/// Resolve duplicate members between two groups
+void resolve_duplicates(CSeqGroup& seq_group1,
+                        CSeqGroup& seq_group2,
+                        const CSequenceColl& seq_coll)
+{
+    if (&seq_group1 == & seq_group2) // self check
+        return;
+
+    bm::bvector<>& bv1 = seq_group1.get_members();
+    bm::bvector<>& bv2 = seq_group2.get_members();
+
+    // build intersect between group members
+    bm::bvector<> bv_and;
+    bv_and.bit_and(bv1, bv2, bm::bvector<>::opt_none);
+
+    if (bv_and.any()) // double membership detected
+    {
+        bm::bvector<>& bv_rep1 = seq_group1.get_rep();
+        bm::bvector<>& bv_rep2 = seq_group2.get_rep();
+
+        bm::operation_deserializer<bm::bvector<> > od;
+
+        // evaluate each double member for best membership
+        //
+        bm::bvector<>::enumerator en = bv_and.first();
+        for (; en.valid(); ++en)
+        {
+            auto idx = *en;
+            auto lead_idx1 = seq_group1.get_lead();
+            auto lead_idx2 = seq_group2.get_lead();
+            assert(lead_idx1 != lead_idx2);
+
+            if (idx == lead_idx1)
+            {
+                seq_group2.clear_member(idx);
+                continue;
+            }
+            if (idx == lead_idx2)
+            {
+                seq_group1.clear_member(idx);
+                continue;
+            }
+
+            const unsigned char* buf = seq_coll.get_buf(idx);
+            assert(buf);
+            // resolve conflict based on max.absolute similarity
+            //
+            bm::id64_t and_cnt1 = od.deserialize(bv_rep1, buf, 0, bm::set_COUNT_AND);
+            bm::id64_t and_cnt2 = od.deserialize(bv_rep2, buf, 0, bm::set_COUNT_AND);
+            if (and_cnt1 >= and_cnt2)
+                seq_group2.clear_member(idx);
+            else
+                seq_group1.clear_member(idx);
+
+        } // for
+    }
+}
+
+/// Compute AND similarity to all available clusters assign to the most similar
+///
+static
+void assign_to_best_cluster(CSeqClusters& cluster_groups,
+                            bm::bvector<>::size_type seq_id,
+                            const unsigned char* buf)
+{
+    BM_DECLARE_TEMP_BLOCK(tb)
+
+    bm::bvector<> bv_k_mer;
+    bm::deserialize(bv_k_mer, buf, tb);
+
+    bm::bvector<>::size_type best_score(0);
+    size_t cand_idx(~0ull);
+
+    // analyse candidate's similarity to all clusters via representative
+    //
+    for (size_t i = 0; i < cluster_groups.groups_size(); ++i)
+    {
+        CSeqGroup* sg = cluster_groups.get_group(i);
+        //  - COUNT(AND) similarity to the representative of each cluster
+        //
+        bm::bvector<>& bv_rep_k_mer = sg->get_rep();
+        auto rep_and_cnt = bm::count_and(bv_k_mer, bv_rep_k_mer);
+        if (rep_and_cnt > best_score)
+        {
+            cand_idx = i; best_score = rep_and_cnt;
+        }
+    } // for i
+    if (cand_idx != ~0ull) // cluster association via representative
+    {
+        CSeqGroup* sg = cluster_groups.get_group(cand_idx);
+        sg->add_member_sync(seq_id);
+        return;
+    }
+
+    // just in case if representative assignment did not happen
+    // try to extend search using UNION of all cluster k-mers
+    //
+    best_score = 0;
+    for (size_t i = 0; i < cluster_groups.groups_size(); ++i)
+    {
+        CSeqGroup* sg = cluster_groups.get_group(i);
+        //  - COUNT(AND) similarity to the representative of each cluster
+        //
+        bm::bvector<>& bv_uni_k_mer = sg->get_kmer_union();
+        auto uni_and_cnt = bm::count_and(bv_k_mer, bv_uni_k_mer);
+        if (uni_and_cnt > best_score)
+        {
+            cand_idx = i; best_score = uni_and_cnt;
+        }
+    } // for i
+    if (cand_idx != ~0ull) // cluster association via representative
+    {
+        CSeqGroup* sg = cluster_groups.get_group(cand_idx);
+        sg->add_member_sync(seq_id);
+        return;
+    }
+}
+
+/// Pick random sequences as cluster seed elements, try attach
+/// initial sequences based on weighted similarity measure
+///
+static
+void compute_random_clusters(CSeqClusters& cluster_groups,
+                              const CSequenceColl& seq_coll,
+                              const bm::bvector<>& bv_total,
+                              bm::random_subset<bvector_type>& rsub,
+                              unsigned num_clust,
+                              float similarity_cut_off,
+                              unsigned concurrency)
+{
+    bm::bvector<> bv_rsub; // random subset of sequences
+    rsub.sample(bv_rsub, bv_total, num_clust); // pick random sequences as seeds
+
+    std::list<std::future<void> > futures;
+    unsigned parallel_cnt = 0;
+
+    for (bm::bvector<>::enumerator en=bv_rsub.first(); en.valid(); ++en)
+    {
+        auto idx = *en;
+        CSeqGroup* sg = new CSeqGroup(idx);
+        cluster_groups.add_group(sg);
+
+        if (parallel_cnt < concurrency)
+        {
+        schedule_job:
+            futures.emplace_back(
+                std::async(std::launch::async,
+                [&seq_coll, sg, similarity_cut_off]() { compute_group(*sg, seq_coll, similarity_cut_off); }
+                ));
+            ++parallel_cnt;
+        }
+        else
+        {
+            // wait for an async() slot to open
+            ::wait_for_slot(futures, &parallel_cnt, concurrency);
+            goto schedule_job;
+        }
+    } // for en
+
+    // wait for completion of initial cluster group formation
+    for (auto& e : futures)
+        e.wait();
+}
+
+static
+void compute_jaccard_clusters(const CSequenceColl& seq_coll,
+                              unsigned num_clust,
+                              float similarity_cut_off,
+                              unsigned concurrency)
+{
+    assert(similarity_cut_off < 1);
+    if (!seq_coll.buf_size())
+        return; // nothing to do
+
+    CSeqClusters cluster_groups;
+
+    bm::bvector<> bv_total;
+    bv_total.set_range(0, seq_coll.buf_size());
+
+    bm::random_subset<bm::bvector<> > rsub; // sub-set getter
+
+    compute_random_clusters(cluster_groups, seq_coll, bv_total, rsub,
+                            num_clust, similarity_cut_off, concurrency);
+
+    // remove possible empty clusters (inital seeds were picked at random)
+    //
+    cluster_groups.clear_empty_groups();
+
+    cluster_groups.resolve_duplicates(seq_coll);
+
+    cluster_groups.clear_empty_groups();
+
+    // print summary after the initial formation of cluster groups
+    //
+    cluster_groups.print_summary();
+
+    // re-elect representatives
+    cluster_groups.elect_leaders(seq_coll, concurrency);
+
+    cluster_groups.print_summary();
+
+    // sub-set of sequence ids already distributed into clusters
+    {
+        bv_total.set_range(0, seq_coll.buf_size());
+        cout << " total = " << bv_total.count() << endl;
+        const bm::bvector<>& bv_clust = cluster_groups.union_all_groups();
+        cout << " clustered = " << bv_clust.count() << endl;
+
+        bv_total -= bv_clust; // exlude all already clustered
+        cout << " remain = " << bv_total.count() << endl;
+
+    }
+
+    std::list<std::future<void> > futures;
+    unsigned parallel_cnt = 0;
+    for (bm::bvector<>::enumerator en(bv_total); en.valid(); ++en)
+    {
+        auto seq_id = *en;
+        const unsigned char* buf = seq_coll.get_buf(seq_id);
+        if (!buf)
+            continue;
+        if (parallel_cnt < concurrency)
+        {
+        schedule_job:
+            futures.emplace_back(
+                std::async(std::launch::async,
+                [&cluster_groups, seq_id, buf]() { assign_to_best_cluster(cluster_groups, seq_id, buf); }
+                ));
+            ++parallel_cnt;
+        }
+        else
+        {
+            // wait for an async() slot to open
+            ::wait_for_slot(futures, &parallel_cnt, concurrency);
+            goto schedule_job;
+        }
+    } // for (all sequences)
+    for (auto& e : futures)
+        e.wait();
+
+    cluster_groups.print_summary();
+
+    // check if there are sequences not yet belonging to any cluster
+    {
+        bv_total.set_range(0, seq_coll.buf_size());
+        const bm::bvector<>& bv_clust = cluster_groups.union_all_groups();
+
+        bv_total -= bv_clust; // exlude all already clustered
+        if (bv_total.any())
+        {
+            cout << "Undistributed sequences = " << bv_total.count() << endl;
+        }
+    }
+
+}
+
 
 static
 void compute_distances(const CSequenceColl& seq_coll,
@@ -655,20 +1389,11 @@ void compute_distances(const CSequenceColl& seq_coll,
         {
             const auto p = cand_vect[i];
             float s_factor = float(p.first)/float(i_cnt);
-            cout << s_factor << " - " << p.second << endl;
+            //cout << s_factor << " - " << p.second << endl;
         }
-
-        cout << "idx = " << idx << endl;
-        cout << "number of k-mers in the base vector = " << i_cnt << endl;
-        cout << "Total cluster size = " << cand_vect.size() << endl << endl;;
-
-
-
     }
     else // no similarities above the cut-off found
     {
-        // what to do?
-        cout << "Empty set" << endl;
     }
 
 }
@@ -735,28 +1460,8 @@ int main(int argc, char *argv[])
 
             if (seq_coll.buf_size())
             {
-                bm::chrono_taker tt1("5. compute k-mer similarity", 1, &timing_map);
-//                distance_matrix_type dm(seq_coll.buf_size(), seq_coll.buf_size());
-//                dm.init();
-//                dm.set_zero();
-
-
-                bm::bvector<> bv_total;
-                bv_total.set_range(0, seq_coll.buf_size());
-cout << bv_total.count() << endl;;
-                bm::random_subset<bm::bvector<> > rsub; // sub-set getter
-                bm::bvector<> bv_rsub; // random subset of sequences
-
-                rsub.sample(bv_rsub, bv_total, 10); // pick random sequences
-cout << bv_rsub.count() << endl;
-
-                bm::bvector<>::enumerator en(bv_rsub.first());
-                for (; en.valid(); ++en)
-                {
-                    auto idx = *en;
-                    cout << idx << endl;
-                    compute_distances(seq_coll, idx, float(0.05));
-                }
+                bm::chrono_taker tt1("5. k-mer similarity clustering", 1, &timing_map);
+                compute_jaccard_clusters(seq_coll, 10, 0.05f, parallel_jobs);
             }
         }
 
