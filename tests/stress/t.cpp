@@ -2526,9 +2526,39 @@ void DynamicMatrixTest()
                 assert(r[i] == i);
             }
         }
+    }
+    {
+        bm::dynamic_heap_matrix<unsigned, bvect::allocator_type> matr(3, 3);
+        matr.init();
+        matr.set_zero();
 
+        matr.set(0, 0, 10);
+        matr.set(1, 1, 100);
+        matr.set(2, 2, 200);
+
+        matr.set(1, 0, 1);
+        matr.set(2, 0, 2);
+        matr.set(2, 1, 21);
+
+        assert(matr.get(0, 0) == 10);
+        assert(matr.get(1, 1) == 100);
+        assert(matr.get(2, 2) == 200);
+
+
+        matr.replicate_triange();
+
+        assert(matr.get(0, 1) == 1);
+        assert(matr.get(0, 2) == 2);
+        assert(matr.get(1, 2) == 21);
+
+
+
+        bm::id64_t s;
+        matr.sum(s, 0);
+        assert(s == 13);
 
     }
+
     
     cout << "---------------------------- DynamicMatrixTest() test OK" << endl;
 }
