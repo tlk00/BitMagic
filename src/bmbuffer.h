@@ -729,6 +729,22 @@ public:
         return (value_type*)buf;
     }
 
+    value_type get(size_type row_idx, size_type col_idx) BMNOEXCEPT
+    {
+        BM_ASSERT(row_idx < rows_);
+        BM_ASSERT(col_idx < cols_);
+        const value_type* r = row(row_idx);
+        return r[col_idx];
+    }
+
+    void set(size_type row_idx, size_type col_idx, value_type v) BMNOEXCEPT
+    {
+        BM_ASSERT(row_idx < rows_);
+        BM_ASSERT(col_idx < cols_);
+        value_type* r = row(row_idx);
+        r[col_idx] = v;
+    }
+
     /** memset all buffer to all zeroes */
     void set_zero() BMNOEXCEPT
     {
@@ -757,6 +773,35 @@ public:
     buffer_type& get_buffer() BMNOEXCEPT { return buffer_; }
     /** Get low-level buffer access */
     const buffer_type& get_buffer() const BMNOEXCEPT { return buffer_; }
+
+    /**
+        copy values of the left triangle elements to the right triangle
+        (operation specific to matrices with symmetric distances)
+     */
+    void replicate_triange() BMNOEXCEPT
+    {
+        BM_ASSERT(rows_ == cols_);
+        for (size_type i = 0; i < rows_; ++i)
+        {
+            for (size_type j = i+1; j < cols_; ++j)
+            {
+                set(i, j, get(j, i));
+            }
+        }
+    }
+    /**
+        Sum of row elements
+     */
+    template<typename ACC>
+    void sum(ACC& acc, size_type row_idx) const BMNOEXCEPT
+    {
+        BM_ASSERT(row_idx < rows_);
+        ACC s = 0;
+        const value_type* r = row(row_idx);
+        for (size_type j = 0; j < cols_; ++j)
+            s += r[j];
+        acc = s;
+    }
 
 protected:
 
