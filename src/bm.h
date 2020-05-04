@@ -621,10 +621,17 @@ public:
             this->bv_ = const_cast<bvector<Alloc>*>(bv);
         }
 
-        enumerator(const bvector<Alloc>& bv) BMNOEXCEPT
+        /*! @brief Construct enumerator for bit vector
+            @param bv  bit-vector reference
+            @param pos bit position in the vector
+                       if position is 0, it finds the next 1 or becomes not valid
+                       (en.valid() == false)
+        */
+        enumerator(const bvector<Alloc>& bv, size_type pos = 0) BMNOEXCEPT
             : iterator_base()
         {
             this->bv_ = const_cast<bvector<Alloc>*>(&bv);
+            go_to(pos);
         }
 
 
