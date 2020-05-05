@@ -346,7 +346,7 @@ void load_kmer_buffers(const std::string& fname, CSequenceColl& seq_coll)
             bfile.read((char*)&control_ch, 1);
             if (control_ch != magic_ch)
             {
-                cerr << "Control read failure!" << endl;
+                cerr << "Error: read failure!" << endl;
                 exit(1);
             }
             seq_coll.set_buffer(i, buf);
@@ -667,9 +667,10 @@ class CSeqGroup
 {
 public:
     CSeqGroup(bm::id64_t lead_id = ~0ull)
-        : m_lead_id(lead_id)
-    {}
-
+        : m_lead_id(lead_id), m_bv_members(bm::BM_GAP)
+    {
+        m_bv_members.set(lead_id);
+    }
 
     /// set id for the group representative
     void set_lead(bm::id64_t lead_id)
@@ -681,16 +682,22 @@ public:
     bool is_assigned() { return m_lead_id != ~0ull; }
 
     /// add a member to the group
-    void add_member(bm::id64_t id) { m_bv_members.set(id); }
+    void add_member(bm::id64_t id) { m_bv_members.set_bit_no_check(id); }
     void add_member(bm::id64_t id, const bm::bvector<>& bv_kmer)
     {
-        m_bv_members.set(id);
+        m_bv_members.set_bit_no_check(id);
         m_bv_kmer_union |= bv_kmer;
     }
-    void add_member_sync(bm::id64_t id)
+    void add_member_sync(bm::id64_t id, const bm::bvector<>& bv_kmer)
     {
         std::lock_guard<std::mutex> guard(mtx_add_member_lock);
-        m_bv_members.set(id);
+        m_bv_members.set_bit_no_check(id); // a bit faster than set()
+        m_bv_kmer_union |= bv_kmer;
+    }
+    bm::id64_t count_and_union_sync(const bm::bvector<>& bv)
+    {
+        std::lock_guard<std::mutex> guard(mtx_add_member_lock);
+        return bm::count_and(bv, m_bv_kmer_union);
     }
 
     void clear_member(bm::id64_t id) { m_bv_members.set(id, false); }
@@ -730,6 +737,13 @@ public:
 
     void add_group(CSeqGroup* sg) { m_seq_groups.emplace_back(sg); }
 
+    /// memebers moved into their own group
+    void take_group(bm::bvector<>& bv_members);
+
+    /// Acquire all groups from another cluster collection
+    ///
+    void merge_from(CSeqClusters& sc);
+
     /// Remove groups which turned empty after clusterization
     void clear_empty_groups();
 
@@ -746,12 +760,15 @@ public:
     void elect_leaders(const CSequenceColl& seq_coll,
                        unsigned concurrency);
 
+    /// calculate avg cluster population count
+    bm::id64_t compute_avg_count() const;
+
 
     size_t groups_size() const { return m_seq_groups.size(); }
     CSeqGroup* get_group(size_t idx) { return m_seq_groups[idx].get(); }
 
     /// print clusterization report
-    void print_summary() const;
+    void print_summary(const char* title) const;
 
 private:
     bm::bvector<>         m_all_members; ///< Union of all group members
@@ -773,6 +790,14 @@ void CSeqClusters::clear_empty_groups()
     } // for
 }
 
+void CSeqClusters::take_group(bm::bvector<>& bv_members)
+{
+    bm::id64_t lead_id = bv_members.get_first();
+    CSeqGroup* sg = new CSeqGroup(lead_id);
+    sg->get_members().swap(bv_members); // move members to the cluster
+    add_group(sg);
+}
+
 const bm::bvector<>& CSeqClusters::union_all_groups()
 {
     BM_DECLARE_TEMP_BLOCK(tb)
@@ -786,6 +811,26 @@ const bm::bvector<>& CSeqClusters::union_all_groups()
     } // for
     m_all_members.optimize(tb);
     return m_all_members;
+}
+
+bm::id64_t CSeqClusters::compute_avg_count() const
+{
+    bm::id64_t cnt = 0;
+    for (groups_vector_type::const_iterator it = m_seq_groups.begin();
+         it != m_seq_groups.end(); ++it)
+    {
+        const CSeqGroup* sg = it->get();
+        cnt += sg->get_members().count();
+    }
+    cnt = cnt / m_seq_groups.size();
+}
+
+
+void CSeqClusters::merge_from(CSeqClusters& sc)
+{
+    for (auto it = sc.m_seq_groups.begin(); it != sc.m_seq_groups.end(); ++it)
+        m_seq_groups.emplace_back(it->release());
+    sc.m_seq_groups.clear();
 }
 
 
@@ -864,22 +909,24 @@ void compute_and_sim(distance_matrix_type& dm,
         const bm::bvector<>* bv_i = k_mers_vect[i].get();
         unsigned* row = dm.row(i);
 
-        if (parallel_cnt < concurrency)
+        do
         {
-        schedule_job:
-            futures.emplace_back(
-                std::async(std::launch::async,
-                [row, bv_i, i, &k_mers_vect]()
+            if (parallel_cnt < concurrency)
+            {
+                futures.emplace_back(
+                    std::async(std::launch::async,
+                    [row, bv_i, i, &k_mers_vect]()
                         { compute_and_sim_row(row, bv_i, i, k_mers_vect); }
-                ));
-            ++parallel_cnt;
-        }
-        else
-        {
-            // wait for an async() slot to open (overbooking control)
-            ::wait_for_slot(futures, &parallel_cnt, concurrency);
-            goto schedule_job;
-        }
+                    ));
+                ++parallel_cnt;
+                break;
+            }
+            else
+            {
+                // wait for an async() slot to open (overbooking control)
+                ::wait_for_slot(futures, &parallel_cnt, concurrency);
+            }
+        } while(1);
     } // for i
 
     // sync point
@@ -901,8 +948,7 @@ void compute_seq_group_union(CSeqGroup&           seq_group,
     bv_kmer_union.clear();
 
     bm::bvector<>& bv_all_members = seq_group.get_members();
-    bm::bvector<>::enumerator en(bv_all_members.first());
-    for( ;en.valid(); ++en)
+    for(bm::bvector<>::enumerator en(bv_all_members) ;en.valid(); ++en)
     {
         auto idx = *en;
         const unsigned char* buf = seq_coll.get_buf(idx);
@@ -1004,8 +1050,9 @@ void CSeqClusters::elect_leaders(const CSequenceColl& seq_coll,
 }
 
 
-void CSeqClusters::print_summary() const
+void CSeqClusters::print_summary(const char* title) const
 {
+    cout << title << endl;
     for (size_t i = 0; i < m_seq_groups.size(); ++i)
     {
         const CSeqGroup* sg = m_seq_groups[i].get();
@@ -1013,7 +1060,7 @@ void CSeqClusters::print_summary() const
         cout << sg->get_lead() << ": "
              << bv_mem.count() << endl;
     }
-    cout << "Total: " <<  m_seq_groups.size() << endl << endl;
+    cout << "-----------\nTotal: " <<  m_seq_groups.size() << endl << endl;
 }
 
 
@@ -1099,10 +1146,9 @@ void resolve_duplicates(CSeqGroup& seq_group1,
 
         bm::operation_deserializer<bm::bvector<> > od;
 
-        // evaluate each double member for best membership
+        // evaluate each double member for best membership placement
         //
-        bm::bvector<>::enumerator en = bv_and.first();
-        for (; en.valid(); ++en)
+        for (bm::bvector<>::enumerator en(bv_and); en.valid(); ++en)
         {
             auto idx = *en;
             auto lead_idx1 = seq_group1.get_lead();
@@ -1142,6 +1188,9 @@ void assign_to_best_cluster(CSeqClusters& cluster_groups,
                             bm::bvector<>::size_type seq_id,
                             const unsigned char* buf)
 {
+    if (!buf)
+        return;
+
     BM_DECLARE_TEMP_BLOCK(tb)
 
     bm::bvector<> bv_k_mer;
@@ -1167,7 +1216,7 @@ void assign_to_best_cluster(CSeqClusters& cluster_groups,
     if (cand_idx != ~0ull) // cluster association via representative
     {
         CSeqGroup* sg = cluster_groups.get_group(cand_idx);
-        sg->add_member_sync(seq_id);
+        sg->add_member_sync(seq_id, bv_k_mer);
         return;
     }
 
@@ -1180,8 +1229,10 @@ void assign_to_best_cluster(CSeqClusters& cluster_groups,
         CSeqGroup* sg = cluster_groups.get_group(i);
         //  - COUNT(AND) similarity to the representative of each cluster
         //
-        bm::bvector<>& bv_uni_k_mer = sg->get_kmer_union();
-        auto uni_and_cnt = bm::count_and(bv_k_mer, bv_uni_k_mer);
+
+//        bm::bvector<>& bv_uni_k_mer = sg->get_kmer_union();
+//        bm::id64_t uni_and_cnt = bm::count_and(bv_k_mer, bv_uni_k_mer);
+        bm::id64_t uni_and_cnt = sg->count_and_union_sync(bv_k_mer);
         if (uni_and_cnt > best_score)
         {
             cand_idx = i; best_score = uni_and_cnt;
@@ -1190,7 +1241,7 @@ void assign_to_best_cluster(CSeqClusters& cluster_groups,
     if (cand_idx != ~0ull) // cluster association via representative
     {
         CSeqGroup* sg = cluster_groups.get_group(cand_idx);
-        sg->add_member_sync(seq_id);
+        sg->add_member_sync(seq_id, bv_k_mer);
         return;
     }
 }
@@ -1219,21 +1270,24 @@ void compute_random_clusters(CSeqClusters& cluster_groups,
         CSeqGroup* sg = new CSeqGroup(idx);
         cluster_groups.add_group(sg);
 
-        if (parallel_cnt < concurrency)
+        do
         {
-        schedule_job:
-            futures.emplace_back(
-                std::async(std::launch::async,
-                [&seq_coll, sg, similarity_cut_off]() { compute_group(*sg, seq_coll, similarity_cut_off); }
-                ));
-            ++parallel_cnt;
-        }
-        else
-        {
-            // wait for an async() slot to open
-            ::wait_for_slot(futures, &parallel_cnt, concurrency);
-            goto schedule_job;
-        }
+            if (parallel_cnt < concurrency)
+            {
+                futures.emplace_back(
+                    std::async(std::launch::async,
+                    [&seq_coll, sg, similarity_cut_off]()
+                        { compute_group(*sg, seq_coll, similarity_cut_off); }
+                    ));
+                ++parallel_cnt;
+                break;
+            }
+            else
+            {
+                // wait for an async() slot to open
+                ::wait_for_slot(futures, &parallel_cnt, concurrency);
+            }
+        } while(1);
     } // for en
 
     // wait for completion of initial cluster group formation
@@ -1242,7 +1296,8 @@ void compute_random_clusters(CSeqClusters& cluster_groups,
 }
 
 static
-void compute_jaccard_clusters(const CSequenceColl& seq_coll,
+void compute_jaccard_clusters(CSeqClusters& seq_clusters,
+                              const CSequenceColl& seq_coll,
                               unsigned num_clust,
                               float similarity_cut_off,
                               unsigned concurrency)
@@ -1251,85 +1306,113 @@ void compute_jaccard_clusters(const CSequenceColl& seq_coll,
     if (!seq_coll.buf_size())
         return; // nothing to do
 
-    CSeqClusters cluster_groups;
+    bm::random_subset<bm::bvector<> > rsub; // sub-set getter
 
     bm::bvector<> bv_total;
     bv_total.set_range(0, seq_coll.buf_size());
 
-    bm::random_subset<bm::bvector<> > rsub; // sub-set getter
+    bm::id64_t rcount;
 
-    compute_random_clusters(cluster_groups, seq_coll, bv_total, rsub,
-                            num_clust, similarity_cut_off, concurrency);
-
-    // remove possible empty clusters (inital seeds were picked at random)
-    //
-    cluster_groups.clear_empty_groups();
-
-    cluster_groups.resolve_duplicates(seq_coll);
-
-    cluster_groups.clear_empty_groups();
-
-    // print summary after the initial formation of cluster groups
-    //
-    cluster_groups.print_summary();
-
-    // re-elect representatives
-    cluster_groups.elect_leaders(seq_coll, concurrency);
-
-    cluster_groups.print_summary();
-
-    // sub-set of sequence ids already distributed into clusters
+    const unsigned max_pass = 3;
+    for (unsigned pass = 0; pass < max_pass; ++pass)
     {
-        bv_total.set_range(0, seq_coll.buf_size());
-        cout << " total = " << bv_total.count() << endl;
-        const bm::bvector<>& bv_clust = cluster_groups.union_all_groups();
-        cout << " clustered = " << bv_clust.count() << endl;
+        CSeqClusters cluster_groups;
 
-        bv_total -= bv_clust; // exlude all already clustered
-        cout << " remain = " << bv_total.count() << endl;
+        compute_random_clusters(cluster_groups, seq_coll, bv_total, rsub,
+                                num_clust, similarity_cut_off, concurrency);
 
+        // remove possible empty clusters (inital seeds were picked at random)
+        //
+        cluster_groups.clear_empty_groups();
+
+        cluster_groups.resolve_duplicates(seq_coll);
+
+        cluster_groups.clear_empty_groups();
+
+        // print summary after the initial formation of cluster groups
+        //
+        cluster_groups.print_summary("Inital cluster formations:");
+
+        // re-elect representatives
+        cluster_groups.elect_leaders(seq_coll, concurrency);
+
+        cluster_groups.print_summary("After lead re-election:");
+
+        // sub-set of sequence ids already distributed into clusters
+        {
+            cout << " total = " << bv_total.count() << endl;
+            const bm::bvector<>& bv_clust = cluster_groups.union_all_groups();
+            cout << " clustered = " << bv_clust.count() << endl;
+
+            bv_total -= bv_clust; // exlude all already clustered
+            cout << " remain = " << bv_total.count() << endl;
+        }
+
+        std::list<std::future<void> > futures;
+        unsigned parallel_cnt = 0;
+        for (bm::bvector<>::enumerator en(bv_total); en.valid(); ++en)
+        {
+            auto seq_id = *en;
+            const unsigned char* buf = seq_coll.get_buf(seq_id);
+            if (!buf)
+                continue;
+            do
+            {
+                if (parallel_cnt < concurrency)
+                {
+                    futures.emplace_back(
+                        std::async(std::launch::async,
+                        [&cluster_groups, seq_id, buf]()
+                            { assign_to_best_cluster(cluster_groups, seq_id, buf); }
+                        ));
+                    ++parallel_cnt;
+                    break;
+                }
+                else
+                {
+                    // wait for an async() slot to open
+                    ::wait_for_slot(futures, &parallel_cnt, concurrency);
+                }
+            } while(1);
+
+        } // for (all sequences)
+        for (auto& e : futures)
+            e.wait();
+
+        cluster_groups.print_summary("Clusters after phase 2 recruitment");
+
+        // check if there are sequences not yet belonging to any cluster
+        {
+            const bm::bvector<>& bv_clust = cluster_groups.union_all_groups();
+            bv_total -= bv_clust; // exlude all already clustered
+            rcount = bv_total.count();
+            if (rcount)
+            {
+                cout << "Undistributed sequences = " << rcount << endl;
+            }
+            else
+            {
+                seq_clusters.merge_from(cluster_groups);
+                break;
+            }
+        }
+        seq_clusters.merge_from(cluster_groups);
+        bm::id64_t avg_group_count = seq_clusters.compute_avg_count();
+        if (rcount < avg_group_count) // not worth another pass ?
+        {
+            seq_clusters.take_group(bv_total);
+            break;
+        }
+
+        cout << "PASS=" << (pass+1) << endl << endl;
     }
 
-    std::list<std::future<void> > futures;
-    unsigned parallel_cnt = 0;
-    for (bm::bvector<>::enumerator en(bv_total); en.valid(); ++en)
+    if (rcount)
     {
-        auto seq_id = *en;
-        const unsigned char* buf = seq_coll.get_buf(seq_id);
-        if (!buf)
-            continue;
-        if (parallel_cnt < concurrency)
-        {
-        schedule_job:
-            futures.emplace_back(
-                std::async(std::launch::async,
-                [&cluster_groups, seq_id, buf]() { assign_to_best_cluster(cluster_groups, seq_id, buf); }
-                ));
-            ++parallel_cnt;
-        }
-        else
-        {
-            // wait for an async() slot to open
-            ::wait_for_slot(futures, &parallel_cnt, concurrency);
-            goto schedule_job;
-        }
-    } // for (all sequences)
-    for (auto& e : futures)
-        e.wait();
-
-    cluster_groups.print_summary();
-
-    // check if there are sequences not yet belonging to any cluster
-    {
-        bv_total.set_range(0, seq_coll.buf_size());
-        const bm::bvector<>& bv_clust = cluster_groups.union_all_groups();
-
-        bv_total -= bv_clust; // exlude all already clustered
-        if (bv_total.any())
-        {
-            cout << "Undistributed sequences = " << bv_total.count() << endl;
-        }
+        seq_clusters.take_group(bv_total);
     }
+
+    seq_clusters.print_summary("Final clusters summary:");
 
 }
 
@@ -1397,18 +1480,6 @@ void compute_distances(const CSequenceColl& seq_coll,
     }
 
 }
-/*
-static
-void compute_distances(distance_matrix_type& dm, const CSequenceColl& seq_coll)
-{
-    auto sz = seq_coll.buf_size();
-    for (size_t i = 0; i < sz; ++i)
-    {
-        compute_distances(dm, seq_coll, i);
-        cout << "\r" << i << flush;
-    }
-}
-*/
 
 int main(int argc, char *argv[])
 {
@@ -1460,8 +1531,9 @@ int main(int argc, char *argv[])
 
             if (seq_coll.buf_size())
             {
+                CSeqClusters seq_clusters;
                 bm::chrono_taker tt1("5. k-mer similarity clustering", 1, &timing_map);
-                compute_jaccard_clusters(seq_coll, 10, 0.05f, parallel_jobs);
+                compute_jaccard_clusters(seq_clusters, seq_coll, 10, 0.05f, parallel_jobs);
             }
         }
 
