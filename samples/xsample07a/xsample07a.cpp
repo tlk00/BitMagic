@@ -987,7 +987,10 @@ void CSeqClusters::elect_leaders(const CSequenceColl& seq_coll,
         auto N = bv_all_members.count();
         auto all_members_count = N; (void) all_members_count;
 
-        const unsigned k_max_electors = 500;
+        // size of the "electoral colledge" here depends on available concurrency
+        // TODO: (is that right?)
+        const unsigned k_max_electors = 200 * concurrency;
+
         const bm::bvector<>* bv_mem = &bv_all_members; // vector of electors
         bm::bvector<> bv_sub; // subset vector
         if (N > k_max_electors) // TODO: parameterize the
@@ -1056,7 +1059,6 @@ void CSeqClusters::elect_leaders(const CSequenceColl& seq_coll,
 
     for (auto& e : futures) // wait for all forked tasks
         e.wait();
-
 
 }
 
@@ -1186,6 +1188,7 @@ void resolve_duplicates(CSeqGroup& seq_group1,
 }
 
 /// Compute AND similarity to all available clusters assign to the most similar
+/// using cluster representative
 ///
 static
 void assign_to_best_cluster(CSeqClusters& cluster_groups,
@@ -1197,12 +1200,9 @@ void assign_to_best_cluster(CSeqClusters& cluster_groups,
     BM_DECLARE_TEMP_BLOCK(tb)
     bm::bvector<>::allocator_pool_type pool;
 
+
     bm::bvector<>::enumerator en(bv_seq_ids);
     en.go_to(seq_id_from);
-
-//auto range_cnt = bv_seq_ids.count_range(seq_id_from, seq_id_to);
-//cout << "Range popcnt=" << range_cnt << "[" << seq_id_from << ".." << seq_id_to << "]" << endl;
-//cout << en.valid() << endl;
 
     for ( ;en.valid(); ++en)
     {
@@ -1235,13 +1235,49 @@ void assign_to_best_cluster(CSeqClusters& cluster_groups,
                 cluster_idx = i; best_score = rep_and_cnt;
             }
         } // for i
+
         if (cluster_idx != ~0ull) // cluster association via representative
         {
             CSeqGroup* sg = cluster_groups.get_group(cluster_idx);
             sg->add_member_sync(seq_id, bv_k_mer);
-//cout << "+" << endl;
         }
-        else
+    } // for all seq-ids in the range
+
+}
+
+/// Compute AND similarity to all available clusters assign to the most similar
+/// using UNION of k-mers in the cluster
+/// This is a more relaxed assignmnet, used when representative does not work
+static
+void assign_to_best_cluster_union(CSeqClusters& cluster_groups,
+                            const CSequenceColl& seq_coll,
+                            const bm::bvector<>& bv_seq_ids,
+                            bm::bvector<>::size_type seq_id_from,
+                            bm::bvector<>::size_type seq_id_to)
+{
+    BM_DECLARE_TEMP_BLOCK(tb)
+    bm::bvector<>::allocator_pool_type pool;
+
+    bm::bvector<>::enumerator en(bv_seq_ids);
+    en.go_to(seq_id_from);
+
+    for ( ;en.valid(); ++en)
+    {
+        auto seq_id = *en;
+        if (seq_id > seq_id_to)
+            break;
+        const unsigned char* buf = seq_coll.get_buf(seq_id);
+        if (!buf)
+            continue;
+
+        bm::bvector<> bv_k_mer;
+        bv_k_mer.set_allocator_pool(&pool); // for faster memory recycling
+
+        bm::deserialize(bv_k_mer, buf, tb);
+
+        bm::bvector<>::size_type best_score(0);
+        size_t cluster_idx(~0ull);
+
         {
             // try to extend search using UNION of all cluster k-mers
             //
@@ -1261,12 +1297,12 @@ void assign_to_best_cluster(CSeqClusters& cluster_groups,
             {
                 CSeqGroup* sg = cluster_groups.get_group(cluster_idx);
                 sg->add_member_sync(seq_id, bv_k_mer);
-    //cout << "*" << endl;
             }
         }
     } // for all seq-ids in the range
 
 }
+
 
 /// Pick random sequences as cluster seed elements, try attach
 /// initial sequences based on weighted similarity measure
@@ -1333,7 +1369,7 @@ void compute_jaccard_clusters(CSeqClusters& seq_clusters,
     bm::bvector<> bv_total;
     bv_total.set_range(0, seq_coll.buf_size());
 
-    bm::id64_t rcount;
+    bm::id64_t rcount = 0;
 
     const unsigned max_pass = 3;
     for (unsigned pass = 0; pass < max_pass; ++pass)
@@ -1361,9 +1397,9 @@ void compute_jaccard_clusters(CSeqClusters& seq_clusters,
         cluster_groups.print_summary("After lead re-election:");
 
         // sub-set of sequence ids already distributed into clusters
-        bm::bvector<>::size_type total_count;
+        bm::bvector<>::size_type total_count = bv_total.count();
         {
-            cout << " total = " << bv_total.count() << endl;
+            cout << " total = " << total_count << endl;
             const bm::bvector<>& bv_clust = cluster_groups.union_all_groups();
             cout << " clustered = " << bv_clust.count() << endl;
 
@@ -1387,9 +1423,6 @@ void compute_jaccard_clusters(CSeqClusters& seq_clusters,
         {
             auto seq_id_from = pair_vect[k].first;
             auto seq_id_to = pair_vect[k].second;
-//auto range_cnt = bv_total.count_range(seq_id_from, seq_id_to);
-//cout << "Range popcnt=" << range_cnt << "[" << seq_id_from << ".." << seq_id_to << "]" << endl;
-
             futures.emplace_back(
                 std::async(std::launch::async,
                 [&cluster_groups, &seq_coll, &bv_total, seq_id_from, seq_id_to]()
@@ -1425,6 +1458,52 @@ void compute_jaccard_clusters(CSeqClusters& seq_clusters,
         }
 
         cout << "PASS=" << (pass+1) << endl << endl;
+    } // for pass
+
+    // try to assign to the global pool of clusters using UNION
+    // which relaxes assignmnet
+
+    if (rcount)
+    {
+        {
+            const bm::bvector<>& bv_clust = seq_clusters.union_all_groups();
+            cout << endl << " clustered = " << bv_clust.count() << endl;
+
+            bv_total -= bv_clust; // exlude all already clustered
+            rcount = bv_total.count();
+            cout << " remain = " << rcount << endl;
+        }
+
+        if (rcount)
+        {
+            bv_ranges_vector pair_vect;
+            bm::bvector<>::size_type split_rank = rcount / concurrency;
+            bm::rank_range_split(bv_total, split_rank, pair_vect);
+
+            std::list<std::future<void> > futures;
+
+            for (size_t k = 0; k < pair_vect.size(); ++k)
+            {
+                auto seq_id_from = pair_vect[k].first;
+                auto seq_id_to = pair_vect[k].second;
+                futures.emplace_back(
+                    std::async(std::launch::async,
+                    [&seq_clusters, &seq_coll, &bv_total, seq_id_from, seq_id_to]()
+                        { assign_to_best_cluster_union(seq_clusters, seq_coll, bv_total, seq_id_from, seq_id_to); }
+                    ));
+            }
+            for (auto& e : futures) // sync point
+                e.wait();
+            {
+                const bm::bvector<>& bv_clust = seq_clusters.union_all_groups();
+                cout << endl << " clustered = " << bv_clust.count() << endl;
+
+                bv_total -= bv_clust; // exlude all already clustered
+                rcount = bv_total.count();
+                cout << " remain = " << rcount << endl;
+            }
+
+        }
     }
 
     if (rcount)
