@@ -401,7 +401,9 @@ void visit_each_bit_range(const BV&                 bv,
 
     @param bv       - bit vector to perform the range split scan
     @param rank     - requested number of bits in each range
-    @param target_v - [out] STL vector of pairs to keep scan results
+                      if 0 it will create single range [first..last]
+                      to cover the whole bv
+    @param target_v - [out] STL(or STL-like) vector of pairs to keep pairs results
 
     \ingroup setalgo
  */
@@ -411,13 +413,18 @@ void rank_range_split(const BV&              bv,
                       PairVect&              target_v)
 {
     target_v.resize(0);
-    if (!rank)
-        return;
-
     typename BV::size_type first, last, pos;
     bool found = bv.find_range(first, last);
     if (!found) // empty bit-vector
         return;
+
+    if (!rank) // if rank is not defined, include the whole vector [first..last]
+    {
+        typename PairVect::value_type pv;
+        pv.first = first; pv.second = last;
+        target_v.push_back(pv);
+        return;
+    }
 
     while (1)
     {
