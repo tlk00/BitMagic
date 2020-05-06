@@ -3641,7 +3641,7 @@ void BlockBitEraseTest()
 
         blk0[1] = 15u; // ..01111
         bm::bit_block_erase(blk0, 33, false);
-        assert(blk0[1] == 0b111);
+        assert(blk0[1] == 7); //0b111
     }
     
     {

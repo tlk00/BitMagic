@@ -433,8 +433,8 @@ private:
     /// @internal
     struct arena
     {
-        BM_DECLARE_TEMP_BLOCK(tb1);
-        BM_DECLARE_TEMP_BLOCK(tb_opt);  ///< temp block for results optimization
+        BM_DECLARE_TEMP_BLOCK(tb1)
+        BM_DECLARE_TEMP_BLOCK(tb_opt)  ///< temp block for results optimization
         const bm::word_t*     v_arg_or_blk[max_aggregator_cap];     ///< source blocks list (OR)
         const bm::gap_word_t* v_arg_or_blk_gap[max_aggregator_cap]; ///< source GAP blocks list (OR)
         const bm::word_t*     v_arg_and_blk[max_aggregator_cap];     ///< source blocks list (AND)
