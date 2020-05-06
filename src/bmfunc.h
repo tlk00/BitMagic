@@ -144,6 +144,7 @@ struct  bit_decode_cache
     \internal
 */
 template<typename BI_TYPE>
+BMFORCEINLINE
 void get_block_coord(BI_TYPE nb, unsigned& i, unsigned& j) BMNOEXCEPT
 {
     i = unsigned(nb >> bm::set_array_shift); // top block address
@@ -171,6 +172,42 @@ BMFORCEINLINE RTYPE get_block_start(unsigned i, unsigned j) BMNOEXCEPT
     idx += (j) * bm::gap_max_bits;
     return idx;
 }
+
+/*! \brief GAP and functor
+    \internal
+ */
+BMFORCEINLINE unsigned and_op(unsigned v1, unsigned v2) BMNOEXCEPT2
+{
+    return v1 & v2;
+}
+
+
+/*! \brief GAP xor functor
+    \internal
+*/
+BMFORCEINLINE unsigned xor_op(unsigned v1, unsigned v2) BMNOEXCEPT2
+{
+    return v1 ^ v2;
+}
+
+
+/*! \brief GAP or functor
+    \internal
+*/
+BMFORCEINLINE unsigned or_op(unsigned v1, unsigned v2) BMNOEXCEPT2
+{
+    return v1 | v2;
+}
+
+/*! \brief GAP or functor
+    \internal
+*/
+BMFORCEINLINE unsigned sub_op(unsigned v1, unsigned v2) BMNOEXCEPT2
+{
+    return v1 & ~v2;
+}
+
+
 
 /*! 
     @defgroup gapfunc GAP functions
@@ -5603,32 +5640,6 @@ bool block_any(const bm::word_t* const BMRESTRICT block) BMNOEXCEPT
 
 // GAP blocks manipulation functions:
 
-/*! \brief GAP and functor */
-BMFORCEINLINE unsigned and_op(unsigned v1, unsigned v2) BMNOEXCEPT2
-{
-    return v1 & v2;
-}
-
-
-/*! \brief GAP xor functor */
-BMFORCEINLINE unsigned xor_op(unsigned v1, unsigned v2) BMNOEXCEPT2
-{
-    return v1 ^ v2;
-}
-
-
-/*! \brief GAP or functor */
-BMFORCEINLINE unsigned or_op(unsigned v1, unsigned v2) BMNOEXCEPT2
-{
-    return v1 | v2;
-}
-
-/*! \brief GAP or functor */
-BMFORCEINLINE unsigned sub_op(unsigned v1, unsigned v2) BMNOEXCEPT2
-{
-    return v1 & ~v2;
-}
-
 
 /*!
    \brief GAP AND operation.
@@ -5646,7 +5657,7 @@ BMFORCEINLINE unsigned sub_op(unsigned v1, unsigned v2) BMNOEXCEPT2
 
    @ingroup gapfunc
 */
-BMFORCEINLINE 
+inline
 gap_word_t* gap_operation_and(const gap_word_t* BMRESTRICT vect1,
                               const gap_word_t* BMRESTRICT vect2,
                               gap_word_t*       BMRESTRICT tmp_buf,
@@ -5670,7 +5681,7 @@ gap_word_t* gap_operation_and(const gap_word_t* BMRESTRICT vect1,
 
    @ingroup gapfunc
 */
-BMFORCEINLINE 
+inline
 unsigned gap_operation_any_and(const gap_word_t* BMRESTRICT vect1,
                                const gap_word_t* BMRESTRICT vect2) BMNOEXCEPT
 {
