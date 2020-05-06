@@ -28,6 +28,7 @@ For more information please visit:  http://bitmagic.io
 
 #include <assert.h>
 #include <stdlib.h>
+#include <math.h>
 
 #include <iostream>
 #include <vector>
@@ -704,6 +705,14 @@ public:
         m_bv_members.set_bit_no_check(id); // a bit faster than set()
         m_bv_kmer_union |= bv_kmer;
     }
+
+    void merge_member_sync(bm::bvector<>& bv_seq, bm::bvector<>& bv_kmer)
+    {
+        std::lock_guard<std::mutex> guard(mtx_add_member_lock);
+        m_bv_members.merge(bv_seq);
+        m_bv_kmer_union.merge(bv_kmer);
+    }
+
     bm::id64_t count_and_union_sync(const bm::bvector<>& bv)
     {
         std::lock_guard<std::mutex> guard(mtx_add_member_lock);
@@ -987,15 +996,16 @@ void CSeqClusters::elect_leaders(const CSequenceColl& seq_coll,
         auto N = bv_all_members.count();
         auto all_members_count = N; (void) all_members_count;
 
-        // size of the "electoral colledge" here depends on available concurrency
-        // TODO: (is that right?)
-        const unsigned k_max_electors = 200 * concurrency;
+        // determine the size of the "electoral colledge" on available concurrency
+        unsigned k_max_electors = 200 * unsigned(log2(concurrency));
+        if (k_max_electors < 500)
+            k_max_electors = 500;
 
         const bm::bvector<>* bv_mem = &bv_all_members; // vector of electors
         bm::bvector<> bv_sub; // subset vector
         if (N > k_max_electors) // TODO: parameterize the
         {
-            // pick a random sub-set as "electoral colledge"
+            // pick a random sub-set as the "electoral colledge"
             rsub.sample(bv_sub, bv_all_members, k_max_electors);
             bv_sub.set(sg->get_lead()); // current leader always takes part
             bv_mem = &bv_sub;
@@ -1187,6 +1197,36 @@ void resolve_duplicates(CSeqGroup& seq_group1,
     }
 }
 
+/// Utility class to accumulate cahnges to cluster
+/// before commiting it (mutex syncronous operation)
+///
+struct CKMerAcc
+{
+    CKMerAcc(size_t sz)
+    : bv_members(sz), bv_kmers(sz)
+    {}
+
+    void add(size_t cluster_id,
+             bm::bvector<>::size_type m_id, bm::bvector<>& bv_kmer)
+    {
+        bm::bvector<>* bv_m = bv_members[cluster_id].get();
+        bm::bvector<>* bv_k = bv_kmers[cluster_id].get();
+        if (!bv_m)
+        {
+            assert(!bv_kmers[cluster_id].get());
+            bv_members[cluster_id].reset(new bm::bvector<>(bm::BM_GAP));
+            bv_kmers[cluster_id].reset(new bm::bvector<>(bm::BM_GAP));
+            bv_m = bv_members[cluster_id].get();
+            bv_k = bv_kmers[cluster_id].get();
+        }
+        bv_m->set(m_id);
+        bv_k->merge(bv_kmer);
+    }
+
+    bvector_ptr_vector_type bv_members;
+    bvector_ptr_vector_type bv_kmers;
+};
+
 /// Compute AND similarity to all available clusters assign to the most similar
 /// using cluster representative
 ///
@@ -1200,6 +1240,7 @@ void assign_to_best_cluster(CSeqClusters& cluster_groups,
     BM_DECLARE_TEMP_BLOCK(tb)
     bm::bvector<>::allocator_pool_type pool;
 
+    CKMerAcc acc(cluster_groups.groups_size());
 
     bm::bvector<>::enumerator en(bv_seq_ids);
     en.go_to(seq_id_from);
@@ -1238,10 +1279,25 @@ void assign_to_best_cluster(CSeqClusters& cluster_groups,
 
         if (cluster_idx != ~0ull) // cluster association via representative
         {
+            acc.add(cluster_idx, seq_id, bv_k_mer);
+            /*
             CSeqGroup* sg = cluster_groups.get_group(cluster_idx);
             sg->add_member_sync(seq_id, bv_k_mer);
+            */
         }
     } // for all seq-ids in the range
+
+    // merge all accumulated cluster assignmnets all at once
+    //
+    for (size_t i = 0; i < cluster_groups.groups_size(); ++i)
+    {
+        bm::bvector<>* bv_m = acc.bv_members[i].get();
+        if (!bv_m)
+            continue;
+        bm::bvector<>* bv_k = acc.bv_kmers[i].get();
+        CSeqGroup* sg = cluster_groups.get_group(i);
+        sg->merge_member_sync(*bv_m, *bv_k);
+    } // for
 
 }
 
@@ -1494,14 +1550,14 @@ void compute_jaccard_clusters(CSeqClusters& seq_clusters,
             }
             for (auto& e : futures) // sync point
                 e.wait();
-            {
-                const bm::bvector<>& bv_clust = seq_clusters.union_all_groups();
-                cout << endl << " clustered = " << bv_clust.count() << endl;
+        {
+            const bm::bvector<>& bv_clust = seq_clusters.union_all_groups();
+            cout << endl << " clustered = " << bv_clust.count() << endl;
 
-                bv_total -= bv_clust; // exlude all already clustered
-                rcount = bv_total.count();
-                cout << " remain = " << rcount << endl;
-            }
+            bv_total -= bv_clust; // exlude all already clustered
+            rcount = bv_total.count();
+            cout << " remain = " << rcount << endl;
+        }
 
         }
     }
