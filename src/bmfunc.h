@@ -173,41 +173,6 @@ BMFORCEINLINE RTYPE get_block_start(unsigned i, unsigned j) BMNOEXCEPT
     return idx;
 }
 
-/*! \brief GAP and functor
-    \internal
- */
-BMFORCEINLINE unsigned and_op(unsigned v1, unsigned v2) BMNOEXCEPT2
-{
-    return v1 & v2;
-}
-
-
-/*! \brief GAP xor functor
-    \internal
-*/
-BMFORCEINLINE unsigned xor_op(unsigned v1, unsigned v2) BMNOEXCEPT2
-{
-    return v1 ^ v2;
-}
-
-
-/*! \brief GAP or functor
-    \internal
-*/
-BMFORCEINLINE unsigned or_op(unsigned v1, unsigned v2) BMNOEXCEPT2
-{
-    return v1 | v2;
-}
-
-/*! \brief GAP or functor
-    \internal
-*/
-BMFORCEINLINE unsigned sub_op(unsigned v1, unsigned v2) BMNOEXCEPT2
-{
-    return v1 & ~v2;
-}
-
-
 
 /*! 
     @defgroup gapfunc GAP functions

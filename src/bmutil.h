@@ -434,6 +434,42 @@ unsigned bit_scan_reverse(T value) BMNOEXCEPT
     return bm::bit_scan_reverse32((unsigned)value);
 }
 
+/*! \brief and functor
+    \internal
+ */
+BMFORCEINLINE unsigned and_op(unsigned v1, unsigned v2) BMNOEXCEPT2
+{
+    return v1 & v2;
+}
+
+
+/*! \brief xor functor
+    \internal
+*/
+BMFORCEINLINE unsigned xor_op(unsigned v1, unsigned v2) BMNOEXCEPT2
+{
+    return v1 ^ v2;
+}
+
+
+/*! \brief or functor
+    \internal
+*/
+BMFORCEINLINE unsigned or_op(unsigned v1, unsigned v2) BMNOEXCEPT2
+{
+    return v1 | v2;
+}
+
+/*! \brief AND NOT (MINUS) or functor
+    \internal
+*/
+BMFORCEINLINE unsigned sub_op(unsigned v1, unsigned v2) BMNOEXCEPT2
+{
+    return v1 & ~v2;
+}
+
+
+
 
 #ifdef __GNUG__
 #pragma GCC diagnostic pop
