@@ -437,37 +437,39 @@ unsigned bit_scan_reverse(T value) BMNOEXCEPT
 /*! \brief and functor
     \internal
  */
-BMFORCEINLINE unsigned and_op(unsigned v1, unsigned v2) BMNOEXCEPT2
+struct and_func
 {
-    return v1 & v2;
-}
-
-
+    static
+    BMFORCEINLINE unsigned op(unsigned v1, unsigned v2) BMNOEXCEPT2
+        { return v1 & v2; }
+};
 /*! \brief xor functor
     \internal
-*/
-BMFORCEINLINE unsigned xor_op(unsigned v1, unsigned v2) BMNOEXCEPT2
+ */
+struct xor_func
 {
-    return v1 ^ v2;
-}
-
-
+    static
+    BMFORCEINLINE unsigned op(unsigned v1, unsigned v2) BMNOEXCEPT2
+        { return v1 ^ v2; }
+};
 /*! \brief or functor
     \internal
-*/
-BMFORCEINLINE unsigned or_op(unsigned v1, unsigned v2) BMNOEXCEPT2
+ */
+struct or_func
 {
-    return v1 | v2;
-}
-
-/*! \brief AND NOT (MINUS) or functor
+    static
+    BMFORCEINLINE unsigned op(unsigned v1, unsigned v2) BMNOEXCEPT2
+        { return v1 | v2; }
+};
+/*! \brief sub functor
     \internal
-*/
-BMFORCEINLINE unsigned sub_op(unsigned v1, unsigned v2) BMNOEXCEPT2
+ */
+struct sub_func
 {
-    return v1 & ~v2;
-}
-
+    static
+    BMFORCEINLINE unsigned op(unsigned v1, unsigned v2) BMNOEXCEPT2
+        { return v1 & ~v2; }
+};
 
 
 

@@ -10626,9 +10626,9 @@ void GAPCheck()
    print_gap(gapv2, 0);
 
    unsigned dsize=0;
-   bm::gap_buff_op((gap_word_t*)gapv.get_buf(), 
+   bm::gap_buff_op<bm::gap_word_t, bm::and_func>((gap_word_t*)gapv.get_buf(),
                          gapv1.get_buf(), 0,
-                         gapv2.get_buf(), 0, bm::and_op, 
+                         gapv2.get_buf(), 0, 
                          dsize); 
    print_gap(gapv, 0);
    gapv.control();

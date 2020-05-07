@@ -2359,7 +2359,6 @@ void gap_buff_op(T*         BMRESTRICT dest,
                  unsigned   vect1_mask, 
                  const T*   BMRESTRICT vect2,
                  unsigned   vect2_mask, 
-                 F&         f,
                  unsigned&  dlen) BMNOEXCEPT2
 {
     const T*  cur1 = vect1;
@@ -2368,7 +2367,7 @@ void gap_buff_op(T*         BMRESTRICT dest,
     T bitval1 = (T)((*cur1++ & 1) ^ vect1_mask);
     T bitval2 = (T)((*cur2++ & 1) ^ vect2_mask);
     
-    T bitval = (T) f(bitval1, bitval2);
+    T bitval = (T) F::op(bitval1, bitval2);
     T bitval_prev = bitval;
 
     T* res = dest;
@@ -2378,7 +2377,7 @@ void gap_buff_op(T*         BMRESTRICT dest,
     T c1 = *cur1; T c2 = *cur2;
     while (1)
     {
-        bitval = (T) f(bitval1, bitval2);
+        bitval = (T) F::op(bitval1, bitval2);
 
         // Check if GAP value changes and we need to 
         // start the next one
@@ -2435,7 +2434,6 @@ void gap_buff_op(T*         BMRESTRICT dest,
 template<typename T, class F>
 bool gap_buff_dry_op(const T*   BMRESTRICT vect1,
                      const T*   BMRESTRICT vect2,
-                          F&         f,
                      unsigned&  dlen,
                      unsigned limit) BMNOEXCEPT2
 {
@@ -2445,7 +2443,7 @@ bool gap_buff_dry_op(const T*   BMRESTRICT vect1,
     T bitval1 = (T)((*cur1++ & 1));
     T bitval2 = (T)((*cur2++ & 1));
 
-    T bitval = (T) f(bitval1, bitval2);
+    T bitval = (T) F::op(bitval1, bitval2);
     T bitval_prev = bitval;
 
     unsigned len = 1;
@@ -2453,7 +2451,7 @@ bool gap_buff_dry_op(const T*   BMRESTRICT vect1,
     T c1 = *cur1; T c2 = *cur2;
     while (1)
     {
-        bitval = (T) f(bitval1, bitval2);
+        bitval = (T) F::op(bitval1, bitval2);
 
         // Check if GAP value changes and we need to
         // start the next one
@@ -2509,8 +2507,7 @@ template<typename T, class F>
 unsigned gap_buff_any_op(const T*   BMRESTRICT vect1,
                          unsigned              vect1_mask, 
                          const T*   BMRESTRICT vect2,
-                         unsigned              vect2_mask, 
-                         F                     f) BMNOEXCEPT2	
+                         unsigned              vect2_mask) BMNOEXCEPT2
 {
     const T*  cur1 = vect1;
     const T*  cur2 = vect2;
@@ -2518,14 +2515,14 @@ unsigned gap_buff_any_op(const T*   BMRESTRICT vect1,
     unsigned bitval1 = (*cur1++ & 1) ^ vect1_mask;
     unsigned bitval2 = (*cur2++ & 1) ^ vect2_mask;
     
-    unsigned bitval = f(bitval1, bitval2);
+    unsigned bitval = F::op(bitval1, bitval2);
     if (bitval)
         return bitval;
     unsigned bitval_prev = bitval;
 
     while (1)
     {
-        bitval = f(bitval1, bitval2);
+        bitval = F::op(bitval1, bitval2);
         if (bitval)
             return bitval;
 
@@ -2549,10 +2546,8 @@ unsigned gap_buff_any_op(const T*   BMRESTRICT vect1,
                 {
                     break;
                 }
-
                 ++cur1;
-                bitval1 ^= 1;
-                bitval2 ^= 1;
+                bitval1 ^= 1; bitval2 ^= 1;
             }
             ++cur2;
         }
@@ -2575,7 +2570,7 @@ unsigned gap_buff_any_op(const T*   BMRESTRICT vect1,
    @ingroup gapfunc
 */
 template<typename T, class F> 
-unsigned gap_buff_count_op(const T*  vect1, const T*  vect2, F f) BMNOEXCEPT2
+unsigned gap_buff_count_op(const T*  vect1, const T*  vect2) BMNOEXCEPT2
 {
     unsigned count;// = 0;
     const T* cur1 = vect1;
@@ -2583,18 +2578,15 @@ unsigned gap_buff_count_op(const T*  vect1, const T*  vect2, F f) BMNOEXCEPT2
 
     unsigned bitval1 = (*cur1++ & 1);
     unsigned bitval2 = (*cur2++ & 1);
-    unsigned bitval = count = f(bitval1, bitval2);
+    unsigned bitval = count = F::op(bitval1, bitval2);
     unsigned bitval_prev = bitval;
 
-    //if (bitval) ++count;
-    
     T res, res_prev;
     res = res_prev = 0;
 
     while (1)
     {
-        bitval = f(bitval1, bitval2);
-
+        bitval = F::op(bitval1, bitval2);
         // Check if GAP value changes and we need to 
         // start the next one.
         if (bitval != bitval_prev)
@@ -5628,7 +5620,8 @@ gap_word_t* gap_operation_and(const gap_word_t* BMRESTRICT vect1,
                               gap_word_t*       BMRESTRICT tmp_buf,
                               unsigned&         dsize) BMNOEXCEPT
 {
-    bm::gap_buff_op(tmp_buf, vect1, 0, vect2, 0, bm::and_op, dsize);
+    bm::gap_buff_op<bm::gap_word_t, bm::and_func>(
+                                        tmp_buf, vect1, 0, vect2, 0, dsize);
     return tmp_buf;
 }
 
@@ -5650,7 +5643,7 @@ inline
 unsigned gap_operation_any_and(const gap_word_t* BMRESTRICT vect1,
                                const gap_word_t* BMRESTRICT vect2) BMNOEXCEPT
 {
-    return gap_buff_any_op(vect1, 0, vect2, 0, and_op);
+    return gap_buff_any_op<bm::gap_word_t, bm::and_func>(vect1, 0, vect2, 0);
 }
 
 
@@ -5667,7 +5660,7 @@ inline
 unsigned gap_count_and(const gap_word_t* BMRESTRICT vect1,
                        const gap_word_t* BMRESTRICT vect2) BMNOEXCEPT
 {
-    return gap_buff_count_op(vect1, vect2, and_op);
+    return bm::gap_buff_count_op<bm::gap_word_t, bm::and_func>(vect1, vect2);
 }
 
 
@@ -5694,7 +5687,8 @@ gap_word_t* gap_operation_xor(const gap_word_t*  BMRESTRICT vect1,
                               gap_word_t*        BMRESTRICT tmp_buf,
                               unsigned&                     dsize) BMNOEXCEPT
 {
-    gap_buff_op(tmp_buf, vect1, 0, vect2, 0, bm::xor_op, dsize);
+    bm::gap_buff_op<bm::gap_word_t, bm::xor_func>(
+                                        tmp_buf, vect1, 0, vect2, 0, dsize);
     return tmp_buf;
 }
 
@@ -5707,7 +5701,8 @@ bool gap_operation_dry_xor(const gap_word_t*  BMRESTRICT vect1,
                            unsigned&                     dsize,
                            unsigned limit) BMNOEXCEPT
 {
-    return gap_buff_dry_op(vect1, vect2, bm::xor_op, dsize, limit);
+    return
+    bm::gap_buff_dry_op<bm::gap_word_t, bm::xor_func>(vect1, vect2, dsize, limit);
 }
 
 
@@ -5729,7 +5724,7 @@ BMFORCEINLINE
 unsigned gap_operation_any_xor(const gap_word_t* BMRESTRICT vect1,
                                const gap_word_t* BMRESTRICT vect2) BMNOEXCEPT
 {
-    return gap_buff_any_op(vect1, 0, vect2, 0, bm::xor_op);
+    return gap_buff_any_op<bm::gap_word_t, bm::xor_func>(vect1, 0, vect2, 0);
 }
 
 /*!
@@ -5741,11 +5736,11 @@ unsigned gap_operation_any_xor(const gap_word_t* BMRESTRICT vect1,
 
    @ingroup gapfunc
 */
-BMFORCEINLINE 
+BMFORCEINLINE
 unsigned gap_count_xor(const gap_word_t* BMRESTRICT vect1,
                        const gap_word_t* BMRESTRICT vect2) BMNOEXCEPT
 {
-    return gap_buff_count_op(vect1, vect2, bm::xor_op);
+    return bm::gap_buff_count_op<bm::gap_word_t, bm::xor_func>(vect1, vect2);
 }
 
 
@@ -5772,8 +5767,8 @@ gap_word_t* gap_operation_or(const gap_word_t*  BMRESTRICT vect1,
                              gap_word_t*        BMRESTRICT tmp_buf,
                              unsigned&                     dsize) BMNOEXCEPT
 {
-    gap_buff_op(tmp_buf, vect1, 1, vect2, 1, bm::and_op, dsize);
-    gap_invert(tmp_buf);
+    bm::gap_buff_op<bm::gap_word_t, bm::and_func>(tmp_buf, vect1, 1, vect2, 1, dsize);
+    bm::gap_invert(tmp_buf);
     return tmp_buf;
 }
 
@@ -5790,7 +5785,7 @@ BMFORCEINLINE
 unsigned gap_count_or(const gap_word_t* BMRESTRICT vect1,
                       const gap_word_t* BMRESTRICT vect2) BMNOEXCEPT
 {
-    return gap_buff_count_op(vect1, vect2, bm::or_op);
+    return gap_buff_count_op<bm::gap_word_t, bm::or_func>(vect1, vect2);
 }
 
 
@@ -5812,12 +5807,14 @@ unsigned gap_count_or(const gap_word_t* BMRESTRICT vect1,
 
    @ingroup gapfunc
 */
-inline gap_word_t* gap_operation_sub(const gap_word_t*  BMRESTRICT vect1,
-                                     const gap_word_t*  BMRESTRICT vect2,
-                                     gap_word_t*        BMRESTRICT tmp_buf,
-                                     unsigned&                     dsize) BMNOEXCEPT
+inline
+gap_word_t* gap_operation_sub(const gap_word_t*  BMRESTRICT vect1,
+                              const gap_word_t*  BMRESTRICT vect2,
+                              gap_word_t*        BMRESTRICT tmp_buf,
+                              unsigned&                     dsize) BMNOEXCEPT
 {
-    gap_buff_op(tmp_buf, vect1, 0, vect2, 1, and_op, dsize);    
+    bm::gap_buff_op<bm::gap_word_t, bm::sub_func>(
+                                        tmp_buf, vect1, 0, vect2, 1, dsize);
     return tmp_buf;
 }
 
@@ -5836,11 +5833,12 @@ inline gap_word_t* gap_operation_sub(const gap_word_t*  BMRESTRICT vect1,
 
    @ingroup gapfunc
 */
-BMFORCEINLINE 
+inline
 unsigned gap_operation_any_sub(const gap_word_t* BMRESTRICT vect1,
                                const gap_word_t* BMRESTRICT vect2) BMNOEXCEPT
 {
-    return gap_buff_any_op(vect1, 0, vect2, 1, bm::and_op);    
+    return
+    bm::gap_buff_any_op<bm::gap_word_t, bm::sub_func>(vect1, 0, vect2, 1);
 }
 
 
@@ -5857,7 +5855,7 @@ BMFORCEINLINE
 unsigned gap_count_sub(const gap_word_t* BMRESTRICT vect1,
                        const gap_word_t* BMRESTRICT vect2) BMNOEXCEPT
 {
-    return gap_buff_count_op(vect1, vect2, bm::sub_op);
+    return bm::gap_buff_count_op<bm::gap_word_t, bm::sub_func>(vect1, vect2);
 }
 
 
