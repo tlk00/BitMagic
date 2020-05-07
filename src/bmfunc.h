@@ -2293,9 +2293,7 @@ int gapcmp(const T* buf1, const T* buf2) BMNOEXCEPT
                 return (bitval1) ? 1 : -1;
             }
         }
-
         ++pcurr1; ++pcurr2;
-
         bitval1 ^= 1;
         bitval2 ^= 1;
     }
@@ -2345,7 +2343,6 @@ bool gap_find_first_diff(const T* BMRESTRICT buf1,
    can be 0 or 1 (1 inverts the vector)
    \param vect2 - operand 2 GAP encoded buffer.
    \param vect2_mask - same as vect1_mask
-   \param f - operation functor.
    \param dlen - destination length after the operation
 
    \note Internal function.
@@ -2419,7 +2416,6 @@ void gap_buff_op(T*         BMRESTRICT dest,
           Receives functor F as a template argument
    \param vect1 - operand 1 GAP encoded buffer.
    \param vect2 - operand 2 GAP encoded buffer.
-   \param f - operation functor.
    \param dlen - destination length after the operation
    \param limit - maximum target length limit,
                   returns false if limit is reached
@@ -2497,7 +2493,6 @@ bool gap_buff_dry_op(const T*   BMRESTRICT vect1,
                        can be 0 or 1 (1 inverts the vector)
    \param vect2 - operand 2 GAP encoded buffer.
    \param vect2_mask - same as vect1_mask
-   \param f - operation functor.
    \note Internal function.
    \return non zero value if operation result returns any 1 bit 
 
@@ -2564,7 +2559,6 @@ unsigned gap_buff_any_op(const T*   BMRESTRICT vect1,
           Receives functor F as a template argument
    \param vect1 - operand 1 GAP encoded buffer.
    \param vect2 - operand 2 GAP encoded buffer.
-   \param f - operation functor.
    \note Internal function.
 
    @ingroup gapfunc
