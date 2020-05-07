@@ -10628,7 +10628,7 @@ void GAPCheck()
    unsigned dsize=0;
    bm::gap_buff_op<bm::gap_word_t, bm::and_func>((gap_word_t*)gapv.get_buf(),
                          gapv1.get_buf(), 0,
-                         gapv2.get_buf(), 0, 
+                         gapv2.get_buf(), 0,
                          dsize); 
    print_gap(gapv, 0);
    gapv.control();
@@ -27929,6 +27929,7 @@ int main(int argc, char *argv[])
       
         InterpolativeCodingTest();
         GammaEncoderTest();
+
         GAPCheck();
         SerializationBufferTest();
         TestBasicMatrix();

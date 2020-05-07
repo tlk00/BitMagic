@@ -5813,7 +5813,7 @@ gap_word_t* gap_operation_sub(const gap_word_t*  BMRESTRICT vect1,
                               gap_word_t*        BMRESTRICT tmp_buf,
                               unsigned&                     dsize) BMNOEXCEPT
 {
-    bm::gap_buff_op<bm::gap_word_t, bm::sub_func>(
+    bm::gap_buff_op<bm::gap_word_t, bm::and_func>( // no bug here
                                         tmp_buf, vect1, 0, vect2, 1, dsize);
     return tmp_buf;
 }
