@@ -910,7 +910,7 @@ void compute_frequent_kmers(BV& frequent_bv,
 
         scanner.find_eq(kmer_counts, kmer_count, bv_found); // seach for all values == 25
         auto found_cnt = bv_found.count();
-
+        (void)found_cnt;
         assert(found_cnt);
         {
             bm::bvector<>::enumerator en = bv_found.first();

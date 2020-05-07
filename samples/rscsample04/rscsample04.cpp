@@ -41,6 +41,7 @@ For more information please visit:  http://bitmagic.io
 
 #include <iostream>
 #include <vector>
+#include <cassert>
 
 #include "bm.h"
 #include "bmsparsevec.h"

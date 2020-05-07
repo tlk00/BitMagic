@@ -2114,7 +2114,7 @@ unsigned gap_bit_count_to(const T* const buf, T right,
     if (right <= *pcurr) // we are in the target block right now
     {
         bits_counter = (right + 1u) & is_set; // & is_set == if (is_set)
-        bits_counter -= (is_set & is_corrected);
+        bits_counter -= (is_set & unsigned(is_corrected));
         return bits_counter;
     }
     bits_counter += (*pcurr + 1u) & is_set;
@@ -2125,13 +2125,13 @@ unsigned gap_bit_count_to(const T* const buf, T right,
         bits_counter += (*pcurr - prev_gap) & is_set;
         if (pcurr == pend)
         {
-            bits_counter -= (is_set & is_corrected);
+            bits_counter -= (is_set & unsigned(is_corrected));
             return bits_counter;
         }
         prev_gap = *pcurr++;
     }
     bits_counter += (right - prev_gap) & is_set;
-    bits_counter -= (is_set & is_corrected);
+    bits_counter -= (is_set & unsigned(is_corrected));
     return bits_counter;
 }
 

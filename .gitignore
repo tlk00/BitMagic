@@ -49,3 +49,4 @@ utils/svutil/match.raw
 *.fa
 *.sv
 *.xml
+msvc32/bm.sln
