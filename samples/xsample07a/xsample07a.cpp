@@ -23,7 +23,14 @@ For more information please visit:  http://bitmagic.io
 
 /*! \file xsample07a.cpp
     \brief Example: Use of bvector<> for k-mer fingerprint
-    K should be short, no minimizers here
+    K should be short, no minimizers here (k < 24)
+
+    Example loads FASTA file (large multi-molecule file is expected,
+    builds a collection of k-mers for each molecule and runs
+    clusterization algorithm on the input collection using
+    set intersect (logical AND) as a similarity measure.
+
+    Example uses std::async for running parallel jobs.
 */
 
 #include <assert.h>
@@ -217,7 +224,8 @@ void CSequenceColl::deserialize_k_mers(bvector_ptr_vector_type& k_mers_vect,
             continue;
         futures.emplace_back(                      // async decompress
             std::async(std::launch::async,
-            [bv, buf]() { bm::deserialize(*bv, buf); }
+            [bv, buf]()
+            { BM_DECLARE_TEMP_BLOCK(tb); bm::deserialize(*bv, buf, tb); }
             ));
 
     } // for en
@@ -792,6 +800,7 @@ public:
 private:
     bm::bvector<>         m_all_members; ///< Union of all group members
     groups_vector_type    m_seq_groups; ///< vector of all formed clusters
+    bm::aggregator<bvector_type> agg; ///< fast aggregator for set UNION ops
 };
 
 void CSeqClusters::clear_empty_groups()
@@ -819,16 +828,18 @@ void CSeqClusters::take_group(bm::bvector<>& bv_members)
 
 const bm::bvector<>& CSeqClusters::union_all_groups()
 {
-    BM_DECLARE_TEMP_BLOCK(tb)
-
+    agg.set_optimization();
     m_all_members.clear();
     for (groups_vector_type::const_iterator it = m_seq_groups.begin();
          it != m_seq_groups.end(); ++it)
     {
         const CSeqGroup* sg = it->get();
-        m_all_members |= sg->get_members();
+        agg.add(&sg->get_members());
     } // for
-    m_all_members.optimize(tb);
+
+    agg.combine_or(m_all_members); // run UNION of all member vectors
+    agg.reset();
+
     return m_all_members;
 }
 
@@ -928,7 +939,6 @@ void compute_and_sim(distance_matrix_type& dm,
     {
         const bm::bvector<>* bv_i = k_mers_vect[i].get();
         unsigned* row = dm.row(i);
-
         do
         {
             if (parallel_cnt < concurrency)
@@ -1280,10 +1290,6 @@ void assign_to_best_cluster(CSeqClusters& cluster_groups,
         if (cluster_idx != ~0ull) // cluster association via representative
         {
             acc.add(cluster_idx, seq_id, bv_k_mer);
-            /*
-            CSeqGroup* sg = cluster_groups.get_group(cluster_idx);
-            sg->add_member_sync(seq_id, bv_k_mer);
-            */
         }
     } // for all seq-ids in the range
 
@@ -1550,15 +1556,14 @@ void compute_jaccard_clusters(CSeqClusters& seq_clusters,
             }
             for (auto& e : futures) // sync point
                 e.wait();
-        {
-            const bm::bvector<>& bv_clust = seq_clusters.union_all_groups();
-            cout << endl << " clustered = " << bv_clust.count() << endl;
+            {
+                const bm::bvector<>& bv_clust = seq_clusters.union_all_groups();
+                cout << endl << " clustered = " << bv_clust.count() << endl;
 
-            bv_total -= bv_clust; // exlude all already clustered
-            rcount = bv_total.count();
-            cout << " remain = " << rcount << endl;
-        }
-
+                bv_total -= bv_clust; // exlude all already clustered
+                rcount = bv_total.count();
+                cout << " remain = " << rcount << endl;
+            }
         }
     }
 

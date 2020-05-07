@@ -94,6 +94,7 @@ INPUT                  = ./src/bm.h ./src/bmfunc.h  ./src/bmsimd.h ./src/bmxor.h
 ./samples/xsample05/xsample05.cpp \
 ./samples/xsample06/xsample06.cpp \
 ./samples/xsample07/xsample07.cpp \
+./samples/xsample07a/xsample07a.cpp \
 ./samples/xsample08/xsample08.cpp \
 ./samples/strsvsample01/strsvsample01.cpp \
 ./samples/strsvsample02/strsvsample02.cpp \
