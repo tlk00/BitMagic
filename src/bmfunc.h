@@ -5838,7 +5838,8 @@ unsigned gap_operation_any_sub(const gap_word_t* BMRESTRICT vect1,
                                const gap_word_t* BMRESTRICT vect2) BMNOEXCEPT
 {
     return
-    bm::gap_buff_any_op<bm::gap_word_t, bm::sub_func>(vect1, 0, vect2, 1);
+    bm::gap_buff_any_op<bm::gap_word_t, bm::and_func>( // no bug here
+                                               vect1, 0, vect2, 1);
 }
 
 
