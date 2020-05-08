@@ -33,7 +33,7 @@ For more information please visit:  http://bitmagic.io
 
 */
 
-/*! \file rscsample03.cpp
+/*! \file rscsample04.cpp
     \brief Example: bm::rsc_sparse_vector<> known NULL elements access
 
     @sa rscsample02.cpp
