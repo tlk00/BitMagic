@@ -1,5 +1,5 @@
 /*
-Copyright(c) 2002-2019 Anatoliy Kuznetsov(anatoliy_kuznetsov at yahoo.com)
+Copyright(c) 2020 Anatoliy Kuznetsov(anatoliy_kuznetsov at yahoo.com)
 
 Licensed under the Apache License, Version 2.0 (the "License");
 you may not use this file except in compliance with the License.
@@ -17,8 +17,25 @@ For more information please visit:  http://bitmagic.io
 */
 
 /** \example xsample07.cpp
+
     Use of bvector<> for k-mer fingerprint K should be short,
-    no minimizers here
+    no minimizers are used here (the approach can be used to create a
+    scheme with minimizers).
+
+    This example:
+    - loads a FASTA file (single DNA molecule is expected)
+    - generates K-mers for the specified K
+      builds a fingerprint bit-vector (presence-absence vector)
+    - runs k-mer counting (fastest method uses sort based algorithm)
+      builds a k-mer frequency compressed sparse vector (TF-vector)
+    - shows how to use TF vector to pick top N% of most frequent k-mers
+      and exclude them (as over-represented)
+
+    \sa bm::sparse_vector
+    \sa bm::rsc_sparse_vector
+    \sa bm::rank_range_split
+    \sa bm::rsc_sparse_vector<>::merge_not_null
+
 */
 
 /*! \file xsample07.cpp
@@ -142,7 +159,6 @@ bool get_DNA_code(char bp, bm::id64_t& dna_code)
 
 /// Calculate k-mer as an unsigned long integer
 ///
-///
 /// @return true - if k-mer is "true" (not 'NNNNNN')
 ///
 inline
@@ -202,9 +218,8 @@ void translate_kmer(std::string& dna, bm::id64_t kmer_code, unsigned k_size)
 }
 
 
-
-
 /// QA function to validate if reverse k-mer decode gives the same string
+///
 inline
 void validate_k_mer(const char* dna,
                     size_t pos, unsigned k_size,
@@ -235,7 +250,7 @@ void validate_k_mer(const char* dna,
 }
 
 /// Auxiliary function to do sort+unique on a vactor of ints
-/// erases all duplicate elements
+/// removes duplicate elements
 ///
 template<typename VECT>
 void sort_unique(VECT& vect)
@@ -343,6 +358,7 @@ void generate_k_mer_bvector(BV& bv,
                 }
                 // shift out the previous base pair code, OR the new arrival
                 k_mer_code = ((k_mer_code >> 2) | (bp_code << k_shift));
+
                 // generated k-mer codes are accumulated in buffer for sorting
                 k_buf.push_back(k_mer_code);
 
@@ -355,7 +371,7 @@ void generate_k_mer_bvector(BV& bv,
                     assert(k_check == k_mer_code);
                 }
 
-                if (k_buf.size() == chunk_size) // soring check.point
+                if (k_buf.size() >= chunk_size) // sorting check.point
                 {
                     sort_unique(k_buf);
                     if (k_buf.size())
@@ -557,6 +573,9 @@ public:
         {
             static std::mutex   mtx_counts_lock;
             std::lock_guard<std::mutex> guard(mtx_counts_lock);
+
+            // merge_not_null fast merge for non-overlapping ranges of
+            // rsc_sparse_vector
             m_kmer_counts.merge_not_null(kmer_counts_part);
         }
     }
@@ -575,6 +594,7 @@ template<typename BV>
 void count_kmers_parallel(const BV& bv_kmers,
                           const vector_char_type& seq_vect,
                           rsc_sparse_vector_u32& kmer_counts,
+                          unsigned k_size,
                           unsigned concurrency)
 {
     typedef typename BV::size_type bv_size_type;
@@ -587,7 +607,7 @@ void count_kmers_parallel(const BV& bv_kmers,
 
     if (split_rank < concurrency || concurrency < 2)
     {
-        count_kmers(seq_vect, ik_size, kmer_counts); // run single threaded
+        count_kmers(seq_vect, k_size, kmer_counts); // run single threaded
         return;
     }
     // run split algorithm to determine equal weight ranges for parallel
@@ -607,6 +627,7 @@ void count_kmers_parallel(const BV& bv_kmers,
                                 pair_vect[k].second,
                                 kmer_counts)));
     } // for k
+
     // wait for all jobs to finish, print progress report
     //
     for (auto& e : futures)
@@ -621,11 +642,12 @@ void count_kmers_parallel(const BV& bv_kmers,
         } // while
     } // for
     cout << endl;
-
 }
 
 
 /// k-mer counting method using Bitap algorithm for occurence search
+///  this method is significantly slower than direct regeneration of k-mer
+///  codes and sorting count
 ///
 template<typename BV>
 void count_kmers(const BV& bv_kmers, rsc_sparse_vector_u32& kmer_counts)
@@ -828,7 +850,7 @@ void count_kmers_parallel(const BV& bv_kmers,
 }
 
 
-/// Compute a map of how often each k-mer freaquency is observed in the
+/// Compute a map of how often each k-mer frequency is observed in the
 /// k-mer counts vector
 /// @param hmap - [out] histogram map
 /// @param kmer_counts - [in] kmer counts vector
@@ -862,15 +884,14 @@ void report_hmap(const string& fname, const histogram_map_u32& hmap)
 
     outf << "kmer count \t number of kmers\n";
 
-    auto it = hmap.rbegin();
-    auto it_end = hmap.rend();
+    auto it = hmap.rbegin(); auto it_end = hmap.rend();
     for (; it != it_end; ++it)
     {
         outf << it->first << "\t" << it->second << endl;
     }
 }
 
-/// Create vector, representing frequent subset of k-mers
+/// Create vector, representing subset of k-mers of high frequency
 ///
 /// @param frequent_bv[out] - bit-vector of frequent k-mers (subset of all k-mers)
 /// @param hmap - histogram map of all k-mers
@@ -1024,7 +1045,7 @@ int main(int argc, char *argv[])
                 bm::chrono_taker tt1("5. k-mer counting std::sort()", 1, &timing_map);
 
                 count_kmers_parallel(bv_kmers, seq_vect,
-                                     rsc_kmer_counts2, parallel_jobs);
+                                     rsc_kmer_counts2, ik_size, parallel_jobs);
 
                 rsc_kmer_counts2.optimize();
 
@@ -1078,7 +1099,8 @@ int main(int argc, char *argv[])
             bm::bvector<> bv_freq(bm::BM_GAP);
             {
                 bm::chrono_taker tt1("7. Build vector of frequent k-mers", 1, &timing_map);
-                compute_frequent_kmers(bv_freq, hmap, rsc_kmer_counts2, 5, ik_size);
+                compute_frequent_kmers(bv_freq, hmap,
+                                       rsc_kmer_counts2, f_percent, ik_size);
             }
             if (!ikd_freq_name.empty())
             {

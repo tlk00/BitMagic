@@ -52,9 +52,14 @@ Help:
 Generate k-mer fingerprint (4 threads):
 >./xsample07_avx2 -kd test10.kd -fa NC_000001.11.fa -k 10  -t -j 4
 
+Generate k-mer fingerprint with diagnostics checks(slower)
+./xsample07 -kd test10.kd -fa NC_000001.11.fa -k 10 -diag
+
 Generate k-mer fingerprint and count all k-mers (8threads):
 >./xsample07_avx2 -kd test10.kd -kdc test10.kdc -fa NC_000001.11.fa -k 10  -t -j 8
 
 Generate k-mer fingerprint and count all k-mers and compute frequent k-mer vector for top 10% of all k-mers.
-k-mer frequency histogram is reported to a file (hmap.tsv) :
+k-mer frequency histogram is reported to a file (hmap.tsv) 
+build and save the k-mer fingerprint cleaned from over-represented k-mers (test.kdc)
+:
 >./xsample07_avx2 -kd test.kd -kdf test.kdf -kdc test.kdc  -fa NC_000001.11.fa -k 16  -t -j 4 -kh hmap.tsv -fpc 10
