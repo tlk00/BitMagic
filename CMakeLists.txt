@@ -17,9 +17,7 @@ include_directories("${PROJECT_SOURCE_DIR}/src")
 
 set (CMAKE_CXX_STANDARD 11)
 
-if ("${CMAKE_CXX_COMPILER_ID}" STREQUAL "GNU" OR
-    "${CMAKE_CXX_COMPILER_ID}" STREQUAL "Clang")
-
+if (CMAKE_CXX_COMPILER_ID MATCHES "GNU" OR CMAKE_CXX_COMPILER_ID MATCHES "Clang")
     if ("${BMOPTFLAGS}" STREQUAL "BMSSE42OPT")
 	    set(bmoptf "-march=nehalem -O2 -msse4.2 -DBMSSE42OPT")
     elseif("${BMOPTFLAGS}" STREQUAL "BMAVX2OPT")
@@ -34,11 +32,10 @@ if ("${CMAKE_CXX_COMPILER_ID}" STREQUAL "GNU" OR
     SET( CMAKE_EXE_LINKER_FLAGS  "${CMAKE_EXE_LINKER_FLAGS} -Wl,-lpthread")
     
 
-elseif ("${CMAKE_CXX_COMPILER_ID}" STREQUAL "Intel")
+elseif (CMAKE_CXX_COMPILER_ID MATCHES "Intel")
     set(flags, "-tpp7 -march=core2 -restrict -DBM_HASRESTRICT -fno-fnalias -Wall")
     set(optflags, "-g0 -O3 -opt_report_fileopt.txt -opt_report_levelmax")
-elseif ("${CMAKE_CXX_COMPILER_ID}" STREQUAL "MSVC")
-
+elseif (CMAKE_CXX_COMPILER_ID MATCHES "MSVC")
     if ("${BMOPTFLAGS}" STREQUAL "BMSSE42OPT")
 	set(bmoptf "-DBMSSE42OPT")
     elseif("${BMOPTFLAGS}" STREQUAL "BMAVX2OPT")
