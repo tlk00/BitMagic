@@ -8407,7 +8407,7 @@ bitscan_wave(const bm::word_t* BMRESTRICT w_ptr,
              unsigned char* BMRESTRICT bits) BMNOEXCEPT
 {
     bm::word_t w0, w1;
-    unsigned short cnt0;
+    unsigned int cnt0;
 
     w0 = w_ptr[0];
     w1 = w_ptr[1];
@@ -8415,7 +8415,7 @@ bitscan_wave(const bm::word_t* BMRESTRICT w_ptr,
 #if defined(BMAVX512OPT) || defined(BMAVX2OPT) || defined(BMSSE42OPT)
     // combine into 64-bit word and scan (when HW popcnt64 is available)
     bm::id64_t w = (bm::id64_t(w1) << 32) | w0;
-    cnt0 = (unsigned short) bm::bitscan_popcnt64(w, bits);
+    cnt0 = bm::bitscan_popcnt64(w, bits);
 
     w0 = w_ptr[2];
     w1 = w_ptr[3];
@@ -8431,7 +8431,7 @@ bitscan_wave(const bm::word_t* BMRESTRICT w_ptr,
     cnt0 += bm::bitscan_popcnt(w0, bits + cnt0, 64);
     cnt0 += bm::bitscan_popcnt(w1, bits + cnt0, 64+32);
 #endif
-    return cnt0;
+    return static_cast<unsigned short>(cnt0);
 }
 
 #if defined (BM64_SSE4) || defined(BM64_AVX2) || defined(BM64_AVX512)
