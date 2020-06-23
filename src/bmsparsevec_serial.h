@@ -417,6 +417,7 @@ class compressed_collection_deserializer
 public:
     typedef CBC                                  compressed_collection_type;
     typedef typename CBC::bvector_type           bvector_type;
+    typedef typename bvector_type::allocator_type allocator_type;
     typedef typename CBC::buffer_type            buffer_type;
     typedef typename CBC::statistics             statistics_type;
     typedef typename CBC::address_resolver_type  address_resolver_type;
@@ -572,8 +573,9 @@ int compressed_collection_deserializer<CBC>::deserialize(
         return -2; // buffer size collection does not match address vector
     }
     
-	typedef std::vector<unsigned>::size_type vect_size_type;
-	std::vector<bm::id64_t> buf_size_vec;
+    typedef size_t vect_size_type;
+    bm::heap_vector<bm::id64_t, allocator_type, true> buf_size_vec;
+
 	buf_size_vec.resize(vect_size_type(coll_size));
     {
         for (unsigned i = 0; i < coll_size; ++i)
