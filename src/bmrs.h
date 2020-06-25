@@ -404,8 +404,8 @@ bool rs_index<BVAlloc>::find(size_type* rank,
         } // for j
         *rank = r;
 
-        unsigned first = rs3_border0;
-        unsigned second = rs3_border1 - first;
+        unsigned first = rs3_border0 + 1;
+        unsigned second = rs3_border1 - first + 1;
         if (*rank > first)
         {
             *rank -= first;
