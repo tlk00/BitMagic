@@ -2771,7 +2771,7 @@ void RSIndexTest()
             assert(b);
             assert(nb == 3*bm::set_sub_array_size+0);
             assert(sub_range == bm::rs3_border1 + 1);
-            assert(rank == 65536 - 6 - bm::rs3_border1);
+            assert(rank == 65536 - 6 - bm::rs3_border1 - 1);
 
             rank = 65536 + 7;
             b = rsi.find(&rank, &nb, &sub_range);
@@ -4586,6 +4586,36 @@ void RankFindTest()
     assert(rf3);
     assert(pos == 65534);
     assert(pos1 == 65534);
+    }
+
+
+    cout << "Test bvector<>::select()" << endl;
+    {
+        bvect::size_type r(65536*256-1), pos;
+
+        bvect bv;
+        bv.set_range(0, r);
+        bv.optimize();
+
+        bvect::rs_index_type rs_idx;
+        bv.build_rs_index(&rs_idx);
+
+        struct bvect::statistics st;
+        bv.calc_stat(&st);
+        assert(st.bit_blocks == 0);
+        assert(st.gap_blocks == 0);
+
+        bvect::size_type i;
+        for (i = 0; i <=r; ++i)
+        {
+            bvect::size_type ri = bv.rank(i, rs_idx);
+            assert(ri == (i+1));
+            bool f = bv.select(ri, pos, rs_idx);
+            assert(f);
+            assert(pos == i);
+        }
+        bool f = bv.select(i+1, pos, rs_idx);
+        assert(!f);
     }
     
     cout << "Find Rank test stress 1\n" << endl;
@@ -27964,7 +27994,7 @@ int main(int argc, char *argv[])
          BasicFunctionalityTest();
 
          OptimizeTest();
-  
+
          RankFindTest();
 
          BvectorBitForEachTest();
@@ -27995,6 +28025,7 @@ int main(int argc, char *argv[])
         MutationOperationsTest();
         
         BlockLevelTest();
+
      }
     
     if (is_all || is_bvser || is_bvbasic)

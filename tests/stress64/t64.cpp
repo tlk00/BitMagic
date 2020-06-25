@@ -2038,7 +2038,7 @@ void RSIndexTest()
             assert(b);
             assert(nb == 3*bm::set_sub_array_size+0);
             assert(sub_range == bm::rs3_border1 + 1);
-            assert(rank == 65536 - 6 - bm::rs3_border1);
+            assert(rank == 65536 - 6 - bm::rs3_border1 - 1);
 
             rank = 65536 + 7;
             b = rsi.find(&rank, &nb, &sub_range);
@@ -2623,6 +2623,29 @@ void RankFindTest()
         assert(pos == base_idx);
         assert(pos1 == base_idx);
     }
+
+    cout << "Test bvector<>::select()" << endl;
+    {
+        bvect::size_type r(3*65536*256-1), pos;
+
+        bvect bv;
+        bv.invert();
+        bv.optimize();
+
+        bvect::rs_index_type rs_idx;
+        bv.build_rs_index(&rs_idx);
+
+        bvect::size_type i;
+        for (i = 0; i <= r; ++i)
+        {
+            bvect::size_type ri = bv.rank(i, rs_idx);
+            assert(ri == (i+1));
+            bool f = bv.select(ri, pos, rs_idx);
+            assert(f);
+            assert(pos == i);
+        }
+    }
+
     
     cout << "Find Rank test stress 1\n" << endl;
     
@@ -16206,6 +16229,7 @@ int main(int argc, char *argv[])
     
     if (is_all || is_bvbasic)
     {
+
         SyntaxTest();
         GenericBVectorTest();
         SetTest();
@@ -16214,6 +16238,7 @@ int main(int argc, char *argv[])
         ResizeTest();
         EmptyBVTest();
         EnumeratorTest();
+
         RSIndexTest();
 
         CountRangeTest();
