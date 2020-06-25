@@ -4248,7 +4248,6 @@ bool bvector<Alloc>::select(size_type rank_in, size_type& pos,
     
     block_idx_type nb;
     bm::gap_word_t sub_range_from;
-    
     bool found = rs_idx.find(&rank_in, &nb, &sub_range_from);
     if (!found)
         return found;
@@ -4256,15 +4255,20 @@ bool bvector<Alloc>::select(size_type rank_in, size_type& pos,
     unsigned i, j;
     bm::get_block_coord(nb, i, j);
     const bm::word_t* block = blockman_.get_block_ptr(i, j);
-    
-    block = BLOCK_ADDR_SAN(block); // TODO: optimize FULL block selection
-
     BM_ASSERT(block);
     BM_ASSERT(rank_in <= rs_idx.count(nb));
 
     unsigned bit_pos = 0;
-    rank_in = bm::block_find_rank(block, rank_in, sub_range_from, bit_pos);
-    BM_ASSERT(rank_in == 0);
+    if (block == FULL_BLOCK_FAKE_ADDR)
+    {
+        BM_ASSERT(rank_in <= bm::gap_max_bits);
+        bit_pos = sub_range_from + unsigned(rank_in) - 1;
+    }
+    else
+    {
+        rank_in = bm::block_find_rank(block, rank_in, sub_range_from, bit_pos);
+        BM_ASSERT(rank_in == 0);
+    }
     pos = bit_pos + (nb * bm::set_block_size * 32);
     return true;
 }
