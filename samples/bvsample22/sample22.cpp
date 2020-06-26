@@ -34,6 +34,7 @@ For more information please visit:  http://bitmagic.io
   \sa bm::bvector::keep_range
   \sa bm::bvector::is_all_one_range
   \sa bm::bvector::any_range
+  \sa bm::bvector::find_reverse()
   \sa bm::is_interval
   \sa bm::find_interval_end
   \sa bm::find_interval_start
@@ -94,20 +95,27 @@ int main(void)
         cout << is_int << endl;
 
         cout << "bvector<>::any_range() demo" << endl;
-        // Check is specified inetrval contains at least one 1
+        // Check is specified interval contains at least one 1
         bool any_one = bv.any_range(0, 99); // false
         cout << any_one << endl;
         any_one = bv.any_range(0, 100); // true 
         cout << any_one << endl;
 
+        cout << "bvector<>::find_reverse() demo" << endl;
+        bm::bvector<>::size_type pos;
+
+        bool found = bv.find_reverse(256, pos);
+        assert(found);
+        cout << pos << endl; // 110
+
+
         // interval boundaries detection
         //
         //
         cout << "bvector<>::find_interval demo" << endl;
-        bm::bvector<>::size_type pos;
 
         // interval end search from interval start
-        bool found = bm::find_interval_end(bv, 100, pos);
+        found = bm::find_interval_end(bv, 100, pos);
         if (found)
             cout << pos << endl; // 110
         else

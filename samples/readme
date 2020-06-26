@@ -26,7 +26,7 @@ Bit-vector operations
 ./bvsample20 - bvector<>::shift_right() and bvector<>::insert() - bit-shifting / insertion sample
 ./bvsample21 - bvector<>::shift_left() and bvector<>::erase() - bit-shifting / bit delete sample
 
-./bvsample22 - algorithms for ranges and intervals (bmintervals.h) 
+./bvsample22 - algorithms for ranges, intervals (bmintervals.h) and bvector<>::find_reverse()
 ./bvsample23 - bm::interval_enumerator<> - iterator for interval traversal of bit-vector (bmintervals.h) 
 ./bvsample24 - bm::rank_range_split(..) algorithm to split bit-vector into equal rank(weight) ranges
 
