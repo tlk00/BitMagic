@@ -116,16 +116,15 @@ public:
     void set_compression_level(unsigned clevel) BMNOEXCEPT;
 
     /**
-        Get compression level (0-5), Default 5 (recommended)
+        Get compression level (0-5),
+        Default 5 (recommended for better compression)
+
         0 - take as is
         1, 2 - apply light weight RLE/GAP encodings, limited depth hierarchical
                compression, intervals encoding
         3 - variant of 2 with different cut-offs
         4 - delta transforms plus Elias Gamma encoding where possible legacy)
         5 - binary interpolated encoding (Moffat, et al)
-     
-        Recommended: use 3 or 5
-
     */
     unsigned get_compression_level() const BMNOEXCEPT
         { return compression_level_; }
@@ -266,6 +265,9 @@ protected:
     void bienc_arr_bit_block(const bm::word_t* block,
                             bm::encoder& enc, bool inverted) BMNOEXCEPT;
 
+    void bienc_arr_sblock(const BV& bv, unsigned sb,
+                                        bm::encoder& enc) BMNOEXCEPT;
+
     /// encode bit-block as interpolated bit block of gaps
     void bienc_gap_bit_block(const bm::word_t* block,
                              bm::encoder& enc) BMNOEXCEPT;
@@ -379,6 +381,7 @@ private:
     typedef bm::bit_out<bm::encoder>                        bit_out_type;
     typedef bm::gamma_encoder<bm::gap_word_t, bit_out_type> gamma_encoder_func;
     typedef bm::heap_vector<bm::gap_word_t, allocator_type, true> block_arridx_type;
+    typedef bm::heap_vector<unsigned, allocator_type, true> sblock_arridx_type;
     typedef typename allocator_type::allocator_pool_type    allocator_pool_type;
 
 private:
@@ -386,6 +389,7 @@ private:
     unsigned           bit_model_d0_size_; ///< memory (bytes) by d0 method (bytes)
     unsigned           bit_model_0run_size_; ///< memory (bytes) by run-0 method (bytes)
     block_arridx_type  bit_idx_arr_;
+    sblock_arridx_type sb_bit_idx_arr_;
     unsigned           scores_[bm::block_waves];
     unsigned char      models_[bm::block_waves];
     unsigned           mod_size_;
@@ -405,6 +409,10 @@ private:
     bool            optimize_; ///< flag to optimize the input vector
     bool            free_;     ///< flag to free the input vector
     allocator_pool_type pool_;
+
+
+    unsigned char* enc_header_pos_; ///< pos of top level header to roll back
+    unsigned char header_flag_;     ///< set of masks used to save
 
     // XOR compression
     //
@@ -430,7 +438,7 @@ protected:
 
 protected:
     deseriaizer_base()
-        : id_array_(0), bookmark_idx_(0), skip_offset_(0), skip_pos_(0)
+        : id_array_(0), sb_id_array_(0), bookmark_idx_(0), skip_offset_(0), skip_pos_(0)
     {}
     
     /// Read GAP block from the stream
@@ -448,6 +456,14 @@ protected:
     
     /// Read binary interpolated list into a bit-set
     void read_bic_arr(decoder_type&   decoder, bm::word_t* blk) BMNOEXCEPT;
+
+	/// Read list of bit ids for super-blocks
+	///
+	/// @return number of ids
+    unsigned read_bic_sb_arr(decoder_type&   decoder,
+                             unsigned  block_type,
+                             unsigned*  dst_arr,
+                             unsigned*  sb_idx);
 
     /// Read binary interpolated gap blocks into a bitset
     void read_bic_gap(decoder_type&   decoder, bm::word_t* blk) BMNOEXCEPT;
@@ -475,6 +491,7 @@ protected:
 
 protected:
     bm::gap_word_t*   id_array_; ///< ptr to idx array for temp decode use
+    unsigned*         sb_id_array_; ///< ptr to super-block idx array (temp)
 
     block_idx_type       bookmark_idx_;///< last bookmark block index
     unsigned             skip_offset_; ///< bookmark to skip 256 encoded blocks
@@ -572,12 +589,17 @@ protected:
                       block_idx_type nb,
                       bm::word_t* blk);
 
+   void decode_arr_sblock(unsigned char btype, decoder_type& dec,
+                         bvector_type&  bv);
+
 protected:
     typedef bm::heap_vector<bm::gap_word_t, allocator_type, true> block_arridx_type;
+    typedef bm::heap_vector<bm::word_t, allocator_type, true> sblock_arridx_type;
     typedef typename allocator_type::allocator_pool_type allocator_pool_type;
 
 protected:
     block_arridx_type    bit_idx_arr_;
+    sblock_arridx_type   sb_bit_idx_arr_;
     block_arridx_type    gap_temp_block_;
     bm::word_t*          temp_block_;
 
@@ -796,6 +818,8 @@ public:
 protected:
     get_bit_func_type  bit_func_table_[bm::set_END];
 
+    unsigned char header_flag_;
+
     decoder_type       decoder_;
     bool               end_of_stream_;
     block_idx_type     bv_size_;
@@ -926,12 +950,16 @@ private:
     typedef typename bvector_type::block_idx_type         block_idx_type;
     typedef
         typename BV::blocks_manager_type               blocks_manager_type;
-    typedef 
+    typedef
         serial_stream_iterator<bm::decoder, block_idx_type> serial_stream_current;
-    typedef 
+    typedef
         serial_stream_iterator<bm::decoder_big_endian, block_idx_type> serial_stream_be;
     typedef 
         serial_stream_iterator<bm::decoder_little_endian, block_idx_type> serial_stream_le;
+    typedef
+        bm::deserializer<BV, bm::decoder_little_endian> deserializer_le;
+    typedef
+        bm::deserializer<BV, bm::decoder_big_endian> deserializer_be;
 
 private:
     allocator_type       alloc_;
@@ -943,6 +971,12 @@ private:
     bm::iterator_deserializer<BV, serial_stream_be> it_d_be_;
     /// little-endian stream iterator
     bm::iterator_deserializer<BV, serial_stream_le> it_d_le_;
+
+    deserializer<BV, bm::decoder> de_;
+    deserializer_le de_le_;
+    deserializer_be de_be_;
+
+    bvector_type bv_tmp_;
 
 
     // XOR compression related fields
@@ -969,7 +1003,8 @@ enum serialization_header_mask {
     BM_HM_NO_BO   = (1 << 3),  ///< no byte-order
     BM_HM_NO_GAPL = (1 << 4),  ///< no GAP levels
     BM_HM_64_BIT  = (1 << 5),  ///< 64-bit vector
-    BM_HM_HXOR    = (1 << 6)   ///< horizontal XOR compression turned ON
+    BM_HM_HXOR    = (1 << 6),  ///< horizontal XOR compression turned ON
+    BM_HM_SPARSE  = (1 << 7)   ///< very sparse vector
 };
 
 
@@ -1028,15 +1063,17 @@ const unsigned char set_block_arrgap_bienc_v2     = 44; //!< //!< Interpolated G
 const unsigned char set_block_arrgap_bienc_inv_v2 = 45; //!< Interpolated GAP array (inverted)
 const unsigned char set_block_bitgap_bienc_v2     = 46; //!< Interpolated bit-block as GAPs (v2 - reseved)
 
-const unsigned char set_nb_bookmark16           = 47; //<! jump ahead mark (16-bit)
-const unsigned char set_nb_bookmark24           = 48; //<! jump ahead mark (24-bit)
-const unsigned char set_nb_bookmark32           = 49; //<! jump ahead mark (32-bit)
+const unsigned char set_nb_bookmark16           = 47; //!< jump ahead mark (16-bit)
+const unsigned char set_nb_bookmark24           = 48; //!< jump ahead mark (24-bit)
+const unsigned char set_nb_bookmark32           = 49; //!< jump ahead mark (32-bit)
 const unsigned char set_nb_sync_mark8           = 50; //!< bookmark sync point (8-bits)
 const unsigned char set_nb_sync_mark16          = 51;
 const unsigned char set_nb_sync_mark24          = 52;
 const unsigned char set_nb_sync_mark32          = 53;
 const unsigned char set_nb_sync_mark48          = 54;
 const unsigned char set_nb_sync_mark64          = 55; //!< ..... 64-bit (should never happen)
+
+const unsigned char set_sblock_bienc            = 56; //!< super-block interpolated list
 
 template<class BV>
 serializer<BV>::serializer(const allocator_type&   alloc,
@@ -1048,6 +1085,7 @@ serializer<BV>::serializer(const allocator_type&   alloc,
   sb_bookmarks_(false),
   sb_range_(0),
   compression_level_(bm::set_compression_default),
+  enc_header_pos_(0), header_flag_(0),
   ref_vect_(0),
   ref_idx_(0),
   xor_block_(0)
@@ -1076,6 +1114,7 @@ serializer<BV>::serializer(bm::word_t*    temp_block)
   sb_bookmarks_(false),
   sb_range_(0),
   compression_level_(bm::set_compression_default),
+  enc_header_pos_(0), header_flag_(0),
   ref_vect_(0),
   ref_idx_(0),
   xor_block_(0)
@@ -1169,29 +1208,30 @@ void serializer<BV>::encode_header(const BV& bv, bm::encoder& enc) BMNOEXCEPT
 {
     const blocks_manager_type& bman = bv.get_blocks_manager();
 
-    unsigned char header_flag = 0;
+    header_flag_ = 0;
     if (bv.size() == bm::id_max) // no dynamic resize
-        header_flag |= BM_HM_DEFAULT;
+        header_flag_ |= BM_HM_DEFAULT;
     else 
-        header_flag |= BM_HM_RESIZE;
+        header_flag_ |= BM_HM_RESIZE;
 
     if (!byte_order_serial_) 
-        header_flag |= BM_HM_NO_BO;
+        header_flag_ |= BM_HM_NO_BO;
 
     if (!gap_serial_) 
-        header_flag |= BM_HM_NO_GAPL;
+        header_flag_ |= BM_HM_NO_GAPL;
 
     #ifdef BM64ADDR
-        header_flag |= BM_HM_64_BIT;
+        header_flag_ |= BM_HM_64_BIT;
     #endif
 
     if (ref_vect_)
     {
         // TODO: check if XOR search found anything at all
-        header_flag |= BM_HM_HXOR; // XOR compression turned ON
+        header_flag_ |= BM_HM_HXOR; // XOR compression turned ON
     }
 
-    enc.put_8(header_flag);
+    enc_header_pos_ = enc.get_pos();
+    enc.put_8(header_flag_);
 
     if (byte_order_serial_)
     {
@@ -1205,7 +1245,7 @@ void serializer<BV>::encode_header(const BV& bv, bm::encoder& enc) BMNOEXCEPT
     }
 
     // save size (only if bvector has been down-sized)
-    if (header_flag & BM_HM_RESIZE) 
+    if (header_flag_ & BM_HM_RESIZE)
     {
     #ifdef BM64ADDR
         enc.put_64(bv.size());
@@ -2065,6 +2105,40 @@ void serializer<BV>::bienc_gap_bit_block(const bm::word_t* block,
 }
 
 
+template<class BV>
+void serializer<BV>::bienc_arr_sblock(const BV& bv, unsigned sb,
+                                    bm::encoder& enc) BMNOEXCEPT
+{
+    unsigned char scode = bm::set_sblock_bienc;
+    bm::convert_sub_to_arr(bv, sb, sb_bit_idx_arr_);
+/*
+    unsigned delta =
+    bm::min_delta_u32(sb_bit_idx_arr_.data(), sb_bit_idx_arr_.size());
+    if (delta > 1)
+    {
+        bm::min_delta_apply(sb_bit_idx_arr_.data(), sb_bit_idx_arr_.size(), delta);
+    }
+*/
+    BM_ASSERT(sb_bit_idx_arr_.size() < 65536);
+    BM_ASSERT(sb_bit_idx_arr_.size());
+
+    bm::word_t min_v = sb_bit_idx_arr_[0];
+    bm::word_t max_v = sb_bit_idx_arr_[sb_bit_idx_arr_.size()-1];
+
+    enc.put_8(scode);
+    enc.put_32(sb);
+    enc.put_16((unsigned short)sb_bit_idx_arr_.size());
+//    enc.put_32(delta);
+    enc.put_32(min_v);
+    enc.put_32(max_v);
+
+    bit_out_type bout(enc);
+    bout.bic_encode_u32_cm(sb_bit_idx_arr_.data()+1,
+                           (unsigned)sb_bit_idx_arr_.size()-2,
+                           min_v, max_v);
+
+    compression_stat_[scode]++;
+}
 
 
 
@@ -2270,9 +2344,12 @@ serializer<BV>::serialize(const BV& bv,
     const blocks_manager_type& bman = bv.get_blocks_manager();
 
     bm::encoder enc(buf, buf_size);  // create the encoder
+    enc_header_pos_ = 0;
     encode_header(bv, enc);
 
     bookmark_state  sb_bookmark(sb_range_);
+
+    unsigned i_last = ~0u;
 
     block_idx_type i, j;
     for (i = 0; i < bm::set_total_blocks; ++i)
@@ -2280,12 +2357,37 @@ serializer<BV>::serialize(const BV& bv,
         unsigned i0, j0;
         bm::get_block_coord(i, i0, j0);
 
-        // ----------------------------------------------------
-        // bookmark the stream to allow fast skip on decode
-        //
-        if (sb_bookmarks_)
+        if (i0 < bman.top_block_size())
         {
-            process_bookmark(i, sb_bookmark, enc);
+            // ----------------------------------------------------
+            // bookmark the stream to allow fast skip on decode
+            //
+            if (sb_bookmarks_)
+            {
+                process_bookmark(i, sb_bookmark, enc);
+            }
+
+            // ---------------------------------------------------
+            // check if top level block is embarassingly sparse
+            // and can be encoded as an array of unsigned
+            //
+            /*
+            if ((compression_level_ >= 5) && (i0 != i_last))
+            {
+                i_last = i0;
+                bool is_sparse_sub = bman.is_sparse_subblock(i0);
+                if (is_sparse_sub)
+                {
+                    header_flag_ |= BM_HM_SPARSE;
+                    bienc_arr_sblock(bv, i0, enc);
+                    i += (bm::set_sub_array_size - j0) - 1;
+                    continue;
+                }
+            }*/
+        }
+        else
+        {
+            break;
         }
 
         const bm::word_t* blk = bman.get_block(i0, j0);
@@ -2564,7 +2666,13 @@ serializer<BV>::serialize(const BV& bv,
     } // for i
 
     enc.put_8(set_block_end);
-    return (size_type)enc.size();
+    size_type sz = (size_type)enc.size();
+
+    // rewind back to save header flag
+    enc.set_pos(enc_header_pos_);
+    enc.put_8(header_flag_);
+
+    return sz;
 }
 
 
@@ -2872,7 +2980,7 @@ unsigned deseriaizer_base<DEC, BLOCK_IDX>::read_id_list(
         }
         break;
 
-    default:
+    default: // TODO: get rid of exception here to classify as "noexept"
         BM_ASSERT(0);
         #ifndef BM_NO_STL
             throw std::logic_error(err_msg());
@@ -2905,6 +3013,43 @@ deseriaizer_base<DEC, BLOCK_IDX>::read_bic_arr(decoder_type& dec,
     bm::set_bit(blk, max_v);
     bin.bic_decode_u16_bitset(blk, arr_len-2, min_v, max_v);
 }
+
+template<typename DEC, typename BLOCK_IDX>
+unsigned deseriaizer_base<DEC, BLOCK_IDX>::read_bic_sb_arr(
+                         decoder_type&   dec,
+                         unsigned  block_type,
+                         unsigned*  dst_arr,
+                         unsigned*  sb_idx)
+{
+	unsigned len = 0;
+
+    bit_in_type bin(dec);
+
+    switch (block_type)
+    {
+    case bm::set_sblock_bienc:
+        {
+            *sb_idx = dec.get_32();
+            len = dec.get_16();
+            bm::word_t min_v = dec.get_32();
+            bm::word_t max_v = dec.get_32();
+
+            dst_arr[0] = min_v;
+            dst_arr[len-1] = max_v;
+            bin.bic_decode_u32_cm(&dst_arr[1], len-2, min_v, max_v);
+        }
+        break;
+    default: // TODO: get rid of exception here to classify as "noexept"
+        BM_ASSERT(0);
+        #ifndef BM_NO_STL
+            throw std::logic_error(err_msg());
+        #else
+            BM_THROW(BM_ERR_SERIALFORMAT);
+        #endif
+    } // switch
+    return len;
+}
+
 
 template<typename DEC, typename BLOCK_IDX>
 void
@@ -3220,8 +3365,13 @@ deserializer<BV, DEC>::deserializer()
   is_range_set_(0)
 {
     temp_block_ = alloc_.alloc_bit_block();
+
     bit_idx_arr_.resize(bm::gap_max_bits);
     this->id_array_ = bit_idx_arr_.data();
+
+    sb_bit_idx_arr_.resize(bm::gap_max_bits);
+    this->sb_id_array_ = sb_bit_idx_arr_.data();
+
     gap_temp_block_.resize(bm::gap_max_bits);
 
     alloc_.set_pool(&pool_);
@@ -3445,6 +3595,30 @@ void deserializer<BV, DEC>::decode_bit_block(unsigned char btype,
 }
 
 template<class BV, class DEC>
+void deserializer<BV, DEC>::decode_arr_sblock(unsigned char  btype,
+                                              decoder_type&  dec,
+                                              bvector_type&  bv)
+{
+    unsigned sb;
+    unsigned* arr = this->sb_id_array_;
+    unsigned len = this->read_bic_sb_arr(dec, btype, arr, &sb);
+    typename BV::size_type from = sb * bm::set_sub_array_size * bm::gap_max_bits;
+    for (typename BV::size_type i = 0; i < len; ++i)
+    {
+        typename BV::size_type idx = arr[i]+from;
+        if (is_range_set_) // range filtering
+        {
+            if (idx > idx_to_)
+                break;
+            if (idx < idx_from_)
+                continue;
+        }
+        bv.set_bit_no_check(idx);
+    } // for
+}
+
+
+template<class BV, class DEC>
 void deserializer<BV, DEC>::decode_block_bit(decoder_type& dec,
                                              bvector_type&  bv,
                                              block_idx_type nb,
@@ -3526,6 +3700,8 @@ void deserializer<BV, DEC>::decode_arrbit(decoder_type& dec,
         bm::set_bit(blk, bit_idx);
     }
 }
+
+
 
 template<class BV, class DEC>
 size_t deserializer<BV, DEC>::deserialize(bvector_type&        bv,
@@ -3624,6 +3800,8 @@ size_t deserializer<BV, DEC>::deserialize(bvector_type&        bv,
         if (!xor_block_)
             xor_block_ = alloc_.alloc_bit_block();
     }
+
+    bv.set_new_blocks_strat(bm::BM_GAP); // minimize deserialization footprint
 
     size_type full_blocks = 0;
 
@@ -3788,6 +3966,11 @@ size_t deserializer<BV, DEC>::deserialize(bvector_type&        bv,
             break;
         case bm::set_block_bit_digest0:
             decode_bit_block(btype, dec, bman, i, blk);
+            break;
+
+        // --------------------------------------- super-block encodings
+        case bm::set_sblock_bienc:
+            decode_arr_sblock(btype, dec, bv);
             break;
 
         // --------------------------------------- bookmarks and skip jumps
@@ -4023,7 +4206,8 @@ void deserializer<BV, DEC>::xor_decode(size_type x_ref_idx, bm::id64_t x_ref_d64
 
 template<typename DEC, typename BLOCK_IDX>
 serial_stream_iterator<DEC, BLOCK_IDX>::serial_stream_iterator(const unsigned char* buf)
-  : decoder_(buf),
+  : header_flag_(0),
+    decoder_(buf),
     end_of_stream_(false),
     bv_size_(0),
     state_(e_unknown),
@@ -4064,20 +4248,20 @@ serial_stream_iterator<DEC, BLOCK_IDX>::serial_stream_iterator(const unsigned ch
 
 
     // reading stream header
-    unsigned char header_flag =  decoder_.get_8();
-    if (!(header_flag & BM_HM_NO_BO))
+    header_flag_ =  decoder_.get_8();
+    if (!(header_flag_ & BM_HM_NO_BO))
     {
         /*ByteOrder bo = (bm::ByteOrder)*/decoder_.get_8();
     }
 
     // check if bitvector comes as an inverted, sorted list of ints
     //
-    if (header_flag & BM_HM_ID_LIST)
+    if (header_flag_ & BM_HM_ID_LIST)
     {
         // special case: the next comes plain list of unsigned integers
-        if (header_flag & BM_HM_RESIZE)
+        if (header_flag_ & BM_HM_RESIZE)
         {
-            if (header_flag & BM_HM_64_BIT)
+            if (header_flag_ & BM_HM_64_BIT)
             {
                 BM_ASSERT(sizeof(block_idx_type)==8);
                 bv_size_ = (block_idx_type)decoder_.get_64();
@@ -4092,14 +4276,14 @@ serial_stream_iterator<DEC, BLOCK_IDX>::serial_stream_iterator(const unsigned ch
     }
     else
     {
-        if (!(header_flag & BM_HM_NO_GAPL))
+        if (!(header_flag_ & BM_HM_NO_GAPL))
         {
             for (unsigned i = 0; i < bm::gap_levels; ++i) // load the GAP levels
                 glevels_[i] = decoder_.get_16();
         }
-        if (header_flag & BM_HM_RESIZE)
+        if (header_flag_ & BM_HM_RESIZE)
         {
-            if (header_flag & BM_HM_64_BIT)
+            if (header_flag_ & BM_HM_64_BIT)
             {
                 BM_ASSERT(sizeof(block_idx_type)==8);
                 bv_size_ = (block_idx_type)decoder_.get_64();
@@ -4118,6 +4302,7 @@ serial_stream_iterator<DEC, BLOCK_IDX>::serial_stream_iterator(const unsigned ch
             BM_THROW(BM_ERR_BADALLOC);
         #endif
     }
+
     this->id_array_ = block_idx_arr_;
 }
 
@@ -4309,6 +4494,8 @@ void serial_stream_iterator<DEC, BLOCK_IDX>::next()
                 }
             break;
 
+
+
         // --------------------------------------------------------------
         // XOR deserials are incompatible with the operation deserialial
         // throw or assert here
@@ -4317,6 +4504,9 @@ void serial_stream_iterator<DEC, BLOCK_IDX>::next()
         case set_block_xor_ref8:
         case set_block_xor_ref16:
         case set_block_xor_ref32:
+            BM_FALLTHROUGH;
+            // fall through
+        case set_sblock_bienc:
             BM_FALLTHROUGH;
             // fall through
         default:
@@ -5624,6 +5814,7 @@ serial_stream_iterator<DEC, BLOCK_IDX>::get_bit_block(
 //
 // ----------------------------------------------------------------------
 
+
 template<class BV>
 operation_deserializer<BV>::operation_deserializer()
 : temp_block_(0), ref_vect_(0)
@@ -5638,6 +5829,68 @@ operation_deserializer<BV>::~operation_deserializer()
     if (temp_block_)
         alloc_.free_bit_block(temp_block_);
 }
+
+/**
+    Utility function to process operation using temp vector
+    @internal
+ */
+template<class BV>
+typename BV::size_type process_operation(BV& bv,
+                                         BV& bv_tmp,
+                                         bm::set_operation op)
+{
+    typename BV::size_type count = 0;
+    switch (op)
+    {
+    case set_AND:
+        bv.bit_and(bv_tmp, BV::opt_compress);
+        break;
+    case set_ASSIGN:
+        bv.swap(bv_tmp);
+        break;
+    case set_OR:
+        bv.bit_or(bv_tmp);
+        break;
+    case set_SUB:
+        bv.bit_sub(bv_tmp);
+        break;
+    case set_XOR:
+        bv.bit_xor(bv_tmp);
+        break;
+    case set_COUNT: case set_COUNT_B:
+        count = bv_tmp.count();
+        break;
+    case set_COUNT_A:
+        count = bv.count();
+        break;
+    case set_COUNT_AND:
+        count = bm::count_and(bv, bv_tmp);
+        break;
+    case set_COUNT_XOR:
+        count = bm::count_xor(bv, bv_tmp);
+        break;
+    case set_COUNT_OR:
+        count = bm::count_or(bv, bv_tmp);
+        break;
+    case set_COUNT_SUB_AB:
+        count = bm::count_sub(bv, bv_tmp);
+        break;
+    case set_COUNT_SUB_BA:
+        count = bm::count_sub(bv_tmp, bv);
+        break;
+    case set_END:
+    default:
+        BM_ASSERT(0);
+        #ifndef BM_NO_STL
+            //throw std::logic_error(err_msg());
+        #else
+            BM_THROW(BM_ERR_SERIALFORMAT);
+        #endif
+    } // switch
+
+    return count;
+}
+
 
 template<class BV>
 typename operation_deserializer<BV>::size_type
@@ -5677,10 +5930,11 @@ void operation_deserializer<BV>::deserialize_xor_range(
 
     if (bo_current == bo)
     {
-        deserializer<BV, bm::decoder> deserial;
-        deserial.set_ref_vectors(ref_vect_);
-        deserial.set_range(idx_from, idx_to);
-        deserial.deserialize(bv, buf);
+        de_.set_ref_vectors(ref_vect_);
+        de_.set_range(idx_from, idx_to);
+        de_.deserialize(bv, buf);
+        de_.unset_range();
+        de_.set_ref_vectors(0);
     }
     else
     {
@@ -5792,6 +6046,33 @@ operation_deserializer<BV>::deserialize(bvector_type&        bv,
     {
         bv.clear(true);
         op = bm::set_OR;
+    }
+
+    if (header_flag & BM_HM_SPARSE)
+    {
+        size_type count = 0;
+        if (bo_current == bo)
+        {
+            if (op == bm::set_OR)
+            {
+                de_.deserialize(bv, buf);
+            }
+            else
+            {
+                bv_tmp_.clear(true);
+                bv_tmp_.set_new_blocks_strat(bm::BM_GAP);
+                de_.unset_range();
+                de_.deserialize(bv_tmp_, buf);
+
+                count = bm::process_operation(bv, bv_tmp_, op);
+            }
+        }
+        else
+        {
+            // TODO: implement byte-order aware sparse deserialization
+            BM_ASSERT(0);
+        }
+        return count;
     }
 
     if (bo_current == bo)

@@ -1903,6 +1903,30 @@ void for_each_bit_range_no_check(const BV&             bv,
     }
 }
 
+/**
+    convert sub-blocks to an array of set 1s (32-bit)
+    @internal
+ */
+template<typename BV, typename VECT>
+void convert_sub_to_arr(const BV& bv, unsigned sb, VECT& vect)
+{
+    vect.resize(0);
+
+    typename BV::size_type from, to, idx;
+    from = sb * bm::set_sub_array_size * bm::gap_max_bits;
+    to = (sb+1) * bm::set_sub_array_size * bm::gap_max_bits;
+    if (!to || to > bm::id_max) // overflow check
+        to = bm::id_max;
+
+    typename BV::enumerator en = bv.get_enumerator(from);
+    for (; en.valid(); ++en)
+    {
+        idx = *en;
+        if (idx >= to)
+            break;
+        vect.push_back(idx - from);
+    } // for en
+}
 
 
 } // namespace bm

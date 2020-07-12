@@ -8518,7 +8518,6 @@ void RangeDeserializationTest()
     }
 
 
-
         cout << "======= BV Empty " << endl;
         {
             bvect bv_e;
@@ -11346,7 +11345,7 @@ void SerializationCompressionLevelsTest()
                        tb,
                        set_OR);
 
-        cmp = bv.compare(bv2);
+        cmp = bv3.compare(bv2);
         assert(cmp == 0);
    }
 
@@ -11383,7 +11382,7 @@ void SerializationCompressionLevelsTest()
                        tb,
                        set_OR);
 
-        cmp = bv.compare(bv2);
+        cmp = bv3.compare(bv2);
         assert(cmp == 0);
    }
    
@@ -11413,7 +11412,7 @@ void SerializationCompressionLevelsTest()
                        sermem_buf.buf(),
                        tb,
                        set_OR);
-        cmp = bv.compare(bv2);
+        cmp = bv3.compare(bv2);
         assert(cmp == 0);
    }
 
@@ -11443,7 +11442,7 @@ void SerializationCompressionLevelsTest()
                        sermem_buf.buf(),
                        tb,
                        set_OR);
-        cmp = bv.compare(bv2);
+        cmp = bv3.compare(bv2);
         assert(cmp == 0);
    }
    
@@ -11481,7 +11480,7 @@ void SerializationCompressionLevelsTest()
                        sermem_buf.buf(),
                        tb,
                        set_OR);
-        cmp = bv.compare(bv2);
+        cmp = bv3.compare(bv2);
         assert(cmp == 0);
    }
 
@@ -11519,7 +11518,7 @@ void SerializationCompressionLevelsTest()
                        sermem_buf.buf(),
                        tb,
                        set_OR);
-        cmp = bv.compare(bv2);
+        cmp = bv3.compare(bv2);
         assert(cmp == 0);
    }
    
@@ -11550,9 +11549,50 @@ void SerializationCompressionLevelsTest()
                        sermem_buf.buf(),
                        tb,
                        set_OR);
-        cmp = bv.compare(bv2);
+        cmp = bv3.compare(bv2);
         assert(cmp == 0);
    }
+
+    // --------------------------------------------------------------
+    // Sparse super-block serialization
+
+   {
+        BM_DECLARE_TEMP_BLOCK(tb)
+
+        bvect bv(bm::BM_GAP);
+
+        bv.set_range(0, 10000);
+        bv.set_range(65535, 65535+10000);
+        bv.set_range(0, 10000, false);
+        bv.set_range(65535, 65535+10000, false);
+
+        for (bvect::size_type i = 65535*5; i < 65535*255; i+= 65536/10)
+            bv.set(i);
+
+        bm::serializer<bvect> bv_ser(tb);
+        bv_ser.set_compression_level(5);
+
+        bm::serializer<bvect>::buffer sermem_buf;
+
+        bv_ser.serialize(bv, sermem_buf, 0);
+
+        const bvect::size_type* cstat = bv_ser.get_compression_stat();
+        assert(cstat[bm::set_sblock_bienc] >= 1);
+
+        bvect bv2;
+        bm::deserialize(bv2, sermem_buf.buf());
+
+        int cmp = bv.compare(bv2);
+        assert(cmp == 0);
+        bvect bv3;
+        od.deserialize(bv3,
+                       sermem_buf.buf(),
+                       tb,
+                       set_OR);
+        bool eq = bv3.equal(bv2);
+        assert(eq);
+   }
+
 
     // --------------------------------------------------------------
     // XOR serialization
@@ -11761,7 +11801,7 @@ void SerializationCompressionLevelsTest()
         od.deserialize(bv3,
                        sermem_buf.buf(),
                        0, set_OR);
-        cmp = bv.compare(bv2);
+        cmp = bv3.compare(bv2);
         assert(cmp == 0);
    }
 
@@ -11790,7 +11830,7 @@ void SerializationCompressionLevelsTest()
         od.deserialize(bv3,
                        sermem_buf.buf(),
                        0, set_OR);
-        cmp = bv.compare(bv2);
+        cmp = bv3.compare(bv2);
         assert(cmp == 0);
    }
 
@@ -11847,7 +11887,7 @@ void SerializationCompressionLevelsTest()
         od.deserialize(bv3,
                        sermem_buf.buf(),
                        0, set_OR);
-        cmp = bv.compare(bv2);
+        cmp = bv3.compare(bv2);
         assert(cmp == 0);
    }
 
@@ -11875,7 +11915,7 @@ void SerializationCompressionLevelsTest()
         od.deserialize(bv3,
                        sermem_buf.buf(),
                        0, set_OR);
-        cmp = bv.compare(bv2);
+        cmp = bv3.compare(bv2);
         assert(cmp == 0);
    }
 
@@ -11904,7 +11944,7 @@ void SerializationCompressionLevelsTest()
         od.deserialize(bv3,
                        sermem_buf.buf(),
                        0, set_OR);
-        cmp = bv.compare(bv2);
+        cmp = bv3.compare(bv2);
         assert(cmp == 0);
    }
 
@@ -11936,7 +11976,7 @@ void SerializationCompressionLevelsTest()
         od.deserialize(bv3,
                        sermem_buf.buf(),
                        0, set_OR);
-        cmp = bv.compare(bv2);
+        cmp = bv3.compare(bv2);
         assert(cmp == 0);
    }
 
@@ -11967,7 +12007,7 @@ void SerializationCompressionLevelsTest()
         od.deserialize(bv3,
                        sermem_buf.buf(),
                        0, set_OR);
-        cmp = bv.compare(bv2);
+        cmp = bv3.compare(bv2);
         assert(cmp == 0);
    }
 
@@ -12026,7 +12066,7 @@ void SerializationCompressionLevelsTest()
             od.deserialize(bv3,
                            sermem_buf.buf(),
                            0, set_OR);
-            cmp = bv.compare(bv2);
+            cmp = bv3.compare(bv2);
             assert(cmp == 0);
         }
    }
@@ -12100,7 +12140,7 @@ void SerializationCompressionLevelsTest()
             od.deserialize(bv3,
                            sermem_buf.buf(),
                            0, set_OR);
-            cmp = bv.compare(bv2);
+            cmp = bv3.compare(bv2);
             assert(cmp == 0);
         }
    }
@@ -12137,7 +12177,7 @@ void SerializationCompressionLevelsTest()
         od.deserialize(bv3,
                        sermem_buf.buf(),
                        0, set_OR);
-        cmp = bv.compare(bv2);
+        cmp = bv3.compare(bv2);
         assert(cmp == 0);
    }
 
@@ -12167,7 +12207,7 @@ void SerializationCompressionLevelsTest()
         od.deserialize(bv3,
                        sermem_buf.buf(),
                        0, set_OR);
-        cmp = bv.compare(bv2);
+        cmp = bv3.compare(bv2);
         assert(cmp == 0);
    }
 
@@ -12200,12 +12240,166 @@ void SerializationCompressionLevelsTest()
         od.deserialize(bv3,
                        sermem_buf.buf(),
                        0, set_OR);
-        cmp = bv.compare(bv2);
+        cmp = bv3.compare(bv2);
         assert(cmp == 0);
    }
 
 
    cout << " ----------------------------------- SerializationCompressionLevelsTest() OK" << endl;
+}
+
+
+static
+void generate_sparse_bv(bvect& bv, bvect::size_type from,
+                        bvect::size_type to,
+                        bvect::size_type step = 65536/10)
+{
+    for (bvect::size_type i = from; true; i+= step)
+    {
+        bv.set(i);
+        if (to - step < i)
+            break;
+    }
+}
+
+static
+void SparseSerializationTest()
+{
+   cout << " ----------------------------------- SparseSerializationTest()" << endl;
+   BM_DECLARE_TEMP_BLOCK(tb)
+   operation_deserializer<bvect> od;
+   bm::serializer<bvect> bv_ser(tb);
+   bm::serializer<bvect>::buffer sermem_buf;
+   bm::serializer<bvect>::buffer sermem_buf_shifted;
+
+   std::vector<std::pair<bvect::size_type, bvect::size_type> > ranges;
+
+   ranges.push_back(std::make_pair(0, 65535*255));
+   ranges.push_back(std::make_pair(0, 65535*255 * 2));
+   ranges.push_back(std::make_pair(65535*5, 65535*255 * 2));
+   ranges.push_back(std::make_pair(65535*255/2, 65535*255));
+   ranges.push_back(std::make_pair(65535*255/2, 65535*255 * 2));
+   ranges.push_back(std::make_pair(bm::id_max/2 - 65535*255/2, bm::id_max/2 + 65535*255 * 2));
+   ranges.push_back(std::make_pair(bm::id_max/2, bm::id_max/2 + 65535*255 * 2));
+   ranges.push_back(std::make_pair(bm::id_max-65535*255*2, bm::id_max-1));
+
+    for (size_t k = 0; k < ranges.size(); ++k)
+    {
+        bvect::size_type from = ranges[k].first;
+        bvect::size_type to = ranges[k].second;
+
+        std::cout << "  range [" << from << ", " << to << "]" << std::endl;
+
+        for (unsigned i = 0; i < 2; ++i)
+        {
+            bvect bv, bv_shifted;
+
+            generate_sparse_bv(bv, from, to, 65536/10);
+            generate_sparse_bv(bv_shifted, from+1, to+1, 65536/10);
+
+            auto bv_cnt = bv.count();
+
+            bv_ser.serialize(bv, sermem_buf, 0);
+            bv_ser.serialize(bv_shifted, sermem_buf_shifted, 0);
+
+            const bvect::size_type* cstat = bv_ser.get_compression_stat();
+
+            {
+                bvect::size_type sb_from = from / (65536*256);
+                bvect::size_type sb_to = to / (65536*256);
+                bvect::size_type sb_cnt = sb_to - sb_from + 1;
+                assert(cstat[bm::set_sblock_bienc] == sb_cnt || cstat[bm::set_sblock_bienc] == sb_cnt-1);
+            }
+
+            bvect bv2;
+            bm::deserialize(bv2, sermem_buf.buf());
+            bool eq = bv.equal(bv2);
+            assert(eq);
+
+            {
+                bvect bv3;
+                od.deserialize(bv3, sermem_buf.buf(), tb, set_OR);
+                eq = bv3.equal(bv2);
+                assert(eq);
+            }
+            {
+                bvect bv3;
+                od.deserialize(bv3, sermem_buf.buf(), tb, set_XOR);
+                eq = bv3.equal(bv);
+                assert(eq);
+                od.deserialize(bv3, sermem_buf.buf(), tb, set_XOR);
+                assert(bv3.count()==0);
+
+                bv3 = bv;
+                od.deserialize(bv3, sermem_buf_shifted.buf(), tb, set_XOR);
+                assert(bv3.count()==2*bv_cnt);
+            }
+            {
+                bvect bv3;
+                od.deserialize(bv3, sermem_buf.buf(), tb, set_XOR);
+                eq = bv3.equal(bv);
+                assert(eq);
+                od.deserialize(bv3, sermem_buf.buf(), tb, set_XOR);
+                assert(bv3.count()==0);
+
+                bv3 = bv;
+                od.deserialize(bv3, sermem_buf_shifted.buf(), tb, set_XOR);
+                assert(bv3.count()==2*bv_cnt);
+            }
+            {
+                bvect bv3(bv);
+                od.deserialize(bv3, sermem_buf_shifted.buf(), tb, set_SUB);
+                eq = bv3.equal(bv);
+                assert(eq);
+                od.deserialize(bv3, sermem_buf.buf(), tb, set_SUB);
+                assert(bv3.count()==0);
+            }
+            {
+                bvect bv3(bv);
+                od.deserialize(bv3, sermem_buf.buf(), tb, set_AND);
+                eq = bv3.equal(bv);
+                assert(eq);
+                od.deserialize(bv3, sermem_buf_shifted.buf(), tb, set_AND);
+                assert(bv3.count()==0);
+            }
+
+
+            {
+                bvect bv3(bv);
+                auto cnt = od.deserialize(bv3, sermem_buf.buf(), tb, set_COUNT_OR);
+                assert(cnt == bv_cnt);
+
+                cnt = od.deserialize(bv3, sermem_buf_shifted.buf(), tb, set_COUNT_OR);
+                assert(cnt == 2*bv_cnt);
+            }
+
+            {
+                bvect bv3;
+                auto cnt = od.deserialize(bv3, sermem_buf.buf(), tb, set_COUNT_XOR);
+                assert(cnt == bv_cnt);
+
+                cnt = od.deserialize(bv, sermem_buf.buf(), tb, set_COUNT_XOR);
+                assert(cnt==0);
+
+                bv3 = bv_shifted;
+                cnt = od.deserialize(bv3, sermem_buf_shifted.buf(), tb, set_COUNT_XOR);
+                assert(cnt==0);
+            }
+            {
+                bvect bv3(bv);
+                auto cnt = od.deserialize(bv3, sermem_buf.buf(), tb, set_COUNT_AND);
+                assert(cnt == bv_cnt);
+                cnt = od.deserialize(bv3, sermem_buf_shifted.buf(), tb, set_COUNT_AND);
+                assert(cnt==0);
+            }
+
+
+            bv.optimize(tb);
+            bv_shifted.optimize(tb);
+        } // for
+    }
+
+   cout << " ----------------------------------- SparseSerializationTest() OK" << endl;
 }
 
 static
@@ -16286,6 +16480,112 @@ void verify_all_one_ranges(const bvect& bv, bool all_one)
         }
 
     } // for t
+}
+
+static
+void BvectorFindReverseTest()
+{
+    cout << "---------------------------- BvectorFindReverseTest()" << endl;
+
+    bool b;
+    bvect::size_type pos;
+
+
+    cout << "Check inverted bvector..." << endl;
+    {
+        bvect bv;
+        bv.flip();
+        b = bv.find_reverse(0, pos);
+        assert(b);
+        assert(pos == 0);
+        b = bv.find_reverse(65535, pos);
+        assert(b);
+        assert(pos == 65535);
+
+        b = bv.find_reverse(bm::id_max-1, pos);
+        assert(b);
+        assert(pos == bm::id_max-1);
+        b = bv.find_reverse(bm::id_max, pos);
+        assert(b);
+        assert(pos == bm::id_max-1);
+    }
+
+    cout << "Check bit bvector..." << endl;
+    {
+        bvect bv;
+        bv[100] = true;
+        b = bv.find_reverse(100, pos);
+        assert(b);
+        assert(pos == 100);
+
+        b = bv.find_reverse(256, pos);
+        assert(b);
+        assert(pos == 100);
+
+        bv[101] = true;
+        b = bv.find_reverse(256, pos);
+        assert(b);
+        assert(pos == 101);
+
+        bv[65355] = true;
+
+        b = bv.find_reverse(256, pos);
+        assert(b);
+        assert(pos == 101);
+
+        bv[100] = false;
+        bv[101] = false;
+        b = bv.find_reverse(256, pos);
+        assert(!b);
+
+        b = bv.find_reverse(bm::id_max/2, pos);
+        assert(b);
+        assert(pos == 65355);
+
+        bv[65355*4] = true;
+        b = bv.find_reverse(65355*2, pos);
+        assert(b);
+        assert(pos == 65355);
+
+
+    }
+    cout << "Check GAP bvector..." << endl;
+    {
+        bvect bv(bm::BM_GAP);
+        bv[100] = true;
+        b = bv.find_reverse(100, pos);
+        assert(b);
+        assert(pos == 100);
+
+        b = bv.find_reverse(256, pos);
+        assert(b);
+        assert(pos == 100);
+
+        bv[101] = true;
+        b = bv.find_reverse(256, pos);
+        assert(b);
+        assert(pos == 101);
+
+        bv[65355] = true;
+
+        bv[100] = false;
+        bv[101] = false;
+        b = bv.find_reverse(256, pos);
+        assert(!b);
+
+        b = bv.find_reverse(bm::id_max/2, pos);
+        assert(b);
+        assert(pos == 65355);
+
+        bv[65355*4] = true;
+        b = bv.find_reverse(65355*2, pos);
+        assert(b);
+        assert(pos == 65355);
+    }
+
+
+
+    cout << "---------------------------- BvectorFindReverseTest() OK" << endl;
 }
 
 static
@@ -27985,6 +28285,8 @@ int main(int argc, char *argv[])
 
          EnumeratorTest();
 
+         BvectorFindReverseTest();
+
          Intervals_RangesTest();
 
          IntervalEnumeratorTest();
@@ -28030,9 +28332,12 @@ int main(int argc, char *argv[])
     
     if (is_all || is_bvser || is_bvbasic)
     {
+
         SerializationCompressionLevelsTest();
+        SparseSerializationTest();
         SerializationTest();
         DesrializationTest2();
+
         RangeDeserializationTest();
     }
     

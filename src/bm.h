@@ -1568,11 +1568,23 @@ public:
 
     /*!
        \brief Finds last index of 1 bit
-       \param pos - index of the last found 1 bit
+       \param pos - [out] index of the last found 1 bit
        \return true if search returned result
-       \sa get_first, get_next, extract_next, find, find_first_mismatch
+       \sa get_first, get_next, extract_next,
+       \sa find, find_first_mismatch, find_range
     */
     bool find_reverse(size_type& pos) const BMNOEXCEPT;
+
+    /*!
+       \brief Reverse finds next(prev) index of 1 bit
+       \param from - index to search from
+       \param pos - [out] found position index
+                    (undefined if method returns false)
+       \return true if search returned result
+       \sa get_first, get_next, extract_next,
+       \sa find, find_first_mismatch, find_range
+    */
+    bool find_reverse(size_type from, size_type& pos) const BMNOEXCEPT;
     
     /*!
        \brief Finds dynamic range of bit-vector [first, last]
@@ -4040,6 +4052,131 @@ bool bvector<Alloc>::find_reverse(size_type& pos) const BMNOEXCEPT
         if (i == 0)
             break;
     } // for i
+    return false;
+}
+
+//---------------------------------------------------------------------
+
+template<class Alloc>
+bool bvector<Alloc>::find_reverse(size_type from, size_type& pos) const BMNOEXCEPT
+{
+    bool found;
+    if (!blockman_.is_init())
+        return false; // nothing to do
+    if (!from)
+    {
+        pos = from;
+        return this->test(from);
+    }
+
+    block_idx_type nb = (from >> bm::set_block_shift);
+    unsigned i0, j0;
+    bm::get_block_coord(nb, i0, j0);
+
+    const bm::word_t* block = blockman_.get_block_ptr(i0, j0);
+    if (block)
+    {
+        size_type base_idx;
+        unsigned found_nbit;
+        unsigned nbit = unsigned(from & bm::set_block_mask);
+        found = bm::block_find_reverse(block, nbit, &found_nbit);
+        if (found)
+        {
+            base_idx = bm::get_block_start<size_type>(i0, j0);
+            pos = base_idx + found_nbit;
+            return found;
+        }
+    }
+
+    if (nb)
+        --nb;
+    else
+        return false;
+    bm::get_block_coord(nb, i0, j0);
+
+    const bm::word_t* const* blk_blk = blockman_.get_topblock(i0);
+    if (blk_blk)
+    {
+        if ((bm::word_t*)blk_blk == FULL_BLOCK_FAKE_ADDR)
+            blk_blk = FULL_SUB_BLOCK_REAL_ADDR;
+        for (unsigned j = j0; true; --j)
+        {
+            const bm::word_t* blk = blk_blk[j];
+            if (blk)
+            {
+                unsigned block_pos;
+                if (blk == FULL_BLOCK_FAKE_ADDR)
+                {
+                    block_pos = bm::gap_max_bits-1;
+                    found = true;
+                }
+                else
+                {
+                    bool is_gap = BM_IS_GAP(blk);
+                    found = is_gap ? bm::gap_find_last(BMGAP_PTR(blk), &block_pos)
+                                   : bm::bit_find_last(blk, &block_pos);
+                }
+                if (found)
+                {
+                    block_idx_type base_idx =
+                        block_idx_type(i0) * bm::set_sub_array_size *
+                        bm::gap_max_bits;
+                    base_idx += j * bm::gap_max_bits;
+                    pos = base_idx + block_pos;
+                    return found;
+                }
+            }
+            if (!j)
+                break;
+        } // for j
+    }
+    if (i0)
+        --i0;
+    else
+        return false;
+
+    for (unsigned i = i0; true; --i)
+    {
+        blk_blk = blockman_.get_topblock(i);
+        if (blk_blk)
+        {
+            if ((bm::word_t*)blk_blk == FULL_BLOCK_FAKE_ADDR)
+                blk_blk = FULL_SUB_BLOCK_REAL_ADDR;
+            for (unsigned short j = bm::set_sub_array_size-1; true; --j)
+            {
+                const bm::word_t* blk = blk_blk[j];
+                if (blk)
+                {
+                    unsigned block_pos;
+                    if (blk == FULL_BLOCK_FAKE_ADDR)
+                    {
+                        block_pos = bm::gap_max_bits-1;
+                        found = true;
+                    }
+                    else
+                    {
+                        bool is_gap = BM_IS_GAP(blk);
+                        found = is_gap ? bm::gap_find_last(BMGAP_PTR(blk), &block_pos)
+                                       : bm::bit_find_last(blk, &block_pos);
+                    }
+                    if (found)
+                    {
+                        block_idx_type base_idx =
+                            block_idx_type(i) * bm::set_sub_array_size *
+                            bm::gap_max_bits;
+                        base_idx += j * bm::gap_max_bits;
+                        pos = base_idx + block_pos;
+                        return found;
+                    }
+                }
+                if (!j)
+                    break;
+            } // for j
+        }
+        if (i == 0)
+            break;
+    } // for i
+
     return false;
 }
 

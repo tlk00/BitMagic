@@ -2007,7 +2007,7 @@ bool gap_find_interval_end(const T* const BMRESTRICT buf,
 
 /**
     \brief Searches for the first 1 bit in the 111 interval of a GAP block
-    \param buf - BIT block buffer
+    \param buf - GAP block buffer
     \param nbit - bit index to start checking from
     \param pos - [out] found value
 
@@ -2032,6 +2032,38 @@ bool gap_find_interval_start(const T* const BMRESTRICT buf,
         *pos = buf[start_pos]+1;
     return true;
 }
+
+/**
+    \brief reverse search for the first 1 bit of a GAP block
+    \param buf - GAP block buffer
+    \param nbit - bit index to start checking from
+    \param pos - [out] found value
+
+    \return false if not found
+    @ingroup gapfunc
+*/
+template<typename T>
+bool gap_find_prev(const T* const BMRESTRICT buf,
+                   unsigned nbit, unsigned* BMRESTRICT pos) BMNOEXCEPT
+{
+    BM_ASSERT(pos);
+    BM_ASSERT(nbit < bm::gap_max_bits);
+
+    unsigned is_set;
+    unsigned start_pos = bm::gap_bfind(buf, nbit, &is_set);
+    if (is_set)
+    {
+        *pos = nbit;
+        return true;
+    }
+    --start_pos;
+    if (!start_pos)
+        return false;
+    else
+        *pos = buf[start_pos];
+    return true;
+}
+
 
 
 /*!
@@ -5511,6 +5543,67 @@ bool bit_block_find_interval_start(const bm::word_t* BMRESTRICT block,
     return true;
 }
 
+/**
+    \brief Reverse search for the previous 1 bit
+    \param block - BIT buffer
+    \param nbit - bit index to start checking from
+    \param pos - [out] found value
+
+    \return false if not found
+    @ingroup bitfunc
+*/
+inline
+bool bit_block_find_prev(const bm::word_t* BMRESTRICT block,
+                           unsigned nbit, unsigned* BMRESTRICT pos) BMNOEXCEPT
+{
+    BM_ASSERT(block);
+    BM_ASSERT(pos);
+
+    unsigned nword  = unsigned(nbit >> bm::set_word_shift);
+    unsigned bit_pos = (nbit & bm::set_word_mask);
+    bm::word_t w = block[nword];
+    w &= (1u << bit_pos);
+    if (w)
+    {
+        *pos = unsigned(bit_pos + (nword * 8u * unsigned(sizeof(bm::word_t))));
+        return true;
+    }
+
+    if (!nbit)
+        return false;
+
+    --nbit;
+    nword  = unsigned(nbit >> bm::set_word_shift);
+    bit_pos = (nbit & bm::set_word_mask);
+
+    w = block[nword] & block_set_table<true>::_left[bit_pos];
+    if (w)
+    {
+        bit_pos = bm::bit_scan_reverse32(w);
+        *pos = unsigned(bit_pos + (nword * 8u * unsigned(sizeof(bm::word_t))));
+        return true;
+    }
+
+    if (nword)
+    {
+        for (--nword; true; --nword)
+        {
+            w = block[nword];
+            if (w)
+            {
+                bit_pos = bm::bit_scan_reverse32(w); // trailing zeros
+                *pos = unsigned(bit_pos + (nword * 8u * unsigned(sizeof(bm::word_t))));
+                return true;
+            }
+            if (!nword)
+                break;
+        } // for nword
+    }
+    return false;
+}
+
+
+// ----------------------------------------------------------------------
 
 /*! @brief Find start of the current 111 interval
     @return search result code 0 - not found, 1 found, 2 - found at the start
@@ -5541,6 +5634,36 @@ unsigned block_find_interval_start(const bm::word_t* BMRESTRICT block,
         b = bm::bit_block_find_interval_start(block, nbit_from, found_nbit);
         if (b && *found_nbit == 0)
             return 2; // start of block, keep searching
+    }
+    return b;
+}
+
+// ----------------------------------------------------------------------
+
+/*! @brief Reverse find 1
+    @return search result code 0 - not found, 1 found
+    @internal
+*/
+inline
+bool block_find_reverse(const bm::word_t* BMRESTRICT block,
+                        unsigned  nbit_from,
+                        unsigned* BMRESTRICT found_nbit) BMNOEXCEPT
+{
+    BM_ASSERT(block && found_nbit);
+    BM_ASSERT(nbit_from < bm::gap_max_bits);
+    bool b;
+    if (BM_IS_GAP(block))
+    {
+        b = bm::gap_find_prev(BMGAP_PTR(block), nbit_from, found_nbit);
+    }
+    else // bit-block
+    {
+        if (IS_FULL_BLOCK(block))
+        {
+            *found_nbit = nbit_from;
+            return true;
+        }
+        b = bm::bit_block_find_prev(block, nbit_from, found_nbit);
     }
     return b;
 }
@@ -8806,6 +8929,54 @@ bm::id_t block_to_global_index(unsigned i, unsigned j,
     return block_idx + base_idx;
 }
 #endif
+
+/**
+    Calculate minimal delta between elements of sorted array
+    @internal
+ */
+inline
+unsigned min_delta_u32(const unsigned* arr, size_t arr_size)
+{
+    if (arr_size < 2)
+        return 0;
+
+    unsigned md = arr[1] - arr[0]; // initial delta value
+    for (size_t i = 1; i < arr_size; ++i)
+    {
+        unsigned prev = arr[i-1];
+        unsigned curr = arr[i];
+        BM_ASSERT(prev <= curr - 1);
+        unsigned delta = curr - prev;
+        if (delta < md)
+        {
+            md = delta;
+        }
+    } // for
+    return md;
+}
+
+/**
+    Recalculate the array to decrement delta as
+    arr[i] = arr[i] - delta + 1
+    so that array remains monotonically growing (fit
+    for interpolative compression)
+
+    @internal
+ */
+inline
+void min_delta_apply(unsigned* arr, size_t arr_size, unsigned delta)
+{
+    BM_ASSERT(delta > 0);
+    --delta;
+    // TODO: SIMD and unroll
+    for (size_t i = 1; i < arr_size; ++i)
+    {
+        arr[i] -= delta;
+        BM_ASSERT(arr[i] > arr[i-1]);
+    } // for
+}
+
+
 
 // --------------------------------------------------------------
 // Functions to work with int values stored in 64-bit pointers

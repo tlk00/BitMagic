@@ -16080,6 +16080,111 @@ void BvectorFindFirstDiffTest()
 }
 
 
+static
+void BvectorFindReverseTest()
+{
+    cout << "---------------------------- BvectorFindReverseTest()" << endl;
+
+    bool b;
+    bvect::size_type pos;
+
+
+    cout << "Check inverted bvector..." << endl;
+    {
+        bvect bv;
+        bv.flip();
+        b = bv.find_reverse(0, pos);
+        assert(b);
+        assert(pos == 0);
+        b = bv.find_reverse(65535, pos);
+        assert(b);
+        assert(pos == 65535);
+
+        b = bv.find_reverse(bm::id_max-1, pos);
+        assert(b);
+        assert(pos == bm::id_max-1);
+        b = bv.find_reverse(bm::id_max, pos);
+        assert(b);
+        assert(pos == bm::id_max-1);
+    }
+
+    cout << "Check bit bvector..." << endl;
+    {
+        bvect bv;
+        bv[100] = true;
+        b = bv.find_reverse(100, pos);
+        assert(b);
+        assert(pos == 100);
+
+        b = bv.find_reverse(256, pos);
+        assert(b);
+        assert(pos == 100);
+
+        bv[101] = true;
+        b = bv.find_reverse(256, pos);
+        assert(b);
+        assert(pos == 101);
+
+        bv[65355] = true;
+
+        b = bv.find_reverse(256, pos);
+        assert(b);
+        assert(pos == 101);
+
+        bv[100] = false;
+        bv[101] = false;
+        b = bv.find_reverse(256, pos);
+        assert(!b);
+
+        b = bv.find_reverse(bm::id_max/2, pos);
+        assert(b);
+        assert(pos == 65355);
+
+        bv[65355*4] = true;
+        b = bv.find_reverse(65355*2, pos);
+        assert(b);
+        assert(pos == 65355);
+
+
+    }
+    cout << "Check GAP bvector..." << endl;
+    {
+        bvect bv(bm::BM_GAP);
+        bv[100] = true;
+        b = bv.find_reverse(100, pos);
+        assert(b);
+        assert(pos == 100);
+
+        b = bv.find_reverse(256, pos);
+        assert(b);
+        assert(pos == 100);
+
+        bv[101] = true;
+        b = bv.find_reverse(256, pos);
+        assert(b);
+        assert(pos == 101);
+
+        bv[65355] = true;
+
+        bv[100] = false;
+        bv[101] = false;
+        b = bv.find_reverse(256, pos);
+        assert(!b);
+
+        b = bv.find_reverse(bm::id_max/2, pos);
+        assert(b);
+        assert(pos == 65355);
+
+        bv[65355*4] = true;
+        b = bv.find_reverse(65355*2, pos);
+        assert(b);
+        assert(pos == 65355);
+    }
+
+
+
+    cout << "---------------------------- BvectorFindReverseTest() OK" << endl;
+}
 
 
 static
@@ -16248,6 +16353,8 @@ int main(int argc, char *argv[])
         KeepRangeTest();
 
         OptimizeTest();
+
+        BvectorFindReverseTest();
 
         RankFindTest();
 
