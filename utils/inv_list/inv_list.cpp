@@ -55,6 +55,7 @@ void show_help()
       << "BitMagic Inverted List Compression Test (c) 2019"              << std::endl
       << "-u32in u32-input-file       -- raw 32-bit unsigned int file"   << std::endl
       << "-bvout bvect-output-file    -- bit-vector compressed out file" << std::endl
+      << "-svout svect-output-file    -- bit-transposed sparse vectors out file" << std::endl
       << "-bvin bvect-input-file      -- bit-vector compressed in file"  << std::endl
       << std::endl
       << "-level N                    -- compression level to use (up to 5)" << std::endl
@@ -314,7 +315,7 @@ bool is_super_sparse(const BV& bv)
 }
 
 
-///  convert vector into bit-vector and append to file
+///  convert vector into bit-vector and append to the file
 ///
 /// @return true if vector was detected as very low cardinality
 ///
@@ -328,7 +329,9 @@ bool write_as_bvector(std::ofstream& bv_file,
     bv.set(&vec[0], bm::bvector<>::size_type(vec.size()), bm::BM_SORTED);
     bool low_card = false; //is_super_sparse(bv);
 
-    bvs.optimize_serialize_destroy(bv, sbuf);
+    bv.optimize();
+    bvs.serialize(bv, sbuf);
+    //bvs.optimize_serialize_destroy(bv, sbuf);
 
     unsigned bv_size = (unsigned)sbuf.size();
     bv_file.write((char*)&bv_size, sizeof(bv_size));
@@ -338,12 +341,106 @@ bool write_as_bvector(std::ofstream& bv_file,
     return low_card;
 }
 
+///  convert vector into delta coded bit-transposed vector and append to the file
+///
+template<typename VT>
+void write_as_svector(std::ofstream& sv_file,
+                     const VT& vec,
+                     unsigned min_delta,
+                     bm::sparse_vector_serial_layout<sparse_vector_u32>& sv_lay)
+{
+
+    sparse_vector_u32 sv;
+    bm::id_t prev = vec[0];
+
+    {
+        sparse_vector_u32::back_insert_iterator sv_bi = sv.get_back_inserter();
+        sv_bi.add(min_delta);
+        sv_bi.add(prev);
+
+        for (unsigned k = 1; k < vec.size(); ++k)
+        {
+            bm::id_t curr = vec[k];
+            bm::id_t delta = curr - prev;
+            if (delta < min_delta)
+                throw std::runtime_error("Input vector validation delta error");
+            delta -= min_delta;
+            sv_bi.add(delta);
+            prev = curr;
+        } // for i
+        sv_bi.flush();
+    }
+
+    BM_DECLARE_TEMP_BLOCK(tb)
+    sv.optimize(tb);
+    bm::sparse_vector_serialize(sv, sv_lay, tb);
+
+    unsigned sv_size = (unsigned)sv_lay.size();
+    sv_file.write((char*)&sv_size, sizeof(sv_size));
+    sv_file.write((char*)sv_lay.data(), (std::streamsize)sv_lay.size());
+    if (!sv_file.good())
+        throw std::runtime_error("Error write to bvect out file");
+
+}
+
+
+///  convert vector into delta coded bit-transposed vector and append to the file
+///
+template<typename VT>
+void write_as_rsc_svector(std::ofstream& sv_file,
+                          const VT& vec,
+                          unsigned min_delta,
+                          bm::sparse_vector_serial_layout<rsc_sparse_vector_u32>& sv_lay)
+{
+
+    sparse_vector_u32 sv(bm::use_null);
+    bm::id_t prev = vec[0];
+
+    {
+        sparse_vector_u32::back_insert_iterator sv_bi = sv.get_back_inserter();
+        sv_bi.add(min_delta);
+        sv_bi.add(prev);
+
+        for (unsigned k = 1; k < vec.size(); ++k)
+        {
+            bm::id_t curr = vec[k];
+            bm::id_t delta = curr - prev;
+            if (delta < min_delta)
+                throw std::runtime_error("Input vector validation delta error");
+            delta -= min_delta;
+            if (delta)
+                sv_bi.add(delta);
+            else
+                sv_bi.add_null();
+            prev = curr;
+        } // for i
+        sv_bi.flush();
+    }
+
+    BM_DECLARE_TEMP_BLOCK(tb)
+ 
+    rsc_sparse_vector_u32 csv; // compressed sparse vector
+    csv.load_from(sv); // load rank-select-compacted (rsc) sparse vector
+    csv.optimize(tb);
+
+    bm::sparse_vector_serialize(csv, sv_lay, tb);
+
+    unsigned sv_size = (unsigned)sv_lay.size();
+    sv_file.write((char*)&sv_size, sizeof(sv_size));
+    sv_file.write((char*)sv_lay.data(), (std::streamsize)sv_lay.size());
+    if (!sv_file.good())
+        throw std::runtime_error("Error write to bvect out file");
+
+}
+
+
 
 /// read the input collection sequence, write using various compression schemes
 ///
 static
 void compress_inv_dump_file(const std::string& fname,
-                            const std::string& bv_out_fname)
+                            const std::string& bv_out_fname,
+                            const std::string& sv_out_fname)
 {
     bm::id64_t total_ints = 0;
     bm::id64_t total_low_card = 0;
@@ -358,6 +455,12 @@ void compress_inv_dump_file(const std::string& fname,
         cout << "Writing to BV collection: " << bv_out_fname << endl;
     else
         cout << "NO BV collection specified" << endl;
+    if (!sv_out_fname.empty())
+        cout << "Writing to SV collection: " << sv_out_fname << endl;
+    else
+        cout << "NO SV collection specified" << endl;
+
+    
     cout << "Compression level: " << c_level << endl;
 
     bm::chrono_taker tt1("1. Convert collection", 1, &timing_map);
@@ -376,7 +479,14 @@ void compress_inv_dump_file(const std::string& fname,
         if (!bv_file.good())
             throw std::runtime_error("Cannot open bvect out file");
     }
-    
+    std::ofstream sv_file;
+    if (!sv_out_fname.empty())
+    {
+        sv_file.open(sv_out_fname, std::ios::out | std::ios::binary);
+        if (!sv_file.good())
+            throw std::runtime_error("Cannot open svect out file");
+    }
+
     
     fin.seekg(0, std::ios::end);
     std::streamsize fsize = fin.tellg();
@@ -389,6 +499,10 @@ void compress_inv_dump_file(const std::string& fname,
     bvs.byte_order_serialization(false);
     bvs.gap_length_serialization(false);
     bvs.set_compression_level(c_level);
+    
+    // serialization target for sparse vector
+    bm::sparse_vector_serial_layout<sparse_vector_u32> sv_lay;
+    bm::sparse_vector_serial_layout<rsc_sparse_vector_u32> csv_lay;
     
     bm::serializer<bm::bvector<> >::buffer sbuf; // resizable memory buffer
 
@@ -428,42 +542,31 @@ void compress_inv_dump_file(const std::string& fname,
         
         // commented out experimental (and very slow code) to evaluate rank-select compression
         #if 0
-        size_t rsc_diff = 0;
-        // try delta-coded sparse vector (experimental)
+        if (!sv_out_fname.empty())
         {
-            sparse_vector_u32 sv(bm::use_null);
-            bm::id_t prev = vec[0];
-            sv.push_back(min_delta);
-            sv.push_back(prev);
+            //write_as_svector(sv_file, vec, min_delta, sv_lay);
+            write_as_rsc_svector(sv_file, vec, min_delta, csv_lay);
+            sv_size += sv_lay.size();
 
-            for (unsigned k = 1; k < vec.size(); ++k)
-            {
-                bm::id_t curr = vec[k];
-                bm::id_t delta = curr - prev;
-                if (delta < min_delta)
-                    throw std::runtime_error("Input vector validation delta error");
-                delta -= min_delta;
-                if (delta)
-                    sv[2+k] = delta;
-                prev = curr;
-            } // for i
-            
-            rsc_sparse_vector_u32 csv; // compressed sparse vector
-            csv.load_from(sv); // load rank-select-compacted (rsc) sparse vector
-            
-            BM_DECLARE_TEMP_BLOCK(tb)
-            csv.optimize(tb);
-            bm::sparse_vector_serial_layout<rsc_sparse_vector_u32> sv_lay;
-            bm::sparse_vector_serialize(csv, sv_lay, tb);
-            if (sv_lay.size() < sbuf.size())
-            {
-                rsc_diff = sbuf.size() - sv_lay.size();
-                rsc_diff_size += rsc_diff;
-                sv_size += sv_lay.size();
-                sv_cnt++;
-            }
+                /*
+                rsc_sparse_vector_u32 csv; // compressed sparse vector
+                csv.load_from(sv); // load rank-select-compacted (rsc) sparse vector
+                
+                BM_DECLARE_TEMP_BLOCK(tb)
+                csv.optimize(tb);
+                bm::sparse_vector_serial_layout<rsc_sparse_vector_u32> sv_lay;
+                bm::sparse_vector_serialize(csv, sv_lay, tb);
+                if (sv_lay.size() < sbuf.size())
+                {
+                    rsc_diff = sbuf.size() - sv_lay.size();
+                    rsc_diff_size += rsc_diff;
+                    sv_size += sv_lay.size();
+                    sv_cnt++;
+                }
+                */
         }
         #endif
+        
         
         std::streamsize fpos_curr = fin.tellg();
         if (fpos_curr == fsize)
@@ -502,8 +605,22 @@ void compress_inv_dump_file(const std::string& fname,
         // for size/length words prefixing the vectors
         double bv_bits_per_int = double(bv_size * 8ull - (i*sizeof(unsigned))) / double(total_ints);
         cout << "BV Bits per/int = " << std::setprecision(3) << bv_bits_per_int << endl;
+        
         bv_file.close();
     }
+    
+    if (!sv_out_fname.empty())
+    {
+        sv_size = (bm::id64_t)sv_file.tellp();
+        cout << "SV size = " << sv_size << endl;
+        // calculate bits per int compression ratio corrected not to account
+        // for size/length words prefixing the vectors
+        double sv_bits_per_int = double(sv_size * 8ull - (i*sizeof(unsigned))) / double(total_ints);
+        cout << "SV Bits per/int = " << std::setprecision(3) << sv_bits_per_int << endl;
+        
+        sv_file.close();
+    }
+
 }
 
 // ------------------------------------------------------------------------
@@ -643,7 +760,7 @@ int main(int argc, char *argv[])
             if (!is_verify)
             {
                 cout << "Compression" << endl;
-                compress_inv_dump_file(u32_in_file, bv_out_file);
+                compress_inv_dump_file(u32_in_file, bv_out_file, sv_out_file);
             }
             else
             {
