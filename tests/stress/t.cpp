@@ -662,7 +662,7 @@ void FillSets(bvect_mini* bvect_min,
             bvect_min->set_bit(id);
             bvect_full->set_bit(id);
         }
-        cout << endl;
+        std::cout << endl;
     }
     else
     {
@@ -878,7 +878,7 @@ void FillSetsRandomOne(bvect_mini* bvect_min,
     unsigned bit_idx = unsigned(rand()) % range;
     bvect_min->set_bit(bit_idx);
     bvect_full->set_bit(bit_idx);
-    cout << "Bit_idx=" << bit_idx << endl;
+    std::cout << "Bit_idx=" << bit_idx << endl;
 }
 
 static
@@ -8347,7 +8347,7 @@ void CheckRangeDeserial(const bvect&     bv,
     static unsigned bm_distance = 4;
     assert(from < to);
 
-    cout << " Check Range [" << from << ", " << to << "] = " << (to-from) << endl;
+    cout << "   Check Range [" << from << ", " << to << "] = " << (to-from) << endl;
 
     int max_inc = 256;
     if (to - from > 65536)
@@ -8498,23 +8498,52 @@ void CheckRangeDeserial(const bvect&     bv,
 }
 
 static
+void generate_sparse_bv(bvect& bv, bvect::size_type from,
+    bvect::size_type to,
+    bvect::size_type step = 65536 / 10)
+{
+    for (bvect::size_type i = from; true; i += step)
+    {
+        bv.set(i);
+        if (to - step < i)
+            break;
+    }
+}
+
+
+static
 void RangeDeserializationTest()
 {
     cout << "\n------------------------------- RangeDeserializationTest()" << endl;
 
-
-    // generated random
-    cout << "======= BV random generated " << endl;
+    cout << "============ BV sparse vector" << endl;
     {
-        bvect bv1;  // generated random
+        std::vector<std::pair<bvect::size_type, bvect::size_type> > ranges;
 
-        generate_bvector(bv1, bm::id_max32/4, false);
-        CheckRangeDeserial(bv1, 0, 5*65536);
-        CheckRangeDeserial(bv1, bm::id_max32/4-(8*65536), bm::id_max32/4);
+        ranges.push_back(std::make_pair(0, 65535 * 255));
+        ranges.push_back(std::make_pair(0, 65535 * 255 * 3));
+        ranges.push_back(std::make_pair(65535 * 5, 65535 * 255 * 2));
+        ranges.push_back(std::make_pair(65535 * 255 / 2, 65535 * 255));
+        ranges.push_back(std::make_pair(65535 * 255 / 2, 65535 * 255 * 2));
+        ranges.push_back(std::make_pair(bm::id_max / 2 - 65535 * 255 / 2, bm::id_max / 2 + 65535 * 255 * 2));
+        ranges.push_back(std::make_pair(bm::id_max / 2, bm::id_max / 2 + 65535 * 255 * 2));
+        ranges.push_back(std::make_pair(bm::id_max - 65535 * 255 * 2, bm::id_max - 1));
 
-        bv1.optimize();
-        CheckRangeDeserial(bv1, 128*65536, 130*65536);
-        CheckRangeDeserial(bv1, bm::id_max32/4-(2*65536), bm::id_max32/4);
+        for (size_t k = 0; k < ranges.size(); ++k)
+        {
+            bvect bv;  // generated random
+
+            bvect::size_type from = ranges[k].first;
+            bvect::size_type to = ranges[k].second;
+            std::cout << "- Vector range [" << from << ", " << to << "]" << std::endl;
+
+            generate_sparse_bv(bv, from, to, 65536 / 10);
+
+            CheckRangeDeserial(bv, to - 65536, to);
+            CheckRangeDeserial(bv, from, from + 65536);
+            auto mid = (to - from) / 2;
+            CheckRangeDeserial(bv, mid - 100, mid + 100);
+        }
     }
 
 
@@ -8534,6 +8563,21 @@ void RangeDeserializationTest()
             CheckRangeDeserial(bv_i, bm::id_max32/4-(256*65536), bm::id_max32/4);
         }
 
+        
+            // generated random
+            cout << "======= BV random generated " << endl;
+            {
+                bvect bv1;  // generated random
+
+                generate_bvector(bv1, bm::id_max32/4, false);
+                CheckRangeDeserial(bv1, 0, 5*65536);
+                CheckRangeDeserial(bv1, bm::id_max32/4-(8*65536), bm::id_max32/4);
+
+                bv1.optimize();
+                CheckRangeDeserial(bv1, 128*65536, 130*65536);
+                CheckRangeDeserial(bv1, bm::id_max32/4-(2*65536), bm::id_max32/4);
+            }
+        
 
 
     cout << "\n------------------------------- RangeDeserializationTest() OK" << endl;
@@ -11557,6 +11601,29 @@ void SerializationCompressionLevelsTest()
     // Sparse super-block serialization
 
    {
+       BM_DECLARE_TEMP_BLOCK(tb)
+       bvect bv(bm::BM_GAP);
+       for (bvect::size_type i = 1; i < 65535 * 255; i += 65535)
+           bv.set_range(i, i+10);
+
+       bm::serializer<bvect> bv_ser(tb);
+       bv_ser.set_compression_level(5);
+
+       bm::serializer<bvect>::buffer sermem_buf;
+
+       bv_ser.serialize(bv, sermem_buf, 0);
+
+       const bvect::size_type* cstat = bv_ser.get_compression_stat();
+       assert(cstat[bm::set_sblock_bienc] == 0);
+
+       bvect bv2;
+       bm::deserialize(bv2, sermem_buf.buf());
+
+       bool eq = bv.equal(bv2);
+       assert(eq);
+   }
+
+   {
         BM_DECLARE_TEMP_BLOCK(tb)
 
         bvect bv(bm::BM_GAP);
@@ -12249,18 +12316,6 @@ void SerializationCompressionLevelsTest()
 }
 
 
-static
-void generate_sparse_bv(bvect& bv, bvect::size_type from,
-                        bvect::size_type to,
-                        bvect::size_type step = 65536/10)
-{
-    for (bvect::size_type i = from; true; i+= step)
-    {
-        bv.set(i);
-        if (to - step < i)
-            break;
-    }
-}
 
 static
 void SparseSerializationTest()
@@ -28332,7 +28387,6 @@ int main(int argc, char *argv[])
     
     if (is_all || is_bvser || is_bvbasic)
     {
-
         SerializationCompressionLevelsTest();
         SparseSerializationTest();
         SerializationTest();

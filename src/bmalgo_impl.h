@@ -1913,8 +1913,9 @@ void convert_sub_to_arr(const BV& bv, unsigned sb, VECT& vect)
     vect.resize(0);
 
     typename BV::size_type from, to, idx;
-    from = sb * bm::set_sub_array_size * bm::gap_max_bits;
-    to = (sb+1) * bm::set_sub_array_size * bm::gap_max_bits;
+    typename BV::size_type sb_max_bc = bm::set_sub_array_size * bm::gap_max_bits;
+    from = sb * sb_max_bc;
+    to = (sb+1) * sb_max_bc;
     if (!to || to > bm::id_max) // overflow check
         to = bm::id_max;
 
@@ -1924,7 +1925,8 @@ void convert_sub_to_arr(const BV& bv, unsigned sb, VECT& vect)
         idx = *en;
         if (idx >= to)
             break;
-        vect.push_back(idx - from);
+        idx -= from;
+        vect.push_back((typename VECT::value_type)idx);
     } // for en
 }
 

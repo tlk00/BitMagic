@@ -5236,6 +5236,163 @@ void DesrializationTest2()
    cout << "\n-------------------------------------- DesrializationTest2() OK" << endl;
 }
 
+static
+void generate_sparse_bv(bvect& bv, bvect::size_type from,
+    bvect::size_type to,
+    bvect::size_type step = 65536 / 10)
+{
+    for (bvect::size_type i = from; true; i += step)
+    {
+        bv.set(i);
+        if (to - step < i)
+            break;
+    }
+}
+
+static
+void SparseSerializationTest()
+{
+    cout << " ----------------------------------- SparseSerializationTest()" << endl;
+    BM_DECLARE_TEMP_BLOCK(tb)
+        operation_deserializer<bvect> od;
+    bm::serializer<bvect> bv_ser(tb);
+    bm::serializer<bvect>::buffer sermem_buf;
+    bm::serializer<bvect>::buffer sermem_buf_shifted;
+
+    std::vector<std::pair<bvect::size_type, bvect::size_type> > ranges;
+
+    ranges.push_back(std::make_pair(0, 65535 * 255));
+    ranges.push_back(std::make_pair(0, 65535 * 255 * 2));
+    ranges.push_back(std::make_pair(65535 * 5, 65535 * 255 * 2));
+    ranges.push_back(std::make_pair(65535 * 255 / 2, 65535 * 255));
+    ranges.push_back(std::make_pair(65535 * 255 / 2, 65535 * 255 * 2)); 
+    ranges.push_back(std::make_pair(bm::id_max / 2 - 65535 * 255 / 2, bm::id_max / 2 + 65535 * 255 * 2));
+    ranges.push_back(std::make_pair(bm::id_max / 2, bm::id_max / 2 + 65535 * 255 * 2));
+    ranges.push_back(std::make_pair(bm::id_max - 65535 * 255 * 2, bm::id_max - 1));
+
+    for (size_t k = 0; k < ranges.size(); ++k)
+    {
+        bvect::size_type from = ranges[k].first;
+        bvect::size_type to = ranges[k].second;
+
+        std::cout << "  range [" << from << ", " << to << "]" << std::endl;
+
+        for (unsigned i = 0; i < 2; ++i)
+        {
+            bvect bv, bv_shifted;
+
+            generate_sparse_bv(bv, from, to, 65536 / 10);
+            generate_sparse_bv(bv_shifted, from + 1, to + 1, 65536 / 10);
+
+            //CheckRangeDeserial(bv, from, to);
+
+            auto bv_cnt = bv.count();
+
+            bv_ser.serialize(bv, sermem_buf, 0);
+            bv_ser.serialize(bv_shifted, sermem_buf_shifted, 0);
+
+            const bvect::size_type* cstat = bv_ser.get_compression_stat();
+
+            {
+                bvect::size_type sb_from = from / (65536 * 256);
+                bvect::size_type sb_to = to / (65536 * 256);
+                bvect::size_type sb_cnt = sb_to - sb_from + 1;
+                assert(cstat[bm::set_sblock_bienc] == sb_cnt || cstat[bm::set_sblock_bienc] == sb_cnt - 1);
+            }
+
+            bvect bv2;
+            bm::deserialize(bv2, sermem_buf.buf());
+            bool eq = bv.equal(bv2);
+            assert(eq);
+
+            {
+                bvect bv3;
+                od.deserialize(bv3, sermem_buf.buf(), tb, set_OR);
+                eq = bv3.equal(bv2);
+                assert(eq);
+            }
+            {
+                bvect bv3;
+                od.deserialize(bv3, sermem_buf.buf(), tb, set_XOR);
+                eq = bv3.equal(bv);
+                assert(eq);
+                od.deserialize(bv3, sermem_buf.buf(), tb, set_XOR);
+                assert(bv3.count() == 0);
+
+                bv3 = bv;
+                od.deserialize(bv3, sermem_buf_shifted.buf(), tb, set_XOR);
+                assert(bv3.count() == 2 * bv_cnt);
+            }
+            {
+                bvect bv3;
+                od.deserialize(bv3, sermem_buf.buf(), tb, set_XOR);
+                eq = bv3.equal(bv);
+                assert(eq);
+                od.deserialize(bv3, sermem_buf.buf(), tb, set_XOR);
+                assert(bv3.count() == 0);
+
+                bv3 = bv;
+                od.deserialize(bv3, sermem_buf_shifted.buf(), tb, set_XOR);
+                assert(bv3.count() == 2 * bv_cnt);
+            }
+            {
+                bvect bv3(bv);
+                od.deserialize(bv3, sermem_buf_shifted.buf(), tb, set_SUB);
+                eq = bv3.equal(bv);
+                assert(eq);
+                od.deserialize(bv3, sermem_buf.buf(), tb, set_SUB);
+                assert(bv3.count() == 0);
+            }
+            {
+                bvect bv3(bv);
+                od.deserialize(bv3, sermem_buf.buf(), tb, set_AND);
+                eq = bv3.equal(bv);
+                assert(eq);
+                od.deserialize(bv3, sermem_buf_shifted.buf(), tb, set_AND);
+                assert(bv3.count() == 0);
+            }
+
+
+            {
+                bvect bv3(bv);
+                auto cnt = od.deserialize(bv3, sermem_buf.buf(), tb, set_COUNT_OR);
+                assert(cnt == bv_cnt);
+
+                cnt = od.deserialize(bv3, sermem_buf_shifted.buf(), tb, set_COUNT_OR);
+                assert(cnt == 2 * bv_cnt);
+            }
+
+            {
+                bvect bv3;
+                auto cnt = od.deserialize(bv3, sermem_buf.buf(), tb, set_COUNT_XOR);
+                assert(cnt == bv_cnt);
+
+                cnt = od.deserialize(bv, sermem_buf.buf(), tb, set_COUNT_XOR);
+                assert(cnt == 0);
+
+                bv3 = bv_shifted;
+                cnt = od.deserialize(bv3, sermem_buf_shifted.buf(), tb, set_COUNT_XOR);
+                assert(cnt == 0);
+            }
+            {
+                bvect bv3(bv);
+                auto cnt = od.deserialize(bv3, sermem_buf.buf(), tb, set_COUNT_AND);
+                assert(cnt == bv_cnt);
+                cnt = od.deserialize(bv3, sermem_buf_shifted.buf(), tb, set_COUNT_AND);
+                assert(cnt == 0);
+            }
+
+
+            bv.optimize(tb);
+            bv_shifted.optimize(tb);
+        } // for
+    }
+
+    cout << " ----------------------------------- SparseSerializationTest() OK" << endl;
+}
+
+
+
 // ---------------------------------------------------------------------------
 
 static
@@ -5413,6 +5570,37 @@ void RangeDeserializationTest()
         CheckRangeDeserial(bv3, bm::id_max48 / 2 + 1, bm::id_max48 / 2 + 32);
         CheckRangeDeserial(bv3, bm::id_max48 - 65536, bm::id_max48 - 1);
     }
+
+    cout << "============ BV sparse vector" << endl;
+    {
+        std::vector<std::pair<bvect::size_type, bvect::size_type> > ranges;
+
+        ranges.push_back(std::make_pair(0, 65535 * 255));
+        ranges.push_back(std::make_pair(0, 65535 * 255 * 3));
+        ranges.push_back(std::make_pair(65535 * 5, 65535 * 255 * 2));
+        ranges.push_back(std::make_pair(65535 * 255 / 2, 65535 * 255));
+        ranges.push_back(std::make_pair(65535 * 255 / 2, 65535 * 255 * 2));
+        ranges.push_back(std::make_pair(bm::id_max / 2 - 65535 * 255 / 2, bm::id_max / 2 + 65535 * 255 * 2));
+        ranges.push_back(std::make_pair(bm::id_max / 2, bm::id_max / 2 + 65535 * 255 * 2));
+        ranges.push_back(std::make_pair(bm::id_max - 65535 * 255 * 2, bm::id_max - 1));
+
+        for (size_t k = 0; k < ranges.size(); ++k)
+        {
+            bvect bv;  // generated random
+
+            bvect::size_type from = ranges[k].first;
+            bvect::size_type to = ranges[k].second;
+            std::cout << "- Vector range [" << from << ", " << to << "]" << std::endl;
+
+            generate_sparse_bv(bv, from, to, 65536 / 10);
+
+            CheckRangeDeserial(bv, to - 65536, to);
+            CheckRangeDeserial(bv, from, from + 65536);
+            auto mid = (to - from) / 2;
+            CheckRangeDeserial(bv, mid - 100, mid + 100);
+        }
+    }
+
 
     // generated random
     cout << "======= BV random generated " << endl;
@@ -16187,6 +16375,7 @@ void BvectorFindReverseTest()
 }
 
 
+
 static
 void show_help()
 {
@@ -16384,10 +16573,10 @@ int main(int argc, char *argv[])
     if (is_all || is_bvser || is_bvbasic)
     {
         //SerializationCompressionLevelsTest();
-
         SerializationTest();
-        DesrializationTest2();
-  
+        DesrializationTest2(); 
+        SparseSerializationTest();
+
         RangeDeserializationTest();
 
     }

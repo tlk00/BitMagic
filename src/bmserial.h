@@ -556,6 +556,13 @@ public:
     */
     void unset_range() BMNOEXCEPT { is_range_set_ = 0; }
 
+    /** reset range deserialization and reference vectors
+        @sa set_range()
+    */
+    void reset() BMNOEXCEPT
+    {
+        unset_range(); set_ref_vectors(0);
+    }
 protected:
    typedef typename BV::blocks_manager_type blocks_manager_type;
 
@@ -2371,11 +2378,11 @@ serializer<BV>::serialize(const BV& bv,
             // check if top level block is embarassingly sparse
             // and can be encoded as an array of unsigned
             //
-            /*
+            
             if ((compression_level_ >= 5) && (i0 != i_last))
             {
                 i_last = i0;
-                bool is_sparse_sub = bman.is_sparse_subblock(i0);
+                bool is_sparse_sub = bman.is_sparse_sblock(i0);
                 if (is_sparse_sub)
                 {
                     header_flag_ |= BM_HM_SPARSE;
@@ -2383,7 +2390,7 @@ serializer<BV>::serialize(const BV& bv,
                     i += (bm::set_sub_array_size - j0) - 1;
                     continue;
                 }
-            }*/
+            }
         }
         else
         {
@@ -3602,19 +3609,29 @@ void deserializer<BV, DEC>::decode_arr_sblock(unsigned char  btype,
     unsigned sb;
     unsigned* arr = this->sb_id_array_;
     unsigned len = this->read_bic_sb_arr(dec, btype, arr, &sb);
-    typename BV::size_type from = sb * bm::set_sub_array_size * bm::gap_max_bits;
-    for (typename BV::size_type i = 0; i < len; ++i)
+    const typename BV::size_type sb_max_bc = bm::set_sub_array_size * bm::gap_max_bits;
+    typename BV::size_type from = sb * sb_max_bc;
+
+    if (is_range_set_)
     {
-        typename BV::size_type idx = arr[i]+from;
-        if (is_range_set_) // range filtering
+        for (typename BV::size_type i = 0; i < len; ++i)
         {
+            typename BV::size_type idx = from + arr[i];
             if (idx > idx_to_)
                 break;
             if (idx < idx_from_)
                 continue;
-        }
-        bv.set_bit_no_check(idx);
-    } // for
+            bv.set_bit_no_check(idx);
+        } // for
+    }
+    else // range restriction is not set
+    {
+        for (typename BV::size_type i = 0; i < len; ++i)
+        {
+            typename BV::size_type idx = from + arr[i];
+            bv.set_bit_no_check(idx);
+        } // for
+    }
 }
 
 
@@ -3971,7 +3988,8 @@ size_t deserializer<BV, DEC>::deserialize(bvector_type&        bv,
         // --------------------------------------- super-block encodings
         case bm::set_sblock_bienc:
             decode_arr_sblock(btype, dec, bv);
-            break;
+            i += (bm::set_sub_array_size - j0);
+            continue; // bypass ++i;
 
         // --------------------------------------- bookmarks and skip jumps
         //
@@ -5933,8 +5951,7 @@ void operation_deserializer<BV>::deserialize_xor_range(
         de_.set_ref_vectors(ref_vect_);
         de_.set_range(idx_from, idx_to);
         de_.deserialize(bv, buf);
-        de_.unset_range();
-        de_.set_ref_vectors(0);
+        de_.reset();
     }
     else
     {
@@ -6055,15 +6072,15 @@ operation_deserializer<BV>::deserialize(bvector_type&        bv,
         {
             if (op == bm::set_OR)
             {
+                de_.reset();
                 de_.deserialize(bv, buf);
             }
             else
             {
                 bv_tmp_.clear(true);
                 bv_tmp_.set_new_blocks_strat(bm::BM_GAP);
-                de_.unset_range();
+                de_.reset();
                 de_.deserialize(bv_tmp_, buf);
-
                 count = bm::process_operation(bv, bv_tmp_, op);
             }
         }
@@ -6112,6 +6129,9 @@ void operation_deserializer<BV>::deserialize_range(
     ByteOrder bo_current = globals<true>::byte_order();
     bm::decoder dec(buf);
     unsigned char header_flag = dec.get_8();
+    ByteOrder bo = bo_current;
+    if (!(header_flag & BM_HM_NO_BO))
+        bo = (bm::ByteOrder) dec.get_8();
 
     // check if it is empty fresh vector, set the range then
     //
@@ -6138,9 +6158,34 @@ void operation_deserializer<BV>::deserialize_range(
         return;
     }
 
-    ByteOrder bo = bo_current;
-    if (!(header_flag & BM_HM_NO_BO))
-        bo = (bm::ByteOrder) dec.get_8();
+    if (header_flag & BM_HM_SPARSE)
+    {
+        if (bo_current == bo)
+        {
+            bv_tmp_.clear(true);
+            bv_tmp_.set_new_blocks_strat(bm::BM_GAP);
+            de_.reset();
+            de_.set_range(idx_from, idx_to);
+            de_.deserialize(bv_tmp_, buf);
+            de_.reset();
+
+            if (bv.any())
+            {
+                bv.bit_and(bv_tmp_, bvector_type::opt_compress);
+            }
+            else
+            {
+                bv.swap(bv_tmp_);
+            }
+
+        }
+        else
+        {
+            // TODO: implement byte-order aware sparse deserialization
+            BM_ASSERT(0);
+        }
+        return;
+    }
 
     const bm::set_operation op = bm::set_AND;
 

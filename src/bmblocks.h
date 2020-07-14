@@ -1632,7 +1632,7 @@ public:
     /**
         Bit count all blocks to determine if it is very sparse
     */
-    bool is_sparse_subblock(unsigned i) const BMNOEXCEPT
+    bool is_sparse_sblock(unsigned i) const BMNOEXCEPT
     {
         const unsigned sparse_cut_off = 48;
         const unsigned non_sparse_cut_off = sparse_cut_off * bm::set_sub_array_size;
@@ -1642,18 +1642,27 @@ public:
         if (!blk_root)
             return false;
         bm::word_t** blk_blk = blk_root[i];
-        if (!blk_blk)
+        if (!blk_blk || (bm::word_t*)blk_blk == FULL_BLOCK_FAKE_ADDR)
             return false;
-        bm::id_t cnt_sum = 0;
-        bm::id_t effective_blocks = 0;
+        bm::id_t cnt_sum(0), effective_blocks(0), gap_len_sum(0);
         for (unsigned j = 0; j < bm::set_sub_array_size; ++j)
         {
-            const bm::word_t* blk = this->get_block(i, j);
+            const bm::word_t* blk = blk_blk[j]; //  this->get_block(i, j);
             if (blk == FULL_BLOCK_FAKE_ADDR)
                 return false;
             if (blk)
             {
-                bm::id_t cnt = block_bitcount(blk);
+                bm::id_t cnt;
+                if (BM_IS_GAP(blk))
+                {
+                    const bm::gap_word_t* gp = BMGAP_PTR(blk);
+                    cnt = bm::gap_bit_count_unr(gp);
+                    gap_len_sum += bm::gap_length(gp);
+                }
+                else // bitset
+                {
+                    cnt = bm::bit_block_count(blk);
+                }
                 if (cnt)
                 {
                     ++effective_blocks;
@@ -1668,6 +1677,8 @@ public:
         if (effective_blocks > 1)
         {
             if (cnt_sum < 5) // super-duper sparse ...
+                return false;
+            if (gap_len_sum && (cnt_sum > gap_len_sum)) // parse but GAPpy (rare case)
                 return false;
             bm::id_t blk_avg = cnt_sum / effective_blocks;
             if (blk_avg <= sparse_cut_off)
