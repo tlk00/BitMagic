@@ -1632,9 +1632,10 @@ public:
     /**
         Bit count all blocks to determine if it is very sparse
     */
-    bool is_sparse_sblock(unsigned i) const BMNOEXCEPT
+    bool is_sparse_sblock(unsigned i, unsigned sparse_cut_off) const BMNOEXCEPT
     {
-        const unsigned sparse_cut_off = 48;
+        if (!sparse_cut_off)
+            return false;
         const unsigned non_sparse_cut_off = sparse_cut_off * bm::set_sub_array_size;
 
         BM_ASSERT(i < top_block_size());

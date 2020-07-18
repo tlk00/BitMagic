@@ -56,8 +56,8 @@ For more information please visit:  http://bitmagic.io
 namespace bm
 {
 
-const unsigned set_compression_max = 5;     ///< Maximum supported compression level
-const unsigned set_compression_default = 5; ///< Default compression level
+const unsigned set_compression_max = 6;     ///< Maximum supported compression level
+const unsigned set_compression_default = 6; ///< Default compression level
 
 /**
     Bit-vector serialization class.
@@ -111,20 +111,19 @@ public:
     /**
         Set compression level. Higher compression takes more time to process.
         @param clevel - compression level (0-5)
-        @sa get_compression_level
-    */
-    void set_compression_level(unsigned clevel) BMNOEXCEPT;
-
-    /**
-        Get compression level (0-5),
-        Default 5 (recommended for better compression)
-
         0 - take as is
         1, 2 - apply light weight RLE/GAP encodings, limited depth hierarchical
                compression, intervals encoding
         3 - variant of 2 with different cut-offs
         4 - delta transforms plus Elias Gamma encoding where possible legacy)
-        5 - binary interpolated encoding (Moffat, et al)
+        5 - Binary Interpolative Coding (Moffat, et al)
+
+        @sa get_compression_level
+    */
+    void set_compression_level(unsigned clevel) BMNOEXCEPT;
+
+    /**
+        Get current compression level.
     */
     unsigned get_compression_level() const BMNOEXCEPT
         { return compression_level_; }
@@ -211,11 +210,22 @@ public:
 
         @param enable - TRUE searilization will add bookmark codes
         @param bm_interval - bookmark interval in (number of blocks)
-                            (suggested between 4 and 512)
-        smaller interval means more bookmarks added to the skip list thus
-        more increasing the BLOB size
+        suggested values between 4 and 512 (block size is 64K bits)
+        smaller interval means more bookmarks added to the skip list 
+        allows faster range deserialization at the expense of  
+        somewhat increased BLOB size.
     */
     void set_bookmarks(bool enable, unsigned bm_interval = 256) BMNOEXCEPT;
+
+    /**
+        Fine tuning for Binary Interpolative Compression (levels 5+)
+        The parameter sets average population count per block (64Kbits) 
+        below which block is considered very sparse. 
+        If super block (group of 256 blocks) is very sparse it applies 
+        block size expansion (for the compression purposes) to 
+        improve compression rates.
+    */
+    void set_sparse_cutoff(unsigned cutoff) BMNOEXCEPT;
 
     /**
         Attach collection of reference vectors for XOR serialization
@@ -421,6 +431,7 @@ private:
     size_type                 ref_idx_;  ///< current reference index
     bm::word_t*               xor_block_; ///< xor product
 
+    unsigned      sparse_cutoff_;   ///< number of bits per blocks to consider sparse 
 };
 
 /**
@@ -455,7 +466,8 @@ protected:
                           bm::gap_word_t* dst_arr);
     
     /// Read binary interpolated list into a bit-set
-    void read_bic_arr(decoder_type&   decoder, bm::word_t* blk) BMNOEXCEPT;
+    void read_bic_arr(decoder_type&   decoder, 
+                      bm::word_t* blk, unsigned block_type) BMNOEXCEPT;
 
 	/// Read list of bit ids for super-blocks
 	///
@@ -1081,6 +1093,7 @@ const unsigned char set_nb_sync_mark48          = 54;
 const unsigned char set_nb_sync_mark64          = 55; //!< ..... 64-bit (should never happen)
 
 const unsigned char set_sblock_bienc            = 56; //!< super-block interpolated list
+const unsigned char set_block_arr_bienc_8bh     = 57; //!< BIC block 8bit header 
 
 template<class BV>
 serializer<BV>::serializer(const allocator_type&   alloc,
@@ -1095,7 +1108,8 @@ serializer<BV>::serializer(const allocator_type&   alloc,
   enc_header_pos_(0), header_flag_(0),
   ref_vect_(0),
   ref_idx_(0),
-  xor_block_(0)
+  xor_block_(0),
+  sparse_cutoff_(128)
 {
     bit_idx_arr_.resize(bm::gap_max_bits);
     if (temp_block == 0)
@@ -1124,7 +1138,8 @@ serializer<BV>::serializer(bm::word_t*    temp_block)
   enc_header_pos_(0), header_flag_(0),
   ref_vect_(0),
   ref_idx_(0),
-  xor_block_(0)
+  xor_block_(0),
+  sparse_cutoff_(128)
 {
     bit_idx_arr_.resize(bm::gap_max_bits);
     if (temp_block == 0)
@@ -1166,6 +1181,18 @@ void serializer<BV>::set_compression_level(unsigned clevel) BMNOEXCEPT
 {
     if (clevel <= bm::set_compression_max)
         compression_level_ = clevel;
+    if (compression_level_ == 5)
+        sparse_cutoff_ = 48;
+    else if (compression_level_ == 6)
+        sparse_cutoff_ = 128;
+}
+
+template<class BV>
+void serializer<BV>::set_sparse_cutoff(unsigned cutoff) BMNOEXCEPT
+{
+    BM_ASSERT(cutoff < 255);
+    if (cutoff < 255)
+        sparse_cutoff_ = cutoff;
 }
 
 template<class BV>
@@ -1908,14 +1935,12 @@ void serializer<BV>::encode_bit_digest(const bm::word_t* block,
         //
         enc.put_8(bm::set_block_bit_digest0);
         enc.put_64(d0);
-
         while (d0)
         {
             bm::id64_t t = bm::bmi_blsi_u64(d0); // d & -d;
             
             unsigned wave = bm::word_bitcount64(t - 1);
             unsigned off = wave * bm::set_block_digest_wave_size;
-
             unsigned j = 0;
             do
             {
@@ -2108,36 +2133,116 @@ void serializer<BV>::bienc_gap_bit_block(const bm::word_t* block,
         compression_stat_[scode]++;
         return;
     }
+    // if we got to this point it means coding was not efficient 
+    // and we rolled back to simpler method
+    //
     encode_bit_digest(block, enc, digest0_);
 }
 
+//--------------------------------------------------------------------
+//
+const unsigned sblock_flag_sb16  = (1u << 0); ///< 16-bit SB index (8-bit by default) 
+const unsigned sblock_flag_sb32  = (1u << 1); ///< 32-bit SB index 
+
+const unsigned sblock_flag_min16 = (1u << 2); ///< 16-bit minv
+const unsigned sblock_flag_min24 = (1u << 3); ///< 24-bit minv
+const unsigned sblock_flag_min32 = bm::sblock_flag_min16 | bm::sblock_flag_min24;
+
+const unsigned sblock_flag_len16 = (1u << 4); ///< 16-bit len (8-bit by default)
+const unsigned sblock_flag_max16 = (1u << 5); 
+const unsigned sblock_flag_max24 = (1u << 6);
+const unsigned sblock_flag_max32 = bm::sblock_flag_max16 | bm::sblock_flag_max24;
 
 template<class BV>
 void serializer<BV>::bienc_arr_sblock(const BV& bv, unsigned sb,
-                                    bm::encoder& enc) BMNOEXCEPT
+    bm::encoder& enc) BMNOEXCEPT
 {
+    unsigned sb_flag = 0;
+
     unsigned char scode = bm::set_sblock_bienc;
     bm::convert_sub_to_arr(bv, sb, sb_bit_idx_arr_);
-/*
-    unsigned delta =
-    bm::min_delta_u32(sb_bit_idx_arr_.data(), sb_bit_idx_arr_.size());
-    if (delta > 1)
-    {
-        bm::min_delta_apply(sb_bit_idx_arr_.data(), sb_bit_idx_arr_.size(), delta);
-    }
-*/
+    unsigned len = (unsigned)sb_bit_idx_arr_.size();
+    /*
+        unsigned delta =
+            bm::min_delta_u32(sb_bit_idx_arr_.data(), len);
+        if (delta > 1)
+        {
+            if (delta <= 65535)
+            {
+                sb_flag |= bm::sblock_flag_delta16;
+                bm::min_delta_apply(sb_bit_idx_arr_.data(), len, delta);
+            }
+        }
+    */
     BM_ASSERT(sb_bit_idx_arr_.size() < 65536);
     BM_ASSERT(sb_bit_idx_arr_.size());
 
     bm::word_t min_v = sb_bit_idx_arr_[0];
-    bm::word_t max_v = sb_bit_idx_arr_[sb_bit_idx_arr_.size()-1];
+    bm::word_t max_v = sb_bit_idx_arr_[len - 1];
+    BM_ASSERT(max_v <= bm::set_sub_total_bits);
+    bm::word_t max_v_delta = bm::set_sub_total_bits - max_v;
 
+    // build decoding flags
+    if (sb > 65535)
+        sb_flag |= bm::sblock_flag_sb32;
+    else if (sb > 255)
+        sb_flag |= bm::sblock_flag_sb16;
+
+    if (len > 255)
+        sb_flag |= bm::sblock_flag_len16;
+
+    if (min_v > 65535)
+        if (min_v < 0xFFFFFF)
+            sb_flag |= bm::sblock_flag_min24;
+        else
+            sb_flag |= bm::sblock_flag_min32; // 24 and 16
+    else if (min_v > 255)
+        sb_flag |= bm::sblock_flag_min16;
+
+    if (max_v_delta > 65535)
+        if (max_v_delta < 0xFFFFFF)
+            sb_flag |= bm::sblock_flag_max24;
+        else
+            sb_flag |= bm::sblock_flag_max32;
+    else if (max_v_delta > 255)
+        sb_flag |= bm::sblock_flag_max16;
+
+    // encoding header 
+    //
     enc.put_8(scode);
-    enc.put_32(sb);
-    enc.put_16((unsigned short)sb_bit_idx_arr_.size());
-//    enc.put_32(delta);
-    enc.put_32(min_v);
-    enc.put_32(max_v);
+    enc.put_8((unsigned char)sb_flag);
+
+    if (sb > 65535)
+        enc.put_32(sb);
+    else if (sb > 255)
+        enc.put_16((unsigned short)sb);
+    else
+        enc.put_8((unsigned char)sb);
+
+    if (len > 255)
+        enc.put_16((unsigned short)len);
+    else
+        enc.put_8((unsigned char)len);
+
+    if (min_v > 65535)
+        if (min_v < 0xFFFFFF)
+            enc.put_24(min_v);
+        else
+            enc.put_32(min_v);
+    else if (min_v > 255)
+        enc.put_16((unsigned short)min_v);
+    else
+        enc.put_8((unsigned char)min_v);
+
+    if (max_v_delta > 65535)
+        if (max_v < 0xFFFFFF)
+            enc.put_24(max_v_delta);
+        else
+            enc.put_32(max_v_delta);
+    else if (max_v_delta > 255)
+        enc.put_16((unsigned short)max_v_delta);
+    else
+        enc.put_8((unsigned char)max_v_delta);
 
     bit_out_type bout(enc);
     bout.bic_encode_u32_cm(sb_bit_idx_arr_.data()+1,
@@ -2173,11 +2278,22 @@ serializer<BV>::interpolated_arr_bit_block(const bm::word_t* block,
             bm::gap_word_t min_v = bit_idx_arr_[0];
             bm::gap_word_t max_v = bit_idx_arr_[arr_len-1];
             BM_ASSERT(max_v > min_v);
+            bm::gap_word_t max_delta = bm::gap_word_t(65536 - max_v);
 
-            enc.put_8(scode);
-            enc.put_16(min_v);
-            enc.put_16(max_v);
+            if (!inverted && min_v <= 0xFF && max_delta <= 0xFF) // 8-bit header
+            {
+                enc.put_8(bm::set_block_arr_bienc_8bh);
+                enc.put_8((unsigned char)min_v);
+                enc.put_8((unsigned char)max_delta);
+            }
+            else
+            {
+                enc.put_8(scode);
+                enc.put_16(min_v);
+                enc.put_16(max_v);
+            }
             enc.put_16(bm::gap_word_t(arr_len));
+
             bout.bic_encode_u16(&bit_idx_arr_[1], arr_len-2, min_v, max_v);
             bout.flush();
         }
@@ -2201,6 +2317,8 @@ serializer<BV>::interpolated_arr_bit_block(const bm::word_t* block,
             }
         }
     }
+    // coding did not result in best compression
+    // use simpler method
     encode_bit_digest(block, enc, digest0_);
 }
 
@@ -2378,11 +2496,10 @@ serializer<BV>::serialize(const BV& bv,
             // check if top level block is embarassingly sparse
             // and can be encoded as an array of unsigned
             //
-            
             if ((compression_level_ >= 5) && (i0 != i_last))
             {
                 i_last = i0;
-                bool is_sparse_sub = bman.is_sparse_sblock(i0);
+                bool is_sparse_sub = bman.is_sparse_sblock(i0, sparse_cutoff_);
                 if (is_sparse_sub)
                 {
                     header_flag_ |= BM_HM_SPARSE;
@@ -2414,7 +2531,12 @@ serializer<BV>::serialize(const BV& bv,
             if (next_nb == bm::set_total_blocks) // no more blocks
             {
                 enc.put_8(set_block_azero);
-                return (size_type)enc.size();
+                size_type sz = (size_type)enc.size();
+
+                // rewind back to save header flag
+                enc.set_pos(enc_header_pos_);
+                enc.put_8(header_flag_);
+                return sz;
             }
             block_idx_type nb = next_nb - i;
             
@@ -3001,13 +3123,29 @@ unsigned deseriaizer_base<DEC, BLOCK_IDX>::read_id_list(
 template<typename DEC, typename BLOCK_IDX>
 void
 deseriaizer_base<DEC, BLOCK_IDX>::read_bic_arr(decoder_type& dec,
-                                               bm::word_t*   blk) BMNOEXCEPT
+    bm::word_t*   blk,
+    unsigned block_type) BMNOEXCEPT
 {
     BM_ASSERT(!BM_IS_GAP(blk));
-    
-    bm::gap_word_t min_v = dec.get_16();
-    bm::gap_word_t max_v = dec.get_16();
-    unsigned arr_len = dec.get_16();
+    bm::gap_word_t min_v, max_v, max_delta, arr_len;
+
+    switch (block_type)
+    {
+    case bm::set_block_arr_bienc:
+        min_v = dec.get_16();
+        max_v = dec.get_16();
+        break;
+    case bm::set_block_arr_bienc_8bh:
+        min_v = dec.get_8();
+        max_delta = dec.get_8();
+        max_v = bm::gap_word_t(65536 - max_delta);
+        break;
+    default:
+        BM_ASSERT(0);
+        return;
+    }
+
+    arr_len = dec.get_16();
     
     bit_in_type bin(dec);
 
@@ -3028,7 +3166,7 @@ unsigned deseriaizer_base<DEC, BLOCK_IDX>::read_bic_sb_arr(
                          unsigned*  dst_arr,
                          unsigned*  sb_idx)
 {
-	unsigned len = 0;
+	unsigned len(0), sb_flag(0);
 
     bit_in_type bin(dec);
 
@@ -3036,10 +3174,45 @@ unsigned deseriaizer_base<DEC, BLOCK_IDX>::read_bic_sb_arr(
     {
     case bm::set_sblock_bienc:
         {
-            *sb_idx = dec.get_32();
-            len = dec.get_16();
-            bm::word_t min_v = dec.get_32();
-            bm::word_t max_v = dec.get_32();
+            sb_flag = dec.get_8();
+
+            if (sb_flag & bm::sblock_flag_sb32)
+                *sb_idx = dec.get_32();
+            else if (sb_flag & bm::sblock_flag_sb16)
+                *sb_idx = dec.get_16();
+            else
+                *sb_idx = dec.get_8();
+
+            if (sb_flag & bm::sblock_flag_len16)
+                len = dec.get_16();
+            else
+                len = dec.get_8();
+/*
+            if (sb_flag & bm::sblock_flag_delta16)
+                delta = dec.get_16();
+*/
+            bm::word_t min_v;
+            if (sb_flag & bm::sblock_flag_min24)
+                if (sb_flag & bm::sblock_flag_min16) // 24 and 16
+                    min_v = dec.get_32();
+                else
+                    min_v = dec.get_24(); // 24 but not 16
+            else if (sb_flag & bm::sblock_flag_min16)
+                min_v = dec.get_16();
+            else
+                min_v = dec.get_8();
+            
+            bm::word_t max_v;// = dec.get_32();
+            if (sb_flag & bm::sblock_flag_max24)
+                if (sb_flag & bm::sblock_flag_max16)
+                    max_v = dec.get_32(); // 24 and 16
+                else
+                    max_v = dec.get_24(); // 24 but not 16
+            else if (sb_flag & bm::sblock_flag_max16)
+                max_v = dec.get_16();
+            else
+                max_v = dec.get_8();
+            max_v = bm::set_sub_total_bits - max_v;
 
             dst_arr[0] = min_v;
             dst_arr[len-1] = max_v;
@@ -3065,7 +3238,7 @@ deseriaizer_base<DEC, BLOCK_IDX>::read_bic_arr_inv(decoder_type&   decoder,
 {
     // TODO: optimization
     bm::bit_block_set(blk, 0);
-    this->read_bic_arr(decoder, blk);
+    this->read_bic_arr(decoder, blk, bm::set_block_arr_bienc);
     bm::bit_invert(blk);
 }
 
@@ -3573,7 +3746,8 @@ void deserializer<BV, DEC>::decode_bit_block(unsigned char btype,
         bm::bit_block_or(blk, temp_block_);
         break;
     case bm::set_block_arr_bienc:
-        this->read_bic_arr(dec, blk);
+    case bm::set_block_arr_bienc_8bh:
+        this->read_bic_arr(dec, blk, btype);
         break;
     case bm::set_block_arr_bienc_inv:
         BM_ASSERT(blk != temp_block_);
@@ -3581,7 +3755,7 @@ void deserializer<BV, DEC>::decode_bit_block(unsigned char btype,
             blk = bman.deoptimize_block(nb);
         // TODO: optimization
         bm::bit_block_set(temp_block_, 0);
-        this->read_bic_arr(dec, temp_block_);
+        this->read_bic_arr(dec, temp_block_, bm::set_block_arr_bienc);
         bm::bit_invert(temp_block_);
         bm::bit_block_or(blk, temp_block_);
         break;
@@ -3979,6 +4153,7 @@ size_t deserializer<BV, DEC>::deserialize(bvector_type&        bv,
         case bm::set_block_arrbit_inv:
         case bm::set_block_arr_bienc_inv:
         case bm::set_block_bitgap_bienc:
+        case bm::set_block_arr_bienc_8bh:
             decode_bit_block(btype, dec, bman, i, blk);
             break;
         case bm::set_block_bit_digest0:
@@ -4429,6 +4604,7 @@ void serial_stream_iterator<DEC, BLOCK_IDX>::next()
         case bm::set_block_arrbit_inv:
         case bm::set_block_arr_bienc:
         case bm::set_block_arr_bienc_inv:
+        case bm::set_block_arr_bienc_8bh:
         case bm::set_block_bitgap_bienc:
         case bm::set_block_bit_digest0:
             state_ = e_bit_block;
@@ -4525,6 +4701,7 @@ void serial_stream_iterator<DEC, BLOCK_IDX>::next()
             BM_FALLTHROUGH;
             // fall through
         case set_sblock_bienc:
+            BM_ASSERT(0); 
             BM_FALLTHROUGH;
             // fall through
         default:
@@ -4667,9 +4844,10 @@ serial_stream_iterator<DEC, BLOCK_IDX>::get_bit_block_ASSIGN(
         get_inv_arr(dst_block);
         break;
     case bm::set_block_arr_bienc:
+    case bm::set_block_arr_bienc_8bh:
         if (IS_VALID_ADDR(dst_block))
             bm::bit_block_set(dst_block, 0);
-        this->read_bic_arr(decoder_, dst_block);
+        this->read_bic_arr(decoder_, dst_block, this->block_type_);
         break;
     case bm::set_block_arr_bienc_inv:
         this->read_bic_arr_inv(decoder_, tmp_block);
@@ -4749,7 +4927,8 @@ serial_stream_iterator<DEC, BLOCK_IDX>::get_bit_block_OR(
         bm::bit_block_or(dst_block, tmp_block);
         break;
     case bm::set_block_arr_bienc:
-        this->read_bic_arr(decoder_, dst_block);
+    case bm::set_block_arr_bienc_8bh:
+        this->read_bic_arr(decoder_, dst_block, this->block_type_);
         break;
     case bm::set_block_arr_bienc_inv:
         this->read_bic_arr_inv(decoder_, tmp_block);
@@ -4837,15 +5016,16 @@ serial_stream_iterator<DEC, BLOCK_IDX>::get_bit_block_AND(
         if (dst_block)
             bm::bit_block_and(dst_block, tmp_block);
         break;
-    case set_block_arr_bienc:
+    case bm::set_block_arr_bienc:
+    case bm::set_block_arr_bienc_8bh:
         if (dst_block)
         {
             bm::bit_block_set(tmp_block, 0);
-            this->read_bic_arr(decoder_, tmp_block);
+            this->read_bic_arr(decoder_, tmp_block, block_type_);
             bm::bit_block_and(dst_block, tmp_block);
         }
         else
-            this->read_bic_arr(decoder_, 0); // dry read
+            this->read_bic_arr(decoder_, 0, block_type_); // dry read
         break;
     case bm::set_block_arr_bienc_inv:
         this->read_bic_arr_inv(decoder_, tmp_block);
@@ -4944,8 +5124,9 @@ serial_stream_iterator<DEC, BLOCK_IDX>::get_bit_block_XOR(
             bm::bit_block_xor(dst_block, tmp_block);
         break;
     case set_block_arr_bienc:
+    case bm::set_block_arr_bienc_8bh:
         bm::bit_block_set(tmp_block, 0);
-        this->read_bic_arr(decoder_, tmp_block);
+        this->read_bic_arr(decoder_, tmp_block, block_type_);
         if (dst_block)
             bm::bit_block_xor(dst_block, tmp_block);
         break;
@@ -5048,9 +5229,10 @@ serial_stream_iterator<DEC, BLOCK_IDX>::get_bit_block_SUB(
         if (dst_block)
             bm::bit_block_sub(dst_block, tmp_block);
         break;
-    case set_block_arr_bienc:
+    case bm::set_block_arr_bienc:
+    case bm::set_block_arr_bienc_8bh:
         bm::bit_block_set(tmp_block, 0);
-        this->read_bic_arr(decoder_, tmp_block);
+        this->read_bic_arr(decoder_, tmp_block, block_type_);
         if (dst_block)
             bm::bit_block_sub(dst_block, tmp_block);
         break;
@@ -5148,9 +5330,10 @@ serial_stream_iterator<DEC, BLOCK_IDX>::get_bit_block_COUNT(
     case set_block_arrbit_inv:
         get_inv_arr(tmp_block);
         goto count_tmp;
-    case set_block_arr_bienc:
+    case bm::set_block_arr_bienc:
+    case bm::set_block_arr_bienc_8bh:
         bm::bit_block_set(tmp_block, 0); // TODO: just add a counted read
-        this->read_bic_arr(decoder_, tmp_block);
+        this->read_bic_arr(decoder_, tmp_block, block_type_);
         goto count_tmp;
     case bm::set_block_arr_bienc_inv:
         this->read_bic_arr_inv(decoder_, tmp_block);
@@ -5235,8 +5418,9 @@ serial_stream_iterator<DEC, BLOCK_IDX>::get_bit_block_COUNT_A(
     case set_block_arrbit_inv:
         get_inv_arr(tmp_block);
         break;
-    case set_block_arr_bienc:
-        this->read_bic_arr(decoder_, tmp_block); // TODO: add dry read
+    case bm::set_block_arr_bienc:
+    case bm::set_block_arr_bienc_8bh:
+        this->read_bic_arr(decoder_, tmp_block, block_type_); // TODO: add dry read
         break;
     case bm::set_block_arr_bienc_inv:
         this->read_bic_arr_inv(decoder_, tmp_block); // TODO: add dry read
@@ -5316,9 +5500,10 @@ serial_stream_iterator<DEC, BLOCK_IDX>::get_bit_block_COUNT_AND(
         get_inv_arr(tmp_block);
         goto count_tmp;
         break;
-    case set_block_arr_bienc:
+    case bm::set_block_arr_bienc:
+    case bm::set_block_arr_bienc_8bh:
         bm::bit_block_set(tmp_block, 0);
-        this->read_bic_arr(decoder_, tmp_block);
+        this->read_bic_arr(decoder_, tmp_block, block_type_);
         goto count_tmp;
     case bm::set_block_arr_bienc_inv:
         this->read_bic_arr_inv(decoder_, tmp_block);
@@ -5419,8 +5604,9 @@ serial_stream_iterator<DEC, BLOCK_IDX>::get_bit_block_COUNT_OR(
         get_inv_arr(tmp_block);
         goto count_tmp;
     case set_block_arr_bienc:
+    case bm::set_block_arr_bienc_8bh:
         bm::bit_block_set(tmp_block, 0);
-        this->read_bic_arr(decoder_, tmp_block);
+        this->read_bic_arr(decoder_, tmp_block, block_type_);
         goto count_tmp;
     case bm::set_block_arr_bienc_inv:
         this->read_bic_arr_inv(decoder_, tmp_block);
@@ -5519,9 +5705,10 @@ serial_stream_iterator<DEC, BLOCK_IDX>::get_bit_block_COUNT_XOR(
     case set_block_arrbit_inv:
         get_inv_arr(tmp_block);
         goto count_tmp;
-    case set_block_arr_bienc:
+    case bm::set_block_arr_bienc:
+    case bm::set_block_arr_bienc_8bh:
         bm::bit_block_set(tmp_block, 0);
-        this->read_bic_arr(decoder_, tmp_block);
+        this->read_bic_arr(decoder_, tmp_block, block_type_);
         goto count_tmp;
     case bm::set_block_arr_bienc_inv:
         this->read_bic_arr_inv(decoder_, tmp_block);
@@ -5622,9 +5809,10 @@ serial_stream_iterator<DEC, BLOCK_IDX>::get_bit_block_COUNT_SUB_AB(
     case set_block_arrbit_inv:
         get_inv_arr(tmp_block);
         goto count_tmp;
-    case set_block_arr_bienc:
+    case bm::set_block_arr_bienc:
+    case bm::set_block_arr_bienc_8bh:
         bm::bit_block_set(tmp_block, 0);
-        this->read_bic_arr(decoder_, tmp_block);
+        this->read_bic_arr(decoder_, tmp_block, block_type_);
         goto count_tmp;
     case bm::set_block_arr_bienc_inv:
         this->read_bic_arr_inv(decoder_, tmp_block);
@@ -5716,9 +5904,10 @@ serial_stream_iterator<DEC, BLOCK_IDX>::get_bit_block_COUNT_SUB_BA(
     case set_block_arrbit_inv:
         get_inv_arr(tmp_block);
         goto count_tmp;
-    case set_block_arr_bienc:
+    case bm::set_block_arr_bienc:
+    case bm::set_block_arr_bienc_8bh:
         bm::bit_block_set(tmp_block, 0);
-        this->read_bic_arr(decoder_, tmp_block);
+        this->read_bic_arr(decoder_, tmp_block, block_type_);
         goto count_tmp;
     case bm::set_block_arr_bienc_inv:
         this->read_bic_arr_inv(decoder_, tmp_block);
