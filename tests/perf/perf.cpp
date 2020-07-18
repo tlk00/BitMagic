@@ -2543,7 +2543,11 @@ void RSC_SparseVectorAccesTest()
         {
             auto v = vect[i];
             auto v1 = vect1[i];
-            assert(v == v1);
+            if (v != v1)
+            {
+                std::cerr << "decode integrity check failed" << std::endl;
+                assert(0);  exit(1);
+            }
         }
 
     }
@@ -3785,6 +3789,120 @@ void StrSparseVectorTest()
 }
 
 
+/// Random numbers test
+template<typename V>
+unsigned generate_inter_test_linear(V* arr, unsigned inc, unsigned target_size)
+{
+    V maskFF = (V)~V(0u);
+    if (inc < 2 || inc > 65535)
+        inc = 1;
+
+    unsigned start = 1;
+    unsigned sz = 0;
+    while (sz < target_size)
+    {
+        arr[sz++] = V(start);
+        if (inc + start >= maskFF)
+        {
+            arr[sz++] = maskFF;
+            break;
+        }
+        start += inc;
+        if (start < arr[sz - 1])
+            break;
+
+    } // while
+    return sz;
+}
+
+/// Random numbers test
+template<typename V>
+unsigned generate_inter_test(V* arr, unsigned inc_factor, unsigned target_size)
+{
+    V maskFF = (V)~V(0u);
+
+    if (inc_factor < 2)
+        inc_factor = 65535;
+
+    unsigned start = rand() % 256;
+    if (!start)
+        start = 1;
+    unsigned sz = 0;
+    while (sz < target_size)
+    {
+        arr[sz++] = V(start);
+
+        unsigned inc = unsigned(rand()) % inc_factor;
+        if (!inc)
+            inc = 1;
+        start += inc;
+        if (start >= maskFF)
+            break;
+    } // while
+
+    for (unsigned i = 1; i < sz; ++i)
+    {
+        if (arr[i - 1] >= arr[i])
+        {
+            return i;
+        }
+    }
+    return sz;
+}
+
+
+static
+void InterpolativeCodingTest()
+{
+    unsigned char buf[1024 * 200] = { 0, };
+
+    const unsigned code_repeats = 500000;
+    const unsigned test_size = 12000;
+
+    vector<unsigned> sa; sa.resize(test_size);
+    vector<unsigned> da; da.resize(test_size);
+
+    bm::word_t* src_arr = &sa[0];
+    bm::word_t* dst_arr = &da[0];
+    unsigned sz;
+    unsigned inc = rand() % (65536 * 256);
+    sz = generate_inter_test_linear(src_arr, inc, test_size);
+    assert(sz);
+    assert(src_arr[0]);
+    {
+        bm::encoder enc(buf, sizeof(buf));
+        bm::bit_out<bm::encoder> bout(enc);
+
+        bout.bic_encode_u32_cm(src_arr, sz - 1, 0, src_arr[sz - 1]);
+        bout.flush();
+        auto ssz = enc.size();
+        assert(ssz < sizeof(buf));
+        (void)ssz;
+    }
+
+    {
+        TimeTaker tt("bic_decode_u32_cm() ", 1);
+
+        for (unsigned k = 0; k < code_repeats; ++k)
+        {
+            bm::decoder dec(buf);
+            bm::bit_in<bm::decoder> bin(dec);
+
+            bin.bic_decode_u32_cm(&dst_arr[0], sz - 1, 0, src_arr[sz - 1]);
+            dst_arr[sz - 1] = src_arr[sz - 1];
+            for (unsigned i = 0; i < sz; ++i)
+            {
+                assert(src_arr[i] == dst_arr[i]);
+                if (i)
+                {
+                    assert(src_arr[i - 1] < src_arr[i]);
+                }
+            }
+        } // for k
+    }
+}
+
+
 int main(void)
 {
 //    ptest();
@@ -3812,6 +3930,8 @@ int main(void)
     BitBlockRotateTest();
 
     BitBlockShiftTest();
+
+    InterpolativeCodingTest();
 
     EnumeratorTest();
 

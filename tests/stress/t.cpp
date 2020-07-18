@@ -961,7 +961,6 @@ void FillSetsRandomMethod(bvect_mini* bvect_min,
         method = rand() % 7;
     }
     unsigned factor;
-///method = 3;
     switch (method)
     {
 
@@ -9629,7 +9628,7 @@ void StressTest(unsigned repetitions, int set_operation, bool detailed)
                 cout << "Predicted any error!" << endl;
                 exit(1);
             }
-            
+
             bvect    bv_target_s;
             SerializationOperation2Test(&bv_target_s,
                                         *bvect_full1,
@@ -28311,8 +28310,9 @@ int main(int argc, char *argv[])
 
         MiniSetTest();
         BitEncoderTest();
-      
+    
         InterpolativeCodingTest();
+
         GammaEncoderTest();
 
         GAPCheck();
