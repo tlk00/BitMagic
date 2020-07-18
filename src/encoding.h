@@ -267,18 +267,21 @@ public:
     void bic_decode_u16(bm::gap_word_t* arr, unsigned sz,
                         bm::gap_word_t lo, bm::gap_word_t hi) BMNOEXCEPT
     {
-        bic_decode_u16_cm(arr, sz, lo, hi);
+        if (sz)
+            bic_decode_u16_cm(arr, sz, lo, hi);
     }
     
     void bic_decode_u16_bitset(bm::word_t* block, unsigned sz,
                                bm::gap_word_t lo, bm::gap_word_t hi) BMNOEXCEPT
     {
-        bic_decode_u16_cm_bitset(block, sz, lo, hi);
+        if (sz)
+            bic_decode_u16_cm_bitset(block, sz, lo, hi);
     }
     void bic_decode_u16_dry(unsigned sz,
                             bm::gap_word_t lo, bm::gap_word_t hi) BMNOEXCEPT
     {
-        bic_decode_u16_cm_dry(sz, lo, hi);
+        if (sz)
+            bic_decode_u16_cm_dry(sz, lo, hi);
     }
 
 
