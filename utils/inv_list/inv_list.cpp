@@ -52,17 +52,18 @@ static
 void show_help()
 {
     std::cout
-      << "BitMagic Inverted List Compression Test (c) 2019"              << std::endl
-      << "-u32in u32-input-file       -- raw 32-bit unsigned int file"   << std::endl
-      << "-bvout bvect-output-file    -- bit-vector compressed out file" << std::endl
-      << "-svout svect-output-file    -- bit-transposed sparse vectors out file" << std::endl
-      << "-bvin bvect-input-file      -- bit-vector compressed in file"  << std::endl
-      << std::endl
-      << "-level N                    -- compression level to use (up to 5)" << std::endl
-      << "-silent (-s)                -- no progress print or messages"          << std::endl
-      << "-verify                     -- verify compressed version "             << std::endl
-      << "-diag (-d)                  -- print statistics/diagnostics info"      << std::endl
-      << "-timing (-t)                -- evaluate timing/duration of operations" << std::endl
+        << "BitMagic Inverted List Compression Test (c) 2019" << std::endl
+        << "-u32in u32-input-file       -- raw 32-bit unsigned int file" << std::endl
+        << "-bvout bvect-output-file    -- bit-vector compressed out file" << std::endl
+        << "-svout svect-output-file    -- bit-transposed sparse vectors out file" << std::endl
+        << "-bvin bvect-input-file      -- bit-vector compressed in file" << std::endl
+        << std::endl
+        << "-level N                    -- compression level to use (up to 5)" << std::endl
+        << "-silent (-s)                -- no progress print or messages" << std::endl
+        << "-verify                     -- verify compressed version " << std::endl
+        << "-decode                   -- run decode test (in-memory)" << std::endl
+        << "-diag (-d)                  -- print statistics/diagnostics info"      << std::endl
+        << "-timing (-t)                -- evaluate timing/duration of operations" << std::endl
       ;
 }
 
@@ -83,6 +84,7 @@ bool         is_diag = false;
 bool         is_timing = false;
 bool         is_verify = false;
 bool         is_silent = false;
+bool         is_decode = false;
 
 unsigned     c_level = bm::set_compression_default;
 
@@ -104,6 +106,14 @@ int parse_args(int argc, char *argv[])
             if (i + 1 < argc)
             {
                 is_verify = true;
+            }
+            continue;
+        }
+        if (arg == "-decode")
+        {
+            if (i + 1 < argc)
+            {
+                is_decode = true;
             }
             continue;
         }
@@ -652,7 +662,7 @@ int read_bvector(std::ifstream& bv_file,
 }
 
 
-/// read the input collection sequence, write using various compression schemes
+/// read the input collection sequence and dump file, verify correctness
 ///
 static
 void verify_inv_dump_file(const std::string& fname,
@@ -738,6 +748,60 @@ void verify_inv_dump_file(const std::string& fname,
     cout << "Total ints=" << total_ints << endl;
 }
 
+/// read and decode the compressed dump file
+///
+static
+void decode_test_dump_file(const std::string& bv_in_fname)
+{
+    bm::chrono_taker tt1("3. Decode collection", 1, &timing_map);
+
+    std::ifstream bv_file;
+    std::streamsize fsize;
+    if (!bv_in_fname.empty())
+    {
+        bv_file.open(bv_in_fname, std::ios::in | std::ios::binary);
+        if (!bv_file.good())
+            throw std::runtime_error("Cannot open bvect dump file");
+        bv_file.seekg(0, std::ios::end);
+        fsize = bv_file.tellg();
+        bv_file.seekg(0, std::ios::beg);
+    }
+    else
+    {
+        throw std::runtime_error("Cannot open bvect dump file");
+    }
+        
+
+    bm::serializer<bm::bvector<> >::buffer sbuf; // resizable memory buffer
+
+    // main loop to read sample vectors
+    //
+    bm::id64_t i;
+    for (i = 0; true; ++i)
+    {
+        // serialize and save as a bit-vector size0:<BLOB0>, size1:<BLOB1>...N
+        //
+        if (!bv_in_fname.empty())
+        {
+            bm::bvector<> bv;
+            read_bvector(bv_file, bv, sbuf);
+        }
+
+        std::streamsize fpos_curr = bv_file.tellg();
+        if (fpos_curr == fsize)
+            break;
+
+        if (!is_silent)
+        {
+            cout << "\r" << fpos_curr << "/" << fsize
+                 << flush;
+        }
+    } // for i
+
+    cout << endl;
+    cout << "Decode complete." << endl;
+    cout << "Total vectors=" << i << endl;
+}
 
 
 
@@ -764,12 +828,20 @@ int main(int argc, char *argv[])
             }
             else
             {
-                cout << "Verification." << endl;
-                verify_inv_dump_file(u32_in_file, bv_in_file);
+                if (is_verify)
+                {
+                    cout << "Verification." << endl;
+                    verify_inv_dump_file(u32_in_file, bv_in_file);
+                }
             }
         }
-        
-        
+        if (is_decode)
+        {
+            cout << "Decode test." << endl;
+            decode_test_dump_file(bv_in_file);
+        }
+
+                
         if (is_timing)  // print all collected timings
         {
             std::cout << std::endl << "Timings (ms):" << std::endl;
