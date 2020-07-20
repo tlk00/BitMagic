@@ -2124,7 +2124,6 @@ void serializer<BV>::bienc_gap_bit_block(const bm::word_t* block,
 {
     unsigned len = bm::bit_to_gap(bit_idx_arr_.data(), block, bm::gap_max_bits);
     BM_ASSERT(len); (void)len;
-    //BM_ASSERT(len <= bie_cut_off);
     
     const unsigned char scode = bm::set_block_bitgap_bienc;
 
