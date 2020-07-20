@@ -335,20 +335,19 @@ bool write_as_bvector(std::ofstream& bv_file,
                      bm::serializer<bm::bvector<> >& bvs,
                      bm::serializer<bm::bvector<> >::buffer& sbuf)
 {
+    BM_DECLARE_TEMP_BLOCK(tb)
     bm::bvector<> bv;
     bv.set(&vec[0], bm::bvector<>::size_type(vec.size()), bm::BM_SORTED);
-    bool low_card = false; //is_super_sparse(bv);
 
-    bv.optimize();
+    bv.optimize(tb);
     bvs.serialize(bv, sbuf);
-    //bvs.optimize_serialize_destroy(bv, sbuf);
 
     unsigned bv_size = (unsigned)sbuf.size();
     bv_file.write((char*)&bv_size, sizeof(bv_size));
     bv_file.write((char*)sbuf.data(), (std::streamsize)sbuf.size());
     if (!bv_file.good())
         throw std::runtime_error("Error write to bvect out file");
-    return low_card;
+    return false;
 }
 
 ///  convert vector into delta coded bit-transposed vector and append to the file
