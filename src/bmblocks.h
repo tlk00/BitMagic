@@ -1679,7 +1679,7 @@ public:
         {
             if (cnt_sum < 5) // super-duper sparse ...
                 return false;
-            if (gap_len_sum && (cnt_sum > gap_len_sum)) // parse but GAPpy (rare case)
+            if (gap_len_sum && (cnt_sum > gap_len_sum)) // sparse but GAPpy (rare case)
                 return false;
             bm::id_t blk_avg = cnt_sum / effective_blocks;
             if (blk_avg <= sparse_cut_off)

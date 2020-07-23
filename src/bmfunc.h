@@ -7914,32 +7914,34 @@ bm::set_representation best_representation(unsigned bit_count,
     @return destination size as a result of block decoding
     @ingroup bitfunc 
 */
+
+/*!
+    @brief Convert bit block into an array of ints corresponding to 1 bits
+    @return destination size as a result of block decoding
+    @ingroup bitfunc
+*/
 template<typename T>
-T bit_convert_to_arr(T* BMRESTRICT dest,
-                     const unsigned* BMRESTRICT src,
-                     bm::id_t bits,
-                     unsigned dest_len,
-                     unsigned mask = 0) BMNOEXCEPT
+unsigned bit_block_convert_to_arr(T* BMRESTRICT dest,
+    const unsigned* BMRESTRICT src,
+    bool inverted) BMNOEXCEPT
 {
+    bm::id64_t imask64 = inverted ? ~0ull : 0;
     T* BMRESTRICT pcurr = dest;
-    for (unsigned bit_idx=0; bit_idx < bits;
-                                ++src,bit_idx += unsigned(sizeof(*src) * 8))
+    for (unsigned bit_idx = 0; bit_idx < bm::gap_max_bits;
+        src+=2, bit_idx += unsigned(sizeof(*src) * 8 * 2))
     {
-        unsigned val = *src ^ mask; // invert value by XOR 0xFF..
-        if (val == 0) 
-            continue;
-        if (pcurr + unsigned(sizeof(val)*8) >= dest + dest_len) // insufficient space
-            return 0;
-        // popscan loop to decode bits in a word
-        while (val)
+        bm::id64_t w = 
+            (bm::id64_t(src[0]) | (bm::id64_t(src[1]) << 32u)) ^ imask64;
+        while (w)
         {
-            bm::id_t t = val & -val;
-            *pcurr++ = (T)(bm::word_bitcount(t - 1) + bit_idx);
-            val &= val - 1;
+            bm::id64_t t = bmi_blsi_u64(w); // w & -w;
+            *pcurr++ = (T)(bm::word_bitcount64(t - 1) + bit_idx);
+            w = bmi_bslr_u64(w); // w &= w - 1;
         }
     } // for
-    return (T)(pcurr - dest);
+    return (unsigned)(pcurr - dest);
 }
+
 
 /**
     \brief Checks all conditions and returns true if block consists of only 0 bits

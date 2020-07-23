@@ -332,11 +332,7 @@ void random_subset<BV>::get_subset(BV&        bv_out,
                 }
                 else // bit-block
                 {
-                    arr_len = bm::bit_convert_to_arr(bit_list_,
-                                                     blk_src,
-                                                     bm::gap_max_bits,
-                                                     bm::gap_max_bits,
-                                                     0);
+                    arr_len = bm::bit_block_convert_to_arr(bit_list_, blk_src, 0);
                 }
                 BM_ASSERT(arr_len);
                 get_random_array(blk_out, bit_list_, arr_len, take_count);
@@ -405,11 +401,11 @@ void random_subset<BV>::get_block_subset(bm::word_t*       blk_out,
         }
         // now transform vacant bits to array, then pick random elements
         //
-        unsigned arr_len = bm::bit_convert_to_arr(bit_list_,
-                                              sub_block_, 
-                                              bm::gap_max_bits, 
-                                              bm::gap_max_bits,
-                                              0);
+        unsigned arr_len = 
+            bm::bit_block_convert_to_arr(bit_list_, sub_block_, 0);
+                           //                   bm::gap_max_bits, 
+                           //                   bm::gap_max_bits,
+                           //                   0);
         BM_ASSERT(arr_len);
         get_random_array(blk_out, bit_list_, arr_len, take_count);        
     }
