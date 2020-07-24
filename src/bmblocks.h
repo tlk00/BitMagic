@@ -1679,11 +1679,24 @@ public:
         {
             if (cnt_sum < 5) // super-duper sparse ...
                 return false;
+            
+            bm::id_t blk_avg = cnt_sum / effective_blocks;
+            if (blk_avg <= sparse_cut_off)
+            {
+                if (gap_len_sum)
+                {
+                    gap_len_sum += effective_blocks * 3;
+                    if (gap_len_sum < cnt_sum)
+                        return false;
+                }
+                return true;
+            }
+            /*
             if (gap_len_sum && (cnt_sum > gap_len_sum)) // sparse but GAPpy (rare case)
                 return false;
             bm::id_t blk_avg = cnt_sum / effective_blocks;
             if (blk_avg <= sparse_cut_off)
-                return true;
+                return true;*/
         }
         return false;
     }
