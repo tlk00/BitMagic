@@ -1691,12 +1691,6 @@ public:
                 }
                 return true;
             }
-            /*
-            if (gap_len_sum && (cnt_sum > gap_len_sum)) // sparse but GAPpy (rare case)
-                return false;
-            bm::id_t blk_avg = cnt_sum / effective_blocks;
-            if (blk_avg <= sparse_cut_off)
-                return true;*/
         }
         return false;
     }
