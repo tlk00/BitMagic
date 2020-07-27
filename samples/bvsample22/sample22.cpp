@@ -49,6 +49,7 @@ For more information please visit:  http://bitmagic.io
 */
 
 #include <iostream>
+#include <assert.h>
 
 #include "bm.h"
 #include "bmserial.h"
