@@ -113,7 +113,8 @@ INPUT                  = ./src/bm.h ./src/bmfunc.h  ./src/bmsimd.h ./src/bmxor.h
 ./samples/rscsample01/rscsample01.cpp \
 ./samples/rscsample02/rscsample02.cpp \
 ./samples/rscsample03/rscsample03.cpp \
-./samples/rscsample04/rscsample04.cpp 
+./samples/rscsample04/rscsample04.cpp \
+./utils/inv_list/inv_list.cpp
 
 FILE_PATTERNS          = *.cpp \
                          *.h
@@ -121,8 +122,8 @@ RECURSIVE              = YES
 EXCLUDE                = 
 EXCLUDE_SYMLINKS       = NO
 EXCLUDE_PATTERNS       = 
-EXAMPLE_PATH           = ./samples/ 
-EXAMPLE_PATTERNS       = samp*.cpp svsamp*.cpp xsamp*.cpp rscsamp*.cpp bv*.cpp strsvsamp*.cpp
+EXAMPLE_PATH           = ./samples/ ./utils/inv_list/
+EXAMPLE_PATTERNS       = samp*.cpp svsamp*.cpp xsamp*.cpp rscsamp*.cpp bv*.cpp strsvsamp*.cpp inv*.cpp
 EXAMPLE_RECURSIVE      = YES
 IMAGE_PATH             = 
 INPUT_FILTER           = 

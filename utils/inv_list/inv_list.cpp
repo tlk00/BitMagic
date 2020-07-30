@@ -1,5 +1,5 @@
 /*
-Copyright(c) 2002-2019 Anatoliy Kuznetsov(anatoliy_kuznetsov at yahoo.com)
+Copyright(c) 2002-2020 Anatoliy Kuznetsov(anatoliy_kuznetsov at yahoo.com)
 
 Licensed under the Apache License, Version 2.0 (the "License");
 you may not use this file except in compliance with the License.
@@ -14,6 +14,15 @@ See the License for the specific language governing permissions and
 limitations under the License.
 
 For more information please visit:  http://bitmagic.io
+*/
+
+/** \example inv_list.cpp
+  Utility to compress test sets of inverted lists (Gov2 corpus)
+  and study compression characteristics and different comression levels
+*/
+
+/*! \file inv_list.cpp
+    \brief Utility to compress test sets of inverted lists
 */
 
 #include <iostream>
