@@ -3970,7 +3970,7 @@ int main(void)
     SparseVectorSerializationTest();
 
     SparseVectorRangeDeserializationTest();
-*/
+
     RSC_SparseVectorFillTest();
 
     RSC_SparseVectorAccesTest();
