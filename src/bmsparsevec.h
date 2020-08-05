@@ -620,7 +620,7 @@ public:
     ///@{
 
     /*! \brief resize to zero, free memory */
-    void clear() BMNOEXCEPT;
+    void clear(bool free_mem=true) BMNOEXCEPT;
 
     /*!
         \brief clear range (assign bit 0 for all plains)
@@ -1688,7 +1688,7 @@ void sparse_vector<Val, BV>::inc_no_null(size_type idx)
     }
 }
 
-//---------------------------------------------------------------------
+//------------------------------------ ---------------------------------
 
 template<class Val, class BV>
 void sparse_vector<Val, BV>::inc_no_null(size_type idx, value_type v)
@@ -1700,9 +1700,9 @@ void sparse_vector<Val, BV>::inc_no_null(size_type idx, value_type v)
 //---------------------------------------------------------------------
 
 template<class Val, class BV>
-void sparse_vector<Val, BV>::clear() BMNOEXCEPT
+void sparse_vector<Val, BV>::clear(bool free_mem) BMNOEXCEPT
 {
-    parent_type::clear();
+    parent_type::clear(free_mem);
 }
 
 //---------------------------------------------------------------------

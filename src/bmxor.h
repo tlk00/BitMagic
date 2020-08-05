@@ -250,8 +250,8 @@ public:
     /// reset the collection (resize(0))
     void reset()
     {
-        ref_bvects_.resize(0);
-        ref_bvects_rows_.resize(0);
+        rows_acc_ = 0;
+        ref_bvects_.resize(0); ref_bvects_rows_.resize(0);
     }
 
     /**
@@ -292,26 +292,51 @@ public:
         return not_found();
     }
 
-    /// build vector of references from a basic bit-matrix
+    /// Find vector index by the pointer
+    /// @return ~0 if not found
+    size_type find(const bvector_type* bv) const BMNOEXCEPT
+    {
+        size_type sz = size();
+        for (size_type i = 0; i < sz; ++i)
+            if (bv == ref_bvects_[i])
+                return i;
+        return not_found();
+    }
+
+    /// Reset and build vector of references from a basic bit-matrix
     ///  all NULL rows are skipped, not added to the ref.vector
+    /// @sa add_vectors
+    ///
     template<class BMATR>
     void build(const BMATR& bmatr)
     {
         reset();
+        add_vectors(bmatr);
+    }
+
+    /// Append basic bit-matrix to the list of reference vectors
+    /// @sa build
+    ///
+    template<class BMATR>
+    void add_vectors(const BMATR& bmatr)
+    {
         size_type rows = bmatr.rows();
         for (size_type r = 0; r < rows; ++r)
         {
             bvector_type_const_ptr bv = bmatr.get_row(r);
             if (bv)
-                add(bv, r);
+                add(bv, rows_acc_ + r);
         } // for r
+        rows_acc_ += rows;
     }
+
 
 protected:
     typedef bm::heap_vector<bvector_type_const_ptr, bv_allocator_type, true> bvptr_vector_type;
     typedef bm::heap_vector<std::size_t, bv_allocator_type, true> bv_plain_vector_type;
 
 protected:
+    unsigned                 rows_acc_ = 0;     ///< total rows accumulator
     bvptr_vector_type        ref_bvects_;       ///< reference vector pointers
     bv_plain_vector_type     ref_bvects_rows_;  ///< reference vector row idxs
 };

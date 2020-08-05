@@ -1230,7 +1230,7 @@ public:
        \param free_mem if "true" (default) bvector frees the memory,
        otherwise sets blocks to 0.
     */
-    void clear(bool free_mem = false) { blockman_.set_all_zero(free_mem); }
+    void clear(bool free_mem = true) { blockman_.set_all_zero(free_mem); }
 
     /*!
        \brief Clears every bit in the bitvector.

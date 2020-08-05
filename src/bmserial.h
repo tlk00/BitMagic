@@ -4214,7 +4214,8 @@ size_t deserializer<BV, DEC>::deserialize(bvector_type&        bv,
                     goto throw_err;
                 }
                 const bvector_type* ref_bv = ref_vect_->get_bv(idx);
-                BM_ASSERT(ref_bv);
+                BM_ASSERT(ref_bv); // some incorrect work with the ref.vector
+                BM_ASSERT(ref_bv != &bv);
                 const blocks_manager_type& ref_bman = ref_bv->get_blocks_manager();
                 const bm::word_t* ref_blk = ref_bman.get_block_ptr(i0, j0);
                 if (ref_blk)
@@ -4327,9 +4328,10 @@ void deserializer<BV, DEC>::xor_decode(size_type x_ref_idx, bm::id64_t x_ref_d64
     unsigned i0, j0;
 
     const bvector_type* ref_bv = ref_vect_->get_bv(x_ref_idx);
-    BM_ASSERT(ref_bv);
     const blocks_manager_type& ref_bman = ref_bv->get_blocks_manager();
-    BM_ASSERT(&ref_bman != &bman);
+    BM_ASSERT(ref_bv);
+    BM_ASSERT(&ref_bman != &bman); // some incorrect work with the ref.vector
+
     bm::get_block_coord(nb, i0, j0);
 
     const bm::word_t* ref_blk = ref_bman.get_block_ptr(i0, j0);

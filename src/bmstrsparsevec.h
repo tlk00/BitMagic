@@ -608,7 +608,7 @@ public:
     ///@{
 
     /*! \brief resize to zero, free memory */
-    void clear() BMNOEXCEPT;
+    void clear(bool free_mem=true) BMNOEXCEPT;
 
     /*!
         \brief clear range (assign bit 0 for all plains)
@@ -1707,9 +1707,9 @@ str_sparse_vector<CharType, BV, MAX_STR_SIZE>::begin() const BMNOEXCEPT
 //---------------------------------------------------------------------
 
 template<class CharType, class BV, unsigned MAX_STR_SIZE>
-void str_sparse_vector<CharType, BV, MAX_STR_SIZE>::clear() BMNOEXCEPT
+void str_sparse_vector<CharType, BV, MAX_STR_SIZE>::clear(bool free_mem) BMNOEXCEPT
 {
-    parent_type::clear();
+    parent_type::clear(free_mem);
 }
 
 //---------------------------------------------------------------------

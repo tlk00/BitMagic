@@ -137,7 +137,12 @@ public:
     /*! Make sure row is copy-constructed, return bit-vector */
     bvector_type_ptr construct_row(size_type row, const bvector_type& bv);
 
+    /*! destruct/deallocate row */
     void destruct_row(size_type row);
+
+    /*! clear row bit-vector */
+    void clear_row(size_type row, bool free_mem);
+
     ///@}
     
     
@@ -305,8 +310,10 @@ public:
     
     void clear_range(size_type left, size_type right, bool set_null);
 
-    /*! \brief resize to zero, free memory */
-    void clear() BMNOEXCEPT;
+    /*! \brief resize to zero, free memory
+        @param free_mem - fully destroys the plane vectors if true
+    */
+    void clear(bool free_mem = true) BMNOEXCEPT;
     
     /*! return true if empty */
     bool empty() const BMNOEXCEPT { return size() == 0; }
@@ -754,6 +761,27 @@ void basic_bmatrix<BV>::destruct_row(size_type row)
     {
         destruct_bvector(bv);
         bv_rows_[row] = 0;
+    }
+}
+
+//---------------------------------------------------------------------
+
+template<typename BV>
+void basic_bmatrix<BV>::clear_row(size_type row, bool free_mem)
+{
+    BM_ASSERT(row < rsize_);
+    bvector_type_ptr bv = bv_rows_[row];
+    if (bv)
+    {
+        if (free_mem)
+        {
+            destruct_bvector(bv);
+            bv_rows_[row] = 0;
+        }
+        else
+        {
+            bv->clear(true);
+        }
     }
 }
 
@@ -1220,17 +1248,15 @@ void base_sparse_vector<Val, BV, MAX_SIZE>::swap(
 //---------------------------------------------------------------------
 
 template<class Val, class BV, unsigned MAX_SIZE>
-void base_sparse_vector<Val, BV, MAX_SIZE>::clear() BMNOEXCEPT
+void base_sparse_vector<Val, BV, MAX_SIZE>::clear(bool free_mem) BMNOEXCEPT
 {
     unsigned plains = value_bits();
     for (size_type i = 0; i < plains; ++i)
-    {
-        bmatr_.destruct_row(i);
-    }
+        bmatr_.clear_row(i, free_mem);
     size_ = 0;
     bvector_type* bv_null = get_null_bvect();
     if (bv_null)
-        bv_null->clear();
+        bv_null->clear(true);
 }
 
 //---------------------------------------------------------------------

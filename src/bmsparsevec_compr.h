@@ -598,8 +598,9 @@ public:
         statistics* stat = 0);
     
     /*! \brief resize to zero, free memory
+        @param free_mem - free bit vector planes if true
     */
-    void clear() BMNOEXCEPT;
+    void clear(bool free_mem=true) BMNOEXCEPT;
     
     /*!
         @brief Calculates memory statistics.
@@ -1253,9 +1254,9 @@ void rsc_sparse_vector<Val, SV>::optimize(bm::word_t*  temp_block,
 //---------------------------------------------------------------------
 
 template<class Val, class SV>
-void rsc_sparse_vector<Val, SV>::clear() BMNOEXCEPT
+void rsc_sparse_vector<Val, SV>::clear(bool free_mem) BMNOEXCEPT
 {
-    sv_.clear();
+    sv_.clear(free_mem);
     in_sync_ = false;  max_id_ = size_ = 0;
 }
 
@@ -1463,7 +1464,7 @@ void rsc_sparse_vector<Val, SV>::copy_range(
     bool range_valid = csv.resolve_range(left, right, &sv_left, &sv_right);
     if (!range_valid)
     {
-        sv_.clear(); sv_.resize(size_);
+        sv_.clear(true); sv_.resize(size_);
         bvector_type* bv_null = sv_.get_null_bvect();
         bv_null->copy_range(*arg_bv_null, 0, right);
         return;
