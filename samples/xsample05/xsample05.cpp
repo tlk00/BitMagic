@@ -227,7 +227,7 @@ int load_dict_report(const std::string& fname, string_vector& str_vec)
     return 0;
 }
 
-/// Compare STL vector with bit-transposed container to check correcness
+/// Compare STL vector with bit-transposed container to check correctness
 ///
 static
 void check_sparse(const str_sparse_vect& str_sv, const string_vector& str_vec)
