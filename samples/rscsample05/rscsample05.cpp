@@ -90,6 +90,18 @@ void test_data(sample_data_frame& df)
     }
 }
 
+/**
+    Copy buffer content into the buffer
+    @internal
+ */
+template<typename SVLay>
+unsigned char* copy_buffer(unsigned char* buf_ptr, const SVLay& sv_lay)
+{
+    auto s = sv_lay.size();
+    ::memcpy(buf_ptr, sv_lay.buf(), s);
+    return buf_ptr + s;
+}
+
 /// serialize with disabled XOR compression
 ///
 static
@@ -132,21 +144,10 @@ void serialize_df0(const sample_data_frame& df,
         buf_ptr += sizeof(s);
     }
     // save all serialization buffers to one BLOB
-    {
-        auto s = sv_lay1.size();
-        ::memcpy(buf_ptr, sv_lay1.buf(), s);
-        buf_ptr += s;
-    }
-    {
-        auto s = sv_lay2.size();
-        ::memcpy(buf_ptr, sv_lay2.buf(), s);
-        buf_ptr += s;
-    }
-    {
-        auto s = sv_lay3.size();
-        ::memcpy(buf_ptr, sv_lay3.buf(), s);
-        buf_ptr += s;
-    }
+    buf_ptr = copy_buffer(buf_ptr, sv_lay1);
+    buf_ptr = copy_buffer(buf_ptr, sv_lay2);
+    buf_ptr = copy_buffer(buf_ptr, sv_lay3);
+
 }
 
 /// Simple (individual) de-serialization of vectors in the data-frame
@@ -235,21 +236,11 @@ void serialize_df2(const sample_data_frame& df,
         buf_ptr += sizeof(s);
     }
     // save all serialization buffers to one BLOB
-    {
-        auto s = sv_lay1.size();
-        ::memcpy(buf_ptr, sv_lay1.buf(), s);
-        buf_ptr += s;
-    }
-    {
-        auto s = sv_lay2.size();
-        ::memcpy(buf_ptr, sv_lay2.buf(), s);
-        buf_ptr += s;
-    }
-    {
-        auto s = sv_lay3.size();
-        ::memcpy(buf_ptr, sv_lay3.buf(), s);
-        buf_ptr += s;
-    }
+    //
+    buf_ptr = copy_buffer(buf_ptr, sv_lay1);
+    buf_ptr = copy_buffer(buf_ptr, sv_lay2);
+    buf_ptr = copy_buffer(buf_ptr, sv_lay3);
+
 
     // if serializer is re-used we need to disconnect it from the
     // current frame reference vectors
