@@ -41,7 +41,7 @@ belong to different ranges.
 
 #include "bm.h"
 #include "bmaggregator.h"
-
+#include "bmundef.h" /* clear the pre-proc defines from BM */
 
 // Utility template function used to print container
 template<class T> void PrintContainer(T first, T last)

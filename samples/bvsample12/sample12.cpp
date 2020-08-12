@@ -39,10 +39,13 @@ For more information please visit:  http://bitmagic.io
 
 #include <iostream>
 #include <vector>
+
 #define BM64ADDR
+
 #include "bm.h"
 #include "bmalgo.h"
 #include "bmtimer.h"
+#include "bmundef.h" /* clear the pre-proc defines from BM */
 
 using namespace std;
 

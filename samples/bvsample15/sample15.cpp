@@ -37,6 +37,7 @@ belong to different ranges.
 #include <vector>
 
 #include "bm.h"
+#include "bmundef.h" /* clear the pre-proc defines from BM */
 
 using namespace std;
 

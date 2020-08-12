@@ -31,6 +31,7 @@ For more information please visit:  http://bitmagic.io
 
 #include "bm.h"
 #include "bmsparsevec.h"
+#include "bmundef.h" /* clear the pre-proc defines from BM */
 
 using namespace std;
 
@@ -91,10 +92,10 @@ int main(void)
         sv1.clear(2, true); // clear element and set to NULL
         print_svector(sv1); // 12: [ NULL, NULL, NULL, 35, NULL, NULL, NULL, NULL, NULL, 1, 2, 3 ]
 
-        sv1.clear(2); // clear element (not NULL anymore)
+        sv1.clear(2, false); // clear element (not NULL anymore)
         print_svector(sv1); // 12: [ NULL, NULL, 0, 35, NULL, NULL, NULL, NULL, NULL, 1, 2, 3 ]
 
-        sv1.clear(3); // clear element (it stays NOT NULL)
+        sv1.clear(3, false); // clear element (it stays NOT NULL)
         print_svector(sv1); // 12: [ NULL, NULL, NULL, 0, NULL, NULL, NULL, NULL, NULL, 1, 2, 3 ]
 
         sv1.clear();

@@ -63,7 +63,7 @@ For more information please visit:  http://bitmagic.io
 #include "bmaggregator.h"
 #include "bmsparsevec_compr.h"
 #include "bmsparsevec_algo.h"
-
+#include "bmundef.h" /* clear the pre-proc defines from BM */
 
 // BitMagic utilities for debug and timings
 #include "bmdbg.h"

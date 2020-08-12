@@ -31,6 +31,7 @@ Example rank and select operations.
 #include <memory>
 
 #include "bm.h"
+#include "bmundef.h" /* clear the pre-proc defines from BM */
 
 int main(void)
 {

@@ -30,8 +30,10 @@ For more information please visit:  http://bmagic.sourceforge.net
 */
 #include <stdlib.h>
 #include <iostream>
+
 #include "bm.h"
 #include "bmserial.h"
+#include "bmundef.h" /* clear the pre-proc defines from BM */
 
 using namespace std;
 

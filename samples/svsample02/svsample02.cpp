@@ -37,6 +37,7 @@ For more information please visit:  http://bitmagic.io
 #include "bm.h"
 #include "bmsparsevec.h"
 #include "bmsparsevec_serial.h"
+#include "bmundef.h" /* clear the pre-proc defines from BM */
 
 using namespace std;
 

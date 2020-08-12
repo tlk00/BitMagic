@@ -43,7 +43,7 @@ For more information please visit:  http://bitmagic.io
 #include "bmalgo_similarity.h"
 
 #include "bmdbg.h"
-
+#include "bmundef.h" /* clear the pre-proc defines from BM */
 
 // ----------------------------------------------------
 // Global parameters and types

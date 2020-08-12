@@ -33,7 +33,9 @@ For more information please visit:  http://bitmagic.io
 */
 #include <stdlib.h>
 #include <iostream>
+
 #include "bm.h"
+#include "bmundef.h" /* clear the pre-proc defines from BM */
 
 using namespace std;
 

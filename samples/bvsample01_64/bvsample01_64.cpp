@@ -44,6 +44,7 @@ For more information please visit:  http://bitmagic.io
 #include <assert.h>
 
 #include "bm64.h"
+#include "bmundef.h" /* clear the pre-proc defines from BM */
 
 using namespace std;
 

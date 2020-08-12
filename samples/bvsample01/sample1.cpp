@@ -31,7 +31,9 @@ For more information please visit:  http://bitmagic.io
     \brief Example: bvector<> set bits and then retrieve indexes of ON bits
 */
 #include <iostream>
+
 #include "bm.h"
+#include "bmundef.h" /* clear the pre-proc defines from BM */
 
 using namespace std;
 

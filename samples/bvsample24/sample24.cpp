@@ -47,6 +47,7 @@ The use case here:
 
 #include "bm.h"
 #include "bmalgo.h"
+#include "bmundef.h" /* clear the pre-proc defines from BM */
 
 using namespace std;
 

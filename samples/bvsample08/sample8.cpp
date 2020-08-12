@@ -42,6 +42,7 @@ using std::list;
 #endif
 
 #include "bm.h"
+#include "bmundef.h" /* clear the pre-proc defines from BM */
 
 using namespace std;
 

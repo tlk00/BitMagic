@@ -62,6 +62,7 @@ using namespace std;
 
 #include "bmdbg.h"
 #include "bmtimer.h"
+#include "bmundef.h" /* clear the pre-proc defines from BM */
 
 /// Print help
 static

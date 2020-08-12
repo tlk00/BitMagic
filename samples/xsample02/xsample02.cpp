@@ -45,7 +45,7 @@ For more information please visit:  http://bitmagic.io
 #include "bm.h"
 #include "bmtimer.h"
 #include "bmsparsevec.h"
-
+#include "bmundef.h" /* clear the pre-proc defines from BM */
 
 // ----------------------------------------------------
 // Global parameters and types

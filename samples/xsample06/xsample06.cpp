@@ -46,7 +46,7 @@ For more information please visit:  http://bitmagic.io
 // BitMagic utilities for debug and timings
 #include "bmdbg.h"
 #include "bmtimer.h"
-
+#include "bmundef.h" /* clear the pre-proc defines from BM */
 
 using namespace std;
 

@@ -57,6 +57,7 @@ For more information please visit:  http://bitmagic.io
 #include "bm.h"
 #include "bmintervals.h"
 #include "bmsparsevec_compr.h"
+#include "bmundef.h" /* clear the pre-proc defines from BM */
 
 using namespace std;
 

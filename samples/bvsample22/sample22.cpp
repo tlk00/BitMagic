@@ -54,6 +54,7 @@ For more information please visit:  http://bitmagic.io
 #include "bm.h"
 #include "bmserial.h"
 #include "bmintervals.h"
+#include "bmundef.h" /* clear the pre-proc defines from BM */
 
 using namespace std;
 
