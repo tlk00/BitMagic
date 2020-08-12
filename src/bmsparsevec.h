@@ -395,7 +395,7 @@ public:
     {
         if (this != &sv)
         {
-            clear();
+            clear_all(true);
             swap(sv);
         }
         return *this;
@@ -478,7 +478,7 @@ public:
         \param idx - element index
         \param set_null - if true the value receives NULL (unassigned) value
     */
-    void clear(size_type idx, bool set_null = false);
+    void clear(size_type idx, bool set_null/* = false*/);
 
     ///@}
 
@@ -620,7 +620,10 @@ public:
     ///@{
 
     /*! \brief resize to zero, free memory */
-    void clear(bool free_mem=true) BMNOEXCEPT;
+    void clear_all(bool free_mem) BMNOEXCEPT;
+
+    /*! \brief resize to zero, free memory */
+    void clear() BMNOEXCEPT { clear_all(true); }
 
     /*!
         \brief clear range (assign bit 0 for all plains)
@@ -1489,7 +1492,7 @@ void sparse_vector<Val, BV>::clear(size_type idx, bool set_null)
     if (idx >= size())
         this->size_ = idx+1;
 
-    set_value(idx, (value_type)0);
+    set_value(idx, value_type(0));
     if (set_null)
     {
         bvector_type* bv_null = this->get_null_bvect();
@@ -1700,9 +1703,9 @@ void sparse_vector<Val, BV>::inc_no_null(size_type idx, value_type v)
 //---------------------------------------------------------------------
 
 template<class Val, class BV>
-void sparse_vector<Val, BV>::clear(bool free_mem) BMNOEXCEPT
+void sparse_vector<Val, BV>::clear_all(bool free_mem) BMNOEXCEPT
 {
-    parent_type::clear(free_mem);
+    parent_type::clear_all(free_mem);
 }
 
 //---------------------------------------------------------------------

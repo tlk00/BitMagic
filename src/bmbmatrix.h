@@ -313,7 +313,7 @@ public:
     /*! \brief resize to zero, free memory
         @param free_mem - fully destroys the plane vectors if true
     */
-    void clear(bool free_mem = true) BMNOEXCEPT;
+    void clear_all(bool free_mem = true) BMNOEXCEPT;
     
     /*! return true if empty */
     bool empty() const BMNOEXCEPT { return size() == 0; }
@@ -1248,7 +1248,7 @@ void base_sparse_vector<Val, BV, MAX_SIZE>::swap(
 //---------------------------------------------------------------------
 
 template<class Val, class BV, unsigned MAX_SIZE>
-void base_sparse_vector<Val, BV, MAX_SIZE>::clear(bool free_mem) BMNOEXCEPT
+void base_sparse_vector<Val, BV, MAX_SIZE>::clear_all(bool free_mem) BMNOEXCEPT
 {
     unsigned plains = value_bits();
     for (size_type i = 0; i < plains; ++i)
@@ -1296,7 +1296,7 @@ void base_sparse_vector<Val, BV, MAX_SIZE>::resize(size_type sz)
         return;
     if (!sz) // resize to zero is an equivalent of non-destructive deallocation
     {
-        clear();
+        clear_all();
         return;
     }
     if (sz < size()) // vector shrink

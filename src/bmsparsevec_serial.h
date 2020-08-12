@@ -971,7 +971,7 @@ void sparse_vector_deserializer<SV>::deserialize_range(SV& sv,
                                                  bool clear_sv)
 {
     if (clear_sv)
-        sv.clear(true);
+        sv.clear_all(true);
 
     idx_range_set_ = true; idx_range_from_ = from; idx_range_to_ = to;
 
@@ -1041,7 +1041,7 @@ void sparse_vector_deserializer<SV>::deserialize_sv(SV& sv,
                                                  bool clear_sv)
 {
     if (clear_sv)
-        sv.clear(true);
+        sv.clear_all(true);
 
     remap_buf_ptr_ = 0;
     bm::decoder dec(buf); // TODO: implement correct processing of byte-order

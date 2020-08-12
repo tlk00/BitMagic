@@ -619,7 +619,10 @@ public:
     ///@{
 
     /*! \brief resize to zero, free memory */
-    void clear(bool free_mem=true) BMNOEXCEPT;
+    void clear_all(bool free_mem) BMNOEXCEPT;
+
+    /*! \brief resize to zero, free memory */
+    void clear() BMNOEXCEPT { clear_all(true); }
 
     /*!
         \brief clear range (assign bit 0 for all plains)
@@ -1623,7 +1626,7 @@ str_sparse_vector<CharType, BV, MAX_STR_SIZE>::remap_from(const str_sparse_vecto
         *this = str_sv;
         return;
     }
-    this->clear();
+    this->clear_all(true);
     if (str_sv.empty()) // no content to remap
     {
         return;
@@ -1701,7 +1704,7 @@ void str_sparse_vector<CharType, BV, MAX_STR_SIZE>::copy_range(
 {
     if (left > right)
         bm::xor_swap(left, right);
-    this->clear();
+    this->clear_all(true);
 
     remap_flags_ = sv.remap_flags_;
     remap_matrix1_ = sv.remap_matrix1_;
@@ -1726,9 +1729,9 @@ str_sparse_vector<CharType, BV, MAX_STR_SIZE>::begin() const BMNOEXCEPT
 //---------------------------------------------------------------------
 
 template<class CharType, class BV, unsigned MAX_STR_SIZE>
-void str_sparse_vector<CharType, BV, MAX_STR_SIZE>::clear(bool free_mem) BMNOEXCEPT
+void str_sparse_vector<CharType, BV, MAX_STR_SIZE>::clear_all(bool free_mem) BMNOEXCEPT
 {
-    parent_type::clear(free_mem);
+    parent_type::clear_all(free_mem);
 }
 
 //---------------------------------------------------------------------
