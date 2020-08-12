@@ -19182,7 +19182,7 @@ void TestSparseVector()
         
         sv1.clear();
         assert(!sv1.is_nullable());
-        sv2.clear();
+        sv2.clear_all(true);
         assert(sv2.is_nullable());
     }}
     
@@ -19382,7 +19382,7 @@ void TestSparseVector()
             exit(1);
         }
         
-        sv2.clear();
+        sv2.clear_all(true);
         sv2.import(&vect[0], (unsigned)vect.size());
         res = CompareSparseVector(sv2, vect);
         if (!res)

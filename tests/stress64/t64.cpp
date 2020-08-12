@@ -11026,7 +11026,7 @@ void TestSparseVector()
         
         sv1.clear();
         assert(!sv1.is_nullable());
-        sv2.clear();
+        sv2.clear_all(true);
         assert(sv2.is_nullable());
     }}
     
@@ -11194,7 +11194,7 @@ void TestSparseVector()
             assert(0);exit(1);
         }
         
-        sv3.clear();
+        sv3.clear_all(true);
         sv3.import(&vect[0], (unsigned)vect.size());
         res = CompareSparseVector(sv3, vect);
         if (!res)
@@ -14207,7 +14207,7 @@ void TestCompressSparseVector()
             cout << "ok" << endl;
 
             cout << "cmp 3...";
-            csv1.clear();
+            csv1.clear_all(true);
 
             sv.optimize(tb);
             rsc_sparse_vector_u32 csv2;
