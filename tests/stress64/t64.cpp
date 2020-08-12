@@ -12410,6 +12410,97 @@ void TestSparseVectorSerialization2()
     bool eq;
     size_t sz1, sz2;
 
+
+    bm::sparse_vector_serializer<sparse_vector_u32> sv_serializer;
+    bm::sparse_vector_deserializer<sparse_vector_u32> sv_deserial;
+
+    cout << "Test data-frame XOR compression" << endl;
+    {
+        sparse_vector_u32 sv1i, sv2i, sv3i(bm::use_null);
+        sparse_vector_u32 sv1o, sv2o, sv3o(bm::use_null);
+
+        bm::sparse_vector_serial_layout<sparse_vector_u32> sv_lay1, sv_lay2, sv_lay3;
+
+
+        for (unsigned i = 0; i < 65536; i+=2)
+        {
+            sv1i[i] = 4;
+            sv2i[i] = 8;
+            sv3i[i] = 0;
+        }
+
+        bm::sparse_vector_serializer<sparse_vector_u32>::bv_ref_vector_type bv_ref;
+        // add references in reverse(!) order
+        bv_ref.add_vectors(sv3i.get_bmatrix());
+        bv_ref.add_vectors(sv2i.get_bmatrix());
+        bv_ref.add_vectors(sv1i.get_bmatrix());
+
+        assert(bv_ref.size() == 3);
+
+        sv_serializer.set_xor_ref(&bv_ref);
+        assert(sv_serializer.is_xor_ref());
+
+        sv_serializer.serialize(sv1i, sv_lay1);
+        {
+            const bvect::size_type* cstat = sv_serializer.get_bv_serializer().get_compression_stat();
+            assert(cstat[bm::set_block_ref_eq]==0);
+        }
+        sv_serializer.serialize(sv2i, sv_lay2);
+        {
+            const bvect::size_type* cstat = sv_serializer.get_bv_serializer().get_compression_stat();
+            assert(cstat[bm::set_block_ref_eq]==1);
+        }
+        sv_serializer.serialize(sv3i, sv_lay3);
+        {
+            const bvect::size_type* cstat = sv_serializer.get_bv_serializer().get_compression_stat();
+            assert(cstat[bm::set_block_ref_eq]==1);
+        }
+
+        // ----------
+
+
+        bm::sparse_vector_deserializer<sparse_vector_u32>::bv_ref_vector_type bv_ref_d;
+
+        buf = sv_lay1.buf();
+        sz2 = sv_lay1.size();
+
+
+        sv_deserial.deserialize_structure(sv1o, sv_lay1.buf());
+        sv_deserial.deserialize_structure(sv2o, sv_lay2.buf());
+        sv_deserial.deserialize_structure(sv3o, sv_lay3.buf());
+
+        bv_ref_d.add_vectors(sv3o.get_bmatrix());
+        bv_ref_d.add_vectors(sv2o.get_bmatrix());
+        bv_ref_d.add_vectors(sv1o.get_bmatrix());
+
+        sv_deserial.set_xor_ref(&bv_ref_d);
+
+        sv_deserial.deserialize(sv1o, buf, false);
+        eq = sv1i.equal(sv1o);
+        assert(eq);
+
+        buf = sv_lay2.buf();
+        sz2 = sv_lay2.size();
+
+        sv_deserial.deserialize(sv2o, buf, false);
+        eq = sv2i.equal(sv2o);
+        assert(eq);
+
+        buf = sv_lay3.buf();
+        sz2 = sv_lay3.size();
+
+        sv_deserial.deserialize(sv3o, buf, false);
+        eq = sv3i.equal(sv3o);
+        assert(eq);
+
+
+        sv_deserial.set_xor_ref(0); // unset
+    }
+    cout << "Test data-frame XOR compression - OK" << endl;
+
+    // -------------------------------------------------
+
+
     sparse_vector_u32 sv1(bm::use_null);
     sparse_vector_u32 sv2(bm::use_null);
     sparse_vector_u32 sv3(bm::use_null);
@@ -12418,8 +12509,6 @@ void TestSparseVectorSerialization2()
 
     bm::sparse_vector_serial_layout<sparse_vector_u32> sv_lay;
 
-    bm::sparse_vector_serializer<sparse_vector_u32> sv_serializer;
-    bm::sparse_vector_deserializer<sparse_vector_u32> sv_deserial;
 
     for (unsigned k = 0; k < 2; ++k)
     {

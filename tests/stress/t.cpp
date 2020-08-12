@@ -2876,45 +2876,45 @@ void TestBlockCountChange()
     for (i = 0; i < bm::set_block_size; ++i)
         blk[i] = 0;
     
-    c = VECT_BLOCK_CHANGE(blk);
-    cc = bm::bit_block_change32(blk);
+    c = VECT_BLOCK_CHANGE(blk, sizeof(blk)/sizeof(blk[0]));
+    cc = bm::bit_block_change32(blk, sizeof(blk)/sizeof(blk[0]));
     assert(c == 1);
     assert(c == cc);
 
     blk[0] = 1;
-    c = VECT_BLOCK_CHANGE(blk);
-    cc = bm::bit_block_change32(blk);
+    c = VECT_BLOCK_CHANGE(blk, sizeof(blk)/sizeof(blk[0]));
+    cc = bm::bit_block_change32(blk, sizeof(blk)/sizeof(blk[0]));
     assert(c == 2);
     assert(c == cc);
 
     blk[0] = 0xFF;
-    c = VECT_BLOCK_CHANGE(blk);
-    cc = bm::bit_block_change32(blk);
+    c = VECT_BLOCK_CHANGE(blk, sizeof(blk)/sizeof(blk[0]));
+    cc = bm::bit_block_change32(blk, sizeof(blk)/sizeof(blk[0]));
     assert(c == 2);
     assert(c == cc);
 
     blk[0] = ~0u;
-    c = VECT_BLOCK_CHANGE(blk);
-    cc = bm::bit_block_change32(blk);
+    c = VECT_BLOCK_CHANGE(blk, sizeof(blk)/sizeof(blk[0]));
+    cc = bm::bit_block_change32(blk, sizeof(blk)/sizeof(blk[0]));
     assert(c == 2);
     assert(c == cc);
 
     blk[0] = blk[1] = blk[2] = blk[3] = 2;
-    c = VECT_BLOCK_CHANGE(blk);
-    cc = bm::bit_block_change32(blk);
+    c = VECT_BLOCK_CHANGE(blk, sizeof(blk)/sizeof(blk[0]));
+    cc = bm::bit_block_change32(blk, sizeof(blk)/sizeof(blk[0]));
     assert(c == cc);
     
     blk[4] = blk[5] = blk[6] = blk[7] = 2;
-    c = VECT_BLOCK_CHANGE(blk);
-    cc = bm::bit_block_change32(blk);
+    c = VECT_BLOCK_CHANGE(blk, sizeof(blk)/sizeof(blk[0]));
+    cc = bm::bit_block_change32(blk, sizeof(blk)/sizeof(blk[0]));
     assert(c == cc);
 
     {
     for (i = 0; i < bm::set_block_size; ++i)
         blk[i] = 2;
 
-    c = VECT_BLOCK_CHANGE(blk);
-    cc = bm::bit_block_change32(blk);
+    c = VECT_BLOCK_CHANGE(blk, sizeof(blk)/sizeof(blk[0]));
+    cc = bm::bit_block_change32(blk, sizeof(blk)/sizeof(blk[0]));
     assert(c == cc);
     }
     
@@ -2922,8 +2922,8 @@ void TestBlockCountChange()
     for (i = 0; i < bm::set_block_size; ++i)
         blk[i] = 1u << 31;
 
-    c = VECT_BLOCK_CHANGE(blk);
-    cc = bm::bit_block_change32(blk);
+    c = VECT_BLOCK_CHANGE(blk, sizeof(blk)/sizeof(blk[0]));
+    cc = bm::bit_block_change32(blk, sizeof(blk)/sizeof(blk[0]));
     assert(c == cc);
     }
 
@@ -2931,8 +2931,8 @@ void TestBlockCountChange()
     for (i = 0; i < bm::set_block_size; ++i)
         blk[i] = ~0u << 30;
 
-    c = VECT_BLOCK_CHANGE(blk);
-    cc = bm::bit_block_change32(blk);
+    c = VECT_BLOCK_CHANGE(blk, sizeof(blk)/sizeof(blk[0]));
+    cc = bm::bit_block_change32(blk, sizeof(blk)/sizeof(blk[0]));
     assert(c == cc);
     }
 
@@ -2948,8 +2948,8 @@ void TestBlockCountChange()
         {
             for (i = 0; i < bm::set_block_size; ++i)
                 blk[i] = k;
-            c = VECT_BLOCK_CHANGE(blk);
-            cc = bm::bit_block_change32(blk);
+            c = VECT_BLOCK_CHANGE(blk, sizeof(blk)/sizeof(blk[0]));
+            cc = bm::bit_block_change32(blk, sizeof(blk)/sizeof(blk[0]));
             assert(c == cc);
             
             if (k % 100000 == 0)
@@ -3021,33 +3021,33 @@ void TestBlockCountXORChange()
         assert(d64 == ~0ull);
         for (unsigned k = 0; k < bm::block_waves; ++k)
         {
-            assert(x_descr.sb_change[k] == 1);
-            assert(x_descr.sb_xor_change[k] == 1);
+            assert(x_descr.sb_gc[k] == 1);
+            assert(x_descr.sb_xor_gc[k] == 1);
         } // for k
 
         blk[0] = 1;
         d64 = bit_block_calc_xor_change_digest(blk, blk_xor, x_descr);
         assert(d64);
-        assert(x_descr.sb_change[0] == 2);
-        assert(x_descr.sb_xor_change[0] == 2);
+        assert(x_descr.sb_gc[0] == 2);
+        assert(x_descr.sb_xor_gc[0] == 2);
         for (unsigned k = 1; k < bm::block_waves; ++k)
         {
-            assert(x_descr.sb_change[k] == 1);
-            assert(x_descr.sb_xor_change[k] == 1);
+            assert(x_descr.sb_gc[k] == 1);
+            assert(x_descr.sb_xor_gc[k] == 1);
         } // for k
 
 
         blk[0] = 1; blk_xor[0] = 1;
         d64 = bit_block_calc_xor_change_digest(blk, blk_xor, x_descr);
-        cout << x_descr.sb_xor_change[0] << endl;
-        assert(x_descr.sb_change[0] == 2);
+        cout << x_descr.sb_xor_gc[0] << endl;
+        assert(x_descr.sb_gc[0] == 2);
         // next assert hides non-critical discrepancy between SIMD versions
-        assert(x_descr.sb_xor_change[0] == 1 || x_descr.sb_xor_change[0] == 0);
+        assert(x_descr.sb_xor_gc[0] == 1 || x_descr.sb_xor_gc[0] == 0);
         assert(d64 == ~0ull);
         for (unsigned k = 1; k < bm::block_waves; ++k)
         {
-            assert(x_descr.sb_change[k] == 1);
-            assert(x_descr.sb_xor_change[k] == 1);
+            assert(x_descr.sb_gc[k] == 1);
+            assert(x_descr.sb_xor_gc[k] == 1);
         } // for k
 
         Check_XOR_Product(blk, blk_xor, d64);
@@ -3057,8 +3057,8 @@ void TestBlockCountXORChange()
         blk[off] = (1 << 10) | (1 << 12);
 
         d64 = bit_block_calc_xor_change_digest(blk, blk_xor, x_descr);
-        assert(x_descr.sb_change[0] == 5);
-        assert(x_descr.sb_xor_change[0] == 3);
+        assert(x_descr.sb_gc[0] == 5);
+        assert(x_descr.sb_xor_gc[0] == 3);
         assert((d64 & 1));
 
         Check_XOR_Product(blk, blk_xor, d64);
@@ -3067,33 +3067,33 @@ void TestBlockCountXORChange()
         {
             if (k!= 60)
             {
-                assert(x_descr.sb_change[k] == 1);
-                assert(x_descr.sb_xor_change[k] == 1);
+                assert(x_descr.sb_gc[k] == 1);
+                assert(x_descr.sb_xor_gc[k] == 1);
             }
             else
             {
-                assert(x_descr.sb_change[60] == 5);
-                assert(x_descr.sb_xor_change[60] == 5);
+                assert(x_descr.sb_gc[60] == 5);
+                assert(x_descr.sb_xor_gc[60] == 5);
             }
         } // for k
 
         blk_xor[off] = (1 << 10) | (1 << 11) | (1 << 12);
         d64 = bit_block_calc_xor_change_digest(blk, blk_xor, x_descr);
-        assert(x_descr.sb_change[0] == 5);
-        assert(x_descr.sb_xor_change[0] == 3);
+        assert(x_descr.sb_gc[0] == 5);
+        assert(x_descr.sb_xor_gc[0] == 3);
         assert((d64 & 1) && (d64 & (1ull << 60)));
 
         for (unsigned k = 1; k < bm::block_waves; ++k)
         {
             if (k!= 60)
             {
-                assert(x_descr.sb_change[k] == 1);
-                assert(x_descr.sb_xor_change[k] == 1);
+                assert(x_descr.sb_gc[k] == 1);
+                assert(x_descr.sb_xor_gc[k] == 1);
             }
             else
             {
-                assert(x_descr.sb_change[60] == 5);
-                assert(x_descr.sb_xor_change[60] == 3);
+                assert(x_descr.sb_gc[60] == 5);
+                assert(x_descr.sb_xor_gc[60] == 3);
             }
         } // for k
 
@@ -12913,17 +12913,17 @@ void TestSparseVectorSerialization2()
 
         sv_serializer.serialize(sv1i, sv_lay1);
         {
-            const bvect::size_type* cstat = sv_serializer.get_compression_stat();
+            const bvect::size_type* cstat = sv_serializer.get_bv_serializer().get_compression_stat();
             assert(cstat[bm::set_block_ref_eq]==0);
         }
         sv_serializer.serialize(sv2i, sv_lay2);
         {
-            const bvect::size_type* cstat = sv_serializer.get_compression_stat();
+            const bvect::size_type* cstat = sv_serializer.get_bv_serializer().get_compression_stat();
             assert(cstat[bm::set_block_ref_eq]==1);
         }
         sv_serializer.serialize(sv3i, sv_lay3);
         {
-            const bvect::size_type* cstat = sv_serializer.get_compression_stat();
+            const bvect::size_type* cstat = sv_serializer.get_bv_serializer().get_compression_stat();
             assert(cstat[bm::set_block_ref_eq]==1);
         }
 
@@ -22635,19 +22635,19 @@ void TestStrSparseVector()
 
        // reference test / serialization test
        {
-       const char* s = str_sv0[3];
+       auto r = str_sv0[3];
+       const char* s = r.get();//str_sv0[3];
        cmp = ::strcmp(s, str0.c_str());
        assert(cmp == 0);
        str_sv0[3] = "333";
        str_sv0.get(3, str, sizeof(str));
 
-       s = str_sv0[3];
-       cmp = ::strcmp(s, "333");
+       cmp = ::strcmp(str_sv0[3].get(), "333");
        assert(cmp == 0);
        
        {
            const str_sparse_vector<char, bvect, 32>& ssv = str_sv0;
-           str_sparse_vector<char, bvect, 32>::const_reference ref3 = ssv[3];
+           const str_sparse_vector<char, bvect, 32>::const_reference ref3 = ssv[3];
            s = ref3;
            cmp = ::strcmp(s, "333");
            assert(cmp == 0);
@@ -23367,6 +23367,102 @@ void TestStrSparseVectorSerial()
 
     }
     cout << " ok" << endl;
+
+
+
+
+    cout << "Test data-frame XOR compression" << endl;
+    {
+        typedef str_sparse_vector<char, bvect, 32> str_sv_type;
+
+        bm::sparse_vector_serializer<str_sv_type> sv_serializer;
+        bm::sparse_vector_deserializer<str_sv_type> sv_deserial;
+
+        str_sv_type sv1i, sv2i, sv3i(bm::use_null);
+        str_sv_type sv1o, sv2o, sv3o(bm::use_null);
+
+        bm::sparse_vector_serial_layout<str_sv_type> sv_lay1, sv_lay2, sv_lay3;
+
+        for (unsigned i = 0; i < 65536; i+=2)
+        {
+            sv1i[i] = "4";
+            sv2i[i] = "8";
+            sv3i[i] = "";
+        }
+
+        bm::sparse_vector_serializer<str_sv_type>::bv_ref_vector_type bv_ref;
+        // add references in reverse(!) order
+        bv_ref.add_vectors(sv3i.get_bmatrix());
+        bv_ref.add_vectors(sv2i.get_bmatrix());
+        bv_ref.add_vectors(sv1i.get_bmatrix());
+
+
+        sv_serializer.set_xor_ref(&bv_ref);
+        assert(sv_serializer.is_xor_ref());
+
+        sv_serializer.serialize(sv1i, sv_lay1);
+        {
+            const bvect::size_type* cstat = sv_serializer.get_bv_serializer().get_compression_stat();
+            assert(cstat[bm::set_block_ref_eq]==0);
+        }
+        sv_serializer.serialize(sv2i, sv_lay2);
+        {
+            const bvect::size_type* cstat = sv_serializer.get_bv_serializer().get_compression_stat();
+            assert(cstat[bm::set_block_ref_eq]==1);
+        }
+        sv_serializer.serialize(sv3i, sv_lay3);
+        {
+            const bvect::size_type* cstat = sv_serializer.get_bv_serializer().get_compression_stat();
+            assert(cstat[bm::set_block_ref_eq]==1);
+        }
+
+        // ----------
+
+
+        bm::sparse_vector_deserializer<sparse_vector_u32>::bv_ref_vector_type bv_ref_d;
+
+        const unsigned char* buf = sv_lay1.buf();
+        auto sz2 = sv_lay1.size();
+
+
+        sv_deserial.deserialize_structure(sv1o, sv_lay1.buf());
+        sv_deserial.deserialize_structure(sv2o, sv_lay2.buf());
+        sv_deserial.deserialize_structure(sv3o, sv_lay3.buf());
+
+        bv_ref_d.add_vectors(sv3o.get_bmatrix());
+        bv_ref_d.add_vectors(sv2o.get_bmatrix());
+        bv_ref_d.add_vectors(sv1o.get_bmatrix());
+
+        sv_deserial.set_xor_ref(&bv_ref_d);
+
+        sv_deserial.deserialize(sv1o, buf, false);
+        bool eq = sv1i.equal(sv1o);
+        assert(eq);
+
+        buf = sv_lay2.buf();
+        sz2 = sv_lay2.size();
+
+        sv_deserial.deserialize(sv2o, buf, false);
+        eq = sv2i.equal(sv2o);
+        assert(eq);
+
+        buf = sv_lay3.buf();
+        sz2 = sv_lay3.size();
+
+        sv_deserial.deserialize(sv3o, buf, false);
+        eq = sv3i.equal(sv3o);
+        assert(eq);
+
+
+        sv_deserial.set_xor_ref(0); // unset
+    }
+    cout << "Test data-frame XOR compression - OK" << endl;
+
+    // -------------------------------------------------
+
+
+
+
 
 
    cout << "---------------------------- TestStrSparseVectorSerial() OK" << endl;
