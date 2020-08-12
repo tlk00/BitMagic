@@ -777,9 +777,9 @@ void sparse_vector_serializer<SV>::serialize(const SV&  sv,
         {
             unsigned idx;
             if (bv_ref_ptr_) // use external reference
-                idx = (unsigned)bv_ref_ptr_->find(bv);//(i);
+                idx = (unsigned)bv_ref_ptr_->find_bv(bv);
             else
-                idx = (unsigned)bv_ref_.find(bv);//(i);
+                idx = (unsigned)bv_ref_.find_bv(bv);
             BM_ASSERT(idx != bv_ref_.not_found());
             bvs_.set_curr_ref_idx(idx);
         }

@@ -293,7 +293,7 @@ public:
 
     /// Find vector index by the pointer
     /// @return ~0 if not found
-    size_type find(const bvector_type* bv) const BMNOEXCEPT
+    size_type find_bv(const bvector_type* bv) const BMNOEXCEPT
     {
         size_type sz = size();
         for (size_type i = 0; i < sz; ++i)
