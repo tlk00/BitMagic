@@ -2212,7 +2212,6 @@ void sparse_vector<Val, BV>::back_insert_iterator::flush()
 
 } // namespace bm
 
-#include "bmundef.h"
 
 
 #endif

@@ -1959,6 +1959,5 @@ aggregator<BV>::run_step(unsigned i, unsigned j)
 
 } // bm
 
-#include "bmundef.h"
 
 #endif

@@ -2137,6 +2137,5 @@ void sparse_vector_scanner<SV>::reset_search_range()
 
 } // namespace bm
 
-#include "bmundef.h"
 
 #endif

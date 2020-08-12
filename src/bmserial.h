@@ -110,13 +110,14 @@ public:
     // --------------------------------------------------------------------
     /**
         Set compression level. Higher compression takes more time to process.
-        @param clevel - compression level (0-5)
+        @param clevel - compression level (0-6)
         0 - take as is
         1, 2 - apply light weight RLE/GAP encodings, limited depth hierarchical
                compression, intervals encoding
         3 - variant of 2 with different cut-offs
         4 - delta transforms plus Elias Gamma encoding where possible legacy)
-        5 - Binary Interpolative Coding (Moffat, et al)
+        5 - Binary Interpolative Coding (BIC) - light settings
+        6 - Binary Interpolative Coding (BIC) - harder settings
 
         @sa get_compression_level
     */
@@ -7012,10 +7013,8 @@ iterator_deserializer<BV, SerialIterator>::deserialize(
 
 
 
-
 } // namespace bm
 
-#include "bmundef.h"
 
 #ifdef _MSC_VER
 #pragma warning( pop )

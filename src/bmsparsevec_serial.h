@@ -173,6 +173,7 @@ public:
 public:
     sparse_vector_serializer();
 
+
     /**
         Add skip-markers for faster range deserialization
 
@@ -188,15 +189,17 @@ public:
     /// Turn ON and OFF XOR compression of sparse vectors
     void set_xor_ref(bool is_enabled) BMNOEXCEPT;
 
-    /// Set external XOR reference vector collecton
-    /// (data frame referenece vectors)
-    ///
-    /// @param bv_ref_ptr - external reference vector
-    ///  if NULL - resets the use of reference
-    ///
+    /** Set external XOR reference vector collecton
+       (data frame referenece vectors)
+
+       @param bv_ref_ptr - external reference vector
+       if NULL - resets the use of reference
+    */
     void set_xor_ref(const bv_ref_vector_type* bv_ref_ptr) BMNOEXCEPT;
 
-    /// Get XOR reference compression status (enabled/disabled)
+    /**
+        Get XOR reference compression status (enabled/disabled)
+    */
     bool is_xor_ref() const BMNOEXCEPT { return is_xor_ref_; }
     
     /*!
@@ -209,13 +212,21 @@ public:
     void serialize(const SV&                        sv,
                    sparse_vector_serial_layout<SV>& sv_layout);
 
+    /** Get access to the underlying bit-vector serializer
+        This access can be used to fine tune compression settings
+        @sa bm::serializer::set_compression_level
+    */
+    bm::serializer<bvector_type>& get_bv_serializer() BMNOEXCEPT
+        { return bvs_; }
 
     /**
         Return serialization counter vector
         @internal
     */
+    /*
     const size_type* get_compression_stat() const BMNOEXCEPT
                             { return bvs_.get_compression_stat(); }
+    */
 
 protected:
     void build_xor_ref_vector(const SV& sv);
@@ -1374,7 +1385,5 @@ void sparse_vector_deserializer<SV>::raise_invalid_bitdepth()
 // -------------------------------------------------------------------------
 
 } // namespace bm
-
-#include "bmundef.h"
 
 #endif

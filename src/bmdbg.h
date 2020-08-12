@@ -1000,7 +1000,6 @@ void convert_bv2sv(SV& sv, const BV& bv)
 
 } // namespace
 
-#include "bmundef.h"
 
 
 #ifdef _MSC_VER

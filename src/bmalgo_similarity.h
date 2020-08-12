@@ -221,6 +221,5 @@ void build_jaccard_similarity_batch(SIMBATCH& sbatch, const SV& sv)
 
 } // namespace bm
 
-#include "bmundef.h"
 
 #endif

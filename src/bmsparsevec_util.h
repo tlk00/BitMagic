@@ -733,7 +733,6 @@ bool compressed_collection<Value, BV>::equal(
 
 } // namespace bm
 
-#include "bmundef.h"
 
 
 #endif

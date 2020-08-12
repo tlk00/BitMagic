@@ -1700,7 +1700,6 @@ bool rsc_sparse_vector<Val, SV>::const_iterator::is_null() const BMNOEXCEPT
 
 } // namespace bm
 
-#include "bmundef.h"
 
 
 #endif

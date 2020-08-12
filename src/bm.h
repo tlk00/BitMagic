@@ -7358,7 +7358,6 @@ bool bvector<Alloc>::enumerator::search_in_blocks() BMNOEXCEPT
 
 } // namespace
 
-#include "bmundef.h"
 
 #ifdef _MSC_VER
 #pragma warning( pop )

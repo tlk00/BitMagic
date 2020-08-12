@@ -485,6 +485,5 @@ void random_subset<BV>::get_random_array(bm::word_t*       blk_out,
 
 } // namespace
 
-#include "bmundef.h"
 
 #endif

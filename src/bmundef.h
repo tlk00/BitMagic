@@ -20,6 +20,7 @@ For more information please visit:  http://bitmagic.io
     \brief pre-processor un-defines to avoid global space pollution (internal)
 */
 
+/*
 #undef BMRESTRICT
 #undef BMFORCEINLINE
 #undef BMGAP_PTR
@@ -95,5 +96,5 @@ For more information please visit:  http://bitmagic.io
 
 #undef BM_UNALIGNED_ACCESS_OK
 #undef BM_x86
-
+*/
 

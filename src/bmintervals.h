@@ -776,6 +776,5 @@ void interval_enumerator<BV>::swap(interval_enumerator<BV>& ien) BMNOEXCEPT
 
 } // namespace bm
 
-#include "bmundef.h"
 
 #endif

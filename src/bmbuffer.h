@@ -823,6 +823,5 @@ protected:
 
 } // namespace bm
 
-#include "bmundef.h"
 
 #endif

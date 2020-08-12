@@ -97,8 +97,8 @@ unsigned bit_block_xor_change(const bm::word_t* BMRESTRICT block,
 */
 struct block_waves_xor_descr
 {
-    unsigned short sb_change[bm::block_waves];
-    unsigned short sb_xor_change[bm::block_waves];
+    unsigned short sb_gc[bm::block_waves]; ///< GAP count
+    unsigned short sb_xor_gc[bm::block_waves]; ///< XOR-mask GAP count
 };
 
 /**
@@ -118,14 +118,13 @@ void compute_complexity_descr(
     {
         unsigned off = (i * bm::set_block_digest_wave_size);
         const bm::word_t* sub_block = block + off;
+        unsigned gc;
         #if defined(VECT_BLOCK_CHANGE)
-            unsigned change VECT_BLOCK_CHANGE(sub_block,
-                                              bm::set_block_digest_wave_size);
+            gc = VECT_BLOCK_CHANGE(sub_block, bm::set_block_digest_wave_size);
         #else
-            unsigned change = bm::bit_block_change32(sub_block,
-                                                bm::set_block_digest_wave_size);
+            gc = bm::bit_block_change32(sub_block, bm::set_block_digest_wave_size);
         #endif
-        x_descr.sb_change[i] = (unsigned short) change;
+        x_descr.sb_gc[i] = (unsigned short) gc;
     } // for i
 }
 
@@ -156,22 +155,22 @@ bm::id64_t compute_xor_complexity_descr(
         const bm::word_t* sub_block = block + off;
         const bm::word_t* xor_sub_block = xor_block + off;
 
-        unsigned xor_change =
+        unsigned xor_gc =
                 bm::bit_block_xor_change(sub_block, xor_sub_block,
                                          bm::set_block_digest_wave_size);
 
-        x_descr.sb_xor_change[i] = (unsigned short)xor_change;
-        if (xor_change <= 1)
+        x_descr.sb_xor_gc[i] = (unsigned short)xor_gc;
+        if (xor_gc <= 1)
         {
             digest |= (1ull << i);
-            block_gain += x_descr.sb_change[i];
+            block_gain += x_descr.sb_gc[i];
         }
         else
         {
-            if (xor_change < x_descr.sb_change[i]) // detected improvement
+            if (xor_gc < x_descr.sb_gc[i]) // detected improvement
             {
                 digest |= (1ull << i);
-                block_gain += (x_descr.sb_change[i] - xor_change);
+                block_gain += (x_descr.sb_gc[i] - xor_gc);
             }
         }
     } // for i
@@ -497,6 +496,11 @@ bool xor_scanner<BV>::search_best_xor_mask(const bm::word_t* block,
 
     if (best_ri != -1) // found some gain
     {
+        // assumed that XOR compression is used on highest level
+        const float bie_bits_per_int = 3.0f; // c_level_ < 6 ? 3.75f : 3.0f;
+        const unsigned bie_limit =
+                        unsigned(float(bm::gap_max_bits) / bie_bits_per_int);
+
         unsigned xor_bc, xor_gc;
         const bvector_type* bv = ref_vect_->get_bv(size_type(best_ri));
         const typename bvector_type::blocks_manager_type& bman = bv->get_blocks_manager();
@@ -505,14 +509,14 @@ bool xor_scanner<BV>::search_best_xor_mask(const bm::word_t* block,
         bm::bit_block_xor(tb, block, block_xor, d64);
         bm::bit_block_change_bc(tb, &xor_gc, &xor_bc);
 
-        if (xor_gc < x_best_metric_ && xor_gc < bm::bie_cut_off)
+        if (xor_gc < x_best_metric_ && xor_gc < bie_limit)
         {
             x_best_metric_ = xor_gc;
             kb_found = true;
             found_ridx_ = size_type(best_ri);
             found_block_xor_ = block_xor;
         }
-        if (xor_bc < x_best_metric_ && xor_bc < bm::bie_cut_off)
+        if (xor_bc < x_best_metric_ && xor_bc < bie_limit)
         {
             x_best_metric_ = xor_bc;
             kb_found = true;
@@ -609,7 +613,6 @@ bool xor_scanner<BV>::validate_found(bm::word_t* xor_block,
         gain_min *= 8; // in bits
         if (gain > gain_min)
         {
-            BM_ASSERT(xor_best_metric < bm::bie_cut_off);
             return true;
         }
     }

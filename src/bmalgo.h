@@ -724,6 +724,5 @@ void rank_compressor<BV>::compress_by_source(BV& bv_target,
 
 } // bm
 
-#include "bmundef.h"
 
 #endif
