@@ -252,7 +252,11 @@ unsigned word_bitcount64(bm::id64_t x) BMNOEXCEPT
 #endif
 }
 
-inline 
+/*!
+    Parallel popcount on 4 64-bit words
+    @ingroup bitfunc
+*/
+inline
 unsigned bitcount64_4way(bm::id64_t x, bm::id64_t y, 
                          bm::id64_t u, bm::id64_t v) BMNOEXCEPT
 {
@@ -4386,6 +4390,62 @@ D gap_convert_to_arr(D* BMRESTRICT       dest,
 }
 
 
+/*!
+    @brief Bitcount for bit block without agressive unrolling
+    @ingroup bitfunc
+*/
+BMFORCEINLINE
+unsigned bit_count_min_unroll(const bm::word_t* BMRESTRICT block,
+                              const bm::word_t* BMRESTRICT block_end) BMNOEXCEPT
+{
+    unsigned count = 0;
+#ifdef BM64OPT
+    do
+    {
+        const bm::bit_block_t::bunion_t* BMRESTRICT src_u =
+                        (const bm::bit_block_t::bunion_t*)(block);
+
+        bm::id64_t x = src_u->w64[0]; bm::id64_t y = src_u->w64[1];
+        bm::id64_t u = src_u->w64[2]; bm::id64_t v = src_u->w64[3];
+
+        #if defined(BM_USE_GCC_BUILD)
+           count += unsigned(__builtin_popcountll(x) + __builtin_popcountll(y)
+                           + __builtin_popcountll(u) + __builtin_popcountll(v));
+        #else
+            // 64-bit optimized algorithm. No sparse vect opt
+            // instead it uses 4-way parallel pipelined version
+            if (x | y | u | v)
+            {
+                unsigned c = bitcount64_4way(x, y, u, v);
+                BM_ASSERT(c);
+                count += c;
+            }
+        #endif
+        block += 8;
+    } while (block < block_end);
+#else
+    // For 32 bit code the fastest method is
+    // to use bitcount table for each byte in the block.
+    // As optimization for sparse bitsets used bits accumulator
+    // to collect ON bits using bitwise OR.
+    bm::word_t  acc = *block++;
+    do
+    {
+        bm::word_t in = *block++;
+        bm::word_t acc_prev = acc;
+        acc |= in;
+        if (acc_prev &= in)  // accumulator miss: counting bits
+        {
+            BM_INCWORD_BITCOUNT(count, acc);
+            acc = acc_prev;
+        }
+    } while (block < block_end);
+    BM_INCWORD_BITCOUNT(count, acc); // count-in remaining accumulator
+#endif
+    return count;
+}
+
+
 
 /*! 
     @brief Bitcount for bit block
@@ -4399,55 +4459,11 @@ inline
 bm::id_t bit_block_count(const bm::word_t* block) BMNOEXCEPT
 {
     const bm::word_t* block_end = block + bm::set_block_size;
-    bm::id_t count = 0;
-
-#ifdef BMVECTOPT 
-    count = VECT_BITCOUNT(block, block_end);
-#else  
-#ifdef BM64OPT
-    // 64-bit optimized algorithm. No sparse vect opt.
-    // instead it uses 4-way parallel pipelined version
-
-    const bm::id64_t* b1 = (bm::id64_t*) block;
-    const bm::id64_t* b2 = (bm::id64_t*) block_end;
-    do 
-    {
-        bm::id64_t x = b1[0];
-        bm::id64_t y = b1[1];
-        bm::id64_t u = b1[2];
-        bm::id64_t v = b1[3];
-
-        if (x | y | u | v)
-        {
-            unsigned c = bitcount64_4way(x, y, u, v);
-            BM_ASSERT(c);
-            count += c;
-        }
-        b1 += 4;
-    } while (b1 < b2);
+#ifdef BMVECTOPT
+    return VECT_BITCOUNT(block, block_end);
 #else
-    // For 32 bit code the fastest method is
-    // to use bitcount table for each byte in the block.
-    // As optimization for sparse bitsets used bits accumulator
-    // to collect ON bits using bitwise OR. 
-    bm::word_t  acc = *block++;
-    do
-    {
-        bm::word_t in = *block++;
-        bm::word_t acc_prev = acc;
-        acc |= in;
-        if (acc_prev &= in)  // accumulator miss: counting bits
-        {
-            BM_INCWORD_BITCOUNT(count, acc);
-            acc = acc_prev;
-        }
-    } while (block < block_end);
-
-    BM_INCWORD_BITCOUNT(count, acc); // count-in remaining accumulator 
-
+    return bm::bit_count_min_unroll(block, block_end);
 #endif
-#endif	
-    return count;
 }
 
 /*!
@@ -4491,39 +4507,6 @@ bm::id_t bit_block_count(const bm::word_t* const block,
     return count;
 #endif
 }
-
-
-
-/*!
-    @brief Bitcount for bit string
-
-    Added for back-compatibility purposes, not block aligned,
-    not SIMD accelerated
-
-    @ingroup bitfunc
-*/
-inline
-bm::id_t bit_block_calc_count(const bm::word_t* block,
-                              const bm::word_t* block_end) BMNOEXCEPT
-{
-    bm::id_t count = 0;
-    bm::word_t  acc = *block++;
-    do
-    {
-        bm::word_t in = *block++;
-        bm::word_t acc_prev = acc;
-        acc |= in;
-        if (acc_prev &= in)  // accumulator miss: counting bits
-        {
-            BM_INCWORD_BITCOUNT(count, acc);
-            acc = acc_prev;
-        }
-    } while (block < block_end);
-
-    BM_INCWORD_BITCOUNT(count, acc); // count-in remaining accumulator
-    return count;
-}
-
 
 
 /*!
