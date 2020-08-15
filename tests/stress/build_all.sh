@@ -15,6 +15,9 @@ mv ./test ./stress_debug
 make rebuild
 mv ./test ./stress_release
 
+make BMOPTFLAGS=-DBM_USE_GCC_BUILD rebuild
+mv ./test ./stress_release_gcc
+
 make BMOPTFLAGS=-DBMSSE2OPT DEBUG=YES rebuild
 mv ./test ./stress_debug_sse2
 
