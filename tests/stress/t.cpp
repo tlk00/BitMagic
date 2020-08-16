@@ -2977,11 +2977,14 @@ inline
 bm::id64_t bit_block_calc_xor_change_digest(
                         const bm::word_t*  block,
                         const bm::word_t*  xor_block,
-                        block_waves_xor_descr&  x_descr)
+                        block_waves_xor_descr&  x_descr,
+                        bm::xor_complement_match& match_type)
 {
     unsigned bgain;
+    bm::id64_t digest;
     bm::compute_complexity_descr(block, x_descr);
-    return bm::compute_xor_complexity_descr(block, xor_block, x_descr, bgain);
+    bm::compute_xor_complexity_descr(block, xor_block, x_descr, match_type, digest, bgain);
+    return digest;
 }
 
 static
@@ -3010,15 +3013,70 @@ void TestBlockCountXORChange()
     bm::id64_t d64;
     bm::block_waves_xor_descr x_descr;
 
+
     {
+        bm::word_t BM_VECT_ALIGN blk[bm::set_block_size] BM_VECT_ALIGN_ATTR = { 0 };
+        bm::compute_complexity_descr(blk, x_descr);
+        for (unsigned k = 0; k < bm::block_waves; ++k)
+        {
+            assert(x_descr.sb_bc[k] == 0);
+        } // for
+
+
+        blk[0] = 1;
+        bm::compute_complexity_descr(blk, x_descr);
+        assert(x_descr.sb_bc[0] == 1);
+        assert(x_descr.sb_gc[0] == 2);
+        for (unsigned k = 1; k < bm::block_waves; ++k)
+        {
+            assert(x_descr.sb_bc[k] == 0);
+        } // for
+
+
+        blk[0] = 1 | (1 << 1);
+        bm::compute_complexity_descr(blk, x_descr);
+        assert(x_descr.sb_bc[0] == 2);
+        assert(x_descr.sb_gc[0] == 2);
+        for (unsigned k = 1; k < bm::block_waves; ++k)
+        {
+            assert(x_descr.sb_bc[k] == 0);
+        } // for
+
+        blk[bm::set_block_size-1] = 1 | (1 << 1);
+        bm::compute_complexity_descr(blk, x_descr);
+        assert(x_descr.sb_bc[0] == 2);
+        assert(x_descr.sb_gc[0] == 2);
+        assert(x_descr.sb_bc[bm::block_waves-1] == 2);
+        assert(x_descr.sb_gc[bm::block_waves-1] == 3);
+        for (unsigned k = 1; k < bm::block_waves-1; ++k)
+        {
+            assert(x_descr.sb_bc[k] == 0);
+            assert(x_descr.sb_gc[k] == 1);
+        } // for
+
+        blk[0] = 0;
+        bm::compute_complexity_descr(blk, x_descr);
+        assert(x_descr.sb_bc[bm::block_waves-1] == 2);
+        assert(x_descr.sb_gc[bm::block_waves-1] == 3);
+        for (unsigned k = 0; k < bm::block_waves-1; ++k)
+        {
+            assert(x_descr.sb_bc[k] == 0);
+            assert(x_descr.sb_gc[k] == 1);
+        } // for
+
+    }
+
+    {
+        bm::xor_complement_match match_type;
         bm::word_t BM_VECT_ALIGN blk[bm::set_block_size] BM_VECT_ALIGN_ATTR = { 0 };
         bm::word_t BM_VECT_ALIGN blk_xor[bm::set_block_size] BM_VECT_ALIGN_ATTR = { 0 };
 
         for (i = 0; i < bm::set_block_size; ++i)
             blk[i] = blk_xor[i] = 0;
 
-        d64 = bit_block_calc_xor_change_digest(blk, blk_xor, x_descr);
+        d64 = bit_block_calc_xor_change_digest(blk, blk_xor, x_descr, match_type);
         assert(d64 == ~0ull);
+        assert(match_type == bm::e_xor_match_GC);
         for (unsigned k = 0; k < bm::block_waves; ++k)
         {
             assert(x_descr.sb_gc[k] == 1);
@@ -3026,8 +3084,10 @@ void TestBlockCountXORChange()
         } // for k
 
         blk[0] = 1;
-        d64 = bit_block_calc_xor_change_digest(blk, blk_xor, x_descr);
-        assert(d64);
+        d64 = bit_block_calc_xor_change_digest(blk, blk_xor, x_descr, match_type);
+        assert(!d64);
+        assert(match_type == bm::e_no_xor_match);
+
         assert(x_descr.sb_gc[0] == 2);
         assert(x_descr.sb_xor_gc[0] == 2);
         for (unsigned k = 1; k < bm::block_waves; ++k)
@@ -3036,14 +3096,24 @@ void TestBlockCountXORChange()
             assert(x_descr.sb_xor_gc[k] == 1);
         } // for k
 
+        // ----------------------------
+        blk[0] = 1 | (1<<1) | (1<<2); blk_xor[0] = (1 << 1);
+        d64 = bit_block_calc_xor_change_digest(blk, blk_xor, x_descr, match_type);
+        assert(d64);
+        assert(x_descr.sb_bc[0] == 3);
+        assert(x_descr.sb_xor_bc[0] == 2);
+        assert(match_type == bm::e_xor_match_BC);
 
+
+        // ----------------------------
         blk[0] = 1; blk_xor[0] = 1;
-        d64 = bit_block_calc_xor_change_digest(blk, blk_xor, x_descr);
+        d64 = bit_block_calc_xor_change_digest(blk, blk_xor, x_descr, match_type);
         cout << x_descr.sb_xor_gc[0] << endl;
         assert(x_descr.sb_gc[0] == 2);
+        assert(match_type == bm::e_xor_match_GC);
         // next assert hides non-critical discrepancy between SIMD versions
         assert(x_descr.sb_xor_gc[0] == 1 || x_descr.sb_xor_gc[0] == 0);
-        assert(d64 == ~0ull);
+        assert(d64 == 1ull);
         for (unsigned k = 1; k < bm::block_waves; ++k)
         {
             assert(x_descr.sb_gc[k] == 1);
@@ -3056,10 +3126,11 @@ void TestBlockCountXORChange()
         unsigned off = (60 * bm::set_block_digest_wave_size);
         blk[off] = (1 << 10) | (1 << 12);
 
-        d64 = bit_block_calc_xor_change_digest(blk, blk_xor, x_descr);
+        d64 = bit_block_calc_xor_change_digest(blk, blk_xor, x_descr, match_type);
         assert(x_descr.sb_gc[0] == 5);
         assert(x_descr.sb_xor_gc[0] == 3);
         assert((d64 & 1));
+        assert(match_type == bm::e_xor_match_GC);
 
         Check_XOR_Product(blk, blk_xor, d64);
 
@@ -3078,10 +3149,11 @@ void TestBlockCountXORChange()
         } // for k
 
         blk_xor[off] = (1 << 10) | (1 << 11) | (1 << 12);
-        d64 = bit_block_calc_xor_change_digest(blk, blk_xor, x_descr);
+        d64 = bit_block_calc_xor_change_digest(blk, blk_xor, x_descr, match_type);
         assert(x_descr.sb_gc[0] == 5);
         assert(x_descr.sb_xor_gc[0] == 3);
         assert((d64 & 1) && (d64 & (1ull << 60)));
+        assert(match_type == bm::e_xor_match_GC);
 
         for (unsigned k = 1; k < bm::block_waves; ++k)
         {
@@ -28437,7 +28509,6 @@ int main(int argc, char *argv[])
 
     if (is_all || is_low_level)
     {
-
         TestRecomb();
 
         OptimGAPTest();
@@ -28625,7 +28696,6 @@ int main(int argc, char *argv[])
 
     if (is_all || is_sv)
     {
-
         TestSparseVector();
 
         TestSparseVectorAlgo();
