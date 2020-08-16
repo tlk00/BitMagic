@@ -12,6 +12,9 @@
 ./stress_release 2>&1 > release.log &
 PID_release=$!
 
+./stress_release_gcc 2>&1 > release_gcc.log &
+PID_release_gcc=$!
+
 ./stress_release_sse2 2>&1 > release_sse2.log &
 PID_release_sse2=$!
 
@@ -50,6 +53,17 @@ if test "$RET_release_sse2" != "0"; then
     echo "Error: Release SSE2 failed! " $RET_release_sse2
 else
     echo "Release SSE2 finished OK!"
+fi
+
+# ---------------------------------------------------------
+
+wait $PID_release_gcc
+RET_release_gcc=$?
+
+if test "$RET_release_gcc" != "0"; then
+    echo "Error: Release GCC failed! " $RET_release
+else
+    echo "Release GCC finished OK!"
 fi
 
 # ---------------------------------------------------------
