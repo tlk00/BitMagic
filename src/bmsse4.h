@@ -708,16 +708,25 @@ unsigned sse42_bit_block_calc_change(const __m128i* BMRESTRICT block,
     @ingroup SSE4
 */
 inline
-unsigned sse42_bit_block_calc_xor_change(const __m128i* BMRESTRICT block,
+void sse42_bit_block_calc_xor_change(const __m128i* BMRESTRICT block,
                                      const __m128i* BMRESTRICT xor_block,
-                                     unsigned size)
+                                     unsigned size,
+                                     unsigned* BMRESTRICT gc,
+                                     unsigned* BMRESTRICT bc)
 {
+#ifdef BM64_SSE4
+    bm::id64_t BM_ALIGN32 simd_buf[2] BM_ALIGN32ATTR;
+#else
+    ///bm::id64_t BM_ALIGN32 simd_buf[4] BM_ALIGN32ATTR;
+#endif
+
     const __m128i* block_end =
         ( __m128i*)((bm::word_t*)(block) + size);
     __m128i m1COshft, m2COshft;
 
     unsigned w0 = *((bm::word_t*)(block));
-    unsigned count = 1;
+    unsigned gap_count = 1;
+    unsigned bit_count = 0;
 
     unsigned co2, co1 = 0;
     for (;block < block_end; block += 2, xor_block += 2)
@@ -729,6 +738,30 @@ unsigned sse42_bit_block_calc_xor_change(const __m128i* BMRESTRICT block,
 
         m1A = _mm_xor_si128(m1A, m1B);
         m2A = _mm_xor_si128(m2A, m2B);
+
+        {
+#ifdef BM64_SSE4
+        _mm_store_si128 ((__m128i*)simd_buf, m1A);
+        bit_count += unsigned(_mm_popcnt_u64(simd_buf[0]) + _mm_popcnt_u64(simd_buf[1]));
+
+        _mm_store_si128 ((__m128i*)simd_buf, m2A);
+        bit_count += unsigned(_mm_popcnt_u64(simd_buf[0]) + _mm_popcnt_u64(simd_buf[1]));
+#else
+        bm::id_t m0 = _mm_extract_epi32(m1A, 0);
+        bm::id_t m1 = _mm_extract_epi32(m1A, 1);
+        bm::id_t m2 = _mm_extract_epi32(m1A, 2);
+        bm::id_t m3 = _mm_extract_epi32(m1A, 3);
+        bit_count += unsigned(_mm_popcnt_u32(m0) + _mm_popcnt_u32(m1) +
+                          _mm_popcnt_u32(m2) + _mm_popcnt_u32(m3));
+
+        m0 = _mm_extract_epi32(m2A, 0);
+        m1 = _mm_extract_epi32(m2A, 1);
+        m2 = _mm_extract_epi32(m2A, 2);
+        m3 = _mm_extract_epi32(m2A, 3);
+        bit_count += unsigned(_mm_popcnt_u32(m0) + _mm_popcnt_u32(m1) +
+                             _mm_popcnt_u32(m2) + _mm_popcnt_u32(m3));
+#endif
+        }
 
         __m128i m1CO = _mm_srli_epi32(m1A, 31);
         __m128i m2CO = _mm_srli_epi32(m2A, 31);
@@ -758,32 +791,31 @@ unsigned sse42_bit_block_calc_xor_change(const __m128i* BMRESTRICT block,
         m2A = _mm_xor_si128(m2A, m2As);
 
 #ifdef BM64_SSE4
-        bm::id64_t m0 = _mm_extract_epi64(m1A, 0);
-        bm::id64_t m1 = _mm_extract_epi64(m1A, 1);
-        count += unsigned(_mm_popcnt_u64(m0) + _mm_popcnt_u64(m1));
+        _mm_store_si128 ((__m128i*)simd_buf, m1A);
+        gap_count += unsigned(_mm_popcnt_u64(simd_buf[0]) + _mm_popcnt_u64(simd_buf[1]));
 
-        m0 = _mm_extract_epi64(m2A, 0);
-        m1 = _mm_extract_epi64(m2A, 1);
-        count += unsigned(_mm_popcnt_u64(m0) + _mm_popcnt_u64(m1));
+        _mm_store_si128 ((__m128i*)simd_buf, m2A);
+        gap_count += unsigned(_mm_popcnt_u64(simd_buf[0]) + _mm_popcnt_u64(simd_buf[1]));
 #else
         bm::id_t m0 = _mm_extract_epi32(m1A, 0);
         bm::id_t m1 = _mm_extract_epi32(m1A, 1);
         bm::id_t m2 = _mm_extract_epi32(m1A, 2);
         bm::id_t m3 = _mm_extract_epi32(m1A, 3);
-        count += unsigned(_mm_popcnt_u32(m0) + _mm_popcnt_u32(m1) +
+        gap_count += unsigned(_mm_popcnt_u32(m0) + _mm_popcnt_u32(m1) +
                           _mm_popcnt_u32(m2) + _mm_popcnt_u32(m3));
 
         m0 = _mm_extract_epi32(m2A, 0);
         m1 = _mm_extract_epi32(m2A, 1);
         m2 = _mm_extract_epi32(m2A, 2);
         m3 = _mm_extract_epi32(m2A, 3);
-        count += unsigned(_mm_popcnt_u32(m0) + _mm_popcnt_u32(m1) +
+        gap_count += unsigned(_mm_popcnt_u32(m0) + _mm_popcnt_u32(m1) +
                           _mm_popcnt_u32(m2) + _mm_popcnt_u32(m3));
 #endif
 
     }
-    count -= (w0 & 1u); // correct initial carry-in error
-    return count;
+    gap_count -= (w0 & 1u); // correct initial carry-in error
+    *gc = gap_count;
+    *bc = bit_count;
 }
 
 
@@ -1815,8 +1847,8 @@ void sse42_bit_block_xor(bm::word_t*  target_block,
 #define VECT_BLOCK_CHANGE(block, size) \
     sse42_bit_block_calc_change((__m128i*)block, size)
 
-#define VECT_BLOCK_XOR_CHANGE(block, xor_block, size) \
-    sse42_bit_block_calc_xor_change((__m128i*)block, (__m128i*)xor_block, size)
+#define VECT_BLOCK_XOR_CHANGE(block, xor_block, size, gc, bc) \
+    sse42_bit_block_calc_xor_change((__m128i*)block, (__m128i*)xor_block, size, gc, bc)
 
 #ifdef BM64_SSE4
 #define VECT_BLOCK_CHANGE_BC(block, gc, bc) \
