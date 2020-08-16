@@ -406,7 +406,7 @@ public:
             if (bv)
                 add(bv, rows_acc_ + r);
         } // for r
-        rows_acc_ += rows;
+        rows_acc_ += unsigned(rows);
     }
 
 
