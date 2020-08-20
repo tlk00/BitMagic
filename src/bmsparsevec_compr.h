@@ -372,6 +372,12 @@ public:
         \return true if empty
     */
     bool empty() const { return sv_.empty(); }
+
+    /**
+        \brief recalculate size to exclude tail NULL elements
+        After this call size() will return the true size of the vector
+     */
+    void sync_size() BMNOEXCEPT;
     
     ///@}
 
@@ -621,6 +627,7 @@ public:
     void calc_stat(
            struct rsc_sparse_vector<Val, SV>::statistics* st) const BMNOEXCEPT;
 
+
     ///@}
 
     // ------------------------------------------------------------
@@ -654,7 +661,7 @@ public:
     /*! @name Fast access structues sync                         */
     //@{
     /*!
-        \brief Re-calculate prefix sum table used for rank search
+        \brief Re-calculate rank-select index for faster access to vector
         \param force - force recalculation even if it is already recalculated
     */
     void sync(bool force);
@@ -1132,18 +1139,22 @@ void rsc_sparse_vector<Val, SV>::sync(bool force)
     BM_ASSERT(bv_null);
     bv_null->build_rs_index(bv_blocks_ptr_); // compute popcount prefix list
     
+    in_sync_ = true;
+}
+
+//---------------------------------------------------------------------
+
+template<class Val, class SV>
+void rsc_sparse_vector<Val, SV>::sync_size() BMNOEXCEPT
+{
+    const bvector_type* bv_null = sv_.get_null_bvector();
+    BM_ASSERT(bv_null);
     // sync the max-id
     bool found = bv_null->find_reverse(max_id_);
     if (!found)
-    {
-        BM_ASSERT(!bv_null->any());
         max_id_ = size_ = 0;
-    }
     else
-    {
         size_ = max_id_ + 1;
-    }
-    in_sync_ = true;
 }
 
 //---------------------------------------------------------------------

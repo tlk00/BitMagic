@@ -676,6 +676,13 @@ public:
         \return current string length maximum
     */
     size_type effective_vector_max() const { return effective_max_str(); }
+
+    /**
+        \brief recalculate size to exclude tail NULL elements
+        After this call size() will return the true size of the vector
+     */
+    void sync_size() BMNOEXCEPT;
+
     ///@}
 
 
@@ -2007,6 +2014,17 @@ const str_sparse_vector<CharType, BV, MAX_STR_SIZE>::back_insert_iterator::value
 
 //---------------------------------------------------------------------
 
+template<class CharType, class BV, unsigned MAX_STR_SIZE>
+void str_sparse_vector<CharType, BV, MAX_STR_SIZE>::sync_size() BMNOEXCEPT
+{
+    const bvector_type* bv_null = this->get_null_bvector();
+    if (!bv_null)
+        return;
+    bool found = bv_null->find_reverse(this->size_);
+    this->size_ += found;
+}
+
+//---------------------------------------------------------------------
 
 } // namespace
 
