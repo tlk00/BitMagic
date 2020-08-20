@@ -655,6 +655,13 @@ public:
         \param sz - new size
     */
     void resize(size_type sz) { parent_type::resize(sz); }
+
+    /**
+        \brief recalculate size to exclude tail NULL elements
+        After this call size() will return the true size of the vector
+     */
+    void sync_size() BMNOEXCEPT;
+
     ///@}
         
     // ------------------------------------------------------------
@@ -1073,6 +1080,18 @@ void sparse_vector<Val, BV>::import(const value_type* arr,
         if (bv_null) // configured to support NULL assignments
             bv_null->set_range(offset, offset + arr_size - 1);
     }
+}
+
+//---------------------------------------------------------------------
+
+template<class Val, class BV>
+void sparse_vector<Val, BV>::sync_size() BMNOEXCEPT
+{
+    const bvector_type* bv_null = this->get_null_bvector();
+    if (!bv_null)
+        return;
+    bool found = bv_null->find_reverse(this->size_);
+    this->size_ += found;
 }
 
 //---------------------------------------------------------------------
