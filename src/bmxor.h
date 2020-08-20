@@ -365,7 +365,7 @@ public:
     size_type find(std::size_t ref_idx) const BMNOEXCEPT
     {
         size_type sz = size();
-        for (size_type i = 0; i < sz; ++i)
+        for (size_type i = 0; i < sz; ++i) // TODO: optimization
             if (ref_idx == ref_bvects_rows_[i])
                 return i;
         return not_found();
@@ -461,7 +461,8 @@ public:
 
     /** Scan all candidate gap-blocks to find best XOR match
     */
-    bool search_best_xor_gap(const bm::word_t* block,
+    bool search_best_xor_gap(bm::gap_word_t*   tmp_buf,
+                             const bm::word_t* block,
                              size_type         ridx_from,
                              size_type         ridx_to,
                              unsigned i, unsigned j);
@@ -623,7 +624,8 @@ bool xor_scanner<BV>::search_best_xor_mask(const bm::word_t* block,
 // --------------------------------------------------------------------------
 
 template<typename BV>
-bool xor_scanner<BV>::search_best_xor_gap(const bm::word_t* block,
+bool xor_scanner<BV>::search_best_xor_gap(bm::gap_word_t*   tmp_buf,
+                                          const bm::word_t* block,
                                           size_type ridx_from,
                                           size_type ridx_to,
                                           unsigned i, unsigned j)
@@ -638,8 +640,12 @@ bool xor_scanner<BV>::search_best_xor_gap(const bm::word_t* block,
     unsigned gap_len = bm::gap_length(gap_block);
     if (gap_len <= 3)
         return false;
-    unsigned best_gap_len = gap_len;
+    unsigned bc = bm::gap_bit_count_unr(gap_block);
+
     bool kb_found = false;
+    unsigned best_gap_metric = gap_len;
+    if (bc < best_gap_metric)
+        best_gap_metric = bc;
 
     for (size_type ri = ridx_from; ri < ridx_to; ++ri)
     {
@@ -647,9 +653,7 @@ bool xor_scanner<BV>::search_best_xor_gap(const bm::word_t* block,
         BM_ASSERT(bv);
         const typename bvector_type::blocks_manager_type& bman = bv->get_blocks_manager();
         const bm::word_t* block_xor = bman.get_block_ptr(i, j);
-        if (!IS_VALID_ADDR(block_xor))
-            continue;
-        if (!BM_IS_GAP(block_xor))
+        if (!IS_VALID_ADDR(block_xor) || !BM_IS_GAP(block_xor))
             continue;
 
         const bm::gap_word_t* gap_xor_block = BMGAP_PTR(block_xor);
@@ -660,14 +664,31 @@ bool xor_scanner<BV>::search_best_xor_gap(const bm::word_t* block,
         BM_ASSERT(block != block_xor);
 
         unsigned res_len;
-        bool f = bm::gap_operation_dry_xor(gap_block, gap_xor_block, res_len, best_gap_len);
-        if (f && (res_len < best_gap_len))
+        bm::gap_operation_xor(gap_block, gap_xor_block, tmp_buf, res_len);
+        unsigned glen = bm::gap_length(tmp_buf);
+        if (res_len > glen) // size overflow
+            continue;
+        unsigned res_bc = bm::gap_bit_count_unr(tmp_buf);
+
+/*
+        unsigned res_len;
+        bool f = bm::gap_operation_dry_xor(gap_block, gap_xor_block, res_len, best_gap_len); */
+//        if (f && (res_len < best_gap_len))
+        if ((res_len < best_gap_metric))
         {
-            best_gap_len = res_len;
+            best_gap_metric = res_len;
             kb_found = true;
             found_ridx_ = ri;
             found_block_xor_ = (const bm::word_t*)gap_xor_block;
         }
+        if (res_bc < best_gap_metric)
+        {
+            best_gap_metric = res_bc;
+            kb_found = true;
+            found_ridx_ = ri;
+            found_block_xor_ = (const bm::word_t*)gap_xor_block;
+        }
+
 
     } // for ri
 
