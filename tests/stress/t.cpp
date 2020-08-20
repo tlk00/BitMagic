@@ -11841,6 +11841,61 @@ void SerializationCompressionLevelsTest()
 
     {{
         bvect bv1, bv2;
+        bv1.set_range(1, 2);
+        bv1.set_range(5, 7);
+        bv1.set_range(9, 9);
+
+        bv2.set(2);
+        bv2.set(7);
+
+        bv1.optimize();
+        bv2.optimize();
+        {
+            struct bvect::statistics st1;
+            bv1.calc_stat(&st1);
+            assert(!st1.bit_blocks);
+            assert(st1.gap_blocks);
+            struct bvect::statistics st2;
+            bv2.calc_stat(&st2);
+            assert(!st2.bit_blocks);
+            assert(st2.gap_blocks);
+        }
+
+        bm::serializer<bvect>::bv_ref_vector_type bv_ref;
+        bv_ref.add(&bv1, 1000000000); // idx = 0
+        bv_ref.add(&bv2, 65500); // idx = 1
+
+        bm::serializer<bvect> bms;
+        bms.set_ref_vectors(&bv_ref);
+        bms.set_curr_ref_idx(0);
+
+        bm::serializer<bvect>::buffer buf;
+        bms.serialize(bv1, buf);
+
+        const bvect::size_type* cstat = bms.get_compression_stat();
+        assert(cstat[bm::set_block_xor_gap_ref32] == 1);
+
+        bvect bv3;
+        bm::deserialize(bv3, buf.buf(), 0, &bv_ref);
+        auto eq = bv3.equal(bv1);
+        assert(eq);
+
+        bvect bv4;
+        od.set_ref_vectors(&bv_ref);
+        od.deserialize(bv4,
+                       buf.buf(),
+                       set_OR);
+        eq = bv4.equal(bv1);
+        assert(eq);
+
+        bvect bv5;
+        od.deserialize_range(bv5, buf.buf(), 0, 100);
+        eq = bv5.equal(bv1);
+        assert(eq);
+    }}
+
+    {{
+        bvect bv1, bv2;
         for (unsigned i = 0; i < 100; i+=2)
         {
             bv1[i] = true;
@@ -20673,7 +20728,7 @@ void TestSparseVectorSerial()
                 bv_mask.set(1024); // out of range mask
                 sv_deserial.deserialize(sv2, buf, bv_mask);
 
-                assert(sv2.size() == sv1.size());
+
                 assert(sv2.get(0) == 1);
                 assert(sv2.get(1) == 0);
                 assert(sv2.get(2) == 3);
@@ -20721,6 +20776,8 @@ void TestSparseVectorSerial()
                 else
                     sv1.set(i, cnt);
             } // for i
+            sv1.sync_size();
+
             sparse_vector_serial_layout<sparse_vector_u32> sv_lay;
             sv_ser.serialize(sv1, sv_lay);
             const unsigned char* buf = sv_lay.buf();
@@ -20754,8 +20811,8 @@ void TestSparseVectorSerial()
                     is_eq = sv_filt.equal(sv_range);
                     assert(is_eq);
 
-
                     sv_deserial.deserialize(sv2, buf, bv_mask);
+
                     assert(sv2.size() == sv1.size());
                     is_eq = sv2.equal(sv_range);
                     if (!is_eq)
@@ -21737,7 +21794,7 @@ void TestSparseVectorTransform()
 static
 void TestSparseVectorScan()
 {
-    cout << " --------------- Test sparse_vector<> scan algo" << endl;
+    cout << " --------------- Test sparse_vector<> scan algo TestSparseVectorScan()" << endl;
     
     bm::sparse_vector_scanner<sparse_vector_u32> scanner;
     bm::sparse_vector_scanner<sparse_vector_u64> scanner_64;
@@ -26397,6 +26454,61 @@ void TestBlockDigest()
         ++start; --end;
     } // while
 
+    cout << "Digest masks tests..." << endl;
+    {
+        bm::id64_t d0;
+        d0 = bm::digest_mask(0, 65535);
+        assert(d0 == ~0ull);
+        d0 = bm::digest_mask(1, 65535);
+        assert(d0 == ~0ull);
+        d0 = bm::digest_mask(0, 0);
+        assert(d0 == 1ull);
+        d0 = bm::digest_mask(1, 1);
+        assert(d0 == 1ull);
+        d0 = bm::digest_mask(1023, 1023);
+        assert(d0 == 1ull);
+
+        d0 = bm::digest_mask(1024, 1024+1024-1);
+        assert(d0 == (1ull << 1));
+        d0 = bm::digest_mask(0, 1024+1024-1);
+        assert(d0 == ((1ull << 1)|1ull));
+        d0 = bm::digest_mask(100, 1024+1024-1);
+        assert(d0 == ((1ull << 1)|1ull));
+
+        for (unsigned i = 0; i < 64; ++i)
+        {
+            bm::id64_t d0_c;
+            d0 = bm::digest_mask(0, i*1024-(i>0));
+            d0_c = bm::dm_control(0, i*1024-(i>0));
+            assert(d0 == d0_c);
+            for (unsigned j = 1; j <= i; ++j)
+            {
+                d0 = bm::digest_mask(j*1024-(j>0), i*1024-(i>0));
+                d0_c = bm::dm_control(j*1024-(j>0), i*1024-(i>0));
+                assert(d0_c == d0);
+            } // for j
+        } // for i
+
+        cout << "Digest mask Stress..." << endl;
+        for (unsigned i = 0; i < 65536; ++i)
+        {
+            bm::id64_t d0_c;
+            d0 = bm::digest_mask(0, i);
+            d0_c = bm::dm_control(0, i);
+            assert(d0 == d0_c);
+            for (unsigned j = 65535; j > i; --j)
+            {
+                d0 = bm::digest_mask(i, j);
+                d0_c = bm::dm_control(i, j);
+                assert(d0 == d0_c);
+            } // for j
+            cout << "\r" << i << "          " << flush;
+        } // for i
+
+
+}
+
+
     cout << " ------------------------------ Test bit-block DIGEST OK" << endl;
 }
 
@@ -28089,8 +28201,18 @@ void TestCompressSparseVectorSerial()
             rs_bi.add(2);
             rs_bi.add_null();
             rs_bi.add(4);
+            rs_bi.add_null(2);
 
             rs_bi.flush();
+        }
+        {
+            auto sz = csv1.size();
+            csv1.sync();
+            auto sz2 = csv1.size();
+            assert(sz == sz2);
+            csv1.sync_size();
+            auto sz3 = csv1.size();
+            assert(sz3 < sz);
         }
 
         BM_DECLARE_TEMP_BLOCK(tb)
@@ -28142,6 +28264,16 @@ void TestCompressSparseVectorSerial()
             }
             rs_bi.flush();
         }
+        csv1.sync_size();
+        /*
+        {
+            auto sz = csv1.size();
+            csv1.sync();
+            auto sz2 = csv1.size();
+            assert(sz == sz2);
+            csv1.sync_size();
+        }
+        */
         cout << "   generation OK" << endl;
         {
             rsc_sparse_vector_u32 csv_range;
@@ -28154,27 +28286,36 @@ void TestCompressSparseVectorSerial()
 
         bm::sparse_vector_serializer<rsc_sparse_vector_u32> sv_serializer;
         sv_serializer.set_bookmarks(false);
+        bm::sparse_vector_deserializer<rsc_sparse_vector_u32> sv_deserial;
 
         for (unsigned pass = 0; pass < 2; ++pass)
         {
             cout << "\nPASS=" << pass << endl;
             sv_serializer.serialize(csv1, sv_lay);
-
             const unsigned char* buf = sv_lay.buf();
+
+            {
+                rsc_sparse_vector_u32 csv_c;
+                sv_deserial.deserialize(csv_c, buf);
+                bool eq = csv1.equal(csv_c);
+                assert(eq);
+            }
 
             size_t cnt = 0;
             auto j = to;
             for (auto i = from; i < j; ++cnt, ++i, --j)
             {
+                bool eq;
+
                 rsc_sparse_vector_u32::bvector_type bv_mask;
                 bv_mask.set_range(i, j);
-                bm::sparse_vector_deserializer<rsc_sparse_vector_u32> sv_deserial;
+
                 sv_deserial.deserialize(csv2, buf, bv_mask);
                 assert(csv2.get(j + 1) == 0);
                 csv2.sync();
 
                 sv_deserial.deserialize_range(csv3, buf, i, j);
-                bool eq = csv2.equal(csv3);
+                eq = csv2.equal(csv3);
                 assert(eq);
 
                 {
@@ -28186,11 +28327,19 @@ void TestCompressSparseVectorSerial()
                                         csv_range, csv2, pos, bm::no_null);
                     if (f)
                     {
+                        cout << "Range = [" << i << ".." << j << "]" << endl;
                         auto v2 = csv2.get(pos);
                         auto rv1 = csv_range.get(pos);
+                        auto v = csv1.get(pos);
+                        auto v3 = csv3.get(pos);
+
                         std::cerr << "Discrepancy at idx=" << pos << endl;
                         std::cerr << v2 << "!=" << rv1 << endl;
-                        csv_range.copy_range(csv1, i, j);
+                        cerr << "v=" << v << endl;
+                        cerr << "v3=" << v3 << endl;
+                        //csv_range.copy_range(csv1, i, j);
+                        //sv_deserial.deserialize(csv2, buf, bv_mask);
+
                         assert(0);
                     }
 
@@ -28207,7 +28356,11 @@ void TestCompressSparseVectorSerial()
                             assert(csv_range.is_null(i0) == csv2.is_null(i0));
                         } // for i0
                     }
+
                 }
+                eq = csv2.equal(csv3);
+                assert(eq);
+
 
                 cout << "\r  " << (j-i) << "           " << std::flush;
 
@@ -28647,6 +28800,7 @@ int main(int argc, char *argv[])
     if (is_all || is_bvser || is_bvbasic)
     {
         SerializationCompressionLevelsTest();
+
         SparseSerializationTest();
         SerializationTest();
         DesrializationTest2();
@@ -28723,6 +28877,7 @@ int main(int argc, char *argv[])
 
     if (is_all || is_csv)
     {
+    
         TestCompressSparseVector();
 
         TestCompressedSparseVectorAlgo();
