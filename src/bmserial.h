@@ -2609,7 +2609,7 @@ serializer<BV>::serialize(const BV& bv,
                     bm::gap_operation_xor(gap_block, gap_xor_block,
                                           tmp_buf, res_len);
 
-                    BM_ASSERT(res_len <= bm::gap_length(gap_block)-1);
+                    BM_ASSERT(res_len <= (unsigned)bm::gap_length(gap_block)-1);
                     BM_ASSERT(1+res_len == bm::gap_length(tmp_buf));
                     //unsigned delta = glen - res_len;
                     //if (delta > 2)
