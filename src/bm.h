@@ -6320,14 +6320,14 @@ void bvector<Alloc>::combine_operation_block_and(
         // GAP & BIT
         //
         bm::word_t* new_blk = blockman_.get_allocator().alloc_bit_block();
-        bm::bit_block_copy(new_blk, arg_blk);
-        bm::id64_t digest = bm::calc_block_digest0(new_blk);
-        
-        bm::gap_and_to_bitset(new_blk, gap_blk, digest);
-        
-        digest = bm::update_block_digest0(new_blk, digest);
+        bm::bit_block_copy(new_blk, arg_blk); // TODO: copy+digest in one pass
+        bm::id64_t d0 = bm::calc_block_digest0(new_blk);
 
-        if (!digest)
+        bm::gap_and_to_bitset(new_blk, gap_blk, d0);
+        
+        bm::id64_t d0_1 = bm::update_block_digest0(new_blk, d0);
+        BM_ASSERT(bm::word_bitcount64(d0_1) <= bm::word_bitcount64(d0));
+        if (!d0_1)
         {
             BM_ASSERT(bm::bit_is_all_zero(new_blk));
             blockman_.get_allocator().free_bit_block(new_blk);
