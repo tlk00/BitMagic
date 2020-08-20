@@ -676,20 +676,26 @@ bool xor_scanner<BV>::search_best_xor_gap(bm::gap_word_t*   tmp_buf,
 //        if (f && (res_len < best_gap_len))
         if ((res_len < best_gap_metric))
         {
-            best_gap_metric = res_len;
-            kb_found = true;
-            found_ridx_ = ri;
-            found_block_xor_ = (const bm::word_t*)gap_xor_block;
+            unsigned gain = best_gap_metric - res_len;
+            if (gain > 2)
+            {
+                best_gap_metric = res_len;
+                kb_found = true;
+                found_ridx_ = ri;
+                found_block_xor_ = (const bm::word_t*)gap_xor_block;
+            }
         }
         if (res_bc < best_gap_metric)
         {
-            best_gap_metric = res_bc;
-            kb_found = true;
-            found_ridx_ = ri;
-            found_block_xor_ = (const bm::word_t*)gap_xor_block;
+            unsigned gain = best_gap_metric - res_bc;
+            if (gain > 2)
+            {
+                best_gap_metric = res_bc;
+                kb_found = true;
+                found_ridx_ = ri;
+                found_block_xor_ = (const bm::word_t*)gap_xor_block;
+            }
         }
-
-
     } // for ri
 
     return kb_found;
