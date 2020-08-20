@@ -1027,6 +1027,8 @@ void sparse_vector_deserializer<SV>::deserialize_range(SV& sv,
     } // if remap traits
 
     sv.sync(true); // force sync, recalculate RS index, remap tables, etc
+//    sv.sync_size();
+
     remap_buf_ptr_ = 0;
 
     idx_range_set_ = false;
@@ -1097,6 +1099,8 @@ void sparse_vector_deserializer<SV>::deserialize_sv(SV& sv,
     } // if remap traits
     
     sv.sync(true); // force sync, recalculate RS index, remap tables, etc
+//    sv.sync_size();
+
     remap_buf_ptr_ = 0;
 }
 
@@ -1148,10 +1152,6 @@ void sparse_vector_deserializer<SV>::deserialize_plains(
     if (mask_bv && !idx_range_set_)
         idx_range_set_ = mask_bv->find_range(idx_range_from_, idx_range_to_);
 
-    //bv_ref_vector_type* bv_ref_curr = bv_ref_ptr_ ? bv_ref_ptr_ : &bv_ref_;
-    //unsigned base_ref_idx = bv_ref_curr->size();
-
-
     // read-deserialize the plains based on offsets
     //       backward order to bring the NULL vector first
     //
@@ -1166,10 +1166,7 @@ void sparse_vector_deserializer<SV>::deserialize_plains(
 
         // add the vector into the XOR reference list
         if (!bv_ref_ptr_)
-        {
-            //bv_ref_.add(bv, base_ref_idx + unsigned(i));
             bv_ref_.add(bv, unsigned(i));
-        }
 
         if (mask_bv) // gather mask set, use AND operation deserializer
         {
@@ -1187,6 +1184,7 @@ void sparse_vector_deserializer<SV>::deserialize_plains(
             if (idx_range_set_)
                 deserial_.set_range(idx_range_from_, idx_range_to_);
             deserial_.deserialize(*bv, bv_buf_ptr);
+
             bv->bit_and(*mask_bv, bvector_type::opt_compress);
         }
         else
@@ -1215,6 +1213,7 @@ void sparse_vector_deserializer<SV>::deserialize_plains(
         }
 
     } // for i
+
     deserial_.unset_range();
 
 }
