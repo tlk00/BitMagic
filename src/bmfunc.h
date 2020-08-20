@@ -659,6 +659,19 @@ bm::id64_t widx_to_digest_mask(unsigned w_idx) BMNOEXCEPT
     return mask << (w_idx / bm::set_block_digest_wave_size);
 }
 
+/** digest mask control generation (for debug and test only)
+    @internal
+ */
+inline
+bm::id64_t dm_control(unsigned from, unsigned to) BMNOEXCEPT
+{
+    bm::id64_t m = 0;
+    for (unsigned i = from; i <= to; ++i)
+        m |= (1ull << (i / 1024));
+    return m;
+}
+
+
 /**
    \brief Compute digest mask for [from..to] positions
     \param from - range from (in bit-block coordinates)
@@ -671,12 +684,18 @@ BMFORCEINLINE
 bm::id64_t digest_mask(unsigned from, unsigned to) BMNOEXCEPT
 {
     BM_ASSERT(from <= to);
+    BM_ASSERT(to < bm::gap_max_bits);
     
     bm::id64_t digest_from = from >> bm::set_block_digest_pos_shift;
     bm::id64_t digest_to = to >> bm::set_block_digest_pos_shift;;
-    const bm::id64_t maskFF(~0ull);
-    return ((maskFF) >> (63 - (digest_to - digest_from))) << digest_from;
+    bm::id64_t mask(~0ull);
+    mask = (mask >> (63 - (digest_to - digest_from))) << digest_from;
+
+    BM_ASSERT(mask == bm::dm_control(from, to));
+
+    return mask;
 }
+
 
 /*!
     \brief check if all digest bits for the range [from..to] are 0
@@ -2463,6 +2482,7 @@ void gap_buff_op(T*         BMRESTRICT dest,
 
    @ingroup gapfunc
 */
+/*
 template<typename T, class F>
 bool gap_buff_dry_op(const T*   BMRESTRICT vect1,
                      const T*   BMRESTRICT vect2,
@@ -2475,7 +2495,7 @@ bool gap_buff_dry_op(const T*   BMRESTRICT vect1,
     T bitval1 = (T)((*cur1++ & 1));
     T bitval2 = (T)((*cur2++ & 1));
 
-    T bitval = (T) F::op(bitval1, bitval2);
+    T bitval = (T)F::op(bitval1, bitval2);
     T bitval_prev = bitval;
 
     unsigned len = 1;
@@ -2519,7 +2539,7 @@ bool gap_buff_dry_op(const T*   BMRESTRICT vect1,
     dlen = len;
     return true;
 }
-
+*/
 
 /*!
    \brief Abstract distance test operation for GAP buffers. 
@@ -3378,7 +3398,7 @@ void gap_sub_to_bitset(unsigned* BMRESTRICT dest,
     const T* pend = pcurr + (*pcurr >> 3);
     if (*pcurr & 1)  // Starts with 1
     {
-        bool all_zero = bm::check_zero_digest(digest0, 0, pcurr[1]+1);
+        bool all_zero = bm::check_zero_digest(digest0, 0, pcurr[1]);
         if (!all_zero)
             bm::sub_bit_block(dest, 0, pcurr[1] + 1); // (not AND) - SUB [0] gaps
         pcurr += 3;
@@ -3552,7 +3572,7 @@ void gap_and_to_bitset(unsigned* BMRESTRICT dest,
     const T* pend = pcurr + (*pcurr >> 3);
     if (!(*pcurr & 1) )  // Starts with 0
     {
-        bool all_zero = bm::check_zero_digest(digest0, 0, pcurr[1]+1);
+        bool all_zero = bm::check_zero_digest(digest0, 0, pcurr[1]);
         if (!all_zero)
             bm::sub_bit_block(dest, 0, pcurr[1] + 1); // (not AND) - SUB [0] gaps
         pcurr += 3;
@@ -5795,6 +5815,7 @@ gap_word_t* gap_operation_xor(const gap_word_t*  BMRESTRICT vect1,
 /*! Light weight gap_operation_xor for len prediction
    @ingroup gapfunc
 */
+/*
 inline
 bool gap_operation_dry_xor(const gap_word_t*  BMRESTRICT vect1,
                            const gap_word_t*  BMRESTRICT vect2,
@@ -5804,7 +5825,7 @@ bool gap_operation_dry_xor(const gap_word_t*  BMRESTRICT vect1,
     return
     bm::gap_buff_dry_op<bm::gap_word_t, bm::xor_func>(vect1, vect2, dsize, limit);
 }
-
+*/
 
 /*!
    \brief GAP XOR operation test.
