@@ -2748,6 +2748,7 @@ bvector<Alloc>::count_range(size_type left, size_type right) const BMNOEXCEPT
         if ((nbit_left == 0) && (r == (bm::bits_in_block-1))) // whole block
         {
             func(block);
+            cnt += func.count();
         }
         else
         {
@@ -2764,11 +2765,8 @@ bvector<Alloc>::count_range(size_type left, size_type right) const BMNOEXCEPT
         }
     }
 
-    cnt += func.count();
     if (nblock_left == nblock_right)  // in one block
-    {
         return cnt;
-    }
 
     // process all full mid-blocks
     {
@@ -6328,6 +6326,7 @@ void bvector<Alloc>::combine_operation_block_and(
         bm::gap_and_to_bitset(new_blk, gap_blk, digest);
         
         digest = bm::update_block_digest0(new_blk, digest);
+
         if (!digest)
         {
             BM_ASSERT(bm::bit_is_all_zero(new_blk));
