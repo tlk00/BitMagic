@@ -754,7 +754,10 @@ protected:
     bool resolve_range(size_type from, size_type to, 
                        size_type* idx_from, size_type* idx_to) const BMNOEXCEPT;
     
-    void resize_internal(size_type sz) { sv_.resize_internal(sz); }
+    void resize_internal(size_type sz) 
+    { 
+        sv_.resize_internal(sz); 
+    }
     size_type size_internal() const BMNOEXCEPT { return sv_.size(); }
 
     bool is_remap() const BMNOEXCEPT { return false; }
@@ -1138,7 +1141,21 @@ void rsc_sparse_vector<Val, SV>::sync(bool force)
     const bvector_type* bv_null = sv_.get_null_bvector();
     BM_ASSERT(bv_null);
     bv_null->build_rs_index(bv_blocks_ptr_); // compute popcount prefix list
-    
+ 
+    if (force)
+    {
+        sync_size();
+        /*
+        size_type sz = sv_.size();
+        if (sz)
+        {
+            size_ = sz;
+            max_id_ = (sz - 1);
+        }
+        else
+            max_id_ = size_ = 0;
+        */
+    }
     in_sync_ = true;
 }
 
