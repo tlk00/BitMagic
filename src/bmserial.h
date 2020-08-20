@@ -3513,7 +3513,7 @@ deserializer<BV, DEC>::~deserializer()
 {
      alloc_.free_bit_block(temp_block_);
      if (xor_block_)
-        alloc_.free_bit_block(xor_block_);
+        alloc_.free_bit_block(xor_block_, 2);
     BM_ASSERT(!or_block_);
 }
 
@@ -3522,7 +3522,7 @@ void deserializer<BV, DEC>::set_ref_vectors(const bv_ref_vector_type* ref_vect)
 {
     ref_vect_ = ref_vect;
     if (ref_vect_ && !xor_block_)
-        xor_block_ = alloc_.alloc_bit_block();
+        xor_block_ = alloc_.alloc_bit_block(2);
 }
 
 template<class BV, class DEC>
@@ -4315,10 +4315,25 @@ void deserializer<BV, DEC>::xor_decode(size_type x_ref_idx, bm::id64_t x_ref_d64
         BM_ASSERT(!or_block_);
         return;
     }
+    bm::word_t* blk = bman.get_block_ptr(i0, j0);
 
     if (BM_IS_GAP(ref_blk))
     {
         bm::gap_word_t* gap_block = BMGAP_PTR(ref_blk);
+        if (BM_IS_GAP(blk) && (!x_ref_d64)) // two GAPs no digest
+        {
+            bm::gap_word_t* tmp_buf = (bm::gap_word_t*)xor_block_;
+            const bm::gap_word_t* res;
+            unsigned res_len;
+            res = bm::gap_operation_xor(BMGAP_PTR(blk),
+                                        gap_block,
+                                        tmp_buf,
+                                        res_len);
+            BM_ASSERT(res == tmp_buf);
+            bman.assign_gap_check(i0, j0, res, ++res_len, blk, tmp_buf);
+            return;
+        }
+
         bm::gap_convert_to_bitset(xor_block_, gap_block);
         ref_blk = xor_block_;
     }
@@ -4328,7 +4343,7 @@ void deserializer<BV, DEC>::xor_decode(size_type x_ref_idx, bm::id64_t x_ref_d64
             ref_blk = FULL_BLOCK_REAL_ADDR;
     }
 
-    bm::word_t* blk = bman.deoptimize_block(nb);
+    blk = bman.deoptimize_block(nb);
     if (!blk)
     {
         blk = bman.check_allocate_block(nb, 0);
