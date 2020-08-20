@@ -691,7 +691,7 @@ bm::id64_t digest_mask(unsigned from, unsigned to) BMNOEXCEPT
     bm::id64_t mask(~0ull);
     mask = (mask >> (63 - (digest_to - digest_from))) << digest_from;
 
-    BM_ASSERT(mask == bm::dm_control(from, to));
+    //BM_ASSERT(mask == bm::dm_control(from, to));
 
     return mask;
 }
