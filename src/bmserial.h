@@ -1170,7 +1170,7 @@ serializer<BV>::~serializer()
     if (compression_stat_)
         alloc_.free_bit_block((bm::word_t*)compression_stat_);
     if (xor_block_)
-        alloc_.free_bit_block(xor_block_);
+        alloc_.free_bit_block(xor_block_, 2);
 }
 
 
@@ -1235,7 +1235,7 @@ void serializer<BV>::set_ref_vectors(const bv_ref_vector_type* ref_vect)
     ref_vect_ = ref_vect;
     xor_scan_.set_ref_vector(ref_vect);
     if (!xor_block_)
-        xor_block_ = alloc_.alloc_bit_block();
+        xor_block_ = alloc_.alloc_bit_block(2);
 }
 
 template<class BV>
@@ -2588,49 +2588,37 @@ serializer<BV>::serialize(const BV& bv,
         {
             if (ref_vect_) // XOR filter
             {
-                bool found = xor_scan_.search_best_xor_gap(blk,
-                                                           ref_idx_+1, ref_vect_->size(),
+                bm::gap_word_t* tmp_buf = (bm::gap_word_t*)xor_block_;
+                bool found = xor_scan_.search_best_xor_gap(tmp_buf, blk,
+                                                           ref_idx_+1,
+                                                           ref_vect_->size(),
                                                            i0, j0);
                 if (found)
                 {
                     const bm::gap_word_t* gap_block = BMGAP_PTR(blk);
-                    unsigned glen = bm::gap_length(gap_block)-1;
+                    //unsigned glen = bm::gap_length(gap_block)-1;
 
                     const bm::gap_word_t* gap_xor_block =
                         (const bm::gap_word_t*) xor_scan_.get_found_block();
                     size_type ridx = xor_scan_.found_ridx();
-                    size_type plain_idx = xor_scan_.get_ref_vector().get_row_idx(ridx);
+                    size_type plain_idx =
+                        xor_scan_.get_ref_vector().get_row_idx(ridx);
 
-                    bm::gap_word_t* tmp_buf = (bm::gap_word_t*)xor_block_;
 
                     unsigned res_len;
-                    bm::gap_operation_xor(gap_block, gap_xor_block, tmp_buf, res_len);
+                    bm::gap_operation_xor(gap_block, gap_xor_block,
+                                          tmp_buf, res_len);
 
-                    BM_ASSERT(res_len <= glen);
+                    BM_ASSERT(res_len <= bm::gap_length(gap_block)-1);
                     BM_ASSERT(1+res_len == bm::gap_length(tmp_buf));
-                    unsigned delta = glen - res_len;
-                    if (delta > 2)
+                    //unsigned delta = glen - res_len;
+                    //if (delta > 2)
                     {
-                        if (plain_idx < 256)
-                        {
-                            enc.put_8(bm::set_block_xor_gap_ref8);
-                            enc.put_8((unsigned char) plain_idx);
-                        }
-                        else
-                        {
-                            if (plain_idx < 65536)
-                            {
-                                enc.put_8(bm::set_block_xor_gap_ref16);
-                                enc.put_16((unsigned short) plain_idx);
-                            }
-                            else
-                            {
-                                enc.put_8(bm::set_block_xor_gap_ref32);
-                                enc.put_32(unsigned(plain_idx));
-                            }
-                        }
+                        enc.put_8_16_32(unsigned(plain_idx),
+                                        bm::set_block_xor_gap_ref8,
+                                        bm::set_block_xor_gap_ref16,
+                                        bm::set_block_xor_gap_ref32);
                         encode_gap_block(tmp_buf, enc);
-
                         compression_stat_[bm::set_block_xor_gap_ref32]++;
                         continue;
                     }
@@ -2667,24 +2655,10 @@ serializer<BV>::serialize(const BV& bv,
                         BM_ASSERT(d64);
                         size_type plain_idx = xor_scan_.get_ref_vector().get_row_idx(ridx);
 
-                        if (plain_idx < 256)
-                        {
-                            enc.put_8(bm::set_block_xor_ref8);
-                            enc.put_8((unsigned char) plain_idx);
-                        }
-                        else
-                        {
-                            if (plain_idx < 65536)
-                            {
-                                enc.put_8(bm::set_block_xor_ref16);
-                                enc.put_16((unsigned short) plain_idx);
-                            }
-                            else
-                            {
-                                enc.put_8(bm::set_block_xor_ref32);
-                                enc.put_32(unsigned(plain_idx));
-                            }
-                        }
+                        enc.put_8_16_32(unsigned(plain_idx),
+                                        bm::set_block_xor_ref8,
+                                        bm::set_block_xor_ref16,
+                                        bm::set_block_xor_ref32);
                         enc.put_64(d64); // xor digest
                         compression_stat_[bm::set_block_xor_ref32]++;
                         blk = xor_block_; // substitute block with XOR product
@@ -4369,8 +4343,8 @@ void deserializer<BV, DEC>::xor_decode(size_type x_ref_idx, bm::id64_t x_ref_d64
         bm::bit_block_or(blk, or_block_);
         alloc_.free_bit_block(or_block_);
         or_block_ = 0;
-        bman.optimize_bit_block(i0, j0);
     }
+    bman.optimize_bit_block(i0, j0);
 }
 
 
