@@ -37,6 +37,7 @@ For more information please visit:  http://bitmagic.io
 
 #include <iostream>
 #include <vector>
+#include <assert.h>
 
 #include "bm.h"
 #include "bmsparsevec.h"
