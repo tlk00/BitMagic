@@ -515,7 +515,7 @@ public:
 
         const auto k_size = m_k_size;
 
-        bm::id64_t k_mer_code;
+        bm::id64_t k_mer_code(0);
         vector_char_type::size_type dna_sz = m_seq_vect.size()-(m_k_size-1);
         vector_char_type::size_type pos = 0;
         bool valid = false;
