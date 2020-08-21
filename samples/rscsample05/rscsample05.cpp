@@ -18,15 +18,19 @@ For more information please visit:  http://bitmagic.io
 
 /** \example rscsample05.cpp
   Example of how to use collaborative compression (XOR compression)
-  for a group of vectors (data-frame)
+  for a group of bit-transposed sparse vectors in a data-frame
 
+  \sa bm::sparse_vector
   \sa bm::rsc_sparse_vector
+  \sa bm::sparse_vector_serializer
+  \sa bm::sparse_vector_deserializer
+
+  \sa rscsample02.cpp
+  \sa svsample02.cpp
 */
 
 /*! \file rscsample05.cpp
     \brief Example: collaborative compression (XOR compression)
-
-    @sa rscsample02.cpp
 */
 
 #include <iostream>

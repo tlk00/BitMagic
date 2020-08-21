@@ -54,7 +54,7 @@ WARN_LOGFILE           = warn.log
 #---------------------------------------------------------------------------
 INPUT                  = ./src/bm.h ./src/bmfunc.h  ./src/bmsimd.h ./src/bmxor.h \
                          ./src/bmvmin.h ./src/encoding.h ./src/bmbmatrix.h \
-                         ./src/bmconst.h ./src/bmsse_util.h ./src/bmsse4.h ./src/bmsse2.h \
+                         ./src/bmconst.h ./src/bmsse_util.h ./src/bmavx2.h ./src/bmsse4.h ./src/bmsse2.h \
                          ./src/bmalgo.h ./src/bmalgo_impl.h ./src/bmalgo_similarity.h ./src/bmgamma.h \
                          ./src/bmintervals.h \
                          ./src/bmdef.h ./src/bmtrans.h ./src/bmutil.h ./src/bmaggregator.h \
@@ -114,6 +114,7 @@ INPUT                  = ./src/bm.h ./src/bmfunc.h  ./src/bmsimd.h ./src/bmxor.h
 ./samples/rscsample02/rscsample02.cpp \
 ./samples/rscsample03/rscsample03.cpp \
 ./samples/rscsample04/rscsample04.cpp \
+./samples/rscsample05/rscsample05.cpp \
 ./utils/inv_list/inv_list.cpp
 
 FILE_PATTERNS          = *.cpp \
@@ -206,7 +207,7 @@ EXPAND_ONLY_PREDEF     = YES
 SEARCH_INCLUDES        = YES
 INCLUDE_PATH           = 
 INCLUDE_FILE_PATTERNS  = *.h
-PREDEFINED             = BMSSE2OPT BM64OPT BMSSE42OPT
+PREDEFINED             = BMSSE2OPT BM64OPT BMSSE42OPT BMAVX2OPT
 EXPAND_AS_DEFINED      = 
 SKIP_FUNCTION_MACROS   = YES
 #---------------------------------------------------------------------------

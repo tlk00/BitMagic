@@ -42,7 +42,8 @@ Sparse vector (bit-transposed sparse vector) for scalar integer types
 
 
 ./svsample01 - basic example of sparse_vector<> container
-./svsample02 - sparse_vector<> serialization example
+./svsample02 - sparse_vector<> serialization example, also shows how to turn on 
+               XOR compression
 ./svsample03 - sparse_vector<> import, join, extract methods
 ./svsample04 - sparse_vector<> operations with NULL-able vectors and values
 ./svsample05 - set transformation algorithm (image) to translate one set to another
@@ -64,8 +65,9 @@ RSC sparse vector (Succinct vector based on Rank-Select methods) for scalar inte
 ./rscsample02 - back insert iterator for rsc_sparse_vector<> container. 
                 Gather and range deserialization of a rank-select compressed container.
 ./rscsample03 - how to use rsc_sparse_vector<>::const_iterator 
-./rscsample04 - hot to construct rsc_sparse_vector<> with a list of known NOT NULL elements and
+./rscsample04 - how to construct rsc_sparse_vector<> with a list of known NOT NULL elements and
                 randomly set() and inc() them in fast rank-select index mode
+./rscsample05 - How to serialize a group of sparse vectors (data frame) using XOR compression
                 
 
 String sparse vector (bit-transposed sparse vector) for ASCII(z) strings
