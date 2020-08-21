@@ -1366,14 +1366,16 @@ rsc_sparse_vector<Val, SV>::decode(value_type* arr,
 
     BM_ASSERT(rank == bv_null->count_range(0, idx_from) - bv_null->test(idx_from));
 
+    size_type i = 0;
+
     bvector_enumerator_type en_i = bv_null->get_enumerator(idx_from);
-    BM_ASSERT(en_i.valid());
+    if (!en_i.valid())
+        return i;
 
     if (zero_mem)
         ::memset(arr, 0, sizeof(value_type)*size);
 
     sparse_vector_const_iterator it = sv_.get_const_iterator(rank);
-    size_type i = 0;
     if (it.valid())
     {
         do
