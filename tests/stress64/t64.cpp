@@ -14079,7 +14079,7 @@ void TestCompressSparseVector()
             csv1.push_back(8, 2);
             csv1.push_back(255, 4);
 
-            csv1.sync();
+            csv1.sync(true);
 
             for (unsigned k = 0; k < 2; ++k)
             {
