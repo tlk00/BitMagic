@@ -36,11 +36,11 @@ mv ./test ./stress_release_avx2
 make BMOPTFLAGS=-DBMAVX2OPT DEBUG=YES rebuild
 mv ./test ./stress_debug_avx2
 
-make BMOPTFLAGS=-DBMAVX512OPT rebuild
-mv ./test ./stress_release_avx512
+#make BMOPTFLAGS=-DBMAVX512OPT rebuild
+#mv ./test ./stress_release_avx512
 
-make BMOPTFLAGS=-DBMAVX512OPT DEBUG=YES rebuild
-mv ./test ./stress_debug_avx512
+#make BMOPTFLAGS=-DBMAVX512OPT DEBUG=YES rebuild
+#mv ./test ./stress_debug_avx512
 
 
 make BMOPTFLAGS=-DBM64OPT rebuild
