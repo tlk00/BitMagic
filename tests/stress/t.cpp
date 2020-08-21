@@ -27925,7 +27925,7 @@ void TestCompressSparseVector()
 
 
             csv1.set_null(100);
-            csv1.sync();
+            csv1.sync(true);
 
             sz = csv1.decode(&arr[0], 100, 1);
             assert(sz == 0);
@@ -28342,7 +28342,7 @@ void TestCompressSparseVectorSerial()
 
                         assert(0);
                     }
-
+/*
                     if (!cnt || (j - i) < 65536)
                     {
                         for (auto i0 = i; i0 < j; ++i0)
@@ -28356,6 +28356,7 @@ void TestCompressSparseVectorSerial()
                             assert(csv_range.is_null(i0) == csv2.is_null(i0));
                         } // for i0
                     }
+*/
 
                 }
                 eq = csv2.equal(csv3);
@@ -28877,7 +28878,7 @@ int main(int argc, char *argv[])
 
     if (is_all || is_csv)
     {
-    
+
         TestCompressSparseVector();
 
         TestCompressedSparseVectorAlgo();
@@ -28887,6 +28888,7 @@ int main(int argc, char *argv[])
         TestCompressedSparseVectorScan();
 
         TestSparseVector_Stress(3);
+
     }
 
     if (is_all || is_c_coll)
