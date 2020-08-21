@@ -11844,9 +11844,11 @@ void SerializationCompressionLevelsTest()
         bv1.set_range(1, 2);
         bv1.set_range(5, 7);
         bv1.set_range(9, 9);
+        bv1.set_range(19, 20);
 
         bv2.set(2);
         bv2.set(7);
+        bv2.set(20);
 
         bv1.optimize();
         bv2.optimize();
