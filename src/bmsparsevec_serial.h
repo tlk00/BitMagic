@@ -174,6 +174,9 @@ public:
     sparse_vector_serializer();
 
 
+    /*! @name Compression settings                               */
+    //@{
+
     /**
         Add skip-markers for faster range deserialization
 
@@ -186,22 +189,32 @@ public:
     void set_bookmarks(bool enable, unsigned bm_interval = 256)
         { bvs_.set_bookmarks(enable, bm_interval); }
 
-    /// Turn ON and OFF XOR compression of sparse vectors
+
+    /** Turn ON and OFF XOR compression of sparse vectors
+        Enables XOR reference compression for the sparse vector.
+        Default: disabled
+        Reference bit-vectors from the sparse vector itself
+    */
     void set_xor_ref(bool is_enabled) BMNOEXCEPT;
 
     /** Set external XOR reference vector collecton
-       (data frame referenece vectors)
+       (data frame ref. vectors).
+       This method is useful when we serialize a group of related
+       sparse vectors which benefits from the XOR referencial compression
 
        @param bv_ref_ptr - external reference vector
-       if NULL - resets the use of reference
+       if NULL - resets the use of reference vector
     */
     void set_xor_ref(const bv_ref_vector_type* bv_ref_ptr) BMNOEXCEPT;
 
     /**
-        Get XOR reference compression status (enabled/disabled)
+        Returns the XOR reference compression status (enabled/disabled)
     */
     bool is_xor_ref() const BMNOEXCEPT { return is_xor_ref_; }
-    
+
+    //@}
+
+
     /*!
         \brief Serialize sparse vector into a memory buffer(s) structure
      
