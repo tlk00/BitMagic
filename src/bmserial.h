@@ -4323,7 +4323,7 @@ void deserializer<BV, DEC>::xor_decode(size_type x_ref_idx, bm::id64_t x_ref_d64
     if (BM_IS_GAP(ref_blk))
     {
         bm::gap_word_t* gap_block = BMGAP_PTR(ref_blk);
-        if (BM_IS_GAP(blk) && (!x_ref_d64)) // two GAPs no digest
+        if (BM_IS_GAP(blk) && (!x_ref_d64) && !or_block_) // two GAPs no digest
         {
             bm::gap_word_t* tmp_buf = (bm::gap_word_t*)xor_block_;
             const bm::gap_word_t* res;
