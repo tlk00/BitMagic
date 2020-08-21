@@ -190,6 +190,20 @@ public:
         { bvs_.set_bookmarks(enable, bm_interval); }
 
 
+    /**
+        Enable XOR compression on vector serialization
+        @sa set_xor_ref
+        @sa disable_xor_compression
+     */
+    void enable_xor_compression() BMNOEXCEPT
+        { set_xor_ref(true); }
+
+    /**
+        Disable XOR compression on serialization
+     */
+    void disable_xor_compression() BMNOEXCEPT
+        { set_xor_ref((const bv_ref_vector_type*)0); }
+
     /** Turn ON and OFF XOR compression of sparse vectors
         Enables XOR reference compression for the sparse vector.
         Default: disabled
@@ -197,8 +211,8 @@ public:
     */
     void set_xor_ref(bool is_enabled) BMNOEXCEPT;
 
-    /** Set external XOR reference vector collecton
-       (data frame ref. vectors).
+    /** Enable external XOR serialization via external reference vectors
+       (data frame ref. vector).
        This method is useful when we serialize a group of related
        sparse vectors which benefits from the XOR referencial compression
 
