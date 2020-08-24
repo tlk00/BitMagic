@@ -3846,6 +3846,7 @@ void TestRandomSubset(const bvect& bv, bm::random_subset<bvect>& rsub, bvect::si
         cout << "\r" << i << " / " << samples_size << " take = " << sample_count << flush;
         
         rsub.sample(bv_subset, bv, sample_count);
+        bv_subset.optimize();
         if (sample_count > bcnt)
             sample_count = bcnt;
 
@@ -3860,14 +3861,16 @@ void TestRandomSubset(const bvect& bv, bm::random_subset<bvect>& rsub, bvect::si
         }
         {
             bvect bv_subset_copy(bv_subset);
-            bvect bv_set_copy(bv);
-            bv_set_copy.invert();
-            bv_subset_copy -= bv_set_copy;
+            {
+                bvect bv_set_copy(bv);
+                bv_set_copy.invert();
+                bv_subset_copy -= bv_set_copy;
+            }
             int res = bv_subset_copy.compare(bv_subset);
             if (res != 0)
             {
                 printf("\nRandom subset failed! inverted set MINUS error! \n");
-                exit(1);
+                assert(0); exit(1);
             }
         }
 
@@ -3875,7 +3878,7 @@ void TestRandomSubset(const bvect& bv, bm::random_subset<bvect>& rsub, bvect::si
         if (bv_subset.count() != 0)
         {
             printf("\nRandom subset failed! Extra bits set! \n");
-            exit(1);
+            assert(0); exit(1);
         }
         
     } // for
@@ -9397,7 +9400,7 @@ void SubOperationsTest()
 static
 void StressTest(unsigned repetitions, int set_operation = -1)
 {
-    const bvect::size_type BITVECT_SIZE = bm::id_max32 * 2;
+    const bvect::size_type BITVECT_SIZE = bm::id_max32 + (bm::id_max32 / 2);
 
    bvect::size_type RatioSum = 0;
    bvect::size_type SRatioSum = 0;
@@ -9467,24 +9470,15 @@ void StressTest(unsigned repetitions, int set_operation = -1)
         int opt = rand() % 2;
 
         bvect::size_type start1 = 0;
-        switch (rand() % 3)
-        {
-        case 1:
+        if (rand()%3)
+            start1 += size / 3;
+        else
             start1 += size / 5;
-            break;
-        default:
-            break;
-        }
-
         bvect::size_type start2 = 0;
-        switch (rand() % 3)
-        {
-        case 1:
+        if (rand()%3)
+            start2 += size / 3;
+        else
             start2 += size / 5;
-            break;
-        default:
-            break;
-        }
 
         FillSetsRandomMethod(bvect_min1, bvect_full1, start1, size, opt);
         FillSetsRandomMethod(bvect_min2, bvect_full2, start2, size, opt);
@@ -9908,7 +9902,6 @@ void StressTest(unsigned repetitions, int set_operation = -1)
         struct bvect::statistics st1;
         bvect_full1->calc_stat(&st1);
         bvect_full1->optimize();
-        bvect_full1->optimize_gap_size();
         struct bvect::statistics st2;
         bvect_full1->calc_stat(&st2);
 

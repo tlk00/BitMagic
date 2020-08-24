@@ -351,7 +351,7 @@ void FillSets(BVMINI* bvect_min,
     //Random filling
     if (fill_factor == 0)
     {
-        SZT n_id = (max - min) / 100;
+        SZT n_id = (max - min) / 1000;
         cout << "random filling : " << n_id << endl;
         for (i = 0; i < n_id; i++)
         {
@@ -560,7 +560,7 @@ int FillSetsRandomMethod(BVMINI* bvect_min,
         method = rand() % 7;
     }
     SZT factor;
-///method = 3;
+//method = 0;
     switch (method)
     {
 
