@@ -673,7 +673,6 @@ bool xor_scanner<BV>::search_best_xor_gap(bm::gap_word_t*   tmp_buf,
 /*
         unsigned res_len;
         bool f = bm::gap_operation_dry_xor(gap_block, gap_xor_block, res_len, best_gap_len); */
-//        if (f && (res_len < best_gap_len))
         if ((res_len < best_gap_metric))
         {
             unsigned gain = best_gap_metric - res_len;

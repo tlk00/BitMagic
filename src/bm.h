@@ -1285,7 +1285,7 @@ public:
     //@{
 
     /*!
-       \brief population cout (count of ON bits)
+       \brief population count (count of ON bits)
        \sa count_range
        \return Total number of bits ON
     */

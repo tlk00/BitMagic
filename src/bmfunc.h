@@ -4569,7 +4569,7 @@ unsigned bit_block_change32(const bm::word_t* block, unsigned size) BMNOEXCEPT
     BM_INCWORD_BITCOUNT(gap_count, w);
     gap_count -= (w_prev = (w0 >> w_shift)); // negative value correction
 
-    const bm::word_t* block_end = block + size; // bm::set_block_size;
+    const bm::word_t* block_end = block + size; 
     for (++block; block < block_end; ++block)
     {
         w = w0 = *block;
@@ -4614,6 +4614,7 @@ void bit_block_change_bc(const bm::word_t* BMRESTRICT block,
     #ifdef VECT_BLOCK_CHANGE_BC
         VECT_BLOCK_CHANGE_BC(block, gc, bc);
     #else
+        // TODO: one pass algo
         *gc = bm::bit_block_change32(block, bm::set_block_size);
         *bc = bm::bit_block_count(block);
     #endif
