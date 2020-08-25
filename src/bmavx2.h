@@ -240,7 +240,7 @@ bm::id_t avx2_bit_block_count(const bm::word_t* const block,
     {
         bm::id64_t t = bm::bmi_blsi_u64(digest); // d & -d;
 
-        unsigned wave = _mm_popcnt_u64(t - 1);
+        unsigned wave = (unsigned)_mm_popcnt_u64(t - 1);
         unsigned off = wave * bm::set_block_digest_wave_size;
 
         const __m256i* BMRESTRICT wave_src = (__m256i*)&block[off];
@@ -1918,11 +1918,11 @@ void avx2_bit_block_calc_change_bc(const __m256i* BMRESTRICT block,
         {
             bm::id64_t* b64 = (bm::id64_t*)block;
 
-            bit_count += _mm_popcnt_u64(b64[0]) + _mm_popcnt_u64(b64[1]);
-            bit_count += _mm_popcnt_u64(b64[2]) + _mm_popcnt_u64(b64[3]);
+            bit_count += (unsigned) (_mm_popcnt_u64(b64[0]) + _mm_popcnt_u64(b64[1]));
+            bit_count += (unsigned)(_mm_popcnt_u64(b64[2]) + _mm_popcnt_u64(b64[3]));
        
-            bit_count += _mm_popcnt_u64(b64[4]) + _mm_popcnt_u64(b64[5]);
-            bit_count += _mm_popcnt_u64(b64[6]) + _mm_popcnt_u64(b64[7]);
+            bit_count += (unsigned)(_mm_popcnt_u64(b64[4]) + _mm_popcnt_u64(b64[5]));
+            bit_count += (unsigned)(_mm_popcnt_u64(b64[6]) + _mm_popcnt_u64(b64[7]));
         }
         
         __m256i m1CO = _mm256_srli_epi32(m1A, 31);
@@ -2892,7 +2892,7 @@ unsigned avx2_bit_to_gap(gap_word_t* BMRESTRICT dest,
                 bool cmp = (bool(bitval) != bool(val));
                 unsigned mask = ~(cmp - 1u);
                 *pcurr = mask & (gap_word_t)(bit_idx-cmp);
-                bitval ^= cmp;
+                bitval ^= unsigned(cmp);
                 unsigned long long pcu = reinterpret_cast<unsigned long long>(pcurr);
                 pcu += mask & sizeof(gap_word_t);
                 pcurr = reinterpret_cast<gap_word_t*>(pcu);
@@ -2928,7 +2928,7 @@ unsigned avx2_bit_to_gap(gap_word_t* BMRESTRICT dest,
                 {
                     tz = ~(cmp - 1u); // generate 0xFFFF or 0x0000 mask
                     *pcurr = tz & (gap_word_t)(bit_idx-cmp);
-                    bitval ^= cmp;
+                    bitval ^= unsigned(cmp);
                     bit_idx += tz & (vCAP - bits_consumed);
                     unsigned long long pcu = reinterpret_cast<unsigned long long>(pcurr);
                     pcu += tz & sizeof(gap_word_t);
