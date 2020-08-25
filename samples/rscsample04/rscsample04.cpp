@@ -31,12 +31,12 @@ For more information please visit:  http://bitmagic.io
   \sa bm::rsc_sparse_vector::sync
   \sa bm::rsc_sparse_vector::inc
 
+  @sa rscsample02.cpp
 */
 
 /*! \file rscsample04.cpp
     \brief Example: bm::rsc_sparse_vector<> known NULL elements access
 
-    @sa rscsample02.cpp
 */
 
 #include <iostream>

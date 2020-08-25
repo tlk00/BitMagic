@@ -255,10 +255,10 @@ void serialize_df2(const sample_data_frame& df,
         // Important: add references in reverse (sic!) order (N ... 3, 2, 1)
         // Important: add all data frame vectors
 
-        bv_ref.add_vectors(df.sv0.get_bmatrix()); // (!) last vectors is added first
-        bv_ref.add_vectors(df.csv3.get_bmatrix());
-        bv_ref.add_vectors(df.csv2.get_bmatrix());
-        bv_ref.add_vectors(df.csv1.get_bmatrix());
+        bv_ref.add_sparse_vector(df.sv0); // (!) last vectors is added first
+        bv_ref.add_sparse_vector(df.csv3);
+        bv_ref.add_sparse_vector(df.csv2);
+        bv_ref.add_sparse_vector(df.csv1);
 
         csv_ser.set_xor_ref(&bv_ref); // connect reference vector to serializer
         sv16_ser.set_xor_ref(&bv_ref); // connect reference vector to sv16 serializer

@@ -395,8 +395,8 @@ public:
 
     /// Append basic bit-matrix to the list of reference vectors
     /// @sa build
-    ///
-    template<class BMATR>
+    /// @sa add_sparse_vector
+    template<typename BMATR>
     void add_vectors(const BMATR& bmatr)
     {
         size_type rows = bmatr.rows();
@@ -407,6 +407,15 @@ public:
                 add(bv, rows_acc_ + r);
         } // for r
         rows_acc_ += unsigned(rows);
+    }
+
+    /// Add bit-transposed sparse vector as a bit-matrix
+    /// @sa add_vectors
+    ///
+    template<class SV>
+    void add_sparse_vector(const SV& sv)
+    {
+        add_vectors(sv.get_bmatrix());
     }
 
 

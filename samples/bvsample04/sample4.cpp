@@ -78,7 +78,9 @@ static
 unsigned char* serialize_bvector(bm::serializer<bm::bvector<> >& bvs, 
                                  bm::bvector<>& bv)
 {
-    // It is reccomended to optimize vector before serialization.
+    // It is good to optimize vector before serialization.
+    
+	// scratch memory block
     BM_DECLARE_TEMP_BLOCK(tb)
     bm::bvector<>::statistics st;
     bv.optimize(tb, bm::bvector<>::opt_compress, &st);
