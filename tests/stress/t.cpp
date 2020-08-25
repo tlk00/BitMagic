@@ -27706,6 +27706,45 @@ void TestCompressSparseVector()
         assert(csv.get(5) == 0);
     }
 
+    {
+    cout << "decode() tests" << endl;
+
+        {
+            unsigned arr[10];
+            unsigned arr1[10];
+            unsigned arr2[10];
+            rsc_sparse_vector_u32 csv1;
+
+            csv1.push_back(5, 1);
+            csv1.push_back(6, 1);
+            csv1.push_back(8, 2);
+
+            csv1.push_back(100, 4);
+            csv1.sync();
+
+            auto sz = csv1.decode(&arr[0], 100, 1);
+            assert(sz==1);
+            assert(arr[0] == 4);
+
+            auto sz2 = csv1.decode_buf(&arr1[0], &arr2[0], 100, 1);
+            assert(sz2==1);
+            assert(arr1[0] == 4);
+
+
+            csv1.set_null(100);
+            csv1.sync(true);
+
+            sz = csv1.decode(&arr[0], 100, 1);
+            assert(sz == 0);
+
+            sz2 = 2;
+            sz2 = csv1.decode_buf(&arr1[0], &arr2[0], 100, 1);
+            if (sz2)
+            {
+                cout << sz2 << endl;
+            }
+            assert(sz2==0);
+        }
 
     cout << "inc() and merge_not_null() tests" << endl;
     {
@@ -27736,9 +27775,10 @@ void TestCompressSparseVector()
 
     {
         rsc_sparse_vector_u32::bvector_type bv;
-        bv.set_range(1, 65536*2);
+        unsigned to = 65536*2;
+        bv.set_range(1, to);
 
-        for (unsigned i = 1; i < 65536*2; ++i)
+        for (unsigned i = 1; i < to; ++i)
         {
             rsc_sparse_vector_u32 csv1(bv);
             rsc_sparse_vector_u32 csv2(bv);
@@ -27768,7 +27808,7 @@ void TestCompressSparseVector()
             assert(csv1.get(i) == 0);
 
             if (i % 100 == 0)
-                cout << "\r" << i << flush;
+                cout << "\r" << i << " / " << to << flush;
 
         } // for
         cout << endl;
@@ -27901,41 +27941,7 @@ void TestCompressSparseVector()
     }
 
     
-    {
-    cout << "decode() tests" << endl;
 
-        {
-            unsigned arr[10];
-            unsigned arr1[10];
-            unsigned arr2[10];
-            rsc_sparse_vector_u32 csv1;
-
-            csv1.push_back(5, 1);
-            csv1.push_back(6, 1);
-            csv1.push_back(8, 2);
-
-            csv1.push_back(100, 4);
-            csv1.sync();
-
-            auto sz = csv1.decode(&arr[0], 100, 1);
-            assert(sz==1);
-            assert(arr[0] == 4);
-
-            auto sz2 = csv1.decode_buf(&arr1[0], &arr2[0], 100, 1);
-            assert(sz2==1);
-            assert(arr1[0] == 4);
-
-
-            csv1.set_null(100);
-            csv1.sync(true);
-
-            sz = csv1.decode(&arr[0], 100, 1);
-            assert(sz == 0);
-
-            sz2 = csv1.decode_buf(&arr1[0], &arr2[0], 100, 1);
-            assert(sz2==0);
-        }
-    
         {
         rsc_sparse_vector_u32 csv1;
         
