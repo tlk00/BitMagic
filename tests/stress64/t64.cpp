@@ -1755,7 +1755,8 @@ void IntervalEnumeratorTest()
         unsigned delta_max = 65536;
         for (unsigned inc = 1; inc < delta_max; ++inc)
         {
-            cout << "\rinc = " << inc << " of " << delta_max << flush;
+            if (inc % 256 == 0)
+                cout << "\rinc = " << inc << " of " << delta_max << flush;
             bvect bv;
             bvect bv_c;
             bvect::size_type test_max = 65535 * 256;
@@ -4528,7 +4529,7 @@ void SerializationTest()
 {
     std::random_device rd;
     std::mt19937_64 mt_rand(rd());
-    bvect::size_type BITVECT_SIZE = bvect::size_type(bm::id_max32) * 3;
+    bvect::size_type BITVECT_SIZE = bvect::size_type(bm::id_max32) + (bvect::size_type(bm::id_max32) / 2);
 
    cout << " ----------------------------------- SerializationTest" << endl;
 
