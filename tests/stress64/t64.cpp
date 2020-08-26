@@ -10494,7 +10494,8 @@ void AggregatorTest()
 static
 void StressTestAggregatorOR(unsigned repetitions)
 {
-  bvect::size_type BITVECT_SIZE = bvect::size_type(bm::id_max32) * 2;
+  bvect::size_type BITVECT_SIZE =
+    bvect::size_type(bm::id_max32) + (bvect::size_type(bm::id_max32) / 2);
 
   cout << "---------------------------- Aggregator OR Stress Test" << endl;
    bvect::size_type size = BITVECT_SIZE - 10;
@@ -10521,23 +10522,11 @@ void StressTestAggregatorOR(unsigned repetitions)
         } // switch
         
         bvect::size_type start1 = 0;
-        switch (rand() % 3)
-        {
-        case 1:
-            start1 += size / 5;
-            break;
-        default:
-            break;
-        }
-
         bvect::size_type start2 = 0;
-        switch (rand() % 3)
+        if (rand()%3 )
         {
-        case 1:
-            start2 += size / 5;
-            break;
-        default:
-            break;
+            start1 += size / 2;
+            start2 += size / 2;
         }
         bvect bv0, bv1, bv2, bv3, bv4, bv5, bv6, bv7, bv8, bv9;
 
@@ -10628,11 +10617,11 @@ void StressTestAggregatorOR(unsigned repetitions)
 static
 void StressTestAggregatorAND(unsigned repetitions)
 {
-  bvect::size_type BITVECT_SIZE = bvect::size_type(bm::id_max32) * 2;
+   bvect::size_type BITVECT_SIZE =
+      bvect::size_type(bm::id_max32) + (bvect::size_type(bm::id_max32) / 2);
 
-  cout << "---------------------------- Aggregator AND Stress Test" << endl;
+   cout << "---------------------------- Aggregator AND Stress Test" << endl;
    bvect::size_type size = BITVECT_SIZE - 10;
-
 
     unsigned i;
     for (i = 0; i < repetitions; ++i)
@@ -10652,25 +10641,13 @@ void StressTestAggregatorAND(unsigned repetitions)
             size = BITVECT_SIZE - 10;
             break;
         } // switch
-        
-        bvect::size_type start1 = 0;
-        switch (rand() % 3)
-        {
-        case 1:
-            start1 += size / 5;
-            break;
-        default:
-            break;
-        }
 
+        bvect::size_type start1 = 0;
         bvect::size_type start2 = 0;
-        switch (rand() % 3)
+        if (rand()%3 )
         {
-        case 1:
-            start2 += size / 5;
-            break;
-        default:
-            break;
+            start1 += size / 2;
+            start2 += size / 2;
         }
 
         bvect bv0, bv1, bv2, bv3, bv4, bv5, bv6, bv7, bv8, bv9;
@@ -10820,7 +10797,8 @@ void GenerateTestCollection(std::vector<bvect>* target,
 static
 void StressTestAggregatorShiftAND(unsigned repeats)
 {
-  bvect::size_type BITVECT_SIZE = bvect::size_type(bm::id_max32) * 2;
+  bvect::size_type BITVECT_SIZE =
+    bvect::size_type(bm::id_max32) + ( bvect::size_type(bm::id_max32) / 2);
 
    cout << "----------------------------StressTestAggregatorShiftAND " << endl;
 
