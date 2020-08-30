@@ -131,8 +131,9 @@ struct block_waves_xor_descr
 
 /**
     Compute reference (non-XOR) 64-dim complexity descriptor for the
-    target block. Phase 1 of the XOR filtering process.
-    Origi
+    target block. Phase 1 of the XOR filtering process is to establish
+    the base metric
+
     @internal
 */
 inline
