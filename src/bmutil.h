@@ -204,7 +204,7 @@ T ilog2_LUT(T x) BMNOEXCEPT
     {
         l += 8; x >>= 8;
     }
-    return l + T(first_bit_table<true>::_idx[x]);
+    return l + T(bm::first_bit_table<true>::_idx[x]);
 }
 
 /**
@@ -213,13 +213,12 @@ T ilog2_LUT(T x) BMNOEXCEPT
 template<>
 inline bm::gap_word_t ilog2_LUT<bm::gap_word_t>(bm::gap_word_t x) BMNOEXCEPT
 {
-    bm::gap_word_t l = 0;
-    if (x & 0xff00) 
+    if (x & 0xff00)
     {
-        l = bm::gap_word_t( + 8u);
         x = bm::gap_word_t(x >> 8u);
+        return bm::gap_word_t(8u + bm::first_bit_table<true>::_idx[x]);
     }
-    return bm::gap_word_t(l + bm::gap_word_t(first_bit_table<true>::_idx[x]));
+    return bm::gap_word_t(bm::first_bit_table<true>::_idx[x]);
 }
 
 
