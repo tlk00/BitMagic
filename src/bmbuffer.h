@@ -98,14 +98,13 @@ public:
         allocate(in_capacity);
     }
     
-    byte_buffer(const byte_buffer& lhs) BMNOEXCEPT
+    byte_buffer(const byte_buffer& lhs) 
+        : byte_buffer_ptr(lhs) 
     {
         byte_buf_ = 0;
         size_ = capacity_ = alloc_factor_ = 0;
         if (lhs.byte_buf_)
-        {
             copy_from(lhs.byte_buf_, lhs.size_);
-        }
     }
     
 #ifndef BM_NO_CXX11
@@ -128,7 +127,7 @@ public:
     }
 #endif
 
-    byte_buffer& operator=(const byte_buffer& lhs) BMNOEXCEPT
+    byte_buffer& operator=(const byte_buffer& lhs) 
     {
         if (this == &lhs)
             return *this;
