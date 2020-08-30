@@ -3536,7 +3536,13 @@ void SparseVectorSerializationTest()
     sparse_vector_u32 sv2(bm::use_null);
     sparse_vector_u32 sv3(bm::use_null);
 
-    generate_serialization_test_set(sv1, BSIZE);
+    unsigned sv_size = BSIZE;
+    if (bm::conditional<sizeof(void*) == 4>::test())
+    {
+        sv_size = sv_size / 2;
+    }
+
+    generate_serialization_test_set(sv1, sv_size);
 
     bm::sparse_vector_serial_layout<sparse_vector_u32> sv_lay;
 
@@ -3617,7 +3623,12 @@ void SparseVectorRangeDeserializationTest()
     sparse_vector_u32 sv1(bm::use_null);
     sparse_vector_u32 sv2(bm::use_null);
 
-    generate_scanner_test_set(vect, bv_null, sv1, BSIZE);
+    unsigned sv_size = BSIZE;
+    if (bm::conditional<sizeof(void*) == 4>::test())
+    {
+        sv_size = sv_size / 2;
+    }
+    generate_scanner_test_set(vect, bv_null, sv1, sv_size);
 
     bm::sparse_vector_deserializer<sparse_vector_u32> sv_deserial;
     bm::sparse_vector_serializer<sparse_vector_u32> sv_serializer;
@@ -3635,16 +3646,16 @@ void SparseVectorRangeDeserializationTest()
         for (unsigned i = 0; i < 15; ++i)
         {
             sv_deserial.deserialize(sv2, buf, 0, 65536 * 2);
-            sv_deserial.deserialize(sv2, buf, BSIZE / 4, BSIZE / 2);
-            sv_deserial.deserialize(sv2, buf, BSIZE / 2, (65536 * 2) + (BSIZE / 2));
+            sv_deserial.deserialize(sv2, buf, sv_size / 4, sv_size / 2);
+            sv_deserial.deserialize(sv2, buf, sv_size / 2, (65536 * 2) + (sv_size / 2));
         }
     }
 
     assert(sv1.size() == sv2.size());
     // validation
     {
-        sparse_vector_u32::size_type to = (65536 * 2) + (BSIZE / 2);
-        for (sparse_vector_u32::size_type from = BSIZE / 2; from <= to; ++from)
+        sparse_vector_u32::size_type to = (65536 * 2) + (sv_size / 2);
+        for (sparse_vector_u32::size_type from = sv_size / 2; from <= to; ++from)
         {
             auto v1 = sv1[from];
             auto v2 = sv2[from];
@@ -3669,16 +3680,16 @@ void SparseVectorRangeDeserializationTest()
         for (unsigned i = 0; i < 15; ++i)
         {
             sv_deserial.deserialize_range(sv2, buf, 0, 65536 * 2);
-            sv_deserial.deserialize_range(sv2, buf, BSIZE / 4, BSIZE / 2);
-            sv_deserial.deserialize_range(sv2, buf, BSIZE / 2, (65536 * 2) + (BSIZE / 2));
+            sv_deserial.deserialize_range(sv2, buf, sv_size / 4, sv_size / 2);
+            sv_deserial.deserialize_range(sv2, buf, sv_size / 2, (65536 * 2) + (sv_size / 2));
         }
     }
 
     // validation
     //
     {
-        sparse_vector_u32::size_type to = (65536 * 2) + (BSIZE / 2);
-        for (sparse_vector_u32::size_type from = BSIZE / 2; from <= to; ++from)
+        sparse_vector_u32::size_type to = (65536 * 2) + (sv_size / 2);
+        for (sparse_vector_u32::size_type from = sv_size / 2; from <= to; ++from)
         {
             auto v1 = sv1[from];
             auto v2 = sv2[from];
@@ -3725,8 +3736,12 @@ void GenerateTestStrCollection(std::vector<string>& str_coll, unsigned max_coll)
 static
 void StrSparseVectorTest()
 {
-    const unsigned max_coll = 20000000;
-    
+    unsigned max_coll = 20000000;
+    if (bm::conditional<sizeof(void*) == 4>::test())
+    {
+        max_coll = max_coll / 2;
+    }
+
    std::vector<string> str_coll;
    str_svect_type str_sv;
 
