@@ -34,6 +34,10 @@ case "${TARGET}" in
 	echo intel-linux-gnu
 	exit 0;;
 
+   arm*-*-linux-gnu*)
+	echo arm7l-linux-gnu
+	exit 0;;
+
    i386-apple-darwin*)
 	echo intel-macosx-gnu
 	exit 0;;
