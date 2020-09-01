@@ -453,6 +453,7 @@ BMFORCEINLINE void encoder::put_16(bm::short_t s) BMNOEXCEPT
 */
 inline void encoder::put_16(const bm::short_t* s, unsigned count) BMNOEXCEPT
 {
+    BM_ASSERT(count);
 #if (BM_UNALIGNED_ACCESS_OK == 1)
     ::memcpy(buf_, s, sizeof(bm::short_t)*count);
     buf_ += sizeof(bm::short_t) * count;
@@ -877,6 +878,7 @@ void decoder::get_32_AND(bm::word_t* w, unsigned count) BMNOEXCEPT
 */
 inline void decoder::get_16(bm::short_t* s, unsigned count) BMNOEXCEPT
 {
+    BM_ASSERT(count);
     if (!s) 
     {
         seek(int(count * sizeof(bm::short_t)));
