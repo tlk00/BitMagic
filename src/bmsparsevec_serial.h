@@ -568,7 +568,7 @@ void compressed_collection_serializer<CBC>::serialize(const CBC&    buffer_coll,
 {
     statistics_type st;
     buffer_coll.calc_stat(&st);
-    
+
     buf.resize(st.max_serialize_mem);
     
     // ptr where bit-plains start
@@ -749,6 +749,9 @@ template<typename SV>
 void sparse_vector_serializer<SV>::serialize(const SV&  sv,
                       sparse_vector_serial_layout<SV>&  sv_layout)
 {
+    bvs_.allow_stat_reset(false); // stats accumulate mode for all bit-slices
+    bvs_.reset_compression_stats();
+
     typename SV::statistics sv_stat;
     sv.calc_stat(&sv_stat);
     unsigned char* buf = sv_layout.reserve(sv_stat.max_serialize_mem);

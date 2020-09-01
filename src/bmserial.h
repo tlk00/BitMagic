@@ -191,7 +191,16 @@ public:
     */
     const size_type* get_compression_stat() const BMNOEXCEPT
                                     { return compression_stat_; }
-    
+
+    /**
+        Enable/disable statistics reset on each serilaization
+     */
+    void allow_stat_reset(bool allow) BMNOEXCEPT
+        { allow_stat_reset_ = allow; }
+
+    /// Reset all accumulated compression statistics
+    void reset_compression_stats() BMNOEXCEPT;
+
     /**
         Set GAP length serialization (serializes GAP levels of the original vector)
                 
@@ -340,9 +349,6 @@ protected:
     /// Determine best representation for a bit-block (level 5)
     unsigned char find_bit_best_encoding_l5(const bm::word_t* block) BMNOEXCEPT;
 
-    /// Reset all accumulated compression statistics
-    void reset_compression_stats() BMNOEXCEPT;
-    
     void reset_models() BMNOEXCEPT { mod_size_ = 0; }
     void add_model(unsigned char mod, unsigned score) BMNOEXCEPT;
 protected:
@@ -407,6 +413,7 @@ private:
     
     allocator_type  alloc_;
     size_type*      compression_stat_;
+    bool            allow_stat_reset_ = true; ///< controls zeroing of telemetry
     bool            gap_serial_;
     bool            byte_order_serial_;
 
@@ -2442,8 +2449,9 @@ serializer<BV>::serialize(const BV& bv,
                           unsigned char* buf, size_t buf_size)
 {
     BM_ASSERT(temp_block_);
-    
-    reset_compression_stats();
+
+    if (allow_stat_reset_)
+        reset_compression_stats();
     const blocks_manager_type& bman = bv.get_blocks_manager();
 
     bm::encoder enc(buf, buf_size);  // create the encoder
