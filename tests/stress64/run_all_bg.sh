@@ -12,9 +12,6 @@
 ./stress64_release 2>&1 > release.log &
 PID_release=$!
 
-./stress64_release_sse2 2>&1 > release_sse2.log &
-PID_release_sse2=$!
-
 ./stress64_release_sse42 2>&1 > release_sse42.log &
 PID_release_sse42=$!
 
@@ -44,15 +41,6 @@ fi
 
 # ---------------------------------------------------------
 
-wait $PID_release_sse2
-RET_release_sse2=$?
-if test "$RET_release_sse2" != "0"; then
-    echo "Error: Release SSE2 failed! " $RET_release_sse2
-else
-    echo "Release SSE2 finished OK!"
-fi
-
-# ---------------------------------------------------------
 
 wait $PID_release
 RET_release=$?
