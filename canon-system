@@ -44,6 +44,9 @@ case "${TARGET}" in
    i386-apple-darwin*)
 	echo intel-macosx-gnu
 	exit 0;;
+   x86_64-apple-darwin*)
+	echo intel-macosx-gnu
+	exit 0;;
 
    i[34567]86-*-cygwin*)
 	echo cygwin
