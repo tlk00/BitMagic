@@ -2836,7 +2836,7 @@ size_t serialize(const BV& bv,
     else
         bv_serial.gap_length_serialization(true);
 
-    return bv_serial.serialize(bv, buf, 0);
+    return (size_t) bv_serial.serialize(bv, buf, 0);
 }
 
 /*!
