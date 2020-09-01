@@ -1277,10 +1277,10 @@ void SerializationTest()
     delete [] buf; buf = 0;
         
     bvect*  bv = new bvect();
-    test_bitset*  bset = new test_bitset();
+    //test_bitset*  bset = new test_bitset();
     unsigned value = 0;
 
-    SimpleFillSets(bset, *bv, 0, BSIZE, 4);
+    SimpleFillSets(nullptr, *bv, 0, BSIZE, 4);
     
     cnt = bv->count();
     bv->calc_stat(&st);
@@ -1304,7 +1304,7 @@ void SerializationTest()
     
     
     delete bv;
-    delete bset;	
+    //delete bset;	
     delete [] buf;
 }
 
@@ -3924,7 +3924,7 @@ int main(void)
 //    ptest();
 
     TimeTaker tt("TOTAL", 1);
-
+/*
     MemCpyTest();
 
     BitCountTest();
@@ -3976,11 +3976,11 @@ int main(void)
     AndCountTest();
 
     TI_MetricTest();
-
+*/
     SerializationTest();
 
     SparseVectorAccessTest();
-
+    return 0;
     SparseVectorScannerTest();
 
     SparseVectorSerializationTest();
