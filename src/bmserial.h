@@ -2586,6 +2586,7 @@ serializer<BV>::serialize(const BV& bv,
         //
         if (BM_IS_GAP(blk))
         {
+            
             if (ref_vect_) // XOR filter
             {
                 bm::gap_word_t* tmp_buf = (bm::gap_word_t*)xor_block_;
@@ -2626,7 +2627,8 @@ serializer<BV>::serialize(const BV& bv,
                         continue;
                     }
                 }
-            }
+            } 
+            
 
             encode_gap_block(BMGAP_PTR(blk), enc);
         }
@@ -2667,8 +2669,8 @@ serializer<BV>::serialize(const BV& bv,
                         blk = xor_block_; // substitute block with XOR product
                     }
                 } // if xor found
-
-            }
+            } 
+            
 
             // ----------------------------------------------
             // BIT BLOCK serialization
@@ -3589,7 +3591,8 @@ deserializer<BV, DEC>::deserialize_gap(unsigned char btype, decoder_type& dec,
             blk = bman.set_block(nb, (bm::word_t*)BMPTR_SETBIT0(gap_blk));
             BM_ASSERT(blk == 0);
             
-            dec.get_16(gap_blk + 1, len - 1);
+            if (len > 1)
+                dec.get_16(gap_blk + 1, len - 1);
             gap_blk[len] = bm::gap_max_bits - 1;
         }
         else // target block exists
