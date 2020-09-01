@@ -484,7 +484,7 @@ void generate_k_mer_bvector(BV& bv,
         return;
     const char* dna_str = &seq_vect[0];
 
-    k_buf.reserve(chunk_size);
+    k_buf.reserve(size_t(chunk_size));
     k_buf.resize(0);
 
     {

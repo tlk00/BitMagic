@@ -691,7 +691,7 @@ int compressed_collection_deserializer<CBC>::deserialize(
             bm::id64_t sz = buf_size_vec[i];
             buffer_type& b = buf_vect.at(i);
             b.resize(sz);
-            dec.memcpy(b.data(), sz);
+            dec.memcpy(b.data(), size_t(sz));
         } // for i
     }
     buffer_coll.sync();
@@ -814,7 +814,7 @@ void sparse_vector_serializer<SV>::serialize(const SV&  sv,
             bvs_.set_curr_ref_idx(idx);
         }
 
-        size_t buf_size =
+        size_t buf_size = (size_t)
             bvs_.serialize(*bv, buf_ptr, sv_stat.max_serialize_mem);
         
         sv_layout.set_plain(i, buf_ptr, buf_size);
@@ -844,7 +844,7 @@ void sparse_vector_serializer<SV>::serialize(const SV&  sv,
 
             enc_m.put_8('R');
             enc_m.put_64(remap_size);
-            enc_m.memcpy(matrix_buf, remap_size);
+            enc_m.memcpy(matrix_buf, size_t(remap_size));
             enc_m.put_8('E'); // end of matrix (integrity check token)
         }
         else
