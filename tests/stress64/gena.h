@@ -87,9 +87,12 @@ void generate_vect48(VT& vect)
     range_base = bm::id_max48 / 2;
     generate_vect48_range(vect, range_base, dist, mt_rand);
 
+// skip this range to save memory for some builds
+#if defined(BMAVX2OPT)
     // Range near 48-bit
     range_base = bm::id_max48 - (65536 * 257);
     generate_vect48_range(vect, range_base, dist, mt_rand);
+#endif
 
     std::sort(vect.begin(), vect.end());
     vect.erase(std::unique(vect.begin(), vect.end() ), vect.end());
