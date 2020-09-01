@@ -300,7 +300,7 @@ inline
 unsigned bit_scan_reverse32(unsigned value) BMNOEXCEPT
 {
     BM_ASSERT(value);
-#if defined(BM_USE_GCC_BUILD)
+#if defined(BM_USE_GCC_BUILD) || (defined(__GNUG__) && (defined(__arm__) || defined(__aarch64__)))
     return (unsigned) (31 - __builtin_clz(value));
 #else
 # if defined(BM_x86) && (defined(__GNUG__) || defined(_MSC_VER))
@@ -315,7 +315,7 @@ inline
 unsigned bit_scan_forward32(unsigned value) BMNOEXCEPT
 {
     BM_ASSERT(value);
-#if defined(BM_USE_GCC_BUILD)
+#if defined(BM_USE_GCC_BUILD) || (defined(__GNUG__) && (defined(__arm__) || defined(__aarch64__)))
     return (unsigned) __builtin_ctz(value);
 #else
 # if defined(BM_x86) && (defined(__GNUG__) || defined(_MSC_VER))
@@ -355,7 +355,7 @@ unsigned count_leading_zeros_u64(bm::id64_t w) BMNOEXCEPT
 #if defined(BMAVX2OPT) || defined (BMAVX512OPT)
     return (unsigned)_lzcnt_u64(w);
 #else
-    #if defined(BM_USE_GCC_BUILD)
+    #if defined(BM_USE_GCC_BUILD) || (defined(__GNUG__) && (defined(__arm__) || defined(__aarch64__)))
         return (unsigned) __builtin_clzll(w);
     #else
         unsigned z;
@@ -384,7 +384,7 @@ unsigned count_trailing_zeros_u64(bm::id64_t w) BMNOEXCEPT
 #if defined(BMAVX2OPT) || defined (BMAVX512OPT)
     return (unsigned)_tzcnt_u64(w);
 #else
-    #if defined(BM_USE_GCC_BUILD)
+    #if defined(BM_USE_GCC_BUILD) || (defined(__GNUG__) && (defined(__arm__) || defined(__aarch64__)))
         return (unsigned) __builtin_ctzll(w);
     #else
         unsigned z;
@@ -417,7 +417,7 @@ unsigned bit_scan_reverse(T value) BMNOEXCEPT
 
     if (bm::conditional<sizeof(T)==8>::test())
     {
-    #if defined(BM_USE_GCC_BUILD)
+    #if defined(BM_USE_GCC_BUILD) || (defined(__GNUG__) && (defined(__arm__) || defined(__aarch64__)))
         return (unsigned) (63 - __builtin_clzll(value));
     #else
         bm::id64_t v8 = value;

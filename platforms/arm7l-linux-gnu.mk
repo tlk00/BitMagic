@@ -8,7 +8,7 @@ ifeq ($(COMPILER),GNU_CC)
     #-g
 
     OS_VER = -D__$(shell uname -s)_$(shell uname -r | sed -e 's/\./_/g' -e 's/-.*//')
-    PLATFORM_CXXFLAGS = -D_REENTRANT $(OS_VER) -D_GNU_SOURCE -std=c++11 -Wall 
+    PLATFORM_CXXFLAGS = -D_REENTRANT $(OS_VER) -D_GNU_SOURCE -std=c++11 -Wall -mfpu=neon-fp-armv8 -mfloat-abi=hard -mlittle-endian -mcpu=native -march=native
     PLATFORM_CFLAGS = -D_REENTRANT $(OS_VER)
     COMMON_LDFLAGS = $(LINKER_DFLAGS) -export-dynamic
     COMMON_CLDFLAGS = $(COMMON_LDFLAGS)
@@ -18,7 +18,7 @@ ifeq ($(COMPILER),GNU_CC)
     LD = g++
     CC_PIC_FLAGS = -fPIC
     CXX_PIC_FLAGS = -fPIC
-    OPT_FLAGS = -g0 -O2 -ggdb -fomit-frame-pointer -pipe
+    OPT_FLAGS = -g0 -O2 -fomit-frame-pointer -pipe -ftree-vectorize 
     SO_FLAGS = -shared
     SO_LIBS =
 
