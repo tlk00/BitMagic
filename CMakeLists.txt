@@ -23,11 +23,11 @@ if (CMAKE_CXX_COMPILER_ID MATCHES "GNU" OR CMAKE_CXX_COMPILER_ID MATCHES "Clang"
     elseif("${BMOPTFLAGS}" STREQUAL "BMAVX2OPT")
         set(bmoptf "-march=skylake -mavx2 -O2 -DBMAVX2OPT")
     else()
-        set(bmoptf "-march=core2")
+        set(bmoptf "-march=native -O2")
     endif()
 
-    set(flags "-Wall -Wextra -Wno-ignored-qualifiers -march=core2 -fPIC")
-    set(optflags -g0 -O3)
+    set(flags "-Wall -Wextra -Wno-ignored-qualifiers -fPIC -fomit-frame-pointer")
+    set(optflags -g0 -O2)
     set(bmptflags -pthread)
     SET( CMAKE_EXE_LINKER_FLAGS  "${CMAKE_EXE_LINKER_FLAGS} -Wl,-lpthread")
     
