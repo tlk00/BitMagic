@@ -142,7 +142,7 @@ void generate_bvector(bvect& bv, unsigned vector_max = 40000000, bool optimize =
 
 
 static
-void SimpleFillSets(test_bitset& bset, 
+void SimpleFillSets(test_bitset* bset, 
                        bvect& bv,
                        unsigned min, 
                        unsigned max,
@@ -151,7 +151,8 @@ void SimpleFillSets(test_bitset& bset,
 {
     for (unsigned i = min; i < max; i+=fill_factor)
     {
-        bset[i] = set_flag;
+        if (bset)
+            (*bset)[i] = set_flag;
         bv[i] = set_flag;
     } // for i
 }
@@ -668,7 +669,7 @@ void BitCountSparseTest()
     size_t value = 0, c1;
     volatile size_t* p = &value;
 
-    SimpleFillSets(*bset, *bv, 0, BSIZE, 130);
+    SimpleFillSets(bset, *bv, 0, BSIZE, 130);
     
     {
         TimeTaker tt("BitCount: Sparse bitset ", REPEATS*10);
@@ -734,9 +735,9 @@ void BitTestSparseTest()
     size_t value = 0, c1;
     volatile size_t* p = &value;
 
-    SimpleFillSets(*bset0, *bv0, 0, BSIZE, 9530);
-    SimpleFillSets(*bset1, *bv1, 0, BSIZE, 1000);
-    SimpleFillSets(*bset2, *bv2, 0, BSIZE, 120);
+    SimpleFillSets(bset0.get(), *bv0, 0, BSIZE, 9530);
+    SimpleFillSets(bset1.get(), *bv1, 0, BSIZE, 1000);
+    SimpleFillSets(bset2.get(), *bv2, 0, BSIZE, 120);
 
 
     {
@@ -787,9 +788,9 @@ void EnumeratorGoToTest()
     size_t value = 0, c1;
     volatile size_t* p = &value;
 
-    SimpleFillSets(*bset0, *bv0, 0, BSIZE, 512);
-    SimpleFillSets(*bset1, *bv1, 0, BSIZE, 256);
-    SimpleFillSets(*bset2, *bv2, 0, BSIZE, 120);
+    SimpleFillSets(bset0.get(), *bv0, 0, BSIZE, 512);
+    SimpleFillSets(bset1.get(), *bv1, 0, BSIZE, 256);
+    SimpleFillSets(bset2.get(), *bv2, 0, BSIZE, 120);
 
 
     {
@@ -842,8 +843,8 @@ void BitCompareTest()
     test_bitset*  bset = new test_bitset();
     int value = 0;
 
-    SimpleFillSets(*bset, *bv1, 0, BSIZE, 10);
-    SimpleFillSets(*bset, *bv2, 0, BSIZE, 10);
+    SimpleFillSets(bset, *bv1, 0, BSIZE, 10);
+    SimpleFillSets(bset, *bv2, 0, BSIZE, 10);
 
     {
     TimeTaker tt("BitCompare: Random bitvector", REPEATS*10);
@@ -926,12 +927,15 @@ void BitCompareTest()
     sprintf(buf, "%p", p);
 }
 
+unsigned long long g_acc = 0;
 extern "C" {
     static
     int bit_visitor_func(void* handle_ptr, bm::id_t bit_idx)
     {
-        std::vector<bm::id_t>* vp = (std::vector<bm::id_t>*)handle_ptr;
-        vp->push_back(bit_idx);
+        std::vector<bvect::size_type>* vp = (std::vector<bm::id_t>*)handle_ptr;
+        (void)vp;
+        //vp->push_back(bit_idx);
+        g_acc += bit_idx;
         return 0;
     }
 } // extern C
@@ -949,9 +953,9 @@ void FindTest()
     bv_empty[100000000] = true;
     bv_empty[100000000] = false;
     
-    SimpleFillSets(*bset, bv1, 0, BSIZE/2, 3);
-    SimpleFillSets(*bset, bv1, 0, BSIZE/2, 4);
-    SimpleFillSets(*bset, bv1, 0, BSIZE/2, 5);
+    SimpleFillSets(bset, bv1, 0, BSIZE/2, 3);
+    SimpleFillSets(bset, bv1, 0, BSIZE/2, 4);
+    SimpleFillSets(bset, bv1, 0, BSIZE/2, 5);
     
     FillSetsIntervals(bset, bv2, 0, BSIZE/2, 8);
     FillSetsIntervals(bset, bv3, 0, BSIZE/2, 12);
@@ -1026,26 +1030,31 @@ static
 void EnumeratorTest()
 {
     bvect                 bv1, bv2, bv3, bv4;
-    std::vector<bm::id_t> v1,  v2,  v3,  v4;
+    std::vector<bvect::size_type> v1,  v2,  v3,  v4;
     
-    test_bitset*  bset = new test_bitset();
+    {
+        test_bitset*  bset = 0;// new test_bitset();
 
-    SimpleFillSets(*bset, bv1, 0, BSIZE/2, 3);
-    SimpleFillSets(*bset, bv1, 0, BSIZE/2, 4);
-    SimpleFillSets(*bset, bv1, 0, BSIZE/2, 5);
+        SimpleFillSets(bset, bv1, 0, BSIZE / 2, 3);
+        SimpleFillSets(bset, bv1, 0, BSIZE / 2, 4);
+        SimpleFillSets(bset, bv1, 0, BSIZE / 2, 5);
+
+        //delete bset;
+    }
     
-    FillSetsIntervals(bset, bv2, 0, BSIZE/2, 8);
-    FillSetsIntervals(bset, bv3, 0, BSIZE/2, 12);
-    FillSetsIntervals(bset, bv4, 0, BSIZE/2, 120);
+    FillSetsIntervals(nullptr, bv2, 0, BSIZE/2, 8);
+    FillSetsIntervals(nullptr, bv3, 0, BSIZE/2, 12);
+    FillSetsIntervals(nullptr, bv4, 0, BSIZE/2, 120);
     
-    v1.reserve(bv1.count());
-    v2.reserve(bv2.count());
-    v3.reserve(bv3.count());
-    v4.reserve(bv4.count());
+    auto c1 = bv1.count();
+    auto c2 = bv2.count();
+    auto c3 = bv3.count();
+    auto c4 = bv4.count();
 
     unsigned i;
 
     {
+        unsigned long long acc = 0;
         TimeTaker tt("bvector<>::enumerator", REPEATS/10);
         for (i = 0; i < REPEATS/10; ++i)
         {
@@ -1053,34 +1062,34 @@ void EnumeratorTest()
                 bvect::enumerator en = bv1.first();
                 for (;en.valid();++en)
                 {
-                    v1.push_back(*en);
+                    auto v = *en;
+                    acc += v;
                 }
             }
             {
                 bvect::enumerator en = bv2.first();
                 for (;en.valid();++en)
                 {
-                    v2.push_back(*en);
+                    auto v = *en;
+                    acc ^= v;
                 }
             }
             {
                 bvect::enumerator en = bv3.first();
                 for (;en.valid();++en)
                 {
-                    v3.push_back(*en);
+                    auto v = *en;
+                    acc += v;
                 }
             }
             {
                 bvect::enumerator en = bv4.first();
                 for (;en.valid();++en)
                 {
-                    v4.push_back(*en);
+                    auto v = *en;
+                    acc ^= v;
                 }
             }
-            v1.resize(0);
-            v2.resize(0);
-            v3.resize(0);
-            v4.resize(0);
 
         } // for REPEATS
     }
@@ -1089,6 +1098,8 @@ void EnumeratorTest()
 
     // -----------------------------------------------
     {
+        unsigned long long acc = 0;
+
         TimeTaker tt("bvector<>::get_next()", REPEATS/10);
         for (i = 0; i < REPEATS/10; ++i)
         {
@@ -1098,16 +1109,18 @@ void EnumeratorTest()
                 do
                 {
                     v = bv1.get_next(v);
-                    v1.push_back(v);
+                    acc += v;
+                    //v1.push_back(v);
                 } while(v);
             }
+
             if (bv2.any())
             {
                 unsigned v = bv2.get_first();
                 do
                 {
                     v = bv2.get_next(v);
-                    v2.push_back(v);
+                    acc ^= v;
                 } while(v);
             }
             if (bv3.any())
@@ -1116,7 +1129,7 @@ void EnumeratorTest()
                 do
                 {
                     v = bv3.get_next(v);
-                    v3.push_back(v);
+                    acc += v;
                 } while(v);
             }
             if (bv4.any())
@@ -1125,14 +1138,9 @@ void EnumeratorTest()
                 do
                 {
                     v = bv4.get_next(v);
-                    v4.push_back(v);
+                    acc ^= v;
                 } while(v);
             }
-            v1.resize(0);
-            v2.resize(0);
-            v3.resize(0);
-            v4.resize(0);
-
         } // for REPEATS
     }
 
@@ -1148,18 +1156,11 @@ void EnumeratorTest()
             bm::visit_each_bit(bv3, (void*)&v3, bit_visitor_func);
             bm::visit_each_bit(bv4, (void*)&v4, bit_visitor_func);
 
-            v1.resize(0);
-            v2.resize(0);
-            v3.resize(0);
-            v4.resize(0);
         } // for REPEATS
 
     }
     
     // -----------------------------------------------
-
-
-    delete bset;
 
 
 }
@@ -1171,7 +1172,7 @@ void EnumeratorTestGAP()
     test_bitset*  bset = new test_bitset();
     unsigned i;
 
-    SimpleFillSets(*bset, *bv, 0, BSIZE, 2500);
+    SimpleFillSets(bset, *bv, 0, BSIZE, 2500);
     bv->count();
 
     for (unsigned k = 0; k < 2; ++k)
@@ -1279,7 +1280,7 @@ void SerializationTest()
     test_bitset*  bset = new test_bitset();
     unsigned value = 0;
 
-    SimpleFillSets(*bset, *bv, 0, BSIZE, 4);
+    SimpleFillSets(bset, *bv, 0, BSIZE, 4);
     
     cnt = bv->count();
     bv->calc_stat(&st);
@@ -1315,7 +1316,7 @@ void InvertTest()
     unsigned i;
     //unsigned value = 0;
 
-    SimpleFillSets(*bset, *bv, 0, BSIZE, 2500);
+    SimpleFillSets(bset, *bv, 0, BSIZE, 2500);
     {
     TimeTaker tt("Invert bvector", REPEATS*4);
     for (i = 0; i < REPEATS*4; ++i)
@@ -1381,8 +1382,8 @@ void AndTest()
     unsigned i;
     //unsigned value = 0;
 
-    SimpleFillSets(*bset1, *bv1, 0, BSIZE, 100);
-    SimpleFillSets(*bset1, *bv2, 0, BSIZE, 100);
+    SimpleFillSets(bset1, *bv1, 0, BSIZE, 100);
+    SimpleFillSets(bset1, *bv2, 0, BSIZE, 100);
     {
     TimeTaker tt("AND bvector test", REPEATS*4);
     for (i = 0; i < REPEATS*4; ++i)
@@ -1417,8 +1418,8 @@ void XorTest()
     unsigned i;
     //unsigned value = 0;
 
-    SimpleFillSets(*bset1, *bv1, 0, BSIZE, 100);
-    SimpleFillSets(*bset1, *bv2, 0, BSIZE, 100);
+    SimpleFillSets(bset1, *bv1, 0, BSIZE, 100);
+    SimpleFillSets(bset1, *bv2, 0, BSIZE, 100);
     {
         TimeTaker tt("XOR bvector test", REPEATS * 10);
         for (i = 0; i < REPEATS * 4; ++i)
@@ -1507,8 +1508,8 @@ void XorCountTest()
     test_bitset*  bset2 = new test_bitset();
     unsigned i;
 
-    SimpleFillSets(*bset1, *bv1, 0, BSIZE, 400);
-    SimpleFillSets(*bset2, *bv2, 0, BSIZE, 500);
+    SimpleFillSets(bset1, *bv1, 0, BSIZE, 400);
+    SimpleFillSets(bset2, *bv2, 0, BSIZE, 500);
 
     unsigned count1 = 0;
     unsigned count2 = 0;
@@ -1648,8 +1649,8 @@ void AndCountTest()
     test_bitset*  bset2 = new test_bitset();
     unsigned i;
 
-    SimpleFillSets(*bset1, *bv1, 0, BSIZE, 400);
-    SimpleFillSets(*bset2, *bv2, 0, BSIZE, 500);
+    SimpleFillSets(bset1, *bv1, 0, BSIZE, 400);
+    SimpleFillSets(bset2, *bv2, 0, BSIZE, 500);
 
     unsigned count1 = 0;
     unsigned count2 = 0;
@@ -1790,8 +1791,8 @@ void TI_MetricTest()
     test_bitset*  bset2 = new test_bitset();
     unsigned i;
 
-    SimpleFillSets(*bset1, *bv1, 0, BSIZE, 500);
-    SimpleFillSets(*bset2, *bv2, 0, BSIZE, 250);
+    SimpleFillSets(bset1, *bv1, 0, BSIZE, 500);
+    SimpleFillSets(bset2, *bv2, 0, BSIZE, 250);
 
     unsigned count1 = 0;
     unsigned count2 = 0;
@@ -3947,7 +3948,7 @@ int main(void)
     BitBlockShiftTest();
 
     InterpolativeCodingTest();
-
+ 
     EnumeratorTest();
 
     EnumeratorTestGAP();
