@@ -705,6 +705,8 @@ bool xor_scanner<BV>::search_best_xor_gap(bm::gap_word_t*   tmp_buf,
                 found_block_xor_ = (const bm::word_t*)gap_xor_block;
             }
         }
+        if (best_gap_metric <= 1)
+            break;
     } // for ri
 
     return kb_found;
