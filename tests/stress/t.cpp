@@ -13005,6 +13005,8 @@ static
 void TestSparseVectorSerialization2()
 {
     cout << " ------------------------------ TestSparseVectorSerialization2()" << endl;
+
+
     const unsigned int BSIZE = 150000000;
 
     const unsigned char* buf;
@@ -13013,6 +13015,54 @@ void TestSparseVectorSerialization2()
 
     bm::sparse_vector_serializer<sparse_vector_u32> sv_serializer;
     bm::sparse_vector_deserializer<sparse_vector_u32> sv_deserial;
+
+
+    {
+        sparse_vector_u32 sv1i(bm::use_null);
+        sparse_vector_u32 sv1o(bm::use_null);
+        bm::sparse_vector_serial_layout<sparse_vector_u32> sv_lay1;
+
+        {
+            unsigned i=0;
+            for (; i < 256; ++i)
+            {
+                sv1i[i] = 1;
+            }
+            for (; i < 512; ++i)
+            {
+                sv1i[i] = 2;
+            }
+            for (; i < 65536; ++i)
+            {
+                sv1i[i] = 1;
+            }
+            for (; i < 65536*2; i+=2)
+            {
+                sv1i[i] = 1;
+            }
+            sv1i.optimize();
+        }
+        sv_serializer.enable_xor_compression();
+        sv_serializer.serialize(sv1i, sv_lay1);
+        {
+            const bvect::size_type* cstat = sv_serializer.get_bv_serializer().get_compression_stat();
+            assert(cstat[bm::set_block_xor_gap_ref32]>=1);
+        }
+
+        buf = sv_lay1.buf();
+        sz1 = sv_lay1.size();
+
+        sv_deserial.deserialize(sv1o, buf);
+
+        eq = sv1i.equal(sv1o);
+        assert(eq);
+        if (!eq)
+        {
+            cerr << "Failed test (GAP SV XOR)" << endl;
+            exit(1);
+        }
+        sv_serializer.disable_xor_compression();
+    }
 
     cout << "Test data-frame XOR compression" << endl;
     {
@@ -28618,10 +28668,18 @@ int parse_args(int argc, char *argv[])
     return 0;
 }
 
+#define BM_EXPAND(x)  x ## 1
+#define EXPAND(x)     BM_EXPAND(x)
+
 int main(int argc, char *argv[])
 {
     time_t      start_time = time(0);
     time_t      finish_time;
+
+#if !defined(BM_ASSERT) || (EXPAND(BM_ASSERT) == 1)
+    cerr << "Build error: Test build with undefined BM_ASSERT" << endl;
+    exit(1);
+#endif
 
     {
     auto ret = parse_args(argc, argv);
@@ -28673,6 +28731,8 @@ int main(int argc, char *argv[])
     {
         TestRecomb();
 
+        Log2Test();
+
         OptimGAPTest();
 
         CalcBeginMask();
@@ -28684,7 +28744,6 @@ int main(int argc, char *argv[])
 
         TestFindBlockDiff();
 
-        Log2Test();
         FindNotNullPtrTest();
 
         LZCNTTest();
@@ -28692,8 +28751,6 @@ int main(int argc, char *argv[])
         SelectTest();
 
          TestBlockZero();
-
-         TestBlockDigest();
 
          TestBlockAND();
          TestBlockSUB();
@@ -28720,7 +28777,9 @@ int main(int argc, char *argv[])
          BitRangeAllSetTest();
 
          BitForEachRangeFuncTest();
-        
+
+         TestBlockDigest();
+
         //BitBlockTransposeTest();
     }
     

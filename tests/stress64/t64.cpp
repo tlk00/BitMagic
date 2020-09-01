@@ -16567,12 +16567,19 @@ int parse_args(int argc, char *argv[])
     return 0;
 }
 
+#define BM_EXPAND(x)  x ## 1
+#define EXPAND(x)     BM_EXPAND(x)
 
 
 int main(int argc, char *argv[])
 {
     time_t      start_time = time(0);
     time_t      finish_time;
+
+#if !defined(BM_ASSERT) || (EXPAND(BM_ASSERT) == 1)
+    cerr << "Build error: Test build with undefined BM_ASSERT" << endl;
+    exit(1);
+#endif
 
     {
     auto ret = parse_args(argc, argv);
