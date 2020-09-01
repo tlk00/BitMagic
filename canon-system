@@ -37,6 +37,9 @@ case "${TARGET}" in
    arm*-*-linux-gnu*)
 	echo arm7l-linux-gnu
 	exit 0;;
+   aarch*-*-linux-gnu*)
+	echo aarch64-linux-gnu
+	exit 0;;
 
    i386-apple-darwin*)
 	echo intel-macosx-gnu
