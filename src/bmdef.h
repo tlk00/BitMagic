@@ -86,17 +86,21 @@ For more information please visit:  http://bitmagic.io
 # endif
 #endif
 
-// WebAssembly compilation settings
+// WebASM compilation settings
 //
-// detects use of EMSCRIPTEN engine and tweaks settings
-// WebAssemply compiles into 32-bit ptr yet 64-bit wordsize use GCC extensions
+#if defined(__EMSCRIPTEN__)
+
+// EMSCRIPTEN specific tweaks
+// WebAssemply compiles into 32-bit memory system but offers 64-bit wordsize
+// WebASM also benefits from use GCC extensions (buildins like popcnt, lzcnt)
 //
 // BMNOEXCEPT2 is to declare "noexcept" for WebAsm only where needed
-// and silence GCC warnings where not
-#if defined(__EMSCRIPTEN__)
+// and silence GCC warnings
+//
 # define BM64OPT
 # define BM_USE_GCC_BUILD
 # define BMNOEXCEPT2 noexcept
+
 #else
 #  define BMNOEXCEPT2
 #endif
