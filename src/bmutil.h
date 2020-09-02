@@ -166,7 +166,8 @@ private:
     @ingroup bitfunc
     @internal
 */
-inline unsigned count_leading_zeros(unsigned x) BMNOEXCEPT
+inline
+unsigned count_leading_zeros(unsigned x) BMNOEXCEPT
 {
     unsigned n =
         (x >= (1U << 16)) ?
@@ -346,6 +347,23 @@ unsigned long long bmi_blsi_u64(unsigned long long w)
     return w & (-w);
 #endif
 }
+
+/// 32-bit bit-scan reverse
+inline
+unsigned count_leading_zeros_u32(unsigned w) BMNOEXCEPT
+{
+    BM_ASSERT(w);
+#if defined(BMSSE42OPT) || defined(BMAVX2OPT) || defined (BMAVX512OPT)
+    return (unsigned)_lzcnt_u32(w);
+#else
+    #if defined(BM_USE_GCC_BUILD) || defined(__GNUG__)
+        return (unsigned) __builtin_clz(w);
+    #else
+        return bm::count_leading_zeros(w); // portable
+    #endif
+#endif
+}
+
 
 /// 64-bit bit-scan reverse
 inline

@@ -17726,6 +17726,12 @@ void LZCNTTest()
     l = bm::count_leading_zeros(~0u >> 1u);
     assert(l == 1);
 
+    unsigned clz = bm::count_leading_zeros_u32(~0u);
+    assert(clz == 0);
+    clz = bm::count_leading_zeros_u32(~0u >> 1);
+    assert(clz == 1);
+
+
 
     unsigned mask = ~0u;
     for (unsigned i = 1; i; i <<= 1)
@@ -17734,9 +17740,11 @@ void LZCNTTest()
         t = bm::count_trailing_zeros(i);
         bsr = bm::bit_scan_reverse32(i);
         bsf = bm::bit_scan_forward32(i);
+        clz = bm::count_leading_zeros_u32(i);
         assert(bsf == bsr);
         assert(l == 31 - bsf);
         assert(t == bsf);
+        assert(clz == l);
 
         l = bm::count_leading_zeros(mask);
         bsf = bm::bit_scan_forward32(mask);
@@ -17891,7 +17899,7 @@ void SelectTest()
     }
 
     {
-        cout << "SELECT stress test." << std::endl;
+        cout << "\nSELECT stress test." << std::endl;
         const unsigned test_size = 1000000 * 10;
         for (unsigned i = 1; i < test_size; ++i)
         {
@@ -17929,12 +17937,12 @@ void SelectTest()
             }
             
             if (i % 1000000 == 0)
-                cout << "\r" << i << std::flush;
+                cout << "\r" << i << " - " << test_size << std::flush;
         }
     }
 
     {
-        cout << "SELECT bit-block test." << std::endl;
+        cout << "\nSELECT bit-block test." << std::endl;
         unsigned cnt;
         
         BM_DECLARE_TEMP_BLOCK(tb1);
@@ -17942,6 +17950,7 @@ void SelectTest()
         {
             tb1.b_.w32[i] = ~0u;
         }
+        unsigned test_size = 65535;
         for (unsigned i = 1; i <= 65535; ++i)
         {
             unsigned idx;
@@ -17962,7 +17971,7 @@ void SelectTest()
             }
 
             if (i % 128 == 0)
-                cout << "\r" << i << std::flush;
+                cout << "\r" << i << "-" << test_size << std::flush;
         }
     }
     
@@ -26506,7 +26515,7 @@ void TestBlockDigest()
         ++start; --end;
     } // while
 
-    cout << "Digest masks tests..." << endl;
+    cout << "DIGEST masks tests..." << endl;
     {
         bm::id64_t d0;
         d0 = bm::digest_mask(0, 65535);
@@ -26541,23 +26550,25 @@ void TestBlockDigest()
             } // for j
         } // for i
 
-        cout << "Digest mask Stress..." << endl;
-        for (unsigned i = 0; i < 65536; ++i)
+        cout << "DIGEST mask stress..." << endl;
+        // uncomment this to fully re-check DIGEST mask (takes a very long time
+        //unsigned test_to = 65536;
+        unsigned test_to = 5000;
+        for (unsigned i = 0; i < test_to; ++i)
         {
             bm::id64_t d0_c;
             d0 = bm::digest_mask(0, i);
             d0_c = bm::dm_control(0, i);
             assert(d0 == d0_c);
-            for (unsigned j = 65535; j > i; --j)
+
+            for (unsigned j = test_to; j > i; --j)
             {
                 d0 = bm::digest_mask(i, j);
                 d0_c = bm::dm_control(i, j);
                 assert(d0 == d0_c);
             } // for j
-            cout << "\r" << i << "          " << flush;
+            cout << "\r" << i << " | " << test_to << "        " << flush;
         } // for i
-
-
 }
 
 
