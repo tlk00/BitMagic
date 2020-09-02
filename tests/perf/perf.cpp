@@ -1287,8 +1287,8 @@ void SerializationTest()
     buf = new unsigned char[st.max_serialize_mem];
     
     {
-    TimeTaker tt("Large bvector serialization", REPEATS*4);
-    for (unsigned i = 0; i < REPEATS*4; ++i)
+    TimeTaker tt("Large bvector serialization", REPEATS/3);
+    for (unsigned i = 0; i < REPEATS/3; ++i)
     {
         len += bm::serialize(*bv, buf, tb, bm::BM_NO_BYTE_ORDER|bm::BM_NO_GAP_LENGTH);
         id_size += cnt * (unsigned)sizeof(unsigned);
@@ -1301,10 +1301,8 @@ void SerializationTest()
     /*
     cout << cbuf << " " << id_size << " " << len << " " << value << endl;
     */
-    
-    
+        
     delete bv;
-    //delete bset;	
     delete [] buf;
 }
 
@@ -2276,16 +2274,13 @@ static
 void SparseVectorAccessTest()
 {
     std::vector<unsigned> target, target1, target2;
-    svect   sv1;
-    svect   sv2;
-    svect   sv3;
+    svect   sv1, sv2, sv3;
+
+    unsigned sv_size = 150000000;
 
     FillSparseIntervals(sv1);
     BM_DECLARE_TEMP_BLOCK(tb)
     sv1.optimize(tb);
-    target.resize(150000000);
-    target1.resize(150000000);
-    target2.resize(150000000);
 
     {
         TimeTaker tt("sparse_vector random element assignment test", REPEATS/10 );
@@ -2293,7 +2288,7 @@ void SparseVectorAccessTest()
         {
             for (unsigned j = 256000; j < 19000000/2; ++j)
             {
-                sv2.set(j, 0xFFF);
+                sv2.set(j, 0xF8A);
             }
         }
     }
@@ -2307,13 +2302,13 @@ void SparseVectorAccessTest()
                 svect::back_insert_iterator bi(sv3.get_back_inserter());
                 for (unsigned j = 256000; j < 19000000/2; ++j)
                 {
-                    *bi = 0xFFF;
+                    *bi = 0xF8A;
                 }
             }
         }
     }
 
-    // check just in case
+    // check 
     //
     if (!sv2.equal(sv3))
     {
@@ -2364,14 +2359,16 @@ void SparseVectorAccessTest()
         }
     }
 
+    target_v.resize(idx.size());
     {
-        TimeTaker tt("sparse_vectot<>::gather() ", REPEATS/5 );
+        TimeTaker tt("sparse_vectot<>::gather() UNSORTED ", REPEATS/5 );
         for (unsigned i = 0; i < REPEATS/10; ++i)
         {
             sv1.gather(target_v.data(), idx.data(), unsigned(idx.size()), bm::BM_UNSORTED);
         }
     }
 
+    target_v2.resize(idx.size());
     {
         TimeTaker tt("sparse_vector<>::decode()", REPEATS / 5);
         auto from = gather_from;
@@ -2390,7 +2387,7 @@ void SparseVectorAccessTest()
         }
     }
 
-
+/*
     {
         TimeTaker tt("sparse_vector const_iterator test", REPEATS );
         for (unsigned i = 0; i < REPEATS/10; ++i)
@@ -2405,9 +2402,9 @@ void SparseVectorAccessTest()
             }
         }
     }
-
+    */
 /*
-    // check just in case
+    // check 
     //
     size_t sz = min(target1.size(), target2.size());
     for (unsigned j = 0; j < sz; ++j)
@@ -2874,41 +2871,33 @@ void Set2SetTransformTest()
     bvect bv_sample;
     bvect bv_non_sample;
 
-
     {
-    bm::sparse_vector_scanner<svect> scanner;
-    scanner.find_nonzero(sv, bv_values);
-    scanner.find_zero(sv, bv_non_values);
+        bm::sparse_vector_scanner<svect> scanner;
+        scanner.find_nonzero(sv, bv_values);
+        scanner.find_zero(sv, bv_non_values);
     
-    unsigned non_v_count = bv_non_values.count() / 20;
-    if (non_v_count > 3000000)
-        non_v_count = 3000000;
+        unsigned non_v_count = bv_non_values.count() / 20;
+        if (non_v_count > 3000000)
+            non_v_count = 3000000;
 
-    if (non_v_count)
-    {
-        bm::random_subset<bvect> rand_sampler;
-        rand_sampler.sample(bv_sample, bv_values, 6000000);
-        rand_sampler.sample(bv_non_sample, bv_non_values, non_v_count);
-        //cout << "zero mix = " << bv_non_sample.count() << endl;
-        bv_sample |= bv_non_sample; // add some missing values
-    }
+        if (non_v_count)
+        {
+            bm::random_subset<bvect> rand_sampler;
+            rand_sampler.sample(bv_sample, bv_values, 6000000);
+            rand_sampler.sample(bv_non_sample, bv_non_values, non_v_count);
+            //cout << "zero mix = " << bv_non_sample.count() << endl;
+            bv_sample |= bv_non_sample; // add some missing values
+        }
     }
     
-    //cout << bv_sample.count() << endl;
-    //cout << sv.size() << endl;
-
     bm::set2set_11_transform<svect> set2set;
-
     int cnt = 0;
-
     {
-    TimeTaker tt("set2set_11_transform::run()", REPEATS/10);
-
+        TimeTaker tt("set2set_11_transform::run()", REPEATS/10);
         for (unsigned i = 0; i < REPEATS/10; ++i)
         {
             bvect bv_out;
             set2set.run(bv_sample, sv, bv_out);
-
             cnt += bv_out.any();
         }
     }
@@ -2926,10 +2915,8 @@ void Set2SetTransformTest()
         }
     }
     */
-
     char buf[256];
     sprintf(buf, "%i", (int)cnt); // to fool some smart compilers like ICC
-
 }
 
 static
@@ -2973,7 +2960,6 @@ void RangeCopyTest()
             bv_cp &= bv;
         } // for
     }
-
 }
 
 /// Reference (naive) interval detector based on population counting 
@@ -3924,7 +3910,8 @@ int main(void)
 //    ptest();
 
     TimeTaker tt("TOTAL", 1);
-/*
+
+    cout << endl;
     MemCpyTest();
 
     BitCountTest();
@@ -3934,68 +3921,80 @@ int main(void)
     BitForEachTest();
 
     WordSelectTest();
+    cout << endl;
 
     BitTestSparseTest();
-
     BitCompareTest();
+    cout << endl;
 
     OptimizeTest();
+    cout << endl;
 
     FindTest();
+    cout << endl;
 
     BitBlockRotateTest();
 
     BitBlockShiftTest();
+    cout << endl;
 
     InterpolativeCodingTest();
- 
+    cout << endl;
+
     EnumeratorTest();
-
     EnumeratorTestGAP();
-
     EnumeratorGoToTest();
+    cout << endl;
 
     BvectorShiftTest();
+    cout << endl;
 
     RangeCopyTest();
+    cout << endl;
 
     IntervalsTest();
+    cout << endl;
 
     AggregatorTest();
+    cout << endl;
 
     OrTest();
-
     AndTest();
     XorTest();
-
     SubTest();
+    cout << endl;
 
     InvertTest();  
+    cout << endl;
+
+    Set2SetTransformTest();
+    cout << endl;
 
     XorCountTest();
     AndCountTest();
-
     TI_MetricTest();
-*/
+    cout << endl;
+
     SerializationTest();
+    cout << endl;
 
     SparseVectorAccessTest();
-    return 0;
+    cout << endl;
+
     SparseVectorScannerTest();
+    cout << endl;
 
     SparseVectorSerializationTest();
-
     SparseVectorRangeDeserializationTest();
+    cout << endl;
 
     RSC_SparseVectorFillTest();
-
     RSC_SparseVectorAccesTest();
-
     RankCompressionTest();
-
-    Set2SetTransformTest();
+    cout << endl;
 
     StrSparseVectorTest();
+    cout << endl;
 
     return 0;
 }
