@@ -1046,10 +1046,6 @@ void EnumeratorTest()
     FillSetsIntervals(nullptr, bv3, 0, BSIZE/2, 12);
     FillSetsIntervals(nullptr, bv4, 0, BSIZE/2, 120);
     
-    auto c1 = bv1.count();
-    auto c2 = bv2.count();
-    auto c3 = bv3.count();
-    auto c4 = bv4.count();
 
     unsigned i;
 
@@ -3921,6 +3917,7 @@ void InterpolativeCodingTest()
 
 int main(void)
 {
+    cout << bm::_copyright<true>::_p << endl;
 //    ptest();
 
     TimeTaker tt("TOTAL", 1);
