@@ -17,6 +17,11 @@ include_directories("${PROJECT_SOURCE_DIR}/src")
 
 set (CMAKE_CXX_STANDARD 11)
 
+
+if (CMAKE_CXX_COMPILER_ID MATCHES "GNU")
+    set(warnopt "-Wno-psabi")
+endif()
+
 if (CMAKE_CXX_COMPILER_ID MATCHES "GNU" OR CMAKE_CXX_COMPILER_ID MATCHES "Clang")
     if ("${BMOPTFLAGS}" STREQUAL "BMSSE42OPT")
 	    set(bmoptf "-march=nehalem -O2 -msse4.2 -DBMSSE42OPT")
@@ -26,7 +31,7 @@ if (CMAKE_CXX_COMPILER_ID MATCHES "GNU" OR CMAKE_CXX_COMPILER_ID MATCHES "Clang"
         set(bmoptf "-march=native -O2")
     endif()
 
-    set(flags "-Wall -Wextra -Wno-psabi -Wno-ignored-qualifiers -fPIC -fomit-frame-pointer")
+    set(flags "-Wall -Wextra -Wno-ignored-qualifiers -fPIC -fomit-frame-pointer")
     set(optflags -g0 -O2)
     set(bmptflags -pthread)
     SET( CMAKE_EXE_LINKER_FLAGS  "${CMAKE_EXE_LINKER_FLAGS} -Wl,-lpthread")
@@ -48,7 +53,7 @@ elseif (CMAKE_CXX_COMPILER_ID MATCHES "MSVC")
 endif()
 
 set(CMAKE_C_FLAGS   "${CMAKE_C_FLAGS} ${flags} ${bmoptf} ${bmptflags}")
-set(CMAKE_CXX_FLAGS "${CMAKE_CXX_FLAGS} ${flags} ${bmoptf} ${bmptflags}")
+set(CMAKE_CXX_FLAGS "${CMAKE_CXX_FLAGS} ${flags} ${bmoptf} ${bmptflags} ${warnopt}")
 
 add_executable(bmsvutil ${PROJECT_SOURCE_DIR}/utils/svutil/svutil.cpp)
 
