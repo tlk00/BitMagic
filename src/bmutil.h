@@ -353,7 +353,7 @@ inline
 unsigned count_leading_zeros_u32(unsigned w) BMNOEXCEPT
 {
     BM_ASSERT(w);
-#if defined(BMSSE42OPT) || defined(BMAVX2OPT) || defined (BMAVX512OPT)
+#if defined(BMAVX2OPT) || defined (BMAVX512OPT)
     return (unsigned)_lzcnt_u32(w);
 #else
     #if defined(BM_USE_GCC_BUILD) || defined(__GNUG__)
