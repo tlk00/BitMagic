@@ -26,7 +26,7 @@ if (CMAKE_CXX_COMPILER_ID MATCHES "GNU" OR CMAKE_CXX_COMPILER_ID MATCHES "Clang"
         set(bmoptf "-march=native -O2")
     endif()
 
-    set(flags "-Wall -Wextra -Wno-ignored-qualifiers -fPIC -fomit-frame-pointer")
+    set(flags "-Wall -Wextra -Wno-psabi -Wno-ignored-qualifiers -fPIC -fomit-frame-pointer")
     set(optflags -g0 -O2)
     set(bmptflags -pthread)
     SET( CMAKE_EXE_LINKER_FLAGS  "${CMAKE_EXE_LINKER_FLAGS} -Wl,-lpthread")
