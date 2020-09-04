@@ -330,15 +330,21 @@ void BitCountTest()
     unsigned value = 0;
 
     FillSetsIntervals(bset, *bv, 0, BSIZE, 10);
+    {
+        auto c0 = bset->count();
+        auto c1 = bv->count();
+        assert(c0 == c1);
+    }
 
     //if (!platform_test)
     {
-    TimeTaker tt("BitCount. Random bitvector", REPEATS*20);
-    for (unsigned i = 0; i < REPEATS*20; ++i)
-    {    
-        value+=bv->count();
+        TimeTaker tt("BitCount. Random bitvector", REPEATS*10);
+        for (unsigned i = 0; i < REPEATS*10; ++i)
+        {
+            value+=bv->count();
+        }
     }
-    }
+
 
     volatile unsigned* p = &value;
     unsigned c1;
@@ -789,28 +795,32 @@ void BitTestSparseTest()
 
     const unsigned repeats = REPEATS * 300000;
 
-    size_t value = 0, c1;
-    volatile size_t* p = &value;
+    size_t value = 0;
 
     SimpleFillSets(bset0.get(), *bv0, 0, BSIZE, 9530);
     SimpleFillSets(bset1.get(), *bv1, 0, BSIZE, 1000);
     SimpleFillSets(bset2.get(), *bv2, 0, BSIZE, 120);
 
+    std::vector<unsigned> idx;
+    idx.resize(repeats);
+    for (unsigned i = 0; i < repeats; ++i)
+    {
+        idx.push_back(unsigned(rand_dis(gen)));
+    }
 
     {
-        TimeTaker tt("BitTest: bitset ", repeats);
+        TimeTaker tt("BitTest: bvector<>::test() (BIT) ", repeats);
         for (unsigned i = 0; i < repeats; ++i)
         {
-            unsigned idx = unsigned(rand_dis(gen));
-            value += bv0->test(idx);
-            value += bv1->test(idx);
-            value += bv2->test(idx);
+            unsigned id = idx[i];
+            value += bv0->test(id);
+            value += bv1->test(id);
+            value += bv2->test(id);
         }
     }
 
 
-    c1 = *p;
-    value = c1 = 0;
+    size_t value2 = 0;
 
     BM_DECLARE_TEMP_BLOCK(tb)
     bv0->optimize(tb);
@@ -818,15 +828,16 @@ void BitTestSparseTest()
     bv2->optimize(tb);
 
     {
-        TimeTaker tt("BitTest: Sparse bitset (GAP) ", repeats);
+        TimeTaker tt("BitTest: bvector<>::test() (GAP) ", repeats);
         for (unsigned i = 0; i < repeats; ++i)
         {
-            unsigned idx = unsigned(rand_dis(gen));
-            value += bv0->test(idx);
-            value += bv1->test(idx);
-            value += bv2->test(idx);
+            unsigned id = idx[i];
+            value2 += bv0->test(id);
+            value2 += bv1->test(id);
+            value2 += bv2->test(id);
         }
     }
+    assert(value == value2);
 
 }
 
@@ -842,22 +853,28 @@ void EnumeratorGoToTest()
 
     const unsigned repeats = REPEATS * 300000;
 
-    size_t value = 0, c1;
-    volatile size_t* p = &value;
+    bm::id64_t value = 0;
 
     SimpleFillSets(bset0.get(), *bv0, 0, BSIZE, 512);
     SimpleFillSets(bset1.get(), *bv1, 0, BSIZE, 256);
     SimpleFillSets(bset2.get(), *bv2, 0, BSIZE, 120);
 
+    std::vector<unsigned> idx;
+    idx.resize(repeats);
+    for (unsigned i = 0; i < repeats; ++i)
+    {
+        idx.push_back(unsigned(rand_dis(gen)));
+    }
+
 
     {
-        TimeTaker tt("Enumerator at bit pos:  ", repeats);
+        TimeTaker tt("Enumerator at BIT pos:  ", repeats);
         for (unsigned i = 0; i < repeats; ++i)
         {
-            unsigned idx = unsigned(rand_dis(gen));
-            bvect::enumerator en0 = bv0->get_enumerator(idx);
-            bvect::enumerator en1 = bv1->get_enumerator(idx);
-            bvect::enumerator en2 = bv2->get_enumerator(idx);
+            unsigned id = idx[i];
+            bvect::enumerator en0 = bv0->get_enumerator(id);
+            bvect::enumerator en1 = bv1->get_enumerator(id);
+            bvect::enumerator en2 = bv2->get_enumerator(id);
 
             value += *en0;
             value += *en1;
@@ -865,8 +882,7 @@ void EnumeratorGoToTest()
         }
     }
 
-    c1 = *p;
-    value = c1 = 0;
+    bm::id64_t value2 = 0;
 
     BM_DECLARE_TEMP_BLOCK(tb)
     bv0->optimize(tb);
@@ -874,20 +890,20 @@ void EnumeratorGoToTest()
     bv2->optimize(tb);
 
     {
-        TimeTaker tt("Enumerator at gap pos: ", repeats);
+        TimeTaker tt("Enumerator at GAP pos: ", repeats);
         for (unsigned i = 0; i < repeats; ++i)
         {
-            unsigned idx = unsigned(rand_dis(gen));
-            bvect::enumerator en0 = bv0->get_enumerator(idx);
-            bvect::enumerator en1 = bv1->get_enumerator(idx);
-            bvect::enumerator en2 = bv2->get_enumerator(idx);
+            unsigned id = idx[i];
+            bvect::enumerator en0 = bv0->get_enumerator(id);
+            bvect::enumerator en1 = bv1->get_enumerator(id);
+            bvect::enumerator en2 = bv2->get_enumerator(id);
 
-            value += *en0;
-            value += *en1;
-            value += *en2;
+            value2 += *en0;
+            value2 += *en1;
+            value2 += *en2;
         }
     }
-
+    assert(value == value2);
 }
 
 

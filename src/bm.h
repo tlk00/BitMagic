@@ -7212,14 +7212,27 @@ bool
 bvector<Alloc>::enumerator::decode_bit_group(block_descr_type* bdescr,
                                              size_type& rank) BMNOEXCEPT
 {
-    const word_t* block_end = this->block_ + bm::set_block_size;
+    const word_t* BMRESTRICT block_end = this->block_ + bm::set_block_size;
     for (; bdescr->bit_.ptr < block_end;)
     {
-        const bm::id64_t* w64_p = (bm::id64_t*)bdescr->bit_.ptr;
-        BM_ASSERT(bm::set_bitscan_wave_size == 4); // TODO: better handle this
+        unsigned cnt;
+        #if defined(BMAVX512OPT) || defined(BMAVX2OPT) || defined(BM64OPT) || defined(BM64_SSE4)
+        {
+            const bm::id64_t* w64_p = (bm::id64_t*)bdescr->bit_.ptr;
+            BM_ASSERT(bm::set_bitscan_wave_size == 4);
+            cnt  = bm::word_bitcount64(w64_p[0]);
+            cnt += bm::word_bitcount64(w64_p[1]);
+        }
+        #else
+            const bm::word_t* BMRESTRICT block = this->block_;
+            unsigned c1= bm::word_bitcount(*block);
+            unsigned c2 = bm::word_bitcount(block[1]);
+            cnt = c1 + c2;
+            c1= bm::word_bitcount(block[2]);
+            c2 = bm::word_bitcount(block[3]);
+            cnt += c1 + c2;
+        #endif
 
-        unsigned cnt = bm::word_bitcount64(w64_p[0]);
-        cnt += bm::word_bitcount64(w64_p[1]);
         if (rank > cnt)
         {
             rank -= cnt;
