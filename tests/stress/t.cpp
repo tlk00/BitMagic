@@ -17531,51 +17531,63 @@ void TestRecomb()
 }
 
 static
+void CheckBitList(const unsigned* bl1, unsigned bl1_cnt,
+                  const unsigned* bl2, unsigned bl2_cnt)
+{
+    assert(bl1_cnt == bl2_cnt);
+    for (unsigned i = 0; i < bl1_cnt; ++i)
+    {
+        assert(bl1[i] == bl2[i]);
+        if (bl1[i] != bl2[i])
+        {
+            cerr << "BitList check failed!" << endl;
+            exit(1);
+        }
+    }
+}
+
+static
 void BitForEachTest()
 {
     cout << "---------------------------- BitForEachTest..." << endl;
 
-    cout << "testing bit_list_4(), bitscan_popcnt().." << endl;
+    cout << "Testing BITSCAN variants: bit_list_4(), bitscan_popcnt().." << endl;
     {
         unsigned bit_list1[32];
         unsigned bit_list2[32];
         unsigned bit_list3[32];
         unsigned bit_list4[32];
         unsigned bit_list5[32];
+        unsigned bit_list6[32];
 
 #ifdef __GNUC__
 #define BITSCAN_NIBGCC bm::bitscan_nibble_gcc
 #else
 #define BITSCAN_NIBGCC bm::bitscan_nibble
 #endif
-        for (unsigned i = 0; i < 65536*1024; ++i)
+        for (unsigned i = 0; i < 65536*10000; ++i)
         {
             unsigned bits1 = bm::bit_list(i, bit_list1);
             unsigned bits2 = bm::bit_list_4(i, bit_list2);
             unsigned bits3 = bm::bitscan_popcnt(i, bit_list3);
             unsigned bits4 = bm::bitscan_nibble(i, bit_list4);
             unsigned bits5 = BITSCAN_NIBGCC(i, bit_list5);
+            unsigned bits6 = bm::bitscan_bsf(i, bit_list6);
             if (bits1 != bits2 || bits1 != bits3)
             {
                 cout << "Bit for each test failed bit_cnt criteria!" << endl;
                 exit(1);
             }
-            if (bits1 != bits4)
-            {
-                cout << "Bit nibble test failed bit_cnt criteria!" << endl;
-                assert(0); exit(1);
-            }
-            if (bits1 != bits5)
-            {
-                cout << "Bit nibble test failed bit_cnt criteria!" << endl;
-                assert(0); exit(1);
-            }
+            assert (bits1 == bits4);
+            assert (bits1 == bits5);
+            assert (bits1 == bits6);
             for (unsigned j = 0; j < bits1; ++j)
             {
                 if (bit_list1[j] != bit_list2[j] ||
                     bit_list1[j] != bit_list3[j] ||
                     bit_list1[j] != bit_list4[j] ||
-                    bit_list1[j] != bit_list5[j]
+                    bit_list1[j] != bit_list5[j] ||
+                    bit_list1[j] != bit_list6[j]
                     )
                 {
                     cout << "Bit for each check failed for w=" << i
@@ -17634,7 +17646,28 @@ void BitForEachTest()
             cout << endl;
         } // for
     }
-    
+
+    cout << "Stress 64-bit bitscan..." << endl;
+    {
+        unsigned bit_list3[64];
+        unsigned bit_list6[64];
+        for (bm::id64_t i = 0; i < 65536*10000; ++i)
+        {
+            bm::id64_t w = i | (i << 32);
+            unsigned bits3 = bm::bitscan_popcnt64(w, bit_list3);
+            unsigned bits6 = bm::bitscan_bsf64(w, bit_list6);
+            CheckBitList(bit_list3, bits3, bit_list6, bits6);
+            w = i;
+            bits3 = bm::bitscan_popcnt64(w, bit_list3);
+            bits6 = bm::bitscan_bsf64(w, bit_list6);
+            CheckBitList(bit_list3, bits3, bit_list6, bits6);
+            w = (i << 32);
+            bits3 = bm::bitscan_popcnt64(w, bit_list3);
+            bits6 = bm::bitscan_bsf64(w, bit_list6);
+            CheckBitList(bit_list3, bits3, bit_list6, bits6);
+        }
+    }
+
 
     cout << "---------------------------- BitForEachTest Ok." << endl;
 }
@@ -17847,7 +17880,7 @@ void SelectTest()
     {
         bm::id64_t w64 = 1;
         unsigned idx = bm::word_select64_linear(w64, 1);
-        unsigned idx0 = word_select64_bitscan(w64, 1);
+        unsigned idx0 = word_select64_bitscan_popcnt(w64, 1);
         unsigned idx1, idx4, idx3, idx5;
         assert(idx == 0);
         assert(idx0 == idx);
@@ -17893,7 +17926,7 @@ void SelectTest()
         {
             idx = bm::word_select64_linear(~0ull, sel);
             assert(idx == sel-1);
-            idx0 = word_select64_bitscan(~0ull, sel);
+            idx0 = word_select64_bitscan_popcnt(~0ull, sel);
             assert(idx0 == idx);
             idx4 = proxy_bmi1_select64_lz(~0ull, sel);
             assert(idx4 == idx);
@@ -17907,7 +17940,7 @@ void SelectTest()
         {
             idx0 = bm::word_select64_linear(w64, 1);
             assert(idx0 == idx);
-            idx1 = word_select64_bitscan(w64, 1);
+            idx1 = word_select64_bitscan_popcnt(w64, 1);
             assert(idx1 == idx0);
             idx4 = proxy_bmi1_select64_lz(w64, 1);
             assert(idx4 == idx);
@@ -17932,7 +17965,7 @@ void SelectTest()
             for (unsigned j = 1; j <= count; ++j)
             {
                 unsigned idx0 = bm::word_select64_linear(w64, j);
-                unsigned idx1 = word_select64_bitscan(w64, j);
+                unsigned idx1 = word_select64_bitscan_popcnt(w64, j);
                 assert(idx0 == idx1);
                 unsigned idx4 = proxy_bmi1_select64_lz(w64, j);
                 assert(idx4 == idx1);
@@ -17947,7 +17980,7 @@ void SelectTest()
             for (unsigned j = 1; j <= count; ++j)
             {
                 unsigned idx0 = bm::word_select64_linear(w64_1, j);
-                unsigned idx1 = word_select64_bitscan(w64_1, j);
+                unsigned idx1 = word_select64_bitscan_popcnt(w64_1, j);
                 assert(idx0 == idx1);
                 unsigned idx4 = proxy_bmi1_select64_lz(w64_1, j);
                 assert(idx4 == idx1);
@@ -28762,6 +28795,7 @@ int main(int argc, char *argv[])
 
     if (is_all || is_low_level)
     {
+/*
         TestRecomb();
 
         Log2Test();
@@ -28801,7 +28835,7 @@ int main(int argc, char *argv[])
         
          BlockBitEraseTest();
          TestBlockLast();
-
+*/
          BitForEachTest();
 
          BitCountChangeTest();
