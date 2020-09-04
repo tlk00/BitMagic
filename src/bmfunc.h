@@ -4650,23 +4650,17 @@ unsigned bit_count_min_unroll(const bm::word_t* BMRESTRICT block,
         block += 8;
     } while (block < block_end);
 #else
-    // For 32 bit code the fastest method is
-    // to use bitcount table for each byte in the block.
-    // As optimization for sparse bitsets used bits accumulator
-    // to collect ON bits using bitwise OR.
-    bm::word_t  acc = *block++;
     do
     {
-        bm::word_t in = *block++;
-        bm::word_t acc_prev = acc;
-        acc |= in;
-        if (acc_prev &= in)  // accumulator miss: counting bits
-        {
-            BM_INCWORD_BITCOUNT(count, acc);
-            acc = acc_prev;
-        }
+        unsigned c1= bm::word_bitcount(*block);
+        unsigned c2 = bm::word_bitcount(block[1]);        
+        count += c1 + c2;        
+        c1= bm::word_bitcount(block[2]);
+        c2 = bm::word_bitcount(block[3]);        
+        count += c1 + c2;                
+        block+=4;
     } while (block < block_end);
-    BM_INCWORD_BITCOUNT(count, acc); // count-in remaining accumulator
+    
 #endif
     return count;
 }
