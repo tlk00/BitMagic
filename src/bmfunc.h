@@ -736,6 +736,7 @@ unsigned short bitscan_bsf64(bm::id64_t w, B* bits) BMNOEXCEPT
     return pos;
 }
 
+
 /*!
   \brief Unpacks 64-bit word into list of ON bit indexes using popcnt method
   \param w - value
