@@ -98,7 +98,7 @@ namespace bm
     Get minimum of 2 values
 */
 template<typename T>
-T min_value(T v1, T v2) BMNOEXCEPT
+BMFORCEINLINE T min_value(T v1, T v2) BMNOEXCEPT
 {
     return v1 < v2 ? v1 : v2;
 }
@@ -121,7 +121,7 @@ template <> struct conditional<false>
     Fast loop-less function to find LOG2
 */
 template<typename T>
-T ilog2(T x) BMNOEXCEPT
+BMFORCEINLINE T ilog2(T x) BMNOEXCEPT
 {
     unsigned int l = 0;
     
@@ -134,7 +134,8 @@ T ilog2(T x) BMNOEXCEPT
 }
 
 template<>
-inline bm::gap_word_t ilog2(gap_word_t x) BMNOEXCEPT
+BMFORCEINLINE
+bm::gap_word_t ilog2(gap_word_t x) BMNOEXCEPT
 {
     unsigned int l = 0;
     if (x >= 1<<8)  { x = (bm::gap_word_t)(x >> 8); l |= 8; }
@@ -166,7 +167,7 @@ private:
     @ingroup bitfunc
     @internal
 */
-inline
+BMFORCEINLINE
 unsigned count_leading_zeros(unsigned x) BMNOEXCEPT
 {
     unsigned n =
@@ -182,7 +183,7 @@ unsigned count_leading_zeros(unsigned x) BMNOEXCEPT
     @ingroup bitfunc
     @internal
 */
-inline
+BMFORCEINLINE
 unsigned count_trailing_zeros(unsigned v) BMNOEXCEPT
 {
     // (v & -v) isolates the last set bit
@@ -193,7 +194,7 @@ unsigned count_trailing_zeros(unsigned v) BMNOEXCEPT
     Lookup table based integer LOG2
 */
 template<typename T>
-T ilog2_LUT(T x) BMNOEXCEPT
+BMFORCEINLINE T ilog2_LUT(T x) BMNOEXCEPT
 {
     unsigned l = 0;
     if (x & 0xffff0000) 
@@ -212,7 +213,7 @@ T ilog2_LUT(T x) BMNOEXCEPT
     Lookup table based short integer LOG2
 */
 template<>
-inline bm::gap_word_t ilog2_LUT<bm::gap_word_t>(bm::gap_word_t x) BMNOEXCEPT
+BMFORCEINLINE bm::gap_word_t ilog2_LUT<bm::gap_word_t>(bm::gap_word_t x) BMNOEXCEPT
 {
     if (x & 0xff00)
     {
@@ -291,13 +292,13 @@ unsigned int bsf_asm32(unsigned int value) BMNOEXCEPT
 // http://citeseerx.ist.psu.edu/viewdoc/summary?doi=10.1.1.37.8562
 //
 template<typename T>
-T bit_scan_fwd(T v) BMNOEXCEPT
+BMFORCEINLINE T bit_scan_fwd(T v) BMNOEXCEPT
 {
     return
         DeBruijn_bit_position<true>::_multiply[(((v & -v) * 0x077CB531U)) >> 27];
 }
 
-inline
+BMFORCEINLINE
 unsigned bit_scan_reverse32(unsigned value) BMNOEXCEPT
 {
     BM_ASSERT(value);
@@ -312,7 +313,7 @@ unsigned bit_scan_reverse32(unsigned value) BMNOEXCEPT
 #endif
 }
 
-inline
+BMFORCEINLINE
 unsigned bit_scan_forward32(unsigned value) BMNOEXCEPT
 {
     BM_ASSERT(value);

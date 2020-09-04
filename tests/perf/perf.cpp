@@ -436,7 +436,7 @@ void BitForEachTest()
     bm::id64_t sum3(0);
     {
         unsigned bit_list[32];
-        TimeTaker tt("BitScan-POPCNT algorithm", REPEATS);
+        TimeTaker tt("BitScan-POPCNT ", REPEATS);
         for (unsigned i = 0; i < REPEATS; ++i)
         {
             for (unsigned j = 0; j < value_to; ++j)
@@ -446,6 +446,21 @@ void BitForEachTest()
         }
     }
     assert(sum1 == sum3);
+
+    bm::id64_t sum4(0);
+    {
+        unsigned bit_list[32];
+        TimeTaker tt("BitScan-BSF ", REPEATS);
+        for (unsigned i = 0; i < REPEATS; ++i)
+        {
+            for (unsigned j = 0; j < value_to; ++j)
+            {
+                sum4 += bm::bitscan_bsf(test_arr[j], bit_list);
+            }
+        }
+    }
+    assert(sum1 == sum4);
+
 
 /*
     {

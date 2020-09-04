@@ -385,6 +385,11 @@ void bit_for_each(T w, F& func)
     } // for
 }
 
+/**
+    portable, switch based bitscan
+    @internal
+   @ingroup bitfunc
+ */
 inline
 unsigned bitscan_nibble(unsigned w, unsigned* bits) BMNOEXCEPT
 {
@@ -476,7 +481,11 @@ unsigned bitscan_nibble(unsigned w, unsigned* bits) BMNOEXCEPT
 }
 
 #ifdef __GNUC__
-
+/**
+    bitscan based on computed goto (GCC/clang)
+    @internal
+    @ingroup bitfunc
+ */
 inline
 unsigned bitscan_nibble_gcc(unsigned w, unsigned* bits) BMNOEXCEPT
 {
@@ -725,6 +734,27 @@ unsigned short bitscan_popcnt64(bm::id64_t w, B* bits) BMNOEXCEPT
 }
 
 /*!
+    \brief Unpacks word into list of ON bits (BSF/__builtin_ctz)
+    \param w - value
+    \param bits - pointer on the result array
+    \return number of bits in the list
+
+    @ingroup bitfunc
+    @internal
+*/
+template<typename B>
+unsigned short bitscan_bsf(unsigned w, B* bits) BMNOEXCEPT
+{
+    unsigned short pos = 0;
+    while (w)
+    {
+        bits[pos++] = bm::bit_scan_forward32(w);
+        w ^= w & -w;
+    }
+    return pos;
+}
+
+/*!
   \brief Unpacks 64-bit word into list of ON bit indexes using popcnt method
   \param w - value
   \param bits - pointer on the result array
@@ -746,7 +776,10 @@ bitscan_popcnt64(bm::id64_t w, B* bits, unsigned short offs) BMNOEXCEPT
     return pos;
 }
 
-
+/**
+    Templated Bitscan with dynamic dispatch for best type
+    @ingroup bitfunc
+ */
 template<typename V, typename B>
 unsigned short bitscan(V w, B* bits) BMNOEXCEPT
 {
