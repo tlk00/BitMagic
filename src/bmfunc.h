@@ -715,6 +715,18 @@ unsigned short bitscan_bsf(unsigned w, B* bits) BMNOEXCEPT
     return pos;
 }
 
+template<typename B, typename OT>
+unsigned short bitscan_bsf(unsigned w, B* bits, OT offs) BMNOEXCEPT
+{
+    unsigned short pos = 0;
+    while (w)
+    {
+        bits[pos++] = (B) (bm::count_trailing_zeros_u32(w) + offs);
+        w &= w - 1;
+    }
+    return pos;
+}
+
 /*!
     \brief Unpacks word into list of ON bits (BSF/__builtin_ctz)
     \param w - value
@@ -8753,13 +8765,22 @@ bitscan_wave(const bm::word_t* BMRESTRICT w_ptr,
     w = (bm::id64_t(w1) << 32) | w0;
     cnt0 += bm::bitscan_popcnt64(w, bits + cnt0, 64);
 #else
-    // decode wave as two 32-bit bitscan decodes
-    cnt0 = bm::bitscan_popcnt(w0, bits);
-    cnt0 += bm::bitscan_popcnt(w1, bits + cnt0, 32);
+    #if (defined(__arm__) || defined(__aarch64__))
+        cnt0 = bm::bitscan_bsf(w0, bits, (unsigned short)0);
+        cnt0 += bm::bitscan_bsf(w1, bits + cnt0, (unsigned short)32);
 
-    w0 = w_ptr[2]; w1 = w_ptr[3];
-    cnt0 += bm::bitscan_popcnt(w0, bits + cnt0, 64);
-    cnt0 += bm::bitscan_popcnt(w1, bits + cnt0, 64+32);
+        w0 = w_ptr[2]; w1 = w_ptr[3];
+        cnt0 += bm::bitscan_bsf(w0, bits + cnt0, (unsigned short)64);
+        cnt0 += bm::bitscan_bsf(w1, bits + cnt0, (unsigned short)(64+32));        
+    #else    
+        // decode wave as two 32-bit bitscan decodes
+        cnt0 = bm::bitscan_popcnt(w0, bits);
+        cnt0 += bm::bitscan_popcnt(w1, bits + cnt0, 32);
+
+        w0 = w_ptr[2]; w1 = w_ptr[3];
+        cnt0 += bm::bitscan_popcnt(w0, bits + cnt0, 64);
+        cnt0 += bm::bitscan_popcnt(w1, bits + cnt0, 64+32);    
+    #endif
 #endif
     return static_cast<unsigned short>(cnt0);
 }
