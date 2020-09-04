@@ -28795,7 +28795,7 @@ int main(int argc, char *argv[])
 
     if (is_all || is_low_level)
     {
-/*
+
         TestRecomb();
 
         Log2Test();
@@ -28835,7 +28835,7 @@ int main(int argc, char *argv[])
         
          BlockBitEraseTest();
          TestBlockLast();
-*/
+
          BitForEachTest();
 
          BitCountChangeTest();
