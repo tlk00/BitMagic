@@ -7224,12 +7224,12 @@ bvector<Alloc>::enumerator::decode_bit_group(block_descr_type* bdescr,
             cnt += bm::word_bitcount64(w64_p[1]);
         }
         #else
-            const bm::word_t* BMRESTRICT block = this->block_;
-            unsigned c1= bm::word_bitcount(*block);
-            unsigned c2 = bm::word_bitcount(block[1]);
+            const bm::word_t* BMRESTRICT w = bdescr->bit_.ptr;
+            unsigned c1= bm::word_bitcount(w[0]);
+            unsigned c2 = bm::word_bitcount(w[1]);
             cnt = c1 + c2;
-            c1= bm::word_bitcount(block[2]);
-            c2 = bm::word_bitcount(block[3]);
+            c1= bm::word_bitcount(w[2]);
+            c2 = bm::word_bitcount(w[3]);
             cnt += c1 + c2;
         #endif
 
@@ -7251,6 +7251,7 @@ bvector<Alloc>::enumerator::decode_bit_group(block_descr_type* bdescr,
     } // for
     return false;
 }
+
 
 //---------------------------------------------------------------------
 
