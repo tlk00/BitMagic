@@ -216,7 +216,7 @@ For more information please visit:  http://bitmagic.io
 
 #ifdef BMSSE42OPT
 # if defined(BM64OPT) || defined(__x86_64) || defined(_M_AMD64) || defined(_WIN64) || \
-    defined(__LP64__) || defined(_LP64)
+    defined(__LP64__) || defined(_LP64) || ( __WORDSIZE == 64 )
 #   undef BM64OPT
 #   define BM64_SSE4
 # endif

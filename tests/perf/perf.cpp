@@ -369,62 +369,88 @@ void BitForEachTest()
 {
     // setup the test data
     //
+    unsigned value_to = 65536 * 50;
     size_t value = 0;
-    unsigned* test_arr = new unsigned[65536];
-    for (unsigned j = 0; j < 65536; ++j)
+    unsigned* test_arr = new unsigned[value_to];
     {
-        test_arr[j] = j * j;
-    }
-
-    if (platform_test)
-    {
-    unsigned bit_list[32];
-    TimeTaker tt("BitList algorithm. Conventional (AND based check)", REPEATS*10);
-    
-
-    for (unsigned i = 0; i < REPEATS*10; ++i)
-    {    
-        for (unsigned j = 0; j < 65536; ++j)
+        unsigned j=0;
+        for (; j < value_to/3; ++j) // sparse
         {
-            bm::bit_list(i*test_arr[j], bit_list);
+            test_arr[j] = (1u << 25) | (1u << 7) | 2u | 4u;
+            test_arr[++j] = 0;
         }
-    }
-    }
+        for (; j < 2 * (value_to/3) ; ++j) // medium
+            test_arr[j] = j;
 
-    // disabled (very slow)
-    #if 0
+        for (; j < value_to ; ++j) // dense
+            test_arr[j] = ~0u & ~((7u << 25) | (19u << 7) | 2u | 4u);
+    }
+/*
     if (platform_test)
     {
         unsigned bit_list[32];
-        TimeTaker tt("BitList4 algorithm(sub-octet+switch)", REPEATS*20);
+        TimeTaker tt("BitList algorithm. Conventional (AND based check)", REPEATS*10);
 
-        for (unsigned i = 0; i < REPEATS*100; ++i)
+        for (unsigned i = 0; i < REPEATS*10; ++i)
         {
-            for (unsigned j = 0; j < 65536; ++j)
+            for (unsigned j = 0; j < value_to; ++j)
             {
-                bm::bit_list_4(i*test_arr[j], bit_list);
+                bm::bit_list(test_arr[j], bit_list);
             }
         }
     }
+*/
+
+    bm::id64_t sum1(0);
+    if (platform_test)
+    {
+        unsigned bit_list[32];
+        TimeTaker tt("BitScan-nibble (switch based)", REPEATS);
+
+        for (unsigned i = 0; i < REPEATS; ++i)
+        {
+            for (unsigned j = 0; j < value_to; ++j)
+            {
+                sum1 += bm::bitscan_nibble(test_arr[j], bit_list);
+            }
+        }
+    }
+    #ifdef __GNUC__
+    bm::id64_t sum2(0);
+    if (platform_test)
+    {
+        unsigned bit_list[32];
+        TimeTaker tt("BitScan-nibble (GCC goto)", REPEATS);
+
+        for (unsigned i = 0; i < REPEATS; ++i)
+        {
+            for (unsigned j = 0; j < value_to; ++j)
+            {
+                sum2 += bm::bitscan_nibble_gcc(test_arr[j], bit_list);
+            }
+        }
+    }
+    assert(sum1 == sum2);
     #endif
 
+    bm::id64_t sum3(0);
     {
         unsigned bit_list[32];
-        TimeTaker tt("BitScan on bitcount algorithm", REPEATS * 20);
-
-        for (unsigned i = 0; i < REPEATS * 100; ++i)
+        TimeTaker tt("BitScan-POPCNT algorithm", REPEATS);
+        for (unsigned i = 0; i < REPEATS; ++i)
         {
-            for (unsigned j = 0; j < 65536; ++j)
+            for (unsigned j = 0; j < value_to; ++j)
             {
-                bm::bitscan_popcnt(i*test_arr[j], bit_list);
+                sum3 += bm::bitscan_popcnt(test_arr[j], bit_list);
             }
         }
     }
+    assert(sum1 == sum3);
 
-
+/*
     {
         unsigned bit_list[64];
-        TimeTaker tt("BitScan on bitcount (block)", REPEATS * 20);
+        TimeTaker tt("BitScan-POPCNT (block)", REPEATS * 20);
         for (unsigned i = 0; i < REPEATS * 20; ++i)
         {
             for (unsigned j = 0; j < 65536; ++j)
@@ -437,7 +463,8 @@ void BitForEachTest()
             }
         }
     }
-
+*/
+/*
     {
         unsigned char bit_list[64];
         TimeTaker tt("BitScan on bitcount64 (block)", REPEATS * 20);
@@ -446,7 +473,6 @@ void BitForEachTest()
             for (unsigned j = 0; j < 65536/2; j+=2)
             {
                 unsigned cnt = bm::bitscan_wave(test_arr + j, bit_list);
-
                 for (unsigned k =  0; j < cnt; j++)
                 {
                     value += bit_list[k];
@@ -454,7 +480,7 @@ void BitForEachTest()
             }
         }
     }
-
+*/
 
     char buf[256];
     sprintf(buf, "%i", (int)value); // to fool some smart compilers like ICC
@@ -3913,6 +3939,7 @@ int main(void)
     try
     {
         cout << endl;
+
         MemCpyTest();
 
         BitCountTest();

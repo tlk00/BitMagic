@@ -17540,27 +17540,49 @@ void BitForEachTest()
         unsigned bit_list1[32];
         unsigned bit_list2[32];
         unsigned bit_list3[32];
+        unsigned bit_list4[32];
+        unsigned bit_list5[32];
 
-
-        for (unsigned i = 0; i < 65536*50; ++i)
+#ifdef __GNUC__
+#define BITSCAN_NIBGCC bm::bitscan_nibble_gcc
+#else
+#define BITSCAN_NIBGCC bm::bitscan_nibble
+#endif
+        for (unsigned i = 0; i < 65536*1024; ++i)
         {
             unsigned bits1 = bm::bit_list(i, bit_list1);
             unsigned bits2 = bm::bit_list_4(i, bit_list2);
             unsigned bits3 = bm::bitscan_popcnt(i, bit_list3);
+            unsigned bits4 = bm::bitscan_nibble(i, bit_list4);
+            unsigned bits5 = BITSCAN_NIBGCC(i, bit_list5);
             if (bits1 != bits2 || bits1 != bits3)
             {
                 cout << "Bit for each test failed bit_cnt criteria!" << endl;
                 exit(1);
             }
+            if (bits1 != bits4)
+            {
+                cout << "Bit nibble test failed bit_cnt criteria!" << endl;
+                assert(0); exit(1);
+            }
+            if (bits1 != bits5)
+            {
+                cout << "Bit nibble test failed bit_cnt criteria!" << endl;
+                assert(0); exit(1);
+            }
             for (unsigned j = 0; j < bits1; ++j)
             {
-                if (bit_list1[j] != bit_list2[j] || bit_list1[j] != bit_list3[j])
+                if (bit_list1[j] != bit_list2[j] ||
+                    bit_list1[j] != bit_list3[j] ||
+                    bit_list1[j] != bit_list4[j] ||
+                    bit_list1[j] != bit_list5[j]
+                    )
                 {
-                    cout << "Bit for each check failed for " << j << endl;
-                    exit(1);
+                    cout << "Bit for each check failed for w=" << i
+                         << " bit=" << j << endl;
+                    assert(0); exit(1);
                 }
             }
-
         } // for
     }
     

@@ -385,6 +385,197 @@ void bit_for_each(T w, F& func)
     } // for
 }
 
+inline
+unsigned bitscan_nibble(unsigned w, unsigned* bits) BMNOEXCEPT
+{
+    unsigned cnt = 0;
+    for (unsigned sub_octet = 0; w; w >>= 4, sub_octet+=4)
+    {
+        switch (w & 15) // 1111
+        {
+        //case 0: // 0000
+        //    break;
+        case 1: // 0001
+            bits[cnt++] = 0 + sub_octet;
+            break;
+        case 2: // 0010
+            bits[cnt++] = 1 + sub_octet;
+            break;
+        case 3:    // 0011
+            bits[cnt]   = 0 + sub_octet;
+            bits[cnt+1] = 1 + sub_octet;
+            cnt += 2;
+            break;
+        case 4: // 0100
+            bits[cnt++] = 2 + sub_octet;
+            break;
+        case 5: // 0101
+            bits[cnt+0] = 0 + sub_octet;
+            bits[cnt+1] = 2 + sub_octet;
+            cnt += 2;
+            break;
+        case 6: // 0110
+            bits[cnt+0] = 1 + sub_octet;
+            bits[cnt+1] = 2 + sub_octet;
+            cnt += 2;
+            break;
+        case 7: // 0111
+            bits[cnt+0] = 0 + sub_octet;
+            bits[cnt+1] = 1 + sub_octet;
+            bits[cnt+2] = 2 + sub_octet;
+            cnt += 3;
+            break;
+        case 8: // 1000
+            bits[cnt++] = 3 + sub_octet;
+            break;
+        case 9: // 1001
+            bits[cnt+0] = 0 + sub_octet;
+            bits[cnt+1] = 3 + sub_octet;
+            cnt += 2;
+            break;
+        case 10: // 1010
+            bits[cnt+0] = 1 + sub_octet;
+            bits[cnt+1] = 3 + sub_octet;
+            cnt += 2;
+            break;
+        case 11: // 1011
+            bits[cnt+0] = 0 + sub_octet;
+            bits[cnt+1] = 1 + sub_octet;
+            bits[cnt+2] = 3 + sub_octet;
+            cnt += 3;
+            break;
+        case 12: // 1100
+            bits[cnt+0] = 2 + sub_octet;
+            bits[cnt+1] = 3 + sub_octet;
+            cnt += 2;
+            break;
+        case 13: // 1101
+            bits[cnt+0] = 0 + sub_octet;
+            bits[cnt+1] = 2 + sub_octet;
+            bits[cnt+2] = 3 + sub_octet;
+            cnt += 3;
+            break;
+        case 14: // 1110
+            bits[cnt+0] = 1 + sub_octet;
+            bits[cnt+1] = 2 + sub_octet;
+            bits[cnt+2] = 3 + sub_octet;
+            cnt += 3;
+            break;
+        case 15: // 1111
+            bits[cnt+0] = 0 + sub_octet;
+            bits[cnt+1] = 1 + sub_octet;
+            bits[cnt+2] = 2 + sub_octet;
+            bits[cnt+3] = 3 + sub_octet;
+            cnt += 4;
+            break;
+        default:
+            break;
+        }
+    } // for
+    return cnt;
+}
+
+#ifdef __GNUC__
+
+inline
+unsigned bitscan_nibble_gcc(unsigned w, unsigned* bits) BMNOEXCEPT
+{
+    static void* d_table[] = { &&l0,
+        &&l1, &&l3_1, &&l3, &&l7_1, &&l5, &&l7_0, &&l7, &&l15_1,
+        &&l9, &&l11_0, &&l11, &&l15_0, &&l13, &&l14, &&l15 };
+    unsigned cnt = 0;
+
+    for (unsigned sub_octet = 0; w; w >>= 4, sub_octet+=4)
+    {
+        goto *d_table[w & 15];
+        l1: // 0001
+            bits[cnt++] = sub_octet;
+            continue;
+/*
+        l2: // 0010
+            bits[cnt++] = 1 + sub_octet;
+            continue; */
+        l3:    // 0011
+            bits[cnt++] = sub_octet;
+            l3_1:
+            bits[cnt++] = 1 + sub_octet;
+            continue;
+/*        l4: // 0100
+            bits[cnt++] = 2 + sub_octet;
+            continue; */
+        l5: // 0101
+            bits[cnt++] = sub_octet;
+            goto l7_1;
+            /*
+            l5_1:
+            bits[cnt++] = 2 + sub_octet;
+            continue;*/
+            /*
+        l6: // 0110
+            bits[cnt++] = 1 + sub_octet;
+            bits[cnt++] = 2 + sub_octet;
+            continue; */
+        l7: // 0111
+            bits[cnt++] = sub_octet;
+            l7_0:
+            bits[cnt++] = 1 + sub_octet;
+            l7_1:
+            bits[cnt++] = 2 + sub_octet;
+            continue;
+/*        l8: // 1000
+            bits[cnt++] = 3 + sub_octet;
+            continue; */
+        l9: // 1001
+            bits[cnt++] = sub_octet;
+            goto l15_1;
+/*
+            l9_0:
+            bits[cnt++] = 3 + sub_octet; */
+            continue;
+/*
+        l10: // 1010
+            bits[cnt++] = 1 + sub_octet;
+            bits[cnt++] = 3 + sub_octet;
+            continue; */
+        l11: // 1011
+            bits[cnt++] = sub_octet;
+            l11_0:
+            bits[cnt++] = 1 + sub_octet;
+            bits[cnt++] = 3 + sub_octet;
+            continue;
+/*
+        l12: // 1100
+            bits[cnt++] = 2 + sub_octet;
+            bits[cnt++] = 3 + sub_octet;
+            continue; */
+        l13: // 1101
+            bits[cnt++] = sub_octet;
+            goto l15_0;
+//            bits[cnt++] = 2 + sub_octet;
+//            bits[cnt++] = 3 + sub_octet;
+//            continue;
+        l14: // 1110
+            bits[cnt++] = 1 + sub_octet;
+            goto l15_0;
+//            bits[cnt++] = 2 + sub_octet;
+//            bits[cnt++] = 3 + sub_octet;
+//            continue;
+        l15: // 1111
+            bits[cnt++] = 0 + sub_octet;
+            bits[cnt++] = 1 + sub_octet;
+            l15_0:
+            bits[cnt++] = 2 + sub_octet;
+            l15_1:
+            bits[cnt++] = 3 + sub_octet;
+
+        l0:
+            continue;
+    } // for
+    return cnt;
+}
+
+#endif
+
 /*! @brief Adaptor to copy 1 bits to array
     @internal
 */
@@ -8539,16 +8730,14 @@ bitscan_wave(const bm::word_t* BMRESTRICT w_ptr,
     bm::word_t w0, w1;
     unsigned int cnt0;
 
-    w0 = w_ptr[0];
-    w1 = w_ptr[1];
-    
-#if defined(BMAVX512OPT) || defined(BMAVX2OPT) || defined(BMSSE42OPT)
+    w0 = w_ptr[0]; w1 = w_ptr[1];
+
+#if defined(BMAVX512OPT) || defined(BMAVX2OPT) || defined(BM64OPT) || defined(BM64_SSE4)
     // combine into 64-bit word and scan (when HW popcnt64 is available)
     bm::id64_t w = (bm::id64_t(w1) << 32) | w0;
     cnt0 = bm::bitscan_popcnt64(w, bits);
 
-    w0 = w_ptr[2];
-    w1 = w_ptr[3];
+    w0 = w_ptr[2]; w1 = w_ptr[3];
     w = (bm::id64_t(w1) << 32) | w0;
     cnt0 += bm::bitscan_popcnt64(w, bits + cnt0, 64);
 #else
@@ -8556,8 +8745,7 @@ bitscan_wave(const bm::word_t* BMRESTRICT w_ptr,
     cnt0 = bm::bitscan_popcnt(w0, bits);
     cnt0 += bm::bitscan_popcnt(w1, bits + cnt0, 32);
 
-    w0 = w_ptr[2];
-    w1 = w_ptr[3];
+    w0 = w_ptr[2]; w1 = w_ptr[3];
     cnt0 += bm::bitscan_popcnt(w0, bits + cnt0, 64);
     cnt0 += bm::bitscan_popcnt(w1, bits + cnt0, 64+32);
 #endif
