@@ -299,31 +299,31 @@ BMFORCEINLINE T bit_scan_fwd(T v) BMNOEXCEPT
 }
 
 BMFORCEINLINE
-unsigned bit_scan_reverse32(unsigned value) BMNOEXCEPT
+unsigned bit_scan_reverse32(unsigned w) BMNOEXCEPT
 {
-    BM_ASSERT(value);
+    BM_ASSERT(w);
 #if defined(BM_USE_GCC_BUILD) || (defined(__GNUG__) && (defined(__arm__) || defined(__aarch64__)))
-    return (unsigned) (31 - __builtin_clz(value));
+    return (unsigned) (31 - __builtin_clz(w));
 #else
 # if defined(BM_x86) && (defined(__GNUG__) || defined(_MSC_VER))
-    return bm::bsr_asm32(value);
+    return bm::bsr_asm32(w);
 # else
-    return bm::ilog2_LUT<unsigned int>(value);
+    return bm::ilog2_LUT<unsigned int>(w);
 # endif
 #endif
 }
 
 BMFORCEINLINE
-unsigned bit_scan_forward32(unsigned value) BMNOEXCEPT
+unsigned bit_scan_forward32(unsigned w) BMNOEXCEPT
 {
-    BM_ASSERT(value);
+    BM_ASSERT(w);
 #if defined(BM_USE_GCC_BUILD) || (defined(__GNUG__) && (defined(__arm__) || defined(__aarch64__)))
-    return (unsigned) __builtin_ctz(value);
+    return (unsigned) __builtin_ctz(w);
 #else
 # if defined(BM_x86) && (defined(__GNUG__) || defined(_MSC_VER))
-    return bm::bsf_asm32(value);
+    return bm::bsf_asm32(w);
 # else
-        return bit_scan_fwd(value);
+        return bit_scan_fwd(w);
 # endif
 #endif
 }
