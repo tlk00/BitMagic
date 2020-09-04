@@ -17847,7 +17847,7 @@ void SelectTest()
     {
         bm::id64_t w64 = 1;
         unsigned idx = bm::word_select64_linear(w64, 1);
-        unsigned idx0 = word_select64_bitscan(w64, 1);
+        unsigned idx0 = bm::word_select64_bitscan_popcnt(w64, 1);
         unsigned idx1, idx4, idx3, idx5;
         assert(idx == 0);
         assert(idx0 == idx);
@@ -17893,7 +17893,7 @@ void SelectTest()
         {
             idx = bm::word_select64_linear(~0ull, sel);
             assert(idx == sel-1);
-            idx0 = word_select64_bitscan(~0ull, sel);
+            idx0 = word_select64_bitscan_popcnt(~0ull, sel);
             assert(idx0 == idx);
             idx4 = proxy_bmi1_select64_lz(~0ull, sel);
             assert(idx4 == idx);
@@ -17907,7 +17907,7 @@ void SelectTest()
         {
             idx0 = bm::word_select64_linear(w64, 1);
             assert(idx0 == idx);
-            idx1 = word_select64_bitscan(w64, 1);
+            idx1 = word_select64_bitscan_popcnt(w64, 1);
             assert(idx1 == idx0);
             idx4 = proxy_bmi1_select64_lz(w64, 1);
             assert(idx4 == idx);
@@ -17932,7 +17932,7 @@ void SelectTest()
             for (unsigned j = 1; j <= count; ++j)
             {
                 unsigned idx0 = bm::word_select64_linear(w64, j);
-                unsigned idx1 = word_select64_bitscan(w64, j);
+                unsigned idx1 = word_select64_bitscan_popcnt(w64, j);
                 assert(idx0 == idx1);
                 unsigned idx4 = proxy_bmi1_select64_lz(w64, j);
                 assert(idx4 == idx1);
@@ -17947,7 +17947,7 @@ void SelectTest()
             for (unsigned j = 1; j <= count; ++j)
             {
                 unsigned idx0 = bm::word_select64_linear(w64_1, j);
-                unsigned idx1 = word_select64_bitscan(w64_1, j);
+                unsigned idx1 = bm::word_select64_bitscan_popcnt(w64_1, j);
                 assert(idx0 == idx1);
                 unsigned idx4 = proxy_bmi1_select64_lz(w64_1, j);
                 assert(idx4 == idx1);
