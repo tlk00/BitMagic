@@ -17980,11 +17980,7 @@ void SelectTest()
             for (unsigned j = 1; j <= count; ++j)
             {
                 unsigned idx0 = bm::word_select64_linear(w64_1, j);
-<<<<<<< HEAD
-                unsigned idx1 = word_select64_bitscan_popcnt(w64_1, j);
-=======
                 unsigned idx1 = bm::word_select64_bitscan_popcnt(w64_1, j);
->>>>>>> 6841189cfa9d6b2c22129c63433a6b79364b1c7a
                 assert(idx0 == idx1);
                 unsigned idx4 = proxy_bmi1_select64_lz(w64_1, j);
                 assert(idx4 == idx1);
