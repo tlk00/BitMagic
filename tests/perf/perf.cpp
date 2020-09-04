@@ -365,11 +365,27 @@ void BitCountTest()
 }
 
 static
+void CheckBitList(const unsigned* bl1, unsigned bl1_cnt,
+                  const unsigned* bl2, unsigned bl2_cnt)
+{
+    assert(bl1_cnt == bl2_cnt);
+    for (unsigned i = 0; i < bl1_cnt; ++i)
+    {
+        assert(bl1[i] == bl2[i]);
+        if (bl1[i] != bl2[i])
+        {
+            cerr << "BitList check failed!" << endl;
+            exit(1);
+        }
+    }
+}
+
+static
 void BitForEachTest()
 {
     // setup the test data
     //
-    unsigned value_to = 65536 * 50;
+    unsigned value_to = 65536 * 64;
     size_t value = 0;
     unsigned* test_arr = new unsigned[value_to];
     {
@@ -385,21 +401,21 @@ void BitForEachTest()
         for (; j < value_to ; ++j) // dense
             test_arr[j] = ~0u & ~((7u << 25) | (19u << 7) | 2u | 4u);
     }
-/*
-    if (platform_test)
-    {
-        unsigned bit_list[32];
-        TimeTaker tt("BitList algorithm. Conventional (AND based check)", REPEATS*10);
 
-        for (unsigned i = 0; i < REPEATS*10; ++i)
+    // quick test
+    {
+        unsigned bit_list0[32];
+        unsigned bit_list1[32];
+        unsigned bit_list2[32];
+        for (unsigned j = 0; j < value_to; ++j)
         {
-            for (unsigned j = 0; j < value_to; ++j)
-            {
-                bm::bit_list(test_arr[j], bit_list);
-            }
+            auto c0 = bm::bitscan_nibble(test_arr[j], bit_list0);
+            auto c1 = bm::bitscan_popcnt(test_arr[j], bit_list1);
+            auto c2 = bm::bitscan_bsf(test_arr[j], bit_list2);
+            CheckBitList(bit_list0, c0, bit_list1, c1);
+            CheckBitList(bit_list0, c0, bit_list2, c2);
         }
     }
-*/
 
     bm::id64_t sum1(0);
     if (platform_test)
@@ -439,13 +455,31 @@ void BitForEachTest()
         TimeTaker tt("BitScan-POPCNT ", REPEATS);
         for (unsigned i = 0; i < REPEATS; ++i)
         {
-            for (unsigned j = 0; j < value_to; ++j)
+            for (unsigned j = 0; j < value_to; j+=2)
             {
                 sum3 += bm::bitscan_popcnt(test_arr[j], bit_list);
+                sum3 += bm::bitscan_popcnt(test_arr[j+1], bit_list);
             }
         }
     }
     assert(sum1 == sum3);
+    sum3 = 0;
+    {
+        unsigned bit_list[64];
+        TimeTaker tt("BitScan-POPCNT-64 ", REPEATS);
+        for (unsigned i = 0; i < REPEATS; ++i)
+        {
+            for (unsigned j = 0; j < value_to; j+=2)
+            {
+                bm::id64_t w0 = test_arr[j];
+                bm::id64_t w1 = test_arr[j+1];
+                bm::id64_t w = w0 | (w1 << 32);
+                sum3 += bm::bitscan_popcnt64(w, bit_list);
+            }
+        }
+    }
+    assert(sum1 == sum3);
+
 
     bm::id64_t sum4(0);
     {
@@ -453,49 +487,31 @@ void BitForEachTest()
         TimeTaker tt("BitScan-BSF ", REPEATS);
         for (unsigned i = 0; i < REPEATS; ++i)
         {
-            for (unsigned j = 0; j < value_to; ++j)
+            for (unsigned j = 0; j < value_to; j+=2)
             {
                 sum4 += bm::bitscan_bsf(test_arr[j], bit_list);
+                sum4 += bm::bitscan_bsf(test_arr[j+1], bit_list);
             }
         }
     }
     assert(sum1 == sum4);
+    sum4 = 0;
 
-
-/*
     {
-        unsigned bit_list[64];
-        TimeTaker tt("BitScan-POPCNT (block)", REPEATS * 20);
-        for (unsigned i = 0; i < REPEATS * 20; ++i)
+        unsigned bit_list[32];
+        TimeTaker tt("BitScan-BSF-64 ", REPEATS);
+        for (unsigned i = 0; i < REPEATS; ++i)
         {
-            for (unsigned j = 0; j < 65536; ++j)
+            for (unsigned j = 0; j < value_to; j+=2)
             {
-                unsigned cnt = bm::bitscan_popcnt(test_arr[j], bit_list);
-                for (unsigned k =  0; j < cnt; j++)
-                {
-                    value += bit_list[k];
-                }
+                bm::id64_t w0 = test_arr[j];
+                bm::id64_t w1 = test_arr[j+1];
+                bm::id64_t w = w0 | (w1 << 32);
+                sum4 += bm::bitscan_bsf64(w, bit_list);
             }
         }
     }
-*/
-/*
-    {
-        unsigned char bit_list[64];
-        TimeTaker tt("BitScan on bitcount64 (block)", REPEATS * 20);
-        for (unsigned i = 0; i < REPEATS * 20; ++i)
-        {
-            for (unsigned j = 0; j < 65536/2; j+=2)
-            {
-                unsigned cnt = bm::bitscan_wave(test_arr + j, bit_list);
-                for (unsigned k =  0; j < cnt; j++)
-                {
-                    value += bit_list[k];
-                }
-            }
-        }
-    }
-*/
+    assert(sum1 == sum4);
 
     char buf[256];
     sprintf(buf, "%i", (int)value); // to fool some smart compilers like ICC
@@ -566,7 +582,7 @@ void WordSelectTest()
     }
 
     {
-        TimeTaker tt("select64 bitscan", 1);
+        TimeTaker tt("select64 bitscan_popcnt", 1);
         for (unsigned i = 0; i < vect_v.size(); ++i)
         {
             bm::id64_t w64 = vect_v[i];
@@ -575,7 +591,7 @@ void WordSelectTest()
             {
                 for (unsigned j = 1; j <= bc; ++j)
                 {
-                    unsigned idx = bm::word_select64_bitscan(w64, j);
+                    unsigned idx = bm::word_select64_bitscan_popcnt(w64, j);
                     vect_r2[i] = idx;
                 }
             }
@@ -3950,7 +3966,6 @@ int main(void)
 //    ptest();
 
     TimeTaker tt("TOTAL", 1);
-
     try
     {
         cout << endl;

@@ -394,6 +394,24 @@ unsigned count_leading_zeros_u64(bm::id64_t w) BMNOEXCEPT
 #endif
 }
 
+/// 32-bit bit-scan fwd
+inline
+unsigned count_trailing_zeros_u32(unsigned w) BMNOEXCEPT
+{
+    BM_ASSERT(w);
+
+#if defined(BMAVX2OPT) || defined (BMAVX512OPT)
+    return (unsigned)_tzcnt_u32(w);
+#else
+    #if defined(BM_USE_GCC_BUILD) || (defined(__GNUG__) && (defined(__arm__) || defined(__aarch64__)))
+        return (unsigned) __builtin_ctz(w);
+    #else
+        return bm::bit_scan_forward32(w);
+    #endif
+#endif
+}
+
+
 /// 64-bit bit-scan fwd
 inline
 unsigned count_trailing_zeros_u64(bm::id64_t w) BMNOEXCEPT

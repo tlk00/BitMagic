@@ -500,30 +500,14 @@ unsigned bitscan_nibble_gcc(unsigned w, unsigned* bits) BMNOEXCEPT
         l1: // 0001
             bits[cnt++] = sub_octet;
             continue;
-/*
-        l2: // 0010
-            bits[cnt++] = 1 + sub_octet;
-            continue; */
-        l3:    // 0011
+        l3: // 0011
             bits[cnt++] = sub_octet;
             l3_1:
             bits[cnt++] = 1 + sub_octet;
             continue;
-/*        l4: // 0100
-            bits[cnt++] = 2 + sub_octet;
-            continue; */
         l5: // 0101
             bits[cnt++] = sub_octet;
             goto l7_1;
-            /*
-            l5_1:
-            bits[cnt++] = 2 + sub_octet;
-            continue;*/
-            /*
-        l6: // 0110
-            bits[cnt++] = 1 + sub_octet;
-            bits[cnt++] = 2 + sub_octet;
-            continue; */
         l7: // 0111
             bits[cnt++] = sub_octet;
             l7_0:
@@ -531,44 +515,22 @@ unsigned bitscan_nibble_gcc(unsigned w, unsigned* bits) BMNOEXCEPT
             l7_1:
             bits[cnt++] = 2 + sub_octet;
             continue;
-/*        l8: // 1000
-            bits[cnt++] = 3 + sub_octet;
-            continue; */
         l9: // 1001
             bits[cnt++] = sub_octet;
             goto l15_1;
-/*
-            l9_0:
-            bits[cnt++] = 3 + sub_octet; */
             continue;
-/*
-        l10: // 1010
-            bits[cnt++] = 1 + sub_octet;
-            bits[cnt++] = 3 + sub_octet;
-            continue; */
         l11: // 1011
             bits[cnt++] = sub_octet;
             l11_0:
             bits[cnt++] = 1 + sub_octet;
             bits[cnt++] = 3 + sub_octet;
             continue;
-/*
-        l12: // 1100
-            bits[cnt++] = 2 + sub_octet;
-            bits[cnt++] = 3 + sub_octet;
-            continue; */
         l13: // 1101
             bits[cnt++] = sub_octet;
             goto l15_0;
-//            bits[cnt++] = 2 + sub_octet;
-//            bits[cnt++] = 3 + sub_octet;
-//            continue;
         l14: // 1110
             bits[cnt++] = 1 + sub_octet;
             goto l15_0;
-//            bits[cnt++] = 2 + sub_octet;
-//            bits[cnt++] = 3 + sub_octet;
-//            continue;
         l15: // 1111
             bits[cnt++] = 0 + sub_octet;
             bits[cnt++] = 1 + sub_octet;
@@ -576,7 +538,6 @@ unsigned bitscan_nibble_gcc(unsigned w, unsigned* bits) BMNOEXCEPT
             bits[cnt++] = 2 + sub_octet;
             l15_1:
             bits[cnt++] = 3 + sub_octet;
-
         l0:
             continue;
     } // for
@@ -748,8 +709,29 @@ unsigned short bitscan_bsf(unsigned w, B* bits) BMNOEXCEPT
     unsigned short pos = 0;
     while (w)
     {
-        bits[pos++] = bm::bit_scan_forward32(w);
-        w ^= w & -w;
+        bits[pos++] = count_trailing_zeros_u32(w);
+        w &= w - 1;
+    }
+    return pos;
+}
+
+/*!
+    \brief Unpacks word into list of ON bits (BSF/__builtin_ctz)
+    \param w - value
+    \param bits - pointer on the result array
+    \return number of bits in the list
+
+    @ingroup bitfunc
+    @internal
+*/
+template<typename B>
+unsigned short bitscan_bsf64(bm::id64_t w, B* bits) BMNOEXCEPT
+{
+    unsigned short pos = 0;
+    while (w)
+    {
+        bits[pos++] = bm::count_trailing_zeros_u64(w);
+        w &= w - 1;
     }
     return pos;
 }
@@ -824,7 +806,7 @@ unsigned word_select64_linear(bm::id64_t w, unsigned rank) BMNOEXCEPT
     \return selected value (inxed of bit set)
 */
 inline
-unsigned word_select64_bitscan(bm::id64_t w, unsigned rank) BMNOEXCEPT
+unsigned word_select64_bitscan_popcnt(bm::id64_t w, unsigned rank) BMNOEXCEPT
 {
     BM_ASSERT(w);
     BM_ASSERT(rank);
@@ -859,7 +841,7 @@ unsigned word_select64(bm::id64_t w, unsigned rank) BMNOEXCEPT
     #if defined(BMI1_SELECT64)
         return BMI2_SELECT64(w, rank);
     #else
-        return bm::word_select64_bitscan(w, rank);
+        return bm::word_select64_bitscan_popcnt(w, rank);
     #endif
 #endif
 }
@@ -8030,12 +8012,14 @@ SIZE_TYPE bit_find_rank(const bm::word_t* const block,
         }
         else // target word
         {
-            unsigned idx = bm::word_select64(w, unsigned(rank));
+            unsigned idx = bm::word_select64(w, unsigned(rank)); // TODO: use 32-bit select
             nbit_pos = pos + idx;
             return 0;
         }
     }
-    
+
+    // TODO: improve 64-bit detection for systems with 32-bit mem
+    // and 64-bit ALU (like WebASM)
     if (bm::conditional<sizeof(void*) == 8>::test()) // 64-bit fast scan
     {
         for (; nword < bm::set_block_size-1; nword+=2)
@@ -8062,7 +8046,7 @@ SIZE_TYPE bit_find_rank(const bm::word_t* const block,
             rank -= bc; pos += 32u;
             continue;
         }
-        unsigned idx = bm::word_select64(w, unsigned(rank));
+        unsigned idx = bm::word_select64(w, unsigned(rank)); // TODO: use 32-bit select
         nbit_pos = pos + idx;
         return 0;
     } // for nword
