@@ -17935,7 +17935,15 @@ void SelectTest()
             idx3 = proxy_bmi2_select64_pdep(~0ull, sel);
             assert(idx3 == idx);
         }
-        
+        for (unsigned sel = 1; sel <= 32; ++sel)
+        {
+            idx = bm::word_select64_linear(~0u, sel);
+            idx0 = word_select32_bitscan_popcnt(~0u, sel);
+            assert(idx == idx0);
+            unsigned idx_tz = bm::word_select32_bitscan_tz(~0u, sel);
+            assert(idx_tz == idx);
+        }
+
         for (idx = 0; w64; w64 <<= 1)
         {
             idx0 = bm::word_select64_linear(w64, 1);
@@ -17948,6 +17956,8 @@ void SelectTest()
             assert(idx5 == idx);
             idx3 = proxy_bmi2_select64_pdep(w64, 1);
             assert(idx3 == idx);
+            unsigned idx_tz = bm::word_select64_bitscan_tz(w64, 1);
+            assert(idx_tz == idx);
 
             ++idx;
         }
@@ -17973,7 +17983,18 @@ void SelectTest()
                 assert(idx5 == idx1);
                 unsigned idx3 = proxy_bmi2_select64_pdep(w64, j);
                 assert(idx3 == idx1);
+                unsigned idx_tz = bm::word_select64_bitscan_tz(w64, j);
+                assert(idx_tz == idx1);
+            }
 
+            count = bm::word_bitcount(i);
+            for (unsigned j = 1; j <= count; ++j)
+            {
+                unsigned idx1 = word_select64_bitscan_popcnt(i, j);
+                unsigned idx2 = word_select32_bitscan_popcnt(i, j);
+                assert(idx1 == idx2);
+                unsigned idx_tz = bm::word_select32_bitscan_tz(i, j);
+                assert(idx_tz == idx1);
             }
             
             count = bm::word_bitcount64(w64_1);
@@ -17988,7 +18009,8 @@ void SelectTest()
                 assert(idx5 == idx1);
                 unsigned idx3 = proxy_bmi2_select64_pdep(w64_1, j);
                 assert(idx3 == idx1);
-
+                unsigned idx_tz = bm::word_select64_bitscan_tz(w64_1, j);
+                assert(idx_tz == idx1);
             }
             
             if (i % 1000000 == 0)
@@ -28795,7 +28817,6 @@ int main(int argc, char *argv[])
 
     if (is_all || is_low_level)
     {
-
         TestRecomb();
 
         Log2Test();
