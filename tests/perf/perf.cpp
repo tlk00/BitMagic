@@ -495,8 +495,10 @@ void WordSelectTest()
 
     std::vector<bm::id64_t> vect_v(test_size);
     std::vector<unsigned> vect_cnt(test_size);
+    std::vector<std::pair<unsigned, unsigned> > vect_cnt32(test_size);
     std::vector<unsigned> vect_r1(test_size);
     std::vector<unsigned> vect_r2(test_size);
+    std::vector<std::pair<unsigned, unsigned> > vect_r2_32(test_size);
 
     for (unsigned i = 0; i < test_size; ++i)
     {
@@ -526,6 +528,10 @@ void WordSelectTest()
         
         vect_v[i] = w64;
         vect_cnt[i] = bc;
+        unsigned w0 = unsigned(w64);
+        unsigned w1 = unsigned(w64 >> 32);
+        vect_cnt32[i].first = bm::word_bitcount64(w0);
+        vect_cnt32[i].second = bm::word_bitcount64(w1);
     }
     
     {
@@ -569,6 +575,99 @@ void WordSelectTest()
             }
         }
     }
+    {
+        bm::chrono_taker tt("select64 bitscan_tz", 1);
+        for (unsigned i = 0; i < vect_v.size(); ++i)
+        {
+            bm::id64_t w64 = vect_v[i];
+            unsigned bc = vect_cnt[i];
+            if (bc)
+            {
+                for (unsigned j = 1; j <= bc; ++j)
+                {
+                    unsigned idx = bm::word_select64_bitscan_tz(w64, j);
+                    vect_r2[i] = idx;
+                }
+            }
+            else
+            {
+                vect_r2[i] = 0;
+            }
+        }
+    }
+
+    {
+        bm::chrono_taker tt("select32 bitscan_popcnt", 1);
+        for (unsigned i = 0; i < vect_v.size(); ++i)
+        {
+            bm::id64_t w64 = vect_v[i];
+            unsigned w0 = unsigned(w64);
+            unsigned w1 = unsigned(w64 >> 32);
+            unsigned bc0 = vect_cnt32[i].first;
+            unsigned bc1 = vect_cnt32[i].second;
+            if (bc0)
+            {
+                for (unsigned j = 1; j <= bc0; ++j)
+                {
+                    unsigned idx = bm::word_select32_bitscan_popcnt(w0, j);
+                    vect_r2_32[i].first = idx;
+                }
+            }
+            else
+            {
+                vect_r2_32[i].first = 0;
+            }
+            if (bc1)
+            {
+                for (unsigned j = 1; j <= bc1; ++j)
+                {
+                    unsigned idx = bm::word_select32_bitscan_popcnt(w1, j);
+                    vect_r2_32[i].second = idx;
+                }
+            }
+            else
+            {
+                vect_r2_32[i].second = 0;
+            }
+        }
+    }
+
+    {
+        bm::chrono_taker tt("select32 bitscan_tz", 1);
+        for (unsigned i = 0; i < vect_v.size(); ++i)
+        {
+            bm::id64_t w64 = vect_v[i];
+            unsigned w0 = unsigned(w64);
+            unsigned w1 = unsigned(w64 >> 32);
+            unsigned bc0 = vect_cnt32[i].first;
+            unsigned bc1 = vect_cnt32[i].second;
+            if (bc0)
+            {
+                for (unsigned j = 1; j <= bc0; ++j)
+                {
+                    unsigned idx = bm::word_select32_bitscan_tz(w0, j);
+                    vect_r2_32[i].first = idx;
+                }
+            }
+            else
+            {
+                vect_r2_32[i].first = 0;
+            }
+            if (bc1)
+            {
+                for (unsigned j = 1; j <= bc1; ++j)
+                {
+                    unsigned idx = bm::word_select32_bitscan_tz(w1, j);
+                    vect_r2_32[i].second = idx;
+                }
+            }
+            else
+            {
+                vect_r2_32[i].second = 0;
+            }
+        }
+    }
+
 
 #ifdef BMBMI1OPT
     std::vector<unsigned> vect_r3(test_size);
