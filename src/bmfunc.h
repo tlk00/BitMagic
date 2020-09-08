@@ -778,10 +778,17 @@ bitscan_popcnt64(bm::id64_t w, B* bits, unsigned short offs) BMNOEXCEPT
 template<typename V, typename B>
 unsigned short bitscan(V w, B* bits) BMNOEXCEPT
 {
+#if (defined(__arm__) || defined(__aarch64__))
+    if (bm::conditional<sizeof(V) == 8>::test())
+        return bm::bitscan_bsf64(w, bits);
+    else
+        return bm::bitscan_bsf((bm::word_t)w, bits);
+#else
     if (bm::conditional<sizeof(V) == 8>::test())
         return bm::bitscan_popcnt64(w, bits);
     else
         return bm::bitscan_popcnt((bm::word_t)w, bits);
+#endif
 }
 
 // --------------------------------------------------------------
@@ -794,6 +801,8 @@ unsigned short bitscan(V w, B* bits) BMNOEXCEPT
     \param rank - rank to select (should be > 0)
  
     \return selected value (inxed of bit set)
+    @ingroup bitfunc
+    @internal
 */
 inline
 unsigned word_select64_linear(bm::id64_t w, unsigned rank) BMNOEXCEPT
@@ -817,6 +826,9 @@ unsigned word_select64_linear(bm::id64_t w, unsigned rank) BMNOEXCEPT
     \param rank - rank to select (should be > 0)
  
     \return selected value (inxed of bit set)
+    @ingroup bitfunc
+    @internal
+
 */
 inline
 unsigned word_select64_bitscan_popcnt(bm::id64_t w, unsigned rank) BMNOEXCEPT
@@ -832,7 +844,6 @@ unsigned word_select64_bitscan_popcnt(bm::id64_t w, unsigned rank) BMNOEXCEPT
             break;
         w &= w - 1;
     } while (1);
-    
     bm::id64_t t = w & -w;
     unsigned count = bm::word_bitcount64(t - 1);
     return count;
@@ -842,8 +853,95 @@ unsigned word_select64_bitscan_popcnt(bm::id64_t w, unsigned rank) BMNOEXCEPT
     \brief word find index of the rank-th bit set by bit-testing
     \param w - 64-bit work to search
     \param rank - rank to select (should be > 0)
+
+    \return selected value (inxed of bit set)
+    @ingroup bitfunc
+    @internal
+
+*/
+inline
+unsigned word_select64_bitscan_tz(bm::id64_t w, unsigned rank) BMNOEXCEPT
+{
+    BM_ASSERT(w);
+    BM_ASSERT(rank);
+    BM_ASSERT(rank <= bm::word_bitcount64(w));
+
+    do
+    {
+        if (!(--rank))
+            break;
+        w &= w - 1;
+    } while (1);
+    bm::id64_t t = w & -w;
+    unsigned count = bm::count_trailing_zeros_u64(t);
+    return count;
+}
+
+
+
+/**
+    \brief word find index of the rank-th bit set by bit-testing
+    \param w - 32-bit work to search
+    \param rank - rank to select (should be > 0)
+
+    \return selected value (inxed of bit set)
+    @ingroup bitfunc
+    @internal
+*/
+inline
+unsigned word_select32_bitscan_popcnt(unsigned w, unsigned rank) BMNOEXCEPT
+{
+    BM_ASSERT(w);
+    BM_ASSERT(rank);
+    BM_ASSERT(rank <= bm::word_bitcount(w));
+
+    do
+    {
+        --rank;
+        if (!rank)
+            break;
+        w &= w - 1;
+    } while (1);
+    unsigned t = w & -w;
+    unsigned count = bm::word_bitcount(t - 1);
+    return count;
+}
+
+/**
+    \brief word find index of the rank-th bit set by bit-testing
+    \param w - 32-bit work to search
+    \param rank - rank to select (should be > 0)
+
+    \return selected value (inxed of bit set)
+    @ingroup bitfunc
+    @internal
+
+*/
+inline
+unsigned word_select32_bitscan_tz(unsigned w, unsigned rank) BMNOEXCEPT
+{
+    BM_ASSERT(w);
+    BM_ASSERT(rank);
+    BM_ASSERT(rank <= bm::word_bitcount(w));
+
+    do
+    {
+        if (!(--rank))
+            break;
+        w &= w - 1;
+    } while (1);
+    return bm::count_trailing_zeros_u32(w & -w);
+}
+
+
+/**
+    \brief word find index of the rank-th bit set by bit-testing
+    \param w - 64-bit work to search
+    \param rank - rank to select (should be > 0)
  
     \return selected value (inxed of bit set)
+    @ingroup bitfunc
+    @internal
 */
 inline
 unsigned word_select64(bm::id64_t w, unsigned rank) BMNOEXCEPT
@@ -854,10 +952,43 @@ unsigned word_select64(bm::id64_t w, unsigned rank) BMNOEXCEPT
     #if defined(BMI1_SELECT64)
         return BMI2_SELECT64(w, rank);
     #else
-        return bm::word_select64_bitscan_popcnt(w, rank);
+        #if (defined(__arm__) || defined(__aarch64__))
+            return bm::word_select64_bitscan_tz(w, rank);
+        #else
+            return bm::word_select64_bitscan_popcnt(w, rank);
+        #endif
     #endif
 #endif
 }
+
+/**
+    \brief word find index of the rank-th bit set by bit-testing
+    \param w - 32-bit work to search
+    \param rank - rank to select (should be > 0)
+
+    \return selected value (inxed of bit set)
+    @ingroup bitfunc
+    @internal
+*/
+inline
+unsigned word_select32(unsigned w, unsigned rank) BMNOEXCEPT
+{
+#if defined(BMI2_SELECT64)
+    return BMI2_SELECT64(w, rank);
+#else
+    #if defined(BMI1_SELECT64)
+        return BMI2_SELECT64(w, rank);
+    #else
+        #if (defined(__arm__) || defined(__aarch64__))
+            return bm::word_select32_bitscan_tz(w, rank);
+        #else
+            return bm::word_select32_bitscan_popcnt(w, rank);
+        #endif
+    #endif
+#endif
+}
+
+
 
 // --------------------------------------------------------------
 // Functions for bit-block digest calculation
@@ -8019,19 +8150,19 @@ SIZE_TYPE bit_find_rank(const bm::word_t* const block,
         }
         else // target word
         {
-            unsigned idx = bm::word_select64(w, unsigned(rank)); // TODO: use 32-bit select
+            unsigned idx = bm::word_select32(w, unsigned(rank));
             nbit_pos = pos + idx;
             return 0;
         }
     }
 
-    // TODO: improve 64-bit detection for systems with 32-bit mem
-    // and 64-bit ALU (like WebASM)
-    if (bm::conditional<sizeof(void*) == 8>::test()) // 64-bit fast scan
+    #if defined(BM64OPT) || defined(BM64_SSE4) || defined(BMAVX2OPT) || defined(BMAVX512OPT)
+    //if (bm::conditional<sizeof(void*) == 8>::test()) // 64-bit fast scan
     {
         for (; nword < bm::set_block_size-1; nword+=2)
         {
-            bm::id64_t w = (bm::id64_t(block[nword+1]) << 32) | bm::id64_t(block[nword]);
+            bm::id64_t w =
+                (bm::id64_t(block[nword+1]) << 32) | bm::id64_t(block[nword]);
             bm::id_t bc = bm::word_bitcount64(w);
             if (bc >= rank) // target
             {
@@ -8043,6 +8174,7 @@ SIZE_TYPE bit_find_rank(const bm::word_t* const block,
             pos += 64u;
         }
     }
+    #endif
 
     for (; nword < bm::set_block_size; ++nword)
     {
@@ -8053,7 +8185,7 @@ SIZE_TYPE bit_find_rank(const bm::word_t* const block,
             rank -= bc; pos += 32u;
             continue;
         }
-        unsigned idx = bm::word_select64(w, unsigned(rank)); // TODO: use 32-bit select
+        unsigned idx = bm::word_select32(w, unsigned(rank));
         nbit_pos = pos + idx;
         return 0;
     } // for nword
