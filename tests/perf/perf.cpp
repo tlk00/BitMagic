@@ -48,6 +48,8 @@ For more information please visit:  http://bitmagic.io
 #include "bmsparsevec_compr.h"
 #include "bmrandom.h"
 
+#include "bmtimer.h"
+
 //#include "bmdbg.h"
 
 #include <math.h>
@@ -64,46 +66,6 @@ unsigned platform_test = 1;
 std::random_device rand_dev;
 std::mt19937 gen(rand_dev()); // mersenne_twister_engine 
 std::uniform_int_distribution<> rand_dis(0, BSIZE); // generate uniform numebrs for [1, vector_max]
-
-
-class TimeTaker
-{
-public:
-
-    TimeTaker(const char* test_name, unsigned repeats) 
-        : test_name_(test_name), repeats_(repeats) 
-    {
-        start_ = clock();
-    }
-
-    ~TimeTaker()
-    {
-        finish_ = clock();
-        clock_t elapsed_clocks = finish_ - start_;
-        double duration = (double)(finish_ - start_) / CLOCKS_PER_SEC;
-
-        cout << test_name_ << " ; ";
-        if (platform_test) 
-        {
-            cout << duration << endl;
-            return;
-        }
-
-        cout <<  elapsed_clocks << ";" << duration << ";";
-        if (repeats_)
-        {
-            double ops_per_sec = (double)repeats_ / duration;
-            cout << ops_per_sec;
-        }
-        cout << endl;
-    }
-
-private:
-    const char*  test_name_;
-    clock_t      start_;
-    clock_t      finish_;
-    unsigned     repeats_;
-};
 
 typedef bm::bvector<> bvect;
 
@@ -295,7 +257,7 @@ void MemCpyTest()
 
     if (!platform_test)
     {
-    TimeTaker tt("Memory ADD transfer test", REPEATS * 4);
+    bm::chrono_taker tt("Memory ADD transfer test", REPEATS * 4);
     for (i = 0; i < REPEATS*4; ++i)
     {
         for (j = 0; j < BSIZE/32; j+=4)
@@ -310,7 +272,7 @@ void MemCpyTest()
     
     if (!platform_test)
     {
-    TimeTaker tt("memcpy transfer test", REPEATS * 4);
+    bm::chrono_taker tt("memcpy transfer test", REPEATS * 4);
     for (i = 0; i < REPEATS*4; ++i)
     {
         memcpy(m1, m2, BSIZE/32 * sizeof(unsigned));
@@ -338,7 +300,7 @@ void BitCountTest()
 
     //if (!platform_test)
     {
-        TimeTaker tt("BitCount. Random bitvector", REPEATS*10);
+        bm::chrono_taker tt("BitCount. Random bitvector", REPEATS*10);
         for (unsigned i = 0; i < REPEATS*10; ++i)
         {
             value+=bv->count();
@@ -352,7 +314,7 @@ void BitCountTest()
 
     if (!platform_test)
     {
-    TimeTaker tt("BitCount. Random bitvector (STL)", REPEATS*2);
+    bm::chrono_taker tt("BitCount. Random bitvector (STL)", REPEATS*2);
     for (unsigned i = 0; i < REPEATS*2; ++i)
     {    
         value += (unsigned)bset->count();
@@ -427,7 +389,7 @@ void BitForEachTest()
     if (platform_test)
     {
         unsigned bit_list[32];
-        TimeTaker tt("BitScan-nibble (switch based)", REPEATS);
+        bm::chrono_taker tt("BitScan-nibble (switch based)", REPEATS);
 
         for (unsigned i = 0; i < REPEATS; ++i)
         {
@@ -442,7 +404,7 @@ void BitForEachTest()
     if (platform_test)
     {
         unsigned bit_list[32];
-        TimeTaker tt("BitScan-nibble (GCC goto)", REPEATS);
+        bm::chrono_taker tt("BitScan-nibble (GCC goto)", REPEATS);
 
         for (unsigned i = 0; i < REPEATS; ++i)
         {
@@ -458,7 +420,7 @@ void BitForEachTest()
     bm::id64_t sum3(0);
     {
         unsigned bit_list[32];
-        TimeTaker tt("BitScan-POPCNT ", REPEATS);
+        bm::chrono_taker tt("BitScan-POPCNT ", REPEATS);
         for (unsigned i = 0; i < REPEATS; ++i)
         {
             for (unsigned j = 0; j < value_to; j+=2)
@@ -472,7 +434,7 @@ void BitForEachTest()
     sum3 = 0;
     {
         unsigned bit_list[64];
-        TimeTaker tt("BitScan-POPCNT-64 ", REPEATS);
+        bm::chrono_taker tt("BitScan-POPCNT-64 ", REPEATS);
         for (unsigned i = 0; i < REPEATS; ++i)
         {
             for (unsigned j = 0; j < value_to; j+=2)
@@ -490,7 +452,7 @@ void BitForEachTest()
     bm::id64_t sum4(0);
     {
         unsigned bit_list[32];
-        TimeTaker tt("BitScan-BSF ", REPEATS);
+        bm::chrono_taker tt("BitScan-BSF ", REPEATS);
         for (unsigned i = 0; i < REPEATS; ++i)
         {
             for (unsigned j = 0; j < value_to; j+=2)
@@ -505,7 +467,7 @@ void BitForEachTest()
 
     {
         unsigned bit_list[32];
-        TimeTaker tt("BitScan-BSF-64 ", REPEATS);
+        bm::chrono_taker tt("BitScan-BSF-64 ", REPEATS);
         for (unsigned i = 0; i < REPEATS; ++i)
         {
             for (unsigned j = 0; j < value_to; j+=2)
@@ -567,7 +529,7 @@ void WordSelectTest()
     }
     
     {
-        TimeTaker tt("select64 linear", 1);
+        bm::chrono_taker tt("select64 linear", 1);
         for (unsigned i = 0; i < vect_v.size(); ++i)
         {
             bm::id64_t w64 = vect_v[i];
@@ -588,7 +550,7 @@ void WordSelectTest()
     }
 
     {
-        TimeTaker tt("select64 bitscan_popcnt", 1);
+        bm::chrono_taker tt("select64 bitscan_popcnt", 1);
         for (unsigned i = 0; i < vect_v.size(); ++i)
         {
             bm::id64_t w64 = vect_v[i];
@@ -735,7 +697,7 @@ void BitCountSparseTest()
     SimpleFillSets(bset, *bv, 0, BSIZE, 130);
     
     {
-        TimeTaker tt("BitCount: Sparse bitset ", REPEATS*10);
+        bm::chrono_taker tt("BitCount: Sparse bitset ", REPEATS*10);
         for (unsigned i = 0; i < REPEATS*10; ++i)
         {    
             value += bv->count();
@@ -744,7 +706,7 @@ void BitCountSparseTest()
 
     if (!platform_test)
     {
-        TimeTaker tt("BitCount: Sparse bitset (STL)", REPEATS*10);
+        bm::chrono_taker tt("BitCount: Sparse bitset (STL)", REPEATS*10);
         for (unsigned int i = 0; i < REPEATS*10; ++i)
         {    
             value += bset->count();
@@ -758,7 +720,7 @@ void BitCountSparseTest()
     bv->optimize(tb);
 
     {
-        TimeTaker tt("BitCount: GAP Sparse bitset", REPEATS*100);
+        bm::chrono_taker tt("BitCount: GAP Sparse bitset", REPEATS*100);
         for (unsigned i = 0; i < REPEATS*100; ++i)
         {    
             value += bv->count();
@@ -770,7 +732,7 @@ void BitCountSparseTest()
 
     {
         unsigned right = 65535;
-        TimeTaker tt("count_to: GAP Sparse bitset", REPEATS * 100);
+        bm::chrono_taker tt("count_to: GAP Sparse bitset", REPEATS * 100);
         for (unsigned i = 0; i < REPEATS * 100000; ++i)
         {
             right = 65525 + (i * 10);
@@ -809,7 +771,7 @@ void BitTestSparseTest()
     }
 
     {
-        TimeTaker tt("BitTest: bvector<>::test() (BIT) ", repeats);
+        bm::chrono_taker tt("BitTest: bvector<>::test() (BIT) ", repeats);
         for (unsigned i = 0; i < repeats; ++i)
         {
             unsigned id = idx[i];
@@ -828,7 +790,7 @@ void BitTestSparseTest()
     bv2->optimize(tb);
 
     {
-        TimeTaker tt("BitTest: bvector<>::test() (GAP) ", repeats);
+        bm::chrono_taker tt("BitTest: bvector<>::test() (GAP) ", repeats);
         for (unsigned i = 0; i < repeats; ++i)
         {
             unsigned id = idx[i];
@@ -868,7 +830,7 @@ void EnumeratorGoToTest()
 
 
     {
-        TimeTaker tt("Enumerator at BIT pos:  ", repeats);
+        bm::chrono_taker tt("Enumerator at BIT pos:  ", repeats);
         for (unsigned i = 0; i < repeats; ++i)
         {
             unsigned id = idx[i];
@@ -890,7 +852,7 @@ void EnumeratorGoToTest()
     bv2->optimize(tb);
 
     {
-        TimeTaker tt("Enumerator at GAP pos: ", repeats);
+        bm::chrono_taker tt("Enumerator at GAP pos: ", repeats);
         for (unsigned i = 0; i < repeats; ++i)
         {
             unsigned id = idx[i];
@@ -920,7 +882,7 @@ void BitCompareTest()
     SimpleFillSets(bset, *bv2, 0, BSIZE, 10);
 
     {
-    TimeTaker tt("BitCompare: Random bitvector", REPEATS*10);
+    bm::chrono_taker tt("BitCompare: Random bitvector", REPEATS*10);
     for (unsigned int i = 0; i < REPEATS*10; ++i)
     {    
         value+=bv1->compare(*bv2);
@@ -954,7 +916,7 @@ void BitCompareTest()
     }
 
     {
-    TimeTaker tt("wordcmp complex: Random words comparison", cnt);
+    bm::chrono_taker tt("wordcmp complex: Random words comparison", cnt);
 
     for (i = 0; i < cnt; ++i)
     {    
@@ -975,7 +937,7 @@ void BitCompareTest()
     volatile void* p = &c;
 
     {
-    TimeTaker tt("wordcmp0. Random words comparison", cnt);
+    bm::chrono_taker tt("wordcmp0. Random words comparison", cnt);
     for (i = 0; i < cnt; ++i)
     {    
         c += bm::wordcmp0(arr1[i], arr2[i]);
@@ -984,7 +946,7 @@ void BitCompareTest()
 
 
     {
-    TimeTaker tt("wordcmp. Random words comparison", cnt);
+    bm::chrono_taker tt("wordcmp. Random words comparison", cnt);
     for (i = 0; i < cnt; ++i)
     {    
         c += bm::wordcmp(arr1[i], arr2[i]);
@@ -1037,7 +999,7 @@ void FindTest()
     unsigned i;
     unsigned pos_sum = 0;
     {
-        TimeTaker tt("bvector<>::find_reverse()", REPEATS*100);
+        bm::chrono_taker tt("bvector<>::find_reverse()", REPEATS*100);
         for (i = 0; i < REPEATS*100; ++i)
         {
             bm::id_t pos;
@@ -1068,7 +1030,7 @@ void FindTest()
     sprintf(cbuf, "%i ", pos_sum); // attempt to avoid agressive optmizations
 
     {
-        TimeTaker tt("bvector<>::find()", REPEATS*100);
+        bm::chrono_taker tt("bvector<>::find()", REPEATS*100);
         for (i = 0; i < REPEATS*100; ++i)
         {
             bm::id_t pos;
@@ -1124,7 +1086,7 @@ void EnumeratorTest()
 
     {
         unsigned long long acc = 0;
-        TimeTaker tt("bvector<>::enumerator", REPEATS/10);
+        bm::chrono_taker tt("bvector<>::enumerator", REPEATS/10);
         for (i = 0; i < REPEATS/10; ++i)
         {
             {
@@ -1169,7 +1131,7 @@ void EnumeratorTest()
     {
         unsigned long long acc = 0;
 
-        TimeTaker tt("bvector<>::get_next()", REPEATS/10);
+        bm::chrono_taker tt("bvector<>::get_next()", REPEATS/10);
         for (i = 0; i < REPEATS/10; ++i)
         {
             if (bv1.any())
@@ -1217,7 +1179,7 @@ void EnumeratorTest()
     
     
     {
-        TimeTaker tt("bm::visit_each_bit()", REPEATS/10);
+        bm::chrono_taker tt("bm::visit_each_bit()", REPEATS/10);
         for (i = 0; i < REPEATS/10; ++i)
         {
             bm::visit_each_bit(bv1, (void*)&v1, bit_visitor_func);
@@ -1249,7 +1211,7 @@ void EnumeratorTestGAP()
 
     {
     unsigned v = 0;
-    TimeTaker tt("Sparse bvector (enumerator)", REPEATS*10*(k+1));
+    bm::chrono_taker tt("Sparse bvector (enumerator)", REPEATS*10*(k+1));
     for (i = 0; i < REPEATS*10*(k+1); ++i)
     {    
         bvect::enumerator en = bv->first();
@@ -1271,8 +1233,7 @@ void EnumeratorTestGAP()
 
     unsigned cnt = 0;
     {
-    TimeTaker tt("Sparse bvector (get_next())", REPEATS*10*(k+1));
-
+    bm::chrono_taker tt("Sparse bvector (get_next())", REPEATS*10*(k+1));
     for (i = 0; i < REPEATS*10*(k+1); ++i)
     {
         if (bv->any())
@@ -1335,7 +1296,7 @@ void SerializationTest()
     size_t len, id_size;
     len = id_size = 0;
     {
-    TimeTaker tt("Small bvector serialization", REPEATS*70000);
+    bm::chrono_taker tt("Small bvector serialization", REPEATS*70000);
     for (unsigned i = 0; i < REPEATS*70000; ++i)
     {
         len += bm::serialize(bv_sparse, buf, tb, bm::BM_NO_BYTE_ORDER|bm::BM_NO_GAP_LENGTH);
@@ -1356,7 +1317,7 @@ void SerializationTest()
     buf = new unsigned char[st.max_serialize_mem];
     
     {
-    TimeTaker tt("Large bvector serialization", REPEATS/3);
+    bm::chrono_taker tt("Large bvector serialization", REPEATS/3);
     for (unsigned i = 0; i < REPEATS/3; ++i)
     {
         len += bm::serialize(*bv, buf, tb, bm::BM_NO_BYTE_ORDER|bm::BM_NO_GAP_LENGTH);
@@ -1385,7 +1346,7 @@ void InvertTest()
 
     SimpleFillSets(bset, *bv, 0, BSIZE, 2500);
     {
-    TimeTaker tt("Invert bvector", REPEATS*4);
+    bm::chrono_taker tt("Invert bvector", REPEATS*4);
     for (i = 0; i < REPEATS*4; ++i)
     {
         bv->flip();    
@@ -1394,7 +1355,7 @@ void InvertTest()
 
     if (!platform_test)
     {
-    TimeTaker tt("Invert bvector (STL)", REPEATS*4);
+    bm::chrono_taker tt("Invert bvector (STL)", REPEATS*4);
     for (i = 0; i < REPEATS*4; ++i)
     {
         bset->flip();    
@@ -1414,7 +1375,7 @@ void OrTest()
     generate_bvector(bv2, 40000000, false);
     
     {
-    TimeTaker tt("OR-optimize (2 operand) bvector test", REPEATS*4);
+    bm::chrono_taker tt("OR-optimize (2 operand) bvector test", REPEATS*4);
     for (unsigned i = 0; i < REPEATS*4; ++i)
     {
         bvt1 = bv1;
@@ -1424,7 +1385,7 @@ void OrTest()
     }
     
     {
-    TimeTaker tt("OR-optimize (3 operand) bvector test", REPEATS*4);
+    bm::chrono_taker tt("OR-optimize (3 operand) bvector test", REPEATS*4);
     for (unsigned i = 0; i < REPEATS*4; ++i)
     {
         bvt2.bit_or(bv1, bv2, bvect::opt_compress);
@@ -1452,7 +1413,7 @@ void AndTest()
     SimpleFillSets(bset1, *bv1, 0, BSIZE, 100);
     SimpleFillSets(bset1, *bv2, 0, BSIZE, 100);
     {
-    TimeTaker tt("AND bvector test", REPEATS*4);
+    bm::chrono_taker tt("AND bvector test", REPEATS*4);
     for (i = 0; i < REPEATS*4; ++i)
     {
         *bv1 &= *bv2;
@@ -1461,7 +1422,7 @@ void AndTest()
 
     if (!platform_test)
     {
-    TimeTaker tt("AND bvector test(STL)", REPEATS*4);
+    bm::chrono_taker tt("AND bvector test(STL)", REPEATS*4);
     for (i = 0; i < REPEATS*4; ++i)
     {
         *bset1 &= *bset2;
@@ -1488,7 +1449,7 @@ void XorTest()
     SimpleFillSets(bset1, *bv1, 0, BSIZE, 100);
     SimpleFillSets(bset1, *bv2, 0, BSIZE, 100);
     {
-        TimeTaker tt("XOR bvector test", REPEATS * 10);
+        bm::chrono_taker tt("XOR bvector test", REPEATS * 10);
         for (i = 0; i < REPEATS * 4; ++i)
         {
             *bv1 ^= *bv2;
@@ -1497,7 +1458,7 @@ void XorTest()
 
     if (!platform_test)
     {
-        TimeTaker tt("XOR bvector test(STL)", REPEATS * 10);
+        bm::chrono_taker tt("XOR bvector test(STL)", REPEATS * 10);
         for (i = 0; i < REPEATS * 4; ++i)
         {
             *bset1 ^= *bset2;
@@ -1520,7 +1481,7 @@ void SubTest()
     generate_bvector(bv2, 40000000, false);
     
     {
-    TimeTaker tt("AND-NOT bvector test", REPEATS*4);
+    bm::chrono_taker tt("AND-NOT bvector test", REPEATS*4);
     for (unsigned i = 0; i < REPEATS*4; ++i)
     {
         bvect bv_tmp(bv2);
@@ -1534,7 +1495,7 @@ void SubTest()
     }
     
     {
-    TimeTaker tt("SUB-optimize (2 operand) bvector test", REPEATS*4);
+    bm::chrono_taker tt("SUB-optimize (2 operand) bvector test", REPEATS*4);
     for (unsigned i = 0; i < REPEATS*4; ++i)
     {
         bvt1 = bv1;
@@ -1544,7 +1505,7 @@ void SubTest()
     }
     
     {
-    TimeTaker tt("SUB-optimize (3 operand) bvector test", REPEATS*4);
+    bm::chrono_taker tt("SUB-optimize (3 operand) bvector test", REPEATS*4);
     for (unsigned i = 0; i < REPEATS*4; ++i)
     {
         bvt2.bit_sub(bv1, bv2, bvect::opt_compress);
@@ -1585,7 +1546,7 @@ void XorCountTest()
     if (!platform_test)
     {
     bvect bv_tmp;
-    TimeTaker tt("XOR COUNT bvector test with TEMP vector", REPEATS*10);
+    bm::chrono_taker tt("XOR COUNT bvector test with TEMP vector", REPEATS*10);
     for (i = 0; i < REPEATS*4; ++i)
     {
         bv_tmp.clear(false);
@@ -1598,7 +1559,7 @@ void XorCountTest()
     if (!platform_test)
     {
     test_bitset*  bset_tmp = new test_bitset();
-    TimeTaker tt("XOR COUNT bvector test with TEMP vector (STL)", REPEATS*10);
+    bm::chrono_taker tt("XOR COUNT bvector test with TEMP vector (STL)", REPEATS*10);
     for (i = 0; i < REPEATS*4; ++i)
     {
         bset_tmp->reset();
@@ -1610,7 +1571,7 @@ void XorCountTest()
 
 
     {
-    TimeTaker tt("XOR COUNT bvector test", REPEATS*10);
+    bm::chrono_taker tt("XOR COUNT bvector test", REPEATS*10);
     for (i = 0; i < REPEATS*4; ++i)
     {
         count2 += bm::count_xor(*bv1, *bv2);
@@ -1638,7 +1599,7 @@ void XorCountTest()
     if (!platform_test)
     {
     bvect bv_tmp;
-    TimeTaker tt("XOR COUNT bvector test with TEMP vector", REPEATS*10);
+    bm::chrono_taker tt("XOR COUNT bvector test with TEMP vector", REPEATS*10);
     for (i = 0; i < REPEATS*4; ++i)
     {
         bv_tmp.clear(false);
@@ -1649,7 +1610,7 @@ void XorCountTest()
     }
 
     {
-    TimeTaker tt("XOR COUNT bvector test", REPEATS*10);
+    bm::chrono_taker tt("XOR COUNT bvector test", REPEATS*10);
     for (i = 0; i < REPEATS*4; ++i)
     {
         count2 += (unsigned)bm::count_xor(*bv1, *bv2);
@@ -1674,7 +1635,7 @@ void XorCountTest()
     if (!platform_test)
     {
     bvect bv_tmp;
-    TimeTaker tt("XOR COUNT bvector test with TEMP vector", REPEATS*10);
+    bm::chrono_taker tt("XOR COUNT bvector test with TEMP vector", REPEATS*10);
     for (i = 0; i < REPEATS*4; ++i)
     {
         bv_tmp.clear(false);
@@ -1685,7 +1646,7 @@ void XorCountTest()
     }
 
     {
-    TimeTaker tt("XOR COUNT bvector(opt) test", REPEATS*10);
+    bm::chrono_taker tt("XOR COUNT bvector(opt) test", REPEATS*10);
     for (i = 0; i < REPEATS*4; ++i)
     {
         count2 += (unsigned)bm::count_xor(*bv1, *bv2);
@@ -1726,7 +1687,7 @@ void AndCountTest()
     if (!platform_test)
     {
         bvect bv_tmp;
-        TimeTaker tt("AND COUNT bvector test with TEMP vector", REPEATS * 10);
+        bm::chrono_taker tt("AND COUNT bvector test with TEMP vector", REPEATS * 10);
         for (i = 0; i < REPEATS * 4; ++i)
         {
             bv_tmp.clear(false);
@@ -1739,7 +1700,7 @@ void AndCountTest()
     if (!platform_test)
     {
         test_bitset*  bset_tmp = new test_bitset();
-        TimeTaker tt("AND COUNT bvector test with TEMP vector (STL)", REPEATS * 10);
+        bm::chrono_taker tt("AND COUNT bvector test with TEMP vector (STL)", REPEATS * 10);
         for (i = 0; i < REPEATS * 4; ++i)
         {
             bset_tmp->reset();
@@ -1751,7 +1712,7 @@ void AndCountTest()
 
 
     {
-        TimeTaker tt("AND COUNT bvector test", REPEATS * 10);
+        bm::chrono_taker tt("AND COUNT bvector test", REPEATS * 10);
         for (i = 0; i < REPEATS * 4; ++i)
         {
             count2 += bm::count_and(*bv1, *bv2);
@@ -1779,7 +1740,7 @@ void AndCountTest()
     if (!platform_test)
     {
         bvect bv_tmp;
-        TimeTaker tt("AND COUNT bvector test with TEMP vector", REPEATS * 10);
+        bm::chrono_taker tt("AND COUNT bvector test with TEMP vector", REPEATS * 10);
         for (i = 0; i < REPEATS * 4; ++i)
         {
             bv_tmp.clear(false);
@@ -1790,7 +1751,7 @@ void AndCountTest()
     }
 
     {
-        TimeTaker tt("AND COUNT bvector test", REPEATS * 10);
+        bm::chrono_taker tt("AND COUNT bvector test", REPEATS * 10);
         for (i = 0; i < REPEATS * 4; ++i)
         {
             count2 += (unsigned)bm::count_and(*bv1, *bv2);
@@ -1815,7 +1776,7 @@ void AndCountTest()
     if (!platform_test)
     {
         bvect bv_tmp;
-        TimeTaker tt("AND COUNT bvector test with TEMP vector", REPEATS * 10);
+        bm::chrono_taker tt("AND COUNT bvector test with TEMP vector", REPEATS * 10);
         for (i = 0; i < REPEATS * 4; ++i)
         {
             bv_tmp.clear(false);
@@ -1826,7 +1787,7 @@ void AndCountTest()
     }
 
     {
-        TimeTaker tt("AND COUNT bvector(opt) test", REPEATS * 10);
+        bm::chrono_taker tt("AND COUNT bvector(opt) test", REPEATS * 10);
         for (i = 0; i < REPEATS * 4; ++i)
         {
             count2 += (unsigned)bm::count_and(*bv1, *bv2);
@@ -1867,7 +1828,7 @@ void TI_MetricTest()
     unsigned test_count = 0;
     double ti1=0, ti2=0;
     {
-    TimeTaker tt("Tversky Index bvector test vector", REPEATS);
+    bm::chrono_taker tt("Tversky Index bvector test vector", REPEATS);
     for (i = 0; i < REPEATS; ++i)
     {
         count1 = bm::count_and(*bv1, *bv2);
@@ -1884,7 +1845,7 @@ void TI_MetricTest()
     {
     test_bitset*  bset_tmp = new test_bitset();
     double test_dice = 0;
-    TimeTaker tt("Dice bvector test with TEMP vector(STL)", REPEATS);
+    bm::chrono_taker tt("Dice bvector test with TEMP vector(STL)", REPEATS);
     for (i = 0; i < REPEATS; ++i)
     {
         bset_tmp->reset();
@@ -1909,7 +1870,7 @@ void TI_MetricTest()
     dmd[1].metric = bm::COUNT_SUB_AB;
     dmd[2].metric = bm::COUNT_SUB_BA;    
     
-    TimeTaker tt("Tversky Index bvector test (pipeline)", REPEATS);
+    bm::chrono_taker tt("Tversky Index bvector test (pipeline)", REPEATS);
     for (i = 0; i < REPEATS; ++i)
     {
         bm::distance_operation(*bv1, *bv2, &dmd[0], (&dmd[0])+3);
@@ -1940,7 +1901,7 @@ void TI_MetricTest()
 
     
     {
-    TimeTaker tt("Dice metric bvector test", REPEATS);
+    bm::chrono_taker tt("Dice metric bvector test", REPEATS);
     for (i = 0; i < REPEATS; ++i)
     {
         count1 = bm::count_and(*bv1, *bv2);
@@ -1960,7 +1921,7 @@ void TI_MetricTest()
     dmd[1].metric = bm::COUNT_SUB_AB;
     dmd[2].metric = bm::COUNT_SUB_BA;    
     
-    TimeTaker tt("Tversky Index bvector test(pipeline)", REPEATS);
+    bm::chrono_taker tt("Tversky Index bvector test(pipeline)", REPEATS);
     for (i = 0; i < REPEATS; ++i)
     {
         bm::distance_operation(*bv1, *bv2, &dmd[0], (&dmd[0])+3);
@@ -1989,7 +1950,7 @@ void TI_MetricTest()
     bv1->optimize(tb);
 
     {
-    TimeTaker tt("Tversky index bvector test", REPEATS);
+    bm::chrono_taker tt("Tversky index bvector test", REPEATS);
     for (i = 0; i < REPEATS; ++i)
     {
         count1 = bm::count_and(*bv1, *bv2);
@@ -2007,7 +1968,7 @@ void TI_MetricTest()
     dmd[1].metric = bm::COUNT_SUB_AB;
     dmd[2].metric = bm::COUNT_SUB_BA;    
     
-    TimeTaker tt("Tversky Index bvector test (pipeline)", REPEATS);
+    bm::chrono_taker tt("Tversky Index bvector test (pipeline)", REPEATS);
     for (i = 0; i < REPEATS; ++i)
     {
         bm::distance_operation(*bv1, *bv2, &dmd[0], (&dmd[0])+3);
@@ -2139,14 +2100,14 @@ void BitBlockRotateTest()
     }
 
     {
-        TimeTaker tt("Bit-block left rotate 1", repeats);
+        bm::chrono_taker tt("Bit-block left rotate 1", repeats);
         for (i = 0; i < repeats; ++i)
         {
             bm::bit_block_rotate_left_1(blk0);
         }
     }
     {
-        TimeTaker tt("Bit-block left rotate 1 unrolled", repeats);
+        bm::chrono_taker tt("Bit-block left rotate 1 unrolled", repeats);
         for (i = 0; i < repeats; ++i)
         {
             bm::bit_block_rotate_left_1_unr(blk1);
@@ -2179,7 +2140,7 @@ void BitBlockShiftTest()
     }
 
     {
-        TimeTaker tt("Bit-block shift-r(1)", repeats);
+        bm::chrono_taker tt("Bit-block shift-r(1)", repeats);
         {
             for (i = 0; i < repeats; ++i)
             {
@@ -2189,7 +2150,7 @@ void BitBlockShiftTest()
     }
 
     {
-        TimeTaker tt("Bit-block shift-r(1) unrolled", repeats);
+        bm::chrono_taker tt("Bit-block shift-r(1) unrolled", repeats);
         for (i = 0; i < repeats; ++i)
         {
             bm::bit_block_shift_r1_unr(blk1, &acc1, 0);
@@ -2212,7 +2173,7 @@ void BitBlockShiftTest()
     }
 
     {
-        TimeTaker tt("Bit-block shift-l(1)", repeats);
+        bm::chrono_taker tt("Bit-block shift-l(1)", repeats);
         for (i = 0; i < repeats; ++i)
         {
             bm::bit_block_shift_l1(blk0, &acc0, 0);
@@ -2220,7 +2181,7 @@ void BitBlockShiftTest()
     }
 
     {
-        TimeTaker tt("Bit-block shift-l(1) unrolled", repeats);
+        bm::chrono_taker tt("Bit-block shift-l(1) unrolled", repeats);
         for (i = 0; i < repeats; ++i)
         {
             bm::bit_block_shift_l1_unr(blk1, &acc1, 0);
@@ -2256,7 +2217,7 @@ void ptest()
     }
 
     {
-    TimeTaker tt("Operation &= test", REPEATS * 10);
+    bm::chrono_taker tt("Operation &= test", REPEATS * 10);
     unsigned count = 0;
     for (unsigned i = 0; i < REPEATS*10; ++i)
     {
@@ -2270,7 +2231,7 @@ void ptest()
 
 
     {
-    TimeTaker tt("Operation &= with enumerator test", REPEATS * 10);
+    bm::chrono_taker tt("Operation &= with enumerator test", REPEATS * 10);
     unsigned count = 0;
     for (unsigned i = 0; i < REPEATS*10; ++i)
     {
@@ -2352,7 +2313,7 @@ void SparseVectorAccessTest()
     {
         svect sv2, sv3;
         {
-            TimeTaker tt("sparse_vector random element assignment test", REPEATS / 10);
+            bm::chrono_taker tt("sparse_vector random element assignment test", REPEATS / 10);
             for (unsigned i = 0; i < REPEATS / 10; ++i)
             {
                 for (unsigned j = 256000; j < 19000000 / 2; ++j)
@@ -2363,7 +2324,7 @@ void SparseVectorAccessTest()
         }
 
         {
-            TimeTaker tt("sparse_vector back_inserter test", REPEATS / 10);
+            bm::chrono_taker tt("sparse_vector back_inserter test", REPEATS / 10);
             for (unsigned i = 0; i < REPEATS / 10; ++i)
             {
                 {
@@ -2414,7 +2375,7 @@ void SparseVectorAccessTest()
 
     bm::id64_t sum1 = 0;
     {
-        TimeTaker tt("sparse_vector random element access test", REPEATS/10 );
+        bm::chrono_taker tt("sparse_vector random element access test", REPEATS/10 );
         for (unsigned i = 0; i < REPEATS/10; ++i)
         {
             for (unsigned j = gather_from; j < gather_to; ++j)
@@ -2425,7 +2386,7 @@ void SparseVectorAccessTest()
     std::vector<unsigned> target_v;
     target_v.resize(idx.size());
     {
-        TimeTaker tt("sparse_vectot<>::gather() UNSORTED ", REPEATS/5 );
+        bm::chrono_taker tt("sparse_vectot<>::gather() UNSORTED ", REPEATS/5 );
         for (unsigned i = 0; i < REPEATS/10; ++i)
         {
             sv1.gather(target_v.data(), idx.data(), unsigned(idx.size()), bm::BM_UNSORTED);
@@ -2445,7 +2406,7 @@ void SparseVectorAccessTest()
     }
 
     {
-        TimeTaker tt("sparse_vector<>::decode()", REPEATS / 5);
+        bm::chrono_taker tt("sparse_vector<>::decode()", REPEATS / 5);
         auto from = gather_from;
         for (unsigned i = 0; i < REPEATS / 10; ++i)
         {
@@ -2508,7 +2469,7 @@ void RSC_SparseVectorFillTest()
     rsc_sparse_vector_u32 csv2(bv);
 
     {
-        TimeTaker tt("rsc_sparse_vector() set values", REPEATS*1);
+        bm::chrono_taker tt("rsc_sparse_vector() set values", REPEATS*1);
 
         bvect::enumerator en = bv.get_enumerator(mid);
         for (;en.valid(); ++en)
@@ -2527,7 +2488,7 @@ void RSC_SparseVectorFillTest()
     }
 
     {
-        TimeTaker tt("rsc_sparse_vector() set values (rs-index)", REPEATS*1);
+        bm::chrono_taker tt("rsc_sparse_vector() set values (rs-index)", REPEATS*1);
         csv2.sync();
 
         bvect::enumerator en = bv.get_enumerator(mid);
@@ -2582,7 +2543,7 @@ void RSC_SparseVectorAccesTest()
         sv1.clear();
 
         {
-            TimeTaker tt("rsc_sparse_vector()::decode() test (sparse)", REPEATS*10 );
+            bm::chrono_taker tt("rsc_sparse_vector()::decode() test (sparse)", REPEATS*10 );
             unsigned from = 0;
             for (unsigned i = 0; i < REPEATS*10; ++i)
             {
@@ -2594,7 +2555,7 @@ void RSC_SparseVectorAccesTest()
             } // for
         }
         {
-            TimeTaker tt("rsc_sparse_vector()::decode_buf() test (sparse)", REPEATS*10 );
+            bm::chrono_taker tt("rsc_sparse_vector()::decode_buf() test (sparse)", REPEATS*10 );
             unsigned from = 0;
             for (unsigned i = 0; i < REPEATS*10; ++i)
             {
@@ -2627,7 +2588,7 @@ void RSC_SparseVectorAccesTest()
         sv1.clear();
 
         {
-            TimeTaker tt("rsc_sparse_vector<>::decode() test (dense)", REPEATS*10 );
+            bm::chrono_taker tt("rsc_sparse_vector<>::decode() test (dense)", REPEATS*10 );
             unsigned from = 0;
             for (unsigned i = 0; i < REPEATS*10; ++i)
             {
@@ -2640,7 +2601,7 @@ void RSC_SparseVectorAccesTest()
             } // for
         }
         {
-            TimeTaker tt("rsc_sparse_vector()::decode_buf() test (dense)", REPEATS*10 );
+            bm::chrono_taker tt("rsc_sparse_vector()::decode_buf() test (dense)", REPEATS*10 );
             unsigned from = 0;
             for (unsigned i = 0; i < REPEATS*10; ++i)
             {
@@ -2677,7 +2638,7 @@ void OptimizeTest()
     
     BM_DECLARE_TEMP_BLOCK(tb)
     {
-    TimeTaker tt("bvector<>::optimize() ", 1);
+        bm::chrono_taker tt("bvector<>::optimize() ", 1);
         for (unsigned k = 0; k < bv_coll.size(); ++k)
         {
             bv_coll[k].optimize(tb);
@@ -2729,7 +2690,7 @@ void AggregatorTest()
     std::unique_ptr<bvect> bv_target2(new bvect);
 
     {
-    TimeTaker tt("Horizontal aggregator OR ", REPEATS);
+    bm::chrono_taker tt("Horizontal aggregator OR ", REPEATS);
     for (unsigned i = 0; i < REPEATS; ++i)
     {
         agg.combine_or_horizontal(*bv_target1, bv_arr, unsigned(bv_coll.size()));
@@ -2737,7 +2698,7 @@ void AggregatorTest()
     }
 
     {
-    TimeTaker tt("aggregator OR", REPEATS);
+    bm::chrono_taker tt("aggregator OR", REPEATS);
     for (unsigned i = 0; i < REPEATS; ++i)
     {
         agg.combine_or(*bv_target2, bv_arr, unsigned(bv_coll.size()));
@@ -2754,7 +2715,7 @@ void AggregatorTest()
 
     // ------------------------------------------------------------------
     {
-    TimeTaker tt("Horizontal aggregator AND", REPEATS);
+    bm::chrono_taker tt("Horizontal aggregator AND", REPEATS);
     for (unsigned i = 0; i < REPEATS; ++i)
     {
         agg.combine_and_horizontal(*bv_target1, bv_arr, unsigned(bv_coll.size()));
@@ -2762,7 +2723,7 @@ void AggregatorTest()
     }
 
     {
-    TimeTaker tt("aggregator AND", REPEATS);
+    bm::chrono_taker tt("aggregator AND", REPEATS);
     for (unsigned i = 0; i < REPEATS; ++i)
     {
         agg.combine_and(*bv_target2, bv_arr, unsigned(bv_coll.size()));
@@ -2778,7 +2739,7 @@ void AggregatorTest()
     }
 
     {
-    TimeTaker tt("Horizontal aggregator AND-SUB", REPEATS);
+    bm::chrono_taker tt("Horizontal aggregator AND-SUB", REPEATS);
     for (unsigned i = 0; i < REPEATS; ++i)
     {
         agg.combine_and_sub_horizontal(*bv_target1,
@@ -2796,7 +2757,7 @@ void AggregatorTest()
     }
 
     {
-    TimeTaker tt("aggregator AND-SUB", REPEATS);
+    bm::chrono_taker tt("aggregator AND-SUB", REPEATS);
     for (unsigned i = 0; i < REPEATS; ++i)
     {
         agg.combine_and_sub(*bv_target2,
@@ -2831,7 +2792,7 @@ void BvectorShiftTest()
             return;
 
         {
-            TimeTaker tt("bvector<>::shift_right() ", REPEATS);
+            bm::chrono_taker tt("bvector<>::shift_right() ", REPEATS);
             for (unsigned i = 0; i < REPEATS; ++i)
             {
                 for (unsigned k = 0; k < bv_coll.size(); ++k)
@@ -2850,7 +2811,7 @@ void BvectorShiftTest()
             return;
 
         {
-            TimeTaker tt("bvector<>::shift_left() ", REPEATS);
+            bm::chrono_taker tt("bvector<>::shift_left() ", REPEATS);
             for (unsigned i = 0; i < REPEATS; ++i)
             {
                 for (unsigned k = 0; k < bv_coll.size(); ++k)
@@ -2875,7 +2836,7 @@ void BvectorShiftTest()
 
     {
         {
-            TimeTaker tt("bvector<>::shift_right()+AND ", REPEATS);
+            bm::chrono_taker tt("bvector<>::shift_right()+AND ", REPEATS);
             for (unsigned i = 0; i < REPEATS; ++i)
             {
                 bvect bv(mask_bv);
@@ -2892,7 +2853,7 @@ void BvectorShiftTest()
         bm::aggregator<bvect> agg;
         
         {
-            TimeTaker tt("aggregator::shift_right_and() ", REPEATS);
+            bm::chrono_taker tt("aggregator::shift_right_and() ", REPEATS);
             agg.add(&mask_bv);
             for (unsigned k = 0; k < bv_coll2.size(); ++k)
             {
@@ -2962,7 +2923,7 @@ void Set2SetTransformTest()
     bm::set2set_11_transform<svect> set2set;
     int cnt = 0;
     {
-        TimeTaker tt("set2set_11_transform::run()", REPEATS/10);
+        bm::chrono_taker tt("set2set_11_transform::run()", REPEATS/10);
         for (unsigned i = 0; i < REPEATS/10; ++i)
         {
             bvect bv_out;
@@ -2996,7 +2957,7 @@ void RangeCopyTest()
     generate_bvector(bv, vect_max);
 
     {
-        TimeTaker tt("bvector<>::copy_range()", REPEATS * 25);
+        bm::chrono_taker tt("bvector<>::copy_range()", REPEATS * 25);
         for (unsigned i = 0; i < REPEATS * 25; ++i)
         {
             unsigned from = vect_max / 4;
@@ -3007,7 +2968,7 @@ void RangeCopyTest()
         } // for
     }
     {
-        TimeTaker tt("bvector<>:: copy range constructor", REPEATS * 25);
+        bm::chrono_taker tt("bvector<>:: copy range constructor", REPEATS * 25);
         for (unsigned i = 0; i < REPEATS * 25; ++i)
         {
             unsigned from = vect_max / 4;
@@ -3018,7 +2979,7 @@ void RangeCopyTest()
     }
 
     {
-        TimeTaker tt("copy range with AND", REPEATS * 25);
+        bm::chrono_taker tt("copy range with AND", REPEATS * 25);
         for (unsigned i = 0; i < REPEATS * 25; ++i)
         {
             unsigned from = vect_max / 4;
@@ -3100,7 +3061,7 @@ void IntervalsTest()
     for (unsigned pass = 0; pass < 2; ++pass)
     {
         {
-            TimeTaker tt(msg3, REPEATS * 1);
+            bm::chrono_taker tt(msg3, REPEATS * 1);
             bvect::size_type istart(0), ilen(0);
             for (istart = 0; istart < vect_max; )
             {
@@ -3127,7 +3088,7 @@ void IntervalsTest()
         }
 
         {
-            TimeTaker tt(msg, REPEATS * 1);
+            bm::chrono_taker tt(msg, REPEATS * 1);
             bvect::size_type istart(0), ilen(0);
             for (istart = 0; istart < vect_max; )
             {
@@ -3154,7 +3115,7 @@ void IntervalsTest()
         }
 
         {
-            TimeTaker tt(msg4, REPEATS * 1);
+            bm::chrono_taker tt(msg4, REPEATS * 1);
             bvect::size_type istart(0), ilen(0);
             for (istart = 0; istart < vect_max; )
             {
@@ -3190,7 +3151,7 @@ void IntervalsTest()
         }
 
         {
-            TimeTaker tt(msg5, REPEATS * 1);
+            bm::chrono_taker tt(msg5, REPEATS * 1);
             bvect::size_type istart(0), ilen(0);
             for (istart = 0; istart < vect_max; )
             {
@@ -3224,7 +3185,7 @@ void IntervalsTest()
         }
 
         {
-            TimeTaker tt(msg2, REPEATS * 1);
+            bm::chrono_taker tt(msg2, REPEATS * 1);
             bvect::size_type istart(0), ilen(0);
             for (istart = 0; istart < vect_max; )
             {
@@ -3252,7 +3213,7 @@ void IntervalsTest()
         }
 
         {
-            TimeTaker tt(msg6, REPEATS * 1);
+            bm::chrono_taker tt(msg6, REPEATS * 1);
             bvect::size_type istart(0), ilen(0);
             for (istart = 0; istart < vect_max; )
             {
@@ -3274,7 +3235,7 @@ void IntervalsTest()
         }
 
         {
-            TimeTaker tt(msg7, REPEATS * 1);
+            bm::chrono_taker tt(msg7, REPEATS * 1);
             bvect::size_type istart(0), ilen(0);
             for (istart = 0; istart < vect_max; )
             {
@@ -3297,7 +3258,7 @@ void IntervalsTest()
 
         bvect::size_type cnt_c = bv.count();
         {
-            TimeTaker tt(msg8, REPEATS * 10);
+            bm::chrono_taker tt(msg8, REPEATS * 10);
    
             for (unsigned i = 0; i < REPEATS * 10; ++i)
             {
@@ -3321,7 +3282,7 @@ void IntervalsTest()
         }
         {
             bvect::size_type sum = 0;
-            TimeTaker tt(msg9, REPEATS/4);
+            bm::chrono_taker tt(msg9, REPEATS/4);
 
             for (unsigned i = 0; i < REPEATS/4; ++i)
             {
@@ -3381,7 +3342,7 @@ void RankCompressionTest()
     bv_i2.build_rs_index(bc2.get());
 
     {
-        TimeTaker tt("Rank compression test", REPEATS * 10);
+        bm::chrono_taker tt("Rank compression test", REPEATS * 10);
         for (unsigned i = 0; i < REPEATS * 10; ++i)
         {
             rc.compress(bv11, bv_i1, bv_s1);
@@ -3389,7 +3350,7 @@ void RankCompressionTest()
         } // for
     }
     {
-        TimeTaker tt("Rank compression (by source) test", REPEATS * 10);
+        bm::chrono_taker tt("Rank compression (by source) test", REPEATS * 10);
         for (unsigned i = 0; i < REPEATS * 10; ++i)
         {
             rc.compress_by_source(bv21, bv_i1, *bc1, bv_s1);
@@ -3398,7 +3359,7 @@ void RankCompressionTest()
     }
     
     {
-        TimeTaker tt("Rank decompression test", REPEATS * 10);
+        bm::chrono_taker tt("Rank decompression test", REPEATS * 10);
         for (unsigned i = 0; i < REPEATS * 10; ++i)
         {
             rc.decompress(bv11_s, bv_i1, bv11);
@@ -3537,7 +3498,7 @@ void SparseVectorScannerTest()
 
     unsigned search_repeats = REPEATS;
     {
-        TimeTaker tt("std::vector<> scan ", search_repeats);
+        bm::chrono_taker tt("std::vector<> scan ", search_repeats);
         for (unsigned i = 0; i < search_repeats; ++i)
         {
             unsigned vs = search_vect[i];
@@ -3548,7 +3509,7 @@ void SparseVectorScannerTest()
     vect.shrink_to_fit();
 
     {
-    TimeTaker tt("horizontal sparse vector scanner find_eq()", search_repeats);
+    bm::chrono_taker tt("horizontal sparse vector scanner find_eq()", search_repeats);
     for (unsigned i = 0; i < search_repeats; ++i)
     {
         {
@@ -3561,7 +3522,7 @@ void SparseVectorScannerTest()
     }
     
     {
-    TimeTaker tt("sparse vector scanner find_eq() ", search_repeats);
+    bm::chrono_taker tt("sparse vector scanner find_eq() ", search_repeats);
     {
         scanner.find_eq(sv, search_vect.begin(), search_vect.end(), bv_res3);
     } // for
@@ -3610,7 +3571,7 @@ void SparseVectorSerializationTest()
 
     {
         {
-            TimeTaker tt("bm::sparse_vector<> serialization XOR disabled ", 1);
+            bm::chrono_taker tt("bm::sparse_vector<> serialization XOR disabled ", 1);
 
             sv_serializer.set_xor_ref(false); // disable XOR compression
             sv_serializer.serialize(sv1, sv_lay);
@@ -3639,7 +3600,7 @@ void SparseVectorSerializationTest()
     }
 
     {
-        TimeTaker tt("bm::sparse_vector<> serialization XOR enabled ", 1);
+        bm::chrono_taker tt("bm::sparse_vector<> serialization XOR enabled ", 1);
         sv_serializer.set_xor_ref(true); // enable XOR compression
         sv_serializer.serialize(sv1, sv_lay);
     }
@@ -3700,7 +3661,7 @@ void SparseVectorRangeDeserializationTest()
     buf = sv_lay.buf();
     
     {
-        TimeTaker tt("bm::sparse_vector<> Range Deserialization() - NO bookmarks ", 1);
+        bm::chrono_taker tt("bm::sparse_vector<> Range Deserialization() - NO bookmarks ", 1);
         for (unsigned i = 0; i < 15; ++i)
         {
             sv_deserial.deserialize(sv2, buf, 0, 65536 * 2);
@@ -3734,7 +3695,7 @@ void SparseVectorRangeDeserializationTest()
     buf = sv_lay.buf();
 
     {
-        TimeTaker tt("bm::sparse_vector<> Range Deserialization() - WITH bookmarks ", 1);
+        bm::chrono_taker tt("bm::sparse_vector<> Range Deserialization() - WITH bookmarks ", 1);
         for (unsigned i = 0; i < 15; ++i)
         {
             sv_deserial.deserialize_range(sv2, buf, 0, 65536 * 2);
@@ -3806,7 +3767,7 @@ void StrSparseVectorTest()
    GenerateTestStrCollection(str_coll, max_coll);
    
     {
-       TimeTaker tt("bm::str_sparse_vector<>::push_back() ", 1);
+       bm::chrono_taker tt("bm::str_sparse_vector<>::push_back() ", 1);
        for (auto str : str_coll)
        {
            str_sv.push_back(str);
@@ -3816,7 +3777,7 @@ void StrSparseVectorTest()
     
     {
        str_svect_type str_sv0;
-       TimeTaker tt("bm::str_sparse_vector<>::back_insert_iterator ", 1);
+       bm::chrono_taker tt("bm::str_sparse_vector<>::back_insert_iterator ", 1);
        str_svect_type::back_insert_iterator bi = str_sv0.get_back_inserter();
        for (auto str : str_coll)
        {
@@ -3828,7 +3789,7 @@ void StrSparseVectorTest()
     {
     string str;
 
-        TimeTaker tt("bm::str_sparse_vector<> - random access ", 1);
+        bm::chrono_taker tt("bm::str_sparse_vector<> - random access ", 1);
         for (unsigned i = 0; i < str_sv.size(); ++i)
         {
             str_sv.get(i, str);
@@ -3842,7 +3803,7 @@ void StrSparseVectorTest()
     }
 
     {
-        TimeTaker tt("bm::str_sparse_vector<>::const_iterator ", 1);
+        bm::chrono_taker tt("bm::str_sparse_vector<>::const_iterator ", 1);
         str_svect_type::const_iterator it = str_sv.begin();
         str_svect_type::const_iterator it_end = str_sv.end();
 
@@ -3954,7 +3915,7 @@ void InterpolativeCodingTest()
     }
 
     {
-        TimeTaker tt("bic_decode_u32_cm() ", 1);
+        bm::chrono_taker tt("bic_decode_u32_cm() ", 1);
 
         for (unsigned k = 0; k < code_repeats; ++k)
         {
@@ -3981,7 +3942,7 @@ int main(void)
     cout << bm::_copyright<true>::_p << endl;
 //    ptest();
 
-    TimeTaker tt("TOTAL", 1);
+    bm::chrono_taker tt("TOTAL", 1);
     try
     {
         cout << endl;
@@ -4064,6 +4025,7 @@ int main(void)
 
         RSC_SparseVectorFillTest();
         RSC_SparseVectorAccesTest();
+
         RankCompressionTest();
         cout << endl;
 
