@@ -1606,14 +1606,14 @@ void for_each_bit_blk(const bm::word_t* block, SIZE_TYPE offset,
                 block_set_table<true>::_right[nbit] &
                 block_set_table<true>::_left[right_margin];
             temp = (*word & mask);
-            cnt = bm::bitscan_popcnt(temp, bits);
+            cnt = bm::bitscan(temp, bits);
             if (cnt)
                 bit_functor.add_bits(offset + (nword * 32), bits, cnt);
 
             return;
         }
         temp = *word & block_set_table<true>::_right[nbit];
-        cnt = bm::bitscan_popcnt(temp, bits);
+        cnt = bm::bitscan(temp, bits);
         if (cnt)
             bit_functor.add_bits(offset + (nword * 32), bits, cnt);
         bitcount -= 32 - nbit;
@@ -1638,7 +1638,7 @@ void for_each_bit_blk(const bm::word_t* block, SIZE_TYPE offset,
     for ( ;bitcount >= 32; bitcount-=32, ++word)
     {
         temp = *word;
-        cnt = bm::bitscan_popcnt(temp, bits);
+        cnt = bm::bitscan(temp, bits);
         if (cnt)
             bit_functor.add_bits(offset + (nword * 32), bits, cnt);
         ++nword;
@@ -1649,7 +1649,7 @@ void for_each_bit_blk(const bm::word_t* block, SIZE_TYPE offset,
     if (bitcount)  // we have a tail to count
     {
         temp = *word & block_set_table<true>::_left[bitcount-1];
-        cnt = bm::bitscan_popcnt(temp, bits);
+        cnt = bm::bitscan(temp, bits);
         if (cnt)
             bit_functor.add_bits(offset + (nword * 32), bits, cnt);
     }

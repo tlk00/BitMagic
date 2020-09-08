@@ -442,7 +442,7 @@ unsigned random_subset<BV>::process_word(bm::word_t*       blk_out,
             BM_ASSERT(take_count);
 
             unsigned char blist[64];
-            unsigned arr_size = bm::bitscan_popcnt(new_bits, blist);
+            unsigned arr_size = bm::bitscan(new_bits, blist);
             BM_ASSERT(arr_size == new_count);
             std::shuffle(blist, blist + arr_size, mt_rand);
             unsigned value = 0;
