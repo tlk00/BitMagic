@@ -4509,12 +4509,15 @@ bool bit_find_first_diff(const bm::word_t* BMRESTRICT blk1,
 #ifdef BM64OPT
     BM_ASSERT(sizeof(bm::wordop_t) == 8);
 
-    const bm::wordop_t* b1 = (const bm::wordop_t*) blk1;
-    const bm::wordop_t* b2 = (const bm::wordop_t*) blk2;
+    const bm::bit_block_t::bunion_t* BMRESTRICT b1_u =
+                    (const bm::bit_block_t::bunion_t*)(blk1);
+    const bm::bit_block_t::bunion_t* BMRESTRICT b2_u =
+                    (const bm::bit_block_t::bunion_t*)(blk2);
 
     for (unsigned i = 0; i < bm::set_block_size/2; ++i)
     {
-        bm::wordop_t w1 = b1[i]; bm::wordop_t w2 = b2[i];
+        bm::wordop_t w1 = b1_u->w64[i];
+        bm::wordop_t w2 = b2_u->w64[i];
         bm::wordop_t diff = w1 ^ w2;
         if (diff)
         {
@@ -4541,7 +4544,7 @@ bool bit_find_first_diff(const bm::word_t* BMRESTRICT blk1,
 }
 
 
-#ifndef BMAVX2OPT
+//#ifndef BMAVX2OPT
 
 /*!
    \brief Converts bit block to GAP.
@@ -4631,7 +4634,7 @@ complete:
     *dest = (gap_word_t)((*dest & 7) + (len << 3));
     return len;
 }
-#endif
+//#endif
 
 /**
    Convert bit block to GAP representation
