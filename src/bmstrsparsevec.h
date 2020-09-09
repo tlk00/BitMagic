@@ -253,6 +253,7 @@ public:
 
     private:
         const str_sparse_vector_type*     sv_;      ///!< ptr to parent
+        unsigned                          max_str_; ///<! effective max string len
         mutable size_type                 pos_;     ///!< Position
         mutable buffer_matrix_type        buf_matrix_; ///!< decode value buffer
         mutable size_type                 pos_in_buf_; ///!< buffer position
@@ -842,26 +843,104 @@ public:
     // ------------------------------------------------------------
     /*! @name Export content to C-style                          */
     ///@{
-    
+
+    /**
+        \brief Bulk export strings to a C-style matrix of chars
+
+        \param cmatr  - dest matrix (bm::heap_matrix)
+        \param idx_from - index in the sparse vector to export from
+        \param dec_size - decoding size (matrix column allocation should match)
+        \param zero_mem - set to false if target array is pre-initialized
+                          with 0s to avoid performance penalty
+
+        \return number of actually exported elements (can be less than requested)
+    */
+    template<typename CharMatrix>
+    size_type decode(CharMatrix& cmatr,
+                     size_type   idx_from,
+                     size_type   dec_size,
+                     bool        zero_mem = true) const
+    {
+        return decode_substr(cmatr, idx_from, dec_size,
+                             0, MAX_STR_SIZE-1, zero_mem);
+
+    }
+
     /**
         \brief Bulk export strings to a C-style matrix of chars
      
         \param cmatr  - dest matrix (bm::heap_matrix)
         \param idx_from - index in the sparse vector to export from
         \param dec_size - decoding size (matrix column allocation should match)
+        \param substr_from - sub-string position from
+        \param substr_to - sub-string position to
         \param zero_mem - set to false if target array is pre-initialized
                           with 0s to avoid performance penalty
      
         \return number of actually exported elements (can be less than requested)
     */
     template<typename CharMatrix>
-    size_type decode(CharMatrix& cmatr,
-                     size_type   idx_from, size_type  dec_size,
+    size_type decode_substr(CharMatrix& cmatr,
+                     size_type   idx_from,
+                     size_type   dec_size,
+                     unsigned    substr_from,
+                     unsigned    substr_to,
                      bool        zero_mem = true) const
     {
+
+    /// Decoder functor
+    /// @internal
+    ///
+    struct sv_decode_visitor_func
+    {
+        sv_decode_visitor_func(CharMatrix& cmatr) BMNOEXCEPT2
+            : cmatr_(cmatr), mask_(0), sv_off_(0)
+        {}
+
+        void add_bits(size_type bv_offset,
+                      const unsigned char* BMRESTRICT bits, unsigned bits_size) BMNOEXCEPT
+        {
+            // can be negative (-1) when bv base offset = 0 and sv = 1,2..
+            size_type base = bv_offset - sv_off_;
+            value_type m = mask_;
+            const unsigned i = substr_i_;
+            for (unsigned j = 0; j < bits_size; ++j)
+            {
+                size_type idx = bits[j] + base;
+                value_type* BMRESTRICT str = cmatr_.row(idx);
+                str[i] |= m;
+            } // for i
+        }
+        void add_range(size_type bv_offset, size_type sz) BMNOEXCEPT
+        {
+            auto base = bv_offset - sv_off_;
+            value_type m = mask_;
+            const unsigned i = substr_i_;
+            for (size_type j = 0; j < sz; ++j)
+            {
+                size_type idx = j + base;
+                value_type* BMRESTRICT str = cmatr_.row(idx);
+                str[i] |= m;
+            } // for i
+        }
+
+        CharMatrix&            cmatr_;     ///< target array for reverse transpose
+        value_type             mask_;      ///< bit-plane mask
+        unsigned               substr_i_;  ///< i
+        size_type              sv_off_;    ///< SV read offset
+
+    };
+
+
+        BM_ASSERT(substr_from <= substr_to);
+        BM_ASSERT(substr_from <= MAX_STR_SIZE);
         BM_ASSERT(cmatr.is_init());
+
+        if (substr_to >= MAX_STR_SIZE)
+            substr_to = MAX_STR_SIZE-1;
+
         if (zero_mem)
-            cmatr.set_zero();
+            cmatr.set_zero(); // TODO: set zero based on requested capacity
         
         size_type rows = size_type(cmatr.rows());
         BM_ASSERT(cmatr.cols() >= MAX_STR_SIZE);
@@ -872,16 +951,26 @@ public:
             dec_size = rows;
         if (!dec_size)
             return dec_size;
-        
-        for (unsigned i = 0; i < MAX_STR_SIZE; ++i)
+
+        sv_decode_visitor_func func(cmatr);
+
+        for (unsigned i = 0; i <= substr_to; ++i)
         {
             unsigned bi = 0;
+            func.substr_i_ = i;
             for (unsigned k = i * 8; k < (i * 8) + 8; ++k, ++bi)
             {
                 const bvector_type* bv = this->bmatr_.get_row(k);
                 if (!bv)
                     continue;
-                value_type mask = value_type(1u << bi);
+//                value_type mask = value_type(1u << bi);
+
+                func.mask_ = value_type(1u << bi);
+                func.sv_off_ = idx_from;
+
+                size_type end = idx_from + dec_size;
+                bm::for_each_bit_range_no_check(*bv, idx_from, end-1, func);
+/*
                 typename bvector_type::enumerator en(bv, idx_from);
                 for ( ;en.valid(); ++en )
                 {
@@ -891,6 +980,9 @@ public:
                     typename CharMatrix::value_type* str = cmatr.row(idx);
                     str[i] |= mask;
                 } // for en
+*/
+
+
             } // for k
         } // for i
         
@@ -1777,7 +1869,7 @@ void str_sparse_vector<CharType, BV, MAX_STR_SIZE>::throw_bad_value(
 
 template<class CharType, class BV, unsigned MAX_STR_SIZE>
 str_sparse_vector<CharType, BV, MAX_STR_SIZE>::const_iterator::const_iterator() BMNOEXCEPT
-: sv_(0), pos_(bm::id_max), pos_in_buf_(~size_type(0))
+: sv_(0), max_str_(MAX_STR_SIZE), pos_(bm::id_max), pos_in_buf_(~size_type(0))
 {}
 
 //---------------------------------------------------------------------
@@ -1785,7 +1877,7 @@ str_sparse_vector<CharType, BV, MAX_STR_SIZE>::const_iterator::const_iterator() 
 template<class CharType, class BV, unsigned MAX_STR_SIZE>
 str_sparse_vector<CharType, BV, MAX_STR_SIZE>::const_iterator::const_iterator(
    const str_sparse_vector<CharType, BV, MAX_STR_SIZE>::const_iterator& it) BMNOEXCEPT
-: sv_(it.sv_), pos_(it.pos_), pos_in_buf_(~size_type(0))
+: sv_(it.sv_), max_str_(it.max_str_), pos_(it.pos_), pos_in_buf_(~size_type(0))
 {}
 
 //---------------------------------------------------------------------
@@ -1794,7 +1886,9 @@ template<class CharType, class BV, unsigned MAX_STR_SIZE>
 str_sparse_vector<CharType, BV, MAX_STR_SIZE>::const_iterator::const_iterator(
     const str_sparse_vector<CharType, BV, MAX_STR_SIZE>* sv) BMNOEXCEPT
 : sv_(sv), pos_(sv->empty() ? bm::id_max : 0), pos_in_buf_(~size_type(0))
-{}
+{
+    max_str_ = sv_->effective_max_str();
+}
 
 //---------------------------------------------------------------------
 
@@ -1803,7 +1897,9 @@ str_sparse_vector<CharType, BV, MAX_STR_SIZE>::const_iterator::const_iterator(
     const str_sparse_vector<CharType, BV, MAX_STR_SIZE>* sv,
     typename str_sparse_vector<CharType, BV, MAX_STR_SIZE>::size_type pos) BMNOEXCEPT
 : sv_(sv), pos_(pos >= sv->size() ? bm::id_max : pos), pos_in_buf_(~size_type(0))
-{}
+{
+    max_str_ = sv_->effective_max_str();
+}
 
 //---------------------------------------------------------------------
 
@@ -1818,7 +1914,9 @@ str_sparse_vector<CharType, BV, MAX_STR_SIZE>::const_iterator::value() const BMN
         if (!buf_matrix_.is_init())
             buf_matrix_.init();
         pos_in_buf_ = 0;
-        size_type d = sv_->decode(buf_matrix_, pos_, buffer_matrix_type::n_rows);
+        size_type d = sv_->decode_substr(buf_matrix_, pos_,
+                                         buffer_matrix_type::n_rows,
+                                         0, max_str_);
         if (!d)
         {
             pos_ = bm::id_max;
