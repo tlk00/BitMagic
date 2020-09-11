@@ -963,25 +963,12 @@ public:
                 const bvector_type* bv = this->bmatr_.get_row(k);
                 if (!bv)
                     continue;
-//                value_type mask = value_type(1u << bi);
 
                 func.mask_ = value_type(1u << bi);
                 func.sv_off_ = idx_from;
 
                 size_type end = idx_from + dec_size;
                 bm::for_each_bit_range_no_check(*bv, idx_from, end-1, func);
-/*
-                typename bvector_type::enumerator en(bv, idx_from);
-                for ( ;en.valid(); ++en )
-                {
-                    size_type idx = *en - idx_from;
-                    if (idx >= dec_size)
-                        break;
-                    typename CharMatrix::value_type* str = cmatr.row(idx);
-                    str[i] |= mask;
-                } // for en
-*/
-
 
             } // for k
         } // for i
