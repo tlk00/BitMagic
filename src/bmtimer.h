@@ -111,9 +111,10 @@ public:
         else // report the measurements
         {
             if (!silent)
-                std::cout << name_ << ": "
-                          << std::chrono::duration <double, std::milli> (diff).count()
-                          << std::endl;
+            {
+                auto ms = std::chrono::duration <double, std::milli> (diff).count();
+                print_duration(name_, ms);
+            }
         }
         is_stopped_ = true;
     }
@@ -121,6 +122,24 @@ public:
     void add_repeats(unsigned inc)
     {
         repeats_ += inc;
+    }
+
+    template<typename DT>
+    static void print_duration(const std::string& name, DT ms)
+    {
+        if (ms > 1000)
+        {
+            double sec = ms / 1000;
+            if (sec > 60)
+            {
+                double min = sec / 60;
+                std::cout << name << "; " << std::setprecision(4) << min << " min" << std::endl;
+            }
+            else
+                std::cout << name << "; " << std::setprecision(4) << sec << " sec" << std::endl;
+        }
+        else
+            std::cout << name << "; " << ms << " ms" << std::endl;
     }
 
     
@@ -144,19 +163,7 @@ public:
             print_time:
                 {
                 auto ms = it->second.duration.count();
-                if (ms > 1000)
-                {
-                    double sec = ms / 1000;
-                    if (sec > 60)
-                    {
-                        double min = sec / 60;
-                        std::cout << it->first << "; " << std::setprecision(4) << min << " min" << std::endl;
-                    }
-                    else
-                        std::cout << it->first << "; " << std::setprecision(4) << sec << " sec" << std::endl;
-                }
-                else
-                    std::cout << it->first << "; " << it->second.duration.count() << " ms" << std::endl;
+                print_duration(it->first, ms);
                 }
                 break;
             case ct_ops_per_sec:

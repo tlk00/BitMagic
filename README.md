@@ -115,11 +115,19 @@ Current 64-bit implementation allows 2^48-1 vector elements for large scale syst
 ### WebAssembly
 
 BitMagic compiles and work with WebAssmbly (emscripten). Latest version includes 
-tweaks, specific for the platform. Performance numbers are close to native code 32-bit 
-code without SIMD. 
-Sample compile line would look like:
+tweaks, specific for the platform. Performance numbers are close to native code 
+without SIMD. Sample compile line would look like:
 
 `emcc -std=c++11 -s ALLOW_MEMORY_GROWTH=1 -O2 -s WASM=1 ... `
+
+### ARM
+
+BitMagic fully supports ARM CPU. All releases are stress tested with Raspberry Pi 4.
+BitMagic implements some algorithmic tweaks and improvements specific for ARM 
+(like use of LZCNT instruction). BitMagic succinct containers can be very useful on embedded 
+systems for edge computing with limited amount of available memory.
+
+ARM NEON SIMD support is a work in progress.
 
 
 ### C-library interface:

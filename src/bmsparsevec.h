@@ -1411,7 +1411,8 @@ sparse_vector<Val, BV>::extract(value_type* BMRESTRICT arr,
         {}
 
         void add_bits(size_type bv_offset,
-                      const unsigned char* bits, unsigned bits_size) BMNOEXCEPT
+                      const unsigned char* BMRESTRICT bits,
+                      unsigned bits_size) BMNOEXCEPT
         {
             // can be negative (-1) when bv base offset = 0 and sv = 1,2..
             size_type base = bv_offset - sv_off_; 

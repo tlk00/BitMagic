@@ -507,6 +507,23 @@ struct sub_func
         { return v1 & ~v2; }
 };
 
+BMFORCEINLINE
+unsigned mask_r_u32(unsigned nbit) BMNOEXCEPT
+{
+    BM_ASSERT(nbit < 32);
+    unsigned m = (~0u << nbit);
+    BM_ASSERT(m == block_set_table<true>::_right[nbit]);
+    return m;
+}
+
+BMFORCEINLINE
+unsigned mask_l_u32(unsigned nbit) BMNOEXCEPT
+{
+    BM_ASSERT(nbit < 32);
+    unsigned m = ~0u >> (31 - nbit);
+    BM_ASSERT(m == block_set_table<true>::_left[nbit]);
+    return m;
+}
 
 
 #ifdef __GNUG__

@@ -1602,18 +1602,19 @@ void for_each_bit_blk(const bm::word_t* block, SIZE_TYPE offset,
         unsigned right_margin = nbit + right - left;
         if (right_margin < 32)
         {
-            unsigned mask =
-                block_set_table<true>::_right[nbit] &
-                block_set_table<true>::_left[right_margin];
+            unsigned mask_r = bm::mask_r_u32(nbit);
+            unsigned mask_l = bm::mask_l_u32(right_margin);
+            unsigned mask = mask_r & mask_l;
+
             temp = (*word & mask);
-            cnt = bm::bitscan_popcnt(temp, bits);
+            cnt = bm::bitscan(temp, bits);
             if (cnt)
                 bit_functor.add_bits(offset + (nword * 32), bits, cnt);
-
             return;
         }
-        temp = *word & block_set_table<true>::_right[nbit];
-        cnt = bm::bitscan_popcnt(temp, bits);
+        unsigned mask_r = bm::mask_r_u32(nbit);
+        temp = *word & mask_r;
+        cnt = bm::bitscan(temp, bits);
         if (cnt)
             bit_functor.add_bits(offset + (nword * 32), bits, cnt);
         bitcount -= 32 - nbit;
@@ -1623,9 +1624,9 @@ void for_each_bit_blk(const bm::word_t* block, SIZE_TYPE offset,
     {
         bitcount = right - left + 1u;
     }
+
+    // word aligned now - scan the bit-stream loop unrolled 4x words(wave)
     BM_ASSERT(bm::set_bitscan_wave_size == 4);
-    // now when we are word aligned, we can scan the bit-stream
-    // loop unrolled to evaluate 4 words at a time
     for ( ;bitcount >= 128;
            bitcount-=128, word+=bm::set_bitscan_wave_size,
            nword += bm::set_bitscan_wave_size)
@@ -1638,7 +1639,7 @@ void for_each_bit_blk(const bm::word_t* block, SIZE_TYPE offset,
     for ( ;bitcount >= 32; bitcount-=32, ++word)
     {
         temp = *word;
-        cnt = bm::bitscan_popcnt(temp, bits);
+        cnt = bm::bitscan(temp, bits);
         if (cnt)
             bit_functor.add_bits(offset + (nword * 32), bits, cnt);
         ++nword;
@@ -1648,8 +1649,9 @@ void for_each_bit_blk(const bm::word_t* block, SIZE_TYPE offset,
 
     if (bitcount)  // we have a tail to count
     {
-        temp = *word & block_set_table<true>::_left[bitcount-1];
-        cnt = bm::bitscan_popcnt(temp, bits);
+        unsigned mask_l = bm::mask_l_u32(bitcount-1);
+        temp = *word & mask_l;
+        cnt = bm::bitscan(temp, bits);
         if (cnt)
             bit_functor.add_bits(offset + (nword * 32), bits, cnt);
     }
