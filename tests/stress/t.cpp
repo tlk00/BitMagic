@@ -3490,7 +3490,7 @@ void ShiftRotateTest()
             }
         }
     }
-    
+
     // SHIFT-R tests
     //
 
@@ -3509,7 +3509,7 @@ void ShiftRotateTest()
         if (blk0[i] != blk1[i])
         {
             cerr << "1. SHIFT-r check failed" << endl;
-            exit(1);
+            assert(0); exit(1);
         }
         assert(blk0[i] == 2);
     }
@@ -3758,6 +3758,14 @@ void BlockBitEraseTest()
         assert(t);
         bm::bit_block_erase(blk0, 0, false);
         unsigned cnt = bm::bit_block_count(blk0);
+        {
+        auto cnt2 = bm::bit_block_count(blk0, ~0ull);
+        assert(cnt2 == cnt);
+        auto d = calc_block_digest0(blk0);
+        cnt2 = bm::bit_block_count(blk0, d);
+        assert(cnt2 == cnt);
+        }
+
         c += cnt;
         if (cnt != 1)
         {
@@ -3805,6 +3813,13 @@ void BlockBitEraseTest()
             assert(!t);
             cnt = bm::bit_block_count(blk0);
             assert(!cnt);
+            {
+            auto cnt2 = bm::bit_block_count(blk0, ~0ull);
+            assert(cnt == cnt2);
+            auto d = calc_block_digest0(blk0);
+            cnt2 = bm::bit_block_count(blk0, d);
+            assert(cnt2 == cnt);
+            }
             break;
         }
         auto cnt = bm::bit_block_count(blk0);
@@ -3836,6 +3851,13 @@ void BlockBitEraseTest()
                     
                     unsigned bc2 = bm::bit_block_count(blk0);
                     assert(bc2 == bc-1);
+                    {
+                    auto cnt2 = bm::bit_block_count(blk0, ~0ull);
+                    assert(cnt2 == bc2);
+                    auto d = calc_block_digest0(blk0);
+                    cnt2 = bm::bit_block_count(blk0, d);
+                    assert(cnt2 == bc2);
+                    }
                     --bc;
                 } // for k
                 
@@ -13680,6 +13702,12 @@ void CalcBeginMask()
     unsigned i;
     for (i = 0; i < 32; ++i)
     {
+        {
+            unsigned mask_r = bm::mask_r_u32(i);
+            assert (mask_r == bm::block_set_table<true>::_right[i]);
+            unsigned mask_l = bm::mask_l_u32(i);
+            assert (mask_l == bm::block_set_table<true>::_left[i]);
+        }
     unsigned mask = 0;
 
         for(unsigned j = i; j < 32; ++j)
@@ -15511,8 +15539,9 @@ void BitRangeAllSetTest()
     cout << "---------------------------- BitRangeAllSetTest()" << endl;
 
     BM_DECLARE_TEMP_BLOCK(tb1);
+    BM_DECLARE_TEMP_BLOCK(tb0);
     bm::bit_block_set(tb1, ~0u);
-
+    bm::bit_block_set(tb0, ~0xBEEFu);
     bool b;
 
     {
@@ -15528,6 +15557,48 @@ void BitRangeAllSetTest()
 
         b =  bm::bit_block_is_all_one_range(tb1, 0, 65535);
         assert(!b);
+    }
+
+
+    {
+        bm::bit_block_set(tb1, ~0u);
+
+        unsigned i(0), j(65535);
+        for (; i < j; ++i, --j)
+        {
+            b =  bm::bit_block_is_all_one_range(tb1, i, j);
+            assert(b);
+            b =  bm::bit_block_is_all_one_range(tb1, i, i);
+            assert(b);
+            b =  bm::bit_block_is_all_one_range(tb1, i, i+63);
+            assert(b);
+
+            auto cnt = bm::bit_block_calc_count_range(tb1, i, i);
+            assert(cnt == 1);
+            cnt = bm::bit_block_calc_count_range(tb1, i, j);
+            assert(cnt == j-i+1);
+            cnt = bm::bit_block_calc_count_range(tb1, i, i+63);
+            assert(cnt == 64);
+        }
+    }
+
+    {
+        bm::bit_block_set(tb1, 0u);
+
+        unsigned i(0), j(65535);
+        for (; i < j; ++i, --j)
+        {
+            b =  bm::bit_block_is_all_one_range(tb1, i, i);
+            assert(!b);
+            b =  bm::bit_block_is_all_one_range(tb1, i, j);
+            assert(!b);
+            b =  bm::bit_block_is_all_one_range(tb1, i, i+63);
+            assert(!b);
+            auto cnt = bm::bit_block_calc_count_range(tb1, i, j);
+            assert(!cnt);
+            cnt = bm::bit_block_calc_count_range(tb1, i, i+63);
+            assert(!cnt);
+        }
     }
 
     cout << "---------------------------- BitRangeAllSetTest() Ok." << endl;
@@ -15723,38 +15794,69 @@ void BitForEachRangeFuncTest()
 
     cout << " for_each_bit_blk() stress 2 ..." << endl;
     {
-        bm::bit_block_set(tb1, ~0u);
+        std::vector<unsigned> svect;
+        svect.push_back(0);
+        svect.push_back(~0u);
+        svect.push_back(1u);
+        svect.push_back(8u);
+        svect.push_back(16u);
+        svect.push_back(1u << 31);
+        svect.push_back(1u << 24);
 
-        unsigned off = 1234567;
-        unsigned j = 65535;
-        for (unsigned i0 = 0; i0 <= j; ++i0, --j)
+        for (unsigned pass = 0; pass < svect.size(); ++pass)
         {
-            TestDecodeFunctor func(dvect);
+            auto testv = svect[pass];
+            bm::bit_block_set(tb1, testv);
 
-            bm::for_each_bit_blk(FULL_BLOCK_FAKE_ADDR, off, i0, j, func);
-            assert(dvect.size() == j-i0+1);
-            for (size_t i = 0; i < dvect.size(); i+=2)
+            unsigned off = 1234567;
+            unsigned j = 65535;
+            for (unsigned i0 = 0; i0 <= j; ++i0, --j)
             {
-                auto v = dvect[i];
-                assert(v == (i0+off+i));
-            } // for i
-            dvect.resize(0);
+                TestDecodeFunctor func(dvect);
 
-            auto cnt = bm::bit_block_calc_count_range(tb1, i0, j);
-            assert(cnt == (j-i0+1));
-            bool all_one = bm::bit_block_is_all_one_range(tb1, i0, j);
-            assert(all_one);
+                bm::for_each_bit_blk(FULL_BLOCK_FAKE_ADDR, off, i0, j, func);
+                assert(dvect.size() == j-i0+1);
+                for (size_t i = 0; i < dvect.size(); i+=2)
+                {
+                    auto v = dvect[i];
+                    assert(v == (i0+off+i));
+                } // for i
+                dvect.resize(0);
 
-            bm::for_each_bit_blk(tb1, off, i0, j, func);
-            assert(dvect.size() == j-i0+1);
+                auto cnt = bm::bit_block_calc_count_range(tb1, i0, j);
+                bool all_one = bm::bit_block_is_all_one_range(tb1, i0, j);
+                if (testv == 0)
+                {
+                    assert(!cnt);
+                    assert(!all_one);
+                }
+                if (testv == ~0u)
+                {
+                    assert(cnt == (j-i0+1));
+                    assert(all_one);
+                }
 
-            for (size_t i = 0; i < dvect.size(); i+=2)
-            {
-                auto v = dvect[i];
-                assert(v == (i0+off+i));
-            } // for i
+                bm::for_each_bit_blk(tb1, off, i0, j, func);
+                if (testv == ~0u)
+                {
+                    assert(dvect.size() == j-i0+1);
+                }
+                assert(dvect.size() == cnt);
 
-        }
+                if (testv == ~0u)
+                {
+                    for (size_t i = 0; i < dvect.size(); i+=2)
+                    {
+                        auto v = dvect[i];
+                        assert(v == (i0+off+i));
+                    } // for i
+                }
+                else
+                {
+                    // TODO: cover all cases via alternative implementation
+                }
+            }
+        } // for pass
     }
 
 
@@ -26630,7 +26732,7 @@ void TestBlockDigest()
         cout << "DIGEST mask stress..." << endl;
         // uncomment this to fully re-check DIGEST mask (takes a very long time
         //unsigned test_to = 65536;
-        unsigned test_to = 5000;
+        unsigned test_to = 15000;
         for (unsigned i = 0; i < test_to; ++i)
         {
             bm::id64_t d0_c;
@@ -26644,7 +26746,8 @@ void TestBlockDigest()
                 d0_c = bm::dm_control(i, j);
                 assert(d0 == d0_c);
             } // for j
-            cout << "\r" << i << " | " << test_to << "        " << flush;
+            if ((i & 0xFF) == 0)
+                cout << "\r" << i << " | " << test_to << "        " << flush;
         } // for i
 }
 
@@ -28647,7 +28750,7 @@ void show_help()
         << "-rankc (or -rc)       - rank-compress " << endl
         << "-agg (or -aggregator) - bm::aggregator " << endl
         << "-sv                   - test sparse vectors" << endl
-        << "-csv                  - test compressed sparse vectors"
+        << "-csv                  - test compressed sparse vectors" << endl
         << "-strsv                - test sparse vectors" << endl
         << "-cc                   - test compresses collections" << endl
       ;
@@ -28853,7 +28956,7 @@ int main(int argc, char *argv[])
          ShiftRotateTest();
 
          BlockBitInsertTest();
-        
+
          BlockBitEraseTest();
          TestBlockLast();
 
