@@ -334,6 +334,11 @@ void BitCountTest()
         auto c0 = bset->count();
         auto c1 = bv->count();
         assert(c0 == c1);
+        if (c0 != c1)
+        {
+            cerr << "Fill sets integrity failed!" << endl;
+            exit(1);
+        }
     }
 
     //if (!platform_test)
@@ -375,6 +380,11 @@ void CheckBitList(const unsigned* bl1, unsigned bl1_cnt,
                   const unsigned* bl2, unsigned bl2_cnt)
 {
     assert(bl1_cnt == bl2_cnt);
+    if (bl1_cnt != bl2_cnt)
+    {
+        cerr << "Check list count failed!" << endl;
+        exit(1);
+    }
     for (unsigned i = 0; i < bl1_cnt; ++i)
     {
         assert(bl1[i] == bl2[i]);
