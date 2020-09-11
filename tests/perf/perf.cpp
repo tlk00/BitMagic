@@ -674,7 +674,7 @@ void WordSelectTest()
     std::vector<unsigned> vect_r4(test_size);
 
     {
-        TimeTaker tt("select64 BMI1 lead-zero", 1);
+        bm::chrono_taker tt("select64 BMI1 lead-zero", 1);
         for (unsigned i = 0; i < vect_v.size(); ++i)
         {
             bm::id64_t w64 = vect_v[i];
@@ -695,7 +695,7 @@ void WordSelectTest()
     }
     
     {
-        TimeTaker tt("select64 BMI1 bitscan", 1);
+        bm::chrono_taker tt("select64 BMI1 bitscan", 1);
         for (unsigned i = 0; i < vect_v.size(); ++i)
         {
             bm::id64_t w64 = vect_v[i];
@@ -720,7 +720,7 @@ void WordSelectTest()
     std::vector<unsigned> vect_r5(test_size);
 
     {
-        TimeTaker tt("select64 BMI2 pdep", 1);
+        bm::chrono_taker tt("select64 BMI2 pdep", 1);
         for (unsigned i = 0; i < vect_v.size(); ++i)
         {
             bm::id64_t w64 = vect_v[i];
@@ -3876,13 +3876,21 @@ void StrSparseVectorTest()
     
     {
        str_svect_type str_sv0;
-       bm::chrono_taker tt("bm::str_sparse_vector<>::back_insert_iterator ", 1);
-       str_svect_type::back_insert_iterator bi = str_sv0.get_back_inserter();
-       for (auto str : str_coll)
        {
-           bi = str;
+           bm::chrono_taker tt("bm::str_sparse_vector<>::back_insert_iterator ", 1);
+           str_svect_type::back_insert_iterator bi = str_sv0.get_back_inserter();
+           for (auto str : str_coll)
+           {
+               bi = str;
+           }
+           bi.flush();
        }
-
+       bool eq = str_sv.equal(str_sv0);
+       if (!eq)
+       {
+            cerr << "Bit-transposed str_sv comparison failed(1)!" << endl;
+            exit(1);
+       }
     }
     
     {
