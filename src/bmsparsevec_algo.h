@@ -1991,7 +1991,8 @@ int sparse_vector_scanner<SV>::compare_str(const SV& sv,
                 if (res || !octet)
                     break;
             } // for i
-            BM_ASSERT(res == sv.compare(idx, str));
+
+            //BM_ASSERT(res == sv.compare(idx, str));
             return res;
         }
         else
@@ -2008,7 +2009,7 @@ int sparse_vector_scanner<SV>::compare_str(const SV& sv,
                     if (res || !octet)
                         break;
                 } // for i
-                BM_ASSERT(res == sv.compare(idx, str));
+                //BM_ASSERT(res == sv.compare(idx, str));
                 return res;
             }
         }

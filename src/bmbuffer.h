@@ -562,9 +562,11 @@ public:
     /**
         Post construction allocation, initialization
     */
-    void init()
+    void init(bool set_z=false)
     {
         buffer_.resize(size_in_bytes);
+        if (set_z)
+            set_zero();
     }
     
     bool is_init() const BMNOEXCEPT
@@ -692,9 +694,11 @@ public:
     /**
         Post construction allocation, initialization
     */
-    void init()
+    void init(bool set_z=false)
     {
         buffer_.resize(size_in_bytes());
+        if (set_z)
+            set_zero();
     }
 
     size_type rows() const { return rows_; }

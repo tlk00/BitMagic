@@ -3690,7 +3690,7 @@ inline void xor_bit_block(unsigned* dest,
             *word ^= mask;
             return;
         }
-        *word ^= bm::mask_r_u32(nbit); // block_set_table<true>::_right[nbit];
+        *word ^= bm::mask_r_u32(nbit);
         bitcount -= 32 - nbit;
         ++word;
     }
@@ -5407,7 +5407,7 @@ bool bit_block_shift_r1_unr_min(bm::word_t* BMRESTRICT block,
     *empty_acc = bool(acc0 | acc1);
     return co_flag;
 #else
-    return bm::bit_block_shift_r1(block, empty_acc, co_flag);
+    return bm::bit_block_shift_r1(block, empty_acc, unsigned(co_flag));
 #endif
 }
 
@@ -5576,7 +5576,6 @@ void bit_block_erase(bm::word_t* block,
     if (nbit)
     {
         unsigned mask_r = bm::mask_r_u32(nbit);
-//        unsigned r_mask = bm::block_set_table<true>::_right[nbit];
         bm::word_t w = block[nword] & mask_r;
         bm::word_t wl = block[nword] & ~mask_r;
         w &= ~(1 << nbit); // clear the removed bit
@@ -5731,7 +5730,7 @@ bm::id_t bit_block_any_range(const bm::word_t* const BMRESTRICT block,
         else
         {
             unsigned mask_r = bm::mask_r_u32(nbit);
-            acc = *word & mask_r;//block_set_table<true>::_right[nbit];
+            acc = *word & mask_r;
             if (acc) 
                 return acc;
             bitcount -= 32 - nbit;
@@ -6010,7 +6009,7 @@ bool bit_block_find_interval_start(const bm::word_t* BMRESTRICT block,
     bit_pos = (nbit & bm::set_word_mask);
 
     unsigned mask_l = bm::mask_l_u32(bit_pos);
-    w = (~block[nword]) & mask_l; // block_set_table<true>::_left[bit_pos];
+    w = (~block[nword]) & mask_l;
     if (w)
     {
         bit_pos = bm::bit_scan_reverse32(w);
@@ -6073,7 +6072,7 @@ bool bit_block_find_prev(const bm::word_t* BMRESTRICT block,
     bit_pos = (nbit & bm::set_word_mask);
 
     unsigned mask_l = bm::mask_l_u32(bit_pos);
-    w = block[nword] & mask_l; // block_set_table<true>::_left[bit_pos];
+    w = block[nword] & mask_l;
     if (w)
     {
         bit_pos = bm::bit_scan_reverse32(w);
@@ -9485,7 +9484,26 @@ void min_delta_apply(unsigned* arr, size_t arr_size, unsigned delta)
     } // for
 }
 
-
+/**
+    Find max non-zero value in an array
+    @internal
+ */
+template<typename VT, typename SZ>
+bool find_max_nz(const VT* arr, SZ arr_size, SZ* found_idx)
+{
+    bool found = false;
+    VT max_v = 0;
+    for (SZ i = 0; i < arr_size; ++i)
+    {
+        VT v = arr[i];
+        if (v > max_v)
+        {
+            max_v = v; *found_idx = i;
+            found = true;
+        }
+    } // for i
+    return found;
+}
 
 // --------------------------------------------------------------
 // Functions to work with int values stored in 64-bit pointers

@@ -222,11 +222,6 @@ public:
         bool advance() BMNOEXCEPT;
         
         void skip_zero_values() BMNOEXCEPT;
-    private:
-        enum buf_size_e
-        {
-            n_buf_size = 1024 * 8
-        };
         
     private:
         const sparse_vector_type*         sv_;      ///!< ptr to parent
@@ -330,11 +325,6 @@ public:
         
     protected:
         typedef typename bvector_type::block_idx_type     block_idx_type;
-    private:
-        enum buf_size_e
-        {
-            n_buf_size = 1024 * 8
-        };
 
     private:
         bm::sparse_vector<Val, BV>* sv_;      ///!< pointer on the parent vector
@@ -883,6 +873,10 @@ protected:
     enum octet_plains
     {
         sv_octet_plains = sizeof(value_type)
+    };
+    enum buf_size_e
+    {
+        n_buf_size = 1024 * 8
     };
 
 
