@@ -1528,7 +1528,7 @@ int str_sparse_vector<CharType, BV, MAX_STR_SIZE>::compare(
         for (unsigned i = 0; i < MAX_STR_SIZE; ++i)
         {
             CharType octet = str[i];
-            CharType sv_octet = this->bmatr_.get_octet(idx, i);
+            CharType sv_octet = (CharType)this->bmatr_.get_octet(idx, i);
             if (!sv_octet)
             {
                 res = -octet; // -1 || 0
@@ -1547,7 +1547,7 @@ int str_sparse_vector<CharType, BV, MAX_STR_SIZE>::compare(
         for (unsigned i = 0; i < MAX_STR_SIZE; ++i)
         {
             CharType octet = str[i];
-            CharType sv_octet = this->bmatr_.get_octet(idx, i);
+            CharType sv_octet = (CharType)this->bmatr_.get_octet(idx, i);
             if (!sv_octet)
             {
                 res = -octet; // -1 || 0
@@ -1956,7 +1956,7 @@ str_sparse_vector<CharType, BV, MAX_STR_SIZE>::const_iterator::const_iterator(
 : sv_(sv), pos_(sv->empty() ? bm::id_max : 0), pos_in_buf_(~size_type(0))
 {
     substr_from_ = 0;
-    substr_to_ = sv_->effective_max_str();
+    substr_to_ = (unsigned) sv_->effective_max_str();
     buf_matrix_.resize(n_rows, substr_to_+1);
 
 }
@@ -1970,7 +1970,7 @@ str_sparse_vector<CharType, BV, MAX_STR_SIZE>::const_iterator::const_iterator(
 : sv_(sv), pos_(pos >= sv->size() ? bm::id_max : pos), pos_in_buf_(~size_type(0))
 {
     substr_from_ = 0;
-    substr_to_ = sv_->effective_max_str();
+    substr_to_ = (unsigned) sv_->effective_max_str();
     buf_matrix_.resize(n_rows, substr_to_+1);
 }
 
