@@ -24236,7 +24236,7 @@ void StressTestStrSparseVector()
     cout << "Memory optimization" << endl;
     str_sv.optimize();
     str_sv_remap.optimize();
-/*
+
     cout << "ok. \n Verification..." << endl;
 
     CompareStrSparseVector(str_sv, str_coll);
@@ -24354,7 +24354,7 @@ void StressTestStrSparseVector()
     }
    cout << "\nTest common prefix...ok." << endl;
    // ----------------------------------------------
-*/
+
    cout << "Test sorted search..." << endl;
    
    for (unsigned k = 0; k < 2; ++k)

@@ -14779,9 +14779,9 @@ void TestStrSparseVector()
         str_sv0[1] = "11";
         str_sv0[2] = "123";
 
-        str_sparse_vector<char, bvect, 32>::plain_octet_matrix_type occ_matrix;
-        str_sparse_vector<char, bvect, 32>::plain_octet_matrix_type remap_matrix1;
-        str_sparse_vector<char, bvect, 32>::plain_octet_matrix_type remap_matrix2;
+        str_sparse_vector<char, bvect, 32>::octet_freq_matrix_type occ_matrix;
+        str_sparse_vector<char, bvect, 32>::plane_octet_matrix_type remap_matrix1;
+        str_sparse_vector<char, bvect, 32>::plane_octet_matrix_type remap_matrix2;
 
         str_sv0.calc_octet_stat(occ_matrix);
         str_sv0.build_octet_remap(remap_matrix1, remap_matrix2, occ_matrix);
@@ -15790,6 +15790,25 @@ void StressTestStrSparseVector()
         {
             const string& s = str_coll_sorted[i];
             bvect::size_type pos1, pos2, pos3, pos4;
+
+            // validate the compare function
+            if (i)
+            {
+                int res0 = str_sv_remap.compare(0, s.c_str());
+                int res1 = str_sv_sorted.compare(0, s.c_str());
+                assert(res0 == res1 && res1 < 0);
+                res0 = str_sv_remap.compare(i-1, s.c_str());
+                res1 = str_sv_sorted.compare(i-1, s.c_str());
+                assert(res0 == res1 && res1 < 0);
+
+                if ( i+1 < unsigned(str_coll_sorted.size()))
+                {
+                    res0 = str_sv_remap.compare(i+1, s.c_str());
+                    res1 = str_sv_sorted.compare(i+1, s.c_str());
+                    assert(res0 == res1 && res1 > 0);
+                }
+            }
+
             bool found1 = scanner.find_eq_str(str_sv_sorted, s.c_str(), pos1);
             if (!found1)
             {
