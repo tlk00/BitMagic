@@ -23487,7 +23487,35 @@ void TestStrSparseVector()
        str_sparse_vector<char, bvect, 32>::back_insert_iterator bit3(bit);
        bit = bit3;
     }
-    
+
+
+    {
+       str_sparse_vector<char, bvect, 32> str_sv0(bm::use_null);
+       {
+            auto bi = str_sv0.get_back_inserter();
+            for (unsigned i = 0; i < 100000; i+=2)
+            {
+                bi.add_null();
+                bi = std::to_string(i);
+            }
+            bi.flush();
+       }
+
+        char str[256];
+        for (unsigned i = 0; i < 100000; i+=2)
+        {
+            bool b = str_sv0.is_null(i);
+            assert(b);
+            b = str_sv0.is_null(i+1);
+            assert(!b);
+            str_sv0.get(i+1, str, sizeof(str));
+            std::string s = std::to_string(i);
+            int cmp = strcmp(s.c_str(), str);
+            assert(cmp == 0);
+        }
+
+    }
+
     {
        str_sparse_vector<char, bvect, 32> str_sv0(bm::use_null);
        auto bi = str_sv0.get_back_inserter();
@@ -23717,7 +23745,6 @@ void TestStrSparseVectorAlgo()
        f = bm::sparse_vector_find_first_mismatch(str_sv1, str_sv2, pos);
        assert(f);
        assert(pos == 0);
-
     }
 
     cout << "------------------------------ TestStrSparseVectorAlgo() OK" << endl;
@@ -23730,68 +23757,109 @@ void TestStrSparseVector_FindEq()
     using bvector_type = bm::bvector<>;
     using TSparseStrVector = bm::str_sparse_vector<char, bvector_type, 64>;
 
+    {
     TSparseStrVector str_vector;
-    {
-    auto in_iter = str_vector.get_back_inserter();
+        {
+        auto in_iter = str_vector.get_back_inserter();
 
-    /*
-    // Example #1:
-    in_iter = "rs123456";
-    in_iter = "rs23456";
-    in_iter = ".";
-    in_iter = "esv4567";
-    in_iter = "esv89000";
-    in_iter = ".";
-    in_iter = "esv4444";
-    in_iter = "rs22222";
-    in_iter = "rs";
-    in_iter = ".";
-    in_iter.flush();
-    */
+        in_iter = "nssv16159936";
+        in_iter = "nssv16168081";
+        in_iter = "nssv16161387";
+        in_iter = "rs4567789";
+        in_iter = ".";
+        in_iter = "nssv16175917";
+        in_iter = "nssv16177038";
+        in_iter = "nssv16177460";
+        in_iter = ".";
+        in_iter = "nssv16161309";
+        in_iter.flush();
+        }
+
+        str_vector.optimize();
+
+        // print them out:
+        auto it = str_vector.begin();
+        auto it_end = str_vector.end();
+        for (; it != it_end; ++it)
+        {
+            cout << *it << endl;
+        }
+
+        bm::sparse_vector_scanner<TSparseStrVector> scanner;
+        TSparseStrVector::bvector_type result;
+        scanner.find_eq_str(str_vector, ".", result);
 
 
-    // Example #2:
-    //This example doesn't work
-    in_iter = "nssv16159936";
-    in_iter = "nssv16168081";
-    in_iter = "nssv16161387";
-    in_iter = "rs4567789";
-    in_iter = ".";
-    in_iter = "nssv16175917";
-    in_iter = "nssv16177038";
-    in_iter = "nssv16177460";
-    in_iter = ".";
-    in_iter = "nssv16161309";
-    in_iter.flush();
+        auto cnt = result.count();
+        cout << "Number of hits: " << cnt << endl;
+        assert(cnt == 2);
+        auto en = result.first();
+        auto en_end = result.end();
+        for (; en < en_end; ++en)
+        {
+            cout << *en << endl;
+        }
     }
 
 
-    str_vector.optimize();
-
-    // print them out:
-    auto it = str_vector.begin();
-    auto it_end = str_vector.end();
-    for (; it != it_end; ++it)
     {
-        cout << *it << endl;
+    TSparseStrVector str_vector(bm::use_null);
+    TSparseStrVector str_vector1(bm::use_null);
+        {
+        auto in_iter = str_vector.get_back_inserter();
+        in_iter = "nssv16159936";
+        in_iter = "nssv16168081";
+        in_iter = "nssv16161387";
+        in_iter = "rs4567789";
+        in_iter.add_null();
+        in_iter = "nssv16175917";
+        in_iter = "nssv16177038";
+        in_iter = "nssv16177460";
+        in_iter.add_null();
+        in_iter = "nssv16161309";
+        in_iter.add_null();
+        in_iter = "";
+        in_iter.add_null(10000000);
+
+        in_iter.flush();
+        }
+
+        str_vector.optimize();
+
+        assert(!str_vector.is_null(0));
+        assert(str_vector.is_null(4));
+        assert(str_vector.is_null(8));
+
+
+        BM_DECLARE_TEMP_BLOCK(tb)
+        std::vector<unsigned char> buf_v;
+        {
+            sparse_vector_serial_layout<TSparseStrVector > sv_lay;
+            bm::sparse_vector_serialize<TSparseStrVector >(str_vector, sv_lay, tb);
+
+            buf_v.resize(sv_lay.size());
+            {
+                const unsigned char* buf = sv_lay.buf();
+                ::memcpy(buf_v.data(), buf, sv_lay.size());
+            }
+        }
+
+        bm::sparse_vector_deserializer<TSparseStrVector> sv_deserial;
+        sv_deserial.deserialize(str_vector1, buf_v.data());
+
+
+        bvect::size_type pos = 0;
+        bool b = bm::sparse_vector_find_first_mismatch(str_vector, str_vector1, pos);
+        assert(!b);
+        b = bm::sparse_vector_find_first_mismatch(str_vector, str_vector1, pos, bm::no_null);
+        assert(!b);
+
+        assert(str_vector.is_null(4));
+        assert(str_vector.is_null(8));
+
+
     }
 
-    bm::sparse_vector_scanner<TSparseStrVector> scanner;
-    TSparseStrVector::bvector_type result;
-    scanner.find_eq_str(str_vector, ".", result);
-
-
-    auto cnt = result.count();
-    cout << "Number of hits: " << cnt << endl;
-    assert(cnt == 2);
-    auto en = result.first();
-    auto en_end = result.end();
-    for (; en < en_end; ++en)
-    {
-        cout << *en << endl;
-    }
-    // Print: 2, 5, 9 - for Example #1
-    // Print: 4, 8    - for Example #2
     cout << "------------------------------- TestStrSparseVector_FindEq()" << endl;
 }
 
@@ -23816,14 +23884,20 @@ void TestStrSparseVectorSerial()
         BM_DECLARE_TEMP_BLOCK(tb)
         sparse_vector_serial_layout<str_sparse_vector<char, bvect, 32> > sv_lay;
         bm::sparse_vector_serialize<str_sparse_vector<char, bvect, 32> >(str_sv1, sv_lay, tb);
-        const unsigned char* buf = sv_lay.buf();
+
+        std::vector<unsigned char> buf_v;
+        {
+            buf_v.resize(sv_lay.size());
+            const unsigned char* buf = sv_lay.buf();
+            ::memcpy(buf_v.data(), buf, sv_lay.size());
+        }
 
         sparse_vector_u32::bvector_type bv_mask;
         bv_mask.set(1);
         bv_mask.set(2);
         bv_mask.set(100);
         bm::sparse_vector_deserializer<str_sparse_vector<char, bvect, 32> > sv_deserial;
-        sv_deserial.deserialize(str_sv2, buf, bv_mask);
+        sv_deserial.deserialize(str_sv2, buf_v.data(), bv_mask);
 
         assert(str_sv1.size() == str_sv2.size());
         char str[256];
@@ -23866,7 +23940,13 @@ void TestStrSparseVectorSerial()
         BM_DECLARE_TEMP_BLOCK(tb)
         sparse_vector_serial_layout<str_sparse_vector<char, bvect, 32> > sv_lay;
         bm::sparse_vector_serialize<str_sparse_vector<char, bvect, 32> >(str_sv1, sv_lay, tb);
-        const unsigned char* buf = sv_lay.buf();
+
+        std::vector<unsigned char> buf_v;
+        {
+            buf_v.resize(sv_lay.size());
+            const unsigned char* buf = sv_lay.buf();
+            ::memcpy(buf_v.data(), buf, sv_lay.size());
+        }
 
         bm::sparse_vector_deserializer<str_sparse_vector<char, bvect, 32> > sv_deserial;
         char s1[256];
@@ -23879,9 +23959,9 @@ void TestStrSparseVectorSerial()
         {
             bvect bv_mask;
             bv_mask.set_range(i, to);
-            sv_deserial.deserialize(str_sv2, buf, bv_mask);
+            sv_deserial.deserialize(str_sv2, buf_v.data(), bv_mask);
 
-            sv_deserial.deserialize_range(str_sv3, buf, i, to);
+            sv_deserial.deserialize_range(str_sv3, buf_v.data(), i, to);
 
             str_sv2.get(1, s2, sizeof(s2));
             assert(s2[0] == 0);
@@ -23923,7 +24003,7 @@ void TestStrSparseVectorSerial()
 
        {
            str_sparse_vector<char, bvect, 32>::back_insert_iterator bi = str_sv0.get_back_inserter();
-           for (unsigned i = 0; i < 100000; ++i)
+           for (unsigned i = 0; i < 1000000; ++i)
            {
                 bi = "ATGC";
                 bi = "GCTA";
@@ -23931,6 +24011,7 @@ void TestStrSparseVectorSerial()
                 bi = "TATA";
                 bi.add_null();
            }
+           bi.flush();
        }
 
        str_sv1.remap_from(str_sv0);
@@ -23944,7 +24025,12 @@ void TestStrSparseVectorSerial()
 
         sv_serializer.serialize(str_sv1, sv_lay);
 
-        const unsigned char* buf = sv_lay.buf();
+        std::vector<unsigned char> buf_v;
+        {
+            buf_v.resize(sv_lay.size());
+            const unsigned char* buf = sv_lay.buf();
+            ::memcpy(buf_v.data(), buf, sv_lay.size());
+        }
 
         bm::sparse_vector_deserializer<str_sparse_vector<char, bvect, 32> > sv_deserial;
         char s1[256];
@@ -23958,9 +24044,9 @@ void TestStrSparseVectorSerial()
         {
             bvect bv_mask;
             bv_mask.set_range(i, to);
-            sv_deserial.deserialize(str_sv2, buf, bv_mask);
+            sv_deserial.deserialize(str_sv2, buf_v.data(), bv_mask);
 
-            sv_deserial.deserialize_range(str_sv3, buf, i, to);
+            sv_deserial.deserialize_range(str_sv3, buf_v.data(), i, to);
 
             // check empty
             str_sv2.get(1, s2, sizeof(s2));
@@ -29472,6 +29558,7 @@ int main(int argc, char *argv[])
     
     if (is_all || is_str_sv)
     {
+
          TestStrSparseVector();
 
          TestStrSparseVectorAlgo();
