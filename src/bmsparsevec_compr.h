@@ -781,6 +781,11 @@ protected:
     template<class SVect> friend class sparse_vector_serializer;
     template<class SVect> friend class sparse_vector_deserializer;
 
+    /// unused remap matrix type for compatibility with the sparse serializer
+    typedef
+    bm::heap_matrix<unsigned char, 1, 1,
+                    typename bvector_type::allocator_type> remap_matrix_type;
+
 private:
     sparse_vector_type            sv_;       ///< transpose-sparse vector for "dense" packing
     size_type                     size_;     ///< vector size (logical)
@@ -1145,16 +1150,6 @@ void rsc_sparse_vector<Val, SV>::sync(bool force)
     if (force)
     {
         sync_size();
-        /*
-        size_type sz = sv_.size();
-        if (sz)
-        {
-            size_ = sz;
-            max_id_ = (sz - 1);
-        }
-        else
-            max_id_ = size_ = 0;
-        */
     }
     in_sync_ = true;
 }

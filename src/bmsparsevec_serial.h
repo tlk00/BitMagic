@@ -258,6 +258,7 @@ public:
 protected:
     void build_xor_ref_vector(const SV& sv);
 
+    typedef typename SV::remap_matrix_type  remap_matrix_type;
 private:
     sparse_vector_serializer(const sparse_vector_serializer&) = delete;
     sparse_vector_serializer& operator=(const sparse_vector_serializer&) = delete;
@@ -742,6 +743,10 @@ void sparse_vector_serializer<SV>::build_xor_ref_vector(const SV& sv)
     //bv_ref_.reset();
     bv_ref_.build(sv.get_bmatrix());
 }
+
+// -------------------------------------------------------------------------
+
+
 
 // -------------------------------------------------------------------------
 

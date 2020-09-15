@@ -921,6 +921,11 @@ protected:
     template<class SVect> friend class sparse_vector_serializer;
     template<class SVect> friend class sparse_vector_deserializer;
 
+    /// unused remap matrix type for compatibility with the sparse serializer
+    typedef
+    bm::heap_matrix<unsigned char, 1, 1,
+                    typename bvector_type::allocator_type> remap_matrix_type;
+
 };
 
 
