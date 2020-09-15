@@ -24,6 +24,7 @@ For more information please visit:  http://bitmagic.io
 //#define BM_USE_GCC_BUILD
 
 #define BMXORCOMP
+#define BM_NONSTANDARD_EXTENTIONS
 
 #include <stdio.h>
 #include <stdlib.h>

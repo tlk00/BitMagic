@@ -27,6 +27,8 @@ For more information please visit:  http://bitmagic.io
 //#define BMSSE42OPT
 //#define BMAVX2OPT
 
+#define BM_NONSTANDARD_EXTENTIONS
+
 #ifdef _MSC_VER
 #pragma warning( push )
 #pragma warning( disable : 4996)
@@ -409,6 +411,7 @@ void BitForEachTest()
             }
         }
     }
+    #ifdef BM_NONSTANDARD_EXTENTIONS
     #ifdef __GNUC__
     bm::id64_t sum2(0);
     if (platform_test)
@@ -425,6 +428,7 @@ void BitForEachTest()
         }
     }
     assert(sum1 == sum2);
+    #endif
     #endif
 
     bm::id64_t sum3(0);
