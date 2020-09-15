@@ -83,11 +83,12 @@ public:
         @internal
      */
     typedef
-    bm::heap_matrix<unsigned char, //size_t,
+    bm::heap_matrix<unsigned char,
                     MAX_STR_SIZE, /* ROWS */
                     256,          /* COLS = number of chars in the ASCII set */
                     typename bvector_type::allocator_type>
                                                     plane_octet_matrix_type;
+    typedef plane_octet_matrix_type remap_matrix_type;
     /**
         Matrix of character frequencies (for optimal code remap)
         @internal
@@ -380,10 +381,9 @@ public:
 
         /** add value to the buffer without changing the NULL vector
             @param v - value to push back
-            @return index of added value in the internal buffer
             @internal
         */
-        size_type add_value(const value_type* v);
+        void add_value(const value_type* v);
 
     private:
         enum buf_size_e
@@ -1240,7 +1240,7 @@ protected:
                 { return remap_matrix1_.get_buffer().buf(); }
     unsigned char* init_remap_buffer()
     {
-        remap_matrix1_.init();
+        remap_matrix1_.init(true);
         return remap_matrix1_.get_buffer().data();
     }
     void set_remap() { remap_flags_ = 1; }
@@ -1676,21 +1676,6 @@ void str_sparse_vector<CharType, BV, MAX_STR_SIZE>::build_octet_remap(
             remap_row2[ch] = (unsigned char)remap_code;
             frq_row[char_idx] = 0; // clear the picked char
         } // for
-
-/*
-        unsigned count = 1;
-        for (unsigned j = 1; j < octet_occupancy_matrix.cols(); ++j)
-        {
-            if (row[j]) // octet is present
-            {
-                // set two remapping table values
-                remap_row1[count] = (unsigned char)j;
-                remap_row2[j] = (unsigned char)count;
-                ++count;
-                BM_ASSERT(count < 256);
-            }
-        } // for j
-*/
     } // for i
 }
 
@@ -1711,9 +1696,9 @@ void str_sparse_vector<CharType, BV, MAX_STR_SIZE>::recalc_remap_matrix2()
         {
             if (remap_row1[j])
             {
-                unsigned count = remap_row1[j];
-                remap_row2[count] = (unsigned char)j;
-                BM_ASSERT(count < 256);
+                unsigned ch_code = remap_row1[j];
+                remap_row2[ch_code] = (unsigned char)j;
+                BM_ASSERT(ch_code < 256);
             }
         } // for j
     } // for i
@@ -1760,7 +1745,7 @@ bool str_sparse_vector<CharType, BV, MAX_STR_SIZE>::remap_fromsv(
     for (unsigned i = 0; i < buf_size; ++i)
     {
         CharType ch = sv_str[i];
-        if (ch == 0)
+        if (!ch)
         {
             str[i] = ch;
             break;
@@ -2113,7 +2098,8 @@ void str_sparse_vector<CharType, BV, MAX_STR_SIZE>::back_insert_iterator::flush(
     if (this->empty())
         return;
 
-    sv_->import_no_check(buf_matrix_, sv_->size(), pos_in_buf_+1, false);
+    size_type imp_idx = sv_->size();
+    sv_->import_no_check(buf_matrix_, imp_idx, pos_in_buf_+1, false);
     pos_in_buf_ = ~size_type(0);
     block_idx_type nb = sv_->size() >> bm::set_block_shift;
     if (nb != prev_nb_)
@@ -2135,11 +2121,12 @@ const typename str_sparse_vector<CharType, BV, MAX_STR_SIZE>::back_insert_iterat
         this->add_null();
         return;
     }
-    size_type buf_idx = this->add_value(v);
+    size_type buf_idx = this->pos_in_buf_; // offset in
+    this->add_value(v);
     if (bv_null_)
     {
         size_type sz = sv_->size();
-        bv_null_->set_bit_no_check(sz + buf_idx);
+        bv_null_->set_bit_no_check(sz + buf_idx + 1);
     }
 }
 
@@ -2165,7 +2152,7 @@ typename str_sparse_vector<CharType, BV, MAX_STR_SIZE>::back_insert_iterator::si
 //---------------------------------------------------------------------
 
 template<class CharType, class BV, unsigned MAX_STR_SIZE>
-typename str_sparse_vector<CharType, BV, MAX_STR_SIZE>::back_insert_iterator::size_type
+void
 str_sparse_vector<CharType, BV, MAX_STR_SIZE>::back_insert_iterator::add_value(
 const str_sparse_vector<CharType, BV, MAX_STR_SIZE>::back_insert_iterator::value_type* v)
 {
@@ -2175,20 +2162,19 @@ const str_sparse_vector<CharType, BV, MAX_STR_SIZE>::back_insert_iterator::value
     {
         if (!buf_matrix_.is_init())
             buf_matrix_.init();
-        pos_in_buf_ = 0;
-        buf_matrix_.set_zero();
+        pos_in_buf_ = 0; buf_matrix_.set_zero();
     }
     else
     if (pos_in_buf_ >= buffer_matrix_type::n_rows-1)
     {
         this->flush();
-        pos_in_buf_ = 0;
-        buf_matrix_.set_zero();
+        pos_in_buf_ = 0; buf_matrix_.set_zero();
     }
     else
     {
         ++pos_in_buf_;
     }
+
     value_type* r = buf_matrix_.row(pos_in_buf_);
     for (unsigned i = 0; i < buffer_matrix_type::n_columns; ++i)
     {
@@ -2196,7 +2182,7 @@ const str_sparse_vector<CharType, BV, MAX_STR_SIZE>::back_insert_iterator::value
         if (!r[i])
             break;
     } // for i
-    return pos_in_buf_;
+    //return pos_in_buf_;
 }
 
 //---------------------------------------------------------------------
