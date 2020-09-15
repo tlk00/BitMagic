@@ -138,7 +138,6 @@ public:
          Reference class to access elements via common [] operator
          @ingroup sv
     */
-
     class reference
     {
     public:

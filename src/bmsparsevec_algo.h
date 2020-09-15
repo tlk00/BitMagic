@@ -506,6 +506,10 @@ public:
     */
     void reset_binding() BMNOEXCEPT;
 
+
+    /*! @name Find in scalar vector */
+    //@{
+
     /**
         \brief find all sparse vector elements EQ to search value
 
@@ -513,7 +517,7 @@ public:
 
         \param sv - input sparse vector
         \param value - value to search for
-        \param bv_out - output bit-vector (search result masks 1 elements)
+        \param bv_out - search result bit-vector (search result masks 1 elements)
     */
     void find_eq(const SV&                  sv,
                  typename SV::value_type    value,
@@ -534,9 +538,53 @@ public:
     bool find_eq(const SV&                  sv,
                  typename SV::value_type    value,
                  typename SV::size_type&    pos);
-    
+    /**
+        \brief lower bound search for an array position
+
+        Method assumes the sparse array is sorted
+
+        \param sv - input sparse vector
+        \param val - value to search for
+        \param pos - output sparse vector element index
+
+        \return true if value found
+    */
+    bool lower_bound(const SV&                      sv,
+                     const typename SV::value_type  val,
+                     typename SV::size_type&        pos);
+
+    //@}
+
+
+    // --------------------------------------------------
+    //
+    /*! @name Find in bit-transposed string vector */
+    //@{
+
+
     /**
         \brief find first sparse vector element (string)
+        @param sv  - sparse vector of strings to search
+        @param str - string to search for
+        @param bv_out - search result bit-vector (search result masks 1 elements)
+    */
+    bool find_eq_str(const SV&                      sv,
+                     const typename SV::value_type* str,
+                     typename SV::bvector_type& bv_out);
+
+    /**
+        \brief find first sparse vector element (string) in the attached SV
+        @param str - string to search for
+        @param bv_out - search result bit-vector (search result masks 1 elements)
+    */
+    bool find_eq_str(const typename SV::value_type* str,
+                     typename SV::bvector_type& bv_out);
+
+    /**
+        \brief find first sparse vector element (string)
+        @param sv  - sparse vector of strings to search
+        @param str - string to search for
+        @param pos - [out] index of the first found
     */
     bool find_eq_str(const SV&                      sv,
                      const typename SV::value_type* str,
@@ -545,6 +593,8 @@ public:
     /**
         \brief binary find first sparse vector element (string)
         Sparse vector must be attached (bind())
+        @param str - string to search for
+        @param pos - [out] index of the first found
         @sa bind
     */
     bool find_eq_str(const typename SV::value_type* str,
@@ -558,20 +608,6 @@ public:
                       const typename SV::value_type* str,
                       typename SV::size_type&        pos);
 
-    /**
-        \brief lower bound search for an array position
-     
-        Method assumes the sparse array is sorted
-     
-        \param sv - input sparse vector
-        \param val - value to search for
-        \param pos - output sparse vector element index
-
-        \return true if value found
-    */
-    bool lower_bound(const SV&                      sv,
-                     const typename SV::value_type  val,
-                     typename SV::size_type&        pos);
     /**
         \brief lower bound search for an array position
      
@@ -594,6 +630,8 @@ public:
     */
     bool bfind_eq_str(const typename SV::value_type* str,
                       typename SV::size_type&        pos);
+
+    //@}
 
     /**
         \brief find all sparse vector elements EQ to 0
@@ -1545,12 +1583,73 @@ bool sparse_vector_scanner<SV>::find_eq_str(const SV&                      sv,
             }
         }
     }
-    else // search for zero value
+    else // search for zero(empty str) value
     {
         // TODO: implement optimized version which would work witout temp vector
         typename SV::bvector_type bv_zero;
         find_zero(sv, bv_zero);
         found = bv_zero.find(pos);
+    }
+    return found;
+}
+
+//----------------------------------------------------------------------------
+
+template<typename SV>
+bool sparse_vector_scanner<SV>::find_eq_str(const typename SV::value_type* str,
+                                            typename SV::bvector_type& bv_out)
+{
+    BM_ASSERT(bound_sv_);
+    return find_eq_str(*bound_sv_, str, bv_out);
+}
+
+//----------------------------------------------------------------------------
+
+template<typename SV>
+bool sparse_vector_scanner<SV>::find_eq_str(const SV&                      sv,
+                                            const typename SV::value_type* str,
+                                            typename SV::bvector_type& bv_out)
+{
+    bool found = false;
+    bv_out.clear();
+    if (sv.empty())
+    {
+        return false; // nothing to do
+    }
+    if (bm::conditional<SV::is_rsc_support::value>::test()) // test rank/select trait
+    {
+        // search in RS compressed string vectors is not implemented
+        BM_ASSERT(0);
+    }
+
+    if (*str)
+    {
+        bool remaped = false;
+        if (bm::conditional<SV::is_remap_support::value>::test()) // test remapping trait
+        {
+            if (sv.is_remap() && str != remap_value_vect_)
+            {
+                remaped = sv.remap_tosv(remap_value_vect_, SV::max_vector_size, str);
+                if (!remaped)
+                    return false; // not found because
+                str = remap_value_vect_;
+            }
+        }
+        /// aggregator search
+        agg_.reset();
+
+        const unsigned common_prefix_len = 0;
+        found = prepare_and_sub_aggregator(sv, str, common_prefix_len);
+        if (!found)
+            return found;
+        found = agg_.combine_and_sub(bv_out);
+
+        agg_.reset();
+    }
+    else // search for zero(empty str) value
+    {
+        find_zero(sv, bv_out);
+        found = bv_out.any();
     }
     return found;
 }

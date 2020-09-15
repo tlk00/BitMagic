@@ -179,10 +179,18 @@ public:
 
         \return true if anything was found
 
-        @sa add, reset
+        @sa add, reset, find_first_and_sub
     */
     bool combine_and_sub(bvector_type& bv_target, bool any);
-    
+
+    /**
+        Aggregate added group of vectors using fused logical AND-SUB,
+        find the first match
+
+        \param idx - [out] index of the first occurence
+        \return true if anything was found
+        @sa combine_and_sub
+     */
     bool find_first_and_sub(size_type& idx);
 
 
