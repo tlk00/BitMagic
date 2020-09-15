@@ -23723,6 +23723,79 @@ void TestStrSparseVectorAlgo()
 }
 
 static
+void TestStrSparseVector_FindEq()
+{
+    cout << "------------------------------- TestStrSparseVector_FindEq()" << endl;
+    using bvector_type = bm::bvector<>;
+    using TSparseStrVector = bm::str_sparse_vector<char, bvector_type, 64>;
+
+    TSparseStrVector str_vector;
+    {
+    auto in_iter = str_vector.get_back_inserter();
+
+    /*
+    // Example #1:
+    in_iter = "rs123456";
+    in_iter = "rs23456";
+    in_iter = ".";
+    in_iter = "esv4567";
+    in_iter = "esv89000";
+    in_iter = ".";
+    in_iter = "esv4444";
+    in_iter = "rs22222";
+    in_iter = "rs";
+    in_iter = ".";
+    in_iter.flush();
+    */
+
+
+    // Example #2:
+    //This example doesn't work
+    in_iter = "nssv16159936";
+    in_iter = "nssv16168081";
+    in_iter = "nssv16161387";
+    in_iter = "rs4567789";
+    in_iter = ".";
+    in_iter = "nssv16175917";
+    in_iter = "nssv16177038";
+    in_iter = "nssv16177460";
+    in_iter = ".";
+    in_iter = "nssv16161309";
+    in_iter.flush();
+    }
+
+
+    str_vector.optimize();
+
+    // print them out:
+    auto it = str_vector.begin();
+    auto it_end = str_vector.end();
+    for (; it != it_end; ++it)
+    {
+        cout << *it << endl;
+    }
+
+    bm::sparse_vector_scanner<TSparseStrVector> scanner;
+    TSparseStrVector::bvector_type result;
+    scanner.find_eq_str(str_vector, ".", result);
+
+
+    auto cnt = result.count();
+    cout << "Number of hits: " << cnt << endl;
+    assert(cnt == 2);
+    auto en = result.first();
+    auto en_end = result.end();
+    for (; en < en_end; ++en)
+    {
+        cout << *en << endl;
+    }
+    // Print: 2, 5, 9 - for Example #1
+    // Print: 4, 8    - for Example #2
+    cout << "------------------------------- TestStrSparseVector_FindEq()" << endl;
+}
+
+
+static
 void TestStrSparseVectorSerial()
 {
    cout << "---------------------------- TestStrSparseVectorSerial()" << endl;
@@ -24105,6 +24178,20 @@ void CompareStrSparseVector(const str_svect_type& str_sv,
             exit(1);
        }
        assert(pos == i);
+       {
+            bvect bv_result;
+            found = scanner.find_eq_str(str_sv, str_control.c_str(), bv_result);
+            if (!found)
+            {
+                cerr << "Scanner bvector search failed! " << str_control << endl;
+                exit(1);
+            }
+            auto c = bv_result.count();
+            assert(c);
+            found = bv_result.find(pos);
+            assert(found);
+            assert(pos == i);
+       }
 
         if (i % 100000 == 0)
         {
@@ -24427,6 +24514,36 @@ void StressTestStrSparseVector()
                 cerr << "Error! Sorted-remap binary search position mismatch at: " << i << "!=" << pos2
                      << " value='" << s << "'" << endl;
                 assert(0);exit(1);
+            }
+            {
+                bvect bv_result;
+                bool found5 = scanner.find_eq_str(str_sv_sorted, s.c_str(), bv_result);
+                if (!found5)
+                {
+                    cerr << "Error! Scanner bvector search failed! at: " << i << endl;
+                    exit(1);
+                    auto c = bv_result.count();
+                    assert(c);
+                    unsigned pos5;
+                    found5 = bv_result.find(pos5);
+                    assert(found5);
+                    assert(pos5 == i);
+                }
+            }
+            {
+                bvect bv_result;
+                bool found6 = scanner2.find_eq_str(s.c_str(), bv_result);
+                if (!found6)
+                {
+                    cerr << "Error! Scanner bvector search failed! at: " << i << endl;
+                    exit(1);
+                    auto c = bv_result.count();
+                    assert(c);
+                    unsigned pos6;
+                    found6 = bv_result.find(pos6);
+                    assert(found6);
+                    assert(pos6 == i);
+                }
             }
             if (i % 65535 == 0)
             {
@@ -29357,6 +29474,8 @@ int main(int argc, char *argv[])
          TestStrSparseVector();
 
          TestStrSparseVectorAlgo();
+
+         TestStrSparseVector_FindEq();
 
          TestStrSparseVectorSerial();
 
