@@ -312,10 +312,9 @@ public:
         
         /** add value to the buffer without changing the NULL vector
             @param v - value to push back
-            @return index of added value in the internal buffer
             @internal
         */
-        size_type add_value_no_null(value_type v);
+        void add_value_no_null(value_type v);
         
         /**
             Reconfшпгку back inserter not to touch the NULL vector
@@ -2139,10 +2138,13 @@ template<class Val, class BV>
 void sparse_vector<Val, BV>::back_insert_iterator::add(
          typename sparse_vector<Val, BV>::back_insert_iterator::value_type v)
 {
-    size_type buf_idx = this->add_value_no_null(v);
+    typename sparse_vector<Val, BV>::size_type sz = sv_->size();
+    size_type buf_idx = size_type(buf_ptr_ - ((value_type*)buffer_.data()));
+
+    this->add_value_no_null(v);
+
     if (bv_null_)
     {
-        typename sparse_vector<Val, BV>::size_type sz = sv_->size();
         bv_null_->set_bit_no_check(sz + buf_idx);
     }
 }
@@ -2150,8 +2152,7 @@ void sparse_vector<Val, BV>::back_insert_iterator::add(
 //---------------------------------------------------------------------
 
 template<class Val, class BV>
-typename sparse_vector<Val, BV>::size_type
-sparse_vector<Val, BV>::back_insert_iterator::add_value_no_null(
+void sparse_vector<Val, BV>::back_insert_iterator::add_value_no_null(
          typename sparse_vector<Val, BV>::back_insert_iterator::value_type v)
 {
     BM_ASSERT(sv_);
@@ -2161,18 +2162,15 @@ sparse_vector<Val, BV>::back_insert_iterator::add_value_no_null(
         buf_ptr_ = (value_type*)(buffer_.data());
         *buf_ptr_ = v;
         ++buf_ptr_;
-        return 0;
+        return;
     }
     if (buf_ptr_ - ((value_type*)buffer_.data()) >= n_buf_size)
     {
         this->flush();
         buf_ptr_ = (value_type*)(buffer_.data());
     }
-    
     *buf_ptr_ = v;
-    size_type buf_idx = size_type(buf_ptr_ - ((value_type*)buffer_.data()));
     ++buf_ptr_;
-    return buf_idx;
 }
 
 //---------------------------------------------------------------------

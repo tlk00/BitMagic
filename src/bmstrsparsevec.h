@@ -397,11 +397,11 @@ public:
                         allocator_type> buffer_matrix_type;
 
     private:
-        str_sparse_vector_type*  sv_;          ///!< pointer on the parent vector
-        bvector_type*            bv_null_;     ///!< not NULL vector pointer
-        buffer_matrix_type       buf_matrix_;  ///!< value buffer
-        size_type                pos_in_buf_;  ///!< buffer position
-        block_idx_type           prev_nb_;     ///!< previous block added
+        str_sparse_vector_type*  sv_;         ///!< pointer on the parent vector
+        bvector_type*            bv_null_;    ///!< not NULL vector pointer
+        buffer_matrix_type       buf_matrix_; ///!< value buffer
+        size_type                pos_in_buf_; ///!< buffer position
+        block_idx_type           prev_nb_;    ///!< previous block added
     };
 
 
@@ -2122,10 +2122,11 @@ const typename str_sparse_vector<CharType, BV, MAX_STR_SIZE>::back_insert_iterat
         return;
     }
     size_type buf_idx = this->pos_in_buf_; // offset in
+    size_type sz = sv_->size();
+
     this->add_value(v);
     if (bv_null_)
     {
-        size_type sz = sv_->size();
         bv_null_->set_bit_no_check(sz + buf_idx + 1);
     }
 }
