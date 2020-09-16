@@ -19894,7 +19894,59 @@ void TestSparseVector()
     } // for
 
     }}
-    
+
+    //
+    {
+       bm::sparse_vector<unsigned, bm::bvector<> > sv(bm::use_null);
+       {
+           bm::sparse_vector<unsigned, bm::bvector<> >::back_insert_iterator
+                                                    bi = sv.get_back_inserter();
+           for (unsigned i = 0; i < 100000; i+=2)
+           {
+                bi.add_null();
+                bi = i;
+           } // for
+           bi.flush();
+        }
+        sv.optimize(tb);
+
+       for (unsigned i = 0; i < 100000; i+=2)
+       {
+           bool b = sv.is_null(i);
+           assert(b);
+           auto v = sv.get(i+1);
+           b = sv.is_null(i+1);
+           assert(!b);
+           assert(v == i);
+       } // for
+    }
+
+    {
+       bm::sparse_vector<unsigned, bm::bvector<> > sv(bm::use_null);
+       {
+           bm::sparse_vector<unsigned, bm::bvector<> >::back_insert_iterator
+                                                    bi = sv.get_back_inserter();
+           for (unsigned i = 0; i < 100000; i+=2)
+           {
+                bi = i;
+                bi.add_null();
+           } // for
+           bi.flush();
+        }
+        sv.optimize(tb);
+
+       for (unsigned i = 0; i < 100000; i+=2)
+       {
+           bool b = sv.is_null(i);
+           assert(!b);
+           auto v = sv.get(i);
+           b = sv.is_null(i+1);
+           assert(b);
+           assert(v == i);
+       } // for
+    }
+
+
     
     // test automatic optimization with back_insert iterator
     {
@@ -23496,7 +23548,10 @@ void TestStrSparseVector()
             for (unsigned i = 0; i < 100000; i+=2)
             {
                 bi.add_null();
-                bi = std::to_string(i);
+                string s(std::to_string(i));
+                bi = s;
+                bool b = str_sv0.is_null(i+1);
+                assert(!b);
             }
             bi.flush();
        }
@@ -23513,8 +23568,38 @@ void TestStrSparseVector()
             int cmp = strcmp(s.c_str(), str);
             assert(cmp == 0);
         }
-
     }
+
+
+    {
+       str_sparse_vector<char, bvect, 32> str_sv0(bm::use_null);
+       {
+            auto bi = str_sv0.get_back_inserter();
+            for (unsigned i = 0; i < 100000; i+=2)
+            {
+                bi = std::to_string(i);
+                bool b = str_sv0.is_null(i);
+                assert(!b);
+                bi.add_null();
+            }
+            bi.flush();
+       }
+
+        char str[256];
+        for (unsigned i = 0; i < 100000; i+=2)
+        {
+            bool b = str_sv0.is_null(i);
+            assert(!b);
+            b = str_sv0.is_null(i+1);
+            assert(b);
+            str_sv0.get(i, str, sizeof(str));
+            std::string s = std::to_string(i);
+            int cmp = strcmp(s.c_str(), str);
+            assert(cmp == 0);
+        }
+    }
+
+
 
     {
        str_sparse_vector<char, bvect, 32> str_sv0(bm::use_null);
