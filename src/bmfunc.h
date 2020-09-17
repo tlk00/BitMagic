@@ -9507,6 +9507,19 @@ bool find_max_nz(const VT* arr, SZ arr_size, SZ* found_idx)
     return found;
 }
 
+/**
+    Find count of non-zero elements in the array
+    @internal
+ */
+template<typename VT, typename SZ>
+SZ count_nz(const VT* arr, SZ arr_size)
+{
+    SZ cnt = 0;
+    for (SZ i = 0; i < arr_size; ++i)
+        cnt += (arr[i] != 0);
+    return cnt;
+}
+
 // --------------------------------------------------------------
 // Functions to work with int values stored in 64-bit pointers
 // --------------------------------------------------------------

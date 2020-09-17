@@ -1253,6 +1253,11 @@ protected:
         *idx_from = from; *idx_to = to; return true;
     }
 
+    const remap_matrix_type* get_remap_matrix() const
+        { return &remap_matrix1_; }
+    remap_matrix_type* get_remap_matrix()
+        { return &remap_matrix1_; }
+
 protected:
     template<class SVect> friend class sparse_vector_serializer;
     template<class SVect> friend class sparse_vector_deserializer;
@@ -1509,7 +1514,7 @@ void str_sparse_vector<CharType, BV, MAX_STR_SIZE>::calc_stat(
     st->memory_used += remap_mem_usage;
     if (remap_flags_) // use of remapping requires some extra storage
     {
-        st->max_serialize_mem += remap_mem_usage;
+        st->max_serialize_mem += (remap_mem_usage * 2);
     }
 }
 
@@ -1800,6 +1805,19 @@ str_sparse_vector<CharType, BV, MAX_STR_SIZE>::remap_from(const str_sparse_vecto
         this->import(cmatr, i, dsize);
         i += dsize;
     } // for i
+
+    bvector_type* bv_null = this->get_null_bvect();
+    if (bv_null)
+    {
+        const bvector_type* bv_null_arg = str_sv.get_null_bvector();
+        if (bv_null_arg)
+            *bv_null = *bv_null_arg;
+        else
+        {
+            // TODO: exception? assert? maybe it is OK...
+        }
+    }
+
 }
 
 //---------------------------------------------------------------------

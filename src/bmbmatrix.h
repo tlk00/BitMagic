@@ -1514,7 +1514,9 @@ bool base_sparse_vector<Val, BV, MAX_SIZE>::equal(
         if (bv_null == bv_null_arg)
             return true;
         if (!bv_null || !bv_null_arg)
-            return false;
+        {
+            return false; // TODO: this may need an improvement when one is null, others not null
+        }
         BM_ASSERT(bv_null);
         BM_ASSERT(bv_null_arg);
         bool eq = bv_null->equal(*bv_null_arg);

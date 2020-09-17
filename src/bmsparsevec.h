@@ -902,6 +902,17 @@ protected:
     unsigned char* init_remap_buffer() BMNOEXCEPT { return 0; }
     void set_remap() BMNOEXCEPT { }
 
+    /// unused remap matrix type for compatibility with the sparse serializer
+    typedef
+    bm::heap_matrix<unsigned char,
+                    sizeof(value_type), /* ROWS */
+                    256,          /* COLS = number of chars in the ASCII set */
+                    typename bvector_type::allocator_type>
+                                                    remap_matrix_type;
+
+    const remap_matrix_type* get_remap_matrix() const { return 0; }
+    remap_matrix_type* get_remap_matrix() { return 0; }
+
     bool resolve_range(size_type from, size_type to,
                        size_type* idx_from, size_type* idx_to) const BMNOEXCEPT
     {
@@ -920,10 +931,6 @@ protected:
     template<class SVect> friend class sparse_vector_serializer;
     template<class SVect> friend class sparse_vector_deserializer;
 
-    /// unused remap matrix type for compatibility with the sparse serializer
-    typedef
-    bm::heap_matrix<unsigned char, 1, 1,
-                    typename bvector_type::allocator_type> remap_matrix_type;
 
 };
 

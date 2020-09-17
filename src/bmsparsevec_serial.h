@@ -169,6 +169,7 @@ public:
                                                    allocator_pool_type;
     typedef typename
     bm::serializer<bvector_type>::bv_ref_vector_type bv_ref_vector_type;
+    typedef typename bvector_type::allocator_type      alloc_type;
 
 public:
     sparse_vector_serializer();
@@ -246,25 +247,23 @@ public:
     bm::serializer<bvector_type>& get_bv_serializer() BMNOEXCEPT
         { return bvs_; }
 
-    /**
-        Return serialization counter vector
-        @internal
-    */
-    /*
-    const size_type* get_compression_stat() const BMNOEXCEPT
-                            { return bvs_.get_compression_stat(); }
-    */
 
 protected:
     void build_xor_ref_vector(const SV& sv);
 
     typedef typename SV::remap_matrix_type  remap_matrix_type;
+
+    /// serialize the remap matrix
+    void encode_remap_matrix(bm::encoder& enc, const remap_matrix_type& rmatr);
+
+    typedef bm::heap_vector<unsigned, alloc_type, true> rlen_vector_type;
+
 private:
     sparse_vector_serializer(const sparse_vector_serializer&) = delete;
     sparse_vector_serializer& operator=(const sparse_vector_serializer&) = delete;
 protected:
     bm::serializer<bvector_type>     bvs_;
-
+    rlen_vector_type                 remap_rlen_vect_;
     // XOR compression member vars
     bool                             is_xor_ref_;
     bv_ref_vector_type               bv_ref_;
@@ -395,7 +394,7 @@ protected:
                         const bvector_type* mask_bv);
 
     /// load string remap dict
-    static void load_remap(SV& sv, const unsigned char* remap_buf_ptr);
+    void load_remap(SV& sv, const unsigned char* remap_buf_ptr);
 
     /// throw error on incorrect deserialization
     static void raise_invalid_header();
@@ -414,6 +413,8 @@ private:
     sparse_vector_deserializer(const sparse_vector_deserializer&) = delete;
     sparse_vector_deserializer& operator=(const sparse_vector_deserializer&) = delete;
 
+    typedef bm::heap_vector<unsigned, alloc_type, true> rlen_vector_type;
+
 protected:
     const unsigned char*                        remap_buf_ptr_;
     alloc_type                                  alloc_;
@@ -425,6 +426,7 @@ protected:
     bvector_type                                not_null_mask_bv_;
     bvector_type                                rsc_mask_bv_;
     bm::heap_vector<size_t, alloc_type, true>   off_vect_;
+    rlen_vector_type                            remap_rlen_vect_;
 
     // XOR compression variables
     bv_ref_vector_type              bv_ref_; ///< reference vector
@@ -746,6 +748,70 @@ void sparse_vector_serializer<SV>::build_xor_ref_vector(const SV& sv)
 
 // -------------------------------------------------------------------------
 
+template<typename SV>
+void sparse_vector_serializer<SV>::encode_remap_matrix(bm::encoder& enc,
+                                             const remap_matrix_type& rmatr)
+{
+/*
+    bm::id64_t remap_size = sv.remap_size();
+    const unsigned char* matrix_buf = sv.get_remap_buffer();
+    BM_ASSERT(matrix_buf);
+    BM_ASSERT(remap_size);
+
+    enc_m.put_8('R');
+    enc_m.put_64(remap_size);
+    enc_m.memcpy(matrix_buf, size_t(remap_size));
+    enc_m.put_8('E'); // end of matrix (integrity check token)
+*/
+
+    size_t rows = rmatr.rows();
+    size_t cols = rmatr.cols();
+
+    BM_ASSERT(cols <= 256);
+    BM_ASSERT(rows <= ~0u);
+
+    // compute CSR capacity vector
+    remap_rlen_vect_.resize(0);
+    for (size_t r = 0; r < rows; ++r)
+    {
+        const unsigned char* BMRESTRICT remap_row = rmatr.row(r);
+        size_t cnt = bm::count_nz(remap_row, cols);
+        if (!cnt)
+            break;
+        remap_rlen_vect_.push_back(unsigned(cnt));
+    } // for r
+
+    rows = remap_rlen_vect_.size(); // effective rows in the remap table
+
+    enc.put_8('C'); // Compressed sparse row (CSR)
+    enc.put_32(unsigned(rows));
+    enc.put_16(bm::gap_word_t(cols)); // <= 255 chars
+
+    {
+        bm::bit_out<bm::encoder> bo(enc);
+        for (size_t r = 0; r < rows; ++r)
+        {
+            unsigned rl = remap_rlen_vect_[r];
+            bo.gamma(rl);
+        } // for r
+    }
+
+    for (size_t r = 0; r < rows; ++r)
+    {
+        const unsigned char* BMRESTRICT row = rmatr.row(r);
+        for (size_t j = 0; j < cols; ++j)
+        {
+            unsigned char v = row[j];
+            if (v)
+            {
+                enc.put_8((unsigned char)j);
+                enc.put_8(v);
+            }
+        } // for j
+    } // for r
+
+    enc.put_8('E'); // end of matrix (integrity check token)
+}
 
 
 // -------------------------------------------------------------------------
@@ -832,7 +898,7 @@ void sparse_vector_serializer<SV>::serialize(const SV&  sv,
         BM_ASSERT(0); // TODO: throw an exception here
     } // for i
 
-    bvs_.set_ref_vectors(0); // disуngage XOR ref vector
+    bvs_.set_ref_vectors(0); // disengage XOR ref vector
 
     // -----------------------------------------------------
     // serialize the re-map matrix
@@ -842,6 +908,7 @@ void sparse_vector_serializer<SV>::serialize(const SV&  sv,
         bm::encoder enc_m(buf_ptr, sv_stat.max_serialize_mem);
         if (sv.is_remap())
         {
+            /*
             bm::id64_t remap_size = sv.remap_size();
             const unsigned char* matrix_buf = sv.get_remap_buffer();
             BM_ASSERT(matrix_buf);
@@ -851,6 +918,10 @@ void sparse_vector_serializer<SV>::serialize(const SV&  sv,
             enc_m.put_64(remap_size);
             enc_m.memcpy(matrix_buf, size_t(remap_size));
             enc_m.put_8('E'); // end of matrix (integrity check token)
+            */
+            const typename SV::remap_matrix_type* rmatr = sv.get_remap_matrix();
+            BM_ASSERT(rmatr);
+            encode_remap_matrix(enc_m, *rmatr);
         }
         else
         {
@@ -1339,11 +1410,12 @@ void sparse_vector_deserializer<SV>::load_remap(SV& sv,
         return;
 
     bm::decoder dec_m(remap_buf_ptr);
+
     unsigned char rh = dec_m.get_8();
     switch (rh)
     {
     case 'N':
-        break;
+        return;
     case 'R':
         {
             size_t remap_size = (size_t) dec_m.get_64();
@@ -1359,18 +1431,58 @@ void sparse_vector_deserializer<SV>::load_remap(SV& sv,
                 #endif
             }
             dec_m.memcpy(remap_buf, remap_size);
-            unsigned char end_tok = dec_m.get_8();
-            if (end_tok != 'E')
+        }
+        break;
+
+    case 'C': // CSR remap
+        {
+            sv.init_remap_buffer();
+            typename SV::remap_matrix_type* rmatr = sv.get_remap_matrix();
+            if (!rmatr)
             {
                 #ifndef BM_NO_STL
-                    throw std::logic_error("Invalid serialization format");
+                    throw std::logic_error("Invalid serialization format (remap matrix)");
                 #else
                     BM_THROW(BM_ERR_SERIALFORMAT);
                 #endif
             }
-            sv.set_remap();
+            size_t rows = (size_t) dec_m.get_32();
+            size_t cols = dec_m.get_16();
+            BM_ASSERT(cols <= 256);
+            BM_ASSERT(rows <= ~0u);
+
+            // read gamma encoded row lens
+            remap_rlen_vect_.resize(0);
+            {
+                bm::bit_in<bm::decoder> bi(dec_m);
+                for (size_t r = 0; r < rows; ++r)
+                {
+                    unsigned rl = bi.gamma();
+                    remap_rlen_vect_.push_back(rl);
+                } // for r
+            }
+
+            for (size_t r = 0; r < rows; ++r)
+            {
+                unsigned char* BMRESTRICT row = rmatr->row(r);
+                size_t cnt = remap_rlen_vect_[r];
+                if (!cnt || cnt > 256)
+                {
+                    // throw an exception here (format corruption!)
+                    BM_ASSERT(0);
+                    //goto format_error;
+                    break;
+                }
+                for (size_t j = 0; j < cnt; ++j)
+                {
+                    unsigned idx = dec_m.get_8();
+                    unsigned char v = dec_m.get_8();
+                    row[idx] = v;
+                } // for j
+            } // for r
         }
         break;
+
     default:
     #ifndef BM_NO_STL
         throw std::logic_error("Invalid serialization format (remap error)");
@@ -1378,6 +1490,20 @@ void sparse_vector_deserializer<SV>::load_remap(SV& sv,
         BM_THROW(BM_ERR_SERIALFORMAT);
     #endif
     } // switch
+
+    // finalize the remap matrix read
+    //
+    unsigned char end_tok = dec_m.get_8();
+    if (end_tok != 'E')
+    {
+        format_error:
+        #ifndef BM_NO_STL
+            throw std::logic_error("Invalid serialization format");
+        #else
+            BM_THROW(BM_ERR_SERIALFORMAT);
+        #endif
+    }
+    sv.set_remap();
 }
 
 // -------------------------------------------------------------------------
