@@ -110,8 +110,9 @@ public:
     class const_reference
     {
     public:
-        const_reference(const str_sparse_vector<CharType, BV, MAX_STR_SIZE>& str_sv,
-                  size_type idx) BMNOEXCEPT
+        const_reference(
+                const str_sparse_vector<CharType, BV, MAX_STR_SIZE>& str_sv,
+                size_type idx) BMNOEXCEPT
         : str_sv_(str_sv), idx_(idx)
         {}
         
@@ -822,6 +823,11 @@ public:
         \param str_sv - source sparse vector (assumed it is not remapped)
     */
     void remap_from(const str_sparse_vector& str_sv);
+
+    /**
+        Build remapping profile and re-load content to save memory
+    */
+    void remap();
 
     /*!
         Calculate flags which octets are present on each byte-plain.
@@ -1764,6 +1770,18 @@ bool str_sparse_vector<CharType, BV, MAX_STR_SIZE>::remap_fromsv(
         str[i] = CharType(remap_value);
     } // for i
     return true;
+}
+
+//---------------------------------------------------------------------
+
+template<class CharType, class BV, unsigned MAX_STR_SIZE>
+void str_sparse_vector<CharType, BV, MAX_STR_SIZE>::remap()
+{
+    // TODO: get rid of tmp, implement a move-remapping
+    str_sparse_vector<CharType, BV, MAX_STR_SIZE>
+                                sv_tmp(this->get_null_support());
+    sv_tmp.remap_from(*this);
+    sv_tmp.swap(*this);
 }
 
 //---------------------------------------------------------------------

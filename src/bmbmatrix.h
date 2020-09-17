@@ -330,6 +330,14 @@ public:
         { return bmatr_.get_row(this->null_plain()) != 0; }
 
     /**
+        \brief check if container supports NULL(unassigned) values
+    */
+    bm::null_support get_null_support() const BMNOEXCEPT
+    {
+        return is_nullable() ? bm::use_null : bm::no_null;
+    }
+
+    /**
         \brief Get bit-vector of assigned values or NULL
         (if not constructed that way)
     */
