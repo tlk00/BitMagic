@@ -402,7 +402,10 @@ protected:
     static void raise_invalid_64bit();
     /// throw error on incorrect deserialization
     static void raise_invalid_bitdepth();
-
+    /// throw error on incorrect deserialization
+    static void raise_invalid_format();
+    /// throw error on incorrect deserialization
+    static void raise_missing_remap_matrix();
     /// setup deserializers
     void setup_xor_compression();
 
@@ -1424,11 +1427,7 @@ void sparse_vector_deserializer<SV>::load_remap(SV& sv,
             size_t target_remap_size = sv.remap_size();
             if (!remap_size || !remap_buf || remap_size != target_remap_size)
             {
-                #ifndef BM_NO_STL
-                    throw std::logic_error("Invalid serialization format (remap size)");
-                #else
-                    BM_THROW(BM_ERR_SERIALFORMAT);
-                #endif
+                raise_invalid_format();
             }
             dec_m.memcpy(remap_buf, remap_size);
         }
@@ -1440,16 +1439,14 @@ void sparse_vector_deserializer<SV>::load_remap(SV& sv,
             typename SV::remap_matrix_type* rmatr = sv.get_remap_matrix();
             if (!rmatr)
             {
-                #ifndef BM_NO_STL
-                    throw std::logic_error("Invalid serialization format (remap matrix)");
-                #else
-                    BM_THROW(BM_ERR_SERIALFORMAT);
-                #endif
+                raise_missing_remap_matrix();
             }
             size_t rows = (size_t) dec_m.get_32();
             size_t cols = dec_m.get_16();
-            BM_ASSERT(cols <= 256);
-            BM_ASSERT(rows <= ~0u);
+            if (cols > 256)
+            {
+                raise_invalid_format();
+            }
 
             // read gamma encoded row lens
             remap_rlen_vect_.resize(0);
@@ -1469,9 +1466,7 @@ void sparse_vector_deserializer<SV>::load_remap(SV& sv,
                 if (!cnt || cnt > 256)
                 {
                     // throw an exception here (format corruption!)
-                    BM_ASSERT(0);
-                    //goto format_error;
-                    break;
+                    raise_invalid_format();
                 }
                 for (size_t j = 0; j < cnt; ++j)
                 {
@@ -1482,13 +1477,9 @@ void sparse_vector_deserializer<SV>::load_remap(SV& sv,
             } // for r
         }
         break;
-
     default:
-    #ifndef BM_NO_STL
-        throw std::logic_error("Invalid serialization format (remap error)");
-    #else
-        BM_THROW(BM_ERR_SERIALFORMAT);
-    #endif
+        // re-map matrix code error
+        raise_invalid_format();
     } // switch
 
     // finalize the remap matrix read
@@ -1496,12 +1487,7 @@ void sparse_vector_deserializer<SV>::load_remap(SV& sv,
     unsigned char end_tok = dec_m.get_8();
     if (end_tok != 'E')
     {
-        format_error:
-        #ifndef BM_NO_STL
-            throw std::logic_error("Invalid serialization format");
-        #else
-            BM_THROW(BM_ERR_SERIALFORMAT);
-        #endif
+        raise_invalid_format();
     }
     sv.set_remap();
 }
@@ -1512,7 +1498,7 @@ template<typename SV>
 void sparse_vector_deserializer<SV>::raise_invalid_header()
 {
 #ifndef BM_NO_STL
-    throw std::logic_error("Invalid serialization signature header");
+    throw std::logic_error("BitMagic: Invalid serialization signature header");
 #else
     BM_THROW(BM_ERR_SERIALFORMAT);
 #endif
@@ -1524,7 +1510,7 @@ template<typename SV>
 void sparse_vector_deserializer<SV>::raise_invalid_64bit()
 {
 #ifndef BM_NO_STL
-    throw std::logic_error("Invalid serialization target (64-bit BLOB)");
+    throw std::logic_error("BitMagic: Invalid serialization target (64-bit BLOB)");
 #else
     BM_THROW(BM_ERR_SERIALFORMAT);
 #endif
@@ -1536,7 +1522,31 @@ template<typename SV>
 void sparse_vector_deserializer<SV>::raise_invalid_bitdepth()
 {
 #ifndef BM_NO_STL
-    throw std::logic_error("Invalid serialization target (bit depth)");
+    throw std::logic_error("BitMagic: Invalid serialization target (bit depth)");
+#else
+    BM_THROW(BM_ERR_SERIALFORMAT);
+#endif
+}
+
+// -------------------------------------------------------------------------
+
+template<typename SV>
+void sparse_vector_deserializer<SV>::raise_invalid_format()
+{
+#ifndef BM_NO_STL
+    throw std::logic_error("BitMagic: Invalid serialization fromat (BLOB corruption?)");
+#else
+    BM_THROW(BM_ERR_SERIALFORMAT);
+#endif
+}
+
+// -------------------------------------------------------------------------
+
+template<typename SV>
+void sparse_vector_deserializer<SV>::raise_missing_remap_matrix()
+{
+#ifndef BM_NO_STL
+    throw std::logic_error("BitMagic: Invalid serialization format (remap matrix)");
 #else
     BM_THROW(BM_ERR_SERIALFORMAT);
 #endif
