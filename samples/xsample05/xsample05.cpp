@@ -73,6 +73,8 @@ void show_help()
         << "-idict  file-name            -- input set file to parse" << std::endl
         << "-svout  spase vector output  -- sparse vector name to save" << std::endl
         << "-svin   sparse vector input  -- sparse vector file name to load " << std::endl
+        << "-remap                       -- re-mapping of string characters " << std::endl
+        << "-xor                         -- use XOR compression filtering" << std::endl
         << "-diag                        -- run diagnostics"                  << std::endl
         << "-bench                       -- run benchmarks"                   << std::endl
         << "-timing                      -- collect timings"                  << std::endl
@@ -88,6 +90,8 @@ std::string  i_name;
 bool         is_diag = false;
 bool         is_timing = false;
 bool         is_bench = false;
+bool         is_remap = false;
+bool         is_xor = false;
 
 // Parse command line arguments
 static
@@ -144,6 +148,16 @@ int parse_args(int argc, char *argv[])
             continue;
         }
 
+        if (arg == "-remap" || arg == "--remap" || arg == "-r" || arg == "--r")
+        {
+            is_remap = true;
+            continue;
+        }
+        if (arg == "-xor" || arg == "--xor" || arg == "-x" || arg == "--x")
+        {
+            is_xor = true;
+            continue;
+        }
         if (arg == "-diag" || arg == "--diag" || arg == "-d" || arg == "--d")
         {
             is_diag = true;
@@ -478,12 +492,18 @@ int main(int argc, char *argv[])
         if (str_vec.size()) // load the sparse vector
         {
             bm::chrono_taker tt1("2. build sparse vector", 1, &timing_map);
-
-            for (const string& term : str_vec)
-                str_sv.push_back(term);
+            {
+                // use insert iterator to load vector (faster than push-back)
+                //
+                auto bi = str_sv.get_back_inserter();
+                for (const string& term : str_vec)
+                    bi = term;
+                bi.flush();
+            }
             
             // build remapped (dense) sparse vector
             // (this should be final), no more edits in this form
+            if (is_remap)
             {
                 str_sparse_vect    str_sv_remap;
                 str_sv_remap.remap_from(str_sv);
@@ -498,7 +518,7 @@ int main(int argc, char *argv[])
         if (!sv_out_name.empty() && !str_sv.empty())
         {
             bm::chrono_taker tt1("7. Save sparse vector", 1, &timing_map);
-            file_save_svector(str_sv, sv_out_name);
+            file_save_svector(str_sv, sv_out_name, 0, is_xor);
         }
         
         if (!sv_in_name.empty())
@@ -523,7 +543,7 @@ int main(int argc, char *argv[])
         {
             if (!str_sv.empty())
             {
-                print_svector_stat(str_sv, true);
+                print_svector_stat(str_sv, false);
             }
             
             if (str_vec.size())
