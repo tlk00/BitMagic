@@ -778,7 +778,7 @@ void print_svector_stat(const SV& svect, bool print_sim = false)
             std::cout << "octet N = " << octet <<
                     "  compressed = " << octet_ssize <<
                     " " << octet_ssize/(1024*1024) << "MB" << std::endl;
-            octet_cnt = octet_ssize = 0;
+            octet_cnt = 0; octet_ssize = 0;
             octet++;
             std::cout << std::endl;
         }
