@@ -774,13 +774,13 @@ void print_svector_stat(const SV& svect, bool print_sim = false)
         }
         if (octet_cnt == 7)
         {
-            cout << "--------------------" << endl;
-            cout << "octet N = " << octet <<
+            std::cout << "--------------------" << std::endl;
+            std::cout << "octet N = " << octet <<
                     "  compressed = " << octet_ssize <<
-                    " " << octet_ssize/(1024*1024) << "MB" << endl;
+                    " " << octet_ssize/(1024*1024) << "MB" << std::endl;
             octet_cnt = octet_ssize = 0;
             octet++;
-            std::cout << endl;
+            std::cout << std::endl;
         }
         else
         {
@@ -804,7 +804,7 @@ void print_svector_stat(const SV& svect, bool print_sim = false)
 
     std::cout << " Total serialized size (plains): " << ssize
               << std::endl
-              << " " << ssize / (1024 * 1024) << " MB" << endl;
+              << " " << ssize / (1024 * 1024) << " MB" << std::endl;
 
     if (svect.size())
     {
