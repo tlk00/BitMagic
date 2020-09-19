@@ -3,7 +3,20 @@ celestial objects from NED objects directory.
 Example shows how to do sorted search, runs benchmarks, checks self correctness. 
 
 
+0. How to build
 
+- go to the source directory of BitMagic
+>cd ../..
+- setup the compile root directory
+as
+>source ./bmenv.sh
+or
+>. ./bmenv.sh
+- get back to the sample 
+>cd -
+>make
+or
+>./build_all.sh
 
 
 1. Download the fragment of catalog from 
@@ -47,6 +60,9 @@ Performance:
 2. build sparse vector; 1.276 sec
 7. Save sparse vector; 4.726 ms
 
+See also:
+./run_all_compr.sh
+
 
 
 3. Run search benchmarks using the compressed sparse vector of "prefname"
@@ -66,3 +82,6 @@ Performance:
 6. bm::sparse_vector_scanner<> binary search; 42000 ops/sec; 351 ms
 8. Load sparse vector; 3.951 ms
 
+See also:
+
+./run_all_bench.sh
