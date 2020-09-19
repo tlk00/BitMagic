@@ -260,7 +260,7 @@ void check_sparse(const str_sparse_vect& str_sv, const string_vector& str_vec)
     std::cout << "Check ok. Dictionary size = " << str_sv.size() << std:: endl;
 }
 
-const unsigned benchmark_max = 15000;  // benchmark sampling size
+const unsigned benchmark_max = 50000;  // benchmark sampling size
 
 /// Sample a few random terms out of collection
 static
