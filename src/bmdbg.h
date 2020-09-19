@@ -383,10 +383,15 @@ void print_bc(unsigned i, unsigned count)
 }
 
 template<class BV>
-void print_bvector_stat(const BV& bvect)
+size_t print_bvector_stat(const BV& bvect)
 {
     typename BV::statistics st;
     bvect.calc_stat(&st);
+
+    typename serializer<BV>::buffer buf;
+    bm::serializer<BV> ser;
+    ser.serialize(bvect, buf, &st);
+    auto ssize = buf.size();
     
     std::cout << " - Blocks: [ "
               << "B:"     << st.bit_blocks
@@ -394,7 +399,9 @@ void print_bvector_stat(const BV& bvect)
               << " count() = " << bvect.count() 
               << ", mem = " << st.memory_used << " " << (st.memory_used / (1024 * 1024)) << "MB "
               << ", max smem:" << st.max_serialize_mem << " " << (st.max_serialize_mem / (1024 * 1024)) << "MB "
+              << " compressed = " << ssize << " " << (ssize / (1024 * 1024)) << "MB "
               << std::endl;
+    return ssize;
 }
 
 
@@ -731,41 +738,61 @@ void print_svector_stat(const SV& svect, bool print_sim = false)
     
     std::cout << "\nPlains:" << std::endl;
 
+    size_t ssize(0), octet_ssize(0);
+
     typename SV::bvector_type bv_join; // global OR of all plains
     auto plains = svect.plains();
+
+    unsigned octet_cnt(0), octet(0);
     for (unsigned i = 0; i < plains; ++i)
     {
         const typename SV::bvector_type* bv_plain = svect.get_plain(i);
-        std::cout << i << ":";
-            if (bv_plain == 0)
+        std::cout << i << "-" << octet_cnt << ":";
+        if (bv_plain == 0)
+        {
+            std::cout << "NULL\n";
+            bool any_else = false;
+            for (unsigned j = i+1; j < plains; ++j) // look ahead
             {
-                std::cout << "NULL\n";
-                bool any_else = false;
-                for (unsigned j = i+1; j < plains; ++j) // look ahead
+                if (svect.get_plain(j))
                 {
-                    if (svect.get_plain(j))
-                    {
-                        any_else = true;
-                        break;
-                    }
-                }
-                if (!any_else)
-                {
+                    any_else = true;
                     break;
                 }
             }
-            else
+            if (!any_else)
             {
-                bv_join |= *bv_plain;                
-                print_bvector_stat(*bv_plain);
+                break;
             }
+        }
+        else
+        {
+            bv_join |= *bv_plain;
+            auto pssize = bm::print_bvector_stat(*bv_plain);
+            ssize += pssize;
+            octet_ssize += pssize;
+        }
+        if (octet_cnt == 7)
+        {
+            cout << "--------------------" << endl;
+            cout << "octet N = " << octet <<
+                    "  compressed = " << octet_ssize <<
+                    " " << octet_ssize/(1024*1024) << "MB" << endl;
+            octet_cnt = octet_ssize = 0;
+            octet++;
+            std::cout << endl;
+        }
+        else
+        {
+            octet_cnt++;
+        }
     } // for i
 
     const typename SV::bvector_type* bv_null = svect.get_null_bvector();
     if (bv_null)
     {
         std::cout << "(not) NULL plain:\n";
-        print_bvector_stat(*bv_null);
+        ssize += print_bvector_stat(*bv_null);
         typename SV::size_type not_null_cnt = bv_null->count();
         std::cout << " - Bitcount: " << not_null_cnt << std::endl;
 
@@ -774,6 +801,10 @@ void print_svector_stat(const SV& svect, bool print_sim = false)
             << ((sizeof(typename SV::value_type) + sizeof(unsigned)) * not_null_cnt) / (1024 * 1024) << "MB"
             << std::endl;
     }
+
+    std::cout << " Total serialized size (plains): " << ssize
+              << std::endl
+              << " " << ssize / (1024 * 1024) << " MB" << endl;
 
     if (svect.size())
     {
@@ -899,20 +930,17 @@ int file_load_compressed_collection(CBC& cbc, const std::string& fname)
 // save sparse_vector dump to disk
 //
 template<class SV>
-int file_save_svector(const SV& sv, const std::string& fname, size_t* sv_blob_size=0)
+int file_save_svector(const SV& sv, const std::string& fname,
+                      size_t* sv_blob_size=0, bool use_xor = true)
 {
     BM_ASSERT(!fname.empty());
     
     bm::sparse_vector_serial_layout<SV> sv_lay;
 
     bm::sparse_vector_serializer<SV> sv_serializer;
-    sv_serializer.set_xor_ref(true);
+    sv_serializer.set_xor_ref(use_xor);
 
     sv_serializer.serialize(sv, sv_lay);
-/*
-    BM_DECLARE_TEMP_BLOCK(tb)
-    bm::sparse_vector_serialize(sv, sv_lay, tb);
-*/
     std::ofstream fout(fname.c_str(), std::ios::binary);
     if (!fout.good())
     {

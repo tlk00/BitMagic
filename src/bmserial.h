@@ -332,7 +332,7 @@ protected:
         Determine best representation for GAP block based
         on current set compression level
      
-        @return  set_block_gap, set_block_bit_1bit, set_block_arrgap
+        @return  set_block_bit, set_block_bit_1bit, set_block_arrgap
                  set_block_arrgap_egamma, set_block_arrgap_bienc
                  set_block_arrgap_inv, set_block_arrgap_egamma_inv
                  set_block_arrgap_bienc_inv, set_block_gap_egamma
@@ -1582,7 +1582,8 @@ template<class BV>
 unsigned char
 serializer<BV>::find_bit_best_encoding_l5(const bm::word_t* block) BMNOEXCEPT
 {
-    const float bie_bits_per_int = compression_level_ < 6 ? 3.75f : 3.0f; 
+//    const float bie_bits_per_int = compression_level_ < 6 ? 3.75f : 3.0f;
+    const float bie_bits_per_int = compression_level_ < 6 ? 3.75f : 2.5f;
     const unsigned bie_limit = unsigned(float(bm::gap_max_bits) / bie_bits_per_int);// bm::bie_cut_off;
 
     unsigned bc, ibc, gc;
@@ -1620,7 +1621,8 @@ serializer<BV>::find_bit_best_encoding_l5(const bm::word_t* block) BMNOEXCEPT
     float gcf=float(gc);
 
     if (gc > 3 && gc < bm::gap_max_buff_len)
-        add_model(bm::set_block_gap_bienc, 32 + unsigned((gcf-1) * bie_bits_per_int));
+        add_model(bm::set_block_gap_bienc,
+                  32 + unsigned((gcf-1) * bie_bits_per_int));
 
 
     float bcf=float(bc), ibcf=float(ibc);
@@ -1628,20 +1630,24 @@ serializer<BV>::find_bit_best_encoding_l5(const bm::word_t* block) BMNOEXCEPT
     if (bc < bie_limit) 
         add_model(bm::set_block_arr_bienc, 16 * 3 + unsigned(bcf * bie_bits_per_int));
     else
+    {
         if (ibc < bie_limit)
-            add_model(bm::set_block_arr_bienc_inv, 16 * 3 + unsigned(ibcf * bie_bits_per_int));
-
+            add_model(bm::set_block_arr_bienc_inv,
+                      16 * 3 + unsigned(ibcf * bie_bits_per_int));
+    }
 
     gc -= gc > 2 ? 2 : 0;
     gcf = float(gc);
     if (gc < bm::gap_max_buff_len) // GAP block
     {
-        add_model(bm::set_block_bitgap_bienc, 16 * 4 + unsigned(gcf * bie_bits_per_int));
+        add_model(bm::set_block_bitgap_bienc,
+                  16 * 4 + unsigned(gcf * bie_bits_per_int));
     }
     else
     {
         if (gc < bie_limit)
-            add_model(bm::set_block_bitgap_bienc, 16 * 4 + unsigned(gcf * bie_bits_per_int));
+            add_model(bm::set_block_bitgap_bienc,
+                      16 * 4 + unsigned(gcf * bie_bits_per_int));
     }
 
     // find the best representation based on computed approx.models
@@ -1656,6 +1662,36 @@ serializer<BV>::find_bit_best_encoding_l5(const bm::word_t* block) BMNOEXCEPT
             model = models_[i];
         }
     }
+#if 0
+    if (model == set_block_bit_0runs)
+    {
+        std::cout << "   0runs=" << (bit_model_0run_size_ * 8) << std::endl;
+        std::cout << " GAP BIC=" << (16 * 4 + unsigned(gcf * bie_bits_per_int)) << std::endl;
+        std::cout << " ARR BIC=" << (16 * 3 + unsigned(bcf * bie_bits_per_int)) << std::endl;
+        std::cout << "BC,GC=[" << bc <<", " << gc << "]" << std::endl;
+        std::cout << "bie_limit=" << bie_limit << std::endl;
+
+    }
+    switch(model)
+    {
+    case set_block_bit: std::cout << "BIT=" << "[" << bc <<", " << gc << "]"; break;
+    case set_block_bit_1bit: std::cout << "1bit "; break;
+    case set_block_arrgap: std::cout << "arr_gap "; break;
+    case set_block_arrgap_egamma: std::cout << "arrgap_egamma "; break;
+    case set_block_arrgap_bienc: std::cout << "arrgap_BIC "; break;
+    case set_block_arrgap_inv: std::cout << "arrgap_INV "; break;
+    case set_block_arrgap_egamma_inv: std::cout << "arrgap_egamma_INV "; break;
+    case set_block_arrgap_bienc_inv: std::cout << "arrgap_BIC_INV "; break;
+    case set_block_gap_egamma: std::cout << "gap_egamma "; break;
+    case set_block_gap_bienc: std::cout << "gap_BIC "; break;
+    case set_block_bitgap_bienc: std::cout << "bitgap_BIC "; break;
+    case set_block_bit_digest0: std::cout << "D0 "; break;
+    case set_block_bit_0runs: std::cout << "0runs=[" << bc <<", " << gc << " lmt=" << bie_limit << "]"; break;
+    case set_block_arr_bienc_inv: std::cout << "arr_BIC_INV "; break;
+    case set_block_arr_bienc: std::cout << "arr_BIC "; break;
+    default: std::cout << "UNK=" << int(model); break;
+    }
+#endif
     return model;
 }
 

@@ -8007,36 +8007,32 @@ unsigned bit_count_nonzero_size(const T* blk, unsigned  data_size) BMNOEXCEPT
     const T* blk_end = blk + data_size - 2;
     do
     {
-        if (*blk == 0) 
+        if (*blk == 0) // scan fwd to find 0 island length
         {
-            // scan fwd to find 0 island length
             const T* blk_j = blk + 1;
             for (; blk_j < blk_end; ++blk_j)
             {
                 if (*blk_j != 0)
                     break;
-            }
+            } // for
             blk = blk_j-1;
             count += (unsigned)sizeof(gap_word_t);
         }
         else
         {
-            // scan fwd to find non-0 island length
-            const T* blk_j = blk + 1;
+            const T* blk_j = blk + 1; // scan fwd to find non-0 island len
             for ( ; blk_j < blk_end; ++blk_j)
             {
                 if (*blk_j == 0)
                 {
-                    // look ahead to identify and ignore short 0-run
-                    if (blk_j[1] | blk_j[2])
+                    if (blk_j[1] | blk_j[2]) // look ahead, ignore short 0-run
                     {
-                        // skip zero word
-                        ++blk_j;
+                        ++blk_j; // skip zero word
                         continue;
                     }
                     break;
                 }
-            }
+            } // for
             count += unsigned(sizeof(gap_word_t));
             // count all bit-words now
             count += unsigned(blk_j - blk) * unsigned(sizeof(T));
@@ -9505,6 +9501,25 @@ bool find_max_nz(const VT* arr, SZ arr_size, SZ* found_idx)
         }
     } // for i
     return found;
+}
+
+/**
+    Find max non-zero value in an array
+    @internal
+ */
+template<typename VT, typename SZ>
+bool find_first_nz(const VT* arr, SZ arr_size, SZ* found_idx)
+{
+    for (SZ i = 0; i < arr_size; ++i)
+    {
+        VT v = arr[i];
+        if (v)
+        {
+            *found_idx = i;
+            return true;
+        }
+    } // for i
+    return false;
 }
 
 /**

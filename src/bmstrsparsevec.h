@@ -1679,6 +1679,9 @@ void str_sparse_vector<CharType, BV, MAX_STR_SIZE>::build_octet_remap(
         {
             typename octet_freq_matrix_type::size_type char_idx;
             bool found = bm::find_max_nz(frq_row, row_size, &char_idx);
+            #if 0
+            bool found = bm::find_first_nz(frq_row, row_size, &char_idx);
+            #endif
             if (!found)
                 break;
             BM_ASSERT(char_idx);
@@ -1788,7 +1791,8 @@ void str_sparse_vector<CharType, BV, MAX_STR_SIZE>::remap()
 
 template<class CharType, class BV, unsigned MAX_STR_SIZE>
 void
-str_sparse_vector<CharType, BV, MAX_STR_SIZE>::remap_from(const str_sparse_vector& str_sv)
+str_sparse_vector<CharType, BV, MAX_STR_SIZE>::remap_from(
+                                            const str_sparse_vector& str_sv)
 {
     if (str_sv.is_remap())
     {
