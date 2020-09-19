@@ -22834,6 +22834,7 @@ void TestStrSparseVector()
    assert(str_sv1.size() == 0);
    str_sparse_vector<char, bvect, 32> str_sv3(std::move(str_sv0));
    assert(!str_sv3.is_remap());
+   assert(str_sv0.get_null_support() == bm::no_null);
    }
    
    {
@@ -23540,6 +23541,32 @@ void TestStrSparseVector()
        bit = bit3;
     }
 
+    {
+       str_sparse_vector<char, bvect, 32> str_sv0(bm::use_null);
+       assert(str_sv0.get_null_support() == bm::use_null);
+
+       str_sv0.resize(10);
+       {
+           auto bi = str_sv0.get_back_inserter();
+           bi = "1";
+           bi.add_null();
+           bi = "2";
+           bi.flush();
+       }
+        bool b = str_sv0.is_null(10);
+        assert(!b);
+        char str[256];
+        str_sv0.get(10, str, sizeof(str));
+        int cmp = strcmp("1", str);
+        assert(cmp == 0);
+        b = str_sv0.is_null(11);
+        assert(b);
+        b = str_sv0.is_null(12);
+        assert(!b);
+        str_sv0.get(12, str, sizeof(str));
+        cmp = strcmp("2", str);
+        assert(cmp == 0);
+    }
 
     {
        str_sparse_vector<char, bvect, 32> str_sv0(bm::use_null);
@@ -23679,7 +23706,8 @@ void TestStrSparseVector()
            
            bi.flush();
        }
-    
+
+
         {
         str_sparse_vector<char, bvect, 32>::const_iterator it_end;
         assert(!it_end.valid());
@@ -23860,6 +23888,7 @@ void TestStrSparseVector_FindEq()
         in_iter.flush();
         }
 
+        str_vector.remap();
         str_vector.optimize();
 
         // print them out:
@@ -23891,24 +23920,24 @@ void TestStrSparseVector_FindEq()
     TSparseStrVector str_vector(bm::use_null);
     TSparseStrVector str_vector1(bm::use_null);
         {
-        auto in_iter = str_vector.get_back_inserter();
-        in_iter = "nssv16159936";
-        in_iter = "nssv16168081";
-        in_iter = "nssv16161387";
-        in_iter = "rs4567789";
-        in_iter.add_null();
-        in_iter = "nssv16175917";
-        in_iter = "nssv16177038";
-        in_iter = "nssv16177460";
-        in_iter.add_null();
-        in_iter = "nssv16161309";
-        in_iter.add_null();
-        in_iter = "";
-        in_iter.add_null(10000000);
-
-        in_iter.flush();
+            auto in_iter = str_vector.get_back_inserter();
+            in_iter = "nssv16159936";
+            in_iter = "nssv16168081";
+            in_iter = "nssv16161387";
+            in_iter = "rs4567789";
+            in_iter.add_null();
+            in_iter = "nssv16175917";
+            in_iter = "nssv16177038";
+            in_iter = "nssv16177460";
+            in_iter.add_null();
+            in_iter = "nssv16161309";
+            in_iter.add_null();
+            in_iter = "";
+            in_iter.add_null(10000000);
+            in_iter.flush();
         }
 
+        str_vector.remap();
         str_vector.optimize();
 
         assert(!str_vector.is_null(0));
@@ -23944,6 +23973,53 @@ void TestStrSparseVector_FindEq()
 
 
     }
+
+    {
+        TSparseStrVector str_vector(bm::use_null);
+        {
+            TSparseStrVector str_vector0(bm::use_null);
+            auto in_iter = str_vector0.get_back_inserter();
+
+            in_iter = "rs123456";
+            in_iter = "rs23456";
+            in_iter.add_null();
+            in_iter = "esv4567";
+            in_iter = "esv89000";
+            in_iter.add_null();
+            in_iter = "esv4444";
+            in_iter = "rs22222";
+            in_iter = "rs";
+
+            in_iter.flush();
+
+            str_vector0.remap();
+            str_vector = std::move(str_vector0);
+        }
+
+        BM_DECLARE_TEMP_BLOCK(tb);
+        str_vector.optimize(tb);
+
+        size_t nr_nulls = 0;
+
+        const auto* bv = str_vector.get_null_bvector();
+        assert(bv);
+        nr_nulls = bv->count();
+        nr_nulls = str_vector.size() - nr_nulls;
+        assert(nr_nulls == 2);
+        nr_nulls = 0;
+
+        auto it = str_vector.begin();
+        auto it_end = str_vector.end();
+        for (; it != it_end; ++it)
+        {
+            if (it.is_null()) {
+                nr_nulls++;
+            }
+        }
+        assert(nr_nulls == 2);
+    }
+
+
 
     cout << "------------------------------- TestStrSparseVector_FindEq()" << endl;
 }
@@ -23997,6 +24073,41 @@ void TestStrSparseVectorSerial()
         assert(cmp==0);
         cmp = str_sv2.compare(0, "");
         assert(cmp==0);
+    }
+
+    {
+       str_sparse_vector<char, bvect, 32> str_sv1(bm::use_null);
+       str_sparse_vector<char, bvect, 32> str_sv2;
+
+       {
+           str_sparse_vector<char, bvect, 32>::back_insert_iterator bi = str_sv1.get_back_inserter();
+           bi = "1";
+           bi.add_null();
+           bi = "12";
+           bi = "12";
+
+           bi.flush();
+       }
+
+        BM_DECLARE_TEMP_BLOCK(tb)
+        sparse_vector_serial_layout<str_sparse_vector<char, bvect, 32> > sv_lay;
+        bm::sparse_vector_serialize<str_sparse_vector<char, bvect, 32> >(str_sv1, sv_lay, tb);
+
+        std::vector<unsigned char> buf_v;
+        {
+            buf_v.resize(sv_lay.size());
+            const unsigned char* buf = sv_lay.buf();
+            ::memcpy(buf_v.data(), buf, sv_lay.size());
+        }
+
+        bm::sparse_vector_deserializer<str_sparse_vector<char, bvect, 32> > sv_deserial;
+        sv_deserial.deserialize(str_sv2, buf_v.data());
+
+        auto* bv = str_sv2.get_null_bvector();
+        assert(bv);
+
+        bool b = str_sv1.equal(str_sv2);
+        assert(b);
     }
 
     cout << "Stress deserialization (AND mask) and range[..]" << endl;
@@ -29643,14 +29754,13 @@ int main(int argc, char *argv[])
     
     if (is_all || is_str_sv)
     {
-
          TestStrSparseVector();
 
          TestStrSparseVectorAlgo();
+         TestStrSparseVectorSerial();
 
          TestStrSparseVector_FindEq();
 
-         TestStrSparseVectorSerial();
 
          TestStrSparseSort();
 
