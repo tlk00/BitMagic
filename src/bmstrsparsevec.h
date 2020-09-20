@@ -2013,7 +2013,7 @@ void str_sparse_vector<CharType, BV, MAX_STR_SIZE>::const_iterator::set_substr(
     substr_to_ = substr_from_ + len - 1;
     if (max_str < substr_to_)
         substr_to_ = max_str;
-    buf_matrix_.resize(n_rows, substr_to_+1);
+    buf_matrix_.resize(n_rows, len+1);
 }
 
 //---------------------------------------------------------------------
