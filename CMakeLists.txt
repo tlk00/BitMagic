@@ -28,7 +28,7 @@ if (CMAKE_CXX_COMPILER_ID MATCHES "GNU" OR CMAKE_CXX_COMPILER_ID MATCHES "Clang"
     elseif("${BMOPTFLAGS}" STREQUAL "BMAVX2OPT")
         set(bmoptf "-march=skylake -mavx2 -O2 -DBMAVX2OPT")
     else()
-        set(bmoptf "-march=native -O2")
+        set(bmoptf "-march=native")
     endif()
 
     set(flags "-Wall -Wextra -Wno-ignored-qualifiers -fPIC -fomit-frame-pointer")
@@ -125,5 +125,6 @@ add_executable(strsvsample02 ${PROJECT_SOURCE_DIR}/samples/strsvsample02/strsvsa
 add_executable(strsvsample03 ${PROJECT_SOURCE_DIR}/samples/strsvsample03/strsvsample03.cpp)
 add_executable(strsvsample04 ${PROJECT_SOURCE_DIR}/samples/strsvsample04/strsvsample04.cpp)
 add_executable(strsvsample05 ${PROJECT_SOURCE_DIR}/samples/strsvsample05/strsvsample05.cpp)
+add_executable(strsvsample06 ${PROJECT_SOURCE_DIR}/samples/strsvsample06/strsvsample06.cpp)
 
 
