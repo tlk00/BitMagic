@@ -17,7 +17,7 @@ For more information please visit:  http://bitmagic.io
 */
 
 /** \example strsvsample06.cpp
-    Succinct container iterators, search, mismatch
+    Succinct container iterator for (substring), search, mismatch
 
   \sa bm::str_sparse_vector
   \sa bm::sparse_vector_find_mismatch
@@ -26,7 +26,7 @@ For more information please visit:  http://bitmagic.io
 */
 
 /*! \file strsvsample06.cpp
-    \brief Example: str_sparse_vector<> iterators and search
+    \brief Example: Succinct container iterator for (substring), search, mismatch
 */
 
 #include <iostream>
