@@ -68,10 +68,10 @@ void show_help()
         << "-svout svect-output-file    -- bit-transposed sparse vectors out file" << std::endl
         << "-bvin bvect-input-file      -- bit-vector compressed in file" << std::endl
         << std::endl
-        << "-level N                    -- compression level to use (up to 5)" << std::endl
-        << "-silent (-s)                -- no progress print or messages" << std::endl
-        << "-verify                     -- verify compressed version " << std::endl
-        << "-decode                   -- run decode test (in-memory)" << std::endl
+        << "-level N                    -- compression level to use (up to 5)"     << std::endl
+        << "-silent (-s)                -- no progress print or messages"          << std::endl
+        << "-verify                     -- verify compressed version "             << std::endl
+        << "-decode                     -- run decode test (in-memory)"            << std::endl
         << "-diag (-d)                  -- print statistics/diagnostics info"      << std::endl
         << "-timing (-t)                -- evaluate timing/duration of operations" << std::endl
       ;
