@@ -23868,7 +23868,7 @@ void TestStrSparseVector_FindEq()
 {
     cout << "------------------------------- TestStrSparseVector_FindEq()" << endl;
     using bvector_type = bm::bvector<>;
-    using TSparseStrVector = bm::str_sparse_vector<char, bvector_type, 64>;
+    using TSparseStrVector = bm::str_sparse_vector<char, bvector_type, 390>;
 
     {
     TSparseStrVector str_vector;
@@ -23907,12 +23907,32 @@ void TestStrSparseVector_FindEq()
         auto cnt = result.count();
         cout << "Number of hits: " << cnt << endl;
         assert(cnt == 2);
-        auto en = result.first();
-        auto en_end = result.end();
-        for (; en < en_end; ++en)
         {
-            cout << *en << endl;
+            auto en = result.first();
+            auto en_end = result.end();
+            for (; en < en_end; ++en)
+            {
+                cout << *en << endl;
+            }
         }
+
+        scanner.find_eq_str_prefix(str_vector, "rs", result);
+        cnt = result.count();
+        assert(cnt == 1);
+        {
+            auto en = result.get_enumerator(0);
+            assert(*en == 3);
+        }
+
+        scanner.find_eq_str_prefix(str_vector, "ns", result);
+        cnt = result.count();
+        assert(cnt == 7);
+
+        bool f = scanner.find_eq_str_prefix(str_vector, "sn", result);
+        assert(!f);
+        cnt = result.count();
+        assert(cnt == 0);
+
     }
 
 
@@ -24018,6 +24038,80 @@ void TestStrSparseVector_FindEq()
         }
         assert(nr_nulls == 2);
     }
+
+    {
+        TSparseStrVector str_vector(bm::use_null);
+        {
+            auto in_iter = str_vector.get_back_inserter();
+
+            in_iter = "rs123456";
+            in_iter = "rs23456";
+            in_iter = "es24567";
+            in_iter = "es189000";
+            in_iter = "rs12222";
+            in_iter = "rs1";
+
+            in_iter.flush();
+
+            str_vector.remap();
+        }
+        bm::sparse_vector_scanner<TSparseStrVector> scanner;
+        TSparseStrVector::size_type pos;
+        bool b = scanner.find_eq_str(str_vector, "rs", pos);
+        assert(!b);
+        TSparseStrVector::bvector_type bv_res;
+        bool found = scanner.find_eq_str(str_vector, "rs", bv_res);
+        assert(!found);
+    }
+
+#if 0
+    {
+        TSparseStrVector str_vector(bm::use_null);
+        int res = bm::file_load_svector(str_vector, "/Volumes/WD-MacOS/VCF/ALL.chr1.phase3_shapeit2_mvncall_integrated_v5a.20130502.genotypes.vcf.gz_1_id.bin");
+        if (res != 0)
+        {
+            cerr << "Cannot load the file " << endl;
+            assert(0);
+        }
+        cout << str_vector.size() << endl;
+//        str_vector[1779648] = "rs57745065";
+//        str_vector[1779649] = "rs57745065";
+
+        TSparseStrVector str_sv_remap(bm::use_null);
+        str_sv_remap.remap_from(str_vector);
+
+        bm::sparse_vector_scanner<TSparseStrVector> scanner;
+/*
+        {
+        TSparseStrVector::bvector_type bv_res;
+        bool found = scanner.find_eq_str(str_vector, "rs5774506", bv_res);
+        assert(found);
+        cout << "1. Number of hits: " << bv_res.count() << endl;
+        }
+*/
+        {
+            TSparseStrVector::size_type pos;
+            bool b = scanner.find_eq_str(str_sv_remap, "rs5774506", pos);
+            if (b)
+            {
+                cout << str_sv_remap[pos] << endl;
+            }
+
+            TSparseStrVector::bvector_type bv_res;
+            bool found = scanner.find_eq_str(str_sv_remap, "rs5774506", bv_res);
+            assert(found);
+            cout << "2. Number of hits: " << bv_res.count() << endl;
+            auto en = bv_res.get_enumerator(0);
+            for (;en.valid(); ++en)
+            {
+                auto idx = *en;
+                cout << idx << ": " << str_vector[idx] << " remap=>" << str_sv_remap[idx] << endl;
+            } // for
+            cout << endl;
+
+        }
+    }
+#endif
 
 
 
@@ -29760,7 +29854,6 @@ int main(int argc, char *argv[])
          TestStrSparseVectorSerial();
 
          TestStrSparseVector_FindEq();
-
 
          TestStrSparseSort();
 

@@ -59,7 +59,7 @@ int main(void)
             iit = "301-223-1234";
             iit = "131-423-1235";
             iit.add_null();
-            iit = "250-113-6535";
+            iit = "301-113-6535";
 
             iit.flush();
         }
@@ -152,15 +152,31 @@ int main(void)
         // NOTE: re-use scanner for multiple searches for best performance
         //
         bm::sparse_vector_scanner<str_sv_type> str_scan;
+
         {
             bvector_type bv_res;
             str_scan.find_eq_str(str_sv1, "250-113-6535", bv_res);
+            {
+                auto en = bv_res.get_enumerator(0); // from the start (pos=0)
+                for (;en.valid(); ++en)
+                {
+                    idx = *en;
+                    cout << idx << ": " << str_sv1[idx] << endl;
+                } // for
+            }
+
+            cout << "Prefix search:" << endl;
+            str_scan.find_eq_str_prefix(str_sv1, "301", bv_res);
+            cout << "Found: " << bv_res.count() << endl;
+
             auto en = bv_res.get_enumerator(0); // from the start (pos=0)
             for (;en.valid(); ++en)
             {
                 idx = *en;
                 cout << idx << ": " << str_sv1[idx] << endl;
             } // for
+
+
         }
 
 
