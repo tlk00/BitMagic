@@ -115,14 +115,14 @@ void test_data(sample_data_frame& df)
     for (unsigned i = 0; i < 65536; i+=7)
     {
         auto v1 = df.csv1.get(i);
-        assert(v1 == 4);
+        assert(v1 == 4); (void)v1;
         auto v2 = df.csv2.get(i);
-        assert(v2 == 8);
+        assert(v2 == 8); (void)v2;
         auto v3 = df.csv3.get(i);
-        assert(v3 == 17);
+        assert(v3 == 17); (void)v3;
 
         auto v0 = df.sv0.get(i);
-        assert(v0 == i % 256);
+        assert(v0 == i % 256); (void)v0;
     }
 }
 
