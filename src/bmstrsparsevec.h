@@ -372,12 +372,12 @@ public:
         /** add a series of consequitve NULLs (no-value) to the container */
         void add_null(size_type count);
 
-        /** return true if insertion buffer is empty */
-        bool empty() const BMNOEXCEPT;
-        
         /** flush the accumulated buffer */
         void flush();
     protected:
+        /** return true if insertion buffer is empty */
+        bool empty() const BMNOEXCEPT;
+
         typedef typename bvector_type::block_idx_type     block_idx_type;
 
         /** add value to the buffer without changing the NULL vector
