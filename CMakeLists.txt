@@ -28,7 +28,11 @@ if (CMAKE_CXX_COMPILER_ID MATCHES "GNU" OR CMAKE_CXX_COMPILER_ID MATCHES "Clang"
     elseif("${BMOPTFLAGS}" STREQUAL "BMAVX2OPT")
         set(bmoptf "-march=skylake -mavx2 -O2 -DBMAVX2OPT")
     else()
-        set(bmoptf "-march=native")
+	if (CMAKE_BUILD_TYPE MATCHES "Release")
+		set(bmoptf "-march=native -O2")
+	else()
+		set(bmoptf "-march=native")
+	endif()
     endif()
 
     set(flags "-Wall -Wextra -Wno-ignored-qualifiers -fPIC -fomit-frame-pointer")
@@ -39,7 +43,7 @@ if (CMAKE_CXX_COMPILER_ID MATCHES "GNU" OR CMAKE_CXX_COMPILER_ID MATCHES "Clang"
 
 elseif (CMAKE_CXX_COMPILER_ID MATCHES "Intel")
     set(flags, "-tpp7 -march=core2 -restrict -DBM_HASRESTRICT -fno-fnalias -Wall")
-    set(optflags, "-g0 -O3 -opt_report_fileopt.txt -opt_report_levelmax")
+    set(optflags, "-g0 -O2 -opt_report_fileopt.txt -opt_report_levelmax")
 elseif (CMAKE_CXX_COMPILER_ID MATCHES "MSVC")
     if ("${BMOPTFLAGS}" STREQUAL "BMSSE42OPT")
 	set(bmoptf "-DBMSSE42OPT")
