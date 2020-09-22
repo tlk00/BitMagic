@@ -2568,6 +2568,7 @@ void SparseVectorAccessTest()
 
 }
 
+static
 void RSC_SparseVectorFillTest()
 {
     bvect bv;// { 10, 20, 100, 200 };
@@ -2631,6 +2632,7 @@ void RSC_SparseVectorFillTest()
 
 }
 
+static
 void RSC_SparseVectorAccesTest()
 {
     BM_DECLARE_TEMP_BLOCK(tb)
