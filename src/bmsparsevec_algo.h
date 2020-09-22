@@ -1432,12 +1432,13 @@ bool sparse_vector_scanner<SV>::prepare_and_sub_aggregator(const SV&  sv,
     
     // add all vectors above string len to the SUB operation group
     //
-    unsigned plain_idx = unsigned(len * 8) + 1;
+    unsigned plain_idx = unsigned(len * 8);// + 1;
     typename SV::size_type plains;
-    if (&sv == bound_sv_)
-        plains = effective_str_max_ * unsigned(sizeof(value_type)) * 8;
-    else
-        plains = sv.plains();
+    if (&sv != bound_sv_)
+    {
+        effective_str_max_ = sv.effective_vector_max();
+    }
+    plains = effective_str_max_ * unsigned(sizeof(value_type)) * 8;
     for (; plain_idx < plains; ++plain_idx)
     {
         bvector_type_const_ptr bv = sv.get_plain(plain_idx);

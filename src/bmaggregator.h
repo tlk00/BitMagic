@@ -891,7 +891,9 @@ bool aggregator<BV>::find_first_and_sub(size_type& idx,
             {
                 unsigned set_array_max2 =
                         find_effective_sub_block_size(i, bv_src_sub, src_sub_size, false);
-                if (set_array_max2 > set_array_max)
+                // TODO: should it be set_array_max2 < set_array_max ????
+                //if (set_array_max2 > set_array_max)
+                if (set_array_max2 < set_array_max)
                     set_array_max = set_array_max2;
             }
         }
