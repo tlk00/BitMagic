@@ -2146,7 +2146,8 @@ void sparse_vector<Val, BV>::back_insert_iterator::add(
          typename sparse_vector<Val, BV>::back_insert_iterator::value_type v)
 {
     typename sparse_vector<Val, BV>::size_type sz = sv_->size();
-    size_type buf_idx = size_type(buf_ptr_ - ((value_type*)buffer_.data()));
+    const value_type* data_ptr = (const value_type*)buffer_.data();
+    size_type buf_idx = size_type(buf_ptr_ - data_ptr);
 
     this->add_value_no_null(v);
 
@@ -2171,6 +2172,7 @@ void sparse_vector<Val, BV>::back_insert_iterator::add_value_no_null(
         ++buf_ptr_;
         return;
     }
+    BM_ASSERT(buf_ptr_ && buffer_.data());
     if (buf_ptr_ - ((value_type*)buffer_.data()) >= n_buf_size)
     {
         this->flush();
@@ -2223,8 +2225,14 @@ void sparse_vector<Val, BV>::back_insert_iterator::flush()
     if (this->empty())
         return;
     value_type* d = (value_type*)buffer_.data();
-    sv_->import_back(d, size_type(buf_ptr_ - d), false); //!set_not_null_);
-    buf_ptr_ = 0;
+    size_type arr_size = size_type(buf_ptr_ - d);
+    if (!arr_size)
+        return;
+
+    sv_->import_back(d, arr_size, false);
+    
+    buf_ptr_ = (value_type*) buffer_.data();
+    BM_ASSERT(buf_ptr_);
     block_idx_type nb = sv_->size() >> bm::set_block_shift;
     if (nb != prev_nb_)
     {
