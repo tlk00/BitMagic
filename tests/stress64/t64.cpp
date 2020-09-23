@@ -16713,6 +16713,7 @@ int main(int argc, char *argv[])
 
     if (is_all || is_sv)
     {
+
          TestSparseVector();
 
          TestSparseVectorAlgo();
