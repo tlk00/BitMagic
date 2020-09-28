@@ -17,9 +17,7 @@ For more information please visit:  http://bitmagic.io
 */
 
 /** \example svsample09.cpp
-  Use of sparse vector for compressed DNA strings (2 bits per bp)
-  Construction of comparison functions on bit-transposed compressed
-  containers, benchmarking.
+    Mismatch search. bm::sparse_vector_find_first_mismatch
  
   \sa bm::sparse_vector
   \sa bm::sparse_vector_find_first_mismatch
