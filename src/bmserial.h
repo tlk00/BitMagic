@@ -2689,6 +2689,7 @@ serializer<BV>::serialize(const BV& bv,
                 if (found)
                 {
                     size_type ridx = xor_scan_.found_ridx();
+
                     if (xor_scan_.is_eq_found()) // golden! (found a copy)
                     {
                         size_type row_idx = xor_scan_.get_ref_vector().get_row_idx(ridx);
@@ -2697,6 +2698,7 @@ serializer<BV>::serialize(const BV& bv,
                         compression_stat_[bm::set_block_ref_eq]++;
                         continue;
                     }
+
                     found = xor_scan_.validate_found(xor_block_, blk);
                     if (found)
                     {
