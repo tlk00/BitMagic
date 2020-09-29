@@ -11449,6 +11449,34 @@ static
 void SerializationCompressionLevelsTest()
 {
    cout << " ----------------------------------- SerializationCompressionLevelsTest()" << endl;
+
+    // test some basics
+    {
+        unsigned best_metric;
+        bm::xor_complement_match xm_type;
+
+        xm_type = bm::xor_scanner<bvect>::best_metric(1, 2, &best_metric);
+        assert(xm_type == e_xor_match_BC);
+        assert(best_metric == 1);
+
+        xm_type = bm::xor_scanner<bvect>::best_metric(2, 1, &best_metric);
+        assert(xm_type == e_xor_match_GC);
+        assert(best_metric == 1);
+
+        xm_type = bm::xor_scanner<bvect>::best_metric(65530, 65531, &best_metric);
+        assert(xm_type == e_xor_match_iBC);
+        assert(best_metric == 65536 - 65530);
+
+        xm_type = bm::xor_scanner<bvect>::best_metric(65530, 65530, &best_metric);
+        assert(xm_type == e_xor_match_iBC);
+        assert(best_metric == 65536 - 65530);
+
+        xm_type = bm::xor_scanner<bvect>::best_metric(65530, 3, &best_metric);
+        assert(xm_type == e_xor_match_GC);
+        assert(best_metric == 3);
+    }
+
+
    operation_deserializer<bvect> od;
 
    {
@@ -11858,6 +11886,42 @@ void SerializationCompressionLevelsTest()
         assert(!st1.bit_blocks);
         assert(st1.gap_blocks == 1);
     }}
+
+    // --------------------------------------------------------------
+    // XOR serialization (2-1)
+    {{
+        bvect bv1, bv2;
+        for (unsigned i = 4; i < 65536; i+=4)
+        {
+            bv2[i] = true;
+            bv1[i-1] = true;
+            bv1[i-2] = true;
+        }
+        cout << bv1.count() << endl;
+        cout << bv2.count() << endl;
+
+        bm::serializer<bvect>::bv_ref_vector_type bv_ref;
+        bv_ref.add(&bv1, 1); // idx = 0
+        bv_ref.add(&bv2, 5); // idx = 1
+
+        bm::serializer<bvect> bms;
+        bms.set_ref_vectors(&bv_ref);
+        bms.set_curr_ref_idx(0);
+        //bms.set_bookmarks(true);
+
+        bm::serializer<bvect>::buffer buf;
+        bms.serialize(bv1, buf);
+
+        const bvect::size_type* cstat = bms.get_compression_stat();
+        assert(cstat[bm::set_block_xor_ref32] == 1);
+
+        bvect bv3;
+        bm::deserialize(bv3, buf.buf(), 0, &bv_ref);
+        auto eq = bv3.equal(bv1);
+        assert(eq);
+
+    }}
+
 
     // --------------------------------------------------------------
     // XOR serialization (3) - GAPs
@@ -20946,7 +21010,7 @@ void TestSparseVector_XOR_Scanner()
         assert(f);
         idx = xscan.found_ridx();
         assert(idx == 1);
-        assert(xscan.get_x_best_metric() == 1);
+        assert(xscan.get_x_best_metric() == 0);
         assert(!xscan.is_eq_found());
         idx = xscan.get_ref_vector().get_row_idx(idx);
         bm::id64_t d64 = xscan.get_xor_digest();
