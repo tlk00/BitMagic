@@ -513,13 +513,14 @@ public:
     unsigned get_x_best_metric() const BMNOEXCEPT { return x_best_metric_; }
     bm::id64_t get_xor_digest() const BMNOEXCEPT { return x_d64_; }
 
-    /// true if completely identical vector found
+    /// true if completely identical block found
+    /*
     bool is_eq_found() const BMNOEXCEPT
         { return !x_best_metric_
           && (x_block_mtype_ == e_xor_match_BC ||
               x_block_mtype_ == e_xor_match_GC);
         }
-
+    */
 
     unsigned get_x_bc() const BMNOEXCEPT { return x_bc_; }
     unsigned get_x_gc() const BMNOEXCEPT { return x_gc_; }
@@ -648,6 +649,7 @@ bool xor_scanner<BV>::search_best_xor_mask(const bm::word_t* block,
             found_ridx_ = size_type(best_ri);
             found_block_xor_ = block_xor;
             x_block_mtype_ = e_xor_match_BC;
+            /*
             unsigned dcnt = bm::word_bitcount64(d64);
             if (dcnt != 64)
                 ++x_best_metric_;
@@ -656,6 +658,7 @@ bool xor_scanner<BV>::search_best_xor_mask(const bm::word_t* block,
                 unsigned pos; (void)pos;
                 BM_ASSERT(!bm::bit_find_first_diff(block, block_xor, &pos));
             }
+            */
         }
         else
         {
@@ -672,14 +675,6 @@ bool xor_scanner<BV>::search_best_xor_mask(const bm::word_t* block,
                 kb_found = true;
                 found_ridx_ = size_type(best_ri);
                 found_block_xor_ = block_xor;
-                /*
-                if (!xor_bc) // completely identical block?
-                {
-                    unsigned pos;
-                    bool f = bm::bit_find_first_diff(block, block_xor, &pos);
-                    x_best_metric_ += f;
-                }
-                */
             }
             xor_ibc = bm::gap_max_bits - xor_bc;
             if (xor_ibc < x_best_metric_ && xor_ibc < bie_limit)
