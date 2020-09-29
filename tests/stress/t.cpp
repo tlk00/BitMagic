@@ -19511,8 +19511,8 @@ void TestSparseVector()
         assert(f);
         idx = xscan.found_ridx();
         assert(idx == 1);
-        assert(xscan.get_x_best_metric() == 0); // EQ
-        assert(xscan.is_eq_found());
+        assert(xscan.get_x_best_metric() != 0); // not EQ as not a full block
+        assert(!xscan.is_eq_found());
         idx = xscan.get_ref_vector().get_row_idx(idx);
         assert(idx == 3); // matrix row 3
     }}
