@@ -1321,8 +1321,18 @@ public:
        \param right - index of last bit
 
        \return population count in the diapason
+       @sa count_range_no_check
     */
     size_type count_range(size_type left, size_type right) const BMNOEXCEPT;
+
+    /*!
+        Returns count of 1 bits in the given range [left..right]
+        Function expects that caller guarantees that left < right
+
+        @sa count_range
+    */
+    size_type count_range_no_check(size_type left, size_type right) const BMNOEXCEPT;
+
 
     /*!
        \brief Returns true if all bits in the range are 1s (saturated interval)
@@ -2719,7 +2729,15 @@ bvector<Alloc>::count_range(size_type left, size_type right) const BMNOEXCEPT
         bm::xor_swap(left, right);
     if (right == bm::id_max)
         --right;
+    return count_range_no_check(left, right);
+}
 
+// -----------------------------------------------------------------------
+
+template<typename Alloc>
+typename bvector<Alloc>::size_type
+bvector<Alloc>::count_range_no_check(size_type left, size_type right) const BMNOEXCEPT
+{
     if (!blockman_.is_init())
         return 0;
 
