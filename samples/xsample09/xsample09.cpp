@@ -24,6 +24,12 @@ For more information please visit:  http://bitmagic.io
     presense/absense (NOT NULL bit-vector) and
     bm::bvector<>::count_range() function.
 
+    @sa bm::rank_range_split
+    @sa bm::bvector
+    @sa bm::sparse_vector
+    @sa rsc_sparse_vector
+    @sa bm::bvector::get_enumerator
+    @sa bm::bvector::enumerator
 */
 
 /*! \file xsample09.cpp
@@ -33,6 +39,7 @@ For more information please visit:  http://bitmagic.io
 
 #include <iostream>
 #include <memory>
+#include <vector>
 #include <stdexcept>
 
 using namespace std;
@@ -54,9 +61,11 @@ const unsigned  test_size = 250000000;  // number of events (ints) to generate
 const unsigned  sampling_interval = 2500;   // size of the histogram sampling
 
 typedef bm::bvector<>                                       bvector_type;
+typedef bvector_type::size_type                             bv_size_type;
 typedef bm::sparse_vector<unsigned, bvector_type>           sparse_vector_u32;
 typedef bm::rsc_sparse_vector<unsigned, sparse_vector_u32>  rsc_sparse_vector_u32;
 
+typedef std::vector<std::pair<bv_size_type, bv_size_type> > bv_ranges_vector;
 
 
 
@@ -70,6 +79,8 @@ bm::chrono_taker::duration_map_type  timing_map;
 static
 void generate_test_data(rsc_sparse_vector_u32& csv, unsigned size)
 {
+    BM_DECLARE_TEMP_BLOCK(tb)
+
     {
         unsigned cnt = 0;
         auto bit = csv.get_back_inserter(); // fastest way to add the data
@@ -84,7 +95,7 @@ void generate_test_data(rsc_sparse_vector_u32& csv, unsigned size)
         bit.flush();
     }
 
-    csv.optimize(); // memory compression
+    csv.optimize(tb); // memory compression
     csv.sync();     // construct the Rank-Select access index
 }
 
@@ -114,6 +125,8 @@ void compute_historgam(sparse_vector_u32& hist_sv,
     assert(sampling_size);
     assert(sampling_size < csv.size());
 
+    BM_DECLARE_TEMP_BLOCK(tb)
+
     sparse_vector_u32::size_type from = 0;
     sparse_vector_u32::size_type to = sampling_size-1;
 
@@ -121,18 +134,19 @@ void compute_historgam(sparse_vector_u32& hist_sv,
     const rsc_sparse_vector_u32::bvector_type* bv_null = csv.get_null_bvector();
     assert(bv_null);
 
-    auto bit = hist_sv.get_back_inserter();
-    auto sz = csv.size();
-    do
     {
-        auto cnt = bv_null->count_range(from, to); // closed interval [from..to]
-        bit = cnt;
-        from += sampling_size;
-        to = from + sampling_size - 1;
-    } while (from < sz);
-
-    bit.flush();
-    hist_sv.optimize();
+        auto bit = hist_sv.get_back_inserter();
+        auto sz = csv.size();
+        do
+        {
+            auto cnt = bv_null->count_range(from, to); // closed interval [from..to]
+            bit = cnt;
+            from += sampling_size;
+            to = from + sampling_size - 1;
+        } while (from < sz);
+        bit.flush();
+    }
+    hist_sv.optimize(tb);
 }
 
 /// Compute histogram as a RSC vector using fixed sampling interval.
@@ -171,7 +185,43 @@ void compute_rsc_historgam(rsc_sparse_vector_u32& hist_rsc,
     hist_rsc.load_from(hist_sv);
     }
 
-    hist_rsc.optimize();
+    BM_DECLARE_TEMP_BLOCK(tb)
+    hist_rsc.optimize(tb);
+    hist_rsc.sync();
+}
+
+/// Adaptive histogram identifies number of not NULL elements (events)
+/// and varies the size of the histogram bin trying to make sure all
+/// bins (but last) are the same weight
+///
+static
+void compute_adaptive_histogram(rsc_sparse_vector_u32& hist_rsc,
+                                const rsc_sparse_vector_u32& csv,
+                                sparse_vector_u32::size_type sampling_size)
+{
+    BM_DECLARE_TEMP_BLOCK(tb)
+
+    assert(sampling_size);
+
+    const bvector_type* bv_null = csv.get_null_bvector();
+    assert(bv_null);
+    bv_size_type data_set_size = bv_null->count();
+    bv_size_type split_rank = data_set_size / sampling_size;
+
+    bv_ranges_vector pair_vect;
+    bm::rank_range_split(*bv_null, split_rank, pair_vect);
+
+
+    size_t sz = pair_vect.size();
+    for (size_t k = 0; k < sz-1; ++k)
+    {
+        const auto& p = pair_vect[k]; // [from..to] sampling rank interval
+        hist_rsc.push_back(p.first, split_rank);
+    } // for
+    const auto& p = pair_vect[sz-1];
+    hist_rsc.push_back(p.first, data_set_size % sampling_size);
+
+    hist_rsc.optimize(tb);
     hist_rsc.sync();
 }
 
@@ -196,8 +246,8 @@ void verify_histograms(const rsc_sparse_vector_u32& hist_rsc,
             exit(1);
         }
     } // for
-
 }
+
 
 /// Access benchmark 1
 ///
@@ -226,7 +276,7 @@ unsigned long long access_bench1(const sparse_vector_u32& hist_sv,
 /// Sampling interval can be non-fixed (variadic, adaptive sampling).
 /// Mthod finds the intreval start and value using RSC container not NULL vector
 static
-unsigned long long access_bench2(const rsc_sparse_vector_u32&       hist_rsc,
+unsigned long long access_bench2(const rsc_sparse_vector_u32&   hist_rsc,
                     const std::vector<bvector_type::size_type>& sample_vec)
 {
     const bvector_type* bv_null = hist_rsc.get_null_bvector();
@@ -250,42 +300,95 @@ unsigned long long access_bench2(const rsc_sparse_vector_u32&       hist_rsc,
 }
 
 
+static
+void access_bench3(const rsc_sparse_vector_u32&   hist_rsc,
+                   const std::vector<bvector_type::size_type>& sample_vec,
+                   const rsc_sparse_vector_u32&                rsc_data)
+{
+    bvector_type::size_type last;
+    // find the last element in the data-set
+    {
+        const bvector_type* bv_null = rsc_data.get_null_bvector();
+        bool found = bv_null->find_reverse(last);
+        assert(found);
+    }
+
+    const bvector_type* bv_null = hist_rsc.get_null_bvector();
+    assert(bv_null);
+
+    for (size_t i = 0; i < sample_vec.size(); ++i)
+    {
+        auto idx = sample_vec[i];
+
+        // search back into container not NULL bit-vector to find sampling
+        // interval start position
+        bvector_type::size_type pos_start, pos_end;
+        bool found = bv_null->find_reverse(idx, pos_start);
+        assert(found);
+
+        found = bv_null->find(idx+1, pos_end);
+        if (!found)
+            pos_end = last;
+
+        // please note that we don't need number of events here
+        // (as it is always the same) we need the interval [start......end]
+        //
+        // (end - start) / sampling_rank defines the average density
+        //
+    }
+}
 
 
 int main(void)
 {
     try
     {
-        rsc_sparse_vector_u32 rsc_test;
-        sparse_vector_u32 hist1;
-        rsc_sparse_vector_u32 hist2;
+        rsc_sparse_vector_u32                rsc_test;
+
+        sparse_vector_u32                    hist1;
+        rsc_sparse_vector_u32                hist2;
+        rsc_sparse_vector_u32                hist3;
+
         std::vector<bvector_type::size_type> svec;
 
         generate_test_data(rsc_test, test_size);
 
         {
-            bm::chrono_taker tt1("1. histogram construction on NULL bector ", 1, &timing_map);
-            compute_historgam(hist1, rsc_test, sampling_interval);
+            const bvector_type* bv_null = rsc_test.get_null_bvector();
+            assert(bv_null);
+            bv_size_type data_set_size =
+                    bv_null->count(); // number of elements in the data set
+            cout << "Number of elements in the data set: " << data_set_size << endl;
         }
-        cout << "Histogram 1 size=" << hist1.size() << endl;
 
         {
-            bm::chrono_taker tt1("2. sparse histogram construction on NULL bector ", 1, &timing_map);
+            bm::chrono_taker tt1("01. Histogram construction (SV)) ", 1, &timing_map);
+            compute_historgam(hist1, rsc_test, sampling_interval);
+        }
+        cout << "Histogram 1 size: " << hist1.size() << endl;
+
+        {
+            bm::chrono_taker tt1("02. Histogram construction (RSC) ", 1, &timing_map);
             compute_rsc_historgam(hist2, rsc_test, sampling_interval);
         }
         cout << "Histogram 2 size=" << hist2.size() << endl;
-        cout << "Histogram 2 NOT NULL size=" << hist2.get_null_bvector()->count() << endl;
+        cout << "Histogram 2 NOT NULL size: " << hist2.get_null_bvector()->count() << endl;
+
+        {
+            bm::chrono_taker tt1("03. Histogram (adaptive) construction (RSC) ", 1, &timing_map);
+            compute_adaptive_histogram(hist3, rsc_test, sampling_interval);
+        }
 
         generate_access_samples(svec, test_size);
         cout << "Access sample size = " << svec.size() << endl;
 
         {
-            bm::chrono_taker tt1("3. verification", 1, &timing_map);
+            bm::chrono_taker tt1("04. Verification", 1, &timing_map);
             verify_histograms(hist2, hist1, sampling_interval);
         }
 
         {
-            bm::chrono_taker tt1("4. serialize and save the histogram(SV)", 1, &timing_map);
+            bm::chrono_taker tt1("05. serialize and save the histogram(SV)", 1, &timing_map);
             size_t serialized_size = 0;
             int res = bm::file_save_svector(hist1, "hist1.sv", &serialized_size, true);
             if (res!=0)
@@ -295,7 +398,7 @@ int main(void)
         }
 
         {
-            bm::chrono_taker tt1("5. serialize and save the histogram(RSC)", 1, &timing_map);
+            bm::chrono_taker tt1("06. serialize and save the histogram(RSC)", 1, &timing_map);
             size_t serialized_size = 0;
             int res = bm::file_save_svector(hist2, "hist2.sv", &serialized_size, true);
             if (res!=0)
@@ -304,15 +407,25 @@ int main(void)
                 cout << "RSC file size = " << serialized_size << endl;
         }
 
+        {
+            bm::chrono_taker tt1("07. serialize and save the adaptive histogram(RSC)", 1, &timing_map);
+            size_t serialized_size = 0;
+            int res = bm::file_save_svector(hist3, "hist3.sv", &serialized_size, true);
+            if (res!=0)
+                cerr << "Failed to save!" << endl;
+            else
+                cout << "Adaptive RSC file size = " << serialized_size << endl;
+        }
+
 
         unsigned long long sum1(0), sum2(0);
         {
-            bm::chrono_taker tt1("6. random access test (SV)", 1, &timing_map);
+            bm::chrono_taker tt1("08. random access test (SV)", 1, &timing_map);
             sum1 = access_bench1(hist1, svec, sampling_interval);
         }
 
         {
-            bm::chrono_taker tt1("7. random access test (RSC)", 1, &timing_map);
+            bm::chrono_taker tt1("09. random access test (RSC)", 1, &timing_map);
             sum2 = access_bench2(hist2, svec);
         }
 
@@ -320,6 +433,11 @@ int main(void)
         {
             cerr << "Control sum discrepancy!" << endl;
             return 1;
+        }
+
+        {
+            bm::chrono_taker tt1("10. random access test adaptive (RSC)", 1, &timing_map);
+            access_bench3(hist3, svec, rsc_test);
         }
 
         cout << endl;
