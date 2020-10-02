@@ -733,6 +733,13 @@ public:
     const bmatrix_type& get_bmatrix() const BMNOEXCEPT
         { return sv_.get_bmatrix(); }
 
+    /*! Get Rank-Select index pointer
+        @return NULL if sync() was not called to construct the index
+        @sa sync()
+    */
+    const rs_index_type* get_RS() const BMNOEXCEPT
+        { return bv_blocks_ptr_; }
+
     ///@}
     
 protected:
