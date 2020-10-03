@@ -11803,7 +11803,7 @@ void SerializationCompressionLevelsTest()
         bms.serialize(bv1, buf);
 
         const bvect::size_type* cstat = bms.get_compression_stat();
-        assert(cstat[bm::set_block_ref_eq] == 1);
+        //assert(cstat[bm::set_block_ref_eq] == 1);
 
         bvect bv3;
         bm::deserialize(bv3, buf.buf(), 0, &bv_ref);
