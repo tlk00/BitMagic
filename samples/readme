@@ -39,12 +39,14 @@ Tutorial: http://bitmagic.io/set-algebra.html
 
 
 
+
+
 Sparse vector (bit-transposed vector) for scalar integer types.
 
 
 ./svsample01 - basic example of sparse_vector<> container
 ./svsample02 - sparse_vector<> serialization example, also shows how to turn on 
-               XOR compression (http://bitmagic.io/bm-xor.html)
+               XOR compression (for more details: http://bitmagic.io/bm-xor.html)
 ./svsample03 - sparse_vector<> import, join, extract methods
 ./svsample04 - sparse_vector<> operations with NULL-able vectors and values
 ./svsample05 - set transformation algorithm (image) to translate one set to another
@@ -73,7 +75,7 @@ RSC sparse vector (Succinct vector based on Rank-Select methods) for scalar inte
                 See also: http://bitmagic.io/bm-xor.html
                 
 
-String sparse vector (bit-transposedvector) for ASCII(z) strings
+String sparse vector (bit-transposed vector) for ASCII(z) strings
 
 
 ./strsvsample01 - basic example of str_sparse_vector<> container, add values, optimize, iterate
@@ -125,4 +127,6 @@ More complex examples to illustrate mixed techniques and use cases:
 ./xsample08 - Example on how to build data model for Genomics Viewer using bit-intervals and succinct
               vectors. Example illustrates a toy rendering with ASCII art and data model range slicing.
               http://bitmagic.io/gen-layout.html
+
+./xsample09 - Another example on histogram construction using memory compact vectors.
 
