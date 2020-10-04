@@ -18,18 +18,19 @@ For more information please visit:  http://bitmagic.io
 
 /** \example xsample09.cpp
 
-    This example generates a RSC sparse vector with randomly assigned values.
+    Then it computes variants of density histograms of using
+    presense/absense (NOT NULL bit-vector) and bm::bvector<>::count_range()
+    function.
 
-    Then it computes a density histogram of those values using
-    presense/absense (NOT NULL bit-vector) and
-    bm::bvector<>::count_range() function.
+    @sa bm::bvector
+    @sa bm::bvector::find_reverse
+    @sa bm::bvector::find
 
     @sa bm::rank_range_split
-    @sa bm::bvector
+
     @sa bm::sparse_vector
-    @sa rsc_sparse_vector
-    @sa bm::bvector::get_enumerator
-    @sa bm::bvector::enumerator
+    @sa bm::rsc_sparse_vector
+    @sa bm::rsc_sparse_vector::get_back_inserter
 */
 
 /*! \file xsample09.cpp
@@ -146,7 +147,7 @@ void compute_historgam(sparse_vector_u32& hist_sv,
         } while (from < sz);
         bit.flush();
     }
-    hist_sv.optimize(tb);
+    hist_sv.optimize(tb); // memory compaction
 }
 
 /// Compute histogram as a RSC vector using fixed sampling interval.
@@ -195,7 +196,7 @@ void compute_rsc_historgam(rsc_sparse_vector_u32& hist_rsc,
 /// bins (but last) are the same weight
 ///
 static
-void compute_adaptive_histogram(rsc_sparse_vector_u32& hist_rsc,
+void compute_adaptive_rsc_histogram(rsc_sparse_vector_u32& hist_rsc,
                                 const rsc_sparse_vector_u32& csv,
                                 sparse_vector_u32::size_type sampling_size)
 {
@@ -203,10 +204,24 @@ void compute_adaptive_histogram(rsc_sparse_vector_u32& hist_rsc,
 
     assert(sampling_size);
 
+
+
     const bvector_type* bv_null = csv.get_null_bvector();
     assert(bv_null);
     bv_size_type data_set_size = bv_null->count();
-    bv_size_type split_rank = data_set_size / sampling_size;
+
+    // take a sample interval [0..sampling_size] as an example
+    //   this is not correct, because we cannot rely that it truly
+    //   represents the average population, but ok for a sample project
+    //
+    // in a real application we would have with a more sophisticated algorithm
+    // to determine the split rank
+    //
+    bv_size_type sampling_range_cnt = bv_null->count_range(0, sampling_size);
+    assert(sampling_range_cnt);
+
+
+    bv_size_type split_rank = data_set_size / sampling_range_cnt;
 
     bv_ranges_vector pair_vect;
     bm::rank_range_split(*bv_null, split_rank, pair_vect);
@@ -218,8 +233,10 @@ void compute_adaptive_histogram(rsc_sparse_vector_u32& hist_rsc,
         const auto& p = pair_vect[k]; // [from..to] sampling rank interval
         hist_rsc.push_back(p.first, split_rank);
     } // for
+
+    // the last one
     const auto& p = pair_vect[sz-1];
-    hist_rsc.push_back(p.first, data_set_size % sampling_size);
+    hist_rsc.push_back(p.first, data_set_size % sampling_range_cnt);
 
     hist_rsc.optimize(tb);
     hist_rsc.sync();
@@ -274,7 +291,7 @@ unsigned long long access_bench1(const sparse_vector_u32& hist_sv,
 ///
 /// Uses Rank-Select bit-transposed vector to read histogram values
 /// Sampling interval can be non-fixed (variadic, adaptive sampling).
-/// Mthod finds the intreval start and value using RSC container not NULL vector
+/// Method finds the interval start and value using RSC container not NULL vector
 static
 unsigned long long access_bench2(const rsc_sparse_vector_u32&   hist_rsc,
                     const std::vector<bvector_type::size_type>& sample_vec)
@@ -362,24 +379,78 @@ int main(void)
         }
 
         {
-            bm::chrono_taker tt1("01. Histogram construction (SV)) ", 1, &timing_map);
+            bm::chrono_taker tt1("01. Histogram 1 construction (SV)) ", 1, &timing_map);
             compute_historgam(hist1, rsc_test, sampling_interval);
         }
-        cout << "Histogram 1 size: " << hist1.size() << endl;
+        // explore some statistics on SV histogram 1
+        {
+            sparse_vector_u32::statistics st;
+            hist1.calc_stat(&st);
+
+            cout << "Histogram 1 (SV)" << endl;
+            cout << "  size: " << hist1.size() << endl;
+            cout << "  RAM size: " << st.memory_used << endl;
+            {
+                bm::chrono_taker tt1("05. Serialize and save the histogram 1 (SV)", 1, &timing_map);
+                size_t serialized_size = 0;
+                int res = bm::file_save_svector(hist1, "hist1.sv", &serialized_size, true);
+                if (res!=0)
+                    cerr << "Failed to save!" << endl;
+                else
+                    cout << "  file size: " << serialized_size << endl;
+            }
+        }
 
         {
-            bm::chrono_taker tt1("02. Histogram construction (RSC) ", 1, &timing_map);
+            bm::chrono_taker tt1("02. Histogram 2 construction (RSC) ", 1, &timing_map);
             compute_rsc_historgam(hist2, rsc_test, sampling_interval);
         }
-        cout << "Histogram 2 size=" << hist2.size() << endl;
-        cout << "Histogram 2 NOT NULL size: " << hist2.get_null_bvector()->count() << endl;
+        {
+            rsc_sparse_vector_u32::statistics st;
+            hist2.calc_stat(&st);
+
+            cout << "Histogram 2 (RSC)" << endl;
+            cout << "  size: " << hist2.size() << endl;
+            cout << "  NOT NULL count: " << hist2.get_null_bvector()->count() << endl;
+            cout << "  RAM size: " << st.memory_used << endl;
+
+            {
+                bm::chrono_taker tt1("06. Serialize and save histogram 2(RSC)", 1, &timing_map);
+                size_t serialized_size = 0;
+                int res = bm::file_save_svector(hist2, "hist2.sv", &serialized_size, true);
+                if (res!=0)
+                    cerr << "Failed to save!" << endl;
+                else
+                    cout << "  file size: " << serialized_size << endl;
+            }
+        }
 
         {
-            bm::chrono_taker tt1("03. Histogram (adaptive) construction (RSC) ", 1, &timing_map);
-            compute_adaptive_histogram(hist3, rsc_test, sampling_interval);
+            bm::chrono_taker tt1("03. Histogram 3 (adaptive) construction (RSC) ", 1, &timing_map);
+            compute_adaptive_rsc_histogram(hist3, rsc_test, sampling_interval);
+        }
+
+        {
+            rsc_sparse_vector_u32::statistics st;
+            hist3.calc_stat(&st);
+
+            cout << "Histogram 3 adaptive (RSC)" << endl;
+            cout << "  size: " << hist3.size() << endl;
+            cout << "  NOT NULL count: " << hist3.get_null_bvector()->count() << endl;
+            cout << "  RAM size: " << st.memory_used << endl;
+            {
+                bm::chrono_taker tt1("07. Serialize and save the adaptive histogram 3 (RSC)", 1, &timing_map);
+                size_t serialized_size = 0;
+                int res = bm::file_save_svector(hist3, "hist3.sv", &serialized_size, true);
+                if (res!=0)
+                    cerr << "Failed to save!" << endl;
+                else
+                    cout << "  file size: " << serialized_size << endl;
+            }
         }
 
         generate_access_samples(svec, test_size);
+        cout << endl;
         cout << "Access sample size = " << svec.size() << endl;
 
         {
@@ -387,45 +458,15 @@ int main(void)
             verify_histograms(hist2, hist1, sampling_interval);
         }
 
-        {
-            bm::chrono_taker tt1("05. serialize and save the histogram(SV)", 1, &timing_map);
-            size_t serialized_size = 0;
-            int res = bm::file_save_svector(hist1, "hist1.sv", &serialized_size, true);
-            if (res!=0)
-                cerr << "Failed to save!" << endl;
-            else
-                cout << "SV file size = " << serialized_size << endl;
-        }
-
-        {
-            bm::chrono_taker tt1("06. serialize and save the histogram(RSC)", 1, &timing_map);
-            size_t serialized_size = 0;
-            int res = bm::file_save_svector(hist2, "hist2.sv", &serialized_size, true);
-            if (res!=0)
-                cerr << "Failed to save!" << endl;
-            else
-                cout << "RSC file size = " << serialized_size << endl;
-        }
-
-        {
-            bm::chrono_taker tt1("07. serialize and save the adaptive histogram(RSC)", 1, &timing_map);
-            size_t serialized_size = 0;
-            int res = bm::file_save_svector(hist3, "hist3.sv", &serialized_size, true);
-            if (res!=0)
-                cerr << "Failed to save!" << endl;
-            else
-                cout << "Adaptive RSC file size = " << serialized_size << endl;
-        }
-
 
         unsigned long long sum1(0), sum2(0);
         {
-            bm::chrono_taker tt1("08. random access test (SV)", 1, &timing_map);
+            bm::chrono_taker tt1("08. Random access test H1 (SV)", 1, &timing_map);
             sum1 = access_bench1(hist1, svec, sampling_interval);
         }
 
         {
-            bm::chrono_taker tt1("09. random access test (RSC)", 1, &timing_map);
+            bm::chrono_taker tt1("09. Random access test H2 (RSC)", 1, &timing_map);
             sum2 = access_bench2(hist2, svec);
         }
 
@@ -436,7 +477,7 @@ int main(void)
         }
 
         {
-            bm::chrono_taker tt1("10. random access test adaptive (RSC)", 1, &timing_map);
+            bm::chrono_taker tt1("10. Random access test H3 adaptive (RSC)", 1, &timing_map);
             access_bench3(hist3, svec, rsc_test);
         }
 
