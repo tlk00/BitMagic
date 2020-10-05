@@ -76,15 +76,31 @@ bm::chrono_taker::duration_map_type  timing_map;
 
 /// Generate a test RSC vector with a randomly distributed values
 /// imitating distribution density of genome variations
-///
+/// it adds a huge area of empty in the middle to simulate chr centromere
 static
 void generate_test_data(rsc_sparse_vector_u32& csv, unsigned size)
 {
     BM_DECLARE_TEMP_BLOCK(tb)
+    unsigned cnt = 0;
 
+    // part one: dense
     {
-        unsigned cnt = 0;
         auto bit = csv.get_back_inserter(); // fastest way to add the data
+        for (unsigned i = 0; i < size/3; )
+        {
+            bit = cnt++;
+            unsigned nc = (unsigned)(rand() % 16);
+            bit.add_null(nc);
+
+            i+=nc+1;
+        } // for
+        bit.flush();
+    }
+    // part two: empty + dense again
+    {
+        auto bit = csv.get_back_inserter(); // fastest way to add the data
+        bit.add_null(size/3); // add huge emty space in the middle
+
         for (unsigned i = 0; i < size; )
         {
             bit = cnt++;
@@ -200,44 +216,21 @@ void compute_adaptive_rsc_histogram(rsc_sparse_vector_u32& hist_rsc,
                                 const rsc_sparse_vector_u32& csv,
                                 sparse_vector_u32::size_type sampling_size)
 {
+    assert(sampling_size);
     BM_DECLARE_TEMP_BLOCK(tb)
 
-    assert(sampling_size);
-
-
-
     const bvector_type* bv_null = csv.get_null_bvector();
-    assert(bv_null);
-    bv_size_type data_set_size = bv_null->count();
-
-    // take a sample interval [0..sampling_size] as an example
-    //   this is not correct, because we cannot rely that it truly
-    //   represents the average population, but ok for a sample project
-    //
-    // in a real application we would have with a more sophisticated algorithm
-    // to determine the split rank
-    //
-    bv_size_type sampling_range_cnt = bv_null->count_range(0, sampling_size);
-    assert(sampling_range_cnt);
-
-
-    bv_size_type split_rank = data_set_size / sampling_range_cnt;
+    bv_size_type split_rank = sampling_size;
 
     bv_ranges_vector pair_vect;
     bm::rank_range_split(*bv_null, split_rank, pair_vect);
 
-
     size_t sz = pair_vect.size();
-    for (size_t k = 0; k < sz-1; ++k)
+    for (size_t k = 0; k < sz; ++k)
     {
         const auto& p = pair_vect[k]; // [from..to] sampling rank interval
-        hist_rsc.push_back(p.first, split_rank);
+        hist_rsc.push_back(p.first, 0); // split_rank);
     } // for
-
-    // the last one
-    const auto& p = pair_vect[sz-1];
-    hist_rsc.push_back(p.first, data_set_size % sampling_range_cnt);
-
     hist_rsc.optimize(tb);
     hist_rsc.sync();
 }
@@ -361,8 +354,11 @@ int main(void)
     try
     {
         rsc_sparse_vector_u32                rsc_test;
+       bv_size_type                          data_set_size = 0;
 
         sparse_vector_u32                    hist1;
+        unsigned                             hist1_avg = 0;
+
         rsc_sparse_vector_u32                hist2;
         rsc_sparse_vector_u32                hist3;
 
@@ -373,9 +369,9 @@ int main(void)
         {
             const bvector_type* bv_null = rsc_test.get_null_bvector();
             assert(bv_null);
-            bv_size_type data_set_size =
-                    bv_null->count(); // number of elements in the data set
-            cout << "Number of elements in the data set: " << data_set_size << endl;
+            data_set_size = bv_null->count(); // number of elements in the data set
+            cout << "Data set size:                             " << rsc_test.size() << endl;
+            cout << "Number of elements/events in the data set: " << data_set_size << endl;
         }
 
         {
@@ -399,6 +395,17 @@ int main(void)
                 else
                     cout << "  file size: " << serialized_size << endl;
             }
+
+            // calculate sum and average value in historgam 1
+            //
+
+            unsigned h1_sum = 0;
+            auto it = hist1.begin();
+            auto it_end = hist1.end();
+            for (; it != it_end; ++it)
+                h1_sum += *it;
+            assert (h1_sum == data_set_size);
+            hist1_avg = h1_sum / hist1.size();
         }
 
         {
@@ -427,7 +434,7 @@ int main(void)
 
         {
             bm::chrono_taker tt1("03. Histogram 3 (adaptive) construction (RSC) ", 1, &timing_map);
-            compute_adaptive_rsc_histogram(hist3, rsc_test, sampling_interval);
+            compute_adaptive_rsc_histogram(hist3, rsc_test, hist1_avg);
         }
 
         {
