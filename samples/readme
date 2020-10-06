@@ -129,4 +129,5 @@ More complex examples to illustrate mixed techniques and use cases:
               http://bitmagic.io/gen-layout.html
 
 ./xsample09 - Another example on histogram construction using memory compact vectors.
+              http://bitmagic.io/bm-hist-compr.html
 

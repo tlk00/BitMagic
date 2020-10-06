@@ -1,5 +1,8 @@
 Density histogram construction using memory compact vectors.
 
+http://bitmagic.io/bm-hist-compr.html
+
+
 Example uses simulated data imitation human variations on chr1 (size wise).
 Rank-Select compressed vector used to keep the test data set.
 Then we run a few algorithms to construct density histograms as bit-transposed 
