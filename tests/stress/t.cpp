@@ -19677,6 +19677,43 @@ void TestSparseVector()
         }
     }}
 
+    // ---------------------------------------------------------
+    // keep range tests
+    {{
+        bm::sparse_vector<unsigned, bvect> sv(bm::use_null);
+        sv.push_back(1);
+        sv.push_back(1);
+        sv.push_back(1);
+
+        sv.keep_range(sv.size()+1, sv.size() + 2);
+        assert(sv.get(0) ==0);
+        assert(sv.get(1) ==0);
+        assert(sv.get(2) ==0);
+    }}
+    {{
+        bm::sparse_vector<unsigned, bvect> sv(bm::use_null);
+        sv.push_back(1);
+        sv.push_back(1);
+        sv.push_back(1);
+
+        sv.keep_range(0, 0);
+        assert(sv.get(0) ==1);
+        assert(sv.get(1) ==0);
+        assert(sv.get(2) ==0);
+    }}
+    {{
+        bm::sparse_vector<unsigned, bvect> sv(bm::use_null);
+        sv.push_back(1);
+        sv.push_back(1);
+        sv.push_back(1);
+
+        sv.keep_range(1, 2);
+        assert(sv.get(0) ==0);
+        assert(sv.get(1) ==1);
+        assert(sv.get(2) ==1);
+    }}
+
+
     cout << "svector Import test..." << endl;
     
     {{
@@ -23020,6 +23057,58 @@ void TestStrSparseVector()
 
           str_sv10.erase(0);
           assert(str_sv10.size() == 1);
+       }
+
+       // test merge
+       {
+          str_sparse_vector<char, bvect, 3> str_sv0;
+          str_sparse_vector<char, bvect, 3> str_sv1;
+
+          str_sv0.push_back("0");
+          str_sv0.push_back("1");
+          str_sv0.push_back("");
+          str_sv0.push_back("3");
+
+          str_sv1.push_back("");
+          str_sv1.push_back("");
+          str_sv1.push_back("2");
+          str_sv1.push_back("8");
+
+          str_sv1.keep_range(2, 2);
+          {
+              str_sv1.get(3, str, sizeof(str));
+              cmp = ::strcmp(str, "");
+              assert(cmp == 0);
+
+          }
+
+          str_sv0.merge(str_sv1);
+
+          str_sv0.get(2, str, sizeof(str));
+          cmp = ::strcmp(str, "2");
+          assert(cmp == 0);
+
+          str_sv0.remap();
+            {
+            str_sparse_vector<char, bvect, 3> str_sv;
+            str_sv.copy_range(str_sv0, 0, 1);
+
+            str_sparse_vector<char, bvect, 3> str_sv2;
+            str_sv2.copy_range(str_sv0, 2, 3);
+            str_sv.merge(str_sv2);
+
+            bool b = str_sv.equal(str_sv0);
+            assert(b);
+
+
+            }
+
+            {
+            str_sparse_vector<char, bvect, 3> str_sv;
+            str_sv.merge(str_sv0);
+            bool b = str_sv.equal(str_sv0);
+            assert(!b); // destucted vector
+            }
        }
        
        // test decode
