@@ -1092,6 +1092,29 @@ public:
                     size_type left, size_type right,
                     bm::null_support splice_null = bm::use_null);
 
+    /**
+        \brief merge with another sparse vector using OR operation
+        Merge is different from join(), because it borrows data from the source
+        vector, so it gets modified (destructive join)
+
+        \param tr_sv - [in, out]argument vector to join with (vector mutates)
+
+        \return self reference
+     */
+     str_sparse_vector<CharType, BV, MAX_STR_SIZE>&
+     merge(str_sparse_vector<CharType, BV, MAX_STR_SIZE>& str_sv);
+
+    /**
+        Keep only specified interval in the sparse vector, clear all other
+        elements.
+
+        \param left  - interval start
+        \param right - interval end (closed interval)
+        \param splice_null - "use_null" copy range for NULL vector or not
+     */
+     void keep_range(size_type left, size_type right,
+                    bm::null_support splice_null = bm::use_null);
+
     ///@}
 
     // ------------------------------------------------------------
@@ -1900,6 +1923,51 @@ void str_sparse_vector<CharType, BV, MAX_STR_SIZE>::copy_range(
     this->resize(sv.size());
 }
 
+//---------------------------------------------------------------------
+
+template<class CharType, class BV, unsigned MAX_STR_SIZE>
+str_sparse_vector<CharType, BV, MAX_STR_SIZE>&
+str_sparse_vector<CharType, BV, MAX_STR_SIZE>::merge(str_sparse_vector<CharType, BV, MAX_STR_SIZE>& str_sv)
+{
+    size_type arg_size = str_sv.size();
+    if (this->size_ < arg_size)
+        resize(arg_size);
+
+    // there is an assumption here that we only need to copy remap flags once
+    // because we merge matrices with the same remaps
+    // otherwise - undefined behavior
+    //
+    if (remap_flags_ != str_sv.remap_flags_)
+    {
+        remap_flags_ = str_sv.remap_flags_;
+        remap_matrix1_ = str_sv.remap_matrix1_;
+        remap_matrix2_ = str_sv.remap_matrix2_;
+    }
+
+    bvector_type* bv_null = this->get_null_bvect();
+    unsigned plains = bv_null ? this->stored_plains() : this->plains();
+
+    this->merge_matr(str_sv.bmatr_, plains);
+
+    // our vector is NULL-able but argument is not (assumed all values are real)
+    if (bv_null && !str_sv.is_nullable())
+        bv_null->set_range(0, arg_size-1);
+
+    return *this;
+
+}
+
+//---------------------------------------------------------------------
+
+template<class CharType, class BV, unsigned MAX_STR_SIZE>
+void str_sparse_vector<CharType, BV, MAX_STR_SIZE>::keep_range(
+                size_type left, size_type right,
+                bm::null_support splice_null)
+{
+    if (right < left)
+        bm::xor_swap(left, right);
+    this->keep_range_no_check(left, right, splice_null);
+}
 
 //---------------------------------------------------------------------
 

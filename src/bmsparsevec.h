@@ -764,7 +764,19 @@ public:
     void copy_range(const sparse_vector<Val, BV>& sv,
                     size_type left, size_type right,
                     bm::null_support splice_null = bm::use_null);
-    
+
+
+    /**
+        Keep only specified interval in the sparse vector, clear all other
+        elements.
+
+        \param left  - interval start
+        \param right - interval end (closed interval)
+        \param splice_null - "use_null" copy range for NULL vector or not
+     */
+     void keep_range(size_type left, size_type right,
+                    bm::null_support splice_null = bm::use_null);
+
     /**
         @brief Apply value filter, defined by mask vector
      
@@ -1854,56 +1866,51 @@ sparse_vector<Val, BV>::merge(sparse_vector<Val, BV>& sv)
 {
     size_type arg_size = sv.size();
     if (this->size_ < arg_size)
-    {
         resize(arg_size);
-    }
+
     bvector_type* bv_null = this->get_null_bvect();
-    unsigned plains;
-    if (bv_null)
-        plains = this->stored_plains();
-    else
-        plains = this->plains();
-    
-    for (unsigned j = 0; j < plains; ++j)
-    {
-        bvector_type* arg_bv = sv.bmatr_.get_row(j);//sv.plains_[j];
-        if (arg_bv)
-        {
-            bvector_type* bv = this->bmatr_.get_row(j);//this->plains_[j];
-            if (!bv)
-                bv = this->get_plain(j);
-            bv->merge(*arg_bv);
-        }
-    } // for j
-    
+    unsigned plains = bv_null ? this->stored_plains() : this->plains();
+
+    this->merge_matr(sv.bmatr_, plains);
+
     // our vector is NULL-able but argument is not (assumed all values are real)
     if (bv_null && !sv.is_nullable())
-    {
         bv_null->set_range(0, arg_size-1);
-    }
-    
+
     return *this;
 }
 
 //---------------------------------------------------------------------
 
 template<class Val, class BV>
-void sparse_vector<Val, BV>::copy_range(const sparse_vector<Val, BV>& sv,
-                                        typename sparse_vector<Val, BV>::size_type left,
-                                        typename sparse_vector<Val, BV>::size_type right,
-                                        bm::null_support splice_null)
+void sparse_vector<Val, BV>::copy_range(
+                            const sparse_vector<Val, BV>& sv,
+                            typename sparse_vector<Val, BV>::size_type left,
+                            typename sparse_vector<Val, BV>::size_type right,
+                            bm::null_support splice_null)
 {
     if (left > right)
         bm::xor_swap(left, right);
-    //this->clear();
     this->copy_range_plains(sv, left, right, splice_null);
     this->resize(sv.size());
 }
 //---------------------------------------------------------------------
 
 template<class Val, class BV>
+void sparse_vector<Val, BV>::keep_range(size_type left, size_type right,
+            bm::null_support splice_null)
+{
+    if (right < left)
+        bm::xor_swap(left, right);
+    this->keep_range_no_check(left, right, splice_null);
+}
+
+
+//---------------------------------------------------------------------
+
+template<class Val, class BV>
 void sparse_vector<Val, BV>::filter(
-                    const typename sparse_vector<Val, BV>::bvector_type& bv_mask)
+                const typename sparse_vector<Val, BV>::bvector_type& bv_mask)
 {
     bvector_type* bv_null = this->get_null_bvect();
     unsigned plains;

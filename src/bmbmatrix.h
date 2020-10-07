@@ -307,8 +307,11 @@ public:
     size_type size() const BMNOEXCEPT { return size_; }
     
     void resize(size_type new_size);
-    
+
     void clear_range(size_type left, size_type right, bool set_null);
+
+    void keep_range_no_check(size_type left, size_type right,
+                             bm::null_support splice_null);
 
     /*! \brief resize to zero, free memory
         @param free_mem - fully destroys the plane vectors if true
@@ -452,6 +455,12 @@ public:
 protected:
     void copy_from(const base_sparse_vector<Val, BV, MAX_SIZE>& bsv);
 
+    /**
+        Merge plane bvectors from an outside base matrix
+        Note: outside base matrix gets destroyed
+     */
+    void merge_matr(bmatrix_type& bmatr, unsigned psize);
+
     /*!
         clear column in all value plains
         \param plain_idx - row (plain index to start from)
@@ -476,6 +485,7 @@ protected:
         insert (NOT) NULL value
     */
     void insert_null(size_type idx, bool not_null);
+
 
 protected:
     typedef typename bvector_type::block_idx_type block_idx_type;
@@ -648,7 +658,6 @@ void basic_bmatrix<BV>::copy_from(const basic_bmatrix<BV>& bbm)
     }
 
 }
-
 
 //---------------------------------------------------------------------
 
@@ -1239,6 +1248,25 @@ void base_sparse_vector<Val, BV, MAX_SIZE>::copy_from(
 //---------------------------------------------------------------------
 
 template<class Val, class BV, unsigned MAX_SIZE>
+void base_sparse_vector<Val, BV, MAX_SIZE>::merge_matr(
+                            bmatrix_type& bmatr, unsigned psize)
+{
+    for (unsigned j = 0; j < psize; ++j)
+    {
+        bvector_type* arg_bv = bmatr.get_row(j);
+        if (arg_bv)
+        {
+            bvector_type* bv = this->bmatr_.get_row(j);
+            if (!bv) // TODO: borrow the whole arg_bv vector
+                bv = this->get_plain(j);
+            bv->merge(*arg_bv);
+        }
+    } // for j
+}
+
+//---------------------------------------------------------------------
+
+template<class Val, class BV, unsigned MAX_SIZE>
 void base_sparse_vector<Val, BV, MAX_SIZE>::swap(
                  base_sparse_vector<Val, BV, MAX_SIZE>& bsv) BMNOEXCEPT
 {
@@ -1291,6 +1319,20 @@ void base_sparse_vector<Val, BV, MAX_SIZE>::clear_range(
         if (bv_null)
             bv_null->set_range(left, right, false);
     }
+}
+
+//---------------------------------------------------------------------
+
+template<class Val, class BV, unsigned MAX_SIZE>
+void base_sparse_vector<Val, BV, MAX_SIZE>::keep_range_no_check(
+                        size_type left, size_type right,
+                        bm::null_support splice_null)
+{
+    if (left)
+        this->clear_range(0, left-1, (splice_null == bm::use_null));
+    size_type sz = size();
+    if (right < sz)
+        this->clear_range(right + 1, sz, (splice_null == bm::use_null));
 }
 
 //---------------------------------------------------------------------
