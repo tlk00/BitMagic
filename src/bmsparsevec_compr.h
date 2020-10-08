@@ -371,13 +371,26 @@ public:
     /*! \brief return true if vector is empty
         \return true if empty
     */
-    bool empty() const { return sv_.empty(); }
+    bool empty() const BMNOEXCEPT { return sv_.empty(); }
 
     /**
         \brief recalculate size to exclude tail NULL elements
         After this call size() will return the true size of the vector
      */
     void sync_size() BMNOEXCEPT;
+
+    /*
+       \brief Returns count of not NULL elements (population)
+              in the given range [left..right]
+       Uses rank-select index to accelerate the search (after sync())
+
+       \param left   - index of first bit start counting from
+       \param right  - index of last bit
+
+       @sa sync
+    */
+    size_type
+    count_range_notnull(size_type left, size_type right) const BMNOEXCEPT;
     
     ///@}
 
@@ -738,7 +751,7 @@ public:
         @sa sync()
     */
     const rs_index_type* get_RS() const BMNOEXCEPT
-        { return bv_blocks_ptr_; }
+        { return in_sync_ ? bv_blocks_ptr_ : 0; }
 
     ///@}
     
@@ -1527,6 +1540,25 @@ void rsc_sparse_vector<Val, SV>::merge_not_null(rsc_sparse_vector<Val, SV>& csv)
     sv_.merge(csv.sv_);
 }
 
+//---------------------------------------------------------------------
+
+template<class Val, class SV>
+typename rsc_sparse_vector<Val, SV>::size_type
+rsc_sparse_vector<Val, SV>::count_range_notnull(
+                                        size_type left,
+                                        size_type right) const BMNOEXCEPT
+{
+    if (left > right)
+        bm::xor_swap(left, right);
+
+    const bvector_type* bv_null = sv_.get_null_bvector();
+    size_type range = right - left;
+    if ((range < rs3_border0) || !in_sync_)
+    {
+        return bv_null->count_range_no_check(left, right);
+    }
+    return bv_null->count_range_no_check(left, right, *bv_blocks_ptr_);
+}
 
 //---------------------------------------------------------------------
 //

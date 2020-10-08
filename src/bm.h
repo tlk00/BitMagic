@@ -1335,6 +1335,16 @@ public:
 
 
     /*!
+        Returns count of 1 bits in the given range [left..right]
+        Function expects that caller guarantees that left < right
+
+        @sa count_range
+    */
+    size_type count_range_no_check(size_type left,
+                                   size_type right,
+                                const rs_index_type&  rs_idx) const BMNOEXCEPT;
+
+    /*!
        \brief Returns true if all bits in the range are 1s (saturated interval)
        Function uses closed interval [left, right]
 
@@ -3002,24 +3012,29 @@ bvector<Alloc>::count_range(size_type left,
                             size_type right,
                             const rs_index_type&  rs_idx) const BMNOEXCEPT
 {
-    BM_ASSERT(left <= right);
-
     if (left > right)
         bm::xor_swap(left, right);
-
     BM_ASSERT_THROW(right < bm::id_max, BM_ERR_RANGE);
+    return count_range_no_check(left, right, rs_idx);
+}
 
+// -----------------------------------------------------------------------
+
+template<typename Alloc>
+typename bvector<Alloc>::size_type
+bvector<Alloc>::count_range_no_check(size_type left,
+                                     size_type right,
+                               const rs_index_type&  rs_idx) const BMNOEXCEPT
+{
+    BM_ASSERT(left <= right);
     if (left == right)
         return this->test(left);
-
     size_type cnt_l, cnt_r;
     if (left)
         cnt_l = this->count_to(left-1, rs_idx);
     else
         cnt_l = left; // == 0
-    
     cnt_r = this->count_to(right, rs_idx);
-    
     return cnt_r - cnt_l;
 }
 

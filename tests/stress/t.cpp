@@ -28632,6 +28632,48 @@ void TestCompressSparseVector()
 
     }
 
+    // count_range_notnull()
+    {
+        rsc_sparse_vector_u32 csv1;
+        auto cnt = csv1.count_range_notnull(0, 10);
+        assert(!cnt);
+
+        for (unsigned i=0; i<1000; ++i)
+        {
+            csv1.push_back(i, 3);
+        }
+        for (unsigned i=1000; i<100000000; i+=7)
+        {
+            csv1.push_back(i, 3);
+        }
+        for (unsigned pass = 0; pass < 2; ++pass)
+        {
+            cnt = csv1.count_range_notnull(0, 0);
+            assert(cnt==1);
+            cnt = csv1.count_range_notnull(0, 9);
+            assert(cnt==10);
+
+            auto sz = csv1.size();
+            for (unsigned j = 0; j < sz; ++j, --sz)
+            {
+                cnt = csv1.count_range_notnull(j, sz);
+                const bvect* bv = csv1.get_null_bvector();
+                auto c = bv->count_range(j, sz);
+                assert(cnt == c);
+
+                const auto* rs_idx = csv1.get_RS();
+                if (rs_idx)
+                {
+                    auto c2 = bv->count_range(j, sz, *rs_idx);
+                    assert(c2 == cnt);
+                }
+            }
+            csv1.optimize();
+            csv1.sync();
+        }
+    }
+
+
     // const_iterator tests
     {
         {
