@@ -255,7 +255,10 @@ void check_sparse(const str_sparse_vect& str_sv, const string_vector& str_vec)
         str_sv.get(i, s);
         const string& s_control = str_vec[i];
         if (s != s_control)
+        {
+            cout << "idx=" << i <<  s << "!=" << s_control << endl;
             throw runtime_error("Error. element comparison failed!");
+        }
     } // for
     std::cout << "Check ok. Dictionary size = " << str_sv.size() << std:: endl;
 }
@@ -501,7 +504,7 @@ int main(int argc, char *argv[])
                 bi.flush();
             }
             
-            // build remapped (dense) sparse vector
+            // build remapped (dense) succinct vector
             // (this should be final), no more edits in this form
             if (is_remap)
             {
@@ -513,19 +516,17 @@ int main(int argc, char *argv[])
             BM_DECLARE_TEMP_BLOCK(tb)
             str_sv.optimize(tb); // memory optimization after load
         }
-        
-        // save SV vector to file
-        if (!sv_out_name.empty() && !str_sv.empty())
-        {
-            bm::chrono_taker tt1("7. Save sparse vector", 1, &timing_map);
-            file_save_svector(str_sv, sv_out_name, 0, is_xor);
-        }
-        
+
         if (!sv_in_name.empty())
         {
             {
                 bm::chrono_taker tt1("8. Load sparse vector", 1, &timing_map);
                 file_load_svector(str_sv, sv_in_name);
+            }
+            if (str_sv.empty())
+            {
+                cout << "Input vector empty!" << endl;
+                exit(1);
             }
             if (str_vec.empty())
             {
@@ -537,6 +538,23 @@ int main(int argc, char *argv[])
                 } // for
             }
         }
+
+        // save SV vector to file
+        if (!sv_out_name.empty() && !str_sv.empty())
+        {
+            bm::chrono_taker tt1("7. Save sparse vector", 1, &timing_map);
+            file_save_svector(str_sv, sv_out_name, 0, is_xor);
+
+            str_sparse_vect    str_sv_control;
+            file_load_svector(str_sv_control, sv_out_name);
+            bool eq = str_sv.equal(str_sv_control);
+            if (!eq)
+            {
+                cerr << "Serialization control failed" << endl;
+                assert(0); exit(1);
+            }
+        }
+        
 
         
         if (is_diag)
