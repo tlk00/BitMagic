@@ -48,7 +48,7 @@ namespace bm
    \brief sparse vector for strings with compression using bit transposition method
  
    Initial string is bit-transposed into bit-planes so collection may use less
-   memory due to prefix sum (GAP) compression in bit-plains.
+   memory due to prefix sum (GAP) compression in bit-planes.
  
    @ingroup sv
 */
@@ -73,9 +73,9 @@ public:
     struct statistics : public bv_statistics
     {};
     
-    enum octet_plains
+    enum octet_planes
     {
-        sv_octet_plains = MAX_STR_SIZE
+        sv_octet_planes = MAX_STR_SIZE
     };
 
     /**
@@ -551,7 +551,7 @@ public:
         size_type sz = size_type((str_size < MAX_STR_SIZE) ? str_size : MAX_STR_SIZE-1);
         if (!sz)
         {
-            this->clear_value_plains_from(0, idx);
+            this->clear_value_planes_from(0, idx);
             return;
         }
         unsigned i = 0;
@@ -571,7 +571,7 @@ public:
         if (idx > sz)
             return;
         this->bmatr_.set_octet(idx, sz, 0);
-        this->clear_value_plains_from(unsigned(sz*8+1), idx);
+        this->clear_value_planes_from(unsigned(sz*8+1), idx);
     }
     
     /*!
@@ -665,7 +665,7 @@ public:
     void clear() BMNOEXCEPT { clear_all(true); }
 
     /*!
-        \brief clear range (assign bit 0 for all plains)
+        \brief clear range (assign bit 0 for all planes)
         \param left  - interval start
         \param right - interval end (closed interval)
         \param set_null - set cleared values to unassigned (NULL)
@@ -703,7 +703,7 @@ public:
     /*! \brief get maximum string length capacity
         \return maximum string length sparse vector can take
     */
-    static size_type max_str() { return sv_octet_plains; }
+    static size_type max_str() { return sv_octet_planes; }
     
     /*! \brief get effective string length used in vector
         Calculate and returns efficiency, how close are we
@@ -731,7 +731,7 @@ public:
     ///@{
 
     /*!
-        \brief run memory optimization for all vector plains
+        \brief run memory optimization for all vector planes
         \param temp_block - pre-allocated memory block to avoid unnecessary re-allocs
         \param opt_mode - requested compression depth
         \param stat - memory allocation statistics after optimization
@@ -830,7 +830,7 @@ public:
     void remap();
 
     /*!
-        Calculate flags which octets are present on each byte-plain.
+        Calculate flags which octets are present on each byte-plane.
         @internal
     */
     void calc_octet_stat(octet_freq_matrix_type& octet_matrix) const BMNOEXCEPT;
@@ -847,7 +847,7 @@ public:
     /*!
         remap string from external (ASCII) system to matrix internal code
         @return true if remapping was ok, false if found incorrect value
-                for the plain
+                for the plane
         @internal
     */
     static
@@ -870,7 +870,7 @@ public:
     /*!
         remap string from internal code to external (ASCII) system
         @return true if remapping was ok, false if found incorrect value
-                for the plain
+                for the plane
         @internal
     */
     static
@@ -1047,7 +1047,7 @@ public:
             return;
         if (idx_from < this->size_) // in case it touches existing elements
         {
-            // clear all plains in the range to provide corrrect import of 0 values
+            // clear all planes in the range to provide corrrect import of 0 values
             this->clear_range(idx_from, idx_from + imp_size - 1);
         }
         import_no_check(cmatr, idx_from, imp_size);
@@ -1127,7 +1127,7 @@ public:
      
         \param sv        - sparse vector for comparison
         \param null_able - flag to consider NULL vector in comparison (default)
-                           or compare only value content plains
+                           or compare only value content planes
      
         \return true, if it is the same
     */
@@ -1202,13 +1202,13 @@ protected:
                         str[i] ^= mask;
                     }
                 } // for j
-                if (n_bits) // set transposed bits to the target plain
+                if (n_bits) // set transposed bits to the target plane
                 {
-                    unsigned plain = i*8 + bi;
-                    bvector_type* bv = this->bmatr_.get_row(plain);
+                    unsigned plane = i*8 + bi;
+                    bvector_type* bv = this->bmatr_.get_row(plane);
                     if (!bv)
                     {
-                        bv = this->bmatr_.construct_row(plain);
+                        bv = this->bmatr_.construct_row(plane);
                         bv->init();
                     }
                     bv->set(&bit_list[0], n_bits, BM_SORTED);
@@ -1411,7 +1411,7 @@ void str_sparse_vector<CharType, BV, MAX_STR_SIZE>::set_value_no_null(
         CharType ch = str[i];
         if (!ch)
         {
-            this->clear_value_plains_from(i*8, idx);
+            this->clear_value_planes_from(i*8, idx);
             return;
         }
         
@@ -1421,7 +1421,7 @@ void str_sparse_vector<CharType, BV, MAX_STR_SIZE>::set_value_no_null(
             BM_ASSERT(remap_value);
             if (!remap_value) // unknown dictionary element
             {
-                this->clear_value_plains_from(i*8, idx);
+                this->clear_value_planes_from(i*8, idx);
                 return;
             }
             ch = CharType(remap_value);
@@ -1451,7 +1451,7 @@ void str_sparse_vector<CharType, BV, MAX_STR_SIZE>::insert_value_no_null(
         CharType ch = str[i];
         if (!ch)
         {
-            this->insert_clear_value_plains_from(i*8, idx);
+            this->insert_clear_value_planes_from(i*8, idx);
             return;
         }
         
@@ -1461,7 +1461,7 @@ void str_sparse_vector<CharType, BV, MAX_STR_SIZE>::insert_value_no_null(
             BM_ASSERT(remap_value);
             if (!remap_value) // unknown dictionary element
             {
-                this->insert_clear_value_plains_from(i*8, idx);
+                this->insert_clear_value_planes_from(i*8, idx);
                 return;
             }
             ch = CharType(remap_value);
@@ -1642,10 +1642,10 @@ str_sparse_vector<CharType, BV, MAX_STR_SIZE>::effective_max_str()
 {
     for (int i = MAX_STR_SIZE-1; i >= 0; --i)
     {
-        unsigned octet_plain = unsigned(i) * unsigned(sizeof(CharType)) * 8;
+        unsigned octet_plane = unsigned(i) * unsigned(sizeof(CharType)) * 8;
         for (unsigned j = 0; j < sizeof(CharType) * 8; ++j)
         {
-            if (this->bmatr_.row(octet_plain+j))
+            if (this->bmatr_.row(octet_plane+j))
                 return unsigned(i)+1;
         } // for j
     } // for i
@@ -1919,7 +1919,7 @@ void str_sparse_vector<CharType, BV, MAX_STR_SIZE>::copy_range(
     remap_matrix1_ = sv.remap_matrix1_;
     remap_matrix2_ = sv.remap_matrix2_;
 
-    this->copy_range_plains(sv, left, right, splice_null);
+    this->copy_range_planes(sv, left, right, splice_null);
     this->resize(sv.size());
 }
 
@@ -1945,9 +1945,9 @@ str_sparse_vector<CharType, BV, MAX_STR_SIZE>::merge(str_sparse_vector<CharType,
     }
 
     bvector_type* bv_null = this->get_null_bvect();
-    unsigned plains = bv_null ? this->stored_plains() : this->plains();
+    unsigned planes = bv_null ? this->stored_planes() : this->planes();
 
-    this->merge_matr(str_sv.bmatr_, plains);
+    this->merge_matr(str_sv.bmatr_, planes);
 
     // our vector is NULL-able but argument is not (assumed all values are real)
     if (bv_null && !str_sv.is_nullable())

@@ -3236,7 +3236,7 @@ unsigned bit_convert_to_gap(T*  dest,
         unsigned mask = 1;
         while (mask)
         {
-            // Now plain bitshifting. TODO: Optimization wanted.
+            // Now plane bitshifting. TODO: Optimization wanted.
 
             bitval_next = val & mask ? 1 : 0;
             if (bitval != bitval_next)
@@ -11804,6 +11804,7 @@ void SerializationCompressionLevelsTest()
 
         const bvect::size_type* cstat = bms.get_compression_stat();
         //assert(cstat[bm::set_block_ref_eq] == 1);
+        assert(cstat[bm::set_block_xor_ref32] == 1);
 
         bvect bv3;
         bm::deserialize(bv3, buf.buf(), 0, &bv_ref);
@@ -13186,11 +13187,13 @@ void TestSparseVectorSerialization2()
         {
             const bvect::size_type* cstat = sv_serializer.get_bv_serializer().get_compression_stat();
 //            assert(cstat[bm::set_block_ref_eq]==1);
+            assert(cstat[bm::set_block_xor_ref32] == 1);
         }
         sv_serializer.serialize(sv3i, sv_lay3);
         {
             const bvect::size_type* cstat = sv_serializer.get_bv_serializer().get_compression_stat();
 //            assert(cstat[bm::set_block_ref_eq]==1);
+            assert(cstat[bm::set_block_xor_ref32] == 1);
         }
 
         // ----------
@@ -15936,24 +15939,24 @@ void DNACompressionTest()
         { 'A', 'C', 'G', 'T', 'A', 'C', 'G', 'A', 'N', 'A', 'C', 'G' };
     
     const unsigned arr_size = bm::set_block_size*4;
-    const unsigned arr_plain_size = arr_size / 8;    
+    const unsigned arr_plane_size = arr_size / 8;
     
     unsigned char BM_VECT_ALIGN block1[arr_size] BM_VECT_ALIGN_ATTR = {0,};
 
-    unsigned char BM_VECT_ALIGN tmatrix1[8][arr_plain_size] BM_VECT_ALIGN_ATTR;
+    unsigned char BM_VECT_ALIGN tmatrix1[8][arr_plane_size] BM_VECT_ALIGN_ATTR;
     unsigned BM_VECT_ALIGN distance1[8][8] BM_VECT_ALIGN_ATTR;
     unsigned char pc_vector1[8] = {0,};
     unsigned pc_vector_stat1[bm::ibpc_end];
 /*
-    unsigned   BM_ALIGN16 tmatrix2[32][bm::set_block_plain_size] BM_ALIGN16ATTR;
+    unsigned   BM_ALIGN16 tmatrix2[32][bm::set_block_plane_size] BM_ALIGN16ATTR;
     unsigned  
-    BM_ALIGN16 distance2[bm::set_block_plain_cnt][bm::set_block_plain_cnt] BM_ALIGN16ATTR;
+    BM_ALIGN16 distance2[bm::set_block_plane_cnt][bm::set_block_plane_cnt] BM_ALIGN16ATTR;
     unsigned char pc_vector2[32] = {0,};
 
 
-    unsigned   BM_ALIGN16 tmatrix3[32][bm::set_block_plain_size] BM_ALIGN16ATTR;
+    unsigned   BM_ALIGN16 tmatrix3[32][bm::set_block_plane_size] BM_ALIGN16ATTR;
     unsigned  
-    BM_ALIGN16 distance3[bm::set_block_plain_cnt][bm::set_block_plain_cnt] BM_ALIGN16ATTR;
+    BM_ALIGN16 distance3[bm::set_block_plane_cnt][bm::set_block_plane_cnt] BM_ALIGN16ATTR;
     unsigned char pc_vector3[32] = {0,};
 */
     
@@ -15986,16 +15989,16 @@ void DNACompressionTest()
         
     bm::vect_bit_transpose<unsigned char, 
                            8, 
-                           arr_plain_size>
+                           arr_plane_size>
                            (block1, arr_size, tmatrix1);
     
     bm::tmatrix_distance<unsigned char, 
                          8, 
-                         arr_plain_size>
+                         arr_plane_size>
                          (tmatrix1, distance1);
     
-    cout << "ALL count=" << sizeof(char)*8*arr_plain_size << endl;
-    bm::bit_iblock_make_pcv<unsigned char, 8, arr_plain_size>(distance1, pc_vector1);
+    cout << "ALL count=" << sizeof(char)*8*arr_plane_size << endl;
+    bm::bit_iblock_make_pcv<unsigned char, 8, arr_plane_size>(distance1, pc_vector1);
     
     bm::bit_iblock_pcv_stat(pc_vector1, pc_vector1 + 8, pc_vector_stat1);
     
@@ -16063,8 +16066,8 @@ void DNACompressionTest()
 
     bm::bit_iblock_reduce(tmatrix1, pc_vector1, pc_vector1+32, tmatrix2);
     bm::tmatrix_distance<unsigned, 
-                         bm::set_block_plain_cnt, 
-                         bm::set_block_plain_size>
+                         bm::set_block_plane_cnt,
+                         bm::set_block_plane_size>
                          (tmatrix2, distance2);    
     
     bm::bit_iblock_make_pcv(distance2, pc_vector2);
@@ -16097,7 +16100,7 @@ void DNACompressionTest()
                  << " Humming=" << distance2[j][n_row] << endl; 
              {
                 const unsigned* r1 = tmatrix2[j];
-                for (unsigned i = 0; i < bm::set_block_plain_size; ++i)
+                for (unsigned i = 0; i < bm::set_block_plane_size; ++i)
                 {
                     cout << hex << r1[i] << " ";
                 }
@@ -16114,8 +16117,8 @@ void DNACompressionTest()
     bm::bit_iblock_reduce(tmatrix2, pc_vector2, pc_vector2+32, tmatrix3);
 
     bm::tmatrix_distance<unsigned, 
-                         bm::set_block_plain_cnt, 
-                         bm::set_block_plain_size>
+                         bm::set_block_plane_cnt,
+                         bm::set_block_plane_size>
                          (tmatrix3, distance3);    
     
     bm::bit_iblock_make_pcv(distance3, pc_vector3);
@@ -16148,7 +16151,7 @@ void DNACompressionTest()
                  << " Humming=" << distance3[j][n_row] << endl; 
              {
                 const unsigned* r1 = tmatrix3[j];
-                for (unsigned i = 0; i < bm::set_block_plain_size; ++i)
+                for (unsigned i = 0; i < bm::set_block_plane_size; ++i)
                 {
                     cout << hex << r1[i] << " ";
                 }
@@ -16171,7 +16174,7 @@ void BitBlockTransposeTest()
 
     bm::word_t BM_ALIGN16 block1[bm::set_block_size] BM_ALIGN16ATTR = {0,};
     bm::word_t BM_ALIGN16 block2[bm::set_block_size] BM_ALIGN16ATTR = {0xFF,};
-    unsigned   BM_ALIGN16 tmatrix1[32][bm::set_block_plain_size] BM_ALIGN16ATTR;
+    unsigned   BM_ALIGN16 tmatrix1[32][bm::set_block_plane_size] BM_ALIGN16ATTR;
 
 
     cout << "---------------------------- BitTransposeTest" << endl;
@@ -16184,13 +16187,13 @@ void BitBlockTransposeTest()
     }
 
     bm::vect_bit_transpose<unsigned, 
-                           bm::set_block_plain_cnt, 
-                           bm::set_block_plain_size>
+                           bm::set_block_plane_cnt,
+                           bm::set_block_plane_size>
                            (block1, bm::set_block_size, tmatrix1);
 
     bm::vect_bit_trestore<unsigned, 
-                           bm::set_block_plain_cnt, 
-                           bm::set_block_plain_size>
+                           bm::set_block_plane_cnt,
+                           bm::set_block_plane_size>
                            (tmatrix1, block2);
 
     for (unsigned i = 0; i < bm::set_block_size; ++i)
@@ -16202,20 +16205,20 @@ void BitBlockTransposeTest()
     }
 
     {
-    unsigned BM_ALIGN16 distance[bm::set_block_plain_cnt][bm::set_block_plain_cnt];
+    unsigned BM_ALIGN16 distance[bm::set_block_plane_cnt][bm::set_block_plane_cnt];
     bm::tmatrix_distance<unsigned, 
-                         bm::set_block_plain_cnt, 
-                         bm::set_block_plain_size>
+                         bm::set_block_plane_cnt,
+                         bm::set_block_plane_size>
                          (tmatrix1, distance);
     
     PrintDistanceMatrix(distance);
 
     // distance matrix verification:
     {
-    for (unsigned i = 0; i < bm::set_block_plain_cnt; ++i)
+    for (unsigned i = 0; i < bm::set_block_plane_cnt; ++i)
     {
         const unsigned* row = distance[i];
-        for (unsigned j = i; j < bm::set_block_plain_cnt; ++j)
+        for (unsigned j = i; j < bm::set_block_plane_cnt; ++j)
         {
             if (i == j)
             {
@@ -16256,12 +16259,12 @@ void BitBlockTransposeTest()
     }
 
     bm::vect_bit_transpose<unsigned, 
-                           bm::set_block_plain_cnt, 
-                           bm::set_block_plain_size>
+                           bm::set_block_plane_cnt,
+                           bm::set_block_plane_size>
                            (block1, bm::set_block_size, tmatrix1);
     bm::vect_bit_trestore<unsigned, 
-                           bm::set_block_plain_cnt, 
-                           bm::set_block_plain_size>
+                           bm::set_block_plane_cnt,
+                           bm::set_block_plane_size>
                            (tmatrix1, block2);
 
 
@@ -16281,12 +16284,12 @@ void BitBlockTransposeTest()
     }
 
     bm::vect_bit_transpose<unsigned, 
-                           bm::set_block_plain_cnt, 
-                           bm::set_block_plain_size>
+                           bm::set_block_plane_cnt,
+                           bm::set_block_plane_size>
                            (block1, bm::set_block_size, tmatrix1);
     bm::vect_bit_trestore<unsigned, 
-                           bm::set_block_plain_cnt, 
-                           bm::set_block_plain_size>
+                           bm::set_block_plane_cnt,
+                           bm::set_block_plane_size>
                            (tmatrix1, block2);
 
     for (unsigned i = 0; i < bm::set_block_size; ++i)
@@ -16305,12 +16308,12 @@ void BitBlockTransposeTest()
     }
 
     bm::vect_bit_transpose<unsigned, 
-                           bm::set_block_plain_cnt, 
-                           bm::set_block_plain_size>
+                           bm::set_block_plane_cnt,
+                           bm::set_block_plane_size>
                            (block1, bm::set_block_size, tmatrix1);
     bm::vect_bit_trestore<unsigned, 
-                           bm::set_block_plain_cnt, 
-                           bm::set_block_plain_size>
+                           bm::set_block_plane_cnt,
+                           bm::set_block_plane_size>
                            (tmatrix1, block2);
 
     for (unsigned i = 0; i < bm::set_block_size; ++i)
@@ -16333,13 +16336,13 @@ void BitBlockTransposeTest()
         }
 
         bm::vect_bit_transpose<unsigned, 
-                               bm::set_block_plain_cnt, 
-                               bm::set_block_plain_size>
+                               bm::set_block_plane_cnt,
+                               bm::set_block_plane_size>
                                (block1, bm::set_block_size, tmatrix1);
 
         bm::vect_bit_trestore<unsigned, 
-                               bm::set_block_plain_cnt, 
-                               bm::set_block_plain_size>
+                               bm::set_block_plane_cnt,
+                               bm::set_block_plane_size>
                                (tmatrix1, block2);
 
 
@@ -19118,7 +19121,7 @@ bool TestEqualSparseVectors(const SV& sv1, const SV& sv2, bool detailed = true)
         
         sv1.extract(&v1[0], sv1.size(), 0);
         sv1.extract_range(&v1r[0], sv1.size(), 0);
-        sv1.extract_plains(&v1p[0], sv1.size(), 0);
+        sv1.extract_planes(&v1p[0], sv1.size(), 0);
         
         for (unsigned i = 0; i < sv1.size(); ++i)
         {
@@ -19143,7 +19146,7 @@ bool TestEqualSparseVectors(const SV& sv1, const SV& sv2, bool detailed = true)
         
         sv1.extract(&v1[0], sv1.size(), pos);
         sv1.extract_range(&v1r[0], sv1.size(), pos);
-        sv1.extract_plains(&v1p[0], sv1.size(), pos);
+        sv1.extract_planes(&v1p[0], sv1.size(), pos);
         
         for (unsigned i = 0; i < sv1.size(); ++i)
         {
@@ -19401,7 +19404,7 @@ void TestBasicMatrix()
 static
 void TestSparseVector()
 {
-    cout << "---------------------------- Bit-plain sparse vector test" << endl;
+    cout << "---------------------------- Bit-plane sparse vector test" << endl;
     BM_DECLARE_TEMP_BLOCK(tb)
 
 
@@ -19464,7 +19467,7 @@ void TestSparseVector()
         xscan.set_ref_vector(&r_vect);
         r_vect.build(sv.get_bmatrix());
 
-        const bvect* bv_x = sv.get_plain(0);
+        const bvect* bv_x = sv.get_plane(0);
         const bvect::blocks_manager_type& bman_x = bv_x->get_blocks_manager();
         const bm::word_t* block_x = bman_x.get_block_ptr(0, 0);
 
@@ -19493,7 +19496,7 @@ void TestSparseVector()
         r_vect.build(sv.get_bmatrix());
         xscan.set_ref_vector(&r_vect);
 
-        const bvect* bv_x = sv.get_plain(0);
+        const bvect* bv_x = sv.get_plane(0);
         const bvect::blocks_manager_type& bman_x = bv_x->get_blocks_manager();
         const bm::word_t* block_x = bman_x.get_block_ptr(0, 0);
 
@@ -19728,7 +19731,7 @@ void TestSparseVector()
         bool res = CompareSparseVector(sv, vect);
         if (!res)
         {
-            cerr << "0.Bit Plain import test failed" << endl;
+            cerr << "0.Bit plane import test failed" << endl;
             exit(1);
         }
         sv.optimize();
@@ -19736,7 +19739,7 @@ void TestSparseVector()
         res = CompareSparseVector(sv, vect);
         if (!res)
         {
-            cerr << "optimized Bit Plain import test failed" << endl;
+            cerr << "optimized Bit plane import test failed" << endl;
             exit(1);
         }
 
@@ -19745,7 +19748,7 @@ void TestSparseVector()
         res = CompareSparseVector(sv_1, vect);
         if (!res)
         {
-            cerr << "Bit Plain push_back test failed" << endl;
+            cerr << "Bit plane push_back test failed" << endl;
             exit(1);
         }
 
@@ -19757,7 +19760,7 @@ void TestSparseVector()
         res = CompareSparseVector(sv2, vect);
         if (!res)
         {
-            cerr << "Bit Plain copy-ctor test failed" << endl;
+            cerr << "Bit plane copy-ctor test failed" << endl;
             exit(1);
         }
         
@@ -19766,7 +19769,7 @@ void TestSparseVector()
         res = CompareSparseVector(sv2, vect);
         if (!res)
         {
-            cerr << "Bit Plain copy-ctor test failed" << endl;
+            cerr << "Bit plane copy-ctor test failed" << endl;
             exit(1);
         }
 
@@ -19776,7 +19779,7 @@ void TestSparseVector()
         res = CompareSparseVector(sv3, vect);
         if (!res)
         {
-            cerr << "Bit Plain assignmnet test failed" << endl;
+            cerr << "Bit plane assignmnet test failed" << endl;
             exit(1);
         }
         
@@ -19785,7 +19788,7 @@ void TestSparseVector()
         res = CompareSparseVector(sv3, vect);
         if (!res)
         {
-            cerr << "Bit Plain assignment test failed" << endl;
+            cerr << "Bit plane assignment test failed" << endl;
             exit(1);
         }
     }}
@@ -19818,7 +19821,7 @@ void TestSparseVector()
         bool res = CompareSparseVector(sv, vect);
         if (!res)
         {
-            cerr << "0.Bit Plain import test failed" << endl;
+            cerr << "0.Bit plane import test failed" << endl;
             exit(1);
         }
         sv.optimize();
@@ -19826,7 +19829,7 @@ void TestSparseVector()
         res = CompareSparseVector(sv, vect);
         if (!res)
         {
-            cerr << "optimized Bit Plain import test failed" << endl;
+            cerr << "optimized Bit plane import test failed" << endl;
             exit(1);
         }
 
@@ -19835,7 +19838,7 @@ void TestSparseVector()
         res = CompareSparseVector(sv_1, vect);
         if (!res)
         {
-            cerr << "Bit Plain push_back test failed" << endl;
+            cerr << "Bit plane push_back test failed" << endl;
             exit(1);
         }
 
@@ -19847,7 +19850,7 @@ void TestSparseVector()
         res = CompareSparseVector(sv2, vect);
         if (!res)
         {
-            cerr << "Bit Plain copy-ctor test failed" << endl;
+            cerr << "Bit plane copy-ctor test failed" << endl;
             exit(1);
         }
         
@@ -19856,7 +19859,7 @@ void TestSparseVector()
         res = CompareSparseVector(sv2, vect);
         if (!res)
         {
-            cerr << "Bit Plain copy-ctor test failed" << endl;
+            cerr << "Bit plane copy-ctor test failed" << endl;
             exit(1);
         }
 
@@ -19866,7 +19869,7 @@ void TestSparseVector()
         res = CompareSparseVector(sv3, vect);
         if (!res)
         {
-            cerr << "Bit Plain assignmnet test failed" << endl;
+            cerr << "Bit plane assignmnet test failed" << endl;
             exit(1);
         }
         
@@ -19875,7 +19878,7 @@ void TestSparseVector()
         res = CompareSparseVector(sv3, vect);
         if (!res)
         {
-            cerr << "Bit Plain assignment test failed" << endl;
+            cerr << "Bit plane assignment test failed" << endl;
             exit(1);
         }
     }}
@@ -19967,7 +19970,7 @@ void TestSparseVector()
     
     sv.extract(&v1[0], 16, 0);
     sv.extract_range(&v1r[0], 16, 0);
-    sv.extract_plains(&v1p[0], 16, 0);
+    sv.extract_planes(&v1p[0], 16, 0);
     for (unsigned i = 0; i < 16; ++i)
     {
         if (v1[i] != 8 || v1r[i] != v1[i] || v1p[i] != v1[i])
@@ -19983,7 +19986,7 @@ void TestSparseVector()
     
     sv.extract(&v2[0], 10, 32);
     sv.extract_range(&v2r[0], 10, 32);
-    sv.extract_plains(&v2p[0], 10, 32);
+    sv.extract_planes(&v2p[0], 10, 32);
         
     for (unsigned i = 0; i < 10; ++i)
     {
@@ -20636,7 +20639,7 @@ void TestSparseVector()
     }
     cout << "Sparse vector join ok" << endl;
     
-    cout << "---------------------------- Bit-plain sparse vector test OK" << endl;
+    cout << "---------------------------- Bit-plane sparse vector test OK" << endl;
 }
 
 static
@@ -20967,7 +20970,7 @@ void TestSparseVector_XOR_Scanner()
         r_vect.build(sv.get_bmatrix());
         xscan.set_ref_vector(&r_vect);
 
-        const bvect* bv_x = sv.get_plain(0);
+        const bvect* bv_x = sv.get_plane(0);
         const bvect::blocks_manager_type& bman_x = bv_x->get_blocks_manager();
         const bm::word_t* block_x = bman_x.get_block_ptr(0, 0);
 
@@ -20998,7 +21001,7 @@ void TestSparseVector_XOR_Scanner()
         r_vect.build(sv.get_bmatrix());
         xscan.set_ref_vector(&r_vect);
 
-        const bvect* bv_x = sv.get_plain(0);
+        const bvect* bv_x = sv.get_plane(0);
         const bvect::blocks_manager_type& bman_x = bv_x->get_blocks_manager();
         const bm::word_t* block_x = bman_x.get_block_ptr(0, 0);
 
@@ -21032,7 +21035,7 @@ void TestSparseVector_XOR_Scanner()
         r_vect.build(sv.get_bmatrix());
         xscan.set_ref_vector(&r_vect);
 
-        const bvect* bv_x = sv.get_plain(0);
+        const bvect* bv_x = sv.get_plane(0);
         const bvect::blocks_manager_type& bman_x = bv_x->get_blocks_manager();
         const bm::word_t* block_x = bman_x.get_block_ptr(0, 0);
 
@@ -21363,7 +21366,7 @@ void TestSparseVectorInserter()
     }
 
 
-    cout << "---------------------------- Bit-plain sparse vector inserter OK" << endl;
+    cout << "---------------------------- Bit-plane sparse vector inserter OK" << endl;
 }
 
 static
@@ -22776,7 +22779,7 @@ static
 void TestSparseVector_Stress(unsigned count)
 {
 
-    cout << "---------------------------- Bit-plain sparse vector stress" << endl;
+    cout << "---------------------------- Bit-plane sparse vector stress" << endl;
 
     cout << "Interval shift check.\n";
     // interval shift check
@@ -22916,13 +22919,13 @@ void TestSparseVector_Stress(unsigned count)
     
     
     
-    cout << "---------------------------- Bit-plain sparse vector stress OK" << endl;
+    cout << "---------------------------- Bit-plane sparse vector stress OK" << endl;
 }
 
 static
 void TestStrSparseVector()
 {
-   cout << "---------------------------- Bit-plain STR sparse vector test" << endl;
+   cout << "---------------------------- Bit-plane STR sparse vector test" << endl;
 
    typedef str_sparse_vector<char, bvect, 32> str_svect_type;
 
@@ -23935,7 +23938,7 @@ void TestStrSparseVector()
     }
     
     
-   cout << "---------------------------- Bit-plain STR sparse vector test OK" << endl;
+   cout << "---------------------------- Bit-plane STR sparse vector test OK" << endl;
 }
 
 static
@@ -24558,16 +24561,20 @@ void TestStrSparseVectorSerial()
         {
             const bvect::size_type* cstat = sv_serializer.get_bv_serializer().get_compression_stat();
             //assert(cstat[bm::set_block_ref_eq]);
+            assert(cstat[bm::set_block_xor_ref32] == 1);
+
         }
         sv_serializer.serialize(sv2i, sv_lay2);
         {
             const bvect::size_type* cstat = sv_serializer.get_bv_serializer().get_compression_stat();
             //assert(cstat[bm::set_block_ref_eq]>=1);
+            assert(cstat[bm::set_block_xor_ref32] == 1);
         }
         sv_serializer.serialize(sv3i, sv_lay3);
         {
             const bvect::size_type* cstat = sv_serializer.get_bv_serializer().get_compression_stat();
             //assert(cstat[bm::set_block_ref_eq]>=1);
+            assert(cstat[bm::set_block_xor_ref32] == 1);
         }
 
         // ----------
@@ -24808,7 +24815,7 @@ void EraseSVCollection(SV& sv)
 static
 void StressTestStrSparseVector()
 {
-   cout << "---------------------------- Bit-plain STR sparse vector stress test" << endl;
+   cout << "---------------------------- Bit-plane STR sparse vector stress test" << endl;
    
    const unsigned max_coll = 2000000;
    std::vector<string> str_coll;
@@ -25091,7 +25098,7 @@ void StressTestStrSparseVector()
    EraseStrCollection(str_sv_sorted);
    EraseStrCollection(str_sv_remap);
    
-   cout << "---------------------------- Bit-plain STR sparse vector stress test OK" << endl;
+   cout << "---------------------------- Bit-plane STR sparse vector stress test OK" << endl;
    cout << endl;
 }
 
@@ -25099,7 +25106,7 @@ void StressTestStrSparseVector()
 static
 void TestStrSparseSort()
 {
-   cout << "---------------------------- Bit-plain STR sparse vector SORT test" << endl;
+   cout << "---------------------------- Bit-plane STR sparse vector SORT test" << endl;
    const unsigned max_coll = 560000;
 
    {
@@ -25301,7 +25308,7 @@ void TestStrSparseSort()
     
     
     
-   cout << "---------------------------- Bit-plain STR sparse vector SORT test OK" << endl;
+   cout << "---------------------------- Bit-plane STR sparse vector SORT test OK" << endl;
 
 }
 

@@ -73,7 +73,7 @@ namespace bm
    will save memory.
  
    Overall it provides variable bit-depth compression, sparse compression in
-   bit-plains.
+   bit-planes.
  
    @ingroup sv
 */
@@ -615,7 +615,7 @@ public:
     void clear() BMNOEXCEPT { clear_all(true); }
 
     /*!
-        \brief clear range (assign bit 0 for all plains)
+        \brief clear range (assign bit 0 for all planes)
         \param left  - interval start
         \param right - interval end (closed interval)
         \param set_null - set cleared values to unassigned (NULL)
@@ -662,7 +662,7 @@ public:
      
         \param sv        - sparse vector for comparison
         \param null_able - flag to consider NULL vector in comparison (default)
-                           or compare only value content plains
+                           or compare only value content planes
      
         \return true, if it is the same
     */
@@ -692,7 +692,7 @@ public:
     ///@{
 
     /*!
-        \brief run memory optimization for all vector plains
+        \brief run memory optimization for all vector planes
         \param temp_block - pre-allocated memory block to avoid unnecessary re-allocs
         \param opt_mode - requested compression depth
         \param stat - memory allocation statistics after optimization
@@ -704,7 +704,7 @@ public:
     /*!
        \brief Optimize sizes of GAP blocks
 
-       This method runs an analysis to find optimal GAP levels for all bit plains
+       This method runs an analysis to find optimal GAP levels for all bit planes
        of the vector.
     */
     void optimize_gap_size();
@@ -780,7 +780,7 @@ public:
     /**
         @brief Apply value filter, defined by mask vector
      
-        All bit-plains are ANDed against the filter mask.
+        All bit-planes are ANDed against the filter mask.
     */
     void filter(const bvector_type& bv_mask);
 
@@ -831,7 +831,7 @@ public:
         \sa decode
         @internal
     */
-    size_type extract_plains(value_type* arr,
+    size_type extract_planes(value_type* arr,
                              size_type size,
                              size_type offset,
                              bool      zero_mem = true) const;
@@ -881,9 +881,9 @@ public:
     void set_allocator_pool(allocator_pool_type* pool_ptr) BMNOEXCEPT;
     
 protected:
-    enum octet_plains
+    enum octet_planes
     {
-        sv_octet_plains = sizeof(value_type)
+        sv_octet_planes = sizeof(value_type)
     };
     enum buf_size_e
     {
@@ -1040,12 +1040,12 @@ void sparse_vector<Val, BV>::import(const value_type* arr,
     
     if (offset < this->size_) // in case it touches existing elements
     {
-        // clear all plains in the range to provide corrrect import of 0 values
+        // clear all planes in the range to provide corrrect import of 0 values
         this->clear_range(offset, offset + arr_size - 1);
     }
     
     // transposition algorithm uses bitscan to find index bits and store it
-    // in temporary matrix (list for each bit plain), matrix here works
+    // in temporary matrix (list for each bit plane), matrix here works
     // when array gets to big - the list gets loaded into bit-vector using
     // bulk load algorithm, which is faster than single bit access
     //
@@ -1065,7 +1065,7 @@ void sparse_vector<Val, BV>::import(const value_type* arr,
             
             if (rl == transpose_window)
             {
-                bvector_type* bv = this->get_plain(p);
+                bvector_type* bv = this->get_plane(p);
                 const size_type* r = tm.row(p);
                 bv->set(r, rl, BM_SORTED);
                 row_len[p] = 0;
@@ -1081,7 +1081,7 @@ void sparse_vector<Val, BV>::import(const value_type* arr,
         unsigned rl = row_len[k];
         if (rl)
         {
-            bvector_type* bv = this->get_plain(k);
+            bvector_type* bv = this->get_plane(k);
             const size_type* r = tm.row(k);
             bv->set(r, rl, BM_SORTED);
         }
@@ -1199,7 +1199,7 @@ sparse_vector<Val, BV>::gather(value_type*       arr,
             BM_ASSERT(0);
         } // switch
         
-        // single element hit, use plain random access
+        // single element hit, use plane random access
         if (r == i+1)
         {
             arr[i] = this->get(idx[i]);
@@ -1212,8 +1212,8 @@ sparse_vector<Val, BV>::gather(value_type*       arr,
         unsigned i0 = unsigned(nb >> bm::set_array_shift); // top block address
         unsigned j0 = unsigned(nb &  bm::set_array_mask);  // address in sub-block
         
-        unsigned eff_plains = this->effective_plains(); // TODO: get real effective plains for [i,j]
-        for (unsigned j = 0; j < eff_plains; ++j)
+        unsigned eff_planes = this->effective_planes(); // TODO: get real effective planes for [i,j]
+        for (unsigned j = 0; j < eff_planes; ++j)
         {
             const bm::word_t* blk = this->bmatr_.get_block(j, i0, j0);
             if (!blk)
@@ -1273,7 +1273,7 @@ sparse_vector<Val, BV>::gather(value_type*       arr,
                 continue;
             }
             bm::bit_block_gather_scatter(arr, blk, idx, r, i, j);
-        } // for (each plain)
+        } // for (each plane)
         
         i = r;
 
@@ -1366,7 +1366,7 @@ sparse_vector<Val, BV>::extract_range(value_type* arr,
 
 template<class Val, class BV>
 typename sparse_vector<Val, BV>::size_type
-sparse_vector<Val, BV>::extract_plains(value_type* arr,
+sparse_vector<Val, BV>::extract_planes(value_type* arr,
                                        size_type   size,
                                        size_type   offset,
                                        bool        zero_mem) const
@@ -1495,8 +1495,8 @@ sparse_vector<Val, BV>::get(
     BM_ASSERT(i < size());
     
     value_type v = 0;
-    unsigned eff_plains = this->effective_plains();
-    for (unsigned j = 0; j < eff_plains; j+=4)
+    unsigned eff_planes = this->effective_planes();
+    for (unsigned j = 0; j < eff_planes; j+=4)
     {
         bool b = this->bmatr_.test_4rows(j);
         if (b)
@@ -1595,7 +1595,7 @@ void sparse_vector<Val, BV>::insert_value_no_null(size_type idx, value_type v)
     {
         if (v & mask)
         {
-            bvector_type* bv = this->get_plain(i);
+            bvector_type* bv = this->get_plane(i);
             bv->insert(idx, true);
         }
         else
@@ -1606,9 +1606,9 @@ void sparse_vector<Val, BV>::insert_value_no_null(size_type idx, value_type v)
         }
         mask <<= 1;
     } // for i
-    // insert 0 into all other existing plains
-    unsigned eff_plains = this->effective_plains();
-    for (; i < eff_plains; ++i)
+    // insert 0 into all other existing planes
+    unsigned eff_planes = this->effective_planes();
+    for (; i < eff_planes; ++i)
     {
         bvector_type* bv = this->bmatr_.get_row(i);
         if (bv)
@@ -1662,11 +1662,11 @@ void sparse_vector<Val, BV>::set_value_no_null(size_type idx, value_type v)
     unsigned i0 = unsigned(nb >> bm::set_array_shift); // top block address
     unsigned j0 = unsigned(nb &  bm::set_array_mask);  // address in sub-block
 
-    // clear the plains where needed
-    unsigned eff_plains = this->effective_plains();
+    // clear the planes where needed
+    unsigned eff_planes = this->effective_planes();
     unsigned bsr = v ? bm::bit_scan_reverse(v) : 0u;
         
-    for (unsigned i = bsr; i < eff_plains; ++i)
+    for (unsigned i = bsr; i < eff_planes; ++i)
     {
         const bm::word_t* blk = this->bmatr_.get_block(i, i0, j0);
         if (blk)
@@ -1684,7 +1684,7 @@ void sparse_vector<Val, BV>::set_value_no_null(size_type idx, value_type v)
         {
             if (v & mask)
             {
-                bvector_type* bv = this->get_plain(j);
+                bvector_type* bv = this->get_plane(j);
                 bv->set_bit_no_check(idx);
             }
             else
@@ -1719,9 +1719,9 @@ void sparse_vector<Val, BV>::inc(size_type idx)
 template<class Val, class BV>
 void sparse_vector<Val, BV>::inc_no_null(size_type idx)
 {
-    for (unsigned i = 0; i < parent_type::sv_value_plains; ++i)
+    for (unsigned i = 0; i < parent_type::sv_value_planes; ++i)
     {
-        bvector_type* bv = this->get_plain(i);
+        bvector_type* bv = this->get_plane(i);
         bool carry_over = bv->inc(idx);
         if (!carry_over)
             break;
@@ -1808,8 +1808,8 @@ void sparse_vector<Val, BV>::optimize(
 template<class Val, class BV>
 void sparse_vector<Val, BV>::optimize_gap_size()
 {
-    unsigned stored_plains = this->stored_plains();
-    for (unsigned j = 0; j < stored_plains; ++j)
+    unsigned stored_planes = this->stored_planes();
+    for (unsigned j = 0; j < stored_planes; ++j)
     {
         bvector_type* bv = this->bmatr_.get_row(j);
         if (bv)
@@ -1831,20 +1831,20 @@ sparse_vector<Val, BV>::join(const sparse_vector<Val, BV>& sv)
         resize(arg_size);
     }
     bvector_type* bv_null = this->get_null_bvect();
-    unsigned plains;
+    unsigned planes;
     if (bv_null)
-        plains = this->stored_plains();
+        planes = this->stored_planes();
     else
-        plains = this->plains();
+        planes = this->planes();
     
-    for (unsigned j = 0; j < plains; ++j)
+    for (unsigned j = 0; j < planes; ++j)
     {
         const bvector_type* arg_bv = sv.bmatr_.row(j);
         if (arg_bv)
         {
             bvector_type* bv = this->bmatr_.get_row(j);
             if (!bv)
-                bv = this->get_plain(j);
+                bv = this->get_plane(j);
             *bv |= *arg_bv;
         }
     } // for j
@@ -1869,9 +1869,9 @@ sparse_vector<Val, BV>::merge(sparse_vector<Val, BV>& sv)
         resize(arg_size);
 
     bvector_type* bv_null = this->get_null_bvect();
-    unsigned plains = bv_null ? this->stored_plains() : this->plains();
+    unsigned planes = bv_null ? this->stored_planes() : this->planes();
 
-    this->merge_matr(sv.bmatr_, plains);
+    this->merge_matr(sv.bmatr_, planes);
 
     // our vector is NULL-able but argument is not (assumed all values are real)
     if (bv_null && !sv.is_nullable())
@@ -1891,7 +1891,7 @@ void sparse_vector<Val, BV>::copy_range(
 {
     if (left > right)
         bm::xor_swap(left, right);
-    this->copy_range_plains(sv, left, right, splice_null);
+    this->copy_range_planes(sv, left, right, splice_null);
     this->resize(sv.size());
 }
 //---------------------------------------------------------------------
@@ -1913,16 +1913,16 @@ void sparse_vector<Val, BV>::filter(
                 const typename sparse_vector<Val, BV>::bvector_type& bv_mask)
 {
     bvector_type* bv_null = this->get_null_bvect();
-    unsigned plains;
+    unsigned planes;
     if (bv_null)
     {
-        plains = this->stored_plains();
+        planes = this->stored_planes();
         bv_null->bit_and(bv_mask);
     }
     else
-        plains = this->plains();
+        planes = this->planes();
     
-    for (unsigned j = 0; j < plains; ++j)
+    for (unsigned j = 0; j < planes; ++j)
     {
         bvector_type* bv = this->bmatr_.get_row(j);
         if (bv)

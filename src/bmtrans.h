@@ -245,8 +245,8 @@ struct bit_trans_grabber
 /**
     Generic bit-array transposition function
     T - array type (any int)
-    BPC - bit plain count
-    BPS - bit plain size
+    BPC - bit plane count
+    BPS - bit plane size
     
     \param arr      - source array start
     \param arr_size - source array size
@@ -279,8 +279,8 @@ void vect_bit_transpose(const T* arr,
 /**
     Restore bit array from the transposition matrix
     T - array type (any int)
-    BPC - bit plain count
-    BPS - bit plain size
+    BPC - bit plane count
+    BPS - bit plane size
     
     \param arr       - dest array
     \param tmatrix   - source bit-slice matrix
@@ -304,9 +304,9 @@ void vect_bit_trestore(const T  tmatrix[BPC][BPS],
 
 
 /*!
-    \brief Compute pairwise Row x Row Humming distances on plains(rows) of 
+    \brief Compute pairwise Row x Row Humming distances on planes(rows) of
            the transposed bit block
-   \param tmatrix - bit-block transposition matrix (bit-plains)
+   \param tmatrix - bit-block transposition matrix (bit-planes)
    \param distance - pairwise NxN Humming distance matrix (diagonal is popcnt)
 
    @ingroup bitfunc
@@ -348,30 +348,30 @@ void tmatrix_distance(const T  tmatrix[BPC][BPS],
 
 
 
-const unsigned char ibpc_uncompr = 0; ///!< plain uncompressed
-const unsigned char ibpc_all_zero= 1; ///!< plain ALL ZERO
-const unsigned char ibpc_all_one = 2; ///!< plain ALL ONE
-const unsigned char ibpc_equiv   = 3; ///!< plain is equal to plain M
-const unsigned char ibpc_close   = 4; ///!< plain is close to plain M
+const unsigned char ibpc_uncompr = 0; ///!< plane uncompressed
+const unsigned char ibpc_all_zero= 1; ///!< plane ALL ZERO
+const unsigned char ibpc_all_one = 2; ///!< plane ALL ONE
+const unsigned char ibpc_equiv   = 3; ///!< plane is equal to plane M
+const unsigned char ibpc_close   = 4; ///!< plane is close to plane M
 
 const unsigned char ibpc_end = 8; ///!< ibpc limiter
 
 
 /*!
-    \brief Make a compression descriptor vector for bit-plains
+    \brief Make a compression descriptor vector for bit-planes
 
     \param distance - pairwise distance matrix
     \param pc_vector - OUT compression descriptor vector
     <pre>
         pc_vector[] format:
-            each element (pc_vector[i]) describes the plain compression:
+            each element (pc_vector[i]) describes the plane compression:
                 first 3 bits - compression code:
-                    0 - plain uncompressed
-                    1 - plain is ALL ZERO (000000...)
-                    2 - plain is ALL ONE  (111111...)
-                    3 - plain is equal to another plain J (5 high bits (max 31))
-                    4 - plain is close (but not equal) to plain J
-                next 5 bits - number of plain used as a XOR expression
+                    0 - plane uncompressed
+                    1 - plane is ALL ZERO (000000...)
+                    2 - plane is ALL ONE  (111111...)
+                    3 - plane is equal to another plane J (5 high bits (max 31))
+                    4 - plane is close (but not equal) to plane J
+                next 5 bits - number of plane used as a XOR expression
                  ( compression codes: 3,4 )
     </pre>                    
     
@@ -416,9 +416,9 @@ void bit_iblock_make_pcv(
         for (unsigned j = i + 1; j < BPC; ++j)
         {
             unsigned d = distance[i][j];
-            if (d < rmin) // new minimum - closest plain
+            if (d < rmin) // new minimum - closest plane
             {
-                if (d == 0) // plain is complete duplicate of j
+                if (d == 0) // plane is complete duplicate of j
                 {
                     pc = (unsigned char)(ibpc_equiv | (j << 3));
                     break;
@@ -461,12 +461,12 @@ void bit_iblock_pcv_stat(const unsigned char* BMRESTRICT pc_vector,
 */
 inline
 void bit_iblock_reduce(
-    const unsigned  tmatrix[bm::set_block_plain_cnt][bm::set_block_plain_size],
+    const unsigned  tmatrix[bm::set_block_plane_cnt][bm::set_block_plane_size],
     const unsigned char* BMRESTRICT pc_vector,
     const unsigned char* BMRESTRICT pc_vector_end,
-    unsigned  tmatrix_out[bm::set_block_plain_cnt][bm::set_block_plain_size])
+    unsigned  tmatrix_out[bm::set_block_plane_cnt][bm::set_block_plane_size])
 {
-    ::memset(tmatrix_out, 0, bm::set_block_plain_cnt * sizeof(*tmatrix_out));
+    ::memset(tmatrix_out, 0, bm::set_block_plane_cnt * sizeof(*tmatrix_out));
     unsigned row = 0;
     do 
     {
@@ -479,7 +479,7 @@ void bit_iblock_reduce(
             {
             const unsigned* r1 = tmatrix[row];
             unsigned* r_out = tmatrix_out[row];
-            for (unsigned i = 0; i < bm::set_block_plain_size; ++i)
+            for (unsigned i = 0; i < bm::set_block_plane_size; ++i)
             {
                 r_out[i] = r1[i];
             }
@@ -496,7 +496,7 @@ void bit_iblock_reduce(
             const unsigned* r1 = tmatrix[row];
             const unsigned* r2 = tmatrix[n_row];
             unsigned* r_out = tmatrix_out[row];
-            for (unsigned i = 0; i < bm::set_block_plain_size; ++i)
+            for (unsigned i = 0; i < bm::set_block_plane_size; ++i)
             {
                 r_out[i] = r1[i] ^ r2[i];
             } // for
@@ -731,7 +731,7 @@ unsigned find_effective_columns(const TM& tmatrix)
 
 
 /**
-    \brief Bit-plain splicing of a GAP block
+    \brief Bit-plane splicing of a GAP block
     
     GT - gap word type
     BT - block word type

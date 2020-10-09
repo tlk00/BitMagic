@@ -845,7 +845,7 @@ bool TestEqualSparseVectors(const SV& sv1, const SV& sv2, bool detailed = true)
         
         sv1.extract(&v1[0], sv1.size(), 0);
         sv1.extract_range(&v1r[0], sv1.size(), 0);
-        sv1.extract_plains(&v1p[0], sv1.size(), 0);
+        sv1.extract_planes(&v1p[0], sv1.size(), 0);
         
         for (typename SV::size_type i = 0; i < sv1.size(); ++i)
         {
@@ -870,7 +870,7 @@ bool TestEqualSparseVectors(const SV& sv1, const SV& sv2, bool detailed = true)
         
         sv1.extract(&v1[0], sv1.size(), pos);
         sv1.extract_range(&v1r[0], sv1.size(), pos);
-        sv1.extract_plains(&v1p[0], sv1.size(), pos);
+        sv1.extract_planes(&v1p[0], sv1.size(), pos);
         
         for (typename SV::size_type i = 0; i < sv1.size(); ++i)
         {

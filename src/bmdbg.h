@@ -254,13 +254,13 @@ void PrintBits32(unsigned val)
 
 inline
 void PrintDistanceMatrix(
-   const unsigned distance[bm::set_block_plain_cnt][bm::set_block_plain_cnt])
+   const unsigned distance[bm::set_block_plane_cnt][bm::set_block_plane_cnt])
 {
-    for (unsigned i = 0; i < bm::set_block_plain_cnt; ++i)
+    for (unsigned i = 0; i < bm::set_block_plane_cnt; ++i)
     {
         const unsigned* row = distance[i];
         std::cout << i << ": ";
-        for (unsigned j = i; j < bm::set_block_plain_cnt; ++j)
+        for (unsigned j = i; j < bm::set_block_plane_cnt; ++j)
         {
             std::cout << std::setw(4) << std::setfill('0') << row[j] << " ";
         }
@@ -560,10 +560,10 @@ void print_svector_xor_stat(const SV& sv)
         unsigned i0 = unsigned(nb >> bm::set_array_shift);
         unsigned j0 = unsigned(nb &  bm::set_array_mask);
 
-        auto plains = sv.plains();
-        for (unsigned i = 0; i < plains; ++i)
+        auto planes = sv.planes();
+        for (unsigned i = 0; i < planes; ++i)
         {
-            const typename SV::bvector_type* bv = sv.get_plain(i);
+            const typename SV::bvector_type* bv = sv.get_plane(i);
             if (!bv)
                 continue;
             const typename SV::bvector_type::blocks_manager_type& bman = bv->get_blocks_manager();
@@ -581,9 +581,9 @@ void print_svector_xor_stat(const SV& sv)
 
             bool kb_found = false;
             bm::id64_t d64 = 0;
-            for (unsigned k = i + 1; k < plains; ++k)
+            for (unsigned k = i + 1; k < planes; ++k)
             {
-                const typename SV::bvector_type* bv_x = sv.get_plain(i);
+                const typename SV::bvector_type* bv_x = sv.get_plane(i);
                 if (!bv_x)
                     continue;
                 const typename SV::bvector_type::blocks_manager_type& bman_x = bv_x->get_blocks_manager();
@@ -736,25 +736,25 @@ void print_svector_stat(const SV& svect, bool print_sim = false)
                   << sizeof(long long) * svect.size() << std::endl;
     }
     
-    std::cout << "\nPlains:" << std::endl;
+    std::cout << "\nplanes:" << std::endl;
 
     size_t ssize(0), octet_ssize(0);
 
-    typename SV::bvector_type bv_join; // global OR of all plains
-    auto plains = svect.plains();
+    typename SV::bvector_type bv_join; // global OR of all planes
+    auto planes = svect.planes();
 
     unsigned octet_cnt(0), octet(0);
-    for (unsigned i = 0; i < plains; ++i)
+    for (unsigned i = 0; i < planes; ++i)
     {
-        const typename SV::bvector_type* bv_plain = svect.get_plain(i);
+        const typename SV::bvector_type* bv_plane = svect.get_plane(i);
         std::cout << i << "-" << octet_cnt << ":";
-        if (bv_plain == 0)
+        if (bv_plane == 0)
         {
             std::cout << "NULL\n";
             bool any_else = false;
-            for (unsigned j = i+1; j < plains; ++j) // look ahead
+            for (unsigned j = i+1; j < planes; ++j) // look ahead
             {
-                if (svect.get_plain(j))
+                if (svect.get_plane(j))
                 {
                     any_else = true;
                     break;
@@ -767,8 +767,8 @@ void print_svector_stat(const SV& svect, bool print_sim = false)
         }
         else
         {
-            bv_join |= *bv_plain;
-            auto pssize = bm::print_bvector_stat(*bv_plain);
+            bv_join |= *bv_plane;
+            auto pssize = bm::print_bvector_stat(*bv_plane);
             ssize += pssize;
             octet_ssize += pssize;
         }
@@ -791,7 +791,7 @@ void print_svector_stat(const SV& svect, bool print_sim = false)
     const typename SV::bvector_type* bv_null = svect.get_null_bvector();
     if (bv_null)
     {
-        std::cout << "(not) NULL plain:\n";
+        std::cout << "(not) NULL plane:\n";
         ssize += print_bvector_stat(*bv_null);
         typename SV::size_type not_null_cnt = bv_null->count();
         std::cout << " - Bitcount: " << not_null_cnt << std::endl;
@@ -802,7 +802,7 @@ void print_svector_stat(const SV& svect, bool print_sim = false)
             << std::endl;
     }
 
-    std::cout << " Total serialized size (plains): " << ssize
+    std::cout << " Total serialized size (planes): " << ssize
               << std::endl
               << " " << ssize / (1024 * 1024) << " MB" << std::endl;
 
@@ -824,13 +824,13 @@ void print_svector_stat(const SV& svect, bool print_sim = false)
 template<class SV>
 void print_str_svector_stat(const SV& str_svect)
 {
-    typename SV::plain_octet_matrix_type octet_stat_matr;
+    typename SV::plane_octet_matrix_type octet_stat_matr;
     
     str_svect.calc_octet_stat(octet_stat_matr);
     
     for (unsigned i = 0; i < octet_stat_matr.rows(); ++i)
     {
-        const typename SV::plain_octet_matrix_type::value_type* row
+        const typename SV::plane_octet_matrix_type::value_type* row
                                                 = octet_stat_matr.row(i);
         bool any = false;
         for (unsigned j = 0; j < octet_stat_matr.cols(); ++j)

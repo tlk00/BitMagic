@@ -336,7 +336,7 @@ void bit_block_xor(bm::word_t*  target_block,
 
     Each referece vector would have two alternative indexes:
      - index(position) in the reference list
-     - index(row) in the external bit-matrix (plain index)
+     - index(row) in the external bit-matrix (plane index)
 
     @internal
 */
@@ -446,12 +446,12 @@ public:
 
 protected:
     typedef bm::heap_vector<bvector_type_const_ptr, bv_allocator_type, true> bvptr_vector_type;
-    typedef bm::heap_vector<std::size_t, bv_allocator_type, true> bv_plain_vector_type;
+    typedef bm::heap_vector<std::size_t, bv_allocator_type, true> bv_plane_vector_type;
 
 protected:
     unsigned                 rows_acc_ = 0;     ///< total rows accumulator
     bvptr_vector_type        ref_bvects_;       ///< reference vector pointers
-    bv_plain_vector_type     ref_bvects_rows_;  ///< reference vector row idxs
+    bv_plane_vector_type     ref_bvects_rows_;  ///< reference vector row idxs
 };
 
 // --------------------------------------------------------------------------

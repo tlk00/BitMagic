@@ -63,29 +63,29 @@ namespace bm
 template<typename SV>
 void dynamic_range_clip_high(SV& svect, unsigned high_bit)
 {
-    unsigned sv_plains = svect.plains();
+    unsigned sv_planes = svect.planes();
     
-    BM_ASSERT(sv_plains > high_bit && high_bit > 0);
+    BM_ASSERT(sv_planes > high_bit && high_bit > 0);
     
     typename SV::bvector_type bv_acc;
     unsigned i;
     
     // combine all the high bits into accumulator vector
-    for (i = high_bit+1; i < sv_plains; ++i)
+    for (i = high_bit+1; i < sv_planes; ++i)
     {
-        typename SV::bvector_type* bv_plain = svect.plain(i);
-        if (bv_plain)
+        typename SV::bvector_type* bv_plane = svect.plane(i);
+        if (bv_plane)
         {
-            bv_acc.bit_or(*bv_plain);
-            svect.free_plain(i);
+            bv_acc.bit_or(*bv_plane);
+            svect.free_plane(i);
         }
     } // for i
     
     // set all bits ON for all low vectors, which happen to be clipped
     for (i = high_bit; true; --i)
     {
-        typename SV::bvector_type* bv_plain = svect.get_plain(i);
-        bv_plain->bit_or(bv_acc);
+        typename SV::bvector_type* bv_plane = svect.get_plane(i);
+        bv_plane->bit_or(bv_acc);
         if (i == 0)
             break;
     } // for i
@@ -105,49 +105,49 @@ template<typename SV>
 void dynamic_range_clip_low(SV& svect, unsigned low_bit)
 {
     if (low_bit == 0) return; // nothing to do
-    BM_ASSERT(svect.plains() > low_bit);
+    BM_ASSERT(svect.planes() > low_bit);
     
-    unsigned sv_plains = svect.plains();
+    unsigned sv_planes = svect.planes();
     typename SV::bvector_type bv_acc1;
     unsigned i;
     
     // combine all the high bits into accumulator vector
-    for (i = low_bit+1; i < sv_plains; ++i)
+    for (i = low_bit+1; i < sv_planes; ++i)
     {
-        typename SV::bvector_type* bv_plain = svect.plain(i);
-        if (bv_plain)
-            bv_acc1.bit_or(*bv_plain);
+        typename SV::bvector_type* bv_plane = svect.plane(i);
+        if (bv_plane)
+            bv_acc1.bit_or(*bv_plane);
     } // for i
     
     // accumulate all vectors below the clipping point
     typename SV::bvector_type bv_acc2;
-    typename SV::bvector_type* bv_low_plain = svect.get_plain(low_bit);
+    typename SV::bvector_type* bv_low_plane = svect.get_plane(low_bit);
     
     for (i = low_bit-1; true; --i)
     {
-        typename SV::bvector_type* bv_plain = svect.plain(i);
-        if (bv_plain)
+        typename SV::bvector_type* bv_plane = svect.plane(i);
+        if (bv_plane)
         {
-            bv_acc2.bit_or(*bv_plain);
-            svect.free_plain(i);
+            bv_acc2.bit_or(*bv_plane);
+            svect.free_plane(i);
             if (i == 0)
                 break;
         }
     } // for i
     
-    // now we want to set 1 in the clipping low plain based on
+    // now we want to set 1 in the clipping low plane based on
     // exclusive or (XOR) between upper and lower parts)
-    // as a result high signal (any bits in the upper plains) gets
+    // as a result high signal (any bits in the upper planes) gets
     // slightly lower value (due to clipping) low signal gets amplified
     // (lower contrast algorithm)
     
     bv_acc1.bit_xor(bv_acc2);
-    bv_low_plain->bit_or(bv_acc1);
+    bv_low_plane->bit_or(bv_acc1);
 }
 
 /**
     Find first mismatch (element which is different) between two sparse vectors
-    (uses linear scan in bit-vector plains)
+    (uses linear scan in bit-vector planes)
 
     Function works with both NULL and NOT NULL vectors
     NULL means unassigned (uncertainty), so first mismatch NULL is a mismatch
@@ -177,16 +177,16 @@ bool sparse_vector_find_first_mismatch(const SV& sv1,
 
     unsigned sv_idx = 0;
 
-    unsigned plains1 = sv1.plains();
-    BM_ASSERT(plains1);
+    unsigned planes1 = sv1.planes();
+    BM_ASSERT(planes1);
 
-    // for RSC vector do NOT compare NULL plains
+    // for RSC vector do NOT compare NULL planes
 
     if (bm::conditional<SV::is_rsc_support::value>::test())
     {
-        //--plains1;
+        //--planes1;
     }
-    else // regular sparse vector - may have NULL plains
+    else // regular sparse vector - may have NULL planes
     {
         if (null_proc == bm::use_null)
         {
@@ -232,10 +232,10 @@ bool sparse_vector_find_first_mismatch(const SV& sv1,
         } // null_proc
     }
 
-    for (unsigned i = 0; mismatch && (i < plains1); ++i)
+    for (unsigned i = 0; mismatch && (i < planes1); ++i)
     {
-        typename SV::bvector_type_const_ptr bv1 = sv1.get_plain(i);
-        typename SV::bvector_type_const_ptr bv2 = sv2.get_plain(i);
+        typename SV::bvector_type_const_ptr bv1 = sv1.get_plane(i);
+        typename SV::bvector_type_const_ptr bv2 = sv2.get_plane(i);
         if (!bv1)
         {
             if (!bv2)
@@ -257,7 +257,7 @@ bool sparse_vector_find_first_mismatch(const SV& sv1,
             }
             continue;
         }
-        // both plains are not NULL
+        // both planes are not NULL
         //
         bool f = bv1->find_first_mismatch(*bv2, midx, mismatch);
         if (f && (midx < mismatch)) // better mismatch found
@@ -310,14 +310,14 @@ bool sparse_vector_find_first_mismatch(const SV& sv1,
 
 /**
     Find mismatch vector, indicating positions of mismatch between two sparse vectors
-    (uses linear scan in bit-vector plains)
+    (uses linear scan in bit-vector planes)
 
     Function works with both NULL and NOT NULL vectors
 
     @param bv - [out] - bit-ector with mismatch positions indicated as 1s
     @param sv1 - vector 1
     @param sv2 - vector 2
-    @param null_proc - rules of processing for (not) NULL plain
+    @param null_proc - rules of processing for (not) NULL plane
       bm::no_null - NULLs from both vectors are treated as uncertainty
                     and NOT included into final result
       bm::use_null - difference in NULLs accounted into the result
@@ -352,14 +352,14 @@ void sparse_vector_find_mismatch(typename SV1::bvector_type& bv,
 
     bv.clear();
 
-    unsigned plains = sv1.plains();
-    if (plains < sv2.plains())
-        plains = sv2.plains();
+    unsigned planes = sv1.planes();
+    if (planes < sv2.planes())
+        planes = sv2.planes();
 
-    for (unsigned i = 0; i < plains; ++i)
+    for (unsigned i = 0; i < planes; ++i)
     {
-        typename SV1::bvector_type_const_ptr bv1 = sv1.get_plain(i);
-        typename SV2::bvector_type_const_ptr bv2 = sv2.get_plain(i);
+        typename SV1::bvector_type_const_ptr bv1 = sv1.get_plane(i);
+        typename SV2::bvector_type_const_ptr bv2 = sv2.get_plane(i);
 
         if (!bv1)
         {
@@ -375,7 +375,7 @@ void sparse_vector_find_mismatch(typename SV1::bvector_type& bv,
             continue;
         }
 
-        // both plains are not NULL, compute XOR diff
+        // both planes are not NULL, compute XOR diff
         //
         bvector_type bv_xor;
         typename bvector_type::mem_pool_guard mp_guard;
@@ -468,10 +468,10 @@ void sparse_vector_find_mismatch(typename SV1::bvector_type& bv,
 /**
     \brief algorithms for sparse_vector scan/search
  
-    Scanner uses properties of bit-vector plains to answer questions
+    Scanner uses properties of bit-vector planes to answer questions
     like "find all sparse vector elements equivalent to XYZ".
 
-    Class uses fast algorithms based on properties of bit-plains.
+    Class uses fast algorithms based on properties of bit-planes.
     This is NOT a brute force, direct scan.
  
     @ingroup svalgo
@@ -655,7 +655,7 @@ public:
 
     /*!
         \brief Find non-zero elements
-        Output vector is computed as a logical OR (join) of all plains
+        Output vector is computed as a logical OR (join) of all planes
 
         \param  sv - input sparse vector
         \param  bv_out - output bit-bector of non-zero elements
@@ -788,7 +788,7 @@ protected:
     typedef bm::dynamic_heap_matrix<value_type, allocator_type> heap_matrix_type;
     typedef bm::heap_matrix<typename SV::value_type,
                            linear_cutoff2,
-                           SV::sv_octet_plains,
+                           SV::sv_octet_planes,
                            allocator_type> matrix_search_buf_type;
 
 
@@ -808,8 +808,8 @@ private:
     size_type                          effective_str_max_;
     
     value_type                         remap_value_vect_[SV::max_vector_size];
-    /// masks of allocated bit-plains (1 - means there is a bit-plain)
-    bm::id64_t                         vector_plain_masks_[SV::max_vector_size];
+    /// masks of allocated bit-planes (1 - means there is a bit-plane)
+    bm::id64_t                         vector_plane_masks_[SV::max_vector_size];
     matrix_search_buf_type             hmatr_; ///< heap matrix for string search linear stage
 };
 
@@ -1202,11 +1202,11 @@ void sparse_vector_scanner<SV>::bind(const SV&  sv, bool sorted)
             } // for k
         } // for i
     }
-    // pre-calculate vector plain masks
+    // pre-calculate vector plane masks
     //
     for (unsigned i = 0; i < SV::max_vector_size; ++i)
     {
-        vector_plain_masks_[i] = sv.get_plains_mask(i);
+        vector_plane_masks_[i] = sv.get_planes_mask(i);
     } // for i
     
 }
@@ -1405,14 +1405,14 @@ bool sparse_vector_scanner<SV>::prepare_and_sub_aggregator(const SV&  sv,
         unsigned value = unsigned(str[octet_idx]) & 0xFF;
         BM_ASSERT(value != 0);
         
-        bm::id64_t plains_mask;
+        bm::id64_t planes_mask;
         if (&sv == bound_sv_)
-            plains_mask = vector_plain_masks_[octet_idx];
+            planes_mask = vector_plane_masks_[octet_idx];
         else
-            plains_mask = sv.get_plains_mask(unsigned(octet_idx));
+            planes_mask = sv.get_planes_mask(unsigned(octet_idx));
 
-        if ((value & plains_mask) != value) // pre-screen for impossible values
-            return false; // found non-existing plain
+        if ((value & planes_mask) != value) // pre-screen for impossible values
+            return false; // found non-existing plane
 
         // prep the lists for combined AND-SUB aggregator
         //
@@ -1421,8 +1421,8 @@ bool sparse_vector_scanner<SV>::prepare_and_sub_aggregator(const SV&  sv,
         {
             unsigned bit_idx = bits[i];
             BM_ASSERT(value & (value_type(1) << bit_idx));
-            unsigned plain_idx = (unsigned(octet_idx) * 8) + bit_idx;
-            const bvector_type* bv = sv.get_plain(plain_idx);
+            unsigned plane_idx = (unsigned(octet_idx) * 8) + bit_idx;
+            const bvector_type* bv = sv.get_plane(plane_idx);
             agg_.add(bv);
         } // for i
         
@@ -1437,13 +1437,13 @@ bool sparse_vector_scanner<SV>::prepare_and_sub_aggregator(const SV&  sv,
             vinv ^= 0xFFFF;
         }
         // exclude the octet bits which are all not set (no vectors)
-        vinv &= unsigned(plains_mask);
-        for (unsigned octet_plain = (unsigned(octet_idx) * 8); vinv; vinv &= vinv-1)
+        vinv &= unsigned(planes_mask);
+        for (unsigned octet_plane = (unsigned(octet_idx) * 8); vinv; vinv &= vinv-1)
         {
             bm::id_t t = vinv & -vinv;
             unsigned bit_idx = bm::word_bitcount(t - 1);
-            unsigned plain_idx = octet_plain + bit_idx;
-            const bvector_type* bv = sv.get_plain(plain_idx);
+            unsigned plane_idx = octet_plane + bit_idx;
+            const bvector_type* bv = sv.get_plane(plane_idx);
             BM_ASSERT(bv);
             agg_.add(bv, 1); // agg to SUB group
         } // for
@@ -1453,16 +1453,16 @@ bool sparse_vector_scanner<SV>::prepare_and_sub_aggregator(const SV&  sv,
     //
     if (prefix_sub)
     {
-        unsigned plain_idx = unsigned(len * 8);
-        typename SV::size_type plains;
+        unsigned plane_idx = unsigned(len * 8);
+        typename SV::size_type planes;
         if (&sv != bound_sv_)
         {
             effective_str_max_ = sv.effective_vector_max();
         }
-        plains = effective_str_max_ * unsigned(sizeof(value_type)) * 8;
-        for (; plain_idx < plains; ++plain_idx)
+        planes = effective_str_max_ * unsigned(sizeof(value_type)) * 8;
+        for (; plane_idx < planes; ++plane_idx)
         {
-            bvector_type_const_ptr bv = sv.get_plain(plain_idx);
+            bvector_type_const_ptr bv = sv.get_plane(plane_idx);
             if (bv)
                 agg_.add(bv, 1); // agg to SUB group
         } // for
@@ -1488,17 +1488,17 @@ bool sparse_vector_scanner<SV>::prepare_and_sub_aggregator(const SV&   sv,
     {
         unsigned bit_idx = bits[i-1];
         BM_ASSERT(value & (mask1 << bit_idx));
-        const bvector_type* bv = sv.get_plain(bit_idx);
+        const bvector_type* bv = sv.get_plane(bit_idx);
         if (bv)
             agg_.add(bv);
         else
             return false;
     }
     
-    unsigned sv_plains = sv.effective_plains();
-    for (unsigned i = 0; i < sv_plains; ++i)
+    unsigned sv_planes = sv.effective_planes();
+    for (unsigned i = 0; i < sv_planes; ++i)
     {
-        bvector_type_const_ptr bv = sv.get_plain(i);
+        bvector_type_const_ptr bv = sv.get_plane(i);
         value_type mask = mask1 << i;
         if (bv && !(value & mask))
             agg_.add(bv, 1); // agg to SUB group
@@ -1529,10 +1529,10 @@ void sparse_vector_scanner<SV>::find_eq_with_nulls_horizontal(const SV&  sv,
 
     // aggregate AND all matching vectors
     {
-        const bvector_type* bv_plain = sv.get_plain(bits[--bit_count_v]);
-        if (bv_plain)
-            bv_out = *bv_plain;
-        else // plain not found
+        const bvector_type* bv_plane = sv.get_plane(bits[--bit_count_v]);
+        if (bv_plane)
+            bv_out = *bv_plane;
+        else // plane not found
         {
             bv_out.clear();
             return;
@@ -1540,23 +1540,23 @@ void sparse_vector_scanner<SV>::find_eq_with_nulls_horizontal(const SV&  sv,
     }
     for (unsigned i = 0; i < bit_count_v; ++i)
     {
-        const bvector_type* bv_plain = sv.get_plain(bits[i]);
-        if (bv_plain)
-            bv_out &= *bv_plain;
-        else // mandatory plain not found - empty result!
+        const bvector_type* bv_plane = sv.get_plane(bits[i]);
+        if (bv_plane)
+            bv_out &= *bv_plane;
+        else // mandatory plane not found - empty result!
         {
             bv_out.clear();
             return;
         }
     } // for i
 
-    // SUB all other plains
-    unsigned sv_plains = sv.effective_plains();
-    for (unsigned i = 0; (i < sv_plains) && value; ++i)
+    // SUB all other planes
+    unsigned sv_planes = sv.effective_planes();
+    for (unsigned i = 0; (i < sv_planes) && value; ++i)
     {
-        const bvector_type* bv_plain = sv.get_plain(i);
-        if (bv_plain && !(value & (value_type(1) << i)))
-            bv_out -= *bv_plain;
+        const bvector_type* bv_plane = sv.get_plane(i);
+        if (bv_plane && !(value & (value_type(1) << i)))
+            bv_out -= *bv_plane;
     }
 }
 
@@ -2233,8 +2233,8 @@ void sparse_vector_scanner<SV>::find_nonzero(const SV& sv,
                                              typename SV::bvector_type& bv_out)
 {
     agg_.reset(); // in case if previous scan was interrupted
-    for (unsigned i = 0; i < sv.plains(); ++i)
-        agg_.add(sv.get_plain(i));
+    for (unsigned i = 0; i < sv.planes(); ++i)
+        agg_.add(sv.get_plane(i));
     agg_.combine_or(bv_out);
     agg_.reset();
 }

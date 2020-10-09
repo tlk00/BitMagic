@@ -11379,7 +11379,7 @@ void TestSparseVector()
     
     sv.extract(&v1[0], 16, 0);
     sv.extract_range(&v1r[0], 16, 0);
-    sv.extract_plains(&v1p[0], 16, 0);
+    sv.extract_planes(&v1p[0], 16, 0);
     for (unsigned i = 0; i < 16; ++i)
     {
         if (v1[i] != 8 || v1r[i] != v1[i] || v1p[i] != v1[i])
@@ -11395,7 +11395,7 @@ void TestSparseVector()
     
     sv.extract(&v2[0], 10, 32);
     sv.extract_range(&v2r[0], 10, 32);
-    sv.extract_plains(&v2p[0], 10, 32);
+    sv.extract_planes(&v2p[0], 10, 32);
         
     for (unsigned i = 0; i < 10; ++i)
     {
