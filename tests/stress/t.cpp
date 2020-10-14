@@ -24561,20 +24561,20 @@ void TestStrSparseVectorSerial()
         {
             const bvect::size_type* cstat = sv_serializer.get_bv_serializer().get_compression_stat();
             //assert(cstat[bm::set_block_ref_eq]);
-            assert(cstat[bm::set_block_xor_ref32] == 1);
+            assert(cstat[bm::set_block_xor_ref32] >= 1);
 
         }
         sv_serializer.serialize(sv2i, sv_lay2);
         {
             const bvect::size_type* cstat = sv_serializer.get_bv_serializer().get_compression_stat();
             //assert(cstat[bm::set_block_ref_eq]>=1);
-            assert(cstat[bm::set_block_xor_ref32] == 1);
+            assert(cstat[bm::set_block_xor_ref32] >= 1);
         }
         sv_serializer.serialize(sv3i, sv_lay3);
         {
             const bvect::size_type* cstat = sv_serializer.get_bv_serializer().get_compression_stat();
             //assert(cstat[bm::set_block_ref_eq]>=1);
-            assert(cstat[bm::set_block_xor_ref32] == 1);
+            assert(cstat[bm::set_block_xor_ref32] >= 1);
         }
 
         // ----------
@@ -30050,6 +30050,7 @@ int main(int argc, char *argv[])
     
     if (is_all || is_str_sv)
     {
+
          TestStrSparseVector();
 
          TestStrSparseVectorAlgo();
