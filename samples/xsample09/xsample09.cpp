@@ -301,7 +301,7 @@ unsigned long long access_bench2(const rsc_sparse_vector_u32&   hist_rsc,
         // interval start position
         bvector_type::size_type pos;
         bool found = bv_null->find_reverse(idx, pos);
-        assert(found);
+        assert(found); (void)found;
 
         auto v = hist_rsc[pos];
         sum += v;
@@ -320,7 +320,7 @@ void access_bench3(const rsc_sparse_vector_u32&   hist_rsc,
     {
         const bvector_type* bv_null = rsc_data.get_null_bvector();
         bool found = bv_null->find_reverse(last);
-        assert(found);
+        assert(found); (void)found;
     }
 
     const bvector_type* bv_null = hist_rsc.get_null_bvector();
