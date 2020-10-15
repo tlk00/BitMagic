@@ -45,11 +45,14 @@ for variety of platforms and build targets:
 - Arm (use of specific available bit-scan instructions)
 - WebAssembly (use of WebAsm built-ins and platform specific tricks)
 
-BitMagic uses a data-parallel vectorized design with a goal not just provide a best single threaded performance but to facilitate highly parallel compute on many-core systems. 
+BitMagic uses a data-parallel vectorized design with a goal not just provide a best single 
+threaded performance but to facilitate highly parallel compute on many-core systems. 
 
 ### Compression algorithms
 
-BitMagic uses compression algorithms, filters and transformations to reduce memory footprint, storage costs and network data transfer.
+BitMagic uses a suite of compression algorithms, filters and transformations to reduce 
+memory footprint, storage costs and network data transfer.
+[http://bitmagic.io/design.html](http://bitmagic.io/design.html)
 
 - Hierachical compression of bit-vectors
 - D-GAP (RLE) of bit-blocks
@@ -58,6 +61,7 @@ BitMagic uses compression algorithms, filters and transformations to reduce memo
 - Bitwise-Tranposition for vectors (also known as Bit Planes coding or bit-slicing)
 - XOR compression filters
 - Frequency based dictionary remapping (similar to Huffman codes)  
+
 
 Please visit our tech.notes:
 [http://bitmagic.io/articles.html](http://bitmagic.io/articles.html)
