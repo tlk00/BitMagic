@@ -11803,8 +11803,8 @@ void SerializationCompressionLevelsTest()
         bms.serialize(bv1, buf);
 
         const bvect::size_type* cstat = bms.get_compression_stat();
-        //assert(cstat[bm::set_block_ref_eq] == 1);
-        assert(cstat[bm::set_block_xor_ref32] == 1);
+        assert(cstat[bm::set_block_ref_eq] >= 1);
+//        assert(cstat[bm::set_block_xor_ref32] >= 1);
 
         bvect bv3;
         bm::deserialize(bv3, buf.buf(), 0, &bv_ref);
@@ -13186,14 +13186,12 @@ void TestSparseVectorSerialization2()
         sv_serializer.serialize(sv2i, sv_lay2);
         {
             const bvect::size_type* cstat = sv_serializer.get_bv_serializer().get_compression_stat();
-//            assert(cstat[bm::set_block_ref_eq]==1);
-            assert(cstat[bm::set_block_xor_ref32] == 1);
+            assert(cstat[bm::set_block_ref_eq]==1 || cstat[bm::set_block_xor_ref32] == 1);
         }
         sv_serializer.serialize(sv3i, sv_lay3);
         {
             const bvect::size_type* cstat = sv_serializer.get_bv_serializer().get_compression_stat();
-//            assert(cstat[bm::set_block_ref_eq]==1);
-            assert(cstat[bm::set_block_xor_ref32] == 1);
+            assert(cstat[bm::set_block_ref_eq]==1 || cstat[bm::set_block_xor_ref32] == 1);
         }
 
         // ----------
@@ -24561,20 +24559,23 @@ void TestStrSparseVectorSerial()
         {
             const bvect::size_type* cstat = sv_serializer.get_bv_serializer().get_compression_stat();
             //assert(cstat[bm::set_block_ref_eq]);
-            assert(cstat[bm::set_block_xor_ref32] >= 1);
+//            assert(cstat[bm::set_block_xor_ref32] >= 1);
+            assert(cstat[bm::set_block_ref_eq]>=1 || cstat[bm::set_block_xor_ref32] >= 1);
 
         }
         sv_serializer.serialize(sv2i, sv_lay2);
         {
             const bvect::size_type* cstat = sv_serializer.get_bv_serializer().get_compression_stat();
             //assert(cstat[bm::set_block_ref_eq]>=1);
-            assert(cstat[bm::set_block_xor_ref32] >= 1);
+//            assert(cstat[bm::set_block_xor_ref32] >= 1);
+            assert(cstat[bm::set_block_ref_eq]>=1 || cstat[bm::set_block_xor_ref32] >= 1);
         }
         sv_serializer.serialize(sv3i, sv_lay3);
         {
             const bvect::size_type* cstat = sv_serializer.get_bv_serializer().get_compression_stat();
             //assert(cstat[bm::set_block_ref_eq]>=1);
-            assert(cstat[bm::set_block_xor_ref32] >= 1);
+            assert(cstat[bm::set_block_ref_eq]>=1 || cstat[bm::set_block_xor_ref32] >= 1);
+//            assert(cstat[bm::set_block_xor_ref32] >= 1);
         }
 
         // ----------

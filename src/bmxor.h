@@ -38,7 +38,8 @@ enum xor_complement_match
     e_no_xor_match = 0,
     e_xor_match_GC,
     e_xor_match_BC,
-    e_xor_match_iBC
+    e_xor_match_iBC,
+    e_xor_match_EQ
 };
 
 /*!
@@ -504,7 +505,7 @@ public:
     /**
         Validate serialization target
     */
-    bool validate_found(bm::word_t* xor_block,
+    xor_complement_match validate_found(bm::word_t* xor_block,
                         const bm::word_t* block) const BMNOEXCEPT;
 
     size_type found_ridx() const BMNOEXCEPT { return found_ridx_; }
@@ -800,8 +801,9 @@ bool xor_scanner<BV>::search_best_xor_gap(bm::gap_word_t*   tmp_buf,
 // --------------------------------------------------------------------------
 
 template<typename BV>
-bool xor_scanner<BV>::validate_found(bm::word_t* xor_block,
-                                     const bm::word_t* block) const BMNOEXCEPT
+bm::xor_complement_match
+xor_scanner<BV>::validate_found(bm::word_t* xor_block,
+                                const bm::word_t* block) const BMNOEXCEPT
 {
     bm::id64_t d64 = get_xor_digest();
     BM_ASSERT(d64);
@@ -813,7 +815,14 @@ bool xor_scanner<BV>::validate_found(bm::word_t* xor_block,
 
     unsigned xor_best_metric;
     bm::xor_complement_match mtype = best_metric(bc, gc, &xor_best_metric);
-    (void)mtype; // heed the unused var warning
+
+    if (mtype == e_xor_match_BC && !bc)
+    {
+        unsigned block_pos;
+        bool found = bm::block_find_first_diff(block, key_block, &block_pos);
+        if (!found)
+            return e_xor_match_EQ;
+    }
 
     if (xor_best_metric < get_x_block_best())
     {
@@ -824,9 +833,9 @@ bool xor_scanner<BV>::validate_found(bm::word_t* xor_block,
         unsigned gain_min = unsigned (sizeof(char) + sizeof(bm::id64_t) + sizeof(unsigned));
         gain_min *= 8; // in bits
         if (gain > gain_min)
-            return true;
+            return mtype;
     }
-    return false;
+    return e_no_xor_match;
 }
 
 // --------------------------------------------------------------------------

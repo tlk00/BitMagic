@@ -2693,19 +2693,17 @@ serializer<BV>::serialize(const BV& bv,
                 if (found)
                 {
                     size_type ridx = xor_scan_.found_ridx();
-                    /*
-                    if (xor_scan_.is_eq_found()) // golden! (found a copy)
+                    xor_complement_match mtype = xor_scan_.validate_found(xor_block_, blk);
+                    if (mtype != e_no_xor_match)
                     {
-                        size_type row_idx = xor_scan_.get_ref_vector().get_row_idx(ridx);
-                        enc.put_8(bm::set_block_ref_eq);
-                        enc.put_32(unsigned(row_idx));
-                        compression_stat_[bm::set_block_ref_eq]++;
-                        continue;
-                    }
-                    */
-                    found = xor_scan_.validate_found(xor_block_, blk);
-                    if (found)
-                    {
+                        if (mtype == e_xor_match_EQ)
+                        {
+                            size_type row_idx = xor_scan_.get_ref_vector().get_row_idx(ridx);
+                            enc.put_8(bm::set_block_ref_eq);
+                            enc.put_32(unsigned(row_idx));
+                            compression_stat_[bm::set_block_ref_eq]++;
+                            continue;
+                        }
                         bm::id64_t d64 = xor_scan_.get_xor_digest();
                         BM_ASSERT(d64);
                         size_type plain_idx = xor_scan_.get_ref_vector().get_row_idx(ridx);
