@@ -150,34 +150,79 @@ void generate_test_dataframe(data_frame& df, unsigned size)
     df.seq.optimize(tb);
 }
 
+/// Test-compare two data frames for match in [from..to] ranges
+///
 static
 void check_range(const data_frame& df_r, const data_frame& df,
                  unsigned from, unsigned to)
 {
-    auto it_r_id = df_r.id.get_const_iterator(from);
-    auto it_id = df.id.get_const_iterator(from);
-
-    for (auto i = from; i <= to; ++i)
     {
-        if (!it_r_id.valid() || !it_id.valid())
+        auto it_r_id = df_r.id.get_const_iterator(from);
+        auto it_id = df.id.get_const_iterator(from);
+        for (auto i = from; i <= to; ++i)
         {
-            break;
-        }
-        const  char* id_r_str = *it_r_id;
-        const  char* id_str = *it_id;
-        int cmp = strcmp(id_r_str, id_str);
-        if (cmp != 0)
+            if (!it_r_id.valid() || !it_id.valid())
+                break;
+            const  char* id_r_str = *it_r_id;
+            const  char* id_str = *it_id;
+            int cmp = strcmp(id_r_str, id_str);
+            if (cmp != 0)
+            {
+                cerr << "Range Id comparison check failed! at:" << i << endl;
+                exit(1);
+            }
+            ++it_r_id;
+            ++it_id;
+        } // for
+    }
+    {
+        auto it_r_pos = df_r.pos.get_const_iterator(from);
+        auto it_pos = df.pos.get_const_iterator(from);
+        for (auto i = from; i <= to; ++i)
         {
-            cerr << "Range comparison check failed! at:" << i << endl;
-            exit(1);
-        }
-    } // for
+            if (!it_r_pos.valid() || !it_pos.valid())
+                break;
+            auto pos = *it_pos;
+            auto r_pos = *it_r_pos;
+            if (pos != r_pos)
+            {
+                cerr << "Range Pos comparison check failed! at:" << i << endl;
+                exit(1);
+            }
+            ++it_r_pos;
+            ++it_pos;
+        } // for
+    }
+    {
+        auto it_r_seq = df_r.seq.get_const_iterator(from);
+        auto it_seq = df.seq.get_const_iterator(from);
+        for (auto i = from; i <= to; ++i)
+        {
+            if (!it_r_seq.valid() || !it_seq.valid())
+                break;
+            const  char* seq_r_str = *it_r_seq;
+            const  char* seq_str = *it_seq;
+            int cmp = strcmp(seq_r_str, seq_str);
+            if (cmp != 0)
+            {
+                cerr << "Range Seq comparison check failed! at:" << i << endl;
+                exit(1);
+            }
+            ++it_r_seq;
+            ++it_seq;
+        } // for
+    }
 
 }
 
+/// Forward scrolling 1
+///
+/// The simplest forward scroll, uses no overlap check, so last
+/// just decoded range just ignored.
+/// Slow but simple.
 static
-void scroll_benchmark1(const compressed_data_frame& df_cz, unsigned size,
-                       const data_frame& df)
+void scroll_benchmark_range(const compressed_data_frame& df_cz, unsigned size,
+                            const data_frame& df)
 {
     data_frame df_r; // range data frame (partial)
 
@@ -189,19 +234,28 @@ void scroll_benchmark1(const compressed_data_frame& df_cz, unsigned size,
     for (unsigned i = 0; i < size; i+=page_size/3, ++cnt)
     {
         unsigned from(i), to(i+page_size-1);
-        sv_deserial_str.deserialize_range(df_r.id, (const unsigned char*)df_cz.id_buf.data(), from, to);
-        sv_deserial_str.deserialize_range(df_r.seq, (const unsigned char*)df_cz.seq_buf.data(), from, to);
-        sv_deserial_u32.deserialize_range(df_r.pos, (const unsigned char*)df_cz.pos_buf.data(), from, to);
+        sv_deserial_str.deserialize_range(df_r.id,
+                    (const unsigned char*)df_cz.id_buf.data(), from, to);
+        sv_deserial_str.deserialize_range(df_r.seq,
+                    (const unsigned char*)df_cz.seq_buf.data(), from, to);
+        sv_deserial_u32.deserialize_range(df_r.pos,
+                    (const unsigned char*)df_cz.pos_buf.data(), from, to);
 
-//cout << from << ".." << to << endl;
         check_range(df_r, df, from, to);
     } // for
-//    cout << "Total=" << cnt << endl;
 }
 
+/// Forward scrolling 2
+///
+/// Faster but more complex:
+/// - explicitly clears the not needed range
+/// - desralization always goes to a temp vector and then merged into scrolled
+/// range data frame. Merge is a fast operation analog of STL move()
+///
 static
-void scroll_benchmark2(const compressed_data_frame& df_cz, unsigned size,
-                        const data_frame& df)
+void scroll_benchmark_clear_range_merge(const compressed_data_frame& df_cz,
+                                        unsigned size,
+                                        const data_frame& df)
 {
     data_frame df_r;
 
@@ -213,8 +267,9 @@ void scroll_benchmark2(const compressed_data_frame& df_cz, unsigned size,
     unsigned i = 0;
     for (; i < size; i+=page_size/3)
     {
+        {
         data_frame df_tmp;
-        // clear previous range
+        // clear the range evicted out of the scrolling window
         if (i)
         {
             df_r.id.clear_range(from, i-1);
@@ -227,14 +282,18 @@ void scroll_benchmark2(const compressed_data_frame& df_cz, unsigned size,
         assert(from < prev_to || !i);
 
         // deserialize into a temp (empty) dataframe
-        sv_deserial_str.deserialize_range(df_tmp.id, (const unsigned char*)df_cz.id_buf.data(), prev_to, to);
-        sv_deserial_str.deserialize_range(df_tmp.seq, (const unsigned char*)df_cz.seq_buf.data(), prev_to, to);
-        sv_deserial_u32.deserialize_range(df_tmp.pos, (const unsigned char*)df_cz.pos_buf.data(), prev_to, to);
+        sv_deserial_str.deserialize_range(df_tmp.id,
+                (const unsigned char*)df_cz.id_buf.data(), prev_to, to);
+        sv_deserial_str.deserialize_range(df_tmp.seq,
+                (const unsigned char*)df_cz.seq_buf.data(), prev_to, to);
+        sv_deserial_u32.deserialize_range(df_tmp.pos,
+                (const unsigned char*)df_cz.pos_buf.data(), prev_to, to);
 
-        // merge temp dataframe
+        // merge temp dataframe into the target dataframe
         df_r.id.merge(df_tmp.id);
         df_r.seq.merge(df_tmp.seq);
         df_r.pos.merge(df_tmp.pos);
+        }
 
         check_range(df_r, df, from, to);
 
@@ -242,9 +301,17 @@ void scroll_benchmark2(const compressed_data_frame& df_cz, unsigned size,
 }
 
 
+/// Forward scrolling 3
+///
+/// About as fast as 3 but a bit simpler:
+/// - desralization always goes to a temp vector and then merged into scrolled
+/// range data frame.
+/// - uses keep_range() to free the memory evicted out of the scrolling window
+///
 static
-void scroll_benchmark3(const compressed_data_frame& df_cz, unsigned size,
-                        const data_frame& df)
+void scroll_benchmark_merge_keep_range(const compressed_data_frame& df_cz,
+                       unsigned size,
+                       const data_frame& df)
 {
     data_frame df_r;
 
@@ -262,15 +329,18 @@ void scroll_benchmark3(const compressed_data_frame& df_cz, unsigned size,
         assert(from < prev_to || !i);
 
         // deserialize into a temp (empty) dataframe
-        sv_deserial_str.deserialize_range(df_tmp.id, (const unsigned char*)df_cz.id_buf.data(), prev_to, to);
+        sv_deserial_str.deserialize_range(df_tmp.id,
+                (const unsigned char*)df_cz.id_buf.data(), prev_to, to);
         df_r.id.merge(df_tmp.id);
         df_r.id.keep_range(from, to);
 
-        sv_deserial_str.deserialize_range(df_tmp.seq, (const unsigned char*)df_cz.seq_buf.data(), prev_to, to);
+        sv_deserial_str.deserialize_range(df_tmp.seq,
+                (const unsigned char*)df_cz.seq_buf.data(), prev_to, to);
         df_r.seq.merge(df_tmp.seq);
         df_r.seq.keep_range(from, to);
 
-        sv_deserial_u32.deserialize_range(df_tmp.pos, (const unsigned char*)df_cz.pos_buf.data(), prev_to, to);
+        sv_deserial_u32.deserialize_range(df_tmp.pos,
+                (const unsigned char*)df_cz.pos_buf.data(), prev_to, to);
         df_r.pos.merge(df_tmp.pos);
         df_r.pos.keep_range(from, to);
 
@@ -338,18 +408,18 @@ int main(void)
         }
 
         {
-            bm::chrono_taker tt1("01. Scrolling test 1", 1, &timing_map);
-            scroll_benchmark1(df_cz, test_size, df);
+            bm::chrono_taker tt1("01. Scrolling test range", 1, &timing_map);
+            scroll_benchmark_range(df_cz, test_size, df);
         }
 
         {
-            bm::chrono_taker tt1("02. Scrolling test 2", 1, &timing_map);
-            scroll_benchmark2(df_cz, test_size, df);
+            bm::chrono_taker tt1("02. Scrolling test clear/range/merge", 1, &timing_map);
+            scroll_benchmark_clear_range_merge(df_cz, test_size, df);
         }
 
         {
-            bm::chrono_taker tt1("02. Scrolling test 3", 1, &timing_map);
-            scroll_benchmark3(df_cz, test_size, df);
+            bm::chrono_taker tt1("03. Scrolling merge/keep_range", 1, &timing_map);
+            scroll_benchmark_merge_keep_range(df_cz, test_size, df);
         }
 
         cout << endl;
