@@ -131,3 +131,6 @@ More complex examples to illustrate mixed techniques and use cases:
 ./xsample09 - Another example on histogram construction using memory compact vectors.
               http://bitmagic.io/bm-hist-compr.html
 
+./xsample10 - Example-benchmark on how to implement compressive scrolling of a data set for (Model View Controller).
+              Show cases bm::sparse_vector_serializer<>::set_bookmarks( ) and use of range deserialization of sparse vectors.
+
