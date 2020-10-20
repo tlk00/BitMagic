@@ -354,7 +354,7 @@ int main(void)
     try
     {
         rsc_sparse_vector_u32                rsc_test;
-       bv_size_type                          data_set_size = 0;
+        bv_size_type                          data_set_size = 0;
 
         sparse_vector_u32                    hist1;
         unsigned                             hist1_avg = 0;
