@@ -62,6 +62,8 @@ using namespace std;
 const unsigned test_size = 25000000;  // number of records to generate
 const unsigned page_size = 1000000;
 
+unsigned bookmark_blocks = 16;
+bool is_check = false;
 
 typedef bm::bvector<>                                       bvector_type;
 typedef bvector_type::size_type                             bv_size_type;
@@ -246,7 +248,8 @@ void scroll_benchmark_range(
         // as a payload to simulate real work
         // use test comparison with the orginal data frame
         //
-        check_range(df_r, df, from, to);
+        if (is_check)
+            check_range(df_r, df, from, to);
     } // for
 }
 
@@ -298,7 +301,8 @@ void scroll_benchmark_clear_range_merge(const compressed_data_frame& df_cz,
         df_r.pos.merge(df_tmp.pos);
         }
 
-        check_range(df_r, df, from, to);
+        if (is_check)
+            check_range(df_r, df, from, to);
 
     } // for
 }
@@ -345,19 +349,19 @@ void scroll_benchmark_merge_keep_range(const compressed_data_frame& df_cz,
         df_r.pos.merge(df_tmp.pos);
         df_r.pos.keep_range(from, to);
 
-        check_range(df_r, df, from, to); // check the range
+        if (is_check)
+            check_range(df_r, df, from, to); // check the range
 
     } // for
 }
-
-unsigned bookmark_blocks = 0;
 
 /// Display help
 static void show_help()
 {
     std::cerr
         << "BitMagic range deserialization example (c) 2020" << std::endl
-        << "-h                    -- print help"
+        << "-h                    -- print help" << std::endl
+        << "-check                -- run test within benchmark " << std::endl
         << "-bookm number         -- bookmark parameter (256, 128, 64, 32, 16...)" << std::endl
       ;
 }
@@ -371,10 +375,13 @@ static int parse_args(int argc, char *argv[])
         std::string arg = argv[i];
         if ((arg == "-h") || (arg == "--help"))
         {
-            show_help();
-            exit(0);
+            show_help(); exit(0);
         }
-
+        if (arg == "-check" || arg == "--check")
+        {
+            is_check = true;
+            continue;
+        }
         if (arg == "-bookm" || arg == "--bookm")
         {
             if (i + 1 < argc)
@@ -422,6 +429,8 @@ int main(int argc, char *argv[])
                 sv_serializer_u32.set_bookmarks(true, bookmark_blocks);
                 cout << "  Serialization bookmark at:" << bookmark_blocks << endl;
             }
+            if (is_check)
+                cout << "  Testing is ON" << endl;
 
             sv_serializer.enable_xor_compression();
             sv_serializer_u32.enable_xor_compression();

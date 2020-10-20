@@ -8,8 +8,25 @@ How to build and run (x86 centric):
 ./run_all.sh
 
 
+How to run:
+-------------
+./xsample10_sse42 -bookm 16 -check
+
+  Serialization bookmark at:16
+  ID BLOB size = 125490402
+  SEQ BLOB size = 20354073
+  POS BLOB size = 9662368
+Total = 155506843
+
+01. Scrolling test range; 19.66 sec
+02. Scrolling test clear/range/merge; 13.05 sec
+03. Scrolling merge/keep_range; 13.25 sec
+
+
+
 
 Application notes:
+------------------
 
 Example generates a sample data frame, serializes it into memory using compressive
 techniques and setting bookmarks to support range deserialization.
