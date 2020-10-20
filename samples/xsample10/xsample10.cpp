@@ -221,19 +221,21 @@ void check_range(const data_frame& df_r, const data_frame& df,
 /// just decoded range just ignored.
 /// Slow but simple.
 static
-void scroll_benchmark_range(const compressed_data_frame& df_cz, unsigned size,
-                            const data_frame& df)
+void scroll_benchmark_range(
+            const compressed_data_frame& df_cz, unsigned size,
+            const data_frame& df,
+            bm::sparse_vector_deserializer<str_sv64_type>& sv_deserial_str,
+            bm::sparse_vector_deserializer<sparse_vector_u32>& sv_deserial_u32)
 {
     data_frame df_r; // range data frame (partial)
-
-    bm::sparse_vector_deserializer<str_sv64_type> sv_deserial_str;
-    bm::sparse_vector_deserializer<sparse_vector_u32> sv_deserial_u32;
-
 
     unsigned cnt = 0;
     for (unsigned i = 0; i < size; i+=page_size/3, ++cnt)
     {
-        unsigned from(i), to(i+page_size-1);
+        unsigned from(i), to(i+page_size-1); // define range variables
+
+        // deserialize range for each vector in the data frame
+        //
         sv_deserial_str.deserialize_range(df_r.id,
                     (const unsigned char*)df_cz.id_buf.data(), from, to);
         sv_deserial_str.deserialize_range(df_r.seq,
@@ -241,6 +243,9 @@ void scroll_benchmark_range(const compressed_data_frame& df_cz, unsigned size,
         sv_deserial_u32.deserialize_range(df_r.pos,
                     (const unsigned char*)df_cz.pos_buf.data(), from, to);
 
+        // as a payload to simulate real work
+        // use test comparison with the orginal data frame
+        //
         check_range(df_r, df, from, to);
     } // for
 }
@@ -255,13 +260,11 @@ void scroll_benchmark_range(const compressed_data_frame& df_cz, unsigned size,
 static
 void scroll_benchmark_clear_range_merge(const compressed_data_frame& df_cz,
                                         unsigned size,
-                                        const data_frame& df)
+                                        const data_frame& df,
+            bm::sparse_vector_deserializer<str_sv64_type>& sv_deserial_str,
+            bm::sparse_vector_deserializer<sparse_vector_u32>& sv_deserial_u32)
 {
     data_frame df_r;
-
-    bm::sparse_vector_deserializer<str_sv64_type> sv_deserial_str;
-    bm::sparse_vector_deserializer<sparse_vector_u32> sv_deserial_u32;
-
 
     unsigned from(0), to(0);
     unsigned i = 0;
@@ -311,13 +314,11 @@ void scroll_benchmark_clear_range_merge(const compressed_data_frame& df_cz,
 static
 void scroll_benchmark_merge_keep_range(const compressed_data_frame& df_cz,
                        unsigned size,
-                       const data_frame& df)
+                       const data_frame& df,
+            bm::sparse_vector_deserializer<str_sv64_type>& sv_deserial_str,
+            bm::sparse_vector_deserializer<sparse_vector_u32>& sv_deserial_u32)
 {
     data_frame df_r;
-
-    bm::sparse_vector_deserializer<str_sv64_type> sv_deserial_str;
-    bm::sparse_vector_deserializer<sparse_vector_u32> sv_deserial_u32;
-
 
     unsigned from(0), to(0);
     unsigned i = 0;
@@ -344,32 +345,85 @@ void scroll_benchmark_merge_keep_range(const compressed_data_frame& df_cz,
         df_r.pos.merge(df_tmp.pos);
         df_r.pos.keep_range(from, to);
 
-        check_range(df_r, df, from, to);
+        check_range(df_r, df, from, to); // check the range
 
     } // for
 }
 
+unsigned bookmark_blocks = 0;
 
+/// Display help
+static void show_help()
+{
+    std::cerr
+        << "BitMagic range deserialization example (c) 2020" << std::endl
+        << "-h                    -- print help"
+        << "-bookm number         -- bookmark parameter (256, 128, 64, 32, 16...)" << std::endl
+      ;
+}
 
-int main(void)
+/// cmd-line arguments parser
+///
+static int parse_args(int argc, char *argv[])
+{
+    for (int i = 1; i < argc; ++i)
+    {
+        std::string arg = argv[i];
+        if ((arg == "-h") || (arg == "--help"))
+        {
+            show_help();
+            exit(0);
+        }
+
+        if (arg == "-bookm" || arg == "--bookm")
+        {
+            if (i + 1 < argc)
+                bookmark_blocks = (unsigned)::atoi(argv[++i]);
+            else
+            {
+                std::cerr << "Error: -bookm requires a number" << std::endl;
+                return 1;
+            }
+            continue;
+        }
+    } // for i
+    return 0;
+}
+
+int main(int argc, char *argv[])
 {
     try
     {
-        data_frame df;
-        compressed_data_frame df_cz;
+        data_frame            df;    // sample data frame (columnar)
+        compressed_data_frame df_cz; // sample data frame compressed into BLOBs
+
+
+        auto ret = parse_args(argc, argv);
+        if (ret != 0)
+        {
+            cerr << "cmd-line parse error. " << endl;
+            return ret;
+        }
+
 
         generate_test_dataframe(df, test_size);
 
         // serialize into compressed data frame
         {
+            size_t size_total  = 0;
             bm::sparse_vector_serializer<str_sv64_type> sv_serializer;
             bm::sparse_vector_serializer<sparse_vector_u32> sv_serializer_u32;
 
             // configure with bookmarks for fast range deserialization
             //
-            sv_serializer.set_bookmarks(true, 32);
+            if (bookmark_blocks)
+            {
+                sv_serializer.set_bookmarks(true, bookmark_blocks);
+                sv_serializer_u32.set_bookmarks(true, bookmark_blocks);
+                cout << "  Serialization bookmark at:" << bookmark_blocks << endl;
+            }
+
             sv_serializer.enable_xor_compression();
-            sv_serializer_u32.set_bookmarks(true, 32);
             sv_serializer_u32.enable_xor_compression();
 
             {
@@ -378,48 +432,62 @@ int main(void)
                     sv_serializer.serialize(df.id, sv_lay_str);
                     const unsigned char* buf = sv_lay_str.buf();
                     auto sz = sv_lay_str.size();
-                    cout << sz << endl;
+                    size_total += sz;
+                    cout << "  ID BLOB size = " << sz << endl;
 
                     df_cz.id_buf.resize(sz);
                     ::memcpy(df_cz.id_buf.data(), buf, sz);
                 }
-
                 {
                     sv_serializer.serialize(df.seq, sv_lay_str);
                     const unsigned char* buf = sv_lay_str.buf();
                     auto sz = sv_lay_str.size();
-                    cout << sz << endl;
+                    size_total += sz;
+                    cout << "  SEQ BLOB size = " << sz << endl;
 
                     df_cz.seq_buf.resize(sz);
                     ::memcpy(df_cz.seq_buf.data(), buf, sz);
                 }
             }
-
             {
                 bm::sparse_vector_serial_layout<sparse_vector_u32> sv_lay_u32;
                 sv_serializer_u32.serialize(df.pos, sv_lay_u32);
                 const unsigned char* buf = sv_lay_u32.buf();
                 auto sz = sv_lay_u32.size();
-                    cout << sz << endl;
+                size_total += sz;
+                cout << "  POS BLOB size = " << sz << endl;
 
                 df_cz.pos_buf.resize(sz);
                 ::memcpy(df_cz.pos_buf.data(), buf, sz);
             }
+            cout << "Total = " <<  size_total << endl;
+
         }
+
+        // create deserializers, one per sparse vector type
+        //
+        // deserializers are heavy objects so it is best to re-use objects
+        //
+        bm::sparse_vector_deserializer<str_sv64_type> sv_deserial_str;
+        bm::sparse_vector_deserializer<sparse_vector_u32> sv_deserial_u32;
+
 
         {
             bm::chrono_taker tt1("01. Scrolling test range", 1, &timing_map);
-            scroll_benchmark_range(df_cz, test_size, df);
+            scroll_benchmark_range(df_cz, test_size, df,
+                                   sv_deserial_str, sv_deserial_u32);
         }
 
         {
             bm::chrono_taker tt1("02. Scrolling test clear/range/merge", 1, &timing_map);
-            scroll_benchmark_clear_range_merge(df_cz, test_size, df);
+            scroll_benchmark_clear_range_merge(df_cz, test_size, df,
+                                           sv_deserial_str, sv_deserial_u32);
         }
 
         {
             bm::chrono_taker tt1("03. Scrolling merge/keep_range", 1, &timing_map);
-            scroll_benchmark_merge_keep_range(df_cz, test_size, df);
+            scroll_benchmark_merge_keep_range(df_cz, test_size, df,
+                                           sv_deserial_str, sv_deserial_u32);
         }
 
         cout << endl;
