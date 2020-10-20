@@ -28640,7 +28640,7 @@ void TestCompressSparseVector()
 
     }
 
-    // count_range_notnull()
+    cout << "count_range_notnull()" << endl;
     {
         rsc_sparse_vector_u32 csv1;
         auto cnt = csv1.count_range_notnull(0, 10);
@@ -28656,12 +28656,14 @@ void TestCompressSparseVector()
         }
         for (unsigned pass = 0; pass < 2; ++pass)
         {
+            cout << "\nPASS=" << pass << endl;
             cnt = csv1.count_range_notnull(0, 0);
             assert(cnt==1);
             cnt = csv1.count_range_notnull(0, 9);
             assert(cnt==10);
 
             auto sz = csv1.size();
+            auto last_r = sz;
             for (unsigned j = 0; j < sz; ++j, --sz)
             {
                 cnt = csv1.count_range_notnull(j, sz);
@@ -28675,14 +28677,28 @@ void TestCompressSparseVector()
                     auto c2 = bv->count_range(j, sz, *rs_idx);
                     assert(c2 == cnt);
                 }
+
+                auto r = sz - j;
+                if ((last_r - r) > 1024)
+                {
+                    cout << "\r" << r << "   " << flush;
+                    last_r = r;
+                }
+
+                if (r > 65536 && j > 65536)
+                {
+                    j+= rand()%256;
+                    sz -= rand()%256;
+                }
             }
             csv1.optimize();
             csv1.sync();
-        }
+        } // for pass
+        cout << endl;
     }
 
 
-    // const_iterator tests
+    cout << "rsc_sparse_vector<>::const_iterator tests" << endl;
     {
         {
         rsc_sparse_vector_u32 csv1;
@@ -28712,7 +28728,7 @@ void TestCompressSparseVector()
         }
     }
     
-    // back inserter tests
+    cout << " back inserter tests" << endl;
     {
         rsc_sparse_vector_u32 csv1;
         {
@@ -28814,7 +28830,7 @@ void TestCompressSparseVector()
         }
     }
     
-    // set test
+    cout << " set test " << endl;
     {
         rsc_sparse_vector_u32 csv;
         csv.set(1, 1);
