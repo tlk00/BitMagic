@@ -1,6 +1,10 @@
 Example to illustrate dataset scrolling using different de-serialization
 techniques with succinct vectors.
 
+http://bitmagic.io/bm-mvc.html
+
+
+
 How to build and run (x86 centric):
 
 ./build_all.sh
