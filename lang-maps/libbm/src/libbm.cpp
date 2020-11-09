@@ -18,7 +18,12 @@ For more information please visit:  http://bitmagic.io
 
 #include "libbm.h"
 #include "try_throw_catch.h"
-static jmp_buf ex_buf__;
+
+#if defined(_MSC_VER)
+__declspec(thread) jmp_buf ex_buf__;
+#else
+__thread jmp_buf ex_buf__;
+#endif
 
 #define BM_NO_STL
 #define BM_NO_CXX11
