@@ -34,8 +34,9 @@ public:
                  locked_.compare_exchange_weak(locked, true,
                                                std::memory_order_acquire))
                 break;
-            // TODO: conditionally enable on SSE/AVX builds
-            //_mm_pause();
+#if defined(BMSSE2OPT) || defined(BMSSE42OPT) || defined(BMAVX2OPT) || defined(BMAVX512OPT)
+            _mm_pause();
+#endif
         } // while
     }
 
@@ -266,8 +267,11 @@ public:
             }
             if (wait_res == std::cv_status::timeout)
             {
-                // maybe
-                //std::this_thread::yield();
+#if defined(BMSSE2OPT) || defined(BMSSE42OPT) || defined(BMAVX2OPT) || defined(BMAVX512OPT)
+                _mm_pause();
+#else
+                std::this_thread::yield();
+#endif
             }
         } // while
      }
