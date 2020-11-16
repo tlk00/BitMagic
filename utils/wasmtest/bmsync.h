@@ -153,10 +153,18 @@ public:
     }
 
     /// lock the queue access
+    /// @sa push_no_lock, unlock
     void lock() { dq_lock_.lock(); }
 
     /// unlock the queue access
-    void unlock() { dq_lock_.unlock(); }
+    /// @sa push_no_lock, lock
+    void unlock()
+    {
+        dq_lock_.unlock();
+        // lock-unlock is done to protect bulk push, need to wake up
+        // all waiting workers
+        queue_push_cond_.notify_all();
+    }
 
     template<typename QV, typename L> friend class bm::thread_pool;
 private:
