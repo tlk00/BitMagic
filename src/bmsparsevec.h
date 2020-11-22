@@ -195,7 +195,8 @@ public:
         const_iterator& operator++() BMNOEXCEPT { this->advance(); return *this; }
 
         /// \brief Advance to the next available value
-        const_iterator& operator++(int)
+        /// 
+        const_iterator operator++(int)
             { const_iterator tmp(*this);this->advance(); return tmp; }
 
 
