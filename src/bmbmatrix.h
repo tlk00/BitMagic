@@ -415,6 +415,11 @@ public:
         get read-only access to inetrnal bit-matrix
     */
     const bmatrix_type& get_bmatrix() const BMNOEXCEPT { return bmatr_; }
+
+    /**
+        access to internal bit-matrix
+     */
+    bmatrix_type& get_bmatrix() BMNOEXCEPT { return bmatr_; }
     ///@}
     
     /*!
