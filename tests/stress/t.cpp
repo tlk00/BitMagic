@@ -1,4 +1,4 @@
-/*
+ /*
 Copyright(c) 2002-2018 Anatoliy Kuznetsov(anatoliy_kuznetsov at yahoo.com)
 
 Licensed under the Apache License, Version 2.0 (the "License");
@@ -60,6 +60,8 @@ For more information please visit:  http://bitmagic.io
 #include <bmsparsevec_compr.h>
 #include <bmstrsparsevec.h>
 #include <bmtimer.h>
+#include <bmtask.h>
+#include <bmsparsevec_parallel.h>
 
 using namespace bm;
 using namespace std;
@@ -19714,6 +19716,25 @@ void TestSparseVector()
         assert(sv.get(2) ==1);
     }}
 
+    {{
+        bm::sparse_vector<unsigned, bvect> sv(bm::use_null);
+        sv.push_back(1);
+        sv.push_back(2);
+        sv.push_back(4);
+
+        optimize_plan_builder<bm::sparse_vector<unsigned, bvect>, std::mutex> opt_builder;
+        optimize_plan_builder<bm::sparse_vector<unsigned, bvect>, std::mutex>::task_batch tbatch;
+
+        bm::sparse_vector<unsigned, bvect>::statistics st;
+        st.reset();
+        opt_builder.build_plan(tbatch, sv,
+          bm::sparse_vector<unsigned, bvect>::bvector_type::opt_compress, &st);
+        auto sz = tbatch.size();
+        assert(sz == 4);
+
+        bm::run_task_batch(tbatch);
+        assert(st.gap_blocks == 4);
+    }}
 
     cout << "svector Import test..." << endl;
     
@@ -29646,6 +29667,67 @@ void TestXOR_RefVector()
     cout << " ------------------------------ TestXOR_RefVector() OK" << endl;
 }
 
+// Test builder
+template<typename BV>
+struct TestTaskBuilder
+{
+    static void* task_run(void* argp)
+    {
+        if (!argp)
+            return 0;
+        BV* bv = static_cast<BV*>(argp);
+        unsigned t = bv->test(0);
+        void* r(0);
+        memcpy(&r, &t, sizeof(t));
+        return r;
+    }
+
+    void build_batch(bm::task_batch<typename BV::allocator_type>& batch)
+    {
+        auto& tv = batch.get_task_vector();
+        tv.push_back(bm::task_description(task_run));
+        tv.push_back(bm::task_description(task_run));
+        tv.push_back(bm::task_description(task_run));
+    }
+};
+
+void TestTasks()
+{
+    std::cout << " ----------------------------- TestTasks() " << endl;
+    {
+        bm::task_batch<bvect::allocator_type> tbatch;
+        assert(tbatch.size() == 0);
+        bm::task_batch<bvect::allocator_type>::task_vector_type& tvect =
+            tbatch.get_task_vector();
+        assert(tvect.empty());
+    }
+
+    {
+        bvect bv; bv.set(0);
+        TestTaskBuilder<bvect> ttb;
+        (void)ttb;
+        bm::task_description tdescr(TestTaskBuilder<bvect>::task_run, &bv);
+        void* ret = tdescr.func(tdescr.argp);
+        unsigned t;
+        memcpy(&t, &ret, sizeof(t));
+        assert(t==1);
+    }
+
+    {
+        TestTaskBuilder<bvect> ttb;
+        bm::task_batch<bvect::allocator_type> tbatch;
+        assert(tbatch.size() == 0);
+        ttb.build_batch(tbatch);
+        auto sz = tbatch.size();
+        assert(sz == 3);
+    }
+
+
+
+
+    std::cout << " ----------------------------- TestTasks() OK " << endl;
+}
+
 static
 void show_help()
 {
@@ -29887,8 +29969,11 @@ int main(int argc, char *argv[])
     
     if (is_all || is_support)
     {
+
         TestHeapVector();
         TestXOR_RefVector();
+
+        TestTasks();
 
         MiniSetTest();
         BitEncoderTest();
