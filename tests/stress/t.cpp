@@ -41,6 +41,7 @@ For more information please visit:  http://bitmagic.io
 #include <random>
 #include <algorithm>
 #include <stdarg.h>  
+#include <mutex>
 
 #include <bm.h>
 #include <bmalgo.h>
