@@ -110,8 +110,6 @@ public:
     bm::heap_vector<bm::task_description, bv_allocator_type, true> task_vector_type;
 
 public:
-    virtual ~task_batch() {}
-
     virtual size_type size() { return (size_type) task_vect_.size(); }
     virtual bm::task_description* get_task(size_type i)
         { return &task_vect_.at(i); }

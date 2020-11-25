@@ -25,6 +25,10 @@ For more information please visit:  http://bitmagic.io
 namespace bm
 {
 
+/**
+    Builder class to prepare a batch of tasks for parallel optimization of
+    a sparse vector
+ */
 template<typename SVect, typename Lock>
 class optimize_plan_builder
 {
