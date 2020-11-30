@@ -149,6 +149,7 @@ void compute_complexity_descr(
         unsigned off = (i * bm::set_block_digest_wave_size);
         const bm::word_t* sub_block = block + off;
         unsigned gc, bc;
+        // TODO: optimize to compute GC and BC in a single pass
         #if defined(VECT_BLOCK_CHANGE)
             gc = VECT_BLOCK_CHANGE(sub_block, bm::set_block_digest_wave_size);
         #else
@@ -534,6 +535,19 @@ public:
     static
     bm::xor_complement_match best_metric(unsigned bc, unsigned gc,
                                         unsigned* best_metric);
+protected:
+
+    /// Return block from the reference vector [vect_idx, block_i, block_j]
+    ///
+    const bm::word_t* get_ref_block(size_type ri,
+                                    unsigned i, unsigned j) const BMNOEXCEPT
+    {
+        const bvector_type* bv = ref_vect_->get_bv(ri);
+        BM_ASSERT(bv);
+        const typename bvector_type::blocks_manager_type& bman =
+                                                bv->get_blocks_manager();
+        return bman.get_block_ptr(i, j);
+    }
 
 private:
     const bv_ref_vector_type*        ref_vect_ = 0; ///< ref.vect for XOR filter
@@ -598,11 +612,7 @@ bool xor_scanner<BV>::search_best_xor_mask(const bm::word_t* block,
 
     for (size_type ri = ridx_from; ri < ridx_to; ++ri)
     {
-        const bvector_type* bv = ref_vect_->get_bv(ri);
-        BM_ASSERT(bv);
-        const typename bvector_type::blocks_manager_type& bman =
-                                                bv->get_blocks_manager();
-        const bm::word_t* block_xor = bman.get_block_ptr(i, j);
+        const bm::word_t* block_xor = get_ref_block(ri, i, j);
         if (!IS_VALID_ADDR(block_xor) || BM_IS_GAP(block_xor))
             continue;
 
@@ -636,9 +646,7 @@ bool xor_scanner<BV>::search_best_xor_mask(const bm::word_t* block,
                         unsigned(float(bm::gap_max_bits) / bie_bits_per_int);
 
         unsigned xor_bc, xor_gc, xor_ibc;
-        const bvector_type* bv = ref_vect_->get_bv(size_type(best_ri));
-        const typename bvector_type::blocks_manager_type& bman = bv->get_blocks_manager();
-        const bm::word_t* block_xor = bman.get_block_ptr(i, j);
+        const bm::word_t* block_xor = get_ref_block(size_type(best_ri), i, j);
 
         bm::bit_block_xor(tb, block, block_xor, d64);
         bm::bit_block_change_bc(tb, &xor_gc, &xor_bc);
