@@ -96,6 +96,12 @@ namespace bm
 
 
 
+#ifdef BM64ADDR
+    typedef bm::id64_t   bvector_size_type;
+#else
+    typedef bm::id_t     bvector_size_type;
+#endif
+
 
 /*!
    @brief Bitvector
@@ -111,11 +117,7 @@ public:
     typedef typename allocator_type::allocator_pool_type allocator_pool_type;
     typedef blocks_manager<Alloc>                        blocks_manager_type;
     typedef typename blocks_manager_type::block_idx_type block_idx_type;
-#ifdef BM64ADDR
-    typedef bm::id64_t                                   size_type;
-#else
-    typedef bm::id_t                                     size_type;
-#endif
+    typedef bvector_size_type                            size_type;
 
     /** Statistical information about bitset's memory allocation details. */
     struct statistics : public bv_statistics
