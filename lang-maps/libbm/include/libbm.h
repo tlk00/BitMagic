@@ -32,6 +32,7 @@ For more information please visit:  http://bitmagic.io
 #define BM_ERR_CPU   (4)
 #define BM_ERR_SERIALFORMAT (5)
 #define BM_ERR_BAD_VALUE (6)
+#define BM_ERR_RANK_SELECT_IDX_MISSING (7)
 
 /* Error codes for Java/JNI incapsulation */
 #define BM_ERR_DETACHED (101)
@@ -48,6 +49,7 @@ For more information please visit:  http://bitmagic.io
 #define BM_ERR_CPU_MSG      "BM-04: Incorrect CPU vectorization (SIMD) version"
 #define BM_ERR_SERIALFORMAT_MSG "BM-05: Serialization format error"
 #define BM_ERR_BAD_VALUE_MSG "BM-06: Bad value"
+#define BM_ERR_RANK_SELECT_IDX_MISSING "BM-07: Rank-Select index not constructed, call sync() first"
 
 
 
