@@ -585,8 +585,12 @@ public:
     //@{
 
     /** Provide const iterator access to container content  */
-    const_iterator begin() const BMNOEXCEPT
-        { return const_iterator(this); }
+    const_iterator begin() const
+    {
+        if (!in_sync_)
+            throw_no_rsc_index(); // call sync() to build RSC fast access index
+        return const_iterator(this);
+    }
         
     /** Provide const iterator access to the end    */
     const_iterator end() const BMNOEXCEPT
@@ -803,6 +807,14 @@ private:
     void construct_rs_index();
     /// Free rs-index
     void free_rs_index();
+
+    /**
+        \brief throw error that RSC index not constructed (call sync())
+        \internal
+        @sa sync
+    */
+    static
+    void throw_no_rsc_index();
 
 protected:
     template<class SVect> friend class sparse_vector_scanner;
@@ -1191,6 +1203,7 @@ void rsc_sparse_vector<Val, SV>::sync_size() BMNOEXCEPT
         max_id_ = size_ = 0;
     else
         size_ = max_id_ + 1;
+    sync(false);
 }
 
 //---------------------------------------------------------------------
@@ -1357,6 +1370,18 @@ rsc_sparse_vector<Val, SV>::find_rank(size_type rank,
 
 //---------------------------------------------------------------------
 
+template<class Val, class SV>
+void rsc_sparse_vector<Val, SV>::throw_no_rsc_index()
+{
+#ifndef BM_NO_STL
+    throw std::domain_error("Rank-Select index not constructed, call sync() first");
+#else
+    BM_ASSERT_THROW(false, BM_ERR_RANGE);
+#endif
+}
+
+//---------------------------------------------------------------------
+
 
 template<class Val, class SV>
 typename rsc_sparse_vector<Val, SV>::size_type
@@ -1367,9 +1392,10 @@ rsc_sparse_vector<Val, SV>::decode(value_type* arr,
 {
     if (size == 0)
         return 0;
+    if (!in_sync_)
+        throw_no_rsc_index(); // call sync() to build RSC fast access index
         
     BM_ASSERT(arr);
-    BM_ASSERT(in_sync_);  // call sync() before decoding
     BM_ASSERT(bv_blocks_ptr_);
     
     if (idx_from >= this->size())
@@ -1430,7 +1456,7 @@ rsc_sparse_vector<Val, SV>::decode_buf(value_type*     arr,
 
     BM_ASSERT(arr && arr_buf_tmp);
     BM_ASSERT(arr != arr_buf_tmp);
-    BM_ASSERT(in_sync_);  // call sync() before decoding
+    BM_ASSERT(in_sync_);  // call sync() to build RSC fast access index
     BM_ASSERT(bv_blocks_ptr_);
 
     if ((bm::id_max - size) <= idx_from)

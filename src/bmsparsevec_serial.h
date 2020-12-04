@@ -873,6 +873,14 @@ void sparse_vector_serializer<SV>::serialize(const SV&  sv,
     bvs_.allow_stat_reset(false); // stats accumulate mode for all bit-slices
     bvs_.reset_compression_stats();
 
+    if (!sv.size()) // special case of an empty vector
+    {
+        unsigned char* buf = sv_layout.reserve(4);
+        buf[0]='B'; buf[1] = 'Z';
+        sv_layout.resize(2);
+        return;
+    }
+
     build_plane_digest(plane_digest_bv_, sv);
     bvs_.serialize(plane_digest_bv_, plane_digest_buf_);
 
@@ -1246,8 +1254,6 @@ void sparse_vector_deserializer<SV>::deserialize_sv(SV& sv,
 
     unsigned char matr_s_ser = 0;
     unsigned planes = load_header(dec, sv, matr_s_ser);
-
-//    bm::id64_t sv_size = dec.get_64();
     if (!sv_size_)
         return;  // empty vector
         
@@ -1310,14 +1316,20 @@ unsigned sparse_vector_deserializer<SV>::load_header(
     unsigned char h1 = dec.get_8();
     unsigned char h2 = dec.get_8();
 
-    BM_ASSERT(h1 == 'B' && (h2 == 'M' || h2 == 'C'));
+    BM_ASSERT(h1 == 'B' && (h2 == 'M' || h2 == 'C' || h2 == 'Z'));
 
-    bool sig2_ok = (h2 == 'M' || h2 == 'C');
+    bool sig2_ok = (h2 == 'M' || h2 == 'C' || h2 == 'Z');
     if (h1 != 'B' || !sig2_ok) //&& (h2 != 'M' || h2 != 'C'))  // no magic header?
         raise_invalid_header();
+    unsigned planes = 0;
+    if (h2 == 'Z') // empty serialization package
+    {
+        sv_size_ = 0;
+        return planes;
+    }
 
     unsigned char bv_bo = dec.get_8(); (void) bv_bo;
-    unsigned planes = dec.get_8();
+    planes = dec.get_8();
     if (planes == 0)  // bit-matrix
     {
         matr_s_ser = dec.get_8(); // matrix serialization version
