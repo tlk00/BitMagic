@@ -4,6 +4,7 @@
 #include <queue>
 #include <thread>
 #include <mutex>
+#include <atomic>
 #include <condition_variable>
 
 #include "bmtask.h"
@@ -54,7 +55,7 @@ private:
     spin_lock& operator=(const spin_lock&)=delete;
 
 private:
-    std::atomic<unsigned> locked_{false};
+    std::atomic<unsigned> locked_ = false;
     Pad p_;
 };
 
