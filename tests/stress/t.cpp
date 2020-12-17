@@ -63,6 +63,7 @@ For more information please visit:  http://bitmagic.io
 #include <bmtimer.h>
 #include <bmtask.h>
 #include <bmsparsevec_parallel.h>
+#include <bmthreadpool.h>
 
 using namespace bm;
 using namespace std;
@@ -362,6 +363,7 @@ typedef std::vector<unsigned> ref_vect_type;
 typedef bm::sparse_vector<unsigned, bvect > sparse_vector_u32;
 typedef bm::sparse_vector<unsigned long long, bvect > sparse_vector_u64;
 typedef bm::rsc_sparse_vector<unsigned, sparse_vector_u32> rsc_sparse_vector_u32;
+typedef bm::rsc_sparse_vector<unsigned long long, sparse_vector_u64> rsc_sparse_vector_u64;
 
 //const unsigned BITVECT_SIZE = 100000000 * 8;
 
@@ -2984,11 +2986,11 @@ bm::id64_t bit_block_calc_xor_change_digest(
                         block_waves_xor_descr&  x_descr,
                         bm::xor_complement_match& match_type)
 {
-    unsigned bgain;
-    bm::id64_t digest;
-    bm::compute_complexity_descr(block, x_descr);
-    bm::compute_xor_complexity_descr(block, xor_block, x_descr, match_type, digest, bgain);
-    return digest;
+    bm::compute_s_block_descr(block, x_descr);
+    block_xor_match_descr xmd;
+    bm::compute_xor_complexity_descr(block, xor_block, x_descr, xmd);
+    match_type = xmd.match_type;
+    return xmd.xor_d64;
 }
 
 static
@@ -3020,7 +3022,7 @@ void TestBlockCountXORChange()
 
     {
         bm::word_t BM_VECT_ALIGN blk[bm::set_block_size] BM_VECT_ALIGN_ATTR = { 0 };
-        bm::compute_complexity_descr(blk, x_descr);
+        bm::compute_s_block_descr(blk, x_descr);
         for (unsigned k = 0; k < bm::block_waves; ++k)
         {
             assert(x_descr.sb_bc[k] == 0);
@@ -3028,7 +3030,7 @@ void TestBlockCountXORChange()
 
 
         blk[0] = 1;
-        bm::compute_complexity_descr(blk, x_descr);
+        bm::compute_s_block_descr(blk, x_descr);
         assert(x_descr.sb_bc[0] == 1);
         assert(x_descr.sb_gc[0] == 2);
         for (unsigned k = 1; k < bm::block_waves; ++k)
@@ -3038,7 +3040,7 @@ void TestBlockCountXORChange()
 
 
         blk[0] = 1 | (1 << 1);
-        bm::compute_complexity_descr(blk, x_descr);
+        bm::compute_s_block_descr(blk, x_descr);
         assert(x_descr.sb_bc[0] == 2);
         assert(x_descr.sb_gc[0] == 2);
         for (unsigned k = 1; k < bm::block_waves; ++k)
@@ -3047,7 +3049,7 @@ void TestBlockCountXORChange()
         } // for
 
         blk[bm::set_block_size-1] = 1 | (1 << 1);
-        bm::compute_complexity_descr(blk, x_descr);
+        bm::compute_s_block_descr(blk, x_descr);
         assert(x_descr.sb_bc[0] == 2);
         assert(x_descr.sb_gc[0] == 2);
         assert(x_descr.sb_bc[bm::block_waves-1] == 2);
@@ -3059,7 +3061,7 @@ void TestBlockCountXORChange()
         } // for
 
         blk[0] = 0;
-        bm::compute_complexity_descr(blk, x_descr);
+        bm::compute_s_block_descr(blk, x_descr);
         assert(x_descr.sb_bc[bm::block_waves-1] == 2);
         assert(x_descr.sb_gc[bm::block_waves-1] == 3);
         for (unsigned k = 0; k < bm::block_waves-1; ++k)
@@ -3067,6 +3069,61 @@ void TestBlockCountXORChange()
             assert(x_descr.sb_bc[k] == 0);
             assert(x_descr.sb_gc[k] == 1);
         } // for
+
+    }
+
+    // test match vector search/refine
+    //
+    {
+        typedef
+        bm::heap_vector<bm::block_xor_match_descr, bvect::allocator_type, true>
+            xor_matches_vector_type;
+        typedef
+        bm::heap_vector<bm::match_pair, bvect::allocator_type, true>
+            m_pairs_vector_type;
+        xor_matches_vector_type xm_vect;
+        m_pairs_vector_type pm_vect;
+        {
+            block_xor_match_descr xmd;
+            xmd.match_type = e_xor_match_BC; xmd.ref_idx = 10; xmd.xor_d64 = 1ull;
+            xm_vect.push_back(xmd);
+        }
+        auto cnt = bm::greedy_refine_match_vector(pm_vect, xm_vect, 10, (1ull << 1), e_xor_match_BC);
+        assert(!cnt);
+        assert(pm_vect.size()==0);
+        cnt = bm::greedy_refine_match_vector(pm_vect, xm_vect, 11, (1ull << 1), e_xor_match_BC);
+        assert(cnt == 1);
+        assert(pm_vect.size()==1);
+        bm::match_pair mp = pm_vect[0];
+        assert(mp.ref_idx == 10);
+        assert(pm_vect[0].xor_d64 == 1ull);
+        cnt = bm::greedy_refine_match_vector(pm_vect, xm_vect, 11, (1ull << 1), e_xor_match_iBC);
+        assert(cnt == 0);
+
+        {
+            block_xor_match_descr xmd;
+            xmd.match_type = e_xor_match_BC; xmd.ref_idx = 20; xmd.xor_d64 = 3ull;
+            xm_vect.push_back(xmd);
+        }
+        cnt = bm::greedy_refine_match_vector(pm_vect, xm_vect, 11, (1ull << 1), e_xor_match_BC);
+        assert(cnt == 1);
+        mp = pm_vect[0];
+        assert(pm_vect[0].ref_idx == 10);
+        assert(mp.xor_d64 == 1ull);
+
+        {
+            block_xor_match_descr xmd;
+            xmd.match_type = e_xor_match_BC; xmd.ref_idx = 25; xmd.xor_d64 = 3ull << 60;
+            xm_vect.push_back(xmd);
+        }
+        cnt = bm::greedy_refine_match_vector(pm_vect, xm_vect, 11, (1ull << 1), e_xor_match_BC);
+        assert(cnt == 2);
+        mp = pm_vect[0];
+        assert(pm_vect[0].ref_idx == 10);
+        assert(mp.xor_d64 == 1ull);
+        mp = pm_vect[1];
+        assert(mp.ref_idx == 25);
+        assert(mp.xor_d64 == 3ull << 60);
 
     }
 
@@ -13354,9 +13411,15 @@ void TestSparseVectorSerialization2()
             if (!eq)
             {
                 sparse_vector_u32::size_type pos;
-                bool f = bm::sparse_vector_find_first_mismatch(sv1, sv4, pos);
+                bool f = bm::sparse_vector_find_first_mismatch(sv_r, sv4, pos);
                 assert(f);
                 cerr << "Mismatch at: " << pos << endl;
+
+                auto v4 = sv4[pos];
+                auto v_r = sv_r[pos];
+                auto v1 = sv1.get(pos);
+                cout << "v4=" << v4 << "  v_r=" << v_r << " v1=" << v1 << endl;
+
                 assert(eq);
                 exit(1);
             }
@@ -19472,10 +19535,10 @@ void TestSparseVector()
         const bvect::blocks_manager_type& bman_x = bv_x->get_blocks_manager();
         const bm::word_t* block_x = bman_x.get_block_ptr(0, 0);
 
-        xscan.compute_x_block_stats(block_x);
-        assert(xscan.get_x_bc() == 1);
-        assert(xscan.get_x_gc() == 2);
-        assert(xscan.get_x_block_best() == 1);
+        xscan.compute_s_block_stats(block_x);
+        assert(xscan.get_s_bc() == 1);
+        assert(xscan.get_s_gc() == 2);
+        assert(xscan.get_s_block_best() == 1);
 
         idx = xscan.get_ref_vector().find(unsigned(0));
         assert(idx == 0);
@@ -19501,10 +19564,10 @@ void TestSparseVector()
         const bvect::blocks_manager_type& bman_x = bv_x->get_blocks_manager();
         const bm::word_t* block_x = bman_x.get_block_ptr(0, 0);
 
-        xscan.compute_x_block_stats(block_x);
-        assert(xscan.get_x_bc() == 2);
-        assert(xscan.get_x_gc() == 2);
-        assert(xscan.get_x_block_best() == 2);
+        xscan.compute_s_block_stats(block_x);
+        assert(xscan.get_s_bc() == 2);
+        assert(xscan.get_s_gc() == 2);
+        assert(xscan.get_s_block_best() == 2);
 
         auto idx = xscan.get_ref_vector().find(unsigned(0));
         assert(idx == 0);
@@ -19722,7 +19785,9 @@ void TestSparseVector()
         sv.push_back(1);
         sv.push_back(2);
         sv.push_back(4);
+        bm::sparse_vector<unsigned, bvect> sv1(sv);
 
+        {
         optimize_plan_builder<bm::sparse_vector<unsigned, bvect>, std::mutex> opt_builder;
         optimize_plan_builder<bm::sparse_vector<unsigned, bvect>, std::mutex>::task_batch tbatch;
 
@@ -19735,6 +19800,34 @@ void TestSparseVector()
 
         bm::run_task_batch(tbatch);
         assert(st.gap_blocks == 4);
+        }
+
+        optimize_plan_builder<bm::sparse_vector<unsigned, bvect>, std::mutex> opt_builder;
+        optimize_plan_builder<bm::sparse_vector<unsigned, bvect>, std::mutex>::task_batch tbatch;
+
+        bm::sparse_vector<unsigned, bvect>::statistics st;
+        st.reset();
+        opt_builder.build_plan(tbatch, sv1,
+          bm::sparse_vector<unsigned, bvect>::bvector_type::opt_compress, &st);
+
+        typedef
+        bm::thread_pool<bm::task_description*, bm::spin_lock<bm::pad0_struct> > pool_type;
+        pool_type tpool;  // our thread pool here (no threads created yet)
+        tpool.start(4); // start the threads
+
+
+        {
+            bm::thread_pool_executor<pool_type> exec;
+            exec.run(tpool, tbatch, true);
+        }
+
+        tpool.set_stop_mode(pool_type::stop_when_done);
+        tpool.join();
+
+        assert(st.gap_blocks == 4);
+        bool eq = sv.equal(sv1);
+        assert(eq);
+
     }}
 
     cout << "svector Import test..." << endl;
@@ -20972,12 +21065,43 @@ void TestSparseVectorAlgo()
     cout << " -------------------------- TestSparseVectorAlgo() OK" << endl;
 }
 
+// Debugging function to validate match findings integrity
+//
+static
+void validate_match_pairs(
+    const bm::xor_scanner<bvect>::match_pairs_vector_type& mp_vect,
+    unsigned xor_idx)
+{
+    bvect bv_acc;
+    auto sz = mp_vect.size();
+    if (!sz)
+        return;
+    for (unsigned i = 0; i < sz; ++i)
+    {
+        const bm::match_pair& mp = mp_vect[i];
+        assert(xor_idx != mp.ref_idx);
+        if (bv_acc.test(mp.ref_idx))
+        {
+            assert(0); // double searched element
+        }
+        bv_acc.set(mp.ref_idx);
+        for (unsigned j = 0; j < sz; ++j)
+        {
+            if (i == j)
+                continue;
+            const bm::match_pair& mp_j = mp_vect[j];
+            assert(0 == (mp.xor_d64 & mp_j.xor_d64)); // never inetersect
+        } // for j
+    } // for i
+}
+
 
 static
 void TestSparseVector_XOR_Scanner()
 {
     cout << " -------------------------- TestSparseVector_XOR_Scanner()" << endl;
     BM_DECLARE_TEMP_BLOCK(tb)
+    BM_DECLARE_TEMP_BLOCK(tb2)
 
     // XOR scanner EQ test
     {{
@@ -20994,7 +21118,7 @@ void TestSparseVector_XOR_Scanner()
         const bvect::blocks_manager_type& bman_x = bv_x->get_blocks_manager();
         const bm::word_t* block_x = bman_x.get_block_ptr(0, 0);
 
-        xscan.compute_x_block_stats(block_x);
+        xscan.compute_s_block_stats(block_x);
 
         auto idx = xscan.get_ref_vector().find(unsigned(0));
         assert(idx == 0);
@@ -21025,7 +21149,7 @@ void TestSparseVector_XOR_Scanner()
         const bvect::blocks_manager_type& bman_x = bv_x->get_blocks_manager();
         const bm::word_t* block_x = bman_x.get_block_ptr(0, 0);
 
-        xscan.compute_x_block_stats(block_x);
+        xscan.compute_s_block_stats(block_x);
 
         auto idx = xscan.get_ref_vector().find(unsigned(0));
         assert(idx == 0);
@@ -21059,7 +21183,7 @@ void TestSparseVector_XOR_Scanner()
         const bvect::blocks_manager_type& bman_x = bv_x->get_blocks_manager();
         const bm::word_t* block_x = bman_x.get_block_ptr(0, 0);
 
-        xscan.compute_x_block_stats(block_x);
+        xscan.compute_s_block_stats(block_x);
 
         auto idx = xscan.get_ref_vector().find(unsigned(0));
         assert(idx == 0);
@@ -21078,6 +21202,296 @@ void TestSparseVector_XOR_Scanner()
         assert(idx == 3); // matrix row 3
     }}
 
+    // test chain compression search
+    //
+    // case 1: main (base) reference vector is found + a chain of improves
+    cout << " case 1: main (base) reference vector is found + a chain of improves" << endl;
+    {{
+        const unsigned stride_len = 1024;
+        bm::sparse_vector<unsigned, bvect> sv;
+
+        bvect::size_type from = 0;
+        unsigned mask = (1u << 1);
+
+        for (unsigned k = 0; k < 2; ++k)
+        {
+            unsigned v = 1u | mask;
+            for (unsigned i = 0; i < stride_len; i+=2)
+            {
+                bvect::size_type idx = from + i;
+                sv.set(idx, v);
+            } // for i
+            from += stride_len;
+            mask <<= 1;
+            if (!mask)
+                break;
+        } // for k
+
+        bm::xor_scanner<bvect> xscan;
+        bm::xor_scanner<bvect>::bv_ref_vector_type r_vect;
+        r_vect.build(sv.get_bmatrix());
+        xscan.set_ref_vector(&r_vect);
+
+        const bvect* bv_x = sv.get_plane(0);
+        const bvect::blocks_manager_type& bman_x = bv_x->get_blocks_manager();
+        const bm::word_t* block_x = bman_x.get_block_ptr(0, 0);
+
+        auto idx = xscan.get_ref_vector().find(unsigned(0));
+        assert(idx == 0);
+
+        // important before search_best_xor_mask
+        xscan.compute_s_block_stats(block_x);
+
+        auto sz = xscan.get_ref_vector().size();
+        bool f = xscan.search_best_xor_mask(block_x,
+                                            1, sz,
+                                            0, 0, tb);
+        assert(f);
+
+        idx = xscan.found_ridx();
+        bm::id64_t d64 = xscan.get_xor_digest();
+        assert(d64 == 1);
+        assert(idx == 1); // matrix row 1
+
+        bm::xor_scanner<bvect>::xor_matches_vector_type& mvect =
+            xscan.get_match_vector();
+        auto mv_sz = mvect.size();
+        assert(mv_sz == 2);
+
+        bm::xor_complement_match mtype = xscan.get_best_match_type();
+        assert(mtype == e_xor_match_BC);
+
+        bm::xor_scanner<bvect>::match_pairs_vector_type pm_vect;
+
+        auto pm_cnt = bm::greedy_refine_match_vector(pm_vect, mvect, idx, d64, e_xor_match_BC);
+        assert(pm_cnt == 1);
+        validate_match_pairs(pm_vect, idx);
+
+        xscan.apply_xor_match_vector(tb, block_x, xscan.get_found_block(), d64, pm_vect, 0, 0);
+        auto tb_cnt = bm::bit_block_count(tb);
+        assert(tb_cnt == 0);
+
+        // reverse XOR
+        xscan.apply_xor_match_vector(tb2, tb, xscan.get_found_block(), d64, pm_vect, 0, 0);
+        unsigned block_pos;
+        bool found = bm::block_find_first_diff(tb2, block_x, &block_pos);
+        assert(!found);
+
+    }}
+
+
+    // case 2: main (base) reference vector is found + a chain of improves
+    cout << " case 2: main (base) reference vector is found + a chain of improves" << endl;
+    {{
+        const unsigned stride_len = 1024;
+
+        for (unsigned pass = 2; pass < 63; ++pass)
+        {
+            bm::sparse_vector<unsigned, bvect> sv;
+            bvect::size_type from = 0;
+
+            unsigned mask = (1u << 1);
+            for (unsigned k = 0; k < pass; ++k)
+            {
+                unsigned v = 1u | mask;
+                for (unsigned i = 0; i < stride_len; i+=2)
+                {
+                    bvect::size_type idx = from + i;
+                    sv.set(idx, v);
+                } // for i
+                from += stride_len;
+                mask <<= 1;
+                if (!mask)
+                    mask = 1u << 1;
+            } // for k
+
+            bm::xor_scanner<bvect> xscan;
+            bm::xor_scanner<bvect>::bv_ref_vector_type r_vect;
+            r_vect.build(sv.get_bmatrix());
+            xscan.set_ref_vector(&r_vect);
+
+            const bvect* bv_x = sv.get_plane(0);
+            auto cnt = bv_x->count();
+            cout << cnt << endl;
+            const bvect::blocks_manager_type& bman_x = bv_x->get_blocks_manager();
+            const bm::word_t* block_x = bman_x.get_block_ptr(0, 0);
+
+            auto idx = xscan.get_ref_vector().find(unsigned(0));
+            assert(idx == 0);
+
+            // important before search_best_xor_mask
+            xscan.compute_s_block_stats(block_x);
+
+            auto sz = xscan.get_ref_vector().size();
+            bool f = xscan.search_best_xor_mask(block_x,
+                                                1, sz,
+                                                0, 0, tb);
+            if (cnt < 23000)
+            {
+                assert(f);
+            }
+
+            idx = xscan.found_ridx();
+            bm::id64_t d64 = xscan.get_xor_digest();
+
+            bm::xor_scanner<bvect>::xor_matches_vector_type& mvect =
+                xscan.get_match_vector();
+
+            if (!f)
+            {
+                assert(bm::word_bitcount64(d64)==2);
+                assert(mvect.size());
+            }
+
+            if (pass < 32)
+            {
+                assert(d64 == 1);
+            }
+            else
+            {
+                assert(bm::word_bitcount64(d64)==2);
+            }
+
+            assert(idx == 1); // matrix row 1
+
+            auto mv_sz = mvect.size();
+            if (pass < 32)
+            {
+                assert(mv_sz == pass);
+            }
+            else
+            {
+                assert(mv_sz == 31);
+            }
+
+            bm::xor_complement_match mtype = xscan.get_best_match_type();
+            assert(mtype == e_xor_match_BC);
+
+
+            auto pm_cnt = xscan.refine_match_chain();
+            if (pass < 32)
+            {
+                assert(pm_cnt == pass-1);
+            }
+            else
+            {
+                assert(pm_cnt == 30);
+            }
+            bm::xor_scanner<bvect>::match_pairs_vector_type& pm_vect
+                                                = xscan.get_match_pairs();
+            validate_match_pairs(pm_vect, idx);
+
+            xscan.apply_xor_match_vector(tb, block_x, xscan.get_found_block(), d64, pm_vect, 0, 0);
+            auto tb_cnt = bm::bit_block_count(tb);
+            assert(tb_cnt == 0);
+
+            // reverse XOR
+            xscan.apply_xor_match_vector(tb2, tb, xscan.get_found_block(), d64, pm_vect, 0, 0);
+            unsigned block_pos;
+            bool found = bm::block_find_first_diff(tb2, block_x, &block_pos);
+            assert(!found);
+
+        } // for pass
+    }}
+
+
+
+
+    // case 3: main (base) reference vector is found + a chain of improves
+    // (inverted)
+    cout << " case 3: main (base) reference vector is found + a chain of improves (inverted)" << endl;
+    {{
+        const unsigned stride_len = 1024;
+
+//        for (unsigned pass = 62; pass < 63; ++pass)
+        unsigned pass = 63;
+        {
+            bm::sparse_vector<unsigned, bvect> sv;
+            bvect::size_type from = 0;
+
+            unsigned mask = (1u << 1);
+            for (unsigned k = 0; k < pass; ++k)
+            {
+                unsigned v = 1u;
+                for (unsigned i = 0; i < stride_len; i+=2)
+                {
+                    bvect::size_type idx = from + i;
+                    sv.set(idx, v);
+                    sv.set(idx+1, mask); // mask is 1 shifted
+                } // for i
+                from += stride_len;
+                mask <<= 1;
+                if (!mask)
+                    mask = 1u << 1;
+            } // for k
+
+            bm::xor_scanner<bvect> xscan;
+            bm::xor_scanner<bvect>::bv_ref_vector_type r_vect;
+            r_vect.build(sv.get_bmatrix());
+            xscan.set_ref_vector(&r_vect);
+
+            const bvect* bv_x = sv.get_plane(0);
+            auto cnt = bv_x->count();
+            cout << cnt << endl;
+            const bvect::blocks_manager_type& bman_x = bv_x->get_blocks_manager();
+            const bm::word_t* block_x = bman_x.get_block_ptr(0, 0);
+
+            auto idx = xscan.get_ref_vector().find(unsigned(0));
+            assert(idx == 0);
+
+            // important before search_best_xor_mask
+            xscan.compute_s_block_stats(block_x);
+
+            auto sz = xscan.get_ref_vector().size();
+            bool f = xscan.search_best_xor_mask(block_x,
+                                                1, sz,
+                                                0, 0, tb);
+            assert(!f);
+            idx = xscan.found_ridx();
+            bm::id64_t d64 = xscan.get_xor_digest();
+
+            bm::xor_scanner<bvect>::xor_matches_vector_type& mvect =
+                xscan.get_match_vector();
+
+            if (!f)
+            {
+                assert(bm::word_bitcount64(d64)==3);
+                assert(mvect.size());
+            }
+
+            assert(idx == 1); // matrix row 1
+
+            auto mv_sz = mvect.size();
+            assert(mv_sz == 31);
+
+            bm::xor_complement_match mtype = xscan.get_best_match_type();
+            assert(mtype == e_xor_match_iBC);
+
+            bm::xor_scanner<bvect>::match_pairs_vector_type pm_vect;
+
+            auto pm_cnt = bm::greedy_refine_match_vector(pm_vect, mvect, idx, d64, mtype);
+            assert(pm_cnt == 30);
+
+            validate_match_pairs(pm_vect, idx);
+
+            xscan.apply_xor_match_vector(tb, block_x, xscan.get_found_block(), d64, pm_vect, 0, 0);
+            auto tb_cnt = bm::bit_block_count(tb);
+            assert(tb_cnt == 64512);
+
+            // reverse XOR
+            xscan.apply_xor_match_vector(tb2, tb, xscan.get_found_block(), d64, pm_vect, 0, 0);
+            unsigned block_pos;
+            bool found = bm::block_find_first_diff(tb2, block_x, &block_pos);
+            assert(!found);
+
+        } // for pass
+    }}
+
+
+
+
+
+
     cout << " -------------------------- TestSparseVector_XOR_Scanner() OK" << endl;
 }
 
@@ -21088,12 +21502,60 @@ void TestSparseVectorSerial()
 {
     cout << "---------------------------- Test sparse vector serializer" << endl;
 
+    cout << "  test chain XOR serialization.. " << endl;
+    {
+        bm::sparse_vector_serializer<sparse_vector_u32> sv_ser;
+        bm::sparse_vector_deserializer<sparse_vector_u32> sv_deserial;
+        sparse_vector_serial_layout<sparse_vector_u32> sv_lay;
+
+        sv_ser.set_xor_ref(true);
+
+        const unsigned stride_len = 1024;
+
+        for (unsigned pass = 2; pass < 128; ++pass)
+        {
+            sparse_vector_u32 sv;
+            bvect::size_type from = 0;
+
+            unsigned mask = (1u << 1);
+            for (unsigned k = 0; k < pass; ++k)
+            {
+                unsigned v = 1u | mask;
+                for (unsigned i = 0; i < stride_len; i+=2)
+                {
+                    bvect::size_type idx = from + i;
+                    sv.set(idx, v);
+                } // for i
+                from += stride_len;
+                mask <<= 1;
+                if (!mask)
+                    mask = 1u << 1;
+            } // for k
+
+            sv_ser.serialize(sv, sv_lay);
+            const bvect::size_type* cstat = sv_ser.get_bv_serializer().get_compression_stat();
+            assert(cstat[bm::set_block_xor_chain]>=1);
+            {
+                const unsigned char* buf = sv_lay.buf();
+                sparse_vector_u32 sv2;
+                sv_deserial.deserialize(sv2, buf);
+
+                bool eq = sv.equal(sv2);
+                assert(eq);
+            }
+
+        } // for pass
+    }
+
     bm::sparse_vector_serializer<sparse_vector_u32> sv_ser;
     sv_ser.set_xor_ref(false);
+//sv_ser.set_xor_ref(true);
+    bm::sparse_vector_deserializer<sparse_vector_u32> sv_deserial;
 
     for (unsigned pass = 0; pass < 2; ++pass)
     {
         // simple test gather for non-NULL vector
+
         {
             sparse_vector_u32 sv1;
             sparse_vector_u32 sv2;
@@ -21103,8 +21565,6 @@ void TestSparseVectorSerial()
             sparse_vector_serial_layout<sparse_vector_u32> sv_lay;
             sv_ser.serialize(sv1, sv_lay);
             const unsigned char* buf = sv_lay.buf();
-
-            bm::sparse_vector_deserializer<sparse_vector_u32> sv_deserial;
 
             sparse_vector_u32::bvector_type bv_mask;
             bv_mask.set(0);
@@ -21123,7 +21583,9 @@ void TestSparseVectorSerial()
             assert(st.gap_blocks);
         }
 
+
         // simple test gather for NULL-able vector
+
         {
             sparse_vector_u32 sv1(bm::use_null);
             sparse_vector_u32 sv2(sv1);
@@ -21172,9 +21634,12 @@ void TestSparseVectorSerial()
                 assert(sv2.get(1) == 0);
                 assert(sv2.get(2) == 0);
             }
+
         }
 
+
         // stress test gather deserialization
+
         cout << "Gather deserialization stress test..." << endl;
         {
             sparse_vector_u32::size_type from, to;
@@ -21205,6 +21670,16 @@ void TestSparseVectorSerial()
                 sv_deserial.deserialize(sv4, buf);
                 {
                     bool is_eq = sv1.equal(sv4);
+                    if (!is_eq)
+                    {
+                        sparse_vector_u32::size_type midx;
+                        bool b = bm::sparse_vector_find_first_mismatch(sv1, sv4, midx);
+                        assert(b);
+                        cout << "Mismatch at pos = " << midx << endl;
+                        auto v1 = sv1[midx];
+                        auto v4 = sv4[midx];
+                        cout << "v1=" << v1 << " v4=" << v4 << " xor(v1, v4)=" << (v1 ^ v4) << endl;
+                    }
                     assert(is_eq);
                 }
 
@@ -28597,6 +29072,32 @@ void TestCompressSparseVector()
         assert(csv3.equal(csv2));
     }
 
+
+    // test contributed by A.Shkeda
+    {
+        rsc_sparse_vector_u64 ins;
+        unsigned long long v0 = 93396ull | (237ull << 32);
+        ins.set(2882526, v0);
+
+        bool ex_flag = false;
+        try {
+            auto it = ins.begin(); // throws an exeption on missing RSC index
+            auto it_end = ins.end();
+            while (it != it_end) {
+                if (it.is_null() == false) {
+                  auto v = it.value(); // CRASH! BOOM!
+                  assert(v == v0);
+                }
+                it.advance();
+            }
+        }
+        catch (std::domain_error& ex)
+        {
+            ex_flag = true;
+        }
+        assert(ex_flag);
+    }
+
     {
     cout << "push_back() test" << endl;
     unsigned v, v1;
@@ -28749,7 +29250,8 @@ void TestCompressSparseVector()
             }
         }
     }
-    
+
+
     cout << " back inserter tests" << endl;
     {
         rsc_sparse_vector_u32 csv1;
@@ -29373,6 +29875,22 @@ void TestCompressSparseVectorSerial()
 {
     cout << " ------------------------------ TestCompressSparseVectorSerial()" << endl;
 
+    // empty test
+    {
+        rsc_sparse_vector_u32 csv1;
+        rsc_sparse_vector_u32 csv2;
+        BM_DECLARE_TEMP_BLOCK(tb)
+        sparse_vector_serial_layout<rsc_sparse_vector_u32> sv_lay;
+        bm::sparse_vector_serialize<rsc_sparse_vector_u32>(csv1, sv_lay, tb);
+        const unsigned char* buf = sv_lay.buf();
+        auto sz = sv_lay.size();
+        assert(sz == 2);
+
+        bm::sparse_vector_deserializer<rsc_sparse_vector_u32> sv_deserial;
+        sv_deserial.deserialize(csv2, buf);
+        assert(csv2.size() == csv1.size());
+    }
+
     {
         rsc_sparse_vector_u32 csv1;
         rsc_sparse_vector_u32 csv2;
@@ -29829,7 +30347,7 @@ int parse_args(int argc, char *argv[])
             is_sv = true;
             continue;
         }
-        if (arg == "-csv")
+        if (arg == "-csv" || arg == "-rsc")
         {
             is_all = false;
             is_csv = true;
@@ -30106,6 +30624,7 @@ int main(int argc, char *argv[])
 
     if (is_all || is_sv)
     {
+
         TestSparseVector();
 
         TestSparseVectorAlgo();
