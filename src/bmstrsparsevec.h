@@ -1171,7 +1171,8 @@ protected:
                     }
                     if (remap_flags_) // re-mapping is in effect
                     {
-                        unsigned char remap_value = remap_matrix2_.get(i, unsigned(ch));
+                        unsigned char remap_value =
+                            remap_matrix2_.get(i, (unsigned char)(ch));
                         BM_ASSERT(remap_value);
                         if (!remap_value) // unknown dictionary element
                             throw_bad_value(0);
@@ -1573,7 +1574,7 @@ int str_sparse_vector<CharType, BV, MAX_STR_SIZE>::compare(
             res = (remap_value > octet) - (remap_value < octet);
             if (res || !octet)
                 break;
-        } // for
+        } // for i
     }
     else
     {
@@ -1589,7 +1590,7 @@ int str_sparse_vector<CharType, BV, MAX_STR_SIZE>::compare(
             res = (sv_octet > octet) - (sv_octet < octet);
             if (res || !octet)
                 break;
-        } // for
+        } // for i
     }
     return res;
 }
@@ -1671,7 +1672,8 @@ void str_sparse_vector<CharType, BV, MAX_STR_SIZE>::calc_octet_stat(
                 break;
             typename octet_freq_matrix_type::value_type* row =
                                                     octet_matrix.row(i);
-            row[size_t(ch)] += 1;
+            unsigned ch_idx = (unsigned char)ch;
+            row[ch_idx] += 1;
         } // for i
     } // for it
 
