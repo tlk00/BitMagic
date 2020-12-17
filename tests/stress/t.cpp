@@ -3108,18 +3108,21 @@ void TestBlockCountXORChange()
         cnt = bm::greedy_refine_match_vector(pm_vect, xm_vect, 11, (1ull << 1), e_xor_match_BC);
         assert(cnt == 1);
         mp = pm_vect[0];
-        assert(pm_vect[0].ref_idx == 10);
+        assert(pm_vect[0].ref_idx == 20);
         assert(mp.xor_d64 == 1ull);
 
         {
+            xm_vect.resize(0);
             block_xor_match_descr xmd;
+            xmd.match_type = e_xor_match_BC; xmd.ref_idx = 20; xmd.xor_d64 = 3ull;
+            xm_vect.push_back(xmd);
             xmd.match_type = e_xor_match_BC; xmd.ref_idx = 25; xmd.xor_d64 = 3ull << 60;
             xm_vect.push_back(xmd);
         }
         cnt = bm::greedy_refine_match_vector(pm_vect, xm_vect, 11, (1ull << 1), e_xor_match_BC);
         assert(cnt == 2);
         mp = pm_vect[0];
-        assert(pm_vect[0].ref_idx == 10);
+        assert(pm_vect[0].ref_idx == 20);
         assert(mp.xor_d64 == 1ull);
         mp = pm_vect[1];
         assert(mp.ref_idx == 25);
