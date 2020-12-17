@@ -1097,7 +1097,6 @@ public:
         unsigned i, j;
         bm::get_block_coord(nb, i, j);
         bm::word_t* block = this->get_block_ptr(i, j);
-
         if (!IS_VALID_ADDR(block)) // NULL block or ALLSET
         {
             // if we wanted ALLSET and requested block is ALLSET return NULL
@@ -1120,7 +1119,7 @@ public:
         }
         return block;
     }
-    
+
 
     /*! @brief Fills all blocks with 0.
         @param free_mem - if true function frees the resources (obsolete)
@@ -1206,7 +1205,6 @@ public:
 
         // NOTE: block will be replaced without freeing, potential memory leak?
         top_blocks_[nblk_blk][nb & bm::set_array_mask] = block;
-
         return old_block;
     }
 
@@ -1258,7 +1256,6 @@ public:
     bm::word_t* set_block(unsigned i, unsigned j, bm::word_t* block, bool gap)
     {
         BM_ASSERT(i < top_block_size_);
-     
         bm::word_t* old_block;
         if (block)
         {
@@ -1521,27 +1518,33 @@ public:
     {
         unsigned i, j;
         get_block_coord(nb, i, j);
+        return deoptimize_block(i, j);
+    }
+
+    bm::word_t* deoptimize_block(unsigned i, unsigned j)
+    {
         bm::word_t* block = this->get_block_ptr(i, j);
         if (BM_IS_GAP(block))
         {
             gap_word_t* gap_block = BMGAP_PTR(block);
-            
+
             bm::word_t* new_block = alloc_.alloc_bit_block();
             bm::gap_convert_to_bitset(new_block, gap_block);
             alloc_.free_gap_block(gap_block, this->glen());
-            
-            set_block_ptr(nb, new_block);
+
+            set_block_ptr(i, j, new_block);
             return new_block;
         }
-        if (IS_FULL_BLOCK(block)) 
+        if (IS_FULL_BLOCK(block))
         {
             bm::word_t* new_block = alloc_.alloc_bit_block();
             bm::bit_block_set(new_block, ~0u);
-            set_block_ptr(nb, new_block);
+            set_block_ptr(i, j, new_block);
             return new_block;
         }
         return block;
     }
+
 
     /**
         Free block, make it zero pointer in the tree
