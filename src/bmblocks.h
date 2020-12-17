@@ -1296,8 +1296,11 @@ public:
         
         bm::word_t** blk_blk = (bm::word_t**)alloc_.alloc_ptr(bm::set_sub_array_size);
         top_blocks_[i] = blk_blk;
-        for (unsigned j = 0; j < bm::set_sub_array_size; ++j)
-            blk_blk[j] = addr_to_set;
+        for (unsigned j = 0; j < bm::set_sub_array_size; j+=4)
+        {
+            blk_blk[j+0] = blk_blk[j+1] =
+            blk_blk[j+2] = blk_blk[j+3] = addr_to_set;
+        } // for j
         return blk_blk;
     }
     
@@ -1537,6 +1540,9 @@ public:
         }
         if (IS_FULL_BLOCK(block))
         {
+            if (top_blocks_[i] == (bm::word_t**)FULL_BLOCK_FAKE_ADDR)
+                alloc_top_subblock(i, FULL_BLOCK_FAKE_ADDR);
+
             bm::word_t* new_block = alloc_.alloc_bit_block();
             bm::bit_block_set(new_block, ~0u);
             set_block_ptr(i, j, new_block);
