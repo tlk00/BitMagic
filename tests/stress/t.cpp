@@ -23438,7 +23438,23 @@ void TestStrSparseVector()
    assert(!str_sv3.is_remap());
    assert(str_sv0.get_null_support() == bm::no_null);
    }
-   
+
+    // test from Andrea Asztalos
+    {
+        using TSparseOptVector = bm::str_sparse_vector<char, bm::bvector<>, 200>;
+        TSparseOptVector str_vector(bm::use_null);
+        auto inserter = str_vector.get_back_inserter();
+        *inserter = "rs_id1";
+        *inserter = "rs_is2";
+        *inserter = "rs_id3";
+        *inserter = "VÉGE";
+        inserter.flush();
+        //PrintSparseVector(str_vector, cout);
+        BM_DECLARE_TEMP_BLOCK(tb);
+        str_vector.remap();
+        str_vector.optimize(tb);
+    }
+
    {
        const char* s0 = "AbC";
        const char* s1 = "jKl";
