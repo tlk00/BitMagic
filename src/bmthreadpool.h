@@ -27,7 +27,7 @@ template<class Pad = bm::pad0_struct>
 class spin_lock
 {
 public:
-    explicit spin_lock() {}
+    spin_lock() : locked_(0) {}
 
     /// Lock the lock
     void lock() noexcept
@@ -55,7 +55,7 @@ private:
     spin_lock& operator=(const spin_lock&)=delete;
 
 private:
-    std::atomic<unsigned> locked_ = false;
+    std::atomic<unsigned> locked_;
     Pad p_;
 };
 
