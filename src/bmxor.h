@@ -694,10 +694,15 @@ public:
      void apply_xor_match_vector(bm::word_t* target_xor_block,
                            const bm::word_t* block,
                            const bm::word_t* ref_block,
-//                            size_type         ridx,
                             bm::id64_t        d64,
                             const match_pairs_vector_type& pm_vect,
                             unsigned i, unsigned j) const BMNOEXCEPT;
+
+    /**
+        Check if XOR transform simplified block enough for
+        compressibility objective
+     */
+    bool validate_xor(const bm::word_t* xor_block) const BMNOEXCEPT;
 
     size_type found_ridx() const BMNOEXCEPT { return found_ridx_; }
 
@@ -910,7 +915,7 @@ xor_scanner<BV>::search_best_xor_mask(const bm::word_t* s_block,
                 // reference data: xor token, digest-64, block idx
                 unsigned gain_min = unsigned(sizeof(char) + sizeof(unsigned));
                 if (d64 != ~0ull) // if mask is all 1s - it is not used
-                    gain_min += sizeof(bm::id64_t);
+                    gain_min += (unsigned)sizeof(bm::id64_t);
                 gain_min *= 8; // in bits
                 if (gain > gain_min)
                     return rb_found;
@@ -1046,7 +1051,8 @@ bool xor_scanner<BV>::search_best_xor_gap(bm::gap_word_t*   tmp_buf,
 // --------------------------------------------------------------------------
 
 template<typename BV>
-void xor_scanner<BV>::apply_xor_match_vector(bm::word_t* target_xor_block,
+void xor_scanner<BV>::apply_xor_match_vector(
+                       bm::word_t* target_xor_block,
                        const bm::word_t* block,
                        const bm::word_t* ref_block,
                        bm::id64_t        d64,
@@ -1061,8 +1067,36 @@ void xor_scanner<BV>::apply_xor_match_vector(bm::word_t* target_xor_block,
         const bm::word_t* block_ref = get_ref_block(mp.ref_idx, i, j);
         bm::bit_block_xor(target_xor_block, block_ref, mp.xor_d64);
     } // for k
+
 }
 
+// --------------------------------------------------------------------------
+
+template<typename BV>
+bool xor_scanner<BV>::validate_xor(const bm::word_t* xor_block) const BMNOEXCEPT
+{
+    const float bie_bits_per_int = 3.0f;
+    const unsigned bie_limit =
+            unsigned(float(bm::gap_max_bits) / bie_bits_per_int);
+
+    unsigned bc, gc;
+    bm::bit_block_change_bc(xor_block, &gc, &bc);
+    unsigned xor_best_metric;
+    bm::xor_complement_match mtype = best_metric(bc, gc, &xor_best_metric);
+    if (mtype && (xor_best_metric < get_s_block_best()))
+    {
+        unsigned gain = get_s_block_best() - xor_best_metric;
+        gain *= 3; // use bit estimate (speculative)
+        // gain should be greater than overhead for storing
+        // reference data: xor token, digest-64, block idx
+        unsigned gain_min =
+           unsigned (sizeof(char) + sizeof(bm::id64_t) + sizeof(unsigned));
+        gain_min *= 8; // in bits
+        if ((gain > gain_min) && (xor_best_metric < bie_limit))
+            return true;
+    }
+    return false;
+}
 
 // --------------------------------------------------------------------------
 

@@ -1165,6 +1165,7 @@ public:
     */
     bm::word_t** check_alloc_top_subblock(unsigned nblk_blk)
     {
+        
         if (!top_blocks_[nblk_blk])
             return alloc_top_subblock(nblk_blk);
         if (top_blocks_[nblk_blk] == (bm::word_t**)FULL_BLOCK_FAKE_ADDR)

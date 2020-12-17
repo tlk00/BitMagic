@@ -593,10 +593,8 @@ protected:
    typedef typename BV::blocks_manager_type blocks_manager_type;
 
 protected:
-   void xor_decode(size_type x_ref_idx, bm::id64_t x_ref_d64,
-                   blocks_manager_type& bman,
-                        block_idx_type nb);//,
-                        //bm::word_t* blk);
+   void xor_decode(blocks_manager_type& bman);
+   void xor_reset() BMNOEXCEPT;
 
    void deserialize_gap(unsigned char btype, decoder_type& dec, 
                         bvector_type&  bv, blocks_manager_type& bman,
@@ -625,6 +623,7 @@ protected:
    void decode_arr_sblock(unsigned char btype, decoder_type& dec,
                          bvector_type&  bv);
 
+
 protected:
     typedef bm::heap_vector<bm::gap_word_t, allocator_type, true> block_arridx_type;
     typedef bm::heap_vector<bm::word_t, allocator_type, true> sblock_arridx_type;
@@ -639,19 +638,28 @@ protected:
     allocator_pool_type  pool_;
     allocator_type       alloc_;
 
-    // XOR compression
+    // XOR compression memory
     //
     const bv_ref_vector_type* ref_vect_;  ///< ref.vector for XOR compression
     bm::word_t*               xor_block_; ///< xor product
     bm::word_t*               or_block_;
-    unsigned                  xor_chain_size_ = 0;
+
+    // XOR decode FSM
+    //
+    size_type                 x_ref_idx_;
+    bm::id64_t                x_ref_d64_;
+    block_idx_type            x_nb_;
+    unsigned                  xor_chain_size_;
     bm::match_pair            xor_chain_[64];
+    bool                      x_ref_gap_;
 
     // Range deserialization settings
     //
     unsigned                  is_range_set_;
     size_type                 idx_from_;
     size_type                 idx_to_;
+
+
 };
 
 
@@ -1091,7 +1099,7 @@ const unsigned char set_block_xor_ref32         = 38; //!< ..... 32-bit (should 
 const unsigned char set_block_xor_gap_ref8      = 39; //!< ..... 8-bit
 const unsigned char set_block_xor_gap_ref16     = 40; //!< ..... 16-bit
 const unsigned char set_block_xor_gap_ref32     = 41; //!< ..... 32-bit (should never happen)
-const unsigned char set_block_xor_chain         = 42; //!< XOR chain (reserved)
+const unsigned char set_block_xor_chain         = 42; //!< XOR chain (composit of sub-blocks)
 
 const unsigned char set_block_gap_bienc_v2        = 43; //!< Interpolated GAP block (v2)
 const unsigned char set_block_arrgap_bienc_v2     = 44; //!< //!< Interpolated GAP array (v2)
@@ -1594,9 +1602,8 @@ template<class BV>
 unsigned char
 serializer<BV>::find_bit_best_encoding_l5(const bm::word_t* block) BMNOEXCEPT
 {
-//    const float bie_bits_per_int = compression_level_ < 6 ? 3.75f : 3.0f;
     const float bie_bits_per_int = compression_level_ < 6 ? 3.75f : 2.5f;
-    const unsigned bie_limit = unsigned(float(bm::gap_max_bits) / bie_bits_per_int);// bm::bie_cut_off;
+    const unsigned bie_limit = unsigned(float(bm::gap_max_bits) / bie_bits_per_int);
 
     unsigned bc, ibc, gc;
     
@@ -2676,8 +2683,6 @@ serializer<BV>::serialize(const BV& bv,
                 if (found)
                 {
                     const bm::gap_word_t* gap_block = BMGAP_PTR(blk);
-                    //unsigned glen = bm::gap_length(gap_block)-1;
-
                     const bm::gap_word_t* gap_xor_block =
                         (const bm::gap_word_t*) xor_scan_.get_found_block();
                     size_type ridx = xor_scan_.found_ridx();
@@ -2694,8 +2699,6 @@ serializer<BV>::serialize(const BV& bv,
                     || bm::gap_bit_count_unr(tmp_buf) < bm::gap_bit_count_unr(gap_block));
 
                     BM_ASSERT(1+res_len == bm::gap_length(tmp_buf));
-                    //unsigned delta = glen - res_len;
-                    //if (delta > 2)
                     {
                         enc.put_8_16_32(unsigned(plain_idx),
                                         bm::set_block_xor_gap_ref8,
@@ -2743,50 +2746,30 @@ serializer<BV>::serialize(const BV& bv,
                         BM_ASSERT(chain_size == pm_vect.size());
                         xor_scan_.apply_xor_match_vector(xor_tmp_block_,
                            blk, xor_scan_.get_found_block(), d64, pm_vect, i0, j0);
-
                         encode_xor_match_chain(enc, plain_idx, d64);
-/*
-                        typename bm::xor_scanner<BV>::match_pairs_vector_type&
-                            pm_vect = xor_scan_.get_match_pairs();
-
-                        xor_scan_.apply_xor_match_vector(xor_tmp_block_,
-                                            blk, ridx, d64, pm_vect, i0, j0);
-
-                        enc.put_8(bm::set_block_xor_chain);
-                        enc.put_8(0); // flag (reserved)
-                        enc.put_32(plain_idx);
-                        enc.put_64(d64);
-                        enc.put_8((unsigned char) chain_size);
-                        for (unsigned ci = 0; ci < chain_size; ++ci)
-                        {
-                            const bm::match_pair& mp = pm_vect[ci];
-                            plain_idx = xor_scan_.get_ref_vector().get_row_idx(mp.ref_idx);
-                            enc.put_32(plain_idx);
-                            enc.put_64(mp.xor_d64);
-                        } // for pm
-                        compression_stat_[bm::set_block_xor_chain]++;
-*/
                     }
                     else // encode single point XOR match
                     {
-                        const bm::word_t* ref_block = xor_scan_.get_ref_block(ridx, i0, j0);
-                        BM_ASSERT(ref_block == xor_scan_.get_found_block());
+                        const bm::word_t* ref_block = xor_scan_.get_found_block();
                         bm::bit_block_xor(xor_tmp_block_, blk, ref_block, d64);
-                        // TODO: validate?
-                        if (d64 == ~0ull)
+                        bool b = xor_scan_.validate_xor(xor_tmp_block_);
+                        if (b)
                         {
-                            enc.put_8_16_32(unsigned(plain_idx),
-                                            bm::set_block_xor_ref8_um,
-                                            bm::set_block_xor_ref16_um,
-                                            bm::set_block_xor_ref32_um);
-                        }
-                        else
-                        {
-                            enc.put_8_16_32(unsigned(plain_idx),
-                                            bm::set_block_xor_ref8,
-                                            bm::set_block_xor_ref16,
-                                            bm::set_block_xor_ref32);
-                            enc.put_64(d64); // xor digest mask
+                            if (d64 == ~0ull)
+                            {
+                                enc.put_8_16_32(unsigned(plain_idx),
+                                                bm::set_block_xor_ref8_um,
+                                                bm::set_block_xor_ref16_um,
+                                                bm::set_block_xor_ref32_um);
+                            }
+                            else
+                            {
+                                enc.put_8_16_32(unsigned(plain_idx),
+                                                bm::set_block_xor_ref8,
+                                                bm::set_block_xor_ref16,
+                                                bm::set_block_xor_ref32);
+                                enc.put_64(d64); // xor digest mask
+                            }
                         }
                         compression_stat_[bm::set_block_xor_ref32]++;
                     }
@@ -2804,14 +2787,15 @@ serializer<BV>::serialize(const BV& bv,
                             typename bm::xor_scanner<BV>::match_pairs_vector_type&
                                 pm_vect = xor_scan_.get_match_pairs();
                             BM_ASSERT(chain_size == pm_vect.size());
+
                             xor_scan_.apply_xor_match_vector(xor_tmp_block_,
                                 blk, xor_scan_.get_found_block(), d64, pm_vect, i0, j0);
-
-                            // TODO: validate if result vector is better
-
-                            encode_xor_match_chain(enc, plain_idx, d64);
-
-                            blk = xor_tmp_block_; // substitute block with XOR product
+                            bool b = xor_scan_.validate_xor(xor_tmp_block_);
+                            if (b)
+                            {
+                                encode_xor_match_chain(enc, plain_idx, d64);
+                                blk = xor_tmp_block_; // substitute block with XOR product
+                            }
                         }
                     }
                 }
@@ -3291,10 +3275,7 @@ unsigned deseriaizer_base<DEC, BLOCK_IDX>::read_bic_sb_arr(
                 len = dec.get_16();
             else
                 len = dec.get_8();
-/*
-            if (sb_flag & bm::sblock_flag_delta16)
-                delta = dec.get_16();
-*/
+
             bm::word_t min_v;
             if (sb_flag & bm::sblock_flag_min24)
                 if (sb_flag & bm::sblock_flag_min16) // 24 and 16
@@ -3688,7 +3669,11 @@ deserializer<BV, DEC>::deserialize_gap(unsigned char btype, decoder_type& dec,
     bm::gap_word_t* gap_temp_block = gap_temp_block_.data();
 
     bool inv_flag = false;
-    
+    unsigned i0, j0;
+    bm::get_block_coord(nb, i0, j0);
+    bman.reserve_top_blocks(i0+1);
+    bman.check_alloc_top_subblock(i0);
+
     switch (btype)
     {
     case set_block_gap: 
@@ -3717,10 +3702,7 @@ deserializer<BV, DEC>::deserialize_gap(unsigned char btype, decoder_type& dec,
             {
                 gap_convert_to_bitset(temp_block_, 
                                       gap_temp_block);
-                bv.combine_operation_with_block(nb,
-                                                temp_block_, 
-                                                0, 
-                                                BM_OR);
+                bv.combine_operation_block_or(i0, j0, blk, temp_block_);
             }
             return;
         } // level == -1
@@ -3775,10 +3757,7 @@ deserializer<BV, DEC>::deserialize_gap(unsigned char btype, decoder_type& dec,
             if (level == -1)  // Too big to be GAP: convert to BIT block
             {
                 bm::gap_convert_to_bitset(temp_block_, gap_temp_block);
-                bv.combine_operation_with_block(nb,
-                                                temp_block_,
-                                                0,
-                                                BM_OR);
+                bv.combine_operation_block_or(i0, j0, blk, temp_block_);
                 return;
             }
             break;
@@ -3808,10 +3787,17 @@ deserializer<BV, DEC>::deserialize_gap(unsigned char btype, decoder_type& dec,
         #endif
     }
 
-    bv.combine_operation_with_block(nb,
-                                   (bm::word_t*)gap_temp_block,
-                                   1, 
-                                   BM_OR);
+    if (x_ref_d64_) // this is a delayed bit-XOR to be played here
+    {   // deoptimize the operation it will turn to bit block anyways
+        bm::gap_convert_to_bitset(temp_block_, gap_temp_block);
+        bv.combine_operation_block_or(i0, j0, blk, temp_block_);
+    }
+    else
+    {
+        bm::word_t* tmp_blk = (bm::word_t*)gap_temp_block;
+        BMSET_PTRGAP(tmp_blk);
+        bv.combine_operation_block_or(i0, j0, blk, tmp_blk);
+    }
 }
 
 template<class BV, class DEC>
@@ -4102,10 +4088,7 @@ size_t deserializer<BV, DEC>::deserialize(bvector_type&        bv,
 
     // reference XOR compression FSM fields
     //
-    size_type x_ref_idx = 0;
-    bm::id64_t x_ref_d64 = 0;
-    block_idx_type x_nb = 0;
-    bool x_ref_gap = false;
+    xor_reset();
 
     unsigned row_idx;
 
@@ -4329,11 +4312,8 @@ size_t deserializer<BV, DEC>::deserialize(bvector_type&        bv,
         case bm::set_block_ref_eq:
             {
                 BM_ASSERT(ref_vect_); // reference vector has to be attached
-                if (x_ref_d64 || x_ref_gap) // previous delayed XOR post proc.
-                {
-                    xor_decode(x_ref_idx, x_ref_d64, bman, x_nb);
-                    x_ref_d64 = 0; x_ref_gap = false;
-                }
+                if (x_ref_d64_ || x_ref_gap_) // previous delayed XOR post proc.
+                    xor_decode(bman);
 
                 row_idx = dec.get_32();
                 size_type idx = ref_vect_->find(row_idx);
@@ -4354,41 +4334,32 @@ size_t deserializer<BV, DEC>::deserialize(bvector_type&        bv,
             }
         case bm::set_block_xor_ref8:
         case bm::set_block_xor_ref8_um:
-                if (x_ref_d64 || x_ref_gap) // previous delayed XOR post proc.
-                {
-                    xor_decode(x_ref_idx, x_ref_d64, bman, x_nb);
-                    x_ref_d64 = 0; x_ref_gap = false;
-                }
+                if (x_ref_d64_ || x_ref_gap_) // previous delayed XOR post proc.
+                    xor_decode(bman);
                 row_idx = dec.get_8();
                 goto process_xor;
         case bm::set_block_xor_ref16:
         case bm::set_block_xor_ref16_um:
-                if (x_ref_d64 || x_ref_gap) // previous delayed XOR post proc.
-                {
-                    xor_decode(x_ref_idx, x_ref_d64, bman, x_nb);
-                    x_ref_d64 = 0; x_ref_gap = false;
-                }
+                if (x_ref_d64_ || x_ref_gap_) // previous delayed XOR post proc.
+                    xor_decode(bman);
                 row_idx = dec.get_16();
                 goto process_xor;
         case bm::set_block_xor_ref32:
         case bm::set_block_xor_ref32_um:
             {
-                if (x_ref_d64 || x_ref_gap) // previous delayed XOR post proc.
-                {
-                    xor_decode(x_ref_idx, x_ref_d64, bman, x_nb);
-                    x_ref_d64 = 0; x_ref_gap = false;
-                }
+                if (x_ref_d64_ || x_ref_gap_) // previous delayed XOR post proc.
+                    xor_decode(bman);
                 row_idx = dec.get_32();
             process_xor:
                 if (btype <= bm::set_block_xor_ref32)
-                    x_ref_d64 = dec.get_64();
+                    x_ref_d64_ = dec.get_64();
                 else
-                    x_ref_d64 = ~0ull;
+                    x_ref_d64_ = ~0ull;
             process_xor_ref:
                 BM_ASSERT(ref_vect_); // reference vector has to be attached
-                x_ref_idx = ref_vect_->find(row_idx);
-                x_nb = i;
-                if (x_ref_idx == ref_vect_->not_found())
+                x_ref_idx_ = ref_vect_->find(row_idx);
+                x_nb_ = i;
+                if (x_ref_idx_ == ref_vect_->not_found())
                 {
                     BM_ASSERT(0);
                     goto throw_err;
@@ -4401,42 +4372,31 @@ size_t deserializer<BV, DEC>::deserialize(bvector_type&        bv,
             }
             continue; // important! cont to avoid inc(i)
         case bm::set_block_xor_gap_ref8:
-            if (x_ref_d64 || x_ref_gap) // previous delayed XOR post proc.
-            {
-                xor_decode(x_ref_idx, x_ref_d64, bman, x_nb);
-                x_ref_d64 = 0; x_ref_gap = false;
-            }
+            if (x_ref_d64_ || x_ref_gap_) // previous delayed XOR post proc.
+                xor_decode(bman);
             row_idx = dec.get_8();
-            x_ref_gap = true;
+            x_ref_gap_ = true;
             goto process_xor_ref;
         case bm::set_block_xor_gap_ref16:
-            if (x_ref_d64 || x_ref_gap) // previous delayed XOR post proc.
-            {
-                xor_decode(x_ref_idx, x_ref_d64, bman, x_nb);
-                x_ref_d64 = 0; x_ref_gap = false;
-            }
+            if (x_ref_d64_ || x_ref_gap_) // previous delayed XOR post proc.
+                xor_decode(bman);
             row_idx = dec.get_16();
-            x_ref_gap = true;
+            x_ref_gap_ = true;
             goto process_xor_ref;
         case bm::set_block_xor_gap_ref32:
-            if (x_ref_d64 || x_ref_gap) // previous delayed XOR post proc.
-            {
-                xor_decode(x_ref_idx, x_ref_d64, bman, x_nb);
-                x_ref_d64 = 0; x_ref_gap = false;
-            }
+            if (x_ref_d64_ || x_ref_gap_) // previous delayed XOR post proc.
+                xor_decode(bman);
             row_idx = dec.get_32();
-            x_ref_gap = true;
+            x_ref_gap_ = true;
             goto process_xor_ref;
         case bm::set_block_xor_chain:
-            if (x_ref_d64 || x_ref_gap) // previous delayed XOR post proc.
-            {
-                xor_decode(x_ref_idx, x_ref_d64, bman, x_nb);
-                x_ref_d64 = 0; x_ref_gap = false;
-            }
+            if (x_ref_d64_ || x_ref_gap_) // previous delayed XOR post proc.
+                xor_decode(bman);
             {
                 unsigned char chain_flag = dec.get_8(); // reserved
                 row_idx = dec.get_32();
-                x_ref_d64 = dec.get_64();
+                x_ref_d64_ = dec.get_64();
+                BM_ASSERT(!xor_chain_size_);
                 xor_chain_size_ = dec.get_8();
                 for (unsigned ci = 0; ci < xor_chain_size_; ++ci)
                 {
@@ -4461,8 +4421,8 @@ size_t deserializer<BV, DEC>::deserialize(bvector_type&        bv,
 
     // process the last delayed XOR ref here
     //
-    if (x_ref_d64 || x_ref_gap)      // XOR post proc.
-        xor_decode(x_ref_idx, x_ref_d64, bman, x_nb);
+    if (x_ref_d64_ || x_ref_gap_)      // XOR post proc.
+        xor_decode(bman);
 
     bv.set_new_blocks_strat(strat);
 
@@ -4472,9 +4432,7 @@ size_t deserializer<BV, DEC>::deserialize(bvector_type&        bv,
 // ---------------------------------------------------------------------------
 
 template<class BV, class DEC>
-void deserializer<BV, DEC>::xor_decode(size_type x_ref_idx, bm::id64_t x_ref_d64,
-                                       blocks_manager_type& bman,
-                                       block_idx_type       nb)
+void deserializer<BV, DEC>::xor_decode(blocks_manager_type& bman)
 {
     BM_ASSERT(ref_vect_);
 
@@ -4482,17 +4440,18 @@ void deserializer<BV, DEC>::xor_decode(size_type x_ref_idx, bm::id64_t x_ref_d64
     const bm::word_t* ref_blk;
 
     {
-        const bvector_type* ref_bv = ref_vect_->get_bv(x_ref_idx);
+        const bvector_type* ref_bv = ref_vect_->get_bv(x_ref_idx_);
         const blocks_manager_type& ref_bman = ref_bv->get_blocks_manager();
         BM_ASSERT(ref_bv);
         BM_ASSERT(&ref_bman != &bman); // some incorrect work with the ref.vect
-        bm::get_block_coord(nb, i0, j0);
+        bm::get_block_coord(x_nb_, i0, j0);
         ref_blk = ref_bman.get_block_ptr(i0, j0);
     }
     if (!ref_blk)
     {
         BM_ASSERT(!or_block_);
-        xor_chain_size_ = 0;
+
+        xor_reset();
         return;
     }
     bm::word_t* blk = bman.get_block_ptr(i0, j0);
@@ -4503,7 +4462,7 @@ void deserializer<BV, DEC>::xor_decode(size_type x_ref_idx, bm::id64_t x_ref_d64
     if (BM_IS_GAP(ref_blk))
     {
         bm::gap_word_t* gap_block = BMGAP_PTR(ref_blk);
-        if (BM_IS_GAP(blk) && (!x_ref_d64) && !or_block_) // two GAPs no digest
+        if (BM_IS_GAP(blk) && (!x_ref_d64_) && !or_block_) // two GAPs no digest
         {
             bm::gap_word_t* tmp_buf = (bm::gap_word_t*)xor_block_;
             const bm::gap_word_t* res;
@@ -4514,6 +4473,8 @@ void deserializer<BV, DEC>::xor_decode(size_type x_ref_idx, bm::id64_t x_ref_d64
                                         res_len);
             BM_ASSERT(res == tmp_buf);
             bman.assign_gap_check(i0, j0, res, ++res_len, blk, tmp_buf);
+
+            xor_reset();
             return;
         }
 
@@ -4528,10 +4489,10 @@ void deserializer<BV, DEC>::xor_decode(size_type x_ref_idx, bm::id64_t x_ref_d64
 
     blk = bman.deoptimize_block(i0, j0);
     if (!blk)
-        blk = bman.check_allocate_block(nb, 0);
+        blk = bman.check_allocate_block(x_nb_, 0);
 
-    if (x_ref_d64)
-        bm::bit_block_xor(blk, blk, ref_blk, x_ref_d64);
+    if (x_ref_d64_)
+        bm::bit_block_xor(blk, blk, ref_blk, x_ref_d64_);
     else
         bm::bit_block_xor(blk, ref_blk);
 
@@ -4560,8 +4521,6 @@ void deserializer<BV, DEC>::xor_decode(size_type x_ref_idx, bm::id64_t x_ref_d64
             bm::bit_block_xor(blk, ref_blk, xor_chain_[ci].xor_d64);
     } // for ci
 
-    xor_chain_size_ = 0; // chain consumed, reset the state
-
     if (or_block_)
     {
         bm::bit_block_or(blk, or_block_);
@@ -4569,8 +4528,17 @@ void deserializer<BV, DEC>::xor_decode(size_type x_ref_idx, bm::id64_t x_ref_d64
         or_block_ = 0;
     }
     bman.optimize_bit_block(i0, j0);
-}
 
+    xor_reset();
+}
+// ---------------------------------------------------------------------------
+
+template<class BV, class DEC>
+void deserializer<BV, DEC>::xor_reset() BMNOEXCEPT
+{
+    x_ref_idx_ = 0; x_ref_d64_ = 0; xor_chain_size_ = 0;
+    x_nb_ = 0; x_ref_gap_ = false;
+}
 
 // ---------------------------------------------------------------------------
 

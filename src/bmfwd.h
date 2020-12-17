@@ -53,6 +53,8 @@ template<typename BV> class aggregator;
 template<typename BV> class rank_compressor;
 template<typename BV> class basic_bmatrix;
 
+template<typename BV, typename DEC> class deserializer;
+
 template<class Val, class BV> class sparse_vector;
 template<class Val, class SV> class rsc_sparse_vector;
 

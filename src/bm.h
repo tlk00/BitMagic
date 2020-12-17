@@ -825,6 +825,7 @@ public:
     friend class enumerator;
     template<class BV> friend class aggregator;
     template<class BV> friend class operation_deserializer;
+    template<class BV, class DEC> friend class deserializer;
 
 public:
     /*! @brief memory allocation policy
@@ -2002,7 +2003,7 @@ protected:
     void import_block(const size_type* ids,
                       block_idx_type nblock, size_type start, size_type stop);
 
-private:
+//private:
 
     size_type check_or_next(size_type prev) const BMNOEXCEPT;
     
