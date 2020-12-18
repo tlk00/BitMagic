@@ -2747,6 +2747,9 @@ serializer<BV>::serialize(const BV& bv,
                         xor_scan_.apply_xor_match_vector(xor_tmp_block_,
                            blk, xor_scan_.get_found_block(), d64, pm_vect, i0, j0);
                         encode_xor_match_chain(enc, plain_idx, d64);
+
+                        compression_stat_[bm::set_block_xor_ref32]++;
+                        blk = xor_tmp_block_; // substitute block with XOR product
                     }
                     else // encode single point XOR match
                     {
@@ -2770,10 +2773,10 @@ serializer<BV>::serialize(const BV& bv,
                                                 bm::set_block_xor_ref32);
                                 enc.put_64(d64); // xor digest mask
                             }
+                            compression_stat_[bm::set_block_xor_ref32]++;
+                            blk = xor_tmp_block_; // substitute block with XOR product
                         }
-                        compression_stat_[bm::set_block_xor_ref32]++;
                     }
-                    blk = xor_tmp_block_; // substitute block with XOR product
                 } // if found
                 else
                 {
