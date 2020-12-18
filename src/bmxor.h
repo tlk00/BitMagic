@@ -1092,7 +1092,7 @@ bool xor_scanner<BV>::validate_xor(const bm::word_t* xor_block) const BMNOEXCEPT
         unsigned gain_min =
            unsigned (sizeof(char) + sizeof(bm::id64_t) + sizeof(unsigned));
         gain_min *= 8; // in bits
-        if ((gain > gain_min) && (xor_best_metric < bie_limit))
+        if (!bc || (gain > gain_min) && (xor_best_metric < bie_limit))
             return true;
     }
     return false;
