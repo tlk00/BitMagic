@@ -3100,6 +3100,14 @@ void TestBlockCountXORChange()
         cnt = bm::greedy_refine_match_vector(pm_vect, xm_vect, 11, (1ull << 1), e_xor_match_iBC);
         assert(cnt == 0);
 
+        int brate = bm::check_pair_vect_vbr(pm_vect, 255);
+        assert(brate = 1);
+        brate = bm::check_pair_vect_vbr(pm_vect, 65535);
+        assert(brate = 2);
+        brate = bm::check_pair_vect_vbr(pm_vect, 65536);
+        assert(brate = 0);
+
+
         {
             block_xor_match_descr xmd;
             xmd.match_type = e_xor_match_BC; xmd.ref_idx = 20; xmd.xor_d64 = 3ull;
@@ -19112,6 +19120,7 @@ bool CompareSparseVector(const SV& sv, const Vect& vect,
     if (bv_null != bv_null2 && (bv_null == 0 || bv_null2 == 0))
     {
         cerr << "Serialization comparison (NUUL vector missing)!" << endl;
+        assert(0);
         exit(1);
     }
     if (bv_null)
@@ -19119,6 +19128,7 @@ bool CompareSparseVector(const SV& sv, const Vect& vect,
         if (bv_null->compare(*bv_null2) != 0)
         {
             cerr << "Serialization comparison of two svectors (NUUL vectors unmatch)!" << endl;
+            assert(0);
             exit(1);
         }
     }
@@ -19136,7 +19146,7 @@ bool CompareSparseVector(const SV& sv, const Vect& vect,
         SV sv3;
         bm::sparse_vector_deserialize(sv3, buf, tb);
 
-
+        assert(0);
         exit(1);
     }
     
