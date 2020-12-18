@@ -1231,7 +1231,6 @@ void sparse_vector_deserializer<SV>::deserialize_range(SV& sv,
     } // if remap traits
 
     sv.sync(true); // force sync, recalculate RS index, remap tables, etc
-//    sv.sync_size();
 
     remap_buf_ptr_ = 0;
 
@@ -1291,7 +1290,6 @@ void sparse_vector_deserializer<SV>::deserialize_sv(SV& sv,
 
     clear_xor_compression();
 
-
     // load the remap matrix
     //
     if (bm::conditional<SV::is_remap_support::value>::test()) // test remap trait
@@ -1301,8 +1299,6 @@ void sparse_vector_deserializer<SV>::deserialize_sv(SV& sv,
     } // if remap traits
     
     sv.sync(true); // force sync, recalculate RS index, remap tables, etc
-//    sv.sync_size();
-
     remap_buf_ptr_ = 0;
 }
 

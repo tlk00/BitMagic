@@ -255,7 +255,30 @@ greedy_refine_match_vector(PVT&                      match_pairs_vect,
     return match_pairs_vect.size();
 }
 
-
+/**
+    Check effective bit-rate for the XOR encode vector
+    @return 1 - < 256 (8bit), 2 - < 65536 (16-bit) or 0 - 32-bit
+    @internal
+ */
+template<typename PVT>
+unsigned char check_pair_vect_vbr(const PVT& match_pairs_vect,
+                             typename PVT::size_type  ref_idx)
+{
+    typename PVT::size_type max_idx = 0;
+    if (ref_idx > max_idx)
+        max_idx = ref_idx;
+    for (typename PVT::size_type i = 0; i < match_pairs_vect.size(); ++i)
+    {
+        const match_pair& mp = match_pairs_vect[i];
+        if (mp.ref_idx > max_idx)
+            max_idx = mp.ref_idx;
+    } // for i
+    if (max_idx < 256)
+        return 1;
+    if (max_idx < 65536)
+        return 2;
+    return 0;
+}
 
 
 /**
