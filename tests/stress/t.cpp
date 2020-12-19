@@ -3101,11 +3101,11 @@ void TestBlockCountXORChange()
         assert(cnt == 0);
 
         int brate = bm::check_pair_vect_vbr(pm_vect, 255);
-        assert(brate = 1);
+        assert(brate == 1);
         brate = bm::check_pair_vect_vbr(pm_vect, 65535);
-        assert(brate = 2);
+        assert(brate == 2);
         brate = bm::check_pair_vect_vbr(pm_vect, 65536);
-        assert(brate = 0);
+        assert(brate == 0);
 
 
         {
