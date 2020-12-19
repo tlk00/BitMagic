@@ -4109,7 +4109,7 @@ size_t deserializer<BV, DEC>::deserialize(bvector_type&        bv,
     //
     xor_reset();
 
-    unsigned row_idx;
+    unsigned row_idx(0);
 
     block_idx_type nb_sync;
 
