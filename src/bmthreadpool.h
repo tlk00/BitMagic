@@ -217,6 +217,12 @@ public:
     }
 
     /**
+        Request an immediate stop of all threads in the pool
+     */
+    void stop()
+        { set_stop_mode(stop_now); }
+
+    /**
         Start thread pool worker threads.
         @param tcount - number of threads to start
      */
