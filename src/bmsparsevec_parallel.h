@@ -41,8 +41,10 @@ public:
     typedef typename bvector_type::optmode            optmode_type;
     typedef typename sparse_vector_type::statistics   sv_statistics_type;
 
-    class task_batch : public bm::task_batch<allocator_type>
+    struct task_batch : public bm::task_batch<allocator_type>
     {
+        typedef bm::task_batch<allocator_type>          parent_type;
+        typedef typename parent_type::task_vector_type  task_vector_type;
     };
 
     void build_plan(task_batch& batch,
@@ -50,7 +52,7 @@ public:
                     typename bvector_type::optmode opt_mode,
                     typename sparse_vector_type::statistics* st)
     {
-        auto& tv = batch.get_task_vector();
+        typename task_batch::task_vector_type& tv = batch.get_task_vector();
         auto rsize = sv.get_bmatrix().rows();
         for (unsigned k = 0; k < rsize; ++k)
         {
