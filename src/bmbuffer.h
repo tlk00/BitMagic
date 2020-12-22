@@ -22,6 +22,7 @@ For more information please visit:  http://bitmagic.io
 #include <type_traits>
 
 #include "bmdef.h"
+#include "bmutil.h"
 
 namespace bm
 {
@@ -464,6 +465,10 @@ public:
         }
     }
 
+    /**
+        @brief Add element to the end of the vector, return reference
+        @return reference the the last element
+     */
     value_type& add()
     {
         size_type v_size = value_size();
@@ -474,6 +479,9 @@ public:
         return *v;
     }
 
+    /**
+        @brief push new element to the back of the vector
+     */
     void push_back(const value_type& v)
     {
         size_type v_size = value_size();

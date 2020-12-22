@@ -1285,15 +1285,6 @@ template<bool T> struct all_set
 
 template<bool T> typename all_set<T>::all_set_block all_set<T>::_block;
 
-/// XOR swap two scalar variables
-template<typename W> 
-void xor_swap(W& x, W& y) BMNOEXCEPT
-{
-    BM_ASSERT(&x != &y);
-    x ^= y;
-    y ^= x;
-    x ^= y;
-}
 
 /*!
     Fini not NULL position

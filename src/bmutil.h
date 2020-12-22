@@ -525,6 +525,16 @@ unsigned mask_l_u32(unsigned nbit) BMNOEXCEPT
     return m;
 }
 
+/// XOR swap two variables
+///
+/// @internal
+template<typename W>
+BMFORCEINLINE void xor_swap(W& x, W& y) BMNOEXCEPT
+{
+    BM_ASSERT(&x != &y);
+    x ^= y; y ^= x; x ^= y;
+}
+
 
 #ifdef __GNUG__
 #pragma GCC diagnostic pop
