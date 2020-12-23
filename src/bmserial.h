@@ -2689,7 +2689,7 @@ serializer<BV>::serialize(const BV& bv,
             if (ref_vect_) // XOR filter
             {
                 bm::gap_word_t* tmp_buf = (bm::gap_word_t*)xor_tmp_block_;
-                bool found = xor_scan_.search_best_xor_gap(tmp_buf, blk,
+                bool found = xor_scan_.search_best_xor_gap(blk,
                                                            ref_idx_+1,
                                                            ref_vect_->size(),
                                                            i0, j0);
@@ -2741,14 +2741,16 @@ serializer<BV>::serialize(const BV& bv,
                 {
                     if (mtype == e_xor_match_EQ)
                     {
-                        size_type row_idx = xor_scan_.get_ref_vector().get_row_idx(ridx);
+                        size_type row_idx =
+                            xor_scan_.get_ref_vector().get_row_idx(ridx);
                         enc.put_8(bm::set_block_ref_eq);
                         enc.put_32(unsigned(row_idx));
                         compression_stat_[bm::set_block_ref_eq]++;
                         continue;
                     }
 
-                    size_type plain_idx = xor_scan_.get_ref_vector().get_row_idx(ridx);
+                    size_type plain_idx =
+                        xor_scan_.get_ref_vector().get_row_idx(ridx);
                     bm::id64_t d64 = xor_scan_.get_xor_digest();
                     BM_ASSERT(d64);
                     size_type chain_size = xor_scan_.refine_match_chain();

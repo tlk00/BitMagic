@@ -3337,6 +3337,43 @@ complete:
     return len;
 }
 
+static
+void TestGAP_XOR()
+{
+   cout << "---------------------------- TestGAP_XOR()" << endl;
+
+    unsigned gc, bc;
+    {
+       gap_vector gapv1(0);
+       gap_vector gapv2(0);
+       gap_word_t* gap_buf1 = gapv1.get_buf();
+       gap_word_t* gap_buf2 = gapv2.get_buf();
+
+
+        gap_operation_dry_xor(gap_buf1, gap_buf2, gc, bc);
+        assert(bc == 0);
+        assert(gc == 1);
+
+        gapv1.set_bit(256);
+        gapv2.set_bit(256);
+
+        gap_operation_dry_xor(gap_buf1, gap_buf2, gc, bc);
+        assert(bc == 0);
+        assert(gc == 1);
+
+        gapv1.set_bit(258);
+        gapv2.set_bit(257);
+        gapv1.set_bit(259);
+        gapv1.set_bit(260);
+
+        gap_operation_dry_xor(gap_buf1, gap_buf2, gc, bc);
+        assert(bc == 4);
+        assert(gc == 3);
+
+    }
+
+   cout << "---------------------------- TestGAP_XOR() - end" << endl;
+}
 
 static
 void TestBlockToGAP()
@@ -30276,6 +30313,7 @@ void TestTasks()
     std::cout << " ----------------------------- TestTasks() OK " << endl;
 }
 
+
 static
 void show_help()
 {
@@ -30492,6 +30530,8 @@ int main(int argc, char *argv[])
 
          TestBlockCountXORChange();
 
+         TestGAP_XOR();
+
          TestBlockToGAP();
 
          ShiftRotateTest();
@@ -30653,17 +30693,17 @@ int main(int argc, char *argv[])
 
     if (is_all || is_sv)
     {
-
+/*
         TestSparseVector();
 
         TestSparseVectorAlgo();
-
+*/
         TestSparseVector_XOR_Scanner();
-
+/*
         TestSparseVectorInserter();
 
         TestSparseVectorGatherDecode();
-
+*/
         TestSparseVectorSerial();
 
         TestSparseVectorSerialization2();

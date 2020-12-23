@@ -531,6 +531,72 @@ void bit_block_xor(bm::word_t* target_block, const bm::word_t*  xor_block,
     } // while
 }
 
+/**
+    Dry XOR operation on two GAP blocks to compute BC/GC metrics
+ */
+template<typename T>
+void gap_operation_dry_xor(const T*  vect1, const T*  vect2,
+                           unsigned& gc,    unsigned& bc) BMNOEXCEPT
+{
+    const T*  cur1 = vect1;
+    const T*  cur2 = vect2;
+
+    unsigned gc_cnt(1), bc_cnt(0);
+
+    T bitval1 = (T)(*cur1++ & 1);
+    T bitval2 = (T)(*cur2++ & 1);
+    T bitval = bitval1 ^ bitval2;
+    T bitval_prev = bitval;
+
+    T c1(*cur1), c2(*cur2);
+    T res(0), res_prev(0);
+
+    while (1)
+    {
+        bitval = bitval1 ^ bitval2;
+        if (bitval != bitval_prev)
+        {
+            ++gc_cnt;
+            bitval_prev = bitval;
+            res_prev = res;
+        }
+
+        if (c1 < c2)
+        {
+            res = c1;
+            if (bitval)
+            {
+                bc_cnt += res - res_prev;
+                res_prev = res;
+            }
+            ++cur1; c1 = *cur1; bitval1 ^= 1;
+        }
+        else // >=
+        {
+            res = c2;
+            if (bitval)
+            {
+                bc_cnt += res - res_prev;
+                res_prev = res;
+            }
+            if (c2 < c1)
+            {
+                bitval2 ^= 1;
+            }
+            else  // equal
+            {
+                if (c2 == (bm::gap_max_bits - 1))
+                    break;
+                ++cur1; c1 = *cur1;
+                bitval1 ^= 1; bitval2 ^= 1;
+            }
+            ++cur2; c2 = *cur2;
+        }
+    } // while
+
+    gc = gc_cnt;
+    bc = bc_cnt;
+}
 
 /**
     List of reference bit-vectors with their true index associations
@@ -705,8 +771,7 @@ public:
 
     /** Scan all candidate gap-blocks to find best XOR match
     */
-    bool search_best_xor_gap(bm::gap_word_t*   tmp_buf,
-                             const bm::word_t* block,
+    bool search_best_xor_gap(const bm::word_t* block,
                              size_type         ridx_from,
                              size_type         ridx_to,
                              unsigned i, unsigned j);
@@ -967,8 +1032,7 @@ typename xor_scanner<BV>::size_type xor_scanner<BV>::refine_match_chain()
 // --------------------------------------------------------------------------
 
 template<typename BV>
-bool xor_scanner<BV>::search_best_xor_gap(bm::gap_word_t*   tmp_buf,
-                                          const bm::word_t* block,
+bool xor_scanner<BV>::search_best_xor_gap(const bm::word_t* block,
                                           size_type ridx_from,
                                           size_type ridx_to,
                                           unsigned i, unsigned j)
@@ -1008,12 +1072,15 @@ bool xor_scanner<BV>::search_best_xor_gap(bm::gap_word_t*   tmp_buf,
 
         BM_ASSERT(block != block_xor);
 
+        unsigned res_gc, res_bc;
+        bm::gap_operation_dry_xor(gap_block, gap_xor_block, res_gc, res_bc);
+/*
         unsigned res_len;
         bm::gap_operation_xor(gap_block, gap_xor_block, tmp_buf, res_len);
         unsigned glen = bm::gap_length(tmp_buf);
         if (res_len > glen) // size overflow
             continue;
-        unsigned res_bc = bm::gap_bit_count_unr(tmp_buf);
+        unsigned res_bc = bm::gap_bit_count_unr(tmp_buf); */
         if (!res_bc) // identical block
         {
             best_gap_metric = res_bc;
@@ -1026,12 +1093,12 @@ bool xor_scanner<BV>::search_best_xor_gap(bm::gap_word_t*   tmp_buf,
 /*
         unsigned res_len;
         bool f = bm::gap_operation_dry_xor(gap_block, gap_xor_block, res_len, best_gap_len); */
-        if ((res_len < best_gap_metric))
+        if ((res_gc < best_gap_metric))
         {
-            unsigned gain = best_gap_metric - res_len;
+            unsigned gain = best_gap_metric - res_gc;
             if (gain > 2)
             {
-                best_gap_metric = res_len;
+                best_gap_metric = res_gc;
                 kb_found = true;
                 found_ridx_ = ri;
                 found_block_xor_ = (const bm::word_t*)gap_xor_block;
