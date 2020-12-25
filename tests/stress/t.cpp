@@ -3019,6 +3019,19 @@ void TestBlockCountXORChange()
     bm::id64_t d64;
     bm::block_waves_xor_descr x_descr;
 
+    {
+        bm::block_match_chain<unsigned> bmc;
+        bmc.nb=100;
+        bmc.chain_size = 56;
+        bmc.ref_idx[0]=1024;
+        bmc.xor_d64[0]=~0ULL;
+
+        bm::block_match_chain<unsigned> bmc2;
+        bmc2 = bmc;
+        assert(bmc2.nb==100);
+        assert(bmc2.chain_size == 56);
+        assert(bmc2.ref_idx[0]==1024);
+    }
 
     {
         bm::word_t BM_VECT_ALIGN blk[bm::set_block_size] BM_VECT_ALIGN_ATTR = { 0 };
@@ -11893,6 +11906,31 @@ void SerializationCompressionLevelsTest()
 
     // --------------------------------------------------------------
     // XOR serialization
+
+    // check digest vector compute
+    {{
+        bvect bv1, bv2, bv3;
+        bv1[1] = true;
+        bv2[65536*256] = true;
+        bm::serializer<bvect>::bv_ref_vector_type bv_ref;
+        bv_ref.add(&bv1, 1); // idx = 0
+        bv_ref.add(&bv2, 5); // idx = 1
+        bv_ref.add(&bv3, 6); // idx = 1
+
+        bvect bv_d;
+        bv_ref.fill_alloc_digest(bv_d);
+        auto c = bv_d.count();
+        assert(c == 2);
+        assert(bv_d.test(0));
+        assert(bv_d.test(256));
+
+        bm::serializer<bvect>::bv_ref_vector_type::matrix_chain_type cm;
+        bv_ref.resize_xor_matrix(cm, c);
+        assert(cm.rows()==3);
+        assert(cm.cols()==c);
+
+    }}
+
     {{
         bvect bv1, bv2;
         bv1[1] = true;
@@ -14659,6 +14697,40 @@ void SyntaxTest()
 
 
     cout << "----------------------------- Syntax test ok." << endl;
+}
+
+static
+void BlockDigestTest()
+{
+    cout << "----------------------------- BlockDigestTest()" << endl;
+
+    {
+        bvect bv_d;
+        bvect bv;
+        bv.fill_alloc_digest(bv_d);
+        auto c = bv_d.count();
+        assert(!c);
+
+        bv.set(0);
+        bv.set(1);
+        bv.set(65536);
+        bv.set(65536+256);
+        bv.set(65536*256);
+
+        bv.fill_alloc_digest(bv_d);
+        c = bv_d.count();
+        assert(c == 3);
+        assert(bv_d.test(0));
+        assert(bv_d.test(1));
+        assert(bv_d.test(256));
+
+        bv.set(bm::id_max32-1);
+        bv.fill_alloc_digest(bv_d);
+        c = bv_d.count();
+        assert(c == 4);
+    }
+
+    cout << "----------------------------- BlockDigestTest() OK" << endl;
 }
 
 static
@@ -19581,6 +19653,30 @@ void TestSparseVector()
         xscan.set_ref_vector(&r_vect);
         r_vect.build(sv.get_bmatrix());
 
+        // test the distance matrix
+        {
+            bvect bv_d;
+            bm::xor_scanner<bvect>::matrix_chain_type mc;
+            r_vect.build_nb_digest_and_xor_matrix(mc, bv_d);
+            assert(mc.rows()==2);
+            assert(mc.cols()==1);
+
+            xscan.compute_xor_matrix(mc, bv_d);
+        }
+
+        {
+            bvect bv_d;
+            bm::xor_scanner<bvect>::matrix_chain_type mc;
+            xscan.compute_xor_matrix(mc, bv_d);
+            assert(mc.rows()==2);
+            assert(mc.cols()==1);
+
+            auto mc_00 = mc.get(0, 0);
+
+            assert(mc_00.match == e_no_xor_match);
+        }
+
+
         const bvect* bv_x = sv.get_plane(0);
         const bvect::blocks_manager_type& bman_x = bv_x->get_blocks_manager();
         const bm::word_t* block_x = bman_x.get_block_ptr(0, 0);
@@ -19632,6 +19728,71 @@ void TestSparseVector()
         //assert(!xscan.is_eq_found());
         idx = xscan.get_ref_vector().get_row_idx(idx);
         assert(idx == 3); // matrix row 3
+
+
+        {
+            bvect bv_d;
+            bm::xor_scanner<bvect>::matrix_chain_type mc;
+            xscan.compute_xor_matrix(mc, bv_d);
+            assert(mc.rows()==2);
+            assert(mc.cols()==1);
+
+            auto mc_00 = mc.get(0, 0);
+
+            assert(mc_00.match == e_xor_match_EQ);
+            assert(mc_00.chain_size == 1);
+            assert(mc_00.ref_idx[0] == 1);
+
+
+            auto mc_10 = mc.get(1, 0);
+            assert(!mc_10.match);
+        }
+
+    }}
+
+
+    {{
+        bm::sparse_vector<unsigned, bvect> sv;
+
+        sv[0] = 9;
+        sv[1] = 9;
+        sv[65536*256] = 9;
+        sv[65536*256+1] = 9;
+
+        for (unsigned pass = 0; pass < 2; ++pass)
+        {
+            bm::xor_scanner<bvect> xscan;
+            bm::xor_scanner<bvect>::bv_ref_vector_type r_vect;
+            r_vect.build(sv.get_bmatrix());
+            xscan.set_ref_vector(&r_vect);
+            {
+                bvect bv_d;
+                bm::xor_scanner<bvect>::matrix_chain_type mc;
+                xscan.compute_xor_matrix(mc, bv_d);
+                assert(mc.rows()==2);
+                assert(mc.cols()==2);
+
+                auto mc_00 = mc.get(0, 0);
+
+                assert(mc_00.match == e_xor_match_EQ);
+                assert(mc_00.chain_size == 1);
+                assert(mc_00.ref_idx[0] == 1);
+                assert(mc_00.nb == 0);
+
+
+                auto mc_10 = mc.get(1, 0);
+                assert(!mc_10.match);
+
+                auto mc_01 = mc.get(0, 1);
+
+                assert(mc_01.match == e_xor_match_EQ);
+                assert(mc_01.chain_size == 1);
+                assert(mc_01.ref_idx[0] == 1);
+                assert(mc_01.nb == 256);
+            }
+            sv.optimize();
+        } // for
+
     }}
     
     // basic const_iterator construction
@@ -30588,6 +30749,8 @@ int main(int argc, char *argv[])
 
          SetTest();
 
+         BlockDigestTest();
+
          EmptyBVTest();
          ClearAllTest();
 
@@ -30693,17 +30856,17 @@ int main(int argc, char *argv[])
 
     if (is_all || is_sv)
     {
-/*
+
         TestSparseVector();
 
         TestSparseVectorAlgo();
-*/
+
         TestSparseVector_XOR_Scanner();
-/*
+
         TestSparseVectorInserter();
 
         TestSparseVectorGatherDecode();
-*/
+
         TestSparseVectorSerial();
 
         TestSparseVectorSerialization2();
