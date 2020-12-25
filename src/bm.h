@@ -1905,6 +1905,15 @@ public:
         @internal
     */
     bool is_init() const BMNOEXCEPT { return blockman_.is_init(); }
+
+    /**
+        Calculate blocks digest vector (for diagnostics purposes)
+        1 is added if NB is a real, allocated block
+
+        @param bv_blocks - [out] bvector of blocks statistics
+        @internal
+     */
+    void fill_alloc_digest(bvector<Alloc>& bv_blocks) const;
     
     //@}
     
@@ -3520,6 +3529,35 @@ void bvector<Alloc>::calc_stat(
     st->memory_used += blocks_mem;
     st->bv_count = 1;
 
+}
+
+// -----------------------------------------------------------------------
+
+template<typename Alloc>
+void bvector<Alloc>::fill_alloc_digest(bvector<Alloc>& bv_blocks) const
+{
+    bv_blocks.init();
+
+    unsigned top_size = blockman_.top_block_size();
+    bm::word_t*** blk_root = blockman_.top_blocks_root();
+    if (blk_root)
+    {
+        for (unsigned i = 0; i < top_size; ++i)
+        {
+            const bm::word_t* const* blk_blk = blk_root[i];
+            if (!blk_blk || ((bm::word_t*)blk_blk == FULL_BLOCK_FAKE_ADDR))
+                continue;
+            for (unsigned j = 0; j < bm::set_sub_array_size; ++j)
+            {
+                const bm::word_t* blk = blk_blk[j];
+                if (IS_VALID_ADDR(blk))
+                {
+                    size_type nb = i * bm::set_sub_array_size + j;
+                    bv_blocks.set_bit_no_check(nb);
+                }
+            } // for j
+        } // for i
+    } // if blk_root
 }
 
 // -----------------------------------------------------------------------

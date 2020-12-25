@@ -60,6 +60,17 @@ struct task_description
     void*           ctx1;      ///< reserved
     bm::id64_t      param0;    ///< reserved
 
+    /// Union to add extra flexible payload to tasks
+    union
+    {
+        int                i32;;
+        unsigned           u32;
+        unsigned long long u64;
+        float              fp32;
+        double             fp64;
+        void*              void_ptr;
+    } payload;
+
     bm::id64_t      flags;     ///< task flags to designate barriers
     unsigned        err_code;  ///< error code
     unsigned        done;      ///< 0 - pending
@@ -77,6 +88,7 @@ struct task_description
         func = f; argp = argptr;
         ret = 0; ctx0 = c0; ctx1 = c1;
         param0 = p0; flags = 0; err_code = done = 0;
+        payload.u64 = 0;
     }
 };
 
@@ -117,6 +129,8 @@ public:
     /// Get access to internal task vector
     ///
     task_vector_type& get_task_vector()  BMNOEXCEPT { return task_vect_; }
+    const task_vector_type& get_task_vector() const  BMNOEXCEPT
+    { return task_vect_; }
 
 protected:
     task_vector_type      task_vect_; ///< list of tasks
@@ -139,6 +153,7 @@ void run_task_batch(task_batch_base & tasks)
     for (task_batch_base::size_type i = 0; i < batch_size; ++i)
     {
         bm::task_description* tdescr = tasks.get_task(i);
+        tdescr->argp = tdescr; // restore the self referenece
         tdescr->ret = tdescr->func(tdescr->argp);
         tdescr->done = 1;
     } // for

@@ -174,6 +174,20 @@ struct match_pair
 };
 
 /**
+    XOR match chain
+    @internal
+ */
+template<typename BLOCK_IDX>
+struct block_match_chain
+{
+    BLOCK_IDX   nb;
+    unsigned    chain_size;
+    unsigned    ref_idx[64];
+    bm::id64_t  xor_d64[64];
+    bm::xor_complement_match match;
+};
+
+/**
     Greedy algorithm to find additional matches
     improving the inital best match block on its match type
 
@@ -331,7 +345,7 @@ void compute_xor_complexity_descr(
                         bm::block_xor_match_descr& BMRESTRICT xmd)
 {
     // digest of all ZERO sub-blocks
-    bm::id64_t d0 = ~bm::calc_block_digest0(block);
+    //bm::id64_t d0 = ~bm::calc_block_digest0(block);
 
     // Pass 1: compute XOR descriptors
     //
@@ -358,8 +372,8 @@ void compute_xor_complexity_descr(
     for (unsigned i = 0; i < bm::block_waves; ++i)
     {
         bm::id64_t dmask = (1ull << i);
-        if (d0 & dmask)
-            continue;
+//        if (d0 & dmask)
+//            continue;
 
         unsigned xor_gc = x_descr.sb_xor_gc[i];
         if (xor_gc <= 1)
@@ -405,6 +419,10 @@ void compute_xor_complexity_descr(
 
     if (!(block_gc_gain | block_bc_gain | block_ibc_gain)) // match not found
     {
+        // this is to check if xor filter has
+        //canceled out a whole sub-block wave
+        // seems to be low probability, commented out for now
+        /*
         bm::id64_t d0_x = ~bm::calc_block_digest0(xor_block);
         if (d0 == d0_x) // TODO: why are we doing this stunt?!
         {
@@ -413,6 +431,7 @@ void compute_xor_complexity_descr(
             xmd.xor_d64 = d0;
             return;
         }
+        */
         xmd.match_type = bm::e_no_xor_match; xmd.block_gain = 0; xmd.xor_d64 = 0;
         return;
     }
@@ -616,6 +635,13 @@ public:
     typedef bvector_type*                               bvector_type_ptr;
     typedef const bvector_type*                         bvector_type_const_ptr;
     typedef typename bvector_type::allocator_type       bv_allocator_type;
+
+
+    typedef bm::block_match_chain<size_type>            block_match_chain_type;
+    typedef
+    bm::dynamic_heap_matrix<block_match_chain_type, bv_allocator_type>
+                                                             matrix_chain_type;
+
 public:
 
     /// reset the collection (resize(0))
@@ -674,6 +700,16 @@ public:
         return not_found();
     }
 
+    /// Fill block allocation digest for all vectors in the reference collection
+    ///   @param bv_blocks - [out] bvector of blocks statistics
+    ///
+    void fill_alloc_digest(bvector_type& bv_blocks) const
+    {
+        size_type sz = size();
+        for (size_type i = 0; i < sz; ++i)
+            ref_bvects_[i]->fill_alloc_digest(bv_blocks);
+    }
+
     /// Reset and build vector of references from a basic bit-matrix
     ///  all NULL rows are skipped, not added to the ref.vector
     /// @sa add_vectors
@@ -710,6 +746,25 @@ public:
         add_vectors(sv.get_bmatrix());
     }
 
+    /** Utility function to resize matrix based on number of vectors and blocks
+    */
+    void resize_xor_matrix(matrix_chain_type& matr,
+                           size_type total_blocks) const
+    {
+        BM_ASSERT(total_blocks);
+        matr.resize(ref_bvects_.size(), total_blocks);
+    }
+
+    /** Calculate blocks digest and resize XOR distance matrix
+        based on total number of available blocks
+     */
+    void build_nb_digest_and_xor_matrix(matrix_chain_type& matr,
+                                        bvector_type& bv_blocks) const
+    {
+        fill_alloc_digest(bv_blocks);
+        size_type cnt = bv_blocks.count();
+        resize_xor_matrix(matr, cnt);
+    }
 
 protected:
     typedef bm::heap_vector<bvector_type_const_ptr, bv_allocator_type, true> bvptr_vector_type;
@@ -744,8 +799,20 @@ public:
             xor_matches_vector_type;
     typedef bm::heap_vector<bm::match_pair, bv_allocator_type, true>
             match_pairs_vector_type;
+    typedef typename bv_ref_vector_type::matrix_chain_type
+                                                    matrix_chain_type;
+    typedef bm::heap_vector<bm::word_t*, bv_allocator_type, true>
+                                                    bv_blocks_vector_type;
 
 public:
+
+    xor_scanner() {}
+    ~xor_scanner()
+    {
+        free_blocks();
+    }
+
+
     void set_ref_vector(const bv_ref_vector_type* ref_vect) BMNOEXCEPT
     { ref_vect_ = ref_vect; }
 
@@ -766,7 +833,9 @@ public:
                               size_type ridx_to,
                               unsigned i, unsigned j,
                               bm::word_t* tx_block);
-
+    /**
+        Run a search to add possible XOR match chain additions
+     */
     size_type refine_match_chain();
 
     /** Scan all candidate gap-blocks to find best XOR match
@@ -785,6 +854,13 @@ public:
                             bm::id64_t        d64,
                             const match_pairs_vector_type& pm_vect,
                             unsigned i, unsigned j) const BMNOEXCEPT;
+
+    /**
+        Calculate matrix of best XOR match metrics per block
+        for the attached collection of bit-vectors
+     */
+    void compute_xor_matrix(matrix_chain_type& matr,
+                            bvector_type& bv_blocks);
 
     /**
         Check if XOR transform simplified block enough for
@@ -830,9 +906,25 @@ public:
 
 protected:
 
+    /// Deoptimize vertical slice of GAP blocks
+    /// @param nb - block number
+    ///
+    void deoptimize_gap_blocks(size_type nb);
+
+    /// Free the collection of temp blocks
+    void free_blocks() BMNOEXCEPT;
+
+    /// Sync TEMP vector size
+    void sync_nb_vect();
 
 private:
-    const bv_ref_vector_type*        ref_vect_ = 0; ///< ref.vect for XOR filter
+    xor_scanner(const xor_scanner&) = delete;
+    xor_scanner& operator=(const xor_scanner&) = delete;
+
+private:
+    const bv_ref_vector_type*   ref_vect_ = 0; ///< ref.vect for XOR filter
+    bv_blocks_vector_type       nb_blocks_vect_;   ///< pointers to temp blocks
+    bv_allocator_type           alloc_;            ///< allocator to produce blocks
 
     bm::block_waves_xor_descr        x_descr_;  ///< XOR desriptor
 
@@ -915,8 +1007,14 @@ xor_scanner<BV>::search_best_xor_mask(const bm::word_t* s_block,
     for (size_type ri = ridx_from; ri < ridx_to; ++ri)
     {
         const bm::word_t* ref_block = get_ref_block(ri, i, j);
-        if (!IS_VALID_ADDR(ref_block) || BM_IS_GAP(ref_block))
+        if (BM_IS_GAP(ref_block))
+        {
+            if (nb_blocks_vect_.size() > ri)
+                ref_block = nb_blocks_vect_[ri];
+        }
+        if (!IS_VALID_ADDR(ref_block))
             continue;
+
         BM_ASSERT(s_block != ref_block);
 
         bm::block_xor_match_descr xmd;
@@ -949,6 +1047,8 @@ xor_scanner<BV>::search_best_xor_mask(const bm::word_t* s_block,
 
         unsigned xor_bc, xor_gc, xor_ibc;
         const bm::word_t* ref_block = get_ref_block(size_type(best_ri), i, j);
+        if (BM_IS_GAP(ref_block))
+            ref_block = nb_blocks_vect_[best_ri];
         found_block_xor_ = ref_block;
 
         // TODO: one pass operation?
@@ -1027,6 +1127,76 @@ typename xor_scanner<BV>::size_type xor_scanner<BV>::refine_match_chain()
         bm::greedy_refine_match_vector(
             chain_match_vect_, match_vect_, found_ridx_, x_d64_, mtype);
     return match_size;
+}
+
+// --------------------------------------------------------------------------
+
+template<typename BV>
+void xor_scanner<BV>::compute_xor_matrix(matrix_chain_type& matr,
+                                         bvector_type& bv_blocks)
+{
+    bv_blocks.clear(false);
+    size_type rsize = ref_vect_->size();
+    ref_vect_->build_nb_digest_and_xor_matrix(matr, bv_blocks);
+
+    sync_nb_vect();
+
+    BM_DECLARE_TEMP_BLOCK(xor_tmp_block);
+
+    typename bvector_type::enumerator en(bv_blocks);
+    for (size_type col = 0; en.valid(); ++en, ++col)
+    {
+        size_type nb = *en;
+
+        deoptimize_gap_blocks(nb);
+
+        unsigned i0, j0;
+        bm::get_block_coord(nb, i0, j0);
+
+        for (size_type ri=0; true; ++ri)
+        {
+            bm::block_match_chain<size_type>* m_row = matr.row(ri);
+            BM_ASSERT(col < matr.cols());
+            bm::block_match_chain<size_type>& bmc = m_row[col];
+            bmc.nb = nb;
+            bmc.chain_size = 0;
+            bmc.match = e_no_xor_match;
+
+            if (ri == rsize-1)
+                break;
+
+            const bm::word_t* s_block = get_ref_block(ri, i0, j0);
+            if (!IS_VALID_ADDR(s_block))
+                continue;
+            if (BM_IS_GAP(s_block))
+            {
+                s_block = nb_blocks_vect_.at(ri);
+                BM_ASSERT(s_block);
+            }
+
+            compute_s_block_stats(s_block);
+            bmc.match = search_best_xor_mask(s_block, ri+1, rsize,
+                                              i0, j0, xor_tmp_block);
+
+            // take index in the ref-vector (not translated to a plain number)
+            //
+            size_type ridx = found_ridx();
+            switch (bmc.match)
+            {
+            case e_no_xor_match:
+                continue;
+            case e_xor_match_EQ:
+                bmc.chain_size++;
+                bmc.ref_idx[0] = ridx;
+                break;
+            default:
+                bmc.chain_size++;
+                bmc.ref_idx[0] = ridx;
+                bmc.xor_d64[0] = get_xor_digest();
+            } // switch
+
+        } // for ri
+    } // for en
 }
 
 // --------------------------------------------------------------------------
@@ -1224,6 +1394,63 @@ xor_scanner<BV>::best_metric(unsigned bc, unsigned gc, unsigned* best_metric)
 
 // --------------------------------------------------------------------------
 
+
+template<typename BV>
+void xor_scanner<BV>::free_blocks() BMNOEXCEPT
+{
+    size_type sz = nb_blocks_vect_.size();
+    for (size_type i = 0; i < sz; ++i)
+    {
+        bm::word_t* blk = nb_blocks_vect_[i];
+        if (blk)
+            alloc_.free_bit_block(blk);
+    }
+    nb_blocks_vect_.resize(0);
+}
+
+// --------------------------------------------------------------------------
+
+template<typename BV>
+void xor_scanner<BV>::deoptimize_gap_blocks(size_type nb)
+{
+    size_type rsize = ref_vect_->size();
+    BM_ASSERT(nb_blocks_vect_.size() == rsize);
+    unsigned i0, j0;
+    bm::get_block_coord(nb, i0, j0);
+
+    for (size_type ri=0; ri < rsize; ++ri)
+    {
+        const bm::word_t* block = get_ref_block(ri, i0, j0);
+        if (BM_IS_GAP(block))
+        {
+            bm::word_t* t_block = nb_blocks_vect_.at(ri);
+            if (!t_block)
+            {
+                t_block = alloc_.alloc_bit_block();
+                nb_blocks_vect_[ri] = t_block;
+            }
+            bm::gap_convert_to_bitset(t_block, BMGAP_PTR(block));
+        }
+    } // for ri
+
+}
+
+// --------------------------------------------------------------------------
+
+template<typename BV>
+void xor_scanner<BV>::sync_nb_vect()
+{
+    size_type rsize = ref_vect_->size();
+    if (nb_blocks_vect_.size() == rsize)
+        return;
+    free_blocks();
+    nb_blocks_vect_.resize(rsize);
+    bm::word_t** vect_data = nb_blocks_vect_.data();
+    for (size_type i = 0; i < rsize; ++i)
+        vect_data[i] = 0;
+}
+
+// --------------------------------------------------------------------------
 
 } // namespace bm
 

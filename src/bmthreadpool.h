@@ -345,7 +345,10 @@ private:
 
 };
 
-
+/**
+    Utility class to submit batched tasks to the running thread pool
+    and optionally wait for thread pool queue to empty
+ */
 template<typename TPool>
 class thread_pool_executor
 {
@@ -357,7 +360,7 @@ public:
     {}
 
     void run(thread_pool_type& tpool,
-             bm::task_batch_base & tasks,
+             bm::task_batch_base& tasks,
              bool wait_for_batch)
     {
         typename thread_pool_type::queue_type& qu = tpool.get_job_queue();
@@ -366,6 +369,7 @@ public:
         for (task_batch_base::size_type i = 0; i < batch_size; ++i)
         {
             bm::task_description* tdescr = tasks.get_task(i);
+            tdescr->argp = tdescr; // restore the self referenece
 
             // check if this is a barrier call
             if (tdescr->flags != bm::task_description::no_flag && i > 0)
@@ -383,7 +387,7 @@ public:
                 continue;
             }
 
-            qu.push(tdescr); // locked push
+            qu.push(tdescr); // locked push to the thread queue
         } // for
 
         // implicit wait barrier for all tasks

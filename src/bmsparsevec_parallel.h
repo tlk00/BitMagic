@@ -54,6 +54,7 @@ public:
     {
         typename task_batch::task_vector_type& tv = batch.get_task_vector();
         auto rsize = sv.get_bmatrix().rows();
+        tv.reserve(rsize);
         for (unsigned k = 0; k < rsize; ++k)
         {
             bvector_type* bv = sv.get_bmatrix().get_row(k);

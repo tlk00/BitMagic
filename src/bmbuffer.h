@@ -59,7 +59,11 @@ public:
     /// Get write access to buffer memory
     unsigned char* data() BMNOEXCEPT { return byte_buf_; }
 
-    bool operator==(const byte_buffer_ptr& lhs) const BMNOEXCEPT { return equal(lhs); }
+    /// const access to buffer memory
+    const unsigned char* data() const BMNOEXCEPT { return byte_buf_; }
+
+    bool operator==(const byte_buffer_ptr& lhs) const BMNOEXCEPT
+        { return equal(lhs); }
     
     /// return true if content and size is the same
     bool equal(const byte_buffer_ptr& lhs) const BMNOEXCEPT
@@ -395,7 +399,18 @@ public:
         unsigned char *p = buffer_.data() + (pos * v_size);
         return *reinterpret_cast<value_type*>(p);
     }
-    
+
+    const value_type& at(size_type pos) const
+    {
+        size_type sz = size();
+        if (pos >= sz)
+            throw_range_error("out of range access");
+
+        size_type v_size = value_size();
+        const unsigned char *p = buffer_.data() + (pos * v_size);
+        return *reinterpret_cast<const value_type*>(p);
+    }
+
     const value_type* begin() const BMNOEXCEPT
     {
         return (const value_type*) buffer_.buf();
