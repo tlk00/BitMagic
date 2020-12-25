@@ -1,0 +1,114 @@
+<html>
+  <body>
+    <script src="wasmtest.js"></script>
+
+    <script>
+    var myBM = {}
+    async function delayedModuleInit() {
+        myBM = await createBM();
+    }
+
+    delayedModuleInit().then(() => {
+        //alert(myBM._my_fib(5));
+        //alert(myBM.my_sq(2));
+
+        myBM.init_thread_pool(4);
+
+        var test_vect = new myBM.TestVector();
+
+        //var v = test_vect.get_value();
+        //alert(v);
+
+
+        // Create float store, add vector(s), verify correctness
+        {
+            var float_vect_store = myBM.create_FloatStore();
+            float_vect_store.reset();
+
+            for (var k = 0; k < 3; ++k) {
+                let size = 1500000;
+                let fp_ptr = float_vect_store.add_vector_js(size);
+                let my_fp_arr = new Float32Array(myBM.HEAPF32.buffer, fp_ptr, size);
+                for (let i = 0; i < size; i++) {
+                    my_fp_arr[i] = 5.1 * (k+1) + i;
+                } // for i
+                //let s = float_vect_store.sum(k);
+                let m = myBM.fp_mean(fp_ptr, size);
+                //console.log(m);
+            } // for k
+            let sz = float_vect_store.size();
+            console.log(sz);
+
+            //alert(sz);
+
+            {
+
+                let fp_ptr1 = float_vect_store.get_ptr(0);
+                let fp_ptr2 = float_vect_store.get_ptr(1);
+                let sz2 = float_vect_store.get_size(1);
+                /*
+                let pcoeff = myBM.fp_pearson(fp_ptr1, fp_ptr2, sz2);
+                alert(pcoeff);
+                console.log("Pearson[0-1] = " + pcoeff);
+                */
+
+                // create parallel builder (with a batch)
+                var pearsons_builder = new myBM.PearsonsParallelBuilder();
+
+                for (var t=0; t < 1000; ++t)
+                    pearsons_builder.add_to_default_batch(fp_ptr1, fp_ptr2, sz2);
+
+                pearsons_builder.sync_run_default_batch();
+
+                let pcoeff = pearsons_builder.get_pcoeff_for_task(0);
+                alert(pcoeff);
+                console.log("Pearson[0-0] = " + pcoeff);
+
+
+
+                pearsons_builder.reset_default_batch();
+
+                pearsons_builder.delete();
+
+            }
+
+            float_vect_store.delete();
+        }
+
+        var tvect_proxy = test_vect.createProxy();
+        tvect_proxy.set("test proxy str");
+
+        let ptr = tvect_proxy.get_buf_ptr();
+        let size = tvect_proxy.get_buf_size();
+        let s1 = tvect_proxy.sum();
+//        console.log(s1);
+
+        let my_uint32_buffer = new Uint32Array(myBM.HEAPU32.buffer, ptr, size);
+        var i;
+        for (i = 0; i < size; i++) {
+            my_uint32_buffer[i] = 10;
+        }
+
+        var s = tvect_proxy.sum();
+        alert(s);
+
+        tvect_proxy.delete();
+
+        //test_vect.set_str("HELLO test-vect from JS");
+
+        var s = test_vect.get_hello();
+        //alert(s);
+
+        test_vect.set_str("HELLO test-vect from JS");
+        var s2 = test_vect.get_hello();
+
+        var text = s + s2;
+        alert(text);
+
+
+
+        test_vect.delete();
+    })
+    </script>
+  </body>
+</html>
