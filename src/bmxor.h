@@ -1024,7 +1024,7 @@ void xor_scanner<BV>::compute_s_block_stats(const bm::word_t* block) BMNOEXCEPT
 template<typename BV>
 bm::xor_complement_match
 xor_scanner<BV>::search_best_xor_mask(const bm::word_t* s_block,
-                                       size_type ri,
+                                       size_type s_ri,
                                        size_type ridx_from,
                                        size_type ridx_to,
                                        unsigned i, unsigned j,
@@ -1052,7 +1052,7 @@ xor_scanner<BV>::search_best_xor_mask(const bm::word_t* s_block,
     {
         const bm::gap_word_t* gap_s_block = BMGAP_PTR(s_block);
         s_gc = bm::gap_length(gap_s_block);
-        s_block = nb_blocks_vect_.at(ri);
+        s_block = nb_blocks_vect_.at(s_ri);
         BM_ASSERT(s_block);
     }
 
@@ -1271,11 +1271,11 @@ void xor_scanner<BV>::compute_sim_model(bm::xor_sim_model<BV>& sim_model)
                 continue;
             case e_xor_match_EQ:
                 bmc.chain_size++;
-                bmc.ref_idx[0] = ridx;
+                bmc.ref_idx[0] = unsigned(ridx);
                 break;
             case e_xor_match_GC:
                 bmc.chain_size++;
-                bmc.ref_idx[0] = ridx;
+                bmc.ref_idx[0] = unsigned(ridx);
                 bmc.xor_d64[0] = ~0ULL;
                 break;
             default:
