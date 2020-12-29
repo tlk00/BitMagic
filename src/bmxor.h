@@ -756,8 +756,10 @@ public:
     void resize_xor_matrix(matrix_chain_type& matr,
                            size_type total_blocks) const
     {
-        BM_ASSERT(total_blocks);
-        matr.resize(ref_bvects_.size(), total_blocks);
+        if (total_blocks)
+            matr.resize(ref_bvects_.size(), total_blocks);
+        else
+            matr.resize(0, 0);
     }
 
     /** Calculate blocks digest and resize XOR distance matrix
