@@ -763,6 +763,14 @@ public:
         return r[col_idx];
     }
 
+    const value_type& get(size_type row_idx, size_type col_idx) const BMNOEXCEPT
+    {
+        BM_ASSERT(row_idx < rows_);
+        BM_ASSERT(col_idx < cols_);
+        const value_type* r = row(row_idx);
+        return r[col_idx];
+    }
+
     void set(size_type row_idx, size_type col_idx, value_type v) BMNOEXCEPT
     {
         BM_ASSERT(row_idx < rows_);

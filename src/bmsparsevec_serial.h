@@ -165,11 +165,13 @@ public:
     typedef bvector_type*                   bvector_type_ptr;
     typedef typename SV::value_type         value_type;
     typedef typename SV::size_type          size_type;
-    typedef typename bvector_type::allocator_type::allocator_pool_type
-                                                   allocator_pool_type;
+    typedef typename bvector_type::allocator_type       alloc_type;
+    typedef typename alloc_type::allocator_pool_type    allocator_pool_type;
     typedef typename
     bm::serializer<bvector_type>::bv_ref_vector_type bv_ref_vector_type;
-    typedef typename bvector_type::allocator_type      alloc_type;
+    typedef typename
+    bm::serializer<bvector_type>::xor_sim_model_type xor_sim_model_type;
+
 
 public:
     sparse_vector_serializer();
@@ -189,7 +191,6 @@ public:
     */
     void set_bookmarks(bool enable, unsigned bm_interval = 256)
         { bvs_.set_bookmarks(enable, bm_interval); }
-
 
     /**
         Enable XOR compression on vector serialization
@@ -221,6 +222,21 @@ public:
        if NULL - resets the use of reference vector
     */
     void set_xor_ref(const bv_ref_vector_type* bv_ref_ptr) BMNOEXCEPT;
+
+    /**
+        Calculate XOR similarity model for ref_vector
+        refernece vector must be associated before
+        @sa set_ref_vectors, set_sim_model
+        @internal
+     */
+    void compute_sim_model(const bv_ref_vector_type& ref_vect,
+                           xor_sim_model_type& sim_model);
+
+    /**
+        Attach serizalizer to a pre-computed similarity model
+        @param sim_model - pointer to external computed model
+     */
+    void set_sim_model(const xor_sim_model_type* sim_model) BMNOEXCEPT;
 
     /**
         Returns the XOR reference compression status (enabled/disabled)
@@ -277,7 +293,9 @@ protected:
     // XOR compression member vars
     bool                             is_xor_ref_;
     bv_ref_vector_type               bv_ref_;
+    xor_sim_model_type               sim_model_;
     const bv_ref_vector_type*        bv_ref_ptr_;
+    const xor_sim_model_type*        sim_model_ptr_;
 };
 
 /**
@@ -744,6 +762,7 @@ void sparse_vector_serializer<SV>::set_xor_ref(
 {
     bv_ref_ptr_ = bv_ref_ptr;
     is_xor_ref_ = bool(bv_ref_ptr);
+    sim_model_ptr_ = 0;
 }
 
 // -------------------------------------------------------------------------
@@ -755,6 +774,24 @@ void sparse_vector_serializer<SV>::set_xor_ref(bool is_enabled) BMNOEXCEPT
     is_xor_ref_ = is_enabled;
 }
 
+// -------------------------------------------------------------------------
+
+template<typename SV>
+void sparse_vector_serializer<SV>::compute_sim_model(
+                                const bv_ref_vector_type& ref_vect,
+                                xor_sim_model_type& sim_model)
+{
+    bvs_.compute_sim_model(ref_vect, sim_model);
+}
+
+// -------------------------------------------------------------------------
+
+template<typename SV>
+void sparse_vector_serializer<SV>::set_sim_model(
+                const xor_sim_model_type* sim_model) BMNOEXCEPT
+{
+    sim_model_ptr_ = sim_model;
+}
 
 // -------------------------------------------------------------------------
 
@@ -882,6 +919,7 @@ void sparse_vector_serializer<SV>::serialize(const SV&  sv,
     }
 
     build_plane_digest(plane_digest_bv_, sv);
+    bvs_.set_ref_vectors(0); // disable possible XOR compression for offs.bv
     bvs_.serialize(plane_digest_bv_, plane_digest_buf_);
 
     unsigned planes = sv.stored_planes();
@@ -918,12 +956,17 @@ void sparse_vector_serializer<SV>::serialize(const SV&  sv,
     {
         if (bv_ref_ptr_) // use external reference
         {
+            // ref vector and similarity model, both must(!) be set
+            BM_ASSERT(sim_model_ptr_);
             bvs_.set_ref_vectors(bv_ref_ptr_);
+            bvs_.set_sim_model(sim_model_ptr_);
         }
         else
         {
             build_xor_ref_vector(sv);
             bvs_.set_ref_vectors(&bv_ref_);
+            bvs_.compute_sim_model(bv_ref_, sim_model_);
+            bvs_.set_sim_model(&sim_model_);
         }
     }
 

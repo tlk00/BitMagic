@@ -82,8 +82,12 @@ public:
     typedef typename bvector_type::block_idx_type           block_idx_type;
     typedef typename bvector_type::size_type                size_type;
 
-    typedef byte_buffer<allocator_type>     buffer;
-    typedef bm::bv_ref_vector<BV>           bv_ref_vector_type;
+    typedef byte_buffer<allocator_type>                buffer;
+    typedef bm::bv_ref_vector<BV>                      bv_ref_vector_type;
+    typedef bm::xor_sim_model<BV>                      xor_sim_model_type;
+
+    typedef
+    typename xor_sim_model_type::block_match_chain_type block_match_chain_type;
 public:
     /**
         Constructor
@@ -239,10 +243,25 @@ public:
 
     /**
         Attach collection of reference vectors for XOR serialization
-        (no transfer of ownership for the pointer)
+        (no transfer of ownership for the pointers)
         @internal
     */
     void set_ref_vectors(const bv_ref_vector_type* ref_vect);
+
+    /**
+        Calculate XOR similarity model for ref_vector
+        refernece vector must be associated before
+        @sa set_ref_vectors
+        @internal
+     */
+    void compute_sim_model(const bv_ref_vector_type& ref_vect,
+                           xor_sim_model_type& sim_model);
+
+    /**
+        Atach XOR similarity model (must be computed by the same ref vector)
+        @internal
+     */
+    void set_sim_model(const xor_sim_model_type* sim_model) BMNOEXCEPT;
 
     /**
         Set current index in rer.vector collection
@@ -396,6 +415,13 @@ protected:
     void process_bookmark(block_idx_type nb, bookmark_state& bookm,
                           bm::encoder&   enc) BMNOEXCEPT;
 
+    /**
+        Compute digest based XOR product, place into tmp XOR block
+    */
+    void xor_tmp_product(const bm::word_t* block1,
+                         const bm::word_t* block2,
+                         bm::id64_t d64);
+
 private:
     serializer(const serializer&);
     serializer& operator=(const serializer&);
@@ -441,9 +467,12 @@ private:
     // XOR compression
     //
     const bv_ref_vector_type* ref_vect_; ///< ref.vector for XOR compression
+    const xor_sim_model_type* sim_model_; ///< similarity model matrix
     bm::xor_scanner<BV>       xor_scan_; ///< scanner for XOR similarity
     size_type                 ref_idx_;  ///< current reference index
-    bm::word_t*               xor_tmp_block_; ///< tmp block for xor product
+    bm::word_t*               xor_tmp_block_; ///< tmp area for xor product
+    bm::word_t*               xor_tmp1_;
+    bm::word_t*               xor_tmp2_;
 
     unsigned      sparse_cutoff_;   ///< number of bits per blocks to consider sparse 
 };
@@ -1140,6 +1169,7 @@ serializer<BV>::serializer(const allocator_type&   alloc,
   compression_level_(bm::set_compression_default),
   enc_header_pos_(0), header_flag_(0),
   ref_vect_(0),
+  sim_model_(0),
   ref_idx_(0),
   xor_tmp_block_(0),
   sparse_cutoff_(sparse_max_l6)
@@ -1157,6 +1187,7 @@ serializer<BV>::serializer(const allocator_type&   alloc,
     }
     compression_stat_ = (size_type*) alloc_.alloc_bit_block();
     optimize_ = free_ = false;
+    xor_tmp1_ = xor_tmp2_ = 0;
 }
 
 template<class BV>
@@ -1170,6 +1201,7 @@ serializer<BV>::serializer(bm::word_t*    temp_block)
   compression_level_(bm::set_compression_default),
   enc_header_pos_(0), header_flag_(0),
   ref_vect_(0),
+  sim_model_(0),
   ref_idx_(0),
   xor_tmp_block_(0),
   sparse_cutoff_(sparse_max_l6)
@@ -1187,6 +1219,7 @@ serializer<BV>::serializer(bm::word_t*    temp_block)
     }
     compression_stat_ = (size_type*) alloc_.alloc_bit_block();
     optimize_ = free_ = false;
+    xor_tmp1_ = xor_tmp2_ = 0;
 }
 
 template<class BV>
@@ -1197,7 +1230,7 @@ serializer<BV>::~serializer()
     if (compression_stat_)
         alloc_.free_bit_block((bm::word_t*)compression_stat_);
     if (xor_tmp_block_)
-        alloc_.free_bit_block(xor_tmp_block_, 2);
+        alloc_.free_bit_block(xor_tmp_block_, 3);
 }
 
 
@@ -1260,9 +1293,27 @@ template<class BV>
 void serializer<BV>::set_ref_vectors(const bv_ref_vector_type* ref_vect)
 {
     ref_vect_ = ref_vect;
+    sim_model_ = 0;
     xor_scan_.set_ref_vector(ref_vect);
-    if (!xor_tmp_block_)
-        xor_tmp_block_ = alloc_.alloc_bit_block(2);
+    if (!xor_tmp_block_ && ref_vect)
+    {
+        xor_tmp_block_ = alloc_.alloc_bit_block(3);
+        xor_tmp1_ = &xor_tmp_block_[bm::set_block_size];
+        xor_tmp2_ = &xor_tmp_block_[bm::set_block_size*2];
+    }
+}
+
+template<class BV>
+void serializer<BV>::compute_sim_model(const bv_ref_vector_type& ref_vect,
+                                       xor_sim_model_type& sim_model)
+{
+    xor_scan_.compute_sim_model(ref_vect, sim_model);
+}
+
+template<class BV>
+void serializer<BV>::set_sim_model(const xor_sim_model_type* sim_model) BMNOEXCEPT
+{
+    sim_model_ = sim_model;
 }
 
 template<class BV>
@@ -2075,6 +2126,24 @@ void serializer<BV>::encode_xor_match_chain(bm::encoder& enc,
     compression_stat_[bm::set_block_xor_chain]++;
 }
 
+template<class BV>
+void serializer<BV>::xor_tmp_product(const bm::word_t* block1,
+                                     const bm::word_t* block2,
+                                     bm::id64_t d64)
+{
+    if (BM_IS_GAP(block1))
+    {
+        bm::gap_convert_to_bitset(xor_tmp1_, BMGAP_PTR(block1));
+        block1 = xor_tmp1_;
+    }
+    if (BM_IS_GAP(block2))
+    {
+        bm::gap_convert_to_bitset(xor_tmp2_, BMGAP_PTR(block2));
+        block2 = xor_tmp2_;
+    }
+    bm::bit_block_xor(xor_tmp_block_, block1, block2, d64);
+}
+
 
 template<class BV>
 void serializer<BV>::serialize(const BV& bv,
@@ -2091,7 +2160,9 @@ void serializer<BV>::serialize(const BV& bv,
     buf.resize(bv_stat->max_serialize_mem, false); // no-copy resize
     optimize_ = free_ = false;
 
-    size_type slen = this->serialize(bv, buf.data(), buf.size());
+    unsigned char* data_buf = buf.data();
+    size_t buf_size = buf.size();
+    size_type slen = this->serialize(bv, data_buf, buf_size);
     BM_ASSERT(slen <= buf.size()); // or we have a BIG problem with prediction
     BM_ASSERT(slen);
     
@@ -2681,11 +2752,83 @@ serializer<BV>::serialize(const BV& bv,
             }
         }
 
+        if (ref_vect_) // XOR filter
+        {
+            // Similarity model must be attached with the ref.vectors
+            // for XOR filter to work
+            BM_ASSERT(sim_model_);
+
+            bool nb_indexed = sim_model_->bv_blocks.test(i);
+            BM_ASSERT(nb_indexed); // Model is correctly computed from ref-vector
+            if (nb_indexed)
+            {
+                // TODO: use rs-index
+                size_type rank = sim_model_->bv_blocks.count_range(0, i);
+                BM_ASSERT(rank);
+                --rank;
+                const block_match_chain_type& mchain =
+                    sim_model_->matr.get(ref_idx_, rank);
+                BM_ASSERT(mchain.nb == i);
+                switch (mchain.match)
+                {
+                case e_no_xor_match:
+                    break;
+                case e_xor_match_EQ:
+                    {
+                        BM_ASSERT(mchain.chain_size == 1);
+                        size_type ridx = mchain.ref_idx[0];
+                        size_type plain_idx = ref_vect_->get_row_idx(ridx);
+                        enc.put_8(bm::set_block_ref_eq);
+                        enc.put_32(unsigned(plain_idx));
+                        compression_stat_[bm::set_block_ref_eq]++;
+                        continue;
+                    }
+                    break;
+                case e_xor_match_GC:
+                case e_xor_match_BC:
+                case e_xor_match_iBC:
+                    {
+                        BM_ASSERT(mchain.chain_size == 1);
+                        size_type ridx = mchain.ref_idx[0];
+                        const bm::word_t* ref_block =
+                            xor_scan_.get_ref_block(ridx, i0, j0);
+
+                        bm::id64_t d64 = mchain.xor_d64[0];
+                        xor_tmp_product(blk, ref_block, d64);
+                        // TODO: validate xor_tmp_block_
+
+                        size_type plain_idx = ref_vect_->get_row_idx(ridx);
+                        if (d64 == ~0ull)
+                        {
+                            enc.put_8_16_32(unsigned(plain_idx),
+                                            bm::set_block_xor_ref8_um,
+                                            bm::set_block_xor_ref16_um,
+                                            bm::set_block_xor_ref32_um);
+                        }
+                        else
+                        {
+                            enc.put_8_16_32(unsigned(plain_idx),
+                                            bm::set_block_xor_ref8,
+                                            bm::set_block_xor_ref16,
+                                            bm::set_block_xor_ref32);
+                            enc.put_64(d64); // xor digest mask
+                        }
+                        compression_stat_[bm::set_block_xor_ref32]++;
+                        blk = xor_tmp_block_; // substitute with XOR product
+                    }
+                    break;
+                default:
+                    BM_ASSERT(0);
+                } // switch xor_match
+            }
+        }
+
         // --------------------------------------------------
         // GAP serialization
         //
         if (BM_IS_GAP(blk))
         {
+            /*
             if (ref_vect_) // XOR filter
             {
                 bm::gap_word_t* tmp_buf = (bm::gap_word_t*)xor_tmp_block_;
@@ -2722,12 +2865,14 @@ serializer<BV>::serialize(const BV& bv,
                         continue;
                     }
                 }
-            } 
+            }
+            */
 
             encode_gap_block(BMGAP_PTR(blk), enc);
         }
         else // bit-block
         {
+            /*
             if (ref_vect_) // XOR filter
             {
                 xor_scan_.compute_s_block_stats(blk);
@@ -2792,6 +2937,7 @@ serializer<BV>::serialize(const BV& bv,
                             blk = xor_tmp_block_; // substitute block with XOR product
                         }
                     }
+
                 } // if found
                 else
                 {
@@ -2822,7 +2968,7 @@ serializer<BV>::serialize(const BV& bv,
                 }
 
             } // if XOR filter search
-            
+*/
 
             // ----------------------------------------------
             // BIT BLOCK serialization
