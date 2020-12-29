@@ -263,6 +263,17 @@ void serialize_df2(const sample_data_frame& df,
         csv_ser.set_xor_ref(&bv_ref); // connect reference vector to serializer
         sv16_ser.set_xor_ref(&bv_ref); // connect reference vector to sv16 serializer
 
+        // compute XOR similarity model - it is common for all serializers
+        // and must be added after set_xor_ref()
+        //
+        csv_serializer_type::xor_sim_model_type sim_model;
+        csv_ser.compute_sim_model(bv_ref, sim_model);
+
+        // add similarity model to each serializer
+        //
+        csv_ser.set_sim_model(&sim_model);
+        sv16_ser.set_sim_model(&sim_model);
+
         // buffers for serialization
         bm::sparse_vector_serial_layout<rsc_sparse_vector_u32> sv_lay1, sv_lay2, sv_lay3;
         bm::sparse_vector_serial_layout<sparse_vector_u16> sv_lay0;
