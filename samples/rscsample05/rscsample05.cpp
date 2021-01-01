@@ -266,8 +266,9 @@ void serialize_df2(const sample_data_frame& df,
         // compute XOR similarity model - it is common for all serializers
         // and must be added after set_xor_ref()
         //
+        bm::xor_sim_params x_params;
         csv_serializer_type::xor_sim_model_type sim_model;
-        csv_ser.compute_sim_model(bv_ref, sim_model);
+        csv_ser.compute_sim_model(sim_model, bv_ref, x_params);
 
         // add similarity model to each serializer
         //
