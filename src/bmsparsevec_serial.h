@@ -229,8 +229,9 @@ public:
         @sa set_ref_vectors, set_sim_model
         @internal
      */
-    void compute_sim_model(const bv_ref_vector_type& ref_vect,
-                           xor_sim_model_type& sim_model);
+    void compute_sim_model(xor_sim_model_type& sim_model,
+                           const bv_ref_vector_type& ref_vect,
+                           const bm::xor_sim_params& params);
 
     /**
         Attach serizalizer to a pre-computed similarity model
@@ -498,6 +499,7 @@ void sparse_vector_serialize(
 {
     (void)temp_block;
     bm::sparse_vector_serializer<SV> sv_serializer;
+    sv_serializer.enable_xor_compression();
     sv_serializer.serialize(sv, sv_layout);
 }
 
@@ -778,10 +780,11 @@ void sparse_vector_serializer<SV>::set_xor_ref(bool is_enabled) BMNOEXCEPT
 
 template<typename SV>
 void sparse_vector_serializer<SV>::compute_sim_model(
+                                xor_sim_model_type& sim_model,
                                 const bv_ref_vector_type& ref_vect,
-                                xor_sim_model_type& sim_model)
+                                const xor_sim_params& params)
 {
-    bvs_.compute_sim_model(ref_vect, sim_model);
+    bvs_.compute_sim_model(sim_model, ref_vect, params);
 }
 
 // -------------------------------------------------------------------------
@@ -963,9 +966,10 @@ void sparse_vector_serializer<SV>::serialize(const SV&  sv,
         }
         else
         {
+            bm::xor_sim_params xs_params;
             build_xor_ref_vector(sv);
             bvs_.set_ref_vectors(&bv_ref_);
-            bvs_.compute_sim_model(bv_ref_, sim_model_);
+            bvs_.compute_sim_model(sim_model_, bv_ref_, xs_params);
             bvs_.set_sim_model(&sim_model_);
         }
     }

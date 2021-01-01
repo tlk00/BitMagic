@@ -376,17 +376,16 @@ public:
     const value_type& operator[](size_type pos) const BMNOEXCEPT
     {
         BM_ASSERT(pos < size());
-        size_type v_size = value_size();
+        return reinterpret_cast<const value_type*>(buffer_.data())[pos];
+/*        size_type v_size = value_size();
         const unsigned char *p = buffer_.buf() + (pos * v_size);
-        return *reinterpret_cast<const value_type*>(p);
+        return *reinterpret_cast<const value_type*>(p); */
     }
 
     value_type& operator[](size_type pos) BMNOEXCEPT
     {
         BM_ASSERT(pos < size());
-        size_type v_size = value_size();
-        unsigned char *p = buffer_.data() + (pos * v_size);
-        return *reinterpret_cast<value_type*>(p);
+        return reinterpret_cast<value_type*>(buffer_.data())[pos];
     }
 
     value_type& at(size_type pos)
@@ -394,10 +393,11 @@ public:
         size_type sz = size();
         if (pos >= sz)
             throw_range_error("out of range access");
-
+        return reinterpret_cast<value_type*>(buffer_.data())[pos];
+/*
         size_type v_size = value_size();
         unsigned char *p = buffer_.data() + (pos * v_size);
-        return *reinterpret_cast<value_type*>(p);
+        return *reinterpret_cast<value_type*>(p); */
     }
 
     const value_type& at(size_type pos) const
@@ -405,10 +405,11 @@ public:
         size_type sz = size();
         if (pos >= sz)
             throw_range_error("out of range access");
-
+        return reinterpret_cast<value_type*>(buffer_.data())[pos];
+/*
         size_type v_size = value_size();
         const unsigned char *p = buffer_.data() + (pos * v_size);
-        return *reinterpret_cast<const value_type*>(p);
+        return *reinterpret_cast<const value_type*>(p); */
     }
 
     const value_type* begin() const BMNOEXCEPT
