@@ -318,7 +318,7 @@ public:
         void add_value_no_null(value_type v);
         
         /**
-            Reconfшпгку back inserter not to touch the NULL vector
+            Reconfigure back inserter not to touch the NULL vector
         */
         void disable_set_null() BMNOEXCEPT { set_not_null_ = false; }
         // ---------------------------------------------------------------
@@ -682,7 +682,7 @@ public:
         \param idx - vactor element index
         \param val - argument to compare with
      
-        \return 0 - equal, < 0 - vect[i] < str, >0 otherwise
+        \return 0 - equal, < 0 - vect[i] < val, >0 otherwise
     */
     int compare(size_type idx, const value_type val) const BMNOEXCEPT;
     
