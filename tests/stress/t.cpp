@@ -3153,14 +3153,14 @@ void TestBlockCountXORChange()
         assert(pm_vect[0].xor_d64 == 1ull);
         cnt = bm::greedy_refine_match_vector(pm_vect, xm_vect, 11, (1ull << 1), e_xor_match_iBC);
         assert(cnt == 0);
-
+/*
         int brate = bm::check_pair_vect_vbr(pm_vect, 255);
         assert(brate == 1);
         brate = bm::check_pair_vect_vbr(pm_vect, 65535);
         assert(brate == 2);
         brate = bm::check_pair_vect_vbr(pm_vect, 65536);
         assert(brate == 0);
-
+*/
 
         {
             block_xor_match_descr xmd;
@@ -13378,7 +13378,6 @@ void TestSparseVectorSerialization2()
         {
             const bvect::size_type* cstat = sv_serializer.get_bv_serializer().get_compression_stat();
             assert(cstat[bm::set_block_xor_ref32]>=1);
-            //assert(cstat[bm::set_block_xor_gap_ref32]>=1);
         }
 
         buf = sv_lay1.buf();
@@ -13411,76 +13410,84 @@ void TestSparseVectorSerialization2()
             sv3i[i] = 0;
         }
 
-        bm::sparse_vector_serializer<sparse_vector_u32>::bv_ref_vector_type bv_ref;
-        // add references in reverse(!) order
-        bv_ref.add_vectors(sv3i.get_bmatrix());
-        bv_ref.add_vectors(sv2i.get_bmatrix());
-        bv_ref.add_vectors(sv1i.get_bmatrix());
-
-        assert(bv_ref.size() == 3);
-
-        sv_serializer.set_xor_ref(&bv_ref);
-        assert(sv_serializer.is_xor_ref());
-
-        bm::sparse_vector_serializer<sparse_vector_u32>::xor_sim_model_type sim_model;
-        sv_serializer.compute_sim_model(sim_model, bv_ref, bm::xor_sim_params());
-        sv_serializer.set_sim_model(&sim_model);
-
-        sv_serializer.serialize(sv1i, sv_lay1);
+        for (unsigned pass = 0; pass < 2; ++pass)
         {
-            const bvect::size_type* cstat = sv_serializer.get_bv_serializer().get_compression_stat();
-            assert(cstat[bm::set_block_ref_eq]==0);
-        }
-        sv_serializer.serialize(sv2i, sv_lay2);
-        {
-            const bvect::size_type* cstat = sv_serializer.get_bv_serializer().get_compression_stat();
-            assert(cstat[bm::set_block_ref_eq]==1 || cstat[bm::set_block_xor_ref32] == 1);
-        }
-        sv_serializer.serialize(sv3i, sv_lay3);
-        {
-            const bvect::size_type* cstat = sv_serializer.get_bv_serializer().get_compression_stat();
-            assert(cstat[bm::set_block_ref_eq]==1 || cstat[bm::set_block_xor_ref32] == 1);
-        }
+            bm::sparse_vector_serializer<sparse_vector_u32>::bv_ref_vector_type bv_ref;
+            // add references in reverse(!) order
+            bv_ref.add_vectors(sv3i.get_bmatrix());
+            bv_ref.add_vectors(sv2i.get_bmatrix());
+            bv_ref.add_vectors(sv1i.get_bmatrix());
 
-        // ----------
+            assert(bv_ref.size() == 3);
 
+            sv_serializer.set_xor_ref(&bv_ref);
+            assert(sv_serializer.is_xor_ref());
 
-        bm::sparse_vector_deserializer<sparse_vector_u32>::bv_ref_vector_type bv_ref_d;
+            bm::sparse_vector_serializer<sparse_vector_u32>::xor_sim_model_type sim_model;
+            sv_serializer.compute_sim_model(sim_model, bv_ref, bm::xor_sim_params());
+            sv_serializer.set_sim_model(&sim_model);
 
-        buf = sv_lay1.buf();
-        sz2 = sv_lay1.size();
+            sv_serializer.serialize(sv1i, sv_lay1);
+            {
+                const bvect::size_type* cstat = sv_serializer.get_bv_serializer().get_compression_stat();
+                assert(cstat[bm::set_block_ref_eq]==0);
+            }
+            sv_serializer.serialize(sv2i, sv_lay2);
+            {
+                const bvect::size_type* cstat = sv_serializer.get_bv_serializer().get_compression_stat();
+                assert(cstat[bm::set_block_ref_eq]==1 || cstat[bm::set_block_xor_ref32] == 1);
+            }
+            sv_serializer.serialize(sv3i, sv_lay3);
+            {
+                const bvect::size_type* cstat = sv_serializer.get_bv_serializer().get_compression_stat();
+                assert(cstat[bm::set_block_ref_eq]==1 || cstat[bm::set_block_xor_ref32] == 1);
+            }
 
-
-        sv_deserial.deserialize_structure(sv1o, sv_lay1.buf());
-        sv_deserial.deserialize_structure(sv2o, sv_lay2.buf());
-        sv_deserial.deserialize_structure(sv3o, sv_lay3.buf());
-
-        bv_ref_d.add_vectors(sv3o.get_bmatrix());
-        bv_ref_d.add_vectors(sv2o.get_bmatrix());
-        bv_ref_d.add_vectors(sv1o.get_bmatrix());
-
-        sv_deserial.set_xor_ref(&bv_ref_d);
-
-        sv_deserial.deserialize(sv1o, buf, false);
-        eq = sv1i.equal(sv1o);
-        assert(eq);
-
-        buf = sv_lay2.buf();
-        sz2 = sv_lay2.size();
-
-        sv_deserial.deserialize(sv2o, buf, false);
-        eq = sv2i.equal(sv2o);
-        assert(eq);
-
-        buf = sv_lay3.buf();
-        sz2 = sv_lay3.size();
-
-        sv_deserial.deserialize(sv3o, buf, false);
-        eq = sv3i.equal(sv3o);
-        assert(eq);
+            // ----------
 
 
-        sv_deserial.set_xor_ref(0); // unset
+            bm::sparse_vector_deserializer<sparse_vector_u32>::bv_ref_vector_type bv_ref_d;
+
+            buf = sv_lay1.buf();
+            sz2 = sv_lay1.size();
+
+
+            sv_deserial.deserialize_structure(sv1o, sv_lay1.buf());
+            sv_deserial.deserialize_structure(sv2o, sv_lay2.buf());
+            sv_deserial.deserialize_structure(sv3o, sv_lay3.buf());
+
+            bv_ref_d.add_vectors(sv3o.get_bmatrix());
+            bv_ref_d.add_vectors(sv2o.get_bmatrix());
+            bv_ref_d.add_vectors(sv1o.get_bmatrix());
+
+            sv_deserial.set_xor_ref(&bv_ref_d);
+
+            sv_deserial.deserialize(sv1o, buf, false);
+            eq = sv1i.equal(sv1o);
+            assert(eq);
+
+            buf = sv_lay2.buf();
+            sz2 = sv_lay2.size();
+
+            sv_deserial.deserialize(sv2o, buf, false);
+            eq = sv2i.equal(sv2o);
+            assert(eq);
+
+            buf = sv_lay3.buf();
+            sz2 = sv_lay3.size();
+
+            sv_deserial.deserialize(sv3o, buf, false);
+            eq = sv3i.equal(sv3o);
+            assert(eq);
+
+
+            sv_deserial.set_xor_ref(0); // unset
+
+            sv1i.optimize();
+            sv2i.optimize();
+            sv3i.optimize();
+
+        } // for pass
     }
     cout << "Test data-frame XOR compression - OK" << endl;
 
@@ -13614,7 +13621,7 @@ void TestSparseVectorSerialization2()
         }
 
         sv1.optimize();
-        sv_serializer.set_bookmarks(true, rand()%512);
+        sv_serializer.set_bookmarks(true, rand()%16);
 
     } // for k
 
@@ -18129,6 +18136,37 @@ void BitForEachTest()
 }
 
 static
+void HMaskTest()
+{
+    cout << "---------------------------- HMaskTest()..." << endl;
+    {
+        unsigned m;
+        m = bm::compute_h64_mask(1 << 0);
+        assert(m == 1);
+        m = bm::compute_h64_mask(1 << 1);
+        assert(m == 1);
+        m = bm::compute_h64_mask(1 << 8);
+        assert(m == (1<<1));
+        m = bm::compute_h64_mask(1 << 16);
+        assert(m == (1<<2));
+        m = bm::compute_h64_mask(1ull << 24);
+        assert(m == (1<<3));
+        m = bm::compute_h64_mask(1ull << 32);
+        assert(m == (1<<4));
+        m = bm::compute_h64_mask(1ull << 40);
+        assert(m == (1<<5));
+        m = bm::compute_h64_mask(1ull << 48);
+        assert(m == (1<<6));
+        m = bm::compute_h64_mask(1ull << 56);
+        assert(m == (1<<7));
+        m = bm::compute_h64_mask((1ull << 48) | (1ull << 56));
+        assert(m == ((1<<6)|(1<<7)));
+    }
+    cout << "---------------------------- HMaskTest()... OK" << endl;
+}
+
+
+static
 void Log2Test()
 {
     cout << "---------------------------- Log2 Test..." << endl;
@@ -18616,6 +18654,20 @@ void BitEncoderTest()
         unsigned char e = dec.get_8();
         assert(!e);
     }
+
+    // test h64
+    {
+        bm::encoder enc(buf, sizeof(buf));
+        enc.put_h64(0xFF);
+        enc.put_h64(0xF0FAFFBEEFFFUL);
+
+        bm::decoder dec(buf);
+        auto v1 = dec.get_h64();
+        assert(v1 == 0xFF);
+        auto v2 = dec.get_h64();
+        assert(v2 == 0xF0FAFFBEEFFFUL);
+    }
+
     
     
     cout << "---------------------------- BitEncoderTest" << endl;
@@ -19796,11 +19848,62 @@ void TestSparseVector()
         assert(!f);
     }}
 
+    // basic const_iterator construction
+    {{
+        bm::sparse_vector<unsigned, bvect> sv1;
+        svector::const_iterator it_end;
+        svector::const_iterator it = sv1.begin();
+
+        assert(!it.valid());
+        assert(!it_end.valid());
+        assert(it != it_end);
+        it.invalidate();
+        assert(!it.valid());
+
+        it.go_to(1);
+        assert(!it.valid());
+
+        svector::const_iterator it_end2 = sv1.end();
+        assert(!it_end2.valid());
+    }}
+
+    // const_iterator::is_null()
+    {{
+        bm::sparse_vector<unsigned, bvect> sv(bm::use_null);
+        sv.push_back((1u << 31) | 1u);
+        sv.push_back(20);
+
+        sv.erase(0);
+        sv.insert(0, 0);
+        bvect* bv_null = sv.get_null_bvect();
+        bv_null->clear_range(0, 0);
+        bool b1 = bv_null->test(0);
+        assert(!b1);
+        b1 = bv_null->test(1);
+        assert(b1);
+
+        sv.set(0, 10);
+        b1 = bv_null->test(0);
+        assert(b1);
+        b1 = bv_null->test(1);
+        assert(b1);
+
+        bm::sparse_vector<unsigned, bvect>::const_iterator it = sv.begin();
+        bool b = it.is_null();
+        assert(!b);
+        it.advance();
+        b = it.is_null();
+        assert(!b);
+    }}
+
     // XOR scanner EQ test
     {{
         bm::sparse_vector<unsigned, bvect> sv;
-        sv.push_back(9);
-        sv.push_back(9);
+        for (unsigned i = 0; i < 5; ++i)
+        {
+            sv.push_back(9);
+            sv.push_back(0);
+        }
 
         bm::xor_scanner<bvect> xscan;
         bm::xor_scanner<bvect>::bv_ref_vector_type r_vect;
@@ -19812,9 +19915,9 @@ void TestSparseVector()
         const bm::word_t* block_x = bman_x.get_block_ptr(0, 0);
 
         xscan.compute_s_block_stats(block_x);
-        assert(xscan.get_s_bc() == 2);
-        assert(xscan.get_s_gc() == 2);
-        assert(xscan.get_s_block_best() == 2);
+        assert(xscan.get_s_bc() == 5);
+        assert(xscan.get_s_gc() == 10);
+        assert(xscan.get_s_block_best() == 5);
 
         auto idx = xscan.get_ref_vector().find(unsigned(0));
         assert(idx == 0);
@@ -19863,6 +19966,8 @@ void TestSparseVector()
             sv[i] = 9;
         sv[65536*256] = 9;
         sv[65536*256+1] = 9;
+        sv[65536*256+3] = 9;
+        sv[65536*256+6] = 9;
 
         for (unsigned pass = 0; pass < 2; ++pass)
         {
@@ -19902,26 +20007,7 @@ void TestSparseVector()
         } // for
 
     }}
-    
-    // basic const_iterator construction
-    {{
-        bm::sparse_vector<unsigned, bvect> sv1;
-        svector::const_iterator it_end;
-        svector::const_iterator it = sv1.begin();
-        
-        assert(!it.valid());
-        assert(!it_end.valid());
-        assert(it != it_end);
-        it.invalidate();
-        assert(!it.valid());
-        
-        it.go_to(1);
-        assert(!it.valid());
-        
-        svector::const_iterator it_end2 = sv1.end();
-        assert(!it_end2.valid());
-    }}
-    
+
     // test empty vector serialization
     {{
         int res;
@@ -21521,6 +21607,7 @@ void TestSparseVector_XOR_Scanner()
         assert(idx == 3); // matrix row 3
     }}
 
+
     // test chain compression search
     //
     // case 1: main (base) reference vector is found + a chain of improves
@@ -21546,11 +21633,32 @@ void TestSparseVector_XOR_Scanner()
                 break;
         } // for k
 
-        bm::xor_scanner<bvect> xscan;
-        bm::xor_scanner<bvect>::bv_ref_vector_type r_vect;
-        r_vect.build(sv.get_bmatrix());
-        xscan.set_ref_vector(&r_vect);
+        for (unsigned pass = 0; pass < 2; ++pass)
+        {
+            bm::xor_scanner<bvect> xscan;
+            bm::xor_scanner<bvect>::bv_ref_vector_type r_vect;
+            r_vect.build(sv.get_bmatrix());
+            xscan.set_ref_vector(&r_vect);
 
+            bm::xor_sim_params xs_params;
+            bm::xor_sim_model<bvect> sim_model;
+            xscan.compute_sim_model(sim_model, r_vect, xs_params);
+
+            auto mchain = sim_model.matr.get(0, 0);
+
+            assert(mchain.chain_size == 2);
+            assert(mchain.ref_idx[0] == 1);
+            assert(mchain.ref_idx[1] == 2);
+            assert(mchain.xor_d64[0] == 1);
+            assert(mchain.xor_d64[1] == 2);
+
+            int brate = bm::check_pair_vect_vbr(mchain);
+            assert(brate == 1);
+
+            sv.optimize();
+        } // for
+
+/*
         const bvect* bv_x = sv.get_plane(0);
         const bvect::blocks_manager_type& bman_x = bv_x->get_blocks_manager();
         const bm::word_t* block_x = bman_x.get_block_ptr(0, 0);
@@ -21595,13 +21703,13 @@ void TestSparseVector_XOR_Scanner()
         unsigned block_pos;
         bool found = bm::block_find_first_diff(tb2, block_x, &block_pos);
         assert(!found);
-
+*/
     }}
 
-
+#if 0
     // case 2: main (base) reference vector is found + a chain of improves
     // TODO: fixme
-    /*
+
     cout << " case 2: main (base) reference vector is found + a chain of improves" << endl;
     {{
         const unsigned stride_len = 1024;
@@ -21631,15 +21739,20 @@ void TestSparseVector_XOR_Scanner()
             r_vect.build(sv.get_bmatrix());
             xscan.set_ref_vector(&r_vect);
 
+            bm::xor_sim_params xs_params;
+            bm::xor_sim_model<bvect> sim_model;
+            xscan.compute_sim_model(sim_model, r_vect, xs_params);
+
             const bvect* bv_x = sv.get_plane(0);
             auto cnt = bv_x->count();
             cout << "\r " << cnt << endl;
-            const bvect::blocks_manager_type& bman_x = bv_x->get_blocks_manager();
-            const bm::word_t* block_x = bman_x.get_block_ptr(0, 0);
+//            const bvect::blocks_manager_type& bman_x = bv_x->get_blocks_manager();
+//            const bm::word_t* block_x = bman_x.get_block_ptr(0, 0);
 
             auto idx = xscan.get_ref_vector().find(unsigned(0));
             assert(idx == 0);
 
+/*
             // important before search_best_xor_mask
             xscan.compute_s_block_stats(block_x);
 
@@ -21711,13 +21824,14 @@ void TestSparseVector_XOR_Scanner()
             unsigned block_pos;
             bool found = bm::block_find_first_diff(tb2, block_x, &block_pos);
             assert(!found);
+*/
 
         } // for pass
     }}
 
+#endif
 
-
-
+    /*
     // case 3: main (base) reference vector is found + a chain of improves
     // (inverted)
     cout << "\n case 3: main (base) reference vector is found + a chain of improves (inverted)" << endl;
@@ -21822,9 +21936,9 @@ static
 void TestSparseVectorSerial()
 {
     cout << "---------------------------- Test sparse vector serializer" << endl;
-// TODO: restore chain tests
-/*
+
     cout << "  test chain XOR serialization.. " << endl;
+
     {
         bm::sparse_vector_serializer<sparse_vector_u32> sv_ser;
         bm::sparse_vector_deserializer<sparse_vector_u32> sv_deserial;
@@ -21868,7 +21982,7 @@ void TestSparseVectorSerial()
 
         } // for pass
     }
-*/
+
     bm::sparse_vector_serializer<sparse_vector_u32> sv_ser;
     sv_ser.set_xor_ref(false);
 //sv_ser.set_xor_ref(true);
@@ -25112,7 +25226,7 @@ static
 void TestStrSparseVectorSerial()
 {
    cout << "---------------------------- TestStrSparseVectorSerial()" << endl;
-
+/*
     {
        str_sparse_vector<char, bvect, 32> str_sv1;
        str_sparse_vector<char, bvect, 32> str_sv2;
@@ -25231,7 +25345,6 @@ void TestStrSparseVectorSerial()
 
 
 
-
     cout << "Stress deserialization (AND mask) and range[..]" << endl;
     {
        str_sparse_vector<char, bvect, 32> str_sv0;
@@ -25307,7 +25420,7 @@ void TestStrSparseVectorSerial()
 
     }
     cout << " ok" << endl;
-
+*/
 
     cout << "Stress deserialization (AND mask) (use NULL) and Range[..]" << endl;
     {
@@ -30821,7 +30934,10 @@ int main(int argc, char *argv[])
     {
         TestRecomb();
 
+        HMaskTest();
+
         Log2Test();
+
 
         OptimGAPTest();
 
@@ -30877,13 +30993,13 @@ int main(int argc, char *argv[])
     
     if (is_all || is_support)
     {
-
         TestHeapVector();
         TestXOR_RefVector();
 
         TestTasks();
 
         MiniSetTest();
+
         BitEncoderTest();
     
         InterpolativeCodingTest();

@@ -814,6 +814,8 @@ void sse42_bit_block_calc_xor_change(const __m128i* BMRESTRICT block,
 
     }
     gap_count -= (w0 & 1u); // correct initial carry-in error
+    if (!gap_count)
+        ++gap_count; // must be >0
     *gc = gap_count;
     *bc = bit_count;
 }

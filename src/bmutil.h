@@ -543,6 +543,26 @@ BMFORCEINLINE void xor_swap(W& x, W& y) BMNOEXCEPT
 #pragma warning( pop )
 #endif
 
+/**
+    Сompute mask of bytes presense in 64-bit word
+
+    @param w - [in] input 64-bit word
+    @return mask with 8 bits
+    @internal
+ */
+inline
+unsigned compute_h64_mask(unsigned long long w)
+{
+    unsigned h_mask = 0;
+    for (unsigned i = 0; w && (i < 8); ++i, w >>= 8)
+    {
+        if ((unsigned char) w)
+            h_mask |= (1u<<i);
+    } // for
+    return h_mask;
+}
+
+
 
 } // bm
 

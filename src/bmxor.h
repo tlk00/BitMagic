@@ -321,18 +321,15 @@ greedy_refine_match_vector(PVT&                      match_pairs_vect,
     @return 1 - < 256 (8bit), 2 - < 65536 (16-bit) or 0 - 32-bit
     @internal
  */
-template<typename PVT>
-unsigned char check_pair_vect_vbr(const PVT& match_pairs_vect,
-                             typename PVT::size_type  ref_idx)
+template<typename BMChain>
+unsigned char check_pair_vect_vbr(const BMChain& mchain)
 {
-    typename PVT::size_type max_idx = 0;
-    if (ref_idx > max_idx)
-        max_idx = ref_idx;
-    for (typename PVT::size_type i = 0; i < match_pairs_vect.size(); ++i)
+    size_t max_idx = 0;
+    for (size_t i = 0; i < mchain.chain_size; ++i)
     {
-        const match_pair& mp = match_pairs_vect[i];
-        if (mp.ref_idx > max_idx)
-            max_idx = mp.ref_idx;
+        auto ridx = mchain.ref_idx[i];
+        if (ridx > max_idx)
+            max_idx = ridx;
     } // for i
     if (max_idx < 256)
         return 1;
@@ -970,12 +967,12 @@ public:
     /**
         XOR all match blocks to target using their digest masks
      */
-     void apply_xor_match_vector(bm::word_t* target_xor_block,
-                           const bm::word_t* block,
-                           const bm::word_t* ref_block,
-                            bm::id64_t        d64,
-                            const match_pairs_vector_type& pm_vect,
-                            unsigned i, unsigned j) const BMNOEXCEPT;
+    void apply_xor_match_vector(
+                       bm::word_t* target_xor_block,
+                       const bm::word_t* s_block,
+                       size_type s_ri,
+                       const match_pairs_vector_type& pm_vect,
+                       unsigned i, unsigned j) const BMNOEXCEPT;
 
     /**
         Calculate matrix of best XOR match metrics per block
@@ -1214,9 +1211,10 @@ xor_scanner<BV>::search_best_xor_mask(const bm::word_t* s_block,
                 //bm::xor_complement_match match =
                 best_metric(xmd.xor_bc, xmd.xor_gc, &curr_best);
                 float gain_ratio =
-                    float(curr_best) / float(s_block_best_metric_);
+                    float(xmd.block_gain) / float(s_block_best_metric_);
 
-                if (depth >= params.min_lookup_depth)
+                if (depth >= params.min_lookup_depth &&
+                    x_block_mtype_ == xmd.match_type)
                 {
                     if (xmd.block_gain >= params.stop_gain)
                         break;
@@ -1238,7 +1236,7 @@ xor_scanner<BV>::search_best_xor_mask(const bm::word_t* s_block,
         const unsigned bie_limit =
                 unsigned(float(bm::gap_max_bits) / bie_bits_per_int);
 
-        unsigned xor_bc, xor_gc;//, xor_ibc;
+        unsigned xor_bc, xor_gc;
         const bm::word_t* ref_block = get_ref_block(size_type(best_ri), i, j);
         bool r_gap = BM_IS_GAP(ref_block);
         if (r_gap)
@@ -1258,7 +1256,9 @@ xor_scanner<BV>::search_best_xor_mask(const bm::word_t* s_block,
             unsigned block_pos;
             bool found = bm::block_find_first_diff(s_block, ref_block, &block_pos);
             if (!found)
-                x_block_mtype_ = rb_found = e_xor_match_EQ;
+            {
+                x_block_mtype_ = rb_found = e_xor_match_EQ; x_d64_ = 0;
+            }
         }
         else // find the best matching metric (GC, BC, iBC, ..)
         {
@@ -1335,6 +1335,10 @@ template<typename BV>
 void xor_scanner<BV>::compute_sim_model(bm::xor_sim_model<BV>& sim_model,
                                         const bm::xor_sim_params& params)
 {
+    const float bie_bits_per_int = 3.0f; // c_level_ < 6 ? 3.75f : 3.0f;
+    const unsigned bie_limit =
+            unsigned(float(bm::gap_max_bits) / bie_bits_per_int);
+
     BM_ASSERT(ref_vect_);
 
     sim_model.bv_blocks.clear(false);
@@ -1393,23 +1397,70 @@ void xor_scanner<BV>::compute_sim_model(bm::xor_sim_model<BV>& sim_model,
             // take index in the ref-vector (not translated to a plain number)
             //
             size_type ridx = found_ridx();
+            bm::id64_t d64 = get_xor_digest();
+
+            size_type chain_size = 0;
+            if (d64 && d64 != ~0ULL) // something found
+            {
+                chain_size = refine_match_chain();
+            }
             switch (bmc.match)
             {
             case e_no_xor_match:
-                continue;
+                if (chain_size) // try chain compression for improve
+                {
+                    match_pairs_vector_type& pm_vect = get_match_pairs();
+                    BM_ASSERT(chain_size == pm_vect.size());
+
+                    apply_xor_match_vector(xor_tmp_block,
+                                           s_block, ri,
+                                           pm_vect, i0, j0);
+                    unsigned xor_bc, xor_gc;
+                    bm::bit_block_change_bc(xor_tmp_block, &xor_gc, &xor_bc);
+
+                    bmc.match = best_metric(xor_bc, xor_gc, &x_best_metric_);
+                    if (bmc.match)
+                    {
+                        if ((x_best_metric_ > bie_limit) ||
+                            (get_s_block_best() < x_best_metric_))
+                        {
+                            bmc.match = e_no_xor_match;
+                            continue;
+                        }
+                        for (size_type k = 0; k < chain_size; ++k)
+                        {
+                            const bm::match_pair& mp = pm_vect[k];
+                            bmc.ref_idx[k] = mp.ref_idx;
+                            bmc.xor_d64[k] = mp.xor_d64;
+                            bmc.chain_size++;
+                        } // for k
+                    }
+                }
+                break;
             case e_xor_match_EQ:
                 bmc.chain_size++;
                 bmc.ref_idx[0] = unsigned(ridx);
                 break;
-            case e_xor_match_GC:
+            default: // improving match found
                 bmc.chain_size++;
                 bmc.ref_idx[0] = unsigned(ridx);
-                bmc.xor_d64[0] = ~0ULL;
-                break;
-            default:
-                bmc.chain_size++;
-                bmc.ref_idx[0] = ridx;
-                bmc.xor_d64[0] = get_xor_digest();
+                bmc.xor_d64[0] = d64;
+
+                if (chain_size) // match chain needs no verification
+                {
+                    match_pairs_vector_type& pm_vect = get_match_pairs();
+                    BM_ASSERT(chain_size == pm_vect.size());
+                    auto sz = pm_vect.size();
+                    for (size_type k = 0; k < sz; ++k)
+                    {
+                        BM_ASSERT(k < 64);
+                        const bm::match_pair& mp = pm_vect[k];
+                        bmc.ref_idx[k+1] = mp.ref_idx;
+                        bmc.xor_d64[k+1] = mp.xor_d64;
+                        bmc.chain_size++;
+                    } // for k
+                }
+
             } // switch
 
         } // for ri
@@ -1526,7 +1577,7 @@ bool xor_scanner<BV>::search_best_xor_gap(const bm::word_t* block,
 }
 
 // --------------------------------------------------------------------------
-
+/*
 template<typename BV>
 void xor_scanner<BV>::apply_xor_match_vector(
                        bm::word_t* target_xor_block,
@@ -1544,11 +1595,44 @@ void xor_scanner<BV>::apply_xor_match_vector(
         const bm::word_t* block_ref = get_ref_block(mp.ref_idx, i, j);
         bm::bit_block_xor(target_xor_block, block_ref, mp.xor_d64);
     } // for k
+}
+*/
 
+template<typename BV>
+void xor_scanner<BV>::apply_xor_match_vector(
+                       bm::word_t* target_xor_block,
+                       const bm::word_t* s_block,
+                       size_type s_ri,
+                       const match_pairs_vector_type& pm_vect,
+                       unsigned i, unsigned j) const BMNOEXCEPT
+{
+    bool s_gap = BM_IS_GAP(s_block);
+    if (s_gap)
+    {
+        s_block = nb_blocks_vect_.at(s_ri);
+        BM_ASSERT(s_block);
+    }
+    auto sz = pm_vect.size();
+    for (typename match_pairs_vector_type::size_type k = 0; k < sz; ++k)
+    {
+        const bm::match_pair& mp = pm_vect[k];
+        const bm::word_t* ref_block = get_ref_block(mp.ref_idx, i, j);
+        if (BM_IS_GAP(ref_block))
+        {
+            ref_block = nb_blocks_vect_[mp.ref_idx];
+            BM_ASSERT(ref_block);
+        }
+        if (!k)
+            bm::bit_block_xor(target_xor_block, s_block, ref_block, mp.xor_d64);
+        else
+            bm::bit_block_xor(target_xor_block, ref_block, mp.xor_d64);
+    } // for k
 }
 
-// --------------------------------------------------------------------------
 
+
+// --------------------------------------------------------------------------
+/*
 template<typename BV>
 bool xor_scanner<BV>::validate_xor(const bm::word_t* xor_block) const BMNOEXCEPT
 {
@@ -1574,7 +1658,7 @@ bool xor_scanner<BV>::validate_xor(const bm::word_t* xor_block) const BMNOEXCEPT
     }
     return false;
 }
-
+*/
 // --------------------------------------------------------------------------
 
 
@@ -1589,9 +1673,9 @@ xor_scanner<BV>::best_metric(unsigned bc, unsigned gc, unsigned* best_metric)
         *best_metric = gc;
         return e_xor_match_GC;
     }
-    if (gc < bc) // GC < GC
+    if (gc < bc) // GC < BC
     {
-        if (gc < ibc)
+        if (gc <= ibc)
         {
             *best_metric = gc;
             return e_xor_match_GC;
@@ -1599,7 +1683,7 @@ xor_scanner<BV>::best_metric(unsigned bc, unsigned gc, unsigned* best_metric)
     }
     else // GC >= BC
     {
-        if (bc < ibc)
+        if (bc <= ibc)
         {
             *best_metric = bc;
             return e_xor_match_BC;

@@ -1875,6 +1875,8 @@ void avx2_bit_block_calc_xor_change(const __m256i* BMRESTRICT block,
     _mm256_store_si256 ((__m256i*)cnt_v, cntAcc);
     gap_count += (unsigned)(cnt_v[0] + cnt_v[1] + cnt_v[2] + cnt_v[3]);
     gap_count -= (w0 & 1u); // correct initial carry-in error
+    if (!gap_count)
+        ++gap_count; // always >0
 
     _mm256_store_si256 ((__m256i*)cnt_v, cntAcc2);
     bit_count += (unsigned)(cnt_v[0] + cnt_v[1] + cnt_v[2] + cnt_v[3]);

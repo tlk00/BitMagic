@@ -60,6 +60,7 @@ public:
     void put_32(const bm::word_t* w, unsigned count) BMNOEXCEPT;
     void put_48(bm::id64_t w) BMNOEXCEPT;
     void put_64(bm::id64_t w) BMNOEXCEPT;
+    void put_h64(bm::id64_t w) BMNOEXCEPT;
 
     void put_8_16_32(unsigned w,
      unsigned char c8, unsigned char c16, unsigned char c32) BMNOEXCEPT;
@@ -105,6 +106,10 @@ public:
 
     /// Set current buffer pointer
     void set_pos(const unsigned char* pos) BMNOEXCEPT { buf_ = pos; }
+
+    /// Read h-64-bit
+    bm::id64_t get_h64() BMNOEXCEPT;
+
 protected:
    const unsigned char*   buf_;
    const unsigned char*   start_;
@@ -615,6 +620,23 @@ inline void encoder::put_64(bm::id64_t w) BMNOEXCEPT
 #endif
 }
 
+/*!
+   \fn void encoder::put_h64(bm::id64_t w)
+   \brief Puts 64 bits word into encoding buffer with h-compression
+   \param w - word to encode.
+*/
+inline void encoder::put_h64(bm::id64_t w) BMNOEXCEPT
+{
+    unsigned h_mask = bm::compute_h64_mask(w);
+    *buf_++ = (unsigned char) h_mask;
+    for (unsigned i = 0; w && (i < 8); ++i, w >>= 8)
+    {
+        if ((unsigned char) w)
+            *buf_++ = (unsigned char) w;
+    } // for i
+}
+
+
 
 /*!
     \brief Encodes array of 32-bit words
@@ -660,6 +682,27 @@ void decoder_base::memcpy(unsigned char* dst, size_t count) BMNOEXCEPT
         ::memcpy(dst, buf_, count);
     buf_ += count;
 }
+
+/*!
+   \fn bm::id64_t decoder_base::get_h64()
+   \brief Reads 64-bit word from the decoding buffer.
+*/
+inline
+bm::id64_t decoder_base::get_h64() BMNOEXCEPT
+{
+    bm::id64_t w = 0;
+    unsigned h_mask = (unsigned char) *buf_++;
+    for (unsigned i = 0; i < 8; ++i)
+    {
+        if (h_mask & (1u<<i))
+        {
+            unsigned char a = (unsigned char) *buf_++;
+            w |= (bm::id64_t(a) << (i*8));
+        }
+    } // for i
+    return w;
+}
+
 
 /*!
    \fn decoder::decoder(const unsigned char* buf) 
@@ -735,7 +778,7 @@ bm::id64_t decoder::get_48() BMNOEXCEPT
 }
 
 /*!
-   \fn bm::word_t decoder::get_64()
+   \fn bm::id64_t decoder::get_64()
    \brief Reads 64-bit word from the decoding buffer.
 */
 inline

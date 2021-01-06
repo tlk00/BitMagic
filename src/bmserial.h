@@ -356,8 +356,7 @@ protected:
         Encode XOR match chain
      */
     void encode_xor_match_chain(bm::encoder& enc,
-                                size_type    ref_idx,
-                                bm::id64_t   d64) BMNOEXCEPT;
+                            const block_match_chain_type& mchain) BMNOEXCEPT;
 
     /**
         Determine best representation for GAP block based
@@ -424,9 +423,10 @@ protected:
     /**
         Compute digest based XOR product, place into tmp XOR block
     */
-    void xor_tmp_product(const bm::word_t* block1,
-                         const bm::word_t* block2,
-                         bm::id64_t d64);
+    void xor_tmp_product(
+                    const bm::word_t* s_block,
+                    const block_match_chain_type& mchain,
+                    unsigned i, unsigned j) BMNOEXCEPT;
 
 private:
     serializer(const serializer&);
@@ -2097,58 +2097,81 @@ void serializer<BV>::encode_bit_digest(const bm::word_t* block,
 
 template<class BV>
 void serializer<BV>::encode_xor_match_chain(bm::encoder& enc,
-                                        size_type        ref_idx,
-                                        bm::id64_t       d64) BMNOEXCEPT
+                            const block_match_chain_type& mchain) BMNOEXCEPT
 {
-    typename bm::xor_scanner<BV>::match_pairs_vector_type&
-        pm_vect = xor_scan_.get_match_pairs();
-    size_type chain_size = (size_type)pm_vect.size();
+    size_type chain_size = (size_type)mchain.chain_size;
     BM_ASSERT(chain_size);
-    unsigned char vbr_flag = bm::check_pair_vect_vbr(pm_vect, ref_idx);
+
+    unsigned char vbr_flag = bm::check_pair_vect_vbr(mchain);
 
     enc.put_8(bm::set_block_xor_chain);
     enc.put_8(vbr_flag); // flag (reserved)
+
+    size_type ridx = mchain.ref_idx[0];
+    bm::id64_t d64 = mchain.xor_d64[0];
+    ridx = ref_vect_->get_row_idx(ridx);
+
     switch(vbr_flag)
     {
-        case 1: enc.put_8((unsigned char)ref_idx); break;
-        case 2: enc.put_16((unsigned short)ref_idx); break;
-        case 0: enc.put_32(ref_idx); break;
-        default: BM_ASSERT(0); break;
+    case 1: enc.put_8((unsigned char)ridx); break;
+    case 2: enc.put_16((unsigned short)ridx); break;
+    case 0: enc.put_32(ridx); break;
+    default: BM_ASSERT(0); break;
     } // switch
-    enc.put_64(d64);
-    enc.put_8((unsigned char) chain_size);
-    for (unsigned ci = 0; ci < chain_size; ++ci)
+    enc.put_h64(d64);
+    enc.put_8((unsigned char) chain_size-1);
+
+    for (unsigned ci = 1; ci < chain_size; ++ci)
     {
-        const bm::match_pair& mp = pm_vect[ci];
-        ref_idx = xor_scan_.get_ref_vector().get_row_idx(mp.ref_idx);
+        ridx = mchain.ref_idx[ci];
+        d64 = mchain.xor_d64[ci];
+        ridx = ref_vect_->get_row_idx(ridx);
         switch(vbr_flag)
         {
-            case 1: enc.put_8((unsigned char)ref_idx); break;
-            case 2: enc.put_16((unsigned short)ref_idx); break;
-            case 0: enc.put_32(ref_idx); break;
-            default: BM_ASSERT(0); break;
+        case 1: enc.put_8((unsigned char)ridx); break;
+        case 2: enc.put_16((unsigned short)ridx); break;
+        case 0: enc.put_32(ridx); break;
+        default: BM_ASSERT(0); break;
         } // switch
-        enc.put_64(mp.xor_d64);
-    } // for pm
+        enc.put_h64(d64);
+    } // for ci
     compression_stat_[bm::set_block_xor_chain]++;
 }
 
+
+
 template<class BV>
-void serializer<BV>::xor_tmp_product(const bm::word_t* block1,
-                                     const bm::word_t* block2,
-                                     bm::id64_t d64)
+void serializer<BV>::xor_tmp_product(
+                    const bm::word_t* s_block,
+                    const block_match_chain_type& mchain,
+                    unsigned i, unsigned j) BMNOEXCEPT
 {
-    if (BM_IS_GAP(block1))
+    if (BM_IS_GAP(s_block))
     {
-        bm::gap_convert_to_bitset(xor_tmp1_, BMGAP_PTR(block1));
-        block1 = xor_tmp1_;
+        bm::gap_convert_to_bitset(xor_tmp1_, BMGAP_PTR(s_block));
+        s_block = xor_tmp1_;
     }
-    if (BM_IS_GAP(block2))
+    size_type ridx = mchain.ref_idx[0];
+    const bm::word_t* ref_block = xor_scan_.get_ref_block(ridx, i, j);
+    if (BM_IS_GAP(ref_block))
     {
-        bm::gap_convert_to_bitset(xor_tmp2_, BMGAP_PTR(block2));
-        block2 = xor_tmp2_;
+        bm::gap_convert_to_bitset(xor_tmp2_, BMGAP_PTR(ref_block));
+        ref_block = xor_tmp2_;
     }
-    bm::bit_block_xor(xor_tmp_block_, block1, block2, d64);
+    bm::id64_t d64 = mchain.xor_d64[0];
+    bm::bit_block_xor(xor_tmp_block_, s_block, ref_block, d64);
+    for (unsigned k = 1; k < mchain.chain_size; ++k)
+    {
+        ridx = mchain.ref_idx[k];
+        ref_block = xor_scan_.get_ref_block(ridx, i, j);
+        if (BM_IS_GAP(ref_block))
+        {
+            bm::gap_convert_to_bitset(xor_tmp2_, BMGAP_PTR(ref_block));
+            ref_block = xor_tmp2_;
+        }
+        d64 = mchain.xor_d64[k];
+        bm::bit_block_xor(xor_tmp_block_, ref_block, d64);
+    } // for i
 }
 
 
@@ -2769,7 +2792,7 @@ serializer<BV>::serialize(const BV& bv,
             BM_ASSERT(nb_indexed); // Model is correctly computed from ref-vector
             if (nb_indexed)
             {
-                // TODO: use rs-index
+                // TODO: use rs-index or count blocks
                 size_type rank = sim_model_->bv_blocks.count_range(0, i);
                 BM_ASSERT(rank);
                 --rank;
@@ -2795,32 +2818,35 @@ serializer<BV>::serialize(const BV& bv,
                 case e_xor_match_BC:
                 case e_xor_match_iBC:
                     {
-                        BM_ASSERT(mchain.chain_size == 1);
-                        size_type ridx = mchain.ref_idx[0];
-                        const bm::word_t* ref_block =
-                            xor_scan_.get_ref_block(ridx, i0, j0);
-
-                        bm::id64_t d64 = mchain.xor_d64[0];
-                        xor_tmp_product(blk, ref_block, d64);
+                        BM_ASSERT(mchain.chain_size);
+                        xor_tmp_product(blk, mchain, i0, j0);
                         // TODO: validate xor_tmp_block_
-
-                        size_type plain_idx = ref_vect_->get_row_idx(ridx);
-                        if (d64 == ~0ull)
+                        if (mchain.chain_size == 1)
                         {
-                            enc.put_8_16_32(unsigned(plain_idx),
-                                            bm::set_block_xor_ref8_um,
-                                            bm::set_block_xor_ref16_um,
-                                            bm::set_block_xor_ref32_um);
+                            size_type ridx = mchain.ref_idx[0];
+                            bm::id64_t d64 = mchain.xor_d64[0];
+                            size_type plain_idx = ref_vect_->get_row_idx(ridx);
+                            if (d64 == ~0ull)
+                            {
+                                enc.put_8_16_32(unsigned(plain_idx),
+                                                bm::set_block_xor_ref8_um,
+                                                bm::set_block_xor_ref16_um,
+                                                bm::set_block_xor_ref32_um);
+                            }
+                            else
+                            {
+                                enc.put_8_16_32(unsigned(plain_idx),
+                                                bm::set_block_xor_ref8,
+                                                bm::set_block_xor_ref16,
+                                                bm::set_block_xor_ref32);
+                                enc.put_64(d64); // xor digest mask
+                            }
+                            compression_stat_[bm::set_block_xor_ref32]++;
                         }
-                        else
+                        else // chain
                         {
-                            enc.put_8_16_32(unsigned(plain_idx),
-                                            bm::set_block_xor_ref8,
-                                            bm::set_block_xor_ref16,
-                                            bm::set_block_xor_ref32);
-                            enc.put_64(d64); // xor digest mask
+                            encode_xor_match_chain(enc, mchain);
                         }
-                        compression_stat_[bm::set_block_xor_ref32]++;
                         blk = xor_tmp_block_; // substitute with XOR product
                     }
                     break;
@@ -4575,9 +4601,10 @@ size_t deserializer<BV, DEC>::deserialize(bvector_type&        bv,
                 case 0: row_idx = dec.get_32(); break;
                 default: BM_ASSERT(0); break;
                 } // switch
-                x_ref_d64_ = dec.get_64();
+                x_ref_d64_ = dec.get_h64();
                 BM_ASSERT(!xor_chain_size_);
                 xor_chain_size_ = dec.get_8();
+                BM_ASSERT(xor_chain_size_);
                 for (unsigned ci = 0; ci < xor_chain_size_; ++ci)
                 {
                     switch (vbr_flag)
@@ -4587,7 +4614,7 @@ size_t deserializer<BV, DEC>::deserialize(bvector_type&        bv,
                     case 0: xor_chain_[ci].ref_idx = dec.get_32(); break;
                     default: BM_ASSERT(0); break;
                     } // switch
-                    xor_chain_[ci].xor_d64 = dec.get_64();
+                    xor_chain_[ci].xor_d64 = dec.get_h64();
                 } // for
             }
             goto process_xor_ref;
