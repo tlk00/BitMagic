@@ -87,7 +87,7 @@ enum xor_complement_match
 };
 
 /*!
-    Function calculates basic complexity statistics on XOR product of
+    Function (32-bit) calculates basic complexity statistics on XOR product of
     two blocks (b1 XOR b2)
     @ingroup bitfunc
     @internal
@@ -113,7 +113,7 @@ void bit_block_xor_change32(const bm::word_t* BMRESTRICT block,
     gap_count += bm::word_bitcount(w);
     gap_count -= (w_prev = (w0 >> w_shift)); // negative value correction
 
-    const bm::word_t* block_end = block + size; // bm::set_block_size;
+    const bm::word_t* block_end = block + size;
     for (++block, ++xor_block; block < block_end; ++block, ++xor_block)
     {
         w = w0 = *block ^ *xor_block;
@@ -142,6 +142,66 @@ void bit_block_xor_change32(const bm::word_t* BMRESTRICT block,
 }
 
 /*!
+    Function (64-bit) calculates basic complexity statistics on XOR product of
+    two blocks (b1 XOR b2)
+    @ingroup bitfunc
+    @internal
+*/
+inline
+void bit_block_xor_change64(const bm::word_t* BMRESTRICT s_block,
+                            const bm::word_t* BMRESTRICT ref_block,
+                            unsigned size,
+                            unsigned* BMRESTRICT gc,
+                            unsigned* BMRESTRICT bc) BMNOEXCEPT
+{
+    BM_ASSERT(gc && bc);
+
+    unsigned gap_count = 1;
+    unsigned bit_count = 0;
+
+    const bm::id64_t* BMRESTRICT block =   (const bm::id64_t*) s_block;
+    const bm::id64_t* BMRESTRICT xor_block =  (const bm::id64_t*) ref_block;
+
+    bm::id64_t  w, w0, w_prev, w_l;
+    w = w0 = *block ^ *xor_block;
+    bit_count += word_bitcount64(w);
+
+    const int w_shift = int(sizeof(w) * 8 - 1);
+    w ^= (w >> 1);
+    gap_count += bm::word_bitcount64(w);
+    gap_count -= (w_prev = (w0 >> w_shift)); // negative value correction
+
+    const bm::id64_t* block_end = block + (size/2);
+    for (++block, ++xor_block; block < block_end; ++block, ++xor_block)
+    {
+        w = w0 = *block ^ *xor_block;
+        bit_count += bm::word_bitcount64(w);
+        ++gap_count;
+        if (!w)
+        {
+            gap_count -= !w_prev;
+            w_prev = 0;
+        }
+        else
+        {
+            w ^= (w >> 1);
+            gap_count += bm::word_bitcount64(w);
+
+            w_l = w0 & 1;
+            gap_count -= (w0 >> w_shift);  // negative value correction
+            gap_count -= !(w_prev ^ w_l);  // word border correction
+
+            w_prev = (w0 >> w_shift);
+        }
+    } // for
+
+    *gc = gap_count;
+    *bc = bit_count;
+}
+
+
+
+/*!
     Function calculates number of times when bit value changed
     @internal
 */
@@ -155,7 +215,11 @@ void bit_block_xor_change(const bm::word_t* BMRESTRICT block,
 #ifdef VECT_BLOCK_XOR_CHANGE
     VECT_BLOCK_XOR_CHANGE(block, xor_block, size, gc, bc);
 #else
-    bm::bit_block_xor_change32(block, xor_block, size, gc, bc);
+    #ifdef BM64OPT
+        bm::bit_block_xor_change64(block, xor_block, size, gc, bc);
+    #else
+        bm::bit_block_xor_change32(block, xor_block, size, gc, bc);
+    #endif
 #endif
 }
 
