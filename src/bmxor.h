@@ -1347,7 +1347,7 @@ xor_scanner<BV>::search_best_xor_mask(const bm::word_t* s_block,
                 gain_min *= 8; // in bits
                 if (gain > gain_min)
                     return rb_found;
-
+                /*
                 if ((r_gap & s_gap) && (d64 != ~0ULL)) // both blocks are GAPs
                 {
                     bm::bit_block_xor_2way(tx_block, s_block, ref_block);
@@ -1357,7 +1357,7 @@ xor_scanner<BV>::search_best_xor_mask(const bm::word_t* s_block,
                         x_d64_ = ~0ULL;
                         return e_xor_match_GC;
                     }
-                }
+                }*/
                 return e_no_xor_match;
             }
         }
