@@ -1806,26 +1806,6 @@ bool xor_scanner<BV>::search_best_xor_gap(const bm::word_t* block,
 }
 */
 // --------------------------------------------------------------------------
-/*
-template<typename BV>
-void xor_scanner<BV>::apply_xor_match_vector(
-                       bm::word_t* target_xor_block,
-                       const bm::word_t* block,
-                       const bm::word_t* ref_block,
-                       bm::id64_t        d64,
-                       const match_pairs_vector_type& pm_vect,
-                       unsigned i, unsigned j) const BMNOEXCEPT
-{
-    bm::bit_block_xor(target_xor_block, block, ref_block, d64);
-    auto sz = pm_vect.size();
-    for (typename match_pairs_vector_type::size_type k = 0; k < sz; ++k)
-    {
-        const bm::match_pair& mp = pm_vect[k];
-        const bm::word_t* block_ref = get_ref_block(mp.ref_idx, i, j);
-        bm::bit_block_xor(target_xor_block, block_ref, mp.xor_d64);
-    } // for k
-}
-*/
 
 template<typename BV>
 void xor_scanner<BV>::apply_xor_match_vector(
@@ -1859,35 +1839,6 @@ void xor_scanner<BV>::apply_xor_match_vector(
 }
 
 
-
-// --------------------------------------------------------------------------
-/*
-template<typename BV>
-bool xor_scanner<BV>::validate_xor(const bm::word_t* xor_block) const BMNOEXCEPT
-{
-    const float bie_bits_per_int = 3.0f;
-    const unsigned bie_limit =
-            unsigned(float(bm::gap_max_bits) / bie_bits_per_int);
-
-    unsigned bc, gc;
-    bm::bit_block_change_bc(xor_block, &gc, &bc);
-    unsigned xor_best_metric;
-    bm::xor_complement_match mtype = best_metric(bc, gc, &xor_best_metric);
-    if (mtype && (xor_best_metric < get_s_block_best()))
-    {
-        unsigned gain = get_s_block_best() - xor_best_metric;
-        gain *= 3; // use bit estimate (speculative)
-        // gain should be greater than overhead for storing
-        // reference data: xor token, digest-64, block idx
-        unsigned gain_min =
-           unsigned (sizeof(char) + sizeof(bm::id64_t) + sizeof(unsigned));
-        gain_min *= 8; // in bits
-        if (!bc || ((gain > gain_min) && (xor_best_metric < bie_limit)))
-            return true;
-    }
-    return false;
-}
-*/
 // --------------------------------------------------------------------------
 
 
