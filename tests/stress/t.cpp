@@ -3391,6 +3391,7 @@ complete:
     return len;
 }
 
+/*
 static
 void TestGAP_XOR()
 {
@@ -3427,7 +3428,7 @@ void TestGAP_XOR()
     }
 
    cout << "---------------------------- TestGAP_XOR() - end" << endl;
-}
+}*/
 
 static
 void TestBlockToGAP()
@@ -30966,7 +30967,7 @@ int main(int argc, char *argv[])
 
          TestBlockCountXORChange();
 
-         TestGAP_XOR();
+         //TestGAP_XOR();
 
          TestBlockToGAP();
 
@@ -31159,7 +31160,6 @@ int main(int argc, char *argv[])
 
     if (is_all || is_csv)
     {
-
         TestCompressSparseVector();
 
         TestCompressedSparseVectorAlgo();
@@ -31169,7 +31169,6 @@ int main(int argc, char *argv[])
         TestCompressedSparseVectorScan();
 
         TestSparseVector_Stress(3);
-
     }
 
     if (is_all || is_c_coll)

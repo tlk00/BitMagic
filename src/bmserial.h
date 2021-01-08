@@ -629,6 +629,7 @@ protected:
 
 protected:
    void xor_decode(blocks_manager_type& bman);
+   void xor_decode_chain(bm::word_t* BMRESTRICT blk) BMNOEXCEPT;
    void xor_reset() BMNOEXCEPT;
 
    void deserialize_gap(unsigned char btype, decoder_type& dec, 
@@ -2861,148 +2862,10 @@ serializer<BV>::serialize(const BV& bv,
         //
         if (BM_IS_GAP(blk))
         {
-            /*
-            if (ref_vect_) // XOR filter
-            {
-                bm::gap_word_t* tmp_buf = (bm::gap_word_t*)xor_tmp_block_;
-                bool found = xor_scan_.search_best_xor_gap(blk,
-                                                           ref_idx_+1,
-                                                           ref_vect_->size(),
-                                                           i0, j0);
-                if (found)
-                {
-                    const bm::gap_word_t* gap_block = BMGAP_PTR(blk);
-                    const bm::gap_word_t* gap_xor_block =
-                        (const bm::gap_word_t*) xor_scan_.get_found_block();
-                    size_type ridx = xor_scan_.found_ridx();
-                    size_type plain_idx =
-                        xor_scan_.get_ref_vector().get_row_idx(ridx);
-
-
-                    unsigned res_len;
-                    bm::gap_operation_xor(gap_block, gap_xor_block,
-                                          tmp_buf, res_len);
-
-
-                    BM_ASSERT(res_len < unsigned(bm::gap_length(gap_block)-1)
-                    || bm::gap_bit_count_unr(tmp_buf) < bm::gap_bit_count_unr(gap_block));
-
-                    BM_ASSERT(1+res_len == bm::gap_length(tmp_buf));
-                    {
-                        enc.put_8_16_32(unsigned(plain_idx),
-                                        bm::set_block_xor_gap_ref8,
-                                        bm::set_block_xor_gap_ref16,
-                                        bm::set_block_xor_gap_ref32);
-                        encode_gap_block(tmp_buf, enc);
-                        compression_stat_[bm::set_block_xor_gap_ref32]++;
-                        continue;
-                    }
-                }
-            }
-            */
-
             encode_gap_block(BMGAP_PTR(blk), enc);
         }
         else // bit-block
         {
-            /*
-            if (ref_vect_) // XOR filter
-            {
-                xor_scan_.compute_s_block_stats(blk);
-                xor_complement_match mtype =
-                    xor_scan_.search_best_xor_mask(blk,
-                                                   ref_idx_+1, ref_vect_->size(),
-                                                   i0, j0,
-                                                   xor_tmp_block_);
-                size_type ridx = xor_scan_.found_ridx();
-                if (mtype != e_no_xor_match)
-                {
-                    if (mtype == e_xor_match_EQ)
-                    {
-                        size_type row_idx =
-                            xor_scan_.get_ref_vector().get_row_idx(ridx);
-                        enc.put_8(bm::set_block_ref_eq);
-                        enc.put_32(unsigned(row_idx));
-                        compression_stat_[bm::set_block_ref_eq]++;
-                        continue;
-                    }
-
-                    size_type plain_idx =
-                        xor_scan_.get_ref_vector().get_row_idx(ridx);
-                    bm::id64_t d64 = xor_scan_.get_xor_digest();
-                    BM_ASSERT(d64);
-                    size_type chain_size = xor_scan_.refine_match_chain();
-                    if (chain_size)
-                    {
-                        typename bm::xor_scanner<BV>::match_pairs_vector_type&
-                            pm_vect = xor_scan_.get_match_pairs();
-                        BM_ASSERT(chain_size == pm_vect.size());
-                        xor_scan_.apply_xor_match_vector(xor_tmp_block_,
-                           blk, xor_scan_.get_found_block(), d64, pm_vect, i0, j0);
-                        encode_xor_match_chain(enc, plain_idx, d64);
-
-                        compression_stat_[bm::set_block_xor_ref32]++;
-                        blk = xor_tmp_block_; // substitute block with XOR product
-                    }
-                    else // encode single point XOR match
-                    {
-                        const bm::word_t* ref_block = xor_scan_.get_found_block();
-                        bm::bit_block_xor(xor_tmp_block_, blk, ref_block, d64);
-                        bool b = xor_scan_.validate_xor(xor_tmp_block_);
-                        if (b)
-                        {
-                            if (d64 == ~0ull)
-                            {
-                                enc.put_8_16_32(unsigned(plain_idx),
-                                                bm::set_block_xor_ref8_um,
-                                                bm::set_block_xor_ref16_um,
-                                                bm::set_block_xor_ref32_um);
-                            }
-                            else
-                            {
-                                enc.put_8_16_32(unsigned(plain_idx),
-                                                bm::set_block_xor_ref8,
-                                                bm::set_block_xor_ref16,
-                                                bm::set_block_xor_ref32);
-                                enc.put_64(d64); // xor digest mask
-                            }
-                            compression_stat_[bm::set_block_xor_ref32]++;
-                            blk = xor_tmp_block_; // substitute block with XOR product
-                        }
-                    }
-
-                } // if found
-                else
-                {
-                    bm::id64_t d64 = xor_scan_.get_xor_digest();
-                    if (d64) // some match found
-                    {
-                        size_type plain_idx =
-                            xor_scan_.get_ref_vector().get_row_idx(ridx);
-                        size_type chain_size = xor_scan_.refine_match_chain();
-                        if (chain_size)
-                        {
-                            typename
-                            bm::xor_scanner<BV>::match_pairs_vector_type&
-                                pm_vect = xor_scan_.get_match_pairs();
-                            BM_ASSERT(chain_size == pm_vect.size());
-
-                            xor_scan_.apply_xor_match_vector(xor_tmp_block_,
-                                blk, xor_scan_.get_found_block(),
-                                d64, pm_vect, i0, j0);
-                            bool b = xor_scan_.validate_xor(xor_tmp_block_);
-                            if (b)
-                            {
-                                encode_xor_match_chain(enc, plain_idx, d64);
-                                blk = xor_tmp_block_; // substitute block with XOR product
-                            }
-                        }
-                    }
-                }
-
-            } // if XOR filter search
-*/
-
             // ----------------------------------------------
             // BIT BLOCK serialization
             //
@@ -3989,8 +3852,17 @@ deserializer<BV, DEC>::deserialize_gap(unsigned char btype, decoder_type& dec,
 
     if (x_ref_d64_) // this is a delayed bit-XOR to be played here
     {   // deoptimize the operation it will turn to bit block anyways
-        bm::gap_convert_to_bitset(temp_block_, gap_temp_block);
-        bv.combine_operation_block_or(i0, j0, blk, temp_block_);
+        if (!blk)
+        {
+            blk = bman.get_allocator().alloc_bit_block();
+            bm::gap_convert_to_bitset(blk, gap_temp_block);
+            bman.set_block_ptr(i0, j0, blk);
+        }
+        else
+        {
+            bm::gap_convert_to_bitset(temp_block_, gap_temp_block);
+            bv.combine_operation_block_or(i0, j0, blk, temp_block_);
+        }
     }
     else
     {
@@ -4305,7 +4177,7 @@ size_t deserializer<BV, DEC>::deserialize(bvector_type&        bv,
         {
             block_idx_type nb_to = (idx_to_ >> bm::set_block_shift);
             if (i > nb_to)
-                break; // early exit
+                break; // early exit (out of target range)
         }
 
         btype = dec.get_8();
@@ -4561,7 +4433,7 @@ size_t deserializer<BV, DEC>::deserialize(bvector_type&        bv,
                 x_nb_ = i;
                 if (x_ref_idx_ == ref_vect_->not_found())
                 {
-                    BM_ASSERT(0);
+                    BM_ASSERT(0); // XOR de-filter setup issue cannot find ref vector
                     goto throw_err;
                 }
                 if (blk)
@@ -4601,7 +4473,7 @@ size_t deserializer<BV, DEC>::deserialize(bvector_type&        bv,
                 case 0: row_idx = dec.get_32(); break;
                 default: BM_ASSERT(0); break;
                 } // switch
-                x_ref_d64_ = dec.get_h64();
+                bm::id64_t acc64 = x_ref_d64_ = dec.get_h64();
                 BM_ASSERT(!xor_chain_size_);
                 xor_chain_size_ = dec.get_8();
                 BM_ASSERT(xor_chain_size_);
@@ -4615,6 +4487,9 @@ size_t deserializer<BV, DEC>::deserialize(bvector_type&        bv,
                     default: BM_ASSERT(0); break;
                     } // switch
                     xor_chain_[ci].xor_d64 = dec.get_h64();
+
+                    BM_ASSERT((xor_chain_[ci].xor_d64 & acc64) == 0);
+                    acc64 |= xor_chain_[ci].xor_d64; // control
                 } // for
             }
             goto process_xor_ref;
@@ -4645,6 +4520,37 @@ size_t deserializer<BV, DEC>::deserialize(bvector_type&        bv,
 // ---------------------------------------------------------------------------
 
 template<class BV, class DEC>
+void deserializer<BV, DEC>::xor_decode_chain(bm::word_t* BMRESTRICT blk) BMNOEXCEPT
+{
+    BM_ASSERT(xor_chain_size_);
+
+    unsigned i0, j0;
+    bm::get_block_coord(x_nb_, i0, j0);
+    for (unsigned ci = 0; ci < xor_chain_size_; ++ci)
+    {
+        unsigned ref_idx = (unsigned)ref_vect_->find(xor_chain_[ci].ref_idx);
+        const bvector_type* BMRESTRICT ref_bv = ref_vect_->get_bv(ref_idx);
+        const blocks_manager_type& ref_bman = ref_bv->get_blocks_manager();
+        BM_ASSERT(ref_bv);
+
+        const bm::word_t* BMRESTRICT ref_blk = ref_bman.get_block_ptr(i0, j0);
+        if (BM_IS_GAP(ref_blk))
+        {
+            bm::gap_word_t* BMRESTRICT gap_block = BMGAP_PTR(ref_blk);
+            bm::gap_convert_to_bitset(xor_block_, gap_block);
+            ref_blk = xor_block_;
+        }
+        else
+            if (IS_FULL_BLOCK(ref_blk))
+                ref_blk = FULL_BLOCK_REAL_ADDR;
+        if (ref_blk)
+            bm::bit_block_xor(blk, ref_blk, xor_chain_[ci].xor_d64);
+    } // for ci
+}
+
+// ---------------------------------------------------------------------------
+
+template<class BV, class DEC>
 void deserializer<BV, DEC>::xor_decode(blocks_manager_type& bman)
 {
     BM_ASSERT(ref_vect_);
@@ -4663,76 +4569,67 @@ void deserializer<BV, DEC>::xor_decode(blocks_manager_type& bman)
     if (!ref_blk)
     {
         BM_ASSERT(!or_block_);
-
+        if (xor_chain_size_)
+        {
+            bm::word_t* blk = bman.deoptimize_block(i0, j0);
+            if (!blk)
+                blk = bman.check_allocate_block(x_nb_, 0);
+            xor_decode_chain(blk);
+        }
         xor_reset();
         return;
     }
-    bm::word_t* blk = bman.get_block_ptr(i0, j0);
-
     if (IS_FULL_BLOCK(ref_blk))
         ref_blk = FULL_BLOCK_REAL_ADDR;
     else
-    if (BM_IS_GAP(ref_blk))
     {
-        bm::gap_word_t* gap_block = BMGAP_PTR(ref_blk);
-        if (BM_IS_GAP(blk) && (!x_ref_d64_) && !or_block_) // two GAPs no digest
-        {
-            bm::gap_word_t* tmp_buf = (bm::gap_word_t*)xor_block_;
-            const bm::gap_word_t* res;
-            unsigned res_len;
-            res = bm::gap_operation_xor(BMGAP_PTR(blk),
-                                        gap_block,
-                                        tmp_buf,
-                                        res_len);
-            BM_ASSERT(res == tmp_buf);
-            bman.assign_gap_check(i0, j0, res, ++res_len, blk, tmp_buf);
-
-            xor_reset();
-            return;
-        }
-
-        bm::gap_convert_to_bitset(xor_block_, gap_block);
-        ref_blk = xor_block_;
-    }
-    else
-    {
-        if (IS_FULL_BLOCK(ref_blk))
-            ref_blk = FULL_BLOCK_REAL_ADDR;
-    }
-
-    blk = bman.deoptimize_block(i0, j0);
-    if (!blk)
-        blk = bman.check_allocate_block(x_nb_, 0);
-
-    if (x_ref_d64_)
-        bm::bit_block_xor(blk, blk, ref_blk, x_ref_d64_);
-    else
-        bm::bit_block_xor(blk, ref_blk);
-
-    // XOR the chain
-    //
-    for (unsigned ci = 0; ci < xor_chain_size_; ++ci)
-    {
-        unsigned ref_idx = (unsigned)ref_vect_->find(xor_chain_[ci].ref_idx);
-        const bvector_type* ref_bv = ref_vect_->get_bv(ref_idx);
-        const blocks_manager_type& ref_bman = ref_bv->get_blocks_manager();
-        BM_ASSERT(ref_bv);
-        BM_ASSERT(&ref_bman != &bman);
-
-        ref_blk = ref_bman.get_block_ptr(i0, j0);
-
         if (BM_IS_GAP(ref_blk))
         {
+            bm::word_t* blk = bman.get_block_ptr(i0, j0);
             bm::gap_word_t* gap_block = BMGAP_PTR(ref_blk);
+            if (BM_IS_GAP(blk) && (!x_ref_d64_) && !or_block_) // two GAPs no digest
+            {
+                BM_ASSERT(!xor_chain_size_);
+                bm::gap_word_t* tmp_buf = (bm::gap_word_t*)xor_block_;
+                const bm::gap_word_t* res;
+                unsigned res_len;
+                res = bm::gap_operation_xor(BMGAP_PTR(blk),
+                                            gap_block,
+                                            tmp_buf,
+                                            res_len);
+                BM_ASSERT(res == tmp_buf);
+                bman.assign_gap_check(i0, j0, res, ++res_len, blk, tmp_buf);
+
+                xor_reset();
+                return;
+            }
+
             bm::gap_convert_to_bitset(xor_block_, gap_block);
             ref_blk = xor_block_;
         }
         else
+        {
             if (IS_FULL_BLOCK(ref_blk))
                 ref_blk = FULL_BLOCK_REAL_ADDR;
-        if (ref_blk)
-            bm::bit_block_xor(blk, ref_blk, xor_chain_[ci].xor_d64);
-    } // for ci
+        }
+    }
+
+    bm::word_t* blk = bman.deoptimize_block(i0, j0);
+    if (!blk)
+        blk = bman.check_allocate_block(x_nb_, 0);
+
+    if (x_ref_d64_)
+    {
+        bm::bit_block_xor(blk, blk, ref_blk, x_ref_d64_);
+        if (xor_chain_size_)
+            xor_decode_chain(blk);
+    }
+    else
+    {
+        BM_ASSERT(xor_chain_size_ == 0);
+        bm::bit_block_xor(blk, ref_blk);
+    }
+
 
     if (or_block_)
     {

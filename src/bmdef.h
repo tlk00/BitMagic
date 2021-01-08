@@ -202,13 +202,14 @@ For more information please visit:  http://bitmagic.io
 # endif
 #endif
 
-
+#ifndef BMFORCEINLINE
 #ifdef BM_HASFORCEINLINE
 # ifndef BMFORCEINLINE
 #  define BMFORCEINLINE __forceinline
 # endif
 #else
 # define BMFORCEINLINE inline
+#endif
 #endif
 
 
