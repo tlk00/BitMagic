@@ -998,7 +998,6 @@ void sparse_vector_serializer<SV>::serialize(const SV&  sv,
             BM_ASSERT(idx != bv_ref_.not_found());
             bvs_.set_curr_ref_idx(idx);
         }
-
         size_t buf_size = (size_t)
             bvs_.serialize(*bv, buf_ptr, sv_stat.max_serialize_mem);
         
@@ -1429,7 +1428,7 @@ void sparse_vector_deserializer<SV>::deserialize_planes(
         // add the vector into the XOR reference list
         if (!bv_ref_ptr_)
             bv_ref_.add(bv, unsigned(i));
-
+// std::cout << "P=" << i << std::endl;
         if (mask_bv) // gather mask set, use AND operation deserializer
         {
             typename bvector_type::mem_pool_guard mp_g_z(pool_, *bv);
@@ -1445,6 +1444,7 @@ void sparse_vector_deserializer<SV>::deserialize_planes(
             }
             if (idx_range_set_)
                 deserial_.set_range(idx_range_from_, idx_range_to_);
+
             deserial_.deserialize(*bv, bv_buf_ptr);
 
             bv->bit_and(*mask_bv, bvector_type::opt_compress);

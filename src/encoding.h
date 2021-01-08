@@ -628,11 +628,11 @@ inline void encoder::put_64(bm::id64_t w) BMNOEXCEPT
 inline void encoder::put_h64(bm::id64_t w) BMNOEXCEPT
 {
     unsigned h_mask = bm::compute_h64_mask(w);
-    *buf_++ = (unsigned char) h_mask;
+    put_8((unsigned char) h_mask);
     for (unsigned i = 0; w && (i < 8); ++i, w >>= 8)
     {
         if ((unsigned char) w)
-            *buf_++ = (unsigned char) w;
+            put_8((unsigned char) w);
     } // for i
 }
 
@@ -692,10 +692,11 @@ bm::id64_t decoder_base::get_h64() BMNOEXCEPT
 {
     bm::id64_t w = 0;
     unsigned h_mask = (unsigned char) *buf_++;
-    for (unsigned i = 0; i < 8; ++i)
+    for (unsigned i = 0; h_mask && (i < 8); ++i)
     {
         if (h_mask & (1u<<i))
         {
+            h_mask &= ~(1u<<i);
             unsigned char a = (unsigned char) *buf_++;
             w |= (bm::id64_t(a) << (i*8));
         }
