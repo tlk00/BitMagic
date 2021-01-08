@@ -4913,7 +4913,7 @@ unsigned bit_block_change64(const bm::word_t* BMRESTRICT in_block,
     const int w_shift = int(sizeof(w) * 8 - 1);
     w ^= (w >> 1);
     gap_count += bm::word_bitcount64(w);
-    gap_count -= (w_prev = (w0 >> w_shift)); // negative value correction
+    gap_count -= unsigned(w_prev = (w0 >> w_shift)); // negative value correction
 
     const bm::id64_t* block_end = block + (size/2);
     for (++block; block < block_end; ++block)
