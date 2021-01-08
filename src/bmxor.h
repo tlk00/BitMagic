@@ -186,11 +186,9 @@ void bit_block_xor_change64(const bm::word_t* BMRESTRICT s_block,
         {
             w ^= (w >> 1);
             gap_count += bm::word_bitcount64(w);
-
             w_l = w0 & 1;
             gap_count -= (w0 >> w_shift);  // negative value correction
             gap_count -= !(w_prev ^ w_l);  // word border correction
-
             w_prev = (w0 >> w_shift);
         }
     } // for
@@ -427,7 +425,12 @@ void compute_s_block_descr(const bm::word_t* BMRESTRICT block,
         #if defined(VECT_BLOCK_CHANGE)
             gc = VECT_BLOCK_CHANGE(sub_block, bm::set_block_digest_wave_size);
         #else
-            gc = bm::bit_block_change32(sub_block, bm::set_block_digest_wave_size);
+            #ifdef BM64OPT
+                gc = bm::bit_block_change64(sub_block, bm::set_block_digest_wave_size);
+                BM_ASSERT(gc == bm::bit_block_change32(sub_block, bm::set_block_digest_wave_size));
+            #else
+                gc = bm::bit_block_change32(sub_block, bm::set_block_digest_wave_size);
+            #endif
         #endif
         bc = bm::bit_count_min_unroll(
                     sub_block, sub_block + bm::set_block_digest_wave_size);
@@ -447,7 +450,8 @@ void compute_s_block_descr(const bm::word_t* BMRESTRICT block,
     // TODO: compute and return d64 - use it later
 }
 
-
+// TODO: remove it
+//
 /**
     Compute reference complexity descriptor based on XOR vector.
     Returns the digest of sub-blocks where XOR filtering improved the metric
@@ -597,6 +601,7 @@ void compute_xor_complexity_descr(
     return;
 }
 
+
 /**
     Build partial XOR product of 2 bit-blocks using digest mask
 
@@ -608,9 +613,10 @@ void compute_xor_complexity_descr(
     @internal
 */
 inline
-void bit_block_xor(bm::word_t*  target_block,
-                   const bm::word_t*  block, const bm::word_t* xor_block,
-                   bm::id64_t digest) BMNOEXCEPT
+void bit_block_xor(bm::word_t*         target_block,
+                   const bm::word_t*   block,
+                   const bm::word_t*   xor_block,
+                   bm::id64_t          digest) BMNOEXCEPT
 {
     BM_ASSERT(target_block);
     BM_ASSERT(block);
@@ -624,23 +630,60 @@ void bit_block_xor(bm::word_t*  target_block,
     {
         const bm::id64_t mask = (1ull << i);
         unsigned off = (i * bm::set_block_digest_wave_size);
+
+    #ifdef BM64OPT
+        const bm::id64_t* sub_block = (const bm::id64_t*)(block + off);
+        bm::id64_t* t_sub_block = (bm::id64_t*)(target_block + off);
+        const bm::id64_t* sub_block_end = sub_block + bm::set_block_digest_wave_size/2;
+        if (digest & mask) // XOR filtered sub-block
+        {
+            const bm::id64_t* xor_sub_block = (const bm::id64_t*)(xor_block + off);
+            for ( ;sub_block < sub_block_end; )
+            {
+                t_sub_block[0] = sub_block[0] ^ xor_sub_block[0];
+                t_sub_block[1] = sub_block[1] ^ xor_sub_block[1];
+                t_sub_block[2] = sub_block[2] ^ xor_sub_block[2];
+                t_sub_block[3] = sub_block[3] ^ xor_sub_block[3];
+                t_sub_block+=4; sub_block+=4; xor_sub_block+=4;
+            } // for
+        }
+        else // just copy the source
+        {
+            for (; sub_block < sub_block_end; t_sub_block+=4, sub_block+=4)
+            {
+                t_sub_block[0] = sub_block[0];
+                t_sub_block[1] = sub_block[1];
+                t_sub_block[2] = sub_block[2];
+                t_sub_block[3] = sub_block[3];
+            } // for
+        }
+    #else
         const bm::word_t* sub_block = block + off;
         bm::word_t* t_sub_block = target_block + off;
-
         const bm::word_t* sub_block_end = sub_block + bm::set_block_digest_wave_size;
-
         if (digest & mask) // XOR filtered sub-block
         {
             const bm::word_t* xor_sub_block = xor_block + off;
-            // TODO: unroll
             for (; sub_block < sub_block_end; )
-                *t_sub_block++ = *sub_block++ ^ *xor_sub_block++;
+            {
+                t_sub_block[0] = sub_block[0] ^ xor_sub_block[0];
+                t_sub_block[1] = sub_block[1] ^ xor_sub_block[1];
+                t_sub_block[2] = sub_block[2] ^ xor_sub_block[2];
+                t_sub_block[3] = sub_block[3] ^ xor_sub_block[3];
+                t_sub_block+=4; sub_block+=4; xor_sub_block+=4;
+            } // for
         }
-        else // just copy source
+        else // just copy the source
         {
-            for (; sub_block < sub_block_end;)
-                *t_sub_block++ = *sub_block++;
+            for (; sub_block < sub_block_end; t_sub_block+=4, sub_block+=4)
+            {
+                t_sub_block[0] = sub_block[0];
+                t_sub_block[1] = sub_block[1];
+                t_sub_block[2] = sub_block[2];
+                t_sub_block[3] = sub_block[3];
+            } // for
         }
+    #endif
     } // for i
 #endif
 }
@@ -669,87 +712,34 @@ void bit_block_xor(bm::word_t* target_block, const bm::word_t*  xor_block,
     while (digest)
     {
         bm::id64_t t = bm::bmi_blsi_u64(digest); // d & -d;
-
         unsigned wave = bm::word_bitcount64(t - 1);
         unsigned off = wave * bm::set_block_digest_wave_size;
 
+    #ifdef BM64OPT
+        const bm::id64_t* xor_sub_block = (const bm::id64_t*)(xor_block + off);
+        bm::id64_t* t_sub_block = (bm::id64_t*)(target_block + off);
+        const bm::id64_t* t_sub_block_end = (t_sub_block + bm::set_block_digest_wave_size/2);
+        for (; t_sub_block < t_sub_block_end; t_sub_block+=4, xor_sub_block+=4)
+        {
+            t_sub_block[0] ^= xor_sub_block[0];
+            t_sub_block[1] ^= xor_sub_block[1];
+            t_sub_block[2] ^= xor_sub_block[2];
+            t_sub_block[3] ^= xor_sub_block[3];
+        } // for
+    #else
         const bm::word_t* xor_sub_block = xor_block + off;
         bm::word_t* t_sub_block = target_block + off;
         const bm::word_t* t_sub_block_end = t_sub_block + bm::set_block_digest_wave_size;
-
-        // TODO: unroll
-        for (; t_sub_block < t_sub_block_end; )
-            *t_sub_block++ ^= *xor_sub_block++;
-
+        for (; t_sub_block < t_sub_block_end; t_sub_block+=4, xor_sub_block+=4)
+        {
+            t_sub_block[0] ^= xor_sub_block[0];
+            t_sub_block[1] ^= xor_sub_block[1];
+            t_sub_block[2] ^= xor_sub_block[2];
+            t_sub_block[3] ^= xor_sub_block[3];
+        } // for
+    #endif
         digest = bm::bmi_bslr_u64(digest); // d &= d - 1;
     } // while
-}
-
-/**
-    Dry XOR operation on two GAP blocks to compute BC/GC metrics
- */
-template<typename T>
-void gap_operation_dry_xor(const T*  vect1, const T*  vect2,
-                           unsigned& gc,    unsigned& bc) BMNOEXCEPT
-{
-    const T*  cur1 = vect1;
-    const T*  cur2 = vect2;
-
-    unsigned gc_cnt(1), bc_cnt(0);
-
-    T bitval1 = (T)(*cur1++ & 1);
-    T bitval2 = (T)(*cur2++ & 1);
-    T bitval = bitval1 ^ bitval2;
-    T bitval_prev = bitval;
-
-    T c1(*cur1), c2(*cur2);
-    T res(0), res_prev(0);
-
-    while (1)
-    {
-        bitval = bitval1 ^ bitval2;
-        if (bitval != bitval_prev)
-        {
-            ++gc_cnt;
-            bitval_prev = bitval;
-            res_prev = res;
-        }
-
-        if (c1 < c2)
-        {
-            res = c1;
-            if (bitval)
-            {
-                bc_cnt += res - res_prev;
-                res_prev = res;
-            }
-            ++cur1; c1 = *cur1; bitval1 ^= 1;
-        }
-        else // >=
-        {
-            res = c2;
-            if (bitval)
-            {
-                bc_cnt += res - res_prev;
-                res_prev = res;
-            }
-            if (c2 < c1)
-            {
-                bitval2 ^= 1;
-            }
-            else  // equal
-            {
-                if (c2 == (bm::gap_max_bits - 1))
-                    break;
-                ++cur1; c1 = *cur1;
-                bitval1 ^= 1; bitval2 ^= 1;
-            }
-            ++cur2; c2 = *cur2;
-        }
-    } // while
-
-    gc = gc_cnt;
-    bc = bc_cnt;
 }
 
 /**
@@ -1023,10 +1013,11 @@ public:
 
     /** Scan all candidate gap-blocks to find best XOR match
     */
+    /*
     bool search_best_xor_gap(const bm::word_t* block,
                              size_type         ridx_from,
                              size_type         ridx_to,
-                             unsigned i, unsigned j);
+                             unsigned i, unsigned j); */
 
     /**
         XOR all match blocks to target using their digest masks
@@ -1052,6 +1043,22 @@ public:
      */
     void compute_sim_model(xor_sim_model<BV> &sim_model,
                            const bm::xor_sim_params& params);
+    /**
+        Compute reference complexity descriptor based on XOR vector.
+        Returns the digest of sub-blocks where XOR filtering improved the metric
+        (function needs reference to estimate the improvement).
+
+        part of Phase 2 of the XOR filtering process
+
+        @sa compute_sub_block_complexity_descr
+
+        @internal
+    */
+    void compute_xor_complexity_descr(
+                const bm::word_t* BMRESTRICT          block,
+                const bm::word_t* BMRESTRICT          xor_block,
+                bm::block_waves_xor_descr& BMRESTRICT x_descr,
+                bm::block_xor_match_descr& BMRESTRICT xmd) const BMNOEXCEPT;
 
     /**
         Check if XOR transform simplified block enough for
@@ -1168,6 +1175,7 @@ void xor_scanner<BV>::get_s_block_stats(size_type ri) BMNOEXCEPT
     x_best_metric_ = s_block_best_metric_;
 }
 
+
 template<typename BV>
 void xor_scanner<BV>::compute_s_block_stats(const bm::word_t* block) BMNOEXCEPT
 {
@@ -1179,6 +1187,166 @@ void xor_scanner<BV>::compute_s_block_stats(const bm::word_t* block) BMNOEXCEPT
 
     x_block_mtype_ = best_metric(s_bc_, s_gc_, &s_block_best_metric_);
     x_best_metric_ = s_block_best_metric_;
+}
+// --------------------------------------------------------------------------
+
+template<typename BV>
+void xor_scanner<BV>::compute_xor_complexity_descr(
+                const bm::word_t* BMRESTRICT block,
+                const bm::word_t* BMRESTRICT xor_block,
+                bm::block_waves_xor_descr& BMRESTRICT x_descr,
+                bm::block_xor_match_descr& BMRESTRICT xmd) const BMNOEXCEPT
+{
+    // digest of all ZERO sub-blocks
+    bm::id64_t d0 = ~bm::calc_block_digest0(block);
+
+    xmd.xor_gc = xmd.xor_bc = 0;
+
+    // Pass 1: compute XOR descriptors
+    //
+    for (unsigned i = 0; i < bm::block_waves; ++i)
+    {
+        unsigned off = (i * bm::set_block_digest_wave_size);
+        const bm::word_t* sub_block = block + off;
+        const bm::word_t* xor_sub_block = xor_block + off;
+
+        unsigned xor_gc, xor_bc;
+        bm::bit_block_xor_change(sub_block, xor_sub_block,
+                                 bm::set_block_digest_wave_size,
+                                 &xor_gc, &xor_bc);
+        x_descr.sb_xor_bc[i] = (unsigned short)xor_bc;
+        BM_ASSERT(xor_gc);
+        if (i) // wave border correction
+        {
+            bm::word_t w_l = (sub_block[-1] ^ xor_sub_block[-1]);
+            bm::word_t w_r = (sub_block[0] ^ xor_sub_block[0]) & 1;
+            w_l >>= 31;
+            xor_gc -= (w_l == w_r);
+        }
+        x_descr.sb_xor_gc[i] = (unsigned short)xor_gc;
+
+        xmd.xor_bc += xor_bc;
+        xmd.xor_gc += xor_gc;
+
+    } // for i
+
+    // Pass 2: find the best match
+    //
+    unsigned block_gc_gain(0), block_bc_gain(0), block_ibc_gain(0);
+    bm::id64_t gc_digest(0), bc_digest(0), ibc_digest(0);
+    const unsigned wave_max_bits = bm::set_block_digest_wave_size * 32;
+
+    for (unsigned i = 0; i < bm::block_waves; ++i)
+    {
+        bm::id64_t dmask = (1ull << i);
+        if (d0 & dmask)
+            continue;
+
+        unsigned xor_gc = x_descr.sb_xor_gc[i];
+        if (xor_gc <= 1)
+        {
+            gc_digest |= dmask;
+            block_gc_gain += x_descr.sb_gc[i]; // all previous GAPs are gone
+        }
+        else if (xor_gc < x_descr.sb_gc[i]) // some improvement in GAPs
+        {
+            gc_digest |= dmask;
+            block_gc_gain += (x_descr.sb_gc[i] - xor_gc);
+        }
+        unsigned xor_bc = x_descr.sb_xor_bc[i];
+        if (xor_bc < x_descr.sb_bc[i]) // improvement in BITS
+        {
+            bc_digest |= dmask;
+            block_bc_gain += (x_descr.sb_bc[i] - xor_bc);
+        }
+        unsigned xor_ibc = wave_max_bits - xor_bc;
+        unsigned wave_ibc = wave_max_bits - x_descr.sb_bc[i];
+        if (xor_ibc < wave_ibc) // improvement in 0 BITS
+        {
+            ibc_digest |= dmask;
+            block_ibc_gain += (wave_ibc - xor_ibc);
+        }
+
+    } // for i
+
+    // Save metric results into XOR match descriptor
+    //
+
+    xmd.gc_d64 = gc_digest;
+    xmd.bc_d64 = bc_digest;
+    xmd.ibc_d64 = ibc_digest;
+
+    xmd.gc_gain = block_gc_gain;
+    xmd.bc_gain = block_bc_gain;
+    xmd.ibc_gain = block_ibc_gain;
+
+
+    // Find the winning metric and its digest mask
+    //
+    if (!(block_gc_gain | block_bc_gain | block_ibc_gain)) // match not found
+    {
+        // this is to check if xor filter has
+        // canceled out a whole sub-block wave
+        //
+        bm::id64_t d0_x = ~bm::calc_block_digest0(xor_block);
+        if (d0 == d0_x)
+        {
+            xmd.match_type = bm::e_xor_match_GC;
+            xmd.block_gain = bm::block_waves;
+            xmd.xor_d64 = d0;
+            return;
+        }
+        xmd.match_type = bm::e_no_xor_match;
+        xmd.block_gain = 0; xmd.xor_d64 = 0;
+        return;
+    }
+
+    int new_gc = int(s_gc_) - int(block_gc_gain);
+    if (new_gc < 0)
+        new_gc = 0;
+    int new_bc = int(s_bc_) - int(block_bc_gain);
+    if (new_bc < 0)
+        new_bc = 0;
+    int new_ibc =  int(bm::gap_max_bits) - int(s_bc_) - int(block_ibc_gain);
+    if (new_ibc < 0)
+        new_ibc = 0;
+
+
+    unsigned best_m;
+    xmd.match_type = best_metric(unsigned(new_bc), unsigned(new_gc), &best_m);
+    switch (xmd.match_type)
+    {
+    case e_xor_match_GC:
+        if (new_ibc < new_gc)
+        {
+            xmd.block_gain = block_ibc_gain;
+            xmd.xor_d64 = ibc_digest;
+        }
+        else
+        {
+            xmd.block_gain = block_gc_gain;
+            xmd.xor_d64 = gc_digest;
+        }
+        break;
+    case e_xor_match_BC:
+        if (new_ibc < new_bc)
+        {
+            xmd.block_gain = block_ibc_gain;
+            xmd.xor_d64 = ibc_digest;
+        }
+        else
+        {
+            xmd.block_gain = block_bc_gain;
+            xmd.xor_d64 = bc_digest;
+        }
+        break;
+    case e_xor_match_iBC:
+        xmd.block_gain = block_ibc_gain;
+        xmd.xor_d64 = ibc_digest;
+        break;
+    default:
+        break;
+    } // switch
 }
 
 // --------------------------------------------------------------------------
@@ -1256,7 +1424,7 @@ xor_scanner<BV>::search_best_xor_mask(const bm::word_t* s_block,
         BM_ASSERT(s_block != ref_block);
 
         bm::block_xor_match_descr xmd;
-        bm::compute_xor_complexity_descr(s_block, ref_block, x_descr_, xmd);
+        compute_xor_complexity_descr(s_block, ref_block, x_descr_, xmd);
         if (xmd.xor_d64) // candidate XOR block found
         {
             xmd.ref_idx = ri;
@@ -1344,20 +1512,15 @@ xor_scanner<BV>::search_best_xor_mask(const bm::word_t* s_block,
                 unsigned gain_min = unsigned(sizeof(char) + sizeof(unsigned));
                 if (d64 != ~0ull) // if mask is all 1s - it is not used
                     gain_min += (unsigned)sizeof(bm::id64_t);
+                else
+                {
+                    if (x_best_metric_ <= 1)
+                        return rb_found;
+                }
                 gain_min *= 8; // in bits
                 if (gain > gain_min)
                     return rb_found;
-                /*
-                if ((r_gap & s_gap) && (d64 != ~0ULL)) // both blocks are GAPs
-                {
-                    bm::bit_block_xor_2way(tx_block, s_block, ref_block);
-                    bm::bit_block_change_bc(tx_block, &xor_gc, &xor_bc);
-                    if (xor_gc < s_gc)
-                    {
-                        x_d64_ = ~0ULL;
-                        return e_xor_match_GC;
-                    }
-                }*/
+
                 return e_no_xor_match;
             }
         }
@@ -1532,7 +1695,7 @@ void xor_scanner<BV>::compute_sim_model(bm::xor_sim_model<BV>& sim_model,
 }
 
 // --------------------------------------------------------------------------
-
+/*
 template<typename BV>
 bool xor_scanner<BV>::search_best_xor_gap(const bm::word_t* block,
                                           size_type ridx_from,
@@ -1576,13 +1739,14 @@ bool xor_scanner<BV>::search_best_xor_gap(const bm::word_t* block,
 
         unsigned res_gc, res_bc;
         bm::gap_operation_dry_xor(gap_block, gap_xor_block, res_gc, res_bc);
-/*
+#if 0
         unsigned res_len;
         bm::gap_operation_xor(gap_block, gap_xor_block, tmp_buf, res_len);
         unsigned glen = bm::gap_length(tmp_buf);
         if (res_len > glen) // size overflow
             continue;
-        unsigned res_bc = bm::gap_bit_count_unr(tmp_buf); */
+        unsigned res_bc = bm::gap_bit_count_unr(tmp_buf);
+#endif
         if (!res_bc) // identical block
         {
             best_gap_metric = res_bc;
@@ -1592,9 +1756,10 @@ bool xor_scanner<BV>::search_best_xor_gap(const bm::word_t* block,
             x_block_mtype_ = e_xor_match_BC;
         }
 
-/*
+#if 0
         unsigned res_len;
-        bool f = bm::gap_operation_dry_xor(gap_block, gap_xor_block, res_len, best_gap_len); */
+        bool f = bm::gap_operation_dry_xor(gap_block, gap_xor_block, res_len, best_gap_len);
+#endif
         if ((res_gc < best_gap_metric))
         {
             unsigned gain = best_gap_metric - res_gc;
@@ -1639,7 +1804,7 @@ bool xor_scanner<BV>::search_best_xor_gap(const bm::word_t* block,
 
     return kb_found;
 }
-
+*/
 // --------------------------------------------------------------------------
 /*
 template<typename BV>

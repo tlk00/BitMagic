@@ -4858,7 +4858,8 @@ bm::id_t bit_count_change(bm::word_t w) BMNOEXCEPT
     @internal
 */
 inline
-unsigned bit_block_change32(const bm::word_t* block, unsigned size) BMNOEXCEPT
+unsigned bit_block_change32(const bm::word_t* BMRESTRICT block,
+                            unsigned                     size) BMNOEXCEPT
 {
     unsigned gap_count = 1;
 
@@ -4895,6 +4896,49 @@ unsigned bit_block_change32(const bm::word_t* block, unsigned size) BMNOEXCEPT
     return gap_count;
 }
 
+/*!
+    Function calculates number of times when bit value changed
+    @internal
+*/
+inline
+unsigned bit_block_change64(const bm::word_t* BMRESTRICT in_block,
+                            unsigned size) BMNOEXCEPT
+{
+    unsigned gap_count = 1;
+    const bm::id64_t* BMRESTRICT block = (const bm::id64_t*) in_block;
+
+    bm::id64_t  w, w0, w_prev, w_l;
+    w = w0 = *block;
+
+    const int w_shift = int(sizeof(w) * 8 - 1);
+    w ^= (w >> 1);
+    gap_count += bm::word_bitcount64(w);
+    gap_count -= (w_prev = (w0 >> w_shift)); // negative value correction
+
+    const bm::id64_t* block_end = block + (size/2);
+    for (++block; block < block_end; ++block)
+    {
+        w = w0 = *block;
+        ++gap_count;
+        if (!w)
+        {
+            gap_count -= !w_prev;
+            w_prev = 0;
+        }
+        else
+        {
+            w ^= (w >> 1);
+            gap_count += bm::word_bitcount64(w);
+            w_l = w0 & 1;
+            gap_count -= (w0 >> w_shift);  // negative value correction
+            gap_count -= !(w_prev ^ w_l);  // word border correction
+            w_prev = (w0 >> w_shift);
+        }
+    } // for
+    return gap_count;
+}
+
+
 
 /*!
     Function calculates basic bit-block statistics
@@ -4916,7 +4960,11 @@ void bit_block_change_bc(const bm::word_t* BMRESTRICT block,
         VECT_BLOCK_CHANGE_BC(block, gc, bc);
     #else
         // TODO: one pass algo
-        *gc = bm::bit_block_change32(block, bm::set_block_size);
+        #ifdef BM64OPT
+            *gc = bm::bit_block_change64(block, bm::set_block_size);
+        #else
+            *gc = bm::bit_block_change32(block, bm::set_block_size);
+        #endif
         *bc = bm::bit_block_count(block);
     #endif
 }
@@ -4938,7 +4986,11 @@ unsigned bit_block_calc_change(const bm::word_t* block) BMNOEXCEPT
 #if defined(VECT_BLOCK_CHANGE)
     return VECT_BLOCK_CHANGE(block, bm::set_block_size);
 #else
-    return bm::bit_block_change32(block, bm::set_block_size);
+    #ifdef BM64OPT
+        return bm::bit_block_change64(block, bm::set_block_size);
+    #else
+        return bm::bit_block_change32(block, bm::set_block_size);
+    #endif
 #endif
 }
 
@@ -5013,7 +5065,6 @@ bool bit_block_is_all_one_range(const bm::word_t* const BMRESTRICT block,
             return false;
     } // for
     BM_ASSERT(bitcount < 32);
-
     if (bitcount)  // we have a tail to count
     {
         unsigned mask_l = bm::mask_l_u32(bitcount-1);
@@ -5021,7 +5072,6 @@ bool bit_block_is_all_one_range(const bm::word_t* const BMRESTRICT block,
         if (temp != mask_l)
             return false;
     }
-
     return true;
 }
 
