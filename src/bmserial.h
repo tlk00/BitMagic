@@ -2119,7 +2119,7 @@ void serializer<BV>::encode_xor_match_chain(bm::encoder& enc,
     case 0: enc.put_32(ridx); break;
     default: BM_ASSERT(0); break;
     } // switch
-    enc.put_64(d64);
+    enc.put_h64(d64);
     enc.put_8((unsigned char) chain_size-1);
 
     for (unsigned ci = 1; ci < chain_size; ++ci)
@@ -2134,7 +2134,7 @@ void serializer<BV>::encode_xor_match_chain(bm::encoder& enc,
         case 0: enc.put_32(ridx); break;
         default: BM_ASSERT(0); break;
         } // switch
-        enc.put_64(d64);
+        enc.put_h64(d64);
     } // for ci
     compression_stat_[bm::set_block_xor_chain]++;
 }
@@ -4473,11 +4473,10 @@ size_t deserializer<BV, DEC>::deserialize(bvector_type&        bv,
                 case 0: row_idx = dec.get_32(); break;
                 default: BM_ASSERT(0); break;
                 } // switch
-                bm::id64_t acc64 = x_ref_d64_ = dec.get_64();
+                bm::id64_t acc64 = x_ref_d64_ = dec.get_h64();
                 BM_ASSERT(!xor_chain_size_);
                 xor_chain_size_ = dec.get_8();
                 BM_ASSERT(xor_chain_size_);
-//std::cout << "[i0,j0]=[" << i0 << "-" << j0 << "] row_idx=" << row_idx << " d64=" << std::hex << x_ref_d64_ << std::dec << " chain_s=" << xor_chain_size_ << std::endl;
                 for (unsigned ci = 0; ci < xor_chain_size_; ++ci)
                 {
                     switch (vbr_flag)
@@ -4487,11 +4486,10 @@ size_t deserializer<BV, DEC>::deserialize(bvector_type&        bv,
                     case 0: xor_chain_[ci].ref_idx = dec.get_32(); break;
                     default: BM_ASSERT(0); break;
                     } // switch
-                    xor_chain_[ci].xor_d64 = dec.get_64();
+                    xor_chain_[ci].xor_d64 = dec.get_h64();
 
                     BM_ASSERT((xor_chain_[ci].xor_d64 & acc64) == 0);
                     acc64 |= xor_chain_[ci].xor_d64; // control
-//std::cout << "  ridx=" << xor_chain_[ci].ref_idx << " d64=" << std::hex << xor_chain_[ci].xor_d64 << std::dec << std::endl;
                 } // for
             }
             goto process_xor_ref;
@@ -4534,7 +4532,6 @@ void deserializer<BV, DEC>::xor_decode_chain(bm::word_t* BMRESTRICT blk) BMNOEXC
         const bvector_type* BMRESTRICT ref_bv = ref_vect_->get_bv(ref_idx);
         const blocks_manager_type& ref_bman = ref_bv->get_blocks_manager();
         BM_ASSERT(ref_bv);
-        BM_ASSERT(&ref_bman != &bman);
 
         const bm::word_t* BMRESTRICT ref_blk = ref_bman.get_block_ptr(i0, j0);
         if (BM_IS_GAP(ref_blk))
