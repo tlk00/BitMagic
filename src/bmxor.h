@@ -169,7 +169,7 @@ void bit_block_xor_change64(const bm::word_t* BMRESTRICT s_block,
     const int w_shift = int(sizeof(w) * 8 - 1);
     w ^= (w >> 1);
     gap_count += bm::word_bitcount64(w);
-    gap_count -= (w_prev = (w0 >> w_shift)); // negative value correction
+    gap_count -= unsigned(w_prev = (w0 >> w_shift)); // negative value correction
 
     const bm::id64_t* block_end = block + (size/2);
     for (++block, ++xor_block; block < block_end; ++block, ++xor_block)
@@ -1494,7 +1494,7 @@ void xor_scanner<BV>::compute_sim_model(bm::xor_sim_model<BV>& sim_model,
                         for (size_type k = 0; k < chain_size; ++k)
                         {
                             const bm::match_pair& mp = pm_vect[k];
-                            bmc.ref_idx[k] = mp.ref_idx;
+                            bmc.ref_idx[k] = (unsigned)mp.ref_idx;
                             bmc.xor_d64[k] = mp.xor_d64;
                             bmc.chain_size++;
                         } // for k
@@ -1519,7 +1519,7 @@ void xor_scanner<BV>::compute_sim_model(bm::xor_sim_model<BV>& sim_model,
                     {
                         BM_ASSERT(k < 64);
                         const bm::match_pair& mp = pm_vect[k];
-                        bmc.ref_idx[k+1] = mp.ref_idx;
+                        bmc.ref_idx[k+1] = (unsigned)mp.ref_idx;
                         bmc.xor_d64[k+1] = mp.xor_d64;
                         bmc.chain_size++;
                     } // for k

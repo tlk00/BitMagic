@@ -2115,11 +2115,11 @@ void serializer<BV>::encode_xor_match_chain(bm::encoder& enc,
     {
     case 1: enc.put_8((unsigned char)ridx); break;
     case 2: enc.put_16((unsigned short)ridx); break;
-    case 0: enc.put_32(ridx); break;
+    case 0: enc.put_32((unsigned)ridx); break;
     default: BM_ASSERT(0); break;
     } // switch
     enc.put_h64(d64);
-    enc.put_8((unsigned char) chain_size-1);
+    enc.put_8((unsigned char) (chain_size-1));
 
     for (unsigned ci = 1; ci < chain_size; ++ci)
     {
@@ -2130,7 +2130,7 @@ void serializer<BV>::encode_xor_match_chain(bm::encoder& enc,
         {
         case 1: enc.put_8((unsigned char)ridx); break;
         case 2: enc.put_16((unsigned short)ridx); break;
-        case 0: enc.put_32(ridx); break;
+        case 0: enc.put_32((unsigned)ridx); break;
         default: BM_ASSERT(0); break;
         } // switch
         enc.put_h64(d64);
@@ -4713,7 +4713,7 @@ void deserializer<BV, DEC>::xor_decode(blocks_manager_type& bman)
     //
     for (unsigned ci = 0; ci < xor_chain_size_; ++ci)
     {
-        unsigned ref_idx = ref_vect_->find(xor_chain_[ci].ref_idx);
+        unsigned ref_idx = (unsigned)ref_vect_->find(xor_chain_[ci].ref_idx);
         const bvector_type* ref_bv = ref_vect_->get_bv(ref_idx);
         const blocks_manager_type& ref_bman = ref_bv->get_blocks_manager();
         BM_ASSERT(ref_bv);
