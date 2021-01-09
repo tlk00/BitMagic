@@ -21507,7 +21507,7 @@ void TestSparseVector_XOR_Scanner()
 {
     cout << " -------------------------- TestSparseVector_XOR_Scanner()" << endl;
     BM_DECLARE_TEMP_BLOCK(tb)
-    BM_DECLARE_TEMP_BLOCK(tb2)
+//    BM_DECLARE_TEMP_BLOCK(tb2)
 
     // XOR scanner EQ test
     {{
@@ -21659,57 +21659,10 @@ void TestSparseVector_XOR_Scanner()
             sv.optimize();
         } // for
 
-/*
-        const bvect* bv_x = sv.get_plane(0);
-        const bvect::blocks_manager_type& bman_x = bv_x->get_blocks_manager();
-        const bm::word_t* block_x = bman_x.get_block_ptr(0, 0);
-
-        auto idx = xscan.get_ref_vector().find(unsigned(0));
-        assert(idx == 0);
-
-        // important before search_best_xor_mask
-        xscan.compute_s_block_stats(block_x);
-
-        auto sz = xscan.get_ref_vector().size();
-        bool f = xscan.search_best_xor_mask(block_x, idx,
-                                            1, sz,
-                                            0, 0, tb, bm::xor_sim_params());
-        assert(f);
-
-        idx = xscan.found_ridx();
-        bm::id64_t d64 = xscan.get_xor_digest();
-        assert(d64 == 1);
-        assert(idx == 1); // matrix row 1
-
-        bm::xor_scanner<bvect>::xor_matches_vector_type& mvect =
-            xscan.get_match_vector();
-        auto mv_sz = mvect.size();
-        assert(mv_sz == 2);
-
-        bm::xor_complement_match mtype = xscan.get_best_match_type();
-        assert(mtype == e_xor_match_BC);
-
-        bm::xor_scanner<bvect>::match_pairs_vector_type pm_vect;
-
-        auto pm_cnt = bm::greedy_refine_match_vector(pm_vect, mvect, idx, d64, e_xor_match_BC);
-        assert(pm_cnt == 1);
-        validate_match_pairs(pm_vect, idx);
-
-        xscan.apply_xor_match_vector(tb, block_x, xscan.get_found_block(), d64, pm_vect, 0, 0);
-        auto tb_cnt = bm::bit_block_count(tb);
-        assert(tb_cnt == 0);
-
-        // reverse XOR
-        xscan.apply_xor_match_vector(tb2, tb, xscan.get_found_block(), d64, pm_vect, 0, 0);
-        unsigned block_pos;
-        bool found = bm::block_find_first_diff(tb2, block_x, &block_pos);
-        assert(!found);
-*/
     }}
 
-#if 0
+
     // case 2: main (base) reference vector is found + a chain of improves
-    // TODO: fixme
 
     cout << " case 2: main (base) reference vector is found + a chain of improves" << endl;
     {{
@@ -21744,95 +21697,28 @@ void TestSparseVector_XOR_Scanner()
             bm::xor_sim_model<bvect> sim_model;
             xscan.compute_sim_model(sim_model, r_vect, xs_params);
 
-            const bvect* bv_x = sv.get_plane(0);
-            auto cnt = bv_x->count();
-            cout << "\r " << cnt << endl;
-//            const bvect::blocks_manager_type& bman_x = bv_x->get_blocks_manager();
-//            const bm::word_t* block_x = bman_x.get_block_ptr(0, 0);
 
             auto idx = xscan.get_ref_vector().find(unsigned(0));
             assert(idx == 0);
 
-/*
-            // important before search_best_xor_mask
-            xscan.compute_s_block_stats(block_x);
-
-            auto sz = xscan.get_ref_vector().size();
-            bool f = xscan.search_best_xor_mask(block_x, idx,
-                                                1, sz,
-                                                0, 0, tb);
-            if (cnt < 23000)
-            {
-                assert(f);
-            }
-
-            idx = xscan.found_ridx();
-            bm::id64_t d64 = xscan.get_xor_digest();
-
-            bm::xor_scanner<bvect>::xor_matches_vector_type& mvect =
-                xscan.get_match_vector();
-
-            if (!f)
-            {
-                assert(bm::word_bitcount64(d64)==2);
-                assert(mvect.size());
-            }
-
+            auto mchain = sim_model.matr.get(0, 0);
+            //cout << mchain.chain_size << endl;
             if (pass < 32)
             {
-                assert(d64 == 1);
+                assert(mchain.chain_size == pass);
             }
             else
             {
-                assert(bm::word_bitcount64(d64)==2);
+                assert(mchain.chain_size >= 30);
             }
-
-            assert(idx == 1); // matrix row 1
-
-            auto mv_sz = mvect.size();
-            if (pass < 32)
-            {
-                assert(mv_sz == pass);
-            }
-            else
-            {
-                assert(mv_sz == 31);
-            }
-
-            bm::xor_complement_match mtype = xscan.get_best_match_type();
-            assert(mtype == e_xor_match_BC);
-
-
-            auto pm_cnt = xscan.refine_match_chain();
-            if (pass < 32)
-            {
-                assert(pm_cnt == pass-1);
-            }
-            else
-            {
-                assert(pm_cnt == 30);
-            }
-            bm::xor_scanner<bvect>::match_pairs_vector_type& pm_vect
-                                                = xscan.get_match_pairs();
-            validate_match_pairs(pm_vect, idx);
-
-            xscan.apply_xor_match_vector(tb, block_x, xscan.get_found_block(), d64, pm_vect, 0, 0);
-            auto tb_cnt = bm::bit_block_count(tb);
-            assert(tb_cnt == 0);
-
-            // reverse XOR
-            xscan.apply_xor_match_vector(tb2, tb, xscan.get_found_block(), d64, pm_vect, 0, 0);
-            unsigned block_pos;
-            bool found = bm::block_find_first_diff(tb2, block_x, &block_pos);
-            assert(!found);
-*/
 
         } // for pass
     }}
 
-#endif
 
-    /*
+// TODO: find a way to solve this case
+/*
+
     // case 3: main (base) reference vector is found + a chain of improves
     // (inverted)
     cout << "\n case 3: main (base) reference vector is found + a chain of improves (inverted)" << endl;
@@ -21866,64 +21752,24 @@ void TestSparseVector_XOR_Scanner()
             r_vect.build(sv.get_bmatrix());
             xscan.set_ref_vector(&r_vect);
 
-            const bvect* bv_x = sv.get_plane(0);
-            auto cnt = bv_x->count();
-            cout << cnt << endl;
-            const bvect::blocks_manager_type& bman_x = bv_x->get_blocks_manager();
-            const bm::word_t* block_x = bman_x.get_block_ptr(0, 0);
+            bm::xor_sim_params xs_params;
+            bm::xor_sim_model<bvect> sim_model;
+            xscan.compute_sim_model(sim_model, r_vect, xs_params);
 
-            auto idx = xscan.get_ref_vector().find(unsigned(0));
-            assert(idx == 0);
-
-            // important before search_best_xor_mask
-            xscan.compute_s_block_stats(block_x);
-
-            auto sz = xscan.get_ref_vector().size();
-            bool f = xscan.search_best_xor_mask(block_x, idx,
-                                                1, sz,
-                                                0, 0, tb);
-            assert(!f);
-            idx = xscan.found_ridx();
-            bm::id64_t d64 = xscan.get_xor_digest();
-
-            bm::xor_scanner<bvect>::xor_matches_vector_type& mvect =
-                xscan.get_match_vector();
-
-            if (!f)
+            auto mchain = sim_model.matr.get(0, 0);
+            cout << mchain.chain_size << endl;
+            if (pass < 32)
             {
-                assert(bm::word_bitcount64(d64)==3);
-                assert(mvect.size());
+                assert(mchain.chain_size == pass);
             }
-
-            assert(idx == 1); // matrix row 1
-
-            auto mv_sz = mvect.size();
-            assert(mv_sz == 31);
-
-            bm::xor_complement_match mtype = xscan.get_best_match_type();
-            assert(mtype == e_xor_match_iBC);
-
-            bm::xor_scanner<bvect>::match_pairs_vector_type pm_vect;
-
-            auto pm_cnt = bm::greedy_refine_match_vector(pm_vect, mvect, idx, d64, mtype);
-            assert(pm_cnt == 30);
-
-            validate_match_pairs(pm_vect, idx);
-
-            xscan.apply_xor_match_vector(tb, block_x, xscan.get_found_block(), d64, pm_vect, 0, 0);
-            auto tb_cnt = bm::bit_block_count(tb);
-            assert(tb_cnt == 64512);
-
-            // reverse XOR
-            xscan.apply_xor_match_vector(tb2, tb, xscan.get_found_block(), d64, pm_vect, 0, 0);
-            unsigned block_pos;
-            bool found = bm::block_find_first_diff(tb2, block_x, &block_pos);
-            assert(!found);
-
+            else
+            {
+                assert(mchain.chain_size >= 30);
+            }
         } // for pass
     }}
-*/
 
+*/
 
 
 
@@ -21939,10 +21785,10 @@ void TestSparseVectorSerial()
     cout << "---------------------------- Test sparse vector serializer" << endl;
 
     cout << "  test chain XOR serialization.. " << endl;
+    bm::sparse_vector_serializer<sparse_vector_u32> sv_ser;
+    bm::sparse_vector_deserializer<sparse_vector_u32> sv_deserial;
 
     {
-        bm::sparse_vector_serializer<sparse_vector_u32> sv_ser;
-        bm::sparse_vector_deserializer<sparse_vector_u32> sv_deserial;
         sparse_vector_serial_layout<sparse_vector_u32> sv_lay;
 
         sv_ser.set_xor_ref(true);
@@ -21984,10 +21830,10 @@ void TestSparseVectorSerial()
         } // for pass
     }
 
-    bm::sparse_vector_serializer<sparse_vector_u32> sv_ser;
+//    bm::sparse_vector_serializer<sparse_vector_u32> sv_ser;
     sv_ser.set_xor_ref(false);
 //sv_ser.set_xor_ref(true);
-    bm::sparse_vector_deserializer<sparse_vector_u32> sv_deserial;
+//    bm::sparse_vector_deserializer<sparse_vector_u32> sv_deserial;
 
     for (unsigned pass = 0; pass < 2; ++pass)
     {
@@ -22071,7 +21917,6 @@ void TestSparseVectorSerial()
                 assert(sv2.get(1) == 0);
                 assert(sv2.get(2) == 0);
             }
-
         }
 
 
@@ -22098,18 +21943,21 @@ void TestSparseVectorSerial()
             sv1.sync_size();
 
             sparse_vector_serial_layout<sparse_vector_u32> sv_lay;
+//sv_ser.set_xor_ref(true);
+
             sv_ser.serialize(sv1, sv_lay);
             const unsigned char* buf = sv_lay.buf();
 
             {
+
                 bm::sparse_vector_deserializer<sparse_vector_u32> sv_deserial;
                 sparse_vector_u32 sv4(bm::use_null);
                 sv_deserial.deserialize(sv4, buf);
                 {
+                    sparse_vector_u32::size_type midx;
                     bool is_eq = sv1.equal(sv4);
                     if (!is_eq)
                     {
-                        sparse_vector_u32::size_type midx;
                         bool b = bm::sparse_vector_find_first_mismatch(sv1, sv4, midx);
                         assert(b);
                         cout << "Mismatch at pos = " << midx << endl;
@@ -22126,6 +21974,8 @@ void TestSparseVectorSerial()
                 bool is_eq;
                 sparse_vector_u32::size_type pos;
                 bool found;
+//i = 59982;
+//i = 2147491602; j = 2147551230;
 
                 for (i = from; i < j; ++i, --j)
                 {
@@ -22149,12 +21999,35 @@ void TestSparseVectorSerial()
                         found = bm::sparse_vector_find_first_mismatch(sv2, sv_range, pos, bm::no_null);
                         if (found)
                         {
+                            auto vf = sv_filt.get(pos);
+                            auto v2 = sv2.get(pos);
+                            auto v3 = sv_range.get(pos);
+
                             cerr << "Mismatch at:" << pos << endl;
+                            cerr << vf << "!=" << v2 << "!=" << v3 << endl;
+                            cerr << "[i, j] = " << i << ":" << j << endl;
+
                         }
                         assert(is_eq);
                     }
 
                     sv_deserial.deserialize(sv3, buf, i, j);
+                    {
+                        sparse_vector_u32::size_type pos;
+                        bool b = bm::sparse_vector_find_first_mismatch(sv3, sv_range, pos);
+                        if (b)
+                        {
+                            auto vf = sv_filt.get(pos);
+                            auto v2 = sv3.get(pos);
+                            auto v3 = sv_range.get(pos);
+                            auto xd = v2 ^ v3;
+
+                            cerr << "Mismatch at:" << pos << " xor diff=" << xd << endl;
+                            cerr << vf << "!=" << v2 << "!=" << v3 << endl;
+                            cerr << "[i, j] = " << i << ":" << j << endl;
+                        }
+                        assert(!b);
+                    }
                     is_eq = sv2.equal(sv3);
                     if (!is_eq)
                     {
