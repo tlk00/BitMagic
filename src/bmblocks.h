@@ -1290,18 +1290,16 @@ public:
     /**
         Allocate subblock and fill based on
     */
-    bm::word_t** alloc_top_subblock(unsigned i, bm::word_t* addr_to_set)
+    bm::word_t** alloc_top_subblock(unsigned i, bm::word_t* addr)
     {
-        BM_ASSERT(addr_to_set == 0 || addr_to_set == FULL_BLOCK_FAKE_ADDR);
-        BM_ASSERT(top_blocks_[i] == 0 || top_blocks_[i] == (bm::word_t**)FULL_BLOCK_FAKE_ADDR);
-        
-        bm::word_t** blk_blk = (bm::word_t**)alloc_.alloc_ptr(bm::set_sub_array_size);
+        BM_ASSERT(addr == 0 || addr == FULL_BLOCK_FAKE_ADDR);
+        BM_ASSERT(top_blocks_[i] == 0 ||
+                  top_blocks_[i] == (bm::word_t**)FULL_BLOCK_FAKE_ADDR);
+        bm::word_t** blk_blk =
+            (bm::word_t**)alloc_.alloc_ptr(bm::set_sub_array_size);
         top_blocks_[i] = blk_blk;
         for (unsigned j = 0; j < bm::set_sub_array_size; j+=4)
-        {
-            blk_blk[j+0] = blk_blk[j+1] =
-            blk_blk[j+2] = blk_blk[j+3] = addr_to_set;
-        } // for j
+            blk_blk[j+0] = blk_blk[j+1] = blk_blk[j+2] = blk_blk[j+3] = addr;
         return blk_blk;
     }
     
@@ -1521,17 +1519,28 @@ public:
     bm::word_t* deoptimize_block(block_idx_type nb)
     {
         unsigned i, j;
-        get_block_coord(nb, i, j);
-        return deoptimize_block(i, j);
+        bm::get_block_coord(nb, i, j);
+        return deoptimize_block(i, j, false);
     }
 
-    bm::word_t* deoptimize_block(unsigned i, unsigned j)
+    /** deoptimize block and return bit-block ptr
+        can return NULL if block does not exists or allocate (if requested)
+    */
+    bm::word_t* deoptimize_block(unsigned i, unsigned j, bool alloc)
     {
         bm::word_t* block = this->get_block_ptr(i, j);
+        if (!block && alloc)
+        {
+            if (!top_blocks_[i])
+                alloc_top_subblock(i, 0);
+            bm::word_t* new_block = alloc_.alloc_bit_block();
+            bm::bit_block_set(new_block, 0u);
+            set_block_ptr(i, j, new_block);
+            return new_block;
+        }
         if (BM_IS_GAP(block))
         {
             gap_word_t* gap_block = BMGAP_PTR(block);
-
             bm::word_t* new_block = alloc_.alloc_bit_block();
             bm::gap_convert_to_bitset(new_block, gap_block);
             alloc_.free_gap_block(gap_block, this->glen());

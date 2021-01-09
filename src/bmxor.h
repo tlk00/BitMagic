@@ -1056,6 +1056,7 @@ public:
     */
     void compute_xor_complexity_descr(
                 const bm::word_t* BMRESTRICT          block,
+                bm::id64_t                            block_d64,
                 const bm::word_t* BMRESTRICT          xor_block,
                 bm::block_waves_xor_descr& BMRESTRICT x_descr,
                 bm::block_xor_match_descr& BMRESTRICT xmd) const BMNOEXCEPT;
@@ -1193,12 +1194,12 @@ void xor_scanner<BV>::compute_s_block_stats(const bm::word_t* block) BMNOEXCEPT
 template<typename BV>
 void xor_scanner<BV>::compute_xor_complexity_descr(
                 const bm::word_t* BMRESTRICT block,
+                bm::id64_t block_d64,
                 const bm::word_t* BMRESTRICT xor_block,
                 bm::block_waves_xor_descr& BMRESTRICT x_descr,
                 bm::block_xor_match_descr& BMRESTRICT xmd) const BMNOEXCEPT
 {
-    // digest of all ZERO sub-blocks
-    bm::id64_t d0 = ~bm::calc_block_digest0(block);
+    bm::id64_t d0 = ~block_d64;
 
     xmd.xor_gc = xmd.xor_bc = 0;
 
@@ -1319,34 +1320,46 @@ void xor_scanner<BV>::compute_xor_complexity_descr(
     case e_xor_match_GC:
         if (new_ibc < new_gc)
         {
-            xmd.block_gain = block_ibc_gain;
-            xmd.xor_d64 = ibc_digest;
+            xmd.block_gain = block_ibc_gain; xmd.xor_d64 = ibc_digest;
         }
         else
         {
-            xmd.block_gain = block_gc_gain;
-            xmd.xor_d64 = gc_digest;
+            xmd.block_gain = block_gc_gain; xmd.xor_d64 = gc_digest;
         }
         break;
     case e_xor_match_BC:
         if (new_ibc < new_bc)
         {
-            xmd.block_gain = block_ibc_gain;
-            xmd.xor_d64 = ibc_digest;
+            xmd.block_gain = block_ibc_gain; xmd.xor_d64 = ibc_digest;
         }
         else
         {
-            xmd.block_gain = block_bc_gain;
-            xmd.xor_d64 = bc_digest;
+            xmd.block_gain = block_bc_gain; xmd.xor_d64 = bc_digest;
         }
         break;
     case e_xor_match_iBC:
-        xmd.block_gain = block_ibc_gain;
-        xmd.xor_d64 = ibc_digest;
+        xmd.block_gain = block_ibc_gain; xmd.xor_d64 = ibc_digest;
         break;
     default:
         break;
     } // switch
+
+    if (!xmd.xor_d64) // best metric choice did not work try best gain
+    {
+        if (block_gc_gain >= block_bc_gain && block_gc_gain >= block_ibc_gain)
+        {
+            xmd.block_gain = block_gc_gain; xmd.xor_d64 = gc_digest;
+        }
+        else
+        if (block_bc_gain > block_gc_gain && block_bc_gain > block_ibc_gain)
+        {
+            xmd.block_gain = block_bc_gain; xmd.xor_d64 = bc_digest;
+        }
+        else
+        {
+            xmd.block_gain = block_ibc_gain; xmd.xor_d64 = ibc_digest;
+        }
+    }
 }
 
 // --------------------------------------------------------------------------
@@ -1388,6 +1401,7 @@ xor_scanner<BV>::search_best_xor_mask(const bm::word_t* s_block,
         s_block = nb_blocks_vect_.at(s_ri);
         BM_ASSERT(s_block);
     }
+    bm::id64_t s_block_d64 = bm::calc_block_digest0(s_block);
 
     // scan pass: over reference vectors
     //
@@ -1424,7 +1438,7 @@ xor_scanner<BV>::search_best_xor_mask(const bm::word_t* s_block,
         BM_ASSERT(s_block != ref_block);
 
         bm::block_xor_match_descr xmd;
-        compute_xor_complexity_descr(s_block, ref_block, x_descr_, xmd);
+        compute_xor_complexity_descr(s_block, s_block_d64, ref_block, x_descr_, xmd);
         if (xmd.xor_d64) // candidate XOR block found
         {
             xmd.ref_idx = ri;
@@ -1694,117 +1708,6 @@ void xor_scanner<BV>::compute_sim_model(bm::xor_sim_model<BV>& sim_model,
     } // for en
 }
 
-// --------------------------------------------------------------------------
-/*
-template<typename BV>
-bool xor_scanner<BV>::search_best_xor_gap(const bm::word_t* block,
-                                          size_type ridx_from,
-                                          size_type ridx_to,
-                                          unsigned i, unsigned j)
-{
-    BM_ASSERT(ridx_from <= ridx_to);
-    BM_ASSERT(BM_IS_GAP(block));
-
-    if (ridx_to > ref_vect_->size())
-        ridx_to = ref_vect_->size();
-
-    x_d64_ = 0;
-
-    const bm::gap_word_t* gap_block = BMGAP_PTR(block);
-    unsigned gap_len = bm::gap_length(gap_block);
-    if (gap_len <= 3)
-        return false;
-    unsigned bc = bm::gap_bit_count_unr(gap_block);
-
-    bool kb_found = false;
-    unsigned best_gap_metric = gap_len;
-    if (bc < best_gap_metric)
-        best_gap_metric = bc;
-
-    for (size_type ri = ridx_from; ri < ridx_to; ++ri)
-    {
-        const bvector_type* bv = ref_vect_->get_bv(ri);
-        BM_ASSERT(bv);
-        const typename bvector_type::blocks_manager_type& bman = bv->get_blocks_manager();
-        const bm::word_t* block_xor = bman.get_block_ptr(i, j);
-        if (!IS_VALID_ADDR(block_xor) || !BM_IS_GAP(block_xor))
-            continue;
-
-        const bm::gap_word_t* gap_xor_block = BMGAP_PTR(block_xor);
-        unsigned gap_xor_len = bm::gap_length(gap_block);
-        if (gap_xor_len <= 3)
-            continue;
-
-        BM_ASSERT(block != block_xor);
-
-        unsigned res_gc, res_bc;
-        bm::gap_operation_dry_xor(gap_block, gap_xor_block, res_gc, res_bc);
-#if 0
-        unsigned res_len;
-        bm::gap_operation_xor(gap_block, gap_xor_block, tmp_buf, res_len);
-        unsigned glen = bm::gap_length(tmp_buf);
-        if (res_len > glen) // size overflow
-            continue;
-        unsigned res_bc = bm::gap_bit_count_unr(tmp_buf);
-#endif
-        if (!res_bc) // identical block
-        {
-            best_gap_metric = res_bc;
-            kb_found = true;
-            found_ridx_ = ri;
-            found_block_xor_ = (const bm::word_t*)gap_xor_block;
-            x_block_mtype_ = e_xor_match_BC;
-        }
-
-#if 0
-        unsigned res_len;
-        bool f = bm::gap_operation_dry_xor(gap_block, gap_xor_block, res_len, best_gap_len);
-#endif
-        if ((res_gc < best_gap_metric))
-        {
-            unsigned gain = best_gap_metric - res_gc;
-            if (gain > 2)
-            {
-                best_gap_metric = res_gc;
-                kb_found = true;
-                found_ridx_ = ri;
-                found_block_xor_ = (const bm::word_t*)gap_xor_block;
-                x_block_mtype_ = e_xor_match_GC;
-            }
-        }
-        if (res_bc < best_gap_metric)
-        {
-            unsigned gain = best_gap_metric - res_bc;
-            if (gain > 2)
-            {
-                best_gap_metric = res_bc;
-                kb_found = true;
-                found_ridx_ = ri;
-                found_block_xor_ = (const bm::word_t*)gap_xor_block;
-                x_block_mtype_ = e_xor_match_BC;
-            }
-        }
-        unsigned res_ibc = bm::gap_max_bits - res_bc;
-        if (res_ibc < best_gap_metric)
-        {
-            unsigned gain = best_gap_metric - res_ibc;
-            if (gain > 2)
-            {
-                best_gap_metric = res_ibc;
-                kb_found = true;
-                found_ridx_ = ri;
-                found_block_xor_ = (const bm::word_t*)gap_xor_block;
-                x_block_mtype_ = e_xor_match_iBC;
-            }
-        }
-
-        if (best_gap_metric <= 1)
-            break;
-    } // for ri
-
-    return kb_found;
-}
-*/
 // --------------------------------------------------------------------------
 
 template<typename BV>

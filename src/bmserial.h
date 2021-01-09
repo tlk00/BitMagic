@@ -687,7 +687,7 @@ protected:
     block_idx_type            x_nb_;
     unsigned                  xor_chain_size_;
     bm::match_pair            xor_chain_[64];
-    bool                      x_ref_gap_;
+//    bool                      x_ref_gap_;
 
     // Range deserialization settings
     //
@@ -4170,13 +4170,13 @@ size_t deserializer<BV, DEC>::deserialize(bvector_type&        bv,
     block_idx_type nb;
     unsigned i0, j0;
 
-    block_idx_type i = 0;
+    block_idx_type nb_i = 0;
     do
     {
         if (is_range_set_)
         {
             block_idx_type nb_to = (idx_to_ >> bm::set_block_shift);
-            if (i > nb_to)
+            if (nb_i > nb_to)
                 break; // early exit (out of target range)
         }
 
@@ -4185,34 +4185,34 @@ size_t deserializer<BV, DEC>::deserialize(bvector_type&        bv,
         {
             nb = btype & ~(1 << 7);
             BM_ASSERT(nb);
-            i += nb;
+            nb_i += nb;
             continue;
         }
-        bm::get_block_coord(i, i0, j0);
+        bm::get_block_coord(nb_i, i0, j0);
         bm::word_t* blk = bman.get_block_ptr(i0, j0);
 
         switch (btype)
         {
         case set_block_azero: 
         case set_block_end:
-            i = bm::set_total_blocks;
+            nb_i = bm::set_total_blocks;
             break;
         case set_block_1zero:
             break;
         case set_block_8zero:
             nb = dec.get_8();
             BM_ASSERT(nb);
-            i += nb;
+            nb_i += nb;
             continue; // bypass ++i;
         case set_block_16zero:
             nb = dec.get_16();
             BM_ASSERT(nb);
-            i += nb;
+            nb_i += nb;
             continue; // bypass ++i;
         case set_block_32zero:
             nb = dec.get_32();
             BM_ASSERT(nb);
-            i += nb;
+            nb_i += nb;
             continue; // bypass ++i;
         case set_block_64zero:
             #ifdef BM64ADDR
@@ -4231,11 +4231,11 @@ size_t deserializer<BV, DEC>::deserialize(bvector_type&        bv,
             #endif
             break;
         case set_block_aone:
-            bman.set_all_set(i, bm::set_total_blocks-1);
-            i = bm::set_total_blocks;
+            bman.set_all_set(nb_i, bm::set_total_blocks-1);
+            nb_i = bm::set_total_blocks;
             break;
         case set_block_1one:
-            bman.set_block_all_set(i);
+            bman.set_block_all_set(nb_i);
             break;
         case set_block_8one:
             full_blocks = dec.get_8();
@@ -4265,19 +4265,19 @@ size_t deserializer<BV, DEC>::deserialize(bvector_type&        bv,
             process_full_blocks:
             {
                 BM_ASSERT(full_blocks);
-                size_type from = i * bm::gap_max_bits;
+                size_type from = nb_i * bm::gap_max_bits;
                 size_type to = from + full_blocks * bm::gap_max_bits;
                 bv.set_range(from, to-1);
-                i += full_blocks-1;
+                nb_i += full_blocks-1;
             }
             break;
         case set_block_bit:
-            decode_block_bit(dec, bv, i, blk);
+            decode_block_bit(dec, bv, nb_i, blk);
             break;
         case set_block_bit_1bit:
         {
             size_type bit_idx = dec.get_16();
-            bit_idx += i * bm::bits_in_block; 
+            bit_idx += nb_i * bm::bits_in_block;
             bv.set_bit_no_check(bit_idx);
             break;
         }
@@ -4285,11 +4285,11 @@ size_t deserializer<BV, DEC>::deserialize(bvector_type&        bv,
         {
             //TODO: optimization if block exists
             this->read_0runs_block(dec, temp_block);
-            bv.combine_operation_with_block(i, temp_block, 0, BM_OR);
+            bv.combine_operation_with_block(nb_i, temp_block, 0, BM_OR);
             break;
         }
         case set_block_bit_interval: 
-            decode_block_bit_interval(dec, bv, i, blk);
+            decode_block_bit_interval(dec, bv, nb_i, blk);
             break;
         case set_block_gap:
         case set_block_gapbit:
@@ -4304,49 +4304,49 @@ size_t deserializer<BV, DEC>::deserialize(bvector_type&        bv,
         case set_block_arrgap_bienc_inv:
         case set_block_arrgap_bienc_v2:
         case set_block_arrgap_bienc_inv_v2:
-            deserialize_gap(btype, dec, bv, bman, i, blk);
+            deserialize_gap(btype, dec, bv, bman, nb_i, blk);
             break;
         case set_block_arrbit:
-            decode_arrbit(dec, bv, i, blk);
+            decode_arrbit(dec, bv, nb_i, blk);
             break;
         case bm::set_block_arr_bienc:
         case bm::set_block_arrbit_inv:
         case bm::set_block_arr_bienc_inv:
         case bm::set_block_bitgap_bienc:
         case bm::set_block_arr_bienc_8bh:
-            decode_bit_block(btype, dec, bman, i, blk);
+            decode_bit_block(btype, dec, bman, nb_i, blk);
             break;
         case bm::set_block_bit_digest0:
-            decode_bit_block(btype, dec, bman, i, blk);
+            decode_bit_block(btype, dec, bman, nb_i, blk);
             break;
 
         // --------------------------------------- super-block encodings
         case bm::set_sblock_bienc:
             decode_arr_sblock(btype, dec, bv);
-            i += (bm::set_sub_array_size - j0);
+            nb_i += (bm::set_sub_array_size - j0);
             continue; // bypass ++i;
 
         // --------------------------------------- bookmarks and skip jumps
         //
         case set_nb_bookmark32:
-            this->bookmark_idx_ = i;
+            this->bookmark_idx_ = nb_i;
             this->skip_offset_ = dec.get_32();
             goto process_bookmark;
         case set_nb_bookmark24:
-            this->bookmark_idx_ = i;
+            this->bookmark_idx_ = nb_i;
             this->skip_offset_ = dec.get_24();
             goto process_bookmark;
         case set_nb_bookmark16:
-            this->bookmark_idx_ = i;
+            this->bookmark_idx_ = nb_i;
             this->skip_offset_ = dec.get_16();
         process_bookmark:
             if (is_range_set_)
             {
                 this->skip_pos_ = dec.get_pos() + this->skip_offset_;
                 block_idx_type nb_from = (idx_from_ >> bm::set_block_shift);
-                nb_from = this->try_skip(dec, i, nb_from);
+                nb_from = this->try_skip(dec, nb_i, nb_from);
                 if (nb_from)
-                    i = nb_from;
+                    nb_i = nb_from;
             }
             continue; // bypass ++i;
 
@@ -4368,8 +4368,8 @@ size_t deserializer<BV, DEC>::deserialize(bvector_type&        bv,
         case set_nb_sync_mark64:
             nb_sync = block_idx_type(dec.get_64());
         process_nb_sync:                
-                BM_ASSERT(i == this->bookmark_idx_ + nb_sync);
-                if (i != this->bookmark_idx_ + nb_sync)
+                BM_ASSERT(nb_i == this->bookmark_idx_ + nb_sync);
+                if (nb_i != this->bookmark_idx_ + nb_sync)
                 {
                     #ifndef BM_NO_STL
                         throw std::logic_error(this->err_msg());
@@ -4384,7 +4384,8 @@ size_t deserializer<BV, DEC>::deserialize(bvector_type&        bv,
         case bm::set_block_ref_eq:
             {
                 BM_ASSERT(ref_vect_); // reference vector has to be attached
-                if (x_ref_d64_ || x_ref_gap_) // previous delayed XOR post proc.
+//                if (x_ref_d64_ || x_ref_gap_) // previous delayed XOR post proc.
+                if (x_ref_d64_) // previous delayed XOR post proc.
                     xor_decode(bman);
 
                 row_idx = dec.get_32();
@@ -4400,26 +4401,29 @@ size_t deserializer<BV, DEC>::deserialize(bvector_type&        bv,
                 const blocks_manager_type& ref_bman = ref_bv->get_blocks_manager();
                 const bm::word_t* ref_blk = ref_bman.get_block_ptr(i0, j0);
                 if (ref_blk)
-                    bv.combine_operation_with_block(i, ref_blk,
+                    bv.combine_operation_with_block(nb_i, ref_blk,
                                                     BM_IS_GAP(ref_blk), BM_OR);
                 break;
             }
         case bm::set_block_xor_ref8:
         case bm::set_block_xor_ref8_um:
-                if (x_ref_d64_ || x_ref_gap_) // previous delayed XOR post proc.
+//                if (x_ref_d64_ || x_ref_gap_) // previous delayed XOR post proc.
+                if (x_ref_d64_) // previous delayed XOR post proc.
                     xor_decode(bman);
                 row_idx = dec.get_8();
                 goto process_xor;
         case bm::set_block_xor_ref16:
         case bm::set_block_xor_ref16_um:
-                if (x_ref_d64_ || x_ref_gap_) // previous delayed XOR post proc.
+//                if (x_ref_d64_ || x_ref_gap_) // previous delayed XOR post proc.
+                if (x_ref_d64_) // previous delayed XOR post proc.
                     xor_decode(bman);
                 row_idx = dec.get_16();
                 goto process_xor;
         case bm::set_block_xor_ref32:
         case bm::set_block_xor_ref32_um:
             {
-                if (x_ref_d64_ || x_ref_gap_) // previous delayed XOR post proc.
+//                if (x_ref_d64_ || x_ref_gap_) // previous delayed XOR post proc.
+                if (x_ref_d64_) // previous delayed XOR post proc.
                     xor_decode(bman);
                 row_idx = dec.get_32();
             process_xor:
@@ -4430,7 +4434,7 @@ size_t deserializer<BV, DEC>::deserialize(bvector_type&        bv,
             process_xor_ref:
                 BM_ASSERT(ref_vect_); // reference vector has to be attached
                 x_ref_idx_ = ref_vect_->find(row_idx);
-                x_nb_ = i;
+                x_nb_ = nb_i;
                 if (x_ref_idx_ == ref_vect_->not_found())
                 {
                     BM_ASSERT(0); // XOR de-filter setup issue cannot find ref vector
@@ -4438,31 +4442,38 @@ size_t deserializer<BV, DEC>::deserialize(bvector_type&        bv,
                 }
                 if (blk)
                 {
-                    or_block_ = bman.deoptimize_block(i);
-                    bman.set_block_ptr(i, 0); // borrow OR target before XOR
+                    or_block_ = bman.deoptimize_block(nb_i);
+                    bman.set_block_ptr(nb_i, 0); // borrow OR target before XOR
                 }
             }
             continue; // important! cont to avoid inc(i)
         case bm::set_block_xor_gap_ref8:
-            if (x_ref_d64_ || x_ref_gap_) // previous delayed XOR post proc.
+//            if (x_ref_d64_ || x_ref_gap_) // previous delayed XOR post proc.
+            if (x_ref_d64_) // previous delayed XOR post proc.
                 xor_decode(bman);
             row_idx = dec.get_8();
-            x_ref_gap_ = true;
+//            x_ref_gap_ = true;
+            x_ref_d64_ = ~0ULL;
             goto process_xor_ref;
         case bm::set_block_xor_gap_ref16:
-            if (x_ref_d64_ || x_ref_gap_) // previous delayed XOR post proc.
+//            if (x_ref_d64_ || x_ref_gap_) // previous delayed XOR post proc.
+            if (x_ref_d64_) // previous delayed XOR post proc.
                 xor_decode(bman);
             row_idx = dec.get_16();
-            x_ref_gap_ = true;
+//            x_ref_gap_ = true;
+            x_ref_d64_ = ~0ULL;
             goto process_xor_ref;
         case bm::set_block_xor_gap_ref32:
-            if (x_ref_d64_ || x_ref_gap_) // previous delayed XOR post proc.
+//            if (x_ref_d64_ || x_ref_gap_) // previous delayed XOR post proc.
+            if (x_ref_d64_) // previous delayed XOR post proc.
                 xor_decode(bman);
             row_idx = dec.get_32();
-            x_ref_gap_ = true;
+//            x_ref_gap_ = true;
+            x_ref_d64_ = ~0ULL;
             goto process_xor_ref;
         case bm::set_block_xor_chain:
-            if (x_ref_d64_ || x_ref_gap_) // previous delayed XOR post proc.
+//            if (x_ref_d64_ || x_ref_gap_) // previous delayed XOR post proc.
+            if (x_ref_d64_) // previous delayed XOR post proc.
                 xor_decode(bman);
             {
                 unsigned char vbr_flag = dec.get_8(); // reserved
@@ -4504,12 +4515,13 @@ size_t deserializer<BV, DEC>::deserialize(bvector_type&        bv,
             #endif
         } // switch
 
-        ++i;
-    } while (i < bm::set_total_blocks);
+        ++nb_i;
+    } while (nb_i < bm::set_total_blocks);
 
     // process the last delayed XOR ref here
     //
-    if (x_ref_d64_ || x_ref_gap_)      // XOR post proc.
+//    if (x_ref_d64_ || x_ref_gap_)      // XOR post proc.
+    if (x_ref_d64_) // XOR post proc.
         xor_decode(bman);
 
     bv.set_new_blocks_strat(strat);
@@ -4571,9 +4583,7 @@ void deserializer<BV, DEC>::xor_decode(blocks_manager_type& bman)
         BM_ASSERT(!or_block_);
         if (xor_chain_size_)
         {
-            bm::word_t* blk = bman.deoptimize_block(i0, j0);
-            if (!blk)
-                blk = bman.check_allocate_block(x_nb_, 0);
+            bm::word_t* blk = bman.deoptimize_block(i0, j0, true);
             xor_decode_chain(blk);
         }
         xor_reset();
@@ -4587,9 +4597,9 @@ void deserializer<BV, DEC>::xor_decode(blocks_manager_type& bman)
         {
             bm::word_t* blk = bman.get_block_ptr(i0, j0);
             bm::gap_word_t* gap_block = BMGAP_PTR(ref_blk);
-            if (BM_IS_GAP(blk) && (!x_ref_d64_) && !or_block_) // two GAPs no digest
+            if (BM_IS_GAP(blk) && (x_ref_d64_==~0ULL) && !or_block_) // two GAPs no FULL digest
             {
-                BM_ASSERT(!xor_chain_size_);
+                BM_ASSERT(!xor_chain_size_); // since x_ref_d64_ == 0xFF...FF
                 bm::gap_word_t* tmp_buf = (bm::gap_word_t*)xor_block_;
                 const bm::gap_word_t* res;
                 unsigned res_len;
@@ -4613,10 +4623,7 @@ void deserializer<BV, DEC>::xor_decode(blocks_manager_type& bman)
                 ref_blk = FULL_BLOCK_REAL_ADDR;
         }
     }
-
-    bm::word_t* blk = bman.deoptimize_block(i0, j0);
-    if (!blk)
-        blk = bman.check_allocate_block(x_nb_, 0);
+    bm::word_t* blk = bman.deoptimize_block(i0, j0, true); // true to alloc
 
     if (x_ref_d64_)
     {
@@ -4629,17 +4636,27 @@ void deserializer<BV, DEC>::xor_decode(blocks_manager_type& bman)
         BM_ASSERT(xor_chain_size_ == 0);
         bm::bit_block_xor(blk, ref_blk);
     }
-
-
+    xor_reset();
     if (or_block_)
     {
         bm::bit_block_or(blk, or_block_);
         alloc_.free_bit_block(or_block_);
         or_block_ = 0;
     }
+
+    // target BLOCK post-processing
+    //
+    // check if we range setting overrides the need for block optimization
+    //
+    if (is_range_set_)
+    {
+        block_idx_type nb_from = (idx_from_ >> bm::set_block_shift);
+        block_idx_type nb_to = (idx_to_ >> bm::set_block_shift);
+        if (nb_from == x_nb_ || nb_to == x_nb_)
+            return;
+    }
     bman.optimize_bit_block(i0, j0);
 
-    xor_reset();
 }
 // ---------------------------------------------------------------------------
 
@@ -4647,7 +4664,8 @@ template<class BV, class DEC>
 void deserializer<BV, DEC>::xor_reset() BMNOEXCEPT
 {
     x_ref_idx_ = 0; x_ref_d64_ = 0; xor_chain_size_ = 0;
-    x_nb_ = 0; x_ref_gap_ = false;
+    x_nb_ = 0;
+    //x_ref_gap_ = false;
 }
 
 // ---------------------------------------------------------------------------
