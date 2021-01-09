@@ -187,7 +187,7 @@ void bit_block_xor_change64(const bm::word_t* BMRESTRICT s_block,
             w ^= (w >> 1);
             gap_count += bm::word_bitcount64(w);
             w_l = w0 & 1;
-            gap_count -= (w0 >> w_shift);  // negative value correction
+            gap_count -= unsigned(w0 >> w_shift);  // negative value correction
             gap_count -= !(w_prev ^ w_l);  // word border correction
             w_prev = (w0 >> w_shift);
         }
