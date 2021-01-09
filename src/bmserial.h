@@ -4218,7 +4218,7 @@ size_t deserializer<BV, DEC>::deserialize(bvector_type&        bv,
             #ifdef BM64ADDR
                 nb = dec.get_64();
                 BM_ASSERT(nb);
-                i += nb;
+                i += nb_i;
                 continue; // bypass ++i;
             #else
                 BM_ASSERT(0); // attempt to read 64-bit vector in 32-bit mode
