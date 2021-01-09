@@ -4203,23 +4203,23 @@ size_t deserializer<BV, DEC>::deserialize(bvector_type&        bv,
             nb = dec.get_8();
             BM_ASSERT(nb);
             nb_i += nb;
-            continue; // bypass ++i;
+            continue; // bypass ++nb_i;
         case set_block_16zero:
             nb = dec.get_16();
             BM_ASSERT(nb);
             nb_i += nb;
-            continue; // bypass ++i;
+            continue; // bypass ++nb_i;
         case set_block_32zero:
             nb = dec.get_32();
             BM_ASSERT(nb);
             nb_i += nb;
-            continue; // bypass ++i;
+            continue; // bypass ++nb_i;
         case set_block_64zero:
             #ifdef BM64ADDR
                 nb = dec.get_64();
                 BM_ASSERT(nb);
-                i += nb_i;
-                continue; // bypass ++i;
+                nb_i += nb;
+                continue; // bypass ++nb_i;
             #else
                 BM_ASSERT(0); // attempt to read 64-bit vector in 32-bit mode
                 #ifndef BM_NO_STL
@@ -4227,7 +4227,6 @@ size_t deserializer<BV, DEC>::deserialize(bvector_type&        bv,
                 #else
                     BM_THROW(BM_ERR_SERIALFORMAT);
                 #endif
-                //i = bm::set_total_blocks;
             #endif
             break;
         case set_block_aone:
@@ -4384,7 +4383,6 @@ size_t deserializer<BV, DEC>::deserialize(bvector_type&        bv,
         case bm::set_block_ref_eq:
             {
                 BM_ASSERT(ref_vect_); // reference vector has to be attached
-//                if (x_ref_d64_ || x_ref_gap_) // previous delayed XOR post proc.
                 if (x_ref_d64_) // previous delayed XOR post proc.
                     xor_decode(bman);
 
@@ -4407,14 +4405,12 @@ size_t deserializer<BV, DEC>::deserialize(bvector_type&        bv,
             }
         case bm::set_block_xor_ref8:
         case bm::set_block_xor_ref8_um:
-//                if (x_ref_d64_ || x_ref_gap_) // previous delayed XOR post proc.
                 if (x_ref_d64_) // previous delayed XOR post proc.
                     xor_decode(bman);
                 row_idx = dec.get_8();
                 goto process_xor;
         case bm::set_block_xor_ref16:
         case bm::set_block_xor_ref16_um:
-//                if (x_ref_d64_ || x_ref_gap_) // previous delayed XOR post proc.
                 if (x_ref_d64_) // previous delayed XOR post proc.
                     xor_decode(bman);
                 row_idx = dec.get_16();
@@ -4422,7 +4418,6 @@ size_t deserializer<BV, DEC>::deserialize(bvector_type&        bv,
         case bm::set_block_xor_ref32:
         case bm::set_block_xor_ref32_um:
             {
-//                if (x_ref_d64_ || x_ref_gap_) // previous delayed XOR post proc.
                 if (x_ref_d64_) // previous delayed XOR post proc.
                     xor_decode(bman);
                 row_idx = dec.get_32();
@@ -4448,31 +4443,24 @@ size_t deserializer<BV, DEC>::deserialize(bvector_type&        bv,
             }
             continue; // important! cont to avoid inc(i)
         case bm::set_block_xor_gap_ref8:
-//            if (x_ref_d64_ || x_ref_gap_) // previous delayed XOR post proc.
             if (x_ref_d64_) // previous delayed XOR post proc.
                 xor_decode(bman);
             row_idx = dec.get_8();
-//            x_ref_gap_ = true;
             x_ref_d64_ = ~0ULL;
             goto process_xor_ref;
         case bm::set_block_xor_gap_ref16:
-//            if (x_ref_d64_ || x_ref_gap_) // previous delayed XOR post proc.
             if (x_ref_d64_) // previous delayed XOR post proc.
                 xor_decode(bman);
             row_idx = dec.get_16();
-//            x_ref_gap_ = true;
             x_ref_d64_ = ~0ULL;
             goto process_xor_ref;
         case bm::set_block_xor_gap_ref32:
-//            if (x_ref_d64_ || x_ref_gap_) // previous delayed XOR post proc.
             if (x_ref_d64_) // previous delayed XOR post proc.
                 xor_decode(bman);
             row_idx = dec.get_32();
-//            x_ref_gap_ = true;
             x_ref_d64_ = ~0ULL;
             goto process_xor_ref;
         case bm::set_block_xor_chain:
-//            if (x_ref_d64_ || x_ref_gap_) // previous delayed XOR post proc.
             if (x_ref_d64_) // previous delayed XOR post proc.
                 xor_decode(bman);
             {
@@ -4520,7 +4508,6 @@ size_t deserializer<BV, DEC>::deserialize(bvector_type&        bv,
 
     // process the last delayed XOR ref here
     //
-//    if (x_ref_d64_ || x_ref_gap_)      // XOR post proc.
     if (x_ref_d64_) // XOR post proc.
         xor_decode(bman);
 
@@ -4665,7 +4652,6 @@ void deserializer<BV, DEC>::xor_reset() BMNOEXCEPT
 {
     x_ref_idx_ = 0; x_ref_d64_ = 0; xor_chain_size_ = 0;
     x_nb_ = 0;
-    //x_ref_gap_ = false;
 }
 
 // ---------------------------------------------------------------------------
