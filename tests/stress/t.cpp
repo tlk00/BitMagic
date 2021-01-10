@@ -21473,6 +21473,7 @@ void TestSparseVectorAlgo()
 
 // Debugging function to validate match findings integrity
 //
+/*
 static
 void validate_match_pairs(
     const bm::xor_scanner<bvect>::match_pairs_vector_type& mp_vect,
@@ -21500,7 +21501,7 @@ void validate_match_pairs(
         } // for j
     } // for i
 }
-
+*/
 
 static
 void TestSparseVector_XOR_Scanner()
@@ -21881,7 +21882,7 @@ void TestSparseVectorSerial()
             sv_ser.serialize(sv1, sv_lay);
             const unsigned char* buf = sv_lay.buf();
 
-            bm::sparse_vector_deserializer<sparse_vector_u32> sv_deserial;
+            //bm::sparse_vector_deserializer<sparse_vector_u32> sv_deserial;
 
             {
                 sparse_vector_u32::bvector_type bv_mask;
@@ -21950,7 +21951,7 @@ void TestSparseVectorSerial()
 
             {
 
-                bm::sparse_vector_deserializer<sparse_vector_u32> sv_deserial;
+                //bm::sparse_vector_deserializer<sparse_vector_u32> sv_deserial;
                 sparse_vector_u32 sv4(bm::use_null);
                 sv_deserial.deserialize(sv4, buf);
                 {
@@ -21974,8 +21975,8 @@ void TestSparseVectorSerial()
                 bool is_eq;
                 sparse_vector_u32::size_type pos;
                 bool found;
-//i = 59982;
-//i = 2147491602; j = 2147551230;
+                //i = 59982;
+                //i = 2147491602; j = 2147551230;
 
                 for (i = from; i < j; ++i, --j)
                 {
@@ -22013,7 +22014,6 @@ void TestSparseVectorSerial()
 
                     sv_deserial.deserialize(sv3, buf, i, j);
                     {
-                        sparse_vector_u32::size_type pos;
                         bool b = bm::sparse_vector_find_first_mismatch(sv3, sv_range, pos);
                         if (b)
                         {
@@ -23885,13 +23885,13 @@ void TestStrSparseVector()
 
        // test merge
        {
-          str_sparse_vector<char, bvect, 3> str_sv0;
+          str_sparse_vector<char, bvect, 3> str_sv00;
           str_sparse_vector<char, bvect, 3> str_sv1;
 
-          str_sv0.push_back("0");
-          str_sv0.push_back("1");
-          str_sv0.push_back("");
-          str_sv0.push_back("3");
+          str_sv00.push_back("0");
+          str_sv00.push_back("1");
+          str_sv00.push_back("");
+          str_sv00.push_back("3");
 
           str_sv1.push_back("");
           str_sv1.push_back("");
@@ -23906,22 +23906,22 @@ void TestStrSparseVector()
 
           }
 
-          str_sv0.merge(str_sv1);
+          str_sv00.merge(str_sv1);
 
-          str_sv0.get(2, str, sizeof(str));
+          str_sv00.get(2, str, sizeof(str));
           cmp = ::strcmp(str, "2");
           assert(cmp == 0);
 
           str_sv0.remap();
             {
             str_sparse_vector<char, bvect, 3> str_sv;
-            str_sv.copy_range(str_sv0, 0, 1);
+            str_sv.copy_range(str_sv00, 0, 1);
 
             str_sparse_vector<char, bvect, 3> str_sv2;
-            str_sv2.copy_range(str_sv0, 2, 3);
+            str_sv2.copy_range(str_sv00, 2, 3);
             str_sv.merge(str_sv2);
 
-            bool b = str_sv.equal(str_sv0);
+            bool b = str_sv.equal(str_sv00);
             assert(b);
 
 
@@ -23929,8 +23929,8 @@ void TestStrSparseVector()
 
             {
             str_sparse_vector<char, bvect, 3> str_sv;
-            str_sv.merge(str_sv0);
-            bool b = str_sv.equal(str_sv0);
+            str_sv.merge(str_sv00);
+            bool b = str_sv.equal(str_sv00);
             assert(!b); // destucted vector
             }
        }
@@ -31005,7 +31005,6 @@ int main(int argc, char *argv[])
 
     if (is_all || is_sv)
     {
-/*
         TestSparseVector();
 
         TestSparseVectorAlgo();
@@ -31013,7 +31012,7 @@ int main(int argc, char *argv[])
         TestSparseVectorInserter();
 
         TestSparseVectorGatherDecode();
-*/
+
         TestSparseVector_XOR_Scanner();
 
         TestSparseVectorSerial();
