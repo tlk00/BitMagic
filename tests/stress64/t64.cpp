@@ -12412,6 +12412,12 @@ void TestSparseVectorSerialization2()
         sv_serializer.set_xor_ref(&bv_ref);
         assert(sv_serializer.is_xor_ref());
 
+        bm::sparse_vector_serializer<sparse_vector_u32>::xor_sim_model_type sim_model;
+        xor_sim_params xs_params;
+        sv_serializer.compute_sim_model(sim_model, bv_ref, xs_params);
+        sv_serializer.set_sim_model(&sim_model);
+
+
         sv_serializer.serialize(sv1i, sv_lay1);
         {
             const bvect::size_type* cstat = sv_serializer.get_bv_serializer().get_compression_stat();
@@ -16713,7 +16719,7 @@ int main(int argc, char *argv[])
 
     if (is_all || is_sv)
     {
-
+/*
          TestSparseVector();
 
          TestSparseVectorAlgo();
@@ -16721,7 +16727,7 @@ int main(int argc, char *argv[])
          TestSparseVectorInserter();
 
          TestSparseVectorGatherDecode();
-
+*/
          TestSparseVectorSerial();
 
          TestSparseVectorSerialization2();
