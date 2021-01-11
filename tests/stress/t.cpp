@@ -2994,7 +2994,10 @@ bm::id64_t bit_block_calc_xor_change_digest(
     assert(bc == c_bc);
 
     block_xor_match_descr xmd;
-    bm::compute_xor_complexity_descr(block, xor_block, x_descr, xmd);
+    bm::id64_t d64 = bm::calc_block_digest0(block);
+
+    xor_scanner<bvect> xs;
+    xs.compute_xor_complexity_descr(block, d64, xor_block, x_descr, xmd);
     match_type = xmd.match_type;
     return xmd.xor_d64;
 }
@@ -24103,6 +24106,8 @@ void TestStrSparseVector()
 
        // reference test / serialization test
        {
+       str_sparse_vector<char, bvect, 32> str_sv0;
+
        auto r = str_sv0[3];
        const char* s = r.get();//str_sv0[3];
        cmp = ::strcmp(s, str0.c_str());
@@ -30639,6 +30644,8 @@ void show_help()
         << "-csv                  - test compressed sparse vectors" << endl
         << "-strsv                - test sparse vectors" << endl
         << "-cc                   - test compresses collections" << endl
+        << "-ser                  - test all serialization" << endl
+        << "-allsvser                - test serailization of sparse vectors (all)" << endl
       ;
 }
 
@@ -30655,6 +30662,8 @@ bool         is_sv = false;
 bool         is_csv = false;
 bool         is_str_sv = false;
 bool         is_c_coll = false;
+bool         is_ser = false;
+bool         is_allsvser = false;
 
 static
 int parse_args(int argc, char *argv[])
@@ -30685,7 +30694,19 @@ int parse_args(int argc, char *argv[])
             is_bvbasic = true;
             continue;
         }
-        if (arg == "-bvser" || arg == "-ser")
+        if (arg == "-ser")
+        {
+            is_all = false;
+            is_ser = true;
+            continue;
+        }
+        if (arg == "-allsvser")
+        {
+            is_all = false;
+            is_allsvser = true;
+            continue;
+        }
+        if (arg == "-bvser")
         {
             is_all = false;
             is_bvser = true;
@@ -31061,6 +31082,24 @@ int main(int argc, char *argv[])
          TestStrSparseSort();
 
          StressTestStrSparseVector();
+    }
+
+    if (is_ser || is_allsvser)
+    {
+        if (is_ser)
+        {
+            SerializationTest();
+            DesrializationTest2();
+
+            RangeDeserializationTest();
+        }
+        TestSparseVector_XOR_Scanner();
+        TestSparseVectorSerial();
+        TestSparseVectorSerialization2();
+
+        TestStrSparseVectorSerial();
+
+        TestCompressSparseVectorSerial();
     }
 
     if (is_all || is_bvops)
