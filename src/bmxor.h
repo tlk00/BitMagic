@@ -1337,7 +1337,8 @@ void xor_scanner<BV>::compute_xor_complexity_descr(
     default:
         break;
     } // switch
-/*
+#if 0
+    // Disabled as cases compression ratio degradation in some tests
     if (!xmd.xor_d64) // best metric choice did not work try best gain
     {
         if (block_gc_gain >= block_bc_gain && block_gc_gain >= block_ibc_gain)
@@ -1354,7 +1355,7 @@ void xor_scanner<BV>::compute_xor_complexity_descr(
             xmd.block_gain = block_ibc_gain; xmd.xor_d64 = ibc_digest;
         }
     }
-*/
+#endif
 }
 
 // --------------------------------------------------------------------------
