@@ -463,6 +463,7 @@ void compute_s_block_descr(const bm::word_t* BMRESTRICT block,
 
     @internal
 */
+/*
 inline
 void compute_xor_complexity_descr(
                         const bm::word_t* BMRESTRICT block,
@@ -600,7 +601,7 @@ void compute_xor_complexity_descr(
     xmd.xor_d64 = ibc_digest;
     return;
 }
-
+*/
 
 /**
     Build partial XOR product of 2 bit-blocks using digest mask
@@ -1011,13 +1012,6 @@ public:
      */
     size_type refine_match_chain();
 
-    /** Scan all candidate gap-blocks to find best XOR match
-    */
-    /*
-    bool search_best_xor_gap(const bm::word_t* block,
-                             size_type         ridx_from,
-                             size_type         ridx_to,
-                             unsigned i, unsigned j); */
 
     /**
         XOR all match blocks to target using their digest masks
@@ -1194,10 +1188,10 @@ void xor_scanner<BV>::compute_s_block_stats(const bm::word_t* block) BMNOEXCEPT
 template<typename BV>
 void xor_scanner<BV>::compute_xor_complexity_descr(
                 const bm::word_t* BMRESTRICT block,
-                bm::id64_t block_d64,
+                bm::id64_t                   block_d64,
                 const bm::word_t* BMRESTRICT xor_block,
                 bm::block_waves_xor_descr& BMRESTRICT x_descr,
-                bm::block_xor_match_descr& BMRESTRICT xmd) const BMNOEXCEPT
+                bm::block_xor_match_descr& BMRESTRICT xmd) const  BMNOEXCEPT
 {
     bm::id64_t d0 = ~block_d64;
 
@@ -1343,7 +1337,7 @@ void xor_scanner<BV>::compute_xor_complexity_descr(
     default:
         break;
     } // switch
-
+/*
     if (!xmd.xor_d64) // best metric choice did not work try best gain
     {
         if (block_gc_gain >= block_bc_gain && block_gc_gain >= block_ibc_gain)
@@ -1360,6 +1354,7 @@ void xor_scanner<BV>::compute_xor_complexity_descr(
             xmd.block_gain = block_ibc_gain; xmd.xor_d64 = ibc_digest;
         }
     }
+*/
 }
 
 // --------------------------------------------------------------------------
