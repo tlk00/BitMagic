@@ -1532,7 +1532,10 @@ public:
         if (!block && alloc)
         {
             if (!top_blocks_[i])
+            {
+                reserve_top_blocks(i+1);
                 alloc_top_subblock(i, 0);
+            }
             bm::word_t* new_block = alloc_.alloc_bit_block();
             bm::bit_block_set(new_block, 0u);
             set_block_ptr(i, j, new_block);
