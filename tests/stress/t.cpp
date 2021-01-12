@@ -2997,6 +2997,7 @@ bm::id64_t bit_block_calc_xor_change_digest(
     bm::id64_t d64 = bm::calc_block_digest0(block);
 
     xor_scanner<bvect> xs;
+    xs.compute_s_block_stats(block);
     xs.compute_xor_complexity_descr(block, d64, xor_block, x_descr, xmd);
     match_type = xmd.match_type;
     return xmd.xor_d64;
@@ -3239,7 +3240,7 @@ void TestBlockCountXORChange()
         d64 = bit_block_calc_xor_change_digest(blk, blk_xor, x_descr, match_type);
         cout << x_descr.sb_xor_gc[0] << endl;
         assert(x_descr.sb_gc[0] == 2);
-        assert(match_type == bm::e_xor_match_GC);
+        assert(match_type == bm::e_xor_match_BC);
         // next assert hides non-critical discrepancy between SIMD versions
         assert(x_descr.sb_xor_gc[0] == 1 || x_descr.sb_xor_gc[0] == 0);
         assert(d64 == 1ull);
@@ -3251,12 +3252,13 @@ void TestBlockCountXORChange()
 
         Check_XOR_Product(blk, blk_xor, d64);
 
-        blk[0] = (1 << 10) | (1 << 12); blk_xor[0] = (1 << 11);
+        blk[0] = (1 << 10) | (1 << 12) | (1 << 14) | ( 1 << 16) | (1 << 18) | (1<<19);
+        blk_xor[0] = (1 << 11) | (1 << 13) | (1 << 15) | (1 << 17);
         unsigned off = (60 * bm::set_block_digest_wave_size);
         blk[off] = (1 << 10) | (1 << 12);
 
         d64 = bit_block_calc_xor_change_digest(blk, blk_xor, x_descr, match_type);
-        assert(x_descr.sb_gc[0] == 5);
+        assert(x_descr.sb_gc[0] == 11);
         assert(x_descr.sb_xor_gc[0] == 3);
         assert((d64 & 1));
         assert(match_type == bm::e_xor_match_GC);
@@ -3279,7 +3281,7 @@ void TestBlockCountXORChange()
 
         blk_xor[off] = (1 << 10) | (1 << 11) | (1 << 12);
         d64 = bit_block_calc_xor_change_digest(blk, blk_xor, x_descr, match_type);
-        assert(x_descr.sb_gc[0] == 5);
+        assert(x_descr.sb_gc[0] == 11);
         assert(x_descr.sb_xor_gc[0] == 3);
         assert((d64 & 1) && (d64 & (1ull << 60)));
         assert(match_type == bm::e_xor_match_GC);
@@ -24102,22 +24104,24 @@ void TestStrSparseVector()
            cmp = ::strcmp(str, cs2);
            assert(cmp == 0);
        }
+   }
 
-
-       // reference test / serialization test
-       {
+   // reference test / serialization test
+   {
        str_sparse_vector<char, bvect, 32> str_sv0;
+       char str[256];
+       string str0;
 
        auto r = str_sv0[3];
-       const char* s = r.get();//str_sv0[3];
-       cmp = ::strcmp(s, str0.c_str());
+       const char* s = r.get();
+       int cmp = ::strcmp(s, str0.c_str());
        assert(cmp == 0);
        str_sv0[3] = "333";
        str_sv0.get(3, str, sizeof(str));
 
        cmp = ::strcmp(str_sv0[3].get(), "333");
        assert(cmp == 0);
-       
+
        {
            const str_sparse_vector<char, bvect, 32>& ssv = str_sv0;
            const str_sparse_vector<char, bvect, 32>::const_reference ref3 = ssv[3];
@@ -24125,13 +24129,13 @@ void TestStrSparseVector()
            cmp = ::strcmp(s, "333");
            assert(cmp == 0);
        }
-       
+
         BM_DECLARE_TEMP_BLOCK(tb)
         sparse_vector_serial_layout<str_svect_type> sv_lay;
         bm::sparse_vector_serialize<str_svect_type>(str_sv0, sv_lay, tb);
 
         str_sparse_vector<char, bvect, 32> str_sv2;
-        
+
         const unsigned char* buf = sv_lay.buf();
         int res = bm::sparse_vector_deserialize(str_sv2, buf, tb);
         if (res != 0)
@@ -24139,10 +24143,10 @@ void TestStrSparseVector()
             cerr << "De-Serialization error" << endl;
             exit(1);
         }
-        
+
         bool eq = str_sv0.equal(str_sv2);
         assert(eq);
-        
+
         str_sparse_vector<char, bvect, 64> str_sv3;   // size increase test
         buf = sv_lay.buf();
         res = bm::sparse_vector_deserialize(str_sv3, buf, tb);
@@ -24151,12 +24155,8 @@ void TestStrSparseVector()
             cerr << "De-Serialization error" << endl;
             exit(1);
         }
-
-
-       }
-
    }
-    
+
    {
        str_sparse_vector<char, bvect, 32> str_sv0;
        unsigned str_max = str_sv0.effective_max_str();
