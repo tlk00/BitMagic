@@ -1176,7 +1176,6 @@ void xor_scanner<BV>::compute_s_block_stats(const bm::word_t* block) BMNOEXCEPT
 {
     BM_ASSERT(IS_VALID_ADDR(block));
     BM_ASSERT(!BM_IS_GAP(block));
-    BM_ASSERT(ref_vect_->size() > 0);
 
     bm::compute_s_block_descr(block, x_descr_, &s_gc_, &s_bc_);
 
