@@ -1083,7 +1083,7 @@ public:
 
     static
     bm::xor_complement_match best_metric(unsigned bc, unsigned gc,
-                                        unsigned* best_metric);
+                                        unsigned* best_metric) BMNOEXCEPT;
 
     xor_matches_vector_type& get_match_vector() BMNOEXCEPT
         { return match_vect_; }
@@ -1736,13 +1736,12 @@ void xor_scanner<BV>::apply_xor_match_vector(
     } // for k
 }
 
-
 // --------------------------------------------------------------------------
-
 
 template<typename BV>
 bm::xor_complement_match
-xor_scanner<BV>::best_metric(unsigned bc, unsigned gc, unsigned* best_metric)
+xor_scanner<BV>::best_metric(unsigned bc, unsigned gc,
+                             unsigned* best_metric) BMNOEXCEPT
 {
     BM_ASSERT(best_metric);
     unsigned ibc = bm::gap_max_bits - bc;
