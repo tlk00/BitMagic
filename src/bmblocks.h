@@ -1531,9 +1531,9 @@ public:
         bm::word_t* block = this->get_block_ptr(i, j);
         if (!block && alloc)
         {
+            reserve_top_blocks(i+1);
             if (!top_blocks_[i])
             {
-                reserve_top_blocks(i+1);
                 alloc_top_subblock(i, 0);
             }
             bm::word_t* new_block = alloc_.alloc_bit_block();
