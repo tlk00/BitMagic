@@ -69,7 +69,7 @@ struct task_description
         float              fp32;
         double             fp64;
         void*              void_ptr;
-    } payload;
+    } payload0, payload1;
 
     bm::id64_t      flags;     ///< task flags to designate barriers
     unsigned        err_code;  ///< error code
@@ -88,7 +88,7 @@ struct task_description
         func = f; argp = argptr;
         ret = 0; ctx0 = c0; ctx1 = c1;
         param0 = p0; flags = 0; err_code = done = 0;
-        payload.u64 = 0;
+        payload0.u64 = payload1.u64 = 0;
     }
 };
 
