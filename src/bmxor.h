@@ -286,14 +286,23 @@ struct match_pair
     XOR match chain
     @internal
  */
-template<typename BLOCK_IDX>
-struct block_match_chain
+template<typename BLOCK_IDX> struct block_match_chain
 {
-    BLOCK_IDX   nb;
-    unsigned    chain_size;
-    unsigned    ref_idx[64];
-    bm::id64_t  xor_d64[64];
+    BLOCK_IDX                nb;
+    unsigned                 chain_size;
+    unsigned                 ref_idx[64];
+    bm::id64_t               xor_d64[64];
     bm::xor_complement_match match;
+
+    bool operator==(const block_match_chain& bmc) const BMNOEXCEPT
+    {
+        if (nb != bmc.nb || chain_size != bmc.chain_size || match != bmc.match)
+            return false;
+        for (unsigned i = 0; i < chain_size; ++i)
+            if (ref_idx[i] != bmc.ref_idx[i] || xor_d64[i] != bmc.xor_d64[i])
+                return false;
+        return true;
+    }
 };
 
 /**
@@ -766,7 +775,6 @@ protected:
 
     @internal
 */
-
 template<typename BV>
 struct xor_sim_model
 {

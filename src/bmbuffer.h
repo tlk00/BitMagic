@@ -634,9 +634,9 @@ public:
     }
 
     /** Get low-level buffer access */
-    buffer_type& get_buffer() { return buffer_; }
+    buffer_type& get_buffer() BMNOEXCEPT { return buffer_; }
     /** Get low-level buffer access */
-    const buffer_type& get_buffer() const { return buffer_; }
+    const buffer_type& get_buffer() const BMNOEXCEPT { return buffer_; }
 
     /*! remapping: vect[idx] = matrix[idx, vect[idx] ]
     */
@@ -813,6 +813,29 @@ public:
             }
         }
     }
+
+    /**
+        Check if two matrix objects matches on the content
+    */
+    bool equal(const dynamic_heap_matrix<Val, BVAlloc>& dhm) const BMNOEXCEPT
+    {
+        if (cols() != dhm.cols())
+            return false;
+        if (rows() != dhm.rows())
+            return false;
+        for (size_type i = 0; i < rows_; ++i)
+        {
+            for (size_type j = i+1; j < cols_; ++j)
+            {
+                const value_type& v1 = get(i,j);
+                const value_type& v2 = dhm.get(i, j);
+                if (!(v1 == v2))
+                    return false;
+            } // j
+        } // i
+        return true;
+    }
+
     /**
         Sum of row elements
      */

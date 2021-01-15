@@ -11612,6 +11612,24 @@ void SerializationBufferTest()
    cout << " ----------------------------------- Serialization Buffer test OK" << endl;
 }
 
+static
+void Check_SimModel(const bm::xor_sim_model<bvect>& sim1,
+                    const bm::xor_sim_model<bvect>& sim2)
+{
+    bool eq = sim1.bv_blocks.equal(sim2.bv_blocks);
+    if (!eq)
+    {
+        cerr << "Sim model Blocks vectors does not match! (BV)" << std::endl;
+        assert(0); exit(1);
+    }
+    eq = sim1.matr.equal(sim2.matr);
+    if (!eq)
+    {
+        cerr << "Sim model Blocks vectors does not match! (Matr)" << std::endl;
+        assert(0); exit(1);
+    }
+}
+
 
 static
 void SerializationCompressionLevelsTest()
@@ -12128,7 +12146,36 @@ void SerializationCompressionLevelsTest()
         //bms.set_bookmarks(true);
         
         bm::serializer<bvect>::xor_sim_model_type sim_model;
-        bms.compute_sim_model(sim_model, bv_ref, bm::xor_sim_params());
+
+        {
+            bm::compute_sim_matrix_plan_builder<bvect> pbuilder;
+            bm::compute_sim_matrix_plan_builder<bvect>::task_batch tbatch;
+            bm::xor_sim_params       xor_search_params;
+
+            pbuilder.build_plan(tbatch, sim_model,
+                                bv_ref, xor_search_params);
+
+            typedef
+            bm::thread_pool<bm::task_description*, bm::spin_lock<bm::pad0_struct> > pool_type;
+            pool_type tpool;  // our thread pool here (no threads created yet)
+            tpool.start(1); // start the threads
+            {
+                bm::thread_pool_executor<pool_type> exec;
+                exec.run(tpool, tbatch, true);
+            }
+            tpool.set_stop_mode(pool_type::stop_when_done);
+            tpool.join();
+            {
+                bm::serializer<bvect>::xor_sim_model_type sim_model_c;
+                bms.compute_sim_model(sim_model_c, bv_ref, xor_search_params);
+                Check_SimModel(sim_model_c, sim_model);
+            }
+        }
+
+
+        //bms.compute_sim_model(sim_model, bv_ref, bm::xor_sim_params());
+
+
         bms.set_sim_model(&sim_model);
 
         bm::serializer<bvect>::buffer buf;
@@ -12179,7 +12226,35 @@ void SerializationCompressionLevelsTest()
         bms.set_curr_ref_idx(0);
 
         bm::serializer<bvect>::xor_sim_model_type sim_model;
-        bms.compute_sim_model(sim_model, bv_ref, bm::xor_sim_params());
+///        bms.compute_sim_model(sim_model, bv_ref, bm::xor_sim_params());
+
+        {
+            bm::compute_sim_matrix_plan_builder<bvect> pbuilder;
+            bm::compute_sim_matrix_plan_builder<bvect>::task_batch tbatch;
+            bm::xor_sim_params       xor_search_params;
+
+            pbuilder.build_plan(tbatch, sim_model,
+                                bv_ref, xor_search_params);
+
+            typedef
+            bm::thread_pool<bm::task_description*, bm::spin_lock<bm::pad0_struct> > pool_type;
+            pool_type tpool;  // our thread pool here (no threads created yet)
+            tpool.start(3); // start the threads
+            {
+                bm::thread_pool_executor<pool_type> exec;
+                exec.run(tpool, tbatch, true);
+            }
+            tpool.set_stop_mode(pool_type::stop_when_done);
+            tpool.join();
+            {
+                bm::serializer<bvect>::xor_sim_model_type sim_model_c;
+                bms.compute_sim_model(sim_model_c, bv_ref, xor_search_params);
+                Check_SimModel(sim_model_c, sim_model);
+            }
+        }
+
+
+
         bms.set_sim_model(&sim_model);
 
         bm::serializer<bvect>::buffer buf;
@@ -13409,7 +13484,7 @@ void TestSparseVectorSerialization2()
         bm::sparse_vector_serial_layout<sparse_vector_u32> sv_lay1, sv_lay2, sv_lay3;
 
 
-        for (unsigned i = 0; i < 65536; i+=2)
+        for (unsigned i = 0; i < 3*65536; i+=2)
         {
             sv1i[i] = 4;
             sv2i[i] = 8;
@@ -13430,7 +13505,33 @@ void TestSparseVectorSerialization2()
             assert(sv_serializer.is_xor_ref());
 
             bm::sparse_vector_serializer<sparse_vector_u32>::xor_sim_model_type sim_model;
-            sv_serializer.compute_sim_model(sim_model, bv_ref, bm::xor_sim_params());
+//            sv_serializer.compute_sim_model(sim_model, bv_ref, bm::xor_sim_params());
+
+            {
+                bm::compute_sim_matrix_plan_builder<bvect> pbuilder;
+                bm::compute_sim_matrix_plan_builder<bvect>::task_batch tbatch;
+                bm::xor_sim_params       xor_search_params;
+
+                pbuilder.build_plan(tbatch, sim_model,
+                                    bv_ref, xor_search_params);
+
+                typedef
+                bm::thread_pool<bm::task_description*, bm::spin_lock<bm::pad0_struct> > pool_type;
+                pool_type tpool;  // our thread pool here (no threads created yet)
+                tpool.start(2); // start the threads
+                {
+                    bm::thread_pool_executor<pool_type> exec;
+                    exec.run(tpool, tbatch, true);
+                }
+                tpool.set_stop_mode(pool_type::stop_when_done);
+                tpool.join();
+                {
+                    bm::serializer<bvect>::xor_sim_model_type sim_model_c;
+                    sv_serializer.compute_sim_model(sim_model_c, bv_ref, xor_search_params);
+                    Check_SimModel(sim_model_c, sim_model);
+                }
+            }
+
             sv_serializer.set_sim_model(&sim_model);
 
             sv_serializer.serialize(sv1i, sv_lay1);
@@ -13441,12 +13542,12 @@ void TestSparseVectorSerialization2()
             sv_serializer.serialize(sv2i, sv_lay2);
             {
                 const bvect::size_type* cstat = sv_serializer.get_bv_serializer().get_compression_stat();
-                assert(cstat[bm::set_block_ref_eq]==1 || cstat[bm::set_block_xor_ref32] == 1);
+                assert(cstat[bm::set_block_ref_eq]>=1 || cstat[bm::set_block_xor_ref32] >= 1);
             }
             sv_serializer.serialize(sv3i, sv_lay3);
             {
                 const bvect::size_type* cstat = sv_serializer.get_bv_serializer().get_compression_stat();
-                assert(cstat[bm::set_block_ref_eq]==1 || cstat[bm::set_block_xor_ref32] == 1);
+                assert(cstat[bm::set_block_ref_eq]>=1 || cstat[bm::set_block_xor_ref32] >= 1);
             }
 
             // ----------
@@ -21513,13 +21614,17 @@ void TestSparseVector_XOR_Scanner()
 {
     cout << " -------------------------- TestSparseVector_XOR_Scanner()" << endl;
     BM_DECLARE_TEMP_BLOCK(tb)
-//    BM_DECLARE_TEMP_BLOCK(tb2)
 
     // XOR scanner EQ test
     {{
         bm::sparse_vector<unsigned, bvect> sv;
-        sv.push_back(9);
-        sv.push_back(9);
+        for (unsigned i = 0; i < 3; ++i)
+        {
+            sv.push_back(9);
+            sv.push_back(9);
+            sv.push_back(0);
+        }
+
 
         bm::xor_scanner<bvect> xscan;
         bm::xor_scanner<bvect>::bv_ref_vector_type r_vect;
@@ -21545,6 +21650,38 @@ void TestSparseVector_XOR_Scanner()
         //assert(xscan.is_eq_found());
         idx = xscan.get_ref_vector().get_row_idx(idx);
         assert(idx == 3); // matrix row 3
+
+        // parallel prog
+        {
+            bm::compute_sim_matrix_plan_builder<bvect> pbuilder;
+            bm::compute_sim_matrix_plan_builder<bvect>::task_batch tbatch;
+            bm::xor_sim_model<bvect> sim_model;
+            bm::xor_sim_params       xor_search_params;
+
+            pbuilder.build_plan(tbatch, sim_model,
+                                r_vect, xor_search_params);
+
+            typedef
+            bm::thread_pool<bm::task_description*, bm::spin_lock<bm::pad0_struct> > pool_type;
+            pool_type tpool;  // our thread pool here (no threads created yet)
+            tpool.start(1); // start the threads
+            {
+                bm::thread_pool_executor<pool_type> exec;
+                exec.run(tpool, tbatch, true);
+            }
+            tpool.set_stop_mode(pool_type::stop_when_done);
+            tpool.join();
+
+            assert(sim_model.bv_blocks.test(0));
+            assert(sim_model.matr.cols() == 1);
+            assert(sim_model.matr.rows() == 2);
+            auto mc_00 = sim_model.matr.get(0, 0);
+            assert(mc_00.match == e_xor_match_EQ);
+
+        }
+
+
+
     }}
 
     {{
@@ -21949,7 +22086,6 @@ void TestSparseVectorSerial()
             sv1.sync_size();
 
             sparse_vector_serial_layout<sparse_vector_u32> sv_lay;
-//sv_ser.set_xor_ref(true);
 
             sv_ser.serialize(sv1, sv_lay);
             const unsigned char* buf = sv_lay.buf();
@@ -25101,11 +25237,12 @@ void TestStrSparseVector_FindEq()
 }
 
 
+
 static
 void TestStrSparseVectorSerial()
 {
    cout << "---------------------------- TestStrSparseVectorSerial()" << endl;
-/*
+
     {
        str_sparse_vector<char, bvect, 32> str_sv1;
        str_sparse_vector<char, bvect, 32> str_sv2;
@@ -25299,7 +25436,7 @@ void TestStrSparseVectorSerial()
 
     }
     cout << " ok" << endl;
-*/
+
 
     cout << "Stress deserialization (AND mask) (use NULL) and Range[..]" << endl;
     {
@@ -25419,7 +25556,33 @@ void TestStrSparseVectorSerial()
 
         bm::sparse_vector_serializer<str_sv_type>::xor_sim_model_type sim_model;
         xor_sim_params xs_params;
-        sv_serializer.compute_sim_model(sim_model, bv_ref, xs_params);
+        //sv_serializer.compute_sim_model(sim_model, bv_ref, xs_params);
+
+        // parallel sim-model compute
+        {
+            bm::compute_sim_matrix_plan_builder<bvect> pbuilder;
+            bm::compute_sim_matrix_plan_builder<bvect>::task_batch tbatch;
+            bm::xor_sim_params       xor_search_params;
+
+            pbuilder.build_plan(tbatch, sim_model,
+                                bv_ref, xor_search_params);
+
+            typedef
+            bm::thread_pool<bm::task_description*, bm::spin_lock<bm::pad0_struct> > pool_type;
+            pool_type tpool;  // our thread pool here (no threads created yet)
+            tpool.start(4); // start the threads
+            {
+                bm::thread_pool_executor<pool_type> exec;
+                exec.run(tpool, tbatch, true);
+            }
+            tpool.set_stop_mode(pool_type::stop_when_done);
+            tpool.join();
+            {
+                bm::sparse_vector_serializer<str_sv_type>::xor_sim_model_type sim_model_c;
+                sv_serializer.compute_sim_model(sim_model_c, bv_ref, xs_params);
+                Check_SimModel(sim_model_c, sim_model);
+            }
+        }
 
         sv_serializer.set_xor_ref(&bv_ref);
         sv_serializer.set_sim_model(&sim_model);
@@ -25466,11 +25629,7 @@ void TestStrSparseVectorSerial()
         bv_ref_d.add_vectors(sv2o.get_bmatrix());
         bv_ref_d.add_vectors(sv1o.get_bmatrix());
 
-        bm::sparse_vector_serializer<str_sv_type>::xor_sim_model_type sim_model2;
-        sv_serializer.compute_sim_model(sim_model2, bv_ref_d, xs_params);
-
         sv_deserial.set_xor_ref(&bv_ref_d);
-        sv_serializer.set_sim_model(&sim_model2);
 
         sv_deserial.deserialize(sv1o, buf, false);
         bool eq = sv1i.equal(sv1o);
@@ -25496,10 +25655,6 @@ void TestStrSparseVectorSerial()
     cout << "Test data-frame XOR compression - OK" << endl;
 
     // -------------------------------------------------
-
-
-
-
 
 
    cout << "---------------------------- TestStrSparseVectorSerial() OK" << endl;
@@ -31088,6 +31243,8 @@ int main(int argc, char *argv[])
     {
         if (is_ser)
         {
+            SerializationCompressionLevelsTest();
+
             SerializationTest();
             DesrializationTest2();
 
@@ -31095,6 +31252,7 @@ int main(int argc, char *argv[])
         }
         TestSparseVector_XOR_Scanner();
         TestSparseVectorSerial();
+
         TestSparseVectorSerialization2();
 
         TestStrSparseVectorSerial();
