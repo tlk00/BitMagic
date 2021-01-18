@@ -297,10 +297,18 @@ template<typename BLOCK_IDX> struct block_match_chain
     bool operator==(const block_match_chain& bmc) const BMNOEXCEPT
     {
         if (nb != bmc.nb || chain_size != bmc.chain_size || match != bmc.match)
+        {
             return false;
+        }
         for (unsigned i = 0; i < chain_size; ++i)
-            if (ref_idx[i] != bmc.ref_idx[i] || xor_d64[i] != bmc.xor_d64[i])
+        {
+            if (ref_idx[i] != bmc.ref_idx[i])
                 return false;
+            if (match == e_xor_match_EQ)
+                continue;
+            if (xor_d64[i] != bmc.xor_d64[i])
+                return false;
+        }
         return true;
     }
 };
@@ -564,40 +572,41 @@ void bit_block_xor(bm::word_t* target_block, const bm::word_t*  xor_block,
     BM_ASSERT(xor_block);
     BM_ASSERT(digest);
 
-    // TODO: SIMD
-    //
-
-    while (digest)
-    {
-        bm::id64_t t = bm::bmi_blsi_u64(digest); // d & -d;
-        unsigned wave = bm::word_bitcount64(t - 1);
-        unsigned off = wave * bm::set_block_digest_wave_size;
-
-    #ifdef BM64OPT
-        const bm::id64_t* xor_sub_block = (const bm::id64_t*)(xor_block + off);
-        bm::id64_t* t_sub_block = (bm::id64_t*)(target_block + off);
-        const bm::id64_t* t_sub_block_end = (t_sub_block + bm::set_block_digest_wave_size/2);
-        for (; t_sub_block < t_sub_block_end; t_sub_block+=4, xor_sub_block+=4)
-        {
-            t_sub_block[0] ^= xor_sub_block[0];
-            t_sub_block[1] ^= xor_sub_block[1];
-            t_sub_block[2] ^= xor_sub_block[2];
-            t_sub_block[3] ^= xor_sub_block[3];
-        } // for
+    #ifdef VECT_BIT_BLOCK_XOR_2WAY
+        VECT_BIT_BLOCK_XOR_2WAY(target_block, xor_block, digest);
     #else
-        const bm::word_t* xor_sub_block = xor_block + off;
-        bm::word_t* t_sub_block = target_block + off;
-        const bm::word_t* t_sub_block_end = t_sub_block + bm::set_block_digest_wave_size;
-        for (; t_sub_block < t_sub_block_end; t_sub_block+=4, xor_sub_block+=4)
+        while (digest)
         {
-            t_sub_block[0] ^= xor_sub_block[0];
-            t_sub_block[1] ^= xor_sub_block[1];
-            t_sub_block[2] ^= xor_sub_block[2];
-            t_sub_block[3] ^= xor_sub_block[3];
-        } // for
+            bm::id64_t t = bm::bmi_blsi_u64(digest); // d & -d;
+            unsigned wave = bm::word_bitcount64(t - 1);
+            unsigned off = wave * bm::set_block_digest_wave_size;
+
+        #ifdef BM64OPT
+            const bm::id64_t* xor_sub_block = (const bm::id64_t*)(xor_block + off);
+            bm::id64_t* t_sub_block = (bm::id64_t*)(target_block + off);
+            const bm::id64_t* t_sub_block_end = (t_sub_block + bm::set_block_digest_wave_size/2);
+            for (; t_sub_block < t_sub_block_end; t_sub_block+=4, xor_sub_block+=4)
+            {
+                t_sub_block[0] ^= xor_sub_block[0];
+                t_sub_block[1] ^= xor_sub_block[1];
+                t_sub_block[2] ^= xor_sub_block[2];
+                t_sub_block[3] ^= xor_sub_block[3];
+            } // for
+        #else
+            const bm::word_t* xor_sub_block = xor_block + off;
+            bm::word_t* t_sub_block = target_block + off;
+            const bm::word_t* t_sub_block_end = t_sub_block + bm::set_block_digest_wave_size;
+            for (; t_sub_block < t_sub_block_end; t_sub_block+=4, xor_sub_block+=4)
+            {
+                t_sub_block[0] ^= xor_sub_block[0];
+                t_sub_block[1] ^= xor_sub_block[1];
+                t_sub_block[2] ^= xor_sub_block[2];
+                t_sub_block[3] ^= xor_sub_block[3];
+            } // for
+        #endif
+            digest = bm::bmi_bslr_u64(digest); // d &= d - 1;
+        } // while
     #endif
-        digest = bm::bmi_bslr_u64(digest); // d &= d - 1;
-    } // while
 }
 
 /**

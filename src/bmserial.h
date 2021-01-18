@@ -1777,6 +1777,68 @@ template<class BV>
 unsigned char
 serializer<BV>::find_bit_best_encoding(const bm::word_t* block) BMNOEXCEPT
 {
+    // experimental code
+#if 0
+    {
+        const float bie_bits_per_int = compression_level_ < 6 ? 3.75f : 2.5f;
+
+        unsigned wave_matches[e_bit_end] = {0, };
+
+        bm::block_waves_xor_descr x_descr;
+        unsigned s_gc, s_bc;
+        bm::compute_s_block_descr(block, x_descr, &s_gc, &s_bc);
+        const unsigned wave_max_bits = bm::set_block_digest_wave_size * 32;
+
+        for (unsigned i = 0; i < bm::block_waves; ++i)
+        {
+            s_gc =  x_descr.sb_gc[i];
+            s_bc = x_descr.sb_bc[i];
+            unsigned curr_best;
+            bm::bit_representation best_rep =
+                bm::best_representation(s_bc, s_gc, wave_max_bits, bie_bits_per_int, &curr_best);
+            wave_matches[best_rep]++;
+        } // for
+        unsigned sum_cases = 0;
+        bool sub_diff = false;
+        unsigned v_count = 0;
+        for (unsigned i = 0; i < e_bit_end; ++i)
+        {
+            sum_cases += wave_matches[i];
+            if (wave_matches[i] != 0 && wave_matches[i] < 64)
+            {
+                sub_diff = true; v_count++;
+            }
+        }
+        if (sub_diff)
+        {
+            std::cout << "-" << v_count;
+            if (v_count > 2)
+            {
+                for (unsigned i=0; i < e_bit_end; ++i)
+                {
+                    if (wave_matches[i])
+                    {
+                        switch (i)
+                        {
+                        case e_bit_GAP: std::cout << " G" << wave_matches[i]; break;
+                        case e_bit_INT: std::cout << " I" << wave_matches[i]; break;
+                        case e_bit_IINT: std::cout << "iI" << wave_matches[i]; break;
+                        case e_bit_1: std::cout << " 1s"  << wave_matches[i]; break;
+                        case e_bit_0: std::cout << " 0s" << wave_matches[i]; break;
+                        case e_bit_bit: std::cout << " B" << wave_matches[i]; break;
+                        }
+                    }
+                } // for
+                std::cout << " |";
+            }
+        }
+        else
+        {
+            //std::cout << "=";
+        }
+        BM_ASSERT(sum_cases == 64);
+    }
+#endif
     reset_models();
     
     if (compression_level_ >= 5)

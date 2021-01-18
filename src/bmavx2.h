@@ -3003,6 +3003,50 @@ void avx2_bit_block_xor(bm::word_t*  target_block,
 }
 
 
+/**
+    Build partial XOR product of 2 bit-blocks using digest mask
+
+    @param target_block - target ^= xor_block
+    @param xor_block - arg1
+    @param digest - mask for each block wave to XOR (1)
+
+    @ingroup AVX2
+    @internal
+*/
+inline
+void avx2_bit_block_xor_2way(bm::word_t* target_block,
+                             const bm::word_t*  xor_block,
+                             bm::id64_t digest) BMNOEXCEPT
+{
+    while (digest)
+    {
+        bm::id64_t t = bm::bmi_blsi_u64(digest); // d & -d;
+        unsigned wave = _mm_popcnt_u64(t - 1);
+        unsigned off = wave * bm::set_block_digest_wave_size;
+
+        const __m256i* sub_block = (const __m256i*) (xor_block + off);
+        __m256i* t_sub_block = (__m256i*)(target_block + off);
+
+        __m256i mA, mB, mC, mD;
+        mA = _mm256_xor_si256(_mm256_load_si256(sub_block),
+                              _mm256_load_si256(t_sub_block));
+        mB = _mm256_xor_si256(_mm256_load_si256(sub_block+1),
+                              _mm256_load_si256(t_sub_block+1));
+        mC = _mm256_xor_si256(_mm256_load_si256(sub_block+2),
+                              _mm256_load_si256(t_sub_block+2));
+        mD = _mm256_xor_si256(_mm256_load_si256(sub_block+3),
+                              _mm256_load_si256(t_sub_block+3));
+
+        _mm256_store_si256(t_sub_block,   mA);
+        _mm256_store_si256(t_sub_block+1, mB);
+        _mm256_store_si256(t_sub_block+2, mC);
+        _mm256_store_si256(t_sub_block+3, mD);
+
+        digest = bm::bmi_bslr_u64(digest); // d &= d - 1;
+    } // while
+
+}
+
 
 
 #ifdef __GNUG__
@@ -3135,6 +3179,9 @@ void avx2_bit_block_xor(bm::word_t*  target_block,
 
 #define VECT_BIT_BLOCK_XOR(t, src, src_xor, d) \
     avx2_bit_block_xor(t, src, src_xor, d)
+
+#define VECT_BIT_BLOCK_XOR_2WAY(t, src_xor, d) \
+    avx2_bit_block_xor_2way(t, src_xor, d)
 
 #define VECT_GAP_BFIND(buf, pos, is_set) \
     avx2_gap_bfind(buf, pos, is_set)

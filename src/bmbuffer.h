@@ -830,7 +830,9 @@ public:
                 const value_type& v1 = get(i,j);
                 const value_type& v2 = dhm.get(i, j);
                 if (!(v1 == v2))
+                {
                     return false;
+                }
             } // j
         } // i
         return true;

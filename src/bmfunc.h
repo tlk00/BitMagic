@@ -9503,6 +9503,83 @@ SZ count_nz(const VT* arr, SZ arr_size)
 }
 
 // --------------------------------------------------------------
+// Best representation
+// --------------------------------------------------------------
+
+/// Possible representations for bit sets
+///
+/// @internal
+enum bit_representation
+{
+    e_bit_GAP = 0, ///< GAPs
+    e_bit_INT,     ///< Int list
+    e_bit_IINT,    ///< Inverted int list
+    e_bit_1,       ///< all 1s
+    e_bit_0,       ///< all 0s (empty block)
+    e_bit_bit,   ///< uncompressed bit-block
+    e_bit_end
+};
+
+/**
+    Detect best representation for serialization for a block or sub-block
+    @param gc - gap count
+    @param bc - bit count
+    @param max_bits - total number of bits in block
+    @param bie_bits_per_int - number of bits per int in the compression scheme
+    @param best_metric - [out] - best metric (number of bits or gaps)
+
+    @return representation metric
+ */
+inline
+bm::bit_representation best_representation(unsigned gc,
+                                           unsigned bc,
+                                           unsigned max_bits,
+                                           float bie_bits_per_int,
+                                           unsigned* best_metric) BMNOEXCEPT
+{
+    if (!bc)
+    {
+        *best_metric = bc;
+        return e_bit_0;
+    }
+    if (bc == max_bits)
+    {
+        *best_metric = 0;
+        return e_bit_1;
+    }
+
+    unsigned ibc = max_bits - bc;
+    if (gc < bc) // GC < BC
+    {
+        if (gc <= ibc)
+        {
+            *best_metric = gc;
+            float cost_in_bits = gc * bie_bits_per_int;
+            if (cost_in_bits >= max_bits)
+                return e_bit_bit;
+            return e_bit_GAP;
+        }
+    }
+    else // GC >= BC
+    {
+        if (bc <= ibc)
+        {
+            *best_metric = bc;
+            float cost_in_bits = bc * bie_bits_per_int;
+            if (cost_in_bits >= max_bits)
+                return e_bit_bit;
+            return e_bit_INT;
+        }
+    }
+    *best_metric = ibc;
+    float cost_in_bits = ibc * bie_bits_per_int;
+    if (cost_in_bits >= max_bits)
+        return e_bit_bit;
+    return e_bit_IINT;
+}
+
+
+// --------------------------------------------------------------
 // Functions to work with int values stored in 64-bit pointers
 // --------------------------------------------------------------
 

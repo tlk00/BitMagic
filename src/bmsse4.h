@@ -1685,7 +1685,7 @@ bool sse42_shift_r1_and(__m128i* block,
 inline
 void sse42_bit_block_xor(bm::word_t*  target_block,
                    const bm::word_t*  block, const bm::word_t*  xor_block,
-                   bm::id64_t digest)
+                   bm::id64_t digest) BMNOEXCEPT
 {
     for (unsigned i = 0; i < bm::block_waves; ++i)
     {
@@ -1740,6 +1740,63 @@ void sse42_bit_block_xor(bm::word_t*  target_block,
             _mm_store_si128(t_sub_block+7, _mm_load_si128(sub_block+7));
         }
     } // for i
+}
+
+/**
+    Build partial XOR product of 2 bit-blocks using digest mask
+
+    @param target_block - target ^= xor_block
+    @param xor_block - arg1
+    @param digest - mask for each block wave to XOR (if 1)
+
+    @ingroup SSE4
+    @internal
+*/
+inline
+void sse42_bit_block_xor_2way(bm::word_t* target_block,
+                              const bm::word_t*  xor_block,
+                              bm::id64_t digest) BMNOEXCEPT
+{
+    while (digest)
+    {
+        bm::id64_t t = bm::bmi_blsi_u64(digest); // d & -d;
+        unsigned wave = _mm_popcnt_u64(t - 1);
+        unsigned off = wave * bm::set_block_digest_wave_size;
+
+        const __m128i* sub_block = (const __m128i*) (xor_block + off);
+        __m128i* t_sub_block = (__m128i*)(target_block + off);
+
+        __m128i mA, mB, mC, mD;
+        mA = _mm_xor_si128(_mm_load_si128(sub_block),
+                              _mm_load_si128(t_sub_block));
+        mB = _mm_xor_si128(_mm_load_si128(sub_block+1),
+                              _mm_load_si128(t_sub_block+1));
+        mC = _mm_xor_si128(_mm_load_si128(sub_block+2),
+                              _mm_load_si128(t_sub_block+2));
+        mD = _mm_xor_si128(_mm_load_si128(sub_block+3),
+                              _mm_load_si128(t_sub_block+3));
+
+        _mm_store_si128(t_sub_block, mA);
+        _mm_store_si128(t_sub_block+1, mB);
+        _mm_store_si128(t_sub_block+2, mC);
+        _mm_store_si128(t_sub_block+3, mD);
+
+        mA = _mm_xor_si128(_mm_load_si128(sub_block+4),
+                              _mm_load_si128(t_sub_block+4));
+        mB = _mm_xor_si128(_mm_load_si128(sub_block+5),
+                              _mm_load_si128(t_sub_block+5));
+        mC = _mm_xor_si128(_mm_load_si128(sub_block+6),
+                              _mm_load_si128(t_sub_block+6));
+        mD = _mm_xor_si128(_mm_load_si128(sub_block+7),
+                              _mm_load_si128(t_sub_block+7));
+
+        _mm_store_si128(t_sub_block+4, mA);
+        _mm_store_si128(t_sub_block+5, mB);
+        _mm_store_si128(t_sub_block+6, mC);
+        _mm_store_si128(t_sub_block+7, mD);
+
+        digest = bm::bmi_bslr_u64(digest); // d &= d - 1;
+    } // while
 }
 
 
@@ -1865,6 +1922,10 @@ void sse42_bit_block_xor(bm::word_t*  target_block,
 
 #define VECT_BIT_BLOCK_XOR(t, src, src_xor, d) \
     sse42_bit_block_xor(t, src, src_xor, d)
+
+#define VECT_BIT_BLOCK_XOR_2WAY(t, src_xor, d) \
+    sse42_bit_block_xor_2way(t, src_xor, d)
+
 
 #define VECT_GAP_BFIND(buf, pos, is_set) \
     sse42_gap_bfind(buf, pos, is_set)
