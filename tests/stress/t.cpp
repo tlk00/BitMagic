@@ -11626,6 +11626,49 @@ void Check_SimModel(const bm::xor_sim_model<bvect>& sim1,
     if (!eq)
     {
         cerr << "Sim model Blocks vectors does not match! (Matr)" << std::endl;
+        std::this_thread::sleep_for (std::chrono::seconds(1));
+        eq = sim1.matr.equal(sim2.matr);
+        if (eq)
+        {
+            cerr << "Race!" << endl;
+        }
+
+        auto cols = sim1.matr.cols();
+        auto rows = sim1.matr.rows();
+        for (unsigned i = 0; i < rows; ++i)
+        {
+            for (unsigned j = i+1; j < cols; ++j)
+            {
+                auto v1 = sim1.matr.get(i,j);
+                auto v2 = sim2.matr.get(i, j);
+                if (!(v1 == v2))
+                {
+                    std::cerr << " Mismatch at: " << i << ":" << j << endl;
+                    if (v1.chain_size != v2.chain_size)
+                        cerr << "Chain size mismatch" << endl;
+                    std::cerr << "chains=" << v1.chain_size << " " << v2.chain_size << endl;
+
+                    if (v1.nb != v2.nb)
+                        std::cerr << "NB mismatch!" << endl;
+                    if (v1.match != v2.match)
+                        std::cerr << "XOR match type  mismatch!" << endl;
+                    cerr << "Match type = " << v1.match << endl;
+
+                    auto chain_size = v1.chain_size;
+                    assert(chain_size < 64);
+                    for (unsigned k = 0; k < chain_size; ++k)
+                        if (v1.ref_idx[k] != v2.ref_idx[k])
+                            std::cerr << "refs " << v1.ref_idx[k] << " " << v2.ref_idx[k] << " ";
+                    std::cerr << endl;
+                    for (unsigned k = 0; k < chain_size; ++k)
+                        if (v1.xor_d64[k] != v2.xor_d64[k])
+                            std::cerr << "D64 " << v1.xor_d64[k] << " " << v2.xor_d64[k];
+                    std::cerr << endl;
+
+                }
+            } // j
+        } // i
+
         assert(0); exit(1);
     }
 }
@@ -30743,6 +30786,7 @@ struct TestTaskBuilder
     }
 };
 
+static
 void TestTasks()
 {
     std::cout << " ----------------------------- TestTasks() " << endl;
