@@ -9554,8 +9554,8 @@ bm::bit_representation best_representation(unsigned gc,
         if (gc <= ibc)
         {
             *best_metric = gc;
-            float cost_in_bits = gc * bie_bits_per_int;
-            if (cost_in_bits >= max_bits)
+            float cost_in_bits = float(gc) * bie_bits_per_int;
+            if (cost_in_bits >= float(max_bits))
                 return e_bit_bit;
             return e_bit_GAP;
         }
@@ -9565,15 +9565,15 @@ bm::bit_representation best_representation(unsigned gc,
         if (bc <= ibc)
         {
             *best_metric = bc;
-            float cost_in_bits = bc * bie_bits_per_int;
-            if (cost_in_bits >= max_bits)
+            float cost_in_bits = float(bc) * bie_bits_per_int;
+            if (cost_in_bits >= float(max_bits))
                 return e_bit_bit;
             return e_bit_INT;
         }
     }
     *best_metric = ibc;
-    float cost_in_bits = ibc * bie_bits_per_int;
-    if (cost_in_bits >= max_bits)
+    float cost_in_bits = float(ibc) * bie_bits_per_int;
+    if (cost_in_bits >= float(max_bits))
         return e_bit_bit;
     return e_bit_IINT;
 }
