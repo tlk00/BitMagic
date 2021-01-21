@@ -30729,6 +30729,66 @@ void TestHeapVector()
 }
 
 static
+void TestSQueue()
+{
+    cout << " ------------------------------ TestSQueue()" << endl;
+
+    typedef bm::simple_queue<unsigned, bvect::allocator_type, true> squeue_type;
+
+    {
+        squeue_type sq;
+        assert(sq.empty());
+        sq.reserve(1);
+        assert(sq.empty());
+
+        bool b;
+        b = sq.try_push(100);
+        assert(b);
+        assert(!sq.empty());
+
+        unsigned v;
+        v = sq.front();
+        assert(v == 100);
+        sq.pop();
+        assert(sq.empty());
+
+    }
+
+    {
+        std::vector<unsigned> vect { 0, 1, 20, 23, 1, 10, 12 };
+
+        squeue_type sq;
+        sq.reserve(vect.size()/2);
+        for (size_t i = 0; i < vect.size(); ++i)
+        {
+            bool b = sq.try_push(vect[i]);
+            if (b)
+            {
+                auto v = sq.front();
+                assert(v == vect[0]);
+            }
+            else
+            {
+                auto sz = sq.size();
+                sq.reserve(sz + 1);
+                --i; // retry
+            }
+        } // for
+
+        for (size_t i = 0; i < vect.size(); ++i)
+        {
+            auto vv = vect.at(i);
+            auto vq = sq.front();
+            assert(vv == vq);
+            sq.pop();
+        }
+    }
+
+
+    cout << " ------------------------------ TestSQueue() OK" << endl;
+}
+
+static
 void TestXOR_RefVector()
 {
     cout << " ------------------------------ TestXOR_RefVector()" << endl;
@@ -31088,6 +31148,9 @@ int main(int argc, char *argv[])
     if (is_all || is_support)
     {
         TestHeapVector();
+
+        TestSQueue();
+
         TestXOR_RefVector();
 
         TestTasks();
