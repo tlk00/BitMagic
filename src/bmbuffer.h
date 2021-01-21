@@ -211,7 +211,12 @@ public:
         
         this->size_ = new_size;
     }
-    
+    /// adjust current size (no need to reallocate)
+    void resize_no_check(size_t new_size) BMNOEXCEPT
+    {
+        this->size_ = new_size;
+    }
+
     /// reserve new capacity (buffer content preserved)
     void reserve(size_t new_capacity)
     {
@@ -495,6 +500,21 @@ public:
         unsigned char *p = buffer_.data() + (sz * v_size);
         new(p) value_type(v);
     }
+
+    /**
+        Push back value without capacity check
+     */
+    void push_back_no_check(const value_type& v) BMNOEXCEPT
+    {
+        size_type v_size = value_size();
+        size_type sz = size();
+
+        buffer_.resize_no_check((sz+1) * v_size);
+
+        unsigned char *p = buffer_.data() + (sz * v_size);
+        new(p) value_type(v);
+    }
+
 
 protected:
 
@@ -868,6 +888,91 @@ protected:
     size_type       cols_;
     buffer_type     buffer_;
 };
+
+
+/**
+    Simple queue based on memory controlled dynamic vector.
+    Intent: better control memory allocations and exceptions than STL variant
+
+    Important assumption: value_type is simple and not throwing exceptions
+    @internal
+ */
+template<typename Value, typename BVAlloc, bool trivial_type>
+class simple_queue
+{
+public:
+    typedef Value         value_type;
+    typedef BVAlloc       bv_allocator_type;
+    typedef
+    bm::heap_vector<Value, bv_allocator_type, trivial_type>   heap_vector_type;
+    typedef typename heap_vector_type::size_type size_type;
+
+public:
+    simple_queue() {}
+
+    /**
+        Capacity reservation
+    */
+    void reserve(size_type capacity)
+    {
+        queue_vector_.reserve(capacity);
+    }
+
+    size_type size() const BMNOEXCEPT
+    {
+        return queue_vector_.size();
+    }
+
+    /**
+        Return true if queue has no elements
+    */
+    bool empty() const BMNOEXCEPT
+    {
+        return !queue_vector_.size();
+    }
+
+    /**
+        Try push into the queue if capacity allows
+    */
+    bool try_push(const value_type& v) BMNOEXCEPT
+    {
+        size_type cap = queue_vector_.capacity();
+        size_type sz = queue_vector_.size();
+        if (cap <= sz)
+            return false;
+        queue_vector_.push_back_no_check(v);
+        return true;
+    }
+
+    /**
+        Return front element
+     */
+    const value_type& front() const BMNOEXCEPT
+    {
+        BM_ASSERT(queue_vector_.size());
+        return queue_vector_[front_idx_];
+    }
+
+    /**
+        Pop the front element
+     */
+    void pop() BMNOEXCEPT
+    {
+        BM_ASSERT(front_idx_ < queue_vector_.size());
+        ++front_idx_;
+        if (front_idx_ == queue_vector_.size())
+            queue_vector_.resize(front_idx_ = 0); // reset the queue
+    }
+
+private:
+    simple_queue(const simple_queue&) = delete;
+    simple_queue& operator=(const simple_queue&) = delete;
+
+protected:
+    heap_vector_type  queue_vector_;
+    size_type         front_idx_ = 0; ///< index of the front element
+};
+
 
 
 } // namespace bm
