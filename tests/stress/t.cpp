@@ -28508,6 +28508,103 @@ void TestFindBlockDiff()
 
 }
 
+static
+void TestBlockExpandCompact()
+{
+    cout << " ------------------------------ TestBlockExpandCompact()" << endl;
+
+    unsigned pos;
+    BM_DECLARE_TEMP_BLOCK(tb1);
+    BM_DECLARE_TEMP_BLOCK(tb2);
+    BM_DECLARE_TEMP_BLOCK(tb3);
+
+    bm::id64_t d64;
+
+    bm::bit_block_set(tb1, 0);
+    //bm::bit_block_set(tb2, 0);
+
+
+    tb1.b_.w32[1] = 1;
+
+    d64 = bm::calc_block_digest0(tb1);
+    assert(d64 == 1ULL);
+
+    bm::block_compact_by_digest(tb2, tb1, d64, true);
+    bool f = bm::bit_find_first_diff(tb1, tb2, &pos);
+    assert(!f);
+
+    bm::block_expand_by_digest(tb3, tb2, d64, true);
+    f = bm::bit_find_first_diff(tb3, tb1, &pos);
+    assert(!f);
+
+
+
+    for (unsigned k = 0; k < 65535; ++k)
+    {
+        bm::bit_block_set(tb1, 0);
+        bm::set_bit(tb1, k);
+
+        d64 = bm::calc_block_digest0(tb1);
+        bm::block_compact_by_digest(tb2, tb1, d64, true);
+
+        bm::block_expand_by_digest(tb3, tb2, d64, true);
+        f = bm::bit_find_first_diff(tb3, tb1, &pos);
+        assert(!f);
+
+        bm::set_bit(tb1, 0);
+
+        d64 = bm::calc_block_digest0(tb1);
+        bm::block_compact_by_digest(tb2, tb1, d64, true);
+
+        bm::block_expand_by_digest(tb3, tb2, d64, true);
+        f = bm::bit_find_first_diff(tb3, tb1, &pos);
+        assert(!f);
+
+    } // for k
+
+
+    for (unsigned k = 0; k < 65535; ++k)
+    {
+        bm::bit_block_set(tb1, 0);
+        bm::set_bit(tb1, k);
+
+        for (unsigned j = 0; j < k; j+=rand()%512)
+        {
+            bm::set_bit(tb1, j);
+            d64 = bm::calc_block_digest0(tb1);
+            bm::block_compact_by_digest(tb2, tb1, d64, true);
+
+            bm::block_expand_by_digest(tb3, tb2, d64, true);
+            f = bm::bit_find_first_diff(tb3, tb1, &pos);
+            assert(!f);
+        } // for j
+
+    } // for k
+
+    for (unsigned k = 0; k < 65535; ++k)
+    {
+        bm::bit_block_set(tb1, 0);
+        bm::set_bit(tb1, k);
+
+        for (int j = 65535; j > int(k); j-=rand()%512)
+        {
+            bm::set_bit(tb1, j);
+            d64 = bm::calc_block_digest0(tb1);
+            bm::block_compact_by_digest(tb2, tb1, d64, true);
+
+            bm::block_expand_by_digest(tb3, tb2, d64, true);
+            f = bm::bit_find_first_diff(tb3, tb1, &pos);
+            assert(!f);
+        } // for j
+
+    } // for k
+
+
+
+
+
+    cout << " ------------------------------ TestBlockExpandCompact() OK" << endl;
+}
 
 
 static
@@ -31086,6 +31183,7 @@ int main(int argc, char *argv[])
 
     if (is_all || is_low_level)
     {
+
         TestRecomb();
 
         HMaskTest();
@@ -31103,6 +31201,8 @@ int main(int argc, char *argv[])
         TestArraysAndBuffers();
 
         TestFindBlockDiff();
+
+        TestBlockExpandCompact();
 
         FindNotNullPtrTest();
 
