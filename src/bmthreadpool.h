@@ -1,6 +1,7 @@
 #ifndef BMTPOOL__H__INCLUDED__
 #define BMTPOOL__H__INCLUDED__
 
+#include <type_traits>
 #include <queue>
 #include <thread>
 #include <mutex>
@@ -11,6 +12,21 @@
 
 namespace bm
 {
+
+/**
+    "noexcept" traits detection for T::lock()
+    @internal
+ */
+template <typename T>
+struct is_lock_noexcept
+{
+#if BM_DONT_WANT_TYPE_TRAITS_HEADER // not used
+    constexpr static bool value = noexcept(((T*)nullptr)->lock());
+#else
+    constexpr static bool value = noexcept(std::declval<T>().lock());
+#endif
+};
+
 
 /// Pad 60 bytes so that the final  ocupiles 64 bytes (1 cache line)
 struct pad60_struct { char c[60]; };
@@ -27,7 +43,7 @@ template<class Pad = bm::pad0_struct>
 class spin_lock
 {
 public:
-    spin_lock() : locked_(0) {}
+    spin_lock() noexcept : locked_(0) {}
 
     /// Lock the lock
     void lock() noexcept
@@ -75,6 +91,7 @@ void join_multiple_threads(TCont& tcont)
 
 template<typename QValue, typename Lock> class thread_pool;
 
+
 /**
     Thread sync queue
 
@@ -89,20 +106,20 @@ public:
 
     /// constructor
     ///
-    queue_sync(){}
+    queue_sync() noexcept {}
 
     /// Push value to the back of the queue
     /// @param v - value to put in the queue
     ///
     /// @sa push_no_lock
     ///
-    void push(value_type v)
+    void push(value_type v) //noexcept(bm::is_noexcept<lock_type>::value)
     {
         {
             std::lock_guard<lock_type> lg(dq_lock_);
             data_queue_.push(v);
         }
-        queue_push_cond_.notify_one();
+        queue_push_cond_.notify_one(); // noexcept
     }
 
     /// Push value to the back of the queue without lock protection
@@ -112,7 +129,10 @@ public:
     /// @param v - value to put in the queue
     /// @sa push
     ///
-    void push_no_lock(value_type v) { data_queue_.push(v); }
+    void push_no_lock(value_type v)
+    {
+        data_queue_.push(v);
+    }
 
 
     /// Extract value
@@ -138,16 +158,17 @@ public:
 
     /// lock the queue access
     /// @sa push_no_lock, unlock
-    void lock() { dq_lock_.lock(); }
+    void lock() noexcept(bm::is_lock_noexcept<lock_type>::value)
+    { dq_lock_.lock(); }
 
     /// unlock the queue access
     /// @sa push_no_lock, lock
-    void unlock()
+    void unlock() noexcept(bm::is_lock_noexcept<lock_type>::value)
     {
         dq_lock_.unlock();
         // lock-unlock is done to protect bulk push, need to wake up
         // all waiting workers
-        queue_push_cond_.notify_all();
+        queue_push_cond_.notify_all(); // noexcept
     }
 
     template<typename QV, typename L> friend class bm::thread_pool;
@@ -210,17 +231,16 @@ public:
         Also notifies all threads on a new directive
         @param sm - stop mode
     */
-    void set_stop_mode(stop_mode sm)
+    void set_stop_mode(stop_mode sm) noexcept
     {
         stop_flag_ = sm;
-        job_queue_.queue_push_cond_.notify_all();
+        job_queue_.queue_push_cond_.notify_all(); // this is noexcept
     }
 
     /**
         Request an immediate stop of all threads in the pool
      */
-    void stop()
-        { set_stop_mode(stop_now); }
+    void stop() noexcept { set_stop_mode(stop_now); }
 
     /**
         Start thread pool worker threads.

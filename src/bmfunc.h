@@ -1192,6 +1192,133 @@ update_block_digest0(const bm::word_t* const block, bm::id64_t digest) BMNOEXCEP
 
 // --------------------------------------------------------------
 
+/**
+    Compact sub-blocks by digest (rank compaction)
+    \param t_block - target block
+    \param block - src bit block
+    \param digest - digest to use for copy
+    \param zero_tail - flag to zero the tail memory
+
+   @ingroup bitfunc
+   @internal
+ */
+inline
+void block_compact_by_digest(bm::word_t*   t_block,
+                       const bm::word_t*   block,
+                       bm::id64_t          digest,
+                       bool zero_tail) BMNOEXCEPT
+{
+    unsigned t_wave = 0;
+    bm::id64_t d = digest;
+
+    while (d)
+    {
+        bm::id64_t t = bm::bmi_blsi_u64(d); // d & -d;
+        unsigned wave = bm::word_bitcount64(t - 1);
+        unsigned off = wave * bm::set_block_digest_wave_size;
+        unsigned t_off = t_wave * bm::set_block_digest_wave_size;
+
+        const bm::word_t* sub_block = block + off;
+        bm::word_t* t_sub_block = t_block + t_off;
+        const bm::word_t* sub_block_end =
+                    sub_block + bm::set_block_digest_wave_size;
+        // TODO 64-bit optimization or SIMD
+        for (; sub_block < sub_block_end; t_sub_block+=4, sub_block+=4)
+        {
+            t_sub_block[0] = sub_block[0];
+            t_sub_block[1] = sub_block[1];
+            t_sub_block[2] = sub_block[2];
+            t_sub_block[3] = sub_block[3];
+        } // for
+
+        d = bm::bmi_bslr_u64(d); // d &= d - 1;
+        ++t_wave;
+    } // while
+
+    // init rest as zeroes (maybe need to be parametric)
+    //
+    if (zero_tail)
+    {
+        for ( ;t_wave < bm::block_waves; ++t_wave)
+        {
+            unsigned t_off = t_wave * bm::set_block_digest_wave_size;
+            bm::word_t* t_sub_block = t_block + t_off;
+            const bm::word_t* t_sub_block_end =
+                        t_sub_block + bm::set_block_digest_wave_size;
+            for (; t_sub_block < t_sub_block_end; t_sub_block+=4)
+            {
+                t_sub_block[0] = 0;
+                t_sub_block[1] = 0;
+                t_sub_block[2] = 0;
+                t_sub_block[3] = 0;
+            } // for
+        } // for
+    }
+}
+
+// --------------------------------------------------------------
+
+/**
+    expand sub-blocks by digest (rank expansion)
+    \param t_block - target block
+    \param block - src bit block
+    \param digest - digest to use for copy
+    \param zero_subs - flag to zero the non-digest sub waves
+
+   @ingroup bitfunc
+   @internal
+ */
+
+inline
+void block_expand_by_digest(bm::word_t*   t_block,
+                       const bm::word_t*   block,
+                       bm::id64_t          digest,
+                       bool zero_subs) BMNOEXCEPT
+{
+    unsigned s_wave = 0;
+    bm::id64_t d = digest;
+
+    bm::id64_t mask1 = 1ULL;
+    for (unsigned wave = 0; wave < bm::block_waves; ++wave)
+    {
+        unsigned s_off = s_wave * bm::set_block_digest_wave_size;
+        const bm::word_t* sub_block = block + s_off;
+        const bm::word_t* sub_block_end =
+                    sub_block + bm::set_block_digest_wave_size;
+        bm::word_t* t_sub_block =
+            t_block + (wave * bm::set_block_digest_wave_size);
+        if (d & mask1)
+        {
+            for (; sub_block < sub_block_end; t_sub_block+=4, sub_block+=4)
+            {
+                t_sub_block[0] = sub_block[0];
+                t_sub_block[1] = sub_block[1];
+                t_sub_block[2] = sub_block[2];
+                t_sub_block[3] = sub_block[3];
+            } // for
+
+            ++s_wave;
+        }
+        else
+        {
+            if (zero_subs)
+            {
+                const bm::word_t* t_sub_block_end =
+                            t_sub_block + bm::set_block_digest_wave_size;
+                for (; t_sub_block < t_sub_block_end; t_sub_block+=4)
+                {
+                    t_sub_block[0] = 0; t_sub_block[1] = 0;
+                    t_sub_block[2] = 0; t_sub_block[3] = 0;
+                } // for
+            }
+        }
+        mask1 <<= 1;
+    } // for i
+}
+
+
+// --------------------------------------------------------------
+
 
 /// Returns true if set operation is constant (bitcount)
 inline
@@ -1228,7 +1355,7 @@ template<bool T> struct all_set
         bm::word_t BM_VECT_ALIGN  _p[bm::set_block_size] BM_VECT_ALIGN_ATTR;
         bm::word_t* _p_fullp;
 
-        all_set_block()
+        all_set_block() BMNOEXCEPT
         {
             ::memset(_p, 0xFF, sizeof(_p)); // set FULL BLOCK content (all 1s)
             if (bm::conditional<sizeof(void*) == 8>::test())
@@ -1367,7 +1494,7 @@ bool find_not_null_ptr(bm::word_t*** arr, N start, N size, N* pos) BMNOEXCEPT
 
    @ingroup bitfunc 
 */
-template<typename T> int wordcmp0(T w1, T w2)
+template<typename T> int wordcmp0(T w1, T w2) BMNOEXCEPT
 {
     while (w1 != w2)
     {
@@ -1396,7 +1523,7 @@ template<typename T> int wordcmp(T w1, T w2)
 
    @ingroup bitfunc 
 */
-template<typename T> int wordcmp(T a, T b)
+template<typename T> int wordcmp(T a, T b) BMNOEXCEPT
 {
     T diff = a ^ b;
     return diff? ( (a & diff & -diff)? 1 : -1 ) : 0;
@@ -9437,7 +9564,7 @@ unsigned min_delta_u32(const unsigned* arr, size_t arr_size)
     @internal
  */
 inline
-void min_delta_apply(unsigned* arr, size_t arr_size, unsigned delta)
+void min_delta_apply(unsigned* arr, size_t arr_size, unsigned delta) BMNOEXCEPT
 {
     BM_ASSERT(delta > 0);
     --delta;
@@ -9454,7 +9581,7 @@ void min_delta_apply(unsigned* arr, size_t arr_size, unsigned delta)
     @internal
  */
 template<typename VT, typename SZ>
-bool find_max_nz(const VT* arr, SZ arr_size, SZ* found_idx)
+bool find_max_nz(const VT* arr, SZ arr_size, SZ* found_idx) BMNOEXCEPT
 {
     bool found = false;
     VT max_v = 0;
@@ -9475,7 +9602,7 @@ bool find_max_nz(const VT* arr, SZ arr_size, SZ* found_idx)
     @internal
  */
 template<typename VT, typename SZ>
-bool find_first_nz(const VT* arr, SZ arr_size, SZ* found_idx)
+bool find_first_nz(const VT* arr, SZ arr_size, SZ* found_idx) BMNOEXCEPT
 {
     for (SZ i = 0; i < arr_size; ++i)
     {
@@ -9494,7 +9621,7 @@ bool find_first_nz(const VT* arr, SZ arr_size, SZ* found_idx)
     @internal
  */
 template<typename VT, typename SZ>
-SZ count_nz(const VT* arr, SZ arr_size)
+SZ count_nz(const VT* arr, SZ arr_size) BMNOEXCEPT
 {
     SZ cnt = 0;
     for (SZ i = 0; i < arr_size; ++i)

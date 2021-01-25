@@ -28508,6 +28508,103 @@ void TestFindBlockDiff()
 
 }
 
+static
+void TestBlockExpandCompact()
+{
+    cout << " ------------------------------ TestBlockExpandCompact()" << endl;
+
+    unsigned pos;
+    BM_DECLARE_TEMP_BLOCK(tb1);
+    BM_DECLARE_TEMP_BLOCK(tb2);
+    BM_DECLARE_TEMP_BLOCK(tb3);
+
+    bm::id64_t d64;
+
+    bm::bit_block_set(tb1, 0);
+    //bm::bit_block_set(tb2, 0);
+
+
+    tb1.b_.w32[1] = 1;
+
+    d64 = bm::calc_block_digest0(tb1);
+    assert(d64 == 1ULL);
+
+    bm::block_compact_by_digest(tb2, tb1, d64, true);
+    bool f = bm::bit_find_first_diff(tb1, tb2, &pos);
+    assert(!f);
+
+    bm::block_expand_by_digest(tb3, tb2, d64, true);
+    f = bm::bit_find_first_diff(tb3, tb1, &pos);
+    assert(!f);
+
+
+
+    for (unsigned k = 0; k < 65535; ++k)
+    {
+        bm::bit_block_set(tb1, 0);
+        bm::set_bit(tb1, k);
+
+        d64 = bm::calc_block_digest0(tb1);
+        bm::block_compact_by_digest(tb2, tb1, d64, true);
+
+        bm::block_expand_by_digest(tb3, tb2, d64, true);
+        f = bm::bit_find_first_diff(tb3, tb1, &pos);
+        assert(!f);
+
+        bm::set_bit(tb1, 0);
+
+        d64 = bm::calc_block_digest0(tb1);
+        bm::block_compact_by_digest(tb2, tb1, d64, true);
+
+        bm::block_expand_by_digest(tb3, tb2, d64, true);
+        f = bm::bit_find_first_diff(tb3, tb1, &pos);
+        assert(!f);
+
+    } // for k
+
+
+    for (unsigned k = 0; k < 65535; ++k)
+    {
+        bm::bit_block_set(tb1, 0);
+        bm::set_bit(tb1, k);
+
+        for (unsigned j = 0; j < k; j+=rand()%512)
+        {
+            bm::set_bit(tb1, j);
+            d64 = bm::calc_block_digest0(tb1);
+            bm::block_compact_by_digest(tb2, tb1, d64, true);
+
+            bm::block_expand_by_digest(tb3, tb2, d64, true);
+            f = bm::bit_find_first_diff(tb3, tb1, &pos);
+            assert(!f);
+        } // for j
+
+    } // for k
+
+    for (unsigned k = 0; k < 65535; ++k)
+    {
+        bm::bit_block_set(tb1, 0);
+        bm::set_bit(tb1, k);
+
+        for (int j = 65535; j > int(k); j-=rand()%512)
+        {
+            bm::set_bit(tb1, j);
+            d64 = bm::calc_block_digest0(tb1);
+            bm::block_compact_by_digest(tb2, tb1, d64, true);
+
+            bm::block_expand_by_digest(tb3, tb2, d64, true);
+            f = bm::bit_find_first_diff(tb3, tb1, &pos);
+            assert(!f);
+        } // for j
+
+    } // for k
+
+
+
+
+
+    cout << " ------------------------------ TestBlockExpandCompact() OK" << endl;
+}
 
 
 static
@@ -30729,6 +30826,66 @@ void TestHeapVector()
 }
 
 static
+void TestSQueue()
+{
+    cout << " ------------------------------ TestSQueue()" << endl;
+
+    typedef bm::simple_queue<unsigned, bvect::allocator_type, true> squeue_type;
+
+    {
+        squeue_type sq;
+        assert(sq.empty());
+        sq.reserve(1);
+        assert(sq.empty());
+
+        bool b;
+        b = sq.try_push(100);
+        assert(b);
+        assert(!sq.empty());
+
+        unsigned v;
+        v = sq.front();
+        assert(v == 100);
+        sq.pop();
+        assert(sq.empty());
+
+    }
+
+    {
+        std::vector<unsigned> vect { 0, 1, 20, 23, 1, 10, 12 };
+
+        squeue_type sq;
+        sq.reserve(vect.size()/2);
+        for (size_t i = 0; i < vect.size(); ++i)
+        {
+            bool b = sq.try_push(vect[i]);
+            if (b)
+            {
+                auto v = sq.front();
+                assert(v == vect[0]);
+            }
+            else
+            {
+                auto sz = sq.size();
+                sq.reserve(sz + 1);
+                --i; // retry
+            }
+        } // for
+
+        for (size_t i = 0; i < vect.size(); ++i)
+        {
+            auto vv = vect.at(i);
+            auto vq = sq.front();
+            assert(vv == vq);
+            sq.pop();
+        }
+    }
+
+
+    cout << " ------------------------------ TestSQueue() OK" << endl;
+}
+
+static
 void TestXOR_RefVector()
 {
     cout << " ------------------------------ TestXOR_RefVector()" << endl;
@@ -31026,6 +31183,7 @@ int main(int argc, char *argv[])
 
     if (is_all || is_low_level)
     {
+
         TestRecomb();
 
         HMaskTest();
@@ -31043,6 +31201,8 @@ int main(int argc, char *argv[])
         TestArraysAndBuffers();
 
         TestFindBlockDiff();
+
+        TestBlockExpandCompact();
 
         FindNotNullPtrTest();
 
@@ -31088,6 +31248,9 @@ int main(int argc, char *argv[])
     if (is_all || is_support)
     {
         TestHeapVector();
+
+        TestSQueue();
+
         TestXOR_RefVector();
 
         TestTasks();
