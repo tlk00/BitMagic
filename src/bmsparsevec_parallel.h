@@ -83,7 +83,7 @@ protected:
 
         typename bvector_type::statistics stbv;
         stbv.reset();
-        BM_DECLARE_TEMP_BLOCK(tb);
+        BM_DECLARE_TEMP_BLOCK(tb)
         bv->optimize(tb, opt_mode, &stbv);
 
         if (st)

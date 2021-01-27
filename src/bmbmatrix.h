@@ -1134,7 +1134,7 @@ void basic_bmatrix<BV>::optimize(bm::word_t* temp_block,
     if (st)
         st->reset();
 
-    BM_DECLARE_TEMP_BLOCK(tb);
+    BM_DECLARE_TEMP_BLOCK(tb)
     if (!temp_block)
         temp_block = tb;
 
