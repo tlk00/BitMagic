@@ -8758,7 +8758,7 @@ bool block_find_first_diff(const bm::word_t* BMRESTRICT blk,
 
     if (arg_gap != gap)
     {
-        //BM_DECLARE_TEMP_BLOCK(temp_blk);
+        //BM_DECLARE_TEMP_BLOCK(temp_blk)
         bm::bit_block_t temp_blk;
         bm::word_t* blk1; bm::word_t* blk2;
 

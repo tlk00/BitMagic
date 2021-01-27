@@ -702,7 +702,7 @@ public:
         {
             for (size_type i = 0; i < sz; ++i)
                 ref_bvects_[i]->fill_alloc_digest(bv_blocks);
-            BM_DECLARE_TEMP_BLOCK(tb);
+            BM_DECLARE_TEMP_BLOCK(tb)
             bv_blocks.optimize(tb);
         }
     }
@@ -991,7 +991,7 @@ private:
     xor_scanner& operator=(const xor_scanner&) = delete;
 
 private:
-    BM_DECLARE_TEMP_BLOCK(xor_tmp_block_);
+    BM_DECLARE_TEMP_BLOCK(xor_tmp_block_)
 
     const bv_ref_vector_type*   ref_vect_ = 0; ///< ref.vect for XOR filter
     bv_blocks_vector_type       nb_blocks_vect_;   ///< pointers to temp blocks
