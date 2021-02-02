@@ -3299,7 +3299,7 @@ int bvector<Alloc>::compare(const bvector<Alloc>& bv) const BMNOEXCEPT
             
             if (arg_gap != gap)
             {
-                BM_DECLARE_TEMP_BLOCK(temp_blk);
+                BM_DECLARE_TEMP_BLOCK(temp_blk)
                 bm::wordop_t* blk1; bm::wordop_t* blk2;
 
                 if (gap)
