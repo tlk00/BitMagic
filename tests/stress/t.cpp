@@ -31173,7 +31173,7 @@ int main(int argc, char *argv[])
     //LoadVectors("c:/dev/bv_perf", 3, 27);
     exit(1);
 */
-
+/*
     {
         typedef str_sparse_vector<char, bvect, 390> str_svect_type;
         str_svect_type sv0;
@@ -31199,9 +31199,8 @@ int main(int argc, char *argv[])
 
         bool equal = sv0.equal(sv1);
         assert(equal);
-
     }
-
+*/
 
 //avx2_i32_shift();
 //return 0;
