@@ -21839,7 +21839,7 @@ void TestSparseVector_XOR_Scanner()
             assert(mchain.xor_d64[0] == 1);
             assert(mchain.xor_d64[1] == 2);
 
-            int brate = bm::check_pair_vect_vbr(mchain);
+            int brate = bm::check_pair_vect_vbr(mchain, r_vect);
             assert(brate == 1);
 
             sv.optimize();
@@ -31173,6 +31173,35 @@ int main(int argc, char *argv[])
     //LoadVectors("c:/dev/bv_perf", 3, 27);
     exit(1);
 */
+
+    {
+        typedef str_sparse_vector<char, bvect, 390> str_svect_type;
+        str_svect_type sv0;
+
+        file_load_svector(sv0, "/Volumes/WD-MacOS/VCF/HG002_1_ID.bin");
+
+        cout << sv0.size() << endl;
+
+        BM_DECLARE_TEMP_BLOCK(tb)
+        std::vector<unsigned char> buf_v;
+
+        sparse_vector_serial_layout<str_svect_type > sv_lay;
+        bm::sparse_vector_serialize<str_svect_type >(sv0, sv_lay, tb);
+        const unsigned char* buf = sv_lay.buf();
+
+        str_svect_type sv1;
+        int res = bm::sparse_vector_deserialize(sv1, buf, tb);
+        if (res != 0)
+        {
+            cerr << "De-Serialization error!" << endl;
+            exit(1);
+        }
+
+        bool equal = sv0.equal(sv1);
+        assert(equal);
+
+    }
+
 
 //avx2_i32_shift();
 //return 0;

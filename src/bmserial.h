@@ -2165,7 +2165,7 @@ void serializer<BV>::encode_xor_match_chain(bm::encoder& enc,
     size_type chain_size = (size_type)mchain.chain_size;
     BM_ASSERT(chain_size);
 
-    unsigned char vbr_flag = bm::check_pair_vect_vbr(mchain);
+    unsigned char vbr_flag = bm::check_pair_vect_vbr(mchain, *ref_vect_);
 
     enc.put_8(bm::set_block_xor_chain);
     enc.put_8(vbr_flag); // flag (reserved)
