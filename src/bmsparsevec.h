@@ -1504,7 +1504,7 @@ sparse_vector<Val, BV>::get(
         if (b)
         {
             value_type vm = (value_type)this->bmatr_.get_half_octet(i, j);
-            v |= vm << j;
+            v |= value_type(vm << j);
         }
     } // for j
     return v;
@@ -1606,7 +1606,7 @@ void sparse_vector<Val, BV>::insert_value_no_null(size_type idx, value_type v)
             if (bv)
                 bv->insert(idx, false);
         }
-        mask <<= 1;
+        mask = value_type(mask << 1);
     } // for i
     // insert 0 into all other existing planes
     unsigned eff_planes = this->effective_planes();
@@ -1698,7 +1698,7 @@ void sparse_vector<Val, BV>::set_value_no_null(size_type idx, value_type v)
                     bv->clear_bit_no_check(idx);
                 }
             }
-            mask <<=  1;
+            mask = value_type(mask << 1);
         } // for j
     }
 }

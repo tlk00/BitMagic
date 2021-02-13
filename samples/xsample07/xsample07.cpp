@@ -877,6 +877,7 @@ void compute_kmer_histogram(histogram_map_u32& hmap,
 /// Save TSV report of k-mer frequences
 /// (reverse sorted, most frequent k-mers first)
 ///
+static
 void report_hmap(const string& fname, const histogram_map_u32& hmap)
 {
     ofstream outf;

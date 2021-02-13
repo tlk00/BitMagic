@@ -290,7 +290,7 @@ void TestParallelSV_Serial()
 
             const unsigned char* buf = sv_lay1.buf();
             auto sz2 = sv_lay1.size();
-
+            assert(sz2); (void)sz2;
 
             sv_deserial.deserialize_structure(sv1o, sv_lay1.buf());
             sv_deserial.deserialize_structure(sv2o, sv_lay2.buf());

@@ -1121,7 +1121,7 @@ void compute_group(CSeqGroup& seq_group,
 
     auto i_cnt = bv.count();
     // approximate number of k-mers we consider similar
-    float similarity_target = i_cnt * similarity_cut_off;
+    float similarity_target = float(i_cnt * float(similarity_cut_off));
 
 
     bm::operation_deserializer<bm::bvector<> > od;
@@ -1140,7 +1140,7 @@ void compute_group(CSeqGroup& seq_group,
         //
         bm::id64_t and_cnt = od.deserialize(bv, buf, 0, bm::set_COUNT_AND);
 
-        if (and_cnt && and_cnt > similarity_target) // similar enough to be a candidate
+        if (and_cnt && (float(and_cnt) > similarity_target)) // similar enough to be a candidate
         {
             seq_group.add_member(i);
             found = true;

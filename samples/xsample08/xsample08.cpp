@@ -140,6 +140,7 @@ void data_model::add_strand(size_t plane, rsc_vector_u8* strand)
 
 // -------------------------------------------------------------------
 
+static
 void set_feature_strand(data_model& dm, size_t   plane,
                         bm::bvector<>::size_type pos,
                         unsigned char strand)
@@ -164,6 +165,7 @@ void set_feature_strand(data_model& dm, size_t   plane,
 
 /// Register new object in the data model: [start..end] + strand
 ///
+static
 void add_object(data_model& dm,
                 unsigned start, unsigned end,
                 unsigned char strand)
@@ -205,7 +207,7 @@ void add_object(data_model& dm,
 
 /// Data model splicer
 ///
-
+static
 void splice_model(data_model& dm_target, const data_model& dm,
                   bm::bvector<>::size_type start,
                   bm::bvector<>::size_type end,
@@ -263,6 +265,7 @@ void splice_model(data_model& dm_target, const data_model& dm,
 /// This is ASCII art "renderer" for the data model.
 /// illustrates how to manipulate succinct data model to create graphics
 ///
+static
 void print_model(const data_model& dm)
 {
     const bm::bvector<>* bv; // layout

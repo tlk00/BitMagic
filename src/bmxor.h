@@ -406,7 +406,7 @@ unsigned char check_pair_vect_vbr(const BMChain& mchain, const RVect& ref_vect)
     size_t max_idx = 0;
     for (size_t i = 0; i < mchain.chain_size; ++i)
     {
-        auto ridx = mchain.ref_idx[i];
+        bvector_size_type ridx = mchain.ref_idx[i];
         ridx = ref_vect.get_row_idx(ridx);
         if (ridx > max_idx)
             max_idx = ridx;

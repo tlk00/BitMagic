@@ -28,7 +28,7 @@ For more information please visit:  http://bitmagic.io
 //#define BMAVX2OPT
 
 #define BM_NONSTANDARD_EXTENTIONS
-
+//#define BM64ADDR
 #ifdef _MSC_VER
 #pragma warning( push )
 #pragma warning( disable : 4996)
