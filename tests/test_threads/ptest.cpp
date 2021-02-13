@@ -81,6 +81,67 @@ typedef bm::sparse_vector<unsigned long long, bvect > sparse_vector_u64;
 typedef bm::rsc_sparse_vector<unsigned, sparse_vector_u32> rsc_sparse_vector_u32;
 typedef bm::rsc_sparse_vector<unsigned long long, sparse_vector_u64> rsc_sparse_vector_u64;
 
+static
+void TestSimpleQueue()
+{
+    cout << " ----------------------------- TestSimpleQueue()" << endl;
+
+    typedef bm::simple_queue<unsigned, bvect::allocator_type, true> squeue_u32;
+
+    {
+        squeue_u32 sq;
+        squeue_u32::value_type val;
+
+        assert(sq.empty());
+        assert(sq.size()==0);
+
+        bool b = sq.try_push(0);
+        assert(!b);
+        b = sq.try_pop(val);
+        assert(!b);
+    }
+
+    {
+        squeue_u32 sq;
+        squeue_u32::value_type val;
+
+        sq.reserve(1);
+        bool b;
+        b = sq.try_push(0);
+        assert(b);
+        auto v = sq.front();
+        assert(v == 0);
+        assert(!sq.empty());
+        b = sq.try_push(1);
+        assert(b);
+        b = sq.try_push(2);
+        assert(!b);
+        sq.push(2); // try again with resize
+        auto sz = sq.size();
+        assert(sz == 3);
+
+        for (unsigned i = 0; i < 3; ++i)
+        {
+            b = sq.try_pop(val);
+            assert(b);
+            assert(val == i);
+        } // for
+        sz = sq.size();
+        assert(sz == 0);
+        b = sq.try_pop(val);
+        assert(!b);
+        assert(sq.empty());
+
+        b = sq.try_push(0);
+        assert(b);
+        b = sq.try_pop(val);
+        assert(b);
+        assert(val == 0);
+    }
+
+    cout << " ----------------------------- TestSimpleQueue() OK" << endl;
+}
+
 
 static
 void Check_SimModel(const bm::xor_sim_model<bvect>& sim1,
@@ -280,12 +341,13 @@ void TestParallelSV_Serial()
 int main(void)
 {
     cout << bm::_copyright<true>::_p << endl;
-//    ptest();
 
     bm::chrono_taker tt("TOTAL", 1);
     try
     {
         cout << endl;
+
+        TestSimpleQueue();
 
         TestParallelSV_Serial();
 
