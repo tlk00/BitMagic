@@ -81,7 +81,7 @@ TARGETS_BLD =  \
               samples/rscsample04 \
               samples/rscsample05 \
               utils/svutil \
-              tests/stress tests/perf tests/stress64 tests/perf64
+              tests/stress tests/perf tests/stress64 tests/perf64 tests/test_threads
         
 SHELL=/bin/sh
 MAKE := ${MAKE} --no-print-directory
