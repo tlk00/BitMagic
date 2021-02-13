@@ -8,6 +8,7 @@
 #include <atomic>
 #include <condition_variable>
 
+#include "bmbuffer.h"
 #include "bmtask.h"
 
 namespace bm
@@ -59,6 +60,18 @@ public:
             _mm_pause();
 #endif
         } // while
+    }
+
+    /// Try to acquire the lock, return true if successfull
+    ///
+    bool try_lock() noexcept
+    {
+        unsigned locked = locked_.load(std::memory_order_relaxed);
+        if (!locked &&
+             locked_.compare_exchange_weak(locked, true,
+                                           std::memory_order_acquire))
+            return true;
+        return false;
     }
 
     /// Unlock the lock
@@ -113,7 +126,7 @@ public:
     ///
     /// @sa push_no_lock
     ///
-    void push(value_type v) //noexcept(bm::is_noexcept<lock_type>::value)
+    void push(value_type v) //noexcept(bm::is_lock_noexcept<lock_type>::value)
     {
         {
             std::lock_guard<lock_type> lg(dq_lock_);
@@ -150,7 +163,7 @@ public:
     }
 
     /// @return true if empty
-    bool empty() const
+    bool empty() const //noexcept(bm::is_lock_noexcept<lock_type>::value)
     {
         std::lock_guard<lock_type> guard(dq_lock_);
         return data_queue_.empty();
@@ -159,7 +172,12 @@ public:
     /// lock the queue access
     /// @sa push_no_lock, unlock
     void lock() noexcept(bm::is_lock_noexcept<lock_type>::value)
-    { dq_lock_.lock(); }
+        { dq_lock_.lock(); }
+
+    /// Try to lock the queue exclusively
+    ///
+    bool try_lock() noexcept(bm::is_lock_noexcept<lock_type>::value)
+        { return dq_lock_.try_lock(); }
 
     /// unlock the queue access
     /// @sa push_no_lock, lock
@@ -172,11 +190,15 @@ public:
     }
 
     template<typename QV, typename L> friend class bm::thread_pool;
+
+protected:
+    typedef std::queue<value_type>     queue_type;
+
 private:
     queue_sync(const queue_sync&) = delete;
     queue_sync& operator=(const queue_sync&) = delete;
 private:
-    std::queue<value_type>    data_queue_; ///< queue object
+    queue_type                data_queue_; ///< queue object
     mutable lock_type         dq_lock_;    ///< lock for queue
 
     // signal structure for wait on empty queue
@@ -273,7 +295,7 @@ public:
      */
      void wait_empty_queue()
      {
-        const std::chrono::duration<int, std::milli> wait_duration(10);
+        const std::chrono::duration<int, std::milli> wait_duration(20);
         while(1)
         {
             if (job_queue_.empty())
@@ -284,13 +306,7 @@ public:
                 wait_res = task_done_cond_.wait_for(lk, wait_duration);
             }
             if (wait_res == std::cv_status::timeout)
-            {
-#if defined(BMSSE2OPT) || defined(BMSSE42OPT) || defined(BMAVX2OPT) || defined(BMAVX512OPT)
-                _mm_pause();
-#else
                 std::this_thread::yield();
-#endif
-            }
         } // while
      }
 
