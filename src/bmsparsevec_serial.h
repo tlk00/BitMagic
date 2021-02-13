@@ -1428,7 +1428,6 @@ void sparse_vector_deserializer<SV>::deserialize_planes(
         // add the vector into the XOR reference list
         if (!bv_ref_ptr_)
             bv_ref_.add(bv, unsigned(i));
-// std::cout << "P=" << i << std::endl;
         if (mask_bv) // gather mask set, use AND operation deserializer
         {
             typename bvector_type::mem_pool_guard mp_g_z(pool_, *bv);
