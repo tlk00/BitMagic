@@ -506,6 +506,7 @@ public:
      */
     void push_back_no_check(const value_type& v) BMNOEXCEPT
     {
+        BM_ASSERT(size() < capacity());
         size_type v_size = value_size();
         size_type sz = size();
 
@@ -945,6 +946,14 @@ public:
     }
 
     /**
+        Push value into the queue (with re-allocation)
+     */
+    void push(const value_type& v)
+    {
+        queue_vector_.push_back(v);
+    }
+
+    /**
         Return front element
      */
     const value_type& front() const BMNOEXCEPT
@@ -962,6 +971,21 @@ public:
         ++front_idx_;
         if (front_idx_ == queue_vector_.size())
             queue_vector_.resize(front_idx_ = 0); // reset the queue
+    }
+
+    /**
+        Try to extract the front element from the queue
+     */
+    bool try_pop(value_type& front_value) BMNOEXCEPT
+    {
+        size_type sz = queue_vector_.size();
+        if (!sz)
+            return false;
+        front_value = queue_vector_[front_idx_];
+        ++front_idx_;
+        if (front_idx_ == sz)
+            queue_vector_.resize(front_idx_ = 0); // reset the queue
+        return true;
     }
 
 private:
