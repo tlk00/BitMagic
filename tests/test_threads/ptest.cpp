@@ -92,6 +92,14 @@ typedef bm::sparse_vector<unsigned long long, bvect > sparse_vector_u64;
 typedef bm::rsc_sparse_vector<unsigned, sparse_vector_u32> rsc_sparse_vector_u32;
 typedef bm::rsc_sparse_vector<unsigned long long, sparse_vector_u64> rsc_sparse_vector_u64;
 
+
+typedef
+bm::thread_pool<bm::task_description*, bm::spin_lock<bm::pad0_struct> > pool_spin_type;
+typedef
+bm::thread_pool<bm::task_description*, std::mutex > pool_mutex_type;
+
+
+
 static
 void TestSimpleQueue()
 {
@@ -247,10 +255,14 @@ void generate_df_svu32_set(sparse_vector_u32& sv1i,
 
 }
 
-static
-void TestParallelSV_Serial()
+template<typename PoolType>
+void TestParallelSV_Serial(const char* test_label,
+                           bool        check_sim,
+                           bool        serialize,
+                           bool        deserialize)
 {
-    cout << " ----------------------------- TestParallelSV_Serial()" << endl;
+    cout << " ----------------------------- TestParallelSV_Serial() - "
+         << test_label << endl;
     {
         bm::sparse_vector_serializer<sparse_vector_u32> sv_serializer;
         bm::sparse_vector_deserializer<sparse_vector_u32> sv_deserial;
@@ -260,13 +272,8 @@ void TestParallelSV_Serial()
 
         bm::sparse_vector_serial_layout<sparse_vector_u32> sv_lay1, sv_lay2, sv_lay3, sv_lay4;
 
-        typedef
-        bm::thread_pool<bm::task_description*, bm::spin_lock<bm::pad0_struct> > pool_type;
-/*
-        typedef
-            bm::thread_pool<bm::task_description*, std::mutex > pool_type;
-*/
-        
+        typedef PoolType pool_type;
+
         {
         cout << "Sample set generation..." << flush;
 
@@ -281,7 +288,7 @@ void TestParallelSV_Serial()
         pool_type tpool;  // our thread pool here (no threads created yet)
         tpool.start(num_threads); // start the threads
 
-        bm::chrono_taker tt1("001. XOR serialization (parallel XOR filter)", 1, &timing_map);
+        bm::chrono_taker tt1(test_label, 1, &timing_map);
 
         for (unsigned pass = 0; pass < 2; ++pass)
         {
@@ -309,83 +316,86 @@ void TestParallelSV_Serial()
                     exec.run(tpool, tbatch, true);
                 }
                 
-                
+                if (check_sim)
                 {
                     bm::serializer<bvect>::xor_sim_model_type sim_model_c;
                     sv_serializer.compute_sim_model(sim_model_c, bv_ref, xor_search_params);
                     Check_SimModel(sim_model_c, sim_model);
                 }
-                
-                
             }
 
-            sv_serializer.set_sim_model(&sim_model);
+            if (serialize)
+            {
+                sv_serializer.set_sim_model(&sim_model);
 
-            sv_serializer.serialize(sv1i, sv_lay1);
-            {
-                const bvect::size_type* cstat = sv_serializer.get_bv_serializer().get_compression_stat();
-                assert(cstat[bm::set_block_ref_eq]>0);
-            }
-            sv_serializer.serialize(sv2i, sv_lay2);
-            {
-                const bvect::size_type* cstat = sv_serializer.get_bv_serializer().get_compression_stat();
-                assert(cstat[bm::set_block_ref_eq]>=1 || cstat[bm::set_block_xor_ref32] >= 1);
-            }
-            sv_serializer.serialize(sv3i, sv_lay3);
-            {
-                const bvect::size_type* cstat = sv_serializer.get_bv_serializer().get_compression_stat();
-                assert(cstat[bm::set_block_ref_eq]>=1 || cstat[bm::set_block_xor_ref32] >= 1);
-            }
-            sv_serializer.serialize(sv4i, sv_lay4);
-            {
-                //const bvect::size_type* cstat = sv_serializer.get_bv_serializer().get_compression_stat();
+                sv_serializer.serialize(sv1i, sv_lay1);
+                {
+                    const bvect::size_type* cstat = sv_serializer.get_bv_serializer().get_compression_stat();
+                    assert(cstat[bm::set_block_ref_eq]>0);
+                }
+                sv_serializer.serialize(sv2i, sv_lay2);
+                {
+                    const bvect::size_type* cstat = sv_serializer.get_bv_serializer().get_compression_stat();
+                    assert(cstat[bm::set_block_ref_eq]>=1 || cstat[bm::set_block_xor_ref32] >= 1);
+                }
+                sv_serializer.serialize(sv3i, sv_lay3);
+                {
+                    const bvect::size_type* cstat = sv_serializer.get_bv_serializer().get_compression_stat();
+                    assert(cstat[bm::set_block_ref_eq]>=1 || cstat[bm::set_block_xor_ref32] >= 1);
+                }
+                sv_serializer.serialize(sv4i, sv_lay4);
+                {
+                    //const bvect::size_type* cstat = sv_serializer.get_bv_serializer().get_compression_stat();
+                }
             }
 
             // ----------
 
+            if (deserialize)
+            {
+                bm::sparse_vector_deserializer<sparse_vector_u32>::bv_ref_vector_type bv_ref_d;
 
-            bm::sparse_vector_deserializer<sparse_vector_u32>::bv_ref_vector_type bv_ref_d;
+                const unsigned char* buf = sv_lay1.buf();
+                auto sz2 = sv_lay1.size();
+                assert(sz2); (void)sz2;
 
-            const unsigned char* buf = sv_lay1.buf();
-            auto sz2 = sv_lay1.size();
-            assert(sz2); (void)sz2;
+                sv_deserial.deserialize_structure(sv1o, sv_lay1.buf());
+                sv_deserial.deserialize_structure(sv2o, sv_lay2.buf());
+                sv_deserial.deserialize_structure(sv3o, sv_lay3.buf());
+                sv_deserial.deserialize_structure(sv4o, sv_lay4.buf());
 
-            sv_deserial.deserialize_structure(sv1o, sv_lay1.buf());
-            sv_deserial.deserialize_structure(sv2o, sv_lay2.buf());
-            sv_deserial.deserialize_structure(sv3o, sv_lay3.buf());
-            sv_deserial.deserialize_structure(sv4o, sv_lay4.buf());
+                bv_ref_d.add_vectors(sv4o.get_bmatrix());
+                bv_ref_d.add_vectors(sv3o.get_bmatrix());
+                bv_ref_d.add_vectors(sv2o.get_bmatrix());
+                bv_ref_d.add_vectors(sv1o.get_bmatrix());
 
-            bv_ref_d.add_vectors(sv4o.get_bmatrix());
-            bv_ref_d.add_vectors(sv3o.get_bmatrix());
-            bv_ref_d.add_vectors(sv2o.get_bmatrix());
-            bv_ref_d.add_vectors(sv1o.get_bmatrix());
+                sv_deserial.set_xor_ref(&bv_ref_d);
 
-            sv_deserial.set_xor_ref(&bv_ref_d);
+                sv_deserial.deserialize(sv1o, buf, false);
+                bool eq = sv1i.equal(sv1o);
+                assert(eq);
 
-            sv_deserial.deserialize(sv1o, buf, false);
-            bool eq = sv1i.equal(sv1o);
-            assert(eq);
+                buf = sv_lay2.buf();
+                sz2 = sv_lay2.size();
 
-            buf = sv_lay2.buf();
-            sz2 = sv_lay2.size();
+                sv_deserial.deserialize(sv2o, buf, false);
+                eq = sv2i.equal(sv2o);
+                assert(eq);
 
-            sv_deserial.deserialize(sv2o, buf, false);
-            eq = sv2i.equal(sv2o);
-            assert(eq);
+                buf = sv_lay3.buf();
+                sz2 = sv_lay3.size();
 
-            buf = sv_lay3.buf();
-            sz2 = sv_lay3.size();
+                sv_deserial.deserialize(sv3o, buf, false);
+                eq = sv3i.equal(sv3o);
+                assert(eq);
 
-            sv_deserial.deserialize(sv3o, buf, false);
-            eq = sv3i.equal(sv3o);
-            assert(eq);
+                buf = sv_lay4.buf();
 
-            buf = sv_lay4.buf();
-
-            sv_deserial.deserialize(sv4o, buf, false);
-            eq = sv4i.equal(sv4o);
-            assert(eq);
-            sv_deserial.set_xor_ref(0); // unset
+                sv_deserial.deserialize(sv4o, buf, false);
+                eq = sv4i.equal(sv4o);
+                assert(eq);
+                sv_deserial.set_xor_ref(0); // unset
+            }
 
             if (pass == 0)
             {
@@ -394,6 +404,7 @@ void TestParallelSV_Serial()
                 sv3i.optimize();
                 sv4i.optimize();
             }
+
         } // for pass
 
         tpool.set_stop_mode(pool_type::stop_when_done);
@@ -462,7 +473,33 @@ int main(int argc, char *argv[])
 
         TestSimpleQueue();
 
-        TestParallelSV_Serial();
+
+        TestParallelSV_Serial<pool_spin_type>(
+            "001-s. XOR filter (check)", true, false, false);
+
+        TestParallelSV_Serial<pool_spin_type>(
+            "002-s. XOR filter (no-check)", false, false, false);
+
+        TestParallelSV_Serial<pool_spin_type>(
+            "003-s. XOR filter/serialization (no-check)", false, true, false);
+
+        TestParallelSV_Serial<pool_spin_type>(
+            "004-s. XOR filter/serialization/deserialization (no-check)",
+            false, true, true);
+
+
+        TestParallelSV_Serial<pool_mutex_type>(
+            "001-m. XOR filter (check)", true, false, false);
+
+        TestParallelSV_Serial<pool_mutex_type>(
+            "002-m. XOR filter (no-check)", false, false, false);
+
+        TestParallelSV_Serial<pool_mutex_type>(
+            "003-m. XOR filter/serialization (no-check)", false, true, false);
+
+        TestParallelSV_Serial<pool_mutex_type>(
+            "004-m. XOR filter/serialization/deserialization (no-check)",
+            false, true, true);
 
         {
             std::cout << std::endl << "Performance:" << std::endl;
