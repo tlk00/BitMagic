@@ -26,6 +26,7 @@ For more information please visit:  http://bitmagic.io
     languages and non-C++ runtimes.
 
 */
+#include <atomic>
 
 #include "bmbuffer.h"
 
@@ -71,9 +72,9 @@ struct task_description
         void*              void_ptr;
     } payload0, payload1;
 
-    bm::id64_t      flags;     ///< task flags to designate barriers
-    unsigned        err_code;  ///< error code
-    unsigned        done;      ///< 0 - pending
+    bm::id64_t              flags;     ///< task flags to designate barriers
+    unsigned                err_code;  ///< error code
+    std::atomic_uint        done;      ///< 0 - pending
 
     task_description() BMNOEXCEPT {}
 
@@ -87,7 +88,8 @@ struct task_description
     {
         func = f; argp = argptr;
         ret = 0; ctx0 = c0; ctx1 = c1;
-        param0 = p0; flags = 0; err_code = done = 0;
+        param0 = p0; flags = 0; err_code = 0;  
+        done = 0;
         payload0.u64 = payload1.u64 = 0;
     }
 };
@@ -106,7 +108,8 @@ public:
     virtual size_type size() = 0;
 
     /// Get task by number
-    virtual task_description* get_task(size_type i) = 0;
+    virtual bm::task_description* get_task(size_type task_idx) = 0;
+
 };
 
 /**
@@ -122,9 +125,13 @@ public:
     bm::heap_vector<bm::task_description, bv_allocator_type, true> task_vector_type;
 
 public:
+
+    /// task_batch_base intreface implementation
+    //@{
     virtual size_type size() { return (size_type) task_vect_.size(); }
-    virtual bm::task_description* get_task(size_type i)
-        { return &task_vect_.at(i); }
+    virtual bm::task_description* get_task(size_type task_idx) 
+        { return &task_vect_.at(task_idx); }
+    //@}
 
     /// Get access to internal task vector
     ///

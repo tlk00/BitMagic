@@ -126,7 +126,7 @@ public:
     ///
     /// @sa push_no_lock
     ///
-    void push(value_type v) //noexcept(bm::is_lock_noexcept<lock_type>::value)
+    void push(const value_type& v) //noexcept(bm::is_lock_noexcept<lock_type>::value)
     {
         {
             std::lock_guard<lock_type> lg(dq_lock_);
@@ -142,7 +142,7 @@ public:
     /// @param v - value to put in the queue
     /// @sa push
     ///
-    void push_no_lock(value_type v)
+    void push_no_lock(const value_type& v)
     {
         data_queue_.push(v);
     }
@@ -205,8 +205,6 @@ private:
 protected:
     mutable std::mutex        signal_mut_; ///< signal mutex for q submissions
     std::condition_variable   queue_push_cond_;   ///< mutex paired conditional
-
-
 };
 
 
@@ -299,14 +297,18 @@ public:
         while(1)
         {
             if (job_queue_.empty())
+            {
                 break;
+            }
             std::cv_status wait_res;
             {
                 std::unique_lock<std::mutex> lk(task_done_mut_);
                 wait_res = task_done_cond_.wait_for(lk, wait_duration);
             }
             if (wait_res == std::cv_status::timeout)
+            {
                 std::this_thread::yield();
+            }
         } // while
      }
 
@@ -328,7 +330,7 @@ protected:
             if (is_stop == stop_now) // immediate stop requested
                 break;
 
-            task_description* task_descr;
+            bm::task_description* task_descr;
             if (job_queue_.try_pop(task_descr))
             {
                 // TODO: consider try-catch here
@@ -390,16 +392,19 @@ class thread_pool_executor
 {
 public:
     typedef TPool thread_pool_type;
+    typedef task_batch_base::size_type size_type;
 
 public:
     thread_pool_executor()
     {}
 
-    void run(thread_pool_type& tpool,
+    void run(thread_pool_type&    tpool,
              bm::task_batch_base& tasks,
-             bool wait_for_batch)
+             bool                  wait_for_batch)
     {
         typename thread_pool_type::queue_type& qu = tpool.get_job_queue();
+ 
+        //qu.lock();
 
         task_batch_base::size_type batch_size = tasks.size();
         for (task_batch_base::size_type i = 0; i < batch_size; ++i)
@@ -410,26 +415,67 @@ public:
             // check if this is a barrier call
             if (tdescr->flags != bm::task_description::no_flag && i > 0)
             {
+                //qu.unlock();
+
                 // barrier task
                 //   wait until all previously scheduled tasks are done
                 tpool.wait_empty_queue();
+                wait_for_batch_done(/*tpool,*/ tasks, 0, batch_size - 1);
 
                 // run the barrier proc on the curent thread
                 tdescr->ret = tdescr->func(tdescr->argp);
                 tdescr->done = 1;
 
                 // re-read the batch size, if barrier added more tasks
-                batch_size = tasks.size();
+                task_batch_base::size_type new_batch_size = tasks.size();
+                if (new_batch_size != batch_size)
+                {
+                    batch_size = new_batch_size;
+                    //qu.lock(); // re-lock
+                }
                 continue;
             }
 
             qu.push(tdescr); // locked push to the thread queue
+            //qu.push_no_lock(tdescr);
         } // for
+
+        //qu.unlock();
 
         // implicit wait barrier for all tasks
         if (wait_for_batch)
+        {
             tpool.wait_empty_queue();
+            wait_for_batch_done(/*tpool,*/ tasks, 0, batch_size - 1);
+        }
     }
+
+    /**
+        Check if all batch jobs in the specified interval are done
+        Spin wait if not.
+    */
+    static
+    void wait_for_batch_done(//thread_pool_type&          tpool,
+                             bm::task_batch_base&       tasks,
+                             task_batch_base::size_type from_idx,
+                             task_batch_base::size_type to_idx)
+    {
+        BM_ASSERT(from_idx <= to_idx);
+        BM_ASSERT(to_idx < tasks.size());
+
+        for (task_batch_base::size_type i = from_idx; i <= to_idx; ++i)
+        {
+            const bm::task_description* tdescr = tasks.get_task(i);
+            unsigned done = tdescr->done.load(std::memory_order_relaxed);
+            while (!done)
+            {
+                std::this_thread::yield();
+                // TODO: subscribe to a conditional wait for job done in tpool
+                done = tdescr->done.load(std::memory_order_relaxed);
+            } // while
+        } // for 
+    }
+
 private:
     thread_pool_executor(const thread_pool_executor&) = delete;
     thread_pool_executor& operator=(const thread_pool_executor&) = delete;
