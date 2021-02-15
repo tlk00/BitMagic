@@ -28588,7 +28588,7 @@ void TestBlockExpandCompact()
 
         for (int j = 65535; j > int(k); j-=rand()%512)
         {
-            bm::set_bit(tb1, j);
+            bm::set_bit(tb1, (unsigned)j);
             d64 = bm::calc_block_digest0(tb1);
             bm::block_compact_by_digest(tb2, tb1, d64, true);
 
