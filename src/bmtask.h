@@ -76,7 +76,28 @@ struct task_description
     unsigned                err_code;  ///< error code
     std::atomic_uint        done;      ///< 0 - pending
 
+    // ----------------------------------------------------
+    // Construction
+    //
     task_description() BMNOEXCEPT {}
+
+    task_description(const task_description& td) BMNOEXCEPT
+    {
+        func = td.func;
+        argp = td.argp;
+        ret  = td.ret;
+        ctx0 = td.ctx0;
+        ctx1 = td.ctx1;
+        param0 = td.param0;
+
+        payload0 = td.payload0;
+        payload1 = td.payload1;
+
+        flags = td.flags;
+
+        err_code = td.err_code;
+        done.store(td.done.load()); // atomic operation
+    }
 
     task_description(task_func_type  f, void* argptr = 0) BMNOEXCEPT
     {
