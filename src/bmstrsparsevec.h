@@ -45,7 +45,7 @@ namespace bm
 {
 
 /*!
-   \brief sparse vector for strings with compression using bit transposition method
+   \brief succinct sparse vector for strings with compression using bit transposition method
  
    Initial string is bit-transposed into bit-planes so collection may use less
    memory due to prefix sum (GAP) compression in bit-planes.
@@ -761,7 +761,7 @@ public:
 
     // ------------------------------------------------------------
     /*! @name Iterator access */
-    //@{
+    ///@{
 
     /** Provide const iterator access to container content  */
     const_iterator begin() const BMNOEXCEPT;
@@ -911,7 +911,6 @@ public:
     {
         return decode_substr(cmatr, idx_from, dec_size,
                              0, MAX_STR_SIZE-1, zero_mem);
-
     }
 
     /**

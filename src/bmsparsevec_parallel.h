@@ -28,6 +28,7 @@ namespace bm
 /**
     Builder class to prepare a batch of tasks for parallel optimization of
     a sparse vector
+    @ingroup bmtasks
  */
 template<typename SVect, typename Lock>
 class optimize_plan_builder
@@ -98,6 +99,7 @@ protected:
 
 /**
     Parallel plan builder for the XOR filter scanner
+    @ingroup bmtasks
  */
 template<typename BV>
 class compute_sim_matrix_plan_builder

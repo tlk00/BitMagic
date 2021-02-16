@@ -1,5 +1,22 @@
 #ifndef BMTPOOL__H__INCLUDED__
 #define BMTPOOL__H__INCLUDED__
+/*
+Copyright(c) 2002-2021 Anatoliy Kuznetsov(anatoliy_kuznetsov at yahoo.com)
+
+Licensed under the Apache License, Version 2.0 (the "License");
+you may not use this file except in compliance with the License.
+You may obtain a copy of the License at
+
+    http://www.apache.org/licenses/LICENSE-2.0
+
+Unless required by applicable law or agreed to in writing, software
+distributed under the License is distributed on an "AS IS" BASIS,
+WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
+See the License for the specific language governing permissions and
+limitations under the License.
+
+For more information please visit:  http://bitmagic.io
+*/
 
 #include <type_traits>
 #include <queue>
@@ -17,6 +34,7 @@ namespace bm
 /**
     "noexcept" traits detection for T::lock()
     @internal
+    @ingroup bmtasks
  */
 template <typename T>
 struct is_lock_noexcept
@@ -28,10 +46,32 @@ struct is_lock_noexcept
 #endif
 };
 
+/**
+    Simple scoped lock guard
+    @internal
+    @ingroup bmtasks
+ */
+template<typename Lock> class lock_guard
+{
+public:
+    lock_guard(Lock& lk) noexcept(bm::is_lock_noexcept<Lock>::value)
+        : lk_(lk) {
+        lk_.lock();
+    }
+    ~lock_guard() { lk_.unlock(); }
+private:
+    lock_guard(const lock_guard<Lock>&) = delete;
+    lock_guard<Lock>& operator=(const lock_guard<Lock>&) = delete;
+private:
+    Lock& lk_;
+};
+
 
 /// Pad 60 bytes so that the final  ocupiles 64 bytes (1 cache line)
+/// @internal
 struct pad60_struct { char c[60]; };
 /// Empty padding
+/// @internal
 struct pad0_struct {  };
 
 /**
@@ -39,6 +79,12 @@ struct pad0_struct {  };
     padding parameter optionally adds a buffer to avoid CPU cache
     line contention.
     TODO: test if padding realy helps in our case
+
+    Generally spin_lock does not have advantage over std::mutex
+    but in some specific cases like WebAssembly it may be better
+    due no "noexcept" property
+
+    @ingroup bmtasks
  */
 template<class Pad = bm::pad0_struct>
 class spin_lock
@@ -90,6 +136,9 @@ private:
 
 /// Wait for multiple threads to exit
 ///
+/// @internal
+/// @ingroup bmtasks
+///
 template<typename TCont>
 void join_multiple_threads(TCont& tcont)
 {
@@ -106,9 +155,10 @@ template<typename QValue, typename Lock> class thread_pool;
 
 
 /**
-    Thread sync queue
+    Thread-sync queue with MT access protecion
 
-    TODO: use data structures which can guarantee "noexcept" for trivial ops
+    @ingroup bmtasks
+    @internal
  */
 template<typename Value, typename Lock>
 class queue_sync
@@ -209,9 +259,15 @@ protected:
 
 
 /**
-    Thread pool with custom (thread safe) queue
+    Thread pool with custom (thread safe) queue 
+
+    Thread pool implements a busy-wait task stealing 
+    design pattern
+
     QValue - task queue value parameter
-    Lock   - locking protection type (like std::mutex or spinlock)
+    Lock   - locking protection type (like std::mutex or spinlock)    
+    
+    @ingroup bmtasks
 */
 template<typename QValue, typename Lock>
 class thread_pool
@@ -384,8 +440,10 @@ private:
 };
 
 /**
-    Utility class to submit batched tasks to the running thread pool
-    and optionally wait for thread pool queue to empty
+    Utility class to submit task batch to the running thread pool
+    and optionally wait for it getting done
+    
+    @ingroup bmtasks
  */
 template<typename TPool>
 class thread_pool_executor

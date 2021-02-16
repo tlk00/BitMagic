@@ -33,15 +33,25 @@ For more information please visit:  http://bitmagic.io
 namespace bm
 {
 
+/** @defgroup bmtasks Task parallel programming
+    Task parallel programming compatible with different execution models
+    and runtimes 
+
+    @ingroup bmagic
+*/
+
 /** Typedef for a call-back function pointer (pthread conformant signature)
+    @ingroup bmtasks
 */
 typedef void* (*task_func_type)(void*);
 
 /**
-    Structure describing a task as a callback function, argument and result.
+    Descriptor for a task as a callback function, arguments, result.
 
-    Structure contains pointers but being a descriptor does not own
-    their scope or nature.
+    Structure contains pointers but being a descriptor it does not own
+    their scope or nature (how it is allocated).
+
+    @ingroup bmtasks
 */
 struct task_description
 {
@@ -116,7 +126,8 @@ struct task_description
 };
 
 /**
-    Interface definition for a group of tasks (batch)
+    Interface definition (base class) for a group of tasks (batch)
+    @ingroup bmtasks
  */
 class task_batch_base
 {
@@ -128,13 +139,16 @@ public:
     /// Return size of batch
     virtual size_type size() = 0;
 
-    /// Get task by number
+    /// Get task by index in the batch
+    /// @param task_idx - task index in the batch
+    /// @return task description
     virtual bm::task_description* get_task(size_type task_idx) = 0;
 
 };
 
 /**
-    Basic collection of tasks for parallel execution
+    Basic implementation for collection of tasks for parallel execution
+    @ingroup bmtasks
  */
 template<typename BVAlloc>
 class task_batch : public task_batch_base
@@ -158,11 +172,10 @@ public:
     ///
     task_vector_type& get_task_vector()  BMNOEXCEPT { return task_vect_; }
     const task_vector_type& get_task_vector() const  BMNOEXCEPT
-    { return task_vect_; }
+        { return task_vect_; }
 
 protected:
     task_vector_type      task_vect_; ///< list of tasks
-
 };
 
 
@@ -173,6 +186,7 @@ protected:
     to implement custom parallel executors
 
     @param tasks - collection of tasks to run
+    @ingroup bmtasks
  */
 inline
 void run_task_batch(task_batch_base & tasks)
@@ -188,21 +202,6 @@ void run_task_batch(task_batch_base & tasks)
 }
 
 
-/**
-    Simple scoped lock guard
-    @internal
- */
-template<typename Lock> class lock_guard
-{
-public:
-    lock_guard(Lock& lk) : lk_(lk) { lk_.lock(); }
-    ~lock_guard() { lk_.unlock(); }
-private:
-    lock_guard(const lock_guard<Lock>&) = delete;
-    lock_guard<Lock>& operator=(const lock_guard<Lock>&) = delete;
-private:
-    Lock& lk_;
-};
 
 
 } // namespace bm

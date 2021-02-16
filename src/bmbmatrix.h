@@ -325,7 +325,7 @@ public:
 
     // ------------------------------------------------------------
     /*! @name Various traits                                     */
-    //@{
+    ///@{
     /**
         \brief check if container supports NULL(unassigned) values
     */

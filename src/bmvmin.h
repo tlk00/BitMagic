@@ -54,10 +54,10 @@ void gap_convert_to_bitset(unsigned* dest, const T*  buf,  unsigned  dest_len)
 /*! @defgroup mset Small sets functionality (intrenal)
  *  @internal
  *  @ingroup bmagic
- *  @{
+ *  
  */
 
-
+/*!@{  */
 /*!
     @brief Template class implements memory saving set functionality
     @ingroup mset
@@ -274,7 +274,7 @@ private:
 };
 
 
-/*!@} */
+/**@} */
 
 /*!
     @brief Bitvector class with very limited functionality.

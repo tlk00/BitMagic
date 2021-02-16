@@ -534,7 +534,7 @@ public:
     
     // ------------------------------------------------------------
     /*! @name Various traits                                     */
-    //@{
+    ///@{
     /**
         \brief if container supports NULL(unassigned) values (true)
     */
@@ -550,7 +550,7 @@ public:
     
     // ------------------------------------------------------------
     /*! @name Comparison */
-    //@{
+    ///@{
 
     /*!
         \brief check if another vector has the same content
@@ -561,11 +561,8 @@ public:
 
 
     // ------------------------------------------------------------
-    /*! @name Load-Export compressed vector with data */
-    
-    //@{
-
-    
+    /*! @name Load-Export compressed vector with data */    
+    ///@{
     /*!
         \brief Load compressed vector from a sparse vector (with NULLs)
         \param sv_src - source sparse vector
@@ -578,11 +575,11 @@ public:
     */
     void load_to(sparse_vector_type& sv) const;
     
-    //@}
+    ///@}
     
     // ------------------------------------------------------------
     /*! @name Iterator access */
-    //@{
+    ///@{
 
     /** Provide const iterator access to container content  */
     const_iterator begin() const
@@ -676,7 +673,7 @@ public:
 
     // ------------------------------------------------------------
     /*! @name Fast access structues sync                         */
-    //@{
+    ///@{
     /*!
         \brief Re-calculate rank-select index for faster access to vector
         \param force - force recalculation even if it is already recalculated

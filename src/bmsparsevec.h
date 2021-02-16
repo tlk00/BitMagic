@@ -52,7 +52,7 @@ namespace bm
  */
 
 
-/** \defgroup sv sparse_vector<>
+/** \defgroup sv bit-sliced (bitwise transposition) succinct sparse vectors 
     Sparse vector for integer types using bit transposition transform
  
     @ingroup bmagic
@@ -60,7 +60,7 @@ namespace bm
 
 
 /*!
-   \brief sparse vector with runtime compression using bit transposition method
+   \brief succinct sparse vector with runtime compression using bit transposition method
  
    Sparse vector implements variable bit-depth storage model.
    Initial data is bit-transposed into bit-planes so each element
@@ -474,7 +474,7 @@ public:
 
     // ------------------------------------------------------------
     /*! @name Iterator access */
-    //@{
+    ///@{
 
     /** Provide const iterator access to container content  */
     const_iterator begin() const BMNOEXCEPT;
@@ -500,7 +500,7 @@ public:
 
     // ------------------------------------------------------------
     /*! @name Various traits                                     */
-    //@{
+    ///@{
     
     /** \brief set specified element to unassigned value (NULL)
         \param idx - element index
@@ -517,7 +517,7 @@ public:
 
     // ------------------------------------------------------------
     /*! @name Loading of sparse vector from C-style array       */
-    //@{
+    ///@{
     
     /*!
         \brief Import list of elements from a C-style array
