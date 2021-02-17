@@ -455,8 +455,8 @@ private:
     bool            gap_serial_;
     bool            byte_order_serial_;
 
-    bool            sb_bookmarks_;
-    unsigned        sb_range_;
+    bool            sb_bookmarks_; ///< Bookmarks flag
+    unsigned        sb_range_;     ///< Desired bookmarks interval
 
     bm::word_t*     temp_block_;
     unsigned        compression_level_;

@@ -202,6 +202,41 @@ void run_task_batch(task_batch_base & tasks)
 }
 
 
+/**
+    "noexcept" traits detection for T::lock()
+    @internal
+    @ingroup bmtasks
+ */
+template <typename T>
+struct is_lock_noexcept
+{
+#if BM_DONT_WANT_TYPE_TRAITS_HEADER // not used
+    constexpr static bool value = noexcept(((T*)nullptr)->lock());
+#else
+    constexpr static bool value = noexcept(std::declval<T>().lock());
+#endif
+};
+
+/**
+    Simple scoped lock guard
+    @internal
+    @ingroup bmtasks
+ */
+template<typename Lock> class lock_guard
+{
+public:
+    lock_guard(Lock& lk) noexcept(bm::is_lock_noexcept<Lock>::value)
+        : lk_(lk) {
+        lk_.lock();
+    }
+    ~lock_guard() { lk_.unlock(); }
+private:
+    lock_guard(const lock_guard<Lock>&) = delete;
+    lock_guard<Lock>& operator=(const lock_guard<Lock>&) = delete;
+private:
+    Lock& lk_;
+};
+
 
 
 } // namespace bm

@@ -189,7 +189,7 @@ public:
         smaller interval means more bookmarks added to the skip list thus
         more increasing the BLOB size
     */
-    void set_bookmarks(bool enable, unsigned bm_interval = 256)
+    void set_bookmarks(bool enable, unsigned bm_interval = 256) BMNOEXCEPT
         { bvs_.set_bookmarks(enable, bm_interval); }
 
     /**

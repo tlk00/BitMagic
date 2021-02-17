@@ -22,6 +22,8 @@ For more information please visit:  http://bitmagic.io
     \brief Parallel planner for operations with sparse vectors
 */
 
+#include "bmsparsevec_serial.h"
+
 namespace bm
 {
 
@@ -144,6 +146,8 @@ public:
 
 protected:
 
+    /// Task execution Entry Point
+    /// @internal
     static void* task_run(void* argp)
     {
         thread_local bm::xor_scanner<BV> xor_scan;
@@ -167,6 +171,134 @@ protected:
         xor_scan.compute_sim_model(*sim_model, nb, rank, *params);
         return 0;
     }
+};
+
+
+/**
+    Parallel plan builder for succinct sparse vector serialization
+
+    @sa sparse_vector_serializer
+    @ingroup bmtasks
+ */
+template<typename SV>
+class sv_serialization_plan_builder
+{
+public:
+    typedef SV                                       sparse_vector_type;
+    typedef typename SV::bvector_type                bvector_type;
+    typedef typename SV::size_type                   size_type;
+    typedef typename bvector_type::allocator_type    allocator_type;
+    typedef bm::bv_ref_vector<bvector_type>          bv_ref_vector_type;
+    typedef bm::xor_sim_model<bvector_type>          xor_sim_model_type;
+
+
+    struct serialization_params
+    {
+        serialization_params()
+        : sb_bookmarks_(false),
+          sb_range_(0),
+          compression_level_(bm::set_compression_default),
+          bv_ref_ptr_(0), sim_model_ptr_(0)
+        {}
+
+        bool            sb_bookmarks_; ///< Bookmarks flag
+        unsigned        sb_range_;     ///< Desired bookmarks interval
+        unsigned        compression_level_;
+
+        const bv_ref_vector_type*   bv_ref_ptr_;
+        const xor_sim_model_type*   sim_model_ptr_;
+    };
+
+    struct task_batch : public bm::task_batch<allocator_type>
+    {
+        typedef bm::task_batch<allocator_type>          parent_type;
+        typedef typename parent_type::task_vector_type  task_vector_type;
+
+        serialization_params s_params;
+    };
+
+public:
+    sv_serialization_plan_builder()
+    {}
+
+    void set_bookmarks(bool enable, unsigned bm_interval = 256) BMNOEXCEPT
+        { s_params_.sb_bookmarks_ = enable; s_params_.sb_range_ = bm_interval; }
+
+    void set_xor_ref(const bv_ref_vector_type* bv_ref_ptr) BMNOEXCEPT
+        {  s_params_.bv_ref_ptr_ = bv_ref_ptr; }
+
+    void set_sim_model(const xor_sim_model_type* sim_model) BMNOEXCEPT
+        { s_params_.sim_model_ptr_ = sim_model; }
+
+
+    void build_plan(task_batch& batch,
+                    sparse_vector_serial_layout<SV>&  sv_layout,
+                    const sparse_vector_type& sv)
+    {
+        typename task_batch::task_vector_type& tv = batch.get_task_vector();
+        unsigned planes = sv.stored_planes();
+        tv.reserve(planes + 1); // +1 for finalization task
+
+        batch.s_params = s_params_;
+
+        for (unsigned i = 0; i < planes; ++i)
+        {
+            typename SV::bvector_type_const_ptr bv = sv.get_plane(i);
+            if (!bv)  // empty plane
+            {
+                sv_layout.set_plane(i, 0, 0);
+                continue;
+            }
+
+            bm::task_description& tdescr = tv.add();
+            tdescr.init(task_run, (void*)&tdescr,
+                        (void*)bv, (void*)&batch.s_params, 0);
+            tdescr.ret = (void*)&sv_layout;
+
+            if (s_params_.bv_ref_ptr_)
+            {
+                BM_ASSERT(batch.s_params.sim_model_ptr_);
+                tdescr.payload0.u32 =
+                    (unsigned)s_params_.bv_ref_ptr_->find_bv(bv);
+                BM_ASSERT(tdescr.payload0.u32
+                          != s_params_.bv_ref_ptr_->not_found());
+            }
+            else
+            {
+                // ref vector not set: see set_xor_ref()
+                BM_ASSERT(!batch.s_params.sim_model_ptr_);
+            }
+
+        } // for i
+
+        // Add barrier task at the end to finalize the compression
+
+        bm::task_description& tdescr = tv.add();
+        tdescr.init(task_run_final, (void*)&tdescr,
+                    (void*)0, (void*)&batch.s_params, 0);
+        tdescr.flags = bm::task_description::barrier_ok;
+        tdescr.ret = (void*)&sv_layout;
+    }
+protected:
+    /// Task execution Entry Point
+    /// @internal
+    static void* task_run(void* argp)
+    {
+        if (!argp)
+            return 0;
+        //TODO: full implementation
+        return 0;
+    }
+
+    static void* task_run_final(void* argp)
+    {
+        if (!argp)
+            return 0;
+        //TODO: full implementation
+        return 0;
+    }
+protected:
+    serialization_params s_params_;
 };
 
 } // namespace bm
