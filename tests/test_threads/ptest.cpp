@@ -271,6 +271,7 @@ void TestParallelSV_Serial(const char* test_label,
         sparse_vector_u32 sv1o, sv2o, sv3o(bm::use_null), sv4o(bm::use_null);
 
         bm::sparse_vector_serial_layout<sparse_vector_u32> sv_lay1, sv_lay2, sv_lay3, sv_lay4;
+        bm::sparse_vector_serial_layout<sparse_vector_u32> sv_lay1p, sv_lay2p, sv_lay3p, sv_lay4p;
 
         typedef PoolType pool_type;
 
@@ -328,21 +329,33 @@ void TestParallelSV_Serial(const char* test_label,
             {
                 sv_serializer.set_sim_model(&sim_model);
 
+                bm::sv_serialization_plan_builder<sparse_vector_u32> sbuilder;
+                sbuilder.set_xor_ref(&bv_ref);
+                sbuilder.set_sim_model(&sim_model);
+
+                {
+                    bm::sv_serialization_plan_builder<sparse_vector_u32>::task_batch tbatch;
+                    sbuilder.build_plan(tbatch, sv_lay1p, sv1i);
+                }
+
                 sv_serializer.serialize(sv1i, sv_lay1);
                 {
                     const bvect::size_type* cstat = sv_serializer.get_bv_serializer().get_compression_stat();
                     assert(cstat[bm::set_block_ref_eq]>0);
                 }
+
                 sv_serializer.serialize(sv2i, sv_lay2);
                 {
                     const bvect::size_type* cstat = sv_serializer.get_bv_serializer().get_compression_stat();
                     assert(cstat[bm::set_block_ref_eq]>=1 || cstat[bm::set_block_xor_ref32] >= 1);
                 }
+
                 sv_serializer.serialize(sv3i, sv_lay3);
                 {
                     const bvect::size_type* cstat = sv_serializer.get_bv_serializer().get_compression_stat();
                     assert(cstat[bm::set_block_ref_eq]>=1 || cstat[bm::set_block_xor_ref32] >= 1);
                 }
+
                 sv_serializer.serialize(sv4i, sv_lay4);
                 {
                     //const bvect::size_type* cstat = sv_serializer.get_bv_serializer().get_compression_stat();
