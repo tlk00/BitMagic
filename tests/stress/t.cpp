@@ -25309,6 +25309,19 @@ void TestStrSparseVectorSerial()
             ::memcpy(buf_v.data(), buf, sv_lay.size());
         }
 
+        {
+            sparse_vector_serial_layout<str_sparse_vector<char, bvect, 32> > sv_lay2;
+            bm::sparse_vector_serialize<str_sparse_vector<char, bvect, 32> >(str_sv1, sv_lay2, tb);
+            const unsigned char* buf1 = sv_lay.buf();
+            const unsigned char* buf2 = sv_lay2.buf();
+            auto sz1 = sv_lay.size();
+            auto sz2 = sv_lay2.size();
+            assert(sz1 == sz2);
+            int cmp = ::memcmp(buf1, buf2, sz1);
+            assert(cmp == 0);
+        }
+
+
         sparse_vector_u32::bvector_type bv_mask;
         bv_mask.set(1);
         bv_mask.set(2);
@@ -25356,6 +25369,33 @@ void TestStrSparseVectorSerial()
             ::memcpy(buf_v.data(), buf, sv_lay.size());
         }
 
+        {
+            sparse_vector_serial_layout<str_sparse_vector<char, bvect, 32> > sv_lay2;
+            bm::sparse_vector_serialize<str_sparse_vector<char, bvect, 32> >(str_sv1, sv_lay2, tb);
+            const unsigned char* buf1 = sv_lay.buf();
+            const unsigned char* buf2 = sv_lay2.buf();
+            auto sz1 = sv_lay.size();
+            auto sz2 = sv_lay2.size();
+            assert(sz1 == sz2);
+            cout << sz1 << endl;
+            int cmp = ::memcmp(buf1, buf2, sz1);
+            if (cmp)
+            {
+                for (size_t i = 0; i < sz1; ++i)
+                {
+                    unsigned char ch1 = buf1[i];
+                    unsigned char ch2 = buf2[i];
+                    if (ch1 != ch2)
+                    {
+                        cerr << "Buffer diff at pos=" << i << endl;
+                        exit(1);
+                    }
+                } // for
+            }
+            assert(cmp == 0);
+        }
+
+
         bm::sparse_vector_deserializer<str_sparse_vector<char, bvect, 32> > sv_deserial;
         sv_deserial.deserialize(str_sv2, buf_v.data());
 
@@ -25383,6 +25423,18 @@ void TestStrSparseVectorSerial()
         sparse_vector_serial_layout<str_sparse_vector<char, bvect, 32> > sv_lay;
         bm::sparse_vector_serialize<str_sparse_vector<char, bvect, 32> >(str_sv1, sv_lay, tb);
 
+        {
+            sparse_vector_serial_layout<str_sparse_vector<char, bvect, 32> > sv_lay2;
+            bm::sparse_vector_serialize<str_sparse_vector<char, bvect, 32> >(str_sv1, sv_lay2, tb);
+            const unsigned char* buf1 = sv_lay.buf();
+            const unsigned char* buf2 = sv_lay2.buf();
+            auto sz1 = sv_lay.size();
+            auto sz2 = sv_lay2.size();
+            assert(sz1 == sz2);
+            int cmp = ::memcmp(buf1, buf2, sz1);
+            assert(cmp == 0);
+        }
+
         std::vector<unsigned char> buf_v;
         {
             buf_v.resize(sv_lay.size());
@@ -25400,6 +25452,62 @@ void TestStrSparseVectorSerial()
         assert(b);
     }
 
+    {
+       str_sparse_vector<char, bvect, 32> str_sv1(bm::use_null);
+       str_sparse_vector<char, bvect, 32> str_sv2;
+
+       str_sparse_vector<char, bvect, 32>::back_insert_iterator bi = str_sv1.get_back_inserter();
+       for (unsigned i = 0; i < 65536;++i)
+       {
+           bi = "1";
+           bi = "1234";
+       }
+       bi.flush();
+
+       str_sv1.remap();
+
+        BM_DECLARE_TEMP_BLOCK(tb)
+        sparse_vector_serial_layout<str_sparse_vector<char, bvect, 32> > sv_lay;
+        bm::sparse_vector_serialize<str_sparse_vector<char, bvect, 32> >(str_sv1, sv_lay, tb);
+
+        std::vector<unsigned char> buf_v_prev;
+        for (unsigned pass = 0; pass < 10; ++pass)
+        {
+            sparse_vector_serial_layout<str_sparse_vector<char, bvect, 32> > sv_lay2;
+            bm::sparse_vector_serialize<str_sparse_vector<char, bvect, 32> >(str_sv1, sv_lay2, tb);
+            const unsigned char* buf1 = sv_lay.buf();
+            const unsigned char* buf2 = sv_lay2.buf();
+            auto sz1 = sv_lay.size();
+            auto sz2 = sv_lay2.size();
+            assert(sz1 == sz2);
+            int cmp = ::memcmp(buf1, buf2, sz1);
+            assert(cmp == 0);
+            if (pass)
+            {
+                const unsigned char* buf_prev = buf_v_prev.data();
+                cmp = ::memcmp(buf_prev, buf2, sz1);
+                assert(cmp == 0);
+            }
+            buf_v_prev.resize(sv_lay2.size());
+            ::memcpy((void*)buf_v_prev.data(), buf2, sv_lay2.size());
+        }
+
+        std::vector<unsigned char> buf_v;
+        {
+            buf_v.resize(sv_lay.size());
+            const unsigned char* buf = sv_lay.buf();
+            ::memcpy(buf_v.data(), buf, sv_lay.size());
+        }
+
+        bm::sparse_vector_deserializer<str_sparse_vector<char, bvect, 32> > sv_deserial;
+        sv_deserial.deserialize(str_sv2, buf_v.data());
+
+        auto* bv = str_sv2.get_null_bvector();
+        assert(bv);
+
+        bool b = str_sv1.equal(str_sv2);
+        assert(b);
+    }
 
 
 
@@ -25436,6 +25544,17 @@ void TestStrSparseVectorSerial()
             buf_v.resize(sv_lay.size());
             const unsigned char* buf = sv_lay.buf();
             ::memcpy(buf_v.data(), buf, sv_lay.size());
+        }
+        {
+            sparse_vector_serial_layout<str_sparse_vector<char, bvect, 32> > sv_lay2;
+            bm::sparse_vector_serialize<str_sparse_vector<char, bvect, 32> >(str_sv1, sv_lay2, tb);
+            const unsigned char* buf1 = sv_lay.buf();
+            const unsigned char* buf2 = sv_lay2.buf();
+            auto sz1 = sv_lay.size();
+            auto sz2 = sv_lay2.size();
+            assert(sz1 == sz2);
+            int cmp = ::memcmp(buf1, buf2, sz1);
+            assert(cmp == 0);
         }
 
         bm::sparse_vector_deserializer<str_sparse_vector<char, bvect, 32> > sv_deserial;
