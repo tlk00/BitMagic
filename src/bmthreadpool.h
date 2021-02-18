@@ -466,7 +466,7 @@ public:
         //qu.unlock();
 
         // implicit wait barrier for all tasks
-        if (wait_for_batch)
+        if (wait_for_batch && batch_size)
         {
             tpool.wait_empty_queue();
             wait_for_batch_done(/*tpool,*/ tasks, 0, batch_size - 1);
