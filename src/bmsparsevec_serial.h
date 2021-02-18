@@ -937,7 +937,7 @@ void sparse_vector_serializer<SV>::serialize(const SV&  sv,
 
     // ----------------------------------------------------
     //
-    bm::encoder enc(buf, (unsigned)sv_layout.capacity());
+    bm::encoder enc(buf, sv_layout.capacity());
 
     // header size in bytes
     unsigned h_size = 1 + 1 +        // "BM" or "BC" (magic header)
@@ -977,7 +977,8 @@ void sparse_vector_serializer<SV>::serialize(const SV&  sv,
     // ----------------------------------------------------
     // Serialize all bvector planes
     //
-    
+
+    ::memset(buf, 0, h_size);
     unsigned char* buf_ptr = buf + h_size; // ptr where planes start (start+hdr)
 
     for (unsigned i = 0; i < planes; ++i)
