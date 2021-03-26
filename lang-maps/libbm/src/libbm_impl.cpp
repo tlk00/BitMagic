@@ -48,14 +48,17 @@ typedef bm::bvector<libbm::standard_allocator>::enumerator TBM_bvector_enumerato
 static
 unsigned x86_simd(void)
 {
-  unsigned eax, ebx, ecx, edx, flag = 0;
+  unsigned flag = 0;
+
+#ifdef BM_x86
+  unsigned eax, ebx, ecx, edx;
 #ifdef _MSC_VER
   int cpuid[4];
   __cpuid(cpuid, 1);
   eax = cpuid[0], ebx = cpuid[1], ecx = cpuid[2], edx = cpuid[3];
 #else
   asm volatile("cpuid" : "=a" (eax), "=b" (ebx), "=c" (ecx), "=d" (edx) : "a" (1));
-#endif
+#endif // _MSC_VER
   if (edx>>25&1) flag |= SIMD_SSE;
   if (edx>>26&1) flag |= SIMD_SSE2;
   if (ecx>>0 &1) flag |= SIMD_SSE3;
@@ -64,6 +67,8 @@ unsigned x86_simd(void)
   if (ecx>>28&1) flag |= SIMD_AVX;
   if (ebx>>5 &1) flag |= SIMD_AVX2;
   if (ebx>>16&1) flag |= SIMD_AVX512F;
+#endif // BM_x86
+
   return flag;
 }
 
