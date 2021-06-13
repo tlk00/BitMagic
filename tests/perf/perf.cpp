@@ -23,6 +23,7 @@ For more information please visit:  http://bitmagic.io
 #include <sstream>
 #include <cassert>
 
+//#define BMWASMSIMDOPT
 //#define BMSSE2OPT
 //#define BMSSE42OPT
 //#define BMAVX2OPT
@@ -4063,6 +4064,7 @@ void InterpolativeCodingTest()
 int main(void)
 {
     cout << bm::_copyright<true>::_p << endl;
+    cout << "SIMD code = " << bm::simd_version() << endl;
 //    ptest();
 
     bm::chrono_taker tt("TOTAL", 1);
@@ -4154,6 +4156,7 @@ int main(void)
 
         StrSparseVectorTest();
         cout << endl;
+
     }
     catch (std::exception& ex)
     {
