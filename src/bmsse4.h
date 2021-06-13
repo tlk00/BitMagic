@@ -20,9 +20,14 @@ For more information please visit:  http://bitmagic.io
 
 /*! \file bmsse4.h
     \brief Compute functions for SSE4.2 SIMD instruction set (internal)
+
+    Aside from SSE4.2 it also compiles in WASM SIMD mode
+    for 128-bit SIMD portable target.
 */
 
+#ifndef BMWASMSIMDOPT
 #include<mmintrin.h>
+#endif
 #include<emmintrin.h>
 #include<smmintrin.h>
 #include<nmmintrin.h>
@@ -52,6 +57,16 @@ namespace bm
 #endif
 
 
+// WASM build: define missing POPCNT intrinsics via GCC build-ins
+#ifdef BMWASMSIMDOPT
+# define _mm_popcnt_u32 __builtin_popcount
+# define _mm_popcnt_u64 __builtin_popcountll
+# define BM_BSF32 __builtin_ctz
+#else
+# define BM_BSF32 bm::bsf_asm32
+#endif
+
+
 /*
 inline
 void sse2_print128(const char* prefix, const __m128i & value)
@@ -75,7 +90,7 @@ void sse2_print128(const char* prefix, const __m128i & value)
     @ingroup SSE4
 */
 inline 
-bm::id_t sse4_bit_count(const __m128i* block, const __m128i* block_end)
+bm::id_t sse4_bit_count(const __m128i* block, const __m128i* block_end) BMNOEXCEPT
 {
     bm::id_t count = 0;
 #ifdef BM64_SSE4
@@ -104,7 +119,7 @@ bm::id_t sse4_bit_count(const __m128i* block, const __m128i* block_end)
 \internal
 */
 BMFORCEINLINE 
-unsigned op_xor(unsigned a, unsigned b)
+unsigned op_xor(unsigned a, unsigned b) BMNOEXCEPT
 {
     unsigned ret = (a ^ b);
     return ret;
@@ -114,7 +129,7 @@ unsigned op_xor(unsigned a, unsigned b)
 \internal
 */
 BMFORCEINLINE 
-unsigned op_or(unsigned a, unsigned b)
+unsigned op_or(unsigned a, unsigned b) BMNOEXCEPT
 {
     return (a | b);
 }
@@ -123,7 +138,7 @@ unsigned op_or(unsigned a, unsigned b)
 \internal
 */
 BMFORCEINLINE 
-unsigned op_and(unsigned a, unsigned b)
+unsigned op_and(unsigned a, unsigned b) BMNOEXCEPT
 {
     return (a & b);
 }
@@ -133,7 +148,7 @@ template<class Func>
 bm::id_t sse4_bit_count_op(const __m128i* BMRESTRICT block, 
                            const __m128i* BMRESTRICT block_end,
                            const __m128i* BMRESTRICT mask_block,
-                           Func sse2_func)
+                           Func sse2_func) BMNOEXCEPT
 {
     bm::id_t count = 0;
 #ifdef BM64_SSE4
@@ -172,7 +187,7 @@ bm::id_t sse4_bit_count_op(const __m128i* BMRESTRICT block,
     @ingroup SSE4
 */
 inline
-bool sse4_is_all_zero(const __m128i* BMRESTRICT block)
+bool sse4_is_all_zero(const __m128i* BMRESTRICT block) BMNOEXCEPT
 {
     __m128i w;
     __m128i maskz = _mm_setzero_si128();
@@ -197,7 +212,7 @@ bool sse4_is_all_zero(const __m128i* BMRESTRICT block)
     @ingroup SSE4
 */
 inline
-bool sse4_is_digest_zero(const __m128i* BMRESTRICT block)
+bool sse4_is_digest_zero(const __m128i* BMRESTRICT block) BMNOEXCEPT
 {
     __m128i wA = _mm_or_si128(_mm_load_si128(block+0), _mm_load_si128(block+1));
     __m128i wB = _mm_or_si128(_mm_load_si128(block+2), _mm_load_si128(block+3));
@@ -216,7 +231,7 @@ bool sse4_is_digest_zero(const __m128i* BMRESTRICT block)
     @ingroup SSE4
 */
 inline
-void sse4_block_set_digest(__m128i* dst, unsigned value)
+void sse4_block_set_digest(__m128i* dst, unsigned value) BMNOEXCEPT
 {
     __m128i mV = _mm_set1_epi32(int(value));
     _mm_store_si128(dst, mV);     _mm_store_si128(dst + 1, mV); 
@@ -235,7 +250,7 @@ void sse4_block_set_digest(__m128i* dst, unsigned value)
 */
 inline
 unsigned sse4_and_block(__m128i* BMRESTRICT dst,
-                       const __m128i* BMRESTRICT src)
+                       const __m128i* BMRESTRICT src) BMNOEXCEPT
 {
     __m128i m1A, m1B, m1C, m1D;
     __m128i accA, accB, accC, accD;
@@ -282,7 +297,7 @@ unsigned sse4_and_block(__m128i* BMRESTRICT dst,
 */
 inline
 bool sse4_and_digest(__m128i* BMRESTRICT dst,
-                     const __m128i* BMRESTRICT src)
+                     const __m128i* BMRESTRICT src) BMNOEXCEPT
 {
     __m128i m1A, m1B, m1C, m1D;
 
@@ -331,7 +346,7 @@ bool sse4_and_digest(__m128i* BMRESTRICT dst,
 inline
 bool sse4_and_digest_2way(__m128i* BMRESTRICT dst,
                           const __m128i* BMRESTRICT src1,
-                          const __m128i* BMRESTRICT src2)
+                          const __m128i* BMRESTRICT src2) BMNOEXCEPT
 {
     __m128i m1A, m1B, m1C, m1D;
 
@@ -380,7 +395,7 @@ bool sse4_and_digest_5way(__m128i* BMRESTRICT dst,
                           const __m128i* BMRESTRICT src1,
                           const __m128i* BMRESTRICT src2,
                           const __m128i* BMRESTRICT src3,
-                          const __m128i* BMRESTRICT src4)
+                          const __m128i* BMRESTRICT src4) BMNOEXCEPT
 {
     __m128i m1A, m1B, m1C, m1D;
     __m128i m1E, m1F, m1G, m1H;
@@ -460,7 +475,7 @@ bool sse4_and_digest_5way(__m128i* BMRESTRICT dst,
 */
 inline
 bool sse4_sub_digest(__m128i* BMRESTRICT dst,
-                     const __m128i* BMRESTRICT src)
+                     const __m128i* BMRESTRICT src) BMNOEXCEPT
 {
     __m128i m1A, m1B, m1C, m1D;
 
@@ -510,7 +525,7 @@ bool sse4_sub_digest(__m128i* BMRESTRICT dst,
 inline
 bool sse4_sub_digest_2way(__m128i* BMRESTRICT dst,
                           const __m128i* BMRESTRICT src1,
-                          const __m128i* BMRESTRICT src2)
+                          const __m128i* BMRESTRICT src2) BMNOEXCEPT
 {
     __m128i m1A, m1B, m1C, m1D;
 
@@ -556,7 +571,7 @@ bool sse4_sub_digest_2way(__m128i* BMRESTRICT dst,
     @ingroup SSE4
 */
 inline
-bool sse4_is_all_one(const __m128i* BMRESTRICT block)
+bool sse4_is_all_one(const __m128i* BMRESTRICT block) BMNOEXCEPT
 {
     __m128i w;
     const __m128i* BMRESTRICT block_end =
@@ -581,7 +596,7 @@ bool sse4_is_all_one(const __m128i* BMRESTRICT block)
     @ingroup SSE4
 */
 BMFORCEINLINE
-bool sse42_test_all_one_wave(const void* ptr)
+bool sse42_test_all_one_wave(const void* ptr) BMNOEXCEPT
 {
     return _mm_test_all_ones(_mm_loadu_si128((__m128i*)ptr));
 }
@@ -592,7 +607,7 @@ bool sse42_test_all_one_wave(const void* ptr)
     @ingroup SSE4
 */
 BMFORCEINLINE
-bool sse42_test_all_zero_wave(const void* ptr)
+bool sse42_test_all_zero_wave(const void* ptr) BMNOEXCEPT
 {
     __m128i w0 = _mm_loadu_si128((__m128i*)ptr);
     return _mm_testz_si128(w0, w0);
@@ -603,7 +618,7 @@ bool sse42_test_all_zero_wave(const void* ptr)
     @ingroup SSE4
 */
 BMFORCEINLINE
-bool sse42_test_all_zero_wave2(const void* ptr0, const void* ptr1)
+bool sse42_test_all_zero_wave2(const void* ptr0, const void* ptr1) BMNOEXCEPT
 {
     __m128i w0 = _mm_loadu_si128((__m128i*)ptr0);
     __m128i w1 = _mm_loadu_si128((__m128i*)ptr1);
@@ -616,7 +631,7 @@ bool sse42_test_all_zero_wave2(const void* ptr0, const void* ptr1)
     @ingroup SSE4
 */
 BMFORCEINLINE
-bool sse42_test_all_eq_wave2(const void* ptr0, const void* ptr1)
+bool sse42_test_all_eq_wave2(const void* ptr0, const void* ptr1) BMNOEXCEPT
 {
     __m128i w0 = _mm_loadu_si128((__m128i*)ptr0);
     __m128i w1 = _mm_loadu_si128((__m128i*)ptr1);
@@ -631,8 +646,10 @@ bool sse42_test_all_eq_wave2(const void* ptr0, const void* ptr1)
 */
 inline
 unsigned sse42_bit_block_calc_change(const __m128i* BMRESTRICT block,
-                                     unsigned size)
+                                     unsigned size) BMNOEXCEPT
 {
+    bm::id64_t BM_ALIGN32 tcnt[2] BM_ALIGN32ATTR;
+
     const __m128i* block_end =
         ( __m128i*)((bm::word_t*)(block) + size); // bm::set_block_size
     __m128i m1COshft, m2COshft;
@@ -674,6 +691,11 @@ unsigned sse42_bit_block_calc_change(const __m128i* BMRESTRICT block,
         m2A = _mm_xor_si128(m2A, m2As);
         
 #ifdef BM64_SSE4
+       _mm_store_si128((__m128i*)tcnt, m1A);
+        count += unsigned(_mm_popcnt_u64(tcnt[0]) + _mm_popcnt_u64(tcnt[1]));
+       _mm_store_si128((__m128i*)tcnt, m2A);
+        count += unsigned(_mm_popcnt_u64(tcnt[0]) + _mm_popcnt_u64(tcnt[1]));
+/*
         bm::id64_t m0 = _mm_extract_epi64(m1A, 0);
         bm::id64_t m1 = _mm_extract_epi64(m1A, 1);
         count += unsigned(_mm_popcnt_u64(m0) + _mm_popcnt_u64(m1));
@@ -681,6 +703,7 @@ unsigned sse42_bit_block_calc_change(const __m128i* BMRESTRICT block,
         m0 = _mm_extract_epi64(m2A, 0);
         m1 = _mm_extract_epi64(m2A, 1);
         count += unsigned(_mm_popcnt_u64(m0) + _mm_popcnt_u64(m1));
+*/
 #else
         bm::id_t m0 = _mm_extract_epi32(m1A, 0);
         bm::id_t m1 = _mm_extract_epi32(m1A, 1);
@@ -712,7 +735,7 @@ void sse42_bit_block_calc_xor_change(const __m128i* BMRESTRICT block,
                                      const __m128i* BMRESTRICT xor_block,
                                      unsigned size,
                                      unsigned* BMRESTRICT gc,
-                                     unsigned* BMRESTRICT bc)
+                                     unsigned* BMRESTRICT bc) BMNOEXCEPT
 {
 #ifdef BM64_SSE4
     bm::id64_t BM_ALIGN32 simd_buf[2] BM_ALIGN32ATTR;
@@ -830,7 +853,7 @@ void sse42_bit_block_calc_xor_change(const __m128i* BMRESTRICT block,
 */
 inline
 void sse42_bit_block_calc_change_bc(const __m128i* BMRESTRICT block,
-                                    unsigned* gc, unsigned* bc)
+                                    unsigned* gc, unsigned* bc) BMNOEXCEPT
 {
     const __m128i* block_end =
         ( __m128i*)((bm::word_t*)(block) + bm::set_block_size);
@@ -906,7 +929,7 @@ void sse42_bit_block_calc_change_bc(const __m128i* BMRESTRICT block,
 inline
 bool sse42_bit_find_first_diff(const __m128i* BMRESTRICT block1,
                                const __m128i* BMRESTRICT block2,
-                               unsigned* pos)
+                               unsigned* pos) BMNOEXCEPT
 {
     unsigned BM_ALIGN32 simd_buf[4] BM_ALIGN32ATTR;
 
@@ -927,22 +950,22 @@ bool sse42_bit_find_first_diff(const __m128i* BMRESTRICT block1,
                 unsigned mask = _mm_movemask_epi8(_mm_cmpeq_epi32(mA, maskZ));
                 mask = ~mask; // invert to find (w != 0)
                 BM_ASSERT(mask);
-                int bsf = bm::bsf_asm32(mask); // find first !=0 (could use lzcnt())
+                int bsf = BM_BSF32(mask); // find first !=0 (could use lzcnt())
                 _mm_store_si128 ((__m128i*)simd_buf, mA);
                 unsigned widx = bsf >> 2; // (bsf / 4);
                 unsigned w = simd_buf[widx]; // _mm_extract_epi32 (mA, widx);
-                bsf = bm::bsf_asm32(w); // find first bit != 0
+                bsf = BM_BSF32(w); // find first bit != 0
                 *pos = (simd_lane * 128) + (widx * 32) + bsf;
                 return true;
             }
             unsigned mask = _mm_movemask_epi8(_mm_cmpeq_epi32(mB, maskZ));
             mask = ~mask; // invert to find (w != 0)
             BM_ASSERT(mask);
-            int bsf = bm::bsf_asm32(mask); // find first !=0 (could use lzcnt())
+            int bsf = BM_BSF32(mask); // find first !=0 (could use lzcnt())
             _mm_store_si128 ((__m128i*)simd_buf, mB);
             unsigned widx = bsf >> 2; // (bsf / 4);
             unsigned w = simd_buf[widx]; // _mm_extract_epi32 (mB, widx);
-            bsf = bm::bsf_asm32(w); // find first bit != 0
+            bsf = BM_BSF32(w); // find first bit != 0
             *pos = ((++simd_lane) * 128) + (widx * 32) + bsf;
             return true;
         }
@@ -961,7 +984,7 @@ bool sse42_bit_find_first_diff(const __m128i* BMRESTRICT block1,
 */
 inline
 bool sse42_bit_find_first(const __m128i* BMRESTRICT block,
-                          unsigned* pos)
+                          unsigned* pos) BMNOEXCEPT
 {
     unsigned BM_ALIGN32 simd_buf[4] BM_ALIGN32ATTR;
 
@@ -981,22 +1004,22 @@ bool sse42_bit_find_first(const __m128i* BMRESTRICT block,
                 unsigned mask = _mm_movemask_epi8(_mm_cmpeq_epi32(mA, maskZ));
                 mask = ~mask; // invert to find (w != 0)
                 BM_ASSERT(mask);
-                int bsf = bm::bsf_asm32(mask); // find first !=0 (could use lzcnt())
+                int bsf = BM_BSF32(mask); // find first !=0 (could use lzcnt())
                 _mm_store_si128 ((__m128i*)simd_buf, mA);
                 unsigned widx = bsf >> 2; // (bsf / 4);
                 unsigned w = simd_buf[widx];
-                bsf = bm::bsf_asm32(w); // find first bit != 0
+                bsf = BM_BSF32(w); // find first bit != 0
                 *pos = (simd_lane * 128) + (widx * 32) + bsf;
                 return true;
             }
             unsigned mask = _mm_movemask_epi8(_mm_cmpeq_epi32(mB, maskZ));
             mask = ~mask; // invert to find (w != 0)
             BM_ASSERT(mask);
-            int bsf = bm::bsf_asm32(mask); // find first !=0 (could use lzcnt())
+            int bsf = BM_BSF32(mask); // find first !=0 (could use lzcnt())
             _mm_store_si128 ((__m128i*)simd_buf, mB);
             unsigned widx = bsf >> 2; // (bsf / 4);
             unsigned w = simd_buf[widx];
-            bsf = bm::bsf_asm32(w); // find first bit != 0
+            bsf = BM_BSF32(w); // find first bit != 0
             *pos = ((++simd_lane) * 128) + (widx * 32) + bsf;
             return true;
         }
@@ -1025,7 +1048,7 @@ bool sse42_bit_find_first(const __m128i* BMRESTRICT block,
 */
 inline
 unsigned sse4_gap_find(const bm::gap_word_t* BMRESTRICT pbuf,
-                       const bm::gap_word_t pos, const unsigned size)
+                       const bm::gap_word_t pos, const unsigned size) BMNOEXCEPT
 {
     BM_ASSERT(size <= 16);
     BM_ASSERT(size);
@@ -1090,7 +1113,7 @@ unsigned sse4_gap_find(const bm::gap_word_t* BMRESTRICT pbuf,
 */
 inline
 unsigned sse42_gap_bfind(const unsigned short* BMRESTRICT buf,
-                         unsigned pos, unsigned* BMRESTRICT is_set)
+                         unsigned pos, unsigned* BMRESTRICT is_set) BMNOEXCEPT
 {
     unsigned start = 1;
     unsigned end = 1 + ((*buf) >> 3);
@@ -1137,7 +1160,7 @@ unsigned sse42_gap_bfind(const unsigned short* BMRESTRICT buf,
     @ingroup SSE4
 */
 inline
-unsigned sse42_gap_test(const unsigned short* BMRESTRICT buf, unsigned pos)
+unsigned sse42_gap_test(const unsigned short* BMRESTRICT buf, unsigned pos) BMNOEXCEPT
 {
     unsigned is_set;
     bm::sse42_gap_bfind(buf, pos, &is_set);
@@ -1154,7 +1177,7 @@ unsigned sse42_gap_test(const unsigned short* BMRESTRICT buf, unsigned pos)
     \internal
 */
 inline
-int sse42_cmpge_u32(__m128i vect4, unsigned value)
+int sse42_cmpge_u32(__m128i vect4, unsigned value) BMNOEXCEPT
 {
     // a > b (unsigned, 32-bit) is the same as (a - 0x80000000) > (b - 0x80000000) (signed, 32-bit)
     // https://fgiesen.wordpress.com/2016/04/03/sse-mind-the-gap/
@@ -1172,7 +1195,7 @@ int sse42_cmpge_u32(__m128i vect4, unsigned value)
     int mask = _mm_movemask_epi8(cmp_mask_ge);
     if (mask)
     {
-        int bsf = bm::bsf_asm32(mask);//_bit_scan_forward(mask);   // could use lzcnt()
+        int bsf = BM_BSF32(mask);//_bit_scan_forward(mask);
         return bsf / 4;
     }
     return -1;
@@ -1188,7 +1211,7 @@ inline
 unsigned sse4_lower_bound_scan_u32(const unsigned* BMRESTRICT arr,
                                    unsigned target,
                                    unsigned from,
-                                   unsigned to)
+                                   unsigned to) BMNOEXCEPT
 {
     // a > b (unsigned, 32-bit) is the same as (a - 0x80000000) > (b - 0x80000000) (signed, 32-bit)
     // see more at:
@@ -1220,7 +1243,7 @@ unsigned sse4_lower_bound_scan_u32(const unsigned* BMRESTRICT arr,
         mask = _mm_movemask_epi8(cmp_mask_ge);
         if (mask)
         {
-            int bsf = bm::bsf_asm32(mask); //_bit_scan_forward(mask);
+            int bsf = BM_BSF32(mask); //_bit_scan_forward(mask);
             return from + k + (bsf / 4);
         }
         vect41 = _mm_loadu_si128((__m128i*)(&arr_base[k+4]));
@@ -1233,7 +1256,7 @@ unsigned sse4_lower_bound_scan_u32(const unsigned* BMRESTRICT arr,
         mask = _mm_movemask_epi8(cmp_mask_ge);
         if (mask)
         {
-            int bsf = bm::bsf_asm32(mask); //_bit_scan_forward(mask);
+            int bsf = BM_BSF32(mask); //_bit_scan_forward(mask);
             return 4 + from + k + (bsf / 4);
         }
     } // for
@@ -1254,7 +1277,7 @@ unsigned sse4_lower_bound_scan_u32(const unsigned* BMRESTRICT arr,
 */
 inline
 unsigned sse42_idx_arr_block_lookup(const unsigned* idx, unsigned size,
-                                   unsigned nb, unsigned start)
+                                   unsigned nb, unsigned start) BMNOEXCEPT
 {
     const unsigned unroll_factor = 8;
     const unsigned len = (size - start);
@@ -1292,7 +1315,7 @@ unsigned sse42_idx_arr_block_lookup(const unsigned* idx, unsigned size,
 inline
 void sse42_set_block_bits(bm::word_t* BMRESTRICT block,
                           const unsigned* BMRESTRICT idx,
-                          unsigned start, unsigned stop )
+                          unsigned start, unsigned stop ) BMNOEXCEPT
 {
     const unsigned unroll_factor = 4;
     const unsigned len = (stop - start);
@@ -1379,7 +1402,7 @@ void sse4_bit_block_gather_scatter(unsigned* BMRESTRICT arr,
                                    const unsigned* BMRESTRICT idx,
                                    unsigned                   size,
                                    unsigned                   start,
-                                   unsigned                   bit_idx)
+                                   unsigned                   bit_idx) BMNOEXCEPT
 {
     const unsigned unroll_factor = 4;
     const unsigned len = (size - start);
@@ -1468,7 +1491,7 @@ void sse4_bit_block_gather_scatter(unsigned* BMRESTRICT arr,
     @ingroup SSE4
 */
 inline
-bool sse42_shift_l1(__m128i* block, unsigned* empty_acc, unsigned co1)
+bool sse42_shift_l1(__m128i* block, unsigned* empty_acc, unsigned co1) BMNOEXCEPT
 {
     __m128i* block_end =
         ( __m128i*)((bm::word_t*)(block) + bm::set_block_size);
@@ -1518,7 +1541,7 @@ bool sse42_shift_l1(__m128i* block, unsigned* empty_acc, unsigned co1)
     @ingroup SSE4
 */
 inline
-bool sse42_shift_r1(__m128i* block, unsigned* empty_acc, unsigned co1)
+bool sse42_shift_r1(__m128i* block, unsigned* empty_acc, unsigned co1) BMNOEXCEPT
 {
     __m128i* block_end =
         ( __m128i*)((bm::word_t*)(block) + bm::set_block_size);
@@ -1571,7 +1594,7 @@ inline
 bool sse42_shift_r1_and(__m128i* block,
                         bm::word_t co1,
                         const __m128i* BMRESTRICT mask_block,
-                        bm::id64_t* digest)
+                        bm::id64_t* digest) BMNOEXCEPT
 {
     bm::word_t* wblock = (bm::word_t*) block;
     const bm::word_t* mblock = (const bm::word_t*) mask_block;
@@ -1933,6 +1956,11 @@ void sse42_bit_block_xor_2way(bm::word_t* target_block,
 #ifdef __GNUG__
 #pragma GCC diagnostic pop
 #endif
+
+
+// undefine local defines to avoid pre-proc space pollution
+//
+#undef BM_BSF32
 
 #ifdef _MSC_VER
 #pragma warning( pop )

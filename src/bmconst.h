@@ -417,7 +417,8 @@ enum simd_codes
     simd_sse2  = 1,   ///!< Intel SSE2
     simd_sse42 = 2,   ///!< Intel SSE4.2
     simd_avx2  = 5,   ///!< Intel AVX2
-    simd_avx512  = 6  ///!< Intel AVX512
+    simd_avx512  = 6,  ///!< Intel AVX512
+    simd_wasm128 = 7   ///! WASM SIMD 128
 };
 
 

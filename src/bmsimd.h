@@ -21,6 +21,11 @@ For more information please visit:  http://bitmagic.io
     \brief SIMD target version definitions
 */
 
+#ifdef BMWASMSIMDOPT
+#include <wasm_simd128.h>
+#define BMSSE42OPT
+#endif
+
 #ifdef BMAVX512OPT
 # undef BMAVX2OPT
 # undef BMSSE42OPT
@@ -60,6 +65,9 @@ namespace bm
 */
 inline int simd_version()
 {
+#ifdef BMWASMSIMDOPT
+    return bm::simd_wasm128;
+#endif
 #ifdef BMAVX512OPT
     return bm::simd_avx512;
 #endif

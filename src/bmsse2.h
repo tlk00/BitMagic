@@ -22,7 +22,9 @@ For more information please visit:  http://bitmagic.io
     \brief Compute functions for SSE2 SIMD instruction set (internal)
 */
 
+#ifndef BMWASMSIMDOPT
 #include<mmintrin.h>
+#endif
 #include<emmintrin.h>
 
 #include "bmdef.h"

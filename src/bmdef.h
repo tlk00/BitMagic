@@ -91,6 +91,8 @@ For more information please visit:  http://bitmagic.io
 //
 #if defined(__EMSCRIPTEN__)
 
+#undef BM_x86
+
 // EMSCRIPTEN specific tweaks
 // WebAssemply compiles into 32-bit memory system but offers 64-bit wordsize
 // WebASM also benefits from use GCC extensions (buildins like popcnt, lzcnt)
@@ -364,7 +366,7 @@ For more information please visit:  http://bitmagic.io
 */
 
 
-#if (defined(BMSSE2OPT) || defined(BMSSE42OPT))
+#if (defined(BMSSE2OPT) || defined(BMSSE42OPT) || defined(BMWASMSIMDOPT))
 #   define BM_VECT_ALIGN BM_ALIGN16
 #   define BM_VECT_ALIGN_ATTR BM_ALIGN16ATTR
 #else

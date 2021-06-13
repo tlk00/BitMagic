@@ -55,12 +55,12 @@ namespace bm
 class sse_empty_guard
 {
 public:
-    BMFORCEINLINE sse_empty_guard() 
+    BMFORCEINLINE sse_empty_guard() BMNOEXCEPT
     {
         //_mm_empty();
     }
 
-    BMFORCEINLINE ~sse_empty_guard() 
+    BMFORCEINLINE ~sse_empty_guard() BMNOEXCEPT
     {
         //_mm_empty();
     }
@@ -78,7 +78,7 @@ inline
 void sse2_xor_arr_2_mask(__m128i* BMRESTRICT dst, 
                          const __m128i* BMRESTRICT src, 
                          const __m128i* BMRESTRICT src_end,
-                         bm::word_t mask)
+                         bm::word_t mask) BMNOEXCEPT
 {
      __m128i xM = _mm_set1_epi32((int)mask);
      do
@@ -102,7 +102,7 @@ inline
 void sse2_andnot_arr_2_mask(__m128i* BMRESTRICT dst, 
                             const __m128i* BMRESTRICT src, 
                             const __m128i* BMRESTRICT src_end,
-                            bm::word_t mask)
+                            bm::word_t mask) BMNOEXCEPT
 {
      __m128i xM = _mm_set1_epi32((int)mask);
      do
@@ -123,7 +123,7 @@ void sse2_andnot_arr_2_mask(__m128i* BMRESTRICT dst,
 */
 inline
 unsigned sse2_and_block(__m128i* BMRESTRICT dst,
-                       const __m128i* BMRESTRICT src)
+                       const __m128i* BMRESTRICT src) BMNOEXCEPT
 {
     __m128i m1A, m1B, m1C, m1D;
     __m128i accA, accB, accC, accD;
@@ -174,7 +174,7 @@ unsigned sse2_and_block(__m128i* BMRESTRICT dst,
 inline
 unsigned sse2_and_arr_unal(__m128i* BMRESTRICT dst,
                        const __m128i* BMRESTRICT src,
-                       const __m128i* BMRESTRICT src_end)
+                       const __m128i* BMRESTRICT src_end) BMNOEXCEPT
 {
     __m128i m1A, m2A, m1B, m2B, m1C, m2C, m1D, m2D;
     __m128i accA, accB, accC, accD;
@@ -227,7 +227,7 @@ unsigned sse2_and_arr_unal(__m128i* BMRESTRICT dst,
 inline
 unsigned sse2_and_block(__m128i* BMRESTRICT dst,
                         const __m128i* BMRESTRICT src,
-                        const __m128i* BMRESTRICT src_end)
+                        const __m128i* BMRESTRICT src_end) BMNOEXCEPT
 {
     __m128i m1A, m2A, m1B, m2B, m1C, m2C, m1D, m2D;
     __m128i accA, accB, accC, accD;
@@ -286,7 +286,7 @@ unsigned sse2_and_block(__m128i* BMRESTRICT dst,
 */
 inline
 bool sse2_or_block(__m128i* BMRESTRICT dst,
-                   const __m128i* BMRESTRICT src)
+                   const __m128i* BMRESTRICT src) BMNOEXCEPT
 {
     __m128i m1A, m2A, m1B, m2B, m1C, m2C, m1D, m2D;
     __m128i mAccF0 = _mm_set1_epi32(~0u); // broadcast 0xFF
@@ -341,7 +341,7 @@ bool sse2_or_block(__m128i* BMRESTRICT dst,
 inline
 bool sse2_or_arr_unal(__m128i* BMRESTRICT dst,
                       const __m128i* BMRESTRICT src,
-                      const __m128i* BMRESTRICT src_end)
+                      const __m128i* BMRESTRICT src_end) BMNOEXCEPT
 {
     __m128i m1A, m2A, m1B, m2B, m1C, m2C, m1D, m2D;
     __m128i mAccF0 = _mm_set1_epi32(~0u); // broadcast 0xFF
@@ -393,7 +393,7 @@ bool sse2_or_arr_unal(__m128i* BMRESTRICT dst,
 inline
 bool sse2_or_block_2way(__m128i* BMRESTRICT dst,
     const __m128i* BMRESTRICT src1,
-    const __m128i* BMRESTRICT src2)
+    const __m128i* BMRESTRICT src2) BMNOEXCEPT
 {
     __m128i m1A, m1B, m1C, m1D;
     __m128i mAccF0 = _mm_set1_epi32(~0u); // broadcast 0xFF
@@ -439,7 +439,7 @@ bool sse2_or_block_2way(__m128i* BMRESTRICT dst,
 inline
 bool sse2_or_block_3way(__m128i* BMRESTRICT dst,
     const __m128i* BMRESTRICT src1,
-    const __m128i* BMRESTRICT src2)
+    const __m128i* BMRESTRICT src2) BMNOEXCEPT
 {
     __m128i m1A, m1B, m1C, m1D;
     __m128i mAccF0 = _mm_set1_epi32(~0u); // broadcast 0xFF
@@ -492,7 +492,7 @@ bool sse2_or_block_5way(__m128i* BMRESTRICT dst,
     const __m128i* BMRESTRICT src1,
     const __m128i* BMRESTRICT src2,
     const __m128i* BMRESTRICT src3,
-    const __m128i* BMRESTRICT src4)
+    const __m128i* BMRESTRICT src4) BMNOEXCEPT
 {
     __m128i m1A, m1B, m1C, m1D;
     __m128i mAccF0 = _mm_set1_epi32(~0u); // broadcast 0xFF
@@ -560,7 +560,7 @@ bool sse2_or_block_5way(__m128i* BMRESTRICT dst,
 */
 inline
 unsigned sse2_xor_block(__m128i* BMRESTRICT dst,
-                       const __m128i* BMRESTRICT src)
+                       const __m128i* BMRESTRICT src) BMNOEXCEPT
 {
     __m128i m1A, m1B, m1C, m1D;
     __m128i accA, accB, accC, accD;
@@ -608,7 +608,7 @@ unsigned sse2_xor_block(__m128i* BMRESTRICT dst,
 inline
 unsigned sse2_xor_block_2way(__m128i* BMRESTRICT dst,
                              const __m128i* BMRESTRICT src1, 
-                             const __m128i* BMRESTRICT src2)
+                             const __m128i* BMRESTRICT src2) BMNOEXCEPT
 {
     __m128i m1A, m1B, m1C, m1D;
     __m128i accA, accB, accC, accD;
@@ -658,7 +658,7 @@ unsigned sse2_xor_block_2way(__m128i* BMRESTRICT dst,
 */
 inline
 unsigned sse2_sub_block(__m128i* BMRESTRICT dst,
-                        const __m128i* BMRESTRICT src)
+                        const __m128i* BMRESTRICT src) BMNOEXCEPT
 {
     __m128i m1A, m1B, m1C, m1D;
     __m128i accA, accB, accC, accD;
@@ -706,8 +706,8 @@ unsigned sse2_sub_block(__m128i* BMRESTRICT dst,
     @ingroup SSE2
 */
 
-BMFORCEINLINE 
-void sse2_set_block(__m128i* BMRESTRICT dst, bm::word_t value)
+inline
+void sse2_set_block(__m128i* BMRESTRICT dst, bm::word_t value) BMNOEXCEPT
 {
     __m128i* BMRESTRICT dst_end =
         (__m128i*)((bm::word_t*)(dst) + bm::set_block_size);
@@ -735,9 +735,9 @@ void sse2_set_block(__m128i* BMRESTRICT dst, bm::word_t value)
 
     @ingroup SSE2
 */
-BMFORCEINLINE 
+inline
 void sse2_copy_block(__m128i* BMRESTRICT dst, 
-                     const __m128i* BMRESTRICT src)
+                     const __m128i* BMRESTRICT src) BMNOEXCEPT
 {
     __m128i xmm0, xmm1, xmm2, xmm3;
     const __m128i* BMRESTRICT src_end =
@@ -776,9 +776,9 @@ void sse2_copy_block(__m128i* BMRESTRICT dst,
 
     @ingroup SSE2
 */
-BMFORCEINLINE
+inline
 void sse2_stream_block(__m128i* BMRESTRICT dst,
-                     const __m128i* BMRESTRICT src)
+                     const __m128i* BMRESTRICT src) BMNOEXCEPT
 {
     __m128i xmm0, xmm1, xmm2, xmm3;
     const __m128i* BMRESTRICT src_end =
@@ -821,7 +821,7 @@ void sse2_stream_block(__m128i* BMRESTRICT dst,
     @ingroup SSE2
 */
 inline 
-void sse2_invert_block(__m128i* dst)
+void sse2_invert_block(__m128i* BMRESTRICT dst) BMNOEXCEPT
 {
     __m128i maskF = _mm_set1_epi32(~0u);
     __m128i* BMRESTRICT dst_end =
@@ -831,19 +831,17 @@ void sse2_invert_block(__m128i* dst)
     do 
     {
         mA = _mm_load_si128(dst + 0);
-        mA = _mm_xor_si128(mA, maskF);
-        _mm_store_si128(dst+0, mA);
-
         mB = _mm_load_si128(dst + 1);
+        mA = _mm_xor_si128(mA, maskF);
         mB = _mm_xor_si128(mB, maskF);
+        _mm_store_si128(dst, mA);
         _mm_store_si128(dst + 1, mB);
 
         mC = _mm_load_si128(dst + 2);
-        mC = _mm_xor_si128(mC, maskF);
-        _mm_store_si128(dst + 2, mC);
-
         mD = _mm_load_si128(dst + 3);
+        mC = _mm_xor_si128(mC, maskF);
         mD = _mm_xor_si128(mD, maskF);
+        _mm_store_si128(dst + 2, mC);
         _mm_store_si128(dst + 3, mD);
 
         dst += 4;
@@ -852,26 +850,26 @@ void sse2_invert_block(__m128i* dst)
 }
 
 BMFORCEINLINE 
-__m128i sse2_and(__m128i a, __m128i b)
+__m128i sse2_and(__m128i a, __m128i b) BMNOEXCEPT
 {
     return _mm_and_si128(a, b);
 }
 
 BMFORCEINLINE 
-__m128i sse2_or(__m128i a, __m128i b)
+__m128i sse2_or(__m128i a, __m128i b) BMNOEXCEPT
 {
     return _mm_or_si128(a, b);
 }
 
 
 BMFORCEINLINE 
-__m128i sse2_xor(__m128i a, __m128i b)
+__m128i sse2_xor(__m128i a, __m128i b) BMNOEXCEPT
 {
     return _mm_xor_si128(a, b);
 }
 
 BMFORCEINLINE 
-__m128i sse2_sub(__m128i a, __m128i b)
+__m128i sse2_sub(__m128i a, __m128i b) BMNOEXCEPT
 {
     return _mm_andnot_si128(b, a);
 }
@@ -891,7 +889,7 @@ inline
 const bm::gap_word_t* sse2_gap_sum_arr(
     const bm::gap_word_t* BMRESTRICT pbuf,
     unsigned sse_vect_waves,
-    unsigned* sum)
+    unsigned* sum) BMNOEXCEPT
 {
     __m128i xcnt = _mm_setzero_si128();
 
