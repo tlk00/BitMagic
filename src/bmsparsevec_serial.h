@@ -178,7 +178,7 @@ public:
 
 
     /*! @name Compression settings                               */
-    //@{
+    ///@{
 
     /**
         Add skip-markers for faster range deserialization
@@ -244,8 +244,10 @@ public:
     */
     bool is_xor_ref() const BMNOEXCEPT { return is_xor_ref_; }
 
-    //@}
+    ///@}
 
+    /*! @name Serialization                                     */
+    ///@{
 
     /*!
         \brief Serialize sparse vector into a memory buffer(s) structure
@@ -263,6 +265,8 @@ public:
     */
     bm::serializer<bvector_type>& get_bv_serializer() BMNOEXCEPT
         { return bvs_; }
+        
+    ///@}
 
 
 protected:
