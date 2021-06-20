@@ -258,13 +258,13 @@ public:
     }
 
     /*! @brief set pointer to external pool */
-    void set_pool(allocator_pool_type* pool)
+    void set_pool(allocator_pool_type* pool) BMNOEXCEPT
     {
         alloc_pool_p_ = pool;
     }
 
     /*! @brief get pointer to allocation pool (if set) */
-    allocator_pool_type* get_pool()
+    allocator_pool_type* get_pool() BMNOEXCEPT
     {
         return alloc_pool_p_;
     }
@@ -284,7 +284,7 @@ public:
 
     /*! @brief Frees bit block allocated by alloc_bit_block.
     */
-    void free_bit_block(bm::word_t* block, unsigned alloc_factor = 1)
+    void free_bit_block(bm::word_t* block, unsigned alloc_factor = 1) BMNOEXCEPT
     {
         BM_ASSERT(IS_VALID_ADDR(block));
         if (alloc_pool_p_ && alloc_factor == 1)
@@ -332,12 +332,18 @@ public:
 
     /*! @brief Frees block of pointers.
     */
-    void free_ptr(void* p, unsigned size)
+    void free_ptr(void* p, unsigned size) BMNOEXCEPT
     {
         if (p)
             ptr_alloc_.deallocate(p, size);
     }
-private:
+
+    /**
+        Get access to block allocator
+     */
+    BA& get_block_alloc() BMNOEXCEPT { return block_alloc_; }
+
+public:
     BA                     block_alloc_;
     PA                     ptr_alloc_;
     allocator_pool_type*   alloc_pool_p_;
