@@ -376,7 +376,12 @@ public:
         if (p)
             ptr_alloc_.deallocate(p, size);
     }
-private:
+
+    /**
+        Get access to block allocator
+     */
+    BA& get_block_alloc() BMNOEXCEPT { return block_alloc_; }
+protected:
     BA                     block_alloc_;
     PA                     ptr_alloc_;
     allocator_pool_type*   alloc_pool_p_;

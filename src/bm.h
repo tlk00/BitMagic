@@ -1852,6 +1852,12 @@ public:
     void calc_stat(struct bm::bvector<Alloc>::statistics* st) const BMNOEXCEPT;
 
     /*!
+       @brief Calculates bitvector arena statistics.
+       @internal
+    */
+    void calc_arena_stat(bm::bv_arena_statistics* st) const BMNOEXCEPT;
+
+    /*!
        \brief Sets new blocks allocation strategy.
        \param strat - Strategy code 0 - bitblocks allocation only.
                       1 - Blocks mutation mode (adaptive algorithm)
@@ -2090,6 +2096,10 @@ protected:
     void copy_range_no_check(const bvector<Alloc>& bvect,
                              size_type left,
                              size_type right);
+
+    /// calculate arena statistics, calculate and copy all blocks there
+    ///
+    void copy_to_arena(typename blocks_manager_type::arena* ar);
 
 private:
 
@@ -3503,7 +3513,7 @@ void bvector<Alloc>::calc_stat(
                 {
                     if (BM_IS_GAP(blk))
                     {
-                        bm::gap_word_t* gap_blk = BMGAP_PTR(blk);
+                        const bm::gap_word_t* gap_blk = BMGAP_PTR(blk);
                         unsigned cap = bm::gap_capacity(gap_blk, blockman_.glen());
                         unsigned len = gap_length(gap_blk);
                         st->add_gap_block(cap, len);
@@ -3511,7 +3521,7 @@ void bvector<Alloc>::calc_stat(
                     else // bit block
                         st->add_bit_block();
                 }
-            }
+            } // for j
         } // for i
         
         size_t full_null_size = blockman_.calc_serialization_null_full();
@@ -3528,6 +3538,74 @@ void bvector<Alloc>::calc_stat(
     blocks_mem += st->ptr_sub_blocks * (sizeof(void*) * bm::set_sub_array_size);
     st->memory_used += blocks_mem;
     st->bv_count = 1;
+
+}
+// -----------------------------------------------------------------------
+
+template<typename Alloc>
+void bvector<Alloc>::calc_arena_stat(bm::bv_arena_statistics* st) const BMNOEXCEPT
+{
+    BM_ASSERT(st);
+    st->reset();
+    bm::word_t*** blk_root = blockman_.top_blocks_root();
+
+    if (!blk_root)
+        return;
+    unsigned top_size = blockman_.top_block_size();
+    for (unsigned i = 0; i < top_size; ++i)
+    {
+        const bm::word_t* const* blk_blk = blk_root[i];
+        if (!blk_blk)
+        {
+            ++i;
+            bool found = bm::find_not_null_ptr(blk_root, i, top_size, &i);
+            if (!found)
+                break;
+            blk_blk = blk_root[i];
+            BM_ASSERT(blk_blk);
+            if (!blk_blk)
+                break;
+        }
+        if ((bm::word_t*)blk_blk == FULL_BLOCK_FAKE_ADDR)
+            continue;
+        st->ptr_sub_blocks_sz += bm::set_sub_array_size;
+        for (unsigned j = 0; j < bm::set_sub_array_size; ++j)
+        {
+            const bm::word_t* blk = blk_blk[j];
+            if (IS_VALID_ADDR(blk))
+            {
+                if (BM_IS_GAP(blk))
+                {
+                    const bm::gap_word_t* gap_blk = BMGAP_PTR(blk);
+                    unsigned len = bm::gap_length(gap_blk);
+                    BM_ASSERT(gap_blk[len-1] == 65535);
+                    st->gap_blocks_sz += len;
+                }
+                else // bit block
+                    st->bit_blocks_sz += bm::set_block_size;
+            }
+        } // for j
+    } // for i
+
+}
+
+// -----------------------------------------------------------------------
+
+template<typename Alloc>
+void bvector<Alloc>::copy_to_arena(typename blocks_manager_type::arena* ar)
+{
+    bm::word_t*** blk_root = blockman_.top_blocks_root();
+    if (!blk_root)
+        return;
+
+    bm::bv_arena_statistics arena_st;
+    calc_arena_stat(&arena_st);
+    blockman_.alloc_arena(ar, arena_st, blockman_.get_allocator());
+
+    bm::bv_arena_statistics st;
+    st.reset();
+
+    blockman_.copy_to_arena(ar, arena_st, st);
 
 }
 

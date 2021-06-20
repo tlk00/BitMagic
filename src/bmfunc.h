@@ -114,6 +114,24 @@ struct bv_statistics
     }
 };
 
+/*!
+    @brief Structure with statistical information about memory
+            allocation for arena based vectors
+    @ingroup bvector
+*/
+struct bv_arena_statistics
+{
+    size_t bit_blocks_sz;      ///< Total size of bit blocks
+    size_t gap_blocks_sz;      ///< Total size of gap blocks
+    size_t ptr_sub_blocks_sz;  ///< Total size of sub-blocks ptrs
+
+    /// Reset statisctics
+    void reset() BMNOEXCEPT
+    {
+        bit_blocks_sz = gap_blocks_sz = ptr_sub_blocks_sz = 0;
+    }
+};
+
 /**
     @brief Pair type
 */

@@ -53,6 +53,22 @@ public:
 #endif
 
 
+    /// Allocation arena
+    ///
+    /// @internal
+    struct arena
+    {
+        bm::word_t*          blocks_;      ///< bit-blocks area
+        bm::gap_word_t*      gap_blocks_;  ///< GAP blocks area
+        bm::word_t**         blk_blks_;    ///< PTR sub-blocks area
+        bv_arena_statistics  st_;          ///< statistics and sizes
+
+        /// Set all arena fields to zero
+        void reset()
+            { blocks_ = 0; gap_blocks_ = 0; blk_blks_ = 0; st_.reset(); }
+    };
+
+
     /** Base functor class (block visitor)*/
     class bm_func_base
     {
@@ -2329,11 +2345,120 @@ public:
 
     // ----------------------------------------------------------------
 
+    /// Allocate arena (content memory) based on arena statistics
+    ///
+    /// @param ar - arena pointer to allocate its buffers
+    /// @param st - arena statistics (should be calculated for the same vector
+    /// @para alloc - allocator
+    ///
+    static
+    void alloc_arena(arena* ar, const bm::bv_arena_statistics& st,
+                     allocator_type& alloc)
+    {
+        BM_ASSERT(ar);
+        ar->st_ = st;
+        ar->blk_blks_ = (bm::word_t**) alloc.alloc_ptr(st.ptr_sub_blocks_sz);
+        ar->blocks_ = alloc.alloc_bit_block(
+                        unsigned(st.bit_blocks_sz / bm::set_block_size));
+        unsigned len =
+            (unsigned)(st.gap_blocks_sz / (sizeof(bm::word_t) / sizeof(bm::gap_word_t)));
+        ar->gap_blocks_ = (bm::gap_word_t*)alloc.get_block_alloc().allocate(len, 0);
+    }
+
+    // ----------------------------------------------------------------
+
+    /// Free arena (content memory) based on arena statistics
+    /// @param ar - arena pointer to free its buffers
+    /// @param alloc - allocator
+    ///
+    static
+    void free_arena(arena* ar, allocator_type& alloc)
+    {
+        BM_ASSERT(ar);
+
+        alloc.free_ptr(ar->blk_blks_, ar->st_.ptr_sub_blocks_sz);
+        alloc.free_bit_block(ar->blocks_, unsigned(ar->st_.bit_blocks_sz / bm::set_block_size));
+        unsigned len =
+            (unsigned)(ar->st_.gap_blocks_sz / (sizeof(bm::word_t) / sizeof(bm::gap_word_t)));
+        alloc.get_block_alloc().deallocate((bm::word_t*)ar->gap_blocks_, len);
+    }
+
+    // ----------------------------------------------------------------
+
+    void copy_to_arena(arena* ar,
+                       const bm::bv_arena_statistics& arena_st,
+                       bm::bv_arena_statistics& st) const BMNOEXCEPT
+    {
+    (void) arena_st;
+        bm::word_t*** blk_root = top_blocks_root();
+        // arena target pointers
+        bm::word_t**    t_blk_blk = ar->blk_blks_;
+        bm::word_t*     t_block   = ar->blocks_;
+        bm::gap_word_t* t_gap_block = ar->gap_blocks_;
+
+        unsigned top_size = top_block_size();
+        for (unsigned i = 0; i < top_size; ++i)
+        {
+            const bm::word_t* const* blk_blk = blk_root[i];
+            if (!blk_blk)
+            {
+                ++i;
+                bool found = bm::find_not_null_ptr(blk_root, i, top_size, &i);
+                if (!found)
+                    break;
+                blk_blk = blk_root[i];
+                BM_ASSERT(blk_blk);
+                if (!blk_blk)
+                    break;
+            }
+            if ((bm::word_t*)blk_blk == FULL_BLOCK_FAKE_ADDR)
+                continue;
+
+            blk_root[i] = t_blk_blk;
+            t_blk_blk += bm::set_sub_array_size;
+            st.ptr_sub_blocks_sz += bm::set_sub_array_size;
+            BM_ASSERT(st.ptr_sub_blocks_sz <= arena_st.ptr_sub_blocks_sz);
+
+            for (unsigned j = 0; j < bm::set_sub_array_size; ++j)
+            {
+                const bm::word_t* blk = blk_blk[j];
+                t_blk_blk[j] = (bm::word_t*)blk; // copy FULL and NULL blocks
+                if (!IS_VALID_ADDR(blk))
+                    continue;
+
+                if (BM_IS_GAP(blk))
+                {
+                    const bm::gap_word_t* gap_blk = BMGAP_PTR(blk);
+                    unsigned len = bm::gap_length(gap_blk);
+                    BM_ASSERT(gap_blk[len-1] == 65535);
+
+                    ::memcpy(t_gap_block, gap_blk, len * sizeof(bm::gap_word_t));
+                    bm::word_t* blk_p = (bm::word_t*) t_gap_block;
+                    BMSET_PTRGAP(blk_p);
+                    t_blk_blk[j] = blk_p;
+                    t_gap_block += len;
+                    st.gap_blocks_sz += len;
+                    BM_ASSERT(st.gap_blocks_sz < arena_st.gap_blocks_sz);
+                }
+                else // bit block
+                {
+                    bm::bit_block_copy(t_block, blk);
+                    t_blk_blk[j] = t_block;
+                    t_block += bm::set_block_size;
+                    st.bit_blocks_sz += bm::set_block_size;
+                    BM_ASSERT(st.bit_blocks_sz < arena_st.bit_blocks_sz);
+                }
+
+            } // for j
+        } // for i
+
+    }
+
+
 private:
 
     void operator =(const blocks_manager&);
-    
-    
+
     void copy(const blocks_manager& blockman,
               block_idx_type block_from = 0,
               block_idx_type block_to = bm::set_total_blocks)
