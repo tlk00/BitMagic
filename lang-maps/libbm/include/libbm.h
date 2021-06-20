@@ -49,7 +49,7 @@ For more information please visit:  http://bitmagic.io
 #define BM_ERR_CPU_MSG      "BM-04: Incorrect CPU vectorization (SIMD) version"
 #define BM_ERR_SERIALFORMAT_MSG "BM-05: Serialization format error"
 #define BM_ERR_BAD_VALUE_MSG "BM-06: Bad value"
-#define BM_ERR_RANK_SELECT_IDX_MISSING "BM-07: Rank-Select index not constructed, call sync() first"
+#define BM_ERR_RANK_SELECT_IDX_MISSING_MSG "BM-07: Rank-Select index not constructed, call sync() first"
 
 
 
@@ -63,7 +63,6 @@ For more information please visit:  http://bitmagic.io
 /*
     List of supported SIMD versions
 */
-
 #define BM_SIMD_NO    0
 #define BM_SIMD_SSE2  1
 #define BM_SIMD_SSE42 2
