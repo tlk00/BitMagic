@@ -30,8 +30,13 @@ Bit-vector operations
 ./bvsample23 - bm::interval_enumerator<> - iterator for interval traversal of bit-vector (bmintervals.h) 
 ./bvsample24 - bm::rank_range_split(..) algorithm to split bit-vector into equal rank(weight) ranges
 
+
+
 ./bvsetalgebra - Tutorial for Algebra of Sets operations
 Tutorial: http://bitmagic.io/set-algebra.html
+
+./bv3vlogic  - Demo for three-valued logic (Kleene) implemented on bit-vectors.
+
 
 ./bvsample01_64 - basic operations with 64-bit bit-vectors, shows how to initialize and compile 
                   BitMagic classes using 48-bit address space.
