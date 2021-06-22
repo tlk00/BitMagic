@@ -43,6 +43,8 @@ For more information please visit:  http://bitmagic.io
 #include <stdarg.h>
 #include <mutex>
 
+#include <functional>
+
 #include <bm.h>
 #include <bmalgo.h>
 #include <bmxor.h>
@@ -467,9 +469,55 @@ int parse_args(int argc, char *argv[])
     } // for
     return 0;
 }
+
 int main(int argc, char *argv[])
 {
     cout << bm::_copyright<true>::_p << endl;
+
+    typedef std::function<int(void)> job_func_type;
+
+
+    std::function<int(void)> f1([]()
+        {
+            cout << "func-type1" << endl; return 0;
+        });
+    int a = 10;
+    int b = 20;
+    std::function<int(void)> f2([a, b]()
+        {
+            cout << "func-type2 " << a << " " << b << endl; return 0;
+        });
+    cout << sizeof(f2) << endl;
+/*
+    std::vector<job_func_type> job_vect;
+    job_vect.push_back(f1);
+    job_vect.push_back(f2);
+
+    for (size_t i = 0; i < job_vect.size(); ++i)
+    {
+        int r = job_vect[i]();
+        cout << "returned: " << r << endl;
+    }
+*/
+    std::deque<job_func_type> job_queue;
+    job_queue.push_back(f1);
+    job_queue.push_back(f2);
+
+    while(!job_queue.empty()) {
+        auto func = job_queue.front();
+        int r = func();
+        cout << "returned: " << r << endl;
+        job_queue.pop_front();
+    } // while
+
+
+//    f1();
+//    f2();
+
+
+
+    return 0;
+
 
     {
         auto ret = parse_args(argc, argv);
@@ -529,3 +577,4 @@ int main(int argc, char *argv[])
     return 0;
 
 }
+
