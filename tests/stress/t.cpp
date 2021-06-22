@@ -8240,7 +8240,7 @@ void KleeneLogicTest()
         assert(b);
     }
 
-    cout << "  set/get value kleen" << endl;
+    cout << "  set/get value kleene" << endl;
     {
         bvect bv_v;
         bvect bv_nnull;
@@ -8257,7 +8257,7 @@ void KleeneLogicTest()
         }
     }
 
-    cout << "  OR kleen" << endl;
+    cout << "  OR kleene" << endl;
     {
         bvect bv_v1     { 10, 20, 30, bm::id_max/2, bm::id_max-1 };
         bvect bv_nnull1 { 10, 20, 25, bm::id_max/2 };
@@ -8325,7 +8325,7 @@ void KleeneLogicTest()
     }
 
 
-    cout << "  AND kleen" << endl;
+    cout << "  AND kleene" << endl;
     {
         assert(bm::and_values_kleene(0, 0) == 0);
         assert(bm::and_values_kleene(0, 1) == 0);
