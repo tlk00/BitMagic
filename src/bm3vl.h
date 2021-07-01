@@ -165,6 +165,39 @@ void or_kleene(BV& bv_value1, BV& bv_null1,
     bv_null1.bit_sub(bv_known_false2);
 }
 
+/**
+    @brief 3-way Kleene OR: target := OR(vect1, vect2) (target := vect1 | vect2)
+    1 OR Unk = 1 (known)
+    @param bv_value_target - [out] target values bit-vector
+    @param bv_null_target -  [out] target not NULL (known) bit-vector
+    @param bv_value1 - [in] values bit-vector
+    @param bv_null1 -  [in] not NULL (known) bit-vector
+    @param bv_value2 - [in] values bit-vector
+    @param bv_null2 -  [in] not NULL (known) bit-vector
+
+    @ingroup bm3VL
+ */
+template<class BV>
+void or_kleene(BV& bv_value_target, BV& bv_null_target,
+               const BV& bv_value1, const BV& bv_null1,
+               const BV& bv_value2, const BV& bv_null2)
+{
+    BV bv_known_false1, bv_known_false2; // known but false
+    bv_known_false1.bit_xor(bv_value1, bv_null1, BV::opt_none);
+    bv_known_false2.bit_xor(bv_value2, bv_null2, BV::opt_none);
+
+    bv_known_false1.bit_sub(bv_null2); // known false but unknown in 2
+    bv_known_false2.bit_sub(bv_null1); // known false but unknown in 1
+
+    bv_value_target.bit_or(bv_value1, bv_value2, BV::opt_none);
+    bv_null_target.bit_or(bv_null1, bv_null2, BV::opt_none);
+
+    // exclude FALSE-unknown combinations
+    bv_null_target.bit_sub(bv_known_false1);
+    bv_null_target.bit_sub(bv_known_false2);
+}
+
+
 
 /**
     @brief Kleene AND(vect1, vect2) (vect1 &= vect2)
@@ -172,7 +205,7 @@ void or_kleene(BV& bv_value1, BV& bv_null1,
     @param bv_value1 - [in, out] values bit-vector
     @param bv_null1 -  [in, out] not NULL (known) bit-vector
     @param bv_value2 - [in] values bit-vector
-    @param bv_null2 -  [in] not NULL (known) bit-vector (not used in this operation)
+    @param bv_null2 -  [in] not NULL (known) bit-vector 
 
     @ingroup bm3VL
  */
@@ -195,6 +228,39 @@ void and_kleene(BV& bv_value1, BV& bv_null1,
     bv_null1.bit_sub(bv_ambig_null1);
     bv_null1.bit_sub(bv_ambig_null2);
 }
+
+/**
+    @brief 3-way Kleene target:=AND(vect1, vect2) (target:= vect1 & vect2)
+    0 AND Unk = 0 (known)
+    @param bv_value_target - [out] values bit-vector
+    @param bv_null_target -  [out] not NULL (known) bit-vector
+    @param bv_value1 - [in] values bit-vector
+    @param bv_null1 -  [in] not NULL (known) bit-vector
+    @param bv_value2 - [in] values bit-vector
+    @param bv_null2 -  [in] not NULL (known) bit-vector
+
+    @ingroup bm3VL
+ */
+template<class BV>
+void and_kleene(BV& bv_value_target, BV& bv_null_target,
+                const BV& bv_value1, const BV& bv_null1,
+                const BV& bv_value2, const BV& bv_null2)
+{
+    BV bv_ambig_null1; // unknowns on just one of the two args
+    bv_ambig_null1.bit_xor(bv_null1, bv_null2, BV::opt_none);
+
+    BV bv_ambig_null2(bv_ambig_null1); // just a copy
+
+    bv_ambig_null1.bit_and(bv_value1); // "unknowns 1"
+    bv_ambig_null2.bit_and(bv_value2); // "unknowns 2"
+
+    bv_value_target.bit_and(bv_value1, bv_value2, BV::opt_none);
+    bv_null_target.bit_or(bv_null1, bv_null2, BV::opt_none);
+
+    bv_null_target.bit_sub(bv_ambig_null1);
+    bv_null_target.bit_sub(bv_ambig_null2);
+}
+
 
 /**
     Reference function for Kleene logic AND (for verification and testing)
