@@ -40,7 +40,7 @@ For more information please visit:  http://bitmagic.io
 
 #include <iostream>
 #include <vector>
-
+#include <cassert>
 
 #include "bm.h"
 #include "bm3vl.h"
@@ -220,7 +220,19 @@ void Set3VL_AndDemo()
     bm::set_value_kleene(bv_v2, bv_null2, 1, 1); // idx = 1 (known true)
     bm::set_value_kleene(bv_v2, bv_null2, 2, -1); // idx = 2 (known false)
 
+
+    bm::bvector<> bv_v_t, bv_null_t;
+    // bv_v_t := bv_v2 & bv_v1
+    bm::and_kleene(bv_v_t, bv_null_t, bv_v2, bv_null2, bv_v1, bv_null1); // 3-value logic AND
+
+    // bv_v2 and bv_null2 are modified in place:
+    // bv_v2 &= bv_v1
     bm::and_kleene(bv_v2, bv_null2, bv_v1, bv_null1); // 3-value logic AND
+
+    bool b = bv_v_t.equal(bv_v2);
+    assert(b);
+    b = bv_null_t.equal(bv_null2);
+    assert(b);
 
     cout << "AND vector:" << endl;
     PrintKleeneVector(bv_v2, bv_null2);
@@ -248,7 +260,19 @@ void Set3VL_ORDemo()
     bm::set_value_kleene(bv_v2, bv_null2, 1, 0); // idx = 1 (NULL)
     bm::set_value_kleene(bv_v2, bv_null2, 2, -1); // idx = 2 (known false)
 
+    bm::bvector<> bv_v_t, bv_null_t;
+    // bv_v_t := bv_v2 | bv_v1
+    bm::or_kleene(bv_v_t, bv_null_t, bv_v2, bv_null2, bv_v1, bv_null1); // 3-value logic AND
+
+    // bv_v2 and bv_null2 are modified in place:
+    // bv_v2 |= bv_v1
     bm::or_kleene(bv_v2, bv_null2, bv_v1, bv_null1); // 3-value logic OR
+
+    bool b = bv_v_t.equal(bv_v2);
+    assert(b);
+    b = bv_null_t.equal(bv_null2);
+    assert(b);
+
 
     cout << "OR vector:" << endl;
     PrintKleeneVector(bv_v2, bv_null2);
