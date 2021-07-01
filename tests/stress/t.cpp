@@ -8143,12 +8143,18 @@ void KleeneLogicAndStressTest(unsigned repeats = 150, unsigned size = 1000000)
             GenerateRandomKleenVect(bv_v2, bv_null2, size, sparse_factor);
             bvect bv_v3(bv_v1),  bv_null3(bv_null1);
 
+
+            bvect bv_v_t, bv_null_t;
+            bm::and_kleene(bv_v_t, bv_null_t, bv_v1, bv_null1, bv_v2, bv_null2);
+
             bm::and_kleene(bv_v1, bv_null1, bv_v2, bv_null2);
 
             for (unsigned k = 0; k < size; ++k)
             {
-                int v;
+                int v, v_t;
                 v = bm::get_value_kleene(bv_v1, bv_null1, k);
+                v_t = bm::get_value_kleene(bv_v_t, bv_null_t, k);
+                assert(v == v_t);
 
                 int a, b;
                 a = bm::get_value_kleene(bv_v3, bv_null3, k);
@@ -8170,7 +8176,7 @@ void KleeneLogicAndStressTest(unsigned repeats = 150, unsigned size = 1000000)
 static
 void KleeneLogicOrStressTest(unsigned repeats = 150, unsigned size = 1000000)
 {
-    cout << "-------------------------------------- KleenLogicOrStressTest()" << endl;
+    cout << "-------------------------------------- KleeneLogicOrStressTest()" << endl;
 
     for (unsigned i = 0; i < repeats; ++i)
     {
@@ -8182,12 +8188,17 @@ void KleeneLogicOrStressTest(unsigned repeats = 150, unsigned size = 1000000)
             GenerateRandomKleenVect(bv_v2, bv_null2, size, sparse_factor);
             bvect bv_v3(bv_v1),  bv_null3(bv_null1);
 
+            bvect bv_v_t, bv_null_t;
+            bm::or_kleene(bv_v_t, bv_null_t, bv_v1, bv_null1, bv_v2, bv_null2);
+
             bm::or_kleene(bv_v1, bv_null1, bv_v2, bv_null2);
 
             for (unsigned k = 0; k < size; ++k)
             {
                 int v;
                 v = bm::get_value_kleene(bv_v1, bv_null1, k);
+                int v_t;
+                v_t = bm::get_value_kleene(bv_v_t, bv_null_t, k);
 
                 int a, b;
                 a = bm::get_value_kleene(bv_v3, bv_null3, k);
@@ -8195,6 +8206,7 @@ void KleeneLogicOrStressTest(unsigned repeats = 150, unsigned size = 1000000)
 
                 int control = bm::or_values_kleene(a, b);
                 assert(control == v);
+                assert(v == v_t);
 
             } // for
             if (i % 16 == 0)
@@ -8203,14 +8215,14 @@ void KleeneLogicOrStressTest(unsigned repeats = 150, unsigned size = 1000000)
             }
         }
     } // for
-    cout << "\n-------------------------------------- KleenLogicOrStressTest() OK" << endl;
+    cout << "\n-------------------------------------- KleeneLogicOrStressTest() OK" << endl;
 }
 
 
 static
 void KleeneLogicTest()
 {
-    cout << "-------------------------------------- KleenLogicTest()" << endl;
+    cout << "-------------------------------------- KleeneLogicTest()" << endl;
 
     cout << "  basic" << endl;
     bool b;
@@ -8272,7 +8284,17 @@ void KleeneLogicTest()
         v = bm::get_value_kleene(bv_v1, bv_nnull1, 11);
         assert(v==0);
 
+        bvect bv_v_t, bv_null_t;
+        bm::or_kleene(bv_v_t, bv_null_t, bv_v1, bv_nnull1, bv_v2, bv_nnull2);
+
         bm::or_kleene(bv_v1, bv_nnull1, bv_v2, bv_nnull2);
+
+        {
+            b = bv_v1.equal(bv_v_t);
+            assert(b);
+            b = bv_nnull1.equal(bv_null_t);
+            assert(b);
+        }
 
         auto cnt = bv_v1.count();
         assert(cnt == 4);
@@ -8288,7 +8310,15 @@ void KleeneLogicTest()
         bm::set_value_kleene(bv_v1, bv_n1, 10, -1);
         bm::set_value_kleene(bv_v2, bv_n2, 10, 0);
 
+        bvect bv_v_t, bv_null_t;
+        bm::or_kleene(bv_v_t, bv_null_t, bv_v1, bv_n1, bv_v2, bv_n2);
+
         bm::or_kleene(bv_v1, bv_n1, bv_v2, bv_n2);
+
+        b = bv_v1.equal(bv_v_t);
+        assert(b);
+        b = bv_n1.equal(bv_null_t);
+        assert(b);
 
         int v;
         v = bm::get_value_kleene(bv_v1, bv_n1, 10);
@@ -8317,7 +8347,19 @@ void KleeneLogicTest()
             bv_v1.optimize(); bv_v2.optimize();
             bv_n1.optimize(); bv_n2.optimize();
         }
+        bvect bv_v_t, bv_null_t;
+        bm::or_kleene(bv_v_t, bv_null_t, bv_v1, bv_n1, bv_v2, bv_n2);
+        bv_v_t.optimize();
+        bv_null_t.optimize();
+
         bm::or_kleene(bv_v1, bv_n1, bv_v2, bv_n2);
+
+        {
+            b = bv_v1.equal(bv_v_t);
+            assert(b);
+            b = bv_n1.equal(bv_null_t);
+            assert(b);
+        }
 
         int v;
         v = bm::get_value_kleene(bv_v1, bv_n1, 10);
@@ -8352,11 +8394,20 @@ void KleeneLogicTest()
         bvect bv_ref_v1(bv_v1);
         bvect bv_ref_nnull1(bv_nnull1);
 
+        bvect bv_v_t, bv_null_t;
+        bm::and_kleene(bv_v_t, bv_null_t, bv_v1, bv_nnull1, bv_v2, bv_nnull2);
+
         bm::and_kleene(bv_v1, bv_nnull1, bv_v2, bv_nnull2);
         b = bv_v1.equal(bv_ref_v1);
         assert(b);
         b = bv_nnull1.equal(bv_ref_nnull1);
         assert(b);
+
+        b = bv_v1.equal(bv_v_t);
+        assert(b);
+        b = bv_nnull1.equal(bv_null_t);
+        assert(b);
+
     }
 
     {
@@ -8377,16 +8428,23 @@ void KleeneLogicTest()
         bm::set_value_kleene(bv_v1, bv_n1, 100, 1);
         bm::set_value_kleene(bv_v2, bv_n2, 101, 1);
 
+        bvect bv_v_t, bv_null_t;
+        bm::and_kleene(bv_v_t, bv_null_t, bv_v1, bv_n1, bv_v2, bv_n2);
+
         bm::and_kleene(bv_v1, bv_n1, bv_v2, bv_n2);
         v = bm::get_value_kleene(bv_v1, bv_n1, 100);
         assert(v == 0);
         v = bm::get_value_kleene(bv_v1, bv_n1, 101);
         assert(v == 0);
 
+        b = bv_v1.equal(bv_v_t);
+        assert(b);
+        b = bv_n1.equal(bv_null_t);
+        assert(b);
 
     }
 
-    cout << "-------------------------------------- KleinLogicTest() OK" << endl;
+    cout << "-------------------------------------- KleeneLogicTest() OK" << endl;
 }
 
 
