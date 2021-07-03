@@ -1,9 +1,8 @@
 ## BitMagic C++ Library
 
-BitMagic was created as a Algebra of Sets toolkit for Information Retrieval but currently evolved into a more general Data Science components library forn memory compact big data structures and algorithms on succinct data vectors. 
-BitMagic implements compressed bit-vectors and containers (vectors) based on ideas of bit-plane transform
-and Rank-Select compression. All containers are serializable (with compression) for efficient storage and
-network transfer. 
+BitMagic was created as a Algebra of Sets toolkit for Information Retrieval but currently evolved into a more general Data Science components library for memory compact structures and algorithms on succinct data vectors. 
+BitMagic implements compressed bit-vectors and containers (vectors) based on ideas of bit-slicing transform
+and Rank-Select compression. All containers are serializable (with compression using state of art Binary Interpolative Coding) for efficient storage and network transfer. 
 
 BitMagic offers sets of method to architect your applications to use HPC techniques to save 
 memory (thus be able to fit more data in one compute unit) and improve storage and traffic patterns 
@@ -31,7 +30,7 @@ BitMagic was used as a building blocks for:
   (edge comuting, IoT, WebAssembly)
 - Graph and Tree analysis, construction of compressive matrixes of association 
 - Web and application logs analytics and systems reliability automation 
-- Low latency network scheduling (orchestration) system
+- Low latency network scheduling (orchestration) systems
 
 Please visit our use-case notes:
 [http://bitmagic.io/use-case.html](http://bitmagic.io/use-case.html)
@@ -44,6 +43,7 @@ for variety of platforms and build targets:
 - x86 SIMD: SSE2, SSE4.2(POPCNT, LZCNT), AVX2 (BMI1/BMI2), AVX-512(work in progress)
 - Arm (use of specific available bit-scan instructions)
 - WebAssembly (use of WebAsm built-ins and platform specific tricks)
+- WebAssembly SIMD
 
 BitMagic uses a data-parallel vectorized design with a goal not just provide a best single 
 threaded performance but to facilitate highly parallel compute on many-core systems. 
@@ -91,6 +91,11 @@ intreval operations implement interval iterator and searches for interval bounda
 Ranges and intervals has great utility in bioinformatics, because genomics data are often annotated as 
 coordinate ranges. BitMagic offers building blocks for effciient oprations on intervals encoded 
 as bit-vectors (find interval start/end, check if range is an inetrval, iterate intervals
+
+### Three-Valued Logic (bm3vl.h)
+
+BitMagic implements logical operations for 3-valued logic of True/False/Unknown (also trinary logic, trivalent, ternary) in compact two bit-vector representation, supporting Invert, AND, OR operations following Kleene's definitions.
+[https://github.com/tlk00/BitMagic/tree/master/samples/bv3vlogic](https://github.com/tlk00/BitMagic/tree/master/samples/bv3vlogic)
 
 ### Serialization with compression
 
@@ -180,13 +185,22 @@ BitMagic supports 64-bit, can be used with 32-bit address space (less overhead) 
 IR and data science systems. 64-bit address mode is available using #define BM64ADDR or #include "bm64.h".
 Current 64-bit implementation allows 2^48-1 vector elements for large scale systems.
 
-### WebAssembly
+### WebAssembly and WebAssembly SIMD
 
 BitMagic compiles and work with WebAssmbly (emscripten). Latest versions includes 
 multiple tweaks, specific for the platform. Performance numbers are close to native code 
 without SIMD (sometimes afster). Sample compile line would look like:
 
 `emcc -std=c++11 -s ALLOW_MEMORY_GROWTH=1 -O2 -s WASM=1 ... `
+
+WebAssembly SIMD is supported but it is not ON by default.
+Use:
+	`#define BMWASMSIMDOPT`
+to enable it. Emscripten cmd example:
+
+`emcc -std=c++11 -s ALLOW_MEMORY_GROWTH=1 -O2 -msse4.2 -msimd128 -D BMWASMSIMDOPT -s WASM=1 -s DISABLE_EXCEPTION_CATCHING=0 -fno-rtti`
+
+Current implementation uses SSE4.2 trans-compilation (via intrinsics), so `-msse4.2` is necessary.
 
 ### ARM
 
