@@ -367,34 +367,36 @@ If you are enthusiastic about Python and think you can help please contact:
 anatoliy.kuznetsov @ yahoo dot com
 
 
+### Modern C++ (C++17)
 
-Fine tuning and optimizations:
----
+BitMagic library requires CXX-11. It uses move semantics, noexept, initalizer lists, threads.
+Next public version will use CXX-17 (constexpr ifs, etc).
+
+
+###Fine tuning and optimizations:
 
 All BM fine tuning parameters are controlled by the preprocessor defines (and 
 compiler keys). 
 
----
+| #define      | Description                                             | Width    |
+| ------------ | ------------------------------------------------------- | ---------
+| BMSSE2OPT    | Turn ON SSE2 code optimizations                         | 128-bit  |
+| BMSSE42OPT   | Turn ON SSE4.2 code optimizations plus POPCNT, BSF, etc | 128-bit  |
+| BMAVX2OPT    | Turn on AVX2, POPCNT, LZCNT, BMI1, BMI2 optimizations   | 256-bit  |
+| BMAVX512OPT  | Turn on AVX-512, (experimental)                         | 512-bit  |
+| BMWASMSIMDOPT| Turn on WebAssembly SIMD optimizations (128-bit)        | 128-bit  |
 
-BM library supports CXX-11. Move semantics, noexept, initalizer lists.
+####Limitations:
 
----
-
-To turn on SSE2 optimization #define BMSSE2OPT in your build environment.
-To use SSE4.2  #define BMSSE42OPT
-SSE42 optimization automatically assumes SSE2 as a subset of SSE4.2. 
-(you don’t have to use both BMSSE2OPT and BMSSE42OPT at the same time). 
-
-To turn on AVX2 - #define BMAVX2OPT
-This will automatically enable AVX2 256-bit SIMD, popcount (SSE4.2) and other 
-compatible hardware instructions.
+SIMD optimization defines are mutually exclusive, you can NOT have BMSSE42OPT and BMAVX2OPT
+at the same time. Pick just one.
 
 BM library does NOT support multiple code paths and runtime CPU identification.
 You have to build specifically for your target system or use default portable
 build.
 
-To correctly build for the target SIMD instruction set - please set correct 
-code generation flags for the build environment.
+
+####Examples:
 
 BitMagic examples and tests can be build with GCC using cmd-line settings: 
 
@@ -429,7 +431,6 @@ to correct keyword.
 
 ---
 
-
 If you want to use BM library in a "no-STL project" (like embedded systems) 
 define BM_NO_STL.
 
@@ -437,7 +438,6 @@ This rule only applies to the core bm::bvector<> methods.
 Auxiliary algorithms, examples, etc would still use STL.
 
 ---
-
 
 Follow us on twitter: [https://twitter.com/bitmagicio](https://twitter.com/bitmagicio)
 
