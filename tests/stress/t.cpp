@@ -20323,6 +20323,9 @@ void TestSparseVector()
     // basic construction (NULL-able vector)
     {{
         bm::sparse_vector<unsigned, bvect> sv1;
+
+        static_assert(sv1.is_signed() == false, "BM:Must be unsigned integral");
+
         bool n = sv1.is_nullable();
         assert(!n);
         const bvect* bvp = sv1.get_null_bvector();
@@ -20415,6 +20418,35 @@ void TestSparseVector()
                                             1, xscan.get_ref_vector().size(),
                                             0, 0, tb, bm::xor_sim_params());
         assert(!f);
+    }}
+
+    // cleaning
+    {{
+        bm::sparse_vector<unsigned, bvect> sv1;
+        const unsigned to = 256000;
+        unsigned vset = to;
+        for (unsigned i = 0; i < to; ++i, --vset)
+        {
+            sv1[i] = vset;
+        }
+        vset = to;
+        for (unsigned i = 0; i < to; ++i, --vset)
+        {
+            auto v = sv1[i];
+            assert(v == vset);
+        }
+        vset = to;
+        for (unsigned i = 0; i < to; ++i, --vset)
+        {
+            sv1[i] = 8;
+        }
+        vset = to;
+        for (unsigned i = 0; i < to; ++i, --vset)
+        {
+            auto v = sv1[i];
+            assert(v == 8);
+        }
+
     }}
 
     // basic const_iterator construction
@@ -20694,6 +20726,7 @@ void TestSparseVector()
         assert(arr[1] == 1);
         assert(arr[2] == 1);
     }}
+
     cout << "sv::push_back_null()" << endl;
     {{
         bm::sparse_vector<unsigned, bvect> sv(bm::use_null);
@@ -21728,6 +21761,41 @@ void TestSparseVector()
     
     cout << "---------------------------- Bit-plane sparse vector test OK" << endl;
 }
+
+static void TestSignedSparseVector()
+{
+    cout << " -------------------------- TestSignedSparseVector()" << endl;
+
+    {{
+        bm::sparse_vector<int, bvect> sv;
+        sv.push_back(-1);
+        sv.push_back(1);
+        sv.push_back(INT_MAX);
+        sv.push_back(INT_MIN);
+
+        int v0 = sv.get(0);
+        assert(v0 == -1);
+        int v1 = sv[1];
+        assert(v1 == 1);
+        int v2 = sv[2];
+        assert(v2 == INT_MAX);
+        int v3 = sv.get(3);
+        assert(v3 == INT_MIN);
+/*
+        int arr[1024];
+
+        unsigned esize =  sv.extract(&arr[0], 1024, 0);
+        assert(esize == 3);
+        assert(arr[0] == 1);
+        assert(arr[1] == 1);
+        assert(arr[2] == 1);
+*/
+    }}
+
+    cout << " -------------------------- TestSignedSparseVector() OK" << endl;
+}
+
+
 
 static
 void TestSparseVectorAlgo()
@@ -31961,6 +32029,8 @@ int main(int argc, char *argv[])
     if (is_all || is_sv)
     {
         TestSparseVector();
+
+        TestSignedSparseVector();
 
         TestSparseVectorAlgo();
 

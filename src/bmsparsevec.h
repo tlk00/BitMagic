@@ -94,6 +94,7 @@ public:
     typedef typename allocator_type::allocator_pool_type allocator_pool_type;
     typedef bm::basic_bmatrix<BV>                    bmatrix_type;
     typedef base_sparse_vector<Val, BV, 1>           parent_type;
+    typedef typename parent_type::unsigned_value_type unsigned_value_type;
     
 
     /*! Statistical information about  memory allocation details. */
@@ -894,10 +895,15 @@ protected:
 
 
     /*! \brief set value without checking boundaries */
-    void set_value(size_type idx, value_type v);
+    void set_value(size_type idx, value_type v, bool need_clear);
     
-    /*! \brief set value without checking boundaries or support of NULL */
-    void set_value_no_null(size_type idx, value_type v);
+    /*! \brief set value without checking boundaries or support of NULL
+        @param idx - element index
+        @param v - value to set
+        @param need_clear - if clear 0 bits is necessary
+                            (or not if vector is resized)
+    */
+    void set_value_no_null(size_type idx, value_type v, bool need_clear);
 
     /*! \brief push value back into vector without NULL semantics */
     void push_back_no_null(value_type v);
@@ -1496,18 +1502,22 @@ sparse_vector<Val, BV>::get(
     BM_ASSERT(i < bm::id_max);
     BM_ASSERT(i < size());
     
-    value_type v = 0;
+    unsigned_value_type uv = 0;
     unsigned eff_planes = this->effective_planes();
     for (unsigned j = 0; j < eff_planes; j+=4)
     {
         bool b = this->bmatr_.test_4rows(j);
         if (b)
         {
-            value_type vm = (value_type)this->bmatr_.get_half_octet(i, j);
-            v |= value_type(vm << j);
+            unsigned_value_type vm =
+                (unsigned_value_type)this->bmatr_.get_half_octet(i, j);
+            uv |= unsigned_value_type(vm << j);
         }
     } // for j
-    return v;
+    if constexpr (parent_type::is_signed())
+        return this->u2s(uv);
+    else
+        return uv;
 }
 
 
@@ -1515,12 +1525,16 @@ sparse_vector<Val, BV>::get(
 
 template<class Val, class BV>
 void sparse_vector<Val, BV>::set(size_type idx, value_type v)
-{ 
+{
+    bool need_clear;
     if (idx >= size())
     {
         this->size_ = idx+1;
+        need_clear = false;
     }
-    set_value(idx, v);
+    else
+        need_clear = true;
+    set_value(idx, v, need_clear);
 }
 
 //---------------------------------------------------------------------
@@ -1531,7 +1545,7 @@ void sparse_vector<Val, BV>::clear(size_type idx, bool set_null)
     if (idx >= size())
         this->size_ = idx+1;
 
-    set_value(idx, value_type(0));
+    set_value(idx, value_type(0), true);
     if (set_null)
     {
         bvector_type* bv_null = this->get_null_bvect();
@@ -1545,7 +1559,7 @@ void sparse_vector<Val, BV>::clear(size_type idx, bool set_null)
 template<class Val, class BV>
 void sparse_vector<Val, BV>::push_back(value_type v)
 {
-    set_value(this->size_, v);
+    set_value(this->size_, v, false);
     ++(this->size_);
 }
 
@@ -1570,7 +1584,7 @@ void sparse_vector<Val, BV>::insert(size_type idx, value_type v)
     if (idx >= size())
     {
         this->size_ = idx+1;
-        set_value(idx, v);
+        set_value(idx, v, false);
         return;
     }
     insert_value(idx, v);
@@ -1638,16 +1652,17 @@ void sparse_vector<Val, BV>::erase(size_type idx)
 template<class Val, class BV>
 void sparse_vector<Val, BV>::push_back_no_null(value_type v)
 {
-    set_value_no_null(this->size_, v);
+    set_value_no_null(this->size_, v, false);
     ++(this->size_);
 }
 
 //---------------------------------------------------------------------
 
 template<class Val, class BV>
-void sparse_vector<Val, BV>::set_value(size_type idx, value_type v)
+void sparse_vector<Val, BV>::set_value(size_type idx,
+                                       value_type v, bool need_clear)
 {
-    set_value_no_null(idx, v);
+    set_value_no_null(idx, v, need_clear);
     bvector_type* bv_null = this->get_null_bvect();
     if (bv_null)
         bv_null->set_bit_no_check(idx);
@@ -1656,8 +1671,11 @@ void sparse_vector<Val, BV>::set_value(size_type idx, value_type v)
 //---------------------------------------------------------------------
 
 template<class Val, class BV>
-void sparse_vector<Val, BV>::set_value_no_null(size_type idx, value_type v)
+void sparse_vector<Val, BV>::set_value_no_null(size_type idx,
+                     value_type v, bool need_clear)
 {
+    unsigned_value_type uv = this->s2u(v);
+
     // calculate logical block coordinates and masks
     //
     block_idx_type nb = (idx >>  bm::set_block_shift);
@@ -1665,40 +1683,33 @@ void sparse_vector<Val, BV>::set_value_no_null(size_type idx, value_type v)
     unsigned j0 = unsigned(nb &  bm::set_array_mask);  // address in sub-block
 
     // clear the planes where needed
-    unsigned eff_planes = this->effective_planes();
-    unsigned bsr = v ? bm::bit_scan_reverse(v) : 0u;
-        
-    for (unsigned i = bsr; i < eff_planes; ++i)
+    unsigned bsr = uv ? bm::bit_scan_reverse(uv) : 0u;
+    if (need_clear)
     {
-        const bm::word_t* blk = this->bmatr_.get_block(i, i0, j0);
-        if (blk)
-        {
-            bvector_type* bv = this->bmatr_.get_row(i);
-            if (bv)
-                bv->clear_bit_no_check(idx);
-        }
-    } // for i
-
-    if (v)
+        unsigned eff_planes = this->effective_planes();
+        this->bmatr_.clear_planes_range(bsr, eff_planes, idx);
+    }
+    if (uv)
     {
-        value_type mask = 1u;
+        unsigned_value_type mask = 1u;
         for (unsigned j = 0; j <= bsr; ++j)
         {
-            if (v & mask)
+            if (uv & mask)
             {
                 bvector_type* bv = this->get_plane(j);
                 bv->set_bit_no_check(idx);
             }
-            else
+            else if (need_clear)
             {
                 const bm::word_t* blk = this->bmatr_.get_block(j, i0, j0);
                 if (blk)
                 {
+                    // TODO: more efficient set/clear on on block
                     bvector_type* bv = this->bmatr_.get_row(j);
                     bv->clear_bit_no_check(idx);
                 }
             }
-            mask = value_type(mask << 1);
+            mask <<= 1u;
         } // for j
     }
 }
@@ -1736,7 +1747,7 @@ template<class Val, class BV>
 void sparse_vector<Val, BV>::inc_no_null(size_type idx, value_type v)
 {
     value_type v_prev = get(idx);
-    set_value_no_null(idx, v + v_prev);
+    set_value_no_null(idx, v + v_prev, true);
 }
 
 //---------------------------------------------------------------------

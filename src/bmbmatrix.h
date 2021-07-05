@@ -23,6 +23,8 @@ For more information please visit:  http://bitmagic.io
 */
 
 #include <stddef.h>
+#include <type_traits>
+
 #include "bmconst.h"
 
 #ifndef BM_NO_STL
@@ -96,6 +98,7 @@ public:
         }
         return *this;
     }
+
 #endif
 
     void set_allocator_pool(allocator_pool_type* pool_ptr) BMNOEXCEPT
@@ -196,7 +199,7 @@ public:
 public:
 
     // ------------------------------------------------------------
-    /*! @name Utility function                                   */
+    /*! @name Utility functions                                  */
     ///@{
     
     /// Test if 4 rows from i are not NULL
@@ -205,6 +208,15 @@ public:
     /// Get low level internal access to
     const bm::word_t* get_block(size_type p,
                                 unsigned i, unsigned j) const BMNOEXCEPT;
+
+    /**
+        Clear bit-planes bit
+        @param plane_from - clear from [from, until)
+        @param plane_until - clear until (open interval!)
+        @param idx - bit index
+     */
+    void clear_planes_range(unsigned plane_from, unsigned plane_until,
+                            size_type idx);
     
     unsigned get_half_octet(size_type pos, size_type row_idx) const BMNOEXCEPT;
 
@@ -225,6 +237,8 @@ public:
     void optimize_block(block_idx_type nb);
 
     ///@}
+
+
 
 
 protected:
@@ -278,8 +292,9 @@ public:
     typedef typename BV::allocator_type              allocator_type;
     typedef typename bvector_type::allocation_policy allocation_policy_type;
     typedef typename bvector_type::enumerator        bvector_enumerator_type;
-    typedef typename allocator_type::allocator_pool_type allocator_pool_type;
-    typedef bm::basic_bmatrix<BV>                        bmatrix_type;
+    typedef typename allocator_type::allocator_pool_type   allocator_pool_type;
+    typedef bm::basic_bmatrix<BV>                          bmatrix_type;
+    typedef typename std::make_unsigned<value_type>::type  unsigned_value_type;
 
 public:
     base_sparse_vector();
@@ -326,6 +341,14 @@ public:
     // ------------------------------------------------------------
     /*! @name Various traits                                     */
     ///@{
+    ///
+
+    /**
+        \brief returns true if value type is signed integral type
+     */
+    static constexpr bool is_signed() BMNOEXCEPT
+        { return std::is_signed<value_type>::value; }
+
     /**
         \brief check if container supports NULL(unassigned) values
     */
@@ -505,10 +528,7 @@ protected:
     static unsigned null_plane() BMNOEXCEPT { return value_bits(); }
     
     /** optimize block in all matrix planes */
-    void optimize_block(block_idx_type nb)
-    {
-        bmatr_.optimize_block(nb);
-    }
+    void optimize_block(block_idx_type nb) { bmatr_.optimize_block(nb); }
 
     /**
         Perform copy_range() on a set of planes
@@ -518,6 +538,15 @@ protected:
         typename base_sparse_vector<Val, BV, MAX_SIZE>::size_type left,
         typename base_sparse_vector<Val, BV, MAX_SIZE>::size_type right,
         bm::null_support splice_null);
+
+    /**
+        Convert signed value type to unsigned representation
+     */
+    static
+    unsigned_value_type s2u(value_type v) BMNOEXCEPT;
+
+    static
+    value_type u2s(unsigned_value_type v) BMNOEXCEPT;
 
 protected:
     bmatrix_type             bmatr_;              ///< bit-transposed matrix
@@ -860,6 +889,21 @@ basic_bmatrix<BV>::get_block(size_type p,
         return bman.get_block_ptr(i, j);
     }
     return 0;
+}
+
+//---------------------------------------------------------------------
+
+template<typename BV>
+void basic_bmatrix<BV>::clear_planes_range(
+                        unsigned plane_from, unsigned plane_until,
+                        size_type idx)
+{
+    for (unsigned p = plane_from; p < plane_until; ++p)
+    {
+        bvector_type* bv = this->get_row(p);
+        if (bv) // TODO: optimize cleaning
+            bv->clear_bit_no_check(idx);
+    } // for p
 }
 
 
@@ -1616,6 +1660,43 @@ void base_sparse_vector<Val, BV, MAX_SIZE>::copy_range_planes(
 }
 
 //---------------------------------------------------------------------
+
+template<class Val, class BV, unsigned MAX_SIZE>
+typename base_sparse_vector<Val, BV, MAX_SIZE>::unsigned_value_type
+base_sparse_vector<Val, BV, MAX_SIZE>::s2u(value_type v) BMNOEXCEPT
+{
+    if constexpr (is_signed())
+    {
+        if (v < 0)
+        {
+            // the +1 trick is to get abs of INT_MIN without overflowing
+            // https://stackoverflow.com/questions/22268815/absolute-value-of-int-min
+            value_type uv = -(v+1);
+            return 1u | (unsigned_value_type(uv) << 1u);
+        }
+        return unsigned_value_type(v) << 1u;
+    }
+    else
+        return v;
+}
+
+template<class Val, class BV, unsigned MAX_SIZE>
+typename base_sparse_vector<Val, BV, MAX_SIZE>::value_type
+base_sparse_vector<Val, BV, MAX_SIZE>::u2s(unsigned_value_type v) BMNOEXCEPT
+{
+    if constexpr (is_signed())
+    {
+        if (v & 1u) // signed
+        {
+            value_type s = (-(v >> 1u)) - 1;
+            return s;
+        }
+        return value_type(v >> 1u);
+    }
+    else
+        return v;
+}
+
 
 } // namespace
 
