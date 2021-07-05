@@ -4,7 +4,7 @@ project(bmlangmap)
 
 
 set( CMAKE_VERBOSE_MAKEFILE on )
-set (CMAKE_CXX_STANDARD 11)
+set (CMAKE_CXX_STANDARD 17)
 
 
 set(CMAKE_BINARY_DIR ${CMAKE_SOURCE_DIR}/build/bin)

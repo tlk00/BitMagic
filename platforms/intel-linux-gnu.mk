@@ -24,7 +24,7 @@ ifeq ($(COMPILER),GNU_CC)
     #-g
 
     OS_VER = -D__$(shell uname -s)_$(shell uname -r | sed -e 's/\./_/g' -e 's/-.*//')
-    PLATFORM_CXXFLAGS = -D_REENTRANT $(OS_VER) -D_GNU_SOURCE -std=c++11 -Wall -Wextra -Werror=uninitialized -Wshadow -Wconversion -Wmissing-declarations -Wswitch-default -Wno-noexcept-type
+    PLATFORM_CXXFLAGS = -D_REENTRANT $(OS_VER) -D_GNU_SOURCE -std=c++17 -Wall -Wextra -Werror=uninitialized -Wshadow -Wconversion -Wmissing-declarations -Wswitch-default -Wno-noexcept-type
     PLATFORM_CFLAGS = -D_REENTRANT $(OS_VER)
     COMMON_LDFLAGS = $(LINKER_DFLAGS) -export-dynamic
     COMMON_CLDFLAGS = $(COMMON_LDFLAGS)
