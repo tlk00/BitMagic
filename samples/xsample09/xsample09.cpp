@@ -41,6 +41,8 @@ For more information please visit:  http://bitmagic.io
 #include <iostream>
 #include <memory>
 #include <vector>
+#include <random>
+#include <algorithm>
 #include <stdexcept>
 
 using namespace std;
@@ -128,8 +130,11 @@ void generate_access_samples(std::vector<bvector_type::size_type> &sample_vec,
         sample_vec.push_back(sample);
         i += sample;
     }
+    std::random_device rd;
+    std::mt19937 g(rd());
+
     // even more random (unordered)
-    std::random_shuffle(sample_vec.begin(), sample_vec.end());
+    std::shuffle(sample_vec.begin(), sample_vec.end(), g);
 }
 
 /// Compute histogram as a SV vector using fixed sampling interval
