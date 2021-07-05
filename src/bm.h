@@ -1225,7 +1225,7 @@ public:
        \brief Clears bit n without precondiion checks
        \param n - bit's index to be cleaned.
     */
-    void clear_bit_no_check(size_type n) { set_bit_no_check(n, false); }
+    void clear_bit_no_check(size_type n);
     
     /*!
        \brief Clears every bit in the bitvector.
@@ -3638,40 +3638,6 @@ void bvector<Alloc>::fill_alloc_digest(bvector<Alloc>& bv_blocks) const
     } // if blk_root
 }
 
-// -----------------------------------------------------------------------
-
-template<class Alloc>
-void bvector<Alloc>::set_bit_no_check(size_type n)
-{
-    BM_ASSERT_THROW(n < bm::id_max, BM_ERR_RANGE);
-    
-    bool val = true; // set bit
-    
-    // calculate logical block number
-    block_idx_type nblock = (n >>  bm::set_block_shift);
-    // calculate word number in block and bit
-    unsigned nbit   = unsigned(n & bm::set_block_mask);
-
-    int block_type;
-    bm::word_t* blk =
-        blockman_.check_allocate_block(nblock,
-                                       val,
-                                       get_new_blocks_strat(),
-                                       &block_type);
-    if (!IS_VALID_ADDR(blk))
-        return;
-
-    if (block_type) // gap block
-    {
-        this->gap_block_set_no_ret(BMGAP_PTR(blk), val, nblock, nbit);
-    }
-    else  // bit block
-    {
-        unsigned nword  = nbit >> bm::set_word_shift;
-        nbit &= bm::set_word_mask;
-        blk[nword] |= (1u << nbit); // set bit
-    }
-}
 
 // -----------------------------------------------------------------------
 
@@ -3891,6 +3857,8 @@ void bvector<Alloc>::import_block(const size_type* ids,
 template<class Alloc> 
 bool bvector<Alloc>::set_bit_no_check(size_type n, bool val)
 {
+    BM_ASSERT_THROW(n < bm::id_max, BM_ERR_RANGE);
+
     // calculate logical block number
     block_idx_type nblock = (n >>  bm::set_block_shift);
 
@@ -3932,6 +3900,72 @@ bool bvector<Alloc>::set_bit_no_check(size_type n, bool val)
     }
     //return false;
 }
+
+// -----------------------------------------------------------------------
+
+template<class Alloc>
+void bvector<Alloc>::set_bit_no_check(size_type n)
+{
+    BM_ASSERT_THROW(n < bm::id_max, BM_ERR_RANGE);
+
+    const bool val = true; // set bit
+
+    block_idx_type nblock = (n >>  bm::set_block_shift);
+    unsigned nbit   = unsigned(n & bm::set_block_mask);
+
+    int block_type;
+    bm::word_t* blk =
+        blockman_.check_allocate_block(nblock,
+                                       val,
+                                       get_new_blocks_strat(),
+                                       &block_type);
+    if (!IS_VALID_ADDR(blk))
+        return;
+
+    if (block_type) // gap block
+    {
+        this->gap_block_set_no_ret(BMGAP_PTR(blk), val, nblock, nbit);
+    }
+    else  // bit block
+    {
+        unsigned nword  = nbit >> bm::set_word_shift;
+        nbit &= bm::set_word_mask;
+        blk[nword] |= (1u << nbit); // set bit
+    }
+}
+
+// -----------------------------------------------------------------------
+
+template<class Alloc>
+void bvector<Alloc>::clear_bit_no_check(size_type n)
+{
+    BM_ASSERT_THROW(n < bm::id_max, BM_ERR_RANGE);
+
+    const bool val = false; // clear bit
+
+    block_idx_type nblock = (n >>  bm::set_block_shift);
+    int block_type;
+    bm::word_t* blk =
+        blockman_.check_allocate_block(nblock,
+                                       val,
+                                       get_new_blocks_strat(),
+                                       &block_type);
+    if (!blk)
+        return;
+
+    unsigned nbit = unsigned(n & bm::set_block_mask);
+    if (block_type) // gap
+    {
+        this->gap_block_set_no_ret(BMGAP_PTR(blk), val, nblock, nbit);
+    }
+    else  // bit block
+    {
+        unsigned nword  = unsigned(nbit >> bm::set_word_shift);
+        nbit &= bm::set_word_mask;
+        blk[nword] &= ~(1u << nbit); // clear bit
+    }
+}
+
 
 // -----------------------------------------------------------------------
 
