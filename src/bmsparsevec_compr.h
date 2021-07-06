@@ -1065,7 +1065,7 @@ void rsc_sparse_vector<Val, SV>::set(size_type idx, value_type v)
 
     if (found)
     {
-        sv_.set_value_no_null(--sv_idx, v, false);
+        sv_.set_value_no_null(--sv_idx, v, true);
     }
     else
     {
