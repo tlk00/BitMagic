@@ -27,6 +27,7 @@ For more information please visit:  http://bitmagic.io
 
 #ifndef BM_NO_STL
 #include <stdexcept>
+#include <limits>
 #endif
 
 #ifndef BM__H__INCLUDED__
@@ -254,6 +255,7 @@ public:
         typedef sparse_vector<Val, BV>                     sparse_vector_type;
         typedef sparse_vector_type*                        sparse_vector_type_ptr;
         typedef typename sparse_vector_type::value_type    value_type;
+        typedef typename sparse_vector_type::unsigned_value_type unsigned_value_type;
         typedef typename sparse_vector_type::size_type     size_type;
         typedef typename sparse_vector_type::bvector_type  bvector_type;
         typedef typename bvector_type::allocator_type      allocator_type;
@@ -331,7 +333,7 @@ public:
         bm::sparse_vector<Val, BV>* sv_;      ///!< pointer on the parent vector
         bvector_type*               bv_null_; ///!< not NULL vector pointer
         buffer_type                 buffer_;  ///!< value buffer
-        value_type*                 buf_ptr_; ///!< position in the buffer
+        unsigned_value_type*        buf_ptr_; ///!< position in the buffer
         block_idx_type              prev_nb_; ///!< previous block added
         bool                        set_not_null_;
     };
@@ -810,7 +812,7 @@ public:
         \param offset - target index in the sparse vector to export from
         \param zero_mem - set to false if target array is pre-initialized
                           with 0s to avoid performance penalty   
-        \return number of exported elements
+        \return effective size(number) of exported elements
      
         \sa decode
      
@@ -945,6 +947,30 @@ protected:
     /// increment by v  without chnaging NULL vector or size
     void inc_no_null(size_type idx, value_type v);
 
+    /*!
+        \brief Import list of elements from a C-style array (pushed back)
+        \param arr  - source array
+        \param arr_size - source array size
+        \param set_not_null - import should register in not null vector
+    */
+    void import_back_u(const unsigned_value_type* arr,
+                       size_type         arr_size,
+                       bool              set_not_null = true);
+
+    /*!
+        \brief Import list of elements from a C-style array
+        \param arr  - source array
+        \param arr_size - source size
+        \param offset - target index in the sparse vector
+        \param set_not_null - import should register in not null vector
+    */
+    void import_u(const unsigned_value_type* arr,
+                  size_type arr_size, size_type offset,
+                  bool      set_not_null);
+
+    static
+    void u2s_translate(value_type* arr, size_type sz) BMNOEXCEPT;
+
 protected:
     template<class V, class SV> friend class rsc_sparse_vector;
     template<class SVect> friend class sparse_vector_scanner;
@@ -1037,40 +1063,55 @@ void sparse_vector<Val, BV>::import(const value_type* arr,
                                     size_type         offset,
                                     bool              set_not_null)
 {
+    // TODO: for signed types use back_insert_iterator (for now)
+    // direct import of signed type array is under-implemented at this point
+    static_assert(std::is_unsigned<value_type>::value, "BM: unsigned type is required");
+
+    import_u((const unsigned_value_type*) arr, arr_size, offset, set_not_null);
+}
+
+//---------------------------------------------------------------------
+
+template<class Val, class BV>
+void sparse_vector<Val, BV>::import_u(const unsigned_value_type* arr,
+                                      size_type         arr_size,
+                                      size_type         offset,
+                                      bool              set_not_null)
+{
     unsigned char b_list[sizeof(Val)*8];
     unsigned row_len[sizeof(Val)*8] = {0, };
-    
+
     const unsigned transpose_window = 256;
     bm::tmatrix<size_type, sizeof(Val)*8, transpose_window> tm; // matrix accumulator
-    
+
     if (arr_size == 0)
         throw_range_error("sparse_vector range error (import size 0)");
-    
+
     if (offset < this->size_) // in case it touches existing elements
     {
         // clear all planes in the range to provide corrrect import of 0 values
         this->clear_range(offset, offset + arr_size - 1);
     }
-    
+
     // transposition algorithm uses bitscan to find index bits and store it
     // in temporary matrix (list for each bit plane), matrix here works
     // when array gets to big - the list gets loaded into bit-vector using
     // bulk load algorithm, which is faster than single bit access
     //
-    
+
     size_type i;
     for (i = 0; i < arr_size; ++i)
     {
         unsigned bcnt = bm::bitscan(arr[i], b_list);
         const size_type bit_idx = i + offset;
-        
+
         for (unsigned j = 0; j < bcnt; ++j)
         {
             unsigned p = b_list[j];
             unsigned rl = row_len[p];
             tm.row(p)[rl] = bit_idx;
             row_len[p] = ++rl;
-            
+
             if (rl == transpose_window)
             {
                 bvector_type* bv = this->get_plane(p);
@@ -1081,7 +1122,7 @@ void sparse_vector<Val, BV>::import(const value_type* arr,
             }
         } // for j
     } // for i
-    
+
     // process incomplete transposition lines
     //
     for (unsigned k = 0; k < tm.rows(); ++k)
@@ -1094,11 +1135,11 @@ void sparse_vector<Val, BV>::import(const value_type* arr,
             bv->set(r, rl, BM_SORTED);
         }
     } // for k
-    
-    
+
+
     if (i + offset > this->size_)
         this->size_ = i + offset;
-    
+
     if (set_not_null)
     {
         bvector_type* bv_null = this->get_null_bvect();
@@ -1106,6 +1147,7 @@ void sparse_vector<Val, BV>::import(const value_type* arr,
             bv_null->set_range(offset, offset + arr_size - 1);
     }
 }
+
 
 //---------------------------------------------------------------------
 
@@ -1126,7 +1168,18 @@ void sparse_vector<Val, BV>::import_back(const value_type* arr,
                                          size_type         arr_size,
                                          bool              set_not_null)
 {
-    this->import(arr, arr_size, this->size(), set_not_null);
+    this->import_back_u((const unsigned_value_type)arr, arr_size, set_not_null);
+}
+
+
+//---------------------------------------------------------------------
+
+template<class Val, class BV>
+void sparse_vector<Val, BV>::import_back_u(const unsigned_value_type* arr,
+                                         size_type         arr_size,
+                                         bool              set_not_null)
+{
+    this->import_u(arr, arr_size, this->size(), set_not_null);
 }
 
 //---------------------------------------------------------------------
@@ -1360,13 +1413,17 @@ sparse_vector<Val, BV>::extract_range(value_type* arr,
                 }
             }
             size_type idx = k - offset;
-            value_type vm = (bool) is_set;
+            unsigned_value_type vm = (bool) is_set;
             vm <<= j;
             arr[idx] |= vm;
             
         } // for k
 
     } // for j
+
+    if constexpr (parent_type::is_signed())
+        u2s_translate(arr, size);
+
     return 0;
 }
 
@@ -1398,8 +1455,7 @@ sparse_vector<Val, BV>::extract_planes(value_type* arr,
         if (!bv)
             continue;
        
-        value_type mask = 1;
-        mask <<= i;
+        unsigned_value_type mask = 1u << i;
         typename BV::enumerator en(bv, offset);
         for (;en.valid(); ++en)
         {
@@ -1426,11 +1482,10 @@ sparse_vector<Val, BV>::extract(value_type* BMRESTRICT arr,
 {
     /// Decoder functor
     /// @internal
-    ///
     struct sv_decode_visitor_func
     {
         sv_decode_visitor_func(value_type* BMRESTRICT varr,
-                               value_type  mask,
+                               unsigned_value_type    mask,
                                size_type   off) BMNOEXCEPT2
         : arr_(varr), mask_(mask), sv_off_(off)
         {}
@@ -1441,21 +1496,21 @@ sparse_vector<Val, BV>::extract(value_type* BMRESTRICT arr,
         {
             // can be negative (-1) when bv base offset = 0 and sv = 1,2..
             size_type base = bv_offset - sv_off_; 
-            value_type m = mask_;
+            unsigned_value_type m = mask_;
             for (unsigned i = 0; i < bits_size; ++i)
                 arr_[bits[i] + base] |= m;
         }
         void add_range(size_type bv_offset, size_type sz) BMNOEXCEPT
         {
             auto base = bv_offset - sv_off_;
-            value_type m = mask_;
+            unsigned_value_type m = mask_;
             for (size_type i = 0; i < sz; ++i)
                 arr_[i + base] |= m;
         }
 
-        value_type* BMRESTRICT arr_;       ///< target array for reverse transpose
-        value_type             mask_;      ///< bit-plane mask 
-        size_type              sv_off_;    ///< SV read offset
+        value_type* BMRESTRICT     arr_;    ///< target array for de-transpose
+        unsigned_value_type        mask_;   ///< bit-plane mask
+        size_type                  sv_off_; ///< SV read offset
     };
 
     if (!size)
@@ -1470,16 +1525,35 @@ sparse_vector<Val, BV>::extract(value_type* BMRESTRICT arr,
 
     sv_decode_visitor_func func(arr, 0, offset);
 
-    for (size_type i = 0; i < parent_type::value_bits(); ++i)
+    auto planes = this->effective_planes();
+    for (size_type i = 0; i < planes; ++i)
     {
         const bvector_type* bv = this->bmatr_.get_row(i);
         if (!bv)
             continue;
-        func.mask_ = (value_type(1) << i); // set target plane OR mask
+        func.mask_ = (unsigned_value_type(1u) << i); // set target plane OR mask
         bm::for_each_bit_range_no_check(*bv, offset, end-1, func);
     } // for i
-    return end - offset;
+
+    const size_type exported_size = end - offset;
+    if constexpr (parent_type::is_signed())
+        u2s_translate(arr, exported_size);
+    return exported_size;
 }
+
+//---------------------------------------------------------------------
+
+template<class Val, class BV>
+void sparse_vector<Val, BV>::u2s_translate(value_type* arr, size_type sz) BMNOEXCEPT
+{
+    for (size_type i = 0; i < sz; ++i)
+    {
+        unsigned_value_type uv;
+        memcpy(&uv, &arr[i], sizeof(uv));
+        arr[i] = parent_type::u2s(uv);
+    } // for i
+}
+
 
 //---------------------------------------------------------------------
 
@@ -1720,8 +1794,13 @@ template<class Val, class BV>
 void sparse_vector<Val, BV>::inc(size_type idx)
 {
     if (idx >= this->size_)
+    {
         this->size_ = idx+1;
-    inc_no_null(idx);
+        set_value_no_null(idx, 1, false);
+    }
+    else
+        inc_no_null(idx);
+
     bvector_type* bv_null = this->get_null_bvect();
     if (bv_null)
         bv_null->set_bit_no_check(idx);
@@ -1732,13 +1811,20 @@ void sparse_vector<Val, BV>::inc(size_type idx)
 template<class Val, class BV>
 void sparse_vector<Val, BV>::inc_no_null(size_type idx)
 {
-    for (unsigned i = 0; i < parent_type::sv_value_planes; ++i)
+    if constexpr (parent_type::is_signed())
     {
-        bvector_type* bv = this->get_plane(i);
-        bool carry_over = bv->inc(idx);
-        if (!carry_over)
-            break;
+        value_type v = get(idx);
+        v = (std::numeric_limits<value_type>::max() == v) ? 0 : ++v;
+        set_value_no_null(idx, v, true);
     }
+    else
+        for (unsigned i = 0; i < parent_type::sv_value_planes; ++i)
+        {
+            bvector_type* bv = this->get_plane(i);
+            bool carry_over = bv->inc(idx);
+            if (!carry_over)
+                break;
+        }
 }
 
 //------------------------------------ ---------------------------------
@@ -2166,15 +2252,13 @@ void sparse_vector<Val, BV>::back_insert_iterator::add(
          typename sparse_vector<Val, BV>::back_insert_iterator::value_type v)
 {
     typename sparse_vector<Val, BV>::size_type sz = sv_->size();
-    const value_type* data_ptr = (const value_type*)buffer_.data();
+    const unsigned_value_type* data_ptr = (const unsigned_value_type*)buffer_.data();
     size_type buf_idx = size_type(buf_ptr_ - data_ptr);
 
     this->add_value_no_null(v);
 
     if (bv_null_)
-    {
         bv_null_->set_bit_no_check(sz + buf_idx);
-    }
 }
 
 //---------------------------------------------------------------------
@@ -2184,21 +2268,25 @@ void sparse_vector<Val, BV>::back_insert_iterator::add_value_no_null(
          typename sparse_vector<Val, BV>::back_insert_iterator::value_type v)
 {
     BM_ASSERT(sv_);
+
+    sparse_vector<Val, BV>::unsigned_value_type uv =
+        sparse_vector<Val, BV>::parent_type::s2u(v);
+
     if (!buf_ptr_) // not allocated (yet)
     {
         buffer_.reserve(n_buf_size * sizeof(value_type));
-        buf_ptr_ = (value_type*)(buffer_.data());
-        *buf_ptr_ = v;
+        buf_ptr_ = (unsigned_value_type*)(buffer_.data());
+        *buf_ptr_ = uv;
         ++buf_ptr_;
         return;
     }
     BM_ASSERT(buf_ptr_ && buffer_.data());
-    if (buf_ptr_ - ((value_type*)buffer_.data()) >= n_buf_size)
+    if (buf_ptr_ - ((unsigned_value_type*)buffer_.data()) >= n_buf_size)
     {
         this->flush();
-        buf_ptr_ = (value_type*)(buffer_.data());
+        buf_ptr_ = (unsigned_value_type*)(buffer_.data());
     }
-    *buf_ptr_ = v;
+    *buf_ptr_ = uv;
     ++buf_ptr_;
 }
 
@@ -2244,14 +2332,14 @@ void sparse_vector<Val, BV>::back_insert_iterator::flush()
 {
     if (this->empty())
         return;
-    value_type* d = (value_type*)buffer_.data();
+    unsigned_value_type* d = (unsigned_value_type*)buffer_.data();
     size_type arr_size = size_type(buf_ptr_ - d);
     if (!arr_size)
         return;
 
-    sv_->import_back(d, arr_size, false);
+    sv_->import_back_u(d, arr_size, false);
     
-    buf_ptr_ = (value_type*) buffer_.data();
+    buf_ptr_ = (unsigned_value_type*) buffer_.data();
     BM_ASSERT(buf_ptr_);
     block_idx_type nb = sv_->size() >> bm::set_block_shift;
     if (nb != prev_nb_)
