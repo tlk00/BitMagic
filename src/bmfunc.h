@@ -23,6 +23,7 @@ For more information please visit:  http://bitmagic.io
 */
 
 #include <memory.h>
+#include <type_traits>
 
 #include "bmdef.h"
 #include "bmutil.h"
@@ -802,13 +803,14 @@ bitscan_popcnt64(bm::id64_t w, B* bits, unsigned short offs) BMNOEXCEPT
 template<typename V, typename B>
 unsigned short bitscan(V w, B* bits) BMNOEXCEPT
 {
+    static_assert(std::is_unsigned<V>::value, "BM: unsigned type is required");
 #if (defined(__arm__) || defined(__aarch64__))
-    if (bm::conditional<sizeof(V) == 8>::test())
+    if constexpr (sizeof(V) == 8)
         return bm::bitscan_bsf64(w, bits);
     else
         return bm::bitscan_bsf((bm::word_t)w, bits);
 #else
-    if (bm::conditional<sizeof(V) == 8>::test())
+    if constexpr (sizeof(V) == 8)
         return bm::bitscan_popcnt64(w, bits);
     else
         return bm::bitscan_popcnt((bm::word_t)w, bits);
@@ -1376,7 +1378,7 @@ template<bool T> struct all_set
         all_set_block() BMNOEXCEPT
         {
             ::memset(_p, 0xFF, sizeof(_p)); // set FULL BLOCK content (all 1s)
-            if (bm::conditional<sizeof(void*) == 8>::test())
+            if constexpr (sizeof(void*) == 8)
             {
                 const unsigned long long magic_mask = 0xFFFFfffeFFFFfffe;
                 ::memcpy(&_p_fullp, &magic_mask, sizeof(magic_mask));
@@ -1399,7 +1401,7 @@ template<bool T> struct all_set
     static bm::id64_t block_type(const bm::word_t* bp) BMNOEXCEPT
     {
         bm::id64_t type;
-        if (bm::conditional<sizeof(void*) == 8>::test())
+        if constexpr (sizeof(void*) == 8)
         {
             bm::id64_t w = reinterpret_cast<unsigned long long>(bp);
             type = (w & 3) | // FULL BLOCK or GAP
@@ -9192,13 +9194,13 @@ typedef unsigned TRGW;
 typedef unsigned IDX;
 #if defined(BM64_SSE4)
     // optimized for unsigned
-    if (bm::conditional<sizeof(TRGW)==4 && sizeof(IDX)==4>::test())
+    if constexpr (sizeof(TRGW)==4 && sizeof(IDX)==4)
     {
         sse4_bit_block_gather_scatter(arr, blk, idx, size, start, bit_idx);
         return;
     }
 #elif defined(BM64_AVX2) || defined(BM64_AVX512)
-    if (bm::conditional<sizeof(TRGW)==4 && sizeof(IDX)==4>::test())
+    if constexpr (sizeof(TRGW)==4 && sizeof(IDX)==4)
     {
         avx2_bit_block_gather_scatter(arr, blk, idx, size, start, bit_idx);
         return;
