@@ -1322,7 +1322,6 @@ void base_sparse_vector<Val, BV, MAX_SIZE>::swap(
     if (this != &bsv)
     {
         bmatr_.swap(bsv.bmatr_);
-
         bm::xor_swap(size_, bsv.size_);
         bm::xor_swap(effective_planes_, bsv.effective_planes_);
     }
