@@ -3672,7 +3672,7 @@ void SparseVectorSerializationTest()
     sparse_vector_u32 sv3(bm::use_null);
 
     unsigned sv_size = BSIZE;
-    if (bm::conditional<sizeof(void*) == 4>::test())
+    if constexpr (sizeof(void*) == 4)
     {
         sv_size = sv_size / 2;
     }
@@ -3872,7 +3872,7 @@ static
 void StrSparseVectorTest()
 {
     unsigned max_coll = 20000000;
-    if (bm::conditional<sizeof(void*) == 4>::test())
+    if constexpr (sizeof(void*) == 4)
     {
         max_coll = max_coll / 2;
     }
