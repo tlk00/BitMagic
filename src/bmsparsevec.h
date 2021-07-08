@@ -1279,14 +1279,14 @@ sparse_vector<Val, BV>::gather(value_type*       arr,
             const bm::word_t* blk = this->bmatr_.get_block(j, i0, j0);
             if (!blk)
                 continue;
-            value_type vm;
-            const value_type mask1 = 1;
+            unsigned_value_type vm;
+            const unsigned_value_type mask1 = 1u;
             
             if (blk == FULL_BLOCK_FAKE_ADDR)
             {
                 vm = (mask1 << j);
                 for (size_type k = i; k < r; ++k)
-                    arr[k] |= vm;
+                    ((unsigned_value_type*)arr)[k] |= vm;
                 continue;
             }
             if (BM_IS_GAP(blk))
@@ -1304,11 +1304,11 @@ sparse_vector<Val, BV>::gather(value_type*       arr,
                         unsigned gap_value = gap_blk[gidx];
                         if (is_set)
                         {
-                            arr[k] |= vm = (mask1 << j);
+                            ((unsigned_value_type*)arr)[k] |= vm = (mask1 << j);
                             for (++k; k < r; ++k) // speculative look-up
                             {
                                 if (unsigned(idx[k] & bm::set_block_mask) <= gap_value)
-                                    arr[k] |= vm;
+                                    ((unsigned_value_type*)arr)[k] |= vm;
                                 else
                                     break;
                             }
@@ -1328,17 +1328,20 @@ sparse_vector<Val, BV>::gather(value_type*       arr,
                     {
                         unsigned nbit = unsigned(idx[k] & bm::set_block_mask);
                         is_set = bm::gap_test_unr(gap_blk, nbit);
-                        arr[k] |= (value_type(bool(is_set)) << j);
+                        ((unsigned_value_type*)arr)[k] |= (unsigned_value_type(bool(is_set)) << j);
                     } // for k
                 }
                 continue;
             }
-            bm::bit_block_gather_scatter(arr, blk, idx, r, i, j);
+            bm::bit_block_gather_scatter((unsigned_value_type*)arr, blk, idx, r, i, j);
         } // for (each plane)
         
         i = r;
 
     } // for i
+
+    if constexpr (parent_type::is_signed())
+        u2s_translate(arr, size);
 
     return size;
 }
