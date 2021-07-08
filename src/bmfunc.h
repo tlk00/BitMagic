@@ -9193,6 +9193,7 @@ void bit_block_gather_scatter(unsigned* BMRESTRICT arr,
 typedef unsigned TRGW;
 typedef unsigned IDX;
 #if defined(BM64_SSE4)
+    // TODO: provide 16 and 64-bit optimized implementations
     // optimized for unsigned
     if constexpr (sizeof(TRGW)==4 && sizeof(IDX)==4)
     {
