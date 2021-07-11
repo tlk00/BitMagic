@@ -1797,8 +1797,7 @@ public:
     {
         if (temp_block_)
         {
-            bm::word_t* ret = temp_block_;
-            temp_block_ = 0;
+            bm::word_t* ret = temp_block_; temp_block_ = 0;
             return ret;
         }
         return alloc_.alloc_bit_block();

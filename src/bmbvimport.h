@@ -38,6 +38,7 @@ namespace bm
     @param bv [out] - target bvector
     @param bit_arr [in] - source array
     @param bit_arr_size [in] - source array size in words (NOT in bits or bytes)
+    @param optimize [in] - flag to optimize/compress target bvector on the fly
 
     @ingroup bvimport
  */
