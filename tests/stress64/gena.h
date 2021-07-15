@@ -691,16 +691,28 @@ void GenerateShiftTestCollection(VECT* target,
 template<typename SV>
 void GenerateSV(SV&   sv, unsigned strategy = 0)
 {
-    typename SV::size_type max_idx_value = 1000000;
+    using value_type = typename SV::value_type;
+
+    unsigned max_idx_value = 1000000;
     switch (strategy)
     {
     case 0:
     {
         cout << "SV Ultra sparse generation" << endl;
-        for (typename SV::size_type i = 0; i < max_idx_value;)
+        for (unsigned i = 0; i < max_idx_value;)
         {
-            unsigned v = (rand() * rand()) % 650000;
-            sv[i] = v;
+            value_type v = (rand() * rand()) % 650000;
+            if constexpr (std::is_unsigned<value_type>::value)
+            {
+                sv[i] = v;
+            }
+            else
+            {
+                if (v & 1)
+                    sv[i] = - v;
+                else
+                    sv[i] = v;
+            }
             i += 10000 + rand() % 65535;
         }
         break;
@@ -708,12 +720,19 @@ void GenerateSV(SV&   sv, unsigned strategy = 0)
     case 1:
     {
         cout << "SV Dense intervals generation 1" << endl;
-        for (typename SV::size_type i = 0; i < max_idx_value;)
+        for (unsigned i = 0; i < max_idx_value;)
         {
-            unsigned v = (rand() * rand()) % 650000;
-            for (typename SV::size_type j = 0; i < max_idx_value; ++i, ++j)
+            value_type v = (rand() * rand()) % 650000;
+            for (unsigned j = 0; i < max_idx_value; ++i, ++j)
             {
-                sv[i] = typename SV::value_type(v + j);
+                if constexpr (std::is_unsigned<value_type>::value)
+                {
+                    sv[i] = v + j;
+                }
+                else
+                {
+                    sv[i] = int(j)-v;
+                }
                 if (j > 256)
                     break;
             }
@@ -724,18 +743,21 @@ void GenerateSV(SV&   sv, unsigned strategy = 0)
     case 2:
     {
         cout << "SV Dense intervals generation 2" << endl;
-        unsigned v = (rand() * rand()) % 650000;
-        for (typename SV::size_type i = 0; i < max_idx_value / 4; ++i)
+        value_type v = (rand() * rand()) % 650000;
+        for (unsigned i = 0; i < max_idx_value/4; ++i)
         {
             sv[i] = v;
         }
 
-        for (typename SV::size_type i = 0; i < max_idx_value;)
+        for (unsigned i = 0; i < max_idx_value;)
         {
             v = unsigned(rand() * rand()) % 650000;
-            for (typename SV::size_type j = 0; i < max_idx_value; ++i, ++j)
+            for (unsigned j = 0; i < max_idx_value; ++i, ++j)
             {
-                sv[i] = typename SV::value_type(v + i);
+                if constexpr (std::is_unsigned<value_type>::value)
+                    sv[i] = v + i;
+                else
+                    sv[i] = - int(unsigned(v) + i);
                 if (j > 256)
                     break;
             }
@@ -746,12 +768,16 @@ void GenerateSV(SV&   sv, unsigned strategy = 0)
     case 3:
     {
         cout << "SV random generation" << endl;
-        typename SV::size_type rand_max = rand() % 300000;
-        for (typename SV::size_type i = 0; i < rand_max; ++i)
+        unsigned rand_max = rand() % 300000;
+        for (unsigned i = 0; i < rand_max; ++i)
         {
-            unsigned v = unsigned(rand() * rand());
-            typename SV::size_type idx = typename SV::size_type(rand()) % max_idx_value;
-            sv[idx] = v;
+            value_type v = value_type(rand() * rand());
+            unsigned idx = unsigned(rand()) % max_idx_value;
+            if constexpr (std::is_unsigned<value_type>::value)
+                sv[idx] = v;
+            else
+                sv[idx] = -v;
+
             if (i % 2 == 0)
             {
                 sv.clear(idx, true);
@@ -760,54 +786,49 @@ void GenerateSV(SV&   sv, unsigned strategy = 0)
         break;
     }
     case 4:
-    {
+        {
         cout << "SV empty generation" << endl;
-        typename SV::size_type idx = typename SV::size_type(rand()) % max_idx_value;
+        unsigned idx = unsigned(rand()) % max_idx_value;
         sv[idx] = 25557890;
         sv.clear(idx, true);
-    }
-    break;
+        }
+        break;
     case 5:
-    {
+        {
         cout << "SV uniform power 2 value generation" << endl;
-        unsigned v = 8;//unsigned(rand()) % 64;
-        for (typename SV::size_type i = 0; i < max_idx_value; ++i)
+        value_type v = 8;//unsigned(rand()) % 64;
+        for (unsigned i = 0; i < max_idx_value; ++i)
         {
-            sv[i] = v;
+            sv[i] = 0-v;
         }
-    }
-    break;
+        }
+        break;
     case 6:
-    {
+        {
         cout << "SV uniform power 2+1 value generation" << endl;
-        unsigned v = 16 + 1;
-        for (typename SV::size_type i = 0; i < max_idx_value; ++i)
+        value_type v = 16+1;
+        for (unsigned i = 0; i < max_idx_value; ++i)
         {
-            sv[i] = v;
+            if constexpr (std::is_unsigned<value_type>::value)
+                sv[i] = v;
+            else
+                sv[i] = 0-v;
+
         }
-    }
-    break;
+        }
+        break;
     case 7:
-    {
-        cout << "SV linear growth value generation..." << flush;
+        {
+        cout << "SV linear growth/decline value generation" << endl;
         for (unsigned i = 0; i < max_idx_value; ++i)
         {
-            sv[i] = i;
+            if constexpr (std::is_unsigned<value_type>::value)
+                sv[i] = i;
+            else
+                sv[i] = -int(i);
         }
-        cout << "ok" << endl;
-    }
-    break;
-    case 8:
-    {
-        cout << "SV linear growth value generation (in 64-bit space)..." << flush;
-        typename SV::size_type from = bm::id_max - max_idx_value - 1;
-        for (unsigned i = 0; i < max_idx_value; ++i)
-        {
-            sv[from + i] = i;
         }
-        cout << "ok effective size=" << (sv.size() - from) << endl;
-    }
-    break;
+        break;
     default:
         break;
     } // switch
