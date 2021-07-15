@@ -14375,6 +14375,244 @@ void TestSparseVectorScan()
     cout << " \n--------------- Test sparse_vector<> scan algo OK" << endl;
 }
 
+static
+void TestSignedSparseVectorScan()
+{
+    cout << " --------------- TestSignedSparseVectorScan()" << endl;
+
+    bm::sparse_vector_scanner<sparse_vector_i32> scanner;
+    bm::sparse_vector_scanner<sparse_vector_i64> scanner_64;
+    bm::sparse_vector_scanner<rsc_sparse_vector_i32> rsc_scanner;
+
+    {
+        sparse_vector_i32 sv(bm::use_null);
+        bvect bv_control;
+        scanner.find_eq(sv, 25, bv_control);
+        assert(!bv_control.any());
+        scanner.invert(sv, bv_control);
+        assert(!bv_control.any());
+    }
+
+    {
+        sparse_vector_i32 sv;
+        bvect bv_control;
+        for (unsigned i = 0; i < 20; ++i)
+        {
+            sv.set(i, 0);
+        }
+        scanner.find_eq(sv, 0, bv_control);
+        bvect::size_type found = bv_control.count();
+        assert(found == 20);
+        scanner.invert(sv, bv_control);
+        found = bv_control.count();
+        assert(!found);
+    }
+
+    {
+        cout << endl << "Unique search check" << endl;
+        sparse_vector_i32 sv;
+        rsc_sparse_vector_i32 csv(bm::use_null);
+
+        bvect bv_control, bv_control2;
+        bvect::allocator_pool_type pool;
+        bvect::mem_pool_guard g1(pool, bv_control);
+        bvect::mem_pool_guard g2(pool, bv_control2);
+
+        unsigned sv_size = 1256000;
+        {
+            sparse_vector_i32::back_insert_iterator bi(sv.get_back_inserter());
+            for (unsigned j = 0; j < sv_size; ++j)
+            {
+                if (j & 1)
+                    *bi = int(j);
+                else
+                    *bi = -int(j);
+            }
+        }
+        csv.load_from(sv);
+
+        {
+        chrono_taker ct("sparse_vector<> search");
+
+            for (unsigned j = 0; j < sv_size; ++j)
+            {
+                int search_value;
+                if (j & 1)
+                    search_value = int(j);
+                else
+                    search_value = -int(j);
+                scanner.find_eq(sv, search_value, bv_control);
+
+                if (bv_control.count()!= 1)
+                {
+                    cerr << "1. Unique search discrepancy at value=" << j
+                         << " count = " << bv_control.count() << endl;
+                    assert(0);exit(1);
+                }
+                bvect::size_type v1, v2;
+                bool b = bv_control.find_range(v1, v2);
+                assert(b);
+                if (v1 != v2)
+                {
+                    cerr << "2. Unique search discrepancy at value=" << j
+                         << " count = " << bv_control.count() << endl;
+                    exit(1);
+                }
+
+                bvect::size_type pos;
+                bool found = scanner.find_eq(sv, search_value, pos);
+                if (!found)
+                {
+                    cerr << "3. Unique search failure at value=" << j
+                         << endl;
+                    exit(1);
+                }
+                if (v1 != pos)
+                {
+                    cerr << "4. Unique search discrepancy at value=" << j
+                         << " found = " << pos << endl;
+                    exit(1);
+                }
+
+                rsc_scanner.find_eq(csv, search_value, bv_control2);
+                int res = bv_control.compare(bv_control2);
+                if (res != 0)
+                {
+                    cerr << "RSC scan comparison failed at value =" << j
+                    << endl;
+                    exit(1);
+                }
+
+
+                if (j % 1000 == 0)
+                    cout << "\r" << j << "/" << sv_size << "    " << flush;
+            } // for
+            cout << endl;
+        }
+
+        cout << "Unique search OK" << endl;
+    }
+
+    {
+        cout << "Find EQ test on flat data" << endl;
+        bvect::allocator_pool_type pool;
+        int max_value = 128000;
+        for (int value = 0; value < max_value; ++value)
+        {
+            sparse_vector_i32 sv;
+            sparse_vector_i64 sv_64;
+            rsc_sparse_vector_i32 csv;
+
+            bvect bv_control, bv_control2;
+            bvect::mem_pool_guard g0(pool, bv_control);
+
+            unsigned sv_size = 67000;
+
+            {
+                sparse_vector_i32::back_insert_iterator bi(sv.get_back_inserter());
+                sparse_vector_i64::back_insert_iterator bi_64(sv_64.get_back_inserter());
+                for (unsigned j = 0; j < 67000; ++j)
+                {
+                    *bi = -value;
+                    bm::id64_t v64 = (unsigned)value;
+                    v64 <<= 32;
+                    *bi_64 = -(signed long long)v64;
+                }
+            }
+            csv.load_from(sv);
+
+            scanner.find_eq(sv, -value, bv_control);
+            bvect::size_type found = bv_control.count();
+
+            if (found != sv_size)
+            {
+                cerr << "1. sparse_vector<>::find_eq() discrepancy for value=" << value
+                     << " count = " << found << endl;
+                exit(1);
+            }
+
+            rsc_scanner.find_eq(csv, -value, bv_control2);
+            int res = bv_control.compare(bv_control2);
+            if (res != 0)
+            {
+                cerr << "RSC scan comparison failed at value =" << value
+                << endl;
+                exit(1);
+            }
+
+
+            {
+                bm::id64_t v64 = unsigned(value);
+                v64 <<= 32;
+                signed long long v64s = -(signed long long)v64;
+                scanner_64.find_eq(sv_64, v64s, bv_control);
+                found = bv_control.count();
+
+                if (found != sv_size)
+                {
+                    cerr << "1. (64) sparse_vector<>::find_eq() discrepancy for value=" << value
+                         << " count = " << found << endl;
+                    exit(1);
+                }
+            }
+
+            // not found check
+            scanner.find_eq(sv, value+1, bv_control);
+            if (bv_control.any())
+            {
+                cerr << "1. sparse_vector<>::find_eq() (any) discrepancy for value=" << value+1
+                     << " count = " << bv_control.count() << endl;
+                exit(1);
+            }
+            rsc_scanner.find_eq(csv, value+1, bv_control2);
+            res = bv_control.compare(bv_control2);
+            if (res != 0)
+            {
+                cerr << "1. RSC scan comparison failed at value =" << value+1
+                << endl;
+                exit(1);
+            }
+
+            {
+            BM_DECLARE_TEMP_BLOCK(tb)
+            sv.optimize(tb);
+            }
+
+            bv_control.clear();
+
+            scanner.find_eq(sv, -value, bv_control);
+            found = bv_control.count();
+            if (found != sv_size)
+            {
+                cerr << "2. sparse_vector<>::find_eq() discrepancy for value=" << value
+                     << " count = " << found << endl;
+                exit(1);
+            }
+
+            // not found check
+            scanner.find_eq(sv, value+1, bv_control);
+            if (bv_control.any())
+            {
+                cerr << "2. sparse_vector<>::find_eq() (any) discrepancy for value=" << value+1
+                     << " count = " << bv_control.count() << endl;
+                exit(1);
+            }
+
+
+            if (value % 256 == 0)
+                cout << "\r" << value << "/" << max_value << "    " << flush;
+        }
+
+        cout << endl << "Flat EQ ok" << endl;
+    }
+
+
+
+    cout << " \n--------------- TestSignedSparseVectorScan() OK" << endl;
+}
+
+
+
 
 //-----------------------------------------------------------------------------------
 
@@ -18301,10 +18539,10 @@ int main(int argc, char *argv[])
 
     if (is_all || is_csv)
     {
-//         TestCompressSparseVector();
+         TestCompressSparseVector();
 
          TestCompressSparseSignedVector();
-/*
+
          TestCompressedSparseVectorAlgo();
 
          TestCompressSparseVectorSerial();
@@ -18315,7 +18553,7 @@ int main(int argc, char *argv[])
         {
             TestSparseVector_Stress(2);
         }
-*/
+
     }
 
     if (is_all || is_c_coll)
