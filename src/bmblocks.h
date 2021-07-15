@@ -1913,16 +1913,10 @@ public:
                             top_block_size_ * sizeof(top_blocks_[0]));
                 i = top_block_size_;
             }
-            /*
-            for (; i < top_block_size_; ++i)
-                new_blocks[i] = top_blocks_[i];
-            */
             alloc_.free_ptr(top_blocks_, top_block_size_);
         }
         if (i < top_blocks)
-        {
             ::memset(&new_blocks[i], 0, sizeof(void*) * (top_blocks-i));
-        }
         top_blocks_ = new_blocks;
         top_block_size_ = top_blocks;
         return top_block_size_;
