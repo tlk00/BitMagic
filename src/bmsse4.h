@@ -1890,8 +1890,14 @@ void sse42_bit_block_xor_2way(bm::word_t* target_block,
 #define VECT_COPY_BLOCK(dst, src) \
     sse2_copy_block((__m128i*) dst, (__m128i*) (src))
 
+#define VECT_COPY_BLOCK_UNALIGN(dst, src) \
+    sse2_copy_block_unalign((__m128i*) dst, (__m128i*) (src))
+
 #define VECT_STREAM_BLOCK(dst, src) \
     sse2_stream_block((__m128i*) dst, (__m128i*) (src))
+
+#define VECT_STREAM_BLOCK_UNALIGN(dst, src) \
+    sse2_stream_block_unalign((__m128i*) dst, (__m128i*) (src))
 
 #define VECT_SET_BLOCK(dst, value) \
     sse2_set_block((__m128i*) dst, value)

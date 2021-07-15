@@ -46,7 +46,7 @@ template<class BV>
 void bit_import_u32(BV& bv,
                    const unsigned int* BMRESTRICT bit_arr,
                    typename BV::size_type         bit_arr_size,
-                   bool optimize)
+                   bool                           optimize)
 {
     BM_ASSERT(bit_arr);
 
@@ -54,8 +54,11 @@ void bit_import_u32(BV& bv,
     if (!bit_arr_size)
         return;
 
-    typename BV::block_idx_type total_blocks = bit_arr_size / bm::set_block_size;
-    unsigned top_blocks = (total_blocks / bm::set_sub_array_size) + 1;
+    using block_idx_type = typename BV::block_idx_type;
+    using bv_size_type = typename BV::size_type;
+
+    block_idx_type total_blocks = bit_arr_size / bm::set_block_size;
+    unsigned top_blocks = unsigned(total_blocks / bm::set_sub_array_size) + 1;
     BM_ASSERT(top_blocks);
 
     typename BV::blocks_manager_type& bman = bv.get_blocks_manager();
@@ -71,8 +74,7 @@ void bit_import_u32(BV& bv,
         bman.set_block(nb, block);
         const unsigned int* BMRESTRICT bit_arr_block_ptr =
                                         &bit_arr[nb*bm::set_block_size];
-        ::memcpy(block, bit_arr_block_ptr,
-                bm::set_block_size * sizeof(bm::word_t));
+        bm::bit_block_copy_unalign(block, bit_arr_block_ptr);
         if (optimize)
             bman.optimize_bit_block(nb); // returns tem_block if needed
     } // for nb
@@ -85,7 +87,7 @@ void bit_import_u32(BV& bv,
         BM_ASSERT(bit_arr_size - tail_idx < bm::set_block_size);
         bm::word_t* block = bman.borrow_tempblock();
         bman.set_block(nb, block);
-        unsigned i = tail_idx;
+        bv_size_type i = tail_idx;
         unsigned k = 0;
         while (i < bit_arr_size) // copy the array's tail
             block[k++] = bit_arr[i++];

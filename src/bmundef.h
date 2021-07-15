@@ -94,6 +94,12 @@ For more information please visit:  http://bitmagic.io
 #undef BMI1_SELECT64
 #undef BMI2_SELECT64
 
+#undef VECT_COPY_BLOCK_UNALIGN
+#undef VECT_COPY_BLOCK
+#undef VECT_STREAM_BLOCK_UNALIGN
+#undef VECT_STREAM_BLOCK
+
+
 #undef BM_UNALIGNED_ACCESS_OK
 #undef BM_x86
 
