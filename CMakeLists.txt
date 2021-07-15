@@ -28,6 +28,7 @@ set(BM_HEADERS ${PROJECT_SOURCE_DIR}/src/bm.h
                ${PROJECT_SOURCE_DIR}/src/bm3vl.h
                ${PROJECT_SOURCE_DIR}/src/bmaggregator.h
                ${PROJECT_SOURCE_DIR}/src/bmalgo.h
+               ${PROJECT_SOURCE_DIR}/src/bmbvimport.h
                ${PROJECT_SOURCE_DIR}/src/bmalgo_impl.h
                ${PROJECT_SOURCE_DIR}/src/bmalgo_similarity.h
                ${PROJECT_SOURCE_DIR}/src/bmalloc.h
@@ -142,6 +143,7 @@ add_executable(bvsample15 ${PROJECT_SOURCE_DIR}/samples/bvsample15/sample15.cpp 
 add_executable(bvsample16 ${PROJECT_SOURCE_DIR}/samples/bvsample16/sample16.cpp ${BM_HEADERS})
 add_executable(bvsample17 ${PROJECT_SOURCE_DIR}/samples/bvsample17/sample17.cpp ${BM_HEADERS})
 add_executable(bvsample18 ${PROJECT_SOURCE_DIR}/samples/bvsample18/sample18.cpp ${BM_HEADERS})
+add_executable(bvsample18a ${PROJECT_SOURCE_DIR}/samples/bvsample18a/sample18a.cpp ${BM_HEADERS})
 add_executable(bvsample19 ${PROJECT_SOURCE_DIR}/samples/bvsample19/sample19.cpp ${BM_HEADERS})
 add_executable(bvsample20 ${PROJECT_SOURCE_DIR}/samples/bvsample20/sample20.cpp ${BM_HEADERS})
 add_executable(bvsample21 ${PROJECT_SOURCE_DIR}/samples/bvsample21/sample21.cpp ${BM_HEADERS})
