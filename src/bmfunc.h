@@ -6597,10 +6597,9 @@ unsigned gap_count_sub(const gap_word_t* BMRESTRICT vect1,
 
 
 /*!
-   \brief Bitblock copy operation. 
-
-   \param dst - destination block.
-   \param src - source block.
+   \brief Bitblock copy operation.
+   \param dst [out] - destination block.
+   \param src [in] - source block.
 
    @ingroup bitfunc
 */
@@ -6614,6 +6613,26 @@ void bit_block_copy(bm::word_t* BMRESTRICT dst,
     ::memcpy(dst, src, bm::set_block_size * sizeof(bm::word_t));
 #endif
 }
+
+/*!
+   \brief Bitblock copy operation (unaligned src)
+   \param dst [out] - destination block.
+   \param src [in] - source block.
+
+   @ingroup bitfunc
+*/
+inline
+void bit_block_copy_unalign(bm::word_t* BMRESTRICT dst,
+                            const bm::word_t* BMRESTRICT src) BMNOEXCEPT
+{
+#ifdef VECT_COPY_BLOCK_UNALIGN
+    VECT_COPY_BLOCK_UNALIGN(dst, src);
+#else
+    ::memcpy(dst, src, bm::set_block_size * sizeof(bm::word_t));
+#endif
+}
+
+
 
 /*!
    \brief Bitblock copy/stream operation.
@@ -6633,6 +6652,25 @@ void bit_block_stream(bm::word_t* BMRESTRICT dst,
     ::memcpy(dst, src, bm::set_block_size * sizeof(bm::word_t));
 #endif
 }
+
+/*!
+   \brief Bitblock copy/stream operation (unaligned src)
+   \param dst [out] - destination block.
+   \param src [in] - source block (unaligned address)
+
+   @ingroup bitfunc
+*/
+inline
+void bit_block_stream_unalign(bm::word_t* BMRESTRICT dst,
+                              const bm::word_t* BMRESTRICT src) BMNOEXCEPT
+{
+#ifdef VECT_STREAM_BLOCK_UNALIGN
+    VECT_STREAM_BLOCK_UNALIGN(dst, src);
+#else
+    ::memcpy(dst, src, bm::set_block_size * sizeof(bm::word_t));
+#endif
+}
+
 
 
 /*!
