@@ -1819,7 +1819,10 @@ void sparse_vector<Val, BV>::inc_no_null(size_type idx)
     if constexpr (parent_type::is_signed())
     {
         value_type v = get(idx);
-        v = (std::numeric_limits<value_type>::max() == v) ? 0 : ++v;
+        if (std::numeric_limits<value_type>::max() == v)
+            v = 0;
+        else
+            ++v;
         set_value_no_null(idx, v, true);
     }
     else
