@@ -26,6 +26,7 @@ For more information please visit:  http://bitmagic.io
 */
 
 #include <stdlib.h>
+#include <assert.h> 
 #include <iostream>
 
 #include "bm.h"
