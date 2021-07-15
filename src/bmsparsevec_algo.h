@@ -949,6 +949,9 @@ template<typename SV>
 set2set_11_transform<SV>::set2set_11_transform()
 : sv_ptr_(0), gb_(0), have_stats_(false)
 {
+    // set2set_11_transform for signed int is not implemented yet
+    static_assert(std::is_unsigned<value_type>::value,
+                  "BM: unsigned sparse vector is required for transform");
     gb_ = (gather_buffer_type*)::malloc(sizeof(gather_buffer_type));
     if (!gb_)
     {
@@ -1336,10 +1339,11 @@ bool sparse_vector_scanner<SV>::find_first_eq(const SV&   sv,
 //----------------------------------------------------------------------------
 
 template<typename SV>
-bool sparse_vector_scanner<SV>::find_first_eq(const SV&                   sv,
-                                          const typename SV::value_type*  str,
-                                          size_type&                      idx,
-                                          bool                            remaped)
+bool sparse_vector_scanner<SV>::find_first_eq(
+                                const SV&                       sv,
+                                const typename SV::value_type*  str,
+                                size_type&                      idx,
+                                bool                            remaped)
 {
     if (sv.empty())
         return false; // nothing to do
@@ -1350,7 +1354,6 @@ bool sparse_vector_scanner<SV>::find_first_eq(const SV&                   sv,
 
     agg_.reset();
     unsigned common_prefix_len = 0;
-    
     if (mask_set_)
     {
         agg_.set_range_hint(mask_from_, mask_to_);
@@ -1476,10 +1479,14 @@ template<typename SV>
 bool sparse_vector_scanner<SV>::prepare_and_sub_aggregator(const SV&   sv,
                                            typename SV::value_type   value)
 {
+    using unsigned_value_type = typename SV::unsigned_value_type;
+
     unsigned char bits[sizeof(value) * 8];
-    unsigned short bit_count_v = bm::bitscan(value, bits);
+    unsigned_value_type uv = sv.s2u(value);
+
+    unsigned short bit_count_v = bm::bitscan(uv, bits);
     BM_ASSERT(bit_count_v);
-    const value_type mask1 = 1;
+    const unsigned_value_type mask1 = 1;
 
     // prep the lists for combined AND-SUB aggregator
     //   (backward order has better chance for bit reduction on AND)
@@ -1487,20 +1494,19 @@ bool sparse_vector_scanner<SV>::prepare_and_sub_aggregator(const SV&   sv,
     for (unsigned i = bit_count_v; i > 0; --i)
     {
         unsigned bit_idx = bits[i-1];
-        BM_ASSERT(value & (mask1 << bit_idx));
+        BM_ASSERT(uv & (mask1 << bit_idx));
         const bvector_type* bv = sv.get_plane(bit_idx);
         if (bv)
             agg_.add(bv);
         else
             return false;
     }
-    
     unsigned sv_planes = sv.effective_planes();
     for (unsigned i = 0; i < sv_planes; ++i)
     {
         bvector_type_const_ptr bv = sv.get_plane(i);
-        value_type mask = mask1 << i;
-        if (bv && !(value & mask))
+        unsigned_value_type mask = mask1 << i;
+        if (bv && !(uv & mask))
             agg_.add(bv, 1); // agg to SUB group
     } // for i
     return true;
@@ -1524,7 +1530,8 @@ void sparse_vector_scanner<SV>::find_eq_with_nulls_horizontal(const SV&  sv,
     }
 
     unsigned char bits[sizeof(value) * 8];
-    unsigned short bit_count_v = bm::bitscan(value, bits);
+    typename SV::unsigned_value_type uv = sv.s2u(value);
+    unsigned short bit_count_v = bm::bitscan(uv, bits);
     BM_ASSERT(bit_count_v);
 
     // aggregate AND all matching vectors
@@ -1552,12 +1559,12 @@ void sparse_vector_scanner<SV>::find_eq_with_nulls_horizontal(const SV&  sv,
 
     // SUB all other planes
     unsigned sv_planes = sv.effective_planes();
-    for (unsigned i = 0; (i < sv_planes) && value; ++i)
+    for (unsigned i = 0; (i < sv_planes) && uv; ++i)
     {
         const bvector_type* bv_plane = sv.get_plane(i);
-        if (bv_plane && !(value & (value_type(1) << i)))
+        if (bv_plane && !(uv & (1u << i)))
             bv_out -= *bv_plane;
-    }
+    } // for i
 }
 
 //----------------------------------------------------------------------------
@@ -1703,9 +1710,10 @@ bool sparse_vector_scanner<SV>::find_eq_str_impl(const SV&  sv,
 //----------------------------------------------------------------------------
 
 template<typename SV>
-bool sparse_vector_scanner<SV>::bfind_eq_str(const SV&                      sv,
-                                             const typename SV::value_type* str,
-                                             typename SV::size_type&        pos)
+bool sparse_vector_scanner<SV>::bfind_eq_str(
+                                    const SV&                      sv,
+                                    const typename SV::value_type* str,
+                                    typename SV::size_type&        pos)
 {
     bool found = false;
     if (sv.empty())
@@ -2180,6 +2188,14 @@ void sparse_vector_scanner<SV>::find_eq(const SV&                  sv,
                                         typename SV::value_type    value,
                                         typename SV::bvector_type& bv_out)
 {
+    // sparse_vector_scanner<> for signed int is not implemented yet
+/*
+    static_assert(std::is_unsigned<value_type>::value ||
+                 std::is_same<value_type, char>::value ||
+                 std::is_same<value_type, unsigned char>::value,
+                  "BM: unsigned sparse vector is sparse_vector_scanner");
+*/
+
     if (sv.empty())
     {
         bv_out.clear();
@@ -2204,6 +2220,14 @@ bool sparse_vector_scanner<SV>::find_eq(const SV&                  sv,
                                         typename SV::value_type    value,
                                         typename SV::size_type&    pos)
 {
+    // sparse_vector_scanner<> for signed int is not implemented yet
+/*
+    static_assert(std::is_unsigned<value_type>::value ||
+                 std::is_same<value_type, char>::value ||
+                 std::is_same<value_type, unsigned char>::value,
+                  "BM: unsigned sparse vector is sparse_vector_scanner");
+*/
+
     if (!value) // zero value - special case
     {
         bvector_type bv_zero;

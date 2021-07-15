@@ -1681,12 +1681,14 @@ void sparse_vector<Val, BV>::insert_value(size_type idx, value_type v)
 template<class Val, class BV>
 void sparse_vector<Val, BV>::insert_value_no_null(size_type idx, value_type v)
 {
-    unsigned bsr = v ? bm::bit_scan_reverse(v) : 0u;
-    value_type mask = 1u;
+    unsigned_value_type uv = this->s2u(v);
+    unsigned bsr = uv ? bm::bit_scan_reverse(uv) : 0u;
+
+    unsigned_value_type mask = 1u;
     unsigned i = 0;
     for (; i <= bsr; ++i)
     {
-        if (v & mask)
+        if (uv & mask)
         {
             bvector_type* bv = this->get_plane(i);
             bv->insert(idx, true);
@@ -1697,8 +1699,9 @@ void sparse_vector<Val, BV>::insert_value_no_null(size_type idx, value_type v)
             if (bv)
                 bv->insert(idx, false);
         }
-        mask = value_type(mask << 1);
+        mask = unsigned_value_type(mask << 1);
     } // for i
+
     // insert 0 into all other existing planes
     unsigned eff_planes = this->effective_planes();
     for (; i < eff_planes; ++i)
@@ -1706,8 +1709,7 @@ void sparse_vector<Val, BV>::insert_value_no_null(size_type idx, value_type v)
         bvector_type* bv = this->bmatr_.get_row(i);
         if (bv)
             bv->insert(idx, false);
-    } // for i
-    
+    } // for i    
     this->size_++;
 }
 

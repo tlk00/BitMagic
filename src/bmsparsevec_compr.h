@@ -77,6 +77,7 @@ public:
     typedef typename bvector_type::rs_index_type     rs_index_type;
     typedef typename bvector_type::enumerator        bvector_enumerator_type;
     typedef typename SV::bmatrix_type                bmatrix_type;
+    typedef typename SV::unsigned_value_type         unsigned_value_type;
 
     enum vector_capacity
     {
@@ -797,6 +798,15 @@ protected:
     
     void push_back_no_check(size_type idx, value_type v);
 
+    /**
+        Convert signed value type to unsigned representation
+     */
+    static
+    unsigned_value_type s2u(value_type v) BMNOEXCEPT
+        { return  sparse_vector_type::s2u(v); }
+    static
+    value_type u2s(unsigned_value_type v) BMNOEXCEPT
+        { return  sparse_vector_type::u2s(v); }
 
 private:
 
@@ -817,6 +827,7 @@ protected:
     template<class SVect> friend class sparse_vector_scanner;
     template<class SVect> friend class sparse_vector_serializer;
     template<class SVect> friend class sparse_vector_deserializer;
+    template<class SVect> friend class sparse_vector_scanner;
 
 
 private:

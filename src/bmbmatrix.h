@@ -239,8 +239,6 @@ public:
     ///@}
 
 
-
-
 protected:
     void allocate_rows(size_type rsize);
     void free_rows() BMNOEXCEPT;
@@ -1681,19 +1679,19 @@ base_sparse_vector<Val, BV, MAX_SIZE>::s2u(value_type v) BMNOEXCEPT
 
 template<class Val, class BV, unsigned MAX_SIZE>
 typename base_sparse_vector<Val, BV, MAX_SIZE>::value_type
-base_sparse_vector<Val, BV, MAX_SIZE>::u2s(unsigned_value_type v) BMNOEXCEPT
+base_sparse_vector<Val, BV, MAX_SIZE>::u2s(unsigned_value_type uv) BMNOEXCEPT
 {
     if constexpr (is_signed())
     {
-        if (v & 1u) // signed
+        if (uv & 1u) // signed
         {
-            value_type s = (-(v >> 1u)) - 1;
+            value_type s = (-(uv >> 1u)) - 1;
             return s;
         }
-        return value_type(v >> 1u);
+        return value_type(uv >> 1u);
     }
     else
-        return v;
+        return uv;
 }
 
 
