@@ -17,7 +17,11 @@ For more information please visit:  http://bitmagic.io
 */
 
 /** \example svsample01.cpp
-  Example of how to use bm::sparse_vector<> template class to set values
+  Example of how to use bm::sparse_vector<> template class to set or
+  import values.
+
+  bm::sparse_vector<> uses bit-splicing method to keep bit-planes separate
+  to provide on-the fly succinct data vector.
  
   \sa bm::sparse_vector<>::import
   \sa bm::sparse_vector<>::at
@@ -31,6 +35,7 @@ For more information please visit:  http://bitmagic.io
 
 
 #include <iostream>
+#include <algorithm>
 
 #include "bm.h"
 #include "bmsparsevec.h"
@@ -38,44 +43,92 @@ For more information please visit:  http://bitmagic.io
 
 using namespace std;
 
+typedef bm::sparse_vector<unsigned, bm::bvector<> > sparse_vector_u32;
+typedef bm::sparse_vector<int, bm::bvector<> >      sparse_vector_i32;
+
+/**
+    bm::sparse_vector for unsigned int data
+*/
+static
+void Demo1()
+{
+    using value_type = bm::sparse_vector<int, bm::bvector<> >::value_type;
+    sparse_vector_u32 sv1;
+
+    unsigned arr[3] = {1,2,3};
+    sv1.import(arr, 3); // import from a C-style array (fastest way to populate)
+
+    // optimize memory allocation of sparse vector
+    {
+        BM_DECLARE_TEMP_BLOCK(tb)
+        sv1.optimize(tb);
+    }
+
+    cout << "sv1.size() = " << sv1.size() << endl;
+    cout << "sv[]:";
+
+    // print the vector elements using direct access operator
+    for (unsigned i = 0; i < sv1.size(); ++i)
+    {
+        cout << sv1.at(i) << ",";
+    }
+    cout << endl;
+
+    // add more at the end
+    unsigned arr2[5] = {10, 20, 30, 40, 50};
+    sv1.import(arr2, 5, sv1.size());
+
+    cout << "sv1.size() = " << sv1.size() << endl;
+    cout << "sv[]:";
+
+    // print using std::for_each plus lambda
+    std::for_each(sv1.begin(), sv1.end(),
+                  [](value_type n) { cout << n << ", "; });
+    cout << endl;
+}
+
+/**
+    bm::sparse_vector can also support signed ints.
+    The container transforms it from complementary code to more
+    optimal representation so that
+*/
+static
+void Demo2()
+{
+    sparse_vector_i32 sv1;
+
+    int arr[3] = {1,-2,3};
+    sv1.import(arr, 3); // import from a C-style array (fastest way to populate)
+
+    // add more at the end
+    int arr2[5] = {-10, 20, 30, 40, -50};
+    sv1.import(arr2, 5, sv1.size());
+    {
+        BM_DECLARE_TEMP_BLOCK(tb)
+        sv1.optimize(tb);
+    }
+
+    cout << "sv1.size() = " << sv1.size() << endl;
+    cout << "sv[]:";
+
+    // print using std::for_each plus lambda
+    std::for_each(sv1.begin(), sv1.end(), [] (auto n) { cout << n << ", "; }
+                  );
+    cout << endl;
+}
+
+
 int main(void)
 {
     try
     {
-        bm::sparse_vector<unsigned, bm::bvector<> > sv1;
-        
-        unsigned arr[3] = {1,2,3};
-        sv1.import(arr, 3); // import from a C-style array (fastest way to populate)
+        // Demo1 for unsigned int
+        Demo1();
 
-        // optimize memory allocation of sparse vector
-        {
-            BM_DECLARE_TEMP_BLOCK(tb)
-            sv1.optimize(tb);
-        }
-        
-        cout << "sv1.size() = " << sv1.size() << endl;
-        cout << "sv[]:";
-        
-        // print the vector elements using direct access operator
-        for (unsigned i = 0; i < sv1.size(); ++i)
-        {
-            cout << sv1.at(i) << ",";
-        }
-        cout << endl;
+        cout << endl << endl;
 
-        // add more at the end
-        unsigned arr2[5] = {10, 20, 30, 40, 50};
-        sv1.import(arr2, 5, sv1.size());
-        
-        cout << "sv1.size() = " << sv1.size() << endl;
-        cout << "sv[]:";
-        for (unsigned i = 0; i < sv1.size(); ++i)
-        {
-            cout << sv1.at(i) << ",";
-        }
-        cout << endl;
-
-        
+        // Demo2 for signed int
+        Demo2();
     }
     catch(std::exception& ex)
     {
