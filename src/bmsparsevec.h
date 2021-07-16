@@ -1063,11 +1063,29 @@ void sparse_vector<Val, BV>::import(const value_type* arr,
                                     size_type         offset,
                                     bool              set_not_null)
 {
-    // TODO: for signed types use back_insert_iterator (for now)
-    // direct import of signed type array is under-implemented at this point
-    static_assert(std::is_unsigned<value_type>::value, "BM: unsigned type is required");
-
-    import_u((const unsigned_value_type*) arr, arr_size, offset, set_not_null);
+    if constexpr (std::is_signed<value_type>::value)
+    {
+        const unsigned tmp_size = 1024;
+        unsigned_value_type arr_tmp[tmp_size];
+        size_type k(0), i(0);
+        while (i < arr_size)
+        {
+            arr_tmp[k++] = this->s2u(arr[i++]);
+            if (k == tmp_size)
+            {
+                import_u(arr_tmp, k, offset, set_not_null);
+                k = 0; offset += tmp_size;
+            }
+        } // while
+        if (k)
+        {
+            import_u(arr_tmp, k, offset, set_not_null);
+        }
+    }
+    else
+    {
+        import_u((const unsigned_value_type*) arr, arr_size, offset, set_not_null);
+    }
 }
 
 //---------------------------------------------------------------------
