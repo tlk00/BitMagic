@@ -12225,6 +12225,91 @@ static void TestSignedSparseVector()
 
     }}
 
+    cout << "svector Import test..." << endl;
+
+    {{
+        sparse_vector_i32 sv;
+        int arr[3] = {1,-8,3};
+        sv.import(arr, 3); // import from a C-style array (fastest way to populate)
+        sv.optimize();
+        print_svector_stat(sv);
+
+        sparse_vector_i32::statistics st;
+        sv.calc_stat(&st);
+        assert(st.gap_blocks == 4);
+    }}
+
+    {{
+        std::vector<int> vect;
+        for (int i = 0; i < 128000; ++i)
+            vect.push_back(-i);
+
+        sparse_vector_i32 sv;
+        sv.import(&vect[0], (bvect::size_type)vect.size());
+        bool res = CompareSparseVector(sv, vect);
+        if (!res)
+        {
+            cerr << "0.Bit plane import test failed" << endl;
+            assert(0);exit(1);
+        }
+        sv.optimize();
+        print_svector_stat(sv);
+        res = CompareSparseVector(sv, vect);
+        if (!res)
+        {
+            cerr << "optimized Bit plane import test failed" << endl;
+            assert(0);exit(1);
+        }
+
+        sparse_vector_i32 sv_1;
+        std::copy(vect.begin(), vect.end(), std::back_inserter(sv_1));
+        res = CompareSparseVector(sv_1, vect);
+        if (!res)
+        {
+            cerr << "Bit plane push_back test failed" << endl;
+            assert(0);exit(1);
+        }
+
+        sparse_vector_i32::statistics st;
+        sv.calc_stat(&st);
+
+        sparse_vector_i32 sv2(sv);
+        res = CompareSparseVector(sv2, vect);
+        if (!res)
+        {
+            cerr << "Bit plane copy-ctor test failed" << endl;
+            assert(0);exit(1);
+        }
+
+        sv2.clear();
+        sv2.import(&vect[0], (bvect::size_type)vect.size());
+        res = CompareSparseVector(sv2, vect);
+        if (!res)
+        {
+            cerr << "Bit plane copy-ctor test failed" << endl;
+            assert(0);exit(1);
+        }
+
+        sparse_vector_i32 sv3;
+        sv3.set(65536, 10); // set some bit to initiate it
+        sv3 = sv;
+        res = CompareSparseVector(sv3, vect);
+        if (!res)
+        {
+            cerr << "Bit plane assignmnet test failed" << endl;
+            exit(1);
+        }
+
+        sv3.clear();
+        sv3.import(&vect[0], (bvect::size_type)vect.size());
+        res = CompareSparseVector(sv3, vect);
+        if (!res)
+        {
+            cerr << "Bit plane assignment test failed" << endl;
+            exit(1);
+        }
+    }}
+
 
     cout << "Same value assignment test.." << endl;
     {
