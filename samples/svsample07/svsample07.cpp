@@ -78,7 +78,7 @@ void insertion_sort(sparse_vector_u32& sv, const vector<unsigned>& vec)
 
     for (const unsigned u : vec)
     {
-        bool found = scanner.lower_bound(sv, u, pos);
+        bool found = scanner.bfind(sv, u, pos);
         (void)found; // just to silence the unused variable warning
         
         sv.insert(pos, u);
