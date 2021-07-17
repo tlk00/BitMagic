@@ -84,7 +84,7 @@ void dynamic_range_clip_high(SV& svect, unsigned high_bit)
     // set all bits ON for all low vectors, which happen to be clipped
     for (i = high_bit; true; --i)
     {
-        typename SV::bvector_type* bv_plane = svect.get_plane(i);
+        typename SV::bvector_type* bv_plane = svect.get_create_splice(i);
         bv_plane->bit_or(bv_acc);
         if (i == 0)
             break;
@@ -121,7 +121,7 @@ void dynamic_range_clip_low(SV& svect, unsigned low_bit)
     
     // accumulate all vectors below the clipping point
     typename SV::bvector_type bv_acc2;
-    typename SV::bvector_type* bv_low_plane = svect.get_plane(low_bit);
+    typename SV::bvector_type* bv_low_plane = svect.get_create_splice(low_bit);
     
     for (i = low_bit-1; true; --i)
     {
@@ -539,19 +539,21 @@ public:
                  typename SV::value_type    value,
                  typename SV::size_type&    pos);
     /**
-        \brief lower bound search for an array position
+        \brief binary search for position in the sorted sparse vector
 
-        Method assumes the sparse array is sorted
+        Method assumes the sparse array is sorted, if value is found pos returns its index,
+        if not found, pos would contain index where it could be inserted to maintain the order
 
         \param sv - input sparse vector
         \param val - value to search for
-        \param pos - output sparse vector element index
+        \param pos - output sparse vector element index (actual index if found or insertion
+                    point if not found)
 
         \return true if value found
     */
-    bool lower_bound(const SV&                      sv,
-                     const typename SV::value_type  val,
-                     typename SV::size_type&        pos);
+    bool bfind(const SV&                      sv,
+               const typename SV::value_type  val,
+               typename SV::size_type&        pos);
 
     //@}
 
@@ -1871,9 +1873,9 @@ bool sparse_vector_scanner<SV>::bfind_eq_str(const typename SV::value_type* str,
 //----------------------------------------------------------------------------
 
 template<typename SV>
-bool sparse_vector_scanner<SV>::lower_bound(const SV&                      sv,
-                                            const typename SV::value_type  val,
-                                            typename SV::size_type&        pos)
+bool sparse_vector_scanner<SV>::bfind(const SV&                      sv,
+                                      const typename SV::value_type  val,
+                                      typename SV::size_type&        pos)
 {
     int cmp;
     size_type l = 0, r = sv.size();

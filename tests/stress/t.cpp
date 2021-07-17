@@ -21382,24 +21382,24 @@ void TestSparseVector()
         bool found;
         
         bm::sparse_vector_scanner<bm::sparse_vector<unsigned, bm::bvector<> > > scanner;
-        found = scanner.lower_bound(sv1, 0u, pos);
+        found = scanner.bfind(sv1, 0u, pos);
         assert(!found);
 
-        found = scanner.lower_bound(sv1, 1u, pos);
+        found = scanner.bfind(sv1, 1u, pos);
         assert(found);
         assert(pos == 0);
 
-        found = scanner.lower_bound(sv1, 2u, pos);
+        found = scanner.bfind(sv1, 2u, pos);
         assert(found);
         assert(pos == 1);
 
-        found = scanner.lower_bound(sv1, 3u, pos);
+        found = scanner.bfind(sv1, 3u, pos);
         assert(!found);
 
-        found = scanner.lower_bound(sv1, 20u, pos);
+        found = scanner.bfind(sv1, 20u, pos);
         assert(found);
 
-        found = scanner.lower_bound(sv1, 2000u, pos);
+        found = scanner.bfind(sv1, 2000u, pos);
         assert(found);
     }
     
@@ -27994,7 +27994,7 @@ void TestSparseSort()
         for (unsigned i = 0; i < max_coll; ++i)
         {
             bvect::size_type pos;
-            bool found = scanner.lower_bound(u_sv_sorted, i, pos);
+            bool found = scanner.bfind(u_sv_sorted, i, pos);
             unsigned u1;
             if (found)
             {
@@ -28061,7 +28061,7 @@ void TestSparseSort()
             for (const unsigned u : u_coll)
             {
                 bvect::size_type pos;
-                bool found = scanner.lower_bound(u_sv_sorted, u, pos);
+                bool found = scanner.bfind(u_sv_sorted, u, pos);
 
                 auto sz1 = u_sv_sorted.size();
                 
@@ -28091,7 +28091,7 @@ void TestSparseSort()
                 
                 {
                     bvect::size_type pos2;
-                    found = scanner.lower_bound(u_sv_sorted, u, pos2);
+                    found = scanner.bfind(u_sv_sorted, u, pos2);
                     if (!found)
                     {
                         cerr << "control loss at " << i << " " << u << endl;
@@ -28141,7 +28141,7 @@ void TestSparseSort()
                 
                 bm::sparse_vector_scanner<u_svect_type> scanner;
                 bvect::size_type pos;
-                bool found = scanner.lower_bound(u_sv_sorted, u, pos);
+                bool found = scanner.bfind(u_sv_sorted, u, pos);
                 
                 if (!found)
                 {
@@ -28196,7 +28196,7 @@ void TestSignedSparseSort()
         for (int i = 0; i < max_coll; ++i)
         {
             bvect::size_type pos;
-            bool found = scanner.lower_bound(i_sv_sorted, -i, pos);
+            bool found = scanner.bfind(i_sv_sorted, -i, pos);
             int u1;
             if (found)
             {
@@ -28269,7 +28269,7 @@ void TestSignedSparseSort()
             for (const int u : u_coll)
             {
                 bvect::size_type pos;
-                bool found = scanner.lower_bound(i_sv_sorted, u, pos);
+                bool found = scanner.bfind(i_sv_sorted, u, pos);
 
                 auto sz1 = i_sv_sorted.size();
 
@@ -28299,7 +28299,7 @@ void TestSignedSparseSort()
 
                 {
                     bvect::size_type pos2;
-                    found = scanner.lower_bound(i_sv_sorted, u, pos2);
+                    found = scanner.bfind(i_sv_sorted, u, pos2);
                     if (!found)
                     {
                         cerr << "control loss at " << i << " " << u << endl;
@@ -28349,7 +28349,7 @@ void TestSignedSparseSort()
 
                 bm::sparse_vector_scanner<i_svect_type> scanner;
                 bvect::size_type pos;
-                bool found = scanner.lower_bound(i_sv_sorted, u, pos);
+                bool found = scanner.bfind(i_sv_sorted, u, pos);
 
                 if (!found)
                 {

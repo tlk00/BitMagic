@@ -1211,7 +1211,7 @@ void sparse_vector_deserializer<SV>::deserialize_structure(SV& sv,
         if (!off_vect_[i]) // empty vector
             continue;
 
-        bvector_type*  bv = sv.get_plane(i);
+        bvector_type* bv = sv.get_create_splice(i);
         BM_ASSERT(bv); (void)bv;
 
     } // for
@@ -1427,7 +1427,7 @@ void sparse_vector_deserializer<SV>::deserialize_planes(
         if (!offset) // empty vector
             continue;
         const unsigned char* bv_buf_ptr = buf + offset; // seek to position
-        bvector_type*  bv = sv.get_plane(unsigned(i));
+        bvector_type*  bv = sv.get_create_splice(unsigned(i));
         BM_ASSERT(bv);
 
         // add the vector into the XOR reference list
@@ -1503,7 +1503,7 @@ int sparse_vector_deserializer<SV>::load_null_plane(SV& sv,
         // the NULL vector just to get to the offset of remap table
 
         const unsigned char* bv_buf_ptr = buf + offset; // seek to position
-        bvector_type*  bv = sv.get_plane(unsigned(i));
+        bvector_type*  bv = sv.get_create_splice(unsigned(i));
 
         if (!bv_ref_ptr_)
             bv_ref_.add(bv, unsigned(i));

@@ -708,8 +708,8 @@ public:
     bvector_type_const_ptr get_plane(unsigned i) const BMNOEXCEPT
         { return sv_.get_plane(i); }
 
-    bvector_type_ptr get_plane(unsigned i) BMNOEXCEPT
-        { return sv_.get_plane(i); }
+    bvector_type_ptr get_create_splice(unsigned i)
+        { return sv_.get_create_splice(i); }
     
     /*!
         Number of effective bit-planes in the value type
@@ -1136,7 +1136,7 @@ void rsc_sparse_vector<Val, SV>::load_from(
             const bvector_type* bv_src_plane = sv_src.get_plane(i);
             if (bv_src_plane)
             {
-                bvector_type* bv_plane = sv_.get_plane(i);
+                bvector_type* bv_plane = sv_.get_create_splice(i);
                 rank_compr.compress(*bv_plane, *bv_null, *bv_src_plane);
             }
         } // for
@@ -1173,7 +1173,7 @@ void rsc_sparse_vector<Val, SV>::load_to(sparse_vector_type& sv) const
         const bvector_type* bv_src_plane = sv_.get_plane(i);
         if (bv_src_plane)
         {
-            bvector_type* bv_plane = sv.get_plane(i);
+            bvector_type* bv_plane = sv.get_create_splice(i);
             rank_compr.decompress(*bv_plane, *bv_null, *bv_src_plane);
         }
     } // for

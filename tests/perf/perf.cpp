@@ -4070,6 +4070,7 @@ int main(void)
     bm::chrono_taker tt("TOTAL", 1);
     try
     {
+/*
         cout << endl;
 
         MemCpyTest();
@@ -4137,10 +4138,10 @@ int main(void)
 
         SerializationTest();
         cout << endl;
-
+*/
         SparseVectorAccessTest();
         cout << endl;
-
+/*
         SparseVectorScannerTest();
         cout << endl;
 
@@ -4156,6 +4157,7 @@ int main(void)
 
         StrSparseVectorTest();
         cout << endl;
+*/
 
     }
     catch (std::exception& ex)

@@ -1132,7 +1132,7 @@ void sparse_vector<Val, BV>::import_u(const unsigned_value_type* arr,
 
             if (rl == transpose_window)
             {
-                bvector_type* bv = this->get_plane(p);
+                bvector_type* bv = this->get_create_splice(p);
                 const size_type* r = tm.row(p);
                 bv->set(r, rl, BM_SORTED);
                 row_len[p] = 0;
@@ -1148,7 +1148,7 @@ void sparse_vector<Val, BV>::import_u(const unsigned_value_type* arr,
         unsigned rl = row_len[k];
         if (rl)
         {
-            bvector_type* bv = this->get_plane(k);
+            bvector_type* bv = this->get_create_splice(k);
             const size_type* r = tm.row(k);
             bv->set(r, rl, BM_SORTED);
         }
@@ -1599,15 +1599,18 @@ sparse_vector<Val, BV>::get(
     
     unsigned_value_type uv = 0;
     unsigned eff_planes = this->effective_planes();
+    unsigned_value_type smask = this->splice_mask_;
     for (unsigned j = 0; j < eff_planes; j+=4)
     {
-        bool b = this->bmatr_.test_4rows(j);
-        if (b)
+        //bool b = this->bmatr_.test_4rows(j);
+//        bool b = smask & 0x0F; // b1111
+        if (smask & 0x0F) // b1111
         {
             unsigned_value_type vm =
                 (unsigned_value_type)this->bmatr_.get_half_octet(i, j);
             uv |= unsigned_value_type(vm << j);
         }
+        smask >>= 4;
     } // for j
     if constexpr (parent_type::is_signed())
         return this->u2s(uv);
@@ -1645,7 +1648,7 @@ void sparse_vector<Val, BV>::clear(size_type idx, bool set_null)
     {
         bvector_type* bv_null = this->get_null_bvect();
         if (bv_null)
-            bv_null->set(idx, false);
+            bv_null->clear_bit_no_check(idx);
     }
 }
 
@@ -1708,7 +1711,7 @@ void sparse_vector<Val, BV>::insert_value_no_null(size_type idx, value_type v)
     {
         if (uv & mask)
         {
-            bvector_type* bv = this->get_plane(i);
+            bvector_type* bv = this->get_create_splice(i);
             bv->insert(idx, true);
         }
         else
@@ -1793,7 +1796,7 @@ void sparse_vector<Val, BV>::set_value_no_null(size_type idx,
         {
             if (uv & mask)
             {
-                bvector_type* bv = this->get_plane(j);
+                bvector_type* bv = this->get_create_splice(j);
                 bv->set_bit_no_check(idx);
             }
             else if (need_clear)
@@ -1846,7 +1849,7 @@ void sparse_vector<Val, BV>::inc_no_null(size_type idx)
     else
         for (unsigned i = 0; i < parent_type::sv_value_planes; ++i)
         {
-            bvector_type* bv = this->get_plane(i);
+            bvector_type* bv = this->get_create_splice(i);
             bool carry_over = bv->inc(idx);
             if (!carry_over)
                 break;
@@ -1956,30 +1959,32 @@ sparse_vector<Val, BV>::join(const sparse_vector<Val, BV>& sv)
         resize(arg_size);
     }
     bvector_type* bv_null = this->get_null_bvect();
-    unsigned planes;
+    const unsigned planes = bv_null ? this->stored_planes() : this->planes();
+    /*
     if (bv_null)
         planes = this->stored_planes();
     else
-        planes = this->planes();
+        planes = this->planes(); */
     
     for (unsigned j = 0; j < planes; ++j)
     {
         const bvector_type* arg_bv = sv.bmatr_.row(j);
         if (arg_bv)
         {
+            /*
             bvector_type* bv = this->bmatr_.get_row(j);
             if (!bv)
                 bv = this->get_plane(j);
+            */
+            bvector_type* bv = this->get_create_splice(j);
             *bv |= *arg_bv;
         }
     } // for j
     
     // our vector is NULL-able but argument is not (assumed all values are real)
     if (bv_null && !sv.is_nullable())
-    {
         bv_null->set_range(0, arg_size-1);
-    }
-    
+
     return *this;
 }
 
@@ -2038,6 +2043,7 @@ void sparse_vector<Val, BV>::filter(
                 const typename sparse_vector<Val, BV>::bvector_type& bv_mask)
 {
     bvector_type* bv_null = this->get_null_bvect();
+/*
     unsigned planes;
     if (bv_null)
     {
@@ -2046,7 +2052,11 @@ void sparse_vector<Val, BV>::filter(
     }
     else
         planes = this->planes();
-    
+*/
+    unsigned planes =
+        bv_null ? bv_null->bit_and(bv_mask), this->stored_planes()
+                : this->planes();
+
     for (unsigned j = 0; j < planes; ++j)
     {
         bvector_type* bv = this->bmatr_.get_row(j);
