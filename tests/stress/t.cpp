@@ -281,7 +281,7 @@ static size_t nf_;
 
     static size_t balance()
     {
-        return nf_ - na_;
+        return na_ - nf_;
     }
 };
 
@@ -291,8 +291,8 @@ size_t dbg_block_allocator::nf_ = 0;
 class dbg_ptr_allocator
 {
 public:
-static size_t na_;
-static size_t nf_;
+static atomic<size_t> na_;
+static atomic<size_t> nf_;
 
     static void* allocate(size_t n, const void *)
     {
@@ -330,8 +330,8 @@ static size_t nf_;
 
 };
 
-size_t dbg_ptr_allocator::na_ = 0;
-size_t dbg_ptr_allocator::nf_ = 0;
+atomic<size_t> dbg_ptr_allocator::na_ = 0;
+atomic<size_t> dbg_ptr_allocator::nf_ = 0;
 
 
 typedef mem_alloc<dbg_block_allocator, dbg_ptr_allocator, alloc_pool<dbg_block_allocator, dbg_ptr_allocator> > dbg_alloc;
@@ -21404,7 +21404,7 @@ void TestSparseVector()
     }
     
     
-    
+
     {{
     cout << "sparse vector inc test" << endl;
     bm::sparse_vector<unsigned, bvect > sv;
@@ -21423,7 +21423,7 @@ void TestSparseVector()
 
     cout <<  "\nOk" << endl;
     }}
-    
+
 
 
     {{
@@ -33647,6 +33647,36 @@ int parse_args(int argc, char *argv[])
     return 0;
 }
 
+static
+void CheckAllocLeaks(bool details = false)
+{
+#ifdef MEM_DEBUG
+    if (details)
+    {
+        cout << "[--------------  Allocation digest -------------------]" << endl;
+        cout << "Number of BLOCK allocations = " <<  dbg_block_allocator::na_ << endl;
+        cout << "Number of PTR allocations = " <<  dbg_ptr_allocator::na_ << endl << endl;
+    }
+
+    if(dbg_block_allocator::balance() != 0)
+    {
+        cout << "ERROR! Block memory leak! " << endl;
+        cout << "leaked blocks: " << dbg_block_allocator::balance() << endl;
+        assert(0);exit(1);
+    }
+
+    if(dbg_ptr_allocator::balance() != 0)
+    {
+        cout << "ERROR! Ptr memory leak! " << endl;
+        cout << "leaked blocks: " << dbg_ptr_allocator::balance() << endl;
+        assert(0);exit(1);
+    }
+    cout << "[------------  Debug Allocation balance OK ----------]" << endl;
+#endif
+}
+
+
+
 #define BM_EXPAND(x)  x ## 1
 #define EXPAND(x)     BM_EXPAND(x)
 
@@ -33800,137 +33830,220 @@ int main(int argc, char *argv[])
     if (is_all || is_support)
     {
         TestHeapVector();
+         CheckAllocLeaks(false);
 
         TestSQueue();
+         CheckAllocLeaks(false);
 
         TestXOR_RefVector();
+         CheckAllocLeaks(false);
 
         TestTasks();
+         CheckAllocLeaks(false);
 
         MiniSetTest();
+         CheckAllocLeaks(false);
 
         BitEncoderTest();
-    
+         CheckAllocLeaks(false);
+
         InterpolativeCodingTest();
+         CheckAllocLeaks(false);
 
         GammaEncoderTest();
+         CheckAllocLeaks(false);
 
         GAPCheck();
+         CheckAllocLeaks(false);
+
         SerializationBufferTest();
+         CheckAllocLeaks(false);
+
         TestBasicMatrix();
+         CheckAllocLeaks(false);
 
         DynamicMatrixTest();
+         CheckAllocLeaks(false);
 
         RSIndexTest();
+         CheckAllocLeaks(false);
     }
 
     if (is_all || is_bvbasic)
     {
          ExportTest();
+         CheckAllocLeaks(false);
+
          ResizeTest();
+         CheckAllocLeaks(false);
 
          SyntaxTest();
+         CheckAllocLeaks(false);
 
          SetTest();
+         CheckAllocLeaks(false);
 
          ArenaTest();
+         CheckAllocLeaks(false);
+
          BlockDigestTest();
+         CheckAllocLeaks(false);
 
          EmptyBVTest();
+         CheckAllocLeaks(false);
+
          ClearAllTest();
+         CheckAllocLeaks(false);
 
          CountRangeTest();
+         CheckAllocLeaks(false);
 
          EnumeratorTest();
+         CheckAllocLeaks(false);
 
          BvectorFindReverseTest();
+         CheckAllocLeaks(false);
 
          Intervals_RangesTest();
+         CheckAllocLeaks(false);
 
          IntervalEnumeratorTest();
+         CheckAllocLeaks(false);
 
          KeepRangeTest();
+         CheckAllocLeaks(false);
 
          BasicFunctionalityTest();
+         CheckAllocLeaks(false);
 
          OptimizeTest();
+         CheckAllocLeaks(false);
 
          RankFindTest();
+         CheckAllocLeaks(false);
 
          BvectorBitForEachTest();
+         CheckAllocLeaks(false);
 
          GetNextTest();
+         CheckAllocLeaks(false);
 
          BvectorIncTest();
+         CheckAllocLeaks(false);
 
          BvectorBulkSetTest();
+         CheckAllocLeaks(false);
 
         GAPTestStress();
-        
+         CheckAllocLeaks(false);
+
         MaxSTest();
+         CheckAllocLeaks(false);
 
         SimpleRandomFillTest();
+         CheckAllocLeaks(false);
 
         RangeRandomFillTest();
+         CheckAllocLeaks(false);
 
         RangeCopyTest();
+         CheckAllocLeaks(false);
 
         ComparisonTest();
+         CheckAllocLeaks(false);
 
         BvectorFindFirstDiffTest();
+         CheckAllocLeaks(false);
 
         RankRangeSplitTest();
+         CheckAllocLeaks(false);
 
         MutationTest();
+         CheckAllocLeaks(false);
         MutationOperationsTest();
-        
+         CheckAllocLeaks(false);
+
         BlockLevelTest();
+         CheckAllocLeaks(false);
 
         BVImportTest();
+         CheckAllocLeaks(false);
 
      }
     
     if (is_all || is_bvser || is_bvbasic)
     {
         SerializationCompressionLevelsTest();
+         CheckAllocLeaks(false);
 
         SparseSerializationTest();
+         CheckAllocLeaks(false);
+
         SerializationTest();
+         CheckAllocLeaks(false);
+
         DesrializationTest2();
+         CheckAllocLeaks(false);
 
         RangeDeserializationTest();
+         CheckAllocLeaks(false);
     }
     
     if (is_all || is_bvshift)
     {
          BvectorShiftTest();
+         CheckAllocLeaks(false);
+
          BvectorInsertTest();
+         CheckAllocLeaks(false);
+
          BvectorEraseTest();
+         CheckAllocLeaks(false);
     }
 
 
     if (is_all || is_rankc)
     {
          AddressResolverTest();
+         CheckAllocLeaks(false);
+
          TestRankCompress();
+         CheckAllocLeaks(false);
     }
 
     if (is_all || is_bvops)
     {
         AndOperationsTest(true); // enable detailed check
+         CheckAllocLeaks(false);
+
         OrOperationsTest(true);
+         CheckAllocLeaks(false);
+
         XorOperationsTest(true);
+         CheckAllocLeaks(false);
+
         SubOperationsTest(true);
+         CheckAllocLeaks(false);
 
         StressTest(150, 0, false); // OR - detailed check disabled
+         CheckAllocLeaks(false);
+
         StressTest(150, 3, false); // AND
+         CheckAllocLeaks(false);
+
         StressTest(150, 1, false); // SUB
+         CheckAllocLeaks(false);
+
         StressTest(150, 2, false); // XOR
+         CheckAllocLeaks(false);
 
         KleeneLogicTest();
+         CheckAllocLeaks(false);
 
         KleeneLogicAndStressTest();
+         CheckAllocLeaks(false);
         KleeneLogicOrStressTest();
+         CheckAllocLeaks(false);
 
     }
 
@@ -33939,83 +34052,121 @@ int main(int argc, char *argv[])
     if (is_all || is_agg)
     {
          AggregatorTest();
+         CheckAllocLeaks(false);
+
          StressTestAggregatorOR(100);
+         CheckAllocLeaks(false);
+
          StressTestAggregatorAND(100);
+         CheckAllocLeaks(false);
 
          StressTestAggregatorShiftAND(5);
+         CheckAllocLeaks(false);
 
     //     StressTestAggregatorSUB(100);
     }
 
     if (is_all || is_sv)
     {
+
         TestSparseVector();
+         CheckAllocLeaks(false);
 
         TestSignedSparseVector();
+         CheckAllocLeaks(false);
 
         TestSparseVectorAlgo();
+         CheckAllocLeaks(false);
 
         TestSparseVectorInserter();
+         CheckAllocLeaks(false);
 
         TestSparseVectorGatherDecode();
+         CheckAllocLeaks(false);
 
         TestSparseVector_XOR_Scanner();
+         CheckAllocLeaks(false);
 
         TestSparseVectorSerial();
+         CheckAllocLeaks(false);
 
         TestSignedSparseVectorSerial();
+         CheckAllocLeaks(false);
 
         TestSparseVectorSerialization2();
+         CheckAllocLeaks(false);
 
         TestSparseVectorTransform();
+         CheckAllocLeaks(false);
 
         TestSparseVectorRange();
+         CheckAllocLeaks(false);
 
         TestSparseVectorFilter();
+         CheckAllocLeaks(false);
 
         TestSparseVectorScan();
+         CheckAllocLeaks(false);
 
         TestSignedSparseVectorScan();
+         CheckAllocLeaks(false);
 
         TestSparseSort();
+         CheckAllocLeaks(false);
 
         TestSignedSparseSort();
+         CheckAllocLeaks(false);
 
     }
 
     if (is_all || is_csv)
     {
+
         TestCompressSparseVector();
+         CheckAllocLeaks(false);
 
         TestCompressSparseSignedVector();
+         CheckAllocLeaks(false);
 
         TestCompressedSparseVectorAlgo();
+         CheckAllocLeaks(false);
 
         TestCompressSparseVectorSerial();
+         CheckAllocLeaks(false);
 
         TestCompressedSparseVectorScan();
+         CheckAllocLeaks(false);
 
         TestSparseVector_Stress(3);
+         CheckAllocLeaks(false);
+
     }
 
     if (is_all || is_c_coll)
     {
          TestCompressedCollection();
+         CheckAllocLeaks(false);
     }
     
     if (is_all || is_str_sv)
     {
          TestStrSparseVector();
+         CheckAllocLeaks(false);
 
          TestStrSparseVectorAlgo();
+         CheckAllocLeaks(false);
 
          TestStrSparseVectorSerial();
+         CheckAllocLeaks(false);
 
          TestStrSparseVector_FindEq();
+         CheckAllocLeaks(false);
 
          TestStrSparseSort();
+         CheckAllocLeaks(false);
 
          StressTestStrSparseVector();
+         CheckAllocLeaks(false);
     }
 
     if (is_ser || is_allsvser)
@@ -34023,20 +34174,33 @@ int main(int argc, char *argv[])
         if (is_ser)
         {
             SerializationCompressionLevelsTest();
+            CheckAllocLeaks(false);
 
             SerializationTest();
+            CheckAllocLeaks(false);
+
             DesrializationTest2();
+            CheckAllocLeaks(false);
 
             RangeDeserializationTest();
+            CheckAllocLeaks(false);
+
         }
         TestSparseVector_XOR_Scanner();
+        CheckAllocLeaks(false);
+
         TestSparseVectorSerial();
+        CheckAllocLeaks(false);
 
         TestSparseVectorSerialization2();
+        CheckAllocLeaks(false);
 
         TestStrSparseVectorSerial();
+        CheckAllocLeaks(false);
 
         TestCompressSparseVectorSerial();
+        CheckAllocLeaks(false);
+
     }
 
     if (is_all || is_bvops)
@@ -34049,26 +34213,8 @@ int main(int argc, char *argv[])
 
     cout << "Test execution time = " << finish_time - start_time << endl;
 //mem_debug_label:
-#ifdef MEM_DEBUG
-    cout << "[--------------  Allocation digest -------------------]" << endl;
-    cout << "Number of BLOCK allocations = " <<  dbg_block_allocator::na_ << endl;
-    cout << "Number of PTR allocations = " <<  dbg_ptr_allocator::na_ << endl << endl;
 
-    if(dbg_block_allocator::balance() != 0)
-    {
-        cout << "ERROR! Block memory leak! " << endl;
-        cout << dbg_block_allocator::balance() << endl;
-        exit(1);
-    }
-
-    if(dbg_ptr_allocator::balance() != 0)
-    {
-        cout << "ERROR! Ptr memory leak! " << endl;
-        cout << dbg_ptr_allocator::balance() << endl;
-        exit(1);
-    }
-    cout << "[------------  Debug Allocation balance OK ----------]" << endl;
-#endif
+    CheckAllocLeaks(true);
 
     return 0;
 }
