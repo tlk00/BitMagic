@@ -21,7 +21,7 @@ For more information please visit:  http://bitmagic.io
 //#define BMSSE42OPT
 //#define BMAVX2OPT
 //#define BM_USE_EXPLICIT_TEMP
-//#define BM_USE_GCC_BUILD
+#define BM_USE_GCC_BUILD
 
 #define BMXORCOMP
 #define BM_NONSTANDARD_EXTENTIONS
@@ -245,6 +245,12 @@ int pool_ptr_allocator::ptr_blocks_idx_ = 0;
  
 #ifdef MEM_DEBUG
 
+#include "stacktrace_dbg.h"
+#include <unordered_map>
+
+std::unordered_map<void*, std::string> g_alloc_trace_map;
+std::mutex g_trace_lock;
+
 
 class dbg_block_allocator
 {
@@ -254,6 +260,7 @@ static size_t nf_;
 
     static bm::word_t* allocate(size_t n, const void *)
     {
+        g_trace_lock.lock();
         ++na_;
         assert(n);
         bm::word_t* p =
@@ -264,11 +271,15 @@ static size_t nf_;
             assert(0);exit(1);
         }
         *p = (bm::word_t)n;
+
+        g_alloc_trace_map.emplace(p, get_stacktrace());
+        g_trace_lock.unlock();
         return ++p;
     }
 
     static void deallocate(bm::word_t* p, size_t n)
     {
+        g_trace_lock.lock();
         ++nf_;
         --p;
         if (*p != n)
@@ -277,6 +288,8 @@ static size_t nf_;
             assert(0);exit(1);
         }
         ::free(p);
+        g_alloc_trace_map.erase(p);
+        g_trace_lock.unlock();
     }
 
     static size_t balance()
@@ -291,11 +304,12 @@ size_t dbg_block_allocator::nf_ = 0;
 class dbg_ptr_allocator
 {
 public:
-static atomic<size_t> na_;
-static atomic<size_t> nf_;
+static size_t na_;
+static size_t nf_;
 
     static void* allocate(size_t n, const void *)
     {
+        g_trace_lock.lock();
         ++na_;
         assert(sizeof(size_t) == sizeof(void*));
         void* p = ::malloc((n+1) * sizeof(void*));
@@ -306,11 +320,16 @@ static atomic<size_t> nf_;
         }
         size_t* s = (size_t*) p;
         *s = n;
+
+        g_alloc_trace_map.emplace(p, get_stacktrace());
+        g_trace_lock.unlock();
+
         return (void*)++s;
     }
 
     static void deallocate(void* p, size_t n)
     {
+        g_trace_lock.lock();
         ++nf_;
         size_t* s = (size_t*) p;
         --s;
@@ -321,6 +340,9 @@ static atomic<size_t> nf_;
             exit(1);
         }
         ::free(s);
+
+        g_alloc_trace_map.erase(s);
+        g_trace_lock.unlock();
     }
 
     static size_t balance()
@@ -330,8 +352,8 @@ static atomic<size_t> nf_;
 
 };
 
-atomic<size_t> dbg_ptr_allocator::na_ = 0;
-atomic<size_t> dbg_ptr_allocator::nf_ = 0;
+size_t dbg_ptr_allocator::na_ = 0;
+size_t dbg_ptr_allocator::nf_ = 0;
 
 
 typedef mem_alloc<dbg_block_allocator, dbg_ptr_allocator, alloc_pool<dbg_block_allocator, dbg_ptr_allocator> > dbg_alloc;
@@ -33647,8 +33669,21 @@ int parse_args(int argc, char *argv[])
     return 0;
 }
 
+
 static
-void CheckAllocLeaks(bool details = false)
+void PrintStacks(unsigned max_cnt = 10)
+{
+    unsigned cnt(0);
+    for (auto it = g_alloc_trace_map.begin();
+        it != g_alloc_trace_map.end() && cnt < max_cnt; ++it)
+    {
+        cout << "\n--------------------STACK_TRACE: " << cnt++ << endl;
+        cout << it->second << endl;
+    }
+}
+
+static
+bool CheckAllocLeaks(bool details = false, bool abort = true)
 {
 #ifdef MEM_DEBUG
     if (details)
@@ -33662,6 +33697,9 @@ void CheckAllocLeaks(bool details = false)
     {
         cout << "ERROR! Block memory leak! " << endl;
         cout << "leaked blocks: " << dbg_block_allocator::balance() << endl;
+        PrintStacks();
+        if (!abort)
+            return true;
         assert(0);exit(1);
     }
 
@@ -33669,10 +33707,14 @@ void CheckAllocLeaks(bool details = false)
     {
         cout << "ERROR! Ptr memory leak! " << endl;
         cout << "leaked blocks: " << dbg_ptr_allocator::balance() << endl;
+        PrintStacks();
+        if (!abort)
+            return true;
         assert(0);exit(1);
     }
     cout << "[------------  Debug Allocation balance OK ----------]" << endl;
 #endif
+    return false;
 }
 
 
@@ -34066,9 +34108,25 @@ int main(int argc, char *argv[])
     //     StressTestAggregatorSUB(100);
     }
 
+    {
+        {
+            bvect bv1;
+            bv1.set(1);
+        }
+        CheckAllocLeaks(false);
+        {
+            bvect* bv = new bvect();
+            bv->set(1);
+            bool b = CheckAllocLeaks(false, false);
+            assert(b); // leak found
+            delete bv;
+            b = CheckAllocLeaks(false, false);
+            assert(!b); // leak found
+        }
+    }
+
     if (is_all || is_sv)
     {
-
         TestSparseVector();
          CheckAllocLeaks(false);
 
