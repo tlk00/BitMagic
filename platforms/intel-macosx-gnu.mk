@@ -25,7 +25,7 @@ ifeq ($(COMPILER),GNU_CC)
     OS_VER = -D__$(shell uname -s)_$(shell uname -r | sed -e 's/\./_/g' -e 's/-.*//')
     PLATFORM_CXXFLAGS = -D_REENTRANT $(OS_VER) -D_GNU_SOURCE -std=c++17 -Wall -Wextra -Werror=uninitialized -Wshadow -Wconversion -Wmissing-declarations -Wswitch-default -Wimplicit-fallthrough
     PLATFORM_CFLAGS = -D_REENTRANT $(OS_VER)
-    COMMON_LDFLAGS = $(LINKER_DFLAGS) -Wl,-stack_size,0x100000000
+    COMMON_LDFLAGS = $(LINKER_DFLAGS) -Wl,-stack_size,0x100000000 -rdynamic
     COMMON_CLDFLAGS = $(COMMON_LDFLAGS)
     EXTERN_LIBS = $(EXTERN_LIBS_BASE)/lib
     CXX = g++ $(CXXARCHFLAGS) -Wall -Wc++11-extensions 
