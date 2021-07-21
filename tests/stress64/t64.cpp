@@ -16437,8 +16437,8 @@ void TestStrSparseVector()
         str_sv0[2] = "123";
 
         str_sparse_vector<char, bvect, 32>::octet_freq_matrix_type occ_matrix;
-        str_sparse_vector<char, bvect, 32>::plane_octet_matrix_type remap_matrix1;
-        str_sparse_vector<char, bvect, 32>::plane_octet_matrix_type remap_matrix2;
+        str_sparse_vector<char, bvect, 32>::slice_octet_matrix_type remap_matrix1;
+        str_sparse_vector<char, bvect, 32>::slice_octet_matrix_type remap_matrix2;
 
         str_sv0.calc_octet_stat(occ_matrix);
         str_sv0.build_octet_remap(remap_matrix1, remap_matrix2, occ_matrix);
