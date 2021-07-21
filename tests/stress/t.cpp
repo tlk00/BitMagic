@@ -21,7 +21,7 @@ For more information please visit:  http://bitmagic.io
 //#define BMSSE42OPT
 //#define BMAVX2OPT
 //#define BM_USE_EXPLICIT_TEMP
-#define BM_USE_GCC_BUILD
+//#define BM_USE_GCC_BUILD
 
 #define BMXORCOMP
 #define BM_NONSTANDARD_EXTENTIONS
@@ -75,168 +75,8 @@ using namespace std;
 #include <limits.h>
 
 #include <bmdbg.h>
-
 #include <vector>
 
-
-#define POOL_SIZE 5000
-
-//#define MEM_POOL
-
-
-template<class T> T* pool_allocate(T** pool, int& i, size_t n)
-{
-    return i ? pool[i--] : (T*) ::malloc(n * sizeof(T));
-}
-
-inline void* pool_allocate2(void** pool, int& i, size_t n)
-{
-    return i ? pool[i--] : malloc(n * sizeof(void*));
-}
-
-
-
-template<class T> void pool_free(T** pool, int& i, T* p)
-{
-    i < POOL_SIZE ? (free(p),(void*)0) : pool[++i]=p;
-}
-
-
-class pool_block_allocator
-{
-public:
-
-    static bm::word_t* allocate(size_t n, const void *)
-    {
-        int *idx = 0;
-        bm::word_t** pool = 0;
-
-        switch (n)
-        {
-        case bm::set_block_size:
-            idx = &bit_blocks_idx_;
-            pool = free_bit_blocks_;
-            break;
-
-        case 64:
-            idx = &gap_blocks_idx0_;
-            pool = gap_bit_blocks0_;
-            break;
-
-        case 128:
-            idx = &gap_blocks_idx1_;
-            pool = gap_bit_blocks1_;
-            break;
-        
-        case 256:
-            idx = &gap_blocks_idx2_;
-            pool = gap_bit_blocks2_;
-            break;
-
-        case 512:
-            idx = &gap_blocks_idx3_;
-            pool = gap_bit_blocks3_;
-            break;
-
-        default:
-            assert(0);
-        }
-
-        return pool_allocate(pool, *idx, n);
-    }
-
-    static void deallocate(bm::word_t* p, size_t n)
-    {
-        int *idx = 0;
-        bm::word_t** pool = 0;
-
-        switch (n)
-        {
-        case bm::set_block_size:
-            idx = &bit_blocks_idx_;
-            pool = free_bit_blocks_;
-            break;
-
-        case 64:
-            idx = &gap_blocks_idx0_;
-            pool = gap_bit_blocks0_;
-            break;
-
-        case 128:
-            idx = &gap_blocks_idx1_;
-            pool = gap_bit_blocks1_;
-            break;
-        
-        case 256:
-            idx = &gap_blocks_idx2_;
-            pool = gap_bit_blocks2_;
-            break;
-
-        case 512:
-            idx = &gap_blocks_idx3_;
-            pool = gap_bit_blocks3_;
-            break;
-
-        default:
-            assert(0);
-        }
-
-        pool_free(pool, *idx, p);
-    }
-
-private:
-    static bm::word_t* free_bit_blocks_[];
-    static int         bit_blocks_idx_;
-
-    static bm::word_t* gap_bit_blocks0_[];
-    static int         gap_blocks_idx0_;
-
-    static bm::word_t* gap_bit_blocks1_[];
-    static int         gap_blocks_idx1_;
-
-    static bm::word_t* gap_bit_blocks2_[];
-    static int         gap_blocks_idx2_;
-
-    static bm::word_t* gap_bit_blocks3_[];
-    static int         gap_blocks_idx3_;
-};
-
-bm::word_t* pool_block_allocator::free_bit_blocks_[POOL_SIZE];
-int pool_block_allocator::bit_blocks_idx_ = 0;
-
-bm::word_t* pool_block_allocator::gap_bit_blocks0_[POOL_SIZE];
-int pool_block_allocator::gap_blocks_idx0_ = 0;
-
-bm::word_t* pool_block_allocator::gap_bit_blocks1_[POOL_SIZE];
-int pool_block_allocator::gap_blocks_idx1_ = 0;
-
-bm::word_t* pool_block_allocator::gap_bit_blocks2_[POOL_SIZE];
-int pool_block_allocator::gap_blocks_idx2_ = 0;
-
-bm::word_t* pool_block_allocator::gap_bit_blocks3_[POOL_SIZE];
-int pool_block_allocator::gap_blocks_idx3_ = 0;
-
-
-
-
-class pool_ptr_allocator
-{
-public:
-    static void* allocate(size_t n, const void *)
-    {
-        return pool_allocate2(free_ptr_blocks_, ptr_blocks_idx_, n);
-    }
-    static void deallocate(void* p, size_t)
-    {
-        pool_free(free_ptr_blocks_, ptr_blocks_idx_, p);
-    }
-private:
-    static void*  free_ptr_blocks_[];
-    static int    ptr_blocks_idx_;
-};
-
-void* pool_ptr_allocator::free_ptr_blocks_[POOL_SIZE];
-int pool_ptr_allocator::ptr_blocks_idx_ = 0;
 
 #if defined(BMSSE2OPT) || defined(BMSSE42OPT) || defined(BMAVX2OPT) || defined(BMAVX512OPT)
 #else
@@ -248,6 +88,9 @@ int pool_ptr_allocator::ptr_blocks_idx_ = 0;
 #include "stacktrace_dbg.h"
 #include <unordered_map>
 
+
+//#define BM_STACK_COLL
+
 std::unordered_map<void*, std::string> g_alloc_trace_map;
 std::mutex g_trace_lock;
 
@@ -255,11 +98,16 @@ std::mutex g_trace_lock;
 class dbg_block_allocator
 {
 public:
-static size_t na_;
-static size_t nf_;
+    static inline size_t na_ = 0;
+    static inline size_t nf_ = 0;
 
     static bm::word_t* allocate(size_t n, const void *)
     {
+        #ifdef BM_STACK_COLL
+        std::string stack_str;
+        stack_str.reserve(2048);
+        get_stacktrace(stack_str);
+        #endif
         g_trace_lock.lock();
         ++na_;
         assert(n);
@@ -272,7 +120,9 @@ static size_t nf_;
         }
         *p = (bm::word_t)n;
 
-        g_alloc_trace_map.emplace(p, get_stacktrace());
+        #ifdef BM_STACK_COLL
+        g_alloc_trace_map.emplace(p, std::move(stack_str));
+        #endif
         g_trace_lock.unlock();
         return ++p;
     }
@@ -288,27 +138,29 @@ static size_t nf_;
             assert(0);exit(1);
         }
         ::free(p);
+        #ifdef BM_STACK_COLL
         g_alloc_trace_map.erase(p);
+        #endif
         g_trace_lock.unlock();
     }
 
-    static size_t balance()
-    {
-        return na_ - nf_;
-    }
+    static size_t balance() BMNOEXCEPT { return na_ - nf_; }
 };
-
-size_t dbg_block_allocator::na_ = 0;
-size_t dbg_block_allocator::nf_ = 0;
 
 class dbg_ptr_allocator
 {
 public:
-static size_t na_;
-static size_t nf_;
+    static inline size_t na_ = 0;
+    static inline size_t nf_ = 0;
 
     static void* allocate(size_t n, const void *)
     {
+        #ifdef BM_STACK_COLL
+        std::string stack_str;
+        stack_str.reserve(2048);
+        get_stacktrace(stack_str);
+        #endif
+
         g_trace_lock.lock();
         ++na_;
         assert(sizeof(size_t) == sizeof(void*));
@@ -321,7 +173,9 @@ static size_t nf_;
         size_t* s = (size_t*) p;
         *s = n;
 
-        g_alloc_trace_map.emplace(p, get_stacktrace());
+        #ifdef BM_STACK_COLL
+        g_alloc_trace_map.emplace(p, std::move(stack_str));
+        #endif
         g_trace_lock.unlock();
 
         return (void*)++s;
@@ -341,19 +195,16 @@ static size_t nf_;
         }
         ::free(s);
 
+        #ifdef BM_STACK_COLL
         g_alloc_trace_map.erase(s);
+        #endif
         g_trace_lock.unlock();
     }
 
-    static size_t balance()
-    {
-        return nf_ - na_;
-    }
+    static size_t balance() BMNOEXCEPT { return nf_ - na_; }
 
 };
 
-size_t dbg_ptr_allocator::na_ = 0;
-size_t dbg_ptr_allocator::nf_ = 0;
 
 
 typedef mem_alloc<dbg_block_allocator, dbg_ptr_allocator, alloc_pool<dbg_block_allocator, dbg_ptr_allocator> > dbg_alloc;
@@ -364,21 +215,10 @@ typedef bm::rs_index<dbg_alloc> rs_ind;
 
 #else
 
-#ifdef MEM_POOL
-
-typedef mem_alloc<pool_block_allocator, pool_ptr_allocator> pool_alloc;
-typedef bm::bvector<pool_alloc> bvect;
-typedef bm::bvector_mini<bm::block_allocator> bvect_mini;
-typedef bm::rs_index<pool_block_allocator> rs_ind;
-
-
-#else
-
 typedef bm::bvector<> bvect;
 typedef bm::bvector_mini<bm::block_allocator> bvect_mini;
 typedef bm::rs_index<> rs_ind;
 
-#endif
 
 #endif
 
@@ -1037,10 +877,8 @@ void FillSetsRandomMethod(bvect_mini* bvect_min,
 
     if (optimize && (method <= 1))
     {
-        cout << "Vector optimization..." << flush;
         BM_DECLARE_TEMP_BLOCK(tb)
         bvect_full->optimize(tb);
-        cout << "OK" << endl;
     }
 }
 
@@ -15219,13 +15057,15 @@ void IntervalEnumeratorTest()
     cout << "interval_enumerator +N stress test" << endl;
     {
         bvect::allocator_pool_type pool;
+        BM_DECLARE_TEMP_BLOCK(tb)
 
         unsigned delta_max = 65536*2;
         double duration = 0;
-        for (unsigned inc = 1; inc < delta_max; ++inc)
+        for (unsigned inc = 1; inc < delta_max;
+            inc += (inc < 64) ? 1 : rand()&0xF)
         {
             clock_t start = clock();
-            cout << "\rinc = " << inc << " of " << delta_max << " (" << duration << ")" << flush;
+            //cout << "\rinc = " << inc << " delta_max= " << delta_max << " (" << duration << ")" << flush;
             bvect bv;
             bvect bv_c;
             bvect::mem_pool_guard g1(pool, bv);
@@ -15261,11 +15101,11 @@ void IntervalEnumeratorTest()
                         interval_copy_range(bv2, bv, k, copy_to);
                         eq = bv2.equal(bv2_c);
                         assert(eq);
-                        copy_to -= rand()%128;
+                        copy_to -= rand()%256;
                     }
                 }
 
-                bv.optimize();
+                bv.optimize(tb);
                 bv_c.clear();
             } // for pass
 
@@ -15273,7 +15113,7 @@ void IntervalEnumeratorTest()
             clock_t elapsed_clocks = finish - start;
             duration = (double)(elapsed_clocks) / CLOCKS_PER_SEC;
 
-            cout << "\rinc = " << inc << " of " << delta_max << " (" << duration << ")" << flush;
+            cout << "\rinc = " << inc << " delta_max= " << delta_max << " (" << duration << ")" << flush;
 
             if (inc > 65536)
                 inc += rand() % 128; // fast pace randomiser
@@ -20562,7 +20402,7 @@ void TestSparseVector()
         }
 
 
-        const bvect* bv_x = sv.get_plane(0);
+        const bvect* bv_x = sv.get_slice(0);
         const bvect::blocks_manager_type& bman_x = bv_x->get_blocks_manager();
         const bm::word_t* block_x = bman_x.get_block_ptr(0, 0);
 
@@ -20672,7 +20512,7 @@ void TestSparseVector()
         r_vect.build(sv.get_bmatrix());
         xscan.set_ref_vector(&r_vect);
 
-        const bvect* bv_x = sv.get_plane(0);
+        const bvect* bv_x = sv.get_slice(0);
         const bvect::blocks_manager_type& bman_x = bv_x->get_blocks_manager();
         const bm::word_t* block_x = bman_x.get_block_ptr(0, 0);
 
@@ -22529,7 +22369,7 @@ void TestSparseVector_XOR_Scanner()
         r_vect.build(sv.get_bmatrix());
         xscan.set_ref_vector(&r_vect);
 
-        const bvect* bv_x = sv.get_plane(0);
+        const bvect* bv_x = sv.get_slice(0);
         const bvect::blocks_manager_type& bman_x = bv_x->get_blocks_manager();
         const bm::word_t* block_x = bman_x.get_block_ptr(0, 0);
 
@@ -22592,7 +22432,7 @@ void TestSparseVector_XOR_Scanner()
         r_vect.build(sv.get_bmatrix());
         xscan.set_ref_vector(&r_vect);
 
-        const bvect* bv_x = sv.get_plane(0);
+        const bvect* bv_x = sv.get_slice(0);
         const bvect::blocks_manager_type& bman_x = bv_x->get_blocks_manager();
         const bm::word_t* block_x = bman_x.get_block_ptr(0, 0);
 
@@ -22626,7 +22466,7 @@ void TestSparseVector_XOR_Scanner()
         r_vect.build(sv.get_bmatrix());
         xscan.set_ref_vector(&r_vect);
 
-        const bvect* bv_x = sv.get_plane(0);
+        const bvect* bv_x = sv.get_slice(0);
         const bvect::blocks_manager_type& bman_x = bv_x->get_blocks_manager();
         const bm::word_t* block_x = bman_x.get_block_ptr(0, 0);
 
@@ -25881,8 +25721,8 @@ void TestStrSparseVector()
        str_sv0[2] = "123";
        str_sv0[3] = "021";
 
-       str_sparse_vector<char, bvect, 32>::plane_octet_matrix_type remap_matrix1;
-       str_sparse_vector<char, bvect, 32>::plane_octet_matrix_type remap_matrix2;
+       str_sparse_vector<char, bvect, 32>::slice_octet_matrix_type remap_matrix1;
+       str_sparse_vector<char, bvect, 32>::slice_octet_matrix_type remap_matrix2;
 
         {
            str_sparse_vector<char, bvect, 32>::octet_freq_matrix_type occ_matrix;
@@ -33670,9 +33510,11 @@ int parse_args(int argc, char *argv[])
 }
 
 
-static
+inline
 void PrintStacks(unsigned max_cnt = 10)
 {
+(void)max_cnt;
+#ifdef MEM_DEBUG
     unsigned cnt(0);
     for (auto it = g_alloc_trace_map.begin();
         it != g_alloc_trace_map.end() && cnt < max_cnt; ++it)
@@ -33680,11 +33522,15 @@ void PrintStacks(unsigned max_cnt = 10)
         cout << "\n--------------------STACK_TRACE: " << cnt++ << endl;
         cout << it->second << endl;
     }
+#else
+    cout << "Stack tracing not enabled (use #define BM_STACK_COLL)" << endl;
+#endif
 }
 
 static
 bool CheckAllocLeaks(bool details = false, bool abort = true)
 {
+(void)details; (void)abort;
 #ifdef MEM_DEBUG
     if (details)
     {
@@ -33693,17 +33539,18 @@ bool CheckAllocLeaks(bool details = false, bool abort = true)
         cout << "Number of PTR allocations = " <<  dbg_ptr_allocator::na_ << endl << endl;
     }
 
-    if(dbg_block_allocator::balance() != 0)
+    if (dbg_block_allocator::balance() != 0)
     {
         cout << "ERROR! Block memory leak! " << endl;
         cout << "leaked blocks: " << dbg_block_allocator::balance() << endl;
         PrintStacks();
         if (!abort)
             return true;
+
         assert(0);exit(1);
     }
 
-    if(dbg_ptr_allocator::balance() != 0)
+    if (dbg_ptr_allocator::balance() != 0)
     {
         cout << "ERROR! Ptr memory leak! " << endl;
         cout << "leaked blocks: " << dbg_ptr_allocator::balance() << endl;
@@ -34088,8 +33935,6 @@ int main(int argc, char *argv[])
          CheckAllocLeaks(false);
 
     }
-
-
 
     if (is_all || is_agg)
     {
