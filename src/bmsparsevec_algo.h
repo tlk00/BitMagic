@@ -63,7 +63,7 @@ namespace bm
 template<typename SV>
 void dynamic_range_clip_high(SV& svect, unsigned high_bit)
 {
-    unsigned sv_planes = svect.planes();
+    unsigned sv_planes = svect.slices();
     
     BM_ASSERT(sv_planes > high_bit && high_bit > 0);
     
@@ -73,20 +73,19 @@ void dynamic_range_clip_high(SV& svect, unsigned high_bit)
     // combine all the high bits into accumulator vector
     for (i = high_bit+1; i < sv_planes; ++i)
     {
-        typename SV::bvector_type* bv_plane = svect.plane(i);
-        if (bv_plane)
+        if (typename SV::bvector_type* bv = svect.slice(i))
         {
-            bv_acc.bit_or(*bv_plane);
-            svect.free_plane(i);
+            bv_acc.bit_or(*bv);
+            svect.free_slice(i);
         }
     } // for i
     
     // set all bits ON for all low vectors, which happen to be clipped
     for (i = high_bit; true; --i)
     {
-        typename SV::bvector_type* bv_plane = svect.get_create_splice(i);
-        bv_plane->bit_or(bv_acc);
-        if (i == 0)
+        typename SV::bvector_type* bv = svect.get_create_slice(i);
+        bv->bit_or(bv_acc);
+        if (!i)
             break;
     } // for i
 }
@@ -105,31 +104,29 @@ template<typename SV>
 void dynamic_range_clip_low(SV& svect, unsigned low_bit)
 {
     if (low_bit == 0) return; // nothing to do
-    BM_ASSERT(svect.planes() > low_bit);
+    BM_ASSERT(svect.slices() > low_bit);
     
-    unsigned sv_planes = svect.planes();
+    unsigned sv_planes = svect.slices();
     typename SV::bvector_type bv_acc1;
     unsigned i;
     
     // combine all the high bits into accumulator vector
     for (i = low_bit+1; i < sv_planes; ++i)
     {
-        typename SV::bvector_type* bv_plane = svect.plane(i);
-        if (bv_plane)
-            bv_acc1.bit_or(*bv_plane);
+        if (typename SV::bvector_type* bv = svect.slice(i))
+            bv_acc1.bit_or(*bv);
     } // for i
     
     // accumulate all vectors below the clipping point
     typename SV::bvector_type bv_acc2;
-    typename SV::bvector_type* bv_low_plane = svect.get_create_splice(low_bit);
+    typename SV::bvector_type* bv_low_plane = svect.get_create_slice(low_bit);
     
     for (i = low_bit-1; true; --i)
     {
-        typename SV::bvector_type* bv_plane = svect.plane(i);
-        if (bv_plane)
+        if (typename SV::bvector_type* bv = svect.slice(i))
         {
-            bv_acc2.bit_or(*bv_plane);
-            svect.free_plane(i);
+            bv_acc2.bit_or(*bv);
+            svect.free_slice(i);
             if (i == 0)
                 break;
         }
@@ -177,7 +174,7 @@ bool sparse_vector_find_first_mismatch(const SV& sv1,
 
     unsigned sv_idx = 0;
 
-    unsigned planes1 = sv1.planes();
+    unsigned planes1 = sv1.slices();
     BM_ASSERT(planes1);
 
     // for RSC vector do NOT compare NULL planes
@@ -199,7 +196,6 @@ bool sparse_vector_find_first_mismatch(const SV& sv1,
                 {
                     found = f; mismatch = midx;
                 }
-
             }
             else // one or both NULL vectors are not present
             {
@@ -234,8 +230,8 @@ bool sparse_vector_find_first_mismatch(const SV& sv1,
 
     for (unsigned i = 0; mismatch && (i < planes1); ++i)
     {
-        typename SV::bvector_type_const_ptr bv1 = sv1.get_plane(i);
-        typename SV::bvector_type_const_ptr bv2 = sv2.get_plane(i);
+        typename SV::bvector_type_const_ptr bv1 = sv1.get_slice(i);
+        typename SV::bvector_type_const_ptr bv2 = sv2.get_slice(i);
         if (!bv1)
         {
             if (!bv2)
@@ -352,14 +348,14 @@ void sparse_vector_find_mismatch(typename SV1::bvector_type& bv,
 
     bv.clear();
 
-    unsigned planes = sv1.planes();
-    if (planes < sv2.planes())
-        planes = sv2.planes();
+    unsigned planes = sv1.slices();
+    if (planes < sv2.slices())
+        planes = sv2.slices();
 
     for (unsigned i = 0; i < planes; ++i)
     {
-        typename SV1::bvector_type_const_ptr bv1 = sv1.get_plane(i);
-        typename SV2::bvector_type_const_ptr bv2 = sv2.get_plane(i);
+        typename SV1::bvector_type_const_ptr bv1 = sv1.get_slice(i);
+        typename SV2::bvector_type_const_ptr bv2 = sv2.get_slice(i);
 
         if (!bv1)
         {
@@ -790,7 +786,7 @@ protected:
     typedef bm::dynamic_heap_matrix<value_type, allocator_type> heap_matrix_type;
     typedef bm::heap_matrix<typename SV::value_type,
                            linear_cutoff2,
-                           SV::sv_octet_planes,
+                           SV::sv_octet_slices,
                            allocator_type> matrix_search_buf_type;
 
 
@@ -1211,7 +1207,7 @@ void sparse_vector_scanner<SV>::bind(const SV&  sv, bool sorted)
     //
     for (unsigned i = 0; i < SV::max_vector_size; ++i)
     {
-        vector_plane_masks_[i] = sv.get_planes_mask(i);
+        vector_plane_masks_[i] = sv.get_slice_mask(i);
     } // for i
     
 }
@@ -1414,7 +1410,7 @@ bool sparse_vector_scanner<SV>::prepare_and_sub_aggregator(const SV&  sv,
         if (&sv == bound_sv_)
             planes_mask = vector_plane_masks_[octet_idx];
         else
-            planes_mask = sv.get_planes_mask(unsigned(octet_idx));
+            planes_mask = sv.get_slice_mask(unsigned(octet_idx));
 
         if ((value & planes_mask) != value) // pre-screen for impossible values
             return false; // found non-existing plane
@@ -1427,7 +1423,7 @@ bool sparse_vector_scanner<SV>::prepare_and_sub_aggregator(const SV&  sv,
             unsigned bit_idx = bits[i];
             BM_ASSERT(value & (value_type(1) << bit_idx));
             unsigned plane_idx = (unsigned(octet_idx) * 8) + bit_idx;
-            const bvector_type* bv = sv.get_plane(plane_idx);
+            const bvector_type* bv = sv.get_slice(plane_idx);
             agg_.add(bv);
         } // for i
         
@@ -1448,7 +1444,7 @@ bool sparse_vector_scanner<SV>::prepare_and_sub_aggregator(const SV&  sv,
             bm::id_t t = vinv & -vinv;
             unsigned bit_idx = bm::word_bitcount(t - 1);
             unsigned plane_idx = octet_plane + bit_idx;
-            const bvector_type* bv = sv.get_plane(plane_idx);
+            const bvector_type* bv = sv.get_slice(plane_idx);
             BM_ASSERT(bv);
             agg_.add(bv, 1); // agg to SUB group
         } // for
@@ -1467,7 +1463,7 @@ bool sparse_vector_scanner<SV>::prepare_and_sub_aggregator(const SV&  sv,
         planes = effective_str_max_ * unsigned(sizeof(value_type)) * 8;
         for (; plane_idx < planes; ++plane_idx)
         {
-            bvector_type_const_ptr bv = sv.get_plane(plane_idx);
+            bvector_type_const_ptr bv = sv.get_slice(plane_idx);
             if (bv)
                 agg_.add(bv, 1); // agg to SUB group
         } // for
@@ -1497,16 +1493,16 @@ bool sparse_vector_scanner<SV>::prepare_and_sub_aggregator(const SV&   sv,
     {
         unsigned bit_idx = bits[i-1];
         BM_ASSERT(uv & (mask1 << bit_idx));
-        const bvector_type* bv = sv.get_plane(bit_idx);
+        const bvector_type* bv = sv.get_slice(bit_idx);
         if (bv)
             agg_.add(bv);
         else
             return false;
     }
-    unsigned sv_planes = sv.effective_planes();
+    unsigned sv_planes = sv.effective_slices();
     for (unsigned i = 0; i < sv_planes; ++i)
     {
-        bvector_type_const_ptr bv = sv.get_plane(i);
+        bvector_type_const_ptr bv = sv.get_slice(i);
         unsigned_value_type mask = mask1 << i;
         if (bv && !(uv & mask))
             agg_.add(bv, 1); // agg to SUB group
@@ -1538,7 +1534,7 @@ void sparse_vector_scanner<SV>::find_eq_with_nulls_horizontal(const SV&  sv,
 
     // aggregate AND all matching vectors
     {
-        const bvector_type* bv_plane = sv.get_plane(bits[--bit_count_v]);
+        const bvector_type* bv_plane = sv.get_slice(bits[--bit_count_v]);
         if (bv_plane)
             bv_out = *bv_plane;
         else // plane not found
@@ -1549,7 +1545,7 @@ void sparse_vector_scanner<SV>::find_eq_with_nulls_horizontal(const SV&  sv,
     }
     for (unsigned i = 0; i < bit_count_v; ++i)
     {
-        const bvector_type* bv_plane = sv.get_plane(bits[i]);
+        const bvector_type* bv_plane = sv.get_slice(bits[i]);
         if (bv_plane)
             bv_out &= *bv_plane;
         else // mandatory plane not found - empty result!
@@ -1560,12 +1556,11 @@ void sparse_vector_scanner<SV>::find_eq_with_nulls_horizontal(const SV&  sv,
     } // for i
 
     // SUB all other planes
-    unsigned sv_planes = sv.effective_planes();
+    unsigned sv_planes = sv.effective_slices();
     for (unsigned i = 0; (i < sv_planes) && uv; ++i)
     {
-        const bvector_type* bv_plane = sv.get_plane(i);
-        if (bv_plane && !(uv & (1u << i)))
-            bv_out -= *bv_plane;
+        if (const bvector_type* bv = sv.get_slice(i); bv && !(uv & (1u << i)))
+            bv_out -= *bv;
     } // for i
 }
 
@@ -1619,7 +1614,7 @@ bool sparse_vector_scanner<SV>::find_eq_str(const SV&                      sv,
         if (found)
         {
             pos = found_pos;
-            if (bm::conditional<SV::is_rsc_support::value>::test()) // test rank/select trait
+            if constexpr (SV::is_rsc_support::value) // test rank/select trait
             {
                 if (sv.is_compressed()) // if compressed vector - need rank translation
                     found = sv.find_rank(found_pos + 1, pos);
@@ -2259,8 +2254,8 @@ void sparse_vector_scanner<SV>::find_nonzero(const SV& sv,
                                              typename SV::bvector_type& bv_out)
 {
     agg_.reset(); // in case if previous scan was interrupted
-    for (unsigned i = 0; i < sv.planes(); ++i)
-        agg_.add(sv.get_plane(i));
+    for (unsigned i = 0; i < sv.slices(); ++i)
+        agg_.add(sv.get_slice(i));
     agg_.combine_or(bv_out);
     agg_.reset();
 }

@@ -190,7 +190,7 @@ template<class SIMBATCH, class SV>
 void build_jaccard_similarity_batch(SIMBATCH& sbatch, const SV& sv)
 {
 
-    size_t planes = sv.planes();
+    size_t planes = sv.slices();
     sbatch.reserve((planes * planes) / 2);
 
     bm::distance_metric_descriptor dmd[2];
@@ -201,16 +201,13 @@ void build_jaccard_similarity_batch(SIMBATCH& sbatch, const SV& sv)
     //
     for (unsigned i = 0; i < planes; ++i)
     {
-        const typename SV::bvector_type* bv1 = sv.get_plane(i);
-        if (bv1)
+        if (const typename SV::bvector_type* bv1 = sv.get_slice(i))
         {
             for (unsigned j = i+1; j < planes; ++j)
             {
-                const typename SV::bvector_type* bv2 = sv.get_plane(j);
+                const typename SV::bvector_type* bv2 = sv.get_slice(j);
                 if (bv2 && bv1 != bv2)
-                {
                     sbatch.push_back(typename SIMBATCH::similaruty_descriptor_type(bv1, i, bv2, j, &dmd[0]));
-                }
             } // for j
         }
 

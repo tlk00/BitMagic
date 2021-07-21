@@ -61,21 +61,25 @@ namespace bm
 
 
 /*!
-   \brief succinct sparse vector with runtime compression using bit transposition method
+   \brief succinct sparse vector with runtime compression using bit-slicing / transposition method
  
    Sparse vector implements variable bit-depth storage model.
-   Initial data is bit-transposed into bit-planes so each element
-   may use less memory than the original native data type prescribes.
+   Initial data is bit-sliced into bit-vectors (all bits 0 become bv[0] so each element
+   may use less memory than the original native data type.
    For example, 32-bit integer may only use 20 bits.
+
+   Container supports both signed and unsigned integer types.
  
    Another level of compression is provided by bit-vector (BV template parameter)
    used for storing bit planes. bvector<> implements varians of on the fly block
    compression, so if a significant area of a sparse vector uses less bits - it
    will save memory.
- 
-   Overall it provides variable bit-depth compression, sparse compression in
-   bit-planes.
- 
+   bm::bvector<> is a sparse data strucrture, so is bm::sparse_vector<>. It should be noted
+   that as succinct data it works for both sparse or dense vectors.
+
+   Container also supports notion of NULL (unassigned value) which can be treated
+   differently than 0.
+
    @ingroup sv
 */
 template<class Val, class BV>
@@ -762,12 +766,12 @@ public:
         \param sv - source vector
         \param left  - index from in losed diapason of [left..right]
         \param right - index to in losed diapason of [left..right]
-        \param splice_null - "use_null" copy range for NULL vector or
+        \param slice_null - "use_null" copy range for NULL vector or
                              do not copy it
     */
     void copy_range(const sparse_vector<Val, BV>& sv,
                     size_type left, size_type right,
-                    bm::null_support splice_null = bm::use_null);
+                    bm::null_support slice_null = bm::use_null);
 
 
     /**
@@ -776,10 +780,10 @@ public:
 
         \param left  - interval start
         \param right - interval end (closed interval)
-        \param splice_null - "use_null" copy range for NULL vector or not
+        \param slice_null - "use_null" copy range for NULL vector or not
      */
      void keep_range(size_type left, size_type right,
-                    bm::null_support splice_null = bm::use_null);
+                    bm::null_support slice_null = bm::use_null);
 
     /**
         @brief Apply value filter, defined by mask vector
@@ -886,9 +890,9 @@ public:
     void set_allocator_pool(allocator_pool_type* pool_ptr) BMNOEXCEPT;
     
 protected:
-    enum octet_planes
+    enum octet_slices
     {
-        sv_octet_planes = sizeof(value_type)
+        sv_octet_slices = sizeof(value_type)
     };
     enum buf_size_e
     {
@@ -1132,7 +1136,7 @@ void sparse_vector<Val, BV>::import_u(const unsigned_value_type* arr,
 
             if (rl == transpose_window)
             {
-                bvector_type* bv = this->get_create_splice(p);
+                bvector_type* bv = this->get_create_slice(p);
                 const size_type* r = tm.row(p);
                 bv->set(r, rl, BM_SORTED);
                 row_len[p] = 0;
@@ -1148,7 +1152,7 @@ void sparse_vector<Val, BV>::import_u(const unsigned_value_type* arr,
         unsigned rl = row_len[k];
         if (rl)
         {
-            bvector_type* bv = this->get_create_splice(k);
+            bvector_type* bv = this->get_create_slice(k);
             const size_type* r = tm.row(k);
             bv->set(r, rl, BM_SORTED);
         }
@@ -1291,7 +1295,7 @@ sparse_vector<Val, BV>::gather(value_type*       arr,
         unsigned i0 = unsigned(nb >> bm::set_array_shift); // top block address
         unsigned j0 = unsigned(nb &  bm::set_array_mask);  // address in sub-block
         
-        unsigned eff_planes = this->effective_planes(); // TODO: get real effective planes for [i,j]
+        unsigned eff_planes = this->effective_slices(); // TODO: get real effective planes for [i,j]
         for (unsigned j = 0; j < eff_planes; ++j)
         {
             const bm::word_t* blk = this->bmatr_.get_block(j, i0, j0);
@@ -1381,10 +1385,8 @@ sparse_vector<Val, BV>::extract_range(value_type* arr,
     size_type start = offset;
     size_type end = start + size;
     if (end > this->size_)
-    {
         end = this->size_;
-    }
-    
+
     // calculate logical block coordinates and masks
     //
     block_idx_type nb = (start >>  bm::set_block_shift);
@@ -1466,10 +1468,8 @@ sparse_vector<Val, BV>::extract_planes(value_type* arr,
     size_type start = offset;
     size_type end = start + size;
     if (end > this->size_)
-    {
         end = this->size_;
-    }
-    
+
     for (size_type i = 0; i < parent_type::value_bits(); ++i)
     {
         const bvector_type* bv = this->bmatr_.get_row(i);
@@ -1546,7 +1546,7 @@ sparse_vector<Val, BV>::extract(value_type* BMRESTRICT arr,
 
     sv_decode_visitor_func func(arr, 0, offset);
 
-    auto planes = this->effective_planes();
+    auto planes = this->effective_slices();
     for (size_type i = 0; i < planes; ++i)
     {
         const bvector_type* bv = this->bmatr_.get_row(i);
@@ -1570,7 +1570,7 @@ void sparse_vector<Val, BV>::u2s_translate(value_type* arr, size_type sz) BMNOEX
     for (size_type i = 0; i < sz; ++i)
     {
         unsigned_value_type uv;
-        memcpy(&uv, &arr[i], sizeof(uv));
+        ::memcpy(&uv, &arr[i], sizeof(uv));
         arr[i] = parent_type::u2s(uv);
     } // for i
 }
@@ -1598,19 +1598,16 @@ sparse_vector<Val, BV>::get(
     BM_ASSERT(i < size());
     
     unsigned_value_type uv = 0;
-    unsigned eff_planes = this->effective_planes();
-    unsigned_value_type smask = this->splice_mask_;
-    for (unsigned j = 0; j < eff_planes; j+=4)
+    unsigned eff_planes = this->effective_slices();
+    unsigned_value_type smask = this->slice_mask_;
+    for (unsigned j = 0; smask && j < eff_planes; j+=4, smask >>= 4)
     {
-        //bool b = this->bmatr_.test_4rows(j);
-//        bool b = smask & 0x0F; // b1111
         if (smask & 0x0F) // b1111
         {
             unsigned_value_type vm =
                 (unsigned_value_type)this->bmatr_.get_half_octet(i, j);
             uv |= unsigned_value_type(vm << j);
         }
-        smask >>= 4;
     } // for j
     if constexpr (parent_type::is_signed())
         return this->u2s(uv);
@@ -1711,7 +1708,7 @@ void sparse_vector<Val, BV>::insert_value_no_null(size_type idx, value_type v)
     {
         if (uv & mask)
         {
-            bvector_type* bv = this->get_create_splice(i);
+            bvector_type* bv = this->get_create_slice(i);
             bv->insert(idx, true);
         }
         else
@@ -1724,7 +1721,7 @@ void sparse_vector<Val, BV>::insert_value_no_null(size_type idx, value_type v)
     } // for i
 
     // insert 0 into all other existing planes
-    unsigned eff_planes = this->effective_planes();
+    unsigned eff_planes = this->effective_slices();
     for (; i < eff_planes; ++i)
     {
         bvector_type* bv = this->bmatr_.get_row(i);
@@ -1763,8 +1760,7 @@ void sparse_vector<Val, BV>::set_value(size_type idx,
                                        value_type v, bool need_clear)
 {
     set_value_no_null(idx, v, need_clear);
-    bvector_type* bv_null = this->get_null_bvect();
-    if (bv_null)
+    if (bvector_type* bv_null = this->get_null_bvect())
         bv_null->set_bit_no_check(idx);
 }
 
@@ -1786,7 +1782,7 @@ void sparse_vector<Val, BV>::set_value_no_null(size_type idx,
     unsigned bsr = uv ? bm::bit_scan_reverse(uv) : 0u;
     if (need_clear)
     {
-        unsigned eff_planes = this->effective_planes();
+        unsigned eff_planes = this->effective_slices();
         this->bmatr_.clear_planes_range(bsr, eff_planes, idx);
     }
     if (uv)
@@ -1796,7 +1792,7 @@ void sparse_vector<Val, BV>::set_value_no_null(size_type idx,
         {
             if (uv & mask)
             {
-                bvector_type* bv = this->get_create_splice(j);
+                bvector_type* bv = this->get_create_slice(j);
                 bv->set_bit_no_check(idx);
             }
             else if (need_clear)
@@ -1827,8 +1823,7 @@ void sparse_vector<Val, BV>::inc(size_type idx)
     else
         inc_no_null(idx);
 
-    bvector_type* bv_null = this->get_null_bvect();
-    if (bv_null)
+    if (bvector_type* bv_null = this->get_null_bvect())
         bv_null->set_bit_no_check(idx);
 }
 
@@ -1847,13 +1842,12 @@ void sparse_vector<Val, BV>::inc_no_null(size_type idx)
         set_value_no_null(idx, v, true);
     }
     else
-        for (unsigned i = 0; i < parent_type::sv_value_planes; ++i)
+        for (unsigned i = 0; i < parent_type::sv_value_slices; ++i)
         {
-            bvector_type* bv = this->get_create_splice(i);
-            bool carry_over = bv->inc(idx);
-            if (!carry_over)
+            bvector_type* bv = this->get_create_slice(i);
+            if (bool carry_over = bv->inc(idx); !carry_over)
                 break;
-        }
+        } // for i
 }
 
 //------------------------------------ ---------------------------------
@@ -1923,7 +1917,7 @@ void sparse_vector<Val, BV>::optimize(
     typename bvector_type::statistics stbv;
     stbv.reset();
     parent_type::optimize(temp_block, opt_mode, st ? &stbv : 0);
-    
+
     if (st)
     {
         st->reset();
@@ -1936,14 +1930,11 @@ void sparse_vector<Val, BV>::optimize(
 template<class Val, class BV>
 void sparse_vector<Val, BV>::optimize_gap_size()
 {
-    unsigned stored_planes = this->stored_planes();
-    for (unsigned j = 0; j < stored_planes; ++j)
+    unsigned stored_slices = this->stored_slices();
+    for (unsigned j = 0; j < stored_slices; ++j)
     {
-        bvector_type* bv = this->bmatr_.get_row(j);
-        if (bv)
-        {
+        if (bvector_type* bv = this->bmatr_.get_row(j))
             bv->optimize_gap_size();
-        }
     }
 }
 
@@ -1955,28 +1946,15 @@ sparse_vector<Val, BV>::join(const sparse_vector<Val, BV>& sv)
 {
     size_type arg_size = sv.size();
     if (this->size_ < arg_size)
-    {
         resize(arg_size);
-    }
+
     bvector_type* bv_null = this->get_null_bvect();
-    const unsigned planes = bv_null ? this->stored_planes() : this->planes();
-    /*
-    if (bv_null)
-        planes = this->stored_planes();
-    else
-        planes = this->planes(); */
-    
+    const unsigned planes = bv_null ? this->stored_slices() : this->slices();
     for (unsigned j = 0; j < planes; ++j)
     {
-        const bvector_type* arg_bv = sv.bmatr_.row(j);
-        if (arg_bv)
+        if (const bvector_type* arg_bv = sv.bmatr_.row(j))
         {
-            /*
-            bvector_type* bv = this->bmatr_.get_row(j);
-            if (!bv)
-                bv = this->get_plane(j);
-            */
-            bvector_type* bv = this->get_create_splice(j);
+            bvector_type* bv = this->get_create_slice(j);
             *bv |= *arg_bv;
         }
     } // for j
@@ -1999,7 +1977,7 @@ sparse_vector<Val, BV>::merge(sparse_vector<Val, BV>& sv)
         resize(arg_size);
 
     bvector_type* bv_null = this->get_null_bvect();
-    unsigned planes = bv_null ? this->stored_planes() : this->planes();
+    unsigned planes = bv_null ? this->stored_slices() : this->slices();
 
     this->merge_matr(sv.bmatr_, planes);
 
@@ -2017,22 +1995,22 @@ void sparse_vector<Val, BV>::copy_range(
                             const sparse_vector<Val, BV>& sv,
                             typename sparse_vector<Val, BV>::size_type left,
                             typename sparse_vector<Val, BV>::size_type right,
-                            bm::null_support splice_null)
+                            bm::null_support slice_null)
 {
     if (left > right)
         bm::xor_swap(left, right);
-    this->copy_range_planes(sv, left, right, splice_null);
+    this->copy_range_slices(sv, left, right, slice_null);
     this->resize(sv.size());
 }
 //---------------------------------------------------------------------
 
 template<class Val, class BV>
 void sparse_vector<Val, BV>::keep_range(size_type left, size_type right,
-            bm::null_support splice_null)
+            bm::null_support slice_null)
 {
     if (right < left)
         bm::xor_swap(left, right);
-    this->keep_range_no_check(left, right, splice_null);
+    this->keep_range_no_check(left, right, slice_null);
 }
 
 
@@ -2043,26 +2021,15 @@ void sparse_vector<Val, BV>::filter(
                 const typename sparse_vector<Val, BV>::bvector_type& bv_mask)
 {
     bvector_type* bv_null = this->get_null_bvect();
-/*
-    unsigned planes;
-    if (bv_null)
-    {
-        planes = this->stored_planes();
-        bv_null->bit_and(bv_mask);
-    }
-    else
-        planes = this->planes();
-*/
     unsigned planes =
-        bv_null ? bv_null->bit_and(bv_mask), this->stored_planes()
-                : this->planes();
+        bv_null ? bv_null->bit_and(bv_mask), this->stored_slices()
+                : this->slices();
 
     for (unsigned j = 0; j < planes; ++j)
     {
-        bvector_type* bv = this->bmatr_.get_row(j);
-        if (bv)
+        if (bvector_type* bv = this->bmatr_.get_row(j))
             bv->bit_and(bv_mask);
-    }
+    } // for j
 }
 
 //---------------------------------------------------------------------

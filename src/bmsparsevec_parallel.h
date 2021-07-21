@@ -236,14 +236,14 @@ public:
                     const sparse_vector_type& sv)
     {
         typename task_batch::task_vector_type& tv = batch.get_task_vector();
-        unsigned planes = sv.stored_planes();
+        unsigned planes = sv.stored_slices();
         tv.reserve(planes + 1); // +1 for finalization task
 
         batch.s_params = s_params_;
 
         for (unsigned i = 0; i < planes; ++i)
         {
-            typename SV::bvector_type_const_ptr bv = sv.get_plane(i);
+            typename SV::bvector_type_const_ptr bv = sv.get_slice(i);
             if (!bv)  // empty plane
             {
                 sv_layout.set_plane(i, 0, 0);

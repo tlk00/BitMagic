@@ -47,8 +47,8 @@ namespace bm
 /*!
    \brief succinct sparse vector for strings with compression using bit transposition method
  
-   Initial string is bit-transposed into bit-planes so collection may use less
-   memory due to prefix sum (GAP) compression in bit-planes.
+   Initial string is bit-transposed into bit-slices so collection may use less
+   memory due to prefix sum (GAP) compression in bit-slices.
  
    @ingroup sv
 */
@@ -73,9 +73,9 @@ public:
     struct statistics : public bv_statistics
     {};
     
-    enum octet_planes
+    enum octet_slices
     {
-        sv_octet_planes = MAX_STR_SIZE
+        sv_octet_slices = MAX_STR_SIZE
     };
 
     /**
@@ -87,8 +87,8 @@ public:
                     MAX_STR_SIZE, /* ROWS */
                     256,          /* COLS = number of chars in the ASCII set */
                     typename bvector_type::allocator_type>
-                                                    plane_octet_matrix_type;
-    typedef plane_octet_matrix_type remap_matrix_type;
+                                                    slice_octet_matrix_type;
+    typedef slice_octet_matrix_type remap_matrix_type;
     /**
         Matrix of character frequencies (for optimal code remap)
         @internal
@@ -703,7 +703,7 @@ public:
     /*! \brief get maximum string length capacity
         \return maximum string length sparse vector can take
     */
-    static size_type max_str() { return sv_octet_planes; }
+    static size_type max_str() { return sv_octet_slices; }
     
     /*! \brief get effective string length used in vector
         Calculate and returns efficiency, how close are we
@@ -841,8 +841,8 @@ public:
     */
     static
     void build_octet_remap(
-                plane_octet_matrix_type& octet_remap_matrix1,
-                plane_octet_matrix_type& octet_remap_matrix2,
+                slice_octet_matrix_type& octet_remap_matrix1,
+                slice_octet_matrix_type& octet_remap_matrix2,
                 octet_freq_matrix_type& octet_occupancy_matrix);
     /*!
         remap string from external (ASCII) system to matrix internal code
@@ -854,7 +854,7 @@ public:
     bool remap_tosv(value_type*  BMRESTRICT      sv_str,
                     size_type                    buf_size,
                     const value_type* BMRESTRICT str,
-                    const plane_octet_matrix_type& BMRESTRICT octet_remap_matrix2
+                    const slice_octet_matrix_type& BMRESTRICT octet_remap_matrix2
                     ) BMNOEXCEPT;
     
     /*!
@@ -878,7 +878,7 @@ public:
             value_type*   BMRESTRICT     str,
             size_type                    buf_size,
             const value_type* BMRESTRICT sv_str,
-            const plane_octet_matrix_type& BMRESTRICT octet_remap_matrix1
+            const slice_octet_matrix_type& BMRESTRICT octet_remap_matrix1
             ) BMNOEXCEPT;
     /*!
         re-calculate remap matrix2 based on matrix1
@@ -1084,12 +1084,12 @@ public:
         \param sv - source vector
         \param left  - index from in losed diapason of [left..right]
         \param right - index to in losed diapason of [left..right]
-        \param splice_null - "use_null" copy range for NULL vector or
+        \param slice_null - "use_null" copy range for NULL vector or
                              do not copy it
     */
     void copy_range(const str_sparse_vector<CharType, BV, MAX_STR_SIZE>& sv,
                     size_type left, size_type right,
-                    bm::null_support splice_null = bm::use_null);
+                    bm::null_support slice_null = bm::use_null);
 
     /**
         \brief merge with another sparse vector using OR operation
@@ -1109,10 +1109,10 @@ public:
 
         \param left  - interval start
         \param right - interval end (closed interval)
-        \param splice_null - "use_null" copy range for NULL vector or not
+        \param slice_null - "use_null" copy range for NULL vector or not
      */
      void keep_range(size_type left, size_type right,
-                    bm::null_support splice_null = bm::use_null);
+                    bm::null_support slice_null = bm::use_null);
 
     ///@}
 
@@ -1292,9 +1292,9 @@ protected:
     template<class SVect> friend class sparse_vector_deserializer;
 
 protected:
-    unsigned                 remap_flags_;   ///< remapping status
-    plane_octet_matrix_type  remap_matrix1_; ///< octet remap table 1
-    plane_octet_matrix_type  remap_matrix2_; ///< octet remap table 2
+    unsigned                  remap_flags_;   ///< remapping status
+    slice_octet_matrix_type  remap_matrix1_; ///< octet remap table 1
+    slice_octet_matrix_type  remap_matrix2_; ///< octet remap table 2
 };
 
 //---------------------------------------------------------------------
@@ -1682,8 +1682,8 @@ void str_sparse_vector<CharType, BV, MAX_STR_SIZE>::calc_octet_stat(
 
 template<class CharType, class BV, unsigned MAX_STR_SIZE>
 void str_sparse_vector<CharType, BV, MAX_STR_SIZE>::build_octet_remap(
-            plane_octet_matrix_type& octet_remap_matrix1,
-            plane_octet_matrix_type& octet_remap_matrix2,
+            slice_octet_matrix_type& octet_remap_matrix1,
+            slice_octet_matrix_type& octet_remap_matrix2,
             octet_freq_matrix_type& octet_occupancy_matrix)
 {
     octet_remap_matrix1.init(true); // init and set-zero
@@ -1697,7 +1697,7 @@ void str_sparse_vector<CharType, BV, MAX_STR_SIZE>::build_octet_remap(
         unsigned char* remap_row1 = octet_remap_matrix1.row(i);
         unsigned char* remap_row2 = octet_remap_matrix2.row(i);
 
-        const typename plane_octet_matrix_type::size_type row_size =
+        const typename slice_octet_matrix_type::size_type row_size =
                                              octet_occupancy_matrix.cols();
         for (unsigned remap_code = 1; true; ++remap_code)
         {
@@ -1749,7 +1749,7 @@ bool str_sparse_vector<CharType, BV, MAX_STR_SIZE>::remap_tosv(
        value_type*   BMRESTRICT     sv_str,
        size_type                    buf_size,
        const value_type* BMRESTRICT str,
-       const plane_octet_matrix_type& BMRESTRICT octet_remap_matrix2) BMNOEXCEPT
+       const slice_octet_matrix_type& BMRESTRICT octet_remap_matrix2) BMNOEXCEPT
 {
     for (unsigned i = 0; i < buf_size; ++i)
     {
@@ -1777,7 +1777,7 @@ bool str_sparse_vector<CharType, BV, MAX_STR_SIZE>::remap_fromsv(
          value_type* BMRESTRICT str,
          size_type         buf_size,
          const value_type* BMRESTRICT sv_str,
-         const plane_octet_matrix_type& BMRESTRICT octet_remap_matrix1
+         const slice_octet_matrix_type& BMRESTRICT octet_remap_matrix1
          ) BMNOEXCEPT
 {
     for (unsigned i = 0; i < buf_size; ++i)
@@ -1910,7 +1910,7 @@ template<class CharType, class BV, unsigned MAX_STR_SIZE>
 void str_sparse_vector<CharType, BV, MAX_STR_SIZE>::copy_range(
                 const str_sparse_vector<CharType, BV, MAX_STR_SIZE>& sv,
                 size_type left, size_type right,
-                bm::null_support splice_null)
+                bm::null_support slice_null)
 {
     if (left > right)
         bm::xor_swap(left, right);
@@ -1920,7 +1920,7 @@ void str_sparse_vector<CharType, BV, MAX_STR_SIZE>::copy_range(
     remap_matrix1_ = sv.remap_matrix1_;
     remap_matrix2_ = sv.remap_matrix2_;
 
-    this->copy_range_planes(sv, left, right, splice_null);
+    this->copy_range_slices(sv, left, right, slice_null);
     this->resize(sv.size());
 }
 
@@ -1946,7 +1946,7 @@ str_sparse_vector<CharType, BV, MAX_STR_SIZE>::merge(str_sparse_vector<CharType,
     }
 
     bvector_type* bv_null = this->get_null_bvect();
-    unsigned planes = bv_null ? this->stored_planes() : this->planes();
+    unsigned planes = bv_null ? this->stored_slices() : this->slices();
 
     this->merge_matr(str_sv.bmatr_, planes);
 
@@ -1963,11 +1963,11 @@ str_sparse_vector<CharType, BV, MAX_STR_SIZE>::merge(str_sparse_vector<CharType,
 template<class CharType, class BV, unsigned MAX_STR_SIZE>
 void str_sparse_vector<CharType, BV, MAX_STR_SIZE>::keep_range(
                 size_type left, size_type right,
-                bm::null_support splice_null)
+                bm::null_support slice_null)
 {
     if (right < left)
         bm::xor_swap(left, right);
-    this->keep_range_no_check(left, right, splice_null);
+    this->keep_range_no_check(left, right, slice_null);
 }
 
 //---------------------------------------------------------------------

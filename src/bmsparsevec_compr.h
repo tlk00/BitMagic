@@ -58,10 +58,10 @@ template<class Val, class SV>
 class rsc_sparse_vector
 {
 public:
-    enum bit_planes
+    enum bit_slices
     {
-        sv_planes = (sizeof(Val) * 8 + 1),
-        sv_value_planes = (sizeof(Val) * 8)
+        sv_slices = (sizeof(Val) * 8 + 1),
+        sv_value_slices = (sizeof(Val) * 8)
     };
 
     typedef Val                                      value_type;
@@ -608,7 +608,7 @@ public:
     ///@{
 
     /*!
-        \brief run memory optimization for all vector planes
+        \brief run memory optimization for all vector slices
         \param temp_block - pre-allocated memory block to avoid unnecessary re-allocs
         \param opt_mode - requested compression depth
         \param stat - memory allocation statistics after optimization
@@ -619,12 +619,12 @@ public:
         statistics* stat = 0);
     
     /*! \brief resize to zero, free memory
-        @param free_mem - free bit vector planes if true
+        @param free_mem - free bit vector slices if true
     */
     void clear_all(bool free_mem) BMNOEXCEPT;
 
     /*! \brief resize to zero, free memory
-        @param free_mem - free bit vector planes if true
+        @param free_mem - free bit vector slices if true
     */
     void clear() BMNOEXCEPT { clear_all(true); }
 
@@ -703,29 +703,29 @@ public:
 
     /*!
         \brief get access to bit-plane, function checks and creates a plane
-        \return bit-vector for the bit plane
+        \return bit-vector for the bit slice
     */
-    bvector_type_const_ptr get_plane(unsigned i) const BMNOEXCEPT
-        { return sv_.get_plane(i); }
+    bvector_type_const_ptr get_slice(unsigned i) const BMNOEXCEPT
+        { return sv_.get_slice(i); }
 
-    bvector_type_ptr get_create_splice(unsigned i)
-        { return sv_.get_create_splice(i); }
+    bvector_type_ptr get_create_slice(unsigned i)
+        { return sv_.get_create_slice(i); }
     
     /*!
-        Number of effective bit-planes in the value type
+        Number of effective bit-slices in the value type
     */
-    unsigned effective_planes() const BMNOEXCEPT
-        { return sv_.effective_planes(); }
+    unsigned effective_slices() const BMNOEXCEPT
+        { return sv_.effective_slices(); }
     
     /*!
-        \brief get total number of bit-planes in the vector
+        \brief get total number of bit-slices in the vector
     */
-    static unsigned planes() BMNOEXCEPT
-        { return sparse_vector_type::planes(); }
+    static unsigned slices() BMNOEXCEPT
+        { return sparse_vector_type::slices(); }
 
-    /** Number of stored bit-planes (value planes + extra */
-    static unsigned stored_planes()
-        { return sparse_vector_type::stored_planes(); }
+    /** Number of stored bit-slices (value slices + extra */
+    static unsigned stored_slices()
+        { return sparse_vector_type::stored_slices(); }
 
     /*!
         \brief access dense vector
@@ -758,9 +758,9 @@ public:
     ///@}
     
 protected:
-    enum octet_planes
+    enum octet_slices
     {
-        sv_octet_planes = sizeof(value_type)
+        sv_octet_slices = sizeof(value_type)
     };
 
     /*!
@@ -850,7 +850,7 @@ rsc_sparse_vector<Val, SV>::rsc_sparse_vector(bm::null_support null_able,
 : sv_(null_able, ap, bv_max_size, alloc), in_sync_(false)
 {
     BM_ASSERT(null_able == bm::use_null);
-    BM_ASSERT(int(sv_value_planes) == int(SV::sv_value_planes));
+    BM_ASSERT(int(sv_value_slices) == int(SV::sv_value_slices));
     size_ = max_id_ = 0;
     construct_rs_index();
 }
@@ -895,7 +895,7 @@ rsc_sparse_vector<Val, SV>::rsc_sparse_vector(
                           const rsc_sparse_vector<Val, SV>& csv)
 : sv_(csv.sv_), size_(csv.size_), max_id_(csv.max_id_), in_sync_(csv.in_sync_)
 {
-    BM_ASSERT(int(sv_value_planes) == int(SV::sv_value_planes));
+    BM_ASSERT(int(sv_value_slices) == int(SV::sv_value_slices));
     
     construct_rs_index();
     if (in_sync_)
@@ -1130,13 +1130,13 @@ void rsc_sparse_vector<Val, SV>::load_from(
         
         bm::rank_compressor<bvector_type> rank_compr; // re-used for planes
         
-        unsigned src_planes = sv_src.planes();
+        unsigned src_planes = sv_src.slices();
         for (unsigned i = 0; i < src_planes; ++i)
         {
-            const bvector_type* bv_src_plane = sv_src.get_plane(i);
+            const bvector_type* bv_src_plane = sv_src.get_slice(i);
             if (bv_src_plane)
             {
-                bvector_type* bv_plane = sv_.get_create_splice(i);
+                bvector_type* bv_plane = sv_.get_create_slice(i);
                 rank_compr.compress(*bv_plane, *bv_null, *bv_src_plane);
             }
         } // for
@@ -1167,16 +1167,15 @@ void rsc_sparse_vector<Val, SV>::load_to(sparse_vector_type& sv) const
     
     bm::rank_compressor<bvector_type> rank_compr; // re-used for planes
 
-    unsigned src_planes = sv_.planes();
+    unsigned src_planes = sv_.slices();
     for (unsigned i = 0; i < src_planes; ++i)
     {
-        const bvector_type* bv_src_plane = sv_.get_plane(i);
-        if (bv_src_plane)
+        if (const bvector_type* bv_src_plane = sv_.get_slice(i))
         {
-            bvector_type* bv_plane = sv.get_create_splice(i);
+            bvector_type* bv_plane = sv.get_create_slice(i);
             rank_compr.decompress(*bv_plane, *bv_null, *bv_src_plane);
         }
-    } // for
+    } // for i
     sv.resize(this->size());
 }
 
@@ -1192,9 +1191,7 @@ void rsc_sparse_vector<Val, SV>::sync(bool force)
     bv_null->build_rs_index(bv_blocks_ptr_); // compute popcount prefix list
  
     if (force)
-    {
         sync_size();
-    }
     in_sync_ = true;
 }
 

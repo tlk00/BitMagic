@@ -273,8 +273,8 @@ class base_sparse_vector
 public:
     enum bit_planes
     {
-        sv_planes = (sizeof(Val) * 8 * MAX_SIZE + 1),
-        sv_value_planes = (sizeof(Val) * 8 * MAX_SIZE)
+        sv_slices = (sizeof(Val) * 8 * MAX_SIZE + 1),
+        sv_value_slices = (sizeof(Val) * 8 * MAX_SIZE)
     };
 
     enum vector_capacity
@@ -311,7 +311,7 @@ public:
     {
         bmatr_.swap(bsv.bmatr_);
         size_ = bsv.size_;
-        effective_planes_ = bsv.effective_plane_;
+        effective_slices_ = bsv.effective_slices_;
         bsv.size_ = 0;
     }
 #endif
@@ -325,7 +325,7 @@ public:
     void clear_range(size_type left, size_type right, bool set_null);
 
     void keep_range_no_check(size_type left, size_type right,
-                             bm::null_support splice_null);
+                             bm::null_support slice_null);
 
     /*! \brief resize to zero, free memory
         @param free_mem - fully destroys the plane vectors if true
@@ -386,33 +386,33 @@ public:
         \brief get access to bit-plain, function checks and creates a plane
         \return bit-vector for the bit plain
     */
-    bvector_type_ptr get_create_splice(unsigned i);
+    bvector_type_ptr get_create_slice(unsigned i);
 
     /*!
         \brief get read-only access to bit-plane
         \return bit-vector for the bit plane or NULL
     */
     bvector_type_const_ptr
-    get_plane(unsigned i) const BMNOEXCEPT { return bmatr_.row(i); }
+    get_slice(unsigned i) const BMNOEXCEPT { return bmatr_.row(i); }
 
     /*!
         \brief get total number of bit-planes in the vector
     */
-    static unsigned planes() BMNOEXCEPT { return value_bits(); }
+    static unsigned slices() BMNOEXCEPT { return value_bits(); }
 
     /** Number of stored bit-planes (value planes + extra */
-    static unsigned stored_planes() BMNOEXCEPT { return value_bits()+1; }
+    static unsigned stored_slices() BMNOEXCEPT { return value_bits()+1; }
 
 
     /** Number of effective bit-planes in the value type */
-    unsigned effective_planes() const BMNOEXCEPT
-                                { return effective_planes_ + 1; }
+    unsigned effective_slices() const BMNOEXCEPT
+                                { return effective_slices_ + 1; }
 
     /*!
         \brief get access to bit-plane as is (can return NULL)
     */
-    bvector_type_ptr plane(unsigned i) BMNOEXCEPT { return bmatr_.get_row(i); }
-    bvector_type_const_ptr plane(unsigned i) const BMNOEXCEPT
+    bvector_type_ptr slice(unsigned i) BMNOEXCEPT { return bmatr_.get_row(i); }
+    bvector_type_const_ptr slice(unsigned i) const BMNOEXCEPT
                                     { return bmatr_.get_row(i); }
 
     bvector_type* get_null_bvect() { return bmatr_.get_row(this->null_plane());}
@@ -420,7 +420,7 @@ public:
     /*!
         \brief free memory in bit-plane
     */
-    void free_plane(unsigned i) { bmatr_.destruct_row(i); }
+    void free_slice(unsigned i) { bmatr_.destruct_row(i); }
     
     /*!
         return mask of allocated bit-planes
@@ -431,7 +431,7 @@ public:
         @return 64-bit mask
         @internal
     */
-    bm::id64_t get_planes_mask(unsigned element_idx) const BMNOEXCEPT;
+    bm::id64_t get_slice_mask(unsigned element_idx) const BMNOEXCEPT;
 
     /*!
         get read-only access to inetrnal bit-matrix
@@ -519,7 +519,7 @@ protected:
 
     /** Number of total bit-planes in the value type*/
     static constexpr unsigned value_bits() BMNOEXCEPT
-        { return base_sparse_vector<Val, BV, MAX_SIZE>::sv_value_planes; }
+        { return base_sparse_vector<Val, BV, MAX_SIZE>::sv_value_slices; }
     
     /** plane index for the "NOT NULL" flags plane */
     static constexpr unsigned null_plane() BMNOEXCEPT { return value_bits(); }
@@ -530,11 +530,11 @@ protected:
     /**
         Perform copy_range() on a set of planes
     */
-    void copy_range_planes(
+    void copy_range_slices(
         const base_sparse_vector<Val, BV, MAX_SIZE>& bsv,
         typename base_sparse_vector<Val, BV, MAX_SIZE>::size_type left,
         typename base_sparse_vector<Val, BV, MAX_SIZE>::size_type right,
-        bm::null_support splice_null);
+        bm::null_support slice_null);
 
     /**
         Convert signed value type to unsigned representation
@@ -547,9 +547,9 @@ protected:
 
 protected:
     bmatrix_type             bmatr_;              ///< bit-transposed matrix
-    unsigned_value_type      splice_mask_;        ///< splice presence bit-mask
+    unsigned_value_type      slice_mask_;        ///< slice presence bit-mask
     size_type                size_;               ///< array size
-    unsigned                 effective_planes_;
+    unsigned                 effective_slices_;
 };
 
 //---------------------------------------------------------------------
@@ -638,27 +638,6 @@ basic_bmatrix<BV>::get_row(size_type i) BMNOEXCEPT
 }
 
 //---------------------------------------------------------------------
-/*
-template<typename BV>
-bool basic_bmatrix<BV>::test_4rows(unsigned j) const BMNOEXCEPT
-{
-    BM_ASSERT((j + 4) <= rsize_);
-#if defined(BM64_SSE4)
-        __m128i w0 = _mm_loadu_si128((__m128i*)(bv_rows_ + j));
-        __m128i w1 = _mm_loadu_si128((__m128i*)(bv_rows_ + j + 2));
-        w0 = _mm_or_si128(w0, w1);
-        return !_mm_testz_si128(w0, w0);
-#elif defined(BM64_AVX2) || defined(BM64_AVX512)
-        __m256i w0 = _mm256_loadu_si256((__m256i*)(bv_rows_ + j));
-        return !_mm256_testz_si256(w0, w0);
-#else
-        bool b = bv_rows_[j + 0] || bv_rows_[j + 1] ||
-                 bv_rows_[j + 2] || bv_rows_[j + 3];
-        return b;
-#endif
-}
-*/
-//---------------------------------------------------------------------
 
 template<typename BV>
 void basic_bmatrix<BV>::copy_from(const basic_bmatrix<BV>& bbm)
@@ -677,14 +656,11 @@ void basic_bmatrix<BV>::copy_from(const basic_bmatrix<BV>& bbm)
         bv_rows_ = (bvector_type_ptr*)alloc_.alloc_ptr(rsize);
         if (!bv_rows_)
             throw_bad_alloc();
-        else
+        rsize_ = rsize;
+        for (size_type i = 0; i < rsize_; ++i)
         {
-            rsize_ = rsize;
-            for (size_type i = 0; i < rsize_; ++i)
-            {
-                const bvector_type_ptr bv = bbm.bv_rows_[i];
-                bv_rows_[i] = bv ?  construct_bvector(bv) : 0;
-            }
+            const bvector_type_ptr bv = bbm.bv_rows_[i];
+            bv_rows_[i] = bv ?  construct_bvector(bv) : 0;
         }
     }
 
@@ -701,12 +677,9 @@ void basic_bmatrix<BV>::allocate_rows(size_type rsize)
         bv_rows_ = (bvector_type_ptr*)alloc_.alloc_ptr(unsigned(rsize));
         if (!bv_rows_)
             throw_bad_alloc();
-        else
-        {
-            rsize_ = rsize;
-            for (size_type i = 0; i < rsize; ++i)
-                bv_rows_[i] = 0;
-        }
+        rsize_ = rsize;
+        for (size_type i = 0; i < rsize; ++i)
+            bv_rows_[i] = 0;
     }
 }
 
@@ -717,7 +690,6 @@ void basic_bmatrix<BV>::free_rows() BMNOEXCEPT
 {
     for (size_type i = 0; i < rsize_; ++i)
     {
-//        bvector_type_ptr bv = bv_rows_[i];
         if (bvector_type_ptr bv = bv_rows_[i])
         {
             destruct_bvector(bv);
@@ -793,7 +765,6 @@ template<typename BV>
 void basic_bmatrix<BV>::destruct_row(size_type row)
 {
     BM_ASSERT(row < rsize_);
-//    bvector_type_ptr bv = bv_rows_[row];
     if (bvector_type_ptr bv = bv_rows_[row])
     {
         destruct_bvector(bv);
@@ -807,7 +778,6 @@ template<typename BV>
 void basic_bmatrix<BV>::clear_row(size_type row, bool free_mem)
 {
     BM_ASSERT(row < rsize_);
-//    bvector_type_ptr bv = bv_rows_[row];
     if (bvector_type_ptr bv = bv_rows_[row])
     {
         if (free_mem)
@@ -868,13 +838,8 @@ const bm::word_t*
 basic_bmatrix<BV>::get_block(size_type p,
                              unsigned i, unsigned j) const BMNOEXCEPT
 {
-//    bvector_type_const_ptr bv = this->row(p);
     if (bvector_type_const_ptr bv = this->row(p))
-    {
-        const typename bvector_type::blocks_manager_type& bman =
-                                            bv->get_blocks_manager();
-        return bman.get_block_ptr(i, j);
-    }
+        return bv->get_blocks_manager().get_block_ptr(i, j);
     return 0;
 }
 
@@ -887,7 +852,6 @@ void basic_bmatrix<BV>::clear_planes_range(
 {
     for (unsigned p = plane_from; p < plane_until; ++p)
     {
-//        bvector_type* bv = this->get_row(p);
         if (bvector_type* bv = this->get_row(p)) // TODO: optimize cleaning
             bv->clear_bit_no_check(idx);
     } // for p
@@ -908,7 +872,6 @@ void basic_bmatrix<BV>::set_octet(size_type pos,
     size_type row_end = row + 8;
     for (; row < row_end; ++row)
     {
-//        bvector_type* bv = this->get_row(row);
         if (bvector_type* bv = this->get_row(row); oct & 1u)
         {
             if (!bv)
@@ -948,7 +911,6 @@ void basic_bmatrix<BV>::insert_octet(size_type pos,
     size_type row_end = row + 8;
     for (; row < row_end; ++row)
     {
-        //bvector_type* bv = this->get_row(row);
         if (bvector_type* bv = this->get_row(row); oct & 1u)
         {
             if (!bv)
@@ -1167,7 +1129,6 @@ void basic_bmatrix<BV>::optimize(bm::word_t* temp_block,
 
     for (unsigned k = 0; k < rsize_; ++k)
     {
-//        bvector_type* bv = get_row(k);
         if (bvector_type* bv = get_row(k))
         {
             typename bvector_type::statistics stbv;
@@ -1186,7 +1147,6 @@ void basic_bmatrix<BV>::optimize_block(block_idx_type nb)
 {
     for (unsigned k = 0; k < rsize_; ++k)
     {
-//        bvector_type* bv = get_row(k);
         if (bvector_type* bv = get_row(k))
         {
             unsigned i, j;
@@ -1206,10 +1166,10 @@ void basic_bmatrix<BV>::optimize_block(block_idx_type nb)
 
 template<class Val, class BV, unsigned MAX_SIZE>
 base_sparse_vector<Val, BV, MAX_SIZE>::base_sparse_vector()
-: bmatr_(sv_planes, allocation_policy_type(), bm::id_max, allocator_type()),
-  splice_mask_(0),
+: bmatr_(sv_slices, allocation_policy_type(), bm::id_max, allocator_type()),
+  slice_mask_(0),
   size_(0),
-  effective_planes_(0)
+  effective_slices_(0)
 {
 }
 
@@ -1221,16 +1181,16 @@ base_sparse_vector<Val, BV, MAX_SIZE>::base_sparse_vector(
         allocation_policy_type  ap,
         size_type               bv_max_size,
         const allocator_type&       alloc)
-: bmatr_(sv_planes, ap, bv_max_size, alloc),
-  splice_mask_(0),
+: bmatr_(sv_slices, ap, bv_max_size, alloc),
+  slice_mask_(0),
   size_(0),
-  effective_planes_(0)
+  effective_slices_(0)
 {
     if (null_able == bm::use_null)
     {
         unsigned i = null_plane();
         bmatr_.construct_row(i)->init();
-        splice_mask_ |= unsigned_value_type(1) << i;
+        slice_mask_ |= unsigned_value_type(1) << i;
 
     }
 }
@@ -1241,9 +1201,9 @@ template<class Val, class BV, unsigned MAX_SIZE>
 base_sparse_vector<Val, BV, MAX_SIZE>::base_sparse_vector(
                         const base_sparse_vector<Val, BV, MAX_SIZE>& bsv)
 : bmatr_(bsv.bmatr_),
-  splice_mask_(bsv.splice_mask_),
+  slice_mask_(bsv.slice_mask_),
   size_(bsv.size_),
-  effective_planes_(bsv.effective_planes_)
+  effective_slices_(bsv.effective_slices_)
 {
 }
 
@@ -1254,10 +1214,10 @@ void base_sparse_vector<Val, BV, MAX_SIZE>::copy_from(
                 const base_sparse_vector<Val, BV, MAX_SIZE>& bsv)
 {
     resize(bsv.size());
-    effective_planes_ = bsv.effective_planes_;
+    effective_slices_ = bsv.effective_slices_;
 
     unsigned ni = this->null_plane();
-    unsigned planes = bsv.stored_planes();
+    unsigned planes = bsv.stored_slices();
     for (size_type i = 0; i < planes; ++i)
     {
         bvector_type* bv = bmatr_.get_row(i);
@@ -1275,12 +1235,12 @@ void base_sparse_vector<Val, BV, MAX_SIZE>::copy_from(
         if (bv)
         {
             bmatr_.destruct_row(i);
-            splice_mask_ &= ~(unsigned_value_type(1) << i);
+            slice_mask_ &= ~(unsigned_value_type(1) << i);
         }
         if (bv_src)
         {
             bmatr_.construct_row(i, *bv_src);
-            splice_mask_ |= (unsigned_value_type(1) << i);
+            slice_mask_ |= (unsigned_value_type(1) << i);
         }
     } // for i
 }
@@ -1296,12 +1256,8 @@ void base_sparse_vector<Val, BV, MAX_SIZE>::merge_matr(
         bvector_type* arg_bv = bmatr.get_row(j);
         if (arg_bv)
         {
-            /*
-            bvector_type* bv = this->bmatr_.get_row(j);
-            if (!bv) // TODO: borrow the whole arg_bv vector
-                bv = this->get_create_splice(j); */
-            bvector_type* bv = this->get_create_splice(j);
-            splice_mask_ |= (unsigned_value_type(1) << j);
+            bvector_type* bv = this->get_create_slice(j);
+            slice_mask_ |= (unsigned_value_type(1) << j);
             bv->merge(*arg_bv);
         }
     } // for j
@@ -1316,9 +1272,9 @@ void base_sparse_vector<Val, BV, MAX_SIZE>::swap(
     if (this != &bsv)
     {
         bmatr_.swap(bsv.bmatr_);
-        bm::xor_swap(splice_mask_, bsv.splice_mask_);
+        bm::xor_swap(slice_mask_, bsv.slice_mask_);
         bm::xor_swap(size_, bsv.size_);
-        bm::xor_swap(effective_planes_, bsv.effective_planes_);
+        bm::xor_swap(effective_slices_, bsv.effective_slices_);
     }
 }
 
@@ -1327,11 +1283,10 @@ void base_sparse_vector<Val, BV, MAX_SIZE>::swap(
 template<class Val, class BV, unsigned MAX_SIZE>
 void base_sparse_vector<Val, BV, MAX_SIZE>::clear_all(bool free_mem) BMNOEXCEPT
 {
-    unsigned planes = value_bits();
-    for (size_type i = 0; i < planes; ++i)
+    unsigned slices = value_bits();
+    for (size_type i = 0; i < slices; ++i)
         bmatr_.clear_row(i, free_mem);
-    splice_mask_ = size_ = 0;
-//    bvector_type* bv_null = get_null_bvect();
+    slice_mask_ = size_ = 0;
     if (bvector_type* bv_null = get_null_bvect())
         bv_null->clear(true);
 }
@@ -1349,14 +1304,12 @@ void base_sparse_vector<Val, BV, MAX_SIZE>::clear_range(
     unsigned planes = value_bits();
     for (unsigned i = 0; i < planes; ++i)
     {
-//        bvector_type* bv = this->bmatr_.get_row(i);
         if (bvector_type* bv = this->bmatr_.get_row(i))
             bv->set_range(left, right, false);
     } // for i
     
     if (set_null)
     {
-//        bvector_type* bv_null = this->get_null_bvect();
         if (bvector_type* bv_null = this->get_null_bvect())
             bv_null->set_range(left, right, false);
     }
@@ -1367,13 +1320,13 @@ void base_sparse_vector<Val, BV, MAX_SIZE>::clear_range(
 template<class Val, class BV, unsigned MAX_SIZE>
 void base_sparse_vector<Val, BV, MAX_SIZE>::keep_range_no_check(
                         size_type left, size_type right,
-                        bm::null_support splice_null)
+                        bm::null_support slice_null)
 {
     if (left)
-        this->clear_range(0, left-1, (splice_null == bm::use_null));
+        this->clear_range(0, left-1, (slice_null == bm::use_null));
     size_type sz = size();
     if (right < sz)
-        this->clear_range(right + 1, sz, (splice_null == bm::use_null));
+        this->clear_range(right + 1, sz, (slice_null == bm::use_null));
 }
 
 //---------------------------------------------------------------------
@@ -1419,19 +1372,19 @@ void base_sparse_vector<Val, BV, MAX_SIZE>::insert_null(size_type idx,
 
 template<class Val, class BV, unsigned MAX_SIZE>
 typename base_sparse_vector<Val, BV, MAX_SIZE>::bvector_type_ptr
-base_sparse_vector<Val, BV, MAX_SIZE>::get_create_splice(unsigned i)
+base_sparse_vector<Val, BV, MAX_SIZE>::get_create_slice(unsigned i)
 {
     bvector_type_ptr bv = bmatr_.construct_row(i);
-    splice_mask_ |= (unsigned_value_type(1) << i);
-    if (i > effective_planes_ && i < value_bits())
-        effective_planes_ = i;
+    slice_mask_ |= (unsigned_value_type(1) << i);
+    if (i > effective_slices_ && i < value_bits())
+        effective_slices_ = i;
     return bv;
 }
 
 //---------------------------------------------------------------------
 
 template<class Val, class BV, unsigned MAX_SIZE>
-bm::id64_t base_sparse_vector<Val, BV, MAX_SIZE>::get_planes_mask(
+bm::id64_t base_sparse_vector<Val, BV, MAX_SIZE>::get_slice_mask(
                                         unsigned element_idx) const BMNOEXCEPT
 {
     BM_ASSERT(element_idx < MAX_SIZE);
@@ -1441,10 +1394,10 @@ bm::id64_t base_sparse_vector<Val, BV, MAX_SIZE>::get_planes_mask(
     unsigned bidx = 0;
     for (unsigned i = element_idx * planes; i < (element_idx+1) * planes; i+=4)
     {
-        mask |= get_plane(i+0) ? (mask1 << (bidx+0)) : 0ull;
-        mask |= get_plane(i+1) ? (mask1 << (bidx+1)) : 0ull;
-        mask |= get_plane(i+2) ? (mask1 << (bidx+2)) : 0ull;
-        mask |= get_plane(i+3) ? (mask1 << (bidx+3)) : 0ull;
+        mask |= get_slice(i+0) ? (mask1 << (bidx+0)) : 0ull;
+        mask |= get_slice(i+1) ? (mask1 << (bidx+1)) : 0ull;
+        mask |= get_slice(i+2) ? (mask1 << (bidx+2)) : 0ull;
+        mask |= get_slice(i+3) ? (mask1 << (bidx+3)) : 0ull;
         bidx += 4;
     } // for i
     return mask;
@@ -1464,8 +1417,8 @@ void base_sparse_vector<Val, BV, MAX_SIZE>::optimize(bm::word_t* temp_block,
     
     bvector_type* bv_null = this->get_null_bvect();
     
-    unsigned stored_planes = this->stored_planes();
-    for (unsigned j = 0; j < stored_planes; ++j)
+    unsigned stored_slices = this->stored_slices();
+    for (unsigned j = 0; j < stored_slices; ++j)
     {
         bvector_type* bv = this->bmatr_.get_row(j);
         if (bv && (bv != bv_null)) // protect the NULL vector from de-allocation
@@ -1474,7 +1427,7 @@ void base_sparse_vector<Val, BV, MAX_SIZE>::optimize(bm::word_t* temp_block,
             if (!bv->any())  // empty vector?
             {
                 this->bmatr_.destruct_row(j);
-                splice_mask_ &= ~(unsigned_value_type(1) << j);
+                slice_mask_ &= ~(unsigned_value_type(1) << j);
                 continue;
             }
         }
@@ -1488,13 +1441,10 @@ void base_sparse_vector<Val, BV, MAX_SIZE>::calc_stat(
                     typename bvector_type::statistics* st) const BMNOEXCEPT
 {
     BM_ASSERT(st);
-    
     st->reset();
-
-    unsigned stored_planes = this->stored_planes();
-    for (unsigned j = 0; j < stored_planes; ++j)
+    unsigned stored_slices = this->stored_slices();
+    for (unsigned j = 0; j < stored_slices; ++j)
     {
-//        const bvector_type* bv = this->bmatr_.row(j);
         if (const bvector_type* bv = this->bmatr_.row(j))
         {
             typename bvector_type::statistics stbv;
@@ -1508,7 +1458,7 @@ void base_sparse_vector<Val, BV, MAX_SIZE>::calc_stat(
     } // for j
     
     // header accounting
-    st->max_serialize_mem += 1 + 1 + 1 + 1 + 8 + (8 * this->stored_planes());
+    st->max_serialize_mem += 1 + 1 + 1 + 1 + 8 + (8 * this->stored_slices());
     st->max_serialize_mem += 1 + 8; // extra header fields for large bit-matrixes
 }
 
@@ -1518,9 +1468,8 @@ template<class Val, class BV, unsigned MAX_SIZE>
 void base_sparse_vector<Val, BV, MAX_SIZE>::clear_value_planes_from(
                                     unsigned plane_idx, size_type idx)
 {
-    for (unsigned i = plane_idx; i < sv_value_planes; ++i)
+    for (unsigned i = plane_idx; i < sv_value_slices; ++i)
     {
-//        bvector_type* bv = this->bmatr_.get_row(i);
         if (bvector_type* bv = this->bmatr_.get_row(i))
             bv->clear_bit_no_check(idx);
     }
@@ -1532,9 +1481,8 @@ template<class Val, class BV, unsigned MAX_SIZE>
 void base_sparse_vector<Val, BV, MAX_SIZE>::insert_clear_value_planes_from(
                                         unsigned plane_idx, size_type idx)
 {
-    for (unsigned i = plane_idx; i < sv_value_planes; ++i)
+    for (unsigned i = plane_idx; i < sv_value_slices; ++i)
     {
-//        bvector_type* bv = this->bmatr_.get_row(i);
         if (bvector_type* bv = this->bmatr_.get_row(i))
             bv->insert(idx, false);
     }
@@ -1545,9 +1493,8 @@ void base_sparse_vector<Val, BV, MAX_SIZE>::insert_clear_value_planes_from(
 template<class Val, class BV, unsigned MAX_SIZE>
 void base_sparse_vector<Val, BV, MAX_SIZE>::erase_column(size_type idx)
 {
-    for (unsigned i = 0; i < sv_value_planes; ++i)
+    for (unsigned i = 0; i < sv_value_slices; ++i)
     {
-//        bvector_type* bv = this->bmatr_.get_row(i);
         if (bvector_type* bv = this->bmatr_.get_row(i))
             bv->erase(idx);
     }
@@ -1565,8 +1512,8 @@ bool base_sparse_vector<Val, BV, MAX_SIZE>::equal(
     {
         return false;
     }
-    unsigned planes = this->planes();
-    for (unsigned j = 0; j < planes; ++j)
+    unsigned slices = this->slices();
+    for (unsigned j = 0; j < slices; ++j)
     {
         const bvector_type* bv = this->bmatr_.get_row(j);
         const bvector_type* arg_bv = sv.bmatr_.get_row(j);
@@ -1615,49 +1562,29 @@ bool base_sparse_vector<Val, BV, MAX_SIZE>::equal(
 //---------------------------------------------------------------------
 
 template<class Val, class BV, unsigned MAX_SIZE>
-void base_sparse_vector<Val, BV, MAX_SIZE>::copy_range_planes(
+void base_sparse_vector<Val, BV, MAX_SIZE>::copy_range_slices(
         const base_sparse_vector<Val, BV, MAX_SIZE>& bsv,
         typename base_sparse_vector<Val, BV, MAX_SIZE>::size_type left,
         typename base_sparse_vector<Val, BV, MAX_SIZE>::size_type right,
-        bm::null_support splice_null)
+        bm::null_support slice_null)
 {
-/*
-    bvector_type* bv_null = get_null_bvect();
-    const bvector_type* bv_null_arg = bsv.get_null_bvector();
-    unsigned planes;
-    if (bv_null)
-    {
-        planes = this->stored_planes();
-        if (bv_null_arg && (splice_null == bm::use_null))
-            bv_null->copy_range(*bv_null_arg, left, right);
-        --planes;
-    }
-    else
-        planes = this->planes();
-*/
-    unsigned planes;
+    unsigned spli;
     if (bvector_type* bv_null = get_null_bvect())
     {
         const bvector_type* bv_null_arg = bsv.get_null_bvector();
-        planes = this->stored_planes();
-        if (bv_null_arg && (splice_null == bm::use_null))
+        spli = this->stored_slices();
+        if (bv_null_arg && (slice_null == bm::use_null))
             bv_null->copy_range(*bv_null_arg, left, right);
-        --planes;
+        --spli;
     }
     else
-        planes = this->planes();
+        spli = this->slices();
 
-    for (unsigned j = 0; j < planes; ++j)
+    for (unsigned j = 0; j < spli; ++j)
     {
-        //const bvector_type* arg_bv = bsv.bmatr_.row(j);
         if (const bvector_type* arg_bv = bsv.bmatr_.row(j))
         {
-/*
-            bvector_type* bv = this->bmatr_.get_row(j);
-            if (!bv)
-                bv = this->get_create_splice(j);
-*/
-            bvector_type* bv = this->get_create_splice(j);
+            bvector_type* bv = this->get_create_slice(j);
             bv->copy_range(*arg_bv, left, right);
         }
     } // for j
@@ -1684,6 +1611,8 @@ base_sparse_vector<Val, BV, MAX_SIZE>::s2u(value_type v) BMNOEXCEPT
     else
         return v;
 }
+
+//---------------------------------------------------------------------
 
 template<class Val, class BV, unsigned MAX_SIZE>
 typename base_sparse_vector<Val, BV, MAX_SIZE>::value_type

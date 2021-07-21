@@ -741,12 +741,12 @@ void print_svector_stat(const SV& svect, bool print_sim = false)
     size_t ssize(0), octet_ssize(0);
 
     typename SV::bvector_type bv_join; // global OR of all planes
-    auto planes = svect.planes();
+    auto planes = svect.slices();
 
     unsigned octet_cnt(0), octet(0);
     for (unsigned i = 0; i < planes; ++i)
     {
-        const typename SV::bvector_type* bv_plane = svect.get_plane(i);
+        const typename SV::bvector_type* bv_plane = svect.get_slice(i);
         std::cout << i << "-" << octet_cnt << ":";
         if (bv_plane == 0)
         {
@@ -754,16 +754,14 @@ void print_svector_stat(const SV& svect, bool print_sim = false)
             bool any_else = false;
             for (unsigned j = i+1; j < planes; ++j) // look ahead
             {
-                if (svect.get_plane(j))
+                if (svect.get_slice(j))
                 {
                     any_else = true;
                     break;
                 }
             }
             if (!any_else)
-            {
                 break;
-            }
         }
         else
         {

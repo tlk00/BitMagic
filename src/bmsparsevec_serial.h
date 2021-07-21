@@ -112,8 +112,8 @@ private:
     void operator=(const sparse_vector_serial_layout&);
 protected:
     buffer_type    buf_;                       ///< serialization buffer
-    unsigned char* plane_ptrs_[SV::sv_planes]; ///< pointers on serialized bit-planes
-    size_t         plane_size_[SV::sv_planes]; ///< serialized plane size
+    unsigned char* plane_ptrs_[SV::sv_slices]; ///< pointers on serialized bit-planes
+    size_t         plane_size_[SV::sv_slices]; ///< serialized plane size
 };
 
 // -------------------------------------------------------------------------
@@ -899,10 +899,10 @@ void sparse_vector_serializer<SV>::build_plane_digest(bvector_type& digest_bv,
 {
     digest_bv.init();
     digest_bv.clear(false);
-    unsigned planes = sv.stored_planes();
+    unsigned planes = sv.stored_slices();
     for (unsigned i = 0; i < planes; ++i)
     {
-        typename SV::bvector_type_const_ptr bv = sv.get_plane(i);
+        typename SV::bvector_type_const_ptr bv = sv.get_slice(i);
         if (bv)
             digest_bv.set_bit_no_check(i);
     } // for i
@@ -929,7 +929,7 @@ void sparse_vector_serializer<SV>::serialize(const SV&  sv,
     bvs_.set_ref_vectors(0); // disable possible XOR compression for offs.bv
     bvs_.serialize(plane_digest_bv_, plane_digest_buf_);
 
-    unsigned planes = sv.stored_planes();
+    unsigned planes = sv.stored_slices();
 
     // ----------------------------------------------------
     // memory pre-reservation
@@ -987,7 +987,7 @@ void sparse_vector_serializer<SV>::serialize(const SV&  sv,
 
     for (unsigned i = 0; i < planes; ++i)
     {
-        typename SV::bvector_type_const_ptr bv = sv.get_plane(i);
+        typename SV::bvector_type_const_ptr bv = sv.get_slice(i);
         if (!bv)  // empty plane
         {
             sv_layout.set_plane(i, 0, 0);
@@ -1211,7 +1211,7 @@ void sparse_vector_deserializer<SV>::deserialize_structure(SV& sv,
         if (!off_vect_[i]) // empty vector
             continue;
 
-        bvector_type* bv = sv.get_create_splice(i);
+        bvector_type* bv = sv.get_create_slice(i);
         BM_ASSERT(bv); (void)bv;
 
     } // for
@@ -1391,7 +1391,7 @@ unsigned sparse_vector_deserializer<SV>::load_header(
         }
     #endif
 
-    unsigned sv_planes = sv.stored_planes();
+    unsigned sv_planes = sv.stored_slices();
     if (!planes || planes > sv_planes)
         raise_invalid_bitdepth();
 
@@ -1427,7 +1427,7 @@ void sparse_vector_deserializer<SV>::deserialize_planes(
         if (!offset) // empty vector
             continue;
         const unsigned char* bv_buf_ptr = buf + offset; // seek to position
-        bvector_type*  bv = sv.get_create_splice(unsigned(i));
+        bvector_type*  bv = sv.get_create_slice(unsigned(i));
         BM_ASSERT(bv);
 
         // add the vector into the XOR reference list
@@ -1503,7 +1503,7 @@ int sparse_vector_deserializer<SV>::load_null_plane(SV& sv,
         // the NULL vector just to get to the offset of remap table
 
         const unsigned char* bv_buf_ptr = buf + offset; // seek to position
-        bvector_type*  bv = sv.get_create_splice(unsigned(i));
+        bvector_type*  bv = sv.get_create_slice(unsigned(i));
 
         if (!bv_ref_ptr_)
             bv_ref_.add(bv, unsigned(i));
