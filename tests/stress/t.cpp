@@ -33952,7 +33952,7 @@ int main(int argc, char *argv[])
 
     //     StressTestAggregatorSUB(100);
     }
-
+#ifdef MEM_DEBUG
     {
         {
             bvect bv1;
@@ -33969,7 +33969,7 @@ int main(int argc, char *argv[])
             assert(!b); // leak found
         }
     }
-
+#endif
     if (is_all || is_sv)
     {
         TestSparseVector();
