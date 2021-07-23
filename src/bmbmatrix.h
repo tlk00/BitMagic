@@ -1286,7 +1286,7 @@ void base_sparse_vector<Val, BV, MAX_SIZE>::clear_all(bool free_mem) BMNOEXCEPT
     unsigned slices = value_bits();
     for (size_type i = 0; i < slices; ++i)
         bmatr_.clear_row(i, free_mem);
-    slice_mask_ = size_ = 0;
+    slice_mask_ = 0; size_ = 0;
     if (bvector_type* bv_null = get_null_bvect())
         bv_null->clear(true);
 }
