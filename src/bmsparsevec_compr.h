@@ -86,6 +86,7 @@ public:
 
     struct is_remap_support { enum trait { value = false }; };
     struct is_rsc_support { enum trait { value = true }; };
+    struct is_dynamic_splices { enum trait { value = false }; };
 
 public:
     /*! Statistical information about  memory allocation details. */
@@ -748,12 +749,22 @@ public:
     const bmatrix_type& get_bmatrix() const BMNOEXCEPT
         { return sv_.get_bmatrix(); }
 
+    /*!
+        get read-only access to inetrnal bit-matrix
+    */
+    bmatrix_type& get_bmatrix() BMNOEXCEPT
+        { return sv_.get_bmatrix(); }
+
+
     /*! Get Rank-Select index pointer
         @return NULL if sync() was not called to construct the index
         @sa sync()
     */
     const rs_index_type* get_RS() const BMNOEXCEPT
         { return in_sync_ ? bv_blocks_ptr_ : 0; }
+
+    void mark_null_idx(unsigned null_idx) BMNOEXCEPT
+        { sv_.mark_null_idx(null_idx); }
 
     ///@}
     
@@ -847,8 +858,9 @@ rsc_sparse_vector<Val, SV>::rsc_sparse_vector(bm::null_support null_able,
                                               allocation_policy_type ap,
                                               size_type bv_max_size,
                                               const allocator_type&   alloc)
-: sv_(null_able, ap, bv_max_size, alloc), in_sync_(false)
+: sv_(bm::use_null, ap, bv_max_size, alloc), in_sync_(false)
 {
+    (void) null_able;
     BM_ASSERT(null_able == bm::use_null);
     BM_ASSERT(int(sv_value_slices) == int(SV::sv_value_slices));
     size_ = max_id_ = 0;
@@ -967,12 +979,13 @@ void rsc_sparse_vector<Val, SV>::set_null(size_type idx)
     bvector_type* bv_null = sv_.get_null_bvect();
     BM_ASSERT(bv_null);
     
-    bool found = bv_null->test(idx);
+    bool found = bv_null->test(idx); // TODO: use extract bit
     if (found)
     {
+        // TODO: maybe RS-index is available
         size_type sv_idx = bv_null->count_range(0, idx);
         bv_null->clear_bit_no_check(idx);
-        sv_.erase(--sv_idx);
+        sv_.erase(--sv_idx, false/*not delete NULL vector*/);
         in_sync_ = false;
     }
 }

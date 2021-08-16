@@ -190,7 +190,7 @@ template<class SIMBATCH, class SV>
 void build_jaccard_similarity_batch(SIMBATCH& sbatch, const SV& sv)
 {
 
-    size_t planes = sv.slices();
+    size_t planes = sv.get_bmatrix().rows();//slices();
     sbatch.reserve((planes * planes) / 2);
 
     bm::distance_metric_descriptor dmd[2];

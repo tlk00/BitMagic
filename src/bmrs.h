@@ -169,8 +169,8 @@ void rs_index<BVAlloc>::init() BMNOEXCEPT
 {
     sblock_count_.resize(0);
     sblock_row_idx_.resize(0);
-    block_matr_.resize(0, 0);
-    sub_block_matr_.resize(0, 0);
+    block_matr_.resize(0, 0, false);
+    sub_block_matr_.resize(0, 0, false);
     
     total_blocks_ = sblock_rows_ = max_sblock_ = 0;
 }

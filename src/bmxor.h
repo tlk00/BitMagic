@@ -750,7 +750,7 @@ public:
                            size_type total_blocks) const
     {
         if (total_blocks)
-            matr.resize(ref_bvects_.size(), total_blocks);
+            matr.resize(ref_bvects_.size(), total_blocks, false /*no-copy*/);
         else
             matr.resize(0, 0);
     }

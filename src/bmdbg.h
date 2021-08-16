@@ -741,7 +741,7 @@ void print_svector_stat(const SV& svect, bool print_sim = false)
     size_t ssize(0), octet_ssize(0);
 
     typename SV::bvector_type bv_join; // global OR of all planes
-    auto planes = svect.slices();
+    auto planes = svect.get_bmatrix().rows();//slices();
 
     unsigned octet_cnt(0), octet(0);
     for (unsigned i = 0; i < planes; ++i)

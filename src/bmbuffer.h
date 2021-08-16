@@ -593,6 +593,12 @@ public:
             buffer_.resize(size_in_bytes);
     }
 
+    void resize(size_type rows_in, size_type cols_in, bool copy_content = true)
+    {
+        BM_ASSERT(0); // heap matrix cannot resize
+        (void) rows_in; (void) cols_in; (void) copy_content;
+    }
+
     /**
         Post construction allocation, initialization
     */
@@ -659,41 +665,6 @@ public:
     /** Get low-level buffer access */
     const buffer_type& get_buffer() const BMNOEXCEPT { return buffer_; }
 
-    /*! remapping: vect[idx] = matrix[idx, vect[idx] ]
-    */
-    template<typename VECT_TYPE>
-    void remap(VECT_TYPE* vect, size_type size) const BMNOEXCEPT
-    {
-        BM_ASSERT(size <= ROWS);
-        const unsigned char* buf = buffer_.buf();
-        for (size_type i = 0; i < size; ++i)
-        {
-            const value_type* this_row = buf + i * row_size_in_bytes;
-            VECT_TYPE v0 = vect[i];
-            BM_ASSERT(size_type(v0) < COLS);
-            value_type remap_v = this_row[unsigned(v0)];
-            vect[i] = VECT_TYPE(remap_v);
-        } // for i
-    }
-    
-    /*! zero-terminated remap: vect[idx] = matrix[idx, vect[idx] ]
-    */
-    template<typename VECT_TYPE>
-    void remapz(VECT_TYPE* vect) const BMNOEXCEPT
-    {
-        const unsigned char* buf = buffer_.buf();
-        for (size_type i = 0; i < ROWS; ++i)
-        {
-            const value_type* this_row = buf + i * row_size_in_bytes;
-            VECT_TYPE v0 = vect[i];
-            if (!v0)
-                break;
-            BM_ASSERT(size_type(v0) < COLS);
-            value_type remap_v = this_row[unsigned(v0)];
-            vect[i] = VECT_TYPE(remap_v);
-        } // for i
-    }
-
 protected:
     buffer_type     buffer_;
 };
@@ -719,11 +690,10 @@ public:
     /**
         By default object is constructed but NOT allocated.
     */
-    dynamic_heap_matrix(size_type rows_in=0, size_type cols_in=0)
+    dynamic_heap_matrix(size_type rows_in=0, size_type cols_in=0) BMNOEXCEPT
         : rows_(rows_in), cols_(cols_in),
         buffer_()
     {}
-
 
     /**
         Post construction allocation, initialization
@@ -731,17 +701,49 @@ public:
     void init(bool set_z=false)
     {
         buffer_.resize(size_in_bytes());
-        if (set_z)
+        if (set_z && size_in_bytes())
             set_zero();
     }
 
-    size_type rows() const { return rows_; }
-    size_type cols() const { return cols_; }
+    size_type rows() const BMNOEXCEPT { return rows_; }
+    size_type cols() const BMNOEXCEPT { return cols_; }
 
-    void resize(size_type rows_in, size_type cols_in)
+    void resize(size_type rows_in, size_type cols_in, bool copy_content = true)
+    {
+        if (copy_content && this->is_init())
+        {
+            dynamic_heap_matrix<value_type, bv_allocator_type>
+                                                tmp_matrix(rows_in, cols_in);
+            tmp_matrix.init(true/*set-zero*/);
+            tmp_matrix.copy_from(*this);
+            this->swap(tmp_matrix);
+            return;
+        }
+        init_resize(rows_in, cols_in);
+    }
+
+    void init_resize(size_type rows_in, size_type cols_in)
     {
         rows_ = rows_in; cols_ = cols_in;
-        buffer_.resize(size_in_bytes());
+        buffer_.resize(size_in_bytes(), false); // no-copy resize
+    }
+
+    void copy_from(const dynamic_heap_matrix<value_type, bv_allocator_type>&
+                   other) BMNOEXCEPT
+    {
+        size_type rsize = other.rows();
+        size_type csize = other.cols();
+
+        BM_ASSERT(rows_ >= rsize);
+        BM_ASSERT(cols_ >= csize);
+
+        for (size_type i = 0; i < rsize; ++i)
+        {
+            const value_type* other_row = other.row(i);
+            value_type* r = this->row(i);
+            for (size_type j = 0; j < csize; ++j)
+                r[j] = other_row[j];
+        } // for i
     }
     
     bool is_init() const BMNOEXCEPT
@@ -793,6 +795,7 @@ public:
     /** memset all buffer to all zeroes */
     void set_zero() BMNOEXCEPT
     {
+        BM_ASSERT(buffer_.data() && size_in_bytes());
         ::memset(buffer_.data(), 0, size_in_bytes());
     }
     
@@ -844,20 +847,58 @@ public:
             return false;
         if (rows() != dhm.rows())
             return false;
-        for (size_type i = 0; i < rows_; ++i)
-        {
-            for (size_type j = i+1; j < cols_; ++j)
-            {
-                const value_type& v1 = get(i,j);
-                const value_type& v2 = dhm.get(i, j);
-                if (!(v1 == v2))
-                {
-                    return false;
-                }
-            } // j
-        } // i
-        return true;
+        return equal_sz(dhm, rows(), cols());
     }
+
+    /**
+        Approximate equals on the rows-columns overlap area
+    */
+    bool equal_overlap(const dynamic_heap_matrix<Val, BVAlloc>& dhm) const BMNOEXCEPT
+    {
+        size_type c1 = cols();
+        size_type c2 = dhm.cols();
+        size_type dim_cols = c1 < c2 ? c1 : c2;
+        size_type r1 = rows();
+        size_type r2 = dhm.rows();
+        size_type dim_rows = r1 < r2 ? r1 : r2;
+
+        return equal_sz(dhm, dim_rows, dim_cols);
+
+    }
+
+    /*! remapping: vect[idx] = matrix[idx, vect[idx] ]
+    */
+    template<typename VECT_TYPE>
+    void remap(VECT_TYPE* vect, size_type size) const BMNOEXCEPT
+    {
+        BM_ASSERT(size <= rows());
+        for (size_type i = 0; i < size; ++i)
+        {
+            const value_type* this_row = row(i);//buf + i * row_size_in_bytes;
+            VECT_TYPE v0 = vect[i];
+            BM_ASSERT(size_type(v0) < cols());
+            value_type remap_v = this_row[unsigned(v0)];
+            vect[i] = VECT_TYPE(remap_v);
+        } // for i
+    }
+
+    template<typename VECT_TYPE>
+    void remapz(VECT_TYPE* vect) const BMNOEXCEPT
+    {
+        size_type rsize = rows();
+        for (size_type i = 0; i < rsize; ++i)
+        {
+            const value_type* this_row = row(i);//buf + i * row_size_in_bytes;
+            VECT_TYPE v0 = vect[i];
+            if (!v0)
+                break;
+            BM_ASSERT(size_type(v0) < cols());
+            value_type remap_v = this_row[unsigned(v0)];
+            vect[i] = VECT_TYPE(remap_v);
+        } // for i
+    }
+
+
 
     /**
         Sum of row elements
@@ -874,15 +915,30 @@ public:
     }
 
 protected:
-
+    static
+    size_type size_in_bytes(size_type rows, size_type cols) BMNOEXCEPT
+        { return sizeof(value_type) * cols * rows; }
     size_type size_in_bytes() const BMNOEXCEPT
-    {
-        return sizeof(value_type) * cols_ * rows_;
-    }
+        { return sizeof(value_type) * cols_ * rows_; }
     size_type row_size_in_bytes() const BMNOEXCEPT
+        { return sizeof(value_type) * cols_; }
+
+    bool equal_sz(const dynamic_heap_matrix<Val, BVAlloc>& dhm,
+                  size_type dim_rows, size_type dim_cols) const BMNOEXCEPT
     {
-        return sizeof(value_type) * cols_;
+        for (size_type i = 0; i < dim_rows; ++i)
+        {
+            for (size_type j = i+1; j < dim_cols; ++j)
+            {
+                const value_type& v1 = get(i,j);
+                const value_type& v2 = dhm.get(i, j);
+                if (!(v1 == v2))
+                    return false;
+            } // j
+        } // i
+        return true;
     }
+
 
 protected:
     size_type       rows_;

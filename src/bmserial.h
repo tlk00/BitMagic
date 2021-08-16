@@ -679,6 +679,7 @@ protected:
     const bv_ref_vector_type* ref_vect_;  ///< ref.vector for XOR compression
     bm::word_t*               xor_block_; ///< xor product
     bm::word_t*               or_block_;
+    size_type                 or_block_idx_;
 
     // XOR decode FSM
     //
@@ -3751,6 +3752,7 @@ deserializer<BV, DEC>::deserializer()
 : ref_vect_(0),
   xor_block_(0),
   or_block_(0),
+  or_block_idx_(0),
   is_range_set_(0)
 {
     temp_block_ = alloc_.alloc_bit_block();
@@ -4499,8 +4501,10 @@ size_t deserializer<BV, DEC>::deserialize(bvector_type&        bv,
                 }
                 if (blk)
                 {
+                    BM_ASSERT(!or_block_);
                     or_block_ = bman.deoptimize_block(nb_i);
                     bman.set_block_ptr(nb_i, 0); // borrow OR target before XOR
+                    or_block_idx_ = nb_i;
                 }
             }
             continue; // important! cont to avoid inc(i)
@@ -4627,9 +4631,25 @@ void deserializer<BV, DEC>::xor_decode(blocks_manager_type& bman)
         bm::get_block_coord(x_nb_, i0, j0);
         ref_blk = ref_bman.get_block_ptr(i0, j0);
     }
+    BM_ASSERT(!or_block_ || or_block_idx_ == x_nb_);
+
     if (!ref_blk)
     {
-        BM_ASSERT(!or_block_);
+        if (or_block_)
+        {
+            bm::word_t* blk = bman.deoptimize_block(i0, j0, true); // true to alloc
+            if (blk)
+            {
+                bm::bit_block_or(blk, or_block_);
+                alloc_.free_bit_block(or_block_);
+            }
+            else
+            {
+                bman.set_block_ptr(x_nb_, or_block_); // return OR block
+            }
+            or_block_ = 0; or_block_idx_ = 0;
+        }
+
         if (xor_chain_size_)
         {
             bm::word_t* blk = bman.deoptimize_block(i0, j0, true);
@@ -4686,11 +4706,13 @@ void deserializer<BV, DEC>::xor_decode(blocks_manager_type& bman)
         bm::bit_block_xor(blk, ref_blk);
     }
     xor_reset();
+
     if (or_block_)
     {
         bm::bit_block_or(blk, or_block_);
         alloc_.free_bit_block(or_block_);
         or_block_ = 0;
+        or_block_idx_ = 0;
     }
 
     // target BLOCK post-processing

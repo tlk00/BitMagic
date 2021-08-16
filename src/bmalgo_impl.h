@@ -1541,12 +1541,10 @@ void for_each_bit_blk(const bm::word_t* block, SIZE_TYPE offset,
     unsigned char bits[bm::set_bitscan_wave_size*32];
 
     SIZE_TYPE offs = offset;
-    unsigned cnt;
     const word_t* block_end = block + bm::set_block_size;
     do
     {
-        cnt = bm::bitscan_wave(block, bits);
-        if (cnt)
+        if (unsigned cnt = bm::bitscan_wave(block, bits))
             bit_functor.add_bits(offs, bits, cnt);
         offs += bm::set_bitscan_wave_size * 32;
         block += bm::set_bitscan_wave_size;
