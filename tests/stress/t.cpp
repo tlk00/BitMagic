@@ -91,9 +91,10 @@ using namespace std;
 
 //#define BM_STACK_COLL
 
+#ifdef BM_STACK_COLL
 std::unordered_map<void*, std::string> g_alloc_trace_map;
+#endif
 std::mutex g_trace_lock;
-
 
 class dbg_block_allocator
 {
@@ -19943,6 +19944,9 @@ bool CompareSparseVector(const SV& sv, const Vect& vect,
     }
     if (sv.is_nullable() != sv2.is_nullable())
     {
+        SV sv2_1;
+        buf = sv_lay.buf();
+        res = bm::sparse_vector_deserialize(sv2_1, buf, tb);
         cerr << "Serialization comparison of two svectors failed (NULL vector)" << endl;
         assert(0);
         exit(1);
@@ -20028,19 +20032,35 @@ bool TestEqualSparseVectors(const SV& sv1, const SV& sv2, bool detailed = true)
         std::vector<unsigned> v1(sv1.size());
         std::vector<unsigned> v1r(sv1.size());
         std::vector<unsigned> v1p(sv1.size());
+        for (size_t i = 0; i < sv1.size(); ++i)
+        {
+            v1[i] = v1r[i] = v1p[i] = rand();
+        }
         
-        sv1.extract(&v1[0], sv1.size(), 0);
-        sv1.extract_range(&v1r[0], sv1.size(), 0);
-        sv1.extract_planes(&v1p[0], sv1.size(), 0);
-        
+        auto sz1 = sv1.extract(&v1[0], sv1.size(), 0);
+        assert(sz1 == sv1.size());
+        auto sz1r = sv1.extract_range(&v1r[0], sv1.size(), 0);
+        auto sz1p = sv1.extract_planes(&v1p[0], sv1.size(), 0);
+        (void)sz1; (void)sz1r; (void)sz1p;
+
         for (unsigned i = 0; i < sv1.size(); ++i)
         {
             if (v1r[i] != v1[i] || v1p[i] != v1[i])
             {
+                unsigned v = sv1.get(i);
+                cout << "XOR diff = " << (v ^ v1[i]) << endl;
                 cerr << "TestEqualSparseVectors Extract 1 failed at:" << i
+                     << " v[i]=" << v << endl
                      << " v1[i]=" << v1[i] << " v1r[i]=" << v1r[i] << " v1p[i]=" << v1p[i]
                      << endl;
-                exit(1);
+
+                std::vector<unsigned> v2(sz1);
+                sv1.extract(&v2[0], sz1, i);
+
+                v = v2[0];
+                cerr << v << endl;
+
+                assert(0); exit(1);
             }
         } // for
     }
@@ -20065,7 +20085,7 @@ bool TestEqualSparseVectors(const SV& sv1, const SV& sv2, bool detailed = true)
                 cerr << "TestEqualSparseVectors Extract 1 failed at:" << i
                      << " v1[i]=" << v1[i] << " v1r[i]=" << v1r[i] << " v1p[i]=" << v1p[i]
                      << endl;
-                exit(1);
+                assert(0); exit(1);
             }
         } // for
     }
@@ -20073,14 +20093,23 @@ bool TestEqualSparseVectors(const SV& sv1, const SV& sv2, bool detailed = true)
     {
         SV svv1(sv1);
         SV svv2(sv2);
-        
+
         bm::null_support is_null = (sv1.is_nullable() == sv2.is_nullable()) ? bm::use_null : bm::no_null;
-        
-        bool b = svv1.equal(svv2, is_null);
+
+        bool b = sv1.equal(sv2, is_null);
         if (!b)
         {
+            b = sv1.equal(sv2, is_null);
+            assert(b);
+        }
+        
+
+        b = svv1.equal(svv2, is_null);
+        if (!b)
+        {
+            b = svv1.equal(svv2, is_null);
             cerr << "Equal, copyctor comparison failed" << endl;
-            return b;
+            assert(0);return b;
         }
 
         svv1.swap(svv2);
@@ -20088,7 +20117,7 @@ bool TestEqualSparseVectors(const SV& sv1, const SV& sv2, bool detailed = true)
         if (!b)
         {
             cerr << "Equal, copyctor-swap comparison failed" << endl;
-            return b;
+            assert(0);return b;
         }
     }
 
@@ -20105,7 +20134,7 @@ bool TestEqualSparseVectors(const SV& sv1, const SV& sv2, bool detailed = true)
             if (v1 != v2)
             {
                 cerr << "1. sparse_vector reference assignment validation failed" << endl;
-                return false;
+                assert(0);return false;
             }
         }
         bm::null_support is_null = (sv1.is_nullable() == sv3.is_nullable()) ? bm::use_null : bm::no_null;
@@ -20113,7 +20142,7 @@ bool TestEqualSparseVectors(const SV& sv1, const SV& sv2, bool detailed = true)
         if (!b)
         {
             cerr << "2. sparse_vector reference assignment validation failed" << endl;
-            return b;
+            assert(0);return b;
         }
     }
     
@@ -20129,7 +20158,7 @@ bool TestEqualSparseVectors(const SV& sv1, const SV& sv2, bool detailed = true)
             if (*it1 != *it2)
             {
                 cerr << "1. sparse_vector::const_iterator validation failed" << endl;
-                return false;
+                assert(0);return false;
             }
         }
     }}
@@ -20153,7 +20182,7 @@ bool TestEqualSparseVectors(const SV& sv1, const SV& sv2, bool detailed = true)
         if (res != 0)
         {
             cerr << "De-Serialization error in TestEqualSparseVectors()" << endl;
-            exit(1);
+            assert(0);exit(1);
         }
         
         const typename SV::bvector_type* bv_null1 = sv1.get_null_bvector();
@@ -20166,7 +20195,7 @@ bool TestEqualSparseVectors(const SV& sv1, const SV& sv2, bool detailed = true)
             if (r != 0)
             {
                 cerr << "2. NULL bvectors comparison failed" << endl;
-                exit(1);
+                assert(0);exit(1);
             }
         }
         if (bv_null1 && bv_null2)
@@ -20175,7 +20204,7 @@ bool TestEqualSparseVectors(const SV& sv1, const SV& sv2, bool detailed = true)
             if (r != 0)
             {
                 cerr << "3. NULL bvectors comparison failed" << endl;
-                exit(1);
+                assert(0); exit(1);
             }
         }
 
@@ -20189,7 +20218,7 @@ bool TestEqualSparseVectors(const SV& sv1, const SV& sv2, bool detailed = true)
         if (!sv2.equal(sv3, is_null) )
         {
             cerr << "Serialization comparison of two svectors failed (2)" << endl;
-            exit(1);
+            assert(0); exit(1);
         }
         
     
@@ -21612,7 +21641,7 @@ void TestSparseVector()
         sv2.set(5, 5);
 
         sv1.join(sv2);
-        assert(!sv1.is_nullable());
+        assert(sv1.is_nullable());
         
         if (sv1.size()!=6)
         {
@@ -21628,7 +21657,7 @@ void TestSparseVector()
                 cerr << "Sparse join cmp failed:" << sv1.size() << endl;
                 exit(1);
             }
-            assert(!sv1[i].is_null());
+            //assert(!sv1[i].is_null());
         }
     }
 
@@ -24294,7 +24323,7 @@ void TestSparseVectorScan()
 
     {
         cout << endl << "Unique search check" << endl;
-        sparse_vector_u32 sv;
+        sparse_vector_u32 sv(bm::use_null);
         rsc_sparse_vector_u32 csv(bm::use_null);
 
         bvect bv_control, bv_control2;
@@ -24375,8 +24404,8 @@ void TestSparseVectorScan()
         unsigned max_value = 128000;
         for (unsigned value = 0; value < max_value; ++value)
         {
-            sparse_vector_u32 sv;
-            sparse_vector_u64 sv_64;
+            sparse_vector_u32 sv(bm::use_null);
+            sparse_vector_u64 sv_64(bm::use_null);
             rsc_sparse_vector_u32 csv;
             
             bvect bv_control, bv_control2;
@@ -24507,7 +24536,7 @@ void TestSignedSparseVectorScan()
     }
 
     {
-        sparse_vector_i32 sv;
+        sparse_vector_i32 sv(bm::use_null);
         bvect bv_control;
         for (unsigned i = 0; i < 20; ++i)
         {
@@ -24523,7 +24552,7 @@ void TestSignedSparseVectorScan()
 
     {
         cout << endl << "Unique search check" << endl;
-        sparse_vector_i32 sv;
+        sparse_vector_i32 sv(bm::use_null);
         rsc_sparse_vector_i32 csv(bm::use_null);
 
         bvect bv_control, bv_control2;
@@ -24612,8 +24641,8 @@ void TestSignedSparseVectorScan()
         int max_value = 128000;
         for (int value = 0; value < max_value; ++value)
         {
-            sparse_vector_i32 sv;
-            sparse_vector_i64 sv_64;
+            sparse_vector_i32 sv(bm::use_null);
+            sparse_vector_i64 sv_64(bm::use_null);
             rsc_sparse_vector_i32 csv;
 
             bvect bv_control, bv_control2;
@@ -24841,7 +24870,7 @@ void TestCompressedSparseVectorAlgo()
 
     {
         cout << endl << "Unique mismatch check" << endl;
-        sparse_vector_u32 sv1, sv2;
+        sparse_vector_u32 sv1(bm::use_null), sv2(bm::use_null);
         rsc_sparse_vector_u32 csv1(bm::use_null);
         rsc_sparse_vector_u32 csv2(bm::use_null);
 
@@ -25176,7 +25205,7 @@ void TestSparseVector_Stress(unsigned count)
                 if (sv1.size() != sv3.size() || sv2.size() != sv3.size() || sv3.size() != sv4.size())
                 {
                     cerr << "Sparse join size error:" << sv1.size() << endl;
-                    exit(1);
+                    assert(0); exit(1);
                 }
                 
                 
@@ -25188,7 +25217,7 @@ void TestSparseVector_Stress(unsigned count)
                     if (v1 != v3 || v1 != v4)
                     {
                         cerr << "Sparse join cmp failed:" << v1 << "!=" << v3 << "!=" << v4 << endl;
-                        exit(1);
+                        assert(0);exit(1);
                     }
                 } // for i
                 
@@ -25196,20 +25225,20 @@ void TestSparseVector_Stress(unsigned count)
                 if (!b1)
                 {
                     cerr << "Equal 1 comparison failed" << endl;
-                    exit(1);
+                    assert(0);exit(1);
                 }
                 bool b2 = TestEqualSparseVectors(sv1, sv4, false);
                 if (!b2)
                 {
                     cerr << "Equal 2 comparison failed" << endl;
-                    exit(1);
+                    assert(0); exit(1);
                 }
                 
                 bool b3 = TestEqualSparseVectors(sv3, sv4, false);
                 if (!b3)
                 {
                     cerr << "Equal 3 comparison failed" << endl;
-                    exit(1);
+                    assert(0); exit(1);
                 }
                 
                 
@@ -25237,7 +25266,7 @@ void TestStrSparseVector()
 {
    cout << "---------------------------- Bit-plane STR sparse vector test" << endl;
 
-   typedef str_sparse_vector<char, bvect, 32> str_svect_type;
+   typedef str_sparse_vector<char, bvect, 2> str_svect_type;
 
    {
    str_sparse_vector<char, bvect, 32> str_sv0;
@@ -25251,9 +25280,67 @@ void TestStrSparseVector()
    assert(str_sv0.get_null_support() == bm::no_null);
    }
 
+    // test automatic resize
+    {
+        char str[256];
+        const char* s0 = "A";
+        const char* s1 = "jKl";
+        {
+        str_sparse_vector<char, bvect, 2> str_sv0;//(bm::use_null);
+        str_sv0.set(0, s0);
+        str_sv0.set(2, s1);
+        auto esize = str_sv0.effective_max_str();
+        assert(esize >= 4);
+
+        str_sv0.get(0, str, sizeof(str));
+        int cmp = ::strcmp(str, s0);
+        assert(cmp == 0);
+
+        str_sv0.get(2, str, sizeof(str));
+        cmp = ::strcmp(str, s1);
+        assert(cmp == 0);
+
+        bool b = str_sv0.is_null(1);
+        assert(!b);
+        b = str_sv0.is_null(0);
+        assert(!b);
+        b = str_sv0.is_null(2);
+        assert(!b);
+        }
+
+        {
+        str_sparse_vector<char, bvect, 2> str_sv0(bm::use_null);
+        const auto& bmatr = str_sv0.get_bmatrix();
+
+        assert(bmatr.get_null_idx()==16);
+        str_sv0.set(0, s0);
+        assert(bmatr.get_null_idx()==16);
+        str_sv0.set(2, s1);
+        assert(bmatr.get_null_idx()==32);
+
+
+
+        str_sv0.get(0, str, sizeof(str));
+        int cmp = ::strcmp(str, s0);
+        assert(cmp == 0);
+
+        str_sv0.get(2, str, sizeof(str));
+        cmp = ::strcmp(str, s1);
+        assert(cmp == 0);
+
+        bool b = str_sv0.is_null(1);
+        assert(b);
+        b = str_sv0.is_null(0);
+        assert(!b);
+        b = str_sv0.is_null(2);
+        assert(!b);
+        }
+
+    }
+
     // test from Andrea Asztalos
     {
-        using TSparseOptVector = bm::str_sparse_vector<char, bm::bvector<>, 200>;
+        using TSparseOptVector = bm::str_sparse_vector<char, bm::bvector<>, 2>;
         TSparseOptVector str_vector(bm::use_null);
         auto inserter = str_vector.get_back_inserter();
         *inserter = "rs_id1";
@@ -25261,17 +25348,32 @@ void TestStrSparseVector()
         *inserter = "rs_id3";
         *inserter = "VÉGE";
         inserter.flush();
-        //PrintSparseVector(str_vector, cout);
+
+        auto esize = str_vector.effective_max_str();
+        assert(esize >= 7);
+
+        char str[256];
+        str_vector.get(0, str, sizeof(str));
+        int cmp = ::strcmp(str, "rs_id1");
+        assert(cmp == 0);
+        str_vector.get(3, str, sizeof(str));
+        cmp = ::strcmp(str, "VÉGE");
+        assert(cmp == 0);
+
         BM_DECLARE_TEMP_BLOCK(tb);
         str_vector.remap();
         str_vector.optimize(tb);
+
+        str_vector.get(3, str, sizeof(str));
+        cmp = ::strcmp(str, "VÉGE");
+        assert(cmp == 0);
     }
 
    {
        const char* s0 = "AbC";
        const char* s1 = "jKl";
        char str[256];
-       str_sparse_vector<char, bvect, 32> str_sv0;
+       str_sparse_vector<char, bvect, 2> str_sv0;
        int cmp;
 
         assert(str_sv0.size()==0);
@@ -25325,27 +25427,20 @@ void TestStrSparseVector()
            assert(cmp==0);
        }
        
-       // test truncation of input string
-       {
-          str_sparse_vector<char, bvect, 3> str_sv10;
-          const char* s10 = "12345";
-          const char* s10c = "123";
-           str_sv10.set(1, s10);
-           str_sv10.get(1, str, sizeof(str));
-           cmp = ::strcmp(str, s10c);
-           assert(cmp == 0);
-       }
-       
        // test string insert
        {
-          str_sparse_vector<char, bvect, 3> str_sv10;
+          str_sparse_vector<char, bvect, 2> str_sv10;
           const char* cs0 = "10";
           const char* cs2 = "30";
           const char* cs1 = "200";
           
           str_sv10.push_back(cs0);
+          auto esize = str_sv10.effective_max_str();
+          assert(esize >= 3);
           str_sv10.push_back(cs1);
           str_sv10.insert(1, cs2);
+          esize = str_sv10.effective_max_str();
+          assert(esize >= 4);
 
            str_sv10.get(0, str, sizeof(str));
            cmp = ::strcmp(str, cs0);
@@ -25365,7 +25460,7 @@ void TestStrSparseVector()
        
        // test erase
        {
-          str_sparse_vector<char, bvect, 3> str_sv10;
+          str_sparse_vector<char, bvect, 2> str_sv10;
           const char* cs0 = "10";
           const char* cs1 = "200";
           const char* cs2 = "30";
@@ -25390,8 +25485,8 @@ void TestStrSparseVector()
 
        // test merge
        {
-          str_sparse_vector<char, bvect, 3> str_sv00;
-          str_sparse_vector<char, bvect, 3> str_sv1;
+          str_sparse_vector<char, bvect, 2> str_sv00;
+          str_sparse_vector<char, bvect, 2> str_sv1;
 
           str_sv00.push_back("0");
           str_sv00.push_back("1");
@@ -25419,10 +25514,10 @@ void TestStrSparseVector()
 
           str_sv0.remap();
             {
-            str_sparse_vector<char, bvect, 3> str_sv;
+            str_sparse_vector<char, bvect, 2> str_sv;
             str_sv.copy_range(str_sv00, 0, 1);
 
-            str_sparse_vector<char, bvect, 3> str_sv2;
+            str_sparse_vector<char, bvect, 2> str_sv2;
             str_sv2.copy_range(str_sv00, 2, 3);
             str_sv.merge(str_sv2);
 
@@ -25433,16 +25528,58 @@ void TestStrSparseVector()
             }
 
             {
-            str_sparse_vector<char, bvect, 3> str_sv;
+            str_sparse_vector<char, bvect, 2> str_sv;
             str_sv.merge(str_sv00);
             bool b = str_sv.equal(str_sv00);
             assert(!b); // destucted vector
             }
        }
+
+
+       // test merge 2
+       {
+          str_sparse_vector<char, bvect, 2> str_svC(bm::use_null);
+          str_sparse_vector<char, bvect, 2> str_sv00(bm::use_null);
+          str_sparse_vector<char, bvect, 2> str_sv1(bm::use_null);
+
+          str_svC.push_back("0");
+          str_svC[2] = "12345";
+
+          str_sv00.push_back("0");
+          str_sv1[2] = "12345";
+
+
+          str_sv00.merge(str_sv1);
+
+            bool b = str_svC.equal(str_sv00);
+            assert(b); // destucted vector
+        }
+
+       // test merge 3
+       {
+          str_sparse_vector<char, bvect, 2> str_svC(bm::use_null);
+          str_sparse_vector<char, bvect, 2> str_sv00(bm::use_null);
+          str_sparse_vector<char, bvect, 2> str_sv1(bm::use_null);
+
+          str_svC.push_back("0");
+          str_svC[2] = "12345";
+
+          str_sv00.push_back("0");
+          str_sv1[2] = "12345";
+
+
+          str_sv1.merge(str_sv00);
+
+            bool b = str_svC.equal(str_sv1);
+            assert(b); // destucted vector
+        }
+
+
+
        
        // test decode
        {
-          str_sparse_vector<char, bvect, 3> str_sv10;
+          str_sparse_vector<char, bvect, 2> str_sv10;
           const char* cs0 = "10";
           const char* cs1 = "200";
           const char* cs2 = "30";
@@ -25510,7 +25647,7 @@ void TestStrSparseVector()
        // test decode sub-string
        //
        {
-          str_sparse_vector<char, bvect, 3> str_sv10;
+          str_sparse_vector<char, bvect, 2> str_sv10;
           const char* cs0 = "10";
           const char* cs1 = "200";
           const char* cs2 = "30";
@@ -25572,7 +25709,7 @@ void TestStrSparseVector()
 
        // test import
        {
-          str_sparse_vector<char, bvect, 3> str_sv10;
+          str_sparse_vector<char, bvect, 2> str_sv10;
 
           const char* cs0 = "@";
           const char* cs1 = " 2";
@@ -25608,7 +25745,7 @@ void TestStrSparseVector()
 
    // reference test / serialization test
    {
-       str_sparse_vector<char, bvect, 32> str_sv0;
+       str_sparse_vector<char, bvect, 2> str_sv0;
        char str[256];
        string str0;
 
@@ -25623,8 +25760,8 @@ void TestStrSparseVector()
        assert(cmp == 0);
 
        {
-           const str_sparse_vector<char, bvect, 32>& ssv = str_sv0;
-           const str_sparse_vector<char, bvect, 32>::const_reference ref3 = ssv[3];
+           const str_sparse_vector<char, bvect, 2>& ssv = str_sv0;
+           const str_sparse_vector<char, bvect, 2>::const_reference ref3 = ssv[3];
            s = ref3;
            cmp = ::strcmp(s, "333");
            assert(cmp == 0);
@@ -25634,7 +25771,7 @@ void TestStrSparseVector()
         sparse_vector_serial_layout<str_svect_type> sv_lay;
         bm::sparse_vector_serialize<str_svect_type>(str_sv0, sv_lay, tb);
 
-        str_sparse_vector<char, bvect, 32> str_sv2;
+        str_sparse_vector<char, bvect, 2> str_sv2;
 
         const unsigned char* buf = sv_lay.buf();
         int res = bm::sparse_vector_deserialize(str_sv2, buf, tb);
@@ -25647,7 +25784,7 @@ void TestStrSparseVector()
         bool eq = str_sv0.equal(str_sv2);
         assert(eq);
 
-        str_sparse_vector<char, bvect, 64> str_sv3;   // size increase test
+        str_sparse_vector<char, bvect, 2> str_sv3;   // size increase test
         buf = sv_lay.buf();
         res = bm::sparse_vector_deserialize(str_sv3, buf, tb);
         if (res != 0)
@@ -25658,18 +25795,18 @@ void TestStrSparseVector()
    }
 
    {
-       str_sparse_vector<char, bvect, 32> str_sv0;
+       str_sparse_vector<char, bvect, 2> str_sv0;
        unsigned str_max = str_sv0.effective_max_str();
-       assert(str_max == 0);
+       assert(str_max > 0);
        str_sv0[0] = "1";
        str_max = str_sv0.effective_max_str();
-       assert(str_max == 1);
+       assert(str_max >= 1);
        str_sv0[1] = "11";
        str_max = str_sv0.effective_max_str();
-       assert(str_max == 2);
+       assert(str_max >= 2);
        str_sv0[2] = "123";
        str_max = str_sv0.effective_max_str();
-       assert(str_max == 3);
+       assert(str_max >= 3);
        
        str_sv0.clear_range(1, 234567);
 
@@ -25681,12 +25818,12 @@ void TestStrSparseVector()
    }
    
    {
-       str_sparse_vector<char, bvect, 32> str_sv0;
+       str_sparse_vector<char, bvect, 2> str_sv0;
        str_sv0[0] = "1";
        str_sv0[1] = "11";
        str_sv0[2] = "123";
 
-        bm::sparse_vector_scanner<bm::str_sparse_vector<char, bvect, 32> > scanner;
+        bm::sparse_vector_scanner<bm::str_sparse_vector<char, bvect, 2> > scanner;
         for (unsigned pass = 0; pass < 2; ++pass)
         {
            unsigned pos;
@@ -25715,17 +25852,17 @@ void TestStrSparseVector()
 
    // test basic remappings functions
    {
-       str_sparse_vector<char, bvect, 32> str_sv0;
+       str_sparse_vector<char, bvect, 2> str_sv0;
        str_sv0[0] = "1";
        str_sv0[1] = "11";
        str_sv0[2] = "123";
        str_sv0[3] = "021";
 
-       str_sparse_vector<char, bvect, 32>::slice_octet_matrix_type remap_matrix1;
-       str_sparse_vector<char, bvect, 32>::slice_octet_matrix_type remap_matrix2;
+       str_sparse_vector<char, bvect, 2>::slice_octet_matrix_type remap_matrix1;
+       str_sparse_vector<char, bvect, 2>::slice_octet_matrix_type remap_matrix2;
 
         {
-           str_sparse_vector<char, bvect, 32>::octet_freq_matrix_type occ_matrix;
+           str_sparse_vector<char, bvect, 2>::octet_freq_matrix_type occ_matrix;
            str_sv0.calc_octet_stat(occ_matrix);
 
             {
@@ -25827,8 +25964,8 @@ void TestStrSparseVector()
    
    // build-vefify remapped sparse-vector
    {
-       str_sparse_vector<char, bvect, 32> str_sv0;
-       str_sparse_vector<char, bvect, 32> str_sv1;
+       str_sparse_vector<char, bvect, 2> str_sv0;
+       str_sparse_vector<char, bvect, 2> str_sv1;
        
        str_sv1.remap_from(str_sv0);
        assert(!str_sv1.is_remap());
@@ -25909,12 +26046,12 @@ void TestStrSparseVector()
             bool equal = str_sv1.equal(str_sv0);
             assert(!equal);
            
-            str_sparse_vector<char, bvect, 32> str_sv2(str_sv1);
+            str_sparse_vector<char, bvect, 2> str_sv2(str_sv1);
             equal = str_sv1.equal(str_sv2);
             assert(equal);
        }
        {
-            str_sparse_vector<char, bvect, 32> str_sv2(str_sv0);
+            str_sparse_vector<char, bvect, 2> str_sv2(str_sv0);
             str_sv2 = str_sv1;
             bool equal = str_sv1.equal(str_sv2);
             assert(equal);
@@ -25923,8 +26060,8 @@ void TestStrSparseVector()
 
    // scanner search on remapped str vector
    {
-       str_sparse_vector<char, bvect, 32> str_sv0;
-       str_sparse_vector<char, bvect, 32> str_sv1;
+       str_sparse_vector<char, bvect, 2> str_sv0;
+       str_sparse_vector<char, bvect, 2> str_sv1;
        str_sv0[0] = "1";
        str_sv0[1] = "11";
        str_sv0[2] = "123";
@@ -25932,8 +26069,8 @@ void TestStrSparseVector()
        str_sv1.remap_from(str_sv0);
        
        unsigned pos, pos1;
-       bm::sparse_vector_scanner<bm::str_sparse_vector<char, bvect, 32> > scanner;
-       bm::sparse_vector_scanner<bm::str_sparse_vector<char, bvect, 32> > scanner1;
+       bm::sparse_vector_scanner<bm::str_sparse_vector<char, bvect, 2> > scanner;
+       bm::sparse_vector_scanner<bm::str_sparse_vector<char, bvect, 2> > scanner1;
        scanner.bind(str_sv1, true);
 
         for (unsigned pass = 0; pass < 2; ++pass)
@@ -25987,9 +26124,9 @@ void TestStrSparseVector()
 
     // serialization of remap string vector
     {
-       str_sparse_vector<char, bvect, 32> str_sv0;
-       str_sparse_vector<char, bvect, 32> str_sv1;
-       str_sparse_vector<char, bvect, 32> str_sv2;
+       str_sparse_vector<char, bvect, 2> str_sv0;
+       str_sparse_vector<char, bvect, 2> str_sv1;
+       str_sparse_vector<char, bvect, 2> str_sv2;
        str_sv0[0] = "1";
        str_sv0[1] = "11";
        str_sv0[2] = "123";
@@ -26010,6 +26147,15 @@ void TestStrSparseVector()
         
         bool equal = str_sv1.equal(str_sv2);
         assert(equal);
+        /*
+        // TODO: cannnot assign extra striungs into remapped marix that easily (it asserts)
+        str_sv2[3] = "1234";
+
+        char str[256];
+        str_sv2.get(3, str, sizeof(str));
+        int cmp = ::strcmp(str, "1234");
+        assert(cmp==0);
+        */
    }
    
    
@@ -26024,7 +26170,7 @@ void TestStrSparseVector()
     }
 
     {
-       str_sparse_vector<char, bvect, 32> str_sv0(bm::use_null);
+       str_sparse_vector<char, bvect, 2> str_sv0(bm::use_null);
        assert(str_sv0.get_null_support() == bm::use_null);
 
        str_sv0.resize(10);
@@ -26051,7 +26197,7 @@ void TestStrSparseVector()
     }
 
     {
-       str_sparse_vector<char, bvect, 32> str_sv0(bm::use_null);
+       str_sparse_vector<char, bvect, 2> str_sv0(bm::use_null);
        {
             auto bi = str_sv0.get_back_inserter();
             for (unsigned i = 0; i < 100000; i+=2)
@@ -26081,7 +26227,7 @@ void TestStrSparseVector()
 
 
     {
-       str_sparse_vector<char, bvect, 32> str_sv0(bm::use_null);
+       str_sparse_vector<char, bvect, 2> str_sv0(bm::use_null);
        {
             auto bi = str_sv0.get_back_inserter();
             for (unsigned i = 0; i < 100000; i+=2)
@@ -26111,7 +26257,7 @@ void TestStrSparseVector()
 
 
     {
-       str_sparse_vector<char, bvect, 32> str_sv0(bm::use_null);
+       str_sparse_vector<char, bvect, 2> str_sv0(bm::use_null);
        auto bi = str_sv0.get_back_inserter();
        bi = (const char*)0;
        bool b = str_sv0.is_null(0);
@@ -26138,24 +26284,23 @@ void TestStrSparseVector()
     
     // test automatic optimization with back_insert iterator
     {
-       str_sparse_vector<char, bvect, 32> str_sv0;
+       str_sparse_vector<char, bvect, 2> str_sv0;
        {
-           str_sparse_vector<char, bvect, 32>::back_insert_iterator
-                                        bi = str_sv0.get_back_inserter();
+           auto bi = str_sv0.get_back_inserter();
            for (unsigned i = 0; i < 65536; ++i)
            {
                 bi = "123";
            } // for
        }
        
-       str_sparse_vector<char, bvect, 32>::statistics st;
+       str_sparse_vector<char, bvect, 2>::statistics st;
        
        str_sv0.calc_stat(&st);
        assert(st.bit_blocks == 0);
        assert(st.gap_blocks == 0);
        
        {
-           str_sparse_vector<char, bvect, 32>::back_insert_iterator
+           str_sparse_vector<char, bvect, 2>::back_insert_iterator
                                         bi = str_sv0.get_back_inserter();
            for (unsigned i = 0; i < 65536; ++i)
            {
@@ -26173,15 +26318,15 @@ void TestStrSparseVector()
     // const_iterator / back_inserter
     //
     {
-       str_sparse_vector<char, bvect, 32> str_sv0;
+       str_sparse_vector<char, bvect, 2> str_sv0;
        {
-        str_sparse_vector<char, bvect, 32>::const_iterator it2(&str_sv0);
+        str_sparse_vector<char, bvect, 2>::const_iterator it2(&str_sv0);
         assert(!it2.valid());
-        str_sparse_vector<char, bvect, 32>::const_iterator it2c(it2);
+        str_sparse_vector<char, bvect, 2>::const_iterator it2c(it2);
         assert(!it2c.valid());
        }
        {
-           str_sparse_vector<char, bvect, 32>::back_insert_iterator bi = str_sv0.get_back_inserter();
+           str_sparse_vector<char, bvect, 2>::back_insert_iterator bi = str_sv0.get_back_inserter();
            bi = "1";
            bi = "11";
            bi = "123";
@@ -26191,22 +26336,22 @@ void TestStrSparseVector()
 
 
         {
-        str_sparse_vector<char, bvect, 32>::const_iterator it_end;
+        str_sparse_vector<char, bvect, 2>::const_iterator it_end;
         assert(!it_end.valid());
-        str_sparse_vector<char, bvect, 32>::const_iterator it2(&str_sv0);
+        str_sparse_vector<char, bvect, 2>::const_iterator it2(&str_sv0);
         assert(it2.valid());
         const char* s = it2.value();
         int cmp = ::strcmp(s, "1");
         assert(cmp == 0);
         assert(!it2.is_null());
 
-        str_sparse_vector<char, bvect, 32>::const_iterator it3(&str_sv0, 1);
+        str_sparse_vector<char, bvect, 2>::const_iterator it3(&str_sv0, 1);
         assert(it3.valid());
         s = it3.value();
         cmp = ::strcmp(s, "11");
         assert(cmp == 0);
         
-        str_sparse_vector<char, bvect, 32>::const_iterator it4(&str_sv0, 3);
+        str_sparse_vector<char, bvect, 2>::const_iterator it4(&str_sv0, 3);
         assert(!it4.valid());
         it4.go_to(2);
         assert(it4.valid());
@@ -26219,9 +26364,9 @@ void TestStrSparseVector()
     // substring const-iterator
     {
         size_t max_str = 0;
-       str_sparse_vector<char, bvect, 64> str_sv0;
+       str_sparse_vector<char, bvect, 2> str_sv0;
        {
-           str_sparse_vector<char, bvect, 64>::back_insert_iterator bi = str_sv0.get_back_inserter();
+           str_sparse_vector<char, bvect, 2>::back_insert_iterator bi = str_sv0.get_back_inserter();
            string str;
            string istr;
            for (unsigned i = 0; i < 1250000; ++i)
@@ -26244,7 +26389,7 @@ void TestStrSparseVector()
            string istr;
             for (size_t i = 0; i < max_str_size; ++i)
             {
-                str_sparse_vector<char, bvect, 64>::const_iterator it1(&str_sv0);
+                str_sparse_vector<char, bvect, 2>::const_iterator it1(&str_sv0);
                 it1.set_substr(unsigned(i));
                 for (unsigned v = 0; it1.valid(); ++it1, ++v)
                 {
@@ -26252,7 +26397,8 @@ void TestStrSparseVector()
                     istr = std::to_string(v);
                     str.append(istr);
 
-                    string ss(it1.value());
+                    const auto* c = it1.value();
+                    string ss(c);
                     string ss_c = (i >= str.size()) ? "" : str.substr(i);
                     assert(ss == ss_c);
                 } // for it
@@ -26273,11 +26419,11 @@ void TestStrSparseVectorAlgo()
     cout << "------------------------------ TestStrSparseVectorAlgo()" << endl;
 
     {
-       str_sparse_vector<char, bvect, 32> str_sv1;
-       str_sparse_vector<char, bvect, 32> str_sv2;
+       str_sparse_vector<char, bvect, 3> str_sv1;
+       str_sparse_vector<char, bvect, 3> str_sv2;
 
        {
-           str_sparse_vector<char, bvect, 32>::back_insert_iterator bi = str_sv1.get_back_inserter();
+           str_sparse_vector<char, bvect, 3>::back_insert_iterator bi = str_sv1.get_back_inserter();
            bi = "123";
            bi = "123";
            bi = "123";
@@ -26309,8 +26455,8 @@ void TestStrSparseVectorAlgo()
     }
 
     {
-       str_sparse_vector<char, bvect, 32> str_sv1(bm::use_null);
-       str_sparse_vector<char, bvect, 32> str_sv2(bm::use_null);
+       str_sparse_vector<char, bvect, 3> str_sv1(bm::use_null);
+       str_sparse_vector<char, bvect, 3> str_sv2(bm::use_null);
 
        bm::sparse_vector<unsigned, bvect>::size_type pos;
        bool f;
@@ -26350,7 +26496,7 @@ void TestStrSparseVector_FindEq()
 {
     cout << "------------------------------- TestStrSparseVector_FindEq()" << endl;
     using bvector_type = bm::bvector<>;
-    using TSparseStrVector = bm::str_sparse_vector<char, bvector_type, 390>;
+    using TSparseStrVector = bm::str_sparse_vector<char, bvector_type, 3>;
 
     {
     TSparseStrVector str_vector;
@@ -26608,11 +26754,11 @@ void TestStrSparseVectorSerial()
    cout << "---------------------------- TestStrSparseVectorSerial()" << endl;
 
     {
-       str_sparse_vector<char, bvect, 32> str_sv1;
-       str_sparse_vector<char, bvect, 32> str_sv2;
+       str_sparse_vector<char, bvect, 3> str_sv1;
+       str_sparse_vector<char, bvect, 3> str_sv2;
 
        {
-           str_sparse_vector<char, bvect, 32>::back_insert_iterator bi = str_sv1.get_back_inserter();
+           str_sparse_vector<char, bvect, 3>::back_insert_iterator bi = str_sv1.get_back_inserter();
            bi = "1";
            bi = "11";
            bi = "123";
@@ -26620,8 +26766,8 @@ void TestStrSparseVectorSerial()
            bi.flush();
        }
         BM_DECLARE_TEMP_BLOCK(tb)
-        sparse_vector_serial_layout<str_sparse_vector<char, bvect, 32> > sv_lay;
-        bm::sparse_vector_serialize<str_sparse_vector<char, bvect, 32> >(str_sv1, sv_lay, tb);
+        sparse_vector_serial_layout<str_sparse_vector<char, bvect, 3> > sv_lay;
+        bm::sparse_vector_serialize<str_sparse_vector<char, bvect, 3> >(str_sv1, sv_lay, tb);
 
         std::vector<unsigned char> buf_v;
         {
@@ -26631,8 +26777,8 @@ void TestStrSparseVectorSerial()
         }
 
         {
-            sparse_vector_serial_layout<str_sparse_vector<char, bvect, 32> > sv_lay2;
-            bm::sparse_vector_serialize<str_sparse_vector<char, bvect, 32> >(str_sv1, sv_lay2, tb);
+            sparse_vector_serial_layout<str_sparse_vector<char, bvect, 3> > sv_lay2;
+            bm::sparse_vector_serialize<str_sparse_vector<char, bvect, 3> >(str_sv1, sv_lay2, tb);
             const unsigned char* buf1 = sv_lay.buf();
             const unsigned char* buf2 = sv_lay2.buf();
             auto sz1 = sv_lay.size();
@@ -26647,7 +26793,7 @@ void TestStrSparseVectorSerial()
         bv_mask.set(1);
         bv_mask.set(2);
         bv_mask.set(100);
-        bm::sparse_vector_deserializer<str_sparse_vector<char, bvect, 32> > sv_deserial;
+        bm::sparse_vector_deserializer<str_sparse_vector<char, bvect, 3> > sv_deserial;
         sv_deserial.deserialize(str_sv2, buf_v.data(), bv_mask);
 
         assert(str_sv1.size() == str_sv2.size());
@@ -26666,11 +26812,11 @@ void TestStrSparseVectorSerial()
     }
 
     {
-       str_sparse_vector<char, bvect, 32> str_sv1(bm::use_null);
-       str_sparse_vector<char, bvect, 32> str_sv2;
+       str_sparse_vector<char, bvect, 3> str_sv1(bm::use_null);
+       str_sparse_vector<char, bvect, 3> str_sv2(bm::use_null);
 
        {
-           str_sparse_vector<char, bvect, 32>::back_insert_iterator bi = str_sv1.get_back_inserter();
+           str_sparse_vector<char, bvect, 3>::back_insert_iterator bi = str_sv1.get_back_inserter();
            bi = "1";
            bi.add_null();
            bi = "12";
@@ -26680,8 +26826,8 @@ void TestStrSparseVectorSerial()
        }
 
         BM_DECLARE_TEMP_BLOCK(tb)
-        sparse_vector_serial_layout<str_sparse_vector<char, bvect, 32> > sv_lay;
-        bm::sparse_vector_serialize<str_sparse_vector<char, bvect, 32> >(str_sv1, sv_lay, tb);
+        sparse_vector_serial_layout<str_sparse_vector<char, bvect, 3> > sv_lay;
+        bm::sparse_vector_serialize<str_sparse_vector<char, bvect, 3> >(str_sv1, sv_lay, tb);
 
         std::vector<unsigned char> buf_v;
         {
@@ -26691,8 +26837,8 @@ void TestStrSparseVectorSerial()
         }
 
         {
-            sparse_vector_serial_layout<str_sparse_vector<char, bvect, 32> > sv_lay2;
-            bm::sparse_vector_serialize<str_sparse_vector<char, bvect, 32> >(str_sv1, sv_lay2, tb);
+            sparse_vector_serial_layout<str_sparse_vector<char, bvect, 3> > sv_lay2;
+            bm::sparse_vector_serialize<str_sparse_vector<char, bvect, 3> >(str_sv1, sv_lay2, tb);
             const unsigned char* buf1 = sv_lay.buf();
             const unsigned char* buf2 = sv_lay2.buf();
             auto sz1 = sv_lay.size();
@@ -26717,7 +26863,7 @@ void TestStrSparseVectorSerial()
         }
 
 
-        bm::sparse_vector_deserializer<str_sparse_vector<char, bvect, 32> > sv_deserial;
+        bm::sparse_vector_deserializer<str_sparse_vector<char, bvect, 3> > sv_deserial;
         sv_deserial.deserialize(str_sv2, buf_v.data());
 
         auto* bv = str_sv2.get_null_bvector();
@@ -26730,10 +26876,10 @@ void TestStrSparseVectorSerial()
 
     // corner case from Andrea Asztalos
     {
-       str_sparse_vector<char, bvect, 32> str_sv1(bm::use_null);
-       str_sparse_vector<char, bvect, 32> str_sv2;
+       str_sparse_vector<char, bvect, 3> str_sv1(bm::use_null);
+       str_sparse_vector<char, bvect, 3> str_sv2(bm::use_null);
 
-       str_sparse_vector<char, bvect, 32>::back_insert_iterator bi = str_sv1.get_back_inserter();
+       str_sparse_vector<char, bvect, 3>::back_insert_iterator bi = str_sv1.get_back_inserter();
        for (unsigned i = 0; i < 65536;++i)
        {
            bi = "1";
@@ -26741,12 +26887,12 @@ void TestStrSparseVectorSerial()
        bi.flush();
 
         BM_DECLARE_TEMP_BLOCK(tb)
-        sparse_vector_serial_layout<str_sparse_vector<char, bvect, 32> > sv_lay;
-        bm::sparse_vector_serialize<str_sparse_vector<char, bvect, 32> >(str_sv1, sv_lay, tb);
+        sparse_vector_serial_layout<str_sparse_vector<char, bvect, 3> > sv_lay;
+        bm::sparse_vector_serialize<str_sparse_vector<char, bvect, 3> >(str_sv1, sv_lay, tb);
 
         {
-            sparse_vector_serial_layout<str_sparse_vector<char, bvect, 32> > sv_lay2;
-            bm::sparse_vector_serialize<str_sparse_vector<char, bvect, 32> >(str_sv1, sv_lay2, tb);
+            sparse_vector_serial_layout<str_sparse_vector<char, bvect, 3> > sv_lay2;
+            bm::sparse_vector_serialize<str_sparse_vector<char, bvect, 3> >(str_sv1, sv_lay2, tb);
             const unsigned char* buf1 = sv_lay.buf();
             const unsigned char* buf2 = sv_lay2.buf();
             auto sz1 = sv_lay.size();
@@ -26763,7 +26909,7 @@ void TestStrSparseVectorSerial()
             ::memcpy(buf_v.data(), buf, sv_lay.size());
         }
 
-        bm::sparse_vector_deserializer<str_sparse_vector<char, bvect, 32> > sv_deserial;
+        bm::sparse_vector_deserializer<str_sparse_vector<char, bvect, 3> > sv_deserial;
         sv_deserial.deserialize(str_sv2, buf_v.data());
 
         auto* bv = str_sv2.get_null_bvector();
@@ -26774,10 +26920,10 @@ void TestStrSparseVectorSerial()
     }
 
     {
-       str_sparse_vector<char, bvect, 32> str_sv1(bm::use_null);
-       str_sparse_vector<char, bvect, 32> str_sv2;
+       str_sparse_vector<char, bvect, 3> str_sv1(bm::use_null);
+       str_sparse_vector<char, bvect, 3> str_sv2(bm::use_null);
 
-       str_sparse_vector<char, bvect, 32>::back_insert_iterator bi = str_sv1.get_back_inserter();
+       str_sparse_vector<char, bvect, 3>::back_insert_iterator bi = str_sv1.get_back_inserter();
        for (unsigned i = 0; i < 65536;++i)
        {
            bi = "1";
@@ -26786,16 +26932,20 @@ void TestStrSparseVectorSerial()
        bi.flush();
 
        str_sv1.remap();
+       {
+        auto* bv1 = str_sv1.get_null_bvector();
+        cout << bv1->count() << endl;
+       }
 
         BM_DECLARE_TEMP_BLOCK(tb)
-        sparse_vector_serial_layout<str_sparse_vector<char, bvect, 32> > sv_lay;
-        bm::sparse_vector_serialize<str_sparse_vector<char, bvect, 32> >(str_sv1, sv_lay, tb);
+        sparse_vector_serial_layout<str_sparse_vector<char, bvect, 3> > sv_lay;
+        bm::sparse_vector_serialize<str_sparse_vector<char, bvect, 3> >(str_sv1, sv_lay, tb);
 
         std::vector<unsigned char> buf_v_prev;
         for (unsigned pass = 0; pass < 10; ++pass)
         {
-            sparse_vector_serial_layout<str_sparse_vector<char, bvect, 32> > sv_lay2;
-            bm::sparse_vector_serialize<str_sparse_vector<char, bvect, 32> >(str_sv1, sv_lay2, tb);
+            sparse_vector_serial_layout<str_sparse_vector<char, bvect, 3> > sv_lay2;
+            bm::sparse_vector_serialize<str_sparse_vector<char, bvect, 3> >(str_sv1, sv_lay2, tb);
             const unsigned char* buf1 = sv_lay.buf();
             const unsigned char* buf2 = sv_lay2.buf();
             auto sz1 = sv_lay.size();
@@ -26820,11 +26970,17 @@ void TestStrSparseVectorSerial()
             ::memcpy(buf_v.data(), buf, sv_lay.size());
         }
 
-        bm::sparse_vector_deserializer<str_sparse_vector<char, bvect, 32> > sv_deserial;
+        bm::sparse_vector_deserializer<str_sparse_vector<char, bvect, 3> > sv_deserial;
         sv_deserial.deserialize(str_sv2, buf_v.data());
 
         auto* bv = str_sv2.get_null_bvector();
         assert(bv);
+        bool bbv = bv->test(0);
+        assert(bbv);
+        auto* bv1 = str_sv1.get_null_bvector();
+        assert(bv1);
+        bool bn = bv->equal(*bv1);
+        assert(bn);
 
         bool b = str_sv1.equal(str_sv2);
         assert(b);
@@ -26835,14 +26991,14 @@ void TestStrSparseVectorSerial()
 
     cout << "Stress deserialization (AND mask) and range[..]" << endl;
     {
-       str_sparse_vector<char, bvect, 32> str_sv0;
-       str_sparse_vector<char, bvect, 32> str_sv1;
-       str_sparse_vector<char, bvect, 32> str_sv2;
-       str_sparse_vector<char, bvect, 32> str_sv3;
-       str_sparse_vector<char, bvect, 32> str_r;
+       str_sparse_vector<char, bvect, 3> str_sv0;
+       str_sparse_vector<char, bvect, 3> str_sv1;
+       str_sparse_vector<char, bvect, 3> str_sv2;
+       str_sparse_vector<char, bvect, 3> str_sv3;
+       str_sparse_vector<char, bvect, 3> str_r;
 
        {
-           str_sparse_vector<char, bvect, 32>::back_insert_iterator bi = str_sv0.get_back_inserter();
+           str_sparse_vector<char, bvect, 3>::back_insert_iterator bi = str_sv0.get_back_inserter();
            for (unsigned i = 0; i < 100000; ++i)
            {
                 bi = "ATGC";
@@ -26857,8 +27013,8 @@ void TestStrSparseVectorSerial()
        str_sv1.optimize();
 
         BM_DECLARE_TEMP_BLOCK(tb)
-        sparse_vector_serial_layout<str_sparse_vector<char, bvect, 32> > sv_lay;
-        bm::sparse_vector_serialize<str_sparse_vector<char, bvect, 32> >(str_sv1, sv_lay, tb);
+        sparse_vector_serial_layout<str_sparse_vector<char, bvect, 3> > sv_lay;
+        bm::sparse_vector_serialize<str_sparse_vector<char, bvect, 3> >(str_sv1, sv_lay, tb);
 
         std::vector<unsigned char> buf_v;
         {
@@ -26867,8 +27023,8 @@ void TestStrSparseVectorSerial()
             ::memcpy(buf_v.data(), buf, sv_lay.size());
         }
         {
-            sparse_vector_serial_layout<str_sparse_vector<char, bvect, 32> > sv_lay2;
-            bm::sparse_vector_serialize<str_sparse_vector<char, bvect, 32> >(str_sv1, sv_lay2, tb);
+            sparse_vector_serial_layout<str_sparse_vector<char, bvect, 3> > sv_lay2;
+            bm::sparse_vector_serialize<str_sparse_vector<char, bvect, 3> >(str_sv1, sv_lay2, tb);
             const unsigned char* buf1 = sv_lay.buf();
             const unsigned char* buf2 = sv_lay2.buf();
             auto sz1 = sv_lay.size();
@@ -26878,13 +27034,48 @@ void TestStrSparseVectorSerial()
             assert(cmp == 0);
         }
 
-        bm::sparse_vector_deserializer<str_sparse_vector<char, bvect, 32> > sv_deserial;
+        bm::sparse_vector_deserializer<str_sparse_vector<char, bvect, 3> > sv_deserial;
         char s1[256];
         char s2[256];
         int cmp;
 
         bvect::size_type from = 100000-1;
         bvect::size_type to = from + 65536;
+
+        cout << "\n   Single element deserializations... \n";
+        for (unsigned i = from; i < to; ++i)
+        {
+            bvect bv_mask;
+            bv_mask.set_range(i, i);
+            sv_deserial.deserialize(str_sv2, buf_v.data(), bv_mask);
+
+            sv_deserial.deserialize_range(str_sv3, buf_v.data(), i, i);
+
+            str_sv2.get(1, s2, sizeof(s2));
+            assert(s2[0] == 0);
+
+            bool eq = str_sv2.equal(str_sv3);
+            assert(eq);
+
+            str_r.copy_range(str_sv1, i, i);
+            eq = str_r.equal(str_sv3);
+            assert(eq);
+
+            for (unsigned j = i; j < i+1; ++j)
+            {
+                str_sv1.get(j, s1, sizeof(s1));
+                str_sv2.get(j, s2, sizeof(s2));
+                cmp = ::strcmp(s1, s2);
+                assert(cmp==0);
+
+            } // for j
+
+            if ((i & 0xFF) == 0)
+                cout << "\r" << i << "/" << to << flush;
+
+        } // for
+
+        cout << "\n   Ranges deserializations... \n";
         for (unsigned i = from; i < to; ++i)
         {
             bvect bv_mask;
@@ -26918,21 +27109,21 @@ void TestStrSparseVectorSerial()
         } // for
 
     }
-    cout << " ok" << endl;
+    cout << "\n ok" << endl;
 
 
     cout << "Stress deserialization (AND mask) (use NULL) and Range[..]" << endl;
     {
-        typedef bm::str_sparse_vector<char, bvect, 32> str_sv_type;
+        typedef bm::str_sparse_vector<char, bvect, 3> str_sv_type;
 
-       str_sparse_vector<char, bvect, 32> str_sv0(bm::use_null);
-       str_sparse_vector<char, bvect, 32> str_sv1(bm::use_null);
-       str_sparse_vector<char, bvect, 32> str_sv2(bm::use_null);
-       str_sparse_vector<char, bvect, 32> str_sv3(bm::use_null);
-       str_sparse_vector<char, bvect, 32> str_r(bm::use_null);
+       str_sparse_vector<char, bvect, 3> str_sv0(bm::use_null);
+       str_sparse_vector<char, bvect, 3> str_sv1(bm::use_null);
+       str_sparse_vector<char, bvect, 3> str_sv2(bm::use_null);
+       str_sparse_vector<char, bvect, 3> str_sv3(bm::use_null);
+       str_sparse_vector<char, bvect, 3> str_r(bm::use_null);
 
        {
-           str_sparse_vector<char, bvect, 32>::back_insert_iterator bi = str_sv0.get_back_inserter();
+           str_sparse_vector<char, bvect, 3>::back_insert_iterator bi = str_sv0.get_back_inserter();
            for (unsigned i = 0; i < 1000000; ++i)
            {
                 bi = "ATGC";
@@ -26948,7 +27139,7 @@ void TestStrSparseVectorSerial()
        assert(str_sv1.is_remap());
        str_sv1.optimize();
 
-        sparse_vector_serial_layout<str_sparse_vector<char, bvect, 32> > sv_lay;
+        sparse_vector_serial_layout<str_sparse_vector<char, bvect, 3> > sv_lay;
 
         bm::sparse_vector_serializer<str_sv_type> sv_serializer;
         sv_serializer.set_bookmarks(true, 6);
@@ -26962,7 +27153,7 @@ void TestStrSparseVectorSerial()
             ::memcpy(buf_v.data(), buf, sv_lay.size());
         }
 
-        bm::sparse_vector_deserializer<str_sparse_vector<char, bvect, 32> > sv_deserial;
+        bm::sparse_vector_deserializer<str_sparse_vector<char, bvect, 3> > sv_deserial;
         char s1[256];
         char s2[256];
         char s3[256];
@@ -27014,7 +27205,7 @@ void TestStrSparseVectorSerial()
 
     cout << "Test data-frame XOR compression" << endl;
     {
-        typedef str_sparse_vector<char, bvect, 32> str_sv_type;
+        typedef str_sparse_vector<char, bvect, 3> str_sv_type;
 
         bm::sparse_vector_serializer<str_sv_type> sv_serializer;
         bm::sparse_vector_deserializer<str_sv_type> sv_deserial;
@@ -27144,7 +27335,7 @@ void TestStrSparseVectorSerial()
 }
 
 
-typedef str_sparse_vector<char, bvect, 32> str_svect_type;
+typedef str_sparse_vector<char, bvect, 3> str_svect_type;
 
 static
 void CompareStrSparseVector(const str_svect_type& str_sv,
@@ -27156,7 +27347,7 @@ void CompareStrSparseVector(const str_svect_type& str_sv,
     string str_h = "z";
     string str_l = "A";
 
-    bm::sparse_vector_scanner<bm::str_sparse_vector<char, bvect, 32> > scanner;
+    bm::sparse_vector_scanner<bm::str_sparse_vector<char, bvect, 3> > scanner;
 
     str_svect_type::const_iterator it = str_sv.begin();
     string str;
@@ -27403,7 +27594,7 @@ void StressTestStrSparseVector()
         sparse_vector_serial_layout<str_svect_type> sv_lay;
         bm::sparse_vector_serialize<str_svect_type>(str_sv, sv_lay, tb);
 
-        str_sparse_vector<char, bvect, 32> str_sv2;
+        str_sparse_vector<char, bvect, 3> str_sv2;
         const unsigned char* buf = sv_lay.buf();
         int res = bm::sparse_vector_deserialize(str_sv2, buf, tb);
         if (res != 0)
@@ -27423,7 +27614,7 @@ void StressTestStrSparseVector()
         sparse_vector_serial_layout<str_svect_type> sv_lay;
         bm::sparse_vector_serialize<str_svect_type>(str_sv_remap, sv_lay, tb);
 
-        str_sparse_vector<char, bvect, 32> str_sv2;
+        str_sparse_vector<char, bvect, 3> str_sv2;
         const unsigned char* buf = sv_lay.buf();
         int res = bm::sparse_vector_deserialize(str_sv2, buf, tb);
         if (res != 0)
@@ -31466,8 +31657,15 @@ void TestCompressSparseVector()
         assert(csv.get(11) == 12);
         assert(csv.get(5) == 56);
 
+        auto sz1 = csv.size();
         csv.set_null(5);
         assert(csv.is_null(5));
+        assert(!csv.is_null(1));
+        auto sz2 = csv.size();
+        assert(sz1 == sz2);
+        assert(csv.get(5) == 0);
+
+
         assert(csv.get(1) == 1);
         assert(csv.get(10) == 11);
         assert(csv.get(11) == 12);
@@ -33515,6 +33713,7 @@ void PrintStacks(unsigned max_cnt = 10)
 {
 (void)max_cnt;
 #ifdef MEM_DEBUG
+    #ifdef BM_STACK_COLL
     unsigned cnt(0);
     for (auto it = g_alloc_trace_map.begin();
         it != g_alloc_trace_map.end() && cnt < max_cnt; ++it)
@@ -33522,6 +33721,7 @@ void PrintStacks(unsigned max_cnt = 10)
         cout << "\n--------------------STACK_TRACE: " << cnt++ << endl;
         cout << it->second << endl;
     }
+    #endif
 #else
     cout << "Stack tracing not enabled (use #define BM_STACK_COLL)" << endl;
 #endif
@@ -33972,6 +34172,7 @@ int main(int argc, char *argv[])
 #endif
     if (is_all || is_sv)
     {
+
         TestSparseVector();
          CheckAllocLeaks(false);
 
@@ -34020,11 +34221,12 @@ int main(int argc, char *argv[])
         TestSignedSparseSort();
          CheckAllocLeaks(false);
 
+        TestSparseVector_Stress(3);
+         CheckAllocLeaks(false);
     }
 
     if (is_all || is_csv)
     {
-
         TestCompressSparseVector();
          CheckAllocLeaks(false);
 
@@ -34038,9 +34240,6 @@ int main(int argc, char *argv[])
          CheckAllocLeaks(false);
 
         TestCompressedSparseVectorScan();
-         CheckAllocLeaks(false);
-
-        TestSparseVector_Stress(3);
          CheckAllocLeaks(false);
 
     }
