@@ -350,6 +350,8 @@ typedef slice_octet_matrix_type remap_matrix_type;
         back_insert_iterator& operator=(const back_insert_iterator& bi)
         {
             BM_ASSERT(bi.empty());
+            buf_matrix_.init_resize(
+                bi.buf_matrix_.rows(), bi.buf_matrix_.cols());
             this->flush(); sv_ = bi.sv_;
             return *this;
         }
@@ -2181,7 +2183,7 @@ str_sparse_vector<CharType, BV, STR_SIZE>::back_insert_iterator::back_insert_ite
         unsigned esize = (unsigned) sv_->effective_max_str();
         if (esize < STR_SIZE)
             esize = STR_SIZE;
-        buf_matrix_.resize(n_buf_size, esize);
+        buf_matrix_.init_resize(n_buf_size, esize);
     }
     else
     {
@@ -2194,7 +2196,8 @@ str_sparse_vector<CharType, BV, STR_SIZE>::back_insert_iterator::back_insert_ite
 template<class CharType, class BV, unsigned STR_SIZE>
 str_sparse_vector<CharType, BV, STR_SIZE>::back_insert_iterator::back_insert_iterator(
 const str_sparse_vector<CharType, BV, STR_SIZE>::back_insert_iterator& bi) BMNOEXCEPT
-: sv_(bi.sv_), bv_null_(bi.bv_null_), pos_in_buf_(~size_type(0)), prev_nb_(bi.prev_nb_)
+: sv_(bi.sv_), bv_null_(bi.bv_null_), buf_matrix_(bi.buf_matrix_.rows(), bi.buf_matrix_.cols()),
+  pos_in_buf_(~size_type(0)), prev_nb_(bi.prev_nb_)
 {
     BM_ASSERT(bi.empty());
 }
