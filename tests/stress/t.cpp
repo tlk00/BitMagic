@@ -20034,7 +20034,7 @@ bool TestEqualSparseVectors(const SV& sv1, const SV& sv2, bool detailed = true)
         std::vector<unsigned> v1p(sv1.size());
         for (size_t i = 0; i < sv1.size(); ++i)
         {
-            v1[i] = v1r[i] = v1p[i] = rand();
+            v1[i] = v1r[i] = v1p[i] = (unsigned)rand();
         }
         
         auto sz1 = sv1.extract(&v1[0], sv1.size(), 0);
@@ -25742,6 +25742,18 @@ void TestStrSparseVector()
            assert(cmp == 0);
        }
    }
+
+   // test from A.Shkeda
+   {
+    typedef bm::str_sparse_vector<char, bm::bvector<>, 64 >  str_sparse_vect64;
+    str_sparse_vect64   m_acc_vec;
+    str_sparse_vect64::back_insert_iterator m_acc_vec_bi;
+    m_acc_vec_bi = m_acc_vec.get_back_inserter();
+    string s = "hello!";
+    m_acc_vec_bi = s;
+
+   }
+
 
    // reference test / serialization test
    {
