@@ -2368,6 +2368,7 @@ void ptest()
 
 typedef bm::sparse_vector<unsigned, bvect> svect;
 typedef bm::sparse_vector<unsigned, bvect> sparse_vector_u32;
+typedef bm::sparse_vector<int, bvect> sparse_vector_i32;
 
 typedef bm::sparse_vector<unsigned, bvect > sparse_vector_u32;
 typedef bm::sparse_vector<unsigned long long, bvect > sparse_vector_u64;
@@ -2376,18 +2377,21 @@ typedef bm::rsc_sparse_vector<unsigned, sparse_vector_u32> rsc_sparse_vector_u32
 
 // create a benchmark svector with a few dufferent distribution patterns
 //
-static
-void FillSparseIntervals(svect& sv)
+template<class SV>
+void FillSparseIntervals(SV& sv)
 {
     sv.resize(250000000);
     unsigned i;
     for (i = 256000; i < 712000 * 2; ++i)
     {
-        sv.set(i, 0xFFE);
+        if constexpr (SV::is_signed())
+            sv.set(i, -0xFFE);
+        else
+            sv.set(i, 0xFFE);
     }
     for (i = 712000 * 3; i < 712000 * 5; ++i)
     {
-        sv.set(i, i);
+        sv.set(i, (typename SV::value_type)i);
     }
     for (i = 180000000; i < 190000000; ++i)
     {
@@ -2395,9 +2399,13 @@ void FillSparseIntervals(svect& sv)
     }
     for (i = 200000000; i < 210000000; ++i)
     {
-        sv.set(i, rand() % 128000);
+        if constexpr (SV::is_signed())
+            sv.set(i, 0 - (rand() % 128000));
+        else
+            sv.set(i, rand() % 128000);
     }
 }
+
 
 template<class SV>
 void FillSparseNullVector(SV& sv, typename SV::size_type size,
@@ -2531,9 +2539,9 @@ void SparseVectorAccessTest()
     target_v.resize(0);
     target_v.shrink_to_fit();
 
-/*
+
     {
-        TimeTaker tt("sparse_vector const_iterator test", REPEATS );
+        bm::chrono_taker tt("sparse_vector const_iterator test", REPEATS );
         for (unsigned i = 0; i < REPEATS/10; ++i)
         {
             auto it = sv1.begin();
@@ -2546,8 +2554,8 @@ void SparseVectorAccessTest()
             }
         }
     }
-    */
-/*
+
+
     // check 
     //
     size_t sz = min(target1.size(), target2.size());
@@ -2562,12 +2570,168 @@ void SparseVectorAccessTest()
             exit(1);
         }
     }
-*/
+
     
     char buf[256];
     sprintf(buf, "%i", (int)cnt); // to fool some smart compilers like ICC
 
 }
+
+static
+void SparseVectorSignedAccessTest()
+{
+    std::vector<int> target, target1, target2;
+    sparse_vector_i32   sv1;
+
+    FillSparseIntervals(sv1);
+    BM_DECLARE_TEMP_BLOCK(tb)
+    sv1.optimize(tb);
+
+    {
+        sparse_vector_i32 sv2, sv3;
+        {
+            bm::chrono_taker tt("sparse_vector<int> random element assignment test", REPEATS / 10);
+            for (unsigned i = 0; i < REPEATS / 10; ++i)
+            {
+                for (unsigned j = 256000; j < 19000000 / 2; ++j)
+                {
+                    sv2.set(j, -0xF8A);
+                }
+            }
+        }
+
+        {
+            bm::chrono_taker tt("sparse_vector<int> back_inserter test", REPEATS / 10);
+            for (unsigned i = 0; i < REPEATS / 10; ++i)
+            {
+                {
+                    sv3.resize(256000);
+                    sparse_vector_i32::back_insert_iterator bi(sv3.get_back_inserter());
+                    for (unsigned j = 256000; j < 19000000 / 2; ++j)
+                    {
+                        *bi = -0xF8A;
+                    }
+                }
+            }
+        }
+
+        // check
+        //
+        if (!sv2.equal(sv3))
+        {
+            std::cerr << "Error! sparse_vector<int> back_insert mismatch."
+                << std::endl;
+            std::cerr << "sv2.size()=" << sv2.size() << std::endl;
+            std::cerr << "sv3.size()=" << sv3.size() << std::endl;
+
+            for (unsigned i = 0; i < sv2.size(); ++i)
+            {
+                const auto v2 = sv2[i];
+                const auto v3 = sv3[i];
+                if (v2 != v3)
+                {
+                    std::cerr << "mismatch at: " << i
+                        << " v2=" << v2 << " v3=" << v3
+                        << std::endl;
+                    exit(1);
+                }
+            }
+            exit(1);
+        }
+    }
+
+    unsigned long long cnt = 0;
+
+    unsigned gather_from = 256000;
+    unsigned gather_to = 19000000/2;
+    std::vector<unsigned> idx;
+    for (unsigned j = gather_from; j < gather_to; ++j)
+    {
+        idx.push_back(j);
+    }
+
+    long long sum1 = 0;
+    {
+        bm::chrono_taker tt("sparse_vector<int> random element access test", REPEATS/10 );
+        for (unsigned i = 0; i < REPEATS/10; ++i)
+        {
+            for (unsigned j = gather_from; j < gather_to; ++j)
+                sum1 += sv1[j];
+        }
+    }
+
+    std::vector<int> target_v;
+    target_v.resize(idx.size());
+    {
+        bm::chrono_taker tt("sparse_vectot<int>::gather() UNSORTED ", REPEATS/5 );
+        for (unsigned i = 0; i < REPEATS/10; ++i)
+        {
+            sv1.gather(target_v.data(), idx.data(), unsigned(idx.size()), bm::BM_UNSORTED);
+        }
+    }
+    long long sum2 = 0;
+    for (size_t i = 0; i < idx.size(); ++i)
+    {
+        sum2 += target_v[i];
+        const auto idx_v = idx[i];
+        const auto v = sv1[idx_v];
+        assert(v == target_v[i]);
+    }
+    if (sum1 != sum2)
+    {
+        cout << "\r";
+    }
+
+    {
+        bm::chrono_taker tt("sparse_vector<int>::decode()", REPEATS / 5);
+        auto from = gather_from;
+        for (unsigned i = 0; i < REPEATS / 10; ++i)
+        {
+            auto dsize = sv1.decode(target_v.data(), gather_from, (unsigned)idx.size(), (i == 0));
+            from += (dsize % 123);
+        }
+    }
+    target_v.resize(0);
+    target_v.shrink_to_fit();
+
+
+    {
+        bm::chrono_taker tt("sparse_vector<int> const_iterator test", REPEATS );
+        for (unsigned i = 0; i < REPEATS/10; ++i)
+        {
+            auto it = sv1.begin();
+            auto it_end = sv1.end();
+            auto sz = target2.size();
+            for (unsigned k = 0; it != it_end && k < sz; ++it, ++k)
+            {
+                auto v = *it;
+                target2[k] = v;
+            }
+        }
+    }
+
+
+    // check
+    //
+    size_t sz = min(target1.size(), target2.size());
+    for (unsigned j = 0; j < sz; ++j)
+    {
+        if (target1[j] != target2[j])
+        {
+            std::cerr << "Error! sparse_vector<int> mismatch at: " << j
+            << " t1 = " << target1[j] << " t2 = " << target2[j]
+            << " sv[] = " << sv1[j]
+            << std::endl;
+            exit(1);
+        }
+    }
+
+
+    char buf[256];
+    sprintf(buf, "%i", (int)cnt); // to fool some smart compilers like ICC
+
+}
+
 
 static
 void RSC_SparseVectorFillTest()
@@ -4070,7 +4234,6 @@ int main(void)
     bm::chrono_taker tt("TOTAL", 1);
     try
     {
-/*
         cout << endl;
 
         MemCpyTest();
@@ -4138,10 +4301,14 @@ int main(void)
 
         SerializationTest();
         cout << endl;
-*/
+
         SparseVectorAccessTest();
         cout << endl;
-/*
+
+        SparseVectorSignedAccessTest();
+        cout << endl;
+
+
         SparseVectorScannerTest();
         cout << endl;
 
@@ -4157,7 +4324,6 @@ int main(void)
 
         StrSparseVectorTest();
         cout << endl;
-*/
 
     }
     catch (std::exception& ex)
