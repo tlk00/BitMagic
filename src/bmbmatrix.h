@@ -777,7 +777,7 @@ template<typename BV>
 void basic_bmatrix<BV>::clear_column(size_type idx,
                                      size_type row_from)
 {
-    for (unsigned i = row_from; i < rsize_; ++i)
+    for (size_type i = row_from; i < rsize_; ++i)
         if (bvector_type* bv = get_row(i))
             bv->clear_bit_no_check(idx);
 }
@@ -1579,19 +1579,15 @@ template<class Val, class BV, unsigned MAX_SIZE>
 bm::id64_t base_sparse_vector<Val, BV, MAX_SIZE>::get_slice_mask(
                                         unsigned element_idx) const BMNOEXCEPT
 {
-    //BM_ASSERT(element_idx < MAX_SIZE);
     bm::id64_t mask = 0;
     bm::id64_t mask1 = 1;
     const unsigned planes = sizeof(value_type) * 8;
     unsigned bidx = 0;
-    for (unsigned i = element_idx * planes; i < (element_idx+1) * planes; i+=4)
-    {
-        mask |= get_slice(i+0) ? (mask1 << (bidx+0)) : 0ull;
-        mask |= get_slice(i+1) ? (mask1 << (bidx+1)) : 0ull;
-        mask |= get_slice(i+2) ? (mask1 << (bidx+2)) : 0ull;
-        mask |= get_slice(i+3) ? (mask1 << (bidx+3)) : 0ull;
-        bidx += 4;
-    } // for i
+    unsigned slice_size = (element_idx+1) * planes;
+    if (slice_size > this->bmatr_.rows())
+        slice_size = (unsigned) this->bmatr_.rows();
+    for (unsigned i = element_idx * planes; i < slice_size; ++i, ++bidx)
+        mask |= get_slice(i) ? (mask1 << bidx) : 0ull;
     return mask;
 }
 
@@ -1608,7 +1604,7 @@ void base_sparse_vector<Val, BV, MAX_SIZE>::optimize(bm::word_t* temp_block,
         st->add(stbv);
     
     bvector_type* bv_null = this->get_null_bvect();
-    unsigned slices = this->bmatr_.rows();
+    unsigned slices = (unsigned)this->bmatr_.rows();
     for (unsigned j = 0; j < slices; ++j)
     {
         bvector_type* bv = this->bmatr_.get_row(j);
@@ -1678,8 +1674,8 @@ bool base_sparse_vector<Val, BV, MAX_SIZE>::equal(
     if (size_type arg_size = sv.size(); this->size_ != arg_size)
         return false;
 
-    unsigned slices = this->bmatr_.rows();//slices();
-    unsigned arg_slices = sv.bmatr_.rows();
+    unsigned slices = (unsigned) this->bmatr_.rows();
+    unsigned arg_slices = (unsigned) sv.bmatr_.rows();
     unsigned max_slices(slices);
     if (max_slices < arg_slices)
         max_slices = arg_slices;
@@ -1749,7 +1745,7 @@ void base_sparse_vector<Val, BV, MAX_SIZE>::copy_range_slices(
     if (bmatr_.rows() < bsv.bmatr_.rows())
         bmatr_.allocate_rows(bsv.bmatr_.rows());
 
-    unsigned spli;
+    size_type spli;
     const bvector_type* bv_null_arg = bsv.get_null_bvector();
     if (bvector_type* bv_null = get_null_bvect())
     {
@@ -1761,13 +1757,13 @@ void base_sparse_vector<Val, BV, MAX_SIZE>::copy_range_slices(
     else
         spli = this->bmatr_.rows();
 
-    for (unsigned j = 0; j < spli; ++j)
+    for (size_type j = 0; j < spli; ++j)
     {
         if (const bvector_type* arg_bv = bsv.bmatr_.row(j))
         {
             if (arg_bv == bv_null_arg)
                 continue;
-            bvector_type* bv = this->get_create_slice(j);
+            bvector_type* bv = this->get_create_slice(unsigned(j));
             bv->copy_range(*arg_bv, left, right);
         }
     } // for j

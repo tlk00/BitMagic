@@ -1958,7 +1958,7 @@ sparse_vector<Val, BV>::join(const sparse_vector<Val, BV>& sv)
     if (this->size_ < arg_size)
         resize(arg_size);
 
-    unsigned planes = this->bmatr_.rows();
+    unsigned planes = (unsigned)this->bmatr_.rows();
     if (planes > sv.get_bmatrix().rows())
         --planes;
 
@@ -2049,7 +2049,7 @@ template<class Val, class BV>
 void sparse_vector<Val, BV>::filter(
                 const typename sparse_vector<Val, BV>::bvector_type& bv_mask)
 {
-    unsigned slices = this->get_bmatrix().rows();
+    unsigned slices = (unsigned)this->get_bmatrix().rows();
     for (unsigned j = 0; j < slices/*planes*/; ++j)
     {
         if (bvector_type* bv = this->bmatr_.get_row(j))

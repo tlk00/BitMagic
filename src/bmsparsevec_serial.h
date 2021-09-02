@@ -914,7 +914,7 @@ void sparse_vector_serializer<SV>::build_plane_digest(bvector_type& digest_bv,
 {
     digest_bv.init();
     digest_bv.clear(false);
-    unsigned planes = sv.get_bmatrix().rows(); // stored_slices();
+    unsigned planes = (unsigned)sv.get_bmatrix().rows();
     for (unsigned i = 0; i < planes; ++i)
     {
         typename SV::bvector_type_const_ptr bv = sv.get_slice(i);
@@ -944,7 +944,7 @@ void sparse_vector_serializer<SV>::serialize(const SV&  sv,
     bvs_.set_ref_vectors(0); // disable possible XOR compression for offs.bv
     bvs_.serialize(plane_digest_bv_, plane_digest_buf_);
 
-    unsigned planes = sv.get_bmatrix().rows();//stored_slices();
+    unsigned planes = (unsigned)sv.get_bmatrix().rows();
     sv_layout.resize_slices(planes);
 
     // ----------------------------------------------------

@@ -917,7 +917,7 @@ public:
     {
         size_type str_len = effective_max_str();
         return decode_substr(cmatr, idx_from, dec_size,
-                             0, str_len-1, zero_mem);
+                             0, unsigned(str_len-1), zero_mem);
     }
 
     /**

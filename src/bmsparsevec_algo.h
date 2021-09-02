@@ -174,7 +174,7 @@ bool sparse_vector_find_first_mismatch(const SV& sv1,
 
     unsigned sv_idx = 0;
 
-    unsigned planes1 = sv1.get_bmatrix().rows();//slices();
+    unsigned planes1 = (unsigned)sv1.get_bmatrix().rows();
     BM_ASSERT(planes1);
 
     typename SV::bvector_type_const_ptr bv_null1 = sv1.get_null_bvector();
@@ -2102,7 +2102,7 @@ bool sparse_vector_scanner<SV>::lower_bound_str(
         {
             if (!hmatr_.is_init())
             {
-                unsigned max_str = sv.effective_max_str();
+                unsigned max_str = (unsigned)sv.effective_max_str();
                 hmatr_.resize(linear_cutoff2, max_str+1, false);
             }
 
