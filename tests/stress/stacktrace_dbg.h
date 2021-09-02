@@ -19,6 +19,7 @@ std::string get_stacktrace(std::string& stack_str,
                            unsigned int max_frames = 256)
 {
 #ifdef _MSC_VER
+    (void) max_frames;
     stack_str = "MSVC, stack trace not implemented.";
 #else
     // storage array for stack trace address data

@@ -1359,6 +1359,10 @@ void sparse_vector_deserializer<SV>::deserialize_sv(SV& sv,
     deserialize_planes(sv, planes, buf, mask_bv);
 
     // restore NULL slice index
+#ifdef _MSC_VER
+#pragma warning( push )
+#pragma warning( disable : 4127)
+#endif
     if (sv.max_vector_size == 1)
     {
         // NULL vector at: (sv.max_vector_size * sizeof(value_type) * 8 + 1)
@@ -1366,6 +1370,9 @@ void sparse_vector_deserializer<SV>::deserialize_sv(SV& sv,
         if (bv_null)
             sv.mark_null_idx(sv.sv_value_slices); // last slice is NULL
     }
+#ifdef _MSC_VER
+#pragma warning( pop )
+#endif
 
 
     clear_xor_compression();
@@ -1388,6 +1395,7 @@ template<typename SV>
 unsigned sparse_vector_deserializer<SV>::load_header(
         bm::decoder& dec, SV& sv, unsigned char& matr_s_ser)
 {
+    (void)sv;
     bm::id64_t planes_code = 0;
     unsigned char h1 = dec.get_8();
     unsigned char h2 = dec.get_8();
