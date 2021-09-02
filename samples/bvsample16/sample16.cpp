@@ -65,7 +65,7 @@ int main(void)
         bm::aggregator<bm::bvector<> > agg;
         
         // current version of aggregator is capped at 256 processing limit
-        if (max_vectors > agg.max_aggregator_cap)
+        if constexpr (max_vectors > agg.max_aggregator_cap)
         {
             std::cerr << "Too many bit-vectors!" << std::endl;
             return 1;

@@ -97,7 +97,7 @@ void Set3VL_ValueDemo()
     {
         bm::set_value_kleene(bv_v, bv_null, i, v);
         auto v1 = bm::get_value_kleene(bv_v, bv_null, i);
-        assert(v == v1);
+        assert(v == v1); (void) v1;
         v += 1;
         if (v > 1)
             v = -1;
