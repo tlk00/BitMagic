@@ -1783,9 +1783,9 @@ base_sparse_vector<Val, BV, MAX_SIZE>::s2u(value_type v) BMNOEXCEPT
             // the +1 trick is to get abs of INT_MIN without overflowing
             // https://stackoverflow.com/questions/22268815/absolute-value-of-int-min
             value_type uv = -(v+1);
-            return 1u | (unsigned_value_type(uv) << 1u);
+            return 1u | unsigned_value_type((unsigned_value_type(uv) << 1u));
         }
-        return unsigned_value_type(v) << 1u;
+        return unsigned_value_type(unsigned_value_type(v) << 1u);
     }
     else
         return v;
