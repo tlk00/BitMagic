@@ -46,10 +46,11 @@ For more information please visit:  http://bitmagic.io
 
 using namespace std;
 
-typedef bm::sparse_vector<unsigned, bm::bvector<> > svector;
+typedef bm::sparse_vector<unsigned, bm::bvector<> > sparse_vector_u32;
+typedef bm::sparse_vector<int, bm::bvector<> >      sparse_vector_i32;
 
-typedef bm::sparse_vector_serializer<svector>   sv_serializer_type;
-typedef bm::sparse_vector_deserializer<svector> sv_deserializer_type;
+typedef bm::sparse_vector_serializer<sparse_vector_u32>   sv_serializer_type;
+typedef bm::sparse_vector_deserializer<sparse_vector_u32> sv_deserializer_type;
 
 /// Demo 1
 /// Simple one function call serialization
@@ -57,8 +58,8 @@ typedef bm::sparse_vector_deserializer<svector> sv_deserializer_type;
 static
 void SDemo1()
 {
-    svector sv1;
-    svector sv2;
+    sparse_vector_u32 sv1;
+    sparse_vector_u32 sv2;
 
     for (unsigned i = 0; i < 128000; ++i)
     {
@@ -68,7 +69,7 @@ void SDemo1()
     // optimize memory allocation of sparse vector
     sv1.optimize();
 
-    bm::sparse_vector_serial_layout<svector> sv_lay;
+    bm::sparse_vector_serial_layout<sparse_vector_u32> sv_lay;
     bm::sparse_vector_serialize(sv1, sv_lay);
 
     // copy serialization buffer to some other location
@@ -98,11 +99,14 @@ void SDemo1()
 /// - Reuseable serializer/deserilaizer classes
 /// - Shows serializarion with XOR compression enabled
 ///
+/// Reusable serializer is better (works faster) when we need to serialize/deserialize a bunch of vectors
+/// use of serializer also offers a better control on serialization options (like XOR compression)
+///
 static
 void SDemo2()
 {
-    svector sv1(bm::use_null); // NULL-able vector
-    svector sv2(bm::use_null);
+    sparse_vector_u32 sv1(bm::use_null); // NULL-able vector
+    sparse_vector_u32 sv2(bm::use_null);
 
     for (unsigned i = 0; i < 128000; i+=2)
     {
@@ -113,7 +117,7 @@ void SDemo2()
 
     sv_serializer_type sv_ser;
     sv_deserializer_type sv_dser;
-    bm::sparse_vector_serial_layout<svector> sv_lay0;
+    bm::sparse_vector_serial_layout<sparse_vector_u32> sv_lay0;
 
     // the data pattern will allow XOR compression
     // lets try to enable it!
@@ -130,7 +134,7 @@ void SDemo2()
     // deserialize from the memory pointer
     //
     {
-        svector sv3(bm::use_null);
+        sparse_vector_u32 sv3(bm::use_null);
         sv_dser.deserialize(sv3, buf);
         assert(sv3.equal(sv1));
     }
@@ -153,7 +157,7 @@ void SDemo2()
     // deserialize from the memory pointer
     //
     {
-        svector sv3(bm::use_null);
+        sparse_vector_u32 sv3(bm::use_null);
         sv_dser.deserialize(sv3, buf);
         assert(sv3.equal(sv1));
     }
