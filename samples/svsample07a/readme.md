@@ -27,4 +27,4 @@ Results bit-vector is inspected using bm::interval_enumerator<> to find patterns
 > 
 > Value = 18 is unique
 > 
-> Value = 178 is co-located
+> Value = 178 is colocated

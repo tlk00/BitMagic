@@ -127,7 +127,7 @@ int main(void)
             // or unique as 000010000...00
             // or form non-unique, multi-occurence patterns as 000111000..011..
             //
-            
+
             interval_enumerator_type ien(bv_res);
             assert(ien.valid()); // as we took value from the search vector
             bvector_type::size_type range_cnt = ien.end() - ien.start() + 1;
@@ -140,7 +140,7 @@ int main(void)
                     cout << "Value = " << v << " is unique" << endl;
                     continue;
                 }
-                cout << "Value = " << v << " is co-located" << endl;
+                cout << "Value = " << v << " is colocated" << endl;
                 continue;
             }
             cout << "Value = " << v << " is not colocated" << endl;
