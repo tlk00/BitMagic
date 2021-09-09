@@ -22,8 +22,8 @@ For more information please visit:  http://bitmagic.io
   to find special values: unique, co-locvated together in the results or dispersed.
 
   \sa bm::sparse_vector
-  \sa bm::sparse_vector_scanner<>
-  \sa bm::interval_enumerator<>
+  \sa bm::sparse_vector_scanner
+  \sa bm::interval_enumerator
   \sa bvintervals
   \sa sample23
 

@@ -177,6 +177,7 @@ add_executable(svsample04 ${PROJECT_SOURCE_DIR}/samples/svsample04/svsample04.cp
 add_executable(svsample05 ${PROJECT_SOURCE_DIR}/samples/svsample05/svsample05.cpp ${BM_HEADERS})
 add_executable(svsample06 ${PROJECT_SOURCE_DIR}/samples/svsample06/svsample06.cpp ${BM_HEADERS})
 add_executable(svsample07 ${PROJECT_SOURCE_DIR}/samples/svsample07/svsample07.cpp ${BM_HEADERS})
+add_executable(svsample07a ${PROJECT_SOURCE_DIR}/samples/svsample07a/svsample07a.cpp ${BM_HEADERS})
 add_executable(svsample08 ${PROJECT_SOURCE_DIR}/samples/svsample08/svsample08.cpp ${BM_HEADERS})
 add_executable(svsample09 ${PROJECT_SOURCE_DIR}/samples/svsample09/svsample09.cpp ${BM_HEADERS})
 
