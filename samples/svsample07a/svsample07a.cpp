@@ -88,9 +88,15 @@ int main(void)
             cout << endl << endl;
         }
 
+        bm::sparse_vector_scanner<sparse_vector_u32> scanner;
+
+        scanner.bind(sv, false);
 
         bvector_type bv_res;
-        bm::sparse_vector_scanner<sparse_vector_u32> scanner;
+        // connect bv_res with allocation pool scanner for better
+        // this is optional but known to improve performance on repeated searches
+        typename bvector_type::mem_pool_guard mp_guard;
+        mp_guard.assign_if_not_set(scanner.get_bvector_alloc_pool(), bv_res);
 
         sparse_vector_u32::const_iterator it = sv.begin();
         sparse_vector_u32::const_iterator it_end = sv.end();
