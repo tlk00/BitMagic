@@ -156,7 +156,7 @@ int main(void)
                 cmp = ::strcmp(s1, s2);
                 assert(cmp==0);
                 cmp = ::strcmp(s1, s3);
-                assert(cmp==0);
+                assert(cmp==0); (void)cmp;
 
             } // for j
             cout << "Gather deserialization check OK" << endl;
