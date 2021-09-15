@@ -734,6 +734,11 @@ public:
         \param  bv_out - output bit-bector of non-zero elements
     */
     void correct_nulls(const SV&   sv, typename SV::bvector_type& bv_out);
+
+    /// Return allocator pool for blocks
+    ///  (Can be used to improve performance of repeated searches with the same scanner)
+    ///
+    allocator_pool_type& get_bvector_alloc_pool() BMNOEXCEPT { return pool_; }
     
 protected:
 
@@ -1193,42 +1198,45 @@ template<typename SV>
 void sparse_vector_scanner<SV>::bind(const SV&  sv, bool sorted)
 {
     bound_sv_ = &sv;
-    effective_str_max_ = sv.effective_vector_max();
-    if (sorted)
+
+    if constexpr (SV::is_str()) // bindings for the string sparse vector
     {
-        size_type sv_sz = sv.size();
-        BM_ASSERT(sv_sz);
-        size_type total_nb = sv_sz / bm::gap_max_bits + 1;
-
-        block0_elements_cache_.resize(total_nb, effective_str_max_+1);
-        block0_elements_cache_.set_zero();
-
-        block3_elements_cache_.resize(total_nb * 3, effective_str_max_+1);
-        block3_elements_cache_.set_zero();
-        
-        // fill in elements cache
-        for (size_type i = 0; i < sv_sz; i+= bm::gap_max_bits)
+        effective_str_max_ = sv.effective_vector_max();
+        if (sorted)
         {
-            size_type nb = (i >> bm::set_block_shift);
-            value_type* s0 = block0_elements_cache_.row(nb);
-            sv.get(i, s0, size_type(block0_elements_cache_.cols()));
-            
-            for (size_type k = 0; k < 3; ++k)
+            size_type sv_sz = sv.size();
+            BM_ASSERT(sv_sz);
+            size_type total_nb = sv_sz / bm::gap_max_bits + 1;
+
+            block0_elements_cache_.resize(total_nb, effective_str_max_+1);
+            block0_elements_cache_.set_zero();
+
+            block3_elements_cache_.resize(total_nb * 3, effective_str_max_+1);
+            block3_elements_cache_.set_zero();
+
+            // fill in elements cache
+            for (size_type i = 0; i < sv_sz; i+= bm::gap_max_bits)
             {
-                value_type* s1 = block3_elements_cache_.row(nb * 3 + k);
-                size_type idx = i + (k+1) * bm::sub_block3_size;
-                sv.get(idx, s1, size_type(block3_elements_cache_.cols()));
-            } // for k
+                size_type nb = (i >> bm::set_block_shift);
+                value_type* s0 = block0_elements_cache_.row(nb);
+                sv.get(i, s0, size_type(block0_elements_cache_.cols()));
+
+                for (size_type k = 0; k < 3; ++k)
+                {
+                    value_type* s1 = block3_elements_cache_.row(nb * 3 + k);
+                    size_type idx = i + (k+1) * bm::sub_block3_size;
+                    sv.get(idx, s1, size_type(block3_elements_cache_.cols()));
+                } // for k
+            } // for i
+        }
+        // pre-calculate vector plane masks
+        //
+        vector_plane_masks_.resize(effective_str_max_);
+        for (unsigned i = 0; i < effective_str_max_; ++i)
+        {
+            vector_plane_masks_[i] = sv.get_slice_mask(i);
         } // for i
     }
-    // pre-calculate vector plane masks
-    //
-    vector_plane_masks_.resize(effective_str_max_);
-    for (unsigned i = 0; i < effective_str_max_; ++i)
-    {
-        vector_plane_masks_[i] = sv.get_slice_mask(i);
-    } // for i
-    
 }
 
 //----------------------------------------------------------------------------

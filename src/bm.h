@@ -1996,6 +1996,20 @@ public:
     blocks_manager_type& get_blocks_manager() BMNOEXCEPT 
                                     { return blockman_; }
 
+    /**
+        Import integers (set bits). (Fast, no checks).
+        @internal
+    */
+    void import(const size_type* ids, size_type ids_size,
+                bm::sort_order sorted_idx);
+
+    /**
+        Import sorted integers (set bits). (Fast, no checks).
+        @internal
+    */
+    void import_sorted(const size_type* ids, const size_type ids_size);
+
+
     //@}
     
     static void throw_bad_alloc();
@@ -2006,14 +2020,7 @@ protected:
         @internal
     */
     void sync_size();
-    
-    /**
-        Import integers (set bits).
-        (Fast, no checks).
-        @internal
-    */
-    void import(const size_type* ids, size_type ids_size,
-                bm::sort_order sorted_idx);
+
 
     void import_block(const size_type* ids,
                       block_idx_type nblock, size_type start, size_type stop);
@@ -3650,7 +3657,7 @@ void bvector<Alloc>::set(const size_type* ids,
     if (!blockman_.is_init())
         blockman_.init_tree();
 
-    import(ids, ids_size, so);    
+    import(ids, ids_size, so);
     sync_size();
 }
 
@@ -3776,9 +3783,8 @@ template<class Alloc>
 void bvector<Alloc>::import(const size_type* ids, size_type size_in,
                             bm::sort_order  sorted_idx)
 {
-    size_type n, start, stop = size_in;
+    size_type n, start(0), stop(size_in);
     block_idx_type nblock;
-    start = 0;
 
     n = ids[start];
     nblock = (n >> bm::set_block_shift);
@@ -3790,10 +3796,7 @@ void bvector<Alloc>::import(const size_type* ids, size_type size_in,
         block_idx_type nblock_end = (ids[size_in-1] >> bm::set_block_shift);
         if (nblock == nblock_end) // special case: one block import
         {
-            if (stop == 1)
-                set_bit_no_check(ids[0]);
-            else
-                import_block(ids, nblock, 0, stop);
+            import_block(ids, nblock, 0, stop);
             return;
         }
     }
@@ -3812,14 +3815,72 @@ void bvector<Alloc>::import(const size_type* ids, size_type size_in,
             stop = bm::idx_arr_block_lookup_u32(ids, size_in, nblock, start);
         #endif
         BM_ASSERT(start < stop);
-
-        if (stop - start == 1 && n < bm::id_max) // just one bit to set
-            set_bit_no_check(n);
-        else
-            import_block(ids, nblock, start, stop);
+        import_block(ids, nblock, start, stop);
         start = stop;
     } while (start < size_in);
 }
+
+// -----------------------------------------------------------------------
+
+template<class Alloc>
+void bvector<Alloc>::import_sorted(const size_type* ids,
+                                   const size_type size_in)
+{
+    BM_ASSERT(size_in);
+    BM_ASSERT(ids[0] < bm::id_max); // limit is 2^31-1 (for 32-bit mode)
+    BM_ASSERT(ids[size_in-1] < bm::id_max);
+
+    size_type n, start(0), stop = size_in;
+    block_idx_type nblock, nblock_end;
+
+    n = ids[start];
+    nblock = (n >> bm::set_block_shift);
+    nblock_end = (ids[size_in-1] >> bm::set_block_shift);
+
+    if (nblock == nblock_end) // special (but frequent)case: one block import
+    {
+        import_block(ids, nblock, 0, stop);
+        unsigned nbit = unsigned(ids[size_in-1] & bm::set_block_mask);
+        if (nbit == 65535) // last bit in block
+        {
+            unsigned i, j;
+            bm::get_block_coord(nblock, i, j);
+            blockman_.optimize_bit_block(i, j);
+        }
+    }
+    else
+    {
+        do
+        {
+            // TODO: use one-sided binary search to find the block limits
+            #ifdef BM64ADDR
+                stop = bm::idx_arr_block_lookup_u64(ids, size_in, nblock, start);
+            #else
+                stop = bm::idx_arr_block_lookup_u32(ids, size_in, nblock, start);
+            #endif
+            BM_ASSERT(start < stop);
+
+            import_block(ids, nblock, start, stop);
+            start = stop;
+            nblock = (ids[stop] >> bm::set_block_shift);
+        } while (start < size_in);
+
+        // multi-block sorted import, lets optimize
+        n = ids[start];
+        nblock = (n >> bm::set_block_shift);
+        nblock_end = (ids[size_in-1] >> bm::set_block_shift);
+        unsigned nbit = unsigned(ids[size_in-1] & bm::set_block_mask);
+        nblock_end += bool(nbit == 65535);
+        do
+        {
+            unsigned i, j;
+            bm::get_block_coord(nblock++, i, j);
+            blockman_.optimize_bit_block(i, j);
+        } while (nblock < nblock_end);
+
+    }
+}
+
 
 // -----------------------------------------------------------------------
 
@@ -3836,9 +3897,14 @@ void bvector<Alloc>::import_block(const size_type* ids,
                                        true/*allow NULL ret*/);
     if (!IS_FULL_BLOCK(blk))
     {
-        // TODO: add a special case when we import just a few bits per block
         if (BM_IS_GAP(blk))
         {
+            if (stop-start == 1)
+            {
+                unsigned nbit = unsigned(ids[0] & bm::set_block_mask);
+                gap_block_set_no_ret(BMGAP_PTR(blk), true, nblock, nbit);
+                return;
+            }
             blk = blockman_.deoptimize_block(nblock); // TODO: try to avoid
         }
         #ifdef BM64ADDR
@@ -3846,7 +3912,6 @@ void bvector<Alloc>::import_block(const size_type* ids,
         #else
             bm::set_block_bits_u32(blk, ids, start, stop);
         #endif
-        
         if (nblock == bm::set_total_blocks-1)
             blk[bm::set_block_size-1] &= ~(1u<<31);
     }
@@ -3898,7 +3963,6 @@ bool bvector<Alloc>::set_bit_no_check(size_type n, bool val)
             return val;
         }
     }
-    //return false;
 }
 
 // -----------------------------------------------------------------------

@@ -245,18 +245,23 @@ public:
         typedef void reference;
         
     public:
+
+        /*! @name Construction and assignment  */
+        ///@{
+
         back_insert_iterator() BMNOEXCEPT;
-        back_insert_iterator(rsc_sparse_vector_type* csv) BMNOEXCEPT;
-        
-        back_insert_iterator& operator=(const back_insert_iterator& bi)
+        back_insert_iterator(rsc_sparse_vector_type* csv) ;
+
+        back_insert_iterator(const back_insert_iterator& bi);
+        void operator=(const back_insert_iterator& bi)
         {
             BM_ASSERT(bi.empty());
             this->flush(); sv_bi_ = bi.sv_bi_;
-            return *this;
         }
 
         ~back_insert_iterator();
-        
+        ///@}
+
         /** push value to the vector */
         back_insert_iterator& operator=(value_type v)
             { this->add(v); return *this; }
@@ -542,10 +547,13 @@ public:
     */
     bool is_nullable() const { return true; }
     
-    /** \brief trait if sparse vector is "compressed" (true)
+    /** \brief various type traits
     */
-    static
+    static constexpr
     bool is_compressed() { return true; }
+
+    static constexpr
+    bool is_str() BMNOEXCEPT { return false; }
 
     ///@}
 
@@ -1619,12 +1627,23 @@ rsc_sparse_vector<Val, SV>::back_insert_iterator::back_insert_iterator() BMNOEXC
 
 template<class Val, class SV>
 rsc_sparse_vector<Val, SV>::back_insert_iterator::back_insert_iterator
-                                (rsc_sparse_vector_type* csv) BMNOEXCEPT
+                                (rsc_sparse_vector_type* csv)
+: csv_(csv),
+  sv_bi_(csv->sv_.get_back_inserter())
 {
-    csv_ = csv;
-    sv_bi_ = csv->sv_.get_back_inserter();
-    sv_bi_.disable_set_null(); // NULL is handled outside
+    sv_bi_.disable_set_null(); // NULL will be handled outside
 }
+
+//---------------------------------------------------------------------
+
+template<class Val, class SV>
+rsc_sparse_vector<Val, SV>::back_insert_iterator::back_insert_iterator(
+        const back_insert_iterator& bi)
+: csv_(bi.csv_),
+  sv_bi_(bi.sv_bi_)
+{
+}
+
 
 //---------------------------------------------------------------------
 

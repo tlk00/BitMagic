@@ -91,7 +91,7 @@ public:
      */
     typedef bm::dynamic_heap_matrix<unsigned char, allocator_type>
                                             slice_octet_matrix_type;
-typedef slice_octet_matrix_type remap_matrix_type;
+    typedef slice_octet_matrix_type remap_matrix_type;
 
     /** Matrix of character frequencies (for optimal code remap)
         @internal
@@ -797,10 +797,13 @@ public:
     /*! @name Various traits                                     */
     ///@{
     
-    /** \brief trait if sparse vector is "compressed" (false)
+    /** \brief various type traits
     */
-    static
+    static constexpr
     bool is_compressed() BMNOEXCEPT { return false; }
+
+    static constexpr
+    bool is_str() BMNOEXCEPT { return true; }
 
     ///@}
 

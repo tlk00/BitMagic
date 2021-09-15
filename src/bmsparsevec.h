@@ -180,6 +180,7 @@ public:
         const_iterator(const sparse_vector_type* sv) BMNOEXCEPT;
         const_iterator(const sparse_vector_type* sv, size_type pos) BMNOEXCEPT;
         const_iterator(const const_iterator& it) BMNOEXCEPT;
+
         
         bool operator==(const const_iterator& it) const BMNOEXCEPT
                                 { return (pos_ == it.pos_) && (sv_ == it.sv_); }
@@ -272,21 +273,41 @@ public:
         typedef void reference;
         
     public:
+        /*! @name Construction and assignment  */
+        ///@{
+
         back_insert_iterator();
         back_insert_iterator(sparse_vector_type* sv);
         back_insert_iterator(const back_insert_iterator& bi);
         
-        back_insert_iterator& operator=(const back_insert_iterator& bi)
+        /*back_insert_iterator&*/ void operator=(const back_insert_iterator& bi)
         {
             BM_ASSERT(bi.empty());
-            this->flush(); sv_ = bi.sv_; bv_null_ = bi. bv_null_;
-            return *this;
+            this->flush(); sv_ = bi.sv_; bv_null_ = bi.bv_null_;
+            buffer_.reserve(n_buf_size * sizeof(value_type));
+            buf_ptr_ = (unsigned_value_type*)(buffer_.data());
+            this->set_not_null_ = bi.set_not_null_;
+            //return *this;
+        }
+        /** move constructor */
+        back_insert_iterator(back_insert_iterator&& bi) BMNOEXCEPT;
+        /** move assignment*/
+        /*back_insert_iterator&*/void operator= (back_insert_iterator&& bi) BMNOEXCEPT
+        {
+            this->flush(); sv_ = bi.sv_; bv_null_ = bi.bv_null_;
+            this->buffer_.swap(bi.buffer_);
+            this->buf_ptr_ = bi.buf_ptr_;
+            this->set_not_null_ = bi.set_not_null_;
+            //return *this;
         }
 
         ~back_insert_iterator();
-        
+        ///@}
+
+
         /** push value to the vector */
-        back_insert_iterator& operator=(value_type v) { this->add(v); return *this; }
+        //back_insert_iterator&
+        void operator=(value_type v) { this->add(v); /*return *this;*/ }
         /** noop */
         back_insert_iterator& operator*() { return *this; }
         /** noop */
@@ -339,7 +360,6 @@ public:
         bvector_type*               bv_null_; ///!< not NULL vector pointer
         buffer_type                 buffer_;  ///!< value buffer
         unsigned_value_type*        buf_ptr_; ///!< position in the buffer
-        block_idx_type              prev_nb_; ///!< previous block added
         bool                        set_not_null_;
     };
     
@@ -383,10 +403,8 @@ public:
         return *this;
     }
 
-#ifndef BM_NO_CXX11
     /*! move-ctor */
     sparse_vector(sparse_vector<Val, BV>&& sv) BMNOEXCEPT;
-
 
     /*! move assignmment operator */
     sparse_vector<Val,BV>& operator = (sparse_vector<Val, BV>&& sv) BMNOEXCEPT
@@ -398,7 +416,6 @@ public:
         }
         return *this;
     }
-#endif
 
     ~sparse_vector() BMNOEXCEPT;
     ///@}
@@ -479,6 +496,11 @@ public:
     */
     void clear(size_type idx, bool set_null/* = false*/);
 
+    /** \brief set specified element to unassigned value (NULL)
+        \param idx - element index
+    */
+    void set_null(size_type idx);
+
     ///@}
 
     // ------------------------------------------------------------
@@ -510,17 +532,15 @@ public:
     // ------------------------------------------------------------
     /*! @name Various traits                                     */
     ///@{
-    
-    /** \brief set specified element to unassigned value (NULL)
-        \param idx - element index
+
+    /** \brief various type traits 
     */
-    void set_null(size_type idx);
-    
-    /** \brief trait if sparse vector is "compressed" (false)
-    */
-    static
+    static constexpr
     bool is_compressed() BMNOEXCEPT { return false; }
-    
+
+    static constexpr
+    bool is_str() BMNOEXCEPT { return false; }
+
     ///@}
 
 
@@ -974,6 +994,10 @@ protected:
                   size_type arr_size, size_type offset,
                   bool      set_not_null);
 
+    void import_u_nocheck(const unsigned_value_type* arr,
+                  size_type arr_size, size_type offset,
+                  bool      set_not_null);
+
     void join_null_slice(const sparse_vector<Val, BV>& sv);
 
     static
@@ -1104,20 +1128,32 @@ void sparse_vector<Val, BV>::import_u(const unsigned_value_type* arr,
                                       size_type         offset,
                                       bool              set_not_null)
 {
-    unsigned char b_list[sizeof(Val)*8];
-    unsigned row_len[sizeof(Val)*8] = {0, };
-
-    const unsigned transpose_window = 256;
-    bm::tmatrix<size_type, sizeof(Val)*8, transpose_window> tm; // matrix accumulator
-
     if (arr_size == 0)
         throw_range_error("sparse_vector range error (import size 0)");
 
+    // clear all planes in the range to provide corrrect import of 0 values
     if (offset < this->size_) // in case it touches existing elements
-    {
-        // clear all planes in the range to provide corrrect import of 0 values
         this->clear_range(offset, offset + arr_size - 1);
-    }
+
+    this->import_u_nocheck(arr, arr_size, offset, set_not_null);
+}
+//---------------------------------------------------------------------
+
+template<class Val, class BV>
+void sparse_vector<Val, BV>::import_u_nocheck
+                                     (const unsigned_value_type* arr,
+                                      size_type         arr_size,
+                                      size_type         offset,
+                                      bool              set_not_null)
+{
+    BM_ASSERT(arr);
+    const unsigned bit_capacity = sizeof(Val)*8;
+    unsigned char b_list[bit_capacity];
+    unsigned row_len[bit_capacity] = {0, };
+    bvector_type_ptr bv_slices[bit_capacity] = {0, };
+
+    const unsigned transpose_window = 256; // L1-sized for 32-bit int
+    bm::tmatrix<size_type, bit_capacity, transpose_window> tm; // matrix accumulator
 
     // transposition algorithm uses bitscan to find index bits and store it
     // in temporary matrix (list for each bit plane), matrix here works
@@ -1140,25 +1176,30 @@ void sparse_vector<Val, BV>::import_u(const unsigned_value_type* arr,
 
             if (rl == transpose_window)
             {
-                bvector_type* bv = this->get_create_slice(p);
+                bvector_type* bv = bv_slices[p];
+                if (!bv)
+                    bv = bv_slices[p] = this->get_create_slice(p);
+
                 const size_type* r = tm.row(p);
-                bv->set(r, rl, BM_SORTED);
                 row_len[p] = 0;
-                tm.row(p)[0] = 0;
+                bv->import_sorted(r, rl);
+
             }
         } // for j
     } // for i
 
     // process incomplete transposition lines
     //
-    for (unsigned k = 0; k < tm.rows(); ++k)
+    unsigned rows = tm.rows();
+    for (unsigned k = 0; k < rows; ++k)
     {
-        unsigned rl = row_len[k];
-        if (rl)
+        if (unsigned rl = row_len[k])
         {
-            bvector_type* bv = this->get_create_slice(k);
-            const size_type* r = tm.row(k);
-            bv->set(r, rl, BM_SORTED);
+            bvector_type* bv = bv_slices[k];
+            if (!bv)
+                bv = this->get_create_slice(k);
+            const size_type* row = tm.row(k);
+            bv->import_sorted(row, rl);
         }
     } // for k
 
@@ -1204,7 +1245,7 @@ void sparse_vector<Val, BV>::import_back_u(const unsigned_value_type* arr,
                                          size_type         arr_size,
                                          bool              set_not_null)
 {
-    this->import_u(arr, arr_size, this->size(), set_not_null);
+    this->import_u_nocheck(arr, arr_size, this->size(), set_not_null);
 }
 
 //---------------------------------------------------------------------
@@ -2233,7 +2274,7 @@ bool sparse_vector<Val, BV>::const_iterator::is_null() const BMNOEXCEPT
 
 template<class Val, class BV>
 sparse_vector<Val, BV>::back_insert_iterator::back_insert_iterator()
-: sv_(0), bv_null_(0), buf_ptr_(0), prev_nb_(0), set_not_null_(true)
+: sv_(0), bv_null_(0), buf_ptr_(0), set_not_null_(true)
 {}
 
 //---------------------------------------------------------------------
@@ -2241,16 +2282,17 @@ sparse_vector<Val, BV>::back_insert_iterator::back_insert_iterator()
 template<class Val, class BV>
 sparse_vector<Val, BV>::back_insert_iterator::back_insert_iterator(
    typename sparse_vector<Val, BV>::back_insert_iterator::sparse_vector_type* sv)
-: sv_(sv), buf_ptr_(0), set_not_null_(true)
+: sv_(sv), set_not_null_(true)
 {
     if (sv)
     {
-        prev_nb_ = sv_->size() >> bm::set_block_shift;
         bv_null_ = sv_->get_null_bvect();
+        buffer_.reserve(n_buf_size * sizeof(value_type));
+        buf_ptr_ = (unsigned_value_type*)(buffer_.data());
     }
     else
     {
-        bv_null_ = 0; prev_nb_ = 0;
+        buf_ptr_ = 0; bv_null_ = 0;
     }
 }
 
@@ -2259,10 +2301,26 @@ sparse_vector<Val, BV>::back_insert_iterator::back_insert_iterator(
 template<class Val, class BV>
 sparse_vector<Val, BV>::back_insert_iterator::back_insert_iterator(
     const typename sparse_vector<Val, BV>::back_insert_iterator& bi)
-: sv_(bi.sv_), bv_null_(bi.bv_null_), buf_ptr_(0), prev_nb_(bi.prev_nb_),
+: sv_(bi.sv_), bv_null_(bi.bv_null_), buf_ptr_(0),
   set_not_null_(bi.set_not_null_)
 {
-    BM_ASSERT(bi.empty());
+    if (sv_)
+    {
+        buffer_.reserve(n_buf_size * sizeof(value_type));
+        buf_ptr_ = (unsigned_value_type*)(buffer_.data());
+    }
+}
+
+//---------------------------------------------------------------------
+
+template<class Val, class BV>
+sparse_vector<Val, BV>::back_insert_iterator::back_insert_iterator(
+    typename sparse_vector<Val, BV>::back_insert_iterator&& bi) BMNOEXCEPT
+: sv_(bi.sv_), bv_null_(bi.bv_null_), buf_ptr_(bi.buf_ptr_),
+  set_not_null_(bi.set_not_null_)
+{
+    buffer_.swap(bi.buffer);
+    buf_ptr_ = bi.buf_ptr_;
 }
 
 //---------------------------------------------------------------------
@@ -2279,43 +2337,40 @@ template<class Val, class BV>
 void sparse_vector<Val, BV>::back_insert_iterator::add(
          typename sparse_vector<Val, BV>::back_insert_iterator::value_type v)
 {
-    typename sparse_vector<Val, BV>::size_type sz = sv_->size();
+    BM_ASSERT(sv_);
+    BM_ASSERT(buf_ptr_ && buffer_.data());
+
     const unsigned_value_type* data_ptr = (const unsigned_value_type*)buffer_.data();
     size_type buf_idx = size_type(buf_ptr_ - data_ptr);
+    typename sparse_vector<Val, BV>::size_type sz = sv_->size();
 
     this->add_value_no_null(v);
 
     if (bv_null_)
+    {
         bv_null_->set_bit_no_check(sz + buf_idx);
+    }
 }
 
 //---------------------------------------------------------------------
 
 template<class Val, class BV>
+BMFORCEINLINE
 void sparse_vector<Val, BV>::back_insert_iterator::add_value_no_null(
          typename sparse_vector<Val, BV>::back_insert_iterator::value_type v)
 {
     BM_ASSERT(sv_);
+    BM_ASSERT(buf_ptr_ && buffer_.data());
 
     sparse_vector<Val, BV>::unsigned_value_type uv =
         sparse_vector<Val, BV>::parent_type::s2u(v);
-
-    if (!buf_ptr_) // not allocated (yet)
-    {
-        buffer_.reserve(n_buf_size * sizeof(value_type));
-        buf_ptr_ = (unsigned_value_type*)(buffer_.data());
-        *buf_ptr_ = uv;
-        ++buf_ptr_;
-        return;
-    }
-    BM_ASSERT(buf_ptr_ && buffer_.data());
-    if (buf_ptr_ - ((unsigned_value_type*)buffer_.data()) >= n_buf_size)
+    size_type buf_idx = size_type(buf_ptr_ - (const unsigned_value_type*)buffer_.data());
+    if (buf_idx >= n_buf_size)
     {
         this->flush();
         buf_ptr_ = (unsigned_value_type*)(buffer_.data());
     }
-    *buf_ptr_ = uv;
-    ++buf_ptr_;
+    *buf_ptr_++ = uv;
 }
 
 //---------------------------------------------------------------------
@@ -2350,7 +2405,7 @@ void sparse_vector<Val, BV>::back_insert_iterator::add_null(
 template<class Val, class BV>
 bool sparse_vector<Val, BV>::back_insert_iterator::empty() const
 {
-    return (!buf_ptr_ || !sv_);
+    return (!sv_ || (buf_ptr_ == (unsigned_value_type*)buffer_.data()));
 }
 
 //---------------------------------------------------------------------
@@ -2358,24 +2413,16 @@ bool sparse_vector<Val, BV>::back_insert_iterator::empty() const
 template<class Val, class BV>
 void sparse_vector<Val, BV>::back_insert_iterator::flush()
 {
-    if (this->empty())
+    if (!sv_)
         return;
-    unsigned_value_type* d = (unsigned_value_type*)buffer_.data();
-    size_type arr_size = size_type(buf_ptr_ - d);
+    unsigned_value_type* arr = (unsigned_value_type*)buffer_.data();
+    size_type arr_size = size_type(buf_ptr_ - arr);
     if (!arr_size)
         return;
 
-    sv_->import_back_u(d, arr_size, false);
+    sv_->import_back_u(arr, arr_size, false);
     
     buf_ptr_ = (unsigned_value_type*) buffer_.data();
-    BM_ASSERT(buf_ptr_);
-    block_idx_type nb = sv_->size() >> bm::set_block_shift;
-    if (nb != prev_nb_)
-    {
-        // optimize all previous blocks in all planes
-        sv_->optimize_block(prev_nb_);
-        prev_nb_ = nb;
-    }
 }
 
 //---------------------------------------------------------------------

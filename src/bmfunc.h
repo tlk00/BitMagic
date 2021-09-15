@@ -9391,17 +9391,18 @@ void set_block_bits_u32(bm::word_t* BMRESTRICT block,
                         const unsigned* BMRESTRICT idx,
                         unsigned start, unsigned stop ) BMNOEXCEPT
 {
+    BM_ASSERT(start < stop);
 #if defined(VECT_SET_BLOCK_BITS)
     VECT_SET_BLOCK_BITS(block, idx, start, stop);
 #else
-    for (unsigned i = start; i < stop; ++i)
+    do
     {
-        unsigned n = idx[i];
+        unsigned n = idx[start++];
         unsigned nbit = unsigned(n & bm::set_block_mask);
         unsigned nword  = nbit >> bm::set_word_shift;
         nbit &= bm::set_word_mask;
         block[nword] |= (1u << nbit);
-    } // for i
+    } while (start < stop);
 #endif
 }
 

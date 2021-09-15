@@ -58,15 +58,15 @@ struct tmatrix
         bm::set_representation best_rep;
     };
 
-    static unsigned rows() { return ROWS; }
-    static unsigned cols() { return COLS; }
+    static unsigned rows() BMNOEXCEPT { return ROWS; }
+    static unsigned cols() BMNOEXCEPT { return COLS; }
 
-    const T* row(unsigned row_idx) const
+    const T* row(unsigned row_idx) const BMNOEXCEPT
     {
         BM_ASSERT(row_idx < ROWS);
         return value[row_idx];
     }
-    T* row(unsigned row_idx)
+    T* row(unsigned row_idx) BMNOEXCEPT
     {
         BM_ASSERT(row_idx < ROWS);
         return value[row_idx];
