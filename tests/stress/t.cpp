@@ -20867,6 +20867,25 @@ void TestSparseVector()
 
     }}
 
+    cout << "svector back inserter..." << endl;
+    {{
+        bm::sparse_vector<long long, bvect> sv(bm::use_null);
+
+        bm::sparse_vector<long long, bvect>::back_insert_iterator bi(sv.get_back_inserter());
+        bi = -10;
+        bi.add_null();
+        bi = 256;
+
+        bi.flush();
+
+        assert(sv.get(0) == -10);
+        assert(sv.get(1) == 0);
+        assert(sv.is_null(1) == true);
+        assert(sv.get(2) == 256);
+
+
+    }}
+
     cout << "svector Import test..." << endl;
     
     {{
@@ -31748,7 +31767,7 @@ void TestCompressSparseVector()
         assert(pos == 21);
 
     }
-
+/*
     cout << "count_range_notnull()" << endl;
     {
         rsc_sparse_vector_u32 csv1;
@@ -31836,7 +31855,7 @@ void TestCompressSparseVector()
             }
         }
     }
-
+*/
 
     cout << " back inserter tests" << endl;
     {
@@ -34184,7 +34203,7 @@ int main(int argc, char *argv[])
 #endif
     if (is_all || is_sv)
     {
-
+/*
         TestSparseVector();
          CheckAllocLeaks(false);
 
@@ -34193,7 +34212,7 @@ int main(int argc, char *argv[])
 
         TestSparseVectorAlgo();
          CheckAllocLeaks(false);
-
+*/
         TestSparseVectorInserter();
          CheckAllocLeaks(false);
 
