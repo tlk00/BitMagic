@@ -4127,19 +4127,8 @@ bool bvector<Alloc>::set_bit_conditional_impl(size_type n,
     if (block_type == 1) // gap
     {
         bm::gap_word_t* gap_blk = BMGAP_PTR(blk);
-        bool old_val = (bm::gap_test_unr(gap_blk, nbit) != 0);
-
-        if (old_val != condition) 
-        {
-            return false;
-        }
-
-        if (val != old_val)
-        {
-            unsigned is_set = gap_block_set(gap_blk, val, nblock, nbit);
-            BM_ASSERT(is_set);
-            return is_set;
-        }
+        unsigned is_set = gap_block_set(gap_blk, val, nblock, nbit);
+        return is_set;
     }
     else  // bit block
     {
@@ -4151,19 +4140,13 @@ bool bvector<Alloc>::set_bit_conditional_impl(size_type n,
         bool is_set = ((*word) & mask) != 0;
 
         if (is_set != condition)
-        {
             return false;
-        }
         if (is_set != val)    // need to change bit
         {
             if (val)          // set bit
-            {
                 *word |= mask;
-            }
             else               // clear bit
-            {
                 *word &= ~mask;
-            }
             return true;
         }
     }

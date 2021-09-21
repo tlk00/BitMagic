@@ -1083,18 +1083,19 @@ public:
                 return 0; // it means nothing to do for the caller
             }
 
+            reserve_top_blocks(i + 1);
             if (initial_block_type == 0) // bitset requested
             {
                 block = alloc_.alloc_bit_block();
                 // initialize block depending on its previous status
                 bm::bit_block_set(block, block_flag ? ~0u : 0u);
-                set_block(nb, block);
+                set_block(i, j, block, false/*bit*/);
             }
             else // gap block requested
             {
                 bm::gap_word_t* gap_block = allocate_gap_block(0);
-                gap_set_all(gap_block, bm::gap_max_bits, block_flag);
-                set_block(nb, (bm::word_t*)gap_block, true/*gap*/);
+                bm::gap_set_all(gap_block, bm::gap_max_bits, block_flag);
+                set_block(i, j, (bm::word_t*)gap_block, true/*gap*/);
                 return (bm::word_t*)gap_block;
             }
         }
