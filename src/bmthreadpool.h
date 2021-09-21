@@ -351,13 +351,20 @@ protected:
             if (is_stop == stop_now) // immediate stop requested
                 break;
 
-            bm::task_description* task_descr;
+            bm::task_descr* task_descr;
             if (job_queue_.try_pop(task_descr))
             {
-                // TODO: consider try-catch here
-                task_descr->ret = task_descr->func(task_descr->argp);
-                task_descr->done = 1;
+                BM_ASSERT(task_descr->done == 0);
+                try
+                {
+                    task_descr->err_code = task_descr->func(task_descr->argp);
+                }
+                catch (...)
+                {
+                    task_descr->err_code = -1;
+                }
 
+                task_descr->done = 1;
                 task_done_cond_.notify_one();
                 continue;
             }
@@ -381,7 +388,6 @@ protected:
                 is_stop = stop_flag_.load(std::memory_order_relaxed);
                 if (is_stop == stop_now) // immediate stop requested
                     return;
-
                 std::this_thread::yield();
             }
         } // while
@@ -432,11 +438,12 @@ public:
         task_batch_base::size_type batch_size = tasks.size();
         for (task_batch_base::size_type i = 0; i < batch_size; ++i)
         {
-            bm::task_description* tdescr = tasks.get_task(i);
+            bm::task_descr* tdescr = tasks.get_task(i);
             tdescr->argp = tdescr; // restore the self referenece
+            BM_ASSERT(tdescr->done == 0);
 
             // check if this is a barrier call
-            if (tdescr->flags != bm::task_description::no_flag && i > 0)
+            if (tdescr->flags != bm::task_descr::no_flag && i > 0)
             {
                 //qu.unlock();
 
@@ -446,7 +453,7 @@ public:
                 wait_for_batch_done(/*tpool,*/ tasks, 0, batch_size - 1);
 
                 // run the barrier proc on the curent thread
-                tdescr->ret = tdescr->func(tdescr->argp);
+                tdescr->err_code = tdescr->func(tdescr->argp);
                 tdescr->done = 1;
 
                 // re-read the batch size, if barrier added more tasks
@@ -488,8 +495,9 @@ public:
 
         for (task_batch_base::size_type i = from_idx; i <= to_idx; ++i)
         {
-            const bm::task_description* tdescr = tasks.get_task(i);
+            const bm::task_descr* tdescr = tasks.get_task(i);
             unsigned done = tdescr->done.load(std::memory_order_relaxed);
+            BM_ASSERT(done == 1 || done == 0);
             while (!done)
             {
                 std::this_thread::yield();

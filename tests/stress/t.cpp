@@ -12405,7 +12405,7 @@ void SerializationCompressionLevelsTest()
                                 bv_ref, xor_search_params);
 
             typedef
-            bm::thread_pool<bm::task_description*, bm::spin_lock<bm::pad0_struct> > pool_type;
+            bm::thread_pool<bm::task_descr*, bm::spin_lock<bm::pad0_struct> > pool_type;
             pool_type tpool;  // our thread pool here (no threads created yet)
             tpool.start(1); // start the threads
             {
@@ -12486,7 +12486,7 @@ void SerializationCompressionLevelsTest()
                                 bv_ref, xor_search_params);
 
             typedef
-            bm::thread_pool<bm::task_description*, bm::spin_lock<bm::pad0_struct> > pool_type;
+            bm::thread_pool<bm::task_descr*, bm::spin_lock<bm::pad0_struct> > pool_type;
             pool_type tpool;  // our thread pool here (no threads created yet)
             tpool.start(3); // start the threads
             {
@@ -13774,7 +13774,7 @@ void TestSparseVectorSerialization2()
                                     bv_ref, xor_search_params);
 
                 typedef
-                bm::thread_pool<bm::task_description*, bm::spin_lock<bm::pad0_struct> > pool_type;
+                bm::thread_pool<bm::task_descr*, bm::spin_lock<bm::pad0_struct> > pool_type;
                 pool_type tpool;  // our thread pool here (no threads created yet)
                 tpool.start(2); // start the threads
                 {
@@ -20848,7 +20848,7 @@ void TestSparseVector()
           bm::sparse_vector<unsigned, bvect>::bvector_type::opt_compress, &st);
 
         typedef
-        bm::thread_pool<bm::task_description*, bm::spin_lock<bm::pad0_struct> > pool_type;
+        bm::thread_pool<bm::task_descr*, bm::spin_lock<bm::pad0_struct> > pool_type;
         pool_type tpool;  // our thread pool here (no threads created yet)
         tpool.start(4); // start the threads
 
@@ -22448,7 +22448,7 @@ void TestSparseVector_XOR_Scanner()
                                 r_vect, xor_search_params);
 
             typedef
-            bm::thread_pool<bm::task_description*, bm::spin_lock<bm::pad0_struct> > pool_type;
+            bm::thread_pool<bm::task_descr*, bm::spin_lock<bm::pad0_struct> > pool_type;
             pool_type tpool;  // our thread pool here (no threads created yet)
             tpool.start(1); // start the threads
             {
@@ -27273,7 +27273,7 @@ void TestStrSparseVectorSerial()
                                 bv_ref, xor_search_params);
 
             typedef
-            bm::thread_pool<bm::task_description*, bm::spin_lock<bm::pad0_struct> > pool_type;
+            bm::thread_pool<bm::task_descr*, bm::spin_lock<bm::pad0_struct> > pool_type;
             pool_type tpool;  // our thread pool here (no threads created yet)
             tpool.start(4); // start the threads
             {
@@ -33539,7 +33539,7 @@ void TestXOR_RefVector()
 template<typename BV>
 struct TestTaskBuilder
 {
-    static void* task_run(void* argp)
+    static int task_run(void* argp)
     {
         if (!argp)
             return 0;
@@ -33547,15 +33547,15 @@ struct TestTaskBuilder
         unsigned t = bv->test(0);
         void* r(0);
         memcpy(&r, &t, sizeof(t));
-        return r;
+        return 1;
     }
 
     void build_batch(bm::task_batch<typename BV::allocator_type>& batch)
     {
         auto& tv = batch.get_task_vector();
-        tv.push_back(bm::task_description(task_run));
-        tv.push_back(bm::task_description(task_run));
-        tv.push_back(bm::task_description(task_run));
+        tv.push_back(bm::task_descr(task_run));
+        tv.push_back(bm::task_descr(task_run));
+        tv.push_back(bm::task_descr(task_run));
     }
 };
 
@@ -33575,11 +33575,9 @@ void TestTasks()
         bvect bv; bv.set(0);
         TestTaskBuilder<bvect> ttb;
         (void)ttb;
-        bm::task_description tdescr(TestTaskBuilder<bvect>::task_run, &bv);
-        void* ret = tdescr.func(tdescr.argp);
-        unsigned t;
-        memcpy(&t, &ret, sizeof(t));
-        assert(t==1);
+        bm::task_descr tdescr(TestTaskBuilder<bvect>::task_run, &bv);
+        int ret = tdescr.func(tdescr.argp);
+        assert(ret==1);
     }
 
     {
@@ -34203,7 +34201,7 @@ int main(int argc, char *argv[])
 #endif
     if (is_all || is_sv)
     {
-/*
+
         TestSparseVector();
          CheckAllocLeaks(false);
 
@@ -34212,7 +34210,7 @@ int main(int argc, char *argv[])
 
         TestSparseVectorAlgo();
          CheckAllocLeaks(false);
-*/
+
         TestSparseVectorInserter();
          CheckAllocLeaks(false);
 

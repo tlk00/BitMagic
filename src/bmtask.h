@@ -27,6 +27,8 @@ For more information please visit:  http://bitmagic.io
 
 */
 #include <atomic>
+#include <functional>
+
 
 #include "bmbuffer.h"
 
@@ -45,15 +47,14 @@ namespace bm
 */
 typedef void* (*task_func_type)(void*);
 
-/**
-    Descriptor for a task as a callback function, arguments, result.
-
-    Structure contains pointers but being a descriptor it does not own
-    their scope or nature (how it is allocated).
-
+/** Typedef for a call-back functional for lambda capture
     @ingroup bmtasks
 */
-struct task_description
+typedef std::function<int(void*)> task_function_t;
+
+
+
+struct task_descr
 {
     enum task_flags
     {
@@ -63,67 +64,47 @@ struct task_description
         barrier_ok_delayed = (1u << 2)
     };
 
-    task_func_type  func;      ///< pthread-like function callback
-    void*           argp;      ///< arg pointer
-    void*           ret;       ///< ret pointer
+    task_function_t  func;      ///< captured function callback
+    void*            argp;      ///< arg pointer
 
-    void*           ctx0;      ///< reserved
-    void*           ctx1;      ///< reserved
-    bm::id64_t      param0;    ///< reserved
-
-    /// Union to add extra flexible payload to tasks
-    union
-    {
-        int                i32;;
-        unsigned           u32;
-        unsigned long long u64;
-        float              fp32;
-        double             fp64;
-        void*              void_ptr;
-    } payload0, payload1;
 
     bm::id64_t              flags;     ///< task flags to designate barriers
-    unsigned                err_code;  ///< error code
+    int                     err_code;  ///< error code
     std::atomic_uint        done;      ///< 0 - pending
 
     // ----------------------------------------------------
     // Construction
     //
-    task_description() BMNOEXCEPT {}
+    task_descr() BMNOEXCEPT {}
 
-    task_description(const task_description& td) BMNOEXCEPT
+    task_descr(const task_descr& td)
     {
         func = td.func;
         argp = td.argp;
-        ret  = td.ret;
-        ctx0 = td.ctx0;
-        ctx1 = td.ctx1;
-        param0 = td.param0;
-
-        payload0 = td.payload0;
-        payload1 = td.payload1;
-
         flags = td.flags;
-
         err_code = td.err_code;
         done.store(td.done.load()); // atomic operation
     }
 
-    task_description(task_func_type  f, void* argptr = 0) BMNOEXCEPT
+    task_descr(task_function_t f, void* argptr = 0)
     {
-        init(f, argptr, 0, 0, 0);
+        this->init(f, argptr);
     }
 
-    void init(task_func_type  f, void* argptr,
-              void* c0, void* c1, bm::id64_t p0) BMNOEXCEPT
+    void init(task_function_t  f, void* argptr)
     {
-        func = f; argp = argptr;
-        ret = 0; ctx0 = c0; ctx1 = c1;
-        param0 = p0; flags = 0; err_code = 0;  
-        done = 0;
-        payload0.u64 = payload1.u64 = 0;
+        func = f; argp = argptr; done = 0; flags = no_flag;
+    }
+
+    int run()
+    {
+        err_code = func(argp);
+        done.store(1);
+        return err_code;
     }
 };
+
+
 
 /**
     Interface definition (base class) for a group of tasks (batch)
@@ -137,12 +118,12 @@ public:
     virtual ~task_batch_base() {}
 
     /// Return size of batch
-    virtual size_type size() = 0;
+    virtual size_type size() const = 0;
 
     /// Get task by index in the batch
     /// @param task_idx - task index in the batch
     /// @return task description
-    virtual bm::task_description* get_task(size_type task_idx) = 0;
+    virtual bm::task_descr* get_task(size_type task_idx) = 0;
 
 };
 
@@ -157,22 +138,31 @@ public:
     typedef BVAlloc                     bv_allocator_type;
     typedef task_batch_base::size_type  size_type;
     typedef
-    bm::heap_vector<bm::task_description, bv_allocator_type, true> task_vector_type;
+    bm::heap_vector<bm::task_descr, bv_allocator_type, true> task_vector_type;
 
 public:
 
     /// task_batch_base intreface implementation
     //@{
-    virtual size_type size() { return (size_type) task_vect_.size(); }
-    virtual bm::task_description* get_task(size_type task_idx) 
-        { return &task_vect_.at(task_idx); }
+    virtual size_type size() const BMNOEXCEPT { return (size_type) task_vect_.size(); }
+    virtual
+    bm::task_descr* get_task(size_type task_idx)
+        { return &task_vect_[task_idx]; }
+
     //@}
+
 
     /// Get access to internal task vector
     ///
     task_vector_type& get_task_vector()  BMNOEXCEPT { return task_vect_; }
     const task_vector_type& get_task_vector() const  BMNOEXCEPT
         { return task_vect_; }
+
+    void add(task_function_t  f, void* argptr)
+    {
+        bm::task_descr& tdescr = task_vect_.add();
+        tdescr.init(f, argptr);
+    }
 
 protected:
     task_vector_type      task_vect_; ///< list of tasks
@@ -194,10 +184,11 @@ void run_task_batch(task_batch_base & tasks)
     task_batch_base::size_type batch_size = tasks.size();
     for (task_batch_base::size_type i = 0; i < batch_size; ++i)
     {
-        bm::task_description* tdescr = tasks.get_task(i);
+        bm::task_descr* tdescr = tasks.get_task(i);
         tdescr->argp = tdescr; // restore the self referenece
-        tdescr->ret = tdescr->func(tdescr->argp);
-        tdescr->done = 1;
+        tdescr->run();
+//        tdescr->ret = tdescr->func(tdescr->argp);
+//        tdescr->done = 1;
     } // for
 }
 

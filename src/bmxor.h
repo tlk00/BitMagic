@@ -907,7 +907,8 @@ public:
     /**
         Compute similarity model for block
      */
-    void compute_sim_model(xor_sim_model<BV>        &sim_model,
+    void compute_sim_model(
+        typename xor_sim_model<BV>::matrix_chain_type &sim_model_matr,
                            size_type                 nb,
                            size_type                 nb_rank,
                            const bm::xor_sim_params& params);
@@ -1461,21 +1462,22 @@ void xor_scanner<BV>::compute_sim_model(bm::xor_sim_model<BV>& sim_model,
     for (size_type col = 0; en.valid(); ++en, ++col)
     {
         size_type nb = *en;
-        compute_sim_model(sim_model, nb, col, params);
+        compute_sim_model(sim_model.matr, nb, col, params);
     } // for en
 }
 
 // --------------------------------------------------------------------------
 
 template<typename BV>
-void xor_scanner<BV>::compute_sim_model(xor_sim_model<BV>        &sim_model,
-                                        size_type                 nb,
-                                        size_type                 nb_rank,
-                                        const bm::xor_sim_params& params)
+void xor_scanner<BV>::compute_sim_model(
+                typename xor_sim_model<BV>::matrix_chain_type &sim_model_matr,
+                        size_type                 nb,
+                        size_type                 nb_rank,
+                        const bm::xor_sim_params& params)
 {
-    BM_ASSERT(nb_rank < sim_model.matr.cols());
-    BM_ASSERT(sim_model.bv_blocks.test(nb));
-    BM_ASSERT(nb_rank == (sim_model.bv_blocks.count_range(0, nb)-1));
+    BM_ASSERT(nb_rank < sim_model_matr.cols());
+//    BM_ASSERT(sim_model.bv_blocks.test(nb));
+//    BM_ASSERT(nb_rank == (sim_model.bv_blocks.count_range(0, nb)-1));
 
     const float bie_bits_per_int = 3.0f; // c_level_ < 6 ? 3.75f : 3.0f;
     const unsigned bie_limit =
@@ -1490,7 +1492,7 @@ void xor_scanner<BV>::compute_sim_model(xor_sim_model<BV>        &sim_model,
 
     for (size_type ri=0; true; ++ri)
     {
-        bm::block_match_chain<size_type>* m_row = sim_model.matr.row(ri);
+        bm::block_match_chain<size_type>* m_row = sim_model_matr.row(ri);
         bm::block_match_chain<size_type>& bmc = m_row[nb_rank];
         bmc.nb = nb;
         bmc.chain_size = 0;

@@ -2485,6 +2485,7 @@ void SparseVectorAccessTest()
         }
     }
 
+
     unsigned long long cnt = 0;
     
     unsigned gather_from = 256000;
@@ -2519,7 +2520,7 @@ void SparseVectorAccessTest()
     {
         sum2 += target_v[i];
         auto idx_v = idx[i];
-        auto v = sv1[idx_v];
+        auto v = sv1[idx_v]; (void) v;
         assert(v == target_v[i]);
     }
     if (sum1 != sum2)
@@ -2674,7 +2675,7 @@ void SparseVectorSignedAccessTest()
     {
         sum2 += target_v[i];
         const auto idx_v = idx[i];
-        const auto v = sv1[idx_v];
+        const auto v = sv1[idx_v]; (void)v;
         assert(v == target_v[i]);
     }
     if (sum1 != sum2)
@@ -2813,7 +2814,7 @@ void RSC_SparseVectorAccesTest()
 
     sparse_vector_u32   sv1(bm::use_null);
     rsc_sparse_vector_u32::size_type sz, sz1;
-
+    (void)sz1;
 
     FillSparseNullVector(sv1, test_size, 2, 150);
     {
@@ -3315,7 +3316,7 @@ void IntervalsTest()
             iit.flush();
 
             ilen += 1;
-            b = bv.test(istart + ilen);
+            b = bv.test(istart + ilen); (void)b;
             assert(!b);
             istart += (ilen + 2);
             if (ilen > 1024)
@@ -4237,7 +4238,7 @@ int main(void)
         cout << endl;
 
         MemCpyTest();
-
+return 0;
         BitCountTest();
 
         BitCountSparseTest();
@@ -4307,7 +4308,6 @@ int main(void)
 
         SparseVectorSignedAccessTest();
         cout << endl;
-
 
         SparseVectorScannerTest();
         cout << endl;

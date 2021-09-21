@@ -86,6 +86,7 @@ bm::chrono_taker::duration_map_type     timing_map;
 
 
 typedef bm::bvector<> bvect;
+typedef bvect::allocator_type  bv_allocator_type;
 
 typedef std::vector<unsigned> ref_vect_type;
 
@@ -96,9 +97,9 @@ typedef bm::rsc_sparse_vector<unsigned long long, sparse_vector_u64> rsc_sparse_
 
 
 typedef
-bm::thread_pool<bm::task_description*, bm::spin_lock<bm::pad0_struct> > pool_spin_type;
+bm::thread_pool<bm::task_descr*, bm::spin_lock<bm::pad0_struct> > pool_spin_type;
 typedef
-bm::thread_pool<bm::task_description*, std::mutex > pool_mutex_type;
+bm::thread_pool<bm::task_descr*, std::mutex > pool_mutex_type;
 
 
 
@@ -162,6 +163,62 @@ void TestSimpleQueue()
 
     cout << " ----------------------------- TestSimpleQueue() OK" << endl;
 }
+
+static
+void TestTaskDescr()
+{
+    cout << " ----------------------------- TestTaskDescr()" << endl;
+
+    {
+        task_descr td;
+    }
+    {
+        std::function<int(void*)> f1([](void*)
+        {
+            return 10;
+        });
+    }
+
+    {
+        task_descr td([](void*) { return 2; }, nullptr);
+        int ret = td.func(td.argp);
+        assert(ret == 2);
+    }
+
+    {
+        task_descr td;
+        td.init([](void*) { return 3; }, nullptr);
+        td.run();
+        assert(td.done == 1);
+        assert(td.err_code = 3);
+    }
+
+    {
+        typedef bm::task_batch<bv_allocator_type> task_batch_type;
+        task_batch_type tb;
+        typename task_batch_type::task_vector_type& tv = tb.get_task_vector();
+        cout << tv.size() << endl;
+        std::function<int(void*)> f1([](void*) { return 11; });
+        bm::task_descr& tdescr = tv.add();
+        tdescr.init(f1, nullptr);
+        assert(tv.size() == 1);
+        int ret = tb.get_task(0)->run();
+        assert(ret == 11);
+    }
+
+    {
+        typedef bm::task_batch<bv_allocator_type> task_batch_type;
+        task_batch_type tb;
+        std::function<int(void*)> f1([](void*) { return 110; });
+        tb.add(f1, nullptr);
+        assert(tb.size() == 1);
+        int ret = tb.get_task(0)->run();
+        assert(ret == 110);
+    }
+
+    cout << " ----------------------------- TestTaskDescr() OK" << endl;
+}
+
 
 
 static
@@ -257,6 +314,7 @@ void generate_df_svu32_set(sparse_vector_u32& sv1i,
 
 }
 
+
 template<typename PoolType>
 void TestParallelSV_Serial(const char* test_label,
                            bool        check_sim,
@@ -291,6 +349,9 @@ void TestParallelSV_Serial(const char* test_label,
         pool_type tpool;  // our thread pool here (no threads created yet)
         tpool.start(num_threads); // start the threads
 
+        bm::serializer<bvect>::xor_sim_model_type sim_model_c;
+        bool control_ready(false);
+
         bm::chrono_taker tt1(test_label, 1, &timing_map);
 
         for (unsigned pass = 0; pass < 2; ++pass)
@@ -307,6 +368,13 @@ void TestParallelSV_Serial(const char* test_label,
 
             bm::sparse_vector_serializer<sparse_vector_u32>::xor_sim_model_type sim_model;
 
+            if (check_sim && !control_ready)
+            {
+                sv_serializer.compute_sim_model(sim_model_c, bv_ref, xor_search_params);
+                control_ready = true; // to avoid double re-calc
+            }
+
+
             {
                 bm::compute_sim_matrix_plan_builder<bvect> pbuilder;
                 bm::compute_sim_matrix_plan_builder<bvect>::task_batch tbatch;
@@ -318,12 +386,12 @@ void TestParallelSV_Serial(const char* test_label,
                     bm::thread_pool_executor<pool_type> exec;
                     exec.run(tpool, tbatch, true);
                 }
-                
+
                 if (check_sim)
                 {
-                    bm::serializer<bvect>::xor_sim_model_type sim_model_c;
-                    sv_serializer.compute_sim_model(sim_model_c, bv_ref, xor_search_params);
+                    assert(control_ready);
                     Check_SimModel(sim_model_c, sim_model);
+                    cout << "XOR model check - OK." << endl;
                 }
             }
 
@@ -335,10 +403,12 @@ void TestParallelSV_Serial(const char* test_label,
                 sbuilder.set_xor_ref(&bv_ref);
                 sbuilder.set_sim_model(&sim_model);
 
+                /*
                 {
                     bm::sv_serialization_plan_builder<sparse_vector_u32>::task_batch tbatch;
                     sbuilder.build_plan(tbatch, sv_lay1p, sv1i);
                 }
+                */
 
                 sv_serializer.serialize(sv1i, sv_lay1);
                 {
@@ -363,6 +433,8 @@ void TestParallelSV_Serial(const char* test_label,
                     //const bvect::size_type* cstat = sv_serializer.get_bv_serializer().get_compression_stat();
                 }
             }
+
+            sim_model.bv_blocks.clear(true);
 
             // ----------
 
@@ -488,17 +560,6 @@ int main(int argc, char *argv[])
             cout << "func-type2 " << a << " " << b << endl; return 0;
         });
     cout << sizeof(f2) << endl;
-/*
-    std::vector<job_func_type> job_vect;
-    job_vect.push_back(f1);
-    job_vect.push_back(f2);
-
-    for (size_t i = 0; i < job_vect.size(); ++i)
-    {
-        int r = job_vect[i]();
-        cout << "returned: " << r << endl;
-    }
-*/
     std::deque<job_func_type> job_queue;
     job_queue.push_back(f1);
     job_queue.push_back(f2);
@@ -510,13 +571,6 @@ int main(int argc, char *argv[])
         job_queue.pop_front();
     } // while
 
-
-//    f1();
-//    f2();
-
-
-
-    return 0;
 
 
     {
@@ -533,6 +587,8 @@ int main(int argc, char *argv[])
 
 
         TestSimpleQueue();
+
+        TestTaskDescr();
 
 
         TestParallelSV_Serial<pool_spin_type>(
