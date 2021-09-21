@@ -3196,6 +3196,10 @@ unsigned gap_set_value(unsigned val,
     return end;
 }
 
+
+
+
+
 /*!
    \brief Sets or clears bit in the GAP buffer.
 
