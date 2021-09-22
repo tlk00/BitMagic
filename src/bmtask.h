@@ -173,7 +173,7 @@ protected:
     Run task batch sequentially
 
     Function is used for testing and debugging purposes or as a reference
-    to implement custom parallel executors
+    to implement custom parallel executors.
 
     @param tasks - collection of tasks to run
     @ingroup bmtasks
@@ -187,8 +187,6 @@ void run_task_batch(task_batch_base & tasks)
         bm::task_descr* tdescr = tasks.get_task(i);
         tdescr->argp = tdescr; // restore the self referenece
         tdescr->run();
-//        tdescr->ret = tdescr->func(tdescr->argp);
-//        tdescr->done = 1;
     } // for
 }
 

@@ -256,27 +256,17 @@ public:
     };
 
 public:
-    thread_pool(stop_mode sm = no_stop)
+    thread_pool(stop_mode sm = no_stop) noexcept
         : stop_flag_(sm)
     {}
 
-    ~thread_pool()
-    {
-        int is_stop = stop_flag_;
-        if (!is_stop) // finish the outstanding jobs and close threads
-            set_stop_mode(stop_when_done);
-        join();
-    }
+    ~thread_pool();
 
     /** Setup the criteria for threads shutdown
         Also notifies all threads on a new directive
         @param sm - stop mode
     */
-    void set_stop_mode(stop_mode sm) noexcept
-    {
-        stop_flag_ = sm;
-        job_queue_.queue_push_cond_.notify_all(); // this is noexcept
-    }
+    void set_stop_mode(stop_mode sm) noexcept;
 
     /**
         Request an immediate stop of all threads in the pool
@@ -287,113 +277,33 @@ public:
         Start thread pool worker threads.
         @param tcount - number of threads to start
      */
-    void start(unsigned tcount)
-    {
-        int is_stop = stop_flag_.load(std::memory_order_relaxed);
-        if (is_stop == stop_now) // immediate stop requested
-            return;
-        // TODO: consider lock protect of thread_vect_ member
-        for(unsigned i = 0;i < tcount; ++i)
-        {
-            thread_vect_.emplace_back(
-                            std::thread(&thread_pool::worker_func,this));
-        } // for
-    }
+    void start(unsigned tcount);
 
     /**
-        Wait for threads to stop
+        Wait for threads to finish (or stop if stop was requested)
     */
-    void join()
-    {
-        bm::join_multiple_threads(thread_vect_);
-        thread_vect_.resize(0);
-    }
+    void join();
 
     /**
         Conditional spin-wait for the queue to empty
+        (Important note: tasks may still be running, but the queue is empty)
      */
-     void wait_empty_queue()
-     {
-        const std::chrono::duration<int, std::milli> wait_duration(20);
-        while(1)
-        {
-            if (job_queue_.empty())
-            {
-                break;
-            }
-            std::cv_status wait_res;
-            {
-                std::unique_lock<std::mutex> lk(task_done_mut_);
-                wait_res = task_done_cond_.wait_for(lk, wait_duration);
-            }
-            if (wait_res == std::cv_status::timeout)
-            {
-                std::this_thread::yield();
-            }
-        } // while
-     }
+     void wait_empty_queue();
 
     /// Get access to the job submission queue
     ///
     queue_type& get_job_queue() noexcept { return job_queue_; }
+
+    /// Return if thread pool is stopped by a request
+    int is_stopped() const noexcept
+        { return stop_flag_.load(std::memory_order_relaxed); }
 
 protected:
 
     /// Internal worker wrapper with busy-wait spin loop
     /// making pthread-like call for tasks
     ///
-    void worker_func()
-    {
-        const std::chrono::duration<int, std::milli> wait_duration(10);
-        while(1)
-        {
-            int is_stop = stop_flag_.load(std::memory_order_relaxed);
-            if (is_stop == stop_now) // immediate stop requested
-                break;
-
-            bm::task_descr* task_descr;
-            if (job_queue_.try_pop(task_descr))
-            {
-                BM_ASSERT(task_descr->done == 0);
-                try
-                {
-                    task_descr->err_code = task_descr->func(task_descr->argp);
-                }
-                catch (...)
-                {
-                    task_descr->err_code = -1;
-                }
-
-                task_descr->done = 1;
-                task_done_cond_.notify_one();
-                continue;
-            }
-            // queue appears to be empty, check if requested to stop
-            //
-            is_stop = stop_flag_.load(std::memory_order_relaxed);
-            if (is_stop)
-                return;
-
-            // enter a temporal condition wait
-            //   notifications are treated as unreliable re-verified
-            //   via spin over the poll of the queue
-            std::cv_status wait_res;
-            {
-                std::unique_lock<std::mutex> lk(job_queue_.signal_mut_);
-                wait_res =
-                    job_queue_.queue_push_cond_.wait_for(lk, wait_duration);
-            }
-            if (wait_res == std::cv_status::timeout)
-            {
-                is_stop = stop_flag_.load(std::memory_order_relaxed);
-                if (is_stop == stop_now) // immediate stop requested
-                    return;
-                std::this_thread::yield();
-            }
-        } // while
-        return;
-    }
-
+    void worker_func();
 
 private:
     thread_pool(const thread_pool&)=delete;
@@ -424,93 +334,249 @@ public:
     typedef task_batch_base::size_type size_type;
 
 public:
-    thread_pool_executor()
-    {}
+    thread_pool_executor() {}
 
+    static
     void run(thread_pool_type&    tpool,
              bm::task_batch_base& tasks,
-             bool                  wait_for_batch)
-    {
-        typename thread_pool_type::queue_type& qu = tpool.get_job_queue();
- 
-        //qu.lock();
-
-        task_batch_base::size_type batch_size = tasks.size();
-        for (task_batch_base::size_type i = 0; i < batch_size; ++i)
-        {
-            bm::task_descr* tdescr = tasks.get_task(i);
-            tdescr->argp = tdescr; // restore the self referenece
-            BM_ASSERT(tdescr->done == 0);
-
-            // check if this is a barrier call
-            if (tdescr->flags != bm::task_descr::no_flag && i > 0)
-            {
-                //qu.unlock();
-
-                // barrier task
-                //   wait until all previously scheduled tasks are done
-                tpool.wait_empty_queue();
-                wait_for_batch_done(/*tpool,*/ tasks, 0, batch_size - 1);
-
-                // run the barrier proc on the curent thread
-                tdescr->err_code = tdescr->func(tdescr->argp);
-                tdescr->done = 1;
-
-                // re-read the batch size, if barrier added more tasks
-                task_batch_base::size_type new_batch_size = tasks.size();
-                if (new_batch_size != batch_size)
-                {
-                    batch_size = new_batch_size;
-                    //qu.lock(); // re-lock
-                }
-                continue;
-            }
-
-            qu.push(tdescr); // locked push to the thread queue
-            //qu.push_no_lock(tdescr);
-        } // for
-
-        //qu.unlock();
-
-        // implicit wait barrier for all tasks
-        if (wait_for_batch && batch_size)
-        {
-            tpool.wait_empty_queue();
-            wait_for_batch_done(/*tpool,*/ tasks, 0, batch_size - 1);
-        }
-    }
+             bool                  wait_for_batch);
 
     /**
         Check if all batch jobs in the specified interval are done
         Spin wait if not.
     */
     static
-    void wait_for_batch_done(//thread_pool_type&          tpool,
+    void wait_for_batch_done(thread_pool_type&          tpool,
                              bm::task_batch_base&       tasks,
                              task_batch_base::size_type from_idx,
-                             task_batch_base::size_type to_idx)
-    {
-        BM_ASSERT(from_idx <= to_idx);
-        BM_ASSERT(to_idx < tasks.size());
-
-        for (task_batch_base::size_type i = from_idx; i <= to_idx; ++i)
-        {
-            const bm::task_descr* tdescr = tasks.get_task(i);
-            unsigned done = tdescr->done.load(std::memory_order_relaxed);
-            BM_ASSERT(done == 1 || done == 0);
-            while (!done)
-            {
-                std::this_thread::yield();
-                // TODO: subscribe to a conditional wait for job done in tpool
-                done = tdescr->done.load(std::memory_order_relaxed);
-            } // while
-        } // for 
-    }
-
+                             task_batch_base::size_type to_idx);
 private:
     thread_pool_executor(const thread_pool_executor&) = delete;
     thread_pool_executor& operator=(const thread_pool_executor&) = delete;
 };
+
+
+// ========================================================================
+// thread_pool<> implementations
+// ========================================================================
+
+
+// -----------------------------------------------------------------------
+
+template<typename QValue, typename Lock>
+thread_pool<QValue, Lock>::~thread_pool()
+{
+    int is_stop = stop_flag_;
+    if (!is_stop) // finish the outstanding jobs and close threads
+        set_stop_mode(stop_when_done);
+    join();
+}
+
+// -----------------------------------------------------------------------
+
+template<typename QValue, typename Lock>
+void thread_pool<QValue, Lock>::set_stop_mode(stop_mode sm) noexcept
+{
+    stop_flag_ = sm;
+    job_queue_.queue_push_cond_.notify_all(); // this is noexcept
+}
+
+// -----------------------------------------------------------------------
+
+template<typename QValue, typename Lock>
+void thread_pool<QValue, Lock>::start(unsigned tcount)
+{
+    int is_stop = stop_flag_.load(std::memory_order_relaxed);
+    if (is_stop == stop_now) // immediate stop requested
+        return;
+    // TODO: consider lock protect of thread_vect_ member
+    for(unsigned i = 0;i < tcount; ++i)
+    {
+        thread_vect_.emplace_back(
+                        std::thread(&thread_pool::worker_func,this));
+    } // for
+}
+
+// -----------------------------------------------------------------------
+
+template<typename QValue, typename Lock>
+void thread_pool<QValue, Lock>::join()
+{
+    bm::join_multiple_threads(thread_vect_);
+    thread_vect_.resize(0);
+}
+
+// -----------------------------------------------------------------------
+
+template<typename QValue, typename Lock>
+void thread_pool<QValue, Lock>::wait_empty_queue()
+{
+    const std::chrono::duration<int, std::milli> wait_duration(20);
+    while(1)
+    {
+        if (job_queue_.empty())
+            break;
+        std::cv_status wait_res;
+        {
+            std::unique_lock<std::mutex> lk(task_done_mut_);
+            wait_res = task_done_cond_.wait_for(lk, wait_duration);
+        }
+        if (wait_res == std::cv_status::timeout)
+        {
+            std::this_thread::yield();
+            int is_stop = is_stopped();
+            if (is_stop == stop_now) // immediate stop requested
+                return;
+        }
+    } // while
+}
+
+// -----------------------------------------------------------------------
+
+template<typename QValue, typename Lock>
+void thread_pool<QValue, Lock>::worker_func()
+{
+    const std::chrono::duration<int, std::milli> wait_duration(10);
+    while(1)
+    {
+        int is_stop = is_stopped();
+        if (is_stop == stop_now) // immediate stop requested
+            break;
+
+        bm::task_descr* task_descr;
+        if (job_queue_.try_pop(task_descr))
+        {
+            BM_ASSERT(task_descr->done == 0);
+            try
+            {
+                task_descr->err_code = task_descr->func(task_descr->argp);
+            }
+            catch (...)
+            {
+                task_descr->err_code = -1;
+            }
+
+            task_descr->done = 1;
+            task_done_cond_.notify_one();
+            continue;
+        }
+        // queue appears to be empty, check if requested to stop
+        //
+        is_stop = is_stopped();
+        if (is_stop)
+            return;
+
+        // enter a temporal condition wait
+        //   notifications are treated as unreliable re-verified
+        //   via spin over the poll of the queue
+        std::cv_status wait_res;
+        {
+            std::unique_lock<std::mutex> lk(job_queue_.signal_mut_);
+            wait_res =
+                job_queue_.queue_push_cond_.wait_for(lk, wait_duration);
+        }
+        if (wait_res == std::cv_status::timeout)
+        {
+            is_stop = is_stopped();
+            if (is_stop == stop_now) // immediate stop requested
+                return;
+            std::this_thread::yield();
+        }
+    } // while
+    return;
+}
+
+// ========================================================================
+// thread_pool_executor<> implementations
+// ========================================================================
+
+
+template<typename TPool>
+void thread_pool_executor<TPool>::run(
+                             thread_pool_type&    tpool,
+                             bm::task_batch_base& tasks,
+                             bool                  wait_for_batch)
+{
+    typename thread_pool_type::queue_type& qu = tpool.get_job_queue();
+
+    //qu.lock();
+
+    task_batch_base::size_type batch_size = tasks.size();
+    for (task_batch_base::size_type i = 0; i < batch_size; ++i)
+    {
+        bm::task_descr* tdescr = tasks.get_task(i);
+        tdescr->argp = tdescr; // restore the self referenece
+        BM_ASSERT(tdescr->done == 0);
+
+        // check if this is a barrier call
+        if (tdescr->flags != bm::task_descr::no_flag && i > 0)
+        {
+            //qu.unlock();
+
+            // barrier task
+            //   wait until all previously scheduled tasks are done
+            tpool.wait_empty_queue();
+            wait_for_batch_done(tpool, tasks, 0, batch_size - 1);
+
+            // run the barrier proc on the curent thread
+            tdescr->err_code = tdescr->func(tdescr->argp);
+            tdescr->done = 1;
+
+            // re-read the batch size, if barrier added more tasks
+            task_batch_base::size_type new_batch_size = tasks.size();
+            if (new_batch_size != batch_size)
+            {
+                batch_size = new_batch_size;
+                //qu.lock(); // re-lock
+            }
+            continue;
+        }
+
+        qu.push(tdescr); // locked push to the thread queue
+        //qu.push_no_lock(tdescr);
+    } // for
+
+    //qu.unlock();
+
+    // implicit wait barrier for all tasks
+    if (wait_for_batch && batch_size)
+    {
+        tpool.wait_empty_queue();
+        wait_for_batch_done(tpool, tasks, 0, batch_size - 1);
+    }
+}
+
+
+// -----------------------------------------------------------------------
+
+template<typename TPool>
+void thread_pool_executor<TPool>::wait_for_batch_done(
+                         thread_pool_type&          tpool,
+                         bm::task_batch_base&       tasks,
+                         task_batch_base::size_type from_idx,
+                         task_batch_base::size_type to_idx)
+{
+    BM_ASSERT(from_idx <= to_idx);
+    BM_ASSERT(to_idx < tasks.size());
+
+    for (task_batch_base::size_type i = from_idx; i <= to_idx; ++i)
+    {
+        const bm::task_descr* tdescr = tasks.get_task(i);
+        unsigned done = tdescr->done.load(std::memory_order_relaxed);
+        BM_ASSERT(done == 1 || done == 0);
+        while (!done)
+        {
+            int is_stop = tpool.is_stopped();
+            if (is_stop == thread_pool_type::stop_now)
+                return; // thread pool stopped, jobs will not be done
+            std::this_thread::yield();
+            // TODO: subscribe to a conditional wait for job done in tpool
+            done = tdescr->done.load(std::memory_order_relaxed);
+        } // while
+    } // for
+}
+
+// -----------------------------------------------------------------------
 
 
 } // bm
