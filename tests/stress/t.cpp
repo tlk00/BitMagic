@@ -15619,6 +15619,19 @@ void SetTest()
         }
     }
 
+
+    {
+        bvect bv3(bm::BM_GAP);
+        bv3.invert();
+
+        bool changed = bv3.set_bit_conditional(10, false, true);
+        bool v = bv3[10];
+        if (v || !changed) {
+            cout << "Conditional bit set failed." << endl;
+            exit(1);
+        }
+    }
+
     {
         bvect bv3(bm::BM_GAP);
         bv3.invert();
@@ -33989,6 +34002,7 @@ int main(int argc, char *argv[])
 
     if (is_all || is_bvbasic)
     {
+
          ExportTest();
          CheckAllocLeaks(false);
 
