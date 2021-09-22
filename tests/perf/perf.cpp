@@ -38,6 +38,7 @@ For more information please visit:  http://bitmagic.io
 #include <vector>
 #include <random>
 #include <memory>
+#include <algorithm>
 
 #include "bm.h"
 #include "bmalgo.h"
@@ -94,7 +95,7 @@ void generate_bvector(bvect& bv, unsigned vector_max = 40000000, bool optimize =
         // generate GAP (compressed) blocks
         for (j = 0; j < 65535; i += 120, j++)
         {
-            unsigned len = rand() % 64;
+            unsigned len = (unsigned)rand() % 64;
             bv.set_range(i, i + len);
             i += len;
             if (i > vector_max)
@@ -137,7 +138,7 @@ void FillSetsIntervals(test_bitset* bset,
 {
     while(fill_factor==0)
     {
-        fill_factor=rand()%10;
+        fill_factor=(unsigned)rand()%10;
     }
 
     unsigned i, j;
@@ -169,7 +170,7 @@ void FillSetsIntervals(test_bitset* bset,
                            
         } // j
         i = end;
-        len = rand() % 10;
+        len = (unsigned)rand() % 10;
 
         i+=len;
         {
@@ -916,6 +917,74 @@ void BitTestSparseTest()
     assert(value == value2);
 
 }
+
+static
+void BitSetConditionalTest()
+{
+    const unsigned repeats = 10;
+    std::random_device rd;
+    std::mt19937 g(rd());
+
+    std::vector<bvect::size_type> idx_vect;
+    for (bvect::size_type i = 0; i < bm::id_max-256; i+=100)
+        idx_vect.push_back(i);
+
+    std::shuffle(idx_vect.begin(), idx_vect.end(), g);
+
+    {
+        bvect bv2(bm::BM_BIT);
+        bv2.invert();
+        bvect bv3(bm::BM_GAP);
+        bv3.invert();
+
+        {
+            bm::chrono_taker tt("BitSetConditional: bvector<>::set_bit_conditional() (BIT) ", repeats);
+            for (bvect::size_type i = 0; i < idx_vect.size(); ++i)
+            {
+                auto idx = idx_vect[i];
+                bool changed = bv2.set_bit_conditional(idx, false, true);
+                if (!changed) {
+                    cout << "Conditional bit set failed. " << i << endl;
+                    exit(1);
+                }
+                changed = bv2.set_bit_conditional(idx, false, true);
+                if (changed) {
+                    cout << "Conditional bit set failed. " << i << endl;
+                    exit(1);
+                }
+            } // for
+        }
+        {
+            bv2.invert();
+            auto cnt = bv2.count();
+            assert(cnt == idx_vect.size());
+            bv2.clear(true);
+        }
+        {
+            bm::chrono_taker tt("BitSetConditional: bvector<>::set_bit_conditional() (GAP) ", repeats);
+            for (bvect::size_type i = 0; i < idx_vect.size(); ++i)
+            {
+                auto idx = idx_vect[i];
+                bool changed = bv3.set_bit_conditional(idx, false, true);
+                if (!changed) {
+                    cout << "Conditional bit set failed. " << i << endl;
+                    exit(1);
+                }
+                changed = bv3.set_bit_conditional(idx, false, true);
+                if (changed) {
+                    cout << "Conditional bit set failed. " << i << endl;
+                    exit(1);
+                }
+            } // for
+        }
+        {
+            bv3.invert();
+            auto cnt = bv3.count();
+            assert(cnt == idx_vect.size());
+        }
+    }
+}
+
 
 static
 void EnumeratorGoToTest()
@@ -2395,14 +2464,14 @@ void FillSparseIntervals(SV& sv)
     }
     for (i = 180000000; i < 190000000; ++i)
     {
-        sv.set(i, rand() % 128000);
+        sv.set(i, (typename SV::value_type)rand() % 128000);
     }
     for (i = 200000000; i < 210000000; ++i)
     {
         if constexpr (SV::is_signed())
-            sv.set(i, 0 - (rand() % 128000));
+            sv.set(i, (typename SV::value_type)(0 - (rand() % 128000)));
         else
-            sv.set(i, rand() % 128000);
+            sv.set(i, (typename SV::value_type)rand() % 128000);
     }
 }
 
@@ -3242,8 +3311,8 @@ void RangeCopyTest()
         for (unsigned i = 0; i < REPEATS * 25; ++i)
         {
             unsigned from = vect_max / 4;
-            from = from * (rand() % 3);
-            unsigned to = from + 1 + (65536 * rand() % 5);
+            from = from * (unsigned)(rand() % 3);
+            unsigned to = from + 1 + (unsigned)(65536 * rand() % 5);
             bvect bv_cp;
             bv_cp.copy_range(bv, from, to);
         } // for
@@ -3253,8 +3322,8 @@ void RangeCopyTest()
         for (unsigned i = 0; i < REPEATS * 25; ++i)
         {
             unsigned from = vect_max / 4;
-            from = from * (rand() % 3);
-            unsigned to = from + 1 + (65536 * rand() % 5);
+            from = from * (unsigned)(rand() % 3);
+            unsigned to = from + 1 + (unsigned)(65536 * rand() % 5);
             bvect bv_cp(bv, from, to);
         } // for
     }
@@ -3264,8 +3333,8 @@ void RangeCopyTest()
         for (unsigned i = 0; i < REPEATS * 25; ++i)
         {
             unsigned from = vect_max / 4;
-            from = from * (rand() % 3);
-            unsigned to = from + 1 + (65536 * rand() % 5);
+            from = from * (unsigned)(rand() % 3);
+            unsigned to = from + 1 + (unsigned)(65536 * rand() % 5);
             bvect bv_cp;
             bv_cp.set_range(from, to);
             bv_cp &= bv;
@@ -3687,14 +3756,14 @@ void generate_serialization_test_set(sparse_vector_u32&   sv,
     unsigned v = 0;
     for (unsigned i = 0; i < vector_max; ++i)
     {
-        unsigned plato = rand() % 16;
+        unsigned plato = (unsigned)rand() % 16;
         for (unsigned j = 0; i < vector_max && j < plato; ++i, ++j)
         {
             *bi = v;
         } // for j
         if (++v > 100000)
             v = 0;
-        unsigned nulls = rand() % 16;
+        unsigned nulls = (unsigned)rand() % 16;
         if (nulls)
             bi.add_null(nulls);
         i += nulls;
@@ -4021,7 +4090,7 @@ void GenerateTestStrCollection(std::vector<string>& str_coll, unsigned max_coll)
         
         {
             prefix.clear();
-            unsigned prefix_len = rand() % 5;
+            unsigned prefix_len = (unsigned)rand() % 5;
             for (unsigned j = 0; j < prefix_len; ++j)
             {
                 char cch = char('a' + rand() % 26);
@@ -4147,7 +4216,7 @@ unsigned generate_inter_test(V* arr, unsigned inc_factor, unsigned target_size)
     if (inc_factor < 2)
         inc_factor = 65535;
 
-    unsigned start = rand() % 256;
+    unsigned start = (unsigned)rand() % 256;
     if (!start)
         start = 1;
     unsigned sz = 0;
@@ -4188,7 +4257,7 @@ void InterpolativeCodingTest()
     bm::word_t* src_arr = &sa[0];
     bm::word_t* dst_arr = &da[0];
     unsigned sz;
-    unsigned inc = rand() % (65536 * 256);
+    unsigned inc = (unsigned)rand() % (65536 * 256);
     sz = generate_inter_test_linear(src_arr, inc, test_size);
     assert(sz);
     assert(src_arr[0]);
@@ -4238,7 +4307,7 @@ int main(void)
         cout << endl;
 
         MemCpyTest();
-return 0;
+
         BitCountTest();
 
         BitCountSparseTest();
@@ -4249,6 +4318,12 @@ return 0;
         cout << endl;
 
         BitTestSparseTest();
+        cout << endl;
+
+        BitSetConditionalTest();
+        cout << endl;
+
+
         BitCompareTest();
         cout << endl;
 
