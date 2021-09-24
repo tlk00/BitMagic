@@ -28,6 +28,7 @@ For more information please visit:  http://bitmagic.io
 */
 #include <atomic>
 #include <functional>
+#include <vector>
 
 
 #include "bmbuffer.h"
@@ -54,6 +55,9 @@ typedef std::function<int(void*)> task_function_t;
 
 
 
+/** BitMagic task with a captured function
+    @ingroup bmtasks
+*/
 struct task_descr
 {
     enum task_flags
@@ -137,8 +141,15 @@ class task_batch : public task_batch_base
 public:
     typedef BVAlloc                     bv_allocator_type;
     typedef task_batch_base::size_type  size_type;
+
+    typedef
+    std::vector<bm::task_descr> task_vector_type;
+
+    // disabled (error aunder MSVC related to vector impl for complex types
+    #if 0
     typedef
     bm::heap_vector<bm::task_descr, bv_allocator_type, true> task_vector_type;
+    #endif
 
 public:
 
@@ -160,8 +171,9 @@ public:
 
     void add(task_function_t  f, void* argptr)
     {
-        bm::task_descr& tdescr = task_vect_.add();
-        tdescr.init(f, argptr);
+        task_vect_.emplace_back(bm::task_descr(f, argptr));
+//        bm::task_descr& tdescr = task_vect_.add();
+//        tdescr.init(f, argptr);
     }
 
 protected:

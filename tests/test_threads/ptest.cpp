@@ -196,19 +196,6 @@ void TestTaskDescr()
     {
         typedef bm::task_batch<bv_allocator_type> task_batch_type;
         task_batch_type tb;
-        typename task_batch_type::task_vector_type& tv = tb.get_task_vector();
-        cout << tv.size() << endl;
-        std::function<int(void*)> f1([](void*) { return 11; });
-        bm::task_descr& tdescr = tv.add();
-        tdescr.init(f1, nullptr);
-        assert(tv.size() == 1);
-        int ret = tb.get_task(0)->run();
-        assert(ret == 11);
-    }
-
-    {
-        typedef bm::task_batch<bv_allocator_type> task_batch_type;
-        task_batch_type tb;
         std::function<int(void*)> f1([](void*) { return 110; });
         tb.add(f1, nullptr);
         assert(tb.size() == 1);
@@ -302,7 +289,7 @@ void generate_df_svu32_set(sparse_vector_u32& sv1i,
         bi2 = 0;
         bi3 = 1 + 0;
         bi3.add_null();
-        bi4 = rand() % 256000;
+        bi4 = (bvect::size_type)rand() % 256000;
         bi4.add_null();
 
     } // for
