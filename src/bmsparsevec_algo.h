@@ -1483,13 +1483,7 @@ bool sparse_vector_scanner<SV>::prepare_and_sub_aggregator(const SV&  sv,
     if (prefix_sub)
     {
         unsigned plane_idx = unsigned(len * 8);
-/*        typename SV::size_type planes;
-        if (&sv != bound_sv_)
-        {
-            effective_str_max_ = sv.effective_vector_max();
-        }
-*/
-        typename SV::size_type planes = sv.get_bmatrix().rows();//effective_str_max_ * unsigned(sizeof(value_type)) * 8;
+        typename SV::size_type planes = sv.get_bmatrix().rows();
         for (; plane_idx < planes; ++plane_idx)
         {
             if (bvector_type_const_ptr bv = sv.get_slice(plane_idx))
