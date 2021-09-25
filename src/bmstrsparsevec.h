@@ -274,7 +274,7 @@ public:
 
 
         /// \brief Get current position (value)
-        const value_type* value() const BMNOEXCEPT;
+        const value_type* value() const;
 
         /// \brief Get NULL status
         bool is_null() const BMNOEXCEPT { return sv_->is_null(this->pos_); }
@@ -1166,8 +1166,7 @@ protected:
                          bool set_not_null = true)
     {
         BM_ASSERT (cmatr.is_init());
-        //BM_ASSERT (cmatr.rows() >= BufSize);
-        
+
         unsigned max_str_size = 0;
         {
             for (unsigned j = 0; j < imp_size; ++j)
@@ -1221,14 +1220,6 @@ protected:
                 if (n_bits) // set transposed bits to the target plane
                 {
                     unsigned plane = i*8 + bi;
-                    /*
-                    bvector_type* bv = this->bmatr_.get_row(plane);
-                    if (!bv)
-                    {
-                        bv = this->bmatr_.construct_row(plane);
-                        bv->init();
-                    }
-                    */
                     bvector_type* bv = this->get_create_slice(plane);
                     bv->set(&bit_list[0], n_bits, BM_SORTED);
                 }
@@ -1777,9 +1768,7 @@ bool str_sparse_vector<CharType, BV, STR_SIZE>::remap_tosv(
         const unsigned char* remap_row = octet_remap_matrix2.row(i);
         unsigned char remap_value = remap_row[unsigned(ch)];
         if (!remap_value) // unknown dictionary element
-        {
             return false;
-        }
         sv_str[i] = CharType(remap_value);
     } // for i
     return true;
@@ -2107,7 +2096,7 @@ void str_sparse_vector<CharType, BV, STR_SIZE>::const_iterator::set_substr(
 
 template<class CharType, class BV, unsigned STR_SIZE>
 const typename str_sparse_vector<CharType, BV, STR_SIZE>::value_type*
-str_sparse_vector<CharType, BV, STR_SIZE>::const_iterator::value() const BMNOEXCEPT
+str_sparse_vector<CharType, BV, STR_SIZE>::const_iterator::value() const
 {
     BM_ASSERT(sv_);
     BM_ASSERT(this->valid());
