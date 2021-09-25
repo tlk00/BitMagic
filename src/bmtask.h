@@ -74,7 +74,7 @@ struct task_descr
 
     bm::id64_t              flags;     ///< task flags to designate barriers
     int                     err_code;  ///< error code
-    std::atomic_uint        done;      ///< 0 - pending
+    std::atomic_bool        done;      ///< 0 - pending
 
     // ----------------------------------------------------
     // Construction
@@ -90,12 +90,12 @@ struct task_descr
         done.store(td.done.load()); // atomic operation
     }
 
-    task_descr(task_function_t f, void* argptr = 0)
+    task_descr(task_function_t f, void* argptr = 0) noexcept
     {
         this->init(f, argptr);
     }
 
-    void init(task_function_t  f, void* argptr)
+    void init(task_function_t  f, void* argptr) noexcept
     {
         func = f; argp = argptr; done = 0; flags = no_flag;
     }
@@ -103,7 +103,7 @@ struct task_descr
     int run()
     {
         err_code = func(argp);
-        done.store(1);
+        done.store(1, std::memory_order_release);
         return err_code;
     }
 };

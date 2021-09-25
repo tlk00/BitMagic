@@ -577,7 +577,6 @@ int main(int argc, char *argv[])
 
         TestTaskDescr();
 
-
         TestParallelSV_Serial<pool_spin_type>(
             "001-s. XOR filter (check)", true, false, false);
 
@@ -590,7 +589,6 @@ int main(int argc, char *argv[])
         TestParallelSV_Serial<pool_spin_type>(
             "004-s. XOR filter/serialization/deserialization (no-check)",
             false, true, true);
-
 
         TestParallelSV_Serial<pool_mutex_type>(
             "001-m. XOR filter (check)", true, false, false);

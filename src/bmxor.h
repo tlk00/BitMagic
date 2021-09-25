@@ -1476,8 +1476,6 @@ void xor_scanner<BV>::compute_sim_model(
                         const bm::xor_sim_params& params)
 {
     BM_ASSERT(nb_rank < sim_model_matr.cols());
-//    BM_ASSERT(sim_model.bv_blocks.test(nb));
-//    BM_ASSERT(nb_rank == (sim_model.bv_blocks.count_range(0, nb)-1));
 
     const float bie_bits_per_int = 3.0f; // c_level_ < 6 ? 3.75f : 3.0f;
     const unsigned bie_limit =
