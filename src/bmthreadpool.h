@@ -295,7 +295,7 @@ public:
     queue_type& get_job_queue() noexcept { return job_queue_; }
 
     /// Return if thread pool is stopped by a request
-    bool is_stopped() const noexcept
+    int is_stopped() const noexcept
         { return stop_flag_.load(std::memory_order_relaxed); }
 
 protected:
@@ -312,7 +312,7 @@ private:
 private:
     queue_type                job_queue_;    ///< queue (thread sync)
     std::vector<std::thread>  thread_vect_;  ///< threads servicing queue
-    std::atomic_bool          stop_flag_{0}; ///< stop flag to all threads
+    std::atomic_int           stop_flag_{0}; ///< stop flag to all threads
 
     // notification channel for results wait
     mutable std::mutex        task_done_mut_; ///< signal mutex for task done
