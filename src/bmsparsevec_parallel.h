@@ -50,14 +50,26 @@ public:
         typedef typename parent_type::task_vector_type  task_vector_type;
     };
 
-    void build_plan(task_batch& batch,
-                    sparse_vector_type& sv,
-                    typename bvector_type::optmode opt_mode,
-                    typename sparse_vector_type::statistics* st)
+    /**
+        Build paralell optimization batch (of tasks) for sparse vector
+        @param batch - target batch (can be re-used for multiple vectors)
+        @param sv - sparse vector for optimization
+        @param opt_mode - optimization mode (see bvector<>::optmode)
+        @param st - sparse vector statistics to compute with optimization pass (optional)
+    */
+    static
+    void build_plan(task_batch&                              batch,
+                    sparse_vector_type&                      sv,
+                    typename bvector_type::optmode
+                                    opt_mode = bvector_type::opt_compress,
+                    typename sparse_vector_type::statistics* st = 0)
     {
         typename task_batch::task_vector_type& tv = batch.get_task_vector();
         auto rsize = sv.get_bmatrix().rows();
         tv.reserve(rsize);
+        if (st)
+            st->reset();
+
         for (unsigned k = 0; k < rsize; ++k)
         {
             if (bvector_type* bv = sv.get_bmatrix().get_row(k))
@@ -76,8 +88,6 @@ public:
                     return 0;
                 });
                 batch.add(task, 0);
-//                bm::task_descr& tdescr = tv.add();
-//                tdescr.init(task, 0);
             }
         } // for
     }

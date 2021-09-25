@@ -473,10 +473,35 @@ void TestParallelSV_Serial(const char* test_label,
 
             if (pass == 0)
             {
-                sv1i.optimize();
-                sv2i.optimize();
-                sv3i.optimize();
-                sv4i.optimize();
+                cout << " sparse vector optimization... " << flush;
+
+                bm::optimize_plan_builder<sparse_vector_u32, std::mutex> op_builder;
+                bm::optimize_plan_builder<sparse_vector_u32, std::mutex>::task_batch opt_batch;
+
+
+                op_builder.build_plan(opt_batch, sv1i);
+                auto bsize = opt_batch.size();
+                assert(bsize > 0);
+
+                op_builder.build_plan(opt_batch, sv2i);
+                assert(bsize < opt_batch.size());
+                bsize = opt_batch.size();
+
+                op_builder.build_plan(opt_batch, sv3i);
+                assert(bsize < opt_batch.size());
+                bsize = opt_batch.size();
+
+                op_builder.build_plan(opt_batch, sv4i);
+                assert(bsize < opt_batch.size());
+
+                // run the plan
+                {
+                    bm::thread_pool_executor<pool_type> exec;
+                    exec.run(tpool, opt_batch, true);
+                }
+
+                cout << "OK" << endl;
+
             }
 
         } // for pass
@@ -486,6 +511,95 @@ void TestParallelSV_Serial(const char* test_label,
     }
 
     cout << " ----------------------------- TestParallelSV_Serial() OK" << endl;
+}
+
+template<typename PoolType>
+void TestParallelSV_Optimize(const char* test_label)
+{
+    cout << " ----------------------------- TestParallelSV_Optimize() - "
+         << test_label << endl;
+    {
+        sparse_vector_u32 sv1i, sv2i, sv3i(bm::use_null), sv4i(bm::use_null);
+
+        typedef PoolType pool_type;
+
+        {
+            cout << " Sample set generation..." << flush;
+
+            const bvect::size_type idmax = 100000000;
+            generate_df_svu32_set(sv1i, sv2i, sv3i, sv4i, idmax);
+
+            cout << "Ok" << endl;
+        }
+
+        sparse_vector_u32 sv1c(sv1i), sv2c(sv2i), sv3c(sv3i), sv4c(sv4i); // control copy
+        sparse_vector_u32::statistics st1, st2, st3, st4;
+        sparse_vector_u32::statistics st1c, st2c, st3c, st4c;
+
+        {
+            cout << " compute controls... " << flush;
+
+            BM_DECLARE_TEMP_BLOCK(tb)
+
+            std::string l(" (non-parallel)");
+            bm::chrono_taker tt1(test_label + l, 1, &timing_map);
+
+            sv1c.optimize(tb, sparse_vector_u32::bvector_type::opt_compress, &st1c);
+            sv2c.optimize(tb, sparse_vector_u32::bvector_type::opt_compress, &st2c);
+            sv3c.optimize(tb, sparse_vector_u32::bvector_type::opt_compress, &st3c);
+            sv4c.optimize(tb, sparse_vector_u32::bvector_type::opt_compress, &st4c);
+            cout << "OK" << endl;
+        }
+
+        pool_type tpool;  // our thread pool here (no threads created yet)
+        tpool.start(num_threads); // start the threads
+
+        {
+            bm::chrono_taker tt1(test_label, 1, &timing_map);
+
+            cout << " sparse vector optimization... " << flush;
+
+            bm::optimize_plan_builder<sparse_vector_u32, std::mutex> op_builder;
+            bm::optimize_plan_builder<sparse_vector_u32, std::mutex>::task_batch opt_batch;
+
+
+            op_builder.build_plan(opt_batch, sv1i, sparse_vector_u32::bvector_type::opt_compress, &st1);
+            auto bsize = opt_batch.size();
+            assert(bsize > 0);
+
+            op_builder.build_plan(opt_batch, sv2i, sparse_vector_u32::bvector_type::opt_compress, &st2);
+            assert(bsize < opt_batch.size());
+            bsize = opt_batch.size();
+
+            op_builder.build_plan(opt_batch, sv3i, sparse_vector_u32::bvector_type::opt_compress, &st3);
+            assert(bsize < opt_batch.size());
+            bsize = opt_batch.size();
+
+            op_builder.build_plan(opt_batch, sv4i, sparse_vector_u32::bvector_type::opt_compress, &st4);
+            assert(bsize < opt_batch.size());
+
+            // run the plan
+            {
+                bm::thread_pool_executor<pool_type> exec;
+                exec.run(tpool, opt_batch, true);
+            }
+
+            assert(st1.gap_blocks == st1c.gap_blocks);
+            assert(st1.bit_blocks == st1c.bit_blocks);
+            assert(st2.gap_blocks == st2c.gap_blocks);
+            assert(st2.bit_blocks == st2c.bit_blocks);
+            assert(st3.gap_blocks == st3c.gap_blocks);
+            assert(st3.bit_blocks == st3c.bit_blocks);
+            assert(st4.gap_blocks == st4c.gap_blocks);
+            assert(st4.bit_blocks == st4c.bit_blocks);
+
+            cout << "OK" << endl;
+        }
+
+        tpool.set_stop_mode(pool_type::stop_when_done);
+        tpool.join();
+    }
+    cout << " ----------------------------- TestParallelSV_Optimize() OK" << endl;
 }
 
 static
@@ -576,6 +690,10 @@ int main(int argc, char *argv[])
         TestSimpleQueue();
 
         TestTaskDescr();
+
+        TestParallelSV_Optimize<pool_spin_type>("005-s. optimize() ");
+        TestParallelSV_Optimize<pool_mutex_type>("005-m. optimize() ");
+
 
         TestParallelSV_Serial<pool_spin_type>(
             "001-s. XOR filter (check)", true, false, false);
