@@ -1188,9 +1188,10 @@ protected:
                     {
                         unsigned char remap_value =
                             remap_matrix2_.get(i, (unsigned char)(ch));
-                        BM_ASSERT(remap_value);
+                        BM_ASSERT(remap_value); // unknown ?!
+                        /*
                         if (!remap_value) // unknown dictionary element
-                            throw_bad_value(0);
+                            throw_bad_value(0); */
                         str[i] = CharType(remap_value);
                     }
                 } // for i
@@ -1199,8 +1200,37 @@ protected:
 
         this->bmatr_.allocate_rows((1+max_str_size) * 8 + this->is_nullable());
 
+        unsigned_value_type ch_slice[BufSize];
         for (unsigned i = 0; i < max_str_size; ++i)
-            import_char_slice(cmatr, i, idx_from, imp_size);
+        {
+            unsigned ch_acc = 0;
+#if defined(BMVECTOPT)
+            if (imp_size == ins_buf_size) /// full buffer import can use loop unrolling
+            {
+                for (size_type j = 0; j < imp_size; j+=4)
+                {
+                    unsigned_value_type ch0 = (unsigned_value_type)cmatr.row(j)[i];
+                    unsigned_value_type ch1 = (unsigned_value_type)cmatr.row(j+1)[i];
+                    unsigned_value_type ch2 = (unsigned_value_type)cmatr.row(j+2)[i];
+                    unsigned_value_type ch3 = (unsigned_value_type)cmatr.row(j+3)[i];
+
+                    ch_acc |= ch0 | ch1 | ch2 | ch3;
+                    ch_slice[j] = ch0; ch_slice[j+1] = ch1;
+                    ch_slice[j+2] = ch2; ch_slice[j+3] = ch3;
+                }
+            }
+            else
+#endif
+            {
+                for (size_type j = 0; j < imp_size; ++j)
+                {
+                    unsigned_value_type ch = (unsigned_value_type)cmatr.row(j)[i];
+                    ch_acc |= ch;
+                    ch_slice[j] = ch;
+                }
+            }
+            import_char_slice(ch_slice, ch_acc, i, idx_from, imp_size);
+        }
 
         size_type idx_to = idx_from + imp_size - 1;
         if (set_not_null)
@@ -1214,30 +1244,53 @@ protected:
     }
 
     /// @internal
-    template<typename CharMatrix, size_t BufSize = ins_buf_size>
-    void import_char_slice(CharMatrix& cmatr,
+    template<size_t BufSize = ins_buf_size>
+    void import_char_slice(const unsigned_value_type* ch_slice,
+                           unsigned ch_acc,
                            size_type char_slice_idx,
                            size_type idx_from, size_type imp_size)
     {
-        unsigned ch_acc = 0;
-        for (size_type j = 0; j < imp_size; ++j)
-        {
-            unsigned_value_type ch = (unsigned_value_type)cmatr.row(j)[char_slice_idx];
-            ch_acc |= ch;
-        }
-
         size_type bit_list[BufSize];
         for ( ;ch_acc; ch_acc &= ch_acc - 1) // bit-scan
         {
             unsigned n_bits = 0;
             const unsigned bi = (bm::word_bitcount((ch_acc & -ch_acc) - 1));
-            const unsigned mask = 1u << bi;
-            for (size_type j = 0; j < imp_size; ++j)
+            unsigned mask = 1u << bi;
+#if defined(BMVECTOPT)
+            if (imp_size == ins_buf_size) /// full buffer import can use loop unrolling
             {
-                unsigned_value_type ch = (unsigned_value_type)cmatr.row(j)[char_slice_idx];
-                if (ch & mask)
-                    bit_list[n_bits++] = idx_from + j;
-            } // for j
+                mask |= (mask << 8) | (mask << 16) | (mask << 24);
+                for (size_type j = 0; j < imp_size; j+=4)
+                {
+                    unsigned ch0 = unsigned(ch_slice[j+0]);
+                    unsigned ch1 = unsigned(ch_slice[j+1]) << 8;
+                    unsigned ch2 = unsigned(ch_slice[j+2]) << 16;
+                    unsigned ch3 = unsigned(ch_slice[j+3]) << 24;
+                    ch0 |= ch1 | ch2 | ch3;
+
+                    ch0 &= mask;
+                    ch0 = (ch0 >> bi) | (ch0 >> (bi+7)) |
+                          (ch0 >> (bi+14)) | (ch0 >> (bi+21));
+                    ch0 &= 15u;
+                    BM_ASSERT(bm::word_bitcount(ch0) <= 4);
+                    for (size_type base_idx = idx_from + j ;ch0; ch0 &= ch0 - 1) // bit-scan
+                    {
+                        const unsigned bit_idx = (bm::word_bitcount((ch0 & -ch0) - 1));
+                        bit_list[n_bits++] = base_idx + bit_idx;
+                    } // for ch0
+                } // for j
+            }
+            else
+#endif
+            {
+                for (size_type j = 0; j < imp_size; ++j)
+                {
+                    unsigned_value_type ch = unsigned(ch_slice[j]);
+                    if (ch & mask)
+                        bit_list[n_bits++] = idx_from + j;
+                } // for j
+            }
+
             if (n_bits) // set transposed bits to the target plane
             {
                 bvector_type* bv =
