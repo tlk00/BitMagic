@@ -1219,7 +1219,7 @@ protected:
                            size_type char_slice_idx,
                            size_type idx_from, size_type imp_size)
     {
-        unsigned_value_type ch_acc = 0;
+        unsigned ch_acc = 0;
         for (size_type j = 0; j < imp_size; ++j)
         {
             unsigned_value_type ch = (unsigned_value_type)cmatr.row(j)[char_slice_idx];
@@ -1227,12 +1227,11 @@ protected:
         }
 
         size_type bit_list[BufSize];
-        unsigned_value_type mask = 1;
-        for (unsigned bi = 0; true; ++bi, mask <<= 1)
+        for ( ;ch_acc; ch_acc &= ch_acc - 1) // bit-scan
         {
             unsigned n_bits = 0;
-            if (!(ch_acc & mask))
-                continue;
+            const unsigned bi = (bm::word_bitcount((ch_acc & -ch_acc) - 1));
+            const unsigned mask = 1u << bi;
             for (size_type j = 0; j < imp_size; ++j)
             {
                 unsigned_value_type ch = (unsigned_value_type)cmatr.row(j)[char_slice_idx];
@@ -1241,14 +1240,11 @@ protected:
             } // for j
             if (n_bits) // set transposed bits to the target plane
             {
-                unsigned plane = (char_slice_idx * 8) + bi;
-                bvector_type* bv = this->get_create_slice(plane);
+                bvector_type* bv =
+                    this->get_create_slice((char_slice_idx * 8) + bi);
                 bv->import_sorted(&bit_list[0], n_bits);
             }
-            ch_acc &= ~mask;
-            if (!ch_acc)
-                break;
-        } // for bi
+        } // for ch_acc
     }
 
     // ------------------------------------------------------------
