@@ -4075,7 +4075,7 @@ void SparseVectorRangeDeserializationTest()
 
 
 
-typedef bm::str_sparse_vector<char, bvect, 32> str_svect_type;
+typedef bm::str_sparse_vector<char, bvect, 8> str_svect_type;
 
 static
 void GenerateTestStrCollection(std::vector<string>& str_coll, unsigned max_coll)
@@ -4105,7 +4105,7 @@ void GenerateTestStrCollection(std::vector<string>& str_coll, unsigned max_coll)
 static
 void StrSparseVectorTest()
 {
-    unsigned max_coll = 20000000;
+    unsigned max_coll = 30000000;
     if constexpr (sizeof(void*) == 4)
     {
         max_coll = max_coll / 2;
@@ -4124,7 +4124,7 @@ void StrSparseVectorTest()
        }
     }
     str_sv.optimize();
-    
+
     {
        str_svect_type str_sv0;
        {
@@ -4142,8 +4142,33 @@ void StrSparseVectorTest()
             cerr << "Bit-transposed str_sv comparison failed(1)!" << endl;
             exit(1);
        }
+
+       str_svect_type str_sv1;
+       {
+           bm::chrono_taker tt("bm::str_sparse_vector<>::remap ", 1);
+           str_sv1.remap_from(str_sv0);
+       }
+       str_sv1.optimize();
+
+       {
+            str_svect_type::const_iterator it = str_sv.begin();
+            str_svect_type::const_iterator it_end = str_sv.end();
+            str_svect_type::const_iterator it1 = str_sv1.begin();
+            for (; it < it_end; ++it, ++it1)
+            {
+                assert(it1.valid());
+                const char* s = *it;
+                const char* s1 = *it1;
+                int cmp = ::strcmp(s, s1);
+                if (cmp != 0)
+                {
+                    cerr << "Bit-transposed(remap) str_sv comparison failed(2)!" << endl;
+                    exit(1);
+                }
+            }
+       }
     }
-    
+
     {
     string str;
 
@@ -4162,6 +4187,24 @@ void StrSparseVectorTest()
 
     {
         bm::chrono_taker tt("bm::str_sparse_vector<>::const_iterator ", 1);
+        str_svect_type::const_iterator it = str_sv.begin();
+        str_svect_type::const_iterator it_end = str_sv.end();
+
+        for (unsigned i=0; it < it_end; ++it, ++i)
+        {
+            const char* s = *it;
+            const std::string& sc = str_coll[i];
+            int cmp = ::strcmp(s, sc.c_str());
+            if (cmp != 0)
+            {
+                cerr << "String random access check failure!" << endl;
+                exit(1);
+            }
+        }
+    }
+
+    {
+        bm::chrono_taker tt("bm::str_sparse_vector<>::const_iterator (remap)", 1);
         str_svect_type::const_iterator it = str_sv.begin();
         str_svect_type::const_iterator it_end = str_sv.end();
 
