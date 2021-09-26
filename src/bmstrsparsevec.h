@@ -76,7 +76,8 @@ public:
     typedef typename allocator_type::allocator_pool_type allocator_pool_type;
     typedef bm::basic_bmatrix<BV>                    bmatrix_type;
     typedef base_sparse_vector<CharType, BV, STR_SIZE> parent_type;
-    
+    typedef typename parent_type::unsigned_value_type unsigned_value_type;
+
     /*! Statistical information about  memory allocation details. */
     struct statistics : public bv_statistics
     {};
@@ -959,7 +960,7 @@ public:
         {
             // can be negative (-1) when bv base offset = 0 and sv = 1,2..
             size_type base = bv_offset - sv_off_;
-            value_type m = mask_;
+            unsigned_value_type m = mask_;
             const unsigned i = substr_i_;
             for (unsigned j = 0; j < bits_size; ++j)
             {
@@ -971,7 +972,7 @@ public:
         void add_range(size_type bv_offset, size_type sz) BMNOEXCEPT
         {
             auto base = bv_offset - sv_off_;
-            value_type m = mask_;
+            unsigned_value_type m = mask_;
             const unsigned i = substr_i_;
             for (size_type j = 0; j < sz; ++j)
             {
@@ -982,7 +983,7 @@ public:
         }
 
         CharMatrix&            cmatr_;     ///< target array for reverse transpose
-        value_type             mask_;      ///< bit-plane mask
+        unsigned_value_type             mask_;      ///< bit-plane mask
         unsigned               substr_i_;  ///< i
         size_type              sv_off_;    ///< SV read offset
     };
@@ -1019,7 +1020,7 @@ public:
                 if (!bv)
                     continue;
 
-                func.mask_ = value_type(1u << bi);
+                func.mask_ = unsigned_value_type(1u << bi);
                 func.sv_off_ = idx_from;
 
                 size_type end = idx_from + dec_size;
@@ -1198,34 +1199,9 @@ protected:
 
         this->bmatr_.allocate_rows((1+max_str_size) * 8 + this->is_nullable());
 
-        size_type bit_list[BufSize];
         for (unsigned i = 0; i < max_str_size; ++i)
-        {
-            for (unsigned bi = 0; bi < 8; ++bi)
-            {
-                unsigned n_bits = 0;
-                value_type mask = value_type(1u << bi);
-                for (size_type j = 0; j < imp_size; ++j)
-                {
-                    typename CharMatrix::value_type* str = cmatr.row(j);
-                    value_type ch = str[i];
-                    if (!ch)
-                        continue;
-                    if (ch & mask)
-                    {
-                        bit_list[n_bits++] = idx_from + j;
-                        str[i] ^= mask;
-                    }
-                } // for j
-                if (n_bits) // set transposed bits to the target plane
-                {
-                    unsigned plane = i*8 + bi;
-                    bvector_type* bv = this->get_create_slice(plane);
-                    bv->set(&bit_list[0], n_bits, BM_SORTED);
-                }
-            } // for k
-        } // for i
-        
+            import_char_slice(cmatr, i, idx_from, imp_size);
+
         size_type idx_to = idx_from + imp_size - 1;
         if (set_not_null)
         {
@@ -1235,6 +1211,44 @@ protected:
         if (idx_to >= this->size())
             this->size_ = idx_to+1;
 
+    }
+
+    /// @internal
+    template<typename CharMatrix, size_t BufSize = ins_buf_size>
+    void import_char_slice(CharMatrix& cmatr,
+                           size_type char_slice_idx,
+                           size_type idx_from, size_type imp_size)
+    {
+        unsigned_value_type ch_acc = 0;
+        for (size_type j = 0; j < imp_size; ++j)
+        {
+            unsigned_value_type ch = (unsigned_value_type)cmatr.row(j)[char_slice_idx];
+            ch_acc |= ch;
+        }
+
+        size_type bit_list[BufSize];
+        unsigned_value_type mask = 1;
+        for (unsigned bi = 0; true; ++bi, mask <<= 1)
+        {
+            unsigned n_bits = 0;
+            if (!(ch_acc & mask))
+                continue;
+            for (size_type j = 0; j < imp_size; ++j)
+            {
+                unsigned_value_type ch = (unsigned_value_type)cmatr.row(j)[char_slice_idx];
+                if (ch & mask)
+                    bit_list[n_bits++] = idx_from + j;
+            } // for j
+            if (n_bits) // set transposed bits to the target plane
+            {
+                unsigned plane = (char_slice_idx * 8) + bi;
+                bvector_type* bv = this->get_create_slice(plane);
+                bv->import_sorted(&bit_list[0], n_bits);
+            }
+            ch_acc &= ~mask;
+            if (!ch_acc)
+                break;
+        } // for bi
     }
 
     // ------------------------------------------------------------
