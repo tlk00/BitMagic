@@ -1882,12 +1882,35 @@ public:
        logical operations.
 
        Optionally function can calculate vector post optimization statistics
+
+       @param temp_block - externally allocated temp buffer for optimization
+            BM_DECLARE_TEMP_BLOCK(tb)
+            if NULL - it will allocated (and de-allocated upon exit)
+       @param opt_mode - optimization level
+       @param stat - statistics of memory consumption and serialization
+         stat can also be computed by calc_stat() but it would require an extra pass
        
-       @sa optmode, optimize_gap_size
+       @sa optmode, optimize_gap_size, calc_stat
     */
     void optimize(bm::word_t* temp_block = 0,
                   optmode opt_mode       = opt_compress,
                   statistics* stat       = 0);
+
+    /*!
+         Run partial vector optimization for the area [left..right] (specified in bit coordinates)
+
+         @param left - bit index to optimize from (approximate, rounded up to a nearest block)
+         @param right - bit index to optimize to
+             Please note that left and right define range in bit coordinates but later rounded to blocks
+         @param temp_block - external scratch memory (MUST be pre-allocated)
+         @param opt_mode - optimization level
+
+         @sa optimize
+     */
+    void optimize_range(
+                  size_type left, size_type right,
+                  bm::word_t* temp_block,
+                  optmode opt_mode       = opt_compress);
 
     /*!
        \brief Optimize sizes of GAP blocks
@@ -3174,23 +3197,11 @@ void bvector<Alloc>::optimize(bm::word_t* temp_block,
                 blockman_.glen(), sizeof(gap_word_t) * bm::gap_levels);
         stat->max_serialize_mem = (unsigned)sizeof(bm::id_t) * 4;
     }
-    
     blockman_.optimize_tree(temp_block, opt_mode, stat);
-    
     if (stat)
     {
-        size_t safe_inc = stat->max_serialize_mem / 10; // 10% increment
-        if (!safe_inc) safe_inc = 256;
-        stat->max_serialize_mem += safe_inc;
-        
+        blockman_.stat_correction(stat);
         stat->memory_used += (unsigned)(sizeof(*this) - sizeof(blockman_));
-        
-        unsigned top_size = blockman_.top_block_size();
-        size_t blocks_mem = sizeof(blockman_);
-        blocks_mem += sizeof(bm::word_t**) * top_size;
-        blocks_mem += stat->ptr_sub_blocks * (sizeof(void*) * bm::set_sub_array_size);
-        stat->memory_used += blocks_mem;
-        stat->bv_count = 1;
     }
     
     // don't need to keep temp block if we optimizing memory usage
@@ -3199,7 +3210,35 @@ void bvector<Alloc>::optimize(bm::word_t* temp_block,
 
 // -----------------------------------------------------------------------
 
-template<typename Alloc> 
+template<typename Alloc>
+void bvector<Alloc>::optimize_range(
+              size_type left,
+              size_type right,
+              bm::word_t* temp_block,
+              optmode opt_mode)
+{
+    BM_ASSERT(left <= right);
+    BM_ASSERT(temp_block);
+
+    block_idx_type nblock_left  = (left  >> bm::set_block_shift);
+    block_idx_type nblock_right = (right >> bm::set_block_shift);
+
+    for (; nblock_left <= nblock_right; ++nblock_left)
+    {
+        unsigned i0, j0;
+        bm::get_block_coord(nblock_left, i0, j0);
+        if (i0 >= blockman_.top_block_size())
+            break;
+        bm::word_t* block = blockman_.get_block_ptr(i0, j0);
+        if (block)
+            blockman_.optimize_block(i0, j0, block, temp_block, opt_mode, 0);
+    } // for
+
+}
+
+// -----------------------------------------------------------------------
+
+template<typename Alloc>
 void bvector<Alloc>::optimize_gap_size()
 {
 #if 0
