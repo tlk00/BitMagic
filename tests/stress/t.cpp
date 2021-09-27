@@ -583,7 +583,7 @@ void FillSets(bvect_mini* bvect_min,
                     {
                         unsigned inc = unsigned(rand()) % 3;
                         ++inc;
-                        unsigned end2 = start + rand() % 1000;
+                        unsigned end2 = start + (unsigned)rand() % 1000;
                         if (end2 > end)
                             end2 = end;
                         while (start < end2)
@@ -646,7 +646,7 @@ void FillSetsIntervals(bvect_mini* bvect_min,
 
     while(fill_factor==0)
     {
-        fill_factor=rand()%10;
+        fill_factor=(unsigned)rand()%10;
     }
     bvect_full.init();
 
@@ -805,7 +805,7 @@ void FillSetsRegular(bvect_mini* bvect_min,
 {
     bvect::bulk_insert_iterator iit = bvect_full->inserter();
 
-    unsigned step = rand() % 4;
+    unsigned step = (unsigned)rand() % 4;
     if (step < 2) ++step;
     for (unsigned i = 0; i < max; i+=step)
     {
@@ -846,18 +846,18 @@ void FillSetsRandomMethod(bvect_mini* bvect_min,
 
     case 1:
         cout << "Random filling: method - FillSets - factor(random)" << endl;
-        factor = rand()%3;
+        factor = (unsigned)rand()%3;
         FillSets(bvect_min, bvect_full, min, max, factor?factor:1);
         break;
 
     case 2:
         cout << "Random filling: method - Set-Clear Intervals - factor(random)" << endl;
-        factor = rand()%10;
+        factor = (unsigned)rand()%10;
         FillSetClearIntervals(bvect_min, bvect_full, min, max, factor);
         break;
     case 3:
         cout << "Random filling: method - FillRandom - factor(random)" << endl;
-        factor = rand()%3;
+        factor = (unsigned)rand()%3;
         FillSetsRandom(bvect_min, bvect_full, min, max, factor?factor:1);
         break;
     case 4:
@@ -870,7 +870,7 @@ void FillSetsRandomMethod(bvect_mini* bvect_min,
         break;
     default:
         cout << "Random filling: method - Set Intervals - factor(random)" << endl;
-        factor = rand()%10;
+        factor = (unsigned)rand()%10;
         FillSetsIntervals(bvect_min, *bvect_full, min, max, factor);
         break;
 
@@ -4328,7 +4328,7 @@ void BasicFunctionalityTest()
 
     cout << "Random step filling" << endl;
 
-    for (i = rand()%10; i < ITERATIONS; i+=rand()%10)
+    for (i = (unsigned)rand()%10; i < ITERATIONS; i+=(unsigned)rand()%10)
     {
         bvect_min.clear_bit(i);
         bvect_full.clear_bit(i);
@@ -4753,7 +4753,7 @@ void RankFindTest()
         for (unsigned i = 0; i < max_size;)
         {
             bv1.set(i);
-            i += rand()%5;
+            i += (unsigned)rand()%5;
         }
         bvect::rs_index_type bc_arr1;
         bv1.build_rs_index(&bc_arr1);
@@ -4908,6 +4908,42 @@ void OptimizeTest()
         assert(st1.gap_blocks == 0);
         assert(st1.ptr_sub_blocks == 0);
     }
+
+    {
+        bvect::statistics st;
+        bvect bv;
+        bv.set(10);
+        bv.set(65536);
+        bv.optimize_range(0, 0, tb, bvect::opt_compress);
+        bv.calc_stat(&st);
+        assert(st.bit_blocks == 1);
+        assert(st.gap_blocks == 1);
+        bv.optimize_range(0, bm::id_max, tb, bvect::opt_compress);
+        bv.calc_stat(&st);
+        assert(st.bit_blocks == 0);
+        assert(st.gap_blocks == 2);
+    }
+
+
+    {
+        bvect::statistics st;
+
+        bvect bv;
+        bv.optimize_range(0, 0, tb, bvect::opt_compress);
+        bv.invert();
+
+        bv.optimize_range(0, 65536, tb, bvect::opt_compress);
+        bv.calc_stat(&st);
+        assert(st.bit_blocks == 1);
+        assert(st.gap_blocks == 0);
+
+        bv.optimize_range(65536, bm::id_max-1, tb, bvect::opt_compress);
+        bv.calc_stat(&st);
+        assert(st.bit_blocks == 0);
+        assert(st.gap_blocks == 1);
+
+    }
+
     
     {
         bvect bv;
@@ -5533,7 +5569,7 @@ void BvectorInsertTest()
             bv2 = bv_control;
             bv2.optimize();
             
-            unsigned i_pos = rand()%40000000;
+            unsigned i_pos = (unsigned)rand()%40000000;
             
             BVectorInsert(&bv_control, i_pos, i & 1u);
             bv.insert(i_pos, i & 1u);
@@ -11000,8 +11036,8 @@ void GAPCheck()
    {
         unsigned* buf = (unsigned*) bvect_r.get_blocks_manager().get_block_ptr(0, 0);
         assert(buf);
-        unsigned start = rand() % 65535;
-        unsigned end = rand() % 65535;
+        unsigned start = (unsigned)rand() % 65535;
+        unsigned end = (unsigned)rand() % 65535;
         if (start > end)
         {
             unsigned tmp = end;
@@ -12859,7 +12895,7 @@ void SerializationCompressionLevelsTest()
                 if (idx >= 65536)
                     break;
                 bv.set(idx);
-                i += (rand() % 9);
+                i += unsigned(rand() % 9);
                 if (bv.count() > 13000)
                     break;
             }
@@ -12921,7 +12957,7 @@ void SerializationCompressionLevelsTest()
                 if (idx >= 65536)
                     break;
                 bv.set(idx);
-                i += (rand() % 9);
+                i += unsigned(rand() % 9);
                 if (bv.count() > 3000)
                     break;
             }
@@ -13024,7 +13060,7 @@ void SerializationCompressionLevelsTest()
         for (bvect::size_type i = 0; i < 65536; ++i)
             bv.set(i);
         for (bvect::size_type i = 0; i < 12045; ++i)
-            bv.set(rand()%65535, false);
+            bv.set((unsigned)rand()%65535, false);
 
         bm::serializer<bvect> bv_ser;
         bv_ser.set_compression_level(5);
@@ -13055,9 +13091,9 @@ void SerializationCompressionLevelsTest()
         bvect::size_type from = 0;
         for (bvect::size_type i = 0; i < 3000; ++i)
         {
-            auto to = from + rand()%15;
+            auto to = from + (unsigned)rand()%15;
             bv.set_range(from, to);
-            from = to + rand()%15;
+            from = to + (unsigned)rand()%15;
         }
 
         bm::serializer<bvect> bv_ser;
@@ -13630,14 +13666,14 @@ void generate_serialization_test_set(SV&   sv,
     unsigned v = 0;
     for (typename SV::size_type i = 0; i < vector_max; ++i)
     {
-        unsigned plato = rand() % 32;
+        unsigned plato = (unsigned)rand() % 32;
         for (unsigned j = 0; i < vector_max && j < plato; ++i, ++j)
         {
             *bi = v;
         } // for j
         if (++v > 100000)
             v = 0;
-        unsigned nulls = rand() % 24;
+        unsigned nulls = (unsigned)rand() % 24;
         if (nulls)
             bi.add_null(nulls);
         i += nulls;
@@ -13985,7 +14021,7 @@ void TestSparseVectorSerialization2()
         }
 
         sv1.optimize();
-        sv_serializer.set_bookmarks(true, rand()%16);
+        sv_serializer.set_bookmarks(true, (unsigned)rand()%16);
 
     } // for k
 
@@ -14375,7 +14411,7 @@ void MaxSTest()
       id = 1;
       for(j = 0; j < n; j++)
       {
-         id += rand() % 10 + 1;
+         id += (unsigned)rand() % 10 + 1;
          vec.set_bit(id);
 
       }
@@ -15102,7 +15138,7 @@ void IntervalEnumeratorTest()
                         interval_copy_range(bv2, bv, k, copy_to);
                         eq = bv2.equal(bv2_c);
                         assert(eq);
-                        copy_to -= rand()%256;
+                        copy_to -= (unsigned) rand()%256;
                     }
                 }
 
@@ -15117,7 +15153,7 @@ void IntervalEnumeratorTest()
             cout << "\rinc = " << inc << " delta_max= " << delta_max << " (" << duration << ")" << flush;
 
             if (inc > 65536)
-                inc += rand() % 128; // fast pace randomiser
+                inc += (unsigned) rand() % 128; // fast pace randomiser
         } // for inc
 
     }
@@ -18002,7 +18038,7 @@ void Intervals_RangesTest()
         b = bm::find_interval_start(bv1, bm::id_max-1, pos);
         assert(b && pos == 0);
 
-        for (bvect::size_type i = 0; i < bm::id_max/4; i+=rand()%256)
+        for (bvect::size_type i = 0; i < bm::id_max/4; i+=(unsigned)rand()%256)
         {
             b = bm::find_interval_end(bv1, i, pos);
             assert(b && pos == bm::id_max-1);
@@ -19288,7 +19324,7 @@ unsigned generate_inter_test(V* arr, unsigned inc_factor, unsigned target_size)
     if (inc_factor < 2)
         inc_factor = 65535;
     
-    unsigned start = rand() % 256;
+    unsigned start = (unsigned) rand() % 256;
     if (!start)
         start = 1;
     unsigned sz = 0;
@@ -19409,7 +19445,7 @@ void InterpolativeCodingTest()
         cout << "  linear pattern" << endl;
         for (unsigned k = 0; k < code_repeats; ++k)
         {
-            unsigned inc = rand()%(65536*256);
+            unsigned inc = (unsigned)rand()%(65536*256);
             if (k == 0)
                 inc = 1;
             sz = generate_inter_test_linear(src_arr, inc, test_size);
@@ -19513,7 +19549,7 @@ void InterpolativeCodingTest()
         cout << "  linear pattern" << endl;
         for (unsigned k = 0; k < code_repeats; ++k)
         {
-            unsigned inc = rand()%(65536*256);
+            unsigned inc = (unsigned)rand()%(65536*256);
             if (k == 0)
                 inc = 1;
             sz = generate_inter_test_linear(src_arr, inc, test_size);
@@ -19617,7 +19653,7 @@ void InterpolativeCodingTest()
 //        sz = generate_inter_test_linear(src_arr, inc);
         for (unsigned k = 0; k < code_repeats; ++k)
         {
-            unsigned inc = rand()%128;
+            unsigned inc = (unsigned)rand()%128;
             if (k == 0)
                 inc = 1;
 
@@ -21531,7 +21567,7 @@ void TestSparseVector()
     unsigned i;
     for (i = 128000; i < 128000 * 3; ++i)
     {
-        sv.set(i, 7 + rand() % 256);
+        sv.set(i, 7 + (unsigned)rand() % 256);
     }
     bm::dynamic_range_clip_high(sv, 3);
     
@@ -23667,7 +23703,7 @@ void TestSparseVectorGatherDecode()
             CheckSparseVectorGather(sv2, i, i, control_value);
             CheckSparseVectorGather(sv3, i, i);
             CheckSparseVectorGather(sv4, i, i);
-            unsigned depth = rand() % 30000;
+            unsigned depth = (unsigned)rand() % 30000;
             CheckSparseVectorGather(sv, i, i+depth);
             CheckSparseVectorGather(sv2, i, i+depth, control_value);
             CheckSparseVectorGather(sv3, i, i+depth);
@@ -23690,7 +23726,7 @@ void TestSparseVectorGatherDecode()
 
         for (unsigned i = 0; i < probe_to; ++i)
         {
-            unsigned gsize = rand()%2024;
+            unsigned gsize = (unsigned)rand()%2024;
             CheckSparseVectorGatherRandom(sv, gsize);
             CheckSparseVectorGatherRandom(sv2, gsize);
             CheckSparseVectorGatherRandom(sv3, gsize);
@@ -25115,7 +25151,7 @@ void FillSparseIntervals(std::vector<unsigned>&   vect,
     for ( ;min < max; )
     {
         // hi-band interval
-        val = rand() % (65535 * 2);
+        val = (unsigned)rand() % (65535 * 2);
         unsigned i;
         for (i = 0; i < count; ++i)
         {
@@ -25127,13 +25163,13 @@ void FillSparseIntervals(std::vector<unsigned>&   vect,
         } // for i
         
         // gap with all zeroes
-        unsigned inc = rand() % 2048;
+        unsigned inc = (unsigned)rand() % 2048;
         min += inc;
         if (min > max)
             break;
 
         // low band plato
-        val = rand() % 8;
+        val = (unsigned)rand() % 8;
         for (i = 0; i < count; ++i)
         {
             vect[min] = val;
@@ -25158,7 +25194,7 @@ void TestSparseVector_Stress(unsigned count)
     for (unsigned i = 0; i < count; ++i)
     {
         unsigned fill_factor = 0;
-        for (unsigned min = 0; min < 10000000; min+= rand()%100000)
+        for (unsigned min = 0; min < 10000000; min+= (unsigned)rand()%100000)
         {
             unsigned max = min + (65535 * 10);
             {{
@@ -25200,10 +25236,10 @@ void TestSparseVector_Stress(unsigned count)
     for (unsigned i = 0; i < 1; ++i)
     {
         unsigned fill_factor = 0;
-        for (unsigned min = 0; min < 10000000; min+= rand()%100000)
+        for (unsigned min = 0; min < 10000000; min+= (unsigned)rand()%100000)
         {
             unsigned max = min + (65535 * 10);
-            unsigned min2 = max + rand() % 65536;
+            unsigned min2 = max + (unsigned)rand() % 65536;
             unsigned max2 = min2 + (65535 * 10);
 
             bm::null_support null_able1 =
@@ -27499,13 +27535,13 @@ void GenerateTestStrCollection(std::vector<string>& str_coll, unsigned max_coll)
         str.append(to_string(i));
         str_coll.emplace_back(str);
         
-//        if (i % 1024 == 0) // generate new prefix
+        if (i % 1024 == 0) // generate new prefix
         {
             prefix.clear();
-            unsigned prefix_len = rand() % 5;
+            unsigned prefix_len = (unsigned)rand() % 5;
             for (unsigned j = 0; j < prefix_len; ++j)
             {
-                char cch = char('a' + rand() % 26);
+                char cch = char('a' + (unsigned)rand() % 26);
                 prefix.push_back(cch);
             } // for j
         }
@@ -27928,7 +27964,7 @@ void TestStrSparseSort()
         {
             str = to_string(i);
             str_coll.emplace_back(str);
-            i += rand() % 3;
+            i += (unsigned)rand() % 3;
         } // for i
         
         // shuffle the data set
@@ -28135,7 +28171,7 @@ void TestSparseSort()
         for (unsigned i = 0; i < max_coll; )
         {
             u_coll.emplace_back(i);
-            i += rand() % 3;
+            i += (unsigned)rand() % 3;
         } // for i
         
         // shuffle the data set
@@ -29601,7 +29637,7 @@ void generate_bvector(bvect& bv, unsigned vector_max, bool optimize)
         // generate GAP (compressed) blocks
         for (j = 0; j < 65535; i += 120, j++)
         {
-            unsigned len = rand() % 64;
+            unsigned len = (unsigned)rand() % 64;
             bv.set_range(i, i + len);
             bool all_one_range = bv.is_all_one_range(i, i + len);
             assert(all_one_range);
@@ -29976,10 +30012,10 @@ void BvectorBitForEachTest()
 static
 void FillTestBuffer(bm::compressed_buffer_collection<bvect>::buffer_type& buf)
 {
-    unsigned sz_factor = rand() % 10;
+    unsigned sz_factor = (unsigned)rand() % 10;
     if (!sz_factor)
         sz_factor = 1;
-    unsigned size = 65000 + rand() % 65;// (128000 / sz_factor);
+    unsigned size = 65000 + (unsigned)rand() % 65;// (128000 / sz_factor);
     
     buf.resize(size);
     unsigned char* data = buf.data();
@@ -29993,9 +30029,9 @@ void FillTestBuffer(bm::compressed_buffer_collection<bvect>::buffer_type& buf)
 static
 void GenerateCompressedBufferCollection(bm::compressed_buffer_collection<bvect>& cbc)
 {
-    unsigned sz = rand() % 10000;
+    unsigned sz = (unsigned)rand() % 10000;
     unsigned key = 0;
-    unsigned key_factor = rand() % 128;
+    unsigned key_factor = (unsigned)rand() % 128;
     if (!key_factor)
         key_factor = 1;
     for (unsigned i = 0; i < sz; ++i)
@@ -30452,7 +30488,7 @@ void TestBlockExpandCompact()
         bm::bit_block_set(tb1, 0);
         bm::set_bit(tb1, k);
 
-        for (unsigned j = 0; j < k; j+=rand()%512)
+        for (unsigned j = 0; j < k; j+=(unsigned)rand()%512)
         {
             bm::set_bit(tb1, j);
             d64 = bm::calc_block_digest0(tb1);
@@ -30470,7 +30506,7 @@ void TestBlockExpandCompact()
         bm::bit_block_set(tb1, 0);
         bm::set_bit(tb1, k);
 
-        for (int j = 65535; j > int(k); j-=rand()%512)
+        for (int j = 65535; j > int(k); j-=(unsigned)rand()%512)
         {
             bm::set_bit(tb1, (unsigned)j);
             d64 = bm::calc_block_digest0(tb1);
@@ -31190,7 +31226,7 @@ void GenerateSV(SV&   sv, unsigned strategy = 0)
         cout << "SV Ultra sparse generation" << endl;
         for (unsigned i = 0; i < max_idx_value;)
         {
-            value_type v = (rand() * rand()) % 650000;
+            value_type v = (unsigned)(rand() * rand()) % 650000;
             if constexpr (std::is_unsigned<value_type>::value)
             {
                 sv[i] = v;
@@ -31202,7 +31238,7 @@ void GenerateSV(SV&   sv, unsigned strategy = 0)
                 else
                     sv[i] = v;
             }
-            i += 10000 + rand() % 65535;
+            i += 10000 + (unsigned)rand() % 65535;
         }
         break;
     }
@@ -31211,7 +31247,7 @@ void GenerateSV(SV&   sv, unsigned strategy = 0)
         cout << "SV Dense intervals generation 1" << endl;
         for (unsigned i = 0; i < max_idx_value;)
         {
-            value_type v = (rand() * rand()) % 650000;
+            value_type v = (unsigned)(rand() * rand()) % 650000;
             for (unsigned j = 0; i < max_idx_value; ++i, ++j)
             {
                 if constexpr (std::is_unsigned<value_type>::value)
@@ -31225,14 +31261,14 @@ void GenerateSV(SV&   sv, unsigned strategy = 0)
                 if (j > 256)
                     break;
             }
-            i += 20000 + rand() % 65535;
+            i += 20000 + (unsigned)rand() % 65535;
         }
         break;
     }
     case 2:
     {
         cout << "SV Dense intervals generation 2" << endl;
-        value_type v = (rand() * rand()) % 650000;
+        value_type v = (unsigned)(rand() * rand()) % 650000;
         for (unsigned i = 0; i < max_idx_value/4; ++i)
         {
             sv[i] = v;
@@ -31257,7 +31293,7 @@ void GenerateSV(SV&   sv, unsigned strategy = 0)
     case 3:
     {
         cout << "SV random generation" << endl;
-        unsigned rand_max = rand() % 300000;
+        unsigned rand_max = (unsigned)rand() % 300000;
         for (unsigned i = 0; i < rand_max; ++i)
         {
             value_type v = value_type(rand() * rand());
@@ -31535,8 +31571,8 @@ void DetailedCheckCompressedDecode(const CSV& csv)
     {
         CheckCompressedDecode(csv, i, size1);
         cout << "\r" << i << "/" << size1 << flush;
-        i+=rand()%3;
-        size1 -= rand()%5;
+        i+=(unsigned)rand()%3;
+        size1 -= (unsigned)rand()%5;
     }
     }
     cout << endl;
@@ -31556,7 +31592,7 @@ void DetailedCheckCompressedDecode(const CSV& csv)
     {
         CheckCompressedDecode(csv, i, size);
         cout << "\r" << i << "/" << size << flush;
-        i += rand() % 25000;
+        i += (unsigned)rand() % 25000;
     }
     cout << endl;
     
@@ -31566,8 +31602,8 @@ void DetailedCheckCompressedDecode(const CSV& csv)
             break;
         CheckCompressedDecode(csv, i, size);
         cout << "\r" << i << "/" << size << flush;
-        i += rand() % 25000;
-        size -= rand() % 25000;;
+        i += (unsigned)rand() % 25000;
+        size -= (unsigned)rand() % 25000;;
     }
     cout << endl;
 
@@ -33375,8 +33411,8 @@ void TestCompressSparseVectorSerial()
                 }
 
                 // gallop to the end
-                i += rand() % 65536;
-                j -= rand() % 65536;
+                i += (unsigned)rand() % 65536;
+                j -= (unsigned)rand() % 65536;
             } // for i
 
             cout << "\n bookmarks ON" << endl;
@@ -34295,6 +34331,7 @@ int main(int argc, char *argv[])
     
     if (is_all || is_str_sv)
     {
+
          TestStrSparseVector();
          CheckAllocLeaks(false);
 

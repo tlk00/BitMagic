@@ -1285,7 +1285,7 @@ protected:
             {
                 for (size_type j = 0; j < imp_size; ++j)
                 {
-                    unsigned_value_type ch = unsigned(ch_slice[j]);
+                    unsigned ch = unsigned(ch_slice[j]);
                     if (ch & mask)
                         bit_list[n_bits++] = idx_from + j;
                 } // for j
