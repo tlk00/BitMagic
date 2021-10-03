@@ -341,7 +341,7 @@ public:
     
     const bvector_type* get_target() const { return bv_target_; }
     
-    bm::word_t* get_temp_block() { return ar_->tb1; }
+    bm::word_t* get_temp_block() { return tb_ar_->tb1; }
     
     //@}
 
@@ -1962,7 +1962,7 @@ void aggregator<BV>::stage(bm::word_t* temp_block)
     case BM_NOT_DEFINED:
         break;
     case BM_SHIFT_R_AND:
-        prepare_shift_right_and(*bv_target, ar_->arg_bv0, arg_group0_size);
+        prepare_shift_right_and(*bv_target, ag_.arg_bv0.data(), arg_group0_size);
         operation_status_ = op_prepared;
         break;
     default:
@@ -1988,7 +1988,7 @@ aggregator<BV>::run_step(unsigned i, unsigned j)
         {
         if (i > top_block_size_)
         {
-            if (!this->any_carry_overs(&ar_->carry_overs_[0], arg_group0_size))
+            if (!this->any_carry_overs(ar_->carry_overs.data(), arg_group0_size))
             {
                 operation_status_ = op_done;
                 return operation_status_;
@@ -1996,7 +1996,7 @@ aggregator<BV>::run_step(unsigned i, unsigned j)
         }
         //bool found =
            this->combine_shift_right_and(i, j, *bv_target_,
-                                        ar_->arg_bv0, arg_group0_size);
+                                        ag_.arg_bv0.data(), arg_group0_size);
         operation_status_ = op_in_progress;
         }
         break;
