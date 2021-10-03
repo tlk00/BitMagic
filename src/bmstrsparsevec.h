@@ -1293,7 +1293,7 @@ protected:
             if (n_bits) // set transposed bits to the target plane
             {
                 bvector_type* bv =
-                    this->get_create_slice((char_slice_idx * 8) + bi);
+                    this->get_create_slice((unsigned)(char_slice_idx * 8) + bi);
                 bv->import_sorted(&bit_list[0], n_bits);
             }
         } // for ch_acc
