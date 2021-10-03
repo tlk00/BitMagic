@@ -64,13 +64,6 @@ int main(void)
         // declare standalone aggregator for logical operations
         bm::aggregator<bm::bvector<> > agg;
         
-        // current version of aggregator is capped at 256 processing limit
-        if constexpr (max_vectors > agg.max_aggregator_cap)
-        {
-            std::cerr << "Too many bit-vectors!" << std::endl;
-            return 1;
-        }
-
         std::cout << "AGRUMENT (GROUP 0) SETS:" << std::endl;
         // make vector of bit-vectors, set some bits
         std::vector<std::unique_ptr<bm::bvector<> > > vect;
