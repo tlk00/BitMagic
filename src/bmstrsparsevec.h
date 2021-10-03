@@ -1204,7 +1204,7 @@ protected:
         for (unsigned i = 0; i < max_str_size; ++i)
         {
             unsigned ch_acc = 0;
-#if defined(BMVECTOPT)
+#if defined(BMVECTOPT) || defined(BM_USE_GCC_BUILD)
             if (imp_size == ins_buf_size) /// full buffer import can use loop unrolling
             {
                 for (size_type j = 0; j < imp_size; j+=4)
@@ -1256,18 +1256,16 @@ protected:
             unsigned n_bits = 0;
             const unsigned bi = (bm::word_bitcount((ch_acc & -ch_acc) - 1));
             unsigned mask = 1u << bi;
-#if defined(BMVECTOPT)
+#if defined(BMVECTOPT) || defined(BM_USE_GCC_BUILD)
             if (imp_size == ins_buf_size) /// full buffer import can use loop unrolling
             {
                 mask |= (mask << 8) | (mask << 16) | (mask << 24);
                 for (size_type j = 0; j < imp_size; j+=4)
                 {
-                    unsigned ch0 = unsigned(ch_slice[j+0]);
-                    unsigned ch1 = unsigned(ch_slice[j+1]) << 8;
-                    unsigned ch2 = unsigned(ch_slice[j+2]) << 16;
-                    unsigned ch3 = unsigned(ch_slice[j+3]) << 24;
-                    ch0 |= ch1 | ch2 | ch3;
-
+                    unsigned ch0 = (ch_slice[j+0]) |
+                                   (ch_slice[j+1] << 8)  |
+                                   (ch_slice[j+2] << 16) |
+                                   (ch_slice[j+3] << 24);
                     ch0 &= mask;
                     ch0 = (ch0 >> bi) | (ch0 >> (bi+7)) |
                           (ch0 >> (bi+14)) | (ch0 >> (bi+21));
@@ -1275,7 +1273,8 @@ protected:
                     BM_ASSERT(bm::word_bitcount(ch0) <= 4);
                     for (size_type base_idx = idx_from + j ;ch0; ch0 &= ch0 - 1) // bit-scan
                     {
-                        const unsigned bit_idx = (bm::word_bitcount((ch0 & -ch0) - 1));
+                        const unsigned bit_idx =
+                                (bm::word_bitcount((ch0 & -ch0) - 1));
                         bit_list[n_bits++] = base_idx + bit_idx;
                     } // for ch0
                 } // for j
