@@ -643,7 +643,8 @@ unsigned aggregator<BV>::add(const bvector_type* bv,
         if (!bv)
             return arg_group1_size;
         
-        ag_.arg_bv1[arg_group1_size++] = bv;
+//        ag_.arg_bv1[arg_group1_size++] = bv;
+        ag_.arg_bv1.push_back(bv); arg_group1_size++;
         return arg_group1_size;
     }
     else // arg group 0
