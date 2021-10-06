@@ -88,7 +88,9 @@ using namespace std;
 #include "stacktrace_dbg.h"
 #include <unordered_map>
 
-
+// -------------------------------
+// memory profiler: very slow if defined
+//
 //#define BM_STACK_COLL
 
 #ifdef BM_STACK_COLL
@@ -9127,6 +9129,36 @@ void AggregatorTest()
     bvect* bv_arr[128] = { 0, };
     bvect* bv_arr2[128] = { 0, };
 
+
+    cout << " AGG arg pipeline tests (basic)" << endl;
+
+    {
+        bm::aggregator<bvect> agg;
+        bm::aggregator<bvect>::pipeline agg_pipe;
+        {
+            bm::aggregator<bvect>::arg_groups* args = agg_pipe.add();
+            assert(args);
+            args->arg_bv0.push_back(nullptr);
+            args->arg_bv1.push_back(nullptr);
+        }
+        {
+            bm::aggregator<bvect>::arg_groups* args = agg_pipe.add();
+            assert(args);
+            args->arg_bv0.push_back(nullptr);
+        }
+        assert(!agg_pipe.is_complete());
+        agg_pipe.complete();
+        assert(agg_pipe.is_complete());
+
+        auto& arg_vect = agg_pipe.get_args_vector();
+        assert(arg_vect.size() == 2);
+        assert(arg_vect[0]->arg_bv0.size() == 1);
+        assert(arg_vect[0]->arg_bv1.size() == 1);
+        assert(arg_vect[1]->arg_bv0.size() == 1);
+        assert(arg_vect[1]->arg_bv1.size() == 0);
+
+    }
+
     cout << "OR tests..." << endl;
     {
         bm::aggregator<bvect> agg;
@@ -9248,7 +9280,19 @@ void AggregatorTest()
         res = bv_control.compare(bv3);
         assert(res == 0);
     }
-    
+
+    {
+        bvect bv1, bv2, bv3;
+        bv1.set(1);
+        bv2.set(2);
+        bv_arr[0] = &bv1;
+        bv_arr[1] = &bv2;
+        agg.combine_and(bv3, bv_arr, 2);
+        bool b = bv3.any();
+        assert(!b);
+
+    }
+
     {
         bvect bv1, bv2, bv3;
         bvect bv_empty;
@@ -9269,6 +9313,7 @@ void AggregatorTest()
         bv_control.set_range(100000, 100100);
         agg.combine_and(bv3, bv_arr, 2);
         res = bv_control.compare(bv3);
+        assert(res == 0);
         agg.combine_and_sub(bv3, bv_arr, 2, 0, 0, false);
         res = bv_control.compare(bv3);
         assert(res == 0);
@@ -9393,6 +9438,104 @@ void AggregatorTest()
         assert(bv4.count()==0);
         assert(!bv4.any());
     }
+
+
+    cout << " AGG arg pipeline tests (AND-SUB)" << endl;
+
+    {
+        //bm::aggregator<bvect> agg;
+        {
+            bvect bv0{ 1, 65536 }, bv1{ 1, 65536 }, bv2 {65536};
+
+            {
+                bm::aggregator<bvect>::pipeline agg_pipe;
+                {
+                    bm::aggregator<bvect>::arg_groups* args = agg_pipe.add();
+                    args->add(&bv0, 0); // AND
+                    args->add(&bv1, 0);
+                }
+                agg_pipe.complete();
+                agg.combine_and_sub(agg_pipe);
+                auto& res_vect = agg_pipe.get_bv_res_vector();
+                assert(res_vect.size()==1);
+                for (size_t i = 0; i < res_vect.size(); ++i)
+                {
+                    bvect* bv = res_vect[i];
+                    assert(bv);
+                    auto cnt = bv->count();
+                    assert(cnt == 2);
+                    assert(bv->test(1));
+                    assert(bv->test(65536));
+                }
+            }
+
+            {
+                bm::aggregator<bvect>::pipeline agg_pipe;
+                {
+                    bm::aggregator<bvect>::arg_groups* args = agg_pipe.add();
+                    args->add(&bv0, 0); // AND
+                    args->add(&bv1, 0);
+                    args->add(&bv2, 1); // SUB
+                }
+                {
+                    bm::aggregator<bvect>::arg_groups* args = agg_pipe.add();
+                    args->add(&bv0, 0); // AND
+                    args->add(&bv1, 0);
+                    args->add(&bv2, 1); // SUB
+                }
+
+                agg_pipe.complete();
+
+
+                agg.combine_and_sub(agg_pipe);
+                auto& res_vect = agg_pipe.get_bv_res_vector();
+                assert(res_vect.size()==2);
+                for (size_t i = 0; i < res_vect.size(); ++i)
+                {
+                    bvect* bv = res_vect[i];
+                    assert(bv);
+                    auto cnt = bv->count();
+                    assert(cnt == 1);
+                    assert(bv->test(1));
+                }
+            }
+
+            {
+                bvect bv_full;
+                bv_full.invert();
+                bm::aggregator<bvect>::pipeline agg_pipe;
+                {
+                    bm::aggregator<bvect>::arg_groups* args = agg_pipe.add();
+                    args->add(&bv0, 0); // AND
+                    args->add(&bv1, 0);
+                    args->add(&bv_full, 1); // SUB
+                }
+                {
+                    bm::aggregator<bvect>::arg_groups* args = agg_pipe.add();
+                    args->add(&bv0, 0); // AND
+                    args->add(&bv1, 0);
+                    args->add(&bv_full, 1); // SUB
+                    args->add(&bv2, 1); // SUB
+                    args->add(&bv0, 1); // SUB
+
+                }
+
+                agg_pipe.complete();
+
+                agg.combine_and_sub(agg_pipe);
+                auto& res_vect = agg_pipe.get_bv_res_vector();
+                assert(res_vect.size()==2);
+                for (size_t i = 0; i < res_vect.size(); ++i)
+                {
+                    bvect* bv = res_vect[i];
+                    assert(!bv);
+                }
+            }
+        }
+    }
+
+
+
     
     // SHIFT-R_AND
     
@@ -9926,7 +10069,7 @@ void StressTestAggregatorShiftAND(unsigned repeats)
                 exit(1);
             }
             if (i % 250 == 0)
-                cout << "\r" << i << flush;
+                cout << "\r" << i << "/" << shift_repeats << flush;
 
             bvect bv_target2;
             agg.set_compute_count(true);
@@ -34217,6 +34360,7 @@ int main(int argc, char *argv[])
 
     if (is_all || is_agg)
     {
+
          AggregatorTest();
          CheckAllocLeaks(false);
 
@@ -34331,7 +34475,6 @@ int main(int argc, char *argv[])
     
     if (is_all || is_str_sv)
     {
-
          TestStrSparseVector();
          CheckAllocLeaks(false);
 
