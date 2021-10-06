@@ -1039,6 +1039,8 @@ void basic_bmatrix<BV>::set_octet(size_type pos,
     } // for
     
     // clear the tail
+    if (row_end > rsize_)
+        row_end = rsize_;
     for (++row; row < row_end; ++row)
         if (bvector_type* bv = this->get_row(row))
             bv->clear_bit_no_check(pos);
@@ -1082,6 +1084,8 @@ void basic_bmatrix<BV>::insert_octet(size_type pos,
     } // for
     
     // clear the tail
+    if (row_end > rsize_)
+        row_end = rsize_;
     for (++row; row < row_end; ++row)
         if (bvector_type* bv = this->get_row(row))
             bv->insert(pos, false);
