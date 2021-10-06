@@ -1420,6 +1420,8 @@ bool sparse_vector_scanner<SV>::prepare_and_sub_aggregator(const SV&  sv,
 {
     unsigned char bits[64];
 
+//    agg_.reset();
+
     int len = 0;
     for (; str[len] != 0; ++len)
     {}
@@ -1456,10 +1458,8 @@ bool sparse_vector_scanner<SV>::prepare_and_sub_aggregator(const SV&  sv,
         } // for i
         
         unsigned vinv = unsigned(value);
-        if (bm::conditional<sizeof(value_type) == 1>::test())
-        {
+        if constexpr (sizeof(value_type) == 1)
             vinv ^= 0xFF;
-        }
         else // 2-byte char
         {
             BM_ASSERT(sizeof(value_type) == 2);
@@ -1500,6 +1500,8 @@ bool sparse_vector_scanner<SV>::prepare_and_sub_aggregator(const SV&   sv,
                                            typename SV::value_type   value)
 {
     using unsigned_value_type = typename SV::unsigned_value_type;
+
+    agg_.reset();
 
     unsigned char bits[sizeof(value) * 8];
     unsigned_value_type uv = sv.s2u(value);

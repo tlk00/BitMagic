@@ -1262,10 +1262,10 @@ protected:
                 mask |= (mask << 8) | (mask << 16) | (mask << 24);
                 for (size_type j = 0; j < imp_size; j+=4)
                 {
-                    unsigned ch0 = (ch_slice[j+0]) |
-                                   (ch_slice[j+1] << 8)  |
-                                   (ch_slice[j+2] << 16) |
-                                   (ch_slice[j+3] << 24);
+                    unsigned ch0 = ((unsigned)ch_slice[j+0]) |
+                                   ((unsigned)ch_slice[j+1] << 8)  |
+                                   ((unsigned)ch_slice[j+2] << 16) |
+                                   ((unsigned)ch_slice[j+3] << 24);
                     ch0 &= mask;
                     ch0 = (ch0 >> bi) | (ch0 >> (bi+7)) |
                           (ch0 >> (bi+14)) | (ch0 >> (bi+21));
