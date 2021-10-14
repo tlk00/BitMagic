@@ -72,6 +72,7 @@ std::mt19937 gen(rand_dev()); // mersenne_twister_engine
 std::uniform_int_distribution<> rand_dis(0, BSIZE); // generate uniform numebrs for [1, vector_max]
 
 typedef bm::bvector<> bvect;
+typedef bm::str_sparse_vector<char, bvect, 8> str_svect_type;
 
 
 // generate pseudo-random bit-vector, mix of compressed/non-compressed blocks
@@ -3894,6 +3895,129 @@ void SparseVectorScannerTest()
 }
 
 
+
+inline
+void GeneratePipelineTestData(std::vector<string>& str_coll,
+                              str_svect_type&      str_sv,
+                              unsigned max_coll = 8000000,
+                              unsigned repeat_factor=10)
+{
+    auto bi(str_sv.get_back_inserter());
+    string str;
+    for (unsigned i = 10; i < max_coll; i+= (rand()&0xF))
+    {
+        switch (i & 0xF)
+        {
+        case 0: str = "AB"; break;
+        case 1: str = "GTx"; break;
+        case 2: str = "cnv"; break;
+        default: str = "AbY11"; break;
+        }
+        str.append(to_string(i));
+
+        for (unsigned k = 0; k < repeat_factor; ++k)
+        {
+            str_coll.emplace_back(str);
+            bi = str;
+        }
+    } // for i
+    bi.flush();
+}
+
+static
+void SparseVectorPipelineScannerTest()
+{
+   const unsigned max_coll = 8000000;
+   std::vector<string> str_coll;
+   str_svect_type      str_sv;
+
+
+   GeneratePipelineTestData(str_coll, str_sv, max_coll, 10);
+
+    str_sv.remap();
+    str_sv.optimize();
+
+
+    //bm::print_svector_stat(str_sv);
+
+    unsigned test_runs = 10000;
+    std::vector<string> str_test_coll;
+    for (bvect::size_type i = 0; i < test_runs; ++i)
+    {
+        bvect::size_type idx = (unsigned) rand() % test_runs;
+        if (idx >= test_runs)
+            idx = test_runs/2;
+        str_test_coll.push_back(str_coll[idx]);
+    }
+    assert(str_test_coll.size() == test_runs);
+
+    unsigned search_repeats = test_runs;
+
+    std::vector<unique_ptr<bvect> > res_vec1;
+    bm::sparse_vector_scanner<str_svect_type> scanner;
+
+    {
+        bm::chrono_taker tt("scanner::find_eq_str()", search_repeats);
+
+        for (bvect::size_type i = 0; i < test_runs; ++i)
+        {
+            const string& str = str_test_coll[i];
+            str_svect_type::bvector_type* bv_res(new bvect);
+            scanner.find_eq_str(str_sv, str.c_str(), *bv_res);
+            res_vec1.emplace_back(unique_ptr<bvect>(bv_res));
+        } // for
+    }
+
+    bm::sparse_vector_scanner<str_svect_type>::pipeline pipe(str_sv);
+    {
+        bm::chrono_taker tt("scanner::pipeline find_eq_str()", search_repeats);
+
+        for (bvect::size_type i = 0; i < test_runs; ++i)
+        {
+            const string& str = str_test_coll[i];
+            pipe.add(str.c_str());
+        }
+        pipe.complete(); // finish the pipeline construction with this call
+
+        scanner.find_eq_str(pipe); // run the search pipeline
+    }
+
+    bm::sparse_vector_scanner<str_svect_type>::pipeline pipe2(str_sv);
+    pipe2.options().make_results = false;
+    pipe2.options().compute_counts = true;
+    {
+        bm::chrono_taker tt("scanner::pipeline find_eq_str()-count()", search_repeats);
+
+        for (bvect::size_type i = 0; i < test_runs; ++i)
+        {
+            const string& str = str_test_coll[i];
+            pipe2.add(str.c_str());
+        }
+        pipe2.complete(); // finish the pipeline construction with this call
+
+        scanner.find_eq_str(pipe2); // run the search pipeline
+    }
+
+    {
+        auto& res_vect = pipe.get_bv_res_vector();
+        auto& cnt_vect = pipe2.get_bv_count_vector();
+
+        for (size_t i = 0; i < res_vect.size(); ++i)
+        {
+            const bvect* bv1 = res_vec1[i].get();
+            const auto* bv = res_vect[i];
+            assert(bv);
+            bool match = bv1->equal(*bv);
+            assert(match);
+            auto c = cnt_vect[i];
+            auto cnt = bv->count();
+            assert(cnt == c);
+        }
+    }
+
+}
+
+
 static
 void SparseVectorSerializationTest()
 {
@@ -4075,7 +4199,6 @@ void SparseVectorRangeDeserializationTest()
 
 
 
-typedef bm::str_sparse_vector<char, bvect, 8> str_svect_type;
 
 static
 void GenerateTestStrCollection(std::vector<string>& str_coll, unsigned max_coll)
@@ -4428,6 +4551,9 @@ int main(void)
         cout << endl;
 
         SparseVectorScannerTest();
+        cout << endl;
+
+        SparseVectorPipelineScannerTest();
         cout << endl;
 
         SparseVectorSerializationTest();
