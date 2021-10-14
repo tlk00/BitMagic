@@ -9443,7 +9443,6 @@ void AggregatorTest()
     cout << " AGG arg pipeline tests (AND-SUB)" << endl;
 
     {
-        //bm::aggregator<bvect> agg;
         {
             bvect bv0{ 1, 65536 }, bv1{ 1, 65536 }, bv2 {65536};
 
@@ -9458,6 +9457,9 @@ void AggregatorTest()
                 agg.combine_and_sub(agg_pipe);
                 auto& res_vect = agg_pipe.get_bv_res_vector();
                 assert(res_vect.size()==1);
+                const auto& res_cnt = agg_pipe.get_bv_count_vector();
+                assert(res_cnt.size()==0);
+
                 for (size_t i = 0; i < res_vect.size(); ++i)
                 {
                     bvect* bv = res_vect[i];
@@ -9471,6 +9473,8 @@ void AggregatorTest()
 
             {
                 bm::aggregator<bvect>::pipeline agg_pipe;
+                agg_pipe.options().compute_counts = true;
+
                 {
                     bm::aggregator<bvect>::arg_groups* args = agg_pipe.add();
                     args->add(&bv0, 0); // AND
@@ -9488,8 +9492,11 @@ void AggregatorTest()
 
 
                 agg.combine_and_sub(agg_pipe);
+
                 auto& res_vect = agg_pipe.get_bv_res_vector();
                 assert(res_vect.size()==2);
+                const auto& res_cnt = agg_pipe.get_bv_count_vector();
+
                 for (size_t i = 0; i < res_vect.size(); ++i)
                 {
                     bvect* bv = res_vect[i];
@@ -9497,13 +9504,53 @@ void AggregatorTest()
                     auto cnt = bv->count();
                     assert(cnt == 1);
                     assert(bv->test(1));
+                    auto c = res_cnt[i];
+                    assert(c == cnt);
                 }
             }
+
+            {
+                bm::aggregator<bvect>::pipeline agg_pipe;
+                agg_pipe.options().make_results = false;
+                agg_pipe.options().compute_counts = true;
+
+                {
+                    bm::aggregator<bvect>::arg_groups* args = agg_pipe.add();
+                    args->add(&bv0, 0); // AND
+                    args->add(&bv1, 0);
+                    args->add(&bv2, 1); // SUB
+                }
+                {
+                    bm::aggregator<bvect>::arg_groups* args = agg_pipe.add();
+                    args->add(&bv0, 0); // AND
+                    args->add(&bv1, 0);
+                    args->add(&bv2, 1); // SUB
+                }
+
+                agg_pipe.complete();
+
+
+                agg.combine_and_sub(agg_pipe);
+
+                auto& res_vect = agg_pipe.get_bv_res_vector();
+                const auto& res_cnt = agg_pipe.get_bv_count_vector();
+
+                for (size_t i = 0; i < res_vect.size(); ++i)
+                {
+                    bvect* bv = res_vect[i];
+                    assert(!bv);
+                    auto c = res_cnt[i];
+                    assert(c == 1);
+                }
+            }
+
 
             {
                 bvect bv_full;
                 bv_full.invert();
                 bm::aggregator<bvect>::pipeline agg_pipe;
+                agg_pipe.options().compute_counts = true;
+
                 {
                     bm::aggregator<bvect>::arg_groups* args = agg_pipe.add();
                     args->add(&bv0, 0); // AND
@@ -9525,13 +9572,71 @@ void AggregatorTest()
                 agg.combine_and_sub(agg_pipe);
                 auto& res_vect = agg_pipe.get_bv_res_vector();
                 assert(res_vect.size()==2);
+                const auto& res_cnt = agg_pipe.get_bv_count_vector();
+
                 for (size_t i = 0; i < res_vect.size(); ++i)
                 {
                     bvect* bv = res_vect[i];
                     assert(!bv);
+                    auto c = res_cnt[i];
+                    assert(c == 0);
                 }
+                auto gch = agg.get_cache_gap_hits();
+                assert(gch == 0);
+
             }
         }
+
+        // test GAP cached aggregator
+        {
+        bvect bv0{ 1, 65536 }, bv1{ 1, 65536 }, bv2 {65536};
+        bv0.optimize();
+        bv1.optimize();
+        bv2.optimize();
+            {
+                bm::aggregator<bvect>::pipeline agg_pipe;
+                {
+                    bm::aggregator<bvect>::arg_groups* args = agg_pipe.add();
+                    args->add(&bv0, 0); // AND
+                    args->add(&bv1, 0);
+                    args->add(&bv2, 1); // SUB
+                }
+                {
+                    bm::aggregator<bvect>::arg_groups* args = agg_pipe.add();
+                    args->add(&bv0, 0); // AND
+                    args->add(&bv1, 0);
+                    args->add(&bv2, 1); // SUB
+                }
+
+                agg_pipe.complete();
+                auto& ivect = agg_pipe.get_all_input_vect();
+                auto& cnt_vect = agg_pipe.get_all_input_cnt_vect();
+                assert(ivect.size() == 3);
+                for (size_t i = 0; i < ivect.size(); ++i)
+                {
+                    const bvect* bv = ivect[i];
+                    assert(bv == &bv0 || bv == &bv1 || bv == &bv2);
+                    assert(cnt_vect[i] == 1);
+                }
+
+
+                agg.combine_and_sub(agg_pipe);
+                auto& res_vect = agg_pipe.get_bv_res_vector();
+                assert(res_vect.size()==2);
+                for (size_t i = 0; i < res_vect.size(); ++i)
+                {
+                    bvect* bv = res_vect[i];
+                    assert(bv);
+                    auto cnt = bv->count();
+                    assert(cnt == 1);
+                    assert(bv->test(1));
+                }
+                auto gch = agg.get_cache_gap_hits();
+                assert(gch == 10);
+            }
+
+        }
+
     }
 
 
@@ -26784,6 +26889,57 @@ void TestStrSparseVector_FindEq()
         cnt = result.count();
         assert(cnt == 0);
 
+
+        // simple pipeline search
+        {
+        bm::sparse_vector_scanner<TSparseStrVector>::pipeline pipe(str_vector);
+        pipe.add("nssv16175917");
+        pipe.add("nssv16175917");
+        pipe.add("xyz"); // impossible case
+        pipe.add("rs4567789");
+
+        pipe.complete(); // finish the pipeline construction with this call
+
+        assert(pipe.is_complete());
+
+        scanner.find_eq_str(pipe); // run the search pipeline
+
+        // iterate all the results
+        //
+        auto& res_vect = pipe.get_bv_res_vector();
+        assert(res_vect.size()==4);
+        for (size_t i = 0; i < res_vect.size(); ++i)
+        {
+            bm::sparse_vector_scanner<TSparseStrVector>::bvector_type* bv = res_vect[i];
+            assert(bv || i == 2);
+            if (bv)
+            {
+                cnt = bv->count();
+                assert(cnt == 1);
+                bm::id_t pos;
+                bool found = bv->find(pos);
+                assert(found);
+                switch (i)
+                {
+                case 0:
+                case 1:
+                    assert(pos == 5);
+                    break;
+                case 2:
+                    assert(0);
+                    break;
+                case 3:
+                    assert(pos == 3);
+                    break;
+                default:
+                    break;
+                } // switch
+            }
+        } // for i
+
+
+        }
+
     }
 
 
@@ -28030,13 +28186,158 @@ void StressTestStrSparseVector()
    cout << endl;
 }
 
+static
+void TestSparseFindEqStrPipeline()
+{
+   cout << "---------------------------- TestSparseFindEqStrPipeline()" << endl;
+   const unsigned max_coll = 8000000;
+   cout << "   generate test set..." << flush;
+
+   std::vector<string> str_coll;
+   str_svect_type      str_sv;
+
+    {
+        auto bi(str_sv.get_back_inserter());
+        string str;
+        for (unsigned i = 10; i < max_coll; i+= (rand()&0xF))
+        {
+            switch (i & 0xF)
+            {
+            case 0: str = "AB"; break;
+            case 1: str = "GTx"; break;
+            case 2: str = "cnv"; break;
+            default: str = "AbY11"; break;
+            }
+            str.append(to_string(i));
+
+            for (unsigned k = 0; k < 10; ++k)
+            {
+                str_coll.emplace_back(str);
+                bi = str;
+            }
+        } // for i
+        bi.flush();
+    }
+    cout << "remap..." << flush;
+
+    str_sv.remap();
+    str_sv.optimize();
+
+   cout << "OK" << endl;
+
+    bm::print_svector_stat(str_sv);
+
+    unsigned test_runs = 10000;
+    std::vector<string> str_test_coll;
+    for (bvect::size_type i = 0; i < test_runs; ++i)
+    {
+        bvect::size_type idx = (unsigned) rand() % test_runs;
+        if (idx >= test_runs)
+            idx = test_runs/2;
+        str_test_coll.push_back(str_coll[idx]);
+    }
+    assert(str_test_coll.size() == test_runs);
+
+    std::this_thread::sleep_for (std::chrono::seconds(4));
+
+
+    std::vector<unique_ptr<bvect> > res_vec1;
+    bm::sparse_vector_scanner<str_svect_type> scanner;
+
+    {
+    std::chrono::time_point<std::chrono::steady_clock> s;
+    std::chrono::time_point<std::chrono::steady_clock> f;
+    s = std::chrono::steady_clock::now();
+
+        for (bvect::size_type i = 0; i < test_runs; ++i)
+        {
+            const string& str = str_test_coll[i];
+
+            str_svect_type::bvector_type* bv_res(new bvect);
+            scanner.find_eq_str(str_sv, str.c_str(), *bv_res);
+            res_vec1.emplace_back(unique_ptr<bvect>(bv_res));
+        } // for
+    f = std::chrono::steady_clock::now();
+    auto diff = f - s;
+    auto d = std::chrono::duration <double, std::milli> (diff).count();
+
+    cout << "scanner::find_eq_str()  " << d << "ms" << endl;
+    }
+
+    bm::sparse_vector_scanner<str_svect_type>::pipeline pipe(str_sv);
+    {
+    std::chrono::time_point<std::chrono::steady_clock> s;
+    std::chrono::time_point<std::chrono::steady_clock> f;
+    s = std::chrono::steady_clock::now();
+
+        for (bvect::size_type i = 0; i < test_runs; ++i)
+        {
+            const string& str = str_test_coll[i];
+            pipe.add(str.c_str());
+        }
+        pipe.complete(); // finish the pipeline construction with this call
+
+        scanner.find_eq_str(pipe); // run the search pipeline
+
+    f = std::chrono::steady_clock::now();
+    auto diff = f - s;
+    auto d = std::chrono::duration <double, std::milli> (diff).count();
+    cout << "scanner::pipeline:  " << d << "ms" << endl;
+    }
+
+    bm::sparse_vector_scanner<str_svect_type>::pipeline pipe2(str_sv);
+    pipe2.options().make_results = false;
+    pipe2.options().compute_counts = true;
+    {
+    std::chrono::time_point<std::chrono::steady_clock> s;
+    std::chrono::time_point<std::chrono::steady_clock> f;
+    s = std::chrono::steady_clock::now();
+
+        for (bvect::size_type i = 0; i < test_runs; ++i)
+        {
+            const string& str = str_test_coll[i];
+            pipe2.add(str.c_str());
+        }
+        pipe2.complete(); // finish the pipeline construction with this call
+
+        scanner.find_eq_str(pipe2); // run the search pipeline
+
+    f = std::chrono::steady_clock::now();
+    auto diff = f - s;
+    auto d = std::chrono::duration <double, std::milli> (diff).count();
+    cout << "scanner::pipeline::count():  " << d << "ms" << endl;
+    }
+
+
+    cout << "  validation..." << flush;
+    {
+        auto& res_vect = pipe.get_bv_res_vector();
+        auto& cnt_vect = pipe2.get_bv_count_vector();
+
+        for (size_t i = 0; i < res_vect.size(); ++i)
+        {
+            const bvect* bv1 = res_vec1[i].get();
+            const auto* bv = res_vect[i];
+            assert(bv);
+            bool match = bv1->equal(*bv);
+            assert(match);
+            auto c = cnt_vect[i];
+            auto cnt = bv->count();
+            assert(cnt == c);
+        }
+    }
+    cout << "OK" << endl;
+
+
+   cout << "---------------------------- TestSparseFindEqStrPipeline() OK" << endl;
+}
+
 
 static
 void TestStrSparseSort()
 {
    cout << "---------------------------- Bit-plane STR sparse vector SORT test" << endl;
    const unsigned max_coll = 560000;
-
    {
        std::vector<string> str_coll;
        str_svect_type      str_sv_sorted;
@@ -34487,11 +34788,15 @@ int main(int argc, char *argv[])
          TestStrSparseVector_FindEq();
          CheckAllocLeaks(false);
 
+         TestSparseFindEqStrPipeline();
+         CheckAllocLeaks(false);
+
          TestStrSparseSort();
          CheckAllocLeaks(false);
 
          StressTestStrSparseVector();
          CheckAllocLeaks(false);
+
     }
 
     if (is_ser || is_allsvser)
