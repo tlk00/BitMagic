@@ -69,6 +69,8 @@ public:
     bm::heap_vector<bvector_type_const_ptr, allocator_type, true> bv_vector_type;
     typedef
     bm::heap_vector<bvector_type*, allocator_type, true> bvect_vector_type;
+    typedef
+    bm::heap_vector<size_t, allocator_type, true> index_vector_type;
 
 
     /// Codes for aggregation operations which can be pipelined for efficient execution
@@ -90,57 +92,85 @@ public:
     /// Aggregator arg groups
     struct arg_groups
     {
-        bv_vector_type arg_bv0;            ///< arg group 0
-        bv_vector_type arg_bv1;            ///< arg group 1
+        bv_vector_type     arg_bv0;            ///< arg group 0
+        bv_vector_type     arg_bv1;            ///< arg group 1
+        index_vector_type  arg_idx0;           ///< indexes of vectors for arg group 0
+        index_vector_type  arg_idx1;
 
         /// Reset argument groups to zero
         void reset()
         {
             arg_bv0.resize(0); // TODO: use reset not resize(0)
             arg_bv1.resize(0);
+            arg_idx0.resize(0);
+            arg_idx1.resize(0);
         }
 
         /** Add bit-vector pointer to its aggregation group
         \param bv - input bit-vector pointer to attach
-        \param agr_group - input argument group (0 - default, 1 - fused op)
+        \param agr_group - input argument group index (0 - default, 1 - fused op)
 
         @return current arg group size (0 if vector was not added (empty))
         */
-        size_t add(const bvector_type* bv, unsigned agr_group)
-        {
-            BM_ASSERT_THROW(agr_group <= 1, BM_ERR_RANGE);
-            BM_ASSERT(agr_group <= 1);
-            switch (agr_group)
-            {
-            case 0:
-                if (!bv)
-                    return arg_bv0.size();
-                arg_bv0.push_back(bv);
-                return arg_bv0.size();
-            case 1:
-                if (!bv)
-                    return arg_bv1.size();
-                arg_bv1.push_back(bv);
-                return arg_bv1.size();
-            default:
-                BM_ASSERT(0);
-            }
-            return 0;
-        }
+        size_t add(const bvector_type* bv, unsigned agr_group);
     };
+
     typedef arg_groups*    arg_groups_type_ptr;
     typedef
     bm::heap_vector<arg_groups_type_ptr, allocator_type, true> arg_vector_type;
+    typedef
+    bm::heap_vector<unsigned, allocator_type, true> count_vector_type;
+    typedef
+    bm::heap_vector<size_type, allocator_type, true> bv_count_vector_type;
+    typedef
+    bm::heap_vector<bm::word_t*, allocator_type, true> blockptr_vector_type;
+    typedef
+    bm::heap_vector<bm::pair<unsigned, unsigned>, allocator_type, true> block_ij_vector_type;
+
+    /**
+        Block cache for pipeline execution
+        @internal
+     */
+    struct pipeline_bcache
+    {
+        bv_vector_type       bv_inp_vect_; ///<  all input vectors from all groups
+        count_vector_type    cnt_vect_;    ///< usage count for bv_inp (all groups)
+        blockptr_vector_type blk_vect_;    ///< cached block ptrs for bv_inp_vect_
+        block_ij_vector_type blk_ij_vect_; ///< current block coords
+    };
+
+    /**
+       Aggregation options to control execution
+     */
+    struct run_options
+    {
+        /// make result(target) vectors (aggregation search results) (Default: true)
+        /// when false is used - means we want to only collect statistics (counts) for the targets
+        bool make_results = true;
+
+        /// Compute counts for the target vectors, when set to true, population count is computed for
+        /// each result, results itself can be omitted (make_results flag set to false)
+        bool compute_counts = false;
+    };
 
     /**
         Pipeline vector for running a group of aggregation operations on a family of vectors.
+        Pipeline is used to run multiple aggregation combinations (searches) for essencially same
+        set of vectors (different combinations of ANDs and SUBs for example).
+        Pipeline execution improves CPU cache reuse and caches the compressed blocks to re-use it
+        for more efficient execution. Essencially it is a tool to run thousads of runs at once faster.
      */
     class pipeline
     {
     public:
         pipeline() {}
-
         ~pipeline() BMNOEXCEPT;
+
+        /// Set pipeline run options
+        run_options& options() BMNOEXCEPT { return options_; }
+
+        /// Get pipeline run options
+        const run_options& get_options() const BMNOEXCEPT { return options_; }
 
         // ------------------------------------------------------------------
         /*! @name pipeline fill-in methods */
@@ -155,12 +185,12 @@ public:
         */
         void complete();
 
+        /** return true if pipeline is ready for execution (complete) */
+        bool is_complete() const BMNOEXCEPT { return is_complete_; }
+
         //@}
 
         // ------------------------------------------------------------------
-
-        /** return true if pipeline is ready for execution (complete) */
-        bool is_complete() const BMNOEXCEPT { return is_complete_; }
 
         /** Return argument vector used for pipeline execution */
         const arg_vector_type& get_args_vector() const BMNOEXCEPT
@@ -170,14 +200,51 @@ public:
         bvect_vector_type& get_bv_res_vector()  BMNOEXCEPT
             { return bv_res_vect_; }
 
+        /** Return results vector count used for pipeline execution */
+        bv_count_vector_type& get_bv_count_vector()  BMNOEXCEPT
+            { return count_res_vect_; }
+
+
+        // ------------------------------------------------------------------
+        /*! @name access to internals */
+        //@{
+
+        const bv_vector_type& get_all_input_vect() const BMNOEXCEPT
+            { return bcache_.bv_inp_vect_; }
+        const count_vector_type& get_all_input_cnt_vect() const BMNOEXCEPT
+            { return bcache_.cnt_vect_; }
+        //@}
+
     protected:
+        /** @internal */
+        pipeline_bcache& get_bcache() BMNOEXCEPT
+            { return bcache_; }
+        /** Return number of top blocks after complete
+            @internal
+        */
+        unsigned get_top_blocks() const BMNOEXCEPT { return top_blocks_; }
+
+    private:
+        void complete_arg_group(arg_groups* ag);
+        void complete_arg_sub_group(index_vector_type& idx_vect,
+            const bvector_type_const_ptr* bv_src, size_t size);
+
+    protected:
+        friend class aggregator;
+
         pipeline(const pipeline&) = delete;
         pipeline& operator=(const pipeline&) = delete;
 
     protected:
-        bool                is_complete_ = false;
-        arg_vector_type     arg_vect_; ///< input arg. groups
-        bvect_vector_type   bv_res_vect_; ///< results (bit-vector ptrs)
+        run_options          options_;  ///< execution parameters
+        bool                 is_complete_ = false; ///< ready to run state flag
+        arg_vector_type      arg_vect_;    ///< input arg. groups
+
+        bvect_vector_type    bv_res_vect_;    ///< results (bit-vector ptrs)
+        bv_count_vector_type count_res_vect_; ///< results (counts)
+
+        pipeline_bcache      bcache_;      ///< blocks cache structure
+        unsigned top_blocks_ = 1;  ///< top-level structure size, max of all bvectors
     };
 
 public:
@@ -439,10 +506,17 @@ public:
     
     operation_status get_operation_status() const { return operation_status_; }
     
-    const bvector_type* get_target() const { return bv_target_; }
+    const bvector_type* get_target() const BMNOEXCEPT { return bv_target_; }
     
-    bm::word_t* get_temp_block() { return tb_ar_->tb1; }
+    bm::word_t* get_temp_block() BMNOEXCEPT { return tb_ar_->tb1; }
     
+    //@}
+
+    // -----------------------------------------------------------------------
+
+    /*! @name Execition metrics and telemetry  */
+    //@{
+    bm::id64_t get_cache_gap_hits() const BMNOEXCEPT { return gap_cache_cnt_; }
     //@}
 
 protected:
@@ -467,7 +541,9 @@ protected:
                     const bvector_type_const_ptr* bv_src, size_t src_size);
     
     digest_type combine_and_sub(unsigned i, unsigned j,
+                         const size_t* and_idx,
                          const bvector_type_const_ptr* bv_src_and, size_t src_and_size,
+                         const size_t* sub_idx,
                          const bvector_type_const_ptr* bv_src_sub, size_t src_sub_size,
                          int* is_result_full);
     
@@ -512,13 +588,19 @@ protected:
     };
 
     
-    bm::word_t* sort_input_blocks_or(const bvector_type_const_ptr* bv_src,
+    bm::word_t* sort_input_blocks_or(const size_t* src_idx,
+                                     const bvector_type_const_ptr* bv_src,
                                      size_t src_size,
-                                     unsigned i, unsigned j) BMNOEXCEPT;
+                                     unsigned i, unsigned j);
 
-    bm::word_t* sort_input_blocks_and(const bvector_type_const_ptr* bv_src,
+    bm::word_t* sort_input_blocks_and(const size_t* src_idx,
+                                      const bvector_type_const_ptr* bv_src,
                                       size_t src_size,
-                                      unsigned i, unsigned j) BMNOEXCEPT;
+                                      unsigned i, unsigned j);
+    bm::word_t* cache_gap_block(const bm::word_t* arg_blk,
+                                const size_t* src_idx,
+                                size_t k,
+                                unsigned i, unsigned j);
 
 
     bool process_bit_blocks_or(blocks_manager_type& bman_target,
@@ -621,6 +703,7 @@ private:
     operation_status     operation_status_ = op_undefined;
     bvector_type*        bv_target_ = 0; ///< target bit-vector
     unsigned             top_block_size_ = 0; ///< operation top block (i) size
+    pipeline_bcache*     bcache_ptr_ = 0; /// pipeline blocks cache ptr
     
     // search range setting (hint) [from, to]
     bool                 range_set_ = false; ///< range flag
@@ -630,6 +713,9 @@ private:
     typename bvector_type::optmode opt_mode_; ///< perform search result optimization
     bool                           compute_count_; ///< compute search result count
     size_type                      count_;         ///< search result count
+    //
+    // execution telemetry and metrics
+    bm::id64_t                     gap_cache_cnt_ = 0;
 };
 
 
@@ -726,6 +812,8 @@ void aggregator<BV>::reset()
     range_set_ = false;
     range_from_ = range_to_ = bm::id_max;
     count_ = 0;
+    bcache_ptr_ = 0;
+    gap_cache_cnt_ = 0;
 }
 
 // ------------------------------------------------------------------------
@@ -910,17 +998,15 @@ bool aggregator<BV>::combine_and_sub(bvector_type& bv_target,
         {
             int is_res_full;
             digest_type digest = combine_and_sub(i, j,
-                                                bv_src_and, src_and_size,
-                                                bv_src_sub, src_sub_size,
+                                                0, bv_src_and, src_and_size,
+                                                0, bv_src_sub, src_sub_size,
                                                 &is_res_full);
             if (is_res_full)
             {
                 bman_target.check_alloc_top_subblock(i);
                 bman_target.set_block_ptr(i, j, (bm::word_t*)FULL_BLOCK_FAKE_ADDR);
                 if (j == bm::set_sub_array_size-1)
-                {
                     bman_target.validate_top_full(i);
-                }
                 if (any)
                     return any;
             }
@@ -930,7 +1016,7 @@ bool aggregator<BV>::combine_and_sub(bvector_type& bv_target,
                 if (found)
                 {
                     bman_target.opt_copy_bit_block(i, j, tb_ar_->tb1,
-                                                   opt_mode_, tb_ar_->tb_opt);
+                                bvector_type::opt_compress, tb_ar_->tb_opt);
                     if (any)
                         return found;
                 }
@@ -956,99 +1042,85 @@ void aggregator<BV>::combine_and_sub(typename aggregator<BV>::pipeline& pipe)
 
     reset();
 
-    // pass 1: compute target vector sizing
-    //
-    unsigned top_blocks = 1;
-    for (size_t p = 0; p < pipe_size; ++p)
+    bcache_ptr_ = &pipe.get_bcache();  // setup common cache block
+
+    unsigned top_blocks = pipe.get_top_blocks();
+    BM_ASSERT(top_blocks);
+
+
+    bvect_vector_type& bv_targets_vect = pipe.get_bv_res_vector();
+    for (unsigned i = 0; i < top_blocks; ++i)
     {
-        const arg_groups* ag = pipe_args[p];
-        BM_ASSERT(ag);
-
-        const bvector_type_const_ptr* bv_src_and = ag->arg_bv0.data();
-        size_t src_and_size = ag->arg_bv0.size();
-        const bvector_type_const_ptr* bv_src_sub = ag->arg_bv1.data();
-        size_t src_sub_size = ag->arg_bv1.size();
-
-        unsigned top_blocks1 = max_top_blocks(bv_src_and, src_and_size);
-        if (top_blocks1 > top_blocks)
-            top_blocks = top_blocks1;
-        unsigned top_blocks2 = max_top_blocks(bv_src_sub, src_sub_size);
-        if (top_blocks2 > top_blocks)
-            top_blocks = top_blocks2;
-
-    } // for p
-
-    // pass 2: AND-SUB operation
-    //
-
-    bvector_type bv_res_flags;
-    bv_res_flags.init();
-    bvector_type* bv_target = 0;
-
-    bvect_vector_type& bv_tragets_vect = pipe.get_bv_res_vector();
-
-    for (size_t p = 0; p < pipe_size; ++p)
-    {
-        const arg_groups* ag = pipe_args[p];
-        const bvector_type_const_ptr* bv_src_and = ag->arg_bv0.data();
-        size_t src_and_size = ag->arg_bv0.size();
-        const bvector_type_const_ptr* bv_src_sub = ag->arg_bv1.data();
-        size_t src_sub_size = ag->arg_bv1.size();
-
-        for (unsigned i = 0; i < top_blocks; ++i)
+        for (unsigned j = 0; j < bm::set_sub_array_size; ++j)
         {
-            unsigned set_array_max =
-                find_effective_sub_block_size(i, bv_src_and, src_and_size,
-                                                 bv_src_sub, src_sub_size);
-
-            for (unsigned j = 0; j < set_array_max; ++j)
+            for (size_t p = 0; p < pipe_size; ++p)
             {
+                const arg_groups* ag = pipe_args[p];
+                const bvector_type_const_ptr* bv_src_and = ag->arg_bv0.data();
+                const size_t* bv_src_and_idx = ag->arg_idx0.data();
+
+                size_t src_and_size = ag->arg_bv0.size();
+                if (!src_and_size)
+                    continue;
+                const bvector_type_const_ptr* bv_src_sub = ag->arg_bv1.data();
+                const size_t* bv_src_sub_idx = ag->arg_idx1.data();
+                size_t src_sub_size = ag->arg_bv1.size();
+
                 int is_res_full;
                 digest_type digest = combine_and_sub(i, j,
-                                                    bv_src_and, src_and_size,
-                                                    bv_src_sub, src_sub_size,
-                                                    &is_res_full);
+                                                     bv_src_and_idx,
+                                                     bv_src_and, src_and_size,
+                                                     bv_src_sub_idx,
+                                                     bv_src_sub, src_sub_size,
+                                                     &is_res_full);
                 if (digest || is_res_full)
                 {
-                    bool is_created = bv_res_flags.test(size_type(p));
-                    if (is_created)
+                    if (!pipe.options().make_results) // drop results
                     {
-                        bv_target = bv_tragets_vect[p];
+                        if (pipe.options().compute_counts)
+                        {
+                            if (is_res_full)
+                                pipe.count_res_vect_[p] += bm::gap_max_bits;
+                            else 
+                                pipe.count_res_vect_[p] += bm::bit_block_count(tb_ar_->tb1, digest);
+                        }
+                        continue;
                     }
-                    else
+                    bvector_type* bv_target = bv_targets_vect[p];
+                    if (!bv_target)
                     {
-                        BM_ASSERT(!bv_tragets_vect[p]);
+                        BM_ASSERT(!bv_targets_vect[p]);
                         bv_target = new bvector_type(bm::BM_GAP);
-                        bv_tragets_vect[p] = bv_target;
-                        bv_target->init();
-                        bv_res_flags.set_bit_no_check(size_type(p));
+                        bv_targets_vect[p] = bv_target;
+                        typename bvector_type::blocks_manager_type& bman =
+                                            bv_target->get_blocks_manager();
+
+                        bman.reserve_top_blocks(top_blocks);
                     }
-                    blocks_manager_type& bman_target =
-                                    bv_target->get_blocks_manager();
+                    blocks_manager_type& bman = bv_target->get_blocks_manager();
                     if (is_res_full)
                     {
-                        bman_target.check_alloc_top_subblock(i);
-                        bman_target.set_block_ptr(i, j,
-                                            (bm::word_t*)FULL_BLOCK_FAKE_ADDR);
+                        bman.check_alloc_top_subblock(i);
+                        bman.set_block_ptr(i, j, (bm::word_t*)FULL_BLOCK_FAKE_ADDR);
                         if (j == bm::set_sub_array_size-1)
-                        {
-                            bman_target.validate_top_full(i);
-                        }
+                            bman.validate_top_full(i);
+                        if (pipe.options().compute_counts)
+                            pipe.count_res_vect_[p] += bm::gap_max_bits;
                     }
                     else
                     {
-                        if (digest)
-                        {
-                            bman_target.opt_copy_bit_block(i, j, tb_ar_->tb1,
-                                                    opt_mode_, tb_ar_->tb_opt);
-                        }
+                        if (pipe.options().compute_counts)
+                            pipe.count_res_vect_[p] += bm::bit_block_count(tb_ar_->tb1, digest);
+                        bman.opt_copy_bit_block(i, j, tb_ar_->tb1,
+                           bvector_type::opt_compress, tb_ar_->tb_opt);
                     }
                 } // if
-            } // for j
+            } // for p
+        } // for j
 
-        } // for i
-    } // for p
+    } // for i
 
+    bcache_ptr_ = 0;
 }
 
 // ------------------------------------------------------------------------
@@ -1082,8 +1154,8 @@ bool aggregator<BV>::find_first_and_sub(size_type& idx,
             unsigned i = top_from;
             unsigned j = unsigned(nblock_from & bm::set_array_mask);
             digest_type digest = combine_and_sub(i, j,
-                                                 bv_src_and, src_and_size,
-                                                 bv_src_sub, src_sub_size,
+                                                 0, bv_src_and, src_and_size,
+                                                 0, bv_src_sub, src_sub_size,
                                                  &is_res_full);
             // is_res_full is not needed here, since it is just 1 block
             if (digest)
@@ -1139,9 +1211,9 @@ bool aggregator<BV>::find_first_and_sub(size_type& idx,
         {
             int is_res_full;
             digest_type digest = combine_and_sub(i, j,
-                                                bv_src_and, src_and_size,
-                                                bv_src_sub, src_sub_size,
-                                                &is_res_full);
+                                                 0, bv_src_and, src_and_size,
+                                                 0, bv_src_sub, src_sub_size,
+                                                 &is_res_full);
             if (digest)
             {
                 unsigned block_bit_idx = 0;
@@ -1238,7 +1310,7 @@ void aggregator<BV>::combine_or(unsigned i, unsigned j,
                                         bv_target.get_blocks_manager();
 
     ar_->reset_blocks();
-    bm::word_t* blk = sort_input_blocks_or(bv_src, src_size, i, j);
+    bm::word_t* blk = sort_input_blocks_or(0, bv_src, src_size, i, j);
 
     BM_ASSERT(blk == 0 || blk == FULL_BLOCK_FAKE_ADDR);
 
@@ -1279,7 +1351,7 @@ void aggregator<BV>::combine_and(unsigned i, unsigned j,
     BM_ASSERT(src_and_size);
     
     ar_->reset_blocks();
-    bm::word_t* blk = sort_input_blocks_and(bv_src, src_and_size, i, j);
+    bm::word_t* blk = sort_input_blocks_and(0, bv_src, src_and_size, i, j);
 
     BM_ASSERT(blk == 0 || blk == FULL_BLOCK_FAKE_ADDR);
 
@@ -1329,8 +1401,11 @@ void aggregator<BV>::combine_and(unsigned i, unsigned j,
 
 template<typename BV>
 typename aggregator<BV>::digest_type
-aggregator<BV>::combine_and_sub(unsigned i, unsigned j,
+aggregator<BV>::combine_and_sub(
+             unsigned i, unsigned j,
+             const size_t* and_idx,
              const bvector_type_const_ptr* bv_src_and, size_t src_and_size,
+             const size_t* sub_idx,
              const bvector_type_const_ptr* bv_src_sub, size_t src_sub_size,
              int* is_result_full)
 {
@@ -1340,7 +1415,7 @@ aggregator<BV>::combine_and_sub(unsigned i, unsigned j,
     ar_->reset_blocks();
 
     *is_result_full = 0;
-    bm::word_t* blk = sort_input_blocks_and(bv_src_and, src_and_size, i, j);
+    bm::word_t* blk = sort_input_blocks_and(and_idx, bv_src_and, src_and_size, i, j);
     BM_ASSERT(blk == 0 || blk == FULL_BLOCK_FAKE_ADDR);
 
     {
@@ -1351,7 +1426,7 @@ aggregator<BV>::combine_and_sub(unsigned i, unsigned j,
 
         if (src_sub_size)
         {
-            blk = sort_input_blocks_or(bv_src_sub, src_sub_size, i, j);
+            blk = sort_input_blocks_or(sub_idx, bv_src_sub, src_sub_size, i, j);
             BM_ASSERT(blk == 0 || blk == FULL_BLOCK_FAKE_ADDR);
             if (blk == FULL_BLOCK_FAKE_ADDR)
                 return 0; // nothing to do - golden block(!)
@@ -1770,9 +1845,10 @@ aggregator<BV>::max_top_blocks(const bvector_type_const_ptr* bv_src,
 
 template<typename BV>
 bm::word_t* aggregator<BV>::sort_input_blocks_or(
+                        const size_t* src_idx,
                         const bvector_type_const_ptr* bv_src,
                         size_t src_size,
-                        unsigned i, unsigned j) BMNOEXCEPT
+                        unsigned i, unsigned j)
 {
     bm::word_t* blk = 0;
     for (size_t k = 0; k < src_size; ++k)
@@ -1785,6 +1861,16 @@ bm::word_t* aggregator<BV>::sort_input_blocks_or(
             continue;
         if (BM_IS_GAP(arg_blk))
         {
+            if (bcache_ptr_)
+            {
+                BM_ASSERT(bv == bcache_ptr_->bv_inp_vect_[src_idx[k]]);
+                bm::word_t* bit_blk = cache_gap_block(arg_blk, src_idx, k, i, j);
+                if (bit_blk)
+                {
+                    ar_->v_arg_or_blk.push_back(bit_blk); // use cached bit-block for operation
+                    continue;
+                }
+            } // bcache_ptr_
             ar_->v_arg_or_blk_gap.push_back(BMGAP_PTR(arg_blk));
         }
         else // FULL or bit block
@@ -1805,9 +1891,10 @@ bm::word_t* aggregator<BV>::sort_input_blocks_or(
 
 template<typename BV>
 bm::word_t* aggregator<BV>::sort_input_blocks_and(
+                                const size_t* src_idx,
                                 const bvector_type_const_ptr* bv_src,
                                 size_t src_size,
-                                unsigned i, unsigned j) BMNOEXCEPT
+                                unsigned i, unsigned j)
 {
     unsigned full_blk_cnt = 0;
     bm::word_t* blk = FULL_BLOCK_FAKE_ADDR;
@@ -1825,6 +1912,16 @@ bm::word_t* aggregator<BV>::sort_input_blocks_and(
         }
         if (BM_IS_GAP(arg_blk))
         {
+            if (bcache_ptr_)
+            {
+                BM_ASSERT(bv == bcache_ptr_->bv_inp_vect_[src_idx[k]]);
+                bm::word_t* bit_blk = cache_gap_block(arg_blk, src_idx, k, i, j);
+                if (bit_blk)
+                {
+                    ar_->v_arg_and_blk.push_back(bit_blk); // use cached bit-block for operation
+                    continue;
+                }
+            } // bcache_ptr_
             ar_->v_arg_and_blk_gap.push_back(BMGAP_PTR(arg_blk));
         }
         else // FULL or bit block
@@ -1845,6 +1942,42 @@ bm::word_t* aggregator<BV>::sort_input_blocks_and(
         }
     } // for k
     return blk;
+}
+
+// ------------------------------------------------------------------------
+
+template<typename BV>
+bm::word_t* aggregator<BV>::cache_gap_block(const bm::word_t* arg_blk,
+                            const size_t* src_idx,
+                            size_t k,
+                            unsigned i, unsigned j)
+{
+    BM_ASSERT(bcache_ptr_);
+    BM_ASSERT(src_idx);
+
+    size_t bv_idx = src_idx[k];
+    auto cnt = bcache_ptr_->cnt_vect_[bv_idx];
+    if (cnt > 0) // frequent bector
+    {
+        bm::word_t* bit_blk = bcache_ptr_->blk_vect_[bv_idx];
+        bm::pair<unsigned, unsigned> pair_ij = bcache_ptr_->blk_ij_vect_[bv_idx];
+        if (!bit_blk)
+        {
+            bit_blk = (bm::word_t*)bm::aligned_new_malloc(bm::set_block_size * sizeof(bm::word_t));
+            pair_ij.first = i+1; // make it NOT match
+            bcache_ptr_->blk_vect_[bv_idx] = bit_blk;
+        }
+        // block is allocated
+        if (i != pair_ij.first || j != pair_ij.second) // not NB cached?
+        {
+            bm::gap_convert_to_bitset(bit_blk, BMGAP_PTR(arg_blk));
+            pair_ij.first = i; pair_ij.second = j;
+            bcache_ptr_->blk_ij_vect_[bv_idx] = pair_ij;
+        }
+        ++gap_cache_cnt_;
+        return bit_blk; // use cached bit-block for operation
+    }
+    return 0;
 }
 
 // ------------------------------------------------------------------------
@@ -2129,9 +2262,6 @@ bool aggregator<BV>::any_carry_overs(const unsigned char* carry_overs,
     unsigned acc = carry_overs[0];
     for (size_t i = 1; i < co_size; ++i)
         acc |= carry_overs[i];
-//        if (ar_->carry_overs_[i])
-//            return true;
-//    return false;
     return acc;
 }
 
@@ -2214,7 +2344,11 @@ aggregator<BV>::pipeline::~pipeline() BMNOEXCEPT
     {
         bvector_type* bv = bv_arr[i];
         delete bv;
-    }
+    } // for i
+    sz = bcache_.blk_vect_.size();
+    bm::word_t** blk_arr = bcache_.blk_vect_.data();
+    for (size_t i = 0; i < sz; ++i)
+        bm::aligned_free(blk_arr[i]);
 }
 
 // ------------------------------------------------------------------------
@@ -2222,16 +2356,98 @@ aggregator<BV>::pipeline::~pipeline() BMNOEXCEPT
 template<typename BV>
 void aggregator<BV>::pipeline::complete()
 {
-    if (!is_complete_)
+    if (is_complete_)
+        return;
+
+    size_t sz = arg_vect_.size();
+
+    BM_ASSERT(!bv_res_vect_.size());
+    bv_res_vect_.resize(sz);
+    bvector_type** bv_arr = bv_res_vect_.data();
+    for (size_t i = 0; i < sz; ++i)
+        bv_arr[i] = 0;
+
+    if (options_.compute_counts)
     {
-        size_t sz = arg_vect_.size();
-        BM_ASSERT(!bv_res_vect_.size());
-        bv_res_vect_.resize(sz);
-        bvector_type** bv_arr = bv_res_vect_.data();
+        count_res_vect_.resize(sz);
+        size_type* cnt_arr = count_res_vect_.data();
         for (size_t i = 0; i < sz; ++i)
-            bv_arr[i] = 0;
-        is_complete_ = true;
+            cnt_arr[i] = 0;
     }
+
+    const arg_vector_type& pipe_args = get_args_vector();
+    size_t pipe_size = pipe_args.size();
+
+    for (size_t p = 0; p < pipe_size; ++p)
+    {
+        arg_groups* ag = pipe_args[p];
+        complete_arg_group(ag);
+
+        const bvector_type_const_ptr* bv_src_and = ag->arg_bv0.data();
+        size_t src_and_size = ag->arg_bv0.size();
+        unsigned top_blocks1 = max_top_blocks(bv_src_and, src_and_size);
+        if (top_blocks1 > top_blocks_)
+            top_blocks_ = top_blocks1;
+
+        const bvector_type_const_ptr* bv_src_sub = ag->arg_bv1.data();
+        size_t src_sub_size = ag->arg_bv1.size();
+        unsigned top_blocks2 = max_top_blocks(bv_src_sub, src_sub_size);
+        if (top_blocks2 > top_blocks_)
+            top_blocks_ = top_blocks2;
+
+    } // for p
+    is_complete_ = true;
+
+    BM_ASSERT(bcache_.bv_inp_vect_.size() == bcache_.cnt_vect_.size());
+    BM_ASSERT(bcache_.bv_inp_vect_.size() == bcache_.blk_vect_.size());
+    BM_ASSERT(bcache_.bv_inp_vect_.size() == bcache_.blk_ij_vect_.size());
+}
+
+// ------------------------------------------------------------------------
+
+template<typename BV>
+void aggregator<BV>::pipeline::complete_arg_group(arg_groups* ag)
+{
+    BM_ASSERT(ag);
+    complete_arg_sub_group(ag->arg_idx0, ag->arg_bv0.data(), ag->arg_bv0.size());
+    complete_arg_sub_group(ag->arg_idx1, ag->arg_bv1.data(), ag->arg_bv1.size());
+}
+
+// ------------------------------------------------------------------------
+
+template<typename BV>
+void aggregator<BV>::pipeline::complete_arg_sub_group(
+                index_vector_type& idx_vect,
+                const bvector_type_const_ptr* bv_src, size_t size)
+{
+    BM_ASSERT(idx_vect.size() == 0);
+
+    for (size_t k = 0; k < size; ++k)
+    {
+        bool found(false); size_t bv_idx;
+        const bvector_type* bv = bv_src[k];
+        if (bv)
+        {
+            const bvector_type** bv_arr = bcache_.bv_inp_vect_.data();
+            found =
+                bm::find_ptr((void**)bv_arr, bcache_.bv_inp_vect_.size(),
+                             bv, &bv_idx);
+        }
+        if (found)
+            bcache_.cnt_vect_[bv_idx]++; // increment vector usage counter
+        else // not found (new one!)
+        {
+            bv_idx = bcache_.bv_inp_vect_.size();
+            bcache_.bv_inp_vect_.push_back(bv); // register a new bv (0-cnt)
+            bcache_.cnt_vect_.push_back(0);
+            bcache_.blk_vect_.push_back(0); // NULL ptr
+            bcache_.blk_ij_vect_.push_back(bm::pair(0u, 0u));
+        }
+        // each arg group
+        idx_vect.push_back(bv_idx);
+    } // for k
+
+    BM_ASSERT(idx_vect.size() == size);
 }
 
 // ------------------------------------------------------------------------
@@ -2247,6 +2463,35 @@ aggregator<BV>::pipeline::add()
 }
 
 // ------------------------------------------------------------------------
+//
+// ------------------------------------------------------------------------
+
+template<typename BV>
+size_t aggregator<BV>::arg_groups::add(const bvector_type* bv,
+                                       unsigned agr_group)
+{
+    BM_ASSERT_THROW(agr_group <= 1, BM_ERR_RANGE);
+    BM_ASSERT(agr_group <= 1);
+    switch (agr_group)
+    {
+    case 0:
+        if (!bv)
+            return arg_bv0.size();
+        arg_bv0.push_back(bv);
+        return arg_bv0.size();
+    case 1:
+        if (!bv)
+            return arg_bv1.size();
+        arg_bv1.push_back(bv);
+        return arg_bv1.size();
+    default:
+        BM_ASSERT(0);
+    }
+    return 0;
+}
+
+// ------------------------------------------------------------------------
+
 
 } // bm
 

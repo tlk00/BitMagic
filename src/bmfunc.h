@@ -9439,10 +9439,8 @@ bool block_ptr_array_range(bm::word_t** arr,
         return false; // nothing here
     }
     for (j = bm::set_sub_array_size-1; j != i; --j)
-    {
         if (arr[j])
             break;
-    }
     right = j;
     return true;
 }
@@ -9566,6 +9564,24 @@ unsigned lower_bound_u64(const unsigned long long* arr,
         }
     }
     return l;
+}
+
+/**
+    Scan search for pointer value in unordered array
+    @return found flag and  index
+    @internal
+ */
+inline
+bool find_ptr(const void* const * p_arr, size_t arr_size,
+              const void* ptr, size_t *idx) BMNOEXCEPT
+{
+    // TODO: SIMD?
+    for (size_t i = 0; i < arr_size; ++i)
+        if (ptr == p_arr[i])
+        {
+            *idx = i; return true;
+        }
+    return false;
 }
 
 

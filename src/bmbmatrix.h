@@ -508,8 +508,24 @@ public:
      */
     void mark_null_idx(unsigned null_idx) BMNOEXCEPT
         { bmatr_.null_idx_ = null_idx; }
+    /**
+        Convert signed value type to unsigned representation
+        @internal
+     */
+    static
+    unsigned_value_type s2u(value_type v) BMNOEXCEPT;
+
+    /**
+        Convert unsigned value type to signed representation
+        @internal
+    */
+    static
+    value_type u2s(unsigned_value_type v) BMNOEXCEPT;
+
 
     ///@}
+    ///
+    // -------------------------------------------------------------------
     
     /*!
         \brief run memory optimization for all bit-vector rows
@@ -603,15 +619,6 @@ protected:
         typename base_sparse_vector<Val, BV, MAX_SIZE>::size_type left,
         typename base_sparse_vector<Val, BV, MAX_SIZE>::size_type right,
         bm::null_support slice_null);
-
-    /**
-        Convert signed value type to unsigned representation
-     */
-    static
-    unsigned_value_type s2u(value_type v) BMNOEXCEPT;
-
-    static
-    value_type u2s(unsigned_value_type v) BMNOEXCEPT;
 
 protected:
     bmatrix_type             bmatr_;              ///< bit-transposed matrix
