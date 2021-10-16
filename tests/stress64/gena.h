@@ -56,7 +56,7 @@ void generate_vect48_range(VT& vect, unsigned long long range_base,
         {
             for (unsigned j = 0; j < 65536;)
             {
-                unsigned to = j + (rand() % 256);
+                unsigned to = j + ((unsigned)rand() % 256);
                 for (unsigned k = j; k < to && k < 65536; ++k, ++j)
                     vect.push_back(sub_base + k);
             }
@@ -118,7 +118,7 @@ void generate_bvector(BV& bv, typename BV::size_type vector_max, bool optimize)
         // generate GAP (compressed) blocks
         for (j = 0; j < 65535; i += 120, j++)
         {
-            unsigned len = rand() % 64;
+            unsigned len = (unsigned)rand() % 64;
             bv.set_range(i, i + len);
             bool all_one_range = bv.is_all_one_range(i, i + len);
             assert(all_one_range);
@@ -181,7 +181,7 @@ void FillSetsIntervals(BVMINI* bvect_min,
 
     while (fill_factor == 0)
     {
-        fill_factor = rand() % 10;
+        fill_factor = (unsigned)rand() % 10;
     }
     bvect_full.init();
 
@@ -269,7 +269,7 @@ void FillSetsIntervals(
     
     while (fill_factor == 0)
     {
-        fill_factor = dist10(mt_rand);//rand() % 10;
+        fill_factor = dist10(mt_rand);
     }
     bvect_full.init();
 
@@ -408,7 +408,7 @@ void FillSets(BVMINI* bvect_min,
                     {
                         unsigned inc = unsigned(rand()) % 3;
                         ++inc;
-                        SZT end2 = start + rand() % 1000;
+                        SZT end2 = start + (unsigned)rand() % 1000;
                         if (end2 > end)
                             end2 = end;
                         while (start < end2)
@@ -526,7 +526,7 @@ void FillSetsRegular(BVMINI* bvect_min,
               SZT /*fill_factor*/)
 {
     typename BV::bulk_insert_iterator iit = bvect_full->inserter();
-    SZT step = rand() % 4;
+    SZT step = (unsigned)rand() % 4;
     if (step < 2) ++step;
     for (SZT i = 0; i < max; i+=step)
     {
@@ -574,18 +574,18 @@ int FillSetsRandomMethod(BVMINI* bvect_min,
 
     case 1:
         cout << "Random filling: method - FillSets - factor(random)" << endl;
-        factor = rand()%3;
+        factor = (unsigned)rand()%3;
         FillSets(bvect_min, bvect_full, min, max, factor?factor:1);
         break;
 
     case 2:
         cout << "Random filling: method - Set-Clear Intervals - factor(random)" << endl;
-        factor = rand()%10;
+        factor = (unsigned)rand()%10;
         FillSetClearIntervals(bvect_min, bvect_full, min, max, factor);
         break;
     case 3:
         cout << "Random filling: method - FillRandom - factor(random)" << endl;
-        factor = rand()%3;
+        factor = (unsigned)rand()%3;
         FillSetsRandom(bvect_min, bvect_full, min, max, factor?factor:1);
         break;
     case 4:
@@ -616,7 +616,7 @@ int FillSetsRandomMethod(BVMINI* bvect_min,
 */
     default:
         cout << "Random filling: method - Set Intervals - factor(random)" << endl;
-        factor = rand()%10;
+        factor = (unsigned)rand()%10;
         FillSetsIntervals(bvect_min, *bvect_full, min, max, factor);
         break;
 
@@ -701,7 +701,7 @@ void GenerateSV(SV&   sv, unsigned strategy = 0)
         cout << "SV Ultra sparse generation" << endl;
         for (unsigned i = 0; i < max_idx_value;)
         {
-            value_type v = (rand() * rand()) % 650000;
+            value_type v = (unsigned)(rand() * rand()) % 650000;
             if constexpr (std::is_unsigned<value_type>::value)
             {
                 sv[i] = v;
@@ -713,7 +713,7 @@ void GenerateSV(SV&   sv, unsigned strategy = 0)
                 else
                     sv[i] = v;
             }
-            i += 10000 + rand() % 65535;
+            i += 10000 + (unsigned)rand() % 65535;
         }
         break;
     }
@@ -722,7 +722,7 @@ void GenerateSV(SV&   sv, unsigned strategy = 0)
         cout << "SV Dense intervals generation 1" << endl;
         for (unsigned i = 0; i < max_idx_value;)
         {
-            value_type v = (rand() * rand()) % 650000;
+            value_type v = (unsigned)(rand() * rand()) % 650000;
             for (unsigned j = 0; i < max_idx_value; ++i, ++j)
             {
                 if constexpr (std::is_unsigned<value_type>::value)
@@ -736,14 +736,14 @@ void GenerateSV(SV&   sv, unsigned strategy = 0)
                 if (j > 256)
                     break;
             }
-            i += 20000 + rand() % 65535;
+            i += 20000 + (unsigned)rand() % 65535;
         }
         break;
     }
     case 2:
     {
         cout << "SV Dense intervals generation 2" << endl;
-        value_type v = (rand() * rand()) % 650000;
+        value_type v = (unsigned)(rand() * rand()) % 650000;
         for (unsigned i = 0; i < max_idx_value/4; ++i)
         {
             sv[i] = v;
@@ -768,7 +768,7 @@ void GenerateSV(SV&   sv, unsigned strategy = 0)
     case 3:
     {
         cout << "SV random generation" << endl;
-        unsigned rand_max = rand() % 300000;
+        unsigned rand_max = (unsigned)rand() % 300000;
         for (unsigned i = 0; i < rand_max; ++i)
         {
             value_type v = value_type(rand() * rand());
@@ -871,7 +871,7 @@ void FillSparseIntervals(std::vector<unsigned>&   vect,
     for ( ;min < max; )
     {
         // hi-band interval
-        val = rand() % (65535 * 2);
+        val = (unsigned)rand() % (65535 * 2);
         unsigned i;
         for (i = 0; i < count; ++i)
         {
@@ -883,13 +883,13 @@ void FillSparseIntervals(std::vector<unsigned>&   vect,
         } // for i
         
         // gap with all zeroes
-        unsigned inc = rand() % 2048;
+        unsigned inc = (unsigned)rand() % 2048;
         min += inc;
         if (min > max)
             break;
 
         // low band plato
-        val = rand() % 8;
+        val = (unsigned)rand() % 8;
         for (i = 0; i < count; ++i)
         {
             vect[min] = val;
@@ -915,10 +915,10 @@ void GenerateTestStrCollection(SSV& str_coll, typename SSV::size_type max_coll)
         // generate new prefix
         {
             prefix.clear();
-            unsigned prefix_len = rand() % 5;
+            unsigned prefix_len = (unsigned)rand() % 5;
             for (unsigned j = 0; j < prefix_len; ++j)
             {
-                char cch = char('a' + rand() % 26);
+                char cch = char('a' + (unsigned)rand() % 26);
                 prefix.push_back(cch);
             } // for j
         }
@@ -930,7 +930,7 @@ void GenerateTestStrCollection(SSV& str_coll, typename SSV::size_type max_coll)
 template<typename CBCBuf>
 void FillTestBuffer(CBCBuf& buf)
 {
-    unsigned sz_factor = rand() % 10;
+    unsigned sz_factor = (unsigned)rand() % 10;
     if (!sz_factor)
         sz_factor = 1;
     unsigned size = 65000 + (128000 / sz_factor);    
@@ -945,9 +945,9 @@ void FillTestBuffer(CBCBuf& buf)
 template<typename CBC>
 void GenerateCompressedBufferCollection(CBC& cbc)
 {
-    unsigned sz = rand() % 10000;
+    unsigned sz = (unsigned)rand() % 10000;
     unsigned key = 0;
-    unsigned key_factor = rand() % 128;
+    unsigned key_factor = (unsigned)rand() % 128;
     if (!key_factor)
         key_factor = 1;
     for (unsigned i = 0; i < sz; ++i)
@@ -972,14 +972,14 @@ void generate_serialization_test_set(SV&   sv,
     unsigned v = 0;
     for (typename SV::size_type i = 0; i < vector_max; ++i)
     {
-        unsigned plato = rand() % 16;
+        unsigned plato = (unsigned)rand() % 16;
         for (unsigned j = 0; i < vector_max && j < plato; ++i, ++j)
         {
             *bi = v;
         } // for j
         if (++v > 100000)
             v = 0;
-        unsigned nulls = rand() % 16;
+        unsigned nulls = (unsigned)rand() % 16;
         if (nulls)
             bi.add_null(nulls);
         i += nulls;

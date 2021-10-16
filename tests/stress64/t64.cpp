@@ -2780,7 +2780,7 @@ void RankFindTest()
         const bvect::size_type max_size = base_idx+200000;
         const bvect::size_type min_size = base_idx-20000;
         bvect bv1;
-        for (bvect::size_type i = base_idx; i < max_size; i += rand()%5)
+        for (bvect::size_type i = base_idx; i < max_size; i += (unsigned)rand()%5)
         {
             bv1.set(i);
         }
@@ -2887,7 +2887,7 @@ void VisitorAllRangeTest(const BV& bv, typename BV::size_type step)
         drange = 256;
     if (!step)
     {
-        unsigned factor = rand()%32;
+        unsigned factor = (unsigned)rand()%32;
         if (!factor) factor = 10;
         step = drange / factor;
     }
@@ -6325,7 +6325,7 @@ void BvectorInsertTest()
             bv2 = bv_control;
             bv2.optimize();
             
-            bvect::size_type i_pos = rand()%40000000;
+            bvect::size_type i_pos = (unsigned)rand()%40000000;
             
             BVectorInsert(&bv_control, i_pos, i & 1u);
             bv.insert(i_pos, i & 1u);
@@ -6897,7 +6897,7 @@ bvect::size_type SerializationOperation(bvect*     bv_target,
 
     if (rand() & 1) // setup random bookmark set
     {
-        unsigned bm_range = rand()%256;
+        unsigned bm_range = (unsigned)rand()%256;
         bv_ser.set_bookmarks(true, bm_range);
         cout << "Bookmark ON at every:" << bm_range << endl;
     }
@@ -6920,7 +6920,7 @@ bvect::size_type SerializationOperation(bvect*     bv_target,
         bool found = bv1.find_range(first, last);
         if (found)
         {
-            unsigned frac = rand() %4;
+            unsigned frac = (unsigned)rand() %4;
             if (!frac)
                 frac = 4;
             auto r_part = (last - first) / frac;
@@ -10170,6 +10170,28 @@ void AggregatorTest()
     bvect* bv_arr[128] = { 0, };
     bvect* bv_arr2[128] = { 0, };
 
+    cout << " AGG arg pipeline tests" << endl;
+
+    {
+        bm::aggregator<bvect>::pipeline agg_pipe;
+        {
+            bm::aggregator<bvect>::arg_groups* args = agg_pipe.add();
+            assert(args);
+            args->arg_bv0.push_back(nullptr);
+            args->arg_bv1.push_back(nullptr);
+        }
+        {
+            bm::aggregator<bvect>::arg_groups* agrs = agg_pipe.add();
+            agrs->arg_bv0.push_back(nullptr);
+        }
+        auto& arg_vect = agg_pipe.get_args_vector();
+        assert(arg_vect.size() == 2);
+        assert(arg_vect[0]->arg_bv0.size() == 1);
+        assert(arg_vect[0]->arg_bv1.size() == 1);
+        assert(arg_vect[1]->arg_bv0.size() == 1);
+        assert(arg_vect[1]->arg_bv1.size() == 0);
+    }
+
     cout << "OR tests..." << endl;
     {
         bm::aggregator<bvect> agg;
@@ -11748,7 +11770,7 @@ void TestSparseVector()
         unsigned i;
         for (i = 128000; i < 128000 * 3; ++i)
         {
-            sv.set(i, 7 + rand() % 256);
+            sv.set(i, 7 + (unsigned)rand() % 256);
         }
         bm::dynamic_range_clip_high(sv, 3);
         
@@ -13579,7 +13601,7 @@ void TestSparseVectorGatherDecode()
             CheckSparseVectorGather(sv, i, i);
             CheckSparseVectorGather(sv2, i, i, control_value);
             CheckSparseVectorGather(sv3, i, i);
-            unsigned depth = rand() % 30000;
+            unsigned depth = (unsigned)rand() % 30000;
             CheckSparseVectorGather(sv, i, i+depth);
             CheckSparseVectorGather(sv2, i, i+depth, control_value);
             CheckSparseVectorGather(sv3, i, i+depth);
@@ -13602,7 +13624,7 @@ void TestSparseVectorGatherDecode()
 
         for (unsigned i = 0; i < probe_to; ++i)
         {
-            unsigned gsize = rand()%2024;
+            unsigned gsize = (unsigned)rand()%2024;
             CheckSparseVectorGatherRandom(sv, gsize);
             CheckSparseVectorGatherRandom(sv2, gsize);
             CheckSparseVectorGatherRandom(sv3, gsize);
@@ -15949,7 +15971,7 @@ void TestSparseVector_Stress(unsigned count)
     for (unsigned i = 0; i < count; ++i)
     {
         unsigned fill_factor = 0;
-        for (bvect::size_type min = 0; min < 10000000; min+= rand()%100000)
+        for (bvect::size_type min = 0; min < 10000000; min+= (unsigned)rand()%100000)
         {
             bvect::size_type max = min + (65535 * 10);
             {{
@@ -15992,10 +16014,10 @@ void TestSparseVector_Stress(unsigned count)
     for (unsigned i = 0; i < 1; ++i)
     {
         unsigned fill_factor = 0;
-        for (bvect::size_type min = 0; min < 10000000; min+= rand()%100000)
+        for (bvect::size_type min = 0; min < 10000000; min+= (unsigned)rand()%100000)
         {
             bvect::size_type max = min + (65535 * 10);
-            bvect::size_type min2 = max + rand() % 65536;
+            bvect::size_type min2 = max + (unsigned)rand() % 65536;
             bvect::size_type max2 = min2 + (65535 * 10);
 
             bm::null_support null_able1 =
@@ -16896,7 +16918,7 @@ void TestStrSparseSort()
         {
             str = to_string(i);
             str_coll.emplace_back(str);
-            i += rand() % 3;
+            i += (unsigned)rand() % 3;
         } // for i
         
         // shuffle the data set
@@ -17123,7 +17145,7 @@ void TestSparseSort()
         for (unsigned i = 0; i < max_coll; )
         {
             u_coll.emplace_back(i);
-            i += rand() % 3;
+            i += (unsigned)rand() % 3;
         } // for i
         
         // shuffle the data set
@@ -17727,6 +17749,162 @@ void StressTestStrSparseVector()
    cout << "---------------------------- Bit-plain STR sparse vector stress test OK" << endl;
    cout << endl;
 }
+
+inline
+void GeneratePipelineTestData(std::vector<string>& str_coll,
+                              str_svect_type&      str_sv,
+                              unsigned max_coll = 8000000,
+                              unsigned repeat_factor=10)
+{
+    auto bi(str_sv.get_back_inserter());
+    string str;
+    for (unsigned i = 10; i < max_coll; i+= (rand()&0xF))
+    {
+        switch (i & 0xF)
+        {
+        case 0: str = "AB"; break;
+        case 1: str = "GTx"; break;
+        case 2: str = "cnv"; break;
+        default: str = "AbY11"; break;
+        }
+        str.append(to_string(i));
+
+        for (unsigned k = 0; k < repeat_factor; ++k)
+        {
+            str_coll.emplace_back(str);
+            bi = str;
+        }
+    } // for i
+    bi.flush();
+}
+
+
+static
+void TestSparseFindEqStrPipeline()
+{
+   cout << "---------------------------- TestSparseFindEqStrPipeline()" << endl;
+   const unsigned max_coll = 8000000;
+   std::vector<string> str_coll;
+   str_svect_type      str_sv;
+
+   cout << "   generate test set..." << flush;
+
+   GeneratePipelineTestData(str_coll, str_sv, max_coll, 10);
+
+    cout << "remap..." << flush;
+
+    str_sv.remap();
+    str_sv.optimize();
+
+   cout << "OK" << endl;
+
+    bm::print_svector_stat(str_sv);
+
+    unsigned test_runs = 10000;
+    std::vector<string> str_test_coll;
+    for (bvect::size_type i = 0; i < test_runs; ++i)
+    {
+        bvect::size_type idx = (unsigned) rand() % test_runs;
+        if (idx >= test_runs)
+            idx = test_runs/2;
+        str_test_coll.push_back(str_coll[idx]);
+    }
+    assert(str_test_coll.size() == test_runs);
+
+
+    std::vector<unique_ptr<bvect> > res_vec1;
+    bm::sparse_vector_scanner<str_svect_type> scanner;
+
+    {
+    std::chrono::time_point<std::chrono::steady_clock> s;
+    std::chrono::time_point<std::chrono::steady_clock> f;
+    s = std::chrono::steady_clock::now();
+
+        for (bvect::size_type i = 0; i < test_runs; ++i)
+        {
+            const string& str = str_test_coll[i];
+
+            str_svect_type::bvector_type* bv_res(new bvect);
+            scanner.find_eq_str(str_sv, str.c_str(), *bv_res);
+            res_vec1.emplace_back(unique_ptr<bvect>(bv_res));
+        } // for
+    f = std::chrono::steady_clock::now();
+    auto diff = f - s;
+    auto d = std::chrono::duration <double, std::milli> (diff).count();
+
+    cout << "scanner::find_eq_str()  " << d << "ms" << endl;
+    }
+
+    bm::sparse_vector_scanner<str_svect_type>::pipeline pipe(str_sv);
+    {
+    std::chrono::time_point<std::chrono::steady_clock> s;
+    std::chrono::time_point<std::chrono::steady_clock> f;
+    s = std::chrono::steady_clock::now();
+
+        for (bvect::size_type i = 0; i < test_runs; ++i)
+        {
+            const string& str = str_test_coll[i];
+            pipe.add(str.c_str());
+        }
+        pipe.complete(); // finish the pipeline construction with this call
+
+        scanner.find_eq_str(pipe); // run the search pipeline
+
+    f = std::chrono::steady_clock::now();
+    auto diff = f - s;
+    auto d = std::chrono::duration <double, std::milli> (diff).count();
+    cout << "scanner::pipeline:  " << d << "ms" << endl;
+    }
+
+    bm::sparse_vector_scanner<str_svect_type>::pipeline pipe2(str_sv);
+    pipe2.options().make_results = false;
+    pipe2.options().compute_counts = true;
+    {
+    std::chrono::time_point<std::chrono::steady_clock> s;
+    std::chrono::time_point<std::chrono::steady_clock> f;
+    s = std::chrono::steady_clock::now();
+
+        for (bvect::size_type i = 0; i < test_runs; ++i)
+        {
+            const string& str = str_test_coll[i];
+            pipe2.add(str.c_str());
+        }
+        pipe2.complete(); // finish the pipeline construction with this call
+
+        scanner.find_eq_str(pipe2); // run the search pipeline
+
+    f = std::chrono::steady_clock::now();
+    auto diff = f - s;
+    auto d = std::chrono::duration <double, std::milli> (diff).count();
+    cout << "scanner::pipeline::count():  " << d << "ms" << endl;
+    }
+
+
+    cout << "  validation..." << flush;
+    {
+        auto& res_vect = pipe.get_bv_res_vector();
+        auto& cnt_vect = pipe2.get_bv_count_vector();
+
+        for (size_t i = 0; i < res_vect.size(); ++i)
+        {
+            const bvect* bv1 = res_vec1[i].get();
+            const auto* bv = res_vect[i];
+            assert(bv);
+            bool match = bv1->equal(*bv);
+            assert(match);
+            auto c = cnt_vect[i];
+            auto cnt = bv->count();
+            assert(cnt == c);
+        }
+    }
+    cout << "OK" << endl;
+
+
+   cout << "---------------------------- TestSparseFindEqStrPipeline() OK" << endl;
+}
+
+
+
 
 static
 void TestCompressedSparseVectorAlgo()
@@ -18640,6 +18818,8 @@ int main(int argc, char *argv[])
     if (is_all || is_str_sv)
     {
          TestStrSparseVector();
+
+         TestSparseFindEqStrPipeline();
         
          TestStrSparseSort();
 

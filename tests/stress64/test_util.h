@@ -762,8 +762,8 @@ void DetailedCheckCompressedDecode(const CSV& csv)
         {
             CheckCompressedDecode(csv, i, size1);
             cout << "\r" << i << "/" << size1 << flush;
-            i += rand() % 3;
-            size1 -= rand() % 5;
+            i += (unsigned)rand() % 3;
+            size1 -= (unsigned)rand() % 5;
         }
     }
     cout << endl;
@@ -783,7 +783,7 @@ void DetailedCheckCompressedDecode(const CSV& csv)
     {
         CheckCompressedDecode(csv, i, size);
         cout << "\r" << i << "/" << size << flush;
-        i += rand() % 25000;
+        i += (unsigned)rand() % 25000;
     }
     cout << endl;
 
@@ -793,8 +793,8 @@ void DetailedCheckCompressedDecode(const CSV& csv)
             break;
         CheckCompressedDecode(csv, i, size);
         cout << "\r" << i << "/" << size << flush;
-        i += rand() % 25000;
-        size -= rand() % 25000;;
+        i += (unsigned)rand() % 25000;
+        size -= (unsigned)rand() % 25000;;
     }
     cout << endl;
 
