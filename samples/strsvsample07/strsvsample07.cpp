@@ -87,13 +87,33 @@ void GenerateTestData(std::vector<string>& str_coll,
     bi.flush();
 }
 
+bool is_diag = true; ///< Flag to print the SV diagnostics
+
+/// Rudimentary cmd-args parser
+static
+void parse_args(int argc, char *argv[])
+{
+    for (int i = 1; i < argc; ++i)
+    {
+        std::string arg = argv[i];
+        if (arg == "-nodiag")
+        {
+            is_diag = false;
+            continue;
+        }
+    } // for i
+}
 
 
 
-int main(void)
+
+int main(int argc, char *argv[])
 {
     try
     {
+        parse_args(argc, argv); 
+
+
         std::vector<string> str_coll;
         str_sv_type str_sv0; // sparse-succinct vector
 
@@ -120,12 +140,15 @@ int main(void)
         //  - print statistics to take a look into details
         //
 
-        cout << "\nStatistics on generated SV:" << endl;
-        bm::print_svector_stat(str_sv1);
-        // diagnostics print to see the details of succinct structures
-        cout << "\nStatistics on remapped/optimized SV:" << endl;
-        bm::print_svector_stat(str_sv0);
-        cout << endl << endl;
+        if (is_diag)
+        {
+            cout << "\nStatistics on generated SV:" << endl;
+            bm::print_svector_stat(str_sv1);
+            // diagnostics print to see the details of succinct structures
+            cout << "\nStatistics on remapped/optimized SV:" << endl;
+            bm::print_svector_stat(str_sv0);
+            cout << endl << endl;
+        }
 
         // create a random sampling of strings to search
         //
