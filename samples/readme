@@ -93,6 +93,9 @@ String sparse vector (bit-transposed vector) for ASCII(z) strings
                   How to add bookmarks to the the serialized BLOB for faster range deserialization.
 ./strsvsample06 - str_sparse_vector<>::const_iterator in substring mode, 
                   bm::sparse_vector_scanner<> to search for a string and iterate the result-set
+./strsvsample07 - bm::sparse_vector_scanner<>::pipeline to bulk search for a thousands of strings,
+                  or calculate statistics, benchmarking various search modes and showing how to use 
+                  succinct vector remapping to save RAM without loosing performance of search
 
 
 
