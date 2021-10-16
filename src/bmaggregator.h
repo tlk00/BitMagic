@@ -1081,7 +1081,7 @@ void aggregator<BV>::combine_and_sub(typename aggregator<BV>::pipeline& pipe)
                         {
                             if (is_res_full)
                                 pipe.count_res_vect_[p] += bm::gap_max_bits;
-                            else 
+                            else
                                 pipe.count_res_vect_[p] += bm::bit_block_count(tb_ar_->tb1, digest);
                         }
                         continue;
