@@ -28186,38 +28186,47 @@ void StressTestStrSparseVector()
    cout << endl;
 }
 
+inline
+void GeneratePipelineTestData(std::vector<string>& str_coll,
+                              str_svect_type&      str_sv,
+                              unsigned max_coll = 8000000,
+                              unsigned repeat_factor=10)
+{
+    auto bi(str_sv.get_back_inserter());
+    string str;
+    for (unsigned i = 10; i < max_coll; i+= (rand()&0xF))
+    {
+        switch (i & 0xF)
+        {
+        case 0: str = "AB"; break;
+        case 1: str = "GTx"; break;
+        case 2: str = "cnv"; break;
+        default: str = "AbY11"; break;
+        }
+        str.append(to_string(i));
+
+        for (unsigned k = 0; k < repeat_factor; ++k)
+        {
+            str_coll.emplace_back(str);
+            bi = str;
+        }
+    } // for i
+    bi.flush();
+}
+
+
 static
 void TestSparseFindEqStrPipeline()
 {
    cout << "---------------------------- TestSparseFindEqStrPipeline()" << endl;
    const unsigned max_coll = 8000000;
-   cout << "   generate test set..." << flush;
-
    std::vector<string> str_coll;
    str_svect_type      str_sv;
 
-    {
-        auto bi(str_sv.get_back_inserter());
-        string str;
-        for (unsigned i = 10; i < max_coll; i+= (rand()&0xF))
-        {
-            switch (i & 0xF)
-            {
-            case 0: str = "AB"; break;
-            case 1: str = "GTx"; break;
-            case 2: str = "cnv"; break;
-            default: str = "AbY11"; break;
-            }
-            str.append(to_string(i));
+   cout << "   generate test set..." << flush;
 
-            for (unsigned k = 0; k < 10; ++k)
-            {
-                str_coll.emplace_back(str);
-                bi = str;
-            }
-        } // for i
-        bi.flush();
-    }
+   GeneratePipelineTestData(str_coll, str_sv, max_coll, 10);
+
     cout << "remap..." << flush;
 
     str_sv.remap();
