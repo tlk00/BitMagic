@@ -872,7 +872,7 @@ public:
         int new_level = bm::gap_calc_level(len, this->glen());
         if (new_level < 0)
         {
-            convert_gap2bitset(i, j, gap_block);
+            convert_gap2bitset(i, j, gap_block, len);
             return;
         }
         bm::gap_word_t* new_blk = allocate_gap_block(unsigned(new_level), gap_block);
@@ -1502,10 +1502,12 @@ public:
         \param i - top index.
         \param j - secondary index.
         \param gap_block - Pointer to the gap block, if NULL block [i,j] is taken
+        \param len - gap length
         \return new bit block's memory
     */
     bm::word_t* convert_gap2bitset(unsigned i, unsigned j,
-                                   const gap_word_t* gap_block=0)
+                                   const gap_word_t* gap_block=0,
+                                   unsigned len = 0)
     {
         BM_ASSERT(is_init());
         
@@ -1517,7 +1519,7 @@ public:
         BM_ASSERT(IS_VALID_ADDR((bm::word_t*)gap_block));
 
         bm::word_t* new_block = alloc_.alloc_bit_block();
-        bm::gap_convert_to_bitset(new_block, gap_block);
+        bm::gap_convert_to_bitset(new_block, gap_block, len);
         
         top_blocks_[i][j] = new_block;
 
@@ -1558,6 +1560,13 @@ public:
             set_block_ptr(i, j, new_block);
             return new_block;
         }
+        return deoptimize_block_no_check(block, i, j);
+    }
+
+    bm::word_t* deoptimize_block_no_check(bm::word_t* block,
+                                         unsigned i, unsigned j)
+    {
+        BM_ASSERT(block);
         if (BM_IS_GAP(block))
         {
             gap_word_t* gap_block = BMGAP_PTR(block);
@@ -1580,6 +1589,7 @@ public:
         }
         return block;
     }
+
 
 
     /**

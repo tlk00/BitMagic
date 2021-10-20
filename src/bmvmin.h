@@ -35,21 +35,6 @@ namespace bm
 #define BM_MINISET_GAPLEN (bm::gap_len_table<true>::_len[0])
 #define BM_MINISET_ARRSIZE(x) ((x / 32) + ( (x % 32) && 1 ))
 
-/*!
-   \brief GAP block to bitblock conversion.
-   \param dest - bitblock buffer pointer.
-   \param buf  - GAP buffer pointer.
-   \param dest_len - length/size of the destination buffer.
-
-    @internal
-*/
-template<typename T>
-void gap_convert_to_bitset(unsigned* dest, const T*  buf,  unsigned  dest_len)
-{
-   ::memset(dest, 0, dest_len * sizeof(unsigned));
-    bm::gap_add_to_bitset(dest, buf);
-}
-
 
 /*! @defgroup mset Small sets functionality (intrenal)
  *  @internal
