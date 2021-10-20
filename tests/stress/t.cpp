@@ -1873,7 +1873,7 @@ void DetailedCheckVectors(const bvect_mini &bvect_min,
                 i, (int)bv_m_flag, (int)bv_f_flag);
 
             cout << "Non-conformant block number is: " << unsigned(i >>  bm::set_block_shift) << endl;
-            exit(1);
+            assert(0); exit(1);
         }
     }
     
@@ -6532,6 +6532,163 @@ void AndOperationsTest(bool detailed)
 
 }
 
+template<typename BV>
+void CheckBV_AND_OR(BV& bv_target, const BV& bv1, const BV& bv2)
+{
+    BV bv_control(bv_target);
+    BV bv_t_copy(bv_target);
+    {
+        BV bv_and;
+        bv_and.bit_and(bv1, bv2, bvect::opt_compress);
+        bv_t_copy |= bv_and;
+    }
+
+    bv_target.bit_and_or(bv1, bv2, bvect::opt_compress);
+    bool f;
+    typename BV::size_type pos;
+    f = bv_target.find_first_mismatch(bv_t_copy, pos);
+    if (f)
+    {
+        cerr << "AND-OR Mismatch at:" << pos << endl;
+        unsigned nb = (pos >> bm::set_block_shift);
+        unsigned i,j;
+        bm::get_block_coord(nb, i, j);
+        cout << "nb=" << nb << " i=" << i << " j=" << j << endl;
+
+        bool v1 = bv_target.test(pos);
+        bool vC = bv_t_copy.test(pos);
+        cout << "v1=" << v1 << " control=" << vC << endl;
+
+        bv_control.bit_and_or(bv1, bv2, bvect::opt_compress);
+
+        assert(0);
+    }
+
+}
+
+static
+void AndOrOperationsTest(bool detailed)
+{
+    (void)detailed;
+    cout << "----------------------------------- AndOrOperationTest()" << endl;
+
+    {
+        bvect  bvtarget;
+        bvect  bv1 { 0, 1 }, bv2 { 1, 3 };
+        CheckBV_AND_OR(bvtarget, bv1, bv2);
+        assert(bvtarget.count() == 1);
+    }
+
+    {
+        bvect  bvtarget;
+        bvect  bv1, bv2;
+        bv1.invert();
+        bv2.invert();
+        CheckBV_AND_OR(bvtarget, bv1, bv2);
+    }
+    {
+        bvect  bvtarget { 1, 10, 65536 };
+        bvect  bv1, bv2;
+        bv1.invert();
+        bv2.invert();
+        CheckBV_AND_OR(bvtarget, bv1, bv2);
+    }
+    {
+        bvect  bvtarget {1, 256, 65536 } ;
+        bvect  bv1 { 0, 1 }, bv2 { 1, 3 };
+        CheckBV_AND_OR(bvtarget, bv1, bv2);
+        auto cnt = bvtarget.count();
+        assert(cnt == 3);
+    }
+    {
+        bvect  bvtarget {1, 256, 65536 } ;
+        bvect  bv1 { 0, 1 }, bv2 { 1, 3 };
+        bvtarget.optimize();
+        CheckBV_AND_OR(bvtarget, bv1, bv2);
+        auto cnt = bvtarget.count();
+        assert(cnt == 3);
+    }
+    {
+        bvect  bvtarget {1, 256, 65536 } ;
+        bvect  bv1 { 0, 1 }, bv2 { 1, 3 };
+        bv1.optimize();
+        CheckBV_AND_OR(bvtarget, bv1, bv2);
+        auto cnt = bvtarget.count();
+        assert(cnt == 3);
+    }
+    {
+        bvect  bvtarget {1, 256, 65536 } ;
+        bvect  bv1 { 0, 1 }, bv2 { 1, 3 };
+        bv2.optimize();
+        CheckBV_AND_OR(bvtarget, bv1, bv2);
+        auto cnt = bvtarget.count();
+        assert(cnt == 3);
+    }
+    {
+        bvect  bvtarget {1, 256, 65536 } ;
+        bvect  bv1 { 0, 1 }, bv2 { 1, 3 };
+        bv1.optimize();
+        bv2.optimize();
+        CheckBV_AND_OR(bvtarget, bv1, bv2);
+        auto cnt = bvtarget.count();
+        assert(cnt == 3);
+    }
+    {
+        bvect  bvtarget;
+        bvect  bv1 { 0, 1 }, bv2 { 2, 3 };
+        CheckBV_AND_OR(bvtarget, bv1, bv2);
+        auto cnt = bvtarget.count();
+        assert(cnt == 0);
+    }
+    {
+        bvect  bvtarget;
+        bvect  bv1, bv2 { 2, 3, bm::id_max/2 };
+        bv1.invert();
+        CheckBV_AND_OR(bvtarget, bv1, bv2);
+        auto cnt = bvtarget.count();
+        assert(cnt == 3);
+    }
+    {
+        bvect  bvtarget;
+        bvect  bv2, bv1 { 2, 3, bm::id_max/2 };
+        bv2.invert();
+        CheckBV_AND_OR(bvtarget, bv1, bv2);
+        auto cnt = bvtarget.count();
+        assert(cnt == 3);
+    }
+
+
+    {
+        bvect  bvtarget {1, 256, 65536 } ;
+        bvect  bv1 { 0, 1 }, bv2 { 1, 3 };
+        bvtarget.optimize();
+        bv1.optimize();
+        bv2.optimize();
+        CheckBV_AND_OR(bvtarget, bv1, bv2);
+        auto cnt = bvtarget.count();
+        assert(cnt == 3);
+    }
+
+    {
+        bvect  bvtarget;
+        bvect  bv1, bv2;
+        bvtarget.set_range(2, 65535);
+        bv1.set_range(0,1);
+        bv2.set_range(0,1);
+        CheckBV_AND_OR(bvtarget, bv1, bv2);
+        auto cnt = bvtarget.count();
+        assert(cnt == 65536);
+        bvect::statistics st;
+        bvtarget.calc_stat(&st);
+        assert(st.gap_blocks==0 && st.bit_blocks==0);
+    }
+
+
+    cout << "----------------------------------- AndOrOperationTest OK" << endl;
+}
+
+
+
 static
 void OrOperationsTest(bool detailed)
 {
@@ -10193,6 +10350,27 @@ void StressTestAggregatorShiftAND(unsigned repeats)
 }
 
 
+static
+void TestAND_OR(bm::random_subset<bvect>& rsub,
+                bvect::size_type count,
+                const bvect& bvect_full1, const bvect& bvect_full2)
+{
+    cout << "AND-OR tests..." << flush;
+    bvect bv_sub1;
+    auto sample_count = count / 2;
+    if (sample_count)
+        rsub.sample(bv_sub1, bvect_full1, sample_count);
+    CheckBV_AND_OR(bv_sub1, bvect_full1, bvect_full2);
+    if (sample_count)
+        rsub.sample(bv_sub1, bvect_full2, sample_count);
+    CheckBV_AND_OR(bv_sub1, bvect_full2, bvect_full1);
+    bv_sub1 = bvect_full1;
+    CheckBV_AND_OR(bv_sub1, bvect_full2, bvect_full1);
+    bv_sub1 = bvect_full2;
+    CheckBV_AND_OR(bv_sub1, bvect_full1, bvect_full2);
+    cout << " OK" << endl;
+}
+
 
 static
 void StressTest(unsigned repetitions, int set_operation, bool detailed)
@@ -10324,7 +10502,7 @@ void StressTest(unsigned repetitions, int set_operation, bool detailed)
 
 
 
-/*        
+#if(0)
         cout << "!!!!!!!!!!!!!!!" << endl;
         CheckVectors(*bvect_min1, *bvect_full1, size);
         cout << "!!!!!!!!!!!!!!!" << endl;
@@ -10335,7 +10513,7 @@ void StressTest(unsigned repetitions, int set_operation, bool detailed)
          bvect_full1->stat();
          cout << " --" << endl;
          bvect_full2->stat();
-*/
+#endif
 
         int operation = rand()%5;
         if (set_operation != -1)
@@ -10406,7 +10584,9 @@ void StressTest(unsigned repetitions, int set_operation, bool detailed)
                 cout << "Serialization operation failed!" << endl;
                 exit(1);
             }
-            
+
+            TestAND_OR(rsub, predicted_count, *bvect_full1, *bvect_full2);
+
             }
             break;
 
@@ -10497,6 +10677,7 @@ void StressTest(unsigned repetitions, int set_operation, bool detailed)
             cout << "Operation AND" << endl;
 
             bm::id_t predicted_count = bm::count_and(*bvect_full1, *bvect_full2);
+
             bm::id_t predicted_any = bm::any_and(*bvect_full1, *bvect_full2);
             if (predicted_any == 0 && predicted_count != 0)
             {
@@ -10514,9 +10695,9 @@ void StressTest(unsigned repetitions, int set_operation, bool detailed)
 
             TestRandomSubset(bv_target_s, rsub);
 
+            TestAND_OR(rsub, predicted_count, *bvect_full1, *bvect_full2);
 
             bvect bv1(*bvect_full1);
-
 
             bvect_full1->bit_and(*bvect_full2);
             bm::id_t count = bvect_full1->count();
@@ -10548,7 +10729,7 @@ void StressTest(unsigned repetitions, int set_operation, bool detailed)
 
         int cres2 = bvect_full1->compare(*bvect_full2);
 
-        CheckIntervals(*bvect_full1, BITVECT_SIZE);
+        //CheckIntervals(*bvect_full1, BITVECT_SIZE);
 
         if (cres1 != cres2)
         {
@@ -10684,7 +10865,7 @@ void StressTest(unsigned repetitions, int set_operation, bool detailed)
         CheckVectors(*bvect_min1, *bvect_full1, size, detailed);
         CheckIntervals(*bvect_full1, BITVECT_SIZE);
 
-        //CheckCountRange(*bvect_full1, 0, size);
+        CheckCountRange(*bvect_full1, 0, size);
 
 
         // Serialization
@@ -10697,7 +10878,7 @@ void StressTest(unsigned repetitions, int set_operation, bool detailed)
        
         bv_ser.serialize(*bvect_full1, sermem_buf, 0);
         unsigned slen = (unsigned)sermem_buf.size();
-       
+
         delete bvect_full1;
 
         unsigned SRatio = unsigned((slen*100)/st2.memory_used);
@@ -34634,7 +34815,11 @@ int main(int argc, char *argv[])
 
     if (is_all || is_bvops)
     {
+
         AndOperationsTest(true); // enable detailed check
+         CheckAllocLeaks(false);
+
+        AndOrOperationsTest(true); // enable detailed check
          CheckAllocLeaks(false);
 
         OrOperationsTest(true);
