@@ -437,6 +437,17 @@ public:
     }
 
     /**
+        Quick resize to zero
+     */
+    void reset() BMNOEXCEPT
+    {
+        if constexpr (trivial_type)
+            buffer_.resize_no_check(0);
+        else
+            resize(0);
+    }
+
+    /**
         @brief vector resize
         @param new_size - new number of elements
         @param init_destroy_values - need to init or destroy values 
@@ -474,6 +485,16 @@ public:
                 }
             }
         }
+    }
+
+    /**
+        @brief resize without content preservation
+        @internal
+     */
+    void resize_no_copy(size_type new_size)
+    {
+        size_type v_size = value_size();
+        buffer_.resize(new_size * v_size);
     }
 
     /**

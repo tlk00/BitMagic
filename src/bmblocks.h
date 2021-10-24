@@ -559,9 +559,8 @@ public:
 
         const bm::word_t* const* blk_blk = top_blocks_[i];
         if ((bm::word_t*)blk_blk == FULL_BLOCK_FAKE_ADDR)
-            return FULL_BLOCK_FAKE_ADDR;
-        const bm::word_t* ret = (blk_blk == 0) ? 0 : blk_blk[j];
-        return ret;
+            return (bm::word_t*)blk_blk;
+        return (blk_blk) ? blk_blk[j] : 0;
     }
     /**
         \brief Finds block in 2-level blocks array (unsinitized)
@@ -575,9 +574,8 @@ public:
             return 0;
         bm::word_t* const* blk_blk = top_blocks_[i];
         if ((bm::word_t*)blk_blk == FULL_BLOCK_FAKE_ADDR)
-            return FULL_BLOCK_FAKE_ADDR;
-        bm::word_t* ret = (!blk_blk) ? 0 : blk_blk[j];
-        return ret;
+            return (bm::word_t*)blk_blk;
+        return (blk_blk) ? blk_blk[j] : 0;
     }
 
 

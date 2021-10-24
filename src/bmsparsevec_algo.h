@@ -531,8 +531,12 @@ public:
         - run all searches at once
         - get the search results (in the order it was added)
      */
+    template<class Opt = bm::agg_run_options<> >
     class pipeline
     {
+    public:
+        typedef
+        typename aggregator_type::template pipeline<Opt> aggregator_pipeline_type;
     public:
         pipeline(const SV& sv)
         : sv_(sv)
@@ -569,15 +573,23 @@ public:
         bv_count_vector_type& get_bv_count_vector()  BMNOEXCEPT
             { return agg_pipe_.get_bv_count_vector(); }
 
+
+        /**
+            get aggregator pipeline (access to compute internals)
+            @internal
+         */
+         aggregator_pipeline_type& get_aggregator_pipe() BMNOEXCEPT
+            { return agg_pipe_; }
+
     protected:
         friend class sparse_vector_scanner;
 
         pipeline(const pipeline&) = delete;
         pipeline& operator=(const pipeline&) = delete;
     protected:
-        const SV&                           sv_; ///< target sparse vector ref
-        typename aggregator_type::pipeline  agg_pipe_; ///< traget aggregator pipeline
-        remap_vector_type                   remap_value_vect_; ///< remap buffer
+        const SV&                    sv_; ///< target sparse vector ref
+        aggregator_pipeline_type     agg_pipe_; ///< traget aggregator pipeline
+        remap_vector_type            remap_value_vect_; ///< remap buffer
     };
 
 public:
@@ -707,7 +719,8 @@ public:
         \brief find sparse vector elements using search pipeline
         @param pipe  - pipeline to run
      */
-    void find_eq_str(pipeline& pipe);
+    template<class TPipe>
+    void find_eq_str(TPipe& pipe);
 
     /**
         \brief binary find first sparse vector element (string)     
@@ -1831,8 +1844,8 @@ bool sparse_vector_scanner<SV>::find_eq_str_impl(const SV&  sv,
 
 //----------------------------------------------------------------------------
 
-template<typename SV>
-void sparse_vector_scanner<SV>::find_eq_str(pipeline& pipe)
+template<typename SV> template<class TPipe>
+void sparse_vector_scanner<SV>::find_eq_str(TPipe& pipe)
 {
     agg_.combine_and_sub(pipe.agg_pipe_);
 }
@@ -2417,12 +2430,12 @@ void sparse_vector_scanner<SV>::reset_search_range()
 
 
 //----------------------------------------------------------------------------
-// sparse_vector_scanner<SV>::pipeline::add
+// sparse_vector_scanner<SV>::pipeline<Opt>
 //----------------------------------------------------------------------------
 
-template<typename SV>
+template<typename SV> template<class Opt>
 void
-sparse_vector_scanner<SV>::pipeline::add(const typename SV::value_type* str)
+sparse_vector_scanner<SV>::pipeline<Opt>::add(const typename SV::value_type* str)
 {
     BM_ASSERT(str);
 

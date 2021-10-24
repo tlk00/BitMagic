@@ -29,6 +29,9 @@ For more information please visit:  http://bitmagic.io
 # error missing include (bm.h or bm64.h)
 #endif
 
+#include <stdio.h>
+#include <string.h>
+
 
 #include "bmfunc.h"
 #include "bmdef.h"
@@ -40,6 +43,50 @@ For more information please visit:  http://bitmagic.io
 namespace bm
 {
 
+/*! @name Aggregator traits and control constants
+    @ingroup setalgo
+*/
+//@{
+
+const bool agg_produce_result_bvectors = true;
+const bool agg_disable_result_bvectors = false;
+const bool agg_compute_counts = true;
+const bool agg_disable_counts = false;
+
+/**
+   Aggregation options to control execution
+   @ingroup setalgo
+ */
+template <bool OBvects=bm::agg_produce_result_bvectors,
+          bool OCounts=bm::agg_disable_counts>
+struct agg_run_options
+{
+    /// make result(target) vectors (aggregation search results) (Default: true)
+    /// when false is used - means we want to only collect statistics (counts) for the targets
+    static constexpr bool is_make_results() { return OBvects; }
+
+    /// Compute counts for the target vectors, when set to true, population count is computed for
+    /// each result, results itself can be omitted (make_results flag set to false)
+    static constexpr bool is_compute_counts() { return OCounts; }
+};
+
+/**
+    Pre-defined aggregator options for counts-only (results dropped) operation
+    @ingroup setalgo
+ */
+typedef
+bm::agg_run_options<agg_disable_result_bvectors, agg_compute_counts>
+agg_opt_only_counts;
+
+/**
+    Pre-defined aggregator options for results plus counts operation
+    @ingroup setalgo
+ */
+typedef
+bm::agg_run_options<agg_produce_result_bvectors, agg_compute_counts>
+agg_opt_bvect_and_counts;
+
+//@}
 
 /**
     Algorithms for fast aggregation of a group of bit-vectors
@@ -140,17 +187,13 @@ public:
     };
 
     /**
-       Aggregation options to control execution
+       Aggregation options for runtime control
      */
     struct run_options
     {
-        /// make result(target) vectors (aggregation search results) (Default: true)
-        /// when false is used - means we want to only collect statistics (counts) for the targets
-        bool make_results = true;
-
-        /// Compute counts for the target vectors, when set to true, population count is computed for
-        /// each result, results itself can be omitted (make_results flag set to false)
-        bool compute_counts = false;
+        /// Batch size sets number of argument groups processed at a time
+        /// Default: 0 means this parameter will be determined automatically
+        size_t batch_size = 0;
     };
 
     /**
@@ -160,8 +203,11 @@ public:
         Pipeline execution improves CPU cache reuse and caches the compressed blocks to re-use it
         for more efficient execution. Essencially it is a tool to run thousads of runs at once faster.
      */
+    template<class Opt = bm::agg_run_options<> >
     class pipeline
     {
+    public:
+        typedef Opt options_type;
     public:
         pipeline() {}
         ~pipeline() BMNOEXCEPT;
@@ -213,6 +259,12 @@ public:
             { return bcache_.bv_inp_vect_; }
         const count_vector_type& get_all_input_cnt_vect() const BMNOEXCEPT
             { return bcache_.cnt_vect_; }
+
+        /// Return number of unique vectors in the pipeline (after complete())
+        size_t unique_vectors() const BMNOEXCEPT
+            { return bcache_.bv_inp_vect_.size(); }
+
+        size_t compute_run_batch() const BMNOEXCEPT;
         //@}
 
     protected:
@@ -238,6 +290,7 @@ public:
     protected:
         run_options          options_;  ///< execution parameters
         bool                 is_complete_ = false; ///< ready to run state flag
+        size_t               total_vect_= 0; ///< total number of vector mentions in all groups
         arg_vector_type      arg_vect_;    ///< input arg. groups
 
         bvect_vector_type    bv_res_vect_;    ///< results (bit-vector ptrs)
@@ -328,8 +381,10 @@ public:
 
     /**
         Run AND-SUB: AND (groups1) AND NOT ( OR(group0)) for a pipeline
+       @param pipe - pipeline to run (should be prepared, filled and complete
      */
-    void combine_and_sub(pipeline& pipe);
+    template<class TPipe>
+    void combine_and_sub(TPipe& pipe);
 
     
     
@@ -571,20 +626,31 @@ protected:
     /// Temporary operations vectors
     struct arena
     {
+        block_ptr_vector_type     v_arg_tmp_blk;    ///< source blocks list
         block_ptr_vector_type     v_arg_or_blk;     ///< source blocks list (OR)
         gap_block_ptr_vector_type v_arg_or_blk_gap; ///< source GAP blocks list (OR)
         block_ptr_vector_type     v_arg_and_blk;     ///< source blocks list (AND)
         gap_block_ptr_vector_type v_arg_and_blk_gap; ///< source GAP blocks list (AND)
         uchar_vector_type         carry_overs;    ///<  shift carry over flags
 
-        void reset_blocks()
+
+        void reset_all_blocks()
         {
-            v_arg_or_blk.resize(0);
-            v_arg_or_blk_gap.resize(0);
-            v_arg_and_blk.resize(0);
-            v_arg_and_blk_gap.resize(0);
-            carry_overs.resize(0);
+            reset_or_blocks();
+            reset_and_blocks();
+            carry_overs.reset();
         }
+        void reset_and_blocks()
+        {
+            v_arg_and_blk.reset();
+            v_arg_and_blk_gap.reset();
+        }
+        void reset_or_blocks()
+        {
+            v_arg_or_blk.reset();
+            v_arg_or_blk_gap.reset();
+        }
+
     };
 
     
@@ -806,7 +872,7 @@ template<typename BV>
 void aggregator<BV>::reset()
 {
     ag_.reset();
-    ar_->reset_blocks();
+    ar_->reset_all_blocks();
     operation_ = top_block_size_ = 0;
     operation_status_ = op_undefined;
     range_set_ = false;
@@ -901,7 +967,7 @@ template<typename BV>
 void aggregator<BV>::combine_shift_right_and(bvector_type& bv_target)
 {
     count_ = 0;
-    ar_->reset_blocks();
+    ar_->reset_all_blocks();
     combine_shift_right_and(bv_target, ag_.arg_bv0.data(), ag_.arg_bv0.size(),//arg_group0_size,
     false);
 }
@@ -918,7 +984,7 @@ void aggregator<BV>::combine_or(bvector_type& bv_target,
         return;
     }
     ag_.reset();
-    ar_->reset_blocks();
+    ar_->reset_or_blocks();
     unsigned top_blocks = resize_target(bv_target, bv_src, src_size);
     for (unsigned i = 0; i < top_blocks; ++i)
     {
@@ -950,7 +1016,7 @@ void aggregator<BV>::combine_and(bvector_type&                 bv_target,
         return;
     }
     ag_.reset();
-    ar_->reset_blocks();
+    ar_->reset_and_blocks();
     unsigned top_blocks = resize_target(bv_target, bv_src, src_size);
     for (unsigned i = 0; i < top_blocks; ++i)
     {
@@ -991,7 +1057,7 @@ bool aggregator<BV>::combine_and_sub(bvector_type& bv_target,
 
     for (unsigned i = 0; i < top_blocks; ++i)
     {
-        unsigned set_array_max =
+        const unsigned set_array_max =
             find_effective_sub_block_size(i, bv_src_and, src_and_size,
                                              bv_src_sub, src_sub_size);
         for (unsigned j = 0; j < set_array_max; ++j)
@@ -1029,14 +1095,13 @@ bool aggregator<BV>::combine_and_sub(bvector_type& bv_target,
 
 // ------------------------------------------------------------------------
 
-template<typename BV>
-void aggregator<BV>::combine_and_sub(typename aggregator<BV>::pipeline& pipe)
+template<typename BV> template<class TPipe>
+void aggregator<BV>::combine_and_sub(TPipe& pipe)
 {
     BM_ASSERT(pipe.is_complete());
 
     const arg_vector_type& pipe_args = pipe.get_args_vector();
     size_t pipe_size = pipe_args.size();
-
     if (!pipe_size)
         return;
 
@@ -1047,78 +1112,96 @@ void aggregator<BV>::combine_and_sub(typename aggregator<BV>::pipeline& pipe)
     unsigned top_blocks = pipe.get_top_blocks();
     BM_ASSERT(top_blocks);
 
+    size_t batch_size = pipe.get_options().batch_size;
+    if (!batch_size)
+        batch_size = pipe.compute_run_batch();
 
     bvect_vector_type& bv_targets_vect = pipe.get_bv_res_vector();
-    for (unsigned i = 0; i < top_blocks; ++i)
+
+    for (size_t batch_from(0), batch_to(0); batch_from < pipe_size;
+         batch_from = batch_to)
     {
-        for (unsigned j = 0; j < bm::set_sub_array_size; ++j)
+        batch_to = batch_from + batch_size;
+        if (batch_to > pipe_size)
+            batch_to = pipe_size;
+        if (!batch_size)
+            batch_size = 1;
+        for (unsigned i = 0; i < top_blocks; ++i)
         {
-            for (size_t p = 0; p < pipe_size; ++p)
+            for (unsigned j = 0; j < bm::set_sub_array_size; ++j)
             {
-                const arg_groups* ag = pipe_args[p];
-                const bvector_type_const_ptr* bv_src_and = ag->arg_bv0.data();
-                const size_t* bv_src_and_idx = ag->arg_idx0.data();
-
-                size_t src_and_size = ag->arg_bv0.size();
-                if (!src_and_size)
-                    continue;
-                const bvector_type_const_ptr* bv_src_sub = ag->arg_bv1.data();
-                const size_t* bv_src_sub_idx = ag->arg_idx1.data();
-                size_t src_sub_size = ag->arg_bv1.size();
-
-                int is_res_full;
-                digest_type digest = combine_and_sub(i, j,
-                                                     bv_src_and_idx,
-                                                     bv_src_and, src_and_size,
-                                                     bv_src_sub_idx,
-                                                     bv_src_sub, src_sub_size,
-                                                     &is_res_full);
-                if (digest || is_res_full)
+                for (size_t p = batch_from; p < batch_to; ++p)
                 {
-                    if (!pipe.options().make_results) // drop results
-                    {
-                        if (pipe.options().compute_counts)
-                        {
-                            if (is_res_full)
-                                pipe.count_res_vect_[p] += bm::gap_max_bits;
-                            else
-                                pipe.count_res_vect_[p] += bm::bit_block_count(tb_ar_->tb1, digest);
-                        }
+                    const arg_groups* ag = pipe_args[p];
+                    size_t src_and_size = ag->arg_bv0.size();
+                    if (!src_and_size)
                         continue;
-                    }
-                    bvector_type* bv_target = bv_targets_vect[p];
-                    if (!bv_target)
-                    {
-                        BM_ASSERT(!bv_targets_vect[p]);
-                        bv_target = new bvector_type(bm::BM_GAP);
-                        bv_targets_vect[p] = bv_target;
-                        typename bvector_type::blocks_manager_type& bman =
-                                            bv_target->get_blocks_manager();
 
-                        bman.reserve_top_blocks(top_blocks);
-                    }
-                    blocks_manager_type& bman = bv_target->get_blocks_manager();
-                    if (is_res_full)
-                    {
-                        bman.check_alloc_top_subblock(i);
-                        bman.set_block_ptr(i, j, (bm::word_t*)FULL_BLOCK_FAKE_ADDR);
-                        if (j == bm::set_sub_array_size-1)
-                            bman.validate_top_full(i);
-                        if (pipe.options().compute_counts)
-                            pipe.count_res_vect_[p] += bm::gap_max_bits;
-                    }
-                    else
-                    {
-                        if (pipe.options().compute_counts)
-                            pipe.count_res_vect_[p] += bm::bit_block_count(tb_ar_->tb1, digest);
-                        bman.opt_copy_bit_block(i, j, tb_ar_->tb1,
-                           bvector_type::opt_compress, tb_ar_->tb_opt);
-                    }
-                } // if
-            } // for p
-        } // for j
+                    const bvector_type_const_ptr* bv_src_and = ag->arg_bv0.data();
+                    const size_t* bv_src_and_idx = ag->arg_idx0.data();
 
-    } // for i
+                    const bvector_type_const_ptr* bv_src_sub = ag->arg_bv1.data();
+                    const size_t* bv_src_sub_idx = ag->arg_idx1.data();
+                    size_t src_sub_size = ag->arg_bv1.size();
+
+                    int is_res_full;
+                    digest_type digest = combine_and_sub(i, j,
+                                                         bv_src_and_idx,
+                                                         bv_src_and, src_and_size,
+                                                         bv_src_sub_idx,
+                                                         bv_src_sub, src_sub_size,
+                                                         &is_res_full);
+                    if (digest || is_res_full)
+                    {
+                        if constexpr (!TPipe::options_type::is_make_results()) // drop results
+                        {
+                            if constexpr (TPipe::options_type::is_compute_counts())
+                            {
+                                if (is_res_full)
+                                    pipe.count_res_vect_[p]+=bm::gap_max_bits;
+                                else
+                                    pipe.count_res_vect_[p]+=
+                                    bm::bit_block_count(tb_ar_->tb1, digest);
+                            }
+                            continue;
+                        }
+
+                        bvector_type* bv_target = bv_targets_vect[p];
+                        if (!bv_target)
+                        {
+                            BM_ASSERT(!bv_targets_vect[p]);
+                            bv_target = new bvector_type(bm::BM_GAP);
+                            bv_targets_vect[p] = bv_target;
+                            typename bvector_type::blocks_manager_type& bman =
+                                                bv_target->get_blocks_manager();
+
+                            bman.reserve_top_blocks(top_blocks);
+                        }
+                        blocks_manager_type& bman =
+                            bv_target->get_blocks_manager();
+                        if (is_res_full)
+                        {
+                            bman.check_alloc_top_subblock(i);
+                            bman.set_block_ptr(i, j,
+                                        (bm::word_t*)FULL_BLOCK_FAKE_ADDR);
+                            if (j == bm::set_sub_array_size-1)
+                                bman.validate_top_full(i);
+                            if constexpr (TPipe::options_type::is_compute_counts())
+                                pipe.count_res_vect_[p] += bm::gap_max_bits;
+                        }
+                        else
+                        {
+                            if constexpr (TPipe::options_type::is_compute_counts())
+                                pipe.count_res_vect_[p] +=
+                                    bm::bit_block_count(tb_ar_->tb1, digest);
+                            bman.opt_copy_bit_block(i, j, tb_ar_->tb1,
+                               bvector_type::opt_compress, tb_ar_->tb_opt);
+                        }
+                    } // if
+                } // for p
+            } // for j
+        } // for i
+    } // for batch
 
     bcache_ptr_ = 0;
 }
@@ -1309,7 +1392,7 @@ void aggregator<BV>::combine_or(unsigned i, unsigned j,
     typename bvector_type::blocks_manager_type& bman_target =
                                         bv_target.get_blocks_manager();
 
-    ar_->reset_blocks();
+    ar_->reset_or_blocks();
     bm::word_t* blk = sort_input_blocks_or(0, bv_src, src_size, i, j);
 
     BM_ASSERT(blk == 0 || blk == FULL_BLOCK_FAKE_ADDR);
@@ -1350,11 +1433,9 @@ void aggregator<BV>::combine_and(unsigned i, unsigned j,
 {
     BM_ASSERT(src_and_size);
     
-    ar_->reset_blocks();
+//    ar_->reset_and_blocks();
     bm::word_t* blk = sort_input_blocks_and(0, bv_src, src_and_size, i, j);
-
     BM_ASSERT(blk == 0 || blk == FULL_BLOCK_FAKE_ADDR);
-
     if (!blk) // nothing to do - golden block(!)
         return;
 
@@ -1412,18 +1493,21 @@ aggregator<BV>::combine_and_sub(
     BM_ASSERT(src_and_size);
     BM_ASSERT(is_result_full);
     
-    ar_->reset_blocks();
+//    ar_->reset_blocks();
 
     *is_result_full = 0;
     bm::word_t* blk = sort_input_blocks_and(and_idx, bv_src_and, src_and_size, i, j);
     BM_ASSERT(blk == 0 || blk == FULL_BLOCK_FAKE_ADDR);
+    if (!blk)
+        return 0; // nothing to do - golden block(!)
 
     {
         size_t arg_blk_and_count = ar_->v_arg_and_blk.size();
         size_t arg_blk_and_gap_count = ar_->v_arg_and_blk_gap.size();
-        if (!blk || !(arg_blk_and_count | arg_blk_and_gap_count))
+        if (!(arg_blk_and_count | arg_blk_and_gap_count))
             return 0; // nothing to do - golden block(!)
 
+        ar_->reset_or_blocks();
         if (src_sub_size)
         {
             blk = sort_input_blocks_or(sub_idx, bv_src_sub, src_sub_size, i, j);
@@ -1851,16 +1935,15 @@ bm::word_t* aggregator<BV>::sort_input_blocks_or(
                         unsigned i, unsigned j)
 {
     bm::word_t* blk = 0;
+    ar_->v_arg_or_blk.reset(); ar_->v_arg_or_blk_gap.reset();
     for (size_t k = 0; k < src_size; ++k)
     {
-        const bvector_type* bv = bv_src[k];
-        BM_ASSERT(bv);
-        const blocks_manager_type& bman_arg = bv->get_blocks_manager();
-        const bm::word_t* arg_blk = bman_arg.get_block_ptr(i, j);
-        if (!arg_blk)
-            continue;
+        const bm::word_t* arg_blk =
+            bv_src[k]->get_blocks_manager().get_block_ptr(i, j);
         if (BM_IS_GAP(arg_blk))
         {
+            (void)src_idx;
+#if (0)
             if (bcache_ptr_)
             {
                 BM_ASSERT(bv == bcache_ptr_->bv_inp_vect_[src_idx[k]]);
@@ -1871,16 +1954,15 @@ bm::word_t* aggregator<BV>::sort_input_blocks_or(
                     continue;
                 }
             } // bcache_ptr_
+#endif
             ar_->v_arg_or_blk_gap.push_back(BMGAP_PTR(arg_blk));
         }
         else // FULL or bit block
         {
-            if (IS_FULL_BLOCK(arg_blk))
-            {
-                blk = FULL_BLOCK_FAKE_ADDR;
-                ar_->v_arg_or_blk.resize(0); ar_->v_arg_or_blk_gap.resize(0);
-                break;
-            }
+            if (!arg_blk)
+                continue;
+            if (arg_blk == FULL_BLOCK_FAKE_ADDR)
+                return FULL_BLOCK_FAKE_ADDR;
             ar_->v_arg_or_blk.push_back(arg_blk);
         }
     } // for k
@@ -1896,51 +1978,69 @@ bm::word_t* aggregator<BV>::sort_input_blocks_and(
                                 size_t src_size,
                                 unsigned i, unsigned j)
 {
-    unsigned full_blk_cnt = 0;
-    bm::word_t* blk = FULL_BLOCK_FAKE_ADDR;
+    ar_->v_arg_tmp_blk.resize_no_copy(src_size);
+    auto blocks_arr = ar_->v_arg_tmp_blk.data();
     for (size_t k = 0; k < src_size; ++k)
     {
-        const bvector_type* bv = bv_src[k];
-        BM_ASSERT(bv);
-        const blocks_manager_type& bman_arg = bv->get_blocks_manager();
-        const bm::word_t* arg_blk = bman_arg.get_block_ptr(i, j);
+        const bm::word_t* arg_blk = blocks_arr[k] =
+            bv_src[k]->get_blocks_manager().get_block_ptr(i, j);
         if (!arg_blk)
-        {
-            blk = 0;
-            ar_->v_arg_and_blk.resize(0); ar_->v_arg_and_blk_gap.resize(0);
-            break;
-        }
+            return 0;
+    }
+
+    bool has_full_blk = false;
+    bm::word_t* blk = FULL_BLOCK_FAKE_ADDR;
+    auto& bit_v = ar_->v_arg_and_blk;
+    auto& gap_v = ar_->v_arg_and_blk_gap;
+    bit_v.resize_no_copy(src_size);
+    gap_v.resize_no_copy(src_size);
+    size_t bc(0), gc(0);
+
+    auto bit_arr = bit_v.data();
+    auto gap_arr = gap_v.data();
+    for (size_t k = 0; k < src_size; ++k)
+    {
+        const bm::word_t* arg_blk = blocks_arr[k];
         if (BM_IS_GAP(arg_blk))
         {
+            const bm::gap_word_t* gap_blk = BMGAP_PTR(arg_blk);
+            (void)src_idx;
+#if (0)
             if (bcache_ptr_)
             {
-                BM_ASSERT(bv == bcache_ptr_->bv_inp_vect_[src_idx[k]]);
-                bm::word_t* bit_blk = cache_gap_block(arg_blk, src_idx, k, i, j);
-                if (bit_blk)
+                unsigned len = bm::gap_length(gap_blk);
+                size_t bv_idx = src_idx[k];
+                auto cnt = bcache_ptr_->cnt_vect_[bv_idx];
+                if (cnt && len > 1024 && bc < (src_size / 4))
                 {
-                    ar_->v_arg_and_blk.push_back(bit_blk); // use cached bit-block for operation
-                    continue;
+                    bm::word_t* bit_blk = cache_gap_block(arg_blk, src_idx, k, i, j);
+                    if (bit_blk)
+                    {
+                        bit_arr[bc++] = bit_blk; // use cached bit-block for operation
+                        continue;
+                    }
                 }
             } // bcache_ptr_
-            ar_->v_arg_and_blk_gap.push_back(BMGAP_PTR(arg_blk));
+#endif
+            gap_arr[gc++] = gap_blk;
+            continue;
         }
-        else // FULL or bit block
+        // FULL or bit block
+        if (arg_blk == FULL_BLOCK_FAKE_ADDR)
         {
-            if (IS_FULL_BLOCK(arg_blk))
-            {
-                // add only first FULL encounter, others ignore
-                if (!full_blk_cnt) // first 0xFFF....
-                {
-                    ar_->v_arg_and_blk.push_back(FULL_BLOCK_REAL_ADDR);
-                    ++full_blk_cnt;
-                }
-            }
-            else
-            {
-                ar_->v_arg_and_blk.push_back(arg_blk);
-            }
+            has_full_blk = true;
+            continue;
         }
+        bit_arr[bc++] = arg_blk;
+
     } // for k
+
+    bit_v.resize_no_copy(bc);
+    gap_v.resize_no_copy(gc);
+
+    if (has_full_blk && (!bc && !gc))
+        bit_v.push_back(FULL_BLOCK_REAL_ADDR);
+
     return blk;
 }
 
@@ -2331,8 +2431,8 @@ aggregator<BV>::run_step(unsigned i, unsigned j)
 // aggregator::pipeline
 // ------------------------------------------------------------------------
 
-template<typename BV>
-aggregator<BV>::pipeline::~pipeline() BMNOEXCEPT
+template<typename BV> template<class Opt>
+aggregator<BV>::pipeline<Opt>::~pipeline() BMNOEXCEPT
 {
     size_t sz = arg_vect_.size();
     arg_groups** arr = arg_vect_.data();
@@ -2353,8 +2453,8 @@ aggregator<BV>::pipeline::~pipeline() BMNOEXCEPT
 
 // ------------------------------------------------------------------------
 
-template<typename BV>
-void aggregator<BV>::pipeline::complete()
+template<typename BV> template<class Opt>
+void aggregator<BV>::pipeline<Opt>::complete()
 {
     if (is_complete_)
         return;
@@ -2367,12 +2467,11 @@ void aggregator<BV>::pipeline::complete()
     for (size_t i = 0; i < sz; ++i)
         bv_arr[i] = 0;
 
-    if (options_.compute_counts)
+    if constexpr (Opt::is_compute_counts())
     {
         count_res_vect_.resize(sz);
         size_type* cnt_arr = count_res_vect_.data();
-        for (size_t i = 0; i < sz; ++i)
-            cnt_arr[i] = 0;
+        ::memset(cnt_arr, 0, sz * sizeof(cnt_arr[0]));
     }
 
     const arg_vector_type& pipe_args = get_args_vector();
@@ -2405,18 +2504,22 @@ void aggregator<BV>::pipeline::complete()
 
 // ------------------------------------------------------------------------
 
-template<typename BV>
-void aggregator<BV>::pipeline::complete_arg_group(arg_groups* ag)
+template<typename BV> template<class Opt>
+void aggregator<BV>::pipeline<Opt>::complete_arg_group(arg_groups* ag)
 {
     BM_ASSERT(ag);
-    complete_arg_sub_group(ag->arg_idx0, ag->arg_bv0.data(), ag->arg_bv0.size());
-    complete_arg_sub_group(ag->arg_idx1, ag->arg_bv1.data(), ag->arg_bv1.size());
+    auto sz = ag->arg_bv0.size();
+    total_vect_ += sz;
+    complete_arg_sub_group(ag->arg_idx0, ag->arg_bv0.data(), sz);
+    sz = ag->arg_bv1.size();
+    total_vect_ += sz;
+    complete_arg_sub_group(ag->arg_idx1, ag->arg_bv1.data(), sz);
 }
 
 // ------------------------------------------------------------------------
 
-template<typename BV>
-void aggregator<BV>::pipeline::complete_arg_sub_group(
+template<typename BV> template<class Opt>
+void aggregator<BV>::pipeline<Opt>::complete_arg_sub_group(
                 index_vector_type& idx_vect,
                 const bvector_type_const_ptr* bv_src, size_t size)
 {
@@ -2452,9 +2555,9 @@ void aggregator<BV>::pipeline::complete_arg_sub_group(
 
 // ------------------------------------------------------------------------
 
-template<typename BV>
+template<typename BV> template<class Opt>
 typename aggregator<BV>::arg_groups*
-aggregator<BV>::pipeline::add()
+aggregator<BV>::pipeline<Opt>::add()
 {
     BM_ASSERT(!is_complete_);
     arg_groups* arg = construct_arg_group();
@@ -2463,7 +2566,36 @@ aggregator<BV>::pipeline::add()
 }
 
 // ------------------------------------------------------------------------
-//
+
+template<typename BV> template<class Opt>
+size_t aggregator<BV>::pipeline<Opt>::compute_run_batch() const BMNOEXCEPT
+{
+    const size_t cache_size = 256 * 1024; // estimation-speculation (L2)
+    // ad-hoc estimate (not correct!) uses 2/3 of bit-vectors size (some are GAPs)
+    // TODO: need to use real sparse vector statistics (AVG block size)
+    //
+    const float block_size = 0.75f * (bm::set_block_size * sizeof(bm::word_t));
+    const float bv_struct_overhead = (64 * 8); // 8 cache lines in bytes
+    const float cached_vect = float(cache_size) / float(block_size + bv_struct_overhead);
+
+    size_t bv_count = unique_vectors();
+    size_t args_total = arg_vect_.size(); // number of arg groups
+    if ((bv_count < cached_vect) || (args_total < 2)) // worst case fit in L2
+        return args_total;
+
+    size_t avg_vect_per_group = total_vect_ / args_total;
+
+    const float reuse_coeff = 0.7f; // spec. coeff of resue of vectors
+    float f_batch_size =
+        (1+reuse_coeff)*(float(avg_vect_per_group) / float(cached_vect) + 0.99f);
+    size_t batch_size = size_t(f_batch_size);
+
+    return batch_size;
+}
+
+
+// ------------------------------------------------------------------------
+// Arg Groups
 // ------------------------------------------------------------------------
 
 template<typename BV>
