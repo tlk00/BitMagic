@@ -35,6 +35,7 @@ For more information please visit:  http://bitmagic.io
 #include <vector>
 #include <memory>
 #include <cassert>
+#include <thread>
 
 #include "bm.h"
 #include "bmstrsparsevec.h"
@@ -204,7 +205,18 @@ int main(int argc, char *argv[])
 
             // pipeline object to run the bulk search
             //
-            bm::sparse_vector_scanner<str_sv_type>::pipeline pipe1(*str_sv);
+            bm::sparse_vector_scanner<str_sv_type>::pipeline<> pipe1(*str_sv);
+
+            // batch_size instructs how many searche to run at once
+            // batch_size=0 and this parameter will be identified automatically
+            //
+            // batch size essentially depends on CPU cache size and it is
+            // sometimes difficult to determine without trying.
+            // batch_size=0 will try to use euristics for CPU L2 = 256KB,
+            // it may be "good enough", but for best results it is best
+            // to run trial runs with typical values may be (2 to 20)
+            //
+            pipe1.options().batch_size = test_runs;
             {
                 bm::chrono_taker tt("scanner::pipeline find_eq_str()", test_runs);
 
@@ -230,12 +242,12 @@ int main(int argc, char *argv[])
             // materializing result bit-vectors
             //
 
-            bm::sparse_vector_scanner<str_sv_type>::pipeline pipe2(*str_sv);
+            // pipeline configuration passed via template parameter
+            // instructs to drop results and provide only counts
 
-            // pipeline configuration
-            //
-            pipe2.options().make_results = false; // do not need bit-vectors
-            pipe2.options().compute_counts = true; // need population count
+            bm::sparse_vector_scanner<str_sv_type>::pipeline<bm::agg_opt_only_counts> pipe2(*str_sv);
+            pipe1.options().batch_size = test_runs;
+
             {
                 bm::chrono_taker tt("scanner::pipeline find_eq_str()-count()", test_runs);
 
