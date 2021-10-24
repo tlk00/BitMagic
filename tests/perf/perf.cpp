@@ -3968,7 +3968,7 @@ void SparseVectorPipelineScannerTest()
         } // for
     }
 
-    bm::sparse_vector_scanner<str_svect_type>::pipeline pipe(str_sv);
+    bm::sparse_vector_scanner<str_svect_type>::pipeline<> pipe(str_sv);
     {
         bm::chrono_taker tt("scanner::pipeline find_eq_str()", search_repeats);
 
@@ -3978,13 +3978,10 @@ void SparseVectorPipelineScannerTest()
             pipe.add(str.c_str());
         }
         pipe.complete(); // finish the pipeline construction with this call
-
         scanner.find_eq_str(pipe); // run the search pipeline
     }
 
-    bm::sparse_vector_scanner<str_svect_type>::pipeline pipe2(str_sv);
-    pipe2.options().make_results = false;
-    pipe2.options().compute_counts = true;
+    bm::sparse_vector_scanner<str_svect_type>::pipeline<bm::agg_opt_only_counts> pipe2(str_sv);
     {
         bm::chrono_taker tt("scanner::pipeline find_eq_str()-count()", search_repeats);
 
@@ -3994,7 +3991,6 @@ void SparseVectorPipelineScannerTest()
             pipe2.add(str.c_str());
         }
         pipe2.complete(); // finish the pipeline construction with this call
-
         scanner.find_eq_str(pipe2); // run the search pipeline
     }
 

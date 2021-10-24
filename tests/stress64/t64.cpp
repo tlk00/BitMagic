@@ -18015,7 +18015,7 @@ void TestSparseFindEqStrPipeline()
     cout << "scanner::find_eq_str()  " << d << "ms" << endl;
     }
 
-    bm::sparse_vector_scanner<str_svect_type>::pipeline pipe(str_sv);
+    bm::sparse_vector_scanner<str_svect_type>::pipeline<> pipe(str_sv);
     {
     std::chrono::time_point<std::chrono::steady_clock> s;
     std::chrono::time_point<std::chrono::steady_clock> f;
@@ -18036,9 +18036,7 @@ void TestSparseFindEqStrPipeline()
     cout << "scanner::pipeline:  " << d << "ms" << endl;
     }
 
-    bm::sparse_vector_scanner<str_svect_type>::pipeline pipe2(str_sv);
-    pipe2.options().make_results = false;
-    pipe2.options().compute_counts = true;
+    bm::sparse_vector_scanner<str_svect_type>::pipeline<bm::agg_opt_only_counts> pipe2(str_sv);
     {
     std::chrono::time_point<std::chrono::steady_clock> s;
     std::chrono::time_point<std::chrono::steady_clock> f;
@@ -18058,7 +18056,6 @@ void TestSparseFindEqStrPipeline()
     auto d = std::chrono::duration <double, std::milli> (diff).count();
     cout << "scanner::pipeline::count():  " << d << "ms" << endl;
     }
-
 
     cout << "  validation..." << flush;
     {
