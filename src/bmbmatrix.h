@@ -631,7 +631,7 @@ protected:
 //
 //---------------------------------------------------------------------
 
-#ifdef _MSVC_VER
+#ifdef _MSC_VER
 #pragma warning( push )
 #pragma warning( disable : 4146 )
 #endif
@@ -1825,7 +1825,7 @@ base_sparse_vector<Val, BV, MAX_SIZE>::u2s(unsigned_value_type uv) BMNOEXCEPT
     else
         return uv;
 }
-#ifdef _MSVC_VER
+#ifdef _MSC_VER
 #pragma warning( pop )
 #endif
 
