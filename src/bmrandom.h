@@ -364,7 +364,7 @@ unsigned random_subset<BV>::compute_take_count(
     if (to_take > bc)
         to_take = bc;
     if (!to_take)
-        to_take = sample_count;
+        to_take = unsigned(sample_count);
 
     return to_take;
 }

@@ -1335,6 +1335,7 @@ sparse_vector_scanner<SV>::sparse_vector_scanner()
 template<typename SV>
 void sparse_vector_scanner<SV>::bind(const SV&  sv, bool sorted)
 {
+    (void)sorted; // MSVC warning over if constexpr variable "not-referenced"
     bound_sv_ = &sv;
 
     if constexpr (SV::is_str()) // bindings for the string sparse vector

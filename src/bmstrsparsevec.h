@@ -1242,7 +1242,10 @@ protected:
             this->size_ = idx_to+1;
 
     }
-
+#ifdef _MSVC_VER
+#pragma warning( push )
+#pragma warning( disable : 4146 )
+#endif
     /// @internal
     template<size_t BufSize = ins_buf_size>
     void import_char_slice(const unsigned_value_type* ch_slice,
@@ -1298,7 +1301,9 @@ protected:
             }
         } // for ch_acc
     }
-
+#ifdef _MSVC_VER
+#pragma warning( pop )
+#endif
     // ------------------------------------------------------------
     /*! @name Errors and exceptions                              */
     ///@{

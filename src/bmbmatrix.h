@@ -631,6 +631,11 @@ protected:
 //
 //---------------------------------------------------------------------
 
+#ifdef _MSVC_VER
+#pragma warning( push )
+#pragma warning( disable : 4146 )
+#endif
+
 template<typename BV>
 basic_bmatrix<BV>::basic_bmatrix(size_type rsize,
               allocation_policy_type ap,
@@ -1820,6 +1825,9 @@ base_sparse_vector<Val, BV, MAX_SIZE>::u2s(unsigned_value_type uv) BMNOEXCEPT
     else
         return uv;
 }
+#ifdef _MSVC_VER
+#pragma warning( pop )
+#endif
 
 
 } // namespace

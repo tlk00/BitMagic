@@ -1146,8 +1146,6 @@ void aggregator<BV>::combine_and_sub(TPipe& pipe)
     if (!batch_size)
         batch_size = pipe.compute_run_batch();
 
-    bvect_vector_type& bv_targets_vect = pipe.get_bv_res_vector();
-
     for (size_t batch_from(0), batch_to(0); batch_from < pipe_size;
          batch_from = batch_to)
     {
@@ -1208,6 +1206,8 @@ void aggregator<BV>::combine_and_sub(TPipe& pipe)
                         }
                         else // results requested
                         {
+                            bvect_vector_type& bv_targets_vect =
+                                                pipe.get_bv_res_vector();
                             bvector_type* bv_target = bv_targets_vect[p];
                             if (!bv_target)
                             {
@@ -2499,11 +2499,10 @@ void aggregator<BV>::pipeline<Opt>::complete()
     if (is_complete_)
         return;
 
-    size_t sz = arg_vect_.size();
-
     if constexpr (Opt::is_make_results())
     {
         BM_ASSERT(!bv_res_vect_.size());
+        size_t sz = arg_vect_.size();
         bv_res_vect_.resize(sz);
         bvector_type** bv_arr = bv_res_vect_.data();
         for (size_t i = 0; i < sz; ++i)
@@ -2511,6 +2510,7 @@ void aggregator<BV>::pipeline<Opt>::complete()
     }
     if constexpr (Opt::is_compute_counts())
     {
+        size_t sz = arg_vect_.size();
         count_res_vect_.resize(sz);
         size_type* cnt_arr = count_res_vect_.data();
         ::memset(cnt_arr, 0, sz * sizeof(cnt_arr[0]));
@@ -2569,7 +2569,7 @@ void aggregator<BV>::pipeline<Opt>::complete_arg_sub_group(
 
     for (size_t k = 0; k < size; ++k)
     {
-        bool found(false); size_t bv_idx;
+        bool found(false); size_t bv_idx(0);
         const bvector_type* bv = bv_src[k];
         if (bv)
         {
