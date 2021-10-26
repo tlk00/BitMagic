@@ -1910,8 +1910,8 @@ void sse42_bit_block_xor_2way(bm::word_t* target_block,
 #define VECT_AND_DIGEST(dst, src) \
     sse4_and_digest((__m128i*) dst, (const __m128i*) (src))
 
-#define VECT_AND_OR_DIGEST(dst, src) \
-    sse4_and_or_digest((__m128i*) dst, (const __m128i*) (src))
+#define VECT_AND_OR_DIGEST_2WAY(dst, src1, src2) \
+    sse4_and_or_digest_2way((__m128i*) dst, (const __m128i*) (src1), (const __m128i*) (src2))
 
 #define VECT_AND_DIGEST_5WAY(dst, src1, src2, src3, src4) \
     sse4_and_digest_5way((__m128i*) dst, (const __m128i*) (src1), (const __m128i*) (src2), (const __m128i*) (src3), (const __m128i*) (src4))

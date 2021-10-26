@@ -6511,12 +6511,9 @@ bool bvector<Alloc>::combine_operation_block_and_or(unsigned i,
 
     // 2 bit-blocks
     //
-    //bm::id64_t digest =
-    bm::bit_block_and_or_2way(blk, arg_blk1, arg_blk2, ~0ull);
-//    if (!digest)
-//    {
-//    }
-
+    bm::id64_t digest =
+        bm::bit_block_and_or_2way(blk, arg_blk1, arg_blk2, ~0ull);
+    (void) digest;
     return true; // optimization may be needed
 }
 
