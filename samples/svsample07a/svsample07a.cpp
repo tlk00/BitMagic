@@ -33,6 +33,7 @@ For more information please visit:  http://bitmagic.io
     \brief Example: sparse_vector<>  search
 */
 
+#include <assert.h>
 #include <iostream>
 #include <vector>
 #include <chrono>
