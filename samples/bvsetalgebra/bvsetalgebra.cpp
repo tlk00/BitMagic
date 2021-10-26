@@ -47,9 +47,9 @@ For more information please visit:  http://bitmagic.io
 */
 
 
+#include <assert.h>
 #include <iostream>
 #include <vector>
-
 
 #include "bm.h"
 #include "bmalgo.h"
@@ -252,7 +252,7 @@ void DemoAND()
         print_bvector(bv_T); // 1, 2
     }
 
-    // bit-vector set union operation (opcode interpeter mode)
+    // bit-vector set intesect operation (opcode interpeter mode)
     // maybe useful for building query interpetors
     {
         bm::bvector<>   bv_A { 1, 2, 3 };
