@@ -1189,7 +1189,7 @@ void aggregator<BV>::combine_and_sub(TPipe& pipe)
                                 pipe.bv_or_target_->get_blocks_manager();
                             const bm::word_t* arg_blk =
                                 (is_res_full) ? (bm::word_t*)FULL_BLOCK_FAKE_ADDR
-                                              : arg_blk = tb_ar_->tb1;
+                                              : tb_ar_->tb1;
                             bman.check_alloc_top_subblock(i);
                             bm::word_t* blk = bman.get_block_ptr(i, j);
                             pipe.bv_or_target_->combine_operation_block_or(
