@@ -9629,6 +9629,70 @@ void AggregatorTest()
             }
 
             {
+                bvect bv_res { 0 };
+                bv_res.optimize();
+
+                bm::aggregator<bvect>::pipeline<bm::agg_opt_disable_bvects_and_counts> agg_pipe;
+                {
+                    bm::aggregator<bvect>::arg_groups* args = agg_pipe.add();
+                    args->add(&bv0, 0); // AND
+                    args->add(&bv1, 0);
+
+                    args = agg_pipe.add();
+                    args->add(&bv0, 0); // AND
+                    args->add(&bv2, 0);
+                }
+                agg_pipe.set_or_target(&bv_res);
+
+                agg_pipe.complete();
+
+                agg.combine_and_sub(agg_pipe);
+
+                auto& res_vect = agg_pipe.get_bv_res_vector();
+                assert(res_vect.size()==0);
+                const auto& res_cnt = agg_pipe.get_bv_count_vector();
+                assert(res_cnt.size()==0);
+
+                auto cnt = bv_res.count();
+                assert(bv_res.test(0));
+                assert(cnt == 3);
+
+            }
+
+            {
+                bvect bv_res;
+                bv_res.invert();
+
+                bm::aggregator<bvect>::pipeline<bm::agg_opt_disable_bvects_and_counts> agg_pipe;
+                {
+                    bm::aggregator<bvect>::arg_groups* args = agg_pipe.add();
+                    args->add(&bv0, 0); // AND
+                    args->add(&bv1, 0);
+
+                    args = agg_pipe.add();
+                    args->add(&bv0, 0); // AND
+                    args->add(&bv2, 0);
+                }
+                agg_pipe.set_or_target(&bv_res);
+
+                agg_pipe.complete();
+
+                agg.combine_and_sub(agg_pipe);
+
+                auto& res_vect = agg_pipe.get_bv_res_vector();
+                assert(res_vect.size()==0);
+                const auto& res_cnt = agg_pipe.get_bv_count_vector();
+                assert(res_cnt.size()==0);
+
+                bvect bv_control;
+                bv_control.invert();
+
+                bool b = bv_control.equal(bv_res);
+                assert(b);
+            }
+
+
+            {
                 bm::aggregator<bvect>::pipeline<bm::agg_opt_bvect_and_counts> agg_pipe;
 
                 {
@@ -9734,9 +9798,8 @@ void AggregatorTest()
                     auto c = res_cnt[i];
                     assert(c == 0);
                 }
-                auto gch = agg.get_cache_gap_hits();
-                assert(gch == 0);
-
+                auto gch = agg.get_cache_gap_hits(); (void) gch;
+                //assert(gch == 0);
             }
         }
 
@@ -10147,6 +10210,72 @@ void StressTestAggregatorAND(unsigned repetitions)
         FillSetsRandomMethod(&bvect_min1, &bv9, start2, size, opt);
         
         bm::aggregator<bvect> agg;
+
+
+        {
+            bm::aggregator<bvect>::pipeline<> agg_pipe;
+            bvect bv_res;
+            {
+                bm::aggregator<bvect>::arg_groups* args = agg_pipe.add();
+                args->add(&bv1, 0); // AND
+                args->add(&bv2, 0);
+
+                args = agg_pipe.add();
+                args->add(&bv5, 0); // AND
+                args->add(&bv6, 0);
+                args->add(&bv7, 0);
+
+                args = agg_pipe.add();
+                args->add(&bv7, 0);
+                args->add(&bv8, 0);
+                args->add(&bv9, 0);
+            }
+            agg_pipe.set_or_target(&bv_res);
+            agg_pipe.complete();
+
+            agg.combine_and_sub(agg_pipe);
+
+            auto& res_vect = agg_pipe.get_bv_res_vector();
+            assert(res_vect.size()==3);
+
+            bool b;
+            {
+                const bvect* bvIp = res_vect[0];
+                bvect bv1c;
+                bv1c.bit_and(bv1, bv2);
+                if (bvIp)
+                    b = bvIp->equal(bv1c);
+                else
+                    b = !bv1c.any();
+                assert(b);
+
+            }
+            {
+                const bvect* bvIp = res_vect[1];
+                bvect bv1c;
+                bv1c.bit_and(bv5, bv6);
+                bv1c.bit_and(bv7);
+
+                if (bvIp)
+                    b = bvIp->equal(bv1c);
+                else
+                    b = !bv1c.any();
+                assert(b);
+            }
+            {
+                const bvect* bvIp = res_vect[2];
+                bvect bv1c;
+                bv1c.bit_and(bv8, bv9);
+                bv1c.bit_and(bv7);
+
+                if (bvIp)
+                    b = bvIp->equal(bv1c);
+                else
+                    b = !bv1c.any();
+                assert(b);
+            }
+        }
+
         agg.set_optimization();
         
         bvect* agg_list[32] = {0, };
@@ -10256,6 +10385,167 @@ void StressTestAggregatorAND(unsigned repetitions)
     } // for i
 
   cout << "---------------------------- Aggregator AND Stress Test OK" << endl;
+}
+
+
+
+static
+void StressTestAggregatorAND_SUB(unsigned repetitions)
+{
+  cout << "---------------------------- Aggregator AND-SUB Stress Test" << endl;
+   unsigned size = BITVECT_SIZE - 10;
+    bm::random_subset<bvect> rsub;
+
+    unsigned i;
+    for (i = 0; i < repetitions; ++i)
+    {
+        int opt = rand() % 2;
+        cout << endl << " - - - - - - - - - - - - AGG AND-SUB STRESS STEP " << i << endl;;
+
+        switch (rand() % 3)
+        {
+        case 0:
+            size = BITVECT_SIZE / 10;
+            break;
+        case 1:
+            size = BITVECT_SIZE / 2;
+            break;
+        default:
+            size = BITVECT_SIZE - 10;
+            break;
+        } // switch
+
+        unsigned start1 = 0;
+        switch (rand() % 3)
+        {
+        case 1:
+            start1 += size / 5;
+            break;
+        default:
+            break;
+        }
+
+        unsigned start2 = 0;
+        switch (rand() % 3)
+        {
+        case 1:
+            start2 += size / 5;
+            break;
+        default:
+            break;
+        }
+
+        bvect_mini   bvect_min1(size);
+        bvect bv0, bv1, bv2, bv3, bv4, bv5, bv6, bv7, bv8, bv9;
+
+        // 0 skipped
+        FillSetsRandomMethod(&bvect_min1, &bv1, start1, size, opt);
+        FillSetsRandomMethod(&bvect_min1, &bv2, start2, size, opt);
+
+        auto cnt1 = bv1.count();
+        auto cnt2 = bv2.count();
+        bvect::size_type sample_size = (cnt1+cnt2)/2;
+
+        rsub.sample(bv3, bv1, sample_size);
+        bv3.optimize();
+        rsub.sample(bv4, bv1, sample_size);
+        rsub.sample(bv5, bv1, sample_size);
+
+        rsub.sample(bv6, bv2, sample_size);
+        rsub.sample(bv7, bv2, sample_size);
+        bv7.optimize();
+
+        bv8 = bv1;
+        bv9 = bv2;
+
+        bvect bv_full;
+        bv_full.invert();
+
+        bm::aggregator<bvect> agg;
+
+        bvect bv_target1;//, bv_target2;
+        {
+            bvect* agg_list_and[32] = {0, };
+            bvect* agg_list_sub[32] = {0, };
+            agg_list_and[0] = &bv2;
+            agg_list_and[1] = &bv3;
+            agg_list_and[2] = &bv_full; // irrelevant
+
+            agg_list_sub[0] = &bv6;
+            agg_list_sub[1] = &bv7;
+
+            agg.combine_and_sub(bv_target1,
+                                agg_list_and, 3, agg_list_sub, 2, false);
+        }
+
+        {
+            bm::aggregator<bvect>::pipeline<> agg_pipe;
+            bvect bv_res;
+            {
+                bm::aggregator<bvect>::arg_groups* args = agg_pipe.add();
+                args->add(&bv1, 0); // AND
+                args->add(&bv3, 0);
+                args->add(&bv8, 1); // SUB bv1
+                args->add(&bv2, 1); // irrelevant arg
+
+                args = agg_pipe.add();
+                args->add(&bv2, 0); // AND
+                args->add(&bv3, 0);
+                args->add(&bv6, 1); // SUB
+                args->add(&bv7, 1);
+
+                args = agg_pipe.add();
+                args->add(&bv7, 0);
+                args->add(&bv8, 0);
+                args->add(&bv9, 0); // AND bv2
+                args->add(&bv9, 1); // SUB bv2
+            }
+            agg_pipe.set_or_target(&bv0);
+            agg_pipe.complete();
+
+            agg.combine_and_sub(agg_pipe);
+
+            auto& res_vect = agg_pipe.get_bv_res_vector();
+            assert(res_vect.size()==3);
+
+            bool b;
+            {
+                const bvect* bvIp = res_vect[0];
+                assert(bvIp == 0);
+            }
+            {
+                const bvect* bvIp = res_vect[1];
+                bvect bv1c;
+                bv1c.bit_and(bv2, bv3);
+                bv1c.bit_sub(bv6);
+                bv1c.bit_sub(bv7);
+
+                if (bvIp)
+                {
+                    b = bvIp->equal(bv1c);
+                    assert(b);
+                    bool b2 = bvIp->equal(bv0);
+                    assert(b2);
+                    bool b3 = bvIp->equal(bv_target1);
+                    assert(b3);
+                }
+                else
+                {
+                    b = !bv1c.any();
+                    assert(b);
+                }
+
+            }
+            {
+                const bvect* bvIp = res_vect[2];
+                assert(bvIp == 0);
+            }
+        }
+
+
+    } // for i
+
+  cout << "---------------------------- Aggregator AND-SUB Stress Test OK" << endl;
 }
 
 
@@ -34861,7 +35151,7 @@ int main(int argc, char *argv[])
          StressTestAggregatorShiftAND(5);
          CheckAllocLeaks(false);
 
-    //     StressTestAggregatorSUB(100);
+         StressTestAggregatorAND_SUB(100);
     }
 #ifdef MEM_DEBUG
     {

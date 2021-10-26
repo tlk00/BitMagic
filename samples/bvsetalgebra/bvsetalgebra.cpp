@@ -507,6 +507,96 @@ void DemoSUB()
 }
 
 // -------------------------------------------------------------
+// Demo for Set Intersect (AND) operations fused with OR
+//
+static
+void DemoAND_OR()
+{
+    // bit-vector set intersect with fused OR: bv_R |= bv_A & bv_B
+    {
+        bm::bvector<>   bv_R { 0, 5 };
+
+        bm::bvector<>   bv_A { 1, 2, 3 };
+        bm::bvector<>   bv_B { 1, 2, 4 };
+        bv_R.bit_and_or(bv_A, bv_B);
+
+        print_bvector(bv_R); // 0, 1, 2, 5
+    }
+
+    // same, but sizes are set, observe size gets extended up
+    {
+        bm::bvector<>   bv_R { 0, 5 };
+        bv_R.resize(12);
+
+        bm::bvector<>   bv_A { 1, 2, 3 };
+        bm::bvector<>   bv_B { 1, 2, 4 };
+        bv_A.resize(5);
+        bv_B.resize(10);
+
+        bv_R.bit_and_or(bv_A, bv_B);
+
+        print_bvector(bv_R); // 0, 1, 2, 5 (size = 12)
+    }
+
+    // AND OR with aggregator pipeline
+
+    bm::aggregator<bm::bvector<> > agg;
+
+    // Aggregator pipeline can efficiently run a group of AND (or AND-SUB)
+    // operations on bit-vectors, assuming that groups of ANDs are comprised
+    // of essentially the same super-set of vectors which are going to be
+    // reused (cached) by the CPU, thus run more efficintly
+    //
+    // In this case pipeline is configured to ignore the sub-results of AND
+    // operations and just UNION all set-results into a target bit-vector
+    // (logical OR)
+    //
+    // The formula here is:
+    // bv_TARGET = bv_TARGET OR (BV1 AND BV2) OR (BV1 & BV3) & (BV2 & BV3)
+    //
+    // This pipeline configuration avoids allocations of temporary vectors
+    // and CPU cache-friendly (thus fast)
+    //
+    bm::aggregator<bm::bvector<> >::pipeline<bm::agg_opt_disable_bvects_and_counts> agg_pipe;
+
+    bm::bvector<>   bv_T { 0, 65536 };
+
+    bm::bvector<>   bv_A { 1, 2, 3 };
+    bm::bvector<>   bv_B { 1, 2  };
+    bm::bvector<>   bv_C { 2, 3, 256  };
+
+    // feed input queries into pipeline
+    {
+        bm::aggregator<bm::bvector<> >::arg_groups* args;
+
+        // Define AND group 1 as: (A & B)
+        args = agg_pipe.add();
+        args->add(&bv_A, 0); // 0 - means AND arg group
+        args->add(&bv_B, 0);
+
+        // Define AND group 2 as: (B & C)
+        args = agg_pipe.add();
+        args->add(&bv_B, 0);
+        args->add(&bv_C, 0);
+    }
+
+    // T |= (A & B) | (B & C)
+    //
+    agg_pipe.set_or_target(&bv_T);
+
+    agg_pipe.complete(); // finish the pipeline configuration
+
+    // We use AND-MINUS operation but since we did not add any subtraction
+    // vectors the result will be just AND
+    //
+    agg.combine_and_sub(agg_pipe); // T |= (A & B) | (B & C)
+
+    print_bvector(bv_T); // 0, 1, 2, 65536
+}
+
+
+
+// -------------------------------------------------------------
 // Demo for Set Invert (NOT)
 //
 static
@@ -540,21 +630,22 @@ void DemoINV()
 static
 void DemoAND_SUB()
 {
+    bm::aggregator<bm::bvector<> > agg;
+
     // Operation on two groups of vectors using aggregator
     // 1. Group 0 - find common subset (Set Intersect / AND)
     // 2. Group 1 - find union (OR) of the group and SUBtract it from #1
     //
     // target := (A AND D AND ...) AND NOT (B OR C OR ...)
     //
+    bm::bvector<>    bv_A { 1, 2, 3, 4 };
+    bm::bvector<>    bv_B { 1, 2 };
+    bm::bvector<>    bv_C { 1, 2, 4 };
+    bm::bvector<>    bv_D { 0, 2, 3, 4, 5 };
+
     {
         bm::bvector<>    bv_T; // target vector
-        
-        bm::bvector<>    bv_A { 1, 2, 3, 4 };
-        bm::bvector<>    bv_B { 1, 2 };
-        bm::bvector<>    bv_C { 1, 2, 4 };
-        bm::bvector<>    bv_D { 0, 2, 3, 4, 5 };
-        
-        bm::aggregator<bm::bvector<> > agg;
+
         agg.set_optimization(); // perform on-the-fly optimization of result
         
         // here we are really using AND SUB operation
@@ -572,6 +663,83 @@ void DemoAND_SUB()
         
         print_bvector(bv_T); // 3
     }
+
+    cout << endl;
+
+    // Next example shows how to run a group of AND-SUB queries
+    // using aggregator::pipeline
+    //
+    // Pipeline runs multiple search formulas, consiting of essentially the
+    // same super-set bit-vectors (vectors are re-used).
+    // This reuse opens an oppotinity to run groups of queries faster
+    // because of CPU cache reuse
+    //
+    {
+        // default pipeline configuration will produce intermediate results
+        // for all pipeline searches
+        //
+        bm::aggregator<bm::bvector<> >::pipeline<> agg_pipe;
+        bm::bvector<> bv_T;
+
+        // Configure 3 different AND-SUB queries based on the same set of vectors
+        //
+        // Note that if we don't add SUBtraction vectors it will work just as
+        // AND formula (AND_SET MINUS empty_set == AND_SET)
+        {
+            bm::aggregator<bm::bvector<> >::arg_groups* args;
+
+            args = agg_pipe.add();
+            // T1 := (A AND B) MINUS D
+            args->add(&bv_A, 0); // 0 - means AND arg group
+            args->add(&bv_B, 0);
+            args->add(&bv_D, 1); // 1 - means SUB arg group
+
+            // T2 := (A AND D) MINUS B
+            args = agg_pipe.add();
+            args->add(&bv_A, 0);
+            args->add(&bv_D, 0);
+            args->add(&bv_B, 1); // 1 - means SUB arg group
+
+            // T3 := D MINUS (C OR B)
+            // or
+            // T3 := (D AND NOT C) OR (D AND NOT B)
+            args = agg_pipe.add();
+            args->add(&bv_D, 0);
+            args->add(&bv_C, 1); // 1 - means SUB arg group
+            args->add(&bv_B, 1);
+        }
+        // this is optional, pipeline can run OR aggregate (UNION ALL)
+        // on all searches in the pipeline
+        //
+        // T = T OR T1 OR T2 OR T3
+        //
+        agg_pipe.set_or_target(&bv_T);
+
+        agg_pipe.complete(); // finish the configuration
+
+        agg.combine_and_sub(agg_pipe); // run the pipeline search
+
+        // now we iterate the results and print it all
+        // we expect 3 output vectors, one for each pipeline AND-SUB group
+        //
+        auto& res_vect = agg_pipe.get_bv_res_vector();
+        assert(res_vect.size()==3); // we expect 3 results
+        for (size_t i = 0; i < res_vect.size(); ++i)
+        {
+            const bm::bvector<>* bv = res_vect[i];
+            if (bv)
+                print_bvector(*bv); // 1
+                                    // 3, 4
+                                    // 0, 3, 5
+            else
+                cout << "Empty result" << endl; // possible outcome as a "not found"
+        } // for i
+
+        // OR target contains the UNION of all pipeline AND-SUB searches
+        //
+        print_bvector(bv_T); // 0, 1, 3, 4, 5,
+    }
+
 }
 
 
@@ -597,6 +765,9 @@ int main(void)
         
         cout << endl << "Set AND-SUB demo" << endl << endl;
         DemoAND_SUB();
+
+        cout << endl << "Set AND-OR demo" << endl << endl;
+        DemoAND_OR();
     }
     catch(std::exception& ex)
     {
