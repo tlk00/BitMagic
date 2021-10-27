@@ -289,6 +289,7 @@ int main(int argc, char *argv[])
                     assert(match);
                     auto c = cnt_vect[i];
                     auto cnt = bv->count();
+                    (void)cnt; (void)c; // to silence unused warnings (relese)
                     assert(cnt == c); // check if counts match
                 }
             }
