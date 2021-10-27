@@ -190,7 +190,7 @@ void TestTaskDescr()
         td.init([](void*) { return 3; }, nullptr);
         td.run();
         assert(td.done == 1);
-        assert(td.err_code = 3);
+        assert(td.err_code == 3);
     }
 
     {
