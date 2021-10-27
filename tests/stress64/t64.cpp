@@ -9541,7 +9541,7 @@ void CheckBV_AND_OR(BV& bv_target, const BV& bv1, const BV& bv2)
     if (f)
     {
         cerr << "AND-OR Mismatch at:" << pos << endl;
-        unsigned nb = (pos >> bm::set_block_shift);
+        unsigned nb = unsigned(pos >> bm::set_block_shift);
         unsigned i,j;
         bm::get_block_coord(nb, i, j);
         cout << "nb=" << nb << " i=" << i << " j=" << j << endl;
