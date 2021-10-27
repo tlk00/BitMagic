@@ -190,7 +190,7 @@ private:
         unsigned arr_size = BM_MINISET_ARRSIZE(N);
         bm::word_t* buf = A::allocate(arr_size, 0);
 
-        gap_convert_to_bitset(buf, (gap_word_t*) m_buf, arr_size);
+        gap_convert_to_bitset(buf, (gap_word_t*) m_buf/*, arr_size*/);
         arr_size = 
             unsigned(BM_MINISET_GAPLEN / (sizeof(bm::word_t) / sizeof(bm::gap_word_t)));
         A::deallocate(m_buf, arr_size);
