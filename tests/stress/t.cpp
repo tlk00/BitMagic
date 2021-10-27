@@ -8166,8 +8166,9 @@ void XorOperationsTest(bool detailed)
 
 
 static
-void GenerateRandomKleenVect(bvect& bv_v, bvect& bv_null, size_t size,
-                            size_t sparse_factor = 0)
+void GenerateRandomKleenVect(bvect& bv_v, bvect& bv_null,
+                             bvect::size_type size,
+                             size_t sparse_factor = 0)
 {
     int v = -1;
     ++sparse_factor;
@@ -34914,6 +34915,7 @@ int main(int argc, char *argv[])
     
     if (is_all || is_support)
     {
+
         TestHeapVector();
          CheckAllocLeaks(false);
 
