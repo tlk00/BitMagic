@@ -1158,7 +1158,8 @@ void aggregator<BV>::combine_and_sub(TPipe& pipe)
         {
             for (unsigned j = 0; j < bm::set_sub_array_size; ++j)
             {
-                for (size_t p = batch_from; p < batch_to; ++p)
+                size_t p = batch_from;
+                for (; p < batch_to; ++p)
                 {
                     const arg_groups* ag = pipe_args[p];
                     size_t src_and_size = ag->arg_bv0.size();
@@ -1242,6 +1243,15 @@ void aggregator<BV>::combine_and_sub(TPipe& pipe)
                         }
                     } // if
                 } // for p
+                // optimize OR target to save memory
+                if (pipe.bv_or_target_ && p == pipe_size) // last batch is done
+                {
+                    blocks_manager_type& bman =
+                        pipe.bv_or_target_->get_blocks_manager();
+                    if (bm::word_t* blk = bman.get_block_ptr(i, j))
+                        bman.optimize_block(i, j, blk,
+                            tb_ar_->tb_opt, bvector_type::opt_compress, 0);
+                }
             } // for j
         } // for i
     } // for batch
