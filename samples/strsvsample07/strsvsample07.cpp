@@ -268,6 +268,8 @@ int main(int argc, char *argv[])
             // we now get access to it
             //
 
+            bvector_type bv_or_total;
+
             {
                 // please note that returned buffer results vectors are NOT STL
                 // vector<> type, but a thin wrapper over C style objects
@@ -291,8 +293,47 @@ int main(int argc, char *argv[])
                     auto cnt = bv->count();
                     (void)cnt; (void)c; // to silence unused warnings (relese)
                     assert(cnt == c); // check if counts match
+
+                    bv_or_total |= *bv; // accumulate OR
                 }
             }
+
+            // Here we define a csutom pipeline run policy which disables
+            // both intermediate results and population counting for it...
+            //
+            // instead it aggregates the results into one UNION ALL (OR) vector
+            // which simulates a huge
+            // field1 IN ('value1', 'value2', 'value3', .... ) SQL expression
+            //
+
+            typedef bm::agg_run_options<false, false> scanner_custom_opt;
+            bm::sparse_vector_scanner<str_sv_type>::pipeline<scanner_custom_opt> pipe3(*str_sv);
+            pipe1.options().batch_size = test_runs;
+
+            bvector_type bv_or;
+            pipe3.set_or_target(&bv_or); // Assign OR aggregation target
+
+            {
+                bm::chrono_taker tt("scanner::pipeline find_eq_str()-OR()", test_runs);
+
+                for (size_t i = 0; i < test_runs; ++i)
+                {
+                    const string& str = str_test_coll[i];
+                    pipe3.add(str.c_str());
+                }
+                pipe3.complete(); // finish the pipeline construction with this call
+
+                scanner.find_eq_str(pipe3); // run the search pipeline
+            }
+            bool match = bv_or.equal(bv_or_total);
+            if (!match)
+            {
+                cerr << "OR vector mismatch!" << endl;
+                exit(1);
+            }
+
+
+
 
             cout << endl;
 
