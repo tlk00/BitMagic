@@ -1529,6 +1529,12 @@ public:
         \brief Returns true if no bits are set, otherwise returns false.
     */
     bool none() const BMNOEXCEPT { return !any(); }
+
+    /**
+        \brief Returns true if the set is empty (no bits are set, otherwise returns false)
+        Please note that this is NOT a size check, it is an empty SET check (absense of 1s)
+     */
+    bool empty() const BMNOEXCEPT { return !any(); }
     
     //@}
     // --------------------------------------------------------------------
