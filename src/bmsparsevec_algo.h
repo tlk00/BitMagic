@@ -550,6 +550,13 @@ public:
         const run_options& get_options() const BMNOEXCEPT
             { return agg_pipe_.options(); }
 
+        /**
+            Attach OR (aggregator vector).
+            Pipeline results all will be OR-ed (UNION) into the OR target vector
+           @param bv_or - OR target vector
+         */
+        void set_or_target(bvector_type* bv_or) BMNOEXCEPT
+            { agg_pipe_.set_or_target(bv_or); }
 
         /*! @name pipeline fill-in methods */
         //@{
