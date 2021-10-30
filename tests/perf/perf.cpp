@@ -1621,6 +1621,54 @@ void AndTest()
 }
 
 static
+void AndOrTest()
+{
+    bvect bv_res1, bv_res2;
+    bvect*  bv1 = new bvect();
+    test_bitset*  bset1 = new test_bitset();
+    test_bitset*  bset2 = new test_bitset();
+    bvect*  bv2 = new bvect();
+    unsigned i;
+    //unsigned value = 0;
+
+    SimpleFillSets(bset1, *bv1, 0, BSIZE, 100);
+    SimpleFillSets(bset1, *bv2, 0, BSIZE, 100);
+
+    {
+    bm::chrono_taker tt("AND+OR bvector test", REPEATS*4);
+    for (i = 0; i < REPEATS*4; ++i)
+    {
+        bvect bv;
+        bv.bit_and(*bv1, *bv2);
+        bv_res1 |= bv;
+    }
+    }
+
+    {
+    bm::chrono_taker tt("AND+OR(fused) bvector test", REPEATS*4);
+    for (i = 0; i < REPEATS*4; ++i)
+    {
+        bv_res2.bit_and_or(*bv1, *bv2);
+    }
+    }
+
+    bool b = bv_res1.equal(bv_res2);
+    if (!b)
+    {
+        cerr << "AND-OR test failed!" << endl;
+        exit(1);
+    }
+
+
+    delete bv1;
+    delete bv2;
+
+    delete bset1;
+    delete bset2;
+}
+
+
+static
 void XorTest()
 {
     bvect*  bv1 = new bvect();
@@ -3994,6 +4042,7 @@ void SparseVectorPipelineScannerTest()
         scanner.find_eq_str(pipe2); // run the search pipeline
     }
 
+    bvect bv_or_acc;
     {
         auto& res_vect = pipe.get_bv_res_vector();
         auto& cnt_vect = pipe2.get_bv_count_vector();
@@ -4008,6 +4057,73 @@ void SparseVectorPipelineScannerTest()
             auto c = cnt_vect[i];
             auto cnt = bv->count();
             assert(cnt == c);
+            bv_or_acc |= *bv;
+        }
+    }
+
+    bvect bv_or;
+    typedef bm::agg_run_options<false, false> scanner_custom_opt;
+    bm::sparse_vector_scanner<str_svect_type>::pipeline<scanner_custom_opt> pipe3(str_sv);
+    {
+        bm::chrono_taker tt("scanner::pipeline find_eq_str()-OR", search_repeats);
+        pipe3.set_or_target(&bv_or); // Assign OR aggregation target
+
+        for (bvect::size_type i = 0; i < test_runs; ++i)
+        {
+            const string& str = str_test_coll[i];
+            pipe3.add(str.c_str());
+        }
+        pipe3.complete(); // finish the pipeline construction with this call
+        scanner.find_eq_str(pipe3); // run the search pipeline
+    }
+    bool match = bv_or.equal(bv_or_acc);
+    if (!match)
+    {
+        cerr << "scanner::pipeline<>-OR vector mismatch!" << endl;
+        assert(0);
+        exit(1);
+    }
+
+    bv_or.clear(true);
+
+    typedef bm::agg_run_options<false, true> scanner_custom_opt4;
+    bm::sparse_vector_scanner<str_svect_type>::pipeline<scanner_custom_opt4> pipe4(str_sv);
+    {
+        bm::chrono_taker tt("scanner::pipeline find_eq_str()-count-OR", search_repeats);
+        pipe4.set_or_target(&bv_or); // Assign OR aggregation target
+
+        for (bvect::size_type i = 0; i < test_runs; ++i)
+        {
+            const string& str = str_test_coll[i];
+            pipe4.add(str.c_str());
+        }
+        pipe4.complete(); // finish the pipeline construction with this call
+        scanner.find_eq_str(pipe4); // run the search pipeline
+    }
+
+    match = bv_or.equal(bv_or_acc);
+    if (!match)
+    {
+        cerr << "scanner::pipeline<>-count-OR vector mismatch!" << endl;
+        assert(0);
+        exit(1);
+    }
+
+    {
+        auto& res_vect = pipe.get_bv_res_vector();
+        auto& cnt_vect = pipe4.get_bv_count_vector();
+
+        for (size_t i = 0; i < res_vect.size(); ++i)
+        {
+            const bvect* bv1 = res_vec1[i].get();
+            auto c = cnt_vect[i];
+            auto cnt = bv1->count();
+            assert(cnt == c);
+            if (cnt != c)
+            {
+                cerr << "Failed count check!" << endl;
+                exit(1);
+            }
         }
     }
 
@@ -4524,6 +4640,8 @@ int main(void)
         AndTest();
         XorTest();
         SubTest();
+
+        AndOrTest();
         cout << endl;
 
         InvertTest();
