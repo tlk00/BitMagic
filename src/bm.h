@@ -5173,11 +5173,8 @@ bool bvector<Alloc>::test_first_block_bit(block_idx_type nb) const BMNOEXCEPT
 template<class Alloc>
 void bvector<Alloc>::merge(bm::bvector<Alloc>& bv)
 {
-    if (!bv.blockman_.is_init())
-    {
-        this->move_from(bv);
+    if (!bv.blockman_.is_init()) // nothing to OR
         return;
-    }
 
     unsigned top_blocks = blockman_.top_block_size();
     if (size_ < bv.size_) // this vect shorter than the arg.
