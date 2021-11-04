@@ -25072,6 +25072,37 @@ void TestSparseVectorTransform()
     cout << " --------------- Test set transformation with sparse vector OK" << endl;
 }
 
+template<class SV>
+void CheckGTSearch(const SV& sv, typename SV::value_type v,
+                   bm::sparse_vector_scanner<SV>& scanner)
+{
+    bvect bv_res, bv_control;
+    scanner.find_gt_horizontal(sv, v, bv_res);
+
+    auto it = sv.begin();
+    auto it_end = sv.end();
+    for (typename SV::size_type i(0); it != it_end; ++it, ++i)
+    {
+        if (!it.is_null())
+        {
+            auto v1 = *it;
+            if (v1 > v)
+                bv_control.set(i);
+        }
+    } // for
+    bool eq = bv_res.equal(bv_control);
+    if (!eq)
+    {
+        cout << "result for v >=" << v << " :" << endl;
+        print_bv(bv_res);
+        bv_res ^= bv_control;
+        cout << "diff=" << endl;
+        print_bv(bv_res);
+        assert(eq);exit(1);
+    }
+}
+
+
 static
 void TestSparseVectorScan()
 {
@@ -25209,7 +25240,7 @@ void TestSparseVectorScan()
                 }
             }
             csv.load_from(sv);
-            
+
             scanner.find_eq(sv, value, bv_control);
             unsigned found = bv_control.count();
             
@@ -25300,6 +25331,311 @@ void TestSparseVectorScan()
     
     cout << " \n--------------- Test sparse_vector<> scan algo OK" << endl;
 }
+
+
+static
+void TestSparseVectorScanGT()
+{
+    cout << " --------------- Test sparse_vector<> scan algo TestSparseVectorScanGT()" << endl;
+
+    bm::sparse_vector_scanner<sparse_vector_u32> scanner;
+    {
+        sparse_vector_u32 sv(bm::use_null);
+        sv.push_back(1);
+        sv.push_back(8);
+        sv.push_back(8+7);
+        sv.push_back(8+1);
+        sv.push_back(16);
+
+        bvect bv_res;
+        bool b;
+        scanner.find_gt_horizontal(sv, 0, bv_res);
+        b = bv_res.empty();
+        assert(!b);
+        CheckGTSearch(sv, 0, scanner);
+
+        sv.push_back(0);
+
+        for (int pass = 0; pass < 2; ++pass)
+        {
+            scanner.find_gt_horizontal(sv, 0, bv_res);
+            auto cnt = bv_res.count();
+            assert(cnt == 5);
+            assert(!bv_res.test(5));
+
+            scanner.find_gt_horizontal(sv, 256, bv_res);
+            cnt = bv_res.count();
+            assert(cnt == 0);
+
+            scanner.find_gt_horizontal(sv, 255, bv_res);
+            cnt = bv_res.count();
+            assert(cnt == 0);
+
+
+            auto it = sv.begin();
+            auto it_end = sv.end();
+            for (; it != it_end; ++it)
+            {
+                if (!it.is_null())
+                {
+                    auto v1 = *it;
+                    CheckGTSearch(sv, v1, scanner);
+                }
+            } // for
+            sv.optimize();
+        } // pass
+
+    }
+
+
+    {
+        sparse_vector_u32 sv(bm::use_null);
+        sv.push_back_null(); // 0
+        sv.push_back(1);
+        sv.push_back(8);     // 2
+        sv.push_back(8+7);
+        sv.push_back(8+1);   // 4
+        sv.push_back_null(); // 5
+        sv.push_back(16);
+        sv.push_back(0);     // 7
+        sv.push_back_null(); // 8
+
+        for (int pass = 0; pass < 2; ++pass)
+        {
+            auto it = sv.begin();
+            auto it_end = sv.end();
+            for (; it != it_end; ++it)
+            {
+                if (!it.is_null())
+                {
+                    auto v1 = *it;
+                    CheckGTSearch(sv, v1, scanner);
+                }
+            } // for
+            sv.optimize();
+        } // pass
+
+    }
+
+
+    {
+        cout <<  "GT-Unique search check" << endl;
+
+        sparse_vector_u32 sv(bm::use_null);
+        unsigned sv_size = 1256000;
+        {
+            sparse_vector_u32::back_insert_iterator bi(sv.get_back_inserter());
+            for (unsigned j = 0; j < sv_size; ++j)
+                *bi = j;
+            bi.flush();
+        }
+
+        // not found tests
+        for (bvect::size_type j = sv_size; j < sv_size+1024*10; ++j)
+        {
+            bvect bv_res;
+            scanner.find_gt_horizontal(sv, j, bv_res);
+            bool b = bv_res.empty();
+            assert(b);
+        } // for
+
+        for (bvect::size_type j = 0; j < sv_size; ++j)
+        {
+            {
+                bvect bv_res, bv_control;
+                scanner.find_gt_horizontal(sv, j, bv_res);
+                if (j == sv_size-1)
+                {
+                    bool b = bv_res.empty();
+                    assert(b);
+                    continue;
+                }
+                bv_control.set_range(j+1, sv_size-1);
+                bool b = bv_res.equal(bv_control);
+                assert(b);
+            }
+            if (j % 1024 == 0)
+                cout << "\r" << j << "/" << sv_size << "    " << flush;
+        } // for
+
+
+    }
+    cout << endl;
+
+
+    cout << " --------------- Test sparse_vector<> scan algo TestSparseVectorScanGT() OK" << endl;
+}
+
+static
+void TestSignedSparseVectorScanGT()
+{
+    cout << " --------------- Test sparse_vector<> scan algo TestSignedSparseVectorScanGT()" << endl;
+
+    bm::sparse_vector_scanner<sparse_vector_i32> scanner;
+    bm::sparse_vector_scanner<sparse_vector_i64> scanner64;
+
+    cout << "...positives only" << endl;
+    {
+        sparse_vector_i32 sv;
+        sv.push_back(1);      // 0
+        sv.push_back(8);
+        sv.push_back(8+7);    // 2
+        sv.push_back(8+1);
+        sv.push_back(16);     // 4
+        sv.push_back(INT_MAX);
+        sv.push_back(0);      // 6
+
+        for (int pass = 0; pass < 2; ++pass)
+        {
+            auto it = sv.begin();
+            auto it_end = sv.end();
+            for (; it != it_end; ++it)
+            {
+                if (!it.is_null())
+                {
+                    auto v1 = *it;
+                    CheckGTSearch(sv, v1, scanner);
+
+                    CheckGTSearch(sv, -v1, scanner);
+                }
+            } // for
+            sv.optimize();
+        } // pass
+    }
+
+    cout << "...positives AND negatives mix" << endl;
+    {
+        sparse_vector_i32 sv;
+        sv.push_back(1);     // 0
+        sv.push_back(8);
+        sv.push_back(8+7);   // 2
+        sv.push_back(8+1);
+        sv.push_back(16);    // 4
+        sv.push_back(0);
+        sv.push_back(-1);    // 6
+        sv.push_back(-2);
+        sv.push_back(-INT_MAX); // 8
+        sv.push_back(-7);
+        sv.push_back(-17);      // 10
+        sv.push_back(0);
+        sv.push_back(INT_MAX);  // 11
+
+//        CheckGTSearch(sv, 0, scanner);
+//        CheckGTSearch(sv, -INT_MAX, scanner);
+
+        for (int pass = 0; pass < 2; ++pass)
+        {
+            auto it = sv.begin();
+            auto it_end = sv.end();
+            for (; it != it_end; ++it)
+            {
+                if (!it.is_null())
+                {
+                    auto v1 = *it;
+                    CheckGTSearch(sv, v1, scanner);
+                }
+            } // for
+            sv.optimize();
+        } // pass
+    }
+
+    cout << "...positives AND negatives mix (with NULLs)" << endl;
+    {
+        sparse_vector_i32 sv(bm::use_null);
+        sv.push_back(1);     // 0
+        sv.push_back_null();
+        sv.push_back(8);
+        sv.push_back(8+7);
+        sv.push_back(8+1);
+        sv.push_back(16);
+        sv.push_back(0);
+        sv.push_back(-1);
+        sv.push_back_null();
+        sv.push_back(-2);
+        sv.push_back(-INT_MAX);
+        sv.push_back(-7);
+        sv.push_back_null();
+        sv.push_back(-17);
+        sv.push_back(0);
+        sv.push_back(INT_MAX);
+        sv.push_back_null();
+
+//        CheckGTSearch(sv, 0, scanner);
+//        CheckGTSearch(sv, -INT_MAX, scanner);
+
+        for (int pass = 0; pass < 2; ++pass)
+        {
+            auto it = sv.begin();
+            auto it_end = sv.end();
+            for (; it != it_end; ++it)
+            {
+                if (!it.is_null())
+                {
+                    auto v1 = *it;
+                    CheckGTSearch(sv, v1, scanner);
+                }
+            } // for
+            sv.optimize();
+        } // pass
+    }
+
+
+    {
+        cout <<  "GT-Unique search check" << endl;
+
+        sparse_vector_i64 sv(bm::use_null);
+        int sv_size = 1256000;
+        {
+            sparse_vector_i64::back_insert_iterator bi(sv.get_back_inserter());
+            for (int j = -sv_size; j < sv_size; ++j)
+                *bi = j;
+            bi.flush();
+        }
+
+        // not found tests
+        for (int j = sv_size; j < sv_size+1024*10; ++j)
+        {
+            bvect bv_res;
+            scanner64.find_gt_horizontal(sv, j, bv_res);
+            bool b = bv_res.empty();
+            assert(b);
+        } // for
+        {
+            bvect bv_res;
+            scanner64.find_gt_horizontal(sv, -sv_size-1, bv_res);
+            auto cnt = bv_res.count();
+            assert(cnt == sv.size()); // all found
+        }
+
+        unsigned i = 0;
+        for (int j = -sv_size; j < sv_size; ++j, ++i)
+        {
+            {
+                bvect bv_res, bv_control;
+                scanner64.find_gt_horizontal(sv, j, bv_res);
+                if (j == sv_size-1)
+                {
+                    bool b = bv_res.empty();
+                    assert(b);
+                    continue;
+                }
+                bv_control.set_range(i+1, sv.size()-1);
+                bool b = bv_res.equal(bv_control);
+                assert(b);
+            }
+            if (j % 1024 == 0)
+                cout << "\r" << i << "/" << sv.size() << "    " << flush;
+        } // for
+
+
+    }
+
+
+    cout << endl;
+
+    cout << " --------------- Test sparse_vector<> scan algo TestSignedSparseVectorScanGT() OK" << endl;
+}
+
 
 static
 void TestSignedSparseVectorScan()
@@ -35175,7 +35511,6 @@ int main(int argc, char *argv[])
 #endif
     if (is_all || is_sv)
     {
-
         TestSparseVector();
          CheckAllocLeaks(false);
 
@@ -35212,7 +35547,13 @@ int main(int argc, char *argv[])
         TestSparseVectorFilter();
          CheckAllocLeaks(false);
 
+        TestSparseVectorScanGT();
+         CheckAllocLeaks(false);
+
         TestSparseVectorScan();
+         CheckAllocLeaks(false);
+
+        TestSignedSparseVectorScanGT();
          CheckAllocLeaks(false);
 
         TestSignedSparseVectorScan();
