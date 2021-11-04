@@ -1470,6 +1470,12 @@ void sparse_vector_scanner<SV>::invert(const SV& sv, typename SV::bvector_type& 
         return;
     }
     // TODO: find a better algorithm (NAND?)
+    auto old_sz = bv_out.size();
+    bv_out.resize(sv.size());
+    bv_out.invert();
+    bv_out.resize(old_sz);
+    correct_nulls(sv, bv_out);
+    /*
     bv_out.invert();
     const bvector_type* bv_null = sv.get_null_bvector();
     if (bv_null) // correct result to only use not NULL elements
@@ -1479,6 +1485,7 @@ void sparse_vector_scanner<SV>::invert(const SV& sv, typename SV::bvector_type& 
         // TODO: use the shorter range to clear the tail
         bv_out.set_range(sv.size(), bm::id_max - 1, false);
     }
+    */
 }
 
 //----------------------------------------------------------------------------
@@ -1809,7 +1816,7 @@ void sparse_vector_scanner<SV>::find_gt_horizontal(const SV&   sv,
     bvector_type top_or_bv;
 
     auto total_planes = sv.effective_slices();
-    const bvector_type* bv_sign = sv.get_slice(0);
+    const bvector_type* bv_sign = sv.get_slice(0); (void)bv_sign;
 
     agg_.reset();
     if constexpr (std::is_signed<value_type>::value)
@@ -2648,12 +2655,15 @@ void sparse_vector_scanner<SV>::find_nonzero(const SV& sv,
                                              typename SV::bvector_type& bv_out)
 {
     agg_.reset(); // in case if previous scan was interrupted
-    auto sz = sv.slices();
+    auto sz = sv.effective_slices(); // sv.slices();
     unsigned i;
-    if constexpr (std::is_signed<value_type>::value)
-        i = 1; // do not process the sign plane
-    else
+    if constexpr (SV::is_str()) // string vector
         i = 0;
+    else // numeric vector: int, unsigned, etc
+        if constexpr (std::is_signed<value_type>::value)
+            i = 1; // do not process the sign plane
+        else
+            i = 0;
     for (; i < sz; ++i)
         agg_.add(sv.get_slice(i));
     agg_.combine_or(bv_out);
