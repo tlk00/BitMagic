@@ -934,7 +934,8 @@ protected:
     {
         if constexpr (std::is_signed<value_type>::value)
             return 1; // last plane
-        return 0;
+        else
+            return 0;
     }
 
 
@@ -1815,7 +1816,7 @@ void sparse_vector_scanner<SV>::find_gt_horizontal(const SV&   sv,
     // TODO: use aggregator function
     bvector_type top_or_bv;
 
-    auto total_planes = sv.effective_slices();
+    unsigned total_planes = sv.effective_slices();
     const bvector_type* bv_sign = sv.get_slice(0); (void)bv_sign;
 
     agg_.reset();
@@ -1839,7 +1840,7 @@ void sparse_vector_scanner<SV>::find_gt_horizontal(const SV&   sv,
     }
     else
     {
-        if (total_planes < blist[bit_count_v-1]+1)
+        if (total_planes < unsigned(blist[bit_count_v-1]+1))
             return; // number is greater than anything in this vector (empty set)
         aggregate_OR_slices(top_or_bv, sv, blist[bit_count_v-1]+1, total_planes);
     }
