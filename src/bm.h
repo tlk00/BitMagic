@@ -6419,6 +6419,14 @@ bool bvector<Alloc>::combine_operation_block_and(unsigned i,
         bm::word_t* block = blockman_.clone_assign_block(i, j, arg_block);
         bm::gap_and_to_bitset(block, arg_gap);
 
+        bool all_z = bm::bit_is_all_zero(block); // maybe ALL empty block?
+        if (all_z)
+        {
+            blockman_.set_block_ptr(i, j, 0);
+            blockman_.return_tempblock(block);
+            return false;
+        }
+
         return true; // optimization may be needed
     }
     
@@ -6483,7 +6491,14 @@ bool bvector<Alloc>::combine_operation_block_and_or(unsigned i,
             bm::gap_operation_and(BMGAP_PTR(arg_blk1), BMGAP_PTR(arg_blk2),
                                   tmp_buf, res_len);
             bm::gap_add_to_bitset(blk, tmp_buf, res_len);
-            return true; // optimization may be needed
+            bool all_one = bm::is_bits_one((bm::wordop_t*) blk);
+            if (all_one)
+            {
+                blockman_.return_tempblock(blk);
+                blockman_.set_block_ptr(i, j, FULL_BLOCK_FAKE_ADDR);
+                return false;
+            }
+            return true;
         }
         // one GAP, one bit
         const bm::word_t* arg_block;
@@ -6505,18 +6520,28 @@ bool bvector<Alloc>::combine_operation_block_and_or(unsigned i,
         if (all_one)
         {
             BM_ASSERT(bm::is_bits_one((bm::wordop_t*) blk));
-            blockman_.get_allocator().free_bit_block(blk);
+            blockman_.return_tempblock(blk);
             blockman_.set_block_ptr(i, j, FULL_BLOCK_FAKE_ADDR);
             return false;
         }
         return true; // optimization may be needed
     }
 
-    // 2 bit-blocks
+    // 1+2 bit-blocks
     //
+    bm::id64_t digest_and = ~0ull;
     bm::id64_t digest =
-        bm::bit_block_and_or_2way(blk, arg_blk1, arg_blk2, ~0ull);
-    (void) digest;
+        bm::bit_block_and_or_2way(blk, arg_blk1, arg_blk2, digest_and);
+    if (digest == digest_and)
+    {
+        bool all_one = bm::is_bits_one((bm::wordop_t*) blk);
+        if (all_one)
+        {
+            blockman_.return_tempblock(blk);
+            blockman_.set_block_ptr(i, j, FULL_BLOCK_FAKE_ADDR);
+            return false;
+        }
+    }
     return true; // optimization may be needed
 }
 

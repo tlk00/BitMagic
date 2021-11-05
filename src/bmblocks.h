@@ -859,7 +859,7 @@ public:
         return new_block;
     }
     
-    /** Clone static known block, assign to i-j position
+    /** Clone static known block, assign to i-j position. Old block must be NULL.
         @return new block address
     */
     void clone_gap_block(unsigned  i,
@@ -867,7 +867,15 @@ public:
                          const bm::gap_word_t* gap_block,
                          unsigned len)
     {
+        BM_ASSERT(get_block(i, j) == 0);
+
         int new_level = bm::gap_calc_level(len, this->glen());
+        if (!new_level) // level 0, check if it is empty
+        {
+            if (bm::gap_is_all_zero(gap_block))
+                return;
+        }
+
         if (new_level < 0)
         {
             convert_gap2bitset(i, j, gap_block, len);
