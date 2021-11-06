@@ -6683,6 +6683,70 @@ void AndOrOperationsTest(bool detailed)
         assert(st.gap_blocks==0 && st.bit_blocks==0);
     }
 
+    // check automatic optimization to FULL and empty blocks
+    bvect::statistics st;
+
+    {
+        bvect  bvtarget;
+        bvect  bv1{1}, bv2{2};
+        bvtarget.bit_and_or(bv1, bv2);
+
+        bvtarget.calc_stat(&st);
+        assert(st.bit_blocks == 0 && st.gap_blocks == 0);
+
+        bv1.optimize();
+        bvtarget.bit_and_or(bv1, bv2);
+        bvtarget.calc_stat(&st);
+        assert(st.bit_blocks == 0 && st.gap_blocks == 0);
+
+        bv2.optimize();
+        bvtarget.bit_and_or(bv1, bv2);
+        bvtarget.calc_stat(&st);
+        assert(st.bit_blocks == 0 && st.gap_blocks == 0);
+    }
+
+    {
+        bvect  bvtarget {0};
+        bvect  bv1{0}, bv2{0};
+        bv1.set(0, false);
+        bv2.set(0, false);
+        bv1.set_range(1, 65535);
+        bv2.set_range(1, 65535);
+        bvtarget.bit_and_or(bv1, bv2);
+
+        bvtarget.calc_stat(&st);
+        assert(st.bit_blocks == 0 && st.gap_blocks == 0);
+    }
+
+
+    {
+        bvect  bvtarget {0};
+        bvect  bv1{0}, bv2{0};
+        bv1.set(0, false);
+        bv2.set(0, false);
+        bv1.set_range(1, 65535);
+        bv2.set_range(1, 65535);
+        bv1.optimize();
+        bv2.optimize();
+        bvtarget.bit_and_or(bv1, bv2);
+
+        bvtarget.calc_stat(&st);
+        assert(st.bit_blocks == 0 && st.gap_blocks == 0);
+    }
+
+    {
+        bvect  bvtarget {0};
+        bvect  bv1{0}, bv2{0};
+        bv1.set(0, false);
+        bv2.set(0, false);
+        bv1.set_range(1, 65535);
+        bv2.set_range(1, 65535);
+        bv2.optimize();
+        bvtarget.bit_and_or(bv1, bv2);
+
+        bvtarget.calc_stat(&st);
+        assert(st.bit_blocks == 0 && st.gap_blocks == 0);
+    }
 
     cout << "----------------------------------- AndOrOperationTest OK" << endl;
 }
