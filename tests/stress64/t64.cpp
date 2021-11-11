@@ -9534,7 +9534,7 @@ void CheckBV_AND_OR(BV& bv_target, const BV& bv1, const BV& bv2)
         bv_t_copy |= bv_and;
     }
 
-    bv_target.bit_and_or(bv1, bv2, bvect::opt_compress);
+    bv_target.bit_or_and(bv1, bv2, bvect::opt_compress);
     bool f;
     typename BV::size_type pos;
     f = bv_target.find_first_mismatch(bv_t_copy, pos);
@@ -9550,7 +9550,7 @@ void CheckBV_AND_OR(BV& bv_target, const BV& bv1, const BV& bv2)
         bool vC = bv_t_copy.test(pos);
         cout << "v1=" << v1 << " control=" << vC << endl;
 
-        bv_control.bit_and_or(bv1, bv2, bvect::opt_compress);
+        bv_control.bit_or_and(bv1, bv2, bvect::opt_compress);
 
         assert(0);
     }

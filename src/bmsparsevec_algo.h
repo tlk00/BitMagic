@@ -1893,7 +1893,7 @@ void sparse_vector_scanner<SV>::find_gt_horizontal(const SV&   sv,
                 if (j == 0) // sign plane
                     break; // do not process the sign plane at all
             if (const bvector_type* bv_sub_plane = sv.get_slice(unsigned(j)))
-                bv_out.bit_and_or(and_eq_bv, *bv_sub_plane);
+                bv_out.bit_or_and(and_eq_bv, *bv_sub_plane);
         } // for j
     } // for i
 
@@ -1952,7 +1952,7 @@ void sparse_vector_scanner<SV>::aggregate_AND_OR_slices(bvector_type& bv_target,
         if (const bvector_type* bv_slice = sv.get_slice(i))
         {
             BM_ASSERT(bv_slice != sv.get_null_bvector());
-            bv_target.bit_and_or(bv_mask, *bv_slice);
+            bv_target.bit_or_and(bv_mask, *bv_slice);
         }
     }
 }

@@ -1626,7 +1626,7 @@ void AndTest()
 }
 
 static
-void AndOrTest()
+void OrAndTest()
 {
     bvect bv_res1, bv_res2;
     bvect*  bv1 = new bvect();
@@ -1650,17 +1650,17 @@ void AndOrTest()
     }
 
     {
-    bm::chrono_taker tt("AND+OR(fused) bvector test", REPEATS*4);
+    bm::chrono_taker tt("AND_OR( fused) bvector test", REPEATS*4);
     for (i = 0; i < REPEATS*4; ++i)
     {
-        bv_res2.bit_and_or(*bv1, *bv2);
+        bv_res2.bit_or_and(*bv1, *bv2);
     }
     }
 
     bool b = bv_res1.equal(bv_res2);
     if (!b)
     {
-        cerr << "AND-OR test failed!" << endl;
+        cerr << "OR-AND test failed!" << endl;
         exit(1);
     }
 
@@ -4591,7 +4591,6 @@ int main(void)
     bm::chrono_taker tt("TOTAL", 1);
     try
     {
-
         cout << endl;
 
         MemCpyTest();
@@ -4652,7 +4651,7 @@ int main(void)
         SubTest();
 
         cout << endl;
-        AndOrTest();
+        OrAndTest();
         cout << endl;
 
         InvertTest();

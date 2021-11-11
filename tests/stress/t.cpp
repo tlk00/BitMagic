@@ -6543,7 +6543,7 @@ void CheckBV_AND_OR(BV& bv_target, const BV& bv1, const BV& bv2)
         bv_t_copy |= bv_and;
     }
 
-    bv_target.bit_and_or(bv1, bv2, bvect::opt_compress);
+    bv_target.bit_or_and(bv1, bv2, bvect::opt_compress);
     bool f;
     typename BV::size_type pos;
     f = bv_target.find_first_mismatch(bv_t_copy, pos);
@@ -6559,7 +6559,7 @@ void CheckBV_AND_OR(BV& bv_target, const BV& bv1, const BV& bv2)
         bool vC = bv_t_copy.test(pos);
         cout << "v1=" << v1 << " control=" << vC << endl;
 
-        bv_control.bit_and_or(bv1, bv2, bvect::opt_compress);
+        bv_control.bit_or_and(bv1, bv2, bvect::opt_compress);
 
         assert(0);
     }
@@ -6689,18 +6689,18 @@ void AndOrOperationsTest(bool detailed)
     {
         bvect  bvtarget;
         bvect  bv1{1}, bv2{2};
-        bvtarget.bit_and_or(bv1, bv2);
+        bvtarget.bit_or_and(bv1, bv2);
 
         bvtarget.calc_stat(&st);
         assert(st.bit_blocks == 0 && st.gap_blocks == 0);
 
         bv1.optimize();
-        bvtarget.bit_and_or(bv1, bv2);
+        bvtarget.bit_or_and(bv1, bv2);
         bvtarget.calc_stat(&st);
         assert(st.bit_blocks == 0 && st.gap_blocks == 0);
 
         bv2.optimize();
-        bvtarget.bit_and_or(bv1, bv2);
+        bvtarget.bit_or_and(bv1, bv2);
         bvtarget.calc_stat(&st);
         assert(st.bit_blocks == 0 && st.gap_blocks == 0);
     }
@@ -6712,7 +6712,7 @@ void AndOrOperationsTest(bool detailed)
         bv2.set(0, false);
         bv1.set_range(1, 65535);
         bv2.set_range(1, 65535);
-        bvtarget.bit_and_or(bv1, bv2);
+        bvtarget.bit_or_and(bv1, bv2);
 
         bvtarget.calc_stat(&st);
         assert(st.bit_blocks == 0 && st.gap_blocks == 0);
@@ -6728,7 +6728,7 @@ void AndOrOperationsTest(bool detailed)
         bv2.set_range(1, 65535);
         bv1.optimize();
         bv2.optimize();
-        bvtarget.bit_and_or(bv1, bv2);
+        bvtarget.bit_or_and(bv1, bv2);
 
         bvtarget.calc_stat(&st);
         assert(st.bit_blocks == 0 && st.gap_blocks == 0);
@@ -6742,7 +6742,7 @@ void AndOrOperationsTest(bool detailed)
         bv1.set_range(1, 65535);
         bv2.set_range(1, 65535);
         bv2.optimize();
-        bvtarget.bit_and_or(bv1, bv2);
+        bvtarget.bit_or_and(bv1, bv2);
 
         bvtarget.calc_stat(&st);
         assert(st.bit_blocks == 0 && st.gap_blocks == 0);

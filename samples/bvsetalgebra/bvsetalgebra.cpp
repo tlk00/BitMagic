@@ -518,7 +518,7 @@ void DemoAND_OR()
 
         bm::bvector<>   bv_A { 1, 2, 3 };
         bm::bvector<>   bv_B { 1, 2, 4 };
-        bv_R.bit_and_or(bv_A, bv_B);
+        bv_R.bit_or_and(bv_A, bv_B);
 
         print_bvector(bv_R); // 0, 1, 2, 5
     }
@@ -533,7 +533,7 @@ void DemoAND_OR()
         bv_A.resize(5);
         bv_B.resize(10);
 
-        bv_R.bit_and_or(bv_A, bv_B);
+        bv_R.bit_or_and(bv_A, bv_B);
 
         print_bvector(bv_R); // 0, 1, 2, 5 (size = 12)
     }
