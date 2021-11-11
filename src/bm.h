@@ -1728,6 +1728,8 @@ public:
 
     /*!
        \brief 3-operand AND where result is ORed into the terget vector : this |= bv1 AND bv2
+       TARGET := TARGET OR (BV1 AND BV2)
+
        \param bv1 - Argument vector 1
        \param bv2 - Argument vector 2
        \param opt_mode - optimization compression
@@ -1735,7 +1737,7 @@ public:
          call to optimize()
        @sa optimize, bit_and
     */
-    bm::bvector<Alloc>& bit_and_or(const bm::bvector<Alloc>& bv1,
+    bm::bvector<Alloc>& bit_or_and(const bm::bvector<Alloc>& bv1,
                                    const bm::bvector<Alloc>& bv2,
                                 typename bm::bvector<Alloc>::optmode opt_mode=opt_none);
 
@@ -5554,7 +5556,7 @@ bvector<Alloc>::bit_and(const bm::bvector<Alloc>& bv1,
 
 template<class Alloc>
 bm::bvector<Alloc>&
-bvector<Alloc>::bit_and_or(const bm::bvector<Alloc>& bv1,
+bvector<Alloc>::bit_or_and(const bm::bvector<Alloc>& bv1,
                            const bm::bvector<Alloc>& bv2,
                            typename bm::bvector<Alloc>::optmode opt_mode)
 {
