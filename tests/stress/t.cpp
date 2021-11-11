@@ -8236,7 +8236,7 @@ void GenerateRandomKleenVect(bvect& bv_v, bvect& bv_null,
 {
     int v = -1;
     ++sparse_factor;
-    for (bvect::size_type i = 0; i < size; i += sparse_factor)
+    for (bvect::size_type i = 0; i < size; i += bvect::size_type(sparse_factor))
     {
         bm::set_value_kleene(bv_v, bv_null, i , v);
         if (rand()&1)
@@ -33029,7 +33029,7 @@ void TestCompressSparseVector()
                 it.advance();
             }
         }
-        catch (std::domain_error& ex)
+        catch (std::domain_error& /*ex*/)
         {
             ex_flag = true;
         }

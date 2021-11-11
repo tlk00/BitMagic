@@ -955,9 +955,11 @@ void BitSetConditionalTest()
                 }
             } // for
         }
+        unsigned c = 0;
         {
             bv2.invert();
             auto cnt = bv2.count();
+            c+=cnt;
             assert(cnt == idx_vect.size());
             bv2.clear(true);
         }
@@ -981,8 +983,11 @@ void BitSetConditionalTest()
         {
             bv3.invert();
             auto cnt = bv3.count();
+            c+=cnt;
             assert(cnt == idx_vect.size());
         }
+        if (!c) // this is to fool compiler from de-optimizing
+            cout << "\r";
     }
 }
 
@@ -4042,6 +4047,7 @@ void SparseVectorPipelineScannerTest()
         scanner.find_eq_str(pipe2); // run the search pipeline
     }
 
+    unsigned c1 = 0;
     bvect bv_or_acc;
     {
         auto& res_vect = pipe.get_bv_res_vector();
@@ -4053,13 +4059,16 @@ void SparseVectorPipelineScannerTest()
             const auto* bv = res_vect[i];
             assert(bv);
             bool match = bv1->equal(*bv);
-            assert(match);
+            assert(match); (void)match;
             auto c = cnt_vect[i];
             auto cnt = bv->count();
             assert(cnt == c);
+            c1 += cnt; c1+= c;
             bv_or_acc |= *bv;
         }
     }
+    if (!c1)
+        cout << "\r";
 
     bvect bv_or;
     typedef bm::agg_run_options<false, false> scanner_custom_opt;
@@ -4582,6 +4591,7 @@ int main(void)
     bm::chrono_taker tt("TOTAL", 1);
     try
     {
+
         cout << endl;
 
         MemCpyTest();
@@ -4641,6 +4651,7 @@ int main(void)
         XorTest();
         SubTest();
 
+        cout << endl;
         AndOrTest();
         cout << endl;
 
