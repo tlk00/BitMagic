@@ -1557,11 +1557,10 @@ bool avx2_is_all_one(const __m256i* BMRESTRICT block)
     const __m256i maskF = _mm256_set1_epi32(~0u); // brosdcast 0xFF
     const __m256i* BMRESTRICT block_end =
         (const __m256i*)((bm::word_t*)(block) + bm::set_block_size);
-    __m256i m1A, m1B, m1C, m1D;
     do
     {
-        m1A = _mm256_load_si256(block+0);
-        m1B = _mm256_load_si256(block+1);
+        __m256i m1A = _mm256_load_si256(block+0);
+        __m256i m1B = _mm256_load_si256(block+1);
         m1A = _mm256_xor_si256(m1A, maskF);
         m1B = _mm256_xor_si256(m1B, maskF);
         m1A = _mm256_or_si256(m1A, m1B);
