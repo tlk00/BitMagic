@@ -3868,6 +3868,190 @@ void vector_search(const std::vector<unsigned>& vect,
     bv_res &= bv_null; // correct results to only include non-NULL values
 }
 
+template<typename VECT>
+void vector_search_GT(const VECT& vect,
+                      const bvect&                 bv_null,
+                      unsigned                     value,
+                      bvect&                       bv_res)
+{
+    bv_res.init(); // always use init() if set_bit_no_check()
+    auto sz = vect.size();
+    for (size_t i = 0; i < sz; ++i)
+    {
+        if (vect[i] > value)
+            bv_res.set_bit_no_check((bm::id_t)i);
+    } // for
+    bv_res &= bv_null; // correct results to only include non-NULL values
+    //bv_res.optimize();
+}
+
+template<typename VECT>
+void vector_search_GT_sorted(const VECT& vect,
+                             const bvect&                 bv_null,
+                             unsigned                     value,
+                             bvect&                       bv_res)
+{
+    bv_res.init(); // always use init() if set_bit_no_check()
+    auto it = std::lower_bound(vect.begin(), vect.end(), value);
+
+    if (it == vect.end())
+        return;
+
+    for (; it < vect.end(); ++it)
+    {
+        auto v = *it;
+        if (v > value)
+        {
+            auto idx_from = it - vect.begin();
+            bv_res.set_range(bvect::size_type(idx_from), bvect::size_type(vect.size()-1));
+            break;
+        }
+    }
+    bv_res &= bv_null; // correct results to only include non-NULL values
+}
+
+
+
+
+template<typename VECT>
+void generate_search_samples(VECT& search_vect,
+                             size_t search_size,
+                             const VECT& src_vect)
+{
+    assert(src_vect.size() >= search_size);
+    search_vect.reserve(search_size);
+    size_t step = src_vect.size() / search_size;
+    for (size_t i = 0; i < search_size; i+= step)
+    {
+        auto v = src_vect[i];
+        search_vect.push_back(v);
+    } // for
+}
+
+
+static
+void SparseVectorScannerCmpTest()
+{
+    std::vector<unsigned> vect;
+    bvect bv_null;
+    sparse_vector_u32 sv(bm::use_null);
+
+    generate_scanner_test_set(vect, bv_null, sv, BSIZE/4);
+
+    // generate a search vector for benchmarking
+    std::vector<unsigned> search_vect;
+    generate_search_samples(search_vect, REPEATS, vect);
+
+    bm::sparse_vector_scanner<sparse_vector_u32> scanner;
+
+    bvect bv_res1, bv_res2, bv_res3, bv_res4;
+
+    unsigned search_repeats = REPEATS;
+
+    // run GT validation
+#if (0)
+    {
+        bm::chrono_taker tt("GT validation", search_repeats);
+        for (unsigned i = 0; i < search_repeats; ++i)
+        {
+            unsigned vs = search_vect[i];
+            bvect bv1, bv2;
+            vector_search_GT(vect, bv_null, vs, bv1);
+
+            scanner.find_gt_horizontal(sv, vs, bv2, true /*NULL correct*/);
+            bool eq = bv1.equal(bv2);
+            if (!eq)
+            {
+                cerr << "ERROR: Failed GT integrity checks!" << endl;
+                assert(0); exit(1);
+            }
+        } // for
+    }
+
+
+
+    {
+        bm::chrono_taker tt("std::vector<> GT scan ", search_repeats);
+        for (unsigned i = 0; i < search_repeats; ++i)
+        {
+            unsigned vs = search_vect[i];
+            vector_search_GT(vect, bv_null, vs, bv_res1);
+            bv_res1.clear();
+        } // for
+    }
+#endif
+
+    std::sort(vect.begin(), vect.end());
+    sparse_vector_u32 sv2;
+    {
+        auto bi(sv2.get_back_inserter());
+        for (size_t i=0; i < vect.size(); ++i)
+            bi = vect[i];
+        bi.flush();
+    }
+    sv2.optimize();
+
+    {
+        bvect bv_all;
+        bv_all.set_range(0, sv2.size()-1);
+        bm::chrono_taker tt("GT validation (sorted)", search_repeats);
+        for (unsigned i = 0; i < search_repeats; ++i)
+        {
+            unsigned vs = search_vect[i];
+            bvect bv1, bv2, bv3;
+            vector_search_GT(vect, bv_all, vs, bv1);
+            vector_search_GT_sorted(vect, bv_all, vs, bv2);
+
+            scanner.find_gt_horizontal(sv2, vs, bv3, false /*no NULL correct*/);
+            bool eq = bv1.equal(bv2);
+            if (!eq)
+            {
+                cerr << "ERROR: Failed GT (sorted) integrity checks (1)!" << endl;
+                assert(0); exit(1);
+            }
+            eq = bv1.equal(bv3);
+            if (!eq)
+            {
+                cerr << "ERROR: Failed GT (sorted) integrity checks (2)!" << endl;
+                assert(0); exit(1);
+            }
+        } // for
+    }
+
+    {
+        bm::chrono_taker tt("std::vector<> GT scan (lower_bound) ", search_repeats);
+        for (unsigned i = 0; i < search_repeats; ++i)
+        {
+            unsigned vs = search_vect[i];
+            vector_search_GT_sorted(vect, bv_null, vs, bv_res3);
+        } // for
+    }
+
+
+    vect.resize(0);
+    vect.shrink_to_fit();
+
+    {
+        bm::chrono_taker tt("horizontal sparse vector scanner find_GT()", search_repeats);
+        for (unsigned i = 0; i < search_repeats; ++i)
+        {
+            unsigned vs = search_vect[i];
+            scanner.find_gt_horizontal(sv, vs, bv_res2, true /*NULL correct*/);
+        } // for
+    }
+
+    {
+        bm::chrono_taker tt("horizontal sparse vector scanner find_GT() (sorted)", search_repeats);
+        for (unsigned i = 0; i < search_repeats; ++i)
+        {
+            unsigned vs = search_vect[i];
+            scanner.find_gt_horizontal(sv2, vs, bv_res4, true /*NULL correct*/);
+        } // for
+    }
+
+
+}
+
 
 
 static
@@ -4675,6 +4859,9 @@ int main(void)
         cout << endl;
 
         SparseVectorScannerTest();
+        cout << endl;
+
+        SparseVectorScannerCmpTest();
         cout << endl;
 
         SparseVectorPipelineScannerTest();
