@@ -1846,6 +1846,8 @@ void sparse_vector_scanner<SV>::find_gt_horizontal(const SV&   sv,
     }
     agg_.reset();
 
+    bv_out.merge(top_or_bv);
+
     // TODO: optimize FULL blocks
 
     bvector_type and_eq_bv; // AND accum
@@ -1897,7 +1899,7 @@ void sparse_vector_scanner<SV>::find_gt_horizontal(const SV&   sv,
         } // for j
     } // for i
 
-    bv_out.merge(top_or_bv);
+//    bv_out.merge(top_or_bv);
 
     if constexpr (std::is_signed<value_type>::value)
     {

@@ -605,8 +605,26 @@ bool avx2_and_or_digest_2way(__m256i* BMRESTRICT dst,
                             const __m256i* BMRESTRICT src1,
                             const __m256i* BMRESTRICT src2)
 {
+    const __m256i maskF = _mm256_set1_epi32(~0u); // brosdcast 0xFF
+
     __m256i m1A, m1B, m1C, m1D;
     __m256i mACC1;
+    __m256i mSA, mSB, mSC, mSD;
+
+
+    mSA = _mm256_load_si256(dst+0);
+    mSB = _mm256_load_si256(dst+1);
+    mACC1 = _mm256_and_si256(mSA, mSB);
+
+    mSC = _mm256_load_si256(dst+2);
+    mSD = _mm256_load_si256(dst+3);
+
+    mACC1 = _mm256_and_si256(mACC1, _mm256_and_si256(mSC, mSD));
+
+    mACC1 = _mm256_xor_si256(mACC1, maskF);
+    if (_mm256_testz_si256(mACC1, mACC1)) // whole wave is saturated 1111s already
+        return false;
+
 
     m1A = _mm256_and_si256(_mm256_load_si256(src1+0), _mm256_load_si256(src2+0));
     m1B = _mm256_and_si256(_mm256_load_si256(src1+1), _mm256_load_si256(src2+1));
@@ -619,10 +637,10 @@ bool avx2_and_or_digest_2way(__m256i* BMRESTRICT dst,
     if (all_z)
         return all_z;
 
-    m1A = _mm256_or_si256(_mm256_load_si256(dst+0), m1A);
-    m1B = _mm256_or_si256(_mm256_load_si256(dst+1), m1B);
-    m1C = _mm256_or_si256(_mm256_load_si256(dst+2), m1C);
-    m1D = _mm256_or_si256(_mm256_load_si256(dst+3), m1D);
+    m1A = _mm256_or_si256(mSA, m1A);
+    m1B = _mm256_or_si256(mSB, m1B);
+    m1C = _mm256_or_si256(mSC, m1C);
+    m1D = _mm256_or_si256(mSD, m1D);
 
     _mm256_store_si256(dst+0, m1A);
     _mm256_store_si256(dst+1, m1B);
@@ -1536,18 +1554,18 @@ void avx2_block_set_digest(__m256i* dst, unsigned value)
 inline
 bool avx2_is_all_one(const __m256i* BMRESTRICT block)
 {
-    __m256i maskF = _mm256_set1_epi32(~0u); // braodcast 0xFF
+    const __m256i maskF = _mm256_set1_epi32(~0u); // brosdcast 0xFF
     const __m256i* BMRESTRICT block_end =
         (const __m256i*)((bm::word_t*)(block) + bm::set_block_size);
-
+    __m256i m1A, m1B, m1C, m1D;
     do
     {
-        __m256i wcmpA= _mm256_cmpeq_epi8(_mm256_load_si256(block), maskF); // (w0 == maskF)
-        __m256i wcmpB= _mm256_cmpeq_epi8(_mm256_load_si256(block+1), maskF); // (w0 == maskF)
-
-        unsigned maskA = unsigned(_mm256_movemask_epi8(wcmpA));
-        unsigned maskB = unsigned(_mm256_movemask_epi8(wcmpB));
-        if (maskA != ~0u || maskB != ~0u)
+        m1A = _mm256_load_si256(block+0);
+        m1B = _mm256_load_si256(block+1);
+        m1A = _mm256_xor_si256(m1A, maskF);
+        m1B = _mm256_xor_si256(m1B, maskF);
+        m1A = _mm256_or_si256(m1A, m1B);
+        if (!_mm256_testz_si256(m1A, m1A))
             return false;
         block += 2;
     } while (block < block_end);
