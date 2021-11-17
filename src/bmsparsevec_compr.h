@@ -550,7 +550,7 @@ public:
     /** \brief various type traits
     */
     static constexpr
-    bool is_compressed() { return true; }
+    bool is_compressed() BMNOEXCEPT { return true; }
 
     static constexpr
     bool is_str() BMNOEXCEPT { return false; }
@@ -1695,8 +1695,8 @@ void rsc_sparse_vector<Val, SV>::back_insert_iterator::add_null(
 template<class Val, class SV>
 void rsc_sparse_vector<Val, SV>::back_insert_iterator::flush()
 {
-    sv_bi_.flush();
-    csv_->in_sync_ = false;
+    if (sv_bi_.flush())
+        csv_->in_sync_ = false;
 }
 
 //---------------------------------------------------------------------

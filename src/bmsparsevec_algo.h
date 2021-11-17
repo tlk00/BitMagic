@@ -1447,7 +1447,7 @@ void sparse_vector_scanner<SV>::find_zero(const SV&                  sv,
         return;
     }
     find_nonzero(sv, bv_out);
-    if (sv.is_compressed())
+    if constexpr (SV::is_compressed())
     {
         bv_out.invert();
         bv_out.set_range(sv.effective_size(), bm::id_max - 1, false);
@@ -1872,7 +1872,7 @@ void sparse_vector_scanner<SV>::find_gt_horizontal(const SV&   sv,
                 else // value > 0
                     and_eq_bv.bit_and(*bv_base_plane, gtz_bv);
             }
-            else
+            else // unsigned
                 and_eq_bv = *bv_base_plane; // initial assignment
         }
         else
@@ -1899,8 +1899,6 @@ void sparse_vector_scanner<SV>::find_gt_horizontal(const SV&   sv,
         } // for j
     } // for i
 
-//    bv_out.merge(top_or_bv);
-
     if constexpr (std::is_signed<value_type>::value)
     {
         if (value < 0)
@@ -1917,6 +1915,8 @@ void sparse_vector_scanner<SV>::find_gt_horizontal(const SV&   sv,
             bv_out.bit_sub(gtz_bv); // exclude all negatives
         }
     }
+
+    decompress(sv, bv_out);
 
     if (null_correct)
         correct_nulls(sv, bv_out);
@@ -2014,7 +2014,7 @@ bool sparse_vector_scanner<SV>::find_eq_str(const SV&                      sv,
             pos = found_pos;
             if constexpr (SV::is_rsc_support::value) // test rank/select trait
             {
-                if (sv.is_compressed()) // if compressed vector - need rank translation
+                if constexpr (sv.is_compressed()) // if compressed vector - need rank translation
                     found = sv.find_rank(found_pos + 1, pos);
             }
         }
@@ -2256,11 +2256,8 @@ bool sparse_vector_scanner<SV>::bfind_eq_str(
         if (found)
         {
             pos = found_pos;
-            if (bm::conditional<SV::is_rsc_support::value>::test()) // test rank/select trait
-            {
-                if (sv.is_compressed()) // if compressed vector - need rank translation
-                    found = sv.find_rank(found_pos + 1, pos);
-            }
+            if constexpr (SV::is_compressed()) // if compressed vector - need rank translation
+                found = sv.find_rank(found_pos + 1, pos);
         }
         reset_search_range();
     }
@@ -2644,7 +2641,7 @@ bool sparse_vector_scanner<SV>::find_eq(const SV&                  sv,
         pos = found_pos;
         if (bm::conditional<SV::is_rsc_support::value>::test()) // test rank/select trait
         {
-            if (sv.is_compressed()) // if compressed vector - need rank translation
+            if constexpr (SV::is_compressed()) // if compressed vector - need rank translation
                 found = sv.find_rank(found_pos + 1, pos);
         }
     }
@@ -2694,14 +2691,15 @@ template<typename SV>
 void sparse_vector_scanner<SV>::decompress(const SV&   sv,
                                            typename SV::bvector_type& bv_out)
 {
-    if (!sv.is_compressed())
-        return; // nothing to do
-    const bvector_type* bv_non_null = sv.get_null_bvector();
-    BM_ASSERT(bv_non_null);
+    if constexpr (SV::is_compressed())
+    {
+        const bvector_type* bv_non_null = sv.get_null_bvector();
+        BM_ASSERT(bv_non_null);
 
-    // TODO: implement faster decompressor for small result-sets
-    rank_compr_.decompress(bv_tmp_, *bv_non_null, bv_out);
-    bv_out.swap(bv_tmp_);
+        // TODO: implement faster decompressor for small result-sets
+        rank_compr_.decompress(bv_tmp_, *bv_non_null, bv_out);
+        bv_out.swap(bv_tmp_);
+    }
 }
 
 //----------------------------------------------------------------------------

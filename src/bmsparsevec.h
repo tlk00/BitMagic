@@ -327,8 +327,10 @@ public:
         /** return true if insertion buffer is empty */
         bool empty() const;
         
-        /** flush the accumulated buffer */
-        void flush();
+        /** flush the accumulated buffer
+            @return true if actually flushed (back inserter had data to flush)
+        */
+        bool flush();
         
         // ---------------------------------------------------------------
         // open internals
@@ -2416,18 +2418,17 @@ bool sparse_vector<Val, BV>::back_insert_iterator::empty() const
 //---------------------------------------------------------------------
 
 template<class Val, class BV>
-void sparse_vector<Val, BV>::back_insert_iterator::flush()
+bool sparse_vector<Val, BV>::back_insert_iterator::flush()
 {
     if (!sv_)
-        return;
+        return false;
     unsigned_value_type* arr = (unsigned_value_type*)buffer_.data();
     size_type arr_size = size_type(buf_ptr_ - arr);
     if (!arr_size)
-        return;
-
+        return false;
     sv_->import_back_u(arr, arr_size, false);
-    
     buf_ptr_ = (unsigned_value_type*) buffer_.data();
+    return true;
 }
 
 //---------------------------------------------------------------------

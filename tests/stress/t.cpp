@@ -26224,6 +26224,113 @@ void TestCompressedSparseVectorScan()
 
 }
 
+static
+void TestCompressedSparseVectorScanGT()
+{
+    cout << " --------------- Test rsc_sparse_vector<> TestSparseVectorScanGT()" << endl;
+
+    bm::sparse_vector_scanner<rsc_sparse_vector_u32> scanner_csv;
+    bm::sparse_vector_scanner<sparse_vector_u32> scanner_sv;
+    {
+    rsc_sparse_vector_u32 csv(bm::use_null);
+    sparse_vector_u32 sv(bm::use_null);
+
+        sv.push_back_null(); // 0
+        sv.push_back(1);
+        sv.push_back(8);     // 2
+        sv.push_back(8+7);
+        sv.push_back(8+1);   // 4
+        sv.push_back_null(); // 5
+        sv.push_back(16);
+        sv.push_back(0);     // 7
+        sv.push_back_null(); // 8
+        sv.push_back(1023);   // 9
+
+        csv.load_from(sv);
+
+        for (int pass = 0; pass < 2; ++pass)
+        {
+            auto it = sv.begin();
+            auto it_end = sv.end();
+            for (; it != it_end; ++it)
+            {
+                if (!it.is_null())
+                {
+                    auto v1 = *it;
+                    CheckGTSearch(sv, v1, scanner_sv);
+                    CheckGTSearch(csv, v1, scanner_csv);
+                }
+            } // for
+            sv.optimize();
+        } // pass
+    }
+
+    cout << "  stress test GT on random data " << endl;
+    cout << "  data generation..." << flush;
+    {
+        const rsc_sparse_vector_u32::size_type total_size = 25 * 1024 * 1024;
+        const unsigned sample_size = 1024;
+
+
+        rsc_sparse_vector_u32 csv(bm::use_null);
+        {
+        auto bit = csv.get_back_inserter();
+        for (rsc_sparse_vector_u32::size_type i = 0; i < total_size; )
+        {
+            unsigned v = unsigned(rand()) & 0xFFF;
+            unsigned len = unsigned(rand()) % 256;
+            for (rsc_sparse_vector_u32::size_type j = 0; j < len; ++j)
+                bit = v;
+            i += len;
+            len = len & 0xF;
+            if (len)
+                bit.add_null(len);
+            i += len;
+        } // for i
+        bit.add_null(65536 * 4);
+        bit = ~0u;
+
+        bit.flush();
+
+        for (rsc_sparse_vector_u32::size_type i = bm::id_max/2; i < bm::id_max/2+ 65536*4; ++i )
+        {
+            csv.set(i, 253);
+        }
+
+
+        csv.sync();
+        cout << " Ok" << endl;
+        }
+
+        bm::random_subset<bvect> rsub;
+        bvect bv_subset;
+        const bvect* bv_null = csv.get_null_bvector();
+        rsub.sample(bv_subset, *bv_null, sample_size);
+        bv_subset.set(csv.size()-1);
+
+        for (unsigned pass = 0; pass < 2; ++pass)
+        {
+            cout << "  PASS = " << pass << " sample count = " << bv_subset.count() << endl;
+            auto en = bv_subset.get_enumerator(0);
+            for (unsigned cnt = 0;en.valid(); ++en, ++cnt)
+            {
+                auto i = *en;
+                assert (!csv.is_null(i));
+                auto v1 = csv.get(i);
+                CheckGTSearch(csv, v1, scanner_csv);
+                if (cnt & 0xF)
+                    cout << "\r" << cnt << "/" << sample_size << flush;
+            }
+
+            cout << endl;
+            csv.optimize();
+        } // for
+
+    }
+
+    cout << " --------------- Test rsc_sparse_vector<> TestSparseVectorScanGT() OK " << endl;
+}
+
 
 // fill pseudo-random plato pattern into two vectors
 //
@@ -35611,10 +35718,10 @@ int main(int argc, char *argv[])
         TestSparseVectorFilter();
          CheckAllocLeaks(false);
 
-        TestSparseVectorScanGT();
+        TestSparseVectorScan();
          CheckAllocLeaks(false);
 
-        TestSparseVectorScan();
+        TestSparseVectorScanGT();
          CheckAllocLeaks(false);
 
         TestSignedSparseVectorScanGT();
@@ -35635,6 +35742,7 @@ int main(int argc, char *argv[])
 
     if (is_all || is_csv)
     {
+/*
         TestCompressSparseVector();
          CheckAllocLeaks(false);
 
@@ -35643,7 +35751,10 @@ int main(int argc, char *argv[])
 
         TestCompressedSparseVectorAlgo();
          CheckAllocLeaks(false);
-
+*/
+        TestCompressedSparseVectorScanGT();
+         CheckAllocLeaks(false);
+return 0;
         TestCompressSparseVectorSerial();
          CheckAllocLeaks(false);
 
