@@ -25,13 +25,17 @@ For more information please visit:  http://bitmagic.io
 #include "bmdef.h"
 #include "bmconst.h"
 
-#if defined(_M_AMD64) || defined(_M_X64) 
-#include <intrin.h>
-#elif defined(BMSSE2OPT) || defined(BMSSE42OPT)
-#include <emmintrin.h>
-#elif defined(BMAVX2OPT)
-#include <emmintrin.h>
-#include <avx2intrin.h>
+#if defined(__arm64__) || defined(__arm__)
+#include "sse2neon.h"
+#else
+    #if defined(_M_AMD64) || defined(_M_X64)
+    #include <intrin.h>
+    #elif defined(BMSSE2OPT) || defined(BMSSE42OPT)
+    #include <emmintrin.h>
+    #elif defined(BMAVX2OPT)
+    #include <emmintrin.h>
+    #include <avx2intrin.h>
+    #endif
 #endif
 
 #ifdef __GNUG__

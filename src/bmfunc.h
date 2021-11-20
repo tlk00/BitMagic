@@ -210,7 +210,11 @@ BMFORCEINLINE RTYPE get_block_start(unsigned i, unsigned j) BMNOEXCEPT
  */
 
 
-
+/**
+    32-bit paralle, bitcount
+   \internal
+   @ingroup bitfunc
+ */
 inline
 int parallel_popcnt_32(unsigned int n) BMNOEXCEPT
 {
