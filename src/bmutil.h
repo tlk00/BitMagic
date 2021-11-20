@@ -230,7 +230,7 @@ BMFORCEINLINE bm::gap_word_t ilog2_LUT<bm::gap_word_t>(bm::gap_word_t x) BMNOEXC
 
 // if we are running on x86 CPU we can use inline ASM 
 
-#ifdef BM_x86
+#if defined(BM_x86) && !(defined(__arm__) || defined(__aarch64__))
 #ifdef __GNUG__
 
 BMFORCEINLINE
