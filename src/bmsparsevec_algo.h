@@ -2815,6 +2815,10 @@ void sparse_vector_scanner<SV>::decompress(const SV&   sv,
         rank_compr_.decompress(bv_tmp_, *bv_non_null, bv_out);
         bv_out.swap(bv_tmp_);
     }
+    else
+    {
+        (void)sv; (void)bv_out;
+    }
 }
 
 //----------------------------------------------------------------------------
