@@ -21,6 +21,15 @@ For more information please visit:  http://bitmagic.io
     \brief SIMD target version definitions
 */
 
+#ifdef BMNEONOPT
+#pragma GCC diagnostic push
+#pragma GCC diagnostic ignored "-Wstrict-aliasing"
+#include "sse2neon.h"
+#pragma GCC diagnostic pop
+#define BMSSE2OPT
+#endif
+
+
 #ifdef BMWASMSIMDOPT
 #include <wasm_simd128.h>
 #define BMSSE42OPT
@@ -67,6 +76,9 @@ inline int simd_version()
 {
 #ifdef BMWASMSIMDOPT
     return bm::simd_wasm128;
+#endif
+#ifdef BMNEONOPT
+    return bm::simd_neon;
 #endif
 #ifdef BMAVX512OPT
     return bm::simd_avx512;

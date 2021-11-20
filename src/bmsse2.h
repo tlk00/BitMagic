@@ -22,9 +22,7 @@ For more information please visit:  http://bitmagic.io
     \brief Compute functions for SSE2 SIMD instruction set (internal)
 */
 
-#if defined(__arm64__) || defined(__arm__)
-#include "sse2neon.h"
-#else
+#if !defined(__arm64__) && !defined(__arm__)
 #ifndef BMWASMSIMDOPT
 #include<mmintrin.h>
 #endif

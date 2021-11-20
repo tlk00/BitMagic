@@ -366,7 +366,7 @@ For more information please visit:  http://bitmagic.io
 */
 
 
-#if (defined(BMSSE2OPT) || defined(BMSSE42OPT) || defined(BMWASMSIMDOPT))
+#if (defined(BMSSE2OPT) || defined(BMSSE42OPT) || defined(BMWASMSIMDOPT) || defined(BMNEONOPT))
 #   define BM_VECT_ALIGN BM_ALIGN16
 #   define BM_VECT_ALIGN_ATTR BM_ALIGN16ATTR
 #else
