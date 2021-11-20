@@ -1,14 +1,14 @@
 ifeq ($(COMPILER),GNU_CC)
 
-    CXXARCHFLAGS=-march=native
+    CXXARCHFLAGS=-march=armv7-a -mfpu=neon
 
     COMMON_DFLAGS = 
     #-g -D_DEBUG
-    LINKER_DFLAGS = 
+    LINKER_DFLAGS =
     #-g
 
     OS_VER = -D__$(shell uname -s)_$(shell uname -r | sed -e 's/\./_/g' -e 's/-.*//')
-    PLATFORM_CXXFLAGS = -D_REENTRANT $(OS_VER) -D_GNU_SOURCE -std=c++17 -Wall -Wno-psabi -mcpu=native -march=native
+    PLATFORM_CXXFLAGS = -D_REENTRANT $(OS_VER) -D_GNU_SOURCE -std=c++17 -Wall -Wno-psabi 
     PLATFORM_CFLAGS = -D_REENTRANT $(OS_VER) 
     COMMON_LDFLAGS = $(LINKER_DFLAGS) -export-dynamic -rdynamic
     COMMON_CLDFLAGS = $(COMMON_LDFLAGS)
