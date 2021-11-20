@@ -32,7 +32,7 @@ BASICINCS=src
 
 CSOURCES= 
 
-DESTINATION = test
+DESTINATION = bmtest
 
 DESTTYPE = 
 DESTINATIONDIR=tests/stress

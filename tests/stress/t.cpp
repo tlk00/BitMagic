@@ -25140,8 +25140,11 @@ template<class SV>
 void CheckGTSearch(const SV& sv, typename SV::value_type v,
                    bm::sparse_vector_scanner<SV>& scanner)
 {
-    bvect bv_res, bv_control;
+    bvect bv_res, bv_gt, bv_control;
+    bvect bv_ge, bv_ge_control;
     scanner.find_gt_horizontal(sv, v, bv_res);
+    scanner.find_gt(sv, v, bv_gt);
+    scanner.find_ge(sv, v, bv_ge);
 
     auto it = sv.begin();
     auto it_end = sv.end();
@@ -25152,16 +25155,39 @@ void CheckGTSearch(const SV& sv, typename SV::value_type v,
             auto v1 = *it;
             if (v1 > v)
                 bv_control.set(i);
+            if (v1 >= v)
+                bv_ge_control.set(i);
+
         }
     } // for
     bool eq = bv_res.equal(bv_control);
     if (!eq)
     {
-        cout << "result for v >=" << v << " :" << endl;
+        cout << "1. result for v >=" << v << " :" << endl;
         print_bv(bv_res);
         bv_res ^= bv_control;
         cout << "diff=" << endl;
         print_bv(bv_res);
+        assert(eq);exit(1);
+    }
+    eq = bv_res.equal(bv_gt);
+    if (!eq)
+    {
+        cout << "2. result for v >=" << v << " :" << endl;
+        print_bv(bv_gt);
+        bv_gt ^= bv_control;
+        cout << "diff=" << endl;
+        print_bv(bv_gt);
+        assert(eq);exit(1);
+    }
+    eq = bv_ge.equal(bv_ge_control);
+    if (!eq)
+    {
+        cout << "3. result for v >=" << v << " :" << endl;
+        print_bv(bv_ge);
+        bv_ge ^= bv_ge_control;
+        cout << "diff=" << endl;
+        print_bv(bv_ge);
         assert(eq);exit(1);
     }
 }
@@ -35742,7 +35768,7 @@ int main(int argc, char *argv[])
 
     if (is_all || is_csv)
     {
-/*
+
         TestCompressSparseVector();
          CheckAllocLeaks(false);
 
@@ -35751,10 +35777,10 @@ int main(int argc, char *argv[])
 
         TestCompressedSparseVectorAlgo();
          CheckAllocLeaks(false);
-*/
+
         TestCompressedSparseVectorScanGT();
          CheckAllocLeaks(false);
-return 0;
+
         TestCompressSparseVectorSerial();
          CheckAllocLeaks(false);
 
