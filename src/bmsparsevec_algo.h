@@ -27,6 +27,8 @@ For more information please visit:  http://bitmagic.io
 # error missing include (bm.h or bm64.h)
 #endif
 
+#include <limits>
+
 #include "bmdef.h"
 #include "bmsparsevec.h"
 #include "bmaggregator.h"
@@ -628,9 +630,7 @@ public:
         \param value - value to search for
         \param bv_out - search result bit-vector (search result  is a vector of 1s when sv[i] == value)
     */
-    void find_eq(const SV&                  sv,
-                 typename SV::value_type    value,
-                 typename SV::bvector_type& bv_out);
+    void find_eq(const SV&  sv, value_type  value, bvector_type& bv_out);
 
     /**
         \brief find first sparse vector element
@@ -644,9 +644,8 @@ public:
      
         \return true if found
     */
-    bool find_eq(const SV&                  sv,
-                 typename SV::value_type    value,
-                 typename SV::size_type&    pos);
+    bool find_eq(const SV&  sv, value_type value, size_type& pos);
+
     /**
         \brief binary search for position in the sorted sparse vector
 
@@ -660,9 +659,53 @@ public:
 
         \return true if value found
     */
-    bool bfind(const SV&                      sv,
-               const typename SV::value_type  val,
-               typename SV::size_type&        pos);
+    bool bfind(const SV&  sv, const value_type  val, size_type&  pos);
+
+    /**
+        \brief find all elements  sparse vector element greater (>) than value
+
+        \param sv - input sparse vector
+        \param value - value to search for
+        \param bv_out - search result bit-vector (search result  is a vector of 1s when sv[i] > value)
+
+        \return true if found
+    */
+    void find_gt(const SV& sv, value_type  val, bvector_type&  bv_out);
+
+    /**
+        \brief find all elements  sparse vector element greater or equal (>=) than value
+
+        \param sv - input sparse vector
+        \param value - value to search for
+        \param bv_out - search result bit-vector (search result  is a vector of 1s when sv[i] >= value)
+
+        \return true if found
+    */
+    void find_ge(const SV& sv, value_type  val, bvector_type&  bv_out);
+
+
+    /**
+        \brief find all elements  sparse vector element less  (<) than value
+
+        \param sv - input sparse vector
+        \param value - value to search for
+        \param bv_out - search result bit-vector (search result  is a vector of 1s when sv[i] < value)
+
+        \return true if found
+    */
+    void find_lt(const SV& sv, value_type  val, bvector_type&  bv_out);
+
+    /**
+        \brief find all elements  sparse vector element less  or equal (<=) than value
+
+        \param sv - input sparse vector
+        \param value - value to search for
+        \param bv_out - search result bit-vector (search result  is a vector of 1s when sv[i] <= value)
+
+        \return true if found
+    */
+    void find_le(const SV& sv, value_type  val, bvector_type&  bv_out);
+
 
     //@}
 
@@ -679,17 +722,14 @@ public:
         @param str - string to search for
         @param bv_out - search result bit-vector (search result masks 1 elements)
     */
-    bool find_eq_str(const SV&                      sv,
-                     const typename SV::value_type* str,
-                     typename SV::bvector_type& bv_out);
+    bool find_eq_str(const SV& sv, const value_type* str, bvector_type& bv_out);
 
     /**
         \brief find sparse vector elementa (string) in the attached SV
         @param str - string to search for
         @param bv_out - search result bit-vector (search result masks 1 elements)
     */
-    bool find_eq_str(const typename SV::value_type* str,
-                     typename SV::bvector_type& bv_out);
+    bool find_eq_str(const value_type* str, bvector_type& bv_out);
 
     /**
         \brief find first sparse vector element (string)
@@ -697,9 +737,7 @@ public:
         @param str - string to search for
         @param pos - [out] index of the first found
     */
-    bool find_eq_str(const SV&                      sv,
-                     const typename SV::value_type* str,
-                     typename SV::size_type&        pos);
+    bool find_eq_str(const SV& sv, const value_type* str, size_type&  pos);
 
     /**
         \brief binary find first sparse vector element (string)
@@ -708,8 +746,7 @@ public:
         @param pos - [out] index of the first found
         @sa bind
     */
-    bool find_eq_str(const typename SV::value_type* str,
-                     typename SV::size_type&        pos);
+    bool find_eq_str(const value_type* str, size_type& pos);
 
     /**
         \brief find sparse vector elements  with a given prefix (string)
@@ -718,9 +755,8 @@ public:
                      "123" is a prefix for "1234567"
         @param bv_out - search result bit-vector (search result masks 1 elements)
     */
-    bool find_eq_str_prefix(const SV&               sv,
-                     const typename SV::value_type* str,
-                     typename SV::bvector_type&     bv_out);
+    bool find_eq_str_prefix(const SV& sv, const value_type* str,
+                            bvector_type& bv_out);
 
     /**
         \brief find sparse vector elements using search pipeline
@@ -733,9 +769,8 @@ public:
         \brief binary find first sparse vector element (string)     
         Sparse vector must be sorted.
     */
-    bool bfind_eq_str(const SV&                      sv,
-                      const typename SV::value_type* str,
-                      typename SV::size_type&        pos);
+    bool bfind_eq_str(const SV& sv,
+                      const value_type* str, size_type& pos);
 
     /**
         \brief lower bound search for an array position
@@ -748,17 +783,16 @@ public:
 
         \return true if value found
     */
-    bool lower_bound_str(const SV&                      sv,
-                         const typename SV::value_type* str,
-                         typename SV::size_type&        pos);
+    bool lower_bound_str(const SV&            sv,
+                         const value_type*    str,
+                         size_type&           pos);
 
     /**
         \brief binary find first sparse vector element (string)
         Sparse vector must be sorted and attached
         @sa bind
     */
-    bool bfind_eq_str(const typename SV::value_type* str,
-                      typename SV::size_type&        pos);
+    bool bfind_eq_str(const value_type* str, size_type& pos);
 
     //@}
 
@@ -766,9 +800,9 @@ public:
         \brief find all sparse vector elements EQ to 0
         \param sv - input sparse vector
         \param bv_out - output bit-vector (search result masks 1 elements)
+        \param null_correct - flag to perform NULL correction
     */
-    void find_zero(const SV&                  sv,
-                   typename SV::bvector_type& bv_out);
+    void find_zero(const SV& sv, bvector_type& bv_out, bool null_correct = true);
 
     /*!
         \brief Find non-zero elements
@@ -777,7 +811,7 @@ public:
         \param  sv - input sparse vector
         \param  bv_out - output bit-bector of non-zero elements
     */
-    void find_nonzero(const SV& sv, typename SV::bvector_type& bv_out);
+    void find_nonzero(const SV& sv, bvector_type& bv_out);
 
     /*!
         \brief Find positive (greter than zero elements)
@@ -786,8 +820,7 @@ public:
         \param  sv - input sparse vector
         \param  bv_out - output bit-bector of non-zero elements
     */
-    void find_positive(const SV& sv,
-                      typename SV::bvector_type& bv_out);
+    void find_positive(const SV& sv, bvector_type& bv_out);
 
 
     /**
@@ -796,7 +829,7 @@ public:
         \param  sv - input sparse vector
         \param  bv_out - output bit-bector of non-zero elements
     */
-    void invert(const SV& sv, typename SV::bvector_type& bv_out);
+    void invert(const SV& sv, bvector_type& bv_out);
 
     /**
         \brief find all values A IN (C, D, E, F)
@@ -809,7 +842,7 @@ public:
     void find_eq(const SV&  sv,
                  It    start, 
                  It    end,
-                 typename SV::bvector_type& bv_out)
+                 bvector_type& bv_out)
     {
         typename bvector_type::mem_pool_guard mp_guard;
         mp_guard.assign_if_not_set(pool_, bv_out); // set algorithm-local memory pool to avoid heap contention
@@ -837,24 +870,23 @@ public:
     /// For testing purposes only
     ///
     /// @internal
-    void find_eq_with_nulls_horizontal(const SV&   sv,
-                 typename SV::value_type           value,
-                 typename SV::bvector_type&        bv_out);
+    void find_eq_with_nulls_horizontal(const SV& sv, value_type value,
+                                       bvector_type&  bv_out);
 
     /// For testing purposes only
     ///
     /// @internal
-    void find_gt_horizontal(const SV&   sv,
-                         typename SV::value_type     value,
-                         typename SV::bvector_type&  bv_out,
-                         bool null_correct = true);
+    void find_gt_horizontal(const SV&      sv,
+                            value_type     value,
+                            bvector_type&  bv_out,
+                            bool null_correct = true);
 
 
     /** Exclude possible NULL values from the result vector
         \param  sv - input sparse vector
         \param  bv_out - output bit-bector of non-zero elements
     */
-    void correct_nulls(const SV&   sv, typename SV::bvector_type& bv_out);
+    void correct_nulls(const SV& sv, bvector_type& bv_out);
 
     /// Return allocator pool for blocks
     ///  (Can be used to improve performance of repeated searches with the same scanner)
@@ -866,7 +898,7 @@ protected:
     /// Remap input value into SV char encodings
     static
     bool remap_tosv(remap_vector_type& remap_vect_target,
-                    const typename SV::value_type* str,
+                    const value_type* str,
                     const SV& sv);
 
     /// set search boundaries (hint for the aggregator)
@@ -877,39 +909,38 @@ protected:
 
     /// find value (may include NULL indexes)
     bool find_eq_with_nulls(const SV&   sv,
-                            typename SV::value_type         value,
-                            typename SV::bvector_type&      bv_out,
-                            typename SV::size_type          search_limit = 0);
+                            value_type         value,
+                            bvector_type&      bv_out,
+                            size_type          search_limit = 0);
 
     /// find first value (may include NULL indexes)
     bool find_first_eq(const SV&   sv,
-                       typename SV::value_type         value,
-                       size_type&                      idx);
+                       value_type  value,
+                       size_type&  idx);
     
     /// find first string value (may include NULL indexes)
-    bool find_first_eq(const SV&                       sv,
-                       const typename SV::value_type*  str,
-                       size_type&                      idx,
-                       bool                            remaped);
+    bool find_first_eq(const SV&          sv,
+                       const value_type*  str,
+                       size_type&         idx,
+                       bool               remaped);
 
     /// find EQ str / prefix impl
     bool find_eq_str_impl(const SV&                      sv,
-                     const typename SV::value_type* str,
-                     typename SV::bvector_type& bv_out,
+                     const value_type* str,
+                     bvector_type& bv_out,
                      bool prefix_sub);
 
     /// Prepare aggregator for AND-SUB (EQ) search
-    bool prepare_and_sub_aggregator(const SV&   sv,
-                                    typename SV::value_type   value);
+    bool prepare_and_sub_aggregator(const SV& sv, value_type value);
 
     /// Prepare aggregator for AND-SUB (EQ) search (string)
     bool prepare_and_sub_aggregator(const SV&  sv,
-                                    const typename SV::value_type*  str,
+                                    const value_type*  str,
                                     unsigned octet_start,
                                     bool prefix_sub);
 
     /// Rank-Select decompression for RSC vectors
-    void decompress(const SV&   sv, typename SV::bvector_type& bv_out);
+    void decompress(const SV&   sv, bvector_type& bv_out);
 
     /// compare sv[idx] with input str
     int compare_str(const SV& sv, size_type idx, const value_type* str);
@@ -1438,8 +1469,9 @@ void sparse_vector_scanner<SV>::reset_binding() BMNOEXCEPT
 //----------------------------------------------------------------------------
 
 template<typename SV>
-void sparse_vector_scanner<SV>::find_zero(const SV&                  sv,
-                                          typename SV::bvector_type& bv_out)
+void sparse_vector_scanner<SV>::find_zero(const SV&     sv,
+                                          bvector_type& bv_out,
+                                          bool null_correct)
 {
     if (sv.size() == 0)
     {
@@ -1457,13 +1489,14 @@ void sparse_vector_scanner<SV>::find_zero(const SV&                  sv,
     {
         invert(sv, bv_out);
     }
-    correct_nulls(sv, bv_out);
+    if (null_correct)
+        correct_nulls(sv, bv_out);
 }
 
 //----------------------------------------------------------------------------
 
 template<typename SV>
-void sparse_vector_scanner<SV>::invert(const SV& sv, typename SV::bvector_type& bv_out)
+void sparse_vector_scanner<SV>::invert(const SV& sv, bvector_type& bv_out)
 {
     if (sv.size() == 0)
     {
@@ -1493,7 +1526,7 @@ void sparse_vector_scanner<SV>::invert(const SV& sv, typename SV::bvector_type& 
 
 template<typename SV>
 void sparse_vector_scanner<SV>::correct_nulls(const SV&   sv,
-                           typename SV::bvector_type& bv_out)
+                                              bvector_type& bv_out)
 {
     const bvector_type* bv_null = sv.get_null_bvector();
     if (bv_null) // correct result to only use not NULL elements
@@ -1504,9 +1537,9 @@ void sparse_vector_scanner<SV>::correct_nulls(const SV&   sv,
 
 template<typename SV>
 bool sparse_vector_scanner<SV>::find_eq_with_nulls(const SV&    sv,
-                                    typename SV::value_type     value,
-                                    typename SV::bvector_type&  bv_out,
-                                    typename SV::size_type      search_limit)
+                                    value_type     value,
+                                    bvector_type&  bv_out,
+                                    size_type      search_limit)
 {
     if (sv.empty())
         return false; // nothing to do
@@ -1535,8 +1568,8 @@ bool sparse_vector_scanner<SV>::find_eq_with_nulls(const SV&    sv,
 
 template<typename SV>
 bool sparse_vector_scanner<SV>::find_first_eq(const SV&   sv,
-                               typename SV::value_type    value,
-                               size_type&                 idx)
+                                            value_type    value,
+                                            size_type&    idx)
 {
     if (sv.empty())
         return false; // nothing to do
@@ -1560,7 +1593,7 @@ bool sparse_vector_scanner<SV>::find_first_eq(const SV&   sv,
 template<typename SV>
 bool sparse_vector_scanner<SV>::find_first_eq(
                                 const SV&                       sv,
-                                const typename SV::value_type*  str,
+                                const value_type*               str,
                                 size_type&                      idx,
                                 bool                            remaped)
 {
@@ -1608,7 +1641,7 @@ bool sparse_vector_scanner<SV>::find_first_eq(
 
 template<typename SV>
 bool sparse_vector_scanner<SV>::prepare_and_sub_aggregator(const SV&  sv,
-                                      const typename SV::value_type*  str,
+                                      const value_type*  str,
                                       unsigned octet_start,
                                       bool prefix_sub)
 {
@@ -1657,7 +1690,7 @@ bool sparse_vector_scanner<SV>::prepare_and_sub_aggregator(const SV&  sv,
 
 template<typename SV>
 bool sparse_vector_scanner<SV>::prepare_and_sub_aggregator(const SV&   sv,
-                                           typename SV::value_type   value)
+                                                           value_type   value)
 {
     using unsigned_value_type = typename SV::unsigned_value_type;
 
@@ -1696,9 +1729,10 @@ bool sparse_vector_scanner<SV>::prepare_and_sub_aggregator(const SV&   sv,
 //----------------------------------------------------------------------------
 
 template<typename SV>
-void sparse_vector_scanner<SV>::find_eq_with_nulls_horizontal(const SV&  sv,
-    typename SV::value_type    value,
-    typename SV::bvector_type& bv_out)
+void sparse_vector_scanner<SV>::find_eq_with_nulls_horizontal(
+                                  const SV&     sv,
+                                  value_type    value,
+                                  bvector_type& bv_out)
 {
     bv_out.clear();
     if (sv.empty())
@@ -1743,14 +1777,87 @@ void sparse_vector_scanner<SV>::find_eq_with_nulls_horizontal(const SV&  sv,
             bv_out -= *bv;
     } // for i
 }
+
+//----------------------------------------------------------------------------
+
+template<typename SV>
+void sparse_vector_scanner<SV>::find_gt(const SV&      sv,
+                                        value_type     val,
+                                        bvector_type&  bv_out)
+{
+    // this is not very optimal but should be good enough
+    find_gt_horizontal(sv, val, bv_out, true /*NULL correction */);
+}
+
+//----------------------------------------------------------------------------
+
+template<typename SV>
+void sparse_vector_scanner<SV>::find_ge(const SV&      sv,
+                                        value_type     val,
+                                        bvector_type&  bv_out)
+{
+    if constexpr (std::is_signed<value_type>::value)
+    {
+        if (val == std::numeric_limits<int>::min())
+        {
+            bvector_type bv_min;
+            find_eq(sv, val, bv_min);
+            find_gt_horizontal(sv, val, bv_out, true /*NULL correction */);
+            bv_out.merge(bv_min);
+        }
+        else
+        {
+            --val;
+            find_gt_horizontal(sv, val, bv_out, true /*NULL correction */);
+        }
+    }
+    else // unsigned
+    {
+        if (val)
+        {
+            --val;
+            find_gt_horizontal(sv, val, bv_out, true /*NULL correction */);
+        }
+        else // val == 0
+        {
+            // result set is ALL elements minus possible NULL values
+            bv_out.set_range(0, sv.size()-1);
+            correct_nulls(sv, bv_out);
+        }
+    }
+}
+
+//----------------------------------------------------------------------------
+
+template<typename SV>
+void sparse_vector_scanner<SV>::find_lt(const SV&      sv,
+                                        value_type     val,
+                                        bvector_type&  bv_out)
+{
+    find_ge(sv, val, bv_out);
+    invert(sv, bv_out);
+}
+
+//----------------------------------------------------------------------------
+
+template<typename SV>
+void sparse_vector_scanner<SV>::find_le(const SV& sv,
+                                        value_type val,
+                                        bvector_type&  bv_out)
+{
+    find_gt(sv, val, bv_out);
+    invert(sv, bv_out);
+}
+
+
 //----------------------------------------------------------------------------
 
 
 template<typename SV>
 void sparse_vector_scanner<SV>::find_gt_horizontal(const SV&   sv,
-                                         typename SV::value_type     value,
-                                         typename SV::bvector_type&  bv_out,
-                                         bool null_correct)
+                                                   value_type     value,
+                                                   bvector_type&  bv_out,
+                                                   bool null_correct)
 {
     unsigned char blist[64];
     unsigned bit_count_v;
@@ -1919,7 +2026,15 @@ void sparse_vector_scanner<SV>::find_gt_horizontal(const SV&   sv,
     decompress(sv, bv_out);
 
     if (null_correct)
-        correct_nulls(sv, bv_out);
+    {
+        if constexpr (!std::is_signed<value_type>::value) // unsigned
+            return; // NULL correction for positive values is not needed
+        else // signed
+        {
+            if (value < 0)
+                correct_nulls(sv, bv_out);
+        }
+    }
 }
 
 //----------------------------------------------------------------------------

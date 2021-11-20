@@ -211,7 +211,7 @@ bool sse4_is_all_zero(const __m128i* BMRESTRICT block) BMNOEXCEPT
     @brief check if digest stride is all zero bits
     @ingroup SSE4
 */
-inline
+BMFORCEINLINE
 bool sse4_is_digest_zero(const __m128i* BMRESTRICT block) BMNOEXCEPT
 {
     __m128i wA = _mm_or_si128(_mm_load_si128(block+0), _mm_load_si128(block+1));
@@ -230,7 +230,7 @@ bool sse4_is_digest_zero(const __m128i* BMRESTRICT block) BMNOEXCEPT
     @brief set digest stride to 0xFF.. or 0x0 value
     @ingroup SSE4
 */
-inline
+BMFORCEINLINE
 void sse4_block_set_digest(__m128i* dst, unsigned value) BMNOEXCEPT
 {
     __m128i mV = _mm_set1_epi32(int(value));
@@ -295,7 +295,7 @@ unsigned sse4_and_block(__m128i* BMRESTRICT dst,
     @return true if stide is all zero
     @ingroup SSE4
 */
-inline
+BMFORCEINLINE
 bool sse4_and_digest(__m128i* BMRESTRICT dst,
                      const __m128i* BMRESTRICT src) BMNOEXCEPT
 {
@@ -343,7 +343,7 @@ bool sse4_and_digest(__m128i* BMRESTRICT dst,
     @return true if stide is all zero
     @ingroup SSE4
 */
-inline
+BMFORCEINLINE
 bool sse4_and_digest_2way(__m128i* BMRESTRICT dst,
                           const __m128i* BMRESTRICT src1,
                           const __m128i* BMRESTRICT src2) BMNOEXCEPT
@@ -529,7 +529,7 @@ bool sse4_and_digest_5way(__m128i* BMRESTRICT dst,
     @return true if stide is all zero
     @ingroup SSE4
 */
-inline
+BMFORCEINLINE
 bool sse4_sub_digest(__m128i* BMRESTRICT dst,
                      const __m128i* BMRESTRICT src) BMNOEXCEPT
 {
@@ -578,7 +578,7 @@ bool sse4_sub_digest(__m128i* BMRESTRICT dst,
     @return true if stide is all zero
     @ingroup SSE4
 */
-inline
+BMFORCEINLINE
 bool sse4_sub_digest_2way(__m128i* BMRESTRICT dst,
                           const __m128i* BMRESTRICT src1,
                           const __m128i* BMRESTRICT src2) BMNOEXCEPT
@@ -623,7 +623,7 @@ bool sse4_sub_digest_2way(__m128i* BMRESTRICT dst,
 
 
 /*!
-    @brief check if block is all zero bits
+    @brief check if block is all ONE bits
     @ingroup SSE4
 */
 inline
@@ -980,7 +980,7 @@ void sse42_bit_block_calc_change_bc(const __m128i* BMRESTRICT block,
 
 /*!
    \brief Find first bit which is different between two bit-blocks
-  @ingroup AVX2
+  @ingroup SSE4
 */
 inline
 bool sse42_bit_find_first_diff(const __m128i* BMRESTRICT block1,
@@ -991,7 +991,7 @@ bool sse42_bit_find_first_diff(const __m128i* BMRESTRICT block1,
 
     const __m128i* block1_end =
         (const __m128i*)((bm::word_t*)(block1) + bm::set_block_size);
-    __m128i maskZ = _mm_setzero_si128();
+    const __m128i maskZ = _mm_setzero_si128();
     __m128i mA, mB;
     unsigned simd_lane = 0;
     do
@@ -1036,7 +1036,7 @@ bool sse42_bit_find_first_diff(const __m128i* BMRESTRICT block1,
 
 /*!
    \brief Find first non-zero bit
-  @ingroup AVX2
+  @ingroup SSE4
 */
 inline
 bool sse42_bit_find_first(const __m128i* BMRESTRICT block,
@@ -1046,7 +1046,7 @@ bool sse42_bit_find_first(const __m128i* BMRESTRICT block,
 
     const __m128i* block_end =
         (const __m128i*)((bm::word_t*)(block) + bm::set_block_size);
-    __m128i maskZ = _mm_setzero_si128();
+    const __m128i maskZ = _mm_setzero_si128();
     __m128i mA, mB;
     unsigned simd_lane = 0;
     do

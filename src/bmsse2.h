@@ -184,6 +184,671 @@ bm::id_t sse2_bit_count_op(const __m128i* BMRESTRICT block,
     return tcnt[0] + tcnt[1] + tcnt[2] + tcnt[3];
 }
 
+/*!
+    @brief check if block is all zero bits
+    @ingroup SSE2
+*/
+inline
+bool sse2_is_all_zero(const __m128i* BMRESTRICT block) BMNOEXCEPT
+{
+    __m128i w;
+    const __m128i maskz = _mm_setzero_si128();
+    const __m128i* BMRESTRICT block_end =
+        (const __m128i*)((bm::word_t*)(block) + bm::set_block_size);
+
+    do
+    {
+        w = _mm_or_si128(_mm_load_si128(block+0), _mm_load_si128(block+1));
+        auto m1 = _mm_movemask_epi8(_mm_cmpeq_epi8(w, maskz));
+        w = _mm_or_si128(_mm_load_si128(block+2), _mm_load_si128(block+3));
+        auto m2 = _mm_movemask_epi8(_mm_cmpeq_epi8(w, maskz));
+        if (m1 != 0xFFFF || m2 != 0xFFFF)
+            return false;
+        block += 4;
+    } while (block < block_end);
+    return true;
+}
+
+/*!
+    @brief check if block is all ONE bits
+    @ingroup SSE2
+*/
+inline
+bool sse2_is_all_one(const __m128i* BMRESTRICT block) BMNOEXCEPT
+{
+    __m128i w;
+    const __m128i mask1 = _mm_set_epi32 (~0u, ~0u, ~0u, ~0u);
+    const __m128i* BMRESTRICT block_end =
+        (const __m128i*)((bm::word_t*)(block) + bm::set_block_size);
+
+    do
+    {
+        w = _mm_and_si128(_mm_load_si128(block+0), _mm_load_si128(block+1));
+        auto m1 = _mm_movemask_epi8(_mm_cmpeq_epi8(w, mask1));
+        w = _mm_and_si128(_mm_load_si128(block+2), _mm_load_si128(block+3));
+        auto m2 = _mm_movemask_epi8(_mm_cmpeq_epi8(w, mask1));
+        if (m1 != 0xFFFF || m2 != 0xFFFF)
+            return false;
+        block+=4;
+    } while (block < block_end);
+    return true;
+}
+
+/*!
+    @brief check if digest stride is all zero bits
+    @ingroup SSE2
+*/
+BMFORCEINLINE
+bool sse2_is_digest_zero(const __m128i* BMRESTRICT block) BMNOEXCEPT
+{
+    const __m128i maskz = _mm_setzero_si128();
+
+    __m128i wA = _mm_or_si128(_mm_load_si128(block+0), _mm_load_si128(block+1));
+    __m128i wB = _mm_or_si128(_mm_load_si128(block+2), _mm_load_si128(block+3));
+    wA = _mm_or_si128(wA, wB);
+    auto m1 = _mm_movemask_epi8(_mm_cmpeq_epi8(wA, maskz));
+
+    wA = _mm_or_si128(_mm_load_si128(block+4), _mm_load_si128(block+5));
+    wB = _mm_or_si128(_mm_load_si128(block+6), _mm_load_si128(block+7));
+    wA = _mm_or_si128(wA, wB);
+    auto m2 = _mm_movemask_epi8(_mm_cmpeq_epi8(wA, maskz));
+
+    if (m1 != 0xFFFF || m2 != 0xFFFF)
+        return false;
+    return true;
+}
+
+/*!
+    @brief set digest stride to 0xFF.. or 0x0 value
+    @ingroup SSE2
+*/
+BMFORCEINLINE
+void sse2_block_set_digest(__m128i* dst, unsigned value) BMNOEXCEPT
+{
+    __m128i mV = _mm_set1_epi32(int(value));
+    _mm_store_si128(dst, mV);     _mm_store_si128(dst + 1, mV);
+    _mm_store_si128(dst + 2, mV); _mm_store_si128(dst + 3, mV);
+    _mm_store_si128(dst + 4, mV); _mm_store_si128(dst + 5, mV);
+    _mm_store_si128(dst + 6, mV); _mm_store_si128(dst + 7, mV);
+}
+
+
+/**
+    Build partial XOR product of 2 bit-blocks using digest mask
+
+    @param target_block - target := block ^ xor_block
+    @param block - arg1
+    @param xor_block - arg2
+    @param digest - mask for each block wave to XOR (1) or just copy (0)
+
+    @ingroup SSE2
+*/
+inline
+void sse2_bit_block_xor(bm::word_t*   target_block,
+                   const bm::word_t*  block,
+                   const bm::word_t*  xor_block,
+                   bm::id64_t digest) BMNOEXCEPT
+{
+    for (unsigned i = 0; i < bm::block_waves; ++i)
+    {
+        const bm::id64_t mask = (1ull << i);
+        unsigned off = (i * bm::set_block_digest_wave_size);
+        const __m128i* sub_block = (__m128i*) (block + off);
+        __m128i* t_sub_block = (__m128i*)(target_block + off);
+
+        if (digest & mask) // XOR filtered sub-block
+        {
+            const __m128i* xor_sub_block = (__m128i*) (xor_block + off);
+            __m128i mA, mB, mC, mD;
+            mA = _mm_xor_si128(_mm_load_si128(sub_block),
+                                  _mm_load_si128(xor_sub_block));
+            mB = _mm_xor_si128(_mm_load_si128(sub_block+1),
+                                  _mm_load_si128(xor_sub_block+1));
+            mC = _mm_xor_si128(_mm_load_si128(sub_block+2),
+                                  _mm_load_si128(xor_sub_block+2));
+            mD = _mm_xor_si128(_mm_load_si128(sub_block+3),
+                                  _mm_load_si128(xor_sub_block+3));
+
+            _mm_store_si128(t_sub_block, mA);
+            _mm_store_si128(t_sub_block+1, mB);
+            _mm_store_si128(t_sub_block+2, mC);
+            _mm_store_si128(t_sub_block+3, mD);
+
+            mA = _mm_xor_si128(_mm_load_si128(sub_block+4),
+                                  _mm_load_si128(xor_sub_block+4));
+            mB = _mm_xor_si128(_mm_load_si128(sub_block+5),
+                                  _mm_load_si128(xor_sub_block+5));
+            mC = _mm_xor_si128(_mm_load_si128(sub_block+6),
+                                  _mm_load_si128(xor_sub_block+6));
+            mD = _mm_xor_si128(_mm_load_si128(sub_block+7),
+                                  _mm_load_si128(xor_sub_block+7));
+
+            _mm_store_si128(t_sub_block+4, mA);
+            _mm_store_si128(t_sub_block+5, mB);
+            _mm_store_si128(t_sub_block+6, mC);
+            _mm_store_si128(t_sub_block+7, mD);
+
+        }
+        else // just copy source
+        {
+            _mm_store_si128(t_sub_block ,  _mm_load_si128(sub_block));
+            _mm_store_si128(t_sub_block+1, _mm_load_si128(sub_block+1));
+            _mm_store_si128(t_sub_block+2, _mm_load_si128(sub_block+2));
+            _mm_store_si128(t_sub_block+3, _mm_load_si128(sub_block+3));
+
+            _mm_store_si128(t_sub_block+4, _mm_load_si128(sub_block+4));
+            _mm_store_si128(t_sub_block+5, _mm_load_si128(sub_block+5));
+            _mm_store_si128(t_sub_block+6, _mm_load_si128(sub_block+6));
+            _mm_store_si128(t_sub_block+7, _mm_load_si128(sub_block+7));
+        }
+    } // for i
+}
+
+/**
+    Build partial XOR product of 2 bit-blocks using digest mask
+
+    @param target_block - target ^= xor_block
+    @param xor_block - arg1
+    @param digest - mask for each block wave to XOR (if 1)
+
+    @ingroup SSE2
+    @internal
+*/
+inline
+void sse2_bit_block_xor_2way(bm::word_t* target_block,
+                             const bm::word_t*  xor_block,
+                             bm::id64_t digest) BMNOEXCEPT
+{
+    while (digest)
+    {
+        bm::id64_t t = bm::bmi_blsi_u64(digest); // d & -d;
+        unsigned wave = bm::word_bitcount64(t - 1);
+        unsigned off = wave * bm::set_block_digest_wave_size;
+
+        const __m128i* sub_block = (const __m128i*) (xor_block + off);
+        __m128i* t_sub_block = (__m128i*)(target_block + off);
+
+        __m128i mA, mB, mC, mD;
+        mA = _mm_xor_si128(_mm_load_si128(sub_block),
+                              _mm_load_si128(t_sub_block));
+        mB = _mm_xor_si128(_mm_load_si128(sub_block+1),
+                              _mm_load_si128(t_sub_block+1));
+        mC = _mm_xor_si128(_mm_load_si128(sub_block+2),
+                              _mm_load_si128(t_sub_block+2));
+        mD = _mm_xor_si128(_mm_load_si128(sub_block+3),
+                              _mm_load_si128(t_sub_block+3));
+
+        _mm_store_si128(t_sub_block, mA);
+        _mm_store_si128(t_sub_block+1, mB);
+        _mm_store_si128(t_sub_block+2, mC);
+        _mm_store_si128(t_sub_block+3, mD);
+
+        mA = _mm_xor_si128(_mm_load_si128(sub_block+4),
+                              _mm_load_si128(t_sub_block+4));
+        mB = _mm_xor_si128(_mm_load_si128(sub_block+5),
+                              _mm_load_si128(t_sub_block+5));
+        mC = _mm_xor_si128(_mm_load_si128(sub_block+6),
+                              _mm_load_si128(t_sub_block+6));
+        mD = _mm_xor_si128(_mm_load_si128(sub_block+7),
+                              _mm_load_si128(t_sub_block+7));
+
+        _mm_store_si128(t_sub_block+4, mA);
+        _mm_store_si128(t_sub_block+5, mB);
+        _mm_store_si128(t_sub_block+6, mC);
+        _mm_store_si128(t_sub_block+7, mD);
+
+        digest = bm::bmi_bslr_u64(digest); // d &= d - 1;
+    } // while
+}
+
+
+
+/*!
+    @brief AND block digest stride
+    *dst &= *src
+    @return true if stide is all zero
+    @ingroup SSE2
+*/
+BMFORCEINLINE
+bool sse2_and_digest(__m128i* BMRESTRICT dst,
+                     const __m128i* BMRESTRICT src) BMNOEXCEPT
+{
+    __m128i m1A, m1B, m1C, m1D;
+    const __m128i maskz = _mm_setzero_si128();
+
+    m1A = _mm_and_si128(_mm_load_si128(src+0), _mm_load_si128(dst+0));
+    m1B = _mm_and_si128(_mm_load_si128(src+1), _mm_load_si128(dst+1));
+    m1C = _mm_and_si128(_mm_load_si128(src+2), _mm_load_si128(dst+2));
+    m1D = _mm_and_si128(_mm_load_si128(src+3), _mm_load_si128(dst+3));
+
+    _mm_store_si128(dst+0, m1A);
+    _mm_store_si128(dst+1, m1B);
+    _mm_store_si128(dst+2, m1C);
+    _mm_store_si128(dst+3, m1D);
+
+    m1A = _mm_or_si128(m1A, m1B);
+    m1C = _mm_or_si128(m1C, m1D);
+    m1A = _mm_or_si128(m1A, m1C);
+
+    bool z1 = _mm_movemask_epi8(_mm_cmpeq_epi8(m1A, maskz)) == 0xFFFF;
+
+    m1A = _mm_and_si128(_mm_load_si128(src+4), _mm_load_si128(dst+4));
+    m1B = _mm_and_si128(_mm_load_si128(src+5), _mm_load_si128(dst+5));
+    m1C = _mm_and_si128(_mm_load_si128(src+6), _mm_load_si128(dst+6));
+    m1D = _mm_and_si128(_mm_load_si128(src+7), _mm_load_si128(dst+7));
+
+    _mm_store_si128(dst+4, m1A);
+    _mm_store_si128(dst+5, m1B);
+    _mm_store_si128(dst+6, m1C);
+    _mm_store_si128(dst+7, m1D);
+
+     m1A = _mm_or_si128(m1A, m1B);
+     m1C = _mm_or_si128(m1C, m1D);
+     m1A = _mm_or_si128(m1A, m1C);
+
+     bool z2 = _mm_movemask_epi8(_mm_cmpeq_epi8(m1A, maskz)) == 0xFFFF;
+
+     return z1 & z2;
+}
+
+/*!
+    @brief AND-OR block digest stride
+    *dst |= *src1 & src2
+
+    @return true if stide is all zero
+    @ingroup SSE2
+*/
+BMFORCEINLINE
+bool sse2_and_or_digest_2way(__m128i* BMRESTRICT dst,
+                             const __m128i* BMRESTRICT src1,
+                             const __m128i* BMRESTRICT src2) BMNOEXCEPT
+{
+    __m128i m1A, m1B, m1C, m1D;
+    __m128i mACC1;
+    const __m128i maskz = _mm_setzero_si128();
+
+    m1A = _mm_and_si128(_mm_load_si128(src1+0), _mm_load_si128(src2+0));
+    m1B = _mm_and_si128(_mm_load_si128(src1+1), _mm_load_si128(src2+1));
+    m1C = _mm_and_si128(_mm_load_si128(src1+2), _mm_load_si128(src2+2));
+    m1D = _mm_and_si128(_mm_load_si128(src1+3), _mm_load_si128(src2+3));
+
+    mACC1 = _mm_or_si128(_mm_or_si128(m1A, m1B), _mm_or_si128(m1C, m1D));
+    bool z1 = _mm_movemask_epi8(_mm_cmpeq_epi8(mACC1, maskz)) == 0xFFFF;
+
+    m1A = _mm_or_si128(_mm_load_si128(dst+0), m1A);
+    m1B = _mm_or_si128(_mm_load_si128(dst+1), m1B);
+    m1C = _mm_or_si128(_mm_load_si128(dst+2), m1C);
+    m1D = _mm_or_si128(_mm_load_si128(dst+3), m1D);
+
+    _mm_store_si128(dst+0, m1A);
+    _mm_store_si128(dst+1, m1B);
+    _mm_store_si128(dst+2, m1C);
+    _mm_store_si128(dst+3, m1D);
+
+
+    m1A = _mm_and_si128(_mm_load_si128(src1+4), _mm_load_si128(src2+4));
+    m1B = _mm_and_si128(_mm_load_si128(src1+5), _mm_load_si128(src2+5));
+    m1C = _mm_and_si128(_mm_load_si128(src1+6), _mm_load_si128(src2+6));
+    m1D = _mm_and_si128(_mm_load_si128(src1+7), _mm_load_si128(src2+7));
+
+    mACC1 = _mm_or_si128(_mm_or_si128(m1A, m1B), _mm_or_si128(m1C, m1D));
+    bool z2 = _mm_movemask_epi8(_mm_cmpeq_epi8(mACC1, maskz)) == 0xFFFF;
+
+    m1A = _mm_or_si128(_mm_load_si128(dst+4), m1A);
+    m1B = _mm_or_si128(_mm_load_si128(dst+5), m1B);
+    m1C = _mm_or_si128(_mm_load_si128(dst+6), m1C);
+    m1D = _mm_or_si128(_mm_load_si128(dst+7), m1D);
+
+    _mm_store_si128(dst+4, m1A);
+    _mm_store_si128(dst+5, m1B);
+    _mm_store_si128(dst+6, m1C);
+    _mm_store_si128(dst+7, m1D);
+
+     return z1 & z2;
+}
+
+
+/*!
+    @brief AND block digest stride
+    @return true if stide is all zero
+    @ingroup SSE2
+*/
+inline
+bool sse2_and_digest_5way(__m128i* BMRESTRICT dst,
+                          const __m128i* BMRESTRICT src1,
+                          const __m128i* BMRESTRICT src2,
+                          const __m128i* BMRESTRICT src3,
+                          const __m128i* BMRESTRICT src4) BMNOEXCEPT
+{
+    __m128i m1A, m1B, m1C, m1D;
+    __m128i m1E, m1F, m1G, m1H;
+
+    m1A = _mm_and_si128(_mm_load_si128(src1+0), _mm_load_si128(src2+0));
+    m1B = _mm_and_si128(_mm_load_si128(src1+1), _mm_load_si128(src2+1));
+    m1C = _mm_and_si128(_mm_load_si128(src1+2), _mm_load_si128(src2+2));
+    m1D = _mm_and_si128(_mm_load_si128(src1+3), _mm_load_si128(src2+3));
+
+    m1E = _mm_and_si128(_mm_load_si128(src3+0), _mm_load_si128(src4+0));
+    m1F = _mm_and_si128(_mm_load_si128(src3+1), _mm_load_si128(src4+1));
+    m1G = _mm_and_si128(_mm_load_si128(src3+2), _mm_load_si128(src4+2));
+    m1H = _mm_and_si128(_mm_load_si128(src3+3), _mm_load_si128(src4+3));
+
+    m1A = _mm_and_si128(m1A, m1E);
+    m1B = _mm_and_si128(m1B, m1F);
+    m1C = _mm_and_si128(m1C, m1G);
+    m1D = _mm_and_si128(m1D, m1H);
+
+    m1A = _mm_and_si128(m1A, _mm_load_si128(dst+0));
+    m1B = _mm_and_si128(m1B, _mm_load_si128(dst+1));
+    m1C = _mm_and_si128(m1C, _mm_load_si128(dst+2));
+    m1D = _mm_and_si128(m1D, _mm_load_si128(dst+3));
+
+    _mm_store_si128(dst+0, m1A);
+    _mm_store_si128(dst+1, m1B);
+    _mm_store_si128(dst+2, m1C);
+    _mm_store_si128(dst+3, m1D);
+
+    m1A = _mm_or_si128(m1A, m1B);
+    m1C = _mm_or_si128(m1C, m1D);
+    m1A = _mm_or_si128(m1A, m1C);
+
+    bool z1 = _mm_movemask_epi8(_mm_cmpeq_epi8(m1A, _mm_setzero_si128())) == 0xFFFF;
+
+    m1A = _mm_and_si128(_mm_load_si128(src1+4), _mm_load_si128(src2+4));
+    m1B = _mm_and_si128(_mm_load_si128(src1+5), _mm_load_si128(src2+5));
+    m1C = _mm_and_si128(_mm_load_si128(src1+6), _mm_load_si128(src2+6));
+    m1D = _mm_and_si128(_mm_load_si128(src1+7), _mm_load_si128(src2+7));
+
+    m1E = _mm_and_si128(_mm_load_si128(src3+4), _mm_load_si128(src4+4));
+    m1F = _mm_and_si128(_mm_load_si128(src3+5), _mm_load_si128(src4+5));
+    m1G = _mm_and_si128(_mm_load_si128(src3+6), _mm_load_si128(src4+6));
+    m1H = _mm_and_si128(_mm_load_si128(src3+7), _mm_load_si128(src4+7));
+
+    m1A = _mm_and_si128(m1A, m1E);
+    m1B = _mm_and_si128(m1B, m1F);
+    m1C = _mm_and_si128(m1C, m1G);
+    m1D = _mm_and_si128(m1D, m1H);
+
+    m1A = _mm_and_si128(m1A, _mm_load_si128(dst+4));
+    m1B = _mm_and_si128(m1B, _mm_load_si128(dst+5));
+    m1C = _mm_and_si128(m1C, _mm_load_si128(dst+6));
+    m1D = _mm_and_si128(m1D, _mm_load_si128(dst+7));
+
+    _mm_store_si128(dst+4, m1A);
+    _mm_store_si128(dst+5, m1B);
+    _mm_store_si128(dst+6, m1C);
+    _mm_store_si128(dst+7, m1D);
+
+     m1A = _mm_or_si128(m1A, m1B);
+     m1C = _mm_or_si128(m1C, m1D);
+     m1A = _mm_or_si128(m1A, m1C);
+
+     bool z2 = _mm_movemask_epi8(_mm_cmpeq_epi8(m1A, _mm_setzero_si128())) == 0xFFFF;
+
+     return z1 & z2;
+}
+
+
+/*!
+    @brief AND block digest stride
+    *dst = *src1 & src2
+
+    @return true if stide is all zero
+    @ingroup SSE2
+*/
+BMFORCEINLINE
+bool sse2_and_digest_2way(__m128i* BMRESTRICT dst,
+                          const __m128i* BMRESTRICT src1,
+                          const __m128i* BMRESTRICT src2) BMNOEXCEPT
+{
+    __m128i m1A, m1B, m1C, m1D;
+
+    m1A = _mm_and_si128(_mm_load_si128(src1+0), _mm_load_si128(src2+0));
+    m1B = _mm_and_si128(_mm_load_si128(src1+1), _mm_load_si128(src2+1));
+    m1C = _mm_and_si128(_mm_load_si128(src1+2), _mm_load_si128(src2+2));
+    m1D = _mm_and_si128(_mm_load_si128(src1+3), _mm_load_si128(src2+3));
+
+    _mm_store_si128(dst+0, m1A);
+    _mm_store_si128(dst+1, m1B);
+    _mm_store_si128(dst+2, m1C);
+    _mm_store_si128(dst+3, m1D);
+
+    m1A = _mm_or_si128(m1A, m1B);
+    m1C = _mm_or_si128(m1C, m1D);
+    m1A = _mm_or_si128(m1A, m1C);
+
+    const __m128i maskz = _mm_setzero_si128();
+    bool z1 = _mm_movemask_epi8(_mm_cmpeq_epi8(m1A, maskz)) == 0xFFFF;
+
+    m1A = _mm_and_si128(_mm_load_si128(src1+4), _mm_load_si128(src2+4));
+    m1B = _mm_and_si128(_mm_load_si128(src1+5), _mm_load_si128(src2+5));
+    m1C = _mm_and_si128(_mm_load_si128(src1+6), _mm_load_si128(src2+6));
+    m1D = _mm_and_si128(_mm_load_si128(src1+7), _mm_load_si128(src2+7));
+
+    _mm_store_si128(dst+4, m1A);
+    _mm_store_si128(dst+5, m1B);
+    _mm_store_si128(dst+6, m1C);
+    _mm_store_si128(dst+7, m1D);
+
+     m1A = _mm_or_si128(m1A, m1B);
+     m1C = _mm_or_si128(m1C, m1D);
+     m1A = _mm_or_si128(m1A, m1C);
+
+     bool z2 = _mm_movemask_epi8(_mm_cmpeq_epi8(m1A, maskz)) == 0xFFFF;
+
+     return z1 & z2;
+}
+
+/*!
+    @brief SUB (AND NOT) block digest stride
+    *dst &= ~*src
+
+    @return true if stide is all zero
+    @ingroup SSE2
+*/
+BMFORCEINLINE
+bool sse2_sub_digest(__m128i* BMRESTRICT dst,
+                     const __m128i* BMRESTRICT src) BMNOEXCEPT
+{
+    __m128i m1A, m1B, m1C, m1D;
+    const __m128i maskz = _mm_setzero_si128();
+
+    m1A = _mm_andnot_si128(_mm_load_si128(src+0), _mm_load_si128(dst+0));
+    m1B = _mm_andnot_si128(_mm_load_si128(src+1), _mm_load_si128(dst+1));
+    m1C = _mm_andnot_si128(_mm_load_si128(src+2), _mm_load_si128(dst+2));
+    m1D = _mm_andnot_si128(_mm_load_si128(src+3), _mm_load_si128(dst+3));
+
+    _mm_store_si128(dst+0, m1A);
+    _mm_store_si128(dst+1, m1B);
+    _mm_store_si128(dst+2, m1C);
+    _mm_store_si128(dst+3, m1D);
+
+    m1A = _mm_or_si128(m1A, m1B);
+    m1C = _mm_or_si128(m1C, m1D);
+    m1A = _mm_or_si128(m1A, m1C);
+
+    bool z1 = _mm_movemask_epi8(_mm_cmpeq_epi8(m1A, maskz)) == 0xFFFF;
+
+    m1A = _mm_andnot_si128(_mm_load_si128(src+4), _mm_load_si128(dst+4));
+    m1B = _mm_andnot_si128(_mm_load_si128(src+5), _mm_load_si128(dst+5));
+    m1C = _mm_andnot_si128(_mm_load_si128(src+6), _mm_load_si128(dst+6));
+    m1D = _mm_andnot_si128(_mm_load_si128(src+7), _mm_load_si128(dst+7));
+
+    _mm_store_si128(dst+4, m1A);
+    _mm_store_si128(dst+5, m1B);
+    _mm_store_si128(dst+6, m1C);
+    _mm_store_si128(dst+7, m1D);
+
+     m1A = _mm_or_si128(m1A, m1B);
+     m1C = _mm_or_si128(m1C, m1D);
+     m1A = _mm_or_si128(m1A, m1C);
+
+     bool z2 = _mm_movemask_epi8(_mm_cmpeq_epi8(m1A, maskz)) == 0xFFFF;
+
+     return z1 & z2;
+}
+
+/*!
+    @brief 2-operand SUB (AND NOT) block digest stride
+    *dst = src1 & ~*src2
+
+    @return true if stide is all zero
+    @ingroup SSE2
+*/
+BMFORCEINLINE
+bool sse2_sub_digest_2way(__m128i* BMRESTRICT dst,
+                          const __m128i* BMRESTRICT src1,
+                          const __m128i* BMRESTRICT src2) BMNOEXCEPT
+{
+    __m128i m1A, m1B, m1C, m1D;
+    const __m128i maskz = _mm_setzero_si128();
+
+    m1A = _mm_andnot_si128(_mm_load_si128(src2+0), _mm_load_si128(src1+0));
+    m1B = _mm_andnot_si128(_mm_load_si128(src2+1), _mm_load_si128(src1+1));
+    m1C = _mm_andnot_si128(_mm_load_si128(src2+2), _mm_load_si128(src1+2));
+    m1D = _mm_andnot_si128(_mm_load_si128(src2+3), _mm_load_si128(src1+3));
+
+    _mm_store_si128(dst+0, m1A);
+    _mm_store_si128(dst+1, m1B);
+    _mm_store_si128(dst+2, m1C);
+    _mm_store_si128(dst+3, m1D);
+
+    m1A = _mm_or_si128(m1A, m1B);
+    m1C = _mm_or_si128(m1C, m1D);
+    m1A = _mm_or_si128(m1A, m1C);
+
+    bool z1 = _mm_movemask_epi8(_mm_cmpeq_epi8(m1A, maskz)) == 0xFFFF;
+
+    m1A = _mm_andnot_si128(_mm_load_si128(src2+4), _mm_load_si128(src1+4));
+    m1B = _mm_andnot_si128(_mm_load_si128(src2+5), _mm_load_si128(src1+5));
+    m1C = _mm_andnot_si128(_mm_load_si128(src2+6), _mm_load_si128(src1+6));
+    m1D = _mm_andnot_si128(_mm_load_si128(src2+7), _mm_load_si128(src1+7));
+
+    _mm_store_si128(dst+4, m1A);
+    _mm_store_si128(dst+5, m1B);
+    _mm_store_si128(dst+6, m1C);
+    _mm_store_si128(dst+7, m1D);
+
+     m1A = _mm_or_si128(m1A, m1B);
+     m1C = _mm_or_si128(m1C, m1D);
+     m1A = _mm_or_si128(m1A, m1C);
+
+     bool z2 = _mm_movemask_epi8(_mm_cmpeq_epi8(m1A, maskz)) == 0xFFFF;
+
+     return z1 & z2;
+}
+
+
+/*!
+   \brief Find first non-zero bit
+  @ingroup SSE2
+*/
+inline
+bool sse2_bit_find_first(const __m128i* BMRESTRICT block,
+                          unsigned* pos) BMNOEXCEPT
+{
+    unsigned BM_ALIGN32 simd_buf[4] BM_ALIGN32ATTR;
+
+    const __m128i* block_end =
+        (const __m128i*)((bm::word_t*)(block) + bm::set_block_size);
+    const __m128i maskZ = _mm_setzero_si128();
+    __m128i mA, mB;
+    unsigned simd_lane = 0;
+    int bsf;
+    do
+    {
+        mA = _mm_load_si128(block); mB = _mm_load_si128(block+1);
+        __m128i mOR = _mm_or_si128(mA, mB);
+        bool z1 = _mm_movemask_epi8(_mm_cmpeq_epi8(mOR, maskZ)) == 0xFFFF;
+        if (!z1) // test 2x128 lanes
+        {
+            z1 = _mm_movemask_epi8(_mm_cmpeq_epi8(mA, maskZ)) == 0xFFFF;
+            if (!z1)
+            {
+                unsigned mask = _mm_movemask_epi8(_mm_cmpeq_epi32(mA, maskZ));
+                mask = ~mask; // invert to find (w != 0)
+                BM_ASSERT(mask);
+                bsf = bm::bit_scan_forward32(mask); // find first !=0 (could use lzcnt())
+                _mm_store_si128 ((__m128i*)simd_buf, mA);
+                unsigned widx = bsf >> 2; // (bsf / 4);
+                unsigned w = simd_buf[widx];
+                bsf = bm::bit_scan_forward32(w); // find first bit != 0
+                *pos = (simd_lane * 128) + (widx * 32) + bsf;
+                return true;
+            }
+            unsigned mask = _mm_movemask_epi8(_mm_cmpeq_epi32(mB, maskZ));
+            mask = ~mask; // invert to find (w != 0)
+            BM_ASSERT(mask);
+            bsf = bm::bit_scan_forward32(mask); // find first !=0 (could use lzcnt())
+            _mm_store_si128 ((__m128i*)simd_buf, mB);
+            unsigned widx = bsf >> 2; // (bsf / 4);
+            unsigned w = simd_buf[widx];
+            bsf = bm::bit_scan_forward32(w); // find first bit != 0
+            *pos = ((++simd_lane) * 128) + (widx * 32) + bsf;
+            return true;
+        }
+        simd_lane+=2;
+        block+=2;
+    } while (block < block_end);
+
+    return false;
+}
+
+/*!
+   \brief Find first bit which is different between two bit-blocks
+  @ingroup SSE2
+*/
+inline
+bool sse2_bit_find_first_diff(const __m128i* BMRESTRICT block1,
+                              const __m128i* BMRESTRICT block2,
+                              unsigned* pos) BMNOEXCEPT
+{
+    unsigned BM_ALIGN32 simd_buf[4] BM_ALIGN32ATTR;
+
+    const __m128i* block1_end =
+        (const __m128i*)((bm::word_t*)(block1) + bm::set_block_size);
+    const __m128i maskZ = _mm_setzero_si128();
+    __m128i mA, mB;
+    unsigned simd_lane = 0;
+    do
+    {
+        mA = _mm_xor_si128(_mm_load_si128(block1), _mm_load_si128(block2));
+        mB = _mm_xor_si128(_mm_load_si128(block1+1), _mm_load_si128(block2+1));
+        __m128i mOR = _mm_or_si128(mA, mB);
+        bool z1 = _mm_movemask_epi8(_mm_cmpeq_epi8(mOR, maskZ)) == 0xFFFF;
+        if (!z1) // test 2x128 lanes
+        {
+            z1 = _mm_movemask_epi8(_mm_cmpeq_epi8(mA, maskZ)) == 0xFFFF;
+            if (!z1) // test 2x128 lanes
+            {
+                unsigned mask = _mm_movemask_epi8(_mm_cmpeq_epi32(mA, maskZ));
+                mask = ~mask; // invert to find (w != 0)
+                BM_ASSERT(mask);
+                int bsf = bm::bit_scan_forward32(mask); // find first !=0 (could use lzcnt())
+                _mm_store_si128 ((__m128i*)simd_buf, mA);
+                unsigned widx = bsf >> 2; // (bsf / 4);
+                unsigned w = simd_buf[widx]; // _mm_extract_epi32 (mA, widx);
+                bsf = bm::bit_scan_forward32(w); // find first bit != 0
+                *pos = (simd_lane * 128) + (widx * 32) + bsf;
+                return true;
+            }
+            unsigned mask = _mm_movemask_epi8(_mm_cmpeq_epi32(mB, maskZ));
+            mask = ~mask; // invert to find (w != 0)
+            BM_ASSERT(mask);
+            int bsf = bm::bit_scan_forward32(mask); // find first !=0 (could use lzcnt())
+            _mm_store_si128 ((__m128i*)simd_buf, mB);
+            unsigned widx = bsf >> 2; // (bsf / 4);
+            unsigned w = simd_buf[widx]; // _mm_extract_epi32 (mB, widx);
+            bsf = bm::bit_scan_forward32(w); // find first bit != 0
+            *pos = ((++simd_lane) * 128) + (widx * 32) + bsf;
+            return true;
+        }
+        simd_lane+=2;
+        block1+=2; block2+=2;
+    } while (block1 < block1_end);
+    return false;
+}
+
 
 inline
 bm::id_t sse2_bit_block_calc_count_change(const __m128i* BMRESTRICT block,
@@ -500,6 +1165,18 @@ unsigned sse2_gap_test(const unsigned short* BMRESTRICT buf, unsigned pos)
 #define VECT_AND_BLOCK(dst, src) \
     sse2_and_block((__m128i*) dst, (__m128i*) (src))
 
+#define VECT_AND_DIGEST(dst, src) \
+    sse2_and_digest((__m128i*) dst, (const __m128i*) (src))
+
+#define VECT_AND_OR_DIGEST_2WAY(dst, src1, src2) \
+    sse2_and_or_digest_2way((__m128i*) dst, (const __m128i*) (src1), (const __m128i*) (src2))
+
+#define VECT_AND_DIGEST_5WAY(dst, src1, src2, src3, src4) \
+    sse2_and_digest_5way((__m128i*) dst, (const __m128i*) (src1), (const __m128i*) (src2), (const __m128i*) (src3), (const __m128i*) (src4))
+
+#define VECT_AND_DIGEST_2WAY(dst, src1, src2) \
+    sse2_and_digest_2way((__m128i*) dst, (const __m128i*) (src1), (const __m128i*) (src2))
+
 #define VECT_OR_BLOCK(dst, src) \
     sse2_or_block((__m128i*) dst, (__m128i*) (src))
 
@@ -514,6 +1191,12 @@ unsigned sse2_gap_test(const unsigned short* BMRESTRICT buf, unsigned pos)
 
 #define VECT_SUB_BLOCK(dst, src) \
     sse2_sub_block((__m128i*) dst, (__m128i*) (src))
+
+#define VECT_SUB_DIGEST(dst, src) \
+    sse2_sub_digest((__m128i*) dst, (const __m128i*) (src))
+
+#define VECT_SUB_DIGEST_2WAY(dst, src1, src2) \
+    sse2_sub_digest_2way((__m128i*) dst, (const __m128i*) (src1), (const __m128i*) (src2))
 
 #define VECT_XOR_BLOCK(dst, src) \
     sse2_xor_block((__m128i*) dst, (__m128i*) (src))
@@ -536,9 +1219,33 @@ unsigned sse2_gap_test(const unsigned short* BMRESTRICT buf, unsigned pos)
 #define VECT_SET_BLOCK(dst, value) \
     sse2_set_block((__m128i*) dst, value)
 
+#define VECT_IS_ZERO_BLOCK(dst) \
+    sse2_is_all_zero((__m128i*) dst)
+
+#define VECT_IS_ONE_BLOCK(dst) \
+    sse2_is_all_one((__m128i*) dst)
+
+#define VECT_IS_DIGEST_ZERO(start) \
+    sse2_is_digest_zero((__m128i*)start)
+
+#define VECT_BLOCK_SET_DIGEST(dst, val) \
+    sse2_block_set_digest((__m128i*)dst, val)
+
+
+#define VECT_BIT_FIND_FIRST(src, pos) \
+    sse2_bit_find_first((__m128i*) src, pos)
+
+#define VECT_BIT_FIND_DIFF(src1, src2, pos) \
+    sse2_bit_find_first_diff((__m128i*) src1, (__m128i*) (src2), pos)
+
+#define VECT_BIT_BLOCK_XOR(t, src, src_xor, d) \
+    sse2_bit_block_xor(t, src, src_xor, d)
+
+#define VECT_BIT_BLOCK_XOR_2WAY(t, src_xor, d) \
+    sse2_bit_block_xor_2way(t, src_xor, d)
+
 #define VECT_GAP_BFIND(buf, pos, is_set) \
     sse2_gap_bfind(buf, pos, is_set)
-
 
 } // namespace
 

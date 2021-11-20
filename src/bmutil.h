@@ -563,6 +563,39 @@ unsigned compute_h64_mask(unsigned long long w)
 }
 
 
+/*!
+    Function calculates number of 1 bits in 64-bit word.
+    @ingroup bitfunc
+*/
+BMFORCEINLINE
+unsigned word_bitcount64(bm::id64_t x) BMNOEXCEPT
+{
+#if defined(BMSSE42OPT) || defined(BMAVX2OPT) || defined(BMAVX512OPT)
+    #if defined(BM64_SSE4) || defined(BM64_AVX2) || defined(BM64_AVX512)
+        return unsigned(_mm_popcnt_u64(x));
+    #else // 32-bit
+        return _mm_popcnt_u32(x >> 32) + _mm_popcnt_u32((unsigned)x);
+    #endif
+#else
+    #if defined(BM_USE_GCC_BUILD) || defined(__arm64__)
+        return (unsigned)__builtin_popcountll(x);
+    #else
+        #if (defined(__arm__)) // 32-bit
+            return bm::word_bitcount(x >> 32) + bm::word_bitcount((unsigned)x);
+        #else
+            x = x - ((x >> 1) & 0x5555555555555555);
+            x = (x & 0x3333333333333333) + ((x >> 2) & 0x3333333333333333);
+            x = (x + (x >> 4)) & 0x0F0F0F0F0F0F0F0F;
+            x = x + (x >> 8);
+            x = x + (x >> 16);
+            x = x + (x >> 32);
+            return x & 0xFF;
+        #endif
+    #endif
+#endif
+}
+
+
 
 } // bm
 
