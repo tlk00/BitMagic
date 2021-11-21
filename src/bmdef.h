@@ -393,7 +393,7 @@ For more information please visit:  http://bitmagic.io
 */
 #ifndef BM_INCWORD_BITCOUNT
 
-#if (defined(BMSSE42OPT) || defined(BMAVX2OPT) || defined(BMAVX512OPT))
+#if (defined(BMSSE42OPT) || defined(BMAVX2OPT) || defined(BMAVX512OPT) || defined(BMNEONOPT))
 # define BM_INCWORD_BITCOUNT(cnt, w) cnt += unsigned(_mm_popcnt_u32(w));
 #else
 
