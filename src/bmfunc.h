@@ -6954,23 +6954,21 @@ unsigned bit_block_and_count(const bm::word_t* BMRESTRICT src1,
     const bm::id64_t* b2 = (bm::id64_t*) src2;
     do
     {
-        count += bitcount64_4way(b1[0] & b2[0], 
-                                 b1[1] & b2[1], 
-                                 b1[2] & b2[2], 
-                                 b1[3] & b2[3]);
-        b1 += 4;
-        b2 += 4;
+        count += bm::bitcount64_4way(b1[0] & b2[0],
+                                     b1[1] & b2[1],
+                                     b1[2] & b2[2],
+                                     b1[3] & b2[3]);
+        b1 += 4; b2 += 4;
     } while (b1 < b1_end);
 # else
     do
     {
-        BM_INCWORD_BITCOUNT(count, src1[0] & src2[0]);
-        BM_INCWORD_BITCOUNT(count, src1[1] & src2[1]);
-        BM_INCWORD_BITCOUNT(count, src1[2] & src2[2]);
-        BM_INCWORD_BITCOUNT(count, src1[3] & src2[3]);
-
-        src1+=4;
-        src2+=4;
+        count +=
+            bm::word_bitcount(src1[0] & src2[0]) +
+            bm::word_bitcount(src1[1] & src2[1]) +
+            bm::word_bitcount(src1[2] & src2[2]) +
+            bm::word_bitcount(src1[3] & src2[3]);
+        src1+=4; src2+=4;
     } while (src1 < src1_end);
 # endif
 #endif    
@@ -6999,7 +6997,6 @@ unsigned bit_block_and_any(const bm::word_t* src1,
                 (src1[1] & src2[1]) |
                 (src1[2] & src2[2]) |
                 (src1[3] & src2[3]);
-
         src1+=4; src2+=4;
     } while ((src1 < src1_end) && !count);
     return count;
