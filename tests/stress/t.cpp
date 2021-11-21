@@ -31770,6 +31770,42 @@ void TestBlockZero()
 }
 
 static
+void TestFindFirst()
+{
+    cout << " ------------------------------  TestFindFirst()" << endl;
+
+    unsigned pos;
+    bool f;
+    BM_DECLARE_TEMP_BLOCK(tb1);
+
+    for (unsigned i = 0; i < bm::set_block_size; ++i)
+        tb1.b_.w32[i] = 0;
+    f = bm::bit_find_first(tb1, &pos);
+    assert(!f);
+
+    for (unsigned w = 0; w < bm::set_block_size; ++w)
+    {
+        for (unsigned b = 0; b < 32; ++b)
+        {
+            unsigned mask1 = 1u << b;
+            tb1.b_.w32[w] |= mask1;
+
+            f = bm::bit_find_first(tb1, &pos);
+            assert(f);
+
+            unsigned pos_c = w*32 + b;
+            assert(pos == pos_c);
+            tb1.b_.w32[w] = 0;
+        }
+
+    } // for w
+
+
+    cout << " ------------------------------  TestFindFirst()" << endl;
+}
+
+
+static
 void TestFindBlockDiff()
 {
     cout << " ------------------------------ Test bit_find_first_diff()" << endl;
@@ -35400,6 +35436,8 @@ int main(int argc, char *argv[])
         TestSIMDUtils();
 
         TestArraysAndBuffers();
+
+        TestFindFirst();
 
         TestFindBlockDiff();
 

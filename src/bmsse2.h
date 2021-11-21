@@ -475,7 +475,7 @@ bool sse2_and_or_digest_2way(__m128i* BMRESTRICT dst,
     m1D = _mm_and_si128(_mm_load_si128(src1+3), _mm_load_si128(src2+3));
 
     mACC1 = _mm_or_si128(_mm_or_si128(m1A, m1B), _mm_or_si128(m1C, m1D));
-    bool z1 = _mm_movemask_epi8(_mm_cmpeq_epi8(mACC1, maskz)) == 0xFFFF;
+    bool z1 = (_mm_movemask_epi8(_mm_cmpeq_epi8(mACC1, maskz)) == 0xFFFF);
 
     m1A = _mm_or_si128(_mm_load_si128(dst+0), m1A);
     m1B = _mm_or_si128(_mm_load_si128(dst+1), m1B);
@@ -494,7 +494,7 @@ bool sse2_and_or_digest_2way(__m128i* BMRESTRICT dst,
     m1D = _mm_and_si128(_mm_load_si128(src1+7), _mm_load_si128(src2+7));
 
     mACC1 = _mm_or_si128(_mm_or_si128(m1A, m1B), _mm_or_si128(m1C, m1D));
-    bool z2 = _mm_movemask_epi8(_mm_cmpeq_epi8(mACC1, maskz)) == 0xFFFF;
+    bool z2 = (_mm_movemask_epi8(_mm_cmpeq_epi8(mACC1, maskz)) == 0xFFFF);
 
     m1A = _mm_or_si128(_mm_load_si128(dst+4), m1A);
     m1B = _mm_or_si128(_mm_load_si128(dst+5), m1B);
@@ -554,7 +554,7 @@ bool sse2_and_digest_5way(__m128i* BMRESTRICT dst,
     m1C = _mm_or_si128(m1C, m1D);
     m1A = _mm_or_si128(m1A, m1C);
 
-    bool z1 = _mm_movemask_epi8(_mm_cmpeq_epi8(m1A, _mm_setzero_si128())) == 0xFFFF;
+    bool z1 = (_mm_movemask_epi8(_mm_cmpeq_epi8(m1A, _mm_setzero_si128())) == 0xFFFF);
 
     m1A = _mm_and_si128(_mm_load_si128(src1+4), _mm_load_si128(src2+4));
     m1B = _mm_and_si128(_mm_load_si128(src1+5), _mm_load_si128(src2+5));
@@ -585,7 +585,7 @@ bool sse2_and_digest_5way(__m128i* BMRESTRICT dst,
      m1C = _mm_or_si128(m1C, m1D);
      m1A = _mm_or_si128(m1A, m1C);
 
-     bool z2 = _mm_movemask_epi8(_mm_cmpeq_epi8(m1A, _mm_setzero_si128())) == 0xFFFF;
+     bool z2 = (_mm_movemask_epi8(_mm_cmpeq_epi8(m1A, _mm_setzero_si128())) == 0xFFFF);
 
      return z1 & z2;
 }
@@ -620,7 +620,7 @@ bool sse2_and_digest_2way(__m128i* BMRESTRICT dst,
     m1A = _mm_or_si128(m1A, m1C);
 
     const __m128i maskz = _mm_setzero_si128();
-    bool z1 = _mm_movemask_epi8(_mm_cmpeq_epi8(m1A, maskz)) == 0xFFFF;
+    bool z1 = (_mm_movemask_epi8(_mm_cmpeq_epi8(m1A, maskz)) == 0xFFFF);
 
     m1A = _mm_and_si128(_mm_load_si128(src1+4), _mm_load_si128(src2+4));
     m1B = _mm_and_si128(_mm_load_si128(src1+5), _mm_load_si128(src2+5));
@@ -636,7 +636,7 @@ bool sse2_and_digest_2way(__m128i* BMRESTRICT dst,
      m1C = _mm_or_si128(m1C, m1D);
      m1A = _mm_or_si128(m1A, m1C);
 
-     bool z2 = _mm_movemask_epi8(_mm_cmpeq_epi8(m1A, maskz)) == 0xFFFF;
+     bool z2 = (_mm_movemask_epi8(_mm_cmpeq_epi8(m1A, maskz)) == 0xFFFF);
 
      return z1 & z2;
 }
@@ -669,7 +669,7 @@ bool sse2_sub_digest(__m128i* BMRESTRICT dst,
     m1C = _mm_or_si128(m1C, m1D);
     m1A = _mm_or_si128(m1A, m1C);
 
-    bool z1 = _mm_movemask_epi8(_mm_cmpeq_epi8(m1A, maskz)) == 0xFFFF;
+    bool z1 = (_mm_movemask_epi8(_mm_cmpeq_epi8(m1A, maskz)) == 0xFFFF);
 
     m1A = _mm_andnot_si128(_mm_load_si128(src+4), _mm_load_si128(dst+4));
     m1B = _mm_andnot_si128(_mm_load_si128(src+5), _mm_load_si128(dst+5));
@@ -685,7 +685,7 @@ bool sse2_sub_digest(__m128i* BMRESTRICT dst,
      m1C = _mm_or_si128(m1C, m1D);
      m1A = _mm_or_si128(m1A, m1C);
 
-     bool z2 = _mm_movemask_epi8(_mm_cmpeq_epi8(m1A, maskz)) == 0xFFFF;
+     bool z2 = (_mm_movemask_epi8(_mm_cmpeq_epi8(m1A, maskz)) == 0xFFFF);
 
      return z1 & z2;
 }
@@ -719,7 +719,7 @@ bool sse2_sub_digest_2way(__m128i* BMRESTRICT dst,
     m1C = _mm_or_si128(m1C, m1D);
     m1A = _mm_or_si128(m1A, m1C);
 
-    bool z1 = _mm_movemask_epi8(_mm_cmpeq_epi8(m1A, maskz)) == 0xFFFF;
+    bool z1 = (_mm_movemask_epi8(_mm_cmpeq_epi8(m1A, maskz)) == 0xFFFF);
 
     m1A = _mm_andnot_si128(_mm_load_si128(src2+4), _mm_load_si128(src1+4));
     m1B = _mm_andnot_si128(_mm_load_si128(src2+5), _mm_load_si128(src1+5));
@@ -735,7 +735,7 @@ bool sse2_sub_digest_2way(__m128i* BMRESTRICT dst,
      m1C = _mm_or_si128(m1C, m1D);
      m1A = _mm_or_si128(m1A, m1C);
 
-     bool z2 = _mm_movemask_epi8(_mm_cmpeq_epi8(m1A, maskz)) == 0xFFFF;
+     bool z2 = (_mm_movemask_epi8(_mm_cmpeq_epi8(m1A, maskz)) == 0xFFFF);
 
      return z1 & z2;
 }
@@ -761,10 +761,10 @@ bool sse2_bit_find_first(const __m128i* BMRESTRICT block,
     {
         mA = _mm_load_si128(block); mB = _mm_load_si128(block+1);
         __m128i mOR = _mm_or_si128(mA, mB);
-        bool z1 = _mm_movemask_epi8(_mm_cmpeq_epi8(mOR, maskZ)) == 0xFFFF;
+        bool z1 = (_mm_movemask_epi8(_mm_cmpeq_epi8(mOR, maskZ)) == 0xFFFF);
         if (!z1) // test 2x128 lanes
         {
-            z1 = _mm_movemask_epi8(_mm_cmpeq_epi8(mA, maskZ)) == 0xFFFF;
+            z1 = (_mm_movemask_epi8(_mm_cmpeq_epi8(mA, maskZ)) == 0xFFFF);
             if (!z1)
             {
                 unsigned mask = _mm_movemask_epi8(_mm_cmpeq_epi32(mA, maskZ));
@@ -778,7 +778,7 @@ bool sse2_bit_find_first(const __m128i* BMRESTRICT block,
                 *pos = (simd_lane * 128) + (widx * 32) + bsf;
                 return true;
             }
-            unsigned mask = _mm_movemask_epi8(_mm_cmpeq_epi32(mB, maskZ));
+            unsigned mask = (_mm_movemask_epi8(_mm_cmpeq_epi32(mB, maskZ)));
             mask = ~mask; // invert to find (w != 0)
             BM_ASSERT(mask);
             bsf = bm::bit_scan_forward32(mask); // find first !=0 (could use lzcnt())
@@ -817,10 +817,10 @@ bool sse2_bit_find_first_diff(const __m128i* BMRESTRICT block1,
         mA = _mm_xor_si128(_mm_load_si128(block1), _mm_load_si128(block2));
         mB = _mm_xor_si128(_mm_load_si128(block1+1), _mm_load_si128(block2+1));
         __m128i mOR = _mm_or_si128(mA, mB);
-        bool z1 = _mm_movemask_epi8(_mm_cmpeq_epi8(mOR, maskZ)) == 0xFFFF;
+        bool z1 = (_mm_movemask_epi8(_mm_cmpeq_epi8(mOR, maskZ)) == 0xFFFF);
         if (!z1) // test 2x128 lanes
         {
-            z1 = _mm_movemask_epi8(_mm_cmpeq_epi8(mA, maskZ)) == 0xFFFF;
+            z1 = (_mm_movemask_epi8(_mm_cmpeq_epi8(mA, maskZ)) == 0xFFFF);
             if (!z1) // test 2x128 lanes
             {
                 unsigned mask = _mm_movemask_epi8(_mm_cmpeq_epi32(mA, maskZ));
@@ -884,7 +884,7 @@ bm::id_t sse2_bit_block_calc_count_change(const __m128i* BMRESTRICT block,
        const bm::word_t* blk = (const bm::word_t*) block;
        w = w0 = blk[0];
        w ^= (w >> 1);
-       BM_INCWORD_BITCOUNT(count, w);
+       count += bm::word_bitcount(w);
        count -= (w_prev = (w0 >> w_shift)); // negative value correction
    }
 
@@ -952,7 +952,7 @@ bm::id_t sse2_bit_block_calc_count_change(const __m128i* BMRESTRICT block,
            {
                if (0!=(w0=blk[0]))
                {
-                   BM_INCWORD_BITCOUNT(count, tcnt[0]);
+                   count += bm::word_bitcount(tcnt[0]);
                    count -= !(w_prev ^ (w0 & 1));
                    count -= w_prev = (w0 >> w_shift);
                }
@@ -963,7 +963,7 @@ bm::id_t sse2_bit_block_calc_count_change(const __m128i* BMRESTRICT block,
            }
            if (0!=(w0=blk[1]))
            {
-               BM_INCWORD_BITCOUNT(count, tcnt[1]);
+               count += bm::word_bitcount(tcnt[1]);
                count -= !(w_prev ^ (w0 & 1));
                count -= w_prev = (w0 >> w_shift);                    
            }
@@ -973,7 +973,7 @@ bm::id_t sse2_bit_block_calc_count_change(const __m128i* BMRESTRICT block,
            }    
            if (0!=(w0=blk[2]))
            {
-               BM_INCWORD_BITCOUNT(count, tcnt[2]);
+               count += bm::word_bitcount(tcnt[2]);
                count -= !(w_prev ^ (w0 & 1));
                count -= w_prev = (w0 >> w_shift);                    
            }
@@ -983,7 +983,7 @@ bm::id_t sse2_bit_block_calc_count_change(const __m128i* BMRESTRICT block,
            }      
            if (0!=(w0=blk[3]))
            {
-               BM_INCWORD_BITCOUNT(count, tcnt[3]);
+               count += bm::word_bitcount(tcnt[3]);
                count -= !(w_prev ^ (w0 & 1));
                count -= w_prev = (w0 >> w_shift);                    
            }

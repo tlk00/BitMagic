@@ -4976,7 +4976,8 @@ unsigned bit_block_change32(const bm::word_t* BMRESTRICT block,
     
     const int w_shift = int(sizeof(w) * 8 - 1);
     w ^= (w >> 1);
-    BM_INCWORD_BITCOUNT(gap_count, w);
+    gap_count += bm::word_bitcount(w);
+//    BM_INCWORD_BITCOUNT(gap_count, w);
     gap_count -= (w_prev = (w0 >> w_shift)); // negative value correction
 
     const bm::word_t* block_end = block + size; 
@@ -4992,8 +4993,8 @@ unsigned bit_block_change32(const bm::word_t* BMRESTRICT block,
         else
         {
             w ^= (w >> 1);
-            BM_INCWORD_BITCOUNT(gap_count, w);
-            
+            gap_count += bm::word_bitcount(w);
+//            BM_INCWORD_BITCOUNT(gap_count, w);
             w_l = w0 & 1;
             gap_count -= (w0 >> w_shift);  // negative value correction
             gap_count -= !(w_prev ^ w_l);  // word border correction
@@ -9024,8 +9025,8 @@ template<typename W> struct bit_COUNT
 {
     W operator()(W w1, W w2) BMNOEXCEPT
     {
-        w1 = 0;
-        BM_INCWORD_BITCOUNT(w1, w2);
+        w1 = 0; w1 += bm::word_bitcount(w2);
+//        BM_INCWORD_BITCOUNT(w1, w2);
         return w1;
     }
 };
@@ -9033,79 +9034,44 @@ template<typename W> struct bit_COUNT
 /// Bit COUNT AND functor
 template<typename W> struct bit_COUNT_AND
 {
-    W operator()(W w1, W w2) BMNOEXCEPT
-    {
-        W r = 0;
-        BM_INCWORD_BITCOUNT(r, w1 & w2);
-        return r;
-    }
+    W operator()(W w1, W w2) BMNOEXCEPT { return bm::word_bitcount(w1 & w2); }
 };
 
 /// Bit COUNT XOR functor
 template<typename W> struct bit_COUNT_XOR
 {
-    W operator()(W w1, W w2) BMNOEXCEPT
-    {
-        W r = 0;
-        BM_INCWORD_BITCOUNT(r, w1 ^ w2);
-        return r;
-    }
+    W operator()(W w1, W w2) BMNOEXCEPT { return bm::word_bitcount(w1 ^ w2); }
 };
 
 /// Bit COUNT OR functor
 template<typename W> struct bit_COUNT_OR
 {
-    W operator()(W w1, W w2) BMNOEXCEPT
-    {
-        W r = 0;
-        BM_INCWORD_BITCOUNT(r, w1 | w2);
-        return r;
-    }
+    W operator()(W w1, W w2) BMNOEXCEPT { return bm::word_bitcount(w1 | w2); }
 };
 
 
 /// Bit COUNT SUB AB functor
 template<typename W> struct bit_COUNT_SUB_AB
 {
-    W operator()(W w1, W w2) BMNOEXCEPT
-    {
-        W r = 0;
-        BM_INCWORD_BITCOUNT(r, w1 & (~w2));
-        return r;
-    }
+    W operator()(W w1, W w2) BMNOEXCEPT { return bm::word_bitcount(w1 & (~w2)); }
 };
 
 /// Bit SUB BA functor
 template<typename W> struct bit_COUNT_SUB_BA
 {
-    W operator()(W w1, W w2) BMNOEXCEPT
-    {
-        W r = 0;
-        BM_INCWORD_BITCOUNT(r, w2 & (~w1));
-        return r;
-    }
+    W operator()(W w1, W w2) BMNOEXCEPT { return bm::word_bitcount(w2 & (~w1)); }
 };
 
 /// Bit COUNT A functor
 template<typename W> struct bit_COUNT_A
 {
-    W operator()(W w1, W ) BMNOEXCEPT
-    {
-        W r = 0;
-        BM_INCWORD_BITCOUNT(r, w1);
-        return r;
-    }
+    W operator()(W w1, W ) BMNOEXCEPT { return bm::word_bitcount(w1); }
 };
 
 /// Bit COUNT B functor
 template<typename W> struct bit_COUNT_B
 {
-    W operator()(W, W w2) BMNOEXCEPT
-    {
-        W r = 0;
-        BM_INCWORD_BITCOUNT(r, w2);
-        return r;
-    }
+    W operator()(W, W w2) BMNOEXCEPT { return bm::word_bitcount(w2); }
 };
 
 typedef 
