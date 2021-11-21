@@ -4977,7 +4977,6 @@ unsigned bit_block_change32(const bm::word_t* BMRESTRICT block,
     const int w_shift = int(sizeof(w) * 8 - 1);
     w ^= (w >> 1);
     gap_count += bm::word_bitcount(w);
-//    BM_INCWORD_BITCOUNT(gap_count, w);
     gap_count -= (w_prev = (w0 >> w_shift)); // negative value correction
 
     const bm::word_t* block_end = block + size; 
@@ -4994,7 +4993,6 @@ unsigned bit_block_change32(const bm::word_t* BMRESTRICT block,
         {
             w ^= (w >> 1);
             gap_count += bm::word_bitcount(w);
-//            BM_INCWORD_BITCOUNT(gap_count, w);
             w_l = w0 & 1;
             gap_count -= (w0 >> w_shift);  // negative value correction
             gap_count -= !(w_prev ^ w_l);  // word border correction
@@ -7040,13 +7038,12 @@ unsigned bit_block_xor_count(const bm::word_t* BMRESTRICT src1,
 # else
     do
     {
-        BM_INCWORD_BITCOUNT(count, src1[0] ^ src2[0]);
-        BM_INCWORD_BITCOUNT(count, src1[1] ^ src2[1]);
-        BM_INCWORD_BITCOUNT(count, src1[2] ^ src2[2]);
-        BM_INCWORD_BITCOUNT(count, src1[3] ^ src2[3]);
-
-        src1+=4;
-        src2+=4;
+        count +=
+            bm::word_bitcount(src1[0] ^ src2[0]) +
+            bm::word_bitcount(src1[1] ^ src2[1]) +
+            bm::word_bitcount(src1[2] ^ src2[2]) +
+            bm::word_bitcount(src1[3] ^ src2[3]);
+        src1+=4; src2+=4;
     } while (src1 < src1_end);
 # endif
 #endif
@@ -7075,7 +7072,6 @@ unsigned bit_block_xor_any(const bm::word_t* BMRESTRICT src1,
                 (src1[1] ^ src2[1]) |
                 (src1[2] ^ src2[2]) |
                 (src1[3] ^ src2[3]);
-
         src1+=4; src2+=4;
     } while (!count && (src1 < src1_end));
     return count;
@@ -7110,19 +7106,17 @@ unsigned bit_block_sub_count(const bm::word_t* BMRESTRICT src1,
                                  b1[1] & ~b2[1], 
                                  b1[2] & ~b2[2], 
                                  b1[3] & ~b2[3]);
-        b1 += 4;
-        b2 += 4;
+        b1 += 4; b2 += 4;
     } while (b1 < b1_end);
 # else
     do
     {
-        BM_INCWORD_BITCOUNT(count, src1[0] & ~src2[0]);
-        BM_INCWORD_BITCOUNT(count, src1[1] & ~src2[1]);
-        BM_INCWORD_BITCOUNT(count, src1[2] & ~src2[2]);
-        BM_INCWORD_BITCOUNT(count, src1[3] & ~src2[3]);
-
-        src1+=4;
-        src2+=4;
+        count +=
+            bm::word_bitcount(src1[0] & ~src2[0]) +
+            bm::word_bitcount(src1[1] & ~src2[1]) +
+            bm::word_bitcount(src1[2] & ~src2[2]) +
+            bm::word_bitcount(src1[3] & ~src2[3]);
+        src1+=4; src2+=4;
     } while (src1 < src1_end);
 # endif
 #endif
@@ -7151,7 +7145,6 @@ unsigned bit_block_sub_any(const bm::word_t* BMRESTRICT src1,
                 (src1[1] & ~src2[1]) |
                 (src1[2] & ~src2[2]) |
                 (src1[3] & ~src2[3]);
-
         src1+=4; src2+=4;
     } while ((src1 < src1_end) && (count == 0));
     return count;
@@ -7193,13 +7186,12 @@ unsigned bit_block_or_count(const bm::word_t* src1,
 # else
     do
     {
-        BM_INCWORD_BITCOUNT(count, src1[0] | src2[0]);
-        BM_INCWORD_BITCOUNT(count, src1[1] | src2[1]);
-        BM_INCWORD_BITCOUNT(count, src1[2] | src2[2]);
-        BM_INCWORD_BITCOUNT(count, src1[3] | src2[3]);
-
-        src1+=4;
-        src2+=4;
+        count +=
+            bm::word_bitcount(src1[0] | src2[0]) +
+            bm::word_bitcount(src1[1] | src2[1]) +
+            bm::word_bitcount(src1[2] | src2[2]) +
+            bm::word_bitcount(src1[3] | src2[3]);
+        src1+=4; src2+=4;
     } while (src1 < src1_end);
 # endif
 #endif
@@ -9023,7 +9015,6 @@ template<typename W> struct bit_COUNT
     W operator()(W w1, W w2) BMNOEXCEPT
     {
         w1 = 0; w1 += bm::word_bitcount(w2);
-//        BM_INCWORD_BITCOUNT(w1, w2);
         return w1;
     }
 };
