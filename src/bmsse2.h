@@ -30,8 +30,8 @@ For more information please visit:  http://bitmagic.io
 #endif
 
 #include "bmdef.h"
-#include "bmsse_util.h"
 #include "bmutil.h"
+#include "bmsse_util.h"
 
 
 #ifdef __GNUG__
@@ -851,6 +851,127 @@ bool sse2_bit_find_first_diff(const __m128i* BMRESTRICT block1,
     return false;
 }
 
+/*
+Snippets to extract32 in SSE2:
+
+inline int get_x(const __m128i& vec){return _mm_cvtsi128_si32 (vec);}
+inline int get_y(const __m128i& vec){return _mm_cvtsi128_si32 (_mm_shuffle_epi32(vec,0x55));}
+inline int get_z(const __m128i& vec){return _mm_cvtsi128_si32 (_mm_shuffle_epi32(vec,0xAA));}
+inline int get_w(const __m128i& vec){return _mm_cvtsi128_si32 (_mm_shuffle_epi32(vec,0xFF));}
+*/
+
+/*!
+    @brief block shift right by 1
+    @ingroup SSE2
+*/
+inline
+bool sse2_shift_r1(__m128i* block, unsigned* empty_acc, unsigned co1) BMNOEXCEPT
+{
+    __m128i* block_end =
+        ( __m128i*)((bm::word_t*)(block) + bm::set_block_size);
+    __m128i m1COshft, m2COshft;
+    __m128i mAcc = _mm_set1_epi32(0);
+
+    __m128i mMask0 = _mm_set_epi32(-1,-1,-1, 0);
+
+    unsigned co2;
+    for (;block < block_end; block += 2)
+    {
+        __m128i m1A = _mm_load_si128(block);
+        __m128i m2A = _mm_load_si128(block+1);
+
+        __m128i m1CO = _mm_srli_epi32(m1A, 31);
+        __m128i m2CO = _mm_srli_epi32(m2A, 31);
+
+        co2 = _mm_cvtsi128_si32(_mm_shuffle_epi32(m1CO, 0xFF));
+
+        m1A = _mm_slli_epi32(m1A, 1); // (block[i] << 1u)
+        m2A = _mm_slli_epi32(m2A, 1);
+
+        m1COshft = _mm_slli_si128 (m1CO, 4); // byte shift-l by 1 int32
+        m2COshft = _mm_slli_si128 (m2CO, 4);
+
+        m1COshft = _mm_and_si128(m1COshft, mMask0); // clear the vec[0]
+        m1COshft = _mm_or_si128(m1COshft, _mm_set_epi32(0, 0, 0, co1)); // vec[0] = co1
+
+        m2COshft = _mm_and_si128(m2COshft, mMask0); // clear the vec[0]
+        m2COshft = _mm_or_si128(m2COshft, _mm_set_epi32(0, 0, 0, co2)); // vec[0] = co2
+
+        m1A = _mm_or_si128(m1A, m1COshft); // block[i] |= co_flag
+        m2A = _mm_or_si128(m2A, m2COshft);
+
+        co1 = _mm_cvtsi128_si32(_mm_shuffle_epi32(m2CO, 0xFF));
+
+        _mm_store_si128(block, m1A);
+        _mm_store_si128(block+1, m2A);
+
+        mAcc = _mm_or_si128(mAcc, m1A);
+        mAcc = _mm_or_si128(mAcc, m2A);
+    }
+    bool z1 = (_mm_movemask_epi8(_mm_cmpeq_epi8(mAcc, _mm_set1_epi32(0))) == 0xFFFF);
+    *empty_acc = !z1;
+    return co1;
+}
+
+/*!
+    @brief block shift left by 1
+    @ingroup SSE2
+*/
+inline
+bool sse2_shift_l1(__m128i* block, unsigned* empty_acc, unsigned co1) BMNOEXCEPT
+{
+    __m128i* block_end =
+        ( __m128i*)((bm::word_t*)(block) + bm::set_block_size);
+    __m128i mAcc = _mm_set1_epi32(0);
+    __m128i mMask1 = _mm_set1_epi32(1);
+    __m128i mMask0 = _mm_set_epi32(0, -1, -1, -1);
+
+    unsigned co2;
+    for (--block_end; block_end >= block; block_end -= 2)
+    {
+        __m128i m1A = _mm_load_si128(block_end);
+        __m128i m2A = _mm_load_si128(block_end-1);
+
+        __m128i m1CO = _mm_and_si128(m1A, mMask1);
+        __m128i m2CO = _mm_and_si128(m2A, mMask1);
+
+        co2 = _mm_cvtsi128_si32 (m1CO); // get vec[0]
+
+        m1A = _mm_srli_epi32(m1A, 1); // (block[i] >> 1u)
+        m2A = _mm_srli_epi32(m2A, 1);
+
+        __m128i m1COshft = _mm_srli_si128 (m1CO, 4); // byte shift-r by 1 int32
+        __m128i m2COshft = _mm_srli_si128 (m2CO, 4);
+
+        // m1COshft = _mm_insert_epi32 (m1COshft, co1, 3);
+        // m2COshft = _mm_insert_epi32 (m2COshft, co2, 3);
+        m1COshft = _mm_and_si128(m1COshft, mMask0); // clear the vec[0]
+        m1COshft = _mm_or_si128(m1COshft, _mm_set_epi32(co1, 0, 0, 0)); // vec[3] = co1
+        m2COshft = _mm_and_si128(m2COshft, mMask0); // clear the vec[0]
+        m2COshft = _mm_or_si128(m2COshft, _mm_set_epi32(co2, 0, 0, 0)); // vec[3] = co2
+
+
+        m1COshft = _mm_slli_epi32(m1COshft, 31);
+        m2COshft = _mm_slli_epi32(m2COshft, 31);
+
+        m1A = _mm_or_si128(m1A, m1COshft); // block[i] |= co_flag
+        m2A = _mm_or_si128(m2A, m2COshft);
+
+        co1 = _mm_cvtsi128_si32 (m2CO); // get vec[0]
+
+        _mm_store_si128(block_end, m1A);
+        _mm_store_si128(block_end-1, m2A);
+
+        mAcc = _mm_or_si128(mAcc, m1A);
+        mAcc = _mm_or_si128(mAcc, m2A);
+    } // for
+
+    bool z1 = (_mm_movemask_epi8(_mm_cmpeq_epi8(mAcc, _mm_set1_epi32(0))) == 0xFFFF);
+    *empty_acc = !z1; // !_mm_testz_si128(mAcc, mAcc);
+    return co1;
+}
+
+
 
 inline
 bm::id_t sse2_bit_block_calc_count_change(const __m128i* BMRESTRICT block,
@@ -1135,6 +1256,8 @@ unsigned sse2_gap_test(const unsigned short* BMRESTRICT buf, unsigned pos)
 }
 
 
+
+
 #ifdef __GNUG__
 #pragma GCC diagnostic pop
 #endif
@@ -1232,6 +1355,12 @@ unsigned sse2_gap_test(const unsigned short* BMRESTRICT buf, unsigned pos)
 
 #define VECT_BLOCK_SET_DIGEST(dst, val) \
     sse2_block_set_digest((__m128i*)dst, val)
+
+#define VECT_LOWER_BOUND_SCAN_U32(arr, target, from, to) \
+    sse2_lower_bound_scan_u32(arr, target, from, to)
+
+#define VECT_SHIFT_R1(b, acc, co) \
+    sse2_shift_r1((__m128i*)b, acc, co)
 
 
 #define VECT_BIT_FIND_FIRST(src, pos) \

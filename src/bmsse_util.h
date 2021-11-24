@@ -991,6 +991,74 @@ const bm::gap_word_t* sse2_gap_sum_arr(
     return pbuf;
 }
 
+/**
+    lower bound (great or equal) linear scan in ascending order sorted array
+    @ingroup SSE2
+    \internal
+*/
+inline
+unsigned sse2_lower_bound_scan_u32(const unsigned* BMRESTRICT arr,
+                                   unsigned target,
+                                   unsigned from,
+                                   unsigned to) BMNOEXCEPT
+{
+    // a > b (unsigned, 32-bit) is the same as (a - 0x80000000) > (b - 0x80000000) (signed, 32-bit)
+    // see more at:
+    // https://fgiesen.wordpress.com/2016/04/03/sse-mind-the-gap/
+
+    const unsigned* BMRESTRICT arr_base = &arr[from]; // unrolled search base
+
+    unsigned unroll_factor = 8;
+    unsigned len = to - from + 1;
+    unsigned len_unr = len - (len % unroll_factor);
+
+    __m128i mask0x8 = _mm_set1_epi32(0x80000000);
+    __m128i vect_target = _mm_set1_epi32(target);
+    __m128i norm_target = _mm_sub_epi32(vect_target, mask0x8);  // (signed) target - 0x80000000
+
+    int mask;
+    __m128i vect40, vect41, norm_vect40, norm_vect41, cmp_mask_ge;
+
+    unsigned k = 0;
+    for (; k < len_unr; k+=unroll_factor)
+    {
+        vect40 = _mm_loadu_si128((__m128i*)(&arr_base[k])); // 4 u32s
+        norm_vect40 = _mm_sub_epi32(vect40, mask0x8); // (signed) vect4 - 0x80000000
+
+        cmp_mask_ge = _mm_or_si128(                              // GT | EQ
+                        _mm_cmpgt_epi32 (norm_vect40, norm_target),
+                        _mm_cmpeq_epi32 (vect40, vect_target)
+                        );
+        mask = _mm_movemask_epi8(cmp_mask_ge);
+        if (mask)
+        {
+            int bsf = bm::bit_scan_forward32(mask); //_bit_scan_forward(mask);
+            return from + k + (bsf / 4);
+        }
+        vect41 = _mm_loadu_si128((__m128i*)(&arr_base[k+4]));
+        norm_vect41 = _mm_sub_epi32(vect41, mask0x8);
+
+        cmp_mask_ge = _mm_or_si128(
+                        _mm_cmpgt_epi32 (norm_vect41, norm_target),
+                        _mm_cmpeq_epi32 (vect41, vect_target)
+                        );
+        mask = _mm_movemask_epi8(cmp_mask_ge);
+        if (mask)
+        {
+            int bsf = bm::bit_scan_forward32(mask); //_bit_scan_forward(mask);
+            return 4 + from + k + (bsf / 4);
+        }
+    } // for
+
+    for (; k < len; ++k)
+    {
+        if (arr_base[k] >= target)
+            return from + k;
+    }
+    return to + 1;
+}
+
+
 #ifdef __GNUG__
 #pragma GCC diagnostic pop
 #endif
