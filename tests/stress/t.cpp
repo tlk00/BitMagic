@@ -30847,17 +30847,17 @@ void TestSIMDUtils()
         for (unsigned i = 0; i < arr_size-1; ++i)
         {
             target = arr[i];
-            s_idx = bm::sse4_lower_bound_scan_u32(&arr[0], target, 0, arr_size-1);
+            s_idx = bm::sse2_lower_bound_scan_u32(&arr[0], target, 0, arr_size-1);
             assert(s_idx == i);
-            s_idx = bm::sse4_lower_bound_scan_u32(&arr[0], target, i, arr_size-1);
+            s_idx = bm::sse2_lower_bound_scan_u32(&arr[0], target, i, arr_size-1);
             assert(s_idx == i);
             
             target = 1; // not found but lower
-            s_idx = bm::sse4_lower_bound_scan_u32(&arr[0], target, 0, arr_size-1);
+            s_idx = bm::sse2_lower_bound_scan_u32(&arr[0], target, 0, arr_size-1);
             assert(s_idx == 0);
             
             target = arr_size * 2; // not found but higher
-            s_idx = bm::sse4_lower_bound_scan_u32(&arr[0], target, 0, arr_size-1);
+            s_idx = bm::sse2_lower_bound_scan_u32(&arr[0], target, 0, arr_size-1);
             assert(s_idx == arr_size);
         }
 
