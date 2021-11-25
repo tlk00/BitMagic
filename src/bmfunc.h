@@ -4572,8 +4572,8 @@ bool bit_find_first_diff(const bm::word_t* BMRESTRICT blk1,
             }
         } // for
     #endif
-#endif
     return false;
+#endif
 }
 
 
