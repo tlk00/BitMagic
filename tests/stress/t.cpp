@@ -35803,7 +35803,7 @@ int main(int argc, char *argv[])
 #endif
     if (is_all || is_sv)
     {
-/*
+
         TestSparseVector();
          CheckAllocLeaks(false);
 
@@ -35842,13 +35842,13 @@ int main(int argc, char *argv[])
 
         TestSparseVectorScan();
          CheckAllocLeaks(false);
-*/
+
         TestSparseVectorScanGT();
          CheckAllocLeaks(false);
 
         TestSignedSparseVectorScanGT();
          CheckAllocLeaks(false);
-return 0;
+
         TestSignedSparseVectorScan();
          CheckAllocLeaks(false);
 
