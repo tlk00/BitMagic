@@ -117,6 +117,7 @@ INPUT                  = ./src/bm.h ./src/bmfunc.h  ./src/bmsimd.h ./src/bmxor.h
 ./samples/svsample07a/svsample07a.cpp \
 ./samples/svsample08/svsample08.cpp \
 ./samples/svsample09/svsample09.cpp \
+./samples/svsample10/svsample10.cpp \
 ./samples/rscsample01/rscsample01.cpp \
 ./samples/rscsample02/rscsample02.cpp \
 ./samples/rscsample03/rscsample03.cpp \

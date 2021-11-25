@@ -180,6 +180,7 @@ add_executable(svsample07 ${PROJECT_SOURCE_DIR}/samples/svsample07/svsample07.cp
 add_executable(svsample07a ${PROJECT_SOURCE_DIR}/samples/svsample07a/svsample07a.cpp ${BM_HEADERS})
 add_executable(svsample08 ${PROJECT_SOURCE_DIR}/samples/svsample08/svsample08.cpp ${BM_HEADERS})
 add_executable(svsample09 ${PROJECT_SOURCE_DIR}/samples/svsample09/svsample09.cpp ${BM_HEADERS})
+add_executable(svsample10 ${PROJECT_SOURCE_DIR}/samples/svsample10/svsample10.cpp ${BM_HEADERS})
 
 add_executable(rscsample01 ${PROJECT_SOURCE_DIR}/samples/rscsample01/rscsample01.cpp ${BM_HEADERS})
 add_executable(rscsample02 ${PROJECT_SOURCE_DIR}/samples/rscsample02/rscsample02.cpp ${BM_HEADERS})
