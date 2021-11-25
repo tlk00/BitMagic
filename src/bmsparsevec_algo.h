@@ -667,8 +667,6 @@ public:
         \param sv - input sparse vector
         \param value - value to search for
         \param bv_out - search result bit-vector (search result  is a vector of 1s when sv[i] > value)
-
-        \return true if found
     */
     void find_gt(const SV& sv, value_type  val, bvector_type&  bv_out);
 
@@ -678,8 +676,6 @@ public:
         \param sv - input sparse vector
         \param value - value to search for
         \param bv_out - search result bit-vector (search result  is a vector of 1s when sv[i] >= value)
-
-        \return true if found
     */
     void find_ge(const SV& sv, value_type  val, bvector_type&  bv_out);
 
@@ -690,8 +686,6 @@ public:
         \param sv - input sparse vector
         \param value - value to search for
         \param bv_out - search result bit-vector (search result  is a vector of 1s when sv[i] < value)
-
-        \return true if found
     */
     void find_lt(const SV& sv, value_type  val, bvector_type&  bv_out);
 
@@ -701,10 +695,21 @@ public:
         \param sv - input sparse vector
         \param value - value to search for
         \param bv_out - search result bit-vector (search result  is a vector of 1s when sv[i] <= value)
-
-        \return true if found
     */
     void find_le(const SV& sv, value_type  val, bvector_type&  bv_out);
+
+
+    /**
+        \brief find all elements  sparse vector element in closed range [left..right] interval
+
+        \param sv - input sparse vector
+        \param from - range from
+        \param to - range to
+        \param bv_out - search result bit-vector (search result  is a vector of 1s when sv[i] <= value)
+    */
+    void find_range(const SV&  sv,
+                    value_type from, value_type to,
+                    bvector_type&  bv_out);
 
 
     //@}
@@ -1849,6 +1854,22 @@ void sparse_vector_scanner<SV>::find_le(const SV& sv,
     invert(sv, bv_out);
 }
 
+//----------------------------------------------------------------------------
+
+template<typename SV>
+void sparse_vector_scanner<SV>::find_range(const SV&  sv,
+                                           value_type from, value_type to,
+                                           bvector_type&  bv_out)
+{
+    if (to < from)
+        bm::xor_swap(from, to);
+
+    find_ge(sv, from, bv_out);
+
+    bvector_type bv_gt;
+    find_gt(sv, to, bv_gt);
+    bv_out.bit_sub(bv_gt);
+}
 
 //----------------------------------------------------------------------------
 

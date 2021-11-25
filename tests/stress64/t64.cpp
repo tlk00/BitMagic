@@ -18301,8 +18301,26 @@ template<class SV>
 void CheckGTSearch(const SV& sv, typename SV::value_type v,
                    bm::sparse_vector_scanner<SV>& scanner)
 {
-    bvect bv_res, bv_control;
+    bvect bv_res, bv_gt, bv_control;
+    bvect bv_ge, bv_ge_control;
+    bvect bv_lt, bv_lt_control;
+    bvect bv_le, bv_le_control;
+    bvect bv_r_0v, bv_r_0v_control;
+
     scanner.find_gt_horizontal(sv, v, bv_res);
+    scanner.find_gt(sv, v, bv_gt);
+    scanner.find_ge(sv, v, bv_ge);
+    scanner.find_lt(sv, v, bv_lt);
+    scanner.find_le(sv, v, bv_le);
+    scanner.find_range(sv, 0, v, bv_r_0v);
+
+    {
+    bvect bv_r_vv, bv_r_vv_control;
+    scanner.find_range(sv, v, v, bv_r_vv);
+    scanner.find_eq(sv, v, bv_r_vv_control);
+    bool eq = bv_r_vv.equal(bv_r_vv_control);
+    assert(eq);
+    }
 
     auto it = sv.begin();
     auto it_end = sv.end();
@@ -18313,16 +18331,75 @@ void CheckGTSearch(const SV& sv, typename SV::value_type v,
             auto v1 = *it;
             if (v1 > v)
                 bv_control.set(i);
+            if (v1 >= v)
+                bv_ge_control.set(i);
+            if (v1 < v)
+                bv_lt_control.set(i);
+            if (v1 <= v)
+                bv_le_control.set(i);
+            if (v1 >= 0 && v1 <= v)
+                bv_r_0v_control.set(i);
+
         }
     } // for
     bool eq = bv_res.equal(bv_control);
     if (!eq)
     {
-        cout << "result for v >=" << v << " :" << endl;
+        cout << "1. result for v >=" << v << " :" << endl;
         print_bv(bv_res);
         bv_res ^= bv_control;
         cout << "diff=" << endl;
         print_bv(bv_res);
+        assert(eq);exit(1);
+    }
+    eq = bv_res.equal(bv_gt);
+    if (!eq)
+    {
+        cout << "2. result for v >=" << v << " :" << endl;
+        print_bv(bv_gt);
+        bv_gt ^= bv_control;
+        cout << "diff=" << endl;
+        print_bv(bv_gt);
+        assert(eq);exit(1);
+    }
+    eq = bv_ge.equal(bv_ge_control);
+    if (!eq)
+    {
+        cout << "3. result for v >=" << v << " :" << endl;
+        print_bv(bv_ge);
+        bv_ge ^= bv_ge_control;
+        cout << "diff=" << endl;
+        print_bv(bv_ge);
+        assert(eq);exit(1);
+    }
+    eq = bv_lt.equal(bv_lt_control);
+    if (!eq)
+    {
+        cout << "4. result for v <" << v << " :" << endl;
+        print_bv(bv_lt);
+        bv_lt ^= bv_lt_control;
+        cout << "diff=" << endl;
+        print_bv(bv_lt);
+        assert(eq);exit(1);
+    }
+    eq = bv_le.equal(bv_le_control);
+    if (!eq)
+    {
+        cout << "5. result for v <=" << v << " :" << endl;
+        print_bv(bv_le);
+        bv_le ^= bv_le_control;
+        cout << "diff=" << endl;
+        print_bv(bv_le);
+        assert(eq);exit(1);
+    }
+    eq = bv_r_0v.equal(bv_r_0v_control);
+    if (!eq)
+    {
+        cout << "6. result for [0, v] " << v << " :" << endl;
+        print_bv(bv_r_0v);
+        bv_r_0v ^= bv_r_0v_control;
+        cout << "diff=" << endl;
+        print_bv(bv_r_0v);
         assert(eq);exit(1);
     }
 }

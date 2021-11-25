@@ -25142,9 +25142,24 @@ void CheckGTSearch(const SV& sv, typename SV::value_type v,
 {
     bvect bv_res, bv_gt, bv_control;
     bvect bv_ge, bv_ge_control;
+    bvect bv_lt, bv_lt_control;
+    bvect bv_le, bv_le_control;
+    bvect bv_r_0v, bv_r_0v_control;
+
     scanner.find_gt_horizontal(sv, v, bv_res);
     scanner.find_gt(sv, v, bv_gt);
     scanner.find_ge(sv, v, bv_ge);
+    scanner.find_lt(sv, v, bv_lt);
+    scanner.find_le(sv, v, bv_le);
+    scanner.find_range(sv, 0, v, bv_r_0v);
+
+    {
+    bvect bv_r_vv, bv_r_vv_control;
+    scanner.find_range(sv, v, v, bv_r_vv);
+    scanner.find_eq(sv, v, bv_r_vv_control);
+    bool eq = bv_r_vv.equal(bv_r_vv_control);
+    assert(eq);
+    }
 
     auto it = sv.begin();
     auto it_end = sv.end();
@@ -25157,6 +25172,12 @@ void CheckGTSearch(const SV& sv, typename SV::value_type v,
                 bv_control.set(i);
             if (v1 >= v)
                 bv_ge_control.set(i);
+            if (v1 < v)
+                bv_lt_control.set(i);
+            if (v1 <= v)
+                bv_le_control.set(i);
+            if (v1 >= 0 && v1 <= v)
+                bv_r_0v_control.set(i);
 
         }
     } // for
@@ -25188,6 +25209,36 @@ void CheckGTSearch(const SV& sv, typename SV::value_type v,
         bv_ge ^= bv_ge_control;
         cout << "diff=" << endl;
         print_bv(bv_ge);
+        assert(eq);exit(1);
+    }
+    eq = bv_lt.equal(bv_lt_control);
+    if (!eq)
+    {
+        cout << "4. result for v <" << v << " :" << endl;
+        print_bv(bv_lt);
+        bv_lt ^= bv_lt_control;
+        cout << "diff=" << endl;
+        print_bv(bv_lt);
+        assert(eq);exit(1);
+    }
+    eq = bv_le.equal(bv_le_control);
+    if (!eq)
+    {
+        cout << "5. result for v <=" << v << " :" << endl;
+        print_bv(bv_le);
+        bv_le ^= bv_le_control;
+        cout << "diff=" << endl;
+        print_bv(bv_le);
+        assert(eq);exit(1);
+    }
+    eq = bv_r_0v.equal(bv_r_0v_control);
+    if (!eq)
+    {
+        cout << "6. result for [0, v] " << v << " :" << endl;
+        print_bv(bv_r_0v);
+        bv_r_0v ^= bv_r_0v_control;
+        cout << "diff=" << endl;
+        print_bv(bv_r_0v);
         assert(eq);exit(1);
     }
 }
@@ -25544,6 +25595,9 @@ void TestSparseVectorScanGT()
                 bool b = bv_res.equal(bv_control);
                 assert(b);
             }
+            if ((j % 16) == 0)
+                CheckGTSearch(sv, j, scanner);
+
             if (j % 1024 == 0)
                 cout << "\r" << j << "/" << sv_size << "    " << flush;
         } // for
@@ -25713,6 +25767,9 @@ void TestSignedSparseVectorScanGT()
                 bool b = bv_res.equal(bv_control);
                 assert(b);
             }
+            if ((j % 16) == 0)
+                CheckGTSearch(sv, j, scanner64);
+
             if (j % 1024 == 0)
                 cout << "\r" << i << "/" << sv.size() << "    " << flush;
         } // for
@@ -35746,6 +35803,7 @@ int main(int argc, char *argv[])
 #endif
     if (is_all || is_sv)
     {
+/*
         TestSparseVector();
          CheckAllocLeaks(false);
 
@@ -35784,13 +35842,13 @@ int main(int argc, char *argv[])
 
         TestSparseVectorScan();
          CheckAllocLeaks(false);
-
+*/
         TestSparseVectorScanGT();
          CheckAllocLeaks(false);
 
         TestSignedSparseVectorScanGT();
          CheckAllocLeaks(false);
-
+return 0;
         TestSignedSparseVectorScan();
          CheckAllocLeaks(false);
 
@@ -35806,7 +35864,6 @@ int main(int argc, char *argv[])
 
     if (is_all || is_csv)
     {
-
         TestCompressSparseVector();
          CheckAllocLeaks(false);
 
