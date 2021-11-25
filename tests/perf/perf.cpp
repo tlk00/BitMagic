@@ -1847,7 +1847,7 @@ void XorCountTest()
     }
 
     {
-    bm::chrono_taker tt("XOR COUNT bvector test", REPEATS*10);
+    bm::chrono_taker tt("XOR COUNT bvector(opt1) test", REPEATS*10);
     for (i = 0; i < REPEATS*4; ++i)
     {
         count2 += (unsigned)bm::count_xor(*bv1, *bv2);
@@ -1883,7 +1883,7 @@ void XorCountTest()
     }
 
     {
-    bm::chrono_taker tt("XOR COUNT bvector(opt) test", REPEATS*10);
+    bm::chrono_taker tt("XOR COUNT bvector(opt2) test", REPEATS*10);
     for (i = 0; i < REPEATS*4; ++i)
     {
         count2 += (unsigned)bm::count_xor(*bv1, *bv2);
