@@ -99,8 +99,10 @@ bm::id_t sse4_bit_count(const __m128i* block, const __m128i* block_end) BMNOEXCE
     do
     {
         count += unsigned( _mm_popcnt_u64(b[0]) +
-                           _mm_popcnt_u64(b[1]));
-        b += 2;
+                           _mm_popcnt_u64(b[1]) +
+                           _mm_popcnt_u64(b[2]) +
+                           _mm_popcnt_u64(b[3]));
+        b += 4;
     } while (b < b_end);
 #else
     do
@@ -114,6 +116,8 @@ bm::id_t sse4_bit_count(const __m128i* block, const __m128i* block_end) BMNOEXCE
 #endif    
     return count;
 }
+
+
 
 /*!
 \internal
@@ -152,16 +156,17 @@ bm::id_t sse4_bit_count_op(const __m128i* BMRESTRICT block,
 {
     bm::id_t count = 0;
 #ifdef BM64_SSE4
+    bm::id64_t BM_ALIGN16 tcnt[2] BM_ALIGN16ATTR;
     do
     {
-        __m128i tmp0 = _mm_load_si128(block);
-        __m128i tmp1 = _mm_load_si128(mask_block);        
-        __m128i b = sse2_func(tmp0, tmp1);
+        __m128i b = sse2_func(_mm_load_si128(block), _mm_load_si128(mask_block));
+        _mm_store_si128((__m128i*)tcnt, b);
+        count += unsigned(_mm_popcnt_u64(tcnt[0]) + _mm_popcnt_u64(tcnt[1]));
 
-        count += (unsigned)_mm_popcnt_u64(_mm_extract_epi64(b, 0));
-        count += (unsigned)_mm_popcnt_u64(_mm_extract_epi64(b, 1));
-
-        ++block; ++mask_block;
+        b = sse2_func(_mm_load_si128(block+1), _mm_load_si128(mask_block+1));
+        _mm_store_si128((__m128i*)tcnt, b);
+        count += unsigned(_mm_popcnt_u64(tcnt[0]) + _mm_popcnt_u64(tcnt[1]));
+        block+=2; mask_block+=2;
     } while (block < block_end);
 #else    
     do
@@ -751,15 +756,6 @@ unsigned sse42_bit_block_calc_change(const __m128i* BMRESTRICT block,
         count += unsigned(_mm_popcnt_u64(tcnt[0]) + _mm_popcnt_u64(tcnt[1]));
        _mm_store_si128((__m128i*)tcnt, m2A);
         count += unsigned(_mm_popcnt_u64(tcnt[0]) + _mm_popcnt_u64(tcnt[1]));
-/*
-        bm::id64_t m0 = _mm_extract_epi64(m1A, 0);
-        bm::id64_t m1 = _mm_extract_epi64(m1A, 1);
-        count += unsigned(_mm_popcnt_u64(m0) + _mm_popcnt_u64(m1));
-
-        m0 = _mm_extract_epi64(m2A, 0);
-        m1 = _mm_extract_epi64(m2A, 1);
-        count += unsigned(_mm_popcnt_u64(m0) + _mm_popcnt_u64(m1));
-*/
 #else
         bm::id_t m0 = _mm_extract_epi32(m1A, 0);
         bm::id_t m1 = _mm_extract_epi32(m1A, 1);
@@ -794,9 +790,8 @@ void sse42_bit_block_calc_xor_change(const __m128i* BMRESTRICT block,
                                      unsigned* BMRESTRICT bc) BMNOEXCEPT
 {
 #ifdef BM64_SSE4
-    bm::id64_t BM_ALIGN32 simd_buf[2] BM_ALIGN32ATTR;
-#else
-    ///bm::id64_t BM_ALIGN32 simd_buf[4] BM_ALIGN32ATTR;
+    bm::id64_t BM_ALIGN32 simd_buf0[2] BM_ALIGN32ATTR;
+    bm::id64_t BM_ALIGN32 simd_buf1[2] BM_ALIGN32ATTR;
 #endif
 
     const __m128i* block_end =
@@ -820,11 +815,10 @@ void sse42_bit_block_calc_xor_change(const __m128i* BMRESTRICT block,
 
         {
 #ifdef BM64_SSE4
-        _mm_store_si128 ((__m128i*)simd_buf, m1A);
-        bit_count += unsigned(_mm_popcnt_u64(simd_buf[0]) + _mm_popcnt_u64(simd_buf[1]));
-
-        _mm_store_si128 ((__m128i*)simd_buf, m2A);
-        bit_count += unsigned(_mm_popcnt_u64(simd_buf[0]) + _mm_popcnt_u64(simd_buf[1]));
+        _mm_store_si128 ((__m128i*)simd_buf0, m1A);
+        _mm_store_si128 ((__m128i*)simd_buf1, m2A);
+        bit_count += unsigned(_mm_popcnt_u64(simd_buf0[0]) + _mm_popcnt_u64(simd_buf0[1]));
+        bit_count += unsigned(_mm_popcnt_u64(simd_buf1[0]) + _mm_popcnt_u64(simd_buf1[1]));
 #else
         bm::id_t m0 = _mm_extract_epi32(m1A, 0);
         bm::id_t m1 = _mm_extract_epi32(m1A, 1);
@@ -870,11 +864,10 @@ void sse42_bit_block_calc_xor_change(const __m128i* BMRESTRICT block,
         m2A = _mm_xor_si128(m2A, m2As);
 
 #ifdef BM64_SSE4
-        _mm_store_si128 ((__m128i*)simd_buf, m1A);
-        gap_count += unsigned(_mm_popcnt_u64(simd_buf[0]) + _mm_popcnt_u64(simd_buf[1]));
-
-        _mm_store_si128 ((__m128i*)simd_buf, m2A);
-        gap_count += unsigned(_mm_popcnt_u64(simd_buf[0]) + _mm_popcnt_u64(simd_buf[1]));
+        _mm_store_si128 ((__m128i*)simd_buf0, m1A);
+        _mm_store_si128 ((__m128i*)simd_buf1, m2A);
+        gap_count += unsigned(_mm_popcnt_u64(simd_buf0[0]) + _mm_popcnt_u64(simd_buf0[1]));
+        gap_count += unsigned(_mm_popcnt_u64(simd_buf1[0]) + _mm_popcnt_u64(simd_buf1[1]));
 #else
         bm::id_t m0 = _mm_extract_epi32(m1A, 0);
         bm::id_t m1 = _mm_extract_epi32(m1A, 1);
