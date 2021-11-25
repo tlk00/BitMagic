@@ -67,6 +67,7 @@ Sparse vector (bit-transposed vector) for scalar integer types.
                Example illustrates how to add bookmarks to the serialized BLOB for faster 
                range deserialization
 ./svsample09 - bm::sparse_vector_find_first_mismatch
+./svsample10 - bm::sparse_vector_scanner<>::find_gt() (GT, GE, LT, LE, RANGE) searches
 
 RSC sparse vector (Succinct vector based on Rank-Select methods) for scalar integer types
 
