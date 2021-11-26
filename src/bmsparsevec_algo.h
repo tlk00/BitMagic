@@ -2792,15 +2792,7 @@ void sparse_vector_scanner<SV>::find_nonzero(const SV& sv,
 {
     agg_.reset(); // in case if previous scan was interrupted
     auto sz = sv.effective_slices(); // sv.slices();
-    unsigned i;
-    if constexpr (SV::is_str()) // string vector
-        i = 0;
-    else // numeric vector: int, unsigned, etc
-        if constexpr (std::is_signed<value_type>::value)
-            i = 1; // do not process the sign plane
-        else
-            i = 0;
-    for (; i < sz; ++i)
+    for (unsigned i = 0; i < sz; ++i)
         agg_.add(sv.get_slice(i));
     agg_.combine_or(bv_out);
     agg_.reset();
