@@ -25158,7 +25158,15 @@ void CheckGTSearch(const SV& sv, typename SV::value_type v,
     scanner.find_range(sv, v, v, bv_r_vv);
     scanner.find_eq(sv, v, bv_r_vv_control);
     bool eq = bv_r_vv.equal(bv_r_vv_control);
-    assert(eq);
+    if (!eq)
+    {
+        print_bv(bv_r_vv);
+        print_bv(bv_r_vv_control);
+        bv_r_vv ^= bv_r_vv_control;
+        cout << "diff=" << endl;
+        print_bv(bv_r_vv);
+        assert(eq);exit(1);
+    }
     }
 
     auto it = sv.begin();
@@ -25176,9 +25184,16 @@ void CheckGTSearch(const SV& sv, typename SV::value_type v,
                 bv_lt_control.set(i);
             if (v1 <= v)
                 bv_le_control.set(i);
-            if (v1 >= 0 && v1 <= v)
-                bv_r_0v_control.set(i);
-
+            if (v < 0)
+            {
+                if (v1 <= 0 && v1 >= v)
+                    bv_r_0v_control.set(i);
+            }
+            else
+            {
+                if (v1 >= 0 && v1 <= v)
+                    bv_r_0v_control.set(i);
+            }
         }
     } // for
     bool eq = bv_res.equal(bv_control);
@@ -25662,10 +25677,7 @@ void TestSignedSparseVectorScanGT()
         sv.push_back(-7);
         sv.push_back(-17);      // 10
         sv.push_back(0);
-        sv.push_back(INT_MAX);  // 11
-
-//        CheckGTSearch(sv, 0, scanner);
-//        CheckGTSearch(sv, -INT_MAX, scanner);
+        sv.push_back(INT_MAX);  // 12
 
         for (int pass = 0; pass < 2; ++pass)
         {
@@ -35803,7 +35815,6 @@ int main(int argc, char *argv[])
 #endif
     if (is_all || is_sv)
     {
-
         TestSparseVector();
          CheckAllocLeaks(false);
 
