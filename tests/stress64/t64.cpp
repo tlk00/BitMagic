@@ -18319,7 +18319,15 @@ void CheckGTSearch(const SV& sv, typename SV::value_type v,
     scanner.find_range(sv, v, v, bv_r_vv);
     scanner.find_eq(sv, v, bv_r_vv_control);
     bool eq = bv_r_vv.equal(bv_r_vv_control);
-    assert(eq);
+    if (!eq)
+    {
+        print_bv(bv_r_vv);
+        print_bv(bv_r_vv_control);
+        bv_r_vv ^= bv_r_vv_control;
+        cout << "diff=" << endl;
+        print_bv(bv_r_vv);
+        assert(eq);exit(1);
+    }
     }
 
     auto it = sv.begin();
@@ -18337,9 +18345,16 @@ void CheckGTSearch(const SV& sv, typename SV::value_type v,
                 bv_lt_control.set(i);
             if (v1 <= v)
                 bv_le_control.set(i);
-            if (v1 >= 0 && v1 <= v)
-                bv_r_0v_control.set(i);
-
+            if (v < 0)
+            {
+                if (v1 <= 0 && v1 >= v)
+                    bv_r_0v_control.set(i);
+            }
+            else
+            {
+                if (v1 >= 0 && v1 <= v)
+                    bv_r_0v_control.set(i);
+            }
         }
     } // for
     bool eq = bv_res.equal(bv_control);
@@ -18403,6 +18418,7 @@ void CheckGTSearch(const SV& sv, typename SV::value_type v,
         assert(eq);exit(1);
     }
 }
+
 
 
 static
