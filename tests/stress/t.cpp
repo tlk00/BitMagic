@@ -35221,7 +35221,8 @@ void show_help()
         << "-strsv                - test sparse vectors" << endl
         << "-cc                   - test compresses collections" << endl
         << "-ser                  - test all serialization" << endl
-        << "-allsvser                - test serailization of sparse vectors (all)" << endl
+        << "-allsvser             - test serailization of sparse vectors (all)" << endl
+        << "-sort                 - sparse vector sort tests" << endl;
       ;
 }
 
@@ -35240,6 +35241,7 @@ bool         is_str_sv = false;
 bool         is_c_coll = false;
 bool         is_ser = false;
 bool         is_allsvser = false;
+bool         is_sv_sort = false;
 
 static
 int parse_args(int argc, char *argv[])
@@ -35337,6 +35339,12 @@ int parse_args(int argc, char *argv[])
             is_c_coll = true;
             continue;
         }
+        if (arg == "-sort" || arg == "--sort")
+        {
+            is_all = false;
+            is_sv_sort = true;
+            continue;
+        }
 
     } // for i
     return 0;
@@ -35419,6 +35427,42 @@ int main(int argc, char *argv[])
     if (ret != 0)
         return ret;
     }
+
+    cout << bm::_copyright<true>::_p << endl;
+    cout << "SIMD code = " << bm::simd_version() << endl;
+#if defined(BM_ASSERT)
+{
+    cout << "BM_ASSERT defined. " << endl;
+}
+#endif
+#ifdef MEM_DEBUG
+    cout << "MEM_DEBUG defined. " << endl;
+#endif
+
+#ifdef MEM_DEBUG
+    {
+        {
+            bvect bv1;
+            bv1.set(1);
+        }
+        CheckAllocLeaks(false);
+        {
+            bvect* bv = new bvect();
+            bv->set(1);
+            bool b = CheckAllocLeaks(false, false);
+            assert(b); // leak found
+            delete bv;
+            b = CheckAllocLeaks(false, false);
+            assert(!b); // leak found
+            if (b)
+                cout << "LEAK DETECT (false positive) OK" << endl;
+            else
+                cout << "ERROR detecting leaks" << endl;
+
+        }
+    }
+#endif
+
 /*
     BrennerTest("/Users/anatoliykuznetsov/Desktop/dev/git/BitMagic/tests/stress/1.i",
                 "/Users/anatoliykuznetsov/Desktop/dev/git/BitMagic/tests/stress/1.bv",
@@ -35795,24 +35839,7 @@ int main(int argc, char *argv[])
 
          StressTestAggregatorAND_SUB(100);
     }
-#ifdef MEM_DEBUG
-    {
-        {
-            bvect bv1;
-            bv1.set(1);
-        }
-        CheckAllocLeaks(false);
-        {
-            bvect* bv = new bvect();
-            bv->set(1);
-            bool b = CheckAllocLeaks(false, false);
-            assert(b); // leak found
-            delete bv;
-            b = CheckAllocLeaks(false, false);
-            assert(!b); // leak found
-        }
-    }
-#endif
+
     if (is_all || is_sv)
     {
         TestSparseVector();
@@ -35862,14 +35889,23 @@ int main(int argc, char *argv[])
 
         TestSignedSparseVectorScan();
          CheckAllocLeaks(false);
-
+/*
         TestSparseSort();
          CheckAllocLeaks(false);
 
         TestSignedSparseSort();
          CheckAllocLeaks(false);
-
+*/
         TestSparseVector_Stress(3);
+         CheckAllocLeaks(false);
+    }
+
+    if (is_sv_sort || is_sv)
+    {
+        TestSparseSort();
+         CheckAllocLeaks(false);
+
+        TestSignedSparseSort();
          CheckAllocLeaks(false);
     }
 
