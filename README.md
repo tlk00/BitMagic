@@ -1,26 +1,27 @@
 ## BitMagic C++ Library
 
 BitMagic was created as a Algebra of Sets toolkit for Information Retrieval but currently evolved into a more general Data Science components library for memory compact structures and algorithms on succinct data vectors. 
-BitMagic implements compressed bit-vectors and containers (vectors) based on ideas of bit-slicing transform
-and Rank-Select compression. All containers are serializable (with compression using state of art Binary Interpolative Coding) for efficient storage and network transfer. 
+BitMagic implements compressed bit-vectors and containers (vectors) based on ideas of bit-slicing transform, Rank-Select compression and logical computing on memory compressed models. 
 
-BitMagic offers sets of method to architect your applications to use HPC techniques to save 
-memory (thus be able to fit more data in one compute unit) and improve storage and traffic patterns 
-when storing data vectors and models in files or object stores (SQL or noSQL).
+All BitMagic succicnt containers are serializable (with compression using state of art Binary Interpolative Coding) for efficient storage and network transfer. All containers are fast searchable in
+compresed form.
+
+BitMagic offers sets of methods and tools to architect your applications to use HPC techniques to save 
+memory on the fly (thus be able to fit more data in one compute unit), improve storage and traffic patterns when storing data vectors and models in files or object stores (SQL or noSQL), optimize systems bandwidth from low-level (CPU caches) to network and storage exchnage.
 
 BitMagic facilitates two big classes of scenarios:
 - limited RAM applications (WebAssembly, IoT, Edge computing, desktop/workstation apps)
 - Big Data HPC (petabyte problems) where amount of data is astronomical and computation 
-and storage has to be distributed (need for efficient transfer)
+and storage has to be distributed (need for efficient transfer) and optimized for bandwidth.
 
 ### Applications and Use Cases 
 
 BitMagic was used as a building blocks for:
 
-- Algebra of Sets for IR, database inverted index construction
-- Simulation of logical schemes and topologies (like FPGAs)
-- Multidimentional binary distances on compressed bit-vectors 
-  building blocks for binary clusterizations, Self-organizing maps
+- Algebra of Sets for IR, database inverted index construction or index-free columnar DBs
+- Simulation of logical schemes (FPGAs)
+- Data Science of multidimentional binary distances on compressed sets, 
+  building blocks for binary clusterizations, self-organizing maps
 - Construction of memory compressed bioinformatics models 
   - sequence alignments 
   - collections of variations and SNPs 
@@ -28,20 +29,20 @@ BitMagic was used as a building blocks for:
   - k-mer classification systems
 - Visualization of data-sets in the memory constrained edge configurations
   (edge comuting, IoT, WebAssembly)
-- Graph and Tree analysis, construction of compressive matrixes of association 
-- Web and application logs analytics and systems reliability automation 
-- Low latency network scheduling (orchestration) systems
+- Graph and Tree analysis, construction of compressive matrices of association 
+- Web and application logs analytics, systems for reliability automation 
+- Low latency task scheduling (orchestration) systems
 
 Please visit our use-case notes:
 [http://bitmagic.io/use-case.html](http://bitmagic.io/use-case.html)
 
 ### Optimizations and SIMD
 
-BitMagic library is a high performance library, implementing custom optimizations
-for variety of platforms and build targets:
+BitMagic library is a high performance library, implementing optimizations for variety of platforms and build targets:
+
 - x86 (platform specific available bit-scan instructions)
 - x86 SIMD: SSE2, SSE4.2(POPCNT, LZCNT), AVX2 (BMI1/BMI2), AVX-512(work in progress)
-- Arm (use of specific available bit-scan instructions)
+- ARM SIMD: Neon
 - WebAssembly (use of WebAsm built-ins and platform specific tricks)
 - WebAssembly SIMD
 
@@ -130,15 +131,15 @@ deserializatin of elements.
 
 ### Succinct vectors 
 BitMagic supports succinct (memory compact) vectors based on bit-transposition transform  
-also known as bit-plane compression (BPC) or bit-slicing and Rank-Select compression. 
-Succint vectors are labeled "sparse" but they also work for dense vectors.
+also known as bit-plane compression (BPC) (aka bit-slicing) plus Rank-Select compression. 
+BitMagic succint vectors somewhat misleadingly labeled "sparse" but they work for dense vectors just fine.
 
 Bit transposition solves two purposes: free unused bit plains and isolate regularity and entropy into
-separate (sparse) bit-vectors. Compression on bit-planes offers both superior memory performance and fast search. One of the design golas was to be able to perform searches on succinct data using vectorized
-logical operations.
+separate (sparse) bit-vectors. Compression on bit-planes offers both superior memory performance and fast search. One of the design goals to perform index free searches on succinct vectros using fast vectorized logical operations. 
 
-Succinct bit-transposed implementation works well for both integer vectors and string vectors and 
-it rivals other succinct schemes like prefix trees. Succinct vectors can be both sorted and unsorted.
+BitMagic succinct vectors are index-free searchable in memory compressed form. It is fast!
+
+Succinct bit-transposed implementation works well for both integer vectors (signed or unsigned) as well as string vectors. It rivals other succinct schemes like prefix trees. Succinct vectors can be both sorted and unsorted.
 The idea here is similar to Apache Arrow-Parquet, but it takes it farther with bit-plane compression 
 and extensive use of accelerated Rank-Select compression.
 
@@ -157,13 +158,13 @@ between bit-planes to reduce enthropy
 
 
 #### Main features
-- sparse vector(s) for native int types using bit transposition and separate compression of bit-plains, 
+- sparse vector(s) for native int types using bitwise slicing and separate compression of bit-slices, 
 with support of NULL values (unassigned) for construction of in-memory columnar structures. Bit-transposed
 sparse vectors can be used for on-the fly compression of astronomical, molecular biology or other data,
 efficient store of associations for graphs, etc.
 - search algorithms for sorted and unsorted succinct vectors (vectors of ints or strings)
 - algorithms on sparse vectors: dynamic range clipping, search, group theory image (re-mapping).
-- all containers are serializable with compression (binary interpolative coding, elias gamma coding)
+- all containers are serializable with compression (XOR coding, binary interpolative coding, elias gamma coding)
 
 #### Serialization and versioning
 BitMagic supports serialization evolution - if serialization format changes, 
@@ -209,7 +210,7 @@ BitMagic implements some algorithmic tweaks and improvements specific for ARM
 (like use of LZCNT instruction). BitMagic succinct containers can be very useful on embedded 
 systems for edge computing with limited amount of available memory.
 
-ARM NEON SIMD support is a work in progress.
+ARM NEON SIMD support is available (thanks to SSE2NEON project).
 
 
 ### C-library interface:
@@ -375,8 +376,8 @@ Next public version will use CXX-17 (constexpr ifs, etc).
 
 ###Fine tuning and optimizations:
 
-All BM fine tuning parameters are controlled by the preprocessor defines (and 
-compiler keys). 
+All BitMagic fine tuning parameters are controlled by the preprocessor defines (and 
+target arch. specific compiler keys for code generation). 
 
 | #define      | Description                                             | Width    |
 | ------------ | ------------------------------------------------------- | ---------
@@ -384,7 +385,8 @@ compiler keys).
 | BMSSE42OPT   | Turn ON SSE4.2 code optimizations plus POPCNT, BSF, etc | 128-bit  |
 | BMAVX2OPT    | Turn on AVX2, POPCNT, LZCNT, BMI1, BMI2 optimizations   | 256-bit  |
 | BMAVX512OPT  | Turn on AVX-512, (experimental)                         | 512-bit  |
-| BMWASMSIMDOPT| Turn on WebAssembly SIMD optimizations (128-bit)        | 128-bit  |
+| BMWASMSIMDOPT| Turn on WebAssembly SIMD optimizations                  | 128-bit  |
+| DBMNEONOPT   | Turn on ARM NEON SIMD optimizations (uses SSE2 translation)| 128-bit  |
 
 ####Limitations:
 
