@@ -3,11 +3,12 @@
 #  run_all_bg.sh
 #  
 #  Run all tests in background
-#  Created by Anatoliy Kuznetsov on 9/2/17.
 #
 
 #echo "DEBUG"
 #./stress_debug || exit 1
+
+rm -f release*.log
 
 ./stress_release 2>&1 > release.log &
 PID_release=$!
