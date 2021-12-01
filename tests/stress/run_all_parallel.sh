@@ -1,4 +1,4 @@
-#!/bin/sh
+#!/bin/bash
 
 #  run_all_parallel.sh
 #  
