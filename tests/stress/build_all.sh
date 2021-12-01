@@ -9,31 +9,31 @@
 make clean
 
 rm -rf ./stress_* ./test
-make DEBUG=YES rebuild
+make DEBUG=YES rebuild || exit 1
 mv ./bmtest ./stress_debug
 
-make rebuild
+make rebuild || exit 1
 mv ./bmtest ./stress_release
 
-make BMOPTFLAGS=-DBM_USE_GCC_BUILD rebuild
+make BMOPTFLAGS=-DBM_USE_GCC_BUILD rebuild || exit 1
 mv ./bmtest ./stress_release_gcc
 
-make BMOPTFLAGS=-DBMSSE2OPT DEBUG=YES rebuild
+make BMOPTFLAGS=-DBMSSE2OPT DEBUG=YES rebuild || exit 1
 mv ./bmtest ./stress_debug_sse2
 
-make BMOPTFLAGS=-DBMSSE2OPT rebuild
+make BMOPTFLAGS=-DBMSSE2OPT rebuild || exit 1
 mv ./bmtest ./stress_release_sse2
 
-make BMOPTFLAGS=-DBMSSE42OPT rebuild
+make BMOPTFLAGS=-DBMSSE42OPT rebuild || exit 1
 mv ./bmtest ./stress_release_sse42
 
-make BMOPTFLAGS=-DBMSSE42OPT DEBUG=YES rebuild
+make BMOPTFLAGS=-DBMSSE42OPT DEBUG=YES rebuild || exit 1
 mv ./bmtest ./stress_debug_sse42
 
-make BMOPTFLAGS=-DBMAVX2OPT rebuild
+make BMOPTFLAGS=-DBMAVX2OPT rebuild || exit 1
 mv ./bmtest ./stress_release_avx2
 
-make BMOPTFLAGS=-DBMAVX2OPT DEBUG=YES rebuild
+make BMOPTFLAGS=-DBMAVX2OPT DEBUG=YES rebuild || exit 1
 mv ./bmtest ./stress_debug_avx2
 
 #make BMOPTFLAGS=-DBMAVX512OPT rebuild
@@ -43,5 +43,5 @@ mv ./bmtest ./stress_debug_avx2
 #mv ./test ./stress_debug_avx512
 
 
-make BMOPTFLAGS=-DBM64OPT rebuild
+make BMOPTFLAGS=-DBM64OPT rebuild || exit 1
 mv ./bmtest ./stress_release_64
