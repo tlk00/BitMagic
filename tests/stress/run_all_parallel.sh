@@ -55,7 +55,7 @@ do
     LOG_OPT=${RUN_NAME}${OPT}.log
     echo ${RUN_NAME} ${OPT} ">" ${LOG_OPT}
 
-    ./${RUN_NAME} ${OPT} 2>&1 > ${LOG_OPT} &
+    ./${RUN_NAME} ${OPT} &> ${LOG_OPT} &
     PID=$!
     PID_ARR+=($PID)
     OPT_ARR+=($LOG_OPT)
