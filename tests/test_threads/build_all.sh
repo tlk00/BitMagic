@@ -6,14 +6,14 @@
 make clean
 
 rm -rf ./ptest_*
-make DEBUG=YES rebuild
+make DEBUG=YES rebuild || exit 1
 mv ./ptest ./ptest_debug
 
-make rebuild
+make rebuild || exit 1
 mv ./ptest ./ptest_release
 
-make BMOPTFLAGS=-DBMSSE42OPT rebuild
+make BMOPTFLAGS=-DBMSSE42OPT rebuild || exit 1
 mv ./ptest ./ptest_release_sse42
 
-make BMOPTFLAGS=-DBMAVX2OPT rebuild
+make BMOPTFLAGS=-DBMAVX2OPT rebuild || exit 1
 mv ./ptest ./ptest_release_avx2
