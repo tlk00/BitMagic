@@ -88,6 +88,9 @@ using namespace std;
 #include "stacktrace_dbg.h"
 #include <unordered_map>
 
+
+bool is_silent = false;
+
 // -------------------------------
 // memory profiler: very slow if defined
 //
@@ -420,7 +423,8 @@ void VisitorAllRangeTest(const BV& bv, typename BV::size_type step = 1)
         }
         if (!pcnt)
         {
-            cout << "\r" << i << " / " << right << flush;
+            if (!is_silent)
+                cout << "\r" << i << " / " << right << flush;
             pcnt = 128;
         }
         --pcnt;
@@ -464,7 +468,8 @@ void VisitorAllRangeTest(const BV& bv, typename BV::size_type step = 1)
         }
         if (!pcnt)
         {
-            cout << "\r" << left << " / " << right << flush;
+            if (!is_silent)
+                cout << "\r" << left << " / " << right << flush;
             pcnt = 128;
         }
         --pcnt;
@@ -2831,7 +2836,8 @@ void TestBlockCountChange()
                 auto diff = f - s;
                 auto d = std::chrono::duration <double, std::milli> (diff).count();
 
-                cout << "\r" << k << " / " << k_max << " (" << d << "ms)" << flush;
+                if (!is_silent)
+                    cout << "\r" << k << " / " << k_max << " (" << d << "ms)" << flush;
                 
                 s = std::chrono::steady_clock::now();
             }
@@ -4246,7 +4252,8 @@ void BasicFunctionalityTest()
         }
         if (i % 1000 == 0)
         {
-            cout << "\r" << i << " / " << ITERATIONS << flush;
+            if (!is_silent)
+                cout << "\r" << i << " / " << ITERATIONS << flush;
         }
     }
     cout << endl;
@@ -4674,7 +4681,8 @@ void BvectorBulkSetTest()
 
             if (delta % 256 == 0)
             {
-                cout << "\r" << delta << "/" << delta_max << flush;
+                if (!is_silent)
+                    cout << "\r" << delta << "/" << delta_max << flush;
             }
             
         } // for delta
@@ -4796,7 +4804,8 @@ void RankFindTest()
                 }
             }
             if (i % 100 == 0)
-                cout << "\r" << i << "/" << max_size << flush;
+                if (!is_silent)
+                    cout << "\r" << i << "/" << max_size << flush;
         } // for
         cout << endl;
     }
@@ -5332,22 +5341,23 @@ void BvectorShiftTest()
         }
         */
 
-        if ((start % (1024 * 1024)) == 0)
-        {
-            f = std::chrono::steady_clock::now();
-            auto diff = f - s;
-            auto d = std::chrono::duration <double, std::milli> (diff).count();
-            cout << "\r" << start << " (" << d << ") " << flush;
+        if (!is_silent)
+            if ((start % (1024 * 1024)) == 0)
+            {
+                f = std::chrono::steady_clock::now();
+                auto diff = f - s;
+                auto d = std::chrono::duration <double, std::milli> (diff).count();
+                cout << "\r" << start << " (" << d << ") " << flush;
 
-            unsigned idx = bv.get_first();
-            assert(idx == start-1);
+                unsigned idx = bv.get_first();
+                assert(idx == start-1);
 
-            bv.calc_stat(&st);
-            bcnt = st.bit_blocks + st.gap_blocks;
-            assert(bcnt == 1);
-            
-            s = std::chrono::steady_clock::now();
-        }
+                bv.calc_stat(&st);
+                bcnt = st.bit_blocks + st.gap_blocks;
+                assert(bcnt == 1);
+
+                s = std::chrono::steady_clock::now();
+            }
     }
     cout << "ok.\n";
     }
@@ -5379,22 +5389,23 @@ void BvectorShiftTest()
             break;
         }
 
-        if ((start % (1024 * 1024)) == 0)
-        {
-            f = std::chrono::steady_clock::now();
-            auto diff = f - s;
-            auto d = std::chrono::duration <double, std::milli> (diff).count();
-            cout << "\r" << start << " (" << d << ") " << flush;
-            
-            unsigned idx = bv.get_first();
-            assert(idx-1 == start);
-            
-            bv.calc_stat(&st);
-            bcnt = st.bit_blocks + st.gap_blocks;
-            assert(bcnt == 1);
- 
-            s = std::chrono::steady_clock::now();
-        }
+        if (!is_silent)
+            if ((start % (1024 * 1024)) == 0)
+            {
+                f = std::chrono::steady_clock::now();
+                auto diff = f - s;
+                auto d = std::chrono::duration <double, std::milli> (diff).count();
+                cout << "\r" << start << " (" << d << ") " << flush;
+
+                unsigned idx = bv.get_first();
+                assert(idx-1 == start);
+
+                bv.calc_stat(&st);
+                bcnt = st.bit_blocks + st.gap_blocks;
+                assert(bcnt == 1);
+
+                s = std::chrono::steady_clock::now();
+            }
         ++start;
     }
     cout << "ok.\n";
@@ -5415,7 +5426,8 @@ void BvectorShiftTest()
             assert(cmp==0);
             if ((i % 16) == 0)
             {
-                cout << "\r" << i << "/" << max_shifts << flush;
+                if (!is_silent)
+                    cout << "\r" << i << "/" << max_shifts << flush;
             }
         }
     }
@@ -5588,7 +5600,8 @@ void BvectorInsertTest()
             
             if ((i % 16) == 0)
             {
-                cout << "\r" << i << "/" << max_shifts << flush;
+                if (!is_silent)
+                    cout << "\r" << i << "/" << max_shifts << flush;
             }
         } // for i
     }
@@ -5760,7 +5773,8 @@ void BvectorEraseTest()
             
             if ((k % 4) == 0)
             {
-                cout << "\r" << k << "/" << max_erase << flush;
+                if (!is_silent)
+                    cout << "\r" << k << "/" << max_erase << flush;
                 bv.optimize();
             }
 
@@ -6053,7 +6067,8 @@ void RangeCopyTest()
             {
                 CheckRangeCopy(bvect1, i, bm::id_max);
                 if ((i & 0xFFFF) == 0)
-                    cout << "\r" << i << flush;
+                    if (!is_silent)
+                        cout << "\r" << i << flush;
             }
             cout << endl;
             to = bm::id_max-1 - to_max - 100;
@@ -6069,7 +6084,8 @@ void RangeCopyTest()
                 {
                     CheckRangeCopy(bvect1, i, bm::id_max);
                     if ((i & 0xFFFF) == 0)
-                        cout << "\r" << i << flush;
+                        if (!is_silent)
+                            cout << "\r" << i << flush;
                 }
                 bvect1.optimize();
             }
@@ -8290,7 +8306,8 @@ void KleeneLogicAndStressTest(unsigned repeats = 150, unsigned size = 1000000)
             } // for
             if (i % 16 == 0)
             {
-                cout << "\r" << i << " of " << repeats << flush;
+                if (!is_silent)
+                    cout << "\r" << i << " of " << repeats << flush;
             }
         }
     } // for
@@ -8333,10 +8350,11 @@ void KleeneLogicOrStressTest(unsigned repeats = 150, unsigned size = 1000000)
                 assert(v == v_t);
 
             } // for
-            if (i % 16 == 0)
-            {
-                cout << "\r" << i << " of " << repeats << flush;
-            }
+            if (!is_silent)
+                if (i % 16 == 0)
+                {
+                    cout << "\r" << i << " of " << repeats << flush;
+                }
         }
     } // for
     cout << "\n-------------------------------------- KleeneLogicOrStressTest() OK" << endl;
@@ -8894,7 +8912,8 @@ void RankRangeSplitTest()
             assert(cnt == cnt_c);
             if (i % 500 == 0)
             {
-                cout << "\r" << i << "/" << cnt << flush;
+                if (!is_silent)
+                    cout << "\r" << i << "/" << cnt << flush;
             }
         } // for i
     }
@@ -9165,7 +9184,8 @@ void CheckRangeDeserial(const bvect&     bv,
                 }
 
                 auto r = target - i;
-                cout << "\r      " << r << "      " << flush;
+                if (!is_silent)
+                    cout << "\r      " << r << "      " << flush;
                 if (cnt > 128 && (target - i) > 128)
                 {
                     {
@@ -9205,7 +9225,8 @@ void CheckRangeDeserial(const bvect&     bv,
             assert(eq);
 
             auto r = j - i;
-            cout << "\r      " << r << "      " << flush;
+            if (!is_silent)
+                cout << "\r      " << r << "      " << flush;
             // turn on random gallop mode
             if (cnt > 100)
             {
@@ -10681,8 +10702,9 @@ void StressTestAggregatorShiftAND(unsigned repeats)
                 DetailedCheckVectors(bv_target0, bv_target1);
                 exit(1);
             }
-            if (i % 250 == 0)
-                cout << "\r" << i << "/" << shift_repeats << flush;
+            if (!is_silent)
+                if (i % 250 == 0)
+                    cout << "\r" << i << "/" << shift_repeats << flush;
 
             bvect bv_target2;
             agg.set_compute_count(true);
@@ -15669,8 +15691,9 @@ void BVImportTest()
             bool eq = bv.equal(bv_control);
             assert(eq);
 
-            if (size % 256 == 0)
-                cout << "\r" << size << " of " << max << "      " << flush;
+            if (!is_silent)
+                if (size % 256 == 0)
+                    cout << "\r" << size << " of " << max << "      " << flush;
         } // for size
     }
 
@@ -19900,8 +19923,9 @@ void SelectTest()
                 assert(idx_tz == idx1);
             }
             
-            if (i % 1000000 == 0)
-                cout << "\r" << i << " - " << test_size << std::flush;
+            if (!is_silent)
+                if (i % 1000000 == 0)
+                    cout << "\r" << i << " - " << test_size << std::flush;
         }
     }
 
@@ -19934,8 +19958,9 @@ void SelectTest()
                 }
             }
 
-            if (i % 128 == 0)
-                cout << "\r" << i << "-" << test_size << std::flush;
+            if (!is_silent)
+                if (i % 128 == 0)
+                    cout << "\r" << i << "-" << test_size << std::flush;
         }
     }
     
@@ -20261,7 +20286,8 @@ void InterpolativeCodingTest()
                 auto diff = f - s;
                 auto d = std::chrono::duration <double, std::milli> (diff).count();
 
-                cout << "\r" << k << "-" << code_repeats << " (" << d << "ms)" << flush;
+                if (!is_silent)
+                    cout << "\r" << k << "-" << code_repeats << " (" << d << "ms)" << flush;
                 s = std::chrono::steady_clock::now();
             }
         }
@@ -20303,7 +20329,8 @@ void InterpolativeCodingTest()
                 auto diff = f - s;
                 auto d = std::chrono::duration <double, std::milli> (diff).count();
 
-                cout << "\r" << k << "-" << code_repeats << " (" << d << "ms)" << flush;
+                if (!is_silent)
+                    cout << "\r" << k << "-" << code_repeats << " (" << d << "ms)" << flush;
                 s = std::chrono::steady_clock::now();
             }
         } // for k
@@ -20365,7 +20392,8 @@ void InterpolativeCodingTest()
                 auto diff = f - s;
                 auto d = std::chrono::duration <double, std::milli> (diff).count();
 
-                cout << "\r" << k << "-" << code_repeats << " (" << d << "ms)" << flush;
+                if (!is_silent)
+                    cout << "\r" << k << "-" << code_repeats << " (" << d << "ms)" << flush;
                 s = std::chrono::steady_clock::now();
             }
         }
@@ -20407,7 +20435,8 @@ void InterpolativeCodingTest()
                 auto diff = f - s;
                 auto d = std::chrono::duration <double, std::milli> (diff).count();
 
-                cout << "\r" << k << "-" << code_repeats << " (" << d << "ms)" << flush;
+                if (!is_silent)
+                    cout << "\r" << k << "-" << code_repeats << " (" << d << "ms)" << flush;
                 s = std::chrono::steady_clock::now();
             }
         } // for k
@@ -20466,7 +20495,8 @@ void InterpolativeCodingTest()
                 auto diff = f - s;
                 auto d = std::chrono::duration <double, std::milli> (diff).count();
 
-                cout << "\r" << k << "-" << code_repeats << " (" << d << "ms)" << flush;
+                if (!is_silent)
+                    cout << "\r" << k << "-" << code_repeats << " (" << d << "ms)" << flush;
                 s = std::chrono::steady_clock::now();
             }
         }
@@ -20498,8 +20528,9 @@ void InterpolativeCodingTest()
                     assert(src_arr[i] == dst_arr[i]);
                 }
             }
-            if ((k & 0xFFFF) == 0)
-                cout << "\r" << k << "-" << code_repeats << flush;
+            if (!is_silent)
+                if ((k & 0xFFFF) == 0)
+                    cout << "\r" << k << "-" << code_repeats << flush;
         } // for k
         
     }
@@ -22156,8 +22187,9 @@ void TestSparseVector()
             unsigned v = sv.get(j);
             assert(v == i);
         } // for j
-        if ((i % 200) == 0)
-            cout << "\r" << i << " / " << 65536 << flush;
+        if (!is_silent)
+            if ((i % 200) == 0)
+                cout << "\r" << i << " / " << 65536 << flush;
     } // for i
 
     cout <<  "\nOk" << endl;
@@ -23836,7 +23868,8 @@ void TestSparseVectorSerial()
                     */
                     if (i % 0xFF == 0)
                     {
-                        std::cout << "\r" << j - i << flush;
+                        if (!is_silent)
+                            std::cout << "\r" << j - i << flush;
                     }
 
                 } // for i
@@ -24156,7 +24189,8 @@ void TestSignedSparseVectorSerial()
                     */
                     if (i % 0xFF == 0)
                     {
-                        std::cout << "\r" << j - i << flush;
+                        if (!is_silent)
+                            std::cout << "\r" << j - i << flush;
                     }
 
                 } // for i
@@ -24490,8 +24524,9 @@ void TestSparseVectorGatherDecode()
             if (i % 500 == 0)
             {
                 finish_time = time(0);
-                cout << "\r" << i << "/" << probe_to
-                     << " [" << (finish_time - start_time) << "]" << flush;
+                if (!is_silent)
+                    cout << "\r" << i << "/" << probe_to
+                         << " [" << (finish_time - start_time) << "]" << flush;
                 start_time = time(0);
             }
         }
@@ -24513,8 +24548,9 @@ void TestSparseVectorGatherDecode()
             if (i % 500 == 0)
             {
                 finish_time = time(0);
-                cout << "\r" << i << "/" << probe_to
-                     << " [" << (finish_time - start_time) << "]" << flush;
+                if (!is_silent)
+                    cout << "\r" << i << "/" << probe_to
+                         << " [" << (finish_time - start_time) << "]" << flush;
                 start_time = time(0);
             }
         }
@@ -24633,7 +24669,8 @@ void TestSparseVectorRange()
         {
             CheckSparseVectorRange(sv, 0, i);
             CheckSparseVectorRange(sv, i, sv_max+10);
-            cout << "\r" << i << "/" << sv_max << flush;
+            if (!is_silent)
+                cout << "\r" << i << "/" << sv_max << flush;
         }
         cout << endl;
         
@@ -24678,8 +24715,9 @@ void TestSparseVectorRange()
             CheckSparseVectorRange(sv, i, i);
             CheckSparseVectorRange(sv, 0, i);
             CheckSparseVectorRange(sv, i, sv_max+10);
-            if (i % 256 == 0)
-                cout << "\r" << i << "/" << sv_max << flush;
+            if (!is_silent)
+                if (i % 256 == 0)
+                    cout << "\r" << i << "/" << sv_max << flush;
         }
         
         cout << "\nPhase 2-2.." << endl;
@@ -24850,8 +24888,9 @@ void TestSparseVectorFilter()
         for (unsigned i = 2; i < max_factor; ++i)
         {
             CheckSparseVectorFilter(sv, i);
-            if (i % 256 == 0)
-                cout << "\r" << i << "/" << max_factor << flush;
+            if (!is_silent)
+                if (i % 256 == 0)
+                    cout << "\r" << i << "/" << max_factor << flush;
         }
         cout << endl;
     }
@@ -25360,8 +25399,9 @@ void TestSparseVectorScan()
                 }
 
 
-                if (j % 1000 == 0)
-                    cout << "\r" << j << "/" << sv_size << "    " << flush;
+                if (!is_silent)
+                    if (j % 1000 == 0)
+                        cout << "\r" << j << "/" << sv_size << "    " << flush;
             } // for
             cout << endl;
         }
@@ -25476,8 +25516,9 @@ void TestSparseVectorScan()
             }
 
             
-            if (value % 256 == 0)
-                cout << "\r" << value << "/" << max_value << "    " << flush;
+            if (!is_silent)
+                if (value % 256 == 0)
+                    cout << "\r" << value << "/" << max_value << "    " << flush;
         }
         
         cout << endl << "Flat EQ ok" << endl;
@@ -25614,7 +25655,8 @@ void TestSparseVectorScanGT()
                 CheckGTSearch(sv, j, scanner);
 
             if (j % 1024 == 0)
-                cout << "\r" << j << "/" << sv_size << "    " << flush;
+                if (!is_silent)
+                    cout << "\r" << j << "/" << sv_size << "    " << flush;
         } // for
 
 
@@ -25783,7 +25825,8 @@ void TestSignedSparseVectorScanGT()
                 CheckGTSearch(sv, j, scanner64);
 
             if (j % 1024 == 0)
-                cout << "\r" << i << "/" << sv.size() << "    " << flush;
+                if (!is_silent)
+                    cout << "\r" << i << "/" << sv.size() << "    " << flush;
         } // for
 
 
@@ -25906,7 +25949,8 @@ void TestSignedSparseVectorScan()
 
 
                 if (j % 1000 == 0)
-                    cout << "\r" << j << "/" << sv_size << "    " << flush;
+                    if (!is_silent)
+                        cout << "\r" << j << "/" << sv_size << "    " << flush;
             } // for
             cout << endl;
         }
@@ -26021,7 +26065,8 @@ void TestSignedSparseVectorScan()
 
 
             if (value % 256 == 0)
-                cout << "\r" << value << "/" << max_value << "    " << flush;
+                if (!is_silent)
+                    cout << "\r" << value << "/" << max_value << "    " << flush;
         }
 
         cout << endl << "Flat EQ ok" << endl;
@@ -26223,8 +26268,9 @@ void TestCompressedSparseVectorAlgo()
                     auto diff = f1 - st;
                     //auto d = std::chrono::duration <double, std::milli> (diff).count();
 
-                    cout << "\r" << j << "/" << sv_size << " " <<
-                            " (" << diff.count() << ")" << flush;
+                    if (!is_silent)
+                        cout << "\r" << j << "/" << sv_size << " " <<
+                                " (" << diff.count() << ")" << flush;
                 }
             } // for
             cout << endl;
@@ -26414,7 +26460,8 @@ void TestCompressedSparseVectorScanGT()
                 auto v1 = csv.get(i);
                 CheckGTSearch(csv, v1, scanner_csv);
                 if (cnt & 0xF)
-                    cout << "\r" << cnt << "/" << sample_size << flush;
+                    if (!is_silent)
+                        cout << "\r" << cnt << "/" << sample_size << flush;
             }
 
             cout << endl;
@@ -26538,8 +26585,9 @@ void TestSparseVector_Stress(unsigned count)
                     cerr << "sparse-dense vector comparison failed" << endl;
                     exit(1);
                 }
-                cout << "\r min=" << min << " max=" << max << " ff= "
-                     << fill_factor << flush;
+                if (!is_silent)
+                    cout << "\r min=" << min << " max=" << max << " ff= "
+                         << fill_factor << flush;
             }}
             if (++fill_factor > 2) fill_factor = 0;
         } // for min
@@ -28520,7 +28568,8 @@ void TestStrSparseVectorSerial()
             } // for j
 
             if ((i & 0xFF) == 0)
-                cout << "\r" << i << "/" << to << flush;
+                if (!is_silent)
+                    cout << "\r" << i << "/" << to << flush;
 
         } // for
 
@@ -28553,7 +28602,8 @@ void TestStrSparseVectorSerial()
             } // for j
 
             if ((i & 0xF) == 0)
-                cout << "\r" << i << "/" << to << flush;
+                if (!is_silent)
+                    cout << "\r" << i << "/" << to << flush;
 
         } // for
 
@@ -28642,7 +28692,8 @@ void TestStrSparseVectorSerial()
             } // for j
 
             if ((i & 0xF) == 0)
-                cout << "\r" << i << "/" << to << flush;
+                if (!is_silent)
+                    cout << "\r" << i << "/" << to << flush;
 
         } // for
 
@@ -28886,7 +28937,8 @@ void CompareStrSparseVector(const str_svect_type& str_sv,
 
         if (i % 100000 == 0)
         {
-            cout << "\r" << i << " / " << str_sv.size() << flush;
+            if (!is_silent)
+                cout << "\r" << i << " / " << str_sv.size() << flush;
         }
 
     } // for
@@ -29125,7 +29177,8 @@ void StressTestStrSparseVector()
         
         if (i % 512 == 0)
         {
-            cout << "\r" << i << " / " << test_size << flush;
+            if (!is_silent)
+                cout << "\r" << i << " / " << test_size << flush;
         }
     } // for i
     
@@ -29238,7 +29291,8 @@ void StressTestStrSparseVector()
             }
             if (i % 65535 == 0)
             {
-                cout << "\r" << i << " / " << str_sv_sorted.size() << flush;
+                if (!is_silent)
+                    cout << "\r" << i << " / " << str_sv_sorted.size() << flush;
             }
 
         } // for
@@ -29292,6 +29346,54 @@ void TestSparseFindEqStrPipeline()
    const unsigned max_coll = 8000000;
    std::vector<string> str_coll;
    str_svect_type      str_sv;
+
+
+   {
+        str_svect_type str_sv1(bm::use_null);
+        str_sv1.push_back("str1");
+        str_sv1.push_back("str2");
+
+        for (int pass = 0; pass < 2; ++pass)
+        {
+            bm::sparse_vector_scanner<str_svect_type> scanner;
+            bm::sparse_vector_scanner<str_svect_type>::pipeline<> pipe(str_sv1);
+
+            pipe.add("str1");
+            pipe.add("z2"); // not found
+            pipe.add("str2");
+
+            pipe.complete(); // finish the pipeline construction with this call
+
+            scanner.find_eq_str(pipe); // run the search pipeline
+
+            auto& res_vec = pipe.get_bv_res_vector();
+            assert(res_vec.size()==3);
+
+            const bvect* bv0 = res_vec[0];
+            assert(bv0);
+            assert(bv0->count()==1);
+            assert(bv0->test(0));
+
+            {
+                str_svect_type::bvector_type bv_res;
+                scanner.find_eq_str(str_sv1, "str1", bv_res);
+                bool eq = bv0->equal(bv_res);
+                assert(eq);
+            }
+
+            const bvect* bv1 = res_vec[1];
+            assert(!bv1);
+            const bvect* bv2 = res_vec[2];
+            assert(bv2);
+            assert(bv2->count()==1);
+            assert(bv2->test(1));
+
+
+
+            str_sv1.optimize();
+        }
+
+   }
 
    cout << "   generate test set..." << flush;
 
@@ -29469,7 +29571,8 @@ void TestStrSparseSort()
                 }
             }
             if (i % 4096 == 0)
-                cout << "\r" << i << "/" << max_coll << flush;
+                if (!is_silent)
+                    cout << "\r" << i << "/" << max_coll << flush;
 
         } // for
         cout << "\n";
@@ -29550,18 +29653,19 @@ void TestStrSparseSort()
                 }
 
                 
-                if (i % 8096 == 0)
-                {
-                    std::chrono::time_point<std::chrono::steady_clock> f = std::chrono::steady_clock::now();
-                    auto diff = f - st;
-                    auto d = std::chrono::duration <double, std::milli> (diff).count();
+                if (!is_silent)
+                    if (i % 8096 == 0)
+                    {
+                        std::chrono::time_point<std::chrono::steady_clock> f = std::chrono::steady_clock::now();
+                        auto diff = f - st;
+                        auto d = std::chrono::duration <double, std::milli> (diff).count();
 
-                    cout << "\r" << i << "/" << max_coll << " (" << d << "ms)" << flush;
-                    
-                    str_sv_sorted.optimize();
-                    
-                    st = std::chrono::steady_clock::now();
-                }
+                        cout << "\r" << i << "/" << max_coll << " (" << d << "ms)" << flush;
+
+                        str_sv_sorted.optimize();
+
+                        st = std::chrono::steady_clock::now();
+                    }
                 ++i;
             } // for s
         }
@@ -29676,7 +29780,8 @@ void TestSparseSort()
                 }
             }
             if (i % 4096 == 0)
-                cout << "\r" << i << "/" << max_coll << flush;
+                if (!is_silent)
+                    cout << "\r" << i << "/" << max_coll << flush;
 
         } // for
         cout << "\n";
@@ -29755,17 +29860,18 @@ void TestSparseSort()
                 }
 
                 
-                if (i % 8096 == 0)
-                {
-                    std::chrono::time_point<std::chrono::steady_clock> f = std::chrono::steady_clock::now();
-                    auto diff = f - st;
-                    auto d = std::chrono::duration <double, std::milli> (diff).count();
-                    cout << "\r" << i << "/" << max_coll << " (" << d << "ms)" << flush;
-                    
-                    u_sv_sorted.optimize();
-                    
-                    st = std::chrono::steady_clock::now();
-                }
+                if (!is_silent)
+                    if (i % 8096 == 0)
+                    {
+                        std::chrono::time_point<std::chrono::steady_clock> f = std::chrono::steady_clock::now();
+                        auto diff = f - st;
+                        auto d = std::chrono::duration <double, std::milli> (diff).count();
+                        cout << "\r" << i << "/" << max_coll << " (" << d << "ms)" << flush;
+
+                        u_sv_sorted.optimize();
+
+                        st = std::chrono::steady_clock::now();
+                    }
                 ++i;
             } // for s
         }
@@ -29880,8 +29986,9 @@ void TestSignedSparseSort()
                     }
                 }
             }
-            if (i % 4096 == 0)
-                cout << "\r" << i << "/" << max_coll << flush;
+            if (!is_silent)
+                if (i % 4096 == 0)
+                    cout << "\r" << i << "/" << max_coll << flush;
 
         } // for
         cout << "\n";
@@ -29963,17 +30070,18 @@ void TestSignedSparseSort()
                 }
 
 
-                if (i % 8096 == 0)
-                {
-                    std::chrono::time_point<std::chrono::steady_clock> f = std::chrono::steady_clock::now();
-                    auto diff = f - st;
-                    auto d = std::chrono::duration <double, std::milli> (diff).count();
-                    cout << "\r" << i << "/" << max_coll << " (" << d << "ms)" << flush;
+                if (!is_silent)
+                    if (i % 8096 == 0)
+                    {
+                        std::chrono::time_point<std::chrono::steady_clock> f = std::chrono::steady_clock::now();
+                        auto diff = f - st;
+                        auto d = std::chrono::duration <double, std::milli> (diff).count();
+                        cout << "\r" << i << "/" << max_coll << " (" << d << "ms)" << flush;
 
-                    i_sv_sorted.optimize();
+                        i_sv_sorted.optimize();
 
-                    st = std::chrono::steady_clock::now();
-                }
+                        st = std::chrono::steady_clock::now();
+                    }
                 ++i;
             } // for s
         }
@@ -31697,7 +31805,8 @@ void TestCompressedCollection()
             }
 
 
-            cout << "\r" << i << " of " << test_count << flush;
+            if (!is_silent)
+                cout << "\r" << i << " of " << test_count << flush;
         } // for
         
         cout << endl;
@@ -31976,8 +32085,9 @@ void TestFindBlockDiff()
             f = bm::bit_find_first_diff(tb1, tb2, &pos);
             assert(!f);
 
-            if ((k & 0xFF) == 0)
-                cout << "\r" << k << flush;
+            if (!is_silent)
+                if ((k & 0xFF) == 0)
+                    cout << "\r" << k << flush;
         } // for
 
     }
@@ -32246,8 +32356,9 @@ void TestBlockDigest()
                 d0_c = bm::dm_control(i, j);
                 assert(d0 == d0_c);
             } // for j
-            if ((i & 0xFF) == 0)
-                cout << "\r" << i << " | " << test_to << "        " << flush;
+            if (!is_silent)
+                if ((i & 0xFF) == 0)
+                    cout << "\r" << i << " | " << test_to << "        " << flush;
         } // for i
 }
 
@@ -33115,8 +33226,9 @@ void DetailedCheckCompressedDecode(const CSV& csv)
     for (unsigned i = 0; i < size1; )
     {
         CheckCompressedDecode(csv, i, size);
-        if (i % 128 ==0)
-            cout << "\r" << i << "/" << size1 << flush;
+        if (!is_silent)
+            if (i % 128 ==0)
+                cout << "\r" << i << "/" << size1 << flush;
         i++;
     }
     }
@@ -33127,7 +33239,8 @@ void DetailedCheckCompressedDecode(const CSV& csv)
     for (unsigned i = 0; i < size1; )
     {
         CheckCompressedDecode(csv, i, size1);
-        cout << "\r" << i << "/" << size1 << flush;
+        if (!is_silent)
+            cout << "\r" << i << "/" << size1 << flush;
         i+=(unsigned)rand()%3;
         size1 -= (unsigned)rand()%5;
     }
@@ -33139,7 +33252,8 @@ void DetailedCheckCompressedDecode(const CSV& csv)
     for (unsigned i = size-size/2; i < size1; )
     {
         CheckCompressedDecode(csv, i, size1);
-        cout << "\r" << i << "/" << size1 << flush;
+        if (!is_silent)
+            cout << "\r" << i << "/" << size1 << flush;
         i+=(1+i);
     }
     }
@@ -33148,7 +33262,8 @@ void DetailedCheckCompressedDecode(const CSV& csv)
     for (unsigned i = size-size/2; i < size; )
     {
         CheckCompressedDecode(csv, i, size);
-        cout << "\r" << i << "/" << size << flush;
+        if (!is_silent)
+            cout << "\r" << i << "/" << size << flush;
         i += (unsigned)rand() % 25000;
     }
     cout << endl;
@@ -33158,7 +33273,8 @@ void DetailedCheckCompressedDecode(const CSV& csv)
         if (size <= i)
             break;
         CheckCompressedDecode(csv, i, size);
-        cout << "\r" << i << "/" << size << flush;
+        if (!is_silent)
+            cout << "\r" << i << "/" << size << flush;
         i += (unsigned)rand() % 25000;
         size -= (unsigned)rand() % 25000;;
     }
@@ -33667,8 +33783,9 @@ void TestCompressSparseVector()
             }
             assert(csv1.get(i) == 0);
 
-            if (i % 100 == 0)
-                cout << "\r" << i << " / " << to << flush;
+            if (!is_silent)
+                if (i % 100 == 0)
+                    cout << "\r" << i << " / " << to << flush;
 
         } // for
         cout << endl;
@@ -33893,7 +34010,8 @@ void TestCompressSparseVector()
 
             if (i % 4096 == 0)
             {
-                cout << "\r" << pr.first << "/" << max_size << flush;
+                if (!is_silent)
+                    cout << "\r" << pr.first << "/" << max_size << flush;
                 csv.optimize();
             }
 
@@ -33910,8 +34028,9 @@ void TestCompressSparseVector()
             const std::pair<unsigned, unsigned>& pr = vect[i];
             unsigned v = csv[pr.first];
             assert(v == pr.second);
-            if (i % 4096 == 0)
-                cout << "\r" << pr.first << "/" << max_size << flush;
+            if (!is_silent)
+                if (i % 4096 == 0)
+                    cout << "\r" << pr.first << "/" << max_size << flush;
         } // for
 
         cout << "\nRSC set null..." << endl;
@@ -33924,13 +34043,12 @@ void TestCompressSparseVector()
             assert(csv.is_null(pr.first));
             if (i % 4096 == 0)
             {
-                cout << "\r" << i << "/" << max_size << flush;
+                if (!is_silent)
+                    cout << "\r" << i << "/" << max_size << flush;
                 csv.optimize();
             }
             ++i;
         } // for
-
-
 
         cout << "\nOK" << endl;
     }
@@ -34958,7 +35076,8 @@ void TestCompressSparseVectorSerial()
                 assert(eq);
 
 
-                cout << "\r  " << (j-i) << "           " << std::flush;
+                if (!is_silent)
+                    cout << "\r  " << (j-i) << "           " << std::flush;
 
                 csv1.sync();
 
@@ -35222,7 +35341,10 @@ void show_help()
         << "-cc                   - test compresses collections" << endl
         << "-ser                  - test all serialization" << endl
         << "-allsvser             - test serailization of sparse vectors (all)" << endl
-        << "-sort                 - sparse vector sort tests" << endl;
+        << "-sort                 - sparse vector sort tests" << endl
+        << endl
+        << "-silent               -run without excessive progress report prints"
+        << endl;
       ;
 }
 
@@ -35343,6 +35465,11 @@ int parse_args(int argc, char *argv[])
         {
             is_all = false;
             is_sv_sort = true;
+            continue;
+        }
+        if (arg == "-silent" || arg == "--silent")
+        {
+            is_silent = true;
             continue;
         }
 
@@ -35531,7 +35658,6 @@ int main(int argc, char *argv[])
 //unsigned long long a = 9223372036854775807ULL;
 //unsigned long long a = 281474976710655ULL;
 //a = a / (65536 * 256);
-
     if (is_all || is_low_level)
     {
         TestRecomb();
@@ -35889,13 +36015,7 @@ int main(int argc, char *argv[])
 
         TestSignedSparseVectorScan();
          CheckAllocLeaks(false);
-/*
-        TestSparseSort();
-         CheckAllocLeaks(false);
 
-        TestSignedSparseSort();
-         CheckAllocLeaks(false);
-*/
         TestSparseVector_Stress(3);
          CheckAllocLeaks(false);
     }
@@ -35939,7 +36059,6 @@ int main(int argc, char *argv[])
     
     if (is_all || is_str_sv)
     {
-
          TestStrSparseVector();
          CheckAllocLeaks(false);
 
