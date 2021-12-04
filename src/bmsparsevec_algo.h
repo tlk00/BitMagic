@@ -1011,6 +1011,7 @@ protected:
             BM_ASSERT(value & (value_type(1) << bit_idx));
             unsigned plane_idx = (unsigned(octet_idx) * 8) + bit_idx;
             const bvector_type* bv = sv.get_slice(plane_idx);
+            BM_ASSERT(bv != sv.get_null_bvector());
             agg.add(bv, 0); // add to the AND group
         } // for i
 
@@ -1031,6 +1032,7 @@ protected:
             unsigned plane_idx = octet_plane + bit_idx;
             const bvector_type* bv = sv.get_slice(plane_idx);
             BM_ASSERT(bv);
+            BM_ASSERT(bv != sv.get_null_bvector());
             agg.add(bv, 1); // add to SUB group
         } // for
     }
@@ -1681,7 +1683,7 @@ bool sparse_vector_scanner<SV>::prepare_and_sub_aggregator(const SV&  sv,
     if (prefix_sub)
     {
         unsigned plane_idx = unsigned(len * 8);
-        typename SV::size_type planes = sv.get_bmatrix().rows();
+        typename SV::size_type planes = sv.get_bmatrix().rows_not_null();
         for (; plane_idx < planes; ++plane_idx)
         {
             if (bvector_type_const_ptr bv = sv.get_slice(plane_idx))
@@ -2882,7 +2884,11 @@ sparse_vector_scanner<SV>::pipeline<Opt>::add(const typename SV::value_type* str
     for (; str[len] != 0; ++len)
     {}
     BM_ASSERT(len);
-
+/*
+    const bvector_type* bv_null = sv_.get_null_bvector();
+    if (bv_null)
+        arg->add(bv_null, 0); // agg NOT NULL bv to AND group
+*/
 
     // use reverse order (faster for sorted arrays)
     for (int octet_idx = len-1; octet_idx >= 0; --octet_idx)
@@ -2912,16 +2918,14 @@ sparse_vector_scanner<SV>::pipeline<Opt>::add(const typename SV::value_type* str
     //if (prefix_sub)
     {
         unsigned plane_idx = unsigned(len * 8);
-        typename SV::size_type planes = sv_.get_bmatrix().rows();
+        // SUB group should NOt include not NULL bvector
+        typename SV::size_type planes = sv_.get_bmatrix().rows_not_null();
         for (; plane_idx < planes; ++plane_idx)
         {
             if (bvector_type_const_ptr bv = sv_.get_slice(plane_idx))
                 arg->add(bv, 1); // agg to SUB group
         } // for
     }
-
-
-    //return true;
 
 }
 

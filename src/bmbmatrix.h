@@ -133,6 +133,10 @@ public:
     
     /*! get number of value rows */
     size_type rows() const BMNOEXCEPT { return rsize_; }
+
+    /*! get number of value rows without  (not) NULLs bvector */
+    size_type rows_not_null() const BMNOEXCEPT { return rsize_ - bool(null_idx_);}
+
     
     /*! Make sure row is constructed, return bit-vector */
     bvector_type_ptr construct_row(size_type row);
