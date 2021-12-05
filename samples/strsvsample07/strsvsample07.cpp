@@ -239,7 +239,12 @@ int main(int argc, char *argv[])
             //
             bm::bvector<> bv_mask;
             bv_mask.set_range(0, str_sv->size()/3); // only first 1/3 of elements will be searched
-            bm::sparse_vector_scanner<str_sv_type>::pipeline<> pipe1_and(*str_sv);
+
+
+            // scanner is configured to support result vectors AND search masking
+            //
+            typedef bm::agg_run_options<true, false, true> scanner_custom_mask_opt;
+            bm::sparse_vector_scanner<str_sv_type>::pipeline<scanner_custom_mask_opt> pipe1_and(*str_sv);
 
             pipe1_and.set_search_mask(&bv_mask); // associate search mask with the pipeline
             pipe1_and.options().batch_size = test_runs;

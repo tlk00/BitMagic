@@ -2887,6 +2887,8 @@ template<typename SV> template<class Opt>
 void
 sparse_vector_scanner<SV>::pipeline<Opt>::set_search_mask(const bvector_type* bv_mask) BMNOEXCEPT
 {
+    static_assert(Opt::is_masks(),
+                  "BM: Search masking needs to be enabled in template parameter options before function call. see bm::agg_run_options<> ");
     bv_and_mask_ = bv_mask;
 }
 
@@ -2916,7 +2918,8 @@ sparse_vector_scanner<SV>::pipeline<Opt>::add(const typename SV::value_type* str
     {}
     BM_ASSERT(len);
 
-    arg->add(bv_and_mask_, 0); 
+    if constexpr(Opt::is_masks())
+        arg->add(bv_and_mask_, 0);
 
     // use reverse order (faster for sorted arrays)
     for (int octet_idx = len-1; octet_idx >= 0; --octet_idx)

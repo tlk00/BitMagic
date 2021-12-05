@@ -52,22 +52,29 @@ const bool agg_produce_result_bvectors = true;
 const bool agg_disable_result_bvectors = false;
 const bool agg_compute_counts = true;
 const bool agg_disable_counts = false;
+const bool agg_disable_search_masks = false;
 
 /**
    Aggregation options to control execution
+   Default settings are to support only result bit-vector filters.
    @ingroup setalgo
  */
 template <bool OBvects=bm::agg_produce_result_bvectors,
-          bool OCounts=bm::agg_disable_counts>
+          bool OCounts=bm::agg_disable_counts,
+          bool OSearchMasks=bm::agg_disable_search_masks>
 struct agg_run_options
 {
     /// make result(target) vectors (aggregation search results) (Default: true)
     /// when false is used - means we want to only collect statistics (counts) for the targets
-    static constexpr bool is_make_results() { return OBvects; }
+    static constexpr bool is_make_results() BMNOEXCEPT { return OBvects; }
 
     /// Compute counts for the target vectors, when set to true, population count is computed for
     /// each result, results itself can be omitted (make_results flag set to false)
-    static constexpr bool is_compute_counts() { return OCounts; }
+    static constexpr bool is_compute_counts() BMNOEXCEPT { return OCounts; }
+
+    /// Support for masking operations (Default: false)
+    ///
+    static constexpr bool is_masks() BMNOEXCEPT { return OSearchMasks; }
 };
 
 /**
@@ -1159,9 +1166,7 @@ void aggregator<BV>::combine_and_sub(TPipe& pipe)
     BM_ASSERT(top_blocks);
 
     if (pipe.bv_or_target_)
-    {
         pipe.bv_or_target_->get_blocks_manager().reserve_top_blocks(top_blocks);
-    }
 
     unsigned i_from(0), j_from(0), i_to(0), j_to(0);
     if (range_set_)
@@ -1189,12 +1194,15 @@ void aggregator<BV>::combine_and_sub(TPipe& pipe)
         for (unsigned i = i_from; i < top_blocks; ++i)
         {
             unsigned j(0), sub_size(bm::set_sub_array_size);
-            if (range_set_)
+            if constexpr(TPipe::options_type::is_masks())
             {
-                if (i == i_from)
-                    j = j_from;
-                if (i == i_to)
-                    sub_size = j_to+1;
+                if (range_set_)
+                {
+                    if (i == i_from)
+                        j = j_from;
+                    if (i == i_to)
+                        sub_size = j_to+1;
+                }
             }
 
             for (; j < sub_size; ++j)
