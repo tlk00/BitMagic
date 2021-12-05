@@ -116,7 +116,7 @@ int main(int argc, char *argv[])
 
 
         std::vector<string> str_coll;
-        str_sv_type str_sv0; // sparse-succinct vector
+        str_sv_type str_sv0(bm::use_null); // sparse-succinct vector
 
         cout << "Generating the test data... " << flush;
         GenerateTestData(str_coll, str_sv0);
@@ -188,9 +188,9 @@ int main(int argc, char *argv[])
                 for (bvector_type::size_type i = 0; i < test_runs; ++i)
                 {
                     const string& str = str_test_coll[i];
-                    bvector_type* bv_res(new bvector_type);
+                    unique_ptr<bvector_type> bv_res(new bvector_type);
                     scanner.find_eq_str(*str_sv, str.c_str(), *bv_res);
-                    res_vec1.emplace_back(unique_ptr<bvector_type>(bv_res));
+                    res_vec1.emplace_back(unique_ptr<bvector_type>(bv_res.release()));
                 } // for
             }
 
@@ -207,7 +207,7 @@ int main(int argc, char *argv[])
             //
             bm::sparse_vector_scanner<str_sv_type>::pipeline<> pipe1(*str_sv);
 
-            // batch_size instructs how many searche to run at once
+            // batch_size instructs how many search to run at once
             // batch_size=0 and this parameter will be identified automatically
             //
             // batch size essentially depends on CPU cache size and it is
@@ -232,6 +232,31 @@ int main(int argc, char *argv[])
 
                 // at this point we have the results (in the pipeline object itself)
             }
+
+            // This example sets the search range for only a part of
+            // the sv vector using the mask bit-vector.
+            // Since mask vector narrows down the search space - it is faster
+            //
+            bm::bvector<> bv_mask;
+            bv_mask.set_range(0, str_sv->size()/3); // only first 1/3 of elements will be searched
+            bm::sparse_vector_scanner<str_sv_type>::pipeline<> pipe1_and(*str_sv);
+
+            pipe1_and.set_search_mask(&bv_mask); // associate search mask with the pipeline
+            pipe1_and.options().batch_size = test_runs;
+
+            {
+                bm::chrono_taker tt("scanner::pipeline+MASK find_eq_str()", test_runs);
+
+                // add all the search items to the pipeline
+                for (size_t i = 0; i < test_runs; ++i)
+                {
+                    const string& str = str_test_coll[i];
+                    pipe1_and.add(str.c_str()); // this will search within defined mask
+                }
+                pipe1_and.complete();
+                scanner.find_eq_str(pipe1_and); // run the search
+            }
+
 
             // This variant would build the same pipeline but configure
             // it differently using pipe2.options()
@@ -276,25 +301,47 @@ int main(int argc, char *argv[])
                 // (for the reasons of portability)
                 //
                 auto& res_vect = pipe1.get_bv_res_vector(); // results from pipeline 1
+                auto& res_vect_and = pipe1_and.get_bv_res_vector();
                 auto& cnt_vect = pipe2.get_bv_count_vector(); // counts from pileine 2
 
                 assert(res_vect.size() == cnt_vect.size());
 
-                // iterate over results
+                // iterate over results, run some checks...
                 size_t res_sz = res_vect.size();
                 for (size_t i = 0; i < res_sz; ++i)
                 {
                     const bvector_type* bv1 = res_vec1[i].get();
+                    assert(bv1);
                     const bvector_type* bv = res_vect[i];
                     assert(bv);
                     bool match = bv1->equal(*bv); // quick check
                     assert(match);
+
                     auto c = cnt_vect[i];
                     auto cnt = bv->count();
                     (void)cnt; (void)c; // to silence unused warnings (relese)
                     assert(cnt == c); // check if counts match
 
                     bv_or_total |= *bv; // accumulate OR
+                    {
+                    auto c_and = bm::count_and(*bv, bv_mask);
+                    const bvector_type* bv_and = res_vect_and[i];
+                    if (bv_and)
+                    {
+                        auto c1 = bv_and->count();
+                        assert(c1 == c_and);
+                        bvector_type bv_m;
+                        bv_m.bit_and(*bv1, bv_mask);
+                        match = bv_and->equal(bv_m);
+                        assert(match);
+                    }
+                    else
+                    {
+                        assert(!c_and);
+                    }
+
+
+                    }
                 }
             }
 

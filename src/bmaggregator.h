@@ -447,8 +447,14 @@ public:
     /**
         Set search hint for the range, where results needs to be searched
         (experimental for internal use).
+       @internal
     */
     void set_range_hint(size_type from, size_type to) BMNOEXCEPT;
+
+    /**
+        Reset range hint to false
+     */
+    void reset_range_hint() BMNOEXCEPT;
 
     size_type count() const { return count_; }
     
@@ -604,6 +610,7 @@ protected:
     bm::heap_vector<unsigned char, allocator_type, true> uchar_vector_type;
 
 
+    void reset_vars();
 
 
     void combine_or(unsigned i, unsigned j,
@@ -890,16 +897,31 @@ aggregator<BV>::~aggregator()
 template<typename BV>
 void aggregator<BV>::reset()
 {
+    reset_vars();
+    reset_range_hint();
+}
+
+// ------------------------------------------------------------------------
+
+template<typename BV>
+void aggregator<BV>::reset_vars()
+{
     ag_.reset();
     ar_->reset_all_blocks();
     operation_ = top_block_size_ = 0;
     operation_status_ = op_undefined;
+    count_ = 0; bcache_ptr_ = 0; gap_cache_cnt_ = 0;
+}
+
+// ------------------------------------------------------------------------
+
+template<typename BV>
+void aggregator<BV>::reset_range_hint() BMNOEXCEPT
+{
     range_set_ = false;
     range_from_ = range_to_ = bm::id_max;
-    count_ = 0;
-    bcache_ptr_ = 0;
-    gap_cache_cnt_ = 0;
 }
+
 
 // ------------------------------------------------------------------------
 
@@ -1129,7 +1151,7 @@ void aggregator<BV>::combine_and_sub(TPipe& pipe)
     if (!pipe_size)
         return;
 
-    reset();
+    reset_vars();
 
     bcache_ptr_ = &pipe.get_bcache();  // setup common cache block
 
@@ -1139,6 +1161,16 @@ void aggregator<BV>::combine_and_sub(TPipe& pipe)
     if (pipe.bv_or_target_)
     {
         pipe.bv_or_target_->get_blocks_manager().reserve_top_blocks(top_blocks);
+    }
+
+    unsigned i_from(0), j_from(0), i_to(0), j_to(0);
+    if (range_set_)
+    {
+        typename bvector_type::block_idx_type nb;
+        nb = (range_from_ >> bm::set_block_shift);
+        bm::get_block_coord(nb, i_from, j_from);
+        nb = (range_to_ >> bm::set_block_shift);
+        bm::get_block_coord(nb, i_to, j_to);
     }
 
 
@@ -1154,9 +1186,18 @@ void aggregator<BV>::combine_and_sub(TPipe& pipe)
             batch_to = pipe_size;
         if (!batch_size)
             batch_size = 1;
-        for (unsigned i = 0; i < top_blocks; ++i)
+        for (unsigned i = i_from; i < top_blocks; ++i)
         {
-            for (unsigned j = 0; j < bm::set_sub_array_size; ++j)
+            unsigned j(0), sub_size(bm::set_sub_array_size);
+            if (range_set_)
+            {
+                if (i == i_from)
+                    j = j_from;
+                if (i == i_to)
+                    sub_size = j_to+1;
+            }
+
+            for (; j < sub_size; ++j)
             {
                 size_t p = batch_from;
                 for (; p < batch_to; ++p)

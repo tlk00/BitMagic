@@ -541,7 +541,7 @@ public:
         typename aggregator_type::template pipeline<Opt> aggregator_pipeline_type;
     public:
         pipeline(const SV& sv)
-        : sv_(sv)
+            : sv_(sv), bv_and_mask_(0)
         {}
 
         /// Set pipeline run options
@@ -551,6 +551,14 @@ public:
         /// Get pipeline run options
         const run_options& get_options() const BMNOEXCEPT
             { return agg_pipe_.options(); }
+
+        /** Set pipeline mask bit-vector to restrict the search space
+            @param bv_mask - pointer to bit-vector restricting search to vector indexes marked
+            as 1s. Pointer ownership is not transferred, NULL value resets the mask.
+            bv_mask defines the mask for all added searches.
+
+        */
+        void set_search_mask(const bvector_type* bv_mask) BMNOEXCEPT;
 
         /**
             Attach OR (aggregator vector).
@@ -563,6 +571,10 @@ public:
         /*! @name pipeline fill-in methods */
         //@{
 
+        /**
+            Add new search string
+            @param str - zero terminated string pointer to configure a search for
+         */
         void add(const typename SV::value_type* str);
 
         /** Prepare pipeline for the execution (resize and init internal structures)
@@ -596,9 +608,10 @@ public:
         pipeline(const pipeline&) = delete;
         pipeline& operator=(const pipeline&) = delete;
     protected:
-        const SV&                    sv_; ///< target sparse vector ref
-        aggregator_pipeline_type     agg_pipe_; ///< traget aggregator pipeline
+        const SV&                    sv_;               ///< target sparse vector ref
+        aggregator_pipeline_type     agg_pipe_;         ///< traget aggregator pipeline
         remap_vector_type            remap_value_vect_; ///< remap buffer
+        const bvector_type*          bv_and_mask_;
     };
 
 public:
@@ -2257,7 +2270,16 @@ bool sparse_vector_scanner<SV>::find_eq_str_impl(const SV&  sv,
 template<typename SV> template<class TPipe>
 void sparse_vector_scanner<SV>::find_eq_str(TPipe& pipe)
 {
+    if (pipe.bv_and_mask_)
+    {
+        size_type first, last;
+        bool any = pipe.bv_and_mask_->find_range(first, last);
+        if (!any)
+            return;
+        agg_.set_range_hint(first, last);
+    }
     agg_.combine_and_sub(pipe.agg_pipe_);
+    agg_.reset_range_hint();
 }
 
 //----------------------------------------------------------------------------
@@ -2863,6 +2885,15 @@ void sparse_vector_scanner<SV>::reset_search_range()
 
 template<typename SV> template<class Opt>
 void
+sparse_vector_scanner<SV>::pipeline<Opt>::set_search_mask(const bvector_type* bv_mask) BMNOEXCEPT
+{
+    bv_and_mask_ = bv_mask;
+}
+
+//----------------------------------------------------------------------------
+
+template<typename SV> template<class Opt>
+void
 sparse_vector_scanner<SV>::pipeline<Opt>::add(const typename SV::value_type* str)
 {
     BM_ASSERT(str);
@@ -2884,11 +2915,8 @@ sparse_vector_scanner<SV>::pipeline<Opt>::add(const typename SV::value_type* str
     for (; str[len] != 0; ++len)
     {}
     BM_ASSERT(len);
-/*
-    const bvector_type* bv_null = sv_.get_null_bvector();
-    if (bv_null)
-        arg->add(bv_null, 0); // agg NOT NULL bv to AND group
-*/
+
+    arg->add(bv_and_mask_, 0); 
 
     // use reverse order (faster for sorted arrays)
     for (int octet_idx = len-1; octet_idx >= 0; --octet_idx)
@@ -2907,7 +2935,10 @@ sparse_vector_scanner<SV>::pipeline<Opt>::add(const typename SV::value_type* str
         planes_mask = sv_.get_slice_mask(unsigned(octet_idx));
 
         if ((value & planes_mask) != value) // pre-screen for impossible values
-            return; // found non-existing plane
+        {
+            arg->reset(); // reset is necessary to disable single plane AND
+            return;       // found non-existing plane
+        }
 
         sparse_vector_scanner<SV>::add_agg_char(
             *arg, sv_, octet_idx, planes_mask, value); // AND-SUB aggregator
