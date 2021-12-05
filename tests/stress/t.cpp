@@ -77,6 +77,7 @@ using namespace std;
 #include <bmdbg.h>
 #include <vector>
 
+bool is_silent = false;
 
 #if defined(BMSSE2OPT) || defined(BMSSE42OPT) || defined(BMAVX2OPT) || defined(BMAVX512OPT)
 #else
@@ -89,7 +90,6 @@ using namespace std;
 #include <unordered_map>
 
 
-bool is_silent = false;
 
 // -------------------------------
 // memory profiler: very slow if defined
@@ -29353,9 +29353,35 @@ void TestSparseFindEqStrPipeline()
         str_sv1.push_back("str1");
         str_sv1.push_back("str2");
 
+        bm::sparse_vector_scanner<str_svect_type> scanner;
+        {
+            typedef bm::agg_run_options<true, false, true> scanner_custom_mask_opt;
+            bm::sparse_vector_scanner<str_svect_type>::pipeline<scanner_custom_mask_opt> pipe(str_sv1);
+            bvect bv_mask { 1 };
+            pipe.set_search_mask(&bv_mask);
+
+            pipe.add("str1"); // not found because of the mask
+            pipe.add("z2");   // not found
+            pipe.add("str2");
+            pipe.complete(); // finish the pipeline construction with this call
+
+            scanner.find_eq_str(pipe); // run the search pipeline
+
+            auto& res_vec = pipe.get_bv_res_vector();
+            assert(res_vec.size()==3);
+
+            const bvect* bv0 = res_vec[0];
+            assert(!bv0);
+            const bvect* bv1 = res_vec[1];
+            assert(!bv1);
+            const bvect* bv2 = res_vec[2];
+            assert(bv2);
+            assert(bv2->count()==1);
+            assert(bv2->test(1));
+        }
+
         for (int pass = 0; pass < 2; ++pass)
         {
-            bm::sparse_vector_scanner<str_svect_type> scanner;
             bm::sparse_vector_scanner<str_svect_type>::pipeline<> pipe(str_sv1);
 
             pipe.add("str1");
@@ -29387,7 +29413,6 @@ void TestSparseFindEqStrPipeline()
             assert(bv2);
             assert(bv2->count()==1);
             assert(bv2->test(1));
-
 
 
             str_sv1.optimize();
@@ -36059,6 +36084,7 @@ int main(int argc, char *argv[])
     
     if (is_all || is_str_sv)
     {
+
          TestStrSparseVector();
          CheckAllocLeaks(false);
 
