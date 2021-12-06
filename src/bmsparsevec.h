@@ -1091,6 +1091,7 @@ void sparse_vector<Val, BV>::throw_bad_alloc()
 template<class Val, class BV>
 void sparse_vector<Val, BV>::set_null(size_type idx)
 {
+    BM_ASSERT(this->is_nullable()); // must use bm::use_null (constructor)
     clear(idx, true);
 }
 
@@ -1697,14 +1698,15 @@ template<class Val, class BV>
 void sparse_vector<Val, BV>::clear(size_type idx, bool set_null)
 {
     if (idx >= size())
-        this->size_ = idx+1;
-
-    set_value(idx, value_type(0), true);
-    if (set_null)
+        this->size_ = idx+1; // assumed there is nothing to do outside the size
+    else
     {
-        bvector_type* bv_null = this->get_null_bvect();
-        if (bv_null)
-            bv_null->clear_bit_no_check(idx);
+        set_value(idx, value_type(0), true);
+        if (set_null)
+        {
+            if (bvector_type* bv_null = this->get_null_bvect())
+                bv_null->clear_bit_no_check(idx);
+        }
     }
 }
 
