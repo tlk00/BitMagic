@@ -21239,6 +21239,50 @@ void TestSparseVector()
         assert(bvp);
     }}
 
+
+    // bug fix for not clearing value on set_null
+    {
+        bool b;
+        bm::sparse_vector<int, bvect> sv1(bm::use_null);
+        sv1.set_null(1);
+        sv1.push_back(16);
+
+        b = sv1.is_null(0);
+        assert(b);
+        b = sv1.is_null(1);
+        assert(b);
+        b = sv1.is_null(2);
+        assert(!b);
+
+        assert(sv1.size() == 3);
+
+        sv1.set(0, 10);
+        b = sv1.is_null(0);
+        assert(!b);
+        b = sv1.is_null(1);
+        assert(b);
+
+        sv1.set(0, 12);
+        b = sv1.is_null(0);
+        assert(!b);
+
+        sv1.set_null(0);
+        b = sv1.is_null(0);
+        assert(b);
+        auto it = sv1.begin();
+        auto v = *it;
+        assert(!v);
+
+        sv1[0] = -8;
+        b = sv1.is_null(0);
+        assert(!b);
+
+        v = sv1[0];
+        assert(v == -8);
+
+    }
+
+
     // reference vector construction for XOR serialization
     {{
         bm::sparse_vector<unsigned, bvect> sv;
@@ -26801,6 +26845,37 @@ void TestStrSparseVector()
         str_vector.get(3, str, sizeof(str));
         cmp = ::strcmp(str, "VÉGE");
         assert(cmp == 0);
+    }
+
+    // bug fix for not clearing value on set_null
+    {
+        using TSparseOptVector = bm::str_sparse_vector<char, bm::bvector<>, 2>;
+        TSparseOptVector ssv1(bm::use_null);
+        ssv1.set_null(1);
+        assert(ssv1.size() == 2);
+
+        ssv1.set(0, "test data");
+        bool b;
+        b = ssv1.is_null(0);
+        assert(!b);
+        b = ssv1.is_null(1);
+        assert(b);
+
+        ssv1.set(0, "test data 1");
+        b = ssv1.is_null(0);
+        assert(!b);
+
+        ssv1.set(0, "test d");
+        b = ssv1.is_null(0);
+        assert(!b);
+
+        ssv1.set_null(0);
+        b = ssv1.is_null(0);
+        assert(b);
+        auto it = ssv1.begin();
+        const char* ch = *it;
+        assert(!ch[0]);
+
     }
 
    {
