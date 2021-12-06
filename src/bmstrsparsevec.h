@@ -1461,10 +1461,10 @@ void str_sparse_vector<CharType, BV, STR_SIZE>::erase(size_type idx)
 template<class CharType, class BV, unsigned STR_SIZE>
 void str_sparse_vector<CharType, BV, STR_SIZE>::set_null(size_type idx)
 {
-    if (bvector_type* bv_null = this->get_null_bvect())
-        bv_null->clear_bit_no_check(idx);
     if (idx >= this->size_)
-        this->size_ = idx + 1;
+        this->size_ = idx + 1; // assumed nothing todo outside current size
+    else
+        this->bmatr_.clear_column(idx, 0);
 }
 
 //---------------------------------------------------------------------
