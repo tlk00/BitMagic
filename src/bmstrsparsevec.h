@@ -503,6 +503,12 @@ public:
     */
     void set_null(size_type idx);
 
+    /**
+        Set NULL all elements set as 1 in the argument vector
+        \param bv_idx - index bit-vector for elements which needs to be turned to NULL
+     */
+    void set_null(const bvector_type& bv_idx) { this->bit_sub_rows(bv_idx); }
+
     
     /*!
         \brief insert the specified element

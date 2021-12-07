@@ -21239,6 +21239,39 @@ void TestSparseVector()
         assert(bvp);
     }}
 
+    // global set_null
+    {{
+        bm::sparse_vector<int, bvect> sv1(bm::use_null);
+
+        sv1.push_back(0);
+        sv1.push_back(1);
+        sv1.push_back_null();
+        sv1.push_back(3);
+
+        bm::sparse_vector<int, bvect>::bvector_type bv { 0, 3, 5 };
+        sv1.set_null(bv);
+
+        assert(sv1.is_null(0));
+        assert(!sv1.is_null(1));
+        assert(sv1.is_null(3));
+        assert(sv1.is_null(5));
+
+        bm::sparse_vector<int, bvect> sv2(bm::use_null);
+
+        sv2.push_back(0);
+        sv2.push_back(1);
+        sv2.push_back(2);
+        sv2.push_back(3);
+
+        sv2.set_null(bv);
+
+        assert(sv2.is_null(0));
+        assert(!sv2.is_null(1));
+        assert(sv2.is_null(3));
+        assert(!sv2.is_null(2));
+        assert(!sv2.get(3));
+    }}
+
 
     // bug fix for not clearing value on set_null
     {
@@ -26876,6 +26909,32 @@ void TestStrSparseVector()
         const char* ch = *it;
         assert(!ch[0]);
 
+    }
+
+    // bulk set_null
+    {
+        using TSparseOptVector = bm::str_sparse_vector<char, bm::bvector<>, 2>;
+        TSparseOptVector ssv1(bm::use_null);
+
+        ssv1.set(0, "s1");
+        ssv1.set(1, "s1");
+        ssv1.set(4, "s4");
+
+        TSparseOptVector::bvector_type bv {0, 2, 4, 5};
+        ssv1.set_null(bv);
+        bool b;
+        b = ssv1.is_null(0);
+        assert(b);
+        b = ssv1.is_null(1);
+        assert(!b);
+        b = ssv1.is_null(2);
+        assert(b);
+        b = ssv1.is_null(4);
+        assert(b);
+
+        auto it = ssv1.begin();
+        const char* ch = *it;
+        assert(!ch[0]);
     }
 
    {

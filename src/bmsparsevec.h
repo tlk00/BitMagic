@@ -508,6 +508,12 @@ public:
     */
     void set_null(size_type idx);
 
+    /**
+        Set NULL all elements set as 1 in the argument vector
+        \param bv_idx - index bit-vector for elements which needs to be turned to NULL
+     */
+    void set_null(const bvector_type& bv_idx) { this->bit_sub_rows(bv_idx); }
+
     ///@}
 
     // ------------------------------------------------------------
@@ -1091,7 +1097,6 @@ void sparse_vector<Val, BV>::throw_bad_alloc()
 template<class Val, class BV>
 void sparse_vector<Val, BV>::set_null(size_type idx)
 {
-    BM_ASSERT(this->is_nullable()); // must use bm::use_null (constructor)
     clear(idx, true);
 }
 

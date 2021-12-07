@@ -279,6 +279,12 @@ public:
     */
     void clear_column(size_type idx, size_type row_from);
 
+    /**
+        Set SUB (MINUS) operation on all existing rows
+        @param bv - argument vector row[i] -= bv
+     */
+    void bit_sub_rows(const bvector_type& bv);
+
 
     ///@}
 
@@ -601,6 +607,11 @@ protected:
     */
     void insert_null(size_type idx, bool not_null);
 
+    /**
+        Set SUB (MINUS) operation on all existing bit-slices
+        @param bv - argument vector row[i] -= bv
+     */
+    void bit_sub_rows(const bvector_type& bv) { bmatr_.bit_sub_rows(bv); }
 
 protected:
     typedef typename bvector_type::block_idx_type block_idx_type;
@@ -857,6 +868,18 @@ void basic_bmatrix<BV>::free_rows() BMNOEXCEPT
     if (bv_rows_)
         alloc_.free_ptr(bv_rows_, unsigned(rsize_));
     bv_rows_ = 0;
+}
+
+//---------------------------------------------------------------------
+
+template<typename BV>
+void basic_bmatrix<BV>::bit_sub_rows(const bvector_type& bv)
+{
+    for (size_type i = 0; i < rsize_; ++i)
+    {
+        if (bvector_type_ptr bv_r = bv_rows_[i])
+            bv_r->bit_sub(bv);
+    } // for i
 }
 
 //---------------------------------------------------------------------
