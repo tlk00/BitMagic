@@ -2333,7 +2333,7 @@ sparse_vector<Val, BV>::back_insert_iterator::back_insert_iterator(
 : sv_(bi.sv_), bv_null_(bi.bv_null_), buf_ptr_(bi.buf_ptr_),
   set_not_null_(bi.set_not_null_)
 {
-    buffer_.swap(bi.buffer);
+    buffer_.swap(bi.buffer_);
     buf_ptr_ = bi.buf_ptr_;
 }
 

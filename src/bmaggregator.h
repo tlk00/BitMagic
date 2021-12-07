@@ -2645,7 +2645,7 @@ void aggregator<BV>::pipeline<Opt>::complete_arg_sub_group(
             bcache_.bv_inp_vect_.push_back(bv); // register a new bv (0-cnt)
             bcache_.cnt_vect_.push_back(0);
             bcache_.blk_vect_.push_back(0); // NULL ptr
-            bcache_.blk_ij_vect_.push_back(bm::pair(0u, 0u));
+            bcache_.blk_ij_vect_.push_back(bm::pair<unsigned, unsigned>(0u, 0u));
         }
         // each arg group
         idx_vect.push_back(bv_idx);
