@@ -684,6 +684,16 @@ public:
     */
     unsigned common_prefix_length(size_type idx1, size_type idx2) const BMNOEXCEPT;
 
+    /**
+        Variant of compare for remapped vectors. Caller MUST guarantee vector is remapped.
+     */
+    int compare_remap(size_type idx, const value_type* str) const BMNOEXCEPT;
+
+    /**
+        Variant of compare for non-mapped vectors. Caller MUST guarantee vector is not remapped.
+     */
+    int compare_nomap(size_type idx, const value_type* str) const BMNOEXCEPT;
+
     ///@}
 
 
@@ -847,7 +857,7 @@ public:
     ///@{
     
     /**
-        Get character remapping status (true|false)
+        Get character remapping status (true | false)
     */
     bool is_remap() const BMNOEXCEPT { return remap_flags_ != 0; }
     
@@ -1651,47 +1661,69 @@ void str_sparse_vector<CharType, BV, STR_SIZE>::calc_stat(
 //---------------------------------------------------------------------
 
 template<class CharType, class BV, unsigned STR_SIZE>
+int str_sparse_vector<CharType, BV, STR_SIZE>::compare_remap(
+                size_type idx, const value_type* str) const BMNOEXCEPT
+{
+    BM_ASSERT(str);
+    BM_ASSERT(is_remap()); // MUST guarantee remapping
+
+    int res = 0;
+    for (unsigned i = 0; true; ++i)
+    {
+        CharType octet2 = str[i];
+        CharType octet1 = (CharType)this->bmatr_.get_octet(idx, i);
+        if (!octet1)
+        {
+            res = -octet2; // -1 || 0
+            break;
+        }
+        const unsigned char* remap_row = remap_matrix1_.row(i);
+        unsigned char remap_value1 = remap_row[unsigned(octet1)];
+        BM_ASSERT(remap_value1);
+        res = (remap_value1 > octet2) - (remap_value1 < octet2);
+        if (res || !octet2)
+            break;
+    } // for i
+    return res;
+}
+
+//---------------------------------------------------------------------
+
+template<class CharType, class BV, unsigned STR_SIZE>
+int str_sparse_vector<CharType, BV, STR_SIZE>::compare_nomap(size_type idx,
+                                    const value_type* str) const BMNOEXCEPT
+{
+    BM_ASSERT(str);
+    BM_ASSERT(!is_remap()); // MUST guarantee remapping
+
+    int res = 0;
+    for (unsigned i = 0; true; ++i)
+    {
+        CharType octet2 = str[i];
+        CharType octet1 = (CharType)this->bmatr_.get_octet(idx, i);
+        if (!octet1)
+        {
+            res = -octet2; // -1 || 0
+            break;
+        }
+        res = (octet1 > octet2) - (octet1 < octet2);
+        if (res || !octet2)
+            break;
+    } // for i
+    return res;
+}
+
+
+//---------------------------------------------------------------------
+
+template<class CharType, class BV, unsigned STR_SIZE>
 int str_sparse_vector<CharType, BV, STR_SIZE>::compare(
                      size_type idx,
                      const value_type* str) const BMNOEXCEPT
 {
     BM_ASSERT(str);
-    int res = 0;
-    if (remap_flags_)
-    {
-        for (unsigned i = 0; true; ++i)
-        {
-            CharType octet2 = str[i];
-            CharType octet1 = (CharType)this->bmatr_.get_octet(idx, i);
-            if (!octet1)
-            {
-                res = -octet2; // -1 || 0
-                break;
-            }
-            const unsigned char* remap_row = remap_matrix1_.row(i);
-            unsigned char remap_value1 = remap_row[unsigned(octet1)];
-            BM_ASSERT(remap_value1);
-            res = (remap_value1 > octet2) - (remap_value1 < octet2);
-            if (res || !octet2)
-                break;
-        } // for i
-    }
-    else
-    {
-        for (unsigned i = 0; true; ++i)
-        {
-            CharType octet2 = str[i];
-            CharType octet1 = (CharType)this->bmatr_.get_octet(idx, i);
-            if (!octet1)
-            {
-                res = -octet2; // -1 || 0
-                break;
-            }
-            res = (octet1 > octet2) - (octet1 < octet2);
-            if (res || !octet2)
-                break;
-        } // for i
-    }
+    int res = remap_flags_ ? compare_remap(idx, str)
+                           : compare_nomap(idx, str);
     return res;
 }
 
@@ -1999,8 +2031,7 @@ str_sparse_vector<CharType, BV, STR_SIZE>::remap_from(
 
     if (bvector_type* bv_null = this->get_null_bvect())
     {
-        const bvector_type* bv_null_arg = str_sv.get_null_bvector();
-        if (bv_null_arg)
+        if (const bvector_type* bv_null_arg = str_sv.get_null_bvector())
             *bv_null = *bv_null_arg;
         else
         {
@@ -2016,9 +2047,7 @@ template<class CharType, class BV, unsigned STR_SIZE>
 void str_sparse_vector<CharType, BV, STR_SIZE>::sync(bool /*force*/)
 {
     if (remap_flags_)
-    {
         recalc_remap_matrix2();
-    }
 }
 
 //---------------------------------------------------------------------
@@ -2412,7 +2441,6 @@ typename str_sparse_vector<CharType, BV, STR_SIZE>::back_insert_iterator::size_t
     for (size_type i = 0; i < count; ++i) // TODO: optimization
         this->add_value("");
 }
-
 
 //---------------------------------------------------------------------
 
