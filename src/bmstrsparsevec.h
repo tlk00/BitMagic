@@ -509,6 +509,12 @@ public:
      */
     void set_null(const bvector_type& bv_idx) { this->bit_sub_rows(bv_idx); }
 
+    /**
+        Set NULL all elements NOT set as 1 in the argument vector
+        \param bv_idx - index bit-vector for elements which needs to be kept
+     */
+    void keep(const bvector_type& bv_idx) { this->bit_and_rows(bv_idx); }
+
     
     /*!
         \brief insert the specified element
@@ -645,6 +651,8 @@ public:
 
     /**
         \brief Compare vector element with argument lexicographically
+
+        The function does not account for NULL values, NULL element is treated as an empty string
      
         NOTE: for a re-mapped container, input string may have no correct
         remapping, in this case we have an ambiguity
@@ -654,10 +662,21 @@ public:
         \param idx - vactor element index
         \param str - argument to compare with
      
-        \return 0 - equal, < 0 - vect[i] < str, >0 otherwise
+        \return 0 - equal,  < 0 - vect[idx] < str,  >0 otherwise
     */
     int compare(size_type idx, const value_type* str) const BMNOEXCEPT;
-    
+
+    /**
+        \brief Compare two vector elements
+
+        The function does not account for NULL values, NULL element is treated as an empty string
+        \param idx1 - vactor element index 1
+        \param idx2 - vactor element index 2
+
+        \return 0 - equal,  < 0 - vect[idx1] < vect[idx2],  >0 otherwise
+    */
+    int compare(size_type idx1, size_type idx2) const BMNOEXCEPT;
+
     
     /**
         \brief Find size of common prefix between two vector elements in octets
@@ -1642,18 +1661,18 @@ int str_sparse_vector<CharType, BV, STR_SIZE>::compare(
     {
         for (unsigned i = 0; true; ++i)
         {
-            CharType octet = str[i];
-            CharType sv_octet = (CharType)this->bmatr_.get_octet(idx, i);
-            if (!sv_octet)
+            CharType octet2 = str[i];
+            CharType octet1 = (CharType)this->bmatr_.get_octet(idx, i);
+            if (!octet1)
             {
-                res = -octet; // -1 || 0
+                res = -octet2; // -1 || 0
                 break;
             }
             const unsigned char* remap_row = remap_matrix1_.row(i);
-            unsigned char remap_value = remap_row[unsigned(sv_octet)];
-            BM_ASSERT(remap_value);
-            res = (remap_value > octet) - (remap_value < octet);
-            if (res || !octet)
+            unsigned char remap_value1 = remap_row[unsigned(octet1)];
+            BM_ASSERT(remap_value1);
+            res = (remap_value1 > octet2) - (remap_value1 < octet2);
+            if (res || !octet2)
                 break;
         } // for i
     }
@@ -1661,19 +1680,71 @@ int str_sparse_vector<CharType, BV, STR_SIZE>::compare(
     {
         for (unsigned i = 0; true; ++i)
         {
-            CharType octet = str[i];
-            CharType sv_octet = (CharType)this->bmatr_.get_octet(idx, i);
-            if (!sv_octet)
+            CharType octet2 = str[i];
+            CharType octet1 = (CharType)this->bmatr_.get_octet(idx, i);
+            if (!octet1)
             {
-                res = -octet; // -1 || 0
+                res = -octet2; // -1 || 0
                 break;
             }
-            res = (sv_octet > octet) - (sv_octet < octet);
-            if (res || !octet)
+            res = (octet1 > octet2) - (octet1 < octet2);
+            if (res || !octet2)
                 break;
         } // for i
     }
     return res;
+}
+
+//---------------------------------------------------------------------
+
+template<class CharType, class BV, unsigned STR_SIZE>
+int str_sparse_vector<CharType, BV, STR_SIZE>::compare(
+                                              size_type idx1,
+                                              size_type idx2) const BMNOEXCEPT
+{
+    int res = 0;
+    if (idx1 == idx2)
+        return 0;
+    if (remap_flags_)
+    {
+        for (unsigned i = 0; true; ++i)
+        {
+            // TODO: implement function to return two octets at once
+            CharType octet2 = (CharType)this->bmatr_.get_octet(idx2, i);
+            CharType octet1 = (CharType)this->bmatr_.get_octet(idx1, i);
+            if (!octet1)
+            {
+                res = -octet2; // -1 || 0
+                break;
+            }
+            const unsigned char* remap_row = remap_matrix1_.row(i);
+            unsigned char remap_value1 = remap_row[unsigned(octet1)];
+            BM_ASSERT(remap_value1);
+            unsigned char remap_value2 = remap_row[unsigned(octet2)];
+            BM_ASSERT(remap_value2);
+            res = (remap_value1 > remap_value2) - (remap_value1 < remap_value2);
+            if (res || !octet2)
+                break;
+        } // for i
+    }
+    else
+    {
+        for (unsigned i = 0; true; ++i)
+        {
+            CharType octet2 = (CharType)this->bmatr_.get_octet(idx2, i);
+            CharType octet1 = (CharType)this->bmatr_.get_octet(idx1, i);
+            if (!octet1)
+            {
+                res = -octet2; // -1 || 0
+                break;
+            }
+            res = (octet1 > octet2) - (octet1 < octet2);
+            if (res || !octet2)
+                break;
+        } // for i
+    }
+    return res;
+
 }
 
 //---------------------------------------------------------------------
