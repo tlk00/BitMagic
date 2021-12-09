@@ -199,8 +199,7 @@ public:
         Implementation uses buffer for decoding so, competing changes
         to the original vector may not match the iterator returned values.
      
-        This iterator keeps an operational buffer of transposed elements,
-        so memory footprint is not negligable.
+        This iterator keeps an operational buffer of decoded elements, so memory footprint is NOT negligable.
      
         @ingroup sv
     */

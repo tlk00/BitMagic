@@ -8391,10 +8391,7 @@ bool bit_find_first_if_1(const bm::word_t* BMRESTRICT block,
 {
     BM_ASSERT(block);
     BM_ASSERT(first);
-
-    unsigned bc = bm::word_bitcount64(digest);
-    if (bc != 1)
-        return false;
+    BM_ASSERT(bm::word_bitcount64(digest)==1);
 
     bool found = false;
     bm::id64_t t = bm::bmi_blsi_u64(digest); // d & -d;
@@ -8407,7 +8404,7 @@ bool bit_find_first_if_1(const bm::word_t* BMRESTRICT block,
         bm::word_t w = block[i];
         if (w)
         {
-            bc = bm::word_bitcount(w);
+            unsigned bc = bm::word_bitcount(w);
             if (bc != 1)
                 return false;
 

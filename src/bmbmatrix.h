@@ -137,6 +137,9 @@ public:
     /*! get number of value rows without  (not) NULLs bvector */
     size_type rows_not_null() const BMNOEXCEPT { return rsize_ - bool(null_idx_);}
 
+    /*! get number of assigned avlue rows without \ NULLs bvector */
+    size_type calc_effective_rows_not_null() const BMNOEXCEPT;
+
     
     /*! Make sure row is constructed, return bit-vector */
     bvector_type_ptr construct_row(size_type row);
@@ -284,6 +287,12 @@ public:
         @param bv - argument vector row[i] -= bv
      */
     void bit_sub_rows(const bvector_type& bv);
+
+    /**
+        Set AND (intersect) operation on all existing rows
+        @param bv - argument vector row[i] &= bv
+     */
+    void bit_and_rows(const bvector_type& bv);
 
 
     ///@}
@@ -613,6 +622,12 @@ protected:
      */
     void bit_sub_rows(const bvector_type& bv) { bmatr_.bit_sub_rows(bv); }
 
+    /**
+        Set AND (intersect) operation on all existing bit-slices
+        @param bv - argument vector row[i] -= bv
+     */
+    void bit_and_rows(const bvector_type& bv) { bmatr_.bit_and_rows(bv); }
+
 protected:
     typedef typename bvector_type::block_idx_type block_idx_type;
 
@@ -825,8 +840,9 @@ void basic_bmatrix<BV>::allocate_rows(size_type rsize)
         throw_bad_alloc();
     rsize_ = rsize;
     BM_ASSERT((!null_idx_) || (rsize & 1u));
-    for (size_type i = 0; i < rsize; ++i)
-        bv_rows_[i] = 0;
+    ::memset(&bv_rows_[0], 0, rsize * sizeof(bv_rows_[0]));
+//    for (size_type i = 0; i < rsize; ++i)
+//        bv_rows_[i] = 0;
     if (bv_rows_prev) // deallocate prev, reset NULL
     {
         for (size_type i = 0; i < rsize_prev; ++i)
@@ -873,12 +889,38 @@ void basic_bmatrix<BV>::free_rows() BMNOEXCEPT
 //---------------------------------------------------------------------
 
 template<typename BV>
+typename basic_bmatrix<BV>::size_type
+basic_bmatrix<BV>::calc_effective_rows_not_null() const BMNOEXCEPT
+{
+    // TODO: SIMD
+    auto i = rows_not_null();
+    for (--i; i > 0; --i)
+        if (bv_rows_[i])
+            break;
+    return i;
+}
+
+//---------------------------------------------------------------------
+
+template<typename BV>
 void basic_bmatrix<BV>::bit_sub_rows(const bvector_type& bv)
 {
     for (size_type i = 0; i < rsize_; ++i)
     {
         if (bvector_type_ptr bv_r = bv_rows_[i])
             bv_r->bit_sub(bv);
+    } // for i
+}
+
+//---------------------------------------------------------------------
+
+template<typename BV>
+void basic_bmatrix<BV>::bit_and_rows(const bvector_type& bv)
+{
+    for (size_type i = 0; i < rsize_; ++i)
+    {
+        if (bvector_type_ptr bv_r = bv_rows_[i])
+            bv_r->bit_and(bv);
     } // for i
 }
 

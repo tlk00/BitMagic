@@ -717,6 +717,7 @@ void print_svector_stat(const SV& svect, bool print_sim = false)
     svect.calc_stat(&st);
     
     std::cout << "size = " << svect.size() << std::endl;
+
     std::cout << "Bit blocks:       " << st.bit_blocks << std::endl;
     std::cout << "Gap blocks:       " << st.gap_blocks << std::endl;
     std::cout << "Max serialize mem:" << st.max_serialize_mem << " "
@@ -741,7 +742,7 @@ void print_svector_stat(const SV& svect, bool print_sim = false)
     size_t ssize(0), octet_ssize(0);
 
     typename SV::bvector_type bv_join; // global OR of all planes
-    auto planes = svect.get_bmatrix().rows();//slices();
+    auto planes = svect.get_bmatrix().rows();
 
     unsigned octet_cnt(0), octet(0);
     for (unsigned i = 0; i < planes; ++i)
@@ -785,11 +786,12 @@ void print_svector_stat(const SV& svect, bool print_sim = false)
             octet_cnt++;
         }
     } // for i
+    std::cout << "-------------------- END of OCTETS\n";
 
     const typename SV::bvector_type* bv_null = svect.get_null_bvector();
     if (bv_null)
     {
-        std::cout << "(not) NULL plane:\n";
+        std::cout << "NULL plane:\n";
         ssize += print_bvector_stat(*bv_null);
         typename SV::size_type not_null_cnt = bv_null->count();
         std::cout << " - Bitcount: " << not_null_cnt << std::endl;
@@ -798,6 +800,10 @@ void print_svector_stat(const SV& svect, bool print_sim = false)
             << ((sizeof(typename SV::value_type) + sizeof(unsigned)) * not_null_cnt) << " "
             << ((sizeof(typename SV::value_type) + sizeof(unsigned)) * not_null_cnt) / (1024 * 1024) << "MB"
             << std::endl;
+    }
+    else
+    {
+        std::cout << "NO NULL plane:\n";
     }
 
     std::cout << " Total serialized size (planes): " << ssize
@@ -822,13 +828,13 @@ void print_svector_stat(const SV& svect, bool print_sim = false)
 template<class SV>
 void print_str_svector_stat(const SV& str_svect)
 {
-    typename SV::plane_octet_matrix_type octet_stat_matr;
+    typename SV::octet_freq_matrix_type octet_stat_matr;
     
     str_svect.calc_octet_stat(octet_stat_matr);
     
     for (unsigned i = 0; i < octet_stat_matr.rows(); ++i)
     {
-        const typename SV::plane_octet_matrix_type::value_type* row
+        const typename SV::octet_freq_matrix_type::value_type* row
                                                 = octet_stat_matr.row(i);
         bool any = false;
         for (unsigned j = 0; j < octet_stat_matr.cols(); ++j)

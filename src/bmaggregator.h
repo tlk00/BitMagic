@@ -234,6 +234,7 @@ public:
         /// Get pipeline run options
         const run_options& get_options() const BMNOEXCEPT { return options_; }
 
+
         // ------------------------------------------------------------------
         /*! @name pipeline argument groups fill-in methods */
         //@{
@@ -250,6 +251,15 @@ public:
         void set_or_target(bvector_type* bv_or) BMNOEXCEPT
             { bv_or_target_ = bv_or; }
 
+        /**
+          Set search limit for results. Requires that bit-counting to be enabled in the template parameters.
+          Warning: search limit is approximate (for performance reasons) so it can occasinally find more
+          than requested. It cannot find less.
+          @param limit - search limit (target population count to search for)
+         */
+        void set_search_count_limit(size_type limit) BMNOEXCEPT
+            { search_count_limit_ = limit; }
+
         /** Prepare pipeline for the execution (resize and init internal structures)
             Once complete, you cannot add() to it.
         */
@@ -257,6 +267,9 @@ public:
 
         /** return true if pipeline is ready for execution (complete) */
         bool is_complete() const BMNOEXCEPT { return is_complete_; }
+
+        /**Return size() of pileine */
+        size_type size() const BMNOEXCEPT { return arg_vect_.size(); }
 
         //@}
 
@@ -320,6 +333,7 @@ public:
 
         bvect_vector_type    bv_res_vect_;    ///< results (bit-vector ptrs)
         bv_count_vector_type count_res_vect_; ///< results (counts)
+        size_type            search_count_limit_{bm::id_max}; ///< search limit by count
 
         pipeline_bcache      bcache_;     ///< blocks cache structure
         unsigned top_blocks_ = 1;         ///< top-level structure size, max of all bvectors
@@ -1222,6 +1236,13 @@ void aggregator<BV>::combine_and_sub(TPipe& pipe)
                     const size_t* bv_src_sub_idx = ag->arg_idx1.data();
                     size_t src_sub_size = ag->arg_bv1.size();
 
+                    if constexpr (TPipe::options_type::is_compute_counts())
+                    {
+                        // if search limit reached
+                        if (pipe.count_res_vect_[p] >= pipe.search_count_limit_)
+                            continue;
+                    }
+
                     int is_res_full;
                     digest_type digest = combine_and_sub(i, j,
                                                          bv_src_and_idx,
@@ -1680,16 +1701,19 @@ aggregator<BV>::process_gap_blocks_and(const arena& ar,
             BM_ASSERT(bm::bit_is_all_zero(blk));
             break;
         }
-        single_bit_found = bm::bit_find_first_if_1(blk, &single_bit_idx, digest);
-        if (single_bit_found)
+        if (bm::word_bitcount64(digest) == 1)
         {
-            for (++k; k < arg_blk_gap_count; ++k)
+            single_bit_found = bm::bit_find_first_if_1(blk, &single_bit_idx, digest);
+            if (single_bit_found)
             {
-                bool b = bm::gap_test_unr(ar.v_arg_and_blk_gap[k], single_bit_idx);
-                if (!b)
-                    return 0; // AND 0 causes result to turn 0
-            } // for k
-            break;
+                for (++k; k < arg_blk_gap_count; ++k)
+                {
+                    bool b = bm::gap_test_unr(ar.v_arg_and_blk_gap[k], single_bit_idx);
+                    if (!b)
+                        return 0; // AND 0 causes result to turn 0
+                } // for k
+                break;
+            }
         }
     }
     return digest;
@@ -1716,16 +1740,19 @@ aggregator<BV>::process_gap_blocks_sub(const arena& ar,
             break;
         }
         // check if logical operation reduced to a corner case of one single bit
-        single_bit_found = bm::bit_find_first_if_1(blk, &single_bit_idx, digest);
-        if (single_bit_found)
+        if (bm::word_bitcount64(digest) == 1)
         {
-            for (++k; k < arg_blk_gap_count; ++k)
+            single_bit_found = bm::bit_find_first_if_1(blk, &single_bit_idx, digest);
+            if (single_bit_found)
             {
-                bool b = bm::gap_test_unr(ar.v_arg_or_blk_gap[k], single_bit_idx);
-                if (b)
-                    return 0; // AND-NOT causes search result to turn 0
-            } // for k
-            break;
+                for (++k; k < arg_blk_gap_count; ++k)
+                {
+                    bool b = bm::gap_test_unr(ar.v_arg_or_blk_gap[k], single_bit_idx);
+                    if (b)
+                        return 0; // AND-NOT causes search result to turn 0
+                } // for k
+                break;
+            }
         }
     } // for k
     return digest;
@@ -1839,7 +1866,9 @@ aggregator<BV>::process_bit_blocks_and(const arena& ar,
     bm::word_t* blk = tb_ar_->tb1;
     size_t k = 0;
     size_t   arg_blk_count = ar.v_arg_and_blk.size();
-    
+
+    const word_t** args = ar.v_arg_and_blk.data();
+
     block_idx_type nb_from = (range_from_ >> bm::set_block_shift);
     block_idx_type nb_to = (range_to_ >> bm::set_block_shift);
     if (range_set_ && (nb_from == nb_to))
@@ -1858,13 +1887,10 @@ aggregator<BV>::process_bit_blocks_and(const arena& ar,
             bm::block_init_digest0(blk, digest); // 0xFF... by default
             return digest;
         case 1:
-            bm::bit_block_copy(blk, ar_->v_arg_and_blk[k]);
+            bm::bit_block_copy(blk, args[k]);
             return bm::calc_block_digest0(blk);
         default:
-            digest = bm::bit_block_and_2way(blk,
-                                            ar_->v_arg_and_blk[k],
-                                            ar_->v_arg_and_blk[k+1],
-                                            ~0ull);
+            digest = bm::bit_block_and_2way(blk, args[k], args[k+1], ~0ull);
             k += 2;
             break;
         } // switch
@@ -1880,34 +1906,36 @@ aggregator<BV>::process_bit_blocks_and(const arena& ar,
     {
         digest = 
             bm::bit_block_and_5way(blk, 
-                                   ar_->v_arg_and_blk[k], ar_->v_arg_and_blk[k + 1],
-                                   ar_->v_arg_and_blk[k + 2], ar_->v_arg_and_blk[k + 3],
+                                   args[k], args[k + 1],
+                                   args[k + 2], args[k + 3],
                                    digest);
         if (!digest) // all zero
             return digest;
-        bool found = bm::bit_find_first_if_1(blk, &single_bit_idx, digest);
-        if (found)
+        if (bm::word_bitcount64(digest) == 1)
         {
-            unsigned nword = unsigned(single_bit_idx >> bm::set_word_shift);
-            unsigned mask = 1u << (single_bit_idx & bm::set_word_mask);
-            for (++k; k < arg_blk_count; ++k)
+            bool found = bm::bit_find_first_if_1(blk, &single_bit_idx, digest);
+            if (found)
             {
-                const bm::word_t* arg_blk = ar_->v_arg_and_blk[k];
-                if (!(mask & arg_blk[nword]))
+                unsigned nword = unsigned(single_bit_idx >> bm::set_word_shift);
+                unsigned mask = 1u << (single_bit_idx & bm::set_word_mask);
+                for (++k; k < arg_blk_count; ++k)
                 {
-                    blk[nword] = 0;
-                    return 0;
-                }
-            } // for k
-            break;
+                    if (!(mask & args[k][nword]))
+                    {
+                        blk[nword] = 0;
+                        return 0;
+                    }
+                } // for k
+                break;
+            }
         }
     } // for k
 
     for (; k < arg_blk_count; ++k)
-    {
+    {/*
         if (ar_->v_arg_and_blk[k] == FULL_BLOCK_REAL_ADDR)
-            continue;
-        digest = bm::bit_block_and(blk, ar_->v_arg_and_blk[k], digest);
+            continue;*/
+        digest = bm::bit_block_and(blk, args[k], digest);
         if (!digest) // all zero
             return digest;
     } // for k
@@ -1925,31 +1953,36 @@ aggregator<BV>::process_bit_blocks_sub(const arena& ar,
     bm::word_t* blk = tb_ar_->tb1;
     unsigned single_bit_idx;
     const word_t** args = ar.v_arg_or_blk.data();
-    for (size_t k = 0; k < arg_blk_count; ++k)
+
+    size_t k = 0;
+    for (; k < arg_blk_count; ++k)
     {
+    /*
         if (ar.v_arg_or_blk[k] == FULL_BLOCK_REAL_ADDR) // golden block
         {
             digest = 0;
             break;
-        }
+        } */
         digest = bm::bit_block_sub(blk, args[k], digest);
         if (!digest) // all zero
             break;
-        
-        bool found = bm::bit_find_first_if_1(blk, &single_bit_idx, digest);
-        if (found)
+        if (bm::word_bitcount64(digest) == 1)
         {
-            const unsigned mask = 1u << (single_bit_idx & bm::set_word_mask);
-            unsigned nword = unsigned(single_bit_idx >> bm::set_word_shift);
-            for (++k; k < arg_blk_count; ++k)
+            bool found = bm::bit_find_first_if_1(blk, &single_bit_idx, digest);
+            if (found)
             {
-                if (mask & args[k][nword])
+                const unsigned mask = 1u << (single_bit_idx & bm::set_word_mask);
+                unsigned nword = unsigned(single_bit_idx >> bm::set_word_shift);
+                for (++k; k < arg_blk_count; ++k)
                 {
-                    blk[nword] = 0;
-                    return 0;
-                }
-            } // for k
-            break;
+                    if (mask & args[k][nword])
+                    {
+                        blk[nword] = 0;
+                        return 0;
+                    }
+                } // for k
+                return digest;
+            }
         }
     } // for k
     return digest;

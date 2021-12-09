@@ -541,7 +541,8 @@ public:
         typename aggregator_type::template pipeline<Opt> aggregator_pipeline_type;
     public:
         pipeline(const SV& sv)
-            : sv_(sv), bv_and_mask_(0)
+            : sv_(sv), bv_and_mask_(0),
+            eff_slices_(sv_.get_bmatrix().calc_effective_rows_not_null())
         {}
 
         /// Set pipeline run options
@@ -559,6 +560,15 @@ public:
 
         */
         void set_search_mask(const bvector_type* bv_mask) BMNOEXCEPT;
+
+        /**
+          Set search limit for results. Requires that bit-counting to be enabled in the template parameters.
+          Warning: search limit is approximate (for performance reasons) so it can occasinally find more
+          than requested. It cannot find less. Search limit works for individual results (not ORed aggregate)
+          @param limit - search limit (target population count to search for)
+         */
+        void set_search_count_limit(size_type limit) BMNOEXCEPT
+            { agg_pipe_.set_search_count_limit(limit); }
 
         /**
             Attach OR (aggregator vector).
@@ -584,6 +594,9 @@ public:
         
         bool is_complete() const BMNOEXCEPT
             { return agg_pipe_.is_complete(); }
+
+        size_type size() const BMNOEXCEPT { return agg_pipe_.size(); }
+
         //@}
 
         /** Return results vector used for pipeline execution */
@@ -612,6 +625,7 @@ public:
         aggregator_pipeline_type     agg_pipe_;         ///< traget aggregator pipeline
         remap_vector_type            remap_value_vect_; ///< remap buffer
         const bvector_type*          bv_and_mask_;
+        size_t                       eff_slices_; ///< number of effectice NOT NULL value slices
     };
 
 public:
@@ -1027,7 +1041,6 @@ protected:
             BM_ASSERT(bv != sv.get_null_bvector());
             agg.add(bv, 0); // add to the AND group
         } // for i
-
         unsigned vinv = unsigned(value);
         if constexpr (sizeof(value_type) == 1)
             vinv ^= 0xFF;
@@ -2920,8 +2933,10 @@ sparse_vector_scanner<SV>::pipeline<Opt>::add(const typename SV::value_type* str
 
     if constexpr(Opt::is_masks())
         arg->add(bv_and_mask_, 0);
+    arg->add(sv_.get_null_bvector(), 0);
 
     // use reverse order (faster for sorted arrays)
+
     for (int octet_idx = len-1; octet_idx >= 0; --octet_idx)
     {
         //if (unsigned(octet_idx) < octet_start) // common prefix
@@ -2931,10 +2946,11 @@ sparse_vector_scanner<SV>::pipeline<Opt>::add(const typename SV::value_type* str
         BM_ASSERT(value != 0);
 
         bm::id64_t planes_mask;
-        /*
+        #if (0)
         if (&sv == bound_sv_)
             planes_mask = vector_plane_masks_[unsigned(octet_idx)];
-        else */
+        else
+        #endif
         planes_mask = sv_.get_slice_mask(unsigned(octet_idx));
 
         if ((value & planes_mask) != value) // pre-screen for impossible values
@@ -2947,13 +2963,14 @@ sparse_vector_scanner<SV>::pipeline<Opt>::add(const typename SV::value_type* str
             *arg, sv_, octet_idx, planes_mask, value); // AND-SUB aggregator
      } // for octet_idx
 
+
     // add all vectors above string len to the SUB aggregation group
     //
     //if (prefix_sub)
     {
         unsigned plane_idx = unsigned(len * 8);
         // SUB group should NOt include not NULL bvector
-        typename SV::size_type planes = sv_.get_bmatrix().rows_not_null();
+        size_type planes = size_type(this->eff_slices_);
         for (; plane_idx < planes; ++plane_idx)
         {
             if (bvector_type_const_ptr bv = sv_.get_slice(plane_idx))

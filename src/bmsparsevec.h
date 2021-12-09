@@ -514,6 +514,7 @@ public:
      */
     void set_null(const bvector_type& bv_idx) { this->bit_sub_rows(bv_idx); }
 
+
     ///@}
 
     // ------------------------------------------------------------
@@ -957,7 +958,7 @@ protected:
     void resize_internal(size_type sz) { resize(sz); }
     size_type size_internal() const BMNOEXCEPT { return size(); }
 
-    bool is_remap() const BMNOEXCEPT { return false; }
+    constexpr bool is_remap() const BMNOEXCEPT { return false; }
     size_t remap_size() const BMNOEXCEPT { return 0; }
     const unsigned char* get_remap_buffer() const BMNOEXCEPT { return 0; }
     unsigned char* init_remap_buffer() BMNOEXCEPT { return 0; }
