@@ -20,7 +20,7 @@ For more information please visit:  http://bitmagic.io
 
   \sa bm::str_sparse_vector
   \sa bm::str_sparse_vector::const_iterator
-  \sa bm::str_sparse_vector::back_inserter
+  \sa bm::str_sparse_vector::back_insert_iterator
   \sa bm::str_sparse_vector::remap
   \sa bm::str_sparse_vector::optimize
 
