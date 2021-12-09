@@ -61,7 +61,7 @@ void generate_string_set(vector<string>& str_vec)
    
     str_vec.resize(0);
     string str;
-    for (unsigned i = 10; i < max_coll; i += rand() % 3)
+    for (unsigned i = 10; i < max_coll; i += unsigned(rand() % 3))
     {
         str = to_string(i);
         str_vec.emplace_back(str);
