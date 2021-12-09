@@ -190,6 +190,7 @@ add_executable(rscsample05 ${PROJECT_SOURCE_DIR}/samples/rscsample05/rscsample05
 
 add_executable(strsvsample01 ${PROJECT_SOURCE_DIR}/samples/strsvsample01/strsvsample01.cpp ${BM_HEADERS})
 add_executable(strsvsample02 ${PROJECT_SOURCE_DIR}/samples/strsvsample02/strsvsample02.cpp ${BM_HEADERS})
+add_executable(strsvsample02a ${PROJECT_SOURCE_DIR}/samples/strsvsample02a/strsvsample02a.cpp ${BM_HEADERS})
 add_executable(strsvsample03 ${PROJECT_SOURCE_DIR}/samples/strsvsample03/strsvsample03.cpp ${BM_HEADERS})
 add_executable(strsvsample04 ${PROJECT_SOURCE_DIR}/samples/strsvsample04/strsvsample04.cpp ${BM_HEADERS})
 add_executable(strsvsample05 ${PROJECT_SOURCE_DIR}/samples/strsvsample05/strsvsample05.cpp ${BM_HEADERS})
