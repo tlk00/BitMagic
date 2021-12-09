@@ -72,6 +72,7 @@ using namespace std;
 
 //#define MEM_POOL
 
+bool is_silent = false;
 
 template<class T> T* pool_allocate(T** pool, int& i, size_t n)
 {
@@ -375,7 +376,7 @@ void SyntaxTest()
     {
         bvect64 bv0;
 
-        load_BV_set_ref(bv0, vect);
+        load_BV_set_ref(cout, bv0, vect);
         compare_BV_set_ref(bv0, vect);
 
         
@@ -414,7 +415,7 @@ void SyntaxTest()
     {
         bvect64 bv0, bv1, bv2;
 
-        load_BV_set_ref(bv0, vect);
+        load_BV_set_ref(cout, bv0, vect);
         bv1 = bv2 = bv0;
         bool b = (bv1 == bv0);
         assert(b);
@@ -487,11 +488,11 @@ void GenericBVectorTest()
         ref_vect vect;
         generate_vect_simpl0(vect);
         
-        load_BV_set_ref(bv0, vect);
+        load_BV_set_ref(cout, bv0, vect);
         compare_BV_set_ref(bv0, vect);
 
         bvect64 bv1(bm::BM_GAP);
-        load_BV_set_ref(bv1, vect);
+        load_BV_set_ref(cout, bv1, vect);
         compare_BV_set_ref(bv1, vect);
         
         int cmp = bv0.compare(bv1);
@@ -1062,9 +1063,9 @@ void ResizeTest()
         //print_stat(bv);
         bv.set(100);
         bv.set(65536 + 10);
-        print_stat(bv);
+        print_stat(cout,bv);
         bv.set_range(0, 65536*10, false);
-        print_stat(bv);
+        print_stat(cout,bv);
     }}
 
     // test logical operations
@@ -1705,7 +1706,7 @@ void EnumeratorTest()
             exit(1);
         }
         CompareEnumerators(en, en1);
-        print_stat(bvect1);
+        print_stat(cout,bvect1);
     }
 
     {
@@ -4996,7 +4997,7 @@ void SerializationTest()
 
     bvect_full1->optimize();
 
-    print_stat(*bvect_full1);
+    print_stat(cout,*bvect_full1);
 
 
     bvect::statistics st;
@@ -5090,7 +5091,7 @@ void DesrializationTest2()
       bv2.set_bit(i);
    }
    bv2.optimize();
-   print_stat(bv2);
+   print_stat(cout,bv2);
 
    struct bvect::statistics st2;
    bv2.calc_stat(&st2);
@@ -5102,7 +5103,7 @@ void DesrializationTest2()
    slen = 0;
 
    bm::deserialize(bvtotal, sermemv2.data());
-   print_stat(bvtotal);
+   print_stat(cout,bvtotal);
    //operation_deserializer<bvect64> od;
 
    od.deserialize(bv_target_s,
@@ -5174,7 +5175,7 @@ void DesrializationTest2()
         {
             bvect::size_type bit_idx = bv_target_s.get_first();
             cout << bit_idx << " " << bv_target_s.get_next(bit_idx) << endl;;
-            print_stat(bv_target_s);
+            print_stat(cout,bv_target_s);
             cout << "Operation deserialization error 2" << endl;
             assert(0);
             exit(1);
@@ -5208,8 +5209,8 @@ void DesrializationTest2()
                 generate_vect_simpl0(vect0);
                 generate_vect48(vect1);
                 
-                load_BV_set_ref(bv0, vect0, false);
-                load_BV_set_ref(bv1, vect1, false);
+                load_BV_set_ref(cout,bv0, vect0, false);
+                load_BV_set_ref(cout,bv1, vect1, false);
             }
 
             bm::serializer<bvect64> bv_ser;
@@ -5693,7 +5694,7 @@ void RangeDeserializationTest()
         bvect bv3;  // 48-bit super sparse
         ref_vect vect;
         generate_vect_simpl0(vect);
-        load_BV_set_ref(bv3, vect);
+        load_BV_set_ref(cout, bv3, vect);
 
         CheckRangeDeserial(bv3, 0, 77777);
         CheckRangeDeserial(bv3, (bm::id_max32 - 10), bm::id_max32 + 10);
@@ -5752,7 +5753,7 @@ void RangeDeserializationTest()
         {
         ref_vect vect0;
         generate_vect48(vect0);
-        load_BV_set_ref(bv4, vect0);
+        load_BV_set_ref(cout, bv4, vect0);
         }
         bv4.optimize();
         CheckRangeDeserial(bv4, 0, 64*65536);
@@ -6953,10 +6954,10 @@ bvect::size_type SerializationOperation(bvect*     bv_target,
    {
        cout << "---------------------------------- " << endl;
        cout << "bv1.count()=" << bv1.count() << endl;
-       print_stat(bv1);
+       print_stat(cout,bv1);
        cout << "---------------------------------- " << endl;
        cout << "bv_target.count()=" << bv_target->count() << endl;
-       print_stat(*bv_target);
+       print_stat(cout,*bv_target);
        
        bv_target->bit_xor(bv1);
        cout << "First diff=" << bv_target->get_first() << endl;
@@ -7303,7 +7304,7 @@ void AndOperationsTest()
         generate_vect_simpl0(vect);
 
         bvect bv0;
-        load_BV_set_ref(bv0, vect);
+        load_BV_set_ref(cout, bv0, vect);
         bvect bv1(bv0);
         
         {
@@ -7368,13 +7369,13 @@ void AndOperationsTest()
         ref_vect vect0;
         generate_vect48(vect0);
         bvect bv0;
-        load_BV_set_ref(bv0, vect0);
+        load_BV_set_ref(cout, bv0, vect0);
         compare_BV_set_ref(bv0, vect0);
 
         ref_vect vect1;
         generate_vect48(vect1);
         bvect bv1;
-        load_BV_set_ref(bv1, vect1);
+        load_BV_set_ref(cout, bv1, vect1);
         compare_BV_set_ref(bv1, vect1);
         cout << "ok\n" << endl;
 
@@ -7388,14 +7389,14 @@ void AndOperationsTest()
             compare_BV_set_ref(bv_i, vect_i);
         }
         bv0.optimize();
-        print_bvector_stat(bv0);
+        print_bvector_stat(cout,bv0);
         {
             bvect bv_i(bv0);
             bv_i.bit_and(bv1);
             compare_BV_set_ref(bv_i, vect_i);
         }
         bv1.optimize();
-        print_bvector_stat(bv1);
+        print_bvector_stat(cout,bv1);
         {
             bvect bv_i(bv0);
             bv_i.bit_and(bv1);
@@ -7597,7 +7598,7 @@ void AndOperationsTest()
     if (count != predicted_count)
     {
         cout << "Predicted count error!" << endl;
-        print_stat(bvect_full1);
+        print_stat(cout,bvect_full1);
         exit(1);
     }
 
@@ -7855,7 +7856,7 @@ void OrOperationsTest()
         generate_vect_simpl0(vect);
 
         bvect bv0;
-        load_BV_set_ref(bv0, vect);
+        load_BV_set_ref(cout, bv0, vect);
         bvect bv1(bv0);
 
         {
@@ -7916,13 +7917,13 @@ void OrOperationsTest()
         ref_vect vect0;
         generate_vect48(vect0);
         bvect bv0;
-        load_BV_set_ref(bv0, vect0);
+        load_BV_set_ref(cout, bv0, vect0);
         compare_BV_set_ref(bv0, vect0);
 
         ref_vect vect1;
         generate_vect48(vect1);
         bvect bv1;
-        load_BV_set_ref(bv1, vect1);
+        load_BV_set_ref(cout, bv1, vect1);
         compare_BV_set_ref(bv1, vect1);
         cout << "ok\n" << endl;
 
@@ -7936,14 +7937,14 @@ void OrOperationsTest()
             compare_BV_set_ref(bv_i, vect_i);
         }
         bv0.optimize();
-        print_bvector_stat(bv0);
+        print_bvector_stat(cout,bv0);
         {
             bvect bv_i(bv0);
             bv_i.bit_or(bv1);
             compare_BV_set_ref(bv_i, vect_i);
         }
         bv1.optimize();
-        print_bvector_stat(bv1);
+        print_bvector_stat(cout,bv1);
         {
             bvect bv_i(bv0);
             bv_i.bit_or(bv1);
@@ -8010,7 +8011,7 @@ void OrOperationsTest()
         {
             cout << "Predicted count error!" << endl;
             cout << predicted_count << " " << count << endl;
-            print_stat(bvect_full1);
+            print_stat(cout,bvect_full1);
             exit(1);
         }
 
@@ -8398,7 +8399,7 @@ void XorOperationsTest()
         generate_vect_simpl0(vect);
 
         bvect bv0;
-        load_BV_set_ref(bv0, vect);
+        load_BV_set_ref(cout,bv0, vect);
         bvect bv1(bv0);
         
         {
@@ -8435,7 +8436,7 @@ void XorOperationsTest()
             
             {
                 bvect bv3(bv_i);
-                clear_BV_set_ref(bv3, vect);
+                clear_BV_set_ref(cout,bv3, vect);
                 predicted_count = bm::count_xor(bv0, bv3);
                 assert(predicted_count == bm::id_max);
                 auto cnt = bv3.count();
@@ -8458,13 +8459,13 @@ void XorOperationsTest()
         ref_vect vect0;
         generate_vect48(vect0);
         bvect bv0;
-        load_BV_set_ref(bv0, vect0);
+        load_BV_set_ref(cout,bv0, vect0);
         compare_BV_set_ref(bv0, vect0);
 
         ref_vect vect1;
         generate_vect48(vect1);
         bvect bv1;
-        load_BV_set_ref(bv1, vect1);
+        load_BV_set_ref(cout,bv1, vect1);
         compare_BV_set_ref(bv1, vect1);
         cout << "ok\n" << endl;
 
@@ -8478,14 +8479,14 @@ void XorOperationsTest()
             compare_BV_set_ref(bv_i, vect_i);
         }
         bv0.optimize();
-        print_bvector_stat(bv0);
+        print_bvector_stat(cout,bv0);
         {
             bvect bv_i(bv0);
             bv_i.bit_xor(bv1);
             compare_BV_set_ref(bv_i, vect_i);
         }
         bv1.optimize();
-        print_bvector_stat(bv1);
+        print_bvector_stat(cout,bv1);
         {
             bvect bv_i(bv0);
             bv_i.bit_xor(bv1);
@@ -8762,7 +8763,7 @@ void XorOperationsTest()
         {
             cout << "5.Predicted count error!" << endl;
             cout << count << " " << predicted_count << endl;
-            print_stat(bvect_full1);
+            print_stat(cout,bvect_full1);
             exit(1);
         }
 
@@ -9131,7 +9132,7 @@ void SubOperationsTest()
         generate_vect_simpl0(vect);
 
         bvect bv0;
-        load_BV_set_ref(bv0, vect);
+        load_BV_set_ref(cout,bv0, vect);
         bvect bv1(bv0);
         
         {
@@ -9167,7 +9168,7 @@ void SubOperationsTest()
             
             {
                 bvect bv3(bv_i);
-                clear_BV_set_ref(bv3, vect);
+                clear_BV_set_ref(cout, bv3, vect);
                 bvect bv4(bv_i);
                 bv4 -= bv0;
                 
@@ -9193,13 +9194,13 @@ void SubOperationsTest()
         ref_vect vect0;
         generate_vect48(vect0);
         bvect bv0;
-        load_BV_set_ref(bv0, vect0);
+        load_BV_set_ref(cout,bv0, vect0);
         compare_BV_set_ref(bv0, vect0);
 
         ref_vect vect1;
         generate_vect48(vect1);
         bvect bv1;
-        load_BV_set_ref(bv1, vect1);
+        load_BV_set_ref(cout, bv1, vect1);
         compare_BV_set_ref(bv1, vect1);
         cout << "ok\n" << endl;
 
@@ -9333,7 +9334,7 @@ void SubOperationsTest()
         {
             cout << "Predicted count error!" << endl;
             cout << predicted_count << " " << count << endl;
-            print_stat(bvect_full1);
+            print_stat(cout,bvect_full1);
             assert(0);
             exit(1);
         }
@@ -9721,12 +9722,12 @@ void StressTest(unsigned repetitions, int set_operation = -1)
     {
         ref_vect vect;
         generate_vect_simpl0(vect);
-        load_BV_set_ref(bv_p0, vect);
+        load_BV_set_ref(cout,bv_p0, vect);
     }
     {
         ref_vect vect;
         generate_vect48(vect);
-        load_BV_set_ref(bv_p1, vect);
+        load_BV_set_ref(cout,bv_p1, vect);
     }
 
 
@@ -10873,13 +10874,13 @@ void StressTestAggregatorOR(unsigned repetitions)
         {
             ref_vect vect0;
             generate_vect48(vect0);
-            load_BV_set_ref(bv8, vect0);
+            load_BV_set_ref(cout,bv8, vect0);
             bv8.optimize();
         }
         {
             ref_vect vect0;
             generate_vect48(vect0);
-            load_BV_set_ref(bv9, vect0);
+            load_BV_set_ref(cout,bv9, vect0);
             bv9.optimize();
         }
         bm::aggregator<bvect> agg;
@@ -11446,7 +11447,7 @@ void TestSparseVector()
             assert(0);exit(1);
         }
         sv.optimize();
-        print_svector_stat(sv);
+        print_svector_stat(cout,sv);
         res = CompareSparseVector(sv, vect);
         if (!res)
         {
@@ -11536,7 +11537,7 @@ void TestSparseVector()
             assert(0);exit(1);
         }
         sv.optimize();
-        print_svector_stat(sv);
+        print_svector_stat(cout,sv);
         res = CompareSparseVector(sv, vect);
         if (!res)
         {
@@ -12434,7 +12435,7 @@ static void TestSignedSparseVector()
         int arr[3] = {1,-8,3};
         sv.import(arr, 3); // import from a C-style array (fastest way to populate)
         sv.optimize();
-        print_svector_stat(sv);
+        print_svector_stat(cout,sv);
 
         sparse_vector_i32::statistics st;
         sv.calc_stat(&st);
@@ -12455,7 +12456,7 @@ static void TestSignedSparseVector()
             assert(0);exit(1);
         }
         sv.optimize();
-        print_svector_stat(sv);
+        print_svector_stat(cout,sv);
         res = CompareSparseVector(sv, vect);
         if (!res)
         {
@@ -16287,6 +16288,35 @@ void TestSparseVector_Stress(unsigned count)
 }
 
 
+template<class STR_SV>
+void CheckStrSVCompare(const STR_SV& str_sv,
+                        typename STR_SV::size_type limit = 0)
+{
+    if (!limit)
+        limit = str_sv.size();
+
+    typename STR_SV::size_type i, j;
+    i = j = 0;
+    auto it1 = str_sv.begin();
+    auto it_end = str_sv.end();
+    for (; it1 != it_end; ++it1, ++i)
+    {
+        const char* s1 = *it1;
+        auto it2 = str_sv.begin();
+        it2.go_to(i);
+        for (j = i; j < limit; ++it2, ++j)
+        {
+            assert(it2 != it_end);
+            const char* s2 = *it2;
+            int r2 = ::strcmp(s1, s2);
+            int r1 = str_sv.compare(i, j);
+            assert (r1 == r2 || (r1 < 0 && r2 < 0) || (r1 > 0 && r2 > 0));
+        } // for j
+        if ((!is_silent) && ((i & 0xFF) == 0))
+            cout << "\r   " << i << " / " << (limit ? limit : str_sv.size()) << flush;
+    } // for i
+    cout << endl << endl;
+}
 
 // -------------------------------------------------------------------------------------------
 
@@ -17686,6 +17716,8 @@ void StressTestStrSparseVector()
        }
    }
 
+   CheckStrSVCompare(str_sv, max_coll / 1000);
+
     // -----------------------------------------------------------
     // create sorted collections
     cout << "Sorting str sparse vectors..." << endl;
@@ -17719,7 +17751,7 @@ void StressTestStrSparseVector()
     
     str_sv.optimize();
 
-   print_svector_stat(str_sv, true);
+   print_svector_stat(cout,str_sv, true);
 
     cout << "ok. \n Verification..." << endl;
 
@@ -17978,7 +18010,7 @@ void TestSparseFindEqStrPipeline()
 
    cout << "OK" << endl;
 
-    bm::print_svector_stat(str_sv);
+    bm::print_svector_stat(cout,str_sv);
 
     unsigned test_runs = 10000;
     std::vector<string> str_test_coll;
@@ -19106,7 +19138,113 @@ int main(int argc, char *argv[])
     if (ret != 0)
         return ret;
     }
+/*
+    {
+        typedef str_sparse_vector<char, bvect, 3> str_svect_type;
+        str_svect_type sv0(bm::use_null);
 
+        file_load_svector(sv0, "/Volumes/WD-MacOS/svstr-shuf/100M.out.shuf.vec");
+
+        cout << sv0.size() << endl;
+
+
+        //print_str_svector_stat(sv0);
+        //print_svector_stat(sv0);
+
+        size_t samples = 65536;
+//        size_t samples = 10000;
+
+        typedef bm::agg_run_options<true, true, true> scanner_custom_mask_opt;
+        bm::sparse_vector_scanner<str_svect_type> scanner;
+
+        typedef typename str_svect_type::bvector_type::allocator_type::allocator_pool_type allocator_pool_type;
+        allocator_pool_type  pool; // local pool for blocks
+
+        size_t wcnt = 0;
+        auto it = sv0.begin();
+        auto it_end = sv0.end();
+        str_svect_type::bvector_type bv_mask;
+        typename str_svect_type::bvector_type::mem_pool_guard mp_guard_bv;
+        mp_guard_bv.assign_if_not_set(pool, bv_mask); // pool bv_mask for faster construction
+        bv_mask.resize(sv0.size());
+        bv_mask.set_range(0, sv0.size());
+
+        for (size_t idx=0; idx < sv0.size(); ++wcnt)
+        {
+            cout << "\nwindow=" << wcnt << " window start= " << idx << endl;
+            bm::chrono_taker tt("scanner::pipeline find_eq_str()", 0);
+
+            bm::sparse_vector_scanner<str_svect_type>::pipeline<scanner_custom_mask_opt> pipe1_and(sv0);
+            pipe1_and.options().batch_size = 5;
+            pipe1_and.set_search_mask(&bv_mask); // associate search mask with the pipeline
+            pipe1_and.set_search_count_limit(2); // only need pairs
+
+            for (auto k = idx; k < (idx + samples); ++k, ++it)
+            {
+                assert(it != it_end);
+                if (sv0.is_null(k))
+                    continue;
+                const char* s = it.value();
+                pipe1_and.add(s); // this will search within defined mask
+            } // for k
+
+            if (pipe1_and.size())
+            {
+                pipe1_and.complete();
+                scanner.find_eq_str(pipe1_and); // run the search
+
+                {
+                    auto& res_vect = pipe1_and.get_bv_res_vector();
+
+                    // iterate over results, run some checks...
+                    size_t res_sz = res_vect.size();
+                    for (size_t i = 0; i < res_sz; ++i)
+                    {
+                        if (const str_svect_type::bvector_type* bv_res = res_vect[i])
+                            bv_mask.bit_sub(*bv_res); // subtract all results from search mask
+                    }
+                }
+            } // if size()
+
+            idx += samples;
+
+            bv_mask.keep_range(idx, sv0.size());
+            auto cnt = bv_mask.count();
+            cout << "bv_mask.count()=" << cnt << endl;
+
+            // correct the NULL vector, which is against the rules since
+            // we have an active iterator on the same object
+            //
+            str_svect_type::bvector_type* bv_null = sv0.get_null_bvect();
+            bv_null->bit_and(bv_mask);
+        } // for idx
+*/
+
+/*
+        for (unsigned bs = 0; bs < 1000; ++bs)
+        {
+            cout << " batch=" << bs << endl;
+
+            typedef bm::agg_run_options<true, false, true> scanner_custom_mask_opt;
+            bm::sparse_vector_scanner<str_svect_type>::pipeline<scanner_custom_mask_opt> pipe1_and(sv0);
+            pipe1_and.options().batch_size = bs;
+
+            {
+                bm::chrono_taker tt("scanner::pipeline find_eq_str()", svect.size());
+
+                // add all the search items to the pipeline
+                for (size_t i = 0; i < svect.size(); ++i)
+                {
+                    const string& str = svect[i];
+                    pipe1_and.add(str.c_str()); // this will search within defined mask
+                }
+                pipe1_and.complete();
+                scanner.find_eq_str(pipe1_and); // run the search
+            }
+        
+        }
+    }
+*/
 
     // -----------------------------------------------------------------
     

@@ -538,14 +538,14 @@ int main(int argc, char *argv[])
                 std::cout << std::endl
                           << "sparse vector statistics:"
                           << std::endl;
-                bm::print_svector_stat(sv, true);
+                bm::print_svector_stat(std::cout, sv, true);
             }
             if (!csv.empty())
             {
                 std::cout << std::endl
                           << "RS compressed sparse vector statistics:"
                           << std::endl;
-                bm::print_svector_stat(csv, true);
+                bm::print_svector_stat(std::cout, csv, true);
             }
         }
 

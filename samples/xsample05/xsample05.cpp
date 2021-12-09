@@ -561,7 +561,7 @@ int main(int argc, char *argv[])
         {
             if (!str_sv.empty())
             {
-                print_svector_stat(str_sv, false);
+                print_svector_stat(cout,str_sv, false);
             }
             
             if (str_vec.size())

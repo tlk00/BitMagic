@@ -999,7 +999,7 @@ int main(int argc, char *argv[])
 
             if (is_diag)
             {
-                bm::print_bvector_stat(bv_kmers);
+                bm::print_bvector_stat(cout,bv_kmers);
                 size_t blob_size = bm::compute_serialization_size(bv_kmers);
                 cout << "DNA 2-bit coded FASTA size=" << seq_vect.size()/4 << endl;
                 cout << "           Compressed size=" << blob_size << endl;

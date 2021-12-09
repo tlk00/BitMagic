@@ -18,9 +18,14 @@ For more information please visit:  http://bitmagic.io
 
 /** \example strsvsample02a.cpp
 
+   Example shows how to use optimized bm::str_sparse_vector::compare() functions with std::sort
+   And then use bm::str_sparse_vector::remap() to reduce memory footprint.
+   Succinct methods are very responsive to sort order and other regularities in the data.
+
   \sa bm::str_sparse_vector
   \sa bm::str_sparse_vector::const_iterator
   \sa bm::str_sparse_vector::back_insert_iterator
+  \sa bm::str_sparse_vector::compare
   \sa bm::str_sparse_vector::remap
   \sa bm::str_sparse_vector::optimize
 
@@ -39,6 +44,10 @@ For more information please visit:  http://bitmagic.io
 #include "bm.h"
 #include "bmstrsparsevec.h"
 #include "bmsparsevec_algo.h"
+
+#include "bmtimer.h"
+#include "bmdbg.h"
+
 #include "bmundef.h" /* clear the pre-proc defines from BM */
 
 using namespace std;
@@ -47,8 +56,8 @@ typedef bm::bvector<> bvector_type;
 typedef bm::str_sparse_vector<char, bvector_type, 3> str_sv_type;
 
 
-// generate collection of strings from integers and shuffle it
-//
+/// generate collection of strings from integers and shuffle it
+///
 static
 void generate_string_set(vector<string>& str_vec,
                          const unsigned max_coll = 250000)
@@ -68,7 +77,6 @@ void generate_string_set(vector<string>& str_vec,
     std::shuffle(str_vec.begin(), str_vec.end(), g);
 }
 
-
 int main(void)
 {
     try
@@ -84,6 +92,7 @@ int main(void)
             bit.flush(); // important to avoid descructor exceptions
             str_sv.optimize();
         }
+        cout << endl;
 
         // This approach to sort uses an index vector to perform the sort on
         // plain uncompressed vector of indexes offers better sort performance
@@ -91,18 +100,25 @@ int main(void)
         //
         // In this example we are swapping index elements, leaving the original
         // vector in place with an option to copy it later
-
+        //
 
         std::vector<uint32_t> index(str_sv.size());
         std::generate(index.begin(), index.end(),
                                          [n = 0] () mutable { return n++; });
+        {{
+        bm::chrono_taker tt("1.std::sort() of index: ", 0); // timing
+#if (1)
+        // fastest variant uses local cache to keep one of the comparison vars
+        // to reduce access to the succinct vector, right variable gets more hits
+        // due to specifics of sort implementation
+        // (improves comparison performance, alternative variant provided)
+        //
 
         std::sort(index.begin(), index.end(),
             [&str_sv](const uint32_t l, const uint32_t r)
             {
-                static thread_local string last_right_str; // value caching variable
+                static thread_local string last_right_str; // caching variable
                 static thread_local uint32_t last_right = uint32_t(-1);
-
                 if (last_right != r)
                 {
                     last_right = r;
@@ -111,6 +127,18 @@ int main(void)
                 return str_sv.compare(l, last_right_str.c_str()) < 0;
             } // lambda
         ); // sort
+#else
+
+        // possible alternative is to use sort with compare (l, r) it is
+        // measurably slower (due to hight latency more access to succint vector)
+        // (code is somewhat simpler)
+
+        std::sort(index.begin(), index.end(),
+            [&str_sv](const uint32_t l, const uint32_t r)
+                    { return str_sv.compare(l, r) < 0; } // lambda
+        ); // sort
+#endif
+        }}
 
         // copy the sorted vector
         //
@@ -147,8 +175,8 @@ int main(void)
                 }
             } // for
         }
-        cout << "Sort validation Ok." << endl;
-
+        cout << "Sort validation Ok." << endl << endl;
+        cout << "Memory footprint statistics:\n" << endl;
         //
         //
         // compute succinct container stats before remapping

@@ -85,7 +85,7 @@ void bvector64_VerySparse_SetDestroyCycle()
         for (unsigned i = 0; i < max_try; ++i)
         {
             bvect64 bv0;
-            load_BV_set_ref(bv0, vect, false);
+            load_BV_set_ref(std::cout, bv0, vect, false);
             if ((i & 0xF) == 0)
                 cout << "\r" << i << "/" << max_try << flush;
         }
@@ -100,7 +100,7 @@ void bvector64_VerySparse_RefAccessCycle()
         bvect64 bv0;
         ref_vect vect;
         generate_vect_simpl0(vect);
-        load_BV_set_ref(bv0, vect, false);
+        load_BV_set_ref(std::cout, bv0, vect, false);
 
         cout << "bvector64_VerySparse_RefAccessCycle..." << endl;
         {
@@ -140,8 +140,8 @@ void bvector64_Serialization()
             generate_vect_simpl0(vect0);
             generate_vect48(vect1);
             
-            load_BV_set_ref(bv0, vect0, false);
-            load_BV_set_ref(bv1, vect1, false);
+            load_BV_set_ref(cout,bv0, vect0, false);
+            load_BV_set_ref(cout,bv1, vect1, false);
         }
 
         bm::serializer<bvect64> bv_ser;

@@ -144,10 +144,10 @@ int main(int argc, char *argv[])
         if (is_diag)
         {
             cout << "\nStatistics on generated SV:" << endl;
-            bm::print_svector_stat(str_sv1);
+            bm::print_svector_stat(cout, str_sv1);
             // diagnostics print to see the details of succinct structures
             cout << "\nStatistics on remapped/optimized SV:" << endl;
-            bm::print_svector_stat(str_sv0);
+            bm::print_svector_stat(cout, str_sv0);
             cout << endl << endl;
         }
 

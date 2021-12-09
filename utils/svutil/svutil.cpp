@@ -392,14 +392,14 @@ int main(int argc, char *argv[])
             if (sv_u32_in_flag)  // input sparse vector loaded
             {
                 std::cout << "Input sparse vector statistics:" << std::endl;
-                bm::print_svector_stat(sv_u32_in, true);
+                bm::print_svector_stat(std::cout, sv_u32_in, true);
                 std::cout << std::endl;
             }
             
             if (rsc_u64_in_flag)
             {
                 std::cout << "Input rsc 64-bit sparse vector statistics:" << std::endl;
-                bm::print_svector_stat(rsc_u64_in, true);
+                bm::print_svector_stat(std::cout, rsc_u64_in, true);
                 std::cout << std::endl;
             }
 
@@ -469,7 +469,7 @@ int main(int argc, char *argv[])
                 if (is_diag)  // diagnostics requested
                 {
                     std::cout << "Output sparse vector statistics:" << std::endl;
-                    bm::print_svector_stat(sv_u32_out);
+                    bm::print_svector_stat(std::cout, sv_u32_out);
                     std::cout << std::endl;
                 }
                 

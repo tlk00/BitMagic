@@ -1051,10 +1051,10 @@ unsigned SerializationOperation(bvect*             bv_target,
    {
        cout << "---------------------------------- " << endl;
        cout << "bv1.count()=" << bv1.count() << endl;
-       print_stat(bv1);
+       print_stat(cout, bv1);
        cout << "---------------------------------- " << endl;
        cout << "bv_target.count()=" << bv_target->count() << endl;
-       print_stat(*bv_target);
+       print_stat(cout, *bv_target);
        
        bv_target->bit_xor(bv1);
        cout << "First diff=" << bv_target->get_first() << endl;
@@ -1393,7 +1393,7 @@ void SerializationOperation2Test(bvect*        bv_target,
             << endl;
 
         cout << endl << "target:" << endl;
-        print_stat(*bv_target);
+        print_stat(cout, *bv_target);
         cout << endl << endl << "Reference" << endl;
         if (op_combine == set_OR)
         {
@@ -1403,13 +1403,13 @@ void SerializationOperation2Test(bvect*        bv_target,
                 cout << "Comparison OR error!" << endl;
             }
             cout << "OR operation count=" << bv1.count() << endl;
-            print_stat(bv1);
+            print_stat(cout, bv1);
         }
         else
             if (op_combine == set_AND)
             {
                 bv1 &= bv2;
-                print_stat(bv1);
+                print_stat(cout,bv1);
             }
 
         exit(1);
@@ -2245,7 +2245,7 @@ void CheckVectors(bvect_mini &bvect_min,
     {
         cout << "fullvector count = " << count << endl;
         cout << "Count comparison failed !!!!" << endl;
-        print_stat(bvect_full);
+        print_stat(cout, bvect_full);
         DetailedCheckVectors(bvect_min, bvect_full, size);
         assert(0);
         exit(1);  
@@ -2304,7 +2304,7 @@ void CheckVectors(bvect_mini &bvect_min,
               << bit_m << endl;
 
 
-         print_stat(bvect_full);
+         print_stat(cout,bvect_full);
 
          DetailedCheckVectors(bvect_min, bvect_full, size);
 
@@ -2684,11 +2684,11 @@ void ClearAllTest()
     bvect_full.optimize(tb);
     bvect_full.clear();
 
-    print_stat(bvect_full);
+    print_stat(cout, bvect_full);
 
     unsigned count = bvect_full.count();
     assert(count == 0);
-    print_stat(bvect_full);
+    print_stat(cout, bvect_full);
 }
 
 static
@@ -4267,12 +4267,12 @@ void BasicFunctionalityTest()
     if (bvect_full1 != bvect_full)
     {
         cout << "set_range failed!" << endl;
-        print_stat(bvect_full1);
+        print_stat(cout,bvect_full1);
         exit(1);
     }
 
-    print_stat(bvect_full);
-    print_stat(bvect_full1);
+    print_stat(cout,bvect_full);
+    print_stat(cout,bvect_full1);
 
     // checking the results
     unsigned count_min = 0;
@@ -6293,7 +6293,7 @@ void AndOperationsTest(bool detailed)
     if (count != predicted_count)
     {
         cout << "Predicted count error!" << endl;
-        print_stat(bvect_full1);
+        print_stat(cout,bvect_full1);
         exit(1);
     }
 
@@ -6830,7 +6830,7 @@ void OrOperationsTest(bool detailed)
     {
         cout << "Predicted count error!" << endl;
         cout << predicted_count << " " << count << endl;
-        print_stat(bvect_full1);
+        print_stat(cout, bvect_full1);
         exit(1);
     }
 
@@ -7351,7 +7351,7 @@ void SubOperationsTest(bool detailed)
     {
         cout << "Predicted count error!" << endl;
         cout << predicted_count << " " << count << endl;
-        print_stat(bvect_full1);    
+        print_stat(cout,bvect_full1);
         
         exit(1);
     }
@@ -7870,7 +7870,7 @@ void XorOperationsTest(bool detailed)
     {
         cout << "5.Predicted count error!" << endl;
         cout << count << " " << predicted_count << endl;
-        print_stat(bvect_full1);
+        print_stat(cout,bvect_full1);
         exit(1);
     }
 
@@ -8938,7 +8938,7 @@ void DesrializationTest2()
    }
 
    bv1.optimize(tb);
-   print_stat(bv1);
+   print_stat(cout, bv1);
 
    struct bvect::statistics st1;
    bv1.calc_stat(&st1);
@@ -8967,7 +8967,7 @@ void DesrializationTest2()
       bv2.set_bit(i);
    }
    bv2.optimize();
-   print_stat(bv2);
+   print_stat(cout,bv2);
 
    struct bvect::statistics st2;
    bv2.calc_stat(&st2);
@@ -8979,7 +8979,7 @@ void DesrializationTest2()
    slen = 0;
 
    bm::deserialize(bvtotal, sermemv2.data());
-   print_stat(bvtotal);
+   print_stat(cout, bvtotal);
    od.deserialize(bv_target_s, sermemv2.data(), 0, set_OR);
     res = bvtotal.compare(bv_target_s);
     if (res != 0)
@@ -9061,8 +9061,8 @@ void DesrializationTest2()
             
             unsigned bit_idx = bv_target_s.get_first();
             cout << bit_idx << " " << bv_target_s.get_next(bit_idx) << endl;;
-            print_stat(*bvect_full1);
-            print_stat(bv_target_s);
+            print_stat(cout,*bvect_full1);
+            print_stat(cout,bv_target_s);
             cout << "Operation deserialization error 2" << endl;
             assert(0); exit(1);
         }
@@ -10850,7 +10850,7 @@ void StressTest(unsigned repetitions, int set_operation, bool detailed)
             }
             cout << endl;
             cout << "================" << endl;
-            print_stat(*bvect_full1);
+            print_stat(cout, *bvect_full1);
 
 
             exit(1);
@@ -11360,11 +11360,11 @@ void CheckGap2DGap(gap_vector& gapv)
    if (c != 0)
    {
         cout << "Gap1: ";
-        PrintGap(gapv.get_buf());
+        PrintGap(cout, gapv.get_buf());
         cout << "D-Gap: ";
-        PrintGap(dgap_buf);
+        PrintGap(cout, dgap_buf);
         cout << "Gap2:";
-        PrintGap(gap_buf);
+        PrintGap(cout, gap_buf);
         
         cout << "DGap conversion failed!" << endl;
         exit(1);
@@ -12430,7 +12430,7 @@ void MutationOperationsTest()
        bvect_full2.set_bit(i);
        bvect_min2.set_bit(i);
     }
-    print_stat(bvect_full2);
+    print_stat(cout,bvect_full2);
     CheckVectors(bvect_min2, bvect_full2, 65536, true);
     
     bvect_min1.combine_and(bvect_min2);
@@ -12495,7 +12495,7 @@ void MutationOperationsTest()
 
     bvect        bvect_full3;
     bm::deserialize(bvect_full3, sermem);
-    print_stat(bvect_full3);
+    print_stat(cout,bvect_full3);
     CheckVectors(bvect_min1, bvect_full3, 100, true);
    }
 
@@ -12521,19 +12521,19 @@ void MutationOperationsTest()
     FillSets(&bvect_min1, &bvect_full1, min, max, 0);
     FillSets(&bvect_min1, &bvect_full1, 0, len, 5);
     printf("Bvect_FULL 1 STAT\n");
-    print_stat(bvect_full1);
+    print_stat(cout,bvect_full1);
 //    CheckVectors(bvect_min1, bvect_full1, max+10, false);
     FillSets(&bvect_min2, &bvect_full2, min, max, 0);
     FillSets(&bvect_min2, &bvect_full2, 0, len, 0);
     printf("Bvect_FULL 2 STAT\n");
-    print_stat(bvect_full2);
+    print_stat(cout,bvect_full2);
 //    CheckVectors(bvect_min2, bvect_full2, max+10);
     
 
     bvect_min1.combine_and(bvect_min2);
     bvect_full1.bit_and(bvect_full2);
     printf("Bvect_FULL 1 STAT after AND\n");
-    print_stat(bvect_full1);
+    print_stat(cout,bvect_full1);
 
     CheckVectors(bvect_min1, bvect_full1, max+10, false);
 
@@ -12545,7 +12545,7 @@ void MutationOperationsTest()
     cout << "MINIVECT: " << bvect_min1.mem_used() << endl;
 
     bvect_full1.optimize();
-    print_stat(bvect_full1);
+    print_stat(cout,bvect_full1);
 
     CheckVectors(bvect_min1, bvect_full1, max+10, false);
 
@@ -12572,14 +12572,14 @@ void MutationOperationsTest()
     
     bvect        bvect_full3;
     bm::deserialize(bvect_full3, sermem_buf.buf());
-    print_stat(bvect_full3);
+    print_stat(cout,bvect_full3);
     CheckVectors(bvect_min1, bvect_full3, max+10, true);
     
     cout << "Copy constructor check." << endl;
 
     {
     bvect       bvect_full4(bvect_full3);
-    print_stat(bvect_full3);
+    print_stat(cout,bvect_full3);
     CheckVectors(bvect_min1, bvect_full4, max+10, true);
     }
     
@@ -14219,7 +14219,7 @@ void SerializationTest()
     bvect_full1.calc_stat(&st);
 
     unsigned char* sermem = new unsigned char[st.max_serialize_mem];
-    print_stat(bvect_full1);
+    print_stat(cout,bvect_full1);
     
     size_t slen = bm::serialize(bvect_full1, sermem);
 
@@ -14322,8 +14322,8 @@ void SerializationTest()
     bm::deserialize(bvt, sermem);
     if (bvt != *bvect_full1)
     {
-        print_stat(bvt);
-        print_stat(*bvect_full1);
+        print_stat(cout,bvt);
+        print_stat(cout,*bvect_full1);
         cout << "Error!" << endl;
         exit(1);
     }
@@ -14337,9 +14337,9 @@ void SerializationTest()
          << endl;
 
     bvect*  bv_target_s=new bvect(*bvect_full2);
-    print_stat(*bv_target_s);
+    print_stat(cout,*bv_target_s);
 
-    print_stat(*bvect_full2);
+    print_stat(cout,*bvect_full2);
 
     bvect*  bvect_full3= new bvect();
     *bvect_full3 = *bvect_full1;
@@ -14364,8 +14364,8 @@ void SerializationTest()
     
     if (*bvect_full2 != *bvect_full3)
     {
-        print_stat(*bvect_full2);
-        print_stat(*bvect_full3);
+        print_stat(cout,*bvect_full2);
+        print_stat(cout,*bvect_full3);
 
         cout << "Error!" << endl;
         exit(1);
@@ -14419,7 +14419,7 @@ void SerializationTest()
 
     bvect_full1->optimize();
 
-    print_stat(*bvect_full1);
+    print_stat(cout,*bvect_full1);
 
     bvect::statistics st;
     bvect_full1->calc_stat(&st);
@@ -15460,7 +15460,7 @@ void EnumeratorTest()
         exit(1);
     }
     CompareEnumerators(en, en1);
-    print_stat(bvect1);
+    print_stat(cout,bvect1);
     }
 
     {
@@ -15555,13 +15555,13 @@ void BlockLevelTest()
     {
         bv.set_bit(i);
     }
-    print_stat(bv);
+    print_stat(cout,bv);
 
     for (i = 0; i < 1000; i+=2)
     {
         bv2.set_bit(i);
     }
-    print_stat(bv2);
+    print_stat(cout,bv2);
 
     struct bvect::statistics st;
     bv2.calc_stat(&st);
@@ -15574,7 +15574,7 @@ void BlockLevelTest()
     
     bm::deserialize(bv, sermem);
 
-    print_stat(bv);
+    print_stat(cout,bv);
 
 }
 
@@ -16293,7 +16293,7 @@ void SetTest()
         assert(cnt == 2);
 
         bv.invert();
-        print_stat(bv);
+        print_stat(cout,bv);
         cnt = bv.count();
 
         if (cnt != bm::id_max - 2)
@@ -17920,7 +17920,7 @@ void BitBlockTransposeTest()
                          bm::set_block_plane_size>
                          (tmatrix1, distance);
     
-    PrintDistanceMatrix(distance);
+    PrintDistanceMatrix(cout,distance);
 
     // distance matrix verification:
     {
@@ -18091,11 +18091,11 @@ void BitBlockTransposeTest()
     gte.restore();
     
     unsigned glen = *(gapv.get_buf()) >> 3;
-    PrintGap(gapv.get_buf());
-    PrintDGap((gap_word_t*) block1, glen-1);
-    PrintDGapGamma((gap_word_t*) block1, glen-1);
+    PrintGap(cout,gapv.get_buf());
+    PrintDGap(cout,(gap_word_t*) block1, glen-1);
+    PrintDGapGamma(cout,(gap_word_t*) block1, glen-1);
     
-    PrintTMatrix(gte.tmatrix_, gte.eff_cols_, true);
+    PrintTMatrix(cout,gte.tmatrix_, gte.eff_cols_, true);
     
     //bm::gap_word_t gap_head = *gapv.get_buf();
 //    gte.trestore(gap_head, gapv1.get_buf());//, block2);
@@ -18256,12 +18256,12 @@ void ResizeTest()
 
     {{
         bvect bv;
-        print_stat(bv);
+        print_stat(cout,bv);
         bv.set(100);
         bv.set(65536 + 10);
-        print_stat(bv);
+        print_stat(cout,bv);
         bv.set_range(0, 65536*10, false);
-        print_stat(bv);
+        print_stat(cout,bv);
     }}
 
     // test logical operations
@@ -21841,7 +21841,7 @@ void TestSparseVector()
             exit(1);
         }
         sv.optimize();
-        print_svector_stat(sv);
+        print_svector_stat(cout,sv);
         res = CompareSparseVector(sv, vect);
         if (!res)
         {
@@ -21931,7 +21931,7 @@ void TestSparseVector()
             exit(1);
         }
         sv.optimize();
-        print_svector_stat(sv);
+        print_svector_stat(cout,sv);
         res = CompareSparseVector(sv, vect);
         if (!res)
         {
@@ -22832,7 +22832,7 @@ static void TestSignedSparseVector()
         int arr[3] = {1,-8,3};
         sv.import(arr, 3); // import from a C-style array (fastest way to populate)
         sv.optimize();
-        print_svector_stat(sv);
+        print_svector_stat(cout,sv);
 
         sparse_vector_i32::statistics st;
         sv.calc_stat(&st);
@@ -22853,7 +22853,7 @@ static void TestSignedSparseVector()
             assert(0);exit(1);
         }
         sv.optimize();
-        print_svector_stat(sv);
+        print_svector_stat(cout,sv);
         res = CompareSparseVector(sv, vect);
         if (!res)
         {
@@ -29256,7 +29256,7 @@ void StressTestStrSparseVector()
 
     CompareStrSparseVector(str_sv, str_coll);
 
-   print_svector_stat(str_sv, true);
+   print_svector_stat(cout,str_sv, true);
 
     cout << "ok. \n Verification..." << endl;
 
@@ -29616,7 +29616,7 @@ void TestSparseFindEqStrPipeline()
 
    cout << "OK" << endl;
 
-    bm::print_svector_stat(str_sv);
+    bm::print_svector_stat(cout,str_sv);
 
     unsigned test_runs = 10000;
     std::vector<string> str_test_coll;
