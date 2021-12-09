@@ -26772,6 +26772,37 @@ void TestSparseVector_Stress(unsigned count)
     cout << "---------------------------- Bit-plane sparse vector stress OK" << endl;
 }
 
+template<class STR_SV>
+void CheckStrSVCompare(const STR_SV& str_sv,
+                        typename STR_SV::size_type limit = 0)
+{
+    if (!limit)
+        limit = str_sv.size();
+
+    typename STR_SV::size_type i, j;
+    i = j = 0;
+    auto it1 = str_sv.begin();
+    auto it_end = str_sv.end();
+    for (; it1 != it_end; ++it1, ++i)
+    {
+        const char* s1 = *it1;
+        auto it2 = str_sv.begin();
+        it2.go_to(i);
+        for (j = i; j < limit; ++it2, ++j)
+        {
+            assert(it2 != it_end);
+            const char* s2 = *it2;
+            int r2 = ::strcmp(s1, s2);
+            int r1 = str_sv.compare(i, j);
+            assert (r1 == r2 || (r1 < 0 && r2 < 0) || (r1 > 0 && r2 > 0));
+        } // for j
+        if ((!is_silent) && ((i & 0xFF) == 0))
+            cout << "\r   " << i << " / " << (limit ? limit : str_sv.size()) << flush;
+    } // for i
+    cout << endl << endl;
+}
+
+
 static
 void TestStrSparseVector()
 {
@@ -26878,6 +26909,8 @@ void TestStrSparseVector()
         str_vector.get(3, str, sizeof(str));
         cmp = ::strcmp(str, "VÉGE");
         assert(cmp == 0);
+
+        CheckStrSVCompare(str_vector);
     }
 
     // bug fix for not clearing value on set_null
@@ -27154,7 +27187,9 @@ void TestStrSparseVector()
           str_sv10.push_back(cs0);
           str_sv10.push_back(cs1);
           str_sv10.push_back(cs2);
-          
+
+          CheckStrSVCompare(str_sv10);
+
           bm::heap_matrix<char, 1024, 64, bvect::allocator_type> hmatr(true);
           
           unsigned d = 0;
@@ -27403,6 +27438,8 @@ void TestStrSparseVector()
        str_sv0[1] = "11";
        str_sv0[2] = "123";
 
+      CheckStrSVCompare(str_sv0);
+
         bm::sparse_vector_scanner<bm::str_sparse_vector<char, bvect, 2> > scanner;
         for (unsigned pass = 0; pass < 2; ++pass)
         {
@@ -27437,6 +27474,8 @@ void TestStrSparseVector()
        str_sv0[1] = "11";
        str_sv0[2] = "123";
        str_sv0[3] = "021";
+
+      CheckStrSVCompare(str_sv0);
 
        str_sparse_vector<char, bvect, 2>::slice_octet_matrix_type remap_matrix1;
        str_sparse_vector<char, bvect, 2>::slice_octet_matrix_type remap_matrix2;
@@ -27647,7 +27686,9 @@ void TestStrSparseVector()
        str_sv0[2] = "123";
 
        str_sv1.remap_from(str_sv0);
-       
+      CheckStrSVCompare(str_sv0);
+      CheckStrSVCompare(str_sv1);
+
        unsigned pos, pos1;
        bm::sparse_vector_scanner<bm::str_sparse_vector<char, bvect, 2> > scanner;
        bm::sparse_vector_scanner<bm::str_sparse_vector<char, bvect, 2> > scanner1;
@@ -27803,6 +27844,10 @@ void TestStrSparseVector()
             int cmp = strcmp(s.c_str(), str);
             assert(cmp == 0);
         }
+      cout << "  Testing compare(i, j)..." << endl;
+      CheckStrSVCompare(str_sv0);
+      cout << "  OK" << endl;
+
     }
 
 
@@ -27832,6 +27877,8 @@ void TestStrSparseVector()
             int cmp = strcmp(s.c_str(), str);
             assert(cmp == 0);
         }
+      CheckStrSVCompare(str_sv0);
+
     }
 
 
@@ -29172,6 +29219,10 @@ void StressTestStrSparseVector()
        }
        bi.flush();
    }
+    cout << "  Testing compare(i, j)..." << endl;
+    CheckStrSVCompare(str_sv, max_coll / 100);
+    cout << "  OK" << endl;
+
 
     // -----------------------------------------------------------
     // create sorted collections
@@ -29693,7 +29744,8 @@ void TestStrSparseSort()
             str_sv_sorted.push_back(s);
         } // for s
         str_sv_sorted.optimize();
-       
+        CheckStrSVCompare(str_sv_sorted, str_sv_sorted.size()/10);
+
         // run lower bound tests
         bm::sparse_vector_scanner<str_svect_type> scanner;
 
@@ -29759,7 +29811,7 @@ void TestStrSparseSort()
 
         // insertion sort
         str_svect_type      str_sv_sorted;
-        
+
         cout << "\ninsertion sort..." << endl;
         {
         std::chrono::time_point<std::chrono::steady_clock> st;
@@ -35784,12 +35836,6 @@ int main(int argc, char *argv[])
 */
 /*
     {
-        typedef str_sparse_vector<char, bvect, 390> str_svect_type;
-        str_svect_type sv0;
-
-        file_load_svector(sv0, "/Volumes/WD-MacOS/VCF/HG002_1_ID.bin");
-
-        cout << sv0.size() << endl;
 
         BM_DECLARE_TEMP_BLOCK(tb)
         std::vector<unsigned char> buf_v;
