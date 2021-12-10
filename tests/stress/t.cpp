@@ -6191,6 +6191,26 @@ void AndOperationsTest(bool detailed)
         bvect1 &= bvect2;
         int res = bvect1.compare(bvect_control);
         assert(res==0);
+
+        bvect::statistics st1;
+        bvect1.calc_stat(&st1);
+
+        assert(st1.bit_blocks == 0);
+
+    }
+
+    {
+        bvect        bvect1 { 1, 2, 3};
+        bvect        bvect2 {  2, 3 };
+        bvect        bvect3 { 1 };
+        bvect1 -= bvect2;
+        bvect::statistics st1;
+        bvect1.calc_stat(&st1);
+        assert(st1.bit_blocks == 1);
+        bvect1 -= bvect3;
+        bvect1.calc_stat(&st1);
+        assert(st1.bit_blocks == 0);
+
     }
 
 
@@ -32461,13 +32481,20 @@ void TestBlockDigest()
         single_bit_found = bm::bit_find_first_if_1(tb1, &first_bit, mask1);
         assert(!single_bit_found);
 
-        single_bit_found = bm::bit_find_first_if_1(tb1, &first_bit, mask3);
+        if (bm::word_bitcount64(mask3)==1)
+            single_bit_found = bm::bit_find_first_if_1(tb1, &first_bit, mask3);
+        else
+            single_bit_found = false;
         assert(!single_bit_found);
 
         tb1.b_.w32[k] = 3;
         mask3 = bm::calc_block_digest0(tb1); 
 
-        single_bit_found = bm::bit_find_first_if_1(tb1, &first_bit, mask3);
+        if (bm::word_bitcount64(mask3)==1)
+            single_bit_found = bm::bit_find_first_if_1(tb1, &first_bit, mask3);
+        else
+            single_bit_found = false;
+
         assert(!single_bit_found);
 
         tb1.b_.w32[0] = 1;
@@ -32475,7 +32502,10 @@ void TestBlockDigest()
 
         mask3 = bm::calc_block_digest0(tb1);
 
-        single_bit_found = bm::bit_find_first_if_1(tb1, &first_bit, mask3);
+        if (bm::word_bitcount64(mask3)==1)
+            single_bit_found = bm::bit_find_first_if_1(tb1, &first_bit, mask3);
+        else
+            single_bit_found = false;
         assert(!single_bit_found);
     }
 
