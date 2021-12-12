@@ -21264,7 +21264,7 @@ void TestSparseVector()
         bm::sparse_vector<int, bvect> sv1(bm::use_null);
 
         sv1.push_back(0);
-        sv1.push_back(1);
+        sv1.push_back(-5);
         sv1.push_back_null();
         sv1.push_back(3);
 
@@ -21275,6 +21275,11 @@ void TestSparseVector()
         assert(!sv1.is_null(1));
         assert(sv1.is_null(3));
         assert(sv1.is_null(5));
+
+        assert(sv1.get(3) ==0);
+        assert(sv1.get(1) ==-5);
+        assert(sv1.get(0) ==0);
+
 
         bm::sparse_vector<int, bvect> sv2(bm::use_null);
 
@@ -21290,6 +21295,29 @@ void TestSparseVector()
         assert(sv2.is_null(3));
         assert(!sv2.is_null(2));
         assert(!sv2.get(3));
+    }}
+
+
+    // global clear
+    {{
+        bm::sparse_vector<int, bvect> sv1(bm::use_null);
+
+        sv1.push_back(0);
+        sv1.push_back(1);
+        sv1.push_back_null();
+        sv1.push_back(3);
+
+        bm::sparse_vector<int, bvect>::bvector_type bv { 0, 3, 5 };
+        sv1.clear(bv);
+
+        assert(!sv1.is_null(0));
+        assert(!sv1.is_null(1));
+        assert(!sv1.is_null(3));
+        assert(sv1.is_null(5));
+
+        assert(sv1.get(3) ==0);
+        assert(sv1.get(1) ==1);
+        assert(sv1.get(0) ==0);
     }}
 
 
@@ -26900,6 +26928,38 @@ void TestStrSparseVector()
 
     }
 
+    // remap of null-able vector bug
+    {
+        using TSparseOptVector = bm::str_sparse_vector<char, bm::bvector<>, 2>;
+        TSparseOptVector ssv1(bm::use_null);
+        ssv1.set(0, "s1");
+        bool b = ssv1.is_null(0);
+        assert(!b);
+
+        string s;
+        ssv1.get(0, s);
+        assert(s == "s1");
+        {
+        TSparseOptVector::const_iterator it(&ssv1);
+        assert(it.valid());
+        const char* str = *it;
+        assert(strcmp(str, "s1")==0);
+        }
+
+        ssv1.remap();
+        b = ssv1.is_null(0);
+        assert(!b);
+        {
+        TSparseOptVector::const_iterator it(&ssv1);
+        assert(it.valid());
+        const char* str = *it;
+        assert(strcmp(str, "s1")==0);
+        }
+
+        ssv1.get(0, s);
+        assert(s == "s1");
+    }
+
     // test from Andrea Asztalos
     {
         using TSparseOptVector = bm::str_sparse_vector<char, bm::bvector<>, 2>;
@@ -26989,6 +27049,52 @@ void TestStrSparseVector()
         const char* ch = *it;
         assert(!ch[0]);
     }
+
+
+    // bulk clear
+    {
+        using TSparseOptVector = bm::str_sparse_vector<char, bm::bvector<>, 2>;
+        TSparseOptVector ssv1(bm::use_null);
+
+        ssv1.set(0, "s1");
+        ssv1.set(1, "z1");
+        ssv1.set(4, "s4");
+
+        ssv1.remap();
+        ssv1.optimize();
+
+        TSparseOptVector::bvector_type bv {0, 2, 4, 5};
+        ssv1.clear(bv);
+
+        for (unsigned i = 0; i < ssv1.size(); ++i)
+        {
+            string s;
+            ssv1.get(i, s);
+            cout << s << ", ";
+        }
+        cout << endl;
+
+        bool b;
+        b = ssv1.is_null(0);
+        assert(!b);
+        b = ssv1.is_null(1);
+        assert(!b);
+        b = ssv1.is_null(2);
+        assert(b);
+        b = ssv1.is_null(4);
+        assert(!b);
+
+        auto it = ssv1.begin();
+        const char* ch = *it;
+        assert(!ch[0]);
+        ++it;
+        ch = *it;
+        assert(ch[0] == 'z');
+        ++it; ++it;
+        ch = *it;
+        assert(!ch[0]);
+    }
+
 
    {
        const char* s0 = "AbC";
@@ -33730,7 +33836,94 @@ void TestCompressSparseVector()
         assert(pos == 21);
 
     }
-/*
+
+    // bulk clear tests
+    {
+        rsc_sparse_vector_u32 csv1(bm::use_null);
+        csv1.push_back(1, 1);
+        csv1.push_back(20, 200);
+        csv1.push_back(21, 201);
+
+        bvect bv { 1, 20, 21};
+        csv1.clear(bv);
+
+        const bvect* bv_null = csv1.get_null_bvector();
+        auto c = bm::count_and(*bv_null, bv);
+        assert(c==3);
+        assert(!csv1.is_null(1));
+
+        assert(csv1.get(1)==0);
+        assert(csv1.get(20)==0);
+        assert(csv1.get(21)==0);
+    }
+    {
+        rsc_sparse_vector_u32 csv1(bm::use_null);
+        csv1.push_back(1, 1);
+        csv1.push_back(20, 200);
+        csv1.push_back(21, 201);
+        csv1.push_back(51, 65535);
+
+        bvect bv { 1, 2, 21};
+        csv1.clear(bv);
+
+        const bvect* bv_null = csv1.get_null_bvector();
+        auto c = bm::count_and(*bv_null, bv);
+        assert(c==2);
+        c = bv_null->count();
+        assert(c == 4);
+        assert(!csv1.is_null(1));
+
+        assert(csv1.get(1)==0);
+        assert(csv1.get(20)==200);
+        assert(csv1.get(21)==0);
+        assert(csv1.get(51)==65535);
+    }
+
+    // bulk set_null
+    {
+        rsc_sparse_vector_u32 csv1(bm::use_null);
+        csv1.push_back(1, 1);
+        csv1.push_back(20, 200);
+        csv1.push_back(21, 201);
+
+        bvect bv0 { 0, 2, 3, 23};
+        csv1.set_null(bv0);
+
+        const bvect* bv_null = csv1.get_null_bvector();
+        auto c = bv_null->count();
+        assert(c==3);
+        assert(csv1.get(20)==200);
+        assert(csv1.get(21)==201);
+
+        bvect bv { 0, 1, 20, 21};
+        csv1.set_null(bv);
+
+        c = bv_null->count();
+        assert(c==0);
+    }
+
+    {
+        rsc_sparse_vector_u32 csv1(bm::use_null);
+        csv1.push_back(1, 1);
+        csv1.push_back(20, 200);
+        csv1.push_back(21, 201);
+        csv1.optimize();
+
+        const bvect* bv_null = csv1.get_null_bvector();
+
+        bvect bv { 0, 10, 20};
+        csv1.set_null(bv);
+
+        auto c = bv_null->count();
+        assert(c==2);
+
+        assert(csv1.get(1)==1);
+        assert(csv1.get(20)==0);
+        assert(csv1.get(21)==201);
+
+    }
+
+
     cout << "count_range_notnull()" << endl;
     {
         rsc_sparse_vector_u32 csv1;
@@ -33818,7 +34011,7 @@ void TestCompressSparseVector()
             }
         }
     }
-*/
+
 
     cout << " back inserter tests" << endl;
     {
