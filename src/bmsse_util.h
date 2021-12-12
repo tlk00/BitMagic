@@ -121,13 +121,13 @@ void sse2_andnot_arr_2_mask(__m128i* BMRESTRICT dst,
     @return 0 if no bits were set
     @ingroup SSE2
 */
+
 inline
 unsigned sse2_and_block(__m128i* BMRESTRICT dst,
                        const __m128i* BMRESTRICT src) BMNOEXCEPT
 {
     __m128i m1A, m1B, m1C, m1D;
     __m128i accA, accB, accC, accD;
-    
     const __m128i* BMRESTRICT src_end =
         (const __m128i*)((bm::word_t*)(src) + bm::set_block_size);
 
@@ -137,20 +137,37 @@ unsigned sse2_and_block(__m128i* BMRESTRICT dst,
     {
         m1A = _mm_and_si128(_mm_load_si128(src+0), _mm_load_si128(dst+0));
         m1B = _mm_and_si128(_mm_load_si128(src+1), _mm_load_si128(dst+1));
-        m1C = _mm_and_si128(_mm_load_si128(src+2), _mm_load_si128(dst+2));
-        m1D = _mm_and_si128(_mm_load_si128(src+3), _mm_load_si128(dst+3));
-
         _mm_store_si128(dst+0, m1A);
         _mm_store_si128(dst+1, m1B);
+        accA = _mm_or_si128(accA, m1A);
+        accB = _mm_or_si128(accB, m1B);
+
+        m1C = _mm_and_si128(_mm_load_si128(src+2), _mm_load_si128(dst+2));
+        m1D = _mm_and_si128(_mm_load_si128(src+3), _mm_load_si128(dst+3));
         _mm_store_si128(dst+2, m1C);
         _mm_store_si128(dst+3, m1D);
 
-        accA = _mm_or_si128(accA, m1A);
-        accB = _mm_or_si128(accB, m1B);
         accC = _mm_or_si128(accC, m1C);
         accD = _mm_or_si128(accD, m1D);
-        
         src += 4; dst += 4;
+
+        
+        m1A = _mm_and_si128(_mm_load_si128(src+0), _mm_load_si128(dst+0));
+        m1B = _mm_and_si128(_mm_load_si128(src+1), _mm_load_si128(dst+1));
+        _mm_store_si128(dst+0, m1A);
+        _mm_store_si128(dst+1, m1B);
+        accA = _mm_or_si128(accA, m1A);
+        accB = _mm_or_si128(accB, m1B);
+
+        m1C = _mm_and_si128(_mm_load_si128(src+2), _mm_load_si128(dst+2));
+        m1D = _mm_and_si128(_mm_load_si128(src+3), _mm_load_si128(dst+3));
+        _mm_store_si128(dst+2, m1C);
+        _mm_store_si128(dst+3, m1D);
+
+        accC = _mm_or_si128(accC, m1C);
+        accD = _mm_or_si128(accD, m1D);
+        src += 4; dst += 4;
+
     } while (src < src_end);
     
     accA = _mm_or_si128(accA, accB); // A = A | B
@@ -162,6 +179,73 @@ unsigned sse2_and_block(__m128i* BMRESTRICT dst,
     _mm_store_si128((__m128i*)macc, accA);
     return macc[0] | macc[1] | macc[2] | macc[3];
 }
+
+/*
+inline
+unsigned sse2_and_block(__m128i* BMRESTRICT dst,
+                       const __m128i* BMRESTRICT src) BMNOEXCEPT
+{
+    __m128i m1A, m1B, m1C, m1D;
+    __m128i accA, accB, accC, accD;
+    const __m128i* BMRESTRICT src_end =
+        (const __m128i*)((bm::word_t*)(src) + bm::set_block_size);
+
+    const __m128i* BMRESTRICT src2 =
+        (const __m128i*)((bm::word_t*)(src) + bm::set_block_size/2);
+
+    __m128i* BMRESTRICT dst2 =
+        ( __m128i*)((bm::word_t*)(dst) + bm::set_block_size/2);
+
+    accA = accB = accC = accD = _mm_setzero_si128();
+
+    do
+    {
+        m1A = _mm_and_si128(_mm_load_si128(src), _mm_load_si128(dst+0));
+        m1B = _mm_and_si128(_mm_load_si128(src+1), _mm_load_si128(dst+1));
+        m1C = _mm_and_si128(_mm_load_si128(src+2), _mm_load_si128(dst+2));
+        m1D = _mm_and_si128(_mm_load_si128(src+3), _mm_load_si128(dst+3));
+
+        _mm_store_si128(dst, m1A);
+        _mm_store_si128(dst+1, m1B);
+        _mm_store_si128(dst+2, m1C);
+        _mm_store_si128(dst+3, m1D);
+
+        accA = _mm_or_si128(accA, m1A);
+        accB = _mm_or_si128(accB, m1B);
+        accC = _mm_or_si128(accC, m1C);
+        accD = _mm_or_si128(accD, m1D);
+
+        src += 4; dst += 4;
+
+        m1A = _mm_and_si128(_mm_load_si128(src2), _mm_load_si128(dst2));
+        m1B = _mm_and_si128(_mm_load_si128(src2+1), _mm_load_si128(dst2+1));
+        m1C = _mm_and_si128(_mm_load_si128(src2+2), _mm_load_si128(dst2+2));
+        m1D = _mm_and_si128(_mm_load_si128(src2+3), _mm_load_si128(dst2+3));
+
+        _mm_store_si128(dst2, m1A);
+        _mm_store_si128(dst2+1, m1B);
+        _mm_store_si128(dst2+2, m1C);
+        _mm_store_si128(dst2+3, m1D);
+
+        accA = _mm_or_si128(accA, m1A);
+        accB = _mm_or_si128(accB, m1B);
+        accC = _mm_or_si128(accC, m1C);
+        accD = _mm_or_si128(accD, m1D);
+
+
+        src2 += 4; dst2 += 4;
+    } while (src2 < src_end);
+
+    accA = _mm_or_si128(accA, accB); // A = A | B
+    accC = _mm_or_si128(accC, accD); // C = C | D
+    accA = _mm_or_si128(accA, accC); // A = A | C
+
+
+    bm::id_t BM_ALIGN16 macc[4] BM_ALIGN16ATTR;
+    _mm_store_si128((__m128i*)macc, accA);
+    return macc[0] | macc[1] | macc[2] | macc[3];
+}
+*/
 
 /*!
     @brief AND array elements against another array (unaligned)
@@ -672,11 +756,10 @@ unsigned sse2_sub_block(__m128i* BMRESTRICT dst,
     {
         m1A = _mm_andnot_si128(_mm_load_si128(src+0), _mm_load_si128(dst+0));
         m1B = _mm_andnot_si128(_mm_load_si128(src+1), _mm_load_si128(dst+1));
-        m1C = _mm_andnot_si128(_mm_load_si128(src+2), _mm_load_si128(dst+2));
-        m1D = _mm_andnot_si128(_mm_load_si128(src+3), _mm_load_si128(dst+3));
-
         _mm_store_si128(dst+0, m1A);
         _mm_store_si128(dst+1, m1B);
+        m1C = _mm_andnot_si128(_mm_load_si128(src+2), _mm_load_si128(dst+2));
+        m1D = _mm_andnot_si128(_mm_load_si128(src+3), _mm_load_si128(dst+3));
         _mm_store_si128(dst+2, m1C);
         _mm_store_si128(dst+3, m1D);
 
@@ -685,6 +768,22 @@ unsigned sse2_sub_block(__m128i* BMRESTRICT dst,
         accC = _mm_or_si128(accC, m1C);
         accD = _mm_or_si128(accD, m1D);
         
+        src += 4; dst += 4;
+
+        m1A = _mm_andnot_si128(_mm_load_si128(src+0), _mm_load_si128(dst+0));
+        m1B = _mm_andnot_si128(_mm_load_si128(src+1), _mm_load_si128(dst+1));
+        _mm_store_si128(dst+0, m1A);
+        _mm_store_si128(dst+1, m1B);
+        m1C = _mm_andnot_si128(_mm_load_si128(src+2), _mm_load_si128(dst+2));
+        m1D = _mm_andnot_si128(_mm_load_si128(src+3), _mm_load_si128(dst+3));
+        _mm_store_si128(dst+2, m1C);
+        _mm_store_si128(dst+3, m1D);
+
+        accA = _mm_or_si128(accA, m1A);
+        accB = _mm_or_si128(accB, m1B);
+        accC = _mm_or_si128(accC, m1C);
+        accD = _mm_or_si128(accD, m1D);
+
         src += 4; dst += 4;
     } while (src < src_end);
     

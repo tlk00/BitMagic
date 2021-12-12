@@ -1171,18 +1171,17 @@ unsigned avx2_sub_block(__m256i* BMRESTRICT dst,
         m1C = _mm256_andnot_si256(_mm256_load_si256(src+2), _mm256_load_si256(dst+2));
         m1D = _mm256_andnot_si256(_mm256_load_si256(src+3), _mm256_load_si256(dst+3));
 
-        _mm256_store_si256(dst+0, m1A);
-        _mm256_store_si256(dst+1, m1B);
         _mm256_store_si256(dst+2, m1C);
         _mm256_store_si256(dst+3, m1D);
-        
+        _mm256_store_si256(dst+0, m1A);
+        _mm256_store_si256(dst+1, m1B);
+
         accA = _mm256_or_si256(accA, m1A);
         accB = _mm256_or_si256(accB, m1B);
         accC = _mm256_or_si256(accC, m1C);
         accD = _mm256_or_si256(accD, m1D);
         
         src += 4; dst += 4;
-
     } while (src < src_end);
     
     accA = _mm256_or_si256(accA, accB); // A = A | B
