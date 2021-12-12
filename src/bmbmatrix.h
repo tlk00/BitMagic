@@ -285,8 +285,9 @@ public:
     /**
         Set SUB (MINUS) operation on all existing rows
         @param bv - argument vector row[i] -= bv
+        @param use_null - if true clear the NULL vector as well
      */
-    void bit_sub_rows(const bvector_type& bv);
+    void bit_sub_rows(const bvector_type& bv, bool use_null);
 
     /**
         Set AND (intersect) operation on all existing rows
@@ -620,7 +621,8 @@ protected:
         Set SUB (MINUS) operation on all existing bit-slices
         @param bv - argument vector row[i] -= bv
      */
-    void bit_sub_rows(const bvector_type& bv) { bmatr_.bit_sub_rows(bv); }
+    void bit_sub_rows(const bvector_type& bv, bool use_null)
+        { bmatr_.bit_sub_rows(bv, use_null); }
 
     /**
         Set AND (intersect) operation on all existing bit-slices
@@ -841,8 +843,6 @@ void basic_bmatrix<BV>::allocate_rows(size_type rsize)
     rsize_ = rsize;
     BM_ASSERT((!null_idx_) || (rsize & 1u));
     ::memset(&bv_rows_[0], 0, rsize * sizeof(bv_rows_[0]));
-//    for (size_type i = 0; i < rsize; ++i)
-//        bv_rows_[i] = 0;
     if (bv_rows_prev) // deallocate prev, reset NULL
     {
         for (size_type i = 0; i < rsize_prev; ++i)
@@ -863,7 +863,7 @@ template<typename BV>
 typename basic_bmatrix<BV>::size_type
 basic_bmatrix<BV>::octet_size() const BMNOEXCEPT
 {
-    size_type osize = (7 + rsize_) / 8;
+    size_type osize = (7 + rows_not_null()) / 8;
     return osize;
 }
 
@@ -895,17 +895,23 @@ basic_bmatrix<BV>::calc_effective_rows_not_null() const BMNOEXCEPT
     // TODO: SIMD
     auto i = rows_not_null();
     for (--i; i > 0; --i)
+    {
         if (bv_rows_[i])
+        {
+            ++i;
             break;
+        }
+    }
     return i;
 }
 
 //---------------------------------------------------------------------
 
 template<typename BV>
-void basic_bmatrix<BV>::bit_sub_rows(const bvector_type& bv)
+void basic_bmatrix<BV>::bit_sub_rows(const bvector_type& bv, bool use_null)
 {
-    for (size_type i = 0; i < rsize_; ++i)
+    size_type sz = use_null ? rsize_: calc_effective_rows_not_null();
+    for (size_type i = 0; i < sz; ++i)
     {
         if (bvector_type_ptr bv_r = bv_rows_[i])
             bv_r->bit_sub(bv);

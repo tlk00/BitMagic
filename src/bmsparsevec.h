@@ -424,7 +424,7 @@ public:
 
     
     // ------------------------------------------------------------
-    /*! @name Element access */
+    /*! @name Element access, editing  */
     ///@{
 
     /** \brief Operator to get write access to an element  */
@@ -509,10 +509,20 @@ public:
     void set_null(size_type idx);
 
     /**
-        Set NULL all elements set as 1 in the argument vector
-        \param bv_idx - index bit-vector for elements which needs to be turned to NULL
+        Set NULL all elements set as 1 in the argument vector.
+        Function also clears all the values to 0.
+        \param bv_idx - index bit-vector for elements which  to be set to NULL
      */
-    void set_null(const bvector_type& bv_idx) { this->bit_sub_rows(bv_idx); }
+    void set_null(const bvector_type& bv_idx)
+        { this->bit_sub_rows(bv_idx, true); }
+
+    /**
+        Set vector elements spcified by argument bit-vector to zero
+        Note that set to 0 elements are NOT going to tuned to NULL (NULL qualifier is preserved)
+        \param bv_idx - index bit-vector for elements which  to be set to 0
+     */
+    void clear(const bvector_type& bv_idx)
+        { this->bit_sub_rows(bv_idx, false); }
 
 
     ///@}

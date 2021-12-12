@@ -614,8 +614,9 @@ public:
         {}
         
         /*! @brief Construct enumerator associated with a vector.
-            This construction creates unpositioned iterator with status
-            valid() == false. It can be re-positioned using go_first() or go_to()
+            Important: This construction creates unpositioned iterator with status
+            valid() == false. It can be re-positioned using go_first() or go_to().
+            @sa go_to
         */
         enumerator(const bvector<Alloc>* bv) BMNOEXCEPT
             : iterator_base()

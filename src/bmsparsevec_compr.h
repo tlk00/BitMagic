@@ -474,6 +474,23 @@ public:
     */
     void set_null(size_type idx);
 
+    /**
+        Set NULL all elements set as 1 in the argument vector.
+        Function also clears all the values to 0.
+        Note: this can be a very expensive function for an RS container.
+        \param bv_idx - index bit-vector for elements which  to be set to NULL
+     */
+    void set_null(const bvector_type& bv_idx);
+
+
+    /**
+        Set vector elements spcified by argument bit-vector to zero
+        Note that set to 0 elements are NOT going to tuned to NULL (NULL qualifier is preserved)
+        \param bv_idx - index bit-vector for elements which  to be set to 0
+     */
+    void clear(const bvector_type& bv_idx);
+
+
 
     /** \brief test if specified element is NULL
         \param idx - element index
@@ -996,6 +1013,52 @@ void rsc_sparse_vector<Val, SV>::set_null(size_type idx)
         sv_.erase(--sv_idx, false/*not delete NULL vector*/);
         in_sync_ = false;
     }
+}
+
+//---------------------------------------------------------------------
+
+template<class Val, class SV>
+void rsc_sparse_vector<Val, SV>::set_null(const bvector_type& bv_idx)
+{
+    bvector_type* bv_null = sv_.get_null_bvect();
+    bvector_type bv_sub; // subtraction vector cleared from NOT NULLs
+    bv_sub.bit_and(bv_idx, *bv_null);
+    // clear the main matrix to accelerate the erase in all bit-slices
+    {
+        bm::rank_compressor<bvector_type> rank_compr;
+        bvector_type bv_sub_rsc;
+        rank_compr.compress(bv_sub_rsc, *bv_null, bv_sub);
+        sv_.clear(bv_sub_rsc);
+    }
+
+    in_sync_ = false;
+    typename bvector_type::enumerator en(&bv_sub, 0);
+    for (size_type cnt = 0; en.valid(); ++en, ++cnt)
+    {
+        auto idx = *en;
+
+        size_type sv_idx = bv_null->count_range(0, idx);
+        sv_idx -= cnt; // correct rank for what we deleted previously
+        sv_.erase(--sv_idx, false/*not delete the NULL vector*/);
+    }
+    bv_null->bit_sub(bv_sub);
+}
+
+//---------------------------------------------------------------------
+
+template<class Val, class SV>
+void rsc_sparse_vector<Val, SV>::clear(const bvector_type& bv_idx)
+{
+    const bvector_type* bv_null = sv_.get_null_bvector();
+
+    bvector_type bv_sub; // subtraction vector cleared from NOT NULLs
+    bv_sub.bit_and(bv_idx, *bv_null);
+
+    bm::rank_compressor<bvector_type> rank_compr;
+    bvector_type bv_sub_rsc;
+    rank_compr.compress(bv_sub_rsc, *bv_null, bv_sub);
+
+    sv_.clear(bv_sub_rsc);
 }
 
 //---------------------------------------------------------------------

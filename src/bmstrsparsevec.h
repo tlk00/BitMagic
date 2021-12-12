@@ -506,7 +506,17 @@ public:
         Set NULL all elements set as 1 in the argument vector
         \param bv_idx - index bit-vector for elements which needs to be turned to NULL
      */
-    void set_null(const bvector_type& bv_idx) { this->bit_sub_rows(bv_idx); }
+    void set_null(const bvector_type& bv_idx)
+        { this->bit_sub_rows(bv_idx, true); }
+
+    /**
+        Set vector elements spcified by argument bit-vector to empty
+        Note that set to empty elements are NOT going to tuned to NULL (NULL qualifier is preserved)
+        \param bv_idx - index bit-vector for elements which  to be set to 0
+     */
+    void clear(const bvector_type& bv_idx)
+        { this->bit_sub_rows(bv_idx, false); }
+
 
     /**
         Set NULL all elements NOT set as 1 in the argument vector
@@ -1045,14 +1055,15 @@ public:
             unsigned bi = 0;
             func.substr_i_ = i - substr_from; // to put substr at the str[0]
 
-            auto rsize = this->bmatr_.rows();
+            auto rsize = this->bmatr_.rows_not_null();
             for (unsigned k = i * 8; k < (i * 8) + 8; ++k, ++bi)
             {
                 if (k >= rsize)
-                    continue;
+                    goto break2;
                 const bvector_type* bv = this->bmatr_.get_row(k);
                 if (!bv)
                     continue;
+                BM_ASSERT (bv != this->get_null_bvector());
 
                 func.mask_ = unsigned_value_type(1u << bi);
                 func.sv_off_ = idx_from;
@@ -1062,6 +1073,7 @@ public:
 
             } // for k
         } // for i
+        break2:
         
         if (remap_flags_)
         {
@@ -2014,7 +2026,7 @@ str_sparse_vector<CharType, BV, STR_SIZE>::remap_from(
 
     typedef bm::dynamic_heap_matrix<CharType, allocator_type> buffer_matrix_type;
 
-    size_type str_len = str_sv.effective_max_str();
+    size_type str_len = str_sv.effective_max_str()+1;
     //remap_buffer_type cmatr(true);
     buffer_matrix_type cmatr(buffer_size, str_len);
     cmatr.init(true); // init and set zero

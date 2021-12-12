@@ -6656,17 +6656,15 @@ bm::id64_t bit_block_and(bm::word_t* BMRESTRICT dst,
     bm::id64_t acc = VECT_AND_BLOCK(dst, src);
 #else
     unsigned arr_sz = bm::set_block_size / 2;
-
     const bm::bit_block_t::bunion_t* BMRESTRICT src_u = (const bm::bit_block_t::bunion_t*)src;
     bm::bit_block_t::bunion_t* BMRESTRICT dst_u = (bm::bit_block_t::bunion_t*)dst;
-
     bm::id64_t acc = 0;
     for (unsigned i = 0; i < arr_sz; i+=4)
     {
-        acc |= dst_u->w64[i] &= src_u->w64[i];
-        acc |= dst_u->w64[i+1] &= src_u->w64[i+1];
-        acc |= dst_u->w64[i+2] &= src_u->w64[i+2];
-        acc |= dst_u->w64[i+3] &= src_u->w64[i+3];
+        acc |= (dst_u->w64[i]   &= src_u->w64[i])   |
+               (dst_u->w64[i+1] &= src_u->w64[i+1]) |
+               (dst_u->w64[i+2] &= src_u->w64[i+2]) |
+               (dst_u->w64[i+3] &= src_u->w64[i+3]);
     }
 #endif
     return acc;
@@ -7240,30 +7238,22 @@ unsigned bit_block_or_any(const bm::word_t* BMRESTRICT src1,
 
    @ingroup bitfunc
 */
-inline bm::word_t* bit_operation_and(bm::word_t* BMRESTRICT dst, 
-                                     const bm::word_t* BMRESTRICT src) BMNOEXCEPT
+inline
+bm::word_t* bit_operation_and(bm::word_t* BMRESTRICT dst,
+                              const bm::word_t* BMRESTRICT src) BMNOEXCEPT
 {
     BM_ASSERT(dst || src);
-
     bm::word_t* ret = dst;
-
     if (IS_VALID_ADDR(dst))  // The destination block already exists
     {
         if (!IS_VALID_ADDR(src))
         {
             if (IS_EMPTY_BLOCK(src))
-            {
-                //If the source block is zero 
-                //just clean the destination block
-                return 0;
-            }
+                return 0; //just clean the destination block
         }
         else
         {
-            // Regular operation AND on the whole block.
-            //
-            auto any = bm::bit_block_and(dst, src);
-            if (!any)
+            if (!bm::bit_block_and(dst, src))
                 ret = 0;
         }
     }
@@ -7272,23 +7262,16 @@ inline bm::word_t* bit_operation_and(bm::word_t* BMRESTRICT dst,
         if(!IS_VALID_ADDR(src))
         {
             if(IS_EMPTY_BLOCK(src)) 
-            {
-                // The source block is empty.
-                // One argument empty - all result is empty.
-                return 0;
-            }
-            // Here we have nothing to do.
-            // Src block is all ON, dst block remains as it is
+                return 0; // One argument empty - all result is empty.
+            // Src block is all ON, dst block remains as it is. nothing to do.
         }
         else // destination block does not exists, src - valid block
         {
             if (IS_FULL_BLOCK(dst))
                 return const_cast<bm::word_t*>(src);
-            // Nothng to do.
-            // Dst block is all ZERO no combination required.
+            // Dst block is all ZERO no combination required. Nothng to do.
         }
     }
-
     return ret;
 }
 
@@ -7798,10 +7781,10 @@ bm::id64_t bit_block_sub(bm::word_t* BMRESTRICT dst,
     bm::id64_t acc = 0;
     for (unsigned i = 0; i < arr_sz; i+=4)
     {
-        acc |= dst_u->w64[i] &= ~src_u->w64[i];
-        acc |= dst_u->w64[i+1] &= ~src_u->w64[i+1];
-        acc |= dst_u->w64[i+2] &= ~src_u->w64[i+2];
-        acc |= dst_u->w64[i+3] &= ~src_u->w64[i+3];
+        acc |= (dst_u->w64[i] &= ~src_u->w64[i])     |
+               (dst_u->w64[i+1] &= ~src_u->w64[i+1]) |
+               (dst_u->w64[i+2] &= ~src_u->w64[i+2]) |
+               (dst_u->w64[i+3] &= ~src_u->w64[i+3]);
     }
     return acc;
 #endif
