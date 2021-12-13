@@ -145,13 +145,13 @@ typedef bm::aggregator<bm::bvector<> >  aggregator_type;
 
 // ----------------------------------------------------------------------------
 
-bm::chrono_taker::duration_map_type  timing_map;
+bm::chrono_taker<>::duration_map_type  timing_map;
 
 // FASTA format parser
 static
 int load_FASTA(const std::string& fname, std::vector<char>& seq_vect)
 {
-    bm::chrono_taker tt1("1. Parse FASTA", 1, &timing_map);
+    bm::chrono_taker tt1(cout, "1. Parse FASTA", 1, &timing_map);
 
     seq_vect.resize(0);
     std::ifstream fin(fname.c_str(), std::ios::in);
@@ -531,7 +531,7 @@ int main(int argc, char *argv[])
             std::cout << "FASTA sequence size=" << seq_vect.size() << std::endl;
             
             {
-                bm::chrono_taker tt1("2. Build DNA index", 1, &timing_map);
+                bm::chrono_taker tt1(cout, "2. Build DNA index", 1, &timing_map);
                 idx.Build(seq_vect);
             }
         }
@@ -568,7 +568,7 @@ int main(int argc, char *argv[])
                         ht.reserve(12000);
                     });
                 
-                bm::chrono_taker tt1("6. String search 2-way single pass",
+                bm::chrono_taker tt1(cout, "6. String search 2-way single pass",
                                       unsigned(words.size()), &timing_map);
                 find_words(seq_vect, word_list, unsigned(WORD_SIZE), word_hits);
             }
@@ -576,7 +576,7 @@ int main(int argc, char *argv[])
             // collection search, runs all hits at once
             //
             {
-                bm::chrono_taker tt1("7. Aggregated search single pass",
+                bm::chrono_taker tt1(cout, "7. Aggregated search single pass",
                                       unsigned(words.size()), &timing_map);
                 
                 idx.FindCollection(words, word_hits_agg);
@@ -590,19 +590,19 @@ int main(int argc, char *argv[])
                 THitList hits1;
   
                 {
-                    bm::chrono_taker tt1("3. String search 2-way", 1, &timing_map);
+                    bm::chrono_taker tt1(cout, "3. String search 2-way", 1, &timing_map);
                     find_word_2way(seq_vect,
                                       word.c_str(), unsigned(word.size()),
                                       hits1);
                 }
                 THitList hits2;
                 {
-                    bm::chrono_taker tt1("4. Search with bvector SHIFT+AND", 1, &timing_map);
+                    bm::chrono_taker tt1(cout, "4. Search with bvector SHIFT+AND", 1, &timing_map);
                     idx.Find(word, hits2);
                 }
                 THitList hits4;
                 {
-                    bm::chrono_taker tt1("5. Search with aggregator fused SHIFT+AND", 1, &timing_map);
+                    bm::chrono_taker tt1(cout, "5. Search with aggregator fused SHIFT+AND", 1, &timing_map);
                     idx.FindAggFused(word, hits4);
                 }
 
@@ -629,7 +629,7 @@ int main(int argc, char *argv[])
         if (is_timing)  // print all collected timings
         {
             std::cout << std::endl << "Performance:" << std::endl;
-            bm::chrono_taker::print_duration_map(timing_map, bm::chrono_taker::ct_all);
+            bm::chrono_taker<>::print_duration_map(cout, timing_map, bm::chrono_taker<>::ct_all);
         }
     }
     catch (std::exception& ex)

@@ -190,14 +190,14 @@ typedef vector<string>  string_vector;
 
 
 
-bm::chrono_taker::duration_map_type  timing_map;
+bm::chrono_taker<>::duration_map_type  timing_map;
 
 /// Parse the input file and extract dictionary values.
 /// 
 static
 int load_dict_report(const std::string& fname, string_vector& str_vec)
 {
-    bm::chrono_taker tt1("1. parse input data ", 1, &timing_map);
+    bm::chrono_taker tt1(cout, "1. parse input data ", 1, &timing_map);
 
     std::ifstream fin(fname.c_str(), std::ios::in);
     if (!fin.good())
@@ -331,7 +331,7 @@ void run_benchmark(const str_sparse_vect& str_sv, const string_vector& str_vec)
     unsigned bench_size = unsigned(bench_vec.size());
     {
         {
-            bm::chrono_taker tt1("3.  std::lower_bound() search", bench_size, &timing_map);
+            bm::chrono_taker tt1(cout, "3.  std::lower_bound() search", bench_size, &timing_map);
             for (const string& term : bench_vec)
             {
                 auto it = std::lower_bound(str_vec.begin(), str_vec.end(), term);
@@ -344,7 +344,7 @@ void run_benchmark(const str_sparse_vect& str_sv, const string_vector& str_vec)
             } // for
         }
         {
-            bm::chrono_taker tt2("3a. std::lower_bound() search (empty)", bench_size, &timing_map);
+            bm::chrono_taker tt2(cout, "3a. std::lower_bound() search (empty)", bench_size, &timing_map);
             for (const string& term : bench_vec_not_found)
             {
                 std::lower_bound(str_vec.begin(), str_vec.end(), term);
@@ -361,7 +361,7 @@ void run_benchmark(const str_sparse_vect& str_sv, const string_vector& str_vec)
             str_map[s] = unsigned(i);
         } // for
         {
-            bm::chrono_taker tt1("4.  std::map<> search", bench_size, &timing_map);
+            bm::chrono_taker tt1(cout, "4.  std::map<> search", bench_size, &timing_map);
             for (const string& term : bench_vec)
             {
                 auto it = str_map.find(term);
@@ -372,7 +372,7 @@ void run_benchmark(const str_sparse_vect& str_sv, const string_vector& str_vec)
             } // for
         }
         {
-            bm::chrono_taker tt2("4a. std::map<> search (empty)", bench_size, &timing_map);
+            bm::chrono_taker tt2(cout, "4a. std::map<> search (empty)", bench_size, &timing_map);
             for (const string& term : bench_vec_not_found)
             {
                 auto it = str_map.find(term);
@@ -387,7 +387,7 @@ void run_benchmark(const str_sparse_vect& str_sv, const string_vector& str_vec)
     {
         bm::sparse_vector_scanner<str_sparse_vect> scanner;
         {
-            bm::chrono_taker tt1("5.  bm::sparse_vector_scanner<> search", bench_size, &timing_map);
+            bm::chrono_taker tt1(cout, "5.  bm::sparse_vector_scanner<> search", bench_size, &timing_map);
             for (const string& term : bench_vec)
             {
                 unsigned pos;
@@ -399,7 +399,7 @@ void run_benchmark(const str_sparse_vect& str_sv, const string_vector& str_vec)
             } // for
         }
         {
-            bm::chrono_taker tt1("5a. bm::sparse_vector_scanner<> search (empty)", bench_size, &timing_map);
+            bm::chrono_taker tt1(cout, "5a. bm::sparse_vector_scanner<> search (empty)", bench_size, &timing_map);
             for (const string& term : bench_vec_not_found)
             {
                 unsigned pos;
@@ -417,7 +417,7 @@ void run_benchmark(const str_sparse_vect& str_sv, const string_vector& str_vec)
         scanner.bind(str_sv, true); // attach SV as permanent search parameter to share cached values
 
         {
-            bm::chrono_taker tt1("6.  bm::sparse_vector_scanner<> binary search", bench_size, &timing_map);
+            bm::chrono_taker tt1(cout, "6.  bm::sparse_vector_scanner<> binary search", bench_size, &timing_map);
             for (const string& term : bench_vec)
             {
                 unsigned pos;
@@ -429,7 +429,7 @@ void run_benchmark(const str_sparse_vect& str_sv, const string_vector& str_vec)
             } // for
         }
         {
-            bm::chrono_taker tt2("6a. bm::sparse_vector_scanner<> binary search (empty)", bench_size, &timing_map);
+            bm::chrono_taker tt2(cout, "6a. bm::sparse_vector_scanner<> binary search (empty)", bench_size, &timing_map);
             for (const string& term : bench_vec_not_found)
             {
                 unsigned pos;
@@ -494,7 +494,7 @@ int main(int argc, char *argv[])
         
         if (str_vec.size()) // load the sparse vector
         {
-            bm::chrono_taker tt1("2. build sparse vector", 1, &timing_map);
+            bm::chrono_taker tt1(cout, "2. build sparse vector", 1, &timing_map);
             {
                 // use insert iterator to load vector (faster than push-back)
                 //
@@ -520,7 +520,7 @@ int main(int argc, char *argv[])
         if (!sv_in_name.empty())
         {
             {
-                bm::chrono_taker tt1("8. Load sparse vector", 1, &timing_map);
+                bm::chrono_taker tt1(cout, "8. Load sparse vector", 1, &timing_map);
                 file_load_svector(str_sv, sv_in_name);
             }
             if (str_sv.empty())
@@ -542,7 +542,7 @@ int main(int argc, char *argv[])
         // save SV vector to file
         if (!sv_out_name.empty() && !str_sv.empty())
         {
-            bm::chrono_taker tt1("7. Save sparse vector", 1, &timing_map);
+            bm::chrono_taker tt1(cout, "7. Save sparse vector", 1, &timing_map);
             file_save_svector(str_sv, sv_out_name, 0, is_xor);
 
             str_sparse_vect    str_sv_control;
@@ -592,7 +592,7 @@ int main(int argc, char *argv[])
         if (is_timing)  // print all collected timings
         {
             std::cout << std::endl << "Performance:" << std::endl;
-            bm::chrono_taker::print_duration_map(timing_map, bm::chrono_taker::ct_time);
+            bm::chrono_taker<>::print_duration_map(cout, timing_map, bm::chrono_taker<>::ct_time);
         }
     }
     catch (std::exception& ex)

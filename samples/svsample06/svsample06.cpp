@@ -62,7 +62,7 @@ std::mt19937 gen(rand_dev());
 std::uniform_int_distribution<> rand_dis(1, value_max); // generate uniform numebrs for [1, vector_max]
 
 // timing storage for benchmarking
-bm::chrono_taker::duration_map_type  timing_map;
+bm::chrono_taker<>::duration_map_type  timing_map;
 
 
 
@@ -163,7 +163,7 @@ int main(void)
         sparse_vector_u32 sv(bm::use_null);
 
         {
-            bm::chrono_taker tt1("0. test set generate ", 1, &timing_map);
+            bm::chrono_taker<> tt1(cout, "0. test set generate ", 1, &timing_map);
             generate_test_set(vect, bv_null, sv);
         }
 
@@ -194,7 +194,7 @@ int main(void)
         bm::bvector<> bv_res3;
 
         {
-            bm::chrono_taker tt1("1. std::vector<> scan ", search_repeats, &timing_map);
+            bm::chrono_taker tt1(cout, "1. std::vector<> scan ", search_repeats, &timing_map);
             
             for (unsigned i = 0; i < search_repeats; ++i)
             {
@@ -204,7 +204,7 @@ int main(void)
         }
 
         {
-            bm::chrono_taker tt1("2. sparse_vector<> scan ", search_repeats, &timing_map);
+            bm::chrono_taker tt1(cout, "2. sparse_vector<> scan ", search_repeats, &timing_map);
 
             bm::sparse_vector_scanner<sparse_vector_u32> scanner;
             scanner.find_eq(sv, search_vect.begin(), search_vect.end(), bv_res2);
@@ -219,7 +219,7 @@ int main(void)
         {
             bv_res3.init(); // always init before calling "set_bit_no_check()"
             
-            bm::chrono_taker tt1("3. sparse_vector<>::const_iterator search ", search_repeats, &timing_map);
+            bm::chrono_taker tt1(cout, "3. sparse_vector<>::const_iterator search ", search_repeats, &timing_map);
 
             // prepare a unique search set
             bm::bvector<> bv_search(bm::BM_GAP);
@@ -244,7 +244,7 @@ int main(void)
         }
 
         
-        bm::chrono_taker::print_duration_map(timing_map, bm::chrono_taker::ct_ops_per_sec);
+        bm::chrono_taker<>::print_duration_map(cout, timing_map, bm::chrono_taker<>::ct_ops_per_sec);
 
     }
     catch(std::exception& ex)

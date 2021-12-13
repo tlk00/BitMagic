@@ -80,7 +80,7 @@ using namespace std;
 
 unsigned                                num_threads = 4;
 
-bm::chrono_taker::duration_map_type     timing_map;
+bm::chrono_taker<>::duration_map_type     timing_map;
 
 // ----------------------------------------------------
 
@@ -339,7 +339,7 @@ void TestParallelSV_Serial(const char* test_label,
         bm::serializer<bvect>::xor_sim_model_type sim_model_c;
         bool control_ready(false);
 
-        bm::chrono_taker tt1(test_label, 1, &timing_map);
+        bm::chrono_taker tt1(cout, test_label, 1, &timing_map);
 
         for (unsigned pass = 0; pass < 2; ++pass)
         {
@@ -542,7 +542,7 @@ void TestParallelSV_Optimize(const char* test_label)
             BM_DECLARE_TEMP_BLOCK(tb)
 
             std::string l(" (non-parallel)");
-            bm::chrono_taker tt1(test_label + l, 1, &timing_map);
+            bm::chrono_taker tt1(cout, test_label + l, 1, &timing_map);
 
             sv1c.optimize(tb, sparse_vector_u32::bvector_type::opt_compress, &st1c);
             sv2c.optimize(tb, sparse_vector_u32::bvector_type::opt_compress, &st2c);
@@ -555,7 +555,7 @@ void TestParallelSV_Optimize(const char* test_label)
         tpool.start(num_threads); // start the threads
 
         {
-            bm::chrono_taker tt1(test_label, 1, &timing_map);
+            bm::chrono_taker tt1(cout, test_label, 1, &timing_map);
 
             cout << " sparse vector optimization... " << flush;
 
@@ -681,7 +681,7 @@ int main(int argc, char *argv[])
     }
     cout << "Threads:" << num_threads << endl;
 
-    bm::chrono_taker tt("TOTAL", 1);
+    bm::chrono_taker tt(cout, "TOTAL", 1);
     try
     {
         cout << endl;
@@ -723,7 +723,7 @@ int main(int argc, char *argv[])
 
         {
             std::cout << std::endl << "Performance:" << std::endl;
-            bm::chrono_taker::print_duration_map(timing_map, bm::chrono_taker::ct_time);
+            bm::chrono_taker<>::print_duration_map(cout, timing_map, bm::chrono_taker<>::ct_time);
         }
 
         cout << endl;

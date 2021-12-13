@@ -239,7 +239,7 @@ typedef bm::sparse_vector<unsigned, bm::bvector<> > sparse_vector_u32;
 typedef bm::rsc_sparse_vector<unsigned, sparse_vector_u32> rsc_sparse_vector_u32;
 
 
-bm::chrono_taker::duration_map_type  timing_map;
+bm::chrono_taker<>::duration_map_type  timing_map;
 
 
 /// Read 32-bit vector size-prefix format (length:0, 1, 2, 3, ....)
@@ -482,7 +482,7 @@ void compress_inv_dump_file(const std::string& fname,
     
     cout << "Compression level: " << c_level << endl;
 
-    bm::chrono_taker tt1("1. Convert collection", 1, &timing_map);
+    bm::chrono_taker tt1(std::cout, "1. Convert collection", 1, &timing_map);
 
     vector<unsigned> vec;
     std::ifstream fin(fname.c_str(), std::ios::in | std::ios::binary);
@@ -680,7 +680,7 @@ void verify_inv_dump_file(const std::string& fname,
     bm::id64_t total_ints = 0;
 
 
-    bm::chrono_taker tt1("2. Verify collection", 1, &timing_map);
+    bm::chrono_taker tt1(std::cout, "2. Verify collection", 1, &timing_map);
 
 
     cout << "Reading input collection: " << fname << endl;
@@ -762,7 +762,7 @@ void verify_inv_dump_file(const std::string& fname,
 static
 void decode_test_dump_file(const std::string& bv_in_fname)
 {
-    bm::chrono_taker tt1("3. Decode collection", 1, &timing_map);
+    bm::chrono_taker tt1(std::cout, "3. Decode collection", 1, &timing_map);
 
     std::ifstream bv_file;
     std::streamsize fsize;
@@ -854,7 +854,7 @@ int main(int argc, char *argv[])
         if (is_timing)  // print all collected timings
         {
             std::cout << std::endl << "Timings (ms):" << std::endl;
-            bm::chrono_taker::print_duration_map(timing_map);
+            bm::chrono_taker<>::print_duration_map(std::cout, timing_map);
         }
     }
     catch (std::exception& ex)

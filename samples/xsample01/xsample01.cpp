@@ -32,6 +32,8 @@ For more information please visit:  http://bitmagic.io
 #include <algorithm>
 #include <stdexcept>
 
+using namespace std;
+
 #include "bm.h"
 #include "bmalgo.h"
 #include "bmtimer.h"
@@ -73,7 +75,7 @@ typedef  bm::bvector<>   TBVector;
 
 
 // timing storage for benchmarking
-bm::chrono_taker::duration_map_type  timing_map;
+bm::chrono_taker<>::duration_map_type  timing_map;
 
 
 
@@ -554,7 +556,7 @@ void speed_test_bv_index(const bv_index& bvi)
 {
     TBVector bv_join; // OR join vector
     
-    bm::chrono_taker tt1("1. bm::bvector<> index", 1, &timing_map);
+    bm::chrono_taker tt1(cout, "1. bm::bvector<> index", 1, &timing_map);
 
     // join all vectors using OR operation
     for (bv_index::map_type::const_iterator it = bvi.idx_.begin();
@@ -617,7 +619,7 @@ void speed_test_bvs_index(const bvs_index& bvs)
 
     bm::operation_deserializer<TBVector> des;
     
-    bm::chrono_taker tt1("2. serialized bvector", 1, &timing_map);
+    bm::chrono_taker tt1(cout, "2. serialized bvector", 1, &timing_map);
 
     // join all vectors using OR operation
     for (bvs_index::map_type::const_iterator it = bvs.idx_.begin();
@@ -677,7 +679,7 @@ void speed_test_vect_index(const vect_index& vecti)
 {
     TBVector bv_join; // OR join vector
     
-    bm::chrono_taker tt1("3. std::vector<unsigned> ", 1, &timing_map);
+    bm::chrono_taker tt1(cout, "3. std::vector<unsigned> ", 1, &timing_map);
 
     // join all vectors using OR operation
     for (vect_index::map_type::const_iterator it = vecti.idx_.begin();
@@ -739,7 +741,7 @@ void speed_test_sv_index(const sparse_vect_index& svi)
 {
     TBVector bv_join; // OR join vector
     
-    bm::chrono_taker tt1("4. bm::sparse_vector<unsigned> ", 1, &timing_map);
+    bm::chrono_taker tt1(cout, "4. bm::sparse_vector<unsigned> ", 1, &timing_map);
     
     std::vector<unsigned> vect;
 
@@ -846,7 +848,7 @@ int main(void)
 
 
         std::cout << std::endl << "Performance (ops/sec):" << std::endl;
-        bm::chrono_taker::print_duration_map(timing_map, bm::chrono_taker::ct_ops_per_sec);
+        bm::chrono_taker<>::print_duration_map(cout, timing_map, bm::chrono_taker<>::ct_ops_per_sec);
 
         //getchar();  // uncomment to check memory consumption at the OS level
 

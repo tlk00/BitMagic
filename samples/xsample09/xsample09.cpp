@@ -73,7 +73,7 @@ typedef std::vector<std::pair<bv_size_type, bv_size_type> > bv_ranges_vector;
 
 
 // timing storage for benchmarking
-bm::chrono_taker::duration_map_type  timing_map;
+bm::chrono_taker<>::duration_map_type  timing_map;
 
 
 /// Generate a test RSC vector with a randomly distributed values
@@ -380,7 +380,7 @@ int main(void)
         }
 
         {
-            bm::chrono_taker tt1("01. Histogram 1 construction (SV)) ", 1, &timing_map);
+            bm::chrono_taker tt1(cout, "01. Histogram 1 construction (SV)) ", 1, &timing_map);
             compute_historgam(hist1, rsc_test, sampling_interval);
         }
         // explore some statistics on SV histogram 1
@@ -392,7 +392,7 @@ int main(void)
             cout << "  size: " << hist1.size() << endl;
             cout << "  RAM size: " << st.memory_used << endl;
             {
-                bm::chrono_taker tt1("05. Serialize and save the histogram 1 (SV)", 1, &timing_map);
+                bm::chrono_taker tt1(cout, "05. Serialize and save the histogram 1 (SV)", 1, &timing_map);
                 size_t serialized_size = 0;
                 int res = bm::file_save_svector(hist1, "hist1.sv", &serialized_size, true);
                 if (res!=0)
@@ -414,7 +414,7 @@ int main(void)
         }
 
         {
-            bm::chrono_taker tt1("02. Histogram 2 construction (RSC) ", 1, &timing_map);
+            bm::chrono_taker tt1(cout, "02. Histogram 2 construction (RSC) ", 1, &timing_map);
             compute_rsc_historgam(hist2, rsc_test, sampling_interval);
         }
         {
@@ -427,7 +427,7 @@ int main(void)
             cout << "  RAM size: " << st.memory_used << endl;
 
             {
-                bm::chrono_taker tt1("06. Serialize and save histogram 2(RSC)", 1, &timing_map);
+                bm::chrono_taker tt1(cout, "06. Serialize and save histogram 2(RSC)", 1, &timing_map);
                 size_t serialized_size = 0;
                 int res = bm::file_save_svector(hist2, "hist2.sv", &serialized_size, true);
                 if (res!=0)
@@ -438,7 +438,7 @@ int main(void)
         }
 
         {
-            bm::chrono_taker tt1("03. Histogram 3 (adaptive) construction (RSC) ", 1, &timing_map);
+            bm::chrono_taker tt1(cout, "03. Histogram 3 (adaptive) construction (RSC) ", 1, &timing_map);
             compute_adaptive_rsc_histogram(hist3, rsc_test, hist1_avg);
         }
 
@@ -451,7 +451,7 @@ int main(void)
             cout << "  NOT NULL count: " << hist3.get_null_bvector()->count() << endl;
             cout << "  RAM size: " << st.memory_used << endl;
             {
-                bm::chrono_taker tt1("07. Serialize and save the adaptive histogram 3 (RSC)", 1, &timing_map);
+                bm::chrono_taker tt1(cout, "07. Serialize and save the adaptive histogram 3 (RSC)", 1, &timing_map);
                 size_t serialized_size = 0;
                 int res = bm::file_save_svector(hist3, "hist3.sv", &serialized_size, true);
                 if (res!=0)
@@ -466,19 +466,19 @@ int main(void)
         cout << "Access sample size = " << svec.size() << endl;
 
         {
-            bm::chrono_taker tt1("04. Verification", 1, &timing_map);
+            bm::chrono_taker tt1(cout, "04. Verification", 1, &timing_map);
             verify_histograms(hist2, hist1, sampling_interval);
         }
 
 
         unsigned long long sum1(0), sum2(0);
         {
-            bm::chrono_taker tt1("08. Random access test H1 (SV)", 1, &timing_map);
+            bm::chrono_taker tt1(cout, "08. Random access test H1 (SV)", 1, &timing_map);
             sum1 = access_bench1(hist1, svec, sampling_interval);
         }
 
         {
-            bm::chrono_taker tt1("09. Random access test H2 (RSC)", 1, &timing_map);
+            bm::chrono_taker tt1(cout, "09. Random access test H2 (RSC)", 1, &timing_map);
             sum2 = access_bench2(hist2, svec);
         }
 
@@ -489,12 +489,12 @@ int main(void)
         }
 
         {
-            bm::chrono_taker tt1("10. Random access test H3 adaptive (RSC)", 1, &timing_map);
+            bm::chrono_taker tt1(cout, "10. Random access test H3 adaptive (RSC)", 1, &timing_map);
             access_bench3(hist3, svec, rsc_test);
         }
 
         cout << endl;
-        bm::chrono_taker::print_duration_map(timing_map, bm::chrono_taker::ct_ops_per_sec);
+        bm::chrono_taker<>::print_duration_map(cout, timing_map, bm::chrono_taker<>::ct_ops_per_sec);
 
     }
     catch(std::exception& ex)

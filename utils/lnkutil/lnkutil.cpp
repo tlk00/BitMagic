@@ -33,6 +33,8 @@ For more information please visit:  http://bitmagic.io
 #include <chrono>
 #include <map>
 
+using namespace std;
+
 //#define BMAVX2OPT
 
 #include "bm.h"
@@ -541,36 +543,36 @@ void link_matrix::print_stat() const
 {
     std::cout << "\nsv 11 statistics:" << std::endl;
     std::cout << "-----------------" << std::endl;
-    bm::print_svector_stat(sv_11, false);
+    bm::print_svector_stat(cout, sv_11, false);
     std::cout << "\nsv offs statistics:" << std::endl;
     std::cout << "-----------------" << std::endl;
-    bm::print_svector_stat(sv_offs, false);
+    bm::print_svector_stat(cout, sv_offs, false);
     std::cout << "\nsv size statistics:" << std::endl;
     std::cout << "-----------------" << std::endl;
-    bm::print_svector_stat(sv_sz, false);
+    bm::print_svector_stat(cout, sv_sz, false);
     std::cout << "\nsv 1M statistics:" << std::endl;
     std::cout << "-----------------" << std::endl;
-    bm::print_svector_stat(sv_1m, false);
+    bm::print_svector_stat(cout, sv_1m, false);
 
 
     std::cout << "\nbvector-from statistics:" << std::endl;
     std::cout << "-----------------" << std::endl;
-    bm::print_bvector_stat(bv_from);
+    bm::print_bvector_stat(cout, bv_from);
     
     std::cout << "\nbvector-to statistics:" << std::endl;
     std::cout << "-----------------" << std::endl;
-    bm::print_bvector_stat(bv_to);
+    bm::print_bvector_stat(cout, bv_to);
 
 
     std::cout << "\nsv 11 C statistics:" << std::endl;
     std::cout << "-----------------" << std::endl;
-    bm::print_svector_stat(sv_11_c.sv_stor, false);
-    bm::print_bvector_stat(sv_11_c.bv_ares.get_bvector());
+    bm::print_svector_stat(cout, sv_11_c.sv_stor, false);
+    bm::print_bvector_stat(cout, sv_11_c.bv_ares.get_bvector());
 
     std::cout << "\nsv OFFS C statistics:" << std::endl;
     std::cout << "-----------------" << std::endl;
-    bm::print_svector_stat(sv_offs_c.sv_stor, false);
-    bm::print_bvector_stat(sv_offs_c.bv_ares.get_bvector());
+    bm::print_svector_stat(cout, sv_offs_c.sv_stor, false);
+    bm::print_bvector_stat(cout, sv_offs_c.bv_ares.get_bvector());
 
 }
 
@@ -1033,14 +1035,14 @@ void link_matrix::add_vector(unsigned id_from, std::vector<unsigned>& vect)
 }
 
 link_matrix            link_m;
-bm::chrono_taker::duration_map_type  timing_map;
+bm::chrono_taker<>::duration_map_type  timing_map;
 
 
 // parse the input re-mapping vector
 //
 int load_bv(const std::string& fname, bm::bvector<>& bv)
 {
-    bm::chrono_taker tt1("1. parse input bit-vector", 1, &timing_map);
+    bm::chrono_taker tt1(cout, "1. parse input bit-vector", 1, &timing_map);
 
     std::string line;
 
@@ -1186,7 +1188,7 @@ void run_benchmark(link_matrix& lm)
     bm::bvector<>  bv_res;
 
     {
-    bm::chrono_taker tt1("3. generation of remapping samples", benchmark_ops, &timing_map);
+    bm::chrono_taker tt1(cout, "3. generation of remapping samples", benchmark_ops, &timing_map);
     
         bm::random_subset<bm::bvector<> > rsampler;
 
@@ -1207,7 +1209,7 @@ void run_benchmark(link_matrix& lm)
     }
 
     {
-    bm::chrono_taker tt1("4. remapping", benchmark_ops, &timing_map);
+    bm::chrono_taker tt1(cout, "4. remapping", benchmark_ops, &timing_map);
     
         //std::vector<unsigned> vect;
         bm::bvector<>         bv_remap;
@@ -1246,7 +1248,7 @@ void remap(const link_matrix& lm, const bm::bvector<>& bv_in)
         return;
 
     {
-        bm::chrono_taker tt1("5. input remap", 1, &timing_map);
+        bm::chrono_taker tt1(cout, "5. input remap", 1, &timing_map);
 
         std::vector<unsigned> vect;
         bm::bvector<>         bv_remap;
@@ -1291,7 +1293,7 @@ int main(int argc, char *argv[])
         
         if (!ln_in_file.empty())
         {
-            bm::chrono_taker tt1("0. link pairs load", 1, &timing_map);
+            bm::chrono_taker tt1(cout, "0. link pairs load", 1, &timing_map);
             auto res = load_ln_unsorted(ln_in_file, link_m);
             if (res != 0)
             {
@@ -1310,13 +1312,13 @@ int main(int argc, char *argv[])
         
         if (!lm_in_name.empty())
         {
-            bm::chrono_taker tt1("2. matrix load", 1, &timing_map);
+            bm::chrono_taker tt1(cout, "2. matrix load", 1, &timing_map);
             link_m.load(lm_in_name);
         }
         
         if (!lm_out_name.empty())
         {
-            bm::chrono_taker tt1("1. matrix save", 1, &timing_map);
+            bm::chrono_taker tt1(cout, "1. matrix save", 1, &timing_map);
             link_m.save(lm_out_name);
         }
 
@@ -1339,7 +1341,7 @@ int main(int argc, char *argv[])
         if (is_timing)  // print all collected timings
         {
             std::cout << std::endl << "Performance (ops/sec):" << std::endl;
-            bm::chrono_taker::print_duration_map(timing_map, bm::chrono_taker::ct_ops_per_sec);
+            bm::chrono_taker<>::print_duration_map(cout, timing_map, bm::chrono_taker<>::ct_ops_per_sec);
         }
         
         //getchar();

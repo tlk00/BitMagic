@@ -101,7 +101,7 @@ typedef std::vector<std::pair<bv_size_type, bv_size_type> > bv_ranges_vector;
 
 // Global vars
 //
-bm::chrono_taker::duration_map_type     timing_map;
+bm::chrono_taker<>::duration_map_type     timing_map;
 
 
 /// wait for any opening in a list of futures
@@ -1596,7 +1596,7 @@ int main(int argc, char *argv[])
 
         if (!ifa_name.empty()) // FASTA file load
         {
-            bm::chrono_taker tt1("1. Load FASTA", 1, &timing_map);
+            bm::chrono_taker tt1(cout, "1. Load FASTA", 1, &timing_map);
 
             // limitation: loads a single molecule only
             //
@@ -1610,14 +1610,14 @@ int main(int argc, char *argv[])
         if (ik_size && !ifa_name.empty())
         {
             {
-                bm::chrono_taker tt1("2. Generate k-mers", 1, &timing_map);
+                bm::chrono_taker tt1(cout, "2. Generate k-mers", 1, &timing_map);
                 seq_coll.sync_buffers_size();
                 generate_k_mers_parallel(seq_coll, ik_size, parallel_jobs);
             }
 
             if (!ikd_name.empty())
             {
-                bm::chrono_taker tt1("3. Save k-mers", 1, &timing_map);
+                bm::chrono_taker tt1(cout, "3. Save k-mers", 1, &timing_map);
                 save_kmer_buffers(ikd_name, seq_coll);
             }
         }
@@ -1625,14 +1625,14 @@ int main(int argc, char *argv[])
         if (ik_size && ifa_name.empty() && !ikd_name.empty())
         {
             {
-            bm::chrono_taker tt1("4. Load k-mers", 1, &timing_map);
+            bm::chrono_taker tt1(cout, "4. Load k-mers", 1, &timing_map);
             load_kmer_buffers(ikd_name, seq_coll);
             }
 
             if (seq_coll.buf_size())
             {
                 CSeqClusters seq_clusters;
-                bm::chrono_taker tt1("5. k-mer similarity clustering", 1, &timing_map);
+                bm::chrono_taker tt1(cout, "5. k-mer similarity clustering", 1, &timing_map);
                 compute_jaccard_clusters(seq_clusters, seq_coll, 10, 0.05f, parallel_jobs);
             }
         }
@@ -1641,7 +1641,7 @@ int main(int argc, char *argv[])
         if (is_timing)
         {
             std::cout << std::endl << "Performance:" << std::endl;
-            bm::chrono_taker::print_duration_map(timing_map, bm::chrono_taker::ct_time);
+            bm::chrono_taker<>::print_duration_map(cout, timing_map, bm::chrono_taker<>::ct_time);
         }
 
     }

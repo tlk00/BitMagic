@@ -54,12 +54,12 @@ For more information please visit:  http://bitmagic.io
 #include <regex>
 #include <time.h>
 #include <stdio.h>
-
-
 #include <vector>
 #include <chrono>
 #include <map>
 #include <utility>
+
+using namespace std;
 
 #include "bm.h"
 #include "bmalgo.h"
@@ -207,7 +207,7 @@ typedef std::vector<std::pair<unsigned, unsigned> >         vector_pairs;
 
 // ----------------------------------------------------------------------------
 
-bm::chrono_taker::duration_map_type  timing_map;
+bm::chrono_taker<>::duration_map_type  timing_map;
 
 // SNP report format parser (extraction and transformation)
 // Parser extracts SNP id (rsid) and positio on genome to build
@@ -217,7 +217,7 @@ bm::chrono_taker::duration_map_type  timing_map;
 static
 int load_snp_report(const std::string& fname, sparse_vector_u32& sv)
 {
-    bm::chrono_taker tt1("1. parse input SNP chr report", 1, &timing_map);
+    bm::chrono_taker tt1(cout, "1. parse input SNP chr report", 1, &timing_map);
 
     std::ifstream fin(fname.c_str(), std::ios::in);
     if (!fin.good())
@@ -372,7 +372,7 @@ void run_benchmark(const sparse_vector_u32& sv, const rsc_sparse_vector_u32& csv
 
     if (!sv.empty())
     {
-        bm::chrono_taker tt1("09. rs search (sv)", unsigned(rs_vect.size()), &timing_map);
+        bm::chrono_taker tt1(cout, "09. rs search (sv)", unsigned(rs_vect.size()), &timing_map);
         
         // scanner class
         // it's important to keep scanner class outside the loop to avoid
@@ -400,7 +400,7 @@ void run_benchmark(const sparse_vector_u32& sv, const rsc_sparse_vector_u32& csv
 
     if (!csv.empty())
     {
-        bm::chrono_taker tt1("10. rs search (rsc_sv)", unsigned(rs_vect.size()), &timing_map);
+        bm::chrono_taker tt1(cout, "10. rs search (rsc_sv)", unsigned(rs_vect.size()), &timing_map);
 
         bm::sparse_vector_scanner<rsc_sparse_vector_u32> scanner; // scanner class
 
@@ -423,7 +423,7 @@ void run_benchmark(const sparse_vector_u32& sv, const rsc_sparse_vector_u32& csv
 
     if (vp.size())
     {
-        bm::chrono_taker tt1("11. rs search (std::vector<>)", unsigned(rs_vect.size()), &timing_map);
+        bm::chrono_taker tt1(cout, "11. rs search (std::vector<>)", unsigned(rs_vect.size()), &timing_map);
 
         for (unsigned i = 0; i < rs_vect.size(); ++i)
         {
@@ -484,14 +484,14 @@ int main(int argc, char *argv[])
         }
         if (!sv_in_name.empty())
         {
-            bm::chrono_taker tt1("02. Load sparse vector", 1, &timing_map);
+            bm::chrono_taker tt1(cout, "02. Load sparse vector", 1, &timing_map);
             file_load_svector(sv, sv_in_name);
         }
         
         // load rs-compressed sparse vector
         if (!rsc_in_name.empty())
         {
-            bm::chrono_taker tt1("03. Load rsc sparse vector", 1, &timing_map);
+            bm::chrono_taker tt1(cout, "03. Load rsc sparse vector", 1, &timing_map);
             file_load_svector(csv, rsc_in_name);
         }
         
@@ -500,11 +500,11 @@ int main(int argc, char *argv[])
         {
             sparse_vector_u32  sv2(bm::use_null);
             {
-                bm::chrono_taker tt1("04. rs compress sparse vector", 1, &timing_map);
+                bm::chrono_taker tt1(cout, "04. rs compress sparse vector", 1, &timing_map);
                 csv.load_from(sv);
             }
             {
-                bm::chrono_taker tt1("05. rs de-compress sparse vector", 1, &timing_map);
+                bm::chrono_taker tt1(cout, "05. rs de-compress sparse vector", 1, &timing_map);
                 csv.load_to(sv2);
             }
             
@@ -518,7 +518,7 @@ int main(int argc, char *argv[])
         // save SV vector
         if (!sv_out_name.empty() && !sv.empty())
         {
-            bm::chrono_taker tt1("07. Save sparse vector", 1, &timing_map);
+            bm::chrono_taker tt1(cout, "07. Save sparse vector", 1, &timing_map);
             sv.optimize();
             file_save_svector(sv, sv_out_name);
         }
@@ -526,7 +526,7 @@ int main(int argc, char *argv[])
         // save RS sparse vector
         if (!rsc_out_name.empty() && !csv.empty())
         {
-            bm::chrono_taker tt1("08. Save RS sparse vector", 1, &timing_map);
+            bm::chrono_taker tt1(cout, "08. Save RS sparse vector", 1, &timing_map);
             csv.optimize();
             file_save_svector(csv, rsc_out_name);
         }
@@ -557,7 +557,7 @@ int main(int argc, char *argv[])
         if (is_timing)  // print all collected timings
         {
             std::cout << std::endl << "Performance:" << std::endl;
-            bm::chrono_taker::print_duration_map(timing_map, bm::chrono_taker::ct_ops_per_sec);
+            bm::chrono_taker<>::print_duration_map(cout, timing_map, bm::chrono_taker<>::ct_ops_per_sec);
         }
     }
     catch (std::exception& ex)

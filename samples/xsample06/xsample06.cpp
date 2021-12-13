@@ -277,7 +277,7 @@ void generate_mismatches(vector_pairs_type& vect_m,
 
 // -------------------------------------------------------------------
 
-bm::chrono_taker::duration_map_type  timing_map;
+bm::chrono_taker<>::duration_map_type  timing_map;
 const unsigned repeats = 20000;
 
 
@@ -292,7 +292,7 @@ void test_mismatch_search(const svector_u32& sv, const vector_pairs_type& vect_m
 
     unsigned cnt = 0;
 
-    bm::chrono_taker tt1("1. SV mismatch", sz, &timing_map);
+    bm::chrono_taker tt1(cout, "1. SV mismatch", sz, &timing_map);
 
     for (unsigned k = 0; k < sz; ++k)
     {
@@ -326,7 +326,7 @@ void test_vect_mismatch_search(const vector_char_type& vect,
 
     unsigned cnt = 0;
 
-    bm::chrono_taker tt1("2. STL iterator", sz, &timing_map);
+    bm::chrono_taker tt1(cout, "2. STL iterator", sz, &timing_map);
 
     for (unsigned k = 0; k < sz; ++k)
     {
@@ -370,7 +370,7 @@ void test_strcmp(const vector_char_type& vect, const vector_pairs_type& vect_m)
     unsigned sz = (unsigned)vect_m.size();
     unsigned cnt = 0;
 
-    bm::chrono_taker tt1("3. strcmp() test ", sz, &timing_map);
+    bm::chrono_taker tt1(cout, "3. strcmp() test ", sz, &timing_map);
 
     unsigned vs = unsigned(vect.size());
 
@@ -405,7 +405,7 @@ void test_sv_cmp(const svector_u32& sv, const vector_pairs_type& vect_m)
     unsigned sz = (unsigned)vect_m.size();
     unsigned cnt = 0;
 
-    bm::chrono_taker tt1("4. sv compare", sz, &timing_map);
+    bm::chrono_taker tt1(cout, "4. sv compare", sz, &timing_map);
 
     for (unsigned k = 0; k < sz; ++k)
     {
@@ -435,7 +435,7 @@ void test_sv_cmp_it(const svector_u32& sv, const vector_pairs_type& vect_m)
     unsigned sz = (unsigned)vect_m.size();
     unsigned cnt = 0;
 
-    bm::chrono_taker tt1("4. sv-cmp-it()", sz, &timing_map);
+    bm::chrono_taker tt1(cout, "4. sv-cmp-it()", sz, &timing_map);
 
     for (unsigned k = 0; k < sz; ++k)
     {
@@ -519,7 +519,7 @@ int main(void)
         }
 
         std::cout << std::endl << "Performance:" << std::endl;
-        bm::chrono_taker::print_duration_map(timing_map, bm::chrono_taker::ct_time);
+        bm::chrono_taker<>::print_duration_map(cout, timing_map, bm::chrono_taker<>::ct_time);
 
     }
     catch(std::exception& ex)

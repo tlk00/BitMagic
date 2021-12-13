@@ -94,7 +94,7 @@ typedef std::vector<std::pair<bv_size_type, bv_size_type> > bv_ranges_vector;
 
 
 // timing storage for benchmarking
-bm::chrono_taker::duration_map_type  timing_map;
+bm::chrono_taker<std::ostream>::duration_map_type  timing_map;
 
 /// Generate random test data, resembles bio-data but does not mean anything
 /// in particular
@@ -482,25 +482,25 @@ int main(int argc, char *argv[])
 
 
         {
-            bm::chrono_taker tt1("01. Scrolling test range", 1, &timing_map);
+            bm::chrono_taker tt1(cout, "01. Scrolling test range", 1, &timing_map);
             scroll_benchmark_range(df_cz, test_size, df,
                                    sv_deserial_str, sv_deserial_u32);
         }
 
         {
-            bm::chrono_taker tt1("02. Scrolling test clear/range/merge", 1, &timing_map);
+            bm::chrono_taker tt1(cout, "02. Scrolling test clear/range/merge", 1, &timing_map);
             scroll_benchmark_clear_range_merge(df_cz, test_size, df,
                                            sv_deserial_str, sv_deserial_u32);
         }
 
         {
-            bm::chrono_taker tt1("03. Scrolling merge/keep_range", 1, &timing_map);
+            bm::chrono_taker tt1(cout, "03. Scrolling merge/keep_range", 1, &timing_map);
             scroll_benchmark_merge_keep_range(df_cz, test_size, df,
                                            sv_deserial_str, sv_deserial_u32);
         }
 
         cout << endl;
-        bm::chrono_taker::print_duration_map(timing_map, bm::chrono_taker::ct_ops_per_sec);
+        bm::chrono_taker<>::print_duration_map(cout, timing_map, bm::chrono_taker<>::ct_ops_per_sec);
 
     }
     catch(std::exception& ex)

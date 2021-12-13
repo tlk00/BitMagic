@@ -42,7 +42,7 @@ For more information please visit:  http://bitmagic.io
 using namespace std;
 
 // timing storage for benchmarking
-bm::chrono_taker::duration_map_type  timing_map;
+bm::chrono_taker<>::duration_map_type  timing_map;
 
 const unsigned benchmark_count = 10000;
 unsigned            vector_max = 400000000;
@@ -116,7 +116,7 @@ void bv_count_test(const bm::bvector<>& bv)
     bm::bvector<>::size_type cnt = 0;
 
     {
-        bm::chrono_taker tt1("1. bvector<>::count()", benchmark_count / 2, &timing_map);
+        bm::chrono_taker tt1(cout, "1. bvector<>::count()", benchmark_count / 2, &timing_map);
         for (unsigned i = 0; i < benchmark_count / 2; ++i)
         {
             cnt += bv.count();
@@ -133,7 +133,7 @@ void bv_count_range(const bm::bvector<>& bv)
 {
     bm::bvector<>::size_type cnt = 0;
     {
-        bm::chrono_taker tt1("2. bvector<>::count_range()", benchmark_count, &timing_map);
+        bm::chrono_taker tt1(cout, "2. bvector<>::count_range()", benchmark_count, &timing_map);
         for (unsigned i = 0; i < benchmark_count; ++i)
         {
             unsigned from = unsigned(rand_dis(gen));
@@ -158,7 +158,7 @@ void bv_count_range_acc(const bm::bvector<>& bv)
     bv.build_rs_index(rs.get());
 
     {
-        bm::chrono_taker tt1("3. bvector<>::count_range() with rs_index", benchmark_count, &timing_map);
+        bm::chrono_taker tt1(cout, "3. bvector<>::count_range() with rs_index", benchmark_count, &timing_map);
         cnt = 0;
         for (unsigned i = 0; i < benchmark_count; ++i)
         {
@@ -185,7 +185,7 @@ void bv_count_to_acc(const bm::bvector<>& bv)
     bv.build_rs_index(rs.get());
 
     {
-        bm::chrono_taker tt1("4. bvector<>::count_to() with rs_index", benchmark_count, &timing_map);
+        bm::chrono_taker tt1(cout, "4. bvector<>::count_to() with rs_index", benchmark_count, &timing_map);
 
         for (unsigned i = 0; i < benchmark_count; ++i)
         {
@@ -211,7 +211,7 @@ void bv_count_to_range_acc(const bm::bvector<>& bv)
     bv.build_rs_index(rs.get());
 
     {
-        bm::chrono_taker tt1("5. bvector<>::count_to to simulate count_range()", benchmark_count, &timing_map);
+        bm::chrono_taker tt1(cout, "5. bvector<>::count_to to simulate count_range()", benchmark_count, &timing_map);
 
         for (unsigned i = 0; i < benchmark_count; ++i)
         {
@@ -239,7 +239,7 @@ void bv_count_and(const bm::bvector<>& bv)
 {
     bm::bvector<>::size_type cnt = 0;
     {
-        bm::chrono_taker tt1("6. bm::count_and with mask vector", benchmark_count, &timing_map);
+        bm::chrono_taker tt1(cout, "6. bm::count_and with mask vector", benchmark_count, &timing_map);
 
         bm::bvector<> mask_bv(bm::BM_GAP); // use compressed mask, better seluts on long ranges
         for (unsigned i = 0; i < benchmark_count; ++i)
@@ -270,7 +270,7 @@ void bv_counted_enumerator(const bm::bvector<>& bv)
     bm::bvector<>::size_type cnt = 0;
     {
         // This is a slow method so we use less iterators
-        bm::chrono_taker tt1("7. bm::bvector<>::counted_enumerator", benchmark_count/20, &timing_map);
+        bm::chrono_taker tt1(cout, "7. bm::bvector<>::counted_enumerator", benchmark_count/20, &timing_map);
 
         for (unsigned i = 0; i < benchmark_count/20; ++i)
         {
@@ -356,7 +356,7 @@ int main(void)
         std::cout << "                                                        "
                   << std::endl;
                   
-        bm::chrono_taker::print_duration_map(timing_map, bm::chrono_taker::ct_ops_per_sec);
+        bm::chrono_taker<>::print_duration_map(cout, timing_map, bm::chrono_taker<>::ct_ops_per_sec);
     }
     catch(std::exception& ex)
     {

@@ -106,7 +106,7 @@ int main(void)
         std::generate(index.begin(), index.end(),
                                          [n = 0] () mutable { return n++; });
         {{
-        bm::chrono_taker tt("1.std::sort() of index: ", 0); // timing
+        bm::chrono_taker tt(cout, "1.std::sort() of index: ", 0); // timing
 #if (1)
         // fastest variant uses local cache to keep one of the comparison vars
         // to reduce access to the succinct vector, right variable gets more hits

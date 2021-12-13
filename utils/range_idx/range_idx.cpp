@@ -158,8 +158,8 @@ int parse_args(int argc, char *argv[])
 // Global types
 //
 typedef bm::sparse_vector<unsigned, bm::bvector<> >     sparse_vector_u32;
-typedef bm::str_sparse_vector<char, bm::bvector<>, 64>  str_sparse_vect;
-//typedef vector<string>  string_vector;
+typedef bm::str_sparse_vector<char, bm::bvector<>, 16>  str_sparse_vect;
+
 
 /// Columnar structure for succinct vectors
 ///
@@ -481,14 +481,20 @@ int main(int argc, char *argv[])
 
         if (is_diag)
         {
+/*
             std::cout << "ID_FROM:" << std::endl;
             print_svector_stat(r_idx.id_from_v, false);
             std::cout << "RANGE_FROM:" << std::endl;
             print_svector_stat(r_idx.range_from_v, false);
             std::cout << "LEN:" << std::endl;
             print_svector_stat(r_idx.len_v, false);
+*/
+
+            //print_svector_xor_stat(r_idx.id_to_v);
+/*
             std::cout << "ID_TO:" << std::endl;
             print_svector_stat(r_idx.id_to_v, false);
+*/
         }
         
         run_search(r_idx, "CUU0");

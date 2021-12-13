@@ -42,6 +42,8 @@ For more information please visit:  http://bitmagic.io
 #include <future>
 #include <thread>
 
+using namespace std;
+
 #include "bm.h"
 #include "bmtimer.h"
 #include "bmsparsevec.h"
@@ -68,7 +70,7 @@ typedef std::map<unsigned, unsigned>                map_u32;
 
 
 // timing storage for benchmarking
-bm::chrono_taker::duration_map_type  timing_map;
+bm::chrono_taker<>::duration_map_type  timing_map;
 
 
 // -------------------------------------------
@@ -288,27 +290,27 @@ int main(void)
         map_u32  h_map;
 
         {
-            bm::chrono_taker tt1("1. counting sort ", 1, &timing_map);
+            bm::chrono_taker tt1(cout, "1. counting sort ", 1, &timing_map);
             counting_sort(r_sv, v);
         }
 
         {
-            bm::chrono_taker tt1("3. counting sort (naive) ", 1, &timing_map);
+            bm::chrono_taker tt1(cout, "3. counting sort (naive) ", 1, &timing_map);
             counting_sort_naive(n_sv, v);
         }
 
         {
-            bm::chrono_taker tt1("4. counting sort (parallel) ", 1, &timing_map);
+            bm::chrono_taker tt1(cout, "4. counting sort (parallel) ", 1, &timing_map);
             counting_sort_parallel(p_sv, v);
         }
 
         {
-            bm::chrono_taker tt1("5. counting sort (map) ", 1, &timing_map);
+            bm::chrono_taker tt1(cout, "5. counting sort (map) ", 1, &timing_map);
             sort_map(h_map, v);
         }
         
         {
-            bm::chrono_taker tt1("2. std::sort() + histogram", 1, &timing_map);
+            bm::chrono_taker tt1(cout, "2. std::sort() + histogram", 1, &timing_map);
             std::sort(v.begin(), v.end());
             build_histogram(h_sv, v);
         }
@@ -340,7 +342,7 @@ int main(void)
         }
 
 
-        bm::chrono_taker::print_duration_map(timing_map, bm::chrono_taker::ct_ops_per_sec);
+        bm::chrono_taker<>::print_duration_map(cout, timing_map, bm::chrono_taker<>::ct_ops_per_sec);
 
     }
     catch(std::exception& ex)

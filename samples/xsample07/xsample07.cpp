@@ -105,9 +105,9 @@ typedef std::map<unsigned, unsigned>                  histogram_map_u32;
 
 // Global vars
 //
-bm::chrono_taker::duration_map_type     timing_map;
-dna_scanner_type                        dna_scanner;
-std::atomic_ullong                      k_mer_progress_count(0);
+bm::chrono_taker<>::duration_map_type     timing_map;
+dna_scanner_type                          dna_scanner;
+std::atomic_ullong                        k_mer_progress_count(0);
 
 
 /// really simple FASTA parser (one entry per file)
@@ -115,7 +115,7 @@ std::atomic_ullong                      k_mer_progress_count(0);
 static
 int load_FASTA(const std::string& fname, vector_char_type& seq_vect)
 {
-    bm::chrono_taker tt1("1. Parse FASTA", 1, &timing_map);
+    bm::chrono_taker tt1(cout, "1. Parse FASTA", 1, &timing_map);
 
     seq_vect.resize(0);
     std::ifstream fin(fname.c_str(), std::ios::in);
@@ -309,7 +309,7 @@ void generate_k_mer_bvector(BV& bv,
                             bool check)
 {
     const bm::id64_t chunk_size = 400000000;
-    bm::chrono_taker tt1("2. Generate k-mers", 1, &timing_map);
+    bm::chrono_taker tt1(cout, "2. Generate k-mers", 1, &timing_map);
 
     bv.clear();
     bv.init(); // need to explicitly init to use bvector<>::set_bit_no_check()
@@ -1008,14 +1008,14 @@ int main(int argc, char *argv[])
 
         if (!ikd_name.empty())
         {
-            bm::chrono_taker tt1("3. k-mer serialization and save", 1, &timing_map);
+            bm::chrono_taker tt1(cout, "3. k-mer serialization and save", 1, &timing_map);
 
             bm::SaveBVector(ikd_name.c_str(), bv_kmers);
         }
 
         if (seq_vect.size())
         {
-            bm::chrono_taker tt1("4. Build DNA fingerprints (bulk, parallel)", 1, &timing_map);
+            bm::chrono_taker tt1(cout, "4. Build DNA fingerprints (bulk, parallel)", 1, &timing_map);
             dna_scanner.BuildParallel(seq_vect, parallel_jobs);
         }
 
@@ -1033,7 +1033,7 @@ int main(int argc, char *argv[])
             if (is_diag) // compute reference counts using slower algorithm for verification
             {
                 cout << " ... using bm::aggregator<>" << endl;
-                bm::chrono_taker tt1("5a. k-mer counting (bm::aggregator<>)", 1, &timing_map);
+                bm::chrono_taker tt1(cout, "5a. k-mer counting (bm::aggregator<>)", 1, &timing_map);
 
                 count_kmers_parallel(bv_kmers, rsc_kmer_counts, parallel_jobs);
                 //count_kmers(bv_kmers, rsc_kmer_counts);
@@ -1043,7 +1043,7 @@ int main(int argc, char *argv[])
 
             {
                 cout << " ... using std::sort() and count" << endl;
-                bm::chrono_taker tt1("5. k-mer counting std::sort()", 1, &timing_map);
+                bm::chrono_taker tt1(cout, "5. k-mer counting std::sort()", 1, &timing_map);
 
                 count_kmers_parallel(bv_kmers, seq_vect,
                                      rsc_kmer_counts2, ik_size, parallel_jobs);
@@ -1086,7 +1086,7 @@ int main(int argc, char *argv[])
 
             histogram_map_u32 hmap;
             {
-                bm::chrono_taker tt1("6. build histogram of k-mer frequencies", 1, &timing_map);
+                bm::chrono_taker tt1(cout, "6. build histogram of k-mer frequencies", 1, &timing_map);
                 compute_kmer_histogram(hmap, rsc_kmer_counts2);
             }
             if (!kh_name.empty())
@@ -1099,7 +1099,7 @@ int main(int argc, char *argv[])
             //
             bm::bvector<> bv_freq(bm::BM_GAP);
             {
-                bm::chrono_taker tt1("7. Build vector of frequent k-mers", 1, &timing_map);
+                bm::chrono_taker tt1(cout, "7. Build vector of frequent k-mers", 1, &timing_map);
                 compute_frequent_kmers(bv_freq, hmap,
                                        rsc_kmer_counts2, f_percent, ik_size);
             }
@@ -1124,7 +1124,7 @@ int main(int argc, char *argv[])
         if (is_timing)
         {
             std::cout << std::endl << "Performance:" << std::endl;
-            bm::chrono_taker::print_duration_map(timing_map, bm::chrono_taker::ct_time);
+            bm::chrono_taker<>::print_duration_map(cout, timing_map, bm::chrono_taker<>::ct_time);
         }
 
     }

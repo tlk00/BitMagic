@@ -25477,7 +25477,7 @@ void TestSparseVectorScan()
         csv.load_from(sv);
         
         {
-        chrono_taker ct("sparse_vector<> search");
+        chrono_taker<std::ostream> ct(cerr, "sparse_vector<> search");
 
             for (unsigned j = 0; j < sv_size; ++j)
             {
@@ -26021,7 +26021,7 @@ void TestSignedSparseVectorScan()
         csv.load_from(sv);
 
         {
-        chrono_taker ct("sparse_vector<> search");
+        chrono_taker<std::ostream> ct(cout, "sparse_vector<> search");
 
             for (unsigned j = 0; j < sv_size; ++j)
             {
@@ -26353,7 +26353,7 @@ void TestCompressedSparseVectorAlgo()
         for (unsigned k = 0; k < 4; ++k)
         {
             cout << "PASS = " << k << endl;
-            chrono_taker ct("sparse_vector<> unique value mismatch search");
+            chrono_taker<std::ostream> ct(cout, "sparse_vector<> unique value mismatch search");
 
             for (sparse_vector_u32::size_type j = 0; j < sv_size; ++j)
             {
@@ -33160,7 +33160,7 @@ void TestRankCompress()
             for (unsigned j = 0; j < 2; ++ j)
             {
                 {
-                chrono_taker ct("c1");
+                chrono_taker<std::ostream> ct(cout, "c1");
                 rc.compress(bv1, bv_i, bv_s);
                 rc.decompress(bv_sr, bv_i, bv1);
                 }
@@ -33169,7 +33169,7 @@ void TestRankCompress()
                 assert(cmp == 0);
 
                 {
-                chrono_taker ct("c2");
+                chrono_taker<std::ostream> ct(cout, "c2");
                 rc.compress_by_source(bv2, bv_i, bc, bv_s);
                 rc.decompress(bv_sr, bv_i, bv2);
                 }
@@ -33190,7 +33190,7 @@ void TestRankCompress()
                     bvect bv_subset;
                     rsub.sample(bv_subset, bv_s, 100);
                     {
-                    chrono_taker ct("c1-1");
+                    chrono_taker<std::ostream> ct(cout, "c1-1");
                     rc.compress(bv1, bv_i, bv_subset);
                     rc.decompress(bv_sr, bv_i, bv1);
                     }
@@ -33199,7 +33199,7 @@ void TestRankCompress()
                     assert(cmp == 0);
 
                     {
-                    chrono_taker ct("c2-2");
+                    chrono_taker<std::ostream> ct(cout, "c2-2");
                     rc.compress_by_source(bv2, bv_i, bc, bv_subset);
                     rc.decompress(bv_sr, bv_i, bv2);
                     }

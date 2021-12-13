@@ -45,6 +45,8 @@ For more information please visit:  http://bitmagic.io
 #include "bmdbg.h"
 #include "bmtimer.h"
 
+using namespace std;
+
 static
 void show_help()
 {
@@ -201,7 +203,7 @@ bool                   rsc_u64_in_flag = false;
 std::vector<unsigned>  vect_u32_in;
 std::vector<unsigned>  vect_u32_out;
 
-bm::chrono_taker::duration_map_type  timing_map;
+bm::chrono_taker<>::duration_map_type  timing_map;
 
 
 // load bvector from a file
@@ -220,7 +222,7 @@ int load_sv(const std::string& fname, sparse_vector_u32& sv)
     std::vector<unsigned char> buffer;
 
     // read the input buffer, validate errors
-    bm::chrono_taker tt1("serialized sparse vector BLOB read", 1, &timing_map);
+    bm::chrono_taker tt1(cout, "serialized sparse vector BLOB read", 1, &timing_map);
     auto ret = bm::read_dump_file(fname, buffer);
     
     tt1.stop(is_timing);
@@ -238,7 +240,7 @@ int load_sv(const std::string& fname, sparse_vector_u32& sv)
     
     // deserialize
     //
-    bm::chrono_taker tt2("sparse vector deserialization", 1, &timing_map);
+    bm::chrono_taker tt2(cout, "sparse vector deserialization", 1, &timing_map);
     const unsigned char* buf = &buffer[0];
     BM_DECLARE_TEMP_BLOCK(tb)
     auto res = bm::sparse_vector_deserialize(sv, buf, tb);
@@ -261,7 +263,7 @@ int load_rsc64(const std::string& fname, rsc_sparse_vector_u64& csv)
     std::vector<unsigned char> buffer;
 
     // read the input buffer, validate errors
-    bm::chrono_taker tt1("serialized rsc sparse vector BLOB read", 1, &timing_map);
+    bm::chrono_taker tt1(cout, "serialized rsc sparse vector BLOB read", 1, &timing_map);
     auto ret = bm::read_dump_file(fname, buffer);
     
     tt1.stop(is_timing);
@@ -279,7 +281,7 @@ int load_rsc64(const std::string& fname, rsc_sparse_vector_u64& csv)
     
     // deserialize
     //
-    bm::chrono_taker tt2("rsc sparse vector deserialization", 1, &timing_map);
+    bm::chrono_taker tt2(cout, "rsc sparse vector deserialization", 1, &timing_map);
     const unsigned char* buf = &buffer[0];
     BM_DECLARE_TEMP_BLOCK(tb)
     auto res = bm::sparse_vector_deserialize(csv, buf, tb);
@@ -305,7 +307,7 @@ int load_rsc64(const std::string& fname, rsc_sparse_vector_u64& csv)
 static
 int load_u32(const std::string& fname, std::vector<unsigned>& vect)
 {
-    bm::chrono_taker tt("u32 BLOB read", 1, &timing_map);
+    bm::chrono_taker tt(cout, "u32 BLOB read", 1, &timing_map);
 
     auto ret = bm::read_dump_file(fname, vect);
     
@@ -330,7 +332,7 @@ static
 int convert_u32(const std::vector<unsigned>& u32, sparse_vector_u32& sv)
 {
     BM_DECLARE_TEMP_BLOCK(tb)
-    bm::chrono_taker tt("u32 array to sparse vector transposition conversion", 1, &timing_map);
+    bm::chrono_taker tt(cout, "u32 array to sparse vector transposition conversion", 1, &timing_map);
     
     sv.import(&u32[0], (unsigned)u32.size());
     sv.optimize(tb);
@@ -427,7 +429,7 @@ int main(int argc, char *argv[])
             bm::set2set_11_transform<sparse_vector_u32> set2set;
             
             {
-                bm::chrono_taker tt("set2set transform one-by-one(control) remap", 1, &timing_map);
+                bm::chrono_taker tt(cout, "set2set transform one-by-one(control) remap", 1, &timing_map);
                 typename sparse_vector_u32::bvector_type::enumerator en(bv_mask.first());
                 for (; en.valid(); ++en)
                 {
@@ -444,7 +446,7 @@ int main(int argc, char *argv[])
 
 
             {
-                bm::chrono_taker tt("set2set transform remap", 1, &timing_map);            
+                bm::chrono_taker tt(cout, "set2set transform remap", 1, &timing_map);
                 set2set.remap(bv_mask, sv_u32_in, bv_out);
             }
             
@@ -475,7 +477,7 @@ int main(int argc, char *argv[])
                 
                 size_t sv_blob_size = 0;
                 
-                bm::chrono_taker tt("sparse vector BLOB save", 1, &timing_map);
+                bm::chrono_taker tt(cout, "sparse vector BLOB save", 1, &timing_map);
                 res = bm::file_save_svector(sv_u32_out, sv_out_file, &sv_blob_size);
                 tt.stop(is_timing);
                 
@@ -501,12 +503,12 @@ int main(int argc, char *argv[])
             {
                 vect_u32_out.resize(sv_u32_in.size());
                 {
-                    bm::chrono_taker tt("sparse vector decode", 1, &timing_map);
+                    bm::chrono_taker tt(cout, "sparse vector decode", 1, &timing_map);
                     sv_u32_in.decode(&vect_u32_out[0], 0, sv_u32_in.size(), false);
                     tt.stop(is_timing);
                 }
                 {
-                    bm::chrono_taker tt("u32 vector write", 1, &timing_map);
+                    bm::chrono_taker tt(cout, "u32 vector write", 1, &timing_map);
                     std::ofstream fout(u32_out_file.c_str(), std::ios::binary);
                     if (!fout.good())
                     {
@@ -531,7 +533,7 @@ int main(int argc, char *argv[])
             // in/out sparse vectors
             if (!sv_u32_in.empty() && !sv_u32_out.empty())
             {
-                bm::chrono_taker tt("sparse vectors in/out comparison", 1, &timing_map);
+                bm::chrono_taker tt(cout, "sparse vectors in/out comparison", 1, &timing_map);
                 bool eq = sv_u32_in.equal(sv_u32_out);
                 if (!eq)
                 {
@@ -549,7 +551,7 @@ int main(int argc, char *argv[])
                 }
                 else
                 {
-                    bm::chrono_taker tt("sparse vector in/raw comparison", 1, &timing_map);
+                    bm::chrono_taker tt(cout, "sparse vector in/raw comparison", 1, &timing_map);
                     int res = bm::svector_check(sv_u32_in, vect_u32_in);
                     if (res != 0)
                     {
@@ -561,7 +563,7 @@ int main(int argc, char *argv[])
             // input sparse compare to output raw
             if (!sv_u32_in.empty() && !vect_u32_out.empty())
             {
-                bm::chrono_taker tt("sparse vector in/raw comparison", 1, &timing_map);
+                bm::chrono_taker tt(cout, "sparse vector in/raw comparison", 1, &timing_map);
                 int res = bm::svector_check(sv_u32_in, vect_u32_out);
                 if (res != 0)
                 {
@@ -571,7 +573,7 @@ int main(int argc, char *argv[])
             
             if (!vect_u32_in.empty() && !sv_u32_out.empty())
             {
-                bm::chrono_taker tt("raw in to sparse vector out comparison", 1, &timing_map);
+                bm::chrono_taker tt(cout, "raw in to sparse vector out comparison", 1, &timing_map);
                 int res = bm::svector_check(sv_u32_out, vect_u32_in);
                 if (res != 0)
                 {
@@ -584,7 +586,7 @@ int main(int argc, char *argv[])
         if (is_timing)  // print all collected timings
         {
             std::cout << std::endl << "Timings (ms):" << std::endl;
-            bm::chrono_taker::print_duration_map(timing_map);
+            bm::chrono_taker<>::print_duration_map(cout, timing_map);
         }
     }
     catch (std::exception& ex)

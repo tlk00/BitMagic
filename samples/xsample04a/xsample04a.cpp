@@ -116,13 +116,13 @@ int parse_args(int argc, char *argv[])
 
 // ----------------------------------------------------------------------------
 
-bm::chrono_taker::duration_map_type  timing_map;
+bm::chrono_taker<>::duration_map_type  timing_map;
 
 // FASTA format parser
 static
 int load_FASTA(const std::string& fname, std::vector<char>& seq_vect)
 {
-    bm::chrono_taker tt1("1. Parse FASTA", 1, &timing_map);
+    bm::chrono_taker tt1(cout, "1. Parse FASTA", 1, &timing_map);
 
     seq_vect.resize(0);
     std::ifstream fin(fname.c_str(), std::ios::in);
@@ -441,14 +441,14 @@ int main(int argc, char *argv[])
             std::cout << "FASTA sequence size=" << seq_vect.size() << std::endl;
             
             {
-                bm::chrono_taker tt1("2. Build DNA index", 1, &timing_map);
+                bm::chrono_taker tt1(cout, "2. Build DNA index", 1, &timing_map);
                 idx1.Build(seq_vect);
             }
             
             if (parallel_jobs > 0)
             {
                 std::cout << "jobs = " << parallel_jobs << std::endl;
-                bm::chrono_taker tt1("3. Build DNA index (bulk, parallel)", 1, &timing_map);
+                bm::chrono_taker tt1(cout, "3. Build DNA index (bulk, parallel)", 1, &timing_map);
                 idx2.BuildParallel(seq_vect, parallel_jobs);
             }
 
@@ -460,7 +460,7 @@ int main(int argc, char *argv[])
         if (is_timing)  // print all collected timings
         {
             std::cout << std::endl << "Performance:" << std::endl;
-            bm::chrono_taker::print_duration_map(timing_map, bm::chrono_taker::ct_all);
+            bm::chrono_taker<>::print_duration_map(cout, timing_map, bm::chrono_taker<>::ct_all);
         }
     }
     catch (std::exception& ex)

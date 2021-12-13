@@ -183,7 +183,7 @@ int main(int argc, char *argv[])
             // This is not a slow method, scanner uses various optimizations
             // (SIMD, "search space prunning" to be efficient)
             {
-                bm::chrono_taker tt("scanner<>::find_eq_str()", test_runs);
+                bm::chrono_taker tt(cout, "scanner<>::find_eq_str()", test_runs);
 
                 for (bvector_type::size_type i = 0; i < test_runs; ++i)
                 {
@@ -218,7 +218,7 @@ int main(int argc, char *argv[])
             //
             pipe1.options().batch_size = test_runs;
             {
-                bm::chrono_taker tt("scanner::pipeline find_eq_str()", test_runs);
+                bm::chrono_taker tt(cout, "scanner::pipeline find_eq_str()", test_runs);
 
                 // add all the search items to the pipeline
                 for (size_t i = 0; i < test_runs; ++i)
@@ -250,7 +250,7 @@ int main(int argc, char *argv[])
             pipe1_and.options().batch_size = test_runs;
 
             {
-                bm::chrono_taker tt("scanner::pipeline+MASK find_eq_str()", test_runs);
+                bm::chrono_taker tt(cout, "scanner::pipeline+MASK find_eq_str()", test_runs);
 
                 // add all the search items to the pipeline
                 for (size_t i = 0; i < test_runs; ++i)
@@ -279,7 +279,7 @@ int main(int argc, char *argv[])
             pipe1.options().batch_size = test_runs;
 
             {
-                bm::chrono_taker tt("scanner::pipeline find_eq_str()-count()", test_runs);
+                bm::chrono_taker tt(cout, "scanner::pipeline find_eq_str()-count()", test_runs);
 
                 for (size_t i = 0; i < test_runs; ++i)
                 {
@@ -366,7 +366,7 @@ int main(int argc, char *argv[])
             pipe3.set_or_target(&bv_or); // Assign OR aggregation target
 
             {
-                bm::chrono_taker tt("scanner::pipeline find_eq_str()-OR()", test_runs);
+                bm::chrono_taker tt(cout, "scanner::pipeline find_eq_str()-OR()", test_runs);
 
                 for (size_t i = 0; i < test_runs; ++i)
                 {

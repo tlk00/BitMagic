@@ -50,7 +50,7 @@ For more information please visit:  http://bitmagic.io
 using namespace std;
 
 // timing storage for benchmarking
-bm::chrono_taker::duration_map_type  timing_map;
+bm::chrono_taker<>::duration_map_type  timing_map;
 
 // depending of the build it may be "unsigned int" or 64-bit "unsigned long long"
 typedef bm::bvector<>::size_type bm_size_type;
@@ -97,7 +97,7 @@ void generate_test_vectors(std::vector<bm_size_type> &v1,
 static
 void bv_set_bit_test()
 {
-    bm::chrono_taker tt1("1. bvector<>::set_bit()", benchmark_count, &timing_map);
+    bm::chrono_taker tt1(cout, "1. bvector<>::set_bit()", benchmark_count, &timing_map);
     bm::bvector<> bv1, bv2, bv3;
 
     for (unsigned i = 0; i < benchmark_count; ++i)
@@ -127,7 +127,7 @@ void bv_set_bit_test()
 static
 void bv_set_bit_no_check_test()
 {
-    bm::chrono_taker tt1("2. bvector<>::set_bit_no_check()", benchmark_count, &timing_map);
+    bm::chrono_taker tt1(cout, "2. bvector<>::set_bit_no_check()", benchmark_count, &timing_map);
     bm::bvector<> bv1, bv2, bv3;
 
     bv1.init();
@@ -157,7 +157,7 @@ void combine_or_test(std::vector<bm_size_type> &v1,
                      std::vector<bm_size_type> &v2,
                      std::vector<bm_size_type> &v3)
 {
-    bm::chrono_taker tt1("3. combine_or()", benchmark_count, &timing_map);
+    bm::chrono_taker tt1(cout, "3. combine_or()", benchmark_count, &timing_map);
     bm::bvector<> bv1, bv2, bv3;
 
     for (unsigned i = 0; i < benchmark_count; ++i)
@@ -173,7 +173,7 @@ void bvector_bulk_set_test(std::vector<bm_size_type> &v1,
                            std::vector<bm_size_type> &v2,
                            std::vector<bm_size_type> &v3)
 {
-    bm::chrono_taker tt1("3. bvector<>::set() array", benchmark_count, &timing_map);
+    bm::chrono_taker tt1(cout, "3. bvector<>::set() array", benchmark_count, &timing_map);
     bm::bvector<> bv1, bv2, bv3;
 
     for (unsigned i = 0; i < benchmark_count; ++i)
@@ -320,7 +320,7 @@ int main(void)
         // print all test timing results
         //
         std::cout << std::endl;
-        bm::chrono_taker::print_duration_map(timing_map, bm::chrono_taker::ct_all);
+        bm::chrono_taker<>::print_duration_map(cout, timing_map, bm::chrono_taker<>::ct_all);
     }
     catch(std::exception& ex)
     {
