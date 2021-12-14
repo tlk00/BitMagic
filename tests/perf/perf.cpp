@@ -54,7 +54,7 @@ For more information please visit:  http://bitmagic.io
 
 #include "bmtimer.h"
 
-//#include "bmdbg.h"
+#include "bmdbg.h"
 
 #include <math.h>
 
@@ -691,7 +691,7 @@ void WordSelectTest()
     std::vector<unsigned> vect_r4(test_size);
 
     {
-        bm::chrono_taker tt("select64 BMI1 lead-zero", 1);
+        bm::chrono_taker tt(cout, "select64 BMI1 lead-zero", 1);
         for (unsigned i = 0; i < vect_v.size(); ++i)
         {
             bm::id64_t w64 = vect_v[i];
@@ -2545,6 +2545,22 @@ void FillSparseNullVector(SV& sv, typename SV::size_type size,
     } // for i
 }
 
+template<class SV>
+void FillRandomSparseNullVector(SV& sv, typename SV::size_type size,
+                          unsigned data_size, unsigned null_factor)
+{
+    typename SV::size_type i = 0;
+    for (; i < size; i+= null_factor)
+    {
+        typename SV::size_type k = 0;
+        for (;k < data_size; ++k, ++i)
+        {
+            sv.push_back(i, rand() & 0xFFF);
+        } // for k
+    } // for i
+}
+
+
 static
 void SparseVectorAccessTest()
 {
@@ -2920,6 +2936,102 @@ void RSC_SparseVectorFillTest()
     }
 
 }
+
+static
+void RSC_SparseVectorRandomAccesTest()
+{
+    const unsigned test_size = 250000000;
+    BM_DECLARE_TEMP_BLOCK(tb)
+
+    rsc_sparse_vector_u32   sv1(bm::use_null);
+
+    FillRandomSparseNullVector(sv1, test_size, 100, 153);
+    sv1.sync(false);
+
+//    bm::print_svector_stat(cout, sv1);
+
+    std::vector<unsigned> test_idx;
+    unsigned idx = 0;
+    test_idx.push_back(0);
+    for (unsigned i = 0; i < 300*65536; ++i)
+    {
+        idx = i*65535;
+        if (idx < sv1.size())
+            test_idx.push_back(idx);
+        idx = i*65535;
+        if (idx < sv1.size())
+            test_idx.push_back(idx);
+        idx = (unsigned)rand() % test_size;
+        if (idx < sv1.size())
+            test_idx.push_back(idx);
+    }
+
+    unsigned long long sum1 = 0, sum2 = 0;
+
+    {
+        bm::chrono_taker tt(cout, "rsc_sparse_vector()::is_null()+get() (bit)", REPEATS*10 );
+        for (unsigned i = 0; i < test_idx.size(); ++i)
+        {
+            idx = test_idx[i];
+            if (!sv1.is_null(idx))
+            {
+                unsigned v = sv1.get(idx);
+                sum1 += v;
+            }
+        }
+    }
+
+    {
+        bm::chrono_taker tt(cout, "rsc_sparse_vector()::get_conditional_sync() (bit)", REPEATS*10 );
+        for (unsigned i = 0; i < test_idx.size(); ++i)
+        {
+            idx = test_idx[i];
+            unsigned v;
+            if (sv1.get_conditional_sync(idx, v))
+                sum2 += v;
+        }
+    }
+
+    if (sum1 != sum2)
+    {
+        cerr << "Error! RSC random access check failed!" << endl;
+        assert(0);exit(1);
+    }
+
+    unsigned long long sum3 = 0, sum4 = 0;
+    sv1.optimize(tb);
+
+    {
+        bm::chrono_taker tt(cout, "rsc_sparse_vector()::is_null()+get() (gap)", REPEATS*10 );
+        for (unsigned i = 0; i < test_idx.size(); ++i)
+        {
+            idx = test_idx[i];
+            if (!sv1.is_null(idx))
+            {
+                unsigned v = sv1.get(idx);
+                sum3 += v;
+            }
+        }
+    }
+
+    {
+        bm::chrono_taker tt(cout, "rsc_sparse_vector()::get_conditional_sync() (gap)", REPEATS*10 );
+        for (unsigned i = 0; i < test_idx.size(); ++i)
+        {
+            idx = test_idx[i];
+            unsigned v;
+            if (sv1.get_conditional_sync(idx, v))
+                sum4 += v;
+        }
+    }
+
+    if (sum3 != sum4 || sum2 != sum3)
+    {
+        cerr << "Error! RSC random access check failed!" << endl;
+        assert(0);exit(1);
+    }
+}
+
 
 static
 void RSC_SparseVectorAccesTest()
@@ -5002,6 +5114,8 @@ int main(void)
 
         RSC_SparseVectorFillTest();
         RSC_SparseVectorAccesTest();
+
+        RSC_SparseVectorRandomAccesTest();
 
         RankCompressionTest();
         cout << endl;

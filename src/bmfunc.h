@@ -2636,8 +2636,7 @@ unsigned gap_bit_count_to(const T* const buf, T right,
     return bits_counter;
 }
 
-
-/*! 
+/*!
     D-GAP block for_each algorithm
     
     D-Gap Functor is called for each element but last one.

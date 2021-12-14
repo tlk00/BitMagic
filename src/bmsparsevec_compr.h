@@ -425,7 +425,27 @@ public:
         \return value of the element
     */
     value_type get(size_type idx) const BMNOEXCEPT;
-    
+
+    /**
+        \brief get specified element with NOT NULL check
+        \param idx - element index
+        \param v -  [out] value to get
+        \return true if value was aquired (NOT NULL), false otherwise
+        @sa is_null, get
+     */
+    bool get_conditional(size_type idx, value_type& v) const BMNOEXCEPT;
+
+    /**
+        \brief get specified element with NOT NULL check
+        Caller guarantees that the vector is in sync mode (RS-index access).
+        \param idx - element index
+        \param v -  [out] value to get
+        \return true if value was aquired (NOT NULL), false otherwise
+        @sa is_null, get, sync
+     */
+    bool get_conditional_sync(size_type idx, value_type& v) const BMNOEXCEPT;
+
+
     /*!
         \brief set specified element with bounds checking and automatic resize
      
@@ -808,6 +828,8 @@ protected:
         \return true if id is known and resolved successfully
     */
     bool resolve(size_type idx, size_type* idx_to) const BMNOEXCEPT;
+
+    bool resolve_sync(size_type idx, size_type* idx_to) const BMNOEXCEPT;
 
     bool resolve_range(size_type from, size_type to, 
                        size_type* idx_from, size_type* idx_to) const BMNOEXCEPT;
@@ -1302,16 +1324,29 @@ bool rsc_sparse_vector<Val, SV>::resolve(size_type idx,
                                          size_type* idx_to) const BMNOEXCEPT
 {
     BM_ASSERT(idx_to);
-    const bvector_type* bv_null = sv_.get_null_bvector();
     if (in_sync_)
-    {
-        *idx_to = bv_null->count_to_test(idx, *bv_blocks_ptr_);
-    }
-    else  // slow access
-    {
-        bool found = bv_null->test(idx);
-        *idx_to = found ? bv_null->count_range(0, idx) : 0;
-    }
+        return resolve_sync(idx, idx_to);
+
+    // not in-sync: slow access
+    const bvector_type* bv_null = sv_.get_null_bvector();
+    bool found = bv_null->test(idx);
+    if (!found)
+        return found;
+    *idx_to = bv_null->count_range(0, idx);
+    return found;
+}
+
+//---------------------------------------------------------------------
+
+template<class Val, class SV>
+bool rsc_sparse_vector<Val, SV>::resolve_sync(
+                                    size_type  idx,
+                                    size_type* idx_to) const BMNOEXCEPT
+{
+    BM_ASSERT(idx_to);
+    BM_ASSERT(in_sync_);
+    const bvector_type* bv_null = sv_.get_null_bvector();
+    *idx_to = bv_null->count_to_test(idx, *bv_blocks_ptr_);
     return bool(*idx_to);
 }
 
@@ -1374,8 +1409,36 @@ rsc_sparse_vector<Val, SV>::get(size_type idx) const BMNOEXCEPT
     bool found = resolve(idx, &sv_idx);
     if (!found)
         return value_type(0);
-    
+    BM_ASSERT(!is_null(idx));
     return sv_.get(--sv_idx);
+}
+
+//---------------------------------------------------------------------
+
+template<class Val, class SV>
+bool rsc_sparse_vector<Val, SV>::get_conditional(
+                        size_type idx, value_type& v) const BMNOEXCEPT
+{
+    size_type sv_idx;
+    bool found = resolve(idx, &sv_idx);
+    if (!found)
+        return found;
+    v = sv_.get(--sv_idx);
+    return true;
+}
+
+//---------------------------------------------------------------------
+
+template<class Val, class SV>
+bool rsc_sparse_vector<Val, SV>::get_conditional_sync(
+                        size_type idx, value_type& v) const BMNOEXCEPT
+{
+    size_type sv_idx;
+    bool found = resolve_sync(idx, &sv_idx);
+    if (!found)
+        return found;
+    v = sv_.get(--sv_idx);
+    return true;
 }
 
 //---------------------------------------------------------------------

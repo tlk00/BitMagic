@@ -2723,13 +2723,10 @@ bvector<Alloc>::count_to_test(size_type right,
     unsigned i, j;
     bm::get_block_coord(nblock_right, i, j);
     const bm::word_t* block = blockman_.get_block_ptr(i, j);
-
-    size_type cnt = 0;
     if (!block)
-        return cnt;
-
-    bool gap = BM_IS_GAP(block);
-    if (gap)
+        return 0;
+    size_type cnt = 0;
+    if (BM_IS_GAP(block))
     {
         bm::gap_word_t *gap_blk = BMGAP_PTR(block);
         if (bm::gap_test_unr(gap_blk, (gap_word_t)nbit_right))
@@ -2745,10 +2742,8 @@ bvector<Alloc>::count_to_test(size_type right,
         }
         else
         {
-            unsigned nword = nbit_right >> bm::set_word_shift;
-            unsigned w = block[nword];
-            w &= (1u << (nbit_right & bm::set_word_mask));
-            if (w)
+            unsigned w = block[nbit_right >> bm::set_word_shift]; // nword
+            if (w &= (1u << (nbit_right & bm::set_word_mask)))
             {
                 cnt = block_count_to(block, nblock_right, nbit_right, rs_idx);
                 BM_ASSERT(cnt == bm::bit_block_calc_count_to(block, nbit_right));
@@ -3188,7 +3183,7 @@ bool bvector<Alloc>::get_bit(size_type n) const BMNOEXCEPT
         unsigned nbit = unsigned(n & bm::set_block_mask); 
         if (BM_IS_GAP(block))
         {
-            return gap_test_unr(BMGAP_PTR(block), nbit);
+            return bm::gap_test_unr(BMGAP_PTR(block), nbit);
         }
         else 
         {
