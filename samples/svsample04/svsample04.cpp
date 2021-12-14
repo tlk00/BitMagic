@@ -19,7 +19,15 @@ For more information please visit:  http://bitmagic.io
 /** \example svsample04.cpp
   Example how to use NULL-enabled sparse vector
  
-  \sa bm::sparse_vector<>
+  \sa bm::sparse_vector
+  \sa bm::sparse_vector::clear
+  \sa bm::sparse_vector::set_null
+  \sa bm::sparse_vector::push_back
+  \sa bm::sparse_vector::decode
+  \sa bm::sparse_vector::resize
+  \sa bm::sparse_vector::join
+  \sa bm::bvector::enumerator
+
 */
 
 /*! \file svsample04.cpp
@@ -106,8 +114,32 @@ int main(void)
         
         sv1.push_back(10);
         sv1.push_back(20);
-        
-        print_svector(sv1); // 5: [ NULL, NULL, NULL, 10, 20 ]
+        sv1.push_back(30);
+
+        print_svector(sv1); // 5: [ NULL, NULL, NULL, 10, 20, 30 ]
+
+        // bulk clear the vector (can be a lot faster than random element access)
+        {
+            bm::bvector<> bv_clear { 3, 5 }; // clear sv1[3]=0 and sv1[5]=0
+            sv1.clear(bv_clear); // clear multiple elemets at once
+            print_svector(sv1); // 5: [ NULL, NULL, NULL, 0, 20, 0 ]
+            // please note, that clear does not set elements to NULL (but to 0)
+        }
+
+        sv1.set(1, 10);
+        sv1.set(2, 20);
+        sv1.push_back(40);
+
+        print_svector(sv1); // 5: [ NULL, 10, 20, 0, 20, 0, 40 ]
+        // bulk set_null the vector 
+        {
+            bm::bvector<> bv_set_null { 0, 1, 3, 5 }; // NULLs sv1[3] and sv1[5]
+            sv1.set_null(bv_set_null); // clear multiple elemets at once
+            print_svector(sv1); // 5: [ NULL, NULL, 20, NULL, 20, NULL, 40]
+            // please note, that clear both sets to zero and sets it to NULL
+        }
+
+
 
         
         // construct not-null-able sparse vector
