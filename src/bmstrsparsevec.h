@@ -27,6 +27,7 @@ For more information please visit:  http://bitmagic.io
 
 #ifndef BM_NO_STL
 #include <stdexcept>
+#include <string_view>
 #endif
 
 #ifndef BM__H__INCLUDED__
@@ -208,7 +209,8 @@ public:
     public:
     friend class str_sparse_vector;
 #ifndef BM_NO_STL
-        typedef std::input_iterator_tag  iterator_category;
+        typedef std::input_iterator_tag            iterator_category;
+        typedef std::basic_string_view<CharType>   string_view_type;
 #endif
         typedef str_sparse_vector<CharType, BV, STR_SIZE>     str_sparse_vector_type;
         typedef str_sparse_vector_type*                       str_sparse_vector_type_ptr;
@@ -262,7 +264,8 @@ public:
                                 { return pos_ >= it.pos_; }
 
         /// \brief Get current position (value)
-        const value_type* operator*() const BMNOEXCEPT { return this->value(); }
+        const value_type* operator*() const
+            { return this->value(); }
 
         /// \brief Advance to the next available value
         const_iterator& operator++() BMNOEXCEPT
@@ -273,8 +276,11 @@ public:
             { const_iterator tmp(*this);this->advance(); return tmp; }
 
 
-        /// \brief Get current position (value)
+        /// \brief Get zero terminated string value at the current position
         const value_type* value() const;
+
+        /// \brief Get current string as string_view
+        string_view_type get_string_view() const;
 
         /// \brief Get NULL status
         bool is_null() const BMNOEXCEPT { return sv_->is_null(this->pos_); }
@@ -2297,9 +2303,39 @@ str_sparse_vector<CharType, BV, STR_SIZE>::const_iterator::value() const
             pos_ = bm::id_max;
             return 0;
         }
+        if (is_null())
+            return 0;
     }
     return buf_matrix_.row(pos_in_buf_);
 }
+
+//---------------------------------------------------------------------
+
+template<class CharType, class BV, unsigned STR_SIZE>
+typename str_sparse_vector<CharType, BV, STR_SIZE>::const_iterator::string_view_type
+str_sparse_vector<CharType, BV, STR_SIZE>::const_iterator::get_string_view() const
+{
+    BM_ASSERT(sv_);
+    BM_ASSERT(this->valid());
+
+    if (pos_in_buf_ == ~size_type(0))
+    {
+        if (!buf_matrix_.is_init())
+            buf_matrix_.init();
+        pos_in_buf_ = 0;
+        size_type d = sv_->decode_substr(buf_matrix_, pos_, n_rows,
+                                         substr_from_, substr_to_);
+        if (!d)
+        {
+            pos_ = bm::id_max;
+            return string_view_type();
+        }
+    }
+    if (is_null())
+        return string_view_type();
+    return string_view_type(buf_matrix_.row(pos_in_buf_));
+}
+
 
 //---------------------------------------------------------------------
 
