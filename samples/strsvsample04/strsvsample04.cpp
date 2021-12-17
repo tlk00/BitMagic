@@ -21,15 +21,21 @@ For more information please visit:  http://bitmagic.io
   bit-transposed string collections with NULL (unassigned) values support
  
   \sa bm::str_sparse_vector
+  \sa bm::str_sparse_vector::set_null
+  \sa bm::str_sparse_vector::push_back
+  \sa bm::str_sparse_vector::const_iterator
+  \sa bm::str_sparse_vector::optimize
+
 */
 
 /*! \file strsvsample04.cpp
-    \brief Example: str_sparse_vector<> how to work with NULLs values
+    \brief Example: str_sparse_vector<> how to work with NULL values
 */
 
 #include <iostream>
 #include <string>
 #include <vector>
+#include <algorithm>
 
 #include "bm.h"
 #include "bmstrsparsevec.h"
@@ -106,6 +112,28 @@ int main(void)
                     cout << *it << endl;
             } // for it
         }
+
+        // bulk clear and set to NULL using bit-vector as an index
+        // (faster than random access)
+        {
+            bvector_type bv_idx { 0, 3, 4, 5 }; // index vector of elements
+            str_sv.set_null(bv_idx);
+            str_sv.optimize(); // recompress blocks to free some memory
+        }
+        cout << endl;
+        {
+            str_sv_type::const_iterator it = str_sv.begin();
+            str_sv_type::const_iterator it_end = str_sv.end();
+            for (; it != it_end; ++it)
+            {
+                std::string_view s = it.get_string_view();
+                if (s.data() == 0)
+                    cout << "NULL" << endl;
+                else
+                    cout << s << endl;
+            } // for it
+        }
+
     }
     catch(std::exception& ex)
     {
