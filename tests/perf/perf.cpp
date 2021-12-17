@@ -2946,6 +2946,13 @@ void RSC_SparseVectorRandomAccesTest()
     rsc_sparse_vector_u32   sv1(bm::use_null);
 
     FillRandomSparseNullVector(sv1, test_size, 100, 153);
+    {
+        bm::chrono_taker tt(cout, "rsc_sparse_vector<>::sync() (BIT)", REPEATS*10 );
+        for (unsigned i = 0; i < REPEATS*10; ++i)
+        {
+            sv1.sync(true);
+        }
+    }
     sv1.sync(false);
 
 //    bm::print_svector_stat(cout, sv1);
@@ -2969,7 +2976,7 @@ void RSC_SparseVectorRandomAccesTest()
     unsigned long long sum1 = 0, sum2 = 0;
 
     {
-        bm::chrono_taker tt(cout, "rsc_sparse_vector()::is_null()+get() (bit)", REPEATS*10 );
+        bm::chrono_taker tt(cout, "rsc_sparse_vector<>::is_null()+get() (BIT)", REPEATS*10 );
         for (unsigned i = 0; i < test_idx.size(); ++i)
         {
             idx = test_idx[i];
@@ -2982,7 +2989,7 @@ void RSC_SparseVectorRandomAccesTest()
     }
 
     {
-        bm::chrono_taker tt(cout, "rsc_sparse_vector()::get_conditional_sync() (bit)", REPEATS*10 );
+        bm::chrono_taker tt(cout, "rsc_sparse_vector<>::get_conditional_sync() (BIT)", REPEATS*10 );
         for (unsigned i = 0; i < test_idx.size(); ++i)
         {
             idx = test_idx[i];
@@ -3002,7 +3009,15 @@ void RSC_SparseVectorRandomAccesTest()
     sv1.optimize(tb);
 
     {
-        bm::chrono_taker tt(cout, "rsc_sparse_vector()::is_null()+get() (gap)", REPEATS*10 );
+        bm::chrono_taker tt(cout, "rsc_sparse_vector<>::sync() (GAP)", REPEATS*10 );
+        for (unsigned i = 0; i < REPEATS*10; ++i)
+        {
+            sv1.sync(true);
+        }
+    }
+
+    {
+        bm::chrono_taker tt(cout, "rsc_sparse_vector<>::is_null()+get() (GAP)", REPEATS*10 );
         for (unsigned i = 0; i < test_idx.size(); ++i)
         {
             idx = test_idx[i];
@@ -3015,7 +3030,7 @@ void RSC_SparseVectorRandomAccesTest()
     }
 
     {
-        bm::chrono_taker tt(cout, "rsc_sparse_vector()::get_conditional_sync() (gap)", REPEATS*10 );
+        bm::chrono_taker tt(cout, "rsc_sparse_vector<>::get_conditional_sync() (GAP)", REPEATS*10 );
         for (unsigned i = 0; i < test_idx.size(); ++i)
         {
             idx = test_idx[i];
