@@ -67,25 +67,25 @@ public:
     // -----------------------------------------------------------------
 
     /// set empty (no bits set super-block)
-    void set_null_super_block(unsigned i);
+    void set_null_super_block(unsigned i) BMNOEXCEPT;
     
     /// set FULL (all bits set super-block)
-    void set_full_super_block(unsigned i);
+    void set_full_super_block(unsigned i) BMNOEXCEPT;
     
     /// set super block count
-    void set_super_block(unsigned i, size_type bcount);
+    void set_super_block(unsigned i, size_type bcount) BMNOEXCEPT;
     
     /// return bit-count in super-block
-    unsigned get_super_block_count(unsigned i) const;
+    unsigned get_super_block_count(unsigned i) const BMNOEXCEPT;
 
     /// return running bit-count in super-block
-    size_type get_super_block_rcount(unsigned i) const;
+    size_type get_super_block_rcount(unsigned i) const BMNOEXCEPT;
     
     /// return number of super-blocks
-    size_type super_block_size() const;
+    size_type super_block_size() const BMNOEXCEPT;
     
     /// Find super-block with specified rank
-    unsigned find_super_block(size_type rank) const;
+    unsigned find_super_block(size_type rank) const BMNOEXCEPT;
     
     
     /// set size of true super-blocks (not NULL and not FFFFF)
@@ -101,7 +101,7 @@ public:
               block_idx_type* nb, bm::gap_word_t* sub_range) const;
     
     /// return sub-clock counts
-    unsigned sub_count(block_idx_type nb) const;
+    unsigned sub_count(block_idx_type nb) const BMNOEXCEPT;
 
 
     // -----------------------------------------------------------------
@@ -126,13 +126,14 @@ public:
     
     /// determine the sub-range within a bit-block
     static
-    unsigned find_sub_range(unsigned block_bit_pos);
+    unsigned find_sub_range(unsigned block_bit_pos) BMNOEXCEPT;
     
     /// determine block sub-range for rank search
-    bm::gap_word_t select_sub_range(block_idx_type nb, size_type& rank) const;
+    bm::gap_word_t select_sub_range(block_idx_type nb,
+                                    size_type& rank) const BMNOEXCEPT;
     
     /// find block position for the specified rank
-    block_idx_type find(size_type rank) const;
+    block_idx_type find(size_type rank) const BMNOEXCEPT;
     
 private:
     typedef bm::heap_vector<sblock_count_type, bv_allocator_type, false>
@@ -271,7 +272,7 @@ rs_index<BVAlloc>::rcount(block_idx_type nb) const
 //---------------------------------------------------------------------
 
 template<typename BVAlloc>
-unsigned rs_index<BVAlloc>::find_sub_range(unsigned block_bit_pos)
+unsigned rs_index<BVAlloc>::find_sub_range(unsigned block_bit_pos) BMNOEXCEPT
 {
     return (block_bit_pos <= rs3_border0) ? 0 :
             (block_bit_pos > rs3_border1) ? 2 : 1;
@@ -280,8 +281,9 @@ unsigned rs_index<BVAlloc>::find_sub_range(unsigned block_bit_pos)
 //---------------------------------------------------------------------
 
 template<typename BVAlloc>
-bm::gap_word_t rs_index<BVAlloc>::select_sub_range(block_idx_type nb,
-                                                   size_type& rank) const
+bm::gap_word_t rs_index<BVAlloc>::select_sub_range(
+                                            block_idx_type nb,
+                                            size_type& rank) const BMNOEXCEPT
 {
     unsigned sub_cnt = sub_count(nb);
     unsigned first = sub_cnt & 0xFFFF;
@@ -305,7 +307,7 @@ bm::gap_word_t rs_index<BVAlloc>::select_sub_range(block_idx_type nb,
 
 template<typename BVAlloc>
 typename rs_index<BVAlloc>::block_idx_type
-rs_index<BVAlloc>::find(size_type rank) const
+rs_index<BVAlloc>::find(size_type rank) const BMNOEXCEPT
 {
     BM_ASSERT(rank);
 
@@ -344,7 +346,7 @@ rs_index<BVAlloc>::find(size_type rank) const
 
 //---------------------------------------------------------------------
 template<typename BVAlloc>
-unsigned rs_index<BVAlloc>::sub_count(block_idx_type nb) const
+unsigned rs_index<BVAlloc>::sub_count(block_idx_type nb) const BMNOEXCEPT
 {
     if (nb >= total_blocks_)
         return 0;
@@ -466,7 +468,7 @@ bool rs_index<BVAlloc>::find(size_type* rank,
 //---------------------------------------------------------------------
 
 template<typename BVAlloc>
-void rs_index<BVAlloc>::set_null_super_block(unsigned i)
+void rs_index<BVAlloc>::set_null_super_block(unsigned i) BMNOEXCEPT
 {
     if (i > max_sblock_)
         max_sblock_ = i;
@@ -477,7 +479,7 @@ void rs_index<BVAlloc>::set_null_super_block(unsigned i)
 //---------------------------------------------------------------------
 
 template<typename BVAlloc>
-void rs_index<BVAlloc>::set_full_super_block(unsigned i)
+void rs_index<BVAlloc>::set_full_super_block(unsigned i) BMNOEXCEPT
 {
     set_super_block(i, bm::set_sub_array_size * bm::gap_max_bits);
 }
@@ -485,7 +487,7 @@ void rs_index<BVAlloc>::set_full_super_block(unsigned i)
 //---------------------------------------------------------------------
 
 template<typename BVAlloc>
-void rs_index<BVAlloc>::set_super_block(unsigned i, size_type bcount)
+void rs_index<BVAlloc>::set_super_block(unsigned i, size_type bcount) BMNOEXCEPT
 {
     if (i > max_sblock_)
         max_sblock_ = i;
@@ -505,7 +507,7 @@ void rs_index<BVAlloc>::set_super_block(unsigned i, size_type bcount)
 //---------------------------------------------------------------------
 
 template<typename BVAlloc>
-unsigned rs_index<BVAlloc>::get_super_block_count(unsigned i) const
+unsigned rs_index<BVAlloc>::get_super_block_count(unsigned i) const BMNOEXCEPT
 {
     if (i > max_sblock_)
         return 0;
@@ -520,7 +522,7 @@ unsigned rs_index<BVAlloc>::get_super_block_count(unsigned i) const
 
 template<typename BVAlloc>
 typename rs_index<BVAlloc>::size_type
-rs_index<BVAlloc>::get_super_block_rcount(unsigned i) const
+rs_index<BVAlloc>::get_super_block_rcount(unsigned i) const BMNOEXCEPT
 {
     if (i > max_sblock_)
         i = max_sblock_;
@@ -530,7 +532,7 @@ rs_index<BVAlloc>::get_super_block_rcount(unsigned i) const
 //---------------------------------------------------------------------
 
 template<typename BVAlloc>
-unsigned rs_index<BVAlloc>::find_super_block(size_type rank) const
+unsigned rs_index<BVAlloc>::find_super_block(size_type rank) const BMNOEXCEPT
 {
     const sblock_count_type* bcount_arr = sblock_count_.begin();
     unsigned i;
@@ -547,7 +549,7 @@ unsigned rs_index<BVAlloc>::find_super_block(size_type rank) const
 
 template<typename BVAlloc>
 typename rs_index<BVAlloc>::size_type
-rs_index<BVAlloc>::super_block_size() const
+rs_index<BVAlloc>::super_block_size() const BMNOEXCEPT
 {
 
     size_type total_sblocks = (size_type)sblock_count_.size();
@@ -590,7 +592,8 @@ void rs_index<BVAlloc>::register_super_block(unsigned i,
         bc += bcount[j];
         row[j] = bc;
         sub_row[j] = sub_count_in[j];
-        BM_ASSERT(bcount[j] >= (sub_count_in[j] >> 16) + (sub_count_in[j] & bm::set_block_mask));
+        BM_ASSERT(bcount[j] >=
+            (sub_count_in[j] >> 16) + (sub_count_in[j] & bm::set_block_mask));
     } // for j
     sblock_count_[i+1] = sblock_count_[i] + bc;
 }
