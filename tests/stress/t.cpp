@@ -35806,7 +35806,7 @@ void show_help()
         << "-h                - help" << endl
         << "-llevel (or -ll)      - low level tests" << endl
         << "-support (or -s)      - support containers " << endl
-        << "-bvbasic (or -bvb     - bit-vector basic " << endl
+        << "-bvbasic (or -bvb)    - bit-vector basic " << endl
         << "-bvser                - bit-vector serialization " << endl
         << "-bvops (-bvo, -bvl)   - bit-vector logical operations" << endl
         << "-bvshift (or -bvs)    - bit-vector shifts " << endl
