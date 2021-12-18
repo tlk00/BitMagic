@@ -49,13 +49,14 @@ rm -f *.log
 PID_ARR=()
 declare -a OPT_MAP
 
-TEST_OPT="-ll -s -bvb -bvser -bvl -bvs -rc -agg -sv -csv -strsv -cc -ser"
+TEST_OPT="-ll -s -bvb"
+# -bvser -bvl -bvs -rc -agg -sv -csv -strsv -cc -ser"
 for OPT in $TEST_OPT;
 do
     LOG_OPT=${RUN_NAME}${OPT}.log
     echo ${RUN_NAME} ${OPT} ">" ${LOG_OPT}
 
-    ./${RUN_NAME} ${OPT} &> ${LOG_OPT} &
+    ./${RUN_NAME} ${OPT} -silent &> ${LOG_OPT} &
     PID=$!
     PID_ARR+=($PID)
     OPT_ARR+=($LOG_OPT)
@@ -70,17 +71,21 @@ ERR_FLAG="0"
 
 for PID in ${PID_ARR[*]};
 do
-    echo ${PID}
+    LOG=${OPT_MAP[$PID]}
+    echo ${PID} ${LOG}
     wait ${PID}
     RET=$?
-    LOG=${OPT_MAP[$PID]}
 
     if test "$RET" != "0"; then
         ERR_FLAG="1"
+        echo
         echo "Error: test case failed! log file:" $LOG
-        echo "--------------------------------------------------->8"
-        tail -50 $LOG
-        echo "--------------------------------------------------->8"
+        echo "==============================================================="
+        echo "-------------------------------------------------------------->8"
+        tail -10 $LOG
+        echo "==============================================================="
+        echo "-------------------------------------------------------------->8"
+        echo
     else
         echo "$LOG OK!"
     fi
@@ -90,7 +95,10 @@ done
 
 
 if test "$ERR_FLAG" != "0"; then
+    echo "======================"
+    echo "BUILD=" ${BUILD_TYPE}
     echo "ERROR(s) detected!"
+    exit 1
 else
-    echo "DONE"
+    echo "DONE     " ${RUN_NAME}
 fi
