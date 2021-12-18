@@ -1857,6 +1857,8 @@ void str_sparse_vector<CharType, BV, STR_SIZE>::calc_octet_stat(
     for(; it.valid(); ++it)
     {
         const value_type* s = *it; // get asciiz char*
+        if(!s)
+            continue;
         for (unsigned i = 0; true; ++i) // for each char in str
         {
             value_type ch = s[i];
@@ -2303,9 +2305,9 @@ str_sparse_vector<CharType, BV, STR_SIZE>::const_iterator::value() const
             pos_ = bm::id_max;
             return 0;
         }
-        if (is_null())
-            return 0;
     }
+    if (is_null())
+        return 0;
     return buf_matrix_.row(pos_in_buf_);
 }
 

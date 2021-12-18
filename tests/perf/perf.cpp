@@ -1254,6 +1254,7 @@ static
 void EnumeratorTest()
 {
     bvect                 bv1, bv2, bv3, bv4;
+    bvect::statistics     st1, st2, st3, st4;;
     std::vector<bvect::size_type> v1,  v2,  v3,  v4;
     
     {
@@ -1265,11 +1266,16 @@ void EnumeratorTest()
 
         //delete bset;
     }
-    
+
     FillSetsIntervals(nullptr, bv2, 0, BSIZE/2, 8);
     FillSetsIntervals(nullptr, bv3, 0, BSIZE/2, 12);
     FillSetsIntervals(nullptr, bv4, 0, BSIZE/2, 120);
-    
+
+    bv1.calc_stat(&st1);
+    bv2.calc_stat(&st2);
+    bv3.calc_stat(&st3);
+    bv4.calc_stat(&st4);
+
 
     unsigned i;
 
@@ -5066,6 +5072,7 @@ int main(void)
         cout << endl;
 
         EnumeratorTest();
+
         EnumeratorTestGAP();
         EnumeratorGoToTest();
         cout << endl;

@@ -28939,6 +28939,36 @@ void TestStrSparseVectorSerial()
                 bi.add_null();
            }
            bi.flush();
+
+           str_sparse_vector<char, bvect, 3>::const_iterator it(&str_sv0);
+           for (unsigned i = 0; i < 1000000; ++i)
+           {
+                assert(it.valid());
+                const char* s;
+                int cmp;
+
+                s = it.value();
+                cmp = ::strcmp(s, "ATGC");
+                assert(cmp==0);
+                ++it;
+                s = it.value();
+                cmp = ::strcmp(s, "GCTA");
+                assert(cmp==0);
+                ++it;
+                s = it.value();
+                cmp = ::strcmp(s, "GCAA");
+                assert(cmp==0);
+                ++it;
+                s = it.value();
+                cmp = ::strcmp(s, "TATA");
+                assert(cmp==0);
+                ++it;
+                s = it.value();
+                assert(!s); // NULL value
+                ++it;
+
+           }
+
        }
 
        str_sv1.remap_from(str_sv0);
@@ -33461,7 +33491,7 @@ void DetailedCompareSparseVectors(const CSV& csv,
             assert(0); exit(1);
         }
 
-        value_type v1c;
+        value_type v1c{0};
         bool found = csv.get_conditional(i, v1c);
         assert(is_null_csv == !found);
         
@@ -36655,6 +36685,7 @@ int main(int argc, char *argv[])
 
     if (is_ser || is_allsvser)
     {
+
         if (is_ser)
         {
             SerializationCompressionLevelsTest();
