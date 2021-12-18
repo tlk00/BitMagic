@@ -386,6 +386,11 @@ public:
      */
     void sync_size() BMNOEXCEPT;
 
+    /*! \brief change vector size
+        \param new_size - new vector size
+    */
+    void resize(size_type new_size);
+
     /*
        \brief Returns count of not NULL elements (population)
               in the given range [left..right]
@@ -456,7 +461,26 @@ public:
         \param v   - element value
     */
     void push_back(size_type idx, value_type v);
-    
+
+
+    /*!
+        \brief add element with automatic resize
+        \param v   - element value
+    */
+    void push_back(value_type v)
+        { this->push_back(size_, v); }
+
+    /*!
+        \brief push back specified amount of NULL values
+        \param count   - number of NULLs to push back
+    */
+    void push_back_null(size_type count);
+
+    /*!
+        \brief push back NULL value
+    */
+    void push_back_null() { push_back_null(1); }
+
     /*!
         \brief set specified element with bounds checking and automatic resize
         \param idx - element index
@@ -990,6 +1014,53 @@ rsc_sparse_vector<Val, SV>::size() const BMNOEXCEPT
 //---------------------------------------------------------------------
 
 template<class Val, class SV>
+void rsc_sparse_vector<Val, SV>::resize(size_type new_size)
+{
+    BM_ASSERT(new_size < bm::id_max);
+    if (!new_size) // clear memory
+    {
+        sv_.resize(0);
+        BM_ASSERT(sv_.get_null_bvect()->none());
+        in_sync_ = false;
+        size_ = max_id_ = 0;
+        return;
+    }
+    if (new_size >= size_) // vector grows
+    {
+        size_ = new_size;
+        max_id_ = new_size - 1;
+        return;
+    }
+
+    // vector shrinks
+    // compute tail rank
+    bvector_type* bv_null = sv_.get_null_bvect();
+    size_type clear_size = bv_null->count_range(new_size, bm::id_max-1);
+
+    if (!clear_size) // tail set/rank is empty
+    {
+        size_ = new_size;
+        max_id_ = new_size - 1;
+        BM_ASSERT(!bv_null->any_range(size_, bm::id_max-1));
+        return;
+    }
+
+    BM_ASSERT(sv_.size() >= clear_size);
+    size_type new_sv_size = sv_.size() - clear_size;
+    sv_.resize_internal(new_sv_size, false); // without touching NULL plane
+    bv_null->clear_range(new_size, bm::id_max-1);
+
+    size_ = new_size;
+    max_id_ = new_size - 1;
+
+    BM_ASSERT(!bv_null->any_range(size_, bm::id_max-1));
+
+    in_sync_ = false;
+}
+
+//---------------------------------------------------------------------
+
+template<class Val, class SV>
 void rsc_sparse_vector<Val, SV>::push_back(size_type idx, value_type v)
 {
     if (sv_.empty())
@@ -1000,6 +1071,16 @@ void rsc_sparse_vector<Val, SV>::push_back(size_type idx, value_type v)
         sv_.throw_range_error("compressed sparse vector push_back() range error");
     }
     push_back_no_check(idx, v);
+}
+
+//---------------------------------------------------------------------
+
+template<class Val, class SV>
+void rsc_sparse_vector<Val, SV>::push_back_null(size_type count)
+{
+    BM_ASSERT(size_ < bm::id_max - count); // overflow assert
+    size_ += count;
+    max_id_ = size_-1;
 }
 
 //---------------------------------------------------------------------
@@ -1034,6 +1115,14 @@ void rsc_sparse_vector<Val, SV>::set_null(size_type idx)
         bv_null->clear_bit_no_check(idx);
         sv_.erase(--sv_idx, false/*not delete NULL vector*/);
         in_sync_ = false;
+    }
+    else
+    {
+        if (idx > max_id_)
+        {
+            max_id_ = idx;
+            size_ = max_id_ + 1;
+        }
     }
 }
 

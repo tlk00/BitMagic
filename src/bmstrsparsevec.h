@@ -756,7 +756,7 @@ public:
     /*! \brief resize vector
         \param sz - new size
     */
-    void resize(size_type sz) { parent_type::resize(sz); }
+    void resize(size_type sz) { parent_type::resize(sz, true); }
     
     /*! \brief get maximum string length capacity
         \return maximum string length sparse vector can take

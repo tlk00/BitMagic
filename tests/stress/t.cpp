@@ -33879,6 +33879,105 @@ void TestCompressSparseVector()
 
     }
 
+    // trailing NULLs and size() check
+    {
+        rsc_sparse_vector_u64 csv1;
+        csv1.push_back(10, 10);
+        assert(csv1.size() == 11);
+        csv1.set_null(11);
+        assert(csv1.size() == 12);
+        csv1.optimize();
+        csv1.sync();
+        assert(csv1.size() == 12);
+
+        auto sz0 = csv1.size();
+        {
+            auto bi = csv1.get_back_inserter();
+            bi = 12;
+            bi = 13;
+            bi.flush();
+        }
+        auto sz = csv1.size();
+        assert(sz == sz0+2);
+        auto v = csv1.get(13);
+        assert(v == 13);
+        v = csv1.get(12);
+        assert(v == 12);
+
+        csv1.resize(0);
+        sz = csv1.size();
+        assert(sz == 0);
+        bool b = csv1.is_null(12);
+        assert(b);
+        v = csv1.get(12);
+        assert(v == 0);
+
+        sz = csv1.size();
+        assert(sz == 0);
+
+        // test down resize
+        csv1.push_back_null();
+            sz = csv1.size(); assert(sz == 1);
+        csv1.push_back(1);
+        csv1.push_back(2);
+            sz = csv1.size(); assert(sz == 3);
+        csv1.push_back_null();
+            sz = csv1.size(); assert(sz == 4);
+        csv1.push_back(4);
+            sz = csv1.size(); assert(sz == 5);
+        csv1.push_back_null(2); // 5, 6
+
+        sz = csv1.size();
+        assert(sz == 7);
+        csv1.resize(6);
+            sz = csv1.size();assert(sz == 6);
+
+        csv1.resize(4);
+            sz = csv1.size(); assert(sz == 4);
+        v = csv1.get(4);
+        assert(v == 0);
+
+        csv1.push_back(40);
+            sz = csv1.size();assert(sz == 5);
+            v = csv1.get(4);
+            assert(v == 40);
+        csv1.push_back(5);
+            sz = csv1.size();assert(sz == 6);
+            v = csv1.get(5);
+            assert(v == 5);
+
+        csv1.resize(4);
+        sz = csv1.size();
+        assert(sz == 4);
+        v = csv1.get(4);
+        assert(v == 0);
+
+    }
+
+    // resize tests
+    {
+        rsc_sparse_vector_u64 csv1;
+        assert(csv1.size()==0);
+        csv1.resize(0);
+        assert(csv1.size()==0);
+        csv1.push_back_null();
+        assert(csv1.size()==1);
+        csv1.resize(2);
+        assert(csv1.size()==2);
+        csv1.resize(5);
+        assert(csv1.size()==5);
+
+        csv1.push_back(5);
+        assert(csv1.size()==6);
+        assert(csv1.get(5) == 5);
+        csv1.push_back_null(10);
+        assert(csv1.size()==16);
+
+        csv1.resize(6); // trim the NULL tail
+        assert(csv1.size()==6);
+        assert(csv1.get(5) == 5);
+    }
+
     // bulk clear tests
     {
         rsc_sparse_vector_u32 csv1(bm::use_null);
@@ -36600,6 +36699,8 @@ int main(int argc, char *argv[])
 //mem_debug_label:
 
     CheckAllocLeaks(true);
+
+    cout << "OK";
 
     return 0;
 }

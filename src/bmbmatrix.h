@@ -380,7 +380,7 @@ public:
 
     size_type size() const BMNOEXCEPT { return size_; }
     
-    void resize(size_type new_size);
+    void resize(size_type new_size, bool set_null);
 
     void clear_range(size_type left, size_type right, bool set_null);
 
@@ -1469,7 +1469,7 @@ template<class Val, class BV, unsigned MAX_SIZE>
 void base_sparse_vector<Val, BV, MAX_SIZE>::copy_from(
                 const base_sparse_vector<Val, BV, MAX_SIZE>& bsv)
 {
-    resize(bsv.size());
+    resize(bsv.size(), true);
     effective_slices_ = bsv.effective_slices_;
 
     size_type arg_null_idx = bsv.bmatr_.get_null_idx();
@@ -1584,9 +1584,13 @@ void base_sparse_vector<Val, BV, MAX_SIZE>::clear_range(
         return clear_range(right, left, set_null);
     unsigned planes = value_bits();
     for (unsigned i = 0; i < planes; ++i)
+    {
         if (bvector_type* bv = this->bmatr_.get_row(i))
+        {
+            BM_ASSERT(bv != this->get_null_bvect());
             bv->set_range(left, right, false);
-
+        }
+    }
     if (set_null)
         if (bvector_type* bv_null = this->get_null_bvect())
             bv_null->set_range(left, right, false);
@@ -1609,7 +1613,7 @@ void base_sparse_vector<Val, BV, MAX_SIZE>::keep_range_no_check(
 //---------------------------------------------------------------------
 
 template<class Val, class BV, unsigned MAX_SIZE>
-void base_sparse_vector<Val, BV, MAX_SIZE>::resize(size_type sz)
+void base_sparse_vector<Val, BV, MAX_SIZE>::resize(size_type sz, bool set_null)
 {
     if (sz == size())  // nothing to do
         return;
@@ -1619,7 +1623,7 @@ void base_sparse_vector<Val, BV, MAX_SIZE>::resize(size_type sz)
         return;
     }
     if (sz < size()) // vector shrink
-        clear_range(sz, this->size_-1, true);   // clear the tails and NULL vect
+        clear_range(sz, this->size_, set_null); // clear the tails and NULL
     size_ = sz;
 }
 

@@ -697,7 +697,7 @@ public:
     /*! \brief resize vector
         \param sz - new size
     */
-    void resize(size_type sz) { parent_type::resize(sz); }
+    void resize(size_type sz) { parent_type::resize(sz, true); }
 
     /**
         \brief recalculate size to exclude tail NULL elements
@@ -965,7 +965,8 @@ protected:
     /*! \brief insert value without checking boundaries or support of NULL */
     void insert_value_no_null(size_type idx, value_type v);
 
-    void resize_internal(size_type sz) { resize(sz); }
+    void resize_internal(size_type sz, bool set_null=true)
+        { parent_type::resize(sz, set_null); }
     size_type size_internal() const BMNOEXCEPT { return size(); }
 
     constexpr bool is_remap() const BMNOEXCEPT { return false; }
