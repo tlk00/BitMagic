@@ -26824,6 +26824,7 @@ template<class STR_SV>
 void CheckStrSVCompare(const STR_SV& str_sv,
                         typename STR_SV::size_type limit = 0)
 {
+    char emptyStr[] = "";
     if (!limit)
         limit = str_sv.size();
 
@@ -26834,12 +26835,23 @@ void CheckStrSVCompare(const STR_SV& str_sv,
     for (; it1 != it_end; ++it1, ++i)
     {
         const char* s1 = *it1;
+        if (!s1)
+        {
+            assert(it1.is_null());
+            s1 = emptyStr;
+        }
+
         auto it2 = str_sv.begin();
         it2.go_to(i);
         for (j = i; j < limit; ++it2, ++j)
         {
             assert(it2 != it_end);
             const char* s2 = *it2;
+            if (!s2)
+            {
+                assert(it2.is_null());
+                s2 = emptyStr;
+            }
             int r2 = ::strcmp(s1, s2);
             int r1 = str_sv.compare(i, j);
             assert (r1 == r2 || (r1 < 0 && r2 < 0) || (r1 > 0 && r2 > 0));
@@ -27020,7 +27032,7 @@ void TestStrSparseVector()
         assert(b);
         auto it = ssv1.begin();
         const char* ch = *it;
-        assert(!ch[0]);
+        assert(!ch);
 
     }
 
@@ -27047,7 +27059,7 @@ void TestStrSparseVector()
 
         auto it = ssv1.begin();
         const char* ch = *it;
-        assert(!ch[0]);
+        assert(!ch);
     }
 
 
@@ -27092,7 +27104,7 @@ void TestStrSparseVector()
         assert(ch[0] == 'z');
         ++it; ++it;
         ch = *it;
-        assert(!ch[0]);
+        assert(!ch);
     }
 
 
