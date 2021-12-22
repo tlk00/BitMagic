@@ -19,11 +19,12 @@ For more information please visit:  http://bitmagic.io
 */
 
 /*! \file bmconst.h
-    \brief Constants, tables and typedefs
+    \brief Constants, lookup tables and typedefs
     @internal
 */
 
 #include <cstdint>
+#include <inttypes.h>
 
 namespace bm
 {
@@ -228,7 +229,7 @@ template<bool T> struct _copyright
 };
 
 template<bool T> const char _copyright<T>::_p[] = 
-    "BitMagic C++ Library. v.7.8.2 (c) 2002-2021 Anatoliy Kuznetsov.";
+    "BitMagic C++ Library. v.7.9.3 (c) 2002-2021 Anatoliy Kuznetsov.";
 template<bool T> const unsigned _copyright<T>::_v[3] = {7, 9, 3};
 
 

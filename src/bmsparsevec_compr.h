@@ -918,6 +918,7 @@ private:
     size_type                     max_id_;   ///< control variable for sorted load
     bool                          in_sync_;  ///< flag if prefix sum is in-sync with vector
     rs_index_type*                bv_blocks_ptr_ = 0; ///< prefix sum for rank translation
+    bool                          is_dense_ = false; ///< flag if vector is dense
 };
 
 //---------------------------------------------------------------------
@@ -1384,9 +1385,13 @@ void rsc_sparse_vector<Val, SV>::sync(bool force)
     const bvector_type* bv_null = sv_.get_null_bvector();
     BM_ASSERT(bv_null);
     bv_null->build_rs_index(bv_blocks_ptr_); // compute popcount prefix list
- 
+
     if (force)
         sync_size();
+
+    size_type cnt = bv_null->count_range(0, size_, *bv_blocks_ptr_);
+    is_dense_ = (cnt == size_); // dense vector?
+
     in_sync_ = true;
 }
 
@@ -1434,6 +1439,13 @@ bool rsc_sparse_vector<Val, SV>::resolve_sync(
 {
     BM_ASSERT(idx_to);
     BM_ASSERT(in_sync_);
+
+    if (is_dense_)
+    {
+        *idx_to = idx+1;
+        return true;
+    }
+
     const bvector_type* bv_null = sv_.get_null_bvector();
     *idx_to = bv_null->count_to_test(idx, *bv_blocks_ptr_);
     return bool(*idx_to);

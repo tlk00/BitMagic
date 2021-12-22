@@ -1295,6 +1295,33 @@ int basic_bmatrix<BV>::compare_octet(size_type pos,
 
 //---------------------------------------------------------------------
 
+/**
+    Test 4 pointers are all marked as GAPs
+    @internal
+ */
+inline
+bool test_4gaps(const bm::word_t* p0, const bm::word_t* p1,
+                const bm::word_t* p2, const bm::word_t* p3) BMNOEXCEPT
+{
+    uintptr_t p
+        = uintptr_t(p0) | uintptr_t(p1) | uintptr_t(p2) | uintptr_t(p3);
+    return (p & 1);
+}
+/**
+    Test 4 pointers are not NULL and not marked as FULLBLOCK
+    @internal
+*/
+inline
+bool test_4bits(const bm::word_t* p0, const bm::word_t* p1,
+                const bm::word_t* p2, const bm::word_t* p3) BMNOEXCEPT
+{
+    return p0 && p0!=FULL_BLOCK_FAKE_ADDR &&
+           p1 && p1!=FULL_BLOCK_FAKE_ADDR &&
+           p2 && p2!=FULL_BLOCK_FAKE_ADDR &&
+           p3 && p3!=FULL_BLOCK_FAKE_ADDR;
+}
+
+
 template<typename BV>
 unsigned
 basic_bmatrix<BV>::get_half_octet(size_type pos, size_type row_idx) const BMNOEXCEPT
@@ -1308,47 +1335,52 @@ basic_bmatrix<BV>::get_half_octet(size_type pos, size_type row_idx) const BMNOEX
     const bm::word_t* blk;
     const bm::word_t* blka[4];
     unsigned nbit = unsigned(pos & bm::set_block_mask);
-    unsigned nword  = unsigned(nbit >> bm::set_word_shift);
-    unsigned mask0 = 1u << (nbit & bm::set_word_mask);
 
     blka[0] = get_block(row_idx+0, i0, j0);
     blka[1] = get_block(row_idx+1, i0, j0);
     blka[2] = get_block(row_idx+2, i0, j0);
     blka[3] = get_block(row_idx+3, i0, j0);
     unsigned is_set;
-    
-    if ((blk = blka[0])!=0)
+
+
+    unsigned nword  = unsigned(nbit >> bm::set_word_shift);
+    unsigned mask0 = 1u << (nbit & bm::set_word_mask);
+
+    // speculative assumption that nibble is often 4 bit-blocks
+    // and we will be able to extract it faster with less mispredicts
+    //
+    if (!test_4gaps(blka[0], blka[1], blka[2], blka[3]))
     {
-        if (blk == FULL_BLOCK_FAKE_ADDR)
-            is_set = 1;
-        else
-            is_set = (BM_IS_GAP(blk)) ? bm::gap_test_unr(BMGAP_PTR(blk), nbit) : (blk[nword] & mask0);
-        v |= unsigned(bool(is_set));
+        if (test_4bits(blka[0], blka[1], blka[2], blka[3]))
+        {
+            v = unsigned(bool((blka[0][nword] & mask0))) |
+                unsigned(bool((blka[1][nword] & mask0)) << 1u) |
+                unsigned(bool((blka[2][nword] & mask0)) << 2u) |
+                unsigned(bool((blka[3][nword] & mask0)) << 3u);
+            return v;
+        }
     }
-    if ((blk = blka[1])!=0)
+    // hypothesis above didn't work out extract the regular way
+    unsigned i = 0;
+    do
     {
-        if (blk == FULL_BLOCK_FAKE_ADDR)
-            is_set = 1;
-        else
-            is_set = (BM_IS_GAP(blk)) ? bm::gap_test_unr(BMGAP_PTR(blk), nbit) : (blk[nword] & mask0);
-        v |= unsigned(bool(is_set)) << 1u;
-    }
-    if ((blk = blka[2])!=0)
-    {
-        if (blk == FULL_BLOCK_FAKE_ADDR)
-            is_set = 1;
-        else
-            is_set = (BM_IS_GAP(blk)) ? bm::gap_test_unr(BMGAP_PTR(blk), nbit) : (blk[nword] & mask0);
-        v |= unsigned(bool(is_set)) << 2u;
-    }
-    if ((blk = blka[3])!=0)
-    {
-        if (blk == FULL_BLOCK_FAKE_ADDR)
-            is_set = 1;
-        else
-            is_set = (BM_IS_GAP(blk)) ? bm::gap_test_unr(BMGAP_PTR(blk), nbit) : (blk[nword] & mask0);
-        v |= unsigned(bool(is_set)) << 3u;
-    }
+        if ((blk = blka[i])!=0)
+        {
+            if (blk == FULL_BLOCK_FAKE_ADDR)
+                is_set = 1;
+            else
+                is_set = (BM_IS_GAP(blk)) ? bm::gap_test_unr(BMGAP_PTR(blk), nbit) : (blk[nword] & mask0);
+            v |= unsigned(bool(is_set)) << i;
+        }
+        if ((blk = blka[++i])!=0)
+        {
+            if (blk == FULL_BLOCK_FAKE_ADDR)
+                is_set = 1;
+            else
+                is_set = (BM_IS_GAP(blk)) ? bm::gap_test_unr(BMGAP_PTR(blk), nbit) : (blk[nword] & mask0);
+            v |= unsigned(bool(is_set)) << i;
+        }
+    } while(++i < 4);
     return v;
 }
 
