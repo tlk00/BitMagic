@@ -2556,14 +2556,21 @@ void FillRandomSparseNullVector(SV& sv, typename SV::size_type size,
                           unsigned data_size, unsigned null_factor)
 {
     typename SV::size_type i = 0;
-    for (; i < size; i+= null_factor)
+    if (null_factor)
     {
-        typename SV::size_type k = 0;
-        for (;k < data_size; ++k, ++i)
+        for (; i < size; i+= null_factor)
         {
-            sv.push_back(i, rand() & 0xFFF);
-        } // for k
-    } // for i
+            typename SV::size_type k = 0;
+            for (;k < data_size; ++k, ++i)
+                sv.push_back(i, unsigned(rand()) & 0xFFF);
+        } // for i
+    }
+    else
+    {
+        auto bi = sv.get_back_inserter();
+        for (; i < size; i++)
+            bi = unsigned(rand()) & 0xFFF;
+    }
 }
 
 
@@ -2950,8 +2957,13 @@ void RSC_SparseVectorRandomAccesTest()
     BM_DECLARE_TEMP_BLOCK(tb)
 
     rsc_sparse_vector_u32   sv1(bm::use_null);
+    rsc_sparse_vector_u32   sv2(bm::use_null);
 
     FillRandomSparseNullVector(sv1, test_size, 100, 153);
+    FillRandomSparseNullVector(sv2, test_size, 0, 0);
+    sv2.optimize();
+    sv2.sync();
+
     {
         bm::chrono_taker tt(cout, "rsc_sparse_vector<>::sync() (BIT)", REPEATS*10 );
         for (unsigned i = 0; i < REPEATS*10; ++i)
@@ -2961,7 +2973,7 @@ void RSC_SparseVectorRandomAccesTest()
     }
     sv1.sync(false);
 
-//    bm::print_svector_stat(cout, sv1);
+    //bm::print_svector_stat(cout, sv2);
 
     std::vector<unsigned> test_idx;
     unsigned idx = 0;
@@ -2979,7 +2991,20 @@ void RSC_SparseVectorRandomAccesTest()
             test_idx.push_back(idx);
     }
 
-    unsigned long long sum1 = 0, sum2 = 0;
+    unsigned long long sum1 = 0, sum2 = 0, sum1d = 0;
+
+    {
+        bm::chrono_taker tt(cout, "rsc_sparse_vector<>::is_null()+get() (DENSE)", REPEATS*10 );
+        for (unsigned i = 0; i < test_idx.size(); ++i)
+        {
+            idx = test_idx[i];
+            if (!sv2.is_null(idx))
+            {
+                unsigned v = sv2.get(idx);
+                sum1d += v;
+            }
+        }
+    }
 
     {
         bm::chrono_taker tt(cout, "rsc_sparse_vector<>::is_null()+get() (BIT)", REPEATS*10 );
@@ -5136,8 +5161,8 @@ int main(void)
 
         RSC_SparseVectorFillTest();
         RSC_SparseVectorAccesTest();
-
         RSC_SparseVectorRandomAccesTest();
+        cout << endl;
 
         RankCompressionTest();
         cout << endl;
