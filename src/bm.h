@@ -2814,7 +2814,7 @@ bvector<Alloc>::count_to(size_type right,
     {
         const bm::gap_word_t* gap_block = BMGAP_PTR(block);
         unsigned len = bm::gap_length(gap_block);
-        unsigned c;
+        size_type c;
         if (len < 128)
         {
             c = bm::gap_bit_count_to(gap_block, (gap_word_t)nbit_right);
