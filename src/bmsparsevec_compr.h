@@ -1419,6 +1419,8 @@ bool rsc_sparse_vector<Val, SV>::resolve(size_type idx,
                                          size_type* idx_to) const BMNOEXCEPT
 {
     BM_ASSERT(idx_to);
+    if (!size_)
+        return false;
     if (in_sync_)
         return resolve_sync(idx, idx_to);
 
@@ -1444,7 +1446,7 @@ bool rsc_sparse_vector<Val, SV>::resolve_sync(
     if (is_dense_)
     {
         *idx_to = idx+1;
-        return true;
+        return (*idx_to < size_);
     }
 
     const bvector_type* bv_null = sv_.get_null_bvector();
