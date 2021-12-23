@@ -34107,7 +34107,7 @@ void TestCompressSparseVector()
     }
 
 
-    cout << "count_range_notnull()" << endl;
+    cout << "    testing count_range_notnull()..." << endl;
     {
         rsc_sparse_vector_u32 csv1;
         auto cnt = csv1.count_range_notnull(0, 10);
@@ -34121,6 +34121,9 @@ void TestCompressSparseVector()
         {
             csv1.push_back(i, 3);
         }
+//csv1.optimize();
+//csv1.sync();
+
         for (unsigned pass = 0; pass < 2; ++pass)
         {
             cout << "\nPASS=" << pass << endl;
@@ -34164,9 +34167,9 @@ void TestCompressSparseVector()
         } // for pass
         cout << endl;
     }
+    cout << "OK" << endl;
 
-
-    cout << "rsc_sparse_vector<>::const_iterator tests" << endl;
+    cout << "   rsc_sparse_vector<>::const_iterator tests.." << endl;
     {
         {
         rsc_sparse_vector_u32 csv1;
