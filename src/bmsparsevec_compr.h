@@ -1389,7 +1389,8 @@ void rsc_sparse_vector<Val, SV>::sync(bool force)
     if (force)
         sync_size();
 
-    size_type cnt = bv_null->count_range(0, size_, *bv_blocks_ptr_);
+    size_type cnt = size_ ? bv_null->count_range(0, size_-1, *bv_blocks_ptr_)
+                          : 0;
     is_dense_ = (cnt == size_); // dense vector?
 
     in_sync_ = true;

@@ -96,6 +96,9 @@ bool is_silent = false;
 //
 //#define BM_STACK_COLL
 
+// NOTE: ARM NEON compilation causes SIGBUS failure (Pi 32-bit)
+// (disabled as non-essential)
+
 #ifdef BM_STACK_COLL
 std::unordered_map<void*, std::string> g_alloc_trace_map;
 #endif
@@ -35308,7 +35311,7 @@ void TestCompressSparseSignedVector()
         }
     }
 
-/*
+
     // set stress test
     {
         cout << "RSC set stress..." << endl;
@@ -35382,7 +35385,7 @@ void TestCompressSparseSignedVector()
 
         cout << "\nOK" << endl;
     }
-*/
+
     {
     cout << "load() test" << endl;
     unsigned v;
