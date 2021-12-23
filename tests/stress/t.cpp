@@ -33779,7 +33779,7 @@ void TestCompressSparseVector()
                 it.advance();
             }
         }
-        catch (std::domain_error& /*ex*/)
+        catch (std::domain_error& )
         {
             ex_flag = true;
         }
@@ -34734,7 +34734,8 @@ void TestCompressSparseVector()
         
         sparse_vector_u32 sv(bm::use_null);
         rsc_sparse_vector_u32 csv1;
-        
+
+
         GenerateSV(sv, i);
         
         
