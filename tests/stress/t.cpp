@@ -79,7 +79,7 @@ using namespace std;
 
 bool is_silent = false;
 
-#if defined(BMSSE2OPT) || defined(BMSSE42OPT) || defined(BMAVX2OPT) || defined(BMAVX512OPT)
+#if defined(BMSSE2OPT) || defined(BMSSE42OPT) || defined(BMAVX2OPT) || defined(BMAVX512OPT) || defined(__ARM_NEON__)
 #else
 # define MEM_DEBUG
 #endif
@@ -36273,6 +36273,7 @@ int main(int argc, char *argv[])
 //unsigned long long a = 9223372036854775807ULL;
 //unsigned long long a = 281474976710655ULL;
 //a = a / (65536 * 256);
+
     if (is_all || is_low_level)
     {
         TestRecomb();
