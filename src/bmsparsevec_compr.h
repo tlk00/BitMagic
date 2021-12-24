@@ -764,7 +764,7 @@ public:
     /*!
         \brief Unsync the prefix sum table
     */
-    void unsync() BMNOEXCEPT { in_sync_ = false; }
+    void unsync() BMNOEXCEPT { in_sync_ = is_dense_ = false; }
     ///@}
 
     // ------------------------------------------------------------
@@ -1419,7 +1419,7 @@ bool rsc_sparse_vector<Val, SV>::resolve(size_type idx,
                                          size_type* idx_to) const BMNOEXCEPT
 {
     BM_ASSERT(idx_to);
-    if (!size_)
+    if (idx >= size_)
         return false;
     if (in_sync_)
         return resolve_sync(idx, idx_to);
@@ -1446,7 +1446,7 @@ bool rsc_sparse_vector<Val, SV>::resolve_sync(
     if (is_dense_)
     {
         *idx_to = idx+1;
-        return (*idx_to < size_);
+        return (*idx_to <= size_);
     }
 
     const bvector_type* bv_null = sv_.get_null_bvector();
@@ -1524,9 +1524,8 @@ bool rsc_sparse_vector<Val, SV>::get_conditional(
                         size_type idx, value_type& v) const BMNOEXCEPT
 {
     size_type sv_idx;
-    bool found = resolve(idx, &sv_idx);
-    if (!found)
-        return found;
+    if (!resolve(idx, &sv_idx))
+        return false;
     v = sv_.get(--sv_idx);
     return true;
 }
