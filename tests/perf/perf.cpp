@@ -3020,12 +3020,12 @@ void RSC_SparseVectorRandomAccesTest()
     }
 
     {
-        bm::chrono_taker tt(cout, "rsc_sparse_vector<>::get_conditional_sync() (BIT)", REPEATS*10 );
+        bm::chrono_taker tt(cout, "rsc_sparse_vector<>::try_get_sync() (BIT)", REPEATS*10 );
         for (unsigned i = 0; i < test_idx.size(); ++i)
         {
             idx = test_idx[i];
             unsigned v;
-            if (sv1.get_conditional_sync(idx, v))
+            if (sv1.try_get_sync(idx, v))
                 sum2 += v;
         }
     }
@@ -3061,12 +3061,12 @@ void RSC_SparseVectorRandomAccesTest()
     }
 
     {
-        bm::chrono_taker tt(cout, "rsc_sparse_vector<>::get_conditional_sync() (GAP)", REPEATS*10 );
+        bm::chrono_taker tt(cout, "rsc_sparse_vector<>::try_get_sync() (GAP)", REPEATS*10 );
         for (unsigned i = 0; i < test_idx.size(); ++i)
         {
             idx = test_idx[i];
             unsigned v;
-            if (sv1.get_conditional_sync(idx, v))
+            if (sv1.try_get_sync(idx, v))
                 sum4 += v;
         }
     }

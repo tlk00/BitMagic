@@ -438,7 +438,7 @@ public:
         \return true if value was aquired (NOT NULL), false otherwise
         @sa is_null, get
      */
-    bool get_conditional(size_type idx, value_type& v) const BMNOEXCEPT;
+    bool try_get(size_type idx, value_type& v) const BMNOEXCEPT;
 
     /**
         \brief get specified element with NOT NULL check
@@ -448,7 +448,7 @@ public:
         \return true if value was aquired (NOT NULL), false otherwise
         @sa is_null, get, sync
      */
-    bool get_conditional_sync(size_type idx, value_type& v) const BMNOEXCEPT;
+    bool try_get_sync(size_type idx, value_type& v) const BMNOEXCEPT;
 
 
     /*!
@@ -1520,7 +1520,7 @@ rsc_sparse_vector<Val, SV>::get(size_type idx) const BMNOEXCEPT
 //---------------------------------------------------------------------
 
 template<class Val, class SV>
-bool rsc_sparse_vector<Val, SV>::get_conditional(
+bool rsc_sparse_vector<Val, SV>::try_get(
                         size_type idx, value_type& v) const BMNOEXCEPT
 {
     size_type sv_idx;
@@ -1533,7 +1533,7 @@ bool rsc_sparse_vector<Val, SV>::get_conditional(
 //---------------------------------------------------------------------
 
 template<class Val, class SV>
-bool rsc_sparse_vector<Val, SV>::get_conditional_sync(
+bool rsc_sparse_vector<Val, SV>::try_get_sync(
                         size_type idx, value_type& v) const BMNOEXCEPT
 {
     size_type sv_idx;

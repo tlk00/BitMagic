@@ -33505,9 +33505,8 @@ void DetailedCompareSparseVectors(const CSV& csv,
             }
             assert(0); exit(1);
         }
-
         value_type v1c{0};
-        bool found = csv.get_conditional(i, v1c);
+        bool found = csv.try_get(i, v1c);
         assert(is_null_csv == !found);
         
         if (!is_null_sv)
@@ -33791,17 +33790,17 @@ void TestCompressSparseVector()
         unsigned v;
         rsc_sparse_vector_u32 csv;
 
-        bool exists = csv.get_conditional(1000, v);
+        bool exists = csv.try_get(1000, v);
         assert(!exists);
 
         csv.set(1, 1);
-        exists = csv.get_conditional(1000, v);
+        exists = csv.try_get(1000, v);
         assert(!exists);
 
         assert(csv.is_null(0));
         assert(!csv.is_null(1));
         assert(csv.get(1) == 1);
-        exists = csv.get_conditional(1, v);
+        exists = csv.try_get(1, v);
         assert(exists && v == 1);
 
 
@@ -33809,7 +33808,7 @@ void TestCompressSparseVector()
         csv.push_back(10, 11);
         csv.set(11, 12);
         assert(csv.get(11) == 12);
-        exists = csv.get_conditional(11, v);
+        exists = csv.try_get(11, v);
         assert(exists && v == 12);
 
         csv.set(5, 55);
@@ -33817,16 +33816,16 @@ void TestCompressSparseVector()
 
         assert(csv.size() == 12);
         assert(csv.get(1) == 1);
-        exists = csv.get_conditional(1, v);
+        exists = csv.try_get(1, v);
         assert(exists && v == 1);
         assert(csv.get(10) == 11);
-        exists = csv.get_conditional(10, v);
+        exists = csv.try_get(10, v);
         assert(exists && v == 11);
         assert(csv.get(11) == 12);
-        exists = csv.get_conditional(11, v);
+        exists = csv.try_get(11, v);
         assert(exists && v == 12);
         assert(csv.get(5) == 56);
-        exists = csv.get_conditional(5, v);
+        exists = csv.try_get(5, v);
         assert(exists && v == 56);
 
 
@@ -33844,17 +33843,17 @@ void TestCompressSparseVector()
         assert(csv.get(11) == 12);
         assert(csv.get(5) == 0);
 
-        exists = csv.get_conditional(1000, v);
+        exists = csv.try_get(1000, v);
         assert(!exists);
 
         csv.optimize();
 
         csv.sync();
-        exists = csv.get_conditional_sync(1000, v);
+        exists = csv.try_get(1000, v);
         assert(!exists);
-        exists = csv.get_conditional(11, v);
+        exists = csv.try_get(11, v);
         assert(exists && v == 12);
-        exists = csv.get_conditional_sync(11, v);
+        exists = csv.try_get(11, v);
         assert(exists && v == 12);
 
     }
@@ -34734,7 +34733,6 @@ void TestCompressSparseVector()
         
         sparse_vector_u32 sv(bm::use_null);
         rsc_sparse_vector_u32 csv1;
-
 
         GenerateSV(sv, i);
         
