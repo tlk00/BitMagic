@@ -74,22 +74,17 @@ namespace bm
 */
 inline int simd_version()
 {
-#ifdef BMWASMSIMDOPT
+#if defined(BMWASMSIMDOPT)
     return bm::simd_wasm128;
-#endif
-#ifdef BMNEONOPT
+#elif defined(BMNEONOPT)
     return bm::simd_neon;
-#endif
-#ifdef BMAVX512OPT
+#elif defined(BMAVX512OPT)
     return bm::simd_avx512;
-#endif
-#ifdef BMAVX2OPT
+#elif defined(BMAVX2OPT)
     return bm::simd_avx2;
-#endif
-#ifdef BMSSE42OPT
+#elif defined(BMSSE42OPT)
     return bm::simd_sse42;
-#endif
-#ifdef BMSSE2OPT
+#elif defined(BMSSE2OPT)
     return bm::simd_sse2;
 #else
     return bm::simd_none;
