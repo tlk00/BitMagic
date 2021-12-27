@@ -53,6 +53,10 @@ using namespace std;
 typedef bm::sparse_vector<unsigned, bm::bvector<> >         sparse_vector_u32;
 typedef bm::rsc_sparse_vector<unsigned, sparse_vector_u32 > rsc_sparse_vector_u32;
 
+/// Prints the vector using is_null() and get()
+/// Please note, that random access is not the fastest, const_iterator 
+/// is preferred in many cases (better performance)
+/// 
 template<class SV>
 void print_svector(const SV& sv, bool show_nulls = false)
 {
@@ -78,6 +82,33 @@ void print_svector(const SV& sv, bool show_nulls = false)
     std::cout << std::endl;
 }
 
+/// Prints succinct vector using try_get() random access method
+/// 
+///
+template<class SV>
+void print_svector2(const SV& sv, bool show_nulls = false)
+{
+    using value_type = typename SV::value_type;
+    value_type v;
+    std::cout << sv.size() << ": ";
+    for (unsigned i = 0; i < sv.size(); ++i)
+    {
+        if (show_nulls)
+        {
+            if (!sv.try_get(i, v))
+                std::cout << "NULL, ";
+            else
+                std::cout << v << ", ";
+        }
+        else
+        {
+            v = sv.get(i);
+            std::cout << v << ", ";
+        }
+    }
+    std::cout << std::endl;
+}
+
 int main(void)
 {
     // temp buffer to avoid unnecessary re-allocations
@@ -95,13 +126,13 @@ int main(void)
         }
         
         print_svector(sv1); // print sparse vector disregard NULL values (printed as 0)
-        print_svector(sv1, true); // print sparse vector show NULLs (unassigned)
+        print_svector2(sv1, true); // print sparse vector show NULLs (unassigned)
 
         csv2.load_from(sv1); // load rank-select-compacted (rsc) sparse vector
         
         // print results - it should look the same
         print_svector(csv2);
-        print_svector(csv2, true);
+        print_svector2(csv2, true);
 
         // serialize rsc vector
         

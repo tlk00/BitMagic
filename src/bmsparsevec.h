@@ -452,6 +452,15 @@ public:
     */
     value_type get(size_type idx) const BMNOEXCEPT;
 
+    /**
+        \brief get specified element with NOT NULL check
+        \param idx - element index
+        \param v -  [out] value to get
+        \return true if value was aquired (NOT NULL), false otherwise
+        @sa is_null, get
+     */
+    bool try_get(size_type idx, value_type& v) const BMNOEXCEPT;
+
     /*!
         \brief set specified element with bounds checking and automatic resize
         \param idx - element index
@@ -1690,6 +1699,17 @@ sparse_vector<Val, BV>::get(
         return this->u2s(uv);
     else
         return uv;
+}
+//---------------------------------------------------------------------
+
+template<class Val, class BV>
+bool sparse_vector<Val, BV>::try_get(
+    size_type idx, value_type& v) const BMNOEXCEPT
+{
+    if (is_null(idx))
+        return false;
+    v = get(idx);
+    return true;
 }
 
 

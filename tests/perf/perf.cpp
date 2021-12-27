@@ -3036,7 +3036,7 @@ void RSC_SparseVectorRandomAccesTest()
         assert(0);exit(1);
     }
 
-    unsigned long long sum3 = 0, sum4 = 0;
+    unsigned long long sum3 = 0, sum4 = 0, sum5 = 0;
     sv1.optimize(tb);
 
     {
@@ -3070,8 +3070,18 @@ void RSC_SparseVectorRandomAccesTest()
                 sum4 += v;
         }
     }
+    {
+        bm::chrono_taker tt(cout, "rsc_sparse_vector<>::try_get() (GAP)", REPEATS * 10);
+        for (unsigned i = 0; i < test_idx.size(); ++i)
+        {
+            idx = test_idx[i];
+            unsigned v;
+            if (sv1.try_get(idx, v))
+                sum5 += v;
+        }
+    }
 
-    if (sum3 != sum4 || sum2 != sum3)
+    if (sum3 != sum4 || sum2 != sum3 || sum4 != sum5)
     {
         cerr << "Error! RSC random access check failed!" << endl;
         assert(0);exit(1);

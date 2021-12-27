@@ -21283,6 +21283,14 @@ void TestSparseVector()
         assert(sv1.get(1) ==-5);
         assert(sv1.get(0) ==0);
 
+        int v;
+        bool found;
+        found = sv1.try_get(0, v);
+        assert(!found);
+        found = sv1.try_get(1, v);
+        assert(found);
+        assert(v == -5);
+
 
         bm::sparse_vector<int, bvect> sv2(bm::use_null);
 
