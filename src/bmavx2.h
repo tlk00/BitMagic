@@ -3164,7 +3164,7 @@ void avx2_bit_block_xor_2way(bm::word_t* target_block,
     while (digest)
     {
         bm::id64_t t = bm::bmi_blsi_u64(digest); // d & -d;
-        unsigned wave = _mm_popcnt_u64(t - 1);
+        unsigned wave = (unsigned)_mm_popcnt_u64(t - 1);
         unsigned off = wave * bm::set_block_digest_wave_size;
 
         const __m256i* sub_block = (const __m256i*) (xor_block + off);

@@ -258,7 +258,7 @@ void generate_mismatches(vector_pairs_type& vect_m,
         vector_char_type::value_type v2 = int2DNA(code);
         if (v2 == v1)
             continue;
-        vect_m.push_back(vector_pairs_type::value_type(i, code));
+        vect_m.push_back(vector_pairs_type::value_type(unsigned(i), code));
     } // for i
 
     // add some extra with a distrubution skewed to the beginning
@@ -270,15 +270,15 @@ void generate_mismatches(vector_pairs_type& vect_m,
         vector_char_type::value_type v2 = int2DNA(code);
         if (v2 == v1)
             continue;
-        vect_m.push_back(vector_pairs_type::value_type(i, code));
+        vect_m.push_back(vector_pairs_type::value_type(unsigned(i), code));
     } // for i
 
 }
 
 // -------------------------------------------------------------------
 
+const unsigned rep = 20000;
 bm::chrono_taker<>::duration_map_type  timing_map;
-const unsigned repeats = 20000;
 
 
 /*
@@ -491,7 +491,7 @@ int main(void)
             cout << "Generate benchmark test data." << endl;
             generate_big_case(sv1, dna_vect);
 
-            generate_mismatches(vect_m, dna_vect, repeats);
+            generate_mismatches(vect_m, dna_vect, rep);
             cout << "generated mismatches=" << vect_m.size() << endl;
 
             cout << "SV mismatch search test" << endl;

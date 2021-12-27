@@ -347,7 +347,7 @@ void run_benchmark(const str_sparse_vect& str_sv, const string_vector& str_vec)
             bm::chrono_taker tt2(cout, "3a. std::lower_bound() search (empty)", bench_size, &timing_map);
             for (const string& term : bench_vec_not_found)
             {
-                std::lower_bound(str_vec.begin(), str_vec.end(), term);
+                auto p = std::lower_bound(str_vec.begin(), str_vec.end(), term);
             } // for
         }
     }

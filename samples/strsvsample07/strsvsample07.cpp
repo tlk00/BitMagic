@@ -334,7 +334,7 @@ int main(int argc, char *argv[])
                     if (bv_and)
                     {
                         auto c1 = bv_and->count();
-                        assert(c1 == c_and);
+                        assert(c1 == c_and); (void)c1; (void)c_and;
                         bvector_type bv_m;
                         bv_m.bit_and(*bv1, bv_mask);
                         match = bv_and->equal(bv_m);
