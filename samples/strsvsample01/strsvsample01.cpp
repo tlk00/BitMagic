@@ -30,6 +30,7 @@ For more information please visit:  http://bitmagic.io
 #include <iostream>
 #include <string>
 #include <vector>
+#include <cassert>
 
 #include "bm.h"
 #include "bmstrsparsevec.h"
@@ -99,6 +100,36 @@ int main(void)
             {
                 cout << *it << endl;
             } // for it
+        }
+
+        // ---------------------------------------------
+
+        str_sv_type str_sv2(bm::use_null); // NULL-able string vector
+
+        str_sv2.set(1, "s1");
+        str_sv2.push_back("s2"); 
+        str_sv2.push_back_null();
+        str_sv2.push_back("s3");
+
+        std::string s;
+        bool found = str_sv2.try_get(0, s); // FALSE (NULL value)
+        assert(!found);  (void)found;
+        found = str_sv2.try_get(2, s); // TRUE, "s2"
+        assert(found);
+        std::cout << s << std::endl;
+
+        // print out vector content with NULL check
+        {
+            str_sv_type::const_iterator it = str_sv2.begin();
+            it.go_to(1); // position to idx=1, skipping the element 0
+            for (; it.valid(); ++it)
+            {
+                if (it.is_null())
+                    cout << "NULL, ";
+                else
+                    cout << *it << ", ";
+            } // for it.valid()
+            cout << endl;
         }
     }
     catch(std::exception& ex)

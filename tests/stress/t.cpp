@@ -26899,7 +26899,7 @@ void TestStrSparseVector()
         const char* s0 = "A";
         const char* s1 = "jKl";
         {
-        str_sparse_vector<char, bvect, 2> str_sv0;//(bm::use_null);
+        str_sparse_vector<char, bvect, 2> str_sv0(bm::use_null);
         str_sv0.set(0, s0);
         str_sv0.set(2, s1);
         auto esize = str_sv0.effective_max_str();
@@ -26914,11 +26914,21 @@ void TestStrSparseVector()
         assert(cmp == 0);
 
         bool b = str_sv0.is_null(1);
-        assert(!b);
+        assert(b);
         b = str_sv0.is_null(0);
         assert(!b);
         b = str_sv0.is_null(2);
         assert(!b);
+
+        std::string s;
+        b = str_sv0.try_get(1, s);
+        assert(!b);
+        b = str_sv0.try_get(2, s);
+        assert(b);
+        assert(s == s1);
+        b = str_sv0.try_get(0, s);
+        assert(b);
+        assert(s == s0);
         }
 
         {

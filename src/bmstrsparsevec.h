@@ -623,6 +623,33 @@ public:
     */
     void push_back(const value_type* str) { set(this->size_, str); }
 
+    /*!
+        \brief push back specified amount of NULL values
+        \param count   - number of NULLs to push back
+    */
+    void push_back_null(size_type count);
+
+    /*!
+        \brief push back NULL value
+    */
+    void push_back_null() { push_back_null(1); }
+
+    /*!
+        \brief get specified string element if NOT NULL
+        Template method expects an STL-compatible type basic_string<>
+        \param idx  - element index (vector auto-resized if needs to)
+        \param str  - string to get [out]
+        \return true if element is not null and try-get successfull
+    */
+    template<typename StrType>
+    bool try_get(size_type idx, StrType& str) const
+    {
+        if (is_null(idx))
+            return false;
+        get(idx, str);
+        return true;
+    }
+
 
     /*!
         \brief get specified string element
@@ -1517,6 +1544,17 @@ void str_sparse_vector<CharType, BV, STR_SIZE>::set_null(size_type idx)
         this->size_ = idx + 1; // assumed nothing todo outside current size
     else
         this->bmatr_.clear_column(idx, 0);
+}
+//---------------------------------------------------------------------
+
+template<class CharType, class BV, unsigned STR_SIZE>
+void str_sparse_vector<CharType, BV, STR_SIZE>::push_back_null(size_type count)
+{
+    BM_ASSERT(count);
+    BM_ASSERT(bm::id_max - count > this->size_);
+    BM_ASSERT(this->is_nullable());
+
+    this->size_ += count;
 }
 
 //---------------------------------------------------------------------
