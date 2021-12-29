@@ -150,6 +150,7 @@ add_executable(bvsample21 ${PROJECT_SOURCE_DIR}/samples/bvsample21/sample21.cpp 
 add_executable(bvsample22 ${PROJECT_SOURCE_DIR}/samples/bvsample22/sample22.cpp ${BM_HEADERS})
 add_executable(bvsample23 ${PROJECT_SOURCE_DIR}/samples/bvsample23/sample23.cpp ${BM_HEADERS})
 add_executable(bvsample24 ${PROJECT_SOURCE_DIR}/samples/bvsample24/sample24.cpp ${BM_HEADERS})
+add_executable(bvsample25 ${PROJECT_SOURCE_DIR}/samples/bvsample25/sample25.cpp ${BM_HEADERS})
 
 add_executable(bvsetalgebra ${PROJECT_SOURCE_DIR}/samples/bvsetalgebra/bvsetalgebra.cpp ${BM_HEADERS})
 add_executable(bv3vlogic ${PROJECT_SOURCE_DIR}/samples/bv3vlogic/bv3vlogic.cpp ${BM_HEADERS})

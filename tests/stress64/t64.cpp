@@ -2862,7 +2862,7 @@ extern "C" {
         const id64_t limit = 65536ULL * 256 * 2ULL;
         if (bit_idx > limit)
         {
-            throw 1;
+            return -1;
         }
         /*
         std::vector<bvect::size_type>* vp = (std::vector<bvect::size_type>*)handle_ptr;

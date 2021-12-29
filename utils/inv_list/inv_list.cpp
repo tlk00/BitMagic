@@ -698,7 +698,7 @@ void verify_inv_dump_file(const std::string& fname,
     }
     
     std::ifstream bv_file;
-    std::streamsize fsize;
+    std::streamsize fsize = 0;
     if (!bv_in_fname.empty())
     {
         bv_file.open(bv_in_fname, std::ios::in | std::ios::binary);

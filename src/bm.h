@@ -65,6 +65,7 @@ extern "C"
     
     @param handle_ptr - custom pointer to callback specific data
     @param bit_idx - number/index of visited bit
+    @return negative return code is recognised as a request to interrupt visiting
     
     @ingroup bvector
     */

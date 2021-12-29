@@ -17418,15 +17418,17 @@ struct TestDecodeFunctor
         dvect_.resize(0);
     }
 
-    void add_bits(size_type offset, const unsigned char* bits, unsigned size)
+    int add_bits(size_type offset, const unsigned char* bits, unsigned size)
     {
         for (size_type i = 0; i < size; ++i)
             dvect_.push_back(offset + bits[i]);
+        return 0;
     }
-    void add_range(size_type offset, unsigned size)
+    int add_range(size_type offset, unsigned size)
     {
         for (size_type i = 0; i < size; ++i)
             dvect_.push_back(offset + i);
+        return 0;
     }
 
     decode_vector& dvect_;

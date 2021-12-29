@@ -1032,7 +1032,7 @@ public:
             : cmatr_(cmatr), mask_(0), sv_off_(0)
         {}
 
-        void add_bits(size_type bv_offset,
+        int add_bits(size_type bv_offset,
                       const unsigned char* BMRESTRICT bits, unsigned bits_size) BMNOEXCEPT
         {
             // can be negative (-1) when bv base offset = 0 and sv = 1,2..
@@ -1045,8 +1045,9 @@ public:
                 value_type* BMRESTRICT str = cmatr_.row(idx);
                 str[i] |= m;
             } // for i
+            return 0;
         }
-        void add_range(size_type bv_offset, size_type sz) BMNOEXCEPT
+        int add_range(size_type bv_offset, size_type sz) BMNOEXCEPT
         {
             auto base = bv_offset - sv_off_;
             unsigned_value_type m = mask_;
@@ -1057,6 +1058,7 @@ public:
                 value_type* BMRESTRICT str = cmatr_.row(idx);
                 str[i] |= m;
             } // for i
+            return 0;
         }
 
         CharMatrix&            cmatr_;     ///< target array for reverse transpose

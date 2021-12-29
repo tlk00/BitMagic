@@ -1594,7 +1594,7 @@ sparse_vector<Val, BV>::extract(value_type* BMRESTRICT arr,
         : arr_(varr), mask_(mask), sv_off_(off)
         {}
 
-        void add_bits(size_type bv_offset,
+        int add_bits(size_type bv_offset,
                       const unsigned char* BMRESTRICT bits,
                       unsigned bits_size) BMNOEXCEPT
         {
@@ -1603,13 +1603,15 @@ sparse_vector<Val, BV>::extract(value_type* BMRESTRICT arr,
             unsigned_value_type m = mask_;
             for (unsigned i = 0; i < bits_size; ++i)
                 arr_[bits[i] + base] |= m;
+            return 0;
         }
-        void add_range(size_type bv_offset, size_type sz) BMNOEXCEPT
+        int add_range(size_type bv_offset, size_type sz) BMNOEXCEPT
         {
             auto base = bv_offset - sv_off_;
             unsigned_value_type m = mask_;
             for (size_type i = 0; i < sz; ++i)
                 arr_[i + base] |= m;
+            return 0;
         }
 
         value_type* BMRESTRICT     arr_;    ///< target array for de-transpose

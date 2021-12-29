@@ -5109,6 +5109,7 @@ int main(void)
         EnumeratorTest();
 
         EnumeratorTestGAP();
+
         EnumeratorGoToTest();
         cout << endl;
 
