@@ -263,7 +263,7 @@ int for_each_bit(const BV&    bv,
     @sa for_each_bit
 */
 template<class BV, class Func>
-void for_each_bit_range(const BV&             bv,
+int for_each_bit_range(const BV&             bv,
                        typename BV::size_type left,
                        typename BV::size_type right,
                        Func&                  bit_functor)
@@ -273,8 +273,8 @@ void for_each_bit_range(const BV&             bv,
     if (right == bm::id_max)
         --right;
     BM_ASSERT(left < bm::id_max && right < bm::id_max);
-
-    bm::for_each_bit_range_no_check(bv, left, right, bit_functor);
+    int res = bm::for_each_bit_range_no_check(bv, left, right, bit_functor);
+    return res;
 }
 
 
@@ -399,7 +399,7 @@ int  visit_each_bit_range(const BV&                 bv,
                           bit_visitor_callback_type callback_ptr)
 {
     typedef typename BV::size_type size_type;
-    bm::bit_vitor_callback_adaptor<bit_visitor_callback_type, size_type>
+    bm::bit_visitor_callback_adaptor<bit_visitor_callback_type, size_type>
             func(handle_ptr, callback_ptr);
     int res = bm::for_each_bit_range(bv, left, right, func);
     return res;
