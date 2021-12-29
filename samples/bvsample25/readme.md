@@ -23,3 +23,11 @@ be considered as the fastest method for bit-vector traversal.
 `bm::visit_each_bit` is an adaptation for C-style code for cases where compiled code size
 is important.
 
+### Ranges traversals
+
+`bm::bvector<>::enumerator` can be positioned for range traversal using
+`bm::bvector<>::get_enumerator` or with `bm::bvector<>::enumerator::go_to(idx)`.
+
+BitMagic offers efficicnt algorithms for [from..to] closed range traversals.
+See `bm::for_each_bit_range` and `bm::visit_each_bit_range` usage in this example.
+

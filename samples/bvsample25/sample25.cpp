@@ -26,7 +26,9 @@ This example illustrates verious traversal methods.
     @sa bm::bvector::get_enumerator
     @sa bm::bvector::enumerator
     @sa bm::visit_each_bit
+    @sa bm::visit_each_bit_range
     @sa bm::for_each_bit
+    @sa bm::for_each_bit_range
 */
 
 /*! \file sample25.cpp
@@ -68,7 +70,7 @@ int bit_visitor_callback(void* handle_ptr, bm::id_t bit_idx) noexcept
 * which corresponds to different internal methods of representation of 
 * sets in the bm::bvector<> (bit-stream and D-GAP/RLE representation) 
 * 
-* This method somewhat exposes inetrnals and requires writing a custom
+* This method somewhat exposes internals and requires writing a custom
 * object, but it is also the fastest method, used inside BitMagic 
 * library a lot.
 */
@@ -156,6 +158,32 @@ int main(void)
             int res = bm::for_each_bit(bv, func);
             cout << "\nvisitor return code = " << res << endl; // -1
         }
+
+        // If we want to traverse a range in bit-vector
+        // BitMagic offers range traversal algorithms with [from..to] 
+        // closed range semantics
+        //
+
+        bm::bvector<>::size_type from(15), to(550);
+        cout << "\nRange traversal: [" << from << ".." << to << "]" << endl;
+
+        // CASE 2a: bm::visit_each_bit_range
+        {
+            unsigned cnt = 0;
+            int res = bm::visit_each_bit_range(bv, from, to, (void*)&cnt, bit_visitor_callback);
+            // note that return code would be 0 in this case,
+            // because range [15,500] has less than 5 set elements
+            cout << "\nvisitor return code = " << res << endl; // -1
+        }
+
+
+        // CASE 3a: bm::for_each_bit_range
+        {
+            bit_visitor_functor func; // declare the visitor object
+            int res = bm::for_each_bit_range(bv, from, to, func);
+            cout << "\nvisitor return code = " << res << endl; // 0
+        }
+
 
     }
     catch(std::exception& ex)
