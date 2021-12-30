@@ -16,19 +16,17 @@ limitations under the License.
 For more information please visit:  http://bitmagic.io
 */
 
-/** \example sample25.cpp
-@brief Example to show how to use various bit-vector traversal methods
+/*! \example sample25.cpp
 
-bm::bvector<>::enumerator is user friendly, but not the fastest method.
-This example illustrates verious traversal methods.
+This example illustrates verious traversal methods based on iterator/enumerator or algorithms.
 
-    @sa bm::bvector
-    @sa bm::bvector::get_enumerator
-    @sa bm::bvector::enumerator
-    @sa bm::visit_each_bit
-    @sa bm::visit_each_bit_range
-    @sa bm::for_each_bit
-    @sa bm::for_each_bit_range
+    \sa bm::bvector
+    \sa bm::bvector::get_enumerator
+    \sa bm::bvector::enumerator
+    \sa bm::visit_each_bit
+    \sa bm::visit_each_bit_range
+    \sa bm::for_each_bit
+    \sa bm::for_each_bit_range
 */
 
 /*! \file sample25.cpp

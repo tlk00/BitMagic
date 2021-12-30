@@ -24,10 +24,10 @@ For more information please visit:  http://bitmagic.io
 
   \sa bvector
 
-  \sa bvector<>::bit_or
-  \sa bvector<>::bit_and
-  \sa bvector<>::bit_xor
-  \sa bvector<>::bit_sub
+  \sa bm::bvector::bit_or
+  \sa bm::bvector::bit_and
+  \sa bm::bvector::bit_xor
+  \sa bm::bvector::bit_sub
 
   \sa bm::aggregator
   \sa bm::operation_deserializer
