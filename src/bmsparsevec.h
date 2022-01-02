@@ -1708,7 +1708,7 @@ template<class Val, class BV>
 bool sparse_vector<Val, BV>::try_get(
     size_type idx, value_type& v) const BMNOEXCEPT
 {
-    if (is_null(idx))
+    if (this->is_null(idx))
         return false;
     v = get(idx);
     return true;

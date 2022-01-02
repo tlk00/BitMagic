@@ -644,7 +644,7 @@ public:
     template<typename StrType>
     bool try_get(size_type idx, StrType& str) const
     {
-        if (is_null(idx))
+        if (this->is_null(idx))
             return false;
         get(idx, str);
         return true;
