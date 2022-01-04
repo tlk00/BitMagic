@@ -361,15 +361,17 @@ struct bit_vistor_copy_functor
     @param bv - bit vector to scan
     @param handle_ptr - handle to private memory used by callback
     @param callback_ptr - callback function
+
+    @return exit code form call back function
  
     \ingroup setalgo
  
     @sa bit_visitor_callback_type
 */
 template<class BV>
-unsigned visit_each_bit(const BV&                 bv,
-                        void*                     handle_ptr,
-                        bit_visitor_callback_type callback_ptr)
+int visit_each_bit(const BV&                 bv,
+                   void*                     handle_ptr,
+                   bit_visitor_callback_type callback_ptr)
 {
     typedef typename BV::size_type size_type;
     bm::bit_visitor_callback_adaptor<bit_visitor_callback_type, size_type>
@@ -386,6 +388,7 @@ unsigned visit_each_bit(const BV&                 bv,
     @param right - to [left..right]
     @param handle_ptr - handle to private memory used by callback
     @param callback_ptr - callback function
+    @return exit code form call back function
 
     \ingroup setalgo
 

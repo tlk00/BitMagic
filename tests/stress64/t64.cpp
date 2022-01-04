@@ -16522,10 +16522,17 @@ void TestStrSparseVector()
             const char* cs2 = "034";
 
             bm::heap_matrix<char, 1024, 64, bvect::allocator_type> hmatr(true);
+
+            #if defined(_MSC_VER)
             ::strncpy_s(hmatr.row(0), hmatr.cols(), cs0, hmatr.cols());
             ::strncpy_s(hmatr.row(1), hmatr.cols(), cs1, hmatr.cols());
             ::strncpy_s(hmatr.row(2), hmatr.cols(), cs2, hmatr.cols());
-
+            #else
+            ::strncpy(hmatr.row(0),  cs0, hmatr.cols());
+            ::strncpy(hmatr.row(1),  cs1, hmatr.cols());
+            ::strncpy(hmatr.row(2),  cs2, hmatr.cols());
+            #endif
+            
             for (unsigned i = 0; i < 3; ++i)
             {
                 const char* s = hmatr.row(i);
