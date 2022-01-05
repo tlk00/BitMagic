@@ -50,11 +50,9 @@ This example showcases several search methods to benchmark different search meth
 
 ## Sample run
 
-Use ./run_all.sh script to run the benchmarks:
+Use ./run_all.sh script to run the benchmarks with expected output similar to:
 
  
-> 
-> Regular build
 > Generating the test data... OK
 > 
 > Remapping the data to create compressed vector OK
@@ -63,12 +61,28 @@ Use ./run_all.sh script to run the benchmarks:
 > 
 > PASS = 0 -- remap/optimized
 > 
-> scanner<>::find_eq_str(); 12.9 sec
+> scanner<>::find_eq_str(); 11.04 sec
 > 
-> scanner::pipeline find_eq_str(); 4.755 sec
+> scanner::pipeline find_eq_str(); 6.028 sec
 > 
-> scanner::pipeline find_eq_str()-count(); 4.474 sec
+> scanner::pipeline+MASK find_eq_str(); 1.817 sec
 > 
+> scanner::pipeline find_eq_str()-count(); 7.017 sec
+> 
+> scanner::pipeline find_eq_str()-OR(); 7.904 sec
+> 
+> PASS = 1 -- NOT remapped
+> 
+> scanner<>::find_eq_str(); 10.02 sec
+> 
+> scanner::pipeline find_eq_str(); 5.114 sec
+> 
+> scanner::pipeline+MASK find_eq_str(); 1.942 sec
+> 
+> scanner::pipeline find_eq_str()-count(); 7.563 sec
+> 
+> scanner::pipeline find_eq_str()-OR(); 7.3 sec
+>
 >...
 
 
