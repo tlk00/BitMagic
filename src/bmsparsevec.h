@@ -452,6 +452,14 @@ public:
     */
     value_type get(size_type idx) const BMNOEXCEPT;
 
+
+    /*!
+        \brief get specified element without checking
+        \param idx - element index
+        \return value of the element
+    */
+    value_type get_no_check(size_type idx) const BMNOEXCEPT;
+
     /**
         \brief get specified element with NOT NULL check
         \param idx - element index
@@ -1363,7 +1371,12 @@ sparse_vector<Val, BV>::gather(value_type*       arr,
         // single element hit, use plane random access
         if (r == i+1)
         {
-            arr[i] = this->get(idx[i]);
+            // (idx[i] < bm::id_max) ? is an out of bounds check
+            // some code (RSC vector) uses it to
+            // indicate NULL value and prsent it as 0
+            //
+            if (idx[i] < bm::id_max)
+                arr[i] = this->get_no_check(idx[i]);
             ++i;
             continue;
         }
@@ -1682,7 +1695,17 @@ sparse_vector<Val, BV>::get(
 {
     BM_ASSERT(i < bm::id_max);
     BM_ASSERT(i < size());
-    
+
+    return get_no_check(i);
+}
+
+//---------------------------------------------------------------------
+
+template<class Val, class BV>
+typename sparse_vector<Val, BV>::value_type
+sparse_vector<Val, BV>::get_no_check(
+        typename sparse_vector<Val, BV>::size_type i) const BMNOEXCEPT
+{
     unsigned_value_type uv = 0;
     unsigned eff_planes = this->effective_slices();
     BM_ASSERT(eff_planes <= (sizeof(value_type) * 8));
@@ -1702,6 +1725,8 @@ sparse_vector<Val, BV>::get(
     else
         return uv;
 }
+
+
 //---------------------------------------------------------------------
 
 template<class Val, class BV>

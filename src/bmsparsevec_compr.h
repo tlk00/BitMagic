@@ -597,6 +597,40 @@ public:
                          size_type   size,
                          bool        zero_mem = true) const BMNOEXCEPT;
 
+    /*!
+        \brief Gather elements to a C-style array
+
+        Gather collects values from different locations, for best
+        performance feed it with sorted list of indexes.
+
+        Faster than one-by-one random access.
+
+        For efficiency, this is left as a low level function,
+        it does not do any bounds checking on the target array, it will
+        override memory and crash if you are not careful with allocation
+        and request size.
+
+        \param arr  - dest array
+        \param idx - index list to gather elements (read only)
+        \param idx_tmp_buf - temp scratch buffer for index rank-select index translation
+                must be correctly allocated to match size. No value initialization requirement.
+        \param size - decoding index list size (array allocation should match)
+        \param sorted_idx - sort order directive for the idx array
+                          (BM_UNSORTED, BM_SORTED, BM_UNKNOWN)
+        Sort order affects both performance and correctness(!), use BM_UNKNOWN
+        if not sure.
+
+        \return number of actually exported elements (can be less than requested)
+
+        \sa decode
+    */
+    size_type gather(value_type* arr,
+                     const size_type* idx,
+                     size_type*  idx_tmp_buf,
+                     size_type   size,
+                     bm::sort_order sorted_idx) const;
+
+
     ///@}
 
     
@@ -1750,6 +1784,50 @@ rsc_sparse_vector<Val, SV>::decode_buf(value_type*     arr,
         en_i.advance();
     } // for i
 
+    return size;
+}
+
+
+//---------------------------------------------------------------------
+
+template<class Val, class SV>
+typename rsc_sparse_vector<Val, SV>::size_type
+rsc_sparse_vector<Val, SV>::gather(value_type*      arr,
+                                   const size_type* idx,
+                                   size_type*       idx_tmp_buf,
+                                   size_type        size,
+                                   bm::sort_order   sorted_idx) const
+{
+    BM_ASSERT(arr);
+    BM_ASSERT(idx);
+    BM_ASSERT(idx_tmp_buf);
+    BM_ASSERT(size);
+
+    if (size == 1) // corner case: get 1 value
+    {
+        arr[0] = this->get(idx[0]);
+        return size;
+    }
+
+    // validate index, resolve rank addresses
+    //
+    for (size_type i = 0; i < size; ++i)
+    {
+        size_type sv_idx;
+        if (resolve(idx[i], &sv_idx))
+        {
+            idx_tmp_buf[i] = sv_idx-1;
+        }
+        else
+        {
+            sorted_idx = bm::BM_UNKNOWN;
+            idx_tmp_buf[i] = bm::id_max;
+        }
+    } // for i
+
+    // gather the data using resolved indexes
+    //
+    size = sv_.gather(arr, idx_tmp_buf, size, sorted_idx);
     return size;
 }
 

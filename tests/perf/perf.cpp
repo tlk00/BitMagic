@@ -27,6 +27,7 @@ For more information please visit:  http://bitmagic.io
 //#define BMSSE2OPT
 //#define BMSSE42OPT
 //#define BMAVX2OPT
+//#define BM_USE_GCC_BUILD
 
 #define BM_NONSTANDARD_EXTENTIONS
 //#define BM64ADDR
@@ -2959,6 +2960,7 @@ void RSC_SparseVectorRandomAccesTest()
     rsc_sparse_vector_u32   sv1(bm::use_null);
     rsc_sparse_vector_u32   sv2(bm::use_null);
 
+
     FillRandomSparseNullVector(sv1, test_size, 100, 153);
     FillRandomSparseNullVector(sv2, test_size, 0, 0);
     sv2.optimize();
@@ -2975,7 +2977,10 @@ void RSC_SparseVectorRandomAccesTest()
 
     //bm::print_svector_stat(cout, sv2);
 
-    std::vector<unsigned> test_idx;
+    std::vector<rsc_sparse_vector_u32::size_type> test_idx;
+    std::vector<rsc_sparse_vector_u32::size_type> idx_buf_vec;
+    std::vector<rsc_sparse_vector_u32::size_type> test_arr;
+
     unsigned idx = 0;
     test_idx.push_back(0);
     for (unsigned i = 0; i < 300*65536; ++i)
@@ -2991,7 +2996,10 @@ void RSC_SparseVectorRandomAccesTest()
             test_idx.push_back(idx);
     }
 
-    unsigned long long sum1 = 0, sum2 = 0, sum1d = 0;
+    idx_buf_vec.resize(test_idx.size());
+    test_arr.resize(test_idx.size());
+
+    unsigned long long sum1 = 0, sum2 = 0, sum1d = 0, sum1g = 0;
 
     {
         bm::chrono_taker tt(cout, "rsc_sparse_vector<>::is_null()+get() (DENSE)", REPEATS*10 );
@@ -3030,9 +3038,37 @@ void RSC_SparseVectorRandomAccesTest()
         }
     }
 
+    {
+        {
+        bm::chrono_taker tt(cout, "rsc_sparse_vector<>::gather() (BIT)", REPEATS*10 );
+        unsigned sz = test_idx.size();
+        sz = sv1.gather(test_arr.data(), test_idx.data(), idx_buf_vec.data(), sz, bm::BM_UNKNOWN);
+        }
+        // validate
+        for (unsigned i = 0; i < test_idx.size(); ++i)
+        {
+            unsigned v = test_arr[i];
+            sum1g += v;
+            unsigned v1;
+            if (sv1.try_get_sync(test_idx[i], v1))
+            {
+                assert(v1 == v);
+            }
+            else
+            {
+                assert(!v);
+            }
+        }
+    }
+
     if (sum1 != sum2)
     {
         cerr << "Error! RSC random access check failed!" << endl;
+        assert(0);exit(1);
+    }
+    if (sum1 != sum1g)
+    {
+        cerr << "Error! RSC random access check failed (gather)!" << endl;
         assert(0);exit(1);
     }
 
@@ -3081,7 +3117,31 @@ void RSC_SparseVectorRandomAccesTest()
         }
     }
 
-    if (sum3 != sum4 || sum2 != sum3 || sum4 != sum5)
+    {
+        sum1g = 0;
+        {
+        bm::chrono_taker tt(cout, "rsc_sparse_vector<>::gather() (GAP)", REPEATS*10 );
+        unsigned sz = test_idx.size();
+        sz = sv1.gather(test_arr.data(), test_idx.data(), idx_buf_vec.data(), sz, bm::BM_UNKNOWN);
+        }
+        // validate
+        for (unsigned i = 0; i < test_idx.size(); ++i)
+        {
+            unsigned v = test_arr[i];
+            sum1g += v;
+            unsigned v1;
+            if (sv1.try_get_sync(test_idx[i], v1))
+            {
+                assert(v1 == v);
+            }
+            else
+            {
+                assert(!v);
+            }
+        }
+    }
+
+    if (sum3 != sum4 || sum2 != sum3 || sum4 != sum5 || sum5 != sum1g)
     {
         cerr << "Error! RSC random access check failed!" << endl;
         assert(0);exit(1);
@@ -5172,6 +5232,7 @@ int main(void)
 
         RSC_SparseVectorFillTest();
         RSC_SparseVectorAccesTest();
+
         RSC_SparseVectorRandomAccesTest();
         cout << endl;
 
