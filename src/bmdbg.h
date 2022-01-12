@@ -713,7 +713,22 @@ void print_svector_stat(TOut& tout, const SV& svect, bool print_sim = false)
     tout << "size = " << svect.size() << std::endl;
 
     tout << "Bit blocks:       " << st.bit_blocks << std::endl;
-    tout << "Gap blocks:       " << st.gap_blocks << std::endl;
+    tout << "GAP blocks:       " << st.gap_blocks << std::endl;
+    tout << "GAP levels counts:";
+    for (unsigned g = 0; g < bm::gap_levels; ++g)
+    {
+        switch (g)
+        {
+        case 0: tout << "[ I:  " << st.gap_levels[g] << "] "; break;
+        case 1: tout << "[ II: " << st.gap_levels[g] << "] "; break;
+        case 2: tout << "[ III:" << st.gap_levels[g] << "] "; break;
+        case 3: tout << "[ IV: " << st.gap_levels[g] << "] "; break;
+        default:
+                tout << "[ " << g << ": " << st.gap_levels[g] << "] "; break;
+        }
+    } // for
+    tout << std::endl;
+
     tout << "Max serialize mem:" << st.max_serialize_mem << " "
               << (st.max_serialize_mem / (1024 * 1024)) << "MB" << std::endl;
     tout << "Memory used:      " << st.memory_used << " "

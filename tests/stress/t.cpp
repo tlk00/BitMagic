@@ -2498,8 +2498,8 @@ void RSIndexTest()
     
     {
         unsigned bcount[bm::set_sub_array_size];
-        unsigned sub_count1[bm::set_sub_array_size];
-        unsigned sub_count2[bm::set_sub_array_size];
+        bm::id64_t sub_count1[bm::set_sub_array_size];
+        bm::id64_t sub_count2[bm::set_sub_array_size];
         for (unsigned i = 0; i < bm::set_sub_array_size; ++i)
         {
             bcount[i] = sub_count1[i] = sub_count2[i] = 0;
@@ -4199,7 +4199,7 @@ void BasicFunctionalityTest()
 
         bvect_full.build_rs_index(&bc_arr);
         
-        bm::id_t pos1, pos2, pos3, pos4;
+        bm::id_t pos1, pos2, pos3, pos4, pos5;
         auto rf1 = FindRank(bvect_full, i+1, 0, pos1);
         auto rf2 = bvect_full.find_rank(i+1, 0, pos2);
         auto rf3 = bvect_full.find_rank(i+1, 0, pos3);
@@ -4220,6 +4220,15 @@ void BasicFunctionalityTest()
                  << endl;
                  ;
             exit(1);
+        }
+
+        {
+            bvect bv_opt(bvect_full);
+            bv_opt.optimize();
+            bv_opt.build_rs_index(&bc_arr);
+            auto rf5 = bv_opt.select(i+1, pos5, bc_arr);
+            assert(rf5);
+            assert(pos1 == pos5);
         }
 
     }
@@ -18494,7 +18503,7 @@ void CountRangeTest()
         } // for
         
         VerifyCountRange(bv1, bc_arr1, 0, 200000);
-        VerifyCountRange(bv1, bc_arr, bm::id_max-200000, bm::id_max-1);
+        VerifyCountRange(bv1, bc_arr1, bm::id_max-200000, bm::id_max-1);
     }}
 
     {{
@@ -18528,6 +18537,7 @@ void CountRangeTest()
             VerifyCountRange(bv1, bc_arr, bm::id_max/2-200000, bm::id_max/2+200000);
 
             bv1.optimize();
+            bv1.build_rs_index(&bc_arr);
         }
     }}
 
@@ -25341,7 +25351,7 @@ void CheckGTSearch(const SV& sv, typename SV::value_type v,
         print_bv(bv_r_vv_control);
         bv_r_vv ^= bv_r_vv_control;
         cout << "diff=" << endl;
-        print_bv(bv_r_vv);
+        //print_bv(bv_r_vv);
         assert(eq);exit(1);
     }
     }
@@ -26573,7 +26583,7 @@ void TestCompressedSparseVectorScanGT()
 
         for (rsc_sparse_vector_u32::size_type i = bm::id_max/2; i < bm::id_max/2+ 65536*4; ++i )
         {
-            csv.set(i, 253);
+            csv.push_back(i, 253); //set(i, 253);
         }
 
 
@@ -26589,6 +26599,8 @@ void TestCompressedSparseVectorScanGT()
 
         for (unsigned pass = 0; pass < 2; ++pass)
         {
+            if (pass)
+                csv.optimize();
             cout << "  PASS = " << pass << " sample count = " << bv_subset.count() << endl;
             auto en = bv_subset.get_enumerator(0);
             for (unsigned cnt = 0;en.valid(); ++en, ++cnt)
@@ -26603,7 +26615,6 @@ void TestCompressedSparseVectorScanGT()
             }
 
             cout << endl;
-            csv.optimize();
         } // for
 
     }

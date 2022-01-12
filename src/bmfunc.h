@@ -1697,18 +1697,27 @@ unsigned gap_bfind(const T* BMRESTRICT buf,
         return VECT_GAP_BFIND(buf, pos, is_set);
     #else
         *is_set = (*buf) & 1;
-
         unsigned start = 1;
         unsigned end = 1 + ((*buf) >> 3);
-
-        while ( start != end )
+        while (start != end)
         {
+            if ((end - start) < 16) // use direct scan on short span
+            {
+                do
+                {
+                    if (buf[start] >= pos)
+                        goto break2;
+                } while (++start);
+                BM_ASSERT(0); // should not get here
+                break;
+            }
             unsigned curr = (start + end) >> 1;
             if ( buf[curr] < pos )
                 start = curr + 1;
             else
                 end = curr;
-        }
+        } // while
+        break2:
         *is_set ^= ((start-1) & 1);
         return start;
     #endif
@@ -2317,9 +2326,8 @@ unsigned gap_bit_count_unr(const T* buf) BMNOEXCEPT
     
     const T* pend = buf + dsize;
     for ( ; pcurr <= pend ; pcurr+=2)
-    {
         cnt += *pcurr - *(pcurr - 1);
-    }
+
     BM_ASSERT(cnt == bm::gap_bit_count(buf));
     return cnt;
 }
@@ -2330,44 +2338,96 @@ unsigned gap_bit_count_unr(const T* buf) BMNOEXCEPT
    \brief Counts 1 bits in GAP buffer in the closed [left, right] range.
    \param buf - GAP buffer pointer.
    \param left - leftmost bit index to start from
-   \param right- rightmost bit index
+   \param right - rightmost bit index
+   \param pos - position in the
    \return Number of non-zero bits.
    @ingroup gapfunc
 */
-template<typename T>
+template<typename T, bool RIGHT_END = false>
 unsigned gap_bit_count_range(const T* const buf,
                              unsigned left, unsigned right) BMNOEXCEPT
 {
     BM_ASSERT(left <= right);
     BM_ASSERT(right < bm::gap_max_bits);
     
-    const T* pcurr = buf;
-    const T* pend = pcurr + (*pcurr >> 3);
-    
-    unsigned bits_counter = 0;
-    unsigned is_set;
+    unsigned is_set, bits_counter, prev_gap;
     unsigned start_pos = bm::gap_bfind(buf, left, &is_set);
     is_set = ~(is_set - 1u); // 0xFFF.. if true (mask for branchless code)
 
-    pcurr = buf + start_pos;
+    const T* pcurr = buf + start_pos;
     if (right <= *pcurr) // we are in the target gap right now
     {
-        bits_counter = unsigned(right - left + 1u) & is_set; // & is_set == if(is_set)
-        return bits_counter;
+        bits_counter = unsigned(right - left + 1u) & is_set;
     }
-    bits_counter += unsigned(*pcurr - left + 1u) & is_set;
-
-    unsigned prev_gap = *pcurr++;
-    for (is_set ^= ~0u; right > *pcurr; is_set ^= ~0u)
+    else
     {
-        bits_counter += (*pcurr - prev_gap) & is_set;
-        if (pcurr == pend) 
-            return bits_counter;
-        prev_gap = *pcurr++;
+        bits_counter = unsigned(*pcurr - left + 1u) & is_set;
+        if constexpr (RIGHT_END) // count to the end
+        {
+            BM_ASSERT(right == bm::gap_max_bits-1);
+            for (prev_gap = *pcurr++ ;true; prev_gap = *pcurr++)
+            {
+                bits_counter += (is_set ^= ~0u) & (*pcurr - prev_gap);
+                if (*pcurr == bm::gap_max_bits-1)
+                    break;
+            } // for
+        }
+        else // true range search here
+        {
+            for (prev_gap = *pcurr++; right > *pcurr; prev_gap = *pcurr++)
+                bits_counter += (is_set ^= ~0u) & (*pcurr - prev_gap);
+            bits_counter += unsigned(right - prev_gap) & (is_set ^ ~0u);
+        }
     }
-    bits_counter += unsigned(right - prev_gap) & is_set;
+    return bits_counter;
+
+}
+
+/*!
+   \brief Counts 1 bits in GAP buffer in the closed [left, right] range using position hint to avoid bfind
+   \param buf - GAP buffer pointer.
+   \param left - leftmost bit index to start from
+   \param right - rightmost bit index
+   \param pos - position in the
+   \param hint - position hint
+   \return Number of non-zero bits.
+   @ingroup gapfunc
+*/
+template<typename T>
+unsigned gap_bit_count_range_hint(const T* const buf,
+                  unsigned left, unsigned right, unsigned hint) BMNOEXCEPT
+{
+    BM_ASSERT(left <= right);
+    BM_ASSERT(right < bm::gap_max_bits);
+
+    unsigned is_set, bits_counter, prev_gap;
+
+    // process the hint instead of binary search
+    is_set = hint & 1;
+    is_set = ~(is_set - 1u); // 0xFFF.. if true (mask for branchless code)
+    unsigned start_pos = hint >> 1;
+    {
+        unsigned is_set_c; (void)is_set_c;
+        unsigned pos; (void)pos;
+        BM_ASSERT((pos = bm::gap_bfind(buf, left, &is_set_c))==start_pos);
+        BM_ASSERT(bool(is_set) == bool(is_set_c));
+    }
+
+    const T* pcurr = buf + start_pos;
+    if (right <= *pcurr) // we are in the target gap right now
+    {
+        bits_counter = unsigned(right - left + 1u) & is_set;
+    }
+    else
+    {
+        bits_counter = unsigned(*pcurr - left + 1u) & is_set;
+        for (prev_gap = *pcurr++; right > *pcurr; prev_gap = *pcurr++)
+            bits_counter += (is_set ^= ~0u) & (*pcurr - prev_gap);
+        bits_counter += unsigned(right - prev_gap) & (is_set ^ ~0u);
+    }
     return bits_counter;
 }
+
 
 /*!
    \brief Test if all bits are 1 in GAP buffer in the [left, right] range.
@@ -2600,6 +2660,7 @@ SIZE_TYPE gap_find_rank(const T* const block,
     \return Number of non-zero bits
     @ingroup gapfunc
 */
+/*
 template<typename T>
 unsigned gap_bit_count_to(const T* const buf, T right,
                           bool is_corrected=false) BMNOEXCEPT
@@ -2635,6 +2696,40 @@ unsigned gap_bit_count_to(const T* const buf, T right,
     bits_counter -= (is_set & unsigned(is_corrected));
     return bits_counter;
 }
+*/
+template<typename T, bool TCORRECT=false>
+unsigned gap_bit_count_to(const T* const buf, T right) BMNOEXCEPT
+{
+    BM_ASSERT(right < bm::gap_max_bits);
+
+    unsigned bits_counter, prev_gap;
+
+    unsigned is_set = ~((unsigned(*buf) & 1u) - 1u); // 0xFFF.. if true (mask for branchless code)
+    const T* pcurr = buf + 1;
+    if (right <= *pcurr) // we are in the target block right now
+    {
+        bits_counter = (right + 1u) & is_set; // & is_set == if (is_set)
+    }
+    else
+    {
+        bits_counter = (*pcurr + 1u) & is_set;
+        prev_gap = *pcurr++;
+        for (is_set ^= ~0u; right > *pcurr; is_set ^= ~0u, prev_gap = *pcurr++)
+        {
+            bits_counter += (*pcurr - prev_gap) & is_set;
+            if (*pcurr == bm::gap_max_bits-1)
+                goto cret;
+        }
+        bits_counter += (right - prev_gap) & is_set;
+    }
+
+    cret:
+    if constexpr (TCORRECT)
+        bits_counter -= (is_set & unsigned(TCORRECT));
+    return bits_counter;
+}
+
+
 
 /*!
     D-GAP block for_each algorithm

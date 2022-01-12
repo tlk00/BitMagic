@@ -229,8 +229,8 @@ template<bool T> struct _copyright
 };
 
 template<bool T> const char _copyright<T>::_p[] = 
-    "BitMagic C++ Library. v.7.9.3 (c) 2002-2021 Anatoliy Kuznetsov.";
-template<bool T> const unsigned _copyright<T>::_v[3] = {7, 9, 3};
+    "BitMagic C++ Library. v.7.10.0 (c) 2002-2022 Anatoliy Kuznetsov.";
+template<bool T> const unsigned _copyright<T>::_v[3] = {7, 10, 0};
 
 
 
@@ -467,6 +467,7 @@ template<bool T> struct globals
     static ByteOrder byte_order() { return _bo._byte_order; }
 };
 template<bool T> typename globals<T>::bo globals<T>::_bo;
+
 
 
 } // namespace

@@ -2013,8 +2013,8 @@ void RSIndexTest()
     
     {
         unsigned bcount[bm::set_sub_array_size];
-        unsigned sub_count1[bm::set_sub_array_size];
-        unsigned sub_count2[bm::set_sub_array_size];
+        bm::id64_t sub_count1[bm::set_sub_array_size];
+        bm::id64_t sub_count2[bm::set_sub_array_size];
         for (unsigned i = 0; i < bm::set_sub_array_size; ++i)
         {
             bcount[i] = sub_count1[i] = sub_count2[i] = 0;

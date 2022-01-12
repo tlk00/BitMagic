@@ -117,11 +117,15 @@ void SimpleFillSets(test_bitset* bset,
                        unsigned fill_factor,
                        bool set_flag=true)
 {
+    bv.init();
     for (unsigned i = min; i < max; i+=fill_factor)
     {
         if (bset)
             (*bset)[i] = set_flag;
-        bv[i] = set_flag;
+        if (set_flag)
+            bv.set_bit_no_check(i);
+        else
+            bv.clear_bit_no_check(i);
     } // for i
 }
 
@@ -808,11 +812,13 @@ void BitCountSparseTest()
 {
     bvect*  bv = new bvect();
     test_bitset*  bset = new test_bitset();
-    size_t value = 0, c1;
+    size_t value = 0, c1, value2(0);
+    size_t value_t = 0, value2_t = 0;
     volatile size_t* p = &value;
 
     SimpleFillSets(bset, *bv, 0, BSIZE, 130);
-    
+    bv->set_range(65536, 65536*3); // create a dense area of FULL blocks
+/*
     {
         bm::chrono_taker<std::ostream> tt(cout, "BitCount: Sparse bitset ", REPEATS*10);
         for (unsigned i = 0; i < REPEATS*10; ++i)
@@ -820,7 +826,7 @@ void BitCountSparseTest()
             value += bv->count();
         }
     }
-
+*/
     if (!platform_test)
     {
         bm::chrono_taker<std::ostream> tt(cout, "BitCount: Sparse bitset (STL)", REPEATS*10);
@@ -832,33 +838,142 @@ void BitCountSparseTest()
 
     c1 = *p;
     value = c1 = 0;
-    
-    BM_DECLARE_TEMP_BLOCK(tb)
-    bv->optimize(tb);
 
+    bvect*  bv_c = new bvect(*bv);
+
+
+    std::vector<bvect::size_type> sample_vec;
+    sample_vec.reserve(BSIZE*2);
     {
-        bm::chrono_taker<std::ostream> tt(cout, "BitCount: GAP Sparse bitset", REPEATS*100);
-        for (unsigned i = 0; i < REPEATS*100; ++i)
-        {    
-            value += bv->count();
+        auto en = bv->get_enumerator(0);
+        auto prev = *en;
+        for (; en.valid(); ++en)
+        {
+            auto v = *en;
+            sample_vec.push_back(v);
+            if (prev+1 != v)
+                sample_vec.push_back(prev);
+            prev = v;
         }
+        std::random_device rd;
+        std::mt19937 g(rd());
+        std::shuffle(sample_vec.begin(), sample_vec.end(), g);
     }
 
+
+    BM_DECLARE_TEMP_BLOCK(tb)
+    bv->optimize(tb);
+    {
+    bvect::statistics st;
+    bv->calc_stat(&st);
+    assert(st.gap_blocks);
+    assert(!st.bit_blocks);
+    }
+
+    {
+    bvect::statistics st_c;
+    bv_c->calc_stat(&st_c);
+    assert(st_c.gap_blocks == 0);
+    assert(st_c.bit_blocks > 0);
+    }
+
+/*
+    {
+        bm::chrono_taker<std::ostream> tt(cout, "BitCount: (GAP) Sparse bitset", REPEATS*100);
+        for (unsigned i = 0; i < REPEATS*100; ++i)
+        {    
+            value3 += bv->count();
+        }
+    }
+*/
     std::unique_ptr<bvect::rs_index_type> bc_arr(new bvect::rs_index_type());
     bv->build_rs_index(bc_arr.get());
 
+    std::unique_ptr<bvect::rs_index_type> bc_arr_c(new bvect::rs_index_type());
+    bv_c->build_rs_index(bc_arr_c.get());
+
+
+
+    unsigned rs_max = 80;
+
+
     {
-        unsigned right = 65535;
-        bm::chrono_taker<std::ostream> tt(cout, "count_to: GAP Sparse bitset", REPEATS * 100);
-        for (unsigned i = 0; i < REPEATS * 100000; ++i)
+        bm::chrono_taker<std::ostream> tt(cout, "count_to(): (RS-index) (GAP) bitset", rs_max);
+        for (unsigned j = 0; j < rs_max; j++)
         {
-            right = 65525 + (i * 10);
-            if (right > BSIZE)
-                right = 0;
-            value += bv->count_to(right, *bc_arr);
+            for (size_t i = 0; i < sample_vec.size(); ++i)
+            {
+                auto idx = sample_vec[i];
+                value += bv->count_to_test(idx, *bc_arr);
+            }
         }
     }
+
+    {
+        bm::chrono_taker<std::ostream> tt(cout, "count_to_test(): (RS-index) (GAP) bitset", rs_max);
+        for (unsigned j = 0; j < rs_max; j++)
+        {
+            for (size_t i = 0; i < sample_vec.size(); ++i)
+            {
+                auto idx = sample_vec[i];
+                value_t += bv->count_to_test(idx, *bc_arr);
+            }
+        }
+    }
+
+    {
+        bm::chrono_taker<std::ostream> tt(cout, "count_to(): (RS-index) (BITS) bitset", rs_max);
+        for (unsigned j = 0; j < rs_max; j++)
+        {
+            for (size_t i = 0; i < sample_vec.size(); ++i)
+            {
+                auto idx = sample_vec[i];
+                value2 += bv_c->count_to(idx, *bc_arr);
+            }
+        }
+        assert(value == value2);
+        assert(value);
+    }
+
+    {
+        bm::chrono_taker<std::ostream> tt(cout, "count_to_test(): (RS-index) (BITS) bitset", rs_max);
+        for (unsigned j = 0; j < rs_max; j++)
+        {
+            for (size_t i = 0; i < sample_vec.size(); ++i)
+            {
+                auto idx = sample_vec[i];
+                value2_t += bv_c->count_to_test(idx, *bc_arr_c);
+            }
+        }
+
+        assert(value_t == value2_t);
+        assert(value_t);
+    }
+
+
+    // validation
+    {
+        bm::chrono_taker<std::ostream> tt(cout, "count_to(): (RS-index) (GAP+BITS) bitset", rs_max);
+        for (unsigned j = 0; j < rs_max; j++)
+        {
+            for (size_t i = 0; i < sample_vec.size(); ++i)
+            {
+                auto idx = sample_vec[i];
+                auto cnt   = bv->count_to(idx, *bc_arr);
+                auto cnt_c = bv_c->count_to(idx, *bc_arr_c);
+
+                if(cnt != cnt_c)
+                {
+                    std::cerr << "Error in count_to()!" << std::endl;
+                    assert(0); exit(1);
+                }
+            }
+        }
+    }
+
+
     delete bv;
+    delete bv_c;
     delete bset;
 }
 
@@ -3041,7 +3156,7 @@ void RSC_SparseVectorRandomAccesTest()
     {
         {
         bm::chrono_taker tt(cout, "rsc_sparse_vector<>::gather() (BIT)", REPEATS*10 );
-        unsigned sz = test_idx.size();
+        unsigned sz = (unsigned)test_idx.size();
         sz = sv1.gather(test_arr.data(), test_idx.data(), idx_buf_vec.data(), sz, bm::BM_UNKNOWN);
         }
         // validate
@@ -3121,7 +3236,7 @@ void RSC_SparseVectorRandomAccesTest()
         sum1g = 0;
         {
         bm::chrono_taker tt(cout, "rsc_sparse_vector<>::gather() (GAP)", REPEATS*10 );
-        unsigned sz = test_idx.size();
+        unsigned sz = (unsigned)test_idx.size();
         sz = sv1.gather(test_arr.data(), test_idx.data(), idx_buf_vec.data(), sz, bm::BM_UNKNOWN);
         }
         // validate
@@ -5136,14 +5251,17 @@ int main(void)
         BitCountTest();
 
         BitCountSparseTest();
+//        return 0;
+
+        BitTestSparseTest();
+        cout << endl;
 
         BitForEachTest();
+        cout << endl;
 
         WordSelectTest();
         cout << endl;
 
-        BitTestSparseTest();
-        cout << endl;
 
         BitSetConditionalTest();
         cout << endl;
@@ -5231,6 +5349,7 @@ int main(void)
         cout << endl;
 
         RSC_SparseVectorFillTest();
+
         RSC_SparseVectorAccesTest();
 
         RSC_SparseVectorRandomAccesTest();

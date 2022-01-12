@@ -94,14 +94,14 @@ public:
     /// Add block list belonging to one super block
     void register_super_block(unsigned i,
                               const unsigned* bcount,
-                              const unsigned* sub_count);
+                              const bm::id64_t* sub_count);
 
     /// find block position and sub-range for the specified rank
     bool find(size_type* rank,
               block_idx_type* nb, bm::gap_word_t* sub_range) const;
     
-    /// return sub-clock counts
-    unsigned sub_count(block_idx_type nb) const BMNOEXCEPT;
+    /// return sub-clock counts (64-bit for additional information)
+    bm::id64_t sub_count(block_idx_type nb) const BMNOEXCEPT;
 
 
     // -----------------------------------------------------------------
@@ -142,15 +142,90 @@ private:
                                                     sblock_row_vector_type;
     typedef bm::dynamic_heap_matrix<unsigned, bv_allocator_type>  blocks_matrix_type;
 
+    typedef bm::dynamic_heap_matrix<bm::id64_t, bv_allocator_type>  blocks_matrix64_type;
+
 private:
     unsigned                  sblock_rows_;
     sblock_count_vector_type  sblock_count_;   ///< super-block accumulated counts
     sblock_row_vector_type    sblock_row_idx_; ///< super-block row numbers
     blocks_matrix_type        block_matr_;     ///< blocks within super-blocks (matrix)
-    blocks_matrix_type        sub_block_matr_; ///< sub-block counts
+    blocks_matrix64_type      sub_block_matr_; ///< sub-block counts
     size_type                 total_blocks_;   ///< total bit-blocks in the index
     unsigned                  max_sblock_;     ///< max. superblock index
 };
+
+/**
+    Precalculated decision table fdr interval selection
+    @internal
+ */
+template<bool T> struct rs_intervals
+{
+    struct codes
+    {
+        unsigned char _buf[65536];
+        codes()
+        {
+            const unsigned cutoff_bias = rs3_half_span/8;
+            for (unsigned i = 0; i < 65536; ++i)
+            {
+                unsigned sub = (i <= rs3_border0) ? 0 :
+                               (i > rs3_border1) ? 2 : 1;
+                switch(sub)  // sub-range rank calc
+                {
+                case 0:
+                    // |--x-----[0]-----------[1]----------|
+                    if (i <= (rs3_border0/2 + cutoff_bias))
+                        sub = 0;
+                    else
+                    {
+                        // |--------[x]-----------[1]----------|
+                        if (i == rs3_border0)
+                            sub = 1;
+                        else // |------x-[0]-----------[1]----------|
+                            sub = 2;
+                    }
+                break;
+                case 1:
+                    // |--------[0]-x---------[1]----------|
+                    if (i <= (rs3_border0 + rs3_half_span + cutoff_bias))
+                        sub = 3;
+                    else
+                    {
+                        // |--------[0]-----------[x]----------|
+                        if (i == rs3_border1)
+                            sub = 4;
+                        else // |--------[0]--------x--[1]----------|
+                            sub = 5;
+                    }
+                break;
+                case 2:
+                {
+                    // |--------[0]-----------[1]-x--------|
+                    if (i <= (rs3_border1 + rs3_half_span + cutoff_bias))
+                        sub = 6;
+                    else
+                    {
+                        // |--------[0]-----------[1]----------x
+                        if (i == bm::gap_max_bits-1)
+                            sub = 7;
+                        else // |--------[0]-----------[1]-------x--|
+                            sub = 8;
+                    }
+                }
+                break;
+                default:
+                    BM_ASSERT(0);
+                    sub = 128;
+                } // switch
+
+                _buf[i] = sub;
+            } // for
+        }
+    };
+    static codes _c;
+};
+template<bool T> typename rs_intervals<T>::codes rs_intervals<T>::_c;
+
 
 //---------------------------------------------------------------------
 //
@@ -272,7 +347,7 @@ rs_index<BVAlloc>::rcount(block_idx_type nb) const
 //---------------------------------------------------------------------
 
 template<typename BVAlloc>
-unsigned rs_index<BVAlloc>::find_sub_range(unsigned block_bit_pos) BMNOEXCEPT
+unsigned rs_index<BVAlloc>::find_sub_range(unsigned block_bit_pos)  BMNOEXCEPT
 {
     return (block_bit_pos <= rs3_border0) ? 0 :
             (block_bit_pos > rs3_border1) ? 2 : 1;
@@ -285,7 +360,8 @@ bm::gap_word_t rs_index<BVAlloc>::select_sub_range(
                                             block_idx_type nb,
                                             size_type& rank) const BMNOEXCEPT
 {
-    unsigned sub_cnt = sub_count(nb);
+    bm::id64_t sub = sub_count(nb);
+    unsigned sub_cnt = unsigned(sub);
     unsigned first = sub_cnt & 0xFFFF;
     unsigned second = sub_cnt >> 16;
 
@@ -346,7 +422,7 @@ rs_index<BVAlloc>::find(size_type rank) const BMNOEXCEPT
 
 //---------------------------------------------------------------------
 template<typename BVAlloc>
-unsigned rs_index<BVAlloc>::sub_count(block_idx_type nb) const BMNOEXCEPT
+bm::id64_t rs_index<BVAlloc>::sub_count(block_idx_type nb) const BMNOEXCEPT
 {
     if (nb >= total_blocks_)
         return 0;
@@ -366,7 +442,7 @@ unsigned rs_index<BVAlloc>::sub_count(block_idx_type nb) const BMNOEXCEPT
     unsigned j = unsigned(nb &  bm::set_array_mask);
 
     unsigned row_idx = sblock_row_idx_[i+1];
-    const unsigned* sub_row = sub_block_matr_.row(row_idx);
+    const bm::id64_t* sub_row = sub_block_matr_.row(row_idx);
     return sub_row[j];
 }
 
@@ -437,9 +513,9 @@ bool rs_index<BVAlloc>::find(size_type* rank,
         if (j)
             *rank -= row[j-1];
         
-        const unsigned* sub_row = sub_block_matr_.row(row_idx);
+        const bm::id64_t* sub_row = sub_block_matr_.row(row_idx);
         unsigned first = sub_row[j] & 0xFFFF;
-        unsigned second = sub_row[j] >> 16;
+        unsigned second = (sub_row[j] >> 16) & 0xFFFF;
         if (*rank > first)
         {
             *rank -= first;
@@ -572,7 +648,7 @@ void rs_index<BVAlloc>::resize_effective_super_blocks(size_type sb_eff)
 template<typename BVAlloc>
 void rs_index<BVAlloc>::register_super_block(unsigned i,
                                              const unsigned* bcount,
-                                             const unsigned* sub_count_in)
+                                             const bm::id64_t* sub_count_in)
 {
     BM_ASSERT(bcount);
     BM_ASSERT(sub_count_in);
@@ -583,7 +659,7 @@ void rs_index<BVAlloc>::register_super_block(unsigned i,
     
     sblock_row_idx_[i+1] = sblock_rows_;
     unsigned* row = block_matr_.row(sblock_rows_);
-    unsigned* sub_row = sub_block_matr_.row(sblock_rows_);
+    bm::id64_t* sub_row = sub_block_matr_.row(sblock_rows_);
     ++sblock_rows_;
 
     unsigned bc = 0;
@@ -593,7 +669,8 @@ void rs_index<BVAlloc>::register_super_block(unsigned i,
         row[j] = bc;
         sub_row[j] = sub_count_in[j];
         BM_ASSERT(bcount[j] >=
-            (sub_count_in[j] >> 16) + (sub_count_in[j] & bm::set_block_mask));
+                     ((sub_count_in[j] >> 16) & bm::set_block_mask) +
+                     (sub_count_in[j] & bm::set_block_mask));
     } // for j
     sblock_count_[i+1] = sblock_count_[i] + bc;
 }

@@ -1131,12 +1131,8 @@ unsigned sse4_gap_find(const bm::gap_word_t* BMRESTRICT pbuf,
     __m128i  mge_mask = _mm_cmpeq_epi16(_mm_subs_epu16(mp, m1), mz); // unsigned m1 >= mp
     __m128i  c_mask = _mm_slli_epi16(mge_mask, 15); // clear not needed flag bits by shift
     int mi = _mm_movemask_epi8(c_mask);  // collect flag bits
-    if (mi)
-    {
-        // alternative: int bsr_i= bm::bit_scan_fwd(mi) >> 1;
-        unsigned bc = _mm_popcnt_u32(mi); // gives us number of elements >= pos
+    if (unsigned bc = _mm_popcnt_u32(mi)) // gives us number of elements >= pos
         return unroll_factor - bc;   // address of first one element (target)
-    }
     // inspect the next lane with possible step back (to avoid over-read the block boundaries)
     //   GCC gives a false warning for "- unroll_factor" here
     const bm::gap_word_t* BMRESTRICT pbuf2 = pbuf + size - unroll_factor;
