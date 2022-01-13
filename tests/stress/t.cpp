@@ -33171,6 +33171,7 @@ void TestRankCompress()
             
             bv_i.optimize();
             bv_s.optimize();
+            bv_i.build_rs_index(&bc);
         }
     }
     cout << "Step 1 - OK" << endl;
@@ -33212,6 +33213,7 @@ void TestRankCompress()
  
             bv_i.optimize();
             bv_s.optimize();
+            bv_i.build_rs_index(&bc);
         }
     }
     std::cout << "basic test OK..." << std::endl;
@@ -33297,6 +33299,8 @@ void TestRankCompress()
 
                 bv_i.optimize();
                 bv_s.optimize();
+                bv_i.build_rs_index(&bc);
+
             } // for j
             cout << "\n" << i << " of " << test_count << "  " << endl;
             
