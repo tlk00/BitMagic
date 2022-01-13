@@ -115,10 +115,12 @@ const unsigned bits_in_block = bm::set_block_size * unsigned((sizeof(bm::word_t)
 const unsigned bits_in_array = bm::bits_in_block * bm::set_array_size32;
 
 
-// Rank-Select parameters
+// Rank-Select parameters (linear address to split the searches
 const unsigned rs3_border0 = 21824; // 682 words by 32-bits
 const unsigned rs3_border1 = (rs3_border0 * 2); // 43648
 const unsigned rs3_half_span = rs3_border0 / 2;
+const unsigned rs3_border0_1 = rs3_border0 + rs3_half_span; // intermed pnt 1
+const unsigned rs3_border1_1 = rs3_border1 + rs3_half_span; // intermed pnt 2
 
 // misc parameters for sparse vec algorithms
 const unsigned sub_block3_size = bm::gap_max_bits / 4;

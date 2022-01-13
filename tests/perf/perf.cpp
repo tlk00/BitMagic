@@ -886,6 +886,7 @@ void BitCountSparseTest()
         }
     }
 */
+
     std::unique_ptr<bvect::rs_index_type> bc_arr(new bvect::rs_index_type());
     bv->build_rs_index(bc_arr.get());
 
@@ -894,7 +895,7 @@ void BitCountSparseTest()
 
 
 
-    unsigned rs_max = 80;
+    unsigned rs_max = 40;
 
 
     {
@@ -928,7 +929,7 @@ void BitCountSparseTest()
             for (size_t i = 0; i < sample_vec.size(); ++i)
             {
                 auto idx = sample_vec[i];
-                value2 += bv_c->count_to(idx, *bc_arr);
+                value2 += bv_c->count_to(idx, *bc_arr_c);
             }
         }
         assert(value == value2);
@@ -5245,14 +5246,14 @@ int main(void)
     try
     {
         cout << endl;
-
+/*
         MemCpyTest();
 
         BitCountTest();
-
+*/
         BitCountSparseTest();
 //        return 0;
-
+/*
         BitTestSparseTest();
         cout << endl;
 
@@ -5351,10 +5352,10 @@ int main(void)
         RSC_SparseVectorFillTest();
 
         RSC_SparseVectorAccesTest();
-
+*/
         RSC_SparseVectorRandomAccesTest();
         cout << endl;
-
+return 0;
         RankCompressionTest();
         cout << endl;
 

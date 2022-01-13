@@ -37,7 +37,7 @@ namespace bm
 {
 
 
-inline 
+template<bool LWA=false, bool RWA=false>
 bm::id_t bit_block_calc_count_range(const bm::word_t* block,
                                     bm::word_t left,
                                     bm::word_t right) BMNOEXCEPT;
@@ -5284,9 +5284,11 @@ bool bit_block_is_all_one_range(const bm::word_t* const BMRESTRICT block,
     the range between left anf right bits (borders included)
     Make sure the addr is aligned.
 
+    LWA - left word aligned
+    RWA - right word aligned
     @ingroup bitfunc
 */
-inline 
+template<bool LWA, bool RWA>
 bm::id_t bit_block_calc_count_range(const bm::word_t* block,
                                     bm::word_t left,
                                     bm::word_t right) BMNOEXCEPT
@@ -5294,60 +5296,76 @@ bm::id_t bit_block_calc_count_range(const bm::word_t* block,
     BM_ASSERT(left <= right);
     BM_ASSERT(right <= bm::gap_max_bits-1);
     
-    unsigned nword, nbit, bitcount, count;
+    unsigned nword, nbit, bitcount, count, right_margin;
     nbit = left & bm::set_word_mask;
-    const bm::word_t* word = 
-        block + (nword = unsigned(left >> bm::set_word_shift));
+    block += (nword = unsigned(left >> bm::set_word_shift));
     if (left == right)  // special case (only 1 bit to check)
+        return (*block >> nbit) & 1u;
+
+    bitcount = 1u + (right_margin = (right - left));
+    if constexpr (LWA)
     {
-        return (*word >> nbit) & 1u;
+        BM_ASSERT(!nbit);
+        count = 0;
     }
-    
-    count = 0;
-    bitcount = right - left + 1u;
-    if (nbit) // starting position is not aligned
-    {
-        unsigned right_margin = nbit + right - left;
-        if (right_margin < 32)
+    else
+        if (nbit) // starting position is not aligned
         {
+            right_margin += nbit;
             unsigned mask_r = bm::mask_r_u32(nbit);
-            unsigned mask_l = bm::mask_l_u32(right_margin);
-            unsigned mask = mask_r & mask_l;
-            return bm::word_bitcount(*word & mask);
+            if (right_margin < 32)
+            {
+                unsigned mask_l = bm::mask_l_u32(right_margin);
+                return bm::word_bitcount(mask_r & mask_l & *block);
+            }
+            count = bm::word_bitcount(*block++ & mask_r);
+            bitcount -= 32 - nbit;
         }
-        unsigned mask_r = bm::mask_r_u32(nbit);
-        count = bm::word_bitcount(*word & mask_r);
-        bitcount -= 32 - nbit;
-        ++word;
-    }
-    
+        else
+            count = 0;
+
     // now when we are word aligned, we can count bits the usual way
     //
     #if defined(BM64_SSE4) || defined(BM64_AVX2) || defined(BM64_AVX512)
+        for ( ;bitcount >= 128; bitcount-=128)
+        {
+            const bm::id64_t* p64 = (bm::id64_t*) block;
+            bm::id64_t w64_0 = p64[0]; // x86 unaligned(!) read
+            bm::id64_t w64_1 = p64[1];
+            count += unsigned(_mm_popcnt_u64(w64_0));
+            count += unsigned(_mm_popcnt_u64(w64_1));
+            block += 4;
+        }
         for ( ;bitcount >= 64; bitcount-=64)
         {
-            bm::id64_t w64 = *((bm::id64_t*)word); // x86 unaligned(!) read
+            bm::id64_t w64 = *((bm::id64_t*)block); // x86 unaligned(!) read
             count += unsigned(_mm_popcnt_u64(w64));
-            word += 2;
+            block += 2;
         }
         if (bitcount >= 32)
         {
-            count += bm::word_bitcount(*word++);
+            count += bm::word_bitcount(*block++);
             bitcount-=32;
         }
     #else
-        for ( ;bitcount >= 32; bitcount-=32, ++word)
-            count += bm::word_bitcount(*word);
+        for ( ;bitcount >= 32; bitcount-=32)
+            count += bm::word_bitcount(*block++);
     #endif
     BM_ASSERT(bitcount < 32);
     
-    if (bitcount)  // we have a tail to count
+    if constexpr (RWA)
     {
-        unsigned mask_l = bm::mask_l_u32(bitcount-1);
-        count += bm::word_bitcount(*word & mask_l);
+        BM_ASSERT(!bitcount);
     }
+    else
+        if (bitcount)  // we have a tail to count
+        {
+            unsigned mask_l = bm::mask_l_u32(bitcount-1);
+            count += bm::word_bitcount(*block & mask_l);
+        }
     return count;
 }
+
 
 /*!
     Function calculates number of 1 bits in the given array of words in
