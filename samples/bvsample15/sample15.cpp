@@ -23,9 +23,9 @@ Ranges of bit-vectors can be used to find probability of intersection.
 For instance, in some corner cases AND product can be predicted empty if vectors
 belong to different ranges.
 
-    @sa bm::bvector<>::find()
-    @sa bm::bvector<>::find_reverse()
-    @sa bm::bvector<>::find_range()
+    @sa bm::bvector::find()
+    @sa bm::bvector::find_reverse()
+    @sa bm::bvector::find_range()
 */
 
 /*! \file sample15.cpp
@@ -47,7 +47,7 @@ const unsigned MAX_VALUE = 10000000;
 static
 void fill_bvector(bm::bvector<>* bv)
 {
-    unsigned start = MAX_VALUE / (rand()%10);
+    unsigned start = MAX_VALUE / (unsigned)(rand()%10);
     for (unsigned i = start; i < MAX_VALUE; ++i)
     {
         if ((rand() % 10))
@@ -72,12 +72,33 @@ int main(void)
         cout << "bv2 count = " << bv2.count() << endl;
 
         bool found;
-        bm::bvector<>::size_type first, last;
+        bm::bvector<>::size_type first, last, pos, second;
         
         found = bv1.find(first);
         if (found)
             cout << "bv1 first = " << first << endl;
-        
+
+        // make a repeat find starting on a discovered position
+        //
+        // find will return the same position (if it is set)
+        found = bv1.find(first, pos);
+        assert (found);
+        {
+            cout << "bv1 pos = " << pos << endl; // will be same as first
+            assert(pos == first);
+        }
+
+        // Q: what if we need a second set position?
+        // A: increament previously found index and find() again
+        //
+        found = bv1.find(first+1, second); // use first + 1 
+        assert (found);
+        {
+            cout << "bv1 second = " << second << endl;
+            assert(second > first);
+            assert(bv1.test(second));
+        }
+
         found = bv1.find_reverse(last);
         if (found)
             cout << "bv1 last = " << last << endl;
