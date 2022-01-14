@@ -1465,7 +1465,7 @@ bool rsc_sparse_vector<Val, SV>::resolve(size_type idx,
     bool found = bv_null->test(idx);
     if (!found)
         return found;
-    *idx_to = bv_null->count_range(0, idx);
+    *idx_to = bv_null->count_range_no_check(0, idx);
     return found;
 }
 

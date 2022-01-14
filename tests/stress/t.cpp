@@ -19401,6 +19401,38 @@ void ExportTest()
     cout << "---------------------------- ExportTest Ok." << endl;
 }
 
+
+
+static
+void TestNibbleArr()
+{
+    cout << "---------------------------- TestNibbleArr()" << endl;
+
+    {
+        unsigned char arr[256] = {0,};
+        unsigned char v = 0;
+        for (unsigned i = 0; i < 512; ++i, ++v)
+        {
+            if (v > 0xF)
+                v = 0;
+            bm::set_nibble(arr, i, v);
+            auto vc = bm::get_nibble(arr, i);
+            assert(vc == v);
+        } // for
+        v = 0;
+        for (unsigned i = 0; i < 512; ++i, ++v)
+        {
+            if (v > 0xF)
+                v = 0;
+            auto vc = bm::get_nibble(arr, i);
+            assert(vc == v);
+        } // for
+    }
+
+    cout << "---------------------------- TestNibbleArr() OK" << endl;
+}
+
+
 static
 void TestRecomb()
 {
@@ -36323,6 +36355,8 @@ int main(int argc, char *argv[])
 
     if (is_all || is_low_level)
     {
+        TestNibbleArr();
+
         TestRecomb();
 
         HMaskTest();

@@ -9856,6 +9856,57 @@ bm::bit_representation best_representation(unsigned gc,
     return e_bit_IINT;
 }
 
+// --------------------------------------------------------------
+// Nibble array functions
+// --------------------------------------------------------------
+
+/**
+    @brief set nibble in the array
+    @param arr - base array of characters
+    @param idx - nibble index
+    @param v - value to set
+
+    @internal
+ */
+inline
+void set_nibble(unsigned char* arr, unsigned idx, unsigned char v) BMNOEXCEPT
+{
+    BM_ASSERT(arr);
+    BM_ASSERT(v <= 0xF);
+
+    unsigned arr_idx = idx >> 1;
+    if (idx & 1)
+    {
+        unsigned char old_val = arr[arr_idx];
+        old_val &= 0x0F; // clear the upper bits
+        arr[arr_idx] = old_val | (v << 4);
+    }
+    else
+    {
+        unsigned char old_val = arr[arr_idx];
+        old_val &= 0xF0; // clear the lower bits
+        arr[arr_idx] = old_val | (v & 0xF);
+    }
+}
+
+/**
+    @brief get nibble from the array
+    @param arr - base array of characters
+    @param idx - nibble index
+    @return value
+
+    @internal
+ */
+inline
+unsigned char get_nibble(const unsigned char* arr, unsigned idx) BMNOEXCEPT
+{
+    BM_ASSERT(arr);
+    unsigned char v = arr[idx >> 1];
+    v >>= (idx & 1) * 4;
+    v &= 0xF;
+    return v;
+}
+
 
 // --------------------------------------------------------------
 // Functions to work with int values stored in 64-bit pointers

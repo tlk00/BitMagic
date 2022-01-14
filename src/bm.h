@@ -2694,7 +2694,7 @@ bvector<Alloc>::block_count_to(const bm::word_t*    block,
 
 #endif
 
-#if 1
+#if 0
 
 template<typename Alloc>
 typename bvector<Alloc>::size_type
@@ -2881,9 +2881,119 @@ bvector<Alloc>::block_count_to(const bm::word_t*    block,
     return c;
 }
 
-#undef BM_BORDER_TEST
+#endif
+
+
+#if 1
+
+// --------------------------------------------------------------
+
+template<typename Alloc>
+typename bvector<Alloc>::size_type
+bvector<Alloc>::block_count_to(const bm::word_t*    block,
+                               block_idx_type       nb,
+                               unsigned             nbit_right,
+                               const rs_index_type& rs_idx) BMNOEXCEPT
+{
+    BM_ASSERT(block);
+
+
+    bm::id64_t sub = rs_idx.sub_count(nb);
+    unsigned sub_cnt = unsigned(sub);
+    unsigned first = sub_cnt & 0xFFFF;
+    unsigned second = sub_cnt >> 16;
+
+    BM_ASSERT(first == bm::bit_block_calc_count_to(block, rs3_border0));
+    BM_ASSERT(second == bm::bit_block_calc_count_range(block, rs3_border0+1, rs3_border1));
+
+
+    {
+        unsigned cnt, aux0(bm::gap_word_t(sub >> 32)); (void)cnt; (void)aux0;
+        BM_ASSERT(aux0 == (cnt =bm::bit_block_calc_count_to(block, bm::rs3_border0_1)));
+    }
+
+    size_type c=0;
+    unsigned sub_choice =
+        bm::get_nibble(bm::rs_intervals<true>::_c._lut, nbit_right);
+
+    switch(sub_choice)
+    {
+    case 0:
+        c = bm::bit_block_calc_count_range<true, false>(block, 0, nbit_right);
+        break;
+    case 1:
+        c = first;
+        break;
+    case 2:
+        c = bm::bit_block_calc_count_range(block, nbit_right+1, rs3_border0);
+        c = first - c;
+        break;
+    case 3:
+        c = bm::bit_block_calc_count_range<true, false>(block,
+                                                        bm::rs3_border0,
+                                                        nbit_right);
+        c += first - BM_BORDER_TEST(block, bm::rs3_border0);
+        break;
+    case 4:
+        c = first + second;
+        break;
+    case 5:
+        c = bm::bit_block_calc_count_range(block, nbit_right+1, rs3_border1);
+        c = first + second - c;
+        break;
+    case 6:
+        c = bm::bit_block_calc_count_range<true, false>(
+                                           block,
+                                           bm::rs3_border0_1,
+                                           nbit_right);
+        c += bm::gap_word_t(sub >> 32); // aux0
+        c -= BM_BORDER_TEST(block, bm::rs3_border0_1);
+        break;
+    case 7:
+        c = bm::bit_block_calc_count_range<true, false>(block,
+                                               bm::rs3_border1,
+                                               nbit_right);
+        c += first + second; //bc_second_range;
+        c -= BM_BORDER_TEST(block, bm::rs3_border1);
+        break;
+    case 8:
+        c = bm::gap_word_t(sub >> 48); // aux1;
+        break;
+    case 9:
+        c = bm::bit_block_calc_count_range(block,
+                                           nbit_right+1,
+                                           rs3_border1_1);
+        c = bm::gap_word_t(sub >> 48) - c; // aux1 - c
+        break;
+    case 10:
+        c = rs_idx.count(nb);
+        break;
+    case 11:
+        c = bm::bit_block_calc_count_range(block,
+                                           nbit_right+1,
+                                           bm::gap_max_bits-1);
+        c = rs_idx.count(nb) - c;
+        break;
+    case 12:
+        c = bm::bit_block_calc_count_range<true, false>(block,
+                                               bm::rs3_border1_1,
+                                               nbit_right);
+        c += bm::gap_word_t(sub >> 48); // aux1;
+        c -= BM_BORDER_TEST(block, bm::rs3_border1_1);
+        break;
+    default:
+        BM_ASSERT(0);
+    } // switch
+
+    BM_ASSERT(c == bm::bit_block_calc_count_to(block, nbit_right));
+    return c;
+}
 
 #endif
+
+
+
+#undef BM_BORDER_TEST
 
 // -----------------------------------------------------------------------
 

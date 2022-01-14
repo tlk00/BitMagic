@@ -162,63 +162,96 @@ template<bool T> struct rs_intervals
 {
     struct codes
     {
-        unsigned char _buf[65536];
+        unsigned char _lut[65536/2]; // nibble lookup table
+
         codes()
         {
+            #if defined(BM64_SSE4) || defined(BM64_AVX2) || defined(BM64_AVX512)
             const unsigned cutoff_bias = rs3_half_span/8;
-            for (unsigned i = 0; i < 65536; ++i)
+            #else
+            const unsigned cutoff_bias = 0;
+            #endif
+
+            for (unsigned nbit_right = 0; nbit_right < 65536; ++nbit_right)
             {
-                unsigned sub = (i <= rs3_border0) ? 0 :
-                               (i > rs3_border1) ? 2 : 1;
+                unsigned sub = (nbit_right <= rs3_border0) ? 0 :
+                               (nbit_right > rs3_border1) ? 2 : 1;
                 switch(sub)  // sub-range rank calc
                 {
                 case 0:
                     // |--x-----[0]-----------[1]----------|
-                    if (i <= (rs3_border0/2 + cutoff_bias))
+                    if (nbit_right <= rs3_border0/2 + cutoff_bias)
                         sub = 0;
-                    else
-                    {
-                        // |--------[x]-----------[1]----------|
-                        if (i == rs3_border0)
+                    else // |--------[x]-----------[1]----------|
+                        if (nbit_right == rs3_border0)
                             sub = 1;
                         else // |------x-[0]-----------[1]----------|
                             sub = 2;
-                    }
                 break;
+
                 case 1:
                     // |--------[0]-x---------[1]----------|
-                    if (i <= (rs3_border0 + rs3_half_span + cutoff_bias))
+                    if (nbit_right <= rs3_border0_1 + cutoff_bias)
                         sub = 3;
                     else
                     {
                         // |--------[0]-----------[x]----------|
-                        if (i == rs3_border1)
+                        if (nbit_right == rs3_border1)
                             sub = 4;
-                        else // |--------[0]--------x--[1]----------|
-                            sub = 5;
+                        else
+                        {
+                            // |--------[0]--------x--[1]----------|
+                            unsigned d1 = nbit_right - bm::rs3_border0_1;
+                            unsigned d2 = rs3_border1 - nbit_right;
+                            if (d2 < d1) // |--------[0]----|----x-[1]--------|
+                                sub = 5;
+                            else // |--------[0]----|-x----[1]----------|
+                                sub = 6;
+                        }
                     }
                 break;
+
                 case 2:
+                // |--------[0]-----------[1]-x---*----|
+                if (nbit_right <= rs3_border1_1)
                 {
-                    // |--------[0]-----------[1]-x--------|
-                    if (i <= (rs3_border1 + rs3_half_span + cutoff_bias))
-                        sub = 6;
+                    unsigned d1 = nbit_right - bm::rs3_border1;
+                    unsigned d2 = (rs3_border1_1 + cutoff_bias) - nbit_right;
+                    if (d1 < d2) // |--------[0]-----------[1]-x---*----|
+                        sub = 7;
+                    else // |--------[0]-----------[1]---x-*----|
+                    {
+                        if (nbit_right == rs3_border1_1)
+                            sub = 8;
+                        else
+                            sub = 9;
+                    }
+                }
+                else
+                {
+                    // |--------[0]-----------[1]----------x
+                    if (nbit_right == bm::gap_max_bits-1)
+                        sub = 10;
                     else
                     {
-                        // |--------[0]-----------[1]----------x
-                        if (i == bm::gap_max_bits-1)
-                            sub = 7;
-                        else // |--------[0]-----------[1]-------x--|
-                            sub = 8;
+                        // |--------[0]-----------[1]-------x--|
+                        BM_ASSERT(nbit_right > bm::rs3_border1_1);
+                        unsigned d1 = nbit_right - bm::rs3_border1_1;
+                        unsigned d2 = bm::gap_max_bits - nbit_right;
+                        if (d2 < d1) // |--------[0]----------[1]----*---x-|
+                            sub = 11;
+                        else // |--------[0]----------[1]----*-x---|
+                            sub = 12;
                     }
                 }
                 break;
+
                 default:
                     BM_ASSERT(0);
                     sub = 128;
                 } // switch
+                bm::set_nibble(_lut, nbit_right, (unsigned char)sub);
 
-                _buf[i] = sub;
             } // for
         }
     };
