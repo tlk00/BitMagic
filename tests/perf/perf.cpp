@@ -895,7 +895,7 @@ void BitCountSparseTest()
 
 
 
-    unsigned rs_max = 40;
+    unsigned rs_max = 100;
 
 
     {
@@ -5246,14 +5246,14 @@ int main(void)
     try
     {
         cout << endl;
-/*
+
         MemCpyTest();
 
         BitCountTest();
-*/
+
         BitCountSparseTest();
 //        return 0;
-/*
+
         BitTestSparseTest();
         cout << endl;
 
@@ -5352,10 +5352,10 @@ int main(void)
         RSC_SparseVectorFillTest();
 
         RSC_SparseVectorAccesTest();
-*/
+
         RSC_SparseVectorRandomAccesTest();
         cout << endl;
-return 0;
+
         RankCompressionTest();
         cout << endl;
 

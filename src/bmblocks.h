@@ -1959,11 +1959,9 @@ public:
         {
             top_blocks_ = (bm::word_t***) alloc_.alloc_ptr(top_block_size_);
             ::memset(top_blocks_, 0, top_block_size_ * sizeof(bm::word_t**));
+            return;
         }
-        else
-        {
-            top_blocks_ = 0;
-        }
+        top_blocks_ = 0;
     }
     
     // ----------------------------------------------------------------

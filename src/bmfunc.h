@@ -2356,9 +2356,7 @@ unsigned gap_bit_count_range(const T* const buf,
 
     const T* pcurr = buf + start_pos;
     if (right <= *pcurr) // we are in the target gap right now
-    {
         bits_counter = unsigned(right - left + 1u) & is_set;
-    }
     else
     {
         bits_counter = unsigned(*pcurr - left + 1u) & is_set;
@@ -2415,9 +2413,7 @@ unsigned gap_bit_count_range_hint(const T* const buf,
 
     const T* pcurr = buf + start_pos;
     if (right <= *pcurr) // we are in the target gap right now
-    {
         bits_counter = unsigned(right - left + 1u) & is_set;
-    }
     else
     {
         bits_counter = unsigned(*pcurr - left + 1u) & is_set;
@@ -9879,13 +9875,13 @@ void set_nibble(unsigned char* arr, unsigned idx, unsigned char v) BMNOEXCEPT
     {
         unsigned char old_val = arr[arr_idx];
         old_val &= 0x0F; // clear the upper bits
-        arr[arr_idx] = old_val | (v << 4);
+        arr[arr_idx] = (unsigned char)(old_val | (v << 4));
     }
     else
     {
         unsigned char old_val = arr[arr_idx];
         old_val &= 0xF0; // clear the lower bits
-        arr[arr_idx] = old_val | (v & 0xF);
+        arr[arr_idx] = (unsigned char)(old_val | (v & 0xF));
     }
 }
 
