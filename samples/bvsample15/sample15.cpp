@@ -35,6 +35,7 @@ belong to different ranges.
 #include <stdlib.h>
 #include <iostream>
 #include <vector>
+#include <cassert>
 
 #include "bm.h"
 #include "bmundef.h" /* clear the pre-proc defines from BM */

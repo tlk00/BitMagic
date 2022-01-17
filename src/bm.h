@@ -2491,7 +2491,7 @@ void bvector<Alloc>::build_rs_index(rs_index_type* rs_idx,
             const bm::word_t* block = blk_blk[j];
             if (!block)
             {
-                bcount[j] = sub_count[j] = 0;
+                bcount[j] = 0; sub_count[j] = 0;
                 continue;
             }
             unsigned local_first, local_second, local_third;

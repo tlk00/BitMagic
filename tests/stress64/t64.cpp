@@ -2017,7 +2017,7 @@ void RSIndexTest()
         bm::id64_t sub_count2[bm::set_sub_array_size];
         for (unsigned i = 0; i < bm::set_sub_array_size; ++i)
         {
-            bcount[i] = sub_count1[i] = sub_count2[i] = 0;
+            bcount[i] = 0, sub_count1[i] = sub_count2[i] = 0;
         } // for
         bcount[0] = 1;
         bcount[255] = 2;
