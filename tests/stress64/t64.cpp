@@ -15018,6 +15018,19 @@ void TestCompressSparseVector()
         assert(csv.get(10) == 11);
         assert(csv.get(11) == 12);
         assert(csv.get(5) == 0);
+
+
+        // gather
+
+        bvect::size_type idx[5] = {11, 10, 5, }, buf[5];
+        unsigned v[5];
+        csv.gather(&v[0], &idx[0], &buf[0], 3, bm::BM_UNKNOWN);
+        assert(v[0] == 12);
+        assert(v[1] == 11);
+        assert(v[2] == 0);
+        assert(buf[0] != bm::id_max);
+        assert(buf[1] != bm::id_max);
+        assert(buf[2] == bm::id_max);
     }
 
     cout << "inc() and merge_not_null() tests" << endl;

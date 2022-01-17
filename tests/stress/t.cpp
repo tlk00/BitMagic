@@ -34139,6 +34139,19 @@ void TestCompressSparseVector()
         assert(csv1.get(20)==200);
         assert(csv1.get(21)==0);
         assert(csv1.get(51)==65535);
+
+        // gather
+
+        bvect::size_type idx[5] = {51, 0, 20, }, buf[5];
+        unsigned v[5];
+        csv1.gather(&v[0], &idx[0], &buf[0], 3, bm::BM_UNKNOWN);
+        assert(v[0] == 65535);
+        assert(v[1] == 0);
+        assert(v[2] == 200);
+        assert(buf[0] != bm::id_max);
+        assert(buf[1] = bm::id_max);
+        assert(buf[2] != bm::id_max);
+
     }
 
     // bulk set_null
