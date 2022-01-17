@@ -2282,6 +2282,7 @@ void CountRangeTest()
             VerifyCountRange(bv1, bc_arr, bm::id_max/2-200, bm::id_max/2+2000);
 
             bv1.optimize();
+            bv1.build_rs_index(&bc_arr);
         }
     }}
 
