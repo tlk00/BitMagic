@@ -82,6 +82,7 @@ RSC sparse vector (Succinct vector based on Rank-Select methods) for scalar inte
                 randomly set() and inc() them in fast rank-select index mode
 ./rscsample05 - How to serialize a group of sparse vectors (data frame) using XOR compression
                 See also: http://bitmagic.io/bm-xor.html
+./rscsample06 - rsc_sparse_vector<>::gather() - random or sorted order extraction
                 
 
 String sparse vector (bit-transposed vector) for ASCII(z) strings
