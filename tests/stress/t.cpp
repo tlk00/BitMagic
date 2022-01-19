@@ -4711,7 +4711,7 @@ void BvectorBulkSetTest()
     }
     
     
-    cout << "---------------------------- Bvector BULK set test OK" << endl;
+    cout << "---------------------------- Bvector BULK set test OK\n" << endl;
 }
 
 
@@ -5868,19 +5868,17 @@ void SimpleRandomFillTest()
 
     bm::random_subset<bvect> rsub;
 
-    cout << "-------------------------- SimpleRandomFillTest" << endl;
+    cout << "\n-------------------------- SimpleRandomFillTest()" << endl;
 
-    printf("Test for Random inverted subset.");
-
+    printf("Test for Random inverted subset.\n");
     {
         bvect bv;
         bv.invert();
         TestRandomSubset(bv, rsub);
     }
 
-
     {
-    printf("Simple random fill test 1.");
+    printf("Simple random fill test 1.\n");
     bvect_mini   bvect_min(BITVECT_SIZE);
     bvect      bvect_full;
     bvect_full.set_new_blocks_strat(bm::BM_BIT);
@@ -5901,9 +5899,13 @@ void SimpleRandomFillTest()
         unsigned num = unsigned(::rand()) % iter;
         bvect_min.set_bit(num);
         bvect_full.set_bit(num);
-        if ((i % 1000) == 0) cout << "." << flush;
+
+        bvect_full.build_rs_index(&rs_idx_full);
+
         CheckCountRange(bvect_full, rs_idx_full, 0, num);
         CheckCountRange(bvect_full, rs_idx_full, num, num+iter);
+
+        if ((i % 1000) == 0) cout << "." << flush;
     }
 
     CheckVectors(bvect_min, bvect_full, iter);
@@ -5944,6 +5946,9 @@ void SimpleRandomFillTest()
         unsigned num = unsigned(::rand()) % iter;
         bvect_min.set_bit(num);
         bvect_full.set_bit(num);
+
+        bvect_full.build_rs_index(&rs_idx_full);
+
         CheckCountRange(bvect_full, rs_idx_full, 0, 65535);
         CheckCountRange(bvect_full, rs_idx_full, 0, num);
         CheckCountRange(bvect_full, rs_idx_full, num, num+iter);
@@ -5960,6 +5965,9 @@ void SimpleRandomFillTest()
         unsigned num = unsigned(rand()) % iter;
         bvect_min.clear_bit(num);
         bvect_full.clear_bit(num);
+
+        bvect_full.build_rs_index(&rs_idx_full);
+
         CheckCountRange(bvect_full, rs_idx_full, 0, num);
         CheckCountRange(bvect_full, rs_idx_full, num, num+iter);
     }
@@ -6128,7 +6136,7 @@ void RangeCopyTest()
     
     
 
-    cout << "----------------------------------- RangeCopyTest OK" << endl;
+    cout << "----------------------------------- RangeCopyTest() OK\n" << endl;
 }
 
 
@@ -15313,6 +15321,7 @@ void GetNextTest()
 static
 void MaxSTest()
 {
+   cout << "\n  ------------------------------------ MaxSTest()\n";
    bvect vec;
 
    int i, j;
@@ -15329,8 +15338,8 @@ void MaxSTest()
       }
       vec.optimize();
       vec.clear();
-      fprintf(stderr, ".");
    }
+   cout << "\n  ------------------------------------ MaxSTest() OK \n\n";
 }
 
 static
