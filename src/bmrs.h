@@ -162,7 +162,7 @@ template<bool T> struct rs_intervals
 {
     struct codes
     {
-        unsigned char _lut[65536/2]; // nibble lookup table
+        const unsigned char _lut[65536] = {0, }; // nibble lookup table
 
         codes()
         {
@@ -248,9 +248,15 @@ template<bool T> struct rs_intervals
 
                 default:
                     BM_ASSERT(0);
-                    sub = 128;
+                    sub = 0;
                 } // switch
-                bm::set_nibble(_lut, nbit_right, (unsigned char)sub);
+
+                bm::set_nibble(
+                    const_cast<unsigned char*>(_lut),
+                    nbit_right, (unsigned char)sub);
+
+                BM_ASSERT((unsigned char)sub ==
+                 bm::get_nibble(const_cast<unsigned char*>(_lut), nbit_right));
 
             } // for
         }
@@ -462,21 +468,21 @@ bm::id64_t rs_index<BVAlloc>::sub_count(block_idx_type nb) const BMNOEXCEPT
     
     unsigned i = unsigned(nb >> bm::set_array_shift);
     size_type sb_count = get_super_block_count(i);
-    
     if (!sb_count)
         return 0;
+
     if (sb_count == (bm::set_sub_array_size * bm::gap_max_bits)) // FULL BLOCK
     {
         unsigned first = rs3_border0 + 1;
         unsigned second = rs3_border1 - first + 1;
-        return (second << 16) | first;
+        bm::id64_t aux0 = bm::rs3_border0_1 + 1;
+        bm::id64_t aux1 = bm::rs3_border1_1 + 1;
+        return (aux0 << 32) | (aux1 << 48) | (second << 16) | first;
     }
     
-    unsigned j = unsigned(nb &  bm::set_array_mask);
-
     unsigned row_idx = sblock_row_idx_[i+1];
     const bm::id64_t* sub_row = sub_block_matr_.row(row_idx);
-    return sub_row[j];
+    return sub_row[nb &  bm::set_array_mask]; // j - coordinate element
 }
 
 

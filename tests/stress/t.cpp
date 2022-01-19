@@ -1679,7 +1679,7 @@ void CheckRangeCopy(const bvect& bv, unsigned from, unsigned to)
 
 
 template<class T>
-void CheckCountRange(const T& vect, 
+void CheckCountRange(const T& vect, const bvect::rs_index_type& bc_arr,
                                        unsigned left, 
                                        unsigned right)
 {
@@ -1704,8 +1704,8 @@ void CheckCountRange(const T& vect,
     
     CheckRangeCopy(vect, left, right);
     
-    bvect::rs_index_type bc_arr;
-    vect.build_rs_index(&bc_arr);
+//    bvect::rs_index_type bc_arr;
+//    vect.build_rs_index(&bc_arr);
     
     // run a cycle to check count_to()
     //
@@ -1724,14 +1724,17 @@ void CheckCountRange(const T& vect,
                  << " right=" << right << endl
                  << " count_range()=" << cnt1
                  << " check=" << cnt2;
-            exit(1);
+            assert(0); exit(1);
         }
         
         bm::id_t range = 1 + right - left;
         if (cnt1 > range)
         {
             cerr << "Impossible count_range detected!" << endl;
-            exit(1);
+            cerr << " range = " << range << endl;
+            cerr << " cnt1 = " << cnt1 << endl;
+            cnt1 = vect.count_range(left, right, bc_arr);
+            assert(0); exit(1);
         }
         
         
@@ -1774,10 +1777,10 @@ void CheckCountRange(const T& vect,
                         cerr << "Failed for rank=" << k << endl;
                         cerr << rf << " " << rf2 << endl;
                         cerr << "pos = " << pos << " pos2 = " << pos2 << endl;
-                        exit(1);
+                        assert(0); exit(1);
                     }
                 }
-                exit(1);
+                assert(0); exit(1);
             }
             assert(pos == pos1);
             
@@ -1809,7 +1812,7 @@ void CheckCountRange(const T& vect,
                          << " pos=" << pos
                          << " rank = " << pos2
                          << endl;
-                    exit(1);
+                    assert(0); exit(1);
                 }
             }
         }
@@ -4270,11 +4273,17 @@ void BasicFunctionalityTest()
     }
     cout << endl;
 
-    CheckCountRange(bvect_full, 0, ITERATIONS);
-    CheckCountRange(bvect_full, 10, ITERATIONS+10);
-    CheckCountRange(bvect_full1, 0, ITERATIONS);
-    CheckCountRange(bvect_full1, ITERATIONS-10, ITERATIONS+10);
-    CheckCountRange(bvect_full1, 10, ITERATIONS+10);
+    bvect::rs_index_type rs_idx_full;
+    bvect_full.build_rs_index(&rs_idx_full);
+
+    bvect::rs_index_type rs_idx_full1;
+    bvect_full1.build_rs_index(&rs_idx_full1);
+
+    CheckCountRange(bvect_full, rs_idx_full, 0, ITERATIONS);
+    CheckCountRange(bvect_full, rs_idx_full, 10, ITERATIONS+10);
+    CheckCountRange(bvect_full1, rs_idx_full1, 0, ITERATIONS);
+    CheckCountRange(bvect_full1, rs_idx_full1, ITERATIONS-10, ITERATIONS+10);
+    CheckCountRange(bvect_full1, rs_idx_full1, 10, ITERATIONS+10);
 
     if (bvect_full1 != bvect_full)
     {
@@ -4298,15 +4307,15 @@ void BasicFunctionalityTest()
     cout << "Rank check 3" << endl;
     for (i = 0; i < ITERATIONS; ++i)
     {
-        CheckCountRange(bvect_full, i, ITERATIONS);
-        CheckCountRange(bvect_full1, i, ITERATIONS);
+        CheckCountRange(bvect_full, rs_idx_full, i, ITERATIONS);
+        CheckCountRange(bvect_full1, rs_idx_full1, i, ITERATIONS);
     }
 
     cout << "Rank check 4" << endl;
     for (i = ITERATIONS; i > 0; --i)
     {
-        CheckCountRange(bvect_full, 0, i);
-        CheckCountRange(bvect_full1, 0, i);
+        CheckCountRange(bvect_full, rs_idx_full, 0, i);
+        CheckCountRange(bvect_full1, rs_idx_full1, 0, i);
     }
     
     unsigned count_full = bvect_full.count();
@@ -5881,9 +5890,11 @@ void SimpleRandomFillTest()
 
     printf("\nSimple Random fill test ITERATIONS = %i\n", iter);
 
+    bvect::rs_index_type rs_idx_full;
+    bvect_full.build_rs_index(&rs_idx_full);
+
     bvect_min.set_bit(0);
     bvect_full.set_bit(0);
-
     unsigned i;
     for (i = 0; i < iter; ++i)
     {
@@ -5891,12 +5902,14 @@ void SimpleRandomFillTest()
         bvect_min.set_bit(num);
         bvect_full.set_bit(num);
         if ((i % 1000) == 0) cout << "." << flush;
-        CheckCountRange(bvect_full, 0, num);
-        CheckCountRange(bvect_full, num, num+iter);
+        CheckCountRange(bvect_full, rs_idx_full, 0, num);
+        CheckCountRange(bvect_full, rs_idx_full, num, num+iter);
     }
 
     CheckVectors(bvect_min, bvect_full, iter);
-    CheckCountRange(bvect_full, 0, iter);
+
+
+    CheckCountRange(bvect_full, rs_idx_full, 0, iter);
 
     TestRandomSubset(bvect_full, rsub);
 
@@ -5922,6 +5935,8 @@ void SimpleRandomFillTest()
     unsigned iter = ITERATIONS;
 
     printf("\nSimple Random fill test ITERATIONS = %i\n", iter);
+    bvect::rs_index_type rs_idx_full;
+    bvect_full.build_rs_index(&rs_idx_full);
 
     unsigned i;
     for(i = 0; i < iter; ++i)
@@ -5929,9 +5944,9 @@ void SimpleRandomFillTest()
         unsigned num = unsigned(::rand()) % iter;
         bvect_min.set_bit(num);
         bvect_full.set_bit(num);
-        CheckCountRange(bvect_full, 0, 65535);
-        CheckCountRange(bvect_full, 0, num);
-        CheckCountRange(bvect_full, num, num+iter);
+        CheckCountRange(bvect_full, rs_idx_full, 0, 65535);
+        CheckCountRange(bvect_full, rs_idx_full, 0, num);
+        CheckCountRange(bvect_full, rs_idx_full, num, num+iter);
     }
 
     CheckVectors(bvect_min, bvect_full, iter);
@@ -5945,12 +5960,12 @@ void SimpleRandomFillTest()
         unsigned num = unsigned(rand()) % iter;
         bvect_min.clear_bit(num);
         bvect_full.clear_bit(num);
-        CheckCountRange(bvect_full, 0, num);
-        CheckCountRange(bvect_full, num, num+iter);
+        CheckCountRange(bvect_full, rs_idx_full, 0, num);
+        CheckCountRange(bvect_full, rs_idx_full, num, num+iter);
     }
 
     CheckVectors(bvect_min, bvect_full, iter);
-    CheckCountRange(bvect_full, 0, iter);
+    CheckCountRange(bvect_full, rs_idx_full, 0, iter);
 
     TestRandomSubset(bvect_full, rsub);
     }
@@ -5980,7 +5995,11 @@ void RangeRandomFillTest()
     FillSets(&bvect_min, &bvect_full, min, max, 0);
 
     CheckVectors(bvect_min, bvect_full, BITVECT_SIZE);
-    CheckCountRange(bvect_full, min, max);
+
+    bvect::rs_index_type rs_idx_full;
+    bvect_full.build_rs_index(&rs_idx_full);
+
+    CheckCountRange(bvect_full, rs_idx_full, min, max);
 
     }
 
@@ -5999,7 +6018,10 @@ void RangeRandomFillTest()
     FillSetsIntervals(&bvect_min, bvect_full, min, max, 4);
 
     CheckVectors(bvect_min, bvect_full, BITVECT_SIZE);
-    CheckCountRange(bvect_full, min, max);
+    bvect::rs_index_type rs_idx_full;
+    bvect_full.build_rs_index(&rs_idx_full);
+
+    CheckCountRange(bvect_full, rs_idx_full, min, max);
     }
 }
 
@@ -6177,7 +6199,10 @@ void AndOperationsTest(bool detailed)
 
     CheckVectors(bvect_min1, bvect_full1, 256, detailed);
     CheckVectors(bvect_min1, bv_target_s, 256, detailed);
-    CheckCountRange(bvect_full1, 0, 256);
+
+    bvect::rs_index_type rs_idx_full1;
+    bvect_full1.build_rs_index(&rs_idx_full1);
+    CheckCountRange(bvect_full1, rs_idx_full1, 0, 256);
 
     }
     
@@ -6246,7 +6271,9 @@ void AndOperationsTest(bool detailed)
     }
 
     CheckVectors(bvect_min1, bvect_full1, BITVECT_SIZE/10+10, detailed);
-    CheckCountRange(bvect_full1, 0, BITVECT_SIZE/10+10);
+    bvect::rs_index_type rs_idx_full1;
+    bvect_full1.build_rs_index(&rs_idx_full1);
+    CheckCountRange(bvect_full1, rs_idx_full1, 0, BITVECT_SIZE/10+10);
 
 //    FillSets(&bvect_min1, &bvect_full1, 1, BITVECT_SIZE/7, 0);
 //    FillSets(&bvect_min2, &bvect_full2, 1, BITVECT_SIZE/7, 0);
@@ -6280,7 +6307,11 @@ void AndOperationsTest(bool detailed)
 
     CheckVectors(bvect_min1, bvect_full1, BITVECT_SIZE/10+10, detailed);
     CheckVectors(bvect_min1, bv_target_s, BITVECT_SIZE/10+10, detailed);
-    CheckCountRange(bvect_full1, 0, BITVECT_SIZE/10+10);
+
+//    bvect::rs_index_type rs_idx_full1;
+    bvect_full1.build_rs_index(&rs_idx_full1);
+
+    CheckCountRange(bvect_full1, rs_idx_full1, 0, BITVECT_SIZE/10+10);
 
     }
 
@@ -6331,7 +6362,10 @@ void AndOperationsTest(bool detailed)
 
     CheckVectors(bvect_min1, bvect_full1, BITVECT_SIZE/10+10, detailed);
     CheckVectors(bvect_min1, bv_target_s, BITVECT_SIZE/10+10, detailed);
-    CheckCountRange(bvect_full1, 0, BITVECT_SIZE/10+10);
+
+    bvect::rs_index_type rs_idx1;
+    bvect_full1.build_rs_index(&rs_idx1);
+    CheckCountRange(bvect_full1, rs_idx1, 0, BITVECT_SIZE/10+10);
 
     }
 
@@ -6391,13 +6425,18 @@ void AndOperationsTest(bool detailed)
 
     CheckVectors(bvect_min1, bvect_full1, BITVECT_SIZE, detailed);
     CheckVectors(bvect_min1, bv_target_s, BITVECT_SIZE, detailed);
-    CheckCountRange(bvect_full1, 0, BITVECT_SIZE);
+    bvect::rs_index_type rs_idx1;
+    bvect_full1.build_rs_index(&rs_idx1);
+    CheckCountRange(bvect_full1, rs_idx1, 0, BITVECT_SIZE);
 
     BM_DECLARE_TEMP_BLOCK(tb)
     bvect_full1.optimize(tb);
     CheckVectors(bvect_min1, bvect_full1, BITVECT_SIZE, detailed);
-    CheckCountRange(bvect_full1, 0, BITVECT_SIZE);
-    CheckCountRange(bvect_full1, BITVECT_SIZE/2, BITVECT_SIZE);
+
+//    bvect::rs_index_type rs_idx1;
+    bvect_full1.build_rs_index(&rs_idx1);
+    CheckCountRange(bvect_full1, rs_idx1, 0, BITVECT_SIZE);
+    CheckCountRange(bvect_full1, rs_idx1, BITVECT_SIZE/2, BITVECT_SIZE);
 
     }
 
@@ -6876,10 +6915,16 @@ void OrOperationsTest(bool detailed)
         }
     }
 
+
     CheckVectors(bvect_min1, bvect_full1, 256, detailed);
     CheckVectors(bvect_min1, bv_target_s, 256, detailed);
-    CheckCountRange(bvect_full1, 0, 256);
-    CheckCountRange(bvect_full1, 128, 256);
+
+
+    bvect::rs_index_type rs_idx1;
+    bvect_full1.build_rs_index(&rs_idx1);
+
+    CheckCountRange(bvect_full1, rs_idx1, 0, 256);
+    CheckCountRange(bvect_full1, rs_idx1, 128, 256);
     }
 
     {
@@ -6938,7 +6983,10 @@ void OrOperationsTest(bool detailed)
 
     CheckVectors(bvect_min1, bvect_full1, BITVECT_SIZE/10+10, detailed);
     CheckVectors(bvect_min1, bvect_full1, BITVECT_SIZE/10+10, detailed);
-    CheckCountRange(bvect_full1, 0, BITVECT_SIZE/10+10);
+
+    bvect::rs_index_type rs_idx1;
+    bvect_full1.build_rs_index(&rs_idx1);
+    CheckCountRange(bvect_full1, rs_idx1, 0, BITVECT_SIZE/10+10);
 
     }
     
@@ -7021,7 +7069,9 @@ void OrOperationsTest(bool detailed)
 
     CheckVectors(bvect_min1, bvect_full1, BITVECT_SIZE, detailed);
     CheckVectors(bvect_min1, bv_target_s, BITVECT_SIZE, detailed);
-    CheckCountRange(bvect_full1, 0, BITVECT_SIZE);
+    bvect::rs_index_type rs_idx1;
+    bvect_full1.build_rs_index(&rs_idx1);
+    CheckCountRange(bvect_full1, rs_idx1, 0, BITVECT_SIZE);
 
 
     }
@@ -7338,7 +7388,10 @@ void SubOperationsTest(bool detailed)
 
     CheckVectors(bvect_min1, bvect_full1, 256, detailed);
     CheckVectors(bvect_min1, bv_target_s, 256, detailed);
-    CheckCountRange(bvect_full1, 0, 256);
+
+    bvect::rs_index_type rs_idx1;
+    bvect_full1.build_rs_index(&rs_idx1);
+    CheckCountRange(bvect_full1, rs_idx1, 0, 256);
 
     }
 
@@ -7400,7 +7453,10 @@ void SubOperationsTest(bool detailed)
 
     CheckVectors(bvect_min1, bvect_full1, BITVECT_SIZE/10+10, detailed);
     CheckVectors(bvect_min1, bv_target_s, BITVECT_SIZE/10+10, detailed);
-    CheckCountRange(bvect_full1, 0, BITVECT_SIZE/10+10);
+
+    bvect::rs_index_type rs_idx1;
+    bvect_full1.build_rs_index(&rs_idx1);
+    CheckCountRange(bvect_full1, rs_idx1, 0, BITVECT_SIZE/10+10);
 
     }
 
@@ -7465,7 +7521,10 @@ void SubOperationsTest(bool detailed)
 
     CheckVectors(bvect_min1, bvect_full1, BITVECT_SIZE, detailed);
     CheckVectors(bvect_min1, bv_target_s, BITVECT_SIZE, detailed);
-    CheckCountRange(bvect_full1, 0, BITVECT_SIZE);
+
+    bvect::rs_index_type rs_idx1;
+    bvect_full1.build_rs_index(&rs_idx1);
+    CheckCountRange(bvect_full1, rs_idx1, 0, BITVECT_SIZE);
 
     }
     
@@ -7673,8 +7732,12 @@ void XorOperationsTest(bool detailed)
     }
     CheckVectors(bvect_min1, bvect_full1, 256, detailed);
     CheckVectors(bvect_min1, bv_target_s, 256, detailed);
-    CheckCountRange(bvect_full1, 0, 256);
-    CheckCountRange(bvect_full1, 128, 256);
+
+    bvect::rs_index_type rs_idx1;
+    bvect_full1.build_rs_index(&rs_idx1);
+
+    CheckCountRange(bvect_full1, rs_idx1, 0, 256);
+    CheckCountRange(bvect_full1, rs_idx1, 128, 256);
 
     }
     {
@@ -7733,7 +7796,10 @@ void XorOperationsTest(bool detailed)
 
         CheckVectors(bvect_min1, bvect1, BITVECT_SIZE, detailed);
         CheckVectors(bvect_min1, bv_target_s, BITVECT_SIZE, detailed);
-        CheckCountRange(bvect1, 0, BITVECT_SIZE);
+
+        bvect::rs_index_type rs_idx1;
+        bvect1.build_rs_index(&rs_idx1);
+        CheckCountRange(bvect1, rs_idx1, 0, BITVECT_SIZE);
     }
     
     {
@@ -7918,7 +7984,10 @@ void XorOperationsTest(bool detailed)
 
     CheckVectors(bvect_min1, bvect_full1, BITVECT_SIZE/10+10, detailed);
     CheckVectors(bvect_min1, bv_target_s, BITVECT_SIZE/10+10, detailed);
-    CheckCountRange(bvect_full1, 0, BITVECT_SIZE/10+10);
+
+    bvect::rs_index_type rs_idx1;
+    bvect_full1.build_rs_index(&rs_idx1);
+    CheckCountRange(bvect_full1, rs_idx1, 0, BITVECT_SIZE/10+10);
 
     }
 
@@ -7983,8 +8052,10 @@ void XorOperationsTest(bool detailed)
 
     CheckVectors(bvect_min1, bvect_full1, BITVECT_SIZE, detailed);
     CheckVectors(bvect_min1, bv_target_s, BITVECT_SIZE, detailed);
-    CheckCountRange(bvect_full1, 0, BITVECT_SIZE);
 
+    bvect::rs_index_type rs_idx1;
+    bvect_full1.build_rs_index(&rs_idx1);
+    CheckCountRange(bvect_full1, rs_idx1, 0, BITVECT_SIZE);
 
     }
 
@@ -10888,14 +10959,19 @@ void StressTest(unsigned repetitions, int set_operation, bool detailed)
             exit(1);
         }
 
-        CheckCountRange(*bvect_full1, start1, BITVECT_SIZE);
+        bvect::rs_index_type rs_idx1;
+        bvect_full1->build_rs_index(&rs_idx1);
+        bvect::rs_index_type rs_idx2;
+        bvect_full2->build_rs_index(&rs_idx2);
+
+        CheckCountRange(*bvect_full1, rs_idx1, start1, BITVECT_SIZE);
         CheckIntervals(*bvect_full1, BITVECT_SIZE);
 
 
-        CheckCountRange(*bvect_full2, start2, BITVECT_SIZE);
+        CheckCountRange(*bvect_full2, rs_idx2, start2, BITVECT_SIZE);
 
-        CheckCountRange(*bvect_full1, 0, start1);
-        CheckCountRange(*bvect_full2, 0, start2);
+        CheckCountRange(*bvect_full1, rs_idx1, 0, start1);
+        CheckCountRange(*bvect_full2, rs_idx2, 0, start2);
 
 
         TestRandomSubset(*bvect_full1, rsub);
@@ -11270,7 +11346,9 @@ void StressTest(unsigned repetitions, int set_operation, bool detailed)
         CheckVectors(*bvect_min1, *bvect_full1, size, detailed);
         CheckIntervals(*bvect_full1, BITVECT_SIZE);
 
-        CheckCountRange(*bvect_full1, 0, size);
+//        bvect::rs_index_type rs_idx1;
+        bvect_full1->build_rs_index(&rs_idx1);
+        CheckCountRange(*bvect_full1, rs_idx1, 0, size);
 
 
         // Serialization

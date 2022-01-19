@@ -2588,8 +2588,7 @@ bvector<Alloc>::block_count_to(const bm::word_t*    block,
                                unsigned             nbit_right,
                                const rs_index_type& rs_idx) BMNOEXCEPT
 {
-    BM_ASSERT(block);
-
+    BM_ASSERT(IS_VALID_ADDR(block));
     size_type c;
 
     bm::id64_t sub = rs_idx.sub_count(nb);
@@ -2604,6 +2603,8 @@ bvector<Alloc>::block_count_to(const bm::word_t*    block,
     {
         unsigned cnt, aux0(bm::gap_word_t(sub >> 32)); (void)cnt; (void)aux0;
         BM_ASSERT(aux0 == (cnt =bm::bit_block_calc_count_to(block, bm::rs3_border0_1)));
+        unsigned cnt1, aux1(bm::gap_word_t(sub >> 48)); (void)aux1; (void) cnt1;
+        BM_ASSERT(aux1 == (cnt1 =bm::bit_block_calc_count_to(block, bm::rs3_border1_1)));
     }
 
 
@@ -2789,6 +2790,8 @@ bvector<Alloc>::block_count_to(const bm::word_t*    block,
     {
         unsigned cnt, aux0(bm::gap_word_t(sub >> 32)); (void)cnt; (void)aux0;
         BM_ASSERT(aux0 == (cnt =bm::bit_block_calc_count_to(block, bm::rs3_border0_1)));
+        unsigned cnt1, aux1(bm::gap_word_t(sub >> 48)); (void)aux1; (void) cnt1;
+        BM_ASSERT(aux1 == (cnt1 =bm::bit_block_calc_count_to(block, bm::rs3_border1_1)));
     }
 
     size_type c=0;
