@@ -36154,6 +36154,10 @@ bool         is_support = false;
 bool         is_bvbasic = false;
 bool         is_bvser = false;
 bool         is_bvops = false;
+bool         is_bvops0 = false;
+bool         is_bvops1 = false;
+bool         is_bvops2 = false;
+
 bool         is_bvshift = false;
 bool         is_rankc = false;
 bool         is_agg = false;
@@ -36218,6 +36222,25 @@ int parse_args(int argc, char *argv[])
             is_bvops = true;
             continue;
         }
+        if (arg == "-bvl0" || arg == "-bvops0")
+        {
+            is_all = false;
+            is_bvops0 = true;
+            continue;
+        }
+        if (arg == "-bvl1" || arg == "-bvops1")
+        {
+            is_all = false;
+            is_bvops1 = true;
+            continue;
+        }
+        if (arg == "-bvl2" || arg == "-bvops2")
+        {
+            is_all = false;
+            is_bvops2 = true;
+            continue;
+        }
+
         if (arg == "-bvs" || arg == "-bvshift")
         {
             is_all = false;
@@ -36706,6 +36729,53 @@ int main(int argc, char *argv[])
          CheckAllocLeaks(false);
     }
 
+    if (is_all || is_bvops0)
+    {
+        AndOperationsTest(true); // enable detailed check
+         CheckAllocLeaks(false);
+
+        AndOrOperationsTest(true); // enable detailed check
+         CheckAllocLeaks(false);
+
+        OrOperationsTest(true);
+         CheckAllocLeaks(false);
+
+        XorOperationsTest(true);
+         CheckAllocLeaks(false);
+
+        SubOperationsTest(true);
+         CheckAllocLeaks(false);
+
+        StressTest(300, -1, true); // random OPS stress
+    }
+
+    if (is_all || is_bvops1)
+    {
+        StressTest(150, 0, false); // OR - detailed check disabled
+         CheckAllocLeaks(false);
+
+        StressTest(150, 3, false); // AND
+         CheckAllocLeaks(false);
+
+        StressTest(150, 1, false); // SUB
+         CheckAllocLeaks(false);
+
+        StressTest(150, 2, false); // XOR
+         CheckAllocLeaks(false);
+    }
+
+    if (is_all || is_bvops2)
+    {
+        KleeneLogicTest();
+         CheckAllocLeaks(false);
+
+        KleeneLogicAndStressTest();
+         CheckAllocLeaks(false);
+
+        KleeneLogicOrStressTest();
+         CheckAllocLeaks(false);
+    }
+
     if (is_all || is_bvops)
     {
 
@@ -36743,6 +36813,8 @@ int main(int argc, char *argv[])
          CheckAllocLeaks(false);
         KleeneLogicOrStressTest();
          CheckAllocLeaks(false);
+
+        StressTest(300, -1, true); // random OPS stress test
 
     }
 
@@ -36915,10 +36987,6 @@ int main(int argc, char *argv[])
 
     }
 
-    if (is_all || is_bvops)
-    {
-        StressTest(300, -1, true);
-    }
 
     finish_time = time(0);
 
