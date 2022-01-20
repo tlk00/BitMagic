@@ -49,7 +49,7 @@ rm -f *.log
 PID_ARR=()
 declare -a OPT_MAP
 
-TEST_OPT="-ll -s -bvb0 -bvb1 -bvser -bvl0 -bvl1 -bvl2 -bvs -rc -agg -sv -csv -strsv -cc -ser -allsvser"
+TEST_OPT="-ll -s -bvb0 -bvb1 -bvser -bvl0 -bvl1 -bvl2 -bvs -rc -agg -sv -csv0 -csv1 -strsv -cc -ser -allsvser"
 for OPT in $TEST_OPT;
 do
     LOG_OPT=${RUN_NAME}${OPT}.log
