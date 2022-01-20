@@ -36152,6 +36152,8 @@ bool         is_all = true;
 bool         is_low_level = false;
 bool         is_support = false;
 bool         is_bvbasic = false;
+bool         is_bvb0 = false;
+bool         is_bvb1 = false;
 bool         is_bvser = false;
 bool         is_bvops = false;
 bool         is_bvops0 = false;
@@ -36196,6 +36198,18 @@ int parse_args(int argc, char *argv[])
         {
             is_all = false;
             is_bvbasic = true;
+            continue;
+        }
+        if (arg == "-bvb0" )
+        {
+            is_all = false;
+            is_bvb0 = true;
+            continue;
+        }
+        if (arg == "-bvb1" )
+        {
+            is_all = false;
+            is_bvb1 = true;
             continue;
         }
         if (arg == "-ser")
@@ -36586,109 +36600,117 @@ int main(int argc, char *argv[])
          CheckAllocLeaks(false);
     }
 
-    if (is_all || is_bvbasic)
+    if (is_all || is_bvbasic || is_bvb0 || is_bvb1)
     {
 
-         ExportTest();
-         CheckAllocLeaks(false);
+        if (is_all || is_bvbasic || is_bvb0)
+        {
+             ExportTest();
+             CheckAllocLeaks(false);
 
-         ResizeTest();
-         CheckAllocLeaks(false);
+             ResizeTest();
+             CheckAllocLeaks(false);
 
-         SyntaxTest();
-         CheckAllocLeaks(false);
+             SyntaxTest();
+             CheckAllocLeaks(false);
 
-         SetTest();
-         CheckAllocLeaks(false);
+             SetTest();
+             CheckAllocLeaks(false);
 
-         ArenaTest();
-         CheckAllocLeaks(false);
+             ArenaTest();
+             CheckAllocLeaks(false);
 
-         BlockDigestTest();
-         CheckAllocLeaks(false);
+             BlockDigestTest();
+             CheckAllocLeaks(false);
 
-         EmptyBVTest();
-         CheckAllocLeaks(false);
+             EmptyBVTest();
+             CheckAllocLeaks(false);
 
-         ClearAllTest();
-         CheckAllocLeaks(false);
+             ClearAllTest();
+             CheckAllocLeaks(false);
 
-         CountRangeTest();
-         CheckAllocLeaks(false);
+             CountRangeTest();
+             CheckAllocLeaks(false);
 
-         EnumeratorTest();
-         CheckAllocLeaks(false);
+             EnumeratorTest();
+             CheckAllocLeaks(false);
 
-         BvectorFindReverseTest();
-         CheckAllocLeaks(false);
+             BvectorFindReverseTest();
+             CheckAllocLeaks(false);
 
-         Intervals_RangesTest();
-         CheckAllocLeaks(false);
+             Intervals_RangesTest();
+             CheckAllocLeaks(false);
 
-         IntervalEnumeratorTest();
-         CheckAllocLeaks(false);
+             IntervalEnumeratorTest();
+             CheckAllocLeaks(false);
 
-         KeepRangeTest();
-         CheckAllocLeaks(false);
+             KeepRangeTest();
+             CheckAllocLeaks(false);
+         }
 
-         BasicFunctionalityTest();
-         CheckAllocLeaks(false);
+        if (is_all || is_bvbasic || is_bvb1)
+        {
+             BasicFunctionalityTest();
+             CheckAllocLeaks(false);
 
-         OptimizeTest();
-         CheckAllocLeaks(false);
+             OptimizeTest();
+             CheckAllocLeaks(false);
 
-         RankFindTest();
-         CheckAllocLeaks(false);
+             RankFindTest();
+             CheckAllocLeaks(false);
 
-         BvectorBitForEachTest();
-         CheckAllocLeaks(false);
+             BvectorBitForEachTest();
+             CheckAllocLeaks(false);
 
-         GetNextTest();
-         CheckAllocLeaks(false);
+             GetNextTest();
+             CheckAllocLeaks(false);
 
-         BvectorIncTest();
-         CheckAllocLeaks(false);
+             BvectorIncTest();
+             CheckAllocLeaks(false);
 
-         BvectorBulkSetTest();
-         CheckAllocLeaks(false);
+             BvectorBulkSetTest();
+             CheckAllocLeaks(false);
 
-        GAPTestStress();
-         CheckAllocLeaks(false);
+            GAPTestStress();
+             CheckAllocLeaks(false);
 
-        MaxSTest();
-         CheckAllocLeaks(false);
+            MaxSTest();
+             CheckAllocLeaks(false);
 
-        SimpleRandomFillTest();
-         CheckAllocLeaks(false);
+            SimpleRandomFillTest();
+             CheckAllocLeaks(false);
 
-        RangeRandomFillTest();
-         CheckAllocLeaks(false);
+            RangeRandomFillTest();
+             CheckAllocLeaks(false);
 
-        RangeCopyTest();
-         CheckAllocLeaks(false);
+            RangeCopyTest();
+             CheckAllocLeaks(false);
 
-        ComparisonTest();
-         CheckAllocLeaks(false);
+            ComparisonTest();
+             CheckAllocLeaks(false);
 
-        BvectorFindFirstDiffTest();
-         CheckAllocLeaks(false);
+            BvectorFindFirstDiffTest();
+             CheckAllocLeaks(false);
 
-        RankRangeSplitTest();
-         CheckAllocLeaks(false);
+            RankRangeSplitTest();
+             CheckAllocLeaks(false);
 
-        MutationTest();
-         CheckAllocLeaks(false);
-        MutationOperationsTest();
-         CheckAllocLeaks(false);
+            MutationTest();
+             CheckAllocLeaks(false);
+            MutationOperationsTest();
+             CheckAllocLeaks(false);
 
-        BlockLevelTest();
-         CheckAllocLeaks(false);
+            BlockLevelTest();
+             CheckAllocLeaks(false);
 
-        BVImportTest();
-         CheckAllocLeaks(false);
+            BVImportTest();
+             CheckAllocLeaks(false);
+         }
 
      }
-    
+
+
+
     if (is_all || is_bvser || is_bvbasic)
     {
         SerializationCompressionLevelsTest();
@@ -36729,7 +36751,7 @@ int main(int argc, char *argv[])
          CheckAllocLeaks(false);
     }
 
-    if (is_all || is_bvops0)
+    if (is_bvops0)
     {
         AndOperationsTest(true); // enable detailed check
          CheckAllocLeaks(false);
@@ -36749,7 +36771,7 @@ int main(int argc, char *argv[])
         StressTest(300, -1, true); // random OPS stress
     }
 
-    if (is_all || is_bvops1)
+    if (is_bvops1)
     {
         StressTest(150, 0, false); // OR - detailed check disabled
          CheckAllocLeaks(false);
@@ -36764,7 +36786,7 @@ int main(int argc, char *argv[])
          CheckAllocLeaks(false);
     }
 
-    if (is_all || is_bvops2)
+    if (is_bvops2)
     {
         KleeneLogicTest();
          CheckAllocLeaks(false);
