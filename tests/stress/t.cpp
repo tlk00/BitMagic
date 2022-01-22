@@ -36165,6 +36165,9 @@ bool         is_rankc = false;
 bool         is_agg = false;
 bool         is_sv = false;
 bool         is_csv = false;
+bool         is_csv0 = false;
+bool         is_csv1 = false;
+
 bool         is_str_sv = false;
 bool         is_c_coll = false;
 bool         is_ser = false;
@@ -36283,6 +36286,18 @@ int parse_args(int argc, char *argv[])
         {
             is_all = false;
             is_csv = true;
+            continue;
+        }
+        if (arg == "-csv0")
+        {
+            is_all = false;
+            is_csv0 = true;
+            continue;
+        }
+        if (arg == "-csv1")
+        {
+            is_all = false;
+            is_csv1 = true;
             continue;
         }
 
@@ -36920,26 +36935,31 @@ int main(int argc, char *argv[])
          CheckAllocLeaks(false);
     }
 
-    if (is_all || is_csv)
+    if (is_all || is_csv || is_csv0 || is_csv1)
     {
-        TestCompressSparseVector();
-         CheckAllocLeaks(false);
+        if (is_all || is_csv || is_csv0)
+        {
+            TestCompressSparseVector();
+             CheckAllocLeaks(false);
 
-        TestCompressSparseSignedVector();
-         CheckAllocLeaks(false);
+            TestCompressSparseSignedVector();
+             CheckAllocLeaks(false);
 
-        TestCompressedSparseVectorAlgo();
-         CheckAllocLeaks(false);
+            TestCompressedSparseVectorAlgo();
+             CheckAllocLeaks(false);
+        }
 
-        TestCompressedSparseVectorScanGT();
-         CheckAllocLeaks(false);
+        if (is_all || is_csv || is_csv1)
+        {
+            TestCompressedSparseVectorScanGT();
+             CheckAllocLeaks(false);
 
-        TestCompressSparseVectorSerial();
-         CheckAllocLeaks(false);
+            TestCompressSparseVectorSerial();
+             CheckAllocLeaks(false);
 
-        TestCompressedSparseVectorScan();
-         CheckAllocLeaks(false);
-
+            TestCompressedSparseVectorScan();
+             CheckAllocLeaks(false);
+        }
     }
 
     if (is_all || is_c_coll)
