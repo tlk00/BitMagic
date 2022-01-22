@@ -19,7 +19,7 @@ For more information please visit:  http://bitmagic.io
 
 //#define BMSSE2OPT
 //#define BMSSE42OPT
-#define BMAVX2OPT
+//#define BMAVX2OPT
 //#define BM_USE_EXPLICIT_TEMP
 //#define BM_USE_GCC_BUILD
 
@@ -36793,16 +36793,22 @@ int main(int argc, char *argv[])
 
         StressTest(150, 3, false); // AND
          CheckAllocLeaks(false);
+    }
 
+    if (is_bvops2)
+    {
+        // -------------------------------------
+        // placed here for performance/parallel test execution purposes
+        //
         StressTest(150, 1, false); // SUB
          CheckAllocLeaks(false);
 
         StressTest(150, 2, false); // XOR
          CheckAllocLeaks(false);
-    }
 
-    if (is_bvops2)
-    {
+        // -------------------------------------
+
+
         KleeneLogicTest();
          CheckAllocLeaks(false);
 
