@@ -19,7 +19,7 @@ For more information please visit:  http://bitmagic.io
 
 //#define BMSSE2OPT
 //#define BMSSE42OPT
-//#define BMAVX2OPT
+#define BMAVX2OPT
 //#define BM_USE_EXPLICIT_TEMP
 //#define BM_USE_GCC_BUILD
 
@@ -34236,7 +34236,7 @@ void TestCompressSparseVector()
         assert(v[1] == 0);
         assert(v[2] == 200);
         assert(buf[0] != bm::id_max);
-        assert(buf[1] = bm::id_max);
+        assert(buf[1] == bm::id_max);
         assert(buf[2] != bm::id_max);
 
     }
