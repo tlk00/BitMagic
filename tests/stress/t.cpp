@@ -26361,7 +26361,18 @@ void TestCompressSparseGather()
         res = bm::file_load_svector(csv1, "/Users/anatoliykuznetsov/dev/git/BitMagic/tests/stress/gath_data.csv");
         assert(res==0);
 
-        unsigned i=33595; unsigned get_idx = 139324;
+//        unsigned i=33595; unsigned get_idx = 139324;
+        unsigned i=469; unsigned get_idx = 24969598;
+
+
+        {
+//            assert(idx[i] == get_idx);
+            rsc_sparse_vector_i32::size_type rank;
+            bool b = csv1.resolve(get_idx, &rank);
+            bool b1 = !csv1.is_null(get_idx);
+            assert(b == b1);
+        }
+
 
         assert(idx[i]==get_idx);
         auto vc = csv1.get(get_idx);
@@ -26424,12 +26435,17 @@ void TestCompressSparseGather()
 
         unsigned test_size = 65536 * 256 * 2;
         unsigned test_start = pass * 65536;
+        if (test_start > bm::id_max/4)
+            test_start = (unsigned)((pass % 256) * (unsigned(rand()) % 65536));
+
         {
             auto iit = csv1.get_back_inserter();
             iit.add_null(test_start);
 
             for (unsigned i = 0; i < test_size; i+=3)
             {
+                if (bm::id64_t(csv1.size()) + pass + 1ull > bm::id64_t(bm::id_max))
+                    break;
                 int v = rand() % 65539;
                 if ((v > 0) && ((v % 5) == 0)) v = -v;
                 iit = v;
@@ -26442,7 +26458,8 @@ void TestCompressSparseGather()
 
         csv1.optimize();
         csv1.sync();
-/*
+
+        if (pass < 10)
         {
             rsc_sparse_vector_i32::size_type rank = 0;
             for (rsc_sparse_vector_i32::size_type i = 0; i < csv1.size(); ++i)
@@ -26456,7 +26473,7 @@ void TestCompressSparseGather()
                 }
             }
         }
-*/
+
         std::vector<rsc_sparse_vector_i32::size_type>  idx;
         std::vector<rsc_sparse_vector_i32::size_type>  idx_buf;
         std::vector<rsc_sparse_vector_i32::value_type> vbuf;
@@ -37151,13 +37168,12 @@ int main(int argc, char *argv[])
     {
         if (is_all || is_csv || is_csv0)
         {
-/*
             TestCompressSparseVector();
              CheckAllocLeaks(false);
 
             TestCompressSparseSignedVector();
              CheckAllocLeaks(false);
-*/
+
              TestCompressSparseGather();
              CheckAllocLeaks(false);
 
