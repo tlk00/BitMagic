@@ -893,7 +893,8 @@ int save_vector(const VECT& vect, const std::string& fname)
         return -1;
     if (sz)
     {
-        fout.write((char*)vect.data(), sz*sizeof(typename VECT::value_type));
+        fout.write((char*)vect.data(),
+            (std::streamsize) (sz*sizeof(typename VECT::value_type)));
         if (!fout.good())
             return -1;
     }
