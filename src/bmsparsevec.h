@@ -454,7 +454,7 @@ public:
 
 
     /*!
-        \brief get specified element without checking
+        \brief get specified element without checking boundary conditions
         \param idx - element index
         \return value of the element
     */
@@ -1045,6 +1045,9 @@ protected:
     static
     void u2s_translate(value_type* arr, size_type sz) BMNOEXCEPT;
 
+    // get raw unsigned value
+    unsigned_value_type get_unsigned(size_type idx) const BMNOEXCEPT;
+
 protected:
     template<class V, class SV> friend class rsc_sparse_vector;
     template<class SVect> friend class sparse_vector_scanner;
@@ -1336,12 +1339,17 @@ sparse_vector<Val, BV>::gather(value_type*       arr,
         {
         case BM_UNKNOWN:
             {
+                sorted_block = true; // initial assumption
                 size_type idx_prev = idx[r];
                 for (; (r < size) && (nb == (idx[r] >> bm::set_block_shift)); ++r)
                 {
-                    sorted_block = !(idx[r] < idx_prev); // sorted check
-                    idx_prev = idx[r];
-                }
+                    if (sorted_block)
+                    {
+                        if (idx[r] < idx_prev) // sorted check
+                            sorted_block = false;
+                        idx_prev = idx[r];
+                    }
+                } // for r
             }
             break;
         case BM_UNSORTED:
@@ -1353,7 +1361,6 @@ sparse_vector<Val, BV>::gather(value_type*       arr,
                     break;
             } // for r
             break;            
-            // no break(!) intentional fall through
         case BM_SORTED:
             #ifdef BM64ADDR
                 r = bm::idx_arr_block_lookup_u64(idx, size, nb, r);
@@ -1368,7 +1375,7 @@ sparse_vector<Val, BV>::gather(value_type*       arr,
             BM_ASSERT(0);
         } // switch
         
-        // single element hit, use plane random access
+        // single element hit, use random access
         if (r == i+1)
         {
             // (idx[i] < bm::id_max) ? is an out of bounds check
@@ -1376,7 +1383,10 @@ sparse_vector<Val, BV>::gather(value_type*       arr,
             // indicate NULL value and prsent it as 0
             //
             if (idx[i] < bm::id_max)
-                arr[i] = this->get_no_check(idx[i]);
+            {
+                unsigned_value_type uv = this->get_unsigned(idx[i]);
+                arr[i] = value_type(uv);
+            }
             ++i;
             continue;
         }
@@ -1693,9 +1703,7 @@ typename sparse_vector<Val, BV>::value_type
 sparse_vector<Val, BV>::get(
         typename sparse_vector<Val, BV>::size_type i) const BMNOEXCEPT
 {
-    BM_ASSERT(i < bm::id_max);
     BM_ASSERT(i < size());
-
     return get_no_check(i);
 }
 
@@ -1706,6 +1714,22 @@ typename sparse_vector<Val, BV>::value_type
 sparse_vector<Val, BV>::get_no_check(
         typename sparse_vector<Val, BV>::size_type i) const BMNOEXCEPT
 {
+    unsigned_value_type uv = get_unsigned(i);
+    if constexpr (parent_type::is_signed())
+        return this->u2s(uv);
+    else
+        return uv;
+}
+
+//---------------------------------------------------------------------
+
+template<class Val, class BV>
+typename sparse_vector<Val, BV>::unsigned_value_type
+sparse_vector<Val, BV>::get_unsigned(
+        typename sparse_vector<Val, BV>::size_type i) const BMNOEXCEPT
+{
+    BM_ASSERT(i < bm::id_max);
+
     unsigned_value_type uv = 0;
     unsigned eff_planes = this->effective_slices();
     BM_ASSERT(eff_planes <= (sizeof(value_type) * 8));
@@ -1720,12 +1744,8 @@ sparse_vector<Val, BV>::get_no_check(
             uv |= unsigned_value_type(vm << j);
         }
     } // for j
-    if constexpr (parent_type::is_signed())
-        return this->u2s(uv);
-    else
-        return uv;
+    return uv;
 }
-
 
 //---------------------------------------------------------------------
 
