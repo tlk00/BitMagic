@@ -1430,6 +1430,7 @@ void rsc_sparse_vector<Val, SV>::sync(bool force)
     size_type cnt = size_ ? bv_null->count_range(0, size_-1, *rs_idx_)
                           : 0;
     is_dense_ = (cnt == size_); // dense vector?
+    BM_ASSERT(size_ >= bv_null->count());
 
     in_sync_ = true;
 }
@@ -1457,13 +1458,16 @@ bool rsc_sparse_vector<Val, SV>::resolve(size_type idx,
                                          size_type* idx_to) const BMNOEXCEPT
 {
     BM_ASSERT(idx_to);
+    const bvector_type* bv_null = sv_.get_null_bvector();
     if (idx >= size_)
+    {
+        BM_ASSERT(bv_null->get_bit(idx) == false);
         return false;
+    }
     if (in_sync_)
         return resolve_sync(idx, idx_to);
 
     // not in-sync: slow access
-    const bvector_type* bv_null = sv_.get_null_bvector();
     bool found = bv_null->test(idx);
     if (!found)
         return found;
@@ -1481,15 +1485,16 @@ bool rsc_sparse_vector<Val, SV>::resolve_sync(
     BM_ASSERT(idx_to);
     BM_ASSERT(in_sync_);
 
+    const bvector_type* bv_null = sv_.get_null_bvector();
     if (is_dense_)
     {
         *idx_to = idx+1;
         if (idx <= size_)
             return true;
         *idx_to = bm::id_max;
+        BM_ASSERT(bv_null->get_bit(idx) == false);
         return false;
     }
-    const bvector_type* bv_null = sv_.get_null_bvector();
     *idx_to = bv_null->count_to_test(idx, *rs_idx_);
     return bool(*idx_to);
 }
@@ -1993,6 +1998,8 @@ void rsc_sparse_vector<Val, SV>::back_insert_iterator::add(
     typename rsc_sparse_vector<Val, SV>::back_insert_iterator::value_type v)
 {
     BM_ASSERT(csv_);
+    BM_ASSERT(bm::id64_t(csv_->size_) + 1 < bm::id64_t(bm::id_max));
+
     sv_bi_.add_value_no_null(v);
     bvector_type* bv_null = sv_bi_.get_null_bvect();
     BM_ASSERT(bv_null);
@@ -2008,8 +2015,9 @@ template<class Val, class SV>
 void rsc_sparse_vector<Val, SV>::back_insert_iterator::add_null() BMNOEXCEPT
 {
     BM_ASSERT(csv_);
-    csv_->max_id_++;
-    csv_->size_++;
+    BM_ASSERT(bm::id64_t(csv_->size_) + 1 < bm::id64_t(bm::id_max));
+
+    csv_->max_id_++; csv_->size_++;
 }
 
 //---------------------------------------------------------------------
@@ -2019,6 +2027,8 @@ void rsc_sparse_vector<Val, SV>::back_insert_iterator::add_null(
     rsc_sparse_vector<Val, SV>::back_insert_iterator::size_type count) BMNOEXCEPT
 {
     BM_ASSERT(csv_);
+    BM_ASSERT(bm::id64_t(csv_->size_) + count < bm::id64_t(bm::id_max));
+
     csv_->max_id_+=count;
     csv_->size_+=count;
 }
