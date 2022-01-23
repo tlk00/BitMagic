@@ -608,7 +608,7 @@ public:
         override memory and crash if you are not careful with allocation
         and request size.
 
-        \param arr  - dest array
+        \param arr  - destination array
         \param idx - index list to gather elements (read only)
         \param idx_tmp_buf - temp scratch buffer for index rank-select index translation
                 must be correctly allocated to match size. No value initialization requirement.
@@ -871,6 +871,17 @@ public:
     void mark_null_idx(unsigned null_idx) BMNOEXCEPT
         { sv_.mark_null_idx(null_idx); }
 
+    /*!
+        \brief Resolve logical address to access via rank compressed address
+
+        \param idx    - input id to resolve
+        \param idx_to - output id
+
+        \return true if id is known and resolved successfully
+         @internal
+    */
+    bool resolve(size_type idx, size_type* idx_to) const BMNOEXCEPT;
+
     ///@}
     
 protected:
@@ -879,15 +890,6 @@ protected:
         sv_octet_slices = sizeof(value_type)
     };
 
-    /*!
-        \brief Resolve logical address to access via rank compressed address
-     
-        \param idx    - input id to resolve
-        \param idx_to - output id
-     
-        \return true if id is known and resolved successfully
-    */
-    bool resolve(size_type idx, size_type* idx_to) const BMNOEXCEPT;
 
     bool resolve_sync(size_type idx, size_type* idx_to) const BMNOEXCEPT;
 
@@ -1482,9 +1484,11 @@ bool rsc_sparse_vector<Val, SV>::resolve_sync(
     if (is_dense_)
     {
         *idx_to = idx+1;
-        return (*idx_to <= size_);
+        if (idx <= size_)
+            return true;
+        *idx_to = bm::id_max;
+        return false;
     }
-
     const bvector_type* bv_null = sv_.get_null_bvector();
     *idx_to = bv_null->count_to_test(idx, *rs_idx_);
     return bool(*idx_to);
@@ -1813,21 +1817,40 @@ rsc_sparse_vector<Val, SV>::gather(value_type*      arr,
         return size;
     }
 
-    // validate index, resolve rank addresses
-    //
-    for (size_type i = 0; i < size; ++i)
+    if (is_dense_) // rank-select idx recalc is not needed (with bounds check)
     {
-        size_type sv_idx;
-        if (resolve(idx[i], &sv_idx))
+        BM_ASSERT(in_sync_);
+        for (size_type i = 0; i < size; ++i)
         {
-            idx_tmp_buf[i] = sv_idx-1;
-        }
-        else
+            if (idx[i] < size_)
+                idx_tmp_buf[i] = idx[i];
+            else
+            {
+                idx_tmp_buf[i] = bm::id_max;
+                if (sorted_idx == bm::BM_SORTED)
+                    sorted_idx = bm::BM_UNKNOWN; // UNK will evaluate the sort-order
+            }
+        } // for i
+    }
+    else
+    {
+        // validate index, resolve rank addresses
+        //
+        for (size_type i = 0; i < size; ++i)
         {
-            sorted_idx = bm::BM_UNKNOWN;
-            idx_tmp_buf[i] = bm::id_max;
-        }
-    } // for i
+            size_type sv_idx;
+            if (resolve(idx[i], &sv_idx))
+            {
+                idx_tmp_buf[i] = sv_idx-1;
+            }
+            else
+            {
+                if (sorted_idx == bm::BM_SORTED)
+                    sorted_idx = bm::BM_UNKNOWN; // UNK will evaluate the sort-order
+                idx_tmp_buf[i] = bm::id_max;
+            }
+        } // for i
+    }
 
     // gather the data using resolved indexes
     //
