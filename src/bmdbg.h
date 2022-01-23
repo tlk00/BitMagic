@@ -879,6 +879,51 @@ void print_str_svector_stat(TOut& tout, const SV& str_svect)
     } // for i
 }
 
+// Save std::vector
+//
+template<class VECT>
+int save_vector(const VECT& vect, const std::string& fname)
+{
+    std::ofstream fout(fname.c_str(), std::ios::binary);
+    if (!fout.good())
+        return -1;
+    size_t sz = vect.size();
+    fout.write((char*)&sz, sizeof(sz));
+    if (!fout.good())
+        return -1;
+    if (sz)
+    {
+        fout.write((char*)vect.data(), sz*sizeof(typename VECT::value_type));
+        if (!fout.good())
+            return -1;
+    }
+    fout.close();
+    return 0;
+}
+
+// Save std::vector
+//
+template<class VECT>
+int load_vector(VECT& vect, const std::string& fname)
+{
+    std::ifstream fin(fname.c_str(), std::ios::in | std::ios::binary);
+    if (!fin.good())
+        return -1;
+    size_t sz;
+    fin.read((char*) &sz, sizeof(sz));
+    if (!fin.good())
+        return -2;
+    vect.resize(sz);
+    if (sz)
+    {
+        fin.read((char*)vect.data(), sz*sizeof(typename VECT::value_type));
+        if (!fin.good())
+            return -1;
+    }
+    fin.close();
+    return 0;
+}
+
 
 
 // save compressed collection to disk
