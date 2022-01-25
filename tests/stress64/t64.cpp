@@ -18138,6 +18138,236 @@ void TestSparseFindEqStrPipeline()
 }
 
 
+static
+void TestCompressSparseGather()
+{
+    cout << "\n--------------- TestCompressSparseGather()" << endl;
+
+    // DEBUGGING code, reading from a saved memory dump
+#if 0
+    {
+        rsc_sparse_vector_i32 csv1(bm::use_null);
+        std::vector<rsc_sparse_vector_i32::size_type>  idx;
+
+        int res = bm::load_vector(idx, "/Users/anatoliykuznetsov/dev/git/BitMagic/tests/stress/gath_idx.vect");
+        assert(res == 0);
+        res = bm::file_load_svector(csv1, "/Users/anatoliykuznetsov/dev/git/BitMagic/tests/stress/gath_data.csv");
+        assert(res==0);
+
+//        unsigned i=33595; unsigned get_idx = 139324;
+        unsigned i=469; unsigned get_idx = 24969598;
+
+
+        {
+//            assert(idx[i] == get_idx);
+            rsc_sparse_vector_i32::size_type rank;
+            bool b = csv1.resolve(get_idx, &rank);
+            bool b1 = !csv1.is_null(get_idx);
+            assert(b == b1);
+        }
+
+
+        assert(idx[i]==get_idx);
+        auto vc = csv1.get(get_idx);
+
+
+        std::vector<rsc_sparse_vector_i32::size_type>  idx_buf;
+        std::vector<rsc_sparse_vector_i32::value_type> vbuf;
+
+        assert(idx.size());
+        idx_buf.resize(idx.size());
+        vbuf.resize(idx.size());
+
+//        for (unsigned k = 0; k < i; ++k)
+        unsigned k = 33594;
+        {
+            int* arr = vbuf.data() + k;
+            const rsc_sparse_vector_i32::size_type* iarr = idx.data()+k;
+            rsc_sparse_vector_i32::size_type* iarr_tmp = idx_buf.data() + k;
+            size_t gath_sz = idx.size()-k;
+/*
+            auto sz = csv1.gather(arr, iarr, iarr_tmp,
+                                  (rsc_sparse_vector_i32::size_type)gath_sz,
+                                  bm::BM_UNSORTED);
+*/
+            //for (size_t gs = 2; gs <= gath_sz; ++gs)
+            {
+                auto sz = csv1.gather(arr, iarr, iarr_tmp,
+                                      102, //gath_sz,
+                                      bm::BM_UNSORTED);
+                auto v0 = vbuf.at(k);
+                auto get_idx0 = idx[k];
+                auto v0c = csv1.at(get_idx0);
+                auto t = idx_buf[k];
+                if (t != bm::id_max)
+                {
+                    assert(v0 == v0c);
+                }
+                auto v = vbuf.at(i);
+                cout << sz << " " << flush;
+                assert(v == vc);
+                //cout << k << " " << flush;
+    //            if (v == vc)
+    //                break;
+            }
+        }
+        auto v = vbuf.at(i);
+        cout << vc << "=" << v << endl;
+        assert(v == vc);
+        return;
+    }
+#endif
+
+    unsigned max_passes = 1024;
+    unsigned sampling_delta = 3;
+
+    for (unsigned pass = 0; pass < max_passes; ++pass)
+    {
+        rsc_sparse_vector_i32 csv1(bm::use_null);
+        std::vector<int> vect_c;
+
+        rsc_sparse_vector_i32::size_type test_size = 65536 * 256 * 2;
+        rsc_sparse_vector_i32::size_type test_start = pass * 65536;
+        if (test_start > bm::id_max/4)
+            test_start = (unsigned)((pass % 256) * (unsigned(rand()) % 65536));
+
+        {
+            auto iit = csv1.get_back_inserter();
+            iit.add_null(test_start);
+
+            for (unsigned i = 0; i < test_size; i+=3)
+            {
+                if (bm::id64_t(csv1.size()) + pass + 1ull > bm::id64_t(bm::id_max))
+                    break;
+                int v = rand() % 65539;
+                if ((v > 0) && ((v % 5) == 0)) v = -v;
+                iit = v;
+                iit.add_null(pass);
+
+                vect_c.push_back(v);
+            } // for i
+            iit.flush();
+        }
+
+        csv1.optimize();
+        csv1.sync();
+
+        if (pass < 10)
+        {
+            rsc_sparse_vector_i32::size_type rank = 0;
+            for (rsc_sparse_vector_i32::size_type i = 0; i < csv1.size(); ++i)
+            {
+                int v;
+                bool b = csv1.try_get(i, v);
+                if (b)
+                {
+                    auto vc = vect_c[rank++];
+                    assert(v == vc);
+                }
+            }
+        }
+
+        std::vector<rsc_sparse_vector_i32::size_type>  idx;
+        std::vector<rsc_sparse_vector_i32::size_type>  idx_buf;
+        std::vector<rsc_sparse_vector_i32::value_type> vbuf;
+
+        rsc_sparse_vector_i32::size_type gather_size = 65536 * 3;
+
+        for (rsc_sparse_vector_i32::size_type i = 0; i < gather_size; i += sampling_delta)
+        {
+            rsc_sparse_vector_i32::size_type get_idx = test_start - 1025 + i;
+            if (get_idx > bm::id_max)
+                get_idx = bm::id_max - 1;
+            idx.push_back(get_idx);
+        }
+
+        assert(idx.size());
+        idx_buf.resize(idx.size());
+        vbuf.resize(idx.size());
+
+        auto sort_opt = bm::BM_SORTED;
+        for (unsigned gpass = 0; gpass < 5; ++gpass)
+        {
+            auto sz = csv1.gather(vbuf.data(), idx.data(), idx_buf.data(),
+                                  (rsc_sparse_vector_i32::size_type)idx.size(),
+                                  sort_opt);
+            assert(sz == idx.size());
+            for (rsc_sparse_vector_i32::size_type i = 0; i < sz; ++i)
+            {
+                auto get_idx = idx[i];
+                auto v = vbuf[i];
+                auto t = idx_buf[i];
+                if (t == bm::id_max)
+                {
+                    if (!csv1.is_null(get_idx))
+                    {
+                        cout << "  i=" << i << " get_idx = " << get_idx
+                             << " sz = " << sz
+                             << endl;
+                        rsc_sparse_vector_i32::size_type rank;
+                        bool b = csv1.resolve(get_idx, &rank);
+                        cout << "  is_not_NULL=" << b << " rank="
+                             << rank-1 << endl;
+
+                        int res = bm::save_vector(idx, "gath_idx.vect");
+                        assert(res==0);
+                        res = bm::file_save_svector(csv1, "gath_data.csv");
+                        assert(res==0);
+                        cout << "DBG/Dump creates: " << "gath_data.csv" << "gath_idx.vect" << endl;
+
+                        bool bc = csv1.is_null(get_idx);
+                        assert(!b);
+                        assert(bc);
+                        assert(0);
+                    }
+                }
+                else
+                {
+                    auto vc = csv1.at(get_idx);
+                    auto vc0 = csv1.get(get_idx);
+                    assert(vc == vc0);
+
+                    if (v != vc)
+                    {
+                        rsc_sparse_vector_i32::size_type rank;
+                        bool b = csv1.resolve(get_idx, &rank);
+                        assert(b);
+                        auto vvc = vect_c.at(rank-1);
+                        assert(vc == vvc);
+
+                        cout << "  i=" << i << " get_idx = " << get_idx
+                             << " sz = " << sz << " vc = " << vc << " v=" << v
+                             << endl;
+
+                        int res = bm::save_vector(idx, "gath_idx.vect");
+                        assert(res==0);
+                        res = bm::file_save_svector(csv1, "gath_data.csv");
+                        assert(res==0);
+                        cout << "DBG/Dump creates: " << "gath_data.csv" << "gath_idx.vect" << endl;
+                    }
+                    assert(v == vc);
+                }
+            } // for i
+
+            // shuffle the indexes
+            {
+                std::random_device rd;
+                std::mt19937       g(rd());
+                std::shuffle(idx.begin(), idx.end(), g);
+            }
+            sort_opt = bm::BM_UNSORTED;
+        } // for gpass
+
+
+        if (!is_silent)
+            cout << "\r" << pass << "/" << max_passes << flush;
+    } // pass
+    cout << endl;
+
+    cout << "--------------- TestCompressSparseGather() OK\n" << endl;
+}
+
+
 
 
 static
@@ -19496,7 +19726,11 @@ int main(int argc, char *argv[])
 
     if (is_all || is_csv)
     {
+
          TestCompressSparseVector();
+         CheckAllocLeaks(false);
+
+         TestCompressSparseGather();
          CheckAllocLeaks(false);
 
          TestCompressSparseSignedVector();
@@ -19518,7 +19752,7 @@ int main(int argc, char *argv[])
         {
             TestSparseVector_Stress(2);
             CheckAllocLeaks(false);
-     }
+        }
 
     }
 
