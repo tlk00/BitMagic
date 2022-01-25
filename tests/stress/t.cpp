@@ -5519,6 +5519,8 @@ void BvectorInsertTest()
         bvect bv { 1, 2, 3 };
         bvect bv_c { 2, 3, 4 };
         bvect bv1(bv);
+        bvect bv2(bv); bv2.optimize();
+
         BVectorInsert(&bv, 0, false);
         int cmp = bv.compare(bv_c);
         assert(cmp == 0);
@@ -5526,12 +5528,23 @@ void BvectorInsertTest()
         bv1.insert(0, false);
         cmp = bv1.compare(bv_c);
         assert(cmp == 0);
+
+        bv2.insert(0, false);
+        cmp = bv2.compare(bv_c);
+        assert(cmp == 0);
+
+       struct bvect::statistics st2;
+       bv2.calc_stat(&st2);
+       assert(st2.gap_blocks==1);
+       assert(st2.bit_blocks==0);
     }
     
     {
         bvect bv { 1, 2, 3 };
         bvect bv_c { 0, 2, 3, 4 };
         bvect bv1(bv);
+        bvect bv2(bv); bv2.optimize();
+
         BVectorInsert(&bv, 0, true);
         int cmp = bv.compare(bv_c);
         assert(cmp == 0);
@@ -5539,12 +5552,43 @@ void BvectorInsertTest()
         bv1.insert(0, true);
         cmp = bv1.compare(bv_c);
         assert(cmp == 0);
+
+        bv2.insert(0, true);
+//        print_bv(bv2);
+//        print_bv(bv_c);
+        cmp = bv2.compare(bv_c);
+        assert(cmp == 0);
+
+        struct bvect::statistics st2;
+        bv2.calc_stat(&st2);
+        assert(st2.gap_blocks==1);
+        assert(st2.bit_blocks==0);
+    }
+
+    {
+        bvect bv;
+        bv.set_range(0, 65535);
+        bv.optimize();
+        bvect bv_c;
+        bv_c.set_range(0, 65536);
+
+        bv.insert(1, true);
+        int cmp = bv.compare(bv_c);
+        assert(cmp == 0);
+
+        struct bvect::statistics st;
+        bv.calc_stat(&st);
+        assert(st.gap_blocks==0);
+        assert(st.bit_blocks==1);
+
     }
     
     {
         bvect bv { 1, 20, 65535 };
         bvect bv_c { 1, 20, 65535, 65536 };
         bvect bv1(bv);
+        bvect bv2(bv); bv2.optimize();
+
         BVectorInsert(&bv, 65535, true);
         int cmp = bv.compare(bv_c);
         assert(cmp == 0);
@@ -5553,6 +5597,16 @@ void BvectorInsertTest()
         print_bv(bv1);
         cmp = bv1.compare(bv_c);
         assert(cmp == 0);
+
+        bv2.insert(65535, true);
+        cmp = bv2.compare(bv_c);
+        assert(cmp == 0);
+
+        struct bvect::statistics st2;
+        bv2.calc_stat(&st2);
+        assert(st2.gap_blocks==1);
+        assert(st2.bit_blocks==1);
+
     }
     
     // bit-vector insert checks
@@ -5590,6 +5644,40 @@ void BvectorInsertTest()
         int cmp = bv1.compare(bv);
         assert(cmp==0);
     }
+
+    {
+        std::cout << "INSERT GAP  (random)..\n";
+
+        bvect bv(BM_GAP), bv1;
+        bv.set(10);
+        bv1 = bv;
+        bv.optimize();
+
+        for (unsigned i = 0; i < 1000; ++i)
+        {
+            unsigned idx = (unsigned)rand() % 65535;
+            unsigned val = (unsigned)rand() & 1;
+            bv.insert(idx, val);
+            bv1.insert(idx, val);
+            int cmp = bv1.compare(bv);
+            assert(cmp==0);
+
+            struct bvect::statistics st;
+            bv.calc_stat(&st);
+            assert(st.gap_blocks >= 1);
+            assert(st.bit_blocks == 0);
+
+            bv.insert(idx, val);
+            bv1.insert(idx, val);
+            cmp = bv1.compare(bv);
+            assert(cmp==0);
+
+            bv.calc_stat(&st);
+            assert(st.gap_blocks >= 1);
+            assert(st.bit_blocks == 0);
+        }
+    }
+
     
     {
         std::cout << "INSERT stress (large vector insert)..\n";
@@ -26481,7 +26569,12 @@ void TestCompressSparseGather()
         rsc_sparse_vector_i32::size_type gather_size = 65536 * 3;
 
         for (rsc_sparse_vector_i32::size_type i = 0; i < gather_size; i += sampling_delta)
-            idx.push_back(test_start - 1025 + i);
+        {
+            rsc_sparse_vector_i32::size_type get_idx = test_start - 1025 + i;
+            if (get_idx > bm::id_max)
+                get_idx = bm::id_max - 1;
+            idx.push_back(get_idx);
+        }
 
         assert(idx.size());
         idx_buf.resize(idx.size());
@@ -34186,7 +34279,7 @@ void TestCompressSparseVector()
 
         assert(csv.is_null(0));
         assert(!csv.is_null(1));
-        assert(csv.get(1) == 1);
+        assert((v=csv.get(1)) == 1);
         exists = csv.try_get(1, v);
         assert(exists && v == 1);
 
@@ -36387,6 +36480,8 @@ bool         is_bvshift = false;
 bool         is_rankc = false;
 bool         is_agg = false;
 bool         is_sv = false;
+bool         is_sv0 = false;
+bool         is_sv1 = false;
 bool         is_csv = false;
 bool         is_csv0 = false;
 bool         is_csv1 = false;
@@ -36499,12 +36594,26 @@ int parse_args(int argc, char *argv[])
             is_agg = true;
             continue;
         }
+
         if (arg == "-sv")
         {
             is_all = false;
             is_sv = true;
             continue;
         }
+        if (arg == "-sv0")
+        {
+            is_all = false;
+            is_sv0 = true;
+            continue;
+        }
+        if (arg == "-sv1")
+        {
+            is_all = false;
+            is_sv1 = true;
+            continue;
+        }
+
         if (arg == "-csv" || arg == "-rsc")
         {
             is_all = false;
@@ -37101,58 +37210,64 @@ int main(int argc, char *argv[])
          StressTestAggregatorAND_SUB(100);
     }
 
-    if (is_all || is_sv)
+    if (is_all || is_sv || is_sv0 || is_sv1)
     {
-        TestSparseVector();
-         CheckAllocLeaks(false);
+        if (is_all || is_sv || is_sv0)
+        {
+            TestSparseVector();
+             CheckAllocLeaks(false);
 
-        TestSignedSparseVector();
-         CheckAllocLeaks(false);
+            TestSignedSparseVector();
+             CheckAllocLeaks(false);
 
-        TestSparseVectorAlgo();
-         CheckAllocLeaks(false);
+            TestSparseVectorAlgo();
+             CheckAllocLeaks(false);
 
-        TestSparseVectorInserter();
-         CheckAllocLeaks(false);
+            TestSparseVectorInserter();
+             CheckAllocLeaks(false);
 
-        TestSparseVectorGatherDecode();
-         CheckAllocLeaks(false);
+            TestSparseVectorGatherDecode();
+             CheckAllocLeaks(false);
 
-        TestSparseVector_XOR_Scanner();
-         CheckAllocLeaks(false);
+            TestSparseVector_XOR_Scanner();
+             CheckAllocLeaks(false);
 
-        TestSparseVectorSerial();
-         CheckAllocLeaks(false);
+            TestSparseVectorSerial();
+             CheckAllocLeaks(false);
 
-        TestSignedSparseVectorSerial();
-         CheckAllocLeaks(false);
+            TestSignedSparseVectorSerial();
+             CheckAllocLeaks(false);
 
-        TestSparseVectorSerialization2();
-         CheckAllocLeaks(false);
+            TestSparseVectorSerialization2();
+             CheckAllocLeaks(false);
+        }
 
-        TestSparseVectorTransform();
-         CheckAllocLeaks(false);
+        if (is_all || is_sv || is_sv1)
+        {
+            TestSparseVectorTransform();
+             CheckAllocLeaks(false);
 
-        TestSparseVectorRange();
-         CheckAllocLeaks(false);
+            TestSparseVectorRange();
+             CheckAllocLeaks(false);
 
-        TestSparseVectorFilter();
-         CheckAllocLeaks(false);
+            TestSparseVectorFilter();
+             CheckAllocLeaks(false);
 
-        TestSparseVectorScan();
-         CheckAllocLeaks(false);
+            TestSparseVectorScan();
+             CheckAllocLeaks(false);
 
-        TestSparseVectorScanGT();
-         CheckAllocLeaks(false);
+            TestSparseVectorScanGT();
+             CheckAllocLeaks(false);
 
-        TestSignedSparseVectorScanGT();
-         CheckAllocLeaks(false);
+            TestSignedSparseVectorScanGT();
+             CheckAllocLeaks(false);
 
-        TestSignedSparseVectorScan();
-         CheckAllocLeaks(false);
+            TestSignedSparseVectorScan();
+             CheckAllocLeaks(false);
 
-        TestSparseVector_Stress(3);
-         CheckAllocLeaks(false);
+            TestSparseVector_Stress(3);
+             CheckAllocLeaks(false);
+         }
     }
 
     if (is_sv_sort || is_sv)
