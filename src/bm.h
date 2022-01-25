@@ -5192,31 +5192,57 @@ bool bvector<Alloc>::insert(size_type n, bool value)
     int block_type;
     bm::word_t carry_over = 0;
     
-    if (!n && !value) // regular shift-right by 1 bit
-    {}
-    else // process target block insertion
+    // 1: process target block insertion
     {
         unsigned i, j;
         bm::get_block_coord(nb, i, j);
         bm::word_t* block = blockman_.get_block_ptr(i, j);
 
-        if (!block && !value) // nothing to do
-        {}
+        const unsigned nbit  = unsigned(n & bm::set_block_mask);
+        if (!block)
+        {
+            if (value)
+            {
+                block = blockman_.check_allocate_block(nb, get_new_blocks_strat());
+                goto insert_bit_check;
+            }
+        }
         else
         {
-            if (!block)
-                block = blockman_.check_allocate_block(nb, BM_BIT);
-            if (BM_IS_GAP(block) || IS_FULL_BLOCK(block))
-                block = blockman_.deoptimize_block(nb); // TODO: optimize GAP block insert
-            BM_ASSERT(IS_VALID_ADDR(block));
+        insert_bit_check:
+            if (BM_IS_GAP(block))
             {
-                unsigned nbit  = unsigned(n & bm::set_block_mask);
-                carry_over = bm::bit_block_insert(block, nbit, value);
+                unsigned new_block_len;
+                bm::gap_word_t* gap_blk = BMGAP_PTR(block);
+                carry_over = bm::gap_insert(gap_blk, nbit, value, &new_block_len);
+                unsigned threshold =  bm::gap_limit(gap_blk, blockman_.glen());
+                if (new_block_len > threshold)
+                    blockman_.extend_gap_block(nb, gap_blk);
+            }
+            else
+            {
+                if (IS_FULL_BLOCK(block))
+                {
+                    if (!value)
+                    {
+                        block = blockman_.deoptimize_block(nb);
+                        goto insert_bit;
+                    }
+                    carry_over = 1;
+                }
+                else // BIT block
+                {
+                insert_bit:
+                    BM_ASSERT(IS_VALID_ADDR(block));
+                    carry_over = bm::bit_block_insert(block, nbit, value);
+                }
             }
         }
         ++nb;
     }
-    
+
+    // 2: shift right everything else
+    //
     unsigned i0, j0;
     bm::get_block_coord(nb, i0, j0);
 

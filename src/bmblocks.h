@@ -1755,7 +1755,7 @@ public:
         \param nb - Block's linear index.
         \param blk - Blocks's pointer 
 
-        \return new GAP block pointer or NULL if block type mutated
+        \return new GAP block pointer or NULL if block type mutated into NULL
     */
     bm::gap_word_t* extend_gap_block(block_idx_type nb, gap_word_t* blk)
     {

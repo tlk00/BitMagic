@@ -3408,17 +3408,18 @@ bool gap_shift_r1(T* BMRESTRICT buf,
                   unsigned co_flag, unsigned* BMRESTRICT new_len) BMNOEXCEPT
 {
     BM_ASSERT(new_len);
-    bool co;
+    BM_ASSERT(co_flag <= 1);
+
+    bool co, gap_set_flag;
+    unsigned len = (*buf >> 3);
     // 1: increment all GAP values by 1
     {
         unsigned bitval = *buf & 1;
+        gap_set_flag = (bitval != co_flag);
         if (buf[1] == bm::gap_max_bits-1) // full GAP block
-        {
             co = bitval;
-        }
         else
         {
-            unsigned len = (*buf >> 3);
             unsigned i = 1;
             for (; i < len; ++i)
             {
@@ -3435,11 +3436,70 @@ bool gap_shift_r1(T* BMRESTRICT buf,
             co = bitval;
         }
     }
-    // set bit position 0 with carry-in flag
-    {
-        unsigned is_set;
+    // set bit bit 0 with carry-in flag
+    unsigned is_set;
+    if (gap_set_flag)
         *new_len = bm::gap_set_value(co_flag, buf, 0, &is_set);
+    else
+        *new_len = len;
+
+    return co;
+}
+
+/*!
+    @brief isnert bit into GAP compressed block
+    @param buf - block pointer
+    @param pos - insert position
+    @param value - (0 or 1) - value to set
+    @param new_len - output length of the GAP block after the operation
+
+    @return carry over bit (1 or 0)
+    @ingroup gapfunc
+*/
+template<typename T>
+bool gap_insert(T* BMRESTRICT buf,
+                unsigned pos, unsigned val, unsigned* BMRESTRICT new_len) BMNOEXCEPT
+{
+    BM_ASSERT(new_len);
+    BM_ASSERT(val <= 1);
+
+    bool co, gap_set_flag;
+    unsigned is_set;
+    unsigned idx = bm::gap_bfind(buf, pos, &is_set);
+    BM_ASSERT(is_set <= 1);
+
+    gap_set_flag = (val != is_set);
+    unsigned len = (*buf >> 3);
+
+    // 1: increment all GAP values by 1
+    if (buf[idx] == bm::gap_max_bits-1)
+    {
+        co = is_set;
     }
+    else
+    {
+        unsigned i = idx;
+        for (; i < len; ++i)
+        {
+            buf[i]++;
+            is_set ^= 1;
+        } // for i
+        BM_ASSERT(buf[i] == bm::gap_max_bits-1);
+        if (buf[i-1] == bm::gap_max_bits-1) // last element shifts out
+        {
+            // Set correct length word
+            --len;
+            *buf = (T)((*buf & 7) + (len << 3));
+            *new_len = len;
+        }
+        co = is_set;
+    }
+
+    if (gap_set_flag)
+        *new_len = bm::gap_set_value(val, buf, pos, &is_set);
+    else
+        *new_len = len;
+
     return co;
 }
 
@@ -3457,6 +3517,8 @@ bool gap_shift_l1(T* BMRESTRICT buf,
                   unsigned co_flag, unsigned* BMRESTRICT new_len) BMNOEXCEPT
 {
     BM_ASSERT(new_len);
+    BM_ASSERT(co_flag <= 1);
+    
     unsigned is_set;
 
     // 1: decrement all GAP values by 1
