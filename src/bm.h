@@ -5193,6 +5193,7 @@ bool bvector<Alloc>::insert(size_type n, bool value)
     bm::word_t carry_over = 0;
     
     // 1: process target block insertion
+    if (value && n)
     {
         unsigned i, j;
         bm::get_block_coord(nb, i, j);
@@ -5342,9 +5343,7 @@ bool bvector<Alloc>::insert(size_type n, bool value)
                     carry_over = bm::gap_shift_r1(gap_blk, carry_over, &new_block_len);
                     unsigned threshold =  bm::gap_limit(gap_blk, blockman_.glen());
                     if (new_block_len > threshold)
-                    {
                         blockman_.extend_gap_block(nblock, gap_blk);
-                    }
                     continue;
                 }
             }
