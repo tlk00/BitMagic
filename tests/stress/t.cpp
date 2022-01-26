@@ -5404,9 +5404,6 @@ void BvectorShiftTest()
 
     while(1)
     {
-       if (start == 65535)
-        cout << ".";
-
         bool carry_over = bv.shift_right();
         if (carry_over)
         {
