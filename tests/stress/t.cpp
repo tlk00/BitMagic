@@ -5373,6 +5373,8 @@ void BvectorShiftTest()
                 unsigned idx = bv.get_first();
                 assert(idx == start-1);
 
+                bv.optimize();
+
                 bv.calc_stat(&st);
                 bcnt = st.bit_blocks + st.gap_blocks;
                 assert(bcnt == 1);
@@ -5386,8 +5388,9 @@ void BvectorShiftTest()
     {
     std::cout << "Shift-R stress (1 bit shift)..\n";
     unsigned start = 0;
-    bvect bv;
+    bvect bv, bv1(BM_GAP);
     bv.set(start);
+    bv1.set(start);
 
    struct bvect::statistics st;
    bv.calc_stat(&st);
@@ -5401,6 +5404,9 @@ void BvectorShiftTest()
 
     while(1)
     {
+       if (start == 65535)
+        cout << ".";
+
         bool carry_over = bv.shift_right();
         if (carry_over)
         {
@@ -5410,10 +5416,38 @@ void BvectorShiftTest()
             break;
         }
 
+        {
+            bv.calc_stat(&st);
+            bcnt = st.bit_blocks + st.gap_blocks;
+            assert(bcnt == 1);
+        }
+        carry_over = bv1.shift_right();
+        if (carry_over)
+        {
+            cout << "CO at " << start << endl;
+            assert(bv1.count()==0);
+            assert(start == bm::id_max-1);
+            break;
+        }
+        // optmization of GAP blocks is not implemented yet
+        #if 0
+        {
+            bv1.calc_stat(&st);
+            bcnt = st.bit_blocks + st.gap_blocks;
+            assert(bcnt == 1);
+        }
+        #endif
+
+
         if (!is_silent)
             if ((start % (1024 * 1024)) == 0)
             {
-                f = std::chrono::steady_clock::now();
+                bool eq = bv.equal(bv1);
+                assert(eq);
+
+                bv1.optimize();
+
+;                f = std::chrono::steady_clock::now();
                 auto diff = f - s;
                 auto d = std::chrono::duration <double, std::milli> (diff).count();
                 cout << "\r" << start << " (" << d << ") " << flush;
@@ -37240,13 +37274,14 @@ int main(int argc, char *argv[])
 
             TestSparseVectorSerialization2();
              CheckAllocLeaks(false);
+
+            TestSparseVectorTransform();
+             CheckAllocLeaks(false);
+
         }
 
         if (is_all || is_sv || is_sv1)
         {
-            TestSparseVectorTransform();
-             CheckAllocLeaks(false);
-
             TestSparseVectorRange();
              CheckAllocLeaks(false);
 
