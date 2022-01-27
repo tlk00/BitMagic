@@ -5193,7 +5193,7 @@ bool bvector<Alloc>::insert(size_type n, bool value)
     bm::word_t carry_over = 0;
     
     // 1: process target block insertion
-    if (value && n)
+    if (value || n)
     {
         unsigned i, j;
         bm::get_block_coord(nb, i, j);
