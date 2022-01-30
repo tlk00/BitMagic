@@ -5294,6 +5294,7 @@ void BvectorShiftTest()
 
 
     {
+    cout << " inverted test" << endl;
     bvect bv;
     bv.invert();
     unsigned cnt = bv.count();
@@ -5312,6 +5313,7 @@ void BvectorShiftTest()
     }
     
     {
+    cout << " 3-bit optimized test" << endl;
     bvect bv;
     
     bv.set(0);
@@ -5328,6 +5330,7 @@ void BvectorShiftTest()
 
 
     {
+    cout << " carry-over test" << endl;
     bvect bv { 1 };
     bool carry_over = bv.shift_left();
     assert(!carry_over);
@@ -5342,6 +5345,8 @@ void BvectorShiftTest()
     }
     
     {
+    cout << " 4278190080 test" << endl;
+
     bvect bv { 4278190080 };
     bv.shift_left();
     unsigned idx = bv.get_first();
@@ -5352,6 +5357,7 @@ void BvectorShiftTest()
     }
     
     {
+    cout << " 4278190080 (optimized) test" << endl;
     bvect bv { 4278190080 };
     bv.optimize();
     bv.shift_left();
@@ -5363,7 +5369,7 @@ void BvectorShiftTest()
     }
 
     {
-    std::cout << "Shift-L stress (1 bit shift)..\n";
+    std::cout << "\nShift-L stress (1 bit shift)..\n" << endl;;
     unsigned start = bm::id_max-1;
     bvect bv;
     bv.set(start);
@@ -5398,31 +5404,30 @@ void BvectorShiftTest()
         }
         */
 
-        if (!is_silent)
-            if ((start % (1024 * 1024)) == 0)
-            {
-                f = std::chrono::steady_clock::now();
-                auto diff = f - s;
-                auto d = std::chrono::duration <double, std::milli> (diff).count();
-                cout << "\r" << start << " (" << d << ") " << flush;
+        if ((start % (1024 * 1024)) == 0)
+        {
+            f = std::chrono::steady_clock::now();
+            auto diff = f - s;
+            auto d = std::chrono::duration <double, std::milli> (diff).count();
+            cout << "\r" << start << " (" << d << ") " << flush;
 
-                unsigned idx = bv.get_first();
-                assert(idx == start-1);
+            unsigned idx = bv.get_first();
+            assert(idx == start-1);
 
-                bv.optimize();
+            bv.optimize();
 
-                bv.calc_stat(&st);
-                bcnt = st.bit_blocks + st.gap_blocks;
-                assert(bcnt == 1);
+            bv.calc_stat(&st);
+            bcnt = st.bit_blocks + st.gap_blocks;
+            assert(bcnt == 1);
 
-                s = std::chrono::steady_clock::now();
-            }
+            s = std::chrono::steady_clock::now();
+        }
     }
     cout << "ok.\n";
     }
 
     {
-    std::cout << "Shift-R stress (1 bit shift)..\n";
+    std::cout << "\nShift-R stress (1 bit shift)..\n" << endl;
     unsigned start = 0;
     bvect bv, bv1(BM_GAP);
     bv.set(start);
@@ -5472,35 +5477,35 @@ void BvectorShiftTest()
         #endif
 
 
-        if (!is_silent)
-            if ((start % (1024 * 1024)) == 0)
-            {
-                bool eq = bv.equal(bv1);
-                assert(eq);
+        if ((start % (1024 * 1024)) == 0)
+        {
+            bool eq = bv.equal(bv1);
+            assert(eq);
 
-                bv1.optimize();
+            bv1.optimize();
 
-;                f = std::chrono::steady_clock::now();
-                auto diff = f - s;
-                auto d = std::chrono::duration <double, std::milli> (diff).count();
-                cout << "\r" << start << " (" << d << ") " << flush;
+            f = std::chrono::steady_clock::now();
+            auto diff = f - s;
+            auto d = std::chrono::duration <double, std::milli> (diff).count();
 
-                unsigned idx = bv.get_first();
-                assert(idx-1 == start);
+            cout << "\r" << start << " (" << d << ") " << flush;
 
-                bv.calc_stat(&st);
-                bcnt = st.bit_blocks + st.gap_blocks;
-                assert(bcnt == 1);
+            unsigned idx = bv.get_first();
+            assert(idx-1 == start);
 
-                s = std::chrono::steady_clock::now();
-            }
+            bv.calc_stat(&st);
+            bcnt = st.bit_blocks + st.gap_blocks;
+            assert(bcnt == 1);
+
+            s = std::chrono::steady_clock::now();
+        }
         ++start;
     }
     cout << "ok.\n";
     }
 
     {
-        std::cout << "Shift-R stress (large vector shift)..\n";
+        std::cout << "\nShift-R stress (large vector shift)..\n" << endl;
         bvect bv;
         generate_bvector(bv);
         bvect bv_control(bv);
@@ -5524,7 +5529,7 @@ void BvectorShiftTest()
 
     // stress test for shifting aggregator
     //
-    cout << "Aggregator based SHIT-R tests..." << endl;
+    cout << "\nAggregator based SHIT-R tests..." << endl;
     {
         const unsigned int REPEATS = 300;
 
@@ -5574,13 +5579,13 @@ void BvectorShiftTest()
     }
 
 
-    cout << "---------------------------- Bvector SHIFT test OK" << endl;
+    cout << "\n---------------------------- Bvector SHIFT test OK" << endl;
 }
 
 static
 void BvectorInsertTest()
 {
-    cout << "---------------------------- Bvector INSERT test" << endl;
+    cout << "\n---------------------------- Bvector INSERT test" << endl;
     
     {
         bvect bv { 1, 2, 3 };
