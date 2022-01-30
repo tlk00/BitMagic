@@ -1000,13 +1000,17 @@ unsigned SerializationOperation(bvect*             bv_target,
     }
 
     // serialize input vectors
-    bvect::statistics *st1_op, *st2_op;
-    st1_op = new bvect::statistics;
-    st2_op = new bvect::statistics;
+    bvect::statistics st1_op, st2_op;
 
     BM_DECLARE_TEMP_BLOCK(tb)
-    bv1.optimize(tb, bvect::opt_compress, st1_op);
-    bv2.optimize(tb, bvect::opt_compress, st2_op);
+    if (!bv1.is_ro())
+        bv1.optimize(tb, bvect::opt_compress, &st1_op);
+    else
+        bv1.calc_stat(&st1_op);
+    if (!bv2.is_ro())
+        bv2.optimize(tb, bvect::opt_compress, &st2_op);
+    else
+        bv2.calc_stat(&st2_op);
 
 
    struct bvect::statistics st1, st2;
@@ -1014,24 +1018,21 @@ unsigned SerializationOperation(bvect*             bv_target,
    bv2.calc_stat(&st2);
 
 
-   if (st1.max_serialize_mem > st1_op->max_serialize_mem)
+   if (st1.max_serialize_mem > st1_op.max_serialize_mem)
    {
        cout << "Error: Optimize failed to compute max_serialize_mem" << endl;
        cout << "calc_stat=" << st1.max_serialize_mem << endl;
-       cout << "optimize=" << st1_op->max_serialize_mem << endl;
+       cout << "optimize=" << st1_op.max_serialize_mem << endl;
        assert(0);
        exit(1);
    }
-   if (st2.max_serialize_mem > st2_op->max_serialize_mem)
+   if (st2.max_serialize_mem > st2_op.max_serialize_mem)
    {
        cout << "Error:Optimize failed to compute max_serialize_mem" << endl;
        cout << "calc_stat=" << st2.max_serialize_mem << endl;
-       cout << "optimize=" << st2_op->max_serialize_mem << endl;
+       cout << "optimize=" << st2_op.max_serialize_mem << endl;
        assert(0); exit(1);
    }
-
-   delete st1_op;
-   delete st2_op;
 
    unsigned char* smem1 = new unsigned char[st1.max_serialize_mem];
    unsigned char* smem2 = new unsigned char[st2.max_serialize_mem];
@@ -1090,8 +1091,8 @@ unsigned SerializationOperation(bvect*             bv_target,
         bm::aggregator<bvect> agg;
         agg.set_optimization();
         
-        bvect* agg_list[10];
-        bvect* agg_list2[10];
+        const bvect* agg_list[10];
+        const bvect* agg_list2[10];
         agg_list[0] = &bv1;
         agg_list[1] = &bv2;
         agg_list2[0] = &bv2;
@@ -1099,15 +1100,15 @@ unsigned SerializationOperation(bvect*             bv_target,
 
         bool agg_check = false;
 
-        bvect bvt(bv1);
+        bvect bvt(bv1, BM_READWRITE);
         switch(op)
         {
         case bm::set_OR:
             {
-                bvect bvc(bv1);
+                bvect bvc(bv1, BM_READWRITE);
                 bvc |= bv2;
-                bvect bv_merge1(bv1);
-                bvect bv_merge2(bv2);
+                bvect bv_merge1(bv1, BM_READWRITE);
+                bvect bv_merge2(bv2, BM_READWRITE);
                 bv_merge1.merge(bv_merge2);
                 
                 if (bv_merge1 != bvc)
@@ -1141,7 +1142,7 @@ unsigned SerializationOperation(bvect*             bv_target,
             bvt ^= bv2;
             // 2-way
             {
-                bvect bvc(bv1);
+                bvect bvc(bv1, BM_READWRITE);
                 bvc ^= bv2;
                 
                 bvect bvt1;
@@ -1188,9 +1189,12 @@ unsigned SerializationOperation(bvect*             bv_target,
             
             // 2-way
             {
-                bvect bvc(bv1);
+                bvect bvc(bv1, BM_READWRITE);
                 bvc &= bv2;
-                
+
+                bvect bv_ro1(bv1, bm::BM_READONLY);
+                bvect bv_ro2(bv2, bm::BM_READONLY);
+
                 bvect bvt1;
                 bvt1.bit_and(bv1, bv2, bvect::opt_none);
                 if (bvt1 != bvc)
@@ -1199,15 +1203,29 @@ unsigned SerializationOperation(bvect*             bv_target,
                     //print_bv(bvt1);
                     //cout << "control:" << endl;
                     //print_bv(bvc);
-                    assert(0);
-                    exit(1);
+                    assert(0); exit(1);
                 }
+                bvect bvt11;
+                bvt11.bit_and(bv_ro1, bv_ro2, bvect::opt_none);
+                if (bvt11 != bvc)
+                {
+                    cerr << "1.1 AND 2-way check error!" << endl;
+                    assert(0); exit(1);
+                }
+
                 bvect bvt2;
                 bvt2.bit_and(bv2, bv1, bvect::opt_compress);
                 if (bvt2 != bvc)
                 {
                     cerr << "2. AND 2-way check error!" << endl;
-                    exit(1);
+                    assert(0);exit(1);
+                }
+                bvect bvt12;
+                bvt12.bit_and(bv_ro1, bv_ro2, bvect::opt_none);
+                if (bvt12 != bvc)
+                {
+                    cerr << "2.1 AND 2-way check error!" << endl;
+                    assert(0); exit(1);
                 }
             }
             break;
@@ -1226,8 +1244,8 @@ unsigned SerializationOperation(bvect*             bv_target,
             agg_check = true;
             // 2-way
             {
-                bvect bvc1(bv1);
-                bvect bvc2(bv2);
+                bvect bvc1(bv1, BM_READWRITE);
+                bvect bvc2(bv2, BM_READWRITE);
                 bvc1 -= bv2;
                 bvc2 -= bv1;
                 
@@ -1371,6 +1389,10 @@ void SerializationOperation2Test(bvect*        bv_target,
                                  set_operation op_combine)
 {
     bv_target->clear(true);
+
+    bvect bv_ro1(bv1, BM_READONLY);
+    bvect bv_ro2(bv2, BM_READONLY);
+
     cout << "Serialization operation count..." << endl;
 
     unsigned scount1 = SerializationOperation(0, 
@@ -1380,6 +1402,8 @@ void SerializationOperation2Test(bvect*        bv_target,
                                               true //reverse check
                                             );
     cout << "Serialization operation count OK." << endl;
+
+
 
     cout << "Serialization operation. " << endl;
     unsigned scount2 = SerializationOperation(bv_target,
@@ -1417,6 +1441,18 @@ void SerializationOperation2Test(bvect*        bv_target,
 
         exit(1);
     }
+
+    bvect bv_target2;
+    unsigned scount3 = SerializationOperation(&bv_target2,
+        bv_ro1,
+        bv_ro2,
+        op_combine);
+    scount3 = bv_target2.count();
+    assert(scount3 == scount2);
+
+    bool eq = bv_target->equal(bv_target2);
+    assert(eq);
+
     cout << "OK" << endl;
 }
 
@@ -6306,6 +6342,19 @@ void AndOperationsTest(bool detailed)
         exit(1);
     }
 
+    {
+        bvect bv_ro1(bvect_full1, bm::BM_READONLY);
+        bm::id_t pcount1 = bm::count_and(bv_ro1, bvect_full2);
+        assert(pcount1 == predicted_count);
+
+        bvect bv_ro2(bvect_full2, bm::BM_READONLY);
+        bm::id_t pcount2 = bm::count_and(bvect_full1, bv_ro2);
+        assert(pcount2 == predicted_count);
+
+        bm::id_t pcount3 = bm::count_and(bv_ro1, bv_ro2);
+        assert(pcount3 == predicted_count);
+    }
+
     bvect    bv_target_s;
     SerializationOperation2Test(&bv_target_s,
                                 bvect_full1,
@@ -6327,9 +6376,18 @@ void AndOperationsTest(bool detailed)
     CheckVectors(bvect_min1, bvect_full1, 256, detailed);
     CheckVectors(bvect_min1, bv_target_s, 256, detailed);
 
-    bvect::rs_index_type rs_idx_full1;
-    bvect_full1.build_rs_index(&rs_idx_full1);
-    CheckCountRange(bvect_full1, rs_idx_full1, 0, 256);
+        {
+        bvect::rs_index_type rs_idx_full1;
+        bvect_full1.build_rs_index(&rs_idx_full1);
+        CheckCountRange(bvect_full1, rs_idx_full1, 0, 256);
+        }
+
+        {
+        bvect bv_ro1(bvect_full1, bm::BM_READONLY);
+        bvect::rs_index_type rs_idx_ro1;
+        bv_ro1.build_rs_index(&rs_idx_ro1);
+        CheckCountRange(bv_ro1, rs_idx_ro1, 0, 256);
+        }
 
     }
     
@@ -6337,8 +6395,9 @@ void AndOperationsTest(bool detailed)
         bvect        bvect1;
         bvect        bvect2 { 256, 165535 };
         bvect        bvect_control { 256  };
-        bvect1.set_range(0, 100000);
+        bvect_control.freeze();
 
+        bvect1.set_range(0, 100000);
         bvect2.optimize();
 
         bvect1 &= bvect2;
@@ -6550,14 +6609,17 @@ void AndOperationsTest(bool detailed)
         }
     }
 
-    CheckVectors(bvect_min1, bvect_full1, BITVECT_SIZE, detailed);
     CheckVectors(bvect_min1, bv_target_s, BITVECT_SIZE, detailed);
+    bv_target_s.freeze();
+    CheckVectors(bvect_min1, bvect_full1, BITVECT_SIZE, detailed);
+
     bvect::rs_index_type rs_idx1;
     bvect_full1.build_rs_index(&rs_idx1);
     CheckCountRange(bvect_full1, rs_idx1, 0, BITVECT_SIZE);
 
     BM_DECLARE_TEMP_BLOCK(tb)
     bvect_full1.optimize(tb);
+
     CheckVectors(bvect_min1, bvect_full1, BITVECT_SIZE, detailed);
 
 //    bvect::rs_index_type rs_idx1;
@@ -6599,7 +6661,8 @@ void AndOperationsTest(bool detailed)
     {
     bvect        bvect1 { 1, 10, 12 };
     bvect        bvect2 { 2, 15, 165535 };
-    
+    bvect2.freeze();
+
     bvect1 &= bvect2;
     
     bvect::statistics st;
@@ -6751,6 +6814,11 @@ void CheckBV_AND_OR(BV& bv_target, const BV& bv1, const BV& bv2)
 {
     BV bv_control(bv_target);
     BV bv_t_copy(bv_target);
+    BV bv_t_copy1(bv_target);
+
+    BV bv_ro1(bv1, BM_READONLY);
+    BV bv_ro2(bv2, BM_READONLY);
+
     {
         BV bv_and;
         bv_and.bit_and(bv1, bv2, bvect::opt_compress);
@@ -6778,6 +6846,11 @@ void CheckBV_AND_OR(BV& bv_target, const BV& bv1, const BV& bv2)
         assert(0);
     }
 
+    bv_t_copy1.bit_or_and(bv_ro1, bv_ro2, bvect::opt_compress);
+    bv_t_copy1.freeze();
+
+    bool eq = bv_target.equal(bv_t_copy1);
+    assert(eq);
 }
 
 static
@@ -16280,7 +16353,7 @@ bvect bvect_test_return()
 static
 void SyntaxTest()
 {
-    cout << "----------------------------- Syntax test." << endl;
+    cout << "----------------------------- SyntaxTest()" << endl;
     
     {
         bvect bv1;
@@ -16369,8 +16442,240 @@ void SyntaxTest()
     }
 
 
-    cout << "----------------------------- Syntax test ok." << endl;
+    cout << "----------------------------- SyntaxTest() OK\n" << endl;
 }
+
+static
+void FreezeTest()
+{
+    cout << "----------------------------- FreezeTest()" << endl;
+
+    bool eq;
+    {
+        bvect bv;
+        bvect bv_ro(bv, bm::BM_READONLY);
+        assert(!bv.is_ro());
+        assert(!bv_ro.is_ro());
+    }
+
+    // swap test
+    {
+        bvect bv {0};
+        bvect bv_ro(bv, bm::BM_READONLY);
+
+        assert(!bv.is_ro());
+        assert(bv_ro.is_ro());
+
+        eq = bv.equal(bv_ro);
+        assert(eq);
+
+        bv.swap(bv_ro);
+
+        assert(bv.is_ro());
+        assert(!bv_ro.is_ro());
+
+        eq = bv.equal(bv_ro);
+        assert(eq);
+    }
+
+    // merge
+    {
+        bvect bv1 {0}, bv2 {65536};
+        bv2.freeze();
+
+        bvect bv3;
+        bv3.bit_or(bv2, bv1);
+        print_bv(bv3);
+
+        bv1.merge(bv2);
+        print_bv(bv1);
+
+        eq = bv3.equal(bv1);
+        assert(eq);
+    }
+
+    // move
+    {
+        bvect bv1 {0}, bv2 {65536, bm::id_max-1};
+        bv2.freeze();
+
+        bv1.move_from(bv2);
+        assert(bv1.is_ro());
+        print_bv(bv1);
+        bvect bvc {65536, bm::id_max-1};
+        bvc.freeze();
+        eq = bvc.equal(bv1);
+        assert(eq);
+    }
+
+    // calc_stat
+    {
+        bvect bv1 {1, bm::id_max-1};
+        bv1.optimize();
+        bvect bv2(bv1);
+        bv2.freeze();
+
+        bvect::statistics st1, st2;
+        bv1.calc_stat(&st1);
+        bv2.calc_stat(&st2);
+
+        assert(st2.memory_used < st1.memory_used);
+    }
+
+
+    {
+        bvect bv;
+        bv.invert();
+
+        {
+            bvect bv_ro(bv, bm::BM_READONLY);
+
+            assert(!bv.is_ro());
+            assert(bv_ro.is_ro());
+
+            eq = bv.equal(bv_ro);
+            assert(eq);
+        }
+        bv.optimize();
+        {
+            bvect bv_ro(bv, bm::BM_READONLY);
+
+            assert(!bv.is_ro());
+            assert(bv_ro.is_ro());
+
+            eq = bv.equal(bv_ro);
+            assert(eq);
+        }
+    }
+
+    {
+        bvect bv;
+        bv.set_range(256*65536, bm::id_max/2 + 10);
+
+        {
+            bvect bv_ro(bv, bm::BM_READONLY);
+
+            assert(!bv.is_ro());
+            assert(bv_ro.is_ro());
+
+            eq = bv.equal(bv_ro);
+            assert(eq); // copy-ctor
+            {
+                bvect bv_ro2(bv_ro, bm::BM_READONLY);
+                assert(bv_ro2.is_ro());
+                eq = bv.equal(bv_ro2);
+                assert(eq);
+            }
+
+            { // assignment
+                bvect bv_ro2 { 126 };
+                bv_ro2 = bv_ro;
+                assert(bv_ro2.is_ro());
+                eq = bv.equal(bv_ro2);
+                assert(eq);
+            }
+
+            { // move ctor/assignment
+            bvect bv_ro2 = std::move(bv_ro);
+            assert(bv_ro2.is_ro());
+            eq = bv.equal(bv_ro2);
+            assert(eq);
+            bvect bv_ro3;
+            bv_ro3 = std::move(bv_ro2);
+            assert(bv_ro3.is_ro());
+            eq = bv.equal(bv_ro3);
+            assert(eq);
+
+            }
+        }
+    }
+
+
+
+    {
+        std::vector<bvect::size_type> v1 { 0, 65536, 65536 * 256, bm::id_max/2, bm::id_max-1 };
+        for (size_t i = 0; i < v1.size(); ++i)
+        {
+            auto idx = v1[i];
+            bvect bv; bv.set(idx);
+            {
+                for (int pass = 0; pass < 2; ++pass)
+                {
+                    bvect bv_ro(bv, bm::BM_READONLY);
+                    assert(!bv.is_ro());
+                    assert(bv_ro.is_ro());
+                    eq = bv.equal(bv_ro);
+                    assert(eq);
+                    bvect::size_type pos(bm::id_max);
+                    bool found = bv_ro.find(pos);
+                    assert(found);
+                    assert(pos == idx);
+
+                    { // freezing copyctor
+                    bvect bv_ro2(bv_ro, bm::BM_READONLY);
+                    assert(bv_ro2.is_ro());
+                    eq = bv.equal(bv_ro2);
+                    assert(eq);
+                    }
+
+                    { // copyctor
+                    bvect bv_ro2(bv_ro);
+                    assert(bv_ro2.is_ro());
+                    eq = bv.equal(bv_ro2);
+                    assert(eq);
+                    }
+                    { // assignment tests
+                    bvect bv_ro2 { 126 };
+                    bv_ro2 = bv_ro;
+                    assert(bv_ro2.is_ro());
+                    eq = bv.equal(bv_ro2);
+                    assert(eq);
+                    }
+
+                    { // move ctor/assignment
+                    bvect bv_ro2 = std::move(bv_ro);
+                    assert(bv_ro2.is_ro());
+                    eq = bv.equal(bv_ro2);
+                    assert(eq);
+                    bvect bv_ro3;
+                    bv_ro3 = std::move(bv_ro2);
+                    assert(bv_ro3.is_ro());
+                    eq = bv.equal(bv_ro3);
+                    assert(eq);
+                    }
+
+                    bv.optimize();
+                } // for pass
+            }
+        } // for i
+    }
+
+    {
+        bvect bv { 0 };
+        {
+            for (bvect::size_type i = 0; i < 65535; i+=3)
+                bv.set(i);
+            bv.set(bm::id_max/2);
+            bv.optimize();
+
+            bvect bv_ro(bv, bm::BM_READONLY);
+            assert(!bv.is_ro());
+            assert(bv_ro.is_ro());
+            eq = bv.equal(bv_ro);
+            assert(eq);
+
+            bvect bv_ro2(bv_ro);
+            assert(bv_ro2.is_ro());
+            eq = bv_ro.equal(bv_ro2);
+            assert(eq);
+            eq = bv.equal(bv_ro2);
+            assert(eq);
+        }
+    }
+
+    cout << "----------------------------- FreezeTest() ON\n" << endl;
+}
+
 
 static
 void BlockDigestTest()
@@ -16415,21 +16720,21 @@ void ArenaTest()
         bm::bv_arena_statistics st;
         bvect bv;
 
-        bv.calc_arena_stat(&st);
+        bv.get_blocks_manager().calc_arena_stat(&st);
         assert(st.gap_blocks_sz == 0);
         assert(st.ptr_sub_blocks_sz == 0);
         assert(st.bit_blocks_sz == 0);
 
         bv.set(0);
 
-        bv.calc_arena_stat(&st);
+        bv.get_blocks_manager().calc_arena_stat(&st);
         assert(st.gap_blocks_sz == 0);
         assert(st.ptr_sub_blocks_sz == bm::set_sub_array_size);
         assert(st.bit_blocks_sz == bm::set_block_size);
 
         bv.set(bm::id_max/2);
 
-        bv.calc_arena_stat(&st);
+        bv.get_blocks_manager().calc_arena_stat(&st);
         assert(st.gap_blocks_sz == 0);
         assert(st.ptr_sub_blocks_sz == 2* bm::set_sub_array_size);
         assert(st.bit_blocks_sz == 2 * bm::set_block_size);
@@ -16442,14 +16747,14 @@ void ArenaTest()
         bv.set(1);
         bv.set(2);
 
-        bv.calc_arena_stat(&st);
+        bv.get_blocks_manager().calc_arena_stat(&st);
         assert(st.gap_blocks_sz == 4);
         assert(st.ptr_sub_blocks_sz == bm::set_sub_array_size);
         assert(st.bit_blocks_sz == 0);
 
         bv.set(1+bm::id_max/2);
 
-        bv.calc_arena_stat(&st);
+        bv.get_blocks_manager().calc_arena_stat(&st);
         assert(st.gap_blocks_sz == 7);
         assert(st.ptr_sub_blocks_sz == 2*bm::set_sub_array_size);
         assert(st.bit_blocks_sz == 0);
@@ -16465,7 +16770,7 @@ void ArenaTest()
 
         bv.set(bm::id_max/2);
 
-        bv.calc_arena_stat(&st);
+        bv.get_blocks_manager().calc_arena_stat(&st);
         assert(st.gap_blocks_sz == 3);
         assert(st.ptr_sub_blocks_sz == 2* bm::set_sub_array_size);
         assert(st.bit_blocks_sz == 1 * bm::set_block_size);
@@ -36998,6 +37303,9 @@ int main(int argc, char *argv[])
              ArenaTest();
              CheckAllocLeaks(false);
 
+             FreezeTest();
+             CheckAllocLeaks(false);
+
              BlockDigestTest();
              CheckAllocLeaks(false);
 
@@ -37184,7 +37492,6 @@ int main(int argc, char *argv[])
 
     if (is_all || is_bvops)
     {
-
         AndOperationsTest(true); // enable detailed check
          CheckAllocLeaks(false);
 

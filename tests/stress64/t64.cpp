@@ -516,6 +516,271 @@ void GenericBVectorTest()
 }
 
 static
+void ArenaTest()
+{
+   cout << "----------------------------- ArenaTest() " << endl;
+
+   {
+        bm::bv_arena_statistics st;
+        bvect bv;
+
+        bv.get_blocks_manager().calc_arena_stat(&st);
+        assert(st.gap_blocks_sz == 0);
+        assert(st.ptr_sub_blocks_sz == 0);
+        assert(st.bit_blocks_sz == 0);
+
+        bv.set(0);
+
+        bv.get_blocks_manager().calc_arena_stat(&st);
+        assert(st.gap_blocks_sz == 0);
+        assert(st.ptr_sub_blocks_sz == bm::set_sub_array_size);
+        assert(st.bit_blocks_sz == bm::set_block_size);
+
+        bv.set(bm::id_max/2);
+
+        bv.get_blocks_manager().calc_arena_stat(&st);
+        assert(st.gap_blocks_sz == 0);
+        assert(st.ptr_sub_blocks_sz == 2* bm::set_sub_array_size);
+        assert(st.bit_blocks_sz == 2 * bm::set_block_size);
+   }
+
+   {
+        bm::bv_arena_statistics st;
+        bvect bv(bm::BM_GAP);
+
+        bv.set(1);
+        bv.set(2);
+
+        bv.get_blocks_manager().calc_arena_stat(&st);
+        assert(st.gap_blocks_sz == 4);
+        assert(st.ptr_sub_blocks_sz == bm::set_sub_array_size);
+        assert(st.bit_blocks_sz == 0);
+
+        bv.set(1+bm::id_max/2);
+
+        bv.get_blocks_manager().calc_arena_stat(&st);
+        assert(st.gap_blocks_sz == 7);
+        assert(st.ptr_sub_blocks_sz == 2*bm::set_sub_array_size);
+        assert(st.bit_blocks_sz == 0);
+   }
+
+    {
+        bm::bv_arena_statistics st;
+        bvect bv;
+
+        bv.set(0);
+        bv.set(1);
+        bv.optimize();
+
+        bv.set(bm::id_max/2);
+
+        bv.get_blocks_manager().calc_arena_stat(&st);
+        assert(st.gap_blocks_sz == 3);
+        assert(st.ptr_sub_blocks_sz == 2* bm::set_sub_array_size);
+        assert(st.bit_blocks_sz == 1 * bm::set_block_size);
+
+
+        bvect::blocks_manager_type& bman = bv.get_blocks_manager();
+        bvect::blocks_manager_type::arena ar;
+
+        bman.alloc_arena(&ar, st, bman.get_allocator());
+        bman.free_arena(&ar, bman.get_allocator());
+
+    }
+
+
+   cout << "----------------------------- ArenaTest() OK" << endl;
+}
+
+
+static
+void FreezeTest()
+{
+    cout << "----------------------------- FreezeTest()" << endl;
+
+    bool eq;
+    {
+        bvect bv;
+        bvect bv_ro(bv, bm::BM_READONLY);
+        assert(!bv.is_ro());
+        assert(!bv_ro.is_ro());
+    }
+
+    // swap test
+    {
+        bvect bv {0};
+        bvect bv_ro(bv, bm::BM_READONLY);
+
+        assert(!bv.is_ro());
+        assert(bv_ro.is_ro());
+
+        eq = bv.equal(bv_ro);
+        assert(eq);
+
+        bv.swap(bv_ro);
+
+        assert(bv.is_ro());
+        assert(!bv_ro.is_ro());
+
+        eq = bv.equal(bv_ro);
+        assert(eq);
+    }
+
+    {
+        bvect bv;
+        bv.invert();
+
+        {
+            bvect bv_ro(bv, bm::BM_READONLY);
+
+            assert(!bv.is_ro());
+            assert(bv_ro.is_ro());
+
+            eq = bv.equal(bv_ro);
+            assert(eq);
+        }
+        bv.optimize();
+        {
+            bvect bv_ro(bv, bm::BM_READONLY);
+
+            assert(!bv.is_ro());
+            assert(bv_ro.is_ro());
+
+            eq = bv.equal(bv_ro);
+            assert(eq);
+        }
+    }
+
+    {
+        bvect bv;
+        bv.set_range(256*65536, bm::id_max/2 + 10);
+
+        {
+            bvect bv_ro(bv, bm::BM_READONLY);
+
+            assert(!bv.is_ro());
+            assert(bv_ro.is_ro());
+
+            eq = bv.equal(bv_ro);
+            assert(eq); // copy-ctor
+            {
+                bvect bv_ro2(bv_ro, bm::BM_READONLY);
+                assert(bv_ro2.is_ro());
+                eq = bv.equal(bv_ro2);
+                assert(eq);
+            }
+
+            { // assignment
+                bvect bv_ro2 { 126 };
+                bv_ro2 = bv_ro;
+                assert(bv_ro2.is_ro());
+                eq = bv.equal(bv_ro2);
+                assert(eq);
+            }
+
+            { // move ctor/assignment
+            bvect bv_ro2 = std::move(bv_ro);
+            assert(bv_ro2.is_ro());
+            eq = bv.equal(bv_ro2);
+            assert(eq);
+            bvect bv_ro3;
+            bv_ro3 = std::move(bv_ro2);
+            assert(bv_ro3.is_ro());
+            eq = bv.equal(bv_ro3);
+            assert(eq);
+
+            }
+        }
+    }
+
+
+
+    {
+        std::vector<bvect::size_type> v1 { 0, 65536, 65536 * 256, bm::id_max/2, bm::id_max-1 };
+        for (size_t i = 0; i < v1.size(); ++i)
+        {
+            auto idx = v1[i];
+            bvect bv; bv.set(idx);
+            {
+                for (int pass = 0; pass < 2; ++pass)
+                {
+                    bvect bv_ro(bv, bm::BM_READONLY);
+                    assert(!bv.is_ro());
+                    assert(bv_ro.is_ro());
+                    eq = bv.equal(bv_ro);
+                    assert(eq);
+                    bvect::size_type pos(bm::id_max);
+                    bool found = bv_ro.find(pos);
+                    assert(found);
+                    assert(pos == idx);
+
+                    { // freezing copyctor
+                    bvect bv_ro2(bv_ro, bm::BM_READONLY);
+                    assert(bv_ro2.is_ro());
+                    eq = bv.equal(bv_ro2);
+                    assert(eq);
+                    }
+
+                    { // copyctor
+                    bvect bv_ro2(bv_ro);
+                    assert(bv_ro2.is_ro());
+                    eq = bv.equal(bv_ro2);
+                    assert(eq);
+                    }
+                    { // assignment tests
+                    bvect bv_ro2 { 126 };
+                    bv_ro2 = bv_ro;
+                    assert(bv_ro2.is_ro());
+                    eq = bv.equal(bv_ro2);
+                    assert(eq);
+                    }
+
+                    { // move ctor/assignment
+                    bvect bv_ro2 = std::move(bv_ro);
+                    assert(bv_ro2.is_ro());
+                    eq = bv.equal(bv_ro2);
+                    assert(eq);
+                    bvect bv_ro3;
+                    bv_ro3 = std::move(bv_ro2);
+                    assert(bv_ro3.is_ro());
+                    eq = bv.equal(bv_ro3);
+                    assert(eq);
+                    }
+
+                    bv.optimize();
+                } // for pass
+            }
+        } // for i
+    }
+
+    {
+        bvect bv { 0 };
+        {
+            for (bvect::size_type i = 0; i < 65535; i+=3)
+                bv.set(i);
+            bv.set(bm::id_max/2);
+            bv.optimize();
+
+            bvect bv_ro(bv, bm::BM_READONLY);
+            assert(!bv.is_ro());
+            assert(bv_ro.is_ro());
+            eq = bv.equal(bv_ro);
+            assert(eq);
+
+            bvect bv_ro2(bv_ro);
+            assert(bv_ro2.is_ro());
+            eq = bv_ro.equal(bv_ro2);
+            assert(eq);
+            eq = bv.equal(bv_ro2);
+            assert(eq);
+        }
+    }
+
+    cout << "----------------------------- FreezeTest() ON\n" << endl;
+}
+
+
+static
 void SetTest()
 {
     cout << "------------------------------------ SetTest()" << endl;
@@ -7311,7 +7576,8 @@ void AndOperationsTest()
         bvect bv0;
         load_BV_set_ref(cout, bv0, vect);
         bvect bv1(bv0);
-        
+        bvect bv11(bv0);
+
         {
             bvect bvt;
             SerializationOperation2Test(&bvt,
@@ -7324,7 +7590,8 @@ void AndOperationsTest()
         
         bvect bv_i;
         bv_i.invert();
-        
+        bvect bv_ro_i(bv_i, bm::BM_READONLY);
+
         for (unsigned i = 0; i < 2; ++i)
         {
             bvect::size_type predicted_count = bm::count_and(bv0, bv1);
@@ -7338,7 +7605,7 @@ void AndOperationsTest()
             }
             predicted_count = bm::count_and(bv0, bv_i);
             assert(predicted_count == vect.size());
-            
+
             bv1.bit_and(bv0);
             auto count = bv1.count();
             if (count != predicted_count)
@@ -7348,10 +7615,21 @@ void AndOperationsTest()
                 exit(1);
             }
             compare_BV_set_ref(bv1, vect);
+
             
             bv1.bit_and(bv_i);
             compare_BV_set_ref(bv1, vect);
-            
+
+            {
+                bvect bv_ro0(bv0, bm::BM_READONLY);
+                bm::id_t pcount1 = bm::count_and(bv_ro0, bv_i);
+                assert(pcount1 == predicted_count);
+
+                bv11.bit_and(bv_ro0);
+                bv11.bit_and(bv_ro_i);
+                compare_BV_set_ref(bv11, vect);
+            }
+
             {
                 bvect bv_i_c;
                 bv_i_c.invert();
@@ -19513,6 +19791,12 @@ int main(int argc, char *argv[])
 
         SetTest();
         CheckAllocLeaks(false);
+
+         ArenaTest();
+         CheckAllocLeaks(false);
+
+         FreezeTest();
+         CheckAllocLeaks(false);
 
         ExportTest();
         CheckAllocLeaks(false);

@@ -147,6 +147,17 @@ enum strategy
     BM_GAP = 1  //!< GAP compression is ON.
 };
 
+/*!
+   @brief copy strategy
+   @ingroup bvector
+*/
+enum finalization
+{
+    BM_UNDEFINED = 0,
+    BM_READONLY = 1,   //!<  immutable (read-only object)
+    BM_READWRITE = 2,  //!<  mutable (read-write object)
+};
+
 
 /**
     Codes of set operations

@@ -980,6 +980,7 @@ size_t aggregator<BV>::add(const bvector_type* bv, unsigned agr_group)
 template<typename BV>
 void aggregator<BV>::combine_or(bvector_type& bv_target)
 {
+    BM_ASSERT(!bv_target.is_ro()); // immutable vector used as a target
     combine_or(bv_target, ag_.arg_bv0.data(), ag_.arg_bv0.size());
 }
 
@@ -988,6 +989,7 @@ void aggregator<BV>::combine_or(bvector_type& bv_target)
 template<typename BV>
 void aggregator<BV>::combine_and(bvector_type& bv_target)
 {
+    BM_ASSERT(!bv_target.is_ro()); // immutable vector used as a target
     //combine_and(bv_target, ag_.arg_bv0.data(), ag_.arg_bv0.size());
     // implemented ad AND-SUB (with an empty MINUS set)
     combine_and_sub(bv_target,
@@ -1001,6 +1003,7 @@ void aggregator<BV>::combine_and(bvector_type& bv_target)
 template<typename BV>
 bool aggregator<BV>::combine_and_sub(bvector_type& bv_target)
 {
+    BM_ASSERT(!bv_target.is_ro()); // immutable vector used as a target
     return combine_and_sub(bv_target,
                     ag_.arg_bv0.data(), ag_.arg_bv0.size(),
                     ag_.arg_bv1.data(), ag_.arg_bv1.size(),
@@ -1012,6 +1015,7 @@ bool aggregator<BV>::combine_and_sub(bvector_type& bv_target)
 template<typename BV>
 bool aggregator<BV>::combine_and_sub(bvector_type& bv_target, bool any)
 {
+    BM_ASSERT(!bv_target.is_ro()); // immutable vector used as a target
     return combine_and_sub(bv_target,
                     ag_.arg_bv0.data(), ag_.arg_bv0.size(),
                     ag_.arg_bv1.data(), ag_.arg_bv1.size(),
@@ -1033,6 +1037,7 @@ bool aggregator<BV>::find_first_and_sub(size_type& idx)
 template<typename BV>
 void aggregator<BV>::combine_shift_right_and(bvector_type& bv_target)
 {
+    BM_ASSERT(!bv_target.is_ro()); // immutable vector used as a target
     count_ = 0;
     ar_->reset_all_blocks();
     combine_shift_right_and(bv_target, ag_.arg_bv0.data(), ag_.arg_bv0.size(),//arg_group0_size,
@@ -1045,6 +1050,7 @@ template<typename BV>
 void aggregator<BV>::combine_or(bvector_type& bv_target,
                         const bvector_type_const_ptr* bv_src, size_t src_size)
 {
+    BM_ASSERT(!bv_target.is_ro()); // immutable vector used as a target
     if (!src_size)
     {
         bv_target.clear();
@@ -1071,6 +1077,7 @@ void aggregator<BV>::combine_and(bvector_type&                 bv_target,
                                  const bvector_type_const_ptr* bv_src, 
                                  size_t                      src_size)
 {
+    BM_ASSERT(!bv_target.is_ro()); // immutable vector used as a target
     if (src_size == 1)
     {
         const bvector_type* bv = bv_src[0];
@@ -1106,6 +1113,7 @@ bool aggregator<BV>::combine_and_sub(bvector_type& bv_target,
                  const bvector_type_const_ptr* bv_src_sub, size_t src_sub_size,
                  bool any)
 {
+    BM_ASSERT(!bv_target.is_ro()); // immutable vector used as a target
     bool global_found = false;
 
     if (!bv_src_and || !src_and_size)
@@ -2218,14 +2226,16 @@ template<typename BV>
 void aggregator<BV>::combine_or_horizontal(bvector_type& bv_target,
                      const bvector_type_const_ptr* bv_src, size_t src_size)
 {
+    BM_ASSERT(!bv_target.is_ro()); // immutable vector used as a target
     BM_ASSERT(src_size);
+
     if (src_size == 0)
     {
         bv_target.clear();
         return;
     }
     const bvector_type* bv = bv_src[0];
-    bv_target = *bv;
+    bv_target.copy(*bv, bm::BM_READWRITE);
     for (unsigned i = 1; i < src_size; ++i)
     {
         bv = bv_src[i];
@@ -2240,6 +2250,7 @@ template<typename BV>
 void aggregator<BV>::combine_and_horizontal(bvector_type& bv_target,
                      const bvector_type_const_ptr* bv_src, size_t src_size)
 {
+    BM_ASSERT(!bv_target.is_ro()); // immutable vector used as a target
     BM_ASSERT(src_size);
     
     if (src_size == 0)
@@ -2248,7 +2259,7 @@ void aggregator<BV>::combine_and_horizontal(bvector_type& bv_target,
         return;
     }
     const bvector_type* bv = bv_src[0];
-    bv_target = *bv;
+    bv_target.copy(*bv, bm::BM_READWRITE);
     
     for (unsigned i = 1; i < src_size; ++i)
     {
@@ -2268,6 +2279,7 @@ void aggregator<BV>::combine_and_sub_horizontal(bvector_type& bv_target,
                                                 size_t src_sub_size)
 {
     BM_ASSERT(src_and_size);
+    BM_ASSERT(!bv_target.is_ro()); // immutable vector used as a target
 
     combine_and_horizontal(bv_target, bv_src_and, src_and_size);
 

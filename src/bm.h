@@ -906,7 +906,6 @@ public:
     
     /*!
         \brief Copy constructor for range copy [left..right]
-     
         \sa copy_range
     */
     bvector(const bvector<Alloc>& bvect, size_type left, size_type right)
@@ -921,10 +920,27 @@ public:
         copy_range_no_check(bvect, left, right);
     }
 
+    /*!
+        \brief Copy-constructor for mutable/immutable initialization
+    */
+    bvector(const bvector<Alloc>& bvect, bm::finalization is_final)
+    : blockman_(bvect.blockman_.glevel_len_, bvect.blockman_.max_bits_, bvect.blockman_.alloc_),
+      new_blocks_strat_(bvect.new_blocks_strat_),
+      size_(bvect.size_)
+    {
+        if (!bvect.blockman_.is_init())
+            return;
+        if (is_final == bm::BM_READONLY)
+            blockman_.copy_to_arena(bvect.blockman_);
+        else
+            blockman_.copy(bvect.blockman_);
+    }
+
     
     ~bvector() BMNOEXCEPT {}
     /*!
-        \brief Explicit post-construction initialization
+        \brief Explicit post-construction initialization.
+        Must be caled to make sure safe use of *_no_check() methods
     */
     void init();
 
@@ -933,12 +949,7 @@ public:
     */
     bvector& operator=(const bvector<Alloc>& bvect)
     {
-        if (this != &bvect)
-        {
-            blockman_.deinit_tree();
-            blockman_.copy(bvect.blockman_);
-            resize(bvect.size());
-        }
+        this->copy(bvect, bm::BM_UNDEFINED);
         return *this;
     }
 
@@ -965,9 +976,7 @@ public:
         std::initializer_list<size_type>::const_iterator it_start = il.begin();
         std::initializer_list<size_type>::const_iterator it_end = il.end();
         for (; it_start < it_end; ++it_start)
-        {
             this->set_bit_no_check(*it_start);
-        }
     }
     
     /*! 
@@ -979,6 +988,16 @@ public:
         return *this;
     }
 #endif
+
+    /*!
+        \brief Copy bvector from the argument bvector
+        \param bvect - bit-vector to copy from
+        \param is_final - BM_READONLY - copies as immutable, BM_READWRITE - copies as mutable
+            even if the argument bvect is read-only vector,
+            BM_UNDEFINED - follow the argument type as is
+    */
+    void copy(const bvector<Alloc>& bvect, bm::finalization is_final);
+
     /*!
         \brief Move bvector content from another bvector
     */
@@ -1045,6 +1064,22 @@ public:
     /// @return pointer to the current pool or NULL
     allocator_pool_type* get_allocator_pool() BMNOEXCEPT
                         { return blockman_.get_allocator().get_pool(); }
+
+    // --------------------------------------------------------------------
+    /*! @name Read-only / immutable vector methods  */
+    //@{
+
+    /// Turn current vector to read-only (immutable vector).
+    /// After calling this method any modification (non-const methods) will cause undefined behavior
+    /// (likely crash or assert)
+    ///
+    /// \sa is_ro
+    void freeze();
+
+    /// Returns true if vector is read-only
+    bool is_ro() const BMNOEXCEPT { return blockman_.arena_; }
+
+    //@}
 
     // --------------------------------------------------------------------
     /*! @name Bit access/modification methods  */
@@ -1766,6 +1801,7 @@ public:
     */
     bm::bvector<Alloc>& bit_or(const  bm::bvector<Alloc>& bv)
     {
+        BM_ASSERT(!is_ro());
         combine_operation_or(bv);
         return *this;
     }
@@ -1778,6 +1814,7 @@ public:
     bm::bvector<Alloc>& bit_and(const bm::bvector<Alloc>& bv,
                                 optmode opt_mode = opt_none)
     {
+        BM_ASSERT(!is_ro());
         combine_operation_and(bv, opt_mode);
         return *this;
     }
@@ -1788,6 +1825,7 @@ public:
     */
     bm::bvector<Alloc>& bit_xor(const bm::bvector<Alloc>& bv)
     {
+        BM_ASSERT(!is_ro());
         combine_operation_xor(bv);
         return *this;
     }
@@ -1798,6 +1836,7 @@ public:
     */
     bm::bvector<Alloc>& bit_sub(const bm::bvector<Alloc>& bv)
     {
+        BM_ASSERT(!is_ro());
         combine_operation_sub(bv);
         return *this;
     }
@@ -1876,11 +1915,6 @@ public:
     */
     void calc_stat(struct bm::bvector<Alloc>::statistics* st) const BMNOEXCEPT;
 
-    /*!
-       @brief Calculates bitvector arena statistics.
-       @internal
-    */
-    void calc_arena_stat(bm::bv_arena_statistics* st) const BMNOEXCEPT;
 
     /*!
        \brief Sets new blocks allocation strategy.
@@ -2157,12 +2191,7 @@ protected:
                              size_type left,
                              size_type right);
 
-    /// calculate arena statistics, calculate and copy all blocks there
-    ///
-    void copy_to_arena(typename blocks_manager_type::arena* ar);
-
 private:
-
     /**
        \brief Set range without validity/bounds checking
     */
@@ -2261,8 +2290,46 @@ inline bvector<Alloc> operator- (const bvector<Alloc>& bv1,
 template<typename Alloc>
 void bvector<Alloc>::init()
 {
+    BM_ASSERT(!is_ro());
     if (!blockman_.is_init())
         blockman_.init_tree();
+}
+
+// -----------------------------------------------------------------------
+
+template<typename Alloc>
+void bvector<Alloc>::copy(const bvector<Alloc>& bvect, bm::finalization is_final)
+{
+    if (this != &bvect)
+    {
+        blockman_.deinit_tree();
+        switch (is_final)
+        {
+        case bm::BM_UNDEFINED:
+            if (bvect.is_ro())
+            {
+                blockman_.copy_to_arena(bvect.blockman_);
+                size_ = bvect.size();
+            }
+            else
+            {
+                blockman_.copy(bvect.blockman_);
+                resize(bvect.size());
+            }
+            break;
+        case bm::BM_READONLY:
+            blockman_.copy_to_arena(bvect.blockman_);
+            size_ = bvect.size();
+            break;
+        case bm::BM_READWRITE:
+            blockman_.copy(bvect.blockman_);
+            resize(bvect.size());
+            break;
+        default:
+            BM_ASSERT(0);
+            break;
+        } // switch
+    }
 }
 
 // -----------------------------------------------------------------------
@@ -2283,6 +2350,7 @@ void bvector<Alloc>::move_from(bvector<Alloc>& bvect) BMNOEXCEPT
 template<class Alloc>
 void bvector<Alloc>::keep_range(size_type left, size_type right)
 {
+    BM_ASSERT(!is_ro());
     if (!blockman_.is_init())
         return; // nothing to do
 
@@ -2291,6 +2359,7 @@ void bvector<Alloc>::keep_range(size_type left, size_type right)
 
     keep_range_no_check(left, right);
 }
+
 // -----------------------------------------------------------------------
 
 template<typename Alloc> 
@@ -2298,16 +2367,13 @@ bvector<Alloc>& bvector<Alloc>::set_range(size_type left,
                                           size_type right,
                                           bool     value)
 {
-    if (!blockman_.is_init())
-    {
-        if (!value)
-            return *this; // nothing to do
-    }
+    BM_ASSERT(!is_ro());
+
+    if (!blockman_.is_init() && !value)
+        return *this; // nothing to do
 
     if (right < left)
-    {
         return set_range(right, left, value);
-    }
 
     BM_ASSERT_THROW(right < bm::id_max, BM_ERR_RANGE);
     if (right >= size_) // this vect shorter than the arg.
@@ -2394,6 +2460,8 @@ bool bvector<Alloc>::any() const BMNOEXCEPT
 template<typename Alloc> 
 void bvector<Alloc>::resize(size_type new_size)
 {
+    BM_ASSERT(!is_ro());
+
     if (size_ == new_size) return; // nothing to do
     if (size_ < new_size) // size grows 
     {
@@ -2415,6 +2483,8 @@ void bvector<Alloc>::resize(size_type new_size)
 template<typename Alloc>
 void bvector<Alloc>::sync_size()
 {
+    BM_ASSERT(!is_ro());
+
     if (size_ >= bm::id_max)
         return;
     bvector<Alloc>::size_type last;
@@ -3469,6 +3539,8 @@ bvector<Alloc>::count_range_no_check(size_type left,
 template<typename Alloc>
 bvector<Alloc>& bvector<Alloc>::invert()
 {
+    BM_ASSERT(!is_ro());
+
     if (!size_)
         return *this; // cannot invert a set of power 0
 
@@ -3554,6 +3626,8 @@ void bvector<Alloc>::optimize(bm::word_t* temp_block,
                               optmode     opt_mode,
                               statistics* stat)
 {
+    BM_ASSERT(!is_ro());
+
     if (!blockman_.is_init())
     {
         if (stat)
@@ -3590,6 +3664,7 @@ void bvector<Alloc>::optimize_range(
               bm::word_t* temp_block,
               optmode opt_mode)
 {
+    BM_ASSERT(!is_ro());
     BM_ASSERT(left <= right);
     BM_ASSERT(temp_block);
 
@@ -3640,6 +3715,8 @@ void bvector<Alloc>::optimize_gap_size()
 template<typename Alloc> 
 void bvector<Alloc>::set_gap_levels(const gap_word_t* glevel_len)
 {
+    BM_ASSERT(!is_ro());
+
     if (blockman_.is_init())
     {
         word_t*** blk_root = blockman_.top_blocks_root();
@@ -3933,9 +4010,12 @@ void bvector<Alloc>::calc_stat(
                     if (BM_IS_GAP(blk))
                     {
                         const bm::gap_word_t* gap_blk = BMGAP_PTR(blk);
-                        unsigned cap = bm::gap_capacity(gap_blk, blockman_.glen());
+                        unsigned cap;
                         unsigned len = gap_length(gap_blk);
-                        st->add_gap_block(cap, len);
+                        cap = is_ro() ? len
+                            : bm::gap_capacity(gap_blk, blockman_.glen());
+                        unsigned level = bm::gap_level(gap_blk);
+                        st->add_gap_block(cap, len, level);
                     }
                     else // bit block
                         st->add_bit_block();
@@ -3956,75 +4036,9 @@ void bvector<Alloc>::calc_stat(
     st->memory_used += unsigned(sizeof(*this) - sizeof(blockman_));
     blocks_mem += st->ptr_sub_blocks * (sizeof(void*) * bm::set_sub_array_size);
     st->memory_used += blocks_mem;
+    if (is_ro())
+        st->memory_used += sizeof(typename blocks_manager_type::arena);
     st->bv_count = 1;
-
-}
-// -----------------------------------------------------------------------
-
-template<typename Alloc>
-void bvector<Alloc>::calc_arena_stat(bm::bv_arena_statistics* st) const BMNOEXCEPT
-{
-    BM_ASSERT(st);
-    st->reset();
-    bm::word_t*** blk_root = blockman_.top_blocks_root();
-
-    if (!blk_root)
-        return;
-    unsigned top_size = blockman_.top_block_size();
-    for (unsigned i = 0; i < top_size; ++i)
-    {
-        const bm::word_t* const* blk_blk = blk_root[i];
-        if (!blk_blk)
-        {
-            ++i;
-            bool found = bm::find_not_null_ptr(blk_root, i, top_size, &i);
-            if (!found)
-                break;
-            blk_blk = blk_root[i];
-            BM_ASSERT(blk_blk);
-            if (!blk_blk)
-                break;
-        }
-        if ((bm::word_t*)blk_blk == FULL_BLOCK_FAKE_ADDR)
-            continue;
-        st->ptr_sub_blocks_sz += bm::set_sub_array_size;
-        for (unsigned j = 0; j < bm::set_sub_array_size; ++j)
-        {
-            const bm::word_t* blk = blk_blk[j];
-            if (IS_VALID_ADDR(blk))
-            {
-                if (BM_IS_GAP(blk))
-                {
-                    const bm::gap_word_t* gap_blk = BMGAP_PTR(blk);
-                    unsigned len = bm::gap_length(gap_blk);
-                    BM_ASSERT(gap_blk[len-1] == 65535);
-                    st->gap_blocks_sz += len;
-                }
-                else // bit block
-                    st->bit_blocks_sz += bm::set_block_size;
-            }
-        } // for j
-    } // for i
-
-}
-
-// -----------------------------------------------------------------------
-
-template<typename Alloc>
-void bvector<Alloc>::copy_to_arena(typename blocks_manager_type::arena* ar)
-{
-    bm::word_t*** blk_root = blockman_.top_blocks_root();
-    if (!blk_root)
-        return;
-
-    bm::bv_arena_statistics arena_st;
-    calc_arena_stat(&arena_st);
-    blockman_.alloc_arena(ar, arena_st, blockman_.get_allocator());
-
-    bm::bv_arena_statistics st;
-    st.reset();
-
-    blockman_.copy_to_arena(ar, arena_st, st);
 
 }
 
@@ -4064,6 +4078,8 @@ template<class Alloc>
 void bvector<Alloc>::set(const size_type* ids,
                         size_type ids_size, bm::sort_order so)
 {
+    BM_ASSERT(!is_ro());
+
     if (!ids || !ids_size)
         return; // nothing to do
     if (!blockman_.is_init())
@@ -4079,6 +4095,8 @@ template<class Alloc>
 void bvector<Alloc>::keep(const size_type* ids, size_type ids_size,
                           bm::sort_order so)
 {
+    BM_ASSERT(!is_ro());
+
     if (!ids || !ids_size || !blockman_.is_init())
     {
         clear();
@@ -4107,6 +4125,8 @@ template<class Alloc>
 void bvector<Alloc>::clear(const size_type* ids,
                            size_type ids_size, bm::sort_order so)
 {
+    BM_ASSERT(!is_ro());
+
     if (!ids || !ids_size || !blockman_.is_init())
     {
         return;
@@ -4132,6 +4152,8 @@ void bvector<Alloc>::clear(const size_type* ids,
 template<class Alloc>
 bvector<Alloc>& bvector<Alloc>::set()
 {
+    BM_ASSERT(!is_ro());
+
     set_range(0, size_ - 1, true);
     return *this;
 }
@@ -4141,6 +4163,8 @@ bvector<Alloc>& bvector<Alloc>::set()
 template<class Alloc>
 bvector<Alloc>& bvector<Alloc>::set(size_type n, bool val)
 {
+    BM_ASSERT(!is_ro());
+
     set_bit(n, val);
     return *this;
 }
@@ -4164,6 +4188,7 @@ bool bvector<Alloc>::set_bit_conditional(size_type n, bool val, bool condition)
 template<class Alloc>
 bool bvector<Alloc>::set_bit_and(size_type n, bool val)
 {
+    BM_ASSERT(!is_ro());
     BM_ASSERT(n < size_);
     BM_ASSERT_THROW(n < size_, BM_ERR_RANGE);
     
@@ -4177,6 +4202,7 @@ bool bvector<Alloc>::set_bit_and(size_type n, bool val)
 template<class Alloc>
 bool bvector<Alloc>::set_bit(size_type n, bool val)
 {
+    BM_ASSERT(!is_ro());
     BM_ASSERT_THROW(n < bm::id_max, BM_ERR_RANGE);
 
     if (!blockman_.is_init())
@@ -4195,6 +4221,8 @@ template<class Alloc>
 void bvector<Alloc>::import(const size_type* ids, size_type size_in,
                             bm::sort_order  sorted_idx)
 {
+    BM_ASSERT(!is_ro());
+
     size_type n, start(0), stop(size_in);
     block_idx_type nblock;
 
@@ -4334,6 +4362,7 @@ void bvector<Alloc>::import_block(const size_type* ids,
 template<class Alloc> 
 bool bvector<Alloc>::set_bit_no_check(size_type n, bool val)
 {
+    BM_ASSERT(!is_ro());
     BM_ASSERT_THROW(n < bm::id_max, BM_ERR_RANGE);
 
     // calculate logical block number
@@ -4382,6 +4411,7 @@ bool bvector<Alloc>::set_bit_no_check(size_type n, bool val)
 template<class Alloc>
 void bvector<Alloc>::set_bit_no_check(size_type n)
 {
+    BM_ASSERT(!is_ro());
     BM_ASSERT_THROW(n < bm::id_max, BM_ERR_RANGE);
 
     const bool val = true; // set bit
@@ -4415,6 +4445,7 @@ void bvector<Alloc>::set_bit_no_check(size_type n)
 template<class Alloc>
 void bvector<Alloc>::clear_bit_no_check(size_type n)
 {
+    BM_ASSERT(!is_ro());
     BM_ASSERT_THROW(n < bm::id_max, BM_ERR_RANGE);
 
     const bool val = false; // clear bit
@@ -4485,6 +4516,7 @@ void bvector<Alloc>::gap_block_set_no_ret(bm::gap_word_t* gap_blk,
 template<class Alloc>
 bool bvector<Alloc>::inc(size_type n)
 {
+    BM_ASSERT(!is_ro());
     // calculate logical block number
     block_idx_type nblock = (n >>  bm::set_block_shift);
     bm::word_t* blk =
@@ -4572,6 +4604,7 @@ bool bvector<Alloc>::set_bit_conditional_impl(size_type n,
 template<class Alloc> 
 bool bvector<Alloc>::and_bit_no_check(size_type n, bool val)
 {
+    BM_ASSERT(!is_ro());
     // calculate logical block number
     block_idx_type nblock = (n >>  bm::set_block_shift);
 
@@ -5143,6 +5176,7 @@ template<class Alloc>
 typename bvector<Alloc>::size_type
 bvector<Alloc>::check_or_next_extract(size_type prev)
 {
+    BM_ASSERT(!is_ro());
     if (!blockman_.is_init())
         return 0;
     // TODO: optimization
@@ -5157,6 +5191,7 @@ bvector<Alloc>::check_or_next_extract(size_type prev)
 template<class Alloc>
 bool bvector<Alloc>::shift_right()
 {
+    BM_ASSERT(!is_ro());
     return insert(0, false);
 }
 
@@ -5165,6 +5200,7 @@ bool bvector<Alloc>::shift_right()
 template<class Alloc>
 bool bvector<Alloc>::shift_left()
 {
+    BM_ASSERT(!is_ro());
     bool b = this->test(0);
     this->erase(0);
     return b;
@@ -5175,6 +5211,7 @@ bool bvector<Alloc>::shift_left()
 template<class Alloc>
 bool bvector<Alloc>::insert(size_type n, bool value)
 {
+    BM_ASSERT(!is_ro());
     BM_ASSERT_THROW(n < bm::id_max, BM_ERR_RANGE);
 
     if (size_ < bm::id_max)
@@ -5377,6 +5414,7 @@ bool bvector<Alloc>::insert(size_type n, bool value)
 template<class Alloc>
 void bvector<Alloc>::erase(size_type n)
 {
+    BM_ASSERT(!is_ro());
     BM_ASSERT_THROW(n < bm::id_max, BM_ERR_RANGE);
 
     if (!blockman_.is_init())
@@ -5546,8 +5584,16 @@ bool bvector<Alloc>::test_first_block_bit(block_idx_type nb) const BMNOEXCEPT
 template<class Alloc>
 void bvector<Alloc>::merge(bm::bvector<Alloc>& bv)
 {
+    BM_ASSERT(!is_ro());
+
     if (!bv.blockman_.is_init()) // nothing to OR
         return;
+
+    if (bv.is_ro()) // argument is immutable, just use OR
+    {
+        this->bit_or(bv);
+        return;
+    }
 
     unsigned top_blocks = blockman_.top_block_size();
     if (size_ < bv.size_) // this vect shorter than the arg.
@@ -5630,6 +5676,8 @@ bvector<Alloc>::bit_or(const bm::bvector<Alloc>& bv1,
                        const bm::bvector<Alloc>& bv2,
                        typename bm::bvector<Alloc>::optmode opt_mode)
 {
+    BM_ASSERT(!is_ro());
+
     if (blockman_.is_init())
         blockman_.deinit_tree();
 
@@ -5727,6 +5775,8 @@ bvector<Alloc>::bit_xor(const bm::bvector<Alloc>& bv1,
                         const bm::bvector<Alloc>& bv2,
                         typename bm::bvector<Alloc>::optmode opt_mode)
 {
+    BM_ASSERT(!is_ro());
+
     if (blockman_.is_init())
         blockman_.deinit_tree();
 
@@ -5838,6 +5888,8 @@ bvector<Alloc>::bit_and(const bm::bvector<Alloc>& bv1,
                         const bm::bvector<Alloc>& bv2,
                         typename bm::bvector<Alloc>::optmode opt_mode)
 {
+    BM_ASSERT(!is_ro());
+
     if (&bv1 == &bv2)
     {
         *this = bv1;
@@ -5931,6 +5983,8 @@ bvector<Alloc>::bit_or_and(const bm::bvector<Alloc>& bv1,
                            const bm::bvector<Alloc>& bv2,
                            typename bm::bvector<Alloc>::optmode opt_mode)
 {
+    BM_ASSERT(!is_ro());
+
     if (&bv1 == &bv2)
     {
         this->bit_or(bv1);
@@ -6046,6 +6100,8 @@ bvector<Alloc>::bit_sub(const bm::bvector<Alloc>& bv1,
                         const bm::bvector<Alloc>& bv2,
                         typename bm::bvector<Alloc>::optmode opt_mode)
 {
+    BM_ASSERT(!is_ro());
+
     if (blockman_.is_init())
         blockman_.deinit_tree();
 
@@ -7763,6 +7819,15 @@ void bvector<Alloc>::copy_range_no_check(const bvector<Alloc>& bvect,
             clear_range_no_check(right+1, last);
     }
     //keep_range_no_check(left, right); // clear the flanks
+}
+
+//---------------------------------------------------------------------
+
+template<class Alloc>
+void bvector<Alloc>::freeze()
+{
+    bvector<Alloc> bv_ro(*this, BM_READONLY);
+    swap(bv_ro);
 }
 
 //---------------------------------------------------------------------

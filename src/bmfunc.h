@@ -74,23 +74,18 @@ struct bv_statistics
     }
 
     /// count gap block
-    void add_gap_block(unsigned capacity, unsigned length) BMNOEXCEPT
+    void add_gap_block(unsigned capacity, unsigned length, unsigned level) BMNOEXCEPT
     {
+        BM_ASSERT(level < bm::gap_levels);
+
         ++gap_blocks;
         size_t mem_used = (capacity * sizeof(gap_word_t));
         memory_used += mem_used;
         max_serialize_mem += (unsigned)(length * sizeof(gap_word_t));
         BM_ASSERT(length <= capacity);
         gap_cap_overhead += (capacity - length) * sizeof(gap_word_t);
-        for (unsigned i = 0; i < bm::gap_levels; ++i)
-        {
-            if (capacity == gap_levels[i])
-            {
-                gaps_by_level[i]++;
-                return;
-            }
-        }
-        BM_ASSERT(0);
+        if (level < bm::gap_levels)
+            gaps_by_level[level]++;
     }
     
     /// Reset statisctics
@@ -99,7 +94,7 @@ struct bv_statistics
         bit_blocks = gap_blocks = ptr_sub_blocks = bv_count = 0;
         max_serialize_mem = memory_used = gap_cap_overhead = 0;
         for (unsigned i = 0; i < bm::gap_levels; ++i)
-            gaps_by_level[i] = 0ull;
+            gaps_by_level[i] = 0;
     }
     
     /// Sum data from another sttructure
@@ -125,11 +120,12 @@ struct bv_arena_statistics
     size_t bit_blocks_sz;      ///< Total size of bit blocks
     size_t gap_blocks_sz;      ///< Total size of gap blocks
     size_t ptr_sub_blocks_sz;  ///< Total size of sub-blocks ptrs
+    unsigned top_block_size;   ///< size of top descriptor
 
     /// Reset statisctics
     void reset() BMNOEXCEPT
     {
-        bit_blocks_sz = gap_blocks_sz = ptr_sub_blocks_sz = 0;
+        bit_blocks_sz = gap_blocks_sz = ptr_sub_blocks_sz = top_block_size = 0;
     }
 };
 
@@ -1391,7 +1387,8 @@ template<bool T> typename all_set<T>::all_set_block all_set<T>::_block;
     @internal
 */
 template<typename N>
-bool find_not_null_ptr(bm::word_t*** arr, N start, N size, N* pos) BMNOEXCEPT
+bool find_not_null_ptr(const bm::word_t* const * const* arr,
+                       N start, N size, N* pos) BMNOEXCEPT
 {
     BM_ASSERT(pos);
 //    BM_ASSERT(start < size);
