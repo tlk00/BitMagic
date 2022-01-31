@@ -747,10 +747,11 @@ int BM_bvector_optimize(BM_BVHANDLE            h,
                         int                    opt_mode,
                         struct BM_bvector_statistics* pstat)
 {
+    TBM_bvector::statistics stat;
+    TBM_bvector::optmode omode;
     if (!h)
         return BM_ERR_BADARG;
-    TBM_bvector::optmode omode = TBM_bvector::opt_compress;
-    TBM_bvector::statistics stat;
+    omode = TBM_bvector::opt_compress;
     
     switch (opt_mode)
     {
@@ -776,8 +777,7 @@ int BM_bvector_optimize(BM_BVHANDLE            h,
     }
     BM_CATCH_ALL
     ETRY;
-    return BM_OK;
-    
+    return BM_OK;    
 }
 
 // -----------------------------------------------------------------
