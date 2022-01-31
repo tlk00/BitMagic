@@ -99,6 +99,7 @@ int BM_init(void*)
         case BM_SIMD_AVX2:
             if (!(cpu_simd & SIMD_AVX2))
                 return BM_ERR_CPU;
+            break;
         default:
             return BM_ERR_CPU;  // ?!
         }
