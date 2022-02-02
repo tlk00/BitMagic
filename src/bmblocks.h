@@ -2427,6 +2427,29 @@ public:
         } // for i
     }
 
+    /**
+        Arena allocation memory guard
+        @internal
+     */
+    struct arena_guard
+    {
+        arena_guard(arena* ar, blocks_manager& bman) noexcept
+            : ar_(ar), bman_(bman)
+        {}
+        ~arena_guard() noexcept
+        {
+            if (ar_)
+            {
+                blocks_manager::free_arena(ar_, bman_.alloc_);
+                ::free(ar_);
+            }
+        }
+        void release() noexcept { ar_ = 0; }
+
+        arena* ar_;
+        blocks_manager& bman_;
+    };
+
     /// calculate arena statistics, calculate and copy all blocks there
     ///
     void copy_to_arena(const blocks_manager& bman)
@@ -2448,11 +2471,13 @@ public:
             BM_THROW(BM_ERR_BADALLOC);
         #endif
         }
-        arena_ = ar;
         ar->reset();
+        arena_guard aguard(ar, *this); // alloc_arena can throw an exception..
 
         alloc_arena(ar, src_arena_st, get_allocator());
         bman.copy_to_arena(ar);
+        arena_ = ar;
+        aguard.release(); // ownership of arena is transfered
 
         // reset the top tree link to work with the arena
         top_blocks_ = ar->top_blocks_;
@@ -2484,9 +2509,10 @@ public:
         else
             ar->blk_blks_ = 0;
 
+        size_t alloc_factor = st.bit_blocks_sz / bm::set_block_size;
+        BM_ASSERT(alloc_factor <= unsigned(~0u) );
         if (st.bit_blocks_sz)
-            ar->blocks_ = alloc.alloc_bit_block(
-                            size_type(st.bit_blocks_sz / bm::set_block_size));
+            ar->blocks_ = alloc.alloc_bit_block(unsigned(alloc_factor));
         else
             ar->blocks_ = 0;
 

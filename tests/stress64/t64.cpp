@@ -250,25 +250,27 @@ static size_t nf_;
         ++na_;
         assert(n);
         bm::word_t* p =
-            (bm::word_t*) ::malloc((n+1) * sizeof(bm::word_t));
+            (bm::word_t*) ::malloc((n+2) * sizeof(bm::word_t));
         if (!p)
         {
             std::cerr << "ERROR Failed allocation!" << endl;
-            exit(1);
+            assert(0); exit(1);
         }
-        *p = (bm::word_t)n;
-        return ++p;
+        size_t* ptr = (size_t*)p;
+        *ptr = n;
+        p+=2;
+        return p;
     }
 
     static void deallocate(bm::word_t* p, size_t n)
     {
         ++nf_;
-        --p;
-        if (*p != n)
+        p-=2;
+        size_t* ptr = (size_t*)p;
+        if (*ptr != n)
         {
-            printf("Block memory deallocation ERROR! n = %i (expected %i)\n", (int)n, (int)*p);
-            assert(0);
-            exit(1);
+            cerr << "Block memory deallocation ERROR! n = " << n << ", block-control = " << *ptr << endl;
+            assert(0); exit(1);
         }
         ::free(p);
     }
@@ -7133,8 +7135,15 @@ bvect::size_type SerializationOperation(bvect*     bv_target,
     st2_op = new bvect::statistics;
 
     BM_DECLARE_TEMP_BLOCK(tb)
-    bv1.optimize(tb, bvect::opt_compress, st1_op);
-    bv2.optimize(tb, bvect::opt_compress, st2_op);
+    if (!bv1.is_ro())
+        bv1.optimize(tb, bvect::opt_compress, st1_op);
+    else
+        bv1.calc_stat(st1_op);
+
+    if (!bv2.is_ro())
+        bv2.optimize(tb, bvect::opt_compress, st2_op);
+    else
+        bv2.calc_stat(st2_op);
 
 
    struct bvect::statistics st1, st2;
@@ -7270,15 +7279,15 @@ bvect::size_type SerializationOperation(bvect*     bv_target,
 
         bool agg_check = false;
 
-        bvect bvt(bv1);
+        bvect bvt(bv1, bm::BM_READWRITE);
         switch(op)
         {
         case bm::set_OR:
             {
-                bvect bvc(bv1);
+                bvect bvc(bv1, bm::BM_READWRITE);
                 bvc |= bv2;
-                bvect bv_merge1(bv1);
-                bvect bv_merge2(bv2);
+                bvect bv_merge1(bv1, bm::BM_READWRITE);
+                bvect bv_merge2(bv2, bm::BM_READWRITE);
                 bv_merge1.merge(bv_merge2);
                 
                 if (bv_merge1 != bvc)
@@ -7314,7 +7323,7 @@ bvect::size_type SerializationOperation(bvect*     bv_target,
             bvt ^= bv2;
             // 2-way
             {
-                bvect bvc(bv1);
+                bvect bvc(bv1, bm::BM_READWRITE);
                 bvc ^= bv2;
                 
                 bvect bvt1;
@@ -7362,7 +7371,7 @@ bvect::size_type SerializationOperation(bvect*     bv_target,
             
             // 2-way
             {
-                bvect bvc(bv1);
+                bvect bvc(bv1, bm::BM_READWRITE);
                 bvc &= bv2;
                 
                 bvect bvt1;
@@ -7400,8 +7409,8 @@ bvect::size_type SerializationOperation(bvect*     bv_target,
             agg_check = true;
             // 2-way
             {
-                bvect bvc1(bv1);
-                bvect bvc2(bv2);
+                bvect bvc1(bv1, bm::BM_READWRITE);
+                bvect bvc2(bv2, bm::BM_READWRITE);
                 bvc1 -= bv2;
                 bvc2 -= bv1;
                 
@@ -7513,6 +7522,11 @@ void SerializationOperation2Test(bvect*        bv_target,
 
     bvect::size_type scount1;
 
+    bvect bv_ro1(bv1, bm::BM_READONLY);
+    bvect bv_ro2(bv2, bm::BM_READONLY);
+    bvect bv_target2(*bv_target);
+
+
     scount1 = SerializationOperation(0,
                                       bv1,
                                       bv2,
@@ -7555,6 +7569,15 @@ void SerializationOperation2Test(bvect*        bv_target,
         assert(0);
         exit(1);
     }
+    auto scount3 = SerializationOperation(&bv_target2,
+                                          bv_ro1,
+                                          bv_ro2,
+                                          op_combine);
+    scount3 = bv_target2.count();
+    assert(scount3 == scount2);
+    bool eq = bv_target->equal(bv_target2);
+    assert(eq);
+
     cout << "OK" << endl;
 }
 

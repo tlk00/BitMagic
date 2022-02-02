@@ -7826,6 +7826,8 @@ void bvector<Alloc>::copy_range_no_check(const bvector<Alloc>& bvect,
 template<class Alloc>
 void bvector<Alloc>::freeze()
 {
+    if (is_ro())
+        return; // nothing to do read-only vector already
     bvector<Alloc> bv_ro(*this, BM_READONLY);
     swap(bv_ro);
 }
