@@ -23421,6 +23421,37 @@ static void TestSignedSparseVector()
         assert(sv.get(3) == INT_MIN+1);
     }}
 
+    // import back
+    {{
+        std::vector<int> vect {0, 1, -1, INT_MIN, INT_MAX, 0 };
+        bm::sparse_vector<int, bvect> sv;
+        sv.import_back(vect.data(), vect.size(), false);
+
+        assert(sv.size() == vect.size());
+        for (size_t i = 0; i < vect.size(); ++i)
+        {
+            auto vc = vect.at(i);
+            auto v = sv.at(i);
+            assert(v == vc);
+        } // for
+
+        sv.resize(0);
+        vect.resize(0);
+        for (size_t i = 0; i < 65536*256; ++i)
+            vect.push_back(int(-i));
+
+        sv.import_back(vect.data(), vect.size(), false);
+
+        assert(sv.size() == vect.size());
+        for (size_t i = 0; i < vect.size(); ++i)
+        {
+            auto vc = vect.at(i);
+            auto v = sv.at(i);
+            assert(v == vc);
+        } // for
+
+    }}
+
     {{
         bm::sparse_vector<int, bvect > sv;
         {
@@ -37557,6 +37588,7 @@ int main(int argc, char *argv[])
     {
         if (is_all || is_sv || is_sv0)
         {
+
             TestSparseVector();
              CheckAllocLeaks(false);
 

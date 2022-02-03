@@ -1279,7 +1279,29 @@ void sparse_vector<Val, BV>::import_back(const value_type* arr,
                                          size_type         arr_size,
                                          bool              set_not_null)
 {
-    this->import_back_u((const unsigned_value_type)arr, arr_size, set_not_null);
+    if constexpr (std::is_signed<value_type>::value)
+    {
+        const unsigned tmp_size = 1024;
+        unsigned_value_type arr_tmp[tmp_size];
+        size_type k(0), i(0);
+        while (i < arr_size)
+        {
+            arr_tmp[k++] = this->s2u(arr[i++]);
+            if (k == tmp_size)
+            {
+                import_back_u(arr_tmp, k, set_not_null);
+                k = 0;
+            }
+        } // while
+        if (k)
+        {
+            import_back_u(arr_tmp, k, set_not_null);
+        }
+    }
+    else
+    {
+        this->import_back_u((const unsigned_value_type*)arr, arr_size, set_not_null);
+    }
 }
 
 

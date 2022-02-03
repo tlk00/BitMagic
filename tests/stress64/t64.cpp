@@ -12711,6 +12711,38 @@ static void TestSignedSparseVector()
         } // for pass
     }}
 
+    // import back
+    {{
+        std::vector<int64_t> vect {0, 1, -1, INT_MIN, INT_MAX, 0, INT64_MIN+1, INT64_MIN, INT64_MAX };
+        bm::sparse_vector<int64_t, bvect> sv;
+        sv.import_back(vect.data(), vect.size(), false);
+
+        assert(sv.size() == vect.size());
+        for (size_t i = 0; i < vect.size(); ++i)
+        {
+            auto vc = vect.at(i);
+            auto v = sv.at(i);
+            assert(v == vc);
+        } // for
+
+        sv.resize(0);
+        vect.resize(0);
+
+        for (size_t i = 0; i < 65536*256; ++i)
+            vect.push_back(int(-i));
+
+        sv.import_back(vect.data(), vect.size(), false);
+
+        assert(sv.size() == vect.size());
+        for (size_t i = 0; i < vect.size(); ++i)
+        {
+            auto vc = vect.at(i);
+            auto v = sv.at(i);
+            assert(v == vc);
+        } // for
+
+    }}
+
     {{
         bm::sparse_vector<int64_t, bvect > sv;
         {
