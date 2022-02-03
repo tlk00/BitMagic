@@ -32,6 +32,7 @@ Bit-vector operations
 ./bvsample24 - bm::rank_range_split(..) algorithm to split bit-vector into equal rank(weight) ranges
 ./bvsample25 - bm::visit_each_bit(..)/bm::visit_each_bit_range(..) bm::for_each_bit(..)/bm::for_each_bit_range(..) 
                algorithms to traverse bit-vector (full or range)
+./bvsample26 - immutable bit-vectors, construction, measuring memory savings, bvector<>::freeze()
 
 
 
