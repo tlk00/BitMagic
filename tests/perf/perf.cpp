@@ -62,7 +62,7 @@ For more information please visit:  http://bitmagic.io
 using namespace std;
 
 const unsigned int BSIZE = 150000000;
-const unsigned int REPEATS = 300;
+const unsigned int REPEATS = 1200;
 
 typedef  bitset<BSIZE>  test_bitset;
 
@@ -315,7 +315,7 @@ void BitCountTest()
 
     //if (!platform_test)
     {
-        bm::chrono_taker<std::ostream> tt(cout, "BitCount. Random bitvector", REPEATS*10);
+        bm::chrono_taker<std::ostream> tt(cout, "bvector<>::count() ", REPEATS*10);
         for (unsigned i = 0; i < REPEATS*10; ++i)
         {
             value+=bv->count();
@@ -340,6 +340,17 @@ void BitCountTest()
     c1 = value = 0;
     stringstream s;
     s << value << c1; // to fool the optimization
+
+    bv->freeze();
+
+    {
+        bm::chrono_taker<std::ostream> tt(cout, "bvector<>::count() (RO)", REPEATS*10);
+        for (unsigned i = 0; i < REPEATS*10; ++i)
+        {
+            value+=bv->count();
+        }
+    }
+
 
     delete bset;
     delete bv;
@@ -972,6 +983,27 @@ void BitCountSparseTest()
         }
     }
 
+    bv->freeze();
+    bv_c->freeze();
+
+    {
+        bm::chrono_taker<std::ostream> tt(cout, "count_to(): (RS-index) (GAP+BITS) bitset (RO) ", rs_max);
+        for (unsigned j = 0; j < rs_max; j++)
+        {
+            for (size_t i = 0; i < sample_vec.size(); ++i)
+            {
+                auto idx = sample_vec[i];
+                auto cnt   = bv->count_to(idx, *bc_arr);
+                auto cnt_c = bv_c->count_to(idx, *bc_arr_c);
+
+                if(cnt != cnt_c)
+                {
+                    std::cerr << "Error in count_to() (RO)!" << std::endl;
+                    assert(0); exit(1);
+                }
+            }
+        }
+    }
 
     delete bv;
     delete bv_c;
@@ -1502,6 +1534,23 @@ void EnumeratorTest()
         } // for REPEATS
 
     }
+
+    bv1.freeze();
+    bv2.freeze();
+    bv3.freeze();
+    bv4.freeze();
+
+    {
+        bm::chrono_taker<std::ostream> tt(cout, "bm::visit_each_bit() (RO)", REPEATS/10);
+        for (i = 0; i < REPEATS/10; ++i)
+        {
+            bm::visit_each_bit(bv1, (void*)&v1, bit_visitor_func);
+            bm::visit_each_bit(bv2, (void*)&v2, bit_visitor_func);
+            bm::visit_each_bit(bv3, (void*)&v3, bit_visitor_func);
+            bm::visit_each_bit(bv4, (void*)&v4, bit_visitor_func);
+        } // for REPEATS
+    }
+
     
     // -----------------------------------------------
 
@@ -1516,36 +1565,12 @@ void EnumeratorTestGAP()
     unsigned i;
 
     SimpleFillSets(bset, *bv, 0, BSIZE, 2500);
-    bv->count();
+    bv->optimize();
 
-    for (unsigned k = 0; k < 2; ++k)
-    {
-
-    {
-    unsigned v = 0;
-    bm::chrono_taker<std::ostream> tt(cout, "Sparse bvector (enumerator)", REPEATS*10*(k+1));
-    for (i = 0; i < REPEATS*10*(k+1); ++i)
-    {    
-        bvect::enumerator en = bv->first();
-        bvect::enumerator bend = bv->end();
-
-        while (en < bend)
-        {
-            v += *en;
-            ++en;
-        }
-    }
-
-    stringstream s;
-    s << v << endl; // attempt to fool optimization
-
-    }
-
-    // -----------------------------------------------
-
+    unsigned k = 1;
     unsigned cnt = 0;
     {
-    bm::chrono_taker<std::ostream> tt(cout, "Sparse bvector (get_next())", REPEATS*10*(k+1));
+    bm::chrono_taker<std::ostream> tt(cout, "bvector<>::get_next() (GAP) ", REPEATS*10*(k+1));
     for (i = 0; i < REPEATS*10*(k+1); ++i)
     {
         if (bv->any())
@@ -1559,25 +1584,47 @@ void EnumeratorTestGAP()
         }
     }
     }
+
+    unsigned v = 0;
+    {
+    bm::chrono_taker<std::ostream> tt(cout, "bvector<>::enumerator (GAP) ", REPEATS*10*(k+1));
+    for (i = 0; i < REPEATS*10*(k+1); ++i)
+    {    
+        bvect::enumerator en = bv->first();
+        bvect::enumerator bend = bv->end();
+
+        while (en < bend)
+        {
+            v += *en;
+            ++en;
+        }
+    }
+    }
+    stringstream s;
+    s << v << endl; // attempt to fool optimization
+
+    bv->freeze();
+    {
+    bm::chrono_taker<std::ostream> tt(cout, "bvector<>::enumerator (GAP) (RO)", REPEATS*10*(k+1));
+    for (i = 0; i < REPEATS*10*(k+1); ++i)
+    {
+        bvect::enumerator en = bv->first();
+        bvect::enumerator bend = bv->end();
+
+        while (en < bend)
+        {
+            v += *en;
+            ++en;
+        }
+    }
+    }
+    s << v << endl; // attempt to fool optimization
+
     char buf[256];
     sprintf(buf, "%i", cnt); // to fool some smart compilers like ICC
 
-    {
-
-    BM_DECLARE_TEMP_BLOCK(tb)
-    bv->optimize(tb);
-    }
-
-    if (!platform_test) 
-    {
-        cout << "Testing optimized vectors." << endl;
-    }
-    }
-
     delete bv;
     delete bset;
-    // -----------------------------------------------
-
 }
 
 static
@@ -1682,7 +1729,7 @@ static
 void OrTest()
 {
     bvect bv1, bv2;
-    bvect bvt1, bvt2;
+    bvect bvt1, bvt2, bvt3;
     generate_bvector(bv1, 40000000, false);
     generate_bvector(bv2, 40000000, false);
     
@@ -1710,6 +1757,25 @@ void OrTest()
         cerr << "Error: OR mismatch!" << endl;
         exit(1);
     }
+
+    bv1.freeze();
+    bv2.freeze();
+
+    {
+    bm::chrono_taker<std::ostream> tt(cout, "OR-optimize (3 operand) bvector test (RO)", REPEATS*4);
+    for (unsigned i = 0; i < REPEATS*4; ++i)
+    {
+        bvt3.bit_or(bv1, bv2, bvect::opt_compress);
+    }
+    }
+
+    bool eq = bvt1.equal(bvt3);
+    if (!eq)
+    {
+        cerr << "Error: RO OR mismatch!" << endl;
+        exit(1);
+    }
+
 }
 
 static
@@ -1724,6 +1790,7 @@ void AndTest()
 
     SimpleFillSets(bset1, *bv1, 0, BSIZE, 100);
     SimpleFillSets(bset1, *bv2, 0, BSIZE, 100);
+
     {
     bm::chrono_taker<std::ostream> tt(cout, "AND bvector test", REPEATS*4);
     for (i = 0; i < REPEATS*4; ++i)
@@ -1741,6 +1808,7 @@ void AndTest()
     }
     }
 
+
     delete bv1;
     delete bv2;
 
@@ -1751,7 +1819,7 @@ void AndTest()
 static
 void OrAndTest()
 {
-    bvect bv_res1, bv_res2;
+    bvect bv_res1, bv_res2, bv_res3;
     bvect*  bv1 = new bvect();
     test_bitset*  bset1 = new test_bitset();
     test_bitset*  bset2 = new test_bitset();
@@ -1787,6 +1855,23 @@ void OrAndTest()
         exit(1);
     }
 
+    bv1->freeze();
+    bv2->freeze();
+
+    {
+    bm::chrono_taker<std::ostream> tt(cout, "AND_OR( fused) bvector test (RO)", REPEATS*4);
+    for (i = 0; i < REPEATS*4; ++i)
+    {
+        bv_res3.bit_or_and(*bv1, *bv2);
+    }
+    }
+
+    b = bv_res1.equal(bv_res3);
+    if (!b)
+    {
+        cerr << "OR-AND (RO) test failed!" << endl;
+        exit(1);
+    }
 
     delete bv1;
     delete bv2;
@@ -1808,8 +1893,19 @@ void XorTest()
 
     SimpleFillSets(bset1, *bv1, 0, BSIZE, 100);
     SimpleFillSets(bset1, *bv2, 0, BSIZE, 100);
+
     {
         bm::chrono_taker<std::ostream> tt(cout, "XOR bvector test", REPEATS * 10);
+        for (i = 0; i < REPEATS * 4; ++i)
+        {
+            *bv1 ^= *bv2;
+        }
+    }
+
+    bv2->freeze();
+
+    {
+        bm::chrono_taker<std::ostream> tt(cout, "XOR bvector test (RO)", REPEATS * 10);
         for (i = 0; i < REPEATS * 4; ++i)
         {
             *bv1 ^= *bv2;
@@ -1836,7 +1932,7 @@ static
 void SubTest()
 {
     bvect bv1, bv2;
-    bvect bvt0, bvt1, bvt2;
+    bvect bvt0, bvt1, bvt2, bvt3;
     generate_bvector(bv1, 40000000, false);
     generate_bvector(bv2, 40000000, false);
     
@@ -1872,6 +1968,17 @@ void SubTest()
     }
     }
 
+    bv1.freeze();
+    bv2.freeze();
+    {
+    bm::chrono_taker tt(cout, "SUB-optimize (3 operand) bvector test (RO)", REPEATS*4);
+    for (unsigned i = 0; i < REPEATS*4; ++i)
+    {
+        bvt3.bit_sub(bv1, bv2, bvect::opt_compress);
+    }
+    }
+
+
     int cmp = bvt1.compare(bvt2);
     if (cmp)
     {
@@ -1882,6 +1989,12 @@ void SubTest()
     if (cmp)
     {
         cerr << "Error: (2)SUB mismatch!" << endl;
+        exit(1);
+    }
+    cmp = bvt0.compare(bvt2);
+    if (cmp)
+    {
+        cerr << "Error: (2)SUB mismatch (RO)!" << endl;
         exit(1);
     }
 
@@ -1901,6 +2014,7 @@ void XorCountTest()
 
     unsigned count1 = 0;
     unsigned count2 = 0;
+    unsigned count3 = 0;
     unsigned test_count = 0;
 
     if (!platform_test)
@@ -1909,7 +2023,7 @@ void XorCountTest()
     bm::chrono_taker tt(cout, "XOR COUNT bvector test with TEMP vector", REPEATS*10);
     for (i = 0; i < REPEATS*4; ++i)
     {
-        bv_tmp.clear(false);
+        bv_tmp.clear();
         bv_tmp |= *bv1;
         bv_tmp ^= *bv2;
         count1 += bv_tmp.count();
@@ -1937,6 +2051,8 @@ void XorCountTest()
         count2 += bm::count_xor(*bv1, *bv2);
     }
     }
+
+//    assert(count1 == count2);
 
     
     if (!platform_test)    
@@ -2018,7 +2134,19 @@ void XorCountTest()
             cout << "Check failed !" << endl;
             exit(1);
         }
-    count1 = count2 = 0;
+
+    bv1->freeze();
+    bv2->freeze();
+
+    {
+    bm::chrono_taker tt(cout, "XOR COUNT bvector(opt2) test (RO)", REPEATS*10);
+    for (i = 0; i < REPEATS*4; ++i)
+    {
+        count3 += (unsigned)bm::count_xor(*bv1, *bv2);
+    }
+    }
+    assert(count2 == count3);
+
 
 
     delete bv1;
@@ -2042,6 +2170,7 @@ void AndCountTest()
 
     unsigned count1 = 0;
     unsigned count2 = 0;
+    unsigned count3 = 0;
     unsigned test_count = 0;
 
     if (!platform_test)
@@ -2159,6 +2288,20 @@ void AndCountTest()
             cout << "Check failed !" << endl;
             exit(1);
         }
+
+    bv1->freeze();
+    bv2->freeze();
+
+    {
+        bm::chrono_taker tt(cout, "AND COUNT bvector(opt) test (RO)", REPEATS * 10);
+        for (i = 0; i < REPEATS * 4; ++i)
+        {
+            count3 += (unsigned)bm::count_and(*bv1, *bv2);
+        }
+    }
+    assert(count3 == count2);
+
+
     count1 = count2 = 0;
 
 
@@ -2186,7 +2329,8 @@ void TI_MetricTest()
     unsigned count2 = 0;
     unsigned countA=0, countB=0, test_countA=0, test_countB=0;
     unsigned test_count = 0;
-    double ti1=0, ti2=0;
+    double ti1=0, ti2=0, ti3=0;
+    double di1=0, di2=0;
     {
     bm::chrono_taker tt(cout, "Tversky Index bvector test vector", REPEATS);
     for (i = 0; i < REPEATS; ++i)
@@ -2269,8 +2413,33 @@ void TI_MetricTest()
         countA = bm::count_sub(*bv1, *bv2);
         countB = bm::count_sub(*bv2, *bv1);
         
-        ti1 = double(count1) / double(0.4*countA + 0.5*countB + count1);
+        di1 = double(count1) / double(0.4*countA + 0.5*countB + count1);
     }
+    }
+
+    {
+        bvect bv1_ro(*bv1, bm::BM_READONLY);
+        bvect bv2_ro(*bv2, bm::BM_READONLY);
+
+        {
+        bm::chrono_taker tt(cout, "Dice metric bvector test (RO)", REPEATS);
+        for (i = 0; i < REPEATS; ++i)
+        {
+            count1 = bm::count_and(bv1_ro, bv2_ro);
+
+            countA = bm::count_sub(bv1_ro, bv2_ro);
+            countB = bm::count_sub(bv2_ro, bv1_ro);
+
+            di2 = double(count1) / double(0.4*countA + 0.5*countB + count1);
+        }
+        }
+        if (fabs(di2 - di1) > 0.1)
+        {
+            cout << "Dice RO Check failed !" << endl;
+            cout << di1 << " " << di2 << endl;
+            exit(1);
+        }
+
     }
 
 
@@ -2345,6 +2514,35 @@ void TI_MetricTest()
         cout << ti1 << " " << ti2 << endl;
         exit(1);
     }
+
+    bv1->freeze();
+    bv2->freeze();
+
+
+    {
+    bm::distance_metric_descriptor dmd[3];
+    dmd[0].metric = bm::COUNT_AND;
+    dmd[1].metric = bm::COUNT_SUB_AB;
+    dmd[2].metric = bm::COUNT_SUB_BA;
+
+    bm::chrono_taker tt(cout, "Tversky Index bvector test (pipeline) (RO)", REPEATS);
+    for (i = 0; i < REPEATS; ++i)
+    {
+        bm::distance_operation(*bv1, *bv2, &dmd[0], (&dmd[0])+3);
+
+        ti3 = double(dmd[0].result) / double(0.4*dmd[1].result + 0.5*dmd[2].result + dmd[0].result);
+
+        dmd[0].result = dmd[1].result = dmd[2].result = 0;
+    }
+    }
+
+    if (fabs(ti3 - ti1) > 0.1)
+    {
+        cout << "Check failed ! (RO)" << endl;
+        cout << ti1 << " " << ti3 << endl;
+        exit(1);
+    }
+
 
 
     delete bv1;
@@ -3523,6 +3721,30 @@ void AggregatorTest()
         exit(1);
     }
 
+
+    for (size_t i = 0; i < bv_coll.size(); ++i)
+        bv_arr[i]->freeze();
+    for (size_t i = 0; i < bv_coll2.size(); ++i)
+        bv_arr2[i]->freeze();
+
+
+    {
+    bm::chrono_taker tt(cout, "aggregator AND-SUB (RO)", REPEATS);
+    for (unsigned i = 0; i < REPEATS; ++i)
+    {
+        agg.combine_and_sub(*bv_target2,
+                            bv_arr, unsigned(bv_coll.size()),
+                            bv_arr2, unsigned(bv_coll2.size()),
+                            false
+                            );
+    } // for
+    }
+    res = bv_target1->compare(*bv_target2);
+    if (res != 0)
+    {
+        std::cerr << "Error: Aggregator AND-SUB integrity failed. (RO)" << std::endl;
+        exit(1);
+    }
 
     //std::cout << bv_target1->count() << std::endl;
 }
@@ -5248,11 +5470,13 @@ int main(void)
         cout << endl;
 
         MemCpyTest();
+        cout << endl;
 
         BitCountTest();
+        cout << endl;
 
         BitCountSparseTest();
-//        return 0;
+        cout << endl;
 
         BitTestSparseTest();
         cout << endl;
@@ -5278,7 +5502,6 @@ int main(void)
         cout << endl;
 
         BitBlockRotateTest();
-
         BitBlockShiftTest();
         cout << endl;
 
@@ -5286,9 +5509,7 @@ int main(void)
         cout << endl;
 
         EnumeratorTest();
-
         EnumeratorTestGAP();
-
         EnumeratorGoToTest();
         cout << endl;
 
@@ -5313,16 +5534,17 @@ int main(void)
         OrAndTest();
         cout << endl;
 
+        XorCountTest();
+        AndCountTest();
+        TI_MetricTest();
+        cout << endl;
+
         InvertTest();
         cout << endl;
 
         Set2SetTransformTest();
         cout << endl;
 
-        XorCountTest();
-        AndCountTest();
-        TI_MetricTest();
-        cout << endl;
 
         SerializationTest();
         cout << endl;
