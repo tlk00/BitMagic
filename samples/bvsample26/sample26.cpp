@@ -63,7 +63,7 @@ void print_statistics(const bm::bvector<>& bv)
 
     cout << "Bit blocks        :" << st.bit_blocks << endl;
     cout << "GAP blocks        :" << st.gap_blocks << endl;
-    cout << "Memory used       :"<< st.memory_used << endl;
+    cout << "Memory used       :" << st.memory_used << endl;
     cout << "Memory overhead   :" << st.gap_cap_overhead << endl;
     cout << "Max.serialize mem :" << st.max_serialize_mem << endl << endl;;
 }
