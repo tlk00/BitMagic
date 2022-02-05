@@ -23425,13 +23425,13 @@ static void TestSignedSparseVector()
     {{
         std::vector<int> vect {0, 1, -1, INT_MIN, INT_MAX, 0 };
         bm::sparse_vector<int, bvect> sv;
-        sv.import_back(vect.data(), vect.size(), false);
+        sv.import_back(vect.data(), bm::sparse_vector<int, bvect>::size_type(vect.size()), false);
 
         assert(sv.size() == vect.size());
         for (size_t i = 0; i < vect.size(); ++i)
         {
             auto vc = vect.at(i);
-            auto v = sv.at(i);
+            auto v = sv.at(bm::sparse_vector<int, bvect>::size_type(i));
             assert(v == vc);
         } // for
 
@@ -23440,13 +23440,13 @@ static void TestSignedSparseVector()
         for (size_t i = 0; i < 65536*256; ++i)
             vect.push_back(int(-i));
 
-        sv.import_back(vect.data(), vect.size(), false);
+        sv.import_back(vect.data(), bm::sparse_vector<int, bvect>::size_type(vect.size()), false);
 
         assert(sv.size() == vect.size());
         for (size_t i = 0; i < vect.size(); ++i)
         {
             auto vc = vect.at(i);
-            auto v = sv.at(i);
+            auto v = sv.at(bm::sparse_vector<int, bvect>::size_type(i));
             assert(v == vc);
         } // for
 
@@ -29580,6 +29580,49 @@ void TestStrSparseVectorSerial()
 
         bool b = str_sv1.equal(str_sv2);
         assert(b);
+    }
+
+    // crash report from Andrea Asztalos
+    {
+        using bvector_type = bm::bvector<>;
+        using TSparseStrVector = bm::str_sparse_vector<char, bvector_type, 390>;
+
+        TSparseStrVector vec_A, vec_B;
+
+        auto iter_1 = vec_A.get_back_inserter();
+
+        iter_1 = "rs123456";
+        iter_1 = "rs23456";
+        iter_1 = ".";
+        iter_1 = "esv4567";
+        iter_1 = "esv89000";
+        iter_1 = ".";
+        iter_1 = "esv4444";
+        iter_1 = "rs22222";
+        iter_1.flush();
+
+        auto iter_2 = vec_B.get_back_inserter();
+        iter_2.add_null(10);
+        iter_2.flush();
+
+        BM_DECLARE_TEMP_BLOCK(tb);
+        vec_A.remap();
+        vec_A.optimize(tb);
+
+        vec_B.remap();
+        vec_B.optimize(tb);
+
+        using TLayout = bm::sparse_vector_serial_layout<TSparseStrVector>;
+        auto layout_a = make_unique<TLayout>();
+        auto layout_b = make_unique<TLayout>();
+
+        bm::sparse_vector_serializer<TSparseStrVector> str_serializer;
+        str_serializer.set_bookmarks(true, 16);
+        str_serializer.enable_xor_compression();
+        assert(str_serializer.is_xor_ref());
+
+        str_serializer.serialize(vec_A, *layout_a.get());
+        str_serializer.serialize(vec_B, *layout_b.get());  //<-- runs into assertion
     }
 
     {
@@ -37693,13 +37736,13 @@ int main(int argc, char *argv[])
     
     if (is_all || is_str_sv)
     {
-
+/*
          TestStrSparseVector();
          CheckAllocLeaks(false);
 
          TestStrSparseVectorAlgo();
          CheckAllocLeaks(false);
-
+*/
          TestStrSparseVectorSerial();
          CheckAllocLeaks(false);
 
