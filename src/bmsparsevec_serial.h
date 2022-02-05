@@ -989,8 +989,8 @@ void sparse_vector_serializer<SV>::serialize(const SV&  sv,
             bm::xor_sim_params xs_params;
             build_xor_ref_vector(sv);
             bvs_.set_ref_vectors(&bv_ref_);
-            bvs_.compute_sim_model(sim_model_, bv_ref_, xs_params);
-            bvs_.set_sim_model(&sim_model_);
+            if (bvs_.compute_sim_model(sim_model_, bv_ref_, xs_params))
+                bvs_.set_sim_model(&sim_model_);
         }
     }
 
